@@ -1,4 +1,6 @@
--- Common.lean : generically useful definitions for writing and verifying Blanc programs
+-- Common.lean : definitions and lemmas generally useful for writing and
+-- verifying Blanc programs, including a correctness proof for the Blanc
+-- compiler and tactics for automating Blanc program verification.
 
 import Blanc.Semantics
 import Mathlib.Data.List.Lemmas

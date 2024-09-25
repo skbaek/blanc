@@ -1,4 +1,5 @@
--- Deployer.lean : Makeshift solution for deploying bytecode compiled from Blanc programs
+-- Deployer.lean : makeshift solution for deploying Blanc program bytecode.
+-- generates deployer Solidity code for bytecodes compiled from Blanc programs.
 
 import Blanc.Weth
 
