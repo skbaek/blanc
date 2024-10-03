@@ -206,7 +206,7 @@ structure State : Type :=
   (bal : Addr → Word)
   (stor : Addr → Storage)
   (code : Addr → Bytes)
-  -- stack, memory, & return value : parts of the machine state
+  -- stack, memory, & return data from last call: parts of the machine state
   (stk : Stack)
   (mem : Memory)
   (ret : Bytes)
@@ -403,7 +403,8 @@ def State.Codesize (e : Env) (s s' : State) : Prop := ∃ sz, State.Push [sz] s 
 def State.Gasprice (e : Env) (s s' : State) : Prop := State.Push [e.gpr] s s'
 def State.Extcodesize (s s' : State) : Prop :=
   ∃ x sz, State.Diff [x] [sz] s s' ∧ Bytes.Size (s.code (toAddr x)) sz
-def State.Retdatasize (s s' : State) : Prop := ∃ x r, State.Push [x] s s' ∧ s.ret = r ∧ Bytes.Size r x
+def State.Retdatasize (s s' : State) : Prop :=
+  ∃ x r, State.Push [x] s s' ∧ s.ret = r ∧ Bytes.Size r x
 
 -- For verification tasks where using correct values of Keccak hashes is crucial for correctness,
 -- we can define a (keccak : Bytes → Word) and use it in the definition of State.extcodehash,
