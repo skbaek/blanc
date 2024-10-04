@@ -182,7 +182,7 @@ def Lean.Expr.apply (x : Lean.Expr) : Lean.Elab.Tactic.TacticM Unit := do
 
 inductive Bits : ℕ → Type
   | nil : Bits 0
-  | cons : ∀ {n : ℕ}, Bits n → Bool → Bits (n + 1)
+  | cons : ∀ {n : ℕ}, Bool → Bits n → Bits (n + 1)
 
 abbrev Addr := Bits 160
 abbrev Word := Bits 256
@@ -192,73 +192,76 @@ notation "⦃⦄" => Bits.nil
 infixl:70 " +> " => Bits.cons
 
 syntax "⦃" withoutPosition(term,*,?) "⦄"  : term
-macro_rules | `(⦃$l,*⦄) => `(expand_foldl% (h t => Bits.cons h t) Bits.nil [$(.ofElems l),*])
+macro_rules
+  | `(⦃$l,*⦄) => `(expand_foldr% (h t => Bits.cons h t) Bits.nil [$(.ofElems l),*])
 
 abbrev Byte := Bits 8
 
-inductive Bytes : Type
-  | nil : Bytes
-  | cons : Bytes → Byte → Bytes
+def Bytes : Type := List Byte
+-- inductive Bytes : Type
+--   | nil : Bytes
+--   | cons : Bytes → Byte → Bytes
 
-infixl:70 " :> " => Bytes.cons
+-- infixl:70 " :> " => Bytes.cons
+--
+-- syntax "⟪" withoutPosition(term,*,?) "⟫"  : term
+-- macro_rules | `(⟪$l,*⟫) => `(expand_foldl% (h t => Bytes.cons h t) Bytes.nil [$(.ofElems l),*])
 
-syntax "⟪" withoutPosition(term,*,?) "⟫"  : term
-macro_rules | `(⟪$l,*⟫) => `(expand_foldl% (h t => Bytes.cons h t) Bytes.nil [$(.ofElems l),*])
+def Bits.toChars : ∀ {n}, Bits n → List Char
+  | 0, ⦃⦄ => []
+  | _ + 1, x +> xs => x.toChar :: xs.toChars
 
-def Bits.toString : ∀ {n}, String → Bits n → String
-  | 0, acc, ⦃⦄ => acc
-  | _, acc, (xs +> x) => Bits.toString ⟨Bool.toChar x :: acc.data⟩ xs
+def Bits.toString {n} (bs : Bits n) : String := ⟨bs.toChars⟩
 
-instance {n} : Repr (Bits n) := ⟨λ bs _ => Bits.toString "" bs⟩
+instance {n} : Repr (Bits n) := ⟨λ bs _ => Bits.toString bs⟩
 
 def Bits.not : ∀ {n}, Bits n → Bits n
   | 0, ⦃⦄ => ⦃⦄
-  | _, (xs +> x) => xs.not +> x.not
+  | _, (x +> xs) => x.not +> xs.not
 
 notation "~" => Bits.not
 
 def Bits.zipWith (f : Bool → Bool → Bool) : ∀ {n}, Bits n → Bits n → Bits n
   | 0, ⦃⦄, ⦃⦄ => ⦃⦄
-  | _, xs +> x, ys +> y => (zipWith f xs ys) +> f x y
-
+  | _, x +> xs, y +> ys => f x y +> (zipWith f xs ys)
 
 def Bits.and {n} : Bits n → Bits n → Bits n := zipWith Bool.and
 def Bits.or {n} : Bits n → Bits n → Bits n := zipWith Bool.or
 def Bits.xor {n} : Bits n → Bits n → Bits n := zipWith Bool.xor
 
 lemma Bits.cons_and_cons {n} {xs ys : Bits n} {x y} :
-  and (xs +> x) (ys +> y) = and xs ys +> Bool.and x y := rfl
+  and (x +> xs) (y +> ys) = .and x y +> and xs ys := rfl
 
 def Bits.lt : ∀ {n : ℕ}, Bits n → Bits n → Prop
   | 0, ⦃⦄, ⦃⦄ => False
-  | _, xs +> x, ys +> y => lt xs ys ∨ (xs = ys ∧ x < y)
+  | _, x +> xs, y +> ys => x < y ∨ (x = y ∧ lt xs ys)
 
 instance {n} : @LT (Bits n) := ⟨Bits.lt⟩
 
 def Bits.le : ∀ {n : ℕ}, Bits n → Bits n → Prop
   | 0, ⦃⦄, ⦃⦄ => True
-  | _, xs +> x, ys +> y => lt xs ys ∨ (xs = ys ∧ x ≤ y)
+  | _, x +> xs, y +> ys => x < y ∨ (x = y ∧ le xs ys)
 
 instance {n} : @LE (Bits n) := ⟨Bits.le⟩
 
 lemma Bits.cons_lt_cons {n} {xs ys : Bits n} {x y} :
-    xs +> x < ys +> y ↔ (xs < ys ∨ (xs = ys ∧ x < y)) := Iff.refl _
+    x +> xs < y +> ys ↔ (x < y ∨ (x = y ∧ xs < ys)) := Iff.refl _
 
-lemma Bits.cons_lt_cons' {n} {xs ys : Bits n} {x} :
-    xs +> x < ys +> x ↔ xs < ys := by simp [cons_lt_cons]
-
-lemma Bits.cons_eq_cons {n} {xs ys : Bits n} {x y} :
-    xs +> x = ys +> y ↔ (xs = ys ∧ x = y) := by simp
+-- lemma Bits.cons_lt_cons' {n} {xs ys : Bits n} {x} :
+--     x +> xs < ys +> x ↔ xs < ys := by simp [cons_lt_cons]
+--
+lemma Bits.cons_eq_cons {n} {x y} {xs ys : Bits n} :
+    x +> xs = y +> ys ↔ (x = y ∧ xs = ys) := by simp
 
 lemma Bits.cons_le_cons {n} {xs ys : Bits n} {x y} :
-    xs +> x ≤ ys +> y ↔ (xs < ys ∨ (xs = ys ∧ x ≤ y)) := Iff.refl _
+    x +> xs ≤ y +> ys ↔ (x < y ∨ (x = y ∧ xs ≤ ys)) := Iff.refl _
 
 instance {n : ℕ} (xs ys : Bits n) : Decidable (xs = ys) := by
   induction n with
   | zero => cases xs; cases ys; apply Decidable.isTrue rfl
   | succ n ih =>
     match xs, ys with
-    | xs +> x, ys +> y =>
+    | x +> xs, y +> ys =>
       rw [Bits.cons_eq_cons]; apply instDecidableAnd
 
 instance {n} {xs ys : Bits n} : Decidable (xs < ys) := by
@@ -268,32 +271,31 @@ instance {n} {xs ys : Bits n} : Decidable (xs < ys) := by
     apply Decidable.isFalse not_false
   | succ n ih =>
     match xs, ys with
-    | xs +> x, ys +> y =>
+    | x +> xs, y +> ys =>
       cases x <;> cases y <;>
       simp [Bits.cons_lt_cons, false_lt_true, not_true_lt] <;>
-      try {apply ih}; apply instDecidableOr
+      try {apply ih}; apply instDecidableTrue; apply instDecidableFalse
 
 instance {n : ℕ} (xs ys : Bits n) : Decidable (xs ≤ ys) := by
-  cases n with
+  induction n with
   | zero =>
     cases xs; cases ys;
     apply Decidable.isTrue; constructor
   | succ n =>
     match xs, ys with
-    | xs +> x, ys +> y =>
+    | x +> xs, y +> ys =>
       rw [Bits.cons_le_cons]; apply instDecidableOr
 
 def Bits.slt : ∀ {n : ℕ}, Bits n → Bits n → Prop
   | 0, ⦃⦄, ⦃⦄ => False
-  | 1, ⦃1⦄, ⦃0⦄ => True
-  | 1, ⦃_⦄, ⦃_⦄ => False
-  | _ + 2, xs +> x, ys +> y => slt xs ys ∨ (x < y ∧ xs = ys)
+  | _ + 1, x +> xs, y +> ys => y < x ∨ (x = y ∧ xs < ys)
 
 infix:70 " ±< " => Bits.slt
 
 lemma Bits.singleton_slt_singleton {x y : Bool} :
     ⦃x⦄ ±< ⦃y⦄ ↔ (x = 1 ∧ y = 0) := by
-  cases x <;> cases y <;> simp [Bool.zero, Bool.one] <;>
+  cases x <;> cases y <;>
+  simp [Bool.zero, Bool.one, Bits.slt] <;>
   try {intro hc; cases hc}; constructor
 
 def Bits.sgt {n : ℕ} (xs ys : Bits n) : Prop := slt ys xs
@@ -302,29 +304,32 @@ infix:70 " ±> " => Bits.sgt
 
 def Bits.toNat : ∀ {n : ℕ}, Bits n → Nat
   | 0, ⦃⦄ => 0
-  | _ + 1, xs +> x => 2 * xs.toNat + x.toNat
+  | n + 1, x +> xs => (cond x (2 ^ n) 0) + xs.toNat
 
 def Bits.zero : ∀ n : ℕ, Bits n
   | 0 => ⦃⦄
-  | n + 1 => zero n +> 0
+  | n + 1 => 0 +> zero n
 
 instance {n} : @Zero (Bits n) := ⟨Bits.zero n⟩
 instance : @Zero Byte := ⟨Bits.zero 8⟩
 
 def Bits.max : ∀ n : ℕ, Bits n
   | 0 => ⦃⦄
-  | n + 1 => max n +> 1
+  | n + 1 => 1 +> max n
 
 def Bits.one : ∀ n : ℕ, Bits n
   | 0 => ⦃⦄
-  | n + 1 => 0 +> 1
+  | n + 1 => 0 +> one n
 
 instance {n} : @One (Bits n) := ⟨Bits.one n⟩
 
-def Bits.succ : ∀ {n}, Bits n → Bits n
-  | 0, ⦃⦄ => ⦃⦄
-  | _ + 1, xs +> 0 => xs +> 1
-  | _ + 1, xs +> 1 => xs.succ +> 0
+def Bits.carrySucc : ∀ {n}, Bits n → (Bool × Bits n)
+  | 0, ⦃⦄ => (1, ⦃⦄)
+  | _ + 1, x +> xs =>
+    let (y, ys) := xs.carrySucc
+    (x && y, (x != y) +> ys)
+
+def Bits.succ {n} (xs : Bits n) : Bits n := xs.carrySucc.snd
 
 def Bits.succs {n} : Nat → Bits n → Bits n
   | 0, xs => xs
@@ -334,9 +339,13 @@ def Bits.incr {n} : Bool → Bits n → Bits n
   | false => id
   | true => Bits.succ
 
-def Bits.add : ∀ {n}, Bits n → Bits n → Bits n
-  | 0, ⦃⦄, ⦃⦄ => ⦃⦄
-  | _ + 1, xs +> x, ys +> y => incr x (add xs ys +> y)
+def Bits.carryAdd : ∀ {n}, Bits n → Bits n → (Bool × Bits n)
+  | 0, ⦃⦄, ⦃⦄ => (0, ⦃⦄)
+  | _ + 1, x +> xs, y +> ys =>
+    let (z, zs) := carryAdd xs ys
+    ((x && y) || (x && z) || (y && z), ((x != y) != z) +> zs)
+
+def Bits.add {n} (xs ys : Bits n) : Bits n := (carryAdd xs ys).snd
 
 def Overflow {n : ℕ} (xs ys : Bits n) : Prop := 2 ^ n ≤ xs.toNat + ys.toNat
 
@@ -376,164 +385,187 @@ def NoOverflow {n : ℕ} (xs ys : Bits n) : Prop := xs.toNat + ys.toNat < 2 ^ n
 def Bits.nof_iff_not_Overflow {n : ℕ} (xs ys : Bits n) : NoOverflow xs ys ↔ ¬ xs ↟ ys := by
   simp [Overflow, NoOverflow]
 
-def Bits.pred : ∀ {n}, Bits n → Bits n
-  | 0, ⦃⦄ => ⦃⦄
-  | _ + 1, xs +> 0 => xs.pred +> 1
-  | _ + 1, xs +> 1 => xs +> 0
+--def Bits.pred : ∀ {n}, Bits n → Bits n
+--  | 0, ⦃⦄ => ⦃⦄
+--  | _ + 1, xs +> 0 => xs.pred +> 1
+--  | _ + 1, xs +> 1 => xs +> 0
+--
+--def Bits.decr {n} : Bool → Bits n → Bits n
+--  | false, xs => xs
+--  | true, xs => xs.pred
 
-def Bits.decr {n} : Bool → Bits n → Bits n
-  | false, xs => xs
-  | true, xs => xs.pred
+def Bits.carrySub : ∀ {n}, Bits n → Bits n → (Bool × Bits n)
+  | 0, ⦃⦄, ⦃⦄ => (0, ⦃⦄)
+  | n + 1, x +> xs, y +> ys =>
+    let (z, zs) := carrySub xs ys
+    ((!x && (y || z)) || (y && z), ((x != y) != z) +> zs)
 
-def Bits.sub : ∀ {n}, Bits n → Bits n → Bits n
-  | 0, ⦃⦄, ⦃⦄ => ⦃⦄
-  | _ + 1, xs +> x, ys +> y => decr y (sub xs ys +> x)
+def Bits.sub {n} (xs ys : Bits n) : Bits n := (carrySub xs ys).snd
 
 instance {n} : HAdd (Bits n) (Bits n) (Bits n) := ⟨Bits.add⟩
 
-lemma Bits.cons_add_cons {n} {xs ys : Bits n} {x y} :
-    xs +> x + ys +> y = incr x ((xs + ys) +> y) := rfl
-
-lemma Bits.cons_zero_add_cons {n} {xs ys : Bits n} {y} :
-    xs +> 0 + ys +> y = ((xs + ys) +> y) := rfl
-
-lemma Bits.cons_add_cons_zero {n} {xs ys : Bits n} {x} :
-    xs +> x + ys +> 0 = ((xs + ys) +> x) := by
-  rw [cons_add_cons]; cases x <;> simp [incr] <;> rfl
-
-lemma Bits.cons_add_cons_one {n} {xs ys : Bits n} {x} :
-    xs +> x + ys +> 1 = ((xs + ys) +> x).succ := by
-  rw [cons_add_cons]; cases x <;> simp [incr] <;> rfl
-
-lemma Bits.cons_false_add_cons {n} {xs ys : Bits n} {y} :
-    xs +> false + ys +> y = ((xs + ys) +> y) := cons_zero_add_cons
-
-lemma Bits.cons_true_add_cons {n} {xs ys : Bits n} {y} :
-    xs +> true + ys +> y = ((xs + ys) +> y).succ := rfl
-
-lemma Bits.cons_add_cons_false {n} {xs ys : Bits n} {x} :
-    xs +> x + ys +> false = ((xs + ys) +> x) := cons_add_cons_zero
-
-lemma Bits.cons_add_cons_true {n} {xs ys : Bits n} {x} :
-    xs +> x + ys +> true = ((xs + ys) +> x).succ := cons_add_cons_one
-
 instance {n} : HSub (Bits n) (Bits n) (Bits n) := ⟨Bits.sub⟩
 
-lemma Bits.cons_sub_cons_true {n} {xs ys : Bits n} {x} :
-    xs +> x - ys +> true = ((xs - ys) +> x).pred := rfl
+-- lemma Bits.cons_add_cons {n} {xs ys : Bits n} {x y} :
+--     x +> xs + y +> ys = incr x ((xs + ys) +> y) := rfl
+--
+-- lemma Bits.cons_zero_add_cons {n} {xs ys : Bits n} {y} :
+--     xs +> 0 + y +> ys = ((xs + ys) +> y) := rfl
+--
+-- lemma Bits.cons_add_cons_zero {n} {xs ys : Bits n} {x} :
+--     x +> xs + ys +> 0 = ((xs + ys) +> x) := by
+--   rw [cons_add_cons]; cases x <;> simp [incr] <;> rfl
+--
+-- lemma Bits.cons_add_cons_one {n} {xs ys : Bits n} {x} :
+--     x +> xs + ys +> 1 = ((xs + ys) +> x).succ := by
+--   rw [cons_add_cons]; cases x <;> simp [incr] <;> rfl
+--
+-- lemma Bits.cons_false_add_cons {n} {xs ys : Bits n} {y} :
+--     xs +> false + y +> ys = ((xs + ys) +> y) := cons_zero_add_cons
+--
+-- lemma Bits.cons_true_add_cons {n} {xs ys : Bits n} {y} :
+--     xs +> true + y +> ys = ((xs + ys) +> y).succ := rfl
+--
+-- lemma Bits.cons_add_cons_false {n} {xs ys : Bits n} {x} :
+--     x +> xs + ys +> false = ((xs + ys) +> x) := cons_add_cons_zero
+--
+-- lemma Bits.cons_add_cons_true {n} {xs ys : Bits n} {x} :
+--     x +> xs + ys +> true = ((xs + ys) +> x).succ := cons_add_cons_one
 
-lemma Bits.cons_sub_cons_false {n} {xs ys : Bits n} {x} :
-    xs +> x - ys +> false = (xs - ys) +> x := rfl
+-- lemma Bits.cons_sub_cons_true {n} {xs ys : Bits n} {x} :
+--     x +> xs - ys +> true = ((xs - ys) +> x).pred := rfl
+--
+-- lemma Bits.cons_sub_cons_false {n} {xs ys : Bits n} {x} :
+--     x +> xs - ys +> false = (xs - ys) +> x := rfl
+--
+-- lemma Bits.cons_sub_cons {n} {xs ys : Bits n} {x y} :
+--     x +> xs - y +> ys = decr y ((xs - ys) +> x) := rfl
+--
+-- lemma Bits.cons_sub_cons' {n} {xs ys : Bits n} {x} :
+--     x +> xs - ys +> x = (xs - ys) +> 0 := by cases x <;> rfl
 
-lemma Bits.cons_sub_cons {n} {xs ys : Bits n} {x y} :
-    xs +> x - ys +> y = decr y ((xs - ys) +> x) := rfl
+def Bits.carryShlo : ∀ {n}, Bits n → Bool → (Bool × Bits n)
+  | 0, ⦃⦄, y => (y, ⦃⦄)
+  | _ + 1, x +> xs, y =>
+    let (z, zs) := carryShlo xs y
+    (x, z +> zs)
 
-lemma Bits.cons_sub_cons' {n} {xs ys : Bits n} {x} :
-    xs +> x - ys +> x = (xs - ys) +> 0 := by cases x <;> rfl
+def Bits.shlo {n} (xs : Bits n) (x : Bool) : Bits n := (carryShlo xs x).snd
 
-def Bits.shlo : ∀ {n}, Bits n → Bool → Bits n
-  | 0, ⦃⦄, _ => ⦃⦄
-  | _ + 1, xs +> x, y => shlo xs x +> y
+-- def Bits.shlo : ∀ {n}, Bits n → Bool → (Bits n
+--   | 0, ⦃⦄, _ => ⦃⦄
+--   | _ + 1, x +> xs, y => shlo xs x +> y
 
 def Bits.shl : Nat → ∀ {n}, Bits n → Bits n
   | 0, _, xs => xs
-  | k + 1, _, xs => shl k (shlo xs 0)
+  | k + 1, _, xs => shl k <| shlo xs 0
 
-def Bits.snoc (x : Bool) : ∀ {n}, Bits n → Bits (n + 1)
-  | 0, ⦃⦄ =>⦃x⦄
-  | _ + 1, ys +> y => snoc x ys +> y
+-- def Bits.snoc (x : Bool) : ∀ {n}, Bits n → Bits (n + 1)
+--   | 0, ⦃⦄ =>⦃x⦄
+--   | _ + 1, y +> ys => snoc x y +> ys
 
-def Bits.shro (x : Bool) : ∀ {n}, Bits n → Bits n
-  | 0, ⦃⦄ => ⦃⦄
-  | _ + 1, ys +> _ => snoc x ys
+def Bits.shro : ∀ {n}, Bool → Bits n → Bits n
+  | 0, _, ⦃⦄ => ⦃⦄
+  | n + 1, x, y +> ys =>  x +> shro y ys
 
 def Bits.shr : Nat → ∀ {n}, Bits n → Bits n
   | 0, _, xs => xs
-  | k + 1, _, xs => shro 0 (shr k xs)
+  | k + 1, _, xs => --shro 0 (shr k xs)
+    shr k (shro 0 xs)
 
-def Bits.is_neg : ∀ {n : ℕ}, Bits n → Bool
+def Bits.isNeg : ∀ {n : ℕ}, Bits n → Bool
   | 0, _ => false
-  | 1,⦃x⦄ => x
-  | _ + 2, xs +> _ => is_neg xs
+  | _ + 1, x +> _ => x
 
 def Bits.neg {n : ℕ} (xs : Bits n) : Bits n := (~ xs).succ
 
 def Bits.sar (m : Nat) {n} (xs : Bits n) : Bits n :=
-  if is_neg xs
+  if isNeg xs
   then neg (shr m (neg xs))
   else shr m xs
 
 def Bits.append : ∀ {m n}, Bits m → Bits n → Bits (m + n)
-  | _, 0, xs, ⦃⦄ => xs
-  | _, _ + 1, xs, ys +> y => append xs ys +> y
+  | 0, _, ⦃⦄, ys => by simp; exact ys
+  | m + 1, n, x +> xs, ys => by
+    rw [Nat.add_assoc, Nat.add_comm 1, ← Nat.add_assoc]
+    exact x +> append xs ys
 
 instance {m n} : HAppend (Bits m) (Bits n) (Bits (m + n)) := ⟨Bits.append⟩
 
-lemma Bits.append_nil {n} {xs : Bits n} : xs ++ ⦃⦄ = xs := rfl
+-- lemma Bits.append_nil {n} {xs : Bits n} : xs ++ ⦃⦄ = xs :=
+--
+-- lemma Bits.append_cons {m n} {xs : Bits m} {ys : Bits n} {y} :
+--     xs ++ (y +> ys) = (xs ++ ys) +> y := by simp [HAppend.hAppend, append]
+--
+-- lemma Bits.append_and_append {m n} {xs₀ ys₀ : Bits m} {xs₁ ys₁ : Bits n} :
+--     and (xs₀ ++ xs₁) (ys₀ ++ ys₁) = and xs₀ ys₀ ++ and xs₁ ys₁ := by
+--   induction n with
+--   | zero => cases xs₁; cases ys₁; rfl
+--   | succ n ih =>
+--     match xs₁, ys₁ with
+--     | xs₁ +> x,  ys₁ +> y =>
+--       simp [append_cons, cons_and_cons, ih]
 
-lemma Bits.append_cons {m n} {xs : Bits m} {ys : Bits n} {y} :
-    xs ++ (ys +> y) = (xs ++ ys) +> y := by simp [HAppend.hAppend, append]
+def Bits.mulCore {m} : ∀ {n}, Bits m → Bits n → Bits m
+  | 0, _, ⦃⦄ => 0
+  | _ + 1, xs, 0 +> ys => mulCore xs ys
+  | n + 1, xs, 1 +> ys => shl n xs + mulCore xs ys
 
-lemma Bits.append_and_append {m n} {xs₀ ys₀ : Bits m} {xs₁ ys₁ : Bits n} :
-    and (xs₀ ++ xs₁) (ys₀ ++ ys₁) = and xs₀ ys₀ ++ and xs₁ ys₁ := by
-  induction n with
-  | zero => cases xs₁; cases ys₁; rfl
-  | succ n ih =>
-    match xs₁, ys₁ with
-    | xs₁ +> x,  ys₁ +> y =>
-      simp [append_cons, cons_and_cons, ih]
-
-def Bits.mul : ∀ {n}, Bits n → Bits n → Bits n
-  | 0, ⦃⦄, ⦃⦄ => ⦃⦄
-  | _ + 1, xs +> x, ys +> 0 => mul (shlo xs x) ys +> 0
-  | _ + 1, xs +> x, ys +> 1 => (mul (shlo xs x) ys +> 0) + (xs +> x)
+def Bits.mul {n} (xs ys : Bits n) : Bits n := mulCore xs ys
 
 instance {n} : HMul (Bits n) (Bits n) (Bits n) := ⟨Bits.mul⟩
 
-def Bits.div_mod : ∀ {n}, Bits n → Bits n → (Bits n × Bits n)
-  | 0, ⦃⦄, ⦃⦄ => (⦃⦄, ⦃⦄)
-  | _ + 1, xs +> x, ys +> y =>
-  if xs +> x < ys +> y
-  then (0, xs +> x)
-  else let (zs, xs') := div_mod xs (shlo ys y)
-       if xs' +> x < ys +> y
-       then (zs +> 0, xs' +> x)
-       else (zs +> 1, xs' +> x - ys +> y)
+def Bits.snoc : ∀ {n}, Bits n → Bool → Bits (n + 1)
+  | 0, ⦃⦄, y => ⦃y⦄
+  | n + 1, x +> xs, y => x +> snoc xs y
 
-def Bits.div {n} (xs ys : Bits n) : Bits n := (div_mod xs ys).fst
+-- divMod acc pfx xs ys
+-- assumes: pfx < ys
+def divMod : ∀ {m n : ℕ}, Bits n → Bits m → Bits n → (Bits m × Bits n)
+  | 0, _, pfx, ⦃⦄, _ => (0, pfx)
+  | _ + 1, _, pfx, x +> xs, ys =>
+    let pfx' := .shlo pfx x
+    if ys ≤ pfx'
+    then let (div, mod) := divMod (pfx' - ys) xs ys
+         (1 +> div, mod)
+    else let (div, mod) := divMod pfx' xs ys
+         (0 +> div, mod)
+
+def Bits.div {n} (xs ys : Bits n) : Bits n :=
+  if ys = 0 then 0 else (divMod 0 xs ys).fst
 
 instance {n} : HDiv (Bits n) (Bits n) (Bits n) := ⟨Bits.div⟩
 
-def Bits.mod {n} (xs ys : Bits n) : Bits n := (div_mod xs ys).snd
+def Bits.mod {n} (xs ys : Bits n) : Bits n := (divMod 0 xs ys).snd
 
 instance {n} : HMod (Bits n) (Bits n) (Bits n) := ⟨Bits.mod⟩
 
+-- minimum possible value in 2's complement
 def Bits.smin : ∀ {n : ℕ}, Bits n
   | 0 => ⦃⦄
-  | 1 =>⦃1⦄
-  | _ + 2 => smin +> 0
+  | _ + 1 => 1 +> 0
 
-def Bits.neg_one {n : ℕ} : Bits n := max _
+def Bits.negOne {n : ℕ} : Bits n := max _
 
 def Bits.sdiv {n : ℕ} (xs ys : Bits n) : Bits n :=
   if ys = 0
   then 0
-  else if xs = smin ∧ ys = neg_one
+  else if xs = smin ∧ ys = negOne
        then smin
-       else match (is_neg xs, is_neg ys) with
+       else match (isNeg xs, isNeg ys) with
             | (0, 0) => xs / ys
             | (1, 0) => neg ((neg xs) / ys)
             | (0, 1) => neg (xs / (neg ys))
             | (1, 1) => (neg xs) / (neg ys)
 
 def Bits.abs {n : ℕ} (xs : Bits n) : Bits n :=
-  if is_neg xs then neg xs else xs
+  if isNeg xs then neg xs else xs
 
 def Bits.smod {n : ℕ} (xs ys : Bits n) : Bits n :=
   if ys = 0
   then 0
   else let mod := (abs xs) % (abs ys)
-       if is_neg xs then neg mod else mod
+       if isNeg xs then neg mod else mod
 
 def Bits.addmod {n : ℕ} (x y z : Bits n) : Bits n :=
   if z = 0 then 0 else (x + y) % z
@@ -541,49 +573,62 @@ def Bits.addmod {n : ℕ} (x y z : Bits n) : Bits n :=
 def Bits.mulmod {n : ℕ} (x y z : Bits n) : Bits n :=
   if z = 0 then 0 else (x * y) % z
 
-def Bits.iter {α : Type} (f : α → α) : α → ∀ {n}, Bits n → α
-  | a, 0, ⦃⦄ => a
-  | a, _ + 1, xs +> 0 => iter f (iter f a xs) xs
-  | a, _ + 1, xs +> 1 => iter f (iter f (f a) xs) xs
+-- def Bits.iter {α : Type} (f : α → α) : α → ∀ {n}, Bits n → α
+--   | a, 0, ⦃⦄ => a
+--   | a, _ + 1, xs +> 0 => iter f (iter f a xs) xs
+--   | a, _ + 1, xs +> 1 => iter f (iter f (f a) xs) xs
 
-def Bits.exp {n : ℕ} (x y : Bits n) : Bits n :=
-  iter (· * x) 1 y
+def Bits.expNat {n : ℕ} (x : Bits n) : Nat → Bits n
+  | 0 => 1
+  | k + 1 => x * x.expNat k
+
+def Bits.exp {n : ℕ} (x y : Bits n) : Bits n := expNat x y.toNat
 
 instance {n} : HPow (Bits n) (Bits n) (Bits n) := ⟨Bits.exp⟩
 
-def Bits.signextend_core : Nat → ∀ {n : Nat}, Bits n → Bits n
-  | _, 0, ⦃⦄ => ⦃⦄
-  | 0, _ + 1, _ +> 0  => 0
-  | 0, _ + 1, _ +> 1 => Bits.max _
-  | n + 1, _ + 1, xs +> x => signextend_core n xs +> x
+inductive signext' : Nat → Bool → ∀ {n}, Bits n → Bits n → Prop
+  | zero : ∀ n x (xs : Bits n), signext' 0 x (x +> xs) (x +> xs)
+  | succ :
+    ∀ m n x y (xs ys : Bits n),
+      signext' m y xs ys →
+      signext' (m + 1) y (x +> xs) (y +> ys)
 
-def Bits.signextend {n} (x y : Bits n) : Bits n :=
-  signextend_core (8 * (Bits.toNat x + 1)) y
+def signext (x y y' : Word) : Prop :=
+  ∃ b, signext' (256 - (8 * (x.toNat + 1))) b y y'
 
-def Bits.suffix : ∀ {m n}, Bits m → Bits n → Prop
-  | _, 0, _, ⦃⦄ => true
-  | 0, _ + 1, ⦃⦄, _ => false
-  | _ + 1, _ + 1, xs +> x, ys +> y => suffix xs ys ∧ x = y
-
+-- def Bits.suffix : ∀ {m n}, Bits m → Bits n → Prop
+--   | _, 0, _, ⦃⦄ => true
+--   | 0, _ + 1, ⦃⦄, _ => false
+--   | _ + 1, _ + 1, x +> xs, y +> ys => suffix xs ys ∧ x = y
+--
+-- def Bits.getSuff : ∀ {m n}, Bits (m + n) → Bits n
+--   | _, 0, _ => ⦃⦄
+--   | _, n + 1, x +> xs => getSuff x +> xs
+--
 def Bits.getSuff : ∀ {m n}, Bits (m + n) → Bits n
-  | _, 0, _ => ⦃⦄
-  | _, n + 1, xs +> x => getSuff xs +> x
+  | _, 0, xs => xs
 
-inductive Bits.prefix : ∀ {m n}, Bits m → Bits n → Prop
-  | refl : ∀ {m} (xs : Bits m), Bits.prefix xs xs
-  | cons : ∀ {m n} (xs : Bits m) (ys : Bits n) y, Bits.prefix xs ys → Bits.prefix xs (ys +> y)
+  | (.succ _), _, x +> xs => xs.getSuff
 
-lemma Bits.nil_eq_nil {x y : Bits 0} : x = y := by cases x; cases y; rfl
+  #exit
+  | _, n + 1, x +> xs => getSuff x +> xs
 
-lemma Bits.append_inj {m n} {xs₁ ys₁ : Bits m} {xs₂ ys₂ : Bits n} :
-     xs₁ ++ xs₂ = ys₁ ++ ys₂ → xs₁ = ys₁ ∧ xs₂ = ys₂ := by
-  induction n generalizing xs₁ ys₁ m with
-  | zero => cases xs₂; cases ys₂; intro h; refine' ⟨h, nil_eq_nil⟩
-  | succ n ih =>
-    match xs₂, ys₂ with
-    | xs₂' +> x, ys₂' +> y =>
-      simp [Bits.append_cons]; intro h h'
-      refine ⟨(ih h).left, (ih h).right, h'⟩
+#exit
+-- inductive Bits.prefix : ∀ {m n}, Bits m → Bits n → Prop
+--   | refl : ∀ {m} (xs : Bits m), Bits.prefix xs xs
+--   | cons : ∀ {m n} (xs : Bits m) (ys : Bits n) y, Bits.prefix xs ys → Bits.prefix xs (y +> ys)
+--
+-- lemma Bits.nil_eq_nil {x y : Bits 0} : x = y := by cases x; cases y; rfl
+--
+-- lemma Bits.append_inj {m n} {xs₁ ys₁ : Bits m} {xs₂ ys₂ : Bits n} :
+--      xs₁ ++ xs₂ = ys₁ ++ ys₂ → xs₁ = ys₁ ∧ xs₂ = ys₂ := by
+--   induction n generalizing xs₁ ys₁ m with
+--   | zero => cases xs₂; cases ys₂; intro h; refine' ⟨h, nil_eq_nil⟩
+--   | succ n ih =>
+--     match xs₂, ys₂ with
+--     | xs₂' +> x, ys₂' +> y =>
+--       simp [Bits.append_cons]; intro h h'
+--       refine ⟨(ih h).left, (ih h).right, h'⟩
 
 def Addr.toWord (a : Addr) : Bits 256 := (0 : Bits 96) ++ a
 
@@ -616,7 +661,7 @@ def Bits.head {m} : ∀ {n}, Bits (m + n) → Bits m
 
 def Bits.tail {m} : ∀ {n}, Bits (m + n) → Bits n
   | 0, _ => ⦃⦄
-  | n + 1, xs +> x => tail xs +> x
+  | n + 1, x +> xs => tail x +> xs
 lemma Bits.head_append_tail {m n} : ∀ xs : Bits (m + n), head xs ++ tail xs = xs := by
   induction n with
   | zero => intro xs; rfl
@@ -649,7 +694,7 @@ lemma Bits.zero_toNat : ∀ {k}, (0 : Bits k).toNat = 0
   | (k + 1) => by simp [zero_eq_cons]; unfold Bits.toNat; simp [zero_toNat]; rfl
 
 lemma Bits.cons_eq_zero {n x} {xs : Bits n} :
-  xs +> x = 0 ↔ (xs = 0 ∧ x = 0) := by rw [zero_eq_cons]; simp
+  x +> xs = 0 ↔ (xs = 0 ∧ x = 0) := by rw [zero_eq_cons]; simp
 
 lemma Bits.of_toNat_eq_zero {k} (xs : Bits k) (h : xs.toNat = 0) : xs = 0 := by
   induction k with
@@ -856,7 +901,7 @@ lemma Bits.lt_succ_self {n} {xs : Bits n} (h : xs < max n) : xs < xs.succ := by
   | zero => cases xs; simp [max] at h; cases h
   | succ n ih =>
     match xs with
-    | xs +> x =>
+    | x +> xs =>
       simp [max] at h; rw [cons_lt_cons] at h
       cases x <;> simp [succ, cons_lt_cons]
       · right; constructor
@@ -869,7 +914,7 @@ lemma Bits.lt_trans {n} {xs ys zs : Bits n} (h : xs < ys) (h' : ys < zs) : xs < 
   | zero => cases xs; cases ys; cases h
   | succ n ih =>
     match xs, ys, zs with
-    | xs +> x, ys +> y, zs +> z =>
+    | x +> xs, y +> ys, zs +> z =>
       cases x <;> cases y <;> cases z <;>
       simp [cons_lt_cons, false_lt_true, not_true_lt_false] at * <;>
       try {apply ih h h'}
@@ -891,7 +936,7 @@ lemma Bits.le_of_lt {n : Nat} {xs ys : Bits n} (h : xs < ys) : xs ≤ ys := by
   | zero => cases xs; cases ys; constructor
   | succ n =>
     match xs, ys with
-    | xs +> x, ys +> y =>
+    | x +> xs, y +> ys =>
       rw [cons_lt_cons] at h
       rcases h with h | ⟨h, h'⟩
       · left; exact h
@@ -906,7 +951,7 @@ lemma Bits.lt_or_eq_of_le {n : Nat} {xs ys : Bits n} (h : xs ≤ ys) : xs < ys �
   | zero => right; apply nil_eq_nil
   | succ n  =>
   match xs, ys with
-  | xs +> x, ys +> y =>
+  | x +> xs, y +> ys =>
     cases h with
     | inl h' => left; left; apply h'
     | inr h' =>
@@ -921,7 +966,7 @@ lemma Bits.le_iff_lt_or_eq {n : Nat} {xs ys : Bits n} : xs ≤ ys ↔ (xs < ys �
   ⟨lt_or_eq_of_le, le_of_lt_or_eq⟩
 
 lemma Bits.cons_lt_cons_of_le_of_lt {n} {xs ys : Bits n} {x y} :
-    xs ≤ ys → x < y → xs +> x < ys +> y := by
+    xs ≤ ys → x < y → x +> xs < y +> ys := by
   intros hs h; cases lt_or_eq_of_le hs with
   | inl h_lt => left; apply h_lt
   | inr h_eq => right; refine ⟨h_eq, h⟩
@@ -942,7 +987,7 @@ lemma Bits.zero_le {n} : ∀ xs : Bits n, 0 ≤ xs := by
   | zero => intro xs; cases xs; constructor
   | succ n ih =>
     intro xs; match xs with
-    | xs +> x =>
+    | x +> xs =>
       rw [zero_eq_cons, cons_le_cons]
       cases lt_or_eq_of_le <| ih xs
       · left; assumption
@@ -968,7 +1013,7 @@ lemma Bits.le_trans {n} {xs ys zs : Bits n} (h : xs ≤ ys) (h' : ys ≤ zs) : x
   | zero => cases xs; cases zs; constructor
   | succ n ih =>
     match xs, ys, zs with
-    | xs +> x, ys +> y, zs +> z =>
+    | x +> xs, y +> ys, zs +> z =>
       cases x <;> cases y <;> cases z <;>
       simp [cons_le_cons, false_le, not_true_le_false] at * <;>
       try {apply lt_or_eq_of_le (ih (le_of_lt_or_eq h) (le_of_lt_or_eq h'))}
@@ -1102,7 +1147,7 @@ lemma Bytes.sig_length_le (bs : Bytes) : bs.sig.length ≤ bs.length := by
 lemma eq_nil_or_eq_cons (bs : Bytes) : bs = ⟪⟫ ∨ ∃ bs' b, bs = (bs' :> b) := by
   cases bs; left; rfl; right; refine ⟨_, _, rfl⟩
 
-lemma Bits.cons_eq_max {n} (xs : Bits n) (x) : xs +> x = max _ ↔ (xs = max _ ∧ x = 1) := by
+lemma Bits.cons_eq_max {n} (xs : Bits n) (x) : x +> xs = max _ ↔ (xs = max _ ∧ x = 1) := by
   cases x
   · apply iff_of_false <;> intro h
     · cases h
@@ -1120,7 +1165,7 @@ lemma Bits.lt_or_ge {n : ℕ} : ∀ xs ys : Bits n, xs < ys ∨ xs ≥ ys := by
   | succ n ih =>
     intros xs ys
     match xs, ys with
-    | xs +> x, ys +> y =>
+    | x +> xs, y +> ys =>
       rcases ih xs ys with h | h
       · left; left; exact h
       · simp only [GE.ge] at h
@@ -1158,7 +1203,7 @@ lemma Bits.toNat_lt_toNat {k} (xs ys : Bits k) (h : xs < ys) : xs.toNat < ys.toN
   | zero => cases xs; cases ys; cases h
   | succ k ih =>
     match xs, ys with
-    | xs +> x, ys +> y =>
+    | x +> xs, y +> ys =>
       rw [cons_lt_cons] at h
       rcases h with h | ⟨h_eq, h_lt⟩
       · simp [toNat]
@@ -1178,7 +1223,7 @@ lemma Bits.lt_succ_of_le  {k} {xs ys : Bits k}
   | zero => cases h nil_eq_nil
   | succ k ih =>
     match xs, ys with
-    | xs +> x, ys +> y =>
+    | x +> xs, y +> ys =>
       rw [cons_le_cons] at h'
       simp [Ne, cons_eq_max] at h; cases y
       · simp [succ]; rcases h' with h' | h'
@@ -1203,7 +1248,7 @@ lemma Bits.nof_of_add_eq_max {k} (xs ys : Bits k) (h : xs + ys = max _) :
   | zero => cases xs; cases ys; simp [NoOverflow]; rfl
   | succ k ih =>
     match xs, ys with
-    | xs +> x, ys +> y =>
+    | x +> xs, y +> ys =>
       have h' : xs + ys = max _ ∧ y = !x := by
         cases x <;> cases y
         · simp [cons_add_cons, incr] at h;
@@ -1228,7 +1273,7 @@ lemma Bits.nof_of_add_eq_max {k} (xs ys : Bits k) (h : xs + ys = max _) :
       apply Nat.mul_lt_mul_of_pos_left _ (by simp)
       apply ih  _ _ h'.left
 
-lemma Bits.cons_Overflow_cons {k} {xs ys : Bits k} {x y} (h : xs ↟ ys) : (xs +> x) ↟ (ys +> y) := by
+lemma Bits.cons_Overflow_cons {k} {xs ys : Bits k} {x y} (h : xs ↟ ys) : (x +> xs) ↟ (y +> ys) := by
   simp [Overflow, Bits.toNat, Nat.pow_succ, Nat.mul_comm]
   apply Nat.le_trans <| Nat.mul_le_mul_left 2 h
   simp [Nat.mul_add]; rw [Nat.add_assoc, Nat.mul_comm]
@@ -1236,7 +1281,7 @@ lemma Bits.cons_Overflow_cons {k} {xs ys : Bits k} {x y} (h : xs ↟ ys) : (xs +
   rw [Nat.mul_comm]; apply Nat.le_add_right
 
 lemma Bits.of_cons_nof_cons {k} {xs ys : Bits k} {x y} :
-    NoOverflow (xs +> x) (ys +> y) → NoOverflow xs ys := by
+    NoOverflow (x +> xs) (y +> ys) → NoOverflow xs ys := by
   simp [nof_iff_not_Overflow]; apply mt cons_Overflow_cons
 
 lemma Bits.add_toNat {k} (xs ys : Bits k) (h : NoOverflow xs ys) :
@@ -1245,7 +1290,7 @@ lemma Bits.add_toNat {k} (xs ys : Bits k) (h : NoOverflow xs ys) :
   | zero => simp [nil_toNat]
   | succ k ih =>
     match xs, ys with
-    | xs +> x, ys +> y =>
+    | x +> xs, y +> ys =>
       by_cases h_eq : (xs + ys) +> y = max _
       · rw [cons_eq_max] at h_eq
         cases x
@@ -1274,7 +1319,7 @@ lemma Bits.sub_toNat {k} (xs ys : Bits k) (h : ys ≤ xs) :
   | zero => simp [nil_toNat]
   | succ k ih =>
     match xs, ys with
-    | xs +> x, ys +> y =>
+    | x +> xs, y +> ys =>
       by_cases hd : (xs - ys) +> x = 0
       · rw [cons_eq_zero] at hd
         have h_eq : xs = ys := by
@@ -1679,7 +1724,7 @@ lemma Bits.zipWith_comm (f : Bool → Bool → Bool)
   | succ n ih =>
     intros xs ys
     match xs, ys with
-    | xs +> x, ys +> y =>
+    | x +> xs, y +> ys =>
       simp [zipWith, ih xs ys, hf x y]
 
 lemma Bits.and_comm {n} : ∀ (x y : Bits n), and x y = and y x := by
@@ -1693,7 +1738,7 @@ lemma Bits.toNat_inj {k} (xs ys : Bits k) (h : xs.toNat = ys.toNat) : xs = ys :=
   | zero => apply Bits.nil_eq_nil
   | succ k ih =>
     match xs, ys with
-    | xs +> x, ys +> y =>
+    | x +> xs, y +> ys =>
       simp [Bits.toNat] at h
       cases Nat.eq_floor (Bool.toNat_lt _) (Bool.toNat_lt _) h
       rw [ih xs ys asm, Bool.toNat_inj x y asm]
