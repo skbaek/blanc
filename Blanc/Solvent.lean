@@ -34,7 +34,7 @@ lemma Rinst.inv_solvent {e s o s' wa}
 
 lemma transfer_inv_solvent {a wa} {v} {s : Storage} {b b' : Balances}
     (h_ne : a ≠ wa)
-    (h_nof : nof b)
+    (h_nof : SumNof b)
     (h_di : Transfer b a v wa b')
     (h_sv : s.Solvent 0 (b wa)) :
     s.Solvent v (b' wa) := by
@@ -44,8 +44,8 @@ lemma transfer_inv_solvent {a wa} {v} {s : Storage} {b b' : Balances}
   have h_eq : b' wa = b wa + v := by
     rcases h_di with ⟨_, _, hd, hi⟩
     rw [(hd wa).right h_ne, (hi wa).left rfl]
-  have h_nof : NoOverflow  (b wa) v := by
-    unfold NoOverflow ; apply Nat.lt_of_le_of_lt _ h_nof
+  have h_nof : Nof  (b wa) v := by
+    unfold Nof ; apply Nat.lt_of_le_of_lt _ h_nof
     apply le_trans _ <| add_le_sum_of_ne b h_ne.symm
     apply Nat.add_le_add (le_refl _)
     apply Bits.toNat_le_toNat _ _ h_di.left
@@ -70,7 +70,7 @@ lemma Xinst.prep_inv_solvent
     {e s ep sp o rx sw wa}
     (ho : Xinst.isCall o)
     (h_cr : Xinst.Run' e s ep sp o rx sw)
-    (ha : e.cta ≠ wa) (h_nof : nof s.bal)
+    (ha : e.cta ≠ wa) (h_nof : SumNof s.bal)
     (h_sv : s.Solvent wa e) : sp.Solvent wa ep := by
   have h_stor := (Xinst.prep_inv_stor h_cr).symm
   cases h_cr <;> try {cases ho} <;>
@@ -138,7 +138,7 @@ lemma frel_to_address {w r} {f g : Storage} :
   intros h0 h1 a; constructor <;> intro h3
   · apply (h1 <| Addr.toWord a).left; rw [← h3, toAddr_toWord_eq h0]
   · apply (h1 <| Addr.toWord a).right
-    intro hc; apply h3; rw [hc, toWord_toAddr_eq]
+    intro hc; apply h3; rw [hc, toAddr_toWord]
 
 open Inst
 
@@ -209,7 +209,7 @@ lemma of_transferFromUpdateSbal {e s₀ sₙ} {sbal wad src}
       rw [toAddr_toWord_eq h_src, ← h_sbal]
       apply (h_ow src).left rfl
     · apply (h_ow <| Addr.toWord a).right
-      intro hc; apply ha; rw [← toWord_toAddr_eq a, hc]
+      intro hc; apply ha; rw [← toAddr_toWord a, hc]
   · rw [toAddr_toWord_eq h_src, ← h_sbal]; exact h_le
 
 lemma updateAllowance_inv_stor_rest {wad dst} {e s r}
@@ -450,7 +450,7 @@ theorem approve_inv_solvent {e s r} (h : Func.Run c e s approve r)
   apply result_solvent_of_state_solvent (approve_inv_wbal h) _ h'
   rw [approve_inv_bal h]
 
-lemma nof_of_solvent {s a e} (h : State.Solvent s a e) : nof (s.stor a).rest := by
+lemma nof_of_solvent {s a e} (h : State.Solvent s a e) : SumNof (s.stor a).rest := by
   apply lt_of_le_of_lt _ (Bits.toNat_lt_pow <| s.bal a)
   simp [State.Solvent, Storage.Solvent] at h
   by_cases h' : e.cta = a
@@ -518,8 +518,8 @@ theorem wbsum_after_deposit {e : Env} {s : State} {r}
     · simp [Storage.rest]; rw [← hx, ← h_cbal, Bits.add_comm]
       exact (h (Addr.toWord e.cla)).left rfl
     · apply (h (Addr.toWord x)).right <| mt (@Addr.toWord_inj e.cla x) hx
-  have h_nof' : NoOverflow (Storage.rest (s₃.stor e.cta) e.cla) e.clv := by
-    simp only [NoOverflow ]; apply lt_of_le_of_lt _ h_nof
+  have h_nof' : Nof (Storage.rest (s₃.stor e.cta) e.cla) e.clv := by
+    simp only [Nof ]; apply lt_of_le_of_lt _ h_nof
     rw [Nat.add_le_add_iff_right]; apply le_sum
   exact sum_add_assoc h_incr h_nof'
 
@@ -598,7 +598,7 @@ lemma of_send_to_caller {e : Env} {s sf} {wad}
     (ih : Exec.InvDepth e.exd e.cta weth (Precond e.cta) (Postcond e.cta))
     (hp : [wad] <<+ s.stk)
     (h_code : some (s.code e.cta) = Prog.compile weth)
-    (h_nof : nof s.bal)
+    (h_nof : SumNof s.bal)
     (h_le : wad ≤ s.bal e.cta)
     (h_sv : Storage.Solvent (s.stor e.cta) 0 (s.bal e.cta - wad)) :
     Line.Run e s sendToCaller sf →
@@ -622,7 +622,7 @@ lemma of_send_to_caller {e : Env} {s sf} {wad}
   · have h_exd := Xinst.exd_lt_of_run' h_rm
     have h_weth' : some (sp.code e.cta) = Prog.compile weth := by
       rw [← Xinst.prep_inv_code h_rm, h_code]
-    have h_teth' : nof sp.bal := Xinst.prep_inv_nof h_rm h_nof
+    have h_teth' : SumNof sp.bal := Xinst.prep_inv_nof h_rm h_nof
     have h_sv : State.Solvent sp e.cta ep := by
       have hs : [⟪Ox x5 x2, Ox x0 x8⟫.toBits 32, Addr.toWord e.cla, wad] <<+ s₁.stk := by
         apply pref_trans _ hs₁; show_pref
@@ -860,7 +860,7 @@ theorem weth_inv_solvent (wa : Addr) :
             by_cases ha : a = wa
             · have h_rw : r.bal wa = s.bal wa + s.bal e.cta := by
                 rw [(hd wa).right h_ne]; apply ((hi wa).left ha).symm
-              have hle : NoOverflow  (s.bal wa) (s.bal e.cta) :=
+              have hle : Nof  (s.bal wa) (s.bal e.cta) :=
                 lt_of_le_of_lt (add_le_sum_of_ne s.bal h_ne.symm) h_pc.nof
               rw [h_rw, Bits.add_toNat _ _ hle]; apply Nat.le_add_right
             · rw [(hd wa).right h_ne, (hi wa).right ha]
@@ -873,7 +873,7 @@ theorem weth_inv_solvent (wa : Addr) :
 
 lemma transact_inv_solvent {ST RT w r wa}
     (h : Transact ST RT w r) (h_wa : ST ≠ wa)
-    (h_nof : nof w.bal) (h_wb : w.Solvent wa)
+    (h_nof : SumNof w.bal) (h_wb : w.Solvent wa)
     (h_code : some (w.code wa) = Prog.compile weth) : r.Solvent wa := by
   cases h with
   | create gpr clv ctc bal r cd h_di h_nil cr =>
@@ -905,7 +905,7 @@ lemma transact_inv_solvent {ST RT w r wa}
         have h_eq : w.bal wa + clv = bal wa := by
           rcases h_di with ⟨_, bal', hd, hi⟩
           rw [(hd wa).right h_wa, ← (hi wa).left h_eq]
-        have h_nof : NoOverflow  (w.bal wa) clv := by
+        have h_nof : Nof  (w.bal wa) clv := by
           apply lt_of_le_of_lt _ <| h_nof
           apply le_trans _ <| add_le_sum_of_ne w.bal h_wa
           rw [Nat.add_comm, Nat.add_le_add_iff_right]
@@ -928,7 +928,7 @@ lemma transact_inv_solvent {ST RT w r wa}
   | fail => apply h_wb
 
 theorem transact_inv_sum_bal {sda rca w r} (h : Transact sda rca w r)
-    (h' : nof w.bal) : sum w.bal = sum r.bal := by
+    (h' : SumNof w.bal) : sum w.bal = sum r.bal := by
   cases h with
   | create =>
     rename Exec _ _ _ _ => cr
@@ -945,7 +945,7 @@ theorem transaction_inv_solvent
     (wa : Addr) (w w' : World)
     (h_code : some (w.code wa) = weth.compile)
     (h_solv : w.Solvent wa)
-    (h_bal : nof w.bal)
+    (h_bal : SumNof w.bal)
     (tx : Transaction w w') :
     w'.Solvent wa := by
   have h_ne : tx.sda ≠ wa := by
@@ -953,10 +953,10 @@ theorem transaction_inv_solvent
     cases Prog.compile_ne_nil h_code.symm
   have h_nof_bal :
     sum tx.bal + tx.vs.toNat + tx.vv.toNat + tx.vb.toNat < 2 ^ 256 := by
-    have h_nof' : NoOverflow tx.vs tx.vv :=
+    have h_nof' : Nof tx.vs tx.vv :=
       lt_of_le_of_lt (Nat.le_add_right _ _) tx.nof
-    have h_nof'' : NoOverflow  (tx.vs + tx.vv) tx.vb := by
-      simp only [NoOverflow ]; rw [Bits.add_toNat _ _ h_nof']; apply tx.nof
+    have h_nof'' : Nof  (tx.vs + tx.vv) tx.vb := by
+      simp only [Nof ]; rw [Bits.add_toNat _ _ h_nof']; apply tx.nof
     have h_eq :
       (tx.vs + tx.vv + tx.vb).toNat =
         tx.vs.toNat + tx.vv.toNat + tx.vb.toNat := by
@@ -969,13 +969,13 @@ theorem transaction_inv_solvent
         apply le_sum
       rw [← sum_sub_assoc tx.decr tx.le, Nat.sub_add_cancel h_le]
     rw [h_eq']; apply h_bal
-  have h_nof : nof tx.bal := by
+  have h_nof : SumNof tx.bal := by
     apply lt_of_le_of_lt (le_trans _ <| Nat.le_add_right _ _) h_nof_bal
     apply le_trans (Nat.le_add_right _ _) <| Nat.le_add_right _ _
   have h_sv : Storage.Solvent (w.stor wa) 0 (tx.bal wa) := by
     rw [← (tx.decr wa).right h_ne]; apply h_solv
   have hq := transact_inv_solvent tx.act h_ne h_nof h_sv h_code
-  have h_nof' : NoOverflow (tx.r.bal tx.sda) tx.vs := by
+  have h_nof' : Nof (tx.r.bal tx.sda) tx.vs := by
     apply lt_of_le_of_lt _ h_nof_bal
     apply le_trans _ <| Nat.le_add_right _ _
     apply le_trans _ <| Nat.le_add_right _ _
@@ -988,8 +988,8 @@ theorem transaction_inv_solvent
   apply le_trans hq
   rw [(tx.incr wa).right h_ne]
   apply Bits.toNat_le_toNat
-  have h_nof'' : NoOverflow (tx.bal' tx.vla) tx.vv := by
-    simp only [NoOverflow ]
+  have h_nof'' : Nof (tx.bal' tx.vla) tx.vv := by
+    simp only [Nof ]
     rw [ transact_inv_sum_bal tx.act h_nof,
          sum_add_assoc tx.incr h_nof' ] at h_nof_bal
     apply lt_of_le_of_lt _ h_nof_bal

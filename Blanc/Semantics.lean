@@ -257,23 +257,37 @@ structure Result : Type :=
 -- should revert.
 
 -- This definition of memory slice allows looping around the
--- maximum address (2^256 - 1). It seems that this is the natural
+-- maximum address 2^256 - 1. It seems that this is the natural
 -- interpretation of YP which doesn't mention address overflow,
 -- and in any case it shouldn't be a practical concern since
 -- 2^256 bytes will never be allocated, but it would be good to
 -- double-check it is indeed correct.
 
-inductive Memory.Slice : Memory → Word → Word → Bytes → Prop
-  | zero : ∀ m x, Memory.Slice m x 0 ⟪⟫
-  | succ :
-  ∀ m x y bs,
-    Memory.Slice m x y bs →
-    Memory.Slice m x y.succ (bs :> m (x + y))
+inductive Bits.next : ∀ {n}, Bits n → Bits n → Prop
+  | tail :
+    ∀ n x (xs ys : Bits n),
+      Bits.next xs ys →
+      Bits.next (x +> xs) (x +> ys)
+  | carry : ∀ n, Bits.next (0 +> (.max n)) (1 +> 0)
+
+def Memory.slice' : Memory → Word → Nat → Bytes
+  | _, _, 0 => []
+  | m, x, n + 1 => m x :: slice' m x.succ n
+
+def Memory.slice (m : Memory) (x y : Word) : Bytes := slice' m x y.toNat
+
+-- inductive Memory.Slice : Memory → Word → Word → Bytes → Prop
+--   | zero : ∀ m x, Memory.Slice m x 0 []
+--   | succ :
+--   ∀ m x y bs,
+--     Memory.Slice m x y bs →
+--     Memory.Slice m x y.succ (bs :> m (x + y))
 
 def Memory.store (x : Word) : Bytes → Memory → Memory
-  | ⟪⟫, m => m
-  | bs :> b, m =>
-    Memory.store x bs <| λ y => if Bits.succs bs.length x = y then b else m y
+  | [], m => m
+  | b :: bs, m =>
+    let m' := store x.succ bs m
+    λ y => if x = y then b else m' y
 
 def Memory.init : Memory := λ _ => Bits.zero _
 
@@ -340,7 +354,10 @@ def State.Smod (s s' : State) : Prop := ∃ x y, State.Diff [x, y] [Bits.smod x 
 def State.Addmod (s s' : State) : Prop := ∃ x y z, State.Diff [x, y, z] [Bits.addmod x y z] s s'
 def State.Mulmod (s s' : State) : Prop := ∃ x y z, State.Diff [x, y, z] [Bits.mulmod x y z] s s'
 def State.Exp (s s' : State) : Prop := ∃ x y, State.Diff [x, y] [x ^ y] s s'
-def State.Signextend (s s' : State) : Prop := ∃ x y, State.Diff [x, y] [Bits.signextend x y] s s'
+def State.Signextend (s s' : State) : Prop :=
+  ∃ x y z,
+    State.Diff [x, y] [z] s s' ∧
+    Bits.Signext x y z
 
 instance slt_decidable {n} (xs ys : Bits n) : Decidable (xs ±< ys) := by
   induction n with
@@ -372,6 +389,8 @@ infix:70 " ±<? " => slt_check
 infix:70 " ±>? " => sgt_check
 infix:70 " =? " => eq_check
 
+#eval List.getD [1, 2, 3] 5 0
+
 def State.Lt (s s' : State) : Prop := ∃ x y, State.Diff [x, y] [x <? y] s s'
 def State.Gt (s s' : State) : Prop := ∃ x y, State.Diff [x, y] [x >? y] s s'
 def State.Slt (s s' : State) : Prop := ∃ x y, State.Diff [x, y] [x ±<? y] s s'
@@ -383,9 +402,9 @@ def State.Or (s s' : State) : Prop := ∃ x y, State.Diff [x, y] [Bits.or x y] s
 def State.Xor (s s' : State) : Prop := ∃ x y, State.Diff [x, y] [Bits.xor x y] s s'
 def State.Not (s s' : State) : Prop := ∃ x, State.Diff [x] [~ x] s s'
 def State.Byte (s s' : State) : Prop :=
-  ∃ (x y : Word) (pf : Bits (x.toNat * 8)) (sf : Bits 8),
-    State.Diff [x, y] [(0 : Bits 248) ++ sf] s s' ∧
-    Bits.prefix (pf ++ sf) y
+  ∃ (x y : Word) (b : Bits 8),
+    State.Diff [x, y] [(0 : Bits 248) ++ b] s s' ∧
+    List.getD (@Bits.toBytes 32 y) x.toNat 0 = b
 def State.Shl (s s' : State) : Prop := ∃ x y, State.Diff [x, y] [Bits.shl x.toNat y] s s'
 def State.Shr (s s' : State) : Prop := ∃ x y, State.Diff [x, y] [Bits.shr x.toNat y] s s'
 def State.Sar (s s' : State) : Prop := ∃ x y, State.Diff [x, y] [Bits.sar x.toNat y] s s'
@@ -417,15 +436,14 @@ def State.Extcodehash (s s' : State) : Prop :=
 def State.Calldataload (e : Env) (s s' : State) : Prop :=
   ∃ x y,
     State.Diff [x] [y] s s' ∧
-    sliceFill e.cld x.toNat 32 (@Bits.toBytes 32 y)
+    List.sliceD e.cld x.toNat 32 0 = @Bits.toBytes 32 y
 
 def State.Calldatacopy (e : Env) (s s' : State) : Prop :=
-  ∃ x y z sc,
+  ∃ x y z,
     State.Rel
       { State.Rels.dft with
         stk := Stack.Pop [x, y, z],
-        mem := Mstored x sc } s s' ∧
-    sliceFill e.cld y.toNat z.toNat sc
+        mem := Mstored x <| List.sliceD e.cld y.toNat z.toNat 0 } s s'
 
 def State.Codecopy (e : Env) (s s' : State) : Prop :=
   ∃ x y z bs,
@@ -433,26 +451,24 @@ def State.Codecopy (e : Env) (s s' : State) : Prop :=
       { State.Rels.dft with
         stk := Stack.Pop [x, y, z],
         mem := Mstored x bs } s s' ∧
-    slice e.code y.toNat bs ∧
-    Bytes.Size bs z
+    List.slice? e.code y.toNat z.toNat = some bs
 
 def State.Extcodecopy (s s' : State) : Prop :=
   ∃ w x y z bs,
     State.Rel
       { State.Rels.dft with
         stk := Stack.Pop [w, x, y, z],
-        mem := Mstored x bs } s s' ∧
-    slice (s.code <| toAddr w) y.toNat bs ∧
-    Bytes.Size bs z
+        mem := Mstored x bs }
+      s s' ∧
+    List.slice? (s.code <| toAddr w) y.toNat z.toNat = some bs
 
 def State.Retdatacopy (s s' : State) : Prop :=
-  ∃ x y z sc,
+  ∃ x y z,
     State.Rel
-    { State.Rels.dft with
-      stk := Stack.Pop [x, y, z],
-      mem := Mstored x sc }
-    s s' ∧
-    sliceFill s.ret y.toNat z.toNat sc
+      { State.Rels.dft with
+        stk := Stack.Pop [x, y, z],
+        mem := Mstored x <| List.sliceD s.ret y.toNat z.toNat 0 }
+      s s'
 
 -- One thing that all block operations have in common is that they consume
 -- no Stack items, leave exactly one new item on the Stack, and change nothing
@@ -474,7 +490,7 @@ def State.Sload (e : Env) (s s' : State) : Prop :=
 
 def State.Mload (s s' : State) : Prop :=
   ∃ x y, State.Diff [x] [y] s s' ∧
-    Memory.Slice s.mem x 32 (@Bits.toBytes 32 y)
+    Memory.slice s.mem x 32 = @Bits.toBytes 32 y
 
 def State.Mstore (s s' : State) : Prop :=
   ∃ x y,
@@ -485,12 +501,11 @@ def State.Mstore (s s' : State) : Prop :=
       s s'
 
 def State.Mstore8 (s s' : State) : Prop :=
-  ∃ (x y : Word) (b : _root_.Byte),
+  ∃ (x y : Word),
     State.Rel
       { State.Rels.dft with
         stk := Stack.Diff [x, y] [],
-        mem := Mstored x ⟪b⟫ } s s' ∧
-    Bits.suffix y b
+        mem := Mstored x [@Bits.suffix 8 248 y] } s s'
 
 -- Design choice notes: in this formalization, definition of EVM operational semantics
 -- does not follow the 'obvious' path that a cursory reading of YP may suggest,
@@ -532,32 +547,36 @@ def Xinst.toByte : Xinst → Byte
   | statcall => Ox xF xA
 
 def pushToByte (bs : Bytes) : Byte := Ox x5 xF + Nat.toByte bs.length
-def pushToBytes (bs : Bytes) : Bytes := ⟪pushToByte bs⟫ ++ bs
+def pushToBytes (bs : Bytes) : Bytes := pushToByte bs :: bs
 
-def Rinst.At  (e : Env) (pc : Nat) (o : Rinst) : Prop  := slice e.code pc ⟪Rinst.toByte o⟫
-def Jinst.At (e : Env) (pc : Nat) (o : Jinst) : Prop := slice e.code pc ⟪Jinst.toByte o⟫
-def Xinst.At (e : Env) (pc : Nat) (o : Xinst) : Prop := slice e.code pc ⟪Xinst.toByte o⟫
-def Hinst.At (e : Env) (pc : Nat) (o : Hinst) : Prop := slice e.code pc ⟪Hinst.toByte o⟫
-def pushAt (e : Env) (pc : Nat) (bs : Bytes) : Prop :=
-  slice e.code pc (pushToBytes bs) ∧ bs.length ≤ 32
+def Rinst.At (e : Env) (pc : Nat) (o : Rinst) : Prop := -- e.code.Slice pc [o.toByte]
+  List.get? e.code pc = some (Rinst.toByte o)
+def Jinst.At (e : Env) (pc : Nat) (o : Jinst) : Prop := -- e.code.Slice pc [o.toByte]
+  List.get? e.code pc = some (Jinst.toByte o)
+def Xinst.At (e : Env) (pc : Nat) (o : Xinst) : Prop := -- e.code.Slice pc [o.toByte]
+  List.get? e.code pc = some (Xinst.toByte o)
+def Hinst.At (e : Env) (pc : Nat) (o : Hinst) : Prop := -- e.code.Slice pc [o.toByte]
+  List.get? e.code pc = some (Hinst.toByte o)
+def PushAt (e : Env) (pc : Nat) (bs : Bytes) : Prop :=
+  --List.slice? e.code pc (bs.length + 1) = some (pushToBytes bs) ∧ bs.length ≤ 32
+  List.Slice e.code pc (pushToBytes bs) ∧ bs.length ≤ 32
 
 inductive Hinst.Run : Env → State → Hinst → Result → Prop
-  | stop : ∀ e s, Hinst.Run e s Hinst.stop (Result.wrap s ⟪⟫)
+  | stop : ∀ e s, Hinst.Run e s Hinst.stop (Result.wrap s [])
   | ret :
-    ∀ e s x y bs,
+    ∀ e s x y,
       ([x, y] <+: s.stk) →
-      (s.mem.Slice x y bs) →
-      Hinst.Run e s Hinst.ret (.wrap s bs)
+      Hinst.Run e s Hinst.ret (.wrap s <| s.mem.slice x y)
   | dest :
     ∀ (e : Env) (s : State) x bal bal',
       e.wup = 1 →
       ([x] <+: s.stk) →
       Overwrite e.cta 0 s.bal bal →
       Increase (toAddr x) (s.bal e.cta) bal bal' →
-      Hinst.Run e s Hinst.dest {s with bal := bal', ret := ⟪⟫, dest := e.cta :: s.dest}
+      Hinst.Run e s Hinst.dest {s with bal := bal', ret := [], dest := e.cta :: s.dest}
 
 def insidePushArg (e : Env) (loc : Nat) : Prop :=
-  ∃ (pc : Nat) (bs : Bytes), pushAt e pc bs ∧ pc < loc ∧ loc ≤ pc + bs.length
+  ∃ (pc : Nat) (bs : Bytes), PushAt e pc bs ∧ pc < loc ∧ loc ≤ pc + bs.length
 
 def Jumpable (e : Env) (n : Nat) : Prop :=
   Jinst.At e n Jinst.jumpdest ∧ ¬ insidePushArg e n
@@ -685,12 +704,12 @@ def Env.prep (e : Env) (s : State)
 
 def Env.prep' (e : Env)
     (cta : Addr) (clv : Word) (ctc : Bytes) (exd : Nat) : Env :=
-  { cta := cta, oga := e.oga, gpr := e.gpr, cld := ⟪⟫, cla := e.cta,
+  { cta := cta, oga := e.oga, gpr := e.gpr, cld := [], cla := e.cta,
     clv := clv, code := ctc, exd := exd, wup := 1 }
 
 def State.prep (s : State) (bal : Balances) : State :=
   { bal := bal, stor := s.stor, code := s.code, stk := [],
-    mem := Memory.init, ret := ⟪⟫, dest := s.dest }
+    mem := Memory.init, ret := [], dest := s.dest }
 
 def State.wrap (r : Result) (stk : Stack) (mem : Memory) : State :=
   { bal := r.bal, stor := r.stor, code := r.code,
@@ -700,47 +719,41 @@ def State.wrap' (r : Result) (cd : Codes) (mem : Memory) (stk : Stack) : State :
   { bal := r.bal, stor := r.stor, code := cd, mem := mem,
     stk := stk, ret := r.ret, dest := r.dest }
 
-def storeRet (mem : Memory) (ret : Bytes) (sz : Nat) (loc : Word) (mem' : Memory) : Prop :=
-  ∃ bs,
-    slice ret 0 bs ∧
-    bs.length = (min sz ret.length) ∧
-    Mstored loc bs mem mem'
+def storeRet (mem : Memory) (ret : Bytes) (loc sz : Word) (mem' : Memory) : Prop :=
+  Mstored loc (List.take sz.toNat ret) mem mem'
 
 inductive Xinst.Run' : Env → State → Env → State → Xinst → Result → State → Prop
   | create :
     ∀ e : Env, e.wup = 1 →
     ∀ exd, e.exd = exd.succ →
-    ∀ (s : State) (cta : Addr), s.code cta = ⟪⟫ →
+    ∀ (s : State) (cta : Addr), s.code cta = [] →
     ∀ (clv clc csz : Word) (stk : Stack),
       Stack.Diff [clv, clc, csz] [Addr.toWord cta] s.stk stk →
-    ∀ ctc : Bytes, s.mem.Slice clc csz ctc →
     ∀ bal : Balances, Transfer s.bal e.cta clv cta bal →
     ∀ (r : Result) (cd : Codes),
       Overwrite cta r.ret r.code cd →
-      Xinst.Run' e s (.prep' e cta clv ctc exd)
+      Xinst.Run' e s (.prep' e cta clv (s.mem.slice clc csz) exd)
         (.prep s bal) .create r (.wrap' r cd s.mem stk)
   | create2 :
     ∀ e : Env, e.wup = 1 →
     ∀ exd, e.exd = exd.succ →
-    ∀ (s : State) (cta : Addr), s.code cta = ⟪⟫ →
+    ∀ (s : State) (cta : Addr), s.code cta = [] →
     ∀ (clv clc csz slt : Word) (stk : Stack),
       Stack.Diff [clv, clc, csz, slt] [Addr.toWord cta] s.stk stk →
-    ∀ ctc : Bytes, s.mem.Slice clc csz ctc →
     ∀ bal : Balances, Transfer s.bal e.cta clv cta bal →
     ∀ (r : Result) (cd : Codes),
       Overwrite cta r.ret r.code cd →
-      Xinst.Run' e s (.prep' e cta clv ctc exd)
+      Xinst.Run' e s (.prep' e cta clv (s.mem.slice clc csz) exd)
         (.prep s bal) .create r (.wrap' r cd s.mem stk)
   | call :
     ∀ (e : Env) exd, e.exd = exd.succ →
     ∀ gas adr clv ilc isz olc osz s stk,
       Stack.Diff [gas, adr, clv, ilc, isz, olc, osz] [1] s.stk stk →
-    ∀ cld : Bytes, s.mem.Slice ilc isz cld →
     ∀ bal : Balances, Transfer s.bal e.cta clv (toAddr adr) bal →
     ∀ r : Result,
-    ∀ mem : Memory, storeRet s.mem r.ret osz.toNat olc mem →
+    ∀ mem : Memory, storeRet s.mem r.ret olc osz mem →
       Xinst.Run' e s
-        (.prep e s (toAddr adr) cld e.cta clv (toAddr adr) exd e.wup)
+        (.prep e s (toAddr adr) (s.mem.slice ilc isz) e.cta clv (toAddr adr) exd e.wup)
         (.prep s bal) .call r (.wrap r stk mem)
   -- Two design flaws of CALLCODE:
   -- (1) it accepts a useless call value argument that doesn't actually do anything
@@ -750,31 +763,28 @@ inductive Xinst.Run' : Env → State → Env → State → Xinst → Result → 
     ∀ (e : Env) exd, e.exd = exd.succ →
     ∀ gas adr clv ilc isz olc osz s stk,
       Stack.Diff [gas, adr, clv, ilc, isz, olc, osz] [1] s.stk stk →
-    ∀ cld : Bytes, s.mem.Slice ilc isz cld →
     ∀ r : Result,
-    ∀ mem : Memory, storeRet s.mem r.ret osz.toNat olc mem →
+    ∀ mem : Memory, storeRet s.mem r.ret olc osz mem →
       Xinst.Run' e s
-        (.prep e s e.cta cld e.cta clv (toAddr adr) exd e.wup)
+        (.prep e s e.cta (s.mem.slice ilc isz) e.cta clv (toAddr adr) exd e.wup)
         (.prep s s.bal) .callcode r (.wrap r stk mem)
   | delcall :
     ∀ (e : Env) exd, e.exd = exd.succ →
     ∀ gas adr ilc isz olc osz s stk,
       Stack.Diff [gas, adr, ilc, isz, olc, osz] [1] s.stk stk →
-    ∀ cld : Bytes, s.mem.Slice ilc isz cld →
     ∀ r : Result,
-    ∀ mem : Memory, storeRet s.mem r.ret osz.toNat olc mem →
+    ∀ mem : Memory, storeRet s.mem r.ret olc osz mem →
       Xinst.Run' e s
-        (.prep e s e.cta cld e.cla e.clv (toAddr adr) exd e.wup)
+        (.prep e s e.cta (s.mem.slice ilc isz) e.cla e.clv (toAddr adr) exd e.wup)
         (.prep s s.bal) .delcall r (.wrap r stk mem)
   | statcall :
     ∀ (e : Env) exd, e.exd = exd.succ →
     ∀ gas adr ilc isz olc osz s stk,
       Stack.Diff [gas, adr, ilc, isz, olc, osz] [1] s.stk stk →
-    ∀ cld : Bytes, s.mem.Slice ilc isz cld →
     ∀ r : Result,
-    ∀ mem : Memory, storeRet s.mem r.ret osz.toNat olc mem →
+    ∀ mem : Memory, storeRet s.mem r.ret olc osz mem →
       Xinst.Run' e s
-        (.prep e s (toAddr adr) cld e.cta 0 (toAddr adr) exd 0)
+        (.prep e s (toAddr adr) (s.mem.slice ilc isz) e.cta 0 (toAddr adr) exd 0)
         (.prep s s.bal) .statcall r (.wrap r stk mem)
 
 inductive Step : Env → State → Nat → State → Nat → Type
@@ -802,8 +812,8 @@ inductive Step : Env → State → Nat → State → Nat → Type
       Step e s pc s' pc'
   | push :
     ∀ e s pc bs s',
-      pushAt e pc bs →
-      bs.length ≤ 32 →
+      PushAt e pc bs →
+      -- bs.length ≤ 32 →
       State.Push [bs.toBits 32] s s' →
       Step e s pc s' (pc + bs.length + 1)
 
@@ -813,7 +823,7 @@ inductive Halt : Env → State → Nat → Result → Prop
       Hinst.At e pc o →
       Hinst.Run e s o r →
       Halt e s pc r
-  | eoc : ∀ e s, Halt e s e.code.length (.wrap s ⟪⟫)
+  | eoc : ∀ e s, Halt e s e.code.length (.wrap s [])
 
 inductive Exec : Env → State → Nat → Result → Type
   | step :
@@ -847,12 +857,12 @@ inductive Transact
   | create :
     ∀ gpr clv ctc bal r code,
       Transfer w.bal sda clv rca bal →
-      w.code rca = ⟪⟫ →
+      w.code rca = [] →
       Exec
-        { cta := rca, oga := sda, gpr := gpr, cld := ⟪⟫, cla := sda,
+        { cta := rca, oga := sda, gpr := gpr, cld := [], cla := sda,
           clv := clv, code := ctc, exd := 1024, wup := true }
         { bal := bal, stor := w.stor, code := w.code, stk := [],
-          mem := Memory.init, ret := ⟪⟫, dest := [] }
+          mem := Memory.init, ret := [], dest := [] }
         0 r →
       Overwrite rca r.ret r.code code →
       Transact sda rca w {r with code := code}
@@ -863,7 +873,7 @@ inductive Transact
         { cta := rca, oga := sda, gpr := gpr, cld := cld, cla := sda,
           clv := clv, code := w.code rca, exd := 1024, wup := true }
         { bal := bal, stor := w.stor, code := w.code, stk := []
-          mem := Memory.init, ret := ⟪⟫, dest := []}
+          mem := Memory.init, ret := [], dest := []}
         0 r →
       Transact sda rca w r
   | pre :
@@ -875,7 +885,7 @@ inductive Transact
 
 def DeleteCodes : List Addr → Codes → Codes → Prop
   | [], c, c' => c = c'
-  | a :: as, c, c'' => ∃ c' : Codes, Overwrite a ⟪⟫ c c' ∧ DeleteCodes as c' c''
+  | a :: as, c, c'' => ∃ c' : Codes, Overwrite a [] c c' ∧ DeleteCodes as c' c''
 
   structure Transaction (w w' : World) : Type :=
     (vs : Word) -- gas ultimately refunded to sender
@@ -883,7 +893,7 @@ def DeleteCodes : List Addr → Codes → Codes → Prop
     (vb : Word) -- gas ultimately burned
     (nof : vs.toNat + vv.toNat + vb.toNat < 2 ^ 256)
     (sda : Addr) -- tx sender address
-    (eoa : w.code sda = ⟪⟫) -- per EIP-3607
+    (eoa : w.code sda = []) -- per EIP-3607
     (bal : Balances) -- balances after upfront deduction
     (decr : Decrease sda (vs + vv + vb) w.bal bal)
     (le : vs + vv + vb ≤ w.bal sda)
@@ -922,14 +932,14 @@ infixr:65 " ::: " => Func.next
 postfix:100 " ::. " => Func.last
 
 def Inst.toBytes : Inst → Bytes
-  | reg o => ⟪o.toByte⟫
-  | exec o => ⟪o.toByte⟫
+  | reg o => [o.toByte]
+  | exec o => [o.toByte]
   | push bs _ => pushToBytes bs
 
 def Inst.At (e : Env) (pc : Nat) : Inst → Prop
   | reg o => o.At e pc
   | exec o => o.At e pc
-  | push bs _ => pushAt e pc bs
+  | push bs _ => PushAt e pc bs
 
 inductive Xinst.Run : Env → State → Xinst → State → Prop
   | exec :
@@ -959,32 +969,32 @@ inductive Inst.Run : Env → State → Inst → State → Prop
       State.Push [Bytes.toBits 32 bs] s s' →
       Inst.Run e s (Inst.push bs h) s'
 
-  inductive Func.Run : List Func → Env → State → Func → Result → Prop
-    | zero :
-      ∀ {fs e s s' f g r},
-        State.Pop [0] s s' →
-        Func.Run fs e s' f r →
-        Func.Run fs e s (branch f g) r
-    | succ :
-      ∀ {fs e s w s' f g r},
-        w ≠ 0 →
-        State.Pop [w] s s' →
-        Func.Run fs e s' g r →
-        Func.Run fs e s (branch f g) r
-    | last :
-      ∀ {fs e s i r},
-        Hinst.Run e s i r →
-        Func.Run fs e s (last i) r
-    | next :
-      ∀ {fs e s i s' f r},
-        Inst.Run e s i s' →
-        Func.Run fs e s' f r →
-        Func.Run fs e s (next i f) r
-    | call :
-      ∀ {fs e s k f r},
-        List.get? fs k = some f →
-        Func.Run fs e s f r →
-        Func.Run fs e s (call k) r
+inductive Func.Run : List Func → Env → State → Func → Result → Prop
+  | zero :
+    ∀ {fs e s s' f g r},
+      State.Pop [0] s s' →
+      Func.Run fs e s' f r →
+      Func.Run fs e s (branch f g) r
+  | succ :
+    ∀ {fs e s w s' f g r},
+      w ≠ 0 →
+      State.Pop [w] s s' →
+      Func.Run fs e s' g r →
+      Func.Run fs e s (branch f g) r
+  | last :
+    ∀ {fs e s i r},
+      Hinst.Run e s i r →
+      Func.Run fs e s (last i) r
+  | next :
+    ∀ {fs e s i s' f r},
+      Inst.Run e s i s' →
+      Func.Run fs e s' f r →
+      Func.Run fs e s (next i f) r
+  | call :
+    ∀ {fs e s k f r},
+      List.get? fs k = some f →
+      Func.Run fs e s f r →
+      Func.Run fs e s (call k) r
 
 def Prog.Run (e : Env) (s : State) (p : Prog) (r : Result) : Prop :=
   Func.Run (p.main :: p.aux) e s p.main r

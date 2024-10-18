@@ -2,10 +2,9 @@
 -- verifying Blanc programs, including a correctness proof for the Blanc
 -- compiler and tactics for automating Blanc program verification.
 
+
+import Mathlib.Tactic.Have
 import Blanc.Semantics
-import Mathlib.Data.List.Lemmas
-
-
 
 def Rinst.toString : Rinst → String
   | add => "ADD"
@@ -93,7 +92,7 @@ instance : Repr Xinst := ⟨λ o _ => o.toString⟩
 def Inst.toString : Inst → String
   | reg o => Rinst.toString o
   | exec o => Xinst.toString o
-  | push ⟪⟫ _ => "PUSH0"
+  | push [] _ => "PUSH0"
   | push bs _ => "PUSH" ++ bs.length.repr ++ " " ++ Bytes.toString bs
 
 instance : ToString Inst := ⟨Inst.toString⟩
@@ -125,23 +124,28 @@ def Char.toHex : Char → Hex
   | 'E' => xE
   |  _  => xF
 
-def Chars.toRevBits : ∀ n, List Char → Bits (4 * n)
-  | 0, _ => ⦃⦄
-  | _ + 1, [] => 0
-  | n + 1, c :: cs => Chars.toRevBits n cs ++ Char.toHex c
+-- def Chars.toRevBits : ∀ n, List Char → Bits (4 * n)
+--   | 0, _ => ⦃⦄
+--   | _ + 1, [] => 0
+--   | n + 1, c :: cs => Chars.toRevBits n cs ++ Char.toHex c
 
-def String.toBits (n) (s : String) : Bits (4 * n) := Chars.toRevBits n s.data.reverse
+def String.toBits : ∀ s : String, Bits (4 * s.length)
+  | ⟨[]⟩ => ⦃⦄
+  | ⟨c :: cs⟩ => c.toHex ++ toBits ⟨cs⟩
 
-def String.toWord : String → Word := String.toBits 64
+def String.toWord (s : String) : Word := by
+  by_cases h : s.length = 64
+  · have xs := s.toBits
+    rw [h] at xs; exact xs
+  · exact 0
 
 def Func.stop : Func := .last .stop
 def Func.rev : Func := .last .rev
 def Func.ret : Func := .last .ret
 
 def Inst.pushWord (w : Word) : Inst :=
-  Inst.push
-    (@Bits.toBytes 32 w).sig
-    (le_of_le_of_eq (Bytes.sig_length_le _) (Bits.toBytes_length _))
+  push (@Bits.toBytes 32 w).sig <|
+    le_of_le_of_eq (List.length_dropWhile_le _ _) (Bits.length_toBytes _)
 
 abbrev Inst.add : Inst := Inst.reg Rinst.add
 abbrev Inst.mul : Inst := Inst.reg Rinst.mul
@@ -487,64 +491,113 @@ lemma of_run_branch' {c e s r} {p q : Func} (h : Func.Run c e s (q <?> p) r) :
   · left; refine' ⟨⟨s'.stk, h'.stk⟩, Func.Run.next (run_pop _ h') h''⟩
   · right; refine' ⟨⟨w, hw, s'.stk, h'.stk⟩, Func.Run.next (run_pop _ h') h''⟩
 
-lemma of_and_mask_low_eq_zero {m n} :
+lemma Bits.of_mask_and_eq_zero (m n : Nat) :
    ∀ (xs : Bits (m + n)),
-     Bits.and (Bits.max m ++ Bits.zero n) xs = 0 →
-     ∃ ys : Bits n, (Bits.zero m ++ ys) = xs := by
-  induction n generalizing m with
-  | zero =>
-    simp;
-    intros xs h
-    refine' ⟨⦃⦄, _⟩
-    simp [Bits.zero, Bits.append_nil] at h
-    rw [Bits.max_and] at h
-    simp [Bits.append_nil]
-    apply h.symm
+     Bits.and (Bits.max n ++ Bits.zero m) xs = 0 →
+     ∃ ys : Bits m, (Bits.zero n ++ ys) = xs := by
+  induction n with
+  | zero => intro xs _; refine' ⟨xs, rfl⟩
   | succ n ih =>
-    -- simp [Nat.add_succ]
-    intros xs h;
-    cases xs with
-    | cons xs x =>
-      simp [Bits.zero, Bits.append_cons, Bits.cons_and_cons] at h
-      rw [Bits.cons_eq_zero] at h
-      rcases ih _ h.left with ⟨ys, h_ys⟩
-      refine' ⟨ys +> x, _⟩
-      rw [Bits.append_cons, h_ys]
+    intro xs h
+    match xs with
+    | x +> xs' =>
+      rw [max_eq_cons, cons_append, cons_and_cons, cons_eq_zero_iff] at h
+      simp [Bool.and, Bool.one, Bool.true_and] at h
+      rcases ih xs' h.right with ⟨ys, h'⟩
+      rw [← h', h.left]; refine' ⟨ys, rfl⟩
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      --rw [Bits.cons_and_cons] at h
+
+
+
+
+
+
+
+
+
+
+-- lemma of_and_mask_low_eq_zero {m n} :
+--    ∀ (xs : Bits (m + n)),
+--      Bits.and (Bits.max m ++ Bits.zero n) xs = 0 →
+--      ∃ ys : Bits n, (Bits.zero m ++ ys) = xs := by
+--   induction n generalizing m with
+--   | zero =>
+--     simp;
+--     intros xs h
+--     refine' ⟨⦃⦄, _⟩
+--     simp [Bits.zero, Bits.append_nil] at h
+--     rw [Bits.max_and] at h
+--     simp [Bits.append_nil]
+--     apply h.symm
+--   | succ n ih =>
+--     -- simp [Nat.add_succ]
+--     intros xs h;
+--     cases xs with
+--     | cons xs x =>
+--       simp [Bits.zero, Bits.append_cons, Bits.cons_and_cons] at h
+--       rw [Bits.cons_eq_zero_iff] at h
+--       rcases ih _ h.left with ⟨ys, h_ys⟩
+--       refine' ⟨ys +> x, _⟩
+--       rw [Bits.append_cons, h_ys]
+--
 -- the mask 0xffffffffffffffffffffffff0000000000000000000000000000000000000000,
 -- for checking that a given word is a valid Ethereum addresses
 def addressMask : Word := (@Bits.max 96) ++ (@Bits.zero 160)
-
-lemma shlo_max {m} : Bits.shlo (Bits.max (m + 1)) 0 = Bits.max m +> 0 := by
-  induction m with
-  | zero => simp [Bits.max, Bits.shlo]
-  | succ m ih =>
-    simp [Bits.max, Bits.shlo]
-    simp [Bits.shlo] at ih
-    apply ih
-
-lemma shl_cons_zero {m n} (xs : Bits m) : Bits.shl n (xs +> 0) = Bits.shl n xs +> 0 := by
-  induction n generalizing m xs with
-  | zero => rfl
-  | succ n ih =>
-    simp [Bits.shl, Bits.shlo]
-    rw [← @ih m (Bits.shlo xs 0)]
-
-lemma max_append_zero_eq_shl_max {m n} :
-    (@Bits.max m) ++ (@Bits.zero n) = Bits.shl n (@Bits.max (m + n)) := by
-  induction n generalizing m with
-  | zero =>
-    simp only [Bits.zero, Bits.max, Bits.shl, Bits.append_nil, Nat.add_zero]
-  | succ n ih =>
-    simp only [Bits.zero, Bits.shl, Bits.append_cons]
-    conv => rhs; arg 2; apply shlo_max
-    rw [ih, shl_cons_zero]; rfl
-
-lemma addressMask_eq_shl :
-    addressMask = Bits.shl (160 : Nat).toWord.toNat (Bits.max 256) := by
-  have h_lt : 160 < 2 ^ 256 := by simp
-  simp only [Nat.toWord, toBits_toNat _ h_lt, addressMask]
-  apply max_append_zero_eq_shl_max
+--
+-- lemma shlo_max {m} : Bits.shlo (Bits.max (m + 1)) 0 = Bits.max m +> 0 := by
+--   induction m with
+--   | zero => simp [Bits.max, Bits.shlo]
+--   | succ m ih =>
+--     simp [Bits.max, Bits.shlo]
+--     simp [Bits.shlo] at ih
+--     apply ih
+--
+-- lemma shl_cons_zero {m n} (xs : Bits m) : Bits.shl n (xs +> 0) = Bits.shl n xs +> 0 := by
+--   induction n generalizing m xs with
+--   | zero => rfl
+--   | succ n ih =>
+--     simp [Bits.shl, Bits.shlo]
+--     rw [← @ih m (Bits.shlo xs 0)]
+--
+-- lemma max_append_zero_eq_shl_max {m n} :
+--     (@Bits.max m) ++ (@Bits.zero n) = Bits.shl n (@Bits.max (m + n)) := by
+--   induction n generalizing m with
+--   | zero =>
+--     simp only [Bits.zero, Bits.max, Bits.shl, Bits.append_nil, Nat.add_zero]
+--   | succ n ih =>
+--     simp only [Bits.zero, Bits.shl, Bits.append_cons]
+--     conv => rhs; arg 2; apply shlo_max
+--     rw [ih, shl_cons_zero]; rfl
+--
+-- lemma addressMask_eq_shl :
+--     addressMask = Bits.shl (160 : Nat).toWord.toNat (Bits.max 256) := by
+--   have h_lt : 160 < 2 ^ 256 := by simp
+--   simp only [Nat.toWord, toBits_toNat _ h_lt, addressMask]
+--   apply max_append_zero_eq_shl_max
 
 def ValidAddr (w : Word) : Prop := ∃ a : Addr, a.toWord = w
 
@@ -552,25 +605,26 @@ def validAddr_toWord (a : Addr) : ValidAddr a.toWord := ⟨a, rfl⟩
 
 lemma toAddr_toWord_eq {w : Word} :
     ValidAddr w → Addr.toWord (toAddr w) = w := by
-  intro h; rcases h with ⟨a, ha⟩; rw [← ha, toWord_toAddr_eq]
+  intro h; rcases h with ⟨a, ha⟩; rw [← ha, toAddr_toWord]
 
-lemma of_and_addressMask_eq_zero {w} :
-  Bits.and addressMask w = 0 → ValidAddr w := by
-  intro h0; simp [addressMask] at h0
-  apply @of_and_mask_low_eq_zero 96 160 w h0
+lemma Bits.mask_and_eq_zero (m n : Nat) (xs : Bits (m + n))
+    (h : ∃ ys : Bits m, (Bits.zero n ++ ys) = xs) :
+    Bits.and (Bits.max n ++ Bits.zero m) xs = 0 := by
+  rcases h with ⟨a, h⟩
+  rw [← h, append_and_append, ← @zero_append_zero m n, append_eq_append_iff]
+  refine ⟨and_zero, zero_and⟩
 
-lemma and_addressMask_eq_zero {w} :
-    ValidAddr w → Bits.and addressMask w = 0 := by
-  simp [addressMask]; intro h; rcases h with ⟨a, ha⟩
-  rw [← ha]; unfold Addr.toWord
-  rw [Bits.append_and_append]
-  rw [@Bits.zero_eq_append 96 160]
-  rw [Bits.and_comm, Bits.zero_and]
-  conv => lhs; arg 2; tactic => apply Bits.zero_and
-
-lemma validAddr_iff {w} :
-  ValidAddr w ↔ Bits.and addressMask w = 0 :=
-⟨and_addressMask_eq_zero, of_and_addressMask_eq_zero⟩
+-- lemma Bits.addressMask_and_eq_zero {w} :
+--     ValidAddr w → and addressMask w = 0 := by
+--   simp [addressMask]; intro h; rcases h with ⟨a, ha⟩
+--   rw [← ha]; unfold Addr.toWord
+--   rw [append_and_append, @zero_eq_append 160 96]
+--   rw [and_zero, append_eq_append_iff]
+--   simp; apply zero_and
+--
+lemma validAddr_iff {w : Word} :
+    ValidAddr w ↔ Bits.and addressMask w = 0 :=
+  ⟨Bits.mask_and_eq_zero _ _ _, Bits.of_mask_and_eq_zero _ _ _⟩
 
 instance {w} : Decidable (ValidAddr w) := by
   apply decidable_of_iff _ validAddr_iff.symm
@@ -592,11 +646,13 @@ lemma op_run_iff_inst_run {o} : Rinst.Run e s o s' ↔ Inst.Run e s (Inst.reg o)
 lemma of_run_push {e s s' xs p} (h : Inst.Run e s (push xs p) s') :
     State.Push [xs.toBits 32] s s' := by cases h with | push h => assumption
 
-lemma of_run_pushWord {e s s' x} (h : Inst.Run e s (pushWord x) s') : State.Push [x] s s' := by
-  cases h with | push h => rw [Bytes.sig_toBits, Bits.toBytes_toBits] at h; exact h
+lemma of_run_pushWord {e s s' x} (h : Inst.Run e s (pushWord x) s') :
+    State.Push [x] s s' := by
+  cases h with
+  | push h => rw [Bytes.sig_toBits, toBits_toBytes] at h; exact h
 
 lemma run_pushWord (e) {s s' x} (h : State.Push [x] s s') : Inst.Run e s (pushWord x) s' := by
-  apply Inst.Run.push; rw [Bytes.sig_toBits, Bits.toBytes_toBits]; exact h
+  apply Inst.Run.push; rw [Bytes.sig_toBits, toBits_toBytes]; exact h
 
 lemma frel_of_sstore {e} {s s' : State} {x y xs}:
     State.Sstore e s s' → (x :: y :: xs <<+ s.stk) →
@@ -982,7 +1038,7 @@ lemma Xinst.prep_inv_code {e s ep sp o r sw}
 
 lemma Xinst.code_eq_nil_of_run' {e s ep sp o rx sw}
     (h : Xinst.Run' e s ep sp o rx sw)
-    (h' : ¬ o.isCall) : s.code ep.cta = ⟪⟫ := by
+    (h' : ¬ o.isCall) : s.code ep.cta = [] := by
   cases h <;> try {apply (h' cst).elim} <;>
   {simp [Env.prep']; assumption}
 
@@ -1007,7 +1063,7 @@ lemma Xinst.wrap_inv_code' {e s ep sp o r sw a}
   {rename (Overwrite _ _ _ _) => h_ow; apply (h_ow a).right h'}
 
 lemma Xinst.wrap_inv_code'' {a : Addr} {e s ep sp o r sw}
-    (h : Xinst.Run' e s ep sp o r sw) (h' : s.code a ≠ ⟪⟫) : r.code a = sw.code a := by
+    (h : Xinst.Run' e s ep sp o r sw) (h' : s.code a ≠ []) : r.code a = sw.code a := by
   cases o <;> try {rw [Xinst.wrap_inv_code h cst]} <;>
   {apply Xinst.wrap_inv_code' h; intro hc; apply h'; rw [← hc]; cases h <;> assumption}
 
@@ -1024,9 +1080,9 @@ lemma Step.inv_code {e : Env} {s : State} {pc : ℕ} {s' : State} {pc' : ℕ}
   | push => rw [(asm : State.Push _ _ _).code]
 
 lemma Exec.inv_code {a} :
-    ∀ {e s pc r}, Exec e s pc r → s.code a ≠ ⟪⟫ → s.code a = r.code a := by
+    ∀ {e s pc r}, Exec e s pc r → s.code a ≠ [] → s.code a = r.code a := by
   apply
-    @Exec.rec (λ e s pc r _ => s.code a ≠ ⟪⟫ → s.code a = r.code a)
+    @Exec.rec (λ e s pc r _ => s.code a ≠ [] → s.code a = r.code a)
   · intro e s pc s' pc' r h_step _ ih h_ne
     simp [Step.inv_code h_step] at *; apply ih h_ne
   · intros e s _ ep sp o rx sw r _ h_cr _ _ ih ih' h_ne
@@ -1042,7 +1098,7 @@ lemma Exec.inv_code {a} :
     · rfl
 
 lemma Xinst.inv_code {e s o s' a} (h : Xinst.Run e s o s')
-    (h_ne : s.code a ≠ ⟪⟫) : s.code a = s'.code a := by
+    (h_ne : s.code a ≠ []) : s.code a = s'.code a := by
   cases h
   · have h := Xinst.prep_inv_code asm
     rw [h, Exec.inv_code asm _, Xinst.wrap_inv_code'' asm asm]
@@ -1053,7 +1109,7 @@ lemma Xinst.inv_code {e s o s' a} (h : Xinst.Run e s o s')
   · rw [fail_inv_code asm]
 
 lemma Inst.inv_code {e s i s' a} (h_run : Inst.Run e s i s')
-    (h_ne : s.code a ≠ ⟪⟫) : s.code a = s'.code a := by
+    (h_ne : s.code a ≠ []) : s.code a = s'.code a := by
   cases h_run
   · rw [Rinst.inv_code asm]
   · rw [Xinst.inv_code asm h_ne]
@@ -1214,7 +1270,7 @@ def String.apply (s : String): Lean.Elab.Tactic.TacticM Unit :=
   Lean.Expr.apply <| String.toExpr s
 
 lemma Func.inv_code {c e s p r a} (h : Func.Run c e s p r)
-    (h_ne : s.code a ≠ ⟪⟫) : s.code a = r.code a := by
+    (h_ne : s.code a ≠ []) : s.code a = r.code a := by
   induction h with
   | zero =>
     rename (_ ≠ _) → _ => ih
@@ -1250,7 +1306,7 @@ partial def prog_inv : Lean.Elab.Tactic.TacticM Unit :=
 
 elab "prog_inv" : tactic => prog_inv
 
-def comp {n} {ξ} (f : Bits (n + 1) → ξ) (x : Bool) (xs : Bits n) : ξ := f (xs +> x)
+def comp {n} {ξ} (f : Bits (n + 1) → ξ) (x : Bool) (xs : Bits n) : ξ := f (x +> xs)
 
 @[irreducible] def sum : ∀ {m n}, (Bits m → Bits n) → Nat
 | 0, _, f => (f ⦃⦄).toNat
@@ -1261,20 +1317,20 @@ lemma sum_zero {n} (f : Bits 0 → Bits n) : sum f = (f ⦃⦄).toNat := by delt
 lemma sum_succ {m n} (f : Bits (m + 1) → Bits n) :
     sum f = sum (comp f 0) + sum (comp f 1) := by delta sum; rfl
 
-def nof {m n} (f : Bits m → Bits n) : Prop := sum f < 2 ^ n
+def SumNof {m n} (f : Bits m → Bits n) : Prop := sum f < 2 ^ n
 
-lemma frel_succ {ξ} {n k b r} {f g : Bits (n + 1) → ξ} (h : Frel (k +> b) r f g) :
+lemma frel_succ {ξ} {n k b r} {f g : Bits (n + 1) → ξ} (h : Frel (b +> k) r f g) :
     Frel k r (comp f b) (comp g b) ∧ (comp f !b) = (comp g !b) := by
   constructor
   · intro k'; constructor <;> intro h_k'
-    · apply (h (k' +> b)).left (by rw [h_k'])
-    · apply (h (k' +> b)).right
+    · apply (h (b +> k')).left (by rw [h_k'])
+    · apply (h (b +> k')).right
       intro hc; rw [Bits.cons_eq_cons] at hc
-      cases h_k' hc.left
+      cases h_k' hc.right
   · apply funext; intro k'
-    apply (h (k' +> !b)).right
+    apply (h ((!b) +> k')).right
     intro hc; rw [Bits.cons_eq_cons] at hc
-    cases b <;> cases hc.right
+    cases b <;> cases hc.left
 
 lemma sum_succ_with {m n} {f : Bits (m + 1) → Bits n} (b : Bool) :
     sum f = sum (comp f b) + sum (comp f !b) := by
@@ -1285,7 +1341,7 @@ lemma le_sum {m n} {f : Bits m → Bits n} {xs} : (f xs).toNat ≤ sum f := by
   | zero => rw [sum_zero]; cases xs; apply Nat.le_refl
   | succ m ih =>
     match xs with
-    | xs +> x =>
+    | x +> xs =>
       rw [sum_succ]
       rcases Bool.zero_or_one x with h | h <;> cases h
       · apply @le_trans _ _ _ (sum (comp f 0)) _ (@ih (comp f 0) xs) (Nat.le_add_right _ _)
@@ -1300,10 +1356,10 @@ lemma sum_sub_assoc {m n k v}
   induction m with
   | zero =>
     simp [sum_zero]; cases k
-    rw [← Bits.sub_toNat _ _ h', (h ⦃⦄).left rfl]
+    rw [← Bits.toNat_sub_eq_of_le _ _ h', (h ⦃⦄).left rfl]
   | succ m ih =>
     match k with
-    | k +> b =>
+    | b +> k =>
       rcases frel_succ h with ⟨h_frel, h_eq⟩
       rw [sum_succ_with b, sum_succ_with b, h_eq]
       have h_le : toNat v ≤ sum (comp f b) := by
@@ -1315,15 +1371,16 @@ lemma sum_sub_assoc {m n k v}
              ih h_frel h', Nat.add_comm ]; rfl
 
 lemma sum_add_assoc {m n k v} {f g : Bits m → Bits n}
-    (h : Increase k v f g) (h' : NoOverflow (f k) v) :
+    (h : Increase k v f g) (h' : Nof (f k) v) :
     sum f + v.toNat = sum g := by
   induction m with
   | zero =>
-    cases k; simp [sum_zero]; rw [← Bits.add_toNat _ _ h']
+    cases k; simp [sum_zero]
+    rw [← Bits.toNat_add_eq_of_nof _ _ h']
     apply congr_arg _ <| (h ⦃⦄).left nil_eq_nil
   | succ m ih =>
     match k with
-    | k +> b =>
+    | b +> k =>
       rcases frel_succ h with ⟨h_frel, h_eq⟩
       rw [sum_succ_with b, sum_succ_with b, h_eq]
       conv => lhs; lhs; rw [Nat.add_comm]
@@ -1335,7 +1392,7 @@ lemma add_le_sum_of_ne {m n} (f : Bits m → Bits n) {xs ys : Bits m}
   | zero => cases h nil_eq_nil
   | succ m ih =>
     match xs, ys with
-    | xs +> x, ys +> y =>
+    | x +> xs, y +> ys =>
       rw [sum_succ];
       rcases Bool.zero_or_one x with h | h <;> cases h <;>
       rcases Bool.zero_or_one y with h | h <;> cases h <;> simp at h
@@ -1348,7 +1405,7 @@ lemma add_le_sum_of_ne {m n} (f : Bits m → Bits n) {xs ys : Bits m}
         apply @ih (comp f 1) _ _ h
 
 lemma transfer_inv_sum {m n} {kd ki v} {b d : Bits m → Bits n}
-    (h' : nof b)
+    (h' : SumNof b)
     (h : Transfer b kd v ki d) : sum b = sum d := by
   rcases h with ⟨h, c, hd, hi⟩
   apply @Eq.trans _ _ (sum c + v.toNat)
@@ -1357,16 +1414,16 @@ lemma transfer_inv_sum {m n} {kd ki v} {b d : Bits m → Bits n}
   · apply @sum_add_assoc _ _ ki
     apply frel_of_frel _ hi; intro h_eq; exact h_eq
     by_cases hk : ki = kd
-    · rw [hk, ← (hd kd).left rfl]; simp [NoOverflow]
-      rw [sub_toNat _ _ h, Nat.sub_add_cancel (toNat_le_toNat _ _ h)]
+    · rw [hk, ← (hd kd).left rfl]; simp [Nof]
+      rw [toNat_sub_eq_of_le _ _ h, Nat.sub_add_cancel (toNat_le_toNat _ _ h)]
       apply toNat_lt_pow
     · rw [← (hd ki).right (Ne.symm hk)]
       apply lt_of_le_of_lt (Nat.le_trans _ <| add_le_sum_of_ne b hk) h'
       apply Nat.add_le_add_left <| toNat_le_toNat _ _ h
 
 lemma transfer_inv_nof {m n} {kd ki v} {f g : Bits m → Bits n}
-    (h : Transfer f kd v ki g) (h' : nof f) : nof g := by
-  simp [nof]; rw [← transfer_inv_sum h' h]; apply h'
+    (h : Transfer f kd v ki g) (h' : SumNof f) : SumNof g := by
+  simp [SumNof]; rw [← transfer_inv_sum h' h]; apply h'
 
 lemma of_run_dest {e s r} (h : Hinst.Run e s Hinst.dest r) :
     ∃ a, Transfer s.bal e.cta (s.bal e.cta) a r.bal := by
@@ -1378,7 +1435,7 @@ lemma of_run_dest {e s r} (h : Hinst.Run e s Hinst.dest r) :
     · exact (h_ow a).right ha
 
 lemma Hinst.inv_nof {e s o r}
-    (h : Hinst.Run e s o r) (h_nof : nof s.bal) : nof r.bal := by
+    (h : Hinst.Run e s o r) (h_nof : SumNof s.bal) : SumNof r.bal := by
   cases o with
   | stop => cases h; exact h_nof
   | ret => cases h; exact h_nof
@@ -1388,7 +1445,7 @@ lemma Hinst.inv_nof {e s o r}
     exact transfer_inv_nof asm h_nof
 
 lemma Hinst.inv_sum_bal {e s o r}
-    (h : Hinst.Run e s o r) (h_nof : nof s.bal) : sum s.bal = sum r.bal := by
+    (h : Hinst.Run e s o r) (h_nof : SumNof s.bal) : sum s.bal = sum r.bal := by
   cases o with
   | stop => cases h; rfl
   | ret => cases h; rfl
@@ -1398,19 +1455,19 @@ lemma Hinst.inv_sum_bal {e s o r}
     exact transfer_inv_sum h_nof h'
 
 lemma Xinst.prep_inv_nof {e s ep sp o r sw}
-    (h : Xinst.Run' e s ep sp o r sw) (h_nof : nof s.bal) : nof sp.bal := by
+    (h : Xinst.Run' e s ep sp o r sw) (h_nof : SumNof s.bal) : SumNof sp.bal := by
   cases h <;> try {apply h_nof} <;> apply transfer_inv_nof asm h_nof
 
 lemma Xinst.prep_inv_sum_bal {e s ep sp o r sw}
-    (h : Xinst.Run' e s ep sp o r sw) (h' : nof s.bal) : sum s.bal = sum sp.bal := by
+    (h : Xinst.Run' e s ep sp o r sw) (h' : SumNof s.bal) : sum s.bal = sum sp.bal := by
   cases h <;> try {rfl} <;> apply transfer_inv_sum asm asm
 
 lemma Xinst.wrap_inv_nof {e s ep sp o r sw}
-    (h : Xinst.Run' e s ep sp o r sw) (h' : nof r.bal) : nof sw.bal := by
+    (h : Xinst.Run' e s ep sp o r sw) (h' : SumNof r.bal) : SumNof sw.bal := by
   cases h <;> apply h'
 
 lemma Step.inv_nof {e : Env} {s : State} {pc : ℕ} {s' : State} {pc' : ℕ}
-    (h_nof : nof s.bal) (h_step : Step e s pc s' pc') : nof s'.bal := by
+    (h_nof : SumNof s.bal) (h_step : Step e s pc s' pc') : SumNof s'.bal := by
   cases h_step with
   | reg => rw [← Rinst.inv_bal asm]; exact h_nof
   | pre =>
@@ -1422,7 +1479,7 @@ lemma Step.inv_nof {e : Env} {s : State} {pc : ℕ} {s' : State} {pc' : ℕ}
   | push => rw [← (asm : State.Push _ _ _).bal]; exact h_nof
 
 lemma Step.inv_sum_bal {e : Env} {s : State} {pc : ℕ} {s' : State} {pc' : ℕ}
-    (h_nof : nof s.bal) (h_step : Step e s pc s' pc') : sum s.bal = sum s'.bal := by
+    (h_nof : SumNof s.bal) (h_step : Step e s pc s' pc') : sum s.bal = sum s'.bal := by
   cases h_step with
   | reg => apply congr_arg _ <| Rinst.inv_bal asm
   | pre =>
@@ -1433,8 +1490,8 @@ lemma Step.inv_sum_bal {e : Env} {s : State} {pc : ℕ} {s' : State} {pc' : ℕ}
   | push => rw [(asm : State.Push _ _ _).bal]
 
 lemma Exec.inv_nof :
-    ∀ {e s pc r}, Exec e s pc r → nof s.bal → nof r.bal := by
-  apply @Exec.rec (λ e s pc r _ => nof s.bal → nof r.bal)
+    ∀ {e s pc r}, Exec e s pc r → SumNof s.bal → SumNof r.bal := by
+  apply @Exec.rec (λ e s pc r _ => SumNof s.bal → SumNof r.bal)
   · intros e s pc s' pc' _ h_step _ ih h_nof
     apply ih <| Step.inv_nof h_nof h_step
   · intros e s _ ep sp o rx sw _ _ h_cr _ _ ih ih' h_nof
@@ -1445,8 +1502,8 @@ lemma Exec.inv_nof :
     · exact h_nof
 
 lemma Exec.inv_sum_bal :
-    ∀ {e s pc r}, Exec e s pc r → nof s.bal → sum s.bal = sum r.bal := by
-  apply @Exec.rec (λ e s pc r _ => nof s.bal → sum s.bal = sum r.bal)
+    ∀ {e s pc r}, Exec e s pc r → SumNof s.bal → sum s.bal = sum r.bal := by
+  apply @Exec.rec (λ e s pc r _ => SumNof s.bal → sum s.bal = sum r.bal)
   · intros e s pc s' pc' r h_step _ ih h_nof
     rw [Step.inv_sum_bal h_nof h_step, ih <| Step.inv_nof h_nof h_step]
   · intros e s _ ep sp o rx sw r _ cr h_run _ ih ih' h_nof
@@ -1458,7 +1515,7 @@ lemma Exec.inv_sum_bal :
     · rfl
 
 lemma Xinst.inv_nof {e s o s'}
-    (h : Xinst.Run e s o s') (h' : nof s.bal) : nof s'.bal := by
+    (h : Xinst.Run e s o s') (h' : SumNof s.bal) : SumNof s'.bal := by
   cases h
   · apply Xinst.wrap_inv_nof asm <| Exec.inv_nof asm <| Xinst.prep_inv_nof asm h'
   · apply Xinst.wrap_inv_nof asm
@@ -1467,15 +1524,15 @@ lemma Xinst.inv_nof {e s o s'}
   · rw [← fail_inv_bal asm]; exact h'
 
 lemma Inst.inv_nof {e s} :
-    ∀ {i s'}, Inst.Run e s i s' → nof s.bal → nof s'.bal := by
-  apply @Inst.Run.rec e s (λ i s' _ => nof s.bal → nof s'.bal)
+    ∀ {i s'}, Inst.Run e s i s' → SumNof s.bal → SumNof s'.bal := by
+  apply @Inst.Run.rec e s (λ i s' _ => SumNof s.bal → SumNof s'.bal)
   · intros o s' h; simp [Rinst.inv_bal h]
   · intros o s' h; exact Xinst.inv_nof h
   · intros bs _ s' h h'; rw [← h.bal]; exact h'
 
 lemma Func.inv_nof {c e} :
-    ∀ {s p r}, Func.Run c e s p r → nof s.bal → nof r.bal := by
-  apply @Func.Run.rec c e (λ s p r _ => nof s.bal → nof r.bal)
+    ∀ {s p r}, Func.Run c e s p r → SumNof s.bal → SumNof r.bal := by
+  apply @Func.Run.rec c e (λ s p r _ => SumNof s.bal → SumNof r.bal)
   · intros s s' _ _ r h_pop _ ih h_nof
     rw [← State.Rel.bal h_pop] at ih; apply ih h_nof
   · intros s x s' _ _ r _ h_pop _ ih h_nof
@@ -1497,7 +1554,7 @@ def table : Nat → List Func → List (Nat × Func)
 | k, f :: fs => ⟨k, f⟩ :: table (k + compsize f + 1) fs
 
 def Func.compile (l : List (Nat × Func)) (n : Nat) : Func → Option Bytes
-  | .last o => pure ⟪o.toByte⟫
+  | .last o => pure [o.toByte]
   | .next o p => do
     let p_bts ← Func.compile l (n + o.toBytes.length) p
     pure <| o.toBytes ++ p_bts
@@ -1507,24 +1564,24 @@ def Func.compile (l : List (Nat × Func)) (n : Nat) : Func → Option Bytes
     guard (loc < 2 ^ 16)
     let qbs ← Func.compile l (loc + 1) q
     pure $
-      ⟪Ox x6 x1⟫ ++
+      [Ox x6 x1] ++
       (@Nat.toBits (8 * 2) loc).toBytes ++
-      ⟪Jinst.toByte .jumpi⟫ ++ pbs ++
-      ⟪Jinst.toByte .jumpdest⟫ ++ qbs
+      [Jinst.toByte .jumpi] ++ pbs ++
+      [Jinst.toByte .jumpdest] ++ qbs
   | .call k => do
     let (loc, _) ← List.get? l k
     guard (loc < 2 ^ 16)
     pure $
-      ⟪Ox x6 x1⟫ ++
+      [Ox x6 x1] ++
       (@Nat.toBits (8 * 2) loc).toBytes ++
-      ⟪Jinst.toByte Jinst.jump⟫
+      [Jinst.toByte Jinst.jump]
 
 def Table.compile (l : List (Nat × Func)) : List (Nat × Func) → Option Bytes
-| [] => pure ⟪⟫
+| [] => pure []
 | (n, p) :: nps => do
   let bs ← Func.compile l (n + 1) p
   let bss ← Table.compile l nps
-  pure <| ⟪Jinst.toByte .jumpdest⟫ ++ bs ++ bss
+  pure <| [Jinst.toByte .jumpdest] ++ bs ++ bss
 
 lemma of_bind_eq_some {ξ υ} {f : Option ξ} {g : ξ → Option υ} {y} :
     f >>= g = some y → ∃ x, f = some x ∧ g x = some y := by
@@ -1537,7 +1594,7 @@ lemma Table.compile_cons_eq_some {l n p l' bs}
     ∃ cp cl',
       Func.compile l (n + 1) p = some cp ∧
       Table.compile l l' = some cl' ∧
-      bs = ⟪Jinst.toByte .jumpdest⟫ ++ cp ++ cl' := by
+      bs = [Jinst.toByte .jumpdest] ++ cp ++ cl' := by
   rcases of_bind_eq_some h with ⟨cp, h_cp, h'⟩; clear h
   rcases of_bind_eq_some h' with ⟨cl', h_cl', h_eq⟩; clear h'
   simp at h_eq; refine' ⟨cp, cl', h_cp, h_cl', h_eq.symm⟩
@@ -1555,59 +1612,49 @@ lemma of_guard_eq_some {p : Prop} [hd : Decidable p] {ξ} {ox : Option ξ} {x} :
 
 lemma of_pure_eq_some {ξ} {x y : ξ} : pure x = some y → x = y := by intro h; cases h; rfl
 
-lemma pushToBytes_ne_nil {bs} : pushToBytes bs ≠ ⟪⟫ := by
-  simp [pushToBytes, pushToByte]; intro h
-  rw [Bytes.append_eq_nil] at h; cases h.left
+lemma pushToBytes_ne_nil {bs} : pushToBytes bs ≠ [] := by
+  simp [pushToBytes, pushToByte]
 
-lemma Inst.toBytes_ne_nil : ∀ {i : Inst}, i.toBytes ≠ ⟪⟫
+lemma Inst.toBytes_ne_nil : ∀ {i : Inst}, i.toBytes ≠ []
   | reg o => by simp [toBytes]
   | exec o => by simp [toBytes]
   | push bs _ => pushToBytes_ne_nil
 
-lemma Bytes.append_ne_nil_of_left_ne_nil {xs ys : Bytes} : xs ≠ ⟪⟫ → xs ++ ys ≠ ⟪⟫ := by
-  intros h h'; rw [Bytes.append_eq_nil] at h'; cases h h'.left
+-- lemma List.append_ne_nil_of_left_ne_nil {xs ys : Bytes} : xs ≠ [] → xs ++ ys ≠ [] := by
+--   intros h h'; rw [List.append_eq_nil] at h'; cases h h'.left
 
-lemma Func.compile_ne_nil {l n p} : Func.compile l n p ≠ some ⟪⟫ := by
-  induction p with
+lemma Func.compile_ne_nil {l n f} : Func.compile l n f ≠ some [] := by
+  induction f with
   | last => simp [compile]
   | next =>
-    intros h; rcases of_bind_eq_some h with ⟨bs, _, h⟩; simp at h;
-    apply Bytes.append_ne_nil_of_left_ne_nil Inst.toBytes_ne_nil h
+    intros h; rcases of_bind_eq_some h with ⟨bs, _, h⟩;
+    simp at h; apply Inst.toBytes_ne_nil h.left
   | branch =>
     intro h
     rcases of_bind_eq_some h with ⟨_, _, h'⟩; clear h
     rcases of_guard_eq_some h' with ⟨_, h⟩; clear h'
-    rcases of_bind_eq_some h with ⟨bs', hp, h'⟩; clear h
-    simp at h'; apply Bytes.append_ne_nil_of_left_ne_nil _ h'
-    apply Bytes.append_ne_nil_of_left_ne_nil
-    apply Bytes.append_ne_nil_of_left_ne_nil
-    apply Bytes.append_ne_nil_of_left_ne_nil
-    apply Bytes.append_ne_nil_of_left_ne_nil
-    simp
+    rcases of_bind_eq_some h with ⟨bs', _, h'⟩; clear h
+    simp at h'
   | call =>
     intro h
     rcases of_bind_eq_some h with ⟨_, _, h'⟩; clear h
     rcases of_guard_eq_some h' with ⟨_, h⟩; clear h'
-    simp at h;
-    apply Bytes.append_ne_nil_of_left_ne_nil _ h
-    apply Bytes.append_ne_nil_of_left_ne_nil
-    simp
+    simp at h
 
-lemma Prog.compile_ne_nil {p} : Prog.compile p ≠ some ⟪⟫ := by
+lemma Prog.compile_ne_nil {p} : Prog.compile p ≠ some [] := by
   simp only [Prog.compile, Table.compile]; intro h
-  rcases of_bind_eq_some h with ⟨bs, h_bs, h'⟩; clear h
-  rcases of_bind_eq_some h' with ⟨bs', h_bs', h⟩; clear h'; simp at h;
-  rw [(Bytes.append_eq_nil.mp <| (Bytes.append_eq_nil.mp h).left).right] at h_bs
-  cases Func.compile_ne_nil h_bs
+  rcases of_bind_eq_some h with ⟨bs, _, h'⟩; clear h
+  rcases of_bind_eq_some h' with ⟨bs', _, h⟩; clear h'; simp at h
 
 def subcode (cd : Bytes) (k : Nat) : Option Bytes → Prop
   | none => False
-  | some scd => slice cd k scd
+  | some bs => List.Slice cd k bs
 
-def of_subcode {cd k} :
-    ∀ {ocd}, subcode cd k ocd → ∃ scd, ocd = some scd ∧ slice cd k scd
+lemma of_subcode {cd k} :
+    ∀ {obs}, subcode cd k obs →
+       ∃ bs, obs = some bs ∧ cd.Slice k bs
   | none, h => by cases h
-  | some scd, h => ⟨scd, rfl, h⟩
+  | some bs, h => ⟨bs, rfl, h⟩
 
 lemma hex0_append_hex1 : ∀ {b : Byte}, Byte.hex0 b ++ Byte.hex1 b = b
   | ⦃_, _, _, _, _, _, _, _⦄ => rfl
@@ -1766,26 +1813,42 @@ lemma toByte_toJinst {o : Jinst} :
 lemma toByte_toHinst {o : Hinst} :
   Byte.toHinst o.toByte = o := by cases o <;> rfl
 
-lemma Rinst.At_unique {e pc o o'} (h : Rinst.At e pc o) (h' : Rinst.At e pc o') : o = o' := by
-  rw [← @toByte_toRinst o, ← @toByte_toRinst o', slice_singleton_unique h h']
+lemma Rinst.at_unique {e pc o o'} (h : At e pc o) (h' : At e pc o') : o = o' := by
+  rw [← @toByte_toRinst o, ← @toByte_toRinst o']
 
-lemma Xinst.At_unique {e pc o o'} (h : Xinst.At e pc o) (h' : Xinst.At e pc o') : o = o' := by
-  rw [← @toByte_toXinst o, ← @toByte_toXinst o', slice_singleton_unique h h']
+  rw [Option.some_injective _ <| Eq.trans h.symm h']
 
-lemma Jinst.At_unique {e pc o o'} (h : Jinst.At e pc o) (h' : Jinst.At e pc o') : o = o' := by
-  rw [← @toByte_toJinst o, ← @toByte_toJinst o', slice_singleton_unique h h']
+lemma Xinst.at_unique {e pc o o'} (h : At e pc o) (h' : At e pc o') : o = o' := by
+  rw [← @toByte_toXinst o, ← @toByte_toXinst o']
+  rw [Option.some_injective _ <| Eq.trans h.symm h']
 
-lemma Hinst.At_unique {e pc o o'} (h : Hinst.At e pc o) (h' : Hinst.At e pc o') : o = o' := by
-  rw [← @toByte_toHinst o, ← @toByte_toHinst o', slice_singleton_unique h h']
+lemma Jinst.at_unique {e pc o o'} (h : At e pc o) (h' : At e pc o') : o = o' := by
+  rw [← @toByte_toJinst o, ← @toByte_toJinst o']
+  rw [Option.some_injective _ <| Eq.trans h.symm h']
 
-lemma pushAt_unique {e pc bs bs'} (h : pushAt e pc bs) (h' : pushAt e pc bs') : bs = bs' := by
-  have hs := slice_suffix h.left
-  have hs' := slice_suffix h'.left
-  apply slice_unique _ hs hs'
-  rw [ ← @toBits_toNat 8 bs.length (lt_of_le_of_lt h.right (by omega)),
-       ← @toBits_toNat 8 bs'.length (lt_of_le_of_lt h'.right (by omega)) ]
-  apply congrArg _ <| @Bits.add_left_inj 8 _ _ (Ox x5 xF) _
-  apply slice_singleton_unique (slice_prefix h.left) (slice_prefix h'.left)
+lemma Hinst.at_unique {e pc o o'} (h : At e pc o) (h' : At e pc o') : o = o' := by
+  rw [← @toByte_toHinst o, ← @toByte_toHinst o']
+  rw [Option.some_injective _ <| Eq.trans h.symm h']
+
+lemma pushAt_unique {e pc bs bs'}
+    (h : PushAt e pc bs) (h' : PushAt e pc bs') : bs = bs' := by
+  simp [PushAt, pushToBytes, List.slice_cons_iff] at *
+  rcases h with ⟨⟨h_head, n, h_tail⟩, h_len⟩
+  rcases h' with ⟨⟨h_head', n', h_tail'⟩, h_len'⟩
+  have h_eq : bs.length = bs'.length := by
+    have h_32 : (32 : Nat) < 2 ^ 8 := by omega
+    have h_lt := Nat.lt_of_le_of_lt h_len h_32
+    have h_lt' := Nat.lt_of_le_of_lt h_len' h_32
+    have h_eq : bs.length.toByte = bs'.length.toByte := by
+      have h_eq := Eq.trans h_head.symm h_head'
+      simp [pushToByte, Option.some_inj] at h_eq
+      apply Bits.add_left_inj h_eq
+    apply Nat.toBits_inj h_lt h_lt' h_eq
+  have h_rw := List.length_slice? h_tail
+  have h_rw' := List.length_slice? h_tail'
+  rw [h_rw, h_eq] at h_tail
+  rw [h_rw'] at h_tail'
+  apply Option.some_inj.mp <| .trans h_tail.symm h_tail'
 
 lemma ox_ne_ox_of_left {lx rx ly ry : Hex} : lx ≠ ly → Ox lx rx ≠ Ox ly ry := by
   simp [Ox]; rw [Bits.append_eq_append_iff]; intros h h'; apply h h'.left
@@ -1864,16 +1927,18 @@ lemma eq_ox {b : Byte} {hx0 hx1 : Hex} :
 
 syntax "eq_ox_core" : tactic
 macro_rules
-| `(tactic| eq_ox_core) =>
-  `(tactic| rw [Nat.forall_le_succ]; apply Function.swap And.intro; right)
+  | `(tactic| eq_ox_core) =>
+    `(tactic| rw [Nat.forall_le_succ]; apply Function.swap And.intro; right)
 
 syntax "eq_ox_left" : tactic
 macro_rules
-| `(tactic| eq_ox_left) => `(tactic| eq_ox_core; left; refine ⟨_, eq_ox rfl rfl⟩)
+  | `(tactic| eq_ox_left) =>
+    `(tactic| eq_ox_core; left; refine ⟨_, eq_ox rfl rfl⟩)
 
 syntax "eq_ox_right" : tactic
 macro_rules
-| `(tactic| eq_ox_right) => `(tactic| eq_ox_core; right; refine ⟨_, eq_ox rfl rfl⟩)
+  | `(tactic| eq_ox_right) =>
+    `(tactic| eq_ox_core; right; refine ⟨_, eq_ox rfl rfl⟩)
 
 lemma pushToByte_eq_aux :
     ∀ n ≤ 32,
@@ -1904,7 +1969,7 @@ lemma opToByte_ne_pushToByte {o : Rinst} {bs : Bytes}
     rw [h']; clear h'
     rcases pushToByte_eq h with h' | ⟨_, h'⟩ | ⟨_, h'⟩ <;> (rw [h']; simp [hex0_eq])
   cases o <;>
-  try {simp [Rinst.toByte, hex0_eq] at hc; rcases hc with ⟨⟨_⟩⟩ | ⟨⟨_⟩⟩ | ⟨⟨_⟩⟩; done} <;>
+  try {simp [Rinst.toByte, hex0_eq] at hc; rcases hc with ⟨⟨_⟩⟩ | ⟨⟨_⟩⟩ | ⟨⟨_⟩⟩} <;>
   (
     simp [Rinst.toByte, hex0_eq] at hc;
     rcases hc with h'' | ⟨⟨_⟩⟩ | ⟨⟨_⟩⟩;
@@ -1922,47 +1987,46 @@ lemma hopToByte_ne_pushToByte {o : Hinst} {bs : Bytes} :
     bs.length ≤ 32 → o.toByte ≠ pushToByte bs := by intro h; cases o <;> ne_pushToByte
 
 lemma not_cop_at_of_op_at {e pc} {o : Rinst} {o' : Xinst} : o.At e pc → ¬ o'.At e pc := by
-  intros h h'; cases opToByte_ne_copToByte <| slice_singleton_unique h h'
+  intros h h'; cases opToByte_ne_copToByte <| Option.some_inj.mp <| Eq.trans h.symm h'
 
 lemma not_jop_at_of_cop_at {e pc} {o : Xinst} {o' : Jinst} : o.At e pc → ¬ o'.At e pc := by
-  intros h h'; cases copToByte_ne_jopToByte <| slice_singleton_unique h h'
+  intros h h'; cases copToByte_ne_jopToByte <| Option.some_inj.mp <| Eq.trans h.symm h'
 
 lemma not_jop_at_of_op_at {e pc} {o : Rinst} {o' : Jinst} : o.At e pc → ¬ o'.At e pc := by
-  intros h h'; cases opToByte_ne_jopToByte <| slice_singleton_unique h h'
+  intros h h'; cases opToByte_ne_jopToByte <| Option.some_inj.mp <| Eq.trans h.symm h'
 
 lemma not_hop_at_of_op_at {e pc} {o : Rinst} {o' : Hinst} : o.At e pc → ¬ o'.At e pc := by
-  intros h h'; cases opToByte_ne_hopToByte <| slice_singleton_unique h h'
+  intros h h'; cases opToByte_ne_hopToByte <| Option.some_inj.mp <| Eq.trans h.symm h'
 
 lemma not_hop_at_of_cop_at {e pc} {o : Xinst} {o' : Hinst} : o.At e pc → ¬ o'.At e pc := by
-  intros h h'; cases copToByte_ne_hopToByte <| slice_singleton_unique h h'
+  intros h h'; cases copToByte_ne_hopToByte <| Option.some_inj.mp <| Eq.trans h.symm h'
 
 lemma not_hop_at_of_jop_at {e pc} {o : Jinst} {o' : Hinst} : o.At e pc → ¬ o'.At e pc := by
-  intros h h'; cases jopToByte_ne_hopToByte <| slice_singleton_unique h h'
+  intros h h'; cases jopToByte_ne_hopToByte <| Option.some_inj.mp <| Eq.trans h.symm h'
 
-lemma not_pushAt_of_op_at {e pc} {o : Rinst} {bs : Bytes} : o.At e pc → ¬ pushAt e pc bs := by
-  intros h h';
-  cases opToByte_ne_pushToByte h'.right <| slice_singleton_unique h <| slice_prefix h'.left
 
-lemma not_pushAt_of_cop_at {e pc} {o : Xinst} {bs : Bytes} : o.At e pc → ¬ pushAt e pc bs := by
+lemma not_pushAt_of_op_at {e pc} {o : Rinst} {bs : Bytes} :
+    o.At e pc → ¬ PushAt e pc bs := by
   intros h h'
-  cases copToByte_ne_pushToByte h'.right <| slice_singleton_unique h <| slice_prefix h'.left
+  cases opToByte_ne_pushToByte h'.right <| Option.some_inj.mp
+     <| .trans h.symm <| List.get?_eq_of_slice h'.left
 
-lemma not_pushAt_of_jop_at {e pc} {o : Jinst} {bs : Bytes} : o.At e pc → ¬ pushAt e pc bs := by
+lemma not_pushAt_of_cop_at {e pc} {o : Xinst} {bs : Bytes} :
+    o.At e pc → ¬ PushAt e pc bs := by
   intros h h'
-  cases jopToByte_ne_pushToByte h'.right <| slice_singleton_unique h <| slice_prefix h'.left
+  cases copToByte_ne_pushToByte h'.right <| Option.some_inj.mp
+     <| .trans h.symm <| List.get?_eq_of_slice h'.left
 
-lemma not_pushAt_of_hop_at {e pc} {o : Hinst} {bs : Bytes} : o.At e pc → ¬ pushAt e pc bs := by
+lemma not_pushAt_of_jop_at {e pc} {o : Jinst} {bs : Bytes} :
+    o.At e pc → ¬ PushAt e pc bs := by
   intros h h'
-  cases hopToByte_ne_pushToByte h'.right <| slice_singleton_unique h <| slice_prefix h'.left
+  cases jopToByte_ne_pushToByte h'.right <| Option.some_inj.mp
+     <| .trans h.symm <| List.get?_eq_of_slice h'.left
 
-lemma not_slice_length {xs ys : Bytes} {y} : ¬ slice xs xs.length (ys :> y) := by
-  intro h; rcases h with ⟨pfx, sfx, h_split, h_pfx, h_len⟩
-  have h_sfx : sfx = ⟪⟫ := by
-    have h := congrArg Bytes.length h_split
-    rw [Bytes.length_append, h_len] at h
-    have h' := Nat.eq_sub_of_add_eq' h.symm; simp at h'
-    rw [← Bytes.length_eq_zero, h']
-  rw [h_sfx, Bytes.prefix_nil] at h_pfx; cases h_pfx
+lemma not_pushAt_of_hop_at {e pc} {o : Hinst} {bs : Bytes} : o.At e pc → ¬ PushAt e pc bs := by
+  intros h h'
+  cases hopToByte_ne_pushToByte h'.right <| Option.some_inj.mp
+     <| .trans h.symm <| List.get?_eq_of_slice h'.left
 
 lemma Hinst.run_of_at {e s pc o r} (cr : Exec e s pc r) (h_at : Hinst.At e pc o) :
     Hinst.Run e s o r := by
@@ -1977,8 +2041,8 @@ lemma Hinst.run_of_at {e s pc o r} (cr : Exec e s pc r) (h_at : Hinst.At e pc o)
   | exec => cases not_hop_at_of_cop_at asm h_at
   | halt =>
     rename Halt _ _ _ _ => h_halt; cases h_halt
-    · rw [Hinst.At_unique h_at asm]; assumption
-    · cases not_slice_length h_at
+    · rw [Hinst.at_unique h_at asm]; assumption
+    · simp [Hinst.At] at h_at
 
 lemma Stack.push_cons_pop_cons
     {x y} {xs ys} {s s' s''}
@@ -2025,77 +2089,260 @@ lemma State.push_nil {s s'} (h : State.Push [] s s') : s = s' := by
     simp [Stack.Push, Split, Rels.dft] at *
     refine' ⟨_, _, _, h.symm, _, _, _⟩ <;> assumption
 
-lemma Inst.At_iff_slice {e pc i} :
-    Inst.At e pc i ↔ slice e.code pc (Inst.toBytes i) := by
+-- lemma List.slice?_eq_some_nil {ξ : Type u} {xs : List ξ} {m : ℕ} :
+--     xs.slice? m 0 = some [] := by
+--   simp only [slice?, drop?, take?, Bind.bind, Option.bind]
+
+lemma Inst.at_iff_slice {e pc} {i : Inst} :
+    i.At e pc ↔ List.Slice e.code pc i.toBytes := by
   cases i with
-  | reg o => apply Iff.refl
-  | exec o => apply Iff.refl
-  | push bs h =>
-    simp [Inst.At, pushAt, Inst.toBytes]
-    intro _; exact h
+  | reg => simp [At, Rinst.At, toBytes, List.length, List.slice_iff_get?_eq]
+  | exec => simp [At, Xinst.At, toBytes, List.length, List.slice_iff_get?_eq]
+  | push bs h => simp [At, PushAt, toBytes, List.length, h, and_true]
 
-lemma max_toBytes {n} : ∀ {xs : Bits (8 * n)}, xs.toBytes.max ↔ xs = Bits.max _ := by
+-- lemma Inst.at_iff_slice_eq {e pc} {i : Inst} :
+--     i.At e pc ↔ List.slice? e.code pc i.toBytes.length = some i.toBytes := by
+--   have aux :
+--       ∀ {bs : Bytes} {b : Byte} {k},
+--         bs.get? k = some b → bs.slice? (k + 1) 0 = some [] := by
+--     intro bs b k; unfold List.slice?
+--     rw [List.get?_eq_drop?_head?, Nat.add_comm, List.drop?_add]
+--     cases bs.drop? k <;> simp; rename Bytes => bs'
+--     cases bs' <;> simp [List.drop?, List.take?]
+--   cases i with
+--   | reg =>
+--     simp only [Inst.At, Rinst.At, Inst.toBytes, List.length]
+--     rw [List.slice?_eq_cons_iff]
+--     refine' ⟨λ h => ⟨h, aux h⟩, And.left⟩
+--   | exec =>
+--     simp only [Inst.At, Xinst.At, Inst.toBytes, List.length]
+--     rw [List.slice?_eq_cons_iff]
+--     refine' ⟨λ h => ⟨h, aux h⟩, And.left⟩
+--   | push bs h =>
+--
+--     simp only [Inst.At, PushAt, Inst.toBytes, List.length, h, and_true]
+
+-- lemma max_toBytes {n} : ∀ {xs : Bits (8 * n)}, xs.toBytes.max ↔ xs = Bits.max _ := by
+--   induction n with
+--   | zero =>
+--     simp [Nat.mul_zero]; intro xs; cases xs
+--     apply iff_of_true; constructor; rfl
+--   | succ n ih =>
+--     simp [Nat.mul_succ]
+--     intro xs;
+--     rw [← @Bits.prefix_append_suffix (8 * n) 8 xs, Bits.toBytes_append]
+--     simp [Bytes.max]; rw [ih, Bits.append_eq_max]; rfl
+--
+-- lemma Bytes.not_max_toBytes {m n : Nat} (h : m.succ < 2 ^ (8 * n)) :
+--     ¬ Bytes.max (Bits.toBytes (Nat.toBits (8 * n) m)) := by
+--   rw [max_toBytes]; intro hc
+--   have h_eq := congrArg Bits.toNat hc
+--   rw [@toBits_toNat _ _ (lt_trans (Nat.lt_succ_self _) h)] at h_eq
+--   rw [h_eq, Bits.max_toNat_succ] at h
+--   cases Nat.lt_irrefl _ h
+
+lemma Bits.prefix_zero {m n : Nat} : (0 : Bits (m + n)).prefix = (0 : Bits n) := by
+  rw [← zero_append_zero, prefix_append]
+
+lemma Bits.suffix_zero {m n : Nat} : (0 : Bits (m + n)).suffix = (0 : Bits m) := by
+  rw [← zero_append_zero, suffix_append]
+
+lemma Bits.factor_zero {k m n : Nat} :
+    factor (0 : Bits (k * m + k * n)) = (0 : Bits (k * (m + n))) := by
   induction n with
-  | zero =>
-    simp [Nat.mul_zero]; intro xs; cases xs
-    apply iff_of_true; constructor; rfl
+  | zero => rfl
   | succ n ih =>
-    simp [Nat.mul_succ]
-    intro xs;
-    rw [← @Bits.head_append_tail (8 * n) 8 xs, Bits.toBytes_append]
-    simp [Bytes.max]; rw [ih, Bits.append_eq_max]; rfl
+    simp [factor]
+    rw [← @zero_append_zero (k * (m + n)) k, ← ih]
+    simp [prefix_zero, suffix_zero]
+    rw [zero_append_zero]
 
-lemma Bytes.not_max_toBytes {m n : Nat} (h : m.succ < 2 ^ (8 * n)) :
-    ¬ Bytes.max (Bits.toBytes (Nat.toBits (8 * n) m)) := by
-  rw [max_toBytes]; intro hc
-  have h_eq := congrArg Bits.toNat hc
-  rw [@toBits_toNat _ _ (lt_trans (Nat.lt_succ_self _) h)] at h_eq
-  rw [h_eq, Bits.max_toNat_succ] at h
-  cases Nat.lt_irrefl _ h
-
-lemma pow_add_toBytes_toBits {k m n : Nat} : k < 2 ^ (8 * n) →
-    (Nat.toBits (8 * (m + n)) k).toBytes.toBits (m + n) =
-      (Nat.toBits (8 * n) k).toBytes.toBits (m + n) := by
-  induction k with
+lemma Bits.factor_eq_max {k m n : Nat} (xs : Bits (k * m)) (ys : Bits (k * n)) :
+    factor (xs ++ ys) = (max (k * (n + m))) ↔ (xs = max _ ∧ ys = max _) := by
+  induction m with
   | zero =>
-    intro _; simp [Nat.toBits]
-    rw [Bytes.toBits_eq_zero zero_toBytes_zero]
-    rw [Bytes.toBits_eq_zero zero_toBytes_zero]
+    cases xs; simp [factor, @nil_eq_nil ⦃⦄ (max (k * 0))]
+    rw [← @nil_eq_nil ⦃⦄ (max 0)]; rfl
+  | succ m ih =>
+    simp [factor, prefix_append, suffix_append]
+    have h_rw := @max_append_max k (k * (n + m))
+    conv => lhs; rhs; apply h_rw.symm
+    rw [append_eq_append_iff, ih]
+    have h_rw' := @max_append_max k (k * m)
+    conv => rhs; lhs; rhs; apply h_rw'.symm
+    conv => rhs; lhs; lhs; apply (prefix_append_suffix xs).symm
+    rw [append_eq_append_iff, and_assoc]
+
+lemma Bits.factor_max {k m n : Nat} :
+    factor (max (k * m + k * n)) = (max (k * (m + n))) := by
+  rw [← max_append_max, factor_eq_max]; simp
+
+lemma Bits.zero_fappend_zero {k m n : ℕ} :
+    fappend (0 : Bits (k * m)) (0 : Bits (k * n)) = 0 := by
+  simp only [fappend, zero_append_zero, factor_zero]
+
+lemma Bits.succ_fappend {k m n} (xs : Bits (k * m)) (ys : Bits (k * n)) :
+    (fappend xs ys).succ = fappend (if ys = max _ then xs.succ else xs) ys.succ := by
+  simp only [fappend]
+  induction m with
+  | zero => cases xs; split <;> {simp [factor]; rfl}
+  | succ m ih =>
+    have h_sfx : xs.suffix.succ = xs.succ.suffix := by
+      rw [← prefix_append_suffix xs]
+      simp [suffix_append, succ_append]
+    have h_pfx :
+      xs.succ.prefix =
+        if xs.suffix = max (k * m) then xs.prefix.succ else xs.prefix := by
+      rw [← prefix_append_suffix xs]
+      simp [prefix_append, suffix_append, succ_append]
+    simp [factor, prefix_append, suffix_append, succ_append, ih xs.suffix, h_sfx]
+    by_cases h : ys = max (k * n)
+    · simp [if_pos h]; apply congr_arg₂ _ _ rfl; rw [h_pfx]
+      by_cases h' : xs.suffix = max (k * m)
+      · rw [h, h', max_append_max, if_pos factor_max, if_pos rfl]
+      · rw [if_neg h', if_neg _]
+        rw [factor_eq_max]; simp [h']
+    · simp [if_neg h]; rw [if_neg _]
+      rw [factor_eq_max]; simp [h]
+
+lemma Nat.toBits_pow_add {k m n : Nat} (h : k < 2 ^ (8 * m)) :
+    toBits (8 * (m + n)) k = fappend (0 : Bits (8 * n)) (toBits (8 * m) k) := by
+  induction k with
+  | zero => simp [toBits, zero_append_zero, zero_fappend_zero]
   | succ k ih =>
-    intros h; unfold Nat.toBits
-    rw [Bits.toBytes_succ, Bits.toBytes_succ]
-    rw [Bytes.toBits_succ (Bytes.not_max_toBytes h)]
-    rw [Bytes.toBits_succ (Bytes.not_max_toBytes _)]
-    rw [ih (lt_trans (Nat.lt_succ_self _) h)]
-    apply Nat.lt_of_lt_of_le h
-    rw [Nat.pow_le_pow_iff_right (Nat.lt_succ_self _)]
-    rw [Nat.mul_add]; apply Nat.le_add_left
+    have h_lt := lt_trans (lt_succ_self k) h; simp only [toBits]
+    rw [ih h_lt, Bits.succ_fappend, if_neg _]; intro hc
+    have h' : k + 1 = 2 ^ (8 * m) := by
+      rw [← toNat_toBits h_lt, hc, toNat_max_add_one_eq_pow]
+    rw [h'] at h; cases Nat.lt_irrefl _ h
+
+lemma Nat.toBits_eq_zero_append {k m n : Nat} (h : k < 2 ^ m) :
+    toBits (m + n) k = (0 : Bits n) ++ toBits m k := by
+  induction k with
+  | zero => simp only [toBits, zero_append_zero]
+  | succ k ih =>
+    have h_lt := lt_trans (lt_succ_self k) h; simp only [toBits]
+    rw [ih h_lt, Bits.succ_append, if_neg _]; intro hc
+    have h' : k + 1 = 2 ^ m := by
+      rw [← toNat_toBits h_lt, hc, toNat_max_add_one_eq_pow]
+    rw [h'] at h; cases Nat.lt_irrefl _ h
+
+
+lemma List.takeD_eq_takeD_append_replicate
+    {ξ : Type u} {m n} {xs : List ξ} (y : ξ) :
+    takeD m xs y = takeD m (xs ++ replicate n y) y := by
+  induction m generalizing xs n with
+  | zero => simp [takeD]
+  | succ m ih =>
+    match xs with
+    | [] =>
+      cases n <;> simp [takeD, replicate]; rename Nat => n
+      have h := @ih n []; simp [takeD] at h; apply h
+    | x :: xs =>
+      cases n <;> simp [takeD, replicate]; rename Nat => n
+      apply @ih (n + 1) xs
+
+--lemma toBits_toBytes_pow_add {k m n : Nat} : k < 2 ^ (8 * n) →
+--          (Nat.toBits (8 * n) k).toBytes.toBits (m + n) =
+--    (Nat.toBits (8 * (m + n)) k).toBytes.toBits (m + n) := by
+--  induction k with
+--  | zero =>
+--    intro _; simp [Nat.toBits]
+--    rw [Bytes.toBits_eq_zero zero_toBytes_zero]
+--    rw [Bytes.toBits_eq_zero zero_toBytes_zero]
+--  | succ k ih =>
+--    intros h; unfold Nat.toBits
+--    rw [Bits.toBytes_succ, Bits.toBytes_succ]
+
+lemma toBits_toBytes_toBits_pow_add {k m n : Nat} (h : k < 2 ^ (8 * m)) :
+          (Nat.toBits (8 * m) k).toBytes.toBits (m + n) =
+    (Nat.toBits (8 * (m + n)) k).toBytes.toBits (m + n) := by
+  simp only [Bytes.toBits]
+  apply congr_arg; apply congr_arg
+  suffices h_rw :
+    ((8 * (m + n)).toBits k).toBytes.reverse =
+      ((8 * m).toBits k).toBytes.reverse ++ List.replicate n (0 : Byte) by
+    rw [h_rw]; apply List.takeD_eq_takeD_append_replicate
+  rw [← List.reverse_replicate, ← List.reverse_append, List.reverse_inj]
+  rw [← toBytes_zero_eq_replicate_zero, ← Bits.toBytes_eq_append]
+  apply congr_arg
+  apply Nat.toBits_pow_add h
+
+
+
+
+-- lemma pow_add_toBytes_toBits {k m n : Nat} : k < 2 ^ (8 * m) →
+--     (Nat.toBits (8 * (m + n)) k).toBytes.toBits (m + n) =
+--           (Nat.toBits (8 * m) k).toBytes.toBits (m + n) := by
+--   induction k with
+--   | zero =>
+--     intro _; simp [Nat.toBits]
+--     rw [Bytes.toBits_eq_zero zero_toBytes_zero]
+--     rw [Bytes.toBits_eq_zero zero_toBytes_zero]
+--   | succ k ih =>
+--     intros h; unfold Nat.toBits
+--     rw [Bits.toBytes_succ, Bits.toBytes_succ]
+
+
+
+--     rw [Bytes.toBits_succ (Bytes.not_max_toBytes h)]
+--     rw [Bytes.toBits_succ (Bytes.not_max_toBytes _)]
+--     rw [ih (lt_trans (Nat.lt_succ_self _) h)]
+--     apply Nat.lt_of_lt_of_le h
+--     rw [Nat.pow_le_pow_iff_right (Nat.lt_succ_self _)]
+--     rw [Nat.mul_add]; apply Nat.le_add_left
+
 
 lemma subcode_compile_call {e l m n}
   (h : subcode e.code m (Func.compile l m (Func.call n))) :
     ∃ (loc : Nat) (p : Func),
       List.get? l n = some (loc, p) ∧
       loc < 2 ^ 16 ∧
-      pushAt e m (Bits.toBytes (Nat.toBits (8 * 2) loc)) ∧
+      PushAt e m (Bits.toBytes (Nat.toBits (8 * 2) loc)) ∧
       Jinst.jump.At e (m + 3) := by
   rcases of_subcode h with ⟨cd, h', h_slice⟩; clear h
   rcases of_bind_eq_some h' with ⟨⟨loc, p⟩, h_get, h⟩; clear h'
   rcases of_guard_eq_some h with ⟨h_lt, h_eq⟩; clear h
   refine' ⟨loc, p, h_get, h_lt, _⟩
   simp at h_eq; rw [← h_eq] at h_slice
-  simp only [pushAt, pushToBytes, pushToByte]
-  rw [Bits.toBytes_length]
-  refine' ⟨⟨slice_prefix h_slice, by omega⟩, _⟩
+  simp only [PushAt, pushToBytes, pushToByte]
+  rw [Bits.length_toBytes]
+  refine' ⟨⟨List.slice_prefix h_slice, by omega⟩, _⟩
   simp only [Jinst.At]
-  have hh := slice_suffix h_slice
-  simp [Bytes.append, Bytes.length, Bytes.length_append, Bits.toBytes_length] at hh
+  rw [← List.cons_append] at h_slice
+  have hh := List.slice_suffix h_slice
+  simp [List.append, List.length, List.length_append, length_toBytes] at hh
+  rw [List.slice_iff_get?_eq] at hh
   apply hh
+
+-- lemma subcode_compile_call {e l m n}
+--   (h : subcode e.code m (Func.compile l m (Func.call n))) :
+--     ∃ (loc : Nat) (p : Func),
+--       List.get? l n = some (loc, p) ∧
+--       loc < 2 ^ 16 ∧
+--       PushAt e m (Bits.toBytes (Nat.toBits (8 * 2) loc)) ∧
+--       Jinst.jump.At e (m + 3) := by
+--   rcases of_subcode h with ⟨cd, h', h_slice⟩; clear h
+--   rcases of_bind_eq_some h' with ⟨⟨loc, p⟩, h_get, h⟩; clear h'
+--   rcases of_guard_eq_some h with ⟨h_lt, h_eq⟩; clear h
+--   refine' ⟨loc, p, h_get, h_lt, _⟩
+--   suffices h :
+--       e.code.slice? m 3 = some (Ox x6 x1 :: ((8 * 2).toBits loc).toBytes) ∧
+--       Jinst.At e (m + 3) Jinst.jump by
+--     simp only [PushAt, pushToBytes, pushToByte]
+--     rw [Bits.length_toBytes]
+--     refine' ⟨⟨h.left, by omega⟩, h.right⟩
+--   simp at h_eq; rw [← h_eq, ← List.cons_append] at h_slice
+--   have h := List.of_slice?_eq_append h_slice
+--   simp [Bits.length_toBytes] at h
+--   rw [@List.slice?_eq_cons_iff _ _ _ 0] at h
+--   refine ⟨h.left, h.right.left⟩
 
 lemma subcode_compile_branch {e k l p q}
   (h : subcode e.code k (Func.compile l k (Func.branch p q))) :
     ∃ loc : Nat,
       loc < 2 ^ 16 ∧
-      pushAt e k (Bits.toBytes (Nat.toBits (8 * 2) loc)) ∧
+      PushAt e k (Bits.toBytes (Nat.toBits (8 * 2) loc)) ∧
       Jinst.jumpi.At e (k + 3) ∧
       subcode e.code (k + 4) (Func.compile l (k + 4) p) ∧
       Jinst.jumpdest.At e loc ∧
@@ -2105,22 +2352,23 @@ lemma subcode_compile_branch {e k l p q}
   rcases of_guard_eq_some h with ⟨h_loc, h'⟩; clear h
   rcases of_bind_eq_some h' with ⟨pcd, h_pcd, h⟩; clear h'
   rw [← of_pure_eq_some h] at h_slice; clear h cd; rename' h_slice => h
-  rw [Bytes.append_assoc, Bytes.append_assoc, Bytes.append_assoc] at h
+  rw [List.append_assoc, List.append_assoc, List.append_assoc] at h
   let loc : Nat := k + qcd.length + 4
   refine' ⟨loc, h_loc, _⟩
-  simp [pushAt, pushToBytes, pushToByte]
-  rw [Bits.toBytes_length]
-  refine' ⟨⟨slice_prefix h, by omega⟩, _⟩
-  have h' := slice_suffix h; clear h
-  simp [Bytes.length_snoc, Bits.toBytes_length] at h'
-  refine' ⟨slice_prefix h', _⟩
-  have h := slice_suffix h'; clear h'
-  rw [Nat.add_assoc] at h; simp [Bytes.length] at h; rw [h_qcd]
-  refine' ⟨slice_prefix h, _⟩
-  have h' := slice_suffix h; clear h
-  rw [Nat.add_assoc, Nat.add_comm 4, ← Nat.add_assoc] at h'
-  simp [loc]; rw [h_pcd]
-  refine' ⟨slice_prefix h', slice_suffix h'⟩
+  simp [PushAt, pushToBytes, pushToByte]
+  rw [Bits.length_toBytes]
+  refine' ⟨⟨List.slice_prefix h, by omega⟩, _⟩
+  have h' := List.slice_suffix h; clear h
+  simp [Bits.length_toBytes] at h'
+  rw [← List.singleton_append] at h'
+  refine' ⟨List.slice_iff_get?_eq.mp <| List.slice_prefix h', _⟩
+  have h := List.slice_suffix h'; clear h'
+  rw [Nat.add_assoc] at h; simp [List.length] at h; rw [h_qcd]
+  refine' ⟨List.slice_prefix h, _⟩
+  have h' := List.slice_suffix h; clear h
+  have h_rw : k + 4 + List.length qcd = k + List.length qcd + 4 := by omega
+  rw [h_rw, ← List.singleton_append] at h'; simp [loc]; rw [h_pcd]
+  refine' ⟨List.slice_iff_get?_eq.mp <| List.slice_prefix h', List.slice_suffix h'⟩
 
 lemma Prog.get?_table {m n} {c : List Func} :
     Prod.snd <$> List.get? (table m c) n = List.get? c n := by
@@ -2131,8 +2379,7 @@ lemma Prog.get?_table {m n} {c : List Func} :
     | zero => simp [List.get?]
     | succ n => simp only [List.get?]; apply ih
 
--- alternative version of Exec which rolls
--- all type arguments into a structure.
+-- alternative version of Exec which rolls all arguments into a structure.k
 structure Exec' : Type :=
   (e : Env)
   (s : State)
@@ -2237,7 +2484,7 @@ lemma Rinst.run_of_at {e s pc o r} (cr : Exec e s pc r) (h_at : Rinst.At e pc o)
     rename State => s'; refine' ⟨s', _⟩
     have h_prec := Exec'.Rel.step asm asm
     cases (asm : Step _ _ _ _ _)
-    · rw [Rinst.At_unique h_at asm]; refine' ⟨asm, asm, asm⟩
+    · rw [Rinst.at_unique h_at asm]; refine' ⟨asm, asm, asm⟩
     · cases not_cop_at_of_op_at h_at asm
     · cases not_cop_at_of_op_at h_at asm
     · cases not_jop_at_of_op_at h_at asm
@@ -2246,7 +2493,7 @@ lemma Rinst.run_of_at {e s pc o r} (cr : Exec e s pc r) (h_at : Rinst.At e pc o)
   | halt =>
     rename Halt _ _ _ _ => h_halt; cases h_halt
     · cases not_hop_at_of_op_at h_at asm
-    · cases not_slice_length h_at
+    · cases List.get?_length_ne_some h_at
 
 lemma Xinst.run_of_at {e s pc o r}
     (cr : Exec e s pc r) (h_at : Xinst.At e pc o) :
@@ -2259,22 +2506,22 @@ lemma Xinst.run_of_at {e s pc o r}
     have h_prec := Exec'.Rel.step asm asm
     cases (asm : Step _ _ _ _ _)
     · cases not_cop_at_of_op_at asm h_at
-    · rw [Xinst.At_unique h_at asm]
+    · rw [Xinst.at_unique h_at asm]
       refine ⟨_, Xinst.Run.pre asm asm asm, h_prec⟩
-    · rw [Xinst.At_unique h_at asm]
+    · rw [Xinst.at_unique h_at asm]
       refine ⟨asm, Xinst.Run.fail asm, h_prec⟩
     · cases not_jop_at_of_cop_at h_at asm
     · cases not_pushAt_of_cop_at h_at asm
   | exec =>
-    cases Xinst.At_unique h_at (asm : Xinst.At _ _ _)
+    cases Xinst.at_unique h_at (asm : Xinst.At _ _ _)
     have h_prec := Exec'.Rel.snd asm asm asm asm
     refine' ⟨_, _, Xinst.Run.exec asm asm, h_prec⟩
   | halt =>
     rename Halt _ _ _ _ => h_halt; cases h_halt
     · cases not_hop_at_of_cop_at h_at asm
-    · cases not_slice_length h_at
+    · cases List.get?_length_ne_some h_at
 
-lemma push_of_pushAt {e s pc bs r} (cr : Exec e s pc r) (h_at : pushAt e pc bs) :
+lemma push_of_pushAt {e s pc bs r} (cr : Exec e s pc r) (h_at :PushAt e pc bs) :
     ∃ (s' : State) (cr' : Exec e s' (pc + bs.length + 1) r),
       State.Push [Bytes.toBits 32 bs] s s' ∧
       Exec'.Rel ⟨e, s', pc + bs.length + 1, r, cr'⟩ ⟨e, s, pc, r, cr⟩ := by
@@ -2287,7 +2534,7 @@ lemma push_of_pushAt {e s pc bs r} (cr : Exec e s pc r) (h_at : pushAt e pc bs) 
     · cases not_pushAt_of_cop_at asm h_at
     · cases not_pushAt_of_cop_at asm h_at
     · cases not_pushAt_of_jop_at asm h_at
-    · rename (pushAt e pc _) => h_at'
+    · rename (PushAt e pc _) => h_at'
       cases pushAt_unique h_at h_at'
       refine' ⟨_, asm, h_prec⟩
   | exec =>
@@ -2295,11 +2542,10 @@ lemma push_of_pushAt {e s pc bs r} (cr : Exec e s pc r) (h_at : pushAt e pc bs) 
   | halt =>
     rename Halt _ _ _ _ => h_halt; cases h_halt
     · cases not_pushAt_of_hop_at asm h_at
-    · cases not_slice_length <| slice_prefix <| And.left asm
+    · cases List.not_slice_length h_at.left
 
 lemma length_pushToBytes {bs} : (pushToBytes bs).length = bs.length + 1 := by
-  simp [pushToBytes, Bytes.length]
-  rw [Bytes.length_append, Nat.add_comm]; rfl
+  simp [pushToBytes, List.length]
 
 lemma Inst.run_of_at {e s pc i r}
     (cr : Exec e s pc r) (h_at : Inst.At e pc i) :
@@ -2331,14 +2577,14 @@ lemma Jinst.run_of_at {e s pc o r} (cr : Exec e s pc r) (h_at : Jinst.At e pc o)
     · cases not_jop_at_of_cop_at asm h_at
     · cases not_jop_at_of_cop_at asm h_at
     · refine' ⟨_, _, _, h_prec⟩
-      rw [Jinst.At_unique h_at asm]
+      rw [Jinst.at_unique h_at asm]
       assumption
     · cases not_pushAt_of_jop_at h_at asm
   | exec => cases not_jop_at_of_cop_at asm h_at
   | halt =>
     rename Halt _ _ _ _ => h_halt; cases h_halt
     · cases not_hop_at_of_jop_at h_at asm
-    · cases not_slice_length h_at
+    · cases List.get?_length_ne_some h_at
 
 lemma jump_at {e s pc r} (cr : Exec e s pc r) (h : Jinst.At e pc Jinst.jump) :
     ∃ (x : Word) (s' : State) (cr' : Exec e s' x.toNat r),
@@ -2401,20 +2647,23 @@ lemma Func.length_compile {l k p bs} (h : Func.compile l k p = some bs) :
     rcases of_guard_eq_some h' with ⟨h'', h⟩; clear h' h''
     rcases of_bind_eq_some h with ⟨cq, h_cq, h'⟩; clear h
     simp at h'; rw [← h']
-    simp [Bytes.length_append, Bytes.length, compsize, Bytes.append]
-    rw [toBytes_length, ihp h_cp, ihq h_cq]; omega
+    simp [List.length_append, List.length, compsize, List.append]
+    rw [length_toBytes, ihp h_cp, ihq h_cq]; omega
   | last o => simp [compile] at h; rw [← h]; rfl
   | next o p ih =>
     rcases of_bind_eq_some h with ⟨bs', h, h'⟩;
     simp at h'; rw [← h']
-    simp [Bytes.length_append, compsize, Bytes.length]
+    simp [List.length_append, compsize, List.length]
     rw [ih h, Nat.add_comm]
   | call m =>
     rcases of_bind_eq_some h with ⟨⟨_, _⟩, _, h'⟩; clear h
     rcases of_guard_eq_some h' with ⟨h'', h⟩; clear h' h''
     simp at h; rw [← h];
-    simp [Bytes.length_append, Bytes.length, compsize, Bytes.append]
-    rw [toBytes_length]
+    simp [List.length_append, List.length, compsize, List.append]
+    rw [length_toBytes]
+
+#check List.get?_eq_getElem?
+
 
 lemma of_get?_table_eq_some {f fs} {bs} {m n : ℕ} {p : Func}
     (h_eq : some bs = Prog.compile ⟨f, fs⟩)
@@ -2433,8 +2682,8 @@ lemma of_get?_table_eq_some {f fs} {bs} {m n : ℕ} {p : Func}
     simp [List.get?] at h_get
     cases h_get.left; cases h_get.right; clear h_get
     simp only [table]
-    refine' ⟨ [], _ , rfl, List.nil_append _, ⟪⟫,
-              bs, rfl, Bytes.nil_append.symm, _ ⟩
+    refine' ⟨ [], _ , rfl, List.nil_append _, [],
+              bs, rfl, (List.nil_append _).symm, _ ⟩
     rw [h_eq]; simp [Prog.compile, table]
   | succ m ih =>
     intro n p h_get
@@ -2447,7 +2696,9 @@ lemma of_get?_table_eq_some {f fs} {bs} {m n : ℕ} {p : Func}
       have h_sub : m.succ - m = 1 := by omega
       have h_le : List.length lft ≤ Nat.succ m := by
         rw [h_lft]; apply Nat.le_succ
+
       rw [h_split, List.get?_append_right h_le, h_lft, h_sub] at h_get
+
       match rgt with
       | [] => simp [List.get?] at h_get
       | _ :: rgt' =>
@@ -2459,7 +2710,7 @@ lemma of_get?_table_eq_some {f fs} {bs} {m n : ℕ} {p : Func}
     · simp [Split]; rw [← h_rgt', h_split]
     · rcases Table.compile_cons_eq_some h_sfx.symm with
         ⟨cq, cl, h_cq, h_cl, h_sfx'⟩
-      refine' ⟨pfx ++ (⟪Jinst.jumpdest.toByte⟫ ++ cq), cl, _, _, _⟩
+      refine' ⟨pfx ++ ([Jinst.jumpdest.toByte] ++ cq), cl, _, _, _⟩
       · have hn : n = k + compsize q + 1 := by
           rcases table_suffix h_split with
             ⟨k', _ | ⟨q', c'⟩, h⟩ <;> simp [table] at h
@@ -2467,10 +2718,10 @@ lemma of_get?_table_eq_some {f fs} {bs} {m n : ℕ} {p : Func}
           rw [h_rgt'] at h
           cases c' <;> simp [table] at h
           apply h.left.left
-        simp [Bytes.length_append, Bytes.length]
+        simp [List.length_append, List.length]
         rw [h_pfx, hn, Func.length_compile h_cq]
         omega
-      · simp only [Split]; rw [Bytes.append_assoc, ← h_sfx', h_split']
+      · simp only [Split]; rw [List.append_assoc, ← h_sfx', h_split']
       · rw [← h_cl, ← h_rgt']
 
 lemma subcode_of_get?_eq_some {f fs} {e : Env} {k : ℕ} {p : Func}
@@ -2482,12 +2733,13 @@ lemma subcode_of_get?_eq_some {f fs} {e : Env} {k : ℕ} {p : Func}
     ⟨lft, rgt, _, _, pfx, sfx, h_pfx, h_split', h_sfx⟩
   unfold Jinst.At
   rcases Table.compile_cons_eq_some h_sfx.symm with ⟨bs, bs', h_bs, _, h_sfx'⟩
-  have h_slice : slice e.code k sfx := by
-    rw [← h_pfx, h_split']; apply append_slice_suffix
-  rw [h_sfx', Bytes.append_assoc] at h_slice
-  refine' ⟨slice_prefix h_slice, _⟩
+  have h_slice : List.Slice e.code k sfx := by
+    rw [← h_pfx, h_split']; apply List.append_slice_suffix
+  rw [h_sfx', List.append_assoc] at h_slice
+  rw [← List.slice_iff_get?_eq]
+  refine' ⟨List.slice_prefix h_slice, _⟩
   rw [h_bs]; simp [subcode]
-  apply slice_prefix <| slice_suffix h_slice
+  apply List.slice_prefix <| List.slice_suffix h_slice
 
 theorem correct_core (f : Func) (fs : List Func) :
     ∀ (pk : Exec') (p : Func),
@@ -2497,18 +2749,18 @@ theorem correct_core (f : Func) (fs : List Func) :
   apply Exec'.strongRec; intro pk ih p h_eq h_sub
   match p with
   | .last o =>
-    apply Func.Run.last <| Hinst.run_of_at pk.cr h_sub
+    apply Func.Run.last <| Hinst.run_of_at pk.cr <| List.get?_eq_of_slice h_sub
   | .next i p =>
     rcases of_subcode h_sub with ⟨cd, h_eq', h_slice⟩; clear h_sub
     rcases of_bind_eq_some h_eq' with ⟨cd', h_eq'', h_rw⟩; clear h_eq'
     simp [pure] at h_rw; rw [← h_rw] at h_slice; clear h_rw cd
     have h_at : Inst.At pk.e pk.pc i := by
-      rw [Inst.At_iff_slice]; apply slice_prefix h_slice
+      rw [Inst.at_iff_slice]; apply List.slice_prefix h_slice
     rcases Inst.run_of_at pk.cr h_at with ⟨s', cr', h_run, h_prec⟩
     have h_run' : Func.Run (f :: fs) pk.e s' p pk.r := by
       apply ih ⟨pk.e, s', _, pk.r, cr'⟩ (Exec'.lt_of_prec h_prec) p
       · simp; apply h_eq
-      · simp; rw [h_eq'']; apply slice_suffix h_slice
+      · simp; rw [h_eq'']; apply List.slice_suffix h_slice
     apply Func.Run.next h_run h_run'
   | .branch p q =>
     rcases subcode_compile_branch h_sub with
@@ -2517,9 +2769,13 @@ theorem correct_core (f : Func) (fs : List Func) :
              State.Push [Nat.toBits 256 loc] pk.s s' ∧
              Exec'.Rel ⟨pk.e, s', pk.pc + 3, pk.r, cr'⟩ pk := by
       rcases push_of_pushAt pk.cr h_push with ⟨s', cr', h, h_prec⟩
+      have hh := @pow_add_toBytes_toBits
+
+
+      #exit
       rw [← @pow_add_toBytes_toBits loc 30 2 h_loc, Bits.toBytes_toBits] at h
-      have h_rw : pk.pc +3 = pk.pc + Bytes.length (Bits.toBytes (Nat.toBits (8 * 2) loc)) + 1 := by
-        rw [@toBytes_length 2 (Nat.toBits (8 * 2) loc)]
+      have h_rw : pk.pc +3 = pk.pc + List.length (Bits.toBytes (Nat.toBits (8 * 2) loc)) + 1 := by
+        rw [@length_toBytes 2 (Nat.toBits (8 * 2) loc)]
       rw [h_rw]; refine' ⟨s', cr', h, h_prec⟩
     clear h_push; rcases h with ⟨s', cr, h_push, h_prec⟩
     rcases jumpi_at cr h_jumpi with
@@ -2568,9 +2824,9 @@ theorem correct_core (f : Func) (fs : List Func) :
              State.Push [Nat.toBits 256 loc] pk.s s' ∧
              Exec'.Rel ⟨pk.e, s', pk.pc + 3, pk.r, cr'⟩ pk := by
       rcases push_of_pushAt pk.cr h_push with ⟨s', cr', h, h_prec⟩
-      rw [← @pow_add_toBytes_toBits loc 30 2 h_loc, Bits.toBytes_toBits] at h
-      have h_rw : pk.pc + 3 = pk.pc + Bytes.length (Bits.toBytes (Nat.toBits (8 * 2) loc)) + 1 := by
-        rw [@toBytes_length 2 (Nat.toBits (8 * 2) loc)]
+      rw [← @pow_add_toBytes_toBits loc 30 2 h_loc, toBits_toBytes] at h
+      have h_rw : pk.pc + 3 = pk.pc + List.length (Bits.toBytes (Nat.toBits (8 * 2) loc)) + 1 := by
+        rw [@length_toBytes 2 (Nat.toBits (8 * 2) loc)]
       rw [h_rw]; refine' ⟨s', cr', h, h_prec⟩
     clear h_push; rcases h with ⟨s, cr, h_push, h_prec⟩
     rcases jump_at cr h_jump with ⟨x, s', cr', h_pop, h, h_prec'⟩
@@ -2643,9 +2899,9 @@ lemma call_or_statcall_of_ne {e s ep sp o rx sw}
 
 lemma Xinst.rel_inv_code {a} {e s ep sp o rx sw}
     (h_cr : Xinst.Run' e s ep sp o rx sw)
-    (h_ne : s.code a ≠ ⟪⟫)
+    (h_ne : s.code a ≠ [])
     (h_run : Exec ep sp 0 rx) : s.code a = sw.code a := by
-  have h_ne' : sp.code a ≠ Bytes.nil := by
+  have h_ne' : sp.code a ≠ List.nil := by
     rw [← Xinst.prep_inv_code h_cr]; exact h_ne
   rw [Xinst.prep_inv_code h_cr, Exec.inv_code h_run h_ne']
   apply Xinst.wrap_inv_code'' h_cr h_ne
@@ -3705,8 +3961,8 @@ lemma prepend_cdl_prepend_elim {e s} (l) {n p r} (φ : Prop)
   apply h x <| run_prepend h₁ <| .next (run_pushWord _ hp₂) h₃
 
 lemma of_nof_of_transfer {m n} {a b : Bits m} {v : Bits n} {f h : Bits m → Bits n}
-    (h_nof : nof f) (h_di : Transfer f a v b h) :
-    ∃ g, Decrease a v f g ∧ Increase b v g h ∧ NoOverflow (g b) v := by
+    (h_nof : SumNof f) (h_di : Transfer f a v b h) :
+    ∃ g, Decrease a v f g ∧ Increase b v g h ∧ Nof (g b) v := by
   rcases h_di with ⟨h_le, g, hd, hi⟩; refine' ⟨g, hd, hi, _⟩
   apply lt_of_le_of_lt _ h_nof
   by_cases h_ab : a = b
@@ -3718,7 +3974,7 @@ lemma of_nof_of_transfer {m n} {a b : Bits m} {v : Bits n} {f h : Bits m → Bit
     apply Bits.toNat_le_toNat _ _ h_le
 
 lemma le_of_increase {m n : ℕ} {k : Bits m} {v : Bits n} {f g : Bits m → Bits n}
-    (h : Increase k v f g) (h' : NoOverflow (f k) v) : ∀ k', f k' ≤ g k' := by
+    (h : Increase k v f g) (h' : Nof (f k) v) : ∀ k', f k' ≤ g k' := by
   intro k'; by_cases h_eq : k = k'
   · rw [← h_eq]
     have h_rw : f k + v = g k := (h k).left rfl
