@@ -11,3 +11,5 @@ require mathlib from git
 
 @[default_target]
 lean_lib «Blanc» where
+lean_exe «Blanx» where
+  root := `Blanc

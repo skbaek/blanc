@@ -113,7 +113,8 @@ def logWithdraw : Func :=
 -- ( wad -- )
 def sendToCaller : Line :=
   pushList [0, 0, 0, 0] ++ -- 0 :: 0 :: 0 :: 0 :: wad
-  swap 3 :: caller :: push ⟪Ox x5 x2, Ox x0 x8⟫ (by {simp [Bytes.length]}) :: -- 21000 :: caller :: wad :: 0 :: 0 :: 0 :: 0
+  swap 3 :: caller :: -- caller :: wad :: 0 :: 0 :: 0 :: 0
+  push [Ox x5 x2, Ox x0 x8] (by {simp [List.length]}) :: -- 21000 :: caller :: wad :: 0 :: 0 :: 0 :: 0
   call :: -- 'wad' amount of ethers now sent to 'caller'
   []
 

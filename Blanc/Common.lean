@@ -117,6 +117,12 @@ def Char.toHex : Char → Hex
   | '7' => x7
   | '8' => x8
   | '9' => x9
+  | 'a' => xA
+  | 'b' => xB
+  | 'c' => xC
+  | 'd' => xD
+  | 'e' => xE
+  | 'f' => xF
   | 'A' => xA
   | 'B' => xB
   | 'C' => xC
@@ -583,21 +589,208 @@ def addressMask : Word := (@Bits.max 96) ++ (@Bits.zero 160)
 --     simp [Bits.shl, Bits.shlo]
 --     rw [← @ih m (Bits.shlo xs 0)]
 --
--- lemma max_append_zero_eq_shl_max {m n} :
---     (@Bits.max m) ++ (@Bits.zero n) = Bits.shl n (@Bits.max (m + n)) := by
+
+inductive prefix_ones : Nat → ∀ {n}, Bits n → Prop
+  | tail : ∀ m (xs : Bits m), prefix_ones 0 xs
+  | cons : ∀ m n (xs : Bits m), prefix_ones n xs → prefix_ones (n + 1) (1 +> xs)
+
+inductive suffix_zeroes : ∀ {m}, Nat → Bits m → Prop
+  | tail : ∀ n, suffix_zeroes n (Bits.zero n)
+  | cons : ∀ m n x (xs : Bits m), suffix_zeroes n xs → suffix_zeroes n (x +> xs)
+
+inductive suffix?_zeroes : ∀ {m}, Nat → Bits m → Prop
+  | exact : ∀ m n (xs : Bits m), suffix_zeroes n xs → suffix?_zeroes n xs
+  | more : ∀ (m n : Nat), m < n → suffix?_zeroes n (Bits.zero m)
+
+lemma le_of_suffix_zeroes :
+    ∀ {m n} (xs : Bits m), suffix_zeroes n xs → n ≤ m := by
+  apply @suffix_zeroes.rec @(λ m n xs _ => n ≤ m)
+  · intro _; apply le_refl
+  · intro m n _ xs _ h'; apply le_trans h'; simp
+
+lemma of_suffix?_zeroes {m n} :
+    ∀ (xs : Bits m) (h : suffix?_zeroes n xs),
+      suffix_zeroes n xs ∨ (m < n ∧ xs = Bits.zero m) := by
+  apply @suffix?_zeroes.rec m n
+          @(λ xs _ => suffix_zeroes n xs ∨ (m < n ∧ xs = Bits.zero m))
+  · intro _; apply Or.inl
+  · intro h; right; refine ⟨h, rfl⟩
+
+lemma suffix_zeroes_zero {m} (xs : Bits m) : suffix_zeroes 0 xs := by
+  induction xs with
+  | nil => apply suffix_zeroes.tail
+  | cons x xs ih => apply suffix_zeroes.cons; apply ih
+
+lemma Bits.zero_snoc_zero {n} : (zero n).snoc 0 = zero (n + 1) := by
+  induction n with
+  | zero => rfl
+  | succ n ih => simp only [zero, snoc, ih]
+
+lemma Bits.zero_shlo_zero {n} : (zero n).shlo 0 = zero n := by
+  cases n <;> simp only [zero, shlo]; apply zero_snoc_zero
+
+lemma Bits.eq_zero_of_suffix_zeroes :
+    ∀ {m n} (xs : Bits m), suffix_zeroes n xs → m ≤ n → xs = zero m := by
+  apply @suffix_zeroes.rec @(λ m n xs _ => m ≤ n → xs = zero m)
+  · intro _ _; rfl
+  · intro m n x xs h h' h_le
+    have hh := le_trans h_le <| le_of_suffix_zeroes _ h
+    rw [← Nat.not_lt] at hh
+    cases hh <| Nat.lt_succ_self _
+
+lemma Bits.suffix?_zeroes_succ' :
+    ∀ {m n} (xs : Bits m) (h : suffix_zeroes n xs),
+      suffix?_zeroes (n + 1) (xs.shlo 0) := by
+  apply @suffix_zeroes.rec @(λ m n xs _ => suffix?_zeroes (n + 1) (xs.shlo 0))
+  · intro n; rw [zero_shlo_zero]
+    apply suffix?_zeroes.more _ _ <| Nat.lt_succ_self _
+  · intro m n x xs h h'; simp only [shlo];
+    match xs with
+    | ⦃⦄ =>
+      cases n
+      · apply suffix?_zeroes.exact _ _ _ <| suffix_zeroes.tail 1
+      · apply suffix?_zeroes.more 1 (_ + 2) (by omega)
+    | y +> ys =>
+      clear x xs; rename Nat => m'
+      simp [shlo] at h'
+      simp [snoc]
+      rcases of_suffix?_zeroes _ h' with h'' | ⟨h_lt, h_eq⟩
+      · apply suffix?_zeroes.exact _ _ _ <| suffix_zeroes.cons _ _ _ _ h''
+      · simp at h_lt
+        have h_eq' := eq_zero_of_suffix_zeroes _ h h_lt
+        simp [zero] at h_eq'
+        rw [h_eq, h_eq'.left]
+        rw [← Nat.succ_le] at h_lt
+        have h_le := le_of_suffix_zeroes _ h
+        rw [Nat.le_antisymm h_le h_lt]
+        apply suffix?_zeroes.exact
+        apply suffix_zeroes.tail
+
+
+-- lemma Bits.foo {m n} (xs : Bits m) : suffix?_zeroes n (shl n xs) := by
+--   induction n generalizing xs with
+--   | zero => apply suffix?_zeroes.exact; apply suffix_zeroes_zero
+--   | succ n ih =>
+--     simp only [shl];
+--     cases ih (shl n xs) with
+--     | exact _ h =>
+--
+
+lemma Bits.shl_eq_zero {m} (xs : Bits m) : shl m xs = zero m := by
+  induction m with
+  | zero => apply nil_eq_nil
+  | succ m ih => cases xs; simp [shl, zero, ih, zero_snoc_zero]
+
+--def Bits.comm_aux : ∀ {m n : Nat}, Bits (m + n + 1) → Bits (m + 1 + n)
+--  | _, 0, xs => xs
+--  | _, n + 1, x +> xs => x +> xs.comm_aux
+
+def Bits.comm_aux : ∀ {m n : Nat}, Bits (m + 1 + n) → Bits (m + (n + 1))
+  | _, 0, xs => xs
+  | _, _ + 1, xs =>
+    match xs with
+    | x +> xs => x +> xs.comm_aux
+
+def Bits.head {m} : Bits (m + 1) → Bool
+  | x +> _ => x
+
+def Bits.tail {m} : Bits (m + 1) → Bits m
+  | _ +> xs => xs
+
+def Bits.comm : ∀ {m n : Nat}, Bits (m + n) → Bits (n + m)
+  | 0, n, xs => xs.prefix
+  | m + 1, n, xs =>
+    have pfx := xs.prefix
+    have xsfx := xs.suffix
+    have x := xsfx.head
+    have sfx := xsfx.tail
+    have pfxx := pfx.snoc x
+    have xs' := comm (pfxx ++ sfx)
+    xs'.comm_aux
+
+-- def Bits.comm : ∀ {m n : Nat}, Bits (m + n) → Bits (n + m)
+--   | m, 0, xs => xs ++ ⦃⦄
+--   | m, n + 1, x +> xs =>
+--     have ys := xs.prefix
+--     have zs := xs.suffix
+--     have foo := x +> Bits.comm (ys ++ zs)
+--     foo.comm_aux
+
+-- def Bits.raf : ∀ {m: Nat} (xs : Bits m), (xs ++ ⦃⦄).comm = xs :=
+--
+-- lemma Bits.max_append_zero_eq_shl_max {m n} :
+--     comm (max m ++ zero n) = Bits.shl n (max (m + n)) := by
+--   induction n with
+--   | zero => simp [zero, max, shl, raf]
+--   | succ n ih =>
+--     simp [zero, max, shl]
+--     rw [← ih]
+--     conv => lhs; rhs; rhs; apply zero_snoc_zero.symm
+
+
+
+
+
+
+
+
+
+-- #exit
+--
+-- lemma Bits.max_append_zero_eq_shl_max {m n} :
+--     (@Bits.max m) ++ (@Bits.zero n) = Bits.shl n (@Bits.max (n + m)) := by
 --   induction n generalizing m with
 --   | zero =>
---     simp only [Bits.zero, Bits.max, Bits.shl, Bits.append_nil, Nat.add_zero]
+--     simp [zero, shl];
+--     rw [← max_append_max]
+--     rfl
 --   | succ n ih =>
---     simp only [Bits.zero, Bits.shl, Bits.append_cons]
---     conv => rhs; arg 2; apply shlo_max
---     rw [ih, shl_cons_zero]; rfl
 --
--- lemma addressMask_eq_shl :
---     addressMask = Bits.shl (160 : Nat).toWord.toNat (Bits.max 256) := by
---   have h_lt : 160 < 2 ^ 256 := by simp
---   simp only [Nat.toWord, toBits_toNat _ h_lt, addressMask]
---   apply max_append_zero_eq_shl_max
+--     simp [zero]
+
+
+
+
+-- lemma Bits.max_append_zero_eq_shl_max {k m n} :
+--     @Bits.max k ++ (max m ++ zero n) = Bits.shl n (@Bits.max (n + m + k)) := by
+--   induction k generalizing m n with
+--   | zero => simp [max, shl]
+
+
+
+-- #exit
+--
+-- lemma Bits.max_append_zero_eq_shl_max {m n} :
+--     (@Bits.max m) ++ (@Bits.zero n) = Bits.shl n (@Bits.max (n + m)) := by
+--   induction m generalizing n with
+--   | zero => simp [max, shl_eq_zero]; rfl
+--   | succ m ih =>
+--     match n with
+--     | 0 => simp only [zero, shl]; rw [← @max_append_max (m + 1)]; rfl
+--     | _ + 1 =>
+--       simp [zero, max, shl]
+--
+-- lemma max_append_zero_eq_shl_max {m n} :
+--     (@Bits.max m) ++ (@Bits.zero n) = Bits.shl n (@Bits.max (n + m)) := by
+--   induction n generalizing m with
+--   | zero =>
+--     simp only [Bits.zero, Bits.max, Bits.shl]
+--     induction m with
+--     | zero => rfl
+--     | succ m ih => simp only [Bits.max]; rw [Bits.cons_append, ih]; rfl
+--   | succ n ih =>
+--     simp only [Bits.shl]
+
+
+lemma addressMask_eq_shl :
+    addressMask = Bits.shl (160 : Nat).toWord.toNat (Bits.max 256) := by
+  have h_rw : (160 : Nat).toWord.toNat = (160 : Nat) := by
+    apply toNat_toBits; omega
+  rw [h_rw]; rfl
+
+-- have h_lt : 160 < 2 ^ 256 := by simp
+-- simp only [Nat.toWord, toNat_toBits h_lt, addressMask]
+-- apply max_append_zero_eq_shl_max
 
 def ValidAddr (w : Word) : Prop := ∃ a : Addr, a.toWord = w
 
@@ -2662,9 +2855,6 @@ lemma Func.length_compile {l k p bs} (h : Func.compile l k p = some bs) :
     simp [List.length_append, List.length, compsize, List.append]
     rw [length_toBytes]
 
-#check List.get?_eq_getElem?
-
-
 lemma of_get?_table_eq_some {f fs} {bs} {m n : ℕ} {p : Func}
     (h_eq : some bs = Prog.compile ⟨f, fs⟩)
     (h_get : List.get? (table 0 (f :: fs)) m = some (n, p)) :
@@ -2769,12 +2959,9 @@ theorem correct_core (f : Func) (fs : List Func) :
              State.Push [Nat.toBits 256 loc] pk.s s' ∧
              Exec'.Rel ⟨pk.e, s', pk.pc + 3, pk.r, cr'⟩ pk := by
       rcases push_of_pushAt pk.cr h_push with ⟨s', cr', h, h_prec⟩
-      have hh := @pow_add_toBytes_toBits
-
-
-      #exit
-      rw [← @pow_add_toBytes_toBits loc 30 2 h_loc, Bits.toBytes_toBits] at h
-      have h_rw : pk.pc +3 = pk.pc + List.length (Bits.toBytes (Nat.toBits (8 * 2) loc)) + 1 := by
+      rw [@toBits_toBytes_toBits_pow_add loc 2 30 h_loc] at h
+      rw [toBits_toBytes] at h
+      have h_rw : pk.pc + 3 = pk.pc + List.length (Bits.toBytes (Nat.toBits (8 * 2) loc)) + 1 := by
         rw [@length_toBytes 2 (Nat.toBits (8 * 2) loc)]
       rw [h_rw]; refine' ⟨s', cr', h, h_prec⟩
     clear h_push; rcases h with ⟨s', cr, h_push, h_prec⟩
@@ -2801,7 +2988,7 @@ theorem correct_core (f : Func) (fs : List Func) :
           with ⟨hx, st, h_push', h_pop'⟩
         rw [ State.push_nil h_push',
              ← congrArg Bits.toNat hx,
-             toBits_toNat loc h_loc' ]
+             toNat_toBits h_loc' ]
         refine ⟨rfl, h_pop'⟩
       rcases h with ⟨hx, h_pop'⟩
       have h_run' : Func.Run (f :: fs) pk.e s'' q pk.r := by
@@ -2824,7 +3011,7 @@ theorem correct_core (f : Func) (fs : List Func) :
              State.Push [Nat.toBits 256 loc] pk.s s' ∧
              Exec'.Rel ⟨pk.e, s', pk.pc + 3, pk.r, cr'⟩ pk := by
       rcases push_of_pushAt pk.cr h_push with ⟨s', cr', h, h_prec⟩
-      rw [← @pow_add_toBytes_toBits loc 30 2 h_loc, toBits_toBytes] at h
+      rw [@toBits_toBytes_toBits_pow_add loc 2 30 h_loc, toBits_toBytes] at h
       have h_rw : pk.pc + 3 = pk.pc + List.length (Bits.toBytes (Nat.toBits (8 * 2) loc)) + 1 := by
         rw [@length_toBytes 2 (Nat.toBits (8 * 2) loc)]
       rw [h_rw]; refine' ⟨s', cr', h, h_prec⟩
@@ -2839,7 +3026,7 @@ theorem correct_core (f : Func) (fs : List Func) :
     have h : loc = x.toNat ∧ pk.s = s' := by
       rcases State.push_cons_pop_cons h_push h_pop with ⟨hx, st, h_push', h_pop'⟩
       rw [State.push_nil h_push', State.pop_nil h_pop']
-      rw [← congrArg Bits.toNat hx, toBits_toNat loc h_loc']; simp
+      rw [← congrArg Bits.toNat hx, toNat_toBits h_loc']; simp
     rcases h with ⟨h_rw, h_rw'⟩
     rw [h_rw']; rw [h_rw] at hp
     have h_lt : Exec'.lt ⟨pk.e, s', toNat x + 1, pk.r, cr''⟩ pk := by
@@ -3207,7 +3394,9 @@ lemma prefix_of_callvalue {e xs} {s s' : State} :
 
 lemma prefix_of_calldatacopy {e x y z xs} {s s' : State} :
     State.Calldatacopy e s s' → (x :: y :: z :: xs <<+ s.stk) → (xs <<+ s'.stk) := by
-  intros h0 h1; rcases h0 with ⟨x', y', z', sc, h0,_⟩
+  intros h0 h1;
+  simp [State.Calldatacopy] at h0
+  rcases h0 with ⟨x', y', z', h0⟩
   have h2 := h0.stk; clear h0;
   rcases of_cons_cons_pref_of_cons_cons_pref h1 (pref_of_split h2)
     with ⟨hx, hy, ws, h, h'⟩
@@ -3966,7 +4155,7 @@ lemma of_nof_of_transfer {m n} {a b : Bits m} {v : Bits n} {f h : Bits m → Bit
   rcases h_di with ⟨h_le, g, hd, hi⟩; refine' ⟨g, hd, hi, _⟩
   apply lt_of_le_of_lt _ h_nof
   by_cases h_ab : a = b
-  · rw [← (hd b).left h_ab, ← h_ab, Bits.sub_toNat _ _ h_le]
+  · rw [← (hd b).left h_ab, ← h_ab, Bits.toNat_sub_eq_of_le _ _ h_le]
     rw [Nat.sub_add_cancel (Bits.toNat_le_toNat _ _ h_le)]
     exact le_sum
   · rw [← (hd b).right h_ab, Nat.add_comm]

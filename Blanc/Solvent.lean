@@ -40,7 +40,7 @@ lemma transfer_inv_solvent {a wa} {v} {s : Storage} {b b' : Balances}
     s.Solvent v (b' wa) := by
   simp [Storage.Solvent]
   simp [Storage.Solvent] at h_sv
-  rw [Bits.zero_toNat, Nat.add_zero] at h_sv
+  rw [Bits.toNat_zero, Nat.add_zero] at h_sv
   have h_eq : b' wa = b wa + v := by
     rcases h_di with ⟨_, _, hd, hi⟩
     rw [(hd wa).right h_ne, (hi wa).left rfl]
@@ -49,7 +49,7 @@ lemma transfer_inv_solvent {a wa} {v} {s : Storage} {b b' : Balances}
     apply le_trans _ <| add_le_sum_of_ne b h_ne.symm
     apply Nat.add_le_add (le_refl _)
     apply Bits.toNat_le_toNat _ _ h_di.left
-  rw [h_eq, Bits.add_toNat _ _ h_nof]
+  rw [h_eq, Bits.toNat_add_eq_of_nof _ _ h_nof]
   apply Nat.add_le_add h_sv (le_refl _)
 
 lemma Xinst.prep_inv_solvent'
@@ -131,7 +131,7 @@ lemma of_check_address {e} {s s' : State} {x xs} :
   have h_pfx : (ite (y = 0) 1 0 :: xs <<+ s''.stk) := by
     revert h_run'; revert s'; line_pref
   refine' ⟨_, h_pfx, _⟩; rw [← h_iff]
-  apply Ne.ite_eq_right_iff <| Ne.symm Bits.zero_ne_one --
+  apply Ne.ite_eq_right_iff <| Ne.symm Bits.zero_ne_succ
 
 lemma frel_to_address {w r} {f g : Storage} :
     ValidAddr w → Frel w r f g → Frel (toAddr w) r f.rest g.rest := by
@@ -265,7 +265,7 @@ lemma transfer_of_transferFrom {e : Env} {s : State} {r : Result} :
   lstor; cstate s₄
   apply rev_branch_elim' (∃ _, _) hp₅; intro h_eq
   have h_le : wad ≤ sbal := by
-    rw [← Bits.not_lt]; apply (Ne.ite_eq_right_iff Bits.zero_ne_one.symm).mp h_eq
+    rw [← Bits.not_lt]; apply (Ne.ite_eq_right_iff Bits.zero_ne_succ.symm).mp h_eq
   clear h_eq; pexen 1
   have hp₆ : [sbal, wad, wad, src] <<+ s₆.stk := by lpfx
   lstor; cstate s₅; pexec transferFromUpdateSbal
@@ -306,6 +306,9 @@ theorem of_transferTestDst {e : Env} {s s' : State} :
     with ⟨na_dst, h_pfx, h_iff⟩; clear h hp₂
   refine ⟨_, _, h_pfx, h_iff⟩
 
+lemma Bits.zero_ne_one {n} : (0 : Bits (n + 1)) ≠ (1 : Bits (n + 1)) := by
+  apply Bits.zero_ne_succ
+
 theorem of_transferTestLt {e s s'} {dst} (h_stk : [dst] <<+ s.stk) :
     Line.Run e s transferTestLt s' →
     ∃ lt? caller wad,
@@ -329,6 +332,7 @@ theorem of_transferTestLt {e s s'} {dst} (h_stk : [dst] <<+ s.stk) :
     ⟨ if (s'.stor e.cta (Addr.toWord e.cla) < wad) then 1 else 0,
       Addr.toWord e.cla, wad, hp', _, validAddr_toWord _ ⟩
   rw [Ne.ite_eq_right_iff Bits.zero_ne_one.symm, Bits.not_lt]
+
 
 theorem transfer_of_transfer {e : Env} {s : State} {r : Result} :
     Func.Run c e s transfer r →
@@ -416,7 +420,7 @@ lemma transfer_inv_bal : Func.Inv State.bal Result.bal transfer := by prog_inv
 
 lemma solvent_zero_of_solvent {s : Storage} {v : Word} {b : Word}
     (h : s.Solvent v b) : s.Solvent 0 b := by
-  simp [Storage.Solvent, Bits.zero_toNat]
+  simp [Storage.Solvent, Bits.toNat_zero]
   apply Nat.le_trans (Nat.le_add_right _ _) h
 
 lemma storage_solvent_zero_of_state_solvent {s : State} {a e}
@@ -524,7 +528,7 @@ theorem wbsum_after_deposit {e : Env} {s : State} {r}
   exact sum_add_assoc h_incr h_nof'
 
 lemma solvent_zero_iff {s b} : Storage.Solvent s 0 b ↔ wbsum s ≤ b.toNat := by
-  simp [Storage.Solvent, wbsum, Bits.zero_toNat]
+  simp [Storage.Solvent, wbsum, Bits.toNat_zero]
 
 theorem deposit_inv_solvent {e s r} :
     Func.Run c e s deposit r → s.Solvent e.cta e → r.Solvent e.cta := by
@@ -582,8 +586,8 @@ lemma solvent_of_callPrep {e s ep sp r sw send_gas send_amnt}
   rcases h_di with ⟨h_le, s', hd, hi⟩
   constructor <;> (intro h_cta; rw [← Xinst.prep_inv_stor cr])
   · conv => arg 3; tactic => apply ((hi e.cta).left h_cta).symm
-    simp [Storage.Solvent, Bits.zero_toNat] at h_sv
-    rw [Bits.sub_toNat _ _ h_le] at h_sv
+    simp [Storage.Solvent, Bits.toNat_zero] at h_sv
+    rw [Bits.toNat_sub_eq_of_le _ _ h_le] at h_sv
     rw [← (hd e.cta).left rfl]
     simp [Storage.Solvent, Bits.sub_add_cancel]
     rw [← Nat.sub_add_cancel (Bits.toNat_le_toNat _ _ h_le), h_clv]
@@ -604,14 +608,14 @@ lemma of_send_to_caller {e : Env} {s sf} {wad}
     Line.Run e s sendToCaller sf →
     Storage.Solvent (sf.stor e.cta) 0 (sf.bal e.cta) := by
   have h_nof' : wbsum (s.stor e.cta) + wad.toNat < 2 ^ 256 := by
-    simp [Storage.Solvent, Bits.zero_toNat] at h_sv
-    rw [Bits.sub_toNat _ _ h_le] at h_sv
+    simp [Storage.Solvent, Bits.toNat_zero] at h_sv
+    rw [Bits.toNat_sub_eq_of_le _ _ h_le] at h_sv
     apply lt_of_le_of_lt <| Nat.add_le_add_right h_sv wad.toNat
     rw [Nat.sub_add_cancel <| Bits.toNat_le_toNat _ _ h_le]
     apply Bits.toNat_lt_pow
   lexen 7
   have hs₁ :
-    [ ⟪Ox x5 x2, Ox x0 x8⟫.toBits 32,
+    [ Bytes.toBits 32 [Ox x5 x2, Ox x0 x8],
       Addr.toWord e.cla, wad, 0, 0, 0, 0 ] <<+ s₁.stk := by lpfx
   have hc₁ : s.code = s₁.code := by apply Line.of_inv _ _ asm; line_inv
   rw [hc₁] at h_code; clear hc₁
@@ -624,7 +628,7 @@ lemma of_send_to_caller {e : Env} {s sf} {wad}
       rw [← Xinst.prep_inv_code h_rm, h_code]
     have h_teth' : SumNof sp.bal := Xinst.prep_inv_nof h_rm h_nof
     have h_sv : State.Solvent sp e.cta ep := by
-      have hs : [⟪Ox x5 x2, Ox x0 x8⟫.toBits 32, Addr.toWord e.cla, wad] <<+ s₁.stk := by
+      have hs : [ Bytes.toBits 32 [Ox x5 x2, Ox x0 x8], Addr.toWord e.cla, wad] <<+ s₁.stk := by
         apply pref_trans _ hs₁; show_pref
       apply solvent_of_callPrep h_rm hs h_sv
     have h_pc : Precond e.cta ep sp := by refine' ⟨h_weth', h_teth', h_sv⟩
@@ -640,7 +644,7 @@ lemma of_send_to_caller {e : Env} {s sf} {wad}
       · apply solvent_zero_of_solvent (h_sv.left h_cta)
       · apply h_sv.right h_cta
   · rw [← fail_inv_bal hf, ← fail_inv_stor hf]; apply le_trans h_sv
-    rw [Bits.sub_toNat _ _ h_le]; apply Nat.sub_le
+    rw [Bits.toNat_sub_eq_of_le _ _ h_le]; apply Nat.sub_le
 
 lemma solvent_of_withdraw_update_bal {e : Env} {s s'} {lt? cbal wad}
     (h_pc : Precond e.cta e s)
@@ -674,10 +678,10 @@ lemma solvent_of_withdraw_update_bal {e : Env} {s s'} {lt? cbal wad}
     apply Nat.le_add_right
   have h_le''' := Bits.of_toNat_le_toNat h_le''
   refine' ⟨h_le''', _⟩
-  · simp [Storage.Solvent, Bits.zero_toNat]
-    rw [Bits.sub_toNat _ _ h_le''', ← h_eq, Nat.sub_le_sub_iff_right h_le'']
+  · simp [Storage.Solvent, Bits.toNat_zero]
+    rw [Bits.toNat_sub_eq_of_le _ _ h_le''', ← h_eq, Nat.sub_le_sub_iff_right h_le'']
     have h' := solvent_zero_of_solvent <| (Precond.solvent asm).left rfl
-    simp [Storage.Solvent, Bits.zero_toNat] at h'; exact h'
+    simp [Storage.Solvent, Bits.toNat_zero] at h'; exact h'
 
 theorem withdraw_inv_solvent {e : Env} {s r} (h_pc : Precond e.cta e s)
     (ih : Exec.InvDepth e.exd e.cta weth (Precond e.cta) (Postcond e.cta)) :
@@ -717,7 +721,7 @@ lemma run_inv_cond (f : Func)
       Precond e.cta e s → Postcond e.cta e r := by
   intro e s r h_run h_pc
   refine' ⟨_, Func.inv_nof h_run h_pc.nof, h h_run h_pc.solvent⟩
-  have hcode : s.code e.cta ≠ ⟪⟫ := by
+  have hcode : s.code e.cta ≠ [] := by
     intro h; apply @Prog.compile_ne_nil weth; rw [← h_pc.code, h]
   rw [← Func.inv_code h_run hcode]; exact h_pc.code
 
@@ -758,7 +762,7 @@ lemma weth_inv {e s r}
     · apply run_inv_cond _ totalSupply_inv_solvent h_run h_pc
     · apply run_inv_cond _ transferFrom_inv_solvent h_run h_pc
     · refine' ⟨_, Func.inv_nof h_run h_pc.nof, withdraw_inv_solvent h_pc h_inv h_run⟩
-      have hcode : s.code e.cta ≠ ⟪⟫ := by
+      have hcode : s.code e.cta ≠ [] := by
         intro h; apply @Prog.compile_ne_nil weth; rw [← h_pc.code, h]
       rw [← Func.inv_code h_run hcode]; exact h_pc.code
     · apply run_inv_cond _ decimals_inv_solvent h_run h_pc
@@ -862,7 +866,7 @@ theorem weth_inv_solvent (wa : Addr) :
                 rw [(hd wa).right h_ne]; apply ((hi wa).left ha).symm
               have hle : Nof  (s.bal wa) (s.bal e.cta) :=
                 lt_of_le_of_lt (add_le_sum_of_ne s.bal h_ne.symm) h_pc.nof
-              rw [h_rw, Bits.add_toNat _ _ hle]; apply Nat.le_add_right
+              rw [h_rw, Bits.toNat_add_eq_of_nof _ _ hle]; apply Nat.le_add_right
             · rw [(hd wa).right h_ne, (hi wa).right ha]
         unfold Result.Solvent; rw [← Hinst.inv_stor asm]
         apply le_trans h_sv h_le
@@ -912,8 +916,8 @@ lemma transact_inv_solvent {ST RT w r wa}
           apply Bits.toNat_le_toNat
           rcases h_di with ⟨h_le, _⟩; exact h_le
         rw [← h_eq]; simp [Storage.Solvent]
-        rw [Bits.add_toNat _ _ h_nof, Nat.add_le_add_iff_right]
-        simp [World.Solvent, Storage.Solvent, Bits.zero_toNat] at h_wb
+        rw [Bits.toNat_add_eq_of_nof _ _ h_nof, Nat.add_le_add_iff_right]
+        simp [World.Solvent, Storage.Solvent, Bits.toNat_zero] at h_wb
         apply h_wb
       · simp only [State.Solvent]; intro h_ne
         have h_eq : w.bal wa = bal wa := by
@@ -956,11 +960,11 @@ theorem transaction_inv_solvent
     have h_nof' : Nof tx.vs tx.vv :=
       lt_of_le_of_lt (Nat.le_add_right _ _) tx.nof
     have h_nof'' : Nof  (tx.vs + tx.vv) tx.vb := by
-      simp only [Nof ]; rw [Bits.add_toNat _ _ h_nof']; apply tx.nof
+      simp only [Nof ]; rw [Bits.toNat_add_eq_of_nof _ _ h_nof']; apply tx.nof
     have h_eq :
       (tx.vs + tx.vv + tx.vb).toNat =
         tx.vs.toNat + tx.vv.toNat + tx.vb.toNat := by
-      rw [Bits.add_toNat _ _ h_nof'', Bits.add_toNat _ _ h_nof']
+      rw [Bits.toNat_add_eq_of_nof _ _ h_nof'', Bits.toNat_add_eq_of_nof _ _ h_nof']
     have h_eq' :
       sum tx.bal + tx.vs.toNat + tx.vv.toNat + tx.vb.toNat = sum w.bal := by
       rw [Nat.add_assoc (sum _), Nat.add_assoc, ← h_eq]
