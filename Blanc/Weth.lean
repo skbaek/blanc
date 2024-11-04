@@ -42,10 +42,6 @@ def symbolSig : Word :=
 def transferSig : Word :=
   String.toWord "00000000000000000000000000000000000000000000000000000000A9059CBB"
 
--- First 4 bytes of Keccak hash of "deposit()", pushed to right
-def depositSig : Word :=
-  String.toWord "00000000000000000000000000000000000000000000000000000000D0E30DB0"
-
 -- First 4 bytes of Keccak hash of "allowance(address,address)", pushed to right
 def allowanceSig : Word :=
   String.toWord "00000000000000000000000000000000000000000000000000000000DD62ED3E"
@@ -58,9 +54,9 @@ def allowanceSig : Word :=
 def depositEsig : Word :=
   String.toWord "e1fffcc4923d04b559f4d29a8bfc6cda04eb5b0d3c460751c2402c5c5cc9109c"
 
--- Keccak hash of "Withdraw(address,uint256)"
+-- Keccak hash of "Withdrawal(address,uint256)"
 def withdrawEsig : Word :=
-  String.toWord "884edad9ce6fa2440d8a54cc123490eb96d2768479d49ff9c7366125a9424364"
+  String.toWord "7fcf532c15f0a6db0bd6d0e038bea71d30d808c7d98cb3bf7268a95bf5081b65"
 
 -- Keccak hash of "Approval(address,address,uint256)"
 def approvalEsig : Word :=
@@ -356,7 +352,7 @@ def transferFrom : Func :=
 
 -- main --
 
-def wethTree : DispatchTree :=
+def wethTree' : DispatchTree :=
   .fork
   ( .fork
     ( .fork
@@ -375,8 +371,6 @@ def wethTree : DispatchTree :=
         (.leaf symbolSig symbol) ) )
     ( .fork
       (.leaf transferSig transfer)
-      ( .fork
-        (.leaf depositSig deposit)
-        (.leaf allowanceSig allowance) ) ) )
+      (.leaf allowanceSig allowance) ) )
 
-def weth : Prog := ⟨Func.main wethTree, []⟩
+def weth' : Prog := ⟨Func.mainWith 1 wethTree', [deposit]⟩

@@ -549,16 +549,15 @@ def Xinst.toByte : Xinst → Byte
 def pushToByte (bs : Bytes) : Byte := Ox x5 xF + Nat.toByte bs.length
 def pushToBytes (bs : Bytes) : Bytes := pushToByte bs :: bs
 
-def Rinst.At (e : Env) (pc : Nat) (o : Rinst) : Prop := -- e.code.Slice pc [o.toByte]
+def Rinst.At (e : Env) (pc : Nat) (o : Rinst) : Prop :=
   List.get? e.code pc = some (Rinst.toByte o)
-def Jinst.At (e : Env) (pc : Nat) (o : Jinst) : Prop := -- e.code.Slice pc [o.toByte]
+def Jinst.At (e : Env) (pc : Nat) (o : Jinst) : Prop :=
   List.get? e.code pc = some (Jinst.toByte o)
-def Xinst.At (e : Env) (pc : Nat) (o : Xinst) : Prop := -- e.code.Slice pc [o.toByte]
+def Xinst.At (e : Env) (pc : Nat) (o : Xinst) : Prop :=
   List.get? e.code pc = some (Xinst.toByte o)
-def Hinst.At (e : Env) (pc : Nat) (o : Hinst) : Prop := -- e.code.Slice pc [o.toByte]
+def Hinst.At (e : Env) (pc : Nat) (o : Hinst) : Prop :=
   List.get? e.code pc = some (Hinst.toByte o)
 def PushAt (e : Env) (pc : Nat) (bs : Bytes) : Prop :=
-  --List.slice? e.code pc (bs.length + 1) = some (pushToBytes bs) ∧ bs.length ≤ 32
   List.Slice e.code pc (pushToBytes bs) ∧ bs.length ≤ 32
 
 inductive Hinst.Run : Env → State → Hinst → Result → Prop

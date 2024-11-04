@@ -2,8 +2,6 @@
 
 import Blanc.Weth
 
-
-
 def Storage.rest (s : Storage) : Addr → Word := s ∘ Addr.toWord
 
 -- sum of all WETH balances, provided that s is the storage of WETH contract
@@ -90,13 +88,13 @@ lemma Xinst.prep_inv_solvent
 
 -- Precond & Postcond : invariants in the main induction for proof of solvency preservation
 
-structure Precond (wa : Addr) (e : Env) (s : State) : Prop :=
-  (code : some (s.code wa) = Prog.compile weth)
+structure Precond' (wa : Addr) (e : Env) (s : State) : Prop :=
+  (code : some (s.code wa) = Prog.compile weth')
   (nof : sum s.bal < 2 ^ 256)
   (solvent : s.Solvent wa e)
 
-structure Postcond (wa : Addr) (e : Env) (r : Result) : Prop :=
-  (code : some (r.code wa) = Prog.compile weth)
+structure Postcond' (wa : Addr) (e : Env) (r : Result) : Prop :=
+  (code : some (r.code wa) = Prog.compile weth')
   (nof : sum r.bal < 2 ^ 256)
   (solvent : r.Solvent wa)
 
@@ -560,10 +558,10 @@ lemma of_withdrawLoadCheck {e : Env} {s s'} (h : Line.Run e s withdrawLoadCheck 
   have hs₃ : [cbal <? wad, cbal, wad, wad] <<+ s'.stk := by lpfx
   lstor; refine ⟨wad, cbal, hs₃, h_cbal⟩
 
-lemma precond_of_precond {a e} {s s' : State}
-    (h : Precond a e s) (h_bal : s.bal = s'.bal)
+lemma precond_of_precond' {a e} {s s' : State}
+    (h : Precond' a e s) (h_bal : s.bal = s'.bal)
     (h_stor : s.stor = s'.stor) (h_code : s.code = s'.code) :
-    Precond a e s' := by
+    Precond' a e s' := by
   refine' ⟨_, _, _⟩
   · rw [← h_code]; apply h.code
   · rw [← h_bal]; apply h.nof
@@ -598,10 +596,10 @@ def Exec.InvDepth (k : Nat) (ca : Addr) (p : Prog)
     (σ : Env → State → Prop) (ρ : Env → Result → Prop) : Prop :=
   ForallDeeperAt k ca p (λ e s _ r _ => σ e s → ρ e r)
 
-lemma of_send_to_caller {e : Env} {s sf} {wad}
-    (ih : Exec.InvDepth e.exd e.cta weth (Precond e.cta) (Postcond e.cta))
+lemma of_send_to_caller' {e : Env} {s sf} {wad}
+    (ih : Exec.InvDepth e.exd e.cta weth' (Precond' e.cta) (Postcond' e.cta))
     (hp : [wad] <<+ s.stk)
-    (h_code : some (s.code e.cta) = Prog.compile weth)
+    (h_code : some (s.code e.cta) = Prog.compile weth')
     (h_nof : SumNof s.bal)
     (h_le : wad ≤ s.bal e.cta)
     (h_sv : Storage.Solvent (s.stor e.cta) 0 (s.bal e.cta - wad)) :
@@ -624,14 +622,14 @@ lemma of_send_to_caller {e : Env} {s sf} {wad}
   lstor; cstate s; lexen 1; intro h₃; cases h₃
   rcases of_run_call <| of_run_singleton h₂ with ⟨ep, sp, r, h_rm, h_run⟩ | hf
   · have h_exd := Xinst.exd_lt_of_run' h_rm
-    have h_weth' : some (sp.code e.cta) = Prog.compile weth := by
+    have h_weth' : some (sp.code e.cta) = Prog.compile weth' := by
       rw [← Xinst.prep_inv_code h_rm, h_code]
     have h_teth' : SumNof sp.bal := Xinst.prep_inv_nof h_rm h_nof
     have h_sv : State.Solvent sp e.cta ep := by
       have hs : [ Bytes.toBits 32 [Ox x5 x2, Ox x0 x8], Addr.toWord e.cla, wad] <<+ s₁.stk := by
         apply pref_trans _ hs₁; show_pref
       apply solvent_of_callPrep h_rm hs h_sv
-    have h_pc : Precond e.cta ep sp := by refine' ⟨h_weth', h_teth', h_sv⟩
+    have h_pc : Precond' e.cta ep sp := by refine' ⟨h_weth', h_teth', h_sv⟩
     simp [Storage.Solvent]
     rw [← Xinst.wrap_inv_stor h_rm, ← Xinst.wrap_inv_bal h_rm]
     rcases h_run with ⟨cr, ⟨_⟩⟩ | hf
@@ -646,8 +644,8 @@ lemma of_send_to_caller {e : Env} {s sf} {wad}
   · rw [← fail_inv_bal hf, ← fail_inv_stor hf]; apply le_trans h_sv
     rw [Bits.toNat_sub_eq_of_le _ _ h_le]; apply Nat.sub_le
 
-lemma solvent_of_withdraw_update_bal {e : Env} {s s'} {lt? cbal wad}
-    (h_pc : Precond e.cta e s)
+lemma solvent_of_withdraw_update_bal' {e : Env} {s s'} {lt? cbal wad}
+    (h_pc : Precond' e.cta e s)
     (h_stk : [lt?, cbal, wad, wad] <<+ s.stk)
     (h_cbal : cbal = s.stor e.cta (Addr.toWord e.cla))
     (h_le : wad ≤ cbal)
@@ -655,8 +653,8 @@ lemma solvent_of_withdraw_update_bal {e : Env} {s s'} {lt? cbal wad}
     wad ≤ s'.bal e.cta ∧
     Storage.Solvent (s'.stor e.cta) 0 (s'.bal e.cta - wad) := by
   revert h_run; lexen 3
-  have h_pc' : Precond e.cta e s₁ := by
-    apply precond_of_precond h_pc <;> (apply Line.of_inv _ _ h₁; line_inv)
+  have h_pc' : Precond' e.cta e s₁ := by
+    apply precond_of_precond' h_pc <;> (apply Line.of_inv _ _ h₁; line_inv)
   have hp₁ : [Addr.toWord e.cla, cbal - wad, wad] <<+ s₁.stk := by lpfx
   lstor; cstate s; intro h₂
   have h_dec : Decrease e.cla wad (s₁.stor e.cta).rest (s'.stor e.cta).rest := by
@@ -680,25 +678,26 @@ lemma solvent_of_withdraw_update_bal {e : Env} {s s'} {lt? cbal wad}
   refine' ⟨h_le''', _⟩
   · simp [Storage.Solvent, Bits.toNat_zero]
     rw [Bits.toNat_sub_eq_of_le _ _ h_le''', ← h_eq, Nat.sub_le_sub_iff_right h_le'']
-    have h' := solvent_zero_of_solvent <| (Precond.solvent asm).left rfl
+    have h' := solvent_zero_of_solvent <| (Precond'.solvent asm).left rfl
     simp [Storage.Solvent, Bits.toNat_zero] at h'; exact h'
 
-theorem withdraw_inv_solvent {e : Env} {s r} (h_pc : Precond e.cta e s)
-    (ih : Exec.InvDepth e.exd e.cta weth (Precond e.cta) (Postcond e.cta)) :
+theorem withdraw_inv_solvent' {e : Env} {s r} (h_pc : Precond' e.cta e s)
+    (ih : Exec.InvDepth e.exd e.cta weth' (Precond' e.cta) (Postcond' e.cta)) :
     Func.Run c e s withdraw r → r.Solvent e.cta := by
   pexec withdrawLoadCheck
   rcases of_withdrawLoadCheck asm
     with ⟨h_bal, h_stor, h_code, wad, cbal, hp₁, h_cbal⟩
-  have h_pc' := precond_of_precond h_pc h_bal h_stor h_code
+  have h_pc' := precond_of_precond' h_pc h_bal h_stor h_code
   cstate s; rename' h_pc' => h_pc
   apply rev_branch_elim' (Result.Solvent _ _) hp₁
   intro h_eq
   have h_wad : wad ≤ cbal := by
-    rw [← Bits.not_lt]; apply (Ne.ite_eq_right_iff Bits.zero_ne_one.symm).mp h_eq
+    rw [← Bits.not_lt];
+    apply (Ne.ite_eq_right_iff <| Ne.symm Bits.zero_ne_one).mp h_eq
   clear h_eq; pexen 4
-  rcases solvent_of_withdraw_update_bal h_pc hp₁ h_cbal h_wad h₂ with ⟨h_le, h_sv⟩
+  rcases solvent_of_withdraw_update_bal' h_pc hp₁ h_cbal h_wad h₂ with ⟨h_le, h_sv⟩
   clear h_cbal h_wad
-  have h_code : some (s₂.code e.cta) = Prog.compile weth := by
+  have h_code : some (s₂.code e.cta) = Prog.compile weth' := by
     rw [← Line.of_inv State.code (by line_inv) h₂]; apply h_pc.code
   have h_nof : sum s₂.bal < 2 ^ 256 := by
     rw [← Line.of_inv State.bal (by line_inv) h₂]; apply h_pc.nof
@@ -707,42 +706,43 @@ theorem withdraw_inv_solvent {e : Env} {s r} (h_pc : Precond e.cta e s)
   unfold Result.Solvent
   rw [← Func.of_inv State.stor Result.stor (by prog_inv) h₄]
   rw [← Func.of_inv State.bal Result.bal (by prog_inv) h₄]
-  apply of_send_to_caller ih hp₂ h_code h_nof h_le h_sv h₃
+  apply of_send_to_caller' ih hp₂ h_code h_nof h_le h_sv h₃
 
 lemma Line.inv_solvent {e e' s l s' a}
     (h_bal : Line.Inv State.bal l) (h_stor : Line.Inv State.stor l)
     (h_sv : State.Solvent s a e) (h_run : Line.Run e' s l s') : State.Solvent s' a e := by
   unfold State.Solvent; rw [← h_bal h_run, ← h_stor h_run]; exact h_sv
 
-lemma run_inv_cond (f : Func)
+lemma run_inv_cond' (f : Func)
     (h : ∀ {e : Env} {s : State} {r : Result}, Func.Run c e s f r →
        State.Solvent s e.cta e → Result.Solvent r e.cta) :
     ∀ {e : Env} {s : State} {r : Result}, Func.Run c e s f r →
-      Precond e.cta e s → Postcond e.cta e r := by
+      Precond' e.cta e s → Postcond' e.cta e r := by
   intro e s r h_run h_pc
   refine' ⟨_, Func.inv_nof h_run h_pc.nof, h h_run h_pc.solvent⟩
   have hcode : s.code e.cta ≠ [] := by
-    intro h; apply @Prog.compile_ne_nil weth; rw [← h_pc.code, h]
+    intro h; apply @Prog.compile_ne_nil weth'; rw [← h_pc.code, h]
   rw [← Func.inv_code h_run hcode]; exact h_pc.code
 
-lemma weth_inv {e s r}
-    (hs : Precond e.cta e s)
-    (ih : Exec.InvDepth e.exd e.cta weth (Precond e.cta) (Postcond e.cta)) :
-    Func.Run (weth.main :: weth.aux) e s (Func.main wethTree) r →
-    Postcond e.cta e r := by
+lemma weth_inv' {e s r}
+    (hs : Precond' e.cta e s)
+    (ih : Exec.InvDepth e.exd e.cta weth' (Precond' e.cta) (Postcond' e.cta)) :
+    Func.Run (weth'.main :: weth'.aux) e s (Func.mainWith 1 wethTree') r →
+    Postcond' e.cta e r := by
   pexec fsig
-  have hs₁ : Precond e.cta e s₁ := by
+  have hs₁ : Precond' e.cta e s₁ := by
     refine' ⟨_, _, _⟩
     · rw [← Line.of_inv State.code (by line_inv) h₁, hs.code]
     · rw [← Line.of_inv State.bal (by line_inv) h₁]; exact hs.nof
     · apply Line.inv_solvent _ _ hs.solvent h₁ <;> line_inv
   clear hs
   apply
-    dispatch_inv
-      (λ e s => Precond e.cta e s ∧
-                Exec.InvDepth e.exd e.cta weth (Precond e.cta) (Postcond e.cta) )
-      (λ e r => Postcond e.cta e r)
-      _ _ wethTree _ e s₁ r ⟨hs₁, ih⟩ <;>
+    @dispatchWith_inv
+      (weth'.main :: weth'.aux) 1 deposit
+      (λ e s => Precond' e.cta e s ∧
+                Exec.InvDepth e.exd e.cta weth' (Precond' e.cta) (Postcond' e.cta) )
+      (λ e r => Postcond' e.cta e r)
+      _ _ rfl _ wethTree' _ e s₁ r ⟨hs₁, ih⟩ <;>
     (clear h₁ hs₁ ih e s r s₁; simp)
   · intro e s x s' h_pc h_inv h_run;
     refine' ⟨⟨_, _, _⟩, h_inv⟩
@@ -754,23 +754,24 @@ lemma weth_inv {e s r}
     · rw [← Line.of_inv State.code (by line_inv) h_run]; apply h_pc.code
     · rw [← Line.of_inv State.bal (by line_inv) h_run]; apply h_pc.nof
     · apply Line.inv_solvent _ _ h_pc.solvent h_run <;> line_inv
+  · intro e s r h_pc _ h_run
+    apply run_inv_cond' _ deposit_inv_solvent h_run h_pc
   · intro e s r w p h_mem h_pc h_inv h_run
-    rcases h_mem with ((h | h) | (h | (h | h))) | ((h | (h | h)) | (h | (h | h))) <;>
-    (cases h)
-    · apply run_inv_cond _ name_inv_solvent h_run h_pc
-    · apply run_inv_cond _ approve_inv_solvent h_run h_pc
-    · apply run_inv_cond _ totalSupply_inv_solvent h_run h_pc
-    · apply run_inv_cond _ transferFrom_inv_solvent h_run h_pc
-    · refine' ⟨_, Func.inv_nof h_run h_pc.nof, withdraw_inv_solvent h_pc h_inv h_run⟩
+    rcases h_mem with ((h | h) | (h | (h | h))) | ((h | (h | h)) | (h | h)) <;>
+      (cases h)
+    · apply run_inv_cond' _ name_inv_solvent h_run h_pc
+    · apply run_inv_cond' _ approve_inv_solvent h_run h_pc
+    · apply run_inv_cond' _ totalSupply_inv_solvent h_run h_pc
+    · apply run_inv_cond' _ transferFrom_inv_solvent h_run h_pc
+    · refine' ⟨_, Func.inv_nof h_run h_pc.nof, withdraw_inv_solvent' h_pc h_inv h_run⟩
       have hcode : s.code e.cta ≠ [] := by
-        intro h; apply @Prog.compile_ne_nil weth; rw [← h_pc.code, h]
+        intro h; apply @Prog.compile_ne_nil weth'; rw [← h_pc.code, h]
       rw [← Func.inv_code h_run hcode]; exact h_pc.code
-    · apply run_inv_cond _ decimals_inv_solvent h_run h_pc
-    · apply run_inv_cond _ balanceOf_inv_solvent h_run h_pc
-    · apply run_inv_cond _ symbol_inv_solvent h_run h_pc
-    · apply run_inv_cond _ transfer_inv_solvent' h_run h_pc
-    · apply run_inv_cond _ deposit_inv_solvent h_run h_pc
-    · apply run_inv_cond _ allowance_inv_solvent h_run h_pc
+    · apply run_inv_cond' _ decimals_inv_solvent h_run h_pc
+    · apply run_inv_cond' _ balanceOf_inv_solvent h_run h_pc
+    · apply run_inv_cond' _ symbol_inv_solvent h_run h_pc
+    · apply run_inv_cond' _ transfer_inv_solvent' h_run h_pc
+    · apply run_inv_cond' _ allowance_inv_solvent h_run h_pc
 
 lemma Xinst.wrap_inv_solvent {e s ep sp o r sw wa}
     (h : Xinst.Run' e s ep sp o r sw)
@@ -778,18 +779,18 @@ lemma Xinst.wrap_inv_solvent {e s ep sp o r sw wa}
   simp [h_ne, State.Solvent];
   cases h <;> {simp [State.wrap, State.wrap']; apply h_sv}
 
-theorem weth_inv_solvent (wa : Addr) :
+theorem weth_inv_solvent' (wa : Addr) :
     ∀ e s r,
       Exec e s 0 r →
-      some (s.code wa) = Prog.compile weth →
-      (e.cta = wa → some e.code = Prog.compile weth) →
-      Precond wa e s → Postcond wa e r := by
+      some (s.code wa) = Prog.compile weth' →
+      (e.cta = wa → some e.code = Prog.compile weth') →
+      Precond' wa e s → Postcond' wa e r := by
   intro e s r ex h h'
   apply
-    lift_inv wa weth (Precond wa) (Postcond wa) _ _ _ _
+    lift_inv wa weth' (Precond' wa) (Postcond' wa) _ _ _ _
       e s 0 r ex ⟨h, λ h_eq => ⟨h' h_eq, rfl⟩⟩ <;> clear e s r ex h h'
   · intro e s r h_run h_eq; rw [← h_eq]
-    intro h_inv h_pc; apply weth_inv h_pc h_inv asm
+    intro h_inv h_pc; apply weth_inv' h_pc h_inv asm
   · intros e s pc s' pc' h_step h_ne h_pc; constructor
     · rw [← Step.inv_code h_step, h_pc.code]
     · have h_nof := h_pc.nof; clear h_pc
@@ -835,14 +836,14 @@ theorem weth_inv_solvent (wa : Addr) :
       · by_cases ho : o.isCall
         · apply Xinst.prep_inv_solvent ho h_cr ha h_pc.nof h_pc.solvent
         · have ha' : ep.cta ≠ wa := by
-            intro hc; apply @Prog.compile_ne_nil weth
+            intro hc; apply @Prog.compile_ne_nil weth'
             rw [← h_pc.code, ← hc, Xinst.code_eq_nil_of_run' asm ho]
           apply Xinst.prep_inv_solvent' asm h_cr ha ha' h_pc.solvent
     · intro h_pc'; constructor
       by_cases ho : o.isCall
       · rw [← Xinst.wrap_inv_code asm ho, h_pc'.code]
       · have ha' : ep.cta ≠ wa := by
-          intro hc; apply @Prog.compile_ne_nil weth
+          intro hc; apply @Prog.compile_ne_nil weth'
           rw [← h_pc.code, ← hc, Xinst.code_eq_nil_of_run' asm ho]
         rw [← Xinst.wrap_inv_code' asm asm, h_pc'.code]
       · exact Xinst.wrap_inv_nof asm h_pc'.nof
@@ -875,20 +876,19 @@ theorem weth_inv_solvent (wa : Addr) :
       simp [State.Solvent, h_ne] at h
       apply h
 
-lemma transact_inv_solvent {ST RT w r wa}
+lemma transact_inv_solvent' {ST RT w r wa}
     (h : Transact ST RT w r) (h_wa : ST ≠ wa)
     (h_nof : SumNof w.bal) (h_wb : w.Solvent wa)
-    (h_code : some (w.code wa) = Prog.compile weth) : r.Solvent wa := by
+    (h_code : some (w.code wa) = Prog.compile weth') : r.Solvent wa := by
   cases h with
   | create gpr clv ctc bal r cd h_di h_nil cr =>
     have h_ne : RT ≠ wa := by
-      intro hc; apply @Prog.compile_ne_nil weth-- h_code.symm
+      intro hc; apply @Prog.compile_ne_nil weth'
       rw [← h_code, ← hc, h_nil]
     have h_eq : w.bal wa = bal wa := by
       rcases h_di with ⟨_, bal', hd, hi⟩
       apply Eq.trans ((hd wa).right h_wa) ((hi wa).right h_ne)
-
-    apply (@weth_inv_solvent wa _ _ _ cr h_code _ _).solvent
+    apply (@weth_inv_solvent' wa _ _ _ cr h_code _ _).solvent
     · intro hc; cases h_ne hc
     · refine' ⟨h_code, _, _, _⟩
       · simp only []
@@ -899,7 +899,7 @@ lemma transact_inv_solvent {ST RT w r wa}
       · intro h; clear h; simp only [State.Solvent]
         rw [← h_eq]; apply h_wb
   | call gpr cld clv bal _ h_di cr =>
-    apply (@weth_inv_solvent wa _ _ _ cr h_code _ _).solvent
+    apply (@weth_inv_solvent' wa _ _ _ cr h_code _ _).solvent
     · simp; intro h_eq; rw [h_eq]; apply h_code
     · refine' ⟨h_code, _, _, _⟩
       · simp only []
@@ -945,9 +945,9 @@ theorem transact_inv_sum_bal {sda rca w r} (h : Transact sda rca w r)
   | pre => rw [transfer_inv_sum h' asm]
   | fail => rfl
 
-theorem transaction_inv_solvent
+theorem transaction_inv_solvent'
     (wa : Addr) (w w' : World)
-    (h_code : some (w.code wa) = weth.compile)
+    (h_code : some (w.code wa) = weth'.compile)
     (h_solv : w.Solvent wa)
     (h_bal : SumNof w.bal)
     (tx : Transaction w w') :
@@ -978,7 +978,7 @@ theorem transaction_inv_solvent
     apply le_trans (Nat.le_add_right _ _) <| Nat.le_add_right _ _
   have h_sv : Storage.Solvent (w.stor wa) 0 (tx.bal wa) := by
     rw [← (tx.decr wa).right h_ne]; apply h_solv
-  have hq := transact_inv_solvent tx.act h_ne h_nof h_sv h_code
+  have hq := transact_inv_solvent' tx.act h_ne h_nof h_sv h_code
   have h_nof' : Nof (tx.r.bal tx.sda) tx.vs := by
     apply lt_of_le_of_lt _ h_nof_bal
     apply le_trans _ <| Nat.le_add_right _ _
