@@ -2,87 +2,13 @@
 
 import Blanc.Common
 
-
-
--- function signatures --
-
--- First 4 bytes of Keccak hash of "name()", pushed to right
-def nameSig : Word :=
-  String.toWord "0000000000000000000000000000000000000000000000000000000006FDDE03"
-
--- First 4 bytes of Keccak hash of "approve(address,uint256)", pushed to right
-def approveSig : Word :=
-  String.toWord "00000000000000000000000000000000000000000000000000000000095EA7B3"
-
--- First 4 bytes of Keccak hash of "totalSupply()", pushed to right
-def totalSupplySig : Word :=
-  String.toWord "0000000000000000000000000000000000000000000000000000000018160DDD"
-
--- First 4 bytes of Keccak hash of "transferFrom(address,address,uint256)", pushed to right
-def transferFromSig : Word :=
-  String.toWord "0000000000000000000000000000000000000000000000000000000023B872DD"
-
--- First 4 bytes of Keccak hash of "withdraw(256)", pushed to right
-def withdrawSig : Word :=
-  String.toWord "000000000000000000000000000000000000000000000000000000002E1A7D4D"
-
--- First 4 bytes of Keccak hash of "decimals()", pushed to right
-def decimalsSig : Word :=
-  String.toWord "00000000000000000000000000000000000000000000000000000000313CE567"
-
--- First 4 bytes of Keccak hash of "balanceOf(address)", pushed to right
-def balanceOfSig : Word :=
-  String.toWord "0000000000000000000000000000000000000000000000000000000070A08231"
-
--- First 4 bytes of Keccak hash of "symbol()", pushed to right
-def symbolSig : Word :=
-  String.toWord "0000000000000000000000000000000000000000000000000000000095D89B41"
-
--- First 4 bytes of Keccak hash of "transfer(address,uint256)", pushed to right
-def transferSig : Word :=
-  String.toWord "00000000000000000000000000000000000000000000000000000000A9059CBB"
-
--- First 4 bytes of Keccak hash of "allowance(address,address)", pushed to right
-def allowanceSig : Word :=
-  String.toWord "00000000000000000000000000000000000000000000000000000000DD62ED3E"
-
-
-
--- event signatures --
-
--- Keccak hash of "Deposit(address,uint256)"
-def depositEsig : Word :=
-  String.toWord "e1fffcc4923d04b559f4d29a8bfc6cda04eb5b0d3c460751c2402c5c5cc9109c"
-
--- Keccak hash of "Withdrawal(address,uint256)"
-def withdrawEsig : Word :=
-  String.toWord "7fcf532c15f0a6db0bd6d0e038bea71d30d808c7d98cb3bf7268a95bf5081b65"
-
--- Keccak hash of "Approval(address,address,uint256)"
-def approvalEsig : Word :=
-  String.toWord "8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925"
-
--- Keccak hash of "Transfer(address,address,uint256)"
-def transferEsig : Word :=
-  String.toWord "ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
-
--- Encoding of string "Wrapped Ether"
-def wrappedEtherStringShift : Word :=
-  String.toWord "0000000000000000000000000000000000000057726170706564204574686572"
-
--- Encoding of string "WETH"
-def wethStringShift : Word :=
-  String.toWord "0000000000000000000000000000000000000000000000000000000057455448"
-
-
-
 open Inst
 
 -- deposit() --
 
 def logDeposit : Func :=
-  callvalue ::: mstoreAt 0 +++ -- || wad
-  caller ::: pushWord depositEsig ::: -- depositEsig :: caller || wad
+  callvalue ::: mstoreAt 0 +++ caller ::: -- caller || wad
+  pushWord "Deposit(address,uint256)".keccak ::: -- depositEventSig :: caller || wad
   logWith 1 0 1 +++ -- 1 indexed topic : caller address
                     -- 1 unindexed data : deposit value
   Func.stop
@@ -100,8 +26,9 @@ def deposit : Func :=
 
 -- assumes : args := [wad]
 def logWithdraw : Func :=
-  caller ::: pushWord withdrawEsig ::: -- withdrawEsig :: caller
-  argCopy 0 0 1 +++ -- withdrawEsig :: caller || wad
+  caller :::
+  pushWord "Withdrawal(address,uint256)".keccak ::: -- withdrawEventSig :: caller
+  argCopy 0 0 1 +++ -- withdrawEventSig :: caller || wad
   logWith 1 0 1 +++ -- 1 indexed topic : caller address
                     -- 1 unindexed data : withdraw amount
   Func.stop
@@ -147,12 +74,13 @@ def decimals : Func :=
 -- name() --
 
 def name : Func :=
-  pushWord wrappedEtherStringShift ::: -- wrappedEtherStringShift ||
+  --pushWord wrappedEtherStringShift ::: -- wrappedEtherStringShift ||
+  pushWord ("Wrapped Ether".toBytes.toBits 32) :::
   pushWord 152 ::: shl ::: -- "Wrapped Ether" ||
   pushList [13, 32] +++ -- 32 :: 13 :: "Wrapped Ether" ||
   mstoreAt 0 +++ -- 13 :: "Wrapped Ether" || 32
   mstoreAt 1 +++ -- "Wrapped Ether" || 32 13
-  mstoreAt 2 +++ -- || 32 3 "Wrapped Ether"
+  mstoreAt 2 +++ -- || 32 13 "Wrapped Ether"
   returnMemoryRange 0 96
 
 
@@ -160,7 +88,8 @@ def name : Func :=
 -- symbol() --
 
 def symbol : Func :=
-  pushList [wethStringShift] +++ -- wethStringShift
+  -- pushList [wethStringShift] +++ -- wethStringShift
+  pushWord ("WETH".toBytes.toBits 32) :::
   pushWord 224 ::: shl ::: -- "WETH""
   pushList [4, 32] +++ -- 32 :: 4 :: "WETH""
   mstoreAt 0 +++ -- 4 :: "WETH"" || 32
@@ -215,7 +144,8 @@ def prepApprove : Line :=
 -- assumes : args = [guy, wad]
 def logApprove : Line :=
   argCopy 0 1 1 ++ -- || wad
-  arg 0 ++ caller :: pushWord approvalEsig :: -- approvalEsig :: caller :: guy || wad
+  arg 0 ++ caller ::
+  pushWord "Approval(address,address,uint256)".keccak :: -- approvalEventSig :: caller :: guy || wad
   logWith 2 0 1 -- 2 indexed topics : caller address, approvee address
                 -- 1 unindexed data : approval value
 
@@ -241,7 +171,8 @@ def approve : Func :=
 -- assumes : args = [dst, wad]
 def logTransfer : Line :=
   argCopy 0 1 1 ++ -- || wad
-  arg 0 ++ caller :: pushWord transferEsig :: -- transferEsig :: src :: dst || wad
+  arg 0 ++ caller ::
+  pushWord "Transfer(address,address,uint256)".keccak :: -- transferEventSig :: src :: dst || wad
   logWith 2 0 1 -- 2 indexed topics : source address, destination address
                 -- 1 unindexed data : transfer value
 
@@ -301,8 +232,8 @@ def transferFromUpdateSbal : Line :=
 -- ( dst :: wad :: src -- wad :: src )
 def transferFromLog : Line :=
   dup 2 :: -- src :: dst :: wad :: src
-  pushWord transferEsig :: -- transferEsig :: src :: dst :: wad :: src
-  dup 3 :: mstoreAt 0 ++ -- transferEsig :: src :: dst :: wad :: src || wad
+  pushWord "Transfer(address,address,uint256)".keccak :: -- transferEventSig :: src :: dst :: wad :: src
+  dup 3 :: mstoreAt 0 ++ -- transferEventSig :: src :: dst :: wad :: src || wad
   logWith 2 0 1 -- [Transfer(src,dst,wad) is logged]
                 -- wad :: src
 
@@ -352,25 +283,41 @@ def transferFrom : Func :=
 
 -- main --
 
-def wethTree' : DispatchTree :=
+inductive ArgType
+  | address
+  | uint256
+
+def ArgType.toString : ArgType → String
+  | address => "address"
+  | uint256 => "uint256"
+
+def selectorArgs : List ArgType → String
+  | [] => ""
+  | t :: ts => List.foldl (λ s t' => s!"{s},{t'.toString}") t.toString ts
+
+def selector (name : String) (args : List ArgType) : Word :=
+  (s!"{name}({selectorArgs args})").keccak.shr 224
+
+def wethTree : DispatchTree :=
   .fork
   ( .fork
     ( .fork
-      (.leaf nameSig name)
-      (.leaf approveSig approve) )
-    ( .fork
-      (.leaf totalSupplySig totalSupply)
       ( .fork
-        (.leaf transferFromSig transferFrom)
-        (.leaf withdrawSig withdraw) ) ) )
+        (.leaf (selector "name" []) name)
+        (.leaf (selector "approve" [.address, .uint256]) approve) )
+      (.leaf (selector "totalSupply" []) totalSupply)
+    )
+    ( .fork
+      (.leaf (selector "transferFrom" [.address, .address, .uint256]) transferFrom)
+      (.leaf (selector "withdraw" [.uint256]) withdraw) ) )
   ( .fork
     ( .fork
-      (.leaf decimalsSig decimals)
       ( .fork
-        (.leaf balanceOfSig balanceOf)
-        (.leaf symbolSig symbol) ) )
+        (.leaf (selector "decimals" []) decimals)
+        (.leaf (selector "balanceOf" [.address]) balanceOf) )
+      (.leaf (selector "symbol" []) symbol) )
     ( .fork
-      (.leaf transferSig transfer)
-      (.leaf allowanceSig allowance) ) )
+      (.leaf (selector "transfer" [.address, .uint256]) transfer)
+      (.leaf (selector "allowance" [.address, .address]) allowance) ) )
 
-def weth' : Prog := ⟨Func.mainWith 1 wethTree', [deposit]⟩
+def weth : Prog := ⟨Func.mainWith 1 wethTree, [deposit]⟩

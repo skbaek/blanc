@@ -71,11 +71,13 @@ inductive Rinst : Type
   | swap : Fin 16 → Rinst
   | log : Fin 5 → Rinst
   | invalid -- 0xFE / 0 / 0 / Designated invalid instruction.
+-- deriving DecidableEq
 
 inductive Jinst : Type
   | jump -- 0x56 / 1 / 0 / Unconditional jump.
   | jumpi -- 0x57 / 2 / 0 / Conditional jump.
   | jumpdest -- 0x5b / 0 / 0 / Mark a valid jump destination.
+deriving DecidableEq
 
 inductive Xinst : Type
   | create -- 0xf0 / 3 / 1 / Create a new contract account.
@@ -84,12 +86,14 @@ inductive Xinst : Type
   | delcall -- 0xf4 / 6 / 1 / Call an existing contract's code using the current contract's Storage and the calling contract's Addr and value.
   | create2 -- 0xf5 / 4 / 1 / Create a new contract account at a deterministic Addr using a salt value.
   | statcall -- 0xfa / 6 / 1 / Perform a read-only call to an existing contract.
+deriving DecidableEq
 
 inductive Hinst : Type
   | stop -- 0x00 / 0 / 0 / halts execution.
   | ret -- 0xf3 / 2 / 0 / Halt execution and return output data.
   | rev -- 0xfd / 2 / 0 / Halt execution and revert State changes, returning output data.
   | dest -- 0xff / 1 / 0 / Halt execution and destroy the current contract, transferring remaining Ether to a specified Addr.
+deriving DecidableEq
 
 def Rinst.toByte : Rinst → Byte
   | add          => Ox x0 x1
@@ -163,7 +167,7 @@ abbrev Balances : Type := Addr → Word
 abbrev Storages : Type := Addr → Storage
 abbrev Codes : Type := Addr → Bytes
 
-structure Env :=
+structure Env where
   (cta : Addr) -- contract address (YP : a)
   (oga : Addr) -- origin address (YP : o)
   (gpr : Word) -- gas price (YP : p)
@@ -174,7 +178,7 @@ structure Env :=
   (exd : Nat) -- execution depth (YP : e)
   (wup : Bool) -- World-State update permission (YP : w)
 
-structure World :=
+structure World where
   (bal : Balances)
   (stor : Storages)
   (code : Codes)
@@ -201,7 +205,7 @@ inductive Stack.Nth : Nat → Word → Stack → Prop
 
 def Stack.Dup (n : Nat) (s s' : Stack) : Prop := ∃ x, Push [x] s s' ∧ Stack.Nth n x s
 
-structure State : Type :=
+structure State where
   -- balance, storage, & code : parts of the world state
   (bal : Addr → Word)
   (stor : Addr → Storage)
@@ -228,7 +232,7 @@ structure State : Type :=
 -- of a code execution? YP does not specify this, but it seems reasonable to assume it
 -- is an empty Byte array of length 0. (Confirm this from other sources if possible)
 
-structure Result : Type :=
+structure Result where
   -- balance, Storage, & code : parts of the 'World-State'
   (bal : Addr → Word)
   (stor : Addr → Storage)
@@ -263,25 +267,11 @@ structure Result : Type :=
 -- 2^256 bytes will never be allocated, but it would be good to
 -- double-check it is indeed correct.
 
-inductive Bits.next : ∀ {n}, Bits n → Bits n → Prop
-  | tail :
-    ∀ n x (xs ys : Bits n),
-      Bits.next xs ys →
-      Bits.next (x +> xs) (x +> ys)
-  | carry : ∀ n, Bits.next (0 +> (.max n)) (1 +> 0)
-
 def Memory.slice' : Memory → Word → Nat → Bytes
   | _, _, 0 => []
   | m, x, n + 1 => m x :: slice' m x.succ n
 
 def Memory.slice (m : Memory) (x y : Word) : Bytes := slice' m x y.toNat
-
--- inductive Memory.Slice : Memory → Word → Word → Bytes → Prop
---   | zero : ∀ m x, Memory.Slice m x 0 []
---   | succ :
---   ∀ m x y bs,
---     Memory.Slice m x y bs →
---     Memory.Slice m x y.succ (bs :> m (x + y))
 
 def Memory.store (x : Word) : Bytes → Memory → Memory
   | [], m => m
@@ -308,7 +298,7 @@ def Transfer {m n : Nat}
     Decrease kd v b c ∧
     Increase ki v c d
 
-structure State.Rels :=
+structure State.Rels where
   (bal : Balances → Balances → Prop)
   (stor : Storages → Storages → Prop)
   (code : Codes → Codes → Prop)
@@ -320,7 +310,7 @@ structure State.Rels :=
 def State.Rels.dft : Rels :=
   {bal := Eq, stor := Eq, code := Eq, stk := Eq, mem := Eq, ret := Eq, dest := Eq}
 
-structure State.Rel (r : Rels) (s s' : State) : Prop :=
+structure State.Rel (r : Rels) (s s' : State) : Prop where
   (bal  : r.bal  (State.bal s) (State.bal s'))
   (stor : r.stor (State.stor s) (State.stor s'))
   (code : r.code (State.code s) (State.code s'))
@@ -408,7 +398,9 @@ def State.Byte (s s' : State) : Prop :=
 def State.Shl (s s' : State) : Prop := ∃ x y, State.Diff [x, y] [Bits.shl x.toNat y] s s'
 def State.Shr (s s' : State) : Prop := ∃ x y, State.Diff [x, y] [Bits.shr x.toNat y] s s'
 def State.Sar (s s' : State) : Prop := ∃ x y, State.Diff [x, y] [Bits.sar x.toNat y] s s'
-def State.Kec (s s' : State) : Prop := ∃ x y z, State.Diff [x, y] [z] s s'
+def State.Kec (s s' : State) : Prop :=
+  --∃ x y z, State.Diff [x, y] [z] s s'
+  ∃ x y, State.Diff [x, y] [(Memory.slice s.mem x y).keccak] s s'
 
 def Bytes.Size (bs : Bytes) (sz : Word) : Prop := bs.length = sz.toNat
 
@@ -683,7 +675,7 @@ inductive Jinst.Run : Env → State → Nat → Jinst → State → Nat → Prop
   | dest :
     ∀ e s pc, Jinst.Run e s pc jumpdest s (pc + 1)
 
-structure PreRun (s : State) (r : Result) : Prop :=
+structure PreRun (s : State) (r : Result) : Prop where
   (bal : s.bal = r.bal)
   (stor : s.stor = r.stor)
   (code : s.code = r.code)
@@ -886,7 +878,7 @@ def DeleteCodes : List Addr → Codes → Codes → Prop
   | [], c, c' => c = c'
   | a :: as, c, c'' => ∃ c' : Codes, Overwrite a [] c c' ∧ DeleteCodes as c' c''
 
-  structure Transaction (w w' : World) : Type :=
+  structure Transaction (w w' : World) : Type where
     (vs : Word) -- gas ultimately refunded to sender
     (vv : Word) -- gas ultimately rewarded to validator
     (vb : Word) -- gas ultimately burned
@@ -920,8 +912,9 @@ inductive Func : Type
   | last : Hinst → Func
   | next : Inst → Func → Func
   | call : Nat → Func
+-- deriving DecidableEq
 
-structure Prog : Type :=
+structure Prog : Type where
   (main : Func)
   (aux : List Func)
 

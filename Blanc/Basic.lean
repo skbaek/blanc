@@ -387,8 +387,12 @@ def Bits.shlo : ∀ {n}, Bits n → Bool → Bits n
 
 def Bits.shl : Nat → ∀ {n}, Bits n → Bits n
   | 0, _, xs => xs
-  | _, 0, ⦃⦄ => ⦃⦄
-  | m + 1, _ + 1, _ +> xs => (shl m xs).snoc 0
+  | m + 1, _, xs => shlo (xs.shl m) 0
+
+-- def Bits.shl : Nat → ∀ {n}, Bits n → Bits n
+--   | 0, _, xs => xs
+--   | _, 0, ⦃⦄ => ⦃⦄
+--   | m + 1, _ + 1, _ +> xs => (shl m xs).snoc 0
 
 -- def Bits.shro : ∀ {n}, Bool → Bits n → Bits n
 --   | 0, _, ⦃⦄ => ⦃⦄
@@ -426,7 +430,7 @@ def Bits.sar (m : Nat) {n} (xs : Bits n) : Bits n :=
 
 def Bits.append : ∀ {m n}, Bits m → Bits n → Bits (n + m)
   | 0, _, ⦃⦄, ys => ys
-  | m + 1, n, x +> xs, ys => x +> append xs ys
+  | _ + 1, _, x +> xs, ys => x +> append xs ys
 
 instance {m n} : HAppend (Bits m) (Bits n) (Bits (n + m)) := ⟨Bits.append⟩
 
@@ -1368,7 +1372,7 @@ lemma Bits.of_toNat_le_toNat {k : ℕ} {xs ys : Bits k}
 lemma Bits.le_add_right {n} {xs ys : Bits n} (h : Nof xs ys) : xs ≤ xs + ys := by
   apply of_toNat_le_toNat; rw [toNat_add_eq_of_nof _ _ h]; apply Nat.le_add_right
 
-def Char.toHex : Char → Hex
+def Hexar.toHex : Char → Hex
   | '0' => x0
   | '1' => x1
   | '2' => x2
@@ -1392,9 +1396,10 @@ def Char.toHex : Char → Hex
   | 'E' => xE
   |  _  => xF
 
-def String.toBits : ∀ s : String, Bits (4 * s.length)
+def Hextring.toBits : ∀ s : String, Bits (4 * s.length)
   | ⟨[]⟩ => ⦃⦄
-  | ⟨c :: cs⟩ => Char.toHex c ++ toBits ⟨cs⟩
+  | ⟨c :: cs⟩ => Hexar.toHex c ++ toBits ⟨cs⟩
+
 abbrev Vec := Mathlib.Vector
 
 abbrev Qords : Type := Vec (Bits 64) 25
@@ -1402,20 +1407,22 @@ abbrev Qords : Type := Vec (Bits 64) 25
 def Char.toByte (c : Char) : Byte := Nat.toBits 8 c.toNat
 def String.toBytes (s : String) : Bytes := s.data.map Char.toByte
 
-def Bytes.toHex (bs : Bytes) : String :=
+def Bytes.toHextring (bs : Bytes) : String :=
   List.foldr (λ b s => Byte.toString b ++ s) "" bs
 
-def Bytes.toHexString (bs : Bytes) : String :=
-  "hex\"" ++ List.foldr (λ b s => Byte.toString b ++ s) "\"" bs
+def Bits.toHextring (k : Nat) (xs : Bits (8 * k)) : String :=
+  Bytes.toHextring <| Bits.toBytes xs
 
-def Bits.toHex {k : Nat} (xs : Bits (8 * k)) : String :=
-  Bytes.toHex <| Bits.toBytes xs
+------------------------------KECCAK------------------------------
+
+-- 256-bit keccak hash function. Ported from Andrey Jivsov's
+-- C implementation (https://github.com/brainhub/SHA3IUF)
 
 def Qords.init : Qords := Mathlib.Vector.replicate 25 (.zero 64)
 
 def Qords.toString (ws : Qords) : String :=
   let f : Fin 25 → String :=
-    λ k => @Bits.toHex 8 (ws.get k)
+    λ k => Bits.toHextring 8 (ws.get k)
   s!"{f 0} {f 1} {f 2} {f 3} {f 4}\n" ++
   s!"{f 5} {f 6} {f 7} {f 8} {f 9}\n" ++
   s!"{f 10} {f 11} {f 12} {f 13} {f 14}\n" ++
@@ -1425,7 +1432,7 @@ def Qords.toString (ws : Qords) : String :=
 def Qords.app (k : Nat) (f : Bits 64 → Bits 64) (ws : Qords) : Qords :=
   ws.set k <| f <| ws.get k
 
-infixl:65 " ^^ " => Bits.xor
+infixr:65 " ^^ " => Bits.xor
 
 def sha3rotl64 (xs : Bits 64) (y : Nat) : Bits 64 :=
   Bits.or (xs.shl y) (xs.shr (64 - y))
@@ -1443,23 +1450,23 @@ def theta' (bc : Vec (Bits 64) 5) : Nat → Qords → Qords
 def theta (ws : Qords) : Qords :=
   let g : Fin 5 → Bits 64 :=
     λ x => ws.get x ^^ ws.get (x + 5) ^^ ws.get (x + 10) ^^
-           ws.get (x + 15) ^^ ws.get (x + 20)
+          ws.get (x + 15) ^^ ws.get (x + 20)
   let bc : Vec (Bits 64) 5 := ⟨[g 0, g 1, g 2, g 3, g 4], rfl⟩
   theta' bc 5 ws
 
 def keccakf_rndc : Vec (Bits 64) 24 :=
-  ⟨ [ "0000000000000001".toBits, "0000000000008082".toBits,
-      "800000000000808a".toBits, "8000000080008000".toBits,
-      "000000000000808b".toBits, "0000000080000001".toBits,
-      "8000000080008081".toBits, "8000000000008009".toBits,
-      "000000000000008a".toBits, "0000000000000088".toBits,
-      "0000000080008009".toBits, "000000008000000a".toBits,
-      "000000008000808b".toBits, "800000000000008b".toBits,
-      "8000000000008089".toBits, "8000000000008003".toBits,
-      "8000000000008002".toBits, "8000000000000080".toBits,
-      "000000000000800a".toBits, "800000008000000a".toBits,
-      "8000000080008081".toBits, "8000000000008080".toBits,
-      "0000000080000001".toBits, "8000000080008008".toBits ], rfl ⟩
+  ⟨ [ Hextring.toBits "0000000000000001", Hextring.toBits "0000000000008082",
+      Hextring.toBits "800000000000808a", Hextring.toBits "8000000080008000",
+      Hextring.toBits "000000000000808b", Hextring.toBits "0000000080000001",
+      Hextring.toBits "8000000080008081", Hextring.toBits "8000000000008009",
+      Hextring.toBits "000000000000008a", Hextring.toBits "0000000000000088",
+      Hextring.toBits "0000000080008009", Hextring.toBits "000000008000000a",
+      Hextring.toBits "000000008000808b", Hextring.toBits "800000000000008b",
+      Hextring.toBits "8000000000008089", Hextring.toBits "8000000000008003",
+      Hextring.toBits "8000000000008002", Hextring.toBits "8000000000000080",
+      Hextring.toBits "000000000000800a", Hextring.toBits "800000008000000a",
+      Hextring.toBits "8000000080008081", Hextring.toBits "8000000000008080",
+      Hextring.toBits "0000000080000001", Hextring.toBits "8000000080008008" ], rfl ⟩
 
 def keccakf_rotc : Vec Nat 24 :=
   ⟨ [ 1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 2, 14, 27,
@@ -1509,17 +1516,20 @@ def keccakf (ws : Qords) : Qords := kecaux 24 ws
 def Qord.reverse (w : Bits 64) : Bits 64 :=
   Bytes.toBits 8 (@Bits.toBytes 8 w).reverse
 
-def Bytes.keccak : Fin 17 → Bytes → Qords → Word
+def keccak : Fin 17 → Bytes → Qords → Word
 | wc, b0 :: b1 :: b2 :: b3 :: b4 :: b5 :: b6 :: b7 :: bs, ws =>
   let t : Bits 64 := Bytes.toBits 8 [b7, b6, b5, b4, b3, b2, b1, b0]
   let ws' := ws.app wc (· ^^ t)
   keccak (wc + 1) bs <| if wc = 16 then (keccakf ws') else ws'
 | wc, bs, ws =>
   let t := Bytes.toBits' 8 ((bs ++ [Bits.one 8]).takeD 8 (.zero 8)).reverse
-  let s := "8000000000000000".toBits
+  let s := Hextring.toBits "8000000000000000"
   let ws' := keccakf <| .app 16 (· ^^ s) <| .app wc (· ^^ t) ws
   (Qord.reverse <| ws'.get 0) ++ (Qord.reverse <| ws'.get 1) ++
   (Qord.reverse <| ws'.get 2) ++ (Qord.reverse <| ws'.get 3)
 
+def Bytes.keccak (bs : Bytes) : Word :=
+  _root_.keccak (0 : Fin 17) bs Qords.init
+
 def String.keccak (s : String) : Word :=
-  Bytes.keccak 0 s.toBytes Qords.init
+  Bytes.keccak s.toBytes

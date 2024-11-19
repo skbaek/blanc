@@ -106,9 +106,9 @@ def Func.toString : Func → String
 
 instance : Repr Func := ⟨λ p _ => Func.toString p⟩
 
-def String.toWord (s : String) : Word := by
+def Hextring.toWord (s : String) : Word := by
   by_cases h : s.length = 64
-  · have xs := s.toBits
+  · have xs := Hextring.toBits s
     rw [h] at xs; exact xs
   · exact 0
 
@@ -483,11 +483,113 @@ lemma Bits.of_mask_and_eq_zero (m n : Nat) :
 -- for checking that a given word is a valid Ethereum addresses
 def addressMask : Word := (@Bits.max 96) ++ (@Bits.zero 160)
 
+-- inductive preOne : Nat → ∀ {n}, Bits n → Prop
+-- | zero : ∀ n (xs : Bits n), preOne 0 xs
+-- | succ : ∀ k n (xs : Bits n), preOne k xs → preOne (k + 1) (1 +> xs)
+--
+-- lemma preOne_max {k} : preOne k (.max k) := sorry
+--
+-- lemma preOne_append {k m n} (xs : Bits m) (ys : Bits n) (h : preOne k xs) :
+--     preOne k (xs ++ ys) := sorry
+--
+-- lemma Bits.loom {m n} : preOne m (Bits.shl n (Bits.max (n + m))) := by
+--   induction n with
+--   | zero =>
+--     simp [shl]
+--     rw [← max_append_max]
+--     apply preOne_append
+--     apply preOne_max
+--   | succ n ih =>
+--
+--
+--
+--
+--
+-- #exit
+
+def Bits.toBools : ∀ {n}, Bits n → List Bool
+| 0, ⦃⦄ => []
+| _ + 1, x +> xs => x :: xs.toBools
+
+def Bools.toBits : ∀ n, List Bool → Bits n
+| 0, _ => ⦃⦄
+| n + 1, [] => 0 +> toBits n []
+| n + 1, x :: xs => x +> toBits n xs
+
+
+lemma Bits.toBools_inj :
+    ∀ {k : ℕ} (xs ys : Bits k), xs.toBools = ys.toBools → xs = ys := by
+  apply Bits.rec2
+  · intro _; rfl
+  · intro n x xs y ys ih h
+    simp [toBools] at h
+    rw [h.left, ih h.right]
+
+
+lemma Bits.toBools_append {m n : ℕ} (xs : Bits m) (ys : Bits n) :
+    (xs ++ ys).toBools = xs.toBools ++ ys.toBools := by
+  induction m with
+  | zero => cases xs; rfl
+  | succ m ih => cases xs; simp [toBools]; apply ih
+
+
+lemma Bits.toBools_max {n : ℕ} : (max n).toBools = List.replicate n 1 := by
+  induction n with
+  | zero => rfl
+  | succ n ih => simp [toBools, List.replicate]; apply ih
+
+lemma Bits.toBools_zero {n : ℕ} : (zero n).toBools = List.replicate n 0 := by
+  induction n with
+  | zero => rfl
+  | succ n ih => simp [toBools, List.replicate]; apply ih
+
+def Bools.shlo : List Bool → Bool → List Bool
+  | [], _ => []
+  | _ :: xs, x => xs ++ [x]
+
+def Bools.shl : Nat → List Bool → List Bool
+  | 0, xs => xs
+  | n + 1, xs => shlo (shl n xs) 0
+
+lemma Bools.shl_nil {m} : Bools.shl m [] = [] := by
+  induction m with
+  | zero => rfl
+  | succ m ih => simp [shl, ih]; rfl
+
+lemma Bits.toBools_snoc {n} (xs : Bits n) (y) :
+    (Bits.snoc xs y).toBools = xs.toBools ++ [y] := by
+  induction xs with
+  | nil => rfl
+  | cons x xs ih => simp [snoc, toBools, ih]
+
+lemma Bits.toBools_shlo {n} (xs : Bits n) (x) :
+    (Bits.shlo xs x).toBools = Bools.shlo xs.toBools x := by
+  cases xs; rfl; simp [shlo, toBools, Bools.shlo, toBools_snoc]
+
+lemma Bits.toBools_shl {m n} (xs : Bits n) :
+    (Bits.shl m xs).toBools = Bools.shl m xs.toBools := by
+  induction m generalizing xs with
+  | zero => rfl
+  | succ m ih => simp [shl, Bools.shl, toBools_shlo]; rw [ih]
+
+lemma Bits.max_append_zero {m n} :
+    Bits.max m ++ Bits.zero n = Bits.shl n (Bits.max (n + m)) := by
+  apply toBools_inj
+  rw [ toBools_append, toBools_zero, toBools_max,
+       toBools_shl, toBools_max, Nat.add_comm ]
+  induction n generalizing m with
+  | zero => simp [Bools.shl]
+  | succ n ih =>
+    simp [Bools.shl]
+    have h_rw : m + (n + 1) = m + 1 + n := by omega
+    rw [h_rw, ← ih]; simp [List.replicate, Bools.shlo]
+    apply List.replicate_add n 1 0
+
 lemma addressMask_eq_shl :
     addressMask = Bits.shl (160 : Nat).toWord.toNat (Bits.max 256) := by
   have h_rw : (160 : Nat).toWord.toNat = (160 : Nat) := by
     apply toNat_toBits; omega
-  rw [h_rw]; rfl
+  rw [h_rw]; apply Bits.max_append_zero
 
 def ValidAddr (w : Word) : Prop := ∃ a : Addr, a.toWord = w
 
@@ -579,9 +681,9 @@ def Func.Inv {ξ : Type} (f : State → ξ) (g : Result → ξ) (p : Func) : Pro
 def RelInv {X Y} (f : X → Y) (r : X → X → Prop) : Prop :=
   ∀ {x x'}, r x x' → f x = f x'
 
-class Rinst.Hinv {ξ : Type} (f : State → ξ) (o : Rinst) := (inv : Rinst.Inv f o)
-class Hinst.Hinv {ξ : Type} (f : State → ξ) (g : Result → ξ) (o : Hinst) := (inv : Hinst.Inv f g o)
-class Inst.Hinv {ξ : Type} (f : State → ξ) (i : Inst) := (inv : Inst.Inv f i)
+class Rinst.Hinv {ξ : Type} (f : State → ξ) (o : Rinst) where (inv : Rinst.Inv f o)
+class Hinst.Hinv {ξ : Type} (f : State → ξ) (g : Result → ξ) (o : Hinst) where (inv : Hinst.Inv f g o)
+class Inst.Hinv {ξ : Type} (f : State → ξ) (i : Inst) where (inv : Inst.Inv f i)
 
 lemma fail_inv_bal {o : Xinst} : RelInv State.bal (Fail · o ·) := by
   intro s s'
@@ -1635,7 +1737,7 @@ lemma log_toByte_toRinst : ∀ n, Byte.toRinst (Rinst.log n).toByte = Rinst.log 
     cases h (Nat.le_add_left _ _)
 
 lemma toByte_toRinst {o : Rinst} : Byte.toRinst o.toByte = o := by
-  cases o <;> try {rfl; done}
+  cases o <;> try {rfl}
   · apply dup_toByte_toRinst
   · apply swap_toByte_toRinst
   · apply log_toByte_toRinst
@@ -1821,14 +1923,7 @@ lemma opToByte_ne_pushToByte {o : Rinst} {bs : Bytes}
   have hc : o.toByte = Ox x5 xF ∨ o.toByte.hex0 = x6 ∨ o.toByte.hex0 = x7 := by
     rw [h']; clear h'
     rcases pushToByte_eq h with h' | ⟨_, h'⟩ | ⟨_, h'⟩ <;> (rw [h']; simp [hex0_eq])
-  cases o <;>
-  try {simp [Rinst.toByte, hex0_eq] at hc; rcases hc with ⟨⟨_⟩⟩ | ⟨⟨_⟩⟩ | ⟨⟨_⟩⟩} <;>
-  (
-    simp [Rinst.toByte, hex0_eq] at hc;
-    rcases hc with h'' | ⟨⟨_⟩⟩ | ⟨⟨_⟩⟩;
-    have hc := congr_arg Byte.hex0 h''
-    simp [hex0_eq] at hc; cases hc
-  )
+  cases o <;> {simp [Rinst.toByte, hex0_eq] at hc; rcases hc with ⟨⟨_⟩⟩ | ⟨⟨_⟩⟩ | ⟨⟨_⟩⟩}
 
 lemma copToByte_ne_pushToByte {o : Xinst} {bs : Bytes} :
     bs.length ≤ 32 → o.toByte ≠ pushToByte bs := by intro h; cases o <;> ne_pushToByte
@@ -2116,7 +2211,7 @@ lemma Prog.get?_table {m n} {c : List Func} :
     | succ n => simp only [List.get?]; apply ih
 
 -- alternative version of Exec which rolls all arguments into a structure.k
-structure Exec' : Type :=
+structure Exec' : Type where
   (e : Env)
   (s : State)
   (pc : Nat)
@@ -2369,7 +2464,7 @@ lemma table_suffix {c k pfx sfx} (h : pfx <++ (table k c) ++> sfx) :
   | nil => refine' ⟨k, [], (List.append_eq_nil.mp h.symm).right⟩
   | cons p ps ih =>
     simp [table] at h
-    rcases List.cons_eq_append.mp h with
+    rcases List.cons_eq_append_iff.mp h with
       ⟨_, h'⟩ | ⟨pfx', _, h'⟩
     · refine ⟨k, p :: ps, h'⟩
     · exact ih h'
@@ -2428,9 +2523,9 @@ lemma of_get?_table_eq_some {f fs} {bs} {m n : ℕ} {p : Func}
       have h_sub : m.succ - m = 1 := by omega
       have h_le : List.length lft ≤ Nat.succ m := by
         rw [h_lft]; apply Nat.le_succ
-
-      rw [h_split, List.get?_append_right h_le, h_lft, h_sub] at h_get
-
+      have heq : (lft ++ (k, q) :: rgt).get? m.succ = ((k, q) :: rgt).get? (m.succ - lft.length) := by
+        simp [List.getElem?_append_right, h_le]
+      rw [h_split, heq, h_lft, h_sub] at h_get
       match rgt with
       | [] => simp [List.get?] at h_get
       | _ :: rgt' =>
@@ -3505,7 +3600,6 @@ elab_rules : tactic
       let ctx ← Lean.MonadLCtx.getLCtx -- get the local context.
       ctx.forM (clearIfOcc d.toExpr)
       d.fvarId.clear
-
 end
 
 inductive DispatchTree : Type
@@ -3625,7 +3719,8 @@ lemma State.of_pop_cons {x xs} {s s''} (h : State.Pop (x :: xs) s s'') :
 lemma kec_elim {e s s'} (φ : Prop)
     (h : ∀ x, Line.Run e s [pop, pop, pushWord x] s' → φ)
     (h' : Inst.Run e s kec s') : φ := by
-  rcases opRun_of_instRun h' with ⟨x, y, z, h_diff⟩; apply h z
+  rcases opRun_of_instRun h' with ⟨x, y, h_diff⟩
+  apply h (s.mem.slice x y).keccak
   rcases State.of_diff h_diff with ⟨s₁, h_pop, h_push⟩
   rcases State.of_pop_cons h_pop with ⟨s₀, hx, hy⟩
   apply Line.Run.cons <| run_pop e hx
