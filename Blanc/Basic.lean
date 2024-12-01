@@ -347,6 +347,7 @@ def Bits.sub {n} : Bits n → Bits n → Bits n
   | x +> xs, y +> ys => ((x != y) != lt' xs ys) +> sub xs ys
 
 instance {n} : HAdd (Bits n) (Bits n) (Bits n) := ⟨Bits.add⟩
+instance {n} : Add (Bits n) := ⟨Bits.add⟩
 
 instance {n} : HSub (Bits n) (Bits n) (Bits n) := ⟨Bits.sub⟩
 
@@ -634,6 +635,15 @@ def Bits.toBytes : ∀ {n}, Bits (8 * n) → Bytes
   | _ + 1, b0 +> b1 +> b2 +> b3 +> b4 +> b5 +> b6 +> b7 +> bs =>
     ⦃b0, b1, b2, b3, b4, b5, b6, b7⦄ :: bs.toBytes
 
+abbrev Nib : Type := Bits 4
+
+abbrev Nibs := List Nib
+
+def Bits.toNibs : ∀ {n}, Bits (4 * n) → Nibs
+  | 0, ⦃⦄ => []
+  | _ + 1, b0 +> b1 +> b2 +> b3 +> bs =>
+    ⦃b0, b1, b2, b3⦄ :: bs.toNibs
+
 def Bytes.toBits' : ∀ (n : Nat), Bytes → Bits (8 * n)
   | 0, _ => ⦃⦄
   | n + 1, [] => (0 : Byte) ++ toBits' n []
@@ -811,9 +821,8 @@ lemma Nat.toBits_le_toBits {k m n : Nat} (h_le : m ≤ n) (h_lt : n < 2 ^ k) :
       rw [← hc] at h_lt; cases Nat.lt_irrefl _ h_lt
     · rw [h_eq]; apply Bits.le_refl
 
-abbrev Hex : Type := Bits 4
 
-def Hex.toChar : Hex → Char
+def Nib.toHexit : Nib → Char
   | ⦃0, 0, 0, 0⦄ => '0'
   | ⦃0, 0, 0, 1⦄ => '1'
   | ⦃0, 0, 1, 0⦄ => '2'
@@ -831,14 +840,19 @@ def Hex.toChar : Hex → Char
   | ⦃1, 1, 1, 0⦄ => 'E'
   | ⦃1, 1, 1, 1⦄ => 'F'
 
-def Byte.hex0 : Byte → Hex
+def Byte.nib0 : Byte → Nib
   | ⦃w, x, y, z, _, _, _, _⦄ => ⦃w, x, y, z⦄
 
-def Byte.hex1 : Byte → Hex
+def Byte.nib1 : Byte → Nib
   | ⦃_, _, _, _, w, x, y, z⦄ => ⦃w, x, y, z⦄
 
-def Byte.toString (b : Byte) : String :=
-⟨[Hex.toChar b.hex0, Hex.toChar b.hex1]⟩
+def Byte.toHex (b : Byte) : String :=
+⟨[b.nib0.toHexit, b.nib1.toHexit]⟩
+
+def Nibs.toHex : Nibs → String
+  | [] => ""
+  | [b] => ⟨[b.toHexit]⟩
+  | b :: bs => ⟨[b.toHexit] ++ (toHex bs).data⟩
 
 def Bytes.toString : Bytes → String
   | [] => ""
@@ -847,27 +861,27 @@ def Bytes.toString : Bytes → String
 
 instance : Repr Bytes := ⟨λ b _ => b.toString⟩
 
-def Ox (hx hx' : Hex) : Byte := hx ++ hx'
+def Ox (hx hx' : Nib) : Byte := hx ++ hx'
 
-lemma hex0_eq : ∀ {x y : Hex}, (Ox x y).hex0 = x
+lemma nib0_eq : ∀ {x y : Nib}, (Ox x y).nib0 = x
 | ⦃_, _, _, _⦄, ⦃_, _, _, _⦄ => rfl
 
-def x0 : Hex := ⦃0, 0, 0, 0⦄
-def x1 : Hex := ⦃0, 0, 0, 1⦄
-def x2 : Hex := ⦃0, 0, 1, 0⦄
-def x3 : Hex := ⦃0, 0, 1, 1⦄
-def x4 : Hex := ⦃0, 1, 0, 0⦄
-def x5 : Hex := ⦃0, 1, 0, 1⦄
-def x6 : Hex := ⦃0, 1, 1, 0⦄
-def x7 : Hex := ⦃0, 1, 1, 1⦄
-def x8 : Hex := ⦃1, 0, 0, 0⦄
-def x9 : Hex := ⦃1, 0, 0, 1⦄
-def xA : Hex := ⦃1, 0, 1, 0⦄
-def xB : Hex := ⦃1, 0, 1, 1⦄
-def xC : Hex := ⦃1, 1, 0, 0⦄
-def xD : Hex := ⦃1, 1, 0, 1⦄
-def xE : Hex := ⦃1, 1, 1, 0⦄
-def xF : Hex := ⦃1, 1, 1, 1⦄
+def x0 : Nib := ⦃0, 0, 0, 0⦄
+def x1 : Nib := ⦃0, 0, 0, 1⦄
+def x2 : Nib := ⦃0, 0, 1, 0⦄
+def x3 : Nib := ⦃0, 0, 1, 1⦄
+def x4 : Nib := ⦃0, 1, 0, 0⦄
+def x5 : Nib := ⦃0, 1, 0, 1⦄
+def x6 : Nib := ⦃0, 1, 1, 0⦄
+def x7 : Nib := ⦃0, 1, 1, 1⦄
+def x8 : Nib := ⦃1, 0, 0, 0⦄
+def x9 : Nib := ⦃1, 0, 0, 1⦄
+def xA : Nib := ⦃1, 0, 1, 0⦄
+def xB : Nib := ⦃1, 0, 1, 1⦄
+def xC : Nib := ⦃1, 1, 0, 0⦄
+def xD : Nib := ⦃1, 1, 0, 1⦄
+def xE : Nib := ⦃1, 1, 1, 0⦄
+def xF : Nib := ⦃1, 1, 1, 1⦄
 
 lemma List.length_dropWhile_le {ξ : Type u} (xs : List ξ) (f : ξ → Bool) :
     (dropWhile f xs ).length ≤ xs.length := by
@@ -1372,33 +1386,71 @@ lemma Bits.of_toNat_le_toNat {k : ℕ} {xs ys : Bits k}
 lemma Bits.le_add_right {n} {xs ys : Bits n} (h : Nof xs ys) : xs ≤ xs + ys := by
   apply of_toNat_le_toNat; rw [toNat_add_eq_of_nof _ _ h]; apply Nat.le_add_right
 
-def Hexar.toHex : Char → Hex
-  | '0' => x0
-  | '1' => x1
-  | '2' => x2
-  | '3' => x3
-  | '4' => x4
-  | '5' => x5
-  | '6' => x6
-  | '7' => x7
-  | '8' => x8
-  | '9' => x9
-  | 'a' => xA
-  | 'b' => xB
-  | 'c' => xC
-  | 'd' => xD
-  | 'e' => xE
-  | 'f' => xF
-  | 'A' => xA
-  | 'B' => xB
-  | 'C' => xC
-  | 'D' => xD
-  | 'E' => xE
-  |  _  => xF
+def Hexit.toNib : Char → Option Nib
+  | '0' => some x0
+  | '1' => some x1
+  | '2' => some x2
+  | '3' => some x3
+  | '4' => some x4
+  | '5' => some x5
+  | '6' => some x6
+  | '7' => some x7
+  | '8' => some x8
+  | '9' => some x9
+  | 'a' => some xA
+  | 'b' => some xB
+  | 'c' => some xC
+  | 'd' => some xD
+  | 'e' => some xE
+  | 'f' => some xF
+  | 'A' => some xA
+  | 'B' => some xB
+  | 'C' => some xC
+  | 'D' => some xD
+  | 'E' => some xE
+  | 'F' => some xF
+  |  _  => none
 
-def Hextring.toBits : ∀ s : String, Bits (4 * s.length)
-  | ⟨[]⟩ => ⦃⦄
-  | ⟨c :: cs⟩ => Hexar.toHex c ++ toBits ⟨cs⟩
+-- def Hexit.toHex : Char → Hex
+--   | '0' => x0
+--   | '1' => x1
+--   | '2' => x2
+--   | '3' => x3
+--   | '4' => x4
+--   | '5' => x5
+--   | '6' => x6
+--   | '7' => x7
+--   | '8' => x8
+--   | '9' => x9
+--   | 'a' => xA
+--   | 'b' => xB
+--   | 'c' => xC
+--   | 'd' => xD
+--   | 'e' => xE
+--   | 'f' => xF
+--   | 'A' => xA
+--   | 'B' => xB
+--   | 'C' => xC
+--   | 'D' => xD
+--   | 'E' => xE
+--   |  _  => xF
+
+-- def Hex.toBits : ∀ s : String, Bits (4 * s.length)
+--   | ⟨[]⟩ => ⦃⦄
+--   | ⟨c :: cs⟩ => Hexit.toHex c ++ toBits ⟨cs⟩
+
+def Hex.toBits : ∀ (n : Nat), String → Option (Bits (4 * n))
+  | 0, ⟨[]⟩ => some ⦃⦄
+  | 0, ⟨_ :: _⟩ => none
+  | _ + 1, ⟨[]⟩ => none
+  | n + 1, ⟨c :: cs⟩ => do
+    let h ← Hexit.toNib c
+    let hs ← toBits n ⟨cs⟩
+    some (h ++ hs)
+
+def Hex.toBits' (n : Nat) (s : String) : Bits (4 * n) :=
+  let cs := (s.data.reverse.takeD n '0').reverse
+  (Hex.toBits n ⟨cs⟩).getD 0
 
 abbrev Vec := Mathlib.Vector
 
@@ -1407,11 +1459,14 @@ abbrev Qords : Type := Vec (Bits 64) 25
 def Char.toByte (c : Char) : Byte := Nat.toBits 8 c.toNat
 def String.toBytes (s : String) : Bytes := s.data.map Char.toByte
 
-def Bytes.toHextring (bs : Bytes) : String :=
-  List.foldr (λ b s => Byte.toString b ++ s) "" bs
+def Bytes.toHex (bs : Bytes) : String :=
+  List.foldr (λ b s => Byte.toHex b ++ s) "" bs
 
-def Bits.toHextring (k : Nat) (xs : Bits (8 * k)) : String :=
-  Bytes.toHextring <| Bits.toBytes xs
+def Bits.toHex : ∀ k : Nat, Bits (4 * k) → String
+ | 0, ⦃⦄ => ""
+ | k + 1, .cons b0 (.cons b1 (.cons b2 (.cons b3 bs))) =>
+   ⟨[Nib.toHexit ⦃b0, b1, b2, b3⦄]⟩ ++ bs.toHex k
+
 
 ------------------------------KECCAK------------------------------
 
@@ -1422,7 +1477,7 @@ def Qords.init : Qords := Mathlib.Vector.replicate 25 (.zero 64)
 
 def Qords.toString (ws : Qords) : String :=
   let f : Fin 25 → String :=
-    λ k => Bits.toHextring 8 (ws.get k)
+    λ k => Bits.toHex 16 (ws.get k)
   s!"{f 0} {f 1} {f 2} {f 3} {f 4}\n" ++
   s!"{f 5} {f 6} {f 7} {f 8} {f 9}\n" ++
   s!"{f 10} {f 11} {f 12} {f 13} {f 14}\n" ++
@@ -1454,19 +1509,53 @@ def theta (ws : Qords) : Qords :=
   let bc : Vec (Bits 64) 5 := ⟨[g 0, g 1, g 2, g 3, g 4], rfl⟩
   theta' bc 5 ws
 
+
+def keccak_rdnc_00 : Bits 64 := (Hex.toBits 16 "0000000000000001").getD 0
+def keccak_rdnc_01 : Bits 64 := (Hex.toBits 16 "0000000000008082").getD 0
+def keccak_rdnc_02 : Bits 64 := (Hex.toBits 16 "800000000000808a").getD 0
+def keccak_rdnc_03 : Bits 64 := (Hex.toBits 16 "8000000080008000").getD 0
+def keccak_rdnc_04 : Bits 64 := (Hex.toBits 16 "000000000000808b").getD 0
+def keccak_rdnc_05 : Bits 64 := (Hex.toBits 16 "0000000080000001").getD 0
+def keccak_rdnc_06 : Bits 64 := (Hex.toBits 16 "8000000080008081").getD 0
+def keccak_rdnc_07 : Bits 64 := (Hex.toBits 16 "8000000000008009").getD 0
+def keccak_rdnc_08 : Bits 64 := (Hex.toBits 16 "000000000000008a").getD 0
+def keccak_rdnc_09 : Bits 64 := (Hex.toBits 16 "0000000000000088").getD 0
+def keccak_rdnc_10 : Bits 64 := (Hex.toBits 16 "0000000080008009").getD 0
+def keccak_rdnc_11 : Bits 64 := (Hex.toBits 16 "000000008000000a").getD 0
+def keccak_rdnc_12 : Bits 64 := (Hex.toBits 16 "000000008000808b").getD 0
+def keccak_rdnc_13 : Bits 64 := (Hex.toBits 16 "800000000000008b").getD 0
+def keccak_rdnc_14 : Bits 64 := (Hex.toBits 16 "8000000000008089").getD 0
+def keccak_rdnc_15 : Bits 64 := (Hex.toBits 16 "8000000000008003").getD 0
+def keccak_rdnc_16 : Bits 64 := (Hex.toBits 16 "8000000000008002").getD 0
+def keccak_rdnc_17 : Bits 64 := (Hex.toBits 16 "8000000000000080").getD 0
+def keccak_rdnc_18 : Bits 64 := (Hex.toBits 16 "000000000000800a").getD 0
+def keccak_rdnc_19 : Bits 64 := (Hex.toBits 16 "800000008000000a").getD 0
+def keccak_rdnc_20 : Bits 64 := (Hex.toBits 16 "8000000080008081").getD 0
+def keccak_rdnc_21 : Bits 64 := (Hex.toBits 16 "8000000000008080").getD 0
+def keccak_rdnc_22 : Bits 64 := (Hex.toBits 16 "0000000080000001").getD 0
+def keccak_rdnc_23 : Bits 64 := (Hex.toBits 16 "8000000080008008").getD 0
+
 def keccakf_rndc : Vec (Bits 64) 24 :=
-  ⟨ [ Hextring.toBits "0000000000000001", Hextring.toBits "0000000000008082",
-      Hextring.toBits "800000000000808a", Hextring.toBits "8000000080008000",
-      Hextring.toBits "000000000000808b", Hextring.toBits "0000000080000001",
-      Hextring.toBits "8000000080008081", Hextring.toBits "8000000000008009",
-      Hextring.toBits "000000000000008a", Hextring.toBits "0000000000000088",
-      Hextring.toBits "0000000080008009", Hextring.toBits "000000008000000a",
-      Hextring.toBits "000000008000808b", Hextring.toBits "800000000000008b",
-      Hextring.toBits "8000000000008089", Hextring.toBits "8000000000008003",
-      Hextring.toBits "8000000000008002", Hextring.toBits "8000000000000080",
-      Hextring.toBits "000000000000800a", Hextring.toBits "800000008000000a",
-      Hextring.toBits "8000000080008081", Hextring.toBits "8000000000008080",
-      Hextring.toBits "0000000080000001", Hextring.toBits "8000000080008008" ], rfl ⟩
+  ⟨ [ keccak_rdnc_00, keccak_rdnc_01, keccak_rdnc_02, keccak_rdnc_03,
+      keccak_rdnc_04, keccak_rdnc_05, keccak_rdnc_06, keccak_rdnc_07,
+      keccak_rdnc_08, keccak_rdnc_09, keccak_rdnc_10, keccak_rdnc_11,
+      keccak_rdnc_12, keccak_rdnc_13, keccak_rdnc_14, keccak_rdnc_15,
+      keccak_rdnc_16, keccak_rdnc_17, keccak_rdnc_18, keccak_rdnc_19,
+      keccak_rdnc_20, keccak_rdnc_21, keccak_rdnc_22, keccak_rdnc_23 ], rfl ⟩
+
+-- def keccakf_rndc : Vec (Bits 64) 24 :=
+--   ⟨ [ Hex.toBits "0000000000000001", Hex.toBits "0000000000008082",
+--       Hex.toBits "800000000000808a", Hex.toBits "8000000080008000",
+--       Hex.toBits "000000000000808b", Hex.toBits "0000000080000001",
+--       Hex.toBits "8000000080008081", Hex.toBits "8000000000008009",
+--       Hex.toBits "000000000000008a", Hex.toBits "0000000000000088",
+--       Hex.toBits "0000000080008009", Hex.toBits "000000008000000a",
+--       Hex.toBits "000000008000808b", Hex.toBits "800000000000008b",
+--       Hex.toBits "8000000000008089", Hex.toBits "8000000000008003",
+--       Hex.toBits "8000000000008002", Hex.toBits "8000000000000080",
+--       Hex.toBits "000000000000800a", Hex.toBits "800000008000000a",
+--       Hex.toBits "8000000080008081", Hex.toBits "8000000000008080",
+--       Hex.toBits "0000000080000001", Hex.toBits "8000000080008008" ], rfl ⟩
 
 def keccakf_rotc : Vec Nat 24 :=
   ⟨ [ 1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 2, 14, 27,
@@ -1523,7 +1612,7 @@ def keccak : Fin 17 → Bytes → Qords → Word
   keccak (wc + 1) bs <| if wc = 16 then (keccakf ws') else ws'
 | wc, bs, ws =>
   let t := Bytes.toBits' 8 ((bs ++ [Bits.one 8]).takeD 8 (.zero 8)).reverse
-  let s := Hextring.toBits "8000000000000000"
+  let s := (Hex.toBits 16 "8000000000000000").getD 0
   let ws' := keccakf <| .app 16 (· ^^ s) <| .app wc (· ^^ t) ws
   (Qord.reverse <| ws'.get 0) ++ (Qord.reverse <| ws'.get 1) ++
   (Qord.reverse <| ws'.get 2) ++ (Qord.reverse <| ws'.get 3)

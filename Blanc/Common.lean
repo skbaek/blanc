@@ -106,11 +106,7 @@ def Func.toString : Func → String
 
 instance : Repr Func := ⟨λ p _ => Func.toString p⟩
 
-def Hextring.toWord (s : String) : Word := by
-  by_cases h : s.length = 64
-  · have xs := Hextring.toBits s
-    rw [h] at xs; exact xs
-  · exact 0
+def Hex.toWord : String → Option Word := Hex.toBits 64
 
 def Func.stop : Func := .last .stop
 def Func.rev : Func := .last .rev
@@ -1611,7 +1607,7 @@ lemma of_subcode {cd k} :
   | none, h => by cases h
   | some bs, h => ⟨bs, rfl, h⟩
 
-lemma hex0_append_hex1 : ∀ {b : Byte}, Byte.hex0 b ++ Byte.hex1 b = b
+lemma nib0_append_nib1 : ∀ {b : Byte}, Byte.nib0 b ++ Byte.nib1 b = b
   | ⦃_, _, _, _, _, _, _, _⦄ => rfl
 
 def Byte.toRinst : Byte → Rinst
@@ -1805,10 +1801,10 @@ lemma pushAt_unique {e pc bs bs'}
   rw [h_rw'] at h_tail'
   apply Option.some_inj.mp <| .trans h_tail.symm h_tail'
 
-lemma ox_ne_ox_of_left {lx rx ly ry : Hex} : lx ≠ ly → Ox lx rx ≠ Ox ly ry := by
+lemma ox_ne_ox_of_left {lx rx ly ry : Nib} : lx ≠ ly → Ox lx rx ≠ Ox ly ry := by
   simp [Ox]; rw [Bits.append_eq_append_iff]; intros h h'; apply h h'.left
 
-lemma ox_ne_ox_of_right {lx rx ly ry : Hex} : rx ≠ ry → Ox lx rx ≠ Ox ly ry := by
+lemma ox_ne_ox_of_right {lx rx ly ry : Nib} : rx ≠ ry → Ox lx rx ≠ Ox ly ry := by
   simp [Ox]; rw [Bits.append_eq_append_iff]; intros h h'; apply h h'.right
 
 syntax "ox_ne_left" : tactic
@@ -1876,9 +1872,9 @@ lemma jopToByte_ne_hopToByte {o : Jinst} {o' : Hinst} : o.toByte ≠ o'.toByte :
 lemma copToByte_ne_hopToByte {o : Xinst} {o' : Hinst} : o.toByte ≠ o'.toByte := by
   cases o <;> cases o' <;> ox_ne
 
-lemma eq_ox {b : Byte} {hx0 hx1 : Hex} :
-    Byte.hex0 b = hx0 → Byte.hex1 b = hx1 → b = Ox hx0 hx1 := by
-  intros h0 h1; rw [← @hex0_append_hex1 b, h0, h1]; rfl
+lemma eq_ox {b : Byte} {hx0 hx1 : Nib} :
+    Byte.nib0 b = hx0 → Byte.nib1 b = hx1 → b = Ox hx0 hx1 := by
+  intros h0 h1; rw [← @nib0_append_nib1 b, h0, h1]; rfl
 
 syntax "eq_ox_core" : tactic
 macro_rules
@@ -1920,10 +1916,10 @@ macro_rules
 lemma opToByte_ne_pushToByte {o : Rinst} {bs : Bytes}
     (h : bs.length ≤ 32) : o.toByte ≠ pushToByte bs := by
   intro h'
-  have hc : o.toByte = Ox x5 xF ∨ o.toByte.hex0 = x6 ∨ o.toByte.hex0 = x7 := by
+  have hc : o.toByte = Ox x5 xF ∨ o.toByte.nib0 = x6 ∨ o.toByte.nib0 = x7 := by
     rw [h']; clear h'
-    rcases pushToByte_eq h with h' | ⟨_, h'⟩ | ⟨_, h'⟩ <;> (rw [h']; simp [hex0_eq])
-  cases o <;> {simp [Rinst.toByte, hex0_eq] at hc; rcases hc with ⟨⟨_⟩⟩ | ⟨⟨_⟩⟩ | ⟨⟨_⟩⟩}
+    rcases pushToByte_eq h with h' | ⟨_, h'⟩ | ⟨_, h'⟩ <;> (rw [h']; simp [nib0_eq])
+  cases o <;> {simp [Rinst.toByte, nib0_eq] at hc; rcases hc with ⟨⟨_⟩⟩ | ⟨⟨_⟩⟩ | ⟨⟨_⟩⟩}
 
 lemma copToByte_ne_pushToByte {o : Xinst} {bs : Bytes} :
     bs.length ≤ 32 → o.toByte ≠ pushToByte bs := by intro h; cases o <;> ne_pushToByte
