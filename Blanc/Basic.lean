@@ -350,6 +350,7 @@ instance {n} : HAdd (Bits n) (Bits n) (Bits n) := ⟨Bits.add⟩
 instance {n} : Add (Bits n) := ⟨Bits.add⟩
 
 instance {n} : HSub (Bits n) (Bits n) (Bits n) := ⟨Bits.sub⟩
+instance {n} : Sub (Bits n) := ⟨Bits.sub⟩
 
 lemma Bits.faux : ∀ {n} {xs ys : Bits n}, lt' xs ys = overflow (xs - ys) ys := by
   apply rec2
@@ -1211,7 +1212,7 @@ def List.Slice {ξ : Type u} (xs : List ξ) (m : Nat) (ys : List ξ) : Prop :=
 lemma List.slice?_cons {ξ : Type u} (x) (xs : List ξ) (m n : Nat) :
     slice? (x :: xs) (m + 1) n = slice? xs m n := rfl
 
-def List.sliceD {ξ : Type u} [Zero ξ] (xs : List ξ) (m n : Nat) (x : ξ) : List ξ :=
+def List.sliceD {ξ : Type u} (xs : List ξ) (m n : Nat) (x : ξ) : List ξ :=
   takeD n (drop m xs) x
 
 lemma List.slice?_eq_cons_iff {ξ : Type u} {xs : List ξ} {m n : Nat} {y} {ys} :
@@ -1492,22 +1493,22 @@ infixr:65 " ^^ " => Bits.xor
 def sha3rotl64 (xs : Bits 64) (y : Nat) : Bits 64 :=
   Bits.or (xs.shl y) (xs.shr (64 - y))
 
-def theta'' (t : Bits 64) (i : Nat) : Nat → Qords → Qords
+def Keccak.θ'' (t : Bits 64) (i : Nat) : Nat → Qords → Qords
   | 0, ws => ws
-  | j + 1, ws => theta'' t i j <| ws.app ((j * 5) + i) (· ^^ t)
+  | j + 1, ws => θ'' t i j <| ws.app ((j * 5) + i) (· ^^ t)
 
-def theta' (bc : Vec (Bits 64) 5) : Nat → Qords → Qords
+def Keccak.θ' (bc : Vec (Bits 64) 5) : Nat → Qords → Qords
 | 0, ws => ws
 | i + 1, ws =>
   let t : Bits 64 := bc.get (i + 4) ^^ sha3rotl64 (bc.get (i + 1)) 1
-  theta' bc i <| theta'' t i 5 ws
+  θ' bc i <| θ'' t i 5 ws
 
-def theta (ws : Qords) : Qords :=
+def Keccak.θ (ws : Qords) : Qords :=
   let g : Fin 5 → Bits 64 :=
     λ x => ws.get x ^^ ws.get (x + 5) ^^ ws.get (x + 10) ^^
           ws.get (x + 15) ^^ ws.get (x + 20)
   let bc : Vec (Bits 64) 5 := ⟨[g 0, g 1, g 2, g 3, g 4], rfl⟩
-  theta' bc 5 ws
+  θ' bc 5 ws
 
 
 def keccak_rdnc_00 : Bits 64 := (Hex.toBits 16 "0000000000000001").getD 0
@@ -1543,20 +1544,6 @@ def keccakf_rndc : Vec (Bits 64) 24 :=
       keccak_rdnc_16, keccak_rdnc_17, keccak_rdnc_18, keccak_rdnc_19,
       keccak_rdnc_20, keccak_rdnc_21, keccak_rdnc_22, keccak_rdnc_23 ], rfl ⟩
 
--- def keccakf_rndc : Vec (Bits 64) 24 :=
---   ⟨ [ Hex.toBits "0000000000000001", Hex.toBits "0000000000008082",
---       Hex.toBits "800000000000808a", Hex.toBits "8000000080008000",
---       Hex.toBits "000000000000808b", Hex.toBits "0000000080000001",
---       Hex.toBits "8000000080008081", Hex.toBits "8000000000008009",
---       Hex.toBits "000000000000008a", Hex.toBits "0000000000000088",
---       Hex.toBits "0000000080008009", Hex.toBits "000000008000000a",
---       Hex.toBits "000000008000808b", Hex.toBits "800000000000008b",
---       Hex.toBits "8000000000008089", Hex.toBits "8000000000008003",
---       Hex.toBits "8000000000008002", Hex.toBits "8000000000000080",
---       Hex.toBits "000000000000800a", Hex.toBits "800000008000000a",
---       Hex.toBits "8000000080008081", Hex.toBits "8000000000008080",
---       Hex.toBits "0000000080000001", Hex.toBits "8000000080008008" ], rfl ⟩
-
 def keccakf_rotc : Vec Nat 24 :=
   ⟨ [ 1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 2, 14, 27,
       41, 56, 8, 25, 43, 62, 18, 39, 61, 20, 44 ], rfl ⟩
@@ -1565,42 +1552,41 @@ def keccakf_piln : Vec Nat 24 :=
   ⟨ [ 10, 7, 11, 17, 18, 3, 5, 16, 8, 21, 24, 4,
       15, 23, 19, 13, 12, 2, 20, 14, 22, 9, 6, 1 ], rfl ⟩
 
-def rhopiAux : Nat → Bits 64 → Qords → Qords
+def Keccak.ρπ' : Nat → Bits 64 → Qords → Qords
   | 0, _, ws => ws
   | k + 1, t, ws =>
     let i := 23 - k
     let j := keccakf_piln.get i
     let ws' := ws.set j (sha3rotl64 t <| keccakf_rotc.get i)
-    rhopiAux k (ws.get j) ws'
+    ρπ' k (ws.get j) ws'
 
-def rhopi (ws : Qords) : Qords := rhopiAux 24 (ws.get 1) ws
+def Keccak.ρπ (ws : Qords) : Qords := ρπ' 24 (ws.get 1) ws
 
-def chi'' (ws : Qords) (bc : Vec (Bits 64) 5) (j : Nat) : Nat → Qords
+def Keccak.χ'' (ws : Qords) (bc : Vec (Bits 64) 5) (j : Nat) : Nat → Qords
   | 0 => ws
   | i + 1 =>
     let ws' := ws.app (j + i) (·  ^^ (.and (bc.get (i + 1)).not (bc.get (i + 2))))
-    chi'' ws' bc j i
+    χ'' ws' bc j i
 
-def chi' (ws : Qords) : Nat → Qords
+def Keccak.χ' (ws : Qords) : Nat → Qords
   | 0 => ws
   | k + 1 =>
     let j := k * 5
     let f : Nat → Bits 64 := λ x => ws.get (j + x)
     let bc : Vec (Bits 64) 5 := ⟨[f 0, f 1, f 2, f 3, f 4], rfl⟩
-    let ws' : Qords := chi'' ws bc j 5
-    chi' ws' k
+    let ws' : Qords := Keccak.χ'' ws bc j 5
+    χ' ws' k
 
-def chi (ws : Qords) : Qords := chi' ws 5
+def Keccak.χ (ws : Qords) : Qords := χ' ws 5
 
-def iota (round : Nat) (ws : Qords) : Qords :=
+def Keccak.ι (round : Nat) (ws : Qords) : Qords :=
   ws.app 0 (· ^^ keccakf_rndc.get round)
 
-def kecaux : Nat → Qords → Qords
+def Keccak.aux : Nat → Qords → Qords
 | 0, ws => ws
-| n + 1, ws =>
-  kecaux n <| iota (23 - n) <| chi <| rhopi <| theta ws
+| n + 1, ws => aux n <| ι (23 - n) <| χ <| ρπ <| θ ws
 
-def keccakf (ws : Qords) : Qords := kecaux 24 ws
+def Keccak.f (ws : Qords) : Qords := aux 24 ws
 
 def Qord.reverse (w : Bits 64) : Bits 64 :=
   Bytes.toBits 8 (@Bits.toBytes 8 w).reverse
@@ -1609,11 +1595,11 @@ def keccak : Fin 17 → Bytes → Qords → Word
 | wc, b0 :: b1 :: b2 :: b3 :: b4 :: b5 :: b6 :: b7 :: bs, ws =>
   let t : Bits 64 := Bytes.toBits 8 [b7, b6, b5, b4, b3, b2, b1, b0]
   let ws' := ws.app wc (· ^^ t)
-  keccak (wc + 1) bs <| if wc = 16 then (keccakf ws') else ws'
+  keccak (wc + 1) bs <| if wc = 16 then (Keccak.f ws') else ws'
 | wc, bs, ws =>
   let t := Bytes.toBits' 8 ((bs ++ [Bits.one 8]).takeD 8 (.zero 8)).reverse
   let s := (Hex.toBits 16 "8000000000000000").getD 0
-  let ws' := keccakf <| .app 16 (· ^^ s) <| .app wc (· ^^ t) ws
+  let ws' := Keccak.f <| .app 16 (· ^^ s) <| .app wc (· ^^ t) ws
   (Qord.reverse <| ws'.get 0) ++ (Qord.reverse <| ws'.get 1) ++
   (Qord.reverse <| ws'.get 2) ++ (Qord.reverse <| ws'.get 3)
 

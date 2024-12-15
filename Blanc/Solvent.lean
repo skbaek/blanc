@@ -98,7 +98,7 @@ structure Postcond (wa : Addr) (e : Env) (r : Result) : Prop :=
   (nof : sum r.bal < 2 ^ 256)
   (solvent : r.Solvent wa)
 
-open Inst
+open Ninst
 
 lemma of_push_addressMask {e} {s s' : State} {xs}
     (h_pfx : xs <<+ s.stk) (h_run : Line.Run e s pushAddressMask s') :
@@ -137,8 +137,6 @@ lemma frel_to_address {w r} {f g : Storage} :
   · apply (h1 <| Addr.toWord a).left; rw [← h3, toAddr_toWord_eq h0]
   · apply (h1 <| Addr.toWord a).right
     intro hc; apply h3; rw [hc, toAddr_toWord]
-
-open Inst
 
 lemma incrAt_of_incrWbal {e s s' wad dst} (h_dst : ValidAddr dst)
     (h0 : Line.Run e s incrWbal s') (h1 : [wad, dst] <<+ s.stk) :
@@ -850,13 +848,13 @@ theorem weth_inv_solvent (wa : Addr) :
       · exact Xinst.wrap_inv_solvent asm ha h_pc'.solvent
   · intros e s pc r h h_ne h_pc; cases h
     · constructor
-      · rw [← Hinst.inv_code asm]; apply h_pc.code
-      · exact Hinst.inv_nof asm h_pc.nof
+      · rw [← Linst.inv_code asm]; apply h_pc.code
+      · exact Linst.inv_nof asm h_pc.nof
       · have h_sv : Storage.Solvent (s.stor wa) 0 (s.bal wa) := by
           have h := h_pc.solvent; simp [State.Solvent, h_ne] at h; exact h
         have h_le : (s.bal wa).toNat ≤ (r.bal wa).toNat := by
-          rename Hinst.Run _ _ _ _ => h_run
-          cases (asm : Hinst) with
+          rename Linst.Run _ _ _ _ => h_run
+          cases (asm : Linst) with
           | stop => cases h_run; apply Nat.le_refl
           | ret => cases h_run; apply Nat.le_refl
           | rev => cases h_run
@@ -869,7 +867,8 @@ theorem weth_inv_solvent (wa : Addr) :
                 lt_of_le_of_lt (add_le_sum_of_ne s.bal h_ne.symm) h_pc.nof
               rw [h_rw, Bits.toNat_add_eq_of_nof _ _ hle]; apply Nat.le_add_right
             · rw [(hd wa).right h_ne, (hi wa).right ha]
-        unfold Result.Solvent; rw [← Hinst.inv_stor asm]
+          | invalid => cases h_run
+        unfold Result.Solvent; rw [← Linst.inv_stor asm]
         apply le_trans h_sv h_le
     · refine' ⟨h_pc.code, h_pc.nof, _⟩
       have h := h_pc.solvent

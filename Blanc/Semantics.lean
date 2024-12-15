@@ -70,7 +70,6 @@ inductive Rinst : Type
   | dup : Fin 16 → Rinst
   | swap : Fin 16 → Rinst
   | log : Fin 5 → Rinst
-  | invalid -- 0xFE / 0 / 0 / Designated invalid instruction.
 -- deriving DecidableEq
 
 inductive Jinst : Type
@@ -88,11 +87,12 @@ inductive Xinst : Type
   | statcall -- 0xfa / 6 / 1 / Perform a read-only call to an existing contract.
 deriving DecidableEq
 
-inductive Hinst : Type
+inductive Linst : Type
   | stop -- 0x00 / 0 / 0 / halts execution.
   | ret -- 0xf3 / 2 / 0 / Halt execution and return output data.
   | rev -- 0xfd / 2 / 0 / Halt execution and revert State changes, returning output data.
   | dest -- 0xff / 1 / 0 / Halt execution and destroy the current contract, transferring remaining Ether to a specified Addr.
+  | invalid -- 0xFE / 0 / 0 / Designated invalid instruction.
 deriving DecidableEq
 
 def Rinst.toByte : Rinst → Byte
@@ -159,7 +159,6 @@ def Rinst.toByte : Rinst → Byte
   | dup n        => Ox x8 (@Nat.toBits 4 n)
   | swap n       => Ox x9 (@Nat.toBits 4 n)
   | log n        => Ox xA (@Nat.toBits 4 n)
-  | invalid      => Ox xF xE
 
 def Memory : Type := Word → Byte
 def Storage : Type := Word → Word
@@ -519,11 +518,12 @@ def Result.wrap (s : State) (ret : Bytes) : Result :=
     dest := s.dest
   }
 
-def Hinst.toByte : Hinst → Byte
-  | Hinst.stop => Ox x0 x0
-  | Hinst.ret => Ox xF x3
-  | Hinst.rev => Ox xF xD
-  | Hinst.dest => Ox xF xF
+def Linst.toByte : Linst → Byte
+  | .stop => Ox x0 x0
+  | .ret => Ox xF x3
+  | .rev => Ox xF xD
+  | .dest => Ox xF xF
+  | .invalid      => Ox xF xE
 
 def Jinst.toByte : Jinst → Byte
   | jump => Ox x5 x6     -- 0x56 / 1 / 0 / Unconditional jump.
@@ -547,24 +547,24 @@ def Jinst.At (e : Env) (pc : Nat) (o : Jinst) : Prop :=
   List.get? e.code pc = some (Jinst.toByte o)
 def Xinst.At (e : Env) (pc : Nat) (o : Xinst) : Prop :=
   List.get? e.code pc = some (Xinst.toByte o)
-def Hinst.At (e : Env) (pc : Nat) (o : Hinst) : Prop :=
-  List.get? e.code pc = some (Hinst.toByte o)
+def Linst.At (e : Env) (pc : Nat) (o : Linst) : Prop :=
+  List.get? e.code pc = some (Linst.toByte o)
 def PushAt (e : Env) (pc : Nat) (bs : Bytes) : Prop :=
   List.Slice e.code pc (pushToBytes bs) ∧ bs.length ≤ 32
 
-inductive Hinst.Run : Env → State → Hinst → Result → Prop
-  | stop : ∀ e s, Hinst.Run e s Hinst.stop (Result.wrap s [])
+inductive Linst.Run : Env → State → Linst → Result → Prop
+  | stop : ∀ e s, Linst.Run e s Linst.stop (Result.wrap s [])
   | ret :
     ∀ e s x y,
       ([x, y] <+: s.stk) →
-      Hinst.Run e s Hinst.ret (.wrap s <| s.mem.slice x y)
+      Linst.Run e s Linst.ret (.wrap s <| s.mem.slice x y)
   | dest :
     ∀ (e : Env) (s : State) x bal bal',
       e.wup = 1 →
       ([x] <+: s.stk) →
       Overwrite e.cta 0 s.bal bal →
       Increase (toAddr x) (s.bal e.cta) bal bal' →
-      Hinst.Run e s Hinst.dest {s with bal := bal', ret := [], dest := e.cta :: s.dest}
+      Linst.Run e s Linst.dest {s with bal := bal', ret := [], dest := e.cta :: s.dest}
 
 def insidePushArg (e : Env) (loc : Nat) : Prop :=
   ∃ (pc : Nat) (bs : Bytes), PushAt e pc bs ∧ pc < loc ∧ loc ≤ pc + bs.length
@@ -654,7 +654,7 @@ def Rinst.Run (e : Env) : State → Rinst → State → Prop :=
       | ⟨3, _⟩ => λ s s' => ∃ x₀ x₁ x₂ x₃ x₄, State.Pop [x₀, x₁, x₂, x₃, x₄] s s'
       | ⟨4, _⟩ => λ s s' => ∃ x₀ x₁ x₂ x₃ x₄ x₅, State.Pop [x₀, x₁, x₂, x₃, x₄, x₅] s s'
       | ⟨5, h⟩ => False.elim <| Nat.lt_irrefl _ h
-    | Rinst.invalid => λ _ _ => False
+    -- | Rinst.invalid => λ _ _ => False
 
 inductive Jinst.Run : Env → State → Nat → Jinst → State → Nat → Prop
   | jump :
@@ -804,15 +804,14 @@ inductive Step : Env → State → Nat → State → Nat → Type
   | push :
     ∀ e s pc bs s',
       PushAt e pc bs →
-      -- bs.length ≤ 32 →
       State.Push [bs.toBits 32] s s' →
       Step e s pc s' (pc + bs.length + 1)
 
 inductive Halt : Env → State → Nat → Result → Prop
   | inst :
     ∀ e s pc o r,
-      Hinst.At e pc o →
-      Hinst.Run e s o r →
+      Linst.At e pc o →
+      Linst.Run e s o r →
       Halt e s pc r
   | eoc : ∀ e s, Halt e s e.code.length (.wrap s [])
 
@@ -902,15 +901,15 @@ def DeleteCodes : List Addr → Codes → Codes → Prop
 
 -- Blanc semantics --
 
-inductive Inst : Type
-  | reg : Rinst → Inst
-  | exec : Xinst → Inst
-  | push : ∀ bs : Bytes, bs.length ≤ 32 → Inst
+inductive Ninst : Type
+  | reg : Rinst → Ninst
+  | exec : Xinst → Ninst
+  | push : ∀ bs : Bytes, bs.length ≤ 32 → Ninst
 
 inductive Func : Type
   | branch : Func → Func → Func
-  | last : Hinst → Func
-  | next : Inst → Func → Func
+  | last : Linst → Func
+  | next : Ninst → Func → Func
   | call : Nat → Func
 -- deriving DecidableEq
 
@@ -923,12 +922,12 @@ infixr:65 " <?> " => λ f g => Func.branch g f
 infixr:65 " ::: " => Func.next
 postfix:100 " ::. " => Func.last
 
-def Inst.toBytes : Inst → Bytes
+def Ninst.toBytes : Ninst → Bytes
   | reg o => [o.toByte]
   | exec o => [o.toByte]
   | push bs _ => pushToBytes bs
 
-def Inst.At (e : Env) (pc : Nat) : Inst → Prop
+def Ninst.At (e : Env) (pc : Nat) : Ninst → Prop
   | reg o => o.At e pc
   | exec o => o.At e pc
   | push bs _ => PushAt e pc bs
@@ -947,19 +946,19 @@ inductive Xinst.Run : Env → State → Xinst → State → Prop
       Xinst.Run e s o s'
   | fail : ∀ {e s o s'}, Fail s o s' → Xinst.Run e s o s'
 
-inductive Inst.Run : Env → State → Inst → State → Prop
+inductive Ninst.Run : Env → State → Ninst → State → Prop
   | reg :
     ∀ {e s o s'},
       Rinst.Run e s o s' →
-      Inst.Run e s (Inst.reg o) s'
+      Ninst.Run e s (Ninst.reg o) s'
   | exec :
     ∀ {e s o s'},
       Xinst.Run e s o s' →
-      Inst.Run e s (Inst.exec o) s'
+      Ninst.Run e s (Ninst.exec o) s'
   | push :
     ∀ e {s bs h s'},
       State.Push [Bytes.toBits 32 bs] s s' →
-      Inst.Run e s (Inst.push bs h) s'
+      Ninst.Run e s (Ninst.push bs h) s'
 
 inductive Func.Run : List Func → Env → State → Func → Result → Prop
   | zero :
@@ -975,11 +974,11 @@ inductive Func.Run : List Func → Env → State → Func → Result → Prop
       Func.Run fs e s (branch f g) r
   | last :
     ∀ {fs e s i r},
-      Hinst.Run e s i r →
+      Linst.Run e s i r →
       Func.Run fs e s (last i) r
   | next :
     ∀ {fs e s i s' f r},
-      Inst.Run e s i s' →
+      Ninst.Run e s i s' →
       Func.Run fs e s' f r →
       Func.Run fs e s (next i f) r
   | call :

@@ -2,7 +2,7 @@
 
 import Blanc.Common
 
-open Inst
+open Ninst
 
 -- deposit() --
 

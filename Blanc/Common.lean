@@ -70,7 +70,6 @@ def Rinst.toString : Rinst → String
   | dup n => "DUP " ++ n.val.repr
   | swap n => "SWAP " ++ n.val.repr
   | log n => "LOG " ++ n.val.repr
-  | invalid => "INVALID"
 
 def Xinst.toString : Xinst → String
   | create => "CREATE"
@@ -80,26 +79,27 @@ def Xinst.toString : Xinst → String
   | create2 => "CREATE2"
   | statcall => "STATCALL"
 
-def Hinst.toString : Hinst → String
+def Linst.toString : Linst → String
   | .stop => "STOP"
   | .dest => "SELFDESTRUCT"
   | .rev => "REVERT"
   | .ret => "RETURN"
+  | .invalid => "INVALID"
 
 instance : Repr Rinst := ⟨λ o _ => o.toString⟩
 instance : Repr Xinst := ⟨λ o _ => o.toString⟩
 
-def Inst.toString : Inst → String
+def Ninst.toString : Ninst → String
   | reg o => Rinst.toString o
   | exec o => Xinst.toString o
   | push [] _ => "PUSH0"
   | push bs _ => "PUSH" ++ bs.length.repr ++ " " ++ Bytes.toString bs
 
-instance : ToString Inst := ⟨Inst.toString⟩
-instance : Repr Inst := ⟨λ i _ => i.toString⟩
+instance : ToString Ninst := ⟨Ninst.toString⟩
+instance : Repr Ninst := ⟨λ i _ => i.toString⟩
 
 def Func.toString : Func → String
-  | .last o => Hinst.toString o ++ " ::."
+  | .last o => Linst.toString o ++ " ::."
   | .next o p => o.toString ++ " ::: " ++ p.toString
   | .branch p q => "{" ++ q.toString ++ "} <?> {" ++ p.toString ++ "}"
   | .call _ => "[TAIL]"
@@ -112,81 +112,81 @@ def Func.stop : Func := .last .stop
 def Func.rev : Func := .last .rev
 def Func.ret : Func := .last .ret
 
-def Inst.pushWord (w : Word) : Inst :=
+def Ninst.pushWord (w : Word) : Ninst :=
   push (@Bits.toBytes 32 w).sig <|
     le_of_le_of_eq (List.length_dropWhile_le _ _) (Bits.length_toBytes _)
 
-abbrev Inst.add : Inst := Inst.reg Rinst.add
-abbrev Inst.mul : Inst := Inst.reg Rinst.mul
-abbrev Inst.sub : Inst := Inst.reg Rinst.sub
-abbrev Inst.div : Inst := Inst.reg Rinst.div
-abbrev Inst.sdiv : Inst := Inst.reg Rinst.sdiv
-abbrev Inst.mod : Inst := Inst.reg Rinst.mod
-abbrev Inst.smod : Inst := Inst.reg Rinst.smod
-abbrev Inst.addmod : Inst := Inst.reg Rinst.addmod
-abbrev Inst.mulmod : Inst := Inst.reg Rinst.mulmod
-abbrev Inst.exp : Inst := Inst.reg Rinst.exp
-abbrev Inst.signextend : Inst := Inst.reg Rinst.signextend
-abbrev Inst.lt : Inst := Inst.reg Rinst.lt
-abbrev Inst.gt : Inst := Inst.reg Rinst.gt
-abbrev Inst.slt : Inst := Inst.reg Rinst.slt
-abbrev Inst.sgt : Inst := Inst.reg Rinst.sgt
-abbrev Inst.eq : Inst := Inst.reg Rinst.eq
-abbrev Inst.iszero : Inst := Inst.reg Rinst.iszero
-abbrev Inst.and : Inst := Inst.reg Rinst.and
-abbrev Inst.or : Inst := Inst.reg Rinst.or
-abbrev Inst.xor : Inst := Inst.reg Rinst.xor
-abbrev Inst.not : Inst := Inst.reg Rinst.not
-abbrev Inst.byte : Inst := Inst.reg Rinst.byte
-abbrev Inst.shr : Inst := Inst.reg Rinst.shr
-abbrev Inst.shl : Inst := Inst.reg Rinst.shl
-abbrev Inst.sar : Inst := Inst.reg Rinst.sar
-abbrev Inst.kec : Inst := Inst.reg Rinst.kec
-abbrev Inst.address : Inst := Inst.reg Rinst.address
-abbrev Inst.balance : Inst := Inst.reg Rinst.balance
-abbrev Inst.origin : Inst := Inst.reg Rinst.origin
-abbrev Inst.caller : Inst := Inst.reg Rinst.caller
-abbrev Inst.callvalue : Inst := Inst.reg Rinst.callvalue
-abbrev Inst.calldataload : Inst := Inst.reg Rinst.calldataload
-abbrev Inst.calldatasize : Inst := Inst.reg Rinst.calldatasize
-abbrev Inst.calldatacopy : Inst := Inst.reg Rinst.calldatacopy
-abbrev Inst.codesize : Inst := Inst.reg Rinst.codesize
-abbrev Inst.codecopy : Inst := Inst.reg Rinst.codecopy
-abbrev Inst.gasprice : Inst := Inst.reg Rinst.gasprice
-abbrev Inst.extcodesize : Inst := Inst.reg Rinst.extcodesize
-abbrev Inst.extcodecopy : Inst := Inst.reg Rinst.extcodecopy
-abbrev Inst.retdatasize : Inst := Inst.reg Rinst.retdatasize
-abbrev Inst.retdatacopy : Inst := Inst.reg Rinst.retdatacopy
-abbrev Inst.extcodehash : Inst := Inst.reg Rinst.extcodehash
-abbrev Inst.blockhash : Inst := Inst.reg Rinst.blockhash
-abbrev Inst.coinbase : Inst := Inst.reg Rinst.coinbase
-abbrev Inst.timestamp : Inst := Inst.reg Rinst.timestamp
-abbrev Inst.number : Inst := Inst.reg Rinst.number
-abbrev Inst.prevrandao : Inst := Inst.reg Rinst.prevrandao
-abbrev Inst.gaslimit : Inst := Inst.reg Rinst.gaslimit
-abbrev Inst.chainid : Inst := Inst.reg Rinst.chainid
-abbrev Inst.selfbalance : Inst := Inst.reg Rinst.selfbalance
-abbrev Inst.basefee : Inst := Inst.reg Rinst.basefee
-abbrev Inst.pop : Inst := Inst.reg Rinst.pop
-abbrev Inst.mload : Inst := Inst.reg Rinst.mload
-abbrev Inst.mstore : Inst := Inst.reg Rinst.mstore
-abbrev Inst.mstore8 : Inst := Inst.reg Rinst.mstore8
-abbrev Inst.sload : Inst := Inst.reg Rinst.sload
-abbrev Inst.sstore : Inst := Inst.reg Rinst.sstore
-abbrev Inst.pc : Inst := Inst.reg Rinst.pc
-abbrev Inst.msize : Inst := Inst.reg Rinst.msize
-abbrev Inst.gas : Inst := Inst.reg Rinst.gas
-abbrev Inst.dup (n : Fin 16) : Inst := Inst.reg (Rinst.dup n)
-abbrev Inst.swap (n : Fin 16) : Inst := Inst.reg (Rinst.swap n)
-abbrev Inst.log (n : Fin 5) : Inst := Inst.reg (Rinst.log n)
-abbrev Inst.create : Inst := Inst.exec Xinst.create
-abbrev Inst.call : Inst := Inst.exec Xinst.call
-abbrev Inst.callcode : Inst := Inst.exec Xinst.callcode
-abbrev Inst.delcall : Inst := Inst.exec Xinst.delcall
-abbrev Inst.create2 : Inst := Inst.exec Xinst.create2
-abbrev Inst.statcall : Inst := Inst.exec Xinst.statcall
+abbrev Ninst.add : Ninst := Ninst.reg Rinst.add
+abbrev Ninst.mul : Ninst := Ninst.reg Rinst.mul
+abbrev Ninst.sub : Ninst := Ninst.reg Rinst.sub
+abbrev Ninst.div : Ninst := Ninst.reg Rinst.div
+abbrev Ninst.sdiv : Ninst := Ninst.reg Rinst.sdiv
+abbrev Ninst.mod : Ninst := Ninst.reg Rinst.mod
+abbrev Ninst.smod : Ninst := Ninst.reg Rinst.smod
+abbrev Ninst.addmod : Ninst := Ninst.reg Rinst.addmod
+abbrev Ninst.mulmod : Ninst := Ninst.reg Rinst.mulmod
+abbrev Ninst.exp : Ninst := Ninst.reg Rinst.exp
+abbrev Ninst.signextend : Ninst := Ninst.reg Rinst.signextend
+abbrev Ninst.lt : Ninst := Ninst.reg Rinst.lt
+abbrev Ninst.gt : Ninst := Ninst.reg Rinst.gt
+abbrev Ninst.slt : Ninst := Ninst.reg Rinst.slt
+abbrev Ninst.sgt : Ninst := Ninst.reg Rinst.sgt
+abbrev Ninst.eq : Ninst := Ninst.reg Rinst.eq
+abbrev Ninst.iszero : Ninst := Ninst.reg Rinst.iszero
+abbrev Ninst.and : Ninst := Ninst.reg Rinst.and
+abbrev Ninst.or : Ninst := Ninst.reg Rinst.or
+abbrev Ninst.xor : Ninst := Ninst.reg Rinst.xor
+abbrev Ninst.not : Ninst := Ninst.reg Rinst.not
+abbrev Ninst.byte : Ninst := Ninst.reg Rinst.byte
+abbrev Ninst.shr : Ninst := Ninst.reg Rinst.shr
+abbrev Ninst.shl : Ninst := Ninst.reg Rinst.shl
+abbrev Ninst.sar : Ninst := Ninst.reg Rinst.sar
+abbrev Ninst.kec : Ninst := Ninst.reg Rinst.kec
+abbrev Ninst.address : Ninst := Ninst.reg Rinst.address
+abbrev Ninst.balance : Ninst := Ninst.reg Rinst.balance
+abbrev Ninst.origin : Ninst := Ninst.reg Rinst.origin
+abbrev Ninst.caller : Ninst := Ninst.reg Rinst.caller
+abbrev Ninst.callvalue : Ninst := Ninst.reg Rinst.callvalue
+abbrev Ninst.calldataload : Ninst := Ninst.reg Rinst.calldataload
+abbrev Ninst.calldatasize : Ninst := Ninst.reg Rinst.calldatasize
+abbrev Ninst.calldatacopy : Ninst := Ninst.reg Rinst.calldatacopy
+abbrev Ninst.codesize : Ninst := Ninst.reg Rinst.codesize
+abbrev Ninst.codecopy : Ninst := Ninst.reg Rinst.codecopy
+abbrev Ninst.gasprice : Ninst := Ninst.reg Rinst.gasprice
+abbrev Ninst.extcodesize : Ninst := Ninst.reg Rinst.extcodesize
+abbrev Ninst.extcodecopy : Ninst := Ninst.reg Rinst.extcodecopy
+abbrev Ninst.retdatasize : Ninst := Ninst.reg Rinst.retdatasize
+abbrev Ninst.retdatacopy : Ninst := Ninst.reg Rinst.retdatacopy
+abbrev Ninst.extcodehash : Ninst := Ninst.reg Rinst.extcodehash
+abbrev Ninst.blockhash : Ninst := Ninst.reg Rinst.blockhash
+abbrev Ninst.coinbase : Ninst := Ninst.reg Rinst.coinbase
+abbrev Ninst.timestamp : Ninst := Ninst.reg Rinst.timestamp
+abbrev Ninst.number : Ninst := Ninst.reg Rinst.number
+abbrev Ninst.prevrandao : Ninst := Ninst.reg Rinst.prevrandao
+abbrev Ninst.gaslimit : Ninst := Ninst.reg Rinst.gaslimit
+abbrev Ninst.chainid : Ninst := Ninst.reg Rinst.chainid
+abbrev Ninst.selfbalance : Ninst := Ninst.reg Rinst.selfbalance
+abbrev Ninst.basefee : Ninst := Ninst.reg Rinst.basefee
+abbrev Ninst.pop : Ninst := Ninst.reg Rinst.pop
+abbrev Ninst.mload : Ninst := Ninst.reg Rinst.mload
+abbrev Ninst.mstore : Ninst := Ninst.reg Rinst.mstore
+abbrev Ninst.mstore8 : Ninst := Ninst.reg Rinst.mstore8
+abbrev Ninst.sload : Ninst := Ninst.reg Rinst.sload
+abbrev Ninst.sstore : Ninst := Ninst.reg Rinst.sstore
+abbrev Ninst.pc : Ninst := Ninst.reg Rinst.pc
+abbrev Ninst.msize : Ninst := Ninst.reg Rinst.msize
+abbrev Ninst.gas : Ninst := Ninst.reg Rinst.gas
+abbrev Ninst.dup (n : Fin 16) : Ninst := Ninst.reg (Rinst.dup n)
+abbrev Ninst.swap (n : Fin 16) : Ninst := Ninst.reg (Rinst.swap n)
+abbrev Ninst.log (n : Fin 5) : Ninst := Ninst.reg (Rinst.log n)
+abbrev Ninst.create : Ninst := Ninst.exec Xinst.create
+abbrev Ninst.call : Ninst := Ninst.exec Xinst.call
+abbrev Ninst.callcode : Ninst := Ninst.exec Xinst.callcode
+abbrev Ninst.delcall : Ninst := Ninst.exec Xinst.delcall
+abbrev Ninst.create2 : Ninst := Ninst.exec Xinst.create2
+abbrev Ninst.statcall : Ninst := Ninst.exec Xinst.statcall
 
-abbrev Line : Type := List Inst
+abbrev Line : Type := List Ninst
 
 def prepend : Line → Func → Func
   | [], x => x
@@ -198,11 +198,11 @@ inductive Line.Run : Env → State → Line → State → Prop
   | nil : ∀ {e s}, Line.Run e s [] s
   | cons :
     ∀ {e s i s' l s''},
-      Inst.Run e s i s' →
+      Ninst.Run e s i s' →
       Line.Run e s' l s'' →
       Line.Run e s (i :: l) s''
 
-open Inst
+open Ninst
 
 def mstoreAt (x : Word) : Line := [pushWord (x * 32), mstore]
 
@@ -242,7 +242,7 @@ def Nat.toWord : Nat → Word := Nat.toBits 256
 def pushAddressMask : Line := [pushWord 0, not, pushWord (Nat.toWord 160), shl]
 
 -- ( adr -- adr_invalid? )
-def checkNonAddress : Line := pushAddressMask ++ [Inst.and]
+def checkNonAddress : Line := pushAddressMask ++ [Ninst.and]
 
 -- ( adr -- adr_valid? )
 def checkAddress : Line := checkNonAddress ++ [iszero]
@@ -409,12 +409,12 @@ lemma of_run_prepend {c e s r} :
   refine' ⟨s', Line.Run.cons h hp, hq⟩
 
 lemma opRun_of_instRun {e s s'} {o : Rinst}
-    (h : Inst.Run e s (Inst.reg o) s') : Rinst.Run e s o s' := by cases h; assumption
+    (h : Ninst.Run e s (Ninst.reg o) s') : Rinst.Run e s o s' := by cases h; assumption
 
-lemma of_run_singleton {e s i s'} (h : Line.Run e s [i] s') : Inst.Run e s i s' := by
+lemma of_run_singleton {e s i s'} (h : Line.Run e s [i] s') : Ninst.Run e s i s' := by
   rcases Line.of_run_cons h with ⟨_, _, ⟨_⟩⟩; assumption
 
-lemma of_run_singleton' {e s o s'} (h : Line.Run e s [Inst.reg o] s') :
+lemma of_run_singleton' {e s o s'} (h : Line.Run e s [Ninst.reg o] s') :
     Rinst.Run e s o s' := opRun_of_instRun <| of_run_singleton asm
 
 lemma run_append {e s a s' b s''}
@@ -435,12 +435,12 @@ lemma of_run_append  {e s} (a) {b s''} (h : Line.Run e s (a ++ b) s'') :
     rcases ih h_ab with ⟨s1, ha, hb⟩
     refine ⟨s1, Line.Run.cons hi ha, hb⟩
 
-lemma of_run_last {o : Hinst} {c e s r} (h : (o ::.).Run c e s r) : o.Run e s r := by
+lemma of_run_last {o : Linst} {c e s r} (h : (o ::.).Run c e s r) : o.Run e s r := by
   cases h; assumption
 
 lemma of_run_next {c e} {s : State} {i} {p : Func} {r}
     (h : Func.Run c e s (i ::: p) r) :
-    ∃ s', (Inst.Run e s i s' ∧ Func.Run c e s' p r) := by
+    ∃ s', (Ninst.Run e s i s' ∧ Func.Run c e s' p r) := by
   cases h; rename State => s'; refine ⟨s', asm, asm⟩
 
 lemma of_run_branch {e s r} {p q : Func} (h : Func.Run c e s (q <?> p) r) :
@@ -451,7 +451,7 @@ lemma of_run_branch {e s r} {p q : Func} (h : Func.Run c e s (q <?> p) r) :
   · right; refine ⟨_, _, asm, asm, asm⟩
 
 lemma run_pop (e) {x s s'} (h : State.Pop [x] s s') : Run e s pop s' :=
-  Inst.Run.reg ⟨x, h⟩
+  Ninst.Run.reg ⟨x, h⟩
 
 lemma of_run_branch' {c e s r} {p q : Func} (h : Func.Run c e s (q <?> p) r) :
     ([0] <<+ s.stk ∧ Func.Run c e s (pop ::: p) r) ∨
@@ -618,21 +618,21 @@ lemma of_run_branch_rev {e s p r} (h : Func.Run c e s (.rev <?> p) r) :
 lemma not_run_prepend_rev {e s l r} : ¬ Func.Run c e s (l +++ Func.rev) r := by
   intro h; rcases of_run_prepend _ _ h with ⟨_, _, h'⟩; cases of_run_last h'
 
-lemma op_run_iff_inst_run {o} : Rinst.Run e s o s' ↔ Inst.Run e s (Inst.reg o) s' := by
+lemma op_run_iff_inst_run {o} : Rinst.Run e s o s' ↔ Ninst.Run e s (Ninst.reg o) s' := by
   constructor
-  · apply Inst.Run.reg
+  · apply Ninst.Run.reg
   · apply opRun_of_instRun
 
-lemma of_run_push {e s s' xs p} (h : Inst.Run e s (push xs p) s') :
+lemma of_run_push {e s s' xs p} (h : Ninst.Run e s (push xs p) s') :
     State.Push [xs.toBits 32] s s' := by cases h with | push h => assumption
 
-lemma of_run_pushWord {e s s' x} (h : Inst.Run e s (pushWord x) s') :
+lemma of_run_pushWord {e s s' x} (h : Ninst.Run e s (pushWord x) s') :
     State.Push [x] s s' := by
   cases h with
   | push h => rw [Bytes.sig_toBits, toBits_toBytes] at h; exact h
 
-lemma run_pushWord (e) {s s' x} (h : State.Push [x] s s') : Inst.Run e s (pushWord x) s' := by
-  apply Inst.Run.push; rw [Bytes.sig_toBits, toBits_toBytes]; exact h
+lemma run_pushWord (e) {s s' x} (h : State.Push [x] s s') : Ninst.Run e s (pushWord x) s' := by
+  apply Ninst.Run.push; rw [Bytes.sig_toBits, toBits_toBytes]; exact h
 
 lemma frel_of_sstore {e} {s s' : State} {x y xs}:
     State.Sstore e s s' → (x :: y :: xs <<+ s.stk) →
@@ -646,7 +646,7 @@ lemma frel_of_sstore {e} {s s' : State} {x y xs}:
     refine ⟨h4, h7⟩
   rw [h3.left, h3.right]; apply h2.stor
 
-lemma of_run_call {e} {s s'} (h : Inst.Run e s .call s') :
+lemma of_run_call {e} {s s'} (h : Ninst.Run e s .call s') :
     ( ∃ ep sp r,
         Xinst.Run' e s ep sp .call r s' ∧
         ((∃ (_ : Exec ep sp 0 r), True) ∨ PreRun sp r) ) ∨
@@ -662,11 +662,11 @@ def Rinst.Inv {ξ : Type} (r : State → ξ) (o : Rinst) : Prop :=
 def Jinst.Inv {ξ : Type} (r : State → ξ) (o : Jinst) : Prop :=
   ∀ {e s pc s' pc'}, Jinst.Run e s pc o s' pc' → r s = r s'
 
-def Hinst.Inv {ξ : Type} (f : State → ξ) (g : Result → ξ) (o : Hinst) : Prop :=
-  ∀ {e s r}, Hinst.Run e s o r → f s = g r
+def Linst.Inv {ξ : Type} (f : State → ξ) (g : Result → ξ) (o : Linst) : Prop :=
+  ∀ {e s r}, Linst.Run e s o r → f s = g r
 
-def Inst.Inv {ξ : Type} (r : State → ξ) (i : Inst) : Prop :=
-  ∀ {e s s'}, Inst.Run e s i s' → r s = r s'
+def Ninst.Inv {ξ : Type} (r : State → ξ) (i : Ninst) : Prop :=
+  ∀ {e s s'}, Ninst.Run e s i s' → r s = r s'
 
 def Line.Inv {ξ : Type} (f : State → ξ) (l : Line) : Prop :=
   ∀ {e s s'}, l.Run e s s' → f s = f s'
@@ -678,8 +678,8 @@ def RelInv {X Y} (f : X → Y) (r : X → X → Prop) : Prop :=
   ∀ {x x'}, r x x' → f x = f x'
 
 class Rinst.Hinv {ξ : Type} (f : State → ξ) (o : Rinst) where (inv : Rinst.Inv f o)
-class Hinst.Hinv {ξ : Type} (f : State → ξ) (g : Result → ξ) (o : Hinst) where (inv : Hinst.Inv f g o)
-class Inst.Hinv {ξ : Type} (f : State → ξ) (i : Inst) where (inv : Inst.Inv f i)
+class Linst.Hinv {ξ : Type} (f : State → ξ) (g : Result → ξ) (o : Linst) where (inv : Linst.Inv f g o)
+class Ninst.Hinv {ξ : Type} (f : State → ξ) (i : Ninst) where (inv : Ninst.Inv f i)
 
 lemma fail_inv_bal {o : Xinst} : RelInv State.bal (Fail · o ·) := by
   intro s s'
@@ -747,18 +747,18 @@ lemma Jinst.inv_stor {o} : Jinst.Inv State.stor o := by
   intros e s pc s' pc' h
   cases h <;> try {have h' := State.Rel.stor asm; apply h'}; rfl
 
-lemma Hinst.inv_stor {o} : Hinst.Inv State.stor Result.stor o := by intros e s r h; cases h <;> rfl
-lemma Hinst.inv_code {o} : Hinst.Inv State.code Result.code o := by intros e s r h; cases h <;> rfl
+lemma Linst.inv_stor {o} : Linst.Inv State.stor Result.stor o := by intros e s r h; cases h <;> rfl
+lemma Linst.inv_code {o} : Linst.Inv State.code Result.code o := by intros e s r h; cases h <;> rfl
 
-lemma stop_inv_bal : Hinst.Inv State.bal Result.bal (Hinst.stop) := by intros e s r h; cases h; rfl
-lemma ret_inv_bal : Hinst.Inv State.bal Result.bal Hinst.ret := by intros e s r h; cases h; rfl
+lemma stop_inv_bal : Linst.Inv State.bal Result.bal (Linst.stop) := by intros e s r h; cases h; rfl
+lemma ret_inv_bal : Linst.Inv State.bal Result.bal Linst.ret := by intros e s r h; cases h; rfl
 
-instance {o} : Hinst.Hinv State.stor Result.stor o := ⟨Hinst.inv_stor⟩
-instance {o} : Hinst.Hinv State.code Result.code o := ⟨Hinst.inv_code⟩
+instance {o} : Linst.Hinv State.stor Result.stor o := ⟨Linst.inv_stor⟩
+instance {o} : Linst.Hinv State.code Result.code o := ⟨Linst.inv_code⟩
 
-instance {ξ} {f g}: @Hinst.Hinv ξ f g Hinst.rev := by constructor; intros e s r h; cases h
-instance : Hinst.Hinv State.bal Result.bal Hinst.ret := ⟨ret_inv_bal⟩
-instance : Hinst.Hinv State.bal Result.bal Hinst.stop := ⟨stop_inv_bal⟩
+instance {ξ} {f g}: @Linst.Hinv ξ f g Linst.rev := by constructor; intros e s r h; cases h
+instance : Linst.Hinv State.bal Result.bal Linst.ret := ⟨ret_inv_bal⟩
+instance : Linst.Hinv State.bal Result.bal Linst.stop := ⟨stop_inv_bal⟩
 
 syntax "app_bal_rec" : tactic
 macro_rules
@@ -876,7 +876,6 @@ instance {n} : Rinst.Hinv State.mem (Rinst.log n) := by
   | ⟨3, _⟩ => show_hinv_mem
   | ⟨4, _⟩ => show_hinv_mem
   | ⟨5, h⟩ => cases (Nat.lt_irrefl _ h)
-instance : Rinst.Hinv State.mem Rinst.invalid := by constructor; intro _ _ _ h; cases h
 
 instance : Rinst.Hinv State.stor Rinst.add := by show_hinv_stor
 instance : Rinst.Hinv State.stor Rinst.mul := by show_hinv_stor
@@ -947,7 +946,6 @@ instance {n} : Rinst.Hinv State.stor (Rinst.log n) := by
   | ⟨3, _⟩ => show_hinv_stor
   | ⟨4, _⟩ => show_hinv_stor
   | ⟨5, h⟩ => cases (Nat.lt_irrefl _ h)
-instance : Rinst.Hinv State.stor Rinst.invalid := by constructor; intro _ _ _ h; cases h
 
 lemma Rinst.inv_bal {o} : Rinst.Inv State.bal o := by
   intros e s s' h; cases o <;>
@@ -986,7 +984,6 @@ lemma Rinst.inv_stor {e s o s' a}
     | ⟨3, _⟩ => app_stor_rec
     | ⟨4, _⟩ => app_stor_rec
     | ⟨5, h⟩ => cases (Nat.lt_irrefl _ h)
-  · cases h_run
 
 lemma Rinst.inv_dest {o} : Rinst.Inv State.dest o := by
   intros e s s' h; cases o <;>
@@ -1074,7 +1071,7 @@ lemma Exec.inv_code {a} :
       apply ih'; rw [← h2, ← h1, ← h0]; exact h_ne
     rw [h0, h1, h2, h3]
   · intros e s pc r h_halt _; cases h_halt
-    · rw [Hinst.inv_code asm]
+    · rw [Linst.inv_code asm]
     · rfl
 
 lemma Xinst.inv_code {e s o s' a} (h : Xinst.Run e s o s')
@@ -1088,7 +1085,7 @@ lemma Xinst.inv_code {e s o s' a} (h : Xinst.Run e s o s')
     rw [Xinst.prep_inv_code asm, h, h']
   · rw [fail_inv_code asm]
 
-lemma Inst.inv_code {e s i s' a} (h_run : Inst.Run e s i s')
+lemma Ninst.inv_code {e s i s' a} (h_run : Ninst.Run e s i s')
     (h_ne : s.code a ≠ []) : s.code a = s'.code a := by
   cases h_run
   · rw [Rinst.inv_code asm]
@@ -1099,13 +1096,13 @@ lemma Line.nil_inv {ξ : Type} {f : State → ξ} : Line.Inv f [] := by
   intros e s s' h; cases h; rfl
 
 lemma Line.cons_inv {ξ : Type} {f : State → ξ} {i l} :
-    Inst.Inv f i → Line.Inv f l → Line.Inv f (i :: l) := by
+    Ninst.Inv f i → Line.Inv f l → Line.Inv f (i :: l) := by
   intros h0 h1 e s s'' h2
   rcases Line.of_run_cons h2 with ⟨s', h3, h4⟩
   apply Eq.trans (h0 h3) (h1 h4)
 
 instance {ξ : Type} (f : State → ξ) (o : Rinst) [Rinst.Hinv f o] :
-    Inst.Hinv f (Inst.reg o) := by
+    Ninst.Hinv f (Ninst.reg o) := by
   constructor; intros e s s' h
   apply Rinst.Hinv.inv <| opRun_of_instRun h
 
@@ -1114,75 +1111,75 @@ instance {o : Rinst} : Rinst.Hinv State.code o := ⟨Rinst.inv_code⟩
 instance {o : Rinst} : Rinst.Hinv State.ret o := ⟨Rinst.inv_ret⟩
 instance {o : Rinst} : Rinst.Hinv State.dest o := ⟨Rinst.inv_dest⟩
 
-instance {bs h_le} : Inst.Hinv State.bal (Inst.push bs h_le) := by
+instance {bs h_le} : Ninst.Hinv State.bal (Ninst.push bs h_le) := by
   constructor; intros e s s' h
   cases h with | push h => apply h.bal
 
-instance {bs h_le} : Inst.Hinv State.code (Inst.push bs h_le) := by
+instance {bs h_le} : Ninst.Hinv State.code (Ninst.push bs h_le) := by
   constructor; intros e s s' h
   cases h with | push h => apply h.code
 
-instance {bs h_le} : Inst.Hinv State.stor (Inst.push bs h_le) := by
+instance {bs h_le} : Ninst.Hinv State.stor (Ninst.push bs h_le) := by
   constructor; intros e s s' h
   cases h with | push h => apply h.stor
 
-instance {bs h_le} : Inst.Hinv State.ret (Inst.push bs h_le) := by
+instance {bs h_le} : Ninst.Hinv State.ret (Ninst.push bs h_le) := by
   constructor; intros e s s' h
   cases h with | push h => apply h.ret
 
-instance {bs h_le} : Inst.Hinv State.dest (Inst.push bs h_le) := by
+instance {bs h_le} : Ninst.Hinv State.dest (Ninst.push bs h_le) := by
   constructor; intros e s s' h
   cases h with | push h => apply h.dest
 
-instance {bs h_le} : Inst.Hinv State.mem (Inst.push bs h_le) := by
+instance {bs h_le} : Ninst.Hinv State.mem (Ninst.push bs h_le) := by
   constructor; intros e s s' h
   cases h with | push h => apply h.mem
 
 syntax "show_pushWord_hinv" : tactic
 macro_rules
   | `(tactic| show_pushWord_hinv) =>
-    `(tactic| constructor; unfold Inst.pushWord; apply Inst.Hinv.inv)
+    `(tactic| constructor; unfold Ninst.pushWord; apply Ninst.Hinv.inv)
 
-instance {x} : Inst.Hinv State.bal (Inst.pushWord x) := by
-  constructor; unfold Inst.pushWord; apply Inst.Hinv.inv
+instance {x} : Ninst.Hinv State.bal (Ninst.pushWord x) := by
+  constructor; unfold Ninst.pushWord; apply Ninst.Hinv.inv
 
-instance {x} : Inst.Hinv State.bal (Inst.pushWord x) := by show_pushWord_hinv
-instance {x} : Inst.Hinv State.code (Inst.pushWord x) := by show_pushWord_hinv
-instance {x} : Inst.Hinv State.stor (Inst.pushWord x) := by show_pushWord_hinv
-instance {x} : Inst.Hinv State.mem (Inst.pushWord x) := by show_pushWord_hinv
-instance {x} : Inst.Hinv State.ret (Inst.pushWord x) := by show_pushWord_hinv
-instance {x} : Inst.Hinv State.dest (Inst.pushWord x) := by show_pushWord_hinv
+instance {x} : Ninst.Hinv State.bal (Ninst.pushWord x) := by show_pushWord_hinv
+instance {x} : Ninst.Hinv State.code (Ninst.pushWord x) := by show_pushWord_hinv
+instance {x} : Ninst.Hinv State.stor (Ninst.pushWord x) := by show_pushWord_hinv
+instance {x} : Ninst.Hinv State.mem (Ninst.pushWord x) := by show_pushWord_hinv
+instance {x} : Ninst.Hinv State.ret (Ninst.pushWord x) := by show_pushWord_hinv
+instance {x} : Ninst.Hinv State.dest (Ninst.pushWord x) := by show_pushWord_hinv
 
 open Qq
 
-def Inst.inv_expr (ξx fx : Lean.Expr) (ix : Q(Inst)) : Lean.Elab.Tactic.TacticM Lean.Expr := do
-  let x ← Lean.Meta.synthInstance <| Lean.mkApp3 q(@Inst.Hinv) ξx fx ix
-  pure <| Lean.mkApp4 q(@Inst.Hinv.inv) ξx fx ix x
+def Ninst.inv_expr (ξx fx : Lean.Expr) (ix : Q(Ninst)) : Lean.Elab.Tactic.TacticM Lean.Expr := do
+  let x ← Lean.Meta.synthInstance <| Lean.mkApp3 q(@Ninst.Hinv) ξx fx ix
+  pure <| Lean.mkApp4 q(@Ninst.Hinv.inv) ξx fx ix x
 
-def Hinst.inv_expr (ξx fx gx : Lean.Expr) (ox : Q(Hinst)) :
+def Linst.inv_expr (ξx fx gx : Lean.Expr) (ox : Q(Linst)) :
     Lean.Elab.Tactic.TacticM Lean.Expr := do
-  let x ← Lean.Meta.synthInstance <| Lean.mkApp4 q(@Hinst.Hinv) ξx fx gx ox
-  pure <| Lean.mkApp5 q(@Hinst.Hinv.inv) ξx fx gx ox x
+  let x ← Lean.Meta.synthInstance <| Lean.mkApp4 q(@Linst.Hinv) ξx fx gx ox
+  pure <| Lean.mkApp5 q(@Linst.Hinv.inv) ξx fx gx ox x
 
 def hopInv : Lean.Elab.Tactic.TacticM Unit :=
   Lean.Elab.Tactic.withMainContext do
   let t ← Lean.Elab.Tactic.getMainTarget
   have t' : Q(Prop) := t
   match t' with
-  | ~q(@Hinst.Inv $ξx $fx $gx $ox) =>
-    let x ← Hinst.inv_expr ξx fx gx ox
+  | ~q(@Linst.Inv $ξx $fx $gx $ox) =>
+    let x ← Linst.inv_expr ξx fx gx ox
     Lean.Elab.Tactic.closeMainGoal `tacName x
-  | _ => dbg_trace "Not a Hinst.Inv goal"
+  | _ => dbg_trace "Not a Linst.Inv goal"
 
 def instInv : Lean.Elab.Tactic.TacticM Unit :=
   Lean.Elab.Tactic.withMainContext do
   let t ← Lean.Elab.Tactic.getMainTarget
   have t' : Q(Prop) := t
   match t' with
-  | ~q(@Inst.Inv $ξx $fx $ix) =>
-    let x ← Inst.inv_expr ξx fx ix
+  | ~q(@Ninst.Inv $ξx $fx $ix) =>
+    let x ← Ninst.inv_expr ξx fx ix
     Lean.Elab.Tactic.closeMainGoal `tacName x
-  | _ => dbg_trace "Not a Inst.Inv goal"
+  | _ => dbg_trace "Not a Ninst.Inv goal"
 
 lemma Line.of_inv {ξ : Type} {e s s'} (r : _root_.State → ξ) {l : Line} :
   Line.Inv r l → l.Run e s s' → r s = r s' := λ h => h
@@ -1212,7 +1209,7 @@ lemma Func.of_inv {ξ : Type} {e s r} (f g) {p : Func} :
   @Func.Inv ξ f g p → Func.Run c e s p r → f s = g r := λ h => h
 
 lemma branch_inv {ξ : Type} {f g} {p q}
-    (h : Inst.Inv f Inst.pop) (hp : Func.Inv f g p) (hq : Func.Inv f g q) :
+    (h : Ninst.Inv f Ninst.pop) (hp : Func.Inv f g p) (hq : Func.Inv f g q) :
     @Func.Inv ξ f g (q <?> p) := by
   intros c e s r h_run
   rcases of_run_branch h_run
@@ -1222,12 +1219,12 @@ lemma branch_inv {ξ : Type} {f g} {p q}
   · apply hq h_run
 
 lemma next_inv {ξ : Type} {f : _root_.State → ξ} {g} {i p}
-    (h : Inst.Inv f i) (h' : Func.Inv f g p) : Func.Inv f g (i ::: p) := by
+    (h : Ninst.Inv f i) (h' : Func.Inv f g p) : Func.Inv f g (i ::: p) := by
   intros c e s r h_run
   rcases of_run_next h_run with ⟨s', hi, hp⟩
   rw [h hi, h' hp]
 
-lemma last_inv {ξ} {f g o} (h : Hinst.Inv f g o) :
+lemma last_inv {ξ} {f g o} (h : Linst.Inv f g o) :
     @Func.Inv ξ f g (Func.last o) := by
   intros c e s r h'; cases h'; apply h asm
 
@@ -1260,10 +1257,10 @@ lemma Func.inv_code {c e s p r a} (h : Func.Run c e s p r)
     rename (_ ≠ _) → _ => ih
     have h := State.Rel.code asm
     rw [h , ih _]; rw [← h]; exact h_ne
-  | last => rw [Hinst.inv_code asm]
+  | last => rw [Linst.inv_code asm]
   | next =>
     rename (_ ≠ _) → _ => ih
-    have h := Inst.inv_code asm h_ne
+    have h := Ninst.inv_code asm h_ne
     rw [h, ih _]; rw [← h]; exact h_ne
   | call =>
     rename (_ ≠ _) → _ => ih
@@ -1405,7 +1402,7 @@ lemma transfer_inv_nof {m n} {kd ki v} {f g : Bits m → Bits n}
     (h : Transfer f kd v ki g) (h' : SumNof f) : SumNof g := by
   simp [SumNof]; rw [← transfer_inv_sum h' h]; apply h'
 
-lemma of_run_dest {e s r} (h : Hinst.Run e s Hinst.dest r) :
+lemma of_run_dest {e s r} (h : Linst.Run e s Linst.dest r) :
     ∃ a, Transfer s.bal e.cta (s.bal e.cta) a r.bal := by
   cases h with
   | dest x bal bal' h_wup h_stk h_ow hi =>
@@ -1414,8 +1411,8 @@ lemma of_run_dest {e s r} (h : Hinst.Run e s Hinst.dest r) :
     · rw [ha, Bits.sub_self, (h_ow a).left ha]
     · exact (h_ow a).right ha
 
-lemma Hinst.inv_nof {e s o r}
-    (h : Hinst.Run e s o r) (h_nof : SumNof s.bal) : SumNof r.bal := by
+lemma Linst.inv_nof {e s o r}
+    (h : Linst.Run e s o r) (h_nof : SumNof s.bal) : SumNof r.bal := by
   cases o with
   | stop => cases h; exact h_nof
   | ret => cases h; exact h_nof
@@ -1423,9 +1420,10 @@ lemma Hinst.inv_nof {e s o r}
   | dest =>
     rcases of_run_dest h with ⟨a, h'⟩
     exact transfer_inv_nof asm h_nof
+  | invalid => cases h
 
-lemma Hinst.inv_sum_bal {e s o r}
-    (h : Hinst.Run e s o r) (h_nof : SumNof s.bal) : sum s.bal = sum r.bal := by
+lemma Linst.inv_sum_bal {e s o r}
+    (h : Linst.Run e s o r) (h_nof : SumNof s.bal) : sum s.bal = sum r.bal := by
   cases o with
   | stop => cases h; rfl
   | ret => cases h; rfl
@@ -1433,6 +1431,7 @@ lemma Hinst.inv_sum_bal {e s o r}
   | dest =>
     rcases of_run_dest h with ⟨a, h'⟩
     exact transfer_inv_sum h_nof h'
+  | invalid => cases h
 
 lemma Xinst.prep_inv_nof {e s ep sp o r sw}
     (h : Xinst.Run' e s ep sp o r sw) (h_nof : SumNof s.bal) : SumNof sp.bal := by
@@ -1478,7 +1477,7 @@ lemma Exec.inv_nof :
     apply ih' <| Xinst.wrap_inv_nof asm <| ih <| Xinst.prep_inv_nof asm h_nof
   · intros e s pc r h_ht h_nof
     cases h_ht
-    · apply Hinst.inv_nof asm h_nof
+    · apply Linst.inv_nof asm h_nof
     · exact h_nof
 
 lemma Exec.inv_sum_bal :
@@ -1491,7 +1490,7 @@ lemma Exec.inv_sum_bal :
     have h_nof' := Xinst.wrap_inv_nof asm <| Exec.inv_nof h_run asm
     rw [Xinst.prep_inv_sum_bal asm asm, ih asm, Xinst.wrap_inv_bal asm, ih' asm]
   · intros e s pc r h h'; cases h
-    · exact Hinst.inv_sum_bal asm h'
+    · exact Linst.inv_sum_bal asm h'
     · rfl
 
 lemma Xinst.inv_nof {e s o s'}
@@ -1503,9 +1502,9 @@ lemma Xinst.inv_nof {e s o s'}
     apply Xinst.prep_inv_nof asm h'
   · rw [← fail_inv_bal asm]; exact h'
 
-lemma Inst.inv_nof {e s} :
-    ∀ {i s'}, Inst.Run e s i s' → SumNof s.bal → SumNof s'.bal := by
-  apply @Inst.Run.rec e s (λ i s' _ => SumNof s.bal → SumNof s'.bal)
+lemma Ninst.inv_nof {e s} :
+    ∀ {i s'}, Ninst.Run e s i s' → SumNof s.bal → SumNof s'.bal := by
+  apply @Ninst.Run.rec e s (λ i s' _ => SumNof s.bal → SumNof s'.bal)
   · intros o s' h; simp [Rinst.inv_bal h]
   · intros o s' h; exact Xinst.inv_nof h
   · intros bs _ s' h h'; rw [← h.bal]; exact h'
@@ -1518,9 +1517,9 @@ lemma Func.inv_nof {c e} :
   · intros s x s' _ _ r _ h_pop _ ih h_nof
     rw [← State.Rel.bal h_pop] at ih; apply ih h_nof
   · intros s o r h_run h_nof
-    apply Hinst.inv_nof h_run h_nof
+    apply Linst.inv_nof h_run h_nof
   · intros s i s' _ _ h_run _ ih h_nof
-    apply ih <| Inst.inv_nof h_run h_nof
+    apply ih <| Ninst.inv_nof h_run h_nof
   · intro _ _ _ _ _ _; apply id
 
 def compsize : Func → Nat
@@ -1537,7 +1536,7 @@ def Func.compile (l : List (Nat × Func)) (n : Nat) : Func → Option Bytes
   | .last o => pure [o.toByte]
   | .next i p => do
     let p_bts ← Func.compile l (n + i.toBytes.length) p
-    pure <| Inst.toBytes i ++ p_bts
+    pure <| Ninst.toBytes i ++ p_bts
   | .branch p q => do
     let pbs ← Func.compile l (n + 4) p
     let loc := n + pbs.length + 4
@@ -1610,77 +1609,79 @@ lemma of_subcode {cd k} :
 lemma nib0_append_nib1 : ∀ {b : Byte}, Byte.nib0 b ++ Byte.nib1 b = b
   | ⦃_, _, _, _, _, _, _, _⦄ => rfl
 
-def Byte.toRinst : Byte → Rinst
-  | ⦃0, 0, 0, 0, 0, 0, 0, 1⦄ => Rinst.add -- 0x01 / 2 / 1 / addition operation.
-  | ⦃0, 0, 0, 0, 0, 0, 1, 0⦄ => Rinst.mul -- 0x02 / 2 / 1 / multiplication operation.
-  | ⦃0, 0, 0, 0, 0, 0, 1, 1⦄ => Rinst.sub -- 0x03 / 2 / 1 / subtraction operation.
-  | ⦃0, 0, 0, 0, 0, 1, 0, 0⦄ => Rinst.div -- 0x04 / 2 / 1 / integer division operation.
-  | ⦃0, 0, 0, 0, 0, 1, 0, 1⦄ => Rinst.sdiv -- 0x05 / 2 / 1 / signed integer division operation.
-  | ⦃0, 0, 0, 0, 0, 1, 1, 0⦄ => Rinst.mod -- 0x06 / 2 / 1 / modulo operation.
-  | ⦃0, 0, 0, 0, 0, 1, 1, 1⦄ => Rinst.smod -- 0x07 / 2 / 1 / signed modulo operation.
-  | ⦃0, 0, 0, 0, 1, 0, 0, 0⦄ => Rinst.addmod -- 0x08 / 3 / 1 / modulo addition operation.
-  | ⦃0, 0, 0, 0, 1, 0, 0, 1⦄ => Rinst.mulmod -- 0x09 / 3 / 1 / modulo multiplication operation.
-  | ⦃0, 0, 0, 0, 1, 0, 1, 0⦄ => Rinst.exp -- 0x0a / 2 / 1 / exponentiation operation.
-  | ⦃0, 0, 0, 0, 1, 0, 1, 1⦄ => Rinst.signextend -- 0x0b / 2 / 1 / sign extend operation.
-  | ⦃0, 0, 0, 1, 0, 0, 0, 0⦄ => Rinst.lt -- 0x10 / 2 / 1 / less-than comparison.
-  | ⦃0, 0, 0, 1, 0, 0, 0, 1⦄ => Rinst.gt -- 0x11 / 2 / 1 / greater-than comparison.
-  | ⦃0, 0, 0, 1, 0, 0, 1, 0⦄ => Rinst.slt -- 0x12 / 2 / 1 / signed less-than comparison.
-  | ⦃0, 0, 0, 1, 0, 0, 1, 1⦄ => Rinst.sgt -- 0x13 / 2 / 1 / signed greater-than comparison.
-  | ⦃0, 0, 0, 1, 0, 1, 0, 0⦄ => Rinst.eq -- 0x14 / 2 / 1 / equality comparison.
-  | ⦃0, 0, 0, 1, 0, 1, 0, 1⦄ => Rinst.iszero -- 0x15 / 1 / 1 / tests if the input is zero.
-  | ⦃0, 0, 0, 1, 0, 1, 1, 0⦄ => Rinst.and -- 0x16 / 2 / 1 / bitwise and operation.
-  | ⦃0, 0, 0, 1, 0, 1, 1, 1⦄ => Rinst.or -- 0x17 / 2 / 1 / bitwise or operation.
-  | ⦃0, 0, 0, 1, 1, 0, 0, 0⦄ => Rinst.xor -- 0x18 / 2 / 1 / bitwise xor operation.
-  | ⦃0, 0, 0, 1, 1, 0, 0, 1⦄ => Rinst.not -- 0x19 / 1 / 1 / bitwise not operation.
-  | ⦃0, 0, 0, 1, 1, 0, 1, 0⦄ => Rinst.byte -- 0x1a / 2 / 1 / retrieve a single byte from a word.
-  | ⦃0, 0, 0, 1, 1, 0, 1, 1⦄ => Rinst.shl -- 0x1b / 2 / 1 / logical shift right operation.
-  | ⦃0, 0, 0, 1, 1, 1, 0, 0⦄ => Rinst.shr -- 0x1c / 2 / 1 / logical shift left operation.
-  | ⦃0, 0, 0, 1, 1, 1, 0, 1⦄ => Rinst.sar -- 0x1d / 2 / 1 / arithmetic (signed) shift right operation.
-  | ⦃0, 0, 1, 0, 0, 0, 0, 0⦄ => Rinst.kec -- 0x20 / 2 / 1 / compute Keccak-256 hash.
-  | ⦃0, 0, 1, 1, 0, 0, 0, 0⦄ => Rinst.address -- 0x30 / 0 / 1 / Get the address of the currently executing account.
-  | ⦃0, 0, 1, 1, 0, 0, 0, 1⦄ => Rinst.balance -- 0x31 / 1 / 1 / Get the balance of the specified account.
-  | ⦃0, 0, 1, 1, 0, 0, 1, 0⦄ => Rinst.origin -- 0x32 / 0 / 1 / Get the address that initiated the current transaction.
-  | ⦃0, 0, 1, 1, 0, 0, 1, 1⦄ => Rinst.caller -- 0x33 / 0 / 1 / Get the address that directly called the currently executing contract.
-  | ⦃0, 0, 1, 1, 0, 1, 0, 0⦄ => Rinst.callvalue -- 0x34 / 0 / 1 / Get the value (in wei) sent with the current transaction.
-  | ⦃0, 0, 1, 1, 0, 1, 0, 1⦄ => Rinst.calldataload -- 0x35 / 1 / 1 / Load input data from the current transaction.
-  | ⦃0, 0, 1, 1, 0, 1, 1, 0⦄ => Rinst.calldatasize -- 0x36 / 0 / 1 / Get the size of the input data from the current transaction.
-  | ⦃0, 0, 1, 1, 0, 1, 1, 1⦄ => Rinst.calldatacopy -- 0x37 / 3 / 0 / Copy input data from the current transaction to memory.
-  | ⦃0, 0, 1, 1, 1, 0, 0, 0⦄ => Rinst.codesize -- 0x38 / 0 / 1 / Get the size of the code of the currently executing contract.
-  | ⦃0, 0, 1, 1, 1, 0, 0, 1⦄ => Rinst.codecopy -- 0x39 / 3 / 0 / Copy the code of the currently executing contract to memory.
-  | ⦃0, 0, 1, 1, 1, 0, 1, 0⦄ => Rinst.gasprice -- 0x3a / 0 / 1 / Get the gas price of the current transaction.
-  | ⦃0, 0, 1, 1, 1, 0, 1, 1⦄ => Rinst.extcodesize -- 0x3b / 1 / 1 / Get the size of the code of an external account.
-  | ⦃0, 0, 1, 1, 1, 1, 0, 0⦄ => Rinst.extcodecopy -- 0x3c / 4 / 0 / Copy the code of an external account to memory.
-  | ⦃0, 0, 1, 1, 1, 1, 0, 1⦄ => Rinst.retdatasize -- 0x3d / 0 / 1 / Get the size of the output data from the previous call.
-  | ⦃0, 0, 1, 1, 1, 1, 1, 0⦄ => Rinst.retdatacopy -- 0x3e / 3 / 0 / Copy output data from the previous call to memory.
-  | ⦃0, 0, 1, 1, 1, 1, 1, 1⦄ => Rinst.extcodehash -- 0x3f / 1 / 1 / Get the code hash of an external account.
-  | ⦃0, 1, 0, 0, 0, 0, 0, 0⦄ => Rinst.blockhash -- 0x40 / 1 / 1 / get the hash of the specified block.
-  | ⦃0, 1, 0, 0, 0, 0, 0, 1⦄ => Rinst.coinbase -- 0x41 / 0 / 1 / get the address of the current block's miner.
-  | ⦃0, 1, 0, 0, 0, 0, 1, 0⦄ => Rinst.timestamp -- 0x42 / 0 / 1 / get the timestamp of the current block.
-  | ⦃0, 1, 0, 0, 0, 0, 1, 1⦄ => Rinst.number -- 0x43 / 0 / 1 / get the current block number.
-  | ⦃0, 1, 0, 0, 0, 1, 0, 0⦄ => Rinst.prevrandao -- 0x44 / 0 / 1 / get the difficulty of the current block.
-  | ⦃0, 1, 0, 0, 0, 1, 0, 1⦄ => Rinst.gaslimit -- 0x45 / 0 / 1 / get the gas limit of the current block.
-  | ⦃0, 1, 0, 0, 0, 1, 1, 0⦄ => Rinst.chainid -- 0x46 / 0 / 1 / get the chain id of the current blockchain.
-  | ⦃0, 1, 0, 0, 0, 1, 1, 1⦄ => Rinst.selfbalance -- 0x46 / 0 / 1 / get the chain id of the current blockchain.
-  | ⦃0, 1, 0, 0, 1, 0, 0, 0⦄ => Rinst.basefee -- 0x46 / 0 / 1 / get the chain id of the current blockchain.
-  | ⦃0, 1, 0, 1, 0, 0, 0, 0⦄ => Rinst.pop -- 0x50 / 1 / 0 / Remove an item from the stack.
-  | ⦃0, 1, 0, 1, 0, 0, 0, 1⦄ => Rinst.mload -- 0x51 / 1 / 1 / Load a word from memory.
-  | ⦃0, 1, 0, 1, 0, 0, 1, 0⦄ => Rinst.mstore -- 0x52 / 2 / 0 / Store a word in memory.
-  | ⦃0, 1, 0, 1, 0, 0, 1, 1⦄ => Rinst.mstore8 -- 0x53 / 2 / 0 / Store a byte in memory.
-  | ⦃0, 1, 0, 1, 0, 1, 0, 0⦄ => Rinst.sload -- 0x54 / 1 / 1 / Load a word from storage.
-  | ⦃0, 1, 0, 1, 0, 1, 0, 1⦄ => Rinst.sstore -- 0x55 / 2 / 0 / Store a word in storage.
-  | ⦃0, 1, 0, 1, 1, 0, 0, 0⦄ => Rinst.pc -- 0x58 / 0 / 1 / Get the current program counter value.
-  | ⦃0, 1, 0, 1, 1, 0, 0, 1⦄ => Rinst.msize -- 0x59 / 0 / 1 / Get the size of the memory.
-  | ⦃0, 1, 0, 1, 1, 0, 1, 0⦄ => Rinst.gas -- 0x5a / 0 / 1 / Get the amount of remaining gas.
-  | ⦃1, 0, 0, 0, b0, b1, b2, b3⦄ => Rinst.dup ⟨Bits.toNat ⦃b0, b1, b2, b3⦄, Bits.toNat_lt_pow _⟩
-  | ⦃1, 0, 0, 1, b0, b1, b2, b3⦄ => Rinst.swap ⟨Bits.toNat ⦃b0, b1, b2, b3⦄, Bits.toNat_lt_pow _⟩
-  | ⦃1, 0, 1, 0, 0, 0, 0, 0⦄ => Rinst.log 0
-  | ⦃1, 0, 1, 0, 0, 0, 0, 1⦄ => Rinst.log 1
-  | ⦃1, 0, 1, 0, 0, 0, 1, 0⦄ => Rinst.log 2
-  | ⦃1, 0, 1, 0, 0, 0, 1, 1⦄ => Rinst.log 3
-  | ⦃1, 0, 1, 0, 0, 1, 0, 0⦄ => Rinst.log 4
-  | _ => Rinst.invalid
+def Byte.toRinst? : Byte → Option Rinst
+  | ⦃0, 0, 0, 0, 0, 0, 0, 1⦄ => some .add -- 0x01 / 2 / 1 / addition operation.
+  | ⦃0, 0, 0, 0, 0, 0, 1, 0⦄ => some .mul -- 0x02 / 2 / 1 / multiplication operation.
+  | ⦃0, 0, 0, 0, 0, 0, 1, 1⦄ => some .sub -- 0x03 / 2 / 1 / subtraction operation.
+  | ⦃0, 0, 0, 0, 0, 1, 0, 0⦄ => some .div -- 0x04 / 2 / 1 / integer division operation.
+  | ⦃0, 0, 0, 0, 0, 1, 0, 1⦄ => some .sdiv -- 0x05 / 2 / 1 / signed integer division operation.
+  | ⦃0, 0, 0, 0, 0, 1, 1, 0⦄ => some .mod -- 0x06 / 2 / 1 / modulo operation.
+  | ⦃0, 0, 0, 0, 0, 1, 1, 1⦄ => some .smod -- 0x07 / 2 / 1 / signed modulo operation.
+  | ⦃0, 0, 0, 0, 1, 0, 0, 0⦄ => some .addmod -- 0x08 / 3 / 1 / modulo addition operation.
+  | ⦃0, 0, 0, 0, 1, 0, 0, 1⦄ => some .mulmod -- 0x09 / 3 / 1 / modulo multiplication operation.
+  | ⦃0, 0, 0, 0, 1, 0, 1, 0⦄ => some .exp -- 0x0a / 2 / 1 / exponentiation operation.
+  | ⦃0, 0, 0, 0, 1, 0, 1, 1⦄ => some .signextend -- 0x0b / 2 / 1 / sign extend operation.
+  | ⦃0, 0, 0, 1, 0, 0, 0, 0⦄ => some .lt -- 0x10 / 2 / 1 / less-than comparison.
+  | ⦃0, 0, 0, 1, 0, 0, 0, 1⦄ => some .gt -- 0x11 / 2 / 1 / greater-than comparison.
+  | ⦃0, 0, 0, 1, 0, 0, 1, 0⦄ => some .slt -- 0x12 / 2 / 1 / signed less-than comparison.
+  | ⦃0, 0, 0, 1, 0, 0, 1, 1⦄ => some .sgt -- 0x13 / 2 / 1 / signed greater-than comparison.
+  | ⦃0, 0, 0, 1, 0, 1, 0, 0⦄ => some .eq -- 0x14 / 2 / 1 / equality comparison.
+  | ⦃0, 0, 0, 1, 0, 1, 0, 1⦄ => some .iszero -- 0x15 / 1 / 1 / tests if the input is zero.
+  | ⦃0, 0, 0, 1, 0, 1, 1, 0⦄ => some .and -- 0x16 / 2 / 1 / bitwise and operation.
+  | ⦃0, 0, 0, 1, 0, 1, 1, 1⦄ => some .or -- 0x17 / 2 / 1 / bitwise or operation.
+  | ⦃0, 0, 0, 1, 1, 0, 0, 0⦄ => some .xor -- 0x18 / 2 / 1 / bitwise xor operation.
+  | ⦃0, 0, 0, 1, 1, 0, 0, 1⦄ => some .not -- 0x19 / 1 / 1 / bitwise not operation.
+  | ⦃0, 0, 0, 1, 1, 0, 1, 0⦄ => some .byte -- 0x1a / 2 / 1 / retrieve a single byte from a word.
+  | ⦃0, 0, 0, 1, 1, 0, 1, 1⦄ => some .shl -- 0x1b / 2 / 1 / logical shift right operation.
+  | ⦃0, 0, 0, 1, 1, 1, 0, 0⦄ => some .shr -- 0x1c / 2 / 1 / logical shift left operation.
+  | ⦃0, 0, 0, 1, 1, 1, 0, 1⦄ => some .sar -- 0x1d / 2 / 1 / arithmetic (signed) shift right operation.
+  | ⦃0, 0, 1, 0, 0, 0, 0, 0⦄ => some .kec -- 0x20 / 2 / 1 / compute Keccak-256 hash.
+  | ⦃0, 0, 1, 1, 0, 0, 0, 0⦄ => some .address -- 0x30 / 0 / 1 / Get the address of the currently executing account.
+  | ⦃0, 0, 1, 1, 0, 0, 0, 1⦄ => some .balance -- 0x31 / 1 / 1 / Get the balance of the specified account.
+  | ⦃0, 0, 1, 1, 0, 0, 1, 0⦄ => some .origin -- 0x32 / 0 / 1 / Get the address that initiated the current transaction.
+  | ⦃0, 0, 1, 1, 0, 0, 1, 1⦄ => some .caller -- 0x33 / 0 / 1 / Get the address that directly called the currently executing contract.
+  | ⦃0, 0, 1, 1, 0, 1, 0, 0⦄ => some .callvalue -- 0x34 / 0 / 1 / Get the value (in wei) sent with the current transaction.
+  | ⦃0, 0, 1, 1, 0, 1, 0, 1⦄ => some .calldataload -- 0x35 / 1 / 1 / Load input data from the current transaction.
+  | ⦃0, 0, 1, 1, 0, 1, 1, 0⦄ => some .calldatasize -- 0x36 / 0 / 1 / Get the size of the input data from the current transaction.
+  | ⦃0, 0, 1, 1, 0, 1, 1, 1⦄ => some .calldatacopy -- 0x37 / 3 / 0 / Copy input data from the current transaction to memory.
+  | ⦃0, 0, 1, 1, 1, 0, 0, 0⦄ => some .codesize -- 0x38 / 0 / 1 / Get the size of the code of the currently executing contract.
+  | ⦃0, 0, 1, 1, 1, 0, 0, 1⦄ => some .codecopy -- 0x39 / 3 / 0 / Copy the code of the currently executing contract to memory.
+  | ⦃0, 0, 1, 1, 1, 0, 1, 0⦄ => some .gasprice -- 0x3a / 0 / 1 / Get the gas price of the current transaction.
+  | ⦃0, 0, 1, 1, 1, 0, 1, 1⦄ => some .extcodesize -- 0x3b / 1 / 1 / Get the size of the code of an external account.
+  | ⦃0, 0, 1, 1, 1, 1, 0, 0⦄ => some .extcodecopy -- 0x3c / 4 / 0 / Copy the code of an external account to memory.
+  | ⦃0, 0, 1, 1, 1, 1, 0, 1⦄ => some .retdatasize -- 0x3d / 0 / 1 / Get the size of the output data from the previous call.
+  | ⦃0, 0, 1, 1, 1, 1, 1, 0⦄ => some .retdatacopy -- 0x3e / 3 / 0 / Copy output data from the previous call to memory.
+  | ⦃0, 0, 1, 1, 1, 1, 1, 1⦄ => some .extcodehash -- 0x3f / 1 / 1 / Get the code hash of an external account.
+  | ⦃0, 1, 0, 0, 0, 0, 0, 0⦄ => some .blockhash -- 0x40 / 1 / 1 / get the hash of the specified block.
+  | ⦃0, 1, 0, 0, 0, 0, 0, 1⦄ => some .coinbase -- 0x41 / 0 / 1 / get the address of the current block's miner.
+  | ⦃0, 1, 0, 0, 0, 0, 1, 0⦄ => some .timestamp -- 0x42 / 0 / 1 / get the timestamp of the current block.
+  | ⦃0, 1, 0, 0, 0, 0, 1, 1⦄ => some .number -- 0x43 / 0 / 1 / get the current block number.
+  | ⦃0, 1, 0, 0, 0, 1, 0, 0⦄ => some .prevrandao -- 0x44 / 0 / 1 / get the difficulty of the current block.
+  | ⦃0, 1, 0, 0, 0, 1, 0, 1⦄ => some .gaslimit -- 0x45 / 0 / 1 / get the gas limit of the current block.
+  | ⦃0, 1, 0, 0, 0, 1, 1, 0⦄ => some .chainid -- 0x46 / 0 / 1 / get the chain id of the current blockchain.
+  | ⦃0, 1, 0, 0, 0, 1, 1, 1⦄ => some .selfbalance -- 0x46 / 0 / 1 / get the chain id of the current blockchain.
+  | ⦃0, 1, 0, 0, 1, 0, 0, 0⦄ => some .basefee -- 0x46 / 0 / 1 / get the chain id of the current blockchain.
+  | ⦃0, 1, 0, 1, 0, 0, 0, 0⦄ => some .pop -- 0x50 / 1 / 0 / Remove an item from the stack.
+  | ⦃0, 1, 0, 1, 0, 0, 0, 1⦄ => some .mload -- 0x51 / 1 / 1 / Load a word from memory.
+  | ⦃0, 1, 0, 1, 0, 0, 1, 0⦄ => some .mstore -- 0x52 / 2 / 0 / Store a word in memory.
+  | ⦃0, 1, 0, 1, 0, 0, 1, 1⦄ => some .mstore8 -- 0x53 / 2 / 0 / Store a byte in memory.
+  | ⦃0, 1, 0, 1, 0, 1, 0, 0⦄ => some .sload -- 0x54 / 1 / 1 / Load a word from storage.
+  | ⦃0, 1, 0, 1, 0, 1, 0, 1⦄ => some .sstore -- 0x55 / 2 / 0 / Store a word in storage.
+  | ⦃0, 1, 0, 1, 1, 0, 0, 0⦄ => some .pc -- 0x58 / 0 / 1 / Get the current program counter value.
+  | ⦃0, 1, 0, 1, 1, 0, 0, 1⦄ => some .msize -- 0x59 / 0 / 1 / Get the size of the memory.
+  | ⦃0, 1, 0, 1, 1, 0, 1, 0⦄ => some .gas -- 0x5a / 0 / 1 / Get the amount of remaining gas.
+  | ⦃1, 0, 0, 0, b0, b1, b2, b3⦄ => some (.dup ⟨Bits.toNat ⦃b0, b1, b2, b3⦄, Bits.toNat_lt_pow _⟩)
+  | ⦃1, 0, 0, 1, b0, b1, b2, b3⦄ => some (.swap ⟨Bits.toNat ⦃b0, b1, b2, b3⦄, Bits.toNat_lt_pow _⟩)
+  | ⦃1, 0, 1, 0, 0, 0, 0, 0⦄ => some (.log 0)
+  | ⦃1, 0, 1, 0, 0, 0, 0, 1⦄ => some (.log 1)
+  | ⦃1, 0, 1, 0, 0, 0, 1, 0⦄ => some (.log 2)
+  | ⦃1, 0, 1, 0, 0, 0, 1, 1⦄ => some (.log 3)
+  | ⦃1, 0, 1, 0, 0, 1, 0, 0⦄ => some (.log 4)
+  | _ => none
 
-lemma dup_toByte_toRinst : ∀ n, Byte.toRinst (Rinst.dup n).toByte = Rinst.dup n
+
+lemma dup_toByte_toRinst? :
+  ∀ n, Byte.toRinst? (Rinst.dup n).toByte = some (.dup n)
   | 0 => rfl
   | 1 => rfl
   | 2 => rfl
@@ -1701,7 +1702,8 @@ lemma dup_toByte_toRinst : ∀ n, Byte.toRinst (Rinst.dup n).toByte = Rinst.dup 
     rw [← Nat.not_le] at h
     cases h (Nat.le_add_left _ _)
 
-lemma swap_toByte_toRinst : ∀ n, Byte.toRinst (Rinst.swap n).toByte = Rinst.swap n
+lemma swap_toByte_toRinst?
+  : ∀ n, Byte.toRinst? (Rinst.swap n).toByte = some (.swap n)
   | 0 => rfl
   | 1 => rfl
   | 2 => rfl
@@ -1722,7 +1724,8 @@ lemma swap_toByte_toRinst : ∀ n, Byte.toRinst (Rinst.swap n).toByte = Rinst.sw
     rw [← Nat.not_le] at h
     cases h (Nat.le_add_left _ _)
 
-lemma log_toByte_toRinst : ∀ n, Byte.toRinst (Rinst.log n).toByte = Rinst.log n
+lemma log_toByte_toRinst? :
+  ∀ n, Byte.toRinst? (Rinst.log n).toByte = some (.log n)
   | 0 => rfl
   | 1 => rfl
   | 2 => rfl
@@ -1732,53 +1735,60 @@ lemma log_toByte_toRinst : ∀ n, Byte.toRinst (Rinst.log n).toByte = Rinst.log 
     rw [← Nat.not_le] at h
     cases h (Nat.le_add_left _ _)
 
-lemma toByte_toRinst {o : Rinst} : Byte.toRinst o.toByte = o := by
-  cases o <;> try {rfl}
-  · apply dup_toByte_toRinst
-  · apply swap_toByte_toRinst
-  · apply log_toByte_toRinst
+lemma toByte_toRinst? {i : Rinst} : Byte.toRinst? i.toByte = some i := by
+  cases i <;> try {rfl}
+  · apply dup_toByte_toRinst?
+  · apply swap_toByte_toRinst?
+  · apply log_toByte_toRinst?
 
-def Byte.toXinst : Byte → Xinst
-  | ⦃1, 1, 1, 1, 0, 0, 0, 0⦄ => Xinst.create
-  | ⦃1, 1, 1, 1, 0, 0, 0, 1⦄ => Xinst.call
-  | ⦃1, 1, 1, 1, 0, 0, 1, 0⦄ => Xinst.callcode
-  | ⦃1, 1, 1, 1, 0, 1, 0, 0⦄ => Xinst.delcall
-  | ⦃1, 1, 1, 1, 0, 1, 0, 1⦄ => Xinst.create2
-  | _                        => Xinst.statcall
+def Byte.toXinst? : Byte → Option Xinst
+  | ⦃1, 1, 1, 1, 0, 0, 0, 0⦄ => some .create
+  | ⦃1, 1, 1, 1, 0, 0, 0, 1⦄ => some .call
+  | ⦃1, 1, 1, 1, 0, 0, 1, 0⦄ => some .callcode
+  | ⦃1, 1, 1, 1, 0, 1, 0, 0⦄ => some .delcall
+  | ⦃1, 1, 1, 1, 0, 1, 0, 1⦄ => some .create2
+  | ⦃1, 1, 1, 1, 1, 0, 1, 0⦄ => some .statcall
+  | _                        => none
 
-def Byte.toJinst : Byte → Jinst
-  | ⦃0, 1, 0, 1, 0, 1, 1, 0⦄ => Jinst.jump
-  | ⦃0, 1, 0, 1, 0, 1, 1, 1⦄ => Jinst.jumpi
-  | _ => Jinst.jumpdest
+def Byte.toJinst? : Byte → Option Jinst
+  | ⦃0, 1, 0, 1, 0, 1, 1, 0⦄ => some .jump
+  | ⦃0, 1, 0, 1, 0, 1, 1, 1⦄ => some .jumpi
+  | ⦃0, 1, 0, 1, 1, 0, 1, 1⦄ => some .jumpdest
+  | _ => none
 
-def Byte.toHinst : Byte → Hinst
-  | ⦃0, 0, 0, 0, 0, 0, 0, 0⦄ => Hinst.stop
-  | ⦃1, 1, 1, 1, 0, 0, 1, 1⦄ => Hinst.ret
-  | ⦃1, 1, 1, 1, 1, 1, 0, 1⦄ => Hinst.rev
-  | _ => Hinst.dest
+def Byte.toLinst? : Byte → Option Linst
+  | ⦃0, 0, 0, 0, 0, 0, 0, 0⦄ => some .stop
+  | ⦃1, 1, 1, 1, 0, 0, 1, 1⦄ => some .ret
+  | ⦃1, 1, 1, 1, 1, 1, 0, 1⦄ => some .rev
+  | ⦃1, 1, 1, 1, 1, 1, 1, 1⦄ => some .dest
+  | ⦃1, 1, 1, 1, 1, 1, 1, 0⦄ => some .invalid
+  | _ => none
 
-lemma toByte_toXinst {o : Xinst} :
-  Byte.toXinst o.toByte = o := by cases o <;> rfl
-lemma toByte_toJinst {o : Jinst} :
-  Byte.toJinst o.toByte = o := by cases o <;> rfl
-lemma toByte_toHinst {o : Hinst} :
-  Byte.toHinst o.toByte = o := by cases o <;> rfl
+lemma toByte_toXinst? {o : Xinst} :
+  Byte.toXinst? o.toByte = some o := by cases o <;> rfl
+lemma toByte_toJinst? {o : Jinst} :
+  Byte.toJinst? o.toByte = some o := by cases o <;> rfl
+lemma toByte_toLinst? {o : Linst} :
+  Byte.toLinst? o.toByte = some o := by cases o <;> rfl
 
 lemma Rinst.at_unique {e pc o o'} (h : At e pc o) (h' : At e pc o') : o = o' := by
-  rw [← @toByte_toRinst o, ← @toByte_toRinst o']
-
+  apply Option.some_injective
+  rw [← @toByte_toRinst? o, ← @toByte_toRinst? o']
   rw [Option.some_injective _ <| Eq.trans h.symm h']
 
 lemma Xinst.at_unique {e pc o o'} (h : At e pc o) (h' : At e pc o') : o = o' := by
-  rw [← @toByte_toXinst o, ← @toByte_toXinst o']
+  apply Option.some_injective
+  rw [← @toByte_toXinst? o, ← @toByte_toXinst? o']
   rw [Option.some_injective _ <| Eq.trans h.symm h']
 
 lemma Jinst.at_unique {e pc o o'} (h : At e pc o) (h' : At e pc o') : o = o' := by
-  rw [← @toByte_toJinst o, ← @toByte_toJinst o']
+  apply Option.some_injective
+  rw [← @toByte_toJinst? o, ← @toByte_toJinst? o']
   rw [Option.some_injective _ <| Eq.trans h.symm h']
 
-lemma Hinst.at_unique {e pc o o'} (h : At e pc o) (h' : At e pc o') : o = o' := by
-  rw [← @toByte_toHinst o, ← @toByte_toHinst o']
+lemma Linst.at_unique {e pc o o'} (h : At e pc o) (h' : At e pc o') : o = o' := by
+  apply Option.some_injective
+  rw [← @toByte_toLinst? o, ← @toByte_toLinst? o']
   rw [Option.some_injective _ <| Eq.trans h.symm h']
 
 lemma pushAt_unique {e pc bs bs'}
@@ -1833,7 +1843,6 @@ inductive Rinst.range : Rinst → Prop
   | x8 : ∀ hx, o.toByte = (Ox x8 hx) → Rinst.range o
   | x9 : ∀ hx, o.toByte = (Ox x9 hx) → Rinst.range o
   | xA : ∀ hx, o.toByte = (Ox xA hx) → Rinst.range o
-  | xFE : Rinst.range Rinst.invalid
 
 lemma Rinst.range_toByte (o : Rinst) : Rinst.range o := by
   cases o
@@ -1846,7 +1855,6 @@ lemma Rinst.range_toByte (o : Rinst) : Rinst.range o := by
   repeat {apply Rinst.range.x8; rfl}
   repeat {apply Rinst.range.x9; rfl}
   repeat {apply Rinst.range.xA; rfl}
-  apply Rinst.range.xFE
 
 lemma Xinst.toByte_eq_ox (o : Xinst) : ∃ hx, o.toByte = Ox xF hx := by
   cases o <;> refine ⟨_, rfl⟩
@@ -1855,21 +1863,20 @@ lemma opToByte_ne_copToByte {o : Rinst} {o' : Xinst} : o.toByte ≠ o'.toByte :=
   cases Rinst.range_toByte o <;>
   try { apply @Eq.rec Byte _ (λ b h_eq => (b ≠ o'.toByte)) _ _ (Eq.symm (by assumption));
         rcases Xinst.toByte_eq_ox o' with ⟨hx, h_eq⟩; rw [h_eq]; ox_ne_left' }
-  cases o' <;> ox_ne
 
 lemma opToByte_ne_jopToByte {o : Rinst} {o' : Jinst} : o.toByte ≠ o'.toByte := by
   cases o <;> cases o' <;> ox_ne
 
-lemma opToByte_ne_hopToByte {o : Rinst} {o' : Hinst} : o.toByte ≠ o'.toByte := by
+lemma opToByte_ne_hopToByte {o : Rinst} {o' : Linst} : o.toByte ≠ o'.toByte := by
   cases o <;> cases o' <;> ox_ne
 
 lemma copToByte_ne_jopToByte {o : Xinst} {o' : Jinst} : o.toByte ≠ o'.toByte := by
   cases o <;> cases o' <;> ox_ne
 
-lemma jopToByte_ne_hopToByte {o : Jinst} {o' : Hinst} : o.toByte ≠ o'.toByte := by
+lemma jopToByte_ne_hopToByte {o : Jinst} {o' : Linst} : o.toByte ≠ o'.toByte := by
   cases o <;> cases o' <;> ox_ne
 
-lemma copToByte_ne_hopToByte {o : Xinst} {o' : Hinst} : o.toByte ≠ o'.toByte := by
+lemma copToByte_ne_hopToByte {o : Xinst} {o' : Linst} : o.toByte ≠ o'.toByte := by
   cases o <;> cases o' <;> ox_ne
 
 lemma eq_ox {b : Byte} {hx0 hx1 : Nib} :
@@ -1927,7 +1934,7 @@ lemma copToByte_ne_pushToByte {o : Xinst} {bs : Bytes} :
 lemma jopToByte_ne_pushToByte {o : Jinst} {bs : Bytes} :
     bs.length ≤ 32 → o.toByte ≠ pushToByte bs := by intro h; cases o <;> ne_pushToByte
 
-lemma hopToByte_ne_pushToByte {o : Hinst} {bs : Bytes} :
+lemma hopToByte_ne_pushToByte {o : Linst} {bs : Bytes} :
     bs.length ≤ 32 → o.toByte ≠ pushToByte bs := by intro h; cases o <;> ne_pushToByte
 
 lemma not_cop_at_of_op_at {e pc} {o : Rinst} {o' : Xinst} : o.At e pc → ¬ o'.At e pc := by
@@ -1939,13 +1946,13 @@ lemma not_jop_at_of_cop_at {e pc} {o : Xinst} {o' : Jinst} : o.At e pc → ¬ o'
 lemma not_jop_at_of_op_at {e pc} {o : Rinst} {o' : Jinst} : o.At e pc → ¬ o'.At e pc := by
   intros h h'; cases opToByte_ne_jopToByte <| Option.some_inj.mp <| Eq.trans h.symm h'
 
-lemma not_hop_at_of_op_at {e pc} {o : Rinst} {o' : Hinst} : o.At e pc → ¬ o'.At e pc := by
+lemma not_hop_at_of_op_at {e pc} {o : Rinst} {o' : Linst} : o.At e pc → ¬ o'.At e pc := by
   intros h h'; cases opToByte_ne_hopToByte <| Option.some_inj.mp <| Eq.trans h.symm h'
 
-lemma not_hop_at_of_cop_at {e pc} {o : Xinst} {o' : Hinst} : o.At e pc → ¬ o'.At e pc := by
+lemma not_hop_at_of_cop_at {e pc} {o : Xinst} {o' : Linst} : o.At e pc → ¬ o'.At e pc := by
   intros h h'; cases copToByte_ne_hopToByte <| Option.some_inj.mp <| Eq.trans h.symm h'
 
-lemma not_hop_at_of_jop_at {e pc} {o : Jinst} {o' : Hinst} : o.At e pc → ¬ o'.At e pc := by
+lemma not_hop_at_of_jop_at {e pc} {o : Jinst} {o' : Linst} : o.At e pc → ¬ o'.At e pc := by
   intros h h'; cases jopToByte_ne_hopToByte <| Option.some_inj.mp <| Eq.trans h.symm h'
 
 
@@ -1967,13 +1974,13 @@ lemma not_pushAt_of_jop_at {e pc} {o : Jinst} {bs : Bytes} :
   cases jopToByte_ne_pushToByte h'.right <| Option.some_inj.mp
      <| .trans h.symm <| List.get?_eq_of_slice h'.left
 
-lemma not_pushAt_of_hop_at {e pc} {o : Hinst} {bs : Bytes} : o.At e pc → ¬ PushAt e pc bs := by
+lemma not_pushAt_of_hop_at {e pc} {o : Linst} {bs : Bytes} : o.At e pc → ¬ PushAt e pc bs := by
   intros h h'
   cases hopToByte_ne_pushToByte h'.right <| Option.some_inj.mp
      <| .trans h.symm <| List.get?_eq_of_slice h'.left
 
-lemma Hinst.run_of_at {e s pc o r} (cr : Exec e s pc r) (h_at : Hinst.At e pc o) :
-    Hinst.Run e s o r := by
+lemma Linst.run_of_at {e s pc o r} (cr : Exec e s pc r) (h_at : Linst.At e pc o) :
+    Linst.Run e s o r := by
   cases cr with
   | step =>
     rename Step _ _ _ _ _ => h_step; cases h_step
@@ -1985,8 +1992,8 @@ lemma Hinst.run_of_at {e s pc o r} (cr : Exec e s pc r) (h_at : Hinst.At e pc o)
   | exec => cases not_hop_at_of_cop_at asm h_at
   | halt =>
     rename Halt _ _ _ _ => h_halt; cases h_halt
-    · rw [Hinst.at_unique h_at asm]; assumption
-    · simp [Hinst.At] at h_at
+    · rw [Linst.at_unique h_at asm]; assumption
+    · simp [Linst.At] at h_at
 
 lemma Stack.push_cons_pop_cons
     {x y} {xs ys} {s s' s''}
@@ -2033,7 +2040,7 @@ lemma State.push_nil {s s'} (h : State.Push [] s s') : s = s' := by
     simp [Stack.Push, Split, Rels.dft] at *
     refine' ⟨_, _, _, h.symm, _, _, _⟩ <;> assumption
 
-lemma Inst.at_iff_slice {e pc} {i : Inst} :
+lemma Ninst.at_iff_slice {e pc} {i : Ninst} :
     i.At e pc ↔ List.Slice e.code pc i.toBytes := by
   cases i with
   | reg => simp [At, Rinst.At, toBytes, List.length, List.slice_iff_get?_eq]
@@ -2373,10 +2380,10 @@ lemma push_of_pushAt {e s pc bs r} (cr : Exec e s pc r) (h_at :PushAt e pc bs) :
 lemma length_pushToBytes {bs} : (pushToBytes bs).length = bs.length + 1 := by
   simp [pushToBytes, List.length]
 
-lemma Inst.run_of_at {e s pc i r}
-    (cr : Exec e s pc r) (h_at : Inst.At e pc i) :
+lemma Ninst.run_of_at {e s pc i r}
+    (cr : Exec e s pc r) (h_at : Ninst.At e pc i) :
     ∃ (s' : State) (cr' : Exec e s' (pc + i.toBytes.length) r),
-      Inst.Run e s i s' ∧
+      Ninst.Run e s i s' ∧
       Exec'.Rel ⟨e, s', pc + i.toBytes.length, r, cr'⟩ ⟨e, s, pc,r, cr⟩ := by
   cases i with
   | reg o =>
@@ -2388,7 +2395,7 @@ lemma Inst.run_of_at {e s pc i r}
   | push bs h =>
     rcases push_of_pushAt cr h_at with ⟨s', cr', h_push, h_prec⟩
     simp [toBytes]; rw [length_pushToBytes, ← Nat.add_assoc]
-    refine' ⟨s', _, _, h_prec⟩; exact Inst.Run.push _ h_push
+    refine' ⟨s', _, _, h_prec⟩; exact Ninst.Run.push _ h_push
 
 lemma Jinst.run_of_at {e s pc o r} (cr : Exec e s pc r) (h_at : Jinst.At e pc o) :
     ∃ (s' : State) (pc' : Nat), ∃ (cr' : Exec e s' pc' r),
@@ -2572,14 +2579,14 @@ theorem correct_core (f : Func) (fs : List Func) :
   apply Exec'.strongRec; intro pk ih p h_eq h_sub
   match p with
   | .last o =>
-    apply Func.Run.last <| Hinst.run_of_at pk.cr <| List.get?_eq_of_slice h_sub
+    apply Func.Run.last <| Linst.run_of_at pk.cr <| List.get?_eq_of_slice h_sub
   | .next i p =>
     rcases of_subcode h_sub with ⟨cd, h_eq', h_slice⟩; clear h_sub
     rcases of_bind_eq_some h_eq' with ⟨cd', h_eq'', h_rw⟩; clear h_eq'
     simp [pure] at h_rw; rw [← h_rw] at h_slice; clear h_rw cd
-    have h_at : Inst.At pk.e pk.pc i := by
-      rw [Inst.at_iff_slice]; apply List.slice_prefix h_slice
-    rcases Inst.run_of_at pk.cr h_at with ⟨s', cr', h_run, h_prec⟩
+    have h_at : Ninst.At pk.e pk.pc i := by
+      rw [Ninst.at_iff_slice]; apply List.slice_prefix h_slice
+    rcases Ninst.run_of_at pk.cr h_at with ⟨s', cr', h_run, h_prec⟩
     have h_run' : Func.Run (f :: fs) pk.e s' p pk.r := by
       apply ih ⟨pk.e, s', _, pk.r, cr'⟩ (Exec'.lt_of_prec h_prec) p
       · simp; apply h_eq
@@ -3037,7 +3044,7 @@ lemma prefix_of_calldatacopy {e x y z xs} {s s' : State} :
   rw [hx, hy, hz] at h1; apply of_append_pref h2 h1
 
 lemma Line.spx_scheme {e s' i l xs xs' ys}
-    (h : ∀ s0 s1, Inst.Run e s0 i s1 → (xs <<+ s0.stk) → (xs' <<+ s1.stk))
+    (h : ∀ s0 s1, Ninst.Run e s0 i s1 → (xs <<+ s0.stk) → (xs' <<+ s1.stk))
     (h' : ∀ s : State, (xs' <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) :
     ∀ s : State, (xs <<+ s.stk) → Line.Run e s (i :: l) s'→ (ys <<+ s'.stk) := by
   intros s h_pfx h_run
@@ -3250,39 +3257,39 @@ partial def line_pref : Lean.Elab.Tactic.TacticM Unit :=
     | ~q([]) => "Line.spx_unwrap".apply
     | ~q($ix :: _) =>
       match ix with
-      | ~q(Inst.dup $nx) =>
+      | ~q(Ninst.dup $nx) =>
         let n ← unsafe Lean.Meta.evalExpr (Fin 16) q(Fin 16) nx
         "Line.spx_dup".apply; show_nth' n.val
-      | ~q(Inst.log $nx) =>
+      | ~q(Ninst.log $nx) =>
         let n ← unsafe Lean.Meta.evalExpr (Fin 5) q(Fin 5) nx
         let x ← get_take (n.val + 2) px
         Lean.Expr.apply <| Lean.mkApp "Line.spx_log".toExpr x
         Lean.Elab.Tactic.evalRefl Lean.Syntax.missing
         --appRefl
-      | ~q(Inst.swap $nx) =>
+      | ~q(Ninst.swap $nx) =>
         let n ← unsafe Lean.Meta.evalExpr (Fin 16) q(Fin 16) nx
         let x ← get_swap n.val px
         Lean.Expr.apply <| Lean.mkApp "Line.spx_swap".toExpr x
         show_swap' n.val
-      | ~q(Inst.pushWord _) => "Line.spx_pushWord".apply
-      | ~q(Inst.push _ _) => "Line.spx_push".apply
-      | ~q(Inst.sub) => "Line.spx_sub".apply
-      | ~q(Inst.add) => "Line.spx_add".apply
-      | ~q(Inst.pop) => "Line.spx_pop".apply
-      | ~q(Inst.sstore) => "Line.spx_sstore".apply
-      | ~q(Inst.mstore) => "Line.spx_mstore".apply
-      | ~q(Inst.lt) => "Line.spx_lt".apply
-      | ~q(Inst.gt) => "Line.spx_gt".apply
-      | ~q(Inst.eq) => "Line.spx_eq".apply
-      | ~q(Inst.not) => "Line.spx_not".apply
-      | ~q(Inst.and) => "Line.spx_and".apply
-      | ~q(Inst.or) => "Line.spx_or".apply
-      | ~q(Inst.shl) => "Line.spx_shl".apply
-      | ~q(Inst.shr) => "Line.spx_shr".apply
-      | ~q(Inst.iszero) => "Line.spx_iszero".apply
-      | ~q(Inst.caller) => "Line.spx_caller".apply
-      | ~q(Inst.callvalue) => "Line.spx_callvalue".apply
-      | ~q(Inst.calldatacopy) => "Line.spx_calldatacopy".apply
+      | ~q(Ninst.pushWord _) => "Line.spx_pushWord".apply
+      | ~q(Ninst.push _ _) => "Line.spx_push".apply
+      | ~q(Ninst.sub) => "Line.spx_sub".apply
+      | ~q(Ninst.add) => "Line.spx_add".apply
+      | ~q(Ninst.pop) => "Line.spx_pop".apply
+      | ~q(Ninst.sstore) => "Line.spx_sstore".apply
+      | ~q(Ninst.mstore) => "Line.spx_mstore".apply
+      | ~q(Ninst.lt) => "Line.spx_lt".apply
+      | ~q(Ninst.gt) => "Line.spx_gt".apply
+      | ~q(Ninst.eq) => "Line.spx_eq".apply
+      | ~q(Ninst.not) => "Line.spx_not".apply
+      | ~q(Ninst.and) => "Line.spx_and".apply
+      | ~q(Ninst.or) => "Line.spx_or".apply
+      | ~q(Ninst.shl) => "Line.spx_shl".apply
+      | ~q(Ninst.shr) => "Line.spx_shr".apply
+      | ~q(Ninst.iszero) => "Line.spx_iszero".apply
+      | ~q(Ninst.caller) => "Line.spx_caller".apply
+      | ~q(Ninst.callvalue) => "Line.spx_callvalue".apply
+      | ~q(Ninst.calldatacopy) => "Line.spx_calldatacopy".apply
       | _ => dbg_trace "line_pref : unimplemented inst"; failure
       line_pref
   | _ =>
@@ -3418,7 +3425,7 @@ def findSubscript (x : Lean.Expr) : Lean.Elab.Tactic.TacticM String := do
       | _ => failure
     | _ => failure
 
-open Inst
+open Ninst
 
 lemma branch_elim (φ : Prop) {c e s p q r}
     (hp : ([0] <<+ s.stk) → Func.Run c e s (pop ::: p) r → φ)
@@ -3714,7 +3721,7 @@ lemma State.of_pop_cons {x xs} {s s''} (h : State.Pop (x :: xs) s s'') :
 
 lemma kec_elim {e s s'} (φ : Prop)
     (h : ∀ x, Line.Run e s [pop, pop, pushWord x] s' → φ)
-    (h' : Inst.Run e s kec s') : φ := by
+    (h' : Ninst.Run e s kec s') : φ := by
   rcases opRun_of_instRun h' with ⟨x, y, h_diff⟩
   apply h (s.mem.slice x y).keccak
   rcases State.of_diff h_diff with ⟨s₁, h_pop, h_push⟩
@@ -3757,7 +3764,7 @@ lemma cdl_prepend_elim {c e s n p r} (φ : Prop)
 
 lemma sload_elim {e s s'} (φ : Prop)
     (h : ∀ x, Line.Run e s [pop, pushWord x] s' → φ)
-    (h' : Inst.Run e s sload s') : φ := by
+    (h' : Ninst.Run e s sload s') : φ := by
   rcases opRun_of_instRun h' with ⟨x, hx⟩
   rcases State.of_diff hx with ⟨s₀, h_pop, h_push⟩
   apply h (s.stor e.cta x);
