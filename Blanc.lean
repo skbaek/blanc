@@ -4,6 +4,7 @@ import Lean.Data.HashSet
 import «Blanc».Weth
 
 
+
 def List.chunksCore {ξ} (m : Nat) : Nat → List ξ → List (List ξ)
   | _, [] => [[]]
   | 0, x :: xs =>
@@ -15,14 +16,7 @@ def List.chunksCore {ξ} (m : Nat) : Nat → List ξ → List (List ξ)
     | [] => [[x]]
     | ys :: yss => (x :: ys) :: yss
 
-
 def List.chunks {ξ} (m : Nat) : List ξ → List (List ξ) := List.chunksCore m (m + 1)
-
--- #exit
--- partial def Bytes.chunks (bs : Bytes) : List Bytes :=
---   match bs.splitAt 32 with
---   | (_, []) => [bs]
---   | (bs', bs'') => bs' :: chunks bs''
 
 def Bytes.toHexLine (bs : Bytes) : String :=
   s!"hex\"{bs.toHex}\""
@@ -33,7 +27,6 @@ def WethByteCode : String :=
      "" <| List.map Bytes.toHexLine
         <| List.chunks 31 <| Option.getD weth.compile []
 
-
 inductive RLP : Type
   | bytes : Bytes → RLP
   | list : List RLP → RLP
@@ -43,13 +36,11 @@ def List.splitAt? {ξ : Type u} : Nat → List ξ → Option (List ξ × List ξ
   | _ + 1, [] => none
   | n + 1, x :: xs => .map (x :: ·) id <$> xs.splitAt? n
 
-
 def Bytes.toNat' : Nat → Bytes → Nat
   | k, [] => k
   | k, b :: bs => Bytes.toNat' ((k * 256) + b.toNat) bs
 
 def Bytes.toNat (bs : Bytes) : Nat := bs.toNat' 0
-
 
 def Nat.toBytesCore (n : Nat) : Bytes :=
   if n < 256
@@ -57,19 +48,6 @@ def Nat.toBytesCore (n : Nat) : Bytes :=
   else (n % 256).toByte :: (n / 256).toBytesCore
 
 def Nat.toBytes (n : Nat) : Bytes := n.toBytesCore.reverse
-
-def Nat.toBool : Nat → Bool
-  | 0 => 0
-  | _ => 1
-
-def Nat.toBitsAux' (n : Nat) : List Bool :=
-  if n < 2
-  then [n.toBool]
-  else (n % 2).toBool :: (n / 2).toBitsAux'
-
-def Nat.toBits' (m n : Nat) : Bits m :=
-  let bs := (List.takeD m (Nat.toBitsAux' n) 0).reverse
-  Bools.toBits m bs
 
 mutual
   def RLP.decode' : Nat → Bytes → Option (RLP × Bytes)
@@ -156,15 +134,6 @@ def Nibs.toBytes : List Nib → Option Bytes
 def Hex.toBytes (s : String) : Option Bytes :=
   s.data.mapM Hexit.toNib >>= Nibs.toBytes
 
-def notTxBytes : Bytes :=
-  (Hex.toBytes "f885800a8404c4b40094cccccccccccccccccccccccccccccccccccccccc01a4693c613900000000000000000000000000000000000000000000000000000000000000001ba0e8ff56322287185f6afd3422a825b47bf5c1a4ccf0dc0389cdc03f7c1c32b7eaa0776b02f9f5773238d3ff36b74a123f409cd6420908d7855bbe4c8ff63e00d698").getD []
-
-def badTxBytes : Bytes :=
-  (Hex.toBytes "f885800a8404c4b40094ccccc76482364981768476182936712638712ccc01a4693c613900000000000000000000000000000000000000000000000000000000000000001ba0e8ff56322287185f6afd3422a825b47bf5c1a4ccf0dc0389cdc03f7c1c32b7eaa0776b02f9f5773238d3ff36b74a123f409cd6420908d7855bbe4c8ff63e00d698").getD []
-
-def highValueTxBytes : Bytes :=
-  (Hex.toBytes "f87f800182520894095e7baea6a6c7c4c2dfeb977efac326af552d87a0ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff801ba048b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353a01fffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804").getD []
-
 def Option.toIO {ξ} (o : Option ξ) (msg : String) : IO ξ := do
   match o with
   | none => throw (IO.Error.userError msg)
@@ -202,19 +171,6 @@ def readJsonFile (filename : System.FilePath) : IO Lean.Json := do
   | .ok json => pure json
   | .error err => throw (IO.userError err)
 
--- inductive Json where
---   | null
---   | bool (b : Bool)
---   | num (n : JsonNumber)
---   | str (s : String)
---   | arr (elems : Array Json)
---   -- uses RBNode instead of RBMap because RBMap is a def
---   -- and thus currently cannot be used to define a type that
---   -- is recursive in one of its parameters
---   | obj (kvPairs : RBNode String (fun _ => Json))
---   deriving Inhabited
-
-
 mutual
   partial def StringJsons.toStrings : List ((_ : String) × Lean.Json) → List String
     | [] => []
@@ -248,13 +204,14 @@ def Bits.ordering {n} (xs ys : Bits n) : Ordering :=
 
 instance {n} : Ord (Bits n) := ⟨Bits.ordering⟩
 
--- def Stor := Lean.RBMap Word Word Ord.compare
-
 def List.compare {ξ : Type u} [Ord ξ] : List ξ → List ξ → Ordering
   | [], [] => .eq
   | [], _ :: _ => .lt
   | _ :: _, [] => .gt
-  | x :: _, y :: _ => Ord.compare x y
+  | x :: xs, y :: ys =>
+    match Ord.compare x y with
+    | .eq => List.compare xs ys
+    | o => o
 
 instance {ξ : Type u} [Ord ξ] : Ord (List ξ) := ⟨List.compare⟩
 
@@ -262,6 +219,7 @@ abbrev NTB := Lean.RBMap Nibs Bytes compare
 abbrev Stor := Lean.RBMap Word Word compare
 
 structure EnvData where
+  (baseFee : Word)
   (coinbase : Addr)
 
 structure PreData where
@@ -305,6 +263,7 @@ structure Acct where
 abbrev World' : Type := Lean.RBMap Addr Acct compare
 
 structure Test where
+  (baseFee : Word)
   (coinbase : Addr)
   (world  : World')
   (txdata : Bytes)
@@ -356,7 +315,7 @@ def longBytesToStrings (hd : String) (bs : Bytes) : List String :=
   match List.chunks 31 bs with
   | [] => [hd]
   | [bs'] => [s!"{hd} : {Bytes.toHex bs'}"]
-  | bss => "{hd} :" :: bss.map (λ bs' => pad (Bytes.toHex bs'))
+  | bss => s!"{hd} :" :: bss.map (λ bs' => pad (Bytes.toHex bs'))
 
 def txdataToStrings (tx : Bytes) : List String :=
   match List.chunks 31 tx with
@@ -364,20 +323,18 @@ def txdataToStrings (tx : Bytes) : List String :=
   | [bs] => [s!"txdata : {Bytes.toHex bs}"]
   | bss => "txdata :" :: bss.map (λ bs => pad (Bytes.toHex bs))
 
+def Word.toHex (w : Word) : String := @Bits.toHex 64 w
+
 def Stor.toStrings (s : Stor) : List String :=
   let kvs := s.toArray.toList
   let kvToStrings : Word × Word → List String :=
-    λ nb => [s!"{nb.fst.toString} : {nb.snd.toString}"]
+    λ nb => [s!"{Word.toHex nb.fst} : {Word.toHex nb.snd}"]
   fork "stor" (kvs.map kvToStrings)
 
-  -- nonce : Word)
-  -- bal : Word)
-  -- stor : Stor)
-  -- code : Bytes)
 def Acct.toStrings (s : String) (a : Acct) : List String :=
   fork s [
-    [s!"nonce : 0x{a.nonce.toHex 64}"],
-    [s!"bal : 0x{a.bal.toHex 64}"],
+    [s!"nonce : 0x{a.nonce.toHex}"],
+    [s!"bal : 0x{a.bal.toHex}"],
     a.stor.toStrings,
     longBytesToStrings "code" a.code
   ]
@@ -446,16 +403,16 @@ def Test.toStrings (t : Test) : List String :=
     [s!"coinbase : {t.coinbase.toHex 40}"],
     t.world.toStrings,
     txdataToStrings t.txdata,
-    [s!"nonce : 0x{t.nonce.toHex 64}"],
-    [s!"gas price : 0x{t.gasPrice.toHex 64}"],
-    [s!"gas limit : 0x{t.gasLimit.toHex 64}"],
+    [s!"nonce : 0x{t.nonce.toHex}"],
+    [s!"gas price : 0x{t.gasPrice.toHex}"],
+    [s!"gas limit : 0x{t.gasLimit.toHex}"],
     [s!"sender : 0x{t.sender.toHex 40}"],
     [s!"receiver : 0x{t.receiver.toHex 40}"],
-    [s!"value : 0x{t.value.toHex 64}"],
+    [s!"value : 0x{t.value.toHex}"],
     longBytesToStrings "calldata" t.calldata,
-    [s!"hash : 0x{t.hash.toHex 64}"],
-    [s!"logs : 0x{t.logs.toHex 64}"],
-    [s!"secret : 0x{t.secret.toHex 64}"]
+    [s!"hash : 0x{t.hash.toHex}"],
+    [s!"logs : 0x{t.logs.toHex}"],
+    [s!"secret : 0x{t.secret.toHex}"]
   ]
 
 def TestData.toStrings (t : TestData) : List String :=
@@ -519,9 +476,6 @@ def Lean.Json.toPostData : Json → IO PostData
     return ⟨hs, d, g, v, lg, tx⟩
   | _ => IO.throw "Json-to-PostData failed"
 
-
--- def kbAdd {ξ υ o} (s : Lean.RBMap ξ υ o) (kv : (_ : String) × Json) : IO Stor := return s
-
 def Lean.Json.toBytes (j : Json) : IO Bytes := do
   let x ← fromStr j >>= Hex.from0x
   (Hex.toBytes x).toIO ""
@@ -530,21 +484,30 @@ def Lean.Json.toBits (n : Nat) (j : Json) : IO (Bits (4 * n)) := do
   let x ← fromStr j >>= Hex.from0x
   (Hex.toBits n x).toIO ""
 
+def helper (xy :(_ : String) × Lean.Json) : IO (Word × Word) := do
+  let x ← Hex.from0x xy.fst
+  let bs ← (Hex.toBytes x).toIO ""
+  let foo ← xy.snd.toBytes
+  return ⟨Bytes.toBits 32 bs, Bytes.toBits 32 foo⟩
 
 def Lean.Json.toPreData (sj : (_ : String) × Json) : IO PreData := do
   let ax ← Hex.from0x sj.fst
   let a ← (Hex.toBits 40 ax).toIO ""
   let r ← sj.snd.fromObj
-  let b ← ((r.find Ord.compare "balance").toIO "" >>= toBytes)
+  let b ← (r.find Ord.compare "balance").toIO "" >>= toBytes
   let c ← (r.find Ord.compare "code").toIO "" >>= toBytes
-  let n ← ((r.find Ord.compare "nonce").toIO "" >>= toBytes)
-  return ⟨a, n, b, Lean.RBMap.empty, c⟩
+  let n ← (r.find Ord.compare "nonce").toIO "" >>= toBytes
+  let l ← (r.find Ord.compare "storage").toIO "" >>= fromObj
+  let s ← mapM helper l.toArray.toList
+  return ⟨a, n, b, Lean.RBMap.fromList s _, c⟩
 
 def Lean.Json.toEnvData (j : Lean.Json) : IO EnvData := do
   let r ← j.fromObj
+  let bfj ← (r.find compare "currentBaseFee").toIO "No basefee"
   let cbj ← (r.find compare "currentCoinbase").toIO "No coinbase"
+  let bf ← bfj.toBytes
   let bs ← cbj.toBytes
-  return ⟨bs.toBits 20⟩
+  return ⟨bf.toBits 32, bs.toBits 20⟩
 
 def Lean.Json.toPreDatas (j : Lean.Json) : IO (List PreData) := do
   let r ← j.fromObj
@@ -580,8 +543,6 @@ def Lean.Json.toTestData (j : Lean.Json) : IO TestData := do
   let tx ←   (r.find compare "transaction").toIO "" >>= Lean.Json.toTransactionData
   return ⟨info, env, pre, post, tx⟩
 
-
-
 def TestData.world (td : TestData) : World' :=
   let aux : PreData → (Addr × Acct) :=
     fun pd => ⟨
@@ -600,6 +561,7 @@ def getTest (td : TestData) (p : PostData) : IO Test := do
   let gl ← (List.get? td.tx.gasLimit p.gasIdx).toIO ""
   let vl ← (List.get? td.tx.value p.valueIdx).toIO ""
   return {
+    baseFee := td.env.baseFee
     coinbase := td.env.coinbase
     world := td.world
     txdata := p.txdata
@@ -614,8 +576,6 @@ def getTest (td : TestData) (p : PostData) : IO Test := do
     hash := p.hash
     logs := p.logs
   }
-
-
 
 def getTests (t : TestData) : IO (List Test) := do
   have ps := t.post.snd
@@ -640,7 +600,6 @@ def hp (ns : Nibs) (t : Bool) : Bytes :=
   | ⟨none, bs⟩ => ⦃0, 0, t, 0, 0, 0, 0, 0⦄ :: bs
   | ⟨some n, bs⟩ => (⦃0, 0, t, 1⦄ ++ n) :: bs
 
-
 def commonPrefixCore : Nibs → Nibs → Nibs
   | [], _ => []
   | _, [] => []
@@ -654,7 +613,6 @@ def commonPrefix (n : Nib) (ns : Nibs) : List Nibs → Option Nibs
     match commonPrefixCore (n :: ns) ns' with
     | [] => none
     | (n' :: ns'') => commonPrefix n' ns'' nss
-
 
 def NTB.empty : NTB := Lean.RBMap.empty
 
@@ -763,44 +721,52 @@ def Stor.toNTB (s : Stor) : NTB :=
     λ j k v =>
       j.insert
         (@Bits.toNibs 64 k.keccak)
-        (RLP.encode <| .bytes <| @Bits.toBytes 32 v)
+        (RLP.encode <| .bytes <| Bytes.sig <| @Bits.toBytes 32 v)
   Lean.RBMap.fold f NTB.empty s
 
-def PreData.toKV (a : PreData) : Nibs × Bytes :=
+def Acct.toVal (a : Acct) (w : Word) : Bytes :=
+  RLP.encode <| .list [
+    .bytes a.nonce.toBytes.sig, --a.nonce,
+    .bytes a.bal.toBytes.sig, --a.bal,
+    Word.toRLP w,
+    Word.toRLP <| Bytes.keccak a.code
+  ]
+
+def toKeyVal (pr : Addr × Acct) : Nibs × Bytes :=
+  let ad := pr.fst
+  let ac := pr.snd
   ⟨
-    @Bits.toNibs 64 (@Bits.toBytes 20 a.addr).keccak,
+    @Bits.toNibs 64 (@Bits.toBytes 20 ad).keccak,
     RLP.encode <| .list [
-      .bytes a.nonce,
-      .bytes a.bal,
-      Word.toRLP (trie a.stor.toNTB),
-      Word.toRLP <| Bytes.keccak a.code
+      .bytes ac.nonce.toBytes.sig, --a.nonce,
+      .bytes ac.bal.toBytes.sig, --a.bal,
+      Word.toRLP (trie ac.stor.toNTB),
+      Word.toRLP <| Bytes.keccak ac.code
     ]
   ⟩
-
-
-def G_initcodeword : Nat := 2
-
-def initCodeCost (cd : Bytes) : Nat :=
-  G_initcodeword * ((cd.length / 32) + if 32 ∣ cd.length then 0 else 1)
 
 def G_txcreate : Nat := 32000
 def G_accesslistaddress : Nat := 2400
 def G_accessliststorage : Nat := 1900
+def G_initcodeword : Nat := 2
 
-
+def initCodeCost (cd : Bytes) : Nat :=
+  G_initcodeword * ((cd.length / 32) + if 32 ∣ cd.length then 0 else 1)
 
 
 instance : Hashable Addr := ⟨Bits.toUInt64 ∘ @Bits.suffix 64 96⟩
 instance : Hashable (Addr × Word) := ⟨Bits.toUInt64 ∘ @Bits.suffix 64 96 ∘ Prod.fst⟩
 
 abbrev AddrSet : Type := @Std.HashSet Addr _ _ --⟨Bits.toUInt64 ∘ @Bits.suffix 64 96⟩
-abbrev StorKeySet : Type := @Std.HashSet (Addr × Word) _ _
+abbrev KeySet : Type := @Std.HashSet (Addr × Word) _ _
 
 structure Accrual where
   (dest : List Addr) -- A_s
-  (adrs : AddrSet) -- A_s
-  (keys : StorKeySet) -- A_k
+  (adrs : AddrSet) -- A_a
+  (keys : KeySet) -- A_k
   (ref : Nat) -- A_r
+  (logs : List RLP) -- A_l
+  (touched : AddrSet) -- A_t
   -- (sac : Nat) -- A_r
 
 structure Machine where
@@ -817,6 +783,7 @@ def ceilDiv (m n : Nat) := m / n + if m % n = 0 then 0 else 1
 def Machine.msz (m : Machine) : Nat := ceilDiv m.mem.length 32
 
 structure Block where
+  (baseFee : Word) --
   (ben : Addr) -- H_c
 
 structure Env' where
@@ -879,23 +846,14 @@ def State'.inst (s : State') : Option Inst := do
 
 def g_zero : Nat := 0
 def g_verylow : Nat := 3
+def g_low : Nat := 5
+def g_mid : Nat := 8
 
 def safeSub {ξ} [Sub ξ] [LE ξ] [@DecidableRel ξ (· ≤ ·)] (x y : ξ) : Option ξ :=
   if y ≤ x then some (x - y) else none
 
 def State'.deductGas (s : State') (c : Nat) : Option Nat := safeSub s.mcn.gas c
 
-def Rinst.run (s : State') : Rinst → Option State'
-  | .add => do
-    let (x :: y :: xs) ← (return s.mcn.stk) | none
-    let g' ← safeSub s.mcn.gas g_verylow
-    return {s with mcn := {s.mcn with stk := (x + y) :: xs, gas := g', pc := s.mcn.pc + 1}}
-  | .calldataload => do
-    let (x :: xs) ← (return s.mcn.stk) | none
-    let g' ← s.deductGas g_verylow
-    let cd : Word := Bytes.toBits 32 (s.env.cld.sliceD x.toNat 32 0)
-    return {s with mcn := {s.mcn with stk := cd :: xs, gas := g', pc := s.mcn.pc + 1}}
-  | _ => none
 
 def Acct.Empty (a : Acct) : Prop :=
   a.code = [] ∧ a.nonce = 0 ∧ a.bal = 0
@@ -945,13 +903,21 @@ structure theta.Result : Type where
   (wld : World')
   (gas : Nat)
   (acr : Accrual)
-  (sta : Word)
+  (sta : Bool)
   (ret : Bytes)
 
 def World'.code (w : World') (a : Addr) : Bytes :=
   match w.find? a with
   | none => []
   | some x => x.code
+
+def Acct.empty : Acct :=
+  {
+    nonce := 0
+    bal := 0
+    stor := .empty
+    code := []
+  }
 
 -- need further update for precompiled contracts
 def θ.prep
@@ -983,7 +949,7 @@ def θ.prep
       if v = 0
       then σ'₁
       else (dbg_trace "unreachable code : nonzero value calls from empty accounts should never happen" ; σ'₁)
-    | some aₛ => σ.insert s {aₛ with bal := aₛ.bal - v}
+    | some aₛ => σ'₁.insert s {aₛ with bal := aₛ.bal - v}
   let cd : Bytes := σ.code c
   let I : Env' := {
     cta := r, oga := o, gpr := @Nat.toBits 256 p, cld := d
@@ -993,7 +959,7 @@ def θ.prep
   ⟨σ₁, μ, A, I⟩
 
 def θ.wrap (s : State') (oxr : Option exec.Result) : theta.Result :=
-  let xr : exec.Result := oxr.getD ⟨none, s.mcn, s.acr, none⟩
+  let xr : exec.Result := oxr.getD (dbg_trace "FAILED!!" ; ⟨none, s.mcn, s.acr, none⟩)
   let Ξr : Ξ.Result := {wld := xr.wld, gas := xr.mcn.gas, acr := xr.acr, ret := xr.ret}
   let σ_stars : Option World' := Ξr.wld
   let g_stars : Nat := Ξr.gas
@@ -1003,7 +969,7 @@ def θ.wrap (s : State') (oxr : Option exec.Result) : theta.Result :=
   let σ' : World' := σ_stars.getD s.wld
   let g' : Nat := if σ_stars.isNone ∧ o.isNone then 0 else g_stars
   let A' : Accrual := if σ_stars.isNone then s.acr else A_stars
-  let z : Word := if σ_stars.isNone then 0 else 1
+  let z : Bool := if σ_stars.isNone then 0 else 1
 
   -- o' is not from YP, but necessary to cast from 'Option Bytes' to 'Bytes'
   -- (YP is a bit sloppy with types here)
@@ -1011,9 +977,6 @@ def θ.wrap (s : State') (oxr : Option exec.Result) : theta.Result :=
   ⟨σ', g', A', z, o'⟩
 
 
--- returns 'none' IFF either
--- (1) VM is CURRENTLY at EHS, due to the code byte at PC (not at some later point in code), or
--- (2) recursion limit is reached (should never happen with correct usage)
 def execAux (s s' : State') (f : State' → Option exec.Result) : exec.Result :=
   let g' : Nat := s'.mcn.gas
   let s'' := {s' with mcn := {s'.mcn with gas := g'}}
@@ -1039,97 +1002,6 @@ def Bits.min {n} : Bits n → Bits n → Bits n
 
 instance {n} : Min (Bits n) := ⟨.min⟩
 
-def testStor : Stor :=
-  Lean.RBMap.singleton 0
-    ((Hex.toWord "fffffffffffffffffffffffffffffffffffffffffffffffffedcba9876543210").getD 0)
-
-def testerAdr : Addr := (Hex.toBits 40 "0000000000000000000000000000000000001000").getD 0
-def senderAdr : Addr := (Hex.toBits 40 "a94f5374fce5edbc8e2a8697c15331677e6ebf0b").getD 0
-def receiverAdr : Addr := (Hex.toBits 40 "cccccccccccccccccccccccccccccccccccccccc").getD 0
-
-def beforeBal : Word := Bytes.toBits 32 <| (Hex.toBytes "0ba1a9ce0ba1a9ce").getD []
-
-
-def beforeTesterAcct : Acct :=
-  {
-    nonce := 0
-    bal := beforeBal
-    stor := .empty
-    code := (Hex.toBytes "670123456789abcdef1960005500").getD []
-  }
-
-def afterTesterAcct : PreData :=
-  {
-    addr := testerAdr
-    nonce := []
-    bal := (Hex.toBytes "0ba1a9ce0ba1a9ce").getD []
-    stor := testStor
-    code := (Hex.toBytes "670123456789abcdef1960005500").getD []
-  }
-
-def beforeSenderAcct : Acct :=
-  {
-    nonce := 0
-    bal := beforeBal
-    stor := .empty
-    code := []
-  }
-
-def afterSenderAcct : PreData :=
-  {
-    addr := senderAdr
-    nonce := [Ox x0 x1]
-    bal := (Hex.toBytes "0ba1a9ce0b9aa79f").getD []
-    stor := .empty
-    code := []
-  }
-
-def beforeReceiverAcct : Acct :=
-  {
-    nonce := 0
-    bal := beforeBal
-    stor := .empty
-    code := (Hex.toBytes "600060006000600060006004356110000162fffffff100").getD []
-  }
-
-def afterReceiverAcct : PreData :=
-  {
-    addr := receiverAdr
-    nonce := []
-    bal := (Hex.toBytes "0ba1a9ce0ba1a9cf").getD []
-    stor := .empty
-    code := (Hex.toBytes "600060006000600060006004356110000162fffffff100").getD []
-  }
-
-def afterPreDatas : List PreData :=
-  [
-    afterTesterAcct,
-    afterSenderAcct,
-    afterReceiverAcct
-  ]
-
-def testNTB : NTB := Lean.RBMap.fromList (List.map PreData.toKV afterPreDatas) compare
-
-
-def beforeWorld : World' :=
-  Lean.RBMap.fromList
-    [
-      ⟨testerAdr, beforeTesterAcct⟩,
-      ⟨senderAdr, beforeSenderAcct⟩,
-      ⟨receiverAdr, beforeReceiverAcct⟩
-    ]
-    _
-
-def afterWorld : World' :=
-  let aux : PreData → (Addr × Acct) :=
-    fun pa => ⟨pa.addr, ⟨pa.nonce.toBits 32, pa.bal.toBits 32, pa.stor, pa.code⟩⟩
-  Lean.RBMap.fromList (afterPreDatas.map aux) _
-
-
--- gas limit ('T_g' in YP)
-def Tg : Nat := ((Hex.toBytes "04C4B400").getD []).toNat
-def testGasLimit : Nat := ((Hex.toBytes "04C4B400").getD []).toNat
-
 def dataGas (cd : Bytes) : Nat :=
   let aux : Byte → Nat := fun b => if b = 0 then 4 else 16
   (cd.map aux).sum
@@ -1143,14 +1015,6 @@ def intrinsicGas (Rcv : Option Addr) (cd : Bytes) (Ta : List (Addr × List Word)
   Rcv.rec (G_txcreate + initCodeCost cd) (fun _ => 0) +
   gTransaction +
   (Ta.map aux).sum
-
-def testCallData : Bytes :=
-  (Hex.toBytes "693c61390000000000000000000000000000000000000000000000000000000000000000").getD []
-
-def g₀ : Nat := intrinsicGas (some receiverAdr) testCallData []
-
-def g : Nat := Tg - g₀
-
 
 def World'.transfer? (wld : World') (src : Addr) (clv : Word) (dst : Addr) : Option World' := do
   let src_acct ← wld.find? src
@@ -1169,25 +1033,24 @@ def checkpoint (w : World') (ad : Addr) (v : Word) : Option World' := do
   let bal' ← safeSub ac.bal v
   some <| w.insert ad {ac with bal := bal', nonce := ac.nonce + 1}
 
-def testCoinbase : Addr := (Hex.toBits 40 "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba").getD 0
-
-def testCheckpoint : World' := (checkpoint beforeWorld senderAdr 1).getD beforeWorld
 
 -- A^0
 def Accrual.init : Accrual :=
   {
     dest := []
-    adrs := Std.HashSet.ofList [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    adrs := .ofList [1, 2, 3, 4, 5, 6, 7, 8, 9] -- precompiled contracts
     keys := .empty
     ref := 0
+    logs := []
+    touched := .empty
   }
 
 abbrev AccessList : Type := List (Addr × List Word)
 
-abbrev AccessList.collect (al : AccessList) : StorKeySet :=
-  let addPair : Addr → StorKeySet → Word → StorKeySet :=
+abbrev AccessList.collect (al : AccessList) : KeySet :=
+  let addPair : Addr → KeySet → Word → KeySet :=
     fun a aks k => aks.insert ⟨a, k⟩
-  let addElem : StorKeySet → Addr × List Word → StorKeySet :=
+  let addElem : KeySet → Addr × List Word → KeySet :=
     fun aks pr => List.foldl (addPair pr.fst) aks pr.snd
   List.foldl addElem .empty al
 
@@ -1201,7 +1064,8 @@ def A_star (H : Block) (ST : Addr) (Tt : Option Addr) (TA : AccessList) : Accrua
     keys := TA.collect
   }
 
-def testBlock : Block := {ben := testCoinbase}
+def Stor.insert' (s : Stor) (k v : Word) : Stor :=
+  if v = 0 then s.erase k else s.insert k v
 
 def sstoreStep (w₀ : World') (s : State') : Option State' := do
   let ⟨σ, μ, A, I⟩ := s
@@ -1211,7 +1075,6 @@ def sstoreStep (w₀ : World') (s : State') : Option State' := do
   let (a : Acct) ← σ.find? s.env.cta
   let (v : Word) := (a.stor.find? x).getD 0
   let c₀ : Nat := cond (A.keys.contains ⟨I.cta, x⟩) 0 gColdSLoad
-  -- let .true ← (dbg_trace s!"v₀ : {Bits.toHex 64 v₀}\nv : {Bits.toHex 64 v}\nv' : {Bits.toHex 64 v'}"; return true) | none
   let c₁ : Nat :=
     if v = v' ∨ v₀ ≠ v
     then gWarmAccess
@@ -1235,13 +1098,13 @@ def sstoreStep (w₀ : World') (s : State') : Option State' := do
     if v = v'
     then 0
     else if v₀ = v
-         then if v₀ = 0
+         then if v' = 0
               then rSClear
               else 0
          else rDirtyClear + rDirtyReset
   let g' ← safeSub s.mcn.gas c
   let ref' ← (Int.ofNat A.ref + r).toNat'
-  let a' : Acct := {a with stor := a.stor.insert x v'}
+  let a' : Acct := {a with stor := a.stor.insert' x v'}
 
   some
     {
@@ -1265,60 +1128,126 @@ def Option.trace {ξ} [ToString ξ] : Option ξ → Option ξ
   | some x => dbg_trace x; some x
 
 
--- match (dbg_trace "Gas left : {μ.gas}\n\nPC : {μ.pc}\nInst read : {i.toString}"; i) with
+def Addr.toHex (a :Addr) : String := @Bits.toHex 40 a
+
+def Rinst.run (w₀ : World') (s : State') : Rinst → Option State'
+  | .calldataload => do
+    let (x :: xs) ← (return s.mcn.stk) | none
+    let g' ← s.deductGas g_verylow
+    let cd : Word := Bytes.toBits 32 (s.env.cld.sliceD x.toNat 32 0)
+    some {s with mcn := {s.mcn with stk := cd :: xs, gas := g', pc := s.mcn.pc + 1}}
+  | .not => do
+    let (x :: xs) ← (return s.mcn.stk) | none
+    let g' ← safeSub s.mcn.gas g_verylow
+    some {s with mcn := {s.mcn with stk := x.not :: xs, gas := g', pc := s.mcn.pc + 1}}
+
+  | .eq => do
+    let (x :: y :: xs) ← (return s.mcn.stk) | none
+    let g' ← safeSub s.mcn.gas g_verylow
+    some {s with mcn := {s.mcn with stk := (x =? y) :: xs, gas := g', pc := s.mcn.pc + 1}}
+
+  | .sub => do
+    let (x :: y :: xs) ← (return s.mcn.stk) | none
+    let g' ← safeSub s.mcn.gas g_verylow
+    some {s with mcn := {s.mcn with stk := (x - y) :: xs, gas := g', pc := s.mcn.pc + 1}}
+  | .mul => do
+    let (x :: y :: xs) ← (return s.mcn.stk) | none
+    let g' ← safeSub s.mcn.gas g_low
+    some {s with mcn := {s.mcn with stk := (x * y) :: xs, gas := g', pc := s.mcn.pc + 1}}
+  | .div => do
+    let (x :: y :: xs) ← (return s.mcn.stk) | none
+    let g' ← safeSub s.mcn.gas g_low
+    some {s with mcn := {s.mcn with stk := (x / y) :: xs, gas := g', pc := s.mcn.pc + 1}}
+
+  | .sdiv => do
+    let (x :: y :: xs) ← (return s.mcn.stk) | none
+    let g' ← safeSub s.mcn.gas g_low
+    some {s with mcn := {s.mcn with stk := Bits.sdiv x y :: xs, gas := g', pc := s.mcn.pc + 1}}
+
+  | .mod => do
+    let (x :: y :: xs) ← (return s.mcn.stk) | none
+    let g' ← safeSub s.mcn.gas g_low
+    some {s with mcn := {s.mcn with stk := (x % y) :: xs, gas := g', pc := s.mcn.pc + 1}}
+
+  | .smod => do
+    let (x :: y :: xs) ← (return s.mcn.stk) | none
+    let g' ← safeSub s.mcn.gas g_low
+    some {s with mcn := {s.mcn with stk := (Bits.smod x y) :: xs, gas := g', pc := s.mcn.pc + 1}}
+
+  | .add => do
+    let (x :: y :: xs) ← (return s.mcn.stk) | none
+    let g' ← safeSub s.mcn.gas g_verylow
+    some {s with mcn := {s.mcn with stk := (x + y) :: xs, gas := g', pc := s.mcn.pc + 1}}
+
+  | .addmod => do
+    let (x :: y :: z :: xs) ← (return s.mcn.stk) | none
+    let g' ← safeSub s.mcn.gas g_mid
+    some {s with mcn := {s.mcn with stk := Bits.addmod x y z :: xs, gas := g', pc := s.mcn.pc + 1}}
+
+  | .mulmod => do
+    let (x :: y :: z :: xs) ← (return s.mcn.stk) | none
+    let g' ← safeSub s.mcn.gas g_mid
+    some {s with mcn := {s.mcn with stk := Bits.mulmod x y z :: xs, gas := g', pc := s.mcn.pc + 1}}
+
+  | .sstore => sstoreStep w₀ s
+  | .sload => do
+    let (x :: xs) ← (return s.mcn.stk) | (dbg_trace "sload failed!!"; none)
+    let c : Nat := if s.acr.keys.contains ⟨s.env.cta, x⟩ then gWarmAccess else gColdSLoad
+    let g' ← safeSub s.mcn.gas c
+    let ac ← s.wld.find? s.env.cta
+    let y := (ac.stor.find? x).getD 0
+    some {
+      s with
+      mcn := {s.mcn with stk := y :: xs, gas := g', pc := s.mcn.pc + 1}
+      acr := {s.acr with keys := s.acr.keys.insert ⟨s.env.cta, x⟩}
+    }
+  | i => dbg_trace s!"UNIMPLEMENTED REGULAR INSTRUCTION EXECUTION : {i.toString}"; none
+
+
+
 -- w₀ : the 'checkpoint' world saved at the preparation stage of tx
+
+-- 'exec' returns 'none' IFF either
+-- (1) VM is CURRENTLY at exceptional halting state, due to
+--     the code byte at PC (not at some later point in code), or
+-- (2) recursion limit is reached (should never happen with correct usage)
 def exec (H : Block) (w₀ : World') : Nat → State' → Option exec.Result
-  | 0, _ => do (dbg_trace "NO INST\n"; none)
+  | 0, _ => do (dbg_trace "execution limit reached\n"; none)
   | lim + 1, s@⟨σ, μ, A, I⟩ => do
     let i ← s.inst
-    match i with
+    match (dbg_trace s!"current gas : {μ.gas}\nexecuting inst : {i.toString}" ; i) with
+    -- match i with
     | .next (.push bs _) => do
        let g' ← safeSub μ.gas g_verylow
-       let m' : Machine := {
-         s.mcn with
-         gas := g'
-         pc := μ.pc + bs.length + 1
-         stk := (bs.toBits 32) :: s.mcn.stk
-       }
-       execAux s {s with mcn := m'} (exec H w₀ lim)
-    | .next (.reg .calldataload) => do
-      let (x :: xs) ← (return s.mcn.stk) | none
-      let g' ← s.deductGas g_verylow
-      let cd : Word := Bytes.toBits 32 (s.env.cld.sliceD x.toNat 32 0)
-      let s' := {s with mcn := {s.mcn with stk := cd :: xs, gas := g', pc := s.mcn.pc + 1}}
-      execAux s s' (exec H w₀ lim)
-    | .next (.reg .not) => do
-      let (x :: xs) ← (return s.mcn.stk) | none
-      let g' ← safeSub s.mcn.gas g_verylow
-      let s' := {s with mcn := {s.mcn with stk := x.not :: xs, gas := g', pc := s.mcn.pc + 1}}
-      execAux s s' (exec H w₀ lim)
+       let m' : Machine :=
+         (
+           {
+             s.mcn with
+             gas := g'
+             pc := μ.pc + bs.length + 1
+             stk := (bs.toBits 32) :: s.mcn.stk
+           }
 
-    | .next (.reg .add) => do
-      let (x :: y :: xs) ← (return s.mcn.stk) | none
-      let g' ← safeSub s.mcn.gas g_verylow
-      let s' := {s with mcn := {s.mcn with stk := (x + y) :: xs, gas := g', pc := s.mcn.pc + 1}}
+         )
+       execAux s {s with mcn := m'} (exec H w₀ lim)
+
+    | .next (.reg r) => do
+      let s' ← r.run w₀ s
       execAux s s' (exec H w₀ lim)
     | .next (.exec .call) => do
       let (gas :: adr :: clv :: ilc :: isz :: olc :: osz :: stk)
         ← (return s.mcn.stk) | none
       let i : Bytes := s.mcn.mem.sliceD ilc.toNat isz.toNat 0
-      let t : Addr := toAddr adr
+      let t : Addr := (dbg_trace s!"nested receiver : {adr.toHex}" ; toAddr adr)
       let acct ← s.wld.find? s.env.cta
       let as' : AddrSet := s.acr.adrs.insert (toAddr adr)
       let A' : Accrual := {s.acr with adrs := as'}
-
-
       let cg : Nat := cCallGas s gas.toNat t clv
-
-      --let g' ← (dbg_trace "after EIP-2929 : "; (safeSub s.mcn.gas gColdAccountAccess).trace)
       let g' ← safeSub s.mcn.gas gColdAccountAccess
-      --let g'' ← (dbg_trace "after deducting callgas : "; (safeSub g' cg).trace)
       let g'' ← safeSub g' cg
-
       let trState : State' :=
          θ.prep H s.wld A' s.env.cta s.env.oga t t cg s.env.gpr.toNat clv clv i (s.env.exd - 1) s.env.wup
       let trCore : theta.Result := θ.wrap trState (exec H w₀ lim trState)
-
       let tr : theta.Result :=
         if 0 < s.env.exd ∧ clv ≤ acct.bal
         then trCore
@@ -1329,16 +1258,13 @@ def exec (H : Block) (w₀ : World') : Nat → State' → Option exec.Result
         pc := s.mcn.pc + 1
         mem := s.mcn.mem.takeD olc.toNat 0 ++ cpy ++ s.mcn.mem.drop (olc.toNat + cpy.length)
         ret := tr.ret
-        stk := tr.sta :: stk
+        stk := @Bool.toBits 256 tr.sta :: stk
       }
 
       let s' : State' := {wld := tr.wld, mcn := m', acr := tr.acr, env := s.env}
       let s'' : State' := s' -- todo : make s'' the result of deducting
                              -- memory expansion gas costs from s'
       execAux s s'' (exec H w₀ lim)
-    | .next (.reg .sstore) => do
-      let s' ← sstoreStep w₀ s
-      execAux s s' (exec H w₀ lim)
     | .last .stop => some {wld := σ, mcn := μ, acr := A, ret := some []}
     | _ => none
 
@@ -1362,46 +1288,6 @@ def theta
   let xr := θ.prep H σ A s o r c g p v v_app d e w
   θ.wrap xr (exec H σ₀ 100 xr)
 
-def foo :=
-  theta
-    testBlock
-    testCheckpoint
-    testCheckpoint
-    (A_star testBlock senderAdr (some receiverAdr) [])
-    senderAdr
-    senderAdr
-    receiverAdr
-    receiverAdr
-    g
-    10
-    1
-    1
-    testCallData
-    1024
-    true
-
-
-def g' : Nat := foo.gas
-
-def A_r : Nat := 0 -- SSTORE used only once, cannot change from 0
-
-def gstar : Nat := g' + min ((Tg - g') / 5) A_r
-
-def balInit : Nat := Bytes.toNat ((Hex.toBytes "0ba1a9ce0ba1a9ce").getD [])
-
-def txVal : Nat := 1
-
--- def Yg : Nat := Tg - gstar
-def Yg : Nat := Tg - gstar
-
-def gasPrice : Nat := 10
-
-def balFinal : Nat := balInit - ((Yg * gasPrice) + txVal)
-
-#eval (Nat.toBytes balFinal).toHex
-#check Nat.toBytes
-
-
 def publicAddress (hsa : ByteArray) (ri : UInt8) (rsa : ByteArray) : IO Addr :=
   match (ecrecoverFlag hsa ri rsa).toBytes with
   | [] => IO.throw "Unreachable code : ecrecover should never return empty bytes"
@@ -1413,20 +1299,34 @@ def publicAddress (hsa : ByteArray) (ri : UInt8) (rsa : ByteArray) : IO Addr :=
 def IO.guard (φ : Prop) [Decidable φ] (msg : String) : IO Unit :=
   if φ then return () else IO.throw msg
 
+inductive TxType : Type
+  | zero : TxType
+  -- access list (T_A)
+  | one : AccessList → TxType
+  -- access list (T_A), max fee per gas (T_m), max priority fee per gas (T_f)
+  | two : AccessList → Word → Word → TxType
 
-structure TxData : Type where
+structure TxBytesContent : Type where
+  (chainId : Nat)
+  (yParity : Bool)
+  (type : TxType)
   (nonce : Word)
   (gasPrice : Word)
   (gasLimit : Word)
   (receiver : Addr)
   (val : Word)
   (calldata : Bytes)
-  (v : Byte)
   (r : Bytes)
   (s : Bytes)
-  (hash : Word)
+  (acc : AccessList)
 
-def decodeTxBytes (tbs : Bytes) : IO TxData := do
+structure transact.Result : Type where
+  (wld : World')
+  (gas : Nat)
+  (log : Word)
+  (sta : Bool)
+
+def decodeTxBytes (tbs : Bytes) : IO (TxBytesContent × Word) := do
   match RLP.decode tbs with
   | RLP.list [
       .bytes nonce,
@@ -1449,97 +1349,198 @@ def decodeTxBytes (tbs : Bytes) : IO TxData := do
           .bytes val,
           .bytes calldata
         ]
-    return {
-      nonce := @Bytes.toBits 32 nonce
-      gasPrice := @Bytes.toBits 32 gasPrice
-      gasLimit := @Bytes.toBits 32 gasLimit
-      receiver := @Bytes.toBits 20 toAddr
-      val := @Bytes.toBits 32 val
-      calldata := calldata
-      v := v
-      r := r
-      s := s
-      hash := bs.keccak
-    }
+    return ⟨
+      {
+        chainId := 1
+        yParity := if (v - Ox x1 xB) = 0 then 0 else 1
+        type := .zero
+        nonce := @Bytes.toBits 32 nonce
+        gasPrice := @Bytes.toBits 32 gasPrice
+        gasLimit := @Bytes.toBits 32 gasLimit
+        receiver := @Bytes.toBits 20 toAddr
+        val := @Bytes.toBits 32 val
+        calldata := calldata
+        r := (r.reverse.takeD 32 0).reverse
+        s := (s.reverse.takeD 32 0).reverse
+        acc := []
+      },
+      bs.keccak
+    ⟩
   | _ => IO.throw "Error : TX bytes decoding failed"
 
 def eqTest {ξ} [DecidableEq ξ] (x y : ξ) (testName : String) : IO Unit := do
   .guard (x = y) (testName ++ " : fail")
   .println (testName ++ " : pass")
 
-def main : IO Unit := do
-  let td ← readJsonFile "not.json" >>= Lean.Json.toTestData
-  IO.println td.toString
-  IO.println "======================================================"
-  let [t] ← getTests td | IO.throw "more than one test"
-  IO.println t.toString
-  let txd ← decodeTxBytes t.txdata
+def Acct.isEmpty (ac : Acct) : Prop :=
+  ac.nonce = 0 ∧
+  ac.bal = 0 ∧
+  ac.stor.isEmpty = .true ∧
+  ac.code = []
 
-  IO.println <| s!"v : {Bits.toHex 2 txd.v}"
-  IO.println <| s!"r : {txd.r.toHex}"
-  IO.println <| s!"s : {txd.s.toHex}"
-  IO.println <| s!"Hash of txdata excluding signature: {Bits.toHex 64 txd.hash}"
+instance {ac : Acct} : Decidable ac.isEmpty := instDecidableAnd
 
-  let rsa : ByteArray := Bytes.toBytesArray (txd.r ++ txd.s)
-  let hsa : ByteArray := Bytes.toBytesArray (@Bits.toBytes 32 txd.hash)
-  let ri : UInt8 := Byte.toUInt8 (txd.v - Ox x1 xB)
+def World'.get (w : World') (a : Addr) : Acct := (w.find? a).getD .empty
+def World'.set (w : World') (a : Addr) (ac : Acct) : World' :=
+  if ac.isEmpty then w.erase a else w.insert a ac
 
-  let sender ← publicAddress hsa ri rsa
-  IO.println <| s!"Recovered public address : {@Bits.toHex 40 sender}"
+def World'.addBal (w : World') (a : Addr) (v : Word) : World' :=
+  let ac := w.get a
+  let ac' : Acct := {ac with bal := ac.bal + v}
+  w.set a ac'
 
-  eqTest txd.nonce t.nonce "nonce check"
-  eqTest txd.gasPrice t.gasPrice "gas price check"
-  eqTest txd.gasLimit t.gasLimit "gas limit check"
-  eqTest sender t.sender "sender address check"
-  eqTest txd.receiver t.receiver "sender address check"
-  eqTest txd.val t.value "value check"
-  eqTest txd.calldata t.calldata "value check"
+def eraseIfEmpty (w : World') (a : Addr) : World' := w.set a <| w.get a
 
-
-  let g : Nat := txd.gasLimit.toNat - intrinsicGas (some txd.receiver) txd.calldata []
-
-  let blk : Block := {ben := t.coinbase}
-  let w ← (checkpoint t.world sender txd.val).toIO ""
+def Tx.run
+  (blk : Block) (w : World') (tx : TxBytesContent)
+  (sender : Addr) : IO transact.Result := do
+  let g : Nat := tx.gasLimit.toNat - intrinsicGas (some tx.receiver) tx.calldata []
+  let w ← (checkpoint w sender (tx.gasLimit * tx.gasPrice)).toIO ""
 
   let tr : theta.Result :=
     theta
       blk
       w w
-      (A_star blk sender (some txd.receiver) [])
+      (A_star blk sender (some tx.receiver) [])
       sender
       sender
-      txd.receiver
-      txd.receiver
+      tx.receiver
+      tx.receiver
       g
-      txd.gasPrice.toNat
-      txd.val
-      txd.val
-      txd.calldata
+      tx.gasPrice.toNat
+      tx.val
+      tx.val
+      tx.calldata
       1024
       true
 
-  let gasLeft : Nat := tr.gas
-  let refundAmount : Nat := 0 -- SSTORE used only once, cannot change from 0
-  let gasReturn : Nat := gasLeft + min ((Tg - g') / 5) refundAmount
-  let gasDiff : Nat := txd.gasLimit.toNat - gasReturn
-  let senderAcct ← (w.find? sender).toIO ""
-  let newBal : Nat := senderAcct.bal.toNat - (gasDiff * txd.gasPrice.toNat)
+  let gasLeft : Nat := tr.gas -- g'
+  let refundAmount : Nat := tr.acr.ref
 
-  let newBalWord : Word := Nat.toBits' 256 newBal
+  .println s!"refund Amount : {refundAmount}"
 
-  IO.println s!"New sender balance : {@Bits.toHex 64 newBalWord}"
+  let gasReturn : Word :=
+    Nat.toBits' 256 (gasLeft + min ((tx.gasLimit.toNat - gasLeft) / 5) refundAmount) -- g*
+  let gasUsed : Word := tx.gasLimit - gasReturn
+  let valReturn : Word := gasReturn * tx.gasPrice
 
-  return ()
+  let f : Word :=
+    match tx.type with
+      | .two _ tm tf => min tf (tm - blk.baseFee)
+      | _ => tx.gasPrice - blk.baseFee
 
+  let w₀ : World' := tr.wld.addBal sender valReturn
+  let w₁ : World' := w₀.addBal blk.ben (gasUsed * f)
+  let w₂ : World' := List.foldl Lean.RBMap.erase w₁ tr.acr.dest
+  let w₃ : World' := List.foldl eraseIfEmpty w₂ tr.acr.touched.toList
+
+  return {
+    wld := w₃,
+    gas := gasUsed.toNat
+    log := (RLP.list tr.acr.logs.reverse).encode.keccak
+    sta := tr.sta
+  }
+
+def Test.run (t : Test) : IO Unit := do
+  let ⟨tx, hsh⟩ ← decodeTxBytes t.txdata
+  .println s!"r-length : {tx.r.length}"
+  .println s!"s-length : {tx.s.length}"
+  .println s!"r-value : {tx.r.toHex}"
+  .println s!"s-value : {tx.s.toHex}"
+
+  let rsa : ByteArray := Bytes.toBytesArray (tx.r ++ tx.s)
+  let hsa : ByteArray := Bytes.toBytesArray (@Bits.toBytes 32 hsh)
+  let ri : UInt8 := Byte.toUInt8 (if tx.yParity then 1 else 0)
+  let sender ← publicAddress hsa ri rsa
+
+  .println "initial world : "
+  .println (Strings.join t.world.toStrings)
+
+  let initNTB : NTB :=
+    Lean.RBMap.fromList (List.map toKeyVal t.world.toList) _
+
+  let initRoot : Word := trie initNTB
+
+  .println s!"initial state root : {initRoot.toHex}"
+
+  let sa₀ ← (t.world.find? sender).toIO "no sender account"
+
+  .guard (tx.nonce = t.nonce) "nonce check 1 : fail"
+  .println "nonce check 1 : pass"
+
+  .guard (tx.nonce = sa₀.nonce) "nonce check 2 : fail"
+  .println "nonce check 2 : pass"
+
+  .guard (sender = t.sender) "sender check : fail"
+  .println "sender check : pass"
+
+  .guard (tx.receiver = t.receiver) "receiver check : fail"
+  .println s!"receiver : {tx.receiver.toHex}"
+
+  .guard (tx.gasLimit = t.gasLimit) "gas limit check : fail"
+  .println "gas limit check : pass"
+
+  .guard (tx.gasPrice = t.gasPrice) "gas price check : fail"
+  .println "gas price check : pass"
+
+  .guard (tx.val = t.value) "value check : fail"
+  .println "value check : pass"
+
+  .guard (tx.calldata = t.calldata) "calldata check : fail"
+  .println "calldata check : pass"
+
+  let rst ←
+    Tx.run
+      {baseFee := t.baseFee, ben := t.coinbase}
+      t.world
+      tx
+      sender
+
+  .println s!"tx status : {rst.sta}"
+
+  .println "world state after tx :"
+  .println (Strings.join rst.wld.toStrings)
+
+  let temp := (List.map toKeyVal rst.wld.toList)
+
+  let finalNTB : NTB :=
+    Lean.RBMap.fromList temp _
+
+  let root : Word := trie finalNTB
+
+  .println s!"computer final root : {root.toHex}"
+  .println s!"expected final root : {t.hash.toHex}"
+
+  .guard (root = t.hash) "state root check : fail"
+  .println "state root check : pass"
+
+  .guard (rst.log = t.logs) "log hash check : fail"
+  .println "log hash check : pass"
+
+def Tests.run : Nat → List Test → IO Unit
+  | _, [] => return ()
+  | n, t :: ts => do
+    .println s!"================ Running test {n} ================"
+    t.run
+    Tests.run (n + 1) ts
+
+def List.toNTB (l : List (Word × Word)) : NTB :=
+  Stor.toNTB <| .fromList l _
+
+def main (args : List String) : IO Unit := do
+  let testPath ← args.head?.toIO "no command line argument"
+  let td ← readJsonFile testPath >>= Lean.Json.toTestData
+  let ts ← getTests td --| IO.throw "more than one test"
+  Tests.run 1 ts
 
 #exit
 
--- def main : IO Unit := do
---   let td ← readJsonFile "not.json" >>= Lean.Json.toTestData
---   IO.println td.toString
+def main : IO Unit := do
+  let td ← readJsonFile "not.json" >>= Lean.Json.toTestData
+  IO.println td.toString
 
--- def main : IO Unit := IO.println WethByteCode
--- def main : IO Unit := do IO.println <| Bits.toHex 64 (trie testNTB)
+def main : IO Unit := IO.println WethByteCode
+def main : IO Unit := do IO.println <| Bits.toHex 64 (trie testNTB)
 
 def main : IO Unit := do
   let bs := notTxBytes
@@ -1564,131 +1565,3 @@ def main : IO Unit := do
     if b = 0
     then IO.println "ecrecover failed"
     else IO.println <| s!"Recovered public address : {Bytes.toHex pa}"
-
-
--- mutual
---
---   def Ξ
---     (σ : World')
---     (g : Nat)
---     (A : Accrual)
---     (I : Env) :
---     Ξ.Result :=
---   let μ : Machine := {gas := g, pc := 0, mem := [], ret := [], stk := []}
---   let xr : exec.Result := (execCore ⟨σ, μ, A, I⟩).getD ⟨none, μ, A, none⟩
---   {wld := xr.wld, gas := xr.mcn.gas, acr := xr.acr, ret := xr.ret}
---
---
---   def θ
---     (lim : Measure)
---     (σ : World')
---     (A : Accrual)
---     (s : Addr)
---     (o : Addr)
---     (r : Addr)
---     (c : Addr)
---     (g : Nat)
---     (p : Nat)
---     (v : Word)
---     (v_app : Word)
---     (d : Bytes)
---     (e : Nat)
---     (w : Bool) :
---     theta.Result :=
---   let σ'₁ : World' :=
---     match σ.find? r with
---     | none =>
---       if v = 0
---       then σ
---       else σ.insert r {nonce := 0, bal := v, stor := .empty, code := []}
---     | some aᵣ => σ.insert r {aᵣ with bal := aᵣ.bal + v}
---   let σ₁ : World' :=
---     match σ'₁.find? s with
---     | none =>
---       if v = 0
---       then σ'₁
---       else (dbg_trace "unreachable code : nonzero value calls from empty accounts should never happen" ; σ'₁)
---     | some aₛ => σ.insert s {aₛ with bal := aₛ.bal - v}
---   let cd : Bytes := σ.code c
---   let I : Env := {
---     cta := r, oga := o, gpr := @Nat.toBits 256 p, cld := d
---     cla := s, clv := v_app, code := cd, exd := e, wup := w
---   }
---   let Ξr : Ξ.Result :=
---     match c.toNat with
---     | 1 => (dbg_trace "unimplemented : precompiled contract"; sorry)
---     | 2 => (dbg_trace "unimplemented : precompiled contract"; sorry)
---     | 3 => (dbg_trace "unimplemented : precompiled contract"; sorry)
---     | 4 => (dbg_trace "unimplemented : precompiled contract"; sorry)
---     | 5 => (dbg_trace "unimplemented : precompiled contract"; sorry)
---     | 6 => (dbg_trace "unimplemented : precompiled contract"; sorry)
---     | 7 => (dbg_trace "unimplemented : precompiled contract"; sorry)
---     | 8 => (dbg_trace "unimplemented : precompiled contract"; sorry)
---     | 9 => (dbg_trace "unimplemented : precompiled contract"; sorry)
---     | _ => Ξ lim σ₁ g A I
---
---   let σ_stars : Option World' := Ξr.wld
---   let g_stars : Nat := Ξr.gas
---   let A_stars : Accrual := Ξr.acr
---   let o : Option Bytes := Ξr.ret
---
---   let σ' : World' := σ_stars.getD σ
---   let g' : Nat := if σ_stars.isNone ∧ o.isNone then 0 else g_stars
---   let A' : Accrual := if σ_stars.isNone then A else A_stars
---   let z : Word := if σ_stars.isNone then 0 else 1
---   -- o' is not from YP, but necessary to cast from 'Option Bytes' to 'Bytes'
---   let o' : Bytes := o.getD []
---   ⟨σ', g', A', z, o'⟩
---   termination_by lim
---
---   -- if EVM is in EHS at the point of running the Xinst, return 'none'.
---   -- in all other cases, return 'some'
---   def Xinst.run (lim : Measure) (s : State') : Xinst → Option State'
---     | .call => do
---       let (gas :: adr :: clv :: ilc :: isz :: olc :: osz :: stk)
---         ← (return s.mcn.stk) | none
---       let i : Bytes := s.mcn.mem.sliceD ilc.toNat isz.toNat 0
---       let t : Addr := toAddr adr
---       let acct ← s.wld.find? s.env.cta
---       let as' : AddrSet := s.acr.adrs.insert (toAddr adr)
---       let A' : Accrual := {s.acr with adrs := as'}
---       let cg : Nat := cCallGas s gas.toNat t clv
---       let tr : theta.Result :=
---         if 0 < s.env.exd ∧ clv ≤ acct.bal
---         then θ lim s.wld A' s.env.cta s.env.oga t t cg
---                s.env.gpr.toNat clv clv i (s.env.exd - 1) s.env.wup
---         else ⟨s.wld, cg, A', 0, []⟩
---       let cpy : Bytes := List.take osz.toNat tr.ret
---       let m' : Machine := {
---         gas := s.mcn.gas - cg + tr.gas
---         pc := s.mcn.pc + 1
---         mem := s.mcn.mem.takeD olc.toNat 0 ++ cpy ++ s.mcn.mem.drop (olc.toNat + cpy.length)
---         ret := tr.ret
---         stk := tr.sta :: s.mcn.stk
---       }
---       some {wld := tr.wld, mcn := m', acr := tr.acr, env := s.env}
---     | _ => none
---   termination_by lim
---
---   def Ninst.run (lim : Measure) (s : State') : Ninst → Option State'
---     | .push bs _ => do
---       let g' ← safeSub s.mcn.gas g_verylow
---       return {s with mcn := {s.mcn with stk := (bs.toBits 32) :: s.mcn.stk, gas := g'}}
---     | .exec x => x.run lim s
---     | .reg r => r.run s
---   termination_by lim
---
---   def execCore (lim : Measure) (s : State') : Option exec.Result :=
---     match lim with
---     | 0 => none
---     | k + 1 =>  do
---       let i ← s.inst
---       match i with
---       | .next n => n.run k s >>= execCore k --⟨k, false⟩
---       | .jump j => none
---       | .last l => none
---   termination_by lim
---
-  -- -- X of YP
-  -- def exec (s : State') : exec.Result :=
-  --   (execCore (s.mcn.gas + 1) s).getD ⟨none, s.mcn, s.acr, none⟩

@@ -471,11 +471,13 @@ def divMod : ∀ {m n : ℕ}, Bits n → Bits m → Bits n → (Bits m × Bits n
 def Bits.div {n} (xs ys : Bits n) : Bits n :=
   if ys = 0 then 0 else (divMod 0 xs ys).fst
 
+def Bits.mod {n} (xs ys : Bits n) : Bits n :=
+  if ys = 0 then 0 else (divMod 0 xs ys).snd
+
 instance {n} : HDiv (Bits n) (Bits n) (Bits n) := ⟨Bits.div⟩
 
-def Bits.mod {n} (xs ys : Bits n) : Bits n := (divMod 0 xs ys).snd
-
 instance {n} : HMod (Bits n) (Bits n) (Bits n) := ⟨Bits.mod⟩
+instance {n} : Mod (Bits n) := ⟨Bits.mod⟩
 
 -- minimum possible value in 2's complement
 def Bits.smin : ∀ {n : ℕ}, Bits n
@@ -504,11 +506,39 @@ def Bits.smod {n : ℕ} (xs ys : Bits n) : Bits n :=
   else let mod := (abs xs) % (abs ys)
        if isNeg xs then neg mod else mod
 
+
+def Nat.toBool : Nat → Bool
+  | 0 => 0
+  | _ => 1
+
+def Nat.toBitsAux' (n : Nat) : List Bool :=
+  if n < 2
+  then [n.toBool]
+  else (n % 2).toBool :: (n / 2).toBitsAux'
+
+def Bool.toBits {k} : Bool → Bits k
+  | .false => 0
+  | .true => 1
+
+def Bools.toBits : ∀ n, List Bool → Bits n
+  | 0, _ => ⦃⦄
+  | n + 1, [] => 0 +> toBits n []
+  | n + 1, x :: xs => x +> toBits n xs
+
+def Nat.toBits' (m n : Nat) : Bits m :=
+  let bs := (List.takeD m (Nat.toBitsAux' n) 0).reverse
+  Bools.toBits m bs
+
 def Bits.addmod {n : ℕ} (x y z : Bits n) : Bits n :=
-  if z = 0 then 0 else (x + y) % z
+  if z = 0
+  then 0
+  else Nat.toBits' n ((x.toNat + y.toNat) % z.toNat) -- (x + y) % z
 
 def Bits.mulmod {n : ℕ} (x y z : Bits n) : Bits n :=
-  if z = 0 then 0 else (x * y) % z
+  --if z = 0 then 0 else (x * y) % z
+  if z = 0
+  then 0
+  else Nat.toBits' n ((x.toNat * y.toNat) % z.toNat) -- (x + y) % z
 
 def Bits.expNat {n : ℕ} (x : Bits n) : Nat → Bits n
   | 0 => 1

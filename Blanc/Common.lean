@@ -507,10 +507,6 @@ def Bits.toBools : ∀ {n}, Bits n → List Bool
 | 0, ⦃⦄ => []
 | _ + 1, x +> xs => x :: xs.toBools
 
-def Bools.toBits : ∀ n, List Bool → Bits n
-| 0, _ => ⦃⦄
-| n + 1, [] => 0 +> toBits n []
-| n + 1, x :: xs => x +> toBits n xs
 
 
 lemma Bits.toBools_inj :
