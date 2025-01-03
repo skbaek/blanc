@@ -1198,25 +1198,88 @@ def Stack.swap (n : Nat) : Stack → Option Stack
 def gBase : Nat := 2
 
 def Rinst.run (w₀ : World') (s : State') : Rinst → Option State'
+  | .eq => do
+    let (x :: y :: xs) ← (return s.mcn.stk) | none
+    let g' ← s.deductGas g_verylow
+    some {s with mcn := {s.mcn with stk := x =? y :: xs, gas := g', pc := s.mcn.pc + 1}}
+  | .lt => do
+    let (x :: y :: xs) ← (return s.mcn.stk) | none
+    let g' ← s.deductGas g_verylow
+    some {s with mcn := {s.mcn with stk := x <? y :: xs, gas := g', pc := s.mcn.pc + 1}}
+  | .gt => do
+    let (x :: y :: xs) ← (return s.mcn.stk) | none
+    let g' ← s.deductGas g_verylow
+    some {s with mcn := {s.mcn with stk := x >? y :: xs, gas := g', pc := s.mcn.pc + 1}}
+
+  | .slt => do
+    let (x :: y :: xs) ← (return s.mcn.stk) | none
+    let g' ← s.deductGas g_verylow
+    some {s with mcn := {s.mcn with stk := x ±<? y :: xs, gas := g', pc := s.mcn.pc + 1}}
+  | .sgt => do
+    let (x :: y :: xs) ← (return s.mcn.stk) | none
+    let g' ← s.deductGas g_verylow
+    some {s with mcn := {s.mcn with stk := x ±>? y :: xs, gas := g', pc := s.mcn.pc + 1}}
+  | .iszero => do
+    let (x :: xs) ← (return s.mcn.stk) | none
+    let g' ← s.deductGas g_verylow
+    some {s with mcn := {s.mcn with stk := x =? 0 :: xs, gas := g', pc := s.mcn.pc + 1}}
+
+  | .not => do
+    let (x :: xs) ← (return s.mcn.stk) | none
+    let g' ← s.deductGas g_verylow
+    some {s with mcn := {s.mcn with stk := ~ x :: xs, gas := g', pc := s.mcn.pc + 1}}
+  | .and => do
+    let (x :: y :: xs) ← (return s.mcn.stk) | none
+    let g' ← s.deductGas g_verylow
+    some {s with mcn := {s.mcn with stk := Bits.and x y :: xs, gas := g', pc := s.mcn.pc + 1}}
+  | .or => do
+    let (x :: y :: xs) ← (return s.mcn.stk) | none
+    let g' ← s.deductGas g_verylow
+    some {s with mcn := {s.mcn with stk := Bits.or x y :: xs, gas := g', pc := s.mcn.pc + 1}}
+  | .xor => do
+    let (x :: y :: xs) ← (return s.mcn.stk) | none
+    let g' ← s.deductGas g_verylow
+    some {s with mcn := {s.mcn with stk := Bits.xor x y :: xs, gas := g', pc := s.mcn.pc + 1}}
+
+  | .signextend => do
+    let (x :: y :: xs) ← (return s.mcn.stk) | none
+    let g' ← s.deductGas g_low
+    some {s with mcn := {s.mcn with stk := Word.signext x y :: xs, gas := g', pc := s.mcn.pc + 1}}
   | .pop => do
     let (_ :: xs) ← (return s.mcn.stk) | none
     let g' ← s.deductGas gBase
     some {s with mcn := {s.mcn with stk := xs, gas := g', pc := s.mcn.pc + 1}}
+
+  | .byte => do
+    let (x :: y :: xs) ← (return s.mcn.stk) | none
+    let g' ← s.deductGas g_verylow
+    let b : Byte := List.getD (@Bits.toBytes 32 y) x.toNat 0
+    let z : Word := (0 : Bits 248) ++ b
+    some {s with mcn := {s.mcn with stk := z :: xs, gas := g', pc := s.mcn.pc + 1}}
+  | .shl => do
+    let (x :: y :: xs) ← (return s.mcn.stk) | none
+    let g' ← s.deductGas g_verylow
+    let z : Word := Bits.shl x.toNat y
+    some {s with mcn := {s.mcn with stk := z :: xs, gas := g', pc := s.mcn.pc + 1}}
+  | .shr => do
+    let (x :: y :: xs) ← (return s.mcn.stk) | none
+    let g' ← s.deductGas g_verylow
+    let z : Word := Bits.shr x.toNat y
+    some {s with mcn := {s.mcn with stk := z :: xs, gas := g', pc := s.mcn.pc + 1}}
+  | .sar => do
+    let (x :: y :: xs) ← (return s.mcn.stk) | none
+    let g' ← s.deductGas g_verylow
+    let z : Word := Bits.sar x.toNat y
+    some {s with mcn := {s.mcn with stk := z :: xs, gas := g', pc := s.mcn.pc + 1}}
+
+--def State.Kec (s s' : State) : Prop :=
+--  ∃ x y, State.Diff [x, y] [(Memory.slice s.mem x y).keccak] s s'
 
   | .calldataload => do
     let (x :: xs) ← (return s.mcn.stk) | none
     let g' ← s.deductGas g_verylow
     let cd : Word := Bytes.toBits 32 (s.env.cld.sliceD x.toNat 32 0)
     some {s with mcn := {s.mcn with stk := cd :: xs, gas := g', pc := s.mcn.pc + 1}}
-  | .not => do
-    let (x :: xs) ← (return s.mcn.stk) | none
-    let g' ← safeSub s.mcn.gas g_verylow
-    some {s with mcn := {s.mcn with stk := x.not :: xs, gas := g', pc := s.mcn.pc + 1}}
-
-  | .eq => do
-    let (x :: y :: xs) ← (return s.mcn.stk) | none
-    let g' ← safeSub s.mcn.gas g_verylow
-    some {s with mcn := {s.mcn with stk := (x =? y) :: xs, gas := g', pc := s.mcn.pc + 1}}
 
   | .sub => do
     let (x :: y :: xs) ← (return s.mcn.stk) | none

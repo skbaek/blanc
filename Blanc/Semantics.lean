@@ -346,7 +346,7 @@ def State.Exp (s s' : State) : Prop := ∃ x y, State.Diff [x, y] [x ^ y] s s'
 def State.Signextend (s s' : State) : Prop :=
   ∃ x y z,
     State.Diff [x, y] [z] s s' ∧
-    Bits.Signext x y z
+    Word.Signext x y z
 
 instance slt_decidable {n} (xs ys : Bits n) : Decidable (xs ±< ys) := by
   induction n with
@@ -364,7 +364,7 @@ instance slt_decidable {n} (xs ys : Bits n) : Decidable (xs ±< ys) := by
       apply instDecidableOr
 
 instance {n} (xs ys : Bits n) : Decidable (xs ±> ys) := by
-  unfold Bits.sgt; apply slt_decidable
+  unfold Bits.Sgt; apply slt_decidable
 
 def lt_check (x y : Bits 256) : Bits 256 := if x < y then 1 else 0
 def gt_check (x y : Bits 256) : Bits 256 := if x > y then 1 else 0
@@ -378,7 +378,6 @@ infix:70 " ±<? " => slt_check
 infix:70 " ±>? " => sgt_check
 infix:70 " =? " => eq_check
 
-#eval List.getD [1, 2, 3] 5 0
 
 def State.Lt (s s' : State) : Prop := ∃ x y, State.Diff [x, y] [x <? y] s s'
 def State.Gt (s s' : State) : Prop := ∃ x y, State.Diff [x, y] [x >? y] s s'
@@ -398,7 +397,6 @@ def State.Shl (s s' : State) : Prop := ∃ x y, State.Diff [x, y] [Bits.shl x.to
 def State.Shr (s s' : State) : Prop := ∃ x y, State.Diff [x, y] [Bits.shr x.toNat y] s s'
 def State.Sar (s s' : State) : Prop := ∃ x y, State.Diff [x, y] [Bits.sar x.toNat y] s s'
 def State.Kec (s s' : State) : Prop :=
-  --∃ x y z, State.Diff [x, y] [z] s s'
   ∃ x y, State.Diff [x, y] [(Memory.slice s.mem x y).keccak] s s'
 
 def Bytes.Size (bs : Bytes) (sz : Word) : Prop := bs.length = sz.toNat

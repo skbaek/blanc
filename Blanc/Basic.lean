@@ -256,21 +256,21 @@ instance {n : ℕ} (xs ys : Bits n) : Decidable (xs ≤ ys) := by
     | x +> xs, y +> ys =>
       rw [Bits.cons_le_cons]; apply instDecidableOr
 
-def Bits.slt : ∀ {n : ℕ}, Bits n → Bits n → Prop
+def Bits.Slt : ∀ {n : ℕ}, Bits n → Bits n → Prop
   | 0, ⦃⦄, ⦃⦄ => False
   | _ + 1, x +> xs, y +> ys => y < x ∨ (x = y ∧ xs < ys)
 
-infix:70 " ±< " => Bits.slt
+infix:70 " ±< " => Bits.Slt
 
 lemma Bits.singleton_slt_singleton {x y : Bool} :
     ⦃x⦄ ±< ⦃y⦄ ↔ (x = 1 ∧ y = 0) := by
   cases x <;> cases y <;>
-  simp [Bool.zero, Bool.one, Bits.slt] <;>
+  simp [Bool.zero, Bool.one, Bits.Slt] <;>
   try {intro hc; cases hc}
 
-def Bits.sgt {n : ℕ} (xs ys : Bits n) : Prop := slt ys xs
+def Bits.Sgt {n : ℕ} (xs ys : Bits n) : Prop := Slt ys xs
 
-infix:70 " ±> " => Bits.sgt
+infix:70 " ±> " => Bits.Sgt
 
 def Bits.toNat : ∀ {n : ℕ}, Bits n → Nat
   | 0, ⦃⦄ => 0
@@ -548,15 +548,30 @@ def Bits.exp {n : ℕ} (x y : Bits n) : Bits n := expNat x y.toNat
 
 instance {n} : HPow (Bits n) (Bits n) (Bits n) := ⟨Bits.exp⟩
 
-inductive Bits.Signext' : Nat → Bool → ∀ {n}, Bits n → Bits n → Prop
-  | zero : ∀ n x (xs : Bits n), Signext' 0 x (x +> xs) (x +> xs)
+inductive Bits.Signext : Nat → Bool → ∀ {n}, Bits n → Bits n → Prop
+  | zero : ∀ n x (xs : Bits n), Signext 0 x (x +> xs) (x +> xs)
   | succ :
     ∀ m n x y (xs ys : Bits n),
-      Signext' m y xs ys →
-      Signext' (m + 1) y (x +> xs) (y +> ys)
+      Signext m y xs ys →
+      Signext (m + 1) y (x +> xs) (y +> ys)
 
-def Bits.Signext (x y y' : Word) : Prop :=
-  ∃ b, Signext' (256 - (8 * (x.toNat + 1))) b y y'
+def Bits.signext {m} : Nat → Bits m → (Bits m × Bool)
+  | _, ⦃⦄ => ⟨⦃⦄, 0⟩
+  | 0, x +> xs => ⟨x +> xs, x⟩
+  | n + 1, _ +> xs =>
+    let ⟨ys, y⟩ := Bits.signext n xs
+    ⟨y +> ys, y⟩
+
+def Word.signext (x y : Word) : Word :=
+  (Bits.signext (256 - (8 * (x.toNat + 1))) y).fst
+
+def Bits.toInt {m} (xs : Bits m) : Int :=
+  if xs.isNeg
+  then .negSucc (~ xs).toNat
+  else .ofNat xs.toNat
+
+def Word.Signext (x y y' : Word) : Prop :=
+  ∃ b, Bits.Signext (256 - (8 * (x.toNat + 1))) b y y'
 
 def Bits.prefix {m} : ∀ {n}, Bits (m + n) → Bits n
   | 0, _ => ⦃⦄
