@@ -238,6 +238,7 @@ def arg (k : Word) : Line := cdl ((32 * k) + 4)
 -- whereas pushing the value directly would take up 32.
 
 def Nat.toWord : Nat → Word := Nat.toBits 256
+def Nat.toWord' : Nat → Word := Nat.toBits' 256
 
 def pushAddressMask : Line := [pushWord 0, not, pushWord (Nat.toWord 160), shl]
 

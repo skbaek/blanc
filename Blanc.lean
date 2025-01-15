@@ -146,11 +146,6 @@ def Bool.toByte : Bool → Byte
   | true => Ox x0 x1
   | false => Ox x0 x0
 
-def Byte.toUInt8 (b : Byte) : UInt8 := ⟨⟨b.toNat, b.toNat_lt_pow⟩⟩
-def UInt8.toByte (i : UInt8) : Byte := i.toBitVec.toFin.val.toByte
-def Bits.toUInt64 (xs : Bits 64) : UInt64 := ⟨⟨xs.toNat, xs.toNat_lt_pow⟩⟩
-def UInt64.toBits (i : UInt64) : Bits 64 := Nat.toBits 64 i.toBitVec.toFin.val
-
 def Bytes.toBytesArray (bs : Bytes) : ByteArray := ⟨⟨List.map Byte.toUInt8 bs⟩⟩
 def ByteArray.toBytes (a : ByteArray) : Bytes := a.data.toList.map UInt8.toByte
 
@@ -221,6 +216,10 @@ abbrev Stor := Lean.RBMap Word Word compare
 structure EnvData where
   (baseFee : Word)
   (coinbase : Addr)
+  (prevRandao : Word)
+  (blockGasLimit : Word)
+  (timestamp : Word)
+  (number : Word)
 
 structure PreData where
   (addr : Addr)
@@ -265,6 +264,11 @@ abbrev World' : Type := Lean.RBMap Addr Acct compare
 structure Test where
   (baseFee : Word)
   (coinbase : Addr)
+  (prevRandao : Word)
+  (blockGasLimit : Word)
+  (number : Word)
+  (timestamp : Word)
+
   (world  : World')
   (txdata : Bytes)
 
@@ -505,9 +509,24 @@ def Lean.Json.toEnvData (j : Lean.Json) : IO EnvData := do
   let r ← j.fromObj
   let bfj ← (r.find compare "currentBaseFee").toIO "No basefee"
   let cbj ← (r.find compare "currentCoinbase").toIO "No coinbase"
+  let prj ← (r.find compare "currentRandom").toIO "No random"
+  let glj ← (r.find compare "currentGasLimit").toIO "No gas limit"
+  let tsj ← (r.find compare "currentTimestamp").toIO "No timestamp"
+  let nj  ← (r.find compare "currentNumber").toIO "No number"
   let bf ← bfj.toBytes
-  let bs ← cbj.toBytes
-  return ⟨bf.toBits 32, bs.toBits 20⟩
+  let cb ← cbj.toBytes
+  let pr ← prj.toBytes
+  let gl ← glj.toBytes
+  let ts ← tsj.toBytes
+  let n  ← nj.toBytes
+  return {
+    baseFee := bf.toBits 32,
+    coinbase := cb.toBits 20,
+    prevRandao := pr.toBits 32,
+    blockGasLimit := gl.toBits 32
+    timestamp := ts.toBits 32
+    number := n.toBits 32
+  }
 
 def Lean.Json.toPreDatas (j : Lean.Json) : IO (List PreData) := do
   let r ← j.fromObj
@@ -563,6 +582,10 @@ def getTest (td : TestData) (p : PostData) : IO Test := do
   return {
     baseFee := td.env.baseFee
     coinbase := td.env.coinbase
+    prevRandao := td.env.prevRandao
+    blockGasLimit := td.env.blockGasLimit
+    number := td.env.number
+    timestamp := td.env.timestamp
     world := td.world
     txdata := p.txdata
     calldata := cd
@@ -784,8 +807,14 @@ def ceilDiv (m n : Nat) := m / n + if m % n = 0 then 0 else 1
 def Machine.msz (m : Machine) : Nat := ceilDiv m.mem.length 32
 
 structure Block where
-  (baseFee : Word) --
+  (baseFee : Word) -- H_f
   (ben : Addr) -- H_c
+  (prevRandao : Word) -- H_a
+  (gasLimit : Word) -- H_l
+  (timestamp : Word) -- H_s
+  (number : Word) -- H_s
+  (chainId : Word) -- β
+
 
 structure Env' where
   (cta : Addr) -- contract address (YP : a)
@@ -874,8 +903,8 @@ def State'.inst (s : State') : Option Inst := do
         else none )
 
 def g_zero : Nat := 0
-def g_verylow : Nat := 3
-def g_low : Nat := 5
+def gVerylow : Nat := 3
+def gLow : Nat := 5
 def g_mid : Nat := 8
 def g_exp : Nat := 10
 def g_expbyte : Nat := 50
@@ -913,22 +942,27 @@ def cAAccess (x : Addr) (a : AddrSet) : Nat :=
 def except64th (n : Nat) : Nat := n - (n / 64)
 
 def cExtra (s : State') (t : Addr) (v : Word) : Nat :=
+  let cAcc : Nat := cAAccess t s.acr.adrs
   let cNew : Nat := if (Dead s.wld t ∧ v ≠ 0) then gNewAccount else 0
   let cXfer : Nat := if v ≠ 0 then gCallValue else 0
-  cAAccess t s.acr.adrs + cXfer + cNew
+  (cAcc + cXfer + cNew)
 
-def cGasCap (s : State') (g : Nat) (t : Addr) (v : Word) : Nat :=
-    if cExtra s t v ≤ s.mcn.gas
-    then min (except64th (s.mcn.gas - cExtra s t v)) g
+def cGasCap (s : State') (g : Nat) (memCost : Nat) (t : Addr) (v : Word) : Nat :=
+    if (memCost + cExtra s t v) ≤ s.mcn.gas
+    then min (except64th (s.mcn.gas - (memCost + cExtra s t v))) g
     else g
 
-def cCallGas (s : State') (g : Nat) (t : Addr) (v : Word) : Nat :=
+def cCallGas (s : State') (g : Nat) (memCost : Nat) (t : Addr) (v : Word) : Nat :=
   if v ≠ 0
-  then cGasCap s g t v + gCallStipend
-  else cGasCap s g t v
+  then dbg_trace "stipend case" ; cGasCap s g memCost t v + gCallStipend
+  else dbg_trace "no stipend" ; cGasCap s g memCost t v
 
-def cCall (s : State') (g : Nat) (t : Addr) (v : Word) : Nat :=
-  cGasCap s g t v + cExtra s t v
+def cCall (s : State') (g : Nat) (memCost : Nat) (t : Addr) (v : Word) : Nat :=
+  dbg_trace s!"gascap : {cGasCap s g memCost t v}"
+  dbg_trace s!"extra : {cExtra s t v}"
+  cGasCap s g memCost t v + cExtra s t v
+  -- access cost : 2600
+
 
 structure theta.Result : Type where
   (wld : World')
@@ -989,17 +1023,16 @@ def θ.prep
   let μ : Machine := {gas := g, pc := 0, mem := [], ret := [], stk := [], act := 0}
   ⟨σ₁, μ, A, I⟩
 
-def θ.wrap (s : State') (xr : exec.Result) : theta.Result :=
-  -- let xr : exec.Result := --oxr.getD (dbg_trace "FAILED!!" ; ⟨none, s.mcn, s.acr, none⟩)
+def θ.wrap (wld : World') (acr : Accrual) (xr : exec.Result) : theta.Result :=
   let Ξr : Ξ.Result := {wld := xr.wld, gas := xr.mcn.gas, acr := xr.acr, ret := xr.ret}
   let σ_stars : Option World' := Ξr.wld
   let g_stars : Nat := Ξr.gas
   let A_stars : Accrual := Ξr.acr
   let o : Option Bytes := Ξr.ret
 
-  let σ' : World' := σ_stars.getD s.wld
+  let σ' : World' := σ_stars.getD wld
   let g' : Nat := if σ_stars.isNone ∧ o.isNone then (dbg_trace "zero trigger"; 0) else g_stars
-  let A' : Accrual := if σ_stars.isNone then s.acr else A_stars
+  let A' : Accrual := if σ_stars.isNone then acr else A_stars
   let z : Bool := if σ_stars.isNone then 0 else 1
 
   -- o' is not from YP, but necessary to cast from 'Option Bytes' to 'Bytes'
@@ -1197,145 +1230,349 @@ def Stack.swap (n : Nat) : Stack → Option Stack
 
 def gBase : Nat := 2
 
-def Rinst.run (w₀ : World') (s : State') : Rinst → Option State'
+
+def Bits.replicate : ∀ n : Nat, Bool → Bits n
+  | 0, _ => ⦃⦄
+  | n + 1, b => b +> Bits.replicate n b
+
+def Bits.takeD : ∀ {m} n, Bits m → Bool → Bits n
+  | _, 0, _, _ => ⦃⦄
+  | 0, n + 1, ⦃⦄, y => y +> Bits.takeD n ⦃⦄ y
+  | _ + 1, n + 1, x +> xs, y => x +> Bits.takeD n xs y
+
+def Bits.shlCore {m n : Nat} : Nat → Bits m → Bits n
+  | 0, xs => Bits.takeD n xs 0
+  | _, ⦃⦄ => Bits.replicate n 0
+  | k + 1, _ +> xs => @Bits.shlCore _ n k xs
+
+def Bits.shl' (m : Nat) {n} (xs : Bits n) : Bits n := @Bits.shlCore n n m xs
+
+def memExp (s : Nat) (f l : Word) : Nat :=
+  if l = 0
+  then s
+  else max s (ceilDiv (f.toNat + l.toNat) 32)
+
+-- 'List.put xs n y z' is similar to 'List.set xs n y', except that
+-- the former extends the input list (using the default filler 'z')
+-- to ensure that 'y' is the 'n'th element of the resultant list.
+def List.put {ξ : Type u} : List ξ → Nat → ξ → ξ → List ξ
+  | _ :: xs, 0, y, _ => y :: xs
+  | [], 0, y, _ => [y]
+  | x :: xs, n + 1, y, z => x :: (List.put xs n y z)
+  | [], n + 1, y, z => z :: (List.put [] n y z)
+
+def List.puts {ξ : Type u} (xs : List ξ) (n : Nat) (ys : List ξ) (z : ξ) : List ξ :=
+  xs.takeD n z ++ ys ++ xs.drop (n + ys.length)
+
+def gCopy : Nat := 3
+def gMemory : Nat := 3
+def gKeccak256 : Nat := 30
+def gKeccak256Word : Nat := 6
+
+def cMem (a : Nat) := gMemory * a + ((a ^ 2) / 512)
+
+def nextState (s : State') (cost : Nat)
+  (act' : Nat := s.mcn.act)
+  (stk' : Stack := s.mcn.stk)
+  (mem' : Bytes := s.mcn.mem)
+  (ret' : Bytes := s.mcn.ret)
+  (adrs' : AddrSet := s.acr.adrs)
+
+   :
+  Option State' := do
+  let memCost : Nat := cMem act' - cMem s.mcn.act
+  let gas' ← s.deductGas (cost + memCost)
+  let μ' : Machine :=
+    {
+      gas := gas',
+      pc := s.mcn.pc + 1,
+      mem := mem',
+      ret := ret'
+      stk := stk'
+      act := act'
+    }
+  let A' : Accrual :=
+    {
+      dest := s.acr.dest
+      adrs := adrs'
+      keys := s.acr.keys
+      ref := s.acr.ref
+      logs := s.acr.logs
+      touched := s.acr.touched
+    }
+  some {s with mcn := μ', acr := A'}
+
+def World'.get (w : World') (a : Addr) : Acct := (w.find? a).getD .empty
+
+def Rinst.run (H : Block) (w₀ : World') (s : State') : Rinst → Option State'
+  | .address =>
+    nextState s (cost := gBase) (stk' := s.env.cta.toWord :: s.mcn.stk)
+  | .balance => do
+    let (x :: xs) ← (return s.mcn.stk) | none
+    let a := toAddr x
+    let adrs' : AddrSet := s.acr.adrs.insert a
+    nextState s
+      (cost := cAAccess a s.acr.adrs)
+      (stk' := (s.wld.get a).bal :: xs)
+      (adrs' := adrs')
+  | .origin => nextState s (cost := gBase) (stk' := s.env.oga.toWord :: s.mcn.stk)
+  | .caller => nextState s (cost := gBase) (stk' := s.env.cla.toWord :: s.mcn.stk)
+  | .callvalue => nextState s (cost := gBase) (stk' := s.env.clv :: s.mcn.stk)
+  | .calldataload => do
+    let (x :: xs) ← (return s.mcn.stk) | none
+    let cd : Word := Bytes.toBits 32 (s.env.cld.sliceD x.toNat 32 0)
+    nextState s (cost := gVerylow) (stk' := cd :: xs)
+  | .calldatasize => nextState s (cost := gBase) (stk' := s.env.cld.length.toWord :: s.mcn.stk)
+  | .calldatacopy => do
+    let (x :: y :: z :: xs) ← (return s.mcn.stk) | none
+    let bs : Bytes := s.env.cld.sliceD y.toNat z.toNat 0
+    nextState s
+      (cost := gVerylow + (gCopy * (ceilDiv z.toNat 32)))
+      (act' := memExp s.mcn.act x z)
+      (stk' := xs)
+      (mem' := List.puts s.mcn.mem x.toNat bs 0)
+  | .codesize => nextState s (cost := gBase) (stk' := s.env.code.length.toWord :: s.mcn.stk)
+  | .codecopy => do
+    let (x :: y :: z :: xs) ← (return s.mcn.stk) | none
+    let bs : Bytes := s.env.code.sliceD y.toNat z.toNat (Linst.toByte .stop)
+    nextState s
+      (cost := gVerylow + (gCopy * (ceilDiv z.toNat 32)))
+      (act' := memExp s.mcn.act x z)
+      (stk' := xs)
+      (mem' := List.puts s.mcn.mem x.toNat bs 0)
+  | .gasprice => nextState s (cost := gBase) (stk' := s.env.gpr :: s.mcn.stk)
+  | .extcodesize => do
+    let (x :: xs) ← (return s.mcn.stk) | none
+    let a := toAddr x
+    let adrs' : AddrSet := s.acr.adrs.insert a
+    nextState s
+      (cost := cAAccess a s.acr.adrs)
+      (stk' := (s.wld.get a).code.length.toWord :: xs)
+      (adrs' := adrs')
+  | .extcodecopy => do
+    let (x :: y :: z :: w :: xs) ← (return s.mcn.stk) | none
+    let a : Acct := s.wld.get (toAddr x)
+    let bs : Bytes := a.code.sliceD z.toNat w.toNat (Linst.toByte .stop)
+    nextState s
+      (cost := cAAccess (toAddr x) s.acr.adrs + (gCopy * (ceilDiv z.toNat 32)))
+      (act' := memExp s.mcn.act y w)
+      (stk' := xs)
+      (mem' := List.puts s.mcn.mem y.toNat bs 0)
+  | .retdatasize =>
+    nextState s (cost := gBase) (stk' := s.mcn.ret.length.toWord :: s.mcn.stk)
+  | .retdatacopy => do
+    let (x :: y :: z :: xs) ← (return s.mcn.stk) | none
+    let bs ← s.env.code.slice? y.toNat z.toNat
+    nextState s
+      (cost := gVerylow + (gCopy * (ceilDiv z.toNat 32)))
+      (act' := memExp s.mcn.act x z)
+      (stk' := xs)
+      (mem' := List.puts s.mcn.mem x.toNat bs 0)
+  | .extcodehash => do
+    let (x :: xs) ← (return s.mcn.stk) | none
+    let a := toAddr x
+    let adrs' : AddrSet := s.acr.adrs.insert a
+    let hash : Word :=
+      if (Dead s.wld a)
+      then 0
+      else (s.wld.get a).code.keccak
+    nextState s
+      (cost := cAAccess a s.acr.adrs)
+      (stk' := hash :: xs)
+      (adrs' := adrs')
+  | .selfbalance =>
+    let bal := (s.wld.get s.env.cta).bal
+    nextState s (cost := gLow) (stk' := bal :: s.mcn.stk)
+  | .chainid =>
+    nextState s (cost := gBase) (stk' := H.chainId :: s.mcn.stk)
+  | .number =>
+    nextState s (cost := gBase) (stk' := H.number :: s.mcn.stk)
+  | .timestamp =>
+    nextState s (cost := gBase) (stk' := H.timestamp :: s.mcn.stk)
+  | .gaslimit =>
+    nextState s (cost := gBase) (stk' := H.gasLimit :: s.mcn.stk)
+  | .prevrandao =>
+    nextState s (cost := gBase) (stk' := H.prevRandao :: s.mcn.stk)
+  | .coinbase =>
+    nextState s (cost := gBase) (stk' := H.ben.toWord :: s.mcn.stk)
+  | .msize =>
+    nextState s (cost := gBase) (stk' := (s.mcn.act * 32).toWord :: s.mcn.stk)
+  | .mload => do
+    let (x :: xs) ← (return s.mcn.stk) | none
+    let bs : Bytes := s.mcn.mem.sliceD x.toNat 32 0
+    nextState s (cost := gVerylow)
+      (act' := memExp s.mcn.act x 32)
+      (stk' := @Bytes.toBits 32 bs :: xs)
+  | .mstore => do
+    let (x :: y :: xs) ← (return s.mcn.stk) | none
+    let act' := memExp s.mcn.act x 32
+    let memCost : Nat := cMem act' - cMem s.mcn.act
+    let g' ← s.deductGas (gVerylow + memCost)
+    let m' : Machine :=
+      {
+        s.mcn with
+        stk := xs,
+        gas := g',
+        mem := List.puts s.mcn.mem x.toNat (@Bits.toBytes 32 y) 0,
+        pc := s.mcn.pc + 1
+        act := act'
+      }
+    some {s with mcn := m'}
+  | .mstore8 => do
+    let (x :: y :: xs) ← (return s.mcn.stk) | none
+    let act' := memExp s.mcn.act x 1
+    let memCost : Nat := cMem act' - cMem s.mcn.act
+    let g' ← s.deductGas (gVerylow + memCost)
+    let m' : Machine :=
+      {
+        s.mcn with
+        stk := xs,
+        gas := g',
+        mem := List.put s.mcn.mem x.toNat (@Bits.suffix 8 248 y) 0,
+        pc := s.mcn.pc + 1
+        act := act'
+      }
+    some {s with mcn := m'}
+  | .gas => do
+    let g' ← s.deductGas gBase
+    -- some {s with mcn := {s.mcn with stk := g'.toWord' :: s.mcn.stk, gas := g', pc := s.mcn.pc + 1}}
+    nextState s (cost := gBase) (stk' := g'.toWord' :: s.mcn.stk)
   | .eq => do
     let (x :: y :: xs) ← (return s.mcn.stk) | none
-    let g' ← s.deductGas g_verylow
+    let g' ← s.deductGas gVerylow
     some {s with mcn := {s.mcn with stk := x =? y :: xs, gas := g', pc := s.mcn.pc + 1}}
   | .lt => do
     let (x :: y :: xs) ← (return s.mcn.stk) | none
-    let g' ← s.deductGas g_verylow
+    let g' ← s.deductGas gVerylow
     some {s with mcn := {s.mcn with stk := x <? y :: xs, gas := g', pc := s.mcn.pc + 1}}
   | .gt => do
     let (x :: y :: xs) ← (return s.mcn.stk) | none
-    let g' ← s.deductGas g_verylow
+    let g' ← s.deductGas gVerylow
     some {s with mcn := {s.mcn with stk := x >? y :: xs, gas := g', pc := s.mcn.pc + 1}}
-
   | .slt => do
     let (x :: y :: xs) ← (return s.mcn.stk) | none
-    let g' ← s.deductGas g_verylow
+    let g' ← s.deductGas gVerylow
     some {s with mcn := {s.mcn with stk := x ±<? y :: xs, gas := g', pc := s.mcn.pc + 1}}
   | .sgt => do
     let (x :: y :: xs) ← (return s.mcn.stk) | none
-    let g' ← s.deductGas g_verylow
+    let g' ← s.deductGas gVerylow
     some {s with mcn := {s.mcn with stk := x ±>? y :: xs, gas := g', pc := s.mcn.pc + 1}}
   | .iszero => do
     let (x :: xs) ← (return s.mcn.stk) | none
-    let g' ← s.deductGas g_verylow
+    let g' ← s.deductGas gVerylow
     some {s with mcn := {s.mcn with stk := x =? 0 :: xs, gas := g', pc := s.mcn.pc + 1}}
-
   | .not => do
     let (x :: xs) ← (return s.mcn.stk) | none
-    let g' ← s.deductGas g_verylow
+    let g' ← s.deductGas gVerylow
     some {s with mcn := {s.mcn with stk := ~ x :: xs, gas := g', pc := s.mcn.pc + 1}}
   | .and => do
     let (x :: y :: xs) ← (return s.mcn.stk) | none
-    let g' ← s.deductGas g_verylow
+    let g' ← s.deductGas gVerylow
     some {s with mcn := {s.mcn with stk := Bits.and x y :: xs, gas := g', pc := s.mcn.pc + 1}}
   | .or => do
     let (x :: y :: xs) ← (return s.mcn.stk) | none
-    let g' ← s.deductGas g_verylow
+    let g' ← s.deductGas gVerylow
     some {s with mcn := {s.mcn with stk := Bits.or x y :: xs, gas := g', pc := s.mcn.pc + 1}}
   | .xor => do
     let (x :: y :: xs) ← (return s.mcn.stk) | none
-    let g' ← s.deductGas g_verylow
+    let g' ← s.deductGas gVerylow
     some {s with mcn := {s.mcn with stk := Bits.xor x y :: xs, gas := g', pc := s.mcn.pc + 1}}
-
   | .signextend => do
     let (x :: y :: xs) ← (return s.mcn.stk) | none
-    let g' ← s.deductGas g_low
+    let g' ← s.deductGas gLow
     some {s with mcn := {s.mcn with stk := Word.signext x y :: xs, gas := g', pc := s.mcn.pc + 1}}
   | .pop => do
     let (_ :: xs) ← (return s.mcn.stk) | none
     let g' ← s.deductGas gBase
     some {s with mcn := {s.mcn with stk := xs, gas := g', pc := s.mcn.pc + 1}}
-
   | .byte => do
     let (x :: y :: xs) ← (return s.mcn.stk) | none
-    let g' ← s.deductGas g_verylow
+    let g' ← s.deductGas gVerylow
     let b : Byte := List.getD (@Bits.toBytes 32 y) x.toNat 0
     let z : Word := (0 : Bits 248) ++ b
     some {s with mcn := {s.mcn with stk := z :: xs, gas := g', pc := s.mcn.pc + 1}}
   | .shl => do
     let (x :: y :: xs) ← (return s.mcn.stk) | none
-    let g' ← s.deductGas g_verylow
-    let z : Word := Bits.shl x.toNat y
+    let g' ← s.deductGas gVerylow
+    let z : Word := Bits.shl' x.toNat y
     some {s with mcn := {s.mcn with stk := z :: xs, gas := g', pc := s.mcn.pc + 1}}
   | .shr => do
     let (x :: y :: xs) ← (return s.mcn.stk) | none
-    let g' ← s.deductGas g_verylow
+    let g' ← s.deductGas gVerylow
     let z : Word := Bits.shr x.toNat y
     some {s with mcn := {s.mcn with stk := z :: xs, gas := g', pc := s.mcn.pc + 1}}
   | .sar => do
     let (x :: y :: xs) ← (return s.mcn.stk) | none
-    let g' ← s.deductGas g_verylow
+    let g' ← s.deductGas gVerylow
     let z : Word := Bits.sar x.toNat y
     some {s with mcn := {s.mcn with stk := z :: xs, gas := g', pc := s.mcn.pc + 1}}
-
---def State.Kec (s s' : State) : Prop :=
---  ∃ x y, State.Diff [x, y] [(Memory.slice s.mem x y).keccak] s s'
-
-  | .calldataload => do
-    let (x :: xs) ← (return s.mcn.stk) | none
-    let g' ← s.deductGas g_verylow
-    let cd : Word := Bytes.toBits 32 (s.env.cld.sliceD x.toNat 32 0)
-    some {s with mcn := {s.mcn with stk := cd :: xs, gas := g', pc := s.mcn.pc + 1}}
-
+  | .kec => do
+    let (x :: y :: xs) ← (return s.mcn.stk) | none
+    let act' := memExp s.mcn.act x y
+    dbg_trace s!"act' : {act'}"
+    let memCost : Nat := cMem act' - cMem s.mcn.act
+    dbg_trace s!"memCost : {memCost}"
+    let g' ← s.deductGas (gKeccak256 + (gKeccak256Word * (ceilDiv y.toNat 32)) + memCost)
+    dbg_trace s!"kec-gas : {g'}"
+    let bs : Bytes := s.mcn.mem.sliceD x.toNat y.toNat 0
+    dbg_trace s!"bs length : {bs.length}"
+    let hash : Word := bs.keccak
+    let m' :=
+      {
+        s.mcn with
+        stk := hash :: xs,
+        gas := g',
+        pc := s.mcn.pc + 1
+        act := act'
+      }
+    some {s with mcn := m'}
   | .sub => do
     let (x :: y :: xs) ← (return s.mcn.stk) | none
-    let g' ← safeSub s.mcn.gas g_verylow
+    let g' ← safeSub s.mcn.gas gVerylow
     some {s with mcn := {s.mcn with stk := (x - y) :: xs, gas := g', pc := s.mcn.pc + 1}}
   | .mul => do
     let (x :: y :: xs) ← (return s.mcn.stk) | none
-    let g' ← safeSub s.mcn.gas g_low
+    let g' ← safeSub s.mcn.gas gLow
     some {s with mcn := {s.mcn with stk := (x * y) :: xs, gas := g', pc := s.mcn.pc + 1}}
-
   | .exp => do
     let (x :: y :: xs) ← (return s.mcn.stk) | none
-    let gas := g_exp + (g_expbyte * y.bytecount)
-    let g' ← safeSub s.mcn.gas gas
-    some {s with mcn := {s.mcn with stk := Bits.bexp x y :: xs, gas := g', pc := s.mcn.pc + 1}}
-
+    nextState s
+      (cost := g_exp + (g_expbyte * y.bytecount))
+      (stk' := Bits.bexp x y :: xs)
   | .div => do
     let (x :: y :: xs) ← (return s.mcn.stk) | none
-    let g' ← safeSub s.mcn.gas g_low
-    some {s with mcn := {s.mcn with stk := (x / y) :: xs, gas := g', pc := s.mcn.pc + 1}}
-
+    nextState s (cost := gLow) (stk' := (x / y) :: xs)
   | .sdiv => do
     let (x :: y :: xs) ← (return s.mcn.stk) | none
-    let g' ← safeSub s.mcn.gas g_low
+    let g' ← safeSub s.mcn.gas gLow
     some {s with mcn := {s.mcn with stk := Bits.sdiv x y :: xs, gas := g', pc := s.mcn.pc + 1}}
-
   | .mod => do
     let (x :: y :: xs) ← (return s.mcn.stk) | none
-    let g' ← safeSub s.mcn.gas g_low
+    let g' ← safeSub s.mcn.gas gLow
     some {s with mcn := {s.mcn with stk := (x % y) :: xs, gas := g', pc := s.mcn.pc + 1}}
-
   | .smod => do
     let (x :: y :: xs) ← (return s.mcn.stk) | none
-    let g' ← safeSub s.mcn.gas g_low
+    let g' ← safeSub s.mcn.gas gLow
     some {s with mcn := {s.mcn with stk := (Bits.smod x y) :: xs, gas := g', pc := s.mcn.pc + 1}}
-
   | .add => do
     let (x :: y :: xs) ← (return s.mcn.stk) | none
-    let g' ← safeSub s.mcn.gas g_verylow
-    some {s with mcn := {s.mcn with stk := (x + y) :: xs, gas := g', pc := s.mcn.pc + 1}}
-
+    nextState s (cost := gVerylow) (stk' := (x + y) :: xs)
   | .addmod => do
     let (x :: y :: z :: xs) ← (return s.mcn.stk) | none
     let g' ← safeSub s.mcn.gas g_mid
     some {s with mcn := {s.mcn with stk := Bits.addmod x y z :: xs, gas := g', pc := s.mcn.pc + 1}}
-
   | .mulmod => do
     let (x :: y :: z :: xs) ← (return s.mcn.stk) | none
     let g' ← safeSub s.mcn.gas g_mid
     some {s with mcn := {s.mcn with stk := Bits.mulmod x y z :: xs, gas := g', pc := s.mcn.pc + 1}}
-
   | .swap n => do
-    let stk' ← Stack.swap n s.mcn.stk
-    let g' ← safeSub s.mcn.gas g_verylow
+    let stk' ← (dbg_trace "stage 0" ; Stack.swap n s.mcn.stk)
+    let g' ← (dbg_trace "stage 1" ; safeSub s.mcn.gas gVerylow)
     some {s with mcn := {s.mcn with stk := stk', gas := g', pc := s.mcn.pc + 1}}
-
+  | .dup n => do
+    let x ← s.mcn.stk.get? n
+    let g' ← safeSub s.mcn.gas gVerylow
+    some {s with mcn := {s.mcn with stk := x :: s.mcn.stk, gas := g', pc := s.mcn.pc + 1}}
   | .sstore => sstoreStep w₀ s
   | .sload => do
     let (x :: xs) ← (return s.mcn.stk) | (dbg_trace "sload failed!!"; none)
@@ -1361,14 +1598,10 @@ def Rinst.run (w₀ : World') (s : State') : Rinst → Option State'
 --       points to, or
 --   (2) recursion limit is reached (which should never happen with correct usage)
 
-def gMemory : Nat := 3
-
-def cMem (a : Nat) := gMemory * a + ((a ^ 2) / 512)
-
-def memExp (s : Nat) (f l : Word) : Nat :=
-  if l = 0
-  then s
-  else max s (ceilDiv (f.toNat + 1) l.toNat)
+-- def memExp (s : Nat) (f l : Word) : Nat :=
+--   if l = 0
+--   then s
+--   else max s (ceilDiv (f.toNat + 1) l.toNat)
 
 def gHigh : Nat := 10
 def gJumpdest : Nat := 1
@@ -1392,87 +1625,136 @@ def Jinst.run (s : State') : Jinst → Option State'
          guard (s.jumpable loc.toNat)
          some {s with mcn := {s.mcn with stk := stk', gas := g', pc := loc.toNat}}
 
+def Ninst.run (B : Block) (w₀ : World') (s : State') : Ninst → Option State'
+  | .push bs _ => do
+    let g' ← safeSub s.mcn.gas (if bs = [] then gBase else gVerylow)
+    let m' : Machine :=
+      { s.mcn with
+        gas := g'
+        pc := s.mcn.pc + bs.length + 1,
+        stk := (bs.toBits 32) :: s.mcn.stk }
+    some {s with mcn := m'}
+  | .reg r => Rinst.run B w₀ s r
+  | .exec e => dbg_trace s!"unimplemented xinst : {e.toString}\n" ; none
 
-def execCore (H : Block) (w₀ : World') : Nat → State' → Option exec.Result
-  | 0, _ => do (dbg_trace "execution limit reached\n"; none)
-  | lim + 1, s@⟨σ, μ, A, I⟩ => do
-    let i ← s.inst
-    --match (dbg_trace s!"current gas : {μ.gas}\nexecuting inst : {i.toString}" ; i) with
-    match (dbg_trace s!"executing inst : {i.toString}" ; i) with
-    --match i with
-    | .next (.push bs _) => do
-       let g' ← safeSub μ.gas g_verylow
-       let m' : Machine :=
-         (
-           {
-             s.mcn with
-             gas := g'
-             pc := μ.pc + bs.length + 1
-             stk := (bs.toBits 32) :: s.mcn.stk
-           }
+def retRun (s : State') : Option exec.Result := do
+  let (rlc :: rsz :: stk') ← (return s.mcn.stk) | none
+  let act' : Nat := memExp s.mcn.act rlc rsz
+  let memCost : Nat := cMem act' - cMem s.mcn.act
+  let g' ← safeSub s.mcn.gas memCost
+  let r := s.mcn.mem.sliceD rlc.toNat rsz.toNat 0
+  some {wld := s.wld, mcn := {s.mcn with stk := stk', gas := g', act := act'}, acr := s.acr, ret := r}
 
-         )
-       execAux {s with mcn := m'} (execCore H w₀ lim)
+def State'.xh (s : State') : exec.Result :=
+  {wld := none, mcn := s.mcn, acr := s.acr, ret := none}
 
-    | .next (.reg r) => do
-      let s' ← r.run w₀ s
-      execAux s' (execCore H w₀ lim)
+structure theta.Cont : Type where
+  (olc : Word)
+  (osz : Word)
+  (gas : Nat)
+  (mem : Bytes)
+  (pc : Nat)
+  (stk : Stack)
+  (act : Nat)
+  (env : Env')
 
-    | .jump j => do
-      let s' ← j.run s
-      execAux s' (execCore H w₀ lim)
+def theta.Result.toState (ct : theta.Cont) (tr : theta.Result) : State' :=
+  let cpy : Bytes := List.take ct.osz.toNat tr.ret
+  let m' : Machine := {
+    gas := ct.gas + tr.gas
+    pc := ct.pc + 1
+    mem := ct.mem.takeD ct.olc.toNat 0 ++ cpy ++ ct.mem.drop (ct.olc.toNat + cpy.length)
+    ret := tr.ret
+    stk := @Bool.toBits 256 tr.sta :: ct.stk
+    act := ct.act
+  }
+  {wld := tr.wld, mcn := m', acr := tr.acr, env := ct.env}
 
+-- returns 'none' only when either the recursion limit or an unimplemented
+-- opcode is reached. returns 'some _' for all other cases.
+def exec (H : Block) (w₀ : World') : Nat → State' → Option exec.Result
+  | 0, _ => dbg_trace "execution limit reached\n" ; none
+  | lim + 1, s =>
+    match s.inst with
+    | none => some s.xh
+    | some i =>
+      match
+        (
+          dbg_trace s!"gas remaining : {s.mcn.gas}" ;
+          dbg_trace s!"executing inst : {i.toString}\n" ;
+          i
+        ) with
+      | .next (.exec .call) =>
+        match s.mcn.stk, s.wld.find? s.env.cta with
+        | gas :: adr :: clv :: ilc :: isz :: olc :: osz :: stk, some acct =>
+          let i : Bytes := s.mcn.mem.sliceD ilc.toNat isz.toNat 0
+          let t : Addr := (dbg_trace s!"nested receiver : {adr.toHex}" ; toAddr adr)
+          let as' : AddrSet := s.acr.adrs.insert (toAddr adr)
+          let A' : Accrual := {s.acr with adrs := as'}
+          let act' : Nat := memExp (memExp s.mcn.act ilc isz) olc osz
+          let memCost : Nat := cMem act' - cMem s.mcn.act
+          let cg : Nat := cCallGas s gas.toNat memCost t clv
+          dbg_trace s!"cg : {cg}"
+          dbg_trace s!"gas before totalcost deduction : {s.mcn.gas}"
+          dbg_trace s!"mem cost : {memCost}"
+          let totalCost := (cCall s gas.toNat memCost t clv) + memCost
+          dbg_trace s!"total cost : {totalCost}"
+          match safeSub s.mcn.gas totalCost with
+          | none => some s.xh
+          | some g' =>
+            let bd : theta.Cont :=
+              (
+                dbg_trace s!"gas after totalcost deduction : {g'}" ;
+                {
+                  olc := olc
+                  osz := osz
+                  gas := g'
+                  mem := s.mcn.mem
+                  pc := s.mcn.pc
+                  stk := stk
+                  act := act'
+                  env := s.env
+                }
+              )
+            if 0 < s.env.exd ∧ clv ≤ acct.bal
+            then let s' : State' :=
+                       θ.prep
+                         H
+                         s.wld
+                         A'
+                         s.env.cta
+                         s.env.oga
+                         t
+                         t
+                         cg
+                         s.env.gpr.toNat
+                         clv
+                         clv
+                         i
+                         (s.env.exd - 1)
+                         s.env.wup
+                 do let xr ← exec H w₀ lim s'
+                    let θr := θ.wrap s'.wld s'.acr xr
+                    exec H w₀ lim <| theta.Result.toState bd θr
+            else let s' : State' := theta.Result.toState bd ⟨s.wld, cg, A', 0, []⟩
+                 exec H w₀ lim s'
+        | _, _ => some s.xh
+      | .next n =>
+        match n.run H w₀ s with
+        | none => some s.xh
+        | some s' => exec H w₀ lim s'
+      | .jump j =>
+         match j.run s with
+         | none => some s.xh
+         | some s' => exec H w₀ lim s'
+      | .last .stop => some {wld := s.wld, mcn := s.mcn, acr := s.acr, ret := some []}
+      | .last .ret => some <| (retRun s).getD s.xh
+      -- | .last .dest => do
+      --   let (x :: _) ← (return s.mcn.stk) | none
+      --   let a := toAddr x
+      --   some {}
 
-
-
-    | .next (.exec .call) => do
-      let (gas :: adr :: clv :: ilc :: isz :: olc :: osz :: stk)
-        ← (return s.mcn.stk) | none
-      let i : Bytes :=
-        ( dbg_trace s!"INPUT LOC : {ilc.toNat}, INPUT SIZE : {isz.toNat}" ;
-          dbg_trace s!"OUTPUT LOC : {olc.toNat}, OUTPUT SIZE : {osz.toNat}" ;
-          s.mcn.mem.sliceD ilc.toNat isz.toNat 0 )
-      let t : Addr := (dbg_trace s!"nested receiver : {adr.toHex}" ; toAddr adr)
-      let acct ← s.wld.find? s.env.cta
-      let as' : AddrSet := s.acr.adrs.insert (toAddr adr)
-      let A' : Accrual := {s.acr with adrs := as'}
-      let cg : Nat := cCallGas s gas.toNat t clv
-      let g' ← safeSub s.mcn.gas gColdAccountAccess
-      let g'' ← safeSub g' cg
-      let newAct : Nat := memExp (memExp s.mcn.act ilc isz) olc osz
-      let memCost : Nat := cMem newAct - cMem s.mcn.act
-      let g''' ← (dbg_trace s!"call op memExp cost : {memCost}\n" ; safeSub g'' memCost)
-      let trState : State' :=
-         θ.prep H s.wld A' s.env.cta s.env.oga t t cg s.env.gpr.toNat clv clv i (s.env.exd - 1) s.env.wup
-      let trCore : theta.Result := θ.wrap trState (execAux trState (execCore H w₀ lim))
-      let tr : theta.Result :=
-        if 0 < s.env.exd ∧ clv ≤ acct.bal
-        then trCore
-        else ⟨s.wld, cg, A', 0, []⟩
-      let cpy : Bytes := List.take osz.toNat tr.ret
-      let m' : Machine := {
-        gas := g''' + tr.gas
-        pc := s.mcn.pc + 1
-        mem := s.mcn.mem.takeD olc.toNat 0 ++ cpy ++ s.mcn.mem.drop (olc.toNat + cpy.length)
-        ret := tr.ret
-        stk := @Bool.toBits 256 tr.sta :: stk
-        act := newAct
-      }
-
-      let s' : State' := {wld := tr.wld, mcn := m', acr := tr.acr, env := s.env}
-      execAux s' (execCore H w₀ lim)
-    | .last .stop => some {wld := σ, mcn := μ, acr := A, ret := some []}
-    | .last .ret => do
-      let (rlc :: rsz :: stk') ← (return s.mcn.stk) | none
-      let newAct : Nat := memExp s.mcn.act rlc rsz
-      let memCost : Nat := cMem newAct - cMem s.mcn.act
-      let g' ← (dbg_trace s!"return op memExp cost : {memCost}\n" ; safeSub s.mcn.gas memCost)
-      let r := s.mcn.mem.sliceD rlc.toNat rsz.toNat 0
-      some {wld := s.wld, mcn := {s.mcn with stk := stk', gas := g'}, acr := s.acr, ret := r}
-    | _ => (dbg_trace s!"unimplemented instruction : {i.toString}"; none)
-
-def exec (H : Block) (w₀ : World') (lim : Nat) (s : State') : exec.Result :=
-  execAux s (execCore H w₀ lim)
+      | _ => dbg_trace s!"unimplemented instruction : {i.toString}"; none
 
 def theta
   (H : Block)
@@ -1490,9 +1772,11 @@ def theta
   (d : Bytes)
   (e : Nat)
   (w : Bool) :
-  theta.Result :=
-  let xr := θ.prep H σ A s o r c g p v v_app d e w
-  θ.wrap xr (exec H σ₀ g xr)
+  Option theta.Result :=
+  let st := θ.prep H σ A s o r c g p v v_app d e w
+  match exec H σ₀ g st with
+  | none => none
+  | some xr => some (θ.wrap st.wld st.acr xr)
 
 def publicAddress (hsa : ByteArray) (ri : UInt8) (rsa : ByteArray) : IO Addr :=
   match (ecrecoverFlag hsa ri rsa).toBytes with
@@ -1513,7 +1797,7 @@ inductive TxType : Type
   | two : AccessList → Word → Word → TxType
 
 structure TxBytesContent : Type where
-  (chainId : Nat)
+  (chainId : Option Nat)
   (yParity : Bool)
   (type : TxType)
   (nonce : Word)
@@ -1557,7 +1841,7 @@ def decodeTxBytes (tbs : Bytes) : IO (TxBytesContent × Word) := do
         ]
     return ⟨
       {
-        chainId := 1
+        chainId := none
         yParity := if (v - Ox x1 xB) = 0 then 0 else 1
         type := .zero
         nonce := @Bytes.toBits 32 nonce
@@ -1586,7 +1870,6 @@ def Acct.isEmpty (ac : Acct) : Prop :=
 
 instance {ac : Acct} : Decidable ac.isEmpty := instDecidableAnd
 
-def World'.get (w : World') (a : Addr) : Acct := (w.find? a).getD .empty
 def World'.set (w : World') (a : Addr) (ac : Acct) : World' :=
   if ac.isEmpty then w.erase a else w.insert a ac
 
@@ -1603,22 +1886,24 @@ def Tx.run
   let g : Nat := tx.gasLimit.toNat - intrinsicGas (some tx.receiver) tx.calldata []
   let w ← (checkpoint w sender (tx.gasLimit * tx.gasPrice)).toIO ""
 
-  let tr : theta.Result :=
-    theta
-      blk
-      w w
-      (A_star blk sender (some tx.receiver) [])
-      sender
-      sender
-      tx.receiver
-      tx.receiver
-      g
-      tx.gasPrice.toNat
-      tx.val
-      tx.val
-      tx.calldata
-      1024
-      true
+  let tr ←
+    (
+      theta
+        blk
+        w w
+        (A_star blk sender (some tx.receiver) [])
+        sender
+        sender
+        tx.receiver
+        tx.receiver
+        g
+        tx.gasPrice.toNat
+        tx.val
+        tx.val
+        tx.calldata
+        1024
+        true
+    ).toIO "theta failed"
 
   let gasLeft : Nat := tr.gas -- g'
   let refundAmount : Nat := tr.acr.ref
@@ -1695,7 +1980,15 @@ def Test.run (t : Test) : IO Unit := do
 
   let rst ←
     Tx.run
-      {baseFee := t.baseFee, ben := t.coinbase}
+      {
+        baseFee := t.baseFee,
+        ben := t.coinbase
+        prevRandao := t.prevRandao
+        gasLimit := t.blockGasLimit
+        timestamp := t.timestamp
+        number := t.number
+        chainId := 1
+      }
       t.world
       tx
       sender
@@ -1734,10 +2027,18 @@ def List.toNTB (l : List (Word × Word)) : NTB :=
 def main (args : List String) : IO Unit := do
   let testPath ← args.head?.toIO "no command line argument"
   let td ← readJsonFile testPath >>= Lean.Json.toTestData
-  let ts ← getTests td --| IO.throw "more than one test"
+  let ts ← getTests td
   Tests.run 1 ts
 
 #exit
+
+def main (args : List String) : IO Unit := do
+  let arg ← args.head?.toIO "no command line argument"
+  match arg.toNat? with
+  | none => IO.println "Argument is not a number"
+  | some n =>
+    let w : Word := UInt8a.keccak (Array.mkArray n 0)
+    IO.println s!"keccak of zeroes : {w.toHex}"
 
 def main : IO Unit := do
   let td ← readJsonFile "not.json" >>= Lean.Json.toTestData
