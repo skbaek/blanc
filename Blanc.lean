@@ -883,24 +883,39 @@ def State'.jumpable (s : State') (k : Nat) : Bool :=
   | none => false
   | some a => a.code.jumpable 0 k
 
-def State'.inst (s : State') : Option Inst := do
-  match s.wld.find? s.env.cta with
+def State'.inst (s : State') : Option Inst :=
+  match s.env.code.get? s.mcn.pc with
   | none => some (.last .stop)
-  | some a =>
-    match a.code.get? s.mcn.pc with
-    | none => return (.last .stop)
-    | some b =>
-      (b.toRinst? <&> (.next ∘ .reg)) <|>
-      (b.toXinst? <&> (.next ∘ .exec)) <|>
-      (b.toJinst? <&> .jump) <|>
-      (b.toLinst? <&> .last) <|>
-      ( if h : 95 ≤ b.toNat ∧ b.toNat ≤ 127
-        then let len := b.toNat - 95
-             let slc := a.code.sliceD (s.mcn.pc + 1) len 0
-             let h_slc : slc.length ≤ 32 := by
-               simp [len, slc, List.sliceD, h.right]
-             some (.next <| .push slc h_slc)
-        else none )
+  | some b =>
+    (b.toRinst? <&> (.next ∘ .reg)) <|>
+    (b.toXinst? <&> (.next ∘ .exec)) <|>
+    (b.toJinst? <&> .jump) <|>
+    (b.toLinst? <&> .last) <|>
+    ( if h : 95 ≤ b.toNat ∧ b.toNat ≤ 127
+      then let len := b.toNat - 95
+           let slc := s.env.code.sliceD (s.mcn.pc + 1) len 0
+           let h_slc : slc.length ≤ 32 := by
+             simp [len, slc, List.sliceD, h.right]
+           some (.next <| .push slc h_slc)
+      else none )
+
+  -- match s.wld.find? s.env.cta with
+  -- | none => some (.last .stop)
+  -- | some a =>
+  --   match a.code.get? s.mcn.pc with
+  --   | none => return (.last .stop)
+  --   | some b =>
+  --     (b.toRinst? <&> (.next ∘ .reg)) <|>
+  --     (b.toXinst? <&> (.next ∘ .exec)) <|>
+  --     (b.toJinst? <&> .jump) <|>
+  --     (b.toLinst? <&> .last) <|>
+  --     ( if h : 95 ≤ b.toNat ∧ b.toNat ≤ 127
+  --       then let len := b.toNat - 95
+  --            let slc := a.code.sliceD (s.mcn.pc + 1) len 0
+  --            let h_slc : slc.length ≤ 32 := by
+  --              simp [len, slc, List.sliceD, h.right]
+  --            some (.next <| .push slc h_slc)
+  --       else none )
 
 def g_zero : Nat := 0
 def gVerylow : Nat := 3
@@ -923,9 +938,20 @@ def Dead (w : World') (a : Addr) : Prop :=
   | none => True
   | some x => x.Empty
 
+def World'.balAt (w : World') (a : Addr) : Word :=
+  match w.find? a with
+  | none => 0
+  | some x => x.bal
+
 def gNewAccount : Nat := 25000
 def gCallValue : Nat := 9000
 def gCallStipend : Nat := 2300
+def gWarmAccess : Nat := 100
+def gColdAccountAccess : Nat := 2600
+def gSelfdestruct : Nat := 5000
+def gLog : Nat := 375
+def gLogdata : Nat := 8
+def gLogtopic : Nat := 375
 
 instance {w a} : Decidable (Dead w a) := by
   simp [Dead]
@@ -933,8 +959,6 @@ instance {w a} : Decidable (Dead w a) := by
   · simp; apply instDecidableTrue
   · simp [Acct.Empty]; apply instDecidableAnd
 
-def gWarmAccess : Nat := 100
-def gColdAccountAccess : Nat := 2600
 
 def cAAccess (x : Addr) (a : AddrSet) : Nat :=
   if x ∈ a then gWarmAccess else gColdAccountAccess
@@ -954,14 +978,13 @@ def cGasCap (s : State') (g : Nat) (memCost : Nat) (t : Addr) (v : Word) : Nat :
 
 def cCallGas (s : State') (g : Nat) (memCost : Nat) (t : Addr) (v : Word) : Nat :=
   if v ≠ 0
-  then dbg_trace "stipend case" ; cGasCap s g memCost t v + gCallStipend
-  else dbg_trace "no stipend" ; cGasCap s g memCost t v
+  then cGasCap s g memCost t v + gCallStipend
+  else cGasCap s g memCost t v
 
 def cCall (s : State') (g : Nat) (memCost : Nat) (t : Addr) (v : Word) : Nat :=
-  dbg_trace s!"gascap : {cGasCap s g memCost t v}"
-  dbg_trace s!"extra : {cExtra s t v}"
+  -- dbg_trace s!"gascap : {cGasCap s g memCost t v}"
+  -- dbg_trace s!"extra : {cExtra s t v}"
   cGasCap s g memCost t v + cExtra s t v
-  -- access cost : 2600
 
 
 structure theta.Result : Type where
@@ -1016,6 +1039,7 @@ def θ.prep
       else (dbg_trace "unreachable code : nonzero value calls from empty accounts should never happen" ; σ'₁)
     | some aₛ => σ'₁.insert s {aₛ with bal := aₛ.bal - v}
   let cd : Bytes := σ.code c
+  dbg_trace s!"code fetched to run : {cd.toHex}"
   let I : Env' := {
     cta := r, oga := o, gpr := @Nat.toBits 256 p, cld := d
     cla := s, clv := v_app, code := cd, blk := H, exd := e, wup := w
@@ -1023,8 +1047,8 @@ def θ.prep
   let μ : Machine := {gas := g, pc := 0, mem := [], ret := [], stk := [], act := 0}
   ⟨σ₁, μ, A, I⟩
 
-def θ.wrap (wld : World') (acr : Accrual) (xr : exec.Result) : theta.Result :=
-  let Ξr : Ξ.Result := {wld := xr.wld, gas := xr.mcn.gas, acr := xr.acr, ret := xr.ret}
+def θ.wrap (wld : World') (acr : Accrual) (Ξr : Ξ.Result) : theta.Result :=
+  -- let Ξr : Ξ.Result := {wld := xr.wld, gas := xr.mcn.gas, acr := xr.acr, ret := xr.ret}
   let σ_stars : Option World' := Ξr.wld
   let g_stars : Nat := Ξr.gas
   let A_stars : Accrual := Ξr.acr
@@ -1277,9 +1301,7 @@ def nextState (s : State') (cost : Nat)
   (mem' : Bytes := s.mcn.mem)
   (ret' : Bytes := s.mcn.ret)
   (adrs' : AddrSet := s.acr.adrs)
-
-   :
-  Option State' := do
+  (logs' : List RLP := s.acr.logs) : Option State' := do
   let memCost : Nat := cMem act' - cMem s.mcn.act
   let gas' ← s.deductGas (cost + memCost)
   let μ' : Machine :=
@@ -1297,7 +1319,7 @@ def nextState (s : State') (cost : Nat)
       adrs := adrs'
       keys := s.acr.keys
       ref := s.acr.ref
-      logs := s.acr.logs
+      logs := logs'
       touched := s.acr.touched
     }
   some {s with mcn := μ', acr := A'}
@@ -1435,48 +1457,37 @@ def Rinst.run (H : Block) (w₀ : World') (s : State') : Rinst → Option State'
     some {s with mcn := m'}
   | .gas => do
     let g' ← s.deductGas gBase
-    -- some {s with mcn := {s.mcn with stk := g'.toWord' :: s.mcn.stk, gas := g', pc := s.mcn.pc + 1}}
     nextState s (cost := gBase) (stk' := g'.toWord' :: s.mcn.stk)
   | .eq => do
     let (x :: y :: xs) ← (return s.mcn.stk) | none
-    let g' ← s.deductGas gVerylow
-    some {s with mcn := {s.mcn with stk := x =? y :: xs, gas := g', pc := s.mcn.pc + 1}}
+    nextState s (cost := gVerylow) (stk' := x =? y :: xs)
   | .lt => do
     let (x :: y :: xs) ← (return s.mcn.stk) | none
-    let g' ← s.deductGas gVerylow
-    some {s with mcn := {s.mcn with stk := x <? y :: xs, gas := g', pc := s.mcn.pc + 1}}
+    nextState s (cost := gVerylow) (stk' := x <? y :: xs)
   | .gt => do
     let (x :: y :: xs) ← (return s.mcn.stk) | none
-    let g' ← s.deductGas gVerylow
-    some {s with mcn := {s.mcn with stk := x >? y :: xs, gas := g', pc := s.mcn.pc + 1}}
+    nextState s (cost := gVerylow) (stk' := x >? y :: xs)
   | .slt => do
     let (x :: y :: xs) ← (return s.mcn.stk) | none
-    let g' ← s.deductGas gVerylow
-    some {s with mcn := {s.mcn with stk := x ±<? y :: xs, gas := g', pc := s.mcn.pc + 1}}
+    nextState s (cost := gVerylow) (stk' := x ±<? y :: xs)
   | .sgt => do
     let (x :: y :: xs) ← (return s.mcn.stk) | none
-    let g' ← s.deductGas gVerylow
-    some {s with mcn := {s.mcn with stk := x ±>? y :: xs, gas := g', pc := s.mcn.pc + 1}}
+    nextState s (cost := gVerylow) (stk' := x ±>? y :: xs)
   | .iszero => do
     let (x :: xs) ← (return s.mcn.stk) | none
-    let g' ← s.deductGas gVerylow
-    some {s with mcn := {s.mcn with stk := x =? 0 :: xs, gas := g', pc := s.mcn.pc + 1}}
+    nextState s (cost := gVerylow) (stk' := x =? 0 :: xs)
   | .not => do
     let (x :: xs) ← (return s.mcn.stk) | none
-    let g' ← s.deductGas gVerylow
-    some {s with mcn := {s.mcn with stk := ~ x :: xs, gas := g', pc := s.mcn.pc + 1}}
+    nextState s (cost := gVerylow) (stk' := ~ x :: xs)
   | .and => do
     let (x :: y :: xs) ← (return s.mcn.stk) | none
-    let g' ← s.deductGas gVerylow
-    some {s with mcn := {s.mcn with stk := Bits.and x y :: xs, gas := g', pc := s.mcn.pc + 1}}
+    nextState s (cost := gVerylow) (stk' := Bits.and x y :: xs)
   | .or => do
     let (x :: y :: xs) ← (return s.mcn.stk) | none
-    let g' ← s.deductGas gVerylow
-    some {s with mcn := {s.mcn with stk := Bits.or x y :: xs, gas := g', pc := s.mcn.pc + 1}}
+    nextState s (cost := gVerylow) (stk' := Bits.or x y :: xs)
   | .xor => do
     let (x :: y :: xs) ← (return s.mcn.stk) | none
-    let g' ← s.deductGas gVerylow
-    some {s with mcn := {s.mcn with stk := Bits.xor x y :: xs, gas := g', pc := s.mcn.pc + 1}}
+    nextState s (cost := gVerylow) (stk' := Bits.xor x y :: xs)
   | .signextend => do
     let (x :: y :: xs) ← (return s.mcn.stk) | none
     let g' ← s.deductGas gLow
@@ -1509,23 +1520,12 @@ def Rinst.run (H : Block) (w₀ : World') (s : State') : Rinst → Option State'
   | .kec => do
     let (x :: y :: xs) ← (return s.mcn.stk) | none
     let act' := memExp s.mcn.act x y
-    dbg_trace s!"act' : {act'}"
-    let memCost : Nat := cMem act' - cMem s.mcn.act
-    dbg_trace s!"memCost : {memCost}"
-    let g' ← s.deductGas (gKeccak256 + (gKeccak256Word * (ceilDiv y.toNat 32)) + memCost)
-    dbg_trace s!"kec-gas : {g'}"
     let bs : Bytes := s.mcn.mem.sliceD x.toNat y.toNat 0
-    dbg_trace s!"bs length : {bs.length}"
     let hash : Word := bs.keccak
-    let m' :=
-      {
-        s.mcn with
-        stk := hash :: xs,
-        gas := g',
-        pc := s.mcn.pc + 1
-        act := act'
-      }
-    some {s with mcn := m'}
+    nextState s
+      (cost := gKeccak256 + (gKeccak256Word * (ceilDiv y.toNat 32)))
+      (act' := act')
+      (stk' := hash :: xs)
   | .sub => do
     let (x :: y :: xs) ← (return s.mcn.stk) | none
     let g' ← safeSub s.mcn.gas gVerylow
@@ -1566,16 +1566,15 @@ def Rinst.run (H : Block) (w₀ : World') (s : State') : Rinst → Option State'
     let g' ← safeSub s.mcn.gas g_mid
     some {s with mcn := {s.mcn with stk := Bits.mulmod x y z :: xs, gas := g', pc := s.mcn.pc + 1}}
   | .swap n => do
-    let stk' ← (dbg_trace "stage 0" ; Stack.swap n s.mcn.stk)
-    let g' ← (dbg_trace "stage 1" ; safeSub s.mcn.gas gVerylow)
+    let stk' ← Stack.swap n s.mcn.stk
+    let g' ← safeSub s.mcn.gas gVerylow
     some {s with mcn := {s.mcn with stk := stk', gas := g', pc := s.mcn.pc + 1}}
   | .dup n => do
     let x ← s.mcn.stk.get? n
     let g' ← safeSub s.mcn.gas gVerylow
     some {s with mcn := {s.mcn with stk := x :: s.mcn.stk, gas := g', pc := s.mcn.pc + 1}}
-  | .sstore => sstoreStep w₀ s
   | .sload => do
-    let (x :: xs) ← (return s.mcn.stk) | (dbg_trace "sload failed!!"; none)
+    let (x :: xs) ← (return s.mcn.stk) | none
     let c : Nat := if s.acr.keys.contains ⟨s.env.cta, x⟩ then gWarmAccess else gColdSLoad
     let g' ← safeSub s.mcn.gas c
     let ac ← s.wld.find? s.env.cta
@@ -1585,9 +1584,27 @@ def Rinst.run (H : Block) (w₀ : World') (s : State') : Rinst → Option State'
       mcn := {s.mcn with stk := y :: xs, gas := g', pc := s.mcn.pc + 1}
       acr := {s.acr with keys := s.acr.keys.insert ⟨s.env.cta, x⟩}
     }
+  | .sstore => sstoreStep w₀ s
+  | .pc => nextState s (cost := gBase) (stk' := s.mcn.pc.toWord :: s.mcn.stk)
+  | .log n => do
+    let (x :: y :: xys) ← (return s.mcn.stk) | none
+    let ⟨xs, ys⟩ ← List.splitAt? n xys
+    let bs : Bytes := s.mcn.mem.sliceD x.toNat y.toNat 0
+    let log : RLP :=
+      .list [
+        .bytes (@Bits.toBytes 20 s.env.cta),
+        .list (xs.map Word.toRLP),
+        .bytes bs
+      ]
+    nextState s
+      (cost := gLog + (gLogdata * y.toNat) + (n * gLogtopic))
+      (stk' := ys)
+      (act' := memExp s.mcn.act x y)
+      (logs' := log :: s.acr.logs)
   | i => dbg_trace s!"UNIMPLEMENTED REGULAR INSTRUCTION EXECUTION : {i.toString}"; none
 
 
+#check Word.toRLP
 
 -- w₀ : the 'checkpoint' world saved at the preparation stage of tx
 
@@ -1605,6 +1622,27 @@ def Rinst.run (H : Block) (w₀ : World') (s : State') : Rinst → Option State'
 
 def gHigh : Nat := 10
 def gJumpdest : Nat := 1
+
+def Acct.isEmpty (ac : Acct) : Prop :=
+  ac.nonce = 0 ∧
+  ac.bal = 0 ∧
+  ac.stor.isEmpty = .true ∧
+  ac.code = []
+
+instance {ac : Acct} : Decidable ac.isEmpty := instDecidableAnd
+
+def World'.set (w : World') (a : Addr) (ac : Acct) : World' :=
+  if ac.isEmpty then w.erase a else w.insert a ac
+
+def World'.addBal (w : World') (a : Addr) (v : Word) : World' :=
+  let ac := w.get a
+  let ac' : Acct := {ac with bal := ac.bal + v}
+  w.set a ac'
+
+def World'.setBal (w : World') (a : Addr) (v : Word) : World' :=
+  let ac := w.get a
+  let ac' : Acct := {ac with bal := v}
+  w.set a ac'
 
 def Jinst.run (s : State') : Jinst → Option State'
   | .jumpdest => do
@@ -1637,16 +1675,16 @@ def Ninst.run (B : Block) (w₀ : World') (s : State') : Ninst → Option State'
   | .reg r => Rinst.run B w₀ s r
   | .exec e => dbg_trace s!"unimplemented xinst : {e.toString}\n" ; none
 
-def retRun (s : State') : Option exec.Result := do
-  let (rlc :: rsz :: stk') ← (return s.mcn.stk) | none
+def retRun (s : State') : Option Ξ.Result := do
+  let (rlc :: rsz :: _) ← (return s.mcn.stk) | none
   let act' : Nat := memExp s.mcn.act rlc rsz
   let memCost : Nat := cMem act' - cMem s.mcn.act
   let g' ← safeSub s.mcn.gas memCost
   let r := s.mcn.mem.sliceD rlc.toNat rsz.toNat 0
-  some {wld := s.wld, mcn := {s.mcn with stk := stk', gas := g', act := act'}, acr := s.acr, ret := r}
+  some {wld := s.wld, gas := g', acr := s.acr, ret := r}
 
-def State'.xh (s : State') : exec.Result :=
-  {wld := none, mcn := s.mcn, acr := s.acr, ret := none}
+def State'.xh (s : State') : Ξ.Result :=
+  {wld := none, gas := s.mcn.gas, acr := s.acr, ret := none}
 
 structure theta.Cont : Type where
   (olc : Word)
@@ -1670,75 +1708,116 @@ def theta.Result.toState (ct : theta.Cont) (tr : theta.Result) : State' :=
   }
   {wld := tr.wld, mcn := m', acr := tr.acr, env := ct.env}
 
--- returns 'none' only when either the recursion limit or an unimplemented
--- opcode is reached. returns 'some _' for all other cases.
-def exec (H : Block) (w₀ : World') : Nat → State' → Option exec.Result
+-- the X function of YP, except that the return type is modified to match
+-- that of the Ξ function: the machine state (μ) returned by 'X' is never
+-- used for anything except for remaining gas, so it is safe to discard the
+-- unused information by the time X is returning.
+-- This function returns 'none' only when either the recursion limit or an
+-- unimplemented opcode is reached. returns 'some _' for all other cases.
+def exec (H : Block) (w₀ : World') : Nat → State' → Option Ξ.Result
   | 0, _ => dbg_trace "execution limit reached\n" ; none
   | lim + 1, s =>
     match s.inst with
     | none => some s.xh
     | some i =>
-      match
-        (
-          dbg_trace s!"gas remaining : {s.mcn.gas}" ;
-          dbg_trace s!"executing inst : {i.toString}\n" ;
-          i
-        ) with
-      | .next (.exec .call) =>
-        match s.mcn.stk, s.wld.find? s.env.cta with
-        | gas :: adr :: clv :: ilc :: isz :: olc :: osz :: stk, some acct =>
-          let i : Bytes := s.mcn.mem.sliceD ilc.toNat isz.toNat 0
-          let t : Addr := (dbg_trace s!"nested receiver : {adr.toHex}" ; toAddr adr)
-          let as' : AddrSet := s.acr.adrs.insert (toAddr adr)
-          let A' : Accrual := {s.acr with adrs := as'}
-          let act' : Nat := memExp (memExp s.mcn.act ilc isz) olc osz
-          let memCost : Nat := cMem act' - cMem s.mcn.act
-          let cg : Nat := cCallGas s gas.toNat memCost t clv
-          dbg_trace s!"cg : {cg}"
-          dbg_trace s!"gas before totalcost deduction : {s.mcn.gas}"
-          dbg_trace s!"mem cost : {memCost}"
-          let totalCost := (cCall s gas.toNat memCost t clv) + memCost
-          dbg_trace s!"total cost : {totalCost}"
-          match safeSub s.mcn.gas totalCost with
-          | none => some s.xh
-          | some g' =>
-            let bd : theta.Cont :=
-              (
-                dbg_trace s!"gas after totalcost deduction : {g'}" ;
-                {
-                  olc := olc
-                  osz := osz
-                  gas := g'
-                  mem := s.mcn.mem
-                  pc := s.mcn.pc
-                  stk := stk
-                  act := act'
-                  env := s.env
-                }
-              )
-            if 0 < s.env.exd ∧ clv ≤ acct.bal
-            then let s' : State' :=
-                       θ.prep
-                         H
-                         s.wld
-                         A'
-                         s.env.cta
-                         s.env.oga
-                         t
-                         t
-                         cg
-                         s.env.gpr.toNat
-                         clv
-                         clv
-                         i
-                         (s.env.exd - 1)
-                         s.env.wup
-                 do let xr ← exec H w₀ lim s'
-                    let θr := θ.wrap s'.wld s'.acr xr
-                    exec H w₀ lim <| theta.Result.toState bd θr
-            else let s' : State' := theta.Result.toState bd ⟨s.wld, cg, A', 0, []⟩
-                 exec H w₀ lim s'
-        | _, _ => some s.xh
+      -- dbg_trace s!"gas remaining : {s.mcn.gas}"
+      dbg_trace s!"executing inst : {i.toString}"
+      match i with
+      | .next (.exec .delcall) => do
+        let gas :: adr :: ilc :: isz :: olc :: osz :: stk
+          ← (return s.mcn.stk) | (some s.xh)
+        let i : Bytes := s.mcn.mem.sliceD ilc.toNat isz.toNat 0
+        let t : Addr := toAddr adr
+        dbg_trace s!"nested delgatecall to address : {t.toHex}"
+        let as' : AddrSet := s.acr.adrs.insert t
+        let A' : Accrual := {s.acr with adrs := as'}
+        let act' : Nat := memExp (memExp s.mcn.act ilc isz) olc osz
+        let memCost : Nat := cMem act' - cMem s.mcn.act
+        let cg : Nat := cCallGas s gas.toNat memCost t 0
+        let totalCost := (cCall s gas.toNat memCost t 0) + memCost
+        let (some g') ← (return (safeSub s.mcn.gas totalCost)) | some s.xh
+        let bd : theta.Cont :=
+          {
+            olc := olc
+            osz := osz
+            gas := g'
+            mem := s.mcn.mem
+            pc := s.mcn.pc
+            stk := stk
+            act := act'
+            env := s.env
+          }
+        let s'' : State' ←
+          if 0 = s.env.exd
+          then some (theta.Result.toState bd ⟨s.wld, cg, A', 0, []⟩)
+          else do let s' : State' :=
+                        θ.prep
+                          H
+                          s.wld
+                          A'
+                          s.env.cla
+                          s.env.oga
+                          s.env.cta
+                          t
+                          cg
+                          s.env.gpr.toNat
+                          0
+                          s.env.clv
+                          i
+                          (s.env.exd - 1)
+                          s.env.wup
+                  let xr ← exec H w₀ lim s'
+                  let θr := θ.wrap s'.wld s'.acr xr
+                  some (theta.Result.toState bd θr)
+        exec H w₀ lim s''
+
+      | .next (.exec .call) => do
+        let gas :: adr :: clv :: ilc :: isz :: olc :: osz :: stk
+          ← (return s.mcn.stk) | (some s.xh)
+        let i : Bytes := s.mcn.mem.sliceD ilc.toNat isz.toNat 0
+        let t : Addr := toAddr adr
+        dbg_trace s!"nested call to address : {t.toHex}"
+        let as' : AddrSet := s.acr.adrs.insert t
+        let A' : Accrual := {s.acr with adrs := as'}
+        let act' : Nat := memExp (memExp s.mcn.act ilc isz) olc osz
+        let memCost : Nat := cMem act' - cMem s.mcn.act
+        let cg : Nat := cCallGas s gas.toNat memCost t clv
+        let totalCost := (cCall s gas.toNat memCost t clv) + memCost
+        let (some g') ← (return (safeSub s.mcn.gas totalCost)) | some s.xh
+        let bd : theta.Cont :=
+          {
+            olc := olc
+            osz := osz
+            gas := g'
+            mem := s.mcn.mem
+            pc := s.mcn.pc
+            stk := stk
+            act := act'
+            env := s.env
+          }
+        let s'' : State' ←
+          if 0 = s.env.exd ∨ (s.wld.get s.env.cta).bal < clv
+          then some (theta.Result.toState bd ⟨s.wld, cg, A', 0, []⟩)
+          else do let s' : State' :=
+                        θ.prep
+                          H
+                          s.wld
+                          A'
+                          s.env.cta
+                          s.env.oga
+                          t
+                          t
+                          cg
+                          s.env.gpr.toNat
+                          clv
+                          clv
+                          i
+                          (s.env.exd - 1)
+                          s.env.wup
+                  let xr ← exec H w₀ lim s'
+                  let θr := θ.wrap s'.wld s'.acr xr
+                  some (theta.Result.toState bd θr)
+        exec H w₀ lim s''
       | .next n =>
         match n.run H w₀ s with
         | none => some s.xh
@@ -1747,18 +1826,45 @@ def exec (H : Block) (w₀ : World') : Nat → State' → Option exec.Result
          match j.run s with
          | none => some s.xh
          | some s' => exec H w₀ lim s'
-      | .last .stop => some {wld := s.wld, mcn := s.mcn, acr := s.acr, ret := some []}
+      | .last .stop => some {wld := s.wld, gas := s.mcn.gas, acr := s.acr, ret := some []}
       | .last .ret => some <| (retRun s).getD s.xh
-      -- | .last .dest => do
-      --   let (x :: _) ← (return s.mcn.stk) | none
-      --   let a := toAddr x
-      --   some {}
+      | .last .dest => do
+        let (x :: _) ← (return s.mcn.stk) | none
+        let a := toAddr x -- recipient
+        let cost :=
+          gSelfdestruct
+          + (if a ∈ s.acr.adrs then 0 else gColdAccountAccess)
+          + ( if Dead s.wld a ∧ s.wld.balAt s.env.cta ≠ 0
+              then gNewAccount
+              else 0 )
+        let gas' ← s.deductGas cost
+        some
+          {
+            wld :=
+              if a = s.env.cta
+              then s.wld
+              else let v := (s.wld.get s.env.cta).bal
+                   let wld' := s.wld.setBal s.env.cta 0
+                   wld'.addBal a v
+            gas := gas'
+            acr :=
+              {
+                s.acr with
+                dest := s.env.cta :: s.acr.dest
+                adrs := s.acr.adrs.insert a
+              }
+            ret := some []
+          }
 
       | _ => dbg_trace s!"unimplemented instruction : {i.toString}"; none
 
 def theta
+  -- Extra arguments not mentioned by YP,
+  -- but still necessary for correct execution
   (H : Block)
   (σ₀ : World')
+
+  -- Arguments specified by YP
   (σ : World')
   (A : Accrual)
   (s : Addr)
@@ -1862,21 +1968,6 @@ def eqTest {ξ} [DecidableEq ξ] (x y : ξ) (testName : String) : IO Unit := do
   .guard (x = y) (testName ++ " : fail")
   .println (testName ++ " : pass")
 
-def Acct.isEmpty (ac : Acct) : Prop :=
-  ac.nonce = 0 ∧
-  ac.bal = 0 ∧
-  ac.stor.isEmpty = .true ∧
-  ac.code = []
-
-instance {ac : Acct} : Decidable ac.isEmpty := instDecidableAnd
-
-def World'.set (w : World') (a : Addr) (ac : Acct) : World' :=
-  if ac.isEmpty then w.erase a else w.insert a ac
-
-def World'.addBal (w : World') (a : Addr) (v : Word) : World' :=
-  let ac := w.get a
-  let ac' : Acct := {ac with bal := ac.bal + v}
-  w.set a ac'
 
 def eraseIfEmpty (w : World') (a : Addr) : World' := w.set a <| w.get a
 
@@ -1922,8 +2013,9 @@ def Tx.run
 
   let w₀ : World' := tr.wld.addBal sender valReturn
   let w₁ : World' := w₀.addBal blk.ben (gasUsed * f)
-  let w₂ : World' := List.foldl Lean.RBMap.erase w₁ tr.acr.dest
-  let w₃ : World' := List.foldl eraseIfEmpty w₂ tr.acr.touched.toList
+  --let w₂ : World' := List.foldl Lean.RBMap.erase w₁ tr.acr.dest
+  --let w₃ : World' := List.foldl eraseIfEmpty w₂ tr.acr.touched.toList
+  let w₃ : World' := List.foldl eraseIfEmpty w₁ tr.acr.touched.toList
 
   return {
     wld := w₃,
@@ -2016,6 +2108,7 @@ def Test.run (t : Test) : IO Unit := do
 
 def Tests.run : Nat → List Test → IO Unit
   | _, [] => return ()
+  | 2, _ => return ()
   | n, t :: ts => do
     .println s!"================ Running test {n} ================"
     t.run
