@@ -211,28 +211,11 @@ def Bits.lt' : ∀ {n : ℕ}, Bits n → Bits n → Bool
 
 instance {n} : @LT (Bits n) := ⟨Bits.lt⟩
 
-def Bits.le : ∀ {n : ℕ}, Bits n → Bits n → Prop
-  | 0, ⦃⦄, ⦃⦄ => True
-  | _, x +> xs, y +> ys => x < y ∨ (x = y ∧ le xs ys)
-
-instance {n} : @LE (Bits n) := ⟨Bits.le⟩
-
 lemma Bits.cons_lt_cons {n} {x y} {xs ys : Bits n} :
     x +> xs < y +> ys ↔ (x < y ∨ (x = y ∧ xs < ys)) := Iff.refl _
 
 lemma Bits.cons_eq_cons {n} {x y} {xs ys : Bits n} :
     x +> xs = y +> ys ↔ (x = y ∧ xs = ys) := by simp
-
-lemma Bits.cons_le_cons {n} {xs ys : Bits n} {x y} :
-    x +> xs ≤ y +> ys ↔ (x < y ∨ (x = y ∧ xs ≤ ys)) := Iff.refl _
-
-instance {n : ℕ} (xs ys : Bits n) : Decidable (xs = ys) := by
-  induction n with
-  | zero => cases xs; cases ys; apply Decidable.isTrue rfl
-  | succ n ih =>
-    match xs, ys with
-    | x +> xs, y +> ys =>
-      rw [Bits.cons_eq_cons]; apply instDecidableAnd
 
 instance {n} {xs ys : Bits n} : Decidable (xs < ys) := by
   induction n with
@@ -245,6 +228,24 @@ instance {n} {xs ys : Bits n} : Decidable (xs < ys) := by
       cases x <;> cases y <;>
       simp [Bits.cons_lt_cons, false_lt_true, not_true_lt] <;>
       try {apply ih}; apply instDecidableTrue; apply instDecidableFalse
+
+def Bits.le : ∀ {n : ℕ}, Bits n → Bits n → Prop
+  | 0, ⦃⦄, ⦃⦄ => True
+  | _, x +> xs, y +> ys => x < y ∨ (x = y ∧ le xs ys)
+
+instance {n} : @LE (Bits n) := ⟨Bits.le⟩
+
+lemma Bits.cons_le_cons {n} {xs ys : Bits n} {x y} :
+    x +> xs ≤ y +> ys ↔ (x < y ∨ (x = y ∧ xs ≤ ys)) := Iff.refl _
+
+instance {n : ℕ} (xs ys : Bits n) : Decidable (xs = ys) := by
+  induction n with
+  | zero => cases xs; cases ys; apply Decidable.isTrue rfl
+  | succ n ih =>
+    match xs, ys with
+    | x +> xs, y +> ys =>
+      rw [Bits.cons_eq_cons]; apply instDecidableAnd
+
 
 instance {n : ℕ} (xs ys : Bits n) : Decidable (xs ≤ ys) := by
   induction n with
@@ -1519,8 +1520,176 @@ def Bits.toHex : ∀ k : Nat, Bits (4 * k) → String
 def Byte.toUInt8 (b : Byte) : UInt8 := ⟨⟨b.toNat, b.toNat_lt_pow⟩⟩
 def UInt8.toByte (i : UInt8) : Byte := i.toBitVec.toFin.val.toByte
 def Bits.toUInt64 (xs : Bits 64) : UInt64 := ⟨⟨xs.toNat, xs.toNat_lt_pow⟩⟩
-def UInt64.toBits (i : UInt64) : Bits 64 := Nat.toBits 64 i.toBitVec.toFin.val
-def UInt64.toBits' (i : UInt64) : Bits 64 := Nat.toBits' 64 i.toBitVec.toFin.val
+-- def UInt64.toBits (i : UInt64) : Bits 64 := Nat.toBits 64 i.toBitVec.toFin.val
+def UInt64.toBits (i : UInt64) : Bits 64 := Nat.toBits' 64 i.toBitVec.toFin.val
+
+
+
+def UInt64.lows (i : UInt64) : UInt64 := (i &&& 0x00000000FFFFFFFF)
+def UInt64.highs (i : UInt64) : UInt64 := (i >>> 32)
+
+def UInt64.carry (x y : UInt64) : UInt64 :=
+  if x + y < x then 1 else 0 -- alternatively : ~~~ x < y, or ~~~ y < x
+
+def UInt128 : Type := UInt64 × UInt64
+def UInt256 : Type := UInt128 × UInt128
+
+def Bits.toUInt128 (xys : Bits 128) : UInt128 :=
+  let xs := @Bits.prefix 64 64 xys
+  let ys := @Bits.suffix 64 64 xys
+  ⟨xs.toUInt64, ys.toUInt64⟩
+
+def Bits.toUInt256 (xys : Bits 256) : UInt256 :=
+  let xs := @Bits.prefix 128 128 xys
+  let ys := @Bits.suffix 128 128 xys
+  ⟨xs.toUInt128, ys.toUInt128⟩
+
+instance : Zero UInt128 := ⟨⟨0, 0⟩⟩
+instance : One UInt128 := ⟨⟨0, 1⟩⟩
+
+def UInt128.toBits (i : UInt128) : Bits 128 := i.1.toBits ++ i.2.toBits
+def UInt256.toBits (i : UInt256) : Bits 256 := i.1.toBits ++ i.2.toBits
+
+
+def UInt64.mulx (x y : UInt64) : UInt128 :=
+  let xh := x.highs
+  -- dbg_trace s!"xh : {@Bits.toHex 16 xh.toBits}"
+  let xl := x.lows
+  -- dbg_trace s!"xl : {@Bits.toHex 16 xl.toBits}"
+  let yh := y.highs
+  -- dbg_trace s!"yh : {@Bits.toHex 16 yh.toBits}"
+  let yl := y.lows
+  -- dbg_trace s!"yl : {@Bits.toHex 16 yl.toBits}"
+  let ll := xl * yl
+  -- dbg_trace s!"ll : {@Bits.toHex 16 ll.toBits}"
+  let lh := xl * yh
+  -- dbg_trace s!"lh : {@Bits.toHex 16 lh.toBits}"
+  let hl := xh * yl
+  -- dbg_trace s!"hl : {@Bits.toHex 16 hl.toBits}"
+  let hh := xh * yh
+  -- dbg_trace s!"hh : {@Bits.toHex 16 hh.toBits}"
+  let lhl := lh <<< 32
+  -- dbg_trace s!"lhl : {@Bits.toHex 16 lhl.toBits}"
+  let hll := hl <<< 32
+  -- dbg_trace s!"hll : {@Bits.toHex 16 hll.toBits}"
+  let lt := ll + lhl
+  let l := lt + hll
+  -- dbg_trace s!"lt : {@Bits.toHex 16 lt.toBits}"
+  let c : UInt64 :=
+    match (lt < ll : Bool), (l < lt : Bool) with
+    | true, true => 2
+    | false, false => 0
+    | _, _  => 1
+  -- dbg_trace s!"c : {@Bits.toHex 16 c.toBits}"
+  let h := hh + lh.highs + hl.highs + c --0 + c1
+  -- dbg_trace s!"h : {@Bits.toHex 16 h.toBits}"
+  ⟨h, l⟩
+
+def UInt128.add (x y : UInt128) : UInt128 :=
+  let l := x.2 + y.2
+  let c : UInt64 := if l < x.2 then 1 else 0
+  ⟨x.1 + y.1 + c, l⟩
+
+instance : HAdd UInt128 UInt128 UInt128 := ⟨UInt128.add⟩
+
+def UInt128.lt (x y : UInt128) : Prop :=
+  x.1 < y.1 ∨ (x.1 = y.1 ∧ x.2 < y.2)
+
+instance : @LT UInt128 := ⟨UInt128.lt⟩
+
+instance {x y : UInt128} : Decidable (x < y) := instDecidableOr
+
+-- def UInt128.lt' (x y : UInt128) : Bool :=
+--   (x.1 < y.1) || (x.1 = y.1 && x.2 < y.2)
+
+
+def UInt256.add (x y : UInt256) : UInt256 :=
+  let l := x.2 + y.2
+  let c : UInt128 := if l < x.2 then 1 else 0
+  ⟨x.1 + y.1 + c, l⟩
+
+instance : HAdd UInt256 UInt256 UInt256 := ⟨UInt256.add⟩
+
+def UInt128.mulx (x y : UInt128) : UInt256 :=
+  let ll := UInt64.mulx x.2 y.2 -- dbg_trace s!"ll : {@Bits.toHex 16 ll.toBits}"
+  let lh := UInt64.mulx x.2 y.1 -- dbg_trace s!"lh : {@Bits.toHex 16 lh.toBits}"
+  let hl := UInt64.mulx x.1 y.2 -- dbg_trace s!"hl : {@Bits.toHex 16 hl.toBits}"
+  let hh := UInt64.mulx x.1 y.1 -- dbg_trace s!"hh : {@Bits.toHex 16 hh.toBits}"
+  let lhl : UInt128 := ⟨lh.2, 0⟩ -- dbg_trace s!"lhl : {@Bits.toHex 16 lhl.toBits}"
+  let hll : UInt128 := ⟨hl.2, 0⟩ -- dbg_trace s!"hll : {@Bits.toHex 16 hll.toBits}"
+  let lt := ll + lhl
+  let l := lt + hll -- dbg_trace s!"lt : {@Bits.toHex 16 lt.toBits}"
+  let c : UInt128 :=
+    match (lt < ll : Bool), (l < lt : Bool) with
+    | true, true => ⟨0, 2⟩
+    | false, false => ⟨0, 0⟩
+    | _, _  => ⟨0, 1⟩
+  -- dbg_trace s!"c : {@Bits.toHex 16 c.toBits}"
+  let h := hh + ⟨0, lh.1⟩ + ⟨0, hl.1⟩ + c --0 + c1
+  -- dbg_trace s!"h : {@Bits.toHex 16 h.toBits}"
+  ⟨h, l⟩
+
+def UInt256.mul (x y : UInt256) : UInt256 :=
+  let ll := UInt128.mulx x.2 y.2 -- dbg_trace s!"ll : {@Bits.toHex 16 ll.toBits}"
+  let lh := UInt128.mulx x.2 y.1 -- dbg_trace s!"lh : {@Bits.toHex 16 lh.toBits}"
+  let hl := UInt128.mulx x.1 y.2 -- dbg_trace s!"hl : {@Bits.toHex 16 hl.toBits}"
+  ll + ⟨lh.2, 0⟩ + ⟨hl.2, 0⟩
+
+-- @Bits.bexpCore m n x y := ⟨r, s⟩, where
+--   r := x ^ y
+--   s := if n = 0 then _ else x ^ (2 ^ (n - 1))
+def Bits.bexpCore : ∀ {m n : Nat}, Bits m → Bits n → (Bits m × Bits m)
+  | m, 0, x, ⦃⦄ => ⟨1, 1⟩
+  | m, 1, x, ⦃b⦄ => ⟨cond b x 1, x⟩
+  | m, n + 1, x, Bits.cons y ys =>
+    let ⟨r, s⟩ := @Bits.bexpCore m n x ys
+    let s₂ := s * s
+    ⟨(cond y s₂ 1) * r, s₂⟩
+
+instance : Zero UInt256 := ⟨0, 0⟩
+instance : One UInt256 := ⟨0, 1⟩
+
+def UInt64.teg (xs : UInt64) (n : Nat) : Bool :=
+  ((xs >>> n.toUInt64) &&& 0x0000000000000001) != 0
+
+def UInt128.teg (xs : UInt128) (n : Nat) : Bool :=
+  if n < 64
+  then xs.2.teg n
+  else xs.1.teg (n - 64)
+
+def UInt256.teg (xs : UInt256) (n : Nat) : Bool :=
+  if n < 128
+  then xs.2.teg n
+  else xs.1.teg (n - 128)
+
+-- def Bits.getD : ∀ {m}, Bits m → Nat → Bool → Bool
+--   | 0, ⦃⦄, _, d => d
+--   | _ + 1, x +> _, 0, _ => x
+--   | _ + 1, _ +> xs, n + 1, d => Bits.getD xs n d
+--
+-- def UInt256.getD (xs : UInt256) (n : Nat) (b : Bool) : Bool :=
+--   if n < 64
+--   then xs.1.1.getD n b
+--   else _
+
+instance : HMul UInt256 UInt256 UInt256 := ⟨UInt256.mul⟩
+
+def UInt256.bexpCore : Nat → UInt256 → UInt256 → (UInt256 × UInt256)
+ | 0, xs, _ => ⟨1, xs⟩
+ | n + 1, xs, ys =>
+   let ⟨r, s⟩ := UInt256.bexpCore n xs ys
+   let y : Bool := ys.teg n
+   ⟨(cond y s 1) * r, s * s⟩
+
+def UInt256.bexp (xs ys : UInt256) : UInt256 :=
+  (UInt256.bexpCore 256 xs ys).fst
+
+def Bits.bexp {m : Nat} (xs ys : Bits m) : Bits m :=
+  (@Bits.bexpCore m m xs ys).fst
+
+instance : HPow UInt256 UInt256 UInt256 := ⟨UInt256.bexp⟩
+
+
 
 ------------------------------KECCAK------------------------------
 
@@ -1545,7 +1714,7 @@ def Qords.toString (ws : Qords) : String :=
 
 def QordsU.toString (ws : QordsU) : String :=
   let f : Fin 25 → String :=
-    λ k => Bits.toHex 16 (UInt64.toBits' (ws.get k))
+    λ k => Bits.toHex 16 (UInt64.toBits (ws.get k))
   s!"{f 0} {f 1} {f 2} {f 3} {f 4}\n" ++
   s!"{f 5} {f 6} {f 7} {f 8} {f 9}\n" ++
   s!"{f 10} {f 11} {f 12} {f 13} {f 14}\n" ++
@@ -1592,7 +1761,7 @@ def Keccak'.θ' (bc : Array UInt64) : Nat → Array UInt64 → Array UInt64
     bc.get! ((i + 4) % 5) ^^^ sha3rotl64' (bc.get! ((i + 1) % 5)) 1
   θ' bc i <| θ'' t i 5 ws
 
-def UInt64.toHex (z : UInt64) : String := @Bits.toHex 16 z.toBits'
+def UInt64.toHex (z : UInt64) : String := @Bits.toHex 16 z.toBits
 
 def KeccakU.θ' (bc : Vec UInt64 5) : Nat → QordsU → QordsU
 | 0, ws => ws
@@ -1830,7 +1999,7 @@ def Qord.reverse (w : Bits 64) : Bits 64 :=
   Bytes.toBits 8 (@Bits.toBytes 8 w).reverse
 
 
-abbrev UInt256 : Type := Vec UInt64 4
+
 
 abbrev Qords' := Array UInt64
 
@@ -1894,17 +2063,10 @@ def keccakU : Fin 17 → List UInt8 → QordsU → Word
   let temp0 := QordsU.app wc (· ^^^ t) ws
   let temp1 := QordsU.app 16 (· ^^^ s) temp0
   let ws' := KeccakU.f temp1
-  Qord.reverse (ws'.get 0).toBits' ++
-  Qord.reverse (ws'.get 1).toBits' ++
-  Qord.reverse (ws'.get 2).toBits' ++
-  Qord.reverse (ws'.get 3).toBits'
-
--- def foof (bs : Array UInt8) (n m : Nat) : UInt8 :=
---   if n > m
---   then bs.htn! (n - m)
---   else if n = m
---        then 1
---        else 0
+  Qord.reverse (ws'.get 0).toBits ++
+  Qord.reverse (ws'.get 1).toBits ++
+  Qord.reverse (ws'.get 2).toBits ++
+  Qord.reverse (ws'.get 3).toBits
 
 def keccakA (n : Nat) (wc : Fin 17) (bs : Array UInt8) (ws : QordsU) : Word :=
   if 7 < n
@@ -1928,29 +2090,10 @@ def keccakA (n : Nat) (wc : Fin 17) (bs : Array UInt8) (ws : QordsU) : Word :=
        let temp0 := QordsU.app wc (· ^^^ t) ws
        let temp1 := QordsU.app 16 (· ^^^ s) temp0
        let ws' := KeccakU.f temp1
-       Qord.reverse (ws'.get 0).toBits' ++
-       Qord.reverse (ws'.get 1).toBits' ++
-       Qord.reverse (ws'.get 2).toBits' ++
-       Qord.reverse (ws'.get 3).toBits'
-
-   -- let b0 : UInt8 := foof bs n 0
-   --     let b1 : UInt8 := foof bs n 1
-   --     let b2 : UInt8 := foof bs n 2
-   --     let b3 : UInt8 := foof bs n 3
-   --     let b4 : UInt8 := foof bs n 4
-   --     let b5 : UInt8 := foof bs n 5
-   --     let b6 : UInt8 := foof bs n 6
-   --     let b7 : UInt8 := foof bs n 7
-   --     let t : UInt64 := UInt8s.toUInt64 b7 b6 b5 b4 b3 b2 b1 b0
-   --     let s : UInt64 := ((8 : UInt64) <<< 60)
-   --     let ws' :=
-   --       Keccak'.f
-   --         <| Qords'.app 16 (UInt64.xor · s)
-   --         <| Qords'.app wc (UInt64.xor · t) ws
-   --     Qord.reverse (ws'.get! 0).toBits' ++
-   --     Qord.reverse (ws'.get! 1).toBits' ++
-   --     Qord.reverse (ws'.get! 2).toBits' ++
-   --     Qord.reverse (ws'.get! 3).toBits'
+       Qord.reverse (ws'.get 0).toBits ++
+       Qord.reverse (ws'.get 1).toBits ++
+       Qord.reverse (ws'.get 2).toBits ++
+       Qord.reverse (ws'.get 3).toBits
 
 def Bytes.keccak (bs : Bytes) : Word :=
   _root_.keccak (0 : Fin 17) bs Qords.init
@@ -1961,17 +2104,105 @@ def UInt8s.keccak (bs : List UInt8) : Word :=
 def UInt8a.keccak (bs : Array UInt8) : Word :=
   keccakA bs.size (0 : Fin 17) bs QordsU.init
 
--- #eval @Bits.toHex 64 (UInt8s.keccak [])
--- #eval @Bits.toHex 64 (UInt8a.keccak #[])
--- #eval @Bits.toHex 64 (Bytes.keccak [])
--- def longFooA : Array UInt8 := Array.mkArray 1048575 0
--- #eval UInt8a.keccak longFooA
--- #eval UInt8s.keccak longFooU
-
 def String.keccak (s : String) : Word :=
   Bytes.keccak s.toBytes
 
--- def longFoo : Bytes := List.replicate 1048575 0
--- def longFooU : List UInt8 := List.replicate 1048575 0
--- def longFooU : List UInt8 := List.replicate 1048575 0
--- #eval UInt8s.keccak longFooU
+def List.splitAt? {ξ : Type u} : Nat → List ξ → Option (List ξ × List ξ)
+  | 0, xs => some ([], xs)
+  | _ + 1, [] => none
+  | n + 1, x :: xs => .map (x :: ·) id <$> xs.splitAt? n
+
+
+def Bytes.toNat' : Nat → Bytes → Nat
+  | k, [] => k
+  | k, b :: bs => Bytes.toNat' ((k * 256) + b.toNat) bs
+
+def Bytes.toNat (bs : Bytes) : Nat := bs.toNat' 0
+
+def Nat.toBytesCore (n : Nat) : Bytes :=
+  if n < 256
+  then [n.toByte]
+  else (n % 256).toByte :: (n / 256).toBytesCore
+
+def Nat.toBytes (n : Nat) : Bytes := n.toBytesCore.reverse
+
+
+
+-------------------------------- RLP --------------------------------
+
+inductive RLP : Type
+  | bytes : Bytes → RLP
+  | list : List RLP → RLP
+
+mutual
+  def RLP.decode' : Nat → Bytes → Option (RLP × Bytes)
+    | _, [] => none
+    | 0, _ :: _ => none
+    | _ + 1, b@⦃0, _, _, _, _, _, _, _⦄ :: bs => some (.bytes [b], bs)
+    | _ + 1, b@⦃1, 0, 1, 1, 1, _, _, _⦄ :: bs => do
+      let (lbs, bs') ← List.splitAt? (b - Ox xB x7).toNat bs
+      let (rbs, bs'') ← List.splitAt? (Bytes.toNat lbs) bs'
+      return ⟨.bytes rbs, bs''⟩
+    | _ + 1, b@⦃1, 0, _, _, _, _, _, _⦄ :: bs =>
+      .map .bytes id <$> List.splitAt? (b - Ox x8 x0).toNat bs
+    | k + 1, b@⦃1, 1, 1, 1, 1, _, _, _⦄ :: bs => do
+      let (lbs, bs') ← List.splitAt? (b - Ox xF x7).toNat bs
+      let (rbs, bs'') ← List.splitAt? (Bytes.toNat lbs) bs'
+      let rs ← RLPs.decode k rbs
+      return ⟨.list rs, bs''⟩
+    | k + 1, b@⦃1, 1, _, _, _, _, _, _⦄ :: bs => do
+      let (rbs, bs') ← List.splitAt? (b - Ox xC x0).toNat bs
+      let rs ← RLPs.decode k rbs
+      return ⟨.list rs, bs'⟩
+  def RLPs.decode : Nat → Bytes → Option (List RLP)
+    | _, [] => some []
+    | 0, _ :: _ => none
+    | k + 1, bs@(_ :: _) => do
+      let (r, bs') ← RLP.decode' (k + 1) bs
+      let rs ← RLPs.decode k bs'
+      return (r :: rs)
+end
+
+def RLP.decode (bs : Bytes) : Option RLP :=
+  match RLP.decode' bs.length bs with
+  | some (r, []) => some r
+  | _ => none
+
+def RLP.encodeBytes : Bytes → Bytes
+  | [b] =>
+    if b < (Ox x8 x0)
+    then [b]
+    else [Ox x8 x1, b]
+  | bs =>
+    if bs.length < 56
+    then (Ox x8 x0 + bs.length.toByte) :: bs
+    else let lbs : Bytes := bs.length.toBytes
+         (Ox xB x7 + lbs.length.toByte) :: (lbs ++ bs)
+
+mutual
+  def RLP.encode : RLP → Bytes
+    | .bytes [b] =>
+      if b < (Ox x8 x0)
+      then [b]
+      else [Ox x8 x1, b]
+    | .bytes bs =>
+      if bs.length < 56
+      then (Ox x8 x0 + bs.length.toByte) :: bs
+      else let lbs : Bytes := bs.length.toBytes
+           (Ox xB x7 + lbs.length.toByte) :: (lbs ++ bs)
+    | .list rs => RLPs.encode rs
+  def RLPs.encodeMap : List RLP → Bytes
+    | .nil => []
+    | .cons r rs => r.encode ++ RLPs.encodeMap rs
+  def RLPs.encode (rs : List RLP) : Bytes :=
+    let bs := RLPs.encodeMap rs
+    let len := bs.length
+    if len < 56
+    then (Ox xC x0 + len.toByte) :: bs
+    else let lbs : Bytes := len.toBytes
+         (Ox xF x7 + lbs.length.toByte) :: (lbs ++ bs)
+end
+
+partial def RLP.toStrings : RLP → List String
+  | .bytes bs => [s!"0x{bs.toHex}"]
+  | .list rs => "List:" :: (rs.map RLP.toStrings).flatten.map ("  " ++ ·)

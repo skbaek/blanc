@@ -27,101 +27,6 @@ def WethByteCode : String :=
      "" <| List.map Bytes.toHexLine
         <| List.chunks 31 <| Option.getD weth.compile []
 
-inductive RLP : Type
-  | bytes : Bytes → RLP
-  | list : List RLP → RLP
-
-def List.splitAt? {ξ : Type u} : Nat → List ξ → Option (List ξ × List ξ)
-  | 0, xs => some ([], xs)
-  | _ + 1, [] => none
-  | n + 1, x :: xs => .map (x :: ·) id <$> xs.splitAt? n
-
-def Bytes.toNat' : Nat → Bytes → Nat
-  | k, [] => k
-  | k, b :: bs => Bytes.toNat' ((k * 256) + b.toNat) bs
-
-def Bytes.toNat (bs : Bytes) : Nat := bs.toNat' 0
-
-def Nat.toBytesCore (n : Nat) : Bytes :=
-  if n < 256
-  then [n.toByte]
-  else (n % 256).toByte :: (n / 256).toBytesCore
-
-def Nat.toBytes (n : Nat) : Bytes := n.toBytesCore.reverse
-
-mutual
-  def RLP.decode' : Nat → Bytes → Option (RLP × Bytes)
-    | _, [] => none
-    | 0, _ :: _ => none
-    | _ + 1, b@⦃0, _, _, _, _, _, _, _⦄ :: bs => some (.bytes [b], bs)
-    | _ + 1, b@⦃1, 0, 1, 1, 1, _, _, _⦄ :: bs => do
-      let (lbs, bs') ← List.splitAt? (b - Ox xB x7).toNat bs
-      let (rbs, bs'') ← List.splitAt? (Bytes.toNat lbs) bs'
-      return ⟨.bytes rbs, bs''⟩
-    | _ + 1, b@⦃1, 0, _, _, _, _, _, _⦄ :: bs =>
-      .map .bytes id <$> List.splitAt? (b - Ox x8 x0).toNat bs
-    | k + 1, b@⦃1, 1, 1, 1, 1, _, _, _⦄ :: bs => do
-      let (lbs, bs') ← List.splitAt? (b - Ox xF x7).toNat bs
-      let (rbs, bs'') ← List.splitAt? (Bytes.toNat lbs) bs'
-      let rs ← RLPs.decode k rbs
-      return ⟨.list rs, bs''⟩
-    | k + 1, b@⦃1, 1, _, _, _, _, _, _⦄ :: bs => do
-      let (rbs, bs') ← List.splitAt? (b - Ox xC x0).toNat bs
-      let rs ← RLPs.decode k rbs
-      return ⟨.list rs, bs'⟩
-  def RLPs.decode : Nat → Bytes → Option (List RLP)
-    | _, [] => some []
-    | 0, _ :: _ => none
-    | k + 1, bs@(_ :: _) => do
-      let (r, bs') ← RLP.decode' (k + 1) bs
-      let rs ← RLPs.decode k bs'
-      return (r :: rs)
-end
-
-def RLP.decode (bs : Bytes) : Option RLP :=
-  match RLP.decode' bs.length bs with
-  | some (r, []) => some r
-  | _ => none
-
-def RLP.encodeBytes : Bytes → Bytes
-  | [b] =>
-    if b < (Ox x8 x0)
-    then [b]
-    else [Ox x8 x1, b]
-  | bs =>
-    if bs.length < 56
-    then (Ox x8 x0 + bs.length.toByte) :: bs
-    else let lbs : Bytes := bs.length.toBytes
-         (Ox xB x7 + lbs.length.toByte) :: (lbs ++ bs)
-
-mutual
-  def RLP.encode : RLP → Bytes
-    | .bytes [b] =>
-      if b < (Ox x8 x0)
-      then [b]
-      else [Ox x8 x1, b]
-    | .bytes bs =>
-      if bs.length < 56
-      then (Ox x8 x0 + bs.length.toByte) :: bs
-      else let lbs : Bytes := bs.length.toBytes
-           (Ox xB x7 + lbs.length.toByte) :: (lbs ++ bs)
-    | .list rs => RLPs.encode rs
-  def RLPs.encodeMap : List RLP → Bytes
-    | .nil => []
-    | .cons r rs => r.encode ++ RLPs.encodeMap rs
-  def RLPs.encode (rs : List RLP) : Bytes :=
-    let bs := RLPs.encodeMap rs
-    let len := bs.length
-    if len < 56
-    then (Ox xC x0 + len.toByte) :: bs
-    else let lbs : Bytes := len.toBytes
-         (Ox xF x7 + lbs.length.toByte) :: (lbs ++ bs)
-end
-
-partial def RLP.toStrings : RLP → List String
-  | .bytes bs => [s!"0x{bs.toHex}"]
-  | .list rs => "List:" :: (rs.map RLP.toStrings).flatten.map ("  " ++ ·)
-
 def Strings.join : List String → String
   | [] => ""
   | s :: ss => s ++ "\n" ++ Strings.join ss
@@ -878,12 +783,22 @@ def Bytes.jumpable : Bytes → Nat → Nat → Bool
     then Bytes.jumpable bs (b - Ox x5 xF).toNat n
     else Bytes.jumpable bs 0 n
 
+def Jinst.toString : Jinst → String
+  | .jump => "JUMP"
+  | .jumpdest => "JUMPDEST"
+  | .jumpi => "JUMPI"
+
+def Inst.toString : Inst → String
+  | .next n => n.toString
+  | .jump j => j.toString
+  | .last l => l.toString
+
 def State'.jumpable (s : State') (k : Nat) : Bool :=
   match s.wld.find? s.env.cta with
   | none => false
   | some a => a.code.jumpable 0 k
 
-def State'.inst (s : State') : Option Inst :=
+def State'.instCore (s : State') : Option Inst :=
   match s.env.code.get? s.mcn.pc with
   | none => some (.last .stop)
   | some b =>
@@ -898,6 +813,16 @@ def State'.inst (s : State') : Option Inst :=
              simp [len, slc, List.sliceD, h.right]
            some (.next <| .push slc h_slc)
       else none )
+
+def State'.inst (s : State') : Option Inst :=
+  -- dbg_trace "remaining gas : {s.mcn.gas}"
+  match s.instCore with
+  | none =>
+    --dbg_trace "no inst"
+    none
+  | some i =>
+    --dbg_trace s!"fetched inst : {i.toString}" ;
+    some i
 
   -- match s.wld.find? s.env.cta with
   -- | none => some (.last .stop)
@@ -1077,15 +1002,6 @@ def gSSet : Nat := 20000
 def gSReset : Nat := 2900
 def rSClear : Nat := 4800
 
-def Jinst.toString : Jinst → String
-  | .jump => "JUMP"
-  | .jumpdest => "JUMPDEST"
-  | .jumpi => "JUMPI"
-
-def Inst.toString : Inst → String
-  | .next n => n.toString
-  | .jump j => j.toString
-  | .last l => l.toString
 
 def Bits.min {n} : Bits n → Bits n → Bits n
   | xs, ys => if xs ≤ ys then xs else ys
@@ -1217,24 +1133,9 @@ def Option.trace {ξ} [ToString ξ] : Option ξ → Option ξ
   | none => none
   | some x => dbg_trace x; some x
 
-
 def Addr.toHex (a :Addr) : String := @Bits.toHex 40 a
 
 def Word.bytecount (w : Word) : Nat := (@Bits.toBytes 32 w).sig.length
-
--- @Bits.bexpCore m n x y := ⟨r, s⟩, where
---   r := x ^ y
---   s := if n = 0 then _ else x ^ (2 ^ (n - 1))
-def Bits.bexpCore : ∀ {m n : Nat}, Bits m → Bits n → (Bits m × Bits m)
-  | m, 0, x, ⦃⦄ => ⟨1, 1⟩
-  | m, 1, x, ⦃b⦄ => ⟨cond b x 1, x⟩
-  | m, n + 1, x, Bits.cons y ys =>
-    let ⟨r, s⟩ := @Bits.bexpCore m n x ys
-    let s₂ := s * s
-    ⟨(cond y s₂ 1) * r, s₂⟩
-
-def Bits.bexp {m : Nat} (xs ys : Bits m) : Bits m :=
-  (@Bits.bexpCore m m xs ys).fst
 
 def Stack.swapCore (x : Word) : Nat → Stack → Option (Word × Stack)
   | 0, [] => none
@@ -1520,8 +1421,11 @@ def Rinst.run (H : Block) (w₀ : World') (s : State') : Rinst → Option State'
   | .kec => do
     let (x :: y :: xs) ← (return s.mcn.stk) | none
     let act' := memExp s.mcn.act x y
+    let cost := gKeccak256 + (gKeccak256Word * (ceilDiv y.toNat 32))
+    let memCost : Nat := cMem act' - cMem s.mcn.act
+    let _ ← s.deductGas (cost + memCost)
     let bs : Bytes := s.mcn.mem.sliceD x.toNat y.toNat 0
-    let hash : Word := bs.keccak
+    let hash : Word := UInt8s.keccak (List.map Byte.toUInt8 bs)
     nextState s
       (cost := gKeccak256 + (gKeccak256Word * (ceilDiv y.toNat 32)))
       (act' := act')
@@ -1532,13 +1436,20 @@ def Rinst.run (H : Block) (w₀ : World') (s : State') : Rinst → Option State'
     some {s with mcn := {s.mcn with stk := (x - y) :: xs, gas := g', pc := s.mcn.pc + 1}}
   | .mul => do
     let (x :: y :: xs) ← (return s.mcn.stk) | none
+    let x' : UInt256 := x.toUInt256
+    let y' : UInt256 := y.toUInt256
+    let xy : Word := (x' * y').toBits
     let g' ← safeSub s.mcn.gas gLow
-    some {s with mcn := {s.mcn with stk := (x * y) :: xs, gas := g', pc := s.mcn.pc + 1}}
+    some {s with mcn := {s.mcn with stk := xy :: xs, gas := g', pc := s.mcn.pc + 1}}
   | .exp => do
     let (x :: y :: xs) ← (return s.mcn.stk) | none
+    let x' : UInt256 := x.toUInt256
+    let y' : UInt256 := y.toUInt256
+    let xpy : Word := (UInt256.bexp x' y').toBits
     nextState s
       (cost := g_exp + (g_expbyte * y.bytecount))
-      (stk' := Bits.bexp x y :: xs)
+      --(stk' := Bits.bexp x y :: xs)
+      (stk' := xpy :: xs)
   | .div => do
     let (x :: y :: xs) ← (return s.mcn.stk) | none
     nextState s (cost := gLow) (stk' := (x / y) :: xs)
@@ -1604,8 +1515,6 @@ def Rinst.run (H : Block) (w₀ : World') (s : State') : Rinst → Option State'
   | i => dbg_trace s!"UNIMPLEMENTED REGULAR INSTRUCTION EXECUTION : {i.toString}"; none
 
 
-#check Word.toRLP
-
 -- w₀ : the 'checkpoint' world saved at the preparation stage of tx
 
 -- The intended behavior of 'execCore' is identical to the 'X' function of YP,
@@ -1655,8 +1564,8 @@ def Jinst.run (s : State') : Jinst → Option State'
     some {s with mcn := {s.mcn with stk := stk', gas := g', pc := loc.toNat}}
   | .jumpi => do
     let (loc :: val :: stk') ← (return s.mcn.stk) | none
-    let g' ← (dbg_trace s!"jumpi loc : {loc.toNat}\njumpi val : {val.toNat}" ; safeSub s.mcn.gas gHigh)
-    --let g' ← safeSub s.mcn.gas gHigh
+    -- let g' ← (dbg_trace s!"jumpi loc : {loc.toNat}\njumpi val : {val.toNat}" ; safeSub s.mcn.gas gHigh)
+    let g' ← safeSub s.mcn.gas gHigh
     if val = 0
     then some {s with mcn := {s.mcn with stk := stk', gas := g', pc := s.mcn.pc + 1}}
     else do
@@ -1708,27 +1617,165 @@ def theta.Result.toState (ct : theta.Cont) (tr : theta.Result) : State' :=
   }
   {wld := tr.wld, mcn := m', acr := tr.acr, env := ct.env}
 
+def midspan : Inst → Bool
+  | .next (.exec .call) => false
+  | .next (.exec .callcode) => false
+  | .next (.exec .delcall) => false
+  | .next (.exec .statcall) => false
+  | .next (.exec .create) => false
+  | .next (.exec .create2) => false
+  | .last _ => false
+  | _ => true
+
+
+/-
+-- - 'none' if recursion limit or unimplemented opcode is reached
+-- - 'some ⟨s, none⟩' if s = exceptional halting state
+-- - 'some ⟨s, some i⟩' if i is calling or halting opcode
+def span (H : Block) (w₀ : World') :
+    Nat → State' → Option (State' × Option Inst)
+  | 0, _ => none
+  | lim + 1, s => do
+    -- dbg_trace s!"span gas : {s.mcn.gas}"
+    let (some i) ← (some s.inst) | some ⟨s, none⟩
+    -- dbg_trace s!"span :: executing inst : {i.toString}"
+    let .true ← (some (midspan i)) | some ⟨s, some i⟩
+    match i with
+    | .next n =>
+      match n.run H w₀ s with
+      | none => some ⟨s, none⟩
+      | some s' => span H w₀ lim s'
+    | .jump j =>
+      match j.run s with
+      | none => some ⟨s, none⟩
+      | some s' => span H w₀ lim s'
+    | .last _ => none -- unreachable code
+
+
 -- the X function of YP, except that the return type is modified to match
 -- that of the Ξ function: the machine state (μ) returned by 'X' is never
 -- used for anything except for remaining gas, so it is safe to discard the
 -- unused information by the time X is returning.
 -- This function returns 'none' only when either the recursion limit or an
 -- unimplemented opcode is reached. returns 'some _' for all other cases.
+-- return values :
 def exec (H : Block) (w₀ : World') : Nat → State' → Option Ξ.Result
   | 0, _ => dbg_trace "execution limit reached\n" ; none
-  | lim + 1, s =>
+  | lim + 1, s₀ => do
+    dbg_trace s!"exec gas : {s₀.mcn.gas}"
+    let ⟨s, oi⟩ ← span H w₀ (lim + 1) s₀
+    let some i ← some oi | some s.xh
+    match i with
+    | .next (.exec .call) => do
+      let gas :: adr :: clv :: ilc :: isz :: olc :: osz :: stk
+        ← (return s.mcn.stk) | (some s.xh)
+      let i : Bytes := s.mcn.mem.sliceD ilc.toNat isz.toNat 0
+      let t : Addr := toAddr adr
+      dbg_trace s!"nested call to address : {t.toHex}"
+      let as' : AddrSet := s.acr.adrs.insert t
+      let A' : Accrual := {s.acr with adrs := as'}
+      let act' : Nat := memExp (memExp s.mcn.act ilc isz) olc osz
+      let memCost : Nat := cMem act' - cMem s.mcn.act
+      let cg : Nat := cCallGas s gas.toNat memCost t clv
+      let totalCost := (cCall s gas.toNat memCost t clv) + memCost
+      let (some g') ← (return (safeSub s.mcn.gas totalCost)) | some s.xh
+      let bd : theta.Cont :=
+        {
+          olc := olc
+          osz := osz
+          gas := g'
+          mem := s.mcn.mem
+          pc := s.mcn.pc
+          stk := stk
+          act := act'
+          env := s.env
+        }
+      let s'' : State' ←
+        if 0 = s.env.exd ∨ (s.wld.get s.env.cta).bal < clv
+        then some (theta.Result.toState bd ⟨s.wld, cg, A', 0, []⟩)
+        else do let s' : State' :=
+                      θ.prep
+                        H
+                        s.wld
+                        A'
+                        s.env.cta
+                        s.env.oga
+                        t
+                        t
+                        cg
+                        s.env.gpr.toNat
+                        clv
+                        clv
+                        i
+                        (s.env.exd - 1)
+                        s.env.wup
+                let xr ← exec H w₀ lim s'
+                let θr := θ.wrap s'.wld s'.acr xr
+                some (theta.Result.toState bd θr)
+      exec H w₀ lim s''
+    -- | .next (.exec .delcall) => _
+    -- | .next (.exec .callcode) => _
+    -- | .next (.exec .statcall) => _
+    -- | .next (.exec .create) => _
+    -- | .next (.exec .create2) => _
+    | .last .stop => some {wld := s.wld, gas := s.mcn.gas, acr := s.acr, ret := some []}
+    | .last .ret => some <| (retRun s).getD s.xh
+    | .last .dest => do
+      let (x :: _) ← (return s.mcn.stk) | none
+      let a := toAddr x -- recipient
+      let cost :=
+        gSelfdestruct
+        + (if a ∈ s.acr.adrs then 0 else gColdAccountAccess)
+        + ( if Dead s.wld a ∧ s.wld.balAt s.env.cta ≠ 0
+            then gNewAccount
+            else 0 )
+      let gas' ← s.deductGas cost
+      some
+        {
+          wld :=
+            if a = s.env.cta
+            then s.wld
+            else let v := (s.wld.get s.env.cta).bal
+                 let wld' := s.wld.setBal s.env.cta 0
+                 wld'.addBal a v
+          gas := gas'
+          acr :=
+            {
+              s.acr with
+              dest := s.env.cta :: s.acr.dest
+              adrs := s.acr.adrs.insert a
+            }
+          ret := some []
+        }
+    | _ =>
+      dbg_trace s!"exec :: unimplemented inst : {i.toString}"
+      none
+-/
+
+def fooo (lim : Nat) (s : State') : Option Unit :=
+  match lim % 100000 with
+  | 0 => do
+    dbg_trace s!"gas : {s.mcn.gas}"
+    return ()
+  | _ => return ()
+
+
+def exec (H : Block) (w₀ : World') : Nat → State' → Option Ξ.Result
+  | 0, _ => none --dbg_trace "execution limit reached\n" ; none
+  | lim + 1, s => do
+    let () ← fooo lim s
     match s.inst with
     | none => some s.xh
     | some i =>
       -- dbg_trace s!"gas remaining : {s.mcn.gas}"
-      dbg_trace s!"executing inst : {i.toString}"
+      -- dbg_trace s!"executing inst : {i.toString}"
       match i with
       | .next (.exec .delcall) => do
         let gas :: adr :: ilc :: isz :: olc :: osz :: stk
           ← (return s.mcn.stk) | (some s.xh)
         let i : Bytes := s.mcn.mem.sliceD ilc.toNat isz.toNat 0
         let t : Addr := toAddr adr
-        dbg_trace s!"nested delgatecall to address : {t.toHex}"
+        -- dbg_trace s!"nested delgatecall to address : {t.toHex}"
         let as' : AddrSet := s.acr.adrs.insert t
         let A' : Accrual := {s.acr with adrs := as'}
         let act' : Nat := memExp (memExp s.mcn.act ilc isz) olc osz
@@ -1776,7 +1823,7 @@ def exec (H : Block) (w₀ : World') : Nat → State' → Option Ξ.Result
           ← (return s.mcn.stk) | (some s.xh)
         let i : Bytes := s.mcn.mem.sliceD ilc.toNat isz.toNat 0
         let t : Addr := toAddr adr
-        dbg_trace s!"nested call to address : {t.toHex}"
+        -- dbg_trace s!"nested call to address : {t.toHex}"
         let as' : AddrSet := s.acr.adrs.insert t
         let A' : Accrual := {s.acr with adrs := as'}
         let act' : Nat := memExp (memExp s.mcn.act ilc isz) olc osz
@@ -1856,7 +1903,7 @@ def exec (H : Block) (w₀ : World') : Nat → State' → Option Ξ.Result
             ret := some []
           }
 
-      | _ => dbg_trace s!"unimplemented instruction : {i.toString}"; none
+      | _ => none --dbg_trace s!"unimplemented instruction : {i.toString}"; none
 
 def theta
   -- Extra arguments not mentioned by YP,
@@ -1967,7 +2014,6 @@ def decodeTxBytes (tbs : Bytes) : IO (TxBytesContent × Word) := do
 def eqTest {ξ} [DecidableEq ξ] (x y : ξ) (testName : String) : IO Unit := do
   .guard (x = y) (testName ++ " : fail")
   .println (testName ++ " : pass")
-
 
 def eraseIfEmpty (w : World') (a : Addr) : World' := w.set a <| w.get a
 
@@ -2108,7 +2154,6 @@ def Test.run (t : Test) : IO Unit := do
 
 def Tests.run : Nat → List Test → IO Unit
   | _, [] => return ()
-  | 2, _ => return ()
   | n, t :: ts => do
     .println s!"================ Running test {n} ================"
     t.run

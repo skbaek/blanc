@@ -480,30 +480,6 @@ lemma Bits.of_mask_and_eq_zero (m n : Nat) :
 -- for checking that a given word is a valid Ethereum addresses
 def addressMask : Word := (@Bits.max 96) ++ (@Bits.zero 160)
 
--- inductive preOne : Nat → ∀ {n}, Bits n → Prop
--- | zero : ∀ n (xs : Bits n), preOne 0 xs
--- | succ : ∀ k n (xs : Bits n), preOne k xs → preOne (k + 1) (1 +> xs)
---
--- lemma preOne_max {k} : preOne k (.max k) := sorry
---
--- lemma preOne_append {k m n} (xs : Bits m) (ys : Bits n) (h : preOne k xs) :
---     preOne k (xs ++ ys) := sorry
---
--- lemma Bits.loom {m n} : preOne m (Bits.shl n (Bits.max (n + m))) := by
---   induction n with
---   | zero =>
---     simp [shl]
---     rw [← max_append_max]
---     apply preOne_append
---     apply preOne_max
---   | succ n ih =>
---
---
---
---
---
--- #exit
-
 def Bits.toBools : ∀ {n}, Bits n → List Bool
 | 0, ⦃⦄ => []
 | _ + 1, x +> xs => x :: xs.toBools
