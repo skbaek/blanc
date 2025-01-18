@@ -162,7 +162,7 @@ structure Acct where
   (nonce : Word)
   (bal : Word)
   (stor : Stor)
-  (code : Bytes)
+  (code : Array Byte)
 
 abbrev World' : Type := Lean.RBMap Addr Acct compare
 
@@ -245,7 +245,7 @@ def Acct.toStrings (s : String) (a : Acct) : List String :=
     [s!"nonce : 0x{a.nonce.toHex}"],
     [s!"bal : 0x{a.bal.toHex}"],
     a.stor.toStrings,
-    longBytesToStrings "code" a.code
+    longBytesToStrings "code" a.code.toList
   ]
 
 def postAcct.toStrings (p : PostData) : List String :=
@@ -475,7 +475,7 @@ def TestData.world (td : TestData) : World' :=
         nonce := pd.nonce.toBits 32,
         bal := pd.bal.toBits 32
         stor := pd.stor
-        code := pd.code
+        code := Array.mk pd.code
       }
     ⟩
   Lean.RBMap.fromList (td.pre.map aux) _
@@ -657,7 +657,8 @@ def Acct.toVal (a : Acct) (w : Word) : Bytes :=
     .bytes a.nonce.toBytes.sig, --a.nonce,
     .bytes a.bal.toBytes.sig, --a.bal,
     Word.toRLP w,
-    Word.toRLP <| Bytes.keccak a.code
+    --Word.toRLP <| Bytes.keccak a.code
+    Word.toRLP <| UInt8a.keccak <| Array.map Byte.toUInt8 a.code
   ]
 
 def toKeyVal (pr : Addr × Acct) : Nibs × Bytes :=
@@ -669,7 +670,8 @@ def toKeyVal (pr : Addr × Acct) : Nibs × Bytes :=
       .bytes ac.nonce.toBytes.sig, --a.nonce,
       .bytes ac.bal.toBytes.sig, --a.bal,
       Word.toRLP (trie ac.stor.toNTB),
-      Word.toRLP <| Bytes.keccak ac.code
+      --Word.toRLP <| Bytes.keccak ac.code
+      Word.toRLP <| UInt8a.keccak <| Array.map Byte.toUInt8 ac.code
     ]
   ⟩
 
@@ -720,7 +722,6 @@ structure Block where
   (number : Word) -- H_s
   (chainId : Word) -- β
 
-
 structure Env' where
   (cta : Addr) -- contract address (YP : a)
   (oga : Addr) -- origin address (YP : o)
@@ -728,7 +729,7 @@ structure Env' where
   (cld : Bytes) -- calldata (YP : d)
   (cla : Addr) -- caller Addr (YP : s)
   (clv : Word) -- callvalue (YP : v)
-  (code : Bytes) -- contract code  (YP : b)
+  (code : Array Byte) -- contract code  (YP : b)
   (blk : Block) -- block (YP : H)
   (exd : Nat) -- execution depth (YP : e)
   (wup : Bool) -- World-State update permission (YP : w)
@@ -793,10 +794,34 @@ def Inst.toString : Inst → String
   | .jump j => j.toString
   | .last l => l.toString
 
+def noPushBefore (cd : Array Byte) : Nat → Nat → Bool
+  | 0, _ => true
+  | _, 0 => true
+  | k + 1, m + 1 =>
+    match cd.get? k with
+    | none => noPushBefore cd k m
+    | some b =>
+      (b < (Ox x7 xF - m.toByte) || Ox x7 xF < b) && noPushBefore cd k m
+
+def ByteArray.jumpable (cd : Array Byte) (k : Nat) : Bool :=
+  cd.get? k = some (Jinst.toByte .jumpdest) &&
+  noPushBefore cd k 32
+
 def State'.jumpable (s : State') (k : Nat) : Bool :=
   match s.wld.find? s.env.cta with
   | none => false
-  | some a => a.code.jumpable 0 k
+  -- | some a => a.code.jumpable 0 k
+  | some a => ByteArray.jumpable a.code k
+
+def Array.sliceD {ξ : Type u} (xs : Array ξ) : Nat → Nat → ξ → List ξ
+  | _, 0, _ => []
+  | m, n + 1, d => xs.getD m d :: Array.sliceD xs (m + 1) n d
+
+lemma Array.length_sliceD {ξ} {xs : Array ξ} {m n x} :
+    (Array.sliceD xs m n x).length = n := by
+  induction n generalizing m with
+  | zero => simp [sliceD]
+  | succ n ih => simp [sliceD, List.length, ih]
 
 def State'.instCore (s : State') : Option Inst :=
   match s.env.code.get? s.mcn.pc with
@@ -810,7 +835,7 @@ def State'.instCore (s : State') : Option Inst :=
       then let len := b.toNat - 95
            let slc := s.env.code.sliceD (s.mcn.pc + 1) len 0
            let h_slc : slc.length ≤ 32 := by
-             simp [len, slc, List.sliceD, h.right]
+             simp [len, slc, Array.length_sliceD, h.right]
            some (.next <| .push slc h_slc)
       else none )
 
@@ -856,7 +881,7 @@ def State'.deductGas (s : State') (c : Nat) : Option Nat := safeSub s.mcn.gas c
 
 
 def Acct.Empty (a : Acct) : Prop :=
-  a.code = [] ∧ a.nonce = 0 ∧ a.bal = 0
+  a.code = #[] ∧ a.nonce = 0 ∧ a.bal = 0
 
 def Dead (w : World') (a : Addr) : Prop :=
   match w.find? a with
@@ -919,9 +944,9 @@ structure theta.Result : Type where
   (sta : Bool)
   (ret : Bytes)
 
-def World'.code (w : World') (a : Addr) : Bytes :=
+def World'.code (w : World') (a : Addr) : Array Byte :=
   match w.find? a with
-  | none => []
+  | none => #[]
   | some x => x.code
 
 def Acct.empty : Acct :=
@@ -929,7 +954,7 @@ def Acct.empty : Acct :=
     nonce := 0
     bal := 0
     stor := .empty
-    code := []
+    code := #[]
   }
 
 -- need further update for precompiled contracts
@@ -954,7 +979,7 @@ def θ.prep
     | none =>
       if v = 0
       then σ
-      else σ.insert r {nonce := 0, bal := v, stor := .empty, code := []}
+      else σ.insert r {nonce := 0, bal := v, stor := .empty, code := #[]}
     | some aᵣ => σ.insert r {aᵣ with bal := aᵣ.bal + v}
   let σ₁ : World' :=
     match σ'₁.find? s with
@@ -963,8 +988,7 @@ def θ.prep
       then σ'₁
       else (dbg_trace "unreachable code : nonzero value calls from empty accounts should never happen" ; σ'₁)
     | some aₛ => σ'₁.insert s {aₛ with bal := aₛ.bal - v}
-  let cd : Bytes := σ.code c
-  dbg_trace s!"code fetched to run : {cd.toHex}"
+  let cd : Array Byte := σ.code c
   let I : Env' := {
     cta := r, oga := o, gpr := @Nat.toBits 256 p, cld := d
     cla := s, clv := v_app, code := cd, blk := H, exd := e, wup := w
@@ -1227,6 +1251,7 @@ def nextState (s : State') (cost : Nat)
 
 def World'.get (w : World') (a : Addr) : Acct := (w.find? a).getD .empty
 
+#check Array.size
 def Rinst.run (H : Block) (w₀ : World') (s : State') : Rinst → Option State'
   | .address =>
     nextState s (cost := gBase) (stk' := s.env.cta.toWord :: s.mcn.stk)
@@ -1254,7 +1279,7 @@ def Rinst.run (H : Block) (w₀ : World') (s : State') : Rinst → Option State'
       (act' := memExp s.mcn.act x z)
       (stk' := xs)
       (mem' := List.puts s.mcn.mem x.toNat bs 0)
-  | .codesize => nextState s (cost := gBase) (stk' := s.env.code.length.toWord :: s.mcn.stk)
+  | .codesize => nextState s (cost := gBase) (stk' := s.env.code.size.toWord :: s.mcn.stk)
   | .codecopy => do
     let (x :: y :: z :: xs) ← (return s.mcn.stk) | none
     let bs : Bytes := s.env.code.sliceD y.toNat z.toNat (Linst.toByte .stop)
@@ -1270,7 +1295,7 @@ def Rinst.run (H : Block) (w₀ : World') (s : State') : Rinst → Option State'
     let adrs' : AddrSet := s.acr.adrs.insert a
     nextState s
       (cost := cAAccess a s.acr.adrs)
-      (stk' := (s.wld.get a).code.length.toWord :: xs)
+      (stk' := (s.wld.get a).code.size.toWord :: xs)
       (adrs' := adrs')
   | .extcodecopy => do
     let (x :: y :: z :: w :: xs) ← (return s.mcn.stk) | none
@@ -1285,7 +1310,7 @@ def Rinst.run (H : Block) (w₀ : World') (s : State') : Rinst → Option State'
     nextState s (cost := gBase) (stk' := s.mcn.ret.length.toWord :: s.mcn.stk)
   | .retdatacopy => do
     let (x :: y :: z :: xs) ← (return s.mcn.stk) | none
-    let bs ← s.env.code.slice? y.toNat z.toNat
+    let bs ← s.mcn.ret.slice? y.toNat z.toNat
     nextState s
       (cost := gVerylow + (gCopy * (ceilDiv z.toNat 32)))
       (act' := memExp s.mcn.act x z)
@@ -1298,7 +1323,8 @@ def Rinst.run (H : Block) (w₀ : World') (s : State') : Rinst → Option State'
     let hash : Word :=
       if (Dead s.wld a)
       then 0
-      else (s.wld.get a).code.keccak
+      --else (s.wld.get a).code.keccak
+      else UInt8a.keccak <| Array.map Byte.toUInt8 (s.wld.get a).code -- (s.wld.get a).code.keccak
     nextState s
       (cost := cAAccess a s.acr.adrs)
       (stk' := hash :: xs)
@@ -1536,7 +1562,7 @@ def Acct.isEmpty (ac : Acct) : Prop :=
   ac.nonce = 0 ∧
   ac.bal = 0 ∧
   ac.stor.isEmpty = .true ∧
-  ac.code = []
+  ac.code = #[]
 
 instance {ac : Acct} : Decidable ac.isEmpty := instDecidableAnd
 
