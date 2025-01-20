@@ -296,6 +296,23 @@ def World'.toStrings (w : World') : List String :=
     fun x => Acct.toStrings (x.fst.toHex 40) x.snd
   fork "world" (kvs.map kvToStrings)
 
+def Nib.toB8 : Nib → B8
+  | ⦃b0, b1, b2, b3⦄ =>
+    (cond b0 (8 : UInt8) 0) |||
+    (cond b1 (4 : UInt8) 0) |||
+    (cond b2 (2 : UInt8) 0) |||
+    (cond b3 (1 : UInt8) 0)
+
+def B8.toNib (x : B8) : Nib :=
+   match x.toBools with
+   | ⟨_, _, _, _, b0, b1, b2, b3⟩ => ⦃b0, b1, b2, b3⦄
+
+def NTB'.toStrings (s : NTB') : List String :=
+  let kvs := s.toArray.toList
+  let kvToStrings : B8s × B8s → List String :=
+    λ nb => [s!"{Nibs.toHex (nb.fst.map B8.toNib)} : {nb.snd.toHex}"]
+  fork "NTB'" (kvs.map kvToStrings)
+
 def NTB.toStrings (s : NTB) : List String :=
   let kvs := s.toArray.toList
   let kvToStrings : Nibs × Bytes → List String :=
@@ -548,7 +565,7 @@ def hpAux' : B8s → (Option B8 × B8s)
   | n :: ns =>
     match hpAux' ns with
     | ⟨none, bs⟩ => ⟨some n, bs⟩
-    | ⟨some m, bs⟩ => ⟨none, (n.highs ||| m.lows) :: bs⟩
+    | ⟨some m, bs⟩ => ⟨none, ((n <<< 4) ||| m.lows) :: bs⟩
 
 def hpAux : Nibs → (Option Nib × Bytes)
   | [] => ⟨none, []⟩
@@ -559,8 +576,8 @@ def hpAux : Nibs → (Option Nib × Bytes)
 
 def hp' (ns : B8s) (t : Bool) : B8s :=
   match hpAux' ns with
-  | ⟨none, bs⟩ => cond t (0x20) 0 :: bs
-  | ⟨some n, bs⟩ => (0x20 &&& n.lows) :: bs
+  | ⟨none, bs⟩ => (cond t (0x20) 0) :: bs
+  | ⟨some n, bs⟩ => ((cond t 0x30 0x10) ||| n.lows) :: bs
 
 def hp (ns : Nibs) (t : Bool) : Bytes :=
   match hpAux ns with
@@ -771,35 +788,39 @@ def NTB'.maxKeyLength (j : NTB') : Nat := (j.toList.map (List.length ∘ Prod.fs
 def collapse (j : NTB) : RLP := structComp (2 * (j.maxKeyLength + 1)) j
 def collapse' (j : NTB') : RLP' := structComp' (2 * (j.maxKeyLength + 1)) j
 
-def trie (j : NTB) : Word := (collapse j).encode.keccak
-def trie' (j : NTB') : B256 := (collapse' j).encode.keccak
+def trie (j : NTB) : Word :=
+  let bs := (collapse j).encode
+  -- dbg_trace s!"kec bytes : {bs.toHex}"
+  bs.keccak
 
-def Word.toBytes (w : Word) : Bytes :=
-  (@Bits.toBytes 32 w)
+def trie' (j : NTB') : B256 :=
+  let bs := (collapse' j).encode
+  -- dbg_trace s!"kec b8s : {bs.toHex}"
+  bs.keccak
 
+def Word.toBytes (w : Word) : Bytes := (@Bits.toBytes 32 w)
 def Word.toRLP (w : Word) : RLP := .bytes w.toBytes
 def B256.toRLP (w : B256) : RLP' := .b8s w.toB8s
-
 def Word.keccak (w : Word) : Word := (@Bits.toBytes 32 w).keccak
-
 def B16.toB8s (x : B16) : List B8 := [x.highs, x.lows]
 def B32.toB8s (x : B32) : List B8 := x.highs.toB8s ++ x.lows.toB8s
-
 def B8.toB4s (x : B8) : List B8 := [x.highs, x.lows]
 def B16.toB4s (x : B16) : List B8 := x.highs.toB4s ++ x.lows.toB4s
 def B32.toB4s (x : B32) : List B8 := x.highs.toB4s ++ x.lows.toB4s
 def B64.toB4s (x : B64) : List B8 := x.highs.toB4s ++ x.lows.toB4s
 def B128.toB4s (x : B128) : List B8 := x.1.toB4s ++ x.2.toB4s
 def B256.toB4s (x : B256) : List B8 := x.1.toB4s ++ x.2.toB4s
-
-
-
-def foo64 : B64 := 0x123456789ABCDEF
-
-def foo128 := foo64 ++ foo64
-def foo256 := foo128 ++ foo128
-
 def B256.keccak (x : B256) : B256 := B8s.keccak <| x.toB8s
+
+def Stor'.toNTB (s : Stor') : NTB :=
+  let f : NTB → B256 → B256 → NTB :=
+    λ j k v =>
+      j.insert
+        (@Bits.toNibs 64 (Word.keccak k.toBits))
+        (RLP.encode <| .bytes <| Bytes.sig <| @Bits.toBytes 32 v.toBits)
+         --k.keccak.toB4s
+         --((RLP.encode <| .bytes <| Bytes.sig <| v.toB8s.map B8.toByte).map Byte.toB8)
+  Lean.RBMap.fold f NTB.empty s
 
 def Stor'.toNTB' (s : Stor') : NTB' :=
   let f : NTB' → B256 → B256 → NTB' :=
@@ -827,33 +848,112 @@ def Acct.toVal (a : Acct) (w : Word) : Bytes :=
 
   ]
 
--- def toKeyVal (pr : Addr × Acct) : B8s × B8s :=
---   let ad := pr.fst
---   let ac := pr.snd
---   ⟨
---     @Bits.toNibs 64 (@Bits.toBytes 20 ad).keccak,
---     RLP.encode <| .list [
---       .bytes ac.nonce.toBytes.sig, --a.nonce,
---       .bytes ac.bal.toBytes.sig, --a.bal,
---       B256.toRLP (trie' ac.stor.toNTB'),
---       Word.toRLP <| Bytes.keccak ac.code.toList
---     ]
---   ⟩
-
 def Addr.toB8s (a : Addr) : B8s :=
   (@Bits.toBytes 20 a).map Byte.toB8
 
-def toKeyVal (pr : Addr × Acct) : B8s × B8s :=
+def Nib.toHex (n : Nib) : String := ⟨[n.toHexit]⟩
+
+def compareRLP : RLP → RLP' → Option Unit
+  | .bytes xs, .b8s ys =>
+    if (xs = List.map B8.toByte ys)
+    then some ()
+    else dbg_trace "bytes diff" ; none
+  | .list [], .list [] => some ()
+  | .list (x :: xs), .list (y :: ys) => do
+    (compareRLP x y)
+    compareRLP (.list xs) (.list ys)
+  | _, _ => none
+
+def toKeyValTest (pr : Addr × Acct) : Option Unit := do
   let ad := pr.fst
   let ac := pr.snd
-  ⟨
-    --@Bits.toNibs 64 (@Bits.toBytes 20 ad).keccak,
-    ad.toB8s.keccak.toB4s,
+
+  let key := @Bits.toNibs 64 (@Bits.toBytes 20 ad).keccak
+  dbg_trace "key : {key.toHex} "
+  let key' := ad.toB8s.keccak.toB4s
+  dbg_trace "key' : {Nibs.toHex (key'.map B8.toNib)} "
+  guard (key = key'.map B8.toNib)
+  dbg_trace "keys match"
+
+  let val :=
+    RLP.encode <| .list [
+      .bytes (ac.nonce.toBytes.sig), --a.nonce,
+      .bytes (ac.bal.toBytes.sig), --a.bal,
+      Word.toRLP (trie ac.stor.toNTB),
+      Word.toRLP <| (Bytes.keccak ac.code.toList)
+    ]
+
+  let val' :=
     RLP'.encode <| .list [
       .b8s (ac.nonce.toBytes.sig.map Byte.toB8), --a.nonce,
       .b8s (ac.bal.toBytes.sig.map Byte.toB8), --a.bal,
       B256.toRLP (trie' ac.stor.toNTB'),
       B256.toRLP <| (Bytes.keccak ac.code.toList).toB256
+    ]
+
+  let item0 := ac.nonce.toBytes.sig
+  let item0' := (ac.nonce.toBytes.sig.map Byte.toB8)
+  guard (item0 = item0'.map B8.toByte)
+  dbg_trace "item0 match"
+
+  let item1 := (ac.bal.toBytes.sig)
+  let item1' := (ac.bal.toBytes.sig.map Byte.toB8)
+  guard (item1 = item1'.map B8.toByte)
+  dbg_trace "item1 match"
+
+  dbg_trace (Strings.join ac.stor.toNTB.toStrings)
+  dbg_trace (Strings.join ac.stor.toNTB'.toStrings)
+
+  guard ((trie ac.stor.toNTB) = (trie' ac.stor.toNTB').toBits)
+  dbg_trace "word-B256 match"
+
+
+
+  dbg_trace "matching items 2..."
+  compareRLP (Word.toRLP (trie ac.stor.toNTB)) (B256.toRLP (trie' ac.stor.toNTB'))
+
+  dbg_trace "matching items 3..."
+  compareRLP
+    (Word.toRLP <| (Bytes.keccak ac.code.toList))
+    (B256.toRLP <| (Bytes.keccak ac.code.toList).toB256)
+
+
+  guard (val = val'.map B8.toByte)
+  dbg_trace "vals match"
+
+  return ()
+
+def toKeyVal' (pr : Addr × Acct) : B8s × B8s :=
+  let ad := pr.fst
+  let ac := pr.snd
+  ⟨
+    let key' := ad.toB8s.keccak.toB4s
+    -- dbg_trace "key' : {@List.toString _ ⟨λ x => x.toNib.toHex⟩ key'} "
+    key',
+    let val' :=
+      RLP'.encode <| .list [
+        .b8s (ac.nonce.toBytes.sig.map Byte.toB8), --a.nonce,
+        .b8s (ac.bal.toBytes.sig.map Byte.toB8), --a.bal,
+        B256.toRLP (trie' ac.stor.toNTB'),
+        B256.toRLP <| (Bytes.keccak ac.code.toList).toB256
+      ]
+    -- dbg_trace "val : {@List.toString _ ⟨B8.toHex⟩ val'}"
+    val'
+  ⟩
+
+def toKeyVal (pr : Addr × Acct) : Nibs × Bytes :=
+  let ad := pr.fst
+  let ac := pr.snd
+  ⟨
+    let key := @Bits.toNibs 64 (@Bits.toBytes 20 ad).keccak
+    -- dbg_trace "key : {@List.toString _ ⟨Nib.toHex⟩ key} "
+    key
+    ,
+    RLP.encode <| .list [
+      .bytes (ac.nonce.toBytes.sig), --a.nonce,
+      .bytes (ac.bal.toBytes.sig), --a.bal,
+      Word.toRLP (trie ac.stor.toNTB),
+      Word.toRLP <| (Bytes.keccak ac.code.toList)
     ]
   ⟩
 
@@ -2185,6 +2285,17 @@ structure transact.Result : Type where
   (log : Word)
   (sta : Bool)
 
+#check List.toString
+#check Char.toString
+#check Nibs.toHex
+
+
+def prettyFoo : (Nibs × Bytes) → String
+  | ⟨ns, bs⟩ => s!"{ns.toHex} :: {bs.toHex}"
+
+def prettyBar : (B8s × B8s) → String
+  | ⟨ns, bs⟩ => prettyFoo ⟨ns.map B8.toNib, bs.map B8.toByte⟩
+
 def decodeTxBytes (tbs : Bytes) : IO (TxBytesContent × Word) := do
   match RLP.decode tbs with
   | RLP.list [
@@ -2283,6 +2394,9 @@ def Tx.run
     sta := tr.sta
   }
 
+def String.joinnl (l : List String) : String :=
+  l.foldl (fun r s => r ++ "\n" ++ s) ""
+
 def Test.run (t : Test) : IO Unit := do
   let ⟨tx, hsh⟩ ← decodeTxBytes t.txdata
 --  .println s!"r-value : {tx.r.toHex}"
@@ -2343,22 +2457,32 @@ def Test.run (t : Test) : IO Unit := do
       sender
 
   .println s!"tx status : {rst.sta}"
-
   .println "world state after tx :"
   .println (Strings.join rst.wld.toStrings)
 
-  let temp := (List.map toKeyVal rst.wld.toList)
+  -- let _ ← (mapM toKeyValTest rst.wld.toList).toIO "match test failed"
 
-  let finalNTB : NTB' :=
-    Lean.RBMap.fromList temp _
+  -- let temp := (List.map toKeyVal rst.wld.toList)
+  let temp' := (List.map toKeyVal' rst.wld.toList)
 
-  let root : B256 := trie' finalNTB
+  -- let finalNTB : NTB := Lean.RBMap.fromList temp _
+  let finalNTB' : NTB' := Lean.RBMap.fromList temp' _
 
-  .println s!"computed final root : {root.toHex}"
-  .println s!"expected final root : {t.hash.toHex}"
+  -- dbg_trace "collapsed NTB :"
+  -- dbg_trace (Strings.join (RLP.toStrings (collapse finalNTB)))
+  -- dbg_trace "collapsed NTB' :"
+  -- dbg_trace (Strings.join (RLP'.toStrings (collapse' finalNTB')))
+  -- let root : Word  := trie finalNTB
+  let root' : B256 := trie' finalNTB'
 
-  .guard (root = t.hash.toB256) "state root check : fail"
-  .println "state root check : pass"
+  --.println s!"computed final root  : {root.toHex}"
+  .println s!"computed final root' : {root'.toHex}"
+  .println s!"expected final root  : {t.hash.toHex}"
+
+  -- .guard (root = t.hash) "state root check : fail"
+  -- .println "state root check : pass"
+  .guard (root' = t.hash.toB256) "state root' check : fail"
+  .println "state root' check : pass"
 
   .guard (rst.log = t.logs) "log hash check : fail"
   .println "log hash check : pass"
