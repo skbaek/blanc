@@ -261,6 +261,198 @@ instance {n : ℕ} (xs ys : Bits n) : Decidable (xs ≤ ys) := by
     | x +> xs, y +> ys =>
       rw [Bits.cons_le_cons]; apply instDecidableOr
 
+def B8.highBit (x : B8) : Bool := (x &&& 0x80) != 0
+def B8.lowBit (x : B8) : Bool := (x &&& 0x01) != 0
+
+def B16.highBit (x : B16) : Bool := (x &&& 0x8000) != 0
+def B16.lowBit  (x : B16) : Bool := (x &&& 0x0001) != 0
+
+def B32.highBit (x : B32) : Bool := (x &&& 0x80000000) != 0
+def B32.lowBit  (x : B32) : Bool := (x &&& 0x00000001) != 0
+
+def B64.highBit (x : B64) : Bool := (x &&& 0x8000000000000000) != 0
+def B64.lowBit  (x : B64) : Bool := (x &&& 0x0000000000000001) != 0
+
+def B128 : Type := B64 × B64
+def B256 : Type := B128 × B128
+
+def B128.highBit (x : B128) : Bool := x.1.highBit
+def B128.lowBit  (x : B128) : Bool := x.2.lowBit
+
+def B256.highBit (x : B256) : Bool := x.1.highBit
+def B256.lowBit  (x : B256) : Bool := x.2.lowBit
+
+instance : HAppend B64 B64 B128 := ⟨λ xs ys => ⟨xs, ys⟩⟩
+instance : HAppend B128 B128 B256 := ⟨λ xs ys => ⟨xs, ys⟩⟩
+
+def B64.max : B64 := 0xFFFFFFFFFFFFFFFF
+def B128.max : B128 := (.max : B64) ++ (.max : B64)
+def B256.max : B256 := (.max : B128) ++ (.max : B128)
+
+
+
+instance {x y : B128} : Decidable (x = y) := by
+  rw [@Prod.eq_iff_fst_eq_snd_eq B64 B64 x y]; apply instDecidableAnd
+
+instance {x y : B256} : Decidable (x = y) := by
+  rw [@Prod.eq_iff_fst_eq_snd_eq B128 B128 x y]; apply instDecidableAnd
+
+def B128.LT (x y : B128) : Prop :=
+  x.1 < y.1 ∨ (x.1 = y.1 ∧ x.2 < y.2)
+instance : @LT B128 := ⟨B128.LT⟩
+instance {x y : B128} : Decidable (x < y) := instDecidableOr
+
+def B256.LT (x y : B256) : Prop :=
+  x.1 < y.1 ∨ (x.1 = y.1 ∧ x.2 < y.2)
+
+instance : @LT B256 := ⟨B256.LT⟩
+instance {x y : B256} : Decidable (x < y) := instDecidableOr
+
+def Nat.toB128 (n : Nat) : B128 :=
+  let q := n / (2 ^ 64)
+  q.toUInt64 ++ n.toUInt64
+
+def Nat.toB256 (n : Nat) : B256 :=
+  let q := n / (2 ^ 128)
+  q.toB128 ++ n.toB128
+
+instance {n} : OfNat B128 n := ⟨n.toB128⟩
+instance {n} : OfNat B256 n := ⟨n.toB256⟩
+
+
+def B8.toHexit : B8 → Char
+  | 0x0 => '0'
+  | 0x1 => '1'
+  | 0x2 => '2'
+  | 0x3 => '3'
+  | 0x4 => '4'
+  | 0x5 => '5'
+  | 0x6 => '6'
+  | 0x7 => '7'
+  | 0x8 => '8'
+  | 0x9 => '9'
+  | 0xA => 'A'
+  | 0xB => 'B'
+  | 0xC => 'C'
+  | 0xD => 'D'
+  | 0xE => 'E'
+  | 0xF => 'F'
+  | _   => 'X'
+
+def B8.highs (x : B8) : B8 := (x >>> 4)
+def B8.lows (x : B8) : B8 := (x &&& 0x0F)
+
+def B8.toHex (x : B8) : String :=
+  ⟨[x.highs.toHexit, x.lows.toHexit]⟩
+
+def B8s.toHex (bs : B8s) : String :=
+  List.foldr (λ b s => B8.toHex b ++ s) "" bs
+
+def B16.highs (x : B16) : B8 := (x >>> 8).toUInt8
+def B16.lows : B16 → B8 := UInt16.toUInt8
+def B16.toHex (x : B16) : String := x.highs.toHex ++ x.lows.toHex
+
+def B32.highs (x : B32) : B16 := (x >>> 16).toUInt16
+def B32.lows : B32 → B16 := UInt32.toUInt16
+def B32.toHex (x : B32) : String := x.highs.toHex ++ x.lows.toHex
+
+def B64.highs (x : B64) : B32 := (x >>> 32).toUInt32
+def B64.lows : B64 → B32 := UInt64.toUInt32
+def B64.toHex (x : B64) : String := x.highs.toHex ++ x.lows.toHex
+
+def B128.toHex (x : B128) : String := x.1.toHex ++ x.2.toHex
+def B256.toHex (x : B256) : String := x.1.toHex ++ x.2.toHex
+
+def foo256 : B256 := 0xFEDCBA9876543210FEDCBA9876543210FEDCBA9876543210FEDCBA9876543210
+
+
+def B128.LE (x y : B128) : Prop :=
+  x.1 < y.1 ∨ (x.1 = y.1 ∧ x.2 ≤ y.2)
+instance : @LE B128 := ⟨B128.LE⟩
+instance {x y : B128} : Decidable (x ≤ y) := instDecidableOr
+
+def B256.LE (x y : B256) : Prop :=
+  x.1 < y.1 ∨ (x.1 = y.1 ∧ x.2 ≤ y.2)
+instance : @LE B256 := ⟨B256.LE⟩
+instance {x y : B256} : Decidable (x ≤ y) := instDecidableOr
+
+
+def B128.shiftLeft : B128 → Nat → B128
+  | ⟨xs, ys⟩, os =>
+    if os = 0
+    then ⟨xs, ys⟩
+    else if os < 64
+         then ⟨ (xs <<< os.toUInt64) ||| (ys >>> (64 - os).toUInt64),
+                ys <<< os.toUInt64 ⟩
+         else if os < 128
+              then ⟨ys <<< (os - 64).toUInt64, 0⟩
+              else ⟨0, 0⟩
+instance : HShiftLeft B128 Nat B128 := ⟨B128.shiftLeft⟩
+
+def B128.shiftRight : B128 → Nat → B128
+  | ⟨xs, ys⟩, os =>
+    if os = 0
+    then ⟨xs, ys⟩
+    else if os < 64
+         then ⟨ xs >>> os.toUInt64,
+                (xs <<< (64 - os).toUInt64) ||| (ys >>> os.toUInt64) ⟩
+         else if os < 128
+              then ⟨0, xs >>> (os - 64).toUInt64⟩
+              else ⟨0, 0⟩
+instance : HShiftRight B128 Nat B128 := ⟨B128.shiftRight⟩
+
+def B128.or : B128 → B128 → B128
+  | ⟨xh, xl⟩, ⟨yh, yl⟩ => ⟨xh ||| yh, xl ||| yl⟩
+instance : HOr B128 B128 B128 := ⟨B128.or⟩
+def B128.and : B128 → B128 → B128
+  | ⟨xh, xl⟩, ⟨yh, yl⟩ => ⟨xh &&& yh, xl &&& yl⟩
+instance : HAnd B128 B128 B128 := ⟨B128.and⟩
+
+def B256.or : B256 → B256 → B256
+  | ⟨xh, xl⟩, ⟨yh, yl⟩ => ⟨xh ||| yh, xl ||| yl⟩
+instance : HOr B256 B256 B256 := ⟨B256.or⟩
+def B256.and : B256 → B256 → B256
+  | ⟨xh, xl⟩, ⟨yh, yl⟩ => ⟨xh &&& yh, xl &&& yl⟩
+instance : HAnd B256 B256 B256 := ⟨B256.and⟩
+
+def B128.xor : B128 → B128 → B128
+  | ⟨xh, xl⟩, ⟨yh, yl⟩ => ⟨xh ^^^ yh, xl ^^^ yl⟩
+instance : HXor B128 B128 B128 := ⟨B128.xor⟩
+def B256.xor : B256 → B256 → B256
+  | ⟨xh, xl⟩, ⟨yh, yl⟩ => ⟨xh ^^^ yh, xl ^^^ yl⟩
+instance : HXor B256 B256 B256 := ⟨B256.xor⟩
+
+def B256.shiftRight : B256 → Nat → B256
+  | ⟨xs, ys⟩, os =>
+    if os = 0
+    then ⟨xs, ys⟩
+    else if os < 128
+         then ⟨ xs >>> os,
+                (xs <<< (128 - os)) ||| (ys >>> os) ⟩
+         else if os < 256
+              then ⟨0, xs >>> (os - 128)⟩
+              else ⟨0, 0⟩
+instance : HShiftRight B256 Nat B256 := ⟨B256.shiftRight⟩
+
+def B256.shiftLeft : B256 → Nat → B256
+  | ⟨xs, ys⟩, os =>
+    if os = 0
+    then ⟨xs, ys⟩
+    else  if os < 128
+         then ⟨(xs <<< os) ||| (ys >>> (128 - os)), ys <<< os⟩
+         else if os < 256
+              then ⟨ys <<< (os - 128), 0⟩
+              else ⟨0, 0⟩
+instance : HShiftLeft B256 Nat B256 := ⟨B256.shiftLeft⟩
+
+def B256.Slt (xs ys : B256) : Prop :=
+  let x := xs.highBit
+  let y := ys.highBit
+  let xs' : B256 := xs &&& (B256.max >>> 1)
+  let ys' : B256 := ys &&& (B256.max >>> 1)
+  y < x ∨ (x = y ∧ xs' < ys')
+instance {xs ys : B256} : Decidable (B256.Slt xs ys) := instDecidableOr
+
 def Bits.Slt : ∀ {n : ℕ}, Bits n → Bits n → Prop
   | 0, ⦃⦄, ⦃⦄ => False
   | _ + 1, x +> xs, y +> ys => y < x ∨ (x = y ∧ xs < ys)
@@ -274,6 +466,8 @@ lemma Bits.singleton_slt_singleton {x y : Bool} :
   try {intro hc; cases hc}
 
 def Bits.Sgt {n : ℕ} (xs ys : Bits n) : Prop := Slt ys xs
+def B256.Sgt (xs ys : B256) : Prop := B256.Slt ys xs
+instance {xs ys : B256} : Decidable (B256.Sgt xs ys) := instDecidableOr
 
 infix:70 " ±> " => Bits.Sgt
 
@@ -428,12 +622,67 @@ def Bits.isNeg : ∀ {n : ℕ}, Bits n → Bool
   | 0, _ => false
   | _ + 1, x +> _ => x
 
+def B256.isNeg : B256 → Bool := B256.highBit
+
 def Bits.neg {n : ℕ} (xs : Bits n) : Bits n := (~ xs).succ
+
+def B128.complement : B128 → B128
+  | ⟨xs, ys⟩ => ⟨~~~ xs, ~~~ ys⟩
+instance : Complement B128 := ⟨B128.complement⟩
+
+def B256.complement : B256 → B256
+  | ⟨xs, ys⟩ => ⟨~~~ xs, ~~~ ys⟩
+instance : Complement B256 := ⟨B256.complement⟩
+
+def B8.toB256  (x : B8)  : B256 := ⟨0, ⟨0, x.toUInt64⟩⟩
+def B16.toB256 (x : B16) : B256 := ⟨0, ⟨0, x.toUInt64⟩⟩
+def B32.toB256 (x : B32) : B256 := ⟨0, ⟨0, x.toUInt64⟩⟩
+def B64.toB256 (x : B64) : B256 := ⟨0, ⟨0, x⟩⟩
+
+def B128.zero : B128 := ⟨0, 0⟩
+instance : Zero B128 := ⟨.zero⟩
+def B128.one : B128 := ⟨0, 1⟩
+instance : One B128 := ⟨.one⟩
+def B256.zero : B256 := ⟨0, 0⟩
+instance : Zero B256 := ⟨.zero⟩
+def B256.one : B256 := ⟨0, 1⟩
+instance : One B256 := ⟨.one⟩
+
+def B128.sub (x y : B128) : B128 :=
+  let l := x.2 - y.2
+  let c : B64 := if x.2 < y.2 then 1 else 0
+  ⟨(x.1 - y.1) - c, l⟩
+instance : HSub B128 B128 B128 := ⟨B128.sub⟩
+
+def B128.add (x y : B128) : B128 :=
+  let l := x.2 + y.2
+  let c : B64 := if l < x.2 then 1 else 0
+  ⟨x.1 + y.1 + c, l⟩
+instance : HAdd B128 B128 B128 := ⟨B128.add⟩
+
+def B256.add (x y : B256) : B256 :=
+  let l := x.2 + y.2
+  let c : B128 := if l < x.2 then 1 else 0
+  ⟨x.1 + y.1 + c, l⟩
+instance : HAdd B256 B256 B256 := ⟨B256.add⟩
+
+def B256.sub (x y : B256) : B256 :=
+  let l := x.2 - y.2
+  let c : B128 := if x.2 < y.2 then 1 else 0
+  ⟨(x.1 - y.1) - c, l⟩
+instance : HSub B256 B256 B256 := ⟨B256.sub⟩
+
+def B256.neg (xs : B256) : B256 := (~~~ xs) + B256.one
 
 def Bits.sar (m : Nat) {n} (xs : Bits n) : Bits n :=
   if isNeg xs
   then neg (shr m (neg xs))
   else shr m xs
+
+def B256.sar (m : Nat) (xs : B256) : B256 :=
+  if isNeg xs
+  then neg ((neg xs) >>> m)
+  else (xs >>> m)
 
 def Bits.append : ∀ {m n}, Bits m → Bits n → Bits (n + m)
   | 0, _, ⦃⦄, ys => ys
@@ -489,7 +738,16 @@ def Bits.smin : ∀ {n : ℕ}, Bits n
   | 0 => ⦃⦄
   | _ + 1 => 1 +> 0
 
+-- minimum possible value in 2's complement
+def B64.smin : B64 := 0x8000000000000000
+def B128.smin : B128 := ⟨.smin, 0⟩
+def B256.smin : B256 := ⟨.smin, 0⟩
+
 def Bits.negOne {n : ℕ} : Bits n := max _
+
+def B64.negOne  : B64  := .max
+def B128.negOne : B128 := .max
+def B256.negOne : B256 := .max
 
 def Bits.sdiv {n : ℕ} (xs ys : Bits n) : Bits n :=
   if ys = 0
@@ -540,7 +798,6 @@ def Bits.addmod {n : ℕ} (x y z : Bits n) : Bits n :=
   else Nat.toBits' n ((x.toNat + y.toNat) % z.toNat) -- (x + y) % z
 
 def Bits.mulmod {n : ℕ} (x y z : Bits n) : Bits n :=
-  --if z = 0 then 0 else (x * y) % z
   if z = 0
   then 0
   else Nat.toBits' n ((x.toNat * y.toNat) % z.toNat) -- (x + y) % z
@@ -569,6 +826,71 @@ def Bits.signext {m} : Nat → Bits m → (Bits m × Bool)
 
 def Word.signext (x y : Word) : Word :=
   (Bits.signext (256 - (8 * (x.toNat + 1))) y).fst
+
+abbrev Vec := Mathlib.Vector
+
+def B64.toB8v (x : B64) : Vec B8 8 :=
+  ⟨ [ (x >>> 56).toUInt8, (x >>> 48).toUInt8,
+      (x >>> 40).toUInt8, (x >>> 32).toUInt8,
+      (x >>> 24).toUInt8, (x >>> 16).toUInt8,
+      (x >>> 8).toUInt8, x.toUInt8 ], rfl ⟩
+
+def B64.toB8t (x : B64) : B8 × B8 × B8 × B8 × B8 × B8 × B8 × B8 :=
+  ⟨ (x >>> 56).toUInt8, (x >>> 48).toUInt8,
+    (x >>> 40).toUInt8, (x >>> 32).toUInt8,
+    (x >>> 24).toUInt8, (x >>> 16).toUInt8,
+    (x >>> 8).toUInt8, x.toUInt8 ⟩
+
+def B64.toB8s (x : B64) : B8s :=
+  [ (x >>> 56).toUInt8, (x >>> 48).toUInt8,
+    (x >>> 40).toUInt8, (x >>> 32).toUInt8,
+    (x >>> 24).toUInt8, (x >>> 16).toUInt8,
+    (x >>> 8).toUInt8, x.toUInt8 ]
+
+
+def B64.reverse (w : B64) : B64 :=
+  ((w <<< 56) &&& (0xFF00000000000000 : B64)) |||
+  ((w <<< 40) &&& (0x00FF000000000000 : B64)) |||
+  ((w <<< 24) &&& (0x0000FF0000000000 : B64)) |||
+  ((w <<< 8)  &&& (0x000000FF00000000 : B64)) |||
+  ((w >>> 8)  &&& (0x00000000FF000000 : B64)) |||
+  ((w >>> 24) &&& (0x0000000000FF0000 : B64)) |||
+  ((w >>> 40) &&& (0x000000000000FF00 : B64)) |||
+  ((w >>> 56) &&& (0x00000000000000FF : B64))
+
+
+def B128.toB8s (x : B128) : B8s := x.1.toB8s ++ x.2.toB8s
+def B256.toB8s (x : B256) : B8s := x.1.toB8s ++ x.2.toB8s
+
+def B128.toB8v (x : B128) : Vec B8 16 :=
+  Mathlib.Vector.append x.1.toB8v x.2.toB8v
+
+def B256.toB8v (x : B256) : Vec B8 32 :=
+  Mathlib.Vector.append x.1.toB8v x.2.toB8v
+
+def B128.toNat (x : B128) : Nat := (x.1.toNat * (2 ^ 64)) + x.2.toNat
+def B256.toNat (x : B256) : Nat := (x.1.toNat * (2 ^ 128)) + x.2.toNat
+
+def B256.addmod (x y z : B256) : B256 :=
+  if z = 0
+  then 0
+  else ((x.toNat + y.toNat) % z.toNat).toB256 -- (x + y) % z
+
+def B256.mulmod (x y z : B256) : B256 :=
+  if z = 0
+  then 0
+  else ((x.toNat * y.toNat) % z.toNat).toB256 -- (x + y) % z
+
+def B256.signext (x y : B256) : B256 :=
+  if h : x < 31
+  then have h' : (32 - (x.toNat + 1)) < 32 := by omega
+       let z : B8 := y.toB8v.get (32 - (x.toNat + 1))
+       dbg_trace s!"z : {z.toHex}"
+       cond z.highBit
+         ((B256.max <<< (8 * (x.toNat + 1))) ||| y)
+         ((B256.max >>> (32 - (8 * (x.toNat + 1)))) &&& y)
+  else y
+
 
 def Bits.toInt {m} (xs : Bits m) : Int :=
   if xs.isNeg
@@ -1503,7 +1825,6 @@ def Hex.toBits! (n : Nat) (s : String) : Bits (4 * n) :=
   let cs := (s.data.reverse.takeD n '0').reverse
   (Hex.toBits n ⟨cs⟩).getD 0
 
-abbrev Vec := Mathlib.Vector
 
 
 abbrev Qords : Type := Vec (Bits 64) 25
@@ -1515,48 +1836,12 @@ def String.toBytes (s : String) : Bytes := s.data.map Char.toByte
 def Bytes.toHex (bs : Bytes) : String :=
   List.foldr (λ b s => Byte.toHex b ++ s) "" bs
 
-def B8.toHexit : B8 → Char
-  | 0x0 => '0'
-  | 0x1 => '1'
-  | 0x2 => '2'
-  | 0x3 => '3'
-  | 0x4 => '4'
-  | 0x5 => '5'
-  | 0x6 => '6'
-  | 0x7 => '7'
-  | 0x8 => '8'
-  | 0x9 => '9'
-  | 0xA => 'A'
-  | 0xB => 'B'
-  | 0xC => 'C'
-  | 0xD => 'D'
-  | 0xE => 'E'
-  | 0xF => 'F'
-  | _   => 'X'
-
-
-def B8.highs (x : B8) : B8 := (x >>> 4)
-def B8.lows (x : B8) : B8 := (x &&& 0x0F)
-
-def B8.toHex (x : B8) : String :=
-  ⟨[x.highs.toHexit, x.lows.toHexit]⟩
-
-def B8s.toHex (bs : B8s) : String :=
-  List.foldr (λ b s => B8.toHex b ++ s) "" bs
-
 def Bits.toHex : ∀ k : Nat, Bits (4 * k) → String
  | 0, ⦃⦄ => ""
  | k + 1, .cons b0 (.cons b1 (.cons b2 (.cons b3 bs))) =>
    ⟨[Nib.toHexit ⦃b0, b1, b2, b3⦄]⟩ ++ bs.toHex k
 
-def B128 : Type := B64 × B64
-def B256 : Type := B128 × B128
 
-instance {x y : B128} : Decidable (x = y) := by
-  rw [@Prod.eq_iff_fst_eq_snd_eq B64 B64 x y]; apply instDecidableAnd
-
-instance {x y : B256} : Decidable (x = y) := by
-  rw [@Prod.eq_iff_fst_eq_snd_eq B128 B128 x y]; apply instDecidableAnd
 
 def Byte.toB8 (b : Byte) : B8 := ⟨⟨b.toNat, b.toNat_lt_pow⟩⟩
 
@@ -1584,8 +1869,6 @@ def Bits.toB256 (xys : Bits 256) : B256 :=
   let ys := @Bits.suffix 128 128 xys
   ⟨xs.toB128, ys.toB128⟩
 
-instance : Zero B128 := ⟨⟨0, 0⟩⟩
-instance : One B128 := ⟨⟨0, 1⟩⟩
 
 def B128.toBits (i : B128) : Bits 128 := i.1.toBits ++ i.2.toBits
 def B256.toBits (i : B256) : Bits 256 := i.1.toBits ++ i.2.toBits
@@ -1624,31 +1907,6 @@ def B64.mulx (x y : B64) : B128 :=
   -- dbg_trace s!"h : {@Bits.toHex 16 h.toBits}"
   ⟨h, l⟩
 
-def B128.add (x y : B128) : B128 :=
-  let l := x.2 + y.2
-  let c : B64 := if l < x.2 then 1 else 0
-  ⟨x.1 + y.1 + c, l⟩
-
-instance : HAdd B128 B128 B128 := ⟨B128.add⟩
-
-def B128.lt (x y : B128) : Prop :=
-  x.1 < y.1 ∨ (x.1 = y.1 ∧ x.2 < y.2)
-
-instance : @LT B128 := ⟨B128.lt⟩
-
-instance {x y : B128} : Decidable (x < y) := instDecidableOr
-
--- def B128.lt' (x y : B128) : Bool :=
---   (x.1 < y.1) || (x.1 = y.1 && x.2 < y.2)
-
-
-def B256.add (x y : B256) : B256 :=
-  let l := x.2 + y.2
-  let c : B128 := if l < x.2 then 1 else 0
-  ⟨x.1 + y.1 + c, l⟩
-
-instance : HAdd B256 B256 B256 := ⟨B256.add⟩
-
 def B128.mulx (x y : B128) : B256 :=
   let ll := B64.mulx x.2 y.2 -- dbg_trace s!"ll : {@Bits.toHex 16 ll.toBits}"
   let lh := B64.mulx x.2 y.1 -- dbg_trace s!"lh : {@Bits.toHex 16 lh.toBits}"
@@ -1673,6 +1931,63 @@ def B256.mul (x y : B256) : B256 :=
   let lh := B128.mulx x.2 y.1 -- dbg_trace s!"lh : {@Bits.toHex 16 lh.toBits}"
   let hl := B128.mulx x.1 y.2 -- dbg_trace s!"hl : {@Bits.toHex 16 hl.toBits}"
   ll + ⟨lh.2, 0⟩ + ⟨hl.2, 0⟩
+instance : HMul B256 B256 B256 := ⟨B256.mul⟩
+
+
+def divOffset : Nat → B256 → B256 → Option Nat
+  | 0, _, _ => some 0
+  | m + 1, x, y =>
+    if x < y
+    then none
+    else if B256.smin ≤ y
+         then some 0
+         else match divOffset m x (y <<< 1) with
+                   | none => some 0
+                   | some n => some (n + 1)
+
+
+def B256.divModCore : Nat → B256 → B256 → B256 → (B256 × B256)
+  | 0,     x, _, z => ⟨z, x⟩
+  | n + 1, x, y, z =>
+    -- dbg_trace s!"n : {n}"
+    -- dbg_trace s!"x : {x.toHex}"
+    -- dbg_trace s!"y : {y.toHex}"
+    -- dbg_trace s!"z : {z.toHex}\n"
+    if x < y
+    then divModCore n x (y >>> 1) (z <<< 1)
+    else divModCore n (x - y) (y >>> 1) ((z <<< 1) + 1)
+def B256.divMod (x y : B256) : B256 × B256 :=
+  if y = 0
+  then ⟨0, 0⟩
+  else let os := divOffset 255 x y
+       match os with
+       | none => ⟨0, x⟩
+       | some n =>
+         B256.divModCore (n + 1) x (y <<< n) 0
+
+instance : HDiv B256 B256 B256 := ⟨λ x y => (B256.divMod x y).fst⟩
+instance : HMod B256 B256 B256 := ⟨λ x y => (B256.divMod x y).snd⟩
+
+#eval ((2 : B256) / foo256).toHex
+
+def B256.sdiv (xs ys : B256) : B256 :=
+  if ys = 0
+  then 0
+  else if xs = smin ∧ ys = negOne
+       then smin
+       else match (isNeg xs, isNeg ys) with
+            | (0, 0) => xs / ys
+            | (1, 0) => neg ((neg xs) / ys)
+            | (0, 1) => neg (xs / (neg ys))
+            | (1, 1) => (neg xs) / (neg ys)
+
+def B256.abs (xs : B256) : B256 := if isNeg xs then neg xs else xs
+
+def B256.smod (xs ys : B256) : B256 :=
+  if ys = 0
+  then 0
+  else let mod := (abs xs) % (abs ys)
+       if isNeg xs then neg mod else mod
 
 -- @Bits.bexpCore m n x y := ⟨r, s⟩, where
 --   r := x ^ y
@@ -1684,9 +1999,6 @@ def Bits.bexpCore : ∀ {m n : Nat}, Bits m → Bits n → (Bits m × Bits m)
     let ⟨r, s⟩ := @Bits.bexpCore m n x ys
     let s₂ := s * s
     ⟨(cond y s₂ 1) * r, s₂⟩
-
-instance : Zero B256 := ⟨0, 0⟩
-instance : One B256 := ⟨0, 1⟩
 
 def B64.teg (xs : B64) (n : Nat) : Bool :=
   ((xs >>> n.toUInt64) &&& 0x0000000000000001) != 0
@@ -1711,7 +2023,6 @@ def B256.teg (xs : B256) (n : Nat) : Bool :=
 --   then xs.1.1.getD n b
 --   else _
 
-instance : HMul B256 B256 B256 := ⟨B256.mul⟩
 
 def B256.bexpCore : Nat → B256 → B256 → (B256 × B256)
  | 0, xs, _ => ⟨1, xs⟩
@@ -2032,43 +2343,6 @@ def Keccak'.aux : Nat → Array B64 → Array B64
 def Keccak.f (ws : Qords) : Qords := aux 24 ws
 def KeccakU.f (ws : QordsU) : QordsU := aux 24 ws
 
-def B64.toB8s (x : B64) : B8s :=
-  [ (x >>> 56).toUInt8, (x >>> 48).toUInt8,
-    (x >>> 40).toUInt8, (x >>> 32).toUInt8,
-    (x >>> 24).toUInt8, (x >>> 16).toUInt8,
-    (x >>> 8).toUInt8, x.toUInt8 ]
-
-
-def B64.reverse (w : B64) : B64 :=
-  ((w <<< 56) &&& (0xFF00000000000000 : B64)) |||
-  ((w <<< 40) &&& (0x00FF000000000000 : B64)) |||
-  ((w <<< 24) &&& (0x0000FF0000000000 : B64)) |||
-  ((w <<< 8)  &&& (0x000000FF00000000 : B64)) |||
-  ((w >>> 8)  &&& (0x00000000FF000000 : B64)) |||
-  ((w >>> 24) &&& (0x0000000000FF0000 : B64)) |||
-  ((w >>> 40) &&& (0x000000000000FF00 : B64)) |||
-  ((w >>> 56) &&& (0x00000000000000FF : B64))
-
-
-def B16.highs (x : B16) : B8 := (x >>> 8).toUInt8
-def B16.lows : B16 → B8 := UInt16.toUInt8
-def B16.toHex (x : B16) : String := x.highs.toHex ++ x.lows.toHex
-
-def B32.highs (x : B32) : B16 := (x >>> 16).toUInt16
-def B32.lows : B32 → B16 := UInt32.toUInt16
-def B32.toHex (x : B32) : String := x.highs.toHex ++ x.lows.toHex
-
-def B64.highs (x : B64) : B32 := (x >>> 32).toUInt32
-def B64.lows : B64 → B32 := UInt64.toUInt32
-def B64.toHex (x : B64) : String := x.highs.toHex ++ x.lows.toHex
-
-def B128.toHex (x : B128) : String := x.1.toHex ++ x.2.toHex
-def B256.toHex (x : B256) : String := x.1.toHex ++ x.2.toHex
-
-def B.toB8s (x : B128) : B8s := x.1.toB8s ++ x.2.toB8s
-def B128.toB8s (x : B128) : B8s := x.1.toB8s ++ x.2.toB8s
-def B256.toB8s (x : B256) : B8s := x.1.toB8s ++ x.2.toB8s
-
 def Qord.reverse (w : Bits 64) : Bits 64 :=
   Bytes.toBits 8 (@Bits.toBytes 8 w).reverse
 
@@ -2120,8 +2394,6 @@ def keccak : Fin 17 → Bytes → Qords → Word
   (Qord.reverse <| ws'.get 2) ++ (Qord.reverse <| ws'.get 3)
 
 
-instance : HAppend B64 B64 B128 := ⟨λ xs ys => ⟨xs, ys⟩⟩
-instance : HAppend B128 B128 B256 := ⟨λ xs ys => ⟨xs, ys⟩⟩
 
 def keccakU : Fin 17 → B8s → QordsU → B256
 | wc, b0 :: b1 :: b2 :: b3 :: b4 :: b5 :: b6 :: b7 :: bs, ws =>
@@ -2300,8 +2572,6 @@ inductive RLP' : Type
   | b8s : B8s → RLP'
   | list : List RLP' → RLP'
 
-def B8.highBit (x : B8) : Bool := (x &&& 0x80) != 0
-def B8.lowBit (x : B8) : Bool := (x &&& 0x01) != 0
 
 def B8.toBools (x0 : B8) :
     Bool × Bool × Bool × Bool × Bool × Bool × Bool × Bool :=

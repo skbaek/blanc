@@ -372,6 +372,12 @@ def slt_check (x y : Bits 256) : Bits 256 := if x ±< y then 1 else 0
 def sgt_check (x y : Bits 256) : Bits 256 := if x ±> y then 1 else 0
 def eq_check (x y : Bits 256) : Bits 256 := if x = y then 1 else 0
 
+def B256.lt_check  (x y : B256) : B256 := if x < y then 1 else 0
+def B256.gt_check  (x y : B256) : B256 := if x > y then 1 else 0
+def B256.slt_check (x y : B256) : B256 := if B256.Slt x y then 1 else 0
+def B256.sgt_check (x y : B256) : B256 := if B256.Sgt x y then 1 else 0
+def B256.eq_check  (x y : B256) : B256 := if x = y then 1 else 0
+
 infix:70 " <? " => lt_check
 infix:70 " >? " => gt_check
 infix:70 " ±<? " => slt_check
