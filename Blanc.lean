@@ -115,16 +115,16 @@ def List.compare {ξ : Type u} [Ord ξ] : List ξ → List ξ → Ordering
 
 def B128.compare : B128 → B128 → Ordering
   | ⟨x, y⟩, ⟨x', y'⟩ =>
-    match Ord.compare x y with
-    | .eq => Ord.compare x' y'
+    match Ord.compare x x' with
+    | .eq => Ord.compare y y'
     | o => o
 
 instance : Ord B128 := ⟨B128.compare⟩
 
 def B256.compare : B256 → B256 → Ordering
   | ⟨x, y⟩, ⟨x', y'⟩ =>
-    match Ord.compare x y with
-    | .eq => Ord.compare x' y'
+    match Ord.compare x x' with
+    | .eq => Ord.compare y y'
     | o => o
 
 instance {ξ : Type u} [Ord ξ] : Ord (List ξ) := ⟨List.compare⟩
@@ -790,12 +790,10 @@ def collapse' (j : NTB') : RLP' := structComp' (2 * (j.maxKeyLength + 1)) j
 
 def trie (j : NTB) : Word :=
   let bs := (collapse j).encode
-  -- dbg_trace s!"kec bytes : {bs.toHex}"
   bs.keccak
 
 def trie' (j : NTB') : B256 :=
   let bs := (collapse' j).encode
-  -- dbg_trace s!"kec b8s : {bs.toHex}"
   bs.keccak
 
 def Word.toBytes (w : Word) : Bytes := (@Bits.toBytes 32 w)
@@ -857,7 +855,7 @@ def compareRLP : RLP → RLP' → Option Unit
   | .bytes xs, .b8s ys =>
     if (xs = List.map B8.toByte ys)
     then some ()
-    else dbg_trace "bytes diff" ; none
+    else none
   | .list [], .list [] => some ()
   | .list (x :: xs), .list (y :: ys) => do
     (compareRLP x y)
@@ -867,7 +865,6 @@ def compareRLP : RLP → RLP' → Option Unit
 def toKeyValTest (pr : Addr × Acct) : Option Unit := do
   let ad := pr.fst
   let ac := pr.snd
-
   let key := @Bits.toNibs 64 (@Bits.toBytes 20 ad).keccak
   dbg_trace "key : {key.toHex} "
   let key' := ad.toB8s.keccak.toB4s
@@ -1220,10 +1217,7 @@ def cCallGas (s : State') (g : Nat) (memCost : Nat) (t : Addr) (v : Word) : Nat 
   else cGasCap s g memCost t v
 
 def cCall (s : State') (g : Nat) (memCost : Nat) (t : Addr) (v : Word) : Nat :=
-  -- dbg_trace s!"gascap : {cGasCap s g memCost t v}"
-  -- dbg_trace s!"extra : {cExtra s t v}"
   cGasCap s g memCost t v + cExtra s t v
-
 
 structure theta.Result : Type where
   (wld : World')
@@ -1779,10 +1773,7 @@ def Rinst.run (H : Block) (w₀ : World') (s : State') : Rinst → Option State'
       (stk' := xpy :: xs)
   | .div => do
     let (x :: y :: xs) ← (return s.mcn.stk) | none
-    dbg_trace s!"dividend : {x.toHex}"
-    dbg_trace s!"divisor : {y.toHex}"
     let z : B256 := (x / y)
-    dbg_trace s!"quotient : {z.toHex}"
     nextState s (cost := gLow) (stk' := z :: xs)
   | .sdiv => do
     let (x :: y :: xs) ← (return s.mcn.stk) | none
@@ -1790,10 +1781,7 @@ def Rinst.run (H : Block) (w₀ : World') (s : State') : Rinst → Option State'
     some {s with mcn := {s.mcn with stk := .sdiv x y :: xs, gas := g', pc := s.mcn.pc + 1}}
   | .mod => do
     let (x :: y :: xs) ← (return s.mcn.stk) | none
-    dbg_trace s!"dividend : {x.toHex}"
-    dbg_trace s!"divisor : {y.toHex}"
     let z : B256 := (x % y)
-    dbg_trace s!"quotient : {z.toHex}"
     let g' ← safeSub s.mcn.gas gLow
     some {s with mcn := {s.mcn with stk := z :: xs, gas := g', pc := s.mcn.pc + 1}}
   | .smod => do
@@ -2105,7 +2093,7 @@ def exec (H : Block) (w₀ : World') : Nat → State' → Option Ξ.Result
     | none => some s.xh
     | some i =>
       -- dbg_trace s!"gas remaining : {s.mcn.gas}"
-      dbg_trace s!"executing inst : {i.toString}"
+      -- dbg_trace s!"executing inst : {i.toString}"
       match i with
       | .next (.exec .delcall) => do
         let gas :: adr :: ilc :: isz :: olc :: osz :: stk

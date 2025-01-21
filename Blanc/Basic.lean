@@ -885,10 +885,9 @@ def B256.signext (x y : B256) : B256 :=
   if h : x < 31
   then have h' : (32 - (x.toNat + 1)) < 32 := by omega
        let z : B8 := y.toB8v.get (32 - (x.toNat + 1))
-       dbg_trace s!"z : {z.toHex}"
        cond z.highBit
          ((B256.max <<< (8 * (x.toNat + 1))) ||| y)
-         ((B256.max >>> (32 - (8 * (x.toNat + 1)))) &&& y)
+         ((B256.max >>> (256 - (8 * (x.toNat + 1)))) &&& y)
   else y
 
 
@@ -1875,64 +1874,48 @@ def B256.toBits (i : B256) : Bits 256 := i.1.toBits ++ i.2.toBits
 
 def B64.mulx (x y : B64) : B128 :=
   let xh := x.highs'
-  -- dbg_trace s!"xh : {@Bits.toHex 16 xh.toBits}"
   let xl := x.lows'
-  -- dbg_trace s!"xl : {@Bits.toHex 16 xl.toBits}"
   let yh := y.highs'
-  -- dbg_trace s!"yh : {@Bits.toHex 16 yh.toBits}"
   let yl := y.lows'
-  -- dbg_trace s!"yl : {@Bits.toHex 16 yl.toBits}"
   let ll := xl * yl
-  -- dbg_trace s!"ll : {@Bits.toHex 16 ll.toBits}"
   let lh := xl * yh
-  -- dbg_trace s!"lh : {@Bits.toHex 16 lh.toBits}"
   let hl := xh * yl
-  -- dbg_trace s!"hl : {@Bits.toHex 16 hl.toBits}"
   let hh := xh * yh
-  -- dbg_trace s!"hh : {@Bits.toHex 16 hh.toBits}"
   let lhl := lh <<< 32
-  -- dbg_trace s!"lhl : {@Bits.toHex 16 lhl.toBits}"
   let hll := hl <<< 32
-  -- dbg_trace s!"hll : {@Bits.toHex 16 hll.toBits}"
   let lt := ll + lhl
   let l := lt + hll
-  -- dbg_trace s!"lt : {@Bits.toHex 16 lt.toBits}"
   let c : B64 :=
     match (lt < ll : Bool), (l < lt : Bool) with
     | true, true => 2
     | false, false => 0
     | _, _  => 1
-  -- dbg_trace s!"c : {@Bits.toHex 16 c.toBits}"
   let h := hh + lh.highs' + hl.highs' + c --0 + c1
-  -- dbg_trace s!"h : {@Bits.toHex 16 h.toBits}"
   ⟨h, l⟩
 
 def B128.mulx (x y : B128) : B256 :=
-  let ll := B64.mulx x.2 y.2 -- dbg_trace s!"ll : {@Bits.toHex 16 ll.toBits}"
-  let lh := B64.mulx x.2 y.1 -- dbg_trace s!"lh : {@Bits.toHex 16 lh.toBits}"
-  let hl := B64.mulx x.1 y.2 -- dbg_trace s!"hl : {@Bits.toHex 16 hl.toBits}"
-  let hh := B64.mulx x.1 y.1 -- dbg_trace s!"hh : {@Bits.toHex 16 hh.toBits}"
-  let lhl : B128 := ⟨lh.2, 0⟩ -- dbg_trace s!"lhl : {@Bits.toHex 16 lhl.toBits}"
-  let hll : B128 := ⟨hl.2, 0⟩ -- dbg_trace s!"hll : {@Bits.toHex 16 hll.toBits}"
+  let ll := B64.mulx x.2 y.2
+  let lh := B64.mulx x.2 y.1
+  let hl := B64.mulx x.1 y.2
+  let hh := B64.mulx x.1 y.1
+  let lhl : B128 := ⟨lh.2, 0⟩
+  let hll : B128 := ⟨hl.2, 0⟩
   let lt := ll + lhl
-  let l := lt + hll -- dbg_trace s!"lt : {@Bits.toHex 16 lt.toBits}"
+  let l := lt + hll
   let c : B128 :=
     match (lt < ll : Bool), (l < lt : Bool) with
     | true, true => ⟨0, 2⟩
     | false, false => ⟨0, 0⟩
     | _, _  => ⟨0, 1⟩
-  -- dbg_trace s!"c : {@Bits.toHex 16 c.toBits}"
   let h := hh + ⟨0, lh.1⟩ + ⟨0, hl.1⟩ + c --0 + c1
-  -- dbg_trace s!"h : {@Bits.toHex 16 h.toBits}"
   ⟨h, l⟩
 
 def B256.mul (x y : B256) : B256 :=
-  let ll := B128.mulx x.2 y.2 -- dbg_trace s!"ll : {@Bits.toHex 16 ll.toBits}"
-  let lh := B128.mulx x.2 y.1 -- dbg_trace s!"lh : {@Bits.toHex 16 lh.toBits}"
-  let hl := B128.mulx x.1 y.2 -- dbg_trace s!"hl : {@Bits.toHex 16 hl.toBits}"
+  let ll := B128.mulx x.2 y.2
+  let lh := B128.mulx x.2 y.1
+  let hl := B128.mulx x.1 y.2
   ll + ⟨lh.2, 0⟩ + ⟨hl.2, 0⟩
 instance : HMul B256 B256 B256 := ⟨B256.mul⟩
-
 
 def divOffset : Nat → B256 → B256 → Option Nat
   | 0, _, _ => some 0
@@ -1949,10 +1932,6 @@ def divOffset : Nat → B256 → B256 → Option Nat
 def B256.divModCore : Nat → B256 → B256 → B256 → (B256 × B256)
   | 0,     x, _, z => ⟨z, x⟩
   | n + 1, x, y, z =>
-    -- dbg_trace s!"n : {n}"
-    -- dbg_trace s!"x : {x.toHex}"
-    -- dbg_trace s!"y : {y.toHex}"
-    -- dbg_trace s!"z : {z.toHex}\n"
     if x < y
     then divModCore n x (y >>> 1) (z <<< 1)
     else divModCore n (x - y) (y >>> 1) ((z <<< 1) + 1)
@@ -2121,9 +2100,6 @@ def Keccak.θ' (bc : Vec (Bits 64) 5) : Nat → Qords → Qords
 | 0, ws => ws
 | i + 1, ws =>
   let t : Bits 64 := bc.get (i + 4) ^^ sha3rotl64 (bc.get (i + 1)) 1
-  -- dbg_trace s!"arg : {@bits.tohex 16 (bc.get (i + 1))}"
-  -- dbg_trace s!"ret : {@bits.tohex 16 (sha3rotl64 (bc.get (i + 1)) 1)}"
-  -- dbg_trace s!"i : {i}, t : {@bits.tohex 16 t}"
   θ' bc i <| θ'' t i 5 ws
 
 def Keccak'.θ (ws : Array B64) : Array B64 :=
@@ -2140,7 +2116,6 @@ def KeccakU.θ (ws : QordsU) : QordsU :=
     λ x => ws.get x ^^^ ws.get (x + 5) ^^^ ws.get (x + 10) ^^^
           ws.get (x + 15) ^^^ ws.get (x + 20)
   let bc : Vec B64 5 := ⟨[g 0, g 1, g 2, g 3, g 4], rfl⟩
-  -- dbg_trace s!"bc :\n{@List.toString _ ⟨B64.toHex⟩ bc.val}"
   θ' bc 5 ws
 
 def Keccak.θ (ws : Qords) : Qords :=
@@ -2148,7 +2123,6 @@ def Keccak.θ (ws : Qords) : Qords :=
     λ x => ws.get x ^^ ws.get (x + 5) ^^ ws.get (x + 10) ^^
           ws.get (x + 15) ^^ ws.get (x + 20)
   let bc : Vec (Bits 64) 5 := ⟨[g 0, g 1, g 2, g 3, g 4], rfl⟩
-  -- dbg_trace s!"bc :\n{@List.toString _ ⟨@Bits.toHex 16⟩ bc.val}"
   θ' bc 5 ws
 
 def keccak_rdnc_00 : Bits 64 := Hex.toBits! 16 "0000000000000001"
