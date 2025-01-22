@@ -1835,6 +1835,10 @@ def Rinst.run (H : Block) (w₀ : World') (s : State') : Rinst → Option State'
   | .pc => nextState s (cost := gBase) (stk' := s.mcn.pc.toB256 :: s.mcn.stk)
   | .log n => do
     let (x :: y :: xys) ← (return s.mcn.stk) | none
+    let cost := gLog + (gLogdata * y.toNat) + (n * gLogtopic)
+    let act' := memExp s.mcn.act x y
+    let memCost : Nat := cMem act' - cMem s.mcn.act
+    let _ ← s.deductGas (cost + memCost)
     let ⟨xs, ys⟩ ← List.splitAt? n xys
     let bs : B8s := (s.mcn.mem.sliceD x.toNat y.toNat 0).map Byte.toB8
     let log : RLP' :=
@@ -1844,9 +1848,9 @@ def Rinst.run (H : Block) (w₀ : World') (s : State') : Rinst → Option State'
         .b8s bs
       ]
     nextState s
-      (cost := gLog + (gLogdata * y.toNat) + (n * gLogtopic))
+      (cost := cost)
       (stk' := ys)
-      (act' := memExp s.mcn.act x y)
+      (act' := act')
       (logs' := log :: s.acr.logs)
   | i => dbg_trace s!"UNIMPLEMENTED REGULAR INSTRUCTION EXECUTION : {i.toString}"; none
 
