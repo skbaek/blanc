@@ -862,64 +862,6 @@ def compareRLP : RLP → RLP' → Option Unit
     compareRLP (.list xs) (.list ys)
   | _, _ => none
 
-def toKeyValTest (pr : Addr × Acct) : Option Unit := do
-  let ad := pr.fst
-  let ac := pr.snd
-  let key := @Bits.toNibs 64 (@Bits.toBytes 20 ad).keccak
-  dbg_trace "key : {key.toHex} "
-  let key' := ad.toB8s.keccak.toB4s
-  dbg_trace "key' : {Nibs.toHex (key'.map B8.toNib)} "
-  guard (key = key'.map B8.toNib)
-  dbg_trace "keys match"
-
-  let val :=
-    RLP.encode <| .list [
-      .bytes (ac.nonce.toBytes.sig), --a.nonce,
-      .bytes (ac.bal.toBytes.sig), --a.bal,
-      Word.toRLP (trie ac.stor.toNTB),
-      Word.toRLP <| (Bytes.keccak ac.code.toList)
-    ]
-
-  let val' :=
-    RLP'.encode <| .list [
-      .b8s (ac.nonce.toBytes.sig.map Byte.toB8), --a.nonce,
-      .b8s (ac.bal.toBytes.sig.map Byte.toB8), --a.bal,
-      B256.toRLP (trie' ac.stor.toNTB'),
-      B256.toRLP <| (Bytes.keccak ac.code.toList).toB256
-    ]
-
-  let item0 := ac.nonce.toBytes.sig
-  let item0' := (ac.nonce.toBytes.sig.map Byte.toB8)
-  guard (item0 = item0'.map B8.toByte)
-  dbg_trace "item0 match"
-
-  let item1 := (ac.bal.toBytes.sig)
-  let item1' := (ac.bal.toBytes.sig.map Byte.toB8)
-  guard (item1 = item1'.map B8.toByte)
-  dbg_trace "item1 match"
-
-  dbg_trace (Strings.join ac.stor.toNTB.toStrings)
-  dbg_trace (Strings.join ac.stor.toNTB'.toStrings)
-
-  guard ((trie ac.stor.toNTB) = (trie' ac.stor.toNTB').toBits)
-  dbg_trace "word-B256 match"
-
-
-
-  dbg_trace "matching items 2..."
-  compareRLP (Word.toRLP (trie ac.stor.toNTB)) (B256.toRLP (trie' ac.stor.toNTB'))
-
-  dbg_trace "matching items 3..."
-  compareRLP
-    (Word.toRLP <| (Bytes.keccak ac.code.toList))
-    (B256.toRLP <| (Bytes.keccak ac.code.toList).toB256)
-
-
-  guard (val = val'.map B8.toByte)
-  dbg_trace "vals match"
-
-  return ()
-
 def toKeyVal' (pr : Addr × Acct) : B8s × B8s :=
   let ad := pr.fst
   let ac := pr.snd
@@ -936,22 +878,6 @@ def toKeyVal' (pr : Addr × Acct) : B8s × B8s :=
       ]
     -- dbg_trace "val : {@List.toString _ ⟨B8.toHex⟩ val'}"
     val'
-  ⟩
-
-def toKeyVal (pr : Addr × Acct) : Nibs × Bytes :=
-  let ad := pr.fst
-  let ac := pr.snd
-  ⟨
-    let key := @Bits.toNibs 64 (@Bits.toBytes 20 ad).keccak
-    -- dbg_trace "key : {@List.toString _ ⟨Nib.toHex⟩ key} "
-    key
-    ,
-    RLP.encode <| .list [
-      .bytes (ac.nonce.toBytes.sig), --a.nonce,
-      .bytes (ac.bal.toBytes.sig), --a.bal,
-      Word.toRLP (trie ac.stor.toNTB),
-      Word.toRLP <| (Bytes.keccak ac.code.toList)
-    ]
   ⟩
 
 def G_txcreate : Nat := 32000
@@ -984,7 +910,7 @@ def Stack' : Type := List B256
 structure Machine where
   (gas : Nat) -- μ_g
   (pc : Nat) -- μ_pc
-  (mem : Bytes) -- μ_m
+  (mem : Array Byte) -- μ_m
   (ret : Bytes) -- μ_o
   (stk : Stack') -- μ_s
   (act : Nat) -- μ_i
@@ -993,7 +919,7 @@ def ceilDiv (m n : Nat) := m / n + if m % n = 0 then 0 else 1
 
 -- μ_i : no need to make it a separate field of Machine,
 -- when it is completely determined by Machine.mem
-def Machine.msz (m : Machine) : Nat := ceilDiv m.mem.length 32
+def Machine.msz (m : Machine) : Nat := ceilDiv m.mem.size 32
 
 structure Block where
   (baseFee : Word) -- H_f
@@ -1281,7 +1207,7 @@ def θ.prep
     cta := r, oga := o, gpr := p.toB256, cld := d
     cla := s, clv := v_app, code := cd, blk := H, exd := e, wup := w
   }
-  let μ : Machine := {gas := g, pc := 0, mem := [], ret := [], stk := [], act := 0}
+  let μ : Machine := {gas := g, pc := 0, mem := #[], ret := [], stk := [], act := 0}
   ⟨σ₁, μ, A, I⟩
 
 def θ.wrap (wld : World') (acr : Accrual) (Ξr : Ξ.Result) : theta.Result :=
@@ -1509,6 +1435,28 @@ def List.put {ξ : Type u} : List ξ → Nat → ξ → ξ → List ξ
 def List.puts {ξ : Type u} (xs : List ξ) (n : Nat) (ys : List ξ) (z : ξ) : List ξ :=
   xs.takeD n z ++ ys ++ xs.drop (n + ys.length)
 
+def Mem : Type := Array Byte
+
+def Array.writeD {ξ : Type u} (xs : Array ξ) (n : ℕ) : List ξ → Array ξ
+  | [] => xs
+  | y :: ys =>
+    if h : n < xs.size
+    then let xs' := xs.setN n y
+         writeD xs' (n + 1) ys
+    else xs
+
+def Array.copyD {ξ : Type u} (xs ys : Array ξ) : Array ξ :=
+  let f : (Array ξ × Nat) → ξ → (Array ξ × Nat) :=
+    λ ysn x => ⟨Array.setD ysn.fst ysn.snd x, ysn.snd + 1⟩
+  (Array.foldl f ⟨ys, 0⟩ xs).fst
+
+def Array.writeX {ξ : Type u} (xs : Array ξ) (n : ℕ) (ys : List ξ) (d : ξ) : Array ξ :=
+  if n + ys.length ≤ xs.size
+  then Array.writeD xs n ys
+  else let zs : Array ξ := Array.mkArray (n + ys.length) d
+       let zs' : Array ξ := Array.copyD xs zs
+       Array.writeD zs' n ys
+
 def gCopy : Nat := 3
 def gMemory : Nat := 3
 def gKeccak256 : Nat := 30
@@ -1519,7 +1467,7 @@ def cMem (a : Nat) := gMemory * a + ((a ^ 2) / 512)
 def nextState (s : State') (cost : Nat)
   (act' : Nat := s.mcn.act)
   (stk' : Stack' := s.mcn.stk)
-  (mem' : Bytes := s.mcn.mem)
+  (mem' : Array Byte := s.mcn.mem)
   (ret' : Bytes := s.mcn.ret)
   (adrs' : AddrSet := s.acr.adrs)
   (logs' : List RLP' := s.acr.logs) : Option State' := do
@@ -1580,7 +1528,8 @@ def Rinst.run (H : Block) (w₀ : World') (s : State') : Rinst → Option State'
       (cost := gVerylow + (gCopy * (ceilDiv z.toBits.toNat 32)))
       (act' := memExp s.mcn.act x z)
       (stk' := xs)
-      (mem' := List.puts s.mcn.mem x.toBits.toNat bs 0)
+      --(mem' := List.puts s.mcn.mem x.toNat bs 0)
+      (mem' := Array.writeX s.mcn.mem x.toNat bs 0)
   | .codesize => nextState s (cost := gBase) (stk' := s.env.code.size.toB256 :: s.mcn.stk)
   | .codecopy => do
     let (x :: y :: z :: xs) ← (return s.mcn.stk) | none
@@ -1595,7 +1544,7 @@ def Rinst.run (H : Block) (w₀ : World') (s : State') : Rinst → Option State'
       (cost := cost)-- gVerylow + (gCopy * (ceilDiv z.toNat 32)))
       (act' := act')-- memExp s.mcn.act x z)
       (stk' := xs)
-      (mem' := List.puts s.mcn.mem x.toNat bs 0)
+      (mem' := Array.writeX s.mcn.mem x.toNat bs 0)
   | .gasprice => nextState s (cost := gBase) (stk' := s.env.gpr :: s.mcn.stk)
   | .extcodesize => do
     let (x :: xs) ← (return s.mcn.stk) | none
@@ -1613,7 +1562,7 @@ def Rinst.run (H : Block) (w₀ : World') (s : State') : Rinst → Option State'
       (cost := cAAccess x.toAddr s.acr.adrs + (gCopy * (ceilDiv z.toNat 32)))
       (act' := memExp s.mcn.act y w)
       (stk' := xs)
-      (mem' := List.puts s.mcn.mem y.toNat bs 0)
+      (mem' := Array.writeX s.mcn.mem y.toNat bs 0)
   | .retdatasize =>
     nextState s (cost := gBase) (stk' := s.mcn.ret.length.toB256 :: s.mcn.stk)
   | .retdatacopy => do
@@ -1623,7 +1572,7 @@ def Rinst.run (H : Block) (w₀ : World') (s : State') : Rinst → Option State'
       (cost := gVerylow + (gCopy * (ceilDiv z.toNat 32)))
       (act' := memExp s.mcn.act x z)
       (stk' := xs)
-      (mem' := List.puts s.mcn.mem x.toNat bs 0)
+      (mem' := Array.writeX s.mcn.mem x.toNat bs 0)
   | .extcodehash => do
     let (x :: xs) ← (return s.mcn.stk) | none
     let a := x.toAddr
@@ -1670,7 +1619,7 @@ def Rinst.run (H : Block) (w₀ : World') (s : State') : Rinst → Option State'
         stk := xs,
         gas := g',
         -- mem := List.puts s.mcn.mem x.toNat (@Bits.toBytes 32 y) 0,
-        mem := List.puts s.mcn.mem x.toNat (y.toB8s.map B8.toByte) 0,
+        mem := Array.writeX s.mcn.mem x.toNat (y.toB8s.map B8.toByte) 0,
         pc := s.mcn.pc + 1
         act := act'
       }
@@ -1687,7 +1636,7 @@ def Rinst.run (H : Block) (w₀ : World') (s : State') : Rinst → Option State'
         s.mcn with
         stk := xs,
         gas := g',
-        mem := List.put s.mcn.mem x.toNat (B8.toByte y.2.2.toUInt8) 0,
+        mem := Array.writeX s.mcn.mem x.toNat [B8.toByte y.2.2.toUInt8] 0,
         pc := s.mcn.pc + 1
         act := act'
       }
@@ -1940,7 +1889,7 @@ structure theta.Cont : Type where
   (olc : B256)
   (osz : B256)
   (gas : Nat)
-  (mem : Bytes)
+  (mem : Array Byte)
   (pc : Nat)
   (stk : Stack')
   (act : Nat)
@@ -1951,7 +1900,8 @@ def theta.Result.toState (ct : theta.Cont) (tr : theta.Result) : State' :=
   let m' : Machine := {
     gas := ct.gas + tr.gas
     pc := ct.pc + 1
-    mem := ct.mem.takeD ct.olc.toNat 0 ++ cpy ++ ct.mem.drop (ct.olc.toNat + cpy.length)
+    --mem := ct.mem.takeD ct.olc.toNat 0 ++ cpy ++ ct.mem.drop (ct.olc.toNat + cpy.length)
+    mem := Array.writeX ct.mem ct.olc.toNat cpy 0
     ret := tr.ret
     --stk := @Bool.toBits 256 tr.sta :: ct.stk
     stk := (if tr.sta then 1 else 0) :: ct.stk
@@ -2110,14 +2060,14 @@ def exec (H : Block) (w₀ : World') : Nat → State' → Option Ξ.Result
     | none => some s.xh
     | some i =>
       -- dbg_trace s!"gas remaining : {s.mcn.gas}"
-      dbg_trace s!"executing inst : {i.toString}"
+      -- dbg_trace s!"executing inst : {i.toString}"
       match i with
       | .next (.exec .delcall) => do
         let gas :: adr :: ilc :: isz :: olc :: osz :: stk
           ← (return s.mcn.stk) | (some s.xh)
         let i : Bytes := s.mcn.mem.sliceD ilc.toNat isz.toNat 0
         let t : Addr := adr.toAddr
-        dbg_trace s!"nested delgatecall to address : {t.toHex}"
+        -- dbg_trace s!"nested delgatecall to address : {t.toHex}"
         let as' : AddrSet := s.acr.adrs.insert t
         let A' : Accrual := {s.acr with adrs := as'}
         let act' : Nat := memExp (memExp s.mcn.act ilc isz) olc osz
@@ -2528,8 +2478,7 @@ def main (args : List String) : IO Unit := do
   let testPath ← args.head?.toIO "no command line argument"
   let td ← readJsonFile testPath >>= Lean.Json.toTestData
   let ts ← getTests td
-  --let t ← (ts.get? 2).toIO "test #2 does not exist"
-  --Test.run t
+  --((ts.get? 2).toIO "test #2 does not exist") >>= Test.run
   Tests.run 1 ts
 
 #exit
