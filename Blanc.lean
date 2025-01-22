@@ -1085,18 +1085,23 @@ def noPushBefore (cd : Array Byte) : Nat → Nat → Bool
       if (b < (Ox x7 xF - m.toByte) || Ox x7 xF < b)
       then noPushBefore cd k m
       else if noPushBefore cd k 32
-           then false
+           then dbg_trace "jumpdest check : is a push arg" ; false
            else noPushBefore cd k m
 
 def ByteArray.jumpable (cd : Array Byte) (k : Nat) : Bool :=
-  cd.get? k = some (Jinst.toByte .jumpdest) &&
-  noPushBefore cd k 32
+  if cd.get? k = some (Jinst.toByte .jumpdest)
+  then noPushBefore cd k 32
+  else dbg_trace s!"jumpdest check : no jumpdest op, loc : {k}" ; false
 
 def State'.jumpable (s : State') (k : Nat) : Bool :=
-  match s.wld.find? s.env.cta with
-  | none => false
-  -- | some a => a.code.jumpable 0 k
-  | some a => ByteArray.jumpable a.code k
+  if s.env.code.get? k = some (Jinst.toByte .jumpdest)
+  then noPushBefore s.env.code k 32
+  else dbg_trace s!"jumpdest check : no jumpdest op, loc : {k}" ; false
+
+  --match s.wld.find? s.env.cta with
+  --| none => dbg_trace "jumpdest check : no account" ; false
+  ---- | some a => a.code.jumpable 0 k
+  --| some a => ByteArray.jumpable a.code k
 
 def Array.sliceD {ξ : Type u} (xs : Array ξ) : Nat → Nat → ξ → List ξ
   | _, 0, _ => []
@@ -1579,10 +1584,16 @@ def Rinst.run (H : Block) (w₀ : World') (s : State') : Rinst → Option State'
   | .codesize => nextState s (cost := gBase) (stk' := s.env.code.size.toB256 :: s.mcn.stk)
   | .codecopy => do
     let (x :: y :: z :: xs) ← (return s.mcn.stk) | none
+
+    let act' := memExp s.mcn.act x z
+    let cost := gVerylow + (gCopy * (ceilDiv z.toNat 32))
+    let memCost : Nat := cMem act' - cMem s.mcn.act
+    let _ ← s.deductGas (cost + memCost)
+
     let bs : Bytes := s.env.code.sliceD y.toNat z.toNat (Linst.toByte .stop)
     nextState s
-      (cost := gVerylow + (gCopy * (ceilDiv z.toNat 32)))
-      (act' := memExp s.mcn.act x z)
+      (cost := cost)-- gVerylow + (gCopy * (ceilDiv z.toNat 32)))
+      (act' := act')-- memExp s.mcn.act x z)
       (stk' := xs)
       (mem' := List.puts s.mcn.mem x.toNat bs 0)
   | .gasprice => nextState s (cost := gBase) (stk' := s.env.gpr :: s.mcn.stk)
@@ -1666,8 +1677,10 @@ def Rinst.run (H : Block) (w₀ : World') (s : State') : Rinst → Option State'
     some {s with mcn := m'}
   | .mstore8 => do
     let (x :: y :: xs) ← (return s.mcn.stk) | none
+    dbg_trace s!"x : {x.toNat}"
     let act' := memExp s.mcn.act x 1
     let memCost : Nat := cMem act' - cMem s.mcn.act
+    dbg_trace s!"mem cost : {memCost}"
     let g' ← s.deductGas (gVerylow + memCost)
     let m' : Machine :=
       {
@@ -2093,7 +2106,7 @@ def exec (H : Block) (w₀ : World') : Nat → State' → Option Ξ.Result
     | none => some s.xh
     | some i =>
       -- dbg_trace s!"gas remaining : {s.mcn.gas}"
-      -- dbg_trace s!"executing inst : {i.toString}"
+      dbg_trace s!"executing inst : {i.toString}"
       match i with
       | .next (.exec .delcall) => do
         let gas :: adr :: ilc :: isz :: olc :: osz :: stk
