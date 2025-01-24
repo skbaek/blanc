@@ -1386,6 +1386,7 @@ def θ.prep
       then σ'₁
       else (dbg_trace "unreachable code : nonzero value calls from empty accounts should never happen" ; σ'₁)
     | some aₛ => σ'₁.insert s {aₛ with bal := aₛ.bal - v}
+  dbg_trace s!"getting code from address : {@Bits.toHex 40 c}"
   let cd : Array B8 := σ.code c
   let I : Env' := {
     cta := r, oga := o, gpr := p.toB256, cld := d
@@ -2201,7 +2202,7 @@ def Ninst'.run (B : Block) (w₀ : World')
     Ninst' → Option (World' × Machine × Accrual)
   | .push bs _ => do
     let g' ← safeSub μ.gas (if bs = [] then gBase else gVerylow)
-    let xs ← μ.stk.push1 <| bs.toB256.getD 0
+    let xs ← μ.stk.push1 <| bs.toB256pad.getD 0
     let μ' : Machine :=
       { μ with
         gas := g'
@@ -2388,6 +2389,17 @@ def exec (H : Block) (w₀ : World') : Nat → State' → Option Ξ.Result
       none
 -/
 
+def Ninst'.toString : Ninst' → String
+  | reg o => Rinst.toString o
+  | exec o => Xinst.toString o
+  | push [] _ => "PUSH0"
+  | push bs _ => "PUSH" ++ bs.length.repr ++ " " ++ B8s.toHex bs
+
+def Inst'.toString : Inst' → String
+  | .next n => n.toString
+  | .jump j => j.toString
+  | .last l => l.toString
+
 def fooo (lim : Nat) (m : Machine) : Option Unit :=
   match lim % 100000 with
   | 0 => do
@@ -2407,6 +2419,7 @@ def exec (H : Block) (w₀ : World') :
     | some i =>
       -- dbg_trace s!"gas remaining : {μ.gas}"
       -- dbg_trace s!"executing inst : {i.toString}"
+      -- dbg_trace s!"current stack :\n{Stk.toString μ.stk}"
       match i with
       | .next (.exec .delcall) => do
         let (gas, adr, ilc, isz, olc, osz, stk) ← μ.stk.pop6
@@ -2496,6 +2509,7 @@ def exec (H : Block) (w₀ : World') :
                           i
                           (ε.exd - 1)
                           ε.wup
+                  -- dbg_trace s!"code of nested delcall : {B8s.toHex s'.env.code.toList}"
                   let xr ← exec H w₀ lim s'.env s'.acr s'.wld s'.mcn
                   let θr := θ.wrap s'.wld s'.acr xr
                   (theta.Result.toState bd θr)
@@ -2789,8 +2803,8 @@ def main (args : List String) : IO Unit := do
   let j ← readJsonFile testPath
   let td ← Lean.Json.toTestData j
   let ts ← getTests td
-  ((ts.get? 2).toIO "test #2 does not exist") >>= Test.run
-  -- Tests.run 1 ts
+  -- ((ts.get? 2).toIO "test #2 does not exist") >>= Test.run
+  Tests.run 1 ts
 
 #exit
 
