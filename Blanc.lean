@@ -160,7 +160,7 @@ instance : Ord B256 := ⟨B256.compare⟩
 def B8.compareLows (x y : B8) : Ordering :=
   Ord.compare x.lows y.lows
 
-abbrev NTB := Lean.RBMap Nibs Bytes compare
+-- abbrev NTB := Lean.RBMap Nibs Bytes compare
 abbrev NTB' := Lean.RBMap (List B8) (List B8) (@List.compare _ ⟨B8.compareLows⟩)
 
 abbrev Stor' := Lean.RBMap B256 B256 compare
@@ -329,11 +329,11 @@ def NTB'.toStrings (s : NTB') : List String :=
     λ nb => [s!"{Nibs.toHex (nb.fst.map B8.toNib)} : {nb.snd.toHex}"]
   fork "NTB'" (kvs.map kvToStrings)
 
-def NTB.toStrings (s : NTB) : List String :=
-  let kvs := s.toArray.toList
-  let kvToStrings : Nibs × Bytes → List String :=
-    λ nb => [s!"{nb.fst.toHex} : {nb.snd.toHex}"]
-  fork "NTB" (kvs.map kvToStrings)
+--def NTB.toStrings (s : NTB) : List String :=
+--  let kvs := s.toArray.toList
+--  let kvToStrings : Nibs × Bytes → List String :=
+--    λ nb => [s!"{nb.fst.toHex} : {nb.snd.toHex}"]
+--  fork "NTB" (kvs.map kvToStrings)
 
 def preAcct.toStrings (p : PreData) : List String :=
   fork "Pre Acct" [
@@ -565,7 +565,6 @@ def Lean.Json.toTestData (j : Lean.Json) : IO TestData := do
   return ⟨info, env, pre, post, tx⟩
 
 
-
 def TestData.world (td : TestData) : Option World' :=
   let aux : PreData → Option (Addr × Acct) :=
     fun pd => do
@@ -670,7 +669,7 @@ def commonPrefix' (n : B8) (ns : B8s) : List B8s → Option B8s
     | [] => none
     | (n' :: ns'') => commonPrefix' n' ns'' nss
 
-def NTB.empty : NTB := Lean.RBMap.empty
+-- def NTB.empty : NTB := Lean.RBMap.empty
 def NTB'.empty : NTB' := Lean.RBMap.empty
 
 def sansPrefix : Nibs → Nibs → Option Nibs
@@ -684,8 +683,8 @@ def sansPrefix' : B8s → B8s → Option B8s
   | n :: ns, n' :: ns' =>
     if n = n' then sansPrefix' ns ns' else none
 
-def insertSansPrefix (pfx : Nibs) (m : NTB) (ns : Nibs) (bs : Bytes) : Option NTB := do
-  (m.insert · bs) <$> sansPrefix pfx ns
+-- def insertSansPrefix (pfx : Nibs) (m : NTB) (ns : Nibs) (bs : Bytes) : Option NTB := do
+--   (m.insert · bs) <$> sansPrefix pfx ns
 
 def insertSansPrefix' (pfx : B8s) (m : NTB') (ns : B8s) (bs : B8s) : Option NTB' := do
   (m.insert · bs) <$> sansPrefix' pfx ns
@@ -696,18 +695,18 @@ def NTB'.factor (m : NTB') : Option (B8s × NTB') := do
   let m' ← Lean.RBMap.foldM (insertSansPrefix' pfx) NTB'.empty m
   some ⟨pfx, m'⟩
 
-def NTB.factor (m : NTB) : Option (Nibs × NTB) := do
-  let ((n :: ns) :: nss) ← some (m.toList.map Prod.fst) | none
-  let pfx ← commonPrefix n ns nss
-  let m' ← Lean.RBMap.foldM (insertSansPrefix pfx) NTB.empty m
-  some ⟨pfx, m'⟩
-
-structure NTBs : Type where
-  (x0 : NTB) (x1 : NTB) (x2 : NTB) (x3 : NTB)
-  (x4 : NTB) (x5 : NTB) (x6 : NTB) (x7 : NTB)
-  (x8 : NTB) (x9 : NTB) (xA : NTB) (xB : NTB)
-  (xC : NTB) (xD : NTB) (xE : NTB) (xF : NTB)
-
+-- def NTB.factor (m : NTB) : Option (Nibs × NTB) := do
+--   let ((n :: ns) :: nss) ← some (m.toList.map Prod.fst) | none
+--   let pfx ← commonPrefix n ns nss
+--   let m' ← Lean.RBMap.foldM (insertSansPrefix pfx) NTB.empty m
+--   some ⟨pfx, m'⟩
+--
+-- structure NTBs : Type where
+--   (x0 : NTB) (x1 : NTB) (x2 : NTB) (x3 : NTB)
+--   (x4 : NTB) (x5 : NTB) (x6 : NTB) (x7 : NTB)
+--   (x8 : NTB) (x9 : NTB) (xA : NTB) (xB : NTB)
+--   (xC : NTB) (xD : NTB) (xE : NTB) (xF : NTB)
+--
 structure NTBs' : Type where
   (x0 : NTB') (x1 : NTB') (x2 : NTB') (x3 : NTB')
   (x4 : NTB') (x5 : NTB') (x6 : NTB') (x7 : NTB')
@@ -720,11 +719,11 @@ def NTBs'.empty : NTBs' :=
     .empty, .empty, .empty, .empty,
     .empty, .empty, .empty, .empty ⟩
 
-def NTBs.empty : NTBs :=
-  ⟨ .empty, .empty, .empty, .empty,
-    .empty, .empty, .empty, .empty,
-    .empty, .empty, .empty, .empty,
-    .empty, .empty, .empty, .empty ⟩
+-- def NTBs.empty : NTBs :=
+--   ⟨ .empty, .empty, .empty, .empty,
+--     .empty, .empty, .empty, .empty,
+--     .empty, .empty, .empty, .empty,
+--     .empty, .empty, .empty, .empty ⟩
 
 def NTBs'.update (js : NTBs') (f : NTB' → NTB') (k : B8) : NTBs' :=
   match k.toBools with
@@ -745,27 +744,27 @@ def NTBs'.update (js : NTBs') (f : NTB' → NTB') (k : B8) : NTBs' :=
   | ⟨_, _, _, _, 1, 1, 1, 0⟩ => { js with xE := f js.xE}
   | ⟨_, _, _, _, 1, 1, 1, 1⟩ => { js with xF := f js.xF}
 
-def NTBs.update (js : NTBs) (f : NTB → NTB) : Nib → NTBs
-  | ⦃0, 0, 0, 0⦄ => { js with x0 := f js.x0}
-  | ⦃0, 0, 0, 1⦄ => { js with x1 := f js.x1}
-  | ⦃0, 0, 1, 0⦄ => { js with x2 := f js.x2}
-  | ⦃0, 0, 1, 1⦄ => { js with x3 := f js.x3}
-  | ⦃0, 1, 0, 0⦄ => { js with x4 := f js.x4}
-  | ⦃0, 1, 0, 1⦄ => { js with x5 := f js.x5}
-  | ⦃0, 1, 1, 0⦄ => { js with x6 := f js.x6}
-  | ⦃0, 1, 1, 1⦄ => { js with x7 := f js.x7}
-  | ⦃1, 0, 0, 0⦄ => { js with x8 := f js.x8}
-  | ⦃1, 0, 0, 1⦄ => { js with x9 := f js.x9}
-  | ⦃1, 0, 1, 0⦄ => { js with xA := f js.xA}
-  | ⦃1, 0, 1, 1⦄ => { js with xB := f js.xB}
-  | ⦃1, 1, 0, 0⦄ => { js with xC := f js.xC}
-  | ⦃1, 1, 0, 1⦄ => { js with xD := f js.xD}
-  | ⦃1, 1, 1, 0⦄ => { js with xE := f js.xE}
-  | ⦃1, 1, 1, 1⦄ => { js with xF := f js.xF}
+-- def NTBs.update (js : NTBs) (f : NTB → NTB) : Nib → NTBs
+--   | ⦃0, 0, 0, 0⦄ => { js with x0 := f js.x0}
+--   | ⦃0, 0, 0, 1⦄ => { js with x1 := f js.x1}
+--   | ⦃0, 0, 1, 0⦄ => { js with x2 := f js.x2}
+--   | ⦃0, 0, 1, 1⦄ => { js with x3 := f js.x3}
+--   | ⦃0, 1, 0, 0⦄ => { js with x4 := f js.x4}
+--   | ⦃0, 1, 0, 1⦄ => { js with x5 := f js.x5}
+--   | ⦃0, 1, 1, 0⦄ => { js with x6 := f js.x6}
+--   | ⦃0, 1, 1, 1⦄ => { js with x7 := f js.x7}
+--   | ⦃1, 0, 0, 0⦄ => { js with x8 := f js.x8}
+--   | ⦃1, 0, 0, 1⦄ => { js with x9 := f js.x9}
+--   | ⦃1, 0, 1, 0⦄ => { js with xA := f js.xA}
+--   | ⦃1, 0, 1, 1⦄ => { js with xB := f js.xB}
+--   | ⦃1, 1, 0, 0⦄ => { js with xC := f js.xC}
+--   | ⦃1, 1, 0, 1⦄ => { js with xD := f js.xD}
+--   | ⦃1, 1, 1, 0⦄ => { js with xE := f js.xE}
+--   | ⦃1, 1, 1, 1⦄ => { js with xF := f js.xF}
 
-def NTBs.insert (js : NTBs) : Nibs → Bytes → NTBs
-  | [], _ => js
-  | n :: ns, bs => js.update (Lean.RBMap.insert · ns bs) n
+-- def NTBs.insert (js : NTBs) : Nibs → Bytes → NTBs
+--   | [], _ => js
+--   | n :: ns, bs => js.update (Lean.RBMap.insert · ns bs) n
 
 def NTBs'.insert (js : NTBs') : B8s → B8s → NTBs'
   | [], _ => js
@@ -804,62 +803,63 @@ mutual
                 | some (pfx, j') => .list [.b8s (hp' pfx 0), nodeComp' k j']
 end
 
-mutual
-  def nodeComp : Nat → NTB → RLP
-    | 0, _ => .bytes []
-    | k + 1, j =>
-      if j.isEmpty
-      then .bytes []
-      else let r := structComp k j
-           if r.encode.length < 32
-           then r
-           else .bytes <| @Bits.toBytes 32 r.encode.keccak
-
-  def structComp : Nat → NTB → RLP
-    | 0, _ => .bytes []
-    | k + 1, j =>
-      if j.isEmpty
-      -- then .list (.replicate 17 <| .bytes []) -- what should be returned
-      then .bytes [] -- what devtools actually return
-      else if j.isSingleton
-           then match j.toList with
-                | [(k, v)] => .list [.bytes (hp k 1), .bytes v]
-                | _ => .bytes [] -- unreachable code
-           else match j.factor with
-                | none =>
-                  let js := Lean.RBMap.fold NTBs.insert NTBs.empty j
-                  .list [ nodeComp k js.x0, nodeComp k js.x1, nodeComp k js.x2,
-                          nodeComp k js.x3, nodeComp k js.x4, nodeComp k js.x5,
-                          nodeComp k js.x6, nodeComp k js.x7, nodeComp k js.x8,
-                          nodeComp k js.x9, nodeComp k js.xA, nodeComp k js.xB,
-                          nodeComp k js.xC, nodeComp k js.xD, nodeComp k js.xE,
-                          nodeComp k js.xF, .bytes (j.findD [] []) ]
-                | some (pfx, j') => .list [.bytes (hp pfx 0), nodeComp k j']
-end
+-- mutual
+--   def nodeComp : Nat → NTB → RLP
+--     | 0, _ => .bytes []
+--     | k + 1, j =>
+--       if j.isEmpty
+--       then .bytes []
+--       else let r := structComp k j
+--            if r.encode.length < 32
+--            then r
+--            else .bytes <| @Bits.toBytes 32 r.encode.keccak
+--
+--   def structComp : Nat → NTB → RLP
+--     | 0, _ => .bytes []
+--     | k + 1, j =>
+--       if j.isEmpty
+--       -- then .list (.replicate 17 <| .bytes []) -- what should be returned
+--       then .bytes [] -- what devtools actually return
+--       else if j.isSingleton
+--            then match j.toList with
+--                 | [(k, v)] => .list [.bytes (hp k 1), .bytes v]
+--                 | _ => .bytes [] -- unreachable code
+--            else match j.factor with
+--                 | none =>
+--                   let js := Lean.RBMap.fold NTBs.insert NTBs.empty j
+--                   .list [ nodeComp k js.x0, nodeComp k js.x1, nodeComp k js.x2,
+--                           nodeComp k js.x3, nodeComp k js.x4, nodeComp k js.x5,
+--                           nodeComp k js.x6, nodeComp k js.x7, nodeComp k js.x8,
+--                           nodeComp k js.x9, nodeComp k js.xA, nodeComp k js.xB,
+--                           nodeComp k js.xC, nodeComp k js.xD, nodeComp k js.xE,
+--                           nodeComp k js.xF, .bytes (j.findD [] []) ]
+--                 | some (pfx, j') => .list [.bytes (hp pfx 0), nodeComp k j']
+-- end
 
 
 def List.maxD {ξ} [Max ξ] : List ξ → ξ → ξ
   | [], y => y
   | x :: xs, y => maxD xs (max x y)
 
-def NTB.maxKeyLength (j : NTB) : Nat := (j.toList.map (List.length ∘ Prod.fst)).maxD 0
+-- def NTB.maxKeyLength (j : NTB) : Nat := (j.toList.map (List.length ∘ Prod.fst)).maxD 0
 def NTB'.maxKeyLength (j : NTB') : Nat := (j.toList.map (List.length ∘ Prod.fst)).maxD 0
 
-def collapse (j : NTB) : RLP := structComp (2 * (j.maxKeyLength + 1)) j
+-- def collapse (j : NTB) : RLP := structComp (2 * (j.maxKeyLength + 1)) j
 def collapse' (j : NTB') : RLP' := structComp' (2 * (j.maxKeyLength + 1)) j
 
-def trie (j : NTB) : Word :=
-  let bs := (collapse j).encode
-  bs.keccak
+-- def trie (j : NTB) : Word :=
+--   let bs := (collapse j).encode
+--   bs.keccak
 
 def trie' (j : NTB') : B256 :=
   let bs := (collapse' j).encode
   bs.keccak
 
-def Word.toBytes (w : Word) : Bytes := (@Bits.toBytes 32 w)
-def Word.toRLP (w : Word) : RLP := .bytes w.toBytes
+-- def Word.toBytes (w : Word) : Bytes := (@Bits.toBytes 32 w)
+-- def Word.toRLP (w : Word) : RLP := .bytes w.toBytes
+-- def Word.keccak (w : Word) : Word := (@Bits.toBytes 32 w).keccak
+
 def B256.toRLP (w : B256) : RLP' := .b8s w.toB8s
-def Word.keccak (w : Word) : Word := (@Bits.toBytes 32 w).keccak
 def B16.toB8s (x : B16) : List B8 := [x.highs, x.lows]
 def B32.toB8s (x : B32) : List B8 := x.highs.toB8s ++ x.lows.toB8s
 def B8.toB4s (x : B8) : List B8 := [x.highs, x.lows]
@@ -870,15 +870,13 @@ def B128.toB4s (x : B128) : List B8 := x.1.toB4s ++ x.2.toB4s
 def B256.toB4s (x : B256) : List B8 := x.1.toB4s ++ x.2.toB4s
 def B256.keccak (x : B256) : B256 := B8s.keccak <| x.toB8s
 
-def Stor'.toNTB (s : Stor') : NTB :=
-  let f : NTB → B256 → B256 → NTB :=
-    λ j k v =>
-      j.insert
-        (@Bits.toNibs 64 (Word.keccak k.toBits))
-        (RLP.encode <| .bytes <| Bytes.sig <| @Bits.toBytes 32 v.toBits)
-         --k.keccak.toB4s
-         --((RLP.encode <| .bytes <| Bytes.sig <| v.toB8s.map B8.toByte).map Byte.toB8)
-  Lean.RBMap.fold f NTB.empty s
+-- def Stor'.toNTB (s : Stor') : NTB :=
+--   let f : NTB → B256 → B256 → NTB :=
+--     λ j k v =>
+--       j.insert
+--         (@Bits.toNibs 64 (Word.keccak k.toBits))
+--         (RLP.encode <| .bytes <| Bytes.sig <| @Bits.toBytes 32 v.toBits)
+--   Lean.RBMap.fold f NTB.empty s
 
 def Stor'.toNTB' (s : Stor') : NTB' :=
   let f : NTB' → B256 → B256 → NTB' :=
@@ -898,12 +896,10 @@ def B8s.sig (bs : B8s) : B8s := List.dropWhile (· = 0) bs
 
 def Acct.toVal (a : Acct) (w : B256) : B8s :=
   RLP'.encode <| .list [
-    .b8s a.nonce.toB8s.sig, --a.nonce,
-    --.bytes a.bal.toBytes.sig, --a.bal,
-    .b8s a.bal.toB8s.sig, --a.bal,
+    .b8s a.nonce.toB8s.sig,
+    .b8s a.bal.toB8s.sig,
     B256.toRLP w,
     B256.toRLP <| B8s.keccak (a.code.toList)
-
   ]
 
 def Addr.toB8s (a : Addr) : B8s :=
@@ -927,7 +923,6 @@ def toKeyVal' (pr : Addr × Acct) : B8s × B8s :=
   let ac := pr.snd
   ⟨
     let key' := ad.toB8s.keccak.toB4s
-    -- dbg_trace "key' : {@List.toString _ ⟨λ x => x.toNib.toHex⟩ key'} "
     key',
     let val' :=
       RLP'.encode <| .list [
@@ -936,7 +931,6 @@ def toKeyVal' (pr : Addr × Acct) : B8s × B8s :=
         B256.toRLP (trie' ac.stor.toNTB'),
         B256.toRLP <| (B8s.keccak ac.code.toList)
       ]
-    -- dbg_trace "val : {@List.toString _ ⟨B8.toHex⟩ val'}"
     val'
   ⟩
 
@@ -1886,7 +1880,8 @@ def Rinst.run (H : Block) -- (w₀ : World')
     let hash : B256 :=
       if (Dead σ a)
       then 0
-      else B8a.keccak (σ.get a).code -- (σ.get a).code.keccak
+      else let cd := (σ.get a).code
+           B8a.keccak 0 cd.size cd
     let xs' ← xs.push1 hash
     nextState μ α
       (cost := cAAccess a α.adrs)
@@ -2034,19 +2029,11 @@ def Rinst.run (H : Block) -- (w₀ : World')
     some ⟨{μ with stk := xs', gas := g', pc := μ.pc + 1}, α⟩
   | .kec => do
     let (x, y, xs) ← μ.stk.pop2
-    dbg_trace "stage 0"
     let act' := memExp μ.act x y
-    dbg_trace "stage 1"
     let cost := gKeccak256 + (gKeccak256Word * (ceilDiv y.toNat 32))
-    dbg_trace "stage 2"
     let memCost : Nat := cMem act' - cMem μ.act
-    dbg_trace "stage 3"
     let _ ← deductGas μ (cost + memCost)
-    dbg_trace "stage 4"
-    let bs : B8s := μ.mem.sliceD x.toNat y.toNat 0
-    dbg_trace "stage 5"
-    let xs' ← xs.push1 <| B8s.keccak bs
-    dbg_trace "stage 6"
+    let xs' ← xs.push1 <| B8a.keccak x.toNat y.toNat μ.mem
     nextState μ α
       (cost := gKeccak256 + (gKeccak256Word * (ceilDiv y.toNat 32)))
       (act' := act')
@@ -2412,16 +2399,15 @@ def fooo (lim : Nat) (m : Machine) : Option Unit :=
   | _ => return ()
 
 def exec (H : Block) (w₀ : World') :
-    --Nat → State' → Option Ξ.Result
     Nat → Env' → Accrual → World' → Machine → Option Ξ.Result
-  | 0, _, _, _, _ => none --dbg_trace "execution limit reached\n" ; none
+  | 0, _, _, _, _ => none
   | lim + 1, ε, α, σ, μ => do
     let () ← fooo lim μ
     match getInst ε μ with
     | none => some <| xhs μ α
     | some i =>
       -- dbg_trace s!"gas remaining : {μ.gas}"
-      dbg_trace s!"executing inst : {i.toString}"
+      -- dbg_trace s!"executing inst : {i.toString}"
       -- dbg_trace s!"current stack :\n{Stk.toString μ.stk}"
       match i with
       | .next (.exec .delcall) => do
@@ -2806,8 +2792,8 @@ def main (args : List String) : IO Unit := do
   let j ← readJsonFile testPath
   let td ← Lean.Json.toTestData j
   let ts ← getTests td
-  -- ((ts.get? 2).toIO "test #2 does not exist") >>= Test.run
-  Tests.run 1 ts
+  ((ts.get? 2).toIO "test #2 does not exist") >>= Test.run
+  -- Tests.run 1 ts
 
 #exit
 
