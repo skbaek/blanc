@@ -1190,7 +1190,7 @@ def B8.toRinst : B8 → Option Rinst
   | 0x9B => some (.swap 11)
   | 0x9C => some (.swap 12)
   | 0x9D => some (.swap 13)
-  | 0x9E => some (.swap 15)
+  | 0x9E => some (.swap 14)
   | 0x9F => some (.swap 15)
   | 0xA0 => some (.log 0)
   | 0xA1 => some (.log 1)
@@ -1386,7 +1386,6 @@ def θ.prep
       then σ'₁
       else (dbg_trace "unreachable code : nonzero value calls from empty accounts should never happen" ; σ'₁)
     | some aₛ => σ'₁.insert s {aₛ with bal := aₛ.bal - v}
-  dbg_trace s!"getting code from address : {@Bits.toHex 40 c}"
   let cd : Array B8 := σ.code c
   let I : Env' := {
     cta := r, oga := o, gpr := p.toB256, cld := d
@@ -1943,10 +1942,8 @@ def Rinst.run (H : Block) -- (w₀ : World')
     some ⟨m', α⟩
   | .mstore8 => do
     let (x, y, xs) ← μ.stk.pop2
-    dbg_trace s!"x : {x.toNat}"
     let act' := memExp μ.act x 1
     let memCost : Nat := cMem act' - cMem μ.act
-    dbg_trace s!"mem cost : {memCost}"
     let g' ← deductGas μ (gVerylow + memCost)
     let m' : Machine :=
       {
@@ -2037,12 +2034,19 @@ def Rinst.run (H : Block) -- (w₀ : World')
     some ⟨{μ with stk := xs', gas := g', pc := μ.pc + 1}, α⟩
   | .kec => do
     let (x, y, xs) ← μ.stk.pop2
+    dbg_trace "stage 0"
     let act' := memExp μ.act x y
+    dbg_trace "stage 1"
     let cost := gKeccak256 + (gKeccak256Word * (ceilDiv y.toNat 32))
+    dbg_trace "stage 2"
     let memCost : Nat := cMem act' - cMem μ.act
+    dbg_trace "stage 3"
     let _ ← deductGas μ (cost + memCost)
+    dbg_trace "stage 4"
     let bs : B8s := μ.mem.sliceD x.toNat y.toNat 0
+    dbg_trace "stage 5"
     let xs' ← xs.push1 <| B8s.keccak bs
+    dbg_trace "stage 6"
     nextState μ α
       (cost := gKeccak256 + (gKeccak256Word * (ceilDiv y.toNat 32)))
       (act' := act')
@@ -2411,14 +2415,13 @@ def exec (H : Block) (w₀ : World') :
     --Nat → State' → Option Ξ.Result
     Nat → Env' → Accrual → World' → Machine → Option Ξ.Result
   | 0, _, _, _, _ => none --dbg_trace "execution limit reached\n" ; none
-
   | lim + 1, ε, α, σ, μ => do
     let () ← fooo lim μ
     match getInst ε μ with
     | none => some <| xhs μ α
     | some i =>
       -- dbg_trace s!"gas remaining : {μ.gas}"
-      -- dbg_trace s!"executing inst : {i.toString}"
+      dbg_trace s!"executing inst : {i.toString}"
       -- dbg_trace s!"current stack :\n{Stk.toString μ.stk}"
       match i with
       | .next (.exec .delcall) => do
