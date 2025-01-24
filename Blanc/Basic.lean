@@ -671,6 +671,7 @@ def B256.sub (x y : B256) : B256 :=
   let c : B128 := if x.2 < y.2 then 1 else 0
   ⟨(x.1 - y.1) - c, l⟩
 instance : HSub B256 B256 B256 := ⟨B256.sub⟩
+instance : Sub B256 := ⟨B256.sub⟩
 
 def B256.neg (xs : B256) : B256 := (~~~ xs) + B256.one
 
@@ -2393,7 +2394,7 @@ def keccakU : Fin 17 → B8s → QordsU → B256
 
   --⟨B64.reverse (ws'.get 0), B64.reverse (ws'.get 1)⟩ ++ ⟨B64.reverse (ws'.get 2), B64.reverse (ws'.get 3)⟩
 
-def keccakA (n : Nat) (wc : Fin 17) (bs : Array B8) (ws : QordsU) : Word :=
+def keccakA (n : Nat) (wc : Fin 17) (bs : Array B8) (ws : QordsU) : B256 :=
   if 7 < n
   then let b0 : B8 := bs.htn! n
        let b1 : B8 := bs.htn! (n - 1)
@@ -2415,10 +2416,12 @@ def keccakA (n : Nat) (wc : Fin 17) (bs : Array B8) (ws : QordsU) : Word :=
        let temp0 := QordsU.app wc (· ^^^ t) ws
        let temp1 := QordsU.app 16 (· ^^^ s) temp0
        let ws' := KeccakU.f temp1
-       Qord.reverse (ws'.get 0).toBits ++
-       Qord.reverse (ws'.get 1).toBits ++
-       Qord.reverse (ws'.get 2).toBits ++
-       Qord.reverse (ws'.get 3).toBits
+       -- Qord.reverse (ws'.get 0).toBits ++
+       -- Qord.reverse (ws'.get 1).toBits ++
+       -- Qord.reverse (ws'.get 2).toBits ++
+       -- Qord.reverse (ws'.get 3).toBits
+      (B64.reverse (ws'.get 0) ++ B64.reverse (ws'.get 1)) ++
+      (B64.reverse (ws'.get 2) ++ B64.reverse (ws'.get 3))
 
 def Bytes.keccak (bs : Bytes) : Word :=
   _root_.keccak (0 : Fin 17) bs Qords.init
@@ -2426,7 +2429,7 @@ def Bytes.keccak (bs : Bytes) : Word :=
 def B8s.keccak (bs : B8s) : B256 :=
   _root_.keccakU (0 : Fin 17) bs QordsU.init
 
-def B8a.keccak (bs : Array B8) : Word :=
+def B8a.keccak (bs : Array B8) : B256 :=
   keccakA bs.size (0 : Fin 17) bs QordsU.init
 
 def String.keccak (s : String) : Word :=
