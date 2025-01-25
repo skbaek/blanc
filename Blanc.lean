@@ -1069,10 +1069,6 @@ def noPushBefore (cd : Array B8) : Nat → Nat → Bool
            then false
            else noPushBefore cd k m
 
--- def ByteArray.jumpable (cd : Array Byte) (k : Nat) : Bool :=
---   if cd.get? k = some (Jinst.toByte .jumpdest)
---   then noPushBefore cd k 32
---   else dbg_trace s!"jumpdest check : no jumpdest op, loc : {k}" ; false
 def Jinst.toB8 : Jinst → B8
   | jump => 0x56     -- 0x56 / 1 / 0 / Unconditional jump.
   | jumpi => 0x57    -- 0x57 / 2 / 0 / Conditional jump.
@@ -2391,24 +2387,30 @@ def Inst'.toString : Inst' → String
   | .jump j => j.toString
   | .last l => l.toString
 
-def fooo (lim : Nat) (m : Machine) : Option Unit :=
-  match lim % 100000 with
+def showLim (lim : Nat) (m : Machine) : Option Unit :=
+  match lim % 1000000 with
   | 0 => do
     dbg_trace s!"gas : {m.gas}"
     return ()
   | _ => return ()
 
-def exec (H : Block) (w₀ : World') :
+def showExec (i : Inst') : Option Unit := do
+  dbg_trace s!"executing inst : {i.toString}"
+  return ()
+
+def  exec (H : Block) (w₀ : World') :
     Nat → Env' → Accrual → World' → Machine → Option Ξ.Result
   | 0, _, _, _, _ => none
   | lim + 1, ε, α, σ, μ => do
-    let () ← fooo lim μ
+    --let () ←
+    showLim lim μ
     match getInst ε μ with
     | none => some <| xhs μ α
     | some i =>
       -- dbg_trace s!"gas remaining : {μ.gas}"
-      -- dbg_trace s!"executing inst : {i.toString}"
       -- dbg_trace s!"current stack :\n{Stk.toString μ.stk}"
+      do
+      -- showExec i
       match i with
       | .next (.exec .delcall) => do
         let (gas, adr, ilc, isz, olc, osz, stk) ← μ.stk.pop6
@@ -2658,6 +2660,11 @@ def eraseIfEmpty (w : World') (a : Addr) : World' := w.set a <| w.get a
 def Tx.run
   (blk : Block) (w : World') (tx : TxBytesContent)
   (sender : Addr) : IO transact.Result := do
+
+  IO.println s!"block gas limit : 0x{blk.gasLimit.toHex}"
+  IO.println s!"tx gas limit    : 0x{tx.gasLimit.toHex}"
+  IO.guard (tx.gasLimit ≤ blk.gasLimit) "error : block gas limit < tx gas limit"
+
   let g : Nat := tx.gasLimit.toNat - intrinsicGas (some tx.receiver) tx.calldata []
   let w ← (checkpoint w sender (tx.gasLimit * tx.gasPrice)).toIO ""
 
@@ -2787,13 +2794,28 @@ def Tests.run : Nat → List Test → IO Unit
     t.run
     Tests.run (n + 1) ts
 
+def main : List String → IO Unit
+  | [testPath] => do
+    let j ← readJsonFile testPath
+    let td ← Lean.Json.toTestData j
+    let ts ← getTests td
+    Tests.run 1 ts
+  | [testPath, testNum] => do
+    let n ← testNum.toNat?.toIO "error : second argument is not a number"
+    let j ← readJsonFile testPath
+    let td ← Lean.Json.toTestData j
+    let ts ← getTests td
+    ((ts.get? n).toIO s!"test #{n} does not exist") >>= Test.run
+  | _ => IO.throw "error : invalid arguments"
+
+#exit
 def main (args : List String) : IO Unit := do
   let testPath ← args.head?.toIO "no command line argument"
   let j ← readJsonFile testPath
   let td ← Lean.Json.toTestData j
   let ts ← getTests td
-  ((ts.get? 2).toIO "test #2 does not exist") >>= Test.run
-  -- Tests.run 1 ts
+  -- ((ts.get? 2).toIO "test #2 does not exist") >>= Test.run
+  Tests.run 1 ts
 
 #exit
 
