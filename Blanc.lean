@@ -959,7 +959,6 @@ structure Accrual where
   (touched : AddrSet) -- A_t
   -- (sac : Nat) -- A_r
 
---def Stk : Type := List B256
 def Stk : Type := Array B256 × Nat
 
 structure Machine where
@@ -967,7 +966,7 @@ structure Machine where
   (pc : Nat) -- μ_pc
   (mem : Array B8) -- μ_m
   (ret : B8s) -- μ_o
-  (stk : Stk) -- μ_s
+  -- (stk : Stk) -- μ_s
   (act : Nat) -- μ_i
 
 def ceilDiv (m n : Nat) := m / n + if m % n = 0 then 0 else 1
@@ -1000,6 +999,7 @@ structure Env' where
 structure State' where
   (wld : World')
   (mcn : Machine)
+  (stk : Stk)
   (acr : Accrual)
   (env : Env')
 
@@ -1301,27 +1301,27 @@ def cAAccess (x : Addr) (a : AddrSet) : Nat :=
 
 def except64th (n : Nat) : Nat := n - (n / 64)
 
-def cExtra (σ : World') (α : Accrual) (t : Addr) (v : Word) : Nat :=
+def cExtra (ω : World') (α : Accrual) (t : Addr) (v : Word) : Nat :=
   let cAcc : Nat := cAAccess t α.adrs
-  let cNew : Nat := if (Dead σ t ∧ v ≠ 0) then gNewAccount else 0
+  let cNew : Nat := if (Dead ω t ∧ v ≠ 0) then gNewAccount else 0
   let cXfer : Nat := if v ≠ 0 then gCallValue else 0
   (cAcc + cXfer + cNew)
 
-def cGasCap (σ : World') (μ : Machine) (α : Accrual) (g : Nat)
+def cGasCap (ω : World') (μ : Machine) (α : Accrual) (g : Nat)
     (memCost : Nat) (t : Addr) (v : Word) : Nat :=
-  if (memCost + cExtra σ α t v) ≤ μ.gas
-  then min (except64th (μ.gas - (memCost + cExtra σ α t v))) g
+  if (memCost + cExtra ω α t v) ≤ μ.gas
+  then min (except64th (μ.gas - (memCost + cExtra ω α t v))) g
   else g
 
-def cCallGas (σ : World') (μ : Machine) (α : Accrual)
+def cCallGas (ω : World') (μ : Machine) (α : Accrual)
    (g : Nat) (memCost : Nat) (t : Addr) (v : Word) : Nat :=
   if v ≠ 0
-  then cGasCap σ μ α g memCost t v + gCallStipend
-  else cGasCap σ μ α g memCost t v
+  then cGasCap ω μ α g memCost t v + gCallStipend
+  else cGasCap ω μ α g memCost t v
 
-def cCall (σ : World') (μ : Machine) (α : Accrual)
+def cCall (ω : World') (μ : Machine) (α : Accrual)
     (g : Nat) (memCost : Nat) (t : Addr) (v : Word) : Nat :=
-  cGasCap σ μ α g memCost t v + cExtra σ α t v
+  cGasCap ω μ α g memCost t v + cExtra ω α t v
 
 structure theta.Result : Type where
   (wld : World')
@@ -1348,7 +1348,7 @@ def Stk.init : Stk := ⟨Array.mkArray 1024 (0 : B256), 0⟩
 -- need further update for precompiled contracts
 def θ.prep
   (H : Block)
-  (σ : World')
+  (ω : World')
   (A : Accrual)
   (s : Addr)
   (o : Addr)
@@ -1362,44 +1362,44 @@ def θ.prep
   (e : Nat)
   (w : Bool) :
   State' :=
-  let σ'₁ : World' :=
-    match σ.find? r with
+  let ω'₁ : World' :=
+    match ω.find? r with
     | none =>
       if v = 0
-      then σ
-      else σ.insert r {nonce := 0, bal := v, stor := .empty, code := #[]}
-    | some aᵣ => σ.insert r {aᵣ with bal := aᵣ.bal + v}
-  let σ₁ : World' :=
-    match σ'₁.find? s with
+      then ω
+      else ω.insert r {nonce := 0, bal := v, stor := .empty, code := #[]}
+    | some aᵣ => ω.insert r {aᵣ with bal := aᵣ.bal + v}
+  let ω₁ : World' :=
+    match ω'₁.find? s with
     | none =>
       if v = 0
-      then σ'₁
-      else (dbg_trace "unreachable code : nonzero value calls from empty accounts should never happen" ; σ'₁)
-    | some aₛ => σ'₁.insert s {aₛ with bal := aₛ.bal - v}
-  let cd : Array B8 := σ.code c
+      then ω'₁
+      else (dbg_trace "unreachable code : nonzero value calls from empty accounts should never happen" ; ω'₁)
+    | some aₛ => ω'₁.insert s {aₛ with bal := aₛ.bal - v}
+  let cd : Array B8 := ω.code c
   let I : Env' := {
     cta := r, oga := o, gpr := p.toB256, cld := d
     cla := s, clv := v_app, code := cd, blk := H, exd := e, wup := w
   }
-  let μ : Machine := {gas := g, pc := 0, mem := #[], ret := [], stk := .init, act := 0}
-  ⟨σ₁, μ, A, I⟩
+  let μ : Machine := {gas := g, pc := 0, mem := #[], ret := [], act := 0}
+  ⟨ω₁, μ, .init, A, I⟩
 
 def θ.wrap (wld : World') (acr : Accrual) (Ξr : Ξ.Result) : theta.Result :=
   -- let Ξr : Ξ.Result := {wld := xr.wld, gas := xr.mcn.gas, acr := xr.acr, ret := xr.ret}
-  let σ_stars : Option World' := Ξr.wld
+  let ω_stars : Option World' := Ξr.wld
   let g_stars : Nat := Ξr.gas
   let A_stars : Accrual := Ξr.acr
   let o : Option B8s := Ξr.ret
 
-  let σ' : World' := σ_stars.getD wld
-  let g' : Nat := if σ_stars.isNone ∧ o.isNone then (dbg_trace "zero trigger"; 0) else g_stars
-  let A' : Accrual := if σ_stars.isNone then acr else A_stars
-  let z : Bool := if σ_stars.isNone then 0 else 1
+  let ω' : World' := ω_stars.getD wld
+  let g' : Nat := if ω_stars.isNone ∧ o.isNone then (dbg_trace "zero trigger"; 0) else g_stars
+  let A' : Accrual := if ω_stars.isNone then acr else A_stars
+  let z : Bool := if ω_stars.isNone then 0 else 1
 
   -- o' is not from YP, but necessary to cast from 'Option Bytes' to 'Bytes'
   -- (YP is a bit sloppy with types here)
   let o' : B8s := o.getD []
-  ⟨σ', g', A', z, o'⟩
+  ⟨ω', g', A', z, o'⟩
 
 def gColdSLoad : Nat := 2100
 def gSSet : Nat := 20000
@@ -1567,13 +1567,13 @@ def Stk.popN (s : Stk ) : Nat → Option (List B256 × Stk)
     let (xs, s'') ← s'.popN n
     some ⟨x :: xs, s''⟩
 
-def sstoreStep (w₀ : World') (σ : World')
-    (μ : Machine) (α : Accrual) (ε : Env') :
-    Option (World' × Machine × Accrual) := do
-  let (x, v', xs) ← μ.stk.pop2
+def sstoreStep (w₀ : World') (ω : World')
+    (μ : Machine) (σ : Stk) (α : Accrual) (ε : Env') :
+    Option (World' × Machine × Stk × Accrual) := do
+  let (x, v', σ') ← σ.pop2
   let (a₀ : Acct) ← w₀.find? ε.cta
   let (v₀ : B256) := ((a₀.stor.find? x).getD 0)
-  let (a : Acct) ← σ.find? ε.cta
+  let (a : Acct) ← ω.find? ε.cta
   let (v : B256) := ((a.stor.find? x).getD 0)
   let c₀ : Nat := cond (α.keys.contains ⟨ε.cta, x⟩) 0 gColdSLoad
   let c₁ : Nat :=
@@ -1609,13 +1609,13 @@ def sstoreStep (w₀ : World') (σ : World')
 
   some
     ⟨
-      σ.insert ε.cta a',
+      ω.insert ε.cta a',
       {
         μ with
         gas := g'
         pc := μ.pc + 1
-        stk := xs
       },
+      σ',
       {
         α with
         keys := α.keys.insert ⟨ε.cta, x⟩
@@ -1711,13 +1711,13 @@ def gKeccak256Word : Nat := 6
 
 def cMem (a : Nat) := gMemory * a + ((a ^ 2) / 512)
 
-def nextState (μ : Machine) (α : Accrual) (cost : Nat)
+def nextState (μ : Machine) (σ : Stk) (α : Accrual) (cost : Nat)
   (act' : Nat := μ.act)
-  (stk' : Stk := μ.stk)
+  --(stk' : Stk := μ.stk)
   (mem' : Array B8 := μ.mem)
   (ret' : B8s := μ.ret)
   (adrs' : AddrSet := α.adrs)
-  (logs' : List RLP' := α.logs) : Option (Machine × Accrual) := do
+  (logs' : List RLP' := α.logs) : Option (Machine × Stk × Accrual) := do
   let memCost : Nat := cMem act' - cMem μ.act
   let gas' ← deductGas μ (cost + memCost)
   let μ' : Machine :=
@@ -1726,7 +1726,6 @@ def nextState (μ : Machine) (α : Accrual) (cost : Nat)
       pc := μ.pc + 1,
       mem := mem',
       ret := ret'
-      stk := stk'
       act := act'
     }
   let A' : Accrual :=
@@ -1738,7 +1737,7 @@ def nextState (μ : Machine) (α : Accrual) (cost : Nat)
       logs := logs'
       touched := α.touched
     }
-  some ⟨μ', A'⟩
+  some ⟨μ', σ, A'⟩
 
 def World'.get (w : World') (a : Addr) : Acct := (w.find? a).getD .empty
 
@@ -1781,342 +1780,318 @@ def Linst.toB8 : Linst → B8
 
 def Rinst.run (H : Block) -- (w₀ : World')
   -- (s : State') : Rinst → Option State'
-    (σ : World') (μ : Machine) (α : Accrual) (ε : Env') :
-    Rinst → Option (Machine × Accrual)
+    (ω : World') (μ : Machine) (σ : Stk) (α : Accrual) (ε : Env') :
+    Rinst → Option (Machine × Stk × Accrual)
   | .address => do
-    let stk' ← μ.stk.push1 ε.cta.toB256
-    nextState μ α (cost := gBase) (stk' := stk')
+    let σ' ← σ.push1 ε.cta.toB256
+    nextState μ σ' α (cost := gBase)
   | .balance => do
-    let (x, xs) ← μ.stk.pop1
+    let (x, σ') ← σ.pop1
     let a := x.toAddr
     let adrs' : AddrSet := α.adrs.insert a
-    let xs' ← xs.push1 (σ.get a).bal
-    nextState μ α
+    let σ'' ← σ'.push1 (ω.get a).bal
+    nextState μ σ'' α
       (cost := cAAccess a α.adrs)
-      (stk' := xs')
       (adrs' := adrs')
   | .origin => do
-    let xs ← μ.stk.push1 (ε.oga.toB256)
-    nextState μ α (cost := gBase) (stk' := xs)
+    let σ' ← σ.push1 (ε.oga.toB256)
+    nextState μ σ' α (cost := gBase)
   | .caller => do
-    let xs ← μ.stk.push1 (ε.cla.toB256)
-    nextState μ α (cost := gBase) (stk' := xs)
+    let σ' ← σ.push1 (ε.cla.toB256)
+    nextState μ σ' α (cost := gBase)
   | .callvalue => do
-    let xs ← μ.stk.push1 (ε.clv)
-    nextState μ α (cost := gBase) (stk' := xs)
+    let σ' ← σ.push1 (ε.clv)
+    nextState μ σ' α (cost := gBase)
   | .calldataload => do
-    let (x, xs) ← μ.stk.pop1
-    let cd : B256 ← B8s.toB256 (ε.cld.sliceD x.toNat 32 0)
-    let xs' ← xs.push1 (cd)
-    nextState μ α (cost := gVerylow) (stk' := xs')
+    let (x, σ') ← σ.pop1
+    let cd  ← B8s.toB256 (ε.cld.sliceD x.toNat 32 0)
+    let σ'' ← σ'.push1 cd
+    nextState μ σ'' α (cost := gVerylow)
   | .calldatasize => do
-    let xs ← μ.stk.push1 (ε.cld.length.toB256)
-    nextState μ α (cost := gBase) (stk' := xs)
+    let σ' ← σ.push1 (ε.cld.length.toB256)
+    nextState μ σ' α (cost := gBase)
   | .calldatacopy => do
-    let (x, y, z, xs) ← μ.stk.pop3
+    let (x, y, z, σ') ← σ.pop3
     let bs : B8s := ε.cld.sliceD y.toBits.toNat z.toBits.toNat 0
-    nextState μ α
+    nextState μ σ' α
       (cost := gVerylow + (gCopy * (ceilDiv z.toBits.toNat 32)))
       (act' := memExp μ.act x z)
-      (stk' := xs)
       (mem' := Array.writeX μ.mem x.toNat bs 0)
   | .codesize => do
-    let xs ← μ.stk.push1 (ε.code.size.toB256)
-    nextState μ α (cost := gBase) (stk' := xs)
+    let σ' ← σ.push1 (ε.code.size.toB256)
+    nextState μ σ' α (cost := gBase)
   | .codecopy => do
-    let (x, y, z, xs) ← μ.stk.pop3
+    let (x, y, z, σ') ← σ.pop3
     let act' := memExp μ.act x z
     let cost := gVerylow + (gCopy * (ceilDiv z.toNat 32))
     let memCost : Nat := cMem act' - cMem μ.act
     let _ ← deductGas μ (cost + memCost)
     let bs : B8s :=
       (ε.code.sliceD y.toNat z.toNat (Linst.toB8 .stop))
-    nextState μ α
+    nextState μ σ' α
       (cost := cost)-- gVerylow + (gCopy * (ceilDiv z.toNat 32)))
       (act' := act')-- memExp μ.act x z)
-      (stk' := xs)
       (mem' := Array.writeX μ.mem x.toNat bs 0)
   | .gasprice => do
-    let xs ← μ.stk.push1 (ε.gpr)
-    nextState μ α (cost := gBase) (stk' := xs)
+    let σ' ← σ.push1 (ε.gpr)
+    nextState μ σ' α (cost := gBase)
   | .extcodesize => do
-    let (x, xs) ← μ.stk.pop1
+    let (x, σ') ← σ.pop1
     let a := x.toAddr
     let adrs' : AddrSet := α.adrs.insert a
-    let xs' ← xs.push1 (σ.get a).code.size.toB256
-    nextState μ α
+    let σ'' ← σ'.push1 (ω.get a).code.size.toB256
+    nextState μ σ'' α
       (cost := cAAccess a α.adrs)
-      (stk' := xs')
       (adrs' := adrs')
   | .extcodecopy => do
-    let (x, y, z, w, xs) ← μ.stk.pop4
-    let a : Acct := σ.get x.toAddr
+    let (x, y, z, w, σ') ← σ.pop4
+    let a : Acct := ω.get x.toAddr
     let bs : B8s :=
       (a.code.sliceD z.toNat w.toNat (Linst.toB8 .stop))
-    nextState μ α
+    nextState μ σ' α
       (cost := cAAccess x.toAddr α.adrs + (gCopy * (ceilDiv z.toNat 32)))
       (act' := memExp μ.act y w)
-      (stk' := xs)
       (mem' := Array.writeX μ.mem y.toNat bs 0)
   | .retdatasize => do
-    let xs ← μ.stk.push1 (μ.ret.length.toB256)
-    nextState μ α (cost := gBase) (stk' := xs)
+    let σ' ← σ.push1 (μ.ret.length.toB256)
+    nextState μ σ' α (cost := gBase)
   | .retdatacopy => do
-    let (x, y, z, xs) ← μ.stk.pop3
+    let (x, y, z, σ') ← σ.pop3
     let bs ← μ.ret.slice? y.toNat z.toNat
-    nextState μ α
+    nextState μ σ' α
       (cost := gVerylow + (gCopy * (ceilDiv z.toNat 32)))
       (act' := memExp μ.act x z)
-      (stk' := xs)
       (mem' := Array.writeX μ.mem x.toNat bs 0)
   | .extcodehash => do
-    let (x, xs) ← μ.stk.pop1
+    let (x, σ') ← σ.pop1
     let a := x.toAddr
     let adrs' : AddrSet := α.adrs.insert a
     let hash : B256 :=
-      if (Dead σ a)
+      if (Dead ω a)
       then 0
-      else let cd := (σ.get a).code
+      else let cd := (ω.get a).code
            B8a.keccak 0 cd.size cd
-    let xs' ← xs.push1 hash
-    nextState μ α
+    let σ'' ← σ'.push1 hash
+    nextState μ σ'' α
       (cost := cAAccess a α.adrs)
-      (stk' := xs')
       (adrs' := adrs')
   | .selfbalance => do
-    let bal := (σ.get ε.cta).bal
-    let stk' ← μ.stk.push1 (bal)
-    nextState μ α (cost := gLow) (stk' := stk')
+    let bal := (ω.get ε.cta).bal
+    let σ' ← σ.push1 (bal)
+    nextState μ σ' α (cost := gLow)
   | .chainid => do
-    let xs ← μ.stk.push1 (H.chainId)
-    nextState μ α (cost := gBase) (stk' := xs)
+    let σ' ← σ.push1 (H.chainId)
+    nextState μ σ' α (cost := gBase)
   | .number => do
-    let xs ← μ.stk.push1 (H.number)
-    nextState μ α (cost := gBase) (stk' := xs)
+    let σ' ← σ.push1 (H.number)
+    nextState μ σ' α (cost := gBase)
   | .timestamp => do
-    let xs ← μ.stk.push1 (H.timestamp)
-    nextState μ α (cost := gBase) (stk' := xs)
+    let σ' ← σ.push1 (H.timestamp)
+    nextState μ σ' α (cost := gBase)
   | .gaslimit => do
-    let xs ← μ.stk.push1 (H.gasLimit)
-    nextState μ α (cost := gBase) (stk' := xs)
+    let σ' ← σ.push1 (H.gasLimit)
+    nextState μ σ' α (cost := gBase)
   | .prevrandao => do
-    let xs ← μ.stk.push1 (H.prevRandao)
-    nextState μ α (cost := gBase) (stk' := xs)
+    let σ' ← σ.push1 (H.prevRandao)
+    nextState μ σ' α (cost := gBase)
   | .coinbase => do
-    let xs ← μ.stk.push1 (H.ben.toB256)
-    nextState μ α (cost := gBase) (stk' := xs)
+    let σ' ← σ.push1 (H.ben.toB256)
+    nextState μ σ' α (cost := gBase)
   | .msize => do
-    let xs ← μ.stk.push1 ((μ.act * 32).toB256)
-    nextState μ α (cost := gBase) (stk' := xs)
+    let σ' ← σ.push1 ((μ.act * 32).toB256)
+    nextState μ σ' α (cost := gBase)
   | .mload => do
-    let (x, xs) ← μ.stk.pop1
+    let (x, σ') ← σ.pop1
     let bs : B8s := μ.mem.sliceD x.toNat 32 0
     let y : B256 ← B8s.toB256 bs
-    let xs' ← xs.push1 y
-    nextState μ α (cost := gVerylow)
+    let σ'' ← σ'.push1 y
+    nextState μ σ'' α (cost := gVerylow)
       (act' := memExp μ.act x (32 : Nat).toB256)
-      (stk' := xs')
   | .mstore => do
-    let (x, y, xs) ← μ.stk.pop2
+    let (x, y, σ') ← σ.pop2
     let act' := memExp μ.act x (32 : Nat).toB256
     let memCost : Nat := cMem act' - cMem μ.act
     let g' ← deductGas μ (gVerylow + memCost)
     let m' : Machine :=
       {
         μ with
-        stk := xs,
         gas := g',
         mem := Array.writeX μ.mem x.toNat y.toB8s 0,
         pc := μ.pc + 1
         act := act'
       }
-    some ⟨m', α⟩
+    some ⟨m', σ', α⟩
   | .mstore8 => do
-    let (x, y, xs) ← μ.stk.pop2
+    let (x, y, σ') ← σ.pop2
     let act' := memExp μ.act x 1
     let memCost : Nat := cMem act' - cMem μ.act
     let g' ← deductGas μ (gVerylow + memCost)
     let m' : Machine :=
       {
         μ with
-        stk := xs,
         gas := g',
         mem := Array.writeX μ.mem x.toNat [y.2.2.toUInt8] 0,
         pc := μ.pc + 1
         act := act'
       }
-    some ⟨m', α⟩
+    some ⟨m', σ', α⟩
   | .gas => do
     let g' ← deductGas μ gBase
-    let stk' ← μ.stk.push1 (g'.toB256)
-    nextState μ α (cost := gBase) (stk' := stk')
+    let σ' ← σ.push1 (g'.toB256)
+    nextState μ σ' α (cost := gBase)
   | .eq => do
-    let (x, y, xs) ← μ.stk.pop2
-    let xs' ← xs.push1 (.eq_check x y)
-    nextState μ α (cost := gVerylow) (stk' := xs')
+    let (x, y, σ') ← σ.pop2
+    let σ'' ← σ'.push1 (.eq_check x y)
+    nextState μ σ'' α (cost := gVerylow)
   | .lt => do
-    let (x, y, xs) ← μ.stk.pop2
-    let xs' ← xs.push1 (.lt_check x y)
-    nextState μ α (cost := gVerylow) (stk' := xs')
+    let (x, y, σ') ← σ.pop2
+    let σ'' ← σ'.push1 (.lt_check x y)
+    nextState μ σ'' α (cost := gVerylow)
   | .gt => do
-    let (x, y, xs) ← μ.stk.pop2
-    let xs' ← xs.push1 (.gt_check x y)
-    nextState μ α (cost := gVerylow) (stk' := xs')
+    let (x, y, σ') ← σ.pop2
+    let σ'' ← σ'.push1 (.gt_check x y)
+    nextState μ σ'' α (cost := gVerylow)
   | .slt => do
-    let (x, y, xs) ← μ.stk.pop2
-    let xs' ← xs.push1 (.slt_check x y)
-    nextState μ α (cost := gVerylow) (stk' := xs')
+    let (x, y, σ') ← σ.pop2
+    let σ'' ← σ'.push1 (.slt_check x y)
+    nextState μ σ'' α (cost := gVerylow)
   | .sgt => do
-    let (x, y, xs) ← μ.stk.pop2
-    let xs' ← xs.push1 (.sgt_check x y)
-    nextState μ α (cost := gVerylow) (stk' := xs')
+    let (x, y, σ') ← σ.pop2
+    let σ'' ← σ'.push1 (.sgt_check x y)
+    nextState μ σ'' α (cost := gVerylow)
   | .iszero => do
-    let (x, xs) ← μ.stk.pop1
-    let xs' ← xs.push1 (B256.eq_check x 0)
-    nextState μ α (cost := gVerylow) (stk' := xs')
+    let (x, σ') ← σ.pop1
+    let σ'' ← σ'.push1 (B256.eq_check x 0)
+    nextState μ σ'' α (cost := gVerylow)
   | .not => do
-    let (x, xs) ← μ.stk.pop1
-    let xs' ← xs.push1 (~~~ x)
-    nextState μ α (cost := gVerylow) (stk' := xs')
+    let (x, σ') ← σ.pop1
+    let σ'' ← σ'.push1 (~~~ x)
+    nextState μ σ'' α (cost := gVerylow)
   | .and => do
-    let (x, y, xs) ← μ.stk.pop2
-    let xs' ← xs.push1 (B256.and x y)
-    nextState μ α (cost := gVerylow) (stk' := xs')
+    let (x, y, σ') ← σ.pop2
+    let σ'' ← σ'.push1 (B256.and x y)
+    nextState μ σ'' α (cost := gVerylow)
   | .or => do
-    let (x, y, xs) ← μ.stk.pop2
-    let xs' ← xs.push1 (B256.or x y)
-    nextState μ α (cost := gVerylow) (stk' := xs')
+    let (x, y, σ') ← σ.pop2
+    let σ'' ← σ'.push1 (B256.or x y)
+    nextState μ σ'' α (cost := gVerylow)
   | .xor => do
-    let (x, y, xs) ← μ.stk.pop2
-    let xs' ← xs.push1 (B256.xor x y)
-    nextState μ α (cost := gVerylow) (stk' := xs')
+    let (x, y, σ') ← σ.pop2
+    let σ'' ← σ'.push1 (B256.xor x y)
+    nextState μ σ'' α (cost := gVerylow)
   | .signextend => do
-    let (x, y, xs) ← μ.stk.pop2
-    let g' ← deductGas μ gLow
-    let xs' ← xs.push1 (B256.signext x y)
-    some ⟨{μ with stk := xs', gas := g', pc := μ.pc + 1}, α⟩
+    let (x, y, σ') ← σ.pop2
+    let σ'' ← σ'.push1 (B256.signext x y)
+    nextState μ σ'' α (cost := gLow)
   | .pop => do
-    let (_, xs) ← μ.stk.pop1 --  α
-    let g' ← deductGas μ gBase
-    some ⟨{μ with stk := xs, gas := g', pc := μ.pc + 1}, α⟩
+    let (_, σ') ← σ.pop1
+    nextState μ σ' α (cost := gBase)
   | .byte => do
-    let (x, y, xs) ← μ.stk.pop2
-    let g' ← deductGas μ gVerylow
+    let (x, y, σ') ← σ.pop2
     let b : B8 := (List.getD y.toB8s x.toNat 0)
-    let xs' ← xs.push1 (b.toB256)
-    some ⟨{μ with stk := xs', gas := g', pc := μ.pc + 1}, α⟩
+    let σ'' ← σ'.push1 (b.toB256)
+    nextState μ σ'' α (cost := gVerylow)
   | .shl => do
-    let (x, y, xs) ← μ.stk.pop2
+    let (x, y, σ') ← σ.pop2
     let g' ← deductGas μ gVerylow
     let z : B256 := y <<< x.toNat
-    let xs' ← xs.push1 (z)
-    some ⟨{μ with stk := xs', gas := g', pc := μ.pc + 1}, α⟩
+    let σ'' ← σ'.push1 (z)
+    nextState μ σ'' α (cost := gVerylow)
   | .shr => do
-    let (x, y, xs) ← μ.stk.pop2
+    let (x, y, σ') ← σ.pop2
     let g' ← deductGas μ gVerylow
     let z : B256 := y >>> x.toNat
-    let xs' ← xs.push1 (z)
-    some ⟨{μ with stk := xs', gas := g', pc := μ.pc + 1}, α⟩
+    let σ'' ← σ'.push1 (z)
+    nextState μ σ'' α (cost := gVerylow)
   | .sar => do
-    let (x, y, xs) ← μ.stk.pop2
+    let (x, y, σ') ← σ.pop2
     let g' ← deductGas μ gVerylow
     let z : B256 := B256.sar x.toNat y
-    let xs' ← xs.push1 (z)
-    some ⟨{μ with stk := xs', gas := g', pc := μ.pc + 1}, α⟩
+    let σ'' ← σ'.push1 (z)
+    nextState μ σ'' α (cost := gVerylow)
   | .kec => do
-    let (x, y, xs) ← μ.stk.pop2
+    let (x, y, σ') ← σ.pop2
     let act' := memExp μ.act x y
     let cost := gKeccak256 + (gKeccak256Word * (ceilDiv y.toNat 32))
     let memCost : Nat := cMem act' - cMem μ.act
     let _ ← deductGas μ (cost + memCost)
-    let xs' ← xs.push1 <| B8a.keccak x.toNat y.toNat μ.mem
-    nextState μ α
+    let σ'' ← σ'.push1 <| B8a.keccak x.toNat y.toNat μ.mem
+    nextState μ σ'' α
       (cost := gKeccak256 + (gKeccak256Word * (ceilDiv y.toNat 32)))
       (act' := act')
-      (stk' := xs')
   | .sub => do
-    let (x, y, xs) ← μ.stk.pop2
-    let g' ← safeSub μ.gas gVerylow
-    let xs' ← xs.push1 ((x - y))
-    some ⟨{μ with stk := xs', gas := g', pc := μ.pc + 1}, α⟩
+    let (x, y, σ') ← σ.pop2
+    let σ'' ← σ'.push1 (x - y)
+    nextState μ σ'' α gVerylow
   | .mul => do
-    let (x, y, xs) ← μ.stk.pop2
-    let g' ← safeSub μ.gas gLow
-    let xs' ← xs.push1 ((x * y))
-    some ⟨{μ with stk := xs', gas := g', pc := μ.pc + 1}, α⟩
+    let (x, y, σ') ← σ.pop2
+    let σ'' ← σ'.push1 (x * y)
+    nextState μ σ'' α gLow
   | .exp => do
-    let (x, y, xs) ← μ.stk.pop2
+    let (x, y, σ') ← σ.pop2
     let x' : B256 := x
     let y' : B256 := y
-    let xs' ← xs.push1 (B256.bexp x' y')
-    nextState μ α
+    let σ'' ← σ'.push1 (B256.bexp x' y')
+    nextState μ σ'' α
       (cost := g_exp + (g_expbyte * y.bytecount))
-      (stk' := xs')
+
   | .div => do
-    let (x, y, xs) ← μ.stk.pop2
+    let (x, y, σ') ← σ.pop2
     let z : B256 := (x / y)
-    let xs' ← xs.push1 (z)
-    nextState μ α (cost := gLow) (stk' := xs')
+    let σ'' ← σ'.push1 (z)
+    nextState μ σ'' α (cost := gLow)
   | .sdiv => do
-    let (x, y, xs) ← μ.stk.pop2
-    let g' ← safeSub μ.gas gLow
-    let xs' ← xs.push1 (.sdiv x y)
-    some ⟨{μ with stk := xs', gas := g', pc := μ.pc + 1}, α⟩
+    let (x, y, σ') ← σ.pop2
+    let σ'' ← σ'.push1 (.sdiv x y)
+    nextState μ σ'' α gLow
   | .mod => do
-    let (x, y, xs) ← μ.stk.pop2
-    let z : B256 := (x % y)
-    let g' ← safeSub μ.gas gLow
-    let xs' ← xs.push1 (z)
-    some ⟨{μ with stk := xs', gas := g', pc := μ.pc + 1}, α⟩
+    let (x, y, σ') ← σ.pop2
+    let σ'' ← σ'.push1 (x % y)
+    nextState μ σ'' α gLow
   | .smod => do
-    let (x, y, xs) ← μ.stk.pop2
-    let g' ← safeSub μ.gas gLow
-    let xs' ← xs.push1 ((.smod x y))
-    some ⟨{μ with stk := xs', gas := g', pc := μ.pc + 1}, α⟩
+    let (x, y, σ') ← σ.pop2
+    let σ'' ← σ'.push1 (.smod x y)
+    nextState μ σ'' α gLow
   | .add => do
-    let (x, y, xs) ← μ.stk.pop2
-    let xs' ← xs.push1 ((x + y))
-    nextState μ α (cost := gVerylow) (stk' := xs')
+    let (x, y, σ') ← σ.pop2
+    let σ'' ← σ'.push1 ((x + y))
+    nextState μ σ'' α (cost := gVerylow)
   | .addmod => do
-    let (x, y, z, xs) ← μ.stk.pop3
-    let g' ← safeSub μ.gas g_mid
-    let xs' ← xs.push1 (.addmod x y z)
-    some ⟨{μ with stk := xs', gas := g', pc := μ.pc + 1}, α⟩
+    let (x, y, z, σ') ← σ.pop3
+    let σ'' ← σ'.push1 (.addmod x y z)
+    nextState μ σ'' α (cost := g_mid)
   | .mulmod => do
-    let (x, y, z, xs) ← μ.stk.pop3
-    let g' ← safeSub μ.gas g_mid
-    let xs' ← xs.push1 (.mulmod x y z)
-    some ⟨{μ with stk := xs', gas := g', pc := μ.pc + 1}, α⟩
+    let (x, y, z, σ') ← σ.pop3
+    let σ'' ← σ'.push1 (.mulmod x y z)
+    nextState μ σ'' α (cost := g_mid)
   | .swap n => do
-    let stk' ← μ.stk.swap n
-    let g' ← safeSub μ.gas gVerylow
-    some ⟨{μ with stk := stk', gas := g', pc := μ.pc + 1}, α⟩
+    let σ' ← σ.swap n
+    nextState μ σ' α gVerylow
   | .dup n => do
-    let xs ← μ.stk.dup n
-    let g' ← safeSub μ.gas gVerylow
-    some ⟨{μ with stk := xs, gas := g', pc := μ.pc + 1}, α⟩
+    let σ' ← σ.dup n
+    nextState μ σ' α gVerylow
   | .sload => do
-    let (x, xs) ← μ.stk.pop1
+    let (x, σ') ← σ.pop1
     let c : Nat := if α.keys.contains ⟨ε.cta, x⟩ then gWarmAccess else gColdSLoad
     let g' ← safeSub μ.gas c
-    let ac ← σ.find? ε.cta
+    let ac ← ω.find? ε.cta
     let y := (ac.stor.find? x).getD 0
-    let xs' ← xs.push1 y
+    let σ'' ← σ'.push1 y
     some ⟨
-      {μ with stk := xs', gas := g', pc := μ.pc + 1},
+      {μ with gas := g', pc := μ.pc + 1},
+      σ'',
       {α with keys := α.keys.insert ⟨ε.cta, x⟩}
     ⟩
-  -- | .sstore => sstoreStep w₀ s
   | .pc => do
-    let xs ← μ.stk.push1 (μ.pc.toB256)
-    nextState μ α (cost := gBase) (stk' := xs)
+    let σ' ← σ.push1 (μ.pc.toB256)
+    nextState μ σ' α (cost := gBase)
   | .log n => do
-    let (x, y, xys) ← μ.stk.pop2
+    let (x, y, σ') ← σ.pop2
     let cost := gLog + (gLogdata * y.toNat) + (n * gLogtopic)
     let act' := memExp μ.act x y
     let memCost : Nat := cMem act' - cMem μ.act
     let _ ← deductGas μ (cost + memCost)
-    let ⟨xs, ys⟩ ← Stk.popN xys n
+    let ⟨xs, σ''⟩ ← σ'.popN n
     let bs : B8s := (μ.mem.sliceD x.toNat y.toNat 0)
     let log : RLP' :=
       .list [
@@ -2124,9 +2099,8 @@ def Rinst.run (H : Block) -- (w₀ : World')
         .list (xs.map B256.toRLP),
         .b8s bs
       ]
-    nextState μ α
+    nextState μ σ'' α
       (cost := cost)
-      (stk' := ys)
       (act' := act')
       (logs' := log :: α.logs)
   | i => dbg_trace s!"UNIMPLEMENTED REGULAR INSTRUCTION EXECUTION : {i.toString}"; none
@@ -2165,50 +2139,48 @@ def World'.setBal (w : World') (a : Addr) (v : B256) : World' :=
   let ac' : Acct := {ac with bal := v}
   w.set a ac'
 
-def Jinst.run (μ : Machine) (ε : Env') : Jinst → Option Machine
+def Jinst.run (μ : Machine) (σ : Stk) (ε : Env') :
+    Jinst → Option (Machine × Stk)
   | .jumpdest => do
     let g' ← safeSub μ.gas gJumpdest
-    some {μ with gas := g', pc := μ.pc + 1}
+    some ⟨{μ with gas := g', pc := μ.pc + 1}, σ⟩
   | .jump => do
-    let (loc, stk') ← μ.stk.pop1
+    let (loc, σ') ← σ.pop1
     let g' ← safeSub μ.gas g_mid
     if jumpable ε.code loc.toNat
-    then some {μ with stk := stk', gas := g', pc := loc.toNat}
+    then some ⟨{μ with gas := g', pc := loc.toNat}, σ'⟩
     else none
   | .jumpi => do
-    let (loc, val, stk') ← μ.stk.pop2
+    let (loc, val, σ') ← σ.pop2
     let g' ← safeSub μ.gas gHigh
     if val = 0
-    then some {μ with stk := stk', gas := g', pc := μ.pc + 1}
+    then some ⟨{μ with gas := g', pc := μ.pc + 1}, σ'⟩
     else if jumpable ε.code loc.toNat
-         then some {μ with stk := stk', gas := g', pc := loc.toNat}
+         then some ⟨{μ with gas := g', pc := loc.toNat}, σ'⟩
          else none
 
 def Ninst'.run (B : Block) (w₀ : World')
-    (σ : World') (μ : Machine) (α : Accrual) (ε : Env') :
-    Ninst' → Option (World' × Machine × Accrual)
+    (ω : World') (μ : Machine) (σ : Stk) (α : Accrual) (ε : Env') :
+    Ninst' → Option (World' × Machine × Stk × Accrual)
   | .push bs _ => do
     let g' ← safeSub μ.gas (if bs = [] then gBase else gVerylow)
-    let xs ← μ.stk.push1 <| bs.toB256pad.getD 0
+    let σ' ← σ.push1 <| bs.toB256pad.getD 0
     let μ' : Machine :=
-      { μ with
-        gas := g'
-        pc := μ.pc + bs.length + 1,
-        stk := xs }
-    some ⟨σ, μ', α⟩
-  | .reg (.sstore) => sstoreStep w₀ σ μ α ε
+      {μ with gas := g', pc := μ.pc + bs.length + 1}
+    some ⟨ω, μ', σ', α⟩
+  | .reg (.sstore) => sstoreStep w₀ ω μ σ α ε
   | .reg r => do
-    let ⟨μ', α'⟩ ← Rinst.run B σ μ α ε r
-    some ⟨σ, μ', α'⟩
+    let ⟨μ', σ', α'⟩ ← Rinst.run B ω μ σ α ε r
+    some ⟨ω, μ', σ', α'⟩
   | .exec e => dbg_trace s!"unimplemented xinst : {e.toString}\n" ; none
 
-def retRun (σ : World') (μ : Machine) (α : Accrual) : Option Ξ.Result := do
-  let (rlc, rsz, _) ← μ.stk.pop2
+def retRun (ω : World') (μ : Machine) (σ : Stk) (α : Accrual) : Option Ξ.Result := do
+  let (rlc, rsz, _) ← σ.pop2
   let act' : Nat := memExp μ.act rlc rsz
   let memCost : Nat := cMem act' - cMem μ.act
   let g' ← safeSub μ.gas memCost
   let r := μ.mem.sliceD rlc.toNat rsz.toNat 0
-  some {wld := σ, gas := g', acr := α, ret := r}
+  some {wld := ω, gas := g', acr := α, ret := r}
 
 -- def State'.xh (s : State') : Ξ.Result :=
 --   {wld := none, gas := μ.gas, acr := s.acr, ret := none}
@@ -2236,10 +2208,9 @@ def theta.Result.toState (ct : theta.Cont) (tr : theta.Result) : Option State' :
     mem := Array.writeX ct.mem ct.olc.toNat cpy 0
     ret := tr.ret
     --stk := @Bool.toBits 256 tr.sta :: ct.stk
-    stk := xs
     act := ct.act
   }
-  some {wld := tr.wld, mcn := m', acr := tr.acr, env := ct.env}
+  some {wld := tr.wld, mcn := m', stk := xs, acr := tr.acr, env := ct.env}
 
 def midspan : Inst → Bool
   | .next (.exec .call) => false
@@ -2399,9 +2370,9 @@ def showExec (i : Inst') : Option Unit := do
   return ()
 
 def  exec (H : Block) (w₀ : World') :
-    Nat → Env' → Accrual → World' → Machine → Option Ξ.Result
-  | 0, _, _, _, _ => none
-  | lim + 1, ε, α, σ, μ => do
+    Nat → Env' → Accrual → World' → Machine → Stk →  Option Ξ.Result
+  | 0, _, _, _, _, _ => none
+  | lim + 1, ε, α, ω, μ, σ => do
     --let () ←
     showLim lim μ
     match getInst ε μ with
@@ -2413,7 +2384,7 @@ def  exec (H : Block) (w₀ : World') :
       -- showExec i
       match i with
       | .next (.exec .delcall) => do
-        let (gas, adr, ilc, isz, olc, osz, stk) ← μ.stk.pop6
+        let (gas, adr, ilc, isz, olc, osz, σ') ← σ.pop6
         let i : B8s := μ.mem.sliceD ilc.toNat isz.toNat 0
         let t : Addr := adr.toAddr
         -- dbg_trace s!"nested delgatecall to address : {t.toHex}"
@@ -2421,8 +2392,8 @@ def  exec (H : Block) (w₀ : World') :
         let A' : Accrual := {α with adrs := as'}
         let act' : Nat := memExp (memExp μ.act ilc isz) olc osz
         let memCost : Nat := cMem act' - cMem μ.act
-        let cg : Nat := cCallGas σ μ α gas.toNat memCost t 0
-        let totalCost := (cCall σ μ α gas.toNat memCost t 0) + memCost
+        let cg : Nat := cCallGas ω μ α gas.toNat memCost t 0
+        let totalCost := (cCall ω μ α gas.toNat memCost t 0) + memCost
         let (some g') ← (return (safeSub μ.gas totalCost)) | some (xhs μ α)
         let bd : theta.Cont :=
           {
@@ -2431,17 +2402,17 @@ def  exec (H : Block) (w₀ : World') :
             gas := g'
             mem := μ.mem
             pc := μ.pc
-            stk := stk
+            stk := σ'
             act := act'
             env := ε
           }
         let s'' : State' ←
           if 0 = ε.exd
-          then (theta.Result.toState bd ⟨σ, cg, A', 0, []⟩)
+          then (theta.Result.toState bd ⟨ω, cg, A', 0, []⟩)
           else do let s' : State' :=
                         θ.prep
                           H
-                          σ
+                          ω
                           A'
                           ε.cla
                           ε.oga
@@ -2454,12 +2425,12 @@ def  exec (H : Block) (w₀ : World') :
                           i
                           (ε.exd - 1)
                           ε.wup
-                  let xr ← exec H w₀ lim s'.env s'.acr s'.wld s'.mcn
+                  let xr ← exec H w₀ lim s'.env s'.acr s'.wld s'.mcn s'.stk
                   let θr := θ.wrap s'.wld s'.acr xr
                   (theta.Result.toState bd θr)
-        exec H w₀ lim s''.env s''.acr s''.wld s''.mcn
+        exec H w₀ lim s''.env s''.acr s''.wld s''.mcn s''.stk
       | .next (.exec .call) => do
-        let (gas, adr, clv, ilc, isz, olc, osz, stk) ← μ.stk.pop7
+        let (gas, adr, clv, ilc, isz, olc, osz, σ') ← σ.pop7
         let i : B8s := μ.mem.sliceD ilc.toNat isz.toNat 0
         let t : Addr := adr.toAddr
         -- dbg_trace s!"nested call to address : {t.toHex}"
@@ -2467,8 +2438,8 @@ def  exec (H : Block) (w₀ : World') :
         let A' : Accrual := {α with adrs := as'}
         let act' : Nat := memExp (memExp μ.act ilc isz) olc osz
         let memCost : Nat := cMem act' - cMem μ.act
-        let cg : Nat := cCallGas σ μ α gas.toNat memCost t clv.toBits
-        let totalCost := (cCall σ μ α  gas.toNat memCost t clv.toBits) + memCost
+        let cg : Nat := cCallGas ω μ α gas.toNat memCost t clv.toBits
+        let totalCost := (cCall ω μ α  gas.toNat memCost t clv.toBits) + memCost
         let (some g') ← (return (safeSub μ.gas totalCost)) | some (xhs μ α)
         let bd : theta.Cont :=
           {
@@ -2477,17 +2448,17 @@ def  exec (H : Block) (w₀ : World') :
             gas := g'
             mem := μ.mem
             pc := μ.pc
-            stk := stk
+            stk := σ'
             act := act'
             env := ε
           }
         let s'' : State' ←
-          if 0 = ε.exd ∨ (σ.get ε.cta).bal < clv
-          then (theta.Result.toState bd ⟨σ, cg, A', 0, []⟩)
+          if 0 = ε.exd ∨ (ω.get ε.cta).bal < clv
+          then (theta.Result.toState bd ⟨ω, cg, A', 0, []⟩)
           else do let s' : State' :=
                         θ.prep
                           H
-                          σ
+                          ω
                           A'
                           ε.cta
                           ε.oga
@@ -2501,27 +2472,27 @@ def  exec (H : Block) (w₀ : World') :
                           (ε.exd - 1)
                           ε.wup
                   -- dbg_trace s!"code of nested delcall : {B8s.toHex s'.env.code.toList}"
-                  let xr ← exec H w₀ lim s'.env s'.acr s'.wld s'.mcn
+                  let xr ← exec H w₀ lim s'.env s'.acr s'.wld s'.mcn s'.stk
                   let θr := θ.wrap s'.wld s'.acr xr
                   (theta.Result.toState bd θr)
-        exec H w₀ lim s''.env s''.acr s''.wld s''.mcn
+        exec H w₀ lim s''.env s''.acr s''.wld s''.mcn s''.stk
       | .next n =>
-        match n.run H w₀ σ μ α ε with
+        match n.run H w₀ ω μ σ α ε with
         | none => some (xhs μ α)
-        | some ⟨σ', μ', α'⟩ => exec H w₀ lim ε α' σ' μ' --s'.env s'.acr s'.wld s'.mcn
+        | some ⟨ω', μ', σ', α'⟩ => exec H w₀ lim ε α' ω' μ' σ' --s'.env s'.acr s'.wld s'.mcn
       | .jump j =>
-         match j.run μ ε with
+         match j.run μ σ ε with
          | none => some (xhs μ α)
-         | some μ' => exec H w₀ lim ε α σ μ'
-      | .last .stop => some {wld := σ, gas := μ.gas, acr := α, ret := some []}
-      | .last .ret => some <| (retRun σ μ α).getD (xhs μ α)
+         | some ⟨μ', σ'⟩ => exec H w₀ lim ε α ω μ' σ'
+      | .last .stop => some {wld := ω, gas := μ.gas, acr := α, ret := some []}
+      | .last .ret => some <| (retRun ω μ σ α).getD (xhs μ α)
       | .last .dest => do
-        let (x, _) ← μ.stk.pop1
+        let (x, _) ← σ.pop1
         let a := x.toAddr -- recipient
         let cost :=
           gSelfdestruct
           + (if a ∈ α.adrs then 0 else gColdAccountAccess)
-          + ( if Dead σ a ∧ σ.balAt ε.cta ≠ 0
+          + ( if Dead ω a ∧ ω.balAt ε.cta ≠ 0
               then gNewAccount
               else 0 )
         let gas' ← deductGas μ cost
@@ -2529,9 +2500,9 @@ def  exec (H : Block) (w₀ : World') :
           {
             wld :=
               if a = ε.cta
-              then σ
-              else let v := (σ.get ε.cta).bal
-                   let wld' := σ.setBal ε.cta 0
+              then ω
+              else let v := (ω.get ε.cta).bal
+                   let wld' := ω.setBal ε.cta 0
                    wld'.addBal a v
             gas := gas'
             acr :=
@@ -2549,10 +2520,10 @@ def theta
   -- Extra arguments not mentioned by YP,
   -- but still necessary for correct execution
   (H : Block)
-  (σ₀ : World')
+  (ω₀ : World')
 
   -- Arguments specified by YP
-  (σ : World')
+  (ω : World')
   (A : Accrual)
   (s : Addr)
   (o : Addr)
@@ -2566,8 +2537,8 @@ def theta
   (e : Nat)
   (w : Bool) :
   Option theta.Result :=
-  let st := θ.prep H σ A s o r c g p v v_app d e w
-  match exec H σ₀ g st.env st.acr st.wld st.mcn with
+  let st := θ.prep H ω A s o r c g p v v_app d e w
+  match exec H ω₀ g st.env st.acr st.wld st.mcn st.stk with
   | none => none
   | some xr => some (θ.wrap st.wld st.acr xr)
 
