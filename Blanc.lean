@@ -1778,7 +1778,7 @@ def Linst.toB8 : Linst → B8
   | .dest => 0xFF
   | .invalid => 0xFE
 
-def Rinst.run (H : Block) -- (w₀ : World')
+def Rinst.run  --(H : Block) -- (w₀ : World')
   -- (s : State') : Rinst → Option State'
     (ω : World') (μ : Machine) (σ : Stk) (α : Accrual) (ε : Env') :
     Rinst → Option (Machine × Stk × Accrual)
@@ -1880,22 +1880,22 @@ def Rinst.run (H : Block) -- (w₀ : World')
     let σ' ← σ.push1 (bal)
     nextState μ σ' α (cost := gLow)
   | .chainid => do
-    let σ' ← σ.push1 (H.chainId)
+    let σ' ← σ.push1 (ε.blk.chainId)
     nextState μ σ' α (cost := gBase)
   | .number => do
-    let σ' ← σ.push1 (H.number)
+    let σ' ← σ.push1 (ε.blk.number)
     nextState μ σ' α (cost := gBase)
   | .timestamp => do
-    let σ' ← σ.push1 (H.timestamp)
+    let σ' ← σ.push1 (ε.blk.timestamp)
     nextState μ σ' α (cost := gBase)
   | .gaslimit => do
-    let σ' ← σ.push1 (H.gasLimit)
+    let σ' ← σ.push1 (ε.blk.gasLimit)
     nextState μ σ' α (cost := gBase)
   | .prevrandao => do
-    let σ' ← σ.push1 (H.prevRandao)
+    let σ' ← σ.push1 (ε.blk.prevRandao)
     nextState μ σ' α (cost := gBase)
   | .coinbase => do
-    let σ' ← σ.push1 (H.ben.toB256)
+    let σ' ← σ.push1 (ε.blk.ben.toB256)
     nextState μ σ' α (cost := gBase)
   | .msize => do
     let σ' ← σ.push1 ((μ.act * 32).toB256)
@@ -2159,7 +2159,7 @@ def Jinst.run (μ : Machine) (σ : Stk) (ε : Env') :
          then some ⟨{μ with gas := g', pc := loc.toNat}, σ'⟩
          else none
 
-def Ninst'.run (B : Block) (w₀ : World')
+def Ninst'.run (w₀ : World')
     (ω : World') (μ : Machine) (σ : Stk) (α : Accrual) (ε : Env') :
     Ninst' → Option (World' × Machine × Stk × Accrual)
   | .push bs _ => do
@@ -2170,7 +2170,7 @@ def Ninst'.run (B : Block) (w₀ : World')
     some ⟨ω, μ', σ', α⟩
   | .reg (.sstore) => sstoreStep w₀ ω μ σ α ε
   | .reg r => do
-    let ⟨μ', σ', α'⟩ ← Rinst.run B ω μ σ α ε r
+    let ⟨μ', σ', α'⟩ ← Rinst.run ω μ σ α ε r
     some ⟨ω, μ', σ', α'⟩
   | .exec e => dbg_trace s!"unimplemented xinst : {e.toString}\n" ; none
 
@@ -2369,7 +2369,7 @@ def showExec (i : Inst') : Option Unit := do
   dbg_trace s!"executing inst : {i.toString}"
   return ()
 
-def  exec (H : Block) (w₀ : World') :
+def exec (w₀ : World') :
     Nat → Env' → Accrual → World' → Machine → Stk →  Option Ξ.Result
   | 0, _, _, _, _, _ => none
   | lim + 1, ε, α, ω, μ, σ => do
@@ -2411,7 +2411,7 @@ def  exec (H : Block) (w₀ : World') :
           then (theta.Result.toState bd ⟨ω, cg, A', 0, []⟩)
           else do let s' : State' :=
                         θ.prep
-                          H
+                          ε.blk
                           ω
                           A'
                           ε.cla
@@ -2425,10 +2425,10 @@ def  exec (H : Block) (w₀ : World') :
                           i
                           (ε.exd - 1)
                           ε.wup
-                  let xr ← exec H w₀ lim s'.env s'.acr s'.wld s'.mcn s'.stk
+                  let xr ← exec w₀ lim s'.env s'.acr s'.wld s'.mcn s'.stk
                   let θr := θ.wrap s'.wld s'.acr xr
                   (theta.Result.toState bd θr)
-        exec H w₀ lim s''.env s''.acr s''.wld s''.mcn s''.stk
+        exec w₀ lim s''.env s''.acr s''.wld s''.mcn s''.stk
       | .next (.exec .call) => do
         let (gas, adr, clv, ilc, isz, olc, osz, σ') ← σ.pop7
         let i : B8s := μ.mem.sliceD ilc.toNat isz.toNat 0
@@ -2457,7 +2457,7 @@ def  exec (H : Block) (w₀ : World') :
           then (theta.Result.toState bd ⟨ω, cg, A', 0, []⟩)
           else do let s' : State' :=
                         θ.prep
-                          H
+                          ε.blk
                           ω
                           A'
                           ε.cta
@@ -2472,18 +2472,18 @@ def  exec (H : Block) (w₀ : World') :
                           (ε.exd - 1)
                           ε.wup
                   -- dbg_trace s!"code of nested delcall : {B8s.toHex s'.env.code.toList}"
-                  let xr ← exec H w₀ lim s'.env s'.acr s'.wld s'.mcn s'.stk
+                  let xr ← exec w₀ lim s'.env s'.acr s'.wld s'.mcn s'.stk
                   let θr := θ.wrap s'.wld s'.acr xr
                   (theta.Result.toState bd θr)
-        exec H w₀ lim s''.env s''.acr s''.wld s''.mcn s''.stk
+        exec w₀ lim s''.env s''.acr s''.wld s''.mcn s''.stk
       | .next n =>
-        match n.run H w₀ ω μ σ α ε with
+        match n.run w₀ ω μ σ α ε with
         | none => some (xhs μ α)
-        | some ⟨ω', μ', σ', α'⟩ => exec H w₀ lim ε α' ω' μ' σ' --s'.env s'.acr s'.wld s'.mcn
+        | some ⟨ω', μ', σ', α'⟩ => exec w₀ lim ε α' ω' μ' σ' --s'.env s'.acr s'.wld s'.mcn
       | .jump j =>
          match j.run μ σ ε with
          | none => some (xhs μ α)
-         | some ⟨μ', σ'⟩ => exec H w₀ lim ε α ω μ' σ'
+         | some ⟨μ', σ'⟩ => exec w₀ lim ε α ω μ' σ'
       | .last .stop => some {wld := ω, gas := μ.gas, acr := α, ret := some []}
       | .last .ret => some <| (retRun ω μ σ α).getD (xhs μ α)
       | .last .dest => do
@@ -2538,7 +2538,7 @@ def theta
   (w : Bool) :
   Option theta.Result :=
   let st := θ.prep H ω A s o r c g p v v_app d e w
-  match exec H ω₀ g st.env st.acr st.wld st.mcn st.stk with
+  match exec ω₀ g st.env st.acr st.wld st.mcn st.stk with
   | none => none
   | some xr => some (θ.wrap st.wld st.acr xr)
 
