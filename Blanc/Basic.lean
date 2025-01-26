@@ -363,8 +363,6 @@ def B64.toHex (x : B64) : String := x.highs.toHex ++ x.lows.toHex
 def B128.toHex (x : B128) : String := x.1.toHex ++ x.2.toHex
 def B256.toHex (x : B256) : String := x.1.toHex ++ x.2.toHex
 
-def foo256 : B256 := 0xFEDCBA9876543210FEDCBA9876543210FEDCBA9876543210FEDCBA9876543210
-
 
 def B128.LE (x y : B128) : Prop :=
   x.1 < y.1 ∨ (x.1 = y.1 ∧ x.2 ≤ y.2)
@@ -1948,8 +1946,6 @@ def B256.divMod (x y : B256) : B256 × B256 :=
 instance : HDiv B256 B256 B256 := ⟨λ x y => (B256.divMod x y).fst⟩
 instance : HMod B256 B256 B256 := ⟨λ x y => (B256.divMod x y).snd⟩
 
-#eval ((2 : B256) / foo256).toHex
-
 def B256.sdiv (xs ys : B256) : B256 :=
   if ys = 0
   then 0
@@ -2331,6 +2327,13 @@ def Array.tegD {ξ : Type u} (xs : Array ξ) (n : Nat) (x : ξ) : ξ :=
 
 def Array.teg! {ξ : Type u} [Inhabited ξ] (xs : Array ξ) (n : Nat) : ξ :=
   xs.get! (xs.size - n)
+
+def B8s.toB32 (a b c d : B8) : B32 :=
+  let a64 : B32 := a.toUInt32
+  let b64 : B32 := b.toUInt32
+  let c64 : B32 := c.toUInt32
+  let d64 : B32 := d.toUInt32
+  (a64 <<< 24) ||| (b64 <<< 16) ||| (c64 <<< 8) ||| d64
 
 def B8s.toB64 (a b c d e f g h : B8) : B64 :=
   let a64 : B64 := a.toUInt64
