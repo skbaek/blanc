@@ -434,6 +434,17 @@ def Hex.from0x : String → IO String
   | ⟨'0' :: 'x' :: s⟩ => return ⟨s⟩
   | _ => IO.throw "prefix not 0x"
 
+def B8s.toB128
+  (x0 x1 x2 x3 x4 x5 x6 x7 y0 y1 y2 y3 y4 y5 y6 y7 : B8) : B128 :=
+  ⟨ B8s.toB64 x0 x1 x2 x3 x4 x5 x6 x7,
+    B8s.toB64 y0 y1 y2 y3 y4 y5 y6 y7 ⟩
+
+def B8s.toB256
+  ( x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 xA xB xC xD xE xF
+    y0 y1 y2 y3 y4 y5 y6 y7 y8 y9 yA yB yC yD yE yF : B8 ) : B256 :=
+  ⟨ B8s.toB128 x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 xA xB xC xD xE xF,
+    B8s.toB128 y0 y1 y2 y3 y4 y5 y6 y7 y8 y9 yA yB yC yD yE yF ⟩
+
 def B8L.toB128Diff : B8L → Option (B128 × B8L)
   | x0 :: x1 :: x2 :: x3 ::
     x4 :: x5 :: x6 :: x7 ::
@@ -1136,27 +1147,67 @@ def B8.toLinst : B8 → Option Linst
 inductive Ninst' : Type
   | reg : Rinst → Ninst'
   | exec : Xinst → Ninst'
-  | push : ∀ bs : B8L, bs.length ≤ 32 → Ninst'
+  | push : B256 → Nat →  Ninst' --∀ bs : B8L, bs.length ≤ 32 → Ninst'
 
 inductive Inst' : Type
   | last : Linst → Inst'
   | next : Ninst' → Inst'
   | jump : Jinst → Inst'
 
+def getInstAux (cd : ByteArray) (pc len off : Nat) : B8 :=
+  if off < len
+  then cd.get! ((pc + len) - off)
+  else 0
+
 def getInst (υ : Var) (κ : Con)  : Option Inst' :=
   if υ.pc < κ.code.size
-  then let b : B8 := κ.code.get! υ.pc
-       (b.toRinst <&> (.next ∘ .reg)) <|>
-       (b.toXinst <&> (.next ∘ .exec)) <|>
-       (b.toJinst <&> .jump) <|>
-       (b.toLinst <&> .last) <|>
-       ( if h : 95 ≤ b.toNat ∧ b.toNat ≤ 127
-         then let len := b.toNat - 95
-              let slc := κ.code.sliceD (υ.pc + 1) len 0
-              let h_slc : slc.length ≤ 32 := by
-                simp [len, slc, ByteArray.length_sliceD, h.right]
-              some (.next <| .push slc h_slc)
-         else none )
+  then
+    let b : B8 := κ.code.get! υ.pc
+    (b.toRinst <&> (.next ∘ .reg)) <|>
+    (b.toXinst <&> (.next ∘ .exec)) <|>
+    (b.toJinst <&> .jump) <|>
+    (b.toLinst <&> .last) <|>
+    (
+      let bn := b.toNat
+      if 95 ≤ bn ∧ bn ≤ 127
+      then let len := bn - 95
+           let x : B256 :=
+             B8s.toB256
+               (getInstAux κ.code υ.pc len 31)
+               (getInstAux κ.code υ.pc len 30)
+               (getInstAux κ.code υ.pc len 29)
+               (getInstAux κ.code υ.pc len 28)
+               (getInstAux κ.code υ.pc len 27)
+               (getInstAux κ.code υ.pc len 26)
+               (getInstAux κ.code υ.pc len 25)
+               (getInstAux κ.code υ.pc len 24)
+               (getInstAux κ.code υ.pc len 23)
+               (getInstAux κ.code υ.pc len 22)
+               (getInstAux κ.code υ.pc len 21)
+               (getInstAux κ.code υ.pc len 20)
+               (getInstAux κ.code υ.pc len 19)
+               (getInstAux κ.code υ.pc len 18)
+               (getInstAux κ.code υ.pc len 17)
+               (getInstAux κ.code υ.pc len 16)
+               (getInstAux κ.code υ.pc len 15)
+               (getInstAux κ.code υ.pc len 14)
+               (getInstAux κ.code υ.pc len 13)
+               (getInstAux κ.code υ.pc len 12)
+               (getInstAux κ.code υ.pc len 11)
+               (getInstAux κ.code υ.pc len 10)
+               (getInstAux κ.code υ.pc len  9)
+               (getInstAux κ.code υ.pc len  8)
+               (getInstAux κ.code υ.pc len  7)
+               (getInstAux κ.code υ.pc len  6)
+               (getInstAux κ.code υ.pc len  5)
+               (getInstAux κ.code υ.pc len  4)
+               (getInstAux κ.code υ.pc len  3)
+               (getInstAux κ.code υ.pc len  2)
+               (getInstAux κ.code υ.pc len  1)
+               (getInstAux κ.code υ.pc len  0)
+           some (.next <| .push x len)
+      else none
+    )
   else some (.last .stop)
 
 -- def getInst (υ : Var) (κ : Con)  : Option Inst' :=
@@ -1957,11 +2008,11 @@ def Jinst.run (σ : Sta) (υ : Var) (κ : Con) :
 def Ninst'.run (w₀ : Wor) (ω : Wor)
     (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) :
     Ninst' → Option (Wor × Sta × Mem × Var)
-  | .push bs _ => do
-    let g' ← safeSub υ.gas (if bs = [] then gBase else gVerylow)
-    let x ← B8L.toB256? <| List.ekatD 32 bs 0
+  | .push x len => do
+    let g' ← safeSub υ.gas (if len = 0 then gBase else gVerylow)
+    --let x ← B8L.toB256? <| List.ekatD 32 bs 0
     let σ' ← σ.push1 x
-    let υ' := {υ with gas := g', pc := υ.pc + bs.length + 1}
+    let υ' := {υ with gas := g', pc := υ.pc + len + 1}
     some ⟨ω, σ', μ, υ'⟩
   | .reg (.sstore) => do
     let ⟨ω', σ', υ'⟩ ← sstoreStep w₀ ω σ υ κ --α ε
@@ -2021,8 +2072,8 @@ def theta.Result.toState (ct : theta.Cont) (tr : theta.Result) :
 def Ninst'.toString : Ninst' → String
   | reg o => Rinst.toString o
   | exec o => Xinst.toString o
-  | push [] _ => "PUSH0"
-  | push bs _ => "PUSH" ++ bs.length.repr ++ " " ++ B8L.toHex bs
+  | push _ 0 => "PUSH0"
+  | push x len => "PUSH" ++ len.repr ++ " " ++ x.toHex
 
 def Inst'.toString : Inst' → String
   | .next n => n.toString
