@@ -2411,27 +2411,32 @@ def keccakU : Fin 17 → B8L → QordsU → B256
   --⟨B64.reverse (ws'.get 0), B64.reverse (ws'.get 1)⟩ ++ ⟨B64.reverse (ws'.get 2), B64.reverse (ws'.get 3)⟩
 
 
+def keccakEndAux' (bnd : Nat) (bs : ByteArray) : Nat → Nat → List B8
+  | _, 0 => [] -- unreachable code
+  | 0, n + 1 => 1 :: List.replicate n 0
+  | m + 1, n + 1 =>
+    (bs.get! (bnd - (m + 1))) :: keccakEndAux' bnd bs m n
+
 def keccakEndAux (bnd : Nat) (bs : Array B8) : Nat → Nat → List B8
   | _, 0 => [] -- unreachable code
   | 0, n + 1 => 1 :: List.replicate n 0
   | m + 1, n + 1 =>
     (bs.getD (bnd - (m + 1)) 0) :: keccakEndAux bnd bs m n
 
-def keccakA (bnd n : Nat) (wc : Fin 17) (bs : Array B8) (ws : QordsU) : B256 :=
+def keccakBA (bnd n : Nat) (wc : Fin 17) (bs : ByteArray) (ws : QordsU) : B256 :=
   if 7 < n
-  then let b0 : B8 := bs.getD (bnd - n) 0
-       let b1 : B8 := bs.getD (bnd - (n - 1)) 0
-       let b2 : B8 := bs.getD (bnd - (n - 2)) 0
-       let b3 : B8 := bs.getD (bnd - (n - 3)) 0
-       let b4 : B8 := bs.getD (bnd - (n - 4)) 0
-       let b5 : B8 := bs.getD (bnd - (n - 5)) 0
-       let b6 : B8 := bs.getD (bnd - (n - 6)) 0
-       let b7 : B8 := bs.getD (bnd - (n - 7)) 0
+  then let b0 : B8 := bs.get! (bnd - n)
+       let b1 : B8 := bs.get! (bnd - (n - 1))
+       let b2 : B8 := bs.get! (bnd - (n - 2))
+       let b3 : B8 := bs.get! (bnd - (n - 3))
+       let b4 : B8 := bs.get! (bnd - (n - 4))
+       let b5 : B8 := bs.get! (bnd - (n - 5))
+       let b6 : B8 := bs.get! (bnd - (n - 6))
+       let b7 : B8 := bs.get! (bnd - (n - 7))
        let t : B64 := B8s.toB64 b7 b6 b5 b4 b3 b2 b1 b0
        let ws' := QordsU.app wc (UInt64.xor · t) ws
-       keccakA bnd (n - 8) (wc + 1) bs <| if wc = 16 then (KeccakU.f ws') else ws'
-  else --let us := (bs.toList ++ [(1 : B8)]).takeD 8 (0 : B8)
-       let us := keccakEndAux bnd bs n 8
+       keccakBA bnd (n - 8) (wc + 1) bs <| if wc = 16 then (KeccakU.f ws') else ws'
+  else let us := keccakEndAux' bnd bs n 8
        let t : B64 :=
          B8s.toB64
            (us.getD 7 0)
@@ -2446,10 +2451,37 @@ def keccakA (bnd n : Nat) (wc : Fin 17) (bs : Array B8) (ws : QordsU) : B256 :=
        let temp0 := QordsU.app wc (· ^^^ t) ws
        let temp1 := QordsU.app 16 (· ^^^ s) temp0
        let ws' := KeccakU.f temp1
-       -- Qord.reverse (ws'.get 0).toBits ++
-       -- Qord.reverse (ws'.get 1).toBits ++
-       -- Qord.reverse (ws'.get 2).toBits ++
-       -- Qord.reverse (ws'.get 3).toBits
+      (B64.reverse (ws'.get 0) ++ B64.reverse (ws'.get 1)) ++
+      (B64.reverse (ws'.get 2) ++ B64.reverse (ws'.get 3))
+
+def keccakA (bnd n : Nat) (wc : Fin 17) (bs : Array B8) (ws : QordsU) : B256 :=
+  if 7 < n
+  then let b0 : B8 := bs.getD (bnd - n) 0
+       let b1 : B8 := bs.getD (bnd - (n - 1)) 0
+       let b2 : B8 := bs.getD (bnd - (n - 2)) 0
+       let b3 : B8 := bs.getD (bnd - (n - 3)) 0
+       let b4 : B8 := bs.getD (bnd - (n - 4)) 0
+       let b5 : B8 := bs.getD (bnd - (n - 5)) 0
+       let b6 : B8 := bs.getD (bnd - (n - 6)) 0
+       let b7 : B8 := bs.getD (bnd - (n - 7)) 0
+       let t : B64 := B8s.toB64 b7 b6 b5 b4 b3 b2 b1 b0
+       let ws' := QordsU.app wc (UInt64.xor · t) ws
+       keccakA bnd (n - 8) (wc + 1) bs <| if wc = 16 then (KeccakU.f ws') else ws'
+  else let us := keccakEndAux bnd bs n 8
+       let t : B64 :=
+         B8s.toB64
+           (us.getD 7 0)
+           (us.getD 6 0)
+           (us.getD 5 0)
+           (us.getD 4 0)
+           (us.getD 3 0)
+           (us.getD 2 0)
+           (us.getD 1 0)
+           (us.getD 0 0)
+       let s : B64 := (8 : B64) <<< 60
+       let temp0 := QordsU.app wc (· ^^^ t) ws
+       let temp1 := QordsU.app 16 (· ^^^ s) temp0
+       let ws' := KeccakU.f temp1
       (B64.reverse (ws'.get 0) ++ B64.reverse (ws'.get 1)) ++
       (B64.reverse (ws'.get 2) ++ B64.reverse (ws'.get 3))
 
@@ -2463,6 +2495,9 @@ def B8L.keccak (bs : B8L) : B256 :=
 --   keccakA bs.size (0 : Fin 17) bs QordsU.init
 def B8a.keccak (loc sz : Nat) (bs : Array B8) : B256 :=
   keccakA (loc + sz) sz (0 : Fin 17) bs QordsU.init
+
+def ByteArray.keccak (loc sz : Nat) (bs : ByteArray) : B256 :=
+  keccakBA (loc + sz) sz (0 : Fin 17) bs QordsU.init
 
 def String.keccak (s : String) : Word :=
   Bytes.keccak s.toBytes

@@ -226,7 +226,7 @@ structure Acct where
   (nonce : B256)
   (bal : B256)
   (stor : Stor)
-  (code : Array B8)
+  (code : ByteArray)
 
 abbrev Wor : Type := Lean.RBMap Adr Acct compare
 
@@ -586,6 +586,7 @@ def Lean.Json.toTestData (j : Lean.Json) : IO TestData := do
   let tx ←   (r.find compare "transaction").toIO "" >>= Lean.Json.toTransactionData
   return ⟨info, env, pre, post, tx⟩
 
+
 def TestData.world (td : TestData) : Option Wor :=
   let aux : PreData → Option (Adr × Acct) :=
     fun pd => do
@@ -595,7 +596,7 @@ def TestData.world (td : TestData) : Option Wor :=
           nonce := pd.nonce.toB256P
           bal := pd.bal.toB256P
           stor := pd.stor
-          code := Array.mk pd.code
+          code := ByteArray.mk <| Array.mk pd.code
         }
     ⟩
   do let l ← List.mapM aux td.pre
@@ -901,7 +902,7 @@ structure Con where
   (cld : B8L) -- calldata (YP : d)
   (cla : Adr) -- caller Addr (YP : s)
   (clv : B256) -- callvalue (YP : v)
-  (code : Array B8) -- contract code  (YP : b)
+  (code : ByteArray) -- contract code  (YP : b)
   (blk : Block) -- block (YP : H)
   (exd : Nat) -- execution depth (YP : e)
   (wup : Bool) -- World-State update permission (YP : w)
@@ -941,6 +942,19 @@ def Inst.toString : Inst → String
   | .jump j => j.toString
   | .last l => l.toString
 
+def noPushBefore' (cd : ByteArray) : Nat → Nat → Bool
+  | 0, _ => true
+  | _, 0 => true
+  | k + 1, m + 1 =>
+    if k < cd.size
+    then let b := cd.get! k
+         if (b < (0x7F - m.toUInt8) || 0x7F < b)
+         then noPushBefore' cd k m
+         else if noPushBefore' cd k 32
+              then false
+              else noPushBefore' cd k m
+    else noPushBefore' cd k m
+
 def noPushBefore (cd : Array B8) : Nat → Nat → Bool
   | 0, _ => true
   | _, 0 => true
@@ -959,10 +973,32 @@ def Jinst.toB8 : Jinst → B8
   | jumpi => 0x57    -- 0x57 / 2 / 0 / Conditional jump.
   | jumpdest => 0x5B -- 0x5b / 0 / 0 / Mark a valid jump destination.
 
+def jumpable' (cd : ByteArray) (k : Nat) : Bool :=
+  if cd.get! k = (Jinst.toB8 .jumpdest)
+  then noPushBefore' cd k 32
+  else false
+
 def jumpable (cd : Array B8) (k : Nat) : Bool :=
   if cd.get? k = some (Jinst.toB8 .jumpdest)
   then noPushBefore cd k 32
   else false
+
+def ByteArray.sliceD (xs : ByteArray) : Nat → Nat → B8 → B8L
+  | _, 0, _ => []
+  | m, n + 1, d => --xs.getD m d :: Array.sliceD xs (m + 1) n d
+    if m < xs.size
+    then xs.get! m :: ByteArray.sliceD xs (m + 1) n d
+    else List.replicate (n + 1) d
+
+lemma ByteArray.length_sliceD {xs : ByteArray} {m n x} :
+    (ByteArray.sliceD xs m n x).length = n := by
+  induction n generalizing m with
+  | zero => simp [sliceD]
+  | succ n ih =>
+    simp [sliceD]
+    by_cases h : m < xs.size
+    · rw [if_pos h]; simp [List.length]; apply ih
+    · rw [if_neg h]; apply List.length_replicate
 
 def Array.sliceD {ξ : Type u} (xs : Array ξ) : Nat → Nat → ξ → List ξ
   | _, 0, _ => []
@@ -1107,23 +1143,38 @@ inductive Inst' : Type
   | next : Ninst' → Inst'
   | jump : Jinst → Inst'
 
--- υ : Var
 def getInst (υ : Var) (κ : Con)  : Option Inst' :=
-  match κ.code.get? υ.pc with
-  | none => some (.last .stop)
-  | some b =>
-    (b.toRinst <&> (.next ∘ .reg)) <|>
-    (b.toXinst <&> (.next ∘ .exec)) <|>
-    (b.toJinst <&> .jump) <|>
-    (b.toLinst <&> .last) <|>
-    ( if h : 95 ≤ b.toNat ∧ b.toNat ≤ 127
-      then let len := b.toNat - 95
-           let slc := κ.code.sliceD (υ.pc + 1) len 0
-           let h_slc : slc.length ≤ 32 := by
-             simp [len, slc, Array.length_sliceD, h.right]
-           some (.next <| .push slc h_slc)
-      else none )
+  if υ.pc < κ.code.size
+  then let b : B8 := κ.code.get! υ.pc
+       (b.toRinst <&> (.next ∘ .reg)) <|>
+       (b.toXinst <&> (.next ∘ .exec)) <|>
+       (b.toJinst <&> .jump) <|>
+       (b.toLinst <&> .last) <|>
+       ( if h : 95 ≤ b.toNat ∧ b.toNat ≤ 127
+         then let len := b.toNat - 95
+              let slc := κ.code.sliceD (υ.pc + 1) len 0
+              let h_slc : slc.length ≤ 32 := by
+                simp [len, slc, ByteArray.length_sliceD, h.right]
+              some (.next <| .push slc h_slc)
+         else none )
+  else some (.last .stop)
 
+-- def getInst (υ : Var) (κ : Con)  : Option Inst' :=
+--   match κ.code.get? υ.pc with
+--   | none => some (.last .stop)
+--   | some b =>
+--     (b.toRinst <&> (.next ∘ .reg)) <|>
+--     (b.toXinst <&> (.next ∘ .exec)) <|>
+--     (b.toJinst <&> .jump) <|>
+--     (b.toLinst <&> .last) <|>
+--     ( if h : 95 ≤ b.toNat ∧ b.toNat ≤ 127
+--       then let len := b.toNat - 95
+--            let slc := κ.code.sliceD (υ.pc + 1) len 0
+--            let h_slc : slc.length ≤ 32 := by
+--              simp [len, slc, Array.length_sliceD, h.right]
+--            some (.next <| .push slc h_slc)
+--       else none )
+--
 def g_zero : Nat := 0
 def gVerylow : Nat := 3
 def gLow : Nat := 5
@@ -1137,7 +1188,7 @@ def safeSub {ξ} [Sub ξ] [LE ξ] [@DecidableRel ξ (· ≤ ·)] (x y : ξ) : Op
 def deductGas (υ : Var) (c : Nat) : Option Nat := safeSub υ.gas c
 
 def Acct.Empty (a : Acct) : Prop :=
-  a.code = #[] ∧ a.nonce = 0 ∧ a.bal = 0
+  a.code.size = 0 ∧ a.nonce = 0 ∧ a.bal = 0
 
 def Dead (w : Wor) (a : Adr) : Prop :=
   match w.find? a with
@@ -1199,9 +1250,9 @@ structure theta.Result : Type where
   (status : Bool)
   (ret : B8L)
 
-def Wor.code (w : Wor) (a : Adr) : Array B8 :=
+def Wor.code (w : Wor) (a : Adr) : ByteArray :=
   match w.find? a with
-  | none => #[]
+  | none => ByteArray.mk #[]
   | some x => x.code
 
 def Acct.empty : Acct :=
@@ -1209,7 +1260,7 @@ def Acct.empty : Acct :=
     nonce := 0
     bal := 0
     stor := .empty
-    code := #[]
+    code := ByteArray.mk #[]
   }
 
 def Sta.init : Sta := ⟨Array.mkArray 1024 (0 : B256), 0⟩
@@ -1236,7 +1287,7 @@ def θ.prep
     | none =>
       if v = 0
       then ω
-      else ω.insert r {nonce := 0, bal := v, stor := .empty, code := #[]}
+      else ω.insert r {nonce := 0, bal := v, stor := .empty, code := ByteArray.mk #[]}
     | some aᵣ => ω.insert r {aᵣ with bal := aᵣ.bal + v}
   let ω₁ : Wor :=
     match ω'₁.find? s with
@@ -1245,7 +1296,7 @@ def θ.prep
       then ω'₁
       else (dbg_trace "unreachable code : nonzero value calls from empty accounts should never happen" ; ω'₁)
     | some aₛ => ω'₁.insert s {aₛ with bal := aₛ.bal - v}
-  let cd : Array B8 := ω.code c
+  let cd : ByteArray := ω.code c
   let κ : Con := {
     cta := r, oga := o, gpr := p.toB256, cld := d
     cla := s, clv := v_app, code := cd, blk := H, exd := e, wup := w
@@ -1569,18 +1620,21 @@ def gKeccak256Word : Nat := 6
 def cMem (a : Nat) := gMemory * a + ((a ^ 2) / 512)
 
 def nextState (υ : Var) (cost : Nat)
-  (act' : Nat := υ.act)
+  (act' : Option Nat := none)
   (ret' : B8L := υ.ret)
   (adrs' : AdrSet := υ.adrs)
   (logs' : List RLP' := υ.logs)
   (keys' : KeySet := υ.keys) : Option Var := do
-  let memCost : Nat := cMem act' - cMem υ.act
-  let gas' ← deductGas υ (cost + memCost)
+  --let memCost : Nat := cMem act' - cMem υ.act
+  let gas' ←
+    match act' with
+    | none => deductGas υ cost
+    | some k => deductGas υ (cost + (cMem k - cMem υ.act))
   some {
       gas := gas',
       pc := υ.pc + 1,
       ret := ret'
-      act := act'
+      act := act'.getD υ.act
       dest := υ.dest
       adrs := adrs'
       keys := keys'
@@ -1724,7 +1778,7 @@ def Rinst.run (ω : Wor) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) :
       if (Dead ω a)
       then 0
       else let cd := (ω.get a).code
-           B8a.keccak 0 cd.size cd
+           ByteArray.keccak 0 cd.size cd
     let σ'' ← σ'.push1 hash
     let υ' ← nextState υ (cAAccess a υ.adrs) (adrs' := adrs')
     some ⟨σ'', μ, υ'⟩
@@ -1863,7 +1917,7 @@ def Acct.isEmpty (ac : Acct) : Prop :=
   ac.nonce = 0 ∧
   ac.bal = 0 ∧
   ac.stor.isEmpty = .true ∧
-  ac.code = #[]
+  ac.code.size = 0
 
 instance {ac : Acct} : Decidable ac.isEmpty := instDecidableAnd
 
@@ -1888,7 +1942,7 @@ def Jinst.run (σ : Sta) (υ : Var) (κ : Con) :
   | .jump => do
     let (loc, σ') ← σ.pop1
     let g' ← safeSub υ.gas g_mid
-    if jumpable κ.code loc.toNat
+    if jumpable' κ.code loc.toNat
     then some ⟨σ', {υ with gas := g', pc := loc.toNat}⟩
     else none
   | .jumpi => do
@@ -1896,7 +1950,7 @@ def Jinst.run (σ : Sta) (υ : Var) (κ : Con) :
     let g' ← safeSub υ.gas gHigh
     if val = 0
     then some ⟨σ', {υ with gas := g', pc := υ.pc + 1}⟩
-    else if jumpable κ.code loc.toNat
+    else if jumpable' κ.code loc.toNat
          then some ⟨σ', {υ with gas := g', pc := loc.toNat}⟩
          else none
 
