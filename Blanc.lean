@@ -29,42 +29,40 @@ def Strings.join : List String → String
   | [] => ""
   | s :: ss => s ++ "\n" ++ Strings.join ss
 
-def Nib.toB8 : Nib → B8
-  | ⦃b0, b1, b2, b3⦄ =>
-    (cond b0 (8 : UInt8) 0) |||
-    (cond b1 (4 : UInt8) 0) |||
-    (cond b2 (2 : UInt8) 0) |||
-    (cond b3 (1 : UInt8) 0)
+def Hexit.toB4 : Char → Option B8
+  | '0' => some 0x00
+  | '1' => some 0x01
+  | '2' => some 0x02
+  | '3' => some 0x03
+  | '4' => some 0x04
+  | '5' => some 0x05
+  | '6' => some 0x06
+  | '7' => some 0x07
+  | '8' => some 0x08
+  | '9' => some 0x09
+  | 'a' => some 0x0A
+  | 'b' => some 0x0B
+  | 'c' => some 0x0C
+  | 'd' => some 0x0D
+  | 'e' => some 0x0E
+  | 'f' => some 0x0F
+  | 'A' => some 0x0A
+  | 'B' => some 0x0B
+  | 'C' => some 0x0C
+  | 'D' => some 0x0D
+  | 'E' => some 0x0E
+  | 'F' => some 0x0F
+  |  _  => none
 
-def B8.toNib (x : B8) : Nib :=
-   match x.toBools with
-   | ⟨_, _, _, _, b0, b1, b2, b3⟩ => ⦃b0, b1, b2, b3⦄
-
-def Nibs.toB8s : List Nib → Option B8s
+def B4L.toB8L : B8L → Option B8L
   | [] => some []
   | [_] => none
-  | ⦃h0, h1, h2, h3⦄ :: ⦃l0, l1, l2, l3⦄ :: hs =>
-    let b : B8 :=
-      (cond h0 (128 : B8) 0) |||
-      (cond h1 (64  : B8) 0) |||
-      (cond h2 (32  : B8) 0) |||
-      (cond h3 (16  : B8) 0) |||
-      (cond l0 (8   : B8) 0) |||
-      (cond l1 (4   : B8) 0) |||
-      (cond l2 (2   : B8) 0) |||
-      (cond l3 (1   : B8) 0)
-    (b :: ·) <$> Nibs.toB8s hs
+  | x :: y :: xs =>
+    let xy := (x <<< 4) ||| y
+    (xy :: ·) <$> B4L.toB8L xs
 
-def Nibs.toBytes : List Nib → Option Bytes
-  | [] => some []
-  | [_] => none
-  | h0 :: h1 :: hs => (Ox h0 h1 :: ·) <$> Nibs.toBytes hs
-
-def Hex.toBytes (s : String) : Option Bytes :=
-  s.data.mapM Hexit.toNib >>= Nibs.toBytes
-
-def Hex.toB8s (s : String) : Option B8s :=
-  s.data.mapM Hexit.toNib >>= Nibs.toB8s
+def Hex.toB8L (s : String) : Option B8L :=
+  s.data.mapM Hexit.toB4 >>= B4L.toB8L
 
 def Option.toIO {ξ} (o : Option ξ) (msg : String) : IO ξ := do
   match o with
@@ -78,9 +76,6 @@ def Bool.toByte : Bool → Byte
   | true => Ox x0 x1
   | false => Ox x0 x0
 
-def Bytes.toBytesArray (bs : Bytes) : ByteArray := ⟨⟨List.map Byte.toB8 bs⟩⟩
-def ByteArray.toBytes (a : ByteArray) : Bytes := a.data.toList.map B8.toByte
-
 structure Adr : Type where
   (high : B32)
   (mid : B64)
@@ -89,7 +84,7 @@ structure Adr : Type where
 def Adr.toHex (a : Adr) : String :=
   a.high.toHex ++ a.mid.toHex ++ a.low.toHex
 
-def B8s.toAdr : B8s → Option Adr
+def B8L.toAdr : B8L → Option Adr
   | x0 :: x1 :: x2 :: x3 ::
     y0 :: y1 :: y2 :: y3 ::
     y4 :: y5 :: y6 :: y7 ::
@@ -102,16 +97,16 @@ def B8s.toAdr : B8s → Option Adr
     ⟩
   | _ => none
 
-def ecrecover (h : Word) (v : Bool) (r : Word) (s : Word) : Option Adr :=
-  let rsa : ByteArray := Bytes.toBytesArray <| @Bits.toBytes 64 (r ++ s)
-  let hsa : ByteArray := Bytes.toBytesArray (@Bits.toBytes 32 h)
+def ecrecover (h : B256) (v : Bool) (r : B256) (s : B256) : Option Adr :=
+  let rsa : ByteArray := ⟨Array.mk (r.toB8L ++ s.toB8L)⟩
+  let hsa : ByteArray := ⟨Array.mk h.toB8L⟩
   let ri : UInt8 := if v then 1 else 0
   match (ecrecoverFlag hsa ri rsa).toList with
   | [] => none
   | b :: pa =>
     if b = 0 ∨ pa.length ≠ 20
     then none
-    else B8s.toAdr pa --some (Bytes.toBits 20 pa)
+    else B8L.toAdr pa
 
 def readJsonFile (filename : System.FilePath) : IO Lean.Json := do
   let contents ← IO.FS.readFile filename
@@ -142,15 +137,6 @@ mutual
 end
 
 def Lean.Json.toString (j : Lean.Json) : String := Strings.join j.toStrings
-
-def Bits.ordering {n} (xs ys : Bits n) : Ordering :=
-  if xs < ys
-  then .lt
-  else if xs = ys
-       then .eq
-       else .gt
-
-instance {n} : Ord (Bits n) := ⟨Bits.ordering⟩
 
 def Adr.ordering : Adr → Adr → Ordering
   | ⟨xh, xm, xl⟩, ⟨yh, ym, yl⟩ =>
@@ -192,9 +178,9 @@ instance : Ord B256 := ⟨B256.compare⟩
 def B8.compareLows (x y : B8) : Ordering :=
   Ord.compare x.lows y.lows
 
-abbrev NTB' := Lean.RBMap (List B8) (List B8) (@List.compare _ ⟨B8.compareLows⟩)
+abbrev NTB := Lean.RBMap (List B8) (List B8) (@List.compare _ ⟨B8.compareLows⟩)
 
-abbrev Stor' := Lean.RBMap B256 B256 compare
+abbrev Stor := Lean.RBMap B256 B256 compare
 
 structure EnvData where
   (baseFee : B256)
@@ -206,10 +192,10 @@ structure EnvData where
 
 structure PreData where
   (addr : Adr)
-  (nonce : B8s)
-  (bal : B8s)
-  (stor : Stor')
-  (code : B8s)
+  (nonce : B8L)
+  (bal : B8L)
+  (stor : Stor)
+  (code : B8L)
 
 structure PostData where
   (hash : B256)
@@ -217,10 +203,10 @@ structure PostData where
   (gasIdx : Nat)
   (valueIdx : Nat)
   (logs : B256)
-  (txdata : Bytes)
+  (txdata : B8L)
 
 structure TransactionData : Type where
-  (data : List Bytes)
+  (data : List B8L)
   (gasLimit : List B256)
   (gasPrice : B256)
   (nonce : B256)
@@ -239,7 +225,7 @@ structure TestData where
 structure Acct where
   (nonce : B256)
   (bal : B256)
-  (stor : Stor')
+  (stor : Stor)
   (code : Array B8)
 
 abbrev Wor : Type := Lean.RBMap Adr Acct compare
@@ -253,7 +239,7 @@ structure Test where
   (timestamp : B256)
 
   (world  : Wor)
-  (txdata : Bytes)
+  (txdata : B8L)
 
   (nonce : B256)
   (gasPrice : B256)
@@ -261,7 +247,7 @@ structure Test where
   (sender : Adr)
   (receiver : Adr)
   (value : B256)
-  (calldata : Bytes)
+  (calldata : B8L)
 
   (hash : B256) -- ?
   (logs : B256) -- keccak hash of (RLP-encoded) log items
@@ -298,27 +284,19 @@ def encloseStrings : List String → List String
 def listToStrings {ξ} (f : ξ -> List String) (xs : List ξ) : List String :=
   encloseStrings (xs.map f).flatten
 
-def longB8sToStrings (hd : String) (bs : B8s) : List String :=
+def longB8LToStrings (hd : String) (bs : B8L) : List String :=
   match List.chunks 31 bs with
   | [] => [hd]
-  | [bs'] => [s!"{hd} : {B8s.toHex bs'}"]
-  | bss => s!"{hd} :" :: bss.map (λ bs' => pad (B8s.toHex bs'))
+  | [bs'] => [s!"{hd} : {B8L.toHex bs'}"]
+  | bss => s!"{hd} :" :: bss.map (λ bs' => pad (B8L.toHex bs'))
 
-def longBytesToStrings (hd : String) (bs : Bytes) : List String :=
-  match List.chunks 31 bs with
-  | [] => [hd]
-  | [bs'] => [s!"{hd} : {Bytes.toHex bs'}"]
-  | bss => s!"{hd} :" :: bss.map (λ bs' => pad (Bytes.toHex bs'))
-
-def txdataToStrings (tx : Bytes) : List String :=
+def txdataToStrings (tx : B8L) : List String :=
   match List.chunks 31 tx with
   | [] => ["txdata :"]
-  | [bs] => [s!"txdata : {Bytes.toHex bs}"]
-  | bss => "txdata :" :: bss.map (λ bs => pad (Bytes.toHex bs))
+  | [bs] => [s!"txdata : {B8L.toHex bs}"]
+  | bss => "txdata :" :: bss.map (λ bs => pad (B8L.toHex bs))
 
-def Word.toHex (w : Word) : String := @Bits.toHex 64 w
-
-def Stor'.toStrings (s : Stor') : List String :=
+def Stor.toStrings (s : Stor) : List String :=
   let kvs := s.toArray.toList
   let kvToStrings : B256 × B256 → List String :=
     λ nb => [s!"{B256.toHex nb.fst} : {B256.toHex nb.snd}"]
@@ -329,7 +307,7 @@ def Acct.toStrings (s : String) (a : Acct) : List String :=
     [s!"nonce : 0x{a.nonce.toHex}"],
     [s!"bal : 0x{a.bal.toHex}"],
     a.stor.toStrings,
-    longB8sToStrings "code" a.code.toList
+    longB8LToStrings "code" a.code.toList
   ]
 
 def postAcct.toStrings (p : PostData) : List String :=
@@ -353,19 +331,24 @@ def Wor.toStrings (w : Wor) : List String :=
     fun x => Acct.toStrings x.fst.toHex x.snd
   fork "world" (kvs.map kvToStrings)
 
-def NTB'.toStrings (s : NTB') : List String :=
+def B4L.toHex : B8L → String
+  | [] => ""
+  | [b] => ⟨[b.toHexit]⟩
+  | b :: bs => ⟨[b.toHexit] ++ (toHex bs).data⟩
+
+def NTB.toStrings (s : NTB) : List String :=
   let kvs := s.toArray.toList
-  let kvToStrings : B8s × B8s → List String :=
-    λ nb => [s!"{Nibs.toHex (nb.fst.map B8.toNib)} : {nb.snd.toHex}"]
-  fork "NTB'" (kvs.map kvToStrings)
+  let kvToStrings : B8L × B8L → List String :=
+    λ nb => [s!"{B4L.toHex (nb.fst.map B8.lows)} : {nb.snd.toHex}"]
+  fork "NTB" (kvs.map kvToStrings)
 
 def preAcct.toStrings (p : PreData) : List String :=
   fork "Pre Acct" [
     [s!"address : {p.addr.toHex}"],
-    [s!"nonce : {B8s.toHex p.nonce}"],
-    [s!"balance : {B8s.toHex p.bal}"],
+    [s!"nonce : {B8L.toHex p.nonce}"],
+    [s!"balance : {B8L.toHex p.bal}"],
     p.stor.toStrings,
-    [s!"code : {B8s.toHex p.code}"]
+    [s!"code : {B8L.toHex p.code}"]
   ]
 
 def postToStrings : (String × List PostData) → List String
@@ -381,7 +364,7 @@ def preToStrings (l : List PreData) : List String :=
 
 def TransactionData.toStrings (tx : TransactionData) : List String :=
   fork "transaction" [
-    fork "data" [listToStrings (λ x => [Bytes.toHex x]) tx.data],
+    fork "data" [listToStrings (λ x => [B8L.toHex x]) tx.data],
     fork "gasLimit" [listToStrings (λ x => [x.toHex]) tx.gasLimit],
     [s!"gasPrice : {tx.gasPrice.toHex}"],
     [s!"nonce :     {tx.nonce.toHex}"],
@@ -402,7 +385,7 @@ def Test.toStrings (t : Test) : List String :=
     [s!"sender : 0x{t.sender.toHex}"],
     [s!"receiver : 0x{t.receiver.toHex}"],
     [s!"value : 0x{t.value.toHex}"],
-    longBytesToStrings "calldata" t.calldata,
+    longB8LToStrings "calldata" t.calldata,
     [s!"hash : 0x{t.hash.toHex}"],
     [s!"logs : 0x{t.logs.toHex}"],
     [s!"secret : 0x{t.secret.toHex}"]
@@ -438,9 +421,6 @@ def Lean.Json.fromNum : Lean.Json → IO JsonNumber
   | .num n => return n
   | _ => IO.throw "not a string"
 
-def Lean.JsonNumber.toString' : JsonNumber → String
-  | ⟨x, y⟩ => s!"<mantissa : {x}, exponent : {y}>"
-
 def Lean.JsonNumber.toNat : JsonNumber → IO Nat
   | ⟨.ofNat x, 0⟩ => return x
   | ⟨.negSucc _, _⟩ => IO.throw "negative mantissa"
@@ -454,7 +434,7 @@ def Hex.from0x : String → IO String
   | ⟨'0' :: 'x' :: s⟩ => return ⟨s⟩
   | _ => IO.throw "prefix not 0x"
 
-def B8s.toB128Diff : B8s → Option (B128 × B8s)
+def B8L.toB128Diff : B8L → Option (B128 × B8L)
   | x0 :: x1 :: x2 :: x3 ::
     x4 :: x5 :: x6 :: x7 ::
     y0 :: y1 :: y2 :: y3 ::
@@ -466,75 +446,87 @@ def B8s.toB128Diff : B8s → Option (B128 × B8s)
       ⟩
   | _ => none
 
-def B8s.toB256 (xs : B8s) : Option B256 := do
+def List.ekatD {ξ : Type u} (n : Nat) (xs : List ξ) (x : ξ) : List ξ :=
+  (xs.reverse.takeD n x).reverse
+
+lemma List.length_ekatD {ξ : Type u} (n : Nat) (xs : List ξ) (x : ξ) :
+    (List.ekatD n xs x).length = n := by
+  apply Eq.trans (List.length_reverse _)
+  apply Eq.trans (List.takeD_length _ _ _) rfl
+
+def B8L.toB256? (xs : B8L) : Option B256 := do
   let ⟨h, xs'⟩ ← xs.toB128Diff
-  let ⟨l, _⟩ ← xs'.toB128Diff
+  let ⟨l, []⟩ ← xs'.toB128Diff | none
   some ⟨h, l⟩
 
+def Hex.toB256? (hx : String) : Option B256 := do
+  Hex.toB8L hx >>= B8L.toB256?
 
+def B8V.toB128 : Vec B8 16 → B128
+  | ⟨ [ b0, b1, b2, b3, b4, b5, b6, b7,
+        b8, b9, bA, bB, bC, bD, bE, bF ], _ ⟩ =>
+    ⟨ B8s.toB64 b0 b1 b2 b3 b4 b5 b6 b7,
+      B8s.toB64 b8 b9 bA bB bC bD bE bF ⟩
 
-def B8s.toB256pad (xs : B8s) : Option B256 :=
-  let xs' : B8s :=
-    if xs.length < 32
-    then (List.replicate (32 - xs.length) 0) ++ xs
-    else (xs.drop (xs.length - 32))
-  B8s.toB256 xs'
+def B8V.toB256 (xs : Vec B8 32) : B256 :=
+  let h : Vec B8 16 := xs.take 16
+  let l : Vec B8 16 := xs.drop 16
+  ⟨B8V.toB128 h, B8V.toB128 l⟩
 
-def Hex.toB256 (hx : String) : Option B256 := do
-  let xs ← Hex.toB8s hx
-  B8s.toB256pad xs
+def B8L.pack (xs : B8L) (n : Nat) : B8L := List.ekatD n xs 0
+
+def B8L.toB8V (xs : B8L) (n : Nat) : Vec B8 n :=
+  ⟨xs.pack n, List.length_ekatD _ _ _⟩
+
+def B8L.toB256P (xs : B8L) : B256 := B8V.toB256 (xs.toB8V 32)
 
 def Lean.Json.toPostData : Json → IO PostData
   | .obj r => do
     let hsx ← (r.find compare "hash").toIO "cannot retrieve hash bytes" >>= fromStr >>= Hex.from0x
-    let hs ← (Hex.toB256 hsx).toIO "cannot convert hash bytes to word"
+    let hs ← (Hex.toB256? hsx).toIO "cannot convert hash bytes to word"
     let lgx ← (r.find compare "logs").toIO "cannot get logs bytes" >>= fromStr >>= Hex.from0x
-    let lg ← (Hex.toBits 64 lgx).toIO "cannot convert logs bytes to word"
+    let lg ← (Hex.toB256? lgx).toIO "cannot convert logs bytes to word"
     let txx ← (r.find compare "txbytes").toIO "cannot get tx bytes" >>= fromStr >>= Hex.from0x
-    let tx ← (Hex.toBytes txx).toIO "cannot convert tx bytes to word"
+    let tx ← (Hex.toB8L txx).toIO "cannot convert tx bytes to word"
     let dgv ← (r.find compare "indexes").toIO "cannot get indexes" >>= Json.fromObj
     let d ← (dgv.find compare "data").toIO "cannot get data" >>= Json.fromNum >>= JsonNumber.toNat
     let g ← (dgv.find compare "gas").toIO "cannot get gas" >>= Json.fromNum >>= JsonNumber.toNat
     let v ← (dgv.find compare "value").toIO "cannot get value" >>= Json.fromNum >>= JsonNumber.toNat
-    return ⟨hs, d, g, v, lg.toB256, tx⟩
+    return ⟨hs, d, g, v, lg, tx⟩
   | _ => IO.throw "Json-to-PostData failed"
 
-def Lean.Json.toBytes (j : Json) : IO Bytes := do
+def Lean.Json.toB8L (j : Json) : IO B8L := do
   let x ← fromStr j >>= Hex.from0x
-  (Hex.toBytes x).toIO ""
+  (Hex.toB8L x).toIO ""
 
-def Lean.Json.toB8s (j : Json) : IO B8s := do
-  let x ← fromStr j >>= Hex.from0x
-  (Hex.toB8s x).toIO ""
-
-def Hex.toAdr (hx : String) : Option Adr := Hex.toB8s hx >>= B8s.toAdr
+def Hex.toAdr (hx : String) : Option Adr := Hex.toB8L hx >>= B8L.toAdr
 
 def Lean.Json.toAdr (j : Json) : IO Adr := do
   let x ← fromStr j >>= Hex.from0x
   (Hex.toAdr x).toIO ""
 
-def Lean.Json.toB256 (j : Json) : IO B256 := do
+def Lean.Json.toB256? (j : Json) : IO B256 := do
   let x ← fromStr j >>= Hex.from0x
-  (Hex.toB256 x).toIO ""
+  (Hex.toB256? x).toIO ""
 
-def Lean.Json.toBits (n : Nat) (j : Json) : IO (Bits (4 * n)) := do
+def Lean.Json.toB256P (j : Json) : IO B256 := do
   let x ← fromStr j >>= Hex.from0x
-  (Hex.toBits n x).toIO ""
+  let xs ← (Hex.toB8L x).toIO ""
+  return (B8L.toB256P xs)
 
 def helper (xy :(_ : String) × Lean.Json) : IO (B256 × B256) := do
   let x ← Hex.from0x xy.fst
-  let bs ← (Hex.toBytes x).toIO ""
-  let bs' ← xy.snd.toBytes
-  return ⟨(Bytes.toBits 32 bs).toB256, (Bytes.toBits 32 bs').toB256⟩
-
+  let bs ← (Hex.toB8L x).toIO ""
+  let bs' ← xy.snd.toB8L
+  return ⟨bs.toB256P, bs'.toB256P⟩
 
 def Lean.Json.toPreData (sj : (_ : String) × Json) : IO PreData := do
   let ax ← Hex.from0x sj.fst
   let a ← (Hex.toAdr ax).toIO ""
   let r ← sj.snd.fromObj
-  let b ← (r.find Ord.compare "balance").toIO "" >>= toB8s
-  let c ← (r.find Ord.compare "code").toIO "" >>= toB8s
-  let n ← (r.find Ord.compare "nonce").toIO "" >>= toB8s
+  let b ← (r.find Ord.compare "balance").toIO "" >>= toB8L
+  let c ← (r.find Ord.compare "code").toIO "" >>= toB8L
+  let n ← (r.find Ord.compare "nonce").toIO "" >>= toB8L
   let l ← (r.find Ord.compare "storage").toIO "" >>= fromObj
   let s ← mapM helper l.toArray.toList
   return ⟨a, n, b, Lean.RBMap.fromList s _, c⟩
@@ -547,15 +539,15 @@ def Lean.Json.toEnvData (j : Lean.Json) : IO EnvData := do
   let glj ← (r.find compare "currentGasLimit").toIO "No gas limit"
   let tsj ← (r.find compare "currentTimestamp").toIO "No timestamp"
   let nj  ← (r.find compare "currentNumber").toIO "No number"
-  let bf ← bfj.toB256
+  let bf ← bfj.toB256P
   let cb ← cbj.toAdr
-  let pr ← prj.toB256
-  let gl ← glj.toB256
-  let ts ← tsj.toB256
-  let n  ← nj.toB256
+  let pr ← prj.toB256?
+  let gl ← glj.toB256P
+  let ts ← tsj.toB256P
+  let n  ← nj.toB256P
   return {
     baseFee := bf
-    coinbase := cb --.toBits 20,
+    coinbase := cb
     prevRandao := pr
     blockGasLimit := gl
     timestamp := ts
@@ -573,18 +565,16 @@ def Lean.Json.toPost (j : Lean.Json) : IO (String × List PostData) := do
   let js ← mapM Lean.Json.toPostData l
   return ⟨k, js⟩
 
-def Bytes.toWord : Bytes → Word := Bytes.toBits 32
-
 def Lean.Json.toTransactionData (j : Lean.Json) : IO TransactionData := do
   let r ← j.fromObj
-  let ds ← (r.find Ord.compare "data").toIO "" >>= fromArr >>= mapM toBytes
-  let gls ← (r.find Ord.compare "gasLimit").toIO "" >>= fromArr >>= mapM toB256
-  let gp ← ((r.find Ord.compare "gasPrice").toIO "" >>= toB256)
-  let n ← ((r.find Ord.compare "nonce").toIO "" >>= toB256)
-  let sk ← (r.find Ord.compare "secretKey").toIO "" >>= toB256
+  let ds ← (r.find Ord.compare "data").toIO "" >>= fromArr >>= mapM toB8L
+  let gls ← (r.find Ord.compare "gasLimit").toIO "" >>= fromArr >>= mapM toB256P
+  let gp ← ((r.find Ord.compare "gasPrice").toIO "" >>= toB256P)
+  let n ← ((r.find Ord.compare "nonce").toIO "" >>= toB256P)
+  let sk ← (r.find Ord.compare "secretKey").toIO "" >>= toB256?
   let sd ← (r.find Ord.compare "sender").toIO "" >>= toAdr
   let rc ← (r.find Ord.compare "to").toIO "" >>= toAdr
-  let vs ← (r.find Ord.compare "value").toIO "" >>= fromArr >>= mapM toB256
+  let vs ← (r.find Ord.compare "value").toIO "" >>= fromArr >>= mapM toB256P
   return ⟨ds, gls, gp, n, sk, sd, rc, vs⟩
 
 def Lean.Json.toTestData (j : Lean.Json) : IO TestData := do
@@ -596,23 +586,20 @@ def Lean.Json.toTestData (j : Lean.Json) : IO TestData := do
   let tx ←   (r.find compare "transaction").toIO "" >>= Lean.Json.toTransactionData
   return ⟨info, env, pre, post, tx⟩
 
-
 def TestData.world (td : TestData) : Option Wor :=
   let aux : PreData → Option (Adr × Acct) :=
     fun pd => do
-      let nonce ← B8s.toB256pad pd.nonce
-      let bal ← B8s.toB256pad pd.bal
       some  ⟨
         pd.addr,
         {
-          nonce := nonce -- pd.nonce.toBits 32,
-          bal := bal --.toBits 32
+          nonce := pd.nonce.toB256P
+          bal := pd.bal.toB256P
           stor := pd.stor
           code := Array.mk pd.code
         }
     ⟩
   do let l ← List.mapM aux td.pre
-     some <| Lean.RBMap.fromList l _ --(td.pre.map aux) _
+     some <| Lean.RBMap.fromList l _
 
 def getTest (td : TestData) (p : PostData) : IO Test := do
   let cd ← (List.get? td.tx.data p.dataIdx).toIO ""
@@ -651,91 +638,62 @@ def Lean.RBMap.fromSingleton {ξ υ f} (m : RBMap ξ υ f) : Option (ξ × υ) :
 
 def Lean.RBMap.singleton {ξ υ f} (x : ξ) (y : υ) : RBMap ξ υ f := RBMap.empty.insert x y
 
-def hpAux' : B8s → (Option B8 × B8s)
-  | [] => ⟨none, []⟩
-  | n :: ns =>
-    match hpAux' ns with
-    | ⟨none, bs⟩ => ⟨some n, bs⟩
-    | ⟨some m, bs⟩ => ⟨none, ((n <<< 4) ||| m.lows) :: bs⟩
-
-def hpAux : Nibs → (Option Nib × Bytes)
+def hpAux : B8L → (Option B8 × B8L)
   | [] => ⟨none, []⟩
   | n :: ns =>
     match hpAux ns with
     | ⟨none, bs⟩ => ⟨some n, bs⟩
-    | ⟨some m, bs⟩ => ⟨none, (n ++ m) :: bs⟩
+    | ⟨some m, bs⟩ => ⟨none, ((n <<< 4) ||| m.lows) :: bs⟩
 
-def hp' (ns : B8s) (t : Bool) : B8s :=
-  match hpAux' ns with
+def hp (ns : B8L) (t : Bool) : B8L :=
+  match hpAux ns with
   | ⟨none, bs⟩ => (cond t (0x20) 0) :: bs
   | ⟨some n, bs⟩ => ((cond t 0x30 0x10) ||| n.lows) :: bs
 
-def hp (ns : Nibs) (t : Bool) : Bytes :=
-  match hpAux ns with
-  | ⟨none, bs⟩ => ⦃0, 0, t, 0, 0, 0, 0, 0⦄ :: bs
-  | ⟨some n, bs⟩ => (⦃0, 0, t, 1⦄ ++ n) :: bs
-
-def commonPrefixCore : Nibs → Nibs → Nibs
+def commonPrefixCore : B8L → B8L → B8L
   | [], _ => []
   | _, [] => []
   | n :: ns, n' :: ns' =>
     if n = n' then n :: commonPrefixCore ns ns'
     else []
-def commonPrefix (n : Nib) (ns : Nibs) : List Nibs → Option Nibs
+
+def commonPrefix (n : B8) (ns : B8L) : List B8L → Option B8L
   | [] => some (n :: ns)
   | ns' :: nss =>
     match commonPrefixCore (n :: ns) ns' with
     | [] => none
     | (n' :: ns'') => commonPrefix n' ns'' nss
 
-def commonPrefixCore' : B8s → B8s → B8s
-  | [], _ => []
-  | _, [] => []
-  | n :: ns, n' :: ns' =>
-    if n = n' then n :: commonPrefixCore' ns ns'
-    else []
-def commonPrefix' (n : B8) (ns : B8s) : List B8s → Option B8s
-  | [] => some (n :: ns)
-  | ns' :: nss =>
-    match commonPrefixCore' (n :: ns) ns' with
-    | [] => none
-    | (n' :: ns'') => commonPrefix' n' ns'' nss
+def NTB.empty : NTB := Lean.RBMap.empty
 
-def NTB'.empty : NTB' := Lean.RBMap.empty
-
-def sansPrefix : Nibs → Nibs → Option Nibs
+def sansPrefix : B8L → B8L → Option B8L
   | [], ns => some ns
   | _, [] => none
   | n :: ns, n' :: ns' =>
     if n = n' then sansPrefix ns ns' else none
-def sansPrefix' : B8s → B8s → Option B8s
-  | [], ns => some ns
-  | _, [] => none
-  | n :: ns, n' :: ns' =>
-    if n = n' then sansPrefix' ns ns' else none
 
-def insertSansPrefix' (pfx : B8s) (m : NTB') (ns : B8s) (bs : B8s) : Option NTB' := do
-  (m.insert · bs) <$> sansPrefix' pfx ns
+def insertSansPrefix (pfx : B8L) (m : NTB) (ns : B8L) (bs : B8L) : Option NTB := do
+  (m.insert · bs) <$> sansPrefix pfx ns
 
-def NTB'.factor (m : NTB') : Option (B8s × NTB') := do
+def NTB.factor (m : NTB) : Option (B8L × NTB) := do
   let ((n :: ns) :: nss) ← some (m.toList.map Prod.fst) | none
-  let pfx ← commonPrefix' n ns nss
-  let m' ← Lean.RBMap.foldM (insertSansPrefix' pfx) NTB'.empty m
+  let pfx ← commonPrefix n ns nss
+  let m' ← Lean.RBMap.foldM (insertSansPrefix pfx) NTB.empty m
   some ⟨pfx, m'⟩
 
-structure NTBs' : Type where
-  (x0 : NTB') (x1 : NTB') (x2 : NTB') (x3 : NTB')
-  (x4 : NTB') (x5 : NTB') (x6 : NTB') (x7 : NTB')
-  (x8 : NTB') (x9 : NTB') (xA : NTB') (xB : NTB')
-  (xC : NTB') (xD : NTB') (xE : NTB') (xF : NTB')
+structure NTBs : Type where
+  (x0 : NTB) (x1 : NTB) (x2 : NTB) (x3 : NTB)
+  (x4 : NTB) (x5 : NTB) (x6 : NTB) (x7 : NTB)
+  (x8 : NTB) (x9 : NTB) (xA : NTB) (xB : NTB)
+  (xC : NTB) (xD : NTB) (xE : NTB) (xF : NTB)
 
-def NTBs'.empty : NTBs' :=
+def NTBs.empty : NTBs :=
   ⟨ .empty, .empty, .empty, .empty,
     .empty, .empty, .empty, .empty,
     .empty, .empty, .empty, .empty,
     .empty, .empty, .empty, .empty ⟩
 
-def NTBs'.update (js : NTBs') (f : NTB' → NTB') (k : B8) : NTBs' :=
+def NTBs.update (js : NTBs) (f : NTB → NTB) (k : B8) : NTBs :=
   match k.toBools with
   | ⟨_, _, _, _, 0, 0, 0, 0⟩ => { js with x0 := f js.x0}
   | ⟨_, _, _, _, 0, 0, 0, 1⟩ => { js with x1 := f js.x1}
@@ -754,22 +712,22 @@ def NTBs'.update (js : NTBs') (f : NTB' → NTB') (k : B8) : NTBs' :=
   | ⟨_, _, _, _, 1, 1, 1, 0⟩ => { js with xE := f js.xE}
   | ⟨_, _, _, _, 1, 1, 1, 1⟩ => { js with xF := f js.xF}
 
-def NTBs'.insert (js : NTBs') : B8s → B8s → NTBs'
+def NTBs.insert (js : NTBs) : B8L → B8L → NTBs
   | [], _ => js
   | n :: ns, bs => js.update (Lean.RBMap.insert · ns bs) n
 
 mutual
-  def nodeComp' : Nat → NTB' → RLP'
+  def nodeComp : Nat → NTB → RLP'
     | 0, _ => .b8s []
     | k + 1, j =>
       if j.isEmpty
       then .b8s []
-      else let r := structComp' k j
+      else let r := structComp k j
            if r.encode.length < 32
            then r
-           else .b8s <| r.encode.keccak.toB8s
+           else .b8s <| r.encode.keccak.toB8L
 
-  def structComp' : Nat → NTB' → RLP'
+  def structComp : Nat → NTB → RLP'
     | 0, _ => .b8s []
     | k + 1, j =>
       if j.isEmpty
@@ -777,50 +735,52 @@ mutual
       then .b8s [] -- what devtools actually return
       else if j.isSingleton
            then match j.toList with
-                | [(k, v)] => .list [.b8s (hp' k 1), .b8s v]
+                | [(k, v)] => .list [.b8s (hp k 1), .b8s v]
                 | _ => .b8s [] -- unreachable code
            else match j.factor with
                 | none =>
-                  let js := Lean.RBMap.fold NTBs'.insert NTBs'.empty j
-                  .list [ nodeComp' k js.x0, nodeComp' k js.x1, nodeComp' k js.x2,
-                          nodeComp' k js.x3, nodeComp' k js.x4, nodeComp' k js.x5,
-                          nodeComp' k js.x6, nodeComp' k js.x7, nodeComp' k js.x8,
-                          nodeComp' k js.x9, nodeComp' k js.xA, nodeComp' k js.xB,
-                          nodeComp' k js.xC, nodeComp' k js.xD, nodeComp' k js.xE,
-                          nodeComp' k js.xF, .b8s (j.findD [] []) ]
-                | some (pfx, j') => .list [.b8s (hp' pfx 0), nodeComp' k j']
+                  let js := Lean.RBMap.fold NTBs.insert NTBs.empty j
+                  .list [ nodeComp k js.x0, nodeComp k js.x1, nodeComp k js.x2,
+                          nodeComp k js.x3, nodeComp k js.x4, nodeComp k js.x5,
+                          nodeComp k js.x6, nodeComp k js.x7, nodeComp k js.x8,
+                          nodeComp k js.x9, nodeComp k js.xA, nodeComp k js.xB,
+                          nodeComp k js.xC, nodeComp k js.xD, nodeComp k js.xE,
+                          nodeComp k js.xF, .b8s (j.findD [] []) ]
+                | some (pfx, j') => .list [.b8s (hp pfx 0), nodeComp k j']
 end
 
 def List.maxD {ξ} [Max ξ] : List ξ → ξ → ξ
   | [], y => y
   | x :: xs, y => maxD xs (max x y)
 
-def NTB'.maxKeyLength (j : NTB') : Nat := (j.toList.map (List.length ∘ Prod.fst)).maxD 0
+def NTB.maxKeyLength (j : NTB) : Nat := (j.toList.map (List.length ∘ Prod.fst)).maxD 0
 
-def collapse' (j : NTB') : RLP' := structComp' (2 * (j.maxKeyLength + 1)) j
+def collapse (j : NTB) : RLP' := structComp (2 * (j.maxKeyLength + 1)) j
 
-def trie' (j : NTB') : B256 :=
-  let bs := (collapse' j).encode
+def trie (j : NTB) : B256 :=
+  let bs := (collapse j).encode
   bs.keccak
 
-def B256.toRLP (w : B256) : RLP' := .b8s w.toB8s
-def B16.toB8s (x : B16) : List B8 := [x.highs, x.lows]
-def B32.toB8s (x : B32) : List B8 := x.highs.toB8s ++ x.lows.toB8s
+def B256.toRLP (w : B256) : RLP' := .b8s w.toB8L
+def B16.toB8L (x : B16) : List B8 := [x.highs, x.lows]
+def B32.toB8L (x : B32) : List B8 := x.highs.toB8L ++ x.lows.toB8L
 def B8.toB4s (x : B8) : List B8 := [x.highs, x.lows]
 def B16.toB4s (x : B16) : List B8 := x.highs.toB4s ++ x.lows.toB4s
 def B32.toB4s (x : B32) : List B8 := x.highs.toB4s ++ x.lows.toB4s
 def B64.toB4s (x : B64) : List B8 := x.highs.toB4s ++ x.lows.toB4s
 def B128.toB4s (x : B128) : List B8 := x.1.toB4s ++ x.2.toB4s
 def B256.toB4s (x : B256) : List B8 := x.1.toB4s ++ x.2.toB4s
-def B256.keccak (x : B256) : B256 := B8s.keccak <| x.toB8s
+def B256.keccak (x : B256) : B256 := B8L.keccak <| x.toB8L
 
-def Stor'.toNTB' (s : Stor') : NTB' :=
-  let f : NTB' → B256 → B256 → NTB' :=
+def B8L.sig (bs : B8L) : B8L := List.dropWhile (· = 0) bs
+
+def Stor.toNTB (s : Stor) : NTB :=
+  let f : NTB → B256 → B256 → NTB :=
     λ j k v =>
       j.insert
         k.keccak.toB4s
-        ((RLP.encode <| .bytes <| Bytes.sig <| v.toB8s.map B8.toByte).map Byte.toB8)
-  Lean.RBMap.fold f NTB'.empty s
+        ((RLP'.encode <| .b8s <| B8L.sig <| v.toB8L))
+  Lean.RBMap.fold f NTB.empty s
 
 def B256.zerocount (x : B256) : Nat → Nat
   | 0 => 0
@@ -828,17 +788,13 @@ def B256.zerocount (x : B256) : Nat → Nat
 
 def B256.bytecount (x : B256) : Nat := 32 - (B256.zerocount x 32)
 
-def B8s.sig (bs : B8s) : B8s := List.dropWhile (· = 0) bs
-
-def Acct.toVal (a : Acct) (w : B256) : B8s :=
+def Acct.toVal (a : Acct) (w : B256) : B8L :=
   RLP'.encode <| .list [
-    .b8s a.nonce.toB8s.sig,
-    .b8s a.bal.toB8s.sig,
+    .b8s a.nonce.toB8L.sig,
+    .b8s a.bal.toB8L.sig,
     B256.toRLP w,
-    B256.toRLP <| B8s.keccak (a.code.toList)
+    B256.toRLP <| B8L.keccak (a.code.toList)
   ]
-
-def Nib.toHex (n : Nib) : String := ⟨[n.toHexit]⟩
 
 def compareRLP : RLP → RLP' → Option Unit
   | .bytes xs, .b8s ys =>
@@ -851,31 +807,33 @@ def compareRLP : RLP → RLP' → Option Unit
     compareRLP (.list xs) (.list ys)
   | _, _ => none
 
-def Adr.toB8s (a : Adr) : B8s :=
-  a.high.toB8s ++ a.mid.toB8s ++ a.low.toB8s
+def Adr.toB8L (a : Adr) : B8L :=
+  a.high.toB8L ++ a.mid.toB8L ++ a.low.toB8L
 
-def toKeyVal' (pr : Adr × Acct) : B8s × B8s :=
+def toKeyVal (pr : Adr × Acct) : B8L × B8L :=
   let ad := pr.fst
   let ac := pr.snd
   ⟨
-    let key' := ad.toB8s.keccak.toB4s
+    let key' := ad.toB8L.keccak.toB4s
     key',
     let val' :=
       RLP'.encode <| .list [
-        .b8s (ac.nonce.toB8s.sig), --a.nonce,
-        .b8s (ac.bal.toB8s.sig), --a.bal,
-        B256.toRLP (trie' ac.stor.toNTB'),
-        B256.toRLP <| (B8s.keccak ac.code.toList)
+        .b8s (ac.nonce.toB8L.sig), --a.nonce,
+        .b8s (ac.bal.toB8L.sig), --a.bal,
+        B256.toRLP (trie ac.stor.toNTB),
+        B256.toRLP <| (B8L.keccak ac.code.toList)
       ]
     val'
   ⟩
+
+-- values --
 
 def G_txcreate : Nat := 32000
 def G_accesslistaddress : Nat := 2400
 def G_accessliststorage : Nat := 1900
 def G_initcodeword : Nat := 2
 
-def initCodeCost (cd : Bytes) : Nat :=
+def initCodeCost (cd : B8L) : Nat :=
   G_initcodeword * ((cd.length / 32) + if 32 ∣ cd.length then 0 else 1)
 
 instance {a b : Adr} : Decidable (a = b) := by
@@ -886,7 +844,6 @@ instance : Hashable (Adr × B256) := ⟨λ x => x.1.low⟩
 
 abbrev AdrSet : Type := @Std.HashSet Adr _ _
 abbrev KeySet : Type := @Std.HashSet (Adr × B256) _ _
-
 
 def Sta : Type := Array B256 × Nat
 def Mem : Type := Array B8
@@ -902,7 +859,7 @@ structure Acs where
 structure Var where
   (gas : Nat) -- μ_g
   (pc : Nat)  -- μ_pc
-  (ret : B8s) -- μ_o
+  (ret : B8L) -- μ_o
   (act : Nat) -- μ_i
   -------------------------
   (dest : List Adr)  -- A_s
@@ -911,7 +868,6 @@ structure Var where
   (ref : Nat)         -- A_r
   (logs : List RLP')  -- A_l
   (tchd : AdrSet) -- A_t
-  -- (sac : Nat)      -- A_r
 
 def Var.toAcs (υ : Var) : Acs :=
   {
@@ -942,20 +898,13 @@ structure Con where
   (cta : Adr) -- contract address (YP : a)
   (oga : Adr) -- origin address (YP : o)
   (gpr : B256) -- gas price (YP : p)
-  (cld : B8s) -- calldata (YP : d)
+  (cld : B8L) -- calldata (YP : d)
   (cla : Adr) -- caller Addr (YP : s)
   (clv : B256) -- callvalue (YP : v)
   (code : Array B8) -- contract code  (YP : b)
   (blk : Block) -- block (YP : H)
   (exd : Nat) -- execution depth (YP : e)
   (wup : Bool) -- World-State update permission (YP : w)
-
-structure State' where
-  (wor : Wor)
-  (sta : Sta)
-  (mem : Mem)
-  (var : Var)
-  (con : Con)
 
 -- YP says that this type should also have a field for
 -- execution environment, but it was omitted since the
@@ -964,7 +913,7 @@ structure Ξ.Result where
   (wor : Option Wor)
   (gas : Nat)
   (acs : Acs)
-  (ret : Option B8s)
+  (ret : Option B8L)
 
 inductive Inst : Type
   | last : Linst → Inst
@@ -1100,7 +1049,7 @@ def B8.toRinst : B8 → Option Rinst
   | 0x8B => some (.dup 11)
   | 0x8C => some (.dup 12)
   | 0x8D => some (.dup 13)
-  | 0x8E => some (.dup 15)
+  | 0x8E => some (.dup 14)
   | 0x8F => some (.dup 15)
   | 0x90 => some (.swap 0)
   | 0x91 => some (.swap 1)
@@ -1151,7 +1100,7 @@ def B8.toLinst : B8 → Option Linst
 inductive Ninst' : Type
   | reg : Rinst → Ninst'
   | exec : Xinst → Ninst'
-  | push : ∀ bs : B8s, bs.length ≤ 32 → Ninst'
+  | push : ∀ bs : B8L, bs.length ≤ 32 → Ninst'
 
 inductive Inst' : Type
   | last : Linst → Inst'
@@ -1185,7 +1134,6 @@ def g_expbyte : Nat := 50
 def safeSub {ξ} [Sub ξ] [LE ξ] [@DecidableRel ξ (· ≤ ·)] (x y : ξ) : Option ξ :=
   if y ≤ x then some (x - y) else none
 
--- def State'.deductGas (s : State') (c : Nat) : Option Nat := safeSub υ.gas c
 def deductGas (υ : Var) (c : Nat) : Option Nat := safeSub υ.gas c
 
 def Acct.Empty (a : Acct) : Prop :=
@@ -1222,26 +1170,26 @@ def cAAccess (x : Adr) (a : AdrSet) : Nat :=
 
 def except64th (n : Nat) : Nat := n - (n / 64)
 
-def cExtra (ω : Wor) (υ : Var) (t : Adr) (v : Word) : Nat :=
+def cExtra (ω : Wor) (υ : Var) (t : Adr) (v : B256) : Nat :=
   let cAcc : Nat := cAAccess t υ.adrs
   let cNew : Nat := if (Dead ω t ∧ v ≠ 0) then gNewAccount else 0
   let cXfer : Nat := if v ≠ 0 then gCallValue else 0
   (cAcc + cXfer + cNew)
 
 def cGasCap (ω : Wor) (υ : Var) (g : Nat)
-    (memCost : Nat) (t : Adr) (v : Word) : Nat :=
+    (memCost : Nat) (t : Adr) (v : B256) : Nat :=
   if (memCost + cExtra ω υ t v) ≤ υ.gas
   then min (except64th (υ.gas - (memCost + cExtra ω υ t v))) g
   else g
 
 def cCallGas (ω : Wor) (υ : Var)
-   (g : Nat) (memCost : Nat) (t : Adr) (v : Word) : Nat :=
+   (g : Nat) (memCost : Nat) (t : Adr) (v : B256) : Nat :=
   if v ≠ 0
   then cGasCap ω υ g memCost t v + gCallStipend
   else cGasCap ω υ g memCost t v
 
 def cCall (ω : Wor) (υ : Var)
-    (g : Nat) (memCost : Nat) (t : Adr) (v : Word) : Nat :=
+    (g : Nat) (memCost : Nat) (t : Adr) (v : B256) : Nat :=
   cGasCap ω υ g memCost t v + cExtra ω υ t v
 
 structure theta.Result : Type where
@@ -1249,7 +1197,7 @@ structure theta.Result : Type where
   (gas : Nat)
   (acs : Acs)
   (status : Bool)
-  (ret : B8s)
+  (ret : B8L)
 
 def Wor.code (w : Wor) (a : Adr) : Array B8 :=
   match w.find? a with
@@ -1279,10 +1227,10 @@ def θ.prep
   (p : Nat)
   (v : B256)
   (v_app : B256)
-  (d : B8s)
+  (d : B8L)
   (e : Nat)
   (w : Bool) :
-  State' :=
+  Wor × Sta × Mem × Var × Con :=
   let ω'₁ : Wor :=
     match ω.find? r with
     | none =>
@@ -1302,28 +1250,29 @@ def θ.prep
     cta := r, oga := o, gpr := p.toB256, cld := d
     cla := s, clv := v_app, code := cd, blk := H, exd := e, wup := w
   }
-  --let υ : Var := {gas := g, pc := 0, mem := #[], ret := [], act := 0}
   let υ : Var := {
     gas := g, pc := 0, ret := [], act := 0
     dest := A.dest, adrs := A.adrs, keys := A.keys,
     ref := A.ref, logs := A.logs, tchd := A.tchd
   }
-  ⟨ω₁, .init, #[], υ, κ⟩ -- .init, A, I⟩
+  ⟨ω₁, .init, #[], υ, κ⟩
 
 def θ.wrap (wor : Wor) (acs : Acs) (Ξr : Ξ.Result) : theta.Result :=
   let ω_stars : Option Wor := Ξr.wor
   let g_stars : Nat := Ξr.gas
   let A_stars : Acs := Ξr.acs
-  let o : Option B8s := Ξr.ret
-
+  let o : Option B8L := Ξr.ret
   let ω' : Wor := ω_stars.getD wor
-  let g' : Nat := if ω_stars.isNone ∧ o.isNone then (dbg_trace "zero trigger"; 0) else g_stars
+  let g' : Nat :=
+    if ω_stars.isNone ∧ o.isNone
+    then (dbg_trace "EXCEPTIONAL HALTING STATE"; 0)
+    else g_stars
   let A' : Acs := if ω_stars.isNone then acs else A_stars
   let z : Bool := if ω_stars.isNone then 0 else 1
 
-  -- o' is not from YP, but necessary to cast from 'Option B8s to 'B8s'
+  -- o' is not from YP, but necessary to cast from 'Option B8L to 'B8L'
   -- (YP is a bit sloppy with types here)
-  let o' : B8s := o.getD []
+  let o' : B8L := o.getD []
   ⟨ω', g', A', z, o'⟩
 
 def gColdSLoad : Nat := 2100
@@ -1331,22 +1280,19 @@ def gSSet : Nat := 20000
 def gSReset : Nat := 2900
 def rSClear : Nat := 4800
 
-def Bits.min {n} : Bits n → Bits n → Bits n
-  | xs, ys => if xs ≤ ys then xs else ys
-instance {n} : Min (Bits n) := ⟨.min⟩
 
 def B256.min : B256 → B256 → B256
   | xs, ys => if xs ≤ ys then xs else ys
 instance : Min B256 := ⟨.min⟩
 
-def dataGas (cd : Bytes) : Nat :=
-  let aux : Byte → Nat := fun b => if b = 0 then 4 else 16
+def dataGas (cd : B8L) : Nat :=
+  let aux : B8 → Nat := fun b => if b = 0 then 4 else 16
   (cd.map aux).sum
 
 def gTransaction : Nat := 21000
 
-def intrinsicGas (Rcv : Option Adr) (cd : Bytes) (Ta : List (Adr × List Word)) : Nat :=
-  let aux : (Adr × List Word) → Nat :=
+def intrinsicGas (Rcv : Option Adr) (cd : B8L) (Ta : List (Adr × List B256)) : Nat :=
+  let aux : (Adr × List B256) → Nat :=
     fun | ⟨_, l⟩ => G_accesslistaddress + (G_accessliststorage * l.length)
   dataGas cd +
   Rcv.rec (G_txcreate + initCodeCost cd) (fun _ => 0) +
@@ -1418,7 +1364,7 @@ def A_star (H : Block) (ST : Adr) (Tt : Option Adr) (TA : AccessList) : Acs :=
     keys := TA.collect
   }
 
-def Stor'.insert' (s : Stor') (k v : B256) : Stor' :=
+def Stor.insertNonzero (s : Stor) (k v : B256) : Stor :=
   if v = 0 then s.erase k else s.insert k v
 
 def Sta.pop1 : Sta → Option (B256 × Sta)
@@ -1546,7 +1492,7 @@ def sstoreStep (w₀ : Wor) (ω : Wor) (σ : Sta) (υ : Var) (κ : Con) :
          else rDirtyClear + rDirtyReset
   let g' ← safeSub υ.gas c
   let ref' ← (Int.ofNat υ.ref + r).toNat'
-  let a' : Acct := {a with stor := a.stor.insert' x v'}
+  let a' : Acct := {a with stor := a.stor.insertNonzero x v'}
 
   some
     ⟨
@@ -1560,13 +1506,6 @@ def sstoreStep (w₀ : Wor) (ω : Wor) (σ : Sta) (υ : Var) (κ : Con) :
         ref := ref'
       }
     ⟩
-
-def Option.trace {ξ} [ToString ξ] : Option ξ → Option ξ
-  | none => none
-  | some x => dbg_trace x; some x
-
-
-
 
 def List.swapCore {ξ} (x : ξ) : Nat → List ξ → Option (ξ × List ξ)
   | 0, [] => none
@@ -1586,22 +1525,6 @@ def List.swap {ξ} (n : Nat) : List ξ → Option (List ξ)
 
 def gBase : Nat := 2
 
-def Bits.replicate : ∀ n : Nat, Bool → Bits n
-  | 0, _ => ⦃⦄
-  | n + 1, b => b +> Bits.replicate n b
-
-def Bits.takeD : ∀ {m} n, Bits m → Bool → Bits n
-  | _, 0, _, _ => ⦃⦄
-  | 0, n + 1, ⦃⦄, y => y +> Bits.takeD n ⦃⦄ y
-  | _ + 1, n + 1, x +> xs, y => x +> Bits.takeD n xs y
-
-def Bits.shlCore {m n : Nat} : Nat → Bits m → Bits n
-  | 0, xs => Bits.takeD n xs 0
-  | _, ⦃⦄ => Bits.replicate n 0
-  | k + 1, _ +> xs => @Bits.shlCore _ n k xs
-
-def Bits.shl' (m : Nat) {n} (xs : Bits n) : Bits n := @Bits.shlCore n n m xs
-
 def memExp (s : Nat) (f l : B256) : Nat :=
   if l = 0
   then s
@@ -1618,8 +1541,6 @@ def List.put {ξ : Type u} : List ξ → Nat → ξ → ξ → List ξ
 
 def List.puts {ξ : Type u} (xs : List ξ) (n : Nat) (ys : List ξ) (z : ξ) : List ξ :=
   xs.takeD n z ++ ys ++ xs.drop (n + ys.length)
-
--- def Mem : Type := Array Byte
 
 def Array.writeD {ξ : Type u} (xs : Array ξ) (n : ℕ) : List ξ → Array ξ
   | [] => xs
@@ -1649,7 +1570,7 @@ def cMem (a : Nat) := gMemory * a + ((a ^ 2) / 512)
 
 def nextState (υ : Var) (cost : Nat)
   (act' : Nat := υ.act)
-  (ret' : B8s := υ.ret)
+  (ret' : B8L := υ.ret)
   (adrs' : AdrSet := υ.adrs)
   (logs' : List RLP' := υ.logs)
   (keys' : KeySet := υ.keys) : Option Var := do
@@ -1738,7 +1659,6 @@ def B256.toAdr : B256 → Adr
 def Adr.toB256 (a : Adr) : B256 :=
   ⟨⟨0, a.high.toUInt64⟩ , ⟨a.mid, a.low⟩ ⟩
 
-
 def Rinst.run (ω : Wor) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) :
     Rinst → Option (Sta × Mem × Var)
   | .address => pushItem σ μ υ κ.cta.toB256 gBase
@@ -1754,17 +1674,17 @@ def Rinst.run (ω : Wor) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) :
   | .callvalue => pushItem σ μ υ κ.clv gBase
   | .calldataload => do
     let (x, σ') ← σ.pop1
-    let cd  ← B8s.toB256 (κ.cld.sliceD x.toNat 32 0)
+    let cd  ← B8L.toB256? (κ.cld.sliceD x.toNat 32 0)
     let σ'' ← σ'.push1 cd
     let υ' ← nextState υ gVerylow
     some ⟨σ'', μ, υ'⟩
   | .calldatasize => pushItem σ μ υ κ.cld.length.toB256 gBase
   | .calldatacopy => do
     let (x, y, z, σ') ← σ.pop3
-    let bs : B8s := κ.cld.sliceD y.toBits.toNat z.toBits.toNat 0
+    let bs : B8L := κ.cld.sliceD y.toNat z.toNat 0
     let υ' ←
       nextState υ
-        (gVerylow + (gCopy * ceilDiv z.toBits.toNat 32))
+        (gVerylow + (gCopy * ceilDiv z.toNat 32))
         (act' := memExp υ.act x z)
     some ⟨σ', Array.writeX μ x.toNat bs 0, υ'⟩
   | .codesize => pushItem σ μ υ κ.code.size.toB256 gBase
@@ -1788,45 +1708,7 @@ def Rinst.run (ω : Wor) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) :
     let υ' ← nextState υ cost (act' := memExp υ.act y w)
     let bs := κ.code.sliceD z.toNat w.toNat (Linst.toB8 .stop)
     some ⟨σ', Array.writeX μ y.toNat bs 0, υ'⟩
-  -- | .retdatasize => pushItem σ μ υ υ.ret.length.toB256 gBase
-  -- | .retdatacopy => do
-  --   let (x, y, z, σ') ← σ.pop3
-  --   let bs ← υ.ret.slice? y.toNat z.toNat
-  --   let υ' ← nextState υ
-  --     (gVerylow + (gCopy * (ceilDiv z.toNat 32)))
-  --     (act' := memExp υ.act x z)
-  --   some ⟨σ', Array.writeX μ x.toNat bs 0, υ'⟩
-  -- | .extcodehash => do
-  --   let (x, σ') ← σ.pop1
-  --   let a := x.toAdr
-  --   let adrs' := υ.adrs.insert a
-  --   let hash : B256 :=
-  --     if (Dead ω a)
-  --     then 0
-  --     else let cd := (ω.get a).code
-  --          B8a.keccak 0 cd.size cd
-  --   let σ'' ← σ'.push1 hash
-  --   let υ' ← nextState υ (cAAccess a υ.adrs) (adrs' := adrs')
-  --   some ⟨σ'', μ, υ'⟩
-  -- | .selfbalance => pushItem σ μ υ (ω.get κ.cta).bal gLow
-  -- | .chainid => pushItem σ μ υ κ.blk.chainId gBase
-  -- | .number => pushItem σ μ υ κ.blk.number gBase
-  -- | .timestamp => pushItem σ μ υ κ.blk.timestamp gBase
-  -- | .gaslimit => pushItem σ μ υ κ.blk.gasLimit gBase
-  -- | .prevrandao => pushItem σ μ υ κ.blk.prevRandao gBase
-  -- | .coinbase => pushItem σ μ υ κ.blk.ben.toB256 gBase
-  -- | .msize => pushItem σ μ υ (υ.act * 32).toB256 gBase
-  -- -- | .retdatasize => do
-  -- --   let σ' ← σ.push1 (μ.ret.length.toB256)
-  -- --   nextState μ σ' α (cost := gBase)
   | .retdatasize => pushItem σ μ υ υ.ret.length.toB256 gBase
-  -- | .retdatacopy => do
-  --   let (x, y, z, σ') ← σ.pop3
-  --   let bs ← μ.ret.slice? y.toNat z.toNat
-  --   nextState μ σ' α
-  --     (cost := gVerylow + (gCopy * (ceilDiv z.toNat 32)))
-  --     (act' := memExp υ.act x z)
-  --     (mem' := Array.writeX μ.mem x.toNat bs 0)
   | .retdatacopy => do
     let (x, y, z, σ') ← σ.pop3
     let bs ← υ.ret.slice? y.toNat z.toNat
@@ -1834,20 +1716,6 @@ def Rinst.run (ω : Wor) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) :
     checkRemGas υ (gVerylow + (gCopy * (ceilDiv z.toNat 32))) act'
     let υ' ← nextState υ (gVerylow + (gCopy * (ceilDiv z.toNat 32))) (act' := act')
     some ⟨σ', Array.writeX μ x.toNat bs 0, υ'⟩
-
-  -- | .extcodehash => do
-  --   let (x, σ') ← σ.pop1
-  --   let a := x.toAdr
-  --   let adrs' : AdrSet := υ.adrs.insert a
-  --   let hash : B256 :=
-  --     if (Dead ω a)
-  --     then 0
-  --     else let cd := (ω.get a).code
-  --          B8a.keccak 0 cd.size cd
-  --   let σ'' ← σ'.push1 hash
-  --   nextState μ σ'' α
-  --     (cost := cAAccess a υ.adrs)
-  --     (adrs' := adrs')
   | .extcodehash => do
     let (x, σ') ← σ.pop1
     let a := x.toAdr
@@ -1860,111 +1728,36 @@ def Rinst.run (ω : Wor) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) :
     let σ'' ← σ'.push1 hash
     let υ' ← nextState υ (cAAccess a υ.adrs) (adrs' := adrs')
     some ⟨σ'', μ, υ'⟩
-
-  -- | .selfbalance => do
-  --   let bal := (ω.get κ.cta).bal
-  --   let σ' ← σ.push1 (bal)
-  --   nextState μ σ' α (cost := gLow)
   | .selfbalance => pushItem σ μ υ (ω.get κ.cta).bal gLow
-
-  -- | .chainid => do
-  --   let σ' ← σ.push1 (κ.blk.chainId)
-  --   nextState μ σ' α (cost := gBase)
   | .chainid => pushItem σ μ υ κ.blk.chainId gBase
-  -- | .number => do
-  --   let σ' ← σ.push1 (κ.blk.number)
-  --   nextState μ σ' α (cost := gBase)
   | .number => pushItem σ μ υ κ.blk.number gBase
-
-  -- | .timestamp => do
-  --   let σ' ← σ.push1 (κ.blk.timestamp)
-  --   nextState μ σ' α (cost := gBase)
   | .timestamp => pushItem σ μ υ κ.blk.timestamp gBase
-
-  -- | .gaslimit => do
-  --   let σ' ← σ.push1 (κ.blk.gasLimit)
-  --   nextState μ σ' α (cost := gBase)
   | .gaslimit => pushItem σ μ υ κ.blk.gasLimit gBase
-
-  -- | .prevrandao => do
-  --   let σ' ← σ.push1 (κ.blk.prevRandao)
-  --   nextState μ σ' α (cost := gBase)
   | .prevrandao => pushItem σ μ υ κ.blk.prevRandao gBase
-
-  -- | .coinbase => do
-  --   let σ' ← σ.push1 (κ.blk.ben.toB256)
-  --   nextState μ σ' α (cost := gBase)
   | .coinbase => pushItem σ μ υ κ.blk.ben.toB256 gBase
-
-  -- | .msize => do
-  --   let σ' ← σ.push1 ((υ.act * 32).toB256)
-  --   nextState μ σ' α (cost := gBase)
   | .msize => pushItem σ μ υ (υ.act * 32).toB256 gBase
-
-  -- | .mload => do
-  --   let (x, σ') ← σ.pop1
-  --   let bs : B8s := μ.mem.sliceD x.toNat 32 0
-  --   let y : B256 ← B8s.toB256 bs
-  --   let σ'' ← σ'.push1 y
-  --   nextState μ σ'' α (cost := gVerylow)
-  --     (act' := memExp υ.act x (32 : Nat).toB256)
   | .mload => do
     let (x, σ') ← σ.pop1
-    let bs : B8s := μ.sliceD x.toNat 32 0
-    let y : B256 ← B8s.toB256 bs
+    let bs : B8L := μ.sliceD x.toNat 32 0
+    let y : B256 ← B8L.toB256? bs
     let act' := memExp υ.act x (32 : Nat).toB256
     checkRemGas υ gVerylow act'
     let σ'' ← σ'.push1 y
     let υ' ← nextState υ gVerylow (act' := act')
     some ⟨σ'', μ, υ'⟩
-
-  -- | .mstore => do
-  --   let (x, y, σ') ← σ.pop2
-  --   let act' := memExp υ.act x (32 : Nat).toB256
-  --   let memCost : Nat := cMem act' - cMem υ.act
-  --   let g' ← deductGas μ (gVerylow + memCost)
-  --   let m' : Machine :=
-  --     {
-  --       μ with
-  --       gas := g',
-  --       mem := Array.writeX μ.mem x.toNat y.toB8s 0,
-  --       pc := υ.pc + 1
-  --       act := act'
-  --     }
-  --   some ⟨m', σ', α⟩
   | .mstore => do
     let (x, y, σ') ← σ.pop2
     let act' := memExp υ.act x (32 : Nat).toB256
     checkRemGas υ gVerylow act'
     let υ' ← nextState υ gVerylow (act' := act')
-    some ⟨σ', Array.writeX μ x.toNat y.toB8s 0, υ'⟩
-
-  -- | .mstore8 => do
-  --   let (x, y, σ') ← σ.pop2
-  --   let act' := memExp υ.act x 1
-  --   let memCost : Nat := cMem act' - cMem υ.act
-  --   let g' ← deductGas μ (gVerylow + memCost)
-  --   let m' : Machine :=
-  --     {
-  --       μ with
-  --       gas := g',
-  --       mem := Array.writeX μ.mem x.toNat [y.2.2.toUInt8] 0,
-  --       pc := υ.pc + 1
-  --       act := act'
-  --     }
-  --   some ⟨m', σ', α⟩
+    some ⟨σ', Array.writeX μ x.toNat y.toB8L 0, υ'⟩
   | .mstore8 => do
     let (x, y, σ') ← σ.pop2
     let act' := memExp υ.act x 1
     checkRemGas υ gVerylow act'
     let υ' ← nextState υ gVerylow (act' := act')
     some ⟨σ', Array.writeX μ x.toNat [y.2.2.toUInt8] 0, υ'⟩
-
-  -- | .gas => do
-  --   let g' ← deductGas μ gBase
-  --   let σ' ← σ.push1 (g'.toB256)
-  --   nextState μ σ' α (cost := gBase)
-  | .gas => pushItem σ μ υ υ.gas.toB256 gBase
+  | .gas => pushItem σ μ υ (υ.gas - gBase).toB256 gBase
   | .eq => applyBinary σ μ υ .eq_check gVerylow
   | .lt => applyBinary σ μ υ .lt_check gVerylow
   | .gt => applyBinary σ μ υ .gt_check gVerylow
@@ -1988,46 +1781,14 @@ def Rinst.run (ω : Wor) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) :
 
   -- | .byte => do
   --   let (x, y, σ') ← σ.pop2
-  --   let b : B8 := (List.getD y.toB8s x.toNat 0)
+  --   let b : B8 := (List.getD y.toB8L x.toNat 0)
   --   let σ'' ← σ'.push1 (b.toB256)
   --   nextState μ σ'' α (cost := gVerylow)
   | .byte =>
-    applyBinary σ μ υ (λ x y => (List.getD y.toB8s x.toNat 0).toB256) gVerylow
-
--- | .shl => do
-  --   let (x, y, σ') ← σ.pop2
-  --   let g' ← deductGas μ gVerylow
-  --   let z : B256 := y <<< x.toNat
-  --   let σ'' ← σ'.push1 (z)
-  --   nextState μ σ'' α (cost := gVerylow)
+    applyBinary σ μ υ (λ x y => (List.getD y.toB8L x.toNat 0).toB256) gVerylow
   | .shl => applyBinary σ μ υ (fun x y => y <<< x.toNat) gVerylow
-
-  -- | .shr => do
-  --   let (x, y, σ') ← σ.pop2
-  --   let g' ← deductGas μ gVerylow
-  --   let z : B256 := y >>> x.toNat
-  --   let σ'' ← σ'.push1 (z)
-  --   nextState μ σ'' α (cost := gVerylow)
   | .shr => applyBinary σ μ υ (fun x y => y >>> x.toNat) gVerylow
-
-  -- | .sar => do
-  --   let (x, y, σ') ← σ.pop2
-  --   let g' ← deductGas μ gVerylow
-  --   let z : B256 := B256.sar x.toNat y
-  --   let σ'' ← σ'.push1 (z)
-  --   nextState μ σ'' α (cost := gVerylow)
   | .sar => applyBinary σ μ υ (fun x y => B256.sar x.toNat y) gVerylow
-
-  -- | .kec => do
-  --   let (x, y, σ') ← σ.pop2
-  --   let act' := memExp υ.act x y
-  --   let cost := gKeccak256 + (gKeccak256Word * (ceilDiv y.toNat 32))
-  --   let memCost : Nat := cMem act' - cMem υ.act
-  --   let _ ← deductGas μ (cost + memCost)
-  --   let σ'' ← σ'.push1 <| B8a.keccak x.toNat y.toNat μ.mem
-  --   nextState μ σ'' α
-  --     (cost := gKeccak256 + (gKeccak256Word * (ceilDiv y.toNat 32)))
-  --     (act' := act')
   | .kec => do
     let (x, y, σ') ← σ.pop2
     let act' := memExp υ.act x y
@@ -2036,103 +1797,29 @@ def Rinst.run (ω : Wor) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) :
     let σ'' ← σ'.push1 <| B8a.keccak x.toNat y.toNat μ
     let υ' ← nextState υ cost (act' := act')
     some ⟨σ'', μ, υ'⟩
-
-  -- | .sub => do
-  --   let (x, y, σ') ← σ.pop2
-  --   let σ'' ← σ'.push1 (x - y)
-  --   nextState μ σ'' α gVerylow
   | .sub => applyBinary σ μ υ (· - ·) gVerylow
-
-  -- | .mul => do
-  --   let (x, y, σ') ← σ.pop2
-  --   let σ'' ← σ'.push1 (x * y)
-  --   nextState μ σ'' α gLow
   | .mul => applyBinary σ μ υ (· * ·) gLow
-
-  -- | .exp => do
-  --   let (x, y, σ') ← σ.pop2
-  --   let x' : B256 := x
-  --   let y' : B256 := y
-  --   let σ'' ← σ'.push1 (B256.bexp x' y')
-  --   nextState μ σ'' α
-  --     (cost := g_exp + (g_expbyte * y.bytecount))
   | .exp => do
     let (x, y, σ') ← σ.pop2
     let cost := g_exp + (g_expbyte * y.bytecount)
     let σ'' ← σ'.push1 (B256.bexp x y)
     let υ' ← nextState υ cost
     some ⟨σ'', μ, υ'⟩
-
-  -- | .div => do
-  --   let (x, y, σ') ← σ.pop2
-  --   let z : B256 := (x / y)
-  --   let σ'' ← σ'.push1 (z)
-  --   nextState μ σ'' α (cost := gLow)
   | .div => applyBinary σ μ υ (· / ·) gLow
-
-  -- | .sdiv => do
-  --   let (x, y, σ') ← σ.pop2
-  --   let σ'' ← σ'.push1 (.sdiv x y)
-  --   nextState μ σ'' α gLow
   | .sdiv => applyBinary σ μ υ B256.sdiv gLow
-
-  -- | .mod => do
-  --   let (x, y, σ') ← σ.pop2
-  --   let σ'' ← σ'.push1 (x % y)
-  --   nextState μ σ'' α gLow
   | .mod => applyBinary σ μ υ (· % ·) gLow
-
-  -- | .smod => do
-  --   let (x, y, σ') ← σ.pop2
-  --   let σ'' ← σ'.push1 (.smod x y)
-  --   nextState μ σ'' α gLow
   | .smod => applyBinary σ μ υ B256.smod gLow
-
-  -- | .add => do
-  --   let (x, y, σ') ← σ.pop2
-  --   let σ'' ← σ'.push1 ((x + y))
-  --   nextState μ σ'' α (cost := gVerylow)
   | .add => applyBinary σ μ υ (· + ·) gVerylow
-
-  -- | .addmod => do
-  --   let (x, y, z, σ') ← σ.pop3
-  --   let σ'' ← σ'.push1 (.addmod x y z)
-  --   nextState μ σ'' α (cost := g_mid)
   | .addmod => applyTernary σ μ υ B256.addmod g_mid
-
-  -- | .mulmod => do
-  --   let (x, y, z, σ') ← σ.pop3
-  --   let σ'' ← σ'.push1 (.mulmod x y z)
-  --   nextState μ σ'' α (cost := g_mid)
   | .mulmod => applyTernary σ μ υ B256.mulmod g_mid
--- | .swap n => do
-  --   let σ' ← σ.swap n
-  --   nextState μ σ' α gVerylow
   | .swap n => do
     let σ' ← σ.swap n
     let υ' ← nextState υ gVerylow
     some ⟨σ', μ, υ'⟩
-
-  -- | .dup n => do
-  --   let σ' ← σ.dup n
-  --   nextState μ σ' α gVerylow
   | .dup n => do
     let σ' ← σ.dup n
     let υ' ← nextState υ gVerylow
     some ⟨σ', μ, υ'⟩
-
-  -- | .sload => do
-  --   let (x, σ') ← σ.pop1
-  --   let c : Nat := if α.keys.contains ⟨κ.cta, x⟩ then gWarmAccess else gColdSLoad
-  --   let g' ← safeSub υ.gas c
-  --   let ac ← ω.find? κ.cta
-  --   let y := (ac.stor.find? x).getD 0
-  --   let σ'' ← σ'.push1 y
-  --   some ⟨
-  --     {μ with gas := g', pc := υ.pc + 1},
-  --     σ'',
-  --     {α with keys := α.keys.insert ⟨κ.cta, x⟩}
-  --   ⟩
   | .sload => do
     let (x, σ') ← σ.pop1
     let cost : Nat := if υ.keys.contains ⟨κ.cta, x⟩ then gWarmAccess else gColdSLoad
@@ -2141,300 +1828,23 @@ def Rinst.run (ω : Wor) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) :
     let σ'' ← σ'.push1 y
     let υ' ← nextState υ cost (keys' := υ.keys.insert ⟨κ.cta, x⟩)
     some ⟨σ'', μ, υ'⟩
-
-  -- | .pc => do
-  --   let σ' ← σ.push1 (υ.pc.toB256)
-  --   nextState μ σ' α (cost := gBase)
   | .pc => pushItem σ μ υ υ.pc.toB256 gBase
-
-  -- | .log n => do
-  --   let (x, y, σ') ← σ.pop2
-  --   let cost := gLog + (gLogdata * y.toNat) + (n * gLogtopic)
-  --   let act' := memExp υ.act x y
-  --   let memCost : Nat := cMem act' - cMem υ.act
-  --   let _ ← deductGas μ (cost + memCost)
-  --   let ⟨xs, σ''⟩ ← σ'.popN n
-  --   let bs : B8s := (μ.mem.sliceD x.toNat y.toNat 0)
-  --   let log : RLP' :=
-  --     .list [
-  --       .b8s ((@Bits.toBytes 20 κ.cta).map Byte.toB8),
-  --       .list (xs.map B256.toRLP),
-  --       .b8s bs
-  --     ]
-  --   nextState μ σ'' α
-  --     (cost := cost)
-  --     (act' := act')
-  --     (logs' := log :: α.logs)
   | .log n => do
     let (x, y, σ') ← σ.pop2
     let act' := memExp υ.act x y
     let cost := gLog + (gLogdata * y.toNat) + (n * gLogtopic)
     checkRemGas υ cost act'
     let ⟨xs, σ''⟩ ← σ'.popN n
-    let bs : B8s := μ.sliceD x.toNat y.toNat 0
+    let bs : B8L := μ.sliceD x.toNat y.toNat 0
     let log : RLP' :=
       .list [
-        .b8s κ.cta.toB8s,
+        .b8s κ.cta.toB8L,
         .list (xs.map B256.toRLP),
         .b8s bs
       ]
     let υ' ← nextState υ cost (act' := act') (logs' := log :: υ.logs)
     some ⟨σ'', μ, υ'⟩
   | i => dbg_trace s!"UNIMPLEMENTED REGULAR INSTRUCTION EXECUTION : {i.toString}"; none
-
-  /-h
-  | .retdatasize => do
-    let σ' ← σ.push1 (μ.ret.length.toB256)
-    nextState μ σ' α (cost := gBase)
-  | .retdatacopy => do
-    let (x, y, z, σ') ← σ.pop3
-    let bs ← μ.ret.slice? y.toNat z.toNat
-    nextState μ σ' α
-      (cost := gVerylow + (gCopy * (ceilDiv z.toNat 32)))
-      (act' := memExp υ.act x z)
-      (mem' := Array.writeX μ.mem x.toNat bs 0)
-  | .extcodehash => do
-    let (x, σ') ← σ.pop1
-    let a := x.toAdr
-    let adrs' : AdrSet := υ.adrs.insert a
-    let hash : B256 :=
-      if (Dead ω a)
-      then 0
-      else let cd := (ω.get a).code
-           B8a.keccak 0 cd.size cd
-    let σ'' ← σ'.push1 hash
-    nextState μ σ'' α
-      (cost := cAAccess a υ.adrs)
-      (adrs' := adrs')
-  | .selfbalance => do
-    let bal := (ω.get κ.cta).bal
-    let σ' ← σ.push1 (bal)
-    nextState μ σ' α (cost := gLow)
-  | .chainid => do
-    let σ' ← σ.push1 (κ.blk.chainId)
-    nextState μ σ' α (cost := gBase)
-  | .number => do
-    let σ' ← σ.push1 (κ.blk.number)
-    nextState μ σ' α (cost := gBase)
-  | .timestamp => do
-    let σ' ← σ.push1 (κ.blk.timestamp)
-    nextState μ σ' α (cost := gBase)
-  | .gaslimit => do
-    let σ' ← σ.push1 (κ.blk.gasLimit)
-    nextState μ σ' α (cost := gBase)
-  | .prevrandao => do
-    let σ' ← σ.push1 (κ.blk.prevRandao)
-    nextState μ σ' α (cost := gBase)
-  | .coinbase => do
-    let σ' ← σ.push1 (κ.blk.ben.toB256)
-    nextState μ σ' α (cost := gBase)
-  | .msize => do
-    let σ' ← σ.push1 ((υ.act * 32).toB256)
-    nextState μ σ' α (cost := gBase)
-  | .mload => do
-    let (x, σ') ← σ.pop1
-    let bs : B8s := μ.mem.sliceD x.toNat 32 0
-    let y : B256 ← B8s.toB256 bs
-    let σ'' ← σ'.push1 y
-    nextState μ σ'' α (cost := gVerylow)
-      (act' := memExp υ.act x (32 : Nat).toB256)
-  | .mstore => do
-    let (x, y, σ') ← σ.pop2
-    let act' := memExp υ.act x (32 : Nat).toB256
-    let memCost : Nat := cMem act' - cMem υ.act
-    let g' ← deductGas μ (gVerylow + memCost)
-    let m' : Machine :=
-      {
-        μ with
-        gas := g',
-        mem := Array.writeX μ.mem x.toNat y.toB8s 0,
-        pc := υ.pc + 1
-        act := act'
-      }
-    some ⟨m', σ', α⟩
-  | .mstore8 => do
-    let (x, y, σ') ← σ.pop2
-    let act' := memExp υ.act x 1
-    let memCost : Nat := cMem act' - cMem υ.act
-    let g' ← deductGas μ (gVerylow + memCost)
-    let m' : Machine :=
-      {
-        μ with
-        gas := g',
-        mem := Array.writeX μ.mem x.toNat [y.2.2.toUInt8] 0,
-        pc := υ.pc + 1
-        act := act'
-      }
-    some ⟨m', σ', α⟩
-  | .gas => do
-    let g' ← deductGas μ gBase
-    let σ' ← σ.push1 (g'.toB256)
-    nextState μ σ' α (cost := gBase)
-  | .eq => do
-    let (x, y, σ') ← σ.pop2
-    let σ'' ← σ'.push1 (.eq_check x y)
-    nextState μ σ'' α (cost := gVerylow)
-  | .lt => do
-    let (x, y, σ') ← σ.pop2
-    let σ'' ← σ'.push1 (.lt_check x y)
-    nextState μ σ'' α (cost := gVerylow)
-  | .gt => do
-    let (x, y, σ') ← σ.pop2
-    let σ'' ← σ'.push1 (.gt_check x y)
-    nextState μ σ'' α (cost := gVerylow)
-  | .slt => do
-    let (x, y, σ') ← σ.pop2
-    let σ'' ← σ'.push1 (.slt_check x y)
-    nextState μ σ'' α (cost := gVerylow)
-  | .sgt => do
-    let (x, y, σ') ← σ.pop2
-    let σ'' ← σ'.push1 (.sgt_check x y)
-    nextState μ σ'' α (cost := gVerylow)
-  | .iszero => do
-    let (x, σ') ← σ.pop1
-    let σ'' ← σ'.push1 (B256.eq_check x 0)
-    nextState μ σ'' α (cost := gVerylow)
-  | .not => do
-    let (x, σ') ← σ.pop1
-    let σ'' ← σ'.push1 (~~~ x)
-    nextState μ σ'' α (cost := gVerylow)
-  | .and => do
-    let (x, y, σ') ← σ.pop2
-    let σ'' ← σ'.push1 (B256.and x y)
-    nextState μ σ'' α (cost := gVerylow)
-  | .or => do
-    let (x, y, σ') ← σ.pop2
-    let σ'' ← σ'.push1 (B256.or x y)
-    nextState μ σ'' α (cost := gVerylow)
-  | .xor => do
-    let (x, y, σ') ← σ.pop2
-    let σ'' ← σ'.push1 (B256.xor x y)
-    nextState μ σ'' α (cost := gVerylow)
-  | .signextend => do
-    let (x, y, σ') ← σ.pop2
-    let σ'' ← σ'.push1 (B256.signext x y)
-    nextState μ σ'' α (cost := gLow)
-  | .pop => do
-    let (_, σ') ← σ.pop1
-    nextState μ σ' α (cost := gBase)
-  | .byte => do
-    let (x, y, σ') ← σ.pop2
-    let b : B8 := (List.getD y.toB8s x.toNat 0)
-    let σ'' ← σ'.push1 (b.toB256)
-    nextState μ σ'' α (cost := gVerylow)
-  | .shl => do
-    let (x, y, σ') ← σ.pop2
-    let g' ← deductGas μ gVerylow
-    let z : B256 := y <<< x.toNat
-    let σ'' ← σ'.push1 (z)
-    nextState μ σ'' α (cost := gVerylow)
-  | .shr => do
-    let (x, y, σ') ← σ.pop2
-    let g' ← deductGas μ gVerylow
-    let z : B256 := y >>> x.toNat
-    let σ'' ← σ'.push1 (z)
-    nextState μ σ'' α (cost := gVerylow)
-  | .sar => do
-    let (x, y, σ') ← σ.pop2
-    let g' ← deductGas μ gVerylow
-    let z : B256 := B256.sar x.toNat y
-    let σ'' ← σ'.push1 (z)
-    nextState μ σ'' α (cost := gVerylow)
-  | .kec => do
-    let (x, y, σ') ← σ.pop2
-    let act' := memExp υ.act x y
-    let cost := gKeccak256 + (gKeccak256Word * (ceilDiv y.toNat 32))
-    let memCost : Nat := cMem act' - cMem υ.act
-    let _ ← deductGas μ (cost + memCost)
-    let σ'' ← σ'.push1 <| B8a.keccak x.toNat y.toNat μ.mem
-    nextState μ σ'' α
-      (cost := gKeccak256 + (gKeccak256Word * (ceilDiv y.toNat 32)))
-      (act' := act')
-  | .sub => do
-    let (x, y, σ') ← σ.pop2
-    let σ'' ← σ'.push1 (x - y)
-    nextState μ σ'' α gVerylow
-  | .mul => do
-    let (x, y, σ') ← σ.pop2
-    let σ'' ← σ'.push1 (x * y)
-    nextState μ σ'' α gLow
-  | .exp => do
-    let (x, y, σ') ← σ.pop2
-    let x' : B256 := x
-    let y' : B256 := y
-    let σ'' ← σ'.push1 (B256.bexp x' y')
-    nextState μ σ'' α
-      (cost := g_exp + (g_expbyte * y.bytecount))
-  | .div => do
-    let (x, y, σ') ← σ.pop2
-    let z : B256 := (x / y)
-    let σ'' ← σ'.push1 (z)
-    nextState μ σ'' α (cost := gLow)
-  | .sdiv => do
-    let (x, y, σ') ← σ.pop2
-    let σ'' ← σ'.push1 (.sdiv x y)
-    nextState μ σ'' α gLow
-  | .mod => do
-    let (x, y, σ') ← σ.pop2
-    let σ'' ← σ'.push1 (x % y)
-    nextState μ σ'' α gLow
-  | .smod => do
-    let (x, y, σ') ← σ.pop2
-    let σ'' ← σ'.push1 (.smod x y)
-    nextState μ σ'' α gLow
-  | .add => do
-    let (x, y, σ') ← σ.pop2
-    let σ'' ← σ'.push1 ((x + y))
-    nextState μ σ'' α (cost := gVerylow)
-  | .addmod => do
-    let (x, y, z, σ') ← σ.pop3
-    let σ'' ← σ'.push1 (.addmod x y z)
-    nextState μ σ'' α (cost := g_mid)
-  | .mulmod => do
-    let (x, y, z, σ') ← σ.pop3
-    let σ'' ← σ'.push1 (.mulmod x y z)
-    nextState μ σ'' α (cost := g_mid)
-  | .swap n => do
-    let σ' ← σ.swap n
-    nextState μ σ' α gVerylow
-  | .dup n => do
-    let σ' ← σ.dup n
-    nextState μ σ' α gVerylow
-  | .sload => do
-    let (x, σ') ← σ.pop1
-    let c : Nat := if α.keys.contains ⟨κ.cta, x⟩ then gWarmAccess else gColdSLoad
-    let g' ← safeSub υ.gas c
-    let ac ← ω.find? κ.cta
-    let y := (ac.stor.find? x).getD 0
-    let σ'' ← σ'.push1 y
-    some ⟨
-      {μ with gas := g', pc := υ.pc + 1},
-      σ'',
-      {α with keys := α.keys.insert ⟨κ.cta, x⟩}
-    ⟩
-  | .pc => do
-    let σ' ← σ.push1 (υ.pc.toB256)
-    nextState μ σ' α (cost := gBase)
-  | .log n => do
-    let (x, y, σ') ← σ.pop2
-    let cost := gLog + (gLogdata * y.toNat) + (n * gLogtopic)
-    let act' := memExp υ.act x y
-    let memCost : Nat := cMem act' - cMem υ.act
-    let _ ← deductGas μ (cost + memCost)
-    let ⟨xs, σ''⟩ ← σ'.popN n
-    let bs : B8s := (μ.mem.sliceD x.toNat y.toNat 0)
-    let log : RLP' :=
-      .list [
-        .b8s ((@Bits.toBytes 20 κ.cta).map Byte.toB8),
-        .list (xs.map B256.toRLP),
-        .b8s bs
-      ]
-    nextState μ σ'' α
-      (cost := cost)
-      (act' := act')
-      (logs' := log :: α.logs)
-  | i => dbg_trace s!"UNIMPLEMENTED REGULAR INSTRUCTION EXECUTION : {i.toString}"; none
-  -/
 
 
 -- w₀ : the 'checkpoint' world saved at the preparation stage of tx
@@ -2495,7 +1905,8 @@ def Ninst'.run (w₀ : Wor) (ω : Wor)
     Ninst' → Option (Wor × Sta × Mem × Var)
   | .push bs _ => do
     let g' ← safeSub υ.gas (if bs = [] then gBase else gVerylow)
-    let σ' ← σ.push1 <| bs.toB256pad.getD 0
+    let x ← B8L.toB256? <| List.ekatD 32 bs 0
+    let σ' ← σ.push1 x
     let υ' := {υ with gas := g', pc := υ.pc + bs.length + 1}
     some ⟨ω, σ', μ, υ'⟩
   | .reg (.sstore) => do
@@ -2514,9 +1925,6 @@ def retRun (ω : Wor) (σ : Sta) (μ : Mem) (υ : Var) : Option Ξ.Result := do
   let r := μ.sliceD rlc.toNat rsz.toNat 0
   some {wor := ω, gas := g', acs := υ.toAcs, ret := r}
 
--- def State'.xh (s : State') : Ξ.Result :=
---   {wor := none, gas := υ.gas, acr := s.acr, ret := none}
-
 def xhs (υ : Var) : Ξ.Result :=
   {wor := none, gas := υ.gas, acs := υ.toAcs, ret := none}
 
@@ -2528,10 +1936,11 @@ structure theta.Cont : Type where
   (pc : Nat)
   (sta : Sta)
   (act : Nat)
-  (con : Con)
 
-def theta.Result.toState (ct : theta.Cont) (tr : theta.Result) : Option State' := do
-  let cpy : B8s := List.take ct.osz.toNat tr.ret
+-- Wor × Sta × Mem × Var × Con
+def theta.Result.toState (ct : theta.Cont) (tr : theta.Result) :
+    Option (Wor × Sta × Mem × Var) := do
+  let cpy : B8L := List.take ct.osz.toNat tr.ret
   let xs ← ct.sta.push1 (if tr.status then 1 else 0)
   let υ' : Var := {
     gas := ct.gas + tr.gas
@@ -2545,48 +1954,7 @@ def theta.Result.toState (ct : theta.Cont) (tr : theta.Result) : Option State' :
     logs := tr.acs.logs
     tchd := tr.acs.tchd
   }
-  some {
-    wor := tr.wor--mcn := m', sta := xs, acr := tr.acr, env := ct.env
-    sta := xs
-    mem := Array.writeX ct.mem ct.olc.toNat cpy 0
-    var := υ'
-    con := ct.con
-  }
-
-def midspan : Inst → Bool
-  | .next (.exec .call) => false
-  | .next (.exec .callcode) => false
-  | .next (.exec .delcall) => false
-  | .next (.exec .statcall) => false
-  | .next (.exec .create) => false
-  | .next (.exec .create2) => false
-  | .last _ => false
-  | _ => true
-
-
-/-
--- - 'none' if recursion limit or unimplemented opcode is reached
--- - 'some ⟨s, none⟩' if s = exceptional halting state
--- - 'some ⟨s, some i⟩' if i is calling or halting opcode
-def span (H : Block) (w₀ : Wor) :
-    Nat → State' → Option (State' × Option Inst)
-  | 0, _ => none
-  | lim + 1, s => do
-    -- dbg_trace s!"span gas : {υ.gas}"
-    let (some i) ← (some s.inst) | some ⟨s, none⟩
-    -- dbg_trace s!"span :: executing inst : {i.toString}"
-    let .true ← (some (midspan i)) | some ⟨s, some i⟩
-    match i with
-    | .next n =>
-      match n.run H w₀ s with
-      | none => some ⟨s, none⟩
-      | some s' => span H w₀ lim s'
-    | .jump j =>
-      match j.run s with
-      | none => some ⟨s, none⟩
-      | some s' => span H w₀ lim s'
-    | .last _ => none -- unreachable code
-
+  some ⟨tr.wor, xs, Array.writeX ct.mem ct.olc.toNat cpy 0, υ'⟩
 
 -- the X function of YP, except that the return type is modified to match
 -- that of the Ξ function: the machine state (μ) returned by 'X' is never
@@ -2595,104 +1963,12 @@ def span (H : Block) (w₀ : Wor) :
 -- This function returns 'none' only when either the recursion limit or an
 -- unimplemented opcode is reached. returns 'some _' for all other cases.
 -- return values :
-def exec (H : Block) (w₀ : Wor) : Nat → State' → Option Ξ.Result
-  | 0, _ => dbg_trace "execution limit reached\n" ; none
-  | lim + 1, s₀ => do
-    dbg_trace s!"exec gas : {s₀.mcn.gas}"
-    let ⟨s, oi⟩ ← span H w₀ (lim + 1) s₀
-    let some i ← some oi | some s.xh
-    match i with
-    | .next (.exec .call) => do
-      let gas :: adr :: clv :: ilc :: isz :: olc :: osz :: sta
-        ← (return μ.sta) | (some s.xh)
-      let i : Bytes := μ.mem.sliceD ilc.toNat isz.toNat 0
-      let t : Adr := toAdr adr
-      dbg_trace s!"nested call to address : {t.toHex}"
-      let as' : AdrSet := s.acr.adrs.insert t
-      let A' : Accrual := {s.acr with adrs := as'}
-      let act' : Nat := memExp (memExp υ.act ilc isz) olc osz
-      let memCost : Nat := cMem act' - cMem υ.act
-      let cg : Nat := cCallGas s gas.toNat memCost t clv
-      let totalCost := (cCall s gas.toNat memCost t clv) + memCost
-      let (some g') ← (return (safeSub υ.gas totalCost)) | some s.xh
-      let bd : theta.Cont :=
-        {
-          olc := olc
-          osz := osz
-          gas := g'
-          mem := μ.mem
-          pc := υ.pc
-          sta := sta
-          act := act'
-          env := s.env
-        }
-      let s'' : State' ←
-        if 0 = s.env.exd ∨ (s.wor.get s.env.cta).bal < clv
-        then some (theta.Result.toState bd ⟨s.wor, cg, A', 0, []⟩)
-        else do let s' : State' :=
-                      θ.prep
-                        H
-                        s.wor
-                        A'
-                        s.env.cta
-                        s.env.oga
-                        t
-                        t
-                        cg
-                        s.env.gpr.toNat
-                        clv
-                        clv
-                        i
-                        (s.env.exd - 1)
-                        s.env.wup
-                let xr ← exec H w₀ lim s'
-                let θr := θ.wrap s'.wor s'.acr xr
-                some (theta.Result.toState bd θr)
-      exec H w₀ lim s''
-    -- | .next (.exec .delcall) => _
-    -- | .next (.exec .callcode) => _
-    -- | .next (.exec .statcall) => _
-    -- | .next (.exec .create) => _
-    -- | .next (.exec .create2) => _
-    | .last .stop => some {wor := s.wor, gas := υ.gas, acr := s.acr, ret := some []}
-    | .last .ret => some <| (retRun s).getD s.xh
-    | .last .dest => do
-      let (x :: _) ← (return μ.sta) | none
-      let a := toAdr x -- recipient
-      let cost :=
-        gSelfdestruct
-        + (if a ∈ s.acr.adrs then 0 else gColdAccountAccess)
-        + ( if Dead s.wor a ∧ s.wor.balAt s.env.cta ≠ 0
-            then gNewAccount
-            else 0 )
-      let gas' ← deductGas μ cost
-      some
-        {
-          wor :=
-            if a = s.env.cta
-            then s.wor
-            else let v := (s.wor.get s.env.cta).bal
-                 let wor' := s.wor.setBal s.env.cta 0
-                 wor'.addBal a v
-          gas := gas'
-          acr :=
-            {
-              s.acr with
-              dest := s.env.cta :: s.acr.dest
-              adrs := s.acr.adrs.insert a
-            }
-          ret := some []
-        }
-    | _ =>
-      dbg_trace s!"exec :: unimplemented inst : {i.toString}"
-      none
--/
 
 def Ninst'.toString : Ninst' → String
   | reg o => Rinst.toString o
   | exec o => Xinst.toString o
   | push [] _ => "PUSH0"
-  | push bs _ => "PUSH" ++ bs.length.repr ++ " " ++ B8s.toHex bs
+  | push bs _ => "PUSH" ++ bs.length.repr ++ " " ++ B8L.toHex bs
 
 def Inst'.toString : Inst' → String
   | .next n => n.toString
@@ -2710,7 +1986,6 @@ def showExec (i : Inst') : Option Unit := do
   dbg_trace s!"executing inst : {i.toString}"
   return ()
 
--- κ
 def exec (w₀ : Wor) :
     Nat → Wor → Sta → Mem → Var → Con → Option Ξ.Result
   | 0, _, _, _, _, _ => none
@@ -2718,15 +1993,14 @@ def exec (w₀ : Wor) :
     showLim lim υ
     match getInst υ κ  with
     | none => some <| xhs υ
-    | some i =>
-      -- dbg_trace s!"gas remaining : {υ.gas}"
-      -- dbg_trace s!"current stack :\n{Sta.toString μ.sta}"
-      do
+    | some i => do
+      -- dbg_trace s!"remaining gas : {υ.gas}"
       -- showExec i
+      -- dbg_trace s!"current stack :\n{Sta.toString σ}"
       match i with
       | .next (.exec .delcall) => do
         let (gas, adr, ilc, isz, olc, osz, σ') ← σ.pop6
-        let i : B8s := μ.sliceD ilc.toNat isz.toNat 0
+        let i : B8L := μ.sliceD ilc.toNat isz.toNat 0
         let t : Adr := adr.toAdr
         -- dbg_trace s!"nested delgatecall to address : {t.toHex}"
         let as' : AdrSet := υ.adrs.insert t
@@ -2745,12 +2019,11 @@ def exec (w₀ : Wor) :
             pc := υ.pc
             sta := σ'
             act := act'
-            con := κ
           }
-        let s'' : State' ←
+        let ⟨ω?, σ?, μ?, υ?⟩ ←
           if 0 = κ.exd
           then (theta.Result.toState bd ⟨ω, cg, A', 0, []⟩)
-          else do let s' : State' :=
+          else do let ⟨ω!, σ!, μ!, υ!, κ!⟩ :=
                         θ.prep
                           κ.blk
                           ω
@@ -2766,21 +2039,21 @@ def exec (w₀ : Wor) :
                           i
                           (κ.exd - 1)
                           κ.wup
-                  let xr ← exec w₀ lim s'.wor s'.sta s'.mem s'.var s'.con
-                  let θr := θ.wrap s'.wor s'.var.toAcs xr
+                  let xr ← exec w₀ lim ω! σ! μ! υ! κ!
+                  let θr := θ.wrap ω! υ!.toAcs xr
                   (theta.Result.toState bd θr)
-        exec w₀ lim s''.wor s''.sta s''.mem s''.var s''.con
+        exec w₀ lim ω? σ? μ? υ? κ
       | .next (.exec .call) => do
         let (gas, adr, clv, ilc, isz, olc, osz, σ') ← σ.pop7
-        let i : B8s := μ.sliceD ilc.toNat isz.toNat 0
+        let i : B8L := μ.sliceD ilc.toNat isz.toNat 0
         let t : Adr := adr.toAdr
         -- dbg_trace s!"nested call to address : {t.toHex}"
         let as' : AdrSet := υ.adrs.insert t
         let A' : Acs := {υ.toAcs with adrs := as'}
         let act' : Nat := memExp (memExp υ.act ilc isz) olc osz
         let memCost : Nat := cMem act' - cMem υ.act
-        let cg : Nat := cCallGas ω υ gas.toNat memCost t clv.toBits
-        let totalCost := (cCall ω υ gas.toNat memCost t clv.toBits) + memCost
+        let cg : Nat := cCallGas ω υ gas.toNat memCost t clv
+        let totalCost := (cCall ω υ gas.toNat memCost t clv) + memCost
         let (some g') ← (return (safeSub υ.gas totalCost)) | some (xhs υ)
         let bd : theta.Cont :=
           {
@@ -2791,12 +2064,11 @@ def exec (w₀ : Wor) :
             pc := υ.pc
             sta := σ'
             act := act'
-            con := κ
           }
-        let s'' : State' ←
+        let ⟨ω?, σ?, μ?, υ?⟩ ←
           if 0 = κ.exd ∨ (ω.get κ.cta).bal < clv
           then (theta.Result.toState bd ⟨ω, cg, A', 0, []⟩)
-          else do let s' : State' :=
+          else do let ⟨ω!, σ!, μ!, υ!, κ!⟩  : (Wor × Sta × Mem × Var × Con) :=
                         θ.prep
                           κ.blk
                           ω
@@ -2812,11 +2084,11 @@ def exec (w₀ : Wor) :
                           i
                           (κ.exd - 1)
                           κ.wup
-                  -- dbg_trace s!"code of nested delcall : {B8s.toHex s'.env.code.toList}"
-                  let xr ← exec w₀ lim s'.wor s'.sta s'.mem s'.var s'.con
-                  let θr := θ.wrap s'.wor s'.var.toAcs xr
+                  -- dbg_trace s!"code of nested delcall : {B8L.toHex s'.env.code.toList}"
+                  let xr ← exec w₀ lim ω! σ! μ! υ! κ!
+                  let θr := θ.wrap ω! υ!.toAcs xr
                   (theta.Result.toState bd θr)
-        exec w₀ lim s''.wor s''.sta s''.mem s''.var s''.con
+        exec w₀ lim ω? σ? μ? υ? κ
       | .next n =>
         match n.run w₀ ω σ μ υ κ  with
         | none => some (xhs υ)
@@ -2874,14 +2146,14 @@ def theta
   (p : Nat)
   (v : B256)
   (v_app : B256)
-  (d : B8s)
+  (d : B8L)
   (e : Nat)
   (w : Bool) :
   Option theta.Result :=
-  let st := θ.prep H ω A s o r c g p v v_app d e w
-  match exec ω₀ g st.wor st.sta st.mem st.var st.con with
+  let ⟨ω?, σ?, μ?, υ?, κ?⟩ := θ.prep H ω A s o r c g p v v_app d e w
+  match exec ω₀ g ω? σ? μ? υ? κ? with
   | none => none
-  | some xr => some (θ.wrap st.wor st.var.toAcs xr)
+  | some xr => some (θ.wrap ω? υ?.toAcs xr)
 
 def publicAddress (hsa : ByteArray) (ri : UInt8) (rsa : ByteArray) : IO Adr :=
   match (ecrecoverFlag hsa ri rsa).toList with
@@ -2889,7 +2161,7 @@ def publicAddress (hsa : ByteArray) (ri : UInt8) (rsa : ByteArray) : IO Adr :=
   | b :: pa =>
     if b = 0
     then IO.throw "ecrecover failed"
-    else (B8s.toAdr pa).toIO "bytearray to address conversion failed"
+    else (B8L.toAdr pa).toIO "bytearray to address conversion failed"
 
 def IO.guard (φ : Prop) [Decidable φ] (msg : String) : IO Unit :=
   if φ then return () else IO.throw msg
@@ -2910,9 +2182,9 @@ structure TxBytesContent : Type where
   (gasLimit : B256)
   (receiver : Adr)
   (val : B256)
-  (calldata : Bytes)
-  (r : Bytes)
-  (s : Bytes)
+  (calldata : B8L)
+  (r : B8L)
+  (s : B8L)
   (acc : AccessList)
 
 structure transact.Result : Type where
@@ -2921,43 +2193,40 @@ structure transact.Result : Type where
   (log : B256)
   (sta : Bool)
 
-def decodeTxBytes (tbs : Bytes) : IO (TxBytesContent × Word) := do
-  match RLP.decode tbs with
-  | RLP.list [
-      .bytes nonce,
-      .bytes gasPrice,
-      .bytes gasLimit,
-      .bytes toAdr,
-      .bytes val,
-      .bytes calldata,
-      .bytes [v],
-      .bytes r,
-      .bytes s
-    ] =>
+def decodeTxBytes (tbs : B8L) : IO (TxBytesContent × B256) :=
+  match RLP'.decode tbs with
+  | RLP'.list [
+      .b8s nonce,
+      .b8s gasPrice,
+      .b8s gasLimit,
+      .b8s receiver,
+      .b8s val,
+      .b8s calldata,
+      .b8s [v],
+      .b8s r,
+      .b8s s
+    ] => do
     let bs :=
-      RLP.encode <|
+      RLP'.encode <|
         .list [
-          .bytes nonce,
-          .bytes gasPrice,
-          .bytes gasLimit,
-          .bytes toAdr,
-          .bytes val,
-          .bytes calldata
+          .b8s nonce,
+          .b8s gasPrice,
+          .b8s gasLimit,
+          .b8s receiver,
+          .b8s val,
+          .b8s calldata
         ]
+    let recAdr ← (B8L.toAdr receiver).toIO "cannot convert bytes to receiver address"
     return ⟨
       {
         chainId := none
-        yParity := if (v - Ox x1 xB) = 0 then 0 else 1
+        yParity := if (v - 0x1B) = 0 then 0 else 1
         type := .zero
-        nonce := (@Bytes.toBits 32 nonce).toB256
-        gasPrice := (@Bytes.toBits 32 gasPrice).toB256
-        gasLimit := (@Bytes.toBits 32 gasLimit).toB256
-        receiver :=
-          let b8s := toAdr.map Byte.toB8
-          match b8s.length with
-          | 20 => (B8s.toAdr b8s).getD 0 --(@Bytes.toBits 20 toAdr)
-          | _ => dbg_trace "SHORT ADDRESS DETECTED" ; sorry
-        val := (@Bytes.toBits 32 val).toB256
+        nonce    := nonce.toB256P
+        gasPrice := gasPrice.toB256P
+        gasLimit := gasLimit.toB256P
+        receiver := recAdr
+        val := val.toB256P
         calldata := calldata
         r := (r.reverse.takeD 32 0).reverse
         s := (s.reverse.takeD 32 0).reverse
@@ -2998,7 +2267,7 @@ def Tx.run
         tx.gasPrice.toNat
         tx.val
         tx.val
-        (tx.calldata.map Byte.toB8)
+        tx.calldata
         1024
         true
     ).toIO "theta failed"
@@ -3033,8 +2302,8 @@ def String.joinnl (l : List String) : String :=
 
 def Test.run (t : Test) : IO Unit := do
   let ⟨tx, hsh⟩ ← decodeTxBytes t.txdata
-  let rsa : ByteArray := Bytes.toBytesArray (tx.r ++ tx.s)
-  let hsa : ByteArray := Bytes.toBytesArray (@Bits.toBytes 32 hsh)
+  let rsa : ByteArray := ⟨Array.mk (tx.r ++ tx.s)⟩
+  let hsa : ByteArray := ⟨Array.mk hsh.toB8L⟩
   let ri : UInt8 := Byte.toB8 (if tx.yParity then 1 else 0)
   let sender ← publicAddress hsa ri rsa
 
@@ -3086,9 +2355,9 @@ def Test.run (t : Test) : IO Unit := do
   .println "world state after tx :"
   .println (Strings.join rst.wor.toStrings)
 
-  let temp' := (List.map toKeyVal' rst.wor.toList)
-  let finalNTB' : NTB' := Lean.RBMap.fromList temp' _
-  let root' : B256 := trie' finalNTB'
+  let temp' := (List.map toKeyVal rst.wor.toList)
+  let finalNTB : NTB := Lean.RBMap.fromList temp' _
+  let root' : B256 := trie finalNTB
 
   .println s!"computed final root' : {root'.toHex}"
   .println s!"expected final root  : {t.hash.toHex}"
@@ -3120,53 +2389,3 @@ def main : List String → IO Unit
     let ts ← getTests td
     ((ts.get? n).toIO s!"test #{n} does not exist") >>= Test.run
   | _ => IO.throw "error : invalid arguments"
-
-#exit
-def main (args : List String) : IO Unit := do
-  let testPath ← args.head?.toIO "no command line argument"
-  let j ← readJsonFile testPath
-  let td ← Lean.Json.toTestData j
-  let ts ← getTests td
-  -- ((ts.get? 2).toIO "test #2 does not exist") >>= Test.run
-  Tests.run 1 ts
-
-#exit
-
-def main (args : List String) : IO Unit := do
-  let arg ← args.head?.toIO "no command line argument"
-  match arg.toNat? with
-  | none => IO.println "Argument is not a number"
-  | some n =>
-    let w : Word := UInt8a.keccak (Array.mkArray n 0)
-    IO.println s!"keccak of zeroes : {w.toHex}"
-
-def main : IO Unit := do
-  let td ← readJsonFile "not.json" >>= Lean.Json.toTestData
-  IO.println td.toString
-
-def main : IO Unit := IO.println WethByteCode
-def main : IO Unit := do IO.println <| Bits.toHex 64 (trie testNTB)
-
-def main : IO Unit := do
-  let bs := notTxBytes
-  let (RLP.list [nonce, gasPrice, gasLimit, toAddr, val, calldata, .bytes [v], .bytes r, .bytes s])
-    ← (Option.toIO <| RLP.decode bs) ""
-    | throw (IO.Error.userError "Error : RLP decoding failed")
-  let bs' := RLP.encode <| .list [nonce, gasPrice, gasLimit, toAddr, val, calldata]
-  let hs := bs'.keccak
-
-  IO.println <| s!"v : {Bits.toHex 2 v}"
-  IO.println <| s!"r : {r.toHex}"
-  IO.println <| s!"s : {s.toHex}"
-  IO.println <| s!"Hash of txdata excluding signature: {Bits.toHex 64 hs}"
-
-  let rsa : ByteArray := Bytes.toBytesArray (r ++ s)
-  let hsa : ByteArray := Bytes.toBytesArray (@Bits.toBytes 32 hs)
-  let ri : UInt8 := Byte.toUInt8 (v - Ox x1 xB)
-
-  match (ecrecoverFlag hsa ri rsa).toBytes with
-  | [] => IO.println "Unreachable code : ecrecover should never return empty bytes"
-  | b :: pa =>
-    if b = 0
-    then IO.println "ecrecover failed"
-    else IO.println <| s!"Recovered public address : {Bytes.toHex pa}"

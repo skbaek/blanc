@@ -177,7 +177,7 @@ abbrev B8 : Type := UInt8
 abbrev B16 : Type := UInt16
 abbrev B32 : Type := UInt32
 abbrev B64 : Type := UInt64
-abbrev B8s : Type := List B8
+abbrev B8L : Type := List B8
 abbrev Bytes : Type := List Byte
 
 def Bits.toChars : ∀ {n}, Bits n → List Char
@@ -345,7 +345,7 @@ def B8.lows (x : B8) : B8 := (x &&& 0x0F)
 def B8.toHex (x : B8) : String :=
   ⟨[x.highs.toHexit, x.lows.toHexit]⟩
 
-def B8s.toHex (bs : B8s) : String :=
+def B8L.toHex (bs : B8L) : String :=
   List.foldr (λ b s => B8.toHex b ++ s) "" bs
 
 def B16.highs (x : B16) : B8 := (x >>> 8).toUInt8
@@ -828,7 +828,7 @@ def Word.signext (x y : Word) : Word :=
 
 abbrev Vec := Mathlib.Vector
 
-def B64.toB8v (x : B64) : Vec B8 8 :=
+def B64.toB8V (x : B64) : Vec B8 8 :=
   ⟨ [ (x >>> 56).toUInt8, (x >>> 48).toUInt8,
       (x >>> 40).toUInt8, (x >>> 32).toUInt8,
       (x >>> 24).toUInt8, (x >>> 16).toUInt8,
@@ -840,7 +840,7 @@ def B64.toB8t (x : B64) : B8 × B8 × B8 × B8 × B8 × B8 × B8 × B8 :=
     (x >>> 24).toUInt8, (x >>> 16).toUInt8,
     (x >>> 8).toUInt8, x.toUInt8 ⟩
 
-def B64.toB8s (x : B64) : B8s :=
+def B64.toB8L (x : B64) : B8L :=
   [ (x >>> 56).toUInt8, (x >>> 48).toUInt8,
     (x >>> 40).toUInt8, (x >>> 32).toUInt8,
     (x >>> 24).toUInt8, (x >>> 16).toUInt8,
@@ -858,14 +858,14 @@ def B64.reverse (w : B64) : B64 :=
   ((w >>> 56) &&& (0x00000000000000FF : B64))
 
 
-def B128.toB8s (x : B128) : B8s := x.1.toB8s ++ x.2.toB8s
-def B256.toB8s (x : B256) : B8s := x.1.toB8s ++ x.2.toB8s
+def B128.toB8L (x : B128) : B8L := x.1.toB8L ++ x.2.toB8L
+def B256.toB8L (x : B256) : B8L := x.1.toB8L ++ x.2.toB8L
 
-def B128.toB8v (x : B128) : Vec B8 16 :=
-  Mathlib.Vector.append x.1.toB8v x.2.toB8v
+def B128.toB8V (x : B128) : Vec B8 16 :=
+  Mathlib.Vector.append x.1.toB8V x.2.toB8V
 
-def B256.toB8v (x : B256) : Vec B8 32 :=
-  Mathlib.Vector.append x.1.toB8v x.2.toB8v
+def B256.toB8V (x : B256) : Vec B8 32 :=
+  Mathlib.Vector.append x.1.toB8V x.2.toB8V
 
 def B128.toNat (x : B128) : Nat := (x.1.toNat * (2 ^ 64)) + x.2.toNat
 def B256.toNat (x : B256) : Nat := (x.1.toNat * (2 ^ 128)) + x.2.toNat
@@ -883,7 +883,7 @@ def B256.mulmod (x y z : B256) : B256 :=
 def B256.signext (x y : B256) : B256 :=
   if h : x < 31
   then have h' : (32 - (x.toNat + 1)) < 32 := by omega
-       let z : B8 := y.toB8v.get (32 - (x.toNat + 1))
+       let z : B8 := y.toB8V.get (32 - (x.toNat + 1))
        cond z.highBit
          ((B256.max <<< (8 * (x.toNat + 1))) ||| y)
          ((B256.max >>> (256 - (8 * (x.toNat + 1)))) &&& y)
@@ -2015,6 +2015,19 @@ def Bits.bexp {m : Nat} (xs ys : Bits m) : Bits m :=
 
 instance : HPow B256 B256 B256 := ⟨B256.bexp⟩
 
+def Bits.min {n} : Bits n → Bits n → Bits n
+  | xs, ys => if xs ≤ ys then xs else ys
+instance {n} : Min (Bits n) := ⟨.min⟩
+
+def Bits.ordering {n} (xs ys : Bits n) : Ordering :=
+  if xs < ys
+  then .lt
+  else if xs = ys
+       then .eq
+       else .gt
+
+instance {n} : Ord (Bits n) := ⟨Bits.ordering⟩
+
 
 
 ------------------------------KECCAK------------------------------
@@ -2373,7 +2386,7 @@ def keccak : Fin 17 → Bytes → Qords → Word
 
 
 
-def keccakU : Fin 17 → B8s → QordsU → B256
+def keccakU : Fin 17 → B8L → QordsU → B256
 | wc, b0 :: b1 :: b2 :: b3 :: b4 :: b5 :: b6 :: b7 :: bs, ws =>
   let t : B64 := B8s.toB64 b7 b6 b5 b4 b3 b2 b1 b0
   let ws' := ws.app wc (· ^^^ t)
@@ -2443,7 +2456,7 @@ def keccakA (bnd n : Nat) (wc : Fin 17) (bs : Array B8) (ws : QordsU) : B256 :=
 def Bytes.keccak (bs : Bytes) : Word :=
   _root_.keccak (0 : Fin 17) bs Qords.init
 
-def B8s.keccak (bs : B8s) : B256 :=
+def B8L.keccak (bs : B8L) : B256 :=
   _root_.keccakU (0 : Fin 17) bs QordsU.init
 
 -- def B8a.keccak (bs : Array B8) : B256 :=
@@ -2459,10 +2472,10 @@ def List.splitAt? {ξ : Type u} : Nat → List ξ → Option (List ξ × List ξ
   | _ + 1, [] => none
   | n + 1, x :: xs => .map (x :: ·) id <$> xs.splitAt? n
 
-def B8s.toNat' : Nat → B8s → Nat
+def B8L.toNat' : Nat → B8L → Nat
   | k, [] => k
-  | k, b :: bs => B8s.toNat' ((k * 256) + b.toNat) bs
-def B8s.toNat (bs : B8s) : Nat := bs.toNat' 0
+  | k, b :: bs => B8L.toNat' ((k * 256) + b.toNat) bs
+def B8L.toNat (bs : B8L) : Nat := bs.toNat' 0
 
 def Bytes.toNat' : Nat → Bytes → Nat
   | k, [] => k
@@ -2475,11 +2488,11 @@ def Nat.toBytesCore (n : Nat) : Bytes :=
   else (n % 256).toByte :: (n / 256).toBytesCore
 def Nat.toBytes (n : Nat) : Bytes := n.toBytesCore.reverse
 
-def Nat.toB8sCore (n : Nat) : B8s :=
+def Nat.toB8LCore (n : Nat) : B8L :=
   if n < 256
   then [n.toUInt8]
-  else (n % 256).toUInt8 :: (n / 256).toB8sCore
-def Nat.toB8s (n : Nat) : B8s := n.toB8sCore.reverse
+  else (n % 256).toUInt8 :: (n / 256).toB8LCore
+def Nat.toB8L (n : Nat) : B8L := n.toB8LCore.reverse
 
 
 
@@ -2565,7 +2578,7 @@ partial def RLP.toStrings : RLP → List String
 -------------------------------- RLP' --------------------------------
 
 inductive RLP' : Type
-  | b8s : B8s → RLP'
+  | b8s : B8L → RLP'
   | list : List RLP' → RLP'
 
 
@@ -2582,7 +2595,7 @@ def B8.toBools (x0 : B8) :
     x4.highBit, x5.highBit, x6.highBit, x7.highBit ⟩
 
 mutual
-  def RLP'.decode' : Nat → B8s → Option (RLP' × B8s)
+  def RLP'.decode' : Nat → B8L → Option (RLP' × B8L)
     | _, [] => none
     | 0, _ :: _ => none
     | k + 1, b :: bs =>
@@ -2590,13 +2603,13 @@ mutual
     | ⟨0, _, _, _, _, _, _, _⟩ => some (.b8s [b], bs)
     | ⟨1, 0, 1, 1, 1, _, _, _⟩ => do
       let (lbs, bs') ← List.splitAt? (b - 0xB7).toNat bs
-      let (rbs, bs'') ← List.splitAt? (B8s.toNat lbs) bs'
+      let (rbs, bs'') ← List.splitAt? (B8L.toNat lbs) bs'
       return ⟨.b8s rbs, bs''⟩
     | ⟨1, 0, _, _, _, _, _, _⟩ =>
       .map .b8s id <$> List.splitAt? (b - 0x80).toNat bs
     | ⟨1, 1, 1, 1, 1, _, _, _⟩ => do
       let (lbs, bs') ← List.splitAt? (b - 0xF7).toNat bs
-      let (rbs, bs'') ← List.splitAt? (B8s.toNat lbs) bs'
+      let (rbs, bs'') ← List.splitAt? (B8L.toNat lbs) bs'
       let rs ← RLPs'.decode k rbs
       return ⟨.list rs, bs''⟩
     | ⟨1, 1, _, _, _, _, _, _⟩ => do
@@ -2604,7 +2617,7 @@ mutual
       let rs ← RLPs'.decode k rbs
       return ⟨.list rs, bs'⟩
 
-  def RLPs'.decode : Nat → B8s → Option (List RLP')
+  def RLPs'.decode : Nat → B8L → Option (List RLP')
     | _, [] => some []
     | 0, _ :: _ => none
     | k + 1, bs@(_ :: _) => do
@@ -2613,37 +2626,37 @@ mutual
       return (r :: rs)
 end
 
-def RLP'.decode (bs : B8s) : Option RLP' :=
+def RLP'.decode (bs : B8L) : Option RLP' :=
   match RLP'.decode' bs.length bs with
   | some (r, []) => some r
   | _ => none
 
-def RLP'.encodeBytes : B8s → B8s
+def RLP'.encodeBytes : B8L → B8L
   | [b] => if b < (0x80) then [b] else [0x81, b]
   | bs =>
     if bs.length < 56
     then (0x80 + Nat.toUInt8 bs.length) :: bs
-    else let lbs : B8s := bs.length.toB8s
+    else let lbs : B8L := bs.length.toB8L
          (0xB7 + lbs.length.toUInt8) :: (lbs ++ bs)
 
 mutual
-  def RLP'.encode : RLP' → B8s
+  def RLP'.encode : RLP' → B8L
     | .b8s [b] => if b < (0x80) then [b] else [0x81, b]
     | .b8s bs =>
       if bs.length < 56
       then (0x80 + bs.length.toUInt8) :: bs
-      else let lbs : B8s := bs.length.toB8s
+      else let lbs : B8L := bs.length.toB8L
            (0xB7 + lbs.length.toUInt8) :: (lbs ++ bs)
     | .list rs => RLPs'.encode rs
-  def RLPs'.encodeMap : List RLP' → B8s
+  def RLPs'.encodeMap : List RLP' → B8L
     | .nil => []
     | .cons r rs => r.encode ++ RLPs'.encodeMap rs
-  def RLPs'.encode (rs : List RLP') : B8s :=
+  def RLPs'.encode (rs : List RLP') : B8L :=
     let bs := RLPs'.encodeMap rs
     let len := bs.length
     if len < 56
     then (0xC0 + len.toUInt8) :: bs
-    else let lbs : B8s := len.toB8s
+    else let lbs : B8L := len.toB8L
          (0xF7 + lbs.length.toUInt8) :: (lbs ++ bs)
 end
 
