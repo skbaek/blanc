@@ -858,7 +858,7 @@ abbrev AdrSet : Type := @Std.HashSet Adr _ _
 abbrev KeySet : Type := @Std.HashSet (Adr × B256) _ _
 
 def Sta : Type := Array B256 × Nat
-def Mem : Type := Array B8
+abbrev Mem : Type := ByteArray
 
 structure Acs where
   (dest : List Adr)  -- A_s
@@ -871,7 +871,7 @@ structure Acs where
 structure Var where
   (gas : Nat) -- μ_g
   (pc : Nat)  -- μ_pc
-  (ret : B8L) -- μ_o
+  (ret : ByteArray) -- μ_o
   (act : Nat) -- μ_i
   -------------------------
   (dest : List Adr)  -- A_s
@@ -910,7 +910,7 @@ structure Con where
   (cta : Adr) -- contract address (YP : a)
   (oga : Adr) -- origin address (YP : o)
   (gpr : B256) -- gas price (YP : p)
-  (cld : B8L) -- calldata (YP : d)
+  (cld : ByteArray) -- calldata (YP : d)
   (cla : Adr) -- caller Addr (YP : s)
   (clv : B256) -- callvalue (YP : v)
   (code : ByteArray) -- contract code  (YP : b)
@@ -925,7 +925,7 @@ structure Ξ.Result where
   (wor : Option Wor)
   (gas : Nat)
   (acs : Acs)
-  (ret : Option B8L)
+  (ret : Option ByteArray)
 
 inductive Inst : Type
   | last : Linst → Inst
@@ -953,44 +953,26 @@ def Inst.toString : Inst → String
   | .jump j => j.toString
   | .last l => l.toString
 
-def noPushBefore' (cd : ByteArray) : Nat → Nat → Bool
+def noPushBefore (cd : ByteArray) : Nat → Nat → Bool
   | 0, _ => true
   | _, 0 => true
   | k + 1, m + 1 =>
     if k < cd.size
     then let b := cd.get! k
          if (b < (0x7F - m.toUInt8) || 0x7F < b)
-         then noPushBefore' cd k m
-         else if noPushBefore' cd k 32
+         then noPushBefore cd k m
+         else if noPushBefore cd k 32
               then false
-              else noPushBefore' cd k m
-    else noPushBefore' cd k m
-
-def noPushBefore (cd : Array B8) : Nat → Nat → Bool
-  | 0, _ => true
-  | _, 0 => true
-  | k + 1, m + 1 =>
-    match cd.get? k with
-    | none => noPushBefore cd k m
-    | some b =>
-      if (b < (0x7F - m.toUInt8) || 0x7F < b)
-      then noPushBefore cd k m
-      else if noPushBefore cd k 32
-           then false
-           else noPushBefore cd k m
+              else noPushBefore cd k m
+    else noPushBefore cd k m
 
 def Jinst.toB8 : Jinst → B8
   | jump => 0x56     -- 0x56 / 1 / 0 / Unconditional jump.
   | jumpi => 0x57    -- 0x57 / 2 / 0 / Conditional jump.
   | jumpdest => 0x5B -- 0x5b / 0 / 0 / Mark a valid jump destination.
 
-def jumpable' (cd : ByteArray) (k : Nat) : Bool :=
+def jumpable (cd : ByteArray) (k : Nat) : Bool :=
   if cd.get! k = (Jinst.toB8 .jumpdest)
-  then noPushBefore' cd k 32
-  else false
-
-def jumpable (cd : Array B8) (k : Nat) : Bool :=
-  if cd.get? k = some (Jinst.toB8 .jumpdest)
   then noPushBefore cd k 32
   else false
 
@@ -1299,7 +1281,7 @@ structure theta.Result : Type where
   (gas : Nat)
   (acs : Acs)
   (status : Bool)
-  (ret : B8L)
+  (ret : ByteArray)
 
 def Wor.code (w : Wor) (a : Adr) : ByteArray :=
   match w.find? a with
@@ -1329,7 +1311,7 @@ def θ.prep
   (p : Nat)
   (v : B256)
   (v_app : B256)
-  (d : B8L)
+  (d : ByteArray)
   (e : Nat)
   (w : Bool) :
   Wor × Sta × Mem × Var × Con :=
@@ -1353,17 +1335,17 @@ def θ.prep
     cla := s, clv := v_app, code := cd, blk := H, exd := e, wup := w
   }
   let υ : Var := {
-    gas := g, pc := 0, ret := [], act := 0
+    gas := g, pc := 0, ret := ByteArray.mk #[], act := 0
     dest := A.dest, adrs := A.adrs, keys := A.keys,
     ref := A.ref, logs := A.logs, tchd := A.tchd
   }
-  ⟨ω₁, .init, #[], υ, κ⟩
+  ⟨ω₁, .init, ByteArray.mk #[], υ, κ⟩
 
 def θ.wrap (wor : Wor) (acs : Acs) (Ξr : Ξ.Result) : theta.Result :=
   let ω_stars : Option Wor := Ξr.wor
   let g_stars : Nat := Ξr.gas
   let A_stars : Acs := Ξr.acs
-  let o : Option B8L := Ξr.ret
+  let o : Option ByteArray := Ξr.ret
   let ω' : Wor := ω_stars.getD wor
   let g' : Nat :=
     if ω_stars.isNone ∧ o.isNone
@@ -1374,7 +1356,7 @@ def θ.wrap (wor : Wor) (acs : Acs) (Ξr : Ξ.Result) : theta.Result :=
 
   -- o' is not from YP, but necessary to cast from 'Option B8L to 'B8L'
   -- (YP is a bit sloppy with types here)
-  let o' : B8L := o.getD []
+  let o' : ByteArray := o.getD (ByteArray.mk #[])
   ⟨ω', g', A', z, o'⟩
 
 def gColdSLoad : Nat := 2100
@@ -1657,6 +1639,8 @@ def Array.copyD {ξ : Type u} (xs ys : Array ξ) : Array ξ :=
     λ ysn x => ⟨Array.setD ysn.fst ysn.snd x, ysn.snd + 1⟩
   (Array.foldl f ⟨ys, 0⟩ xs).fst
 
+
+
 def Array.writeX {ξ : Type u} (xs : Array ξ) (n : ℕ) (ys : List ξ) (d : ξ) : Array ξ :=
   if n + ys.length ≤ xs.size
   then Array.writeD xs n ys
@@ -1672,7 +1656,7 @@ def cMem (a : Nat) := gMemory * a + ((a ^ 2) / 512)
 
 def nextState (υ : Var) (cost : Nat)
   (act' : Option Nat := none)
-  (ret' : B8L := υ.ret)
+  (ret' : ByteArray := υ.ret)
   (adrs' : AdrSet := υ.adrs)
   (logs' : List RLP' := υ.logs)
   (keys' : KeySet := υ.keys) : Option Var := do
@@ -1764,6 +1748,122 @@ def B256.toAdr : B256 → Adr
 def Adr.toB256 (a : Adr) : B256 :=
   ⟨⟨0, a.high.toUInt64⟩ , ⟨a.mid, a.low⟩ ⟩
 
+def ByteArray.pushPack (xs : ByteArray) : Nat → B8 → ByteArray
+  | 0, _ => xs
+  | n + 1, p =>
+    let xs' := xs.push p
+    ByteArray.pushPack xs' n p
+
+def ByteArray.setPack (xs : ByteArray) (off : Nat) : Nat → B8 → ByteArray
+  | 0, _ => xs
+  | n + 1, p =>
+    let xs' := xs.set! (off + n) p
+    ByteArray.setPack xs' off n p
+
+-- assumes : capacity of ys ≥ yo + len
+-- assumes : size ys ≥ yo + len
+
+-- def ByteArray.copyPackAux (xs : ByteArray) (xo : Nat)
+--   (ys : ByteArray) (yo len : Nat) (p : B8) : ByteArray :=
+--   let ys' := ByteArray.copySlice xs xo ys yo len
+--   if xo + len ≤ xs.size
+--   then ys'
+--   else
+--     let numCopied := xs.size - xo
+--     let zeroLeft := len - numCopied
+--     ByteArray.pushPack ys' zeroLeft p
+--
+
+def ByteArray.appendPack (xs : ByteArray)
+  (ys : ByteArray) (yo : Nat) (len : Nat) (p : B8) : ByteArray :=
+  let xs' := ByteArray.copySlice ys yo xs xs.size len
+  if yo + len ≤ ys.size
+  then xs'
+  else
+    let numCopied := ys.size - yo
+    let zeroLeft := len - numCopied
+    ByteArray.pushPack xs' zeroLeft p
+
+def ByteArray.copyPack (xs : ByteArray) (xo : Nat)
+  (ys : ByteArray) (yo len : Nat) (p : B8) : ByteArray :=
+  if yo + len ≤ ys.size
+  then
+    if xo + len ≤ xs.size
+    then .copySlice xs xo ys yo len
+    else
+      let xs' := copySlice xs xo ys yo len
+      let numCopied := xs.size - xo
+      let packLeft := len - numCopied
+      let packOff := yo + numCopied
+      ByteArray.setPack xs' packOff packLeft p
+  else
+    let e := ByteArray.mkEmpty (yo + len)
+    let ys' := ByteArray.appendPack e ys 0 yo p
+    ByteArray.appendPack ys' xs xo len p
+
+
+def foo : ByteArray := ⟨#[1,2,3,4]⟩
+def bar : ByteArray := ⟨#[5,6,7]⟩
+
+def ByteArray.copyB8 (xs : ByteArray) (off : Nat) (x : B8) : ByteArray :=
+  if off + 1 ≤ xs.size
+  then xs.set! off x
+  else
+    let e := ByteArray.mkEmpty (off + 1)
+    (ByteArray.appendPack e xs 0 off 0).push x
+
+
+def ByteArray.pushB64 (xs : ByteArray) (x : B64) : ByteArray :=
+  let xs0 := xs.push (x >>> 56).toUInt8
+  let xs1 := xs0.push (x >>> 48).toUInt8
+  let xs2 := xs1.push (x >>> 40).toUInt8
+  let xs3 := xs2.push (x >>> 32).toUInt8
+  let xs4 := xs3.push (x >>> 24).toUInt8
+  let xs5 := xs4.push (x >>> 16).toUInt8
+  let xs6 := xs5.push (x >>> 8).toUInt8
+  xs6.push x.toUInt8
+
+def ByteArray.setB64 (xs : ByteArray) (off : Nat) (x : B64) : ByteArray :=
+  let xs0 := xs.set! off (x >>> 56).toUInt8
+  let xs1 := xs0.set! (off + 1) (x >>> 48).toUInt8
+  let xs2 := xs1.set! (off + 2) (x >>> 40).toUInt8
+  let xs3 := xs2.set! (off + 3) (x >>> 32).toUInt8
+  let xs4 := xs3.set! (off + 4) (x >>> 24).toUInt8
+  let xs5 := xs4.set! (off + 5) (x >>> 16).toUInt8
+  let xs6 := xs5.set! (off + 6) (x >>> 8).toUInt8
+  xs6.set! (off + 7) x.toUInt8
+
+def ByteArray.setB128 (xs : ByteArray) (off : Nat) : B128 → ByteArray
+  | ⟨h, l⟩ =>
+    let xs' := ByteArray.setB64 xs off h
+    ByteArray.setB64 xs' (off + 8) l
+
+def ByteArray.setB256 (xs : ByteArray) (off : Nat) : B256 → ByteArray
+  | ⟨h, l⟩ =>
+    let xs' := ByteArray.setB128 xs off h
+    ByteArray.setB128 xs' (off + 16) l
+
+def ByteArray.pushB128 (xs : ByteArray) : B128 → ByteArray
+  | ⟨h, l⟩ =>
+    let xs' := ByteArray.pushB64 xs h
+    ByteArray.pushB64 xs' l
+
+def ByteArray.pushB256 (xs : ByteArray) : B256 → ByteArray
+  | ⟨h, l⟩ =>
+    let xs' := ByteArray.pushB128 xs h
+    ByteArray.pushB128 xs' l
+
+def ByteArray.copyB256 (xs : ByteArray) (off : Nat) (w : B256) : ByteArray :=
+  if off + 32 ≤ xs.size
+  then ByteArray.setB256 xs off w
+  else
+    let e := ByteArray.mkEmpty (off + 32)
+    let ys' := ByteArray.appendPack e xs 0 off 0
+    ByteArray.pushB256 ys' w
+
+def B256.toB8 (x : B256) : B8 := x.2.2.toUInt8
+def B256.getB8 (x o : B256) : B8 := (x >>> (248 - (8 * o))).toB8
+
 def Rinst.run (ω : Wor) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) :
     Rinst → Option (Sta × Mem × Var)
   | .address => pushItem σ μ υ κ.cta.toB256 gBase
@@ -1783,44 +1883,57 @@ def Rinst.run (ω : Wor) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) :
     let σ'' ← σ'.push1 cd
     let υ' ← nextState υ gVerylow
     some ⟨σ'', μ, υ'⟩
-  | .calldatasize => pushItem σ μ υ κ.cld.length.toB256 gBase
+  | .calldatasize => pushItem σ μ υ κ.cld.size.toB256 gBase
   | .calldatacopy => do
     let (x, y, z, σ') ← σ.pop3
-    let bs : B8L := κ.cld.sliceD y.toNat z.toNat 0
+    --let bs : B8L := κ.cld.sliceD y.toNat z.toNat 0
+    dbg_trace "checking for var construction..."
     let υ' ←
       nextState υ
         (gVerylow + (gCopy * ceilDiv z.toNat 32))
         (act' := memExp υ.act x z)
-    some ⟨σ', Array.writeX μ x.toNat bs 0, υ'⟩
+    --some ⟨σ', Array.writeX μ x.toNat bs 0, υ'⟩
+    dbg_trace "updating memory..."
+    dbg_trace s!"read location : {y.toNat}"
+    dbg_trace s!"write location : {x.toNat}"
+    dbg_trace s!"copy size : {z.toNat}"
+    let μ' := ByteArray.copyPack κ.cld y.toNat μ x.toNat z.toNat 0
+    some ⟨σ', μ', υ'⟩
   | .codesize => pushItem σ μ υ κ.code.size.toB256 gBase
   | .codecopy => do
     let (x, y, z, σ') ← σ.pop3
     let cost := gVerylow + (gCopy * ceilDiv z.toNat 32)
     let υ' ← nextState υ cost (act' := memExp υ.act x z)
-    let bs := κ.code.sliceD y.toNat z.toNat (Linst.toB8 .stop)
-    some ⟨σ', Array.writeX μ x.toNat bs 0, υ'⟩
+    -- let bs := κ.code.sliceD y.toNat z.toNat (Linst.toB8 .stop)
+    -- some ⟨σ', Array.writeX μ x.toNat bs 0, υ'⟩
+    some ⟨σ', ByteArray.copyPack κ.code y.toNat μ x.toNat z.toNat (Linst.toB8 .stop), υ'⟩
   | .gasprice => pushItem σ μ υ κ.gpr gBase
   | .extcodesize => do
     let (x, σ') ← σ.pop1
     let a := x.toAdr
     let adrs' : AdrSet := υ.adrs.insert a
-    let σ'' ← σ'.push1 (ω.get a).code.size.toB256
     let υ' ← nextState υ (cAAccess a υ.adrs) (adrs' := adrs')
+    let σ'' ← σ'.push1 (ω.get a).code.size.toB256
     some ⟨σ'', μ, υ'⟩
   | .extcodecopy => do
     let (x, y, z, w, σ') ← σ.pop4
-    let cost := cAAccess x.toAdr υ.adrs + (gCopy * ceilDiv z.toNat 32)
+    let a := x.toAdr
+    let cost := cAAccess a υ.adrs + (gCopy * ceilDiv z.toNat 32)
     let υ' ← nextState υ cost (act' := memExp υ.act y w)
-    let bs := κ.code.sliceD z.toNat w.toNat (Linst.toB8 .stop)
-    some ⟨σ', Array.writeX μ y.toNat bs 0, υ'⟩
-  | .retdatasize => pushItem σ μ υ υ.ret.length.toB256 gBase
+    --let bs := κ.code.sliceD z.toNat w.toNat (Linst.toB8 .stop)
+    let cd := (ω.get a).code
+    --some ⟨σ', Array.writeX μ y.toNat bs 0, υ'⟩
+    some ⟨σ', ByteArray.copyPack cd z.toNat μ y.toNat w.toNat (Linst.toB8 .stop), υ'⟩
+  | .retdatasize => pushItem σ μ υ υ.ret.size.toB256 gBase
   | .retdatacopy => do
     let (x, y, z, σ') ← σ.pop3
-    let bs ← υ.ret.slice? y.toNat z.toNat
+    --let bs ← υ.ret.slice? y.toNat z.toNat
     let act' := memExp υ.act x z
-    checkRemGas υ (gVerylow + (gCopy * (ceilDiv z.toNat 32))) act'
+    --checkRemGas υ (gVerylow + (gCopy * (ceilDiv z.toNat 32))) act'
     let υ' ← nextState υ (gVerylow + (gCopy * (ceilDiv z.toNat 32))) (act' := act')
-    some ⟨σ', Array.writeX μ x.toNat bs 0, υ'⟩
+    --some ⟨σ', Array.writeX μ x.toNat bs 0, υ'⟩
+    some ⟨σ', ByteArray.copyPack υ.ret y.toNat μ x.toNat z.toNat 0, υ'⟩
+
   | .extcodehash => do
     let (x, σ') ← σ.pop1
     let a := x.toAdr
@@ -1853,15 +1966,15 @@ def Rinst.run (ω : Wor) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) :
   | .mstore => do
     let (x, y, σ') ← σ.pop2
     let act' := memExp υ.act x (32 : Nat).toB256
-    checkRemGas υ gVerylow act'
+    -- checkRemGas υ gVerylow act'
     let υ' ← nextState υ gVerylow (act' := act')
-    some ⟨σ', Array.writeX μ x.toNat y.toB8L 0, υ'⟩
+    some ⟨σ', ByteArray.copyB256 μ x.toNat y, υ'⟩
   | .mstore8 => do
     let (x, y, σ') ← σ.pop2
     let act' := memExp υ.act x 1
-    checkRemGas υ gVerylow act'
+    --checkRemGas υ gVerylow act'
     let υ' ← nextState υ gVerylow (act' := act')
-    some ⟨σ', Array.writeX μ x.toNat [y.2.2.toUInt8] 0, υ'⟩
+    some ⟨σ', ByteArray.copyB8 μ x.toNat y.toB8, υ'⟩
   | .gas => pushItem σ μ υ (υ.gas - gBase).toB256 gBase
   | .eq => applyBinary σ μ υ .eq_check gVerylow
   | .lt => applyBinary σ μ υ .lt_check gVerylow
@@ -1874,11 +1987,6 @@ def Rinst.run (ω : Wor) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) :
   | .or => applyBinary σ μ υ B256.or gVerylow
   | .xor => applyBinary σ μ υ B256.xor gVerylow
   | .signextend => applyBinary σ μ υ B256.signext gLow
-
-
-  -- | .pop => do
-  --   let (_, σ') ← σ.pop1
-  --   nextState μ σ' α (cost := gBase)
   | .pop => do
     let (_, σ') ← σ.pop1
     let υ' ← nextState υ gBase
@@ -1898,9 +2006,8 @@ def Rinst.run (ω : Wor) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) :
     let (x, y, σ') ← σ.pop2
     let act' := memExp υ.act x y
     let cost := gKeccak256 + (gKeccak256Word * (ceilDiv y.toNat 32))
-    checkRemGas υ cost act'
-    let σ'' ← σ'.push1 <| B8a.keccak x.toNat y.toNat μ
     let υ' ← nextState υ cost (act' := act')
+    let σ'' ← σ'.push1 <| ByteArray.keccak x.toNat y.toNat μ
     some ⟨σ'', μ, υ'⟩
   | .sub => applyBinary σ μ υ (· - ·) gVerylow
   | .mul => applyBinary σ μ υ (· * ·) gLow
@@ -1993,7 +2100,7 @@ def Jinst.run (σ : Sta) (υ : Var) (κ : Con) :
   | .jump => do
     let (loc, σ') ← σ.pop1
     let g' ← safeSub υ.gas g_mid
-    if jumpable' κ.code loc.toNat
+    if jumpable κ.code loc.toNat
     then some ⟨σ', {υ with gas := g', pc := loc.toNat}⟩
     else none
   | .jumpi => do
@@ -2001,7 +2108,7 @@ def Jinst.run (σ : Sta) (υ : Var) (κ : Con) :
     let g' ← safeSub υ.gas gHigh
     if val = 0
     then some ⟨σ', {υ with gas := g', pc := υ.pc + 1}⟩
-    else if jumpable' κ.code loc.toNat
+    else if jumpable κ.code loc.toNat
          then some ⟨σ', {υ with gas := g', pc := loc.toNat}⟩
          else none
 
@@ -2010,7 +2117,6 @@ def Ninst'.run (w₀ : Wor) (ω : Wor)
     Ninst' → Option (Wor × Sta × Mem × Var)
   | .push x len => do
     let g' ← safeSub υ.gas (if len = 0 then gBase else gVerylow)
-    --let x ← B8L.toB256? <| List.ekatD 32 bs 0
     let σ' ← σ.push1 x
     let υ' := {υ with gas := g', pc := υ.pc + len + 1}
     some ⟨ω, σ', μ, υ'⟩
@@ -2027,7 +2133,8 @@ def retRun (ω : Wor) (σ : Sta) (μ : Mem) (υ : Var) : Option Ξ.Result := do
   let act' : Nat := memExp υ.act rlc rsz
   let memCost : Nat := cMem act' - cMem υ.act
   let g' ← safeSub υ.gas memCost
-  let r := μ.sliceD rlc.toNat rsz.toNat 0
+  let e := ByteArray.mkEmpty rsz.toNat
+  let r := ByteArray.appendPack e μ rlc.toNat rsz.toNat 0
   some {wor := ω, gas := g', acs := υ.toAcs, ret := r}
 
 def xhs (υ : Var) : Ξ.Result :=
@@ -2037,7 +2144,7 @@ structure theta.Cont : Type where
   (olc : B256)
   (osz : B256)
   (gas : Nat)
-  (mem : Array B8)
+  (mem : ByteArray)
   (pc : Nat)
   (sta : Sta)
   (act : Nat)
@@ -2045,7 +2152,7 @@ structure theta.Cont : Type where
 -- Wor × Sta × Mem × Var × Con
 def theta.Result.toState (ct : theta.Cont) (tr : theta.Result) :
     Option (Wor × Sta × Mem × Var) := do
-  let cpy : B8L := List.take ct.osz.toNat tr.ret
+  --let cpy : B8L := List.take ct.osz.toNat tr.ret
   let xs ← ct.sta.push1 (if tr.status then 1 else 0)
   let υ' : Var := {
     gas := ct.gas + tr.gas
@@ -2059,7 +2166,8 @@ def theta.Result.toState (ct : theta.Cont) (tr : theta.Result) :
     logs := tr.acs.logs
     tchd := tr.acs.tchd
   }
-  some ⟨tr.wor, xs, Array.writeX ct.mem ct.olc.toNat cpy 0, υ'⟩
+  --some ⟨tr.wor, xs, Array.writeX ct.mem ct.olc.toNat cpy 0, υ'⟩
+  some ⟨tr.wor, xs, ByteArray.copyPack tr.ret 0 ct.mem ct.olc.toNat ct.osz.toNat 0, υ'⟩
 
 -- the X function of YP, except that the return type is modified to match
 -- that of the Ξ function: the machine state (μ) returned by 'X' is never
@@ -2105,7 +2213,9 @@ def exec (w₀ : Wor) :
       match i with
       | .next (.exec .delcall) => do
         let (gas, adr, ilc, isz, olc, osz, σ') ← σ.pop6
-        let i : B8L := μ.sliceD ilc.toNat isz.toNat 0
+        let ei : ByteArray := ByteArray.mkEmpty isz.toNat
+        --let i : B8L := μ.sliceD ilc.toNat isz.toNat 0
+        let i : ByteArray := ByteArray.appendPack ei μ ilc.toNat isz.toNat 0
         let t : Adr := adr.toAdr
         -- dbg_trace s!"nested delgatecall to address : {t.toHex}"
         let as' : AdrSet := υ.adrs.insert t
@@ -2127,7 +2237,7 @@ def exec (w₀ : Wor) :
           }
         let ⟨ω?, σ?, μ?, υ?⟩ ←
           if 0 = κ.exd
-          then (theta.Result.toState bd ⟨ω, cg, A', 0, []⟩)
+          then (theta.Result.toState bd ⟨ω, cg, A', 0, ByteArray.mk #[]⟩)
           else do let ⟨ω!, σ!, μ!, υ!, κ!⟩ :=
                         θ.prep
                           κ.blk
@@ -2150,7 +2260,9 @@ def exec (w₀ : Wor) :
         exec w₀ lim ω? σ? μ? υ? κ
       | .next (.exec .call) => do
         let (gas, adr, clv, ilc, isz, olc, osz, σ') ← σ.pop7
-        let i : B8L := μ.sliceD ilc.toNat isz.toNat 0
+
+        let ei : ByteArray := ByteArray.mkEmpty isz.toNat
+        let i : ByteArray := ByteArray.appendPack ei μ ilc.toNat isz.toNat 0
         let t : Adr := adr.toAdr
         -- dbg_trace s!"nested call to address : {t.toHex}"
         let as' : AdrSet := υ.adrs.insert t
@@ -2172,7 +2284,7 @@ def exec (w₀ : Wor) :
           }
         let ⟨ω?, σ?, μ?, υ?⟩ ←
           if 0 = κ.exd ∨ (ω.get κ.cta).bal < clv
-          then (theta.Result.toState bd ⟨ω, cg, A', 0, []⟩)
+          then (theta.Result.toState bd ⟨ω, cg, A', 0, ByteArray.mk #[]⟩)
           else do let ⟨ω!, σ!, μ!, υ!, κ!⟩  : (Wor × Sta × Mem × Var × Con) :=
                         θ.prep
                           κ.blk
@@ -2202,7 +2314,7 @@ def exec (w₀ : Wor) :
          match j.run σ υ κ with
          | none => some (xhs υ)
          | some ⟨σ', υ'⟩ => exec w₀ lim ω σ' μ υ' κ
-      | .last .stop => some {wor := ω, gas := υ.gas, acs := υ.toAcs, ret := some []}
+      | .last .stop => some {wor := ω, gas := υ.gas, acs := υ.toAcs, ret := some (ByteArray.mk #[])}
       | .last .ret => some <| (retRun ω σ μ υ).getD (xhs υ)
       | .last .dest => do
         let (x, _) ← σ.pop1
@@ -2229,7 +2341,7 @@ def exec (w₀ : Wor) :
                 dest := κ.cta :: υ.dest
                 adrs := υ.adrs.insert a
               }
-            ret := some []
+            ret := some (ByteArray.mk #[])
           }
 
       | _ => none --dbg_trace s!"unimplemented instruction : {i.toString}"; none
@@ -2251,7 +2363,7 @@ def theta
   (p : Nat)
   (v : B256)
   (v_app : B256)
-  (d : B8L)
+  (d : ByteArray)
   (e : Nat)
   (w : Bool) :
   Option theta.Result :=
@@ -2372,7 +2484,7 @@ def Tx.run
         tx.gasPrice.toNat
         tx.val
         tx.val
-        tx.calldata
+        (List.toByteArray tx.calldata)
         1024
         true
     ).toIO "theta failed"

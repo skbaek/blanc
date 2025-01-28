@@ -374,8 +374,19 @@ def B256.LE (x y : B256) : Prop :=
 instance : @LE B256 := ⟨B256.LE⟩
 instance {x y : B256} : Decidable (x ≤ y) := instDecidableOr
 
+def B128.shiftLeft : B128 → B128 → B128
+  | ⟨xs, ys⟩, os =>
+    if os = 0
+    then ⟨xs, ys⟩
+    else if os < 64
+         then ⟨ (xs <<< os.2) ||| (ys >>> (64 - os.2)),
+                ys <<< os.2 ⟩
+         else if os < 128
+              then ⟨ys <<< (os.2 - 64), 0⟩
+              else ⟨0, 0⟩
+instance : HShiftLeft B128 B128 B128 := ⟨B128.shiftLeft⟩
 
-def B128.shiftLeft : B128 → Nat → B128
+def B128.shiftLeft' : B128 → Nat → B128
   | ⟨xs, ys⟩, os =>
     if os = 0
     then ⟨xs, ys⟩
@@ -385,9 +396,21 @@ def B128.shiftLeft : B128 → Nat → B128
          else if os < 128
               then ⟨ys <<< (os - 64).toUInt64, 0⟩
               else ⟨0, 0⟩
-instance : HShiftLeft B128 Nat B128 := ⟨B128.shiftLeft⟩
+instance : HShiftLeft B128 Nat B128 := ⟨B128.shiftLeft'⟩
 
-def B128.shiftRight : B128 → Nat → B128
+def B128.shiftRight : B128 → B128 → B128
+  | ⟨xs, ys⟩, os =>
+    if os = 0
+    then ⟨xs, ys⟩
+    else if os < 64
+         then ⟨ xs >>> os.2,
+                (xs <<< (64 - os.2)) ||| (ys >>> os.2) ⟩
+         else if os < 128
+              then ⟨0, xs >>> (os.2 - 64)⟩
+              else ⟨0, 0⟩
+instance : HShiftRight B128 B128 B128 := ⟨B128.shiftRight⟩
+
+def B128.shiftRight' : B128 → Nat → B128
   | ⟨xs, ys⟩, os =>
     if os = 0
     then ⟨xs, ys⟩
@@ -397,7 +420,7 @@ def B128.shiftRight : B128 → Nat → B128
          else if os < 128
               then ⟨0, xs >>> (os - 64).toUInt64⟩
               else ⟨0, 0⟩
-instance : HShiftRight B128 Nat B128 := ⟨B128.shiftRight⟩
+instance : HShiftRight B128 Nat B128 := ⟨B128.shiftRight'⟩
 
 def B128.or : B128 → B128 → B128
   | ⟨xh, xl⟩, ⟨yh, yl⟩ => ⟨xh ||| yh, xl ||| yl⟩
@@ -420,7 +443,8 @@ def B256.xor : B256 → B256 → B256
   | ⟨xh, xl⟩, ⟨yh, yl⟩ => ⟨xh ^^^ yh, xl ^^^ yl⟩
 instance : HXor B256 B256 B256 := ⟨B256.xor⟩
 
-def B256.shiftRight : B256 → Nat → B256
+
+def B256.shiftRight' : B256 → Nat → B256
   | ⟨xs, ys⟩, os =>
     if os = 0
     then ⟨xs, ys⟩
@@ -430,9 +454,9 @@ def B256.shiftRight : B256 → Nat → B256
          else if os < 256
               then ⟨0, xs >>> (os - 128)⟩
               else ⟨0, 0⟩
-instance : HShiftRight B256 Nat B256 := ⟨B256.shiftRight⟩
+instance : HShiftRight B256 Nat B256 := ⟨B256.shiftRight'⟩
 
-def B256.shiftLeft : B256 → Nat → B256
+def B256.shiftLeft' : B256 → Nat → B256
   | ⟨xs, ys⟩, os =>
     if os = 0
     then ⟨xs, ys⟩
@@ -441,7 +465,7 @@ def B256.shiftLeft : B256 → Nat → B256
          else if os < 256
               then ⟨ys <<< (os - 128), 0⟩
               else ⟨0, 0⟩
-instance : HShiftLeft B256 Nat B256 := ⟨B256.shiftLeft⟩
+instance : HShiftLeft B256 Nat B256 := ⟨B256.shiftLeft'⟩
 
 def B256.Slt (xs ys : B256) : Prop :=
   let x := xs.highBit
@@ -672,6 +696,29 @@ instance : HSub B256 B256 B256 := ⟨B256.sub⟩
 instance : Sub B256 := ⟨B256.sub⟩
 
 def B256.neg (xs : B256) : B256 := (~~~ xs) + B256.one
+
+def B256.shiftRight : B256 → B256 → B256
+  | ⟨xs, ys⟩, os =>
+    if os = 0
+    then ⟨xs, ys⟩
+    else if os < 128
+         then ⟨ xs >>> os.2,
+                (xs <<< (128 - os.2)) ||| (ys >>> os.2) ⟩
+         else if os < 256
+              then ⟨0, xs >>> (os.2 - 128)⟩
+              else ⟨0, 0⟩
+instance : HShiftRight B256 B256 B256 := ⟨B256.shiftRight⟩
+
+def B256.shiftLeft : B256 → B256 → B256
+  | ⟨xs, ys⟩, os =>
+    if os = 0
+    then ⟨xs, ys⟩
+    else  if os < 128
+         then ⟨(xs <<< os.2) ||| (ys >>> (128 - os.2)), ys <<< os.2⟩
+         else if os < 256
+              then ⟨ys <<< (os.2 - 128), 0⟩
+              else ⟨0, 0⟩
+instance : HShiftLeft B256 B256 B256 := ⟨B256.shiftLeft⟩
 
 def Bits.sar (m : Nat) {n} (xs : Bits n) : Bits n :=
   if isNeg xs
@@ -2038,8 +2085,6 @@ instance {n} : Ord (Bits n) := ⟨Bits.ordering⟩
 def Qords'.init : Array B64 := Array.mkArray 25 0 --Mathlib.Vector.replicate 25 (.zero 64)
 def Qords.init : Qords := Mathlib.Vector.replicate 25 (.zero 64)
 def QordsU.init : QordsU := Mathlib.Vector.replicate 25 0
-
-#check List.toString
 
 def Qords.toString (ws : Qords) : String :=
   let f : Fin 25 → String :=
