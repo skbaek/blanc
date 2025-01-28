@@ -1760,23 +1760,19 @@ def ByteArray.setPack (xs : ByteArray) (off : Nat) : Nat → B8 → ByteArray
     let xs' := xs.set! (off + n) p
     ByteArray.setPack xs' off n p
 
--- assumes : capacity of ys ≥ yo + len
--- assumes : size ys ≥ yo + len
+def foo : ByteArray := ⟨#[1,2,3,4]⟩
+def bar : ByteArray := ⟨#[5,6,7]⟩
 
--- def ByteArray.copyPackAux (xs : ByteArray) (xo : Nat)
---   (ys : ByteArray) (yo len : Nat) (p : B8) : ByteArray :=
---   let ys' := ByteArray.copySlice xs xo ys yo len
---   if xo + len ≤ xs.size
---   then ys'
---   else
---     let numCopied := xs.size - xo
---     let zeroLeft := len - numCopied
---     ByteArray.pushPack ys' zeroLeft p
---
+def ByteArray.copySliceSafe (src : ByteArray) (srcOff : ℕ)
+  (dest : ByteArray) (destOff len : Nat) : ByteArray :=
+  if src.size < srcOff
+  then dest
+  else .copySlice src srcOff dest destOff len
+
 
 def ByteArray.appendPack (xs : ByteArray)
   (ys : ByteArray) (yo : Nat) (len : Nat) (p : B8) : ByteArray :=
-  let xs' := ByteArray.copySlice ys yo xs xs.size len
+  let xs' := ByteArray.copySliceSafe ys yo xs xs.size len
   if yo + len ≤ ys.size
   then xs'
   else
@@ -1791,7 +1787,7 @@ def ByteArray.copyPack (xs : ByteArray) (xo : Nat)
     if xo + len ≤ xs.size
     then .copySlice xs xo ys yo len
     else
-      let xs' := copySlice xs xo ys yo len
+      let xs' := copySliceSafe xs xo ys yo len
       let numCopied := xs.size - xo
       let packLeft := len - numCopied
       let packOff := yo + numCopied
@@ -1802,8 +1798,6 @@ def ByteArray.copyPack (xs : ByteArray) (xo : Nat)
     ByteArray.appendPack ys' xs xo len p
 
 
-def foo : ByteArray := ⟨#[1,2,3,4]⟩
-def bar : ByteArray := ⟨#[5,6,7]⟩
 
 def ByteArray.copyB8 (xs : ByteArray) (off : Nat) (x : B8) : ByteArray :=
   if off + 1 ≤ xs.size
@@ -1886,17 +1880,10 @@ def Rinst.run (ω : Wor) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) :
   | .calldatasize => pushItem σ μ υ κ.cld.size.toB256 gBase
   | .calldatacopy => do
     let (x, y, z, σ') ← σ.pop3
-    --let bs : B8L := κ.cld.sliceD y.toNat z.toNat 0
-    dbg_trace "checking for var construction..."
     let υ' ←
       nextState υ
         (gVerylow + (gCopy * ceilDiv z.toNat 32))
         (act' := memExp υ.act x z)
-    --some ⟨σ', Array.writeX μ x.toNat bs 0, υ'⟩
-    dbg_trace "updating memory..."
-    dbg_trace s!"read location : {y.toNat}"
-    dbg_trace s!"write location : {x.toNat}"
-    dbg_trace s!"copy size : {z.toNat}"
     let μ' := ByteArray.copyPack κ.cld y.toNat μ x.toNat z.toNat 0
     some ⟨σ', μ', υ'⟩
   | .codesize => pushItem σ μ υ κ.code.size.toB256 gBase
@@ -1904,8 +1891,6 @@ def Rinst.run (ω : Wor) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) :
     let (x, y, z, σ') ← σ.pop3
     let cost := gVerylow + (gCopy * ceilDiv z.toNat 32)
     let υ' ← nextState υ cost (act' := memExp υ.act x z)
-    -- let bs := κ.code.sliceD y.toNat z.toNat (Linst.toB8 .stop)
-    -- some ⟨σ', Array.writeX μ x.toNat bs 0, υ'⟩
     some ⟨σ', ByteArray.copyPack κ.code y.toNat μ x.toNat z.toNat (Linst.toB8 .stop), υ'⟩
   | .gasprice => pushItem σ μ υ κ.gpr gBase
   | .extcodesize => do
@@ -1920,20 +1905,14 @@ def Rinst.run (ω : Wor) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) :
     let a := x.toAdr
     let cost := cAAccess a υ.adrs + (gCopy * ceilDiv z.toNat 32)
     let υ' ← nextState υ cost (act' := memExp υ.act y w)
-    --let bs := κ.code.sliceD z.toNat w.toNat (Linst.toB8 .stop)
     let cd := (ω.get a).code
-    --some ⟨σ', Array.writeX μ y.toNat bs 0, υ'⟩
     some ⟨σ', ByteArray.copyPack cd z.toNat μ y.toNat w.toNat (Linst.toB8 .stop), υ'⟩
   | .retdatasize => pushItem σ μ υ υ.ret.size.toB256 gBase
   | .retdatacopy => do
     let (x, y, z, σ') ← σ.pop3
-    --let bs ← υ.ret.slice? y.toNat z.toNat
     let act' := memExp υ.act x z
-    --checkRemGas υ (gVerylow + (gCopy * (ceilDiv z.toNat 32))) act'
     let υ' ← nextState υ (gVerylow + (gCopy * (ceilDiv z.toNat 32))) (act' := act')
-    --some ⟨σ', Array.writeX μ x.toNat bs 0, υ'⟩
     some ⟨σ', ByteArray.copyPack υ.ret y.toNat μ x.toNat z.toNat 0, υ'⟩
-
   | .extcodehash => do
     let (x, σ') ← σ.pop1
     let a := x.toAdr
