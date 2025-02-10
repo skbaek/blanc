@@ -364,6 +364,7 @@ def B128.toHex (x : B128) : String := x.1.toHex ++ x.2.toHex
 def B256.toHex (x : B256) : String := x.1.toHex ++ x.2.toHex
 
 
+
 def B128.LE (x y : B128) : Prop :=
   x.1 < y.1 ∨ (x.1 = y.1 ∧ x.2 ≤ y.2)
 instance : @LE B128 := ⟨B128.LE⟩
@@ -2030,6 +2031,274 @@ instance {n} : Ord (Bits n) := ⟨Bits.ordering⟩
 
 
 
+
+
+def String.joinln (l : List String) : String :=
+  l.foldl (fun r s => r ++ "\n" ++ s) ""
+
+def Hexit.toB4 : Char → Option B8
+  | '0' => some 0x00
+  | '1' => some 0x01
+  | '2' => some 0x02
+  | '3' => some 0x03
+  | '4' => some 0x04
+  | '5' => some 0x05
+  | '6' => some 0x06
+  | '7' => some 0x07
+  | '8' => some 0x08
+  | '9' => some 0x09
+  | 'a' => some 0x0A
+  | 'b' => some 0x0B
+  | 'c' => some 0x0C
+  | 'd' => some 0x0D
+  | 'e' => some 0x0E
+  | 'f' => some 0x0F
+  | 'A' => some 0x0A
+  | 'B' => some 0x0B
+  | 'C' => some 0x0C
+  | 'D' => some 0x0D
+  | 'E' => some 0x0E
+  | 'F' => some 0x0F
+  |  _  => none
+
+def B4L.toB8L : B8L → Option B8L
+  | [] => some []
+  | [_] => none
+  | x :: y :: xs =>
+    let xy := (x <<< 4) ||| y
+    (xy :: ·) <$> B4L.toB8L xs
+
+def Hex.toB8L (s : String) : Option B8L :=
+  s.data.mapM Hexit.toB4 >>= B4L.toB8L
+
+def Option.toIO {ξ} (o : Option ξ) (msg : String) : IO ξ := do
+  match o with
+  | none => throw (IO.Error.userError msg)
+  | some x => pure x
+
+def Bool.toByte : Bool → Byte
+  | true => Ox x0 x1
+  | false => Ox x0 x0
+
+def List.compare {ξ : Type u} [Ord ξ] : List ξ → List ξ → Ordering
+  | [], [] => .eq
+  | [], _ :: _ => .lt
+  | _ :: _, [] => .gt
+  | x :: xs, y :: ys =>
+    match Ord.compare x y with
+    | .eq => List.compare xs ys
+    | o => o
+
+def B128.compare : B128 → B128 → Ordering
+  | ⟨x, y⟩, ⟨x', y'⟩ =>
+    match Ord.compare x x' with
+    | .eq => Ord.compare y y'
+    | o => o
+
+instance : Ord B128 := ⟨B128.compare⟩
+
+def B256.compare : B256 → B256 → Ordering
+  | ⟨x, y⟩, ⟨x', y'⟩ =>
+    match Ord.compare x x' with
+    | .eq => Ord.compare y y'
+    | o => o
+
+instance {ξ : Type u} [Ord ξ] : Ord (List ξ) := ⟨List.compare⟩
+instance : Ord B256 := ⟨B256.compare⟩
+
+def B8.compareLows (x y : B8) : Ordering :=
+  Ord.compare x.lows y.lows
+
+def pad : String → String
+  | s => "  " ++ s
+
+def padMid : String -> String
+  | s => "│ " ++ s
+
+def padsMid : List String → List String
+  | [] => []
+  | s :: ss => ("├─" ++ s) :: ss.map padMid
+
+def padsEnd : List String → List String
+  | [] => []
+  | s :: ss => ("└─" ++ s) :: ss.map pad
+
+def padss : List (List String) -> List String
+  | [] => []
+  | [ss] => padsEnd ss
+  | ss :: sss => padsMid ss ++ padss sss
+
+def fork (s : String) : List (List String) → List String
+  | [[s']] => [s ++ "──" ++ s']
+  | sss => s :: padss sss
+
+def encloseStrings : List String → List String
+  | [] => ["[]"]
+  | [s] => ["[" ++ s ++ "]"]
+  | ss => "┌─" :: ss.map padMid ++ ["└─"]
+
+def listToStrings {ξ} (f : ξ -> List String) (xs : List ξ) : List String :=
+  encloseStrings (xs.map f).flatten
+
+def B4L.toHex : B8L → String
+  | [] => ""
+  | [b] => ⟨[b.toHexit]⟩
+  | b :: bs => ⟨[b.toHexit] ++ (toHex bs).data⟩
+def IO.throw {ξ} (s : String) : IO ξ := MonadExcept.throw <| IO.Error.userError s
+def Hex.from0x : String → IO String
+  | ⟨'0' :: 'x' :: s⟩ => return ⟨s⟩
+  | _ => IO.throw "prefix not 0x"
+
+def B8s.toB32 (a b c d : B8) : B32 :=
+  let a32 : B32 := a.toUInt32
+  let b32 : B32 := b.toUInt32
+  let c32 : B32 := c.toUInt32
+  let d32 : B32 := d.toUInt32
+  (a32 <<< 24) ||| (b32 <<< 16) ||| (c32 <<< 8) ||| d32
+
+def B8s.toB64 (a b c d e f g h : B8) : B64 :=
+  let a64 : B64 := a.toUInt64
+  let b64 : B64 := b.toUInt64
+  let c64 : B64 := c.toUInt64
+  let d64 : B64 := d.toUInt64
+  let e64 : B64 := e.toUInt64
+  let f64 : B64 := f.toUInt64
+  let g64 : B64 := g.toUInt64
+  let h64 : B64 := h.toUInt64
+  (a64 <<< 56) |||
+  (b64 <<< 48) |||
+  (c64 <<< 40) |||
+  (d64 <<< 32) |||
+  (e64 <<< 24) |||
+  (f64 <<< 16) |||
+  (g64 <<< 8)  |||
+  h64
+
+def B8s.toB128
+  (x0 x1 x2 x3 x4 x5 x6 x7 y0 y1 y2 y3 y4 y5 y6 y7 : B8) : B128 :=
+  ⟨ B8s.toB64 x0 x1 x2 x3 x4 x5 x6 x7,
+    B8s.toB64 y0 y1 y2 y3 y4 y5 y6 y7 ⟩
+
+def B8s.toB256
+  ( x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 xA xB xC xD xE xF
+    y0 y1 y2 y3 y4 y5 y6 y7 y8 y9 yA yB yC yD yE yF : B8 ) : B256 :=
+  ⟨ B8s.toB128 x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 xA xB xC xD xE xF,
+    B8s.toB128 y0 y1 y2 y3 y4 y5 y6 y7 y8 y9 yA yB yC yD yE yF ⟩
+
+def B8L.toB128Diff : B8L → Option (B128 × B8L)
+  | x0 :: x1 :: x2 :: x3 ::
+    x4 :: x5 :: x6 :: x7 ::
+    y0 :: y1 :: y2 :: y3 ::
+    y4 :: y5 :: y6 :: y7 :: xs =>
+    some ⟨
+        ⟨ B8s.toB64 x0 x1 x2 x3 x4 x5 x6 x7,
+          B8s.toB64 y0 y1 y2 y3 y4 y5 y6 y7 ⟩,
+        xs
+      ⟩
+  | _ => none
+
+def List.ekatD {ξ : Type u} (n : Nat) (xs : List ξ) (x : ξ) : List ξ :=
+  (xs.reverse.takeD n x).reverse
+
+lemma List.length_ekatD {ξ : Type u} (n : Nat) (xs : List ξ) (x : ξ) :
+    (List.ekatD n xs x).length = n := by
+  apply Eq.trans (List.length_reverse _)
+  apply Eq.trans (List.takeD_length _ _ _) rfl
+
+def B8L.toB256? (xs : B8L) : Option B256 := do
+  let ⟨h, xs'⟩ ← xs.toB128Diff
+  let ⟨l, []⟩ ← xs'.toB128Diff | none
+  some ⟨h, l⟩
+
+def Hex.toB256? (hx : String) : Option B256 := do
+  Hex.toB8L hx >>= B8L.toB256?
+
+def B8V.toB128 : Vec B8 16 → B128
+  | ⟨ [ b0, b1, b2, b3, b4, b5, b6, b7,
+        b8, b9, bA, bB, bC, bD, bE, bF ], _ ⟩ =>
+    ⟨ B8s.toB64 b0 b1 b2 b3 b4 b5 b6 b7,
+      B8s.toB64 b8 b9 bA bB bC bD bE bF ⟩
+
+def B8V.toB256 (xs : Vec B8 32) : B256 :=
+  let h : Vec B8 16 := xs.take 16
+  let l : Vec B8 16 := xs.drop 16
+  ⟨B8V.toB128 h, B8V.toB128 l⟩
+
+def B8L.pack (xs : B8L) (n : Nat) : B8L := List.ekatD n xs 0
+
+def B8L.toB8V (xs : B8L) (n : Nat) : Vec B8 n :=
+  ⟨xs.pack n, List.length_ekatD _ _ _⟩
+
+def B8L.toB256P (xs : B8L) : B256 := B8V.toB256 (xs.toB8V 32)
+
+
+def IO.guard (φ : Prop) [Decidable φ] (msg : String) : IO Unit :=
+  if φ then return () else IO.throw msg
+
+def Array.writeD {ξ : Type u} (xs : Array ξ) (n : ℕ) : List ξ → Array ξ
+  | [] => xs
+  | y :: ys =>
+    if h : n < xs.size
+    then let xs' := xs.setN n y
+         writeD xs' (n + 1) ys
+    else xs
+
+def Array.copyD {ξ : Type u} (xs ys : Array ξ) : Array ξ :=
+  let f : (Array ξ × Nat) → ξ → (Array ξ × Nat) :=
+    λ ysn x => ⟨Array.setD ysn.fst ysn.snd x, ysn.snd + 1⟩
+  (Array.foldl f ⟨ys, 0⟩ xs).fst
+
+def Array.writeX {ξ : Type u} (xs : Array ξ) (n : ℕ) (ys : List ξ) (d : ξ) : Array ξ :=
+  if n + ys.length ≤ xs.size
+  then Array.writeD xs n ys
+  else let zs : Array ξ := Array.mkArray (n + ys.length) d
+       let zs' : Array ξ := Array.copyD xs zs
+       Array.writeD zs' n ys
+
+
+def ByteArray.sliceD (xs : ByteArray) : Nat → Nat → B8 → B8L
+  | _, 0, _ => []
+  | m, n + 1, d =>
+    if m < xs.size
+    then xs.get! m :: ByteArray.sliceD xs (m + 1) n d
+    else List.replicate (n + 1) d
+
+lemma ByteArray.length_sliceD {xs : ByteArray} {m n x} :
+    (ByteArray.sliceD xs m n x).length = n := by
+  induction n generalizing m with
+  | zero => simp [sliceD]
+  | succ n ih =>
+    simp [sliceD]
+    by_cases h : m < xs.size
+    · rw [if_pos h]; simp [List.length]; apply ih
+    · rw [if_neg h]; apply List.length_replicate
+
+def Array.sliceD {ξ : Type u} (xs : Array ξ) : Nat → Nat → ξ → List ξ
+  | _, 0, _ => []
+  | m, n + 1, d => xs.getD m d :: Array.sliceD xs (m + 1) n d
+
+lemma Array.length_sliceD {ξ} {xs : Array ξ} {m n x} :
+    (Array.sliceD xs m n x).length = n := by
+  induction n generalizing m with
+  | zero => simp [sliceD]
+  | succ n ih => simp [sliceD, List.length, ih]
+
+
+def B256.min : B256 → B256 → B256
+  | xs, ys => if xs ≤ ys then xs else ys
+instance : Min B256 := ⟨.min⟩
+
+def B16.toB8L (x : B16) : List B8 := [x.highs, x.lows]
+def B32.toB8L (x : B32) : List B8 := x.highs.toB8L ++ x.lows.toB8L
+def B8.toB4s (x : B8) : List B8 := [x.highs, x.lows]
+def B16.toB4s (x : B16) : List B8 := x.highs.toB4s ++ x.lows.toB4s
+def B32.toB4s (x : B32) : List B8 := x.highs.toB4s ++ x.lows.toB4s
+def B64.toB4s (x : B64) : List B8 := x.highs.toB4s ++ x.lows.toB4s
+def B128.toB4s (x : B128) : List B8 := x.1.toB4s ++ x.2.toB4s
+def B256.toB4s (x : B256) : List B8 := x.1.toB4s ++ x.2.toB4s
+
+
+
 ------------------------------KECCAK------------------------------
 
 -- 256-bit keccak hash function. Ported from Andrey Jivsov's
@@ -2038,8 +2307,6 @@ instance {n} : Ord (Bits n) := ⟨Bits.ordering⟩
 def Qords'.init : Array B64 := Array.mkArray 25 0 --Mathlib.Vector.replicate 25 (.zero 64)
 def Qords.init : Qords := Mathlib.Vector.replicate 25 (.zero 64)
 def QordsU.init : QordsU := Mathlib.Vector.replicate 25 0
-
-#check List.toString
 
 def Qords.toString (ws : Qords) : String :=
   let f : Fin 25 → String :=
@@ -2341,33 +2608,6 @@ def Array.tegD {ξ : Type u} (xs : Array ξ) (n : Nat) (x : ξ) : ξ :=
 def Array.teg! {ξ : Type u} [Inhabited ξ] (xs : Array ξ) (n : Nat) : ξ :=
   xs.get! (xs.size - n)
 
-def B8s.toB32 (a b c d : B8) : B32 :=
-  let a64 : B32 := a.toUInt32
-  let b64 : B32 := b.toUInt32
-  let c64 : B32 := c.toUInt32
-  let d64 : B32 := d.toUInt32
-  (a64 <<< 24) ||| (b64 <<< 16) ||| (c64 <<< 8) ||| d64
-
-def B8s.toB64 (a b c d e f g h : B8) : B64 :=
-  let a64 : B64 := a.toUInt64
-  let b64 : B64 := b.toUInt64
-  let c64 : B64 := c.toUInt64
-  let d64 : B64 := d.toUInt64
-  let e64 : B64 := e.toUInt64
-  let f64 : B64 := f.toUInt64
-  let g64 : B64 := g.toUInt64
-  let h64 : B64 := h.toUInt64
-  (a64 <<< 56) |||
-  (b64 <<< 48) |||
-  (c64 <<< 40) |||
-  (d64 <<< 32) |||
-  (e64 <<< 24) |||
-  (f64 <<< 16) |||
-  (g64 <<< 8)  |||
-  h64
-
-
-
 instance {n : Nat} : ToString (Bits n) := ⟨@Bits.toString n⟩
 
 def keccak : Fin 17 → Bytes → Qords → Word
@@ -2384,8 +2624,6 @@ def keccak : Fin 17 → Bytes → Qords → Word
   (Qord.reverse <| ws'.get 0) ++ (Qord.reverse <| ws'.get 1) ++
   (Qord.reverse <| ws'.get 2) ++ (Qord.reverse <| ws'.get 3)
 
-
-
 def keccakU : Fin 17 → B8L → QordsU → B256
 | wc, b0 :: b1 :: b2 :: b3 :: b4 :: b5 :: b6 :: b7 :: bs, ws =>
   let t : B64 := B8s.toB64 b7 b6 b5 b4 b3 b2 b1 b0
@@ -2401,15 +2639,8 @@ def keccakU : Fin 17 → B8L → QordsU → B256
   let temp0 := QordsU.app wc (· ^^^ t) ws
   let temp1 := QordsU.app 16 (· ^^^ s) temp0
   let ws' := KeccakU.f temp1
-  --Qord.reverse (ws'.get 0).toBits ++
-  --Qord.reverse (ws'.get 1).toBits ++
-  --Qord.reverse (ws'.get 2).toBits ++
-  --Qord.reverse (ws'.get 3).toBits
   (B64.reverse (ws'.get 0) ++ B64.reverse (ws'.get 1)) ++
   (B64.reverse (ws'.get 2) ++ B64.reverse (ws'.get 3))
-
-  --⟨B64.reverse (ws'.get 0), B64.reverse (ws'.get 1)⟩ ++ ⟨B64.reverse (ws'.get 2), B64.reverse (ws'.get 3)⟩
-
 
 def keccakEndAux' (bnd : Nat) (bs : ByteArray) : Nat → Nat → List B8
   | _, 0 => [] -- unreachable code
@@ -2491,8 +2722,6 @@ def Bytes.keccak (bs : Bytes) : Word :=
 def B8L.keccak (bs : B8L) : B256 :=
   _root_.keccakU (0 : Fin 17) bs QordsU.init
 
--- def B8a.keccak (bs : Array B8) : B256 :=
---   keccakA bs.size (0 : Fin 17) bs QordsU.init
 def B8a.keccak (loc sz : Nat) (bs : Array B8) : B256 :=
   keccakA (loc + sz) sz (0 : Fin 17) bs QordsU.init
 
@@ -2501,6 +2730,221 @@ def ByteArray.keccak (loc sz : Nat) (bs : ByteArray) : B256 :=
 
 def String.keccak (s : String) : Word :=
   Bytes.keccak s.toBytes
+
+
+
+------------------------------SHA256------------------------------
+
+-- 256-bit SHA-2 hash function. Ported from Alain Mosnier's
+-- C implementation (https://github.com/amosnier/sha-2)
+
+abbrev B32L : Type := List B32
+abbrev B32A : Type := Array B32
+
+def B32L.initChunk : B32L :=
+  [ 0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+    0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19 ]
+
+def B32A.initChunk : B32A :=
+  #[ 0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+     0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19 ]
+
+
+def B8L.toChunks (lenB8L : B8L) : Nat → B8L → List B8L
+  | 0, _ => []
+  | k + 1, xs =>
+    match xs.length with
+    | 0 => [[0x80] ++ (List.replicate (55 : Nat) 0x00) ++ lenB8L]
+    | _ + 64 =>
+      let ⟨pfx, xs'⟩ := List.splitAt 64 xs
+      let xss := B8L.toChunks lenB8L k xs'
+      pfx :: xss
+    | _ + 56 =>
+      [ xs ++ (0x80 :: List.replicate (64 - (xs.length + 1)) 0x00),
+        (List.replicate (56 : Nat) 0x00) ++ lenB8L ]
+    | _ =>
+      [xs ++ (0x80 :: List.replicate (64 - (xs.length + 9)) 0x00) ++ lenB8L]
+
+def ceilDiv (m n : Nat) := m / n + if m % n = 0 then 0 else 1
+
+def chunkToString : B8L → String
+  | x0 :: x1 :: x2 :: x3 ::
+    x4 :: x5 :: x6 :: x7 :: xs =>
+    s!"{x0.toHex} {x1.toHex} {x2.toHex} {x3.toHex} {x4.toHex} {x5.toHex} {x6.toHex} {x7.toHex}\n" ++
+    chunkToString xs
+  | [] => ""
+  | _ => "ERROR : CHUNK NOT MULTIPLE OF 8"
+
+def chunksToString : Nat → List B8L → String
+  | _, [] => ""
+  | k, xs :: xss =>
+    -- s!"Chunk #{k}:\n" ++
+    chunkToString xs ++
+    chunksToString k.succ xss
+
+
+def rightRot (x : B32) (n : B32): B32 :=
+  (x >>> n) ||| (x <<< (32 - n))
+
+def getAddMod (w : B32L) (j n : Nat) := (w.getD ((j + n) % 16) 0)
+
+def roundConstants : B32A :=
+ #[ 0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5,
+    0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3,
+    0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc,
+    0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
+    0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13,
+    0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3,
+    0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5,
+    0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208,
+    0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2 ]
+
+def hashPrint : B32L → String
+  | [] => ""
+  | x0 :: x1 :: x2 :: x3 ::
+    x4 :: x5 :: x6 :: x7 :: xs =>
+    s!"{x0.toHex} {x1.toHex} {x2.toHex} {x3.toHex} " ++
+    s!"{x4.toHex} {x5.toHex} {x6.toHex} {x7.toHex}\n" ++
+    s!"{hashPrint xs}"
+  | _ => "ERROR : hash not multiple of 8"
+
+def consumeChunkAux (ah : B32L) (w : B32L) (p : B8L) (i j : Nat) : B32L × B32L :=
+  dbg_trace "------------------------------------------------------------------------\n\n"
+  dbg_trace s!"i : {i}, j : {j}\n"
+  dbg_trace "AH :"
+  dbg_trace s!"{hashPrint ah}"
+  dbg_trace "W :"
+  dbg_trace s!"{hashPrint w}"
+
+  let newEntry : B32 :=
+    if i = 0
+    then
+      let temp : B32 :=
+        B8s.toB32
+          (p.getD (4 * j) 0)
+          (p.getD ((4 * j) + 1) 0)
+          (p.getD ((4 * j) + 2) 0)
+          (p.getD ((4 * j) + 3) 0)
+      dbg_trace s!"temp : {temp.toHex}"
+      temp
+    else
+      let s0 : B32 :=
+        (rightRot (getAddMod w j 1) 7) ^^^
+        (rightRot (getAddMod w j 1) 18) ^^^
+        ((getAddMod w j 1) >>> 3)
+      let s1 :=
+        (rightRot (getAddMod w j 14) 17) ^^^
+        (rightRot (getAddMod w j 14) 19) ^^^
+        ((getAddMod w j 14) >>> 10)
+      (w.getD j 0) + s0 + (getAddMod w j 9) + s1
+  let w' := List.set w j newEntry
+  let s1 : B32 :=
+    (rightRot (ah.get! 4) 6) ^^^
+    (rightRot (ah.get! 4) 11) ^^^
+    (rightRot (ah.get! 4) 25)
+  let ch : B32 :=
+    (ah.get! 4 &&& ah.get! 5) ^^^
+    ((~~~ (ah.get! 4)) &&& ah.get! 6)
+  dbg_trace s!"s1 : {s1.toHex}"
+  dbg_trace s!"ch : {ch.toHex}"
+  let temp1 : B32 :=
+    (ah.get! 7) + s1 + ch +
+    (roundConstants.get! ((i * 16) + j)) +
+    (w'.get! j)-- ah[7] + s1 + ch + k[i << 4 | j] + w[j];
+  let s0 : B32 :=
+    (rightRot (ah.get! 0) 2) ^^^
+    (rightRot (ah.get! 0) 13) ^^^
+    (rightRot (ah.get! 0) 22)
+  let maj : B32 :=
+    (ah.get! 0 &&& ah.get! 1) ^^^
+    (ah.get! 0 &&& ah.get! 2) ^^^
+    (ah.get! 1 &&& ah.get! 2)
+  let temp2 : B32 := s0 + maj -- s0 + maj;
+
+  dbg_trace s!"temp1 : {temp1.toHex}"
+  dbg_trace s!"s0 : {s0.toHex}"
+  dbg_trace s!"maj : {maj.toHex}"
+  dbg_trace s!"temp2 : {temp2.toHex}"
+
+  let ah' :=
+    [
+      temp1 + temp2,
+      ah.get! 0,
+      ah.get! 1,
+      ah.get! 2,
+      ah.get! 3 + temp1,
+      ah.get! 4,
+      ah.get! 5,
+      ah.get! 6
+    ]
+
+  dbg_trace "AH' :"
+  dbg_trace s!"{hashPrint ah'}"
+  dbg_trace "W' :"
+  dbg_trace s!"{hashPrint w'}"
+
+  ⟨ah', w'⟩
+
+def consumeChunkLoop (ah : B32L) (w : B32L) (p : B8L) : Nat → Nat → B32L
+  | 0, _ => ah
+  | ni + 1, 0 => consumeChunkLoop ah w p ni 16
+  | ni, nj + 1 =>
+    let n := 4 - ni
+    let j := 16 - (nj + 1)
+    let ⟨ah', w'⟩ := consumeChunkAux ah w p n j
+    consumeChunkLoop ah' w' p ni nj
+
+
+def consumeChunk (h : B32L) (p : B8L) : B32L :=
+  dbg_trace "Hash before consume chunk:"
+  dbg_trace s!"{hashPrint h}"
+
+  dbg_trace "Consuming chunk:"
+  dbg_trace s!"{chunkToString p}"
+
+  let w : B32L := List.replicate 16 (0 : B32)
+  let ah := consumeChunkLoop h w p 4 16
+  let h' :=
+    [
+      h.get! 0 + ah.get! 0,
+      h.get! 1 + ah.get! 1,
+      h.get! 2 + ah.get! 2,
+      h.get! 3 + ah.get! 3,
+      h.get! 4 + ah.get! 4,
+      h.get! 5 + ah.get! 5,
+      h.get! 6 + ah.get! 6,
+      h.get! 7 + ah.get! 7
+    ]
+
+  dbg_trace "Hash after consume chunk:"
+  dbg_trace s!"{hashPrint h'}"
+  h'
+
+def B32s.toB64 (x y : B32) : B64 :=
+  x.toUInt64 <<< 32 ||| y.toUInt64
+
+def B32s.toB128 (x0 x1 y0 y1 : B32) : B128 :=
+  ⟨B32s.toB64 x0 x1, B32s.toB64 y0 y1⟩
+
+def B32s.toB256 (x0 x1 x2 x3 y0 y1 y2 y3: B32) : B256 :=
+  ⟨B32s.toB128 x0 x1 x2 x3, B32s.toB128 y0 y1 y2 y3⟩
+
+def B8L.sha256 (xs : B8L) : B256 :=
+  let xss : List B8L :=
+    B8L.toChunks (B64.toB8L (xs.length * 8).toUInt64) (xs.length / 64).succ xs
+  -- dbg_trace (chunksToString 0 xss);
+  let hash := List.foldl consumeChunk B32L.initChunk xss
+  match hash with
+  | [x0, x1, x2, x3, y0, y1, y2, y3] =>
+    B32s.toB256 x0 x1 x2 x3 y0 y1 y2 y3
+  | _ => (dbg_trace "incorrect number of 32-bit numbers in hash"; 0)
 
 def List.splitAt? {ξ : Type u} : Nat → List ξ → Option (List ξ × List ξ)
   | 0, xs => some ([], xs)

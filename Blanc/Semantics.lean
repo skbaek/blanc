@@ -204,6 +204,32 @@ inductive Stack.Nth : Nat → Word → Stack → Prop
 
 def Stack.Dup (n : Nat) (s s' : Stack) : Prop := ∃ x, Push [x] s s' ∧ Stack.Nth n x s
 
+abbrev Stor := Lean.RBMap B256 B256 compare
+
+structure Acct where
+  (nonce : B256)
+  (bal : B256)
+  (stor : Stor)
+  (code : ByteArray)
+
+structure Adr : Type where
+  (high : B32)
+  (mid : B64)
+  (low : B64)
+
+def Adr.ordering : Adr → Adr → Ordering
+  | ⟨xh, xm, xl⟩, ⟨yh, ym, yl⟩ =>
+    match compare xh yh with
+    | .eq =>
+      match compare xm ym with
+      | .eq => compare xl yl
+      | o => o
+    | o => o
+
+instance : Ord Adr := ⟨Adr.ordering⟩
+abbrev Wor : Type := Lean.RBMap Adr Acct compare
+
+
 structure State where
   -- balance, storage, & code : parts of the world state
   (bal : Addr → Word)
