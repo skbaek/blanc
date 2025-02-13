@@ -207,7 +207,6 @@ def gMemory : Nat := 3
 def gKeccak256 : Nat := 30
 def gKeccak256Word : Nat := 6
 def cMem (a : Nat) := gMemory * a + ((a ^ 2) / 512)
--- def gZero : Nat := 0
 def gVerylow : Nat := 3
 def gLow : Nat := 5
 def gMid : Nat := 8
@@ -488,6 +487,13 @@ def cCall (ω : Wor) (υ : Var)
     (g : Nat) (memCost : Nat) (t : Adr) (v : B256) : Nat :=
   cGasCap ω υ g memCost t v + cExtra ω υ t v
 
+structure ΛR : Type where
+  (wor : Wor)
+  (gas : Nat)
+  (acs : Acs)
+  (status : B256)
+  (ret : B8L)
+
 structure theta.Result : Type where
   (wor : Wor)
   (gas : Nat)
@@ -510,7 +516,6 @@ def Acct.empty : Acct :=
 
 def Sta.init : Sta := ⟨Array.mkArray 1024 (0 : B256), 0⟩
 
--- need further update for precompiled contracts
 def θ.prep
   (ω₀ : Wor)
   (H : Block)
@@ -801,8 +806,6 @@ def memExp (s : Nat) (f l : B256) : Nat :=
   if l = 0
   then s
   else max s (ceilDiv (f.toNat + l.toNat) 32)
-
-
 
 def nextState (υ : Var) (cost : Nat)
   (act' : Option Nat := none)
@@ -1158,7 +1161,24 @@ structure theta.Cont : Type where
   (sta : Sta)
   (act : Nat)
 
--- Wor × Sta × Mem × Var × Con
+def theta.Result.use (tr : theta.Result) (ct : theta.Cont) :
+    Option (Wor × Sta × Mem × Var) := do
+  let cpy : B8L := List.take ct.osz.toNat tr.ret
+  let xs ← ct.sta.push1 (if tr.status then 1 else 0)
+  let υ' : Var := {
+    gas := ct.gas + tr.gas
+    pc := ct.pc + 1
+    ret := tr.ret
+    act := ct.act
+    dest := tr.acs.dest
+    adrs := tr.acs.adrs
+    keys := tr.acs.keys
+    ref := tr.acs.ref
+    logs := tr.acs.logs
+    tchd := tr.acs.tchd
+  }
+  some ⟨tr.wor, xs, Array.writeX ct.mem ct.olc.toNat cpy 0, υ'⟩
+
 def theta.Result.toState (ct : theta.Cont) (tr : theta.Result) :
     Option (Wor × Sta × Mem × Var) := do
   let cpy : B8L := List.take ct.osz.toNat tr.ret
@@ -1215,11 +1235,6 @@ def showStep (υ : Var) (i : Inst') : Option Unit := do
   )
   return ()
 
---structure Ξ.Result where
---  (wor : Option Wor)
---  (gas : Nat)
---  (acs : Acs)
---  (ret : Option B8L)
 
 
 def execSha (ω : Wor) (υ : Var) (κ : Con) : Ξ.Result :=
@@ -1230,14 +1245,6 @@ def execSha (ω : Wor) (υ : Var) (κ : Con) : Ξ.Result :=
     let hash : B256 := B8L.sha256 κ.cld
     {wor := some ω, gas := g', acs := υ.toAcs, ret := some hash.toB8L}
 
--- the X function of YP, except that the return type is modified to match
--- that of the Ξ function: the machine state (μ) returned by 'X' is never
--- used for anything except for remaining gas, so it is safe to discard the
--- unused information by the time X is returning.
--- This function returns `none` only when either the recursion limit or an
--- unimplemented opcode is reached. returns 'some _' for all other cases.
--- in particular, exceptional halting state should not cause it to return
--- a `none`.
 def mkThetaCont (ω : Wor) (σ' : Sta) (μ : Mem) (υ : Var)
     (gas adr ilc isz olc osz : B256) : Option theta.Cont :=  do
 
@@ -1256,6 +1263,115 @@ def mkThetaCont (ω : Wor) (σ' : Sta) (μ : Mem) (υ : Var)
     act := act'
   }
 
+def execPre : Nat → Wor → Sta → Mem → Var → Con → Option Ξ.Result
+  | 2, ω, σ, μ, υ, κ => some <| execSha ω υ κ
+  | _, ω, σ, μ, υ, κ => none
+
+
+-- STATCALL: Θ(σ, A∗, Ia, Io, t,  t, C_CALLGAS(σ, μ, A), I_p, 0,     0,     i, Ie + 1, false)
+-- CALL:     Θ(σ, A∗, Ia, Io, t,  t, C_CALLGAS(σ, μ, A), I_p, μs[2], μs[2], i, Ie + 1, Iw)
+-- CALLCODE: Θ(σ, A∗, Ia, Io, Ia, t, C_CALLGAS(σ, μ, A), I_p, μs[2], μs[2], i, Ie + 1, Iw)
+-- DELCALL:  Θ(σ, A∗, Is, Io, Ia, t, C_CALLGAS(σ, μ, A), I_p, 0,     I_v,   i, Ie + 1, Iw)
+
+--  Θ(σ, A∗, Ia, Io, t,  t, C_CALLGAS(σ, μ, A), I_p, μs[2], μs[2], i, Ie + 1, Iw)
+
+-- A* : υ, adr
+-- I_o : κ
+-- t : adr
+-- C_CALLGAS(...) : ω, υ, gas, ilc, isz, olc, osz, adr, clv
+-- I_p : κ
+-- i : μ, ilc, isz
+-- I_e : κ
+
+-- θ( ω, μ, υ, κ, gas, adr, clv, ilc, isz, olc, osz,
+--    sender, receiver, trans_val, report_val, update? )
+
+
+-- succeeds in all cases EXCEPT there is insufficient gas
+-- to execute a CALL/CALLCODE/DELCALL/STATCALL instruction,
+-- which is an exceptional halting state.
+
+def θ.prep'
+  (κ : Con)
+  (ω : Wor)
+  (A' : Acs)
+  (sen : Adr)
+  (rec : Adr)
+  (cod : Adr)
+  (cg : Nat)
+  (tval : B256)
+  (rval : B256)
+  (i : B8L)
+  (wup : Bool) :
+  Wor × Var × Con :=
+  let ω' : Wor :=
+    match ω.find? rec with
+    | none =>
+      if tval = 0
+      then ω
+      else ω.insert rec {nonce := 0, bal := tval, stor := .empty, code := ByteArray.mk #[]}
+    | some aᵣ => ω.insert rec {aᵣ with bal := aᵣ.bal + tval}
+  let ω! : Wor :=
+    match ω'.find? sen with
+    | none =>
+      if tval = 0
+      then ω'
+      else (dbg_trace "unreachable code : nonzero value calls from empty accounts should never happen" ; ω')
+    | some aₛ => ω'.insert sen {aₛ with bal := aₛ.bal - tval}
+  let κ! : Con := {
+    wor0 := κ.wor0
+    cta := rec, oga := κ.oga, gpr := κ.gpr, cld := i, cla := sen,
+    clv := rval, code := ω.code cod, blk := κ.blk, exd := κ.exd - 1, wup := wup
+  }
+  let υ! : Var := {
+    gas := cg, pc := 0, ret := [], act := 0
+    dest := A'.dest, adrs := A'.adrs, keys := A'.keys,
+    ref := A'.ref, logs := A'.logs, tchd := A'.tchd
+  }
+  ⟨ω!, υ!, κ!⟩
+
+def thetaPrep
+  (ω : Wor) (σ' : Sta) (μ : Mem) (υ : Var) (κ : Con)
+  (gas adr ilc isz olc osz : B256)
+  (sen rec : Adr) (tval rval : B256) (wup : Bool) :
+  Option (theta.Result × (Wor × Var × Con) × theta.Cont) := do
+  let i : B8L := μ.sliceD ilc.toNat isz.toNat 0
+  let cod := adr.toAdr
+  let as' : AdrSet := υ.adrs.insert cod
+  let A' : Acs := {υ.toAcs with adrs := as'}
+  let act' : Nat := memExp (memExp υ.act ilc isz) olc osz
+  let memCost : Nat := cMem act' - cMem υ.act
+  let cg : Nat := cCallGas ω υ gas.toNat memCost cod tval
+  let totalCost := (cCall ω υ gas.toNat memCost cod tval) + memCost
+  let g' ← (safeSub υ.gas totalCost)
+  let ⟨ω!, υ!, κ!⟩ : (Wor × Var × Con) :=
+    θ.prep'
+      κ
+      ω
+      A'
+      sen
+      rec
+      cod
+      cg
+      tval
+      rval
+      i
+      wup
+  some ⟨
+    ⟨ω, cg, A', 0, []⟩,
+    ⟨ω!, υ!,κ!⟩,
+    {olc := olc, osz := osz, gas := g', mem := μ, pc := υ.pc, sta := σ', act := act'}
+  ⟩
+
+-- the X function of YP, except that the return type is modified to match
+-- that of the Ξ function: the machine state (μ) returned by 'X' is never
+-- used for anything except for remaining gas, so it is safe to discard the
+-- unused information by the time X is returning.
+-- This function returns `none` only when either the recursion limit or an
+-- unimplemented opcode is reached. returns 'some _' for all other cases.
+-- in particular, exceptional halting state should not cause it to return
+-- a `none`.
+
 def exec : Nat → Wor → Sta → Mem → Var → Con → Option Ξ.Result
   | 0, _, _, _, _, _ => none
   | lim + 1, ω, σ, μ, υ, κ  => do
@@ -1264,123 +1380,85 @@ def exec : Nat → Wor → Sta → Mem → Var → Con → Option Ξ.Result
     | none => some <| xhs υ
     | some i => do
       -- dbg_trace s!"remaining gas : {υ.gas}"
-      -- showStep υ i
+      showStep υ i
       -- dbg_trace s!"current stack :\n{Sta.toString σ}"
       match i with
-      | .next (.exec .delcall) => do
-        let (gas, adr, ilc, isz, olc, osz, σ') ← σ.pop6
-        let i : B8L := μ.sliceD ilc.toNat isz.toNat 0
-        let t : Adr := adr.toAdr
-        -- dbg_trace s!"nested delgatecall to address : {t.toHex}"
-        let as' : AdrSet := υ.adrs.insert t
-        let A' : Acs := {υ.toAcs with adrs := as'}
-        let act' : Nat := memExp (memExp υ.act ilc isz) olc osz
-        let memCost : Nat := cMem act' - cMem υ.act
-        let cg : Nat := cCallGas ω υ gas.toNat memCost t 0
-        let totalCost := (cCall ω υ gas.toNat memCost t 0) + memCost
-        let (some g') ← (return (safeSub υ.gas totalCost)) | some (xhs υ)
-        let bd : theta.Cont :=
-          {
-            olc := olc
-            osz := osz
-            gas := g'
-            mem := μ
-            pc := υ.pc
-            sta := σ'
-            act := act'
-          }
-        let ⟨ω?, σ?, μ?, υ?⟩ ←
-          if 0 = κ.exd
-          then (theta.Result.toState bd ⟨ω, cg, A', 0, []⟩)
-          else do let ⟨ω!, σ!, μ!, υ!, κ!⟩ :=
-                        θ.prep
-                          κ.wor0
-                          κ.blk
-                          ω
-                          A'
-                          κ.cla
-                          κ.oga
-                          κ.cta
-                          t
-                          cg
-                          κ.gpr.toNat
-                          0
-                          κ.clv
-                          i
-                          (κ.exd - 1)
-                          κ.wup
-                  let xr ←
-                    match κ!.cta.toNat with
-                    | 1 => dbg_trace "unimplemented : precompiled contract 1"; sorry
-                    | 2 => execSha ω! υ! κ!
-                    | 3 => dbg_trace "unimplemented : precompiled contract 3"; sorry
-                    | 4 => dbg_trace "unimplemented : precompiled contract 4"; sorry
-                    | 5 => dbg_trace "unimplemented : precompiled contract 5"; sorry
-                    | 6 => dbg_trace "unimplemented : precompiled contract 6"; sorry
-                    | 7 => dbg_trace "unimplemented : precompiled contract 7"; sorry
-                    | 8 => dbg_trace "unimplemented : precompiled contract 8"; sorry
-                    | 9 => dbg_trace "unimplemented : precompiled contract 9"; sorry
-                    | _ => exec lim ω! σ! μ! υ! κ!
-                  let θr := θ.wrap ω! υ!.toAcs xr
-                  (theta.Result.toState bd θr)
-        exec lim ω? σ? μ? υ? κ
+      --| .next (.exec .create) => do
+      --  let (val, code_loc, code_sz, σ') ← σ.pop7
+      --  let i : B8L := μ.sliceD code_loc.toNat code_sz.toNat 0
+      --  let act' : Nat := memExp υ.act code_loc code_sz
+      --  let memCost : Nat := cMem act' - cMem υ.act
+      --  let totalCost := (except64th υ.gas) + memCost
+      --  let g' ← (safeSub υ.gas totalCost)
+      --  _
       | .next (.exec .call) => do
         let (gas, adr, clv, ilc, isz, olc, osz, σ') ← σ.pop7
-        let t : Adr := adr.toAdr
-        -- dbg_trace s!"nested call to address : {t.toHex}"
-        let i : B8L := μ.sliceD ilc.toNat isz.toNat 0
-        let as' : AdrSet := υ.adrs.insert t
-        let A' : Acs := {υ.toAcs with adrs := as'}
-        let act' : Nat := memExp (memExp υ.act ilc isz) olc osz
-        let memCost : Nat := cMem act' - cMem υ.act
-        let cg : Nat := cCallGas ω υ gas.toNat memCost t clv
-        let totalCost := (cCall ω υ gas.toNat memCost t clv) + memCost
-        let (some g') ← (return (safeSub υ.gas totalCost)) | some (xhs υ)
-        let bd : theta.Cont :=
-          {
-            olc := olc
-            osz := osz
-            gas := g'
-            mem := μ
-            pc := υ.pc
-            sta := σ'
-            act := act'
-          }
-        let ⟨ω?, σ?, μ?, υ?⟩ ←
+        dbg_trace s!"nested CALL to address : {adr.toHex}"
+        let (some ⟨θrf, ⟨ωp, υp, κp⟩, θc⟩) ←
+          ( return thetaPrep ω σ' μ υ κ
+              gas adr ilc isz olc osz
+              κ.cta adr.toAdr clv clv κ.wup ) | some (xhs υ)
+        let θr : theta.Result ←
           if 0 = κ.exd ∨ (ω.get κ.cta).bal < clv
-          then (theta.Result.toState bd ⟨ω, cg, A', 0, []⟩)
-          else do let ⟨ω!, σ!, μ!, υ!, κ!⟩ : (Wor × Sta × Mem × Var × Con) :=
-                        θ.prep
-                          κ.wor0
-                          κ.blk
-                          ω
-                          A'
-                          κ.cta
-                          κ.oga
-                          t
-                          t
-                          cg
-                          κ.gpr.toNat
-                          clv
-                          clv
-                          i
-                          (κ.exd - 1)
-                          κ.wup
-                  let xr ←
-                    match κ!.cta.toNat with
-                    | 1 => dbg_trace "unimplemented : precompiled contract 1"; sorry
-                    | 2 => execSha ω! υ! κ!
-                    | 3 => dbg_trace "unimplemented : precompiled contract 3"; sorry
-                    | 4 => dbg_trace "unimplemented : precompiled contract 4"; sorry
-                    | 5 => dbg_trace "unimplemented : precompiled contract 5"; sorry
-                    | 6 => dbg_trace "unimplemented : precompiled contract 6"; sorry
-                    | 7 => dbg_trace "unimplemented : precompiled contract 7"; sorry
-                    | 8 => dbg_trace "unimplemented : precompiled contract 8"; sorry
-                    | 9 => dbg_trace "unimplemented : precompiled contract 9"; sorry
-                    | _ => exec lim ω! σ! μ! υ! κ!
-                  let θr := θ.wrap ω! υ!.toAcs xr
-                  (theta.Result.toState bd θr)
-        exec lim ω? σ? μ? υ? κ
+          then some θrf
+          else
+            ( if (0 < adr.toAdr.toNat ∧ adr.toAdr.toNat < 10)
+              then execPre adr.toAdr.toNat ωp .init #[] υp κp
+              else exec lim ωp .init #[] υp κp ) <&>
+            (θ.wrap ωp υp.toAcs)
+        let ⟨ω', σ'', μ', υ'⟩ ← theta.Result.use θr θc -- failure here should be XHS, but it never fails, so it's OK
+        exec lim ω' σ'' μ' υ' κ
+      | .next (.exec .statcall) => do
+        let (gas, adr, ilc, isz, olc, osz, σ') ← σ.pop6
+        dbg_trace s!"nested CALL to address : {adr.toHex}"
+        let (some ⟨θrf, ⟨ωp, υp, κp⟩, θc⟩) ←
+          ( return thetaPrep ω σ' μ υ κ
+              gas adr ilc isz olc osz
+              κ.cta adr.toAdr 0 0 false ) | some (xhs υ)
+        let θr : theta.Result ←
+          if 0 = κ.exd ∨ (ω.get κ.cta).bal < 0
+          then some θrf
+          else
+            ( if (0 < adr.toAdr.toNat ∧ adr.toAdr.toNat < 10)
+              then execPre adr.toAdr.toNat ωp .init #[] υp κp
+              else exec lim ωp .init #[] υp κp ) <&>
+            (θ.wrap ωp υp.toAcs)
+        let ⟨ω', σ'', μ', υ'⟩ ← theta.Result.use θr θc -- failure here should be XHS, but it never fails, so it's OK
+        exec lim ω' σ'' μ' υ' κ
+      | .next (.exec .callcode) => do
+        let (gas, adr, clv, ilc, isz, olc, osz, σ') ← σ.pop7
+        dbg_trace s!"nested CALL to address : {adr.toHex}"
+        let (some ⟨θrf, ⟨ωp, υp, κp⟩, θc⟩) ←
+          ( return thetaPrep ω σ' μ υ κ
+              gas adr ilc isz olc osz
+              κ.cta κ.cta clv clv κ.wup ) | some (xhs υ)
+        let θr : theta.Result ←
+          if 0 = κ.exd ∨ (ω.get κ.cta).bal < clv
+          then some θrf
+          else
+            ( if (0 < adr.toAdr.toNat ∧ adr.toAdr.toNat < 10)
+              then execPre adr.toAdr.toNat ωp .init #[] υp κp
+              else exec lim ωp .init #[] υp κp ) <&>
+            (θ.wrap ωp υp.toAcs)
+        let ⟨ω', σ'', μ', υ'⟩ ← theta.Result.use θr θc -- failure here should be XHS, but it never fails, so it's OK
+        exec lim ω' σ'' μ' υ' κ
+      | .next (.exec .delcall) => do
+        let (gas, adr, ilc, isz, olc, osz, σ') ← σ.pop6
+        dbg_trace s!"nested DELCALL to address : {adr.toHex}"
+        let (some ⟨θrf, ⟨ωp, υp, κp⟩, θc⟩) ←
+          ( return thetaPrep ω σ' μ υ κ
+              gas adr ilc isz olc osz
+              κ.cla κ.cta 0 κ.clv κ.wup ) | some (xhs υ)
+        let θr : theta.Result ←
+          if 0 = κ.exd ∨ (ω.get κ.cta).bal < 0
+          then some θrf
+          else
+            ( if (0 < adr.toAdr.toNat ∧ adr.toAdr.toNat < 10)
+              then execPre adr.toAdr.toNat ωp .init #[] υp κp
+              else exec lim ωp .init #[] υp κp ) <&>
+            (θ.wrap ωp υp.toAcs)
+        let ⟨ω', σ'', μ', υ'⟩ ← theta.Result.use θr θc -- failure here should be XHS, but it never fails, so it's OK
+        exec lim ω' σ'' μ' υ' κ
       | .next n =>
         match n.run ω σ μ υ κ  with
         | none => some (xhs υ)
@@ -1597,12 +1675,34 @@ def Tests.run : Nat → List Test → IO Unit
     t.run
     Tests.run (n + 1) ts
 
+def checkJson (name : String) : IO Unit :=
+  if List.IsSuffix ".json".data name.data
+  then IO.println s!"json file found : {name}"
+  else IO.throw s!"not a json file : {name}"
+
+def runTestAtPath (path : String) : IO Unit := do
+  let j ← readJsonFile path
+  let td ← Lean.Json.toTestData j
+  let ts ← getTests td
+  Tests.run 0 ts
+
+#check System.FilePath.readDir
+#check System.FilePath.walkDir
+
 def main : List String → IO Unit
-  | [testPath] => do
-    let j ← readJsonFile testPath
-    let td ← Lean.Json.toTestData j
-    let ts ← getTests td
-    Tests.run 0 ts
+  | [path] => do
+    let b ← System.FilePath.isDir path
+    if !b
+    then runTestAtPath path
+    else do
+      let fs ← System.FilePath.walkDir path
+      let _← mapM runTestAtPath (fs.toList.map System.FilePath.toString)
+      pure ()
+  -- | [testPath] => do
+  --   let j ← readJsonFile testPath
+  --   let td ← Lean.Json.toTestData j
+  --   let ts ← getTests td
+  --   Tests.run 0 ts
   | [testPath, testNum] => do
     let n ← testNum.toNat?.toIO "error : second argument is not a number"
     let j ← readJsonFile testPath

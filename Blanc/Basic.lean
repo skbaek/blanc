@@ -2782,7 +2782,6 @@ def chunksToString : Nat → List B8L → String
     chunkToString xs ++
     chunksToString k.succ xss
 
-
 def rightRot (x : B32) (n : B32): B32 :=
   (x >>> n) ||| (x <<< (32 - n))
 
@@ -2816,12 +2815,12 @@ def hashPrint : B32L → String
   | _ => "ERROR : hash not multiple of 8"
 
 def consumeChunkAux (ah : B32L) (w : B32L) (p : B8L) (i j : Nat) : B32L × B32L :=
-  dbg_trace "------------------------------------------------------------------------\n\n"
-  dbg_trace s!"i : {i}, j : {j}\n"
-  dbg_trace "AH :"
-  dbg_trace s!"{hashPrint ah}"
-  dbg_trace "W :"
-  dbg_trace s!"{hashPrint w}"
+  -- dbg_trace "------------------------------------------------------------------------\n\n"
+  -- dbg_trace s!"i : {i}, j : {j}\n"
+  -- dbg_trace "AH :"
+  -- dbg_trace s!"{hashPrint ah}"
+  -- dbg_trace "W :"
+  -- dbg_trace s!"{hashPrint w}"
 
   let newEntry : B32 :=
     if i = 0
@@ -2832,7 +2831,7 @@ def consumeChunkAux (ah : B32L) (w : B32L) (p : B8L) (i j : Nat) : B32L × B32L 
           (p.getD ((4 * j) + 1) 0)
           (p.getD ((4 * j) + 2) 0)
           (p.getD ((4 * j) + 3) 0)
-      dbg_trace s!"temp : {temp.toHex}"
+      -- dbg_trace s!"temp : {temp.toHex}"
       temp
     else
       let s0 : B32 :=
@@ -2852,8 +2851,8 @@ def consumeChunkAux (ah : B32L) (w : B32L) (p : B8L) (i j : Nat) : B32L × B32L 
   let ch : B32 :=
     (ah.get! 4 &&& ah.get! 5) ^^^
     ((~~~ (ah.get! 4)) &&& ah.get! 6)
-  dbg_trace s!"s1 : {s1.toHex}"
-  dbg_trace s!"ch : {ch.toHex}"
+  -- dbg_trace s!"s1 : {s1.toHex}"
+  -- dbg_trace s!"ch : {ch.toHex}"
   let temp1 : B32 :=
     (ah.get! 7) + s1 + ch +
     (roundConstants.get! ((i * 16) + j)) +
@@ -2868,10 +2867,10 @@ def consumeChunkAux (ah : B32L) (w : B32L) (p : B8L) (i j : Nat) : B32L × B32L 
     (ah.get! 1 &&& ah.get! 2)
   let temp2 : B32 := s0 + maj -- s0 + maj;
 
-  dbg_trace s!"temp1 : {temp1.toHex}"
-  dbg_trace s!"s0 : {s0.toHex}"
-  dbg_trace s!"maj : {maj.toHex}"
-  dbg_trace s!"temp2 : {temp2.toHex}"
+  -- dbg_trace s!"temp1 : {temp1.toHex}"
+  -- dbg_trace s!"s0 : {s0.toHex}"
+  -- dbg_trace s!"maj : {maj.toHex}"
+  -- dbg_trace s!"temp2 : {temp2.toHex}"
 
   let ah' :=
     [
@@ -2885,10 +2884,10 @@ def consumeChunkAux (ah : B32L) (w : B32L) (p : B8L) (i j : Nat) : B32L × B32L 
       ah.get! 6
     ]
 
-  dbg_trace "AH' :"
-  dbg_trace s!"{hashPrint ah'}"
-  dbg_trace "W' :"
-  dbg_trace s!"{hashPrint w'}"
+  -- dbg_trace "AH' :"
+  -- dbg_trace s!"{hashPrint ah'}"
+  -- dbg_trace "W' :"
+  -- dbg_trace s!"{hashPrint w'}"
 
   ⟨ah', w'⟩
 
@@ -2903,11 +2902,10 @@ def consumeChunkLoop (ah : B32L) (w : B32L) (p : B8L) : Nat → Nat → B32L
 
 
 def consumeChunk (h : B32L) (p : B8L) : B32L :=
-  dbg_trace "Hash before consume chunk:"
-  dbg_trace s!"{hashPrint h}"
-
-  dbg_trace "Consuming chunk:"
-  dbg_trace s!"{chunkToString p}"
+  -- dbg_trace "Hash before consume chunk:"
+  -- dbg_trace s!"{hashPrint h}"
+  -- dbg_trace "Consuming chunk:"
+  -- dbg_trace s!"{chunkToString p}"
 
   let w : B32L := List.replicate 16 (0 : B32)
   let ah := consumeChunkLoop h w p 4 16
@@ -2922,9 +2920,8 @@ def consumeChunk (h : B32L) (p : B8L) : B32L :=
       h.get! 6 + ah.get! 6,
       h.get! 7 + ah.get! 7
     ]
-
-  dbg_trace "Hash after consume chunk:"
-  dbg_trace s!"{hashPrint h'}"
+  -- dbg_trace "Hash after consume chunk:"
+  -- dbg_trace s!"{hashPrint h'}"
   h'
 
 def B32s.toB64 (x y : B32) : B64 :=

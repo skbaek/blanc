@@ -778,8 +778,7 @@ inductive Xinst.Run' : Env → State → Env → State → Xinst → Result → 
         (.prep s bal) .call r (.wrap r stk mem)
   -- Two design flaws of CALLCODE:
   -- (1) it accepts a useless call value argument that doesn't actually do anything
-  -- (2) it updates the caller address when it shouldn't (the whole point of the
-  --     instruction is that it stays in the same execution)
+  -- (2) it updates the caller address when it shouldn't
   | callcode :
     ∀ (e : Env) exd, e.exd = exd.succ →
     ∀ gas adr clv ilc isz olc osz s stk,
