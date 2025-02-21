@@ -218,6 +218,8 @@ def gSReset : Nat := 2900
 def rSClear : Nat := 4800
 def gTransaction : Nat := 21000
 def gBlockhash : Nat := 20
+def gCodedeposit : Nat := 200
+def gCreate : Nat := 32000
 
 def initCodeCost (cd : B8L) : Nat :=
   gInitcodeword * ((cd.length / 32) + if 32 ∣ cd.length then 0 else 1)
@@ -265,6 +267,23 @@ def Var.toAcs (υ : Var) : Acs :=
     tchd := υ.tchd
   }
 
+def Acs.toVar (A : Acs)
+  (gas : Nat := 0)
+  (pc : Nat := 0)
+  (ret : B8L := [])
+  (act : Nat := 0) : Var :=
+  {
+    gas := gas
+    pc := pc
+    ret := ret
+    act := act
+    dest := A.dest
+    adrs := A.adrs
+    keys := A.keys
+    ref := A.ref
+    logs := A.logs
+    tchd := A.tchd
+  }
 
 -- μ_i : no need to make it a separate field of Machine,
 -- when it is completely determined by Machine.mem
@@ -443,21 +462,51 @@ abbrev Exmo (ξ : Type u) := Except (ΞR ⊕ String) ξ
 def xhs (υ : Var) : ΞR :=
   {wor := none, gas := υ.gas, acs := υ.toAcs, ret := none}
 
+def xhs0 (υ : Var) : ΞR :=
+  {wor := none, gas := 0, acs := υ.toAcs, ret := none}
+
 def deductGas (υ : Var) (c : Nat) : Exmo Nat :=
-  (safeSub υ.gas c).toExcept (.inl <| xhs υ)
+  -- according to revm, executions that end with 'out of gas` outcome
+  -- should contribute 0 gas back to the parent execution.
+  (safeSub υ.gas c).toExcept (.inl <| xhs0 υ)
 
 def Acct.Empty (a : Acct) : Prop :=
   a.code.size = 0 ∧ a.nonce = 0 ∧ a.bal = 0
+
+instance {a : Acct} : Decidable a.Empty := by
+ apply instDecidableAnd
 
 def Dead (w : Wor) (a : Adr) : Prop :=
   match w.find? a with
   | none => True
   | some x => x.Empty
 
-def Wor.balAt (w : Wor) (a : Adr) : B256 :=
+def Dead' (w : Wor) (a : Adr) : Prop :=
   match w.find? a with
-  | none => 0
-  | some x => x.bal
+  | none => True
+  | some x =>
+    if x.Empty
+    then @panic _ ⟨True⟩  "error : empty account stored to world"
+    else False
+
+def Acct.empty : Acct :=
+  {
+    nonce := 0
+    bal := 0
+    stor := .empty
+    code := ByteArray.mk #[]
+  }
+
+def Wor.get (w : Wor) (a : Adr) : Acct := (w.find? a).getD .empty
+
+def Wor.codeAt (w : Wor) (a : Adr) : ByteArray :=
+  (w.get a).code
+
+def Wor.nonceAt (w : Wor) (a : Adr) : B256 :=
+  (w.get a).nonce
+
+def Wor.balAt (w : Wor) (a : Adr) : B256 :=
+  (w.get a).bal
 
 def gNewAccount : Nat := 25000
 def gCallValue : Nat := 9000
@@ -487,20 +536,20 @@ def cExtra (ω : Wor) (υ : Var) (t : Adr) (v : B256) : Nat :=
   (cAcc + cXfer + cNew)
 
 def cGasCap (ω : Wor) (υ : Var) (g : Nat)
-    (memCost : Nat) (t : Adr) (v : B256) : Nat :=
-  if (memCost + cExtra ω υ t v) ≤ υ.gas
-  then min (except64th (υ.gas - (memCost + cExtra ω υ t v))) g
+    (mc : Nat) (t : Adr) (v : B256) : Nat :=
+  if (mc + cExtra ω υ t v) ≤ υ.gas
+  then min (except64th (υ.gas - (mc + cExtra ω υ t v))) g
   else g
 
 def cCallGas (ω : Wor) (υ : Var)
-   (g : Nat) (memCost : Nat) (t : Adr) (v : B256) : Nat :=
+   (g : Nat) (mc : Nat) (t : Adr) (v : B256) : Nat :=
   if v ≠ 0
-  then cGasCap ω υ g memCost t v + gCallStipend
-  else cGasCap ω υ g memCost t v
+  then cGasCap ω υ g mc t v + gCallStipend
+  else cGasCap ω υ g mc t v
 
 def cCall (ω : Wor) (υ : Var)
-    (g : Nat) (memCost : Nat) (t : Adr) (v : B256) : Nat :=
-  cGasCap ω υ g memCost t v + cExtra ω υ t v
+    (g : Nat) (mc : Nat) (t : Adr) (v : B256) : Nat :=
+  cGasCap ω υ g mc t v + cExtra ω υ t v
 
 structure ΛR : Type where
   (wor : Wor)
@@ -521,15 +570,23 @@ def Wor.code (w : Wor) (a : Adr) : ByteArray :=
   | none => ByteArray.mk #[]
   | some x => x.code
 
-def Acct.empty : Acct :=
-  {
-    nonce := 0
-    bal := 0
-    stor := .empty
-    code := ByteArray.mk #[]
-  }
 
 def Sta.init : Sta := ⟨Array.mkArray 1024 (0 : B256), 0⟩
+
+def Acct.Erasable (ac : Acct) : Prop :=
+  ac.nonce = 0 ∧
+  ac.bal = 0 ∧
+  ac.stor.isEmpty = .true ∧
+  ac.code.size = 0
+
+instance {ac : Acct} : Decidable ac.Erasable := instDecidableAnd
+
+def Wor.set (w : Wor) (a : Adr) (ac : Acct) : Wor :=
+  if ac.Erasable then w.erase a else w.insert a ac
+
+def Wor.setCode (ω : Wor) (a : Adr) (cd : ByteArray) : Wor :=
+  let ac := ω.get a
+  ω.set a {ac with code := cd}
 
 def θ.prep
   (ω₀ : Wor)
@@ -553,15 +610,15 @@ def θ.prep
     | none =>
       if v = 0
       then ω
-      else ω.insert r {nonce := 0, bal := v, stor := .empty, code := ByteArray.mk #[]}
-    | some aᵣ => ω.insert r {aᵣ with bal := aᵣ.bal + v}
+      else ω.set r {nonce := 0, bal := v, stor := .empty, code := ByteArray.mk #[]}
+    | some aᵣ => ω.set r {aᵣ with bal := aᵣ.bal + v}
   let ω₁ : Wor :=
     match ω'₁.find? s with
     | none =>
       if v = 0
       then ω'₁
       else (dbg_trace "unreachable code : nonzero value calls from empty accounts should never happen" ; ω'₁)
-    | some aₛ => ω'₁.insert s {aₛ with bal := aₛ.bal - v}
+    | some aₛ => ω'₁.set s {aₛ with bal := aₛ.bal - v}
   let cd : ByteArray := ω.code c
   let κ : Con := {
     wor0 := ω₀
@@ -614,8 +671,8 @@ def Wor.transfer? (wor : Wor) (src : Adr) (clv : B256) (dst : Adr) : Option Wor 
   let src_acct ← wor.find? src
   let dst_acct ← wor.find? dst
   let new_src_bal ← safeSub src_acct.bal clv
-  let wor' := wor.insert src {src_acct with bal := new_src_bal}
-  return wor'.insert dst {dst_acct with bal := dst_acct.bal + clv}
+  let wor' := wor.set src {src_acct with bal := new_src_bal}
+  return wor'.set dst {dst_acct with bal := dst_acct.bal + clv}
 
 -- checkpoint is an 'Option' type because computation of checkpoints
 -- may fail for invalid txs. this is *not* the case for any subsequent
@@ -625,7 +682,7 @@ def Wor.transfer? (wor : Wor) (src : Adr) (clv : B256) (dst : Adr) : Option Wor 
 def checkpoint (w : Wor) (ad : Adr) (v : B256) : Option Wor := do
   let ac ← w.find? ad
   let bal' ← safeSub ac.bal v
-  some <| w.insert ad {ac with bal := bal', nonce := ac.nonce + 1}
+  some <| w.set ad {ac with bal := bal', nonce := ac.nonce + 1}
 
 def Adr.toNat (x : Adr) : Nat :=
   x.high.toNat * (2 ^ 128) +
@@ -812,7 +869,7 @@ def sstoreStep (ω : Wor) (σ : Sta) (υ : Var) (κ : Con) :
 
   .ok
     ⟨
-      ω.insert κ.cta a',
+      ω.set κ.cta a',
       σ',
       {
         υ with
@@ -852,7 +909,6 @@ def nextVar (υ : Var) (cost : Nat)
       tchd := υ.tchd
     }
 
-def Wor.get (w : Wor) (a : Adr) : Acct := (w.find? a).getD .empty
 
 def Sta.toStringsCore (xs : Array B256) : Nat → List String
   | 0 => []
@@ -884,8 +940,8 @@ def pushItem (σ : Sta) (μ : Mem) (υ : Var) (x : B256) (c : Nat) :
   .ok ⟨σ', μ, υ'⟩
 
 def checkRemGas (υ : Var) (cost : Nat) (act' : Nat) : Exmo Unit := do
-  let memCost : Nat := cMem act' - cMem υ.act
-  let _ ← deductGas υ (cost + memCost)
+  let mc : Nat := cMem act' - cMem υ.act
+  let _ ← deductGas υ (cost + mc)
   return ()
 
 def applyUnary (σ : Sta) (μ : Mem) (υ : Var) (f : B256 → B256) (cost : Nat) :
@@ -1111,7 +1167,6 @@ def Rinst.run (ω : Wor) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) :
   | i => .error <| .inr s!"UNIMPLEMENTED REGULAR INSTRUCTION EXECUTION : {i.toString}"
 
 
-#check List.getD
 
 -- w₀ : the 'checkpoint' world saved at the preparation stage of tx
 
@@ -1122,16 +1177,11 @@ def Rinst.run (ω : Wor) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) :
 --       points to, or
 --   (2) recursion limit is reached (which should never happen with correct usage)
 
-def Acct.isEmpty (ac : Acct) : Prop :=
-  ac.nonce = 0 ∧
-  ac.bal = 0 ∧
-  ac.stor.isEmpty = .true ∧
-  ac.code.size = 0
 
-instance {ac : Acct} : Decidable ac.isEmpty := instDecidableAnd
-
-def Wor.set (w : Wor) (a : Adr) (ac : Acct) : Wor :=
-  if ac.isEmpty then w.erase a else w.insert a ac
+def Wor.subBal (w : Wor) (a : Adr) (v : B256) : Wor :=
+  let ac := w.get a
+  let ac' : Acct := {ac with bal := ac.bal - v}
+  w.set a ac'
 
 def Wor.addBal (w : Wor) (a : Adr) (v : B256) : Wor :=
   let ac := w.get a
@@ -1141,6 +1191,11 @@ def Wor.addBal (w : Wor) (a : Adr) (v : B256) : Wor :=
 def Wor.setBal (w : Wor) (a : Adr) (v : B256) : Wor :=
   let ac := w.get a
   let ac' : Acct := {ac with bal := v}
+  w.set a ac'
+
+def Wor.incrNonce (w : Wor) (a : Adr) : Wor :=
+  let ac := w.get a
+  let ac' : Acct := {ac with nonce := ac.nonce + 1}
   w.set a ac'
 
 def Jinst.run (σ : Sta) (υ : Var) (κ : Con) :
@@ -1178,14 +1233,13 @@ def Ninst'.run (ω : Wor) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) :
   | .exec e =>
     .error <| .inr s!"unimplemented xinst : {e.toString}"
 
-def retRun (ω : Wor) (σ : Sta) (μ : Mem) (υ : Var) : Option ΞR := do
-  let (rlc, rsz, _) ← σ.pop2
-  let act' : Nat := memExp υ.act rlc rsz
-  let memCost : Nat := cMem act' - cMem υ.act
-  let g' ← safeSub υ.gas memCost
-  let r := μ.sliceD rlc.toNat rsz.toNat 0
-  some {wor := ω, gas := g', acs := υ.toAcs, ret := r}
+def memCost (υ : Var) (lc sz : B256) : Nat :=
+  let act' : Nat := memExp υ.act lc sz
+  cMem act' - cMem υ.act
 
+def memExpCost (υ : Var) (lc sz : B256) : Nat × Nat :=
+  let act' : Nat := memExp υ.act lc sz
+  ⟨act', cMem act' - cMem υ.act⟩
 
 structure theta.Cont : Type where
   (olc : B256)
@@ -1200,6 +1254,8 @@ def theta.Result.use (tr : theta.Result) (ct : theta.Cont) :
     Option (Wor × Sta × Mem × Var) := do
   let cpy : B8L := List.take ct.osz.toNat tr.ret
   let xs ← ct.sta.push1 (if tr.status then 1 else 0)
+  dbg_trace s!"gas left in call continuation : {ct.gas}"
+  dbg_trace s!"gas returned from call : {tr.gas}"
   let υ' : Var := {
     gas := ct.gas + tr.gas
     pc := ct.pc + 1
@@ -1283,8 +1339,8 @@ def mkThetaCont (ω : Wor) (σ' : Sta) (μ : Mem) (υ : Var)
 
   let t : Adr := adr.toAdr
   let act' : Nat := memExp (memExp υ.act ilc isz) olc osz
-  let memCost : Nat := cMem act' - cMem υ.act
-  let totalCost := (cCall ω υ gas.toNat memCost t 0) + memCost
+  let mc : Nat := cMem act' - cMem υ.act
+  let totalCost := (cCall ω υ gas.toNat mc t 0) + mc
   let gas' ← safeSub υ.gas totalCost
   some {
     olc := olc
@@ -1342,15 +1398,15 @@ def θ.prep'
     | none =>
       if tval = 0
       then ω
-      else ω.insert rec {nonce := 0, bal := tval, stor := .empty, code := ByteArray.mk #[]}
-    | some aᵣ => ω.insert rec {aᵣ with bal := aᵣ.bal + tval}
+      else ω.set rec {nonce := 0, bal := tval, stor := .empty, code := ByteArray.mk #[]}
+    | some aᵣ => ω.set rec {aᵣ with bal := aᵣ.bal + tval}
   let ω! : Wor :=
     match ω'.find? sen with
     | none =>
       if tval = 0
       then ω'
       else (dbg_trace "unreachable code : nonzero value calls from empty accounts should never happen" ; ω')
-    | some aₛ => ω'.insert sen {aₛ with bal := aₛ.bal - tval}
+    | some aₛ => ω'.set sen {aₛ with bal := aₛ.bal - tval}
   let κ! : Con := {
     wor0 := κ.wor0
     cta := rec, oga := κ.oga, gpr := κ.gpr, cld := i, cla := sen,
@@ -1373,9 +1429,9 @@ def thetaPrep
   let as' : AdrSet := υ.adrs.insert cod
   let A' : Acs := {υ.toAcs with adrs := as'}
   let act' : Nat := memExp (memExp υ.act ilc isz) olc osz
-  let memCost : Nat := cMem act' - cMem υ.act
-  let cg : Nat := cCallGas ω υ gas.toNat memCost cod tval
-  let totalCost := (cCall ω υ gas.toNat memCost cod tval) + memCost
+  let mc : Nat := cMem act' - cMem υ.act
+  let cg : Nat := cCallGas ω υ gas.toNat mc cod tval
+  let totalCost := (cCall ω υ gas.toNat mc cod tval) + mc
   let g' ← (safeSub υ.gas totalCost)
   let ⟨ω!, υ!, κ!⟩ : (Wor × Var × Con) :=
     θ.prep'
@@ -1415,13 +1471,17 @@ def Linst.run (ω : Wor) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) :
     Linst → Exmo ΞR
   | .invalid => .ok <| xhs υ
   | .stop => .ok {wor := ω, gas := υ.gas, acs := υ.toAcs, ret := some []}
-  | .ret => .ok <| (retRun ω σ μ υ).getD (xhs υ)
+  | .ret => do
+    let (rlc, rsz, _) ← σ.pop2.toExcept (.inl <| xhs0 υ)
+    let mc := memCost υ rlc rsz
+    let g' ← deductGas υ mc
+    let r := μ.sliceD rlc.toNat rsz.toNat 0
+    .ok {wor := ω, gas := g', acs := υ.toAcs, ret := r}
   | .rev => do
-    let ⟨ret_loc, ret_sz, _⟩ ← σ.pop2.toExmo υ
-    let act' : Nat := memExp υ.act ret_loc ret_sz
-    let memCost : Nat := cMem act' - cMem υ.act
-    let g' ← deductGas υ memCost
-    let o : B8L := μ.sliceD ret_loc.toNat ret_sz.toNat 0
+    let ⟨rlc, rsz, _⟩ ← σ.pop2.toExmo υ
+    let mc := memCost υ rlc rsz
+    let g' ← deductGas υ mc
+    let o : B8L := μ.sliceD rlc.toNat rsz.toNat 0
     .ok {wor := none, gas := g', acs := υ.toAcs, ret := some o}
   | .dest => do
     let (x, _) ← σ.pop1.toExmo υ
@@ -1451,19 +1511,205 @@ def Linst.run (ω : Wor) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) :
         ret := some []
       }
 
+
+
+
+-- `ADDR` of YP
+def newContAdr (s : Adr) (nc : B256) (ζ : Option B256) (ic : B8L): Adr :=
+
+  let LA : B8L :=
+    match ζ with
+    | none =>
+      RLP'.encode <| .list [.b8s s.toB8L, .b8s nc.toB8L.sig]
+    | some z => (0xFF : B8) :: (s.toB8L ++ z.toB8L ++ ic.keccak.toB8L)
+
+  dbg_trace s!"new contract hash arg length : {LA.length}"
+  (B8L.keccak LA).toAdr
+
+
+-- def lambda (ω : Wor) (κ : Con) (A : Acs) (g : Nat)
+--     (val : B256) (ic : B8L) (ζ : Option B256) : Exmo ΛR :=
+
+
+/-
+lambda-def  : Λ(σ,  A, s,  o,  g,      p,  v,      i, e,      ζ, w  )
+lambda-call : Λ(σ∗, A, Ia, Io, L(μ_g), Ip, μ_s[0], i, Ie + 1, ζ, I_w)
+-/
+
+
+
+/-
+for correct operation, `lambdaPrep` requires:
+A. `s` ≠ `a`
+B. stor at `a` is empty
+C. nonce at `a` is 0
+D. no code at `a`
+
+we may assume (C) and (D) because contract creation will roll back
+and state changes will be undone if they fail to hold in later parts
+of the lambda function, so whatever returned by `lambdaPrep` will be
+a moot point in that case. (A) can be deduced from (C) because `s` is
+the address of either
+  - the EOA that initiated a contract creation transaction
+  - the contract whose code includes, and is now executing,
+    a `CREATE` or `CREATE2` instruction
+In either case, the nonce of `s` is at least 1, so `s` ≠ `a`.
+Similarly, the storage of `a` must be empty because there is no way
+to alter the storage of an account without incrementing its nonce.
+-/
+
+
+def lambdaPrep
+  (ω : Wor) -- σ
+  (A : Acs)
+  (s : Adr)
+  (v : B256)
+  (i : B8L)
+  (ζ : Option B256) : Exmo (Wor × Acs × Adr) := do
+  dbg_trace s!"newContAdr caller arg: {s.toHex}"
+  let oldNonce : B256 := (ω.nonceAt s - 1)
+  dbg_trace s!"newContAdr oldNonce arg: {oldNonce.toHex}"
+  let a : Adr := newContAdr s oldNonce ζ i
+  let ω' : Wor := ((ω.addBal a v).incrNonce a).subBal s v -- σ*
+  let adrs' : AdrSet := A.adrs.insert a
+  let A' : Acs := {A with adrs := adrs'}
+  .ok ⟨ω', A', a⟩
+
+
+-- def lambdaPrep (ω : Wor) (μ : Mem) (υ : Var) (κ : Con)
+--     (val code_loc code_sz : B256) (ζ : Option B256) : Exmo (Wor × Acs) := do
+--
+--   -- the `σ` of lambda-def
+--   -- i.e, the `σ*` of lambda-call
+--   -- i.e, `ω` with caller nonce + 1
+--   let ωᵢ : Wor := ω.incrNonce κ.cta
+--
+--   -- contract initiation code
+--   let ic : B8L := μ.sliceD code_loc.toNat code_sz.toNat 0
+--   let nca : Adr := newContAdr κ.cta (ω.nonceAt κ.cta) ζ ic
+--
+--   -- the `σ*` of lambda-def
+--   let ω' : Wor :=
+--     ((ωᵢ.addBal nca val).incrNonce nca).subBal κ.cta val
+--
+--   let as' : AdrSet := υ.adrs.insert nca
+--
+--   -- the `A*` of lambda-def
+--   let A' : Acs := {υ.toAcs with adrs := as'}
+--
+--   .ok ⟨ω', A'⟩
+
+def ByteArray.fromList : B8L → ByteArray := .mk ∘ .mk
+
+def lambdaWrapCore (ω : Wor) (A_star : Acs) (a : Adr) (xr : ΞR) : ΛR :=
+  let o : B8L := xr.ret.getD []
+  let c : Nat :=
+    -- if `xr.ret = None`, value of `c` doesn't matter, but
+    -- we use getD here to get a placeholder that typechecks
+    gCodedeposit * o.length
+  let F : Prop :=
+    (ω.nonceAt a ≠ 0) ∨ !(ω.codeAt a).isEmpty ∨
+    xr.ret.isNone ∨ -- YP definition is `xr.wor.isNone ∧ xr.ret.isNone`,
+                     -- but left conjunct is implied by right and superfluous;
+                     -- YP's of `X` function shows that `xr.ret.isNone` only
+                     -- in XHS, in which case also `xr.wor.isNone`.
+    xr.gas < c ∨
+    24576 < o.length ∨
+    o.head? = some 0xEF
+
+  {
+    wor :=
+      if F
+      then ω
+      else
+        match xr.wor with
+        | none => ω
+        | some ω' =>
+          match ω'.find? a with
+          | none => ω'
+          | some ac =>
+            if ac.Empty
+            then panic! "error : empty account stored to world"
+            else ω'.setCode a <| .fromList o
+
+    gas :=
+      if F
+      then (dbg_trace "lambda returns 0 because of F"; 0)
+      else xr.gas - c
+    acs :=
+      if F ∨ xr.wor.isNone
+      then A_star
+      else xr.acs
+    status := if F ∨ xr.wor.isNone then 0 else 1
+    ret := o
+  }
+
+def lambdaWrap (ω : Wor) (A_star : Acs) (a : Adr) : Exmo ΞR → Exmo ΛR
+  | .error (.inl xr) => .ok <| lambdaWrapCore ω A_star a xr
+  | .error (.inr es) => .error (.inr es)
+  | .ok xr => .ok <| lambdaWrapCore ω A_star a xr
+
+def ΛR.use
+    (σ : Sta) -- Stack after popping CREATE arguments
+    (υ : Var) -- Var at the beginning of CREATE execution
+    (g : Nat) -- gas after deducting memCost & gas for contract creation
+    (act' : Nat) -- active mem size after accounting for init code read
+    (a : Adr) -- new contract address
+    : ΛR → Exmo (Wor × Sta × Var)
+  | ⟨ω', g', A', z, o⟩ => do
+    let x : B256 :=
+      if z = 0
+      then 0
+      else a.toB256
+    let σ' : Sta ← (σ.push1 x).toExmo υ
+    dbg_trace s!"rem gas from lambda call: {g}"
+    dbg_trace s!"gas returned by lambda call: {g'}"
+    dbg_trace s!"new gas after lambda call: {g + g'}"
+    let υ' :=
+      Acs.toVar A'
+        (gas := g + g')
+        (pc := υ.pc + 1)
+        (ret := if z = 1 then [] else o)
+        (act := act')
+    .ok ⟨ω', σ', υ'⟩
+
+
+
 def exec : Nat → Wor → Sta → Mem → Var → Con → Exmo ΞR
   | 0, _, _, _, _, _ => .error <| .inr "execution limit reached"
   | lim + 1, ω, σ, μ, υ, κ => do
     (showLim lim υ).toExcept (.inr "error : showLim cannot fail")
-    match (← (getInst υ κ).toExmo υ) with
-    --| .next (.exec .create) => do
-    --  let (val, code_loc, code_sz, σ') ← σ.pop7
-    --  let i : B8L := μ.sliceD code_loc.toNat code_sz.toNat 0
-    --  let act' : Nat := memExp υ.act code_loc code_sz
-    --  let memCost : Nat := cMem act' - cMem υ.act
-    --  let totalCost := (except64th υ.gas) + memCost
-    --  let g' ← (safeSub υ.gas totalCost)
-    --  _
+    let i ← (getInst υ κ).toExmo υ
+    (showStep υ i).toExcept (.inr "error : showStep cannot fail")
+    match i with
+    | .next (.exec .create) => do
+      let (val, code_loc, code_sz, σ') ← σ.pop3.toExmo υ
+      let i : B8L := μ.sliceD code_loc.toNat code_sz.toNat 0
+      let initCodeCost : Nat := gInitcodeword * (ceilDiv code_sz.toNat 32)
+      let ⟨act', mc⟩ := memExpCost υ code_loc code_sz
+      let interGas ← deductGas υ <| initCodeCost + mc + gCreate
+      let createGas := except64th interGas
+
+      let cond : Prop :=
+        0 = κ.exd ∨
+        (ω.get κ.cta).bal < val ∨
+        49152 < i.length
+
+      let ωp := ω.incrNonce κ.cta
+
+      let ⟨ωx, Ax, a⟩ ← lambdaPrep ωp υ.toAcs κ.cta val i none
+
+      let κx : Con :=
+        { κ with
+          cta := a, cld := [], cla := κ.cta, clv := val
+          code := ByteArray.mk (.mk i), exd := κ.exd - 1 }
+      let lr : ΛR ←
+        if cond
+        then .ok {wor := ω, gas := createGas, acs := υ.toAcs, status := 0, ret := []}
+        else lambdaWrap ωp Ax a <| exec lim ωx .init #[] (Ax.toVar (gas := createGas)) κx
+      let ⟨ωf, σf, υf⟩ ← ΛR.use σ' υ (interGas - createGas) act' a  lr
+      exec lim ωf σf μ υf κ
+
     | .next (.exec .call) => do
       let (gas, adr, clv, ilc, isz, olc, osz, σ') ← σ.pop7.toExmo υ
       dbg_trace s!"nested CALL to address : {adr.toHex}"
