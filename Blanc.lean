@@ -640,7 +640,7 @@ def θ.wrapCore (wor : Wor) (acs : Acs) (Ξr : ΞR) : theta.Result :=
   let ω' : Wor := ω_stars.getD wor
   let g' : Nat :=
     if ω_stars.isNone ∧ o.isNone
-    then (dbg_trace "EXCEPTIONAL HALTING STATE"; 0)
+    then 0
     else g_stars
   let A' : Acs := if ω_stars.isNone then acs else A_stars
   let z : Bool := if ω_stars.isNone then 0 else 1
@@ -666,13 +666,6 @@ def intrinsicGas (Rcv : Option Adr) (cd : B8L) (Ta : List (Adr × List B256)) : 
   Rcv.rec (gTxcreate + initCodeCost cd) (fun _ => 0) +
   gTransaction +
   (Ta.map aux).sum
-
-def Wor.transfer? (wor : Wor) (src : Adr) (clv : B256) (dst : Adr) : Option Wor := do
-  let src_acct ← wor.find? src
-  let dst_acct ← wor.find? dst
-  let new_src_bal ← safeSub src_acct.bal clv
-  let wor' := wor.set src {src_acct with bal := new_src_bal}
-  return wor'.set dst {dst_acct with bal := dst_acct.bal + clv}
 
 -- checkpoint is an 'Option' type because computation of checkpoints
 -- may fail for invalid txs. this is *not* the case for any subsequent
@@ -862,7 +855,6 @@ def sstoreStep (ω : Wor) (σ : Sta) (υ : Var) (κ : Con) :
               then rSClear
               else 0
          else rDirtyClear + rDirtyReset
-  --let g' ← (safeSub υ.gas c).toExcept _
   let g' ← deductGas υ c
   let ref' ← (Int.ofNat υ.ref + r).toNat'.toExcept (.inr "refund underflow")
   let a' : Acct := {a with stor := a.stor.insertNonzero x v'}
@@ -1254,8 +1246,6 @@ def theta.Result.use (tr : theta.Result) (ct : theta.Cont) :
     Option (Wor × Sta × Mem × Var) := do
   let cpy : B8L := List.take ct.osz.toNat tr.ret
   let xs ← ct.sta.push1 (if tr.status then 1 else 0)
-  dbg_trace s!"gas left in call continuation : {ct.gas}"
-  dbg_trace s!"gas returned from call : {tr.gas}"
   let υ' : Var := {
     gas := ct.gas + tr.gas
     pc := ct.pc + 1
@@ -1315,14 +1305,12 @@ def showLim (lim : Nat) (m : Var) : Option Unit :=
     return ()
   | _ => return ()
 
-
-
 def showStep (υ : Var) (i : Inst') : Option Unit := do
   -- let b : B8 := κ.code.get! υ.pc
   dbg_trace (
-    "{" ++
+    "  {" ++
     s!"\"pc\": {υ.pc}, \"gas\": {υ.gas}, \"inst\": \"{i.toString}\"" ++
-    "}"
+    "},"
   )
   return ()
 
@@ -1333,24 +1321,6 @@ def execSha (ω : Wor) (υ : Var) (κ : Con) : ΞR :=
   | some g' =>
     let hash : B256 := B8L.sha256 κ.cld
     {wor := some ω, gas := g', acs := υ.toAcs, ret := some hash.toB8L}
-
-def mkThetaCont (ω : Wor) (σ' : Sta) (μ : Mem) (υ : Var)
-    (gas adr ilc isz olc osz : B256) : Option theta.Cont :=  do
-
-  let t : Adr := adr.toAdr
-  let act' : Nat := memExp (memExp υ.act ilc isz) olc osz
-  let mc : Nat := cMem act' - cMem υ.act
-  let totalCost := (cCall ω υ gas.toNat mc t 0) + mc
-  let gas' ← safeSub υ.gas totalCost
-  some {
-    olc := olc
-    osz := osz
-    gas := gas'
-    mem := μ
-    pc := υ.pc
-    sta := σ'
-    act := act'
-  }
 
 def execPre (ω : Wor) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) : Nat → Exmo ΞR
   | 2 => .ok <| execSha ω υ κ
@@ -1423,7 +1393,7 @@ def thetaPrep
   (ω : Wor) (σ' : Sta) (μ : Mem) (υ : Var) (κ : Con)
   (gas adr ilc isz olc osz : B256)
   (sen rec : Adr) (tval rval : B256) (wup : Bool) :
-  Option (theta.Result × (Wor × Var × Con) × theta.Cont) := do
+  Exmo (theta.Result × (Wor × Var × Con) × theta.Cont) := do
   let i : B8L := μ.sliceD ilc.toNat isz.toNat 0
   let cod := adr.toAdr
   let as' : AdrSet := υ.adrs.insert cod
@@ -1432,7 +1402,7 @@ def thetaPrep
   let mc : Nat := cMem act' - cMem υ.act
   let cg : Nat := cCallGas ω υ gas.toNat mc cod tval
   let totalCost := (cCall ω υ gas.toNat mc cod tval) + mc
-  let g' ← (safeSub υ.gas totalCost)
+  let g' ← (safeSub υ.gas totalCost).toExcept (.inl <| xhs0 υ)
   let ⟨ω!, υ!, κ!⟩ : (Wor × Var × Con) :=
     θ.prep'
       κ
@@ -1446,7 +1416,7 @@ def thetaPrep
       rval
       i
       wup
-  some ⟨
+  .ok ⟨
     ⟨ω, cg, A', 0, []⟩,
     ⟨ω!, υ!,κ!⟩,
     {olc := olc, osz := osz, gas := g', mem := μ, pc := υ.pc, sta := σ', act := act'}
@@ -1516,14 +1486,10 @@ def Linst.run (ω : Wor) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) :
 
 -- `ADDR` of YP
 def newContAdr (s : Adr) (nc : B256) (ζ : Option B256) (ic : B8L): Adr :=
-
   let LA : B8L :=
     match ζ with
-    | none =>
-      RLP'.encode <| .list [.b8s s.toB8L, .b8s nc.toB8L.sig]
+    | none => RLP'.encode <| .list [.b8s s.toB8L, .b8s nc.toB8L.sig]
     | some z => (0xFF : B8) :: (s.toB8L ++ z.toB8L ++ ic.keccak.toB8L)
-
-  dbg_trace s!"new contract hash arg length : {LA.length}"
   (B8L.keccak LA).toAdr
 
 
@@ -1566,9 +1532,7 @@ def lambdaPrep
   (v : B256)
   (i : B8L)
   (ζ : Option B256) : Exmo (Wor × Acs × Adr) := do
-  dbg_trace s!"newContAdr caller arg: {s.toHex}"
   let oldNonce : B256 := (ω.nonceAt s - 1)
-  dbg_trace s!"newContAdr oldNonce arg: {oldNonce.toHex}"
   let a : Adr := newContAdr s oldNonce ζ i
   let ω' : Wor := ((ω.addBal a v).incrNonce a).subBal s v -- σ*
   let adrs' : AdrSet := A.adrs.insert a
@@ -1662,9 +1626,6 @@ def ΛR.use
       then 0
       else a.toB256
     let σ' : Sta ← (σ.push1 x).toExmo υ
-    dbg_trace s!"rem gas from lambda call: {g}"
-    dbg_trace s!"gas returned by lambda call: {g'}"
-    dbg_trace s!"new gas after lambda call: {g + g'}"
     let υ' :=
       Acs.toVar A'
         (gas := g + g')
@@ -1683,7 +1644,7 @@ def exec : Nat → Wor → Sta → Mem → Var → Con → Exmo ΞR
     (showStep υ i).toExcept (.inr "error : showStep cannot fail")
     match i with
     | .next (.exec .create) => do
-      let (val, code_loc, code_sz, σ') ← σ.pop3.toExmo υ
+      let (val, code_loc, code_sz, σ') ← σ.pop3.toExcept (.inl <| xhs0 υ)
       let i : B8L := μ.sliceD code_loc.toNat code_sz.toNat 0
       let initCodeCost : Nat := gInitcodeword * (ceilDiv code_sz.toNat 32)
       let ⟨act', mc⟩ := memExpCost υ code_loc code_sz
@@ -1710,13 +1671,40 @@ def exec : Nat → Wor → Sta → Mem → Var → Con → Exmo ΞR
       let ⟨ωf, σf, υf⟩ ← ΛR.use σ' υ (interGas - createGas) act' a  lr
       exec lim ωf σf μ υf κ
 
+    | .next (.exec .create2) => do
+      let (val, code_loc, code_sz, salt, σ') ← σ.pop4.toExcept (.inl <| xhs0 υ)
+      let i : B8L := μ.sliceD code_loc.toNat code_sz.toNat 0
+      let word_sz : Nat := ceilDiv code_sz.toNat 32
+      let initCodeCost : Nat := gInitcodeword * word_sz
+      let ⟨act', mc⟩ := memExpCost υ code_loc code_sz
+      let interGas ← deductGas υ <| initCodeCost + mc + gCreate + (gKeccak256Word * word_sz)
+      let createGas := except64th interGas
+
+      let cond : Prop :=
+        0 = κ.exd ∨
+        (ω.get κ.cta).bal < val ∨
+        49152 < i.length
+
+      let ωp := ω.incrNonce κ.cta
+
+      let ⟨ωx, Ax, a⟩ ← lambdaPrep ωp υ.toAcs κ.cta val i (some salt)
+
+      let κx : Con :=
+        { κ with
+          cta := a, cld := [], cla := κ.cta, clv := val
+          code := ByteArray.mk (.mk i), exd := κ.exd - 1 }
+      let lr : ΛR ←
+        if cond
+        then .ok {wor := ω, gas := createGas, acs := υ.toAcs, status := 0, ret := []}
+        else lambdaWrap ωp Ax a <| exec lim ωx .init #[] (Ax.toVar (gas := createGas)) κx
+      let ⟨ωf, σf, υf⟩ ← ΛR.use σ' υ (interGas - createGas) act' a  lr
+      exec lim ωf σf μ υf κ
     | .next (.exec .call) => do
       let (gas, adr, clv, ilc, isz, olc, osz, σ') ← σ.pop7.toExmo υ
-      dbg_trace s!"nested CALL to address : {adr.toHex}"
+      -- dbg_trace s!"nested CALL to address : {adr.toHex}"
       let ⟨θrf, ⟨ωp, υp, κp⟩, θc⟩ ←
-        ( thetaPrep
-            ω σ' μ υ κ gas adr ilc isz olc osz
-            κ.cta adr.toAdr clv clv κ.wup ).toExmo υ
+        thetaPrep ω σ' μ υ κ
+          gas adr ilc isz olc osz κ.cta adr.toAdr clv clv κ.wup
       let θr : theta.Result ←
         if 0 = κ.exd ∨ (ω.get κ.cta).bal < clv
         then .ok θrf
@@ -1729,11 +1717,10 @@ def exec : Nat → Wor → Sta → Mem → Var → Con → Exmo ΞR
       exec lim ω' σ'' μ' υ' κ
     | .next (.exec .statcall) => do
       let (gas, adr, ilc, isz, olc, osz, σ') ← σ.pop6.toExmo υ
-      dbg_trace s!"nested STATCALL to address : {adr.toHex}"
+      -- dbg_trace s!"nested STATCALL to address : {adr.toHex}"
       let ⟨θrf, ⟨ωp, υp, κp⟩, θc⟩ ←
-        ( thetaPrep
-            ω σ' μ υ κ gas adr ilc isz olc osz
-            κ.cta adr.toAdr 0 0 false ).toExmo υ
+        thetaPrep ω σ' μ υ κ
+          gas adr ilc isz olc osz κ.cta adr.toAdr 0 0 false
       let θr : theta.Result ←
         if 0 = κ.exd ∨ (ω.get κ.cta).bal < 0
         then .ok θrf
@@ -1746,11 +1733,10 @@ def exec : Nat → Wor → Sta → Mem → Var → Con → Exmo ΞR
       exec lim ω' σ'' μ' υ' κ
     | .next (.exec .callcode) => do
       let (gas, adr, clv, ilc, isz, olc, osz, σ') ← σ.pop7.toExmo υ
-      dbg_trace s!"nested CALLCODE to address : {adr.toHex}"
+      -- dbg_trace s!"nested CALLCODE to address : {adr.toHex}"
       let ⟨θrf, ⟨ωp, υp, κp⟩, θc⟩ ←
-        ( thetaPrep
-            ω σ' μ υ κ gas adr ilc isz olc osz
-            κ.cta κ.cta clv clv κ.wup ).toExmo υ
+        thetaPrep ω σ' μ υ κ
+          gas adr ilc isz olc osz κ.cta κ.cta clv clv κ.wup
       let θr : theta.Result ←
         if 0 = κ.exd ∨ (ω.get κ.cta).bal < clv
         then .ok θrf
@@ -1763,11 +1749,10 @@ def exec : Nat → Wor → Sta → Mem → Var → Con → Exmo ΞR
       exec lim ω' σ'' μ' υ' κ
     | .next (.exec .delcall) => do
       let (gas, adr, ilc, isz, olc, osz, σ') ← σ.pop6.toExmo υ
-      dbg_trace s!"nested DELCALL to address : {adr.toHex}"
+      -- dbg_trace s!"nested DELCALL to address : {adr.toHex}"
       let ⟨θrf, ⟨ωp, υp, κp⟩, θc⟩ ←
-        ( thetaPrep
-            ω σ' μ υ κ gas adr ilc isz olc osz
-            κ.cla κ.cta 0 κ.clv κ.wup ).toExmo υ
+        thetaPrep ω σ' μ υ κ
+          gas adr ilc isz olc osz κ.cla κ.cta 0 κ.clv κ.wup
       let θr : theta.Result ←
         if 0 = κ.exd ∨ (ω.get κ.cta).bal < 0
         then .ok θrf
@@ -1843,8 +1828,9 @@ def Tx.run
   IO.guard (tx.gasLimit ≤ blk.gasLimit) "error : block gas limit < tx gas limit"
 
   let g : Nat := tx.gasLimit.toNat - intrinsicGas (some tx.receiver) tx.calldata []
-  let w ← (checkpoint w sender (tx.gasLimit * tx.gasPrice)).toIO ""
+  let w ← (checkpoint w sender (tx.gasLimit * tx.gasPrice)).toIO "checkpoint creation failed"
 
+  dbg_trace "["
   let tr ←
     (
       theta
@@ -1863,6 +1849,8 @@ def Tx.run
         1024
         true
     ).toIO "theta failed"
+
+  dbg_trace ("  {}\n" ++ "]")
 
   let gasLeft : Nat := tr.gas -- g'
   let refundAmount : Nat := tr.acs.ref
