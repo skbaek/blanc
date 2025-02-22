@@ -58,12 +58,15 @@ inductive Rinst : Type
   | chainid -- 0x46 / 0 / 1 / get the chain id of the current blockchain.
   | selfbalance -- 0x47 / 0 / 1 / get the balance of the currently executing account.
   | basefee -- 0x48 / 0 / 1 / get the current block's base fee.
+  | blobbasefee -- 0x4A / 0 / 1 / get the current block's blob base fee.
   | pop -- 0x50 / 1 / 0 / Remove an item from the Stack.
   | mload -- 0x51 / 1 / 1 / Load a Word from memory.
   | mstore -- 0x52 / 2 / 0 / Store a Word in memory.
-  | mstore8 -- 0x53 / 2 / 0 / Store a Byte in memory.
-  | sload -- 0x54 / 1 / 1 / Load a Word from Storage.
-  | sstore -- 0x55 / 2 / 0 / Store a Word in Storage.
+  | mstore8 -- 0x53 / 2 / 0 / store a Byte in memory.
+  | sload -- 0x54 / 1 / 1 / load a word from storage.
+  | sstore -- 0x55 / 2 / 0 / store a word in storage.
+  | tload -- 0x5c / 1 / 1 / load a word from transient torage.
+  | tstore -- 0x5d / 2 / 0 / store a word in transient storage.
   | pc -- 0x58 / 0 / 1 / Get the current program counter value.
   | msize -- 0x59 / 0 / 1 / Get the size of the memory.
   | gas -- 0x5a / 0 / 1 / Get the amount of remaining gas.
@@ -147,12 +150,15 @@ def Rinst.toByte : Rinst → Byte
   | chainid      => Ox x4 x6
   | selfbalance  => Ox x4 x7
   | basefee      => Ox x4 x8
+  | blobbasefee   => Ox x4 xA
   | pop          => Ox x5 x0
   | mload        => Ox x5 x1
   | mstore       => Ox x5 x2
   | mstore8      => Ox x5 x3
   | sload        => Ox x5 x4
   | sstore       => Ox x5 x5
+  | tload        => Ox x5 xC
+  | tstore       => Ox x5 xD
   | pc           => Ox x5 x8
   | msize        => Ox x5 x9
   | gas          => Ox x5 xA
@@ -228,7 +234,6 @@ def Adr.ordering : Adr → Adr → Ordering
 
 instance : Ord Adr := ⟨Adr.ordering⟩
 abbrev Wor : Type := Lean.RBMap Adr Acct compare
-
 
 structure State where
   -- balance, storage, & code : parts of the world state
@@ -498,6 +503,14 @@ def State.Retdatacopy (s s' : State) : Prop :=
 -- so that part is unspecified here. These definitions will need to be augmented
 -- to  verify more detailed properties about block operations.
 
+def State.Tstore (e : Env) (s s' : State) : Prop :=
+  ∃ x y : Word,
+    State.Rel
+    { State.Rels.dft with
+      -- todo : add t-storage condition
+      stk := Stack.Diff [x, y] [] } s s' ∧
+    e.wup = 1
+
 def State.Sstore (e : Env) (s s' : State) : Prop :=
   ∃ x y : Word,
     State.Rel
@@ -507,7 +520,10 @@ def State.Sstore (e : Env) (s s' : State) : Prop :=
     e.wup = 1
 
 def State.Sload (e : Env) (s s' : State) : Prop :=
- ∃ x, State.Diff [x] [s.stor e.cta x] s s'
+  ∃ x, State.Diff [x] [s.stor e.cta x] s s'
+
+def State.Tload (s s' : State) : Prop :=
+  ∃ x y, State.Diff [x] [y] s s' -- todo : use value from t-storage
 
 def State.Mload (s s' : State) : Prop :=
   ∃ x y, State.Diff [x] [y] s s' ∧
@@ -665,12 +681,15 @@ def Rinst.Run (e : Env) : State → Rinst → State → Prop :=
     | Rinst.chainid => λ s s' => ∃ x, State.Push [x] s s'
     | Rinst.selfbalance => λ s s' => ∃ x, State.Push [x] s s'
     | Rinst.basefee => λ s s' => ∃ x, State.Push [x] s s'
+    | Rinst.blobbasefee => λ s s' => ∃ x, State.Push [x] s s'
     | Rinst.pop => λ s s' => ∃ x, State.Pop [x] s s'
     | Rinst.mload => State.Mload
     | Rinst.mstore => State.Mstore
     | Rinst.mstore8 => State.Mstore8
     | Rinst.sload => State.Sload e
     | Rinst.sstore => State.Sstore e
+    | Rinst.tload => State.Tload
+    | Rinst.tstore => State.Tstore e
     | Rinst.msize => λ s s' => ∃ x, State.Push [x] s s'
     | Rinst.gas => λ s s' => ∃ x, State.Push [x] s s'
     | Rinst.pc => λ s s' => ∃ x, State.Push [x] s s'

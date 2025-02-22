@@ -292,6 +292,7 @@ def Mem.msz (μ : Mem) : Nat := ceilDiv μ.size 32
 structure Block where
   (hashes : List B256)
   (baseFee : B256) -- H_f
+  (blobBaseFee : B256)
   (ben : Adr) -- H_c
   (prevRandao : B256) -- H_a
   (gasLimit : B256) -- H_l
@@ -449,7 +450,12 @@ def getInst (υ : Var) (κ : Con)  : Option Inst' :=
                (getInstAux κ.code υ.pc len  1)
                (getInstAux κ.code υ.pc len  0)
            some (.next <| .push x len)
-      else none
+      else dbg_trace (
+             "  {" ++
+             s!"\"pc\": {υ.pc}, \"gas\": {υ.gas}, \"inst\": \"UNDEFINED\"" ++
+             "},"
+           )
+           none
     )
   else some (.last .stop)
 
@@ -927,7 +933,7 @@ def Sta.dup : Sta → Nat → Option Sta
 
 def pushItem (σ : Sta) (μ : Mem) (υ : Var) (x : B256) (c : Nat) :
     Exmo (Sta × Mem × Var) := do
-  let σ' ← (σ.push1 x).toExmo υ
+  let σ' ← (σ.push1 x).toExcept (.inl <| xhs0 υ)
   let υ' ← nextVar υ c
   .ok ⟨σ', μ, υ'⟩
 
@@ -963,10 +969,11 @@ def B256.toAdr : B256 → Adr
 def Adr.toB256 (a : Adr) : B256 :=
   ⟨⟨0, a.high.toUInt64⟩ , ⟨a.mid, a.low⟩ ⟩
 
-
 def Rinst.run (ω : Wor) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) :
     Rinst → Exmo (Sta × Mem × Var)
   | .address => pushItem σ μ υ κ.cta.toB256 gBase
+  | .basefee => pushItem σ μ υ κ.blk.baseFee gBase
+  | .blobbasefee => pushItem σ μ υ κ.blk.blobBaseFee gBase
   | .balance => do
     let (x, σ') ← σ.pop1.toExmo υ
     let a := x.toAdr
@@ -1306,7 +1313,6 @@ def showLim (lim : Nat) (m : Var) : Option Unit :=
   | _ => return ()
 
 def showStep (υ : Var) (i : Inst') : Option Unit := do
-  -- let b : B8 := κ.code.get! υ.pc
   dbg_trace (
     "  {" ++
     s!"\"pc\": {υ.pc}, \"gas\": {υ.gas}, \"inst\": \"{i.toString}\"" ++
@@ -1885,8 +1891,8 @@ def Test.run (t : Test) : IO Unit := do
   let ri : UInt8 := Byte.toB8 (if tx.yParity then 1 else 0)
   let sender ← publicAddress hsa ri rsa
 
-  .println "initial world : "
-  .println (String.joinln t.world.toStrings)
+  -- .println "initial world : "
+  -- .println (String.joinln t.world.toStrings)
 
   let sa₀ ← (t.world.find? sender).toIO "no sender account"
 
@@ -1921,6 +1927,7 @@ def Test.run (t : Test) : IO Unit := do
       {
         hashes := [],
         baseFee := t.baseFee,
+        blobBaseFee := t.blobBaseFee,
         ben := t.coinbase
         prevRandao := t.prevRandao
         gasLimit := t.blockGasLimit
@@ -1933,8 +1940,8 @@ def Test.run (t : Test) : IO Unit := do
       sender
 
   .println s!"tx status : {rst.sta}"
-  .println "world state after tx :"
-  .println (String.joinln rst.wor.toStrings)
+  -- .println "world state after tx :"
+  -- .println (String.joinln rst.wor.toStrings)
 
   let temp' := (List.map toKeyVal rst.wor.toList)
   let finalNTB : NTB := Lean.RBMap.fromList temp' _
@@ -1963,13 +1970,11 @@ def checkJson (name : String) : IO Unit :=
   else IO.throw s!"not a json file : {name}"
 
 def runTestAtPath (path : String) : IO Unit := do
+  IO.println s!"Testing file : {path}"
   let j ← readJsonFile path
   let td ← Lean.Json.toTestData j
   let ts ← getTests td
   Tests.run 0 ts
-
-#check System.FilePath.readDir
-#check System.FilePath.walkDir
 
 def main : List String → IO Unit
   | [path] => do
@@ -1980,11 +1985,6 @@ def main : List String → IO Unit
       let fs ← System.FilePath.walkDir path
       let _← mapM runTestAtPath (fs.toList.map System.FilePath.toString)
       pure ()
-  -- | [testPath] => do
-  --   let j ← readJsonFile testPath
-  --   let td ← Lean.Json.toTestData j
-  --   let ts ← getTests td
-  --   Tests.run 0 ts
   | [testPath, testNum] => do
     let n ← testNum.toNat?.toIO "error : second argument is not a number"
     let j ← readJsonFile testPath
