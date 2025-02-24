@@ -58,6 +58,7 @@ def Rinst.toString : Rinst → String
   | chainid => "CHAINID"
   | selfbalance => "SELFBALANCE"
   | basefee => "BASEFEE"
+  | blobhash => "BLOBHASH"
   | blobbasefee => "BLOBBASEFEE"
   | pop => "POP"
   | mload => "MLOAD"
@@ -67,6 +68,7 @@ def Rinst.toString : Rinst → String
   | sstore => "SSTORE"
   | tload => "TLOAD"
   | tstore => "TSTORE"
+  | mcopy => "MCOPY"
   | pc => "PC"
   | msize => "MSIZE"
   | gas => "GAS"
@@ -170,6 +172,7 @@ abbrev Ninst.gaslimit : Ninst := Ninst.reg Rinst.gaslimit
 abbrev Ninst.chainid : Ninst := Ninst.reg Rinst.chainid
 abbrev Ninst.selfbalance : Ninst := Ninst.reg Rinst.selfbalance
 abbrev Ninst.basefee : Ninst := Ninst.reg Rinst.basefee
+abbrev Ninst.blobhash : Ninst := Ninst.reg Rinst.blobhash
 abbrev Ninst.blobbasefee : Ninst := Ninst.reg Rinst.blobbasefee
 abbrev Ninst.pop : Ninst := Ninst.reg Rinst.pop
 abbrev Ninst.mload : Ninst := Ninst.reg Rinst.mload
@@ -179,6 +182,7 @@ abbrev Ninst.sload : Ninst := Ninst.reg Rinst.sload
 abbrev Ninst.sstore : Ninst := Ninst.reg Rinst.sstore
 abbrev Ninst.tload : Ninst := Ninst.reg Rinst.tload
 abbrev Ninst.tstore : Ninst := Ninst.reg Rinst.tstore
+abbrev Ninst.mcopy : Ninst := Ninst.reg Rinst.mcopy
 abbrev Ninst.pc : Ninst := Ninst.reg Rinst.pc
 abbrev Ninst.msize : Ninst := Ninst.reg Rinst.msize
 abbrev Ninst.gas : Ninst := Ninst.reg Rinst.gas
@@ -838,6 +842,7 @@ instance : Rinst.Hinv State.mem Rinst.gaslimit := by show_hinv_mem
 instance : Rinst.Hinv State.mem Rinst.chainid := by show_hinv_mem
 instance : Rinst.Hinv State.mem Rinst.selfbalance := by show_hinv_mem
 instance : Rinst.Hinv State.mem Rinst.basefee := by show_hinv_mem
+instance : Rinst.Hinv State.mem Rinst.blobhash := by show_hinv_mem
 instance : Rinst.Hinv State.mem Rinst.blobbasefee := by show_hinv_mem
 instance : Rinst.Hinv State.mem Rinst.pop := by show_hinv_mem
 instance : Rinst.Hinv State.mem Rinst.mload := by show_hinv_mem
@@ -910,6 +915,7 @@ instance : Rinst.Hinv State.stor Rinst.gaslimit := by show_hinv_stor
 instance : Rinst.Hinv State.stor Rinst.chainid := by show_hinv_stor
 instance : Rinst.Hinv State.stor Rinst.selfbalance := by show_hinv_stor
 instance : Rinst.Hinv State.stor Rinst.basefee := by show_hinv_stor
+instance : Rinst.Hinv State.stor Rinst.blobhash := by show_hinv_stor
 instance : Rinst.Hinv State.stor Rinst.blobbasefee := by show_hinv_stor
 instance : Rinst.Hinv State.stor Rinst.pop := by show_hinv_stor
 instance : Rinst.Hinv State.stor Rinst.mload := by show_hinv_stor
@@ -1644,7 +1650,8 @@ def Byte.toRinst? : Byte → Option Rinst
   | ⦃0, 1, 0, 0, 0, 1, 0, 1⦄ => some .gaslimit -- 0x45 / 0 / 1 / get the gas limit of the current block.
   | ⦃0, 1, 0, 0, 0, 1, 1, 0⦄ => some .chainid -- 0x46 / 0 / 1 / get the chain id of the current blockchain.
   | ⦃0, 1, 0, 0, 0, 1, 1, 1⦄ => some .selfbalance -- 0x46 / 0 / 1 / get the chain id of the current blockchain.
-  | ⦃0, 1, 0, 0, 1, 0, 0, 0⦄ => some .basefee -- 0x46 / 0 / 1 /
+  | ⦃0, 1, 0, 0, 1, 0, 0, 0⦄ => some .basefee -- 0x48 / 0 / 1 /
+  | ⦃0, 1, 0, 0, 1, 0, 0, 1⦄ => some .blobhash -- 0x49 / 1 / 1 /
   | ⦃0, 1, 0, 0, 1, 0, 1, 0⦄ => some .blobbasefee -- 0x4A / 0 / 1 /
   | ⦃0, 1, 0, 1, 0, 0, 0, 0⦄ => some .pop -- 0x50 / 1 / 0 / Remove an item from the stack.
   | ⦃0, 1, 0, 1, 0, 0, 0, 1⦄ => some .mload -- 0x51 / 1 / 1 / Load a word from memory.
@@ -1655,6 +1662,7 @@ def Byte.toRinst? : Byte → Option Rinst
 
   | ⦃0, 1, 0, 1, 1, 1, 0, 0⦄ => some .tload -- 0x5C / 1 / 1 / Load a word from transient storage.
   | ⦃0, 1, 0, 1, 1, 1, 0, 1⦄ => some .tstore -- 0x5D / 2 / 0 / Store a word in transient storage.
+  | ⦃0, 1, 0, 1, 1, 1, 1, 0⦄ => some .mcopy -- 0x5D / 2 / 0 / Store a word in transient storage.
 
   | ⦃0, 1, 0, 1, 1, 0, 0, 0⦄ => some .pc -- 0x58 / 0 / 1 / Get the current program counter value.
   | ⦃0, 1, 0, 1, 1, 0, 0, 1⦄ => some .msize -- 0x59 / 0 / 1 / Get the size of the memory.
@@ -3864,6 +3872,7 @@ def B8.toRinst : B8 → Option Rinst
   | 0x46 => some .chainid -- 0x46 / 0 / 1 / get the chain id of the current blockchain.
   | 0x47 => some .selfbalance -- 0x46 / 0 / 1 / get the chain id of the current blockchain.
   | 0x48 => some .basefee -- 0x48 / 0 / 1 /
+  | 0x49 => some .blobhash -- 0x49 / 1 / 1 /
   | 0x4A => some .blobbasefee -- 0x4A / 0 / 1 /
   | 0x50 => some .pop -- 0x50 / 1 / 0 / Remove an item from the stack.
   | 0x51 => some .mload -- 0x51 / 1 / 1 / Load a word from memory.
@@ -3876,6 +3885,7 @@ def B8.toRinst : B8 → Option Rinst
   | 0x5a => some .gas -- 0x5a / 0 / 1 / Get the amount of remaining gas.
   | 0x5C => some .tload -- 0x54 / 1 / 1 / Load a word from storage.
   | 0x5D => some .tstore -- 0x55 / 2 / 0 / Store a word in storage.
+  | 0x5E => some .mcopy -- 0x55 / 2 / 0 / Store a word in storage.
   | 0x80 => some (.dup 0)
   | 0x81 => some (.dup 1)
   | 0x82 => some (.dup 2)

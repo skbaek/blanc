@@ -4,7 +4,7 @@ import Blanc.Common
 
 structure EnvData where
   (baseFee : B256)
-  (blobBaseFee : B256)
+  (excessBlobGas : B256)
   (coinbase : Adr)
   (prevRandao : B256)
   (blockGasLimit : B256)
@@ -154,7 +154,8 @@ def TransactionData.toStrings (tx : TransactionData) : List String :=
 
 structure Test where
   (baseFee : B256)
-  (blobBaseFee : B256)
+  (excessBlobGas : B256)
+  (blobHashes : Array B256)
   (coinbase : Adr)
   (prevRandao : B256)
   (blockGasLimit : B256)
@@ -300,14 +301,14 @@ def Lean.Json.toEnvData (j : Lean.Json) : IO EnvData := do
   let glj ← (r.find compare "currentGasLimit").toIO "No gas limit"
   let tsj ← (r.find compare "currentTimestamp").toIO "No timestamp"
   let nj  ← (r.find compare "currentNumber").toIO "No number"
-  let bbfj  ← (r.find compare "currentExcessBlobGas").toIO "No blob gas"
+  let xbgj  ← (r.find compare "currentExcessBlobGas").toIO "No blob gas"
   let bf ← bfj.toB256P
   let cb ← cbj.toAdr
   let pr ← prj.toB256?
   let gl ← glj.toB256P
   let ts ← tsj.toB256P
   let n  ← nj.toB256P
-  let bbf  ← bbfj.toB256P
+  let xbg  ← xbgj.toB256P
   return {
     baseFee := bf
     coinbase := cb
@@ -315,7 +316,7 @@ def Lean.Json.toEnvData (j : Lean.Json) : IO EnvData := do
     blockGasLimit := gl
     timestamp := ts
     number := n
-    blobBaseFee := bbf
+    excessBlobGas := xbg
   }
 
 def Lean.Json.toPreDatas (j : Lean.Json) : IO (List PreData) := do
@@ -372,7 +373,8 @@ def getTest (td : TestData) (p : PostData) : IO Test := do
   let w ← td.world.toIO ""
   return {
     baseFee := td.env.baseFee
-    blobBaseFee := td.env.blobBaseFee
+    excessBlobGas := td.env.excessBlobGas
+    blobHashes := #[]
     coinbase := td.env.coinbase
     prevRandao := td.env.prevRandao
     blockGasLimit := td.env.blockGasLimit

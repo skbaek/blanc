@@ -58,6 +58,7 @@ inductive Rinst : Type
   | chainid -- 0x46 / 0 / 1 / get the chain id of the current blockchain.
   | selfbalance -- 0x47 / 0 / 1 / get the balance of the currently executing account.
   | basefee -- 0x48 / 0 / 1 / get the current block's base fee.
+  | blobhash -- 0x49 / 1 / 1 /
   | blobbasefee -- 0x4A / 0 / 1 / get the current block's blob base fee.
   | pop -- 0x50 / 1 / 0 / Remove an item from the Stack.
   | mload -- 0x51 / 1 / 1 / Load a Word from memory.
@@ -65,8 +66,9 @@ inductive Rinst : Type
   | mstore8 -- 0x53 / 2 / 0 / store a Byte in memory.
   | sload -- 0x54 / 1 / 1 / load a word from storage.
   | sstore -- 0x55 / 2 / 0 / store a word in storage.
-  | tload -- 0x5c / 1 / 1 / load a word from transient torage.
-  | tstore -- 0x5d / 2 / 0 / store a word in transient storage.
+  | tload -- 0x5C / 1 / 1 / load a word from transient torage.
+  | tstore -- 0x5D / 2 / 0 / store a word in transient storage.
+  | mcopy -- 0x5E / 3 / 0 /
   | pc -- 0x58 / 0 / 1 / Get the current program counter value.
   | msize -- 0x59 / 0 / 1 / Get the size of the memory.
   | gas -- 0x5a / 0 / 1 / Get the amount of remaining gas.
@@ -150,7 +152,8 @@ def Rinst.toByte : Rinst → Byte
   | chainid      => Ox x4 x6
   | selfbalance  => Ox x4 x7
   | basefee      => Ox x4 x8
-  | blobbasefee   => Ox x4 xA
+  | blobhash     => Ox x4 x9
+  | blobbasefee  => Ox x4 xA
   | pop          => Ox x5 x0
   | mload        => Ox x5 x1
   | mstore       => Ox x5 x2
@@ -159,6 +162,7 @@ def Rinst.toByte : Rinst → Byte
   | sstore       => Ox x5 x5
   | tload        => Ox x5 xC
   | tstore       => Ox x5 xD
+  | mcopy        => Ox x5 xE
   | pc           => Ox x5 x8
   | msize        => Ox x5 x9
   | gas          => Ox x5 xA
@@ -471,6 +475,16 @@ def State.Calldatacopy (e : Env) (s s' : State) : Prop :=
         stk := Stack.Pop [x, y, z],
         mem := Mstored x <| List.sliceD e.cld y.toNat z.toNat 0 } s s'
 
+def State.Mcopy (s s' : State) : Prop :=
+  ∃ x y z,
+    State.Rel
+      {
+        State.Rels.dft with
+        stk := Stack.Pop [x, y, z],
+        mem := Mstored x <| Memory.slice s.mem y z
+      }
+      s s'
+
 def State.Codecopy (e : Env) (s s' : State) : Prop :=
   ∃ x y z bs,
     State.Rel
@@ -681,6 +695,7 @@ def Rinst.Run (e : Env) : State → Rinst → State → Prop :=
     | Rinst.chainid => λ s s' => ∃ x, State.Push [x] s s'
     | Rinst.selfbalance => λ s s' => ∃ x, State.Push [x] s s'
     | Rinst.basefee => λ s s' => ∃ x, State.Push [x] s s'
+    | Rinst.blobhash => λ s s' => ∃ x y, State.Diff [x] [y] s s'
     | Rinst.blobbasefee => λ s s' => ∃ x, State.Push [x] s s'
     | Rinst.pop => λ s s' => ∃ x, State.Pop [x] s s'
     | Rinst.mload => State.Mload
@@ -690,6 +705,7 @@ def Rinst.Run (e : Env) : State → Rinst → State → Prop :=
     | Rinst.sstore => State.Sstore e
     | Rinst.tload => State.Tload
     | Rinst.tstore => State.Tstore e
+    | Rinst.mcopy => State.Mcopy
     | Rinst.msize => λ s s' => ∃ x, State.Push [x] s s'
     | Rinst.gas => λ s s' => ∃ x, State.Push [x] s s'
     | Rinst.pc => λ s s' => ∃ x, State.Push [x] s s'

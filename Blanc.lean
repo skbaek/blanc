@@ -220,6 +220,7 @@ def gTransaction : Nat := 21000
 def gBlockhash : Nat := 20
 def gCodedeposit : Nat := 200
 def gCreate : Nat := 32000
+def gHashopcode : Nat := 3
 
 def initCodeCost (cd : B8L) : Nat :=
   gInitcodeword * ((cd.length / 32) + if 32 ∣ cd.length then 0 else 1)
@@ -232,6 +233,9 @@ instance : Hashable (Adr × B256) := ⟨λ x => x.1.low⟩
 
 abbrev AdrSet : Type := @Std.HashSet Adr _ _
 abbrev KeySet : Type := @Std.HashSet (Adr × B256) _ _
+
+
+abbrev Tra : Type := Lean.RBMap Adr Stor compare
 
 def Sta : Type := Array B256 × Nat
 def Mem : Type := Array B8
@@ -292,13 +296,14 @@ def Mem.msz (μ : Mem) : Nat := ceilDiv μ.size 32
 structure Block where
   (hashes : List B256)
   (baseFee : B256) -- H_f
-  (blobBaseFee : B256)
+  (excessBlobGas : B256)
   (ben : Adr) -- H_c
   (prevRandao : B256) -- H_a
   (gasLimit : B256) -- H_l
   (timestamp : B256) -- H_s
   (number : B256) -- H_s
   (chainId : B256) -- β
+  (blobHashes : Array B256)
 
 structure Con where
   (blk : Block) -- block (YP : H)
@@ -318,7 +323,7 @@ structure Con where
 -- execution environment, but it was omitted since the
 -- environment does not change and is already known.
 structure ΞR where
-  (wor : Option Wor)
+  (wt : Option (Wor × Tra))
   (gas : Nat)
   (acs : Acs)
   (ret : Option B8L)
@@ -466,10 +471,10 @@ def safeSub {ξ} [Sub ξ] [LE ξ] [@DecidableRel ξ (· ≤ ·)] (x y : ξ) : Op
 abbrev Exmo (ξ : Type u) := Except (ΞR ⊕ String) ξ
 
 def xhs (υ : Var) : ΞR :=
-  {wor := none, gas := υ.gas, acs := υ.toAcs, ret := none}
+  {wt := none, gas := υ.gas, acs := υ.toAcs, ret := none}
 
 def xhs0 (υ : Var) : ΞR :=
-  {wor := none, gas := 0, acs := υ.toAcs, ret := none}
+  {wt := none, gas := 0, acs := υ.toAcs, ret := none}
 
 def deductGas (υ : Var) (c : Nat) : Exmo Nat :=
   -- according to revm, executions that end with 'out of gas` outcome
@@ -559,6 +564,7 @@ def cCall (ω : Wor) (υ : Var)
 
 structure ΛR : Type where
   (wor : Wor)
+  (tra : Tra)
   (gas : Nat)
   (acs : Acs)
   (status : B256)
@@ -566,6 +572,7 @@ structure ΛR : Type where
 
 structure theta.Result : Type where
   (wor : Wor)
+  (tra : Tra)
   (gas : Nat)
   (acs : Acs)
   (status : Bool)
@@ -590,75 +597,35 @@ instance {ac : Acct} : Decidable ac.Erasable := instDecidableAnd
 def Wor.set (w : Wor) (a : Adr) (ac : Acct) : Wor :=
   if ac.Erasable then w.erase a else w.insert a ac
 
+def Tra.set (τ : Tra) (a : Adr) (s : Stor) : Tra :=
+  if s.isEmpty then τ.erase a else τ.insert a s
+
 def Wor.setCode (ω : Wor) (a : Adr) (cd : ByteArray) : Wor :=
   let ac := ω.get a
   ω.set a {ac with code := cd}
 
-def θ.prep
-  (ω₀ : Wor)
-  (H : Block)
-  (ω : Wor)
-  (A : Acs)
-  (s : Adr)
-  (o : Adr)
-  (r : Adr)
-  (c : Adr)
-  (g : Nat)
-  (p : Nat)
-  (v : B256)
-  (v_app : B256)
-  (d : B8L)
-  (e : Nat)
-  (w : Bool) :
-  Wor × Sta × Mem × Var × Con :=
-  let ω'₁ : Wor :=
-    match ω.find? r with
-    | none =>
-      if v = 0
-      then ω
-      else ω.set r {nonce := 0, bal := v, stor := .empty, code := ByteArray.mk #[]}
-    | some aᵣ => ω.set r {aᵣ with bal := aᵣ.bal + v}
-  let ω₁ : Wor :=
-    match ω'₁.find? s with
-    | none =>
-      if v = 0
-      then ω'₁
-      else (dbg_trace "unreachable code : nonzero value calls from empty accounts should never happen" ; ω'₁)
-    | some aₛ => ω'₁.set s {aₛ with bal := aₛ.bal - v}
-  let cd : ByteArray := ω.code c
-  let κ : Con := {
-    wor0 := ω₀
-    cta := r, oga := o, gpr := p.toB256, cld := d
-    cla := s, clv := v_app, code := cd, blk := H, exd := e, wup := w
-  }
-  let υ : Var := {
-    gas := g, pc := 0, ret := [], act := 0
-    dest := A.dest, adrs := A.adrs, keys := A.keys,
-    ref := A.ref, logs := A.logs, tchd := A.tchd
-  }
-  ⟨ω₁, .init, #[], υ, κ⟩
 
-def θ.wrapCore (wor : Wor) (acs : Acs) (Ξr : ΞR) : theta.Result :=
-  let ω_stars : Option Wor := Ξr.wor
+def thetaWrapCore (ω : Wor) (τ : Tra) (acs : Acs) (Ξr : ΞR) : theta.Result :=
+  let ωτ_stars : Option (Wor × Tra):= Ξr.wt
   let g_stars : Nat := Ξr.gas
   let A_stars : Acs := Ξr.acs
   let o : Option B8L := Ξr.ret
-  let ω' : Wor := ω_stars.getD wor
+  let ⟨ω', τ'⟩ : Wor × Tra := ωτ_stars.getD ⟨ω, τ⟩
   let g' : Nat :=
-    if ω_stars.isNone ∧ o.isNone
+    if ωτ_stars.isNone ∧ o.isNone
     then 0
     else g_stars
-  let A' : Acs := if ω_stars.isNone then acs else A_stars
-  let z : Bool := if ω_stars.isNone then 0 else 1
+  let A' : Acs := if ωτ_stars.isNone then acs else A_stars
+  let z : Bool := if ωτ_stars.isNone then 0 else 1
   -- o' is not from YP, but necessary to cast from 'Option B8L to 'B8L'
   -- (YP is a bit sloppy with types here)
   let o' : B8L := o.getD []
-  ⟨ω', g', A', z, o'⟩
+  ⟨ω', τ', g', A', z, o'⟩
 
-def θ.wrap (ω : Wor) (α : Acs) : Exmo ΞR → Exmo theta.Result
-  | .error (.inl xr) => .ok <| θ.wrapCore ω α xr
+def thetaWrap (ω : Wor) (τ : Tra) (α : Acs) : Exmo ΞR → Exmo theta.Result
+  | .error (.inl xr) => .ok <| thetaWrapCore ω τ α xr
   | .error (.inr es) => .error (.inr es)
-  | .ok xr => .ok <| θ.wrapCore ω α xr
+  | .ok xr => .ok <| thetaWrapCore ω τ α xr
 
 def dataGas (cd : B8L) : Nat :=
   let aux : B8 → Nat := fun b => if b = 0 then 4 else 16
@@ -731,7 +698,7 @@ def A_star (H : Block) (ST : Adr) (Tt : Option Adr) (TA : AccessList) : Acs :=
     keys := TA.collect
   }
 
-def Stor.insertNonzero (s : Stor) (k v : B256) : Stor :=
+def Stor.set (s : Stor) (k v : B256) : Stor :=
   if v = 0 then s.erase k else s.insert k v
 
 def Sta.pop1 : Sta → Option (B256 × Sta)
@@ -826,8 +793,10 @@ def Option.toExmo {ξ : Type u} (υ : Var) : Option ξ → Exmo ξ
   | none => .error <| .inl <| xhs υ
   | some x => .ok x
 
+
 def sstoreStep (ω : Wor) (σ : Sta) (υ : Var) (κ : Con) :
     Exmo (Wor × Sta × Var) := do
+  Except.guard (.inl <| xhs0 υ) (κ.wup ∧ gCallStipend < υ.gas)
   let (x, v', σ') ← σ.pop2.toExcept (.inl <| xhs υ)
   let (a₀ : Acct) := (κ.wor0.find? κ.cta).getD Acct.empty
   let (v₀ : B256) := ((a₀.stor.find? x).getD 0)
@@ -863,7 +832,7 @@ def sstoreStep (ω : Wor) (σ : Sta) (υ : Var) (κ : Con) :
          else rDirtyClear + rDirtyReset
   let g' ← deductGas υ c
   let ref' ← (Int.ofNat υ.ref + r).toNat'.toExcept (.inr "refund underflow")
-  let a' : Acct := {a with stor := a.stor.insertNonzero x v'}
+  let a' : Acct := {a with stor := a.stor.set x v'}
 
   .ok
     ⟨
@@ -876,6 +845,20 @@ def sstoreStep (ω : Wor) (σ : Sta) (υ : Var) (κ : Con) :
         keys := υ.keys.insert ⟨κ.cta, x⟩
         ref := ref'
       }
+    ⟩
+
+def tstoreStep (τ : Tra) (σ : Sta) (υ : Var) (κ : Con) :
+  Exmo (Tra × Sta × Var) := do
+  Except.guard (.inl <| xhs0 υ) (κ.wup)
+  let (x, v', σ') ← σ.pop2.toExcept (.inl <| xhs υ)
+  let s : Stor := (τ.find? κ.cta).getD .empty
+  let s' : Stor := s.set x v'
+  let g' ← deductGas υ 100
+  .ok
+    ⟨
+      τ.set κ.cta s',
+      σ', --σ',
+      {υ with gas := g', pc := υ.pc + 1}
     ⟩
 
 
@@ -931,37 +914,37 @@ def Sta.dup : Sta → Nat → Option Sta
     else do let x ← xs.get? (n - (k + 1))
             Sta.push1 ⟨xs, n⟩ x
 
-def pushItem (σ : Sta) (μ : Mem) (υ : Var) (x : B256) (c : Nat) :
-    Exmo (Sta × Mem × Var) := do
+def pushItem (ω : Wor) (τ : Tra) (σ : Sta) (μ : Mem) (υ : Var) (x : B256) (c : Nat) :
+    Exmo (Wor × Tra × Sta × Mem × Var) := do
   let σ' ← (σ.push1 x).toExcept (.inl <| xhs0 υ)
   let υ' ← nextVar υ c
-  .ok ⟨σ', μ, υ'⟩
+  .ok ⟨ω, τ, σ', μ, υ'⟩
 
 def checkRemGas (υ : Var) (cost : Nat) (act' : Nat) : Exmo Unit := do
   let mc : Nat := cMem act' - cMem υ.act
   let _ ← deductGas υ (cost + mc)
   return ()
 
-def applyUnary (σ : Sta) (μ : Mem) (υ : Var) (f : B256 → B256) (cost : Nat) :
-    Exmo (Sta × Mem × Var) := do
+def applyUnary (ω : Wor) (τ : Tra) (σ : Sta) (μ : Mem) (υ : Var)
+  (f : B256 → B256) (cost : Nat) : Exmo (Wor × Tra × Sta × Mem × Var) := do
   let (x, σ') ← σ.pop1.toExmo υ
   let σ'' ← (σ'.push1 (f x)).toExmo υ
   let υ' ← nextVar υ cost
-  .ok ⟨σ'', μ, υ'⟩
+  .ok ⟨ω, τ, σ'', μ, υ'⟩
 
-def applyBinary (σ : Sta) (μ : Mem) (υ : Var) (f : B256 → B256 → B256) (cost : Nat) :
-    Exmo (Sta × Mem × Var) := do
+def applyBinary (ω : Wor) (τ : Tra) (σ : Sta) (μ : Mem) (υ : Var)
+  (f : B256 → B256 → B256) (cost : Nat) : Exmo (Wor × Tra × Sta × Mem × Var) := do
   let (x, y, σ') ← σ.pop2.toExmo υ
   let σ'' ← (σ'.push1 (f x y)).toExmo υ
   let υ' ← nextVar υ cost
-  .ok ⟨σ'', μ, υ'⟩
+  .ok ⟨ω, τ, σ'', μ, υ'⟩
 
-def applyTernary (σ : Sta) (μ : Mem) (υ : Var) (f : B256 → B256 → B256 → B256) (cost : Nat) :
-    Exmo (Sta × Mem × Var) := do
+def applyTernary (ω : Wor) (τ : Tra) (σ : Sta) (μ : Mem) (υ : Var)
+  (f : B256 → B256 → B256 → B256) (cost : Nat) : Exmo (Wor × Tra × Sta × Mem × Var) := do
   let (x, y, z, σ') ← σ.pop3.toExmo υ
   let σ'' ← (σ'.push1 (f x y z)).toExmo υ
   let υ' ← nextVar υ cost
-  .ok ⟨σ'', μ, υ'⟩
+  .ok ⟨ω, τ, σ'', μ, υ'⟩
 
 def B256.toAdr : B256 → Adr
   | ⟨⟨_, x⟩, ⟨y, z⟩⟩ => {high := x.toUInt32, mid := y, low := z}
@@ -969,29 +952,55 @@ def B256.toAdr : B256 → Adr
 def Adr.toB256 (a : Adr) : B256 :=
   ⟨⟨0, a.high.toUInt64⟩ , ⟨a.mid, a.low⟩ ⟩
 
-def Rinst.run (ω : Wor) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) :
-    Rinst → Exmo (Sta × Mem × Var)
-  | .address => pushItem σ μ υ κ.cta.toB256 gBase
-  | .basefee => pushItem σ μ υ κ.blk.baseFee gBase
-  | .blobbasefee => pushItem σ μ υ κ.blk.blobBaseFee gBase
+def BLOB_BASE_FEE_UPDATE_FRACTION : Nat := 3338477
+
+--def fakeExpAux (lim numAcc num den i : Nat) : Nat :=
+def fakeExpAux (num den i : Nat) : Nat → Nat → Nat
+  | _, 0 => panic! "error : recursion limit reached for fake exponentiation"
+  | 0, _ => 0
+  | numAcc, lim + 1 =>
+    let numAcc' := (numAcc * num) / (den * i)
+    numAcc + fakeExpAux num den (i + 1) numAcc' lim
+
+def fakeExp (fac num den : Nat) : Nat :=
+  let lim := (max (fac * num) <| num * num) + 2
+  let out := fakeExpAux num den 1 (fac * den) lim
+  out / den
+
+def get_base_fee_per_blob_gas (excessBlobGas : Nat) : Nat :=
+  fakeExp 1 excessBlobGas BLOB_BASE_FEE_UPDATE_FRACTION
+
+def Rinst.run (ω : Wor) (τ : Tra) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) :
+    Rinst → Exmo (Wor × Tra × Sta × Mem × Var)
+  | .address => pushItem ω τ σ μ υ κ.cta.toB256 gBase
+  | .basefee => pushItem ω τ σ μ υ κ.blk.baseFee gBase
+  | .blobhash => do
+    let (x, σ') ← (σ.pop1).toExmo υ
+    let y : B256 := κ.blk.blobHashes.getD x.toNat 0
+    let σ'' ← (σ'.push1 y).toExmo υ
+    let υ' ← nextVar υ gHashopcode
+    .ok ⟨ω, τ, σ'', μ, υ'⟩
+  | .blobbasefee => do
+    let fee := get_base_fee_per_blob_gas κ.blk.excessBlobGas.toNat
+    pushItem ω τ σ μ υ fee.toB256 gBase
   | .balance => do
     let (x, σ') ← σ.pop1.toExmo υ
     let a := x.toAdr
     let adrs' : AdrSet := υ.adrs.insert a
     let σ'' ← (σ'.push1 (ω.get a).bal).toExmo υ
     let υ' ← nextVar υ (cAAccess a υ.adrs) (adrs' := adrs')
-    .ok ⟨σ'', μ, υ'⟩
-  | .origin => pushItem σ μ υ κ.oga.toB256 gBase
-  | .caller => pushItem σ μ υ κ.cla.toB256 gBase
-  | .callvalue => pushItem σ μ υ κ.clv gBase
+    .ok ⟨ω, τ, σ'', μ, υ'⟩
+  | .origin => pushItem ω τ σ μ υ κ.oga.toB256 gBase
+  | .caller => pushItem ω τ σ μ υ κ.cla.toB256 gBase
+  | .callvalue => pushItem ω τ σ μ υ κ.clv gBase
   | .calldataload => do
     let (x, σ') ← (σ.pop1).toExmo υ
     let cd ←
       (B8L.toB256? (κ.cld.sliceD x.toNat 32 0)).toExcept (.inr "error : slice length should be 32")
     let σ'' ← (σ'.push1 cd).toExmo υ
     let υ' ← nextVar υ gVerylow
-    .ok ⟨σ'', μ, υ'⟩
-  | .calldatasize => pushItem σ μ υ κ.cld.length.toB256 gBase
+    .ok ⟨ω, τ, σ'', μ, υ'⟩
+  | .calldatasize => pushItem ω τ σ μ υ κ.cld.length.toB256 gBase
   | .calldatacopy => do
     let (x, y, z, σ') ← (σ.pop3).toExmo υ
     let bs : B8L := κ.cld.sliceD y.toNat z.toNat 0
@@ -999,22 +1008,22 @@ def Rinst.run (ω : Wor) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) :
       nextVar υ
         (gVerylow + (gCopy * ceilDiv z.toNat 32))
         (act' := memExp υ.act x z)
-    .ok ⟨σ', Array.writeX μ x.toNat bs 0, υ'⟩
-  | .codesize => pushItem σ μ υ κ.code.size.toB256 gBase
+    .ok ⟨ω, τ, σ', Array.writeX μ x.toNat bs 0, υ'⟩
+  | .codesize => pushItem ω τ σ μ υ κ.code.size.toB256 gBase
   | .codecopy => do
     let (x, y, z, σ') ← (σ.pop3).toExmo υ
     let cost := gVerylow + (gCopy * ceilDiv z.toNat 32)
     let υ' ← nextVar υ cost (act' := memExp υ.act x z)
     let bs := κ.code.sliceD y.toNat z.toNat (Linst.toB8 .stop)
-    .ok ⟨σ', Array.writeX μ x.toNat bs 0, υ'⟩
-  | .gasprice => pushItem σ μ υ κ.gpr gBase
+    .ok ⟨ω, τ, σ', Array.writeX μ x.toNat bs 0, υ'⟩
+  | .gasprice => pushItem ω τ σ μ υ κ.gpr gBase
   | .extcodesize => do
     let (x, σ') ← (σ.pop1).toExmo υ
     let a := x.toAdr
     let adrs' : AdrSet := υ.adrs.insert a
     let σ'' ← (σ'.push1 (ω.get a).code.size.toB256).toExmo υ
     let υ' ← nextVar υ (cAAccess a υ.adrs) (adrs' := adrs')
-    .ok ⟨σ'', μ, υ'⟩
+    .ok ⟨ω, τ, σ'', μ, υ'⟩
   | .extcodecopy => do
     let (x, y, z, w, σ') ← (σ.pop4).toExmo υ
     let a := x.toAdr
@@ -1025,15 +1034,15 @@ def Rinst.run (ω : Wor) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) :
     let bs := cd.sliceD z.toNat w.toNat (Linst.toB8 .stop)
     -- dbg_trace s!"EXTCODECOPY SOURCE ADDRESS : {a.toHex}"
     -- dbg_trace s!"EXTCODECOPY VAL : {bs.toHex}"
-    .ok ⟨σ', Array.writeX μ y.toNat bs 0, υ'⟩
-  | .retdatasize => pushItem σ μ υ υ.ret.length.toB256 gBase
+    .ok ⟨ω, τ, σ', Array.writeX μ y.toNat bs 0, υ'⟩
+  | .retdatasize => pushItem ω τ σ μ υ υ.ret.length.toB256 gBase
   | .retdatacopy => do
     let (x, y, z, σ') ← (σ.pop3).toExmo υ
     let act' := memExp υ.act x z
     let υ' ← nextVar υ (gVerylow + (gCopy * (ceilDiv z.toNat 32))) (act' := act')
     -- return data not being large enough for a slice is XHS
     let bs ← (υ.ret.slice? y.toNat z.toNat).toExmo υ
-    .ok ⟨σ', Array.writeX μ x.toNat bs 0, υ'⟩
+    .ok ⟨ω, τ, σ', Array.writeX μ x.toNat bs 0, υ'⟩
   | .extcodehash => do
     let (x, σ') ← (σ.pop1).toExmo υ
     let a := x.toAdr
@@ -1045,15 +1054,15 @@ def Rinst.run (ω : Wor) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) :
       else let cd := (ω.get a).code
            ByteArray.keccak 0 cd.size cd
     let σ'' ← (σ'.push1 hash).toExmo υ
-    .ok ⟨σ'', μ, υ'⟩
-  | .selfbalance => pushItem σ μ υ (ω.get κ.cta).bal gLow
-  | .chainid => pushItem σ μ υ κ.blk.chainId gBase
-  | .number => pushItem σ μ υ κ.blk.number gBase
-  | .timestamp => pushItem σ μ υ κ.blk.timestamp gBase
-  | .gaslimit => pushItem σ μ υ κ.blk.gasLimit gBase
-  | .prevrandao => pushItem σ μ υ κ.blk.prevRandao gBase
-  | .coinbase => pushItem σ μ υ κ.blk.ben.toB256 gBase
-  | .msize => pushItem σ μ υ (υ.act * 32).toB256 gBase
+    .ok ⟨ω, τ, σ'', μ, υ'⟩
+  | .selfbalance => pushItem ω τ σ μ υ (ω.get κ.cta).bal gLow
+  | .chainid => pushItem ω τ σ μ υ κ.blk.chainId gBase
+  | .number => pushItem ω τ σ μ υ κ.blk.number gBase
+  | .timestamp => pushItem ω τ σ μ υ κ.blk.timestamp gBase
+  | .gaslimit => pushItem ω τ σ μ υ κ.blk.gasLimit gBase
+  | .prevrandao => pushItem ω τ σ μ υ κ.blk.prevRandao gBase
+  | .coinbase => pushItem ω τ σ μ υ κ.blk.ben.toB256 gBase
+  | .msize => pushItem ω τ σ μ υ (υ.act * 32).toB256 gBase
   | .mload => do
     let (x, σ') ← (σ.pop1).toExmo υ
     let act' := memExp υ.act x (32 : Nat).toB256
@@ -1062,70 +1071,68 @@ def Rinst.run (ω : Wor) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) :
     let y : B256 ←
       (B8L.toB256? bs).toExcept (.inr "error : byte slice should always be correct size (32)")
     let σ'' ← (σ'.push1 y).toExmo υ
-    .ok ⟨σ'', μ, υ'⟩
+    .ok ⟨ω, τ, σ'', μ, υ'⟩
   | .mstore => do
     let (x, y, σ') ← (σ.pop2).toExmo υ
     let act' := memExp υ.act x (32 : Nat).toB256
     let υ' ← nextVar υ gVerylow (act' := act')
-    -- dbg_trace s!"MSTORE LOC : {x.toHex}"
-    -- dbg_trace s!"MSTORE VAL : {y.toHex}"
-    .ok ⟨σ', Array.writeX μ x.toNat y.toB8L 0, υ'⟩
+    .ok ⟨ω, τ, σ', Array.writeX μ x.toNat y.toB8L 0, υ'⟩
   | .mstore8 => do
     let (x, y, σ') ← (σ.pop2).toExmo υ
     let act' := memExp υ.act x 1
     let υ' ← nextVar υ gVerylow (act' := act')
-    .ok ⟨σ', Array.writeX μ x.toNat [y.2.2.toUInt8] 0, υ'⟩
-  | .gas => pushItem σ μ υ (υ.gas - gBase).toB256 gBase
-  | .eq => applyBinary σ μ υ .eq_check gVerylow
-  | .lt => applyBinary σ μ υ .lt_check gVerylow
-  | .gt => applyBinary σ μ υ .gt_check gVerylow
-  | .slt => applyBinary σ μ υ .slt_check gVerylow
-  | .sgt => applyBinary σ μ υ .sgt_check gVerylow
-  | .iszero => applyUnary σ μ υ (.eq_check · 0) gVerylow
-  | .not => applyUnary σ μ υ (~~~ ·) gVerylow
-  | .and => applyBinary σ μ υ B256.and gVerylow
-  | .or => applyBinary σ μ υ B256.or gVerylow
-  | .xor => applyBinary σ μ υ B256.xor gVerylow
-  | .signextend => applyBinary σ μ υ B256.signext gLow
+    .ok ⟨ω, τ, σ', Array.writeX μ x.toNat [y.2.2.toUInt8] 0, υ'⟩
+  | .gas => pushItem ω τ σ μ υ (υ.gas - gBase).toB256 gBase
+  | .eq => applyBinary ω τ σ μ υ .eq_check gVerylow
+  | .lt => applyBinary ω τ σ μ υ .lt_check gVerylow
+  | .gt => applyBinary ω τ σ μ υ .gt_check gVerylow
+  | .slt => applyBinary ω τ σ μ υ .slt_check gVerylow
+  | .sgt => applyBinary ω τ σ μ υ .sgt_check gVerylow
+  | .iszero => applyUnary ω τ σ μ υ (.eq_check · 0) gVerylow
+  | .not => applyUnary ω τ σ μ υ (~~~ ·) gVerylow
+  | .and => applyBinary ω τ σ μ υ B256.and gVerylow
+  | .or => applyBinary ω τ σ μ υ B256.or gVerylow
+  | .xor => applyBinary ω τ σ μ υ B256.xor gVerylow
+  | .signextend => applyBinary ω τ σ μ υ B256.signext gLow
   | .pop => do
     let (_, σ') ← (σ.pop1).toExmo υ
     let υ' ← nextVar υ gBase
-    .ok ⟨σ', μ, υ'⟩
+    .ok ⟨ω, τ, σ', μ, υ'⟩
   | .byte =>
-    applyBinary σ μ υ (λ x y => (List.getD y.toB8L x.toNat 0).toB256) gVerylow
-  | .shl => applyBinary σ μ υ (fun x y => y <<< x.toNat) gVerylow
-  | .shr => applyBinary σ μ υ (fun x y => y >>> x.toNat) gVerylow
-  | .sar => applyBinary σ μ υ (fun x y => B256.sar x.toNat y) gVerylow
+    applyBinary ω τ σ μ υ (λ x y => (List.getD y.toB8L x.toNat 0).toB256) gVerylow
+  | .shl => applyBinary ω τ σ μ υ (fun x y => y <<< x.toNat) gVerylow
+  | .shr => applyBinary ω τ σ μ υ (fun x y => y >>> x.toNat) gVerylow
+  | .sar => applyBinary ω τ σ μ υ (fun x y => B256.sar x.toNat y) gVerylow
   | .kec => do
     let (x, y, σ') ← (σ.pop2).toExmo υ
     let act' := memExp υ.act x y
     let cost := gKeccak256 + (gKeccak256Word * (ceilDiv y.toNat 32))
     let υ' ← nextVar υ cost (act' := act')
     let σ'' ← (σ'.push1 <| B8a.keccak x.toNat y.toNat μ).toExmo υ
-    .ok ⟨σ'', μ, υ'⟩
-  | .sub => applyBinary σ μ υ (· - ·) gVerylow
-  | .mul => applyBinary σ μ υ (· * ·) gLow
+    .ok ⟨ω, τ, σ'', μ, υ'⟩
+  | .sub => applyBinary ω τ σ μ υ (· - ·) gVerylow
+  | .mul => applyBinary ω τ σ μ υ (· * ·) gLow
   | .exp => do
     let (x, y, σ') ← (σ.pop2).toExmo υ
     let cost := gExp + (gExpbyte * y.bytecount)
     let σ'' ← (σ'.push1 (B256.bexp x y)).toExmo υ
     let υ' ← nextVar υ cost
-    .ok ⟨σ'', μ, υ'⟩
-  | .div => applyBinary σ μ υ (· / ·) gLow
-  | .sdiv => applyBinary σ μ υ B256.sdiv gLow
-  | .mod => applyBinary σ μ υ (· % ·) gLow
-  | .smod => applyBinary σ μ υ B256.smod gLow
-  | .add => applyBinary σ μ υ (· + ·) gVerylow
-  | .addmod => applyTernary σ μ υ B256.addmod gMid
-  | .mulmod => applyTernary σ μ υ B256.mulmod gMid
+    .ok ⟨ω, τ, σ'', μ, υ'⟩
+  | .div => applyBinary ω τ σ μ υ (· / ·) gLow
+  | .sdiv => applyBinary ω τ σ μ υ B256.sdiv gLow
+  | .mod => applyBinary ω τ σ μ υ (· % ·) gLow
+  | .smod => applyBinary ω τ σ μ υ B256.smod gLow
+  | .add => applyBinary ω τ σ μ υ (· + ·) gVerylow
+  | .addmod => applyTernary ω τ σ μ υ B256.addmod gMid
+  | .mulmod => applyTernary ω τ σ μ υ B256.mulmod gMid
   | .swap n => do
     let σ' ← (σ.swap n).toExmo υ
     let υ' ← nextVar υ gVerylow
-    .ok ⟨σ', μ, υ'⟩
+    .ok ⟨ω, τ, σ', μ, υ'⟩
   | .dup n => do
     let σ' ← (σ.dup n).toExmo υ
     let υ' ← nextVar υ gVerylow
-    .ok ⟨σ', μ, υ'⟩
+    .ok ⟨ω, τ, σ', μ, υ'⟩
   | .sload => do
     let (x, σ') ← (σ.pop1).toExmo υ
     let cost : Nat := if υ.keys.contains ⟨κ.cta, x⟩ then gWarmAccess else gColdSLoad
@@ -1133,9 +1140,33 @@ def Rinst.run (ω : Wor) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) :
     let y := (ac.stor.find? x).getD 0
     let σ'' ← (σ'.push1 y).toExmo υ
     let υ' ← nextVar υ cost (keys' := υ.keys.insert ⟨κ.cta, x⟩)
-    .ok ⟨σ'', μ, υ'⟩
-  | .pc => pushItem σ μ υ υ.pc.toB256 gBase
+    .ok ⟨ω, τ, σ'', μ, υ'⟩
+  | .tload => do
+    let (x, σ') ← (σ.pop1).toExmo υ
+    let cost : Nat := 100 --if υ.keys.contains ⟨κ.cta, x⟩ then gWarmAccess else gColdSLoad
+    let s := τ.findD κ.cta .empty
+    let y := (s.find? x).getD 0
+    let σ'' ← (σ'.push1 y).toExmo υ
+    let υ' ← nextVar υ cost
+    .ok ⟨ω, τ, σ'', μ, υ'⟩
+  | .sstore => do
+    let ⟨ω', σ', υ'⟩ ← sstoreStep ω σ υ κ --α ε
+    .ok ⟨ω', τ, σ', μ, υ'⟩
+  | .tstore => do
+    let ⟨τ', σ', υ'⟩ ← tstoreStep τ σ υ κ --α ε
+    .ok ⟨ω, τ', σ', μ, υ'⟩
+  | .mcopy => do
+    let (x, y, z, σ') ← (σ.pop3).toExmo υ
+    let bs : B8L := μ.sliceD y.toNat z.toNat 0
+    let υ' ←
+      nextVar υ
+        (gVerylow + (gCopy * ceilDiv z.toNat 32))
+        (act' := memExp (memExp υ.act x z) y z)
+    .ok ⟨ω, τ, σ', Array.writeX μ x.toNat bs 0, υ'⟩
+  | .pc => pushItem ω τ σ μ υ υ.pc.toB256 gBase
   | .log n => do
+    Except.guard (.inl <| xhs0 υ) κ.wup
+
     let ⟨x :: y :: xs, σ'⟩ ←
       (σ.popN (n + 2)).toExmo υ | (.error <| .inr "error : popN should return 2 or more items")
     let act' := memExp υ.act x y
@@ -1149,7 +1180,7 @@ def Rinst.run (ω : Wor) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) :
         .b8s bs
       ]
     let υ' ← nextVar υ cost (act' := act') (logs' := log :: υ.logs)
-    .ok ⟨σ', μ, υ'⟩
+    .ok ⟨ω, τ, σ', μ, υ'⟩
   | .blockhash => do
     let (x, σ') ← (σ.pop1).toExmo υ
     let bn := κ.blk.number
@@ -1162,8 +1193,8 @@ def Rinst.run (ω : Wor) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) :
            else List.getD κ.blk.hashes d.toNat 0
     let σ'' ← (σ'.push1 h).toExmo υ
     let υ' ← nextVar υ gBlockhash
-    .ok ⟨σ'', μ, υ'⟩
-  | i => .error <| .inr s!"UNIMPLEMENTED REGULAR INSTRUCTION EXECUTION : {i.toString}"
+    .ok ⟨ω, τ, σ'', μ, υ'⟩
+  -- | i => .error <| .inr s!"UNIMPLEMENTED REGULAR INSTRUCTION EXECUTION : {i.toString}"
 
 
 
@@ -1216,19 +1247,14 @@ def Jinst.run (σ : Sta) (υ : Var) (κ : Con) :
       Except.guard (.inl (xhs υ)) (jumpable' κ.code loc.toNat)
       .ok ⟨σ', {υ with gas := g', pc := loc.toNat}⟩
 
-def Ninst'.run (ω : Wor) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) :
-    Ninst' → Exmo (Wor × Sta × Mem × Var)
+def Ninst'.run (ω : Wor) (τ : Tra) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) :
+    Ninst' → Exmo (Wor × Tra × Sta × Mem × Var)
   | .push x len => do
     let g' ← deductGas υ (if len = 0 then gBase else gVerylow)
     let σ' ← (σ.push1 x).toExmo υ
     let υ' := {υ with gas := g', pc := υ.pc + len + 1}
-    .ok ⟨ω, σ', μ, υ'⟩
-  | .reg (.sstore) => do
-    let ⟨ω', σ', υ'⟩ ← sstoreStep ω σ υ κ --α ε
-    .ok ⟨ω', σ', μ, υ'⟩
-  | .reg r => do
-    let ⟨μ', σ', α'⟩ ← Rinst.run ω σ μ υ κ r --α ε r
-    .ok ⟨ω, μ', σ', α'⟩
+    .ok ⟨ω, τ, σ', μ, υ'⟩
+  | .reg r => r.run ω τ σ μ υ κ
   | .exec e =>
     .error <| .inr s!"unimplemented xinst : {e.toString}"
 
@@ -1250,7 +1276,7 @@ structure theta.Cont : Type where
   (act : Nat)
 
 def theta.Result.use (tr : theta.Result) (ct : theta.Cont) :
-    Option (Wor × Sta × Mem × Var) := do
+    Option (Wor × Tra ×  Sta × Mem × Var) := do
   let cpy : B8L := List.take ct.osz.toNat tr.ret
   let xs ← ct.sta.push1 (if tr.status then 1 else 0)
   let υ' : Var := {
@@ -1265,7 +1291,7 @@ def theta.Result.use (tr : theta.Result) (ct : theta.Cont) :
     logs := tr.acs.logs
     tchd := tr.acs.tchd
   }
-  some ⟨tr.wor, xs, Array.writeX ct.mem ct.olc.toNat cpy 0, υ'⟩
+  some ⟨tr.wor, tr.tra, xs, Array.writeX ct.mem ct.olc.toNat cpy 0, υ'⟩
 
 def theta.Result.toState (ct : theta.Cont) (tr : theta.Result) :
     Option (Wor × Sta × Mem × Var) := do
@@ -1320,17 +1346,17 @@ def showStep (υ : Var) (i : Inst') : Option Unit := do
   )
   return ()
 
-def execSha (ω : Wor) (υ : Var) (κ : Con) : ΞR :=
+def execSha (ω : Wor) (τ : Tra) (υ : Var) (κ : Con) : ΞR :=
   let g_r : Nat := 60 + (12 * (ceilDiv κ.cld.length 32))
   match safeSub υ.gas g_r with
-  | none => {wor := none, gas := 0, acs := υ.toAcs, ret := some []}
+  | none => {wt := none, gas := 0, acs := υ.toAcs, ret := some []}
   | some g' =>
     let hash : B256 := B8L.sha256 κ.cld
-    {wor := some ω, gas := g', acs := υ.toAcs, ret := some hash.toB8L}
+    {wt := some ⟨ω, τ⟩, gas := g', acs := υ.toAcs, ret := some hash.toB8L}
 
-def execPre (ω : Wor) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) : Nat → Exmo ΞR
-  | 2 => .ok <| execSha ω υ κ
-  | n => .error <| .inr "precomp uninplemented : {n}"
+def execPre (ω : Wor) (τ : Tra) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) : Nat → Exmo ΞR
+  | 2 => .ok <| execSha ω τ υ κ
+  | n => .error <| .inr s!"precomp uninplemented : {n}"
 
 
 -- STATCALL: Θ(σ, A∗, Ia, Io, t,  t, C_CALLGAS(σ, μ, A), I_p, 0,     0,     i, Ie + 1, false)
@@ -1355,6 +1381,50 @@ def execPre (ω : Wor) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) : Nat → Exm
 -- succeeds in all cases EXCEPT there is insufficient gas
 -- to execute a CALL/CALLCODE/DELCALL/STATCALL instruction,
 -- which is an exceptional halting state.
+
+def θ.prep
+  (ω₀ : Wor)
+  (H : Block)
+  (ω : Wor)
+  (A : Acs)
+  (s : Adr)
+  (o : Adr)
+  (r : Adr)
+  (c : Adr)
+  (g : Nat)
+  (p : Nat)
+  (v : B256)
+  (v_app : B256)
+  (d : B8L)
+  (e : Nat)
+  (w : Bool) :
+  Wor × Var × Con :=
+  let ω'₁ : Wor :=
+    match ω.find? r with
+    | none =>
+      if v = 0
+      then ω
+      else ω.set r {nonce := 0, bal := v, stor := .empty, code := ByteArray.mk #[]}
+    | some aᵣ => ω.set r {aᵣ with bal := aᵣ.bal + v}
+  let ω₁ : Wor :=
+    match ω'₁.find? s with
+    | none =>
+      if v = 0
+      then ω'₁
+      else (dbg_trace "unreachable code : nonzero value calls from empty accounts should never happen" ; ω'₁)
+    | some aₛ => ω'₁.set s {aₛ with bal := aₛ.bal - v}
+  let cd : ByteArray := ω.code c
+  let κ : Con := {
+    wor0 := ω₀
+    cta := r, oga := o, gpr := p.toB256, cld := d
+    cla := s, clv := v_app, code := cd, blk := H, exd := e, wup := w
+  }
+  let υ : Var := {
+    gas := g, pc := 0, ret := [], act := 0
+    dest := A.dest, adrs := A.adrs, keys := A.keys,
+    ref := A.ref, logs := A.logs, tchd := A.tchd
+  }
+  ⟨ω₁, υ, κ⟩
 
 def θ.prep'
   (κ : Con)
@@ -1396,7 +1466,7 @@ def θ.prep'
   ⟨ω!, υ!, κ!⟩
 
 def thetaPrep
-  (ω : Wor) (σ' : Sta) (μ : Mem) (υ : Var) (κ : Con)
+  (ω : Wor) (τ : Tra) (σ' : Sta) (μ : Mem) (υ : Var) (κ : Con)
   (gas adr ilc isz olc osz : B256)
   (sen rec : Adr) (tval rval : B256) (wup : Bool) :
   Exmo (theta.Result × (Wor × Var × Con) × theta.Cont) := do
@@ -1423,7 +1493,7 @@ def thetaPrep
       i
       wup
   .ok ⟨
-    ⟨ω, cg, A', 0, []⟩,
+    ⟨ω, τ, cg, A', 0, []⟩,
     ⟨ω!, υ!,κ!⟩,
     {olc := olc, osz := osz, gas := g', mem := μ, pc := υ.pc, sta := σ', act := act'}
   ⟩
@@ -1443,23 +1513,24 @@ def thetaPrep
 --     | none => .error .none
 --     | some y => .ok y ⟩
 
-def Linst.run (ω : Wor) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) :
+def Linst.run (ω : Wor) (τ : Tra) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) :
     Linst → Exmo ΞR
   | .invalid => .ok <| xhs υ
-  | .stop => .ok {wor := ω, gas := υ.gas, acs := υ.toAcs, ret := some []}
+  | .stop => .ok {wt := some ⟨ω, τ⟩, gas := υ.gas, acs := υ.toAcs, ret := some []}
   | .ret => do
     let (rlc, rsz, _) ← σ.pop2.toExcept (.inl <| xhs0 υ)
     let mc := memCost υ rlc rsz
     let g' ← deductGas υ mc
     let r := μ.sliceD rlc.toNat rsz.toNat 0
-    .ok {wor := ω, gas := g', acs := υ.toAcs, ret := r}
+    .ok {wt := some ⟨ω, τ⟩, gas := g', acs := υ.toAcs, ret := r}
   | .rev => do
     let ⟨rlc, rsz, _⟩ ← σ.pop2.toExmo υ
     let mc := memCost υ rlc rsz
     let g' ← deductGas υ mc
     let o : B8L := μ.sliceD rlc.toNat rsz.toNat 0
-    .ok {wor := none, gas := g', acs := υ.toAcs, ret := some o}
+    .ok {wt := none, gas := g', acs := υ.toAcs, ret := some o}
   | .dest => do
+    Except.guard (.inl <| xhs0 υ) κ.wup
     let (x, _) ← σ.pop1.toExmo υ
     let a := x.toAdr -- recipient
     let cost :=
@@ -1471,12 +1542,12 @@ def Linst.run (ω : Wor) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) :
     let gas' ← deductGas υ cost
     .ok
       {
-        wor :=
+        wt :=
           if a = κ.cta
-          then ω
+          then some ⟨ω, τ⟩
           else let v := (ω.get κ.cta).bal
-               let wor' := ω.setBal κ.cta 0
-               wor'.addBal a v
+               let ω' := ω.setBal κ.cta 0
+               some ⟨ω'.addBal a v, τ⟩
         gas := gas'
         acs :=
           {
@@ -1486,7 +1557,6 @@ def Linst.run (ω : Wor) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) :
           }
         ret := some []
       }
-
 
 
 
@@ -1571,7 +1641,7 @@ def lambdaPrep
 
 def ByteArray.fromList : B8L → ByteArray := .mk ∘ .mk
 
-def lambdaWrapCore (ω : Wor) (A_star : Acs) (a : Adr) (xr : ΞR) : ΛR :=
+def lambdaWrapCore (ω : Wor) (τ : Tra) (A_star : Acs) (a : Adr) (xr : ΞR) : ΛR :=
   let o : B8L := xr.ret.getD []
   let c : Nat :=
     -- if `xr.ret = None`, value of `c` doesn't matter, but
@@ -1587,37 +1657,33 @@ def lambdaWrapCore (ω : Wor) (A_star : Acs) (a : Adr) (xr : ΞR) : ΛR :=
     24576 < o.length ∨
     o.head? = some 0xEF
 
-  {
-    wor :=
-      if F
-      then ω
-      else
-        match xr.wor with
-        | none => ω
-        | some ω' =>
-          match ω'.find? a with
-          | none => ω'
-          | some ac =>
-            if ac.Empty
-            then panic! "error : empty account stored to world"
-            else ω'.setCode a <| .fromList o
+  let ⟨ω', τ'⟩ : Wor × Tra :=
+    if F
+    then ⟨ω, τ⟩
+    else
+      match xr.wt with
+      | none => ⟨ω, τ⟩
+      | some ⟨ω', τ'⟩ =>
+        match ω'.find? a with
+        | none => ⟨ω', τ'⟩
+        | some ac =>
+          if ac.Empty
+          then panic! "error : empty account stored to world"
+          else ⟨ω'.setCode a <| .fromList o, τ'⟩
 
-    gas :=
-      if F
-      then (dbg_trace "lambda returns 0 because of F"; 0)
-      else xr.gas - c
-    acs :=
-      if F ∨ xr.wor.isNone
-      then A_star
-      else xr.acs
-    status := if F ∨ xr.wor.isNone then 0 else 1
+  {
+    wor := ω'
+    tra := τ'
+    gas := if F then 0 else xr.gas - c
+    acs := if F ∨ xr.wt.isNone then A_star else xr.acs
+    status := if F ∨ xr.wt.isNone then 0 else 1
     ret := o
   }
 
-def lambdaWrap (ω : Wor) (A_star : Acs) (a : Adr) : Exmo ΞR → Exmo ΛR
-  | .error (.inl xr) => .ok <| lambdaWrapCore ω A_star a xr
+def lambdaWrap (ω : Wor) (τ : Tra) (A_star : Acs) (a : Adr) : Exmo ΞR → Exmo ΛR
+  | .error (.inl xr) => .ok <| lambdaWrapCore ω τ A_star a xr
   | .error (.inr es) => .error (.inr es)
-  | .ok xr => .ok <| lambdaWrapCore ω A_star a xr
+  | .ok xr => .ok <| lambdaWrapCore ω τ A_star a xr
 
 def ΛR.use
     (σ : Sta) -- Stack after popping CREATE arguments
@@ -1625,8 +1691,8 @@ def ΛR.use
     (g : Nat) -- gas after deducting memCost & gas for contract creation
     (act' : Nat) -- active mem size after accounting for init code read
     (a : Adr) -- new contract address
-    : ΛR → Exmo (Wor × Sta × Var)
-  | ⟨ω', g', A', z, o⟩ => do
+    : ΛR → Exmo (Wor × Tra × Sta × Var)
+  | ⟨ω', τ', g', A', z, o⟩ => do
     let x : B256 :=
       if z = 0
       then 0
@@ -1638,18 +1704,20 @@ def ΛR.use
         (pc := υ.pc + 1)
         (ret := if z = 1 then [] else o)
         (act := act')
-    .ok ⟨ω', σ', υ'⟩
+    .ok ⟨ω', τ', σ', υ'⟩
 
 
 
-def exec : Nat → Wor → Sta → Mem → Var → Con → Exmo ΞR
-  | 0, _, _, _, _, _ => .error <| .inr "execution limit reached"
-  | lim + 1, ω, σ, μ, υ, κ => do
+def exec : Nat → Wor → Tra → Sta → Mem → Var → Con → Exmo ΞR
+  | 0, _, _, _, _, _, _ => .error <| .inr "execution limit reached"
+  | lim + 1, ω, τ, σ, μ, υ, κ => do
     (showLim lim υ).toExcept (.inr "error : showLim cannot fail")
     let i ← (getInst υ κ).toExmo υ
     (showStep υ i).toExcept (.inr "error : showStep cannot fail")
     match i with
     | .next (.exec .create) => do
+      Except.guard (.inl <| xhs0 υ) κ.wup
+
       let (val, code_loc, code_sz, σ') ← σ.pop3.toExcept (.inl <| xhs0 υ)
       let i : B8L := μ.sliceD code_loc.toNat code_sz.toNat 0
       let initCodeCost : Nat := gInitcodeword * (ceilDiv code_sz.toNat 32)
@@ -1672,12 +1740,14 @@ def exec : Nat → Wor → Sta → Mem → Var → Con → Exmo ΞR
           code := ByteArray.mk (.mk i), exd := κ.exd - 1 }
       let lr : ΛR ←
         if cond
-        then .ok {wor := ω, gas := createGas, acs := υ.toAcs, status := 0, ret := []}
-        else lambdaWrap ωp Ax a <| exec lim ωx .init #[] (Ax.toVar (gas := createGas)) κx
-      let ⟨ωf, σf, υf⟩ ← ΛR.use σ' υ (interGas - createGas) act' a  lr
-      exec lim ωf σf μ υf κ
+        then .ok {wor := ω, tra := τ, gas := createGas, acs := υ.toAcs, status := 0, ret := []}
+        else lambdaWrap ωp τ Ax a <| exec lim ωx τ .init #[] (Ax.toVar (gas := createGas)) κx
+      let ⟨ωf, τf, σf, υf⟩ ← ΛR.use σ' υ (interGas - createGas) act' a  lr
+      exec lim ωf τf σf μ υf κ
 
     | .next (.exec .create2) => do
+      Except.guard (.inl <| xhs0 υ) κ.wup
+
       let (val, code_loc, code_sz, salt, σ') ← σ.pop4.toExcept (.inl <| xhs0 υ)
       let i : B8L := μ.sliceD code_loc.toNat code_sz.toNat 0
       let word_sz : Nat := ceilDiv code_sz.toNat 32
@@ -1701,90 +1771,91 @@ def exec : Nat → Wor → Sta → Mem → Var → Con → Exmo ΞR
           code := ByteArray.mk (.mk i), exd := κ.exd - 1 }
       let lr : ΛR ←
         if cond
-        then .ok {wor := ω, gas := createGas, acs := υ.toAcs, status := 0, ret := []}
-        else lambdaWrap ωp Ax a <| exec lim ωx .init #[] (Ax.toVar (gas := createGas)) κx
-      let ⟨ωf, σf, υf⟩ ← ΛR.use σ' υ (interGas - createGas) act' a  lr
-      exec lim ωf σf μ υf κ
+        then .ok {wor := ω, tra := τ, gas := createGas, acs := υ.toAcs, status := 0, ret := []}
+        else lambdaWrap ωp τ Ax a <| exec lim ωx τ .init #[] (Ax.toVar (gas := createGas)) κx
+      let ⟨ωf, τf, σf, υf⟩ ← ΛR.use σ' υ (interGas - createGas) act' a  lr
+      exec lim ωf τf σf μ υf κ
     | .next (.exec .call) => do
       let (gas, adr, clv, ilc, isz, olc, osz, σ') ← σ.pop7.toExmo υ
+      Except.guard (.inl <| xhs0 υ) (κ.wup ∨ clv = 0)
       -- dbg_trace s!"nested CALL to address : {adr.toHex}"
       let ⟨θrf, ⟨ωp, υp, κp⟩, θc⟩ ←
-        thetaPrep ω σ' μ υ κ
+        thetaPrep ω τ σ' μ υ κ
           gas adr ilc isz olc osz κ.cta adr.toAdr clv clv κ.wup
       let θr : theta.Result ←
         if 0 = κ.exd ∨ (ω.get κ.cta).bal < clv
         then .ok θrf
         else
-          θ.wrap ωp υp.toAcs
+          thetaWrap ωp τ υp.toAcs
             ( if (0 < adr.toAdr.toNat ∧ adr.toAdr.toNat < 10)
-              then execPre ωp .init #[] υp κp adr.toAdr.toNat
-              else exec lim ωp .init #[] υp κp )
-      let ⟨ω', σ'', μ', υ'⟩ ← (theta.Result.use θr θc).toExmo υ
-      exec lim ω' σ'' μ' υ' κ
+              then execPre ωp τ .init #[] υp κp adr.toAdr.toNat
+              else exec lim ωp τ .init #[] υp κp )
+      let ⟨ω', τ', σ'', μ', υ'⟩ ← (theta.Result.use θr θc).toExmo υ
+      exec lim ω' τ' σ'' μ' υ' κ
     | .next (.exec .statcall) => do
       let (gas, adr, ilc, isz, olc, osz, σ') ← σ.pop6.toExmo υ
       -- dbg_trace s!"nested STATCALL to address : {adr.toHex}"
       let ⟨θrf, ⟨ωp, υp, κp⟩, θc⟩ ←
-        thetaPrep ω σ' μ υ κ
+        thetaPrep ω τ σ' μ υ κ
           gas adr ilc isz olc osz κ.cta adr.toAdr 0 0 false
       let θr : theta.Result ←
         if 0 = κ.exd ∨ (ω.get κ.cta).bal < 0
         then .ok θrf
         else
-          θ.wrap ωp υp.toAcs
+          thetaWrap ωp τ υp.toAcs
             ( if (0 < adr.toAdr.toNat ∧ adr.toAdr.toNat < 10)
-              then execPre ωp .init #[] υp κp adr.toAdr.toNat
-              else exec lim ωp .init #[] υp κp )
-      let ⟨ω', σ'', μ', υ'⟩ ← (theta.Result.use θr θc).toExmo υ
-      exec lim ω' σ'' μ' υ' κ
+              then execPre ωp τ .init #[] υp κp adr.toAdr.toNat
+              else exec lim ωp τ .init #[] υp κp )
+      let ⟨ω', τ', σ'', μ', υ'⟩ ← (theta.Result.use θr θc).toExmo υ
+      exec lim ω' τ' σ'' μ' υ' κ
     | .next (.exec .callcode) => do
       let (gas, adr, clv, ilc, isz, olc, osz, σ') ← σ.pop7.toExmo υ
       -- dbg_trace s!"nested CALLCODE to address : {adr.toHex}"
       let ⟨θrf, ⟨ωp, υp, κp⟩, θc⟩ ←
-        thetaPrep ω σ' μ υ κ
+        thetaPrep ω τ σ' μ υ κ
           gas adr ilc isz olc osz κ.cta κ.cta clv clv κ.wup
       let θr : theta.Result ←
         if 0 = κ.exd ∨ (ω.get κ.cta).bal < clv
         then .ok θrf
         else
-          θ.wrap ωp υp.toAcs
+          thetaWrap ωp τ υp.toAcs
             ( if (0 < adr.toAdr.toNat ∧ adr.toAdr.toNat < 10)
-              then execPre ωp .init #[] υp κp adr.toAdr.toNat
-              else exec lim ωp .init #[] υp κp )
-      let ⟨ω', σ'', μ', υ'⟩ ← (theta.Result.use θr θc).toExmo υ
-      exec lim ω' σ'' μ' υ' κ
+              then execPre ωp τ  .init #[] υp κp adr.toAdr.toNat
+              else exec lim ωp τ  .init #[] υp κp )
+      let ⟨ω', τ', σ'', μ', υ'⟩ ← (theta.Result.use θr θc).toExmo υ
+      exec lim ω' τ' σ'' μ' υ' κ
     | .next (.exec .delcall) => do
       let (gas, adr, ilc, isz, olc, osz, σ') ← σ.pop6.toExmo υ
       -- dbg_trace s!"nested DELCALL to address : {adr.toHex}"
       let ⟨θrf, ⟨ωp, υp, κp⟩, θc⟩ ←
-        thetaPrep ω σ' μ υ κ
+        thetaPrep ω τ σ' μ υ κ
           gas adr ilc isz olc osz κ.cla κ.cta 0 κ.clv κ.wup
       let θr : theta.Result ←
         if 0 = κ.exd ∨ (ω.get κ.cta).bal < 0
         then .ok θrf
         else
-          θ.wrap ωp υp.toAcs
+          thetaWrap ωp τ  υp.toAcs
             ( if (0 < adr.toAdr.toNat ∧ adr.toAdr.toNat < 10)
-              then execPre ωp .init #[] υp κp adr.toAdr.toNat
-              else exec lim ωp .init #[] υp κp )
-      let ⟨ω', σ'', μ', υ'⟩ ← (theta.Result.use θr θc).toExmo υ
-      exec lim ω' σ'' μ' υ' κ
+              then execPre ωp τ  .init #[] υp κp adr.toAdr.toNat
+              else exec lim ωp τ .init #[] υp κp )
+      let ⟨ω', τ', σ'', μ', υ'⟩ ← (theta.Result.use θr θc).toExmo υ
+      exec lim ω' τ' σ'' μ' υ' κ
     | .next n => do
-      let ⟨ω', σ', μ', υ'⟩ ← n.run ω σ μ υ κ
-      exec lim ω' σ' μ' υ' κ
+      let ⟨ω', τ', σ', μ', υ'⟩ ← n.run ω τ σ μ υ κ
+      exec lim ω' τ' σ' μ' υ' κ
     | .jump j => do
       let ⟨σ', υ'⟩ ← j.run σ υ κ
-      exec lim ω σ' μ υ' κ
-    | .last l => l.run ω σ μ υ κ
+      exec lim ω τ σ' μ υ' κ
+    | .last l => l.run ω τ σ μ υ κ
 
 def theta
   -- Extra arguments not mentioned by YP,
   -- but still necessary for correct execution
   (H : Block)
   (ω₀ : Wor)
-
   -- Arguments specified by YP
   (ω : Wor)
+  (τ : Tra)
   (A : Acs)
   (s : Adr)
   (o : Adr)
@@ -1796,18 +1867,17 @@ def theta
   (v_app : B256)
   (d : B8L)
   (e : Nat)
-  (w : Bool) :
-  Option theta.Result :=
-  let ⟨ω?, σ?, μ?, υ?, κ?⟩ := θ.prep ω₀ H ω A s o r c g p v v_app d e w
-  match θ.wrap ω? υ?.toAcs (exec g ω? σ? μ? υ? κ?) with
+  (w : Bool) : Option theta.Result :=
+  let ⟨ω?, υ?, κ?⟩ := θ.prep ω₀ H ω A s o r c g p v v_app d e w
+  match thetaWrap ω? τ υ?.toAcs (exec g ω? τ .init #[] υ? κ?) with
   | .error (.inr es) => dbg_trace es ; none
-  | .error (.inl _) => dbg_trace "error : θ.wrap should never return .error" ; none
+  | .error (.inl _) => dbg_trace "error : thetaWrap should never return .error" ; none
   | .ok tr => some tr
 
   --match exec g ω? σ? μ? υ? κ? with
   --| .error (.inr es) => dbg_trace es ; none
-  --| .error (.inl xr) => some (θ.wrap ω? υ?.toAcs xr)
-  --| .ok xr => some (θ.wrap ω? υ?.toAcs xr)
+  --| .error (.inl xr) => some (thetaWrap ω? υ?.toAcs xr)
+  --| .ok xr => some (thetaWrap ω? υ?.toAcs xr)
 
 def publicAddress (hsa : ByteArray) (ri : UInt8) (rsa : ByteArray) : IO Adr :=
   match (ecrecoverFlag hsa ri rsa).toList with
@@ -1842,6 +1912,7 @@ def Tx.run
       theta
         blk
         w w
+        .empty
         (A_star blk sender (some tx.receiver) [])
         sender
         sender
@@ -1927,7 +1998,8 @@ def Test.run (t : Test) : IO Unit := do
       {
         hashes := [],
         baseFee := t.baseFee,
-        blobBaseFee := t.blobBaseFee,
+        excessBlobGas := t.excessBlobGas,
+        blobHashes := t.blobHashes,
         ben := t.coinbase
         prevRandao := t.prevRandao
         gasLimit := t.blockGasLimit
@@ -1955,7 +2027,7 @@ def Test.run (t : Test) : IO Unit := do
 
   .guard (rst.log = t.logs) "log hash check : fail"
   .println "log hash check : pass"
-  .println "test complete."
+  .println "test complete.\n\n"
 
 def Tests.run : Nat → List Test → IO Unit
   | _, [] => return ()
