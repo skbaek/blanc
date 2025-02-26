@@ -462,6 +462,8 @@ inductive TxType : Type
   | one : TxType
   -- EIP-1559
   | two : TxType
+  -- EIP-4844
+  -- | three : TxType
 
 def Lean.Json.transactionDataType (j : Lean.Json) : IO TxType := do
   let r ← j.fromObj
@@ -469,11 +471,12 @@ def Lean.Json.transactionDataType (j : Lean.Json) : IO TxType := do
   | some _ =>
     match r.size with
     | 8 => return .zero
-    | _ => IO.throw "error : unknown tx type"
+    | _ => IO.throw "error : unknown tx type, possibly EIP-155"
   | none =>
-    match r.size with
-    | 10 => return .two
-    | _ => IO.throw "error : unknown tx type"
+    match (r.find Ord.compare "blobVersionedHashes") with
+    | none => return .two
+    -- | some _ => IO.throwreturn .three
+    | _ => IO.throw "error : unknown tx type, possibly EIP-4844"
 
 def Lean.Json.toTransactionDataOrig (j : Lean.Json) : IO TransactionData := do
   let r ← j.fromObj
@@ -489,7 +492,7 @@ def Lean.Json.toTransactionDataOrig (j : Lean.Json) : IO TransactionData := do
 
 def Lean.Json.toTransactionDataTwo (j : Lean.Json) : IO TransactionData := do
   let r ← j.fromObj
-  let al ← (r.find Ord.compare "accessList").toIO "" >>= fromArr >>= mapM toAdrs
+  let al ← (r.find Ord.compare "accessLists").toIO "" >>= fromArr >>= mapM toAdrs
   let ds ← (r.find Ord.compare "data").toIO "" >>= fromArr >>= mapM toB8L
   let gls ← (r.find Ord.compare "gasLimit").toIO "" >>= fromArr >>= mapM toB256P
   let mf ← ((r.find Ord.compare "maxFeePerGas").toIO "" >>= toB256P)
@@ -504,9 +507,13 @@ def Lean.Json.toTransactionDataTwo (j : Lean.Json) : IO TransactionData := do
 def Lean.Json.toTransactionData (j : Lean.Json) : IO TransactionData := do
   let ty ← j.transactionDataType
   match ty with
-  | .zero => j.toTransactionDataOrig
+  | .zero => do
+    .println "type-0 detected"
+    j.toTransactionDataOrig
   | .one => IO.throw "unimplemented : type-1 tx"
-  | .two => j.toTransactionDataTwo
+  | .two => do
+    .println "type-2 detected"
+    j.toTransactionDataTwo
 
 def Lean.Json.toTestData (j : Lean.Json) : IO TestData := do
   let (_, .obj r) ← j.fromSingleton | IO.throw "not singleton object"
@@ -847,11 +854,71 @@ structure TxBytesContent : Type where
   (s : B8L)
   (acc : List (Adr × List B256))
 
+def RLP'.toAdr : RLP' → Option Adr
+  | .b8s bs => bs.toAdr
+  | _ => none
 
 def decodeTxHash : B8L → IO (Tx × B256)
   | [] => IO.throw "error : cannot decode empty bytes"
   | 0x01 :: _ => IO.throw "unimplemented : Type-1 tx decoding"
-  | 0x02 :: _ => IO.throw "unimplemented : Type-2 tx decoding"
+  | 0x02 :: tbs =>
+    match RLP'.decode tbs with
+    | RLP'.list [
+        .b8s chainId,
+        .b8s nonce,
+        .b8s maxPriorityFee,
+        .b8s maxFee,
+        .b8s gasLimit,
+        .b8s receiver,
+        .b8s val,
+        .b8s calldata,
+        .list accessList,
+        .b8s yParity,
+        .b8s r,
+        .b8s s
+      ] => do
+      let bs : B8L :=
+        RLP'.encode <|
+          .list [
+            .b8s chainId,
+            .b8s nonce,
+            .b8s maxPriorityFee,
+            .b8s maxFee,
+            .b8s gasLimit,
+            .b8s receiver,
+            .b8s val,
+            .b8s calldata,
+            .list accessList
+          ]
+
+      let recAdr ← (B8L.toAdr receiver).toIO "cannot convert bytes to receiver address"
+      let yp : Bool ←
+        match yParity with
+        | [] => pure Bool.false
+        -- | [0x00] => pure Bool.false
+        | [0x01] => pure Bool.true
+        | _ => IO.throw s!"invalid yParity value : {yParity.toHex}"
+      let aas : List Adr ←
+        mapM
+          (λ r => r.toAdr.toIO s!"cannot convert RLP to address : {r.toStrings}")
+          accessList
+      return ⟨
+        .two
+        chainId.toNat -- (chainId : Nat)
+        nonce.toB256P-- (nonce : B256)
+        maxPriorityFee.toB256P-- (maxPriorityFee : B256)
+        maxFee.toB256P-- (maxFee : B256)
+        gasLimit.toB256P-- (gasLimit : B256)
+        recAdr -- (receiver : Adr)
+        val.toB256P -- (val : B256)
+        calldata -- (calldata : B8L)
+        aas -- (accessList : List Adr)
+        yp -- (yParity : Bool)
+        (r.reverse.takeD 32 0).reverse
+        (s.reverse.takeD 32 0).reverse,
+        B8L.keccak (0x02 :: bs)
+      ⟩
+    | _ => IO.throw "error : cannot RLP-decode for type-2 tx"
   | 0x03 :: _ => IO.throw "unimplemented : Type-3 tx decoding"
   | bs@(b :: _) =>
     if b ≤ 0xF7
@@ -869,7 +936,7 @@ def decodeTxHash : B8L → IO (Tx × B256)
           .b8s r,
           .b8s s
         ] => do
-        IO.guard (v = 27 ∨ v = 28) ""
+        IO.guard (v = 27 ∨ v = 28) "unimplemented : EIP-155 tx handling"
         let bs :=
           RLP'.encode <|
             .list [
@@ -891,8 +958,8 @@ def decodeTxHash : B8L → IO (Tx × B256)
           calldata
           (if (v - 0x1B) = 0 then 0 else 1)
           none
-          r
-          s,
+          (r.reverse.takeD 32 0).reverse
+          (s.reverse.takeD 32 0).reverse,
           bs.keccak
         ⟩
       | _ => IO.throw "error : cannot RLP-decode for type-0 tx"

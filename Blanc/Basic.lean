@@ -2231,7 +2231,6 @@ def B8L.toB8V (xs : B8L) (n : Nat) : Vec B8 n :=
 
 def B8L.toB256P (xs : B8L) : B256 := B8V.toB256 (xs.toB8V 32)
 
-
 def IO.guard (φ : Prop) [Decidable φ] (msg : String) : IO Unit :=
   if φ then return () else IO.throw msg
 

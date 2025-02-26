@@ -1957,11 +1957,6 @@ def Test.run (t : Test) : IO Unit := do
   let rsa : ByteArray := ⟨Array.mk (tx.r ++ tx.s)⟩
   let hsa : ByteArray := ⟨Array.mk hsh.toB8L⟩
   let ri : UInt8 := Byte.toB8 (if tx.yParity then 1 else 0)
-
-  .println s!"HSA arg for public address : {B8L.toHex hsa.toList}"
-  .println s!"RI arg for public address : {B8.toHex ri}"
-  .println s!"RSA arg for public address : {B8L.toHex rsa.toList}"
-
   let sender ← publicAddress hsa ri rsa
 
   -- .println "initial world : "
