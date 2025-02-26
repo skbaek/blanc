@@ -1896,7 +1896,7 @@ structure transact.Result : Type where
 def eraseIfEmpty (w : Wor) (a : Adr) : Wor := w.set a <| w.get a
 
 def Tx.run
-  (blk : Block) (w : Wor) (tx : TxBytesContent)
+  (blk : Block) (w : Wor) (tx : Tx)
   (sender : Adr) : IO transact.Result := do
 
   IO.println s!"block gas limit : 0x{blk.gasLimit.toHex}"
@@ -1904,7 +1904,7 @@ def Tx.run
   IO.guard (tx.gasLimit ≤ blk.gasLimit) "error : block gas limit < tx gas limit"
 
   let g : Nat := tx.gasLimit.toNat - intrinsicGas (some tx.receiver) tx.calldata []
-  let w ← (checkpoint w sender (tx.gasLimit * tx.gasPrice)).toIO "checkpoint creation failed"
+  let w ← (checkpoint w sender (tx.gasLimit * tx.gasPrice blk.baseFee)).toIO "checkpoint creation failed"
 
   dbg_trace "["
   let tr ←
@@ -1919,7 +1919,7 @@ def Tx.run
         tx.receiver
         tx.receiver
         g
-        tx.gasPrice.toNat
+        (tx.gasPrice blk.baseFee).toNat
         tx.val
         tx.val
         tx.calldata
@@ -1934,12 +1934,9 @@ def Tx.run
   let gasReturn : B256 :=
     Nat.toB256 (gasLeft + min ((tx.gasLimit.toNat - gasLeft) / 5) refundAmount) -- g*
   let gasUsed : B256 := tx.gasLimit - gasReturn
-  let valReturn : B256 := gasReturn * tx.gasPrice
+  let valReturn : B256 := gasReturn * (tx.gasPrice blk.baseFee)
 
-  let f : B256 :=
-    match tx.type with
-      | .two _ tm tf => min tf (tm - blk.baseFee)
-      | _ => tx.gasPrice - blk.baseFee
+  let f : B256 := (tx.gasPrice blk.baseFee) - blk.baseFee
 
   let w₀ : Wor := tr.wor.addBal sender valReturn
   let w₁ : Wor := w₀.addBal blk.ben (gasUsed * f)
@@ -1956,10 +1953,15 @@ def Tx.run
 
 
 def Test.run (t : Test) : IO Unit := do
-  let ⟨tx, hsh⟩ ← decodeTxBytes t.txdata
+  let ⟨tx, hsh⟩ ← decodeTxHash t.txdata
   let rsa : ByteArray := ⟨Array.mk (tx.r ++ tx.s)⟩
   let hsa : ByteArray := ⟨Array.mk hsh.toB8L⟩
   let ri : UInt8 := Byte.toB8 (if tx.yParity then 1 else 0)
+
+  .println s!"HSA arg for public address : {B8L.toHex hsa.toList}"
+  .println s!"RI arg for public address : {B8.toHex ri}"
+  .println s!"RSA arg for public address : {B8L.toHex rsa.toList}"
+
   let sender ← publicAddress hsa ri rsa
 
   -- .println "initial world : "
@@ -1982,7 +1984,7 @@ def Test.run (t : Test) : IO Unit := do
   .guard (tx.gasLimit = t.gasLimit) s!"gas limit check failed. tx.gasLimit : {tx.gasLimit.toHex}, t.gasLimit = {t.gasLimit.toHex}"
   .println "gas limit check : pass"
 
-  .guard (tx.gasPrice = t.gasPrice) "gas price check : fail"
+  .guard (tx.gasPrice t.baseFee = t.gasPrice) "gas price check : fail"
   .println "gas price check : pass"
 
   .guard (tx.val = t.value) "value check : fail"

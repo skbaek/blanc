@@ -26,16 +26,70 @@ structure PostData where
   (logs : B256)
   (txdata : B8L)
 
-structure TransactionData : Type where
-  (data : List B8L)
-  (gasLimit : List B256)
-  (gasPrice : B256)
-  (nonce : B256)
-  (secretKey : B256)
-  (sender : Adr)
-  (receiver : Adr)
-  (value : List B256)
+inductive TransactionData : Type
+  | zero
+    (data : List B8L)
+    (gasLimit : List B256)
+    (gasPrice : B256)
+    (nonce : B256)
+    (secretKey : B256)
+    (sender : Adr)
+    (receiver : Adr)
+    (value : List B256) : TransactionData
+  | two
+    (accessLists : List (List Adr))
+    (data : List B8L)
+    (gasLimit : List B256)
+    (maxFeePerGas : B256)
+    (maxPriorityFeePerGas : B256)
+    (nonce : B256)
+    (secretKey : B256)
+    (sender : Adr)
+    (receiver : Adr)
+    (value : List B256) : TransactionData
 
+
+def TransactionData.gasLimit : TransactionData → List B256
+  | .zero data gasLimit gasPrice nonce secretKey sender receiver value  => gasLimit
+  | .two accessLists data gasLimit maxFeePerGas maxPriorityFeePerGas nonce secretKey sender receiver value => gasLimit
+
+def TransactionData.data :  TransactionData → List B8L
+  | .zero data gasLimit gasPrice nonce secretKey sender receiver value => data
+  | .two accessLists data gasLimit maxFeePerGas maxPriorityFeePerGas nonce secretKey sender receiver value => data
+def TransactionData.value :  TransactionData → List B256
+  | .zero data gasLimit gasPrice nonce secretKey sender receiver value => value
+  | .two accessLists data gasLimit maxFeePerGas maxPriorityFeePerGas nonce secretKey sender receiver value => value
+
+def TransactionData.nonce :  TransactionData → B256
+  | .zero data gasLimit gasPrice nonce secretKey sender receiver value => nonce
+  | .two accessLists data gasLimit maxFeePerGas maxPriorityFeePerGas nonce secretKey sender receiver value => nonce
+
+def TransactionData.secretKey :  TransactionData → B256
+  | .zero data gasLimit gasPrice nonce secretKey sender receiver value => secretKey
+  | .two accessLists data gasLimit maxFeePerGas maxPriorityFeePerGas nonce secretKey sender receiver value => secretKey
+
+def TransactionData.sender :  TransactionData → Adr
+  | .zero data gasLimit gasPrice nonce secretKey sender receiver value => sender
+  | .two accessLists data gasLimit maxFeePerGas maxPriorityFeePerGas nonce secretKey sender receiver value => sender
+
+def TransactionData.receiver : TransactionData → Adr
+  | .zero data gasLimit gasPrice nonce secretKey sender receiver value => receiver
+  | .two accessLists data gasLimit maxFeePerGas maxPriorityFeePerGas nonce secretKey sender receiver value => receiver
+
+def TransactionData.gasPrice (baseFee : B256) : TransactionData → B256
+  | .zero data gasLimit gasPrice nonce secretKey sender receiver value => gasPrice
+  | .two accessLists data gasLimit maxFeePerGas maxPriorityFeePerGas nonce secretKey sender receiver value =>
+    min maxFeePerGas (baseFee + maxPriorityFeePerGas)
+
+-- structure TransactionData : Type where
+--   (data : List B8L)
+--   (gasLimit : List B256)
+--   (gasPrice : B256)
+--   (nonce : B256)
+--   (secretKey : B256)
+--   (sender : Adr)
+--   (receiver : Adr)
+--   (value : List B256)
 structure TestData where
   (info : Lean.Json)
   (env  : EnvData)
@@ -140,18 +194,85 @@ def EnvData.toStrings (e : EnvData) : List String :=
 def preToStrings (l : List PreData) : List String :=
   fork "pre" [listToStrings preAcct.toStrings l]
 
-def TransactionData.toStrings (tx : TransactionData) : List String :=
-  fork "transaction" [
-    fork "data" [listToStrings (λ x => [B8L.toHex x]) tx.data],
-    fork "gasLimit" [listToStrings (λ x => [x.toHex]) tx.gasLimit],
-    [s!"gasPrice : {tx.gasPrice.toHex}"],
-    [s!"nonce :     {tx.nonce.toHex}"],
-    [s!"secretKey : {tx.secretKey.toHex}"],
-    [s!"sender : {tx.sender.toHex}"],
-    [s!"to : {tx.receiver.toHex}"],
-    fork "value" [listToStrings (λ x => [x.toHex]) tx.value]
-  ]
+--inductive TransactionData : Type
+--  | zero
+--    (data : List B8L)
+--    (gasLimit : List B256)
+--    (gasPrice : B256)
+--    (nonce : B256)
+--    (secretKey : B256)
+--    (sender : Adr)
+--    (receiver : Adr)
+--    (value : List B256) : TransactionData
+--  | two
+--    (accessLists : List (List Adr))
+--    (data : List B8L)
+--    (gasLimit : List B256)
+--    (maxFeePerGas : B256)
+--    (maxPriorityFeePerGas : B256)
+--    (nonce : B256)
+--    (secretKey : B256)
+--    (sender : Adr)
+--    (receiver : Adr)
+--    (value : List B256) : TransactionData
 
+def TransactionData.toStrings : TransactionData → List String
+  | .zero
+    data
+    gasLimit
+    gasPrice
+    nonce
+    secretKey
+    sender
+    receiver
+    value =>
+    fork "transaction (Type-0/legacy)" [
+      fork "data" [listToStrings (λ x => [B8L.toHex x]) data],
+      fork "gasLimit" [listToStrings (λ x => [x.toHex]) gasLimit],
+      [s!"gasPrice : {gasPrice.toHex}"],
+      [s!"nonce :     {nonce.toHex}"],
+      [s!"secretKey : {secretKey.toHex}"],
+      [s!"sender : {sender.toHex}"],
+      [s!"to : {receiver.toHex}"],
+      fork "value" [listToStrings (λ x => [x.toHex]) value]
+    ]
+  | .two
+    accessLists
+    data
+    gasLimit
+    maxFeePerGas
+    maxPriorityFeePerGas
+    nonce
+    secretKey
+    sender
+    receiver
+    value =>
+    fork "transaction (Type-2/EIP-1559)" [
+      fork "accessLists" <| accessLists.map <|
+          λ aas => fork "accessList" <| aas.map <| λ aa => ["0x" ++ aa.toHex],
+      fork "data" [listToStrings (λ x => ["0x" ++ B8L.toHex x]) data],
+      fork "gasLimit" [listToStrings (λ x => ["0x" ++ x.toHex]) gasLimit],
+      [s!"maxFeePerGas : 0x{maxFeePerGas.toHex}"],
+      [s!"maxPriorityFeePerGas : 0x{maxPriorityFeePerGas.toHex}"],
+      [s!"nonce :0x{nonce.toHex}"],
+      [s!"secretKey : 0x{secretKey.toHex}"],
+      [s!"sender : 0x{sender.toHex}"],
+      [s!"to : 0x{receiver.toHex}"],
+      fork "value" [listToStrings (λ x => ["0x" ++ x.toHex]) value]
+    ]
+
+-- def TransactionData.toStrings (tx : TransactionData) : List String :=
+--   fork "transaction" [
+--     fork "data" [listToStrings (λ x => [B8L.toHex x]) tx.data],
+--     fork "gasLimit" [listToStrings (λ x => [x.toHex]) tx.gasLimit],
+--     [s!"gasPrice : {tx.gasPrice.toHex}"],
+--     [s!"nonce :     {tx.nonce.toHex}"],
+--     [s!"secretKey : {tx.secretKey.toHex}"],
+--     [s!"sender : {tx.sender.toHex}"],
+--     [s!"to : {tx.receiver.toHex}"],
+--     fork "value" [listToStrings (λ x => [x.toHex]) tx.value]
+--   ]
+--
 structure Test where
   (baseFee : B256)
   (excessBlobGas : B256)
@@ -259,6 +380,7 @@ def Lean.Json.toPostData : Json → IO PostData
     return ⟨hs, d, g, v, lg, tx⟩
   | _ => IO.throw "Json-to-PostData failed"
 
+
 def Lean.Json.toB8L (j : Json) : IO B8L := do
   let x ← fromStr j >>= Hex.from0x
   (Hex.toB8L x).toIO ""
@@ -266,6 +388,9 @@ def Lean.Json.toB8L (j : Json) : IO B8L := do
 def Lean.Json.toAdr (j : Json) : IO Adr := do
   let x ← fromStr j >>= Hex.from0x
   (Hex.toAdr x).toIO ""
+
+def Lean.Json.toAdrs (j : Json) : IO (List Adr) :=
+  fromArr j >>= mapM toAdr
 
 def Lean.Json.toB256? (j : Json) : IO B256 := do
   let x ← fromStr j >>= Hex.from0x
@@ -330,7 +455,27 @@ def Lean.Json.toPost (j : Lean.Json) : IO (String × List PostData) := do
   let js ← mapM Lean.Json.toPostData l
   return ⟨k, js⟩
 
-def Lean.Json.toTransactionData (j : Lean.Json) : IO TransactionData := do
+inductive TxType : Type
+  -- Legacy (including EIP-155)
+  | zero : TxType
+  -- EIP-2930
+  | one : TxType
+  -- EIP-1559
+  | two : TxType
+
+def Lean.Json.transactionDataType (j : Lean.Json) : IO TxType := do
+  let r ← j.fromObj
+  match (r.find Ord.compare "gasPrice") with
+  | some _ =>
+    match r.size with
+    | 8 => return .zero
+    | _ => IO.throw "error : unknown tx type"
+  | none =>
+    match r.size with
+    | 10 => return .two
+    | _ => IO.throw "error : unknown tx type"
+
+def Lean.Json.toTransactionDataOrig (j : Lean.Json) : IO TransactionData := do
   let r ← j.fromObj
   let ds ← (r.find Ord.compare "data").toIO "" >>= fromArr >>= mapM toB8L
   let gls ← (r.find Ord.compare "gasLimit").toIO "" >>= fromArr >>= mapM toB256P
@@ -340,7 +485,28 @@ def Lean.Json.toTransactionData (j : Lean.Json) : IO TransactionData := do
   let sd ← (r.find Ord.compare "sender").toIO "" >>= toAdr
   let rc ← (r.find Ord.compare "to").toIO "" >>= toAdr
   let vs ← (r.find Ord.compare "value").toIO "" >>= fromArr >>= mapM toB256P
-  return ⟨ds, gls, gp, n, sk, sd, rc, vs⟩
+  return .zero ds gls gp n sk sd rc vs
+
+def Lean.Json.toTransactionDataTwo (j : Lean.Json) : IO TransactionData := do
+  let r ← j.fromObj
+  let al ← (r.find Ord.compare "accessList").toIO "" >>= fromArr >>= mapM toAdrs
+  let ds ← (r.find Ord.compare "data").toIO "" >>= fromArr >>= mapM toB8L
+  let gls ← (r.find Ord.compare "gasLimit").toIO "" >>= fromArr >>= mapM toB256P
+  let mf ← ((r.find Ord.compare "maxFeePerGas").toIO "" >>= toB256P)
+  let mpf ← ((r.find Ord.compare "maxPriorityFeePerGas").toIO "" >>= toB256P)
+  let nc ← ((r.find Ord.compare "nonce").toIO "" >>= toB256P)
+  let sk ← (r.find Ord.compare "secretKey").toIO "" >>= toB256?
+  let sd ← (r.find Ord.compare "sender").toIO "" >>= toAdr
+  let rc ← (r.find Ord.compare "to").toIO "" >>= toAdr
+  let vs ← (r.find Ord.compare "value").toIO "" >>= fromArr >>= mapM toB256P
+  return .two al ds gls mf mpf nc sk sd rc vs
+
+def Lean.Json.toTransactionData (j : Lean.Json) : IO TransactionData := do
+  let ty ← j.transactionDataType
+  match ty with
+  | .zero => j.toTransactionDataOrig
+  | .one => IO.throw "unimplemented : type-1 tx"
+  | .two => j.toTransactionDataTwo
 
 def Lean.Json.toTestData (j : Lean.Json) : IO TestData := do
   let (_, .obj r) ← j.fromSingleton | IO.throw "not singleton object"
@@ -384,7 +550,7 @@ def getTest (td : TestData) (p : PostData) : IO Test := do
     txdata := p.txdata
     calldata := cd
     gasLimit := gl
-    gasPrice := td.tx.gasPrice
+    gasPrice := td.tx.gasPrice td.env.baseFee
     nonce := td.tx.nonce
     secret := td.tx.secretKey
     sender := td.tx.sender
@@ -405,13 +571,267 @@ def Lean.RBMap.fromSingleton {ξ υ f} (m : RBMap ξ υ f) : Option (ξ × υ) :
 
 def Lean.RBMap.singleton {ξ υ f} (x : ξ) (y : υ) : RBMap ξ υ f := RBMap.empty.insert x y
 
-inductive TxType : Type
-  | zero : TxType
-  -- access list (T_A)
-  | one : AccessList → TxType
-  -- access list (T_A), max fee per gas (T_m), max priority fee per gas (T_f)
-  | two : AccessList → B256 → B256 → TxType
+inductive Tx : Type
+  | zero
+    (nonce : B256)
+    (gasPrice : B256)
+    (gasLimit : B256)
+    (receiver : Adr)
+    (val : B256)
+    (calldata : B8L)
+    (yParity : Bool)
+    (chainId : Option Nat)
+    (r : B8L)
+    (s : B8L) : Tx
+  | two
+    (chainId : Nat)
+    (nonce : B256)
+    (maxPriorityFee : B256)
+    (maxFee : B256)
+    (gasLimit : B256)
+    (receiver : Adr)
+    (val : B256)
+    (calldata : B8L)
+    (accessList : List Adr)
+    (yParity : Bool)
+    (r : B8L)
+    (s : B8L) : Tx
 
+def Tx.val : Tx → B256
+  | zero
+    nonce
+    gasPrice
+    gasLimit
+    receiver
+    val
+    calldata
+    yParity
+    chainId
+    r
+    s => val
+  | two
+    chainId
+    nonce
+    maxPriorityFee
+    maxFee
+    gasLimit
+    receiver
+    val
+    calldata
+    accessList
+    yParity
+    r
+    s => val
+
+def Tx.calldata : Tx → B8L
+  | zero
+    nonce
+    gasPrice
+    gasLimit
+    receiver
+    val
+    calldata
+    yParity
+    chainId
+    r
+    s => calldata
+  | two
+    chainId
+    nonce
+    maxPriorityFee
+    maxFee
+    gasLimit
+    receiver
+    val
+    calldata
+    accessList
+    yParity
+    r
+    s => calldata
+
+def Tx.receiver : Tx → Adr
+  | zero
+    nonce
+    gasPrice
+    gasLimit
+    receiver
+    val
+    calldata
+    yParity
+    chainId
+    r
+    s => receiver
+  | two
+    chainId
+    nonce
+    maxPriorityFee
+    maxFee
+    gasLimit
+    receiver
+    val
+    calldata
+    accessList
+    yParity
+    r
+    s => receiver
+
+def Tx.gasLimit : Tx → B256
+  | zero
+    nonce
+    gasPrice
+    gasLimit
+    receiver
+    val
+    calldata
+    yParity
+    chainId
+    r
+    s => gasLimit
+  | two
+    chainId
+    nonce
+    maxPriorityFee
+    maxFee
+    gasLimit
+    receiver
+    val
+    calldata
+    accessList
+    yParity
+    r
+    s => gasLimit
+
+def Tx.nonce : Tx → B256
+  | zero
+    nonce
+    gasPrice
+    gasLimit
+    receiver
+    val
+    calldata
+    yParity
+    chainId
+    r
+    s => nonce
+  | two
+    chainId
+    nonce
+    maxPriorityFee
+    maxFee
+    gasLimit
+    receiver
+    val
+    calldata
+    accessList
+    yParity
+    r
+    s => nonce
+
+def Tx.gasPrice (baseFee : B256) : Tx → B256
+  | zero
+    nonce
+    gasPrice
+    gasLimit
+    receiver
+    val
+    calldata
+    yParity
+    chainId
+    r
+    s => gasPrice
+  | two
+    chainId
+    nonce
+    maxPriorityFee
+    maxFee
+    gasLimit
+    receiver
+    val
+    calldata
+    accessList
+    yParity
+    r
+    s => min maxFee (baseFee + maxPriorityFee)
+
+def Tx.yParity : Tx → Bool
+  | zero
+    nonce
+    gasPrice
+    gasLimit
+    receiver
+    val
+    calldata
+    yParity
+    chainId
+    r
+    s => yParity
+  | two
+    chainId
+    nonce
+    maxPriorityFee
+    maxFee
+    gasLimit
+    receiver
+    val
+    calldata
+    accessList
+    yParity
+    r
+    s => yParity
+
+def Tx.r : Tx → B8L
+  | zero
+    nonce
+    gasPrice
+    gasLimit
+    receiver
+    val
+    calldata
+    yParity
+    chainId
+    r
+    s => r
+  | two
+    chainId
+    nonce
+    maxPriorityFee
+    maxFee
+    gasLimit
+    receiver
+    val
+    calldata
+    accessList
+    yParity
+    r
+    s => r
+
+def Tx.s : Tx → B8L
+  | zero
+    nonce
+    gasPrice
+    gasLimit
+    receiver
+    val
+    calldata
+    yParity
+    chainId
+    r
+    s => s
+  | two
+    chainId
+    nonce
+    maxPriorityFee
+    maxFee
+    gasLimit
+    receiver
+    val
+    calldata
+    accessList
+    yParity
+    r
+    s => s
+
+--0x02 || rlp([chain_id, nonce, max_priority_fee_per_gas, max_fee_per_gas, gas_limit, destination, amount, data, access_list, signature_y_parity, signature_r, signature_s])
 
 structure TxBytesContent : Type where
   (chainId : Option Nat)
@@ -427,7 +847,59 @@ structure TxBytesContent : Type where
   (s : B8L)
   (acc : List (Adr × List B256))
 
-def decodeTxBytes (tbs : B8L) : IO (TxBytesContent × B256) :=
+
+def decodeTxHash : B8L → IO (Tx × B256)
+  | [] => IO.throw "error : cannot decode empty bytes"
+  | 0x01 :: _ => IO.throw "unimplemented : Type-1 tx decoding"
+  | 0x02 :: _ => IO.throw "unimplemented : Type-2 tx decoding"
+  | 0x03 :: _ => IO.throw "unimplemented : Type-3 tx decoding"
+  | bs@(b :: _) =>
+    if b ≤ 0xF7
+    then IO.throw s!"error : invalid head tx byte : {b.toHex}"
+    else
+      match RLP'.decode bs with
+      | RLP'.list [
+          .b8s nonce,
+          .b8s gasPrice,
+          .b8s gasLimit,
+          .b8s receiver,
+          .b8s val,
+          .b8s calldata,
+          .b8s [v],
+          .b8s r,
+          .b8s s
+        ] => do
+        IO.guard (v = 27 ∨ v = 28) ""
+        let bs :=
+          RLP'.encode <|
+            .list [
+              .b8s nonce,
+              .b8s gasPrice,
+              .b8s gasLimit,
+              .b8s receiver,
+              .b8s val,
+              .b8s calldata
+            ]
+        let recAdr ← (B8L.toAdr receiver).toIO "cannot convert bytes to receiver address"
+        return ⟨
+          .zero
+          nonce.toB256P
+          gasPrice.toB256P
+          gasLimit.toB256P
+          recAdr
+          val.toB256P
+          calldata
+          (if (v - 0x1B) = 0 then 0 else 1)
+          none
+          r
+          s,
+          bs.keccak
+        ⟩
+      | _ => IO.throw "error : cannot RLP-decode for type-0 tx"
+
+  #exit
+
+def decodeLegacyTxBytes (tbs : B8L) : IO (TxBytesContent × B256) :=
   match RLP'.decode tbs with
   | RLP'.list [
       .b8s nonce,
@@ -469,3 +941,9 @@ def decodeTxBytes (tbs : B8L) : IO (TxBytesContent × B256) :=
       bs.keccak
     ⟩
   | _ => IO.throw "Error : TX bytes decoding failed"
+
+def decodeTxBytes : B8L → IO (TxBytesContent × B256)
+  | [] => IO.throw "empty tx bytes"
+  | 0x01 :: bs => IO.throw "unimplemented : EIP-2930 transaction"
+  | 0x02 :: bs => IO.throw "unimplemented : EIP-1559 transaction"
+  | bs => decodeLegacyTxBytes bs
