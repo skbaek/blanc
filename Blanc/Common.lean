@@ -3963,6 +3963,7 @@ def Linst.toB8 : Linst → B8
 def Adr.toHex (a : Adr) : String :=
   a.high.toHex ++ a.mid.toHex ++ a.low.toHex
 
+instance : ToString Adr := ⟨Adr.toHex⟩
 
 def B8L.toAdr : B8L → Option Adr
   | x0 :: x1 :: x2 :: x3 ::

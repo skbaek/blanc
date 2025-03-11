@@ -364,6 +364,14 @@ def B128.toHex (x : B128) : String := x.1.toHex ++ x.2.toHex
 def B256.toHex (x : B256) : String := x.1.toHex ++ x.2.toHex
 
 
+instance : ToString B8 := ⟨B8.toHex⟩
+instance : ToString B16 := ⟨B16.toHex⟩
+instance : ToString B32 := ⟨B32.toHex⟩
+instance : ToString B64 := ⟨B64.toHex⟩
+instance : ToString B128 := ⟨B128.toHex⟩
+instance : ToString B256 := ⟨B256.toHex⟩
+
+#eval s!"my u64 {(1234 : UInt64)}"
 
 def B128.LE (x y : B128) : Prop :=
   x.1 < y.1 ∨ (x.1 = y.1 ∧ x.2 ≤ y.2)
@@ -2137,7 +2145,7 @@ def encloseStrings : List String → List String
   | [s] => ["[" ++ s ++ "]"]
   | ss => "┌─" :: ss.map padMid ++ ["└─"]
 
-def listToStrings {ξ} (f : ξ -> List String) (xs : List ξ) : List String :=
+def List.toStrings {ξ} (f : ξ -> List String) (xs : List ξ) : List String :=
   encloseStrings (xs.map f).flatten
 
 def B4L.toHex : B8L → String
@@ -2145,6 +2153,7 @@ def B4L.toHex : B8L → String
   | [b] => ⟨[b.toHexit]⟩
   | b :: bs => ⟨[b.toHexit] ++ (toHex bs).data⟩
 def IO.throw {ξ} (s : String) : IO ξ := MonadExcept.throw <| IO.Error.userError s
+
 def Hex.from0x : String → IO String
   | ⟨'0' :: 'x' :: s⟩ => return ⟨s⟩
   | _ => IO.throw "prefix not 0x"
@@ -2247,13 +2256,12 @@ def Array.copyD {ξ : Type u} (xs ys : Array ξ) : Array ξ :=
     λ ysn x => ⟨Array.setD ysn.fst ysn.snd x, ysn.snd + 1⟩
   (Array.foldl f ⟨ys, 0⟩ xs).fst
 
-def Array.writeX {ξ : Type u} (xs : Array ξ) (n : ℕ) (ys : List ξ) (d : ξ) : Array ξ :=
-  if n + ys.length ≤ xs.size
-  then Array.writeD xs n ys
-  else let zs : Array ξ := Array.mkArray (n + ys.length) d
-       let zs' : Array ξ := Array.copyD xs zs
-       Array.writeD zs' n ys
-
+-- def Array.writeX {ξ : Type u} (xs : Array ξ) (n : ℕ) (ys : List ξ) (d : ξ) : Array ξ :=
+--   if n + ys.length ≤ xs.size
+--   then Array.writeD xs n ys
+--   else let zs : Array ξ := Array.mkArray (n + ys.length) d
+--        let zs' : Array ξ := Array.copyD xs zs
+--        Array.writeD zs' n ys
 
 def ByteArray.sliceD (xs : ByteArray) : Nat → Nat → B8 → B8L
   | _, 0, _ => []
@@ -2570,8 +2578,6 @@ def Keccak.aux : Nat → Qords → Qords
 | 0, ws => ws
 | 24, ws =>
   let temp := θ ws
-  -- dbg_trace s!"input :\n{ws.toString}"
-  -- dbg_trace s!"output :\n{temp.toString}"
   aux 23 <| ι 0 <| χ <| ρπ temp
 | n + 1, ws =>
   aux n <| ι (23 - n) <| χ <| ρπ <| θ ws
@@ -2580,8 +2586,6 @@ def KeccakU.aux : Nat → QordsU → QordsU
 | 0, ws => ws
 | 24, ws =>
   let temp := θ ws
-  -- dbg_trace s!"input :\n{ws.toString}"
-  -- dbg_trace s!"output :\n{temp.toString}"
   aux 23 <| ι 0 <| χ <| ρπ temp
 | n + 1, ws =>
   aux n <| ι (23 - n) <| χ <| ρπ <| θ ws
@@ -2814,13 +2818,6 @@ def hashPrint : B32L → String
   | _ => "ERROR : hash not multiple of 8"
 
 def consumeChunkAux (ah : B32L) (w : B32L) (p : B8L) (i j : Nat) : B32L × B32L :=
-  -- dbg_trace "------------------------------------------------------------------------\n\n"
-  -- dbg_trace s!"i : {i}, j : {j}\n"
-  -- dbg_trace "AH :"
-  -- dbg_trace s!"{hashPrint ah}"
-  -- dbg_trace "W :"
-  -- dbg_trace s!"{hashPrint w}"
-
   let newEntry : B32 :=
     if i = 0
     then
@@ -2830,7 +2827,6 @@ def consumeChunkAux (ah : B32L) (w : B32L) (p : B8L) (i j : Nat) : B32L × B32L 
           (p.getD ((4 * j) + 1) 0)
           (p.getD ((4 * j) + 2) 0)
           (p.getD ((4 * j) + 3) 0)
-      -- dbg_trace s!"temp : {temp.toHex}"
       temp
     else
       let s0 : B32 :=
@@ -2850,8 +2846,6 @@ def consumeChunkAux (ah : B32L) (w : B32L) (p : B8L) (i j : Nat) : B32L × B32L 
   let ch : B32 :=
     (ah.get! 4 &&& ah.get! 5) ^^^
     ((~~~ (ah.get! 4)) &&& ah.get! 6)
-  -- dbg_trace s!"s1 : {s1.toHex}"
-  -- dbg_trace s!"ch : {ch.toHex}"
   let temp1 : B32 :=
     (ah.get! 7) + s1 + ch +
     (roundConstants.get! ((i * 16) + j)) +
@@ -2865,12 +2859,6 @@ def consumeChunkAux (ah : B32L) (w : B32L) (p : B8L) (i j : Nat) : B32L × B32L 
     (ah.get! 0 &&& ah.get! 2) ^^^
     (ah.get! 1 &&& ah.get! 2)
   let temp2 : B32 := s0 + maj -- s0 + maj;
-
-  -- dbg_trace s!"temp1 : {temp1.toHex}"
-  -- dbg_trace s!"s0 : {s0.toHex}"
-  -- dbg_trace s!"maj : {maj.toHex}"
-  -- dbg_trace s!"temp2 : {temp2.toHex}"
-
   let ah' :=
     [
       temp1 + temp2,
@@ -2882,12 +2870,6 @@ def consumeChunkAux (ah : B32L) (w : B32L) (p : B8L) (i j : Nat) : B32L × B32L 
       ah.get! 5,
       ah.get! 6
     ]
-
-  -- dbg_trace "AH' :"
-  -- dbg_trace s!"{hashPrint ah'}"
-  -- dbg_trace "W' :"
-  -- dbg_trace s!"{hashPrint w'}"
-
   ⟨ah', w'⟩
 
 def consumeChunkLoop (ah : B32L) (w : B32L) (p : B8L) : Nat → Nat → B32L
@@ -2901,11 +2883,6 @@ def consumeChunkLoop (ah : B32L) (w : B32L) (p : B8L) : Nat → Nat → B32L
 
 
 def consumeChunk (h : B32L) (p : B8L) : B32L :=
-  -- dbg_trace "Hash before consume chunk:"
-  -- dbg_trace s!"{hashPrint h}"
-  -- dbg_trace "Consuming chunk:"
-  -- dbg_trace s!"{chunkToString p}"
-
   let w : B32L := List.replicate 16 (0 : B32)
   let ah := consumeChunkLoop h w p 4 16
   let h' :=
@@ -2919,8 +2896,6 @@ def consumeChunk (h : B32L) (p : B8L) : B32L :=
       h.get! 6 + ah.get! 6,
       h.get! 7 + ah.get! 7
     ]
-  -- dbg_trace "Hash after consume chunk:"
-  -- dbg_trace s!"{hashPrint h'}"
   h'
 
 def B32s.toB64 (x y : B32) : B64 :=
@@ -2935,7 +2910,6 @@ def B32s.toB256 (x0 x1 x2 x3 y0 y1 y2 y3: B32) : B256 :=
 def B8L.sha256 (xs : B8L) : B256 :=
   let xss : List B8L :=
     B8L.toChunks (B64.toB8L (xs.length * 8).toUInt64) (xs.length / 64).succ xs
-  -- dbg_trace (chunksToString 0 xss);
   let hash := List.foldl consumeChunk B32L.initChunk xss
   match hash with
   | [x0, x1, x2, x3, y0, y1, y2, y3] =>
