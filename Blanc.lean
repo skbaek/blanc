@@ -2110,28 +2110,30 @@ def checkJson (name : String) : IO Unit :=
   then IO.println s!"json file found : {name}"
   else IO.throw s!"not a json file : {name}"
 
-def runTestAtPath (path : String) : IO Unit := do
+def runTestFileAtPath (path : String) : IO Unit := do
   .println s!"Testing file : {path}"
   let j ← readJsonFile path
-  let td ← Lean.Json.toTestData j
-  let ts ← getTests td
-  Tests.run 0 ts
+  let tds ← j.toTestDatas
+  -- let ts ← getTests td
+  -- Tests.run 0 ts
+  let _ ← mapM (λ td => getTests td >>= Tests.run 0) tds
+  pure ()
 
 def main : List String → IO Unit
   | [path] => do
     let b ← System.FilePath.isDir path
     if !b
-    then runTestAtPath path
+    then runTestFileAtPath path
     else do
       let fs ← System.FilePath.walkDir path
-      let _← mapM runTestAtPath (fs.toList.map System.FilePath.toString)
+      let _← mapM runTestFileAtPath (fs.toList.map System.FilePath.toString)
       pure ()
-  | [testPath, testNum] => do
-    let n ← testNum.toNat?.toIO "error : second argument is not a number"
-    let j ← readJsonFile testPath
-    let td ← Lean.Json.toTestData j
-    let ts ← getTests td
-    ((ts.get? n).toIO s!"test #{n} does not exist") >>= Test.run
+  -- | [testPath, testNum] => do
+  --   let n ← testNum.toNat?.toIO "error : second argument is not a number"
+  --   let j ← readJsonFile testPath
+  --   let td ← Lean.Json.toTestData j
+  --   let ts ← getTests td
+  --   ((ts.get? n).toIO s!"test #{n} does not exist") >>= Test.run
   | _ => IO.throw "error : invalid arguments"
 
 

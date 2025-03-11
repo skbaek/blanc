@@ -129,6 +129,7 @@ def TransactionData.gasPrice (baseFee : B256) (txd : TransactionData) : B256 :=
 --   (receiver : Adr)
 --   (value : List B256)
 structure TestData where
+  (name : String)
   (info : Lean.Json)
   (env  : EnvData)
   (pre  : List PreData)
@@ -306,64 +307,6 @@ def TransactionData.toStrings (txd : TransactionData) : List String :=
     fork "value" [List.toStrings (λ x => [x.toHex]) txd.value]
   ]
 
--- def TransactionData.toStrings : TransactionData → List String
---   | .zero
---     data
---     gasLimit
---     gasPrice
---     nonce
---     secretKey
---     sender
---     receiver
---     value =>
---     fork "transaction (Type-0/legacy)" [
---       fork "data" [List.toStrings (λ x => [B8L.toHex x]) data],
---       fork "gasLimit" [List.toStrings (λ x => [x.toHex]) gasLimit],
---       [s!"gasPrice : {gasPrice.toHex}"],
---       [s!"nonce :     {nonce.toHex}"],
---       [s!"secretKey : {secretKey.toHex}"],
---       [s!"sender : {sender.toHex}"],
---       [s!"to : {receiver.toHex}"],
---       fork "value" [List.toStrings (λ x => [x.toHex]) value]
---     ]
---   | .two
---     accessLists
---     data
---     gasLimit
---     maxFeePerGas
---     maxPriorityFeePerGas
---     nonce
---     secretKey
---     sender
---     receiver
---     value =>
---     fork "transaction (Type-2/EIP-1559)" [
---       fork "accessLists" <| accessLists.map <|
---           λ aas => fork "accessList" <| aas.map <| λ aa => ["0x" ++ aa.toHex],
---       fork "data" [List.toStrings (λ x => ["0x" ++ B8L.toHex x]) data],
---       fork "gasLimit" [List.toStrings (λ x => ["0x" ++ x.toHex]) gasLimit],
---       [s!"maxFeePerGas : 0x{maxFeePerGas.toHex}"],
---       [s!"maxPriorityFeePerGas : 0x{maxPriorityFeePerGas.toHex}"],
---       [s!"nonce :0x{nonce.toHex}"],
---       [s!"secretKey : 0x{secretKey.toHex}"],
---       [s!"sender : 0x{sender.toHex}"],
---       [s!"to : 0x{receiver.toHex}"],
---       fork "value" [List.toStrings (λ x => ["0x" ++ x.toHex]) value]
---     ]
-
--- def TransactionData.toStrings (tx : TransactionData) : List String :=
---   fork "transaction" [
---     fork "data" [List.toStrings (λ x => [B8L.toHex x]) tx.data],
---     fork "gasLimit" [List.toStrings (λ x => [x.toHex]) tx.gasLimit],
---     [s!"gasPrice : {tx.gasPrice.toHex}"],
---     [s!"nonce :     {tx.nonce.toHex}"],
---     [s!"secretKey : {tx.secretKey.toHex}"],
---     [s!"sender : {tx.sender.toHex}"],
---     [s!"to : {tx.receiver.toHex}"],
---     fork "value" [List.toStrings (λ x => [x.toHex]) tx.value]
---   ]
---
-
 structure Test where
   (expectedException : Option Exception)
   (baseFee : B256)
@@ -454,7 +397,7 @@ def Lean.JsonNumber.toNat : JsonNumber → IO Nat
 
 def Lean.Json.fromSingleton : Lean.Json → IO (String × Lean.Json)
   | .obj (.node _ .leaf k v .leaf) => return ⟨k, v⟩
-  | _ => IO.throw "not a singleton"
+  | j => IO.throw s!"non-singleton JSON : {j}"
 
 def Lean.Json.toPostData : Json → IO PostData
   | .obj r => do
@@ -681,14 +624,29 @@ def Lean.Json.toTransactionData (j : Lean.Json) : IO TransactionData := do
   | .three => do
     j.toTransactionDataThree
 
-def Lean.Json.toTestData (j : Lean.Json) : IO TestData := do
-  let (_, .obj r) ← j.fromSingleton | IO.throw "not singleton object"
-  let info ← (r.find compare "_info").toIO ""
-  let env ← (r.find compare "env").toIO "" >>= Lean.Json.toEnvData
-  let pre ← (r.find compare "pre").toIO "" >>= Lean.Json.toPreDatas
-  let post ← (r.find compare "post").toIO "" >>= Lean.Json.toPost
-  let tx ← (r.find compare "transaction").toIO "" >>= Lean.Json.toTransactionData
-  return ⟨info, env, pre, post, tx⟩
+def mkTestData : ((_ : String) × Lean.Json) → IO TestData
+  | ⟨name, js⟩ => do
+    let r ← js.fromObj
+    let info ← (r.find compare "_info").toIO ""
+    let env ← (r.find compare "env").toIO "" >>= Lean.Json.toEnvData
+    let pre ← (r.find compare "pre").toIO "" >>= Lean.Json.toPreDatas
+    let post ← (r.find compare "post").toIO "" >>= Lean.Json.toPost
+    let tx ← (r.find compare "transaction").toIO "" >>= Lean.Json.toTransactionData
+    return ⟨name, info, env, pre, post, tx⟩
+
+def Lean.Json.toTestDatas (j : Lean.Json) : IO (List TestData) := do
+  let r ← j.fromObj
+  let l := r.toArray.toList
+  mapM mkTestData l
+
+-- def Lean.Json.toTestData (j : Lean.Json) : IO TestData := do
+--   let (_, .obj r) ← j.fromSingleton | IO.throw "not singleton object"
+--   let info ← (r.find compare "_info").toIO ""
+--   let env ← (r.find compare "env").toIO "" >>= Lean.Json.toEnvData
+--   let pre ← (r.find compare "pre").toIO "" >>= Lean.Json.toPreDatas
+--   let post ← (r.find compare "post").toIO "" >>= Lean.Json.toPost
+--   let tx ← (r.find compare "transaction").toIO "" >>= Lean.Json.toTransactionData
+--   return ⟨info, env, pre, post, tx⟩
 
 def TestData.world (td : TestData) : Option Wor :=
   let aux : PreData → Option (Adr × Acct) :=
@@ -1196,6 +1154,21 @@ def B8L.toReceiver : B8L → IO (Option Adr)
   | [] => pure .none
   | xs@(_ :: _) => (B8L.toAdr xs).toIO "cannot convert bytes to receiver address"
 
+def B8.toBool (x : B8) : Bool :=
+  if x = 0 then .false else .true
+
+def decodeV : B8 → IO (Bool × Option Nat)
+  | 27 => pure ⟨0, .none⟩
+  | 28 => pure ⟨1, .none⟩
+  | v =>
+    if v < 37
+    then .throw "nonpositive chain ID"
+    else
+      let x := v - 35
+      let yp : Bool := (x &&& 0x01).toBool
+      let id : Nat := (x &&& 0xFE).toNat / 2
+      pure ⟨yp, some id⟩
+
 def decodeTxHash : B8L → IO (Tx × B256)
   | [] => IO.throw "error : cannot decode empty bytes"
   | 0x01 :: _ => IO.throw "unimplemented : Type-1 tx decoding"
@@ -1329,7 +1302,8 @@ def decodeTxHash : B8L → IO (Tx × B256)
           .b8s r,
           .b8s s
         ] => do
-        IO.guard (v = 27 ∨ v = 28) "unimplemented : EIP-155 tx handling"
+        let ⟨yp, id⟩ ← decodeV v
+        -- IO.guard (v = 27 ∨ v = 28) s!"unsupported v-value : {v.toNat}, EIP-155?"
         let bs :=
           RLP'.encode <|
             .list [
@@ -1349,8 +1323,8 @@ def decodeTxHash : B8L → IO (Tx × B256)
           recAdr
           val.toB256P
           calldata
-          (if (v - 0x1B) = 0 then 0 else 1)
-          none
+          yp --(if v = 0x1B then 0 else 1)
+          id --
           (r.reverse.takeD 32 0).reverse
           (s.reverse.takeD 32 0).reverse,
           bs.keccak
