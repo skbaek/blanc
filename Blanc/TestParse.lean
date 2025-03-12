@@ -498,25 +498,37 @@ def Lean.Json.toPost (j : Lean.Json) : IO (List PostData) := do
 
 inductive TxType : Type
   -- Legacy (including EIP-155)
-  | zero : TxType
-  -- EIP-2930
-  | one : TxType
+  | zero
+    (gasPrice : B256)
+    (chainId : Option Nat)
+  -- -- EIP-2930
+  -- | one : TxType
   -- EIP-1559
-  | two : TxType
+  | two
+    (chainId : Nat)
+    (maxPriorityFee : B256)
+    (maxFee : B256)
+    (accessList : AccessList)
   -- EIP-4844
-  | three : TxType
+  | three
+    (chainId : Nat)
+    (maxPriorityFee : B256)
+    (maxFee : B256)
+    (accessList : AccessList)
+    (maxBlobFee : B256)
+    (blobHashes : List B256)
 
-def Lean.Json.transactionDataType (j : Lean.Json) : IO TxType := do
+def Lean.Json.transactionDataType (j : Lean.Json) : IO Nat := do
   let r ← j.fromObj
   match (r.find Ord.compare "gasPrice") with
   | some _ =>
     match r.size with
-    | 8 => return .zero
-    | _ => IO.throw "error : unknown tx type, possibly EIP-155"
+    | 8 => return 0
+    | _ => IO.throw "error : unknown tx type"
   | none =>
     match (r.find Ord.compare "blobVersionedHashes") with
-    | none => return .two
-    | some _ => return .three
+    | none => return 2
+    | some _ => return 3
 
 def Lean.Json.toTransactionDataZero (j : Lean.Json) : IO TransactionData := do
   let r ← j.fromObj
@@ -596,13 +608,13 @@ def Lean.Json.toTransactionDataThree (j : Lean.Json) : IO TransactionData := do
 def Lean.Json.toTransactionData (j : Lean.Json) : IO TransactionData := do
   let ty ← j.transactionDataType
   match ty with
-  | .zero => do
+  | 0 => do
     j.toTransactionDataZero
-  | .one => IO.throw "unimplemented : type-1 tx"
-  | .two => do
+  | 2 => do
     j.toTransactionDataTwo
-  | .three => do
+  | 3 => do
     j.toTransactionDataThree
+  | n => IO.throw s!"unimplemented tx type : {n}"
 
 def mkTestSet : ((_ : String) × Lean.Json) → IO TestSet
   | ⟨name, js⟩ => do
@@ -663,7 +675,6 @@ def getTest (td : TestSet) (p : PostData) : IO Test' := do
   }
 
 def getTests (t : TestSet) : IO (List Test') := do
-  -- have ps := t.post.snd
   mapM (getTest t) t.post
 
 def Lean.RBMap.fromSingleton {ξ υ f} (m : RBMap ξ υ f) : Option (ξ × υ) :=
@@ -673,417 +684,45 @@ def Lean.RBMap.fromSingleton {ξ υ f} (m : RBMap ξ υ f) : Option (ξ × υ) :
 
 def Lean.RBMap.singleton {ξ υ f} (x : ξ) (y : υ) : RBMap ξ υ f := RBMap.empty.insert x y
 
-inductive Tx : Type
-  | zero
-    (nonce : B256)
-    (gasPrice : B256)
-    (gasLimit : B256)
-    (receiver : Option Adr)
-    (val : B256)
-    (calldata : B8L)
-    (yParity : Bool)
-    (chainId : Option Nat)
-    (r : B8L)
-    (s : B8L) : Tx
-  | two
-    (chainId : Nat)
-    (nonce : B256)
-    (maxPriorityFee : B256)
-    (maxFee : B256)
-    (gasLimit : B256)
-    (receiver : Option Adr)
-    (val : B256)
-    (calldata : B8L)
-    (accessList : AccessList)
-    (yParity : Bool)
-    (r : B8L)
-    (s : B8L) : Tx
-  | three
-    (chainId : Nat)
-    (nonce : B256)
-    (maxPriorityFee : B256)
-    (maxFee : B256)
-    (gasLimit : B256)
-    (receiver : Option Adr)
-    (val : B256)
-    (calldata : B8L)
-    (accessList : AccessList)
-    (maxBlobFee : B256)
-    (blobHashes : List B256)
-    (yParity : Bool)
-    (r : B8L)
-    (s : B8L) : Tx
+structure Tx : Type where
+  (nonce : B256)
+  (gasLimit : B256)
+  (receiver : Option Adr)
+  (val : B256)
+  (calldata : B8L)
+  (yParity : Bool)
+  (r : B8L)
+  (s : B8L)
+  (type : TxType)
 
-def Tx.val : Tx → B256
-  | zero
-    nonce
-    gasPrice
-    gasLimit
-    receiver
-    val
-    calldata
-    yParity
-    chainId
-    r
-    s => val
-  | two
-    chainId
-    nonce
-    maxPriorityFee
-    maxFee
-    gasLimit
-    receiver
-    val
-    calldata
-    accessList
-    yParity
-    r
-    s => val
-  | three
-    chainId
-    nonce
-    maxPriorityFee
-    maxFee
-    gasLimit
-    receiver
-    val
-    calldata
-    accessList
-    maxBlobFee
-    blobHashes
-    yParity
-    r
-    s => val
+def Tx.gasPrice (baseFee : B256) (tx : Tx) : B256 :=
+  match tx.type with
+  | .zero gp _ => gp
+  | .two _ mpf mf _ => min mf (baseFee + mpf)
+  | .three _ mpf mf _ _ _ => min mf (baseFee + mpf)
 
-def Tx.calldata : Tx → B8L
-  | zero
-    nonce
-    gasPrice
-    gasLimit
-    receiver
-    val
-    calldata
-    yParity
-    chainId
-    r
-    s => calldata
-  | two
-    chainId
-    nonce
-    maxPriorityFee
-    maxFee
-    gasLimit
-    receiver
-    val
-    calldata
-    accessList
-    yParity
-    r
-    s => calldata
+def Tx.chainId (tx : Tx) : Nat :=
+  match tx.type with
+  | .zero _ cid => cid.getD 1
+  | .two cid _ _ _ => cid
+  | .three cid _ _ _ _ _ => cid
 
-  | three
-    chainId
-    nonce
-    maxPriorityFee
-    maxFee
-    gasLimit
-    receiver
-    val
-    calldata
-    accessList
-    maxBlobFee
-    blobHashes
-    yParity
-    r
-    s => calldata
+def Tx.accessList (tx : Tx) : AccessList :=
+  match tx.type with
+  | .zero _ _ => []
+  | .two _ _ _ al => al
+  | .three _ _ _ al _ _ => al
 
-def Tx.receiver : Tx → Option Adr
-  | zero
-    nonce
-    gasPrice
-    gasLimit
-    receiver
-    val
-    calldata
-    yParity
-    chainId
-    r
-    s => receiver
-  | two
-    chainId
-    nonce
-    maxPriorityFee
-    maxFee
-    gasLimit
-    receiver
-    val
-    calldata
-    accessList
-    yParity
-    r
-    s => receiver
-  | three
-    chainId
-    nonce
-    maxPriorityFee
-    maxFee
-    gasLimit
-    receiver
-    val
-    calldata
-    accessList
-    maxBlobFee
-    blobHashes
-    yParity
-    r
-    s => receiver
+def Tx.isBlobTx (tx : Tx) : Bool :=
+  match tx.type with
+  | .three _ _ _ _ _ _ => 1
+  | _ => 0
 
-def Tx.gasLimit : Tx → B256
-  | zero
-    nonce
-    gasPrice
-    gasLimit
-    receiver
-    val
-    calldata
-    yParity
-    chainId
-    r
-    s => gasLimit
-  | two
-    chainId
-    nonce
-    maxPriorityFee
-    maxFee
-    gasLimit
-    receiver
-    val
-    calldata
-    accessList
-    yParity
-    r
-    s => gasLimit
-  | three
-    chainId
-    nonce
-    maxPriorityFee
-    maxFee
-    gasLimit
-    receiver
-    val
-    calldata
-    accessList
-    maxBlobFee
-    blobHashes
-    yParity
-    r
-    s => gasLimit
-
-def Tx.nonce : Tx → B256
-  | zero
-    nonce
-    gasPrice
-    gasLimit
-    receiver
-    val
-    calldata
-    yParity
-    chainId
-    r
-    s => nonce
-  | two
-    chainId
-    nonce
-    maxPriorityFee
-    maxFee
-    gasLimit
-    receiver
-    val
-    calldata
-    accessList
-    yParity
-    r
-    s => nonce
-  | three
-    chainId
-    nonce
-    maxPriorityFee
-    maxFee
-    gasLimit
-    receiver
-    val
-    calldata
-    accessList
-    maxBlobFee
-    blobHashes
-    yParity
-    r
-    s => nonce
-
-def Tx.gasPrice (baseFee : B256) : Tx → B256
-  | zero
-    nonce
-    gasPrice
-    gasLimit
-    receiver
-    val
-    calldata
-    yParity
-    chainId
-    r
-    s => gasPrice
-  | two
-    chainId
-    nonce
-    maxPriorityFee
-    maxFee
-    gasLimit
-    receiver
-    val
-    calldata
-    accessList
-    yParity
-    r
-    s => min maxFee (baseFee + maxPriorityFee)
-  | three
-    chainId
-    nonce
-    maxPriorityFee
-    maxFee
-    gasLimit
-    receiver
-    val
-    calldata
-    accessList
-    maxBlobFee
-    blobHashes
-    yParity
-    r
-    s => min maxFee (baseFee + maxPriorityFee)
-
-def Tx.yParity : Tx → Bool
-  | zero
-    nonce
-    gasPrice
-    gasLimit
-    receiver
-    val
-    calldata
-    yParity
-    chainId
-    r
-    s => yParity
-  | two
-    chainId
-    nonce
-    maxPriorityFee
-    maxFee
-    gasLimit
-    receiver
-    val
-    calldata
-    accessList
-    yParity
-    r
-    s => yParity
-  | three
-    chainId
-    nonce
-    maxPriorityFee
-    maxFee
-    gasLimit
-    receiver
-    val
-    calldata
-    accessList
-    maxBlobFee
-    blobHashes
-    yParity
-    r
-    s => yParity
-
-def Tx.r : Tx → B8L
-  | zero
-    nonce
-    gasPrice
-    gasLimit
-    receiver
-    val
-    calldata
-    yParity
-    chainId
-    r
-    s => r
-  | two
-    chainId
-    nonce
-    maxPriorityFee
-    maxFee
-    gasLimit
-    receiver
-    val
-    calldata
-    accessList
-    yParity
-    r
-    s => r
-  | three
-    chainId
-    nonce
-    maxPriorityFee
-    maxFee
-    gasLimit
-    receiver
-    val
-    calldata
-    accessList
-    maxBlobFee
-    blobHashes
-    yParity
-    r
-    s => r
-def Tx.s : Tx → B8L
-  | zero
-    nonce
-    gasPrice
-    gasLimit
-    receiver
-    val
-    calldata
-    yParity
-    chainId
-    r
-    s => s
-  | two
-    chainId
-    nonce
-    maxPriorityFee
-    maxFee
-    gasLimit
-    receiver
-    val
-    calldata
-    accessList
-    yParity
-    r
-    s => s
-  | three
-    chainId
-    nonce
-    maxPriorityFee
-    maxFee
-    gasLimit
-    receiver
-    val
-    calldata
-    accessList
-    maxBlobFee
-    blobHashes
-    yParity
-    r
-    s => s
-
---0x02 || rlp([chain_id, nonce, max_priority_fee_per_gas, max_fee_per_gas, gas_limit, destination, amount, data, access_list, signature_y_parity, signature_r, signature_s])
+def Tx.blobHashes (tx : Tx) : List B256 :=
+  match tx.type with
+  | .zero _ _ => []
+  | .two _ _ _ _ => []
+  | .three _ _ _ _ _ bhs => bhs
 
 def RLP'.toAdr : RLP' → Option Adr
   | .b8s bs => bs.toAdr
@@ -1125,6 +764,11 @@ def decodeV : B8 → IO (Bool × Option Nat)
       let id : Nat := (x &&& 0xFE).toNat / 2
       pure ⟨yp, some id⟩
 
+def decodeYParity : B8L → IO Bool
+  | [] => pure Bool.false
+  | [0x01] => pure Bool.true
+  | yp => IO.throw s!"invalid yParity value : {yp.toHex}"
+
 def decodeTxHash : B8L → IO (Tx × B256)
   | [] => IO.throw "error : cannot decode empty bytes"
   | 0x01 :: _ => IO.throw "unimplemented : Type-1 tx decoding"
@@ -1157,30 +801,26 @@ def decodeTxHash : B8L → IO (Tx × B256)
             .b8s calldata,
             accessList
           ]
-      let recAdr ← receiver.toReceiver
-      let yp : Bool ←
-        match yParity with
-        | [] => pure Bool.false
-        | [0x01] => pure Bool.true
-        | _ => IO.throw s!"invalid yParity value : {yParity.toHex}"
-      let al : AccessList ← accessList.toAccessList.toIO "cannot RLP-decode access list"
       return ⟨
-        .two
-        chainId.toNat -- (chainId : Nat)
-        nonce.toB256P-- (nonce : B256)
-        maxPriorityFee.toB256P-- (maxPriorityFee : B256)
-        maxFee.toB256P-- (maxFee : B256)
-        gasLimit.toB256P-- (gasLimit : B256)
-        recAdr -- (receiver : Adr)
-        val.toB256P -- (val : B256)
-        calldata -- (calldata : B8L)
-        al -- (accessList : List Adr)
-        yp -- (yParity : Bool)
-        (r.reverse.takeD 32 0).reverse
-        (s.reverse.takeD 32 0).reverse,
+        {
+          nonce := nonce.toB256P
+          gasLimit := gasLimit.toB256P
+          receiver := (← receiver.toReceiver)
+          val := val.toB256P
+          calldata := calldata
+          yParity := (← decodeYParity yParity)
+          r := (r.reverse.takeD 32 0).reverse
+          s := (s.reverse.takeD 32 0).reverse
+          type :=
+            .two
+              chainId.toNat
+              maxPriorityFee.toB256P
+              maxFee.toB256P
+              (← accessList.toAccessList.toIO "cannot decode access list")
+        },
         B8L.keccak (0x02 :: bs)
       ⟩
-    | _ => IO.throw "error : cannot RLP-decode for type-2 tx"
+    | _ => IO.throw "error : cannot decode type-2 tx"
   | 0x03 :: tbs =>
     match RLP'.decode tbs with
     | RLP'.list [
@@ -1214,31 +854,25 @@ def decodeTxHash : B8L → IO (Tx × B256)
             .b8s maxBlobFee,
             .list blobHashes,
           ]
-      let recAdr ← receiver.toReceiver
-      let yp : Bool ←
-        match yParity with
-        | [] => pure Bool.false
-        | [0x01] => pure Bool.true
-        | _ => IO.throw s!"invalid yParity value : {yParity.toHex}"
-      let al : AccessList ← accessList.toAccessList.toIO "cannot RLP-decode access list"
-      let bhs : List B256 ←
-        mapM (λ r => r.toB256.toIO "") blobHashes
       return ⟨
-        .three
-        chainId.toNat -- (chainId : Nat)
-        nonce.toB256P-- (nonce : B256)
-        maxPriorityFee.toB256P-- (maxPriorityFee : B256)
-        maxFee.toB256P-- (maxFee : B256)
-        gasLimit.toB256P-- (gasLimit : B256)
-        recAdr -- (receiver : Adr)
-        val.toB256P -- (val : B256)
-        calldata -- (calldata : B8L)
-        al -- (accessList : List Adr)
-        maxBlobFee.toB256P
-        bhs
-        yp -- (yParity : Bool)
-        (r.reverse.takeD 32 0).reverse
-        (s.reverse.takeD 32 0).reverse,
+        {
+          nonce := nonce.toB256P
+          gasLimit := gasLimit.toB256P
+          receiver := (← receiver.toReceiver)
+          val := val.toB256P
+          calldata := calldata
+          yParity := (← decodeYParity yParity)
+          r := (r.reverse.takeD 32 0).reverse
+          s := (s.reverse.takeD 32 0).reverse
+          type :=
+            .three
+              chainId.toNat
+              maxPriorityFee.toB256P
+              maxFee.toB256P
+              (← accessList.toAccessList.toIO "cannot decode access list")
+              maxBlobFee.toB256P
+              (← mapM (λ r => r.toB256.toIO "") blobHashes)
+        },
         B8L.keccak (0x02 :: bs)
       ⟩
     | _ => IO.throw "error : cannot RLP-decode for type-3 tx"
@@ -1258,8 +892,7 @@ def decodeTxHash : B8L → IO (Tx × B256)
           .b8s r,
           .b8s s
         ] => do
-        let ⟨yp, id⟩ ← decodeV v
-        -- IO.guard (v = 27 ∨ v = 28) s!"unsupported v-value : {v.toNat}, EIP-155?"
+        let ⟨yParity, chainId⟩ ← decodeV v
         let bs :=
           RLP'.encode <|
             .list [
@@ -1270,19 +903,19 @@ def decodeTxHash : B8L → IO (Tx × B256)
               .b8s val,
               .b8s calldata
             ]
-        let recAdr ← receiver.toReceiver
         return ⟨
-          .zero
-          nonce.toB256P
-          gasPrice.toB256P
-          gasLimit.toB256P
-          recAdr
-          val.toB256P
-          calldata
-          yp --(if v = 0x1B then 0 else 1)
-          id --
-          (r.reverse.takeD 32 0).reverse
-          (s.reverse.takeD 32 0).reverse,
+          {
+            nonce := nonce.toB256P
+            gasLimit := gasLimit.toB256P
+            receiver := (← receiver.toReceiver)
+            val := val.toB256P
+            calldata := calldata
+            yParity := yParity
+            r := (r.reverse.takeD 32 0).reverse
+            s := (s.reverse.takeD 32 0).reverse
+            type :=
+              .zero gasPrice.toB256P chainId
+          },
           bs.keccak
         ⟩
       | _ => IO.throw "error : cannot RLP-decode for type-0 tx"

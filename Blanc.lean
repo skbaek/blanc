@@ -1912,27 +1912,14 @@ inductive Tx.Result : Type
 
 def eraseIfEmpty (w : Wor) (a : Adr) : Wor := w.set a <| w.get a
 
-def Tx.accessList : Tx → AccessList
-  | .zero _ _ _ _ _ _ _ _ _ _ => []
-  | .two _ _ _ _ _ _ _ _ al _ _ _ => al
-  | .three _ _ _ _ _ _ _ _ al _ _ _ _ _ => al
-
 def IO.decide (φ : Prop) [Decidable φ] : IO Bool :=
   if φ then pure .true else pure .false
-
-def Tx.isBlob : Tx → Bool
-  | .zero _ _ _ _ _ _ _ _ _ _ => .false
-  | .two _ _ _ _ _ _ _ _ _ _ _ _ => .false
-  | .three _ _ _ _ _ _ _ _ _ _ _ _ _ _ => .true
-
-#check B256.toB8V
 
 def correctBlobHashVersion (h : B256) : Prop :=
   h.toB8V[0] = 0x01
 
 instance : DecidablePred correctBlobHashVersion := by
   intro h; simp [correctBlobHashVersion]; infer_instance
-
 
 def Tx.run
   (blk : BlockInfo) (w : Wor) (tx : Tx) (sender : Adr) : IO Tx.Result := do
@@ -1944,8 +1931,8 @@ def Tx.run
 
   let blobCount : B256 := blk.blobHashes.length.toB256
 
-  let .true ← IO.decide (¬ tx.isBlob ∨ tx.receiver.isSome) | pure (Tx.Result.fail .blobCreation)
-  let .true ← IO.decide (¬ tx.isBlob ∨ blobCount > 0) | (dbg_trace s!"no blobs"; pure (Tx.Result.fail .noBlobs))
+  let .true ← IO.decide (¬ tx.isBlobTx ∨ tx.receiver.isSome) | pure (Tx.Result.fail .blobCreation)
+  let .true ← IO.decide (¬ tx.isBlobTx ∨ blobCount > 0) | (dbg_trace s!"no blobs"; pure (Tx.Result.fail .noBlobs))
   let .true ← IO.decide (blobCount < 7) | (dbg_trace s!"too many blobs : {blobCount}"; pure (Tx.Result.fail .tooManyBlobs))
   let .true ← IO.decide (blk.blobHashes.Forall correctBlobHashVersion)
     | ( dbg_trace s!"wrong blob hash version : {blk.blobHashes}" ;
@@ -1994,14 +1981,7 @@ def Tx.run
   let w₀ : Wor := tr.wor.addBal sender valReturn
   let w₁ : Wor := w₀.addBal blk.ben (gasUsed * f)
   let w₃ : Wor := List.foldl eraseIfEmpty w₁ tr.acs.tchd.toList
-
   return (.pass w₃ gasUsed.toNat (RLP'.list tr.acs.logs.reverse).encode.keccak tr.status)
-
-
-def Tx.blobHashes : Tx → List B256
-  | .zero _ _ _ _ _ _ _ _ _ _ => []
-  | .two _ _ _ _ _ _ _ _ _ _ _ _ => []
-  | .three _ _ _ _ _ _ _ _ _ _ bhs _ _ _ => bhs
 
 def checkJson (name : String) : IO Unit :=
   if List.IsSuffix ".json".data name.data
