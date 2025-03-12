@@ -1984,29 +1984,18 @@ def Tx.run
           true
       ).toIO "theta failed"
 
-
   let gasLeft : Nat := tr.gas -- g'
   let refundAmount : Nat := tr.acs.ref
   let gasReturn : B256 :=
     Nat.toB256 (gasLeft + min ((tx.gasLimit.toNat - gasLeft) / 5) refundAmount) -- g*
   let gasUsed : B256 := tx.gasLimit - gasReturn
   let valReturn : B256 := gasReturn * (tx.gasPrice blk.baseFee)
-
   let f : B256 := (tx.gasPrice blk.baseFee) - blk.baseFee
-
   let w₀ : Wor := tr.wor.addBal sender valReturn
   let w₁ : Wor := w₀.addBal blk.ben (gasUsed * f)
-  --let w₂ : Wor := List.foldl Lean.RBMap.erase w₁ tr.acr.dest
-  --let w₃ : Wor := List.foldl eraseIfEmpty w₂ tr.acr.tchd.toList
   let w₃ : Wor := List.foldl eraseIfEmpty w₁ tr.acs.tchd.toList
 
   return (.pass w₃ gasUsed.toNat (RLP'.list tr.acs.logs.reverse).encode.keccak tr.status)
-  --{
-  --  wor := w₃,
-  --  gas := gasUsed.toNat
-  --  log := (RLP'.list tr.acs.logs.reverse).encode.keccak
-  --  sta := tr.status
-  --}
 
 
 def Tx.blobHashes : Tx → List B256
@@ -2014,7 +2003,12 @@ def Tx.blobHashes : Tx → List B256
   | .two _ _ _ _ _ _ _ _ _ _ _ _ => []
   | .three _ _ _ _ _ _ _ _ _ _ bhs _ _ _ => bhs
 
-def Test.checkPass (t : Test) (wor : Wor) (log : B256) (sta : Bool) : IO Unit := do
+def checkJson (name : String) : IO Unit :=
+  if List.IsSuffix ".json".data name.data
+  then IO.println s!"json file found : {name}"
+  else IO.throw s!"not a json file : {name}"
+
+def Test.checkPass (t : Test') (wor : Wor) (log : B256) (sta : Bool) : IO Unit := do
   .println s!"tx status : {sta}"
   .println "world state after tx :"
   .println (String.joinln wor.toStrings)
@@ -2032,8 +2026,30 @@ def Test.checkPass (t : Test) (wor : Wor) (log : B256) (sta : Bool) : IO Unit :=
   .println "log hash check : pass"
   .println "test complete.\n\n"
 
+def Tx.Result.check (xh xl : B256) (xx : Option Exception) : Tx.Result → IO Unit
+  | .fail ex => do
+    .guard
+      (some ex = xx)
+      s!"exception mismatch, expected : {xx}, reported : {ex}"
+    .println "test complete.\n\n"
+  | .pass wor _ log sta => do
+    .println s!"tx status : {sta}"
+    .println "world state after tx :"
+    .println (String.joinln wor.toStrings)
+    let temp' := (List.map toKeyVal wor.toList)
+    let finalNTB : NTB := Lean.RBMap.fromList temp' _
+    let root' : B256 := trie finalNTB
+    .println s!"computed final root' : {root'.toHex}"
+    .println s!"expected final root  : {xh.toHex}"
+    .guard (root' = xh) "state root' check : fail"
+    .println "state root' check : pass"
+    .guard (log = xl) "log hash check : fail"
+    .println "log hash check : pass"
+    .println "test complete.\n\n"
 
-def Test.run (t : Test) : IO Unit := do
+
+
+def Test'.run (t : Test') : IO Unit := do
   let ⟨tx, hsh⟩ ← decodeTxHash t.txdata
   let rsa : ByteArray := ⟨Array.mk (tx.r ++ tx.s)⟩
   let hsa : ByteArray := ⟨Array.mk hsh.toB8L⟩
@@ -2098,25 +2114,96 @@ def Test.run (t : Test) : IO Unit := do
   | .pass worPass _ logPass staPass => do
     Test.checkPass t worPass logPass staPass
 
-def Tests.run : Nat → List Test → IO Unit
+
+def PostData.run (td : TestSet) (idx_pd : Nat × PostData) : IO Unit := do
+  let pd : PostData := idx_pd.snd
+  let cd ← (List.get? td.tx.data pd.dataIdx).toIO ""
+  let gl ← (List.get? td.tx.gasLimit pd.gasIdx).toIO ""
+  let vl ← (List.get? td.tx.value pd.valueIdx).toIO ""
+  let w ← td.world.toIO ""
+
+  let xh : B256 := pd.hash
+  let xl : B256 := pd.logs
+  let xx : Option Exception := pd.expectedException
+
+  let ⟨tx, hsh⟩ ← decodeTxHash pd.txdata
+  let rsa : ByteArray := ⟨Array.mk (tx.r ++ tx.s)⟩
+  let hsa : ByteArray := ⟨Array.mk hsh.toB8L⟩
+  let ri : UInt8 := Byte.toB8 (if tx.yParity then 1 else 0)
+
+  let sender ← publicAddress hsa ri rsa
+
+--  .println s!"recovered sender : 0x{sender'.toHex}"
+--  let sender : Adr := (Hex.toAdr "A94F5374FCE5EDBC8E2A8697C15331677E6EBF0B").getD 0
+  let sa₀ ← (w.find? sender).toIO s!"cannot find sender account : 0x{sender.toHex}"
+  .guard (tx.nonce = td.tx.nonce) "nonce check 1 : fail"
+  .println "nonce check 1 : pass"
+
+  .guard (tx.nonce = sa₀.nonce) "nonce check 2 : fail"
+  .println "nonce check 2 : pass"
+
+  .guard (sender = td.tx.sender) "sender check : fail"
+  .println "sender check : pass"
+
+  .guard (tx.receiver = td.tx.receiver) "receiver check : fail"
+  .println "receiver check : pass"
+
+  .guard (tx.gasLimit = gl) s!"gas limit check failed."
+  .println "gas limit check : pass"
+
+  .guard (tx.gasPrice td.env.baseFee = td.tx.gasPrice td.env.baseFee) "gas price check : fail"
+  .println "gas price check : pass"
+
+  .guard (tx.val = vl) "value check : fail"
+  .println "value check : pass"
+
+  .guard (tx.calldata = cd) "calldata check : fail"
+  .println "calldata check : pass"
+  let rst ←
+    Tx.run
+      {
+        blockHashes := [],
+        baseFee := td.env.baseFee,
+        excessBlobGas := td.env.excessBlobGas,
+        blobHashes := tx.blobHashes,
+        ben := td.env.coinbase
+        prevRandao := td.env.prevRandao
+        gasLimit := td.env.blockGasLimit
+        timestamp := td.env.timestamp
+        number := td.env.number
+        chainId := 1
+      }
+    w
+    tx
+    sender
+
+  Tx.Result.check xh xl xx rst
+
+
+
+def Tests.run : Nat → List Test' → IO Unit
   | _, [] => return ()
   | n, t :: ts => do
     .println s!"================ Running test {n} ================"
     t.run
     Tests.run (n + 1) ts
 
-def checkJson (name : String) : IO Unit :=
-  if List.IsSuffix ".json".data name.data
-  then IO.println s!"json file found : {name}"
-  else IO.throw s!"not a json file : {name}"
+def List.putIndex {ξ : Type u} : Nat → List ξ → List (Nat × ξ)
+  | _, [] => []
+  | k, x :: xs => (k, x) :: List.putIndex (k + 1) xs
+
+def TestSet.run (ts : TestSet) : IO Unit := do
+  let pds := ts.post
+  let _ ← mapM (PostData.run ts) (List.putIndex 0 pds)
+  pure ()
 
 def runTestFileAtPath (path : String) : IO Unit := do
   .println s!"Testing file : {path}"
   let j ← readJsonFile path
-  let tds ← j.toTestDatas
-  -- let ts ← getTests td
-  -- Tests.run 0 ts
+  let tds ← j.toTestSets
   let _ ← mapM (λ td => getTests td >>= Tests.run 0) tds
+  --let _ ← mapM (λ td => .println s!"test set name : {td.name}") tds
+  -- let _ ← mapM TestSet.run tds
   pure ()
 
 def main : List String → IO Unit

@@ -128,12 +128,13 @@ def TransactionData.gasPrice (baseFee : B256) (txd : TransactionData) : B256 :=
 --   (sender : Adr)
 --   (receiver : Adr)
 --   (value : List B256)
-structure TestData where
+
+structure TestSet where
   (name : String)
   (info : Lean.Json)
   (env  : EnvData)
   (pre  : List PreData)
-  (post : String × List PostData)
+  (post : List PostData)
   (tx   : TransactionData)
 
 def readJsonFile (filename : System.FilePath) : IO Lean.Json := do
@@ -222,8 +223,8 @@ def preAcct.toStrings (p : PreData) : List String :=
     [s!"code : {B8L.toHex p.code}"]
   ]
 
-def postToStrings : (String × List PostData) → List String
-  | ⟨s, ps⟩ => fork "Post" [[s], List.toStrings postAcct.toStrings ps]
+def postToStrings (ps : List PostData) : List String :=
+  fork "Post" [List.toStrings postAcct.toStrings ps]
 
 def EnvData.toStrings (e : EnvData) : List String :=
   fork "env" [
@@ -232,28 +233,6 @@ def EnvData.toStrings (e : EnvData) : List String :=
 
 def preToStrings (l : List PreData) : List String :=
   fork "pre" [List.toStrings preAcct.toStrings l]
-
---inductive TransactionData : Type
---  | zero
---    (data : List B8L)
---    (gasLimit : List B256)
---    (gasPrice : B256)
---    (nonce : B256)
---    (secretKey : B256)
---    (sender : Adr)
---    (receiver : Adr)
---    (value : List B256) : TransactionData
---  | two
---    (accessLists : List (List Adr))
---    (data : List B8L)
---    (gasLimit : List B256)
---    (maxFeePerGas : B256)
---    (maxPriorityFeePerGas : B256)
---    (nonce : B256)
---    (secretKey : B256)
---    (sender : Adr)
---    (receiver : Adr)
---    (value : List B256) : TransactionData
 
 def Option.toStrings {ξ : Type u} (f : ξ → List String): Option ξ → List String
   | none => ["none"]
@@ -307,11 +286,10 @@ def TransactionData.toStrings (txd : TransactionData) : List String :=
     fork "value" [List.toStrings (λ x => [x.toHex]) txd.value]
   ]
 
-structure Test where
+structure Test' where
   (expectedException : Option Exception)
   (baseFee : B256)
   (excessBlobGas : B256)
-  -- (blobHashes : Array B256)
   (coinbase : Adr)
   (prevRandao : B256)
   (blockGasLimit : B256)
@@ -345,7 +323,7 @@ def Wor.toStrings (w : Wor) : List String :=
     fun x => Acct.toStrings x.fst.toHex x.snd
   fork "world" (kvs.map kvToStrings)
 
-def Test.toStrings (t : Test) : List String :=
+def Test'.toStrings (t : Test') : List String :=
   fork "VM Test" [
     [s!"coinbase : {t.coinbase.toHex}"],
     t.world.toStrings,
@@ -362,7 +340,7 @@ def Test.toStrings (t : Test) : List String :=
     [s!"secret : 0x{t.secret.toHex}"]
   ]
 
-def TestData.toStrings (t : TestData) : List String :=
+def TestSet.toStrings (t : TestSet) : List String :=
   fork "VM Test" [
     ["info ..."],--t.info.toStrings,
     EnvData.toStrings t.env,
@@ -371,8 +349,8 @@ def TestData.toStrings (t : TestData) : List String :=
     t.tx.toStrings
   ]
 
-def TestData.toString (t : TestData) : String := String.joinln t.toStrings
-def Test.toString (t : Test) : String := String.joinln t.toStrings
+def TestSet.toString (t : TestSet) : String := String.joinln t.toStrings
+def Test.toString (t : Test') : String := String.joinln t.toStrings
 
 def Lean.Json.fromArr : Lean.Json → IO (List Json)
   | .arr a => return a.toList
@@ -510,11 +488,13 @@ def Lean.Json.toPreDatas (j : Lean.Json) : IO (List PreData) := do
   let kvs := r.toArray.toList
   mapM Lean.Json.toPreData kvs
 
-def Lean.Json.toPost (j : Lean.Json) : IO (String × List PostData) := do
-  let ⟨k, j'⟩ ← j.fromSingleton
+def Lean.Json.toPost (j : Lean.Json) : IO (List PostData) := do
+  let r ← j.fromObj
+  let j' ← (r.find Ord.compare "Cancun").toIO "no Cancun"
+  -- let ⟨k, j'⟩ ← j.fromSingleton
   let l ← j'.fromArr
   let js ← mapM Lean.Json.toPostData l
-  return ⟨k, js⟩
+  return js
 
 inductive TxType : Type
   -- Legacy (including EIP-155)
@@ -624,7 +604,7 @@ def Lean.Json.toTransactionData (j : Lean.Json) : IO TransactionData := do
   | .three => do
     j.toTransactionDataThree
 
-def mkTestData : ((_ : String) × Lean.Json) → IO TestData
+def mkTestSet : ((_ : String) × Lean.Json) → IO TestSet
   | ⟨name, js⟩ => do
     let r ← js.fromObj
     let info ← (r.find compare "_info").toIO ""
@@ -634,21 +614,12 @@ def mkTestData : ((_ : String) × Lean.Json) → IO TestData
     let tx ← (r.find compare "transaction").toIO "" >>= Lean.Json.toTransactionData
     return ⟨name, info, env, pre, post, tx⟩
 
-def Lean.Json.toTestDatas (j : Lean.Json) : IO (List TestData) := do
+def Lean.Json.toTestSets (j : Lean.Json) : IO (List TestSet) := do
   let r ← j.fromObj
   let l := r.toArray.toList
-  mapM mkTestData l
+  mapM mkTestSet l
 
--- def Lean.Json.toTestData (j : Lean.Json) : IO TestData := do
---   let (_, .obj r) ← j.fromSingleton | IO.throw "not singleton object"
---   let info ← (r.find compare "_info").toIO ""
---   let env ← (r.find compare "env").toIO "" >>= Lean.Json.toEnvData
---   let pre ← (r.find compare "pre").toIO "" >>= Lean.Json.toPreDatas
---   let post ← (r.find compare "post").toIO "" >>= Lean.Json.toPost
---   let tx ← (r.find compare "transaction").toIO "" >>= Lean.Json.toTransactionData
---   return ⟨info, env, pre, post, tx⟩
-
-def TestData.world (td : TestData) : Option Wor :=
+def TestSet.world (td : TestSet) : Option Wor :=
   let aux : PreData → Option (Adr × Acct) :=
     fun pd => do
       some  ⟨
@@ -663,7 +634,7 @@ def TestData.world (td : TestData) : Option Wor :=
   do let l ← List.mapM aux td.pre
      some <| Lean.RBMap.fromList l _
 
-def getTest (td : TestData) (p : PostData) : IO Test := do
+def getTest (td : TestSet) (p : PostData) : IO Test' := do
   let cd ← (List.get? td.tx.data p.dataIdx).toIO ""
   let gl ← (List.get? td.tx.gasLimit p.gasIdx).toIO ""
   let vl ← (List.get? td.tx.value p.valueIdx).toIO ""
@@ -672,7 +643,6 @@ def getTest (td : TestData) (p : PostData) : IO Test := do
     expectedException := p.expectedException
     baseFee := td.env.baseFee
     excessBlobGas := td.env.excessBlobGas
-    --blobHashes := #[]
     coinbase := td.env.coinbase
     prevRandao := td.env.prevRandao
     blockGasLimit := td.env.blockGasLimit
@@ -692,9 +662,9 @@ def getTest (td : TestData) (p : PostData) : IO Test := do
     logs := p.logs
   }
 
-def getTests (t : TestData) : IO (List Test) := do
-  have ps := t.post.snd
-  mapM (getTest t) ps
+def getTests (t : TestSet) : IO (List Test') := do
+  -- have ps := t.post.snd
+  mapM (getTest t) t.post
 
 def Lean.RBMap.fromSingleton {ξ υ f} (m : RBMap ξ υ f) : Option (ξ × υ) :=
   match m.toList with
@@ -1114,20 +1084,6 @@ def Tx.s : Tx → B8L
     s => s
 
 --0x02 || rlp([chain_id, nonce, max_priority_fee_per_gas, max_fee_per_gas, gas_limit, destination, amount, data, access_list, signature_y_parity, signature_r, signature_s])
-
-structure TxBytesContent : Type where
-  (chainId : Option Nat)
-  (yParity : Bool)
-  (type : TxType)
-  (nonce : B256)
-  (gasPrice : B256)
-  (gasLimit : B256)
-  (receiver : Adr)
-  (val : B256)
-  (calldata : B8L)
-  (r : B8L)
-  (s : B8L)
-  (acc : List (Adr × List B256))
 
 def RLP'.toAdr : RLP' → Option Adr
   | .b8s bs => bs.toAdr
