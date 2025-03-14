@@ -1415,25 +1415,11 @@ def θ.prep
   (e : Nat)
   (w : Bool) :
   Wor × Var × Con :=
-  let ω'₁ : Wor :=
-    match ω.find? r with
-    | none =>
-      if v = 0
-      then ω
-      else ω.set r {nonce := 0, bal := v, stor := .empty, code := ByteArray.mk #[]}
-    | some aᵣ => ω.set r {aᵣ with bal := aᵣ.bal + v}
-  let ω₁ : Wor :=
-    match ω'₁.find? s with
-    | none =>
-      if v = 0
-      then ω'₁
-      else (dbg_trace "unreachable code : nonzero value calls from empty accounts should never happen" ; ω'₁)
-    | some aₛ => ω'₁.set s {aₛ with bal := aₛ.bal - v}
-  let cd : ByteArray := ω.code c
+  let ω₁ : Wor := (ω.addBal r v).subBal s v
   let κ : Con := {
     wor0 := ω₀
     cta := r, oga := o, gpr := p.toB256, cld := d
-    cla := s, clv := v_app, code := cd, blk := H, exd := e, wup := w
+    cla := s, clv := v_app, code := ω.code c, blk := H, exd := e, wup := w
   }
   let υ : Var := {
     gas := g, pc := 0, ret := [], act := 0
@@ -1443,45 +1429,6 @@ def θ.prep
   ⟨ω₁, υ, κ⟩
 
 def θ.prep'
-  (κ : Con)
-  (ω : Wor)
-  (A' : Acs)
-  (sen : Adr)
-  (rec : Adr)
-  (cod : Adr)
-  (cg : Nat)
-  (tval : B256)
-  (rval : B256)
-  (i : B8L)
-  (wup : Bool) :
-  Wor × Var × Con :=
-  let ω' : Wor :=
-    match ω.find? rec with
-    | none =>
-      if tval = 0
-      then ω
-      else ω.set rec {nonce := 0, bal := tval, stor := .empty, code := ByteArray.mk #[]}
-    | some aᵣ => ω.set rec {aᵣ with bal := aᵣ.bal + tval}
-  let ω! : Wor :=
-    match ω'.find? sen with
-    | none =>
-      if tval = 0
-      then ω'
-      else (dbg_trace "unreachable code : nonzero value calls from empty accounts should never happen" ; ω')
-    | some aₛ => ω'.set sen {aₛ with bal := aₛ.bal - tval}
-  let κ! : Con := {
-    wor0 := κ.wor0
-    cta := rec, oga := κ.oga, gpr := κ.gpr, cld := i, cla := sen,
-    clv := rval, code := ω.code cod, blk := κ.blk, exd := κ.exd - 1, wup := wup
-  }
-  let υ! : Var := {
-    gas := cg, pc := 0, ret := [], act := 0
-    dest := A'.dest, adrs := A'.adrs, keys := A'.keys,
-    ref := A'.ref, logs := A'.logs, tchd := A'.tchd
-  }
-  ⟨ω!, υ!, κ!⟩
-
-def thetaPrep
   (ω : Wor) (τ : Tra) (σ' : Sta) (μ : Mem) (υ : Var) (κ : Con)
   (gas adr ilc isz olc osz : B256)
   (sen rec : Adr) (tval rval : B256) (wup : Bool) :
@@ -1495,18 +1442,23 @@ def thetaPrep
   let cg : Nat := cCallGas ω υ gas.toNat mc cod tval
   let totalCost := (cCall ω υ gas.toNat mc cod tval) + mc
   let g' ← (safeSub υ.gas totalCost).toExcept (.inl <| xhs0 υ)
+
   let ⟨ω!, υ!, κ!⟩ : (Wor × Var × Con) :=
-    θ.prep'
-      κ
+    θ.prep
+      κ.wor0
+      κ.blk
       ω
       A'
       sen
+      κ.oga
       rec
       cod
       cg
+      κ.gpr.toNat
       tval
       rval
       i
+      κ.exd
       wup
   .ok ⟨
     ⟨ω, τ, cg, A', 0, []⟩,
@@ -1794,7 +1746,7 @@ def exec : Nat → Wor → Tra → Sta → Mem → Var → Con → Exmo ΞR
       Except.guard (.inl <| xhs0 υ) (κ.wup ∨ clv = 0)
       -- dbg_trace s!"nested CALL to address : {adr.toHex}"
       let ⟨θrf, ⟨ωp, υp, κp⟩, θc⟩ ←
-        thetaPrep ω τ σ' μ υ κ
+        θ.prep' ω τ σ' μ υ κ
           gas adr ilc isz olc osz κ.cta adr.toAdr clv clv κ.wup
       let θr : ΛΘ.Result ←
         if 0 = κ.exd ∨ (ω.get κ.cta).bal < clv
@@ -1810,7 +1762,7 @@ def exec : Nat → Wor → Tra → Sta → Mem → Var → Con → Exmo ΞR
       let (gas, adr, ilc, isz, olc, osz, σ') ← σ.pop6.toExmo υ
       -- dbg_trace s!"nested STATCALL to address : {adr.toHex}"
       let ⟨θrf, ⟨ωp, υp, κp⟩, θc⟩ ←
-        thetaPrep ω τ σ' μ υ κ
+        θ.prep' ω τ σ' μ υ κ
           gas adr ilc isz olc osz κ.cta adr.toAdr 0 0 false
       let θr : ΛΘ.Result ←
         if 0 = κ.exd ∨ (ω.get κ.cta).bal < 0
@@ -1826,7 +1778,7 @@ def exec : Nat → Wor → Tra → Sta → Mem → Var → Con → Exmo ΞR
       let (gas, adr, clv, ilc, isz, olc, osz, σ') ← σ.pop7.toExmo υ
       -- dbg_trace s!"nested CALLCODE to address : {adr.toHex}"
       let ⟨θrf, ⟨ωp, υp, κp⟩, θc⟩ ←
-        thetaPrep ω τ σ' μ υ κ
+        θ.prep' ω τ σ' μ υ κ
           gas adr ilc isz olc osz κ.cta κ.cta clv clv κ.wup
       let θr : ΛΘ.Result ←
         if 0 = κ.exd ∨ (ω.get κ.cta).bal < clv
@@ -1842,7 +1794,7 @@ def exec : Nat → Wor → Tra → Sta → Mem → Var → Con → Exmo ΞR
       let (gas, adr, ilc, isz, olc, osz, σ') ← σ.pop6.toExmo υ
       -- dbg_trace s!"nested DELCALL to address : {adr.toHex}"
       let ⟨θrf, ⟨ωp, υp, κp⟩, θc⟩ ←
-        thetaPrep ω τ σ' μ υ κ
+        θ.prep' ω τ σ' μ υ κ
           gas adr ilc isz olc osz κ.cla κ.cta 0 κ.clv κ.wup
       let θr : ΛΘ.Result ←
         if 0 = κ.exd ∨ (ω.get κ.cta).bal < 0
@@ -1880,7 +1832,7 @@ def theta
   (e : Nat)
   (w : Bool) : Option ΛΘ.Result :=
   let ⟨ω?, υ?, κ?⟩ := θ.prep ω₀ H ω A s o r c g p v v_app d e w
-  match thetaWrap ω? τ υ?.toAcs (exec g ω? τ .init #[] υ? κ?) with
+  match thetaWrap ω τ υ?.toAcs (exec g ω? τ .init #[] υ? κ?) with
   | .error (.inl _) =>
     dbg_trace "unreachable : thetaWrap should never return XHS" ; none
   | .error (.inr es) => dbg_trace es ; none
@@ -1917,15 +1869,6 @@ def lambda
       wup := w
     }
   Λ.wrap ω τ A' a <| exec g ω' τ .init #[] (A'.toVar (gas := g)) κ
-
-    --  let runLambda : Option ΛΘ.Result :=
-    --    let ⟨ωx, Ax, a'⟩ := Λ.prep ωp υ.toAcs κ.cta val i (some salt)
-    --    let κx : Con :=
-    --      { κ with
-    --        cta := a', cld := [], cla := κ.cta, clv := val
-    --        code := ByteArray.mk (.mk i), exd := κ.exd - 1 }
-    --    Λ.wrap ωp τ Ax a' <| exec lim ωx τ .init #[] (Ax.toVar (gas := createGas)) κx
-
 
 def publicAddress (hsa : ByteArray) (ri : UInt8) (rsa : ByteArray) : IO Adr :=
   match (ecrecoverFlag hsa ri rsa).toList with
