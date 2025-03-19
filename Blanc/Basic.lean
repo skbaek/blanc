@@ -274,7 +274,12 @@ def B64.highBit (x : B64) : Bool := (x &&& 0x8000000000000000) != 0
 def B64.lowBit  (x : B64) : Bool := (x &&& 0x0000000000000001) != 0
 
 def B128 : Type := B64 × B64
+
+instance : Inhabited B128 := ⟨⟨0, 0⟩⟩
+
 def B256 : Type := B128 × B128
+
+instance : Inhabited B256 := ⟨⟨Inhabited.default, Inhabited.default⟩⟩
 
 def B128.highBit (x : B128) : Bool := x.1.highBit
 def B128.lowBit  (x : B128) : Bool := x.2.lowBit
