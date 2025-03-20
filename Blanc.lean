@@ -1406,11 +1406,11 @@ def showLim (vb : Bool) (lim : Nat) (m : Var) : Exmo Unit :=
 -- Pstor
 
 
-def showStep (vb :Bool) (σ : Sta) (υ : Var) (i : Inst') : Exmo Unit :=
+def showStep (vb :Bool) (σ : Sta) (υ : Var) (κ : Con) (i : Inst') : Exmo Unit :=
   if vb
   then let σ_fmt : List B256 := σ.fst.toList
        --dbg_trace s!"step(pc({υ.pc}), gas({υ.gas}), inst({i.toString}), stack({σ_fmt}))."
-       dbg_trace s!"step(pc({υ.pc}), gas({υ.gas}), inst({i.toString}))."
+       dbg_trace s!"step(pc({υ.pc}), gas({υ.gas}), inst(\"{i.toString}\"), depth({κ.exd}))."
        return ()
   else return ()
 
@@ -1518,13 +1518,8 @@ def θ.prep'
   let act' : Nat := memExp (memExp υ.act ilc isz) olc osz
   let mc : Nat := cMem act' - cMem υ.act
   let cg : Nat := cCallGas ct ω υ gas.toNat mc cod tval
-
-  -- dbg_trace s!"non-memory cost : {cCall ω υ gas.toNat mc cod tval}"
-  -- dbg_trace s!"memory cost : {mc}"
-
   let totalCost := (cCall ct ω υ gas.toNat mc cod tval) + mc
   let g' ← (safeSub υ.gas totalCost).toExcept (xhs0 υ)
-
   let ⟨ω!, υ!, κ!⟩ : (Wor × Var × Con) :=
     θ.prep
       κ.wor0
@@ -1540,7 +1535,7 @@ def θ.prep'
       tval
       rval
       i
-      κ.exd
+      (κ.exd - 1)
       wup
   .ok ⟨
     ⟨ω, τ, cg, A', 0, []⟩,
@@ -1762,23 +1757,19 @@ def exec (vb : Bool): Nat → Wor → Tra → Sta → Mem → Var → Con → Ex
   | lim + 1, ω, τ, σ, μ, υ, κ => do
     showLim vb lim υ
     let i ← (getInst υ κ).toExmo υ
-    showStep vb σ υ i
+    showStep vb σ υ κ i
     match i with
     | .next (.exec .create) => do
       Except.guard (xhs0 υ) κ.wup
-
       let (val, code_loc, code_sz, σ') ← σ.pop3.toExcept (xhs0 υ)
+      Except.guard (xhs0 υ) (code_sz.toNat ≤ maxInitcodeSize)
       let i : B8L := μ.sliceD code_loc.toNat code_sz.toNat 0
-
-      Except.guard (xhs0 υ) (i.length ≤ maxInitcodeSize)
-
       let initCodeCost : Nat := gInitcodeword * (ceilDiv code_sz.toNat 32)
       let ⟨act', mc⟩ := memExpCost υ code_loc code_sz
       let interGas ← deductGas υ <| initCodeCost + mc + gCreate
       let createGas := except64th interGas
       let cond : Prop := 0 = κ.exd ∨ (ω.get κ.cta).bal < val
       let ωp := ω.incrNonce κ.cta
-
       let runLambda : ΛΘ.Result :=
         let ⟨ωx, Ax, a'⟩ := Λ.prep ωp υ.toAcs κ.cta val i none
         let κx : Con :=
@@ -1786,26 +1777,19 @@ def exec (vb : Bool): Nat → Wor → Tra → Sta → Mem → Var → Con → Ex
             cta := a', cld := [], cla := κ.cta, clv := val
             code := ByteArray.mk (.mk i), exd := κ.exd - 1 }
         Λ.wrap ωp τ Ax a' <| exec vb lim ωx τ .init #[] (Ax.toVar (gas := createGas)) κx
-
       let oldNonce : B256 := ω.nonceAt κ.cta
       let a : Adr := newContAdr κ.cta oldNonce .none i
-
       let lr :  ΛΘ.Result :=
         if cond
         then {wor := ω, tra := τ, gas := createGas, acs := υ.toAcs, status := 0, ret := []}
         else runLambda
-
       let ⟨ωf, τf, σf, υf⟩ ← Λ.Result.use σ' υ (interGas - createGas) act' a  lr
       exec vb lim ωf τf σf μ υf κ
-
     | .next (.exec .create2) => do
       Except.guard (xhs0 υ) κ.wup
-
       let (val, code_loc, code_sz, salt, σ') ← σ.pop4.toExcept (xhs0 υ)
+      Except.guard (xhs0 υ) (code_sz.toNat ≤ maxInitcodeSize)
       let i : B8L := μ.sliceD code_loc.toNat code_sz.toNat 0
-
-      Except.guard (xhs0 υ) (i.length ≤ maxInitcodeSize)
-
       let word_sz : Nat := ceilDiv code_sz.toNat 32
       let initCodeCost : Nat := gInitcodeword * word_sz
       let ⟨act', mc⟩ := memExpCost υ code_loc code_sz
@@ -1813,10 +1797,8 @@ def exec (vb : Bool): Nat → Wor → Tra → Sta → Mem → Var → Con → Ex
       let createGas := except64th interGas
       let cond : Prop := 0 = κ.exd ∨ (ω.get κ.cta).bal < val
       let ωp := ω.incrNonce κ.cta
-
       let oldNonce : B256 := ω.nonceAt κ.cta
       let a : Adr := newContAdr κ.cta oldNonce (some salt) i
-
       let runLambda : ΛΘ.Result :=
         let ⟨ωx, Ax, a'⟩ := Λ.prep ωp υ.toAcs κ.cta val i (some salt)
         let κx : Con :=
@@ -1824,18 +1806,16 @@ def exec (vb : Bool): Nat → Wor → Tra → Sta → Mem → Var → Con → Ex
             cta := a', cld := [], cla := κ.cta, clv := val
             code := ByteArray.mk (.mk i), exd := κ.exd - 1 }
         Λ.wrap ωp τ Ax a' <| exec vb lim ωx τ .init #[] (Ax.toVar (gas := createGas)) κx
-
       let lr : ΛΘ.Result :=
         if cond
         then {wor := ω, tra := τ, gas := createGas, acs := υ.toAcs, status := 0, ret := []}
         else runLambda
-
       let ⟨ωf, τf, σf, υf⟩ ← Λ.Result.use σ' υ (interGas - createGas) act' a lr
       exec vb lim ωf τf σf μ υf κ
     | .next (.exec .call) => do
       let (gas, adr, clv, ilc, isz, olc, osz, σ') ← σ.pop7.toExmo υ
       Except.guard (xhs0 υ) (κ.wup ∨ clv = 0)
-      .println vb s!"nested CALL to address : {adr.toHex}"
+      -- .println vb s!"nested CALL to address : {adr.toHex}"
       let ⟨θrf, ⟨ωp, υp, κp⟩, θc⟩ ←
         θ.prep' .all ω τ σ' μ υ κ
           gas adr ilc isz olc osz κ.cta adr.toAdr clv clv κ.wup
@@ -1851,7 +1831,7 @@ def exec (vb : Bool): Nat → Wor → Tra → Sta → Mem → Var → Con → Ex
       exec vb lim ω' τ' σ'' μ' υ' κ
     | .next (.exec .statcall) => do
       let (gas, adr, ilc, isz, olc, osz, σ') ← σ.pop6.toExmo υ
-      .println vb s!"nested STATCALL to address : {adr.toHex}"
+      -- .println vb s!"nested STATCALL to address : {adr.toHex}"
       let ⟨θrf, ⟨ωp, υp, κp⟩, θc⟩ ←
         θ.prep' .onlyAccess ω τ σ' μ υ κ
           gas adr ilc isz olc osz κ.cta adr.toAdr 0 0 false
@@ -1867,7 +1847,7 @@ def exec (vb : Bool): Nat → Wor → Tra → Sta → Mem → Var → Con → Ex
       exec vb lim ω' τ' σ'' μ' υ' κ
     | .next (.exec .callcode) => do
       let (gas, adr, clv, ilc, isz, olc, osz, σ') ← σ.pop7.toExmo υ
-      .println vb s!"nested CALLCODE to address : {adr.toHex}"
+      -- .println vb s!"nested CALLCODE to address : {adr.toHex}"
       let ⟨θrf, ⟨ωp, υp, κp⟩, θc⟩ ←
         θ.prep' .noCreate ω τ σ' μ υ κ
           gas adr ilc isz olc osz κ.cta κ.cta clv clv κ.wup
@@ -1883,7 +1863,7 @@ def exec (vb : Bool): Nat → Wor → Tra → Sta → Mem → Var → Con → Ex
       exec vb lim ω' τ' σ'' μ' υ' κ
     | .next (.exec .delcall) => do
       let (gas, adr, ilc, isz, olc, osz, σ') ← σ.pop6.toExmo υ
-      .println vb s!"nested DELCALL to address : {adr.toHex}"
+      -- .println vb s!"nested DELCALL to address : {adr.toHex}"
       let ⟨θrf, ⟨ωp, υp, κp⟩, θc⟩ ←
         θ.prep' .onlyAccess ω τ σ' μ υ κ
           gas adr ilc isz olc osz κ.cla κ.cta 0 κ.clv κ.wup
@@ -2098,7 +2078,9 @@ def Tx.Result.check (vb : Bool) (xh xl : B256) (xx : Option Exception) : Tx.Resu
     .cprintln vb "log check : pass"
     .cprintln vb "test complete.\n"
 
-def PostData.run (vb : Bool) (td : Test) (idx_pd : Nat × PostData) : IO Unit := do
+
+
+def PostData.runCore (vb : Bool) (td : Test) (idx_pd : Nat × PostData) : IO Unit := do
   .cprintln vb s!"Testing post : {idx_pd.fst}"
   let pd : PostData := idx_pd.snd
   let cd ← (List.get? td.tx.data pd.dataIdx).toIO ""
@@ -2168,34 +2150,53 @@ def PostData.run (vb : Bool) (td : Test) (idx_pd : Nat × PostData) : IO Unit :=
 
   Tx.Result.check vb xh xl xx rst
 
+def PostData.run (vb : Bool) (idx : Option Nat) (td : Test) (idx_pd : Nat × PostData) : IO Unit :=
+  match idx, idx_pd with
+  | none, _ => PostData.runCore vb td idx_pd
+  | some m, ⟨n, _⟩ =>
+    if m = n
+    then PostData.runCore vb td idx_pd
+    else pure ()
+
 def List.putIndex {ξ : Type u} : Nat → List ξ → List (Nat × ξ)
   | _, [] => []
   | k, x :: xs => (k, x) :: List.putIndex (k + 1) xs
 
-def Test.run (vb : Bool) (ts : Test) : IO Unit := do
+def Test.run (vb : Bool) (idx : Option Nat) (ts : Test) : IO Unit := do
   let pds := ts.post
-  let _ ← mapM (PostData.run vb ts) (List.putIndex 0 pds)
+  let _ ← mapM (PostData.run vb idx ts) (List.putIndex 0 pds)
   pure ()
 
-def runTestFileAtPath (vb : Bool) (path : String) : IO Unit := do
+def runTestFileAtPath (vb : Bool) (idx : Option Nat) (path : String) : IO Unit := do
 
   .println "================================================================\n"
 
   .println s!"Testing file : {path}\n"
   let j ← readJsonFile path
   let tds ← j.toTests
-  let _ ← mapM (Test.run vb) tds
+  let _ ← mapM (Test.run vb idx) tds
   pure ()
+
+def getPostIndex : List String → IO (Option Nat)
+  | [] => pure .none
+  | ["--post"] => .throw "invalid post index format"
+  | [_] => pure .none
+  | "--post" :: idx :: _ =>
+    match idx.toNat? with
+    | none => .throw "invalid post index format"
+    | some n => pure (.some n)
+  | _ :: opts => getPostIndex opts
 
 def main : List String → IO Unit
   | path :: opts => do
-    let vb : Bool := List.contains opts "verbose"
+    let vb : Bool := List.contains opts "--verbose"
+    let idx : Option Nat ← getPostIndex opts
     let b ← System.FilePath.isDir path
     if !b
-    then runTestFileAtPath vb path
+    then runTestFileAtPath vb idx path
     else do
       let fs ← System.FilePath.walkDir path
-      let _← mapM (runTestFileAtPath vb) (fs.toList.map System.FilePath.toString)
+      let _← mapM (runTestFileAtPath vb .none) (fs.toList.map System.FilePath.toString)
       pure ()
   -- | [testPath, testNum] => do
   --   let n ← testNum.toNat?.toIO "error : second argument is not a number"
