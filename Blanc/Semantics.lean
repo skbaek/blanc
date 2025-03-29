@@ -226,6 +226,7 @@ structure Adr : Type where
   (high : B32)
   (mid : B64)
   (low : B64)
+deriving DecidableEq
 
 def Adr.ordering : Adr → Adr → Ordering
   | ⟨xh, xm, xl⟩, ⟨yh, ym, yl⟩ =>
@@ -237,7 +238,9 @@ def Adr.ordering : Adr → Adr → Ordering
     | o => o
 
 instance : Ord Adr := ⟨Adr.ordering⟩
+
 abbrev Wor : Type := Lean.RBMap Adr Acct compare
+
 
 structure State where
   -- balance, storage, & code : parts of the world state

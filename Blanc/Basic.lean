@@ -274,10 +274,12 @@ def B64.highBit (x : B64) : Bool := (x &&& 0x8000000000000000) != 0
 def B64.lowBit  (x : B64) : Bool := (x &&& 0x0000000000000001) != 0
 
 def B128 : Type := B64 × B64
+deriving DecidableEq
 
 instance : Inhabited B128 := ⟨⟨0, 0⟩⟩
 
 def B256 : Type := B128 × B128
+deriving DecidableEq
 
 instance : Inhabited B256 := ⟨⟨Inhabited.default, Inhabited.default⟩⟩
 
@@ -2159,9 +2161,13 @@ def B4L.toHex : B8L → String
   | b :: bs => ⟨[b.toHexit] ++ (toHex bs).data⟩
 def IO.throw {ξ} (s : String) : IO ξ := MonadExcept.throw <| IO.Error.userError s
 
-def Hex.from0x : String → IO String
+def IO.remove0x : String → IO String
   | ⟨'0' :: 'x' :: s⟩ => return ⟨s⟩
   | _ => IO.throw "prefix not 0x"
+
+def remove0x : String → String
+  | ⟨'0' :: 'x' :: s⟩ => ⟨s⟩
+  | s => s
 
 def B8s.toB32 (a b c d : B8) : B32 :=
   let a32 : B32 := a.toUInt32
@@ -3035,7 +3041,6 @@ inductive RLP' : Type
   | b8s : B8L → RLP'
   | list : List RLP' → RLP'
 
-
 def B8.toBools (x0 : B8) :
     Bool × Bool × Bool × Bool × Bool × Bool × Bool × Bool :=
   let x1 := x0 <<< 1
@@ -3114,6 +3119,29 @@ mutual
          (0xF7 + lbs.length.toUInt8) :: (lbs ++ bs)
 end
 
-partial def RLP'.toStrings : RLP' → List String
-  | .b8s bs => [s!"0x{bs.toHex}"]
-  | .list rs => "List:" :: (rs.map RLP'.toStrings).flatten.map ("  " ++ ·)
+def List.chunksCore {ξ} (m : Nat) : Nat → List ξ → List (List ξ)
+  | _, [] => []
+  | 0, x :: xs =>
+    match chunksCore m m xs with
+    | [] => [[], [x]]
+    | ys :: yss => [] :: (x :: ys) :: yss
+  | n + 1, x :: xs =>
+    match chunksCore m n xs with
+    | [] => [[x]]
+    | ys :: yss => (x :: ys) :: yss
+
+def List.chunks {ξ} (m : Nat) : List ξ → List (List ξ) := List.chunksCore m (m + 1)
+
+def String.chunks : Nat → String → List String
+  | 0, _ => []
+  | m + 1, s => (List.chunks m s.data).map String.mk
+
+mutual
+  def RLP'.toStrings : RLP' → List String
+    | .b8s bs => fork "[B8L]" [(List.chunks 31 bs).map B8L.toHex]
+    | .list rs => fork "[LIST]" (RLPs'.toStringss rs)
+
+  def RLPs'.toStringss : List RLP' → List (List String)
+    | [] => []
+    | r :: rs => r.toStrings :: RLPs'.toStringss rs
+end

@@ -24,6 +24,7 @@ inductive Exception : Type
   | blobCreation
   | wrongBlobHashVersion
   | initCodeTooLong
+  | nonceTooHigh
 deriving DecidableEq
 
 def Exception.toString : Exception → String
@@ -32,6 +33,7 @@ def Exception.toString : Exception → String
   | blobCreation => "blobCreation"
   | wrongBlobHashVersion => "wrongBlobHashVersion"
   | initCodeTooLong => "initCodeTooLong"
+  | nonceTooHigh => "nonceTooHigh"
 
 instance : ToString Exception := ⟨Exception.toString⟩
 
@@ -79,43 +81,39 @@ def readJsonFile (filename : System.FilePath) : IO Lean.Json := do
   | .ok json => pure json
   | .error err => throw (IO.userError err)
 
+
 mutual
+  partial def StringJson.toStrings : ((_ : String) × Lean.Json) → List String
+    | ⟨n, j⟩ =>
+      --(sj.fst :: Lean.Json.toStrings sj.snd) ++ StringJsons.toStrings sjs
+      (fork n [Lean.Json.toStrings j])
   partial def StringJsons.toStrings : List ((_ : String) × Lean.Json) → List String
     | [] => []
-    | sj :: sjs =>
-      (sj.fst :: Lean.Json.toStrings sj.snd) ++ StringJsons.toStrings sjs
+    | ⟨n, j⟩ :: njs =>
+      --(sj.fst :: Lean.Json.toStrings sj.snd) ++ StringJsons.toStrings sjs
+      (fork n [Lean.Json.toStrings j]) ++ StringJsons.toStrings njs
 
   partial def Lean.Jsons.toStrings : List Lean.Json → List String
     | [] => []
     | j :: js => Lean.Json.toStrings j ++ Lean.Jsons.toStrings js
 
   partial def Lean.Json.toStrings : Lean.Json → List String
-    | .null => ["null"]
-    | .bool b => [s!"bool : {b}"]
-    | .num n => [s!"num : {n}"]
-    | .str s => [s!"str : {s}"]
+    | .null => ["[NULL]"]
+    | .bool b => [s!"[BOOL] {b}"]
+    | .num n => [s!"[NUM] {n}"]
+    | .str s => --[s!"str : {s}"]
+       fork "[STR]" [s.chunks 80]
     | .arr js =>
-      "arr :" :: (Lean.Jsons.toStrings js.toList).map ("  " ++ ·)
+      fork "[ARR]" (js.toList.map Lean.Json.toStrings)
+      --"arr :" :: (Lean.Jsons.toStrings js.toList).map ("  " ++ ·)
     | .obj m => do
       let kvs := m.toArray.toList
-      "obj : " :: (StringJsons.toStrings kvs).map ("  " ++ ·)
+      --"obj : " :: (StringJsons.toStrings kvs).map ("  " ++ ·)
+      fork "[OBJ]" (kvs.map StringJson.toStrings)
 end
 
 def Lean.Json.toString (j : Lean.Json) : String := String.joinln j.toStrings
 
-
-def List.chunksCore {ξ} (m : Nat) : Nat → List ξ → List (List ξ)
-  | _, [] => [[]]
-  | 0, x :: xs =>
-    match chunksCore m m xs with
-    | [] => [[], [x]]
-    | ys :: yss => [] :: (x :: ys) :: yss
-  | n + 1, x :: xs =>
-    match chunksCore m n xs with
-    | [] => [[x]]
-    | ys :: yss => (x :: ys) :: yss
-
-def List.chunks {ξ} (m : Nat) : List ξ → List (List ξ) := List.chunksCore m (m + 1)
 
 def longB8LToStrings (hd : String) (bs : B8L) : List String :=
   match List.chunks 31 bs with
@@ -174,14 +172,11 @@ def Option.toStrings {ξ : Type u} (f : ξ → List String): Option ξ → List 
   | none => ["none"]
   | some x => fork "some" [f x]
 
+def AccessEntry.toStrings : (Adr × List B256) → List String
+  | ⟨a, ks⟩ => fork a.toHex <| ks.map <| fun k => [k.toHex]
+
 def AccessList.toStrings (al : AccessList) : List String :=
-    fork "accessList" <| al.map <|
-      fun
-        | ⟨a, ks⟩ =>
-          fork "accessEntry" [
-            ["address : 0x" ++ a.toHex],
-            fork "keys" <| ks.map <| λ k => ["0x" ++ k.toHex]
-          ]
+    fork "access list" <| al.map <| AccessEntry.toStrings
 
 def TransactionData.toStrings (txd : TransactionData) : List String :=
   let feeToStrings : (B256 ⊕ (B256 × B256)) → List String :=
@@ -279,11 +274,11 @@ def Lean.Json.toPostData : Json → IO PostData
         | "TransactionException.INITCODE_SIZE_EXCEEDED" =>
           pure <| some .initCodeTooLong
         | _ => IO.throw s!"unknown exception : {exStr}"
-    let hsx ← (r.find compare "hash").toIO "cannot retrieve hash bytes" >>= fromStr >>= Hex.from0x
+    let hsx ← (r.find compare "hash").toIO "cannot retrieve hash bytes" >>= fromStr >>= .remove0x
     let hs ← (Hex.toB256? hsx).toIO "cannot convert hash bytes to word"
-    let lgx ← (r.find compare "logs").toIO "cannot get logs bytes" >>= fromStr >>= Hex.from0x
+    let lgx ← (r.find compare "logs").toIO "cannot get logs bytes" >>= fromStr >>= .remove0x
     let lg ← (Hex.toB256? lgx).toIO "cannot convert logs bytes to word"
-    let txx ← (r.find compare "txbytes").toIO "cannot get tx bytes" >>= fromStr >>= Hex.from0x
+    let txx ← (r.find compare "txbytes").toIO "cannot get tx bytes" >>= fromStr >>= .remove0x
     let tx ← (Hex.toB8L txx).toIO "cannot convert tx bytes to word"
     let dgv ← (r.find compare "indexes").toIO "cannot get indexes" >>= Json.fromObj
     let d ← (dgv.find compare "data").toIO "cannot get data" >>= Json.fromNum >>= JsonNumber.toNat
@@ -293,11 +288,11 @@ def Lean.Json.toPostData : Json → IO PostData
   | _ => IO.throw "Json-to-PostData failed"
 
 def Lean.Json.toB8L (j : Json) : IO B8L := do
-  let x ← fromStr j >>= Hex.from0x
+  let x ← fromStr j >>= .remove0x
   (Hex.toB8L x).toIO ""
 
 def Lean.Json.toAdr (j : Json) : IO Adr := do
-  let x ← fromStr j >>= Hex.from0x
+  let x ← fromStr j >>= .remove0x
   (Hex.toAdr x).toIO ""
 
 def Lean.Json.toOptionAdr (j : Json) : IO (Option Adr) := do
@@ -305,18 +300,18 @@ def Lean.Json.toOptionAdr (j : Json) : IO (Option Adr) := do
   match s with
   | "" => pure .none
   | _ => do
-    let s' ← Hex.from0x s
+    let s' ← .remove0x s
     (Hex.toAdr s').toIO ""
 
 def Lean.Json.toAdrs (j : Json) : IO (List Adr) :=
   fromArr j >>= mapM toAdr
 
 def Lean.Json.toB256? (j : Json) : IO B256 := do
-  let x ← fromStr j >>= Hex.from0x
+  let x ← fromStr j >>= .remove0x
   (Hex.toB256? x).toIO ""
 
 def Lean.Json.toB256P (j : Json) : IO B256 := do
-  let x ← fromStr j >>= Hex.from0x
+  let x ← fromStr j >>= .remove0x
   let xs ← (Hex.toB8L x).toIO ""
   return (B8L.toB256P xs)
 
@@ -330,13 +325,13 @@ def Lean.Json.toAccessList (j : Json) : IO AccessList := do
   fromArr j >>= mapM toAccessEntry
 
 def helper (xy :(_ : String) × Lean.Json) : IO (B256 × B256) := do
-  let x ← Hex.from0x xy.fst
+  let x ← .remove0x xy.fst
   let bs ← (Hex.toB8L x).toIO ""
   let bs' ← xy.snd.toB8L
   return ⟨bs.toB256P, bs'.toB256P⟩
 
 def Lean.Json.toPreData (sj : (_ : String) × Json) : IO PreData := do
-  let ax ← Hex.from0x sj.fst
+  let ax ← .remove0x sj.fst
   let a ← (Hex.toAdr ax).toIO ""
   let r ← sj.snd.fromObj
   let b ← (r.find Ord.compare "balance").toIO "" >>= toB8L
@@ -544,6 +539,7 @@ def Lean.RBMap.singleton {ξ υ f} (x : ξ) (y : υ) : RBMap ξ υ f := RBMap.em
 structure Tx : Type where
   (nonce : B256)
   (gasLimit : B256)
+  --(sender : Adr)
   (receiver : Option Adr)
   (val : B256)
   (calldata : B8L)
@@ -551,6 +547,59 @@ structure Tx : Type where
   (r : B8L)
   (s : B8L)
   (type : TxType)
+
+def TxType.toStrings : TxType → List String
+  | zero
+    (gasPrice : B256)
+    (chainId : Option Nat) =>
+    fork "Type-0" [
+      fork "gas price" [[gasPrice.toHex]],
+      fork "chain ID" [[s!"{chainId}"]]
+    ]
+  | two
+    (chainId : Nat)
+    (maxPriorityFee : B256)
+    (maxFee : B256)
+    (accessList : AccessList) =>
+    fork "Type-2" [
+      [s!"chain ID : {chainId}"],
+      [s!"max priority fee : {maxPriorityFee.toHex}"],
+      [s!"max fee : {maxFee.toHex}"],
+      accessList.toStrings
+    ]
+  | three
+    (chainId : Nat)
+    (maxPriorityFee : B256)
+    (maxFee : B256)
+    (accessList : AccessList)
+    (maxBlobFee : B256)
+    (blobHashes : List B256) =>
+    fork "Type-3" [
+      [s!"chain ID : {chainId}"],
+      [s!"max priority fee : {maxPriorityFee.toHex}"],
+      [s!"max fee : {maxFee.toHex}"],
+      accessList.toStrings,
+      [s!"max blob fee : {maxBlobFee.toHex}"],
+      fork "blob hashes" (blobHashes.map <| fun bh => [bh.toHex])
+    ]
+
+
+instance : ToString TxType := ⟨String.joinln ∘ TxType.toStrings⟩
+
+def Tx.toStrings (tx : Tx) : List String :=
+  fork "tx" [
+    [s!"nonce : {tx.nonce.toHex}"],
+    [s!"gas limit : {tx.gasLimit.toHex}"],
+    [s!"receiver : {tx.receiver}"],
+    [s!"value : {tx.val.toHex}"],
+    [s!"calldata : {tx.calldata.toHex}"],
+    [s!"y-parity : {tx.yParity}"],
+    [s!"r : {tx.r.toHex}"],
+    [s!"s : {tx.s.toHex}"],
+    tx.type.toStrings
+  ]
+
+instance : ToString Tx := ⟨String.joinln ∘ Tx.toStrings⟩
 
 def Tx.gasPrice (baseFee : B256) (tx : Tx) : B256 :=
   match tx.type with
@@ -625,6 +674,47 @@ def decodeYParity : B8L → IO Bool
   | [] => pure Bool.false
   | [0x01] => pure Bool.true
   | yp => IO.throw s!"invalid yParity value : {yp.toHex}"
+
+def RLP'.toLegacyTxHash : RLP' → IO (Tx × B256)
+  | RLP'.list [
+      .b8s nonce,
+      .b8s gasPrice,
+      .b8s gasLimit,
+      .b8s receiver,
+      .b8s val,
+      .b8s calldata,
+      .b8s [v],
+      .b8s r,
+      .b8s s
+    ] => do
+    let ⟨yParity, chainId⟩ ← decodeV v
+    let bs :=
+      RLP'.encode <|
+        .list [
+          .b8s nonce,
+          .b8s gasPrice,
+          .b8s gasLimit,
+          .b8s receiver,
+          .b8s val,
+          .b8s calldata
+        ]
+    return ⟨
+      {
+        nonce := nonce.toB256P
+        gasLimit := gasLimit.toB256P
+        receiver := (← receiver.toReceiver)
+        val := val.toB256P
+        calldata := calldata
+        yParity := yParity
+        r := (r.reverse.takeD 32 0).reverse
+        s := (s.reverse.takeD 32 0).reverse
+        type :=
+          .zero gasPrice.toB256P chainId
+      },
+      bs.keccak
+    ⟩
+  | _ => IO.throw "error : cannot RLP-decode for type-0 tx"
+
 
 def decodeTxHash : B8L → IO (Tx × B256)
   | [] => IO.throw "error : cannot decode empty bytes"
@@ -733,9 +823,15 @@ def decodeTxHash : B8L → IO (Tx × B256)
         B8L.keccak (0x02 :: bs)
       ⟩
     | _ => IO.throw "error : cannot RLP-decode for type-3 tx"
-  | bs@(b :: _) =>
+  | bs => do
+    let r ← (RLP'.decode bs).toIO "cannot RLP-decode legacy TX"
+    r.toLegacyTxHash
+
+
+#exit
+  | bs@(b :: _) => do
     if b ≤ 0xF7
-    then IO.throw s!"error : invalid head tx byte : {b.toHex}"
+    then .throw s!"error : invalid head tx byte : {b.toHex}"
     else
       match RLP'.decode bs with
       | RLP'.list [
