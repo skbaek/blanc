@@ -105,7 +105,7 @@ def NTBs.insert (js : NTBs) : B8L → B8L → NTBs
   | n :: ns, bs => js.update (Lean.RBMap.insert · ns bs) n
 
 mutual
-  def nodeComp : Nat → NTB → RLP'
+  def nodeComp : Nat → NTB → BLT
     | 0, _ => .b8s []
     | k + 1, j =>
       if j.isEmpty
@@ -115,7 +115,7 @@ mutual
            then r
            else .b8s <| r.encode.keccak.toB8L
 
-  def structComp : Nat → NTB → RLP'
+  def structComp : Nat → NTB → BLT
     | 0, _ => .b8s []
     | k + 1, j =>
       if j.isEmpty
@@ -143,15 +143,13 @@ def List.maxD {ξ} [Max ξ] : List ξ → ξ → ξ
 
 def NTB.maxKeyLength (j : NTB) : Nat := (j.toList.map (List.length ∘ Prod.fst)).maxD 0
 
-def collapse (j : NTB) : RLP' := structComp (2 * (j.maxKeyLength + 1)) j
+def collapse (j : NTB) : BLT := structComp (2 * (j.maxKeyLength + 1)) j
 
 def trie (j : NTB) : B256 :=
-  let bs := (collapse j).encode
-  bs.keccak
-
+  B8L.keccak <| (collapse j).encode
 
 def B256.keccak (x : B256) : B256 := B8L.keccak <| x.toB8L
-def B256.toRLP (w : B256) : RLP' := .b8s w.toB8L
+def B256.toRLP (w : B256) : BLT := .b8s w.toB8L
 
 def B8L.sig (bs : B8L) : B8L := List.dropWhile (· = 0) bs
 
@@ -160,7 +158,7 @@ def Stor.toNTB (s : Stor) : NTB :=
     λ j k v =>
       j.insert
         k.keccak.toB4s
-        ((RLP'.encode <| .b8s <| B8L.sig <| v.toB8L))
+        ((BLT.encode <| .b8s <| B8L.sig <| v.toB8L))
   Lean.RBMap.fold f NTB.empty s
 
 def B256.zerocount (x : B256) : Nat → Nat
@@ -170,7 +168,7 @@ def B256.zerocount (x : B256) : Nat → Nat
 def B256.bytecount (x : B256) : Nat := 32 - (B256.zerocount x 32)
 
 def Acct.toVal (a : Acct) (w : B256) : B8L :=
-  RLP'.encode <| .list [
+  BLT.encode <| .list [
     .b8s a.nonce.toB8L.sig,
     .b8s a.bal.toB8L.sig,
     B256.toRLP w,
@@ -181,10 +179,9 @@ def toKeyVal (pr : Adr × Acct) : B8L × B8L :=
   let ad := pr.fst
   let ac := pr.snd
   ⟨
-    let key' := ad.toB8L.keccak.toB4s
-    key',
+    ad.toB8L.keccak.toB4s,
     let val' :=
-      RLP'.encode <| .list [
+      BLT.encode <| .list [
         .b8s (ac.nonce.toB8L.sig), --a.nonce,
         .b8s (ac.bal.toB8L.sig), --a.bal,
         B256.toRLP (trie ac.stor.toNTB),
@@ -246,12 +243,17 @@ instance : Inhabited Sta := ⟨⟨.empty, 0⟩⟩
 
 def Mem : Type := Array B8
 
+structure Log : Type where
+  (address : Adr)
+  (topics : List B256)
+  (data : B8L)
+
 structure Acs where
   (dest : List Adr)  -- A_s
   (adrs : AdrSet)    -- A_a
   (keys : KeySet)     -- A_k
   (ref : Nat)         -- A_r
-  (logs : List RLP')  -- A_l
+  (logs : List Log)  -- A_l
   (tchd : AdrSet) -- A_t
 
 instance : Inhabited Acs :=
@@ -276,7 +278,7 @@ structure Var where
   (adrs : AdrSet)    -- A_a
   (keys : KeySet)     -- A_k
   (ref : Nat)         -- A_r
-  (logs : List RLP')  -- A_l
+  (logs : List Log)  -- A_l
   (tchd : AdrSet) -- A_t
 
 def Var.toAcs (υ : Var) : Acs :=
@@ -846,6 +848,11 @@ def sstoreStep (ω : Wor) (σ : Sta) (υ : Var) (κ : Con) :
   let (a : Acct) := (ω.find? κ.cta).getD Acct.empty
   let (v : B256) := ((a.stor.find? x).getD 0)
 
+
+  -- v₀ : orig value at beginning of tx
+  -- v : current value
+  -- v' : new value
+
   let c₀ : Nat := cond (υ.keys.contains ⟨κ.cta, x⟩) 0 gColdSLoad
   let c₁ : Nat :=
     if v = v' ∨ v₀ ≠ v
@@ -853,6 +860,7 @@ def sstoreStep (ω : Wor) (σ : Sta) (υ : Var) (κ : Con) :
     else if v₀ = 0
          then gSSet
          else gSReset
+
   let c : Nat := c₀ + c₁
   let rDirtyClear : Int :=
     if v₀ ≠ 0 ∧ v = 0
@@ -918,7 +926,7 @@ def nextVar (υ : Var) (cost : Nat)
   (act' : Option Nat := none)
   (ret' : B8L := υ.ret)
   (adrs' : AdrSet := υ.adrs)
-  (logs' : List RLP' := υ.logs)
+  (logs' : List Log := υ.logs)
   (keys' : KeySet := υ.keys) : Exmo Var := do
   let gas' ←
     match act' with
@@ -1234,12 +1242,7 @@ def Rinst.run (ω : Wor) (τ : Tra) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) 
     let cost := gLog + (gLogdata * y.toNat) + (n * gLogtopic)
     checkRemGas υ cost act'
     let bs : B8L := μ.sliceD x.toNat y.toNat 0
-    let log : RLP' :=
-      .list [
-        .b8s κ.cta.toB8L,
-        .list (xs.map B256.toRLP),
-        .b8s bs
-      ]
+    let log : Log := ⟨κ.cta,  xs, bs⟩
     let υ' ← nextVar υ cost (act' := act') (logs' := log :: υ.logs)
     .ok ⟨ω, τ, σ', μ, υ'⟩
   | .blockhash => do
@@ -1626,7 +1629,7 @@ def Linst.run (ω : Wor) (τ : Tra) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) 
 def newContAdr (s : Adr) (nc : B256) (ζ : Option B256) (ic : B8L): Adr :=
   let LA : B8L :=
     match ζ with
-    | none => RLP'.encode <| .list [.b8s s.toB8L, .b8s nc.toB8L.sig]
+    | none => BLT.encode <| .list [.b8s s.toB8L, .b8s nc.toB8L.sig]
     | some z => (0xFF : B8) :: (s.toB8L ++ z.toB8L ++ ic.keccak.toB8L)
   (B8L.keccak LA).toAdr
 
@@ -1774,12 +1777,6 @@ def Λ.Result.use
         )
         (act := act')
     .ok ⟨ω', τ', σ', υ'⟩
-
-def IO.cprint (vb : Bool) (s : String) : IO Unit :=
-  cond vb (.print s) (pure ())
-
-def IO.cprintln (vb : Bool) (s : String) : IO Unit :=
-  cond vb (.println s) (pure ())
 
 def Exmo.print (vb : Bool) (s : String) : Exmo Unit :=
   if vb
@@ -2009,9 +2006,22 @@ def publicAddress (hsa : ByteArray) (ri : UInt8) (rsa : ByteArray) : IO Adr :=
     then IO.throw "ecrecover failed"
     else (B8L.toAdr pa).toIO "bytearray to address conversion failed"
 
+
+def mkSingleton {ξ : Type u} : ξ → List ξ
+  | x => [x]
+
+def Log.toStrings (l : Log) : List String :=
+  fork "log" [
+    [s!"address : {l.address.toHex}"],
+    fork "topics" (l.topics.map (mkSingleton ∘ B256.toHex)),
+    fork "data" [String.chunks 64 l.data.toHex]
+  ]
+
+instance : ToString Log := ⟨String.joinln ∘ Log.toStrings⟩
+
 inductive Tx.Result : Type
   | fail : Exception → Tx.Result
-  | pass (Wor : Wor) (gas : Nat) (log : B256) (sta : Bool) : Tx.Result
+  | pass (Wor : Wor) (gas : Nat) (logs : List Log) (sta : Bool) : Tx.Result
 
 def Tx.Result.toStrings : Tx.Result → List String
   | .fail x => [x.toString]
@@ -2019,7 +2029,8 @@ def Tx.Result.toStrings : Tx.Result → List String
     fork "pass" [
       w.toStrings,
       [s!"gas : {g}"],
-      [s!"log hash : {l.toHex}"],
+      --[s!"logs : {l}"],
+      fork "logs" (l.map Log.toStrings),
       [s!"status : {s}"]
     ]
 
@@ -2131,21 +2142,31 @@ def Tx.run
   let w₃ : Wor := List.foldl eraseIfEmpty w₁ tr.acs.tchd.toList
   -- EIP-6780 : delete only accts that did not exist at the beginning of tx
   let ω₄ : Wor := List.foldl (eraseIfNew w) w₃ tr.acs.dest
-  return (.pass ω₄ gasUsed.toNat (RLP'.list tr.acs.logs.reverse).encode.keccak tr.status)
+  return (.pass ω₄ gasUsed.toNat tr.acs.logs.reverse tr.status)
+  -- (BLT.list tr.acs.logs.reverse).encode.keccak
 
 def checkJson (name : String) : IO Unit :=
   if List.IsSuffix ".json".data name.data
   then IO.println s!"json file found : {name}"
   else IO.throw s!"not a json file : {name}"
 
-def Tx.Result.check (vb : Bool) (exRoot exLog : B256)
+def Log.toBLT (l : Log) : BLT :=
+  .list [
+    .b8s l.address.toB8L,
+    .list (l.topics.map B256.toRLP),
+    .b8s l.data
+  ]
+
+def Tx.Result.check (vb : Bool) (exRoot exLogHash : B256)
     (exExcept : Option Exception) : Tx.Result → IO Unit
   | .fail ex => do
     .guard
       (some ex = exExcept)
       s!"exception mismatch, expected : {exExcept}, reported : {ex}"
     .cprintln vb "test complete.\n\n"
-  | .pass wor _ log sta => do
+  | .pass wor _ logs sta => do
+    let logHash := (BLT.list <| logs.map Log.toBLT).encode.keccak
+
     .cprintln vb s!"tx status : {sta}"
     .cprintln vb "world state after tx :"
     .cprintln vb (String.joinln wor.toStrings)
@@ -2155,10 +2176,9 @@ def Tx.Result.check (vb : Bool) (exRoot exLog : B256)
     .guard (root = exRoot)
       s!"root check : fail, computed : {root.toHex}, expected : {exRoot.toHex}"
     .cprintln vb "root check : pass"
-    .guard (log = exLog) "log check : fail"
+    .guard (logHash = exLogHash) "log check : fail"
     .cprintln vb "log check : pass"
     .cprintln vb "test complete.\n"
-
 
 def checkTxDecode (vb : Bool) (tx : Tx) (td : Test) (pd : PostData) (w : Wor) (sender : Adr) : IO Unit := do
 
@@ -2321,6 +2341,10 @@ def Lean.Json.toWorld (j : Lean.Json) : IO Wor := do
   let ob ← j.fromObj
   List.foldlM aux .empty ob.toArray.toList
 
+def Lean.Json.find? : String → Lean.Json → Option Lean.Json
+  | k, .obj r => r.find compare k
+  | _, _ => .none
+
 def Lean.Json.find : String → Lean.Json → IO Lean.Json
   | k, .obj r => (r.find compare k).toIO ""
   | _, _ => .throw ""
@@ -2330,8 +2354,8 @@ def Lean.Json.get? : Nat → Lean.Json → IO Lean.Json
   | _, _ => .throw ""
 
 def Wor.root (w : Wor) : B256 :=
-  let temp' := (List.map toKeyVal w.toList)
-  let finalNTB : NTB := Lean.RBMap.fromList temp' _
+  let keyVals := (List.map toKeyVal w.toList)
+  let finalNTB : NTB := Lean.RBMap.fromList keyVals _
   trie finalNTB
 
 def getPostRoot (j : Lean.Json) : IO B256 := do
@@ -2373,40 +2397,105 @@ def Lean.Json.toTests' (j : Lean.Json) : IO (List Test') := do
   let l := r.toArray.toList
   mapM mkTest' l
 
-instance : ToString RLP' := ⟨String.joinln ∘ RLP'.toStrings⟩
+instance : ToString BLT := ⟨String.joinln ∘ BLT.toStrings⟩
 
-def RLP'.toB8L : RLP' → Option B8L
+def BLT.toB8L : BLT → Option B8L
   | .b8s xs => some xs
   | _ => .none
 
-def RLP'.get? : Nat → RLP' → Option RLP'
+def BLT.get? : Nat → BLT → Option BLT
   | k, .list rs => rs.get? k
   | _, _ => .none
-
 
 def setupAdr : Adr := 0x000F3DF6D732807EF1319FB7B8BB8522D0BEAC02
 def setupKey : B256 := 1000 --0x03E8
 
+def toKeyVal' (pr : B8L × B8L) : B8L × B8L :=
+  let ad := pr.fst
+  let ac := pr.snd
+  ⟨B8L.toB4s ad, ac⟩
 
-def Tx.Result.check' (vb : Bool) (exRoot : B256) --(exRoot exLog : B256) (exExcept : Option Exception)
-    : Tx.Result → IO Unit
-  | .fail _ => do
-    --.guard
-    --  (some ex = exExcept)
-    --  s!"exception mismatch, expected : {exExcept}, reported : {ex}"
-    --.cprintln vb "test complete.\n\n"
-    .throw "unimplemented : check fail case"
-  | .pass w g l s => do
+def receiptRoot (w : List (B8L × B8L)) : B256 :=
+  let keyVals : List (B8L × B8L) := (List.map toKeyVal' w)
+  let finalNTB : NTB := Lean.RBMap.fromList keyVals _
+  trie finalNTB
 
-    .cprintln vb s!"receit arg (gas) : {g}"
-    .cprintln vb s!"receit arg (logs) : {l}"
+def addIndexToBloom (hash : B8L) (index : Nat) (bloom : B8L) : B8L :=
+  let bitToSet : B16 :=
+    (B8s.toB16 (hash.getD index 0) (hash.getD (index + 1) 0)) &&& (0x07FF : B16)
+  let bitIndex : B16 := 0x07FF - bitToSet
+  let byteIndex : Nat := (bitIndex / 8).toNat
+  let bitValue : B8 := 0x01 <<< (0x07 - (bitIndex.lows &&& 0x07))
+  let origValue : B8 := bloom.getD byteIndex 0
+  bloom.set byteIndex (origValue ||| bitValue)
 
+def addEntryToBloom (bloom : B8L) (entry : B8L) : B8L :=
+  let hash := (B8L.keccak entry).toB8L
+  addIndexToBloom hash 4 <|
+  addIndexToBloom hash 2 <|
+  addIndexToBloom hash 0 bloom
+
+def addLogToBloom (bloom : B8L) (log : Log) : B8L :=
+  let bloom' := addEntryToBloom bloom log.address.toB8L
+  List.foldl addEntryToBloom bloom' (log.topics.map B256.toB8L)
+
+
+def Bool.toB8L : Bool → B8L
+  | .false => []
+  | .true => [0x01]
+
+def Tx.Result.check' (vb : Bool) (tx : Tx) (exBloom : B8L)
+    (exRcRoot : B256) (exRoot : B256) : Option Exception → Tx.Result → IO Unit
+  | .some ex, .fail ex' => do
+    .check vb (ex = ex')
+      "exception check : pass"
+      s!"ERROR : expected exception = {ex}, computed exception = {ex'}"
+    .cprintln vb "test complete.\n"
+  | .none, .fail ex => .throw s!"ERROR : expected exception = none, computed exception = {ex}"
+  | .some ex, _ => .throw s!"ERROR : expected exception = {ex}, computed exception = none"
+  | .none, .pass w g l s => do
+
+    let bloom : B8L := List.foldl addLogToBloom (List.replicate 256 0x00) l
+
+    .check vb (exBloom = bloom)
+      "bloom check : PASS\n"
+      s!"bloom check : FAIL\nexpected : {exBloom.toHex}\ncomputed : {bloom.toHex}\n"
+
+    let receipt_rlp : BLT := .list [
+      .b8s s.toB8L, -- tx status (equals 0x01 if it gets to this point)
+      .b8s (g.toB8L),
+      .b8s bloom,
+      .list (l.map Log.toBLT)
+    ]
+
+    let receipt_header : B8L :=
+      match tx.type with
+      | .zero _ _ => []
+      | .two _ _ _ _ => [0x02]
+      | .three _ _ _ _ _ _ => [0x03]
+
+    let receipt : B8L := receipt_header ++ receipt_rlp.encode
+    let rcRoot : B256 := receiptRoot [⟨[0x80], receipt⟩]
+
+    .check vb (rcRoot = exRcRoot)
+      "receipt root check : pass"
+      s!"receipt root check : fail\nexpected : {exRcRoot.toHex}\ncomputed : {rcRoot.toHex}"
+
+    .cprintln vb "\n\n"
     .cprintln vb s!"tx status : {s}"
     .cprint vb "terminal world :"
     .cprintln vb (String.joinln w.toStrings)
-    .guard (w.storAt setupAdr 1000 = 0) ""
-    let w' := w.setStor setupAdr 1000 1000
-    .guard (w'.root = exRoot) ""
+
+    let setupVal := w.storAt setupAdr 1000
+    .guard (setupVal = 0) s!"setup address has nonzero value stored at position 1000 : {setupVal}"
+
+    -- let w' := w.setStor setupAdr 1000 1000
+    let w' := w.setStor setupAdr 0xf2 1687174231
+
+
+    .check vb (w'.root = exRoot)
+      "state root check : PASS\n"
+      s!"state root check : fail\nexpected : {exRoot.toHex}\ncomputed : {w'.root.toHex}"
 
 
     --let temp' := (List.map toKeyVal wor.toList)
@@ -2419,39 +2508,115 @@ def Tx.Result.check' (vb : Bool) (exRoot : B256) --(exRoot exLog : B256) (exExce
     --.cprintln vb "log check : pass"
     .cprintln vb "test complete.\n"
 
-def decodeTxRLP' : RLP' → IO (Tx × Adr)
-  | .b8s xs => decodeTxBytes xs
+def decodeTxBLT : BLT → IO (Tx × B8L × Adr)
+  | .b8s xs => do
+    let ⟨tx, sender⟩ ← decodeTxBytes xs
+    pure ⟨tx, xs, sender⟩
   | .list l => do
-    let ⟨tx, hs⟩ ← RLP'.toLegacyTxHash <| .list l
+    let r : BLT := .list l
+    let ⟨tx, hs⟩ ← r.toLegacyTxHash
     let sender ← getSender tx hs
-    return ⟨tx, sender⟩
+    return ⟨tx, r.encode, sender⟩
+
+structure Withdrawal : Type where
+  (globalIndex : B64)
+  (validatorIndex : B64)
+  (recipient : Adr)
+  (amount : B256)
+
+def Withdrawal.toStrings (wd : Withdrawal) : List String :=
+  fork "withdrawal" [
+    [s!"global index : 0x{wd.globalIndex.toHex}"],
+    [s!"validator index : 0x{wd.validatorIndex.toHex}"],
+    [s!"recipient : 0x{wd.recipient.toHex}"],
+    [s!"amount : 0x{wd.amount.toHex}"]
+  ]
+
+instance : ToString Withdrawal := ⟨String.joinln ∘ Withdrawal.toStrings⟩
+
+def Withdrawal.toBLT (w : Withdrawal) : BLT :=
+  .list [
+    .b8s w.globalIndex.toB8L,
+    .b8s w.validatorIndex.toB8L,
+    .b8s w.recipient.toB8L,
+    .b8s w.amount.toB8L
+  ]
+
+def checkTransactionsRoot (vb : Bool) (txbs : B8L) (root : B256) (txr : Tx.Result) : IO Unit :=
+  let root' : B256 :=
+    match txr with
+    | .fail _ => receiptRoot []
+    | .pass _ _ _ _ => receiptRoot [⟨[0x80], txbs⟩]
+  .check vb (root = root')
+    "Transactions trie root check : PASS\n"
+    s!"Transactions trie root check : FAIL, expected : {root.toHex}, computed : {root'.toHex}"
+
+def checkWithdrawalsRoot (vb : Bool) (wds : List Withdrawal) (wr : B256) : IO Unit :=
+  let aux : (ℕ × Withdrawal) → (B8L × B8L) :=
+    fun | ⟨idx, wd⟩ => ⟨idx.toB8LNil, wd.toBLT.encode⟩
+  let temp : List (B8L × B8L) := (wds.putIndex 0).map aux
+  let wr' := receiptRoot temp
+  .check vb (wr = wr')
+    "withdrawals check : PASS\n"
+    s!"withdrawals check : FAIL, withdrawals : {wds}"
+
+def getExceptionMap (j : Lean.Json) : IO (Option Exception × Lean.Json) := do
+  match j.find? "expectException" with
+  | .none => pure ⟨.none, j⟩
+  | .some exj => do
+    let exs ← exj.fromStr
+    let ex ← (parseException exs).toIO ""
+    let j' ← j.find "rlp_decoded"
+    pure ⟨.some ex, j'⟩
+
+-- def getMainMap : Lean.Json → IO Lean.Json
+--   | .obj r => (r.find compare "rlp_decoded" <|> pure (.obj r)).toIO ""
+--   | _ => .throw ""
+
+
+def getBlockHeader : Lean.Json → Option Lean.Json
+  | .obj r =>
+    r.find compare "blockHeader" <|>
+    ( do let (.obj r') ← r.find compare "rlp_decoded" | .none
+         r'.find compare "blockHeader" )
+  | _ => .none
+
+def Lean.Json.toWithdrawal (j : Lean.Json) : IO Withdrawal :=
+  .throw "unimplemented : json-to-withdrawal parsing"
+
+#check Lean.Json.fromArr
 
 def runPyTest (vb : Bool) (t : Test') : IO Unit := do
   .cprintln vb "----------------------------------------------------------------"
   .println s!"Running test : {t.name}"
 
-  -- let grlp_str ← Lean.Json.fromStr t.grlp >>= .remove0x
-  -- let grlp ← (Hex.toB8L grlp_str >>= RLP'.decode).toIO ""
-  -- .println s!"GRLP : {grlp}"
+  let [blk] ← t.blocks.fromArr | .throw "error : multiple blocks"
 
-  let bh ← t.blocks.get? 0 >>= Lean.Json.find "blockHeader"
+  let ⟨ex, mm⟩ ← getExceptionMap blk
 
+
+  let bh ← (getBlockHeader mm).toIO ""
+  let wds ← Lean.Json.find "withdrawals" mm >>= Lean.Json.fromArr >>= mapM Lean.Json.toWithdrawal
+  let bloom ← bh.find "bloom" >>= Lean.Json.toB8L
   let bf ← bh.find "baseFeePerGas" >>= Lean.Json.toB256P
   let xbg ← bh.find "excessBlobGas" >>= Lean.Json.toB256P
   let cb ← bh.find "coinbase" >>= Lean.Json.toAdr
-  let pr ← bh.find "difficulty" >>= Lean.Json.toB256P
+  let pr ← bh.find "mixHash" >>= Lean.Json.toB256P
   let gl ← bh.find "gasLimit" >>= Lean.Json.toB256P
   let ts ← bh.find "timestamp" >>= Lean.Json.toB256P
   let nb ← bh.find "number" >>= Lean.Json.toB256P
+  let txRoot ← bh.find "transactionsTrie" >>= Lean.Json.toB256P
+  let exRcRoot ← bh.find "receiptTrie" >>= Lean.Json.toB256P
+  let wdRoot ← bh.find "withdrawalsRoot" >>= Lean.Json.toB256P
+
+  checkWithdrawalsRoot vb wds wdRoot
 
   let rlp_str ← t.blocks.get? 0 >>= Lean.Json.find "rlp" >>= Lean.Json.fromStr >>= .remove0x
-
-  let rlp ← (Hex.toB8L rlp_str >>= RLP'.decode).toIO ""
-  let tx_rlp ← (rlp.get? 1 >>= RLP'.get? 0).toIO ""
-
+  let rlp ← (Hex.toB8L rlp_str >>= BLT.decode).toIO ""
+  let tx_rlp ← (rlp.get? 1 >>= BLT.get? 0).toIO ""
   let w ← Lean.Json.toWorld t.pre
 
-  let blk : BlockInfo :=
+  let bi : BlockInfo :=
     {
       blockHashes := [],
       baseFee := bf
@@ -2463,19 +2628,14 @@ def runPyTest (vb : Bool) (t : Test') : IO Unit := do
       number := nb
     }
 
-  -- let txbs ← (RLP'.toB8L tx_rlp).toIO ""
-  -- let ⟨tx, sender⟩ ← decodeTxBytes txbs
+  let ⟨tx, txbs, sender⟩ ← decodeTxBLT tx_rlp
 
-  let ⟨tx, sender⟩ ← decodeTxRLP' tx_rlp
 
-  let txr ← Tx.run vb blk w tx sender
+  let txr ← Tx.run vb bi w tx sender
 
-  --let wx ← Lean.Json.toWorld t.post
-  --.cprint vb s!"\nterminal world (expected) :"
-  --.cprintln vb s!"{wx}"
+  checkTransactionsRoot vb txbs txRoot txr
 
-  Tx.Result.check' vb t.postRoot txr
-
+  Tx.Result.check' vb tx bloom exRcRoot t.postRoot ex txr
 
 
 def runPyTestFile (vb : Bool) (path : String) : IO Unit := do
@@ -2486,11 +2646,8 @@ def runPyTestFile (vb : Bool) (path : String) : IO Unit := do
   let _ ← mapM (runPyTest vb) ts
 
 def main : List String → IO Unit
-  --| [path] => do
-  --  runPyTest path
   | path :: opts => do
     let vb : Bool := List.contains opts "--verbose"
-    --let idx : Option Nat ← getPostIndex opts
     let b ← System.FilePath.isDir path
     if !b
     then runPyTestFile vb path
@@ -2500,21 +2657,20 @@ def main : List String → IO Unit
       pure ()
   | _ => IO.throw "error : invalid arguments"
 
-
 #exit
 
-def main : List String → IO Unit
-  | path :: opts => do
-    let vb : Bool := List.contains opts "--verbose"
-    let idx : Option Nat ← getPostIndex opts
-    let b ← System.FilePath.isDir path
-    if !b
-    then runTestFileAtPath vb idx path
-    else do
-      let fs ← System.FilePath.walkDir path
-      let _← mapM (runTestFileAtPath vb .none) (fs.toList.map System.FilePath.toString)
-      pure ()
-  | [] => IO.throw "error : no arguments"
+-- def main : List String → IO Unit
+--   | path :: opts => do
+--     let vb : Bool := List.contains opts "--verbose"
+--     let idx : Option Nat ← getPostIndex opts
+--     let b ← System.FilePath.isDir path
+--     if !b
+--     then runTestFileAtPath vb idx path
+--     else do
+--       let fs ← System.FilePath.walkDir path
+--       let _← mapM (runTestFileAtPath vb .none) (fs.toList.map System.FilePath.toString)
+--       pure ()
+--   | [] => IO.throw "error : no arguments"
 
 
 

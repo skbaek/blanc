@@ -258,6 +258,14 @@ def Lean.Json.fromSingleton : Lean.Json → IO (String × Lean.Json)
   | .obj (.node _ .leaf k v .leaf) => return ⟨k, v⟩
   | j => IO.throw s!"non-singleton JSON : {j}"
 
+def parseException : String → Option Exception
+  | "TransactionException.TYPE_3_TX_ZERO_BLOBS" => some .noBlobs
+  | "TransactionException.TYPE_3_TX_BLOB_COUNT_EXCEEDED" => some .tooManyBlobs
+  | "TransactionException.TYPE_3_TX_CONTRACT_CREATION" => some .blobCreation
+  | "TransactionException.TYPE_3_TX_INVALID_BLOB_VERSIONED_HASH" => some .wrongBlobHashVersion
+  | "TransactionException.INITCODE_SIZE_EXCEEDED" => some .initCodeTooLong
+  | _ => .none
+
 def Lean.Json.toPostData : Json → IO PostData
   | .obj r => do
     let ex : Option Exception ←
@@ -265,15 +273,18 @@ def Lean.Json.toPostData : Json → IO PostData
       | none => pure none
       | some j => do
         let exStr ← fromStr j
-        match exStr with
-        | "TransactionException.TYPE_3_TX_ZERO_BLOBS" => pure <| some .noBlobs
-        | "TransactionException.TYPE_3_TX_BLOB_COUNT_EXCEEDED" => pure <| some .tooManyBlobs
-        | "TransactionException.TYPE_3_TX_CONTRACT_CREATION" => pure <| some .blobCreation
-        | "TransactionException.TYPE_3_TX_INVALID_BLOB_VERSIONED_HASH" =>
-          pure <| some .wrongBlobHashVersion
-        | "TransactionException.INITCODE_SIZE_EXCEEDED" =>
-          pure <| some .initCodeTooLong
-        | _ => IO.throw s!"unknown exception : {exStr}"
+        match parseException exStr with
+        | .some exc => pure (.some exc)
+        | .none => .throw s!"unknown exception : {exStr}"
+        -- match exStr with
+        -- | "TransactionException.TYPE_3_TX_ZERO_BLOBS" => pure <| some .noBlobs
+        -- | "TransactionException.TYPE_3_TX_BLOB_COUNT_EXCEEDED" => pure <| some .tooManyBlobs
+        -- | "TransactionException.TYPE_3_TX_CONTRACT_CREATION" => pure <| some .blobCreation
+        -- | "TransactionException.TYPE_3_TX_INVALID_BLOB_VERSIONED_HASH" =>
+        --   pure <| some .wrongBlobHashVersion
+        -- | "TransactionException.INITCODE_SIZE_EXCEEDED" =>
+        --   pure <| some .initCodeTooLong
+        -- | _ => IO.throw s!"unknown exception : {exStr}"
     let hsx ← (r.find compare "hash").toIO "cannot retrieve hash bytes" >>= fromStr >>= .remove0x
     let hs ← (Hex.toB256? hsx).toIO "cannot convert hash bytes to word"
     let lgx ← (r.find compare "logs").toIO "cannot get logs bytes" >>= fromStr >>= .remove0x
@@ -375,7 +386,6 @@ def Lean.Json.toPreDatas (j : Lean.Json) : IO (List PreData) := do
 def Lean.Json.toPost (j : Lean.Json) : IO (List PostData) := do
   let r ← j.fromObj
   let j' ← (r.find Ord.compare "Cancun").toIO "no Cancun"
-  -- let ⟨k, j'⟩ ← j.fromSingleton
   let l ← j'.fromArr
   let js ← mapM Lean.Json.toPostData l
   return js
@@ -539,7 +549,6 @@ def Lean.RBMap.singleton {ξ υ f} (x : ξ) (y : υ) : RBMap ξ υ f := RBMap.em
 structure Tx : Type where
   (nonce : B256)
   (gasLimit : B256)
-  --(sender : Adr)
   (receiver : Option Adr)
   (val : B256)
   (calldata : B8L)
@@ -630,26 +639,28 @@ def Tx.blobHashes (tx : Tx) : List B256 :=
   | .two _ _ _ _ => []
   | .three _ _ _ _ _ bhs => bhs
 
-def RLP'.toAdr : RLP' → Option Adr
+def BLT.toAdr : BLT → Option Adr
   | .b8s bs => bs.toAdr
   | _ => none
 
-def RLP'.toB256 : RLP' → Option B256
+def BLT.toB256 : BLT → Option B256
   | .b8s bs => some bs.toB256P
   | _ => none
 
-def RLP'.toAccessEntry : RLP' → Option (Adr × List B256)
+def BLT.toAccessEntry : BLT → Option (Adr × List B256)
   | .list [.b8s ar, .list ksr] => do
     let a ← B8L.toAdr ar
     let ks ← mapM toB256 ksr
     pure ⟨a, ks⟩
   | _ => none
 
-def RLP'.toAccessList : RLP' → Option AccessList
+def BLT.toAccessList : BLT → Option AccessList
   | .list rs => mapM toAccessEntry rs
   | _ => none
 
-def RLP'.toString (r : RLP') : String := String.join r.toStrings
+-- def BLT.toString (r : BLT) : String := String.join r.toStrings
+
+instance : ToString BLT := ⟨String.joinln ∘ BLT.toStrings⟩
 
 def B8L.toReceiver : B8L → IO (Option Adr)
   | [] => pure .none
@@ -675,8 +686,8 @@ def decodeYParity : B8L → IO Bool
   | [0x01] => pure Bool.true
   | yp => IO.throw s!"invalid yParity value : {yp.toHex}"
 
-def RLP'.toLegacyTxHash : RLP' → IO (Tx × B256)
-  | RLP'.list [
+def BLT.toLegacyTxHash : BLT → IO (Tx × B256)
+  | BLT.list [
       .b8s nonce,
       .b8s gasPrice,
       .b8s gasLimit,
@@ -689,7 +700,7 @@ def RLP'.toLegacyTxHash : RLP' → IO (Tx × B256)
     ] => do
     let ⟨yParity, chainId⟩ ← decodeV v
     let bs :=
-      RLP'.encode <|
+      BLT.encode <|
         .list [
           .b8s nonce,
           .b8s gasPrice,
@@ -720,8 +731,8 @@ def decodeTxHash : B8L → IO (Tx × B256)
   | [] => IO.throw "error : cannot decode empty bytes"
   | 0x01 :: _ => IO.throw "unimplemented : Type-1 tx decoding"
   | 0x02 :: tbs =>
-    match RLP'.decode tbs with
-    | RLP'.list [
+    match BLT.decode tbs with
+    | BLT.list [
         .b8s chainId,
         .b8s nonce,
         .b8s maxPriorityFee,
@@ -736,7 +747,7 @@ def decodeTxHash : B8L → IO (Tx × B256)
         .b8s s
       ] => do
       let bs : B8L :=
-        RLP'.encode <|
+        BLT.encode <|
           .list [
             .b8s chainId,
             .b8s nonce,
@@ -748,6 +759,7 @@ def decodeTxHash : B8L → IO (Tx × B256)
             .b8s calldata,
             accessList
           ]
+
       return ⟨
         {
           nonce := nonce.toB256P
@@ -769,8 +781,8 @@ def decodeTxHash : B8L → IO (Tx × B256)
       ⟩
     | _ => IO.throw "error : cannot decode type-2 tx"
   | 0x03 :: tbs =>
-    match RLP'.decode tbs with
-    | RLP'.list [
+    match BLT.decode tbs with
+    | BLT.list [
         .b8s chainId,
         .b8s nonce,
         .b8s maxPriorityFee,
@@ -787,7 +799,7 @@ def decodeTxHash : B8L → IO (Tx × B256)
         .b8s s
       ] => do
       let bs : B8L :=
-        RLP'.encode <|
+        BLT.encode <|
           .list [
             .b8s chainId,
             .b8s nonce,
@@ -820,11 +832,12 @@ def decodeTxHash : B8L → IO (Tx × B256)
               maxBlobFee.toB256P
               (← mapM (λ r => r.toB256.toIO "") blobHashes)
         },
-        B8L.keccak (0x02 :: bs)
+        B8L.keccak (0x03 :: bs)
+        -- B8L.keccak (0x03 :: bs)
       ⟩
     | _ => IO.throw "error : cannot RLP-decode for type-3 tx"
   | bs => do
-    let r ← (RLP'.decode bs).toIO "cannot RLP-decode legacy TX"
+    let r ← (BLT.decode bs).toIO "cannot RLP-decode legacy TX"
     r.toLegacyTxHash
 
 
@@ -833,8 +846,8 @@ def decodeTxHash : B8L → IO (Tx × B256)
     if b ≤ 0xF7
     then .throw s!"error : invalid head tx byte : {b.toHex}"
     else
-      match RLP'.decode bs with
-      | RLP'.list [
+      match BLT.decode bs with
+      | BLT.list [
           .b8s nonce,
           .b8s gasPrice,
           .b8s gasLimit,
@@ -847,7 +860,7 @@ def decodeTxHash : B8L → IO (Tx × B256)
         ] => do
         let ⟨yParity, chainId⟩ ← decodeV v
         let bs :=
-          RLP'.encode <|
+          BLT.encode <|
             .list [
               .b8s nonce,
               .b8s gasPrice,

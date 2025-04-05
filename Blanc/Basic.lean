@@ -2169,6 +2169,11 @@ def remove0x : String → String
   | ⟨'0' :: 'x' :: s⟩ => ⟨s⟩
   | s => s
 
+def B8s.toB16 (a b : B8) : B16 :=
+  let a16 : B16 := a.toUInt16
+  let b16 : B16 := b.toUInt16
+  (a16 <<< 8) ||| b16
+
 def B8s.toB32 (a b c d : B8) : B32 :=
   let a32 : B32 := a.toUInt32
   let b32 : B32 := b.toUInt32
@@ -2251,8 +2256,17 @@ def B8L.toB8V (xs : B8L) (n : Nat) : Vec B8 n :=
 
 def B8L.toB256P (xs : B8L) : B256 := B8V.toB256 (xs.toB8V 32)
 
+def IO.cprint (vb : Bool) (s : String) : IO Unit :=
+  cond vb (.print s) (pure ())
+
+def IO.cprintln (vb : Bool) (s : String) : IO Unit :=
+  cond vb (.println s) (pure ())
+
 def IO.guard (φ : Prop) [Decidable φ] (msg : String) : IO Unit :=
   if φ then return () else IO.throw msg
+
+def IO.check (vb : Bool) (φ : Prop) [Decidable φ] (msgPass msgFail : String) : IO Unit :=
+  if φ then IO.cprint vb msgPass else IO.throw msgFail
 
 def Array.writeD {ξ : Type u} (xs : Array ξ) (n : ℕ) : List ξ → Array ξ
   | [] => xs
@@ -2315,7 +2329,9 @@ def B64.toB4s (x : B64) : List B8 := x.highs.toB4s ++ x.lows.toB4s
 def B128.toB4s (x : B128) : List B8 := x.1.toB4s ++ x.2.toB4s
 def B256.toB4s (x : B256) : List B8 := x.1.toB4s ++ x.2.toB4s
 
-
+def B8L.toB4s : B8L → B8L
+  | [] => []
+  | x :: xs => x.toB4s ++ B8L.toB4s xs
 
 ------------------------------KECCAK------------------------------
 
@@ -2952,7 +2968,12 @@ def Nat.toB8LCore (n : Nat) : B8L :=
   if n < 256
   then [n.toUInt8]
   else (n % 256).toUInt8 :: (n / 256).toB8LCore
+
 def Nat.toB8L (n : Nat) : B8L := n.toB8LCore.reverse
+
+def Nat.toB8LNil : Nat → B8L
+  | 0 => []
+  | n => n.toB8L
 
 
 
@@ -3035,11 +3056,11 @@ partial def RLP.toStrings : RLP → List String
   | .list rs => "List:" :: (rs.map RLP.toStrings).flatten.map ("  " ++ ·)
 
 
--------------------------------- RLP' --------------------------------
+-------------------------------- BLT --------------------------------
 
-inductive RLP' : Type
-  | b8s : B8L → RLP'
-  | list : List RLP' → RLP'
+inductive BLT : Type
+  | b8s : B8L → BLT
+  | list : List BLT → BLT
 
 def B8.toBools (x0 : B8) :
     Bool × Bool × Bool × Bool × Bool × Bool × Bool × Bool :=
@@ -3054,7 +3075,7 @@ def B8.toBools (x0 : B8) :
     x4.highBit, x5.highBit, x6.highBit, x7.highBit ⟩
 
 mutual
-  def RLP'.decode' : Nat → B8L → Option (RLP' × B8L)
+  def BLT.decode' : Nat → B8L → Option (BLT × B8L)
     | _, [] => none
     | 0, _ :: _ => none
     | k + 1, b :: bs =>
@@ -3076,21 +3097,21 @@ mutual
       let rs ← RLPs'.decode k rbs
       return ⟨.list rs, bs'⟩
 
-  def RLPs'.decode : Nat → B8L → Option (List RLP')
+  def RLPs'.decode : Nat → B8L → Option (List BLT)
     | _, [] => some []
     | 0, _ :: _ => none
     | k + 1, bs@(_ :: _) => do
-      let (r, bs') ← RLP'.decode' (k + 1) bs
+      let (r, bs') ← BLT.decode' (k + 1) bs
       let rs ← RLPs'.decode k bs'
       return (r :: rs)
 end
 
-def RLP'.decode (bs : B8L) : Option RLP' :=
-  match RLP'.decode' bs.length bs with
+def BLT.decode (bs : B8L) : Option BLT :=
+  match BLT.decode' bs.length bs with
   | some (r, []) => some r
   | _ => none
 
-def RLP'.encodeBytes : B8L → B8L
+def BLT.encodeBytes : B8L → B8L
   | [b] => if b < (0x80) then [b] else [0x81, b]
   | bs =>
     if bs.length < 56
@@ -3099,7 +3120,7 @@ def RLP'.encodeBytes : B8L → B8L
          (0xB7 + lbs.length.toUInt8) :: (lbs ++ bs)
 
 mutual
-  def RLP'.encode : RLP' → B8L
+  def BLT.encode : BLT → B8L
     | .b8s [b] => if b < (0x80) then [b] else [0x81, b]
     | .b8s bs =>
       if bs.length < 56
@@ -3107,10 +3128,10 @@ mutual
       else let lbs : B8L := bs.length.toB8L
            (0xB7 + lbs.length.toUInt8) :: (lbs ++ bs)
     | .list rs => RLPs'.encode rs
-  def RLPs'.encodeMap : List RLP' → B8L
+  def RLPs'.encodeMap : List BLT → B8L
     | .nil => []
     | .cons r rs => r.encode ++ RLPs'.encodeMap rs
-  def RLPs'.encode (rs : List RLP') : B8L :=
+  def RLPs'.encode (rs : List BLT) : B8L :=
     let bs := RLPs'.encodeMap rs
     let len := bs.length
     if len < 56
@@ -3137,11 +3158,11 @@ def String.chunks : Nat → String → List String
   | m + 1, s => (List.chunks m s.data).map String.mk
 
 mutual
-  def RLP'.toStrings : RLP' → List String
+  def BLT.toStrings : BLT → List String
     | .b8s bs => fork "[B8L]" [(List.chunks 31 bs).map B8L.toHex]
     | .list rs => fork "[LIST]" (RLPs'.toStringss rs)
 
-  def RLPs'.toStringss : List RLP' → List (List String)
+  def RLPs'.toStringss : List BLT → List (List String)
     | [] => []
     | r :: rs => r.toStrings :: RLPs'.toStringss rs
 end
