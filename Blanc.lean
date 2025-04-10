@@ -488,7 +488,7 @@ def getInst (υ : Var) (κ : Con)  : Option Inst' :=
                (getInstAux κ.code υ.pc len  1)
                (getInstAux κ.code υ.pc len  0)
            some (.next <| .push x len)
-      else dbg_trace s!"undefined opcode : {b}"
+      else -- dbg_trace s!"undefined opcode : {b}"
            none
     )
   else some (.last .stop)
@@ -540,12 +540,17 @@ def Acct.empty : Acct :=
 
 def Wor.get (w : Wor) (a : Adr) : Acct := (w.find? a).getD .empty
 
-def Wor.codeAt (w : Wor) (a : Adr) : ByteArray :=
-  (w.get a).code
+def Wor.codeAt (w : Wor) (a : Adr) : ByteArray := (w.get a).code
+
+
+
 
 def Wor.nonceAt (w : Wor) (a : Adr) : B256 := (w.get a).nonce
 def Wor.balAt (w : Wor) (a : Adr) : B256 := (w.get a).bal
-def Wor.storAt (w : Wor) (a : Adr) (k : B256) : B256 := (w.get a).stor.findD k 0
+def Wor.storEntryAt (w : Wor) (a : Adr) (k : B256) : B256 := (w.get a).stor.findD k 0
+
+def Wor.storIsEmptyAt (w : Wor) (a : Adr) : Bool := (w.get a).stor.isEmpty
+
 
 def gNewAccount : Nat := 25000
 def gCallValue : Nat := 9000
@@ -647,8 +652,6 @@ def Acct.Erasable (ac : Acct) : Prop :=
 
 instance {ac : Acct} : Decidable ac.Erasable := instDecidableAnd
 
-#check Stor
-
 def Wor.set (w : Wor) (a : Adr) (ac : Acct) : Wor :=
   if ac.Erasable then w.erase a else w.insert a ac
 
@@ -740,8 +743,10 @@ def A_star (H : BlockInfo) (ST : Adr) (Tt : Option Adr) (TA : AccessList) : Acs 
 def Stor.set (s : Stor) (k v : B256) : Stor :=
   if v = 0 then s.erase k else s.insert k v
 
+
+
 def Sta.pop1 : Sta → Option (B256 × Sta)
-  | ⟨xs, n + 1⟩ =>do
+  | ⟨xs, n + 1⟩ => do
     let x ← xs.get? n
     some ⟨x, xs, n⟩
   | _ => none
@@ -803,6 +808,15 @@ def Sta.pop7 : Sta → Option (B256 × B256 × B256 × B256 × B256 × B256 × B
     some ⟨a, b, c, d, e, f, g, xs, n⟩
   | _ => none
 
+def Sta.toListCore : Array B256 → Nat → Option (List B256)
+  | _, 0 => .some []
+  | arr, n + 1 => do
+    let x ← arr.get? n
+    let xs ← Sta.toListCore arr n
+    .some (x :: xs)
+
+def Sta.toList (s : Sta) : Option (List B256) := Sta.toListCore s.fst s.snd
+
 def Sta.push1 : Sta → B256 → Option Sta
   | ⟨xs, n⟩, x => do
     guard (n < 1024)
@@ -850,18 +864,27 @@ def sstoreStep (ω : Wor) (σ : Sta) (υ : Var) (κ : Con) :
 
 
   -- v₀ : orig value at beginning of tx
+  dbg_trace s!"orig : {v₀}"
   -- v : current value
+  dbg_trace s!"current : {v}"
   -- v' : new value
+  dbg_trace s!"new : {v'}"
 
-  let c₀ : Nat := cond (υ.keys.contains ⟨κ.cta, x⟩) 0 gColdSLoad
+  let c₀ : Nat :=
+    cond (υ.keys.contains ⟨κ.cta, x⟩)
+      (dbg_trace "WARM LOAD" ; 0)
+      (dbg_trace "COLD LOAD" ; gColdSLoad)
   let c₁ : Nat :=
     if v = v' ∨ v₀ ≠ v
-    then gWarmAccess
+    then (dbg_trace "WARM ACCESS" ; gWarmAccess)
     else if v₀ = 0
-         then gSSet
-         else gSReset
+         then (dbg_trace "v₀ = 0" ; gSSet)
+         else (dbg_trace "v₀ ≠ 0" ; gSReset)
 
   let c : Nat := c₀ + c₁
+
+  dbg_trace s!"SSTORE COST : {c}"
+
   let rDirtyClear : Int :=
     if v₀ ≠ 0 ∧ v = 0
     then (- rSClear)
@@ -1417,17 +1440,19 @@ def showLim (vb : Bool) (lim : Nat) (m : Var) : Exmo Unit :=
 -- Tstor
 -- Pstor
 
+#check List.map
 def showStep (vb :Bool) (σ : Sta) (υ : Var) (κ : Con) (i : Inst') : Exmo Unit :=
   if vb
   then let σ_fmt : List B256 := σ.fst.toList
        -- dbg_trace s!"step(pc({υ.pc}), gas({υ.gas}), inst({i.toString}), stack({σ_fmt}))."
-       -- dbg_trace s!"step(pc({υ.pc}), gas({υ.gas}), inst(\"{i.toString}\"), stack({σ.fst.toList.take 2}) depth({κ.exd}))."
-       dbg_trace s!"step(pc({υ.pc}), gas({υ.gas}), inst(\"{i.toString}\"), depth({κ.exd}))."
+       dbg_trace s!"step(pc({υ.pc}), gas({υ.gas}), inst(\"{i.toString}\"), stack({σ.toList <&> (List.map B256.toNat)}) depth({κ.exd}))."
+       -- dbg_trace s!"step(pc({υ.pc}), gas({υ.gas}), inst(\"{i.toString}\"), depth({κ.exd}))."
        return ()
   else return ()
 
 def Nat.secp256k1n : Nat := 15792089237316195423570985008687907852837564279074904382605163141518161494337
-def B256.secp256k1n : B256 := 0x22EA0179500526EDB610F148EC0C6140101661783F76003BBFD25E8CD0364141
+def B256.secp256k1n : B256 := --0x22EA0179500526EDB610F148EC0C6140101661783F76003BBFD25E8CD0364141
+                              0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
 
 def execEcrec (ω : Wor) (τ : Tra) (υ : Var) (κ : Con) : ΞR :=
   match safeSub υ.gas 3000 with
@@ -1441,13 +1466,23 @@ def execEcrec (ω : Wor) (τ : Tra) (υ : Var) (κ : Con) : ΞR :=
       | _ => none
     let r := B8L.toB256P <| κ.cld.sliceD 64 32 (0x00 : B8)
     let s := B8L.toB256P <| κ.cld.sliceD 96 32 (0x00 : B8)
+
+    dbg_trace s!"ECREC HASH : {h}"
+    dbg_trace s!"ECREC ARG V : {v.get!}"
+    dbg_trace s!"ECREC ARG R : {r}"
+    dbg_trace s!"ECREC ARG S : {s}"
+
     let o : B8L :=
       if v.isNone ∨ r = 0 ∨ r ≥ .secp256k1n ∨ s = 0 ∨ s ≥ .secp256k1n
-      then []
+      then (dbg_trace "exception detected, abort precomp-1 (ECREC)" ; [])
       else
         match ecrecover h v.get! r s with
         | none => []
-        | some rcv => B256.toB8L <| Adr.toB256 rcv
+        | some rcv =>
+          (
+            dbg_trace "ECREC RESULT : {rcv.toHex}" ;
+            B256.toB8L (Adr.toB256 rcv)
+          )
     {wt := some ⟨ω, τ⟩, gas := g', acs := υ.toAcs, ret := some o}
 
 def execSha (ω : Wor) (τ : Tra) (υ : Var) (κ : Con) : ΞR :=
@@ -1634,10 +1669,6 @@ def newContAdr (s : Adr) (nc : B256) (ζ : Option B256) (ic : B8L): Adr :=
   (B8L.keccak LA).toAdr
 
 
--- def lambda (ω : Wor) (κ : Con) (A : Acs) (g : Nat)
---     (val : B256) (ic : B8L) (ζ : Option B256) : Exmo ΛΘ.Result :=
-
-
 /-
 lambda-def  : Λ(σ,  A, s,  o,  g,      p,  v,      i, e,      ζ, w  )
 lambda-call : Λ(σ∗, A, Ia, Io, L(μ_g), Ip, μ_s[0], i, Ie + 1, ζ, I_w)
@@ -1700,13 +1731,15 @@ def Λ.wrapCore (ω : Wor) (τ : Tra) (A_star : Acs) (a : Adr) (xr : ΞR) : ΛΘ
   let c : Nat :=
     -- if `xr.ret = None`, value of `c` doesn't matter, but
     -- we use getD here to get a placeholder that typechecks
-    gCodedeposit * o.length
+    if xr.wt.isNone then 0 else gCodedeposit * o.length
   let F : Prop :=
-    (ω.nonceAt a ≠ 0) ∨ !(ω.codeAt a).isEmpty ∨
+    (ω.nonceAt a ≠ 0) ∨
+    !(ω.codeAt a).isEmpty ∨
+    !ω.storIsEmptyAt a ∨
     xr.ret.isNone ∨ -- YP definition is `xr.wor.isNone ∧ xr.ret.isNone`,
-                     -- but left conjunct is implied by right and superfluous;
-                     -- YP's of `X` function shows that `xr.ret.isNone` only
-                     -- in XHS, in which case also `xr.wor.isNone`.
+                    -- but left conjunct is implied by right and superfluous;
+                    -- YP's of `X` function shows that `xr.ret.isNone` only
+                    -- in XHS, in which case also `xr.wor.isNone`.
     xr.gas < c ∨
     24576 < o.length ∨
     o.head? = some 0xEF
@@ -1733,15 +1766,15 @@ def Λ.wrapCore (ω : Wor) (τ : Tra) (A_star : Acs) (a : Adr) (xr : ΞR) : ΛΘ
     status :=
     if F
     then (
-           dbg_trace
-             (
-               if (ω.nonceAt a ≠ 0) then "nonce ≠ 0; " else "" ++
-               if !(ω.codeAt a).isEmpty then "empty code; " else "" ++
-               if  xr.ret.isNone then "ret is none; " else "" ++
-               if xr.gas < c then s!"gas(:={xr.gas}) < c(:={c}); " else "" ++
-               if 24576 < o.length then "24576 < ||o||; " else "" ++
-               if o.head? = some 0xEF then "head = 0xEF" else ""
-             );
+           -- dbg_trace
+           --   (
+           --     if (ω.nonceAt a ≠ 0) then "nonce ≠ 0; " else "" ++
+           --     if !(ω.codeAt a).isEmpty then "empty code; " else "" ++
+           --     if  xr.ret.isNone then "ret is none; " else "" ++
+           --     if xr.gas < c then s!"gas(:={xr.gas}) < c(:={c}); " else "" ++
+           --     if 24576 < o.length then "24576 < ||o||; " else "" ++
+           --     if o.head? = some 0xEF then "head = 0xEF" else ""
+           --   );
            0
          )
     else if xr.wt.isNone then 0 else 1
@@ -1769,12 +1802,7 @@ def Λ.Result.use
       Acs.toVar A'
         (gas := g + g')
         (pc := υ.pc + 1)
-        (
-          ret :=
-            if z = 1
-            then (dbg_trace "lambda status is 1, setting RET to empty" ; [])
-            else (dbg_trace "lambda status is NOT 1, relaying output"; o)
-        )
+        (ret := if z = 1 then [] else o)
         (act := act')
     .ok ⟨ω', τ', σ', υ'⟩
 
@@ -1802,6 +1830,8 @@ def exec (vb : Bool): Nat → Wor → Tra → Sta → Mem → Var → Con → Ex
       let initCodeCost : Nat := gInitcodeword * (ceilDiv code_sz.toNat 32)
       let ⟨act', mc⟩ := memExpCost υ code_loc code_sz
       let interGas ← deductGas υ <| initCodeCost + mc + gCreate
+
+      dbg_trace s!"CREATE INTERGAS : {interGas}"
 
       if (ω.nonceAt κ.cta).toNat < maxNonce
       then let createGas := except64th interGas
@@ -1837,6 +1867,7 @@ def exec (vb : Bool): Nat → Wor → Tra → Sta → Mem → Var → Con → Ex
 
       if (ω.nonceAt κ.cta).toNat < maxNonce
       then let createGas := except64th interGas
+           let remGas := interGas - createGas
            let cond : Prop := 0 = κ.exd ∨ (ω.get κ.cta).bal < val
            let ωp := ω.incrNonce κ.cta
            let oldNonce : B256 := ω.nonceAt κ.cta
@@ -1852,7 +1883,7 @@ def exec (vb : Bool): Nat → Wor → Tra → Sta → Mem → Var → Con → Ex
              if cond
              then {wor := ω, tra := τ, gas := createGas, acs := υ.toAcs, status := 0, ret := []}
              else runLambda
-           let ⟨ωf, τf, σf, υf⟩ ← Λ.Result.use σ' υ (interGas - createGas) act' a lr
+           let ⟨ωf, τf, σf, υf⟩ ← Λ.Result.use σ' υ remGas act' a lr
            exec vb lim ωf τf σf μ υf κ
       else let σf ← (σ'.push1 0).toExcept (xhs υ)
            let υf := {υ with pc := υ.pc + 1, gas := interGas, act := act'}
@@ -1951,7 +1982,7 @@ def theta
   (v_app : B256)
   (d : B8L)
   (e : Nat)
-  (w : Bool) : Option ΛΘ.Result :=
+  (w : Bool) : ΛΘ.Result :=
   let ⟨ω?, υ?, κ?⟩ := θ.prep ω₀ H bhs ci ω A s o r c g p v v_app d e w
   let xs :=
     if (0 < c.toNat ∧ c.toNat < 10)
@@ -1978,8 +2009,9 @@ def lambda
   (i : B8L)
   (e : Nat)
   (ζ : Option B256)
-  (w : Bool) : Option ΛΘ.Result := do
+  (w : Bool) : ΛΘ.Result := --do
   let ⟨ω', A', a⟩ := Λ.prep ω A s v i ζ
+  dbg_trace s!"create-tx detected, new acc address : 0x{a.toHex}"
   let κ : Con :=
     {
       blk := H
@@ -2052,22 +2084,107 @@ def eraseIfNew (ω₀ ω : Wor) (a : Adr) : Wor :=
   | none => ω.erase a
   | some _ => ω
 
+def Stx.run
+  (vb : Bool) (blk : BlockInfo)
+  (w : Wor) (tx : Stx) : IO Tx.Result := do
+
+  IO.guard (tx.gasLimit ≤ blk.gasLimit) "error : block gas limit < tx gas limit"
+
+  let gIntrinsic : Nat :=
+    intrinsicGas tx.receiver tx.calldata tx.type.accessList
+  let g : Nat := tx.gasLimit.toNat - gIntrinsic
+
+  let blobCount : B256 := tx.blobHashes.length.toB256
+
+  let .true ← IO.decide (¬ tx.type.isBlobTx ∨ tx.receiver.isSome) | pure (Tx.Result.fail .blobCreation)
+  let .true ← IO.decide (¬ tx.type.isBlobTx ∨ blobCount > 0) | pure (Tx.Result.fail .noBlobs)
+  let .true ← IO.decide (blobCount < 7) | pure (Tx.Result.fail .tooManyBlobs)
+  let .true ← IO.decide (tx.blobHashes.Forall correctBlobHashVersion)
+    | pure (Tx.Result.fail .wrongBlobHashVersion)
+  let .false ← IO.decide (tx.receiver.isNone ∧ maxInitcodeSize < tx.calldata.length)
+    | pure (Tx.Result.fail .initCodeTooLong)
+
+  let .true ← IO.decide ((w.nonceAt tx.sender).toNat < maxNonce) | pure (Tx.Result.fail .nonceTooHigh)
+
+  let totalBlobGas : B256 := (gasPerBlob * blobCount)
+
+  let blobGasPrice : B256 :=
+    Nat.toB256 <| get_base_fee_per_blob_gas blk.excessBlobGas.toNat
+
+  let cpVal : B256 :=
+    (tx.gasLimit * tx.type.gasPrice blk.baseFee) + (totalBlobGas * blobGasPrice)
+  let w' ← (checkpoint w tx.sender cpVal).toIO "checkpoint creation failed"
+
+  let tr : ΛΘ.Result :=
+    match tx.receiver with
+    | none =>
+        lambda vb
+          blk
+          w
+          tx.blobHashes
+          tx.type.chainId.toB256
+          w'
+          .empty
+          (A_star blk tx.sender tx.receiver tx.type.accessList)
+          tx.sender
+          tx.sender
+          g
+          (tx.type.gasPrice blk.baseFee).toNat
+          tx.val
+          tx.calldata
+          1024
+          none
+          true
+    | some rcvr =>
+        theta vb
+          blk
+          w
+          tx.blobHashes
+          tx.type.chainId.toB256
+          w'
+          .empty
+          (A_star blk tx.sender tx.receiver tx.type.accessList)
+          tx.sender
+          tx.sender
+          rcvr
+          rcvr
+          g
+          (tx.type.gasPrice blk.baseFee).toNat
+          tx.val
+          tx.val
+          tx.calldata
+          1024
+          true
+
+  let gasLeft : Nat := tr.gas
+  let refundAmount : Nat := tr.acs.ref
+  let gasReturn : B256 :=
+    Nat.toB256 (gasLeft + min ((tx.gasLimit.toNat - gasLeft) / 5) refundAmount) -- g*
+  let gasUsed : B256 := tx.gasLimit - gasReturn
+  let valReturn : B256 := gasReturn * (tx.type.gasPrice blk.baseFee)
+  let f : B256 := (tx.type.gasPrice blk.baseFee) - blk.baseFee
+  let w₀ : Wor := tr.wor.addBal tx.sender valReturn
+  let w₁ : Wor := w₀.addBal blk.beneficiary (gasUsed * f)
+  let w₃ : Wor := List.foldl eraseIfEmpty w₁ tr.acs.tchd.toList
+  -- EIP-6780 : delete only accts that did not exist at the beginning of tx
+  let ω₄ : Wor := List.foldl (eraseIfNew w) w₃ tr.acs.dest
+  return (.pass ω₄ gasUsed.toNat tr.acs.logs.reverse tr.status)
+  -- (BLT.list tr.acs.logs.reverse).encode.keccak
+
 def Tx.run
-  (vb : Bool)
-  (blk : BlockInfo)
-  -- (bhs : List B256)
+  (vb : Bool) (blk : BlockInfo)
   (w : Wor) (tx : Tx) (sender : Adr) : IO Tx.Result := do
 
   IO.guard (tx.gasLimit ≤ blk.gasLimit) "error : block gas limit < tx gas limit"
 
   let gIntrinsic : Nat :=
-    intrinsicGas tx.receiver tx.calldata tx.accessList
+    intrinsicGas tx.receiver tx.calldata tx.type.accessList
   let g : Nat := tx.gasLimit.toNat - gIntrinsic
 
   let blobCount : B256 := tx.blobHashes.length.toB256
 
-  let .true ← IO.decide (¬ tx.isBlobTx ∨ tx.receiver.isSome) | pure (Tx.Result.fail .blobCreation)
-  let .true ← IO.decide (¬ tx.isBlobTx ∨ blobCount > 0) | pure (Tx.Result.fail .noBlobs)
+  let .true ← IO.decide (¬ tx.type.isBlobTx ∨ tx.receiver.isSome) | pure (Tx.Result.fail .blobCreation)
+  let .true ← IO.decide (¬ tx.type.isBlobTx ∨ blobCount > 0) | pure (Tx.Result.fail .noBlobs)
   let .true ← IO.decide (blobCount < 7) | pure (Tx.Result.fail .tooManyBlobs)
   let .true ← IO.decide (tx.blobHashes.Forall correctBlobHashVersion)
     | pure (Tx.Result.fail .wrongBlobHashVersion)
@@ -2082,61 +2199,57 @@ def Tx.run
     Nat.toB256 <| get_base_fee_per_blob_gas blk.excessBlobGas.toNat
 
   let cpVal : B256 :=
-    (tx.gasLimit * tx.gasPrice blk.baseFee) + (totalBlobGas * blobGasPrice)
+    (tx.gasLimit * tx.type.gasPrice blk.baseFee) + (totalBlobGas * blobGasPrice)
   let w' ← (checkpoint w sender cpVal).toIO "checkpoint creation failed"
 
-  let tr : ΛΘ.Result ←
+  let tr : ΛΘ.Result :=
     match tx.receiver with
     | none =>
-      (
         lambda vb
           blk
           w
           tx.blobHashes
-          tx.chainId.toB256
+          tx.type.chainId.toB256
           w'
           .empty
-          (A_star blk sender tx.receiver tx.accessList)
+          (A_star blk sender tx.receiver tx.type.accessList)
           sender
           sender
           g
-          (tx.gasPrice blk.baseFee).toNat
+          (tx.type.gasPrice blk.baseFee).toNat
           tx.val
           tx.calldata
           1024
           none
           true
-      ).toIO "lambda failed"
     | some rcvr =>
-      (
         theta vb
           blk
           w
           tx.blobHashes
-          tx.chainId.toB256
+          tx.type.chainId.toB256
           w'
           .empty
-          (A_star blk sender tx.receiver tx.accessList)
+          (A_star blk sender tx.receiver tx.type.accessList)
           sender
           sender
           rcvr
           rcvr
           g
-          (tx.gasPrice blk.baseFee).toNat
+          (tx.type.gasPrice blk.baseFee).toNat
           tx.val
           tx.val
           tx.calldata
           1024
           true
-      ).toIO "theta failed"
 
   let gasLeft : Nat := tr.gas
   let refundAmount : Nat := tr.acs.ref
   let gasReturn : B256 :=
     Nat.toB256 (gasLeft + min ((tx.gasLimit.toNat - gasLeft) / 5) refundAmount) -- g*
   let gasUsed : B256 := tx.gasLimit - gasReturn
-  let valReturn : B256 := gasReturn * (tx.gasPrice blk.baseFee)
-  let f : B256 := (tx.gasPrice blk.baseFee) - blk.baseFee
+  let valReturn : B256 := gasReturn * (tx.type.gasPrice blk.baseFee)
+  let f : B256 := (tx.type.gasPrice blk.baseFee) - blk.baseFee
   let w₀ : Wor := tr.wor.addBal sender valReturn
   let w₁ : Wor := w₀.addBal blk.beneficiary (gasUsed * f)
   let w₃ : Wor := List.foldl eraseIfEmpty w₁ tr.acs.tchd.toList
@@ -2201,7 +2314,7 @@ def checkTxDecode (vb : Bool) (tx : Tx) (td : Test) (pd : PostData) (w : Wor) (s
   .guard (tx.gasLimit = gl) s!"gas limit check failed."
   .cprintln vb "gas limit check : pass"
 
-  .guard (tx.gasPrice td.env.baseFee = td.tx.gasPrice td.env.baseFee) "gas price check : fail"
+  .guard (tx.type.gasPrice td.env.baseFee = td.tx.gasPrice td.env.baseFee) "gas price check : fail"
   .cprintln vb "gas price check : pass"
 
   .guard (tx.val = vl) "value check : fail"
@@ -2215,9 +2328,17 @@ def checkTxDecode (vb : Bool) (tx : Tx) (td : Test) (pd : PostData) (w : Wor) (s
 
 def getSender (tx : Tx) (hs : B256) : IO Adr := do
   let rsa : ByteArray := ⟨Array.mk (tx.r ++ tx.s)⟩
-  let hsa : ByteArray := ⟨Array.mk hs.toB8L⟩
   let ri : UInt8 := Byte.toB8 (if tx.yParity then 1 else 0)
-  publicAddress hsa ri rsa
+  let hsa : ByteArray := ⟨Array.mk hs.toB8L⟩
+
+  .println s!"publicAddress arg : rsa : {B8L.toHex rsa.toList}"
+  .println s!"publicAddress arg : ri : {ri}"
+  .println s!"publicAddress arg : hsa : {B8L.toHex hsa.toList}"
+
+  let a ← publicAddress hsa ri rsa
+
+  .println s!"publicAddress retrieved : {a.toHex}"
+  pure a
 
 def decodeTxBytes (txbs : B8L) : IO (Tx × Adr) := do
   let ⟨tx, hs⟩ ← decodeTxHash txbs
@@ -2289,6 +2410,10 @@ def getPostIndex : List String → IO (Option Nat)
     | some n => pure (.some n)
   | _ :: opts => getPostIndex opts
 
+inductive XWS : Type
+  | wor : Wor → XWS
+  | root : B256 → XWS
+
 structure Test' where
   (name : String)
   (info : Lean.Json)
@@ -2298,7 +2423,8 @@ structure Test' where
   (lbh : Lean.Json)
   (network : Lean.Json)
   (pre : Lean.Json)
-  (postRoot : B256)
+  -- (postRoot : B256)
+  (post : XWS)
   (sealEngine : Lean.Json)
 
 def Test'.toStrings (t : Test') : List String :=
@@ -2311,7 +2437,7 @@ def Test'.toStrings (t : Test') : List String :=
     fork "lastblockhash" [t.lbh.toStrings],
     fork "network" [t.network.toStrings],
     fork "pre" [t.pre.toStrings],
-    [s!"postRoot {t.postRoot.toHex}"],
+    --[s!"postRoot {t.postRoot.toHex}"],
     fork "sealEngine" [t.sealEngine.toStrings]
   ]
 
@@ -2358,6 +2484,17 @@ def Wor.root (w : Wor) : B256 :=
   let finalNTB : NTB := Lean.RBMap.fromList keyVals _
   trie finalNTB
 
+def getXWS (j : Lean.Json) : IO XWS := do
+  let r ← j.fromObj
+  match r.find compare "postState" with
+  | some wj => do --hj.toB256?
+    let w ← Lean.Json.toWorld wj
+    pure (.wor w)
+  | .none => do
+    let hj ← j.find "postStateHash"
+    let h ← hj.toB256?
+    pure (.root h)
+
 def getPostRoot (j : Lean.Json) : IO B256 := do
   let r ← j.fromObj
   match r.find compare "postStateHash" with
@@ -2377,8 +2514,8 @@ def mkTest' : ((_ : String) × Lean.Json) → IO Test'
     let lbh ← j.find "lastblockhash"
     let network ← j.find "network"
 
-    --let post ← j.find "postState"
-    let postRoot ← getPostRoot j -- j.find "postState"
+    --let postRoot ← getPostRoot j -- j.find "postState"
+    let xws ← getXWS j -- j.find "postState"
 
     let pre ← j.find "pre"
     let sealEngine ← j.find "sealEngine"
@@ -2389,7 +2526,7 @@ def mkTest' : ((_ : String) × Lean.Json) → IO Test'
     -- let post ← (r.find compare "post").toIO "" >>= Lean.Json.toPost
     -- let tx ← (r.find compare "transaction").toIO "" >>= Lean.Json.toTransactionData
     -- return ⟨name, info, env, pre, post, tx⟩
-    return ⟨name, info, blocks, gbh, grlp, lbh, network, pre, postRoot, sealEngine⟩
+    return ⟨name, info, blocks, gbh, grlp, lbh, network, pre, xws, sealEngine⟩
     --return ⟨name, [info, blocks, gbh, grlp, lbh, network, pre, post, sealEngine]⟩
 
 def Lean.Json.toTests' (j : Lean.Json) : IO (List Test') := do
@@ -2444,6 +2581,72 @@ def Bool.toB8L : Bool → B8L
   | .false => []
   | .true => [0x01]
 
+
+def Stx.Result.check' (vb : Bool) (tx : Stx) (exBloom : B8L)
+    (exRcRoot : B256) (exRoot : XWS) : Option Exception → Tx.Result → IO Unit
+  | .some ex, .fail ex' => do
+    .check vb (ex = ex')
+      "exception check : pass"
+      s!"ERROR : expected exception = {ex}, computed exception = {ex'}"
+    .cprintln vb "test complete.\n"
+  | .none, .fail ex => .throw s!"ERROR : expected exception = none, computed exception = {ex}"
+  | .some ex, _ => .throw s!"ERROR : expected exception = {ex}, computed exception = none"
+  | .none, .pass w g l s => do
+
+    let bloom : B8L := List.foldl addLogToBloom (List.replicate 256 0x00) l
+
+    .check vb (exBloom = bloom)
+      "bloom check : PASS\n"
+      s!"bloom check : FAIL\nexpected : {exBloom.toHex}\ncomputed : {bloom.toHex}\n"
+
+    let receipt_rlp : BLT := .list [
+      .b8s s.toB8L, -- tx status (equals 0x01 if it gets to this point)
+      .b8s (g.toB8L),
+      .b8s bloom,
+      .list (l.map Log.toBLT)
+    ]
+
+    let receipt_header : B8L :=
+      match tx.type with
+      | .zero _ _ => []
+      | .two _ _ _ _ => [0x02]
+      | .three _ _ _ _ _ _ => [0x03]
+
+    let receipt : B8L := receipt_header ++ receipt_rlp.encode
+    let rcRoot : B256 := receiptRoot [⟨[0x80], receipt⟩]
+
+    .check vb (rcRoot = exRcRoot)
+      "receipt root check : pass"
+      s!"receipt root check : fail\nexpected : {exRcRoot.toHex}\ncomputed : {rcRoot.toHex}"
+
+    .cprintln vb "\n\n"
+    .cprintln vb s!"tx status : {s}"
+    .cprint vb "terminal world :"
+    .cprintln vb (String.joinln w.toStrings)
+
+    let setupVal := w.storEntryAt setupAdr 1000
+    .guard (setupVal = 0) s!"setup address has nonzero value stored at position 1000 : {setupVal}"
+
+    -- let w' := w.setStor setupAdr 1000 1000
+    -- let w' := w.setStor setupAdr 0xf2 1687174231
+
+
+    match exRoot with
+    | .wor xw => do
+      let w' := w.set setupAdr .empty
+      let xw' := xw.set setupAdr .empty
+      .check vb (xw'.root = w'.root)
+        "state root check : PASS\n"
+        s!"state root check : FAIL\nexpected : {xw'.root.toHex}\ncomputed : {w'.root.toHex}\n(complete expected/computed world states available)"
+      .cprintln vb "test complete.\n"
+      .cprintln vb "test complete.\n"
+    | .root xr => do
+      let w' := w.setStor setupAdr 1000 1000
+      .check vb (w'.root = xr)
+        "state root check : PASS\n"
+        s!"state root check : fail\nexpected : {xr.toHex}\ncomputed : {w'.root.toHex}"
+      .cprintln vb "test complete.\n"
+
 def Tx.Result.check' (vb : Bool) (tx : Tx) (exBloom : B8L)
     (exRcRoot : B256) (exRoot : B256) : Option Exception → Tx.Result → IO Unit
   | .some ex, .fail ex' => do
@@ -2486,7 +2689,7 @@ def Tx.Result.check' (vb : Bool) (tx : Tx) (exBloom : B8L)
     .cprint vb "terminal world :"
     .cprintln vb (String.joinln w.toStrings)
 
-    let setupVal := w.storAt setupAdr 1000
+    let setupVal := w.storEntryAt setupAdr 1000
     .guard (setupVal = 0) s!"setup address has nonzero value stored at position 1000 : {setupVal}"
 
     -- let w' := w.setStor setupAdr 1000 1000
@@ -2497,15 +2700,6 @@ def Tx.Result.check' (vb : Bool) (tx : Tx) (exBloom : B8L)
       "state root check : PASS\n"
       s!"state root check : fail\nexpected : {exRoot.toHex}\ncomputed : {w'.root.toHex}"
 
-
-    --let temp' := (List.map toKeyVal wor.toList)
-    --let finalNTB : NTB := Lean.RBMap.fromList temp' _
-    --let root : B256 := trie finalNTB
-    --.guard (root = exRoot)
-    --  s!"root check : fail, computed : {root.toHex}, expected : {exRoot.toHex}"
-    --.cprintln vb "root check : pass"
-    --.guard (log = exLog) "log check : fail"
-    --.cprintln vb "log check : pass"
     .cprintln vb "test complete.\n"
 
 def decodeTxBLT : BLT → IO (Tx × B8L × Adr)
@@ -2517,6 +2711,17 @@ def decodeTxBLT : BLT → IO (Tx × B8L × Adr)
     let ⟨tx, hs⟩ ← r.toLegacyTxHash
     let sender ← getSender tx hs
     return ⟨tx, r.encode, sender⟩
+
+def Tx.toStx (tx : Tx) (s : Adr) : Stx :=
+  {
+    nonce := tx.nonce
+    gasLimit := tx.gasLimit
+    sender := s
+    receiver := tx.receiver
+    val := tx.val
+    calldata := tx.calldata
+    type := tx.type
+  }
 
 structure Withdrawal : Type where
   (globalIndex : B64)
@@ -2584,7 +2789,6 @@ def getBlockHeader : Lean.Json → Option Lean.Json
 def Lean.Json.toWithdrawal (j : Lean.Json) : IO Withdrawal :=
   .throw "unimplemented : json-to-withdrawal parsing"
 
-#check Lean.Json.fromArr
 
 def runPyTest (vb : Bool) (t : Test') : IO Unit := do
   .cprintln vb "----------------------------------------------------------------"
@@ -2628,14 +2832,15 @@ def runPyTest (vb : Bool) (t : Test') : IO Unit := do
       number := nb
     }
 
-  let ⟨tx, txbs, sender⟩ ← decodeTxBLT tx_rlp
+  let ⟨txFoo, txbs, sender⟩ ← decodeTxBLT tx_rlp
 
+  let stx := Tx.toStx txFoo sender
 
-  let txr ← Tx.run vb bi w tx sender
+  let txr ← Stx.run vb bi w stx
 
   checkTransactionsRoot vb txbs txRoot txr
 
-  Tx.Result.check' vb tx bloom exRcRoot t.postRoot ex txr
+  Stx.Result.check' vb stx bloom exRcRoot t.post ex txr
 
 
 def runPyTestFile (vb : Bool) (path : String) : IO Unit := do

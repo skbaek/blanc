@@ -557,6 +557,15 @@ structure Tx : Type where
   (s : B8L)
   (type : TxType)
 
+structure Stx : Type where
+  (nonce : B256)
+  (gasLimit : B256)
+  (sender : Adr)
+  (receiver : Option Adr)
+  (val : B256)
+  (calldata : B8L)
+  (type : TxType)
+
 def TxType.toStrings : TxType → List String
   | zero
     (gasPrice : B256)
@@ -610,34 +619,32 @@ def Tx.toStrings (tx : Tx) : List String :=
 
 instance : ToString Tx := ⟨String.joinln ∘ Tx.toStrings⟩
 
-def Tx.gasPrice (baseFee : B256) (tx : Tx) : B256 :=
-  match tx.type with
+def TxType.gasPrice (baseFee : B256) : TxType → B256
   | .zero gp _ => gp
   | .two _ mpf mf _ => min mf (baseFee + mpf)
   | .three _ mpf mf _ _ _ => min mf (baseFee + mpf)
 
-def Tx.chainId (tx : Tx) : Nat :=
-  match tx.type with
+def TxType.chainId : TxType → Nat
   | .zero _ cid => cid.getD 1
   | .two cid _ _ _ => cid
   | .three cid _ _ _ _ _ => cid
 
-def Tx.accessList (tx : Tx) : AccessList :=
-  match tx.type with
+def TxType.accessList : TxType → AccessList
   | .zero _ _ => []
   | .two _ _ _ al => al
   | .three _ _ _ al _ _ => al
 
-def Tx.isBlobTx (tx : Tx) : Bool :=
-  match tx.type with
+def TxType.isBlobTx : TxType → Bool
   | .three _ _ _ _ _ _ => 1
   | _ => 0
 
-def Tx.blobHashes (tx : Tx) : List B256 :=
-  match tx.type with
+def TxType.blobHashes : TxType → List B256
   | .zero _ _ => []
   | .two _ _ _ _ => []
   | .three _ _ _ _ _ bhs => bhs
+
+def Stx.blobHashes (tx : Stx) : List B256 := tx.type.blobHashes
+def Tx.blobHashes (tx : Tx) : List B256 := tx.type.blobHashes
 
 def BLT.toAdr : BLT → Option Adr
   | .b8s bs => bs.toAdr
