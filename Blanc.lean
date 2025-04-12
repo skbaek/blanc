@@ -7,6 +7,9 @@ import «Blanc».TestParse
 @[extern "ecrecover_flag"]
 opaque ecrecoverFlag : ByteArray → UInt8 → ByteArray → ByteArray
 
+@[extern "rip160"]
+opaque rip160 : ByteArray → ByteArray
+
 def ecrecover (h : B256) (v : Bool) (r : B256) (s : B256) : Option Adr :=
   let rsa : ByteArray := ⟨Array.mk (r.toB8L ++ s.toB8L)⟩
   let hsa : ByteArray := ⟨Array.mk h.toB8L⟩
@@ -864,26 +867,18 @@ def sstoreStep (ω : Wor) (σ : Sta) (υ : Var) (κ : Con) :
 
 
   -- v₀ : orig value at beginning of tx
-  dbg_trace s!"orig : {v₀}"
   -- v : current value
-  dbg_trace s!"current : {v}"
   -- v' : new value
-  dbg_trace s!"new : {v'}"
 
-  let c₀ : Nat :=
-    cond (υ.keys.contains ⟨κ.cta, x⟩)
-      (dbg_trace "WARM LOAD" ; 0)
-      (dbg_trace "COLD LOAD" ; gColdSLoad)
+  let c₀ : Nat := cond (υ.keys.contains ⟨κ.cta, x⟩) 0 gColdSLoad
   let c₁ : Nat :=
     if v = v' ∨ v₀ ≠ v
-    then (dbg_trace "WARM ACCESS" ; gWarmAccess)
+    then gWarmAccess
     else if v₀ = 0
-         then (dbg_trace "v₀ = 0" ; gSSet)
-         else (dbg_trace "v₀ ≠ 0" ; gSReset)
+         then gSSet
+         else gSReset
 
   let c : Nat := c₀ + c₁
-
-  dbg_trace s!"SSTORE COST : {c}"
 
   let rDirtyClear : Int :=
     if v₀ ≠ 0 ∧ v = 0
@@ -1440,13 +1435,13 @@ def showLim (vb : Bool) (lim : Nat) (m : Var) : Exmo Unit :=
 -- Tstor
 -- Pstor
 
-#check List.map
 def showStep (vb :Bool) (σ : Sta) (υ : Var) (κ : Con) (i : Inst') : Exmo Unit :=
   if vb
   then let σ_fmt : List B256 := σ.fst.toList
        -- dbg_trace s!"step(pc({υ.pc}), gas({υ.gas}), inst({i.toString}), stack({σ_fmt}))."
-       dbg_trace s!"step(pc({υ.pc}), gas({υ.gas}), inst(\"{i.toString}\"), stack({σ.toList <&> (List.map B256.toNat)}) depth({κ.exd}))."
+       -- dbg_trace s!"step(pc({υ.pc}), gas({υ.gas}), inst(\"{i.toString}\"), stack({σ.toList <&> (List.map B256.toNat)}) depth({κ.exd}))."
        -- dbg_trace s!"step(pc({υ.pc}), gas({υ.gas}), inst(\"{i.toString}\"), depth({κ.exd}))."
+       dbg_trace s!"step(pc({υ.pc}), gas({υ.gas}), inst(\"{i.toString}\"), ret({υ.ret.toHex}) depth({κ.exd}))."
        return ()
   else return ()
 
@@ -1466,11 +1461,6 @@ def execEcrec (ω : Wor) (τ : Tra) (υ : Var) (κ : Con) : ΞR :=
       | _ => none
     let r := B8L.toB256P <| κ.cld.sliceD 64 32 (0x00 : B8)
     let s := B8L.toB256P <| κ.cld.sliceD 96 32 (0x00 : B8)
-
-    dbg_trace s!"ECREC HASH : {h}"
-    dbg_trace s!"ECREC ARG V : {v.get!}"
-    dbg_trace s!"ECREC ARG R : {r}"
-    dbg_trace s!"ECREC ARG S : {s}"
 
     let o : B8L :=
       if v.isNone ∨ r = 0 ∨ r ≥ .secp256k1n ∨ s = 0 ∨ s ≥ .secp256k1n
@@ -1493,11 +1483,53 @@ def execSha (ω : Wor) (τ : Tra) (υ : Var) (κ : Con) : ΞR :=
     let hash : B256 := B8L.sha256 κ.cld
     {wt := some ⟨ω, τ⟩, gas := g', acs := υ.toAcs, ret := some hash.toB8L}
 
+def execRip160 (ω : Wor) (τ : Tra) (υ : Var) (κ : Con) : ΞR :=
+  let g_r : Nat := 600 + (120 * (ceilDiv κ.cld.length 32))
+  match safeSub υ.gas g_r with
+  | none => {wt := none, gas := 0, acs := υ.toAcs, ret := some []}
+  | some g' =>
+    let out := B256.toB8L <| B8L.toB256P <| (rip160 ⟨Array.mk κ.cld⟩).toList
+    {wt := some ⟨ω, τ⟩, gas := g', acs := υ.toAcs, ret := some out}
+
+def execId (ω : Wor) (τ : Tra) (υ : Var) (κ : Con) : ΞR :=
+  let g_r : Nat := 15 + (3 * (ceilDiv κ.cld.length 32))
+  match safeSub υ.gas g_r with
+  | none => {wt := none, gas := 0, acs := υ.toAcs, ret := some []}
+  | some g' => {wt := some ⟨ω, τ⟩, gas := g', acs := υ.toAcs, ret := some κ.cld}
+
+def execExpmod (ω : Wor) (τ : Tra) (υ : Var) (κ : Con) : ΞR :=
+  let f : Nat → Nat := λ x => (ceilDiv x 8) ^ 2
+  let gQuadDivisor : Nat := 3
+  let l_B : Nat := B8L.toNat <| κ.cld.sliceD 0 32 (0x00 : B8)
+  let l_E : Nat := B8L.toNat <| κ.cld.sliceD 32 32 (0x00 : B8)
+  let l_M : Nat := B8L.toNat <| κ.cld.sliceD 64 32 (0x00 : B8)
+  let B : Nat := B8L.toNat <| κ.cld.sliceD 96 l_B (0 : B8)
+  let E : Nat := B8L.toNat <| κ.cld.sliceD (96 + l_B) l_E (0 : B8)
+  let E_pfx : Nat := B8L.toNat <| κ.cld.sliceD (96 + l_B) 32 (0 : B8)
+  let M : Nat := B8L.toNat <| κ.cld.sliceD (96 + l_B + l_E) l_M (0 : B8)
+  let l'_E : Nat :=
+    if l_E ≤ 32
+    then
+      if E = 0
+      then 0
+      else Nat.log2 E
+    else
+      if E_pfx = 0
+      then 8 * (l_E - 32)
+      else (8 * (l_E - 32)) + Nat.log2 E_pfx
+  let g_r : Nat := max 200 <| (f (max l_M l_B) * max l'_E 1) / gQuadDivisor
+  match safeSub υ.gas g_r with
+  | none => {wt := none, gas := 0, acs := υ.toAcs, ret := some []}
+  | some g' =>
+    let expmod : Nat := Nat.mod (B ^ E) M
+    {wt := some ⟨ω, τ⟩, gas := g', acs := υ.toAcs, ret := B8L.pack expmod.toB8L l_M}
+
 def execPre (vb : Bool) (ω : Wor) (τ : Tra) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) : Nat → Exmo ΞR
   | 1 => .ok <| execEcrec ω τ υ κ
   | 2 => .ok <| execSha ω τ υ κ
+  | 3 => .ok <| execRip160 ω τ υ κ
+  | 4 => .ok <| execId ω τ υ κ
   | n => panic! s!"precomp uninplemented : {n}"
-
 
 -- STATCALL: Θ(σ, A∗, Ia, Io, t,  t, C_CALLGAS(σ, μ, A), I_p, 0,     0,     i, Ie + 1, false)
 -- CALL:     Θ(σ, A∗, Ia, Io, t,  t, C_CALLGAS(σ, μ, A), I_p, μs[2], μs[2], i, Ie + 1, Iw)
@@ -1830,9 +1862,6 @@ def exec (vb : Bool): Nat → Wor → Tra → Sta → Mem → Var → Con → Ex
       let initCodeCost : Nat := gInitcodeword * (ceilDiv code_sz.toNat 32)
       let ⟨act', mc⟩ := memExpCost υ code_loc code_sz
       let interGas ← deductGas υ <| initCodeCost + mc + gCreate
-
-      dbg_trace s!"CREATE INTERGAS : {interGas}"
-
       if (ω.nonceAt κ.cta).toNat < maxNonce
       then let createGas := except64th interGas
            let cond : Prop := 0 = κ.exd ∨ (ω.get κ.cta).bal < val
