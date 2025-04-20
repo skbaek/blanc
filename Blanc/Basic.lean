@@ -2005,17 +2005,6 @@ def B256.teg (xs : B256) (n : Nat) : Bool :=
   then xs.2.teg n
   else xs.1.teg (n - 128)
 
--- def Bits.getD : ∀ {m}, Bits m → Nat → Bool → Bool
---   | 0, ⦃⦄, _, d => d
---   | _ + 1, x +> _, 0, _ => x
---   | _ + 1, _ +> xs, n + 1, d => Bits.getD xs n d
---
--- def B256.getD (xs : B256) (n : Nat) (b : Bool) : Bool :=
---   if n < 64
---   then xs.1.1.getD n b
---   else _
-
-
 def B256.bexpCore : Nat → B256 → B256 → (B256 × B256)
  | 0, xs, _ => ⟨1, xs⟩
  | n + 1, xs, ys =>
@@ -2031,6 +2020,28 @@ def Bits.bexp {m : Nat} (xs ys : Bits m) : Bits m :=
 
 instance : HPow B256 B256 B256 := ⟨B256.bexp⟩
 
+#eval (UInt8.toUInt16 (255 : B8)) + (UInt8.toUInt16 (255 : B8))
+
+def B8.carryAdd (x y : B8) : B8 × B8 :=
+  let sum : B16 := UInt8.toUInt16 x + UInt8.toUInt16 y
+  ⟨sum.highs, sum.lows⟩
+
+def B8.carryMul (x y : B8) : B8 × B8 :=
+  let prod : B16 := UInt8.toUInt16 x * UInt8.toUInt16 y
+  ⟨prod.highs, prod.lows⟩
+
+/-- Efficient modular exponentiation using the square-and-multiply algorithm -/
+def Nat.powMod (base exp m : Nat) : Nat :=
+  if m = 0 then 0 else
+    let rec go (e : Nat) (b : Nat) (res : Nat) : Nat :=
+      match e with
+      | 0 => res
+      | e@(_ + 1) =>
+        let res' := if e % 2 = 1 then (res * b) % m else res
+        let b' := (b * b) % m
+        go (e / 2) b' res'
+    go exp base 1
+
 def Bits.min {n} : Bits n → Bits n → Bits n
   | xs, ys => if xs ≤ ys then xs else ys
 instance {n} : Min (Bits n) := ⟨.min⟩
@@ -2043,10 +2054,6 @@ def Bits.ordering {n} (xs ys : Bits n) : Ordering :=
        else .gt
 
 instance {n} : Ord (Bits n) := ⟨Bits.ordering⟩
-
-
-
-
 
 def String.joinln (l : List String) : String :=
   l.foldl (fun r s => r ++ "\n" ++ s) ""

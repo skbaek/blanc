@@ -1,6 +1,7 @@
 import Lean.Data.Json
 import Lean.Data.Json.Parser
 import Lean.Data.HashSet
+import Mathlib.Data.ZMod.Defs
 import «Blanc».Weth
 import «Blanc».TestParse
 
@@ -9,6 +10,7 @@ opaque ecrecoverFlag : ByteArray → UInt8 → ByteArray → ByteArray
 
 @[extern "rip160"]
 opaque rip160 : ByteArray → ByteArray
+
 
 def ecrecover (h : B256) (v : Bool) (r : B256) (s : B256) : Option Adr :=
   let rsa : ByteArray := ⟨Array.mk (r.toB8L ++ s.toB8L)⟩
@@ -1439,9 +1441,9 @@ def showStep (vb :Bool) (σ : Sta) (υ : Var) (κ : Con) (i : Inst') : Exmo Unit
   if vb
   then let σ_fmt : List B256 := σ.fst.toList
        -- dbg_trace s!"step(pc({υ.pc}), gas({υ.gas}), inst({i.toString}), stack({σ_fmt}))."
-       -- dbg_trace s!"step(pc({υ.pc}), gas({υ.gas}), inst(\"{i.toString}\"), stack({σ.toList <&> (List.map B256.toNat)}) depth({κ.exd}))."
+       dbg_trace s!"step(pc({υ.pc}), gas({υ.gas}), inst(\"{i.toString}\"), stack({σ.toList <&> (List.map B256.toNat)}), ret({υ.ret.toHex}), depth({κ.exd}))."
        -- dbg_trace s!"step(pc({υ.pc}), gas({υ.gas}), inst(\"{i.toString}\"), depth({κ.exd}))."
-       dbg_trace s!"step(pc({υ.pc}), gas({υ.gas}), inst(\"{i.toString}\"), ret({υ.ret.toHex}) depth({κ.exd}))."
+       -- dbg_trace s!"step(pc({υ.pc}), gas({υ.gas}), inst(\"{i.toString}\"), ret({υ.ret.toHex}) depth({κ.exd}))."
        return ()
   else return ()
 
@@ -1488,7 +1490,7 @@ def execRip160 (ω : Wor) (τ : Tra) (υ : Var) (κ : Con) : ΞR :=
   match safeSub υ.gas g_r with
   | none => {wt := none, gas := 0, acs := υ.toAcs, ret := some []}
   | some g' =>
-    let out := B256.toB8L <| B8L.toB256P <| (rip160 ⟨Array.mk κ.cld⟩).toList
+    let out : B8L := B256.toB8L <| B8L.toB256P <| (rip160 ⟨Array.mk κ.cld⟩).toList
     {wt := some ⟨ω, τ⟩, gas := g', acs := υ.toAcs, ret := some out}
 
 def execId (ω : Wor) (τ : Tra) (υ : Var) (κ : Con) : ΞR :=
@@ -1496,6 +1498,223 @@ def execId (ω : Wor) (τ : Tra) (υ : Var) (κ : Con) : ΞR :=
   match safeSub υ.gas g_r with
   | none => {wt := none, gas := 0, acs := υ.toAcs, ret := some []}
   | some g' => {wt := some ⟨ω, τ⟩, gas := g', acs := υ.toAcs, ret := some κ.cld}
+
+abbrev altBn128Prime : Nat := 21888242871839275222246405745257275088696311157297823662689037894645226208583
+
+structure FF (p : Nat) : Type where
+  (val : Nat)
+deriving DecidableEq
+
+-- abbrev BNF : Type := ZMod altBn128Prime
+abbrev BNF : Type := FF altBn128Prime
+
+structure Point : Type where
+  (x : BNF)
+  (y : BNF)
+
+def Nat.toHexit : Nat → Char
+  | 0 => '0'
+  | 1 => '1'
+  | 2 => '2'
+  | 3 => '3'
+  | 4 => '4'
+  | 5 => '5'
+  | 6 => '6'
+  | 7 => '7'
+  | 8 => '8'
+  | 9 => '9'
+  | 10 => 'A'
+  | 11 => 'B'
+  | 12 => 'C'
+  | 13 => 'D'
+  | 14 => 'E'
+  | 15 => 'F'
+  | _   => 'X'
+
+def Nat.toHexCore : Nat → List Char
+  | 0 => []
+  | n@(_ + 1) =>
+    if n < 16
+    then [n.toHexit]
+    else (n % 16).toHexit :: (n / 16).toHexCore
+
+def Nat.toHex (n : Nat) : String :=
+  ⟨.reverse <| n.toHexCore⟩
+
+def Point.toString : Point → String
+  | ⟨x, y⟩ => s!"⟨{x.val.toHex}, {y.val.toHex}⟩"
+
+instance : ToString Point := ⟨Point.toString⟩
+
+def FF.mkMod {p : Nat} (n : Nat) : FF p := ⟨n % p⟩
+
+instance {p n : Nat} : OfNat (FF p) n := ⟨.mkMod n⟩
+
+def FF.pow {p : Nat} (b : FF p) (e : Nat) : FF p :=
+  ⟨Nat.powMod b.val e p⟩
+
+instance {p} : HPow (FF p) Nat (FF p) := ⟨FF.pow⟩
+
+def FF.add {p : Nat} (x y : FF p) : FF p :=
+  ⟨(x.val + y.val) % p⟩
+
+instance {p} : HAdd (FF p) (FF p) (FF p) := ⟨FF.add⟩
+
+def FF.sub {p : Nat} (x y : FF p) : FF p :=
+  ⟨Int.natAbs <| (Int.ofNat x.val - Int.ofNat y.val) % p⟩
+
+instance {p} : HSub (FF p) (FF p) (FF p) := ⟨FF.sub⟩
+
+def FF.mul {p : Nat} (x y : FF p) : FF p :=
+  ⟨(x.val * y.val) % p⟩
+
+instance {p} : HMul (FF p) (FF p) (FF p) := ⟨FF.mul⟩
+
+def Point.mk? (x : Nat) (y : Nat) : Option Point := do
+  let x' : BNF := FF.mkMod x
+  let y' : BNF := FF.mkMod y
+  if (x' = 0 ∧ y' = 0)
+  then dbg_trace "infinite point construction succeeded"
+       some ⟨0, 0⟩
+  else if y' ^ 2 = (x' ^ 3) + 3
+       then dbg_trace "finite point construction succeeded"
+            some ⟨x', y'⟩
+       else dbg_trace "point construction failed"
+            dbg_trace s!"y ^ 2 = {(y' ^ 2).val.toHex}"
+            dbg_trace s!"x ^ 3 = {(x' ^ 3).val.toHex}"
+            none
+
+-- cx * x + cy * y' = d
+-- let m := y / x
+
+-- (cx - (cy * m)) * x + cy * y = d
+-- (cx - (cy * m)) * x + cy * (y' + x * m) = d
+-- ((cx * x) - (cy * m) * x)) + ((cy * y') + (cy * x * m)) = d
+
+
+-- @[extern "lean_nat_gcd"]
+-- def gcd (m n : @& Nat) : Nat :=
+--   if m = 0 then
+--     n
+--   else
+--     gcd (n % m) m
+--   termination_by m
+--   decreasing_by simp_wf; apply mod_lt _ (zero_lt_of_ne_zero _); assumption
+
+
+def extEuclid (x y : Nat) : Int × Int × Nat :=
+  if hx : x > 0
+  then
+    if hy : y > 0
+    then
+      if _ : x < y
+      then
+        have _ : y % x < x := Nat.mod_lt _ hx
+        let ⟨cy, cx, d⟩ := extEuclid (y % x) x
+        ⟨cx - (cy * (y / x)), cy, d⟩
+      else
+        if _ : y < x
+        then
+          have _ : x % y < y := Nat.mod_lt _ hy
+          let ⟨cy, cx, d⟩ := extEuclid y (x % y)
+          ⟨cx, cy - (cx * (x / y)), d⟩
+        else ⟨0, 1, x⟩
+    else ⟨1, 0, x⟩
+  else ⟨0, 1, y⟩
+termination_by (x + y)
+
+
+def FF.inv {p : Nat} (x : FF p) : FF p :=
+  let ⟨c, _, _⟩ := extEuclid x.val p
+  ⟨(c % p).natAbs⟩
+
+instance {p} : Inv (FF p) := ⟨FF.inv⟩
+
+def FF.div {p : Nat} (x y : FF p) : FF p := x * (y⁻¹)
+
+instance {p} : HDiv (FF p) (FF p) (FF p) := ⟨FF.div⟩
+
+def Point.double (p : Point) : Point :=
+  if p.x = 0 ∧ p.y = 0
+  then p
+  else
+    let lam : BNF := (3 * (p.x ^ 2)) / (2 * p.y)
+    let x := lam ^ 2 - p.x - p.x
+    let y := lam * (p.x - x) - p.y
+    ⟨x, y⟩
+
+def Point.add : Point → Point → Point
+  | ⟨0, 0⟩, q => q
+  | p, ⟨0, 0⟩ => p
+  | ⟨selfX, selfY⟩, ⟨otherX, otherY⟩ =>
+    if selfX = otherX
+    then
+      if selfY = otherY
+      then Point.double ⟨selfX, selfY⟩
+      else ⟨0, 0⟩
+    else
+      let yDiff := otherY - selfY
+      let xDiff := otherX - selfX
+      let lam := yDiff / xDiff
+      let x := lam ^ 2 - selfX - otherX
+      let y := lam * (selfX - x) - selfY
+      ⟨x, y⟩
+
+
+def Point.mul (p : Point) : Nat → Point
+  | 0 => ⟨0, 0⟩
+  | n@(_ + 1) =>
+    let half := Point.mul p (n / 2)
+    let whole := Point.add half half
+    if (n % 2) = 0
+    then whole
+    else Point.add whole p
+
+def Point.toB8L (p : Point) : B8L :=
+  p.x.val.toB8L.pack 32 ++ p.y.val.toB8L.pack 32
+
+def ecadd (input : B8L) : Option B8L := do
+  let px : Nat := B8L.toNat <| input.sliceD 0 32 (0 : B8)
+  let py : Nat := B8L.toNat <| input.sliceD 32 32 (0 : B8)
+  let qx : Nat := B8L.toNat <| input.sliceD 64 32 (0 : B8)
+  let qy : Nat := B8L.toNat <| input.sliceD 96 32 (0 : B8)
+  let p ← Point.mk? px py
+  let q ← Point.mk? qx qy
+  let s := Point.add p q
+  some s.toB8L
+
+def ecmul (input : B8L) : Option B8L := do
+  let px : Nat := B8L.toNat <| input.sliceD 0 32 (0 : B8)
+  let py : Nat := B8L.toNat <| input.sliceD 32 32 (0 : B8)
+  let n  : Nat := B8L.toNat <| input.sliceD 64 32 (0 : B8)
+
+  dbg_trace s!"px : {px.toHex}"
+  dbg_trace s!"py : {py.toHex}"
+  dbg_trace s!"n  : {n.toHex}"
+  let p ← Point.mk? px py
+
+  dbg_trace s!"p : {p.toString}"
+  let s := Point.mul p n
+  dbg_trace s!"p * n : {s.toString}"
+  some s.toB8L
+
+def execEcmul (ω : Wor) (τ : Tra) (υ : Var) (κ : Con) : ΞR :=
+  match safeSub υ.gas 6000 with
+  | none => {wt := none, gas := 0, acs := υ.toAcs, ret := some []}
+  | some g' =>
+    let slc := κ.cld.sliceD 0 96 (0x00 : B8)
+    match (ecmul slc) with
+    | some out => {wt := some ⟨ω, τ⟩, gas := g', acs := υ.toAcs, ret := some out}
+    | _ => {wt := none, gas := 0, acs := υ.toAcs, ret := some []}
+
+def execEcadd (ω : Wor) (τ : Tra) (υ : Var) (κ : Con) : ΞR :=
+  match safeSub υ.gas 150 with
+  | none => {wt := none, gas := 0, acs := υ.toAcs, ret := some []}
+  | some g' =>
+    let slc := κ.cld.sliceD 0 128 (0x00 : B8)
+    match (ecadd slc) with
+    | some out => {wt := some ⟨ω, τ⟩, gas := g', acs := υ.toAcs, ret := some out}
+    | _ => {wt := none, gas := 0, acs := υ.toAcs, ret := some []}
 
 def execExpmod (ω : Wor) (τ : Tra) (υ : Var) (κ : Con) : ΞR :=
   let f : Nat → Nat := λ x => (ceilDiv x 8) ^ 2
@@ -1521,7 +1740,8 @@ def execExpmod (ω : Wor) (τ : Tra) (υ : Var) (κ : Con) : ΞR :=
   match safeSub υ.gas g_r with
   | none => {wt := none, gas := 0, acs := υ.toAcs, ret := some []}
   | some g' =>
-    let expmod : Nat := Nat.mod (B ^ E) M
+    -- let expmod : Nat := Nat.mod (B ^ E) M
+    let expmod : Nat := Nat.powMod B E M
     {wt := some ⟨ω, τ⟩, gas := g', acs := υ.toAcs, ret := B8L.pack expmod.toB8L l_M}
 
 def execPre (vb : Bool) (ω : Wor) (τ : Tra) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) : Nat → Exmo ΞR
@@ -1529,6 +1749,9 @@ def execPre (vb : Bool) (ω : Wor) (τ : Tra) (σ : Sta) (μ : Mem) (υ : Var) (
   | 2 => .ok <| execSha ω τ υ κ
   | 3 => .ok <| execRip160 ω τ υ κ
   | 4 => .ok <| execId ω τ υ κ
+  | 5 => .ok <| execExpmod ω τ υ κ
+  | 6 => .ok <| execEcadd ω τ υ κ
+  | 7 => .ok <| execEcmul ω τ υ κ
   | n => panic! s!"precomp uninplemented : {n}"
 
 -- STATCALL: Θ(σ, A∗, Ia, Io, t,  t, C_CALLGAS(σ, μ, A), I_p, 0,     0,     i, Ie + 1, false)
@@ -2359,15 +2582,7 @@ def getSender (tx : Tx) (hs : B256) : IO Adr := do
   let rsa : ByteArray := ⟨Array.mk (tx.r ++ tx.s)⟩
   let ri : UInt8 := Byte.toB8 (if tx.yParity then 1 else 0)
   let hsa : ByteArray := ⟨Array.mk hs.toB8L⟩
-
-  .println s!"publicAddress arg : rsa : {B8L.toHex rsa.toList}"
-  .println s!"publicAddress arg : ri : {ri}"
-  .println s!"publicAddress arg : hsa : {B8L.toHex hsa.toList}"
-
-  let a ← publicAddress hsa ri rsa
-
-  .println s!"publicAddress retrieved : {a.toHex}"
-  pure a
+  publicAddress hsa ri rsa
 
 def decodeTxBytes (txbs : B8L) : IO (Tx × Adr) := do
   let ⟨tx, hs⟩ ← decodeTxHash txbs

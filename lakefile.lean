@@ -13,6 +13,7 @@ require mathlib from git
 lean_lib «Blanc» where
 lean_exe «Blanx» where
   root := `Blanc
+  -- moreLinkArgs := #["-lsecp256k1", "-lecadd_wrapper"]
   moreLinkArgs := #["-lsecp256k1"]
 
 target keccak.o pkg : System.FilePath := do
