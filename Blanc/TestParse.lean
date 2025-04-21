@@ -264,6 +264,7 @@ def parseException : String → Option Exception
   | "TransactionException.TYPE_3_TX_CONTRACT_CREATION" => some .blobCreation
   | "TransactionException.TYPE_3_TX_INVALID_BLOB_VERSIONED_HASH" => some .wrongBlobHashVersion
   | "TransactionException.INITCODE_SIZE_EXCEEDED" => some .initCodeTooLong
+  | "TransactionException.NONCE_IS_MAX" => some .nonceTooHigh
   | _ => .none
 
 def Lean.Json.toPostData : Json → IO PostData
@@ -276,15 +277,6 @@ def Lean.Json.toPostData : Json → IO PostData
         match parseException exStr with
         | .some exc => pure (.some exc)
         | .none => .throw s!"unknown exception : {exStr}"
-        -- match exStr with
-        -- | "TransactionException.TYPE_3_TX_ZERO_BLOBS" => pure <| some .noBlobs
-        -- | "TransactionException.TYPE_3_TX_BLOB_COUNT_EXCEEDED" => pure <| some .tooManyBlobs
-        -- | "TransactionException.TYPE_3_TX_CONTRACT_CREATION" => pure <| some .blobCreation
-        -- | "TransactionException.TYPE_3_TX_INVALID_BLOB_VERSIONED_HASH" =>
-        --   pure <| some .wrongBlobHashVersion
-        -- | "TransactionException.INITCODE_SIZE_EXCEEDED" =>
-        --   pure <| some .initCodeTooLong
-        -- | _ => IO.throw s!"unknown exception : {exStr}"
     let hsx ← (r.find compare "hash").toIO "cannot retrieve hash bytes" >>= fromStr >>= .remove0x
     let hs ← (Hex.toB256? hsx).toIO "cannot convert hash bytes to word"
     let lgx ← (r.find compare "logs").toIO "cannot get logs bytes" >>= fromStr >>= .remove0x

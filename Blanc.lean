@@ -2249,7 +2249,6 @@ def lambda
   (ω₀ : Wor)
   (bhs : List B256)
   (ci : B256)
-
   (ω : Wor)
   (τ : Tra)
   (A : Acs)
@@ -2261,9 +2260,8 @@ def lambda
   (i : B8L)
   (e : Nat)
   (ζ : Option B256)
-  (w : Bool) : ΛΘ.Result := --do
+  (w : Bool) : ΛΘ.Result :=
   let ⟨ω', A', a⟩ := Λ.prep ω A s v i ζ
-  dbg_trace s!"create-tx detected, new acc address : 0x{a.toHex}"
   let κ : Con :=
     {
       blk := H
@@ -2654,9 +2652,9 @@ def getPostIndex : List String → IO (Option Nat)
     | some n => pure (.some n)
   | _ :: opts => getPostIndex opts
 
-inductive XWS : Type
-  | wor : Wor → XWS
-  | root : B256 → XWS
+inductive ExpectedWorldState : Type
+  | wor : Wor → ExpectedWorldState
+  | root : B256 → ExpectedWorldState
 
 structure Test' where
   (name : String)
@@ -2667,8 +2665,7 @@ structure Test' where
   (lbh : Lean.Json)
   (network : Lean.Json)
   (pre : Lean.Json)
-  -- (postRoot : B256)
-  (post : XWS)
+  (post : ExpectedWorldState)
   (sealEngine : Lean.Json)
 
 def Test'.toStrings (t : Test') : List String :=
@@ -2728,7 +2725,7 @@ def Wor.root (w : Wor) : B256 :=
   let finalNTB : NTB := Lean.RBMap.fromList keyVals _
   trie finalNTB
 
-def getXWS (j : Lean.Json) : IO XWS := do
+def getXWS (j : Lean.Json) : IO ExpectedWorldState := do
   let r ← j.fromObj
   match r.find compare "postState" with
   | some wj => do --hj.toB256?
@@ -2759,6 +2756,7 @@ def mkTest' : ((_ : String) × Lean.Json) → IO Test'
     let network ← j.find "network"
 
     --let postRoot ← getPostRoot j -- j.find "postState"
+
     let xws ← getXWS j -- j.find "postState"
 
     let pre ← j.find "pre"
@@ -2820,14 +2818,12 @@ def addLogToBloom (bloom : B8L) (log : Log) : B8L :=
   let bloom' := addEntryToBloom bloom log.address.toB8L
   List.foldl addEntryToBloom bloom' (log.topics.map B256.toB8L)
 
-
 def Bool.toB8L : Bool → B8L
   | .false => []
   | .true => [0x01]
 
-
 def Stx.Result.check' (vb : Bool) (tx : Stx) (exBloom : B8L)
-    (exRcRoot : B256) (exRoot : XWS) : Option Exception → Tx.Result → IO Unit
+    (exRcRoot : B256) (exRoot : ExpectedWorldState) : Option Exception → Tx.Result → IO Unit
   | .some ex, .fail ex' => do
     .check vb (ex = ex')
       "exception check : pass"
@@ -3018,11 +3014,6 @@ def getExceptionMap (j : Lean.Json) : IO (Option Exception × Lean.Json) := do
     let j' ← j.find "rlp_decoded"
     pure ⟨.some ex, j'⟩
 
--- def getMainMap : Lean.Json → IO Lean.Json
---   | .obj r => (r.find compare "rlp_decoded" <|> pure (.obj r)).toIO ""
---   | _ => .throw ""
-
-
 def getBlockHeader : Lean.Json → Option Lean.Json
   | .obj r =>
     r.find compare "blockHeader" <|>
@@ -3039,10 +3030,7 @@ def runPyTest (vb : Bool) (t : Test') : IO Unit := do
   .println s!"Running test : {t.name}"
 
   let [blk] ← t.blocks.fromArr | .throw "error : multiple blocks"
-
   let ⟨ex, mm⟩ ← getExceptionMap blk
-
-
   let bh ← (getBlockHeader mm).toIO ""
   let wds ← Lean.Json.find "withdrawals" mm >>= Lean.Json.fromArr >>= mapM Lean.Json.toWithdrawal
   let bloom ← bh.find "bloom" >>= Lean.Json.toB8L

@@ -2312,16 +2312,18 @@ lemma ByteArray.length_sliceD {xs : ByteArray} {m n x} :
     · rw [if_pos h]; simp [List.length]; apply ih
     · rw [if_neg h]; apply List.length_replicate
 
-def Array.sliceD {ξ : Type u} (xs : Array ξ) : Nat → Nat → ξ → List ξ
-  | _, 0, _ => []
-  | m, n + 1, d => xs.getD m d :: Array.sliceD xs (m + 1) n d
+def Array.sliceDCore {ξ : Type u} (xs : Array ξ) : List ξ → Nat → Nat → ξ → List ξ
+  | Acc, _, 0, _ => Acc
+  | Acc, m, n + 1, d => Array.sliceDCore xs (xs.getD (m + n) d :: Acc) m n d
 
-lemma Array.length_sliceD {ξ} {xs : Array ξ} {m n x} :
-    (Array.sliceD xs m n x).length = n := by
-  induction n generalizing m with
-  | zero => simp [sliceD]
-  | succ n ih => simp [sliceD, List.length, ih]
+lemma Array.length_sliceDCore {ξ} {xs : Array ξ} {acc m n x} :
+    (Array.sliceDCore xs acc m n x).length = acc.length + n := by
+  induction n generalizing acc with
+  | zero => simp [sliceDCore]
+  | succ n' ih => simp [sliceDCore, ih]; omega
 
+def Array.sliceD {ξ : Type u} (xs : Array ξ) : Nat → Nat → ξ → List ξ :=
+  Array.sliceDCore xs []
 
 def B256.min : B256 → B256 → B256
   | xs, ys => if xs ≤ ys then xs else ys
