@@ -3,14 +3,681 @@ import Lean.Data.Json.Parser
 import Lean.Data.HashSet
 import Mathlib.Data.ZMod.Defs
 import «Blanc».Weth
-import «Blanc».TestParse
+
+inductive Exception : Type
+  | noBlobs
+  | tooManyBlobs
+  | blobCreation
+  | wrongBlobHashVersion
+  | initCodeTooLong
+  | nonceTooHigh
+deriving DecidableEq
+
+def Exception.toString : Exception → String
+  | noBlobs => "noBlobs"
+  | tooManyBlobs => "tooManyBlobs"
+  | blobCreation => "blobCreation"
+  | wrongBlobHashVersion => "wrongBlobHashVersion"
+  | initCodeTooLong => "initCodeTooLong"
+  | nonceTooHigh => "nonceTooHigh"
+
+instance : ToString Exception := ⟨Exception.toString⟩
+
+def AccessList : Type := List (Adr × List B256)
+
+instance : ToString AccessList := ⟨λ x => @List.toString _ _ x⟩
+
+structure TransactionData : Type where
+  (accessLists : Option (List AccessList))
+  (bvhs : Option (List B256))
+  (data : List B8L)
+  (gasLimit : List B256)
+  (fee : B256 ⊕ (B256 × B256))
+  (nonce : B256)
+  (secretKey : B256)
+  (sender : Adr)
+  (receiver : Option Adr)
+  (value : List B256)
+
+def TransactionData.gasPrice (baseFee : B256) (txd : TransactionData) : B256 :=
+  match txd.fee with
+  | .inl gp => gp
+  | .inr ⟨mpf, mf⟩ => min mf (baseFee + mpf)
+
+def readJsonFile (filename : System.FilePath) : IO Lean.Json := do
+  let contents ← IO.FS.readFile filename
+  match Lean.Json.parse contents with
+  | .ok json => pure json
+  | .error err => throw (IO.userError err)
+
+
+mutual
+  partial def StringJson.toStrings : ((_ : String) × Lean.Json) → List String
+    | ⟨n, j⟩ =>
+      --(sj.fst :: Lean.Json.toStrings sj.snd) ++ StringJsons.toStrings sjs
+      (fork n [Lean.Json.toStrings j])
+  partial def StringJsons.toStrings : List ((_ : String) × Lean.Json) → List String
+    | [] => []
+    | ⟨n, j⟩ :: njs =>
+      --(sj.fst :: Lean.Json.toStrings sj.snd) ++ StringJsons.toStrings sjs
+      (fork n [Lean.Json.toStrings j]) ++ StringJsons.toStrings njs
+
+  partial def Lean.Jsons.toStrings : List Lean.Json → List String
+    | [] => []
+    | j :: js => Lean.Json.toStrings j ++ Lean.Jsons.toStrings js
+
+  partial def Lean.Json.toStrings : Lean.Json → List String
+    | .null => ["[NULL]"]
+    | .bool b => [s!"[BOOL] {b}"]
+    | .num n => [s!"[NUM] {n}"]
+    | .str s => --[s!"str : {s}"]
+       fork "[STR]" [s.chunks 80]
+    | .arr js =>
+      fork "[ARR]" (js.toList.map Lean.Json.toStrings)
+      --"arr :" :: (Lean.Jsons.toStrings js.toList).map ("  " ++ ·)
+    | .obj m => do
+      let kvs := m.toArray.toList
+      --"obj : " :: (StringJsons.toStrings kvs).map ("  " ++ ·)
+      fork "[OBJ]" (kvs.map StringJson.toStrings)
+end
+
+def Lean.Json.toString (j : Lean.Json) : String := String.joinln j.toStrings
+
+def longB8LToStrings (hd : String) (bs : B8L) : List String :=
+  match List.chunks 31 bs with
+  | [] => [hd]
+  | [bs'] => [s!"{hd} : {B8L.toHex bs'}"]
+  | bss => s!"{hd} :" :: bss.map (λ bs' => pad (B8L.toHex bs'))
+
+def txdataToStrings (tx : B8L) : List String :=
+  match List.chunks 31 tx with
+  | [] => ["txdata :"]
+  | [bs] => [s!"txdata : {B8L.toHex bs}"]
+  | bss => "txdata :" :: bss.map (λ bs => pad (B8L.toHex bs))
+
+def Lean.RBMap.toStrings {α β cmp} (m : Lean.RBMap α β cmp)
+  (fmt : α × β → List String): List String :=
+  let kvs := m.toArray.toList
+  fork "map" (kvs.map fmt)
+
+def Stor.toStrings (s : Stor) : List String :=
+  let kvs := s.toArray.toList
+  let kvToStrings : B256 × B256 → List String :=
+    λ nb => [s!"{B256.toHex nb.fst} : {B256.toHex nb.snd}"]
+  fork "stor" (kvs.map kvToStrings)
+
+def Option.toStrings {ξ : Type u} (f : ξ → List String): Option ξ → List String
+  | none => ["none"]
+  | some x => fork "some" [f x]
+
+def AccessEntry.toStrings : (Adr × List B256) → List String
+  | ⟨a, ks⟩ => fork a.toHex <| ks.map <| fun k => [k.toHex]
+
+def AccessList.toStrings (al : AccessList) : List String :=
+    fork "access list" <| al.map <| AccessEntry.toStrings
+
+def TransactionData.toStrings (txd : TransactionData) : List String :=
+  let feeToStrings : (B256 ⊕ (B256 × B256)) → List String :=
+    fun
+      | .inl gp => ["gasPrice : 0x" ++ gp.toHex]
+      | .inr ⟨mpf, mf⟩ =>
+        fork "fees" [
+          ["maxPriorityFee : 0x" ++ mpf.toHex],
+          ["maxFee : 0x" ++ mf.toHex]
+        ]
+
+  let bvhsToStrings (bvhs : List B256) : List String :=
+    fork "blobVersionedHashes" <| bvhs.map <| λ bvh => ["0x" ++ bvh.toHex]
+
+  let accessListsToStrings (als : List AccessList) : List String :=
+    fork "accessLists" <| als.map AccessList.toStrings
+
+  fork "transaction" [
+    Option.toStrings accessListsToStrings txd.accessLists,
+    Option.toStrings bvhsToStrings txd.bvhs,
+    fork "data" [List.toStrings (λ x => [B8L.toHex x]) txd.data],
+    fork "gasLimit" [List.toStrings (λ x => [x.toHex]) txd.gasLimit],
+    feeToStrings txd.fee,
+    [s!"nonce :     {txd.nonce.toHex}"],
+    [s!"secretKey : {txd.secretKey.toHex}"],
+    [s!"sender : {txd.sender.toHex}"],
+    [s!"to : {txd.receiver <&> Adr.toHex}"],
+    fork "value" [List.toStrings (λ x => [x.toHex]) txd.value]
+  ]
+
+def Acct.toStrings (s : String) (a : Acct) : List String :=
+  fork s [
+    [s!"nonce : 0x{a.nonce.toHex}"],
+    [s!"bal : 0x{a.bal.toHex}"],
+    a.stor.toStrings,
+    longB8LToStrings "code" a.code.toList
+  ]
+
+
+def Wor.toStrings (w : Wor) : List String :=
+  let kvs := w.toArray.toList
+  let kvToStrings : Adr × Acct → List String :=
+    fun x => Acct.toStrings x.fst.toHex x.snd
+  fork "world" (kvs.map kvToStrings)
+
+-- def Test.toStrings (t : Test) : List String :=
+--   fork "VM Test" [
+--     ["info ..."],
+--     EnvData.toStrings t.env,
+--     preToStrings t.pre,
+--     postToStrings t.post,
+--     t.tx.toStrings
+--   ]
+--
+--def Test.toString (t : Test) : String := String.joinln t.toStrings
+
+def Lean.Json.fromArr : Lean.Json → IO (List Json)
+  | .arr a => return a.toList
+  | _ => IO.throw "not an array"
+
+def Lean.Json.fromObj : Lean.Json → IO (RBNode String (λ _ => Json))
+  | .obj r => return r
+  | _ => IO.throw "not an object"
+
+def Lean.Json.fromStr : Lean.Json → IO String
+  | .str s => return s
+  | _ => IO.throw "not a string"
+
+def Lean.Json.fromNum : Lean.Json → IO JsonNumber
+  | .num n => return n
+  | _ => IO.throw "not a number"
+
+def Lean.JsonNumber.toNat : JsonNumber → IO Nat
+  | ⟨.ofNat x, 0⟩ => return x
+  | ⟨.negSucc _, _⟩ => IO.throw "negative mantissa"
+  | ⟨_, e + 1⟩ => IO.throw s!"nonzero exponent : {e + 1}"
+
+def Lean.Json.fromSingleton : Lean.Json → IO (String × Lean.Json)
+  | .obj (.node _ .leaf k v .leaf) => return ⟨k, v⟩
+  | j => IO.throw s!"non-singleton JSON : {j}"
+
+def parseException : String → Option Exception
+  | "TransactionException.TYPE_3_TX_ZERO_BLOBS" => some .noBlobs
+  | "TransactionException.TYPE_3_TX_BLOB_COUNT_EXCEEDED" => some .tooManyBlobs
+  | "TransactionException.TYPE_3_TX_CONTRACT_CREATION" => some .blobCreation
+  | "TransactionException.TYPE_3_TX_INVALID_BLOB_VERSIONED_HASH" => some .wrongBlobHashVersion
+  | "TransactionException.INITCODE_SIZE_EXCEEDED" => some .initCodeTooLong
+  | "TransactionException.NONCE_IS_MAX" => some .nonceTooHigh
+  | _ => .none
+
+def Lean.Json.toB8L (j : Json) : IO B8L := do
+  let x ← fromStr j >>= .remove0x
+  (Hex.toB8L x).toIO ""
+
+def Lean.Json.toAdr (j : Json) : IO Adr := do
+  let x ← fromStr j >>= .remove0x
+  (Hex.toAdr x).toIO ""
+
+def Lean.Json.toOptionAdr (j : Json) : IO (Option Adr) := do
+  let s ← fromStr j
+  match s with
+  | "" => pure .none
+  | _ => do
+    let s' ← .remove0x s
+    (Hex.toAdr s').toIO ""
+
+def Lean.Json.toAdrs (j : Json) : IO (List Adr) :=
+  fromArr j >>= mapM toAdr
+
+def Lean.Json.toB256? (j : Json) : IO B256 := do
+  let x ← fromStr j >>= .remove0x
+  (Hex.toB256? x).toIO ""
+
+def Lean.Json.toB256P (j : Json) : IO B256 := do
+  let x ← fromStr j >>= .remove0x
+  let xs ← (Hex.toB8L x).toIO ""
+  return (B8L.toB256P xs)
+
+def Lean.Json.toAccessEntry (j : Json) : IO (Adr × List B256) := do
+  let r ← fromObj j
+  let a ← (r.find compare "address").toIO "" >>= toAdr
+  let ks ← (r.find compare "storageKeys").toIO "" >>= fromArr >>= mapM toB256P
+  return ⟨a, ks⟩
+
+def Lean.Json.toAccessList (j : Json) : IO AccessList := do
+  fromArr j >>= mapM toAccessEntry
+
+def helper (xy :(_ : String) × Lean.Json) : IO (B256 × B256) := do
+  let x ← .remove0x xy.fst
+  let bs ← (Hex.toB8L x).toIO ""
+  let bs' ← xy.snd.toB8L
+  return ⟨bs.toB256P, bs'.toB256P⟩
+
+inductive TxType : Type
+  -- Legacy (including EIP-155)
+  | zero
+    (gasPrice : B256)
+    (chainId : Option Nat)
+  -- -- EIP-2930
+  -- | one : TxType
+  -- EIP-1559
+  | two
+    (chainId : Nat)
+    (maxPriorityFee : B256)
+    (maxFee : B256)
+    (accessList : AccessList)
+  -- EIP-4844
+  | three
+    (chainId : Nat)
+    (maxPriorityFee : B256)
+    (maxFee : B256)
+    (accessList : AccessList)
+    (maxBlobFee : B256)
+    (blobHashes : List B256)
+
+def Lean.Json.transactionDataType (j : Lean.Json) : IO Nat := do
+  let r ← j.fromObj
+  match (r.find Ord.compare "gasPrice") with
+  | some _ =>
+    match r.size with
+    | 8 => return 0
+    | _ => IO.throw "error : unknown tx type"
+  | none =>
+    match (r.find Ord.compare "blobVersionedHashes") with
+    | none => return 2
+    | some _ => return 3
+
+def Lean.Json.toTransactionDataZero (j : Lean.Json) : IO TransactionData := do
+  let r ← j.fromObj
+  let ds ← (r.find Ord.compare "data").toIO "" >>= fromArr >>= mapM toB8L
+  let gls ← (r.find Ord.compare "gasLimit").toIO "" >>= fromArr >>= mapM toB256P
+  let gp ← ((r.find Ord.compare "gasPrice").toIO "" >>= toB256P)
+  let nc ← ((r.find Ord.compare "nonce").toIO "" >>= toB256P)
+  let sk ← (r.find Ord.compare "secretKey").toIO "" >>= toB256?
+  let sd ← (r.find Ord.compare "sender").toIO "" >>= toAdr
+  let rc ← (r.find Ord.compare "to").toIO "" >>= toOptionAdr
+  let vs ← (r.find Ord.compare "value").toIO "" >>= fromArr >>= mapM toB256P
+  pure {
+    accessLists := none
+    bvhs := none
+    data := ds
+    gasLimit := gls
+    fee := .inl gp
+    nonce := nc
+    secretKey := sk
+    sender := sd
+    receiver := rc
+    value := vs
+  }
+
+def Lean.Json.toTransactionDataTwo (j : Lean.Json) : IO TransactionData := do
+  let r ← j.fromObj
+  let als ← (r.find Ord.compare "accessLists").toIO "" >>= fromArr >>= mapM toAccessList
+  let ds ← (r.find Ord.compare "data").toIO "" >>= fromArr >>= mapM toB8L
+  let gls ← (r.find Ord.compare "gasLimit").toIO "" >>= fromArr >>= mapM toB256P
+  let mpf ← ((r.find Ord.compare "maxPriorityFeePerGas").toIO "" >>= toB256P)
+  let mf ← ((r.find Ord.compare "maxFeePerGas").toIO "" >>= toB256P)
+  let nc ← ((r.find Ord.compare "nonce").toIO "" >>= toB256P)
+  let sk ← (r.find Ord.compare "secretKey").toIO "" >>= toB256?
+  let sd ← (r.find Ord.compare "sender").toIO "" >>= toAdr
+  let rc ← (r.find Ord.compare "to").toIO "" >>= toOptionAdr
+  let vs ← (r.find Ord.compare "value").toIO "" >>= fromArr >>= mapM toB256P
+  pure {
+    accessLists := als
+    bvhs := none
+    data := ds
+    gasLimit := gls
+    fee := .inr ⟨mpf, mf⟩
+    nonce := nc
+    secretKey := sk
+    sender := sd
+    receiver := rc
+    value := vs
+  }
+
+def Lean.Json.toTransactionDataThree (j : Lean.Json) : IO TransactionData := do
+  let r ← j.fromObj
+  let als ← (r.find Ord.compare "accessLists").toIO "" >>= fromArr >>= mapM toAccessList
+  let bvhs ← (r.find Ord.compare "blobVersionedHashes").toIO "" >>= fromArr >>= mapM toB256P
+  let ds ← (r.find Ord.compare "data").toIO "" >>= fromArr >>= mapM toB8L
+  let gls ← (r.find Ord.compare "gasLimit").toIO "" >>= fromArr >>= mapM toB256P
+  let mpf ← ((r.find Ord.compare "maxPriorityFeePerGas").toIO "" >>= toB256P)
+  let mf ← ((r.find Ord.compare "maxFeePerGas").toIO "" >>= toB256P)
+  let nc ← ((r.find Ord.compare "nonce").toIO "" >>= toB256P)
+  let sk ← (r.find Ord.compare "secretKey").toIO "" >>= toB256?
+  let sd ← (r.find Ord.compare "sender").toIO "" >>= toAdr
+  let rc ← (r.find Ord.compare "to").toIO "" >>= toOptionAdr
+  let vs ← (r.find Ord.compare "value").toIO "" >>= fromArr >>= mapM toB256P
+  pure {
+    accessLists := als
+    bvhs := some bvhs
+    data := ds
+    gasLimit := gls
+    fee := .inr ⟨mpf, mf⟩
+    nonce := nc
+    secretKey := sk
+    sender := sd
+    receiver := rc
+    value := vs
+  }
+
+def Lean.Json.toTransactionData (j : Lean.Json) : IO TransactionData := do
+  let ty ← j.transactionDataType
+  match ty with
+  | 0 => do
+    j.toTransactionDataZero
+  | 2 => do
+    j.toTransactionDataTwo
+  | 3 => do
+    j.toTransactionDataThree
+  | n => IO.throw s!"unimplemented tx type : {n}"
+
+def Lean.RBMap.fromSingleton {ξ υ f} (m : RBMap ξ υ f) : Option (ξ × υ) :=
+  match m.toList with
+  | [kv] => some kv
+  | _ => none
+
+def Lean.RBMap.singleton {ξ υ f} (x : ξ) (y : υ) : RBMap ξ υ f := RBMap.empty.insert x y
+
+structure Tx : Type where
+  (nonce : B256)
+  (gasLimit : B256)
+  (receiver : Option Adr)
+  (val : B256)
+  (calldata : B8L)
+  (yParity : Bool)
+  (r : B8L)
+  (s : B8L)
+  (type : TxType)
+
+structure Stx : Type where
+  (nonce : B256)
+  (gasLimit : B256)
+  (sender : Adr)
+  (receiver : Option Adr)
+  (val : B256)
+  (calldata : B8L)
+  (type : TxType)
+
+def TxType.toStrings : TxType → List String
+  | zero
+    (gasPrice : B256)
+    (chainId : Option Nat) =>
+    fork "Type-0" [
+      fork "gas price" [[gasPrice.toHex]],
+      fork "chain ID" [[s!"{chainId}"]]
+    ]
+  | two
+    (chainId : Nat)
+    (maxPriorityFee : B256)
+    (maxFee : B256)
+    (accessList : AccessList) =>
+    fork "Type-2" [
+      [s!"chain ID : {chainId}"],
+      [s!"max priority fee : {maxPriorityFee.toHex}"],
+      [s!"max fee : {maxFee.toHex}"],
+      accessList.toStrings
+    ]
+  | three
+    (chainId : Nat)
+    (maxPriorityFee : B256)
+    (maxFee : B256)
+    (accessList : AccessList)
+    (maxBlobFee : B256)
+    (blobHashes : List B256) =>
+    fork "Type-3" [
+      [s!"chain ID : {chainId}"],
+      [s!"max priority fee : {maxPriorityFee.toHex}"],
+      [s!"max fee : {maxFee.toHex}"],
+      accessList.toStrings,
+      [s!"max blob fee : {maxBlobFee.toHex}"],
+      fork "blob hashes" (blobHashes.map <| fun bh => [bh.toHex])
+    ]
+
+
+instance : ToString TxType := ⟨String.joinln ∘ TxType.toStrings⟩
+
+def Tx.toStrings (tx : Tx) : List String :=
+  fork "tx" [
+    [s!"nonce : {tx.nonce.toHex}"],
+    [s!"gas limit : {tx.gasLimit.toHex}"],
+    [s!"receiver : {tx.receiver}"],
+    [s!"value : {tx.val.toHex}"],
+    [s!"calldata : {tx.calldata.toHex}"],
+    [s!"y-parity : {tx.yParity}"],
+    [s!"r : {tx.r.toHex}"],
+    [s!"s : {tx.s.toHex}"],
+    tx.type.toStrings
+  ]
+
+instance : ToString Tx := ⟨String.joinln ∘ Tx.toStrings⟩
+
+def TxType.gasPrice (baseFee : B256) : TxType → B256
+  | .zero gp _ => gp
+  | .two _ mpf mf _ => min mf (baseFee + mpf)
+  | .three _ mpf mf _ _ _ => min mf (baseFee + mpf)
+
+def TxType.chainId : TxType → Nat
+  | .zero _ cid => cid.getD 1
+  | .two cid _ _ _ => cid
+  | .three cid _ _ _ _ _ => cid
+
+def TxType.accessList : TxType → AccessList
+  | .zero _ _ => []
+  | .two _ _ _ al => al
+  | .three _ _ _ al _ _ => al
+
+def TxType.isBlobTx : TxType → Bool
+  | .three _ _ _ _ _ _ => 1
+  | _ => 0
+
+def TxType.blobHashes : TxType → List B256
+  | .zero _ _ => []
+  | .two _ _ _ _ => []
+  | .three _ _ _ _ _ bhs => bhs
+
+def Stx.blobHashes (tx : Stx) : List B256 := tx.type.blobHashes
+def Tx.blobHashes (tx : Tx) : List B256 := tx.type.blobHashes
+
+def BLT.toAdr : BLT → Option Adr
+  | .b8s bs => bs.toAdr
+  | _ => none
+
+def BLT.toB256 : BLT → Option B256
+  | .b8s bs => some bs.toB256P
+  | _ => none
+
+def BLT.toAccessEntry : BLT → Option (Adr × List B256)
+  | .list [.b8s ar, .list ksr] => do
+    let a ← B8L.toAdr ar
+    let ks ← mapM toB256 ksr
+    pure ⟨a, ks⟩
+  | _ => none
+
+def BLT.toAccessList : BLT → Option AccessList
+  | .list rs => mapM toAccessEntry rs
+  | _ => none
+
+instance : ToString BLT := ⟨String.joinln ∘ BLT.toStrings⟩
+
+def B8L.toReceiver : B8L → IO (Option Adr)
+  | [] => pure .none
+  | xs@(_ :: _) => (B8L.toAdr xs).toIO "cannot convert bytes to receiver address"
+
+def B8.toBool (x : B8) : Bool :=
+  if x = 0 then .false else .true
+
+def decodeV : B8 → IO (Bool × Option Nat)
+  | 27 => pure ⟨0, .none⟩
+  | 28 => pure ⟨1, .none⟩
+  | v =>
+    if v < 37
+    then .throw "nonpositive chain ID"
+    else
+      let x := v - 35
+      let yp : Bool := (x &&& 0x01).toBool
+      let id : Nat := (x &&& 0xFE).toNat / 2
+      pure ⟨yp, some id⟩
+
+def decodeYParity : B8L → IO Bool
+  | [] => pure Bool.false
+  | [0x01] => pure Bool.true
+  | yp => IO.throw s!"invalid yParity value : {yp.toHex}"
+
+def BLT.toLegacyTxHash : BLT → IO (Tx × B256)
+  | BLT.list [
+      .b8s nonce,
+      .b8s gasPrice,
+      .b8s gasLimit,
+      .b8s receiver,
+      .b8s val,
+      .b8s calldata,
+      .b8s [v],
+      .b8s r,
+      .b8s s
+    ] => do
+    let ⟨yParity, chainId⟩ ← decodeV v
+    let bs :=
+      BLT.encode <|
+        .list [
+          .b8s nonce,
+          .b8s gasPrice,
+          .b8s gasLimit,
+          .b8s receiver,
+          .b8s val,
+          .b8s calldata
+        ]
+    return ⟨
+      {
+        nonce := nonce.toB256P
+        gasLimit := gasLimit.toB256P
+        receiver := (← receiver.toReceiver)
+        val := val.toB256P
+        calldata := calldata
+        yParity := yParity
+        r := (r.reverse.takeD 32 0).reverse
+        s := (s.reverse.takeD 32 0).reverse
+        type :=
+          .zero gasPrice.toB256P chainId
+      },
+      bs.keccak
+    ⟩
+  | _ => IO.throw "error : cannot RLP-decode for type-0 tx"
+
+
+def decodeTxHash : B8L → IO (Tx × B256)
+  | [] => IO.throw "error : cannot decode empty bytes"
+  | 0x01 :: _ => IO.throw "unimplemented : Type-1 tx decoding"
+  | 0x02 :: tbs =>
+    match BLT.decode tbs with
+    | BLT.list [
+        .b8s chainId,
+        .b8s nonce,
+        .b8s maxPriorityFee,
+        .b8s maxFee,
+        .b8s gasLimit,
+        .b8s receiver,
+        .b8s val,
+        .b8s calldata,
+        accessList,
+        .b8s yParity,
+        .b8s r,
+        .b8s s
+      ] => do
+      let bs : B8L :=
+        BLT.encode <|
+          .list [
+            .b8s chainId,
+            .b8s nonce,
+            .b8s maxPriorityFee,
+            .b8s maxFee,
+            .b8s gasLimit,
+            .b8s receiver,
+            .b8s val,
+            .b8s calldata,
+            accessList
+          ]
+
+      return ⟨
+        {
+          nonce := nonce.toB256P
+          gasLimit := gasLimit.toB256P
+          receiver := (← receiver.toReceiver)
+          val := val.toB256P
+          calldata := calldata
+          yParity := (← decodeYParity yParity)
+          r := (r.reverse.takeD 32 0).reverse
+          s := (s.reverse.takeD 32 0).reverse
+          type :=
+            .two
+              chainId.toNat
+              maxPriorityFee.toB256P
+              maxFee.toB256P
+              (← accessList.toAccessList.toIO "cannot decode access list")
+        },
+        B8L.keccak (0x02 :: bs)
+      ⟩
+    | _ => IO.throw "error : cannot decode type-2 tx"
+  | 0x03 :: tbs =>
+    match BLT.decode tbs with
+    | BLT.list [
+        .b8s chainId,
+        .b8s nonce,
+        .b8s maxPriorityFee,
+        .b8s maxFee,
+        .b8s gasLimit,
+        .b8s receiver,
+        .b8s val,
+        .b8s calldata,
+        accessList,
+        .b8s maxBlobFee,
+        .list blobHashes,
+        .b8s yParity,
+        .b8s r,
+        .b8s s
+      ] => do
+      let bs : B8L :=
+        BLT.encode <|
+          .list [
+            .b8s chainId,
+            .b8s nonce,
+            .b8s maxPriorityFee,
+            .b8s maxFee,
+            .b8s gasLimit,
+            .b8s receiver,
+            .b8s val,
+            .b8s calldata,
+            accessList,
+            .b8s maxBlobFee,
+            .list blobHashes,
+          ]
+      return ⟨
+        {
+          nonce := nonce.toB256P
+          gasLimit := gasLimit.toB256P
+          receiver := (← receiver.toReceiver)
+          val := val.toB256P
+          calldata := calldata
+          yParity := (← decodeYParity yParity)
+          r := (r.reverse.takeD 32 0).reverse
+          s := (s.reverse.takeD 32 0).reverse
+          type :=
+            .three
+              chainId.toNat
+              maxPriorityFee.toB256P
+              maxFee.toB256P
+              (← accessList.toAccessList.toIO "cannot decode access list")
+              maxBlobFee.toB256P
+              (← mapM (λ r => r.toB256.toIO "") blobHashes)
+        },
+        B8L.keccak (0x03 :: bs)
+        -- B8L.keccak (0x03 :: bs)
+      ⟩
+    | _ => IO.throw "error : cannot RLP-decode for type-3 tx"
+  | bs => do
+    let r ← (BLT.decode bs).toIO "cannot RLP-decode legacy TX"
+    r.toLegacyTxHash
 
 @[extern "ecrecover_flag"]
 opaque ecrecoverFlag : ByteArray → UInt8 → ByteArray → ByteArray
 
 @[extern "rip160"]
 opaque rip160 : ByteArray → ByteArray
-
 
 def ecrecover (h : B256) (v : Bool) (r : B256) (s : B256) : Option Adr :=
   let rsa : ByteArray := ⟨Array.mk (r.toB8L ++ s.toB8L)⟩
@@ -498,7 +1165,6 @@ def getInst (υ : Var) (κ : Con)  : Option Inst' :=
     )
   else some (.last .stop)
 
-
 def safeSub {ξ} [Sub ξ] [LE ξ] [@DecidableRel ξ (· ≤ ·)] (x y : ξ) : Option ξ :=
   if y ≤ x then some (x - y) else none
 
@@ -593,9 +1259,6 @@ def Nat.toAdr (n : Nat) : Adr :=
     mid  := m.toUInt64
     low  := l.toUInt64
   }
-
-abbrev Adr.isPrecomp (a : Adr) : Prop :=
-  1 ≤ a.toNat ∧ a.toNat ≤ 9
 
 inductive CallCostType
   | all
@@ -2421,92 +3084,6 @@ def Stx.run
   return (.pass ω₄ gasUsed.toNat tr.acs.logs.reverse tr.status)
   -- (BLT.list tr.acs.logs.reverse).encode.keccak
 
-def Tx.run
-  (vb : Bool) (blk : BlockInfo)
-  (w : Wor) (tx : Tx) (sender : Adr) : IO Tx.Result := do
-
-  IO.guard (tx.gasLimit ≤ blk.gasLimit) "error : block gas limit < tx gas limit"
-
-  let gIntrinsic : Nat :=
-    intrinsicGas tx.receiver tx.calldata tx.type.accessList
-  let g : Nat := tx.gasLimit.toNat - gIntrinsic
-
-  let blobCount : B256 := tx.blobHashes.length.toB256
-
-  let .true ← IO.decide (¬ tx.type.isBlobTx ∨ tx.receiver.isSome) | pure (Tx.Result.fail .blobCreation)
-  let .true ← IO.decide (¬ tx.type.isBlobTx ∨ blobCount > 0) | pure (Tx.Result.fail .noBlobs)
-  let .true ← IO.decide (blobCount < 7) | pure (Tx.Result.fail .tooManyBlobs)
-  let .true ← IO.decide (tx.blobHashes.Forall correctBlobHashVersion)
-    | pure (Tx.Result.fail .wrongBlobHashVersion)
-  let .false ← IO.decide (tx.receiver.isNone ∧ maxInitcodeSize < tx.calldata.length)
-    | pure (Tx.Result.fail .initCodeTooLong)
-
-  let .true ← IO.decide ((w.nonceAt sender).toNat < maxNonce) | pure (Tx.Result.fail .nonceTooHigh)
-
-  let totalBlobGas : B256 := (gasPerBlob * blobCount)
-
-  let blobGasPrice : B256 :=
-    Nat.toB256 <| get_base_fee_per_blob_gas blk.excessBlobGas.toNat
-
-  let cpVal : B256 :=
-    (tx.gasLimit * tx.type.gasPrice blk.baseFee) + (totalBlobGas * blobGasPrice)
-  let w' ← (checkpoint w sender cpVal).toIO "checkpoint creation failed"
-
-  let tr : ΛΘ.Result :=
-    match tx.receiver with
-    | none =>
-        lambda vb
-          blk
-          w
-          tx.blobHashes
-          tx.type.chainId.toB256
-          w'
-          .empty
-          (A_star blk sender tx.receiver tx.type.accessList)
-          sender
-          sender
-          g
-          (tx.type.gasPrice blk.baseFee).toNat
-          tx.val
-          tx.calldata
-          1024
-          none
-          true
-    | some rcvr =>
-        theta vb
-          blk
-          w
-          tx.blobHashes
-          tx.type.chainId.toB256
-          w'
-          .empty
-          (A_star blk sender tx.receiver tx.type.accessList)
-          sender
-          sender
-          rcvr
-          rcvr
-          g
-          (tx.type.gasPrice blk.baseFee).toNat
-          tx.val
-          tx.val
-          tx.calldata
-          1024
-          true
-
-  let gasLeft : Nat := tr.gas
-  let refundAmount : Nat := tr.acs.ref
-  let gasReturn : B256 :=
-    Nat.toB256 (gasLeft + min ((tx.gasLimit.toNat - gasLeft) / 5) refundAmount) -- g*
-  let gasUsed : B256 := tx.gasLimit - gasReturn
-  let valReturn : B256 := gasReturn * (tx.type.gasPrice blk.baseFee)
-  let f : B256 := (tx.type.gasPrice blk.baseFee) - blk.baseFee
-  let w₀ : Wor := tr.wor.addBal sender valReturn
-  let w₁ : Wor := w₀.addBal blk.beneficiary (gasUsed * f)
-  let w₃ : Wor := List.foldl eraseIfEmpty w₁ tr.acs.tchd.toList
-  -- EIP-6780 : delete only accts that did not exist at the beginning of tx
-  let ω₄ : Wor := List.foldl (eraseIfNew w) w₃ tr.acs.dest
-  return (.pass ω₄ gasUsed.toNat tr.acs.logs.reverse tr.status)
-  -- (BLT.list tr.acs.logs.reverse).encode.keccak
 
 def checkJson (name : String) : IO Unit :=
   if List.IsSuffix ".json".data name.data
@@ -2543,38 +3120,6 @@ def Tx.Result.check (vb : Bool) (exRoot exLogHash : B256)
     .cprintln vb "log check : pass"
     .cprintln vb "test complete.\n"
 
-def checkTxDecode (vb : Bool) (tx : Tx) (td : Test) (pd : PostData) (w : Wor) (sender : Adr) : IO Unit := do
-
-  let cd ← (List.get? td.tx.data pd.dataIdx).toIO ""
-  let gl ← (List.get? td.tx.gasLimit pd.gasIdx).toIO ""
-  let vl ← (List.get? td.tx.value pd.valueIdx).toIO ""
-
-  .guard (tx.nonce = td.tx.nonce) "nonce check 1 : fail"
-  .cprintln vb "nonce check 1 : pass"
-
-  .guard (tx.nonce = w.nonceAt sender) "nonce check 2 : fail"
-  .cprintln vb "nonce check 2 : pass"
-
-  .guard (sender = td.tx.sender) "sender check : fail"
-  .cprintln vb "sender check : pass"
-
-  .guard (tx.receiver = td.tx.receiver) "receiver check : fail"
-  .cprintln vb "receiver check : pass"
-
-  .guard (tx.gasLimit = gl) s!"gas limit check failed."
-  .cprintln vb "gas limit check : pass"
-
-  .guard (tx.type.gasPrice td.env.baseFee = td.tx.gasPrice td.env.baseFee) "gas price check : fail"
-  .cprintln vb "gas price check : pass"
-
-  .guard (tx.val = vl) "value check : fail"
-  .cprintln vb "value check : pass"
-
-  .guard (tx.calldata = cd) "calldata check : fail"
-  .cprintln vb "calldata check : pass"
-
-  .cprintln vb "world state before tx :"
-  .cprintln vb (String.joinln w.toStrings)
 
 def getSender (tx : Tx) (hs : B256) : IO Adr := do
   let rsa : ByteArray := ⟨Array.mk (tx.r ++ tx.s)⟩
@@ -2587,76 +3132,15 @@ def decodeTxBytes (txbs : B8L) : IO (Tx × Adr) := do
   let sender ← getSender tx hs
   return ⟨tx, sender⟩
 
-def PostData.runCore (vb : Bool) (td : Test) (idx_pd : Nat × PostData) : IO Unit := do
-
-  .cprintln vb s!"Testing post : {idx_pd.fst}"
-  let pd : PostData := idx_pd.snd
-
-  let w ← td.world.toIO ""
-
-  let ⟨tx, sender⟩ ← decodeTxBytes pd.txdata
-
-  checkTxDecode vb tx td pd w sender
-
-  let blk : BlockInfo :=
-    {
-      blockHashes := [],
-      baseFee := td.env.baseFee,
-      excessBlobGas := td.env.excessBlobGas,
-      beneficiary := td.env.coinbase
-      prevRandao := td.env.prevRandao
-      gasLimit := td.env.blockGasLimit
-      timestamp := td.env.timestamp
-      number := td.env.number
-      -- chainId := 1
-    }
-
-  let rst ← Tx.run vb blk w tx sender
-
-  Tx.Result.check vb pd.hash pd.logs pd.expectedException rst
-
-def PostData.run (vb : Bool) (idx : Option Nat) (td : Test) (idx_pd : Nat × PostData) : IO Unit :=
-  match idx, idx_pd with
-  | none, _ => PostData.runCore vb td idx_pd
-  | some m, ⟨n, _⟩ =>
-    if m = n
-    then PostData.runCore vb td idx_pd
-    else pure ()
-
 def List.putIndex {ξ : Type u} : Nat → List ξ → List (Nat × ξ)
   | _, [] => []
   | k, x :: xs => (k, x) :: List.putIndex (k + 1) xs
-
-def Test.run (vb : Bool) (idx : Option Nat) (ts : Test) : IO Unit := do
-  let pds := ts.post
-  let _ ← mapM (PostData.run vb idx ts) (List.putIndex 0 pds)
-  pure ()
-
-def runTestFileAtPath (vb : Bool) (idx : Option Nat) (path : String) : IO Unit := do
-
-  .println "\n================================================================\n"
-
-  .println s!"Testing file : {path}\n"
-  let j ← readJsonFile path
-  let tds ← j.toTests
-  let _ ← mapM (Test.run vb idx) tds
-  pure ()
-
-def getPostIndex : List String → IO (Option Nat)
-  | [] => pure .none
-  | ["--post"] => .throw "invalid post index format"
-  | [_] => pure .none
-  | "--post" :: idx :: _ =>
-    match idx.toNat? with
-    | none => .throw "invalid post index format"
-    | some n => pure (.some n)
-  | _ :: opts => getPostIndex opts
 
 inductive ExpectedWorldState : Type
   | wor : Wor → ExpectedWorldState
   | root : B256 → ExpectedWorldState
 
-structure Test' where
+structure Test where
   (name : String)
   (info : Lean.Json)
   (blocks : Lean.Json)
@@ -2668,7 +3152,7 @@ structure Test' where
   (post : ExpectedWorldState)
   (sealEngine : Lean.Json)
 
-def Test'.toStrings (t : Test') : List String :=
+def Test.toStrings (t : Test) : List String :=
   fork "test" [
     [s!"test name : {t.name}"],
     fork "info" [t.info.toStrings],
@@ -2682,7 +3166,7 @@ def Test'.toStrings (t : Test') : List String :=
     fork "sealEngine" [t.sealEngine.toStrings]
   ]
 
-instance : ToString Test' := ⟨String.joinln ∘ Test'.toStrings⟩
+instance : ToString Test := ⟨String.joinln ∘ Test.toStrings⟩
 
 def Lean.Json.toAcct : Lean.Json → IO Acct
   | .obj r => do
@@ -2745,8 +3229,7 @@ def getPostRoot (j : Lean.Json) : IO B256 := do
     let w ← Lean.Json.toWorld wj
     pure w.root
 
-
-def mkTest' : ((_ : String) × Lean.Json) → IO Test'
+def mkTest : ((_ : String) × Lean.Json) → IO Test
   | ⟨name, j⟩ => do
     let info ← j.find "_info"
     let blocks ← j.find "blocks"
@@ -2754,27 +3237,15 @@ def mkTest' : ((_ : String) × Lean.Json) → IO Test'
     let grlp ← j.find "genesisRLP"
     let lbh ← j.find "lastblockhash"
     let network ← j.find "network"
-
-    --let postRoot ← getPostRoot j -- j.find "postState"
-
     let xws ← getXWS j -- j.find "postState"
-
     let pre ← j.find "pre"
     let sealEngine ← j.find "sealEngine"
-    -- let r ← js.fromObj
-    -- let info ← (r.find compare "_info").toIO ""
-    -- let env ← (r.find compare "env").toIO "" >>= Lean.Json.toEnvData
-    -- let pre ← (r.find compare "pre").toIO "" >>= Lean.Json.toPreDatas
-    -- let post ← (r.find compare "post").toIO "" >>= Lean.Json.toPost
-    -- let tx ← (r.find compare "transaction").toIO "" >>= Lean.Json.toTransactionData
-    -- return ⟨name, info, env, pre, post, tx⟩
     return ⟨name, info, blocks, gbh, grlp, lbh, network, pre, xws, sealEngine⟩
-    --return ⟨name, [info, blocks, gbh, grlp, lbh, network, pre, post, sealEngine]⟩
 
-def Lean.Json.toTests' (j : Lean.Json) : IO (List Test') := do
+def Lean.Json.toTests (j : Lean.Json) : IO (List Test) := do
   let r ← j.fromObj
   let l := r.toArray.toList
-  mapM mkTest' l
+  mapM mkTest l
 
 instance : ToString BLT := ⟨String.joinln ∘ BLT.toStrings⟩
 
@@ -3024,8 +3495,7 @@ def getBlockHeader : Lean.Json → Option Lean.Json
 def Lean.Json.toWithdrawal (j : Lean.Json) : IO Withdrawal :=
   .throw "unimplemented : json-to-withdrawal parsing"
 
-
-def runPyTest (vb : Bool) (t : Test') : IO Unit := do
+def runPyTest (vb : Bool) (t : Test) : IO Unit := do
   .cprintln vb "----------------------------------------------------------------"
   .println s!"Running test : {t.name}"
 
@@ -3079,7 +3549,7 @@ def runPyTestFile (vb : Bool) (path : String) : IO Unit := do
   .println "\n================================================================\n"
   .println s!"Testing file : {path}\n"
   let j ← readJsonFile path
-  let ts ← j.toTests'
+  let ts ← j.toTests
   let _ ← mapM (runPyTest vb) ts
 
 def main : List String → IO Unit
@@ -3096,18 +3566,6 @@ def main : List String → IO Unit
 
 #exit
 
--- def main : List String → IO Unit
---   | path :: opts => do
---     let vb : Bool := List.contains opts "--verbose"
---     let idx : Option Nat ← getPostIndex opts
---     let b ← System.FilePath.isDir path
---     if !b
---     then runTestFileAtPath vb idx path
---     else do
---       let fs ← System.FilePath.walkDir path
---       let _← mapM (runTestFileAtPath vb .none) (fs.toList.map System.FilePath.toString)
---       pure ()
---   | [] => IO.throw "error : no arguments"
 
 
 
