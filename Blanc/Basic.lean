@@ -2984,6 +2984,13 @@ def Nat.toB8LNil : Nat → B8L
   | 0 => []
   | n => n.toB8L
 
+def Except.guard {ξ : Type u} (x : ξ) (p : Prop) [inst : Decidable p] : Except ξ Unit :=
+  if p then .ok () else .error x
+
+def Option.toExcept {ξ : Type u} {υ : Type v} (x : ξ) : Option υ → Except ξ υ
+  | .none => .error x
+  | .some y => .ok y
+
 
 
 -------------------------------- RLP --------------------------------
