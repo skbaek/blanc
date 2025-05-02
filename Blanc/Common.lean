@@ -100,6 +100,11 @@ def Ninst.toString : Ninst → String
   | push [] _ => "PUSH0"
   | push bs _ => "PUSH" ++ bs.length.repr ++ " " ++ Bytes.toString bs
 
+def Jinst.toString : Jinst → String
+  | .jump => "JUMP"
+  | .jumpdest => "JUMPDEST"
+  | .jumpi => "JUMPI"
+
 instance : ToString Ninst := ⟨Ninst.toString⟩
 instance : Repr Ninst := ⟨λ i _ => i.toString⟩
 
