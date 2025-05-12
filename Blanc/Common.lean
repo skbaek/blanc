@@ -89,7 +89,7 @@ def Linst.toString : Linst → String
   | .dest => "SELFDESTRUCT"
   | .rev => "REVERT"
   | .ret => "RETURN"
-  | .invalid => "INVALID"
+  -- | .invalid => "INVALID"
 
 instance : Repr Rinst := ⟨λ o _ => o.toString⟩
 instance : Repr Xinst := ⟨λ o _ => o.toString⟩
@@ -1415,7 +1415,7 @@ lemma Linst.inv_nof {e s o r}
   | dest =>
     rcases of_run_dest h with ⟨a, h'⟩
     exact transfer_inv_nof asm h_nof
-  | invalid => cases h
+  -- | invalid => cases h
 
 lemma Linst.inv_sum_bal {e s o r}
     (h : Linst.Run e s o r) (h_nof : SumNof s.bal) : sum s.bal = sum r.bal := by
@@ -1426,7 +1426,7 @@ lemma Linst.inv_sum_bal {e s o r}
   | dest =>
     rcases of_run_dest h with ⟨a, h'⟩
     exact transfer_inv_sum h_nof h'
-  | invalid => cases h
+  -- | invalid => cases h
 
 lemma Xinst.prep_inv_nof {e s ep sp o r sw}
     (h : Xinst.Run' e s ep sp o r sw) (h_nof : SumNof s.bal) : SumNof sp.bal := by
@@ -1763,7 +1763,7 @@ def Byte.toLinst? : Byte → Option Linst
   | ⦃1, 1, 1, 1, 0, 0, 1, 1⦄ => some .ret
   | ⦃1, 1, 1, 1, 1, 1, 0, 1⦄ => some .rev
   | ⦃1, 1, 1, 1, 1, 1, 1, 1⦄ => some .dest
-  | ⦃1, 1, 1, 1, 1, 1, 1, 0⦄ => some .invalid
+  -- | ⦃1, 1, 1, 1, 1, 1, 1, 0⦄ => some .invalid
   | _ => none
 
 lemma toByte_toXinst? {o : Xinst} :
@@ -3950,7 +3950,7 @@ def B8.toLinst : B8 → Option Linst
   | 0xF3 => some .ret
   | 0xFD => some .rev
   | 0xFF => some .dest
-  | 0xFE => some .invalid
+  -- | 0xFE => some .invalid
   | _ => none
 
 def Jinst.toB8 : Jinst → B8
@@ -3963,7 +3963,7 @@ def Linst.toB8 : Linst → B8
   | .ret => 0xF3
   | .rev => 0xFD
   | .dest => 0xFF
-  | .invalid => 0xFE
+  -- | .invalid => 0xFE
 
 def Adr.toHex (a : Adr) : String :=
   a.high.toHex ++ a.mid.toHex ++ a.low.toHex

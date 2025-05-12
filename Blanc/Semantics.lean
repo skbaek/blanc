@@ -97,7 +97,7 @@ inductive Linst : Type
   | ret -- 0xf3 / 2 / 0 / Halt execution and return output data.
   | rev -- 0xfd / 2 / 0 / Halt execution and revert State changes, returning output data.
   | dest -- 0xff / 1 / 0 / Halt execution and destroy the current contract, transferring remaining Ether to a specified Addr.
-  | invalid -- 0xFE / 0 / 0 / Designated invalid instruction.
+  -- | invalid -- 0xFE / 0 / 0 / Designated invalid instruction.
 deriving DecidableEq
 
 def Rinst.toByte : Rinst → Byte
@@ -586,7 +586,7 @@ def Linst.toByte : Linst → Byte
   | .ret => Ox xF x3
   | .rev => Ox xF xD
   | .dest => Ox xF xF
-  | .invalid      => Ox xF xE
+  -- | .invalid => Ox xF xE
 
 def Jinst.toByte : Jinst → Byte
   | jump => Ox x5 x6     -- 0x56 / 1 / 0 / Unconditional jump.

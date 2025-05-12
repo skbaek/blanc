@@ -710,7 +710,8 @@ def gAccesslistaddress : Nat := 2400
 def gAccessliststorage : Nat := 1900
 def gInitcodeword : Nat := 2
 def gBase : Nat := 2
-def gCopy : Nat := 3
+def GAS_COPY : Nat := 3
+def gReturnDataCopy : Nat := 3
 def gMemory : Nat := 3
 def gKeccak256 : Nat := 30
 def gKeccak256Word : Nat := 6
@@ -720,8 +721,8 @@ def gLow : Nat := 5
 def gMid : Nat := 8
 def gExp : Nat := 10
 def gExpbyte : Nat := 50
-def gColdSLoad : Nat := 2100
-def gSSet : Nat := 20000
+def GAS_COLD_SLOAD : Nat := 2100
+def GAS_STORAGE_SET : Nat := 20000
 def gSReset : Nat := 2900
 def rSClear : Nat := 4800
 def gTransaction : Nat := 21000
@@ -730,6 +731,8 @@ def gCodedeposit : Nat := 200
 def gCreate : Nat := 32000
 def gHashopcode : Nat := 3
 def gasPerBlob : B256 := B32.toB256 0x00020000
+def GAS_STORAGE_UPDATE := 5000
+
 def maxCodeSize : Nat := 24576 -- 0x00006000
 def maxInitcodeSize : Nat := 49152-- 0x0000C000
 def maxNonce : Nat := (2 ^ 64) - 1
@@ -760,11 +763,6 @@ structure Log : Type where
   (topics : List B256)
   (data : B8L)
 
-/-
-structure WorldState : Type where
-  (wor : Wor)
-  (created_accounts : AdrSet)
-
 structure Environment : Type where
   caller : Adr
   block_hashes : List B256
@@ -776,7 +774,9 @@ structure Environment : Type where
   gas_price : Nat
   time : B256
   prev_randao: B256
-  state: WorldState
+  state: Wor
+  orig_state : Wor
+  created_accounts : AdrSet
   chain_id: B64
   excess_blob_gas: B64
   blob_versioned_hashes: List B256
@@ -798,10 +798,35 @@ structure Message : Type where
   accessed_storage_keys: KeySet
   -- parent_evm: Option Evm
 
+inductive ExHalt : Type
+  | stackUnderflowError
+  | stackOverflowError
+  | outOfGasError
+  | invalidOpcode : B8 → ExHalt
+  | invalidJumpDestError
+  | stackDepthLimitError
+  | writeInStaticContext
+  | outOfBoundsRead
+  | invalidParameter
+  | invalidContractPrefix
+  | addressCollision
+  | kzgProofError
+deriving DecidableEq
+
+inductive GenEx : Type
+  | assertionError
+deriving DecidableEq
+
+inductive EthEx : Type
+  | revert
+  | exHalt : ExHalt → EthEx
+  | gen : GenEx → EthEx
+deriving DecidableEq
+
 structure Evm : Type where
   pc : Nat
   stack: List B256
-  memory: Array B8
+  memory: Mem
   code: ByteArray
   gas_left: Nat
   env: Environment
@@ -814,37 +839,1320 @@ structure Evm : Type where
   accounts_to_delete: AdrSet
   touched_accounts: AdrSet
   return_data: B8L
-  error: Option String -- Optional[EthereumException]
+  error: Option EthEx -- Optional[EthereumException]
   accessed_addresses: AdrSet
   accessed_storage_keys: KeySet
 
-inductive PyEx : Type
+def Adr.toNat (x : Adr) : Nat :=
+  x.high.toNat * (2 ^ 128) +
+  x.mid.toNat * (2 ^ 64) +
+  x.low.toNat
+
+def Nat.toAdr (n : Nat) : Adr :=
+  let h := n / (2 ^ 128)
+  let r := n % (2 ^ 128)
+  let m := r / (2 ^ 64)
+  let l := r % (2 ^ 64)
+  {
+    high := h.toUInt32
+    mid  := m.toUInt64
+    low  := l.toUInt64
+  }
+
+instance {n} : OfNat Adr n := ⟨n.toAdr⟩
+
+abbrev Adr.isPrecomp (a : Adr) : Prop :=
+  1 ≤ a.toNat ∧ a.toNat ≤ 10
+
+def gas_ecrecover : Nat := 3000
+
+def safeSub {ξ} [Sub ξ] [LE ξ] [@DecidableRel ξ (· ≤ ·)] (x y : ξ) : Option ξ :=
+  if y ≤ x then some (x - y) else none
+
+def chargeGas (cost : Nat) (evm : Evm) : Except (Evm × EthEx) Evm := do
+  let gas ← (safeSub evm.gas_left cost).toExcept ⟨evm, .exHalt .outOfGasError⟩
+  .ok {evm with gas_left := gas}
+
+def Nat.secp256k1n : Nat := 15792089237316195423570985008687907852837564279074904382605163141518161494337
+def B256.secp256k1n : B256 := 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
+
+def B256.toAdr : B256 → Adr
+  | ⟨⟨_, x⟩, ⟨y, z⟩⟩ => {high := x.toUInt32, mid := y, low := z}
+
+def Adr.toB256 (a : Adr) : B256 :=
+  ⟨⟨0, a.high.toUInt64⟩ , ⟨a.mid, a.low⟩ ⟩
+
+def execute_ecrec (evm : Evm) : Except (Evm × EthEx) Evm := do
+  let data := evm.message.data
+  let evm ← chargeGas gas_ecrecover evm
+  let message_hash := B8L.toB256P <| data.sliceD 0 32 (0x00 : B8)
+  let v : Option Bool :=
+    match (B8L.toB256P <| data.sliceD 32 32 (0x00 : B8)) with
+    | 0x1B => some .false
+    | 0x1C => some .true
+    | _ => none
+  let r := B8L.toB256P <| data.sliceD 64 32 (0x00 : B8)
+  let s := B8L.toB256P <| data.sliceD 96 32 (0x00 : B8)
+  if v.isNone ∨ r = 0 ∨ r ≥ .secp256k1n ∨ s = 0 ∨ s ≥ .secp256k1n
+  then .ok evm
+  else
+    match ecrecover message_hash v.get! r s with
+    | none => .ok evm
+    | some address =>
+      let padded_address := address.toB256.toB8L
+      .ok {evm with output := padded_address}
+
+def GAS_SHA256 : Nat := 60
+def GAS_SHA256_WORD : Nat := 12
+
+def execute_sha (evm : Evm) : Except (Evm × EthEx) Evm := do
+  let data := evm.message.data
+  let word_count := ceilDiv data.length 32
+  let evm ← chargeGas (GAS_SHA256 + GAS_SHA256_WORD * word_count) evm
+  let hash : B256 := B8L.sha256 data
+  .ok {evm with output := hash.toB8L}
+
+def GAS_RIPEMD160 : Nat := 600
+def GAS_RIPEMD160_WORD : Nat := 120
+
+def execute_ripemd160 (evm : Evm) : Except (Evm × EthEx) Evm := do
+  let data := evm.message.data
+  let word_count := ceilDiv data.length 32
+  let evm ← chargeGas (GAS_RIPEMD160 + GAS_RIPEMD160_WORD * word_count) evm
+  let hash : B256 := B8L.toB256P <| (rip160 ⟨.mk data⟩).toList
+  .ok {evm with output := hash.toB8L}
+
+def GAS_IDENTITY : Nat := 15
+def GAS_IDENTITY_WORD : Nat := 3
+
+def execute_id (evm : Evm) : Except (Evm × EthEx) Evm := do
+  let data := evm.message.data
+  let word_count := ceilDiv data.length 32
+  let evm ← chargeGas (GAS_IDENTITY + GAS_IDENTITY_WORD * word_count) evm
+  .ok {evm with output := data}
+
+def execute_modexp (evm : Evm) : Except (Evm × EthEx) Evm := do
+  let data := evm.message.data
+  let f : Nat → Nat := λ x => (ceilDiv x 8) ^ 2
+  let gQuadDivisor : Nat := 3
+  let l_B : Nat := B8L.toNat <| data.sliceD 0 32 (0x00 : B8)
+  let l_E : Nat := B8L.toNat <| data.sliceD 32 32 (0x00 : B8)
+  let l_M : Nat := B8L.toNat <| data.sliceD 64 32 (0x00 : B8)
+  let B : Nat := B8L.toNat   <| data.sliceD 96 l_B (0 : B8)
+  let E : Nat := B8L.toNat   <| data.sliceD (96 + l_B) l_E (0 : B8)
+  let E_pfx : Nat := B8L.toNat <| data.sliceD (96 + l_B) 32 (0 : B8)
+  let M : Nat := B8L.toNat   <| data.sliceD (96 + l_B + l_E) l_M (0 : B8)
+  let l'_E : Nat :=
+    if l_E ≤ 32
+    then
+      if E = 0
+      then 0
+      else Nat.log2 E
+    else
+      if E_pfx = 0
+      then 8 * (l_E - 32)
+      else (8 * (l_E - 32)) + Nat.log2 E_pfx
+  let cost : Nat := max 200 <| (f (max l_M l_B) * max l'_E 1) / gQuadDivisor
+  let evm ← chargeGas cost evm
+  let expmod : Nat := Nat.powMod B E M
+  .ok {evm with output := B8L.pack expmod.toB8L l_M}
+
+abbrev altBn128Prime : Nat := 21888242871839275222246405745257275088696311157297823662689037894645226208583
+
+structure FF (p : Nat) : Type where
+  (val : Nat)
 deriving DecidableEq
 
-inductive PyMo (γ ξ υ : Type u) : Type u
-  | pure : υ → PyMo ξ υ
-  | raise : PyEx → PyMo ξ υ
-  | return : ξ → PyMo ξ υ
+-- abbrev BNF : Type := ZMod altBn128Prime
+abbrev BNF : Type := FF altBn128Prime
 
-def PyMo.bind {ξ υ ζ : Type u} : PyMo ξ υ → (υ → PyMo ξ ζ) → PyMo ξ ζ
-  | .raise e, _ => .raise e
-  | .return z, _ => .return z
-  | .pure y, p => p y
+structure Point : Type where
+  (x : BNF)
+  (y : BNF)
 
-instance {ξ} : Monad (PyMo ξ) where
-  pure := .pure
-  bind := .bind
+def Nat.toHexit : Nat → Char
+  | 0 => '0'
+  | 1 => '1'
+  | 2 => '2'
+  | 3 => '3'
+  | 4 => '4'
+  | 5 => '5'
+  | 6 => '6'
+  | 7 => '7'
+  | 8 => '8'
+  | 9 => '9'
+  | 10 => 'A'
+  | 11 => 'B'
+  | 12 => 'C'
+  | 13 => 'D'
+  | 14 => 'E'
+  | 15 => 'F'
+  | _   => 'X'
 
-def PyMo.tryExAux {ξ υ} (p : PyMo ξ υ) (l : List ((PyEx → Bool) × (PyMo ξ υ))) : PyMo ξ υ :=
+def Nat.toHexCore : Nat → List Char
+  | 0 => []
+  | n@(_ + 1) =>
+    if n < 16
+    then [n.toHexit]
+    else (n % 16).toHexit :: (n / 16).toHexCore
 
-def PyMo.tryEx {ξ υ} (p : PyMo ξ υ) (l : List ((PyEx → Bool) × (PyMo ξ υ))) : PyMo ξ υ :=
-  match p with
-  | .pure x => .pure x
+def Nat.toHex (n : Nat) : String :=
+  ⟨.reverse <| n.toHexCore⟩
+
+def Point.toString : Point → String
+  | ⟨x, y⟩ => s!"⟨{x.val.toHex}, {y.val.toHex}⟩"
+
+instance : ToString Point := ⟨Point.toString⟩
+
+def FF.mkMod {p : Nat} (n : Nat) : FF p := ⟨n % p⟩
+
+instance {p n : Nat} : OfNat (FF p) n := ⟨.mkMod n⟩
+
+def FF.pow {p : Nat} (b : FF p) (e : Nat) : FF p :=
+  ⟨Nat.powMod b.val e p⟩
+
+instance {p} : HPow (FF p) Nat (FF p) := ⟨FF.pow⟩
+
+def FF.add {p : Nat} (x y : FF p) : FF p :=
+  ⟨(x.val + y.val) % p⟩
+
+instance {p} : HAdd (FF p) (FF p) (FF p) := ⟨FF.add⟩
+
+def FF.sub {p : Nat} (x y : FF p) : FF p :=
+  ⟨Int.natAbs <| (Int.ofNat x.val - Int.ofNat y.val) % p⟩
+
+instance {p} : HSub (FF p) (FF p) (FF p) := ⟨FF.sub⟩
+
+def FF.mul {p : Nat} (x y : FF p) : FF p :=
+  ⟨(x.val * y.val) % p⟩
+
+instance {p} : HMul (FF p) (FF p) (FF p) := ⟨FF.mul⟩
+
+def Point.mk? (x : Nat) (y : Nat) : Option Point := do
+  let x' : BNF := FF.mkMod x
+  let y' : BNF := FF.mkMod y
+  if (x' = 0 ∧ y' = 0)
+  then some ⟨0, 0⟩
+  else if y' ^ 2 = (x' ^ 3) + 3
+       then some ⟨x', y'⟩
+       else none
+
+def extEuclid (x y : Nat) : Int × Int × Nat :=
+  if hx : x > 0
+  then
+    if hy : y > 0
+    then
+      if _ : x < y
+      then
+        have _ : y % x < x := Nat.mod_lt _ hx
+        let ⟨cy, cx, d⟩ := extEuclid (y % x) x
+        ⟨cx - (cy * (y / x)), cy, d⟩
+      else
+        if _ : y < x
+        then
+          have _ : x % y < y := Nat.mod_lt _ hy
+          let ⟨cy, cx, d⟩ := extEuclid y (x % y)
+          ⟨cx, cy - (cx * (x / y)), d⟩
+        else ⟨0, 1, x⟩
+    else ⟨1, 0, x⟩
+  else ⟨0, 1, y⟩
+termination_by (x + y)
+
+
+def FF.inv {p : Nat} (x : FF p) : FF p :=
+  let ⟨c, _, _⟩ := extEuclid x.val p
+  ⟨(c % p).natAbs⟩
+
+instance {p} : Inv (FF p) := ⟨FF.inv⟩
+
+def FF.div {p : Nat} (x y : FF p) : FF p := x * (y⁻¹)
+
+instance {p} : HDiv (FF p) (FF p) (FF p) := ⟨FF.div⟩
+
+def Point.double (p : Point) : Point :=
+  if p.x = 0 ∧ p.y = 0
+  then p
+  else
+    let lam : BNF := (3 * (p.x ^ 2)) / (2 * p.y)
+    let x := lam ^ 2 - p.x - p.x
+    let y := lam * (p.x - x) - p.y
+    ⟨x, y⟩
+
+def Point.add : Point → Point → Point
+  | ⟨0, 0⟩, q => q
+  | p, ⟨0, 0⟩ => p
+  | ⟨selfX, selfY⟩, ⟨otherX, otherY⟩ =>
+    if selfX = otherX
+    then
+      if selfY = otherY
+      then Point.double ⟨selfX, selfY⟩
+      else ⟨0, 0⟩
+    else
+      let yDiff := otherY - selfY
+      let xDiff := otherX - selfX
+      let lam := yDiff / xDiff
+      let x := lam ^ 2 - selfX - otherX
+      let y := lam * (selfX - x) - selfY
+      ⟨x, y⟩
+
+def Point.mul (p : Point) : Nat → Point
+  | 0 => ⟨0, 0⟩
+  | n@(_ + 1) =>
+    let half := Point.mul p (n / 2)
+    let whole := Point.add half half
+    if (n % 2) = 0
+    then whole
+    else Point.add whole p
+
+def Point.toB8L (p : Point) : B8L :=
+  p.x.val.toB8L.pack 32 ++ p.y.val.toB8L.pack 32
+
+def ecadd (input : B8L) : Option B8L := do
+  let px : Nat := B8L.toNat <| input.sliceD 0 32 (0 : B8)
+  let py : Nat := B8L.toNat <| input.sliceD 32 32 (0 : B8)
+  let qx : Nat := B8L.toNat <| input.sliceD 64 32 (0 : B8)
+  let qy : Nat := B8L.toNat <| input.sliceD 96 32 (0 : B8)
+  let p ← Point.mk? px py
+  let q ← Point.mk? qx qy
+  let s := Point.add p q
+  some s.toB8L
+
+def ecmul (input : B8L) : Option B8L := do
+  let px : Nat := B8L.toNat <| input.sliceD 0 32 (0 : B8)
+  let py : Nat := B8L.toNat <| input.sliceD 32 32 (0 : B8)
+  let n  : Nat := B8L.toNat <| input.sliceD 64 32 (0 : B8)
+  let p ← Point.mk? px py
+  let s := Point.mul p n
+  some s.toB8L
+
+def EthEx.oog : EthEx := .exHalt .outOfGasError
+
+def execute_ecadd (evm : Evm) : Except (Evm × EthEx) Evm := do
+  let data := evm.message.data
+  let evm ← chargeGas 150 evm
+
+  let x0_value : Nat := B8L.toNat <| data.sliceD 0  32 (0 : B8)
+  let y0_value : Nat := B8L.toNat <| data.sliceD 32 32 (0 : B8)
+  let x1_value : Nat := B8L.toNat <| data.sliceD 64 32 (0 : B8)
+  let y1_value : Nat := B8L.toNat <| data.sliceD 96 32 (0 : B8)
+
+  .guard ⟨evm, .exHalt .outOfGasError⟩  (
+    x0_value < altBn128Prime ∧
+    x0_value < altBn128Prime ∧
+    x1_value < altBn128Prime ∧
+    x1_value < altBn128Prime
+  )
+
+  let p0 ← (Point.mk? x0_value y0_value).toExcept ⟨evm, .oog⟩
+  let p1 ← (Point.mk? x1_value y1_value).toExcept ⟨evm, .oog⟩
+  .ok {evm with output := (Point.add p0 p1).toB8L}
+
+def execute_ecmul (evm : Evm) : Except (Evm × EthEx) Evm := do
+  let data := evm.message.data
+  let evm ← chargeGas 6000 evm
+
+  let x_value : Nat := B8L.toNat <| data.sliceD 0  32 (0 : B8)
+  let y_value : Nat := B8L.toNat <| data.sliceD 32 32 (0 : B8)
+  let n       : Nat := B8L.toNat <| data.sliceD 64 32 (0 : B8)
+
+  .guard ⟨evm, .exHalt .outOfGasError⟩
+    (x_value < altBn128Prime ∧ y_value < altBn128Prime)
+
+  let p ← (Point.mk? x_value y_value).toExcept ⟨evm, .oog⟩
+
+  .ok {evm with output := (Point.mul p n).toB8L}
+
+def execute_precomp (evm : Evm) : Nat → Except (Evm × EthEx) Evm
+  | 1 => execute_ecrec evm
+  | 2 => execute_sha evm
+  | 3 => execute_ripemd160 evm
+  | 4 => execute_id evm
+  | 5 => execute_modexp evm
+  | 6 => execute_ecadd evm
+  | 7 => execute_ecmul evm
+  | n => dbg_trace s!"precomp uninplemented : {n}" ; .ok evm
+
+def execute (evm : Evm) : Except (Evm × EthEx) Evm := sorry
+
+inductive Ninst' : Type
+  | reg : Rinst → Ninst'
+  | exec : Xinst → Ninst'
+  | push : B256 → Nat →  Ninst' --∀ bs : B8L, bs.length ≤ 32 → Ninst'
+
+inductive Inst' : Type
+  | last : Linst → Inst'
+  | next : Ninst' → Inst'
+  | jump : Jinst → Inst'
+
+
+def getInstAux (code : ByteArray) (pc len off : Nat) : B8 :=
+  if off < len
+  then code.get! ((pc + len) - off)
+  else 0
+
+def Evm.getInst (evm : Evm) : Option Inst' :=
+  if evm.pc < evm.code.size
+  then
+    let b : B8 := evm.code.get! evm.pc
+    (b.toRinst <&> (.next ∘ .reg)) <|>
+    (b.toXinst <&> (.next ∘ .exec)) <|>
+    (b.toJinst <&> .jump) <|>
+    (b.toLinst <&> .last) <|>
+    (
+      let bn := b.toNat
+      if 95 ≤ bn ∧ bn ≤ 127
+      then let len := bn - 95
+           let x : B256 :=
+             B8s.toB256
+               (getInstAux evm.code evm.pc len 31)
+               (getInstAux evm.code evm.pc len 30)
+               (getInstAux evm.code evm.pc len 29)
+               (getInstAux evm.code evm.pc len 28)
+               (getInstAux evm.code evm.pc len 27)
+               (getInstAux evm.code evm.pc len 26)
+               (getInstAux evm.code evm.pc len 25)
+               (getInstAux evm.code evm.pc len 24)
+               (getInstAux evm.code evm.pc len 23)
+               (getInstAux evm.code evm.pc len 22)
+               (getInstAux evm.code evm.pc len 21)
+               (getInstAux evm.code evm.pc len 20)
+               (getInstAux evm.code evm.pc len 19)
+               (getInstAux evm.code evm.pc len 18)
+               (getInstAux evm.code evm.pc len 17)
+               (getInstAux evm.code evm.pc len 16)
+               (getInstAux evm.code evm.pc len 15)
+               (getInstAux evm.code evm.pc len 14)
+               (getInstAux evm.code evm.pc len 13)
+               (getInstAux evm.code evm.pc len 12)
+               (getInstAux evm.code evm.pc len 11)
+               (getInstAux evm.code evm.pc len 10)
+               (getInstAux evm.code evm.pc len  9)
+               (getInstAux evm.code evm.pc len  8)
+               (getInstAux evm.code evm.pc len  7)
+               (getInstAux evm.code evm.pc len  6)
+               (getInstAux evm.code evm.pc len  5)
+               (getInstAux evm.code evm.pc len  4)
+               (getInstAux evm.code evm.pc len  3)
+               (getInstAux evm.code evm.pc len  2)
+               (getInstAux evm.code evm.pc len  1)
+               (getInstAux evm.code evm.pc len  0)
+           some (.next <| .push x len)
+      else none
+    )
+  else some (.last .stop)
+
+def fakeExpAux (num den i : Nat) : Nat → Nat → Nat
+  | _, 0 => panic! "error : recursion limit reached for fake exponentiation"
+  | 0, _ => 0
+  | numAcc, lim + 1 =>
+    let numAcc' := (numAcc * num) / (den * i)
+    numAcc + fakeExpAux num den (i + 1) numAcc' lim
+
+def fakeExp (fac num den : Nat) : Nat :=
+  let lim := (max (fac * num) <| num * num) + 2
+  let out := fakeExpAux num den 1 (fac * den) lim
+  out / den
+
+def BLOB_BASE_FEE_UPDATE_FRACTION : Nat := 3338477
+
+def get_base_fee_per_blob_gas (excessBlobGas : Nat) : Nat :=
+  fakeExp 1 excessBlobGas BLOB_BASE_FEE_UPDATE_FRACTION
+
+def Evm.push (x : B256) (evm : Evm) : Except (Evm × EthEx) Evm := do
+  .guard ⟨evm, .exHalt .stackOverflowError⟩ (evm.stack.length < 1024)
+  .ok {evm with stack := x :: evm.stack}
+
+def Evm.pop (evm : Evm) : Except (Evm × EthEx) (B256 × Evm) := do
+  match evm.stack with
+  | [] => .error ⟨evm, .exHalt .stackUnderflowError⟩
+  | x :: xs => .ok ⟨x, {evm with stack := xs}⟩
+
+def Prod.mapFst {α₁ : Type u₁} {α₂ : Type u₂} {β : Type v} (f : α₁ → α₂) : α₁ × β → α₂ × β :=
+  Prod.map f id
+
+def Evm.popToNat (evm : Evm) : Except (Evm × EthEx) (Nat × Evm) :=
+  evm.pop <&> Prod.mapFst B256.toNat
+
+def Evm.popN (evm : Evm) : Nat → Except (Evm × EthEx) (List B256 × Evm)
+  | 0 => .ok ⟨[], evm⟩
+  | n + 1 => do
+    let ⟨x, evm⟩ ← evm.pop
+    let ⟨xs, evm⟩ ← evm.popN n
+    .ok ⟨x :: xs, evm⟩
+
+abbrev Execution : Type := Except (Evm × EthEx) Evm
+
+def Evm.incrPc (evm : Evm) : Execution :=
+  .ok {evm with pc := evm.pc + 1}
+
+def Evm.update (evm : Evm) (cost : Nat)
+  (out : B8L := evm.output)
+  (adrs : AdrSet := evm.accessed_addresses)
+  (logs : List Log := evm.logs)
+  (keys : KeySet := evm.accessed_storage_keys) : Execution := do
+  let gas ← (safeSub evm.gas_left cost).toExcept ⟨evm, .exHalt .outOfGasError⟩
+  .ok {
+    evm with
+    pc := evm.pc + 1
+    gas_left := gas
+    output := out
+    logs := logs
+    accessed_addresses := adrs
+    accessed_storage_keys := keys
+  }
+
+def pushItem (x : B256) (c : Nat) (evm : Evm) : Execution := do
+  chargeGas c evm >>= Evm.push x >>= Evm.incrPc
+
+def gNewAccount : Nat := 25000
+def GAS_SELF_DESTRUCT_NEW_ACCOUNT : Nat := 25000
+def gCallValue : Nat := 9000
+def gCallStipend : Nat := 2300
+def GAS_WARM_ACCESS : Nat := 100
+def gColdAccountAccess : Nat := 2600
+def gSelfdestruct : Nat := 5000
+def gLog : Nat := 375
+def gLogdata : Nat := 8
+def gLogtopic : Nat := 375
+
+def access_cost (x : Adr) (a : AdrSet) : Nat :=
+  if x ∈ a then GAS_WARM_ACCESS else gColdAccountAccess
+
+def add_accessed_address (evm : Evm) (a : Adr) : Evm :=
+  {evm with accessed_addresses := evm.accessed_addresses.insert a}
+
+def add_accessed_storage_key (evm : Evm) (a : Adr) (k : B256) : Evm :=
+  {evm with accessed_storage_keys := evm.accessed_storage_keys.insert ⟨a, k⟩}
+
+def add_account_to_delete (evm : Evm) (a : Adr) : Evm :=
+  {evm with accounts_to_delete := evm.accounts_to_delete.insert a}
+
+def add_touched_account (evm : Evm) (a : Adr) : Evm :=
+  {evm with touched_accounts := evm.touched_accounts.insert a}
+
+def Acct.empty : Acct :=
+  {
+    nonce := 0
+    bal := 0
+    stor := .empty
+    code := ByteArray.mk #[]
+  }
+
+def Acct.Erasable (ac : Acct) : Prop :=
+  ac.nonce = 0 ∧
+  ac.bal = 0 ∧
+  ac.stor.isEmpty = .true ∧
+  ac.code.size = 0
+
+instance {ac : Acct} : Decidable ac.Erasable := instDecidableAnd
+
+def Wor.get (w : Wor) (a : Adr) : Acct := (w.find? a).getD .empty
+
+def Wor.set (w : Wor) (a : Adr) (ac : Acct) : Wor :=
+  if ac.Erasable then w.erase a else w.insert a ac
+
+def Tra.set (τ : Tra) (a : Adr) (s : Stor) : Tra :=
+  if s.isEmpty then τ.erase a else τ.insert a s
+
+def Wor.setCode (ω : Wor) (a : Adr) (cd : ByteArray) : Wor :=
+  let ac := ω.get a
+  ω.set a {ac with code := cd}
+
+def Evm.getOrigAcct (evm : Evm) (a : Adr) : Acct :=
+  evm.env.orig_state.get a
+
+def Evm.getAcct (evm : Evm) (a : Adr) : Acct :=
+  evm.env.state.get a
+
+def Environment.setAcct (env : Environment) (a : Adr) (ac : Acct) : Environment :=
+  {env with state := env.state.set a ac}
+
+def Evm.setAcct (evm : Evm) (a : Adr) (ac : Acct) : Evm :=
+  {evm with env := evm.env.setAcct a ac}
+
+def Evm.balAt (evm : Evm) (a : Adr) : B256 := (evm.getAcct a).bal
+def Evm.codeAt (evm : Evm) (a : Adr) : ByteArray := (evm.getAcct a).code
+def Evm.storValAt (evm : Evm) (adr : Adr) (key : B256) : B256 :=
+  (evm.getAcct adr).stor.findD key 0
+
+
+def Stor.set (s : Stor) (k v : B256) : Stor :=
+  if v = 0 then s.erase k else s.insert k v
+
+def Wor.setStorVal (wor : Wor) (adr : Adr) (key val : B256) : Wor :=
+  let acct : Acct := wor.get adr
+  wor.set adr {acct with stor := acct.stor.set key val}
+
+def Environment.setStorVal (env : Environment)
+  (adr : Adr) (key val : B256) : Environment :=
+  {env with state := env.state.setStorVal adr key val}
+
+def Evm.setStorVal (evm : Evm) (adr : Adr) (key val : B256) : Evm :=
+  {evm with env := evm.env.setStorVal adr key val}
+
+def Environment.setTransVal (env : Environment)
+  (adr : Adr) (key val : B256) : Environment :=
+  {env with state := env.state.setStorVal adr key val}
+
+def Evm.setTransVal (evm : Evm) (adr : Adr) (key val : B256) : Evm :=
+  {evm with env := evm.env.setTransVal adr key val}
+
+def Evm.origStorValAt (evm : Evm) (adr : Adr) (key : B256) : B256 :=
+  (evm.getOrigAcct adr).stor.findD key 0
+
+def Evm.getTransVal (evm : Evm) (adr : Adr) (key : B256) : B256 :=
+  (evm.env.transient_storage.findD adr .empty).findD key 0
+
+def memExtSize
+  (current_size access_index access_size : Nat) : Nat :=
+  if access_size = 0
+  then current_size
+  else
+    max current_size (ceilDiv (access_index + access_size) 32)
+
+def memExtsSize : Nat → List (Nat × Nat) → Nat
+  | initSize, [] => initSize
+  | initSize, ⟨accessIndex, accessSize⟩ :: pairs =>
+    let expSize := memExtSize initSize accessIndex accessSize
+    memExtsSize expSize pairs
+
+def Evm.extCost (evm : Evm) (pairs : List (Nat × Nat)) : Nat :=
+  let extSize := memExtsSize evm.memory.size pairs
+  cMem extSize - cMem evm.memory.size
+
+-- def memCost (υ : Var) (lc sz : B256) : Nat :=
+--   let act' : Nat := memExp υ.act lc sz
+--   cMem act' - cMem υ.act
+--
+-- def memExpCost (υ : Var) (lc sz : B256) : Nat × Nat :=
+--   let act' : Nat := memExp υ.act lc sz
+--   ⟨act', cMem act' - cMem υ.act⟩
+
+-- def Evm.extCost (evm : Evm) (access_start_index access_size : B256) : Nat :=
+--   let extended_size : Nat :=
+--     memExp evm.memory.size access_start_index access_size
+--   cMem extended_size - cMem evm.memory.size
+
+def Mem.write (μ : Mem) (n : ℕ) : B8L → Mem
+  | [] => μ
+  | xs@(_ :: _) =>
+    if n + xs.length ≤ μ.size
+    then Array.writeD μ n xs
+    else let μ₀ : Mem := Array.mkArray (n + xs.length) 0x00
+         Array.writeD (Array.copyD μ μ₀) n xs
+
+def Mem.extend (μ : Mem) (index size : Nat) : Mem :=
+  let size := memExtSize μ.size index size
+  if size ≤ μ.size
+  then μ
+  else Array.copyD μ <| Array.mkArray size 0x00
+
+def Mem.extends (μ : Mem) (pairs : List (Nat × Nat)) : Mem :=
+  let size := memExtsSize μ.size pairs
+  if size ≤ μ.size
+  then μ
+  else Array.copyD μ <| Array.mkArray size 0x00
+
+def Mem.read (μ : Mem) (index size : ℕ) : B8L × Mem :=
+  ⟨μ.sliceD index size 0, μ.extend index size⟩
+
+def Acct.Empty (a : Acct) : Prop :=
+  a.code.size = 0 ∧ a.nonce = 0 ∧ a.bal = 0
+
+instance {a : Acct} : Decidable a.Empty := by
+ apply instDecidableAnd
+
+def Dead (w : Wor) (a : Adr) : Prop :=
+  match w.find? a with
+  | none => True
+  | some x => x.Empty
+
+def Evm.memWrite (evm : Evm) (idx : Nat) (val : B8L) : Evm :=
+  {evm with memory := evm.memory.write idx val}
+
+def Evm.memRead (evm : Evm) (index size : Nat) : B8L × Evm :=
+  let ⟨val, mem⟩ := evm.memory.read index size
+  ⟨val, {evm with memory := mem}⟩
+
+def Evm.memExtend (evm : Evm) (index size : Nat) : Evm :=
+  let mem := evm.memory.extend index size
+  {evm with memory := mem}
+
+def Evm.memExtends (evm : Evm) (pairs : List (Nat × Nat)) : Evm :=
+  let mem := evm.memory.extends pairs
+  {evm with memory := mem}
+
+def Evm.addLog (evm : Evm) (log : Log) : Evm :=
+  {evm with logs := log :: evm.logs}
+
+def applyUnary (f : B256 → B256) (cost : Nat) (evm : Evm) : Execution := do
+  let ⟨x, evm⟩ ← evm.pop
+  pushItem (f x) cost evm
+
+def applyBinary (f : B256 → B256 → B256)
+  (cost : Nat) (evm : Evm) : Execution := do
+  let ⟨x, evm⟩ ← evm.pop
+  let ⟨y, evm⟩ ← evm.pop
+  pushItem (f x y) cost evm
+
+def applyTernary (f : B256 → B256 → B256 → B256)
+  (cost : Nat) (evm : Evm) : Execution := do
+  let ⟨x, evm⟩ ← evm.pop
+  let ⟨y, evm⟩ ← evm.pop
+  let ⟨z, evm⟩ ← evm.pop
+  pushItem (f x y z) cost evm
+
+def List.swap : List ξ → Nat → Option (List ξ)
+  | [], _ => none
+  | x :: xs, k => do
+    let y ← xs.get? k
+    let ys := xs.set k x
+    .some (y :: ys)
+
+def Evm.contract (evm : Evm) : Adr := evm.message.current_target
+
+def Rinst.run (evm : Evm) : Rinst → Execution
+  | .address => pushItem evm.contract.toB256 gBase evm
+  | .basefee => pushItem evm.env.base_fee_per_gas.toB256 gBase evm
+  | .blobhash => do
+    let ⟨x, evm⟩ ← evm.pop
+    let y : B256 := evm.env.blob_versioned_hashes.getD x.toNat 0
+    chargeGas gHashopcode evm >>= Evm.push y >>= Evm.incrPc
+  | .blobbasefee => do
+    let fee := get_base_fee_per_blob_gas evm.env.excess_blob_gas.toNat
+    pushItem fee.toB256 gBase evm
+  | .balance => do
+    let ⟨x, evm⟩ ← evm.pop
+    let a := x.toAdr
+    let evm ←
+      if a ∈ evm.accessed_addresses
+      then chargeGas GAS_WARM_ACCESS evm
+      else chargeGas gColdAccountAccess (add_accessed_address evm a)
+    evm.push (evm.balAt a) >>= Evm.incrPc
+  | .origin => pushItem evm.env.origin.toB256 gBase evm
+  | .caller => pushItem evm.message.caller.toB256 gBase evm
+  | .callvalue => pushItem evm.message.value gBase evm
+  | .calldataload => do
+    let ⟨start_index, evm⟩ ← evm.pop
+    let evm ← chargeGas gVerylow evm
+    let value := B8L.toB256P <| evm.message.data.sliceD start_index.toNat 32 0
+    evm.push value >>= Evm.incrPc
+  | .calldatasize => pushItem evm.message.data.length.toB256 gBase evm
+  | .calldatacopy => do
+    let ⟨memory_start_index, evm⟩ ← evm.popToNat
+    let ⟨data_start_index, evm⟩ ← evm.popToNat
+    let ⟨size, evm⟩ ← evm.popToNat
+    let words := ceilDiv size 32
+    let copy_gas_cost := GAS_COPY * words
+    let extend_memory_cost := evm.extCost [⟨memory_start_index, size⟩]
+    let evm ← chargeGas (gVerylow + copy_gas_cost + extend_memory_cost) evm
+    let value := evm.memory.sliceD data_start_index size 0
+    Evm.incrPc <| evm.memWrite memory_start_index value
+  | .codesize => pushItem evm.message.code.size.toB256 gBase evm
+  | .codecopy => do
+    let ⟨memory_start_index, evm⟩ ← evm.popToNat
+    let ⟨code_start_index, evm⟩ ← evm.popToNat
+    let ⟨size, evm⟩ ← evm.popToNat
+    let words := ceilDiv size 32
+    let copy_gas_cost := GAS_COPY * words
+    let extend_memory_cost := evm.extCost [⟨memory_start_index, size⟩]
+    let evm ← chargeGas (gVerylow + copy_gas_cost + extend_memory_cost) evm
+    let value := evm.code.sliceD code_start_index size (Linst.toB8 .stop)
+    .ok {
+      evm with
+      pc := evm.pc + 1
+      memory := evm.memory.write memory_start_index value
+    }
+  | .gasprice => pushItem evm.env.gas_price.toB256 gBase evm
+  | .extcodesize => do
+    let ⟨address_word, evm⟩ ← evm.pop
+    let address := address_word.toAdr
+    let evm ←
+      if address ∈ evm.accessed_addresses
+      then chargeGas GAS_WARM_ACCESS evm
+      else chargeGas gColdAccountAccess (add_accessed_address evm address)
+    let codesize := (evm.codeAt address).size.toB256
+    evm.push codesize >>= Evm.incrPc
+  | .extcodecopy => do
+    let ⟨address_word, evm⟩ ← evm.pop
+    let address : Adr := address_word.toAdr
+    let ⟨memory_start_index, evm⟩ ← evm.popToNat
+    let ⟨code_start_index, evm⟩ ← evm.popToNat
+    let ⟨size, evm⟩ ← evm.popToNat
+    let words := ceilDiv size 32
+    let copy_gas_cost := GAS_COPY * words
+    let extend_memory_cost := evm.extCost [⟨memory_start_index, size⟩]
+    let evm ←
+      if address ∈ evm.accessed_addresses
+      then chargeGas (GAS_WARM_ACCESS + copy_gas_cost + extend_memory_cost) evm
+      else
+        chargeGas
+          (gColdAccountAccess + copy_gas_cost + extend_memory_cost)
+          (add_accessed_address evm address)
+    let code := evm.codeAt address
+    let value := code.sliceD code_start_index size (Linst.toB8 .stop)
+    .ok {
+      evm with
+      pc := evm.pc + 1
+      memory := evm.memory.write memory_start_index value
+    }
+  | .retdatasize => pushItem evm.return_data.length.toB256 gBase evm
+  | .retdatacopy => do
+    let ⟨memory_start_index, evm⟩ ← evm.pop
+    let ⟨return_data_start_index, evm⟩ ← evm.pop
+    let ⟨size, evm⟩ ← evm.pop
+    let words := ceilDiv size.toNat 32
+    let copy_gas_cost := gReturnDataCopy * words
+    let extend_memory_cost := evm.extCost [⟨memory_start_index, size⟩]
+    let evm ← chargeGas (gVerylow + copy_gas_cost + extend_memory_cost) evm
+    .guard
+      ⟨evm, .exHalt .outOfBoundsRead⟩
+      (evm.return_data.length < return_data_start_index.toNat + size.toNat)
+    let value :=
+      evm.return_data.sliceD return_data_start_index.toNat size.toNat 0
+    .ok {
+      evm with
+      pc := evm.pc + 1
+      memory := evm.memory.write memory_start_index.toNat value
+    }
+  | .extcodehash => do
+    let ⟨address_word, evm⟩ ← evm.pop
+    let address : Adr := address_word.toAdr
+    let evm ←
+      if address ∈ evm.accessed_addresses
+      then chargeGas GAS_WARM_ACCESS evm
+      else chargeGas gColdAccountAccess (add_accessed_address evm address)
+    let account := evm.getAcct address
+    let codehash : B256 :=
+      if account.Empty
+      then 0
+      else ByteArray.keccak 0 account.code.size account.code
+    evm.push codehash >>= Evm.incrPc
+  | .selfbalance => pushItem (evm.balAt evm.contract) gLow evm
+  | .chainid => pushItem evm.env.chain_id.toB256 gBase evm
+  | .number => pushItem evm.env.number.toB256 gBase evm
+  | .timestamp => pushItem evm.env.time gBase evm
+  | .gaslimit => pushItem evm.env.gas_limit.toB256 gBase evm
+  | .prevrandao => pushItem evm.env.prev_randao gBase evm
+  | .coinbase => pushItem evm.env.coinbase.toB256 gBase evm
+  | .msize => pushItem (evm.memory.size * 32).toB256 gBase evm
+  | .mload => do
+    let ⟨start_index, evm⟩ ← evm.pop
+    let extend_memory_cost := evm.extCost [⟨start_index, 32⟩]
+    let evm ← chargeGas (gVerylow + extend_memory_cost) evm
+    let value := B8L.toB256P <| evm.memory.sliceD start_index.toNat 32 0
+    evm.push value >>= Evm.incrPc
+  | .mstore => do
+    let ⟨start_index, evm⟩ ← evm.pop
+    let ⟨value, evm⟩ ← evm.pop
+    let extend_memory_cost := evm.extCost [⟨start_index, 32⟩]
+    let evm ← chargeGas (gVerylow + extend_memory_cost) evm
+    Evm.incrPc <| evm.memWrite start_index.toNat value.toB8L
+  | .mstore8 => do
+    let ⟨start_index, evm⟩ ← evm.pop
+    let ⟨value, evm⟩ ← evm.pop
+    let extend_memory_cost := evm.extCost [⟨start_index, 1⟩]
+    let evm ← chargeGas (gVerylow + extend_memory_cost) evm
+    Evm.incrPc <| evm.memWrite start_index.toNat [value.2.2.toUInt8]
+  | .gas => do
+    let evm ← chargeGas gBase evm
+    evm.push evm.gas_left.toB256 >>= Evm.incrPc
+  | .eq => applyBinary .eq_check gVerylow evm
+  | .lt => applyBinary .lt_check gVerylow evm
+  | .gt => applyBinary .gt_check gVerylow evm
+  | .slt => applyBinary .slt_check gVerylow evm
+  | .sgt => applyBinary .sgt_check gVerylow evm
+  | .iszero => applyUnary (.eq_check · 0) gVerylow evm
+  | .not => applyUnary (~~~ ·) gVerylow evm
+  | .and => applyBinary B256.and gVerylow evm
+  | .or => applyBinary B256.or gVerylow evm
+  | .xor => applyBinary B256.xor gVerylow evm
+  | .signextend => applyBinary B256.signext gLow evm
+  | .pop => (evm.pop <&> Prod.snd) >>= chargeGas gBase >>= Evm.incrPc
+  | .byte =>
+    applyBinary (λ x y => (List.getD y.toB8L x.toNat 0).toB256) gVerylow evm
+  | .shl => applyBinary (fun x y => y <<< x.toNat) gVerylow evm
+  | .shr => applyBinary (fun x y => y >>> x.toNat) gVerylow evm
+  | .sar => applyBinary (fun x y => B256.sar x.toNat y) gVerylow evm
+  | .kec => do
+    let ⟨memory_start_index, evm⟩ ← evm.pop
+    let ⟨size, evm⟩ ← evm.pop
+    let words := ceilDiv size.toNat 32
+    let word_gas_cost := gKeccak256Word * words
+    let extend_memory_cost := evm.extCost [⟨memory_start_index, size⟩]
+    let evm ← chargeGas (gKeccak256 + word_gas_cost + extend_memory_cost) evm
+    let hash := B8a.keccak memory_start_index.toNat size.toNat evm.memory
+    evm.push hash >>= Evm.incrPc
+  | .sub => applyBinary (· - ·) gVerylow evm
+  | .mul => applyBinary (· * ·) gLow evm
+  | .exp => do
+    let ⟨base, evm⟩ ← evm.pop
+    let ⟨exponent, evm⟩ ← evm.pop
+    let evm ← chargeGas (gExp + (gExpbyte * exponent.bytecount)) evm
+    evm.push (B256.bexp base exponent) >>= Evm.incrPc
+  | .div => applyBinary (· / ·) gLow evm
+  | .sdiv => applyBinary B256.sdiv gLow evm
+  | .mod => applyBinary (· % ·) gLow evm
+  | .smod => applyBinary B256.smod gLow evm
+  | .add => applyBinary (· + ·) gVerylow evm
+  | .addmod => applyTernary B256.addmod gMid evm
+  | .mulmod => applyTernary B256.mulmod gMid evm
+  | .swap n => do
+    let evm ← chargeGas gVerylow evm
+    match List.swap evm.stack n with
+    | none => .error ⟨evm, .exHalt .stackUnderflowError⟩
+    | some stack =>
+      .ok {
+        evm with
+        pc := evm.pc + 1
+        stack := stack
+      }
+  | .dup n => do
+    let evm ← chargeGas gVerylow evm
+    match evm.stack.get? n with
+    | none => .error ⟨evm, .exHalt .stackUnderflowError⟩
+    | some word => evm.push word >>= Evm.incrPc
+  | .sload => do
+    let ⟨key, evm⟩ ← evm.pop
+    let ct := evm.contract
+    let evm ←
+      if ⟨ct, key⟩ ∈ evm.accessed_storage_keys
+      then chargeGas GAS_WARM_ACCESS evm
+      else
+        chargeGas gColdAccountAccess
+          (add_accessed_storage_key evm ct key)
+    evm.push (evm.storValAt ct key) >>= Evm.incrPc
+  | .tload => do
+    let ⟨key, evm⟩ ← evm.pop
+    pushItem (evm.getTransVal evm.contract key) GAS_WARM_ACCESS evm
+  | .pc => pushItem evm.pc.toB256 gBase evm
+  | .sstore => do
+    let ⟨key, evm⟩ ← evm.pop
+    let ⟨new_value, evm⟩ ← evm.pop
+    .guard ⟨evm, .oog⟩ (gCallStipend < evm.gas_left)
+    let ct := evm.contract
+    let original_value := evm.origStorValAt ct key
+    let current_value := evm.storValAt ct key
+
+    let access_cost :=
+      if ⟨ct, key⟩ ∈ evm.accessed_storage_keys
+      then 0
+      else GAS_COLD_SLOAD
+
+    let update_cost :=
+      if original_value = current_value ∧ current_value ≠ new_value
+      then
+        if original_value = 0
+        then GAS_STORAGE_SET
+        else GAS_STORAGE_UPDATE - GAS_COLD_SLOAD
+      else GAS_WARM_ACCESS
+
+    let gas_cost := access_cost + update_cost
+
+    let evm : Evm :=
+      if ⟨ct, key⟩ ∈ evm.accessed_storage_keys
+      then evm
+      else add_accessed_storage_key evm ct key
+
+    let rc := evm.refund_counter
+    let rc :=
+      if current_value ≠ new_value
+      then
+        let rc :=
+          if original_value ≠ 0 ∧ current_value ≠ 0 ∧ new_value = 0
+          then rc + rSClear
+          else rc
+        let rc :=
+          if original_value ≠ 0 ∧ current_value = 0
+          then rc - rSClear
+          else rc
+        if original_value = new_value
+        then
+          if original_value = 0
+          then rc + GAS_STORAGE_SET - GAS_WARM_ACCESS
+          else rc + GAS_STORAGE_UPDATE - GAS_COLD_SLOAD - GAS_WARM_ACCESS
+        else rc
+      else rc
+
+    let evm := {evm with refund_counter := rc}
+    let evm ← chargeGas gas_cost evm
+
+    .guard ⟨evm, .exHalt .writeInStaticContext⟩ !evm.message.is_static
+    (evm.setStorVal evm.contract key new_value).incrPc
+  | .tstore => do
+    let ⟨key, evm⟩ ← evm.pop
+    let ⟨new_value, evm⟩ ← evm.pop
+    let evm ← chargeGas GAS_WARM_ACCESS evm
+    .guard ⟨evm, .exHalt .writeInStaticContext⟩ !evm.message.is_static
+    (evm.setTransVal evm.contract key new_value).incrPc
+  | .mcopy => do
+    let ⟨destination, evm⟩ ← evm.pop
+    let ⟨source, evm⟩ ← evm.pop
+    let ⟨length, evm⟩ ← evm.pop
+    let words := ceilDiv length.toNat 32
+    let copy_gas_cost := GAS_COPY * words
+    let extend_memory_cost :=
+      evm.extCost [⟨source, length⟩, ⟨destination, length⟩]
+    let evm ← chargeGas (gVerylow + copy_gas_cost + extend_memory_cost) evm
+    let value := evm.memory.sliceD source.toNat length.toNat 0
+    (evm.memWrite destination.toNat value).incrPc
+  | .log n => do
+    let ⟨memory_start_index, evm⟩ ← evm.pop
+    let ⟨size, evm⟩ ← evm.pop
+    let ⟨topics, evm⟩ ← evm.popN n
+    let extend_memory_cost := evm.extCost [⟨memory_start_index, size⟩]
+    let evm ←
+      chargeGas
+        (
+          gLog + (gLogdata * size.toNat) +
+          (gLogtopic * n) + extend_memory_cost
+        )
+        evm
+    .guard ⟨evm, .exHalt .writeInStaticContext⟩ !evm.message.is_static
+    let data : B8L := evm.memory.sliceD memory_start_index.toNat size.toNat 0
+    let log : Log := ⟨evm.contract, topics, data⟩
+    (evm.addLog log).incrPc
+  | .blockhash => do
+    let ⟨blockNumberWord, evm⟩ ← evm.pop
+    let blockNumber := blockNumberWord.toNat
+    let evm ← chargeGas gBlockhash evm
+    let maxBlockNumber := blockNumber + 256
+    let hash : B256 :=
+      if evm.env.number ≤ blockNumber ∨ maxBlockNumber < evm.env.number
+      then 0
+      else
+        evm.env.block_hashes.getD
+          (evm.env.block_hashes.length - (evm.env.number - blockNumber))
+          0
+    evm.push hash >>= Evm.incrPc
+
+instance : Inhabited Environment :=
+  ⟨
+    {
+      caller := 0
+      block_hashes := []
+      origin := 0
+      coinbase := 0
+      number := 0
+      base_fee_per_gas := 0
+      gas_limit := 0
+      gas_price := 0
+      time := 0
+      prev_randao := 0
+      state := .empty
+      orig_state := .empty
+      created_accounts := .empty
+      chain_id := 0
+      excess_blob_gas := 0
+      blob_versioned_hashes := []
+      transient_storage := .empty
+    }
+  ⟩
+instance : Inhabited Message :=
+  ⟨
+    {
+      caller := 0
+      target := .none
+      current_target := 0
+      gas := 0
+      value := 0
+      data := []
+      code_address := .none
+      code := .empty
+      depth := 0
+      should_transfer_value := false
+      is_static := false
+      accessed_addresses := .empty
+      accessed_storage_keys := .empty
+    }
+  ⟩
+
+instance : Inhabited Evm := ⟨
+  {
+    pc := 0
+    stack := []
+    memory := .empty
+    code := .empty
+    gas_left := 0
+    env := default
+    logs := []
+    refund_counter := 0
+    running := false
+    message := default
+    output := []
+    accounts_to_delete := .empty
+    touched_accounts := .empty
+    return_data := []
+    error := .none
+    accessed_addresses := .empty
+    accessed_storage_keys := .empty
+  }
+⟩
+
+instance : Inhabited Execution := ⟨.ok default⟩
+
+
+def noPushBefore (cd : ByteArray) : Nat → Nat → Bool
+  | 0, _ => true
+  | _, 0 => true
+  | k + 1, m + 1 =>
+    if k < cd.size
+    then let b := cd.get! k
+         if (b < (0x7F - m.toUInt8) || 0x7F < b)
+         then noPushBefore cd k m
+         else if noPushBefore cd k 32
+              then false
+              else noPushBefore cd k m
+    else noPushBefore cd k m
+
+def jumpable (cd : ByteArray) (k : Nat) : Bool :=
+  if cd.get! k = (Jinst.toB8 .jumpdest)
+  then noPushBefore cd k 32
+  else false
+
+def Jinst.run (evm : Evm) : Jinst → Execution
+  | .jumpdest => chargeGas gJumpdest evm >>= Evm.incrPc
+  | .jump => do
+    let ⟨jump_dest, evm⟩ ← evm.pop
+    let evm ← chargeGas gMid evm
+    .guard ⟨evm, .exHalt .invalidJumpDestError⟩ (jumpable evm.code jump_dest.toNat)
+    .ok {evm with pc := jump_dest.toNat}
+  | .jumpi => do
+    let ⟨dest, evm⟩ ← evm.pop
+    let ⟨cond, evm⟩ ← evm.pop
+    let evm ← chargeGas gHigh evm
+    let pc ←
+      if cond = 0
+      then .ok <| evm.pc + 1
+      else
+        .guard ⟨evm, .exHalt .invalidJumpDestError⟩ (jumpable evm.code dest.toNat)
+        .ok dest.toNat
+    .ok {evm with pc := pc}
+
+def Wor.subBal (wor : Wor) (adr : Adr) (val : B256) : Option Wor :=
+  let acct := wor.get adr
+  if acct.bal < val
+  then .none
+  else wor.set adr {acct with bal := acct.bal - val}
+
+def Wor.addBal (wor : Wor) (adr : Adr) (val : B256) : Wor :=
+  let acct := wor.get adr
+  wor.set adr {acct with bal := acct.bal + val}
+
+def Wor.setBal (wor : Wor) (adr : Adr) (val : B256) : Wor :=
+  let acct := wor.get adr
+  wor.set adr {acct with bal := val}
+
+def Environment.subBal (env : Environment) (adr : Adr) (val : B256) :
+  Option Environment := do
+  let wor ← env.state.subBal adr val
+  some {env with state := wor}
+
+def Environment.addBal (env : Environment) (adr : Adr) (val : B256) :
+  Environment :=
+  {env with state := env.state.addBal adr val}
+
+def Environment.setBal (env : Environment) (adr : Adr) (val : B256) :
+  Environment :=
+  {env with state := env.state.setBal adr val}
+
+def Evm.subBal (evm : Evm) (adr : Adr) (val : B256) :
+  Except (Evm × EthEx) Evm := do
+  match evm.env.subBal adr val with
+  | none => .error ⟨evm, .gen .assertionError⟩
+  | some env => .ok {evm with env := env}
+
+def Evm.setBal (evm : Evm) (adr : Adr) (val : B256) : Evm :=
+  {evm with env := evm.env.setBal adr val}
+
+def Evm.addBal (evm : Evm) (adr : Adr) (val : B256) : Evm :=
+  {evm with env := evm.env.addBal adr val}
+
+def Linst.run (evm : Evm) : Linst → Execution
+  | .stop => .ok {evm with running := false, pc := evm.pc + 1}
+  | .rev => do
+    let ⟨memory_start_index, evm⟩ ← evm.pop
+    let ⟨size, evm⟩ ← evm.pop
+    let extend_memory_cost := evm.extCost [⟨memory_start_index, size⟩]
+    let evm ← chargeGas extend_memory_cost evm
+    let output := evm.memory.sliceD memory_start_index.toNat size.toNat 0
+    let evm := {evm with output := output}
+    .error ⟨evm, .revert⟩
+  | .ret => do
+    let ⟨index, evm⟩ ← evm.pop
+    let ⟨size, evm⟩ ← evm.pop
+    let cost := evm.extCost [⟨index, size⟩]
+    let evm ← chargeGas cost evm
+    let ⟨output, evm⟩ := evm.memRead index.toNat size.toNat
+    .ok {evm with running := false, output := output}
+  | .dest => do
+    let ⟨donee, evm⟩ ← evm.pop <&> Prod.mapFst B256.toAdr
+    let donor := evm.contract
+    let donorBal := (evm.getAcct evm.contract).bal
+
+    let accessCost :=
+      if donee ∈ evm.accessed_addresses
+      then 0
+      else gColdAccountAccess
+
+    let creationCost :=
+      if (evm.getAcct donee).Empty ∧ donorBal ≠ 0
+      then 0
+      else GAS_SELF_DESTRUCT_NEW_ACCOUNT
+
+    let cost := gSelfdestruct + accessCost + creationCost
+
+    let evm ← chargeGas cost <| add_accessed_address evm donee
+    .guard ⟨evm, .exHalt .writeInStaticContext⟩ !evm.message.is_static
+
+    let evm ← evm.subBal donor donorBal
+    let evm := evm.addBal donee donorBal
+
+    let evm :=
+      if donor ∈ evm.env.created_accounts
+      then add_account_to_delete (evm.setBal donor 0) donor
+      else evm
+
+    let evm :=
+      if (evm.getAcct donee).Empty
+      then add_touched_account evm donee
+      else evm
+
+    .ok {evm with running := false}
+
+def except64th (n : Nat) : Nat := n - (n / 64)
+
+def calculate_message_call_gas
+  (value gas gas_left memory_cost extra_gas : Nat)
+  (cs : Nat := gCallStipend) : Nat × Nat :=
+  let call_stipend : Nat := --Uint(0) if value == 0 else call_stipend
+    if value = 0 then 0 else cs
+
+  if gas_left < extra_gas + memory_cost
+  then ⟨gas + extra_gas, gas + call_stipend⟩
+  else
+    let gas' := min gas (except64th (gas_left - memory_cost - extra_gas))
+    ⟨gas' + extra_gas, gas' + call_stipend⟩
+
+mutual
+
+  def generic_call
+      (evm: Evm)
+      (gas: Nat)
+      (value: B256)
+      (caller: Adr)
+      (callee: Adr)
+      (code_address: Adr)
+      (should_transfer_value: Bool)
+      (is_staticcall: Bool)
+      (input_index: B256)
+      (input_size: B256)
+      (output_index: B256)
+      (output_size: B256) : Execution := sorry
+
+  def Ninst'.run (evm : Evm) : Ninst' → Execution
+    | .push x len => do
+      let evm ← chargeGas (if len = 0 then gBase else gVerylow) evm
+      let evm ← evm.push x
+      .ok {evm with pc := evm.pc + len + 1}
+    | .reg r => r.run evm
+    | .exec .create => _
+    | .exec .create2 => _
+    | .exec .call => do
+      let ⟨gas, evm⟩ ← evm.pop
+      let ⟨callee, evm⟩ ← evm.pop <&> Prod.mapFst B256.toAdr
+      let ⟨value, evm⟩ ← evm.pop
+      let ⟨input_index, evm⟩ ← evm.pop
+      let ⟨input_size, evm⟩ ← evm.pop
+      let ⟨output_index, evm⟩ ← evm.pop
+      let ⟨output_size, evm⟩ ← evm.pop
+
+      let extend_cost :=
+        evm.extCost [⟨input_index, input_size⟩, ⟨output_index, output_size⟩]
+
+      let access_cost := access_cost callee evm.accessed_addresses
+
+      let evm := add_accessed_address evm callee
+
+      let create_cost :=
+        if (¬ (evm.getAcct callee).Empty) ∨ value = 0
+        then 0
+        else gNewAccount
+
+      let transfer_cost :=
+        if value = 0
+        then 0
+        else gCallValue
+
+      let ⟨message_call_cost, message_call_stipend⟩ :=
+        calculate_message_call_gas
+          value.toNat
+          gas.toNat
+          evm.gas_left
+          extend_cost
+          (access_cost + create_cost + transfer_cost)
+
+      let evm ← chargeGas (message_call_cost + extend_cost) evm
+
+      .guard
+        ⟨evm, .exHalt .writeInStaticContext⟩
+        (!evm.message.is_static ∨ value = 0)
+
+      let evm :=
+        Evm.memExtend
+          (evm.memExtend input_index.toNat input_size.toNat)
+          output_index.toNat
+          output_size.toNat
+
+      let senderBal := (evm.getAcct evm.contract).bal
+
+      let evm ←
+        if senderBal < value
+        then
+          let evm ← evm.push 0
+          .ok {
+            evm with
+            return_data := []
+            gas_left := evm.gas_left + message_call_stipend
+          }
+        else
+          generic_call
+            evm
+            message_call_stipend
+            value
+            evm.contract
+            callee
+            callee
+            true
+            false
+            input_index
+            input_size
+            output_index
+            output_size
+
+      evm.incrPc
+
+    | .exec .callcode => _
+    | .exec .delcall => _
+    | .exec .statcall => _
+
+  def exec : Nat → Evm → Execution
+    | 0, evm =>
+      dbg_trace "execution recursion limit reached (NOT execution depth limit)"
+      .error ⟨evm, .oog⟩
+    | lim + 1, evm => do
+      -- showLim vb lim υ
+      let i ← (evm.getInst).toExcept ⟨evm, .exHalt (.invalidOpcode (evm.code.get! evm.pc))⟩
+      -- showStep vb σ υ κ i
+      match i with
+      | .next n => n.run evm >>= exec lim
+      | .jump j => j.run evm >>= exec lim
+      | .last l => l.run evm
+end
 
 #exit
-
 def execute_code (message: Message) (env: Environment) :
-  PyMo (Environment × Evm) Unit := do
+  Except (Environment × EthEx) Evm := do
   let code := message.code
   let evm : Evm := {
     pc := 0
@@ -867,7 +2175,30 @@ def execute_code (message: Message) (env: Environment) :
     accessed_storage_keys := message.accessed_storage_keys
   }
 
+  let code_address := evm.message.code_address.getD 0
 
+  let xr :=
+    if code_address.isPrecomp
+    then execute_precomp evm code_address.toNat--execPre vb ωp τ .init #[] υp κp c.toNat
+    else execute evm -- exec vb lim ωp τ .init #[] υp κp
+
+  match xr with
+  | .error ⟨evm, ex⟩ =>
+    if ex.exceptionalHalt
+    then
+      .ok {
+        evm with
+        gas_left := 0
+        output := []
+        error := ex
+      }
+    else
+      if ex.revert
+      then .ok {evm with error := ex}
+      else .error ⟨evm.env, ex⟩
+  | .ok evm => .ok evm
+
+#exit
   _
     evm = Evm(
         pc=Uint(0),
@@ -891,6 +2222,34 @@ def execute_code (message: Message) (env: Environment) :
     )
 
 -/
+#exit
+
+inductive PyMo (ξ υ : Type u) : Type u
+  | pure : υ → PyMo ξ υ
+  | raise : PyEx → PyMo ξ υ
+  | return : ξ → PyMo ξ υ
+
+def PyMo.bind {ξ υ ζ : Type u} : PyMo ξ υ → (υ → PyMo ξ ζ) → PyMo ξ ζ
+  | .raise e, _ => .raise e
+  | .return z, _ => .return z
+  | .pure y, p => p y
+
+instance {ξ} : Monad (PyMo ξ) where
+  pure := .pure
+  bind := .bind
+
+def foo : Nat := do
+  _
+
+#exit
+def PyMo.tryExAux {ξ υ} (p : PyMo ξ υ) (l : List ((PyEx → Bool) × (PyMo ξ υ))) : PyMo ξ υ :=
+
+def PyMo.tryEx {ξ υ} (p : PyMo ξ υ) (l : List ((PyEx → Bool) × (PyMo ξ υ))) : PyMo ξ υ :=
+  match p with
+  | .pure x => .pure x
+
+#exit
+
 
 structure Acr where
   (dest : List Adr)  -- A_s
@@ -899,18 +2258,21 @@ structure Acr where
   (ref : Nat)         -- A_r
   (logs : List Log)  -- A_l
   (tchd : AdrSet) -- A_t
+  (created : AdrSet)
 
-instance : Inhabited Acr :=
-  ⟨
-    {
-      dest := []
-      adrs := .empty
-      keys := .empty
-      ref := 0
-      logs := []
-      tchd := .empty
-    }
-  ⟩
+-- A^0
+def Acr.init : Acr :=
+  {
+    dest := []
+    adrs := .ofList [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] -- precompiled contracts
+    keys := .empty
+    ref := 0
+    logs := []
+    tchd := .empty
+    created := .empty
+  }
+
+instance : Inhabited Acr := ⟨.init⟩
 
 structure Var where
   (gas : Nat) -- μ_g
@@ -990,22 +2352,43 @@ structure Con where
 -- YP says that this type should also have a field for
 -- execution environment, but it was omitted since the
 -- environment does not change and is already known.
-structure ΞR where
-  (wt : Option (Wor × Tra))
+
+structure ExecRes where
+  (wor : Wor)
+  (tra : Tra)
   (gas : Nat)
   (acs : Acr)
-  (ret : Option B8L)
+  (ret : B8L)
+  (err : Bool)
 
-
-instance : Inhabited ΞR :=
+instance : Inhabited ExecRes :=
   ⟨
     {
-      wt := .none
+      wor := .empty
+      tra := .empty
       gas := 0
       acs := Inhabited.default
-      ret := .none
+      ret := []
+      err := true
     }
   ⟩
+
+
+-- structure ΞR where
+--   (wt : Option (Wor × Tra))
+--   (gas : Nat)
+--   (acs : Acr)
+--   (ret : Option B8L)
+
+-- instance : Inhabited ΞR :=
+--   ⟨
+--     {
+--       wt := .none
+--       gas := 0
+--       acs := Inhabited.default
+--       ret := .none
+--     }
+--   ⟩
 
 inductive Inst : Type
   | last : Linst → Inst
@@ -1023,33 +2406,6 @@ def Inst.toString : Inst → String
   | .jump j => j.toString
   | .last l => l.toString
 
-def noPushBefore (cd : ByteArray) : Nat → Nat → Bool
-  | 0, _ => true
-  | _, 0 => true
-  | k + 1, m + 1 =>
-    if k < cd.size
-    then let b := cd.get! k
-         if (b < (0x7F - m.toUInt8) || 0x7F < b)
-         then noPushBefore cd k m
-         else if noPushBefore cd k 32
-              then false
-              else noPushBefore cd k m
-    else noPushBefore cd k m
-
-def jumpable (cd : ByteArray) (k : Nat) : Bool :=
-  if cd.get! k = (Jinst.toB8 .jumpdest)
-  then noPushBefore cd k 32
-  else false
-
-inductive Ninst' : Type
-  | reg : Rinst → Ninst'
-  | exec : Xinst → Ninst'
-  | push : B256 → Nat →  Ninst' --∀ bs : B8L, bs.length ≤ 32 → Ninst'
-
-inductive Inst' : Type
-  | last : Linst → Inst'
-  | next : Ninst' → Inst'
-  | jump : Jinst → Inst'
 
 def getInstAux (cd : ByteArray) (pc len off : Nat) : B8 :=
   if off < len
@@ -1108,10 +2464,9 @@ def getInst (υ : Var) (κ : Con)  : Option Inst' :=
     )
   else some (.last .stop)
 
-def safeSub {ξ} [Sub ξ] [LE ξ] [@DecidableRel ξ (· ≤ ·)] (x y : ξ) : Option ξ :=
-  if y ≤ x then some (x - y) else none
 
-abbrev Exmo (ξ : Type u) := Except ΞR ξ
+-- abbrev Exmo (ξ : Type u) := Except ΞR ξ
+abbrev Exmo (ξ : Type u) := Except ExecRes ξ
 
 
 -- structure EVMS : Type
@@ -1146,27 +2501,27 @@ abbrev Exmo (ξ : Type u) := Except ΞR ξ
 --
 -- #exit
 
-def xhs (υ : Var) : ΞR :=
-  {wt := none, gas := υ.gas, acs := υ.acr, ret := none}
+-- def xhs (υ : Var) : ExecRes :=
+  -- {wt := none, gas := υ.gas, acs := υ.acr, ret := none}
+def xhs (υ : Var) : ExecRes :=
+  {wor := .empty, tra := .empty, gas := υ.gas, acs := υ.acr, ret := [], err := true}
 
-def xhs0 (υ : Var) : ΞR :=
-  {wt := none, gas := 0, acs := υ.acr, ret := none}
+-- def xhs0 (υ : Var) : ΞR :=
+--   {wt := none, gas := 0, acs := υ.acr, ret := none}
+
+def xhs0 (υ : Var) : ExecRes :=
+  {wor := .empty, tra := .empty, gas := 0, acs := υ.acr, ret := [], err := true}
+
 
 def deductGas (υ : Var) (c : Nat) : Exmo Nat :=
   -- according to revm, executions that end with 'out of gas` outcome
   -- should contribute 0 gas back to the parent execution.
   (safeSub υ.gas c).toExcept (xhs0 υ)
 
-def Acct.Empty (a : Acct) : Prop :=
-  a.code.size = 0 ∧ a.nonce = 0 ∧ a.bal = 0
+def chargeGas (υ : Var) (c : Nat) : Exmo Var := do
+  let g ← deductGas υ c
+  .ok {υ with gas := g}
 
-instance {a : Acct} : Decidable a.Empty := by
- apply instDecidableAnd
-
-def Dead (w : Wor) (a : Adr) : Prop :=
-  match w.find? a with
-  | none => True
-  | some x => x.Empty
 
 def Acct.empty : Acct :=
   {
@@ -1176,7 +2531,6 @@ def Acct.empty : Acct :=
     code := ByteArray.mk #[]
   }
 
-def Wor.get (w : Wor) (a : Adr) : Acct := (w.find? a).getD .empty
 
 def Wor.codeAt (w : Wor) (a : Adr) : ByteArray := (w.get a).code
 
@@ -1190,15 +2544,6 @@ def Wor.storEntryAt (w : Wor) (a : Adr) (k : B256) : B256 := (w.get a).stor.find
 def Wor.storIsEmptyAt (w : Wor) (a : Adr) : Bool := (w.get a).stor.isEmpty
 
 
-def gNewAccount : Nat := 25000
-def gCallValue : Nat := 9000
-def gCallStipend : Nat := 2300
-def gWarmAccess : Nat := 100
-def gColdAccountAccess : Nat := 2600
-def gSelfdestruct : Nat := 5000
-def gLog : Nat := 375
-def gLogdata : Nat := 8
-def gLogtopic : Nat := 375
 
 instance {w a} : Decidable (Dead w a) := by
   simp [Dead]
@@ -1207,25 +2552,9 @@ instance {w a} : Decidable (Dead w a) := by
   · simp [Acct.Empty]; apply instDecidableAnd
 
 def cAAccess (x : Adr) (a : AdrSet) : Nat :=
-  if x ∈ a then gWarmAccess else gColdAccountAccess
+  if x ∈ a then GAS_WARM_ACCESS else gColdAccountAccess
 
-def except64th (n : Nat) : Nat := n - (n / 64)
 
-def Adr.toNat (x : Adr) : Nat :=
-  x.high.toNat * (2 ^ 128) +
-  x.mid.toNat * (2 ^ 64) +
-  x.low.toNat
-
-def Nat.toAdr (n : Nat) : Adr :=
-  let h := n / (2 ^ 128)
-  let r := n % (2 ^ 128)
-  let m := r / (2 ^ 64)
-  let l := r % (2 ^ 64)
-  {
-    high := h.toUInt32
-    mid  := m.toUInt64
-    low  := l.toUInt64
-  }
 
 inductive CallCostType
   | all
@@ -1278,46 +2607,6 @@ def Wor.code (w : Wor) (a : Adr) : ByteArray :=
 
 def Sta.init : Sta := ⟨Array.mkArray 1024 (0 : B256), 0⟩
 
-def Acct.Erasable (ac : Acct) : Prop :=
-  ac.nonce = 0 ∧
-  ac.bal = 0 ∧
-  ac.stor.isEmpty = .true ∧
-  ac.code.size = 0
-
-instance {ac : Acct} : Decidable ac.Erasable := instDecidableAnd
-
-def Wor.set (w : Wor) (a : Adr) (ac : Acct) : Wor :=
-  if ac.Erasable then w.erase a else w.insert a ac
-
-def Tra.set (τ : Tra) (a : Adr) (s : Stor) : Tra :=
-  if s.isEmpty then τ.erase a else τ.insert a s
-
-def Wor.setCode (ω : Wor) (a : Adr) (cd : ByteArray) : Wor :=
-  let ac := ω.get a
-  ω.set a {ac with code := cd}
-
-def θ.wrapCore (ω : Wor) (τ : Tra) (acs : Acr) (Ξr : ΞR) : ΛΘ.Result :=
-  let ωτ_stars : Option (Wor × Tra):= Ξr.wt
-  let g_stars : Nat := Ξr.gas
-  let A_stars : Acr := Ξr.acs
-  let o : Option B8L := Ξr.ret
-  let ⟨ω', τ'⟩ : Wor × Tra := ωτ_stars.getD ⟨ω, τ⟩
-  let g' : Nat :=
-    if ωτ_stars.isNone ∧ o.isNone
-    then 0
-    else g_stars
-  let A' : Acr := if ωτ_stars.isNone then acs else A_stars
-  let z : Bool := if ωτ_stars.isNone then 0 else 1
-  -- o' is not from YP, but necessary to cast from 'Option B8L to 'B8L'
-  -- (YP is a bit sloppy with types here)
-  let o' : B8L := o.getD []
-  ⟨ω', τ', g', A', z, o'⟩
-
--- θ.wrap
-def θ.wrap (ω : Wor) (τ : Tra) (α : Acr) : Exmo ΞR → ΛΘ.Result
-  | .error xr => θ.wrapCore ω τ α xr
-  | .ok xr => θ.wrapCore ω τ α xr
-
 def dataGas (cd : B8L) : Nat :=
   let aux : B8 → Nat := fun b => if b = 0 then 4 else 16
   (cd.map aux).sum
@@ -1343,18 +2632,7 @@ def checkpoint (w : Wor) (ad : Adr) (v : B256) : Option Wor := do
   some <| w.set ad {ac with bal := bal', nonce := ac.nonce + 1}
 
 
-instance {n} : OfNat Adr n := ⟨n.toAdr⟩
 
--- A^0
-def Acr.init : Acr :=
-  {
-    dest := []
-    adrs := .ofList [1, 2, 3, 4, 5, 6, 7, 8, 9] -- precompiled contracts
-    keys := .empty
-    ref := 0
-    logs := []
-    tchd := .empty
-  }
 
 
 abbrev AccessList.collect (al : AccessList) : KeySet :=
@@ -1373,9 +2651,6 @@ def A_star (H : BlockInfo) (ST : Adr) (Tt : Option Adr) (TA : AccessList) : Acr 
     adrs := Tt.rec a (a.insert)
     keys := TA.collect
   }
-
-def Stor.set (s : Stor) (k v : B256) : Stor :=
-  if v = 0 then s.erase k else s.insert k v
 
 
 
@@ -1496,17 +2771,16 @@ def sstoreStep (ω : Wor) (σ : Sta) (υ : Var) (κ : Con) :
   let (a : Acct) := (ω.find? κ.cta).getD Acct.empty
   let (v : B256) := ((a.stor.find? x).getD 0)
 
-
   -- v₀ : orig value at beginning of tx
   -- v : current value
   -- v' : new value
 
-  let c₀ : Nat := cond (υ.acr.keys.contains ⟨κ.cta, x⟩) 0 gColdSLoad
+  let c₀ : Nat := cond (υ.acr.keys.contains ⟨κ.cta, x⟩) 0 GAS_COLD_SLOAD
   let c₁ : Nat :=
     if v = v' ∨ v₀ ≠ v
-    then gWarmAccess
+    then GAS_WARM_ACCESS
     else if v₀ = 0
-         then gSSet
+         then GAS_STORAGE_SET
          else gSReset
 
   let c : Nat := c₀ + c₁
@@ -1520,8 +2794,8 @@ def sstoreStep (ω : Wor) (σ : Sta) (υ : Var) (κ : Con) :
   let rDirtyReset : Int :=
     if v₀ = v'
     then if v₀ = 0
-         then gSSet - gWarmAccess
-         else gSReset - gWarmAccess
+         then GAS_STORAGE_SET - GAS_WARM_ACCESS
+         else gSReset - GAS_WARM_ACCESS
     else 0
   let r : Int :=
     if v = v'
@@ -1655,37 +2929,11 @@ def applyTernary (ω : Wor) (τ : Tra) (σ : Sta) (μ : Mem) (υ : Var)
   let υ' ← nextVar υ cost
   .ok ⟨ω, τ, σ'', μ, υ'⟩
 
-def B256.toAdr : B256 → Adr
-  | ⟨⟨_, x⟩, ⟨y, z⟩⟩ => {high := x.toUInt32, mid := y, low := z}
-
-def Adr.toB256 (a : Adr) : B256 :=
-  ⟨⟨0, a.high.toUInt64⟩ , ⟨a.mid, a.low⟩ ⟩
-
-def BLOB_BASE_FEE_UPDATE_FRACTION : Nat := 3338477
-
-def fakeExpAux (num den i : Nat) : Nat → Nat → Nat
-  | _, 0 => panic! "error : recursion limit reached for fake exponentiation"
-  | 0, _ => 0
-  | numAcc, lim + 1 =>
-    let numAcc' := (numAcc * num) / (den * i)
-    numAcc + fakeExpAux num den (i + 1) numAcc' lim
-
-def fakeExp (fac num den : Nat) : Nat :=
-  let lim := (max (fac * num) <| num * num) + 2
-  let out := fakeExpAux num den 1 (fac * den) lim
-  out / den
-
-def Mem.write (μ : Mem) (n : ℕ) : B8L → Mem
-  | [] => μ
-  | xs@(_ :: _) =>
-    if n + xs.length ≤ μ.size
-    then Array.writeD μ n xs
-    else let μ₀ : Mem := Array.mkArray (n + xs.length) 0x00
-         Array.writeD (Array.copyD μ μ₀) n xs
 
 
-def get_base_fee_per_blob_gas (excessBlobGas : Nat) : Nat :=
-  fakeExp 1 excessBlobGas BLOB_BASE_FEE_UPDATE_FRACTION
+
+
+
 
 def Rinst.run (ω : Wor) (τ : Tra) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) :
     Rinst → Exmo (Wor × Tra × Sta × Mem × Var)
@@ -1725,13 +2973,13 @@ def Rinst.run (ω : Wor) (τ : Tra) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) 
     let bs : B8L := κ.cld.sliceD y.toNat z.toNat 0
     let υ' ←
       nextVar υ
-        (gVerylow + (gCopy * ceilDiv z.toNat 32))
+        (gVerylow + (GAS_COPY * ceilDiv z.toNat 32))
         (act' := memExp υ.act x z)
     .ok ⟨ω, τ, σ', μ.write x.toNat bs, υ'⟩
   | .codesize => pushItem ω τ σ μ υ κ.code.size.toB256 gBase
   | .codecopy => do
     let (x, y, z, σ') ← (σ.pop3).toExmo υ
-    let cost := gVerylow + (gCopy * ceilDiv z.toNat 32)
+    let cost := gVerylow + (GAS_COPY * ceilDiv z.toNat 32)
     let υ' ← nextVar υ cost (act' := memExp υ.act x z)
     let bs := κ.code.sliceD y.toNat z.toNat (Linst.toB8 .stop)
     .ok ⟨ω, τ, σ', μ.write x.toNat bs, υ'⟩
@@ -1746,7 +2994,7 @@ def Rinst.run (ω : Wor) (τ : Tra) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) 
   | .extcodecopy => do
     let (x, y, z, w, σ') ← (σ.pop4).toExmo υ
     let a := x.toAdr
-    let cost := cAAccess x.toAdr υ.acr.adrs + (gCopy * ceilDiv w.toNat 32)
+    let cost := cAAccess x.toAdr υ.acr.adrs + (GAS_COPY * ceilDiv w.toNat 32)
     let adrs' : AdrSet := υ.acr.adrs.insert a
     let υ' ← nextVar υ cost (act' := memExp υ.act y w) (adrs' := adrs')
     let cd : ByteArray := (ω.get a).code
@@ -1757,8 +3005,7 @@ def Rinst.run (ω : Wor) (τ : Tra) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) 
   | .retdatacopy => do
     let (x, y, z, σ') ← (σ.pop3).toExmo υ
     let act' := memExp υ.act x z
-    let υ' ← nextVar υ (gVerylow + (gCopy * (ceilDiv z.toNat 32))) (act' := act')
-    -- return data not being large enough for a slice is XHS
+    let υ' ← nextVar υ (gVerylow + (GAS_COPY * (ceilDiv z.toNat 32))) (act' := act')
     let bs ← (υ.ret.slice? y.toNat z.toNat).toExmo υ
     .ok ⟨ω, τ, σ', .write μ x.toNat bs, υ'⟩
   | .extcodehash => do
@@ -1855,7 +3102,7 @@ def Rinst.run (ω : Wor) (τ : Tra) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) 
     .ok ⟨ω, τ, σ', μ, υ'⟩
   | .sload => do
     let (x, σ') ← (σ.pop1).toExmo υ
-    let cost : Nat := if υ.acr.keys.contains ⟨κ.cta, x⟩ then gWarmAccess else gColdSLoad
+    let cost : Nat := if υ.acr.keys.contains ⟨κ.cta, x⟩ then GAS_WARM_ACCESS else GAS_COLD_SLOAD
     let ac := ω.findD κ.cta Acct.empty
     let y := (ac.stor.find? x).getD 0
     let σ'' ← (σ'.push1 y).toExmo υ
@@ -1863,7 +3110,7 @@ def Rinst.run (ω : Wor) (τ : Tra) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) 
     .ok ⟨ω, τ, σ'', μ, υ'⟩
   | .tload => do
     let (x, σ') ← (σ.pop1).toExmo υ
-    let cost : Nat := 100 --if υ.acr.keys.contains ⟨κ.cta, x⟩ then gWarmAccess else gColdSLoad
+    let cost : Nat := 100 --if υ.acr.keys.contains ⟨κ.cta, x⟩ then GAS_WARM_ACCESS else GAS_COLD_SLOAD
     let s := τ.findD κ.cta .empty
     let y := (s.find? x).getD 0
     let σ'' ← (σ'.push1 y).toExmo υ
@@ -1880,14 +3127,13 @@ def Rinst.run (ω : Wor) (τ : Tra) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) 
     let act' : Nat := memExp (memExp υ.act x z) y z
     let υ' ←
       nextVar υ
-        (gVerylow + (gCopy * ceilDiv z.toNat 32))
+        (gVerylow + (GAS_COPY * ceilDiv z.toNat 32))
         (act' := act')
     let bs : B8L := μ.sliceD y.toNat z.toNat 0
     .ok ⟨ω, τ, σ', .write μ x.toNat bs, υ'⟩
   | .pc => pushItem ω τ σ μ υ υ.pc.toB256 gBase
   | .log n => do
     Except.guard (xhs0 υ) κ.wup
-
     let ⟨x :: y :: xs, σ'⟩ ←
       (σ.popN (n + 2)).toExmo υ | (panic! "error : popN should return 2 or more items")
     let act' := memExp υ.act x y
@@ -1910,7 +3156,8 @@ def Rinst.run (ω : Wor) (τ : Tra) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) 
     let σ'' ← (σ'.push1 h).toExmo υ
     let υ' ← nextVar υ gBlockhash
     .ok ⟨ω, τ, σ'', μ, υ'⟩
-  -- | i => .error <| .inr s!"UNIMPLEMENTED REGULAR INSTRUCTION EXECUTION : {i.toString}"
+
+
 
 -- w₀ : the 'checkpoint' world saved at the preparation stage of tx
 
@@ -1937,7 +3184,11 @@ def Wor.setBal (w : Wor) (a : Adr) (v : B256) : Wor :=
   let ac' : Acct := {ac with bal := v}
   w.set a ac'
 
-def Wor.setStor (w : Wor) (a : Adr) (k v : B256) : Wor :=
+def Wor.setStor (w : Wor) (a : Adr) (s : Stor) : Wor :=
+  let ac := (w.get a)
+  w.set a {ac with stor := s}
+
+def Wor.setStorEntry (w : Wor) (a : Adr) (k v : B256) : Wor :=
   let ac := (w.get a)
   let st := ac.stor
   let s' : Stor := st.insert k v
@@ -1978,13 +3229,6 @@ def Ninst'.run (ω : Wor) (τ : Tra) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con)
   | .reg r => r.run ω τ σ μ υ κ
   | .exec e => panic! s!"unimplemented xinst : {e.toString}"
 
-def memCost (υ : Var) (lc sz : B256) : Nat :=
-  let act' : Nat := memExp υ.act lc sz
-  cMem act' - cMem υ.act
-
-def memExpCost (υ : Var) (lc sz : B256) : Nat × Nat :=
-  let act' : Nat := memExp υ.act lc sz
-  ⟨act', cMem act' - cMem υ.act⟩
 
 @[inline] def Char.isEq (c c' : Char) : Bool := c == c'
 
@@ -2034,12 +3278,15 @@ def showStep (vb :Bool) (σ : Sta) (υ : Var) (κ : Con) (i : Inst') : Exmo Unit
        return ()
   else return ()
 
-def Nat.secp256k1n : Nat := 15792089237316195423570985008687907852837564279074904382605163141518161494337
-def B256.secp256k1n : B256 := 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
 
-def execEcrec (ω : Wor) (τ : Tra) (υ : Var) (κ : Con) : ΞR :=
+def ExecRes.onlyAcr (A : Acr) : ExecRes :=
+  {wor := .empty, tra := .empty, gas := 0, acs := A, ret := [], err := true}
+
+def execEcrec (ω : Wor) (τ : Tra) (υ : Var) (κ : Con) : ExecRes :=
   match safeSub υ.gas 3000 with
-  | none => {wt := none, gas := 0, acs := υ.acr, ret := some []}
+  | none =>
+    -- {wt := none, gas := 0, acs := υ.acr, ret := some []}
+    .onlyAcr υ.acr
   | some g' =>
     let h := B8L.toB256P <| κ.cld.sliceD 0 32 (0x00 : B8)
     let v : Option Bool :=
@@ -2049,7 +3296,6 @@ def execEcrec (ω : Wor) (τ : Tra) (υ : Var) (κ : Con) : ΞR :=
       | _ => none
     let r := B8L.toB256P <| κ.cld.sliceD 64 32 (0x00 : B8)
     let s := B8L.toB256P <| κ.cld.sliceD 96 32 (0x00 : B8)
-
     let o : B8L :=
       if v.isNone ∨ r = 0 ∨ r ≥ .secp256k1n ∨ s = 0 ∨ s ≥ .secp256k1n
       then (dbg_trace "exception detected, abort precomp-1 (ECREC)" ; [])
@@ -2061,29 +3307,41 @@ def execEcrec (ω : Wor) (τ : Tra) (υ : Var) (κ : Con) : ΞR :=
             dbg_trace "ECREC RESULT : {rcv.toHex}" ;
             B256.toB8L (Adr.toB256 rcv)
           )
-    {wt := some ⟨ω, τ⟩, gas := g', acs := υ.acr, ret := some o}
+    -- {wt := some ⟨ω, τ⟩, gas := g', acs := υ.acr, ret := some o}
+    {wor := ω, tra := τ, gas := g', acs := υ.acr, ret := o, err := false}
 
-def execSha (ω : Wor) (τ : Tra) (υ : Var) (κ : Con) : ΞR :=
+def execSha (ω : Wor) (τ : Tra) (υ : Var) (κ : Con) : ExecRes :=
   let g_r : Nat := 60 + (12 * (ceilDiv κ.cld.length 32))
   match safeSub υ.gas g_r with
-  | none => {wt := none, gas := 0, acs := υ.acr, ret := some []}
+  | none =>
+    --{wt := none, gas := 0, acs := υ.acr, ret := some []}
+    .onlyAcr υ.acr
   | some g' =>
     let hash : B256 := B8L.sha256 κ.cld
-    {wt := some ⟨ω, τ⟩, gas := g', acs := υ.acr, ret := some hash.toB8L}
+    -- {wt := some ⟨ω, τ⟩, gas := g', acs := υ.acr, ret := some hash.toB8L}
+    {wor := ω, tra := τ, gas := g', acs := υ.acr, ret := hash.toB8L, err := false}
 
-def execRip160 (ω : Wor) (τ : Tra) (υ : Var) (κ : Con) : ΞR :=
+def execRip160 (ω : Wor) (τ : Tra) (υ : Var) (κ : Con) : ExecRes :=
   let g_r : Nat := 600 + (120 * (ceilDiv κ.cld.length 32))
   match safeSub υ.gas g_r with
-  | none => {wt := none, gas := 0, acs := υ.acr, ret := some []}
+  | none =>
+    -- {wt := none, gas := 0, acs := υ.acr, ret := some []}
+    .onlyAcr υ.acr
   | some g' =>
     let out : B8L := B256.toB8L <| B8L.toB256P <| (rip160 ⟨Array.mk κ.cld⟩).toList
-    {wt := some ⟨ω, τ⟩, gas := g', acs := υ.acr, ret := some out}
+    -- {wt := some ⟨ω, τ⟩, gas := g', acs := υ.acr, ret := some out}
+    {wor := ω, tra := τ, gas := g', acs := υ.acr, ret := out, err := false}
 
-def execId (ω : Wor) (τ : Tra) (υ : Var) (κ : Con) : ΞR :=
+
+def execId (ω : Wor) (τ : Tra) (υ : Var) (κ : Con) : ExecRes :=
   let g_r : Nat := 15 + (3 * (ceilDiv κ.cld.length 32))
   match safeSub υ.gas g_r with
-  | none => {wt := none, gas := 0, acs := υ.acr, ret := some []}
-  | some g' => {wt := some ⟨ω, τ⟩, gas := g', acs := υ.acr, ret := some κ.cld}
+  | none =>
+    --{wt := none, gas := 0, acs := υ.acr, ret := some []}
+    .onlyAcr υ.acr
+  | some g' =>
+  -- {wt := some ⟨ω, τ⟩, gas := g', acs := υ.acr, ret := some κ.cld}
+    {wor := ω, tra := τ, gas := g', acs := υ.acr, ret :=  κ.cld, err := false}
 
 abbrev altBn128Prime : Nat := 21888242871839275222246405745257275088696311157297823662689037894645226208583
 
@@ -2273,36 +3531,39 @@ def ecmul (input : B8L) : Option B8L := do
   let px : Nat := B8L.toNat <| input.sliceD 0 32 (0 : B8)
   let py : Nat := B8L.toNat <| input.sliceD 32 32 (0 : B8)
   let n  : Nat := B8L.toNat <| input.sliceD 64 32 (0 : B8)
-
-  dbg_trace s!"px : {px.toHex}"
-  dbg_trace s!"py : {py.toHex}"
-  dbg_trace s!"n  : {n.toHex}"
   let p ← Point.mk? px py
-
-  dbg_trace s!"p : {p.toString}"
   let s := Point.mul p n
-  dbg_trace s!"p * n : {s.toString}"
   some s.toB8L
 
-def execEcmul (ω : Wor) (τ : Tra) (υ : Var) (κ : Con) : ΞR :=
+def execEcmul (ω : Wor) (τ : Tra) (υ : Var) (κ : Con) : ExecRes :=
   match safeSub υ.gas 6000 with
-  | none => {wt := none, gas := 0, acs := υ.acr, ret := some []}
+  | none =>
+    --{wt := none, gas := 0, acs := υ.acr, ret := some []}
+    .onlyAcr υ.acr
   | some g' =>
     let slc := κ.cld.sliceD 0 96 (0x00 : B8)
     match (ecmul slc) with
-    | some out => {wt := some ⟨ω, τ⟩, gas := g', acs := υ.acr, ret := some out}
-    | _ => {wt := none, gas := 0, acs := υ.acr, ret := some []}
+    | some out =>
+      --{wt := some ⟨ω, τ⟩, gas := g', acs := υ.acr, ret := some out}
+      {wor := ω, tra := τ, gas := g', acs := υ.acr, ret := out, err := false}
+    | _ =>
+      --{wt := none, gas := 0, acs := υ.acr, ret := some []}
+      .onlyAcr υ.acr
 
-def execEcadd (ω : Wor) (τ : Tra) (υ : Var) (κ : Con) : ΞR :=
+def execEcadd (ω : Wor) (τ : Tra) (υ : Var) (κ : Con) : ExecRes :=
   match safeSub υ.gas 150 with
-  | none => {wt := none, gas := 0, acs := υ.acr, ret := some []}
+  | none =>
+    --{wt := none, gas := 0, acs := υ.acr, ret := some []}
+    .onlyAcr υ.acr
   | some g' =>
     let slc := κ.cld.sliceD 0 128 (0x00 : B8)
     match (ecadd slc) with
-    | some out => {wt := some ⟨ω, τ⟩, gas := g', acs := υ.acr, ret := some out}
-    | _ => {wt := none, gas := 0, acs := υ.acr, ret := some []}
+    | some out => --{wt := some ⟨ω, τ⟩, gas := g', acs := υ.acr, ret := some out}
+      {wor := ω, tra := τ, gas := g', acs := υ.acr, ret := out, err := false}
+    | _ => -- {wt := none, gas := 0, acs := υ.acr, ret := some []}
+      .onlyAcr υ.acr
 
-def execExpmod (ω : Wor) (τ : Tra) (υ : Var) (κ : Con) : ΞR :=
+def execExpmod (ω : Wor) (τ : Tra) (υ : Var) (κ : Con) : ExecRes :=
   let f : Nat → Nat := λ x => (ceilDiv x 8) ^ 2
   let gQuadDivisor : Nat := 3
   let l_B : Nat := B8L.toNat <| κ.cld.sliceD 0 32 (0x00 : B8)
@@ -2324,13 +3585,15 @@ def execExpmod (ω : Wor) (τ : Tra) (υ : Var) (κ : Con) : ΞR :=
       else (8 * (l_E - 32)) + Nat.log2 E_pfx
   let g_r : Nat := max 200 <| (f (max l_M l_B) * max l'_E 1) / gQuadDivisor
   match safeSub υ.gas g_r with
-  | none => {wt := none, gas := 0, acs := υ.acr, ret := some []}
+  | none => -- {wt := none, gas := 0, acs := υ.acr, ret := some []}
+    .onlyAcr υ.acr
   | some g' =>
     -- let expmod : Nat := Nat.mod (B ^ E) M
     let expmod : Nat := Nat.powMod B E M
-    {wt := some ⟨ω, τ⟩, gas := g', acs := υ.acr, ret := B8L.pack expmod.toB8L l_M}
+    -- {wt := some ⟨ω, τ⟩, gas := g', acs := υ.acr, ret := B8L.pack expmod.toB8L l_M}
+    {wor := ω, tra := τ, gas := g', acs := υ.acr, ret := B8L.pack expmod.toB8L l_M, err := false}
 
-def execPre (vb : Bool) (ω : Wor) (τ : Tra) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) : Nat → Exmo ΞR
+def execPre (vb : Bool) (ω : Wor) (τ : Tra) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) : Nat → Exmo ExecRes
   | 1 => .ok <| execEcrec ω τ υ κ
   | 2 => .ok <| execSha ω τ υ κ
   | 3 => .ok <| execRip160 ω τ υ κ
@@ -2408,21 +3671,25 @@ def θ.prep
 -- a `none`.
 
 def Linst.run (ω : Wor) (τ : Tra) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) :
-    Linst → Exmo ΞR
+    Linst → Exmo ExecRes
   | .invalid => .ok <| xhs υ
-  | .stop => .ok {wt := some ⟨ω, τ⟩, gas := υ.gas, acs := υ.acr, ret := some []}
+  | .stop =>
+    -- .ok {wt := some ⟨ω, τ⟩, gas := υ.gas, acs := υ.acr, ret := some []}
+    .ok {wor := ω, tra := τ, gas := υ.gas, acs := υ.acr, ret := [], err := false}
   | .ret => do
     let (rlc, rsz, _) ← σ.pop2.toExcept (xhs0 υ)
     let mc := memCost υ rlc rsz
     let g' ← deductGas υ mc
     let r := μ.sliceD rlc.toNat rsz.toNat 0
-    .ok {wt := some ⟨ω, τ⟩, gas := g', acs := υ.acr, ret := r}
+    --.ok {wt := some ⟨ω, τ⟩, gas := g', acs := υ.acr, ret := r}
+    .ok {wor := ω, tra := τ, gas := g', acs := υ.acr, ret := r, err := false}
   | .rev => do
     let ⟨rlc, rsz, _⟩ ← σ.pop2.toExmo υ
     let mc := memCost υ rlc rsz
     let g' ← deductGas υ mc
     let o : B8L := μ.sliceD rlc.toNat rsz.toNat 0
-    .ok {wt := none, gas := g', acs := υ.acr, ret := some o}
+    -- .ok {wt := none, gas := g', acs := υ.acr, ret := some o}
+    .ok {wor := .empty, tra := .empty, gas := g', acs := υ.acr, ret := o, err := true}
   | .dest => do
     Except.guard (xhs0 υ) κ.wup
     let (x, _) ← σ.pop1.toExmo υ
@@ -2437,12 +3704,13 @@ def Linst.run (ω : Wor) (τ : Tra) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) 
     let gas' ← deductGas υ cost
     .ok
       {
-        wt :=
+        wor :=
           if a = κ.cta
-          then some ⟨ω, τ⟩
+          then ω
           else let v := (ω.get κ.cta).bal
                let ω' := ω.setBal κ.cta 0
-               some ⟨ω'.addBal a v, τ⟩
+               ω'
+        tra := τ
         gas := gas'
         acs :=
           {
@@ -2450,7 +3718,8 @@ def Linst.run (ω : Wor) (τ : Tra) (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) 
             dest := κ.cta :: υ.acr.dest
             adrs := υ.acr.adrs.insert a
           }
-        ret := some []
+        ret := []
+        err := false
       }
 
 
@@ -2515,6 +3784,7 @@ def Λ.prep
 
 def ByteArray.fromList : B8L → ByteArray := .mk ∘ .mk
 
+/-
 def Λ.wrapCore (ω : Wor) (τ : Tra) (A_star : Acr) (a : Adr) (xr : ΞR) : ΛΘ.Result :=
   let o : B8L := xr.ret.getD []
   let c : Nat :=
@@ -2580,6 +3850,7 @@ def Λ.wrapCore (ω : Wor) (τ : Tra) (A_star : Acr) (a : Adr) (xr : ΞR) : ΛΘ
 def Λ.wrap (ω : Wor) (τ : Tra) (A_star : Acr) (a : Adr) : Exmo ΞR → ΛΘ.Result
   | .error (xr) => Λ.wrapCore ω τ A_star a xr
   | .ok xr => Λ.wrapCore ω τ A_star a xr
+  -/
 
 def Exmo.print (vb : Bool) (s : String) : Exmo Unit :=
   if vb
@@ -2598,89 +3869,128 @@ def createMemoryAccess (μ : Mem) (υ : Var) (code_loc code_sz : B256) :
   pure ⟨i, initCodeCost + mc + gCreate, act'⟩
 
 
-def calculate_message_call_gas
-  (value gas gas_left memory_cost extra_gas : Nat)
-  (cs : Nat := gCallStipend) : Nat × Nat :=
-  let call_stipend : Nat := --Uint(0) if value == 0 else call_stipend
-    if value = 0 then 0 else cs
+def process_message : ExecRes := _
 
-  if gas_left < extra_gas + memory_cost
-  then ⟨gas + extra_gas, gas + call_stipend⟩
-  else
-    let gas' := min gas (except64th (gas_left - memory_cost - extra_gas))
-    ⟨gas' + extra_gas, gas' + call_stipend⟩
+def invalidContractPrefix : B8L → Bool
+  | 0xEF :: _ => true
+  | _ => false
 
 def create.run
   (vb : Bool) (lim : Nat) (ω : Wor) (τ : Tra)
   (σ : Sta) (μ : Mem) (υ : Var) (κ : Con) :
   Exmo (Wor × Tra × Sta × Mem × Var) := do
-  let (val, code_loc, code_sz, σ') ← σ.pop3.toExcept (xhs0 υ)
+  let (val, code_loc, code_sz, σ) ← σ.pop3.toExcept (xhs0 υ)
 
-  let initCodeCost : Nat := gInitcodeword * (ceilDiv code_sz.toNat 32)
-  dbg_trace s!"initCodeCost : {initCodeCost}"
+  dbg_trace s!"first argument (value) : {val}"
+  dbg_trace s!"second argument (value) : {code_loc}"
+  dbg_trace s!"third argument (value) : {code_sz}"
 
-  let ⟨act', mc⟩ := memExpCost υ code_loc code_sz
-  dbg_trace s!"mc : {mc}"
+  let act₀ := υ.act
 
-  let upfrontCost := initCodeCost + mc + gCreate
+  let ⟨act, extend_memory_cost⟩ := memExpCost υ code_loc code_sz
 
-  dbg_trace s!"upfront const : {upfrontCost}"
+  dbg_trace s!"extend memory cost : {extend_memory_cost}"
+  dbg_trace s!"extend memory by : {act - act₀}"
 
-  let interGas ← deductGas υ upfrontCost
-  dbg_trace s!"gas after deduction : {interGas}"
+  let init_code_gas : Nat := gInitcodeword * (ceilDiv code_sz.toNat 32)
 
-  let i : B8L := μ.sliceD code_loc.toNat code_sz.toNat 0
-  dbg_trace s!"calldata : {i}"
+  dbg_trace s!"init code gas : {init_code_gas}"
 
-  let a : Adr := newContAdr κ.cta (ω.nonceAt κ.cta) .none i
+  let gas ← deductGas υ <| init_code_gas + extend_memory_cost + gCreate
+
+  let υ := {υ with gas := gas}
+  dbg_trace s!"gas after deduction : {υ.gas}"
+
+  let υ := {υ with act := act}
+  dbg_trace s!"memory size after expansion : {υ.act}"
+
+  let calldata : B8L := μ.sliceD code_loc.toNat code_sz.toNat 0
+
+  let a : Adr := newContAdr κ.cta (ω.nonceAt κ.cta) .none calldata
   dbg_trace s!"new contract address : {a}"
 
+  -- begin generic_create
+
+  dbg_trace s!"calldata : {calldata}"
+
   .guard (xhs0 υ) (code_sz.toNat ≤ maxInitcodeSize)
-  dbg_trace "code size checked."
+  dbg_trace "CHECKED : code size ≤ max size"
 
-  let adrs' : AdrSet := υ.acr.adrs.insert a
+  let adrs : AdrSet := υ.acr.adrs.insert a
+  let υ := {υ with acr := {υ.acr with adrs := υ.acr.adrs.insert a}}
+  dbg_trace s!"updated access list length : {adrs.toList.length}"
 
-  dbg_trace s!"updated access list : {adrs'.toList}"
-
-  let createGas := except64th interGas
+  let createGas := except64th gas
   dbg_trace s!"create message gas : {createGas}"
 
-  dbg_trace s!"gas after deducting create message gas : {interGas - createGas}"
+  let υ := {υ with gas := υ.gas - createGas}
+  dbg_trace s!"gas after deducting create message gas : {υ.gas}"
 
   .guard (xhs0 υ) κ.wup
-  dbg_trace "write permission checked."
+  dbg_trace "CHECKED : write permission = true"
 
   if  (ω.get κ.cta).bal < val ∨
       maxNonce ≤ (ω.nonceAt κ.cta).toNat ∨
       κ.exd = 0
   then
-    do let σ' : Sta ← (σ.push1 0).toExmo υ
-       let υ' : Var := {
-         gas := interGas
+    do let σ : Sta ← (σ.push1 0).toExmo υ
+       let υ : Var := {
+         υ with
+         gas := υ.gas + createGas
          pc := υ.pc + 1
          ret := []
-         act := act'
-         acr := {υ.acr with adrs := adrs'}
        }
-       .ok ⟨ω, τ, σ', μ, υ'⟩
+       .ok ⟨ω, τ, σ, μ, υ⟩
   else do
-    dbg_trace "sender balance & sender nonce & exec depth checked."
+    dbg_trace "CHECKED : val ≤ sender balance"
+    dbg_trace "CHECKED : sender nonce ≤ max nonce"
+    dbg_trace "CHECKED : exec depth not at limit"
+
+    let ω := ω.incrNonce κ.cta
+
     if ω.nonceAt a ≠ 0 ∨ !(ω.codeAt a).isEmpty ∨ !(ω.storIsEmptyAt a)
     then do
-
-      dbg_trace s!"increasing nonce of address : {κ.cta}"
-      let ω' := ω.incrNonce κ.cta
-      let σ' : Sta ← (σ.push1 0).toExmo υ
-       let υ' : Var := {
-         gas := interGas - createGas
+      dbg_trace "CASE : new contract address is already used"
+      let σ : Sta ← (σ.push1 0).toExmo υ
+       let υ : Var := {
+         υ with
          pc := υ.pc + 1
          ret := []
-         act := act'
-         acr := {υ.acr with adrs := adrs'}
        }
-      .ok ⟨ω', τ, σ', μ, υ'⟩
-    else .error (xhs0 υ)
+      .ok ⟨ω, τ, σ, μ, υ⟩
+    else
+      dbg_trace s!"nonce of {κ.cta} increased to : {ω.nonceAt κ.cta}"
+      _
 
+
+#exit
+      let ω_bak := ω
+      let τ_bak := τ
+      dbg_trace "snapshot taken"
+
+      let ω := ω.setStor a .empty
+      dbg_trace "storage destroyed"
+
+      let υ := {υ with acr := {υ.acr with created := υ.acr.created.insert a}}
+      dbg_trace s!"updated access list size : {υ.acr.created.size}"
+
+      let ω := ω.incrNonce a
+      dbg_trace s!"nonce of {a} increased to : {ω.nonceAt a}"
+
+      let er := process_message
+
+      if er.err
+      then .ok ⟨ω_bak, τ_bak, σ, μ, υ⟩
+      else
+        -- contract_code_gas = Uint(len(contract_code)) * GAS_CODE_DEPOSIT
+        let contract_code_gas := er.ret.length * gCodedeposit --Uint(len(contract_code)) * GAS_CODE_DEPOSIT
+        if invalidContractPrefix er.ret --er.ret.length > maxCodeSize
+        then .ok ⟨ω_bak, τ_bak, σ, μ, {υ with gas := 0 }⟩
+        else _
+
+      --.error (xhs0 υ)
+
+#exit
 
 def Var.insertAdr (υ : Var) (a : Adr) : Var :=
   {υ with acr := {υ.acr with adrs := υ.acr.adrs.insert a}}
@@ -3387,8 +4697,8 @@ def Stx.Result.check' (vb : Bool) (tx : Stx) (exBloom : B8L)
     let setupVal := w.storEntryAt setupAdr 1000
     .guard (setupVal = 0) s!"setup address has nonzero value stored at position 1000 : {setupVal}"
 
-    -- let w' := w.setStor setupAdr 1000 1000
-    -- let w' := w.setStor setupAdr 0xf2 1687174231
+    -- let w' := w.setStorEntry setupAdr 1000 1000
+    -- let w' := w.setStorEntry setupAdr 0xf2 1687174231
 
     match exRoot with
     | .wor xw => do
@@ -3400,7 +4710,7 @@ def Stx.Result.check' (vb : Bool) (tx : Stx) (exBloom : B8L)
       .cprintln vb "test complete.\n"
       .cprintln vb "test complete.\n"
     | .root xr => do
-      let w' := w.setStor setupAdr 1000 1000
+      let w' := w.setStorEntry setupAdr 1000 1000
       .check vb (w'.root = xr)
         "state root check : PASS\n"
         s!"state root check : fail\nexpected : {xr.toHex}\ncomputed : {w'.root.toHex}"
@@ -3451,8 +4761,8 @@ def Tx.Result.check' (vb : Bool) (tx : Tx) (exBloom : B8L)
     let setupVal := w.storEntryAt setupAdr 1000
     .guard (setupVal = 0) s!"setup address has nonzero value stored at position 1000 : {setupVal}"
 
-    -- let w' := w.setStor setupAdr 1000 1000
-    let w' := w.setStor setupAdr 0xf2 1687174231
+    -- let w' := w.setStorEntry setupAdr 1000 1000
+    let w' := w.setStorEntry setupAdr 0xf2 1687174231
 
 
     .check vb (w'.root = exRoot)
