@@ -2093,7 +2093,9 @@ def B4L.toB8L : B8L → Option B8L
 def Hex.toB8L (s : String) : Option B8L :=
   s.data.mapM Hexit.toB4 >>= B4L.toB8L
 
-def Option.toIO {ξ} (o : Option ξ) (msg : String) : IO ξ := do
+def Option.toIO {ξ} (o : Option ξ)
+  (msg : String := "error : option-to-IO lift failed, input is 'none'") :
+  IO ξ := do
   match o with
   | none => throw (IO.Error.userError msg)
   | some x => pure x
@@ -2172,6 +2174,10 @@ def IO.remove0x : String → IO String
   | ⟨'0' :: 'x' :: s⟩ => return ⟨s⟩
   | _ => IO.throw "prefix not 0x"
 
+def Option.remove0x : String → Option String
+  | ⟨'0' :: 'x' :: s⟩ => return ⟨s⟩
+  | _ => .none
+
 def remove0x : String → String
   | ⟨'0' :: 'x' :: s⟩ => ⟨s⟩
   | s => s
@@ -2217,6 +2223,10 @@ def B8s.toB256
   ⟨ B8s.toB128 x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 xA xB xC xD xE xF,
     B8s.toB128 y0 y1 y2 y3 y4 y5 y6 y7 y8 y9 yA yB yC yD yE yF ⟩
 
+def B8L.toB64? : B8L → Option B64
+  | [x0, x1, x2, x3, x4, x5, x6, x7] => B8s.toB64 x0 x1 x2 x3 x4 x5 x6 x7
+  | _ => .none
+
 def B8L.toB128Diff : B8L → Option (B128 × B8L)
   | x0 :: x1 :: x2 :: x3 ::
     x4 :: x5 :: x6 :: x7 ::
@@ -2228,6 +2238,9 @@ def B8L.toB128Diff : B8L → Option (B128 × B8L)
         xs
       ⟩
   | _ => none
+
+def List.ekat {ξ : Type u} (n : Nat) (xs : List ξ) : List ξ :=
+  (xs.reverse.take n).reverse
 
 def List.ekatD {ξ : Type u} (n : Nat) (xs : List ξ) (x : ξ) : List ξ :=
   (xs.reverse.takeD n x).reverse
@@ -2242,8 +2255,15 @@ def B8L.toB256? (xs : B8L) : Option B256 := do
   let ⟨l, []⟩ ← xs'.toB128Diff | none
   some ⟨h, l⟩
 
+def Hex.toB64? (hx : String) : Option B64 := do
+  Hex.toB8L hx >>= B8L.toB64?
+
 def Hex.toB256? (hx : String) : Option B256 := do
   Hex.toB8L hx >>= B8L.toB256?
+
+def B8V.toB64 : Vec B8 8 → B64
+  | ⟨[b0, b1, b2, b3, b4, b5, b6, b7], _⟩ =>
+    B8s.toB64 b0 b1 b2 b3 b4 b5 b6 b7
 
 def B8V.toB128 : Vec B8 16 → B128
   | ⟨ [ b0, b1, b2, b3, b4, b5, b6, b7,
@@ -2262,6 +2282,7 @@ def B8L.toB8V (xs : B8L) (n : Nat) : Vec B8 n :=
   ⟨xs.pack n, List.length_ekatD _ _ _⟩
 
 def B8L.toB256P (xs : B8L) : B256 := B8V.toB256 (xs.toB8V 32)
+def B8L.toB64P (xs : B8L) : B64 := B8V.toB64 (xs.toB8V 8)
 
 def IO.cprint (vb : Bool) (s : String) : IO Unit :=
   cond vb (.print s) (pure ())
@@ -2984,11 +3005,16 @@ def Nat.toB8LNil : Nat → B8L
   | 0 => []
   | n => n.toB8L
 
-def Except.guard {ξ : Type u} (x : ξ) (p : Prop) [inst : Decidable p] : Except ξ Unit :=
+def Except.assert (p : Prop) [inst : Decidable p]
+  {ξ : Type u} (x : ξ) : Except ξ Unit :=
   if p then .ok () else .error x
 
-def Except.guardNot {ξ : Type u} (x : ξ) (p : Prop) [inst : Decidable p] : Except ξ Unit :=
+def Except.assertNot (p : Prop) [inst : Decidable p]
+  {ξ : Type u} (x : ξ) : Except ξ Unit :=
   if p then .error x else .ok ()
+
+-- def Except.guardNot (p : Prop) [inst : Decidable p] {ξ : Type u} (x : ξ) : Except ξ Unit :=
+--   if p then .error x else .ok ()
 
 def Option.toExcept {ξ : Type u} {υ : Type v} (x : ξ) : Option υ → Except ξ υ
   | .none => .error x

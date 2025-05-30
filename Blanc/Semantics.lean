@@ -217,7 +217,7 @@ def Stack.Dup (n : Nat) (s s' : Stack) : Prop := ∃ x, Push [x] s s' ∧ Stack.
 abbrev Stor := Lean.RBMap B256 B256 compare
 
 structure Acct where
-  (nonce : B256)
+  (nonce : B64)
   (bal : B256)
   (stor : Stor)
   (code : ByteArray)
@@ -240,7 +240,6 @@ def Adr.ordering : Adr → Adr → Ordering
 instance : Ord Adr := ⟨Adr.ordering⟩
 
 abbrev Wor : Type := Lean.RBMap Adr Acct compare
-
 
 structure State where
   -- balance, storage, & code : parts of the world state
