@@ -2994,16 +2994,30 @@ def Nat.toBytesCore (n : Nat) : Bytes :=
   else (n % 256).toByte :: (n / 256).toBytesCore
 def Nat.toBytes (n : Nat) : Bytes := n.toBytesCore.reverse
 
-def Nat.toB8LCore (n : Nat) : B8L :=
-  if n < 256
-  then [n.toUInt8]
-  else (n % 256).toUInt8 :: (n / 256).toB8LCore
 
-def Nat.toB8L (n : Nat) : B8L := n.toB8LCore.reverse
+def Nat.toB8LNew (n : Nat) : B8L :=
+  let rec aux (acc : B8L) : Nat → B8L
+  | 0 => acc
+  | n@(_ + 1) => aux ((n % 256).toUInt8 :: acc) (n / 256)
+  aux [] n
 
-def Nat.toB8LNil : Nat → B8L
-  | 0 => []
-  | n => n.toB8L
+def Nat.toB8LPack : Nat → B8L
+  | 0 => [0]
+  | n@(_ + 1) => n.toB8LNew
+
+--   if n < 256
+--   then [n.toUInt8]
+--   else (n % 256).toUInt8 :: (n / 256).toB8LCore
+-- def Nat.toB8LCore (n : Nat) : B8L :=
+--   if n < 256
+--   then [n.toUInt8]
+--   else (n % 256).toUInt8 :: (n / 256).toB8LCore
+--
+-- def Nat.toB8L (n : Nat) : B8L := n.toB8LCore.reverse
+--
+-- def Nat.toB8LNil : Nat → B8L
+--   | 0 => []
+--   | n => n.toB8L
 
 def Except.assert (p : Prop) [inst : Decidable p]
   {ξ : Type u} (x : ξ) : Except ξ Unit :=
@@ -3161,7 +3175,7 @@ def BLT.encodeBytes : B8L → B8L
   | bs =>
     if bs.length < 56
     then (0x80 + Nat.toUInt8 bs.length) :: bs
-    else let lbs : B8L := bs.length.toB8L
+    else let lbs : B8L := bs.length.toB8LPack
          (0xB7 + lbs.length.toUInt8) :: (lbs ++ bs)
 
 mutual
@@ -3170,7 +3184,7 @@ mutual
     | .b8s bs =>
       if bs.length < 56
       then (0x80 + bs.length.toUInt8) :: bs
-      else let lbs : B8L := bs.length.toB8L
+      else let lbs : B8L := bs.length.toB8LPack
            (0xB7 + lbs.length.toUInt8) :: (lbs ++ bs)
     | .list rs => RLPs'.encode rs
   def RLPs'.encodeMap : List BLT → B8L
@@ -3181,7 +3195,7 @@ mutual
     let len := bs.length
     if len < 56
     then (0xC0 + len.toUInt8) :: bs
-    else let lbs : B8L := len.toB8L
+    else let lbs : B8L := len.toB8LPack
          (0xF7 + lbs.length.toUInt8) :: (lbs ++ bs)
 end
 

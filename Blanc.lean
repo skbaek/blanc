@@ -230,23 +230,25 @@ def helper (xy :(_ : String) × Lean.Json) : IO (B256 × B256) := do
 inductive TxType : Type
   -- Legacy (including EIP-155)
   | zero
-    (gasPrice : B256)
-    (chainId : Option Nat)
+    (gasPrice : Nat)
   -- -- EIP-2930
-  -- | one : TxType
+  | one
+    (gasPrice : Nat)
+    (chainId : B64)
+    (accessList : AccessList)
   -- EIP-1559
   | two
-    (chainId : Nat)
-    (maxPriorityFee : B256)
-    (maxFee : B256)
+    (chainId : B64)
+    (maxPriorityFee : Nat)
+    (maxFee : Nat)
     (accessList : AccessList)
   -- EIP-4844
   | three
-    (chainId : Nat)
-    (maxPriorityFee : B256)
-    (maxFee : B256)
+    (chainId : B64)
+    (maxPriorityFee : Nat)
+    (maxFee : Nat)
     (accessList : AccessList)
-    (maxBlobFee : B256)
+    (maxBlobFee : Nat)
     (blobHashes : List B256)
 
 structure Withdrawal : Type where
@@ -312,7 +314,7 @@ def B256.toBytes (x : B256) : Bytes := x.toB8L.map B8.toByte
 def B64.toBytes (x : B64) : Bytes := x.toB8L.map B8.toByte
 def Adr.toBytes (adr : Adr) : Bytes := adr.toB8L.map B8.toByte
 
-def Nat.toBytesNil (nat : Nat) : Bytes := nat.toB8LNil.map B8.toByte
+def Nat.toBytesNil (nat : Nat) : Bytes := nat.toB8LNew.map B8.toByte
 
 def Header.toBLT (header : Header) : BLT :=
   BLT.list [
@@ -323,79 +325,100 @@ def Header.toBLT (header : Header) : BLT :=
     BLT.b8s header.txsRoot.toB8L,
     BLT.b8s header.receiptRoot.toB8L,
     BLT.b8s header.bloom,
-    BLT.b8s header.difficulty.toB8LNil,
-    BLT.b8s header.number.toB8LNil,
-    BLT.b8s header.gasLimit.toB8LNil,
-    BLT.b8s header.gasUsed.toB8LNil,
-    BLT.b8s header.timestamp.toB8LNil,
+    BLT.b8s header.difficulty.toB8LNew,
+    BLT.b8s header.number.toB8LNew,
+    BLT.b8s header.gasLimit.toB8LNew,
+    BLT.b8s header.gasUsed.toB8LNew,
+    BLT.b8s header.timestamp.toB8LNew,
     BLT.b8s header.extraData,
     BLT.b8s header.prevRandao.toB8L,
     BLT.b8s header.nonce.toB8L,
-    BLT.b8s header.baseFeePerGas.toB8LNil,
+    BLT.b8s header.baseFeePerGas.toB8LNew,
     BLT.b8s header.withdrawalsRoot.toB8L,
-    BLT.b8s header.blobGasUsed.toB8LNil,
-    BLT.b8s header.excessBlobGas.toB8LNil,
+    BLT.b8s header.blobGasUsed.toB8LNew,
+    BLT.b8s header.excessBlobGas.toB8LNew,
     BLT.b8s header.parentBeaconBlockRoot.toB8L
   ]
 
 structure Tx : Type where
   (nonce : B64)
-  (gasLimit : B256)
+  (gas : Nat)
   (receiver : Option Adr)
-  (val : B256)
-  (calldata : B8L)
-  (yParity : Bool)
+  (value : Nat)
+  (data : B8L)
+  (v : Nat)
   (r : B8L)
   (s : B8L)
   (type : TxType)
 
-structure Stx : Type where
-  (nonce : B64)
-  (gasLimit : B256)
-  (sender : Adr)
-  (receiver : Option Adr)
-  (val : B256)
-  (calldata : B8L)
-  (type : TxType)
-
-structure LegacyTx : Type where
-  nonce : B64
-  gasPrice : Nat
-  gas : Nat
-  receiver : Option Adr
-  value : Nat
-  data : B8L
-  v : Nat
-  r : B8L --B256
-  s : B8L --B256
+-- structure Tx : Type where
+--   (nonce : B64)
+--   (gasLimit : B256)
+--   (receiver : Option Adr)
+--   (val : B256)
+--   (calldata : B8L)
+--   (yParity : Bool)
+--   (r : B8L)
+--   (s : B8L)
+--   (type : TxType)
+--
+-- structure Stx : Type where
+--   (nonce : B64)
+--   (gasLimit : B256)
+--   (sender : Adr)
+--   (receiver : Option Adr)
+--   (val : B256)
+--   (calldata : B8L)
+--   (type : TxType)
+--
+-- structure LegacyTx : Type where
+--   nonce : B64
+--   gasPrice : Nat
+--   gas : Nat
+--   receiver : Option Adr
+--   value : Nat
+--   data : B8L
+--   v : Nat
+--   r : B8L --B256
+--   s : B8L --B256
 
 structure Block : Type where
   header : Header
-  txs : List LegacyTx
+  txs : List Tx
   ommers : List Header
   wds : List Withdrawal
 
-def LegacyTx.toBLT (tx : LegacyTx) : BLT :=
-  .list [
-    .b8s tx.nonce.toNat.toB8LNil,
-    .b8s tx.gasPrice.toB8LNil,
-    .b8s tx.gas.toB8LNil,
-    .b8s <|
-      match tx.receiver with
-      | none => []
-      | some rcvr => rcvr.toB8L,
-    .b8s tx.value.toB8LNil,
-    .b8s tx.data,
-    .b8s tx.v.toB8LNil,
-    .b8s tx.r, -- toB8L,
-    .b8s tx.s, -- toB8L
-  ]
+def Tx.toBLT? (tx : Tx) : Option BLT :=
+  match tx.type with
+  | .zero gasPrice =>
+    some <|
+      .list [
+        .b8s tx.nonce.toNat.toB8LNew,
+        .b8s gasPrice.toB8LNew,
+        .b8s tx.gas.toB8LNew,
+        .b8s <|
+          match tx.receiver with
+          | none => []
+          | some rcvr => rcvr.toB8L,
+        .b8s tx.value.toB8LNew,
+        .b8s tx.data,
+        .b8s tx.v.toB8LNew,
+        .b8s tx.r, -- toB8L,
+        .b8s tx.s, -- toB8L
+      ]
+  | .one _ _ _ => none -- .throw "UNIMP : BLT conversion for Type 1 tx"
+  | .two _ _ _ _ => none-- .throw "UNIMP : BLT conversion for Type 2 tx"
+  | .three _ _ _ _ _ _ => none -- .throw "UNIMP : BLT conversion for Type 3 tx"
+
+
+#check Option.toIO
 
 def Block.toIoBLT (block : Block) : IO BLT := do
   .guard block.wds.isEmpty "unimplemented : withdrawals-to-BLT"
+  let txBLTs : List BLT ← block.txs.mapM (fun tx => tx.toBLT?.toIO "cannot convert tx to BLT")
   .ok <| .list [
     block.header.toBLT,
-    .list (block.txs.map LegacyTx.toBLT),
+    .list txBLTs,-- (block.txs.map LegacyTx.toBLT),
     .list (block.ommers.map Header.toBLT),
     .list []
   ]
@@ -410,36 +433,43 @@ def Lean.RBMap.singleton {ξ υ f} (x : ξ) (y : υ) : RBMap ξ υ f := RBMap.em
 
 def TxType.toStrings : TxType → List String
   | zero
-    (gasPrice : B256)
-    (chainId : Option Nat) =>
+    (gasPrice : Nat) =>
     fork "Type-0" [
-      fork "gas price" [[gasPrice.toHex]],
-      fork "chain ID" [[s!"{chainId}"]]
+      [s!"gas price : {gasPrice.repr}"]
+    ]
+  | one
+    (gasPrice : Nat)
+    (chainId : B64)
+    (accessList : AccessList) =>
+    fork "Type-1" [
+      [s!"gas price : {gasPrice.repr}"],
+      [s!"chain ID : {chainId}"],
+      accessList.toStrings
     ]
   | two
-    (chainId : Nat)
-    (maxPriorityFee : B256)
-    (maxFee : B256)
+    (chainId : B64)
+    (maxPriorityFee : Nat)
+    (maxFee : Nat)
     (accessList : AccessList) =>
     fork "Type-2" [
       [s!"chain ID : {chainId}"],
-      [s!"max priority fee : {maxPriorityFee.toHex}"],
-      [s!"max fee : {maxFee.toHex}"],
+      [s!"max priority fee : {maxPriorityFee.repr}"],
+      [s!"max fee : {maxFee.repr}"],
       accessList.toStrings
     ]
   | three
-    (chainId : Nat)
-    (maxPriorityFee : B256)
-    (maxFee : B256)
+    (chainId : B64)
+    (maxPriorityFee : Nat)
+    (maxFee : Nat)
     (accessList : AccessList)
-    (maxBlobFee : B256)
+    (maxBlobFee : Nat)
     (blobHashes : List B256) =>
     fork "Type-3" [
       [s!"chain ID : {chainId}"],
-      [s!"max priority fee : {maxPriorityFee.toHex}"],
-      [s!"max fee : {maxFee.toHex}"],
+      [s!"max priority fee : {maxPriorityFee.repr}"],
+      [s!"max fee : {maxFee.repr}"],
       accessList.toStrings,
-      [s!"max blob fee : {maxBlobFee.toHex}"],
+      [s!"max blob fee : {maxBlobFee.repr}"],
       fork "blob hashes" (blobHashes.map <| fun bh => [bh.toHex])
     ]
 
@@ -449,11 +479,11 @@ instance : ToString TxType := ⟨String.joinln ∘ TxType.toStrings⟩
 def Tx.toStrings (tx : Tx) : List String :=
   fork "tx" [
     [s!"nonce : {tx.nonce.toHex}"],
-    [s!"gas limit : {tx.gasLimit.toHex}"],
+    [s!"gas limit : {tx.gas}"],
     [s!"receiver : {tx.receiver}"],
-    [s!"value : {tx.val.toHex}"],
-    [s!"calldata : {tx.calldata.toHex}"],
-    [s!"y-parity : {tx.yParity}"],
+    [s!"value : {tx.value.repr}"],
+    [s!"calldata : {tx.data.toHex}"],
+    [s!"v : {tx.v}"],
     [s!"r : {tx.r.toHex}"],
     [s!"s : {tx.s.toHex}"],
     tx.type.toStrings
@@ -461,18 +491,21 @@ def Tx.toStrings (tx : Tx) : List String :=
 
 instance : ToString Tx := ⟨String.joinln ∘ Tx.toStrings⟩
 
-def TxType.gasPrice (baseFee : B256) : TxType → B256
-  | .zero gp _ => gp
+def TxType.gasPrice (baseFee : Nat) : TxType → Nat
+  | .zero gp => gp
+  | .one gp _ _ => gp
   | .two _ mpf mf _ => min mf (baseFee + mpf)
   | .three _ mpf mf _ _ _ => min mf (baseFee + mpf)
 
-def TxType.chainId : TxType → Nat
-  | .zero _ cid => cid.getD 1
-  | .two cid _ _ _ => cid
-  | .three cid _ _ _ _ _ => cid
+-- def TxType.chainId : TxType → B64
+--   | .zero _ cid => cid.getD 1
+--   | .one _ cid _ => cid
+--   | .two cid _ _ _ => cid
+--   | .three cid _ _ _ _ _ => cid
 
 def TxType.accessList : TxType → AccessList
-  | .zero _ _ => []
+  | .zero _ => []
+  | .one _ _ al => al
   | .two _ _ _ al => al
   | .three _ _ _ al _ _ => al
 
@@ -481,11 +514,12 @@ def TxType.isBlobTx : TxType → Bool
   | _ => 0
 
 def TxType.blobHashes : TxType → List B256
-  | .zero _ _ => []
+  | .zero _ => []
+  | .one _ _ _ => []
   | .two _ _ _ _ => []
   | .three _ _ _ _ _ bhs => bhs
 
-def Stx.blobHashes (tx : Stx) : List B256 := tx.type.blobHashes
+-- def Stx.blobHashes (tx : Stx) : List B256 := tx.type.blobHashes
 def Tx.blobHashes (tx : Tx) : List B256 := tx.type.blobHashes
 
 def BLT.toAdr : BLT → Option Adr
@@ -533,159 +567,158 @@ def decodeYParity : B8L → IO Bool
   | [0x01] => pure Bool.true
   | yp => IO.throw s!"invalid yParity value : {yp.toHex}"
 
-def BLT.toLegacyTxHash : BLT → IO (Tx × B256)
-  | BLT.list [
-      .b8s nonce,
-      .b8s gasPrice,
-      .b8s gasLimit,
-      .b8s receiver,
-      .b8s val,
-      .b8s calldata,
-      .b8s [v],
-      .b8s r,
-      .b8s s
-    ] => do
-    let ⟨yParity, chainId⟩ ← decodeV v
-    let bs :=
-      BLT.encode <|
-        .list [
-          .b8s nonce,
-          .b8s gasPrice,
-          .b8s gasLimit,
-          .b8s receiver,
-          .b8s val,
-          .b8s calldata
-        ]
-    return ⟨
-      {
-        nonce := nonce.toB64P
-        gasLimit := gasLimit.toB256P
-        receiver := (← receiver.toReceiver)
-        val := val.toB256P
-        calldata := calldata
-        yParity := yParity
-        r := (r.reverse.takeD 32 0).reverse
-        s := (s.reverse.takeD 32 0).reverse
-        type :=
-          .zero gasPrice.toB256P chainId
-      },
-      bs.keccak
-    ⟩
-  | _ => IO.throw "error : cannot RLP-decode for type-0 tx"
+-- def BLT.toLegacyTxHash : BLT → IO (Tx × B256)
+--   | BLT.list [
+--       .b8s nonce,
+--       .b8s gasPrice,
+--       .b8s gasLimit,
+--       .b8s receiver,
+--       .b8s val,
+--       .b8s calldata,
+--       .b8s [v],
+--       .b8s r,
+--       .b8s s
+--     ] => do
+--     let ⟨yParity, chainId⟩ ← decodeV v
+--     let bs :=
+--       BLT.encode <|
+--         .list [
+--           .b8s nonce,
+--           .b8s gasPrice,
+--           .b8s gasLimit,
+--           .b8s receiver,
+--           .b8s val,
+--           .b8s calldata
+--         ]
+--     return ⟨
+--       {
+--         nonce := nonce.toB64P
+--         gas := gasLimit.toNat --B256P
+--         receiver := (← receiver.toReceiver)
+--         value := val.toB256P
+--         data := calldata
+--         yParity := yParity
+--         r := (r.reverse.takeD 32 0).reverse
+--         s := (s.reverse.takeD 32 0).reverse
+--         type :=
+--           .zero gasPrice.toB256P chainId
+--       },
+--       bs.keccak
+--     ⟩
+--   | _ => IO.throw "error : cannot RLP-decode for type-0 tx"
 
-
-def decodeTxHash : B8L → IO (Tx × B256)
-  | [] => IO.throw "error : cannot decode empty bytes"
-  | 0x01 :: _ => IO.throw "unimplemented : Type-1 tx decoding"
-  | 0x02 :: tbs =>
-    match BLT.decode tbs with
-    | BLT.list [
-        .b8s chainId,
-        .b8s nonce,
-        .b8s maxPriorityFee,
-        .b8s maxFee,
-        .b8s gasLimit,
-        .b8s receiver,
-        .b8s val,
-        .b8s calldata,
-        accessList,
-        .b8s yParity,
-        .b8s r,
-        .b8s s
-      ] => do
-      let bs : B8L :=
-        BLT.encode <|
-          .list [
-            .b8s chainId,
-            .b8s nonce,
-            .b8s maxPriorityFee,
-            .b8s maxFee,
-            .b8s gasLimit,
-            .b8s receiver,
-            .b8s val,
-            .b8s calldata,
-            accessList
-          ]
-
-      return ⟨
-        {
-          nonce := nonce.toB64P
-          gasLimit := gasLimit.toB256P
-          receiver := (← receiver.toReceiver)
-          val := val.toB256P
-          calldata := calldata
-          yParity := (← decodeYParity yParity)
-          r := (r.reverse.takeD 32 0).reverse
-          s := (s.reverse.takeD 32 0).reverse
-          type :=
-            .two
-              chainId.toNat
-              maxPriorityFee.toB256P
-              maxFee.toB256P
-              (← accessList.toAccessList.toIO "cannot decode access list")
-        },
-        B8L.keccak (0x02 :: bs)
-      ⟩
-    | _ => IO.throw "error : cannot decode type-2 tx"
-  | 0x03 :: tbs =>
-    match BLT.decode tbs with
-    | BLT.list [
-        .b8s chainId,
-        .b8s nonce,
-        .b8s maxPriorityFee,
-        .b8s maxFee,
-        .b8s gasLimit,
-        .b8s receiver,
-        .b8s val,
-        .b8s calldata,
-        accessList,
-        .b8s maxBlobFee,
-        .list blobHashes,
-        .b8s yParity,
-        .b8s r,
-        .b8s s
-      ] => do
-      let bs : B8L :=
-        BLT.encode <|
-          .list [
-            .b8s chainId,
-            .b8s nonce,
-            .b8s maxPriorityFee,
-            .b8s maxFee,
-            .b8s gasLimit,
-            .b8s receiver,
-            .b8s val,
-            .b8s calldata,
-            accessList,
-            .b8s maxBlobFee,
-            .list blobHashes,
-          ]
-      return ⟨
-        {
-          nonce := nonce.toB64P
-          gasLimit := gasLimit.toB256P
-          receiver := (← receiver.toReceiver)
-          val := val.toB256P
-          calldata := calldata
-          yParity := (← decodeYParity yParity)
-          r := (r.reverse.takeD 32 0).reverse
-          s := (s.reverse.takeD 32 0).reverse
-          type :=
-            .three
-              chainId.toNat
-              maxPriorityFee.toB256P
-              maxFee.toB256P
-              (← accessList.toAccessList.toIO "cannot decode access list")
-              maxBlobFee.toB256P
-              (← mapM (λ r => r.toB256.toIO "") blobHashes)
-        },
-        B8L.keccak (0x03 :: bs)
-        -- B8L.keccak (0x03 :: bs)
-      ⟩
-    | _ => IO.throw "error : cannot RLP-decode for type-3 tx"
-  | bs => do
-    let r ← (BLT.decode bs).toIO "cannot RLP-decode legacy TX"
-    r.toLegacyTxHash
+-- def decodeTxHash : B8L → IO (Tx × B256)
+--   | [] => IO.throw "error : cannot decode empty bytes"
+--   | 0x01 :: _ => IO.throw "unimplemented : Type-1 tx decoding"
+--   | 0x02 :: tbs =>
+--     match BLT.decode tbs with
+--     | BLT.list [
+--         .b8s chainId,
+--         .b8s nonce,
+--         .b8s maxPriorityFee,
+--         .b8s maxFee,
+--         .b8s gasLimit,
+--         .b8s receiver,
+--         .b8s val,
+--         .b8s calldata,
+--         accessList,
+--         .b8s yParity,
+--         .b8s r,
+--         .b8s s
+--       ] => do
+--       let bs : B8L :=
+--         BLT.encode <|
+--           .list [
+--             .b8s chainId,
+--             .b8s nonce,
+--             .b8s maxPriorityFee,
+--             .b8s maxFee,
+--             .b8s gasLimit,
+--             .b8s receiver,
+--             .b8s val,
+--             .b8s calldata,
+--             accessList
+--           ]
+--
+--       return ⟨
+--         {
+--           nonce := nonce.toB64P
+--           gasLimit := gasLimit.toB256P
+--           receiver := (← receiver.toReceiver)
+--           val := val.toB256P
+--           calldata := calldata
+--           yParity := (← decodeYParity yParity)
+--           r := (r.reverse.takeD 32 0).reverse
+--           s := (s.reverse.takeD 32 0).reverse
+--           type :=
+--             .two
+--               chainId.toNat
+--               maxPriorityFee.toB256P
+--               maxFee.toB256P
+--               (← accessList.toAccessList.toIO "cannot decode access list")
+--         },
+--         B8L.keccak (0x02 :: bs)
+--       ⟩
+--     | _ => IO.throw "error : cannot decode type-2 tx"
+--   | 0x03 :: tbs =>
+--     match BLT.decode tbs with
+--     | BLT.list [
+--         .b8s chainId,
+--         .b8s nonce,
+--         .b8s maxPriorityFee,
+--         .b8s maxFee,
+--         .b8s gasLimit,
+--         .b8s receiver,
+--         .b8s val,
+--         .b8s calldata,
+--         accessList,
+--         .b8s maxBlobFee,
+--         .list blobHashes,
+--         .b8s yParity,
+--         .b8s r,
+--         .b8s s
+--       ] => do
+--       let bs : B8L :=
+--         BLT.encode <|
+--           .list [
+--             .b8s chainId,
+--             .b8s nonce,
+--             .b8s maxPriorityFee,
+--             .b8s maxFee,
+--             .b8s gasLimit,
+--             .b8s receiver,
+--             .b8s val,
+--             .b8s calldata,
+--             accessList,
+--             .b8s maxBlobFee,
+--             .list blobHashes,
+--           ]
+--       return ⟨
+--         {
+--           nonce := nonce.toB64P
+--           gasLimit := gasLimit.toB256P
+--           receiver := (← receiver.toReceiver)
+--           val := val.toB256P
+--           calldata := calldata
+--           yParity := (← decodeYParity yParity)
+--           r := (r.reverse.takeD 32 0).reverse
+--           s := (s.reverse.takeD 32 0).reverse
+--           type :=
+--             .three
+--               chainId.toNat
+--               maxPriorityFee.toB256P
+--               maxFee.toB256P
+--               (← accessList.toAccessList.toIO "cannot decode access list")
+--               maxBlobFee.toB256P
+--               (← mapM (λ r => r.toB256.toIO "") blobHashes)
+--         },
+--         B8L.keccak (0x03 :: bs)
+--         -- B8L.keccak (0x03 :: bs)
+--       ⟩
+--     | _ => IO.throw "error : cannot RLP-decode for type-3 tx"
+--   | bs => do
+--     let r ← (BLT.decode bs).toIO "cannot RLP-decode legacy TX"
+--     r.toLegacyTxHash
 
 @[extern "ecrecover_flag"]
 opaque ecrecoverFlag : ByteArray → UInt8 → ByteArray → ByteArray
@@ -1168,7 +1201,7 @@ def execute_modexp (evm : Evm) : Except (Evm × String) Evm := do
   let cost : Nat := max 200 <| (f (max l_M l_B) * max l'_E 1) / gQuadDivisor
   let evm ← chargeGas cost evm
   let expmod : Nat := Nat.powMod B E M
-  .ok {evm with output := B8L.pack expmod.toB8L l_M}
+  .ok {evm with output := B8L.pack expmod.toB8LPack l_M}
 
 abbrev altBn128Prime : Nat := 21888242871839275222246405745257275088696311157297823662689037894645226208583
 
@@ -1318,7 +1351,7 @@ def Point.mul (p : Point) : Nat → Point
     else Point.add whole p
 
 def Point.toB8L (p : Point) : B8L :=
-  p.x.val.toB8L.pack 32 ++ p.y.val.toB8L.pack 32
+  p.x.val.toB8LNew.pack 32 ++ p.y.val.toB8LNew.pack 32
 
 def ecadd (input : B8L) : Option B8L := do
   let px : Nat := B8L.toNat <| input.sliceD 0 32 (0 : B8)
@@ -1385,7 +1418,7 @@ def execute_precomp (evm : Evm) : Nat → Except (Evm × String) Evm
 inductive Ninst' : Type
   | reg : Rinst → Ninst'
   | exec : Xinst → Ninst'
-  | push : B256 → Nat →  Ninst' --∀ bs : B8L, bs.length ≤ 32 → Ninst'
+  | push : B256 → Nat →  Ninst'
 
 def Ninst'.toString : Ninst' → String
   | reg o => Rinst.toString o
@@ -1468,7 +1501,7 @@ def fakeExp (fac num den : Nat) : Nat :=
 
 def BLOB_BASE_FEE_UPDATE_FRACTION : Nat := 3338477
 
-def get_base_fee_per_blob_gas (excessBlobGas : Nat) : Nat :=
+def calculate_blob_gas_price (excessBlobGas : Nat) : Nat :=
   fakeExp 1 excessBlobGas BLOB_BASE_FEE_UPDATE_FRACTION
 
 def Evm.push (x : B256) (evm : Evm) : Except (Evm × String) Evm := do
@@ -1577,7 +1610,7 @@ instance {a : Acct} : Decidable a.Empty := by
 
 def destroyAccount (w : Wor) (a : Adr) : Wor := w.erase a
 
-abbrev accountExistsAndIsEmpty (wor : Wor) (adr : Adr) : Prop :=
+abbrev AccountExistsAndIsEmpty (wor : Wor) (adr : Adr) : Prop :=
   let acct := wor.get adr
   acct.Empty ∧ !acct.stor.isEmpty
 
@@ -1585,7 +1618,7 @@ def destroyTouchedEmptyAccounts
     (state : Wor) (touchedAccounts: AdrSet) : Wor :=
   let aux : Wor → Adr → Wor :=
     fun wor adr =>
-      if accountExistsAndIsEmpty wor adr
+      if AccountExistsAndIsEmpty wor adr
       then destroyAccount wor adr
       else wor
   touchedAccounts.fold aux state
@@ -1750,7 +1783,7 @@ def Rinst.run (evm : Evm) : Rinst → Execution
     let y : B256 := evm.env.blob_versioned_hashes.getD x.toNat 0
     chargeGas gHashopcode evm >>= Evm.push y >>= Evm.incrPc
   | .blobbasefee => do
-    let fee := get_base_fee_per_blob_gas evm.env.excess_blob_gas
+    let fee := calculate_blob_gas_price evm.env.excess_blob_gas
     pushItem fee.toB256 gBase evm
   | .balance => do
     let ⟨x, evm⟩ ← evm.pop
@@ -2322,7 +2355,7 @@ def incorporateChildOnError (evm child : Evm) : Evm :=
     if
       RIPEMD160_ADDRESS ∈ child.touched_accounts ∨
       ( child.contract = RIPEMD160_ADDRESS ∧
-        accountExistsAndIsEmpty evm.env.state child.contract )
+        AccountExistsAndIsEmpty evm.env.state child.contract )
     then add_touched_account evm RIPEMD160_ADDRESS
     else evm
   {evm with gas_left := evm.gas_left + child.gas_left }
@@ -2336,7 +2369,7 @@ def incorporateChildOnSuccess (evm child : Evm) : Evm :=
     accounts_to_delete := evm.accounts_to_delete.union child.accounts_to_delete
     touched_accounts :=
       let union := evm.touched_accounts.union child.touched_accounts
-      if accountExistsAndIsEmpty evm.env.state child.contract
+      if AccountExistsAndIsEmpty evm.env.state child.contract
       then union.insert child.contract
       else union
     accessed_addresses := evm.accessed_addresses.union child.accessed_addresses
@@ -2461,7 +2494,7 @@ def executeModexp (evm : Evm) : Execution := do
   let (.false : Bool) ←
     .ok ((l_B = 0 ∧ l_M = 0) : Bool) | .ok {evm with output := []}
 
-  .ok {evm with output := (Nat.powMod B E M).toB8L.pack l_M}
+  .ok {evm with output := (Nat.powMod B E M).toB8LNew.pack l_M}
 
 def executeEcadd (evm : Evm) : Execution := do
   let data := evm.message.data
@@ -3424,16 +3457,16 @@ def publicAddress (hsa : ByteArray) (ri : UInt8) (rsa : ByteArray) : IO Adr :=
     then IO.throw "ecrecover failed"
     else (B8L.toAdr pa).toIO "bytearray to address conversion failed"
 
-def getSender (tx : Tx) (hs : B256) : IO Adr := do
-  let rsa : ByteArray := ⟨Array.mk (tx.r ++ tx.s)⟩
-  let ri : UInt8 := Byte.toB8 (if tx.yParity then 1 else 0)
-  let hsa : ByteArray := ⟨Array.mk hs.toB8L⟩
-  publicAddress hsa ri rsa
-
-def decodeTxBytes (txbs : B8L) : IO (Tx × Adr) := do
-  let ⟨tx, hs⟩ ← decodeTxHash txbs
-  let sender ← getSender tx hs
-  return ⟨tx, sender⟩
+-- def getSender (tx : Tx) (hs : B256) : IO Adr := do
+--   let rsa : ByteArray := ⟨Array.mk (tx.r ++ tx.s)⟩
+--   let ri : UInt8 := Byte.toB8 (if tx.yParity then 1 else 0)
+--   let hsa : ByteArray := ⟨Array.mk hs.toB8L⟩
+--   publicAddress hsa ri rsa
+--
+-- def decodeTxBytes (txbs : B8L) : IO (Tx × Adr) := do
+--   let ⟨tx, hs⟩ ← decodeTxHash txbs
+--   let sender ← getSender tx hs
+--   return ⟨tx, sender⟩
 
 def List.putIndex {ξ : Type u} : Nat → List ξ → List (Nat × ξ)
   | _, [] => []
@@ -3601,145 +3634,145 @@ def Bool.toB8L : Bool → B8L
   | .false => []
   | .true => [0x01]
 
-def Stx.Result.check' (vb : Bool) (tx : Stx) (exBloom : B8L)
-    (exRcRoot : B256) (exRoot : ExpectedWorldState) : Option TxEx → Tx.Result → IO Unit
-  | .some ex, .fail ex' => do
-    .check vb (ex = ex')
-      "exception check : pass"
-      s!"ERROR : expected exception = {ex}, computed exception = {ex'}"
-    .cprintln vb "test complete.\n"
-  | .none, .fail ex => .throw s!"ERROR : expected exception = none, computed exception = {ex}"
-  | .some ex, _ => .throw s!"ERROR : expected exception = {ex}, computed exception = none"
-  | .none, .pass w g l s => do
+-- def Stx.Result.check' (vb : Bool) (tx : Stx) (exBloom : B8L)
+--     (exRcRoot : B256) (exRoot : ExpectedWorldState) : Option TxEx → Tx.Result → IO Unit
+--   | .some ex, .fail ex' => do
+--     .check vb (ex = ex')
+--       "exception check : pass"
+--       s!"ERROR : expected exception = {ex}, computed exception = {ex'}"
+--     .cprintln vb "test complete.\n"
+--   | .none, .fail ex => .throw s!"ERROR : expected exception = none, computed exception = {ex}"
+--   | .some ex, _ => .throw s!"ERROR : expected exception = {ex}, computed exception = none"
+--   | .none, .pass w g l s => do
+--
+--     let bloom : B8L := List.foldl addLogToBloom (List.replicate 256 0x00) l
+--
+--     .check vb (exBloom = bloom)
+--       "bloom check : PASS\n"
+--       s!"bloom check : FAIL\nexpected : {exBloom.toHex}\ncomputed : {bloom.toHex}\n"
+--
+--     let receipt_rlp : BLT := .list [
+--       .b8s s.toB8L, -- tx status (equals 0x01 if it gets to this point)
+--       .b8s (g.toB8L),
+--       .b8s bloom,
+--       .list (l.map Log.toBLT)
+--     ]
+--
+--     let receipt_header : B8L :=
+--       match tx.type with
+--       | .zero _ _ => []
+--       | .two _ _ _ _ => [0x02]
+--       | .three _ _ _ _ _ _ => [0x03]
+--
+--     let receipt : B8L := receipt_header ++ receipt_rlp.encode
+--     let rcRoot : B256 := receiptRoot [⟨[0x80], receipt⟩]
+--
+--     .check vb (rcRoot = exRcRoot)
+--       "receipt root check : pass"
+--       s!"receipt root check : fail\nexpected : {exRcRoot.toHex}\ncomputed : {rcRoot.toHex}"
+--
+--     .cprintln vb "\n\n"
+--     .cprintln vb s!"tx status : {s}"
+--     .cprint vb "terminal world :"
+--     .cprintln vb (String.joinln w.toStrings)
+--
+--     let setupVal := w.getStorVal setupAdr 1000
+--     .guard (setupVal = 0) s!"setup address has nonzero value stored at position 1000 : {setupVal}"
+--
+--     -- let w' := w.setStorEntry setupAdr 1000 1000
+--     -- let w' := w.setStorEntry setupAdr 0xf2 1687174231
+--
+--     match exRoot with
+--     | .wor xw => do
+--       let w' := w.set setupAdr .empty
+--       let xw' := xw.set setupAdr .empty
+--       .check vb (xw'.root = w'.root)
+--         "state root check : PASS\n"
+--         s!"state root check : FAIL\nexpected : {xw'.root.toHex}\ncomputed : {w'.root.toHex}\n(complete expected/computed world states available)"
+--       .cprintln vb "test complete.\n"
+--       .cprintln vb "test complete.\n"
+--     | .root xr => do
+--       let w' := w.setStorVal setupAdr 1000 1000
+--       .check vb (w'.root = xr)
+--         "state root check : PASS\n"
+--         s!"state root check : fail\nexpected : {xr.toHex}\ncomputed : {w'.root.toHex}"
+--       .cprintln vb "test complete.\n"
+--
+-- def Tx.Result.check' (vb : Bool) (tx : Tx) (exBloom : B8L)
+--     (exRcRoot : B256) (exRoot : B256) : Option TxEx → Tx.Result → IO Unit
+--   | .some ex, .fail ex' => do
+--     .check vb (ex = ex')
+--       "exception check : pass"
+--       s!"ERROR : expected exception = {ex}, computed exception = {ex'}"
+--     .cprintln vb "test complete.\n"
+--   | .none, .fail ex => .throw s!"ERROR : expected exception = none, computed exception = {ex}"
+--   | .some ex, _ => .throw s!"ERROR : expected exception = {ex}, computed exception = none"
+--   | .none, .pass w g l s => do
+--
+--     let bloom : B8L := List.foldl addLogToBloom (List.replicate 256 0x00) l
+--
+--     .check vb (exBloom = bloom)
+--       "bloom check : PASS\n"
+--       s!"bloom check : FAIL\nexpected : {exBloom.toHex}\ncomputed : {bloom.toHex}\n"
+--
+--     let receipt_rlp : BLT := .list [
+--       .b8s s.toB8L, -- tx status (equals 0x01 if it gets to this point)
+--       .b8s (g.toB8L),
+--       .b8s bloom,
+--       .list (l.map Log.toBLT)
+--     ]
+--
+--     let receipt_header : B8L :=
+--       match tx.type with
+--       | .zero _ _ => []
+--       | .two _ _ _ _ => [0x02]
+--       | .three _ _ _ _ _ _ => [0x03]
+--
+--     let receipt : B8L := receipt_header ++ receipt_rlp.encode
+--     let rcRoot : B256 := receiptRoot [⟨[0x80], receipt⟩]
+--
+--     .check vb (rcRoot = exRcRoot)
+--       "receipt root check : pass"
+--       s!"receipt root check : fail\nexpected : {exRcRoot.toHex}\ncomputed : {rcRoot.toHex}"
+--
+--     .cprintln vb "\n\n"
+--     .cprintln vb s!"tx status : {s}"
+--     .cprint vb "terminal world :"
+--     .cprintln vb (String.joinln w.toStrings)
+--
+--     let setupVal := w.getStorVal setupAdr 1000
+--     .guard (setupVal = 0) s!"setup address has nonzero value stored at position 1000 : {setupVal}"
+--
+--     -- let w' := w.setStorEntry setupAdr 1000 1000
+--     let w' := w.setStorVal setupAdr 0xf2 1687174231
+--
+--
+--     .check vb (w'.root = exRoot)
+--       "state root check : PASS\n"
+--       s!"state root check : fail\nexpected : {exRoot.toHex}\ncomputed : {w'.root.toHex}"
+--
+--     .cprintln vb "test complete.\n"
 
-    let bloom : B8L := List.foldl addLogToBloom (List.replicate 256 0x00) l
-
-    .check vb (exBloom = bloom)
-      "bloom check : PASS\n"
-      s!"bloom check : FAIL\nexpected : {exBloom.toHex}\ncomputed : {bloom.toHex}\n"
-
-    let receipt_rlp : BLT := .list [
-      .b8s s.toB8L, -- tx status (equals 0x01 if it gets to this point)
-      .b8s (g.toB8L),
-      .b8s bloom,
-      .list (l.map Log.toBLT)
-    ]
-
-    let receipt_header : B8L :=
-      match tx.type with
-      | .zero _ _ => []
-      | .two _ _ _ _ => [0x02]
-      | .three _ _ _ _ _ _ => [0x03]
-
-    let receipt : B8L := receipt_header ++ receipt_rlp.encode
-    let rcRoot : B256 := receiptRoot [⟨[0x80], receipt⟩]
-
-    .check vb (rcRoot = exRcRoot)
-      "receipt root check : pass"
-      s!"receipt root check : fail\nexpected : {exRcRoot.toHex}\ncomputed : {rcRoot.toHex}"
-
-    .cprintln vb "\n\n"
-    .cprintln vb s!"tx status : {s}"
-    .cprint vb "terminal world :"
-    .cprintln vb (String.joinln w.toStrings)
-
-    let setupVal := w.getStorVal setupAdr 1000
-    .guard (setupVal = 0) s!"setup address has nonzero value stored at position 1000 : {setupVal}"
-
-    -- let w' := w.setStorEntry setupAdr 1000 1000
-    -- let w' := w.setStorEntry setupAdr 0xf2 1687174231
-
-    match exRoot with
-    | .wor xw => do
-      let w' := w.set setupAdr .empty
-      let xw' := xw.set setupAdr .empty
-      .check vb (xw'.root = w'.root)
-        "state root check : PASS\n"
-        s!"state root check : FAIL\nexpected : {xw'.root.toHex}\ncomputed : {w'.root.toHex}\n(complete expected/computed world states available)"
-      .cprintln vb "test complete.\n"
-      .cprintln vb "test complete.\n"
-    | .root xr => do
-      let w' := w.setStorVal setupAdr 1000 1000
-      .check vb (w'.root = xr)
-        "state root check : PASS\n"
-        s!"state root check : fail\nexpected : {xr.toHex}\ncomputed : {w'.root.toHex}"
-      .cprintln vb "test complete.\n"
-
-def Tx.Result.check' (vb : Bool) (tx : Tx) (exBloom : B8L)
-    (exRcRoot : B256) (exRoot : B256) : Option TxEx → Tx.Result → IO Unit
-  | .some ex, .fail ex' => do
-    .check vb (ex = ex')
-      "exception check : pass"
-      s!"ERROR : expected exception = {ex}, computed exception = {ex'}"
-    .cprintln vb "test complete.\n"
-  | .none, .fail ex => .throw s!"ERROR : expected exception = none, computed exception = {ex}"
-  | .some ex, _ => .throw s!"ERROR : expected exception = {ex}, computed exception = none"
-  | .none, .pass w g l s => do
-
-    let bloom : B8L := List.foldl addLogToBloom (List.replicate 256 0x00) l
-
-    .check vb (exBloom = bloom)
-      "bloom check : PASS\n"
-      s!"bloom check : FAIL\nexpected : {exBloom.toHex}\ncomputed : {bloom.toHex}\n"
-
-    let receipt_rlp : BLT := .list [
-      .b8s s.toB8L, -- tx status (equals 0x01 if it gets to this point)
-      .b8s (g.toB8L),
-      .b8s bloom,
-      .list (l.map Log.toBLT)
-    ]
-
-    let receipt_header : B8L :=
-      match tx.type with
-      | .zero _ _ => []
-      | .two _ _ _ _ => [0x02]
-      | .three _ _ _ _ _ _ => [0x03]
-
-    let receipt : B8L := receipt_header ++ receipt_rlp.encode
-    let rcRoot : B256 := receiptRoot [⟨[0x80], receipt⟩]
-
-    .check vb (rcRoot = exRcRoot)
-      "receipt root check : pass"
-      s!"receipt root check : fail\nexpected : {exRcRoot.toHex}\ncomputed : {rcRoot.toHex}"
-
-    .cprintln vb "\n\n"
-    .cprintln vb s!"tx status : {s}"
-    .cprint vb "terminal world :"
-    .cprintln vb (String.joinln w.toStrings)
-
-    let setupVal := w.getStorVal setupAdr 1000
-    .guard (setupVal = 0) s!"setup address has nonzero value stored at position 1000 : {setupVal}"
-
-    -- let w' := w.setStorEntry setupAdr 1000 1000
-    let w' := w.setStorVal setupAdr 0xf2 1687174231
-
-
-    .check vb (w'.root = exRoot)
-      "state root check : PASS\n"
-      s!"state root check : fail\nexpected : {exRoot.toHex}\ncomputed : {w'.root.toHex}"
-
-    .cprintln vb "test complete.\n"
-
-def decodeTxBLT : BLT → IO (Tx × B8L × Adr)
-  | .b8s xs => do
-    let ⟨tx, sender⟩ ← decodeTxBytes xs
-    pure ⟨tx, xs, sender⟩
-  | .list l => do
-    let r : BLT := .list l
-    let ⟨tx, hs⟩ ← r.toLegacyTxHash
-    let sender ← getSender tx hs
-    return ⟨tx, r.encode, sender⟩
-
-def Tx.toStx (tx : Tx) (s : Adr) : Stx :=
-  {
-    nonce := tx.nonce
-    gasLimit := tx.gasLimit
-    sender := s
-    receiver := tx.receiver
-    val := tx.val
-    calldata := tx.calldata
-    type := tx.type
-  }
+-- def decodeTxBLT : BLT → IO (Tx × B8L × Adr)
+--   | .b8s xs => do
+--     let ⟨tx, sender⟩ ← decodeTxBytes xs
+--     pure ⟨tx, xs, sender⟩
+--   | .list l => do
+--     let r : BLT := .list l
+--     let ⟨tx, hs⟩ ← r.toLegacyTxHash
+--     let sender ← getSender tx hs
+--     return ⟨tx, r.encode, sender⟩
+--
+-- def Tx.toStx (tx : Tx) (s : Adr) : Stx :=
+--   {
+--     nonce := tx.nonce
+--     gasLimit := tx.gasLimit
+--     sender := s
+--     receiver := tx.receiver
+--     val := tx.val
+--     calldata := tx.calldata
+--     type := tx.type
+--   }
 
 
 def Withdrawal.toStrings (wd : Withdrawal) : List String :=
@@ -3771,7 +3804,7 @@ def checkTransactionsRoot (vb : Bool) (txbs : B8L) (root : B256) (txr : Tx.Resul
 
 def checkWithdrawalsRoot (vb : Bool) (wds : List Withdrawal) (wr : B256) : IO Unit :=
   let aux : (ℕ × Withdrawal) → (B8L × B8L) :=
-    fun | ⟨idx, wd⟩ => ⟨idx.toB8LNil, wd.toBLT.encode⟩
+    fun | ⟨idx, wd⟩ => ⟨idx.toB8LNew, wd.toBLT.encode⟩
   let temp : List (B8L × B8L) := (wds.putIndex 0).map aux
   let wr' := receiptRoot temp
   .check vb (wr = wr')
@@ -3946,40 +3979,37 @@ structure BlockChain : Type where
   state : Wor
   chainId : Nat
 
-def LegacyTx.toStrings (tx : LegacyTx) : List String :=
-  let receiverStr : String :=
-    match tx.receiver with
-    | none => "none"
-    | some rcvr => s!"{rcvr.toHex}"
-  fork "tx" [
-    [s!"nonce : {tx.nonce.toHex}"],
-    [s!"gas price : {tx.gasPrice.toHex}"],
-    [s!"gas : {tx.gas.toHex}"],
-    [s!"receiver : {receiverStr}"],
-    [s!"value : {tx.value}"],
-    [s!"call : {tx.data.toHex}"],
-    [s!"v : {tx.v}"],
-    [s!"r : {tx.r.toHex}"],
-    [s!"s : {tx.s.toHex}"]
-  ]
+-- def LegacyTx.toStrings (tx : LegacyTx) : List String :=
+--   let receiverStr : String :=
+--     match tx.receiver with
+--     | none => "none"
+--     | some rcvr => s!"{rcvr.toHex}"
+--   fork "tx" [
+--     [s!"nonce : {tx.nonce.toHex}"],
+--     [s!"gas price : {tx.gasPrice.toHex}"],
+--     [s!"gas : {tx.gas.toHex}"],
+--     [s!"receiver : {receiverStr}"],
+--     [s!"value : {tx.value}"],
+--     [s!"call : {tx.data.toHex}"],
+--     [s!"v : {tx.v}"],
+--     [s!"r : {tx.r.toHex}"],
+--     [s!"s : {tx.s.toHex}"]
+--   ]
+--
+-- instance : ToString LegacyTx := ⟨String.joinln ∘ LegacyTx.toStrings⟩
 
-instance : ToString LegacyTx := ⟨String.joinln ∘ LegacyTx.toStrings⟩
-
-def Lean.Json.toLegacyTx (json : Lean.Json) : IO LegacyTx := do
+def Lean.Json.toIoLegacyTx (json : Lean.Json) : IO Tx := do
   let nonce ← (json.find "nonce" >>= Lean.Json.toIoB8L) <&> B8L.toB64P
-  let gasPrice ← (json.find "gasPrice" >>= Lean.Json.toIoB8L) <&> B8L.toNat
   let gas ← (json.find "gasLimit" >>= Lean.Json.toIoB8L) <&> B8L.toNat
   let receiver ← json.find "to" >>= Lean.Json.toIoAdr
   let value ← (json.find "value" >>= Lean.Json.toIoB8L) <&> B8L.toNat
   let data ← json.find "data" >>= Lean.Json.toIoB8L
   let v ← (json.find "v" >>= Lean.Json.toIoB8L) <&> B8L.toNat
-  --let r ← json.find "r" >>= Lean.Json.toIoB256P
   let r ← json.find "r" >>= Lean.Json.toIoB8L
-  --jlet s ← json.find "s" >>= Lean.Json.toIoB256P
   let s ← json.find "s" >>= Lean.Json.toIoB8L
+  let gasPrice ← (json.find "gasPrice" >>= Lean.Json.toIoB8L) <&> B8L.toNat
   .ok {
     nonce := nonce
-    gasPrice := gasPrice
     gas := gas
     receiver := receiver
     value := value
@@ -3987,12 +4017,50 @@ def Lean.Json.toLegacyTx (json : Lean.Json) : IO LegacyTx := do
     v := v
     r := r
     s := s
+    type := .zero gasPrice
   }
+
+def Lean.Json.toIoTypeTwoTx (json : Lean.Json) : IO Tx := do
+  let nonce ← (json.find "nonce" >>= Lean.Json.toIoB8L) <&> B8L.toB64P
+  let gas ← (json.find "gasLimit" >>= Lean.Json.toIoB8L) <&> B8L.toNat
+  let receiver ← json.find "to" >>= Lean.Json.toIoAdr
+  let value ← (json.find "value" >>= Lean.Json.toIoB8L) <&> B8L.toNat
+  let data ← json.find "data" >>= Lean.Json.toIoB8L
+  let v ← (json.find "v" >>= Lean.Json.toIoB8L) <&> B8L.toNat
+  let r ← json.find "r" >>= Lean.Json.toIoB8L
+  let s ← json.find "s" >>= Lean.Json.toIoB8L
+
+  let chainId ← (json.find "chainId" >>= Lean.Json.toIoB8L) <&> B8L.toB64P
+  let maxFee ← (json.find "maxFeePerGas" >>= Lean.Json.toIoB8L) <&> B8L.toNat
+  let maxPriorityFee ← (json.find "maxPriorityFeePerGas" >>= Lean.Json.toIoB8L) <&> B8L.toNat
+  let temp ← json.find "accessList" >>= Lean.Json.fromArr
+  .guard temp.isEmpty "UNIMP : access list read"
+
+  .ok {
+    nonce := nonce
+    gas := gas
+    receiver := receiver
+    value := value
+    data := data
+    v := v
+    r := r
+    s := s
+    type :=
+      .two
+        chainId
+        maxPriorityFee
+        maxFee
+        []
+  }
+
+
+def Lean.Json.toIoTx (json : Lean.Json) : IO Tx :=
+  json.toIoLegacyTx <|> json.toIoTypeTwoTx
 
 def Block.toStrings (block : Block) : List String :=
   fork "BLOCK" [
     block.header.toStrings,
-    fork "TXS" <| block.txs.map LegacyTx.toStrings,
+    fork "TXS" <| block.txs.map Tx.toStrings,
     fork "OMMERS" <| block.ommers.map Header.toStrings,
     fork "WDS" <| block.wds.map Withdrawal.toStrings
   ]
@@ -4125,7 +4193,7 @@ def processMessageCall (vb : Bool) (msg : Message) (env : Environment) :
     | none => Except.bimap Prod.snd id <| processCreateMessage vb msg env msg.gas
     | some tgt =>
       let evm ← Except.bimap Prod.snd id <| processMessage vb msg env msg.gas
-      if accountExistsAndIsEmpty evm.env.state tgt
+      if AccountExistsAndIsEmpty evm.env.state tgt
       then .ok {evm with touched_accounts := evm.touched_accounts.insert tgt}
       else .ok evm
 
@@ -4155,33 +4223,139 @@ def processMessageCall (vb : Bool) (msg : Message) (env : Environment) :
     ⟩
 
 
-def signingHashPre155 (tx : LegacyTx) : B256 :=
-  B8L.keccak <|
-    BLT.encode <|
-      .list [
-        .b8s tx.nonce.toNat.toB8LNil,
-        .b8s tx.gasPrice.toB8LNil,
-        .b8s tx.gas.toB8LNil,
-        .b8s ((tx.receiver <&> Adr.toB8L).getD []),
-        .b8s tx.value.toB8LNil,
-        .b8s tx.data
-      ]
+def AccessList.toBLT (al : AccessList) : BLT :=
+  let aux : Adr × List B256 → BLT
+  | ⟨adr, words⟩ =>
+    .list [.b8s adr.toB8L, .list (words.map (.b8s ∘ B256.toB8L))]
+  .list (al.map aux)
 
-def signingHash155 (tx : LegacyTx) (chainId : Nat) : B256 :=
-  B8L.keccak <|
-    BLT.encode <|
-      .list [
-        .b8s tx.nonce.toB8L,
-        .b8s tx.gasPrice.toB8LNil,
-        .b8s tx.gas.toB8LNil,
-        -- .b8s tx.receiver.toB8L,
-        .b8s ((tx.receiver <&> Adr.toB8L).getD []),
-        .b8s tx.value.toB8LNil,
-        .b8s tx.data,
-        .b8s chainId.toB8LNil,
-        .b8s [],
-        .b8s []
-      ]
+def Tx.signingHash (tx : Tx) : Option B256 :=
+  match tx.type with
+  | .zero gasPrice =>
+    if tx.v = 27 || tx.v = 28
+    then
+      -- signing_hash_pre155,
+      some <|
+        B8L.keccak <|
+          BLT.encode <|
+            .list [
+              .b8s tx.nonce.toB8L.sig,
+              .b8s gasPrice.toB8LNew,
+              .b8s tx.gas.toB8LNew,
+              .b8s ((tx.receiver <&> Adr.toB8L).getD []),
+              .b8s tx.value.toB8LNew,
+              .b8s tx.data
+            ]
+    else do
+      -- signing_hash_155,
+      let chainId : Nat := (tx.v - 35) / 2
+      some <|
+        B8L.keccak <|
+          BLT.encode <|
+            .list [
+              .b8s tx.nonce.toB8L,
+              .b8s gasPrice.toB8LNew,
+              .b8s tx.gas.toB8LNew,
+              .b8s ((tx.receiver <&> Adr.toB8L).getD []),
+              .b8s tx.value.toB8LNew,
+              .b8s tx.data,
+              .b8s chainId.toB8LNew,
+              .b8s [],
+              .b8s []
+            ]
+  /-
+  def signing_hash_2930(tx: AccessListTransaction) -> Hash32:
+  """
+  Compute the hash of a transaction used in a EIP 2930 signature.
+
+  Parameters
+  ----------
+  tx :
+      Transaction of interest.
+
+  Returns
+  -------
+  hash : `ethereum.crypto.hash.Hash32`
+      Hash of the transaction.
+  """
+  return keccak256(
+      b"\x01"
+      + rlp.encode(
+          (
+              tx.chain_id,
+              tx.nonce,
+              tx.gas_price,
+              tx.gas,
+              tx.to,
+              tx.value,
+              tx.data,
+              tx.access_list,
+          )
+      )
+  ) -/
+  | .one gasPrice chainId accessList =>
+    B8L.keccak <|
+      .cons (0x01 : B8) <|
+        BLT.encode <|
+          .list [
+            .b8s chainId.toB8L.sig,
+            .b8s tx.nonce.toB8L,
+            .b8s gasPrice.toB8LNew,
+            .b8s tx.gas.toB8LNew,
+            .b8s ((tx.receiver <&> Adr.toB8L).getD []),
+            .b8s tx.value.toB8LNew,
+            .b8s tx.data,
+            accessList.toBLT
+          ]
+
+  /-
+  def signing_hash_1559(tx: FeeMarketTransaction) -> Hash32:
+    """
+    Compute the hash of a transaction used in a EIP 1559 signature.
+
+    Parameters
+    ----------
+    tx :
+        Transaction of interest.
+
+    Returns
+    -------
+    hash : `ethereum.crypto.hash.Hash32`
+        Hash of the transaction.
+    """
+    return keccak256(
+        b"\x02"
+        + rlp.encode(
+            (
+                tx.chain_id,
+                tx.nonce,
+                tx.max_priority_fee_per_gas,
+                tx.max_fee_per_gas,
+                tx.gas,
+                tx.to,
+                tx.value,
+                tx.data,
+                tx.access_list,
+            )
+        )
+    )
+  -/
+  | .two chainId maxPriorityFee maxFee accessList =>
+    B8L.keccak <|
+      .cons (0x02 : B8) <|
+        BLT.encode <|
+          .list [
+            .b8s chainId.toB8L.sig,
+            .b8s tx.nonce.toB8L,
+            .b8s maxPriorityFee.toB8LNew,
+            .b8s maxFee.toB8LNew,
+            .b8s tx.gas.toB8LNew,
+            .b8s ((tx.receiver <&> Adr.toB8L).getD []),
+            .b8s tx.value.toB8LNew,
+            .b8s tx.data,
+            accessList.toBLT
+          ]
+  | .three _ _ _ _ _ _ => none
 
 def secp256k1nRecoverToAdr?
   (r s : B256) (v : Nat) (msg_hash : B256) : Option  Adr :=
@@ -4193,60 +4367,321 @@ def secp256k1nRecoverToAdr?
   let hsa : ByteArray := ⟨Array.mk msg_hash.toB8L⟩
   publicAddress? hsa ri rsa
 
-def recoverSender (chain_id: B64) (tx: LegacyTx) : Except String Adr := do
+/-
+def recover_sender(chain_id: U64, tx: Transaction) -> Address:
+    """
+    Extracts the sender address from a transaction.
+
+    The v, r, and s values are the three parts that make up the signature
+    of a transaction. In order to recover the sender of a transaction the two
+    components needed are the signature (``v``, ``r``, and ``s``) and the
+    signing hash of the transaction. The sender's public key can be obtained
+    with these two values and therefore the sender address can be retrieved.
+
+    Parameters
+    ----------
+    tx :
+        Transaction of interest.
+    chain_id :
+        ID of the executing chain.
+
+    Returns
+    -------
+    sender : `ethereum.fork_types.Address`
+        The address of the account that signed the transaction.
+    """
+    r, s = tx.r, tx.s
+
+    if U256(0) >= r or r >= SECP256K1N:
+        raise InvalidSignatureError("bad r")
+    if U256(0) >= s or s > SECP256K1N // U256(2):
+        raise InvalidSignatureError("bad s")
+
+    if isinstance(tx, LegacyTransaction):
+        v = tx.v
+        if v == 27 or v == 28:
+            public_key = secp256k1_recover(
+                r, s, v - U256(27), signing_hash_pre155(tx)
+            )
+        else:
+            chain_id_x2 = U256(chain_id) * U256(2)
+            if v != U256(35) + chain_id_x2 and v != U256(36) + chain_id_x2:
+                raise InvalidSignatureError("bad v")
+            public_key = secp256k1_recover(
+                r,
+                s,
+                v - U256(35) - chain_id_x2,
+                signing_hash_155(tx, chain_id),
+            )
+    elif isinstance(tx, AccessListTransaction):
+        if tx.y_parity not in (U256(0), U256(1)):
+            raise InvalidSignatureError("bad y_parity")
+        public_key = secp256k1_recover(
+            r, s, tx.y_parity, signing_hash_2930(tx)
+        )
+    elif isinstance(tx, FeeMarketTransaction):
+        if tx.y_parity not in (U256(0), U256(1)):
+            raise InvalidSignatureError("bad y_parity")
+        public_key = secp256k1_recover(
+            r, s, tx.y_parity, signing_hash_1559(tx)
+        )
+    elif isinstance(tx, BlobTransaction):
+        if tx.y_parity not in (U256(0), U256(1)):
+            raise InvalidSignatureError("bad y_parity")
+        public_key = secp256k1_recover(
+            r, s, tx.y_parity, signing_hash_4844(tx)
+        )
+
+    return Address(keccak256(public_key)[12:32])
+-/
+def recoverSender (chain_id: B64) (tx: Tx) : Except String Adr := do
 
   let r := tx.r.toB256P
   let s := tx.s.toB256P
-
   .assertNot (r = 0 ∨ B256.secp256k1n ≤ r) "InvalidSignatureError : bad r"
   .assertNot (s = 0 ∨ B256.secp256k1n / 2 < s) "InvalidSignatureError : bad s"
-
   let v := tx.v
 
-  if v = 27 ∨ v = 28
-  then
-    let a :=
-      secp256k1nRecoverToAdr? r s
-        (v - 27)
-        (signingHashPre155 tx)
-    a.toExcept "sender recovery failed"
+  let signingHash ←
+    tx.signingHash.toExcept "InvalidSignatureError : signing hash is None"
 
-  else
-    let chain_id_x2 := (chain_id.toNat) * (2)
-    .assert (v = 35 + chain_id_x2 ∨ v = 36 + chain_id_x2) "InvalidSignatureError : bad v"
-    let a :=
-      secp256k1nRecoverToAdr? r s
-        (v - 35 - chain_id_x2)
-        (signingHash155 tx chain_id.toNat)
-    a.toExcept "sender recovery failed"
+  match tx.type with
+  | .zero _  =>
+    if v = 27 ∨ v = 28
+    then
+      (secp256k1nRecoverToAdr? r s (v - 27) signingHash).toExcept
+        "sender recovery failed"
+    else
+      let chain_id_x2 := (chain_id.toNat) * (2)
+      .assert (v = 35 + chain_id_x2 ∨ v = 36 + chain_id_x2) "InvalidSignatureError : bad v"
+      (secp256k1nRecoverToAdr? r s (v - 35 - chain_id_x2) signingHash).toExcept
+        "sender recovery failed"
+  | .one _ _ _ =>
+    .assert (v = 0 ∨ v = 1) "InvalidSignatureError : bad y_parity"
+    (secp256k1nRecoverToAdr? r s v signingHash).toExcept "sender recovery failed"
+  | .two _ _ _ _ =>
+    .assert (v < 2) "InvalidSignatureError"
+    (secp256k1nRecoverToAdr? r s v signingHash).toExcept "sender recovery failed"
+  | .three _ _ _ _ _ _=> .error "UNIMP : TYPE 3 TX SENDER RECOVERY"
+
 
 def TX_BASE_COST : Nat := 21000
 
+def Tx.maxPriorityFee? (tx : Tx) : Option Nat :=
+  match tx.type with
+  | .zero _ => none
+  | .one _ _ _ => none
+  | .two _ maxPriorityFee _ _ => some maxPriorityFee
+  | .three _ maxPriorityFee _ _ _ _ => some maxPriorityFee
+
+def Tx.maxFee? (tx : Tx) : Option Nat :=
+  match tx.type with
+  | .zero _ => none
+  | .one _ _ _ => none
+  | .two _ _ maxFee _ => some maxFee
+  | .three _ _ maxFee _ _ _ => some maxFee
+
+def Tx.isTypeOne (tx : Tx) : Bool :=
+  match tx.type with
+  | .one _ _ _ => true
+  | _ => false
+
+def Tx.isTypeTwo (tx : Tx) : Bool :=
+  match tx.type with
+  | .two _ _ _ _ => true
+  | _ => false
+
+def Tx.isTypeThree (tx : Tx) : Bool :=
+  match tx.type with
+  | .three _ _ _ _ _ _ => true
+  | _ => false
+
+
+def GAS_PER_BLOB : Nat:= (2 ^ 17)
+
+/-
+def calculate_total_blob_gas(tx: Transaction) -> Uint:
+  """
+  Calculate the total blob gas for a transaction.
+
+  Parameters
+  ----------
+  tx :
+      The transaction for which the blob gas is to be calculated.
+
+  Returns
+  -------
+  total_blob_gas: `ethereum.base_types.Uint`
+      The total blob gas for the transaction.
+  """
+  if isinstance(tx, BlobTransaction):
+      return GAS_PER_BLOB * Uint(len(tx.blob_versioned_hashes))
+  else:
+      return Uint(0)
+-/
+def calculateTotalBlobGas (tx: Tx) : Nat :=
+  match tx.type with
+  | .three _ _ _ _ _ blobHashes => GAS_PER_BLOB * blobHashes.length
+  | _ => 0
+
+/-
+def check_transaction(
+    state: State,
+    tx: Transaction,
+    gas_available: Uint,
+    chain_id: U64,
+    base_fee_per_gas: Uint,
+    excess_blob_gas: U64,
+) -> Tuple[Address, Uint, Tuple[VersionedHash, ...]]:
+    """
+    Check if the transaction is includable in the block.
+
+    Parameters
+    ----------
+    state :
+        Current state.
+    tx :
+        The transaction.
+    gas_available :
+        The gas remaining in the block.
+    chain_id :
+        The ID of the current chain.
+    base_fee_per_gas :
+        The block base fee.
+    excess_blob_gas :
+        The excess blob gas.
+
+    Returns
+    -------
+    sender_address :
+        The sender of the transaction.
+    effective_gas_price :
+        The price to charge for gas when the transaction is executed.
+    blob_versioned_hashes :
+        The blob versioned hashes of the transaction.
+
+    Raises
+    ------
+    InvalidBlock :
+        If the transaction is not includable.
+    """
+    if tx.gas > gas_available:
+        raise InvalidBlock
+
+    sender_address = recover_sender(chain_id, tx)
+
+    sender_account = get_account(state, sender_address)
+
+    if isinstance(tx, (FeeMarketTransaction, BlobTransaction)):
+        if tx.max_fee_per_gas < tx.max_priority_fee_per_gas:
+            raise InvalidBlock
+        if tx.max_fee_per_gas < base_fee_per_gas:
+            raise InvalidBlock
+
+        priority_fee_per_gas = min(
+            tx.max_priority_fee_per_gas,
+            tx.max_fee_per_gas - base_fee_per_gas,
+        )
+        effective_gas_price = priority_fee_per_gas + base_fee_per_gas
+        max_gas_fee = tx.gas * tx.max_fee_per_gas
+    else:
+        if tx.gas_price < base_fee_per_gas:
+            raise InvalidBlock
+        effective_gas_price = tx.gas_price
+        max_gas_fee = tx.gas * tx.gas_price
+
+    if isinstance(tx, BlobTransaction):
+        if not isinstance(tx.to, Address):
+            raise InvalidBlock
+        if len(tx.blob_versioned_hashes) == 0:
+            raise InvalidBlock
+        for blob_versioned_hash in tx.blob_versioned_hashes:
+            if blob_versioned_hash[0:1] != VERSIONED_HASH_VERSION_KZG:
+                raise InvalidBlock
+
+        blob_gas_price = calculate_blob_gas_price(excess_blob_gas)
+        if Uint(tx.max_fee_per_blob_gas) < blob_gas_price:
+            raise InvalidBlock
+
+        max_gas_fee += calculate_total_blob_gas(tx) * Uint(
+            tx.max_fee_per_blob_gas
+        )
+        blob_versioned_hashes = tx.blob_versioned_hashes
+    else:
+        blob_versioned_hashes = ()
+    if sender_account.nonce != tx.nonce:
+        raise InvalidBlock
+    if Uint(sender_account.balance) < max_gas_fee + Uint(tx.value):
+        raise InvalidBlock
+    if sender_account.code != bytearray():
+        raise InvalidSenderError("not EOA")
+
+    return sender_address, effective_gas_price, blob_versioned_hashes
+-/
+
 def checkTransaction
   (state: Wor)
-  (tx: LegacyTx)
+  (tx: Tx)
   (gas_available: Nat)
   (chain_id: B64)
   (base_fee_per_gas: Nat)
   (excess_blob_gas: Nat) :
   Except String (Adr × Nat × List B256) := do
-  .assertNot (tx.gas > gas_available) "InvalidBlock : insufficient gas available"
+  .assertNot (tx.gas > gas_available)
+    "InvalidBlock : insufficient gas available"
 
   let senderAdr ← recoverSender chain_id tx
   let senderAcct := state.get senderAdr
+  let mut max_gas_fee : Nat := 0
 
-  .assertNot (tx.gasPrice < base_fee_per_gas) "InvalidBlock : gas price below base fee"
+  let mut effective_gas_price : Nat := 0
 
-  let effective_gas_price := tx.gasPrice
-  let max_gas_fee := tx.gas * tx.gasPrice
-  let blob_versioned_hashes := []
+  let selector : Nat ⊕ (Nat × Nat) :=
+    match tx.type with
+    | .zero gasPrice => .inl gasPrice
+    | .one gasPrice _ _ => .inl gasPrice
+    | .two _ maxPriorityFee maxFee _ => .inr (maxPriorityFee, maxFee)
+    | .three _ maxPriorityFee maxFee _ _ _ => .inr (maxPriorityFee, maxFee)
 
-  .assert (senderAcct.nonce = tx.nonce)
-    "InvalidBlock : nonce mismatch"
-  .assertNot (senderAcct.bal.toNat < max_gas_fee + tx.value)
-    "InvalidBlock : insufficient balance"
-  .assert senderAcct.code.isEmpty
-    "InvalidSenderError : not EOA"
+  match selector with
+  | .inl gasPrice =>
+    .assertNot (gasPrice < base_fee_per_gas) "InvalidBlock : gas price below base fee"
+    effective_gas_price := gasPrice
+    max_gas_fee := tx.gas * gasPrice
+  | .inr (maxPriorityFee, maxFee) =>
+    .assertNot (maxFee < maxPriorityFee) "InvalidBlock : max fee below priority fee"
+    .assertNot (maxFee < base_fee_per_gas) "InvalidBlock : max fee below base fee"
+    let priority_fee_per_gas := min maxPriorityFee (maxFee - base_fee_per_gas)
+    effective_gas_price := priority_fee_per_gas + base_fee_per_gas
+    max_gas_fee := tx.gas * maxFee
+
+  let blob_versioned_hashes : List B256 :=
+    match tx.type with
+    | .three _ _ _ _ _ blobHashes => blobHashes
+    | _ => []
+
+  match tx.type with
+  | .three _ _ maxFee _ _ blobHashes =>
+    if tx.receiver.isNone then
+      .error "InvalidBlock : receiver is none for type 3 tx"
+    if blobHashes.isEmpty then
+      .error "InvalidBlock : no blob versioned hashes for type 3 tx"
+    if !blobHashes.all (λ bvh => bvh.toB8V.head = 0x01) then
+      .error "InvalidBlock : blob versioned hashes do not match KZG version"
+    let blob_gas_price := calculate_blob_gas_price excess_blob_gas
+    if maxFee < blob_gas_price then
+      .error "InvalidBlock : max fee per blob gas below base fee per blob gas"
+    max_gas_fee := max_gas_fee + calculateTotalBlobGas tx * maxFee
+  | _ => .ok ()
+
+  if senderAcct.nonce ≠ tx.nonce
+    then .error "InvalidBlock : nonce mismatch"
+
+  if senderAcct.bal.toNat < max_gas_fee + tx.value
+    then .error "InvalidBlock : insufficient balance"
+
+  if !senderAcct.code.isEmpty
+    then .error "InvalidSenderError : not EOA"
 
   .ok ⟨senderAdr, effective_gas_price, blob_versioned_hashes⟩
 
@@ -4300,13 +4735,32 @@ def calculate_intrinsic_cost(tx: Transaction) -> Uint:
 
     return Uint(TX_BASE_COST + data_cost + create_cost + access_list_cost)
 -/
-def calculate_intrinsic_cost (tx: LegacyTx) : Nat :=
+
+def TX_ACCESS_LIST_ADDRESS_COST : Nat := 2400
+def TX_ACCESS_LIST_STORAGE_KEY_COST : Nat := 1900
+
+def calculate_intrinsic_cost (tx: Tx) : Nat :=
+
   let dataCost : Nat := dataGas tx.data
+
   let createCost : Nat :=
     match tx.receiver with
     | none => TX_CREATE_COST + initCodeCost (tx.data).length
     | some _ => 0
-  let accessListCost := 0
+
+  let accessList :=
+    match tx.type with
+    | .zero _ => []
+    | .one _ _ accessList => accessList
+    | .two _ _ _ accessList => accessList
+    | .three _ _ _ accessList _ _ => accessList
+
+  let accessItemCost : (Adr × List B256) → Nat
+    | ⟨_, keys⟩ =>
+      TX_ACCESS_LIST_ADDRESS_COST + keys.length * TX_ACCESS_LIST_STORAGE_KEY_COST
+
+  let accessListCost : Nat := (accessList.map accessItemCost).sum
+
   TX_BASE_COST + dataCost + createCost + accessListCost
 
 def MAX_CODE_SIZE : Nat := 0x6000
@@ -4348,7 +4802,7 @@ def validate_transaction(tx: Transaction) -> bool:
 
     return True
 -/
-abbrev validateTransaction (tx: LegacyTx) : Prop :=
+abbrev validateTransaction (tx: Tx) : Prop :=
   calculate_intrinsic_cost tx ≤ tx.gas ∧
   tx.nonce ≠ B64.max ∧
   (tx.receiver.isSome ∨ tx.data.length ≤ MAX_CODE_SIZE * 2)
@@ -4497,6 +4951,56 @@ def prepare_message
   }
 
 /-
+def calculate_total_blob_gas(tx: Transaction) -> Uint:
+    """
+    Calculate the total blob gas for a transaction.
+
+    Parameters
+    ----------
+    tx :
+        The transaction for which the blob gas is to be calculated.
+
+    Returns
+    -------
+    total_blob_gas: `ethereum.base_types.Uint`
+        The total blob gas for the transaction.
+    """
+    if isinstance(tx, BlobTransaction):
+        return GAS_PER_BLOB * Uint(len(tx.blob_versioned_hashes))
+    else:
+        return Uint(0)
+-/
+def calculate_total_blob_gas (tx: Tx) : Nat :=
+  match tx.type with
+  | .three _ _ _ _ _ blobHashes => GAS_PER_BLOB * blobHashes.length
+  | _ => 0
+
+
+/-
+def calculate_data_fee(excess_blob_gas: U64, tx: Transaction) -> Uint:
+    """
+    Calculate the blob data fee for a transaction.
+
+    Parameters
+    ----------
+    excess_blob_gas :
+        The excess_blob_gas for the execution.
+    tx :
+        The transaction for which the blob data fee is to be calculated.
+
+    Returns
+    -------
+    data_fee: `Uint`
+        The blob data fee.
+    """
+    return calculate_total_blob_gas(tx) * calculate_blob_gas_price(
+        excess_blob_gas
+    )
+-/
+def calculate_data_fee (excess_blob_gas: Nat) (tx: Tx) : Nat :=
+  calculate_total_blob_gas tx * calculate_blob_gas_price excess_blob_gas
+
+/-
 def process_transaction(
     env: vm.Environment, tx: Transaction
 ) -> Tuple[Uint, Tuple[Log, ...], Optional[EthereumException]]:
@@ -4526,30 +5030,59 @@ def process_transaction(
     logs : `Tuple[ethereum.blocks.Log, ...]`
         Logs generated during execution.
     """
+-/
+def processTransaction
+  (vb : Bool) (env: Environment) (tx: Tx) :
+  Except String (Wor × Nat × List Log × Option String) := do
+
+/-
     if not validate_transaction(tx):
         raise InvalidBlock
 
     sender = env.origin
     sender_account = get_account(env.state, sender)
+-/
+  .assert (validateTransaction tx) "InvalidBlock"
+  let sender := env.origin
 
+/-
     if isinstance(tx, BlobTransaction):
         blob_gas_fee = calculate_data_fee(env.excess_blob_gas, tx)
     else:
         blob_gas_fee = Uint(0)
+-/
+  let blob_gas_fee :=
+    if tx.isTypeThree
+    then calculate_data_fee env.excess_blob_gas tx
+    else 0
 
+/-
     effective_gas_fee = tx.gas * env.gas_price
-
     gas = tx.gas - calculate_intrinsic_cost(tx)
     increment_nonce(env.state, sender)
+-/
+  let effective_gas_fee := tx.gas * env.gas_price
+  let gas := tx.gas - calculate_intrinsic_cost tx
+  let mut env := env.incrNonce sender
 
+/-
     sender_balance_after_gas_fee = (
         Uint(sender_account.balance) - effective_gas_fee - blob_gas_fee
     )
     set_account_balance(env.state, sender, U256(sender_balance_after_gas_fee))
+-/
+  env := (env.subBal sender (effective_gas_fee + blob_gas_fee).toB256).getD env
 
+/-
     preaccessed_addresses = set()
     preaccessed_storage_keys = set()
     preaccessed_addresses.add(env.coinbase)
+-/
+  let mut preaccessed_addresses : AdrSet :=
+    Std.HashSet.empty.insert env.coinbase
+  let mut preaccessed_storage_keys : KeySet := .empty
+
+/-
     if isinstance(
         tx, (AccessListTransaction, FeeMarketTransaction, BlobTransaction)
     ):
@@ -4557,7 +5090,20 @@ def process_transaction(
             preaccessed_addresses.add(address)
             for key in keys:
                 preaccessed_storage_keys.add((address, key))
+-/
+  let accessList :=
+    match tx.type with
+    | .zero _ => []
+    | .one _ _ accessList => accessList
+    | .two _ _ _ accessList => accessList
+    | .three _ _ _ accessList _ _ => accessList
 
+  for ⟨address, keys⟩ in accessList do
+    preaccessed_addresses := preaccessed_addresses.insert address
+    for key in keys do
+      preaccessed_storage_keys := preaccessed_storage_keys.insert (address, key)
+
+/-
     message = prepare_message(
         sender,
         tx.to,
@@ -4568,13 +5114,30 @@ def process_transaction(
         preaccessed_addresses=frozenset(preaccessed_addresses),
         preaccessed_storage_keys=frozenset(preaccessed_storage_keys),
     )
+-/
+  let message ←
+    prepare_message
+        sender
+        tx.receiver
+        tx.value.toB256
+        tx.data
+        gas
+        env
+        (preaccessed_addresses := preaccessed_addresses)
+        (preaccessed_storage_keys := preaccessed_storage_keys)
 
+/-
     output = process_message_call(message, env)
-
     gas_used = tx.gas - output.gas_left
     gas_refund = min(gas_used // Uint(5), Uint(output.refund_counter))
     gas_refund_amount = (output.gas_left + gas_refund) * env.gas_price
+-/
+  let mut ⟨state, output⟩ ← processMessageCall vb message env
+  let gas_used := tx.gas - output.gas_left
+  let gas_refund := min (gas_used / 5) output.refund_counter
+  let gas_refund_amount := (output.gas_left + gas_refund) * env.gas_price
 
+/-
     # For non-1559 transactions env.gas_price == tx.gas_price
     priority_fee_per_gas = env.gas_price - env.base_fee_per_gas
     transaction_fee = (
@@ -4582,7 +5145,13 @@ def process_transaction(
     ) * priority_fee_per_gas
 
     total_gas_used = gas_used - gas_refund
+-/
+  let priority_fee_per_gas := env.gas_price - env.base_fee_per_gas
+  let transaction_fee :=
+    (tx.gas - output.gas_left - gas_refund) * priority_fee_per_gas
+  let total_gas_used := gas_used - gas_refund
 
+/-
     # refund gas
     sender_balance_after_refund = get_account(
         env.state, sender
@@ -4593,13 +5162,21 @@ def process_transaction(
     coinbase_balance_after_mining_fee = get_account(
         env.state, env.coinbase
     ).balance + U256(transaction_fee)
+
     if coinbase_balance_after_mining_fee != 0:
         set_account_balance(
             env.state, env.coinbase, coinbase_balance_after_mining_fee
         )
     elif account_exists_and_is_empty(env.state, env.coinbase):
         destroy_account(env.state, env.coinbase)
+-/
+  state := state.addBal sender gas_refund_amount.toB256
+  state := state.addBal env.coinbase transaction_fee.toB256
 
+  if AccountExistsAndIsEmpty state env.coinbase then
+    state := destroyAccount state env.coinbase
+
+/-
     for address in output.accounts_to_delete:
         destroy_account(env.state, address)
 
@@ -4607,51 +5184,6 @@ def process_transaction(
 
     return total_gas_used, output.logs, output.error
 -/
-def processTransaction
-  (vb : Bool) (env: Environment) (tx: LegacyTx) :
-  Except String (Wor × Nat × List Log × Option String) := do
-  .assert (validateTransaction tx) "InvalidBlock"
-
-  let sender := env.origin
-
-  let blob_gas_fee := 0
-
-  let effective_gas_fee := tx.gas * env.gas_price
-
-  let gas := tx.gas - calculate_intrinsic_cost tx
-
-  let mut env := env.incrNonce sender
-  env := (env.subBal sender (effective_gas_fee + blob_gas_fee).toB256).getD env
-
-
-  let mut preaccessed_addresses : AdrSet :=
-    Std.HashSet.empty.insert env.coinbase
-  let mut preaccessed_storage_keys : KeySet := .empty
-
-  let message ←
-    prepare_message
-        sender
-        tx.receiver
-        tx.value.toB256
-        tx.data
-        gas
-        env
-        (preaccessed_addresses := preaccessed_addresses)--frozenset(preaccessed_addresses),
-        (preaccessed_storage_keys := preaccessed_storage_keys) -- =frozenset(preaccessed_storage_keys),
-
-  let mut ⟨state, output⟩ ← processMessageCall vb message env
-  let gas_used := tx.gas - output.gas_left
-  let gas_refund := min (gas_used / 5) output.refund_counter
-  let gas_refund_amount := (output.gas_left + gas_refund) * env.gas_price
-
-  let priority_fee_per_gas := env.gas_price - env.base_fee_per_gas
-  let transaction_fee :=
-    (tx.gas - output.gas_left - gas_refund) * priority_fee_per_gas
-  let total_gas_used := gas_used - gas_refund
-
-  state := state.addBal sender gas_refund_amount.toB256
-  state := state.addBal env.coinbase transaction_fee.toB256
-
   for address in output.accounts_to_delete do
     state := destroyAccount state address
 
@@ -4664,6 +5196,15 @@ structure Receipt : Type where
   cumulative_gas_used : Nat
   bloom : B8L
   logs : List Log
+
+def Receipt.toBLT (r : Receipt) : BLT :=
+  .list [
+    .b8s r.succeeded.toB8L,
+    .b8s r.cumulative_gas_used.toB8LPack,
+    .b8s r.bloom,
+    .list (r.logs.map Log.toBLT)
+  ]
+
 
 /-
 def make_receipt(
@@ -4692,13 +5233,28 @@ def make_receipt(
     receipt :
         The receipt for the transaction.
     """
+-/
+def make_receipt
+  (tx: Tx)
+  (error: Option String)
+  (cumulative_gas_used: Nat)
+  (logs: List Log) : B8L :=
+
+/-
     receipt = Receipt(
         succeeded=error is None,
         cumulative_gas_used=cumulative_gas_used,
         bloom=logs_bloom(logs),
         logs=logs,
     )
-
+-/
+  let receipt : Receipt := {
+    succeeded := error.isNone,
+    cumulative_gas_used := cumulative_gas_used,
+    bloom := logs_bloom logs,
+    logs := logs
+  }
+/-
     if isinstance(tx, AccessListTransaction):
         return b"\x01" + rlp.encode(receipt)
     elif isinstance(tx, FeeMarketTransaction):
@@ -4708,40 +5264,15 @@ def make_receipt(
     else:
         return receipt
 -/
-def make_receipt
-  (tx: LegacyTx)
-  (error: Option String)
-  (cumulative_gas_used: Nat)
-  (logs: List Log) : Receipt :=
-  {
-    succeeded := error.isNone,
-    cumulative_gas_used := cumulative_gas_used,
-    bloom := logs_bloom logs,
-    logs := logs
-  }
+  let head : B8L :=
+    match tx.type with
+    | .zero _ => []
+    | .one _ _ _ => [0x01]
+    | .two _ _ _ _ => [0x02]
+    | .three _ _ _ _ _ _ => [0x03]
 
+  head ++ receipt.toBLT.encode
 
-/-
-def calculate_total_blob_gas(tx: Transaction) -> Uint:
-    """
-    Calculate the total blob gas for a transaction.
-
-    Parameters
-    ----------
-    tx :
-        The transaction for which the blob gas is to be calculated.
-
-    Returns
-    -------
-    total_blob_gas: `ethereum.base_types.Uint`
-        The total blob gas for the transaction.
-    """
-    if isinstance(tx, BlobTransaction):
-        return GAS_PER_BLOB * Uint(len(tx.blob_versioned_hashes))
-    else:
-        return Uint(0)
--/
-def calculate_total_blob_gas (tx: LegacyTx) : Nat := 0
 
 def MAX_BLOB_GAS_PER_BLOCK : Nat := 786432
 
@@ -4762,14 +5293,6 @@ def process_withdrawal(
 def process_withdrawal -- (state: Wor) (wd: Withdrawal) : Except String Unit :=
   (state : Wor) (wd : Withdrawal) :  Wor :=
   state.addBal wd.recipient (wd.amount * (10 ^ 9).toB256)
-
-def Receipt.toBLT (r : Receipt) : BLT :=
-  .list [
-    .b8s r.succeeded.toB8L,
-    .b8s r.cumulative_gas_used.toB8L,
-    .b8s r.bloom,
-    .list (r.logs.map Log.toBLT)
-  ]
 
 
 /-
@@ -4836,6 +5359,7 @@ def apply_body(
     apply_body_output : `ApplyBodyOutput`
         Output of applying the block body to the state.
     """
+
     blob_gas_used = Uint(0)
     gas_available = block_gas_limit
     transactions_trie: Trie[
@@ -4990,7 +5514,7 @@ def applyBody
   (block_gas_limit: Nat)
   (block_time: B256)
   (prev_randao: B256)
-  (transactions: List LegacyTx)
+  (transactions: List Tx)
   (chain_id: B64)
   (withdrawals: List Withdrawal)
   (parent_beacon_block_root: B256)
@@ -4999,8 +5523,8 @@ def applyBody
   let mut blob_gas_used : Nat := 0
   let mut gas_available := block_gas_limit
 
-  let mut transactions_trie : Lean.RBMap B8L LegacyTx compare := .empty
-  let mut receipts_trie : Lean.RBMap B8L Receipt compare := .empty
+  let mut transactions_trie : Lean.RBMap B8L Tx compare := .empty
+  let mut receipts_trie : Lean.RBMap B8L B8L compare := .empty
   let mut withdrawals_trie : Lean.RBMap B8L Withdrawal compare := .empty
   let mut block_logs : List Log := []
   let beacon_block_roots_contract_code := state.getCode BEACON_ROOTS_ADDRESS
@@ -5059,7 +5583,7 @@ def applyBody
 
   for ⟨i, tx⟩ in transactions.putIndex 0 do
     transactions_trie :=
-      transactions_trie.insert (BLT.b8s i.toB8LNil).encode tx
+      transactions_trie.insert (BLT.b8s i.toB8LNew).encode tx
 
     let ⟨sender_address, effective_gas_price, blob_versioned_hashes⟩ ←
       checkTransaction state tx gas_available chain_id base_fee_per_gas excess_blob_gas
@@ -5092,7 +5616,7 @@ def applyBody
       make_receipt tx error (block_gas_limit - gas_available) logs
 
     receipts_trie :=
-      receipts_trie.insert (BLT.b8s i.toB8LNil).encode receipt
+      receipts_trie.insert (BLT.b8s i.toB8LNew).encode receipt
 
     block_logs := block_logs ++ logs
     blob_gas_used := blob_gas_used + calculate_total_blob_gas tx
@@ -5106,22 +5630,28 @@ def applyBody
 
   for ⟨i, wd⟩ in withdrawals.putIndex 0 do
     withdrawals_trie :=
-      withdrawals_trie.insert (BLT.b8s i.toB8LNil).encode wd
+      withdrawals_trie.insert (BLT.b8s i.toB8LNew).encode wd
     state := process_withdrawal state wd
-    if accountExistsAndIsEmpty state wd.recipient then
+    if AccountExistsAndIsEmpty state wd.recipient then
       state := destroyAccount state wd.recipient
 
   let receiptRoot : B256 :=
-    let receiptAux (arg : B8L × Receipt) : B8L × B8L :=
-      ⟨arg.fst.toB4s, arg.snd.toBLT.encode⟩
+    let receiptAux (arg : B8L × B8L) : B8L × B8L :=
+      ⟨arg.fst.toB4s, arg.snd⟩
     let temp := (List.map receiptAux receipts_trie.toList)
     trie <| Lean.RBMap.fromList temp _
 
-  let transactionsRoot : B256 :=
-    let transactionsAux (arg : B8L × LegacyTx) : B8L × B8L :=
-      ⟨arg.fst.toB4s, arg.snd.toBLT.encode⟩
-    let temp := (List.map transactionsAux transactions_trie.toList)
-    trie <| Lean.RBMap.fromList temp _
+  -- let transactionsRoot : B256 :=
+  --   let transactionsAux (arg : B8L × Tx) : B8L × B8L :=
+  --     ⟨arg.fst.toB4s, arg.snd.toBLT.encode⟩
+  --   let temp := (List.map transactionsAux transactions_trie.toList)
+  --   trie <| Lean.RBMap.fromList temp _
+  let transactionsRoot : B256 ← do
+    let transactionsAux (arg : B8L × Tx) : Except String (B8L × B8L) := do
+      let txBLT : BLT ← arg.snd.toBLT?.toExcept "error : transaction encoding failed"
+      .ok ⟨arg.fst.toB4s, txBLT.encode⟩
+    let temp ← List.mapM transactionsAux transactions_trie.toList
+    .ok <| trie <| Lean.RBMap.fromList temp _
 
   let withdrawalsRoot : B256 :=
     let withdrawalsAux (arg : B8L × Withdrawal) : B8L × B8L :=
