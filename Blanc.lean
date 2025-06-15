@@ -115,6 +115,8 @@ def Acct.toStrings (s : String) (a : Acct) : List String :=
     a.stor.toStrings
   ]
 
+instance : ToString Acct := ⟨fun a => String.joinln (Acct.toStrings "account" a)⟩
+
 def Wor.toStrings (w : Wor) : List String :=
   let kvs := w.toArray.toList
   let kvToStrings : Adr × Acct → List String :=
@@ -169,11 +171,11 @@ def Lean.Json.toIoB8L (j : Json) : IO B8L := do
 
 def Lean.Json.toAdr? (j : Json) : Option Adr := do
   let x ← fromStr? j >>= .remove0x
-  (Hex.toAdr x)
+  (Hex.toAdr? x)
 
 def Lean.Json.toIoAdr (j : Json) : IO Adr := do
   let x ← fromStr j >>= .remove0x
-  (Hex.toAdr x).toIO ""
+  (Hex.toAdr? x).toIO ""
 
 -- def Lean.Json.toIoOptionAdr (j : Json) : IO (Option Adr) := do
 --   let s ← fromStr j
@@ -384,52 +386,84 @@ structure Tx : Type where
 
 structure Block : Type where
   header : Header
-  txs : List Tx
+  txs : List (B8L ⊕ Tx)
   ommers : List Header
   wds : List Withdrawal
 
-def Tx.toBLT? (tx : Tx) : Option BLT :=
+def TxType.toNat : TxType → Nat
+  | .zero _ => 0
+  | .one _ _ _ => 1
+  | .two _ _ _ _ => 2
+  | .three _ _ _ _ _ _ => 3
+
+def B8L.sig (bs : B8L) : B8L := List.dropWhile (· = 0) bs
+
+def AccessList.toBLT (al : AccessList) : BLT :=
+  let aux : Adr × List B256 → BLT
+  | ⟨adr, words⟩ =>
+    .list [.b8s adr.toB8L, .list (words.map (.b8s ∘ B256.toB8L))]
+  .list (al.map aux)
+
+def Tx.toBLT (tx : Tx) : BLT :=
   match tx.type with
   | .zero gasPrice =>
-    some <|
-      .list [
-        .b8s tx.nonce.toNat.toB8LNew,
-        .b8s gasPrice.toB8LNew,
-        .b8s tx.gas.toB8LNew,
-        .b8s <|
-          match tx.receiver with
-          | none => []
-          | some rcvr => rcvr.toB8L,
-        .b8s tx.value.toB8LNew,
-        .b8s tx.data,
-        .b8s tx.v.toB8LNew,
-        .b8s tx.r, -- toB8L,
-        .b8s tx.s, -- toB8L
-      ]
-  | .one _ _ _ => none -- .throw "UNIMP : BLT conversion for Type 1 tx"
-  | .two _ _ _ _ => none-- .throw "UNIMP : BLT conversion for Type 2 tx"
-  | .three _ _ _ _ _ _ => none -- .throw "UNIMP : BLT conversion for Type 3 tx"
-
-
-#check Option.toIO
-
-def Block.toIoBLT (block : Block) : IO BLT := do
-  .guard block.wds.isEmpty "unimplemented : withdrawals-to-BLT"
-  let txBLTs : List BLT ← block.txs.mapM (fun tx => tx.toBLT?.toIO "cannot convert tx to BLT")
-  .ok <| .list [
-    block.header.toBLT,
-    .list txBLTs,-- (block.txs.map LegacyTx.toBLT),
-    .list (block.ommers.map Header.toBLT),
-    .list []
-  ]
-
-def Lean.RBMap.fromSingleton {ξ υ f} (m : RBMap ξ υ f) : Option (ξ × υ) :=
-  match m.toList with
-  | [kv] => some kv
-  | _ => none
-
-def Lean.RBMap.singleton {ξ υ f} (x : ξ) (y : υ) : RBMap ξ υ f := RBMap.empty.insert x y
-
+    .list [
+      .b8s tx.nonce.toNat.toB8LNew,
+      .b8s gasPrice.toB8LNew,
+      .b8s tx.gas.toB8LNew,
+      .b8s <| tx.receiver.rec [] Adr.toB8L,
+      .b8s tx.value.toB8LNew,
+      .b8s tx.data,
+      .b8s tx.v.toB8LNew,
+      .b8s tx.r,
+      .b8s tx.s,
+    ]
+  | .one gasPrice chainId accessList =>
+    .list [
+      .b8s chainId.toB8L.sig,
+      .b8s tx.nonce.toNat.toB8LNew,
+      .b8s gasPrice.toB8LNew,
+      .b8s tx.gas.toB8LNew,
+      .b8s <| tx.receiver.rec [] Adr.toB8L,
+      .b8s tx.value.toB8LNew,
+      .b8s tx.data,
+      accessList.toBLT,
+      .b8s tx.v.toB8LNew,
+      .b8s tx.r,
+      .b8s tx.s
+    ]
+  | .two chainId maxPriorityFee maxFee accessList =>
+    .list [
+      .b8s chainId.toB8L.sig,
+      .b8s tx.nonce.toNat.toB8LNew,
+      .b8s maxPriorityFee.toB8LNew,
+      .b8s maxFee.toB8LNew,
+      .b8s tx.gas.toB8LNew,
+      .b8s <| tx.receiver.rec [] Adr.toB8L,
+      .b8s tx.value.toB8LNew,
+      .b8s tx.data,
+      accessList.toBLT,
+      .b8s tx.v.toB8LNew,
+      .b8s tx.r,
+      .b8s tx.s
+    ]
+  | .three chainId maxPriorityFee maxFee accessList maxBlobFee blobHashes =>
+    .list [
+      .b8s chainId.toB8L.sig,
+      .b8s tx.nonce.toNat.toB8LNew,
+      .b8s maxPriorityFee.toB8LNew,
+      .b8s maxFee.toB8LNew,
+      .b8s tx.gas.toB8LNew,
+      .b8s <| tx.receiver.rec [] Adr.toB8L,
+      .b8s tx.value.toB8LNew,
+      .b8s tx.data,
+      accessList.toBLT,
+      .b8s maxBlobFee.toB8LNew,
+      .list <| blobHashes.map <| .b8s ∘ B256.toB8L,
+      .b8s tx.v.toB8LNew,
+      .b8s tx.r,
+      .b8s tx.s
+    ]
 
 def TxType.toStrings : TxType → List String
   | zero
@@ -491,6 +525,34 @@ def Tx.toStrings (tx : Tx) : List String :=
 
 instance : ToString Tx := ⟨String.joinln ∘ Tx.toStrings⟩
 
+def B8LOrTxToBLT : B8L ⊕ Tx → BLT
+  | .inl bs => BLT.b8s bs
+  | .inr tx => tx.toBLT
+
+def Withdrawal.toBLT (wd : Withdrawal) : BLT :=
+  BLT.list [
+    BLT.b8s wd.globalIndex.toB8L.sig,
+    BLT.b8s wd.validatorIndex.toB8L.sig,
+    BLT.b8s wd.recipient.toB8L,
+    BLT.b8s wd.amount.toB8L.sig
+  ]
+
+def Block.toIoBLT (block : Block) : IO BLT := do
+  let txBLTs : List BLT := block.txs.map B8LOrTxToBLT
+  .ok <| .list [
+    block.header.toBLT,
+    .list txBLTs,
+    .list <| block.ommers.map Header.toBLT,
+    .list <| block.wds.map Withdrawal.toBLT
+  ]
+
+def Lean.RBMap.fromSingleton {ξ υ f} (m : RBMap ξ υ f) : Option (ξ × υ) :=
+  match m.toList with
+  | [kv] => some kv
+  | _ => none
+
+def Lean.RBMap.singleton {ξ υ f} (x : ξ) (y : υ) : RBMap ξ υ f := RBMap.empty.insert x y
+
 def TxType.gasPrice (baseFee : Nat) : TxType → Nat
   | .zero gp => gp
   | .one gp _ _ => gp
@@ -523,7 +585,7 @@ def TxType.blobHashes : TxType → List B256
 def Tx.blobHashes (tx : Tx) : List B256 := tx.type.blobHashes
 
 def BLT.toAdr : BLT → Option Adr
-  | .b8s bs => bs.toAdr
+  | .b8s bs => bs.toAdr?
   | _ => none
 
 def BLT.toB256 : BLT → Option B256
@@ -532,7 +594,7 @@ def BLT.toB256 : BLT → Option B256
 
 def BLT.toAccessEntry : BLT → Option (Adr × List B256)
   | .list [.b8s ar, .list ksr] => do
-    let a ← B8L.toAdr ar
+    let a ← B8L.toAdr? ar
     let ks ← mapM toB256 ksr
     pure ⟨a, ks⟩
   | _ => none
@@ -543,9 +605,13 @@ def BLT.toAccessList : BLT → Option AccessList
 
 instance : ToString BLT := ⟨String.joinln ∘ BLT.toStrings⟩
 
+def B8L.toReceiver? : B8L → Option Adr
+  | [] => .none
+  | xs@(_ :: _) => xs.toAdr?
+
 def B8L.toReceiver : B8L → IO (Option Adr)
   | [] => pure .none
-  | xs@(_ :: _) => (B8L.toAdr xs).toIO "cannot convert bytes to receiver address"
+  | xs@(_ :: _) => (B8L.toAdr? xs).toIO "cannot convert bytes to receiver address"
 
 def B8.toBool (x : B8) : Bool :=
   if x = 0 then .false else .true
@@ -735,7 +801,7 @@ def ecrecover (h : B256) (v : Bool) (r : B256) (s : B256) : Option Adr :=
   | b :: pa =>
     if b = 0 ∨ pa.length ≠ 20
     then none
-    else B8L.toAdr pa
+    else B8L.toAdr? pa
 
 abbrev NTB := Lean.RBMap (List B8) (List B8) (@List.compare _ ⟨B8.compareLows⟩)
 
@@ -870,7 +936,6 @@ def trie (j : NTB) : B256 :=
 def B256.keccak (x : B256) : B256 := B8L.keccak <| x.toB8L
 def B256.toRLP (w : B256) : BLT := .b8s w.toB8L
 
-def B8L.sig (bs : B8L) : B8L := List.dropWhile (· = 0) bs
 
 def Stor.toNTB (s : Stor) : NTB :=
   let f : NTB → B256 → B256 → NTB :=
@@ -1019,7 +1084,7 @@ abbrev ExceptionalHalt (err : String) : Prop :=
     "StackUnderflowError",
     "StackOverflowError",
     "OutOfGasError",
-    "InvalidOpcode ",
+    "InvalidOpcode",
     "InvalidJumpDestError",
     "StackDepthLimitError",
     "WriteInStaticContext",
@@ -1028,6 +1093,23 @@ abbrev ExceptionalHalt (err : String) : Prop :=
     "InvalidContractPrefix",
     "AddressCollision",
     "KzgProofError"
+  ]
+
+def isException (ex : String) (exs : List String) : Bool :=
+  let aux (s : String) : Bool :=
+    s = ex || String.isPrefixOf (s ++ " : ") ex
+  exs.any aux
+
+def isEthereumException (ex : String) : Bool :=
+  isException ex [
+    "InvalidBlock",
+    "InvalidTransaction"
+  ]
+
+def isRlpException (ex : String) : Bool :=
+  isException ex [
+    "EncodingError",
+    "DecodingError"
   ]
 
 --   | stackUnderflowError
@@ -1116,8 +1198,9 @@ def safeSub {ξ} [Sub ξ] [LE ξ] [@DecidableRel ξ (· ≤ ·)] (x y : ξ) : Op
   if y ≤ x then some (x - y) else none
 
 def chargeGas (cost : Nat) (evm : Evm) : Except (Evm × String) Evm := do
-  let gas ← (safeSub evm.gas_left cost).toExcept ⟨evm, "OutOfGasError"⟩
-  .ok {evm with gas_left := gas}
+  match safeSub evm.gas_left cost with
+  | none => .error ⟨evm, "OutOfGasError"⟩
+  | some gas => .ok {evm with gas_left := gas}
 
 def Nat.secp256k1n : Nat := 15792089237316195423570985008687907852837564279074904382605163141518161494337
 def B256.secp256k1n : B256 := 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
@@ -1647,7 +1730,6 @@ def Evm.codeAt (evm : Evm) (a : Adr) : ByteArray := (evm.getAcct a).code
 def Evm.storValAt (evm : Evm) (adr : Adr) (key : B256) : B256 :=
   (evm.getAcct adr).stor.findD key 0
 
-
 def Stor.set (s : Stor) (k v : B256) : Stor :=
   if v = 0 then s.erase k else s.insert k v
 
@@ -1662,9 +1744,13 @@ def Environment.setStorVal (env : Environment)
 def Evm.setStorVal (evm : Evm) (adr : Adr) (key val : B256) : Evm :=
   {evm with env := evm.env.setStorVal adr key val}
 
+def Tra.setStorVal (tra : Tra) (adr : Adr) (key val : B256) : Tra :=
+  let stor : Stor := tra.findD adr .empty
+  tra.set adr <| stor.set key val
+
 def Environment.setTransVal (env : Environment)
   (adr : Adr) (key val : B256) : Environment :=
-  {env with state := env.state.setStorVal adr key val}
+  {env with transient_storage := env.transient_storage.setStorVal adr key val}
 
 def Evm.setTransVal (evm : Evm) (adr : Adr) (key val : B256) : Evm :=
   {evm with env := evm.env.setTransVal adr key val}
@@ -1773,7 +1859,7 @@ def List.swap : List ξ → Nat → Option (List ξ)
 def Evm.contract (evm : Evm) : Adr := evm.message.current_target
 
 def Evm.assertDynamic (evm : Evm) : Except (Evm × String) Unit :=
-  Except.assert (!evm.message.is_static) ⟨evm, "WriteInStaticContext"⟩
+  Except.assert (!evm.message.is_static) ⟨evm, s!"WriteInStaticContext"⟩
 
 def Rinst.run (evm : Evm) : Rinst → Execution
   | .address => pushItem evm.contract.toB256 gBase evm
@@ -1870,9 +1956,11 @@ def Rinst.run (evm : Evm) : Rinst → Execution
     let copy_gas_cost := gReturnDataCopy * words
     let extend_memory_cost := evm.extCost [⟨memory_start_index, size⟩]
     let evm ← chargeGas (gVerylow + copy_gas_cost + extend_memory_cost) evm
-    .assert
+
+    .assertNot
       (evm.return_data.length < return_data_start_index + size)
       ⟨evm, "OutOfBoundsRead"⟩
+
     let value :=
       evm.return_data.sliceD return_data_start_index size 0
     .ok {
@@ -2287,10 +2375,6 @@ def Linst.run (evm : Evm) : Linst → Execution
       then evm := add_touched_account evm donee
 
     .ok {evm with running := false}
-
-
-
-
   --  let accessCost :=
   --    if donee ∈ evm.accessed_addresses
   --    then 0
@@ -2576,7 +2660,7 @@ def Wor.getBal (w : Wor) (a : Adr) : B256 := (w.get a).bal
 def showLim (lim : Nat) (evm : Evm) : Except (EVM × String) Unit :=
   match lim % 1000000 with
   | 0 => do
-    dbg_trace s!"gas : {evm.gas_left}"
+    dbg_trace s!"Recursion limit tracing, gas left : {evm.gas_left}"
     return ()
   | _ => return ()
 
@@ -2936,7 +3020,7 @@ mutual
 
       let evm ← chargeGas (message_call_cost + extend_cost) evm
 
-      evm.assertDynamic
+      .assert (!evm.message.is_static ∨ value = 0) ⟨evm, "WriteInStaticContext"⟩
 
       let evm :=
         evm.memExtends
@@ -3272,7 +3356,6 @@ def Tx.Result.toStrings : Tx.Result → List String
     fork "pass" [
       w.toStrings,
       [s!"gas : {g}"],
-      --[s!"logs : {l}"],
       fork "logs" (l.map Log.toStrings),
       [s!"status : {s}"]
     ]
@@ -3447,7 +3530,7 @@ def publicAddress? (hsa : ByteArray) (ri : UInt8) (rsa : ByteArray) : Option Adr
   | b :: pa =>
     if b = 0
     then none
-    else (B8L.toAdr pa)
+    else (B8L.toAdr? pa)
 
 def publicAddress (hsa : ByteArray) (ri : UInt8) (rsa : ByteArray) : IO Adr :=
   match (ecrecoverFlag hsa ri rsa).toList with
@@ -3455,7 +3538,7 @@ def publicAddress (hsa : ByteArray) (ri : UInt8) (rsa : ByteArray) : IO Adr :=
   | b :: pa =>
     if b = 0
     then IO.throw "ecrecover failed"
-    else (B8L.toAdr pa).toIO "bytearray to address conversion failed"
+    else (B8L.toAdr? pa).toIO "bytearray to address conversion failed"
 
 -- def getSender (tx : Tx) (hs : B256) : IO Adr := do
 --   let rsa : ByteArray := ⟨Array.mk (tx.r ++ tx.s)⟩
@@ -3524,7 +3607,7 @@ instance : ToString Wor := ⟨String.joinln ∘ Wor.toStrings⟩
 def Lean.Json.toWorld (j : Lean.Json) : IO Wor := do
   let aux : Wor → ((_ : String) × Lean.Json) → IO Wor :=
     fun | w, ⟨s, j⟩ => do
-      let adr ← (Hex.toAdr <| remove0x s).toIO ""
+      let adr ← (Hex.toAdr? <| remove0x s).toIO ""
       let acct ← j.toAcct
       pure <| w.set adr acct
   let ob ← j.fromObj
@@ -3785,14 +3868,6 @@ def Withdrawal.toStrings (wd : Withdrawal) : List String :=
 
 instance : ToString Withdrawal := ⟨String.joinln ∘ Withdrawal.toStrings⟩
 
-def Withdrawal.toBLT (w : Withdrawal) : BLT :=
-  .list [
-    .b8s w.globalIndex.toB8L,
-    .b8s w.validatorIndex.toB8L,
-    .b8s w.recipient.toB8L,
-    .b8s w.amount.toB8L
-  ]
-
 def checkTransactionsRoot (vb : Bool) (txbs : B8L) (root : B256) (txr : Tx.Result) : IO Unit :=
   let root' : B256 :=
     match txr with
@@ -3811,14 +3886,23 @@ def checkWithdrawalsRoot (vb : Bool) (wds : List Withdrawal) (wr : B256) : IO Un
     "withdrawals check : PASS\n"
     s!"withdrawals check : FAIL, withdrawals : {wds}"
 
-def getTxExMap (j : Lean.Json) : IO (Option TxEx × Lean.Json) := do
+-- def getTxExMap (j : Lean.Json) : IO (Option TxEx × Lean.Json) := do
+--   match j.find? "expectException" with
+--   | .none => pure ⟨.none, j⟩
+--   | .some exj => do
+--     let exs ← exj.fromStr
+--     let ex ← (parseTxEx exs).toIO ""
+--     let j' ← j.find "rlp_decoded"
+--     pure ⟨.some ex, j'⟩
+
+def getTxExMap (j : Lean.Json) : IO (Option String × B8L) := do
+  let rlp ← j.find "rlp" >>= Lean.Json.toIoB8L
   match j.find? "expectException" with
-  | .none => pure ⟨.none, j⟩
+  | .none => pure ⟨.none, rlp⟩
   | .some exj => do
     let exs ← exj.fromStr
-    let ex ← (parseTxEx exs).toIO ""
-    let j' ← j.find "rlp_decoded"
-    pure ⟨.some ex, j'⟩
+    -- let ex ← (parseTxEx exs).toIO ""
+    pure ⟨.some exs, rlp⟩
 
 def getBlockHeader : Lean.Json → Option Lean.Json
   | .obj r =>
@@ -3930,6 +4014,94 @@ def runPyTest (vb : Bool) (t : Test) : IO Unit := do
 --   parentBeaconBlockRoot := parentBeaconBlockRoot
 -- }
 
+--structure Header : Type where
+--  parentHash : B256
+--  ommersHash : B256
+--  coinbase : Adr
+--  stateRoot : B256
+--  txsRoot : B256
+--  receiptRoot : B256
+--  bloom : B8L
+--  difficulty : Nat
+--  number : Nat
+--  gasLimit : Nat
+--  gasUsed : Nat
+--  timestamp : Nat
+--  extraData : B8L
+--  prevRandao : B256
+--  nonce : B64
+--  baseFeePerGas : Nat
+--  withdrawalsRoot : B256
+--  blobGasUsed : Nat
+--  excessBlobGas : Nat
+--  parentBeaconBlockRoot : B256
+
+def BLT.toExStrHeader : BLT → Except String Header
+  | .list [
+      .b8s parentHash,
+      .b8s ommersHash,
+      .b8s coinbase,
+      .b8s stateRoot,
+      .b8s txsRoot,
+      .b8s receiptRoot,
+      .b8s bloom,
+      .b8s difficulty,
+      .b8s number,
+      .b8s gasLimit,
+      .b8s gasUsed,
+      .b8s timestamp,
+      .b8s extraData,
+      .b8s prevRandao,
+      .b8s nonce,
+      .b8s baseFeePerGas,
+      .b8s withdrawalsRoot,
+      .b8s blobGasUsed,
+      .b8s excessBlobGas,
+      .b8s parentBeaconBlockRoot
+    ] => do
+      let parentHash ← parentHash.toB256?.toExcept "parentHash to B256 conversion failed"
+      let ommersHash ← ommersHash.toB256?.toExcept "ommersHash to B256 conversion failed"
+      let coinbase ← coinbase.toAdr?.toExcept "coinbase to Adr conversion failed"
+      let stateRoot ← stateRoot.toB256?.toExcept "stateRoot to B256 conversion failed"
+      let txsRoot ← txsRoot.toB256?.toExcept "txsRoot to B256 conversion failed"
+      let receiptRoot ← receiptRoot.toB256?.toExcept "receiptRoot to B256 conversion failed"
+      let difficulty := difficulty.toNat
+      let number := number.toNat
+      let gasLimit := gasLimit.toNat
+      let gasUsed := gasUsed.toNat
+      let timestamp := timestamp.toNat
+      let prevRandao ← prevRandao.toB256?.toExcept "prevRandao to B256 conversion failed"
+      let nonce ← nonce.toB64?.toExcept "nonce to B64 conversion failed"
+      let baseFeePerGas := baseFeePerGas.toNat
+      let withdrawalsRoot ← withdrawalsRoot.toB256?.toExcept "withdrawalsRoot to B256 conversion failed"
+      let blobGasUsed := blobGasUsed.toNat
+      let excessBlobGas := excessBlobGas.toNat
+      let previousBeaconBlockRoot ← parentBeaconBlockRoot.toB256?.toExcept "parentBeaconBlockRoot to B256 conversion failed"
+      .ok {
+        parentHash := parentHash
+        ommersHash := ommersHash
+        coinbase := coinbase
+        stateRoot := stateRoot
+        txsRoot := txsRoot
+        receiptRoot := receiptRoot
+        bloom := bloom
+        difficulty := difficulty
+        number := number
+        gasLimit := gasLimit
+        gasUsed := gasUsed
+        timestamp := timestamp
+        extraData := extraData
+        prevRandao := prevRandao
+        nonce := nonce
+        baseFeePerGas := baseFeePerGas
+        withdrawalsRoot := withdrawalsRoot
+        blobGasUsed := blobGasUsed
+        excessBlobGas := excessBlobGas
+        parentBeaconBlockRoot := previousBeaconBlockRoot
+      }
+  | _ =>
+    .error "BLT to Header conversion failed, expected a list"
+
 def Lean.Json.toHeader (json : Lean.Json) : IO Header := do
   let parentHash ← json.find "parentHash" >>= Lean.Json.toIoB256
   let ommersHash ← json.find "uncleHash" >>= Lean.Json.toIoB256
@@ -3978,25 +4150,6 @@ structure BlockChain : Type where
   blocks : List Block
   state : Wor
   chainId : Nat
-
--- def LegacyTx.toStrings (tx : LegacyTx) : List String :=
---   let receiverStr : String :=
---     match tx.receiver with
---     | none => "none"
---     | some rcvr => s!"{rcvr.toHex}"
---   fork "tx" [
---     [s!"nonce : {tx.nonce.toHex}"],
---     [s!"gas price : {tx.gasPrice.toHex}"],
---     [s!"gas : {tx.gas.toHex}"],
---     [s!"receiver : {receiverStr}"],
---     [s!"value : {tx.value}"],
---     [s!"call : {tx.data.toHex}"],
---     [s!"v : {tx.v}"],
---     [s!"r : {tx.r.toHex}"],
---     [s!"s : {tx.s.toHex}"]
---   ]
---
--- instance : ToString LegacyTx := ⟨String.joinln ∘ LegacyTx.toStrings⟩
 
 def Lean.Json.toIoLegacyTx (json : Lean.Json) : IO Tx := do
   let nonce ← (json.find "nonce" >>= Lean.Json.toIoB8L) <&> B8L.toB64P
@@ -4053,14 +4206,18 @@ def Lean.Json.toIoTypeTwoTx (json : Lean.Json) : IO Tx := do
         []
   }
 
-
 def Lean.Json.toIoTx (json : Lean.Json) : IO Tx :=
   json.toIoLegacyTx <|> json.toIoTypeTwoTx
 
 def Block.toStrings (block : Block) : List String :=
+
+  let aux : B8L ⊕ Tx → List String
+    | .inl xs => fork "Encoded Tx" [String.chunks 80 xs.toHex]
+    | .inr tx => tx.toStrings
+
   fork "BLOCK" [
     block.header.toStrings,
-    fork "TXS" <| block.txs.map Tx.toStrings,
+    fork "TXS" <| block.txs.map aux,
     fork "OMMERS" <| block.ommers.map Header.toStrings,
     fork "WDS" <| block.wds.map Withdrawal.toStrings
   ]
@@ -4223,11 +4380,6 @@ def processMessageCall (vb : Bool) (msg : Message) (env : Environment) :
     ⟩
 
 
-def AccessList.toBLT (al : AccessList) : BLT :=
-  let aux : Adr × List B256 → BLT
-  | ⟨adr, words⟩ =>
-    .list [.b8s adr.toB8L, .list (words.map (.b8s ∘ B256.toB8L))]
-  .list (al.map aux)
 
 def Tx.signingHash (tx : Tx) : Option B256 :=
   match tx.type with
@@ -4253,7 +4405,7 @@ def Tx.signingHash (tx : Tx) : Option B256 :=
         B8L.keccak <|
           BLT.encode <|
             .list [
-              .b8s tx.nonce.toB8L,
+              .b8s tx.nonce.toB8L.sig,
               .b8s gasPrice.toB8LNew,
               .b8s tx.gas.toB8LNew,
               .b8s ((tx.receiver <&> Adr.toB8L).getD []),
@@ -4299,7 +4451,7 @@ def Tx.signingHash (tx : Tx) : Option B256 :=
         BLT.encode <|
           .list [
             .b8s chainId.toB8L.sig,
-            .b8s tx.nonce.toB8L,
+            .b8s tx.nonce.toB8L.sig,
             .b8s gasPrice.toB8LNew,
             .b8s tx.gas.toB8LNew,
             .b8s ((tx.receiver <&> Adr.toB8L).getD []),
@@ -4346,7 +4498,7 @@ def Tx.signingHash (tx : Tx) : Option B256 :=
         BLT.encode <|
           .list [
             .b8s chainId.toB8L.sig,
-            .b8s tx.nonce.toB8L,
+            .b8s tx.nonce.toB8L.sig,
             .b8s maxPriorityFee.toB8LNew,
             .b8s maxFee.toB8LNew,
             .b8s tx.gas.toB8LNew,
@@ -4355,7 +4507,57 @@ def Tx.signingHash (tx : Tx) : Option B256 :=
             .b8s tx.data,
             accessList.toBLT
           ]
-  | .three _ _ _ _ _ _ => none
+  /-
+  def signing_hash_4844(tx: BlobTransaction) -> Hash32:
+    """
+    Compute the hash of a transaction used in a EIP-4844 signature.
+
+    Parameters
+    ----------
+    tx :
+        Transaction of interest.
+
+    Returns
+    -------
+    hash : `ethereum.crypto.hash.Hash32`
+        Hash of the transaction.
+    """
+    return keccak256(
+        b"\x03"
+        + rlp.encode(
+            (
+                tx.chain_id,
+                tx.nonce,
+                tx.max_priority_fee_per_gas,
+                tx.max_fee_per_gas,
+                tx.gas,
+                tx.to,
+                tx.value,
+                tx.data,
+                tx.access_list,
+                tx.max_fee_per_blob_gas,
+                tx.blob_versioned_hashes,
+            )
+        )
+    )
+    -/
+  | .three chainId maxPriorityFee maxFee accessList maxBlobFee blobHashes =>
+    B8L.keccak <|
+      .cons (0x03 : B8) <|
+        BLT.encode <|
+          .list [
+            .b8s chainId.toB8L.sig,
+            .b8s tx.nonce.toB8L.sig,
+            .b8s maxPriorityFee.toB8LNew,
+            .b8s maxFee.toB8LNew,
+            .b8s tx.gas.toB8LNew,
+            .b8s ((tx.receiver <&> Adr.toB8L).getD []),
+            .b8s tx.value.toB8LNew,
+            .b8s tx.data,
+            accessList.toBLT,
+            .b8s maxBlobFee.toB8LNew,
+            .list <| blobHashes.map <| .b8s ∘ B256.toB8L
+          ]
 
 def secp256k1nRecoverToAdr?
   (r s : B256) (v : Nat) (msg_hash : B256) : Option  Adr :=
@@ -4462,7 +4664,9 @@ def recoverSender (chain_id: B64) (tx: Tx) : Except String Adr := do
   | .two _ _ _ _ =>
     .assert (v < 2) "InvalidSignatureError"
     (secp256k1nRecoverToAdr? r s v signingHash).toExcept "sender recovery failed"
-  | .three _ _ _ _ _ _=> .error "UNIMP : TYPE 3 TX SENDER RECOVERY"
+  | .three _ _ _ _ _ _=>
+    .assert (v < 2) "InvalidSignatureError"
+    (secp256k1nRecoverToAdr? r s v signingHash).toExcept "sender recovery failed"
 
 
 def TX_BASE_COST : Nat := 21000
@@ -4627,11 +4831,13 @@ def checkTransaction
   (base_fee_per_gas: Nat)
   (excess_blob_gas: Nat) :
   Except String (Adr × Nat × List B256) := do
-  .assertNot (tx.gas > gas_available)
-    "InvalidBlock : insufficient gas available"
+
+  .assertNot (tx.gas > gas_available) "InvalidBlock : gas exceeds available gas"
 
   let senderAdr ← recoverSender chain_id tx
+
   let senderAcct := state.get senderAdr
+
   let mut max_gas_fee : Nat := 0
 
   let mut effective_gas_price : Nat := 0
@@ -4649,8 +4855,11 @@ def checkTransaction
     effective_gas_price := gasPrice
     max_gas_fee := tx.gas * gasPrice
   | .inr (maxPriorityFee, maxFee) =>
+
     .assertNot (maxFee < maxPriorityFee) "InvalidBlock : max fee below priority fee"
+
     .assertNot (maxFee < base_fee_per_gas) "InvalidBlock : max fee below base fee"
+
     let priority_fee_per_gas := min maxPriorityFee (maxFee - base_fee_per_gas)
     effective_gas_price := priority_fee_per_gas + base_fee_per_gas
     max_gas_fee := tx.gas * maxFee
@@ -4678,7 +4887,8 @@ def checkTransaction
     then .error "InvalidBlock : nonce mismatch"
 
   if senderAcct.bal.toNat < max_gas_fee + tx.value
-    then .error "InvalidBlock : insufficient balance"
+    then
+      .error s!"InvalidBlock : sender balance ({senderAcct.bal.toNat}) < max gas fee ({max_gas_fee}) + tx value ({tx.value})"
 
   if !senderAcct.code.isEmpty
     then .error "InvalidSenderError : not EOA"
@@ -5063,6 +5273,8 @@ def processTransaction
 -/
   let effective_gas_fee := tx.gas * env.gas_price
   let gas := tx.gas - calculate_intrinsic_cost tx
+
+
   let mut env := env.incrNonce sender
 
 /-
@@ -5294,6 +5506,115 @@ def process_withdrawal -- (state: Wor) (wd: Withdrawal) : Except String Unit :=
   (state : Wor) (wd : Withdrawal) :  Wor :=
   state.addBal wd.recipient (wd.amount * (10 ^ 9).toB256)
 
+-- def decodeTxBLT : BLT → IO (Tx × B8L × Adr)
+--   | .b8s xs => do
+--     let ⟨tx, sender⟩ ← decodeTxBytes xs
+--     pure ⟨tx, xs, sender⟩
+--   | .list l => do
+--     let r : BLT := .list l
+--     let ⟨tx, hs⟩ ← r.toLegacyTxHash
+--     let sender ← getSender tx hs
+--     return ⟨tx, r.encode, sender⟩
+def B8L.toExStrTx : B8L → Except String Tx
+  | [] => .error "error : cannot decode empty transaction BLT"
+  | x :: xs =>
+    match x, BLT.decode xs with
+    | 0x01, BLT.list [
+        .b8s chainId,
+        .b8s nonce,
+        .b8s gasPrice,
+        .b8s gas,
+        .b8s receiver,
+        .b8s value,
+        .b8s data,
+        accessList,
+        .b8s yParity,
+        .b8s r,
+        .b8s s
+      ] => do .ok {
+          nonce := nonce.toB64P,
+          gas := gas.toNat,
+          receiver := receiver.toReceiver?,
+          value := value.toNat,
+          data := data,
+          v := yParity.toNat,
+          r := (r.reverse.takeD 32 0).reverse,
+          s := (s.reverse.takeD 32 0).reverse,
+          type :=
+            .one
+              gasPrice.toNat
+              chainId.toB64P
+              (← accessList.toAccessList.toExcept "cannot decode access list")
+        }
+
+    | 0x02, BLT.list [
+        .b8s chainId,
+        .b8s nonce,
+        .b8s maxPriorityFee,
+        .b8s maxFee,
+        .b8s gas,
+        .b8s receiver,
+        .b8s value,
+        .b8s data,
+        accessList,
+        .b8s yParity,
+        .b8s r,
+        .b8s s
+      ] => do .ok {
+        nonce := nonce.toB64P,
+        gas := gas.toNat,
+        receiver := receiver.toReceiver?,
+        value := value.toNat,
+        data := data,
+        v := yParity.toNat,
+        r := (r.reverse.takeD 32 0).reverse,
+        s := (s.reverse.takeD 32 0).reverse,
+        type :=
+          .two
+            chainId.toB64P
+            maxPriorityFee.toNat
+            maxFee.toNat
+            (← accessList.toAccessList.toExcept "cannot decode access list")
+      }
+    | 0x03, BLT.list [
+        .b8s chainId,
+        .b8s nonce,
+        .b8s maxPriorityFee,
+        .b8s maxFee,
+        .b8s gas,
+        .b8s receiver,
+        .b8s value,
+        .b8s data,
+        accessList,
+        .b8s maxBlobFee,
+        .list blobHashes,
+        .b8s yParity,
+        .b8s r,
+        .b8s s
+      ] => do .ok {
+        nonce := nonce.toB64P,
+        gas := gas.toNat,
+        receiver := receiver.toReceiver?,
+        value := value.toNat,
+        data := data,
+        v := yParity.toNat,
+        r := (r.reverse.takeD 32 0).reverse,
+        s := (s.reverse.takeD 32 0).reverse,
+        type :=
+          .three
+            chainId.toB64P
+            maxPriorityFee.toNat
+            maxFee.toNat
+            (← accessList.toAccessList.toExcept "cannot decode access list")
+            maxBlobFee.toNat
+            (← mapM (λ r => r.toB256.toExcept "cannot decode blob hash") blobHashes)
+      }
+
+    | x, _ => .error s!"ERROR : type-{x} txs do not exist, decoding failed"
+
+def decodeTx : B8L ⊕ Tx → Except String Tx
+  | .inl xs => xs.toExStrTx
+  | .inr tx => .ok tx
 
 /-
 def apply_body(
@@ -5514,7 +5835,7 @@ def applyBody
   (block_gas_limit: Nat)
   (block_time: B256)
   (prev_randao: B256)
-  (transactions: List Tx)
+  (transactions: List (B8L ⊕ Tx))
   (chain_id: B64)
   (withdrawals: List Withdrawal)
   (parent_beacon_block_root: B256)
@@ -5581,7 +5902,7 @@ def applyBody
   if vb
     then dbg_trace ("\n================================ TEST TX ================================\n")
 
-  for ⟨i, tx⟩ in transactions.putIndex 0 do
+  for ⟨i, tx⟩ in (← transactions.mapM decodeTx).putIndex 0 do
     transactions_trie :=
       transactions_trie.insert (BLT.b8s i.toB8LNew).encode tx
 
@@ -5621,7 +5942,6 @@ def applyBody
     block_logs := block_logs ++ logs
     blob_gas_used := blob_gas_used + calculate_total_blob_gas tx
 
-
   .assertNot (blob_gas_used > MAX_BLOB_GAS_PER_BLOCK) "InvalidBlock"
 
   let block_gas_used := block_gas_limit - gas_available
@@ -5641,14 +5961,9 @@ def applyBody
     let temp := (List.map receiptAux receipts_trie.toList)
     trie <| Lean.RBMap.fromList temp _
 
-  -- let transactionsRoot : B256 :=
-  --   let transactionsAux (arg : B8L × Tx) : B8L × B8L :=
-  --     ⟨arg.fst.toB4s, arg.snd.toBLT.encode⟩
-  --   let temp := (List.map transactionsAux transactions_trie.toList)
-  --   trie <| Lean.RBMap.fromList temp _
   let transactionsRoot : B256 ← do
     let transactionsAux (arg : B8L × Tx) : Except String (B8L × B8L) := do
-      let txBLT : BLT ← arg.snd.toBLT?.toExcept "error : transaction encoding failed"
+      let txBLT : BLT := arg.snd.toBLT
       .ok ⟨arg.fst.toB4s, txBLT.encode⟩
     let temp ← List.mapM transactionsAux transactions_trie.toList
     .ok <| trie <| Lean.RBMap.fromList temp _
@@ -5838,39 +6153,140 @@ def state_transition (vb : Bool) (chain : BlockChain) (block : Block) :
          chainId := chain.chainId
        }
 
-def addBlockToChain (vb : Bool) (chain : BlockChain) (json : Lean.Json) :
-  IO (BlockChain ⊕ TxEx) := do
-  let headerJson ← json.find "blockHeader"
-  let rlp ← json.find "rlp" >>= Lean.Json.toIoB8L
-  let blockHeaderHash ← headerJson.find "hash" >>= Lean.Json.toIoB256
-  let header ← headerJson.toHeader
+
+def BLT.toExStrWithdrawal : BLT → Except String Withdrawal
+  | .list [
+      .b8s globalIndex,
+      .b8s validatorIndex,
+      .b8s recipient,
+      .b8s amount
+    ] => do
+    let globalIndex := globalIndex.toB64P --.toExcept "error : invalid global index"
+    let validatorIndex := validatorIndex.toB64P -- ?.toExcept "error : invalid validator index"
+    let recipient ← recipient.toAdr?.toExcept "error : invalid recipient address"
+    let amount := amount.toB256P -- "error : invalid withdrawal amount"
+
+    .ok {
+      globalIndex := globalIndex,
+      validatorIndex := validatorIndex,
+      recipient := recipient,
+      amount := amount
+    }
+  | _ => .error "error : invalid withdrawal BLT format"
+
+def BLT.toExStrOmmers : BLT → Except String (List Header)
+  | .list ommers => ommers.mapM BLT.toExStrHeader
+  | _ => .error "error : invalid ommers BLT format"
 
 
-  let txJsons ← json.find "transactions" >>= Lean.Json.fromArr
+def BLT.toExStrTx : BLT → Except String Tx
+  | .list [
+      .b8s nonce,
+      .b8s gasPrice,
+      .b8s gas,
+      .b8s receiver,
+      .b8s value,
+      .b8s data,
+      .b8s v,
+      .b8s r,
+      .b8s s
+    ] => .ok {
+      nonce := nonce.toB64P,
+      gas := gas.toNat
+      receiver := receiver.toReceiver?,
+      value := value.toNat,
+      data := data,
+      v := v.toNat,
+      r := r,
+      s := s,
+      type := .zero gasPrice.toNat
+    }
+  | .list _ => .error "error : invalid transaction BLT format"
+  | .b8s xs => xs.toExStrTx
 
-  let txs ← mapM Lean.Json.toLegacyTx txJsons
+def BLT.isList : BLT → Bool
+  | .list _ => true
+  | _ => false
 
-  let [] ← json.find "uncleHeaders" >>= Lean.Json.fromArr | .throw "error : nonempty uncleHeaders"
-  let [] ← json.find "withdrawals" >>= Lean.Json.fromArr | .throw "error : nonempty withdrawals"
+def BLT.toExStrBlock : BLT → Except String Block
+  | BLT.list [
+      HeaderBLT,
+      .list TxBLTs,
+      .list OmmerBLTs,
+      .list WithdrawalBLTs
+    ] => do
 
-  let block : Block := {
-    header := header
-    txs := txs
-    ommers := []
-    wds := []
-  }
+    let aux : BLT → Except String (B8L ⊕ Tx)
+      | blt@(.list _) => blt.toExStrTx <&> .inr
+      | .b8s xs => .ok <| .inl xs
+
+    let header ← HeaderBLT.toExStrHeader
+    let txs ← mapM aux TxBLTs
+    let ommers ← mapM BLT.toExStrHeader OmmerBLTs
+    let withdrawals ← mapM BLT.toExStrWithdrawal WithdrawalBLTs
+    .ok {
+      header := header,
+      txs := txs,
+      ommers := ommers,
+      wds := withdrawals
+    }
+  | _ => .error "error : invalid block BLT format"
+
+def exStrToIO {ξ : Type} : Except String ξ → IO ξ
+  | .ok x => .ok x
+  | .error err => .throw err
+
+/-
+rlpToBlock is equivalent to json_to_block from execution-specs.
+why does it accept the RLP bytes as input, and not the whole JSON?
+the justification is that json_to_block expects the RLP bytes to be
+always available, and always uses *only* the RLP bytes to obtain the
+block, ignoring everything else in the JSON (the code path that deals
+with nonexistent RLP bytes exists, but is unreachable). its return
+type also omits the RLP bytes, since this is identical to the input.
+-/
+def rlpToBlock (rlp : B8L) : IO (Block × B256) := do
+  let block_blt ← (BLT.decode rlp).toIO  "error : cannot decode block from rlp"
+  let block ← exStrToIO <| block_blt.toExStrBlock
+  return ⟨block, block.header.toBLT.encode.keccak⟩
+
+def addBlockToChain (vb : Bool) (chain : BlockChain) (blockRlp : B8L) :
+  IO (BlockChain ⊕ String) := do
+
+  --let ⟨block, blockHeaderHash, blockRlp⟩ ← Lean.Json.toBlock json
+  let ⟨block, blockHeaderHash⟩ ← rlpToBlock blockRlp
+
+--  let headerJson ← json.find "blockHeader"
+--  let rlp ← json.find "rlp" >>= Lean.Json.toIoB8L
+--  let blockHeaderHash ← headerJson.find "hash" >>= Lean.Json.toIoB256
+--  let header ← headerJson.toHeader
+--
+--  let txJsons ← json.find "transactions" >>= Lean.Json.fromArr
+--
+--  let txs ← mapM Lean.Json.toIoTx txJsons
+--
+--  let [] ← json.find "uncleHeaders" >>= Lean.Json.fromArr | .throw "error : nonempty uncleHeaders"
+--  let [] ← json.find "withdrawals" >>= Lean.Json.fromArr | .throw "error : nonempty withdrawals"
+--
+--  let block : Block := {
+--    header := header
+--    txs := txs
+--    ommers := []
+--    wds := []
+--  }
 
   .cprintln vb "\nSTATE BEFORE TRANSITION :"
   .cprintln vb s!"{chain.state}"
 
-  .guard (header.toBLT.encode.keccak = blockHeaderHash) "error : incorrect block header hash"
+  .guard (block.header.toBLT.encode.keccak = blockHeaderHash) "error : incorrect block header hash"
 
   let rlp' ← block.toIoBLT <&> BLT.encode
-  .guard (rlp = rlp') "error : incorrect block rlp"
+
+  .guard (blockRlp = rlp') "error : incorrect block rlp"
 
   let chain ←
     match state_transition vb chain block with
-    | .error err => .throw err
+    | .error err => return (.inr err)
     | .ok chain => .ok chain
 
   .cprintln vb s!"\nSTATE AFTER TEST TX :"
@@ -5896,17 +6312,25 @@ def processBlockJsons (vb : Bool) (chain : BlockChain) :
       match (← addBlockToChain vb chain j) with
       | .inr ex' =>
         .guard
-          (ex = ex')
-          s!"error :\n  expected exception : {ex}\n  computed exception : {ex'}"
+          --(ex = ex')
+          (isEthereumException ex' || isRlpException ex')
+          s!"ERROR : {ex'} is not an ethereum exception or an RLP exception"
         .ok none
       | .inl _ =>
-        .throw
-          s!"error :\n  expected exception : {ex}\n  computed exception : none"
+        .throw "ERROR : expected exception not raised"
   | [] => .ok <| some chain
 
-def runTest (vb : Bool) : ((_ : String) × Lean.Json) → IO Unit
+def runTest (vb : Bool) (nw : Option String) : ((_ : String) × Lean.Json) → IO Unit
   | ⟨name, json⟩ => do
     .println s!"TEST KEY : {name}"
+
+    match nw with
+    | none => .ok ()
+    | some specNw =>
+      let testNw ← json.find "network" >>= Lean.Json.fromStr
+      if specNw ≠ testNw then
+        .println s!"specified network '{specNw}' ≠ test network '{testNw}', skipping."
+        return ()
 
     let gbh_json ← json.find "genesisBlockHeader"
     let gbh ← gbh_json.toHeader
@@ -5963,17 +6387,20 @@ def runTest (vb : Bool) : ((_ : String) × Lean.Json) → IO Unit
 --     return ⟨name, info, blocks, gbh, grlp, lbh, network, pre, xws, sealEngine⟩
 
 
-def runPyTestFile (vb : Bool) (idx : Option Nat) (path : String) : IO Unit := do
+def runPyTestFile (vb : Bool) (idx : Option Nat)
+  (nw : Option String) (path : String) : IO Unit := do
   .println "\n================================================================\n"
   .println s!"Testing file : {path}\n"
   let rb ← readJsonFile path >>= Lean.Json.fromObj
   let js := rb.toArray.toList
   match idx with
-  | none => let _ ← mapM (runTest vb) js
+  | none => let _ ← mapM (runTest vb nw) js
   | some k =>
     match js.get? k with
-    | none => pure ()
-    | some j => runTest vb j
+    | none => .println s!"Test #{k} does not exist, skipping."
+    | some j => runTest vb nw j
+
+
 
   --let ts ← j.toTests
   --match idx with
@@ -5982,6 +6409,13 @@ def runPyTestFile (vb : Bool) (idx : Option Nat) (path : String) : IO Unit := do
   --  match ts.get? k with
   --  | none => pure ()
   --  | some t => runPyTest vb t
+
+def getTestNetwork : List String → Option String
+  | s0 :: s1 :: ss =>
+    if s0 = "--network"
+    then some s1
+    else getTestNetwork <| s1 :: ss
+  | _ => none
 
 def getTestIndex : List String → Option Nat
   | s0 :: s1 :: ss =>
@@ -5994,16 +6428,15 @@ def main : List String → IO Unit
   | path :: opts => do
     let vb : Bool := List.contains opts "--verbose"
     let idx : Option Nat := getTestIndex opts
+    let nw : Option String := getTestNetwork opts
     let b ← System.FilePath.isDir path
     if !b
-    then runPyTestFile vb idx path
+    then runPyTestFile vb idx nw path
     else do
       let fs ← System.FilePath.walkDir path
-      let _← mapM (runPyTestFile vb idx) (fs.toList.map System.FilePath.toString)
+      let _← mapM (runPyTestFile vb idx nw) (fs.toList.map System.FilePath.toString)
       pure ()
   | _ => IO.throw "error : invalid arguments"
-
-#exit
 
 
 

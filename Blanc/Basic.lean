@@ -2978,15 +2978,17 @@ def List.splitAt? {ξ : Type u} : Nat → List ξ → Option (List ξ × List ξ
   | _ + 1, [] => none
   | n + 1, x :: xs => .map (x :: ·) id <$> xs.splitAt? n
 
-def B8L.toNat' : Nat → B8L → Nat
-  | k, [] => k
-  | k, b :: bs => B8L.toNat' ((k * 256) + b.toNat) bs
-def B8L.toNat (bs : B8L) : Nat := bs.toNat' 0
+def B8L.toNat (bs : B8L) : Nat :=
+  let rec aux (acc : Nat) : B8L → Nat
+    | [] => acc
+    | b :: bs => aux ((acc * 256) + b.toNat) bs
+  aux 0 bs
 
-def Bytes.toNat' : Nat → Bytes → Nat
-  | k, [] => k
-  | k, b :: bs => Bytes.toNat' ((k * 256) + b.toNat) bs
-def Bytes.toNat (bs : Bytes) : Nat := bs.toNat' 0
+def Bytes.toNat (bs : Bytes) : Nat := --bs.toNat' 0
+  let rec aux (acc : Nat) : Bytes → Nat
+    | [] => acc
+    | b :: bs => aux ((acc * 256) + b.toNat) bs
+  aux 0 bs
 
 def Nat.toBytesCore (n : Nat) : Bytes :=
   if n < 256

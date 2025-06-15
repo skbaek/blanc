@@ -3970,7 +3970,7 @@ def Adr.toHex (a : Adr) : String :=
 
 instance : ToString Adr := ⟨Adr.toHex⟩
 
-def B8L.toAdr : B8L → Option Adr
+def B8L.toAdr? : B8L → Option Adr
   | x0 :: x1 :: x2 :: x3 ::
     y0 :: y1 :: y2 :: y3 ::
     y4 :: y5 :: y6 :: y7 ::
@@ -3983,7 +3983,7 @@ def B8L.toAdr : B8L → Option Adr
     ⟩
   | _ => none
 
-def Hex.toAdr (hx : String) : Option Adr := Hex.toB8L hx >>= B8L.toAdr
+def Hex.toAdr? (hx : String) : Option Adr := Hex.toB8L hx >>= B8L.toAdr?
 
 def Adr.toB8L (a : Adr) : B8L :=
   a.high.toB8L ++ a.mid.toB8L ++ a.low.toB8L
