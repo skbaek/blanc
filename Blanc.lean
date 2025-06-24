@@ -975,7 +975,6 @@ structure Evm : Type where
   message: Message
   output: B8L
   accounts_to_delete: AdrSet
-  touched_accounts: AdrSet
   return_data: B8L
   error: Option String
   accessed_addresses: AdrSet
@@ -1431,9 +1430,6 @@ def add_accessed_storage_key (evm : Evm) (a : Adr) (k : B256) : Evm :=
 
 def add_account_to_delete (evm : Evm) (a : Adr) : Evm :=
   {evm with accounts_to_delete := evm.accounts_to_delete.insert a}
-
-def add_touched_account (evm : Evm) (a : Adr) : Evm :=
-  {evm with touched_accounts := evm.touched_accounts.insert a}
 
 def add_created_account (env : Environment) (adr : Adr) : Environment :=
   {env with created_accounts := env.created_accounts.insert adr}
@@ -2007,7 +2003,6 @@ instance : Inhabited Evm := ⟨
     message := default
     output := []
     accounts_to_delete := .empty
-    touched_accounts := .empty
     return_data := []
     error := .none
     accessed_addresses := .empty
@@ -2149,9 +2144,6 @@ def Linst.run (evm : Evm) : Linst → Execution
     if donor ∈ evm.env.created_accounts
       then evm := add_account_to_delete (evm.setBal donor 0) donor
 
-    if (evm.getAcct donee).Empty
-      then evm := add_touched_account evm donee
-
     .ok {evm with running := false}
 
 def except64th (n : Nat) : Nat := n - (n / 64)
@@ -2178,16 +2170,8 @@ def ALT_BN128_PAIRING_CHECK_ADDRESS : Adr := 0x08
 def BLAKE2F_ADDRESS : Adr := 0x09
 def POINT_EVALUATION_ADDRESS : Adr := 0x0a
 
-
 def incorporateChildOnError (evm child : Evm) : Evm :=
-  let evm : Evm :=
-    if
-      RIPEMD160_ADDRESS ∈ child.touched_accounts ∨
-      ( child.contract = RIPEMD160_ADDRESS ∧
-        AccountExistsAndIsEmpty evm.env.state child.contract )
-    then add_touched_account evm RIPEMD160_ADDRESS
-    else evm
-  {evm with gas_left := evm.gas_left + child.gas_left }
+  {evm with gas_left := evm.gas_left + child.gas_left}
 
 def incorporateChildOnSuccess (evm child : Evm) : Evm :=
   {
@@ -2196,11 +2180,6 @@ def incorporateChildOnSuccess (evm child : Evm) : Evm :=
     logs := child.logs ++ evm.logs
     refund_counter := evm.refund_counter + child.refund_counter
     accounts_to_delete := evm.accounts_to_delete.union child.accounts_to_delete
-    touched_accounts :=
-      let union := evm.touched_accounts.union child.touched_accounts
-      if AccountExistsAndIsEmpty evm.env.state child.contract
-      then union.insert child.contract
-      else union
     accessed_addresses := evm.accessed_addresses.union child.accessed_addresses
     accessed_storage_keys := evm.accessed_storage_keys.union child.accessed_storage_keys
   }
@@ -2974,7 +2953,6 @@ def stepString (evm : Evm) (i : Inst') : String :=
     s!"gas({evm.gas_left}), " ++
     s!"inst(\"{i.toString}\"), " ++
     s!"depth({evm.message.depth}), " ++
-    s!"taCount({evm.touched_accounts.size}), " ++
     s!"{evm.stack.map (fun x => "0x" ++ x.toHex.trimHex)}" ++
   ")."
 
@@ -2998,6 +2976,23 @@ def showLim (lim : Nat) (evm : Evm) : Except (EVM × String) Unit :=
   | _ => return ()
 
 
+-- structure reallyBigStructure where
+--   someFlag : Bool
+--
+-- def myHelper : Bool → reallyBigStructure → reallyBigStructure := _
+--
+-- def myFunction : Nat → reallyBigStructure → reallyBigStructure
+--   | 0, big => big
+--   | n + 1, big =>
+--     let big' := myFunction n big
+--     myHelper big.someFlag big'
+--
+-- def myFunction : Nat → reallyBigStructure → reallyBigStructure
+--   | 0, big => big
+--   | n + 1, big =>
+--     let flag := big.someFlag
+--     let big' := myFunction n big
+--     myHelper flag big'
 
 mutual
 
@@ -3018,7 +3013,6 @@ mutual
         message := msg
         output := []
         accounts_to_delete := .empty
-        touched_accounts := .empty,
         return_data := []
         error := .none
         accessed_addresses := msg.accessed_addresses
@@ -3188,7 +3182,6 @@ mutual
         let evm := incorporateChildOnSuccess evm child
         {evm with return_data := []}.push child.contract.toB256
 
-
   termination_by lim => lim
 
 
@@ -3249,6 +3242,7 @@ mutual
       let actualOutput := child.output.take output_size
 
       .ok <| evm.memWrite output_index actualOutput
+
   termination_by lim => lim
 
   def Ninst'.run (vb : Bool) (evm : Evm) : Ninst' → Nat → Execution
@@ -4530,7 +4524,6 @@ structure MessageCallOutput : Type where
   refund_counter : Int
   logs : List Log
   accounts_to_delete : AdrSet
-  touched_accounts : AdrSet
   error: Option String
 
 
@@ -4552,16 +4545,12 @@ def processMessageCall (vb : Bool) (msg : Message) (env : Environment) :
   Except String (Wor × MessageCallOutput) := do
 
   let (true : Bool) ← .ok (noCollision msg env)
-    | .ok ⟨env.state, 0, 0, [], .empty, .empty, some "AddressCollision"⟩
+    | .ok ⟨env.state, 0, 0, [], .empty, some "AddressCollision"⟩
 
   let evm ←
     match msg.target with
     | none => Except.bimap Prod.snd id <| processCreateMessage vb msg env (msg.gas + 50)
-    | some tgt =>
-      let evm ← Except.bimap Prod.snd id <| processMessage vb msg env (msg.gas + 50)
-      if AccountExistsAndIsEmpty evm.env.state tgt
-      then .ok {evm with touched_accounts := evm.touched_accounts.insert tgt}
-      else .ok evm
+    | some _ => Except.bimap Prod.snd id <| processMessage vb msg env (msg.gas + 50)
 
   .ok <|
     if evm.error.isNone
@@ -4572,7 +4561,6 @@ def processMessageCall (vb : Bool) (msg : Message) (env : Environment) :
         refund_counter := evm.refund_counter
         logs := evm.logs
         accounts_to_delete := evm.accounts_to_delete
-        touched_accounts := evm.touched_accounts
         error := evm.error
       }
     ⟩
@@ -4583,7 +4571,6 @@ def processMessageCall (vb : Bool) (msg : Message) (env : Environment) :
         refund_counter := 0
         logs := []
         accounts_to_delete := .empty
-        touched_accounts := .empty
         error := evm.error
       }
     ⟩
@@ -5623,8 +5610,6 @@ def processTransaction
   for address in output.accounts_to_delete do
     state := destroyAccount state address
 
-  state := destroyTouchedEmptyAccounts state output.touched_accounts
-
   .ok ⟨state, total_gas_used, output.logs, output.error⟩
 
 structure Receipt : Type where
@@ -6114,9 +6099,7 @@ def applyBody
   if vb
     then dbg_trace ("\n================================ SETUP TX ================================\n")
 
-  let mut ⟨state, system_tx_output⟩ ← processMessageCall vb system_tx_message system_tx_env
-
-  state := destroyTouchedEmptyAccounts state system_tx_output.touched_accounts
+  let mut ⟨state, _⟩ ← processMessageCall vb system_tx_message system_tx_env
 
   if vb
     then
