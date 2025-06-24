@@ -370,15 +370,12 @@ def B64.toHex (x : B64) : String := x.highs.toHex ++ x.lows.toHex
 def B128.toHex (x : B128) : String := x.1.toHex ++ x.2.toHex
 def B256.toHex (x : B256) : String := x.1.toHex ++ x.2.toHex
 
-
 instance : ToString B8 := ⟨B8.toHex⟩
 instance : ToString B16 := ⟨B16.toHex⟩
 instance : ToString B32 := ⟨B32.toHex⟩
 instance : ToString B64 := ⟨B64.toHex⟩
 instance : ToString B128 := ⟨B128.toHex⟩
 instance : ToString B256 := ⟨B256.toHex⟩
-
-#eval s!"my u64 {(1234 : UInt64)}"
 
 def B128.LE (x y : B128) : Prop :=
   x.1 < y.1 ∨ (x.1 = y.1 ∧ x.2 ≤ y.2)
@@ -448,6 +445,7 @@ def B256.shiftRight : B256 → Nat → B256
               else ⟨0, 0⟩
 instance : HShiftRight B256 Nat B256 := ⟨B256.shiftRight⟩
 
+
 def B256.shiftLeft : B256 → Nat → B256
   | ⟨xs, ys⟩, os =>
     if os = 0
@@ -458,6 +456,16 @@ def B256.shiftLeft : B256 → Nat → B256
               then ⟨ys <<< (os - 128), 0⟩
               else ⟨0, 0⟩
 instance : HShiftLeft B256 Nat B256 := ⟨B256.shiftLeft⟩
+
+def B256.isNeg : B256 → Bool := B256.highBit
+
+def B256.arithShiftRight (xs : B256) (os : Nat) : B256 :=
+  let xs' := xs >>> os
+  if xs.isNeg
+  then
+    let mask := B256.max <<< (256 - os)
+    xs' ||| mask
+  else xs'
 
 def B256.Slt (xs ys : B256) : Prop :=
   let x := xs.highBit
@@ -604,39 +612,30 @@ def Bits.shl : Nat → ∀ {n}, Bits n → Bits n
   | 0, _, xs => xs
   | m + 1, _, xs => shlo (xs.shl m) 0
 
--- def Bits.shl : Nat → ∀ {n}, Bits n → Bits n
---   | 0, _, xs => xs
---   | _, 0, ⦃⦄ => ⦃⦄
---   | m + 1, _ + 1, _ +> xs => (shl m xs).snoc 0
-
--- def Bits.shro : ∀ {n}, Bool → Bits n → Bits n
---   | 0, _, ⦃⦄ => ⦃⦄
---   | n + 1, x, y +> ys =>  x +> shro y ys
-
---def Bits.shr' : ∀ {k m n : Nat}, Bits m → Bits n
---| 0, m, n, xs => _
---
---#exit
 def Bits.prefixLe : ∀ {m n}, m ≤ n → Bits n → Bits m
 | 0, _, _, _ => ⦃⦄
 | m + 1, 0, h, _ => (Nat.not_succ_le_zero m h).elim
 | _ + 1, _ + 1, h, x +> xs =>
   x +> prefixLe (Nat.le_of_succ_le_succ h) xs
 
-def Bits.shr' : Nat → ∀ {m n}, m ≤ n → Bits n → Bits m
+def Bits.shiftRightCore (sign : Bool) :
+  Nat → ∀ {m n}, m ≤ n → Bits n → Bits m
   | _, 0, _, _, _ => ⦃⦄
   | 0, _, _, h, xs => prefixLe h xs
   | k + 1, m + 1, n, h, xs =>
-    0 +> @shr' k m n (le_trans (Nat.le_succ _) h) xs
+    sign +> @shiftRightCore sign k m n (le_trans (Nat.le_succ _) h) xs
 
 def Bits.shr (m : Nat) {n} (xs : Bits n) : Bits n :=
-  Bits.shr' m (le_refl n) xs
+  shiftRightCore 0 m (le_refl n) xs
+
+def Bits.sar (m : Nat) : ∀ {n}, Bits n → Bits n
+  | 0, ⦃⦄ => ⦃⦄
+  | _ + 1, x +> xs =>
+    shiftRightCore x m (le_refl _) (x +> xs)
 
 def Bits.isNeg : ∀ {n : ℕ}, Bits n → Bool
   | 0, _ => false
   | _ + 1, x +> _ => x
-
-def B256.isNeg : B256 → Bool := B256.highBit
 
 def Bits.neg {n : ℕ} (xs : Bits n) : Bits n := (~ xs).succ
 
@@ -689,15 +688,15 @@ instance : Sub B256 := ⟨B256.sub⟩
 
 def B256.neg (xs : B256) : B256 := (~~~ xs) + B256.one
 
-def Bits.sar (m : Nat) {n} (xs : Bits n) : Bits n :=
-  if isNeg xs
-  then neg (shr m (neg xs))
-  else shr m xs
-
-def B256.sar (m : Nat) (xs : B256) : B256 :=
-  if isNeg xs
-  then neg ((neg xs) >>> m)
-  else (xs >>> m)
+-- def Bits.sar (m : Nat) {n} (xs : Bits n) : Bits n :=
+--   if isNeg xs
+--   then neg (shr m (neg xs))
+--   else shr m xs
+--
+-- def B256.sar (m : Nat) (xs : B256) : B256 :=
+--   if isNeg xs
+--   then neg ((neg xs) >>> m)
+--   else (xs >>> m)
 
 def Bits.append : ∀ {m n}, Bits m → Bits n → Bits (n + m)
   | 0, _, ⦃⦄, ys => ys
@@ -2020,8 +2019,6 @@ def Bits.bexp {m : Nat} (xs ys : Bits m) : Bits m :=
 
 instance : HPow B256 B256 B256 := ⟨B256.bexp⟩
 
-#eval (UInt8.toUInt16 (255 : B8)) + (UInt8.toUInt16 (255 : B8))
-
 def B8.carryAdd (x y : B8) : B8 × B8 :=
   let sum : B16 := UInt8.toUInt16 x + UInt8.toUInt16 y
   ⟨sum.highs, sum.lows⟩
@@ -2032,7 +2029,7 @@ def B8.carryMul (x y : B8) : B8 × B8 :=
 
 /-- Efficient modular exponentiation using the square-and-multiply algorithm -/
 def Nat.powMod (base exp m : Nat) : Nat :=
-  if m = 0 then 0 else
+  if m ≤ 1 then 0 else
     let rec go (e : Nat) (b : Nat) (res : Nat) : Nat :=
       match e with
       | 0 => res
