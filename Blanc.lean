@@ -883,7 +883,11 @@ def calculateMemoryGasCost (memSize : Nat) : Nat :=
   linearCost + quadraticCost
 
 
-def Mem : Type := Array B8
+structure Mem' : Type where
+  data : Array B8
+  size : Nat
+
+def Mem'.empty : Mem' := ⟨.empty, 0⟩
 
 structure Log : Type where
   (address : Adr)
@@ -907,7 +911,7 @@ structure Environment : Type where
   chain_id: B64
   excess_blob_gas: Nat
   blob_versioned_hashes: List B256
-  transient_storage: Tra --transient storage
+  transient_storage: Tra
 
 structure Message : Type where
   caller: Adr
@@ -923,7 +927,6 @@ structure Message : Type where
   is_static: Bool
   accessed_addresses: AdrSet
   accessed_storage_keys: KeySet
-  -- parent_evm: Option Evm
 
 abbrev ExceptionalHalt (err : String) : Prop :=
   err ∈ [
@@ -950,28 +953,18 @@ def isInvalidTransaction (err : String) : Bool :=
 def isEthereumException (err : String) : Bool :=
   hasErrorType err "InvalidBlock" || isInvalidTransaction err
 
--- #exit
---
---
--- #exit
--- def isException (ex : String) (exs : List String) : Bool :=
---   let aux (s : String) : Bool :=
---     s = ex || String.isPrefixOf (s ++ " : ") ex
---   exs.any aux
-
 def isRlpException (err : String) : Bool :=
   List.any ["EncodingError", "DecodingError"] (hasErrorType err)
 
 structure Evm : Type where
   pc : Nat
   stack: List B256
-  memory: Mem
+  memory: Mem'
   code: ByteArray
   gas_left: Nat
   env: Environment
   logs: List Log
   refund_counter: Int
-  running: Bool
   message: Message
   output: B8L
   accounts_to_delete: AdrSet
@@ -979,6 +972,151 @@ structure Evm : Type where
   error: Option String
   accessed_addresses: AdrSet
   accessed_storage_keys: KeySet
+
+
+def Stack.toStrings (stack : List B256) : List String :=
+  fork "STACK" [
+    ["-------------------------- STACK TOP ---------------------------"] ++
+    stack.map B256.toHex ++
+    ["------------------------- STACK BOTTOM -------------------------"]
+
+  ]
+
+def Mem.toStrings (mem : Mem') : List String :=
+  fork "MEM" [
+    String.chunks 64 <| B8L.toHex mem.data.toList
+  ]
+
+def mkSingleton {ξ : Type u} : ξ → List ξ
+  | x => [x]
+
+def Log.toStrings (l : Log) : List String :=
+  fork "log" [
+    [s!"address : {l.address.toHex}"],
+    fork "topics" (l.topics.map (mkSingleton ∘ B256.toHex)),
+    fork "data" [String.chunks 64 l.data.toHex]
+  ]
+
+
+def Tra.toStrings (tra : Tra) : List String :=
+  fork "TRANSIENT STORAGE" <| tra.toList.map <|
+    fun kv =>
+      fork kv.fst.toHex <| kv.snd.toList.map <|
+        mkSingleton ∘ fun kv' => s!"{kv'.fst.toHex} : {B256.toHex kv'.snd}"
+
+-- structure Message : Type where
+--   caller: Adr
+--   target: Option Adr
+--   current_target: Adr
+--   gas: Nat
+--   value: B256
+--   data: B8L
+--   code_address: Option Adr
+--   code: ByteArray
+--   depth: Nat
+--   should_transfer_value: Bool
+--   is_static: Bool
+--   accessed_addresses: AdrSet
+--   accessed_storage_keys: KeySet
+
+def Message.toStrings (msg : Message) : List String  :=
+  fork "MESSAGE" [
+    [s!"caller : {msg.caller.toHex}"],
+    [s!"target : {(msg.target.rec "NONE" Adr.toHex : String)}"],
+    [s!"current target : {msg.current_target.toHex}"],
+    [s!"gas : {msg.gas}"],
+    [s!"value : {msg.value.toHex}"],
+    [s!"data : {msg.data.toHex}"],
+    [s!"code address : {(msg.code_address.rec "None" Adr.toHex : String)}"],
+    fork "CODE" [String.chunks 64 <| B8L.toHex msg.code.toList],
+    [s!"depth : {msg.depth}"],
+    [s!"should transfer value : {msg.should_transfer_value}"],
+    [s!"is static : {msg.is_static}"],
+    fork "ACCESSED ADDRESSES"
+      (msg.accessed_addresses.toList.map (mkSingleton ∘ Adr.toHex)),
+    fork "ACCESSED STORAGE KEYS"
+      (msg.accessed_storage_keys.toList.map (fun kv => [s!"{kv.fst.toHex} : {B256.toHex kv.snd}"]))
+  ]
+
+-- structure Environment : Type where
+--   caller : Adr
+--   block_hashes : List B256
+--   origin : Adr
+--   coinbase : Adr
+--   number : Nat
+--   base_fee_per_gas : Nat
+--   gas_limit : Nat
+--   gas_price : Nat
+--   time : B256
+--   prev_randao: B256
+--   state: Wor
+--   orig_state : Wor
+--   created_accounts : AdrSet
+--   chain_id: B64
+--   excess_blob_gas: Nat
+--   blob_versioned_hashes: List B256
+--   transient_storage: Tra
+
+def Environment.toStrings (env : Environment) : List String :=
+  fork "ENVIRONMENT" [
+    [s!"caller : {env.caller.toHex}"],
+    fork "block hashes" (env.block_hashes.map (mkSingleton ∘ B256.toHex)),
+    [s!"origin : {env.origin.toHex}"],
+    [s!"coinbase : {env.coinbase.toHex}"],
+    [s!"number : {env.number}"],
+    [s!"base fee per gas : {env.base_fee_per_gas}"],
+    [s!"gas limit : {env.gas_limit}"],
+    [s!"gas price : {env.gas_price}"],
+    [s!"time : {env.time.toHex}"],
+    [s!"prev randao : {env.prev_randao.toHex}"],
+    fork "STATE" [Wor.toStrings env.state],
+    fork "ORIGINAL STATE" [Wor.toStrings env.orig_state],
+    fork "created accounts" (env.created_accounts.toList.map (mkSingleton ∘ Adr.toHex)),
+    [s!"chain ID : {env.chain_id}"],
+    [s!"excess blob gas : {env.excess_blob_gas}"],
+    fork "blob versioned hashes" (env.blob_versioned_hashes.map (mkSingleton ∘ B256.toHex)),
+    Tra.toStrings env.transient_storage
+  ]
+
+-- structure Evm : Type where
+--   pc : Nat
+--   stack: List B256
+--   memory: Mem
+--   code: ByteArray
+--   gas_left: Nat
+--   env: Environment
+--   logs: List Log
+--   refund_counter: Int
+--   running: Bool
+--   message: Message
+--   output: B8L
+--   accounts_to_delete: AdrSet
+--   return_data: B8L
+--   error: Option String
+--   accessed_addresses: AdrSet
+--   accessed_storage_keys: KeySet
+
+
+def Evm.toStrings (evm : Evm) : List String :=
+  fork "EVM" [
+    [s!"PC : {evm.pc}"],
+    Stack.toStrings evm.stack,
+    Mem.toStrings evm.memory,
+    [s!"CODE : {B8L.toHex evm.code.toList}"],
+    [s!"GAS LEFT : {evm.gas_left}"],
+    Environment.toStrings evm.env,
+    fork "LOGS" (evm.logs.map Log.toStrings),
+    [s!"REFUND COUNTER : {evm.refund_counter}"],
+    Message.toStrings evm.message,
+    [s!"output : {evm.output.toHex}"],
+    fork "ACCOUNTS TO DELETE"
+      (evm.accounts_to_delete.toList.map (mkSingleton ∘ Adr.toHex)),
+    [s!"return data : {evm.return_data.toHex}"],
+    fork "ACCESSED ADDRESSES"
+      (evm.accessed_addresses.toList.map (mkSingleton ∘ Adr.toHex)),
+    fork "ACCESSED STORAGE KEYS"
+      (evm.accessed_storage_keys.toList.map (fun kv => [s!"{kv.fst.toHex} : {B256.toHex kv.snd}"]))
+  ]
 
 def Adr.toNat (x : Adr) : Nat :=
   x.high.toNat * (2 ^ 128) +
@@ -1078,9 +1216,31 @@ deriving DecidableEq
 -- abbrev BNF : Type := ZMod altBn128Prime
 abbrev BNF : Type := FinField altBn128Prime
 
-structure Point : Type where
+instance : ToString BNF := ⟨fun x => toString x.val⟩
+
+def FinField.mkMod {p : Nat} (n : Nat) : FinField p := ⟨n % p⟩
+
+instance {p n : Nat} : OfNat (FinField p) n := ⟨.mkMod n⟩
+
+structure BNP : Type where
   (x : BNF)
   (y : BNF)
+
+-- structure GaloisField (p : Nat) (m : List (FinField p)) : Type where
+--   (val : List (FinField p))
+
+abbrev BNF2 : Type :=
+  FinField altBn128Prime × FinField altBn128Prime
+  -- GaloisField altBn128Prime [1]
+
+structure BNP2 : Type where
+  (x : BNF2)
+  (y : BNF2)
+
+def BNP2.toString : BNP2 → String
+  | ⟨x, y⟩ => s!"⟨{x}, {y}⟩"
+
+instance : ToString BNP2 := ⟨BNP2.toString⟩
 
 def Nat.toHexit : Nat → Char
   | 0 => '0'
@@ -1111,14 +1271,11 @@ def Nat.toHexCore : Nat → List Char
 def Nat.toHex (n : Nat) : String :=
   ⟨.reverse <| n.toHexCore⟩
 
-def Point.toString : Point → String
+def BNP.toString : BNP → String
   | ⟨x, y⟩ => s!"⟨{x.val.toHex}, {y.val.toHex}⟩"
 
-instance : ToString Point := ⟨Point.toString⟩
+instance : ToString BNP := ⟨BNP.toString⟩
 
-def FinField.mkMod {p : Nat} (n : Nat) : FinField p := ⟨n % p⟩
-
-instance {p n : Nat} : OfNat (FinField p) n := ⟨.mkMod n⟩
 
 def FinField.pow {p : Nat} (b : FinField p) (e : Nat) : FinField p :=
   ⟨Nat.powMod b.val e p⟩
@@ -1140,7 +1297,11 @@ def FinField.mul {p : Nat} (x y : FinField p) : FinField p :=
 
 instance {p} : HMul (FinField p) (FinField p) (FinField p) := ⟨FinField.mul⟩
 
-def Point.mk? (x : Nat) (y : Nat) : Option Point := do
+def BNF2.mk (x y : Nat) : BNF2 :=
+  ⟨FinField.mkMod x, FinField.mkMod y⟩
+
+
+def BNP.mk? (x : Nat) (y : Nat) : Option BNP := do
   let x' : BNF := FinField.mkMod x
   let y' : BNF := FinField.mkMod y
   if (x' = 0 ∧ y' = 0)
@@ -1170,7 +1331,6 @@ def extEuclid (x y : Nat) : Int × Int × Nat :=
   else ⟨0, 1, y⟩
 termination_by (x + y)
 
-
 def FinField.inv {p : Nat} (x : FinField p) : FinField p :=
   let ⟨c, _, _⟩ := extEuclid x.val p
   ⟨(c % p).natAbs⟩
@@ -1181,7 +1341,155 @@ def FinField.div {p : Nat} (x y : FinField p) : FinField p := x * (y⁻¹)
 
 instance {p} : HDiv (FinField p) (FinField p) (FinField p) := ⟨FinField.div⟩
 
-def Point.double (p : Point) : Point :=
+instance {k} : Inhabited (FinField k) := ⟨0⟩
+
+
+def BNF2.modulus : List (FinField altBn128Prime) := [1, 0]
+def BNF2.prime : Nat := altBn128Prime
+
+def BNF2.mul (x y : BNF2) : BNF2 :=
+  let modulus := BNF2.modulus
+  let degree : Nat := BNF2.modulus.length
+  -- let prime := BNF2.prime
+  let self : Array (FinField altBn128Prime) := #[x.fst, x.snd]
+  let right : Array (FinField altBn128Prime) := #[y.fst, y.snd]
+
+  let aux : Id BNF2 := do
+    let mut mul : Array (FinField altBn128Prime) := .mkArray (degree * 2) 0
+
+    for i in List.range degree do
+      for j in List.range degree do
+        mul := mul.set! (i + j) (mul.get! (i + j) + (self.get! i * right.get! j))
+
+    for i in (List.range degree).reverse.map (· + 2) do
+      for j in (List.range degree).map (· + (i - degree)) do
+        mul := mul.set! j (mul.get! j - (mul.get! i * modulus.get! (degree - (i - j))))
+
+    return ⟨mul.get! 0, mul.get! 1⟩
+
+  aux.run
+
+instance : HMul BNF2 BNF2 BNF2 := ⟨BNF2.mul⟩
+
+def BNF2.add (x y : BNF2) : BNF2 :=
+  ⟨FinField.add x.fst y.fst, FinField.add x.snd y.snd⟩
+
+instance : HAdd BNF2 BNF2 BNF2 := ⟨BNF2.add⟩
+
+def BNF2.fromNat (i : Nat) : BNF2 := ⟨FinField.mkMod i, 0⟩
+
+def BNF2.pow (x : BNF2) : Nat → BNF2
+  | 0 => BNF2.fromNat 1
+  | n@(_ + 1) =>
+    let root := BNF2.pow x (n / 2)
+    let whole := BNF2.mul root root
+    if (n % 2) = 0
+    then whole
+    else BNF2.mul whole x
+
+instance : HPow BNF2 Nat BNF2 := ⟨BNF2.pow⟩
+
+def lastNonzeroPos (xs : List (FinField altBn128Prime)) : Option Nat :=
+  let rec aux : List (FinField altBn128Prime) → Option Nat
+    | [] => none
+    | x :: xs =>
+      if x ≠ 0 then some xs.length
+      else aux xs
+  aux xs.reverse
+
+def lastNonzeroPos' (xs : List (FinField altBn128Prime)) : Nat :=
+  (lastNonzeroPos xs).getD xs.length
+
+def BNF2.deg (self : BNF2) : Option Nat :=
+  (lastNonzeroPos [self.fst, self.snd]) --.toExcept "ValueError"
+
+
+def BNF2.euclid (x1 x2 f1 f2 : List (FinField altBn128Prime))
+  (d1 d2 : Nat) : Option (List (FinField altBn128Prime)) :=
+  match d1, d2 with
+  | 0, _ =>
+    let q := (x1.get! 0)⁻¹
+    return (f1.map (· * q))
+  | _, 0 =>
+    let q := (x2.get! 0)⁻¹
+    return (f2.map (· * q))
+  | d1@(_ + 1), d2@(_ + 1) =>
+    if d1 < d2
+    then do
+      let q := (x2.get! d2) * (x1.get! d1)⁻¹
+      let mut x2 := x2
+      let mut f2 := f2
+      for i in List.range (BNF2.modulus.length - (d2 - d1)) do
+        let pos := i + (d2 - d1)
+        x2 := x2.set pos ((x2.get! pos) - q * x1.get! i)
+        f2 := f2.set pos ((f2.get! pos) - q * f1.get! i)
+      let d2' := lastNonzeroPos' (x2.take d2)
+      if d2' < d2
+      then BNF2.euclid x1 x2 f1 f2 d1 d2'
+      else none --.error "ERROR : d2 failed to decrease"
+    else do
+      let q := (x1.get! d1) * (x2.get! d2)⁻¹
+      let mut x1 := x1
+      let mut f1 := f1
+      for i in List.range (BNF2.modulus.length - (d1 - d2)) do
+        let pos := i + (d1 - d2)
+        x1 := x1.set pos ((x1.get! pos) - q * x2.get! i)
+        f1 := f1.set pos ((f1.get! pos) - q * f2.get! i)
+      let d1' := lastNonzeroPos' (x1.take d1)
+      if d1' < d1
+      then BNF2.euclid x1 x2 f1 f2 d1' d2
+      else none--.error "ERROR : d1 failed to decrease"
+termination_by (d1 + d2)
+
+
+def BNF2.inv (self : BNF2) : Option BNF2 := do
+  let mut x1 : List (FinField altBn128Prime) := BNF2.modulus
+  let mut x2 : List (FinField altBn128Prime) := [self.fst, self.snd] --BNF2.modulus
+  let mut f1 : List (FinField altBn128Prime) := [0, 0]
+  let mut f2 : List (FinField altBn128Prime) := [1, 0]
+
+  let d2 ← self.deg
+
+  let q0 := (x2.get! d2)⁻¹
+
+  for i in List.range d2 do
+    let pos := i + x1.length - d2
+    x1 := x1.set pos (x1.get! pos - (q0 * x2.get! i))
+    f1 := f1.set pos (f1.get! pos - (q0 * f2.get! i))
+
+  let d1 ← (lastNonzeroPos x1)
+
+  let ans : List (FinField altBn128Prime) ← do
+    BNF2.euclid x1 x2 f1 f2 d1 d2
+
+  .some ⟨ans.get! 0, ans.get! 1⟩
+
+
+def BNF2.i : BNF2 := ⟨0, 1⟩
+
+
+def BNF2.div (x y : BNF2) : Option BNF2 := do
+  let y_inv ← y.inv
+  return x * y_inv
+
+-- instance : HDiv BNF2 BNF2 BNF2 := ⟨.div⟩
+
+def BNP2.mk? (x : BNF2) (y : BNF2) : Option BNP2 := do
+  let A : BNF2 := 0
+  let B : BNF2 ←  BNF2.div (BNF2.fromNat 3) (BNF2.i + BNF2.fromNat 9)
+  if (x = 0 ∧ y = 0)
+  then some ⟨0, 0⟩
+  else
+    dbg_trace s!"x ^ 3 : {x ^ 3}"
+    dbg_trace s!"y ^ 2 : {y ^ 2}"
+    dbg_trace s!"A : {A}"
+    dbg_trace s!"B : {B}"
+
+    if y ^ 2 = (x ^ 3) + (A * x) + B
+    then some ⟨x, y⟩
+    else none
+
+def BNP.double (p : BNP) : BNP :=
   if p.x = 0 ∧ p.y = 0
   then p
   else
@@ -1190,14 +1498,14 @@ def Point.double (p : Point) : Point :=
     let y := lam * (p.x - x) - p.y
     ⟨x, y⟩
 
-def Point.add : Point → Point → Point
+def BNP.add : BNP → BNP → BNP
   | ⟨0, 0⟩, q => q
   | p, ⟨0, 0⟩ => p
   | ⟨selfX, selfY⟩, ⟨otherX, otherY⟩ =>
     if selfX = otherX
     then
       if selfY = otherY
-      then Point.double ⟨selfX, selfY⟩
+      then BNP.double ⟨selfX, selfY⟩
       else ⟨0, 0⟩
     else
       let yDiff := otherY - selfY
@@ -1207,16 +1515,16 @@ def Point.add : Point → Point → Point
       let y := lam * (selfX - x) - selfY
       ⟨x, y⟩
 
-def Point.mul (p : Point) : Nat → Point
+def BNP.mul (p : BNP) : Nat → BNP
   | 0 => ⟨0, 0⟩
   | n@(_ + 1) =>
-    let half := Point.mul p (n / 2)
-    let whole := Point.add half half
+    let half := BNP.mul p (n / 2)
+    let whole := BNP.add half half
     if (n % 2) = 0
     then whole
-    else Point.add whole p
+    else BNP.add whole p
 
-def Point.toB8L (p : Point) : B8L :=
+def BNP.toB8L (p : BNP) : B8L :=
   p.x.val.toB8LNew.pack 32 ++ p.y.val.toB8LNew.pack 32
 
 def ecadd (input : B8L) : Option B8L := do
@@ -1224,17 +1532,17 @@ def ecadd (input : B8L) : Option B8L := do
   let py : Nat := B8L.toNat <| input.sliceD 32 32 (0 : B8)
   let qx : Nat := B8L.toNat <| input.sliceD 64 32 (0 : B8)
   let qy : Nat := B8L.toNat <| input.sliceD 96 32 (0 : B8)
-  let p ← Point.mk? px py
-  let q ← Point.mk? qx qy
-  let s := Point.add p q
+  let p ← BNP.mk? px py
+  let q ← BNP.mk? qx qy
+  let s := BNP.add p q
   some s.toB8L
 
 def ecmul (input : B8L) : Option B8L := do
   let px : Nat := B8L.toNat <| input.sliceD 0 32 (0 : B8)
   let py : Nat := B8L.toNat <| input.sliceD 32 32 (0 : B8)
   let n  : Nat := B8L.toNat <| input.sliceD 64 32 (0 : B8)
-  let p ← Point.mk? px py
-  let s := Point.mul p n
+  let p ← BNP.mk? px py
+  let s := BNP.mul p n
   some s.toB8L
 
 def execute_ecadd (evm : Evm) : Except (Evm × String) Evm := do
@@ -1251,9 +1559,9 @@ def execute_ecadd (evm : Evm) : Except (Evm × String) Evm := do
       x1_value < altBn128Prime ∧ x1_value < altBn128Prime )
     ⟨evm, "OutOfGasError"⟩
 
-  let p0 ← (Point.mk? x0_value y0_value).toExcept ⟨evm, "OutOfGasError"⟩
-  let p1 ← (Point.mk? x1_value y1_value).toExcept ⟨evm, "OutOfGasError"⟩
-  .ok {evm with output := (Point.add p0 p1).toB8L}
+  let p0 ← (BNP.mk? x0_value y0_value).toExcept ⟨evm, "OutOfGasError"⟩
+  let p1 ← (BNP.mk? x1_value y1_value).toExcept ⟨evm, "OutOfGasError"⟩
+  .ok {evm with output := (BNP.add p0 p1).toB8L}
 
 def execute_ecmul (evm : Evm) : Except (Evm × String) Evm := do
   let data := evm.message.data
@@ -1267,9 +1575,9 @@ def execute_ecmul (evm : Evm) : Except (Evm × String) Evm := do
     (x_value < altBn128Prime ∧ y_value < altBn128Prime)
     ⟨evm, "OutOfGasError"⟩
 
-  let p ← (Point.mk? x_value y_value).toExcept ⟨evm, "OutOfGasError"⟩
+  let p ← (BNP.mk? x_value y_value).toExcept ⟨evm, "OutOfGasError"⟩
 
-  .ok {evm with output := (Point.mul p n).toB8L}
+  .ok {evm with output := (BNP.mul p n).toB8L}
 
 inductive Ninst' : Type
   | reg : Rinst → Ninst'
@@ -1370,6 +1678,27 @@ def Evm.pop (evm : Evm) : Except (Evm × String) (B256 × Evm) := do
   match evm.stack with
   | [] => .error ⟨evm, "StackUnderflowError"⟩
   | x :: xs => .ok ⟨x, {evm with stack := xs}⟩
+
+def Evm.stackTop (evm : Evm) : Except (Evm × String) B256 := do
+  match evm.stack with
+  | [] => .error ⟨evm, "StackUnderflowError"⟩
+  | x :: _ => .ok x
+
+def Evm.stackTop6 (evm : Evm) :
+  Except (Evm × String) (B256 × B256 × B256 × B256 × B256 × B256) := do
+  match evm.stack with
+  | x :: y :: z :: a :: b :: c :: _ => .ok ⟨x, y, z, a, b, c⟩
+  | _ => .error ⟨evm, "StackUnderflowError"⟩
+
+def Evm.pop' (evm : Evm) : Except (Evm × String) Evm := do
+  match evm.stack with
+  | [] => .error ⟨evm, "StackUnderflowError"⟩
+  | _ :: xs => .ok {evm with stack := xs}
+
+def Evm.pop6 (evm : Evm) : Except (Evm × String) Evm := do
+  match evm.stack with
+  | _ :: _ :: _ :: _ :: _ :: _ :: xs => .ok {evm with stack := xs}
+  | _ => .error ⟨evm, "StackUnderflowError"⟩
 
 def Prod.mapFst {α₁ : Type u₁} {α₂ : Type u₂} {β : Type v} (f : α₁ → α₂) : α₁ × β → α₂ × β :=
   Prod.map f id
@@ -1556,28 +1885,31 @@ def ceil32 (n : Nat) : Nat :=
   | 0 => n
   | m@(_ + 1) => n + 32 - m
 
-def Mem.write (μ : Mem) (n : ℕ) : B8L → Mem
+def Mem'.write (μ : Mem') (n : ℕ) : B8L → Mem'
   | [] => μ
   | xs@(_ :: _) =>
     if n + xs.length ≤ μ.size
-    then Array.writeD μ n xs
-    else let μ₀ : Mem := Array.mkArray (ceil32 (n + xs.length)) 0x00
-         Array.writeD (Array.copyD μ μ₀) n xs
+    then
+      if n + xs.length ≤ μ.data.size
+      then
+        ⟨Array.writeD μ.data n xs, μ.size⟩
+      else
+        let blank : Array B8 := Array.mkArray (n + xs.length) 0x00
+        ⟨Array.writeD (Array.copyD μ.data blank) n xs, μ.size⟩
 
-def Mem.extend (μ : Mem) (index size : Nat) : Mem :=
-  let size := memExtSize μ.size index size
-  if size ≤ μ.size
-  then μ
-  else Array.copyD μ <| Array.mkArray size 0x00
+    else
+      let newSize := ceil32 (n + xs.length)
+      let blank : Array B8 := Array.mkArray newSize 0x00
+      ⟨Array.writeD (Array.copyD μ.data blank) n xs, newSize⟩
 
-def Mem.extends (μ : Mem) (pairs : List (Nat × Nat)) : Mem :=
-  let size := memExtsSize μ.size pairs
-  if size ≤ μ.size
-  then μ
-  else Array.copyD μ <| Array.mkArray size 0x00
+def Mem'.extend (μ : Mem') (index size : Nat) : Mem' :=
+  ⟨μ.data, memExtSize μ.size index size⟩
 
-def Mem.read (μ : Mem) (index size : ℕ) : B8L × Mem :=
-  ⟨μ.sliceD index size 0, μ.extend index size⟩
+def Mem'.extends (μ : Mem') (pairs : List (Nat × Nat)) : Mem' :=
+  ⟨μ.data, memExtsSize μ.size pairs⟩
+
+def Mem'.read (μ : Mem') (index size : ℕ) : B8L × Mem' :=
+  ⟨μ.data.sliceD index size 0, μ.extend index size⟩
 
 def Dead (w : Wor) (a : Adr) : Prop :=
   match w.find? a with
@@ -1766,17 +2098,26 @@ def Rinst.run (evm : Evm) : Rinst → Execution
     let ⟨value, evm⟩  := evm.memRead start_index 32
     evm.push (B8L.toB256P value) >>= Evm.incrPc
   | .mstore => do
-    let ⟨start_index, evm⟩ ← evm.popToNat
-    let ⟨value, evm⟩ ← evm.pop
+    -- let ⟨start_index, evm⟩ ← evm.popToNat
+    let start_index ← evm.stackTop <&> B256.toNat
+    let mut evm ← evm.pop'
+
+    -- let ⟨value, evm⟩ ← evm.pop
+    let value ← evm.stackTop
+    evm ← evm.pop'
+
     let extend_memory_cost := evm.extCost [⟨start_index, 32⟩]
-    let evm ← chargeGas (gVerylow + extend_memory_cost) evm
-    Evm.incrPc <| evm.memWrite start_index value.toB8L
+    evm ← chargeGas (gVerylow + extend_memory_cost) evm
+    evm := evm.memWrite start_index value.toB8L
+    evm.incrPc -- <| evm.memWrite start_index value.toB8L
+
   | .mstore8 => do
     let ⟨start_index, evm⟩ ← evm.popToNat
     let ⟨value, evm⟩ ← evm.pop
     let extend_memory_cost := evm.extCost [⟨start_index, 1⟩]
     let evm ← chargeGas (gVerylow + extend_memory_cost) evm
-    Evm.incrPc <| evm.memWrite start_index [value.2.2.toUInt8]
+    let evm := evm.memWrite start_index [value.2.2.toUInt8]
+    Evm.incrPc evm
   | .gas => do
     let evm ← chargeGas gBase evm
     evm.push evm.gas_left.toB256 >>= Evm.incrPc
@@ -1993,13 +2334,12 @@ instance : Inhabited Evm := ⟨
   {
     pc := 0
     stack := []
-    memory := .empty
+    memory := ⟨.empty, 0⟩
     code := .empty
     gas_left := 0
     env := default
     logs := []
     refund_counter := 0
-    running := false
     message := default
     output := []
     accounts_to_delete := .empty
@@ -2100,7 +2440,7 @@ def Evm.addBal (evm : Evm) (adr : Adr) (val : B256) : Evm :=
   {evm with env := evm.env.addBal adr val}
 
 def Linst.run (evm : Evm) : Linst → Execution
-  | .stop => .ok {evm with running := false, pc := evm.pc + 1}
+  | .stop => .ok {evm with pc := evm.pc + 1}
   | .rev => do
     let ⟨memory_start_index, evm⟩ ← evm.popToNat
     let ⟨size, evm⟩ ← evm.popToNat
@@ -2117,7 +2457,7 @@ def Linst.run (evm : Evm) : Linst → Execution
 
     let evm ← chargeGas cost evm
     let ⟨output, evm⟩ := evm.memRead index size
-    .ok {evm with running := false, output := output}
+    .ok {evm with output := output}
   | .dest => do
     let donor := evm.contract
     let ⟨donee, evm⟩ ← evm.pop <&> Prod.mapFst B256.toAdr
@@ -2144,7 +2484,7 @@ def Linst.run (evm : Evm) : Linst → Execution
     if donor ∈ evm.env.created_accounts
       then evm := add_account_to_delete (evm.setBal donor 0) donor
 
-    .ok {evm with running := false}
+    .ok evm
 
 def except64th (n : Nat) : Nat := n - (n / 64)
 
@@ -2170,19 +2510,112 @@ def ALT_BN128_PAIRING_CHECK_ADDRESS : Adr := 0x08
 def BLAKE2F_ADDRESS : Adr := 0x09
 def POINT_EVALUATION_ADDRESS : Adr := 0x0a
 
-def incorporateChildOnError (evm child : Evm) : Evm :=
-  {evm with gas_left := evm.gas_left + child.gas_left}
+structure EvmSansEnv : Type where
+  pc : Nat
+  stack: List B256
+  memory: Mem'
+  code: ByteArray
+  gas_left: Nat
+  logs: List Log
+  refund_counter: Int
+  message: Message
+  output: B8L
+  accounts_to_delete: AdrSet
+  return_data: B8L
+  error: Option String
+  accessed_addresses: AdrSet
+  accessed_storage_keys: KeySet
 
-def incorporateChildOnSuccess (evm child : Evm) : Evm :=
+def Evm.toEvmSansEnv (evm : Evm) : EvmSansEnv :=
   {
-    evm with
-    gas_left := evm.gas_left + child.gas_left
-    logs := child.logs ++ evm.logs
-    refund_counter := evm.refund_counter + child.refund_counter
-    accounts_to_delete := evm.accounts_to_delete.union child.accounts_to_delete
-    accessed_addresses := evm.accessed_addresses.union child.accessed_addresses
-    accessed_storage_keys := evm.accessed_storage_keys.union child.accessed_storage_keys
+    pc := evm.pc
+    stack := evm.stack
+    memory := evm.memory
+    code := evm.code
+    gas_left := evm.gas_left
+    logs := evm.logs
+    refund_counter := evm.refund_counter
+    message := evm.message
+    output := evm.output
+    accounts_to_delete := evm.accounts_to_delete
+    return_data := evm.return_data
+    error := evm.error
+    accessed_addresses := evm.accessed_addresses
+    accessed_storage_keys := evm.accessed_storage_keys
   }
+
+def EvmSansEnv.toEvm (ese : EvmSansEnv) (env : Environment) : Evm :=
+  {
+    pc := ese.pc
+    stack := ese.stack
+    memory := ese.memory
+    code := ese.code
+    gas_left := ese.gas_left
+    env := env
+    logs := ese.logs
+    refund_counter := ese.refund_counter
+    message := ese.message
+    output := ese.output
+    accounts_to_delete := ese.accounts_to_delete
+    return_data := ese.return_data
+    error := ese.error
+    accessed_addresses := ese.accessed_addresses
+    accessed_storage_keys := ese.accessed_storage_keys
+  }
+
+def incorporateChildOnError (ese : EvmSansEnv) (child : Evm)
+  (returnData : B8L) : Evm :=
+  {
+    pc := ese.pc
+    stack := ese.stack
+    memory := ese.memory
+    code := ese.code
+    gas_left := ese.gas_left + child.gas_left
+    env := child.env
+    logs := ese.logs
+    refund_counter := ese.refund_counter
+    message := ese.message
+    output := ese.output
+    accounts_to_delete := ese.accounts_to_delete
+    return_data := returnData
+    error := ese.error
+    accessed_addresses := ese.accessed_addresses
+    accessed_storage_keys := ese.accessed_storage_keys
+  }
+
+def incorporateChildOnSuccess (ese : EvmSansEnv) (child : Evm)
+  (returnData : B8L) : Evm :=
+  {
+    pc := ese.pc
+    stack := ese.stack
+    memory := ese.memory
+    code := ese.code
+    gas_left := ese.gas_left + child.gas_left
+    env := child.env
+    logs := child.logs ++ ese.logs
+    refund_counter := ese.refund_counter + child.refund_counter
+    message := ese.message
+    output := ese.output
+    accounts_to_delete := ese.accounts_to_delete.union child.accounts_to_delete
+    return_data := returnData
+    error := ese.error
+    accessed_addresses := ese.accessed_addresses.union child.accessed_addresses
+    accessed_storage_keys := ese.accessed_storage_keys.union child.accessed_storage_keys
+  }
+
+-- def incorporateChildOnError (ec : EvmCarryover) (child : Evm) : Evm :=
+--   {evm with gas_left := evm.gas_left + child.gas_left}
+--
+-- def incorporateChildOnSuccess (evm child : Evm) : Evm :=
+--   {
+--     evm with
+--     gas_left := evm.gas_left + child.gas_left
+--     logs := child.logs ++ evm.logs
+--     refund_counter := evm.refund_counter + child.refund_counter
+--     accounts_to_delete := evm.accounts_to_delete.union child.accounts_to_delete
+--     accessed_addresses := evm.accessed_addresses.union child.accessed_addresses
+--     accessed_storage_keys := evm.accessed_storage_keys.union child.accessed_storage_keys
+--   }
 
 def compute_contract_address (sender : Adr) (nonce : B64) : Adr :=
   let LA : B8L :=
@@ -2228,12 +2661,11 @@ def Environment.rollback
 def Evm.rollback (evm : Evm) (wor : Wor) (tra : Tra) : Evm :=
   {evm with env := evm.env.rollback wor tra}
 
-def liftToExecution (evm : Evm)
+def liftToExecution (ese : EvmSansEnv)
   (f : Except (Environment × String) Evm) : Execution := do
   match f with
-  | .error ⟨env, ex⟩ => .error ⟨{evm with env := env}, ex⟩
+  | .error ⟨env, ex⟩ => .error ⟨ese.toEvm env, ex⟩
   | .ok evm => .ok evm
-
 
 def GAS_ECRECOVER : Nat := 3000
 
@@ -2468,10 +2900,10 @@ def executeEcadd (evm : Evm) : Execution := do
       x1 < altBn128Prime ∧ x1 < altBn128Prime )
     ⟨evm, "OutOfGasError"⟩
 
-  let p0 ← (Point.mk? x0 y0).toExcept ⟨evm, "OutOfGasError"⟩
-  let p1 ← (Point.mk? x1 y1).toExcept ⟨evm, "OutOfGasError"⟩
+  let p0 ← (BNP.mk? x0 y0).toExcept ⟨evm, "OutOfGasError"⟩
+  let p1 ← (BNP.mk? x1 y1).toExcept ⟨evm, "OutOfGasError"⟩
 
-  .ok {evm with output := (Point.add p0 p1).toB8L}
+  .ok {evm with output := (BNP.add p0 p1).toB8L}
 
 def executeEcmul (evm : Evm) : Execution := do
   let data := evm.message.data
@@ -2483,9 +2915,9 @@ def executeEcmul (evm : Evm) : Execution := do
   .assert
     (x < altBn128Prime ∧ y < altBn128Prime)
     ⟨evm, "OutOfGasError"⟩
-  let p ← (Point.mk? x y).toExcept ⟨evm, "OutOfGasError"⟩
+  let p ← (BNP.mk? x y).toExcept ⟨evm, "OutOfGasError"⟩
 
-  .ok {evm with output := (Point.mul p n).toB8L}
+  .ok {evm with output := (BNP.mul p n).toB8L}
 
 structure Blake2 : Type where
   w: Nat
@@ -2838,6 +3270,19 @@ deriving DecidableEq
 def BNF12.from_int (i : Int) : BNF12 :=
   Mathlib.Vector.cons i <| Mathlib.Vector.replicate 11 0
 
+
+-- class BNP2(elliptic_curve.EllipticCurve):
+--     """
+--     A twist of `BNP`. This is actually the same curve as `BNP` under a change
+--     of variable, but that change of variable is only possible over the larger
+--     field `BNP12`.
+--     """
+--
+--     FIELD = BNF2
+--     A = BNF2.zero()
+--     B = BNF2.from_int(3) / (BNF2.i + BNF2.from_int(9))
+
+
 /-
 def alt_bn128_pairing_check(evm: Evm) -> None:
     """
@@ -2865,6 +3310,7 @@ def executePairingCheck (evm : Evm) : Execution := do
 -/
   let data := evm.message.data
   let evm ← chargeGas ((34000 * (data.length / 192)) + 45000) evm
+
 
   .assert (data.length % 192 = 0) ⟨evm, "OutOfGasError"⟩
 
@@ -2898,7 +3344,43 @@ def executePairingCheck (evm : Evm) : Execution := do
             result = result * pairing(q, p)
 -/
 
---  dbg_trace s!"data length : {data.length}"
+  for i in List.range (data.length / 192) do
+    dbg_trace s!"i in range : {i}"
+
+    let mut values : List Nat := []
+
+    for j in List.range 6 do
+      let start := (i * 192) + (32 * j)
+      let value : Nat := B8L.toNat <| data.sliceD start 32 (0 : B8)
+      .assert (value < altBn128Prime) ⟨evm, "OutOfGasError"⟩
+      values := value :: values
+
+    values := values.reverse
+
+    dbg_trace s!"first BNF2, first arg : {values.getD 3 0}"
+    dbg_trace s!"first BNF2, second arg : {values.getD 2 0}"
+    dbg_trace s!"first BNF2 : {BNF2.mk (values.getD 3 0) (values.getD 2 0)}"
+
+    dbg_trace s!"second BNF2, first arg : {values.getD 5 0}"
+    dbg_trace s!"second BNF2, second arg : {values.getD 4 0}"
+    dbg_trace s!"second BNF2 : {BNF2.mk (values.getD 5 0) (values.getD 4 0)}"
+
+    dbg_trace "'B' information for BNP2:"
+    dbg_trace s!"  BNF2.from_int(3) : {BNF2.fromNat 3}"
+    dbg_trace s!"  BNF2.i : {BNF2.i}"
+    dbg_trace s!"  BNF2.from_int(9) : {BNF2.fromNat 9}"
+    dbg_trace s!"  BNF2.i + BNF2.from_int(9) : {BNF2.i + BNF2.fromNat 9}"
+    let invVal ← (BNF2.i + BNF2.fromNat 9).inv.toExcept ⟨evm, "inv val failed"⟩
+    dbg_trace s!"  (BNF2.i + BNF2.from_int(9))^(-1) : {invVal}"
+    dbg_trace s!"  B (expected) : {BNF2.fromNat 3 * invVal}"
+
+    let q : BNP2 ← (
+      BNP2.mk?
+        (BNF2.mk (values.getD 3 0) (values.getD 2 0))
+        (BNF2.mk (values.getD 5 0) (values.getD 4 0))
+      ).toExcept ⟨evm, "BNP2 construction failed"⟩
+
+    dbg_trace s!"q : {q}"
 --
 --  for i in List.range data.length
 --    do dbg_trace s!"i in range : {i}"
@@ -2953,6 +3435,7 @@ def stepString (evm : Evm) (i : Inst') : String :=
     s!"gas({evm.gas_left}), " ++
     s!"inst(\"{i.toString}\"), " ++
     s!"depth({evm.message.depth}), " ++
+    s!"actualMem({evm.memory.data.size}), " ++
     s!"{evm.stack.map (fun x => "0x" ++ x.toHex.trimHex)}" ++
   ")."
 
@@ -3009,7 +3492,6 @@ mutual
         env := env
         logs := []
         refund_counter := 0
-        running := True
         message := msg
         output := []
         accounts_to_delete := .empty
@@ -3116,7 +3598,7 @@ mutual
     | 0 => .error ⟨evm, "RecursionLimit"⟩
     | lim + 1 => do
 
-      let calldata := evm.memory.sliceD memoryIndex memorySize 0
+      let calldata := evm.memory.data.sliceD memoryIndex memorySize 0
 
       .assert
         (memorySize ≤ maxInitcodeSize)
@@ -3170,17 +3652,14 @@ mutual
         accessed_storage_keys := evm.accessed_storage_keys
       }
 
-      let child ← liftToExecution evm <| processCreateMessage vb childMessage evm.env lim
+      let ese := evm.toEvmSansEnv
+      let env := evm.env
 
-      let evm := {evm with env := child.env}
+      let child ← liftToExecution ese <| processCreateMessage vb childMessage env lim
 
       if child.error.isSome
-      then
-        let evm := incorporateChildOnError evm child
-        {evm with return_data := child.output}.push 0
-      else
-        let evm := incorporateChildOnSuccess evm child
-        {evm with return_data := []}.push child.contract.toB256
+      then (incorporateChildOnError ese child child.output).push 0
+      else (incorporateChildOnSuccess ese child []).push child.contract.toB256
 
   termination_by lim => lim
 
@@ -3202,12 +3681,12 @@ mutual
     | 0 => .error ⟨evm, "RecursionLimit"⟩
     | lim + 1 => do
 
-      let evm := {evm with return_data := []}
+      let mut evm := {evm with return_data := []}
 
       let .false ← .ok ((evm.message.depth + 1 > 1024) : Bool)
         | ({evm with gas_left := evm.gas_left + gas}).push 0
 
-      let calldata := evm.memory.sliceD input_index input_size 0
+      let calldata := evm.memory.data.sliceD input_index input_size 0
       let code := (evm.getAcct code_address).code
 
       let childMessage : Message := {
@@ -3226,18 +3705,14 @@ mutual
         accessed_storage_keys := evm.accessed_storage_keys
       }
 
-      let child ← liftToExecution evm <| processMessage vb childMessage evm.env lim
+      let ese := evm.toEvmSansEnv
+      let env := evm.env
+      let child ← liftToExecution ese <| processMessage vb childMessage env lim
 
-      let evm := {
-        evm with
-        env := child.env
-        return_data := child.output
-      }
-
-      let evm ←
+      evm ←
         if child.error.isSome
-        then (incorporateChildOnError evm child).push 0
-        else (incorporateChildOnSuccess evm child).push 1
+        then (incorporateChildOnError ese child child.output).push 0
+        else (incorporateChildOnSuccess ese child child.output).push 1
 
       let actualOutput := child.output.take output_size
 
@@ -3294,7 +3769,7 @@ mutual
         create2NewAddress
           evm.contract
           salt
-          (evm.memory.sliceD memory_index memory_size 0)
+          (evm.memory.data.sliceD memory_index memory_size 0)
       let evm ←
         genericCreate
           vb
@@ -3485,18 +3960,36 @@ mutual
 
     | .exec .statcall, lim + 1 => do
 
-      let ⟨gas, evm⟩ ← evm.pop
-      let ⟨target, evm⟩ ← evm.pop <&> Prod.mapFst B256.toAdr
-      let ⟨input_index, evm⟩ ← evm.popToNat
-      let ⟨input_size, evm⟩ ← evm.popToNat
-      let ⟨output_index, evm⟩ ← evm.popToNat
-      let ⟨output_size, evm⟩ ← evm.popToNat
+      --let ⟨gas, evm⟩ ← evm.pop
+      let gas ← evm.stackTop
+      let mut evm ← evm.pop'
+
+      -- let ⟨target, evm⟩ ← evm.pop <&> Prod.mapFst B256.toAdr
+      let target ← evm.stackTop <&> B256.toAdr
+      evm ← evm.pop'
+
+      -- let ⟨input_index, evm⟩ ← evm.popToNat
+      let input_index ← evm.stackTop <&> B256.toNat
+      evm ← evm.pop'
+
+      -- let ⟨input_size, evm⟩ ← evm.popToNat
+      let input_size ← evm.stackTop <&> B256.toNat
+      evm ← evm.pop'
+
+      -- let ⟨output_index, evm⟩ ← evm.popToNat
+      let output_index ← evm.stackTop <&> B256.toNat
+      evm ← evm.pop'
+
+      -- let ⟨output_size, evm⟩ ← evm.popToNat
+      let output_size ← evm.stackTop <&> B256.toNat
+      evm ← evm.pop'
+
 
       let extend_cost :=
         evm.extCost [⟨input_index, input_size⟩, ⟨output_index, output_size⟩]
 
       let access_cost := access_cost target evm.accessed_addresses
-      let evm := add_accessed_address evm target
+      evm := add_accessed_address evm target
 
       let ⟨message_call_cost, message_call_stipend⟩ :=
         calculate_message_call_gas
@@ -3506,13 +3999,13 @@ mutual
           extend_cost
           access_cost
 
-      let evm ← chargeGas (message_call_cost + extend_cost) evm
+      evm ← chargeGas (message_call_cost + extend_cost) evm
 
-      let evm :=
+      evm :=
         evm.memExtends
           [⟨input_index, input_size⟩, ⟨output_index, output_size⟩]
 
-      let evm ←
+      evm ←
         generic_call
           vb
           evm
@@ -3534,15 +4027,20 @@ mutual
 
   def exec : Bool → Nat → Evm → Execution
     | vb, 0, evm =>
-      dbg_trace "execution recursion limit reached (NOT execution depth limit)"
-      .error ⟨evm, "OutOfGasError"⟩
+      dbg_trace "execution recursion limit (*NOT* execution depth limit) reached"
+      .error ⟨evm, "RecursionLimit"⟩
     | vb, lim + 1, evm => do
+      let mut evm := evm
       showLim lim evm
       let i ← (evm.getInst).toExcept ⟨evm, "InvalidOpcode"⟩
       showStep vb evm i
       match i with
-      | .next n => n.run vb evm lim >>= exec vb lim
-      | .jump j => j.run evm >>= exec vb lim
+      | .next n =>
+         evm ← n.run vb evm lim
+         exec vb lim evm
+      | .jump j =>
+        evm ← j.run evm
+        exec vb lim evm
       | .last l => l.run evm
   termination_by _ lim _ => lim
 
@@ -3653,15 +4151,6 @@ def Sta.toProlog (σ : Sta) : String :=
   | .none => "stack(retrieval_failed)"
   | .some xs => s!"stack({xs.map B256.toNat})"
 
-def mkSingleton {ξ : Type u} : ξ → List ξ
-  | x => [x]
-
-def Log.toStrings (l : Log) : List String :=
-  fork "log" [
-    [s!"address : {l.address.toHex}"],
-    fork "topics" (l.topics.map (mkSingleton ∘ B256.toHex)),
-    fork "data" [String.chunks 64 l.data.toHex]
-  ]
 
 instance : ToString Log := ⟨String.joinln ∘ Log.toStrings⟩
 

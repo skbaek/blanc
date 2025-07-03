@@ -182,13 +182,6 @@ void ripemd160(const uint8_t* data, uint32_t data_len, uint8_t* digest_bytes)
     *length_msw = (data_len >> 29);
 
     ripemd160_update_digest(digest, (uint32_t*)last_chunk);
-
-    printf("RIPEMD-160 = ");
-    for (int i = 0; i < 20; i++) {
-        printf("%02x", digest[i]);
-    }
-    printf("\n");
-
 }
 
 lean_obj_res rip160(lean_obj_arg da) 
