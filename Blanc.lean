@@ -285,6 +285,7 @@ structure Header : Type where
   blobGasUsed : Nat
   excessBlobGas : Nat
   parentBeaconBlockRoot : B256
+  requestsHash : Option B256
 
 def Header.toStrings (header : Header) : List String :=
   fork "header" [
@@ -308,6 +309,7 @@ def Header.toStrings (header : Header) : List String :=
     [s!"blob gas used : {header.blobGasUsed}"],
     [s!"excess blob gas : {header.excessBlobGas}"],
     [s!"parent beacon block root : {header.parentBeaconBlockRoot}"],
+    [s!"requests Hash : {header.requestsHash}"],
   ]
 
 instance : ToString Header := ⟨String.joinln ∘ Header.toStrings⟩
@@ -319,7 +321,7 @@ def Adr.toBytes (adr : Adr) : Bytes := adr.toB8L.map B8.toByte
 def Nat.toBytesNil (nat : Nat) : Bytes := nat.toB8LNew.map B8.toByte
 
 def Header.toBLT (header : Header) : BLT :=
-  BLT.list [
+  BLT.list <| [
     BLT.b8s header.parentHash.toB8L,
     BLT.b8s header.ommersHash.toB8L,
     BLT.b8s header.coinbase.toB8L,
@@ -340,7 +342,10 @@ def Header.toBLT (header : Header) : BLT :=
     BLT.b8s header.blobGasUsed.toB8LNew,
     BLT.b8s header.excessBlobGas.toB8LNew,
     BLT.b8s header.parentBeaconBlockRoot.toB8L
-  ]
+  ] ++
+    match header.requestsHash with
+    | none => []
+    | some rh => [BLT.b8s rh.toB8L]
 
 structure Tx : Type where
   (nonce : B64)
@@ -540,7 +545,7 @@ def Withdrawal.toBLT (wd : Withdrawal) : BLT :=
 def Block.toIoBLT (block : Block) : IO BLT := do
   let txBLTs : List BLT := block.txs.map B8LOrTxToBLT
   .ok <| .list [
-    block.header.toBLT,
+    Header.toBLT block.header,
     .list txBLTs,
     .list <| block.ommers.map Header.toBLT,
     .list <| block.wds.map Withdrawal.toBLT
@@ -1207,40 +1212,71 @@ def execute_id (evm : Evm) : Except (Evm × String) Evm := do
   let evm ← chargeGas (GAS_IDENTITY + GAS_IDENTITY_WORD * word_count) evm
   .ok {evm with output := data}
 
-abbrev altBn128Prime : Nat := 21888242871839275222246405745257275088696311157297823662689037894645226208583
+abbrev altBn128Prime      : Nat := 21888242871839275222246405745257275088696311157297823662689037894645226208583
+abbrev altBn128CurveOrder : Nat := 21888242871839275222246405745257275088548364400416034343698204186575808495617
 
 structure FinField (p : Nat) : Type where
   (val : Nat)
 deriving DecidableEq
 
--- abbrev BNF : Type := ZMod altBn128Prime
 abbrev BNF : Type := FinField altBn128Prime
 
-instance : ToString BNF := ⟨fun x => toString x.val⟩
+instance {p} : ToString (FinField p) := ⟨fun x => toString x.val⟩
 
-def FinField.mkMod {p : Nat} (n : Nat) : FinField p := ⟨n % p⟩
+def FinField.ofNat {p : Nat} (n : Nat) : FinField p := ⟨n % p⟩
 
-instance {p n : Nat} : OfNat (FinField p) n := ⟨.mkMod n⟩
+def FinField.ofInt {p : Nat} : Int → FinField p
+  | .ofNat n => .ofNat n
+  | .negSucc n => .ofNat (p - n.succ % p) -- handle negative integers by wrapping around the field size
 
-structure BNP : Type where
-  (x : BNF)
-  (y : BNF)
+instance {p n : Nat} : OfNat (FinField p) n := ⟨.ofNat n⟩
 
--- structure GaloisField (p : Nat) (m : List (FinField p)) : Type where
---   (val : List (FinField p))
+structure EllipticCurve (F : Type) (a b : F) : Type where
+  (x : F)
+  (y : F)
+deriving DecidableEq
+
+
+-- structure BNP : Type where
+--   (x : BNF)
+--   (y : BNF)
+
+abbrev FinFields (p : Nat) : Type := List (FinField p)
+
+structure GaloisField (p : Nat) (m : FinFields p) : Type where
+  (val : FinFields p)
+deriving DecidableEq
+
+
+instance {p m} : ToString (GaloisField p m) := ⟨
+  fun x =>
+  String.joinln <|
+    "  [" :: (x.val.map <| fun y => "    " ++ toString y ++ ",") ++ ["  ]"]
+
+  --toString x.val
+⟩
 
 abbrev BNF2 : Type :=
-  FinField altBn128Prime × FinField altBn128Prime
-  -- GaloisField altBn128Prime [1]
+  -- FinField altBn128Prime × FinField altBn128Prime
+  GaloisField altBn128Prime [1, 0, 1]
 
-structure BNP2 : Type where
-  (x : BNF2)
-  (y : BNF2)
+-- def BNF2.i : BNF2 := ⟨[1, 0]⟩
 
-def BNP2.toString : BNP2 → String
-  | ⟨x, y⟩ => s!"⟨{x}, {y}⟩"
+def GaloisField.ofNat {p} {m} : Nat → GaloisField p m
+  | 0 => ⟨[]⟩
+  | n@(_ + 1) => ⟨[.ofNat n]⟩
 
-instance : ToString BNP2 := ⟨BNP2.toString⟩
+instance {p m n} : OfNat (GaloisField p m) n := ⟨.ofNat n⟩
+
+
+-- structure BNP2 : Type where
+--   (x : BNF2)
+--   (y : BNF2)
+--
+-- def BNP2.toString : BNP2 → String
+--   | ⟨x, y⟩ => s!"⟨{x.val}, {y.val}⟩"
+--
+-- instance : ToString BNP2 := ⟨BNP2.toString⟩
 
 def Nat.toHexit : Nat → Char
   | 0 => '0'
@@ -1271,11 +1307,6 @@ def Nat.toHexCore : Nat → List Char
 def Nat.toHex (n : Nat) : String :=
   ⟨.reverse <| n.toHexCore⟩
 
-def BNP.toString : BNP → String
-  | ⟨x, y⟩ => s!"⟨{x.val.toHex}, {y.val.toHex}⟩"
-
-instance : ToString BNP := ⟨BNP.toString⟩
-
 
 def FinField.pow {p : Nat} (b : FinField p) (e : Nat) : FinField p :=
   ⟨Nat.powMod b.val e p⟩
@@ -1298,17 +1329,7 @@ def FinField.mul {p : Nat} (x y : FinField p) : FinField p :=
 instance {p} : HMul (FinField p) (FinField p) (FinField p) := ⟨FinField.mul⟩
 
 def BNF2.mk (x y : Nat) : BNF2 :=
-  ⟨FinField.mkMod x, FinField.mkMod y⟩
-
-
-def BNP.mk? (x : Nat) (y : Nat) : Option BNP := do
-  let x' : BNF := FinField.mkMod x
-  let y' : BNF := FinField.mkMod y
-  if (x' = 0 ∧ y' = 0)
-  then some ⟨0, 0⟩
-  else if y' ^ 2 = (x' ^ 3) + 3
-       then some ⟨x', y'⟩
-       else none
+  ⟨[.ofNat x, .ofNat y]⟩
 
 def extEuclid (x y : Nat) : Int × Int × Nat :=
   if hx : x > 0
@@ -1343,186 +1364,459 @@ instance {p} : HDiv (FinField p) (FinField p) (FinField p) := ⟨FinField.div⟩
 
 instance {k} : Inhabited (FinField k) := ⟨0⟩
 
+def trimZero {ξ} [Zero ξ] [DecidableEq ξ] (xs : List ξ) : List ξ :=
+  List.dropWhile (· = 0) xs
 
-def BNF2.modulus : List (FinField altBn128Prime) := [1, 0]
-def BNF2.prime : Nat := altBn128Prime
+def zipWithZero {ξ} [Zero ξ] : List ξ → List ξ → List (ξ × ξ)
+  | [], [] => []
+  | [], y :: ys => (0, y) :: zipWithZero [] ys
+  | x :: xs, [] => (x, 0) :: zipWithZero xs []
+  | x :: xs, y :: ys => (x, y) :: zipWithZero xs ys
 
-def BNF2.mul (x y : BNF2) : BNF2 :=
-  let modulus := BNF2.modulus
-  let degree : Nat := BNF2.modulus.length
-  -- let prime := BNF2.prime
-  let self : Array (FinField altBn128Prime) := #[x.fst, x.snd]
-  let right : Array (FinField altBn128Prime) := #[y.fst, y.snd]
+lemma zipWithZero_length {ξ} [Zero ξ] (xs ys : List ξ) :
+  (zipWithZero xs ys).length = max xs.length ys.length := by
+  induction xs generalizing ys with
+    | nil =>
+      induction ys with
+      | nil => simp [zipWithZero]
+      | cons y ys ih => simp [zipWithZero, ih]
+    | cons x xs ih =>
+      induction ys with
+      | nil => simp [zipWithZero, ih]
+      | cons y ys ih' =>
+        simp [zipWithZero, ih, ih', List.length, Nat.succ_max_succ]
 
-  let aux : Id BNF2 := do
-    let mut mul : Array (FinField altBn128Prime) := .mkArray (degree * 2) 0
+def zipWithZeroLeft {ξ} [Zero ξ] (xs ys : List ξ) : List (ξ × ξ) :=
+  (zipWithZero xs.reverse ys.reverse).reverse
 
-    for i in List.range degree do
-      for j in List.range degree do
-        mul := mul.set! (i + j) (mul.get! (i + j) + (self.get! i * right.get! j))
+lemma zipWithZeroLeft_length {ξ} [Zero ξ] (xs ys : List ξ) :
+  (zipWithZeroLeft xs ys).length = max xs.length ys.length := by
+  simp [zipWithZeroLeft, zipWithZero_length]
 
-    for i in (List.range degree).reverse.map (· + 2) do
-      for j in (List.range degree).map (· + (i - degree)) do
-        mul := mul.set! j (mul.get! j - (mul.get! i * modulus.get! (degree - (i - j))))
+lemma trimZero_length {ξ} [Zero ξ] [DecidableEq ξ] (xs : List ξ) :
+  (trimZero xs).length ≤ xs.length := by
+  simp [trimZero, List.length_dropWhile_le]
 
-    return ⟨mul.get! 0, mul.get! 1⟩
+def FinFields.sub {p} (xs ys : FinFields p) : FinFields p :=
+  trimZero <| (zipWithZeroLeft xs ys).map (fun ⟨x, y⟩ => x - y)
 
-  aux.run
+lemma FinFields.sub_length {p} (xs ys : FinFields p) :
+  (FinFields.sub xs ys).length ≤ max xs.length ys.length := by
+  apply le_trans (trimZero_length _)
+  simp [List.length_map, zipWithZeroLeft_length]
 
-instance : HMul BNF2 BNF2 BNF2 := ⟨BNF2.mul⟩
+def FinFields.add {p} (xs ys : FinFields p) : FinFields p :=
+  trimZero <| (zipWithZeroLeft xs ys).map (fun ⟨x, y⟩ => x + y)
 
-def BNF2.add (x y : BNF2) : BNF2 :=
-  ⟨FinField.add x.fst y.fst, FinField.add x.snd y.snd⟩
+lemma FinFields.add_length {p} (xs ys : FinFields p) :
+  (FinFields.add xs ys).length ≤ max xs.length ys.length := by
+  apply le_trans (trimZero_length _)
+  simp [List.length_map, zipWithZeroLeft_length]
 
-instance : HAdd BNF2 BNF2 BNF2 := ⟨BNF2.add⟩
+def FinFields.mul {p} (xs : FinFields p) : FinFields p → FinFields p
+  | [] => []
+  | y :: ys =>
+    let fromTail := FinFields.mul xs ys
+    let fromHead := trimZero <| (xs.map (· * y)) ++ List.replicate ys.length 0
+    FinFields.add fromHead fromTail
 
-def BNF2.fromNat (i : Nat) : BNF2 := ⟨FinField.mkMod i, 0⟩
+def FinFields.divMod {p} (xs ys : FinFields p) : FinFields p × FinFields p :=
+  match xs, ys with
+  | [], _ => ([], [])
+  | xs, [] => ([], xs) -- similar to x / 0 = 0, x % 0 = x for Nat
+  | x :: xs, y :: ys =>
+    if hlt : xs.length < ys.length
+    then ([], x :: xs)
+    else
+      have hle : ys.length ≤ xs.length := by
+        rw [not_lt] at hlt; exact hlt
+      let c := x * (y⁻¹)
+      let zeroes := List.replicate (xs.length - ys.length) 0
+      let cys := (ys.map (· * c)) ++ zeroes
+      have cys_length : List.length cys = xs.length := by
+        simp [cys, zeroes, List.length_append,  List.length_replicate, List.length_map];
+        rw [← Nat.add_sub_assoc hle, Nat.add_sub_cancel_left];
+      let xs' := FinFields.sub xs cys
+      have h : xs'.length < (x :: xs).length := by
+        rw [not_lt] at hlt; simp only [xs']
+        apply lt_of_le_of_lt (FinFields.sub_length xs cys)
+        simp [cys_length]
+      let (div, mod) := FinFields.divMod xs' (y :: ys)
+      (FinFields.add (c :: zeroes) div, mod)
+termination_by xs.length
 
-def BNF2.pow (x : BNF2) : Nat → BNF2
-  | 0 => BNF2.fromNat 1
+lemma FinFields.divMod_snd_length {p} (xs) (len) (y) (ys : FinFields p) :
+  xs.length ≤ len → (FinFields.divMod xs (y :: ys)).snd.length ≤ ys.length := by
+  revert xs
+  induction len with
+  | zero =>
+    intro xs h_eq; rw [Nat.le_zero] at h_eq
+    simp [List.length_eq_zero.mp h_eq, divMod]
+  | succ len ih =>
+    intro xs h_le
+    rcases xs with _ | ⟨x, xs⟩ <;> simp [divMod] -- try {simp [divMod]; done}
+    split
+    · rename (_ < _) => h_lt
+      simp [List.length]; apply Nat.succ_le_of_lt h_lt
+    · rename (¬ _ < _) => h_le'
+      simp [not_lt] at h_le'
+      simp [List.length] at h_le
+      apply ih
+      apply le_trans (FinFields.sub_length _ _)
+      simp [List.length_map, List.length_replicate, List.length_append, h_le]
+      rw [← Nat.add_sub_assoc h_le', Nat.add_sub_cancel_left];
+      apply h_le
+
+def FinFields.div {p} (xs ys : FinFields p) : FinFields p :=
+  (FinFields.divMod xs ys).fst
+
+def FinFields.mod {p} (xs ys : FinFields p) : FinFields p :=
+  (FinFields.divMod xs ys).snd
+
+def GaloisField.add {p : Nat} {m : FinFields p}
+  (xs ys : GaloisField p m) : GaloisField p m :=
+  ⟨FinFields.add xs.val ys.val⟩
+
+instance {p m} : HAdd (GaloisField p m) (GaloisField p m) (GaloisField p m) :=
+  ⟨@GaloisField.add p m⟩
+
+def GaloisField.sub {p : Nat} {m : FinFields p}
+  (xs ys : GaloisField p m) : GaloisField p m :=
+  ⟨FinFields.sub xs.val ys.val⟩
+
+instance {p m} : HSub (GaloisField p m) (GaloisField p m) (GaloisField p m) :=
+  ⟨@GaloisField.sub p m⟩
+
+def GaloisField.mod {p : Nat} {m : FinFields p}
+  (xs ys : GaloisField p m) : GaloisField p m :=
+  ⟨FinFields.mod xs.val ys.val⟩
+
+instance : HMod (GaloisField p m) (GaloisField p m) (GaloisField p m) :=
+  ⟨GaloisField.mod⟩
+
+def GaloisField.mul {p : Nat} {m : FinFields p}
+  (xs ys : GaloisField p m) : GaloisField p m :=
+  let product := FinFields.mul xs.val ys.val
+  ⟨FinFields.mod product m⟩
+
+instance {p m} : HMul (GaloisField p m) (GaloisField p m) (GaloisField p m) :=
+  ⟨@GaloisField.mul p m⟩
+
+-- def BNF2.mul (x y : BNF2) : BNF2 :=
+--   let modulus := BNF2.modulus
+--   let degree : Nat := BNF2.modulus.length
+--   -- let prime := BNF2.prime
+--   let self : Array (FinField altBn128Prime) := #[x.fst, x.snd]
+--   let right : Array (FinField altBn128Prime) := #[y.fst, y.snd]
+--
+--   let aux : Id BNF2 := do
+--     let mut mul : Array (FinField altBn128Prime) := .mkArray (degree * 2) 0
+--
+--     for i in List.range degree do
+--       for j in List.range degree do
+--         mul := mul.set! (i + j) (mul.get! (i + j) + (self.get! i * right.get! j))
+--
+--     for i in (List.range degree).reverse.map (· + 2) do
+--       for j in (List.range degree).map (· + (i - degree)) do
+--         mul := mul.set! j (mul.get! j - (mul.get! i * modulus.get! (degree - (i - j))))
+--
+--     return ⟨mul.get! 0, mul.get! 1⟩
+--
+--   aux.run
+--
+-- instance : HMul BNF2 BNF2 BNF2 := ⟨BNF2.mul⟩
+
+-- def BNF2.add (x y : BNF2) : BNF2 :=
+--   ⟨FinField.add x.fst y.fst, FinField.add x.snd y.snd⟩
+--
+-- instance : HAdd BNF2 BNF2 BNF2 := ⟨BNF2.add⟩
+
+-- def BNF2.fromNat (i : Nat) : BNF2 := ⟨FinField.ofNat i, 0⟩
+
+--def BNF2.fromNat (x : Nat) : BNF2 := GaloisField.ofNat x
+
+def GaloisField.pow {p} {m} (x : GaloisField p m) : Nat → GaloisField p m
+  | 0 => 1
   | n@(_ + 1) =>
-    let root := BNF2.pow x (n / 2)
-    let whole := BNF2.mul root root
+    let root := GaloisField.pow x (n / 2)
+    let whole := GaloisField.mul root root
     if (n % 2) = 0
-    then whole
-    else BNF2.mul whole x
+    then
+      whole
+    else
+      GaloisField.mul whole x
 
-instance : HPow BNF2 Nat BNF2 := ⟨BNF2.pow⟩
+instance {p m} : HPow (GaloisField p m) Nat (GaloisField p m) :=
+  ⟨@GaloisField.pow p m⟩
 
-def lastNonzeroPos (xs : List (FinField altBn128Prime)) : Option Nat :=
-  let rec aux : List (FinField altBn128Prime) → Option Nat
-    | [] => none
-    | x :: xs =>
-      if x ≠ 0 then some xs.length
-      else aux xs
-  aux xs.reverse
+instance {p} : HMul (FinFields p) (FinFields p) (FinFields p) :=
+  ⟨FinFields.mul⟩
 
-def lastNonzeroPos' (xs : List (FinField altBn128Prime)) : Nat :=
-  (lastNonzeroPos xs).getD xs.length
+instance {p} : HSub (FinFields p) (FinFields p) (FinFields p) :=
+  ⟨FinFields.sub⟩
 
-def BNF2.deg (self : BNF2) : Option Nat :=
-  (lastNonzeroPos [self.fst, self.snd]) --.toExcept "ValueError"
+instance {p} : HDiv (FinFields p) (FinFields p) (FinFields p) :=
+  ⟨FinFields.div⟩
+
+instance {p} : HMod (FinFields p) (FinFields p) (FinFields p) :=
+  ⟨FinFields.mod⟩
+
+lemma FinFields.mod_cons_length {p} (y) (xs ys : FinFields p) :
+  (xs % (y :: ys)).length < (y :: ys).length := by
+  simp [List.length]; apply Nat.lt_succ_of_le
+  apply FinFields.divMod_snd_length _ _ _ _ (le_refl _)
+
+def FinFields.euclid {p} (xs ys : FinFields p) :
+  FinFields p × FinFields p × FinFields p :=
+  match xs, ys with
+  | [], [] => ([], [], [])
+  | [], ys@(y :: _) => ([0], [y⁻¹], ys.map (· * y⁻¹))
+  | xs@(x :: _), [] => ([x⁻¹], [0], xs.map (· * x⁻¹))
+  | xs@(_ :: _), ys@(_ :: _) =>
+    have h : (xs % ys).length < ys.length := by
+      rename (ys = _ :: _) => h_rw; rw [h_rw]
+      apply FinFields.mod_cons_length
+    let ⟨a, b, d⟩ := FinFields.euclid ys (xs % ys)
+    ⟨b, a - (b * (xs / ys)), d⟩
+termination_by ys.length
+
+def GaloisField.inv {p} {m} (xs : GaloisField p m) : GaloisField p m :=
+  let ⟨c, _, _⟩ := FinFields.euclid xs.val m
+  ⟨c % m⟩
+
+instance {p m} : Inv (GaloisField p m) := ⟨GaloisField.inv⟩
+
+def GaloisField.div {p} {m} (xs ys : GaloisField p m) : GaloisField p m :=
+  xs * (ys⁻¹)
+
+instance {p m} : HDiv (GaloisField p m) (GaloisField p m) (GaloisField p m) :=
+  ⟨GaloisField.div⟩
+
+abbrev BNP2 : Type := EllipticCurve BNF2 0 ((3 : BNF2) / ⟨[1, 9]⟩)--(BNF2.i + (9 : BNF2)))
+
+abbrev BNP : Type := EllipticCurve BNF (0 : BNF) (3 : BNF)
+
+abbrev BNF12 : Type :=
+  GaloisField
+    altBn128Prime
+    [1, 0, 0, 0, 0, 0, .ofInt (-18 : Int), 0, 0, 0, 0, 0, 82]
+
+abbrev BNP12 : Type := EllipticCurve BNF12 (0 : BNF12) (3 : BNF12)
+
+#synth ToString BNF12
+#check instToStringGaloisField
+
+def EllipticCurve.toString {F} {a b} [ToString F] : EllipticCurve F a b → String
+  | ⟨x, y⟩ => s!"⟨{x},{y}\n⟩"
+
+instance {F} {a b} [ToString F] : ToString (EllipticCurve F a b) :=
+  ⟨EllipticCurve.toString⟩
+
+-- def BNP.mk? (x : Nat) (y : Nat) : Option BNP := do
+--   let x' : BNF := FinField.ofNat x
+--   let y' : BNF := FinField.ofNat y
+--   if (x' = 0 ∧ y' = 0)
+--   then some ⟨0, 0⟩
+--   else if y' ^ 2 = (x' ^ 3) + 3
+--        then some ⟨x', y'⟩
+--        else none
+
+def EllipticCurve.isOnCurve {F} [Zero F] [DecidableEq F]
+  [HAdd F F F] [HMul F F F] [HPow F Nat F]
+  {a b} (p : EllipticCurve F a b) : Prop :=
+  (p.x = 0 ∧ p.y = 0) ∨ (p.y ^ 2 = (p.x ^ 3) + (a * p.x) + b)
+
+instance {F} [Zero F] [DecidableEq F]
+  [HAdd F F F] [HMul F F F] [HPow F Nat F]
+  {a b} {p : EllipticCurve F a b} : Decidable p.isOnCurve :=
+  instDecidableOr
+
+def EllipticCurve.mk? {F} [Zero F] [DecidableEq F]
+  [HAdd F F F] [HMul F F F] [HPow F Nat F]
+  {a b} (x y : F) : Option (EllipticCurve F a b) :=
+  let p : EllipticCurve F a b := ⟨x, y⟩
+  if p.isOnCurve
+  then some p
+  else none
+
+-- def EllipticCurve.mk? {F} [Zero F] [DecidableEq F]
+--   [HAdd F F F] [HMul F F F] [HPow F Nat F]
+--   {a b} (x y : F) : Option (EllipticCurve F a b) :=
+--   if (x = 0 ∧ y = 0)
+--   then some ⟨0, 0⟩
+--   else
+--     if y ^ 2 = (x ^ 3) + (a * x) + b
+--     then some ⟨x, y⟩
+--     else none
+
+def BNP.mk? (x : Nat) (y : Nat) : Option BNP :=
+  EllipticCurve.mk? (FinField.ofNat x) (FinField.ofNat y)
 
 
-def BNF2.euclid (x1 x2 f1 f2 : List (FinField altBn128Prime))
-  (d1 d2 : Nat) : Option (List (FinField altBn128Prime)) :=
-  match d1, d2 with
-  | 0, _ =>
-    let q := (x1.get! 0)⁻¹
-    return (f1.map (· * q))
-  | _, 0 =>
-    let q := (x2.get! 0)⁻¹
-    return (f2.map (· * q))
-  | d1@(_ + 1), d2@(_ + 1) =>
-    if d1 < d2
-    then do
-      let q := (x2.get! d2) * (x1.get! d1)⁻¹
-      let mut x2 := x2
-      let mut f2 := f2
-      for i in List.range (BNF2.modulus.length - (d2 - d1)) do
-        let pos := i + (d2 - d1)
-        x2 := x2.set pos ((x2.get! pos) - q * x1.get! i)
-        f2 := f2.set pos ((f2.get! pos) - q * f1.get! i)
-      let d2' := lastNonzeroPos' (x2.take d2)
-      if d2' < d2
-      then BNF2.euclid x1 x2 f1 f2 d1 d2'
-      else none --.error "ERROR : d2 failed to decrease"
-    else do
-      let q := (x1.get! d1) * (x2.get! d2)⁻¹
-      let mut x1 := x1
-      let mut f1 := f1
-      for i in List.range (BNF2.modulus.length - (d1 - d2)) do
-        let pos := i + (d1 - d2)
-        x1 := x1.set pos ((x1.get! pos) - q * x2.get! i)
-        f1 := f1.set pos ((f1.get! pos) - q * f2.get! i)
-      let d1' := lastNonzeroPos' (x1.take d1)
-      if d1' < d1
-      then BNF2.euclid x1 x2 f1 f2 d1' d2
-      else none--.error "ERROR : d1 failed to decrease"
-termination_by (d1 + d2)
-
-
-def BNF2.inv (self : BNF2) : Option BNF2 := do
-  let mut x1 : List (FinField altBn128Prime) := BNF2.modulus
-  let mut x2 : List (FinField altBn128Prime) := [self.fst, self.snd] --BNF2.modulus
-  let mut f1 : List (FinField altBn128Prime) := [0, 0]
-  let mut f2 : List (FinField altBn128Prime) := [1, 0]
-
-  let d2 ← self.deg
-
-  let q0 := (x2.get! d2)⁻¹
-
-  for i in List.range d2 do
-    let pos := i + x1.length - d2
-    x1 := x1.set pos (x1.get! pos - (q0 * x2.get! i))
-    f1 := f1.set pos (f1.get! pos - (q0 * f2.get! i))
-
-  let d1 ← (lastNonzeroPos x1)
-
-  let ans : List (FinField altBn128Prime) ← do
-    BNF2.euclid x1 x2 f1 f2 d1 d2
-
-  .some ⟨ans.get! 0, ans.get! 1⟩
-
-
-def BNF2.i : BNF2 := ⟨0, 1⟩
-
-
-def BNF2.div (x y : BNF2) : Option BNF2 := do
-  let y_inv ← y.inv
-  return x * y_inv
-
--- instance : HDiv BNF2 BNF2 BNF2 := ⟨.div⟩
-
-def BNP2.mk? (x : BNF2) (y : BNF2) : Option BNP2 := do
-  let A : BNF2 := 0
-  let B : BNF2 ←  BNF2.div (BNF2.fromNat 3) (BNF2.i + BNF2.fromNat 9)
-  if (x = 0 ∧ y = 0)
-  then some ⟨0, 0⟩
-  else
-    dbg_trace s!"x ^ 3 : {x ^ 3}"
-    dbg_trace s!"y ^ 2 : {y ^ 2}"
-    dbg_trace s!"A : {A}"
-    dbg_trace s!"B : {B}"
-
-    if y ^ 2 = (x ^ 3) + (A * x) + B
-    then some ⟨x, y⟩
-    else none
-
-def BNP.double (p : BNP) : BNP :=
+/-
+def double(self: T) -> T:
+    """
+    Add a point to itself.
+    """
+    x, y, F = self.x, self.y, self.FIELD
+    if x == 0 and y == 0:
+        return self
+    lam = (F.from_int(3) * x**2 + self.A) / (F.from_int(2) * y)
+    new_x = lam**2 - x - x
+    new_y = lam * (x - new_x) - y
+    return self.__new__(type(self), new_x, new_y)
+-/
+def EllipticCurve.double {F} [Zero F] [DecidableEq F]
+  [HAdd F F F] [HSub F F F] [HMul F F F] [HDiv F F F]
+  [HPow F Nat F] [OfNat F 3] [OfNat F 2]
+  [ToString F]
+  {a b} (p : EllipticCurve F a b) : EllipticCurve F a b :=
   if p.x = 0 ∧ p.y = 0
-  then p
+  then
+    p
   else
-    let lam : BNF := (3 * (p.x ^ 2)) / (2 * p.y)
-    let x := lam ^ 2 - p.x - p.x
-    let y := lam * (p.x - x) - p.y
+    let lam : F := (3 * (p.x ^ 2) + a) / (2 * p.y)
+    let x : F := lam ^ 2 - p.x - p.x
+    let y : F := lam * (p.x - x) - p.y
     ⟨x, y⟩
 
-def BNP.add : BNP → BNP → BNP
-  | ⟨0, 0⟩, q => q
-  | p, ⟨0, 0⟩ => p
-  | ⟨selfX, selfY⟩, ⟨otherX, otherY⟩ =>
-    if selfX = otherX
-    then
-      if selfY = otherY
-      then BNP.double ⟨selfX, selfY⟩
-      else ⟨0, 0⟩
+/-
+def __add__(self: T, other: T) -> T:
+    """
+    Add two points together.
+    """
+    ZERO = self.FIELD.zero()
+    self_x, self_y, other_x, other_y = self.x, self.y, other.x, other.y
+    if self_x == ZERO and self_y == ZERO:
+        return other
+    if other_x == ZERO and other_y == ZERO:
+        return self
+    if self_x == other_x:
+        if self_y == other_y:
+            return self.double()
+        else:
+            return self.point_at_infinity()
+    lam = (other_y - self_y) / (other_x - self_x)
+    x = lam**2 - self_x - other_x
+    y = lam * (self_x - x) - self_y
+    return self.__new__(type(self), x, y)
+-/
+def EllipticCurve.add {F} [Zero F] [DecidableEq F]
+  [HAdd F F F] [HSub F F F] [HMul F F F] [HDiv F F F]
+  [HPow F Nat F] [OfNat F 3] [OfNat F 2]
+  [ToString F]
+  {a b} (p q : EllipticCurve F a b) : EllipticCurve F a b :=
+  if p.x = 0 ∧ p.y = 0
+  then q
+  else
+    if q.x = 0 ∧ q.y = 0
+    then p
     else
-      let yDiff := otherY - selfY
-      let xDiff := otherX - selfX
-      let lam := yDiff / xDiff
-      let x := lam ^ 2 - selfX - otherX
-      let y := lam * (selfX - x) - selfY
-      ⟨x, y⟩
+      if p.x = q.x
+      then
+        if p.y = q.y
+        then EllipticCurve.double p
+        else ⟨0, 0⟩ -- point at infinity
+      else
+        let yDiff := q.y - p.y
+        let xDiff := q.x - p.x
+        let lam : F := yDiff / xDiff
+        let x : F := lam ^ 2 - p.x - q.x
+        let y : F := lam * (p.x - x) - p.y
+        ⟨x, y⟩
 
-def BNP.mul (p : BNP) : Nat → BNP
+-- def BNP.add : BNP → BNP → BNP
+--   | ⟨0, 0⟩, q => q
+--   | p, ⟨0, 0⟩ => p
+--   | ⟨selfX, selfY⟩, ⟨otherX, otherY⟩ =>
+--     if selfX = otherX
+--     then
+--       if selfY = otherY
+--       then BNP.double ⟨selfX, selfY⟩
+--       else ⟨0, 0⟩
+--     else
+--       let yDiff := otherY - selfY
+--       let xDiff := otherX - selfX
+--       let lam := yDiff / xDiff
+--       let x := lam ^ 2 - selfX - otherX
+--       let y := lam * (selfX - x) - selfY
+--       ⟨x, y⟩
+
+instance {F} [Zero F] [DecidableEq F] [HAdd F F F] [HSub F F F]
+  [HMul F F F] [HDiv F F F] [HPow F Nat F] [OfNat F 3] [OfNat F 2] {a b}
+  [ToString F]
+  :
+  HAdd (EllipticCurve F a b) (EllipticCurve F a b) (EllipticCurve F a b) :=
+  ⟨EllipticCurve.add⟩
+
+def EllipticCurve.mulBy {F} [Zero F] [DecidableEq F]
+  [HAdd F F F] [HSub F F F] [HMul F F F] [HDiv F F F]
+  [HPow F Nat F] [OfNat F 3] [OfNat F 2]
+  [ToString F]
+  {a b} (p : EllipticCurve F a b) : Nat → EllipticCurve F a b
   | 0 => ⟨0, 0⟩
   | n@(_ + 1) =>
-    let half := BNP.mul p (n / 2)
-    let whole := BNP.add half half
+    let half := EllipticCurve.mulBy p (n / 2)
+    let whole := half + half
     if (n % 2) = 0
     then whole
-    else BNP.add whole p
+    else whole + p
+
+instance {F} [Zero F] [DecidableEq F] [HAdd F F F] [HSub F F F]
+  [HMul F F F] [HDiv F F F] [HPow F Nat F] [OfNat F 3] [OfNat F 2] {a b}
+  [ToString F]
+
+  :
+  HMul (EllipticCurve F a b) Nat (EllipticCurve F a b) :=
+  ⟨EllipticCurve.mulBy⟩
+
+-- def BNP.mul (p : BNP) : Nat → BNP
+--   | 0 => ⟨0, 0⟩
+--   | n@(_ + 1) =>
+--     let half := BNP.mul p (n / 2)
+--     let whole := BNP.add half half
+--     if (n % 2) = 0
+--     then whole
+--     else BNP.add whole p
+
+-- def testX : BNF2 := ⟨
+--   [
+--     2146841959437886920191033516947821737903543682424168472444605468016078231160,
+--     14752851163271972921165116810778899752274893127848647655434033030151679466487
+--   ]
+-- ⟩
+--
+-- def testY : BNF2 := ⟨
+--   [
+--     8159591693044959083845993640644415462154314071906244874217244895511876957520,
+--     19774899457345372253936887903062884289284519982717033379297427576421785416781
+--   ]
+-- ⟩
+--
+-- def testX2 : BNF2 := ⟨
+--   [
+--     17594558952963501381864338711361631612889223792449486717799826958613069746263,
+--     14270783417134604602162577868956750672842836058898352014510009728987093484192
+--   ]
+-- ⟩
+--
+-- def testY2 : BNF2 := ⟨
+--   [
+--     13728651178794316138400412104612859626541997085391578788471792999133349251063,
+--     2113343414493902968309517842194390799411791174580790283391610318223440791802
+--   ]
+-- ⟩
+--
+-- #eval (GaloisField.fromNat 1 : BNF2) * (GaloisField.fromNat 1 : BNF2)
+-- #eval GaloisField.mul (GaloisField.fromNat 1 : BNF2) (GaloisField.fromNat 1 : BNF2)
+--
+-- def testP : BNP2 := ⟨testX, testY⟩
+-- def testP2 : BNP2 := ⟨testX2, testY2⟩
+--
+-- #eval (testP + testP)
+-- #eval testP2
+-- #eval (testP + testP) + testP
+-- #eval testP2 + testP
 
 def BNP.toB8L (p : BNP) : B8L :=
   p.x.val.toB8LNew.pack 32 ++ p.y.val.toB8LNew.pack 32
@@ -1534,16 +1828,17 @@ def ecadd (input : B8L) : Option B8L := do
   let qy : Nat := B8L.toNat <| input.sliceD 96 32 (0 : B8)
   let p ← BNP.mk? px py
   let q ← BNP.mk? qx qy
-  let s := BNP.add p q
-  some s.toB8L
+  let s := p + q
+  some <| BNP.toB8L s
 
 def ecmul (input : B8L) : Option B8L := do
   let px : Nat := B8L.toNat <| input.sliceD 0 32 (0 : B8)
   let py : Nat := B8L.toNat <| input.sliceD 32 32 (0 : B8)
   let n  : Nat := B8L.toNat <| input.sliceD 64 32 (0 : B8)
   let p ← BNP.mk? px py
-  let s := BNP.mul p n
-  some s.toB8L
+  let s := p * n
+  -- some s.toB8L
+  some <| BNP.toB8L s
 
 def execute_ecadd (evm : Evm) : Except (Evm × String) Evm := do
   let data := evm.message.data
@@ -1561,7 +1856,7 @@ def execute_ecadd (evm : Evm) : Except (Evm × String) Evm := do
 
   let p0 ← (BNP.mk? x0_value y0_value).toExcept ⟨evm, "OutOfGasError"⟩
   let p1 ← (BNP.mk? x1_value y1_value).toExcept ⟨evm, "OutOfGasError"⟩
-  .ok {evm with output := (BNP.add p0 p1).toB8L}
+  .ok {evm with output := BNP.toB8L (p0 + p1)}
 
 def execute_ecmul (evm : Evm) : Except (Evm × String) Evm := do
   let data := evm.message.data
@@ -1577,7 +1872,7 @@ def execute_ecmul (evm : Evm) : Except (Evm × String) Evm := do
 
   let p ← (BNP.mk? x_value y_value).toExcept ⟨evm, "OutOfGasError"⟩
 
-  .ok {evm with output := (BNP.mul p n).toB8L}
+  .ok {evm with output := BNP.toB8L (p * n)}
 
 inductive Ninst' : Type
   | reg : Rinst → Ninst'
@@ -2707,7 +3002,6 @@ def executeId (evm : Evm) : Execution := do
   let evm ← chargeGas cost evm
   .ok {evm with output := data}
 
-
 def B8L.sliceToNat (data : B8L) (start : Nat) (length : Nat) : Nat :=
   match data.drop start with
   | [] => 0
@@ -2903,7 +3197,7 @@ def executeEcadd (evm : Evm) : Execution := do
   let p0 ← (BNP.mk? x0 y0).toExcept ⟨evm, "OutOfGasError"⟩
   let p1 ← (BNP.mk? x1 y1).toExcept ⟨evm, "OutOfGasError"⟩
 
-  .ok {evm with output := (BNP.add p0 p1).toB8L}
+  .ok {evm with output := BNP.toB8L (p0 + p1)}
 
 def executeEcmul (evm : Evm) : Execution := do
   let data := evm.message.data
@@ -2917,7 +3211,7 @@ def executeEcmul (evm : Evm) : Execution := do
     ⟨evm, "OutOfGasError"⟩
   let p ← (BNP.mk? x y).toExcept ⟨evm, "OutOfGasError"⟩
 
-  .ok {evm with output := (BNP.mul p n).toB8L}
+  .ok {evm with output := BNP.toB8L (p * n)}
 
 structure Blake2 : Type where
   w: Nat
@@ -3264,137 +3558,245 @@ def executePointEval (evm : Evm) : Execution := do
   .assert (data.length = 192) ⟨evm, "KZGProofError"⟩
   .error ⟨evm, "UNIMP : executePointEval"⟩
 
-def BNF12 : Type := Vec Int 12
-deriving DecidableEq
+def BNP.toBNP12 : BNP → BNP12
+  | ⟨x, y⟩ => ⟨⟨[x]⟩, ⟨[y]⟩⟩
 
-def BNF12.from_int (i : Int) : BNF12 :=
-  Mathlib.Vector.cons i <| Mathlib.Vector.replicate 11 0
-
-
--- class BNP2(elliptic_curve.EllipticCurve):
---     """
---     A twist of `BNP`. This is actually the same curve as `BNP` under a change
---     of variable, but that change of variable is only possible over the larger
---     field `BNP12`.
---     """
+-- # "Twist" a point in E(FQ2) into a point in E(FQ12)
+-- w = FQ12([0, 1] + [0] * 10)
 --
---     FIELD = BNF2
---     A = BNF2.zero()
---     B = BNF2.from_int(3) / (BNF2.i + BNF2.from_int(9))
+-- def twist(pt: Optimized_Point3D[FQP]) -> Optimized_Point3D[FQ12]:
+--     _x, _y, _z = pt
+--     # Field isomorphism from Z[p] / x**2 to Z[p] / x**2 - 18*x + 82
+--     xcoeffs = [_x.coeffs[0] - _x.coeffs[1] * 9, _x.coeffs[1]]
+--     ycoeffs = [_y.coeffs[0] - _y.coeffs[1] * 9, _y.coeffs[1]]
+--     zcoeffs = [_z.coeffs[0] - _z.coeffs[1] * 9, _z.coeffs[1]]
+--     nx = FQ12([xcoeffs[0]] + [0] * 5 + [xcoeffs[1]] + [0] * 5)
+--     ny = FQ12([ycoeffs[0]] + [0] * 5 + [ycoeffs[1]] + [0] * 5)
+--     nz = FQ12([zcoeffs[0]] + [0] * 5 + [zcoeffs[1]] + [0] * 5)
+--     return (nx * w**2, ny * w**3, nz)
+def twist (p : BNP2) : BNP12 :=
+  let xs := List.ekat 2 p.x.val
+  let ys := List.ekat 2 p.y.val
+  let x0 := xs.get! 0
+  let x1 := xs.get! 1
+  let y0 := ys.get! 0
+  let y1 := ys.get! 1
+  let nx : BNF12 := ⟨[x0, 0, 0, 0, 0, 0, x1 - (x0 * 9)]⟩
+  let ny : BNF12 := ⟨[y0, 0, 0, 0, 0, 0, y1 - (y0 * 9)]⟩
+  let w : BNF12 := ⟨[1, 0]⟩
+  ⟨nx * (w ^ 2), ny * (w ^ 3)⟩
 
+def pseudoBinaryEncoding : List Int :=
+  [
+    0, 0, 0, 1, 0, 1, 0, -1,
+    0, 0, 1, -1, 0, 0, 1, 0,
+    0, 1, 1, 0, -1, 0, 0, 1,
+    0, -1, 0, 0, 0, 0, 1, 1,
+    1, 0, 0, -1, 0, 0, 1, 0,
+    0, 0, 0, 0, -1, 0, 0, 1,
+    1, 0, 0, -1, 0, 0, 0, 1,
+    1, 0, -1, 0, 0, 1, 0, 1,
+    1,
+  ]
 
 /-
-def alt_bn128_pairing_check(evm: Evm) -> None:
-    """
-    The ALT_BN128 pairing check precompiled contract.
-
-    Parameters
-    ----------
-    evm :
-        The current EVM frame.
-    """
+# Create a function representing the line between P1 and P2,
+# and evaluate it at T. Returns a numerator and a denominator
+# to avoid unneeded divisions
+def linefunc(
+    P1: Optimized_Point3D[Optimized_Field],
+    P2: Optimized_Point3D[Optimized_Field],
+    T: Optimized_Point3D[Optimized_Field],
+) -> Optimized_Point2D[Optimized_Field]:
+    zero = P1[0].zero()
+    x1, y1, z1 = P1
+    x2, y2, z2 = P2
+    xt, yt, zt = T
 -/
+def linefunc : BNP12 →  BNP12 → BNP12 → BNP12
+  | ⟨x1, y1⟩, ⟨x2, y2⟩, ⟨xt, yt⟩ =>
+
+/-
+    # points in projective coords: (x / z, y / z)
+    # hence, m = (y2/z2 - y1/z1) / (x2/z2 - x1/z1)
+    # multiply numerator and denominator by z1z2 to get values below
+    m_numerator = y2 * z1 - y1 * z2
+    m_denominator = x2 * z1 - x1 * z2
+    if m_denominator != zero:
+        # m * ((xt/zt) - (x1/z1)) - ((yt/zt) - (y1/z1))
+        return (
+            m_numerator * (xt * z1 - x1 * zt) - m_denominator * (yt * z1 - y1 * zt),
+            m_denominator * zt * z1,
+        )
+    elif m_numerator == zero:
+        # m = 3(x/z)^2 / 2(y/z), multiply num and den by z**2
+        m_numerator = 3 * x1 * x1
+        m_denominator = 2 * y1 * z1
+        return (
+            m_numerator * (xt * z1 - x1 * zt) - m_denominator * (yt * z1 - y1 * zt),
+            m_denominator * zt * z1,
+        )
+    else:
+        return xt * z1 - x1 * zt, z1 * zt
+-/
+    let mNumerator : BNF12 := y2 - y1
+    let mDenominator : BNF12 := x2 - x1
+    if mDenominator ≠ 0
+    then
+      ⟨
+        mNumerator * (xt - x1) - mDenominator * (yt - y1),
+        mDenominator
+      ⟩
+    else
+      if mNumerator = 0
+      then
+        let mNumerator := 3 * x1 * x1
+        let mDenominator := 2 * y1
+        ⟨
+          mNumerator * (xt - x1) - mDenominator * (yt - y1),
+          mDenominator
+        ⟩
+      else ⟨xt - x1, 1⟩
+
+
+def FinFields.neg {p} (xs : FinFields p) : FinFields p :=
+  FinFields.sub [] xs
+
+def GaloidField.neg {p} {m} (xs : GaloisField p m) : GaloisField p m := 0 - xs
+
+instance {p} {m} : Neg (GaloisField p m) where
+  neg := GaloidField.neg
+
+def EllipticCurve.neg {F} [Neg F] {a b} : EllipticCurve F a b → EllipticCurve F a b
+  | ⟨x, y⟩ => ⟨x, -y⟩
+
+/-
+def miller_loop(
+    Q: Optimized_Point3D[FQ12],
+    P: Optimized_Point3D[FQ12],
+    final_exponentiate: bool = True,
+) -> FQ12:
+-/
+def millerLoop (q p : BNP12) (finalExp : Bool := true) : Option BNF12 := do
+
+/-
+    if Q is None or P is None:
+        return FQ12.one()
+    R: Optimized_Point3D[FQ12] = Q
+    f_num, f_den = FQ12.one(), FQ12.one()
+-/
+
+  let mut r : BNP12 := q
+  let mut fNum : BNF12 := 1
+  let mut fDen : BNF12 := 1
+
+/-
+    # for i in range(log_ate_loop_count, -1, -1):
+    for v in pseudo_binary_encoding[63::-1]:
+        _n, _d = linefunc(R, R, P)
+        f_num = f_num * f_num * _n
+        f_den = f_den * f_den * _d
+        R = double(R)
+        # if ate_loop_count & (2**i):
+        if v == 1:
+            _n, _d = linefunc(R, Q, P)
+            f_num = f_num * _n
+            f_den = f_den * _d
+            R = add(R, Q)
+        elif v == -1:
+            nQ = neg(Q)
+            _n, _d = linefunc(R, nQ, P)
+            f_num = f_num * _n
+            f_den = f_den * _d
+            R = add(R, nQ)
+-/
+  for v in (pseudoBinaryEncoding.take 64).reverse do
+    let ⟨_n, _d⟩ := linefunc r r p
+    fNum := fNum * fNum * _n
+    fDen := fDen * fDen * _d
+    r := r.double
+
+    if v = 1 then do
+      let ⟨_n, _d⟩ := linefunc r q p
+      fNum := fNum * _n
+      fDen := fDen * _d
+      r := r + q
+    if v = -1 then do
+      let nq := EllipticCurve.neg q
+      let ⟨_n, _d⟩ := linefunc r nq p
+      fNum := fNum * _n
+      fDen := fDen * _d
+      r := r + nq
+
+/-
+    # assert R == multiply(Q, ate_loop_count)
+    Q1 = (Q[0] ** field_modulus, Q[1] ** field_modulus, Q[2] ** field_modulus)
+    # assert is_on_curve(Q1, b12)
+    nQ2 = (Q1[0] ** field_modulus, -Q1[1] ** field_modulus, Q1[2] ** field_modulus)
+    # assert is_on_curve(nQ2, b12)
+    _n1, _d1 = linefunc(R, Q1, P)
+    R = add(R, Q1)
+    _n2, _d2 = linefunc(R, nQ2, P)
+    f = f_num * _n1 * _n2 / (f_den * _d1 * _d2)
+    # R = add(R, nQ2) This line is in many specifications but technically does nothing
+    if final_exponentiate:
+        return f ** ((field_modulus**12 - 1) // curve_order)
+    else:
+        return f
+-/
+  let q1 : BNP12 := ⟨q.x ^ altBn128Prime, q.y ^ altBn128Prime⟩
+  let nq2 : BNP12 := ⟨q1.x ^ altBn128Prime , (-q1.y) ^ altBn128Prime⟩
+  let ⟨_n1, _d1⟩ := linefunc r q1 p
+  r := r + q1
+  let ⟨_n2, _d2⟩ := linefunc r nq2 p
+  let f := (fNum * _n1 * _n2) / (fDen * _d1 * _d2)
+
+  return (
+    if finalExp
+    then f ^ ((altBn128Prime ^ 12 - 1) / altBn128CurveOrder)
+    else f
+  )
+
+def pairing (q : BNP2) (p : BNP) (finalExp : Bool := true) : Option BNF12 := do
+  guard q.isOnCurve
+  guard p.isOnCurve
+  if p = ⟨0, 0⟩ ∨ q = ⟨0, 0⟩ then
+    return 1
+  millerLoop (twist q) (p.toBNP12) finalExp
+
 def executePairingCheck (evm : Evm) : Execution := do
 
-/-
-    data = evm.message.data
-
-    # GAS
-    charge_gas(evm, Uint(34000 * (len(data) // 192) + 45000))
-
-    # OPERATION
-    if len(data) % 192 != 0:
-        raise OutOfGasError
-
-    result = BNF12.from_int(1)
--/
   let data := evm.message.data
   let evm ← chargeGas ((34000 * (data.length / 192)) + 45000) evm
 
-
   .assert (data.length % 192 = 0) ⟨evm, "OutOfGasError"⟩
 
-  let result := BNF12.from_int 1
-
-/-
-    for i in range(len(data) // 192):
-        values = []
-        for j in range(6):
-            value = int(
-                U256.from_be_bytes(
-                    data[i * 192 + 32 * j : i * 192 + 32 * (j + 1)]
-                )
-            )
-            if value >= ALT_BN128_PRIME:
-                raise OutOfGasError
-            values.append(value)
-
-        try:
-            p = BNP(BNF(values[0]), BNF(values[1]))
-            q = BNP2(
-                BNF2((values[3], values[2])), BNF2((values[5], values[4]))
-            )
-        except ValueError:
-            raise OutOfGasError()
-        if p.mul_by(ALT_BN128_CURVE_ORDER) != BNP.point_at_infinity():
-            raise OutOfGasError
-        if q.mul_by(ALT_BN128_CURVE_ORDER) != BNP2.point_at_infinity():
-            raise OutOfGasError
-        if p != BNP.point_at_infinity() and q != BNP2.point_at_infinity():
-            result = result * pairing(q, p)
--/
+  let mut result : BNF12 := 1
 
   for i in List.range (data.length / 192) do
-    dbg_trace s!"i in range : {i}"
 
-    let mut values : List Nat := []
+    let arg0 := data.sliceToNat (i * 192) 32
+    let arg1 := data.sliceToNat (i * 192 + 32) 32
+    let arg2 := data.sliceToNat (i * 192 + 64) 32
+    let arg3 := data.sliceToNat (i * 192 + 96) 32
+    let arg4 := data.sliceToNat (i * 192 + 128) 32
+    let arg5 := data.sliceToNat (i * 192 + 160) 32
 
-    for j in List.range 6 do
-      let start := (i * 192) + (32 * j)
-      let value : Nat := B8L.toNat <| data.sliceD start 32 (0 : B8)
-      .assert (value < altBn128Prime) ⟨evm, "OutOfGasError"⟩
-      values := value :: values
-
-    values := values.reverse
-
-    dbg_trace s!"first BNF2, first arg : {values.getD 3 0}"
-    dbg_trace s!"first BNF2, second arg : {values.getD 2 0}"
-    dbg_trace s!"first BNF2 : {BNF2.mk (values.getD 3 0) (values.getD 2 0)}"
-
-    dbg_trace s!"second BNF2, first arg : {values.getD 5 0}"
-    dbg_trace s!"second BNF2, second arg : {values.getD 4 0}"
-    dbg_trace s!"second BNF2 : {BNF2.mk (values.getD 5 0) (values.getD 4 0)}"
-
-    dbg_trace "'B' information for BNP2:"
-    dbg_trace s!"  BNF2.from_int(3) : {BNF2.fromNat 3}"
-    dbg_trace s!"  BNF2.i : {BNF2.i}"
-    dbg_trace s!"  BNF2.from_int(9) : {BNF2.fromNat 9}"
-    dbg_trace s!"  BNF2.i + BNF2.from_int(9) : {BNF2.i + BNF2.fromNat 9}"
-    let invVal ← (BNF2.i + BNF2.fromNat 9).inv.toExcept ⟨evm, "inv val failed"⟩
-    dbg_trace s!"  (BNF2.i + BNF2.from_int(9))^(-1) : {invVal}"
-    dbg_trace s!"  B (expected) : {BNF2.fromNat 3 * invVal}"
-
+    let p : BNP ← (BNP.mk? arg0 arg1).toExcept ⟨evm, "OutOfGasError"⟩
     let q : BNP2 ← (
-      BNP2.mk?
-        (BNF2.mk (values.getD 3 0) (values.getD 2 0))
-        (BNF2.mk (values.getD 5 0) (values.getD 4 0))
-      ).toExcept ⟨evm, "BNP2 construction failed"⟩
+      EllipticCurve.mk?
+        (BNF2.mk arg2 arg3)
+        (BNF2.mk arg4 arg5)
+      ).toExcept ⟨evm, "OutOfGasError"⟩
 
-    dbg_trace s!"q : {q}"
---
---  for i in List.range data.length
---    do dbg_trace s!"i in range : {i}"
+    .assert (p * altBn128CurveOrder = ⟨0, 0⟩) ⟨evm, "OutOfGasError"⟩
+    .assert (q * altBn128CurveOrder = ⟨0, 0⟩) ⟨evm, "OutOfGasError"⟩
 
-  .assert (data.length = 0) ⟨evm, "UNIMP : paring check with nonempty data"⟩
+    let pairResult ← (pairing q p).toExcept ⟨evm, "ValueError"⟩
+    result := result * pairResult
 
-/-
-    if result == BNF12.from_int(1):
-        evm.output = U256(1).to_be_bytes32()
-    else:
-        evm.output = U256(0).to_be_bytes32()
--/
   let output : B8L :=
-    if result = BNF12.from_int 1
+    if result = 1
     then (1 : Nat).toB256.toB8L
     else (0 : Nat).toB256.toB8L
 
@@ -4605,106 +5007,6 @@ def getBlockHeader : Lean.Json → Option Lean.Json
 def Lean.Json.toWithdrawal (j : Lean.Json) : IO Withdrawal :=
   .throw "unimplemented : json-to-withdrawal parsing"
 
-def runPyTest (vb : Bool) (t : Test) : IO Unit := do
-  .cprintln vb "----------------------------------------------------------------\n"
-  .println s!"TEST KEY : {t.name}"
-
---   let [blk] ← t.blocks.fromArr | .throw "error : multiple blocks"
---   let ⟨ex, mm⟩ ← getExceptionMap blk
---   let bh ← (getBlockHeader mm).toIO ""
---   let wds ← Lean.Json.find "withdrawals" mm >>= Lean.Json.fromArr >>= mapM Lean.Json.toWithdrawal
---   let bloom ← bh.find "bloom" >>= Lean.Json.toB8L
---   let bf ← bh.find "baseFeePerGas" >>= Lean.Json.toB256P
---   let xbg ← bh.find "excessBlobGas" >>= Lean.Json.toB256P
---   let cb ← bh.find "coinbase" >>= Lean.Json.toAdr
---   let pr ← bh.find "mixHash" >>= Lean.Json.toB256P
---   let gl ← bh.find "gasLimit" >>= Lean.Json.toB256P
---   let ts ← bh.find "timestamp" >>= Lean.Json.toB256P
---   let nb ← bh.find "number" >>= Lean.Json.toB256P
---   let txRoot ← bh.find "transactionsTrie" >>= Lean.Json.toB256P
---   let exRcRoot ← bh.find "receiptTrie" >>= Lean.Json.toB256P
---   let wdRoot ← bh.find "withdrawalsRoot" >>= Lean.Json.toB256P
---
---   checkWithdrawalsRoot vb wds wdRoot
---
---   let rlp_str ← t.blocks.get? 0 >>= Lean.Json.find "rlp" >>= Lean.Json.fromStr >>= .remove0x
---   let rlp ← (Hex.toB8L rlp_str >>= BLT.decode).toIO ""
---   let tx_rlp ← (rlp.get? 1 >>= BLT.get? 0).toIO ""
---   let w ← Lean.Json.toWorld t.pre
---
---   .cprintln vb "world state before tx:"
---   .cprintln vb (String.joinln <| w.toStrings)
---
---   let bi : BlockInfo :=
---     {
---       blockHashes := [], -- List B256
---       baseFee := bf -- B256
---       excessBlobGas := xbg -- B256
---       beneficiary := cb -- Adr
---       prevRandao := pr -- B256
---       gasLimit := gl -- B256
---       timestamp := ts -- B256
---       number := nb -- B256
---     }
---
---   let ⟨txFoo, txbs, sender⟩ ← decodeTxBLT tx_rlp
---
---   let stx := Tx.toStx txFoo sender
-
---   let txr ← Stx.run vb bi w stx
---
---   .cprintln vb "tx result:"
---   .cprintln vb (String.joinln <| txr.toStrings)
---
---   checkTransactionsRoot vb txbs txRoot txr
---
---   Stx.Result.check' vb stx bloom exRcRoot t.post ex txr
-
-  .ok ()
--- def Lean.Json.toHeader? (json : Lean.Json) : Option Header := do
---   let parentHash ← json.find? "parentHash" >>= Lean.Json.toB256?
---   let ommersHash ← json.find? "uncleHash" >>= Lean.Json.toB256?
---   let coinbase ← json.find? "coinbase" >>= Lean.Json.toAdr?
---   let stateRoot ← json.find? "stateRoot" >>= Lean.Json.toB256?
---   let txsRoot ← json.find? "transactionsTrie" >>= Lean.Json.toB256?
---   let receiptRoot ← json.find? "receiptTrie" >>= Lean.Json.toB256?
---   let bloom ← json.find? "bloom" >>= Lean.Json.toB8L?
---   let difficulty ← (json.find? "difficulty" >>= Lean.Json.toB8L?) <&> B8L.toNat
---   let number ← (json.find? "number" >>= Lean.Json.toB8L?) <&> B8L.toNat
---   let gasLimit ← (json.find? "gasLimit" >>= Lean.Json.toB8L?) <&> B8L.toNat
---   let gasUsed ← (json.find? "gasUsed" >>= Lean.Json.toB8L?) <&> B8L.toNat
---   let timestamp ← (json.find? "timestamp" >>= Lean.Json.toB8L?) <&> B8L.toNat
---   let extraData ← json.find? "extraData" >>= Lean.Json.toB8L?
---   let prevRandao ← json.find? "mixHash" >>= Lean.Json.toB256?
---   let nonce ← json.find? "nonce" >>= Lean.Json.toB64?
---   let baseFeePerGas ← (json.find? "baseFeePerGas" >>= Lean.Json.toB8L?) <&> B8L.toNat
---   let withdrawalsRoot ← json.find? "withdrawalsRoot" >>= Lean.Json.toB256?
---   let blobGasUsed ← (json.find? "blobGasUsed" >>= Lean.Json.toB8L?) <&> B8L.toNat
---   let excessBlobGas ← (json.find? "excessBlobGas" >>= Lean.Json.toB8L?) <&> B8L.toNat
---   let parentBeaconBlockRoot ← json.find? "parentBeaconBlockRoot" >>= Lean.Json.toB256?
--- .some {
---   parentHash := parentHash
---   ommersHash := ommersHash
---   coinbase := coinbase
---   stateRoot := stateRoot
---   txsRoot := txsRoot
---   receiptRoot := receiptRoot
---   bloom := bloom
---   difficulty := difficulty
---   number := number
---   gasLimit := gasLimit
---   gasUsed := gasUsed
---   timestamp := timestamp
---   extraData := extraData
---   prevRandao := prevRandao
---   nonce := nonce
---   baseFeePerGas := baseFeePerGas
---   withdrawalsRoot := withdrawalsRoot
---   blobGasUsed := blobGasUsed
---   excessBlobGas := excessBlobGas
---   parentBeaconBlockRoot := parentBeaconBlockRoot
--- }
-
 --structure Header : Type where
 --  parentHash : B256
 --  ommersHash : B256
@@ -4728,28 +5030,29 @@ def runPyTest (vb : Bool) (t : Test) : IO Unit := do
 --  parentBeaconBlockRoot : B256
 
 def BLT.toExStrHeader : BLT → Except String Header
-  | .list [
-      .b8s parentHash,
-      .b8s ommersHash,
-      .b8s coinbase,
-      .b8s stateRoot,
-      .b8s txsRoot,
-      .b8s receiptRoot,
-      .b8s bloom,
-      .b8s difficulty,
-      .b8s number,
-      .b8s gasLimit,
-      .b8s gasUsed,
-      .b8s timestamp,
-      .b8s extraData,
-      .b8s prevRandao,
-      .b8s nonce,
-      .b8s baseFeePerGas,
-      .b8s withdrawalsRoot,
-      .b8s blobGasUsed,
-      .b8s excessBlobGas,
-      .b8s parentBeaconBlockRoot
-    ] => do
+  | .list (
+      .b8s parentHash ::
+      .b8s ommersHash ::
+      .b8s coinbase ::
+      .b8s stateRoot ::
+      .b8s txsRoot ::
+      .b8s receiptRoot ::
+      .b8s bloom ::
+      .b8s difficulty ::
+      .b8s number ::
+      .b8s gasLimit ::
+      .b8s gasUsed ::
+      .b8s timestamp ::
+      .b8s extraData ::
+      .b8s prevRandao ::
+      .b8s nonce ::
+      .b8s baseFeePerGas ::
+      .b8s withdrawalsRoot ::
+      .b8s blobGasUsed ::
+      .b8s excessBlobGas ::
+      .b8s parentBeaconBlockRoot ::
+      tail
+    ) => do
       let parentHash ← parentHash.toB256?.toExcept "parentHash to B256 conversion failed"
       let ommersHash ← ommersHash.toB256?.toExcept "ommersHash to B256 conversion failed"
       let coinbase ← coinbase.toAdr?.toExcept "coinbase to Adr conversion failed"
@@ -4768,6 +5071,12 @@ def BLT.toExStrHeader : BLT → Except String Header
       let blobGasUsed := blobGasUsed.toNat
       let excessBlobGas := excessBlobGas.toNat
       let previousBeaconBlockRoot ← parentBeaconBlockRoot.toB256?.toExcept "parentBeaconBlockRoot to B256 conversion failed"
+      let requestsHash : Option B256 ←
+        match tail with
+        | [] => .ok none
+        | [.b8s requestsHash] => requestsHash.toB256?.toExcept "requestsHash conversion failed"
+        | _ => .error "BLT to Header conversion failed, incorrect list length"
+
       .ok {
         parentHash := parentHash
         ommersHash := ommersHash
@@ -4789,6 +5098,7 @@ def BLT.toExStrHeader : BLT → Except String Header
         blobGasUsed := blobGasUsed
         excessBlobGas := excessBlobGas
         parentBeaconBlockRoot := previousBeaconBlockRoot
+        requestsHash := requestsHash
       }
   | _ =>
     .error "BLT to Header conversion failed, expected a list"
@@ -4814,6 +5124,7 @@ def Lean.Json.toHeader (json : Lean.Json) : IO Header := do
   let blobGasUsed ← (json.find "blobGasUsed" >>= Lean.Json.toIoB8L) <&> B8L.toNat
   let excessBlobGas ← (json.find "excessBlobGas" >>= Lean.Json.toIoB8L) <&> B8L.toNat
   let parentBeaconBlockRoot ← json.find "parentBeaconBlockRoot" >>= Lean.Json.toIoB256
+  let requestsHash := (json.find? "requestsHash" >>= Lean.Json.toB256?)
   .ok {
     parentHash := parentHash
     ommersHash := ommersHash
@@ -4835,6 +5146,7 @@ def Lean.Json.toHeader (json : Lean.Json) : IO Header := do
     blobGasUsed := blobGasUsed
     excessBlobGas := excessBlobGas
     parentBeaconBlockRoot := parentBeaconBlockRoot
+    requestsHash := requestsHash
   }
 
 structure BlockChain : Type where
@@ -4907,7 +5219,7 @@ def Block.toStrings (block : Block) : List String :=
     | .inr tx => tx.toStrings
 
   fork "BLOCK" [
-    block.header.toStrings,
+    Header.toStrings block.header,
     fork "TXS" <| block.txs.map aux,
     fork "OMMERS" <| block.ommers.map Header.toStrings,
     fork "WDS" <| block.wds.map Withdrawal.toStrings
@@ -4989,7 +5301,7 @@ def validateHeader (header parentHeader : Header) :
     )
     "InvalidBlock"
 
-  let blockParentHash := parentHeader.toBLT.encode.keccak
+  let blockParentHash := (Header.toBLT parentHeader).encode.keccak
 
   .assert
     (header.parentHash = blockParentHash)
@@ -6727,7 +7039,7 @@ def get_last_256_block_hashes (chain : BlockChain) : List B256 :=
   match chain.blocks.reverse.take 255 with
   | [] => []
   | block :: blocks =>
-    let hash : B256 := block.header.toBLT.encode.keccak
+    let hash : B256 := (Header.toBLT block.header).encode.keccak
     let hashes : List B256 :=
       blocks.map <| fun x => x.header.parentHash
     (hash :: hashes).reverse
@@ -6944,7 +7256,7 @@ type also omits the RLP bytes, since this is identical to the input.
 def rlpToBlock (rlp : B8L) : IO (Block × B256) := do
   let block_blt ← (BLT.decode rlp).toIO  "error : cannot decode block from rlp"
   let block ← exStrToIO <| block_blt.toExStrBlock
-  return ⟨block, block.header.toBLT.encode.keccak⟩
+  return ⟨block, (Header.toBLT block.header).encode.keccak⟩
 
 def addBlockToChain (vb : Bool) (chain : BlockChain) (blockRlp : B8L) :
   IO (BlockChain ⊕ String) := do
@@ -6974,7 +7286,7 @@ def addBlockToChain (vb : Bool) (chain : BlockChain) (blockRlp : B8L) :
   .cprintln vb "\nSTATE BEFORE TRANSITION :"
   .cprintln vb s!"{chain.state}"
 
-  .guard (block.header.toBLT.encode.keccak = blockHeaderHash) "error : incorrect block header hash"
+  .guard ((Header.toBLT block.header).encode.keccak = blockHeaderHash) "error : incorrect block header hash"
 
   let rlp' ← block.toIoBLT <&> BLT.encode
 
@@ -7026,12 +7338,6 @@ def runTest (vb : Bool) (idx? : Option Nat) (nw? : Option String)
       if specIdx ≠ idx then
         return ()
 
-    -- match name? with
-    -- | none => .ok ()
-    -- | some specName =>
-    --   if specName ≠ name then
-    --     return ()
-
     if ¬ (incls.isEmpty ∨ name ∈ incls)
       then return ()
 
@@ -7050,7 +7356,8 @@ def runTest (vb : Bool) (idx? : Option Nat) (nw? : Option String)
     let gbh ← gbh_json.toHeader
     let gb : Block := {header := gbh, txs := [], ommers := [], wds := []}
     let gbh_hash ← gbh_json.find "hash" >>= Lean.Json.toIoB256
-    let gbh_hash' := (BLT.encode gbh.toBLT).keccak
+    let gbh_hash' := (BLT.encode (Header.toBLT gbh)).keccak
+
     .guard (gbh_hash = gbh_hash') "error : unexpected genesis block header hash."
     let genesisRLP ← json.find "genesisRLP" >>= Lean.Json.toIoB8L
     let genesisRLP' ← gb.toIoBLT <&> BLT.encode
@@ -7076,7 +7383,7 @@ def runTest (vb : Bool) (idx? : Option Nat) (nw? : Option String)
 
     let lastBlockHash ← json.find "lastblockhash" >>= Lean.Json.toIoB256
     let lastBlock ← chain.blocks.getLast?.toIO "error : no last block "
-    let lastBlockHash' := lastBlock.header.toBLT.encode.keccak--  (B8L.keccak ∘ BLT.encode)
+    let lastBlockHash' := (Header.toBLT lastBlock.header).encode.keccak--  (B8L.keccak ∘ BLT.encode)
     .guard
       (lastBlockHash = lastBlockHash')
       s!"error : last block hash does not match\n  expected : {lastBlockHash}\n  computed : {lastBlockHash'}"
