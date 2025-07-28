@@ -5,7 +5,7 @@ import Mathlib.Data.Nat.Defs
 import Mathlib.Data.List.Lemmas
 import Mathlib.Util.Notation3
 import Mathlib.Data.Vector.Basic
-
+import Lean.Data.Json
 
 
 -- Boolean lemmas --
@@ -1600,6 +1600,9 @@ lemma List.slice?_cons {ξ : Type u} (x) (xs : List ξ) (m n : Nat) :
 def List.sliceD {ξ : Type u} (xs : List ξ) (m n : Nat) (x : ξ) : List ξ :=
   takeD n (drop m xs) x
 
+def List.slice! {ξ : Type u} [Inhabited ξ] (xs : List ξ) (m n : Nat) : List ξ :=
+  takeD n (drop m xs) default
+
 lemma List.slice?_eq_cons_iff {ξ : Type u} {xs : List ξ} {m n : Nat} {y} {ys} :
     slice? xs m (n + 1) = some (y :: ys) ↔
       (get? xs m = some y ∧ slice? xs (m + 1) n = some ys) := by
@@ -2994,7 +2997,7 @@ def Nat.toBytesCore (n : Nat) : Bytes :=
 def Nat.toBytes (n : Nat) : Bytes := n.toBytesCore.reverse
 
 
-def Nat.toB8LNew (n : Nat) : B8L :=
+def Nat.toB8L (n : Nat) : B8L :=
   let rec aux (acc : B8L) : Nat → B8L
   | 0 => acc
   | n@(_ + 1) => aux ((n % 256).toUInt8 :: acc) (n / 256)
@@ -3002,21 +3005,7 @@ def Nat.toB8LNew (n : Nat) : B8L :=
 
 def Nat.toB8LPack : Nat → B8L
   | 0 => [0]
-  | n@(_ + 1) => n.toB8LNew
-
---   if n < 256
---   then [n.toUInt8]
---   else (n % 256).toUInt8 :: (n / 256).toB8LCore
--- def Nat.toB8LCore (n : Nat) : B8L :=
---   if n < 256
---   then [n.toUInt8]
---   else (n % 256).toUInt8 :: (n / 256).toB8LCore
---
--- def Nat.toB8L (n : Nat) : B8L := n.toB8LCore.reverse
---
--- def Nat.toB8LNil : Nat → B8L
---   | 0 => []
---   | n => n.toB8L
+  | n@(_ + 1) => n.toB8L
 
 def Except.assert (p : Prop) [inst : Decidable p]
   {ξ : Type u} (x : ξ) : Except ξ Unit :=
@@ -3025,9 +3014,6 @@ def Except.assert (p : Prop) [inst : Decidable p]
 def Except.assertNot (p : Prop) [inst : Decidable p]
   {ξ : Type u} (x : ξ) : Except ξ Unit :=
   if p then .error x else .ok ()
-
--- def Except.guardNot (p : Prop) [inst : Decidable p] {ξ : Type u} (x : ξ) : Except ξ Unit :=
---   if p then .error x else .ok ()
 
 def Option.toExcept {ξ : Type u} {υ : Type v} (x : ξ) : Option υ → Except ξ υ
   | .none => .error x
@@ -3224,3 +3210,40 @@ mutual
     | [] => []
     | r :: rs => r.toStrings :: RLPs'.toStringss rs
 end
+
+def readJsonFile (filename : System.FilePath) : IO Lean.Json := do
+  let contents ← IO.FS.readFile filename
+  match Lean.Json.parse contents with
+  | .ok json => pure json
+  | .error err => throw (IO.userError err)
+
+mutual
+
+  partial def StringJson.toStrings : ((_ : String) × Lean.Json) → List String
+    | ⟨n, j⟩ =>
+      (fork n [Lean.Json.toStrings j])
+
+  partial def StringJsons.toStrings : List ((_ : String) × Lean.Json) → List String
+    | [] => []
+    | ⟨n, j⟩ :: njs =>
+      (fork n [Lean.Json.toStrings j]) ++ StringJsons.toStrings njs
+
+  partial def Lean.Jsons.toStrings : List Lean.Json → List String
+    | [] => []
+    | j :: js => Lean.Json.toStrings j ++ Lean.Jsons.toStrings js
+
+  partial def Lean.Json.toStrings : Lean.Json → List String
+    | .null => ["NULL"]
+    | .bool b => [s!"BOOL : {b}"]
+    | .num n => [s!"NUM : {n}"]
+    | .str s =>
+       fork "STR" [s.chunks 80]
+    | .arr js =>
+      fork "ARR" (js.toList.map Lean.Json.toStrings)
+    | .obj m => do
+      let kvs := m.toArray.toList
+      fork "OBJ" (kvs.map StringJson.toStrings)
+
+end
+
+def Lean.Json.toString (j : Lean.Json) : String := String.joinln j.toStrings
