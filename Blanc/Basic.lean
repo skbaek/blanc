@@ -3247,3 +3247,9 @@ mutual
 end
 
 def Lean.Json.toString (j : Lean.Json) : String := String.joinln j.toStrings
+
+def B256.lt_check  (x y : B256) : B256 := if x < y then 1 else 0
+def B256.gt_check  (x y : B256) : B256 := if x > y then 1 else 0
+def B256.slt_check (x y : B256) : B256 := if B256.Slt x y then 1 else 0
+def B256.sgt_check (x y : B256) : B256 := if B256.Sgt x y then 1 else 0
+def B256.eq_check  (x y : B256) : B256 := if x = y then 1 else 0

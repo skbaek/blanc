@@ -867,7 +867,7 @@ theorem weth_inv_solvent (wa : Addr) :
                 lt_of_le_of_lt (add_le_sum_of_ne s.bal h_ne.symm) h_pc.nof
               rw [h_rw, Bits.toNat_add_eq_of_nof _ _ hle]; apply Nat.le_add_right
             · rw [(hd wa).right h_ne, (hi wa).right ha]
-          | invalid => cases h_run
+          -- | invalid => cases h_run
         unfold Result.Solvent; rw [← Linst.inv_stor asm]
         apply le_trans h_sv h_le
     · refine' ⟨h_pc.code, h_pc.nof, _⟩

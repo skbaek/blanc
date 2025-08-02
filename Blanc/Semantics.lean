@@ -1,104 +1,6 @@
 -- Semantics.lean : formalized semantics of the EVM and Blanc
 
-import Blanc.Basic
-
-
-
--- EVM semantics --
-
-inductive Rinst : Type
-  | add -- 0x01 / 2 / 1 / addition operation.
-  | mul -- 0x02 / 2 / 1 / multiplication operation.
-  | sub -- 0x03 / 2 / 1 / subtraction operation.
-  | div -- 0x04 / 2 / 1 / integer division operation.
-  | sdiv -- 0x05 / 2 / 1 / signed integer division operation.
-  | mod -- 0x06 / 2 / 1 / modulo operation.
-  | smod -- 0x07 / 2 / 1 / signed modulo operation.
-  | addmod -- 0x08 / 3 / 1 / modulo addition operation.
-  | mulmod -- 0x09 / 3 / 1 / modulo multiplication operation.
-  | exp -- 0x0A / 2 / 1 / exponentiation operation.
-  | signextend -- 0x0B / 2 / 1 / sign extend operation.
-  | lt -- 0x10 / 2 / 1 / less-than comparison.
-  | gt -- 0x11 / 2 / 1 / greater-than comparison.
-  | slt -- 0x12 / 2 / 1 / signed less-than comparison.
-  | sgt -- 0x13 / 2 / 1 / signed greater-than comparison.
-  | eq -- 0x14 / 2 / 1 / equality comparison.
-  | iszero -- 0x15 / 1 / 1 / tests if the input is zero.
-  | and -- 0x16 / 2 / 1 / bitwise and operation.
-  | or -- 0x17 / 2 / 1 / bitwise or operation.
-  | xor -- 0x18 / 2 / 1 / bitwise xor operation.
-  | not -- 0x19 / 1 / 1 / bitwise not operation.
-  | byte -- 0x1A / 2 / 1 / retrieve a single Byte from a Word.
-  | shr -- 0x1B / 2 / 1 / logical shift right operation.
-  | shl -- 0x1C / 2 / 1 / logical shift left operation.
-  | sar -- 0x1D / 2 / 1 / arithmetic (signed) shift right operation.
-  | kec -- 0x20 / 2 / 1 / compute Keccak-256 hash.
-  | address -- 0x30 / 0 / 1 / Get the Addr of the currently executing account.
-  | balance -- 0x31 / 1 / 1 / Get the balance of the specified account.
-  | origin -- 0x32 / 0 / 1 / Get the Addr that initiated the current transaction.
-  | caller -- 0x33 / 0 / 1 / Get the Addr that directly called the currently executing contract.
-  | callvalue -- 0x34 / 0 / 1 / Get the value (in wei) sent with the current transaction.
-  | calldataload -- 0x35 / 1 / 1 / Load input data from the current transaction.
-  | calldatasize -- 0x36 / 0 / 1 / Get the size of the input data from the current transaction.
-  | calldatacopy -- 0x37 / 3 / 0 / Copy input data from the current transaction to Memory.
-  | codesize -- 0x38 / 0 / 1 / Get the size of the code of the currently executing contract.
-  | codecopy -- 0x39 / 3 / 0 / Copy the code of the currently executing contract to memory.
-  | gasprice -- 0x3a / 0 / 1 / Get the gas price of the current transaction.
-  | extcodesize -- 0x3B / 1 / 1 / Get the size of the code of an external account.
-  | extcodecopy -- 0x3C / 4 / 0 / Copy the code of an external account to memory.
-  | retdatasize -- 0x3D / 0 / 1 / Get the size of the output data from the previous call.
-  | retdatacopy -- 0x3E / 3 / 0 / Copy output data from the previous call to memory.
-  | extcodehash -- 0x3F / 1 / 1 / Get the code hash of an external account.
-  | blockhash -- 0x40 / 1 / 1 / get the hash of the specified block.
-  | coinbase -- 0x41 / 0 / 1 / get the Addr of the current block's miner.
-  | timestamp -- 0x42 / 0 / 1 / get the timestamp of the current block.
-  | number -- 0x43 / 0 / 1 / get the current block number.
-  | prevrandao -- 0x44 / 0 / 1 / get the latest RANDAO mix of the post beacon state of the previous block.
-  | gaslimit -- 0x45 / 0 / 1 / get the gas limit of the current block.
-  | chainid -- 0x46 / 0 / 1 / get the chain id of the current blockchain.
-  | selfbalance -- 0x47 / 0 / 1 / get the balance of the currently executing account.
-  | basefee -- 0x48 / 0 / 1 / get the current block's base fee.
-  | blobhash -- 0x49 / 1 / 1 /
-  | blobbasefee -- 0x4A / 0 / 1 / get the current block's blob base fee.
-  | pop -- 0x50 / 1 / 0 / Remove an item from the Stack.
-  | mload -- 0x51 / 1 / 1 / Load a Word from memory.
-  | mstore -- 0x52 / 2 / 0 / Store a Word in memory.
-  | mstore8 -- 0x53 / 2 / 0 / store a Byte in memory.
-  | sload -- 0x54 / 1 / 1 / load a word from storage.
-  | sstore -- 0x55 / 2 / 0 / store a word in storage.
-  | tload -- 0x5C / 1 / 1 / load a word from transient torage.
-  | tstore -- 0x5D / 2 / 0 / store a word in transient storage.
-  | mcopy -- 0x5E / 3 / 0 /
-  | pc -- 0x58 / 0 / 1 / Get the current program counter value.
-  | msize -- 0x59 / 0 / 1 / Get the size of the memory.
-  | gas -- 0x5a / 0 / 1 / Get the amount of remaining gas.
-  | dup : Fin 16 → Rinst
-  | swap : Fin 16 → Rinst
-  | log : Fin 5 → Rinst
--- deriving DecidableEq
-
-inductive Jinst : Type
-  | jump -- 0x56 / 1 / 0 / Unconditional jump.
-  | jumpi -- 0x57 / 2 / 0 / Conditional jump.
-  | jumpdest -- 0x5b / 0 / 0 / Mark a valid jump destination.
-deriving DecidableEq
-
-inductive Xinst : Type
-  | create -- 0xf0 / 3 / 1 / Create a new contract account.
-  | call -- 0xf1 / 7 / 1 / Call an existing account, which can be either a contract or a non-contract account.
-  | callcode -- 0xf2 / 7 / 1 / Call an existing contract's code using the current contract's Storage and Addr.
-  | delcall -- 0xf4 / 6 / 1 / Call an existing contract's code using the current contract's Storage and the calling contract's Addr and value.
-  | create2 -- 0xf5 / 4 / 1 / Create a new contract account at a deterministic Addr using a salt value.
-  | statcall -- 0xfa / 6 / 1 / Perform a read-only call to an existing contract.
-deriving DecidableEq
-
-inductive Linst : Type
-  | stop -- 0x00 / 0 / 0 / halts execution.
-  | ret -- 0xf3 / 2 / 0 / Halt execution and return output data.
-  | rev -- 0xfd / 2 / 0 / Halt execution and revert State changes, returning output data.
-  | dest -- 0xff / 1 / 0 / Halt execution and destroy the current contract, transferring remaining Ether to a specified Addr.
-  -- | invalid -- 0xFE / 0 / 0 / Designated invalid instruction.
-deriving DecidableEq
+import Blanc.Types
 
 def Rinst.toByte : Rinst → Byte
   | add          => Ox x0 x1
@@ -214,32 +116,9 @@ inductive Stack.Nth : Nat → Word → Stack → Prop
 
 def Stack.Dup (n : Nat) (s s' : Stack) : Prop := ∃ x, Push [x] s s' ∧ Stack.Nth n x s
 
-abbrev Stor := Lean.RBMap B256 B256 compare
 
-structure Acct where
-  (nonce : B64)
-  (bal : B256)
-  (stor : Stor)
-  (code : ByteArray)
 
-structure Adr : Type where
-  (high : B32)
-  (mid : B64)
-  (low : B64)
-deriving DecidableEq
 
-def Adr.ordering : Adr → Adr → Ordering
-  | ⟨xh, xm, xl⟩, ⟨yh, ym, yl⟩ =>
-    match compare xh yh with
-    | .eq =>
-      match compare xm ym with
-      | .eq => compare xl yl
-      | o => o
-    | o => o
-
-instance : Ord Adr := ⟨Adr.ordering⟩
-
-abbrev Wor : Type := Lean.RBMap Adr Acct compare
 
 structure State where
   -- balance, storage, & code : parts of the world state
@@ -408,12 +287,6 @@ def gt_check (x y : Bits 256) : Bits 256 := if x > y then 1 else 0
 def slt_check (x y : Bits 256) : Bits 256 := if x ±< y then 1 else 0
 def sgt_check (x y : Bits 256) : Bits 256 := if x ±> y then 1 else 0
 def eq_check (x y : Bits 256) : Bits 256 := if x = y then 1 else 0
-
-def B256.lt_check  (x y : B256) : B256 := if x < y then 1 else 0
-def B256.gt_check  (x y : B256) : B256 := if x > y then 1 else 0
-def B256.slt_check (x y : B256) : B256 := if B256.Slt x y then 1 else 0
-def B256.sgt_check (x y : B256) : B256 := if B256.Sgt x y then 1 else 0
-def B256.eq_check  (x y : B256) : B256 := if x = y then 1 else 0
 
 infix:70 " <? " => lt_check
 infix:70 " >? " => gt_check
