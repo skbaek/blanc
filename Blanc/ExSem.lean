@@ -1442,7 +1442,7 @@ def Evm.memExtends (evm : Evm) (pairs : List (Nat × Nat)) : Evm :=
   {evm with memory := mem}
 
 def Evm.addLog (evm : Evm) (log : Log) : Evm :=
-  {evm with logs := log :: evm.logs}
+  {evm with logs := evm.logs ++ [log]}
 
 def applyUnary (f : B256 → B256) (cost : Nat) (evm : Evm) : Execution := do
   let ⟨x, evm⟩ ← evm.pop
@@ -2061,6 +2061,7 @@ def incorporateChildOnSuccess (parent child : Evm) (returnData : B8L) : Evm :=
       tenv := child.msg.tenv
     },
     logs := child.logs ++ parent.logs
+    -- logs := parent.logs ++ child.logs
     refund_counter := parent.refund_counter + child.refund_counter
     accountsToDelete := parent.accountsToDelete.union child.accountsToDelete
     return_data := returnData
@@ -3482,7 +3483,7 @@ mutual
       .error ⟨evm, "RecursionLimit"⟩
     | vb, lim + 1, evm => do
       let mut evm := evm
-      showLim lim evm
+      -- showLim lim evm
       let i ← (evm.getInst).toExcept ⟨evm, "InvalidOpcode"⟩
       showStep vb evm i
       match i with
@@ -5964,6 +5965,16 @@ def State.root (w : State) : B256 :=
   let finalNTB : NTB := Lean.RBMap.fromList keyVals _
   trie finalNTB
 
+def Receipt.toStrings (r : Receipt) : List String :=
+  fork "RECEIPT" [
+    [s!"SUCCEEDED: {r.succeeded}"],
+    [s!"GAS USED: {r.gasUsed}"],
+    --s!"bloom: {r.bloom.toHex}",
+    fork "BLOOM" [r.bloom.toHex.chunks 64],
+    --s!"logs: {List.toStrings r.logs}"
+    fork "LOGS" (r.logs.map Log.toStrings)
+  ]
+
 /-
 def state_transition(chain: BlockChain, block: Block) -> None:
 -/
@@ -6026,12 +6037,21 @@ def state_transition (vb : Bool) (chain : BlockChain) (block : Block) :
     .print s!""
     .ok <| trie <| Lean.RBMap.fromList temp _
 
+  .print "receipts from applyBody :"
+  let receiptList : List (B8L × Receipt) ←
+    mapM (fun ⟨foo, bar⟩ => do .ok ⟨foo, (← decodeReceipt bar)⟩ ) bout.receiptsTrie.toList
+
+  --.print <| String.joinln (List.toStrings (fun ⟨foo, bar⟩ => fork foo.toHex [bar.toHex.chunks 64]) bout.receiptsTrie.toList)
+  .print <| String.joinln (List.toStrings (fun ⟨foo, bar⟩ => fork foo.toHex [Receipt.toStrings bar]) receiptList)
+
 --receipt_root = root(block_output.receipts_trie)
   let receiptRoot : B256 :=
     let receiptAux (arg : B8L × B8L) : B8L × B8L :=
       ⟨arg.fst.toB4s, arg.snd⟩
     let temp := (List.map receiptAux bout.receiptsTrie.toList)
     trie <| Lean.RBMap.fromList temp _
+
+  .print s!"computed receipt root : {receiptRoot}"
 
 --block_logs_bloom = logs_bloom(block_output.block_logs)
   let block_logs_bloom := logsBloom bout.blockLogs
