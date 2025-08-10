@@ -51,22 +51,26 @@ inductive TxType : Type
   -- Legacy (including EIP-155)
   | zero
     (gasPrice : Nat)
+    (receiver : Option Adr)
   -- -- EIP-2930
   | one
-    (gasPrice : Nat)
     (chainId : B64)
+    (gasPrice : Nat)
+    (receiver : Option Adr)
     (accessList : AccessList)
   -- EIP-1559
   | two
     (chainId : B64)
     (maxPriorityFee : Nat)
     (maxFee : Nat)
+    (receiver : Option Adr)
     (accessList : AccessList)
   -- EIP-4844
   | three
     (chainId : B64)
     (maxPriorityFee : Nat)
     (maxFee : Nat)
+    (receiver : Adr)
     (accessList : AccessList)
     (maxBlobFee : Nat)
     (blobHashes : List B256)
@@ -74,6 +78,7 @@ inductive TxType : Type
     (chainId : B64)
     (maxPriorityFee : Nat)
     (maxFee : Nat)
+    (receiver : Adr)
     (accessList : AccessList)
     (auths : List Auth)
 
@@ -174,7 +179,7 @@ def Header.toBLT (header : Header) : BLT :=
 structure Tx : Type where
   (nonce : B64)
   (gas : Nat)
-  (receiver : Option Adr)
+  --(receiver : Option Adr)
   (value : Nat)
   (data : B8L)
   (v : Nat)
@@ -193,25 +198,32 @@ structure BlockChain : Type where
   state : State
   chainId : B64
 
+def TxType.receiver? : TxType → Option Adr
+  | .zero _ receiver => receiver
+  | .one _ _ receiver _ => receiver
+  | .two _ _ _ receiver _ => receiver
+  | .three _ _ _ receiver _ _ _ => some receiver
+  | .four _ _ _ receiver _ _ => some receiver
+
 def TxType.toNat : TxType → Nat
-  | .zero _ => 0
-  | .one _ _ _ => 1
-  | .two _ _ _ _ => 2
-  | .three _ _ _ _ _ _ => 3
-  | .four _ _ _ _ _ => 4
+  | .zero _ _ => 0
+  | .one _ _ _ _ => 1
+  | .two _ _ _ _ _ => 2
+  | .three _ _ _ _ _ _ _ => 3
+  | .four _ _ _ _ _ _ => 4
 
 def TxType.accessList : TxType → AccessList
-  | .zero _ => []
-  | .one _ _ al => al
-  | .two _ _ _ al => al
-  | .three _ _ _ al _ _ => al
-  | .four _ _ _ al _ => al
+  | .zero _ _ => []
+  | .one _ _ _ al => al
+  | .two _ _ _ _ al => al
+  | .three _ _ _ _ al _ _ => al
+  | .four _ _ _ _ al _ => al
 
 def Tx.accessList (tx : Tx) : AccessList := tx.type.accessList
 
 def Tx.auths (tx : Tx) : List Auth :=
   match tx.type with
-  | .four _ _ _ _ auths => auths
+  | .four _ _ _ _ _ auths => auths
   | _ => []
 
 def B8L.sig (bs : B8L) : B8L := List.dropWhile (· = 0) bs
@@ -234,79 +246,79 @@ def Auth.toBLT (auth : Auth) : BLT :=
 
 def Tx.toBLT (tx : Tx) : BLT :=
   match tx.type with
-  | .zero gasPrice =>
+  | .zero gasPrice receiver =>
     .list [
       .b8s tx.nonce.toNat.toB8L,
       .b8s gasPrice.toB8L,
       .b8s tx.gas.toB8L,
-      .b8s <| tx.receiver.rec [] Adr.toB8L,
+      .b8s <| receiver.rec [] Adr.toB8L,
       .b8s tx.value.toB8L,
       .b8s tx.data,
       .b8s tx.v.toB8L,
-      .b8s tx.r,
-      .b8s tx.s,
+      .b8s (trimZero tx.r),
+      .b8s (trimZero tx.s),
     ]
-  | .one gasPrice chainId accessList =>
+  | .one chainId gasPrice receiver accessList =>
     .list [
       .b8s chainId.toB8L.sig,
       .b8s tx.nonce.toNat.toB8L,
       .b8s gasPrice.toB8L,
       .b8s tx.gas.toB8L,
-      .b8s <| tx.receiver.rec [] Adr.toB8L,
+      .b8s <| receiver.rec [] Adr.toB8L,
       .b8s tx.value.toB8L,
       .b8s tx.data,
       accessList.toBLT,
       .b8s tx.v.toB8L,
-      .b8s tx.r,
-      .b8s tx.s
+      .b8s (trimZero tx.r),
+      .b8s (trimZero tx.s)
     ]
-  | .two chainId maxPriorityFee maxFee accessList =>
+  | .two chainId maxPriorityFee maxFee receiver accessList =>
     .list [
       .b8s chainId.toB8L.sig,
       .b8s tx.nonce.toNat.toB8L,
       .b8s maxPriorityFee.toB8L,
       .b8s maxFee.toB8L,
       .b8s tx.gas.toB8L,
-      .b8s <| tx.receiver.rec [] Adr.toB8L,
+      .b8s <| receiver.rec [] Adr.toB8L,
       .b8s tx.value.toB8L,
       .b8s tx.data,
       accessList.toBLT,
       .b8s tx.v.toB8L,
-      .b8s tx.r,
-      .b8s tx.s
+      .b8s (trimZero tx.r),
+      .b8s (trimZero tx.s)
     ]
-  | .three chainId maxPriorityFee maxFee accessList maxBlobFee blobHashes =>
+  | .three chainId maxPriorityFee maxFee receiver accessList maxBlobFee blobHashes =>
     .list [
       .b8s chainId.toB8L.sig,
       .b8s tx.nonce.toNat.toB8L,
       .b8s maxPriorityFee.toB8L,
       .b8s maxFee.toB8L,
       .b8s tx.gas.toB8L,
-      .b8s <| tx.receiver.rec [] Adr.toB8L,
+      .b8s receiver.toB8L,
       .b8s tx.value.toB8L,
       .b8s tx.data,
       accessList.toBLT,
       .b8s maxBlobFee.toB8L,
       .list <| blobHashes.map <| .b8s ∘ B256.toB8L,
       .b8s tx.v.toB8L,
-      .b8s tx.r,
-      .b8s tx.s
+      .b8s (trimZero tx.r),
+      .b8s (trimZero tx.s)
     ]
-  | .four chainId maxPriorityFee maxFee accessList auths =>
+  | .four chainId maxPriorityFee maxFee receiver accessList auths =>
     .list [
       .b8s chainId.toB8L.sig,
       .b8s tx.nonce.toNat.toB8L,
       .b8s maxPriorityFee.toB8L,
       .b8s maxFee.toB8L,
       .b8s tx.gas.toB8L,
-      .b8s <| tx.receiver.rec [] Adr.toB8L,
+      .b8s receiver.toB8L,
       .b8s tx.value.toB8L,
       .b8s tx.data,
       accessList.toBLT,
       .list <| auths.map <| Auth.toBLT,
       .b8s tx.v.toB8L,
-      .b8s tx.r,
-      .b8s tx.s
+      .b8s (trimZero tx.r),
+      .b8s (trimZero tx.s)
     ]
 
 
@@ -327,34 +339,41 @@ def Auths.toStrings (al : List Auth) : List String :=
 
 def TxType.toStrings : TxType → List String
   | zero
-    (gasPrice : Nat) =>
+    (gasPrice : Nat)
+    (receiver : Option Adr) =>
     fork "Type-0" [
-      [s!"gas price : {gasPrice.repr}"]
+      [s!"gas price : {gasPrice.repr}"],
+      [s!"receiver : {toString receiver}"]
     ]
   | one
-    (gasPrice : Nat)
     (chainId : B64)
+    (gasPrice : Nat)
+    (receiver : Option Adr)
     (accessList : AccessList) =>
     fork "Type-1" [
-      [s!"gas price : {gasPrice.repr}"],
       [s!"chain ID : {chainId}"],
+      [s!"gas price : {gasPrice.repr}"],
+      [s!"receiver : {toString receiver}"],
       accessList.toStrings
     ]
   | two
     (chainId : B64)
     (maxPriorityFee : Nat)
     (maxFee : Nat)
+    (receiver : Option Adr)
     (accessList : AccessList) =>
     fork "Type-2" [
       [s!"chain ID : {chainId}"],
       [s!"max priority fee : {maxPriorityFee.repr}"],
       [s!"max fee : {maxFee.repr}"],
+      [s!"receiver : {toString receiver}"],
       accessList.toStrings
     ]
   | three
     (chainId : B64)
     (maxPriorityFee : Nat)
     (maxFee : Nat)
+    (receiver : Adr)
     (accessList : AccessList)
     (maxBlobFee : Nat)
     (blobHashes : List B256) =>
@@ -362,6 +381,7 @@ def TxType.toStrings : TxType → List String
       [s!"chain ID : {chainId}"],
       [s!"max priority fee : {maxPriorityFee.repr}"],
       [s!"max fee : {maxFee.repr}"],
+      [s!"receiver : {toString receiver}"],
       accessList.toStrings,
       [s!"max blob fee : {maxBlobFee.repr}"],
       fork "blob hashes" (blobHashes.map <| fun bh => [bh.toHex])
@@ -370,12 +390,14 @@ def TxType.toStrings : TxType → List String
     (chainId : B64)
     (maxPriorityFee : Nat)
     (maxFee : Nat)
+    (receiver : Adr)
     (accessList : AccessList)
     (auths : List Auth) =>
     fork "Type-4" [
       [s!"chain ID : {chainId}"],
       [s!"max priority fee : {maxPriorityFee.repr}"],
       [s!"max fee : {maxFee.repr}"],
+      [s!"receiver : {toString receiver}"],
       accessList.toStrings,
       Auths.toStrings auths
     ]
@@ -386,7 +408,6 @@ def Tx.toStrings (tx : Tx) : List String :=
   fork "tx" [
     [s!"nonce : {tx.nonce.toHex}"],
     [s!"gas limit : {tx.gas}"],
-    [s!"receiver : {tx.receiver}"],
     [s!"value : {tx.value.repr}"],
     [s!"calldata : {tx.data.toHex}"],
     [s!"v : {tx.v}"],
@@ -422,22 +443,22 @@ def Lean.RBMap.singleton {ξ υ f} (x : ξ) (y : υ) : RBMap ξ υ f :=
   RBMap.empty.insert x y
 
 def TxType.gasPrice (baseFee : Nat) : TxType → Nat
-  | .zero gp => gp
-  | .one gp _ _ => gp
-  | .two _ mpf mf _ => min mf (baseFee + mpf)
-  | .three _ mpf mf _ _ _ => min mf (baseFee + mpf)
-  | .four _ mpf mf _ _ => min mf (baseFee + mpf)
+  | .zero gp _ => gp
+  | .one _ gp _ _ => gp
+  | .two _ mpf mf _ _ => min mf (baseFee + mpf)
+  | .three _ mpf mf _ _ _ _ => min mf (baseFee + mpf)
+  | .four _ mpf mf _ _ _ => min mf (baseFee + mpf)
 
 def TxType.isBlobTx : TxType → Bool
-  | .three _ _ _ _ _ _ => 1
+  | .three _ _ _ _ _ _ _ => 1
   | _ => 0
 
 def TxType.blobHashes : TxType → List B256
-  | .zero _ => []
-  | .one _ _ _ => []
-  | .two _ _ _ _ => []
-  | .three _ _ _ _ _ bhs => bhs
-  | .four _ _ _ _ _ => []
+  | .zero _ _ => []
+  | .one _ _ _ _ => []
+  | .two _ _ _ _ _ => []
+  | .three _ _ _ _ _ _ bhs => bhs
+  | .four _ _ _ _ _ _ => []
 
 def Tx.blobHashes (tx : Tx) : List B256 := tx.type.blobHashes
 
@@ -691,7 +712,7 @@ def gasCallValue : Nat := 9000
 def gCallStipend : Nat := 2300
 def gasWarmAccess : Nat := 100
 def gasColdAccountAccess : Nat := 2600
-def gSelfdestruct : Nat := 5000
+def gasSelfDestruct : Nat := 5000
 def gLog : Nat := 375
 def gLogdata : Nat := 8
 def gLogtopic : Nat := 375
@@ -735,7 +756,8 @@ def gasRipemd160Word : Nat := 120
 def gasIdentity : Nat := 15
 def gasIdentityWord : Nat := 3
 def maxInitCodeSize : Nat := maxCodeSize * 2
-def maxBlobGasPerBlock : Nat := 786432
+-- def maxBlobGasPerBlock : Nat := 786432
+def maxBlobGasPerBlock : Nat := 1179648
 def versionedHashVersionKzg : B8 := 0x01
 def setupAdr : Adr := 0x000F3DF6D732807EF1319FB7B8BB8522D0BEAC02
 def setupKey : B256 := 1000 --0x03E8
@@ -914,10 +936,27 @@ def hasErrorType (err errType : String) : Bool :=
   err = errType || String.isPrefixOf (errType ++ " : ") err
 
 def isInvalidTransaction (err : String) : Bool :=
-  List.any ["InvalidSenderError", "InvalidSignatureError"] (hasErrorType err)
+  List.any [
+    "InvalidTransaction",
+    "InsufficientBalanceError",
+    "NonceMismatchError",
+    "GasUsedExceedsLimitError",
+    "InvalidSenderError",
+    "BlobGasLimitExceededError",
+    "NoBlobDataError",
+    "InvalidSignatureError",
+    "TransactionTypeError",
+    "TransactionTypeContractCreationError",
+    "InsufficientMaxFeePerBlobGasError",
+    "InsufficientMaxFeePerGasError",
+    "InvalidBlobVersionedHashError",
+    "PriorityFeeGreaterThanMaxFeeError",
+    "EmptyAuthorizationListError"
+  ] (hasErrorType err)
 
 def isEthereumException (err : String) : Bool :=
-  hasErrorType err "InvalidBlock" || isInvalidTransaction err
+  hasErrorType err "InvalidBlock" ||
+  isInvalidTransaction err
 
 def isRlpException (err : String) : Bool :=
   List.any ["EncodingError", "DecodingError"] (hasErrorType err)
@@ -1021,10 +1060,8 @@ def Evm.toStrings (evm : Evm) : List String :=
       (evm.accessedStorageKeys.toList.map (fun kv => [s!"{kv.fst.toHex} : {B256.toHex kv.snd}"]))
   ]
 
-
 abbrev Adr.isPrecomp (a : Adr) : Prop :=
-  1 ≤ a.toNat ∧ a.toNat ≤ 10
-
+  1 ≤ a.toNat ∧ a.toNat ≤ 17
 
 def safeSub {ξ} [Sub ξ] [LE ξ] [@DecidableRel ξ (· ≤ ·)] (x y : ξ) : Option ξ :=
   if y ≤ x then some (x - y) else none
@@ -1040,8 +1077,6 @@ def B256.toAdr : B256 → Adr
 
 def Adr.toB256 (a : Adr) : B256 :=
   ⟨⟨0, a.high.toUInt64⟩ , ⟨a.mid, a.low⟩⟩
-
-
 
 def Nat.toHexit : Nat → Char
   | 0 => '0'
@@ -1986,11 +2021,11 @@ def Linst.run (evm : Evm) : Linst → Execution
     let ⟨output, evm⟩ := evm.memRead index size
     .ok {evm with output := output}
   | .dest => do
+
     let donor := evm.contract
     let ⟨donee, evm⟩ ← evm.pop <&> Prod.mapFst B256.toAdr
     let donorBal := (evm.getAcct evm.contract).bal
-
-    let mut gas_cost := gSelfdestruct
+    let mut gas_cost := gasSelfDestruct
     let mut evm := evm
 
     if donee ∉ evm.accessedAddresses
@@ -2002,9 +2037,7 @@ def Linst.run (evm : Evm) : Linst → Execution
       then gas_cost := gas_cost + gasSelfDestructNewAccount
 
     evm ← chargeGas gas_cost evm
-
     evm.assertDynamic
-
     evm ←
       (evm.subBal donor donorBal).toExcept
         ⟨evm, "ERROR : InsufficientBalanceError"⟩
@@ -2822,7 +2855,9 @@ def stepString (evm : Evm) (i : Inst) : String :=
 
 def showStep (vb : Bool) (evm : Evm) (i : Inst) : Except (Evm × String) Unit :=
   if vb
-  then (dbg_trace (stepString evm i) ; .ok ())
+  then do
+    .print (stepString evm i)
+    .ok ()
   else .ok ()
 
 def showLim (lim : Nat) (evm : Evm) : Except (EVM × String) Unit := do
@@ -3890,8 +3925,8 @@ def validateHeader (chain : BlockChain) (header : Header) :
 
   if header.excessBlobGas ≠ calculateExcessBlobGas parent.header then do
     .error "InvalidBlock : ExcessBlobGas does not match expected value"
-  if header.gasUsed ≥ header.gasLimit then do
-    .error "InvalidBlock : GasUsed exceeds GasLimit"
+  if header.gasUsed > header.gasLimit then do
+    .error s!"InvalidBlock : gas used = {header.gasUsed} > gas limit = {header.gasLimit}"
   if expectedBaseFeePerGas ≠ header.baseFeePerGas then do
     .error "InvalidBlock : BaseFeePerGas does not match expected value"
   if header.timestamp ≤ parent.header.timestamp then do
@@ -3926,13 +3961,11 @@ def Except.bimap
 def accountHasCodeOrNonce (state : State) (adr : Adr) : Bool :=
   state.getNonce adr > 0 || !(state.getCode adr).isEmpty
 
-
-
-
-
+def accountHasStorage (state : State) (adr : Adr) : Bool :=
+  !(state.getStor adr).isEmpty
 
 /-
-def processMsgCall (vb : Bool) (msg : Msg) (env : Environment) :
+def processMessageCall (vb : Bool) (msg : Msg) (env : Environment) :
   Except String (State × MsgCallOutput) := do
 
   let (true : Bool) ← .ok (noCollision msg env)
@@ -3971,7 +4004,7 @@ def processMsgCall (vb : Bool) (msg : Msg) (env : Environment) :
 
 def Tx.signingHash (tx : Tx) : Option B256 :=
   match tx.type with
-  | .zero gasPrice =>
+  | .zero gasPrice receiver =>
     if tx.v = 27 || tx.v = 28
     then
       -- signing_hash_pre155,
@@ -3982,7 +4015,7 @@ def Tx.signingHash (tx : Tx) : Option B256 :=
               .b8s tx.nonce.toB8L.sig,
               .b8s gasPrice.toB8L,
               .b8s tx.gas.toB8L,
-              .b8s ((tx.receiver <&> Adr.toB8L).getD []),
+              .b8s ((receiver <&> Adr.toB8L).getD []),
               .b8s tx.value.toB8L,
               .b8s tx.data
             ]
@@ -3996,7 +4029,7 @@ def Tx.signingHash (tx : Tx) : Option B256 :=
               .b8s tx.nonce.toB8L.sig,
               .b8s gasPrice.toB8L,
               .b8s tx.gas.toB8L,
-              .b8s ((tx.receiver <&> Adr.toB8L).getD []),
+              .b8s ((receiver <&> Adr.toB8L).getD []),
               .b8s tx.value.toB8L,
               .b8s tx.data,
               .b8s chainId.toB8L,
@@ -4033,7 +4066,7 @@ def Tx.signingHash (tx : Tx) : Option B256 :=
           )
       )
   ) -/
-  | .one gasPrice chainId accessList =>
+  | .one chainId gasPrice receiver accessList =>
     B8L.keccak <|
       .cons (0x01 : B8) <|
         BLT.encode <|
@@ -4042,7 +4075,7 @@ def Tx.signingHash (tx : Tx) : Option B256 :=
             .b8s tx.nonce.toB8L.sig,
             .b8s gasPrice.toB8L,
             .b8s tx.gas.toB8L,
-            .b8s ((tx.receiver <&> Adr.toB8L).getD []),
+            .b8s ((receiver <&> Adr.toB8L).getD []),
             .b8s tx.value.toB8L,
             .b8s tx.data,
             accessList.toBLT
@@ -4080,7 +4113,7 @@ def Tx.signingHash (tx : Tx) : Option B256 :=
         )
     )
   -/
-  | .two chainId maxPriorityFee maxFee accessList =>
+  | .two chainId maxPriorityFee maxFee receiver accessList =>
     B8L.keccak <|
       .cons (0x02 : B8) <|
         BLT.encode <|
@@ -4090,7 +4123,7 @@ def Tx.signingHash (tx : Tx) : Option B256 :=
             .b8s maxPriorityFee.toB8L,
             .b8s maxFee.toB8L,
             .b8s tx.gas.toB8L,
-            .b8s ((tx.receiver <&> Adr.toB8L).getD []),
+            .b8s ((receiver <&> Adr.toB8L).getD []),
             .b8s tx.value.toB8L,
             .b8s tx.data,
             accessList.toBLT
@@ -4129,7 +4162,7 @@ def Tx.signingHash (tx : Tx) : Option B256 :=
         )
     )
     -/
-  | .three chainId maxPriorityFee maxFee accessList maxBlobFee blobHashes =>
+  | .three chainId maxPriorityFee maxFee receiver accessList maxBlobFee blobHashes =>
     B8L.keccak <|
       .cons (0x03 : B8) <|
         BLT.encode <|
@@ -4139,7 +4172,7 @@ def Tx.signingHash (tx : Tx) : Option B256 :=
             .b8s maxPriorityFee.toB8L,
             .b8s maxFee.toB8L,
             .b8s tx.gas.toB8L,
-            .b8s ((tx.receiver <&> Adr.toB8L).getD []),
+            .b8s receiver.toB8L,
             .b8s tx.value.toB8L,
             .b8s tx.data,
             accessList.toBLT,
@@ -4172,7 +4205,7 @@ def Tx.signingHash (tx : Tx) : Option B256 :=
   --             )
   --         )
   --     )
-  | .four chainId maxPriorityFee maxFee accessList auths =>
+  | .four chainId maxPriorityFee maxFee receiver accessList auths =>
     B8L.keccak <|
       .cons (0x04 : B8) <|
         BLT.encode <|
@@ -4182,7 +4215,7 @@ def Tx.signingHash (tx : Tx) : Option B256 :=
             .b8s maxPriorityFee.toB8L,
             .b8s maxFee.toB8L,
             .b8s tx.gas.toB8L,
-            .b8s ((tx.receiver <&> Adr.toB8L).getD []),
+            .b8s receiver.toB8L,
             .b8s tx.value.toB8L,
             .b8s tx.data,
             accessList.toBLT,
@@ -4257,7 +4290,7 @@ def recoverSender (chain_id: B64) (tx: Tx) : Except String Adr := do
     tx.signingHash.toExcept "InvalidSignatureError : signing hash is None"
 
   match tx.type with
-  | .zero _  =>
+  | .zero _ _ =>
     if v = 27 ∨ v = 28
     then
       (secp256k1nRecoverToAdr? r s (v - 27) signingHash).toExcept
@@ -4416,7 +4449,7 @@ def Int.toNat? (i : Int) : Option Nat :=
     some (i.toNat)
 
 /- def process_msg_call(msg: Msg) -> MsgCallOutput: -/
-def processMsgCall (vb : Bool) (msg : Msg) :
+def processMessageCall (vb : Bool) (msg : Msg) :
   Except String (State × MsgCallOutput) := do
 
 --block_env = msg.block_env
@@ -4433,7 +4466,7 @@ def processMsgCall (vb : Bool) (msg : Msg) :
 --    block_env.state, msg.current_target
 --  ) or account_has_storage(block_env.state, msg.current_target)
     let isCollision : Bool :=
-      accountHasCodeOrNonce benv.state msg.currentTarget
+      accountHasCodeOrNonce benv.state msg.currentTarget || accountHasStorage benv.state msg.currentTarget
 
 --  if is_collision:
 --    return MsgCallOutput(
@@ -4521,41 +4554,40 @@ def processMsgCall (vb : Bool) (msg : Msg) :
     }
   ⟩
 
-
 def Tx.maxPriorityFee? (tx : Tx) : Option Nat :=
   match tx.type with
-  | .zero _ => none
-  | .one _ _ _ => none
-  | .two _ maxPriorityFee _ _ => some maxPriorityFee
-  | .three _ maxPriorityFee _ _ _ _ => some maxPriorityFee
-  | .four _ maxPriorityFee _ _ _ => some maxPriorityFee
+  | .zero _ _ => none
+  | .one _ _ _ _ => none
+  | .two _ maxPriorityFee _ _ _ => some maxPriorityFee
+  | .three _ maxPriorityFee _ _ _ _ _ => some maxPriorityFee
+  | .four _ maxPriorityFee _ _ _ _ => some maxPriorityFee
 
 def Tx.maxFee? (tx : Tx) : Option Nat :=
   match tx.type with
-  | .zero _ => none
-  | .one _ _ _ => none
-  | .two _ _ maxFee _ => some maxFee
-  | .three _ _ maxFee _ _ _ => some maxFee
-  | .four _ _ maxFee _ _ => some maxFee
+  | .zero _ _  => none
+  | .one _ _ _ _ => none
+  | .two _ _ maxFee _ _ => some maxFee
+  | .three _ _ maxFee _ _ _ _ => some maxFee
+  | .four _ _ maxFee _ _ _ => some maxFee
 
 def Tx.isTypeOne (tx : Tx) : Bool :=
   match tx.type with
-  | .one _ _ _ => true
+  | .one _ _ _ _ => true
   | _ => false
 
 def Tx.isTypeTwo (tx : Tx) : Bool :=
   match tx.type with
-  | .two _ _ _ _ => true
+  | .two _ _ _ _ _ => true
   | _ => false
 
 def Tx.isTypeThree (tx : Tx) : Bool :=
   match tx.type with
-  | .three _ _ _ _ _ _ => true
+  | .three _ _ _ _ _ _ _ => true
   | _ => false
 
 def Tx.isTypeFour (tx : Tx) : Bool :=
   match tx.type with
-  | .four _ _ _ _ _ => true
+  | .four _ _ _ _ _ _ => true
   | _ => false
 
 
@@ -4581,7 +4613,7 @@ def calculate_total_blob_gas(tx: Transaction) -> Uint:
 -/
 def calculateTotalBlobGas (tx: Tx) : Nat :=
   match tx.type with
-  | .three _ _ _ _ _ blobHashes => gasPerBlob * blobHashes.length
+  | .three _ _ _ _ _ _ blobHashes => gasPerBlob * blobHashes.length
   | _ => 0
 
 
@@ -4594,7 +4626,6 @@ structure BlockOutput : Type where
   withdrawalsTrie : Lean.RBMap B8L Withdrawal compare
   blobGasUsed : Nat
   requests : List B8L
-
 
 -- def check_transaction(
 --     block_env: vm.Benvironment,
@@ -4620,7 +4651,7 @@ def checkTransaction (benv : Benv) (blockOut : BlockOutput) (tx : Tx) :
 --     if tx_blob_gas_used > blob_gas_available:
 --         raise BlobGasLimitExceededError("blob gas limit exceeded")
   if txBlobGasUsed > blobGasAvailable then
-    .error "BlobGasLimitExceededError : blob gas limit exceeded"
+    .error s!"BlobGasLimitExceededError : blob gas used = {txBlobGasUsed}, blob gas available = {blobGasAvailable}"
 
 --     sender_address = recover_sender(block_env.chain_id, tx)
 --     sender_account = get_account(block_env.state, sender_address)
@@ -4654,11 +4685,11 @@ def checkTransaction (benv : Benv) (blockOut : BlockOutput) (tx : Tx) :
   let mut maxGasFee := 0
   let selector : Nat ⊕ (Nat × Nat) :=
     match tx.type with
-    | .zero gasPrice => .inl gasPrice
-    | .one gasPrice _ _ => .inl gasPrice
-    | .two _ maxPriorityFee maxFee _ => .inr (maxPriorityFee, maxFee)
-    | .three _ maxPriorityFee maxFee _ _ _ => .inr (maxPriorityFee, maxFee)
-    | .four _ maxPriorityFee maxFee  _ _ => .inr (maxPriorityFee, maxFee)
+    | .zero gasPrice _ => .inl gasPrice
+    | .one _ gasPrice _ _ => .inl gasPrice
+    | .two _ maxPriorityFee maxFee _ _ => .inr (maxPriorityFee, maxFee)
+    | .three _ maxPriorityFee maxFee _ _ _ _ => .inr (maxPriorityFee, maxFee)
+    | .four _ maxPriorityFee maxFee _ _ _ => .inr (maxPriorityFee, maxFee)
   match selector with
   | .inr (maxPriorityFee, maxFee) =>
     if maxFee < maxPriorityFee then
@@ -4697,7 +4728,7 @@ def checkTransaction (benv : Benv) (blockOut : BlockOutput) (tx : Tx) :
 --         blob_versioned_hashes = ()
   let mut blobVersionedHashes : List B256 := []
   match tx.type with
-  | .three _ _ _ _ maxBlobFee blobHashes =>
+  | .three _ _ _ _ _ maxBlobFee blobHashes =>
     if blobHashes.isEmpty then
       .error "NoBlobDataError : no blob data in transaction"
     if List.any blobHashes (λ bvh => bvh.toB8V.head ≠ versionedHashVersionKzg) then
@@ -4713,14 +4744,14 @@ def checkTransaction (benv : Benv) (blockOut : BlockOutput) (tx : Tx) :
 --         if not isinstance(tx.to, Address):
 --             raise TransactionTypeContractCreationError(tx)
   if tx.isTypeThree ∨ tx.isTypeFour then
-    if tx.receiver.isNone then
+    if tx.type.receiver?.isNone then
       .error "TransactionTypeContractCreationError : receiver is none for type 3 or 4 tx"
 
 --     if isinstance(tx, SetCodeTransaction):
 --         if not any(tx.authorizations):
 --             raise EmptyAuthorizationListError("empty authorization list")
   match tx.type with
-  | .four _ _ _ _ [] =>
+  | .four _ _ _ _ _ [] =>
     .error "EmptyAuthorizationListError : empty authorization list"
   | _ => .ok ()
 
@@ -4810,7 +4841,7 @@ def calculateIntrinsicCost (tx: Tx) : Nat × Nat :=
 --     else:
 --         create_cost = Uint(0)
   let createCost : Nat :=
-      match tx.receiver with
+      match tx.type.receiver? with
       | none => txCreateCost + initCodeCost (tx.data).length
       | some _ => 0
 
@@ -4832,11 +4863,11 @@ def calculateIntrinsicCost (tx: Tx) : Nat × Nat :=
   let accessListCost : Nat :=
     let accessList :=
       match tx.type with
-      | .zero _ => []
-      | .one _ _ accessList => accessList
-      | .two _ _ _ accessList => accessList
-      | .three _ _ _ accessList _ _ => accessList
-      | .four _ _ _ accessList _ => accessList
+      | .zero _ _ => []
+      | .one _ _ _ accessList => accessList
+      | .two _ _ _ _ accessList => accessList
+      | .three _ _ _ _ accessList _ _ => accessList
+      | .four _ _ _ _ accessList _ => accessList
     let accessItemCost : (Adr × List B256) → Nat
       | ⟨_, keys⟩ =>
         txAccessListAddressCost + keys.length * txAccessListStorageKeyCost
@@ -4847,7 +4878,7 @@ def calculateIntrinsicCost (tx: Tx) : Nat × Nat :=
 --         auth_cost += Uint(perEmptyAccountCost * len(tx.authorizations))
   let authCost : Nat :=
     match tx.type with
-    | .four _ _ _ _ auths => perEmptyAccountCost * auths.length
+    | .four _ _ _ _ _ auths => perEmptyAccountCost * auths.length
     | _ => 0
 
   ⟨
@@ -4878,17 +4909,17 @@ def validateTransaction (tx : Tx) : Except String (Nat × Nat) := do
   if tx.nonce = B64.max
     then .error "InvalidTransaction : Nonce too high"
 
-  if tx.receiver.isNone && tx.data.length > maxInitcodeSize
+  if tx.type.receiver?.isNone && tx.data.length > maxInitcodeSize
     then .error "InvalidTransaction : Code size too large"
 
   .ok ⟨intrinsicGas, callDataFloorGasCost⟩
 
-def prepareMsg (benv: Benv) (tenv: Tenv) (tx: Tx) :
+def prepareMessage (benv: Benv) (tenv: Tenv) (tx: Tx) :
   Except String Msg := do
 
   let ⟨currentTarget, msgData, code, codeAddress⟩ :
     Adr × B8L × ByteArray × Option Adr :=
-    match tx.receiver with
+    match tx.type.receiver? with
     | none => ⟨
         compute_contract_address
           tenv.origin
@@ -4906,13 +4937,13 @@ def prepareMsg (benv: Benv) (tenv: Tenv) (tx: Tx) :
 
   let accessedAddresses : AdrSet :=
     tenv.accessListAddresses.insertMany
-      [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, tenv.origin, currentTarget]
+      [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, tenv.origin, currentTarget]
 
   .ok {
     benv := benv,
     tenv := tenv,
     caller := tenv.origin,
-    target := tx.receiver,
+    target := tx.type.receiver?,
     gas := tenv.gas,
     value := tx.value.toB256,
     data := msgData,
@@ -4949,7 +4980,7 @@ def calculate_total_blob_gas(tx: Transaction) -> Uint:
 -/
 def calculate_total_blob_gas (tx: Tx) : Nat :=
   match tx.type with
-  | .three _ _ _ _ _ blobHashes => gasPerBlob * blobHashes.length
+  | .three _ _ _ _ _ _ blobHashes => gasPerBlob * blobHashes.length
   | _ => 0
 
 
@@ -5043,11 +5074,11 @@ def makeReceipt
 -/
   let head : B8L :=
     match tx.type with
-    | .zero _ => []
-    | .one _ _ _ => [0x01]
-    | .two _ _ _ _ => [0x02]
-    | .three _ _ _ _ _ _ => [0x03]
-    | .four _ _ _ _ _ => [0x04]
+    | .zero _ _ => []
+    | .one _ _ _ _ => [0x01]
+    | .two _ _ _ _ _ => [0x02]
+    | .three _ _ _ _ _ _ _ => [0x03]
+    | .four _ _ _ _ _ _ => [0x04]
 
   head ++ receipt.toBLT.encode
 
@@ -5063,35 +5094,13 @@ def BlockOutput.init : BlockOutput :=
     blobGasUsed := 0
     requests := []
   }
+
 -- def process_transaction(
 --     block_env: vm.Benvironment,
 --     block_output: vm.BlockOutput,
 --     tx: Transaction,
 --     index: Uint,
 -- ) -> None:
---     """
---     Execute a transaction against the provided environment.
---
---     This function processes the actions needed to execute a transaction.
---     It decrements the sender's account after calculating the gas fee and
---     refunds them the proper amount after execution. Calling contracts,
---     deploying code, and incrementing nonces are all examples of actions that
---     happen within this function or from a call made within this function.
---
---     Accounts that are marked for deletion are processed and destroyed after
---     execution.
---
---     Parameters
---     ----------
---     block_env :
---         Environment for the Ethereum Virtual Machine.
---     block_output :
---         The block output for the current block.
---     tx :
---         Transaction to execute.
---     index:
---         Index of the transaction in the block.
---     """
 def processTransaction
   (vb : Bool) (benv: Benv) (bout : BlockOutput)
   (tx: Tx) (index : Nat) : Except String (State × BlockOutput) := do
@@ -5207,10 +5216,10 @@ def processTransaction
   }
 
 --     msg = prepare_msg(block_env, tx_env, tx)
-  let msg ← prepareMsg {benv with state := state} tenv tx
+  let msg ← prepareMessage {benv with state := state} tenv tx
 
 --     tx_output = process_msg_call(msg)
-  let ⟨state', txOutput⟩ ← processMsgCall vb msg
+  let ⟨state', txOutput⟩ ← processMessageCall vb msg
   state := state'
 
 --     # For EIP-7623 we first calculate the execution_gas_used, which includes
@@ -5224,7 +5233,6 @@ def processTransaction
     (Int.toNat? txOutput.refundCounter).toExcept "ERROR : refund counter is negative"
   let mut txGasRefund : Nat :=
     min (txGasUsedBeforeRefund / 5) refundCounter
-
 
 --     tx_gas_used_after_refund = tx_gas_used_before_refund - tx_gas_refund
 --
@@ -5357,7 +5365,6 @@ def B8L.toExStrTx : B8L → Except String Tx
       ] => do .ok {
           nonce := nonce.toB64P,
           gas := gas.toNat,
-          receiver := receiver.toAdr?,
           value := value.toNat,
           data := data,
           v := yParity.toNat,
@@ -5365,8 +5372,9 @@ def B8L.toExStrTx : B8L → Except String Tx
           s := (s.reverse.takeD 32 0).reverse,
           type :=
             .one
-              gasPrice.toNat
               chainId.toB64P
+              gasPrice.toNat
+              receiver.toAdr?
               (← accessList.toAccessList.toExcept "cannot decode access list")
         }
 
@@ -5386,7 +5394,6 @@ def B8L.toExStrTx : B8L → Except String Tx
       ] => do .ok {
         nonce := nonce.toB64P,
         gas := gas.toNat,
-        receiver := receiver.toAdr?,
         value := value.toNat,
         data := data,
         v := yParity.toNat,
@@ -5397,6 +5404,7 @@ def B8L.toExStrTx : B8L → Except String Tx
             chainId.toB64P
             maxPriorityFee.toNat
             maxFee.toNat
+            receiver.toAdr?
             (← accessList.toAccessList.toExcept "cannot decode access list")
       }
     | 0x03, BLT.list [
@@ -5417,7 +5425,6 @@ def B8L.toExStrTx : B8L → Except String Tx
       ] => do .ok {
         nonce := nonce.toB64P,
         gas := gas.toNat,
-        receiver := receiver.toAdr?,
         value := value.toNat,
         data := data,
         v := yParity.toNat,
@@ -5428,6 +5435,7 @@ def B8L.toExStrTx : B8L → Except String Tx
             chainId.toB64P
             maxPriorityFee.toNat
             maxFee.toNat
+            (← receiver.toAdr?.toExcept "DecodingError")
             (← accessList.toAccessList.toExcept "cannot decode access list")
             maxBlobFee.toNat
             (← mapM (λ r => r.toB256.toExcept "cannot decode blob hash") blobHashes)
@@ -5517,7 +5525,7 @@ def processSystemTransaction (vb : Bool) (benv : Benv)
 
 --system_tx_output = process_msg_call(system_tx_msg)
 --return system_tx_output
-  processMsgCall vb systemTxMsg
+  processMessageCall vb systemTxMsg
 
 --def decodeReceipt : B8L ⊕ Receipt → Except String Receipt
 def decodeReceipt : B8L → Except String Receipt
@@ -5717,6 +5725,7 @@ def process_unchecked_system_transaction(
 def processUncheckedSystemTransaction
   (vb : Bool) (benv : Benv) (target : Adr) (data : B8L) :
   Except String (State × MsgCallOutput) := do
+
 --system_contract_code = get_account(block_env.state, target_address).code
 --return process_system_transaction(
 --    block_env,
@@ -5737,6 +5746,7 @@ def process_checked_system_transaction(
 def processCheckedSystemTransaction
   (vb : Bool) (benv : Benv) (target : Adr) (data : B8L) :
   Except String (State × MsgCallOutput) := do
+
 --system_contract_code = get_account(block_env.state, target_address).code
   let systemContractCode : ByteArray := benv.state.getCode target
 
@@ -5768,8 +5778,6 @@ def processCheckedSystemTransaction
 
 --return system_tx_output
   .ok ⟨state, systemTxOutput⟩
-
-
 
 /-
 def process_general_purpose_requests(
@@ -5846,9 +5854,7 @@ def applyBody
 --block_output = vm.BlockOutput()
   let mut bout := BlockOutput.init
 
-  if vb then
-    dbg_trace
-      "\n================================ BEACON ROOTS TX ================================\n"
+  .cprint vb "\n================================ BEACON ROOTS TX ================================\n"
 
 --process_unchecked_system_transaction(
 --    block_env=block_env,
@@ -5861,9 +5867,7 @@ def applyBody
       benv.parentBeaconBlockRoot.toB8L
   let mut benv : Benv := {benv with state := state}
 
-  if vb then
-    dbg_trace
-      "\n================================ HISTORY STORAGE TX ================================\n"
+  .cprint vb "\n================================ HISTORY STORAGE TX ================================\n"
 
 --process_unchecked_system_transaction(
 --    block_env=block_env,
@@ -5891,6 +5895,7 @@ def applyBody
   .cprint vb s!"{benv.state}"
 
   .cprint vb "\n================================ PROCESS WITHDRAWALS ================================\n"
+
 
 --process_withdrawals(block_env, block_output, withdrawals)
   let ⟨state, bout'⟩ :=
@@ -6032,17 +6037,16 @@ def state_transition (vb : Bool) (chain : BlockChain) (block : Block) :
 --transactions_root = root(block_output.transactions_trie)
   let transactionsRoot : B256 ← do
     let transactionsAux (arg : B8L × Tx) : (B8L × B8L) :=
-      ⟨arg.fst.toB4s, arg.snd.toBLT.encode⟩
+      let txPrefix : B8L :=
+        match arg.snd.type with
+        | .zero _ _ => []
+        | .one _ _ _ _ => [0x01]
+        | .two _ _ _ _ _ => [0x02]
+        | .three _ _ _ _ _ _ _ => [0x03]
+        | .four _ _ _ _ _ _ => [0x04]
+      ⟨arg.fst.toB4s, txPrefix ++ arg.snd.toBLT.encode⟩
     let temp := List.map transactionsAux bout.transactionsTrie.toList
-    .print s!""
     .ok <| trie <| Lean.RBMap.fromList temp _
-
-  .print "receipts from applyBody :"
-  let receiptList : List (B8L × Receipt) ←
-    mapM (fun ⟨foo, bar⟩ => do .ok ⟨foo, (← decodeReceipt bar)⟩ ) bout.receiptsTrie.toList
-
-  --.print <| String.joinln (List.toStrings (fun ⟨foo, bar⟩ => fork foo.toHex [bar.toHex.chunks 64]) bout.receiptsTrie.toList)
-  .print <| String.joinln (List.toStrings (fun ⟨foo, bar⟩ => fork foo.toHex [Receipt.toStrings bar]) receiptList)
 
 --receipt_root = root(block_output.receipts_trie)
   let receiptRoot : B256 :=
@@ -6050,8 +6054,6 @@ def state_transition (vb : Bool) (chain : BlockChain) (block : Block) :
       ⟨arg.fst.toB4s, arg.snd⟩
     let temp := (List.map receiptAux bout.receiptsTrie.toList)
     trie <| Lean.RBMap.fromList temp _
-
-  .print s!"computed receipt root : {receiptRoot}"
 
 --block_logs_bloom = logs_bloom(block_output.block_logs)
   let block_logs_bloom := logsBloom bout.blockLogs
@@ -6071,12 +6073,12 @@ def state_transition (vb : Bool) (chain : BlockChain) (block : Block) :
 --        f"{block_output.block_gas_used} != {block.header.gas_used}"
 --    )
   if bout.blockGasUsed ≠ block.header.gasUsed then
-    .error s!"InvalidBlock : {bout.blockGasUsed} != {block.header.gasUsed}"
+    .error s!"InvalidBlock : computed block gas used = {bout.blockGasUsed} ≠ expected block gas used = {block.header.gasUsed}"
 
 --if transactions_root != block.header.transactions_root:
 --    raise InvalidBlock
   if transactionsRoot ≠ block.header.txsRoot then
-    .error "InvalidBlock : transactions root mismatch"
+    .error s!"InvalidBlock : computed transactions root = {transactionsRoot} ≠ expected transactions root = {block.header.txsRoot}"
 
 --if block_state_root != block.header.state_root:
 --    raise InvalidBlock
@@ -6209,13 +6211,12 @@ def BLT.toExStrTx : BLT → Except String Tx
     ] => .ok {
       nonce := nonce.toB64P,
       gas := gas.toNat
-      receiver := receiver.toAdr?,
       value := value.toNat,
       data := data,
       v := v.toNat,
       r := r,
       s := s,
-      type := .zero gasPrice.toNat
+      type := .zero gasPrice.toNat receiver.toAdr?
     }
   | .list _ => .error "error : invalid transaction BLT format"
   | .b8s xs => xs.toExStrTx

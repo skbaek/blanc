@@ -228,13 +228,12 @@ def Lean.Json.toIoLegacyTx (json : Lean.Json) : IO Tx := do
   .ok {
     nonce := nonce
     gas := gas
-    receiver := receiver
     value := value
     data := data
     v := v
     r := r
     s := s
-    type := .zero gasPrice
+    type := .zero gasPrice receiver
   }
 
 def Lean.Json.toIoTypeTwoTx (json : Lean.Json) : IO Tx := do
@@ -256,7 +255,6 @@ def Lean.Json.toIoTypeTwoTx (json : Lean.Json) : IO Tx := do
   .ok {
     nonce := nonce
     gas := gas
-    receiver := receiver
     value := value
     data := data
     v := v
@@ -267,6 +265,7 @@ def Lean.Json.toIoTypeTwoTx (json : Lean.Json) : IO Tx := do
         chainId
         maxPriorityFee
         maxFee
+        receiver
         []
   }
 
@@ -303,7 +302,7 @@ def processBlockJsons (vb : Bool) (chain : BlockChain) :
         .throw "ERROR : expected exception not raised"
   | [] => .ok <| some chain
 
-def runTest (vb : Bool) (idx? : Option Nat) (nw? : Option String)
+def runBlockchainStTest (vb : Bool) (idx? : Option Nat) (nw? : Option String)
   (incls excls : List String) : (Nat × (_ : String) × Lean.Json) → IO Unit
   | ⟨idx, name, json⟩ => do
 
@@ -372,7 +371,7 @@ def runPyTestFile (vb : Bool) (idx : Option Nat) (nw : Option String)
   .println s!"Testing file : {path}\n"
   let rb ← readJsonFile path >>= Lean.Json.toIoRBNode
   let js := rb.toArray.toList.putIndex 0
-  let _ ← js.mapM <| runTest vb idx nw incls excls
+  let _ ← js.mapM <| runBlockchainStTest vb idx nw incls excls
   .ok ()
 
 
