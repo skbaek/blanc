@@ -302,7 +302,7 @@ def processBlockJsons (vb : Bool) (chain : BlockChain) :
         .throw "ERROR : expected exception not raised"
   | [] => .ok <| some chain
 
-def runBlockchainStTest (vb : Bool) (idx? : Option Nat) (nw? : Option String)
+def runBlockchainStTest (vb : Bool) (idx? : Option Nat) -- (nw? : Option String)
   (incls excls : List String) : (Nat × (_ : String) × Lean.Json) → IO Unit
   | ⟨idx, name, json⟩ => do
 
@@ -317,12 +317,12 @@ def runBlockchainStTest (vb : Bool) (idx? : Option Nat) (nw? : Option String)
 
     if name ∈ excls then return ()
 
-    match nw? with
-    | none => .ok ()
-    | some specNw =>
-      let nw ← json.find "network" >>= Lean.Json.toIoString
-      if specNw ≠ nw then
-        return ()
+    --match nw? with
+    --| none => .ok ()
+    --| some specNw =>
+    let nw ← json.find "network" >>= Lean.Json.toIoString
+    if "Prague" ≠ nw then
+      return ()
 
     .println s!"TEST NAME : {name}"
 
@@ -365,13 +365,13 @@ def runBlockchainStTest (vb : Bool) (idx? : Option Nat) (nw? : Option String)
       (postStateRoot = chain.state.root)
       s!"error : end state root does not match\n  expected : {postStateRoot}\n  computed : {chain.state.root}"
 
-def runPyTestFile (vb : Bool) (idx : Option Nat) (nw : Option String)
+def runPyTestFile (vb : Bool) (idx : Option Nat) -- (nw : Option String)
   (incls excls : List String) (path : String) : IO Unit := do
   .println "\n================================================================\n"
   .println s!"Testing file : {path}\n"
   let rb ← readJsonFile path >>= Lean.Json.toIoRBNode
   let js := rb.toArray.toList.putIndex 0
-  let _ ← js.mapM <| runBlockchainStTest vb idx nw incls excls
+  let _ ← js.mapM <| runBlockchainStTest vb idx incls excls
   .ok ()
 
 
@@ -405,14 +405,14 @@ def main : List String → IO Unit
   | path :: opts => do
     let vb : Bool := List.contains opts "--verbose"
     let idx : Option Nat := getTestIndex opts
-    let nw : Option String := getTestNetwork opts
+    -- let nw : Option String := getTestNetwork opts
     let ⟨incls, excls⟩ := getTestNames [] [] opts
     let b ← System.FilePath.isDir path
     if !b
-    then runPyTestFile vb idx nw incls excls path
+    then runPyTestFile vb idx incls excls path
     else do
       let fs ← System.FilePath.walkDir path
-      let _← mapM (runPyTestFile vb idx nw incls excls) (fs.toList.map System.FilePath.toString)
+      let _← mapM (runPyTestFile vb idx incls excls) (fs.toList.map System.FilePath.toString)
       pure ()
   | _ => IO.throw "error : invalid arguments"
 

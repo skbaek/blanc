@@ -3,6 +3,8 @@ import Blanc.Basic
 abbrev altBn128Prime      : Nat := 21888242871839275222246405745257275088696311157297823662689037894645226208583
 abbrev altBn128CurveOrder : Nat := 21888242871839275222246405745257275088548364400416034343698204186575808495617
 
+abbrev bls12Prime : Nat := 4002409555221667393417789825735904156556882819939007885332058136124031650490837864442687629129015664037894272559787
+
 structure FinField (p : Nat) : Type where
   (val : Nat)
 deriving DecidableEq
@@ -308,7 +310,14 @@ abbrev BNF12 : Type :=
     altBn128Prime
     [1, 0, 0, 0, 0, 0, .ofInt (-18 : Int), 0, 0, 0, 0, 0, 82]
 
+abbrev BLSF12 : Type :=
+  GaloisField
+    bls12Prime
+    [1, 0, 0, 0, 0, 0, .ofInt (-2 : Int), 0, 0, 0, 0, 0, 2]
+
 abbrev BNP12 : Type := EllipticCurve BNF12 (0 : BNF12) (3 : BNF12)
+
+abbrev BLSP12 : Type := EllipticCurve BLSF12 (0 : BLSF12) (4 : BLSF12)
 
 def EllipticCurve.toString {F} {a b} [ToString F] : EllipticCurve F a b → String
   | ⟨x, y⟩ => s!"⟨{x},{y}\n⟩"
@@ -451,9 +460,7 @@ def EllipticCurve.mulBy {F} [Zero F] [DecidableEq F]
 
 instance {F} [Zero F] [DecidableEq F] [HAdd F F F] [HSub F F F]
   [HMul F F F] [HDiv F F F] [HPow F Nat F] [OfNat F 3] [OfNat F 2] {a b}
-  [ToString F]
-
-  :
+  [ToString F] :
   HMul (EllipticCurve F a b) Nat (EllipticCurve F a b) :=
   ⟨EllipticCurve.mulBy⟩
 
@@ -665,3 +672,9 @@ def pairing (q : BNP2) (p : BNP) (finalExp : Bool := true) : Option BNF12 := do
   if p = ⟨0, 0⟩ ∨ q = ⟨0, 0⟩ then
     return 1
   millerLoop (twist q) (p.toBNP12) finalExp
+
+
+-- def BLSF12.toB8L (f : BLSF12) : B8L := _
+--
+-- def BLSP12.toB8L (p : BLSP12) : B8L :=
+--   p.x.toB8L.pack 32 ++ p.y.toB8L.pack 32

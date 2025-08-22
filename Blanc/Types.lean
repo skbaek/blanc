@@ -263,9 +263,9 @@ def Rinst.toString : Rinst → String
   | pc => "PC"
   | msize => "MSIZE"
   | gas => "GAS"
-  | dup n => "DUP " ++ n.val.repr
-  | swap n => "SWAP " ++ n.val.repr
-  | log n => "LOG " ++ n.val.repr
+  | dup n => "DUP" ++ n.val.repr
+  | swap n => "SWAP" ++ n.val.repr
+  | log n => "LOG" ++ n.val.repr
 
 def Xinst.toString : Xinst → String
   | create => "CREATE"
@@ -273,7 +273,7 @@ def Xinst.toString : Xinst → String
   | callcode => "CALLCODE"
   | delcall => "DELEGATECALL"
   | create2 => "CREATE2"
-  | statcall => "STATCALL"
+  | statcall => "STATICCALL"
 
 def Linst.toString : Linst → String
   | .stop => "STOP"

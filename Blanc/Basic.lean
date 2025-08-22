@@ -338,13 +338,13 @@ def B8.toHexit : B8 → Char
   | 0x7 => '7'
   | 0x8 => '8'
   | 0x9 => '9'
-  | 0xA => 'A'
-  | 0xB => 'B'
-  | 0xC => 'C'
-  | 0xD => 'D'
-  | 0xE => 'E'
-  | 0xF => 'F'
-  | _   => 'X'
+  | 0xA => 'a' -- 'A'
+  | 0xB => 'b' -- 'B'
+  | 0xC => 'c' -- 'C'
+  | 0xD => 'd' -- 'D'
+  | 0xE => 'e' -- 'E'
+  | 0xF => 'f' -- 'F'
+  | _   => 'x' -- 'X'
 
 def B8.highs (x : B8) : B8 := (x >>> 4)
 def B8.lows (x : B8) : B8 := (x &&& 0x0F)
@@ -2152,6 +2152,27 @@ def padss : List (List String) -> List String
   | [ss] => padsEnd ss
   | ss :: sss => padsMid ss ++ padss sss
 
+def addComma (ss : List String) : Option (List String) :=
+  let rec aux (s : String) : List String -> List String
+    | [] => [s ++ ","]
+    | s' :: ss' => s :: (aux s' ss')
+  match ss with
+  | [] => none
+  | s :: ss' => some <| aux s ss'
+
+def addCommas  (ss : List String) : List (List String) -> Option (List String)
+  | [] => ss
+  | ss' :: sss' => do
+    let ssc ← addComma ss
+    let ssc' ← addCommas ss' sss'
+    ssc ++ ssc'
+
+def mkProlog (s : String) : List (List String) → Option (List String)
+  | [] => some [s]
+  | (ss :: sss) => do
+    let ssc ← addCommas ss sss
+    (s ++ "(") :: (ssc.map pad ++ [")"])
+
 def fork (s : String) : List (List String) → List String
   | [[s']] => [s ++ "──" ++ s']
   | sss => s :: padss sss
@@ -2316,12 +2337,26 @@ def Array.copyD {ξ : Type u} (xs ys : Array ξ) : Array ξ :=
 --        let zs' : Array ξ := Array.copyD xs zs
 --        Array.writeD zs' n ys
 
+def ByteArray.slice? (xs : ByteArray) : Nat → Nat → Option B8L
+  | _, 0 => some []
+  | m, n + 1 =>
+    if m < xs.size
+    then (ByteArray.slice? xs (m + 1) n) <&> (List.cons (xs.get! m))
+    else none
+
 def ByteArray.sliceD (xs : ByteArray) : Nat → Nat → B8 → B8L
   | _, 0, _ => []
   | m, n + 1, d =>
     if m < xs.size
     then xs.get! m :: ByteArray.sliceD xs (m + 1) n d
     else List.replicate (n + 1) d
+
+def ByteArray.slice! (xs : ByteArray) : Nat → Nat → B8L
+  | _, 0 => []
+  | m, n + 1 =>
+    if m < xs.size
+    then xs.get! m :: ByteArray.slice! xs (m + 1) n
+    else List.replicate (n + 1) default
 
 lemma ByteArray.length_sliceD {xs : ByteArray} {m n x} :
     (ByteArray.sliceD xs m n x).length = n := by
@@ -2878,13 +2913,11 @@ def consumeChunkAux (ah : B32L) (w : B32L) (p : B8L) (i j : Nat) : B32L × B32L 
   let newEntry : B32 :=
     if i = 0
     then
-      let temp : B32 :=
-        B8s.toB32
-          (p.getD (4 * j) 0)
-          (p.getD ((4 * j) + 1) 0)
-          (p.getD ((4 * j) + 2) 0)
-          (p.getD ((4 * j) + 3) 0)
-      temp
+      B8s.toB32
+        (p.getD (4 * j) 0)
+        (p.getD ((4 * j) + 1) 0)
+        (p.getD ((4 * j) + 2) 0)
+        (p.getD ((4 * j) + 3) 0)
     else
       let s0 : B32 :=
         (rightRot (getAddMod w j 1) 7) ^^^
@@ -2906,7 +2939,7 @@ def consumeChunkAux (ah : B32L) (w : B32L) (p : B8L) (i j : Nat) : B32L × B32L 
   let temp1 : B32 :=
     (ah.get! 7) + s1 + ch +
     (roundConstants.get! ((i * 16) + j)) +
-    (w'.get! j)-- ah[7] + s1 + ch + k[i << 4 | j] + w[j];
+    (w'.get! j)
   let s0 : B32 :=
     (rightRot (ah.get! 0) 2) ^^^
     (rightRot (ah.get! 0) 13) ^^^
@@ -2973,10 +3006,17 @@ def B8L.sha256 (xs : B8L) : B256 :=
     B32s.toB256 x0 x1 x2 x3 y0 y1 y2 y3
   | _ => (dbg_trace "incorrect number of 32-bit numbers in hash"; 0)
 
-def List.splitAt? {ξ : Type u} : Nat → List ξ → Option (List ξ × List ξ)
-  | 0, xs => some ([], xs)
-  | _ + 1, [] => none
-  | n + 1, x :: xs => .map (x :: ·) id <$> xs.splitAt? n
+def List.splitAt? {ξ : Type u} (n : Nat) (xs : List ξ) : Option (List ξ × List ξ) :=
+  let rec aux : Nat → List ξ →  List ξ → Option (List ξ × List ξ)
+    | 0, xs, ys => some (xs.reverse, ys)
+    | _ + 1, _, [] => none
+    | n + 1, xs, y :: ys => aux n (y :: xs) ys
+  aux n [] xs
+
+-- def List.splitAt? {ξ : Type u} : Nat → List ξ → Option (List ξ × List ξ)
+--   | 0, xs => some ([], xs)
+--   | _ + 1, [] => none
+--   | n + 1, x :: xs => .map (x :: ·) id <$> xs.splitAt? n
 
 def B8L.toNat (bs : B8L) : Nat :=
   let rec aux (acc : Nat) : B8L → Nat
@@ -3117,6 +3157,51 @@ def B8.toBools (x0 : B8) :
   let x7 := x6 <<< 1
   ⟨ x0.highBit, x1.highBit, x2.highBit, x3.highBit,
     x4.highBit, x5.highBit, x6.highBit, x7.highBit ⟩
+
+mutual
+  def ByteArray.toBLTIndices? :
+    Nat → ByteArray → Nat → Nat → Option (BLT × Nat × Nat)
+    | _, _, _, 0 => none
+    | 0, _, _, _ => none
+    | lim + 1, bs, loc, sz + 1 =>
+      if h : loc < bs.size
+        then
+          let b : B8 := bs.get ⟨loc, h⟩
+          match b.toBools with
+          | ⟨0, _, _, _, _, _, _, _⟩ => some (.b8s [b], loc + 1, sz)
+          | ⟨1, 0, 1, 1, 1, _, _, _⟩ => do
+            let headSz : Nat := (b - 0xB7).toNat
+            let bodySz : Nat ← bs.slice? (loc + 1) headSz <&> B8L.toNat
+            let body ← bs.slice? (loc + 1 + headSz) bodySz
+            some ⟨.b8s body, loc + 1 + headSz + bodySz, (sz - headSz) - bodySz⟩
+          | ⟨1, 0, _, _, _, _, _, _⟩ => do
+            let bodySz := (b - 0x80).toNat
+            let body ← bs.slice? (loc + 1) bodySz
+            some ⟨.b8s body, loc + 1 + bodySz, sz - bodySz⟩
+          | ⟨1, 1, 1, 1, 1, _, _, _⟩ => do
+            let headSz := (b - 0xF7).toNat
+            let bodySz : Nat ← bs.slice? (loc + 1) headSz <&> B8L.toNat
+            let blts ← ByteArray.toBLTs? lim bs (loc + 1 + headSz) bodySz
+            some ⟨.list blts, loc + 1 + headSz + bodySz, (sz - headSz) - bodySz⟩
+          | ⟨1, 1, _, _, _, _, _, _⟩ => do
+            let bodySz := (b - 0xC0).toNat
+            let blts ← ByteArray.toBLTs? lim bs (loc + 1 + bodySz) bodySz
+            some ⟨.list blts, loc + 1 + bodySz, sz - bodySz⟩
+        else none
+
+  def ByteArray.toBLTs? : Nat → ByteArray → Nat → Nat → Option (List BLT)
+    | _, _, _, 0 => some []
+    | 0, _, _, _ + 1 => none
+    | lim + 1, bs, loc, sz@(_ + 1) => do
+      let ⟨blt, loc', sz'⟩ ← ByteArray.toBLTIndices? (lim + 1) bs loc sz
+      let blts ← ByteArray.toBLTs? lim bs loc' sz'
+      some (blt :: blts)
+end
+
+def ByteArray.toBLT? (bs : ByteArray) : Option BLT :=
+  match ByteArray.toBLTIndices? bs.size bs 0 bs.size with
+  | some (r, _, 0) => some r
+  | _ => none
 
 mutual
   def BLT.decode' : Nat → B8L → Option (BLT × B8L)

@@ -773,6 +773,49 @@ def baseFeeMaxChangeDenominator := 8
 def perEmptyAccountCost := 25000
 def perAuthBaseCost := 12500
 def txBaseCost : Nat := 21000
+def lengthPerPair : Nat := 160
+def g1MaxDiscount : Nat := 519
+def g2MaxDiscount : Nat := 524
+
+def g1KDiscount : List Nat :=
+  [
+    1000, 949, 848, 797, 764, 750, 738, 728,
+    719, 712, 705, 698, 692, 687, 682, 677,
+    673, 669, 665, 661, 658, 654, 651, 648,
+    645, 642, 640, 637, 635, 632, 630, 627,
+    625, 623, 621, 619, 617, 615, 613, 611,
+    609, 608, 606, 604, 603, 601, 599, 598,
+    596, 595, 593, 592, 591, 589, 588, 586,
+    585, 584, 582, 581, 580, 579, 577, 576,
+    575, 574, 573, 572, 570, 569, 568, 567,
+    566, 565, 564, 563, 562, 561, 560, 559,
+    558, 557, 556, 555, 554, 553, 552, 551,
+    550, 549, 548, 547, 547, 546, 545, 544,
+    543, 542, 541, 540, 540, 539, 538, 537,
+    536, 536, 535, 534, 533, 532, 532, 531,
+    530, 529, 528, 528, 527, 526, 525, 525,
+    524, 523, 522, 522, 521, 520, 520, 519,
+  ]
+
+def g2KDiscount : List Nat :=
+  [
+    1000, 1000, 923, 884, 855, 832, 812, 796,
+    782, 770, 759, 749, 740, 732, 724, 717,
+    711, 704, 699, 693, 688, 683, 679, 674,
+    670, 666, 663, 659, 655, 652, 649, 646,
+    643, 640, 637, 634, 632, 629, 627, 624,
+    622, 620, 618, 615, 613, 611, 609, 607,
+    606, 604, 602, 600, 598, 597, 595, 593,
+    592, 590, 589, 587, 586, 584, 583, 582,
+    580, 579, 578, 576, 575, 574, 573, 571,
+    570, 569, 568, 567, 566, 565, 563, 562,
+    561, 560, 559, 558, 557, 556, 555, 554,
+    553, 552, 552, 551, 550, 549, 548, 547,
+    546, 545, 545, 544, 543, 542, 541, 541,
+    540, 539, 538, 537, 537, 536, 535, 535,
+    534, 533, 532, 532, 531, 530, 530, 529,
+    528, 528, 527, 526, 526, 525, 524, 524
+  ]
 
 def initCodeCost (len : Nat) : Nat :=
   gasInitCodeWordCost * (ceilDiv len 32)
@@ -916,8 +959,11 @@ structure Msg : Type where
   accessedStorageKeys: KeySet
   disablePrecompiles : Bool
 
-abbrev ExceptionalHalt (err : String) : Prop :=
-  err ∈ [
+def hasErrorType (err errType : String) : Bool :=
+  err = errType || String.isPrefixOf (errType ++ " : ") err
+
+abbrev isExceptionalHalt (err : String) : Prop :=
+  List.any [
     "StackUnderflowError",
     "StackOverflowError",
     "OutOfGasError",
@@ -930,10 +976,7 @@ abbrev ExceptionalHalt (err : String) : Prop :=
     "InvalidContractPrefix",
     "AddressCollision",
     "KZGProofError"
-  ]
-
-def hasErrorType (err errType : String) : Bool :=
-  err = errType || String.isPrefixOf (errType ++ " : ") err
+  ] (hasErrorType err)
 
 def isInvalidTransaction (err : String) : Bool :=
   List.any [
@@ -1130,6 +1173,12 @@ inductive Ninst : Type
   | exec : Xinst → Ninst
   | push : B256 → Nat →  Ninst
 
+def Ninst.toOpString : Ninst → String
+  | reg o => Rinst.toString o
+  | exec o => Xinst.toString o
+  | push _ 0 => "PUSH0"
+  | push x len => "PUSH" ++ len.repr
+
 def Ninst.toString : Ninst → String
   | reg o => Rinst.toString o
   | exec o => Xinst.toString o
@@ -1194,7 +1243,8 @@ def Evm.getInst (evm : Evm) : Option Inst :=
            some (.next <| .push x len)
       else none
     )
-  else some (.last .stop)
+  else
+    some (.last .stop)
 
 def fakeExpAux (num den i : Nat) : Nat → Nat → Nat
   | _, 0 => panic! "error : recursion limit reached for fake exponentiation"
@@ -2093,7 +2143,7 @@ def incorporateChildOnSuccess (parent child : Evm) (returnData : B8L) : Evm :=
       benv := child.msg.benv
       tenv := child.msg.tenv
     },
-    logs := child.logs ++ parent.logs
+    logs := parent.logs ++ child.logs
     -- logs := parent.logs ++ child.logs
     refund_counter := parent.refund_counter + child.refund_counter
     accountsToDelete := parent.accountsToDelete.union child.accountsToDelete
@@ -2209,7 +2259,7 @@ def executeEcrecover (evm : Evm) : Execution := do
 def executeSha256 (evm : Evm) : Execution := do
   let data := evm.msg.data
   let cost : Nat := 60 + (12 * (ceilDiv data.length 32))
-  let evm ← chargeGas cost evm
+  let mut evm ← chargeGas cost evm
   .ok {evm with output := (B8L.sha256 data).toB8L}
 
 def executeRipemd160 (evm : Evm) : Execution := do
@@ -2579,7 +2629,9 @@ def G(
         The two input words for the mixing.
     """
 -/
-def Blake2.g (b2 : Blake2) (v : List Nat) (a b c d x y : Nat) : List Nat :=
+
+
+def Blake2.g (b2 : Blake2) (v : Array Nat) (a b c d x y : Nat) : Array Nat :=
 
   /-
     v[a] = (v[a] + v[b] + x) % self.max_word
@@ -2587,9 +2639,9 @@ def Blake2.g (b2 : Blake2) (v : List Nat) (a b c d x y : Nat) : List Nat :=
         (v[d] ^ v[a]) << self.wR1
     ) % self.max_word
   -/
-  let v := v.set a <| ((v.get! a) + (v.get! b) + x) % b2.maxWord
+  let v := v.setD a <| ((v.get! a) + (v.get! b) + x) % b2.maxWord
   let shiftArg : Nat := (v.get! d ^^^ v.get! a)
-  let v := v.set d <| ((shiftArg >>> b2.R1) ^^^ (shiftArg <<< b2.wR1)) % b2.maxWord
+  let v := v.setD d <| ((shiftArg >>> b2.R1) ^^^ (shiftArg <<< b2.wR1)) % b2.maxWord
 
   /-
     v[c] = (v[c] + v[d]) % self.max_word
@@ -2597,9 +2649,9 @@ def Blake2.g (b2 : Blake2) (v : List Nat) (a b c d x y : Nat) : List Nat :=
         (v[b] ^ v[c]) << self.wR2
     ) % self.max_word
   -/
-  let v := v.set c <| (v.get! c + v.get! d) % b2.maxWord
+  let v := v.setD c <| (v.get! c + v.get! d) % b2.maxWord
   let shiftArg : Nat := (v.get! b ^^^ v.get! c)
-  let v := v.set b <| ((shiftArg >>> b2.R2) ^^^ (shiftArg <<< b2.wR2)) % b2.maxWord
+  let v := v.setD b <| ((shiftArg >>> b2.R2) ^^^ (shiftArg <<< b2.wR2)) % b2.maxWord
 
   /-
     v[a] = (v[a] + v[b] + y) % self.max_word
@@ -2607,9 +2659,9 @@ def Blake2.g (b2 : Blake2) (v : List Nat) (a b c d x y : Nat) : List Nat :=
         (v[d] ^ v[a]) << self.wR3
     ) % self.max_word
   -/
-  let v := v.set a <| (v.get! a + v.get! b + y) % b2.maxWord
+  let v := v.setD a <| (v.get! a + v.get! b + y) % b2.maxWord
   let shiftArg : Nat := (v.get! d ^^^ v.get! a)
-  let v := v.set d <| ((shiftArg >>> b2.R3) ^^^ (shiftArg <<< b2.wR3)) % b2.maxWord
+  let v := v.setD d <| ((shiftArg >>> b2.R3) ^^^ (shiftArg <<< b2.wR3)) % b2.maxWord
 
   /-
     v[c] = (v[c] + v[d]) % self.max_word
@@ -2617,20 +2669,28 @@ def Blake2.g (b2 : Blake2) (v : List Nat) (a b c d x y : Nat) : List Nat :=
         (v[b] ^ v[c]) << self.wR4
     ) % self.max_word
   -/
-  let v := v.set c <| (v.get! c + v.get! d) % b2.maxWord
+  let v := v.setD c <| (v.get! c + v.get! d) % b2.maxWord
   let shiftArg : Nat := (v.get! b ^^^ v.get! c)
-  let v := v.set b <| ((shiftArg >>> b2.R4) ^^^ (shiftArg <<< b2.wR4)) % b2.maxWord
+  let v := v.setD b <| ((shiftArg >>> b2.R4) ^^^ (shiftArg <<< b2.wR4)) % b2.maxWord
 
   /- return v -/
   v
 
+def iterRangeDebugWrapper (m n : Nat) : Nat :=
+  let i := m - (n + 1)
+  i
 
-def iterRange {ξ : Type} (k : Nat) (f : Nat → ξ → ξ) (x : ξ) : ξ :=
+def iterRange {ξ : Type} (vb : Bool) (k : Nat) (f : Nat → ξ → ξ) (x : ξ) : ξ :=
   let rec aux : Nat → Nat → ξ → ξ
     | _, 0, x => x
     | m, n + 1, x =>
       let i := m - (n + 1)
-      aux m n <| f i x
+      -- let i :=
+      --   if vb
+      --     then iterRangeDebugWrapper m n
+      --     else m - (n + 1)
+      let x' := f i x
+      aux m n x'
   aux k k x
 
 /-
@@ -2703,7 +2763,7 @@ def Blake2.bCompress (b2 : Blake2) (numRounds : Nat)
         v = self.G(v, *self.MIXTable[6], m[s[12]], m[s[13]])
         v = self.G(v, *self.MIXTable[7], m[s[14]], m[s[15]])
   -/
-  let innerFun (s : List Nat) (i : Nat) (v : List Nat) : List Nat :=
+  let innerFun (s : List Nat) (i : Nat) (v : Array Nat) : Array Nat :=
 
     b2.g v
       ((blake2MixTable.get! i).get! 0)
@@ -2713,17 +2773,18 @@ def Blake2.bCompress (b2 : Blake2) (numRounds : Nat)
       (m.get! (s.get! (i * 2)))
       (m.get! (s.get! ((i * 2) + 1)))
 
-  let outerFun (r : Nat) (v : List Nat) : List Nat :=
+  let outerFun (r : Nat) (v : Array Nat) : Array Nat :=
 
     let s : List Nat := blake2Sigma.get! (r % blake2Sigma.length)
-    iterRange 8 (innerFun s) v
+    iterRange false 8 (innerFun s) v
 
-  let v := iterRange numRounds outerFun v
+  let v := Array.toList (iterRange true numRounds outerFun ⟨v⟩)
 
   /-
     result_msg_words = (h[i] ^ v[i] ^ v[i + 8] for i in range(8))
     return struct.pack("<8%s" % self.word_format, *result_msg_words)
   -/
+
   let resultMsgWords :=
     (List.range 8).map <| fun i => h.get! i ^^^ v.get! i ^^^ v.get! (i + 8)
 
@@ -2766,9 +2827,16 @@ def executeBlake2F (evm : Evm) : Execution := do
 
   .assert (data.length = 213) ⟨evm, "InvalidParameter"⟩
 
+  .print "getting blake2 parameters..."
+
   let ⟨rounds, h, m, t0, t1, f⟩ := get_blake2_parameters data
+
   let evm ← chargeGas (gasBlake2PerRound * rounds) evm
+
   let f ← f.toBool?.toExcept ⟨evm, "InvalidParameter"⟩
+
+  .print "compressing blake2..."
+
   let output := blake2b.bCompress rounds h m t0 t1 f
 
   .ok {evm with output := output}
@@ -2777,6 +2845,253 @@ def executePointEval (evm : Evm) : Execution := do
   let data := evm.msg.data
   .assert (data.length = 192) ⟨evm, "KZGProofError"⟩
   .error ⟨evm, "UNIMP : executePointEval"⟩
+
+def gasBlsG1Add : Nat := 375
+def gasBlsG1Mul : Nat := 12000
+def gasBlsG1Map : Nat := 5500
+def gasBlsG2Add : Nat := 600
+def gasBlsG2Mul : Nat := 22500
+def gasBlsG2Map : Nat := 23800
+
+/-
+def bls12_g1_add(evm: Evm) -> None:
+    """
+    The bls12_381 G1 point addition precompile.
+
+    Parameters
+    ----------
+    evm :
+        The current EVM frame.
+    Raises
+    ------
+    InvalidParameter
+        If the input length is invalid.
+    """
+-/
+def executeBls12G1Add (evm : Evm) : Execution := do
+
+--data = evm.message.data
+  let data := evm.msg.data
+
+--if len(data) != 256:
+--    raise InvalidParameter("Invalid Input Length")
+  .assert (data.length = 256) ⟨evm, "InvalidParameter"⟩
+
+-- --# GAS
+-- --charge_gas(evm, Uint(GAS_BLS_G1_ADD))
+--   let mut evm ← chargeGas gasBlsG1Add evm
+--
+-- --# OPERATION
+-- --p1 = bytes_to_g1(buffer_read(data, U256(0), U256(128)))
+--   let p1 : BLSP12 := _
+--
+-- --p2 = bytes_to_g1(buffer_read(data, U256(128), U256(128)))
+--   let p2 : BLSP12 := _
+--
+-- --result = bls12_add(p1, p2)
+--   let result : B8L := (p1 + p2).toB8L
+--
+-- --evm.output = g1_to_bytes(result)
+--   .ok {evm with output := result}
+
+  .error ⟨evm, "BLS12 G1 Add not implemented yet"⟩
+
+
+/-
+def bls12_g1_msm(evm: Evm) -> None:
+-/
+def executeBls12G1Msm (evm : Evm) : Execution := do
+
+--data = evm.message.data
+  let data := evm.msg.data
+
+--if len(data) == 0 or len(data) % LENGTH_PER_PAIR != 0:
+--    raise InvalidParameter("Invalid Input Length")
+  if data.length = 0 ∨ data.length % lengthPerPair ≠ 0 then
+    .error ⟨evm, s!"InvalidParameter : {data.length} is not a valid input lnegth"⟩
+
+--k = len(data) // LENGTH_PER_PAIR
+  let k := data.length / lengthPerPair
+
+--if k <= 128:
+--    discount = Uint(G1_K_DISCOUNT[k - 1])
+--else:
+--    discount = Uint(G1_MAX_DISCOUNT)
+  let discount :=
+    List.getD g1KDiscount (k - 1) g1MaxDiscount
+
+--gas_cost = Uint(k) * GAS_BLS_G1_MUL * discount // MULTIPLIER
+  let gasCost := (k * gasBlsG1Mul * discount) / 1000
+
+--charge_gas(evm, gas_cost)
+  let mut evm ← chargeGas gasCost evm
+
+--for i in range(k):
+--    start_index = i * LENGTH_PER_PAIR
+--    end_index = start_index + LENGTH_PER_PAIR
+--    p, m = decode_g1_scalar_pair(data[start_index:end_index])
+--    product = bls12_multiply(p, m)
+--    if i == 0:
+--        result = product
+--    else:
+--        result = bls12_add(result, product)
+--evm.output = g1_to_bytes(result)
+  .error ⟨evm, "BLS12 G1 msm not implemented yet"⟩
+
+/-
+def bls12_g2_add(evm: Evm) -> None:
+-/
+def executeBls12G2Add (evm : Evm) : Execution := do
+
+--data = evm.message.data
+  let data := evm.msg.data
+
+--if len(data) != 512:
+--    raise InvalidParameter("Invalid Input Length")
+  if data.length ≠ 512 then
+    .error ⟨evm, "InvalidParameter"⟩
+
+--charge_gas(evm, Uint(GAS_BLS_G2_ADD))
+  let mut evm ← chargeGas gasBlsG2Add evm
+
+--p1 = bytes_to_g2(buffer_read(data, U256(0), U256(256)))
+--p2 = bytes_to_g2(buffer_read(data, U256(256), U256(256)))
+--result = bls12_add(p1, p2)
+
+--evm.output = g2_to_bytes(result)
+  .error ⟨evm, "BLS12 G2 add not implemented yet"⟩
+
+
+/-
+def bls12_g2_msm(evm: Evm) -> None:
+-/
+def executeBls12G2Msm (evm : Evm) : Execution := do
+
+--data = evm.message.data
+  let data := evm.msg.data
+
+--if len(data) == 0 or len(data) % LENGTH_PER_PAIR != 0:
+--    raise InvalidParameter("Invalid Input Length")
+  if data.length = 0 ∨ data.length % lengthPerPair ≠ 0 then
+    .error ⟨evm, s!"InvalidParameter : {data.length} is not a valid input lnegth"⟩
+
+--k = len(data) // LENGTH_PER_PAIR
+  let k := data.length / lengthPerPair
+
+--if k <= 128:
+--    discount = Uint(G2_K_DISCOUNT[k - 1])
+--else:
+--    discount = Uint(G2_MAX_DISCOUNT)
+  let discount :=
+    List.getD g2KDiscount (k - 1) g2MaxDiscount
+
+--gas_cost = Uint(k) * GAS_BLS_G2_MUL * discount // MULTIPLIER
+  let gasCost := (k * gasBlsG2Mul * discount) / 1000
+
+--charge_gas(evm, gas_cost)
+  let mut evm ← chargeGas gasCost evm
+
+--for i in range(k):
+--    start_index = i * LENGTH_PER_PAIR
+--    end_index = start_index + LENGTH_PER_PAIR
+--    p, m = decode_g2_scalar_pair(data[start_index:end_index])
+--    product = bls12_multiply(p, m)
+--    if i == 0:
+--        result = product
+--    else:
+--        result = bls12_add(result, product)
+--evm.output = g2_to_bytes(result)
+  .error ⟨evm, "BLS12 G2 msm not implemented yet"⟩
+
+/-
+def bls12_pairing(evm: Evm) -> None:
+-/
+def executeBls12Pairing (evm : Evm) : Execution := do
+
+--data = evm.message.data
+  let data := evm.msg.data
+
+--if len(data) == 0 or len(data) % 384 != 0:
+--    raise InvalidParameter("Invalid Input Length")
+  if data.length = 0 ∨ data.length % 384 ≠ 0 then
+    .error ⟨evm, s!"InvalidParameter : {data.length} is not a valid input lnegth"⟩
+
+--k = len(data) // 384
+  let k := data.length / 384
+
+--gas_cost = Uint(32600 * k + 37700)
+  let gasCost := (32600 * k + 37700)
+
+--charge_gas(evm, gas_cost)
+  let mut evm ← chargeGas gasCost evm
+
+--result = FQ12.one()
+--for i in range(k):
+--    g1_start = Uint(384 * i)
+--    g2_start = Uint(384 * i + 128)
+--
+--    g1_point = bytes_to_g1(data[g1_start : g1_start + Uint(128)])
+--    if not is_inf(bls12_multiply(g1_point, curve_order)):
+--        raise InvalidParameter("Sub-group check failed for G1 point.")
+--
+--    g2_point = bytes_to_g2(data[g2_start : g2_start + Uint(256)])
+--    if not is_inf(bls12_multiply(g2_point, curve_order)):
+--        raise InvalidParameter("Sub-group check failed for G2 point.")
+--
+--    result *= pairing(g2_point, g1_point)
+--
+--if result == FQ12.one():
+--    evm.output = b"\x00" * 31 + b"\x01"
+--else:
+--    evm.output = b"\x00" * 32
+
+  .error ⟨evm, "BLS12 pairing not implemented yet"⟩
+
+/-
+def bls12_map_fp_to_g1(evm: Evm) -> None:
+-/
+def executeBls12MapFpToG1 (evm : Evm) : Execution := do
+
+--data = evm.message.data
+  let data := evm.msg.data
+
+--if len(data) != 64:
+--    raise InvalidParameter("Invalid Input Length")
+  if data.length ≠ 64 then
+    .error ⟨evm, "InvalidParameter"⟩
+
+--charge_gas(evm, Uint(GAS_BLS_G1_MAP))
+  let mut evm ← chargeGas gasBlsG1Map evm
+
+--fp = int.from_bytes(data, "big")
+--if fp >= FQ.field_modulus:
+--    raise InvalidParameter("coordinate >= field modulus")
+--
+--g1_optimized_3d = clear_cofactor_G1(map_to_curve_G1(FQ(fp)))
+--evm.output = g1_to_bytes(g1_optimized_3d)
+  .error ⟨evm, "BLS12 map FP-to-G1 Msm not implemented yet"⟩
+
+/-
+def bls12_map_fp2_to_g2(evm: Evm) -> None:
+-/
+def executeBls12MapFp2ToG2 (evm : Evm) : Execution := do
+
+--data = evm.message.data
+  let data := evm.msg.data
+
+--if len(data) != 128:
+--    raise InvalidParameter("Invalid Input Length")
+  .assert (data.length = 128) ⟨evm, "InvalidParameter"⟩
+
+--charge_gas(evm, Uint(GAS_BLS_G2_MAP))
+  let mut evm ← chargeGas gasBlsG2Map evm
+
+--field_element = bytes_to_fq2(data)
+--assert isinstance(field_element, FQ2)
+--fp2 = bytes_to_fq2(data)
+--g2_3d = clear_cofactor_G2(map_to_curve_G2(fp2))
+--evm.output = g2_to_bytes(g2_3d)
+  .error ⟨evm, "main logic of BLS12 map FP2-to_G2 not implemented yet"⟩
 
 def executePairingCheck (evm : Evm) : Execution := do
 
@@ -2828,7 +3143,19 @@ def executePrecomp (evm : Evm) : Adr → Execution
   | 0x8 => executePairingCheck evm
   | 0x9 => executeBlake2F evm
   | 0xA => executePointEval evm
+  | 0xB => executeBls12G1Add evm
+  | 0xC => executeBls12G1Msm evm
+  | 0xD => executeBls12G2Add evm
+  | 0xE => executeBls12G2Msm evm
+  | 0xF => executeBls12Pairing evm
+  | 0x10 => executeBls12MapFpToG1 evm
+  | 0x11 => executeBls12MapFp2ToG2 evm
   | n => .error ⟨evm, s!"ERROR : precompiled contract {n} does not exist"⟩
+
+def Inst.toOpString : Inst → String
+  | .next n => n.toOpString
+  | .jump j => j.toString
+  | .last l => l.toString
 
 def Inst.toString : Inst → String
   | .next n => n.toString
@@ -2842,15 +3169,29 @@ def State.getCode (w : State) (a : Adr) : ByteArray := (w.get a).code
 def State.getBal (w : State) (a : Adr) : B256 := (w.get a).bal
 -- def State.storIsEmptyAt (w : State) (a : Adr) : Bool := (w.get a).stor.isEmpty
 
+instance : ToString Log := ⟨String.joinln ∘ Log.toStrings⟩
+
+-- j{α : Type u_1} → [inst : ToString α] → List α → String
+
+def List.toStringSingleQuote {ξ : Type u} [inst : ToString ξ] : List ξ → String
+  | [] => "[]"
+  | [x] => "['" ++ toString x ++ "']"
+  | x::xs => xs.foldl (· ++ ", '" ++ toString · ++ "'") ("['" ++ toString x ++ "'") |>.push ']'
+
+-- def Strings.singleQuote : List String → String
+--   | [] => "[]"
+--   | [x] => "['" ++ x ++ "']"
+--   | x::xs => xs.foldl (· ++ ", " ++ toString ·) ("['" ++ x ++ "'") |>.push ']'
+--
+-- #check List.toString
 def stepString (evm : Evm) (i : Inst) : String :=
   "step(" ++
     s!"pc({evm.pc}), " ++
     s!"gas({evm.gas_left}), " ++
-    s!"inst(\"{i.toString}\"), " ++
-    -- s!"depth({evm.msg.depth}), " ++
-    -- s!"actualMem({evm.memory.data.size}), " ++
-    --s!"stor at 0x1000 : {evm.msg.benv.state.getStor 0x1000}, " ++
-    s!"{evm.stack.map (fun x => "0x" ++ x.toHex.dropZeroes)}" ++
+    -- s!"inst(\"{i.toString}\"), " ++
+    s!"op(\"{i.toOpString}\"), " ++
+    s!"depth({evm.msg.depth}), " ++
+    s!"{List.toStringSingleQuote <| evm.stack.map (fun x => "0x" ++ x.toHex.dropZeroes)}" ++
   ")."
 
 def showStep (vb : Bool) (evm : Evm) (i : Inst) : Except (Evm × String) Unit :=
@@ -2861,7 +3202,7 @@ def showStep (vb : Bool) (evm : Evm) (i : Inst) : Except (Evm × String) Unit :=
   else .ok ()
 
 def showLim (lim : Nat) (evm : Evm) : Except (EVM × String) Unit := do
-  if lim % 1000000 = 0 then
+  if lim % 100000 = 0 then
     .print s!"Recursion limit = {lim}, gas left = {evm.gas_left}"
 
 def isValidDelegation (code: ByteArray) : Prop :=
@@ -2955,23 +3296,19 @@ mutual
         accessedAddresses := msg.accessedAddresses
         accessedStorageKeys := msg.accessedStorageKeys
       }
-
       let isPrecomp : Bool :=
         match msg.codeAddress with
         | .none => false
         | .some adr => adr.isPrecomp
-
       let result : Execution :=
         if isPrecomp
         then
           executePrecomp evm (msg.codeAddress.getD 0)
         else exec vb lim evm
-
-
       match result with
       | .ok evm => .ok evm
       | .error ⟨evm, err⟩ =>
-        if ExceptionalHalt err
+        if isExceptionalHalt err
         then .ok {evm with gas_left := 0, output := [], error := some err}
         else
           if err = "Revert"
@@ -2983,12 +3320,13 @@ mutual
     Nat → Except (Benv × Tenv × String) Evm
     | 0 => .error ⟨msg.benv, msg.tenv, "RecursionLimit"⟩
     | lim + 1 => do
+
       .assert
         (msg.depth ≤ 1024)
         ⟨msg.benv, msg.tenv, "StackDepthLimitError"⟩
 
-      let init_state := msg.benv.state
-      let init_tra := msg.tenv.transientStorage
+      -- let init_state := msg.benv.state
+      -- let init_tra := msg.tenv.transientStorage
 
       let benv ←
         if msg.shouldTransferValue
@@ -2999,15 +3337,17 @@ mutual
           .ok <| benv.addBal msg.currentTarget msg.value
         else .ok msg.benv
 
-      let evm ← executeCode vb {msg with benv := benv} lim
+      let mut evm ← executeCode vb {msg with benv := benv} lim
 
       if evm.error.isSome
-      then .ok <| evm.rollback init_state init_tra
-      else .ok evm
+        then evm := evm.rollback msg.benv.state msg.tenv.transientStorage
+
+      .ok evm
+
   termination_by lim => lim
 
 -- def process_create_msg(msg: Msg) -> Evm:
-  def processCreateMsg (vb : Bool) (msg : Msg) :
+  def processCreateMessage (vb : Bool) (msg : Msg) :
     Nat → Except (Benv × Tenv × String) Evm
     | 0 => .error ⟨msg.benv, msg.tenv, "RecursionLimit"⟩
     | lim + 1 => do
@@ -3034,7 +3374,7 @@ mutual
         match result with
         | .ok evm => .ok <| evm.setCode adr <| .mk <| .mk contractCode
         | .error (evm, err) =>
-          if ExceptionalHalt err
+          if isExceptionalHalt err
           then
             let evm := evm.rollback init_state init_tra
             .ok {evm with gas_left := 0, output := [], error := .some err}
@@ -3109,7 +3449,7 @@ mutual
         disablePrecompiles := false
       }
 
-      let child ← liftToExecution evm <| processCreateMsg vb childMsg lim
+      let child ← liftToExecution evm <| processCreateMessage vb childMsg lim
 
       if child.error.isSome
       then (incorporateChildOnError evm child child.output).push 0
@@ -3136,13 +3476,16 @@ mutual
     | 0 => .error ⟨evm, "RecursionLimit"⟩
     | lim + 1 => do
 
+
       let mut evm := {evm with return_data := []}
 
       let .false ← .ok ((evm.msg.depth + 1 > 1024) : Bool)
         | ({evm with gas_left := evm.gas_left + gas}).push 0
 
+
       let calldata := evm.memory.data.sliceD input_index input_size 0
       -- let code := (evm.getAcct codeAddress).code
+
 
       let childMsg : Msg := {
         benv := evm.msg.benv
@@ -3172,7 +3515,9 @@ mutual
 
       let actualOutput := child.output.take output_size
 
-      .ok <| evm.memWrite output_index actualOutput
+      evm := evm.memWrite output_index actualOutput
+
+      .ok evm
 
   termination_by lim => lim
 
@@ -3630,7 +3975,6 @@ def Sta.toProlog (σ : Sta) : String :=
   | .none => "stack(retrieval_failed)"
   | .some xs => s!"stack({xs.map B256.toNat})"
 
-instance : ToString Log := ⟨String.joinln ∘ Log.toStrings⟩
 
 def eraseIfEmpty (w : State) (a : Adr) : State := w.set a <| w.get a
 
@@ -3973,7 +4317,7 @@ def processMessageCall (vb : Bool) (msg : Msg) (env : Environment) :
 
   let evm ←
     match msg.target with
-    | none => Except.bimap Prod.snd id <| processCreateMsg vb msg env (msg.gas + 50)
+    | none => Except.bimap Prod.snd id <| processCreateMessage vb msg env (msg.gas + 50)
     | some _ => Except.bimap Prod.snd id <| processMsg vb msg env (msg.gas + 50)
 
   .ok <|
@@ -4482,7 +4826,7 @@ def processMessageCall (vb : Bool) (msg : Msg) :
     if isCollision then
       return ⟨benv.state, ⟨0, 0, [], .empty, "AddressCollision", []⟩⟩
     else
-      evm ← Except.bimap (Prod.snd ∘ Prod.snd) id <| processCreateMsg vb msg (msg.gas + 50)
+      evm ← Except.bimap (Prod.snd ∘ Prod.snd) id <| processCreateMessage vb msg (msg.gas + 50)
 
 --else:
 --  if msg.tx_env.authorizations != ():
@@ -4616,11 +4960,16 @@ def calculateTotalBlobGas (tx: Tx) : Nat :=
   | .three _ _ _ _ _ _ blobHashes => gasPerBlob * blobHashes.length
   | _ => 0
 
+structure Receipt : Type where
+  succeeded : Bool
+  gasUsed : Nat
+  bloom : B8L
+  logs : List Log
 
 structure BlockOutput : Type where
   blockGasUsed : Nat
   transactionsTrie : Lean.RBMap B8L Tx compare
-  receiptsTrie : Lean.RBMap B8L B8L compare
+  receiptsTrie : Lean.RBMap B8L (Fin 5 × Receipt) compare
   receiptKeys : List B8L
   blockLogs : List Log
   withdrawalsTrie : Lean.RBMap B8L Withdrawal compare
@@ -5021,11 +5370,18 @@ def subAssertPos (n : Nat) (z : Int) : Option Nat :=
 
 def getTxHash (tx : Tx) : B256 := tx.toBLT.encode.keccak
 
-structure Receipt : Type where
-  succeeded : Bool
-  gasUsed : Nat
-  bloom : B8L
-  logs : List Log
+def Receipt.toStrings (r : Receipt) : List String :=
+  fork "RECEIPT" [
+    [s!"SUCCEEDED: {r.succeeded}"],
+    [s!"GAS USED: {r.gasUsed}"],
+    --s!"bloom: {r.bloom.toHex}",
+    fork "BLOOM" [r.bloom.toHex.chunks 64],
+    --s!"logs: {List.toStrings r.logs}"
+    fork "LOGS" (r.logs.map Log.toStrings)
+  ]
+
+instance : ToString Receipt where
+  toString := String.joinln ∘ Receipt.toStrings
 
 def Receipt.toBLT (r : Receipt) : BLT :=
   .list [
@@ -5034,7 +5390,6 @@ def Receipt.toBLT (r : Receipt) : BLT :=
     .b8s r.bloom,
     .list (r.logs.map Log.toBLT)
   ]
-
 
 /-
 def make_receipt(
@@ -5048,7 +5403,7 @@ def makeReceipt
   (tx: Tx)
   (error: Option String)
   (gasUsed: Nat)
-  (logs: List Log) : B8L :=
+  (logs: List Log) : Fin 5 × Receipt :=
 
 --receipt = Receipt(
 --  succeeded=error is None,
@@ -5062,25 +5417,69 @@ def makeReceipt
     bloom := logsBloom logs,
     logs := logs
   }
-/-
-    if isinstance(tx, AccessListTransaction):
-        return b"\x01" + rlp.encode(receipt)
-    elif isinstance(tx, FeeMarketTransaction):
-        return b"\x02" + rlp.encode(receipt)
-    elif isinstance(tx, BlobTransaction):
-        return b"\x03" + rlp.encode(receipt)
-    else:
-        return receipt
--/
-  let head : B8L :=
-    match tx.type with
-    | .zero _ _ => []
-    | .one _ _ _ _ => [0x01]
-    | .two _ _ _ _ _ => [0x02]
-    | .three _ _ _ _ _ _ _ => [0x03]
-    | .four _ _ _ _ _ _ => [0x04]
 
-  head ++ receipt.toBLT.encode
+--if isinstance(tx, AccessListTransaction):
+--    return b"\x01" + rlp.encode(receipt)
+--elif isinstance(tx, FeeMarketTransaction):
+--    return b"\x02" + rlp.encode(receipt)
+--elif isinstance(tx, BlobTransaction):
+--    return b"\x03" + rlp.encode(receipt)
+--else:
+--    return receipt
+  let head : Fin 5 :=
+    match tx.type with
+    | .zero _ _ => 0
+    | .one _ _ _ _ => 1
+    | .two _ _ _ _ _ => 2
+    | .three _ _ _ _ _ _ _ => 3
+    | .four _ _ _ _ _ _ => 4
+  ⟨head, receipt⟩
+
+--  /-
+--  def make_receipt(
+--      tx: Transaction,
+--      error: Optional[EthereumException],
+--      gasUsed: Uint,
+--      logs: Tuple[Log, ...],
+--  ) -> Union[Bytes, Receipt]:
+--  -/
+--  def makeReceipt
+--    (tx: Tx)
+--    (error: Option String)
+--    (gasUsed: Nat)
+--    (logs: List Log) : B8L :=
+--
+--  --receipt = Receipt(
+--  --  succeeded=error is None,
+--  --  gasUsed=gasUsed,
+--  --  bloom=logs_bloom(logs),
+--  --  logs=logs,
+--  --)
+--    let receipt : Receipt := {
+--      succeeded := error.isNone,
+--      gasUsed := gasUsed,
+--      bloom := logsBloom logs,
+--      logs := logs
+--    }
+--  /-
+--      if isinstance(tx, AccessListTransaction):
+--          return b"\x01" + rlp.encode(receipt)
+--      elif isinstance(tx, FeeMarketTransaction):
+--          return b"\x02" + rlp.encode(receipt)
+--      elif isinstance(tx, BlobTransaction):
+--          return b"\x03" + rlp.encode(receipt)
+--      else:
+--          return receipt
+--  -/
+--    let head : B8L :=
+--      match tx.type with
+--      | .zero _ _ => []
+--      | .one _ _ _ _ => [0x01]
+--      | .two _ _ _ _ _ => [0x02]
+--      | .three _ _ _ _ _ _ _ => [0x03]
+--      | .four _ _ _ _ _ _ => [0x04]
+--
+--    head ++ receipt.toBLT.encode
 
 
 def BlockOutput.init : BlockOutput :=
@@ -5309,6 +5708,7 @@ def processTransaction
 --     )
 --
 --     block_output.block_logs += tx_output.logs
+
   bout := {
     bout with
     receiptKeys := bout.receiptKeys ++ [receiptKey]
@@ -5533,14 +5933,16 @@ def decodeReceipt : B8L → Except String Receipt
   | x :: xs => do
     let ys : B8L :=
       if x ∈ [1, 2, 3, 4] then xs else x :: xs
+    --match ByteArray.toBLT? ⟨⟨ys⟩⟩  with
     match BLT.decode ys with
-    | BLT.list [
+    | some (.list [
         .b8s succeeded,
         .b8s gasUsed,
         .b8s bloom,
         .list logs
-      ] =>
-      let logs ← logs.mapM (fun blt => blt.toLog.toExcept "cannot decode log")
+      ]) =>
+      let logs ← logs.mapM
+        (fun blt => blt.toLog.toExcept "cannot decode log")
       .ok {
         succeeded := succeeded = []
         gasUsed := gasUsed.toNat,
@@ -5685,17 +6087,23 @@ def parseDepositRequests
 
 --for key in block_output.receipt_keys:
   for key in bout.receiptKeys do
+
 --  receipt = trie_get(block_output.receipts_trie, key)
 --  assert receipt is not None
-    let receipt ←
+    let ⟨_, receipt⟩  ←
       (bout.receiptsTrie.find? key).toExcept "ERROR : receipt not found"
 
---  decoded_receipt = decode_receipt(receipt)
-    let decodedReceipt ←
-      (decodeReceipt receipt) --.toExcept "ERROR : cannot decode receipt"
+
+-- --  decoded_receipt = decode_receipt(receipt)
+--     let decodedReceipt ←
+--       (decodeReceipt receipt) --.toExcept "ERROR : cannot decode receipt"
+
+    -- .print s!"decoded receipt : {decodedReceipt}"
 
 --  for log in decoded_receipt.logs:
-    for log in decodedReceipt.logs do
+    for log in receipt.logs do
+
+      -- .print s!"processing log : {log}"
 
 --    if log.address == depositContractAddress:
 --      if (
@@ -5708,7 +6116,9 @@ def parseDepositRequests
         log.address = depositContractAddress ∧
         log.topics.get? 0 = some depositEventSignatureHash
       ) then
+
         let request ← extractDepositData log.data
+
         depositRequests := depositRequests ++ request
 
 --return deposit_requests
@@ -5789,9 +6199,11 @@ def processGeneralPurposeRequests
   (vb : Bool) (benv : Benv) (bout : BlockOutput) :
   Except String (State × BlockOutput) := do
 
+
 --deposit_requests = parse_deposit_requests(block_output)
 --requests_from_execution = block_output.requests
   let depositRequests ← parseDepositRequests bout
+
   let mut requestsFromExecution : List B8L := bout.requests
 
 --if len(deposit_requests) > 0:
@@ -5809,6 +6221,7 @@ def processGeneralPurposeRequests
     processCheckedSystemTransaction vb benv
       withdrawalRequestPredeployAddress
       []
+
   let benv := {benv with state := state}
 
 --if len(system_withdrawal_tx_output.return_data) > 0:
@@ -5839,6 +6252,17 @@ def processGeneralPurposeRequests
       requestsFromExecution ++ [consolidationRequestType ++ consolidationOutput.returnData]
 
   .ok ⟨state, {bout with requests := requestsFromExecution}⟩
+
+def String.doubleQuote (str : String) : String :=
+  "\"" ++ str ++ "\""
+
+def Log.toProlog (log : Log) : Option (List String) := do
+  mkProlog "log" [
+    [s!"address(\"{log.address}\")"],
+    (← mkProlog "topics" (log.topics.map (fun topic => [topic.toHex.doubleQuote]))),
+    [s!"data(\"{log.data.toHex}\")"]
+  ]
+
 
 /-
 def apply_body(
@@ -5909,7 +6333,7 @@ def applyBody
 --    block_env=block_env,
 --    block_output=block_output,
 --)
-  processGeneralPurposeRequests false benv bout
+  processGeneralPurposeRequests vb benv bout
 
 
 /-
@@ -5970,16 +6394,6 @@ def State.root (w : State) : B256 :=
   let finalNTB : NTB := Lean.RBMap.fromList keyVals _
   trie finalNTB
 
-def Receipt.toStrings (r : Receipt) : List String :=
-  fork "RECEIPT" [
-    [s!"SUCCEEDED: {r.succeeded}"],
-    [s!"GAS USED: {r.gasUsed}"],
-    --s!"bloom: {r.bloom.toHex}",
-    fork "BLOOM" [r.bloom.toHex.chunks 64],
-    --s!"logs: {List.toStrings r.logs}"
-    fork "LOGS" (r.logs.map Log.toStrings)
-  ]
-
 /-
 def state_transition(chain: BlockChain, block: Block) -> None:
 -/
@@ -6031,9 +6445,11 @@ def state_transition (vb : Bool) (chain : BlockChain) (block : Block) :
 --)
   let ⟨state, bout⟩ ← applyBody vb benv block.txs block.wds
 
+  .print "computing state root..."
 --block_state_root = state_root(block_env.state)
   let blockStateRoot : B256 := state.root
 
+  .print "computing tx root..."
 --transactions_root = root(block_output.transactions_trie)
   let transactionsRoot : B256 ← do
     let transactionsAux (arg : B8L × Tx) : (B8L × B8L) :=
@@ -6048,16 +6464,23 @@ def state_transition (vb : Bool) (chain : BlockChain) (block : Block) :
     let temp := List.map transactionsAux bout.transactionsTrie.toList
     .ok <| trie <| Lean.RBMap.fromList temp _
 
---receipt_root = root(block_output.receipts_trie)
-  let receiptRoot : B256 :=
-    let receiptAux (arg : B8L × B8L) : B8L × B8L :=
-      ⟨arg.fst.toB4s, arg.snd⟩
-    let temp := (List.map receiptAux bout.receiptsTrie.toList)
-    trie <| Lean.RBMap.fromList temp _
+  .print "computing receipt root..."
 
+  --receipt_root = root(block_output.receipts_trie)
+    let receiptRoot : B256 :=
+      let receiptAux : (B8L × Fin 5 × Receipt) → (B8L × B8L)
+        | ⟨key, type, receipt⟩ =>
+          ⟨key.toB4s, type.val.toB8L ++ receipt.toBLT.encode⟩
+      -- let receiptAux (arg : B8L × B8L) : B8L × B8L :=
+      --   ⟨arg.fst.toB4s, arg.snd⟩
+      let temp := (List.map receiptAux bout.receiptsTrie.toList)
+      trie <| Lean.RBMap.fromList temp _
+
+  .print "computing block logs bloom..."
 --block_logs_bloom = logs_bloom(block_output.block_logs)
   let block_logs_bloom := logsBloom bout.blockLogs
 
+  .print "computing withdrawals root..."
 --withdrawals_root = root(block_output.withdrawals_trie)
   let withdrawalsRoot : B256 :=
     let withdrawalsAux (arg : B8L × Withdrawal) : B8L × B8L :=
@@ -6065,6 +6488,7 @@ def state_transition (vb : Bool) (chain : BlockChain) (block : Block) :
     let temp := (List.map withdrawalsAux bout.withdrawalsTrie.toList)
     trie <| Lean.RBMap.fromList temp _
 
+  .print "computing requests hash..."
 --requests_hash = compute_requests_hash(block_output.requests)
   let requestsHash := computeRequestsHash bout.requests
 
@@ -6120,58 +6544,6 @@ def state_transition (vb : Bool) (chain : BlockChain) (block : Block) :
     blocks := (block :: chain.blocks.reverse.take 254).reverse
     chainId := chain.chainId
   }
-
--- def state_transition (vb : Bool) (chain : BlockChain) (block : Block) :
---   Except String BlockChain :=
---   match chain.blocks.getLast? with
---   | none => .error "error : cannot fetch last block, chain is empty"
---   | some parentBlock =>
---     let parentHeader := parentBlock.header
---     let excessBlobGas := calculateExcessBlobGas parentHeader
---
---     if (excessBlobGas ≠ block.header.excessBlobGas)
---     then .error "InvalidBlock"
---
---     else do
---
---        validateHeader block.header parentHeader
---
---        .assert block.ommers.isEmpty "InvalidBlock"
---        let (⟨apply_body_output, state⟩ : ApplyBodyOutput × State) ←
---          applyBody
---            vb
---            chain.state
---            chain.state
---            .empty
---            (getLast256BlockHashes chain)
---            block.header.coinbase
---            block.header.number
---            block.header.baseFeePerGas
---            block.header.gasLimit
---            block.header.timestamp.toB256
---            block.header.prevRandao
---            block.txs
---            chain.chainId.toUInt64
---            block.wds
---            block.header.parentBeaconBlockRoot
---            excessBlobGas
---
---        .assert
---          ( (apply_body_output.blockGasUsed = block.header.gasUsed) ∧
---            (apply_body_output.transactionsRoot = block.header.txsRoot) ∧
---            (apply_body_output.stateRoot = block.header.stateRoot) ∧
---            (apply_body_output.receiptRoot = block.header.receiptRoot) ∧
---            (apply_body_output.blockLogsBloom = block.header.bloom) ∧
---            (apply_body_output.withdrawalsRoot = block.header.withdrawalsRoot) ∧
---            (apply_body_output.blobGasUsed = block.header.blobGasUsed) )
---          "InvalidBlock"
---
---        .ok {
---          state := state
---          blocks := (block :: chain.blocks.reverse.take 254).reverse
---          chainId := chain.chainId
---        }
-
 
 def BLT.toExStrWithdrawal : BLT → Except String Withdrawal
   | .list [
