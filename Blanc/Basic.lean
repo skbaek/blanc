@@ -178,6 +178,7 @@ abbrev B16 : Type := UInt16
 abbrev B32 : Type := UInt32
 abbrev B64 : Type := UInt64
 abbrev B8L : Type := List B8
+abbrev B8A : Type := Array B8
 abbrev Bytes : Type := List Byte
 
 def Bits.toChars : ∀ {n}, Bits n → List Char
@@ -2836,29 +2837,44 @@ def String.keccak (s : String) : Word :=
 abbrev B32L : Type := List B32
 abbrev B32A : Type := Array B32
 
-def B32L.initChunk : B32L :=
-  [ 0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
-    0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19 ]
+-- def B32L.initChunk : B32L :=
+--   [ 0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+--     0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19 ]
 
 def B32A.initChunk : B32A :=
   #[ 0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
      0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19 ]
 
-
-def B8L.toChunks (lenB8L : B8L) : Nat → B8L → List B8L
+def B8L.toChunks (lenB8L : B8L) : Nat → B8L → List B8A
   | 0, _ => []
   | k + 1, xs =>
     match xs.length with
-    | 0 => [[0x80] ++ (List.replicate (55 : Nat) 0x00) ++ lenB8L]
+    | 0 => -- [⟨[0x80] ++ (List.replicate (55 : Nat) 0x00) ++ lenB8L⟩]
+      [((Array.mkArray 64 0x00).set! 0 0x80).writeD 56 lenB8L]
     | _ + 64 =>
       let ⟨pfx, xs'⟩ := List.splitAt 64 xs
       let xss := B8L.toChunks lenB8L k xs'
-      pfx :: xss
+      ⟨pfx⟩ :: xss
     | _ + 56 =>
-      [ xs ++ (0x80 :: List.replicate (64 - (xs.length + 1)) 0x00),
-        (List.replicate (56 : Nat) 0x00) ++ lenB8L ]
+      [ ⟨xs ++ (0x80 :: List.replicate (64 - (xs.length + 1)) 0x00)⟩,
+        ⟨(List.replicate (56 : Nat) 0x00) ++ lenB8L⟩ ]
     | _ =>
-      [xs ++ (0x80 :: List.replicate (64 - (xs.length + 9)) 0x00) ++ lenB8L]
+      [⟨xs ++ (0x80 :: List.replicate (64 - (xs.length + 9)) 0x00) ++ lenB8L⟩]
+
+-- def B8L.toChunks (lenB8L : B8L) : Nat → B8L → List B8L
+--   | 0, _ => []
+--   | k + 1, xs =>
+--     match xs.length with
+--     | 0 => [[0x80] ++ (List.replicate (55 : Nat) 0x00) ++ lenB8L]
+--     | _ + 64 =>
+--       let ⟨pfx, xs'⟩ := List.splitAt 64 xs
+--       let xss := B8L.toChunks lenB8L k xs'
+--       pfx :: xss
+--     | _ + 56 =>
+--       [ xs ++ (0x80 :: List.replicate (64 - (xs.length + 1)) 0x00),
+--         (List.replicate (56 : Nat) 0x00) ++ lenB8L ]
+--     | _ =>
+--       [xs ++ (0x80 :: List.replicate (64 - (xs.length + 9)) 0x00) ++ lenB8L]
 
 def ceilDiv (m n : Nat) := m / n + if m % n = 0 then 0 else 1
 
@@ -2880,7 +2896,7 @@ def chunksToString : Nat → List B8L → String
 def rightRot (x : B32) (n : B32): B32 :=
   (x >>> n) ||| (x <<< (32 - n))
 
-def getAddMod (w : B32L) (j n : Nat) := (w.getD ((j + n) % 16) 0)
+def getAddMod (w : B32A) (j n : Nat) := (w.getD ((j + n) % 16) 0)
 
 def roundConstants : B32A :=
  #[ 0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5,
@@ -2900,16 +2916,16 @@ def roundConstants : B32A :=
     0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208,
     0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2 ]
 
-def hashPrint : B32L → String
-  | [] => ""
-  | x0 :: x1 :: x2 :: x3 ::
-    x4 :: x5 :: x6 :: x7 :: xs =>
-    s!"{x0.toHex} {x1.toHex} {x2.toHex} {x3.toHex} " ++
-    s!"{x4.toHex} {x5.toHex} {x6.toHex} {x7.toHex}\n" ++
-    s!"{hashPrint xs}"
-  | _ => "ERROR : hash not multiple of 8"
+-- def hashPrint : B32L → String
+--   | [] => ""
+--   | x0 :: x1 :: x2 :: x3 ::
+--     x4 :: x5 :: x6 :: x7 :: xs =>
+--     s!"{x0.toHex} {x1.toHex} {x2.toHex} {x3.toHex} " ++
+--     s!"{x4.toHex} {x5.toHex} {x6.toHex} {x7.toHex}\n" ++
+--     s!"{hashPrint xs}"
+--   | _ => "ERROR : hash not multiple of 8"
 
-def consumeChunkAux (ah : B32L) (w : B32L) (p : B8L) (i j : Nat) : B32L × B32L :=
+def consumeChunkAux (ah : B32A) (w : B32A) (p : B8A) (i j : Nat) : B32A × B32A :=
   let newEntry : B32 :=
     if i = 0
     then
@@ -2928,7 +2944,7 @@ def consumeChunkAux (ah : B32L) (w : B32L) (p : B8L) (i j : Nat) : B32L × B32L 
         (rightRot (getAddMod w j 14) 19) ^^^
         ((getAddMod w j 14) >>> 10)
       (w.getD j 0) + s0 + (getAddMod w j 9) + s1
-  let w' := List.set w j newEntry
+  let w' := Array.set! w j newEntry
   let s1 : B32 :=
     (rightRot (ah.get! 4) 6) ^^^
     (rightRot (ah.get! 4) 11) ^^^
@@ -2950,19 +2966,21 @@ def consumeChunkAux (ah : B32L) (w : B32L) (p : B8L) (i j : Nat) : B32L × B32L 
     (ah.get! 1 &&& ah.get! 2)
   let temp2 : B32 := s0 + maj -- s0 + maj;
   let ah' :=
-    [
-      temp1 + temp2,
-      ah.get! 0,
-      ah.get! 1,
-      ah.get! 2,
-      ah.get! 3 + temp1,
-      ah.get! 4,
-      ah.get! 5,
-      ah.get! 6
-    ]
+    ⟨
+      [
+        temp1 + temp2,
+        ah.get! 0,
+        ah.get! 1,
+        ah.get! 2,
+        ah.get! 3 + temp1,
+        ah.get! 4,
+        ah.get! 5,
+        ah.get! 6
+      ]
+    ⟩
   ⟨ah', w'⟩
 
-def consumeChunkLoop (ah : B32L) (w : B32L) (p : B8L) : Nat → Nat → B32L
+def consumeChunkLoop (ah : B32A) (w : B32A) (p : B8A) : Nat → Nat → B32A
   | 0, _ => ah
   | ni + 1, 0 => consumeChunkLoop ah w p ni 16
   | ni, nj + 1 =>
@@ -2971,11 +2989,10 @@ def consumeChunkLoop (ah : B32L) (w : B32L) (p : B8L) : Nat → Nat → B32L
     let ⟨ah', w'⟩ := consumeChunkAux ah w p n j
     consumeChunkLoop ah' w' p ni nj
 
-
-def consumeChunk (h : B32L) (p : B8L) : B32L :=
-  let w : B32L := List.replicate 16 (0 : B32)
+def consumeChunk (h : B32A) (p : B8A) : B32A :=
+  let w : B32A := .mkArray 16 (0 : B32)
   let ah := consumeChunkLoop h w p 4 16
-  let h' :=
+  ⟨
     [
       h.get! 0 + ah.get! 0,
       h.get! 1 + ah.get! 1,
@@ -2986,7 +3003,7 @@ def consumeChunk (h : B32L) (p : B8L) : B32L :=
       h.get! 6 + ah.get! 6,
       h.get! 7 + ah.get! 7
     ]
-  h'
+  ⟩
 
 def B32s.toB64 (x y : B32) : B64 :=
   x.toUInt64 <<< 32 ||| y.toUInt64
@@ -2998,11 +3015,11 @@ def B32s.toB256 (x0 x1 x2 x3 y0 y1 y2 y3: B32) : B256 :=
   ⟨B32s.toB128 x0 x1 x2 x3, B32s.toB128 y0 y1 y2 y3⟩
 
 def B8L.sha256 (xs : B8L) : B256 :=
-  let xss : List B8L :=
+  let xss : List B8A :=
     B8L.toChunks (B64.toB8L (xs.length * 8).toUInt64) (xs.length / 64).succ xs
-  let hash := List.foldl consumeChunk B32L.initChunk xss
+  let hash := List.foldl consumeChunk B32A.initChunk xss
   match hash with
-  | [x0, x1, x2, x3, y0, y1, y2, y3] =>
+  | ⟨[x0, x1, x2, x3, y0, y1, y2, y3]⟩ =>
     B32s.toB256 x0 x1 x2 x3 y0 y1 y2 y3
   | _ => (dbg_trace "incorrect number of 32-bit numbers in hash"; 0)
 
