@@ -374,6 +374,18 @@ def runPyTestFile (vb : Bool) (idx : Option Nat) -- (nw : Option String)
   let _ ← js.mapM <| runBlockchainStTest vb idx incls excls
   .ok ()
 
+def getFileNames (fins fexs : List String) :
+  List String → (List String × List String)
+  | option :: arg :: strs =>
+    if option = "--file"
+    then getFileNames (arg :: fins) fexs strs
+    else
+      if option = "--notFile"
+      then getFileNames fins (arg :: fexs) strs
+      else getFileNames fins fexs (arg :: strs)
+  | _ => ⟨fins, fexs⟩
+  -- | [_] => ⟨fins, fexs⟩
+  -- | [] => ⟨incls, excls⟩
 
 def getTestNames (incls excls : List String) :
   List String → (List String × List String)
@@ -405,7 +417,6 @@ def main : List String → IO Unit
   | path :: opts => do
     let vb : Bool := List.contains opts "--verbose"
     let idx : Option Nat := getTestIndex opts
-    -- let nw : Option String := getTestNetwork opts
     let ⟨incls, excls⟩ := getTestNames [] [] opts
     let b ← System.FilePath.isDir path
     if !b

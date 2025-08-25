@@ -1150,23 +1150,23 @@ def Nat.toHexCore : Nat → List Char
 def Nat.toHex (n : Nat) : String :=
   ⟨.reverse <| n.toHexCore⟩
 
-def ecadd (input : B8L) : Option B8L := do
-  let px : Nat := B8L.toNat <| input.sliceD 0 32 (0 : B8)
-  let py : Nat := B8L.toNat <| input.sliceD 32 32 (0 : B8)
-  let qx : Nat := B8L.toNat <| input.sliceD 64 32 (0 : B8)
-  let qy : Nat := B8L.toNat <| input.sliceD 96 32 (0 : B8)
-  let p ← BNP.mk? px py
-  let q ← BNP.mk? qx qy
-  let s := p + q
-  some <| BNP.toB8L s
-
-def ecmul (input : B8L) : Option B8L := do
-  let px : Nat := B8L.toNat <| input.sliceD 0 32 (0 : B8)
-  let py : Nat := B8L.toNat <| input.sliceD 32 32 (0 : B8)
-  let n  : Nat := B8L.toNat <| input.sliceD 64 32 (0 : B8)
-  let p ← BNP.mk? px py
-  let s := p * n
-  some <| BNP.toB8L s
+-- def ecadd (input : B8L) : Option B8L := do
+--   let px : Nat := B8L.toNat <| input.sliceD 0 32 (0 : B8)
+--   let py : Nat := B8L.toNat <| input.sliceD 32 32 (0 : B8)
+--   let qx : Nat := B8L.toNat <| input.sliceD 64 32 (0 : B8)
+--   let qy : Nat := B8L.toNat <| input.sliceD 96 32 (0 : B8)
+--   let p ← BNP.mk? px py
+--   let q ← BNP.mk? qx qy
+--   let s := p + q
+--   some <| BNP.toB8L s
+--
+-- def ecmul (input : B8L) : Option B8L := do
+--   let px : Nat := B8L.toNat <| input.sliceD 0 32 (0 : B8)
+--   let py : Nat := B8L.toNat <| input.sliceD 32 32 (0 : B8)
+--   let n  : Nat := B8L.toNat <| input.sliceD 64 32 (0 : B8)
+--   let p ← BNP.mk? px py
+--   let s := p * n
+--   some <| BNP.toB8L s
 
 inductive Ninst : Type
   | reg : Rinst → Ninst
@@ -1177,7 +1177,7 @@ def Ninst.toOpString : Ninst → String
   | reg o => Rinst.toString o
   | exec o => Xinst.toString o
   | push _ 0 => "PUSH0"
-  | push x len => "PUSH" ++ len.repr
+  | push _ len => "PUSH" ++ len.repr
 
 def Ninst.toString : Ninst → String
   | reg o => Rinst.toString o
@@ -2804,11 +2804,8 @@ def blake2f(evm: Evm) -> None:
         The current EVM frame.
     """
 
-    print("Running Blake2 precompiled contract")
-
     data = evm.msg.data
     if len(data) != 213:
-        print(f"Invalid data length : {len(data)} bytes, expected 213 bytes")
         raise InvalidParameter
 
     blake2b = Blake2b()
@@ -2827,16 +2824,9 @@ def executeBlake2F (evm : Evm) : Execution := do
 
   .assert (data.length = 213) ⟨evm, "InvalidParameter"⟩
 
-  .print "getting blake2 parameters..."
-
   let ⟨rounds, h, m, t0, t1, f⟩ := get_blake2_parameters data
-
   let evm ← chargeGas (gasBlake2PerRound * rounds) evm
-
   let f ← f.toBool?.toExcept ⟨evm, "InvalidParameter"⟩
-
-  .print "compressing blake2..."
-
   let output := blake2b.bCompress rounds h m t0 t1 f
 
   .ok {evm with output := output}
@@ -3071,6 +3061,113 @@ def executeBls12MapFpToG1 (evm : Evm) : Execution := do
 --evm.output = g1_to_bytes(g1_optimized_3d)
   .error ⟨evm, "BLS12 map FP-to-G1 Msm not implemented yet"⟩
 
+
+def catchWithOOG {ξ : Type U} (evm : Evm) (cond : String → Bool) :
+  Except String ξ → Except (Evm × String) ξ
+  | .ok v => .ok v
+  | .error e =>
+    if cond e then
+      .error ⟨evm, "OutOfGasError"⟩
+    else
+      .error ⟨evm, e⟩
+
+-- def exStrToExEvmStr {ξ : Type U} (evm : Evm) (x : Except String ξ) : Except (Evm × String) ξ :=
+--   match x with
+--   | .ok v => .ok v
+--   | .error e => .error ⟨evm, e⟩
+
+/-
+def bytes_to_g1(data: Bytes) -> Point3D[FQ]:
+-/
+def B8L.toExStrBNP (data : B8L) : Except String BNP := do
+
+--if len(data) != 64:
+--    raise InvalidParameter("Input should be 64 bytes long")
+  if data.length ≠ 64 then
+    .error "InvalidParameter : input should be 64 bytes long"
+
+--x_bytes = buffer_read(data, U256(0), U256(32))
+--x = int(U256.from_be_bytes(x_bytes))
+  let x := data.sliceToNat 0 32
+
+--y_bytes = buffer_read(data, U256(32), U256(32))
+--y = int(U256.from_be_bytes(y_bytes))
+  let y := data.sliceToNat 32 32
+
+--if x >= field_modulus:
+--    raise InvalidParameter("Invalid field element")
+  if x >= altBn128Prime then
+    .error "InvalidParameter : invalid field element"
+
+--if y >= field_modulus:
+--    raise InvalidParameter("Invalid field element")
+  if y >= altBn128Prime then
+    .error "InvalidParameter : invalid field element"
+
+--z = 1
+--if x == 0 and y == 0:
+--    z = 0
+--point = (FQ(x), FQ(y), FQ(z))
+--# Check if the point is on the curve
+--if not is_on_curve(point, b):
+--    raise InvalidParameter("Point is not on curve")
+--return point
+  (EllipticCurve.mk? (FinField.ofNat x) (FinField.ofNat y)).toExcept
+    "InvalidParameter : point is not on curve"
+
+/-
+def bytes_to_g2(data: Bytes) -> Point3D[FQ2]:
+-/
+def B8L.toExStrBNP2 (data : B8L) : Except String BNP2 := do
+
+--if len(data) != 128:
+--    raise InvalidParameter("G2 should be 128 bytes long")
+  if data.length ≠ 128 then
+    .error "InvalidParameter : input should be 128 bytes long"
+
+--x0_bytes = buffer_read(data, U256(0), U256(32))
+--x0 = int(U256.from_be_bytes(x0_bytes))
+  let x0 := data.sliceToNat 0 32
+
+--x1_bytes = buffer_read(data, U256(32), U256(32))
+--x1 = int(U256.from_be_bytes(x1_bytes))
+  let x1 := data.sliceToNat 32 32
+
+--y0_bytes = buffer_read(data, U256(64), U256(32))
+--y0 = int(U256.from_be_bytes(y0_bytes))
+  let y0 := data.sliceToNat 64 32
+
+--y1_bytes = buffer_read(data, U256(96), U256(32))
+--y1 = int(U256.from_be_bytes(y1_bytes))
+  let y1 := data.sliceToNat 96 32
+
+--if x0 >= field_modulus or x1 >= field_modulus:
+--    raise InvalidParameter("Invalid field element")
+--if y0 >= field_modulus or y1 >= field_modulus:
+--    raise InvalidParameter("Invalid field element")
+  if (
+    x0 ≥ altBn128Prime ∨
+    x1 ≥ altBn128Prime ∨
+    y0 ≥ altBn128Prime ∨
+    y1 ≥ altBn128Prime
+  ) then
+    .error "InvalidParameter : invalid field element"
+
+--x = FQ2((x1, x0))
+--y = FQ2((y1, y0))
+--z = (1, 0)
+--if x == FQ2((0, 0)) and y == FQ2((0, 0)):
+--    z = (0, 0)
+--point = (x, y, FQ2(z))
+--# Check if the point is on the curve
+--if not is_on_curve(point, b2):
+--    raise InvalidParameter("Point is not on curve")
+--return point
+
+  (EllipticCurve.mk? (BNF2.mk x0 x1) (BNF2.mk y0 y1)).toExcept
+    "InvalidParameter : point is not on curve"
+
+
 /-
 def bls12_map_fp2_to_g2(evm: Evm) -> None:
 -/
@@ -3099,28 +3196,17 @@ def executePairingCheck (evm : Evm) : Execution := do
   let evm ← chargeGas ((34000 * (data.length / 192)) + 45000) evm
 
   .assert (data.length % 192 = 0) ⟨evm, "OutOfGasError"⟩
-
   let mut result : BNF12 := 1
 
   for i in List.range (data.length / 192) do
-
-    let arg0 := data.sliceToNat (i * 192) 32
-    let arg1 := data.sliceToNat (i * 192 + 32) 32
-    let arg2 := data.sliceToNat (i * 192 + 64) 32
-    let arg3 := data.sliceToNat (i * 192 + 96) 32
-    let arg4 := data.sliceToNat (i * 192 + 128) 32
-    let arg5 := data.sliceToNat (i * 192 + 160) 32
-
-    let p : BNP ← (BNP.mk? arg0 arg1).toExcept ⟨evm, "OutOfGasError"⟩
-    let q : BNP2 ← (
-      EllipticCurve.mk?
-        (BNF2.mk arg2 arg3)
-        (BNF2.mk arg4 arg5)
-      ).toExcept ⟨evm, "OutOfGasError"⟩
-
+    let p : BNP ←
+      catchWithOOG evm (hasErrorType · "InvalidParameter") <|
+        B8L.toExStrBNP (data.slice! (i * 192) 64)
+    let q : BNP2 ←
+      catchWithOOG evm (hasErrorType · "InvalidParameter") <|
+        B8L.toExStrBNP2 (data.slice! (i * 192 + 64) 128)
     .assert (p * altBn128CurveOrder = ⟨0, 0⟩) ⟨evm, "OutOfGasError"⟩
     .assert (q * altBn128CurveOrder = ⟨0, 0⟩) ⟨evm, "OutOfGasError"⟩
-
     let pairResult ← (pairing q p).toExcept ⟨evm, "ValueError"⟩
     result := result * pairResult
 
@@ -3128,9 +3214,7 @@ def executePairingCheck (evm : Evm) : Execution := do
     if result = 1
     then (1 : Nat).toB256.toB8L
     else (0 : Nat).toB256.toB8L
-
   .ok {evm with output := output}
-
 
 def executePrecomp (evm : Evm) : Adr → Execution
   | 0x1 => executeEcrecover evm
@@ -6098,8 +6182,6 @@ def parseDepositRequests
 --     let decodedReceipt ←
 --       (decodeReceipt receipt) --.toExcept "ERROR : cannot decode receipt"
 
-    -- .print s!"decoded receipt : {decodedReceipt}"
-
 --  for log in decoded_receipt.logs:
     for log in receipt.logs do
 
@@ -6198,7 +6280,6 @@ def process_general_purpose_requests(
 def processGeneralPurposeRequests
   (vb : Bool) (benv : Benv) (bout : BlockOutput) :
   Except String (State × BlockOutput) := do
-
 
 --deposit_requests = parse_deposit_requests(block_output)
 --requests_from_execution = block_output.requests

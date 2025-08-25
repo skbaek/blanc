@@ -70,8 +70,11 @@ def FinField.mul {p : Nat} (x y : FinField p) : FinField p :=
 
 instance {p} : HMul (FinField p) (FinField p) (FinField p) := ⟨FinField.mul⟩
 
+def trimZero {ξ} [Zero ξ] [DecidableEq ξ] (xs : List ξ) : List ξ :=
+  List.dropWhile (· = 0) xs
+
 def BNF2.mk (x y : Nat) : BNF2 :=
-  ⟨[.ofNat x, .ofNat y]⟩
+  ⟨trimZero [.ofNat x, .ofNat y]⟩
 
 def extEuclid (x y : Nat) : Int × Int × Nat :=
   if hx : x > 0
@@ -105,9 +108,6 @@ def FinField.div {p : Nat} (x y : FinField p) : FinField p := x * (y⁻¹)
 instance {p} : HDiv (FinField p) (FinField p) (FinField p) := ⟨FinField.div⟩
 
 instance {k} : Inhabited (FinField k) := ⟨0⟩
-
-def trimZero {ξ} [Zero ξ] [DecidableEq ξ] (xs : List ξ) : List ξ :=
-  List.dropWhile (· = 0) xs
 
 def zipWithZero {ξ} [Zero ξ] : List ξ → List ξ → List (ξ × ξ)
   | [], [] => []
@@ -335,32 +335,23 @@ instance {F} {a b} [ToString F] : ToString (EllipticCurve F a b) :=
 --        else none
 
 def EllipticCurve.isOnCurve {F} [Zero F] [DecidableEq F]
-  [HAdd F F F] [HMul F F F] [HPow F Nat F]
+  [HAdd F F F] [HMul F F F] [HPow F Nat F] [ToString F]
   {a b} (p : EllipticCurve F a b) : Prop :=
   (p.x = 0 ∧ p.y = 0) ∨ (p.y ^ 2 = (p.x ^ 3) + (a * p.x) + b)
 
 instance {F} [Zero F] [DecidableEq F]
-  [HAdd F F F] [HMul F F F] [HPow F Nat F]
+  [HAdd F F F] [HMul F F F] [HPow F Nat F] [ToString F]
   {a b} {p : EllipticCurve F a b} : Decidable p.isOnCurve :=
   instDecidableOr
 
 def EllipticCurve.mk? {F} [Zero F] [DecidableEq F]
-  [HAdd F F F] [HMul F F F] [HPow F Nat F]
-  {a b} (x y : F) : Option (EllipticCurve F a b) :=
+  [HAdd F F F] [HMul F F F] [HPow F Nat F] [ToString F]
+  {a b : F} (x y : F) : Option (EllipticCurve F a b) :=
   let p : EllipticCurve F a b := ⟨x, y⟩
-  if p.isOnCurve
-  then some p
-  else none
-
--- def EllipticCurve.mk? {F} [Zero F] [DecidableEq F]
---   [HAdd F F F] [HMul F F F] [HPow F Nat F]
---   {a b} (x y : F) : Option (EllipticCurve F a b) :=
---   if (x = 0 ∧ y = 0)
---   then some ⟨0, 0⟩
---   else
---     if y ^ 2 = (x ^ 3) + (a * x) + b
---     then some ⟨x, y⟩
---     else none
+  if p.isOnCurve then
+    some p
+  else
+    none
 
 def BNP.mk? (x : Nat) (y : Nat) : Option BNP :=
   EllipticCurve.mk? (FinField.ofNat x) (FinField.ofNat y)

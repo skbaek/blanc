@@ -2845,36 +2845,28 @@ def B32A.initChunk : B32A :=
   #[ 0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
      0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19 ]
 
-def B8L.toChunks (lenB8L : B8L) : Nat → B8L → List B8A
-  | 0, _ => []
-  | k + 1, xs =>
-    match xs.length with
-    | 0 => -- [⟨[0x80] ++ (List.replicate (55 : Nat) 0x00) ++ lenB8L⟩]
-      [((Array.mkArray 64 0x00).set! 0 0x80).writeD 56 lenB8L]
-    | _ + 64 =>
-      let ⟨pfx, xs'⟩ := List.splitAt 64 xs
-      let xss := B8L.toChunks lenB8L k xs'
-      ⟨pfx⟩ :: xss
-    | _ + 56 =>
-      [ ⟨xs ++ (0x80 :: List.replicate (64 - (xs.length + 1)) 0x00)⟩,
-        ⟨(List.replicate (56 : Nat) 0x00) ++ lenB8L⟩ ]
-    | _ =>
-      [⟨xs ++ (0x80 :: List.replicate (64 - (xs.length + 9)) 0x00) ++ lenB8L⟩]
+def List.splitToArray {ξ : Type u}
+  (sz : Nat) (xs : List ξ) (x : ξ) : Array ξ × List ξ :=
+  let rec aux : Nat → Array ξ → Nat → List ξ → Array ξ × List ξ
+    | _, array, _, [] => ⟨array, []⟩
+    | _, array, 0, list => ⟨array, list⟩
+    | idx, array, sz + 1, item :: list =>
+      aux (idx + 1) (array.set! idx item) sz list
+  aux 0 (.mkArray sz x) sz xs
 
--- def B8L.toChunks (lenB8L : B8L) : Nat → B8L → List B8L
---   | 0, _ => []
---   | k + 1, xs =>
---     match xs.length with
---     | 0 => [[0x80] ++ (List.replicate (55 : Nat) 0x00) ++ lenB8L]
---     | _ + 64 =>
---       let ⟨pfx, xs'⟩ := List.splitAt 64 xs
---       let xss := B8L.toChunks lenB8L k xs'
---       pfx :: xss
---     | _ + 56 =>
---       [ xs ++ (0x80 :: List.replicate (64 - (xs.length + 1)) 0x00),
---         (List.replicate (56 : Nat) 0x00) ++ lenB8L ]
---     | _ =>
---       [xs ++ (0x80 :: List.replicate (64 - (xs.length + 9)) 0x00) ++ lenB8L]
+def B8L.toChunks (lenB8L : B8L) : Nat → B8L → Nat → List B8A
+  | 0, _, _ => []
+  | _ + 1, _, 0 =>
+    [((Array.mkArray 64 0x00).set! 0 0x80).writeD 56 lenB8L]
+  | k + 1, xs, len' + 64 =>
+      let ⟨pfx, xs'⟩ := List.splitToArray 64 xs 0
+      let xss := B8L.toChunks lenB8L k xs' len'
+      pfx :: xss
+  | _ + 1, xs, _ + 56 =>
+    [ ⟨xs ++ (0x80 :: List.replicate (64 - (xs.length + 1)) 0x00)⟩,
+      ⟨(List.replicate (56 : Nat) 0x00) ++ lenB8L⟩ ]
+  | _ + 1, xs, _ =>
+    [⟨xs ++ (0x80 :: List.replicate (64 - (xs.length + 9)) 0x00) ++ lenB8L⟩]
 
 def ceilDiv (m n : Nat) := m / n + if m % n = 0 then 0 else 1
 
@@ -2916,35 +2908,26 @@ def roundConstants : B32A :=
     0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208,
     0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2 ]
 
--- def hashPrint : B32L → String
---   | [] => ""
---   | x0 :: x1 :: x2 :: x3 ::
---     x4 :: x5 :: x6 :: x7 :: xs =>
---     s!"{x0.toHex} {x1.toHex} {x2.toHex} {x3.toHex} " ++
---     s!"{x4.toHex} {x5.toHex} {x6.toHex} {x7.toHex}\n" ++
---     s!"{hashPrint xs}"
---   | _ => "ERROR : hash not multiple of 8"
+def computeNewEntry (w : B32A) (p : B8A) (i j : Nat) : B32 :=
+  if i = 0
+  then
+    B8s.toB32
+      (p.getD (4 * j) 0)
+      (p.getD ((4 * j) + 1) 0)
+      (p.getD ((4 * j) + 2) 0)
+      (p.getD ((4 * j) + 3) 0)
+  else
+    let s0 : B32 :=
+      (rightRot (getAddMod w j 1) 7) ^^^
+      (rightRot (getAddMod w j 1) 18) ^^^
+      ((getAddMod w j 1) >>> 3)
+    let s1 :=
+      (rightRot (getAddMod w j 14) 17) ^^^
+      (rightRot (getAddMod w j 14) 19) ^^^
+      ((getAddMod w j 14) >>> 10)
+    (w.getD j 0) + s0 + (getAddMod w j 9) + s1
 
-def consumeChunkAux (ah : B32A) (w : B32A) (p : B8A) (i j : Nat) : B32A × B32A :=
-  let newEntry : B32 :=
-    if i = 0
-    then
-      B8s.toB32
-        (p.getD (4 * j) 0)
-        (p.getD ((4 * j) + 1) 0)
-        (p.getD ((4 * j) + 2) 0)
-        (p.getD ((4 * j) + 3) 0)
-    else
-      let s0 : B32 :=
-        (rightRot (getAddMod w j 1) 7) ^^^
-        (rightRot (getAddMod w j 1) 18) ^^^
-        ((getAddMod w j 1) >>> 3)
-      let s1 :=
-        (rightRot (getAddMod w j 14) 17) ^^^
-        (rightRot (getAddMod w j 14) 19) ^^^
-        ((getAddMod w j 14) >>> 10)
-      (w.getD j 0) + s0 + (getAddMod w j 9) + s1
-  let w' := Array.set! w j newEntry
+def computeTemps (ah w' : B32A) (i j : Nat): B32 × B32 :=
   let s1 : B32 :=
     (rightRot (ah.get! 4) 6) ^^^
     (rightRot (ah.get! 4) 11) ^^^
@@ -2964,44 +2947,42 @@ def consumeChunkAux (ah : B32A) (w : B32A) (p : B8A) (i j : Nat) : B32A × B32A 
     (ah.get! 0 &&& ah.get! 1) ^^^
     (ah.get! 0 &&& ah.get! 2) ^^^
     (ah.get! 1 &&& ah.get! 2)
-  let temp2 : B32 := s0 + maj -- s0 + maj;
-  let ah' :=
-    ⟨
-      [
-        temp1 + temp2,
-        ah.get! 0,
-        ah.get! 1,
-        ah.get! 2,
-        ah.get! 3 + temp1,
-        ah.get! 4,
-        ah.get! 5,
-        ah.get! 6
-      ]
-    ⟩
-  ⟨ah', w'⟩
+  let temp2 : B32 := s0 + maj
+  ⟨temp1, temp2⟩
 
-def consumeChunkLoop (ah : B32A) (w : B32A) (p : B8A) : Nat → Nat → B32A
-  | 0, _ => ah
-  | ni + 1, 0 => consumeChunkLoop ah w p ni 16
-  | ni, nj + 1 =>
-    let n := 4 - ni
-    let j := 16 - (nj + 1)
-    let ⟨ah', w'⟩ := consumeChunkAux ah w p n j
-    consumeChunkLoop ah' w' p ni nj
+def sha256indices : List (Nat × Nat) :=
+  [
+    (0, 0), (0, 1), (0, 2), (0, 3), (0, 4), (0, 5), (0, 6), (0, 7),
+    (0, 8), (0, 9), (0, 10), (0, 11), (0, 12), (0, 13), (0, 14), (0, 15),
+    (1, 0), (1, 1), (1, 2), (1, 3), (1, 4), (1, 5), (1, 6), (1, 7),
+    (1, 8), (1, 9), (1, 10), (1, 11), (1, 12), (1, 13), (1, 14), (1, 15),
+    (2, 0), (2, 1), (2, 2), (2, 3), (2, 4), (2, 5), (2, 6), (2, 7),
+    (2, 8), (2, 9), (2, 10), (2, 11), (2, 12), (2, 13), (2, 14), (2, 15),
+    (3, 0), (3, 1), (3, 2), (3, 3), (3, 4), (3, 5), (3, 6), (3, 7),
+    (3, 8), (3, 9), (3, 10), (3, 11), (3, 12), (3, 13), (3, 14), (3, 15)
+  ]
 
 def consumeChunk (h : B32A) (p : B8A) : B32A :=
-  let w : B32A := .mkArray 16 (0 : B32)
-  let ah := consumeChunkLoop h w p 4 16
+  let aux : (B32A × B32A) → (Nat × Nat) → B32A × B32A
+    | ⟨h, w⟩, ⟨i, j⟩ =>
+      let newEntry : B32 := computeNewEntry w p i j
+      let w' := Array.set! w j newEntry
+      let ⟨temp1, temp2⟩ := computeTemps h w' i j
+      let h' :=
+        ⟨ [ temp1 + temp2, h.get! 0, h.get! 1, h.get! 2,
+            h.get! 3 + temp1, h.get! 4, h.get! 5, h.get! 6 ] ⟩
+      ⟨h', w'⟩
+  let h' := List.foldl aux ⟨h, .mkArray 16 0⟩ sha256indices |>.fst
   ⟨
     [
-      h.get! 0 + ah.get! 0,
-      h.get! 1 + ah.get! 1,
-      h.get! 2 + ah.get! 2,
-      h.get! 3 + ah.get! 3,
-      h.get! 4 + ah.get! 4,
-      h.get! 5 + ah.get! 5,
-      h.get! 6 + ah.get! 6,
-      h.get! 7 + ah.get! 7
+      h.get! 0 + h'.get! 0,
+      h.get! 1 + h'.get! 1,
+      h.get! 2 + h'.get! 2,
+      h.get! 3 + h'.get! 3,
+      h.get! 4 + h'.get! 4,
+      h.get! 5 + h'.get! 5,
+      h.get! 6 + h'.get! 6,
+      h.get! 7 + h'.get! 7
     ]
   ⟩
 
@@ -3014,9 +2995,42 @@ def B32s.toB128 (x0 x1 y0 y1 : B32) : B128 :=
 def B32s.toB256 (x0 x1 x2 x3 y0 y1 y2 y3: B32) : B256 :=
   ⟨B32s.toB128 x0 x1 x2 x3, B32s.toB128 y0 y1 y2 y3⟩
 
-def B8L.sha256 (xs : B8L) : B256 :=
+-- def B8L.sha256 (data : B8L) : B256 :=
+--   let xss : List B8A :=
+--     B8L.toChunks
+--       (B64.toB8L (data.length * 8).toUInt64)
+--       (data.length / 64).succ
+--       data
+--       data.length
+--
+--   let empty : B32A := .mkArray 16 (0 : B32)
+--
+--   let aux : Id B32A := do
+--     let mut hash : B32A := B32A.initChunk
+--     for xs in xss do
+--       let ah := consumeChunkLoop hash empty xs 4 16
+--       hash := hash.set! 0 (hash.get! 0 + ah.get! 0)
+--       hash := hash.set! 1 (hash.get! 1 + ah.get! 1)
+--       hash := hash.set! 2 (hash.get! 2 + ah.get! 2)
+--       hash := hash.set! 3 (hash.get! 3 + ah.get! 3)
+--       hash := hash.set! 4 (hash.get! 4 + ah.get! 4)
+--       hash := hash.set! 5 (hash.get! 5 + ah.get! 5)
+--       hash := hash.set! 6 (hash.get! 6 + ah.get! 6)
+--       hash := hash.set! 7 (hash.get! 7 + ah.get! 7)
+--     return hash
+--
+--   match aux.run with
+--   | ⟨[x0, x1, x2, x3, y0, y1, y2, y3]⟩ =>
+--     B32s.toB256 x0 x1 x2 x3 y0 y1 y2 y3
+--   | _ => (dbg_trace "incorrect number of 32-bit numbers in hash"; 0)
+
+def B8L.sha256 (data : B8L) : B256 :=
   let xss : List B8A :=
-    B8L.toChunks (B64.toB8L (xs.length * 8).toUInt64) (xs.length / 64).succ xs
+    B8L.toChunks
+      (B64.toB8L (data.length * 8).toUInt64)
+      (data.length / 64).succ
+      data
+      data.length
   let hash := List.foldl consumeChunk B32A.initChunk xss
   match hash with
   | ⟨[x0, x1, x2, x3, y0, y1, y2, y3]⟩ =>
