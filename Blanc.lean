@@ -4,7 +4,6 @@ import «Blanc».ExSem
 
 /- ----------------- TESTING DEFS ------------------ -/
 
-
 def Lean.Json.toIoList : Lean.Json → IO (List Json)
   | .arr a => return a.toList
   | _ => IO.throw "not an array"
@@ -142,7 +141,7 @@ def mkTest : ((_ : String) × Lean.Json) → IO Test
     let grlp ← j.find "genesisRLP"
     let lbh ← j.find "lastblockhash"
     let network ← j.find "network"
-    let xws ← getXWS j -- j.find "postState"
+    let xws ← getXWS j
     let pre ← j.find "pre"
     let sealEngine ← j.find "sealEngine"
     return ⟨name, info, blocks, gbh, grlp, lbh, network, pre, xws, sealEngine⟩
@@ -158,7 +157,6 @@ def getTxExMap (j : Lean.Json) : IO (Option String × B8L) := do
   | .none => pure ⟨.none, rlp⟩
   | .some exj => do
     let exs ← exj.toIoString
-    -- let ex ← (parseTxEx exs).toIO ""
     pure ⟨.some exs, rlp⟩
 
 def getBlockHeader : Lean.Json → Option Lean.Json
@@ -213,7 +211,6 @@ def Lean.Json.toHeader (json : Lean.Json) : IO Header := do
     parentBeaconBlockRoot := parentBeaconBlockRoot
     requestsHash := requestsHash
   }
-
 
 def Lean.Json.toIoLegacyTx (json : Lean.Json) : IO Tx := do
   let nonce ← (json.find "nonce" >>= Lean.Json.toIoB8L) <&> B8L.toB64P
@@ -291,7 +288,7 @@ def processBlockJsons (vb : Bool) (chain : BlockChain) :
       match (← (addBlockToChain vb chain j).toIO) with
       | .inr ex => .throw s!"unexpected TX exception : {ex}"
       | .inl chain => processBlockJsons vb chain js
-    | .some ex =>
+    | .some _ =>
       match (← (addBlockToChain vb chain j).toIO) with
       | .inr ex' =>
         .guard
@@ -302,24 +299,17 @@ def processBlockJsons (vb : Bool) (chain : BlockChain) :
         .throw "ERROR : expected exception not raised"
   | [] => .ok <| some chain
 
-def runBlockchainStTest (vb : Bool) (idx? : Option Nat) -- (nw? : Option String)
+def runBlockchainStTest (vb : Bool) (idx? : Option Nat)
   (incls excls : List String) : (Nat × (_ : String) × Lean.Json) → IO Unit
   | ⟨idx, name, json⟩ => do
-
     match idx? with
     | none => .ok ()
     | some specIdx =>
       if specIdx ≠ idx then
         return ()
-
     if ¬ (incls.isEmpty ∨ name ∈ incls)
       then return ()
-
     if name ∈ excls then return ()
-
-    --match nw? with
-    --| none => .ok ()
-    --| some specNw =>
     let nw ← json.find "network" >>= Lean.Json.toIoString
     if "Prague" ≠ nw then
       return ()
@@ -384,8 +374,6 @@ def getFileNames (fins fexs : List String) :
       then getFileNames fins (arg :: fexs) strs
       else getFileNames fins fexs (arg :: strs)
   | _ => ⟨fins, fexs⟩
-  -- | [_] => ⟨fins, fexs⟩
-  -- | [] => ⟨incls, excls⟩
 
 def getTestNames (incls excls : List String) :
   List String → (List String × List String)
@@ -426,8 +414,6 @@ def main : List String → IO Unit
       let _← mapM (runPyTestFile vb idx incls excls) (fs.toList.map System.FilePath.toString)
       pure ()
   | _ => IO.throw "error : invalid arguments"
-
-
 
 
 -- def Bytes.toHexLine (bs : Bytes) : String :=

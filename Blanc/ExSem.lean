@@ -1,9 +1,16 @@
 import Lean.Data.HashSet
 import «Blanc».Types
 import «Blanc».EC
+import «Blanc».Hash
 
-def Except.cprint {ξ : Type} (vb : Bool) (msg : String) : Except ξ Unit := do
-  if vb then do dbg_trace msg
+def cprint {m : Type → Type v}  [inst : Monad m] (vb : Bool) (msg : String) : m Unit := do
+  if vb then do
+    dbg_trace msg
+
+-- #exit
+--
+-- def Except.cprint {ξ : Type} (vb : Bool) (msg : String) : Except ξ Unit := do
+--   if vb then do dbg_trace msg
 
 def Except.print {ξ : Type} (msg : String) : Except ξ Unit := do
   dbg_trace msg
@@ -26,19 +33,7 @@ def AccessItem.toStrings : (Adr × List B256) → List String
 def AccessList.toStrings (al : AccessList) : List String :=
     fork "ACCESS LIST" <| al.map <| AccessItem.toStrings
 
-/-
-class Authorization:
-    """
-    The authorization for a set code transaction.
-    """
-
-    chain_id: U256
-    address: Address
-    nonce: U64
-    y_parity: U8
-    r: U256
-    s: U256
--/
+/- class Authorization -/
 structure Auth : Type where
   chainId : B64
   address : Adr
@@ -52,7 +47,7 @@ inductive TxType : Type
   | zero
     (gasPrice : Nat)
     (receiver : Option Adr)
-  -- -- EIP-2930
+  -- EIP-2930
   | one
     (chainId : B64)
     (gasPrice : Nat)
@@ -87,11 +82,6 @@ structure Withdrawal : Type where
   (validatorIndex : B64)
   (recipient : Adr)
   (amount : B256)
--- structure Withdrawal : Type where
---   index : B64
---   validatorIndex: B64
---   address : Adr
---   amount : B256
 
 structure Header : Type where
   parentHash : B256
@@ -179,8 +169,7 @@ def Header.toBLT (header : Header) : BLT :=
 structure Tx : Type where
   (nonce : B64)
   (gas : Nat)
-  --(receiver : Option Adr)
-  (value : Nat)
+    (value : Nat)
   (data : B8L)
   (v : Nat)
   (r : B8L)
@@ -320,7 +309,6 @@ def Tx.toBLT (tx : Tx) : BLT :=
       .b8s (trimZero tx.r),
       .b8s (trimZero tx.s)
     ]
-
 
 def Auth.toStrings (auth : Auth) : List String :=
   fork
@@ -604,13 +592,10 @@ mutual
     | 0, _ => .b8s []
     | k + 1, j =>
       if j.isEmpty
-      -- then .list (.replicate 17 <| .bytes []) -- what should be returned
-      then .b8s [] -- what devtools actually return
-      else if j.isSingleton
+            then .b8s []       else if j.isSingleton
            then match j.toList with
                 | [(k, v)] => .list [.b8s (hp k 1), .b8s v]
-                | _ => .b8s [] -- unreachable code
-           else match j.factor with
+                | _ => .b8s []            else match j.factor with
                 | none =>
                   let js := Lean.RBMap.fold NTBs.insert NTBs.empty j
                   .list [ nodeComp k js.x0, nodeComp k js.x1, nodeComp k js.x2,
@@ -665,8 +650,8 @@ def toKeyVal (pr : Adr × Acct) : B8L × B8L :=
     ad.toB8L.keccak.toB4s,
     let val' :=
       BLT.encode <| .list [
-        .b8s (ac.nonce.toB8L.sig), --a.nonce,
-        .b8s (ac.bal.toB8L.sig), --a.bal,
+        .b8s (ac.nonce.toB8L.sig),
+        .b8s (ac.bal.toB8L.sig),
         B256.toRLP (trie ac.stor.toNTB),
         B256.toRLP <| (B8L.keccak ac.code.toList)
       ]
@@ -700,7 +685,6 @@ def gBlockhash : Nat := 20
 def gasCodeDeposit : Nat := 200
 def gasCreate : Nat := 32000
 def gHashopcode : Nat := 3
---def gasPerBlob : B256 := B32.toB256 0x00020000
 def gasPerBlob : Nat := 2 ^ 17
 def gasStorageUpdate := 5000
 def gasEcrecover : Nat := 3000
@@ -756,7 +740,6 @@ def gasRipemd160Word : Nat := 120
 def gasIdentity : Nat := 15
 def gasIdentityWord : Nat := 3
 def maxInitCodeSize : Nat := maxCodeSize * 2
--- def maxBlobGasPerBlock : Nat := 786432
 def maxBlobGasPerBlock : Nat := 1179648
 def versionedHashVersionKzg : B8 := 0x01
 def setupAdr : Adr := 0x000F3DF6D732807EF1319FB7B8BB8522D0BEAC02
@@ -852,24 +835,7 @@ structure Log : Type where
   (topics : List B256)
   (data : B8L)
 
-/-
-class Benvironment:
-    """
-    Items external to the virtual machine itself, provided by the environment.
-    """
-
-    chain_id: U64
-    state: State
-    block_gas_limit: Uint
-    block_hashes: List[Hash32]
-    coinbase: Address
-    number: Uint
-    base_fee_per_gas: Uint
-    time: U256
-    prev_randao: Bytes32
-    excess_blob_gas: U64
-    parent_beacon_block_root: Hash32
--/
+/- class Benvironment -/
 structure Benv : Type where
   chainId : B64
   state : State
@@ -886,25 +852,7 @@ structure Benv : Type where
   parentBeaconBlockRoot : B256
 
 
-
-/-
-class TransactionEnvironment:
-    """
-    Items that are used by contract creation or msg call.
-    """
-
-    origin: Address
-    gas_price: Uint
-    gas: Uint
-    access_list_addresses: Set[Address]
-    access_list_storage_keys: Set[Tuple[Address, Bytes32]]
-    transient_storage: TransientStorage
-    blob_versioned_hashes: Tuple[VersionedHash, ...]
-    authorizations: Tuple[Authorization, ...]
-    index_in_block: Optional[Uint]
-    tx_hash: Optional[Hash32]
-    traces: List[dict]
--/
+/- class TransactionEnvironment -/
 structure Tenv : Type where
     origin: Adr
     gasPrice: Nat
@@ -916,31 +864,8 @@ structure Tenv : Type where
     auths : List Auth
     indexInBlock : Option Nat
     txHash: Option B256
-    -- traces: List[dict]
 
--- class Message:
---     """
---     Items that are used by contract creation or msg call.
---     """
---
---     block_env: Benvironment
---     tx_env: TransactionEnvironment
---     caller: Address
---     target: Bytes0 | Address
---     currentTarget: Address
---     gas: Uint
---     value: U256
---     data: Bytes
---     codeAddress: Optional[Address]
---     code: Bytes
---     depth: Uint
---     should_transfer_value: bool
---     isStatic: bool
---     accessedAddresses: Set[Address]
---     accessedStorageKeys: Set[Tuple[Address, Bytes32]]
---     disable_precompiles: bool
---     parent_evm: Optional["Evm"]
-
+/- class Message -/
 structure Msg : Type where
   benv: Benv
   tenv: Tenv
@@ -1089,7 +1014,6 @@ def Evm.toStrings (evm : Evm) : List String :=
     Mem.toStrings evm.memory,
     [s!"CODE : {B8L.toHex evm.code.toList}"],
     [s!"GAS LEFT : {evm.gas_left}"],
-    -- Environment.toStrings evm.env,
     fork "LOGS" (evm.logs.map Log.toStrings),
     [s!"REFUND COUNTER : {evm.refund_counter}"],
     Msg.toStrings evm.msg,
@@ -1149,24 +1073,6 @@ def Nat.toHexCore : Nat → List Char
 
 def Nat.toHex (n : Nat) : String :=
   ⟨.reverse <| n.toHexCore⟩
-
--- def ecadd (input : B8L) : Option B8L := do
---   let px : Nat := B8L.toNat <| input.sliceD 0 32 (0 : B8)
---   let py : Nat := B8L.toNat <| input.sliceD 32 32 (0 : B8)
---   let qx : Nat := B8L.toNat <| input.sliceD 64 32 (0 : B8)
---   let qy : Nat := B8L.toNat <| input.sliceD 96 32 (0 : B8)
---   let p ← BNP.mk? px py
---   let q ← BNP.mk? qx qy
---   let s := p + q
---   some <| BNP.toB8L s
---
--- def ecmul (input : B8L) : Option B8L := do
---   let px : Nat := B8L.toNat <| input.sliceD 0 32 (0 : B8)
---   let py : Nat := B8L.toNat <| input.sliceD 32 32 (0 : B8)
---   let n  : Nat := B8L.toNat <| input.sliceD 64 32 (0 : B8)
---   let p ← BNP.mk? px py
---   let s := p * n
---   some <| BNP.toB8L s
 
 inductive Ninst : Type
   | reg : Rinst → Ninst
@@ -1693,19 +1599,14 @@ def Rinst.run (evm : Evm) : Rinst → Execution
     let ⟨value, evm⟩  := evm.memRead start_index 32
     evm.push (B8L.toB256P value) >>= Evm.incrPc
   | .mstore => do
-    -- let ⟨start_index, evm⟩ ← evm.popToNat
     let start_index ← evm.stackTop <&> B256.toNat
     let mut evm ← evm.pop'
-
-    -- let ⟨value, evm⟩ ← evm.pop
     let value ← evm.stackTop
     evm ← evm.pop'
-
     let extend_memory_cost := evm.extCost [⟨start_index, 32⟩]
     evm ← chargeGas (gVerylow + extend_memory_cost) evm
     evm := evm.memWrite start_index value.toB8L
-    evm.incrPc -- <| evm.memWrite start_index value.toB8L
-
+    evm.incrPc
   | .mstore8 => do
     let ⟨start_index, evm⟩ ← evm.popToNat
     let ⟨value, evm⟩ ← evm.pop
@@ -1740,10 +1641,7 @@ def Rinst.run (evm : Evm) : Rinst → Execution
     let word_gas_cost := gasKeccak256Word * words
     let extend_memory_cost := evm.extCost [⟨memory_start_index, size⟩]
     let evm ← chargeGas (gKeccak256 + word_gas_cost + extend_memory_cost) evm
-
     let ⟨arg, evm⟩ := evm.memRead memory_start_index size
-    --let hash := B8a.keccak memory_start_index size evm.memory
-
     evm.push arg.keccak >>= Evm.incrPc
   | .sub => applyBinary (· - ·) gVerylow evm
   | .mul => applyBinary (· * ·) gLow evm
@@ -1792,29 +1690,23 @@ def Rinst.run (evm : Evm) : Rinst → Execution
     let ⟨key, evm⟩ ← evm.pop
     let ⟨new_value, evm⟩ ← evm.pop
     let mut evm : Evm := evm
-
     .assert
       (gCallStipend < evm.gas_left)
       ⟨evm, "OutOfGasError"⟩
     let ct := evm.contract
-
     let original_value := evm.origStorValAt ct key
     let current_value := evm.storValAt ct key
-
     let mut gas_cost := 0
-
     if ⟨ct, key⟩ ∉ evm.accessedStorageKeys
       then
         evm := addAccessedStorageKey evm ct key
         gas_cost := gas_cost + gasColdSload
-
     if original_value = current_value ∧ current_value ≠ new_value
       then
         if original_value = 0
         then gas_cost := gas_cost + gasStorageSet
         else gas_cost := gas_cost + (gasStorageUpdate - gasColdSload)
       else gas_cost := gas_cost + gasWarmAccess
-
     if current_value ≠ new_value
     then
       if original_value ≠ 0 ∧ current_value ≠ 0 ∧ new_value = 0
@@ -2263,10 +2155,11 @@ def executeSha256 (evm : Evm) : Execution := do
   .ok {evm with output := (B8L.sha256 data).toB8L}
 
 def executeRipemd160 (evm : Evm) : Execution := do
-  let data := evm.msg.data
+  let data : B8L := evm.msg.data
   let cost : Nat := 600 + (120 * (ceilDiv data.length 32))
   let evm ← chargeGas cost evm
-  let output : B8L := B256.toB8L <| B8L.toB256P <| (rip160 ⟨.mk data⟩).toList
+  let hash : B8L := data.ripemd160
+  let output : B8L := B256.toB8L <| (B8L.toB256P <| hash)
   .ok {evm with output := output}
 
 def executeId (evm : Evm) : Execution := do
@@ -2286,82 +2179,15 @@ def B8L.sliceToNat (data : B8L) (start : Nat) (length : Nat) : Nat :=
       else B8L.toNat <| tail.takeD length (0 : B8)
     else B8L.toNat <| tail.take length
 
-/-
-def complexity(base_length: U256, modulus_length: U256) -> Uint:
-    """
-    Estimate the complexity of performing a modular exponentiation.
-
-    Parameters
-    ----------
-
-    base_length :
-        Length of the array representing the base integer.
-
-    modulus_length :
-        Length of the array representing the modulus integer.
-
-    Returns
-    -------
-
-    complexity : `Uint`
-        Complexity of performing the operation.
-    """
-    max_length = max(Uint(base_length), Uint(modulus_length))
-    words = (max_length + Uint(7)) // Uint(8)
-    return words ** Uint(2)
--/
+/- def complexity -/
 def modexpComplexity
   (baseLength modulusLength : Nat) : Nat :=
   let maxLength := max baseLength modulusLength
   let words := ceilDiv maxLength 8
   words ^ 2
 
-/-
-def iterations(exponent_length: U256, exponent_head: Uint) -> Uint:
-    """
-    Calculate the number of iterations required to perform a modular
-    exponentiation.
-
-    Parameters
-    ----------
-
-    exponent_length :
-        Length of the array representing the exponent integer.
-
-    exponent_head :
-        First 32 bytes of the exponent (with leading zero padding if it is
-        shorter than 32 bytes), as an unsigned integer.
-
-    Returns
-    -------
-
-    iterations : `Uint`
-        Number of iterations.
-    """
--/
+/- def iterations -/
 def modexpIterations (expLength : Nat) (expHead : Nat) : Nat :=
-
-/-
-    if exponent_length <= U256(32) and exponent_head == U256(0):
-        count = Uint(0)
-    elif exponent_length <= U256(32):
-        bit_length = Uint(exponent_head.bit_length())
-
-        if bit_length > Uint(0):
-            bit_length -= Uint(1)
-
-        count = bit_length
-    else:
-        length_part = Uint(8) * (Uint(exponent_length) - Uint(32))
-        bits_part = Uint(exponent_head.bit_length())
-
-        if bits_part > Uint(0):
-            bits_part -= Uint(1)
-
-        count = length_part + bits_part
-
-    return max(count, Uint(1))
--/
   let bitsPart : Nat := (Nat.log2 expHead)
   let count :=
     if expLength ≤ 32
@@ -2376,82 +2202,32 @@ def modexpIterations (expLength : Nat) (expHead : Nat) : Nat :=
 
   max count 1
 
-
-/-
-def gas_cost(
-    base_length: U256,
-    modulus_length: U256,
-    exponent_length: U256,
-    exponent_head: Uint,
-) -> Uint:
-    """
-    Calculate the gas cost of performing a modular exponentiation.
-
-    Parameters
-    ----------
-
-    base_length :
-        Length of the array representing the base integer.
-
-    modulus_length :
-        Length of the array representing the modulus integer.
-
-    exponent_length :
-        Length of the array representing the exponent integer.
-
-    exponent_head :
-        First 32 bytes of the exponent (with leading zero padding if it is
-        shorter than 32 bytes), as an unsigned integer.
-
-    Returns
-    -------
-
-    gas_cost : `Uint`
-        Gas required for performing the operation.
-    """
--/
+/- def gas_cost -/
 def modexpGascost
   (baseLength modulusLength expLength expHead : Nat) : Nat :=
-
-/-
-    multiplication_complexity = complexity(base_length, modulus_length)
-    iteration_count = iterations(exponent_length, exponent_head)
--/
   let mulComplexity := modexpComplexity baseLength modulusLength
   let iterationCount := modexpIterations expLength expHead
-
-/-
-    cost = multiplication_complexity * iteration_count
-    cost //= GQUADDIVISOR
-    return max(Uint(200), cost)
--/
   let cost := (mulComplexity * iterationCount) / 3
   max 200 cost
 
 
 def executeModexp (evm : Evm) : Execution := do
-
   let data := evm.msg.data
   let baseLength : Nat := B8L.sliceToNat data 0 32
   let expLength : Nat := B8L.sliceToNat data 32 32
   let modulusLength : Nat := B8L.sliceToNat data 64 32
   let expHead : Nat := B8L.sliceToNat data (96 + baseLength) (min 32 expLength)
   let cost : Nat := modexpGascost baseLength modulusLength expLength expHead
-
   let evm ← chargeGas cost evm
-
   if baseLength = 0 ∧ modulusLength = 0
     then return {evm with output := []}
-
   let base : Nat := B8L.sliceToNat data 96 baseLength
   let exp : Nat := B8L.sliceToNat data (96 + baseLength) expLength
   let modulus : Nat := B8L.sliceToNat data (96 + baseLength + expLength) modulusLength
-
   let output :=
     if modulus = 0
     then List.replicate modulusLength (0x00 : B8)
     else (Nat.powMod base exp modulus).toB8L.pack modulusLength
-
   .ok {evm with output := output}
 
 def executeEcadd (evm : Evm) : Execution := do
@@ -2540,33 +2316,10 @@ def blake2Sigma : List (List Nat) :=
     [10, 2, 8, 4, 7, 6, 1, 5, 15, 11, 9, 14, 3, 12, 13, 0]
   ]
 
-/-
-def spit_le_to_uint(data: bytes, start: int, num_words: int) -> List[Uint]:
-    """
-    Extracts 8 byte words from a given data.
-
-    Parameters
-    ----------
-    data :
-        The data in bytes from which the words need to be extracted
-    start :
-        Position to start the extraction
-    num_words:
-        The number of words to be extracted
-    """
-    words = []
-    for i in range(num_words):
-        start_position = start + (i * 8)
-        words.append(
-            Uint.from_le_bytes(data[start_position : start_position + 8])
-        )
-
-    return words
--/
+/- def spit_le_to_uint -/
 def spit_le_to_uint (data: B8L) : Nat → Nat → List Nat
   | _, 0 => []
   | start, num_words + 1 =>
-    --let word := data.sliceToNat start 8
     let wordBytes := data.sliceD start 8 (0x00 : B8)
     let word := B8L.toNat wordBytes.reverse
     word :: spit_le_to_uint data (start + 8) num_words
@@ -2576,25 +2329,7 @@ def Nat.toBool? : Nat → Option Bool
   | 1 => some true
   | _ => none
 
-/-
-    def get_blake2_parameters(self, data: bytes) -> Tuple:
-        """
-        Extract the parameters required in the Blake2 compression function
-        from the provided bytes data.
-
-        Parameters
-        ----------
-        data :
-            The bytes data that has been passed in the msg.
-        """
-        rounds = Uint.from_be_bytes(data[:4])
-        h = spit_le_to_uint(data, 4, 8)
-        m = spit_le_to_uint(data, 68, 16)
-        t_0, t_1 = spit_le_to_uint(data, 196, 2)
-        f = Uint.from_be_bytes(data[212:])
-
-        return (rounds, h, m, t_0, t_1, f)
--/
+/- def get_blake2_parameters -/
 def get_blake2_parameters (data : B8L) :
   Nat × List Nat × List Nat × Nat × Nat × Nat :=
   let rounds := B8L.sliceToNat data 0 4
@@ -2604,76 +2339,26 @@ def get_blake2_parameters (data : B8L) :
   let f := B8L.toNat <| data.drop 212
   ⟨rounds, h, m, t.getD 0 0, t.getD 1 0, f⟩
 
-
 def Blake2.maxWord (b2 : Blake2) : Nat := 2 ^ b2.w
 def Blake2.wR1 (b2 : Blake2) : Nat := b2.w - b2.R1
 def Blake2.wR2 (b2 : Blake2) : Nat := b2.w - b2.R2
 def Blake2.wR3 (b2 : Blake2) : Nat := b2.w - b2.R3
 def Blake2.wR4 (b2 : Blake2) : Nat := b2.w - b2.R4
 
-/-
-def G(
-    self, v: List, a: Uint, b: Uint, c: Uint, d: Uint, x: Uint, y: Uint
-) -> List:
-    """
-    The mixing function used in Blake2
-    https://datatracker.ietf.org/doc/html/rfc7693#section-3.1
-
-    Parameters
-    ----------
-    v :
-        The working vector to be mixed.
-    a, b, c, d :
-        Indexes within v of the words to be mixed.
-    x, y :
-        The two input words for the mixing.
-    """
--/
-
-
+/- def G -/
 def Blake2.g (b2 : Blake2) (v : Array Nat) (a b c d x y : Nat) : Array Nat :=
-
-  /-
-    v[a] = (v[a] + v[b] + x) % self.max_word
-    v[d] = ((v[d] ^ v[a]) >> self.R1) ^ (
-        (v[d] ^ v[a]) << self.wR1
-    ) % self.max_word
-  -/
   let v := v.setD a <| ((v.get! a) + (v.get! b) + x) % b2.maxWord
   let shiftArg : Nat := (v.get! d ^^^ v.get! a)
   let v := v.setD d <| ((shiftArg >>> b2.R1) ^^^ (shiftArg <<< b2.wR1)) % b2.maxWord
-
-  /-
-    v[c] = (v[c] + v[d]) % self.max_word
-    v[b] = ((v[b] ^ v[c]) >> self.R2) ^ (
-        (v[b] ^ v[c]) << self.wR2
-    ) % self.max_word
-  -/
   let v := v.setD c <| (v.get! c + v.get! d) % b2.maxWord
   let shiftArg : Nat := (v.get! b ^^^ v.get! c)
   let v := v.setD b <| ((shiftArg >>> b2.R2) ^^^ (shiftArg <<< b2.wR2)) % b2.maxWord
-
-  /-
-    v[a] = (v[a] + v[b] + y) % self.max_word
-    v[d] = ((v[d] ^ v[a]) >> self.R3) ^ (
-        (v[d] ^ v[a]) << self.wR3
-    ) % self.max_word
-  -/
   let v := v.setD a <| (v.get! a + v.get! b + y) % b2.maxWord
   let shiftArg : Nat := (v.get! d ^^^ v.get! a)
   let v := v.setD d <| ((shiftArg >>> b2.R3) ^^^ (shiftArg <<< b2.wR3)) % b2.maxWord
-
-  /-
-    v[c] = (v[c] + v[d]) % self.max_word
-    v[b] = ((v[b] ^ v[c]) >> self.R4) ^ (
-        (v[b] ^ v[c]) << self.wR4
-    ) % self.max_word
-  -/
   let v := v.setD c <| (v.get! c + v.get! d) % b2.maxWord
   let shiftArg : Nat := (v.get! b ^^^ v.get! c)
   let v := v.setD b <| ((shiftArg >>> b2.R4) ^^^ (shiftArg <<< b2.wR4)) % b2.maxWord
-
-  /- return v -/
   v
 
 def iterRangeDebugWrapper (m n : Nat) : Nat :=
@@ -2685,57 +2370,13 @@ def iterRange {ξ : Type} (vb : Bool) (k : Nat) (f : Nat → ξ → ξ) (x : ξ)
     | _, 0, x => x
     | m, n + 1, x =>
       let i := m - (n + 1)
-      -- let i :=
-      --   if vb
-      --     then iterRangeDebugWrapper m n
-      --     else m - (n + 1)
       let x' := f i x
       aux m n x'
   aux k k x
 
-/-
-def compress(
-    self,
-    num_rounds: Uint,
-    h: List[Uint],
-    m: List[Uint],
-    t_0: Uint,
-    t_1: Uint,
-    f: bool,
-) -> bytes:
-    """
-    'F Compression' from section 3.2 of RFC 7693:
-    https://tools.ietf.org/html/rfc7693#section-3.2
-
-    Parameters
-    ----------
-    num_rounds :
-        The number of rounds. A 32-bit unsigned big-endian word
-    h :
-        The state vector. 8 unsigned 64-bit little-endian words
-    m :
-        The msg block vector. 16 unsigned 64-bit little-endian words
-    t_0, t_1 :
-        Offset counters. 2 unsigned 64-bit little-endian words
-    f:
-        The final block indicator flag. An 8-bit word
-    """
--/
+-- compress
 def Blake2.bCompress (b2 : Blake2) (numRounds : Nat)
   (h m : List Nat) (t0 t1 : Nat) (f : Bool) : B8L :=
-
-  /-
-    # Initialize local work vector v[0..15]
-    v = [Uint(0)] * 16
-    v[0:8] = h  # First half from state
-    v[8:15] = self.IV  # Second half from IV
-
-    v[12] = t_0 ^ self.IV[4]  # Low word of the offset
-    v[13] = t_1 ^ self.IV[5]  # High word of the offset
-
-    if f:
-        v[14] = v[14] ^ self.mask_bits  # Invert all bits for last block
-  -/
   let v14 : Nat := blake2IV.getD 6 0
   let v : List Nat :=
     h.take 8 ++
@@ -2747,22 +2388,6 @@ def Blake2.bCompress (b2 : Blake2) (numRounds : Nat)
       0
     ]
 
-  /-
-    # Mixing
-    for r in range(num_rounds):
-        # for more than sigma_len rounds, the schedule
-        # wraps around to the beginning
-        s = self.sigma[r % self.sigma_len]
-
-        v = self.G(v, *self.MIXTable[0], m[s[0]], m[s[1]])
-        v = self.G(v, *self.MIXTable[1], m[s[2]], m[s[3]])
-        v = self.G(v, *self.MIXTable[2], m[s[4]], m[s[5]])
-        v = self.G(v, *self.MIXTable[3], m[s[6]], m[s[7]])
-        v = self.G(v, *self.MIXTable[4], m[s[8]], m[s[9]])
-        v = self.G(v, *self.MIXTable[5], m[s[10]], m[s[11]])
-        v = self.G(v, *self.MIXTable[6], m[s[12]], m[s[13]])
-        v = self.G(v, *self.MIXTable[7], m[s[14]], m[s[15]])
-  -/
   let innerFun (s : List Nat) (i : Nat) (v : Array Nat) : Array Nat :=
 
     b2.g v
@@ -2779,46 +2404,12 @@ def Blake2.bCompress (b2 : Blake2) (numRounds : Nat)
     iterRange false 8 (innerFun s) v
 
   let v := Array.toList (iterRange true numRounds outerFun ⟨v⟩)
-
-  /-
-    result_msg_words = (h[i] ^ v[i] ^ v[i + 8] for i in range(8))
-    return struct.pack("<8%s" % self.word_format, *result_msg_words)
-  -/
-
   let resultMsgWords :=
     (List.range 8).map <| fun i => h.get! i ^^^ v.get! i ^^^ v.get! (i + 8)
-
-  let retVal := List.flatten <| resultMsgWords.map (fun n => n.toB8L.reverse.takeD 8 (0x00 : B8))
-
-  retVal
+  List.flatten <| resultMsgWords.map (fun n => n.toB8L.reverse.takeD 8 (0x00 : B8))
 
 
-/-
-def blake2f(evm: Evm) -> None:
-    """
-    Writes the Blake2 hash to output.
-
-    Parameters
-    ----------
-    evm :
-        The current EVM frame.
-    """
-
-    data = evm.msg.data
-    if len(data) != 213:
-        raise InvalidParameter
-
-    blake2b = Blake2b()
-    rounds, h, m, t_0, t_1, f = blake2b.get_blake2_parameters(data)
-
-    charge_gas(evm, gasBlake2PerRound * rounds)
-
-    if f not in [0, 1]:
-        raise InvalidParameter
-
-    evm.output = blake2b.compress(rounds, h, m, t_0, t_1, f)
--/
-
+-- blake2f
 def executeBlake2F (evm : Evm) : Execution := do
   let data := evm.msg.data
 
@@ -2843,154 +2434,63 @@ def gasBlsG2Add : Nat := 600
 def gasBlsG2Mul : Nat := 22500
 def gasBlsG2Map : Nat := 23800
 
-/-
-def bls12_g1_add(evm: Evm) -> None:
-    """
-    The bls12_381 G1 point addition precompile.
-
-    Parameters
-    ----------
-    evm :
-        The current EVM frame.
-    Raises
-    ------
-    InvalidParameter
-        If the input length is invalid.
-    """
--/
+-- bls12_g1_add
 def executeBls12G1Add (evm : Evm) : Execution := do
-
---data = evm.message.data
   let data := evm.msg.data
-
---if len(data) != 256:
---    raise InvalidParameter("Invalid Input Length")
   .assert (data.length = 256) ⟨evm, "InvalidParameter"⟩
-
--- --# GAS
--- --charge_gas(evm, Uint(GAS_BLS_G1_ADD))
---   let mut evm ← chargeGas gasBlsG1Add evm
---
--- --# OPERATION
--- --p1 = bytes_to_g1(buffer_read(data, U256(0), U256(128)))
---   let p1 : BLSP12 := _
---
--- --p2 = bytes_to_g1(buffer_read(data, U256(128), U256(128)))
---   let p2 : BLSP12 := _
---
--- --result = bls12_add(p1, p2)
---   let result : B8L := (p1 + p2).toB8L
---
--- --evm.output = g1_to_bytes(result)
---   .ok {evm with output := result}
-
   .error ⟨evm, "BLS12 G1 Add not implemented yet"⟩
 
 
-/-
-def bls12_g1_msm(evm: Evm) -> None:
--/
+-- bls12_g1_msm
 def executeBls12G1Msm (evm : Evm) : Execution := do
 
---data = evm.message.data
   let data := evm.msg.data
 
---if len(data) == 0 or len(data) % LENGTH_PER_PAIR != 0:
---    raise InvalidParameter("Invalid Input Length")
   if data.length = 0 ∨ data.length % lengthPerPair ≠ 0 then
     .error ⟨evm, s!"InvalidParameter : {data.length} is not a valid input lnegth"⟩
 
---k = len(data) // LENGTH_PER_PAIR
   let k := data.length / lengthPerPair
 
---if k <= 128:
---    discount = Uint(G1_K_DISCOUNT[k - 1])
---else:
---    discount = Uint(G1_MAX_DISCOUNT)
   let discount :=
     List.getD g1KDiscount (k - 1) g1MaxDiscount
 
---gas_cost = Uint(k) * GAS_BLS_G1_MUL * discount // MULTIPLIER
   let gasCost := (k * gasBlsG1Mul * discount) / 1000
 
---charge_gas(evm, gas_cost)
   let mut evm ← chargeGas gasCost evm
 
---for i in range(k):
---    start_index = i * LENGTH_PER_PAIR
---    end_index = start_index + LENGTH_PER_PAIR
---    p, m = decode_g1_scalar_pair(data[start_index:end_index])
---    product = bls12_multiply(p, m)
---    if i == 0:
---        result = product
---    else:
---        result = bls12_add(result, product)
---evm.output = g1_to_bytes(result)
   .error ⟨evm, "BLS12 G1 msm not implemented yet"⟩
 
-/-
-def bls12_g2_add(evm: Evm) -> None:
--/
+-- bls12_g2_add
 def executeBls12G2Add (evm : Evm) : Execution := do
 
---data = evm.message.data
   let data := evm.msg.data
 
---if len(data) != 512:
---    raise InvalidParameter("Invalid Input Length")
   if data.length ≠ 512 then
     .error ⟨evm, "InvalidParameter"⟩
 
---charge_gas(evm, Uint(GAS_BLS_G2_ADD))
   let mut evm ← chargeGas gasBlsG2Add evm
 
---p1 = bytes_to_g2(buffer_read(data, U256(0), U256(256)))
---p2 = bytes_to_g2(buffer_read(data, U256(256), U256(256)))
---result = bls12_add(p1, p2)
 
---evm.output = g2_to_bytes(result)
   .error ⟨evm, "BLS12 G2 add not implemented yet"⟩
 
 
-/-
-def bls12_g2_msm(evm: Evm) -> None:
--/
+/- def bls12_g2_msm -/
 def executeBls12G2Msm (evm : Evm) : Execution := do
 
---data = evm.message.data
   let data := evm.msg.data
 
---if len(data) == 0 or len(data) % LENGTH_PER_PAIR != 0:
---    raise InvalidParameter("Invalid Input Length")
   if data.length = 0 ∨ data.length % lengthPerPair ≠ 0 then
     .error ⟨evm, s!"InvalidParameter : {data.length} is not a valid input lnegth"⟩
 
---k = len(data) // LENGTH_PER_PAIR
   let k := data.length / lengthPerPair
 
---if k <= 128:
---    discount = Uint(G2_K_DISCOUNT[k - 1])
---else:
---    discount = Uint(G2_MAX_DISCOUNT)
   let discount :=
     List.getD g2KDiscount (k - 1) g2MaxDiscount
 
---gas_cost = Uint(k) * GAS_BLS_G2_MUL * discount // MULTIPLIER
   let gasCost := (k * gasBlsG2Mul * discount) / 1000
 
---charge_gas(evm, gas_cost)
   let mut evm ← chargeGas gasCost evm
 
---for i in range(k):
---    start_index = i * LENGTH_PER_PAIR
---    end_index = start_index + LENGTH_PER_PAIR
---    p, m = decode_g2_scalar_pair(data[start_index:end_index])
---    product = bls12_multiply(p, m)
---    if i == 0:
---        result = product
---    else:
---        result = bls12_add(result, product)
---evm.output = g2_to_bytes(result)
   .error ⟨evm, "BLS12 G2 msm not implemented yet"⟩
 
 /-
@@ -2998,42 +2498,21 @@ def bls12_pairing(evm: Evm) -> None:
 -/
 def executeBls12Pairing (evm : Evm) : Execution := do
 
---data = evm.message.data
   let data := evm.msg.data
 
---if len(data) == 0 or len(data) % 384 != 0:
---    raise InvalidParameter("Invalid Input Length")
   if data.length = 0 ∨ data.length % 384 ≠ 0 then
     .error ⟨evm, s!"InvalidParameter : {data.length} is not a valid input lnegth"⟩
 
---k = len(data) // 384
   let k := data.length / 384
 
---gas_cost = Uint(32600 * k + 37700)
   let gasCost := (32600 * k + 37700)
 
---charge_gas(evm, gas_cost)
   let mut evm ← chargeGas gasCost evm
 
---result = FQ12.one()
---for i in range(k):
---    g1_start = Uint(384 * i)
---    g2_start = Uint(384 * i + 128)
 --
---    g1_point = bytes_to_g1(data[g1_start : g1_start + Uint(128)])
---    if not is_inf(bls12_multiply(g1_point, curve_order)):
---        raise InvalidParameter("Sub-group check failed for G1 point.")
 --
---    g2_point = bytes_to_g2(data[g2_start : g2_start + Uint(256)])
---    if not is_inf(bls12_multiply(g2_point, curve_order)):
---        raise InvalidParameter("Sub-group check failed for G2 point.")
 --
---    result *= pairing(g2_point, g1_point)
 --
---if result == FQ12.one():
---    evm.output = b"\x00" * 31 + b"\x01"
---else:
---    evm.output = b"\x00" * 32
 
   .error ⟨evm, "BLS12 pairing not implemented yet"⟩
 
@@ -3042,23 +2521,14 @@ def bls12_map_fp_to_g1(evm: Evm) -> None:
 -/
 def executeBls12MapFpToG1 (evm : Evm) : Execution := do
 
---data = evm.message.data
   let data := evm.msg.data
 
---if len(data) != 64:
---    raise InvalidParameter("Invalid Input Length")
   if data.length ≠ 64 then
     .error ⟨evm, "InvalidParameter"⟩
 
---charge_gas(evm, Uint(GAS_BLS_G1_MAP))
   let mut evm ← chargeGas gasBlsG1Map evm
 
---fp = int.from_bytes(data, "big")
---if fp >= FQ.field_modulus:
---    raise InvalidParameter("coordinate >= field modulus")
 --
---g1_optimized_3d = clear_cofactor_G1(map_to_curve_G1(FQ(fp)))
---evm.output = g1_to_bytes(g1_optimized_3d)
   .error ⟨evm, "BLS12 map FP-to-G1 Msm not implemented yet"⟩
 
 
@@ -3071,47 +2541,25 @@ def catchWithOOG {ξ : Type U} (evm : Evm) (cond : String → Bool) :
     else
       .error ⟨evm, e⟩
 
--- def exStrToExEvmStr {ξ : Type U} (evm : Evm) (x : Except String ξ) : Except (Evm × String) ξ :=
---   match x with
---   | .ok v => .ok v
---   | .error e => .error ⟨evm, e⟩
 
 /-
 def bytes_to_g1(data: Bytes) -> Point3D[FQ]:
 -/
 def B8L.toExStrBNP (data : B8L) : Except String BNP := do
 
---if len(data) != 64:
---    raise InvalidParameter("Input should be 64 bytes long")
   if data.length ≠ 64 then
     .error "InvalidParameter : input should be 64 bytes long"
 
---x_bytes = buffer_read(data, U256(0), U256(32))
---x = int(U256.from_be_bytes(x_bytes))
   let x := data.sliceToNat 0 32
 
---y_bytes = buffer_read(data, U256(32), U256(32))
---y = int(U256.from_be_bytes(y_bytes))
   let y := data.sliceToNat 32 32
 
---if x >= field_modulus:
---    raise InvalidParameter("Invalid field element")
   if x >= altBn128Prime then
     .error "InvalidParameter : invalid field element"
 
---if y >= field_modulus:
---    raise InvalidParameter("Invalid field element")
   if y >= altBn128Prime then
     .error "InvalidParameter : invalid field element"
 
---z = 1
---if x == 0 and y == 0:
---    z = 0
---point = (FQ(x), FQ(y), FQ(z))
---# Check if the point is on the curve
---if not is_on_curve(point, b):
---    raise InvalidParameter("Point is not on curve")
---return point
   (EllipticCurve.mk? (FinField.ofNat x) (FinField.ofNat y)).toExcept
     "InvalidParameter : point is not on curve"
 
@@ -3120,31 +2568,17 @@ def bytes_to_g2(data: Bytes) -> Point3D[FQ2]:
 -/
 def B8L.toExStrBNP2 (data : B8L) : Except String BNP2 := do
 
---if len(data) != 128:
---    raise InvalidParameter("G2 should be 128 bytes long")
   if data.length ≠ 128 then
     .error "InvalidParameter : input should be 128 bytes long"
 
---x0_bytes = buffer_read(data, U256(0), U256(32))
---x0 = int(U256.from_be_bytes(x0_bytes))
   let x0 := data.sliceToNat 0 32
 
---x1_bytes = buffer_read(data, U256(32), U256(32))
---x1 = int(U256.from_be_bytes(x1_bytes))
   let x1 := data.sliceToNat 32 32
 
---y0_bytes = buffer_read(data, U256(64), U256(32))
---y0 = int(U256.from_be_bytes(y0_bytes))
   let y0 := data.sliceToNat 64 32
 
---y1_bytes = buffer_read(data, U256(96), U256(32))
---y1 = int(U256.from_be_bytes(y1_bytes))
   let y1 := data.sliceToNat 96 32
 
---if x0 >= field_modulus or x1 >= field_modulus:
---    raise InvalidParameter("Invalid field element")
---if y0 >= field_modulus or y1 >= field_modulus:
---    raise InvalidParameter("Invalid field element")
   if (
     x0 ≥ altBn128Prime ∨
     x1 ≥ altBn128Prime ∨
@@ -3153,41 +2587,21 @@ def B8L.toExStrBNP2 (data : B8L) : Except String BNP2 := do
   ) then
     .error "InvalidParameter : invalid field element"
 
---x = FQ2((x1, x0))
---y = FQ2((y1, y0))
---z = (1, 0)
---if x == FQ2((0, 0)) and y == FQ2((0, 0)):
---    z = (0, 0)
---point = (x, y, FQ2(z))
---# Check if the point is on the curve
---if not is_on_curve(point, b2):
---    raise InvalidParameter("Point is not on curve")
---return point
 
   (EllipticCurve.mk? (BNF2.mk x0 x1) (BNF2.mk y0 y1)).toExcept
     "InvalidParameter : point is not on curve"
-
 
 /-
 def bls12_map_fp2_to_g2(evm: Evm) -> None:
 -/
 def executeBls12MapFp2ToG2 (evm : Evm) : Execution := do
 
---data = evm.message.data
   let data := evm.msg.data
 
---if len(data) != 128:
---    raise InvalidParameter("Invalid Input Length")
   .assert (data.length = 128) ⟨evm, "InvalidParameter"⟩
 
---charge_gas(evm, Uint(GAS_BLS_G2_MAP))
   let mut evm ← chargeGas gasBlsG2Map evm
 
---field_element = bytes_to_fq2(data)
---assert isinstance(field_element, FQ2)
---fp2 = bytes_to_fq2(data)
---g2_3d = clear_cofactor_G2(map_to_curve_G2(fp2))
---evm.output = g2_to_bytes(g2_3d)
   .error ⟨evm, "main logic of BLS12 map FP2-to_G2 not implemented yet"⟩
 
 def executePairingCheck (evm : Evm) : Execution := do
@@ -3219,7 +2633,8 @@ def executePairingCheck (evm : Evm) : Execution := do
 def executePrecomp (evm : Evm) : Adr → Execution
   | 0x1 => executeEcrecover evm
   | 0x2 => executeSha256 evm
-  | 0x3 => executeRipemd160 evm
+  | 0x3 => do
+    executeRipemd160 evm
   | 0x4 => executeId evm
   | 0x5 => executeModexp evm
   | 0x6 => executeEcadd evm
@@ -3251,29 +2666,20 @@ def State.getStorVal (w : State) (a : Adr) (k : B256) : B256 := (w.get a).stor.f
 def State.getNonce (w : State) (a : Adr) : B64 := (w.get a).nonce
 def State.getCode (w : State) (a : Adr) : ByteArray := (w.get a).code
 def State.getBal (w : State) (a : Adr) : B256 := (w.get a).bal
--- def State.storIsEmptyAt (w : State) (a : Adr) : Bool := (w.get a).stor.isEmpty
 
 instance : ToString Log := ⟨String.joinln ∘ Log.toStrings⟩
-
--- j{α : Type u_1} → [inst : ToString α] → List α → String
 
 def List.toStringSingleQuote {ξ : Type u} [inst : ToString ξ] : List ξ → String
   | [] => "[]"
   | [x] => "['" ++ toString x ++ "']"
   | x::xs => xs.foldl (· ++ ", '" ++ toString · ++ "'") ("['" ++ toString x ++ "'") |>.push ']'
 
--- def Strings.singleQuote : List String → String
---   | [] => "[]"
---   | [x] => "['" ++ x ++ "']"
---   | x::xs => xs.foldl (· ++ ", " ++ toString ·) ("['" ++ x ++ "'") |>.push ']'
 --
--- #check List.toString
 def stepString (evm : Evm) (i : Inst) : String :=
   "step(" ++
     s!"pc({evm.pc}), " ++
     s!"gas({evm.gas_left}), " ++
-    -- s!"inst(\"{i.toString}\"), " ++
-    s!"op(\"{i.toOpString}\"), " ++
+    -- s!"op(\"{i.toOpString}\"), " ++
     s!"depth({evm.msg.depth}), " ++
     s!"{List.toStringSingleQuote <| evm.stack.map (fun x => "0x" ++ x.toHex.dropZeroes)}" ++
   ")."
@@ -3295,10 +2701,7 @@ def isValidDelegation (code: ByteArray) : Prop :=
 
 instance {code} : Decidable (isValidDelegation code) := instDecidableAnd
 
--- def get_delegated_code_address(code: bytes) -> Optional[Address]:
---     if is_valid_delegation(code):
---         return Address(code[EOADelegationMarkerLength:])
---     return None
+-- get_delegated_code_address
 def getDelegatedCodeAddress (code : ByteArray) : Option Adr :=
   if isValidDelegation code
   then
@@ -3306,43 +2709,9 @@ def getDelegatedCodeAddress (code : ByteArray) : Option Adr :=
     adrBytes.toAdr?
   else none
 
-/-
-def access_delegation(
-    evm: Evm, address: Address
-) -> Tuple[bool, Address, Bytes, Uint]:
-    """
-    Get the delegation address, code, and the cost of access from the address.
-
-    Parameters
-    ----------
-    evm : `Evm`
-        The execution frame.
-    address : `Address`
-        The address to get the delegation from.
-
-    Returns
-    -------
-    delegation : `Tuple[bool, Address, Bytes, Uint]`
-        The delegation address, code, and access gas cost.
-    """
-    state = evm.msg.block_env.state
-    code = get_account(state, address).code
-    if not is_valid_delegation(code):
-        return False, address, code, Uint(0)
-
-    address = Address(code[eoaDelegationMarkerLength:])
-    if address in evm.accessed_addresses:
-        access_gas_cost = gasWarmAccess
-    else:
-        evm.accessed_addresses.add(address)
-        access_gas_cost = gasColdAccountAccess
-    code = get_account(state, address).code
-
-    return True, address, code, access_gas_cost
--/
-
 instance : Inhabited Adr := ⟨0⟩
 
+-- access_delegation
 def accessDelegation (evm : Evm) (adr : Adr) :
   Bool × Adr × ByteArray × Nat × Evm :=
   let state := evm.msg.benv.state
@@ -3559,18 +2928,10 @@ mutual
     (disablePrecompiles: Bool) : Nat → Execution
     | 0 => .error ⟨evm, "RecursionLimit"⟩
     | lim + 1 => do
-
-
       let mut evm := {evm with return_data := []}
-
       let .false ← .ok ((evm.msg.depth + 1 > 1024) : Bool)
         | ({evm with gas_left := evm.gas_left + gas}).push 0
-
-
       let calldata := evm.memory.data.sliceD input_index input_size 0
-      -- let code := (evm.getAcct codeAddress).code
-
-
       let childMsg : Msg := {
         benv := evm.msg.benv
         tenv := evm.msg.tenv
@@ -3867,28 +3228,22 @@ mutual
 
     | .exec .statcall, lim + 1 => do
 
-      --let ⟨gas, evm⟩ ← evm.pop
       let gas ← evm.stackTop
       let mut evm ← evm.pop'
 
-      -- let ⟨target, evm⟩ ← evm.pop <&> Prod.mapFst B256.toAdr
-      let target ← evm.stackTop <&> B256.toAdr
+            let target ← evm.stackTop <&> B256.toAdr
       evm ← evm.pop'
 
-      -- let ⟨input_index, evm⟩ ← evm.popToNat
-      let input_index ← evm.stackTop <&> B256.toNat
+            let input_index ← evm.stackTop <&> B256.toNat
       evm ← evm.pop'
 
-      -- let ⟨input_size, evm⟩ ← evm.popToNat
-      let input_size ← evm.stackTop <&> B256.toNat
+            let input_size ← evm.stackTop <&> B256.toNat
       evm ← evm.pop'
 
-      -- let ⟨output_index, evm⟩ ← evm.popToNat
-      let output_index ← evm.stackTop <&> B256.toNat
+            let output_index ← evm.stackTop <&> B256.toNat
       evm ← evm.pop'
 
-      -- let ⟨output_size, evm⟩ ← evm.popToNat
-      let output_size ← evm.stackTop <&> B256.toNat
+            let output_size ← evm.stackTop <&> B256.toNat
       evm ← evm.pop'
 
 
@@ -4392,44 +3747,6 @@ def accountHasCodeOrNonce (state : State) (adr : Adr) : Bool :=
 def accountHasStorage (state : State) (adr : Adr) : Bool :=
   !(state.getStor adr).isEmpty
 
-/-
-def processMessageCall (vb : Bool) (msg : Msg) (env : Environment) :
-  Except String (State × MsgCallOutput) := do
-
-  let (true : Bool) ← .ok (noCollision msg env)
-    | .ok ⟨env.state, 0, 0, [], .empty, some "AddressCollision"⟩
-
-  let evm ←
-    match msg.target with
-    | none => Except.bimap Prod.snd id <| processCreateMessage vb msg env (msg.gas + 50)
-    | some _ => Except.bimap Prod.snd id <| processMsg vb msg env (msg.gas + 50)
-
-  .ok <|
-    if evm.error.isNone
-    then ⟨
-      evm.env.state,
-      {
-        gas_left := evm.gas_left
-        refund_counter := evm.refund_counter
-        logs := evm.logs
-        accountsToDelete := evm.accountsToDelete
-        error := evm.error
-      }
-    ⟩
-    else ⟨
-      evm.env.state,
-      {
-        gas_left := evm.gas_left
-        refund_counter := 0
-        logs := []
-        accountsToDelete := .empty
-        error := evm.error
-      }
-    ⟩
-    -/
-
-
-
 def Tx.signingHash (tx : Tx) : Option B256 :=
   match tx.type with
   | .zero gasPrice receiver =>
@@ -4464,36 +3781,7 @@ def Tx.signingHash (tx : Tx) : Option B256 :=
               .b8s [],
               .b8s []
             ]
-  /-
-  def signing_hash2930(tx: AccessListTransaction) -> Hash32:
-  """
-  Compute the hash of a transaction used in a EIP 2930 signature.
-
-  Parameters
-  ----------
-  tx :
-      Transaction of interest.
-
-  Returns
-  -------
-  hash : `ethereum.crypto.hash.Hash32`
-      Hash of the transaction.
-  """
-  return keccak256(
-      b"\x01"
-      + rlp.encode(
-          (
-              tx.chain_id,
-              tx.nonce,
-              tx.gas_price,
-              tx.gas,
-              tx.to,
-              tx.value,
-              tx.data,
-              tx.access_list,
-          )
-      )
-  ) -/
+  /- def signing_hash2930 -/
   | .one chainId gasPrice receiver accessList =>
     B8L.keccak <|
       .cons (0x01 : B8) <|
@@ -4509,38 +3797,7 @@ def Tx.signingHash (tx : Tx) : Option B256 :=
             accessList.toBLT
           ]
 
-  /-
-  def signing_hash1559(tx: FeeMarketTransaction) -> Hash32:
-    """
-    Compute the hash of a transaction used in a EIP 1559 signature.
-
-    Parameters
-    ----------
-    tx :
-        Transaction of interest.
-
-    Returns
-    -------
-    hash : `ethereum.crypto.hash.Hash32`
-        Hash of the transaction.
-    """
-    return keccak256(
-        b"\x02"
-        + rlp.encode(
-            (
-                tx.chain_id,
-                tx.nonce,
-                tx.max_priority_fee_per_gas,
-                tx.max_fee_per_gas,
-                tx.gas,
-                tx.to,
-                tx.value,
-                tx.data,
-                tx.access_list,
-            )
-        )
-    )
-  -/
+  /- signing_hash1559 -/
   | .two chainId maxPriorityFee maxFee receiver accessList =>
     B8L.keccak <|
       .cons (0x02 : B8) <|
@@ -4556,40 +3813,7 @@ def Tx.signingHash (tx : Tx) : Option B256 :=
             .b8s tx.data,
             accessList.toBLT
           ]
-  /-
-  def signing_hash4844(tx: BlobTransaction) -> Hash32:
-    """
-    Compute the hash of a transaction used in a EIP-4844 signature.
-
-    Parameters
-    ----------
-    tx :
-        Transaction of interest.
-
-    Returns
-    -------
-    hash : `ethereum.crypto.hash.Hash32`
-        Hash of the transaction.
-    """
-    return keccak256(
-        b"\x03"
-        + rlp.encode(
-            (
-                tx.chain_id,
-                tx.nonce,
-                tx.max_priority_fee_per_gas,
-                tx.max_fee_per_gas,
-                tx.gas,
-                tx.to,
-                tx.value,
-                tx.data,
-                tx.access_list,
-                tx.max_fee_per_blob_gas,
-                tx.blob_versioned_hashes,
-            )
-        )
-    )
-    -/
+  /- def signing_hash4844 -/
   | .three chainId maxPriorityFee maxFee receiver accessList maxBlobFee blobHashes =>
     B8L.keccak <|
       .cons (0x03 : B8) <|
@@ -4607,32 +3831,6 @@ def Tx.signingHash (tx : Tx) : Option B256 :=
             .b8s maxBlobFee.toB8L,
             .list <| blobHashes.map <| .b8s ∘ B256.toB8L
           ]
-  -- def signing_hash7702(tx: SetCodeTransaction) -> Hash32:
-  --     """
-  --     Compute the hash of a transaction used in a [EIP-7702] signature.
-  --
-  --     This function takes a transaction as a parameter and returns the
-  --     signing hash of the transaction used in a [EIP-7702] signature.
-  --
-  --     [EIP-7702]: https://eips.ethereum.org/EIPS/eip-7702
-  --     """
-  --     return keccak256(
-  --         b"\x04"
-  --         + rlp.encode(
-  --             (
-  --                 tx.chain_id,
-  --                 tx.nonce,
-  --                 tx.max_priority_fee_per_gas,
-  --                 tx.max_fee_per_gas,
-  --                 tx.gas,
-  --                 tx.to,
-  --                 tx.value,
-  --                 tx.data,
-  --                 tx.access_list,
-  --                 tx.authorizations,
-  --             )
-  --         )
-  --     )
   | .four chainId maxPriorityFee maxFee receiver accessList auths =>
     B8L.keccak <|
       .cons (0x04 : B8) <|
@@ -4653,59 +3851,14 @@ def Tx.signingHash (tx : Tx) : Option B256 :=
 def secp256k1nRecoverToAdr?
   (r s : B256) (v : Nat) (msg_hash : B256) : Option  Adr :=
   let rsa : ByteArray := ⟨Array.mk (r.toB8L ++ s.toB8L)⟩
-  let ri : UInt8 := --Byte.toB8 (if tx.yParity then 1 else 0)
+  let ri : UInt8 :=
     match v with
     | 0 => 0
     | _ => 1
   let hsa : ByteArray := ⟨Array.mk msg_hash.toB8L⟩
   publicAddress? hsa ri rsa
 
-/-
-def recover_sender(chain_id: U64, tx: Transaction) -> Address:
-    r, s = tx.r, tx.s
-
-    if U256(0) >= r or r >= SECP256K1N:
-        raise InvalidSignatureError("bad r")
-    if U256(0) >= s or s > SECP256K1N // U256(2):
-        raise InvalidSignatureError("bad s")
-
-    if isinstance(tx, LegacyTransaction):
-        v = tx.v
-        if v == 27 or v == 28:
-            public_key = secp256k1_recover(
-                r, s, v - U256(27), signing_hash_pre155(tx)
-            )
-        else:
-            chain_id_x2 = U256(chain_id) * U256(2)
-            if v != U256(35) + chain_id_x2 and v != U256(36) + chain_id_x2:
-                raise InvalidSignatureError("bad v")
-            public_key = secp256k1_recover(
-                r,
-                s,
-                v - U256(35) - chain_id_x2,
-                signing_hash155(tx, chain_id),
-            )
-    elif isinstance(tx, AccessListTransaction):
-        if tx.y_parity not in (U256(0), U256(1)):
-            raise InvalidSignatureError("bad y_parity")
-        public_key = secp256k1_recover(
-            r, s, tx.y_parity, signing_hash2930(tx)
-        )
-    elif isinstance(tx, FeeMarketTransaction):
-        if tx.y_parity not in (U256(0), U256(1)):
-            raise InvalidSignatureError("bad y_parity")
-        public_key = secp256k1_recover(
-            r, s, tx.y_parity, signing_hash1559(tx)
-        )
-    elif isinstance(tx, BlobTransaction):
-        if tx.y_parity not in (U256(0), U256(1)):
-            raise InvalidSignatureError("bad y_parity")
-        public_key = secp256k1_recover(
-            r, s, tx.y_parity, signing_hash4844(tx)
-        )
-
-    return Address(keccak256(public_key)[12:32])
--/
+-- recover_sender
 def recoverSender (chain_id: B64) (tx: Tx) : Except String Adr := do
 
   let r := tx.r.toB256P
@@ -4734,20 +3887,13 @@ def recoverSender (chain_id: B64) (tx: Tx) : Except String Adr := do
 
 
 
--- def recover_authority(authorization: Authorization) -> Address:
+-- recover_authority
 def recoverAuthority (auth : Auth) : Except String Adr := do
 
---     y_parity, r, s = authorization.y_parity, authorization.r, authorization.s
   let yParity := auth.yParity
   let r := auth.r
   let s := auth.s
 
---     if y_parity not in (0, 1):
---         raise InvalidSignatureError("Invalid y_parity in authorization")
---     if U256(0) >= r or r >= SECP256K1N:
---         raise InvalidSignatureError("Invalid r value in authorization")
---     if U256(0) >= s or s > SECP256K1N // U256(2):
---         raise InvalidSignatureError("Invalid s value in authorization")
   if (
     1 < yParity ∨
     r = 0 ∨ B256.secp256k1n ≤ r ∨
@@ -4755,16 +3901,6 @@ def recoverAuthority (auth : Auth) : Except String Adr := do
   ) then
     .error "InvalidSignatureError"
 
---     signing_hash = keccak256(
---         setCodeTxMagic
---         + rlp.encode(
---             (
---                 authorization.chain_id,
---                 authorization.address,
---                 authorization.nonce,
---             )
---         )
---     )
   let signingHash : B256 :=
     B8L.keccak <|
       List.append setCodeTxMagic <|
@@ -4774,37 +3910,23 @@ def recoverAuthority (auth : Auth) : Except String Adr := do
           .b8s auth.nonce.toB8L.sig
         ]
 
---     public_key = secp256k1_recover(r, s, U256(y_parity), signing_hash)
---     return Address(keccak256(public_key)[12:32])
   (secp256k1nRecoverToAdr? r s yParity signingHash).toExcept "sender recovery failed"
 
 
-
--- def set_delegation(message: Message) -> U256:
+/- def set_delegation -/
 def setDelegation (msg : Msg) : Except String (Msg × B256) := do
 
---     state = message.block_env.state
---     refund_counter = U256(0)
   let mut refundCounter : B256 := 0
   let mut msg := msg
 
---     for auth in message.tx_env.authorizations:
   for auth in msg.tenv.auths do
 
---         if auth.chain_id not in (message.block_env.chain_id, U256(0)):
---             continue
     if auth.chainId != msg.benv.chainId && auth.chainId != 0 then
       continue
 
---         if auth.nonce >= U64.MAXValue:
---             continue
     if auth.nonce = B64.max then
       continue
 
---         try:
---             authority = recover_authority(auth)
---         except InvalidSignatureError:
---             continue
     let authority : Adr ←
       match recoverAuthority auth with
       | .error err =>
@@ -4814,50 +3936,31 @@ def setDelegation (msg : Msg) : Except String (Msg × B256) := do
           .error err
       | .ok adr => .ok adr
 
---         message.accessed_addresses.add(authority)
     msg := {msg with accessedAddresses := msg.accessedAddresses.insert authority}
 
---         authority_account = get_account(state, authority)
     let authorityAccount : Acct :=
       msg.benv.state.get authority
 
---         authority_code = authority_account.code
---         if authority_code and not is_valid_delegation(authority_code):
---             continue
     let authorityCode : ByteArray := authorityAccount.code
     if ¬ (authorityCode.isEmpty ∧ isValidDelegation authorityCode) then
       continue
 
---         authority_nonce = authority_account.nonce
---         if authority_nonce != auth.nonce:
---             continue
     if authorityAccount.nonce != auth.nonce then
       continue
 
---         if account_exists(state, authority):
---             refund_counter += U256(perEmptyAccountCost - perAuthBaseCost)
     if AccountExists msg.benv.state authority then
       refundCounter :=
         refundCounter + (perEmptyAccountCost - perAuthBaseCost).toB256
 
---         if auth.address == nullAddress:
---             code_to_set = b""
---         else:
---             code_to_set = eoaDelegationMarker + auth.address
     let codeToSet : ByteArray :=
       if auth.address = 0 then
         .empty
       else
         (eoaDelegationMarker ++ auth.address.toB8L).toByteArray
 
---         set_code(state, authority, code_to_set)
---         increment_nonce(state, authority)
     msg := msg.setCode authority codeToSet
     msg := msg.incrNonce authority
 
---     if message.code_address is None:
---         raise InvalidBlock("Invalid type 4 transaction: no target")
---     message.code = get_account(state, message.code_address).code
   msg ←
     match msg.codeAddress with
     | none =>
@@ -4876,57 +3979,31 @@ def Int.toNat? (i : Int) : Option Nat :=
   else
     some (i.toNat)
 
-/- def process_msg_call(msg: Msg) -> MsgCallOutput: -/
+/- process_msg_call -/
 def processMessageCall (vb : Bool) (msg : Msg) :
   Except String (State × MsgCallOutput) := do
 
---block_env = msg.block_env
---refund_counter = U256(0)
   let benv := msg.benv
   let mut msg : Msg := msg
   let mut refundCounter : Nat := 0
 
---if msg.target == Bytes0(b""):
   let mut evm : Evm := default
   if msg.target.isNone then
 
---  is_collision = account_has_code_or_nonce(
---    block_env.state, msg.current_target
---  ) or account_has_storage(block_env.state, msg.current_target)
     let isCollision : Bool :=
       accountHasCodeOrNonce benv.state msg.currentTarget || accountHasStorage benv.state msg.currentTarget
 
---  if is_collision:
---    return MsgCallOutput(
---      Uint(0),
---      U256(0),
---      tuple(),
---      set(),
---      AddressCollision(),
---      Bytes(b""),
---    )
---  else:
---    evm = process_create_msg(msg)
     if isCollision then
       return ⟨benv.state, ⟨0, 0, [], .empty, "AddressCollision", []⟩⟩
     else
       evm ← Except.bimap (Prod.snd ∘ Prod.snd) id <| processCreateMessage vb msg (msg.gas + 50)
 
---else:
---  if msg.tx_env.authorizations != ():
---    refund_counter += set_delegation(msg)
   else
     if !msg.tenv.auths.isEmpty then
       let ⟨msg', setDelegationValue⟩ ← setDelegation msg
       msg := msg'
       refundCounter := refundCounter + setDelegationValue.toNat
 
---  delegated_address = get_delegated_code_address(msg.code)
---  if delegated_address is not None:
---    msg.disable_precompiles = True
---    msg.accessed_addresses.add(delegated_address)
---    msg.code = get_account(block_env.state, delegated_address).code
---    msg.code_address = delegated_address
     match getDelegatedCodeAddress msg.code with
     | none => .ok ()
     | some dca =>
@@ -4939,16 +4016,8 @@ def processMessageCall (vb : Bool) (msg : Msg) :
           codeAddress := some dca
         }
 
---  evm = process_msg(msg)
     evm ← Except.bimap (Prod.snd ∘ Prod.snd) id <| processMsg vb msg (msg.gas + 50)
 
---if evm.error:
---  logs: Tuple[Log, ...] = ()
---  accountsToDelete = set()
---else:
---  logs = evm.logs
---  accountsToDelete = evm.accountsToDelete
---  refund_counter += U256(evm.refund_counter)
   let mut logs : List Log := []
   let mut accountsToDelete : AdrSet := .empty
   if evm.error.isNone then
@@ -4957,19 +4026,7 @@ def processMessageCall (vb : Bool) (msg : Msg) :
     let evmRc ← (Int.toNat? evm.refund_counter).toExcept "ERROR : refund counter is negative"
     refundCounter := refundCounter + evmRc
 
---tx_end = TransactionEnd(
---  int(msg.gas) - int(evm.gas_left), evm.output, evm.error
---)
---evm_trace(evm, tx_end)
-
---return MsgCallOutput(
---  gas_left=evm.gas_left,
---  refund_counter=refund_counter,
---  logs=logs,
---  accountsToDelete=accounts_to_delete,
---  error=evm.error,
---  return_data=evm.output,
---)
+--return MsgCallOutput
   .ok ⟨
     evm.msg.benv.state,
     {
@@ -5019,26 +4076,7 @@ def Tx.isTypeFour (tx : Tx) : Bool :=
   | _ => false
 
 
-/-
-def calculate_total_blob_gas(tx: Transaction) -> Uint:
-  """
-  Calculate the total blob gas for a transaction.
-
-  Parameters
-  ----------
-  tx :
-      The transaction for which the blob gas is to be calculated.
-
-  Returns
-  -------
-  total_blob_gas: `ethereum.base_types.Uint`
-      The total blob gas for the transaction.
-  """
-  if isinstance(tx, BlobTransaction):
-      return gasPerBlob * Uint(len(tx.blob_versioned_hashes))
-  else:
-      return Uint(0)
--/
+/- calculate_total_blob_gas -/
 def calculateTotalBlobGas (tx: Tx) : Nat :=
   match tx.type with
   | .three _ _ _ _ _ _ blobHashes => gasPerBlob * blobHashes.length
@@ -5060,60 +4098,23 @@ structure BlockOutput : Type where
   blobGasUsed : Nat
   requests : List B8L
 
--- def check_transaction(
---     block_env: vm.Benvironment,
---     block_output: vm.BlockOutput,
---     tx: Transaction,
--- ) -> Tuple[Address, Uint, Tuple[VersionedHash, ...], U64]:
+/- check_transaction -/
 def checkTransaction (benv : Benv) (blockOut : BlockOutput) (tx : Tx) :
   Except String (Adr × Nat × List B256 × Nat) := do
 
---     gas_available = block_env.block_gas_limit - block_output.block_gas_used
---     blob_gas_available = maxBlobGasPerBlock - block_output.blob_gas_used
   let gasAvailable := benv.blockGasLimit - blockOut.blockGasUsed
   let blobGasAvailable := maxBlobGasPerBlock - blockOut.blobGasUsed
 
---     if tx.gas > gas_available:
---         raise GasUsedExceedsLimitError("gas used exceeds limit")
   if tx.gas > gasAvailable then
     .error "GasUsedExceedsLimitError : gas used exceeds limit"
 
---     tx_blob_gas_used = calculate_total_blob_gas(tx)
   let txBlobGasUsed := calculateTotalBlobGas tx
 
---     if tx_blob_gas_used > blob_gas_available:
---         raise BlobGasLimitExceededError("blob gas limit exceeded")
   if txBlobGasUsed > blobGasAvailable then
     .error s!"BlobGasLimitExceededError : blob gas used = {txBlobGasUsed}, blob gas available = {blobGasAvailable}"
 
---     sender_address = recover_sender(block_env.chain_id, tx)
---     sender_account = get_account(block_env.state, sender_address)
   let senderAddress ← recoverSender benv.chainId tx
   let senderAccount := benv.state.get senderAddress
-
---     if isinstance(
---         tx, (FeeMarketTransaction, BlobTransaction, SetCodeTransaction)
---     ):
---         if tx.max_fee_per_gas < tx.max_priority_fee_per_gas:
---             raise PriorityFeeGreaterThanMaxFeeError(
---                 "priority fee greater than max fee"
---             )
---         if tx.max_fee_per_gas < block_env.base_fee_per_gas:
---             raise InsufficientMaxFeePerGasError(
---                 tx.max_fee_per_gas, block_env.base_fee_per_gas
---             )
---
---         priority_fee_per_gas = min(
---             tx.max_priority_fee_per_gas,
---             tx.max_fee_per_gas - block_env.base_fee_per_gas,
---         )
---         effective_gas_price = priority_fee_per_gas + block_env.base_fee_per_gas
---         max_gas_fee = tx.gas * tx.max_fee_per_gas
---     else:
---         if tx.gas_price < block_env.base_fee_per_gas:
---             raise InvalidBlock
---         effective_gas_price = tx.gas_price
---         max_gas_fee = tx.gas * tx.gas_price
   let mut effectiveGasPrice := 0
   let mut maxGasFee := 0
   let selector : Nat ⊕ (Nat × Nat) :=
@@ -5138,27 +4139,8 @@ def checkTransaction (benv : Benv) (blockOut : BlockOutput) (tx : Tx) :
     effectiveGasPrice := gasPrice
     maxGasFee := tx.gas * gasPrice
 
---     if isinstance(tx, BlobTransaction):
---         if len(tx.blob_versioned_hashes) == 0:
---             raise NoBlobDataError("no blob data in transaction")
---         for blob_versioned_hash in tx.blob_versioned_hashes:
---             if blob_versioned_hash[0:1] != versionedHashVersionKzg:
---                 raise InvalidBlobVersionedHashError(
---                     "invalid blob versioned hash"
---                 )
 --
---         blob_gas_price = calculate_blob_gas_price(block_env.excess_blob_gas)
---         if Uint(tx.max_fee_per_blob_gas) < blob_gas_price:
---             raise InsufficientMaxFeePerBlobGasError(
---                 "insufficient max fee per blob gas"
---             )
 --
---         max_gas_fee += Uint(calculate_total_blob_gas(tx)) * Uint(
---             tx.max_fee_per_blob_gas
---         )
---         blob_versioned_hashes = tx.blob_versioned_hashes
---     else:
---         blob_versioned_hashes = ()
   let mut blobVersionedHashes : List B256 := []
   match tx.type with
   | .three _ _ _ _ _ maxBlobFee blobHashes =>
@@ -5173,46 +4155,26 @@ def checkTransaction (benv : Benv) (blockOut : BlockOutput) (tx : Tx) :
     blobVersionedHashes := blobHashes
   | _ => .ok ()
 
---     if isinstance(tx, (BlobTransaction, SetCodeTransaction)):
---         if not isinstance(tx.to, Address):
---             raise TransactionTypeContractCreationError(tx)
   if tx.isTypeThree ∨ tx.isTypeFour then
     if tx.type.receiver?.isNone then
       .error "TransactionTypeContractCreationError : receiver is none for type 3 or 4 tx"
 
---     if isinstance(tx, SetCodeTransaction):
---         if not any(tx.authorizations):
---             raise EmptyAuthorizationListError("empty authorization list")
   match tx.type with
   | .four _ _ _ _ _ [] =>
     .error "EmptyAuthorizationListError : empty authorization list"
   | _ => .ok ()
 
---     if sender_account.nonce > Uint(tx.nonce):
---         raise NonceMismatchError("nonce too low")
---     elif sender_account.nonce < Uint(tx.nonce):
---         raise NonceMismatchError("nonce too high")
   if senderAccount.nonce > tx.nonce then
     .error "NonceMismatchError : nonce too low"
   else if senderAccount.nonce < tx.nonce then
     .error "NonceMismatchError : nonce too high"
 
---     if Uint(sender_account.balance) < max_gas_fee + Uint(tx.value):
---         raise InsufficientBalanceError("insufficient sender balance")
   if senderAccount.bal.toNat < maxGasFee + tx.value then
     .error s!"InsufficientBalanceError : sender balance ({senderAccount.bal.toNat}) < max gas fee ({maxGasFee}) + tx value ({tx.value})"
 
---     if sender_account.code and not is_valid_delegation(sender_account.code):
---         raise InvalidSenderError("not EOA")
   if ¬ (senderAccount.code.isEmpty ∨ isValidDelegation senderAccount.code) then
     .error "InvalidSenderError : not EOA"
 
---     return (
---         sender_address,
---         effective_gas_price,
---         blob_versioned_hashes,
---         tx_blob_gas_used,
---     )
   .ok ⟨
     senderAddress,
     effectiveGasPrice,
@@ -5221,47 +4183,10 @@ def checkTransaction (benv : Benv) (blockOut : BlockOutput) (tx : Tx) :
   ⟩
 
 
--- def calculate_intrinsic_cost(tx: Transaction) -> Tuple[Uint, Uint]:
---     """
---     Calculates the gas that is charged before execution is started.
---
---     The intrinsic cost of the transaction is charged before execution has
---     begun. Functions/operations in the EVM cost money to execute so this
---     intrinsic cost is for the operations that need to be paid for as part of
---     the transaction. Data transfer, for example, is part of this intrinsic
---     cost. It costs ether to send data over the wire and that ether is
---     accounted for in the intrinsic cost calculated in this function. This
---     intrinsic cost must be calculated and paid for before execution in order
---     for all operations to be implemented.
---
---     The intrinsic cost includes:
---     1. Base cost (`txBaseCost`)
---     2. Cost for data (zero and non-zero bytes)
---     3. Cost for contract creation (if applicable)
---     4. Cost for access list entries (if applicable)
---     5. Cost for authorizations (if applicable)
---
---
---     This function takes a transaction as a parameter and returns the intrinsic
---     gas cost of the transaction and the minimum gas cost used by the
---     transaction based on the calldata size.
---     """
---     from .vm.eoa_delegation import perEmptyAccountCost
---     from .vm.gas import init_code_cost
 def calculateIntrinsicCost (tx: Tx) : Nat × Nat :=
 
---     zero_bytes = 0
---     for byte in tx.data:
---         if byte == 0:
---             zero_bytes += 1
 --
---     tokens_in_calldata = Uint(zero_bytes + (len(tx.data) - zero_bytes) * 4)
---     # EIP-7623 floor price (note: no EVM costs)
---     calldata_floor_gas_cost = (
---         tokens_in_calldata * floorCalldataCost + txBaseCost
---     )
 --
---     data_cost = tokens_in_calldata * standardCalldataTokenCost
   let tokensInCalldata : Nat :=
     (tx.data.map <| fun x => if x = 0 then 1 else 4).sum
   let callDataFloorGasCost : Nat :=
@@ -5269,30 +4194,11 @@ def calculateIntrinsicCost (tx: Tx) : Nat × Nat :=
   let dataCost : Nat :=
     tokensInCalldata * standardCallDataTokenCost
 
---     if tx.to == Bytes0(b""):
---         create_cost = txCreateCost + init_code_cost(ulen(tx.data))
---     else:
---         create_cost = Uint(0)
   let createCost : Nat :=
       match tx.type.receiver? with
       | none => txCreateCost + initCodeCost (tx.data).length
       | some _ => 0
 
---     access_list_cost = Uint(0)
---     if isinstance(
---         tx,
---         (
---             AccessListTransaction,
---             FeeMarketTransaction,
---             BlobTransaction,
---             SetCodeTransaction,
---         ),
---     ):
---         for access in tx.access_list:
---             access_list_cost += txAccessListAddressCost
---             access_list_cost += (
---                 ulen(access.slots) * txAccessListStorageKeyCost
---             )
   let accessListCost : Nat :=
     let accessList :=
       match tx.type with
@@ -5306,9 +4212,6 @@ def calculateIntrinsicCost (tx: Tx) : Nat × Nat :=
         txAccessListAddressCost + keys.length * txAccessListStorageKeyCost
     (accessList.map accessItemCost).sum
 
---     auth_cost = Uint(0)
---     if isinstance(tx, SetCodeTransaction):
---         auth_cost += Uint(perEmptyAccountCost * len(tx.authorizations))
   let authCost : Nat :=
     match tx.type with
     | .four _ _ _ _ _ auths => perEmptyAccountCost * auths.length
@@ -5322,17 +4225,7 @@ def calculateIntrinsicCost (tx: Tx) : Nat × Nat :=
 
 
 
--- def validate_transaction(tx: Transaction) -> Tuple[Uint, Uint]:
---     intrinsic_gas, calldata_floor_gas_cost = calculate_intrinsic_cost(tx)
---     if max(intrinsic_gas, calldata_floor_gas_cost) > tx.gas:
---         raise InvalidTransaction("Insufficient gas")
---     if U256(tx.nonce) >= U256(U64.MAXValue):
---         raise InvalidTransaction("Nonce too high")
---     if tx.to == Bytes0(b"") and len(tx.data) > maxInitCodeSize:
---         raise InvalidTransaction("Code size too large")
---
---     return intrinsic_gas, calldata_floor_gas_cost
-
+/- validate_transaction -/
 def validateTransaction (tx : Tx) : Except String (Nat × Nat) := do
   let ⟨intrinsicGas, callDataFloorGasCost⟩ := calculateIntrinsicCost tx
 
@@ -5391,56 +4284,16 @@ def prepareMessage (benv: Benv) (tenv: Tenv) (tx: Tx) :
     disablePrecompiles := false
   }
 
-/-
-def calculate_total_blob_gas(tx: Transaction) -> Uint:
-    """
-    Calculate the total blob gas for a transaction.
-
-    Parameters
-    ----------
-    tx :
-        The transaction for which the blob gas is to be calculated.
-
-    Returns
-    -------
-    total_blob_gas: `ethereum.base_types.Uint`
-        The total blob gas for the transaction.
-    """
-    if isinstance(tx, BlobTransaction):
-        return gasPerBlob * Uint(len(tx.blob_versioned_hashes))
-    else:
-        return Uint(0)
--/
+/- calculate_total_blob_gas -/
 def calculate_total_blob_gas (tx: Tx) : Nat :=
   match tx.type with
   | .three _ _ _ _ _ _ blobHashes => gasPerBlob * blobHashes.length
   | _ => 0
 
 
-/-
-def calculate_data_fee(excess_blob_gas: U64, tx: Transaction) -> Uint:
-    """
-    Calculate the blob data fee for a transaction.
-
-    Parameters
-    ----------
-    excess_blob_gas :
-        The excess_blob_gas for the execution.
-    tx :
-        The transaction for which the blob data fee is to be calculated.
-
-    Returns
-    -------
-    data_fee: `Uint`
-        The blob data fee.
-    """
-    return calculate_total_blob_gas(tx) * calculate_blob_gas_price(
-        excess_blob_gas
-    )
--/
+/- calculate_data_fee -/
 def calculate_data_fee (excess_blob_gas: Nat) (tx: Tx) : Nat :=
   calculate_total_blob_gas tx * calculate_blob_gas_price excess_blob_gas
-
 
 def addAssertPos (n : Nat) (z : Int) : Option Nat :=
   match Int.ofNat n + z with
@@ -5458,9 +4311,7 @@ def Receipt.toStrings (r : Receipt) : List String :=
   fork "RECEIPT" [
     [s!"SUCCEEDED: {r.succeeded}"],
     [s!"GAS USED: {r.gasUsed}"],
-    --s!"bloom: {r.bloom.toHex}",
     fork "BLOOM" [r.bloom.toHex.chunks 64],
-    --s!"logs: {List.toStrings r.logs}"
     fork "LOGS" (r.logs.map Log.toStrings)
   ]
 
@@ -5475,26 +4326,13 @@ def Receipt.toBLT (r : Receipt) : BLT :=
     .list (r.logs.map Log.toBLT)
   ]
 
-/-
-def make_receipt(
-    tx: Transaction,
-    error: Optional[EthereumException],
-    gasUsed: Uint,
-    logs: Tuple[Log, ...],
-) -> Union[Bytes, Receipt]:
--/
+/- make_receipt -/
 def makeReceipt
   (tx: Tx)
   (error: Option String)
   (gasUsed: Nat)
   (logs: List Log) : Fin 5 × Receipt :=
 
---receipt = Receipt(
---  succeeded=error is None,
---  gasUsed=gasUsed,
---  bloom=logs_bloom(logs),
---  logs=logs,
---)
   let receipt : Receipt := {
     succeeded := error.isNone,
     gasUsed := gasUsed,
@@ -5502,14 +4340,6 @@ def makeReceipt
     logs := logs
   }
 
---if isinstance(tx, AccessListTransaction):
---    return b"\x01" + rlp.encode(receipt)
---elif isinstance(tx, FeeMarketTransaction):
---    return b"\x02" + rlp.encode(receipt)
---elif isinstance(tx, BlobTransaction):
---    return b"\x03" + rlp.encode(receipt)
---else:
---    return receipt
   let head : Fin 5 :=
     match tx.type with
     | .zero _ _ => 0
@@ -5518,53 +4348,6 @@ def makeReceipt
     | .three _ _ _ _ _ _ _ => 3
     | .four _ _ _ _ _ _ => 4
   ⟨head, receipt⟩
-
---  /-
---  def make_receipt(
---      tx: Transaction,
---      error: Optional[EthereumException],
---      gasUsed: Uint,
---      logs: Tuple[Log, ...],
---  ) -> Union[Bytes, Receipt]:
---  -/
---  def makeReceipt
---    (tx: Tx)
---    (error: Option String)
---    (gasUsed: Nat)
---    (logs: List Log) : B8L :=
---
---  --receipt = Receipt(
---  --  succeeded=error is None,
---  --  gasUsed=gasUsed,
---  --  bloom=logs_bloom(logs),
---  --  logs=logs,
---  --)
---    let receipt : Receipt := {
---      succeeded := error.isNone,
---      gasUsed := gasUsed,
---      bloom := logsBloom logs,
---      logs := logs
---    }
---  /-
---      if isinstance(tx, AccessListTransaction):
---          return b"\x01" + rlp.encode(receipt)
---      elif isinstance(tx, FeeMarketTransaction):
---          return b"\x02" + rlp.encode(receipt)
---      elif isinstance(tx, BlobTransaction):
---          return b"\x03" + rlp.encode(receipt)
---      else:
---          return receipt
---  -/
---    let head : B8L :=
---      match tx.type with
---      | .zero _ _ => []
---      | .one _ _ _ _ => [0x01]
---      | .two _ _ _ _ _ => [0x02]
---      | .three _ _ _ _ _ _ _ => [0x03]
---      | .four _ _ _ _ _ _ => [0x04]
---
---    head ++ receipt.toBLT.encode
-
 
 def BlockOutput.init : BlockOutput :=
   {
@@ -5578,39 +4361,18 @@ def BlockOutput.init : BlockOutput :=
     requests := []
   }
 
--- def process_transaction(
---     block_env: vm.Benvironment,
---     block_output: vm.BlockOutput,
---     tx: Transaction,
---     index: Uint,
--- ) -> None:
+/- process_transaction -/
 def processTransaction
   (vb : Bool) (benv: Benv) (bout : BlockOutput)
   (tx: Tx) (index : Nat) : Except String (State × BlockOutput) := do
 
-  -- trie_set(
-  --     block_output.transactions_trie,
-  --     rlp.encode(index),
-  --     encode_transaction(tx),
-  -- )
   let transactionsTrie : Lean.RBMap B8L Tx compare :=
     bout.transactionsTrie.insert (BLT.b8s index.toB8L).encode tx
 
   let bout := {bout with transactionsTrie := transactionsTrie}
 
---     intrinsic_gas, calldata_floor_gas_cost = validate_transaction(tx)
   let ⟨intrinsicGas, calldataFloorGasCost⟩ ← validateTransaction tx
 
-  --   (
-  --       sender,
-  --       effective_gas_price,
-  --       blob_versioned_hashes,
-  --       tx_blob_gas_used,
-  --   ) = check_transaction(
-  --       block_env=block_env,
-  --       block_output=block_output,
-  --       tx=tx,
-  --   )
   let ⟨
     sender,
     effectiveGasPrice,
@@ -5618,73 +4380,25 @@ def processTransaction
     txBlobGasUsed
   ⟩ ← checkTransaction benv bout tx
 
---     sender_account = get_account(block_env.state, sender)
-
---     if isinstance(tx, BlobTransaction):
---         blob_gas_fee = calculate_data_fee(block_env.excess_blob_gas, tx)
---     else:
---         blob_gas_fee = Uint(0)
   let blobGasFee :=
     if tx.isTypeThree
     then calculate_data_fee benv.excessBlobGas tx
     else 0
 
---     effective_gas_fee = tx.gas * effective_gas_price
   let effectiveGasFee := tx.gas * effectiveGasPrice
 
---     gas = tx.gas - intrinsic_gas
   let gas := tx.gas - intrinsicGas
 
---     increment_nonce(block_env.state, sender)
   let mut state : State := benv.state.incrNonce sender
 
---     sender_balance_after_gas_fee = (
---         Uint(sender_account.balance) - effective_gas_fee - blob_gas_fee
---     )
---     set_account_balance(
---         block_env.state, sender, U256(sender_balance_after_gas_fee)
---     )
   state ← (state.subBal sender (effectiveGasFee + blobGasFee).toB256).toExcept
     "ERROR : balance underflow"
 
---     access_list_addresses = set()
---     access_list_storage_keys = set()
---     access_list_addresses.add(block_env.coinbase)
---     if isinstance(
---         tx,
---         (
---             AccessListTransaction,
---             FeeMarketTransaction,
---             BlobTransaction,
---             SetCodeTransaction,
---         ),
---     ):
---         for access in tx.access_list:
---             access_list_addresses.add(access.account)
---             for slot in access.slots:
---                 access_list_storage_keys.add((access.account, slot))
   let preaccessedAddresses : AdrSet :=
     .ofList (benv.coinbase :: tx.accessList.map Prod.fst)
   let preaccessedStorageKeys : KeySet :=
     .ofList (tx.accessList.map <| λ ⟨adr, keys⟩ => keys.map (⟨adr, ·⟩)).flatten
 
---     authorizations: Tuple[Authorization, ...] = ()
---     if isinstance(tx, SetCodeTransaction):
---         authorizations = tx.authorizations
---
---     tx_env = vm.TransactionEnvironment(
---         origin=sender,
---         gas_price=effective_gas_price,
---         gas=gas,
---         access_list_addresses=access_list_addresses,
---         access_list_storage_keys=access_list_storage_keys,
---         transient_storage=TransientStorage(),
---         blob_versioned_hashes=blob_versioned_hashes,
---         authorizations=authorizations,
---         index_in_block=index,
---         tx_hash=get_transaction_hash(encode_transaction(tx)),
---         traces=[],
---     )
   let tenv : Tenv := {
     origin := sender
     gasPrice := effectiveGasPrice
@@ -5698,100 +4412,46 @@ def processTransaction
     txHash := getTxHash tx
   }
 
---     msg = prepare_msg(block_env, tx_env, tx)
   let msg ← prepareMessage {benv with state := state} tenv tx
 
---     tx_output = process_msg_call(msg)
   let ⟨state', txOutput⟩ ← processMessageCall vb msg
   state := state'
 
---     # For EIP-7623 we first calculate the execution_gas_used, which includes
---     # the execution gas refund.
---     tx_gas_used_before_refund = tx.gas - tx_output.gas_left
---     tx_gas_refund = min(
---         tx_gas_used_before_refund // Uint(5), Uint(tx_output.refund_counter)
---     )
   let txGasUsedBeforeRefund := tx.gas - txOutput.gasLeft
   let refundCounter : Nat ←
     (Int.toNat? txOutput.refundCounter).toExcept "ERROR : refund counter is negative"
   let mut txGasRefund : Nat :=
     min (txGasUsedBeforeRefund / 5) refundCounter
 
---     tx_gas_used_after_refund = tx_gas_used_before_refund - tx_gas_refund
---
---     # Transactions with less execution_gas_used than the floor pay at the
---     # floor cost.
---     tx_gas_used_after_refund = max(
---         tx_gas_used_after_refund, calldata_floor_gas_cost
---     )
   let txGasUsedAfterRefund : Nat :=
     max (txGasUsedBeforeRefund - txGasRefund) calldataFloorGasCost
 
---     tx_gas_left = tx.gas - tx_gas_used_after_refund
   let txGasLeft :=
     tx.gas - txGasUsedAfterRefund
 
---     gas_refund_amount = tx_gas_left * effective_gas_price
   let gasRefundAmount : Nat :=
     txGasLeft * effectiveGasPrice
 
---     # For non-1559 transactions effective_gas_price == tx.gas_price
---     priority_fee_per_gas = effective_gas_price - block_env.base_fee_per_gas
---     transaction_fee = tx_gas_used_after_refund * priority_fee_per_gas
   let priorityFeePerGas := effectiveGasPrice - benv.baseFeePerGas
   let transactionFee := txGasUsedAfterRefund * priorityFeePerGas
 
---     # refund gas
---     sender_balance_after_refund = get_account(
---         block_env.state, sender
---     ).balance + U256(gas_refund_amount)
---     set_account_balance(block_env.state, sender, sender_balance_after_refund)
   state := state.addBal sender gasRefundAmount.toB256
 
---     # transfer miner fees
---     coinbase_balance_after_mining_fee = get_account(
---         block_env.state, block_env.coinbase
---     ).balance + U256(transaction_fee)
---     if coinbase_balance_after_mining_fee != 0:
---         set_account_balance(
---             block_env.state,
---             block_env.coinbase,
---             coinbase_balance_after_mining_fee,
---         )
---     elif account_exists_and_is_empty(block_env.state, block_env.coinbase):
---         destroy_account(block_env.state, block_env.coinbase)
   state := state.addBal benv.coinbase transactionFee.toB256
 
---     for address in tx_output.accounts_to_delete:
---         destroy_account(block_env.state, address)
   for adr in txOutput.accountsToDelete do
     state := destroyAccount state adr
 
---     block_output.block_gas_used += tx_gas_used_after_refund
---     block_output.blob_gas_used += tx_blob_gas_used
   let mut bout := {
     bout with
     blockGasUsed := bout.blockGasUsed + txGasUsedAfterRefund,
     blobGasUsed := bout.blobGasUsed + txBlobGasUsed
   }
 
---     receipt = make_receipt(
---         tx, tx_output.error, block_output.block_gas_used, tx_output.logs
---     )
   let receipt :=
     makeReceipt tx txOutput.error bout.blockGasUsed txOutput.logs
 
---     receipt_key = rlp.encode(Uint(index))
   let receiptKey : B8L := BLT.encode <| .b8s index.toB8L
-
---     block_output.receipt_keys += (receipt_key,)
---     trie_set(
---         block_output.receipts_trie,
---         receipt_key,
---         receipt,
---     )
---
---     block_output.block_logs += tx_output.logs
 
   bout := {
     bout with
@@ -5803,24 +4463,7 @@ def processTransaction
 
   .ok ⟨state, bout⟩
 
--- /-
--- def process_withdrawal(
---     state: State,
---     wd: Withdrawal,
--- ) -> None:
---     """
---     Increase the balance of the withdrawing account.
---     """
---
---     def increase_recipient_balance(recipient: Account) -> None:
---         recipient.balance += wd.amount * U256(10**9)
---
---     modify_state(state, wd.address, increase_recipient_balance)
--- -/
--- def process_withdrawal -- (state: State) (wd: Withdrawal) : Except String Unit :=
---   (state : State) (wd : Withdrawal) :  State :=
---   state.addBal wd.recipient (wd.amount * (10 ^ 9).toB256)
-
+-- def process_withdrawal
 def processWithdrawals
   (benv : Benv) (bout : BlockOutput) (wds : List Withdrawal) : State × BlockOutput :=
   let trie : Lean.RBMap B8L Withdrawal compare :=
@@ -5931,31 +4574,11 @@ def decodeTx : B8L ⊕ Tx → Except String Tx
   | .inl xs => xs.toExStrTx
   | .inr tx => .ok tx
 
-/-
-def process_system_transaction(
-  block_env: vm.Benvironment,
-  target_address: Address,
-  system_contract_code: Bytes,
-  data: Bytes,
-) -> MsgCallOutput:
--/
+/- process_system_transaction -/
 def processSystemTransaction (vb : Bool) (benv : Benv)
   (target : Adr) (code : ByteArray) (data : B8L) :
   Except String (State × MsgCallOutput) := do
 
---tx_env = vm.TransactionEnvironment(
---  origin=systemAddress,
---  gas_price=block_env.base_fee_per_gas,
---  gas=systemTransactionGas,
---  access_list_addresses=set(),
---  access_list_storage_keys=set(),
---  transient_storage=TransientStorage(),
---  blob_versioned_hashes=(),
---  authorizations=(),
---  index_in_block=None,
---  tx_hash=None,
---  traces=[],
---)
   let txEnv : Tenv := {
     origin := systemAddress,
     gasPrice := benv.baseFeePerGas,
@@ -5969,25 +4592,6 @@ def processSystemTransaction (vb : Bool) (benv : Benv)
     txHash := none
   }
 
---system_tx_msg = Msg(
---  block_env=block_env,
---  tx_env=tx_env,
---  caller=systemAddress,
---  target=target_address,
---  gas=systemTransactionGas,
---  value=U256(0),
---  data=data,
---  code=system_contract_code,
---  depth=Uint(0),
---  currentTarget=target_address,
---  codeAddress=target_address,
---  should_transfer_value=False,
---  isStatic=False,
---  accessedAddresses=set(),
---  accessedStorageKeys=set(),
---  disable_precompiles=False,
---  parent_evm=None,
---)
   let systemTxMsg : Msg := {
     benv := benv,
     tenv := txEnv,
@@ -6007,8 +4611,6 @@ def processSystemTransaction (vb : Bool) (benv : Benv)
     disablePrecompiles := false
   }
 
---system_tx_output = process_msg_call(system_tx_msg)
---return system_tx_output
   processMessageCall vb systemTxMsg
 
 --def decodeReceipt : B8L ⊕ Receipt → Except String Receipt
@@ -6017,8 +4619,7 @@ def decodeReceipt : B8L → Except String Receipt
   | x :: xs => do
     let ys : B8L :=
       if x ∈ [1, 2, 3, 4] then xs else x :: xs
-    --match ByteArray.toBLT? ⟨⟨ys⟩⟩  with
-    match BLT.decode ys with
+        match BLT.decode ys with
     | some (.list [
         .b8s succeeded,
         .b8s gasUsed,
@@ -6034,166 +4635,55 @@ def decodeReceipt : B8L → Except String Receipt
         logs := logs
       }
     | _ => .error "ERROR : cannot decode a non-list BLT as a receipt"
-  --| .inr receipt => .ok receipt
 
-
-
-/-
-def extract_deposit_data(data: Bytes) -> Bytes:
--/
+/- extract_deposit_data -/
 def extractDepositData (data : B8L) : Except String B8L := do
-
---if ulen(data) != depositEventLength:
---    raise InvalidBlock("Invalid deposit event data length")
   if data.length != depositEventLength then
     .error "InvalidBlock : Invalid deposit event data length"
-
---pubkey_offset = Uint.from_be_bytes(data[0:32])
---if pubkey_offset != pubkeyOffset:
---    raise InvalidBlock("Invalid pubkey offset in deposit log")
   if data.sliceToNat 0 32 ≠ pubkeyOffset then
     .error "InvalidBlock : Invalid pubkey offset in deposit log"
-
---withdrawal_credentials_offset = Uint.from_be_bytes(data[32:64])
---if withdrawal_credentials_offset != withdrawalCredentialsOffset:
---    raise InvalidBlock(
---        "Invalid withdrawal credentials offset in deposit log"
---    )
   if data.sliceToNat 32 32 ≠ withdrawalCredentialsOffset then
     .error "InvalidBlock : Invalid withdrawal credentials offset in deposit log"
-
---amount_offset = Uint.from_be_bytes(data[64:96])
---if amount_offset != amountOffset:
---    raise InvalidBlock("Invalid amount offset in deposit log")
   if data.sliceToNat 64 32 ≠ amountOffset then
     .error "InvalidBlock : Invalid amount offset in deposit log"
-
---signature_offset = Uint.from_be_bytes(data[96:128])
---if signature_offset != signatureOffset:
---    raise InvalidBlock("Invalid signature offset in deposit log")
   if data.sliceToNat 96 32 ≠ signatureOffset then
     .error "InvalidBlock : Invalid signature offset in deposit log"
-
---index_offset = Uint.from_be_bytes(data[128:160])
---if index_offset != indexOffset:
---    raise InvalidBlock("Invalid index offset in deposit log")
   if data.sliceToNat 128 32 ≠ indexOffset then
     .error "InvalidBlock : Invalid index offset in deposit log"
-
---pubkey_size = Uint.from_be_bytes(
---    data[pubkey_offset : pubkey_offset + Uint(32)]
---)
---if pubkey_size != pubkeySize:
---    raise InvalidBlock("Invalid pubkey size in deposit log")
   if data.sliceToNat pubkeyOffset 32 ≠ pubkeySize then
     .error "InvalidBlock : Invalid pubkey size in deposit log"
-
---pubkey = data[
---    pubkey_offset + Uint(32) : pubkey_offset + Uint(32) + pubkeySize
---]
   let pubkey : B8L := data.slice! (pubkeyOffset + 32) pubkeySize
-
---withdrawal_credentials_size = Uint.from_be_bytes(
---    data[
---        withdrawal_credentials_offset : withdrawal_credentials_offset
---        + Uint(32)
---    ],
---)
---if withdrawal_credentials_size != withdrawalCredentialsSize:
---    raise InvalidBlock(
---        "Invalid withdrawal credentials size in deposit log"
---    )
   if data.sliceToNat withdrawalCredentialsOffset 32 ≠ withdrawalCredentialsSize then
     .error "InvalidBlock : Invalid withdrawal credentials size in deposit log"
-
---withdrawal_credentials = data[
---    withdrawal_credentials_offset
---    + Uint(32) : withdrawal_credentials_offset
---    + Uint(32)
---    + withdrawalCredentialsSize
---]
   let withdrawalCredentials : B8L :=
     data.slice! (withdrawalCredentialsOffset + 32) withdrawalCredentialsSize
-
---amount_size = Uint.from_be_bytes(
---    data[amount_offset : amount_offset + Uint(32)]
---)
---if amount_size != amountSize:
---    raise InvalidBlock("Invalid amount size in deposit log")
   if data.sliceToNat amountOffset 32 ≠ amountSize then
     .error "InvalidBlock : Invalid amount size in deposit log"
---
---amount = data[
---    amount_offset + Uint(32) : amount_offset + Uint(32) + amountSize
---]
   let amount : B8L := data.slice! (amountOffset + 32) amountSize
-
---signature_size = Uint.from_be_bytes(
---    data[signature_offset : signature_offset + Uint(32)]
---)
---if signature_size != signatureSize:
---    raise InvalidBlock("Invalid signature size in deposit log")
   if data.sliceToNat signatureOffset 32 ≠ signatureSize then
     .error "InvalidBlock : Invalid signature size in deposit log"
-
---signature = data[
---    signature_offset
---    + Uint(32) : signature_offset
---    + Uint(32)
---    + signatureSize
---]
   let signature : B8L := data.slice! (signatureOffset + 32) signatureSize
-
---index_size = Uint.from_be_bytes(
---    data[index_offset : index_offset + Uint(32)]
---)
---if index_size != indexSize:
---    raise InvalidBlock("Invalid index size in deposit log")
   if data.sliceToNat indexOffset 32 ≠ indexSize then
     .error "InvalidBlock : Invalid index size in deposit log"
-
---index = data[
---    index_offset + Uint(32) : index_offset + Uint(32) + indexSize
---]
   let index : B8L := data.slice! (indexOffset + 32) indexSize
-
---return pubkey + withdrawal_credentials + amount + signature + index
   .ok (pubkey ++ withdrawalCredentials ++ amount ++ signature ++ index)
 
-/-
-def parse_deposit_requests(block_output: BlockOutput) -> Bytes:
--/
+/- parse_deposit_requests -/
 def parseDepositRequests
   (bout : BlockOutput) : Except String B8L := do
 
---deposit_requests: Bytes = b""
   let mut depositRequests : B8L := []
 
---for key in block_output.receipt_keys:
   for key in bout.receiptKeys do
 
---  receipt = trie_get(block_output.receipts_trie, key)
---  assert receipt is not None
     let ⟨_, receipt⟩  ←
       (bout.receiptsTrie.find? key).toExcept "ERROR : receipt not found"
 
 
--- --  decoded_receipt = decode_receipt(receipt)
---     let decodedReceipt ←
---       (decodeReceipt receipt) --.toExcept "ERROR : cannot decode receipt"
 
---  for log in decoded_receipt.logs:
     for log in receipt.logs do
 
-      -- .print s!"processing log : {log}"
 
---    if log.address == depositContractAddress:
---      if (
---        len(log.topics) > 0
---        and log.topics[0] == depositEventSignatureHash
---      ):
---        request = extract_deposit_data(log.data)
---        deposit_requests += request
       if (
         log.address = depositContractAddress ∧
         log.topics.get? 0 = some depositEventSignatureHash
@@ -6203,7 +4693,6 @@ def parseDepositRequests
 
         depositRequests := depositRequests ++ request
 
---return deposit_requests
   .ok depositRequests
 
 
@@ -6218,13 +4707,6 @@ def processUncheckedSystemTransaction
   (vb : Bool) (benv : Benv) (target : Adr) (data : B8L) :
   Except String (State × MsgCallOutput) := do
 
---system_contract_code = get_account(block_env.state, target_address).code
---return process_system_transaction(
---    block_env,
---    target_address,
---    system_contract_code,
---    data,
---)
   let systemContractCode : ByteArray := benv.state.getCode target
   processSystemTransaction vb benv target systemContractCode data
 
@@ -6239,36 +4721,18 @@ def processCheckedSystemTransaction
   (vb : Bool) (benv : Benv) (target : Adr) (data : B8L) :
   Except String (State × MsgCallOutput) := do
 
---system_contract_code = get_account(block_env.state, target_address).code
   let systemContractCode : ByteArray := benv.state.getCode target
 
---if len(system_contract_code) == 0:
---    raise InvalidBlock(
---        f"System contract address {target_address.hex()} does not "
---        "contain code"
---    )
   if systemContractCode.isEmpty then
     .error s!"InvalidBlock : System contract address {target.toHex} does not contain code"
 
---system_tx_output = process_system_transaction(
---    block_env,
---    target_address,
---    system_contract_code,
---    data,
---)
   let ⟨state, systemTxOutput⟩ ←
     processSystemTransaction vb benv target systemContractCode data
 
---if system_tx_output.error:
---    raise InvalidBlock(
---        f"System contract ({target_address.hex()}) call failed: "
---        f"{system_tx_output.error}"
---    )
 --
   if systemTxOutput.error.isSome then
     .error s!"InvalidBlock : System contract ({target.toHex}) call failed: {systemTxOutput.error.get!}"
 
---return system_tx_output
   .ok ⟨state, systemTxOutput⟩
 
 /-
@@ -6281,23 +4745,14 @@ def processGeneralPurposeRequests
   (vb : Bool) (benv : Benv) (bout : BlockOutput) :
   Except String (State × BlockOutput) := do
 
---deposit_requests = parse_deposit_requests(block_output)
---requests_from_execution = block_output.requests
   let depositRequests ← parseDepositRequests bout
 
   let mut requestsFromExecution : List B8L := bout.requests
 
---if len(deposit_requests) > 0:
---  requests_from_execution.append(depositRequestType + deposit_requests)
   if depositRequests.length > 0 then
     requestsFromExecution :=
       requestsFromExecution ++ [depositRequestType ++ depositRequests]
 
---system_withdrawal_tx_output = process_checked_system_transaction(
---  block_env=block_env,
---  target_address=WITHDRAWALRequestPredeployAddress,
---  data=b"",
---)
   let ⟨state, withdrawalOutput⟩  ←
     processCheckedSystemTransaction vb benv
       withdrawalRequestPredeployAddress
@@ -6305,29 +4760,15 @@ def processGeneralPurposeRequests
 
   let benv := {benv with state := state}
 
---if len(system_withdrawal_tx_output.return_data) > 0:
---  requests_from_execution.append(
---    withdrawalRequestType + system_withdrawal_tx_output.return_data
---  )
   if withdrawalOutput.returnData.length > 0 then
     requestsFromExecution :=
       requestsFromExecution ++ [withdrawalRequestType ++ withdrawalOutput.returnData]
 
---system_consolidation_tx_output = process_checked_system_transaction(
---  block_env=block_env,
---  target_address=CONSOLIDATIONRequestPredeployAddress,
---  data=b"",
---)
   let ⟨state, consolidationOutput⟩  ←
     processCheckedSystemTransaction vb benv
       consolidationRequestPredeployAddress
       []
 
---if len(system_consolidation_tx_output.return_data) > 0:
---  requests_from_execution.append(
---    consolidationRequestType
---    + system_consolidation_tx_output.return_data
---  )
   if consolidationOutput.returnData.length > 0 then
     requestsFromExecution :=
       requestsFromExecution ++ [consolidationRequestType ++ consolidationOutput.returnData]
@@ -6356,29 +4797,18 @@ def applyBody
   (vb : Bool) (benv : Benv) (txs : List (B8L ⊕ Tx)) (wds : List Withdrawal) :
   Except String (State × BlockOutput) := do
 
---block_output = vm.BlockOutput()
   let mut bout := BlockOutput.init
 
-  .cprint vb "\n================================ BEACON ROOTS TX ================================\n"
+  cprint vb "\n================================ BEACON ROOTS TX ================================\n"
 
---process_unchecked_system_transaction(
---    block_env=block_env,
---    target_address=BEACONRootsAddress,
---    data=block_env.parent_beacon_block_root,
---)
   let ⟨state, _⟩ ←
     processUncheckedSystemTransaction false benv
       beaconRootsAddress
       benv.parentBeaconBlockRoot.toB8L
   let mut benv : Benv := {benv with state := state}
 
-  .cprint vb "\n================================ HISTORY STORAGE TX ================================\n"
+  cprint vb "\n================================ HISTORY STORAGE TX ================================\n"
 
---process_unchecked_system_transaction(
---    block_env=block_env,
---    target_address=HISTORYStorageAddress,
---    data=block_env.block_hashes[-1],  # The parent hash
---)
   let lastHash ←
      benv.blockHashes.getLast?.toExcept "ERROR : block hashes is empty"
   let ⟨state, _⟩ ←
@@ -6387,76 +4817,30 @@ def applyBody
       lastHash.toB8L
   benv := {benv with state := state}
 
-  .cprint vb "\n================================ TEST TXS ================================\n"
+  cprint vb "\n================================ TEST TXS ================================\n"
 
---for i, tx in enumerate(map(decode_transaction, transactions)):
---    process_transaction(block_env, block_output, tx, Uint(i))
   for ⟨i, tx⟩ in (← txs.mapM decodeTx).putIndex 0 do
     let ⟨state, bout'⟩ ← processTransaction vb benv bout tx i
     benv := {benv with state := state}
     bout := bout'
 
-  .cprint vb s!"\nSTATE AFTER TEST TXS :"
-  .cprint vb s!"{benv.state}"
+  cprint vb s!"\nSTATE AFTER TEST TXS :"
+  cprint vb s!"{benv.state}"
 
-  .cprint vb "\n================================ PROCESS WITHDRAWALS ================================\n"
+  cprint vb "\n================================ PROCESS WITHDRAWALS ================================\n"
 
 
---process_withdrawals(block_env, block_output, withdrawals)
   let ⟨state, bout'⟩ :=
     processWithdrawals benv bout wds
   benv := {benv with state := state}
   bout := bout'
 
-  .cprint vb "\n================================ PROCESS GENERAL PURPOSE REQUESTS ================================\n"
+  cprint vb "\n================================ PROCESS GENERAL PURPOSE REQUESTS ================================\n"
 
---process_general_purpose_requests(
---    block_env=block_env,
---    block_output=block_output,
---)
   processGeneralPurposeRequests vb benv bout
 
 
-/-
-def get_last256_block_hashes(chain: BlockChain) -> List[Hash32]:
-    """
-    Obtain the list of hashes of the previous 256 blocks in order of
-    increasing block number.
-
-    This function will return less hashes for the first 256 blocks.
-
-    The ``BLOCKHASH`` opcode needs to access the latest hashes on the chain,
-    therefore this function retrieves them.
-
-    Parameters
-    ----------
-    chain :
-        History and current state.
-
-    Returns
-    -------
-    recent_block_hashes : `List[Hash32]`
-        Hashes of the recent 256 blocks in order of increasing block number.
-    """
-    recent_blocks = chain.blocks[-255:]
-    # TODO: This function has not been tested rigorously
-    if len(recent_blocks) == 0:
-        return []
-
-    recent_block_hashes = []
-
-    for block in recent_blocks:
-        prev_block_hash = block.header.parent_hash
-        recent_block_hashes.append(prev_block_hash)
-
-    # We are computing the hash only for the most recent block and not for
-    # the rest of the blocks as they have successors which have the hash of
-    # the current block as parent hash.
-    most_recent_block_hash = keccak256(rlp.encode(recent_blocks[-1].header))
-    recent_block_hashes.append(most_recent_block_hash)
-
-    return recent_block_hashes
--/
+/- get_last256_block_hashes -/
 def getLast256BlockHashes (chain : BlockChain) : List B256 :=
   match chain.blocks.reverse.take 255 with
   | [] => []
@@ -6475,33 +4859,15 @@ def State.root (w : State) : B256 :=
   let finalNTB : NTB := Lean.RBMap.fromList keyVals _
   trie finalNTB
 
-/-
-def state_transition(chain: BlockChain, block: Block) -> None:
--/
+/- state_transition -/
 def state_transition (vb : Bool) (chain : BlockChain) (block : Block) :
   Except String BlockChain := do
 
---validate_header(chain, block.header)
   validateHeader chain block.header
 
---if block.ommers != ():
---  raise InvalidBlock
   if ¬block.ommers.isEmpty then do
     .error "InvalidBlock"
 
---block_env = vm.BlockEnvironment(
---  chain_id=chain.chain_id,
---  state=chain.state,
---  block_gas_limit=block.header.gas_limit,
---  block_hashes=get_last256_block_hashes(chain),
---  coinbase=block.header.coinbase,
---  number=block.header.number,
---  base_fee_per_gas=block.header.base_fee_per_gas,
---  time=block.header.timestamp,
---  prev_randao=block.header.prev_randao,
---  excess_blob_gas=block.header.excess_blob_gas,
---  parent_beacon_block_root=block.header.parent_beacon_block_root,
---)
   let benv : Benv := {
     chainId := chain.chainId,
     state := chain.state,
@@ -6518,20 +4884,12 @@ def state_transition (vb : Bool) (chain : BlockChain) (block : Block) :
     parentBeaconBlockRoot := block.header.parentBeaconBlockRoot
   }
 
-
---block_output = apply_body(
---    block_env=block_env,
---    transactions=block.transactions,
---    withdrawals=block.withdrawals,
---)
   let ⟨state, bout⟩ ← applyBody vb benv block.txs block.wds
 
   .print "computing state root..."
---block_state_root = state_root(block_env.state)
   let blockStateRoot : B256 := state.root
 
   .print "computing tx root..."
---transactions_root = root(block_output.transactions_trie)
   let transactionsRoot : B256 ← do
     let transactionsAux (arg : B8L × Tx) : (B8L × B8L) :=
       let txPrefix : B8L :=
@@ -6546,23 +4904,17 @@ def state_transition (vb : Bool) (chain : BlockChain) (block : Block) :
     .ok <| trie <| Lean.RBMap.fromList temp _
 
   .print "computing receipt root..."
-
-  --receipt_root = root(block_output.receipts_trie)
-    let receiptRoot : B256 :=
-      let receiptAux : (B8L × Fin 5 × Receipt) → (B8L × B8L)
-        | ⟨key, type, receipt⟩ =>
-          ⟨key.toB4s, type.val.toB8L ++ receipt.toBLT.encode⟩
-      -- let receiptAux (arg : B8L × B8L) : B8L × B8L :=
-      --   ⟨arg.fst.toB4s, arg.snd⟩
-      let temp := (List.map receiptAux bout.receiptsTrie.toList)
-      trie <| Lean.RBMap.fromList temp _
+  let receiptRoot : B256 :=
+    let receiptAux : (B8L × Fin 5 × Receipt) → (B8L × B8L)
+      | ⟨key, type, receipt⟩ =>
+        ⟨key.toB4s, type.val.toB8L ++ receipt.toBLT.encode⟩
+                let temp := (List.map receiptAux bout.receiptsTrie.toList)
+    trie <| Lean.RBMap.fromList temp _
 
   .print "computing block logs bloom..."
---block_logs_bloom = logs_bloom(block_output.block_logs)
   let block_logs_bloom := logsBloom bout.blockLogs
 
   .print "computing withdrawals root..."
---withdrawals_root = root(block_output.withdrawals_trie)
   let withdrawalsRoot : B256 :=
     let withdrawalsAux (arg : B8L × Withdrawal) : B8L × B8L :=
       ⟨arg.fst.toB4s, arg.snd.toBLT.encode⟩
@@ -6570,56 +4922,32 @@ def state_transition (vb : Bool) (chain : BlockChain) (block : Block) :
     trie <| Lean.RBMap.fromList temp _
 
   .print "computing requests hash..."
---requests_hash = compute_requests_hash(block_output.requests)
   let requestsHash := computeRequestsHash bout.requests
 
---if block_output.block_gas_used != block.header.gas_used:
---    raise InvalidBlock(
---        f"{block_output.block_gas_used} != {block.header.gas_used}"
---    )
   if bout.blockGasUsed ≠ block.header.gasUsed then
     .error s!"InvalidBlock : computed block gas used = {bout.blockGasUsed} ≠ expected block gas used = {block.header.gasUsed}"
 
---if transactions_root != block.header.transactions_root:
---    raise InvalidBlock
   if transactionsRoot ≠ block.header.txsRoot then
     .error s!"InvalidBlock : computed transactions root = {transactionsRoot} ≠ expected transactions root = {block.header.txsRoot}"
 
---if block_state_root != block.header.state_root:
---    raise InvalidBlock
   if blockStateRoot ≠ block.header.stateRoot then
     .error "InvalidBlock : state root mismatch"
 
---if receipt_root != block.header.receipt_root:
---    raise InvalidBlock
   if receiptRoot ≠ block.header.receiptRoot then
     .error "InvalidBlock : receipt root mismatch"
 
---if block_logs_bloom != block.header.bloom:
---    raise InvalidBlock
   if block_logs_bloom ≠ block.header.bloom then
     .error "InvalidBlock : bloom mismatch"
 
---if withdrawals_root != block.header.withdrawals_root:
---    raise InvalidBlock
   if withdrawalsRoot ≠ block.header.withdrawalsRoot then
     .error "InvalidBlock : withdrawals root mismatch"
 
---if block_output.blob_gas_used != block.header.blob_gas_used:
---    raise InvalidBlock
   if bout.blobGasUsed ≠ block.header.blobGasUsed then
     .error "InvalidBlock : blob gas used mismatch"
 
---if requests_hash != block.header.requests_hash:
---    raise InvalidBlock
   if some requestsHash ≠ block.header.requestsHash then
     .error s!"InvalidBlock : expected requests hash = {block.header.requestsHash}, computed requests hash = {requestsHash}"
 
---chain.blocks.append(block)
---if len(chain.blocks) > 255:
---    # Real clients have to store more blocks to deal with reorgs, but the
---    # protocol only requires the last 255
---    chain.blocks = chain.blocks[-255:]
   .ok {
     state := state
     blocks := (block :: chain.blocks.reverse.take 254).reverse
@@ -6633,11 +4961,10 @@ def BLT.toExStrWithdrawal : BLT → Except String Withdrawal
       .b8s recipient,
       .b8s amount
     ] => do
-    let globalIndex := globalIndex.toB64P --.toExcept "error : invalid global index"
-    let validatorIndex := validatorIndex.toB64P -- ?.toExcept "error : invalid validator index"
+    let globalIndex := globalIndex.toB64P
+    let validatorIndex := validatorIndex.toB64P
     let recipient ← recipient.toAdr?.toExcept "error : invalid recipient address"
-    let amount := amount.toB256P -- "error : invalid withdrawal amount"
-
+    let amount := amount.toB256P
     .ok {
       globalIndex := globalIndex,
       validatorIndex := validatorIndex,
@@ -6723,8 +5050,8 @@ def addBlockToChain (vb : Bool) (chain : BlockChain) (blockRlp : B8L) :
 
   let ⟨block, blockHeaderHash⟩ ← rlpToBlock blockRlp
 
-  .cprint vb "\nSTATE BEFORE TRANSITION :"
-  .cprint vb s!"{chain.state}"
+  cprint vb "\nSTATE BEFORE TRANSITION :"
+  cprint vb s!"{chain.state}"
 
   if (Header.toBLT block.header).encode.keccak ≠ blockHeaderHash then do
     .error "ERROR : incorrect block header hash"
@@ -6739,6 +5066,6 @@ def addBlockToChain (vb : Bool) (chain : BlockChain) (blockRlp : B8L) :
     | .error err => return (.inr err)
     | .ok chain => .ok chain
 
-  .cprint vb s!"\nSTATE AFTER TRANSITION :"
-  .cprint vb s!"{chain.state}"
+  cprint vb s!"\nSTATE AFTER TRANSITION :"
+  cprint vb s!"{chain.state}"
   .ok (.inl chain)
