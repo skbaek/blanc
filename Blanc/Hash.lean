@@ -1,5 +1,7 @@
 import Blanc.Basic
 
+
+
 namespace RIPEMD160
 
 ------------------------------ RIPEMD-160 ------------------------------
@@ -269,38 +271,10 @@ def B8L.sha256 : B8L → B256 := SHA256.run
 
 namespace KECCAK
 
-abbrev Qords : Type := Vec (Bits 64) 25
-abbrev QordsU : Type := Vec B64 25
-
-def Qords.init : Qords := Mathlib.Vector.replicate 25 (.zero 64)
-def QordsU.init : QordsU := Mathlib.Vector.replicate 25 0
-
--- def Qords.toString (ws : Qords) : String :=
---   let f : Fin 25 → String :=
---     λ k => Bits.toHex 16 (ws.get k)
---   s!"{f 0} {f 1} {f 2} {f 3} {f 4}\n" ++
---   s!"{f 5} {f 6} {f 7} {f 8} {f 9}\n" ++
---   s!"{f 10} {f 11} {f 12} {f 13} {f 14}\n" ++
---   s!"{f 15} {f 16} {f 17} {f 18} {f 19}\n" ++
---   s!"{f 20} {f 21} {f 22} {f 23} {f 24}\n"
---
--- def QordsU.toString (ws : QordsU) : String :=
---   let f : Fin 25 → String :=
---     λ k => Bits.toHex 16 (B64.toBits (ws.get k))
---   s!"{f 0} {f 1} {f 2} {f 3} {f 4}\n" ++
---   s!"{f 5} {f 6} {f 7} {f 8} {f 9}\n" ++
---   s!"{f 10} {f 11} {f 12} {f 13} {f 14}\n" ++
---   s!"{f 15} {f 16} {f 17} {f 18} {f 19}\n" ++
---   s!"{f 20} {f 21} {f 22} {f 23} {f 24}\n"
-
-def Vec.app {ξ : Type u} {n : Nat}
-  (k : Nat) (f : ξ → ξ) (ws : Vec ξ (n + 1)) : Vec ξ (n + 1) :=
-  ws.set ↑k <| f <| ws.get ↑k
-
 def Array.app {ξ : Type u} (k : Nat) (f : ξ → ξ) (ws : Array ξ) : Array ξ :=
   match ws.get? k with
-  | none => ws
-  | some x => ws.setD k (f x)
+  | none => panic "Array.app out of bounds"
+  | some x => ws.set! k (f x)
 
 def Bits.rol {n} (xs : Bits n) (y : Nat) : Bits n :=
   Bits.or (xs.shl y) (xs.shr (n - y))
@@ -308,35 +282,20 @@ def Bits.rol {n} (xs : Bits n) (y : Nat) : Bits n :=
 def B64.rol (xs : B64) (y : Nat) : B64 :=
   (xs <<< y.toUInt64) ||| (xs >>> (64 - y).toUInt64)
 
-def Keccak'.θ'' (t : B64) (i : Nat) : Nat → Array B64 → Array B64
-  | 0, ws => ws
-  | j + 1, ws => θ'' t i j <| Array.app ((j * 5) + i) (· ^^^ t) ws
-
-def Keccak'.θ' (bc : Array B64) : Nat → Array B64 → Array B64
-| 0, ws => ws
-| i + 1, ws =>
-  let t : B64 :=
-    bc.get! ((i + 4) % 5) ^^^ B64.rol (bc.get! ((i + 1) % 5)) 1
-  θ' bc i <| θ'' t i 5 ws
-
-def Keccak'.θ (ws : Array B64) : Array B64 :=
-  let g : Fin 5 → B64 :=
-    λ x =>
-      ws.get! x ^^^ ws.get! (x + 5) ^^^ ws.get! (x + 10) ^^^
-      ws.get! (x + 15) ^^^ ws.get! (x + 20)
-  let bc : Array B64 := #[g 0, g 1, g 2, g 3, g 4]
-  θ' bc 5 ws
-
-def θ {ξ : Type u} [Xor ξ] (ws : Vec ξ 25) (rol : ξ → Nat → ξ) : Vec ξ 25 :=
+def θ {ξ : Type u} [Xor ξ] [Inhabited ξ]
+  (ws : Array ξ) (rol : ξ → Nat → ξ) : Array ξ :=
   let prep (x : Fin 5) : ξ :=
-    ws.get x ^^^ ws.get (x + 5) ^^^ ws.get (x + 10) ^^^
-    ws.get (x + 15) ^^^ ws.get (x + 20)
+    ws.get! x ^^^
+    ws.get! (x + 5) ^^^
+    ws.get! (x + 10) ^^^
+    ws.get! (x + 15) ^^^
+    ws.get! (x + 20)
   let initVec : Vec ξ 5 :=
     ⟨[prep 0, prep 1, prep 2, prep 3, prep 4], rfl⟩
-  let rec inner (t : ξ) (i : Nat) : Nat → Vec ξ 25 → Vec ξ 25
+  let rec inner (t : ξ) (i : Nat) : Nat → Array ξ → Array ξ
     | 0, ws => ws
-    | j + 1, ws => inner t i j <| Vec.app ((j * 5) + i) (· ^^^ t) ws
-  let rec outer (bc : Vec ξ 5) : Nat → Vec ξ 25 → Vec ξ 25
+    | j + 1, ws => inner t i j <| Array.app ((j * 5) + i) (· ^^^ t) ws
+  let rec outer (bc : Vec ξ 5) : Nat → Array ξ → Array ξ
     | 0, ws => ws
     | i + 1, ws =>
       let t : ξ := bc.get (i + 4) ^^^ rol (bc.get (i + 1)) 1
@@ -379,109 +338,57 @@ def Bits.rdnc : Array (Bits 64) :=
   ]
 
 def B64.rdnc : Array B64 :=
-  #[ 0x0000000000000001,
-     0x0000000000008082,
-     0x800000000000808a,
-     0x8000000080008000,
-     0x000000000000808b,
-     0x0000000080000001,
-     0x8000000080008081,
-     0x8000000000008009,
-     0x000000000000008a,
-     0x0000000000000088,
-     0x0000000080008009,
-     0x000000008000000a,
-     0x000000008000808b,
-     0x800000000000008b,
-     0x8000000000008089,
-     0x8000000000008003,
-     0x8000000000008002,
-     0x8000000000000080,
-     0x000000000000800a,
-     0x800000008000000a,
-     0x8000000080008081,
-     0x8000000000008080,
-     0x0000000080000001,
-     0x8000000080008008 ]
+  #[ 0x0000000000000001, 0x0000000000008082, 0x800000000000808a, 0x8000000080008000,
+     0x000000000000808b, 0x0000000080000001, 0x8000000080008081, 0x8000000000008009,
+     0x000000000000008a, 0x0000000000000088, 0x0000000080008009, 0x000000008000000a,
+     0x000000008000808b, 0x800000000000008b, 0x8000000000008089, 0x8000000000008003,
+     0x8000000000008002, 0x8000000000000080, 0x000000000000800a, 0x800000008000000a,
+     0x8000000080008081, 0x8000000000008080, 0x0000000080000001, 0x8000000080008008 ]
 
-def keccakf_rotc : Vec Nat 24 :=
-  ⟨ [ 1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 2, 14, 27,
-      41, 56, 8, 25, 43, 62, 18, 39, 61, 20, 44 ], rfl ⟩
+def keccakf_rotc : Array Nat :=
+  #[ 1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 2, 14,
+     27, 41, 56, 8, 25, 43, 62, 18, 39, 61, 20, 44 ]
 
-def keccakf_piln : Vec Nat 24 :=
-  ⟨ [ 10, 7, 11, 17, 18, 3, 5, 16, 8, 21, 24, 4,
-      15, 23, 19, 13, 12, 2, 20, 14, 22, 9, 6, 1 ], rfl ⟩
+def keccakf_piln : Array Nat :=
+  #[ 10, 7, 11, 17, 18, 3, 5, 16, 8, 21, 24, 4,
+     15, 23, 19, 13, 12, 2, 20, 14, 22, 9, 6, 1 ]
 
-def Keccak'.ρπ' : Nat → B64 → Array B64 → Array B64
-  | 0, _, ws => ws
-  | k + 1, t, ws =>
-    let i := 23 - k
-    let j := keccakf_piln.get i
-    let ws' := ws.setD j (B64.rol t <| keccakf_rotc.get i)
-    ρπ' k (ws.get! j) ws'
-
-def ρπ {ξ : Type u} (ws : Vec ξ 25) (rol : ξ → Nat → ξ) : Vec ξ 25 :=
-  let rec aux : Nat → ξ → Vec ξ 25 → Vec ξ 25
+def ρπ {ξ : Type u} [Inhabited ξ] (ws : Array ξ) (rol : ξ → Nat → ξ) : Array ξ :=
+  let rec aux : Nat → ξ → Array ξ → Array ξ
     | 0, _, ws => ws
     | k + 1, t, ws =>
       let i := 23 - k
-      let j := keccakf_piln.get i
-      let ws' := ws.set j (rol t <| keccakf_rotc.get i)
-      aux k (ws.get j) ws'
-  aux 24 (ws.get 1) ws
+      let j := keccakf_piln.get! i
+      let ws' := ws.set! j (rol t <| keccakf_rotc.get! i)
+      aux k (ws.get! j) ws'
+  aux 24 (ws.get! 1) ws
 
-def Keccak'.ρπ (ws : Array B64) : Array B64 := ρπ' 24 (ws.get! 1) ws
-
-def Keccak'.χ'' (ws : Array B64)
-    (bc : Array B64) (j : Nat) : Nat → Array B64
-  | 0 => ws
-  | i + 1 =>
-    let ws' :=
-      Array.app (j + i) (· ^^^ ((~~~ bc.get! (i + 1)) &&& (bc.get! (i + 2)))) ws
-    χ'' ws' bc j i
-
-def Keccak'.χ' (ws : Array B64) : Nat → Array B64
-  | 0 => ws
-  | k + 1 =>
-    let j := k * 5
-    let f : Nat → B64 := λ x => ws.get! (j + x)
-    let bc : Array B64 := #[f 0, f 1, f 2, f 3, f 4]
-    let ws' : Array B64 := Keccak'.χ'' ws bc j 5
-    χ' ws' k
-
-def χ {ξ : Type u} [Xor ξ] [Complement ξ] [HAnd ξ ξ ξ]
-  (ws : Vec ξ 25) : Vec ξ 25 :=
-  let rec inner (ws : Vec ξ 25) (bc : Vec ξ 5) (j : Nat) : Nat → Vec ξ 25
+def χ {ξ : Type u} [Xor ξ] [Complement ξ] [HAnd ξ ξ ξ] [Inhabited ξ]
+  (ws : Array ξ) : Array ξ :=
+  let rec inner (ws : Array ξ) (bc : Array ξ) (j : Nat) : Nat → Array ξ
     | 0 => ws
     | i + 1 =>
-      let ws' := Vec.app (j + i) (· ^^^ ((~~~ bc.get (i + 1)) &&& (bc.get (i + 2)))) ws
+      let ws' :=
+        Array.app (j + i)
+          (· ^^^ ((~~~ bc.get! ((i + 1) % 5)) &&& (bc.get! ((i + 2) % 5)))) ws
       inner ws' bc j i
-  let rec outer (ws : Vec ξ 25) : Nat → Vec ξ 25
+  let rec outer (ws : Array ξ) : Nat → Array ξ
     | 0 => ws
     | k + 1 =>
       let j := k * 5
-      let f : Nat → ξ := λ x => ws.get (j + x)
-      let bc : Vec ξ 5 := ⟨[f 0, f 1, f 2, f 3, f 4], rfl⟩
-      let ws' : Vec ξ 25 := inner ws bc j 5
+      let f : Nat → ξ := λ x => ws.get! (j + x)
+      let bc : Array ξ := #[f 0, f 1, f 2, f 3, f 4]
+      let ws' : Array ξ := inner ws bc j 5
       outer ws' k
   outer ws 5
 
-def Keccak'.χ (ws : Array B64) : Array B64 := χ' ws 5
-
 def ι {ξ : Type u} [Xor ξ] [Inhabited ξ]
-  (round : Nat) (rdnc : Array ξ) (ws : Vec ξ 25) : Vec ξ 25 :=
-  Vec.app 0 (· ^^^ (Array.get! rdnc round)) ws
+  (round : Nat) (rdnc : Array ξ) (ws : Array ξ) : Array ξ :=
+  Array.app 0 (· ^^^ (Array.get! rdnc round)) ws
 
-def Keccak'.ι (round : Nat) (ws : Array B64) : Array B64 :=
-  Array.app 0 (UInt64.xor · <| B64.rdnc.get! round) ws
-
-def Keccak'.aux : Nat → Array B64 → Array B64
-| 0, ws => ws
-| n + 1, ws => aux n <| ι (23 - n) <| χ <| ρπ <| θ ws
-
-def Vec.f {ξ : Type u} [Xor ξ] [Complement ξ] [HAnd ξ ξ ξ] [Inhabited ξ]
-  (rdnc : Array ξ) (ws : Vec ξ 25) (rol : ξ → Nat → ξ) : Vec ξ 25 :=
-  let rec aux : Nat → Vec ξ 25 → Vec ξ 25
+def f {ξ : Type u} [Xor ξ] [Complement ξ] [HAnd ξ ξ ξ] [Inhabited ξ]
+  (rdnc : Array ξ) (ws : Array ξ) (rol : ξ → Nat → ξ) : Array ξ :=
+  let rec aux : Nat → Array ξ → Array ξ
     | 0, ws => ws
     | 24, ws =>
       let temp := θ ws rol
@@ -490,28 +397,27 @@ def Vec.f {ξ : Type u} [Xor ξ] [Complement ξ] [HAnd ξ ξ ξ] [Inhabited ξ]
       aux n <| ι (23 - n) rdnc <| χ <| ρπ (θ ws rol) rol
   aux 24 ws
 
-def Qord.reverse (w : Bits 64) : Bits 64 :=
-  Bytes.toBits 8 (@Bits.toBytes 8 w).reverse
-
-def Bytes.run : Fin 17 → Bytes → Qords → Word
+def Bytes.run : Fin 17 → Bytes → Array (Bits 64)→ Word
   | wc, b0 :: b1 :: b2 :: b3 :: b4 :: b5 :: b6 :: b7 :: bs, ws =>
     let t : Bits 64 := Bytes.toBits 8 [b7, b6, b5, b4, b3, b2, b1, b0]
-    let ws' := Vec.app wc (· ^^^ t) ws
-    Bytes.run (wc + 1) bs <| if wc = 16 then (Vec.f Bits.rdnc ws' Bits.rol) else ws'
+    let ws' := Array.app wc (· ^^^ t) ws
+    Bytes.run (wc + 1) bs <| if wc = 16 then (f Bits.rdnc ws' Bits.rol) else ws'
   | wc, bs, ws =>
+    let rev (w : Bits 64) : Bits 64 :=
+      Bytes.toBits 8 (@Bits.toBytes 8 w).reverse
     let t : Bits 64 := Bytes.toBits' 8 ((bs ++ [Bits.one 8]).takeD 8 (.zero 8)).reverse
     let s := (Hex.toBits 16 "8000000000000000").getD 0
-    let temp0 := Vec.app wc (· ^^^ t) ws
-    let temp1 := Vec.app 16 (· ^^^ s) temp0
-    let ws' := Vec.f Bits.rdnc temp1 Bits.rol
-    (Qord.reverse <| ws'.get 0) ++ (Qord.reverse <| ws'.get 1) ++
-    (Qord.reverse <| ws'.get 2) ++ (Qord.reverse <| ws'.get 3)
+    let temp0 := Array.app wc (· ^^^ t) ws
+    let temp1 := Array.app 16 (· ^^^ s) temp0
+    let ws' := f Bits.rdnc temp1 Bits.rol
+    (rev <| ws'.get! 0) ++ (rev <| ws'.get! 1) ++
+    (rev <| ws'.get! 2) ++ (rev <| ws'.get! 3)
 
-def B8L.run : Fin 17 → B8L → QordsU → B256
+def B8L.run : Fin 17 → B8L → Array B64 → B256
   | wc, b0 :: b1 :: b2 :: b3 :: b4 :: b5 :: b6 :: b7 :: bs, ws =>
     let t : B64 := B8s.toB64 b7 b6 b5 b4 b3 b2 b1 b0
-    let ws' := Vec.app wc (· ^^^ t) ws
-    B8L.run (wc + 1) bs <| if wc = 16 then (Vec.f B64.rdnc ws' B64.rol) else ws'
+    let ws' := Array.app wc (· ^^^ t) ws
+    B8L.run (wc + 1) bs <| if wc = 16 then (f B64.rdnc ws' B64.rol) else ws'
   | wc, bs, ws =>
     let us := (bs ++ [(1 : B8)]).takeD 8 (0 : B8)
     let t : B64 :=
@@ -519,13 +425,13 @@ def B8L.run : Fin 17 → B8L → QordsU → B256
         (us.get! 7) (us.get! 6) (us.get! 5) (us.get! 4)
         (us.get! 3) (us.get! 2) (us.get! 1) (us.get! 0)
     let s : B64 := (8 : B64) <<< 60
-    let temp0 := Vec.app wc (· ^^^ t) ws
-    let temp1 := Vec.app 16 (· ^^^ s) temp0
-    let ws' := Vec.f B64.rdnc temp1 B64.rol
-    (B64.reverse (ws'.get 0) ++ B64.reverse (ws'.get 1)) ++
-    (B64.reverse (ws'.get 2) ++ B64.reverse (ws'.get 3))
+    let temp0 := Array.app wc (· ^^^ t) ws
+    let temp1 := Array.app 16 (· ^^^ s) temp0
+    let ws' := f B64.rdnc temp1 B64.rol
+    (B64.reverse (ws'.get! 0) ++ B64.reverse (ws'.get! 1)) ++
+    (B64.reverse (ws'.get! 2) ++ B64.reverse (ws'.get! 3))
 
-def ByteArray.run (bnd n : Nat) (wc : Fin 17) (bs : ByteArray) (ws : QordsU) : B256 :=
+def ByteArray.run (bnd n : Nat) (wc : Fin 17) (bs : ByteArray) (ws : Array B64) : B256 :=
   if 7 < n then
     let b0 : B8 := bs.get! (bnd - n)
     let b1 : B8 := bs.get! (bnd - (n - 1))
@@ -536,9 +442,9 @@ def ByteArray.run (bnd n : Nat) (wc : Fin 17) (bs : ByteArray) (ws : QordsU) : B
     let b6 : B8 := bs.get! (bnd - (n - 6))
     let b7 : B8 := bs.get! (bnd - (n - 7))
     let t : B64 := B8s.toB64 b7 b6 b5 b4 b3 b2 b1 b0
-    let ws' := Vec.app wc (UInt64.xor · t) ws
+    let ws' := Array.app wc (UInt64.xor · t) ws
     ByteArray.run bnd (n - 8) (wc + 1) bs <|
-      if wc = 16 then (Vec.f B64.rdnc ws' B64.rol) else ws'
+      if wc = 16 then (f B64.rdnc ws' B64.rol) else ws'
   else
     let rec aux (bnd : Nat) (bs : ByteArray) : Nat → Nat → List B8
       | _, 0 => [] -- unreachable code
@@ -557,25 +463,22 @@ def ByteArray.run (bnd n : Nat) (wc : Fin 17) (bs : ByteArray) (ws : QordsU) : B
         (us.getD 1 0)
         (us.getD 0 0)
     let s : B64 := (8 : B64) <<< 60
-    let temp0 := Vec.app wc (· ^^^ t) ws
-    let temp1 := Vec.app 16 (· ^^^ s) temp0
-    let ws' := Vec.f B64.rdnc temp1 B64.rol
-    (B64.reverse (ws'.get 0) ++ B64.reverse (ws'.get 1)) ++
-    (B64.reverse (ws'.get 2) ++ B64.reverse (ws'.get 3))
+    let temp0 := Array.app wc (· ^^^ t) ws
+    let temp1 := Array.app 16 (· ^^^ s) temp0
+    let ws' := f B64.rdnc temp1 B64.rol
+    (B64.reverse (ws'.get! 0) ++ B64.reverse (ws'.get! 1)) ++
+    (B64.reverse (ws'.get! 2) ++ B64.reverse (ws'.get! 3))
 
 end KECCAK
 
 def Bytes.keccak (bs : Bytes) : Word :=
-  dbg_trace "Bytes.keccak used!"
-  KECCAK.Bytes.run (0 : Fin 17) bs KECCAK.Qords.init
+  KECCAK.Bytes.run (0 : Fin 17) bs <| .mkArray 25 <| .zero 64
 
 def B8L.keccak (bs : B8L) : B256 :=
-  dbg_trace "B8L.keccak used!"
-  KECCAK.B8L.run (0 : Fin 17) bs KECCAK.QordsU.init
+  KECCAK.B8L.run (0 : Fin 17) bs <| .mkArray 25 0
 
 def ByteArray.keccak (loc sz : Nat) (bs : ByteArray) : B256 :=
-  dbg_trace "BA.keccak used!"
-  KECCAK.ByteArray.run (loc + sz) sz (0 : Fin 17) bs KECCAK.QordsU.init
+  KECCAK.ByteArray.run (loc + sz) sz (0 : Fin 17) bs <| .mkArray 25 0
 
 def String.keccak (s : String) : Word :=
   Bytes.keccak s.toBytes
