@@ -485,12 +485,6 @@ def secp256k1CurveOrder : B256 :=
 def Nat.secp256k1CurveOrder : Nat :=
   115792089237316195423570985008687907852837564279074904382605163141518161494337
 
-@[extern "ecrecover_flag"]
-opaque ecrecoverFlag : ByteArray → UInt8 → ByteArray → ByteArray
-
-@[extern "rip160"]
-opaque rip160 : ByteArray → ByteArray
-
 abbrev scoord : Type := FinField Nat.secp256k1FieldPrime
 
 abbrev spoint : Type := EllipticCurve scoord 0 7
@@ -527,22 +521,6 @@ def ecrecover (h : B256) (v : Bool) (r : B256) (s : B256) : Option Adr := do
     EllipticCurve.mulBy (sR - zG) rInv
   let hash := B8L.keccak <| Q.x.val.toB256.toB8L ++ Q.y.val.toB256.toB8L
   B8L.toAdr? <| List.drop 12 <| hash.toB8L
-
-/-
-
-public key recovery via C FFI
-
-def ecrecover (h : B256) (v : Bool) (r : B256) (s : B256) : Option Adr :=
-  let rsa : ByteArray := ⟨Array.mk (r.toB8L ++ s.toB8L)⟩
-  let hsa : ByteArray := ⟨Array.mk h.toB8L⟩
-  let ri : UInt8 := if v then 1 else 0
-  match (ecrecoverFlag hsa ri rsa).toList with
-  | [] => none
-  | b :: pa =>
-    if b = 0 ∨ pa.length ≠ 20
-    then none
-    else B8L.toAdr? pa
--/
 
 abbrev NTB := Lean.RBMap (List B8) (List B8) (@List.compare _ ⟨B8.compareLows⟩)
 
@@ -3508,14 +3486,6 @@ def BLT.toLog : BLT → Option Log
     }
   | _ => none
 
-def publicAddress? (hsa : ByteArray) (ri : UInt8) (rsa : ByteArray) : Option Adr :=
-  match (ecrecoverFlag hsa ri rsa).toList with
-  | [] => none
-  | b :: pa =>
-    if b = 0
-    then none
-    else (B8L.toAdr? pa)
-
 def List.putIndex {ξ : Type u} : Nat → List ξ → List (Nat × ξ)
   | _, [] => []
   | k, x :: xs => (k, x) :: List.putIndex (k + 1) xs
@@ -3901,14 +3871,14 @@ def Tx.signingHash (tx : Tx) : Option B256 :=
           ]
 
 def secp256k1nRecoverToAdr?
-  (r s : B256) (v : Nat) (msg_hash : B256) : Option  Adr :=
+  (r s : B256) (v : Nat) (msg_hash : B256) : Option Adr :=
   let rsa : ByteArray := ⟨Array.mk (r.toB8L ++ s.toB8L)⟩
   let ri : UInt8 :=
     match v with
     | 0 => 0
     | _ => 1
   let hsa : ByteArray := ⟨Array.mk msg_hash.toB8L⟩
-  publicAddress? hsa ri rsa
+  ecrecover msg_hash v.toBool r s
 
 -- recover_sender
 def recoverSender (chain_id: B64) (tx: Tx) : Except String Adr := do
@@ -3936,8 +3906,6 @@ def recoverSender (chain_id: B64) (tx: Tx) : Except String Adr := do
   | _ =>
     .assert (v < 2) "InvalidSignatureError"
     (secp256k1nRecoverToAdr? r s v signingHash).toExcept "sender recovery failed"
-
-
 
 -- recover_authority
 def recoverAuthority (auth : Auth) : Except String Adr := do
