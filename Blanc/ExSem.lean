@@ -7,11 +7,6 @@ def cprint {m : Type → Type v}  [inst : Monad m] (vb : Bool) (msg : String) : 
   if vb then do
     dbg_trace msg
 
--- #exit
---
--- def Except.cprint {ξ : Type} (vb : Bool) (msg : String) : Except ξ Unit := do
---   if vb then do dbg_trace msg
-
 def Except.print {ξ : Type} (msg : String) : Except ξ Unit := do
   dbg_trace msg
 
@@ -474,11 +469,68 @@ instance : ToString BLT := ⟨String.joinln ∘ BLT.toStrings⟩
 def B8.toBool (x : B8) : Bool :=
   if x = 0 then .false else .true
 
+def secpP : B256 :=
+  (.max : B256)
+  - (976 + (B8L.toB256P <| (Hex.toB8L "0100000000").getD []))
+
+def secp256k1FieldPrime : B256 :=
+  0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f
+
+def Nat.secp256k1FieldPrime : Nat :=
+  115792089237316195423570985008687907853269984665640564039457584007908834671663
+
+def secp256k1CurveOrder : B256 :=
+  0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
+
+def Nat.secp256k1CurveOrder : Nat :=
+  115792089237316195423570985008687907852837564279074904382605163141518161494337
+
 @[extern "ecrecover_flag"]
 opaque ecrecoverFlag : ByteArray → UInt8 → ByteArray → ByteArray
 
 @[extern "rip160"]
 opaque rip160 : ByteArray → ByteArray
+
+abbrev scoord : Type := FinField Nat.secp256k1FieldPrime
+
+abbrev spoint : Type := EllipticCurve scoord 0 7
+
+def spoint.G : spoint :=
+  ⟨
+    .ofNat 0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798,
+    .ofNat 0x483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8
+  ⟩
+
+def sqrtExp : Nat :=
+  (Nat.secp256k1FieldPrime + 1) / 4
+
+def sqrt (x : scoord) : Option scoord :=
+  let y := x ^ sqrtExp
+  if y * y = x then some y else none
+
+def ecrecover (h : B256) (v : Bool) (r : B256) (s : B256) : Option Adr := do
+  let x : scoord := .ofNat r.toNat
+  let ySquared : scoord := x ^ 3 + 7
+  let yFst ← sqrt ySquared
+  let ySnd := FinField.neg yFst
+  let ⟨yOdd, yEven⟩ : scoord × scoord :=
+    if yFst.val % 2 = 0 then ⟨ySnd, yFst⟩ else ⟨yFst, ySnd⟩
+  let y := if v then yOdd else yEven
+  let R : spoint := ⟨x, y⟩
+  let rInv : Nat :=
+    @FinField.val Nat.secp256k1CurveOrder <| FinField.inv <| .ofNat r.toNat
+  let sR : spoint := EllipticCurve.mulBy R <|
+    @FinField.val Nat.secp256k1CurveOrder <| .ofNat s.toNat
+  let zG : spoint := EllipticCurve.mulBy spoint.G <|
+    @FinField.val Nat.secp256k1CurveOrder <| .ofNat h.toNat
+  let Q : spoint :=
+    EllipticCurve.mulBy (sR - zG) rInv
+  let hash := B8L.keccak <| Q.x.val.toB256.toB8L ++ Q.y.val.toB256.toB8L
+  B8L.toAdr? <| List.drop 12 <| hash.toB8L
+
+/-
+
+public key recovery via C FFI
 
 def ecrecover (h : B256) (v : Bool) (r : B256) (s : B256) : Option Adr :=
   let rsa : ByteArray := ⟨Array.mk (r.toB8L ++ s.toB8L)⟩
@@ -490,6 +542,7 @@ def ecrecover (h : B256) (v : Bool) (r : B256) (s : B256) : Option Adr :=
     if b = 0 ∨ pa.length ≠ 20
     then none
     else B8L.toAdr? pa
+-/
 
 abbrev NTB := Lean.RBMap (List B8) (List B8) (@List.compare _ ⟨B8.compareLows⟩)
 
@@ -732,7 +785,7 @@ def beaconRootsAddress : Adr := 0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02
 def systemAddress : Adr := 0xfffffffffffffffffffffffffffffffffffffffe
 def systemTransactionGas : Nat := 30000000
 def Nat.secp256k1n : Nat := 15792089237316195423570985008687907852837564279074904382605163141518161494337
-def B256.secp256k1n : B256 := 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
+def B256.secp256k1n : B256 := 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141 -- secp256k1 curve order
 def gasSha256 : Nat := 60
 def gasSha256Word : Nat := 12
 def gasRipemd160 : Nat := 600
@@ -2633,8 +2686,7 @@ def executePairingCheck (evm : Evm) : Execution := do
 def executePrecomp (evm : Evm) : Adr → Execution
   | 0x1 => executeEcrecover evm
   | 0x2 => executeSha256 evm
-  | 0x3 => do
-    executeRipemd160 evm
+  | 0x3 => executeRipemd160 evm
   | 0x4 => executeId evm
   | 0x5 => executeModexp evm
   | 0x6 => executeEcadd evm

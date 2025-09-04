@@ -1,6 +1,7 @@
 import Blanc.Basic
 
 abbrev altBn128Prime      : Nat := 21888242871839275222246405745257275088696311157297823662689037894645226208583
+
 abbrev altBn128CurveOrder : Nat := 21888242871839275222246405745257275088548364400416034343698204186575808495617
 
 abbrev bls12Prime : Nat := 4002409555221667393417789825735904156556882819939007885332058136124031650490837864442687629129015664037894272559787
@@ -356,6 +357,10 @@ def EllipticCurve.mk? {F} [Zero F] [DecidableEq F]
 def BNP.mk? (x : Nat) (y : Nat) : Option BNP :=
   EllipticCurve.mk? (FinField.ofNat x) (FinField.ofNat y)
 
+def FinField.neg {p} (x : FinField p) : FinField p :=
+  .ofNat (p - x.val)
+
+instance {p} : Neg (FinField p) := ⟨FinField.neg⟩
 
 /-
 def double(self: T) -> T:
@@ -435,6 +440,7 @@ instance {F} [Zero F] [DecidableEq F] [HAdd F F F] [HSub F F F]
   :
   HAdd (EllipticCurve F a b) (EllipticCurve F a b) (EllipticCurve F a b) :=
   ⟨EllipticCurve.add⟩
+
 
 def EllipticCurve.mulBy {F} [Zero F] [DecidableEq F]
   [HAdd F F F] [HSub F F F] [HMul F F F] [HDiv F F F]
@@ -569,6 +575,23 @@ instance {p} {m} : Neg (GaloisField p m) where
 
 def EllipticCurve.neg {F} [Neg F] {a b} : EllipticCurve F a b → EllipticCurve F a b
   | ⟨x, y⟩ => ⟨x, -y⟩
+
+instance {F} [Neg F] {a b} : Neg (EllipticCurve F a b) := ⟨EllipticCurve.neg⟩
+
+def EllipticCurve.sub {F} [Neg F] [Zero F] [DecidableEq F]
+  [HAdd F F F] [HSub F F F] [HMul F F F] [HDiv F F F]
+  [HPow F Nat F] [OfNat F 3] [OfNat F 2]
+  [ToString F]
+  {a b} (p q : EllipticCurve F a b) : EllipticCurve F a b :=
+  p + (-q)
+
+instance {F} [Neg F] [Zero F] [DecidableEq F]
+  [HAdd F F F] [HSub F F F] [HMul F F F] [HDiv F F F]
+  [HPow F Nat F] [OfNat F 3] [OfNat F 2]
+  [ToString F]
+  {a b} :
+  HSub (EllipticCurve F a b) (EllipticCurve F a b) (EllipticCurve F a b) :=
+  ⟨EllipticCurve.sub⟩
 
 /-
 def miller_loop(
