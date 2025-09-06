@@ -510,9 +510,7 @@ def Bits.zero : ∀ n : ℕ, Bits n
   | n + 1 => 0 +> zero n
 
 instance {n} : Inhabited (Bits n) := ⟨Bits.zero n⟩
-
 instance {n} : @Zero (Bits n) := ⟨Bits.zero n⟩
-
 instance : @Zero Byte := ⟨Bits.zero 8⟩
 
 def Bits.max : ∀ n : ℕ, Bits n
@@ -753,7 +751,6 @@ def Bits.mod {n} (xs ys : Bits n) : Bits n :=
   if ys = 0 then 0 else (divMod 0 xs ys).snd
 
 instance {n} : HDiv (Bits n) (Bits n) (Bits n) := ⟨Bits.div⟩
-
 instance {n} : HMod (Bits n) (Bits n) (Bits n) := ⟨Bits.mod⟩
 instance {n} : Mod (Bits n) := ⟨Bits.mod⟩
 
@@ -792,7 +789,6 @@ def Bits.smod {n : ℕ} (xs ys : Bits n) : Bits n :=
   then 0
   else let mod := (abs xs) % (abs ys)
        if isNeg xs then neg mod else mod
-
 
 def Nat.toBool : Nat → Bool
   | 0 => 0

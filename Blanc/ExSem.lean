@@ -469,59 +469,6 @@ instance : ToString BLT := ⟨String.joinln ∘ BLT.toStrings⟩
 def B8.toBool (x : B8) : Bool :=
   if x = 0 then .false else .true
 
-def secpP : B256 :=
-  (.max : B256)
-  - (976 + (B8L.toB256P <| (Hex.toB8L "0100000000").getD []))
-
-def secp256k1FieldPrime : B256 :=
-  0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f
-
-def Nat.secp256k1FieldPrime : Nat :=
-  115792089237316195423570985008687907853269984665640564039457584007908834671663
-
-def secp256k1CurveOrder : B256 :=
-  0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
-
-def Nat.secp256k1CurveOrder : Nat :=
-  115792089237316195423570985008687907852837564279074904382605163141518161494337
-
-abbrev scoord : Type := FinField Nat.secp256k1FieldPrime
-
-abbrev spoint : Type := EllipticCurve scoord 0 7
-
-def spoint.G : spoint :=
-  ⟨
-    .ofNat 0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798,
-    .ofNat 0x483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8
-  ⟩
-
-def sqrtExp : Nat :=
-  (Nat.secp256k1FieldPrime + 1) / 4
-
-def sqrt (x : scoord) : Option scoord :=
-  let y := x ^ sqrtExp
-  if y * y = x then some y else none
-
-def ecrecover (h : B256) (v : Bool) (r : B256) (s : B256) : Option Adr := do
-  let x : scoord := .ofNat r.toNat
-  let ySquared : scoord := x ^ 3 + 7
-  let yFst ← sqrt ySquared
-  let ySnd := FinField.neg yFst
-  let ⟨yOdd, yEven⟩ : scoord × scoord :=
-    if yFst.val % 2 = 0 then ⟨ySnd, yFst⟩ else ⟨yFst, ySnd⟩
-  let y := if v then yOdd else yEven
-  let R : spoint := ⟨x, y⟩
-  let rInv : Nat :=
-    @FinField.val Nat.secp256k1CurveOrder <| FinField.inv <| .ofNat r.toNat
-  let sR : spoint := EllipticCurve.mulBy R <|
-    @FinField.val Nat.secp256k1CurveOrder <| .ofNat s.toNat
-  let zG : spoint := EllipticCurve.mulBy spoint.G <|
-    @FinField.val Nat.secp256k1CurveOrder <| .ofNat h.toNat
-  let Q : spoint :=
-    EllipticCurve.mulBy (sR - zG) rInv
-  let hash := B8L.keccak <| Q.x.val.toB256.toB8L ++ Q.y.val.toB256.toB8L
-  B8L.toAdr? <| List.drop 12 <| hash.toB8L
-
 abbrev NTB := Lean.RBMap (List B8) (List B8) (@List.compare _ ⟨B8.compareLows⟩)
 
 def NTB.toStrings (s : NTB) : List String :=
@@ -2175,7 +2122,7 @@ def executeEcrecover (evm : Evm) : Execution := do
   if r = 0 ∨ r ≥ .secp256k1n ∨ s = 0 ∨ s ≥ .secp256k1n
   then .ok evm
   else
-    match ecrecover h v r s with
+    match secp256k1.recover h v r s with
     | .none => .ok evm
     | some adr => .ok {evm with output := adr.toB256.toB8L}
 
@@ -2392,16 +2339,20 @@ def Blake2.g (b2 : Blake2) (v : Array Nat) (a b c d x y : Nat) : Array Nat :=
   let v := v.setD b <| ((shiftArg >>> b2.R4) ^^^ (shiftArg <<< b2.wR4)) % b2.maxWord
   v
 
-def iterRangeDebugWrapper (m n : Nat) : Nat :=
-  let i := m - (n + 1)
-  i
+def traceId {ξ : Type} (msg : String) (x : ξ) :=
+  dbg_trace msg ; x
 
 def iterRange {ξ : Type} (vb : Bool) (k : Nat) (f : Nat → ξ → ξ) (x : ξ) : ξ :=
   let rec aux : Nat → Nat → ξ → ξ
     | _, 0, x => x
     | m, n + 1, x =>
       let i := m - (n + 1)
-      let x' := f i x
+      --let x' := f i x
+      let x' :=
+        if vb then
+          traceId s!"iteration : {i} / {m}" (f i x)
+        else
+          f i x
       aux m n x'
   aux k k x
 
@@ -2540,10 +2491,6 @@ def executeBls12Pairing (evm : Evm) : Execution := do
 
   let mut evm ← chargeGas gasCost evm
 
---
---
---
---
 
   .error ⟨evm, "BLS12 pairing not implemented yet"⟩
 
@@ -2559,7 +2506,6 @@ def executeBls12MapFpToG1 (evm : Evm) : Execution := do
 
   let mut evm ← chargeGas gasBlsG1Map evm
 
---
   .error ⟨evm, "BLS12 map FP-to-G1 Msm not implemented yet"⟩
 
 
@@ -2704,7 +2650,6 @@ def List.toStringSingleQuote {ξ : Type u} [inst : ToString ξ] : List ξ → St
   | [x] => "['" ++ toString x ++ "']"
   | x::xs => xs.foldl (· ++ ", '" ++ toString · ++ "'") ("['" ++ toString x ++ "'") |>.push ']'
 
---
 def stepString (evm : Evm) (i : Inst) : String :=
   "step(" ++
     s!"pc({evm.pc}), " ++
@@ -3585,7 +3530,6 @@ def Withdrawal.toStrings (wd : Withdrawal) : List String :=
 
 instance : ToString Withdrawal := ⟨String.joinln ∘ Withdrawal.toStrings⟩
 
-
 def BLT.toExStrHeader : BLT → Except String Header
   | .list (
       .b8s parentHash ::
@@ -3870,15 +3814,9 @@ def Tx.signingHash (tx : Tx) : Option B256 :=
             .list <| auths.map Auth.toBLT
           ]
 
-def secp256k1nRecoverToAdr?
-  (r s : B256) (v : Nat) (msg_hash : B256) : Option Adr :=
-  let rsa : ByteArray := ⟨Array.mk (r.toB8L ++ s.toB8L)⟩
-  let ri : UInt8 :=
-    match v with
-    | 0 => 0
-    | _ => 1
-  let hsa : ByteArray := ⟨Array.mk msg_hash.toB8L⟩
-  ecrecover msg_hash v.toBool r s
+-- def secp256k1nRecoverToAdr?
+--   (r s : B256) (v : Nat) (msg_hash : B256) : Option Adr :=
+--   ecrecover msg_hash v.toBool r s
 
 -- recover_sender
 def recoverSender (chain_id: B64) (tx: Tx) : Except String Adr := do
@@ -3896,16 +3834,16 @@ def recoverSender (chain_id: B64) (tx: Tx) : Except String Adr := do
   | .zero _ _ =>
     if v = 27 ∨ v = 28
     then
-      (secp256k1nRecoverToAdr? r s (v - 27) signingHash).toExcept
+      (secp256k1.recover signingHash (v - 27).toBool r s).toExcept
         "sender recovery failed"
     else
       let chain_id_x2 := (chain_id.toNat) * (2)
       .assert (v = 35 + chain_id_x2 ∨ v = 36 + chain_id_x2) "InvalidSignatureError : bad v"
-      (secp256k1nRecoverToAdr? r s (v - 35 - chain_id_x2) signingHash).toExcept
+      (secp256k1.recover signingHash (v - 35 - chain_id_x2).toBool r s).toExcept
         "sender recovery failed"
   | _ =>
     .assert (v < 2) "InvalidSignatureError"
-    (secp256k1nRecoverToAdr? r s v signingHash).toExcept "sender recovery failed"
+    (secp256k1.recover signingHash v.toBool r s).toExcept "sender recovery failed"
 
 -- recover_authority
 def recoverAuthority (auth : Auth) : Except String Adr := do
@@ -3930,7 +3868,7 @@ def recoverAuthority (auth : Auth) : Except String Adr := do
           .b8s auth.nonce.toB8L.sig
         ]
 
-  (secp256k1nRecoverToAdr? r s yParity signingHash).toExcept "sender recovery failed"
+  (secp256k1.recover signingHash yParity.toBool r s ).toExcept "sender recovery failed"
 
 
 /- def set_delegation -/
@@ -4159,8 +4097,6 @@ def checkTransaction (benv : Benv) (blockOut : BlockOutput) (tx : Tx) :
     effectiveGasPrice := gasPrice
     maxGasFee := tx.gas * gasPrice
 
---
---
   let mut blobVersionedHashes : List B256 := []
   match tx.type with
   | .three _ _ _ _ _ maxBlobFee blobHashes =>
@@ -4205,8 +4141,6 @@ def checkTransaction (benv : Benv) (blockOut : BlockOutput) (tx : Tx) :
 
 def calculateIntrinsicCost (tx: Tx) : Nat × Nat :=
 
---
---
   let tokensInCalldata : Nat :=
     (tx.data.map <| fun x => if x = 0 then 1 else 4).sum
   let callDataFloorGasCost : Nat :=
@@ -4749,7 +4683,6 @@ def processCheckedSystemTransaction
   let ⟨state, systemTxOutput⟩ ←
     processSystemTransaction vb benv target systemContractCode data
 
---
   if systemTxOutput.error.isSome then
     .error s!"InvalidBlock : System contract ({target.toHex}) call failed: {systemTxOutput.error.get!}"
 
@@ -4906,10 +4839,10 @@ def state_transition (vb : Bool) (chain : BlockChain) (block : Block) :
 
   let ⟨state, bout⟩ ← applyBody vb benv block.txs block.wds
 
-  .print "computing state root..."
+  -- dbg_trace "computing state root..."
   let blockStateRoot : B256 := state.root
 
-  .print "computing tx root..."
+  -- dbg_trace "computing tx root..."
   let transactionsRoot : B256 ← do
     let transactionsAux (arg : B8L × Tx) : (B8L × B8L) :=
       let txPrefix : B8L :=
@@ -4923,7 +4856,7 @@ def state_transition (vb : Bool) (chain : BlockChain) (block : Block) :
     let temp := List.map transactionsAux bout.transactionsTrie.toList
     .ok <| trie <| Lean.RBMap.fromList temp _
 
-  .print "computing receipt root..."
+  -- dbg_trace "computing receipt root..."
   let receiptRoot : B256 :=
     let receiptAux : (B8L × Fin 5 × Receipt) → (B8L × B8L)
       | ⟨key, type, receipt⟩ =>
@@ -4931,17 +4864,17 @@ def state_transition (vb : Bool) (chain : BlockChain) (block : Block) :
                 let temp := (List.map receiptAux bout.receiptsTrie.toList)
     trie <| Lean.RBMap.fromList temp _
 
-  .print "computing block logs bloom..."
+  -- dbg_trace "computing block logs bloom..."
   let block_logs_bloom := logsBloom bout.blockLogs
 
-  .print "computing withdrawals root..."
+  -- dbg_trace "computing withdrawals root..."
   let withdrawalsRoot : B256 :=
     let withdrawalsAux (arg : B8L × Withdrawal) : B8L × B8L :=
       ⟨arg.fst.toB4s, arg.snd.toBLT.encode⟩
     let temp := (List.map withdrawalsAux bout.withdrawalsTrie.toList)
     trie <| Lean.RBMap.fromList temp _
 
-  .print "computing requests hash..."
+  -- dbg_trace "computing requests hash..."
   let requestsHash := computeRequestsHash bout.requests
 
   if bout.blockGasUsed ≠ block.header.gasUsed then

@@ -1,6 +1,7 @@
 -- Semantics.lean : formalized semantics of the EVM and Blanc
 
 import Blanc.Types
+import Blanc.Hash
 
 def Rinst.toByte : Rinst → Byte
   | add          => Ox x0 x1

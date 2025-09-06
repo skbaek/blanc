@@ -358,7 +358,7 @@ def runBlockchainStTest (vb : Bool) (idx? : Option Nat)
 def runPyTestFile (vb : Bool) (idx : Option Nat) -- (nw : Option String)
   (incls excls : List String) (path : String) : IO Unit := do
   .println "\n================================================================\n"
-  .println s!"Testing file : {path}\n"
+  .println s!"TEST FILE : {path}\n"
   let rb ← readJsonFile path >>= Lean.Json.toIoRBNode
   let js := rb.toArray.toList.putIndex 0
   let _ ← js.mapM <| runBlockchainStTest vb idx incls excls
@@ -401,18 +401,73 @@ def getTestIndex : List String → Option Nat
     else getTestIndex <| s1 :: ss
   | _ => none
 
+#check String.replicate 4 ' '
+
+def String.padN (n : Nat) (s : String) : String :=
+  String.replicate (n * 2) ' ' ++ s
+
+def getRecFilePaths : Nat → System.FilePath → IO (List System.FilePath)
+  | 0, _ => return []
+  | n + 1, path => do
+    let isDir ← System.FilePath.isDir path
+    if isDir then
+      .print s!"is dir : {path}\n"
+      let paths ← System.FilePath.walkDir path
+      let fss ← mapM (getRecFilePaths n) paths.toList
+      let fssString :=
+        String.joinln (List.toStrings (fun fs => List.toStrings (fun f => [f.toString]) fs) fss)
+      .print s!"before flattening :\n{fssString}\n\n"
+      let fs := (List.flatten fss)
+      .print s!"returning for dir :\n{String.joinln (List.toStrings (fun x => [x.toString]) fs)}\n\n"
+      return fs
+    else
+      .print s!"not dir : {path}\n"
+      .print s!"returning for non-dir : [{path.toString}]\n\n"
+      return [path]
+
+def List.removeDups {α : Type} [BEq α] : List α → List α
+  | [] => []
+  | x :: xs =>
+    if xs.contains x then
+      xs.removeDups
+    else
+      x :: xs.removeDups
+
+def getFiles (path : System.FilePath) : IO (List System.FilePath) := do
+  if (← System.FilePath.isDir path) then
+    let paths ← System.FilePath.walkDir path
+    filterM (fun path => path.isDir <&> .not) paths.toList
+  else
+    return [path]
+
 def main : List String → IO Unit
   | path :: opts => do
     let vb : Bool := List.contains opts "--verbose"
     let idx : Option Nat := getTestIndex opts
     let ⟨incls, excls⟩ := getTestNames [] [] opts
-    let b ← System.FilePath.isDir path
-    if !b
-    then runPyTestFile vb idx incls excls path
-    else do
-      let fs ← System.FilePath.walkDir path
-      let _← mapM (runPyTestFile vb idx incls excls) (fs.toList.map System.FilePath.toString)
-      pure ()
+
+    -- let paths ← System.FilePath.walkDir path
+    -- let files ← filterM (fun path => path.isDir <&> .not) paths.toList
+    let files ← getFiles path
+
+    -- let paths ← getRecFilePaths 12 (System.FilePath.mk path)
+    -- if !(← System.FilePath.isDir path)
+    -- then runPyTestFile vb idx incls excls path
+    -- else do
+    --   let fs ← System.FilePath.walkDir path
+    --   let _← mapM (runPyTestFile vb idx incls excls) (fs.toList.map System.FilePath.toString)
+    --   pure ()
+
+    -- let paths' := paths.removeDups
+    -- .print s!"files count : {paths'.length}\n"
+    -- .print s!"files count after removing dups : {paths'.removeDups.length}\n"
+
+    let _ ←
+      mapM
+        (runPyTestFile vb idx incls excls)
+        (files.map System.FilePath.toString)
+
+    pure ()
   | _ => IO.throw "error : invalid arguments"
 
 

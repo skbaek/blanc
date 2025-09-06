@@ -425,7 +425,6 @@ def Jinst.toB8 : Jinst → B8
 instance : Repr Rinst := ⟨λ o _ => o.toString⟩
 instance : Repr Xinst := ⟨λ o _ => o.toString⟩
 
-
 def Jinst.toString : Jinst → String
   | .jump => "JUMP"
   | .jumpdest => "JUMPDEST"

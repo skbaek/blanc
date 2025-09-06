@@ -1,10 +1,20 @@
-import Blanc.Basic
+-- Elliptic curve cryptography definitions, primarily used for
+-- precompiled EVM contracts. Unless otherwise noted, definitions
+-- are ported from execution-specs and the libraries it uses.
 
-abbrev altBn128Prime      : Nat := 21888242871839275222246405745257275088696311157297823662689037894645226208583
+import Blanc.Types
+import Blanc.Hash
 
-abbrev altBn128CurveOrder : Nat := 21888242871839275222246405745257275088548364400416034343698204186575808495617
 
-abbrev bls12Prime : Nat := 4002409555221667393417789825735904156556882819939007885332058136124031650490837864442687629129015664037894272559787
+
+abbrev altBn128Prime : Nat :=
+  21888242871839275222246405745257275088696311157297823662689037894645226208583
+
+abbrev altBn128CurveOrder : Nat :=
+  21888242871839275222246405745257275088548364400416034343698204186575808495617
+
+abbrev bls12Prime : Nat :=
+  4002409555221667393417789825735904156556882819939007885332058136124031650490837864442687629129015664037894272559787
 
 structure FinField (p : Nat) : Type where
   (val : Nat)
@@ -18,7 +28,9 @@ def FinField.ofNat {p : Nat} (n : Nat) : FinField p := ⟨n % p⟩
 
 def FinField.ofInt {p : Nat} : Int → FinField p
   | .ofNat n => .ofNat n
-  | .negSucc n => .ofNat (p - n.succ % p) -- handle negative integers by wrapping around the field size
+  | .negSucc n =>
+    -- handle negative integers by wrapping around the field size
+    .ofNat (p - n.succ % p)
 
 instance {p n : Nat} : OfNat (FinField p) n := ⟨.ofNat n⟩
 
@@ -40,10 +52,7 @@ instance {p m} : ToString (GaloisField p m) := ⟨
 ⟩
 
 abbrev BNF2 : Type :=
-  -- FinField altBn128Prime × FinField altBn128Prime
   GaloisField altBn128Prime [1, 0, 1]
-
--- def BNF2.i : BNF2 := ⟨[1, 0]⟩
 
 def GaloisField.ofNat {p} {m} : Nat → GaloisField p m
   | 0 => ⟨[]⟩
@@ -302,7 +311,7 @@ def GaloisField.div {p} {m} (xs ys : GaloisField p m) : GaloisField p m :=
 instance {p m} : HDiv (GaloisField p m) (GaloisField p m) (GaloisField p m) :=
   ⟨GaloisField.div⟩
 
-abbrev BNP2 : Type := EllipticCurve BNF2 0 ((3 : BNF2) / ⟨[1, 9]⟩)--(BNF2.i + (9 : BNF2)))
+abbrev BNP2 : Type := EllipticCurve BNF2 0 ((3 : BNF2) / ⟨[1, 9]⟩)
 
 abbrev BNP : Type := EllipticCurve BNF (0 : BNF) (3 : BNF)
 
@@ -325,15 +334,6 @@ def EllipticCurve.toString {F} {a b} [ToString F] : EllipticCurve F a b → Stri
 
 instance {F} {a b} [ToString F] : ToString (EllipticCurve F a b) :=
   ⟨EllipticCurve.toString⟩
-
--- def BNP.mk? (x : Nat) (y : Nat) : Option BNP := do
---   let x' : BNF := FinField.ofNat x
---   let y' : BNF := FinField.ofNat y
---   if (x' = 0 ∧ y' = 0)
---   then some ⟨0, 0⟩
---   else if y' ^ 2 = (x' ^ 3) + 3
---        then some ⟨x', y'⟩
---        else none
 
 def EllipticCurve.isOnCurve {F} [Zero F] [DecidableEq F]
   [HAdd F F F] [HMul F F F] [HPow F Nat F] [ToString F]
@@ -362,19 +362,7 @@ def FinField.neg {p} (x : FinField p) : FinField p :=
 
 instance {p} : Neg (FinField p) := ⟨FinField.neg⟩
 
-/-
-def double(self: T) -> T:
-    """
-    Add a point to itself.
-    """
-    x, y, F = self.x, self.y, self.FIELD
-    if x == 0 and y == 0:
-        return self
-    lam = (F.from_int(3) * x**2 + self.A) / (F.from_int(2) * y)
-    new_x = lam**2 - x - x
-    new_y = lam * (x - new_x) - y
-    return self.__new__(type(self), new_x, new_y)
--/
+-- def double(self: T) -> T:
 def EllipticCurve.double {F} [Zero F] [DecidableEq F]
   [HAdd F F F] [HSub F F F] [HMul F F F] [HDiv F F F]
   [HPow F Nat F] [OfNat F 3] [OfNat F 2]
@@ -389,27 +377,7 @@ def EllipticCurve.double {F} [Zero F] [DecidableEq F]
     let y : F := lam * (p.x - x) - p.y
     ⟨x, y⟩
 
-/-
-def __add__(self: T, other: T) -> T:
-    """
-    Add two points together.
-    """
-    ZERO = self.FIELD.zero()
-    self_x, self_y, other_x, other_y = self.x, self.y, other.x, other.y
-    if self_x == ZERO and self_y == ZERO:
-        return other
-    if other_x == ZERO and other_y == ZERO:
-        return self
-    if self_x == other_x:
-        if self_y == other_y:
-            return self.double()
-        else:
-            return self.point_at_infinity()
-    lam = (other_y - self_y) / (other_x - self_x)
-    x = lam**2 - self_x - other_x
-    y = lam * (self_x - x) - self_y
-    return self.__new__(type(self), x, y)
--/
+-- def __add__(self: T, other: T) -> T:
 def EllipticCurve.add {F} [Zero F] [DecidableEq F]
   [HAdd F F F] [HSub F F F] [HMul F F F] [HDiv F F F]
   [HPow F Nat F] [OfNat F 3] [OfNat F 2]
@@ -441,7 +409,6 @@ instance {F} [Zero F] [DecidableEq F] [HAdd F F F] [HSub F F F]
   HAdd (EllipticCurve F a b) (EllipticCurve F a b) (EllipticCurve F a b) :=
   ⟨EllipticCurve.add⟩
 
-
 def EllipticCurve.mulBy {F} [Zero F] [DecidableEq F]
   [HAdd F F F] [HSub F F F] [HMul F F F] [HDiv F F F]
   [HPow F Nat F] [OfNat F 3] [OfNat F 2]
@@ -467,19 +434,7 @@ def BNP.toB8L (p : BNP) : B8L :=
 def BNP.toBNP12 : BNP → BNP12
   | ⟨x, y⟩ => ⟨⟨[x]⟩, ⟨[y]⟩⟩
 
--- # "Twist" a point in E(FQ2) into a point in E(FQ12)
--- w = FQ12([0, 1] + [0] * 10)
---
 -- def twist(pt: Optimized_Point3D[FQP]) -> Optimized_Point3D[FQ12]:
---     _x, _y, _z = pt
---     # Field isomorphism from Z[p] / x**2 to Z[p] / x**2 - 18*x + 82
---     xcoeffs = [_x.coeffs[0] - _x.coeffs[1] * 9, _x.coeffs[1]]
---     ycoeffs = [_y.coeffs[0] - _y.coeffs[1] * 9, _y.coeffs[1]]
---     zcoeffs = [_z.coeffs[0] - _z.coeffs[1] * 9, _z.coeffs[1]]
---     nx = FQ12([xcoeffs[0]] + [0] * 5 + [xcoeffs[1]] + [0] * 5)
---     ny = FQ12([ycoeffs[0]] + [0] * 5 + [ycoeffs[1]] + [0] * 5)
---     nz = FQ12([zcoeffs[0]] + [0] * 5 + [zcoeffs[1]] + [0] * 5)
---     return (nx * w**2, ny * w**3, nz)
 def twist (p : BNP2) : BNP12 :=
   let xs := List.ekat 2 p.x.val
   let ys := List.ekat 2 p.y.val
@@ -506,45 +461,18 @@ def pseudoBinaryEncoding : List Int :=
   ]
 
 /-
-# Create a function representing the line between P1 and P2,
-# and evaluate it at T. Returns a numerator and a denominator
-# to avoid unneeded divisions
+Create a function representing the line between P1 and P2,
+and evaluate it at T. Returns a numerator and a denominator
+to avoid unneeded divisions
 def linefunc(
     P1: Optimized_Point3D[Optimized_Field],
     P2: Optimized_Point3D[Optimized_Field],
     T: Optimized_Point3D[Optimized_Field],
 ) -> Optimized_Point2D[Optimized_Field]:
     zero = P1[0].zero()
-    x1, y1, z1 = P1
-    x2, y2, z2 = P2
-    xt, yt, zt = T
 -/
 def linefunc : BNP12 →  BNP12 → BNP12 → BNP12
   | ⟨x1, y1⟩, ⟨x2, y2⟩, ⟨xt, yt⟩ =>
-
-/-
-    # points in projective coords: (x / z, y / z)
-    # hence, m = (y2/z2 - y1/z1) / (x2/z2 - x1/z1)
-    # multiply numerator and denominator by z1z2 to get values below
-    m_numerator = y2 * z1 - y1 * z2
-    m_denominator = x2 * z1 - x1 * z2
-    if m_denominator != zero:
-        # m * ((xt/zt) - (x1/z1)) - ((yt/zt) - (y1/z1))
-        return (
-            m_numerator * (xt * z1 - x1 * zt) - m_denominator * (yt * z1 - y1 * zt),
-            m_denominator * zt * z1,
-        )
-    elif m_numerator == zero:
-        # m = 3(x/z)^2 / 2(y/z), multiply num and den by z**2
-        m_numerator = 3 * x1 * x1
-        m_denominator = 2 * y1 * z1
-        return (
-            m_numerator * (xt * z1 - x1 * zt) - m_denominator * (yt * z1 - y1 * zt),
-            m_denominator * zt * z1,
-        )
-    else:
-        return xt * z1 - x1 * zt, z1 * zt
--/
     let mNumerator : BNF12 := y2 - y1
     let mDenominator : BNF12 := x2 - x1
     if mDenominator ≠ 0
@@ -563,7 +491,6 @@ def linefunc : BNP12 →  BNP12 → BNP12 → BNP12
           mDenominator
         ⟩
       else ⟨xt - x1, 1⟩
-
 
 def FinFields.neg {p} (xs : FinFields p) : FinFields p :=
   FinFields.sub [] xs
@@ -601,38 +528,9 @@ def miller_loop(
 ) -> FQ12:
 -/
 def millerLoop (q p : BNP12) (finalExp : Bool := true) : Option BNF12 := do
-
-/-
-    if Q is None or P is None:
-        return FQ12.one()
-    R: Optimized_Point3D[FQ12] = Q
-    f_num, f_den = FQ12.one(), FQ12.one()
--/
-
   let mut r : BNP12 := q
   let mut fNum : BNF12 := 1
   let mut fDen : BNF12 := 1
-
-/-
-    # for i in range(log_ate_loop_count, -1, -1):
-    for v in pseudo_binary_encoding[63::-1]:
-        _n, _d = linefunc(R, R, P)
-        f_num = f_num * f_num * _n
-        f_den = f_den * f_den * _d
-        R = double(R)
-        # if ate_loop_count & (2**i):
-        if v == 1:
-            _n, _d = linefunc(R, Q, P)
-            f_num = f_num * _n
-            f_den = f_den * _d
-            R = add(R, Q)
-        elif v == -1:
-            nQ = neg(Q)
-            _n, _d = linefunc(R, nQ, P)
-            f_num = f_num * _n
-            f_den = f_den * _d
-            R = add(R, nQ)
--/
   for v in (pseudoBinaryEncoding.take 64).reverse do
     let ⟨_n, _d⟩ := linefunc r r p
     fNum := fNum * fNum * _n
@@ -650,30 +548,12 @@ def millerLoop (q p : BNP12) (finalExp : Bool := true) : Option BNF12 := do
       fNum := fNum * _n
       fDen := fDen * _d
       r := r + nq
-
-/-
-    # assert R == multiply(Q, ate_loop_count)
-    Q1 = (Q[0] ** field_modulus, Q[1] ** field_modulus, Q[2] ** field_modulus)
-    # assert is_on_curve(Q1, b12)
-    nQ2 = (Q1[0] ** field_modulus, -Q1[1] ** field_modulus, Q1[2] ** field_modulus)
-    # assert is_on_curve(nQ2, b12)
-    _n1, _d1 = linefunc(R, Q1, P)
-    R = add(R, Q1)
-    _n2, _d2 = linefunc(R, nQ2, P)
-    f = f_num * _n1 * _n2 / (f_den * _d1 * _d2)
-    # R = add(R, nQ2) This line is in many specifications but technically does nothing
-    if final_exponentiate:
-        return f ** ((field_modulus**12 - 1) // curve_order)
-    else:
-        return f
--/
   let q1 : BNP12 := ⟨q.x ^ altBn128Prime, q.y ^ altBn128Prime⟩
   let nq2 : BNP12 := ⟨q1.x ^ altBn128Prime , (-q1.y) ^ altBn128Prime⟩
   let ⟨_n1, _d1⟩ := linefunc r q1 p
   r := r + q1
   let ⟨_n2, _d2⟩ := linefunc r nq2 p
   let f := (fNum * _n1 * _n2) / (fDen * _d1 * _d2)
-
   return (
     if finalExp
     then f ^ ((altBn128Prime ^ 12 - 1) / altBn128CurveOrder)
@@ -687,8 +567,49 @@ def pairing (q : BNP2) (p : BNP) (finalExp : Bool := true) : Option BNF12 := do
     return 1
   millerLoop (twist q) (p.toBNP12) finalExp
 
+namespace secp256k1
 
--- def BLSF12.toB8L (f : BLSF12) : B8L := _
---
--- def BLSP12.toB8L (p : BLSP12) : B8L :=
---   p.x.toB8L.pack 32 ++ p.y.toB8L.pack 32
+def prime : Nat :=
+  115792089237316195423570985008687907853269984665640564039457584007908834671663
+
+def curveOrder : Nat :=
+  115792089237316195423570985008687907852837564279074904382605163141518161494337
+
+abbrev Coord : Type := FinField prime
+
+abbrev Point : Type := EllipticCurve Coord 0 7
+
+def generator : Point :=
+  ⟨
+    .ofNat 0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798,
+    .ofNat 0x483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8
+  ⟩
+
+def sqrtExp : Nat :=
+  (prime + 1) / 4
+
+def sqrt (x : Coord) : Option Coord :=
+  let y := x ^ sqrtExp
+  if y * y = x then some y else none
+
+def recover (h : B256) (v : Bool) (r : B256) (s : B256) : Option Adr := do
+  let x : Coord := .ofNat r.toNat
+  let ySquared : Coord := x ^ 3 + 7
+  let yFst ← sqrt ySquared
+  let ySnd := FinField.neg yFst
+  let ⟨yOdd, yEven⟩ : Coord × Coord :=
+    if yFst.val % 2 = 0 then ⟨ySnd, yFst⟩ else ⟨yFst, ySnd⟩
+  let y := if v then yOdd else yEven
+  let R : Point := ⟨x, y⟩
+  let rInv : Nat :=
+    @FinField.val curveOrder <| FinField.inv <| .ofNat r.toNat
+  let sR : Point := EllipticCurve.mulBy R <|
+    @FinField.val curveOrder <| .ofNat s.toNat
+  let zG : Point := EllipticCurve.mulBy generator <|
+    @FinField.val curveOrder <| .ofNat h.toNat
+  let Q : Point :=
+    EllipticCurve.mulBy (sR - zG) rInv
+  let hash := B8L.keccak <| Q.x.val.toB256.toB8L ++ Q.y.val.toB256.toB8L
+  B8L.toAdr? <| List.drop 12 <| hash.toB8L
+
+end secp256k1
