@@ -2240,27 +2240,33 @@ def executeEcmul (evm : Evm) : Execution := do
 
   .ok {evm with output := BNP.toB8L (p * n)}
 
-structure Blake2 : Type where
-  w: Nat
-  mask_bits: Nat
-  word_format: String
-  R1: Nat
-  R2: Nat
-  R3: Nat
-  R4: Nat
+-- structure Blake2 : Type where
+--   w: B64
+--   mask_bits: B64
+--   -- word_format: String
+--   R1: B64
+--   R2: B64
+--   R3: B64
+--   R4: B64
+--
+-- def blake2b : Blake2 :=
+--   {
+--     w := 64,
+--     mask_bits := 0xFFFFFFFFFFFFFFFF
+--     -- word_format := "Q",
+--     R1 := 32,
+--     R2 := 24,
+--     R3 := 16,
+--     R4 := 63
+--   }
 
-def blake2b : Blake2 :=
-  {
-    w := 64,
-    mask_bits := 0xFFFFFFFFFFFFFFFF
-    word_format := "Q",
-    R1 := 32,
-    R2 := 24,
-    R3 := 16,
-    R4 := 63
-  }
+def b2R1 : B64 := 32
+def b2R2 : B64 := 24
+def b2R3 : B64 := 16
+def b2R4 : B64 := 63
+def b2MaskBits : B64 := 0xFFFFFFFFFFFFFFFF
 
-def blake2IV : List Nat :=
+def blake2IV : List B64 :=
   [
     0x6A09E667F3BCC908,
     0xBB67AE8584CAA73B,
@@ -2299,6 +2305,14 @@ def blake2Sigma : Array (Array Nat) :=
   ]
 
 /- def spit_le_to_uint -/
+def spit_le_to_B64 (data: B8L) : Nat → Nat → List B64
+  | _, 0 => []
+  | start, num_words + 1 =>
+    let wordBytes := data.sliceD start 8 (0x00 : B8)
+    let word := B8L.toB64P wordBytes.reverse
+    word :: spit_le_to_B64 data (start + 8) num_words
+
+/- def spit_le_to_uint -/
 def spit_le_to_uint (data: B8L) : Nat → Nat → List Nat
   | _, 0 => []
   | start, num_words + 1 =>
@@ -2313,70 +2327,87 @@ def Nat.toBool? : Nat → Option Bool
 
 /- def get_blake2_parameters -/
 def get_blake2_parameters (data : B8L) :
-  Nat × List Nat × List Nat × Nat × Nat × Nat :=
+  Nat × List B64 × List B64 × B64 × B64 × Nat :=
   let rounds := B8L.sliceToNat data 0 4
-  let h := spit_le_to_uint data 4 8
-  let m := spit_le_to_uint data 68 16
-  let t := spit_le_to_uint data 196 2
+  let h := spit_le_to_B64 data 4 8
+  let m := spit_le_to_B64 data 68 16
+  let t := spit_le_to_B64 data 196 2
   let f := B8L.toNat <| data.drop 212
   ⟨rounds, h, m, t.getD 0 0, t.getD 1 0, f⟩
 
-def Blake2.maxWord (b2 : Blake2) : Nat := 2 ^ b2.w
-def Blake2.wR1 (b2 : Blake2) : Nat := b2.w - b2.R1
-def Blake2.wR2 (b2 : Blake2) : Nat := b2.w - b2.R2
-def Blake2.wR3 (b2 : Blake2) : Nat := b2.w - b2.R3
-def Blake2.wR4 (b2 : Blake2) : Nat := b2.w - b2.R4
+-- def Blake2.maxWord (b2 : Blake2) : B64 := 1 <<< b2.w
+-- def Blake2.wR1 (b2 : Blake2)     : B64 := b2.w - b2.R1
+-- def Blake2.wR2 (b2 : Blake2)     : B64 := b2.w - b2.R2
+-- def Blake2.wR3 (b2 : Blake2)     : B64 := b2.w - b2.R3
+-- def Blake2.wR4 (b2 : Blake2)     : B64 := b2.w - b2.R4
+
+
+def b2wR1 : B64 := 32
+def b2wR2 : B64 := 40
+def b2wR3 : B64 := 48
+def b2wR4 : B64 := 1
 
 /- def G -/
-def Blake2.g (b2 : Blake2) (v : Array Nat) (a b c d x y : Nat) : Array Nat :=
-  let v := v.setD a <| ((v.get! a) + (v.get! b) + x) % b2.maxWord
-  let shiftArg : Nat := (v.get! d ^^^ v.get! a)
-  let v := v.setD d <| ((shiftArg >>> b2.R1) ^^^ (shiftArg <<< b2.wR1)) % b2.maxWord
-  let v := v.setD c <| (v.get! c + v.get! d) % b2.maxWord
-  let shiftArg : Nat := (v.get! b ^^^ v.get! c)
-  let v := v.setD b <| ((shiftArg >>> b2.R2) ^^^ (shiftArg <<< b2.wR2)) % b2.maxWord
-  let v := v.setD a <| (v.get! a + v.get! b + y) % b2.maxWord
-  let shiftArg : Nat := (v.get! d ^^^ v.get! a)
-  let v := v.setD d <| ((shiftArg >>> b2.R3) ^^^ (shiftArg <<< b2.wR3)) % b2.maxWord
-  let v := v.setD c <| (v.get! c + v.get! d) % b2.maxWord
-  let shiftArg : Nat := (v.get! b ^^^ v.get! c)
-  let v := v.setD b <| ((shiftArg >>> b2.R4) ^^^ (shiftArg <<< b2.wR4)) % b2.maxWord
+def Blake2.g (v : Array B64) (a b c d : Nat) (x y : B64) : Array B64 :=
+  let na : B64 := ((v.get! a) + (v.get! b) + x)
+  let v := v.setD a na
+  let shiftArg : B64 := (v.get! d ^^^ na)
+  let nd : B64 := ((shiftArg >>> b2R1) ^^^ (shiftArg <<< b2wR1)) -- % b2.maxWord
+  let v := v.setD d nd
+  let nc := (v.get! c + nd) -- % b2.maxWord
+  let v := v.setD c nc
+  let shiftArg : B64 := (v.get! b ^^^ v.get! c)
+  let nb := ((shiftArg >>> b2R2) ^^^ (shiftArg <<< b2wR2)) -- % b2maxWord
+  let v := v.setD b nb
+  let na := (v.get! a + nb + y) -- % b2maxWord
+  let v := v.setD a na
+  let shiftArg : B64 := (v.get! d ^^^ v.get! a)
+  let nd := ((shiftArg >>> b2R3) ^^^ (shiftArg <<< b2wR3)) -- % b2maxWord
+  let v := v.setD d nd
+  let nc := (v.get! c + nd) -- % b2maxWord
+  let v := v.setD c nc
+  let shiftArg : B64 := (v.get! b ^^^ nc)
+  let v := v.setD b <| ((shiftArg >>> b2R4) ^^^ (shiftArg <<< b2wR4)) -- % b2.maxWord
   v
 
 def traceId {ξ : Type} (msg : String) (x : ξ) :=
   dbg_trace msg ; x
 
-def iterRange {ξ : Type} (vb : Bool) (k : Nat) (f : Nat → ξ → ξ) (x : ξ) : ξ :=
+def iterRangeN? {ξ : Type} (lim k : Nat) (f : Nat → ξ → ξ) (x : ξ) : Option ξ :=
+  let rec aux : Nat → Nat → Nat → ξ → Option ξ
+    | 0, _, _, _ => none
+    | _, _, 0, x => some x
+    | l + 1, m, n + 1, x =>
+      let i := m - (n + 1)
+      aux l m n <| f i x
+  aux lim k k x
+
+def iterRange {ξ : Type} (k : Nat) (f : Nat → ξ → ξ) (x : ξ) : ξ :=
   let rec aux : Nat → Nat → ξ → ξ
     | _, 0, x => x
     | m, n + 1, x =>
       let i := m - (n + 1)
-      --let x' := f i x
-      let x' :=
-        if vb then
-          traceId s!"iteration : {i} / {m}" (f i x)
-        else
-          f i x
-      aux m n x'
+      aux m n <| f i x
   aux k k x
 
+
+
 -- compress
-def Blake2.bCompress (b2 : Blake2) (numRounds : Nat)
-  (h m : List Nat) (t0 t1 : Nat) (f : Bool) : B8L :=
-  let v14 : Nat := blake2IV.getD 6 0
-  let v : List Nat :=
+def bCompress (numRounds : Nat)
+  (h m : List B64) (t0 t1 : B64) (f : Bool) : Option B8L := do
+  let v14 : B64 := blake2IV.getD 6 0
+  let v : List B64 :=
     h.take 8 ++
     (blake2IV).take 4 ++ [
-      Nat.xor t0 (blake2IV.getD 4 0),
-      Nat.xor t1 (blake2IV.getD 5 0),
-      if f then Nat.xor v14 b2.mask_bits else v14,
+      .xor t0 (blake2IV.getD 4 0),
+      .xor t1 (blake2IV.getD 5 0),
+      if f then .xor v14 b2MaskBits else v14,
       (blake2IV.getD 7 0),
       0
     ]
 
-  let innerFun (s : Array Nat) (i : Nat) (v : Array Nat) : Array Nat :=
-
-    b2.g v
+  let innerFun (s : Array Nat) (i : Nat) (v : Array B64) : Array B64 :=
+    Blake2.g v
       ((blake2MixTable.get! i).get! 0)
       ((blake2MixTable.get! i).get! 1)
       ((blake2MixTable.get! i).get! 2)
@@ -2384,12 +2415,23 @@ def Blake2.bCompress (b2 : Blake2) (numRounds : Nat)
       (m.get! (s.get! (i * 2)))
       (m.get! (s.get! ((i * 2) + 1)))
 
-  let outerFun (r : Nat) (v : Array Nat) : Array Nat :=
+  let outerFun (r : Nat) (v : Array B64) : Array B64 :=
+
+    -- let rec remove0s : String → String
+    --   | ⟨['0']⟩ => ⟨['0']⟩
+    --   | ⟨'0' :: s⟩ => remove0s ⟨s⟩
+    --   | s => s
+    -- let dbgLines :=
+    --   mkProlog
+    --     s!"{r}"
+    --     ( v.toList.map <| fun x => ["0x" ++ remove0s x.toHex] )
+    -- dbg_trace (String.joinln (dbgLines.getD []))
 
     let s : Array Nat := blake2Sigma.get! (r % blake2Sigma.size)
-    iterRange false 8 (innerFun s) v
+    iterRange 8 (innerFun s) v
 
-  let v := Array.toList (iterRange true numRounds outerFun ⟨v⟩)
+  let arr := iterRange numRounds outerFun ⟨v⟩
+  let v := arr.toList
   let resultMsgWords :=
     (List.range 8).map <| fun i => h.get! i ^^^ v.get! i ^^^ v.get! (i + 8)
   List.flatten <| resultMsgWords.map (fun n => n.toB8L.reverse.takeD 8 (0x00 : B8))
@@ -2397,15 +2439,13 @@ def Blake2.bCompress (b2 : Blake2) (numRounds : Nat)
 -- blake2f
 def executeBlake2F (evm : Evm) : Execution := do
   let data := evm.msg.data
-
   .assert (data.length = 213) ⟨evm, "InvalidParameter"⟩
-
   let ⟨rounds, h, m, t0, t1, f⟩ := get_blake2_parameters data
   let evm ← chargeGas (gasBlake2PerRound * rounds) evm
   let f ← f.toBool?.toExcept ⟨evm, "InvalidParameter"⟩
-  let output := blake2b.bCompress rounds h m t0 t1 f
-
-  .ok {evm with output := output}
+  -- let output ← (bCompress rounds h m t0 t1 f).toExcept ⟨evm, "bCompress failed"⟩
+  -- .ok {evm with output := output}
+  .error ⟨evm, "fail bCompress for debugging"⟩
 
 def executePointEval (evm : Evm) : Execution := do
   let data := evm.msg.data
