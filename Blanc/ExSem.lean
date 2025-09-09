@@ -2188,7 +2188,6 @@ def modexpGascost
   let cost := (mulComplexity * iterationCount) / 3
   max 200 cost
 
-
 def executeModexp (evm : Evm) : Execution := do
   let data := evm.msg.data
   let baseLength : Nat := B8L.sliceToNat data 0 32
@@ -2382,6 +2381,15 @@ def iterRangeN? {ξ : Type} (lim k : Nat) (f : Nat → ξ → ξ) (x : ξ) : Opt
       aux l m n <| f i x
   aux lim k k x
 
+def iterRangeTrace (max : Nat) {ξ : Type} (k : Nat) (f : Nat → ξ → ξ) (x : ξ) : ξ :=
+  let rec aux : Nat → Nat → ξ → ξ
+    | _, 0, x => x
+    | m, n + 1, x =>
+      let i := m - (n + 1)
+      let x' := traceId s!"{i} / {max}" (f i x)
+      aux m n x' --<| f i x
+  aux k k x
+
 def iterRange {ξ : Type} (k : Nat) (f : Nat → ξ → ξ) (x : ξ) : ξ :=
   let rec aux : Nat → Nat → ξ → ξ
     | _, 0, x => x
@@ -2389,7 +2397,6 @@ def iterRange {ξ : Type} (k : Nat) (f : Nat → ξ → ξ) (x : ξ) : ξ :=
       let i := m - (n + 1)
       aux m n <| f i x
   aux k k x
-
 
 
 -- compress
@@ -2416,21 +2423,10 @@ def bCompress (numRounds : Nat)
       (m.get! (s.get! ((i * 2) + 1)))
 
   let outerFun (r : Nat) (v : Array B64) : Array B64 :=
-
-    -- let rec remove0s : String → String
-    --   | ⟨['0']⟩ => ⟨['0']⟩
-    --   | ⟨'0' :: s⟩ => remove0s ⟨s⟩
-    --   | s => s
-    -- let dbgLines :=
-    --   mkProlog
-    --     s!"{r}"
-    --     ( v.toList.map <| fun x => ["0x" ++ remove0s x.toHex] )
-    -- dbg_trace (String.joinln (dbgLines.getD []))
-
     let s : Array Nat := blake2Sigma.get! (r % blake2Sigma.size)
     iterRange 8 (innerFun s) v
 
-  let arr := iterRange numRounds outerFun ⟨v⟩
+  let arr := iterRangeTrace numRounds numRounds outerFun ⟨v⟩
   let v := arr.toList
   let resultMsgWords :=
     (List.range 8).map <| fun i => h.get! i ^^^ v.get! i ^^^ v.get! (i + 8)
@@ -2443,9 +2439,9 @@ def executeBlake2F (evm : Evm) : Execution := do
   let ⟨rounds, h, m, t0, t1, f⟩ := get_blake2_parameters data
   let evm ← chargeGas (gasBlake2PerRound * rounds) evm
   let f ← f.toBool?.toExcept ⟨evm, "InvalidParameter"⟩
-  -- let output ← (bCompress rounds h m t0 t1 f).toExcept ⟨evm, "bCompress failed"⟩
-  -- .ok {evm with output := output}
-  .error ⟨evm, "fail bCompress for debugging"⟩
+  let output ← (bCompress rounds h m t0 t1 f).toExcept ⟨evm, "bCompress failed"⟩
+  .ok {evm with output := output}
+  -- .error ⟨evm, "fail bCompress for debugging"⟩
 
 def executePointEval (evm : Evm) : Execution := do
   let data := evm.msg.data
@@ -3474,9 +3470,11 @@ def BLT.toLog : BLT → Option Log
     }
   | _ => none
 
-def List.putIndex {ξ : Type u} : Nat → List ξ → List (Nat × ξ)
-  | _, [] => []
-  | k, x :: xs => (k, x) :: List.putIndex (k + 1) xs
+def List.putIndex {ξ : Type u} (xs : List ξ) : List (Nat × ξ) :=
+  let rec aux : Nat → List ξ → List (Nat × ξ)
+    | _, [] => []
+    | k, x :: xs => (k, x) :: aux (k + 1) xs
+  aux 0 xs
 
 inductive ExpectedWorldState : Type
   | wor : State → ExpectedWorldState
@@ -3856,10 +3854,6 @@ def Tx.signingHash (tx : Tx) : Option B256 :=
             accessList.toBLT,
             .list <| auths.map Auth.toBLT
           ]
-
--- def secp256k1nRecoverToAdr?
---   (r s : B256) (v : Nat) (msg_hash : B256) : Option Adr :=
---   ecrecover msg_hash v.toBool r s
 
 -- recover_sender
 def recoverSender (chain_id: B64) (tx: Tx) : Except String Adr := do
@@ -4465,7 +4459,7 @@ def processWithdrawals
   (benv : Benv) (bout : BlockOutput) (wds : List Withdrawal) : State × BlockOutput :=
   let trie : Lean.RBMap B8L Withdrawal compare :=
     List.foldl (λ acc ⟨i, wd⟩ =>
-      acc.insert (BLT.encode <| .b8s i.toB8L) wd) bout.withdrawalsTrie (wds.putIndex 0)
+      acc.insert (BLT.encode <| .b8s i.toB8L) wd) bout.withdrawalsTrie wds.putIndex
   let state :=
     List.foldl (λ acc wd => acc.addBal wd.recipient (wd.amount * (10 ^ 9).toB256)) benv.state wds
   ⟨state, {bout with withdrawalsTrie := trie}⟩
@@ -4815,7 +4809,7 @@ def applyBody
 
   cprint vb "\n================================ TEST TXS ================================\n"
 
-  for ⟨i, tx⟩ in (← txs.mapM decodeTx).putIndex 0 do
+  for ⟨i, tx⟩ in (← txs.mapM decodeTx).putIndex do
     let ⟨state, bout'⟩ ← processTransaction vb benv bout tx i
     benv := {benv with state := state}
     bout := bout'
@@ -4881,11 +4875,7 @@ def state_transition (vb : Bool) (chain : BlockChain) (block : Block) :
   }
 
   let ⟨state, bout⟩ ← applyBody vb benv block.txs block.wds
-
-  -- dbg_trace "computing state root..."
   let blockStateRoot : B256 := state.root
-
-  -- dbg_trace "computing tx root..."
   let transactionsRoot : B256 ← do
     let transactionsAux (arg : B8L × Tx) : (B8L × B8L) :=
       let txPrefix : B8L :=
@@ -4898,52 +4888,35 @@ def state_transition (vb : Bool) (chain : BlockChain) (block : Block) :
       ⟨arg.fst.toB4s, txPrefix ++ arg.snd.toBLT.encode⟩
     let temp := List.map transactionsAux bout.transactionsTrie.toList
     .ok <| trie <| Lean.RBMap.fromList temp _
-
-  -- dbg_trace "computing receipt root..."
   let receiptRoot : B256 :=
     let receiptAux : (B8L × Fin 5 × Receipt) → (B8L × B8L)
       | ⟨key, type, receipt⟩ =>
         ⟨key.toB4s, type.val.toB8L ++ receipt.toBLT.encode⟩
                 let temp := (List.map receiptAux bout.receiptsTrie.toList)
     trie <| Lean.RBMap.fromList temp _
-
-  -- dbg_trace "computing block logs bloom..."
   let block_logs_bloom := logsBloom bout.blockLogs
-
-  -- dbg_trace "computing withdrawals root..."
   let withdrawalsRoot : B256 :=
     let withdrawalsAux (arg : B8L × Withdrawal) : B8L × B8L :=
       ⟨arg.fst.toB4s, arg.snd.toBLT.encode⟩
     let temp := (List.map withdrawalsAux bout.withdrawalsTrie.toList)
     trie <| Lean.RBMap.fromList temp _
-
-  -- dbg_trace "computing requests hash..."
   let requestsHash := computeRequestsHash bout.requests
-
   if bout.blockGasUsed ≠ block.header.gasUsed then
     .error s!"InvalidBlock : computed block gas used = {bout.blockGasUsed} ≠ expected block gas used = {block.header.gasUsed}"
-
   if transactionsRoot ≠ block.header.txsRoot then
     .error s!"InvalidBlock : computed transactions root = {transactionsRoot} ≠ expected transactions root = {block.header.txsRoot}"
-
   if blockStateRoot ≠ block.header.stateRoot then
     .error "InvalidBlock : state root mismatch"
-
   if receiptRoot ≠ block.header.receiptRoot then
     .error "InvalidBlock : receipt root mismatch"
-
   if block_logs_bloom ≠ block.header.bloom then
     .error "InvalidBlock : bloom mismatch"
-
   if withdrawalsRoot ≠ block.header.withdrawalsRoot then
     .error "InvalidBlock : withdrawals root mismatch"
-
   if bout.blobGasUsed ≠ block.header.blobGasUsed then
     .error "InvalidBlock : blob gas used mismatch"
-
   if some requestsHash ≠ block.header.requestsHash then
     .error s!"InvalidBlock : expected requests hash = {block.header.requestsHash}, computed requests hash = {requestsHash}"
-
   .ok {
     state := state
     blocks := (block :: chain.blocks.reverse.take 254).reverse

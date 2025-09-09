@@ -355,13 +355,15 @@ def runBlockchainStTest (vb : Bool) (idx? : Option Nat)
       (postStateRoot = chain.state.root)
       s!"error : end state root does not match\n  expected : {postStateRoot}\n  computed : {chain.state.root}"
 
-def runPyTestFile (vb : Bool) (idx : Option Nat) -- (nw : Option String)
-  (incls excls : List String) (path : String) : IO Unit := do
+def runPyTestFile (vb : Bool) (testIdx : Option Nat) -- (nw : Option String)
+  (incls excls : List String) (idxPath : Nat × String) : IO Unit := do
+  let fileIdx := idxPath.fst
+  let path := idxPath.snd
   .println "\n================================================================\n"
-  .println s!"TEST FILE : {path}\n"
+  .println s!"TEST FILE #{fileIdx} : {path}\n"
   let rb ← readJsonFile path >>= Lean.Json.toIoRBNode
-  let js := rb.toArray.toList.putIndex 0
-  let _ ← js.mapM <| runBlockchainStTest vb idx incls excls
+  let js := rb.toArray.toList.putIndex
+  let _ ← js.mapM <| runBlockchainStTest vb testIdx incls excls
   .ok ()
 
 def getFileNames (fins fexs : List String) :
@@ -394,36 +396,19 @@ def getTestNetwork : List String → Option String
     else getTestNetwork <| s1 :: ss
   | _ => none
 
+def getSkip : List String → Option Nat
+  | s0 :: s1 :: ss =>
+    if s0 = "--skip"
+    then String.toNat? s1
+    else getSkip <| s1 :: ss
+  | _ => none
+
 def getTestIndex : List String → Option Nat
   | s0 :: s1 :: ss =>
     if s0 = "--index"
     then String.toNat? s1
     else getTestIndex <| s1 :: ss
   | _ => none
-
-#check String.replicate 4 ' '
-
-def String.padN (n : Nat) (s : String) : String :=
-  String.replicate (n * 2) ' ' ++ s
-
-def getRecFilePaths : Nat → System.FilePath → IO (List System.FilePath)
-  | 0, _ => return []
-  | n + 1, path => do
-    let isDir ← System.FilePath.isDir path
-    if isDir then
-      .print s!"is dir : {path}\n"
-      let paths ← System.FilePath.walkDir path
-      let fss ← mapM (getRecFilePaths n) paths.toList
-      let fssString :=
-        String.joinln (List.toStrings (fun fs => List.toStrings (fun f => [f.toString]) fs) fss)
-      .print s!"before flattening :\n{fssString}\n\n"
-      let fs := (List.flatten fss)
-      .print s!"returning for dir :\n{String.joinln (List.toStrings (fun x => [x.toString]) fs)}\n\n"
-      return fs
-    else
-      .print s!"not dir : {path}\n"
-      .print s!"returning for non-dir : [{path.toString}]\n\n"
-      return [path]
 
 def List.removeDups {α : Type} [BEq α] : List α → List α
   | [] => []
@@ -443,30 +428,19 @@ def getFiles (path : System.FilePath) : IO (List System.FilePath) := do
 def main : List String → IO Unit
   | path :: opts => do
     let vb : Bool := List.contains opts "--verbose"
-    let idx : Option Nat := getTestIndex opts
+    let testIdx : Option Nat := getTestIndex opts
+    let skip : Option Nat := getSkip opts
     let ⟨incls, excls⟩ := getTestNames [] [] opts
-
-    -- let paths ← System.FilePath.walkDir path
-    -- let files ← filterM (fun path => path.isDir <&> .not) paths.toList
     let files ← getFiles path
 
-    -- let paths ← getRecFilePaths 12 (System.FilePath.mk path)
-    -- if !(← System.FilePath.isDir path)
-    -- then runPyTestFile vb idx incls excls path
-    -- else do
-    --   let fs ← System.FilePath.walkDir path
-    --   let _← mapM (runPyTestFile vb idx incls excls) (fs.toList.map System.FilePath.toString)
-    --   pure ()
-
-    -- let paths' := paths.removeDups
-    -- .print s!"files count : {paths'.length}\n"
-    -- .print s!"files count after removing dups : {paths'.removeDups.length}\n"
-
+    let files :=
+      match skip with
+      | none => files
+      | some n => files.drop n
     let _ ←
       mapM
-        (runPyTestFile vb idx incls excls)
-        (files.map System.FilePath.toString)
-
+        (runPyTestFile vb testIdx incls excls)
+        (files.map System.FilePath.toString).putIndex
     pure ()
   | _ => IO.throw "error : invalid arguments"
 

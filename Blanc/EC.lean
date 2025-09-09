@@ -607,8 +607,10 @@ def recover (h : B256) (v : Bool) (r : B256) (s : B256) : Option Adr := do
     @FinField.val curveOrder <| .ofNat s.toNat
   let zG : Point := EllipticCurve.mulBy generator <|
     @FinField.val curveOrder <| .ofNat h.toNat
+  let O : Point := sR - zG
+  if O = ⟨0, 0⟩ then none
   let Q : Point :=
-    EllipticCurve.mulBy (sR - zG) rInv
+    EllipticCurve.mulBy O rInv
   let hash := B8L.keccak <| Q.x.val.toB256.toB8L ++ Q.y.val.toB256.toB8L
   B8L.toAdr? <| List.drop 12 <| hash.toB8L
 
