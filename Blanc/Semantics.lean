@@ -477,14 +477,10 @@ def Xinst.toByte : Xinst → Byte
 def pushToByte (bs : Bytes) : Byte := Ox x5 xF + Nat.toByte bs.length
 def pushToBytes (bs : Bytes) : Bytes := pushToByte bs :: bs
 
-def Rinst.At (e : Env) (pc : Nat) (o : Rinst) : Prop :=
-  List.get? e.code pc = some (Rinst.toByte o)
-def Jinst.At (e : Env) (pc : Nat) (o : Jinst) : Prop :=
-  List.get? e.code pc = some (Jinst.toByte o)
-def Xinst.At (e : Env) (pc : Nat) (o : Xinst) : Prop :=
-  List.get? e.code pc = some (Xinst.toByte o)
-def Linst.At (e : Env) (pc : Nat) (o : Linst) : Prop :=
-  List.get? e.code pc = some (Linst.toByte o)
+def Rinst.At (e : Env) (pc : Nat) (o : Rinst) : Prop := e.code[pc]? = some (Rinst.toByte o)
+def Jinst.At (e : Env) (pc : Nat) (o : Jinst) : Prop := e.code[pc]? = some (Jinst.toByte o)
+def Xinst.At (e : Env) (pc : Nat) (o : Xinst) : Prop := e.code[pc]? = some (Xinst.toByte o)
+def Linst.At (e : Env) (pc : Nat) (o : Linst) : Prop := e.code[pc]? = some (Linst.toByte o)
 def PushAt (e : Env) (pc : Nat) (bs : Bytes) : Prop :=
   List.Slice e.code pc (pushToBytes bs) ∧ bs.length ≤ 32
 
@@ -923,7 +919,7 @@ inductive Func.Run : List Func → Env → State → Func → Result → Prop
       Func.Run fs e s (next i f) r
   | call :
     ∀ {fs e s k f r},
-      List.get? fs k = some f →
+      fs[k]? = some f →
       Func.Run fs e s f r →
       Func.Run fs e s (call k) r
 

@@ -8,7 +8,10 @@ def Lean.Json.toIoList : Lean.Json → IO (List Json)
   | .arr a => return a.toList
   | _ => IO.throw "not an array"
 
-def Lean.Json.toIoRBNode : Lean.Json → IO (RBNode String (λ _ => Json))
+def Lean.Json.toIoRBNode :
+  Lean.Json →
+    -- IO (RBNode String (λ _ => Json))
+    IO (Std.TreeMap.Raw String Json compare)
   | .obj r => return r
   | _ => IO.throw "not an object"
 
@@ -37,7 +40,7 @@ def Lean.Json.toIoAdr (j : Json) : IO Adr := do
   (Hex.toAdr? x).toIO ""
 
 def Lean.Json.toIoAdrs (j : Json) : IO (List Adr) :=
-  toIoList j >>= mapM toIoAdr
+  toIoList j >>= List.mapM toIoAdr
 
 def Lean.Json.toB64? (j : Json) : Option B64:= do
   let x ← toString? j >>= .remove0x
@@ -67,33 +70,33 @@ def Lean.Json.toIoB256P (j : Json) : IO B256 := do
 
 def Lean.Json.toIoAccessItem (j : Json) : IO (Adr × List B256) := do
   let r ← toIoRBNode j
-  let a ← (r.find compare "address").toIO "" >>= toIoAdr
-  let ks ← (r.find compare "storageKeys").toIO "" >>= toIoList >>= mapM toIoB256P
+  let a ← (r.get? "address").toIO "" >>= toIoAdr
+  let ks ← (r.get? "storageKeys").toIO "" >>= toIoList >>= List.mapM toIoB256P
   return ⟨a, ks⟩
 
 def Lean.Json.toIoAccessList (j : Json) : IO AccessList := do
-  toIoList j >>= mapM toIoAccessItem
+  toIoList j >>= List.mapM toIoAccessItem
 
 def Lean.Json.toAcct : Lean.Json → IO Acct
   | .obj r => do
-    let aux (xy :(_ : String) × Lean.Json) : IO (B256 × B256) := do
+    let aux (xy : String × Lean.Json) : IO (B256 × B256) := do
       let x ← .remove0x xy.fst
       let bs ← (Hex.toB8L x).toIO ""
       let bs' ← xy.snd.toIoB8L
       return ⟨bs.toB256P, bs'.toB256P⟩
-    let bal_json ← (r.find compare "balance").toIO ""
-    let nonce_json ← (r.find compare "nonce").toIO ""
-    let code_json ← (r.find compare "code").toIO ""
-    let stor_json ← (r.find compare "storage").toIO "" >>= Lean.Json.toIoRBNode
+    let bal_json ← (r.get? "balance").toIO ""
+    let nonce_json ← (r.get? "nonce").toIO ""
+    let code_json ← (r.get? "code").toIO ""
+    let stor_json ← (r.get? "storage").toIO "" >>= Lean.Json.toIoRBNode
     let bal ← Lean.Json.toIoB256P bal_json
     let nonce ← Lean.Json.toIoB64P nonce_json
     let code ← Lean.Json.toIoB8L code_json
-    let stor ← mapM aux stor_json.toArray.toList
+    let stor ← List.mapM aux stor_json.toArray.toList
     return ⟨nonce, bal, Lean.RBMap.fromList stor _, code.toByteArray⟩
   | _ => .throw "cannot parse account (not .obj)"
 
 def Lean.Json.toWorld (j : Lean.Json) : IO State := do
-  let aux : State → ((_ : String) × Lean.Json) → IO State :=
+  let aux : State → (String × Lean.Json) → IO State :=
     fun | w, ⟨s, j⟩ => do
       let adr ← (Hex.toAdr? <| remove0x s).toIO ""
       let acct ← j.toAcct
@@ -102,11 +105,11 @@ def Lean.Json.toWorld (j : Lean.Json) : IO State := do
   List.foldlM aux .empty ob.toArray.toList
 
 def Lean.Json.find? : String → Lean.Json → Option Lean.Json
-  | k, .obj r => r.find compare k
+  | k, .obj r => r.get? k
   | _, _ => .none
 
 def Lean.Json.find : String → Lean.Json → IO Lean.Json
-  | k, .obj r => (r.find compare k).toIO s!"ERROR : FAILED JSON RETRIEVAL WITH KEY : {k}"
+  | k, .obj r => (r.get? k).toIO s!"ERROR : FAILED JSON RETRIEVAL WITH KEY : {k}"
   | k, _ => .throw s!"ERROR : INPUT JSON IS NOT OBJECT, FAILED RETRIEVAL WITH KEY : {k}"
 
 def Lean.Json.get? : Nat → Lean.Json → IO Lean.Json
@@ -115,7 +118,7 @@ def Lean.Json.get? : Nat → Lean.Json → IO Lean.Json
 
 def getXWS (j : Lean.Json) : IO ExpectedWorldState := do
   let r ← j.toIoRBNode
-  match r.find compare "postState" with
+  match r.get? "postState" with
   | some wj => do --hj.toB256?
     let w ← Lean.Json.toWorld wj
     pure (.wor w)
@@ -126,14 +129,14 @@ def getXWS (j : Lean.Json) : IO ExpectedWorldState := do
 
 def getPostRoot (j : Lean.Json) : IO B256 := do
   let r ← j.toIoRBNode
-  match r.find compare "postStateHash" with
+  match r.get? "postStateHash" with
   | some hj => hj.toIoB256
   | none => do
     let wj ← j.find "postState"
     let w ← Lean.Json.toWorld wj
     pure w.root
 
-def mkTest : ((_ : String) × Lean.Json) → IO Test
+def mkTest : (String × Lean.Json) → IO Test
   | ⟨name, j⟩ => do
     let info ← j.find "_info"
     let blocks ← j.find "blocks"
@@ -149,7 +152,7 @@ def mkTest : ((_ : String) × Lean.Json) → IO Test
 def Lean.Json.toTests (j : Lean.Json) : IO (List Test) := do
   let r ← j.toIoRBNode
   let l := r.toArray.toList
-  mapM mkTest l
+  List.mapM mkTest l
 
 def getTxExMap (j : Lean.Json) : IO (Option String × B8L) := do
   let rlp ← j.find "rlp" >>= Lean.Json.toIoB8L
@@ -161,9 +164,9 @@ def getTxExMap (j : Lean.Json) : IO (Option String × B8L) := do
 
 def getBlockHeader : Lean.Json → Option Lean.Json
   | .obj r =>
-    r.find compare "blockHeader" <|>
-    ( do let (.obj r') ← r.find compare "rlp_decoded" | .none
-         r'.find compare "blockHeader" )
+    r.get? "blockHeader" <|>
+    ( do let (.obj r') ← r.get? "rlp_decoded" | .none
+         r'.get? "blockHeader" )
   | _ => .none
 
 def Lean.Json.toHeader (json : Lean.Json) : IO Header := do
@@ -300,16 +303,17 @@ def processBlockJsons (vb : Bool) (chain : BlockChain) :
   | [] => .ok <| some chain
 
 def runBlockchainStTest (vb : Bool) (idx? : Option Nat)
-  (incls excls : List String) : (Nat × (_ : String) × Lean.Json) → IO Unit
+  (incls excls : List String) : (Nat × String × Lean.Json) → IO Unit
   | ⟨idx, name, json⟩ => do
     match idx? with
     | none => .ok ()
     | some specIdx =>
       if specIdx ≠ idx then
         return ()
-    if ¬ (incls.isEmpty ∨ name ∈ incls)
-      then return ()
-    if name ∈ excls then return ()
+    if ¬ (incls.isEmpty ∨ name ∈ incls) then
+      return ()
+    if name ∈ excls then
+      return ()
     let nw ← json.find "network" >>= Lean.Json.toIoString
     if "Prague" ≠ nw then
       return ()
@@ -322,8 +326,10 @@ def runBlockchainStTest (vb : Bool) (idx? : Option Nat)
     let gbh_hash ← gbh_json.find "hash" >>= Lean.Json.toIoB256
     let gbh_hash' := (BLT.encode (Header.toBLT gbh)).keccak
 
+    .guard
+      (gbh_hash = gbh_hash')
+      s!"error : genesis block header hash, expected = {gbh_hash}, computed = {gbh_hash'}"
 
-    .guard (gbh_hash = gbh_hash') "error : unexpected genesis block header hash."
     let genesisRLP ← json.find "genesisRLP" >>= Lean.Json.toIoB8L
     let genesisRLP' := gb.toBLT.encode
     .guard (genesisRLP = genesisRLP') "error : unexpected genesis block RLP."
@@ -421,12 +427,13 @@ def List.removeDups {α : Type} [BEq α] : List α → List α
 def getFiles (path : System.FilePath) : IO (List System.FilePath) := do
   if (← System.FilePath.isDir path) then
     let paths ← System.FilePath.walkDir path
-    filterM (fun path => path.isDir <&> .not) paths.toList
+    List.filterM (fun path => path.isDir <&> .not) paths.toList
   else
     return [path]
 
 def main : List String → IO Unit
   | path :: opts => do
+    dbg_trace "ENTER : MAIN"
     let vb : Bool := List.contains opts "--verbose"
     let testIdx : Option Nat := getTestIndex opts
     let skip : Option Nat := getSkip opts
@@ -437,8 +444,11 @@ def main : List String → IO Unit
       match skip with
       | none => files
       | some n => files.drop n
+
+    dbg_trace "begin looping over files..."
+
     let _ ←
-      mapM
+      List.mapM
         (runPyTestFile vb testIdx incls excls)
         (files.map System.FilePath.toString).putIndex
     pure ()

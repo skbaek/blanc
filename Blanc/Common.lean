@@ -394,7 +394,7 @@ lemma Bits.of_mask_and_eq_zero (m n : Nat) :
     match xs with
     | x +> xs' =>
       rw [max_eq_cons, cons_append, cons_and_cons, cons_eq_zero_iff] at h
-      simp [Bool.and, Bool.one, Bool.true_and] at h
+      simp [Bool.and] at h
       rcases ih xs' h.right with ⟨ys, h'⟩
       rw [← h', h.left]; refine' ⟨ys, rfl⟩
 
@@ -406,8 +406,6 @@ def Bits.toBools : ∀ {n}, Bits n → List Bool
 | 0, ⦃⦄ => []
 | _ + 1, x +> xs => x :: xs.toBools
 
-
-
 lemma Bits.toBools_inj :
     ∀ {k : ℕ} (xs ys : Bits k), xs.toBools = ys.toBools → xs = ys := by
   apply Bits.rec2
@@ -416,23 +414,22 @@ lemma Bits.toBools_inj :
     simp [toBools] at h
     rw [h.left, ih h.right]
 
-
 lemma Bits.toBools_append {m n : ℕ} (xs : Bits m) (ys : Bits n) :
     (xs ++ ys).toBools = xs.toBools ++ ys.toBools := by
   induction m with
   | zero => cases xs; rfl
-  | succ m ih => cases xs; simp [toBools]; apply ih
-
+  | succ m ih =>
+    cases xs; simp [cons_append, toBools]; apply ih
 
 lemma Bits.toBools_max {n : ℕ} : (max n).toBools = List.replicate n 1 := by
   induction n with
   | zero => rfl
-  | succ n ih => simp [toBools, List.replicate]; apply ih
+  | succ n ih => simp [max, toBools, List.replicate]; apply ih
 
 lemma Bits.toBools_zero {n : ℕ} : (zero n).toBools = List.replicate n 0 := by
   induction n with
   | zero => rfl
-  | succ n ih => simp [toBools, List.replicate]; apply ih
+  | succ n ih => simp [zero, toBools, List.replicate]; apply ih
 
 def Bools.shlo : List Bool → Bool → List Bool
   | [], _ => []
@@ -1450,7 +1447,7 @@ def Func.compile (l : List (Nat × Func)) (n : Nat) : Func → Option Bytes
       [Jinst.toByte .jumpi] ++ pbs ++
       [Jinst.toByte .jumpdest] ++ qbs
   | .call k => do
-    let (loc, _) ← List.get? l k
+    let (loc, _) ← l[k]?
     guard (loc < 2 ^ 16)
     pure $
       [Ox x6 x1] ++
@@ -1489,12 +1486,12 @@ lemma of_guard_eq_some {p : Prop} [hd : Decidable p] {ξ} {ox : Option ξ} {x} :
   intro h
   cases em p with
   | inl hp => simp [hp] at h; constructor <;> assumption
-  | inr hp => simp [guard, if_neg hp] at h; cases h
+  | inr hp => simp [guard, if_neg hp] at h
 
 lemma of_pure_eq_some {ξ} {x y : ξ} : pure x = some y → x = y := by intro h; cases h; rfl
 
 lemma Prog.compile_ne_nil {p} : Prog.compile p ≠ some [] := by
-  simp only [Prog.compile, Table.compile]; intro h
+  simp only [Prog.compile]; intro h
   rcases of_bind_eq_some h with ⟨bs, _, h'⟩; clear h
   rcases of_bind_eq_some h' with ⟨bs', _, h⟩; clear h'; simp at h
 
@@ -1711,7 +1708,7 @@ lemma pushAt_unique {e pc bs bs'}
     have h_lt' := Nat.lt_of_le_of_lt h_len' h_32
     have h_eq : bs.length.toByte = bs'.length.toByte := by
       have h_eq := Eq.trans h_head.symm h_head'
-      simp [pushToByte, Option.some_inj] at h_eq
+      simp [pushToByte] at h_eq
       apply Bits.add_left_inj h_eq
     apply Nat.toBits_inj h_lt h_lt' h_eq
   have h_rw := List.length_slice? h_tail
@@ -1864,7 +1861,6 @@ lemma not_hop_at_of_cop_at {e pc} {o : Xinst} {o' : Linst} : o.At e pc → ¬ o'
 lemma not_hop_at_of_jop_at {e pc} {o : Jinst} {o' : Linst} : o.At e pc → ¬ o'.At e pc := by
   intros h h'; cases jopToByte_ne_hopToByte <| Option.some_inj.mp <| Eq.trans h.symm h'
 
-
 lemma not_pushAt_of_op_at {e pc} {o : Rinst} {bs : Bytes} :
     o.At e pc → ¬ PushAt e pc bs := by
   intros h h'
@@ -1938,7 +1934,7 @@ lemma State.pop_nil {s s'} (h : State.Pop [] s s') : s = s' := by
   | ⟨_, _, _, _, _, _, _⟩,
     ⟨_, _, _, _, _, _, _⟩,
     ⟨_, _, _, h, _, _, _⟩ =>
-    simp [Stack.Push, Split, Rels.dft] at *
+    simp [Rels.dft] at *
     refine' ⟨_, _, _, h, _, _, _⟩ <;> assumption
 
 lemma State.push_nil {s s'} (h : State.Push [] s s') : s = s' := by
@@ -1952,9 +1948,9 @@ lemma State.push_nil {s s'} (h : State.Push [] s s') : s = s' := by
 lemma Ninst.at_iff_slice {e pc} {i : Ninst} :
     i.At e pc ↔ List.Slice e.code pc i.toBytes := by
   cases i with
-  | reg => simp [At, Rinst.At, toBytes, List.length, List.slice_iff_get?_eq]
-  | exec => simp [At, Xinst.At, toBytes, List.length, List.slice_iff_get?_eq]
-  | push bs h => simp [At, PushAt, toBytes, List.length, h, and_true]
+  | reg => simp [At, Rinst.At, toBytes, List.slice_iff_get?_eq]
+  | exec => simp [At, Xinst.At, toBytes, List.slice_iff_get?_eq]
+  | push bs h => simp [At, PushAt, toBytes, h, and_true]
 
 lemma Bits.prefix_zero {m n : Nat} : (0 : Bits (m + n)).prefix = (0 : Bits n) := by
   rw [← zero_append_zero, prefix_append]
@@ -2023,7 +2019,7 @@ lemma Bits.succ_fappend {k m n} (xs : Bits (k * m)) (ys : Bits (k * n)) :
 lemma Nat.toBits_pow_add {k m n : Nat} (h : k < 2 ^ (8 * m)) :
     toBits (8 * (m + n)) k = fappend (0 : Bits (8 * n)) (toBits (8 * m) k) := by
   induction k with
-  | zero => simp [toBits, zero_append_zero, zero_fappend_zero]
+  | zero => simp [toBits, zero_fappend_zero]
   | succ k ih =>
     have h_lt := lt_trans (lt_succ_self k) h; simp only [toBits]
     rw [ih h_lt, Bits.succ_fappend, if_neg _]; intro hc
@@ -2040,7 +2036,7 @@ lemma List.takeD_eq_takeD_append_replicate
     match xs with
     | [] =>
       cases n <;> simp [takeD, replicate]; rename Nat => n
-      have h := @ih n []; simp [takeD] at h; apply h
+      have h := @ih n []; simp at h; apply h
     | x :: xs =>
       cases n <;> simp [takeD, replicate]; rename Nat => n
       apply @ih (n + 1) xs
@@ -2062,7 +2058,7 @@ lemma toBits_toBytes_toBits_pow_add {k m n : Nat} (h : k < 2 ^ (8 * m)) :
 lemma subcode_compile_call {e l m n}
   (h : subcode e.code m (Func.compile l m (Func.call n))) :
     ∃ (loc : Nat) (p : Func),
-      List.get? l n = some (loc, p) ∧
+      l[n]? = some (loc, p) ∧
       loc < 2 ^ 16 ∧
       PushAt e m (Bits.toBytes (Nat.toBits (8 * 2) loc)) ∧
       Jinst.jump.At e (m + 3) := by
@@ -2077,7 +2073,7 @@ lemma subcode_compile_call {e l m n}
   simp only [Jinst.At]
   rw [← List.cons_append] at h_slice
   have hh := List.slice_suffix h_slice
-  simp [List.append, List.length, List.length_append, length_toBytes] at hh
+  simp [List.length, length_toBytes] at hh
   rw [List.slice_iff_get?_eq] at hh
   apply hh
 
@@ -2114,13 +2110,14 @@ lemma subcode_compile_branch {e k l p q}
   refine' ⟨List.slice_iff_get?_eq.mp <| List.slice_prefix h', List.slice_suffix h'⟩
 
 lemma Prog.get?_table {m n} {c : List Func} :
-    Prod.snd <$> List.get? (table m c) n = List.get? c n := by
+    (Prod.snd <$> (table m c)[n]? : Option Func) =
+      ((@getElem? (List Func) Nat Func _ _ c n) : Option Func) := by
   induction c generalizing m n with
   | nil => rfl
   | cons p c' ih =>
     cases n with
-    | zero => simp [List.get?]
-    | succ n => simp only [List.get?]; apply ih
+    | zero => simp [table]
+    | succ n => simp [table]; apply ih
 
 -- alternative version of Exec which rolls all arguments into a structure.k
 structure Exec' : Type where
@@ -2287,7 +2284,7 @@ lemma push_of_pushAt {e s pc bs r} (cr : Exec e s pc r) (h_at :PushAt e pc bs) :
     · cases List.not_slice_length h_at.left
 
 lemma length_pushToBytes {bs} : (pushToBytes bs).length = bs.length + 1 := by
-  simp [pushToBytes, List.length]
+  simp [pushToBytes]
 
 lemma Ninst.run_of_at {e s pc i r}
     (cr : Exec e s pc r) (h_at : Ninst.At e pc i) :
@@ -2356,24 +2353,23 @@ lemma jumpdest_at {e s pc r} (cr : Exec e s pc r) (h : Jinst.At e pc Jinst.jumpd
   cases h_run; refine ⟨_, h_prec⟩
 
 lemma List.of_get?_succ_eq_some {X} {l : List X} {k x} :
-    l.get? (k + 1) = some x → ∃ y, l.get? k = some y := by
+    l[k + 1]? = some x → ∃ y, l[k]? = some y := by
   induction k generalizing l x with
   | zero =>
     match l with
-    | [] => simp [List.get?]
-    | [_] => simp [List.get?]
+    | [] => simp
+    | [_] => simp
     | (y :: _ :: _) => intro _; refine' ⟨y, rfl⟩
   | succ k ih =>
     match l with
-    | [] => simp [List.get?]
+    | [] => simp
     | (_ :: l') =>
-      simp only [List.get?]
       intro h_get; apply ih h_get
 
 lemma table_suffix {c k pfx sfx} (h : pfx <++ (table k c) ++> sfx) :
     ∃ k' c', sfx = table k' c' := by
   induction c generalizing k pfx sfx with
-  | nil => refine' ⟨k, [], (List.append_eq_nil.mp h.symm).right⟩
+  | nil => refine' ⟨k, [], (List.append_eq_nil_iff.mp h.symm).right⟩
   | cons p ps ih =>
     simp [table] at h
     rcases List.cons_eq_append_iff.mp h with
@@ -2389,24 +2385,24 @@ lemma Func.length_compile {l k p bs} (h : Func.compile l k p = some bs) :
     rcases of_guard_eq_some h' with ⟨h'', h⟩; clear h' h''
     rcases of_bind_eq_some h with ⟨cq, h_cq, h'⟩; clear h
     simp at h'; rw [← h']
-    simp [List.length_append, List.length, compsize, List.append]
+    simp [List.length_append, List.length, compsize]
     rw [length_toBytes, ihp h_cp, ihq h_cq]; omega
   | last o => simp [compile] at h; rw [← h]; rfl
   | next o p ih =>
     rcases of_bind_eq_some h with ⟨bs', h, h'⟩;
     simp at h'; rw [← h']
-    simp [List.length_append, compsize, List.length]
+    simp [List.length_append, compsize]
     rw [ih h, Nat.add_comm]
   | call m =>
     rcases of_bind_eq_some h with ⟨⟨_, _⟩, _, h'⟩; clear h
     rcases of_guard_eq_some h' with ⟨h'', h⟩; clear h' h''
     simp at h; rw [← h];
-    simp [List.length_append, List.length, compsize, List.append]
+    simp [List.length_append, List.length, compsize]
     rw [length_toBytes]
 
 lemma of_get?_table_eq_some {f fs} {bs} {m n : ℕ} {p : Func}
     (h_eq : some bs = Prog.compile ⟨f, fs⟩)
-    (h_get : List.get? (table 0 (f :: fs)) m = some (n, p)) :
+    (h_get : (table 0 (f :: fs))[m]? = some (n, p)) :
     ∃ lft rgt,
       lft.length = m ∧
       (lft <++ (table 0 (f :: fs)) ++> ((n, p) :: rgt)) ∧
@@ -2418,7 +2414,7 @@ lemma of_get?_table_eq_some {f fs} {bs} {m n : ℕ} {p : Func}
   induction m with
   | zero =>
     intro n p h_get
-    simp [List.get?] at h_get
+    simp [table] at h_get
     cases h_get.left; cases h_get.right; clear h_get
     simp only [table]
     refine' ⟨ [], _ , rfl, List.nil_append _, [],
@@ -2435,13 +2431,13 @@ lemma of_get?_table_eq_some {f fs} {bs} {m n : ℕ} {p : Func}
       have h_sub : m.succ - m = 1 := by omega
       have h_le : List.length lft ≤ Nat.succ m := by
         rw [h_lft]; apply Nat.le_succ
-      have heq : (lft ++ (k, q) :: rgt).get? m.succ = ((k, q) :: rgt).get? (m.succ - lft.length) := by
+      have heq : (lft ++ (k, q) :: rgt)[m.succ]? = ((k, q) :: rgt)[m.succ - lft.length]? := by
         simp [List.getElem?_append_right, h_le]
       rw [h_split, heq, h_lft, h_sub] at h_get
       match rgt with
-      | [] => simp [List.get?] at h_get
+      | [] => simp  at h_get
       | _ :: rgt' =>
-        simp [List.get?] at h_get
+        simp at h_get
         rw [h_get]; refine ⟨_, rfl⟩
     rcases h with ⟨rgt', h_rgt'⟩
     refine' ⟨rgt', _, _, _⟩
@@ -2463,16 +2459,16 @@ lemma of_get?_table_eq_some {f fs} {bs} {m n : ℕ} {p : Func}
       · simp only [Split]; rw [List.append_assoc, ← h_sfx', h_split']
       · rw [← h_cl, ← h_rgt']
 
-lemma subcode_of_get?_eq_some {f fs} {e : Env} {k : ℕ} {p : Func}
+lemma subcode_of_get?_eq_some {f fs} {e : Env} {k loc : ℕ} {p : Func}
     (h_eq : some e.code = Prog.compile ⟨f, fs⟩)
-    (h_get : List.get? (table 0 (f :: fs)) m = some (k, p)) :
-    Jinst.At e k Jinst.jumpdest ∧
-    subcode e.code (k + 1) (Func.compile (table 0 (f :: fs)) (k + 1) p) := by
+    (h_get : getElem? (table 0 (f :: fs)) k = some ⟨loc, p⟩) :
+    Jinst.At e loc Jinst.jumpdest ∧
+    subcode e.code (loc + 1) (Func.compile (table 0 (f :: fs)) (loc + 1) p) := by
   rcases of_get?_table_eq_some h_eq h_get with
     ⟨lft, rgt, _, _, pfx, sfx, h_pfx, h_split', h_sfx⟩
   unfold Jinst.At
   rcases Table.compile_cons_eq_some h_sfx.symm with ⟨bs, bs', h_bs, _, h_sfx'⟩
-  have h_slice : List.Slice e.code k sfx := by
+  have h_slice : List.Slice e.code loc sfx := by
     rw [← h_pfx, h_split']; apply List.append_slice_suffix
   rw [h_sfx', List.append_assoc] at h_slice
   rw [← List.slice_iff_get?_eq]
@@ -2553,7 +2549,7 @@ theorem correct_core (f : Func) (fs : List Func) :
       apply Func.Run.succ hy h_pop' h_run'
   | .call k =>
     rcases subcode_compile_call h_sub with ⟨loc, p, h_get, h_loc, h_push, h_jump⟩
-    have h_get' : List.get? (f :: fs) k = p := by
+    have h_get' : (f :: fs)[k]? = p := by
       rw [← @Prog.get?_table 0 k (f :: fs), h_get]; rfl
     apply Func.Run.call h_get'
     have h : ∃ (s' : State) (cr' : Exec pk.e s' (pk.pc + 3) pk.r),
@@ -2588,7 +2584,8 @@ theorem correct_core (f : Func) (fs : List Func) :
 theorem correct (e : Env) (s : State) (p : Prog) (r : Result)
     (cr : Exec e s 0 r) (h : some e.code = p.compile) :
     Prog.Run e s p r := by
-  rcases @subcode_of_get?_eq_some 0 p.main p.aux e 0 p.main h rfl
+  --rcases @subcode_of_get?_eq_some 0 p.main p.aux e 0 p.main h rfl
+  rcases @subcode_of_get?_eq_some p.main p.aux e 0 _ p.main h rfl
     with ⟨h_at, h_sub⟩
   rcases jumpdest_at cr h_at with ⟨cr', h⟩; clear h h_at
   apply correct_core p.main p.aux ⟨e, s, 1, r, cr'⟩ p.main h h_sub
@@ -3552,7 +3549,7 @@ def dispatch : DispatchTree → Func
 lemma dispatchWith_inv {c k f} (σ : Env → State → Prop) (ρ : Env → Result → Prop)
     (h0 : ∀ {e s x s'}, σ e s → Line.Run e s [pushWord x, eq, pop] s' → σ e s')
     (h1 : ∀ {e s x s'}, σ e s → Line.Run e s [dup 0, pushWord x, gt, pop] s' → σ e s')
-    (h2 : List.get? c k = some f)
+    (h2 : c[k]? = some f)
     (h3 : ∀ {e s r}, σ e s → Func.Run c e s f r → ρ e r) :
     ∀ t : DispatchTree,
       (∀ {e s r}, ∀ wf ∈ t, σ e s → Func.Run c e s wf.2 r → ρ e r) →

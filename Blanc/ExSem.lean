@@ -1,4 +1,4 @@
-import Lean.Data.HashSet
+-- import Lean.Data.HashSet
 import «Blanc».Types
 import «Blanc».EC
 import «Blanc».Hash
@@ -456,12 +456,12 @@ def BLT.toB256 : BLT → Option B256
 def BLT.toAccessItem : BLT → Option (Adr × List B256)
   | .list [.b8s ar, .list ksr] => do
     let a ← B8L.toAdr? ar
-    let ks ← mapM toB256 ksr
+    let ks ← List.mapM toB256 ksr
     pure ⟨a, ks⟩
   | _ => none
 
 def BLT.toAccessList : BLT → Option AccessList
-  | .list rs => mapM toAccessItem rs
+  | .list rs => List.mapM toAccessItem rs
   | _ => none
 
 instance : ToString BLT := ⟨String.joinln ∘ BLT.toStrings⟩
@@ -1008,14 +1008,13 @@ def Evm.toStrings (evm : Evm) : List String :=
 abbrev Adr.isPrecomp (a : Adr) : Prop :=
   1 ≤ a.toNat ∧ a.toNat ≤ 17
 
-def safeSub {ξ} [Sub ξ] [LE ξ] [@DecidableRel ξ (· ≤ ·)] (x y : ξ) : Option ξ :=
+def safeSub {ξ} [Sub ξ] [LE ξ] [DecidableLE ξ] (x y : ξ) : Option ξ :=
   if y ≤ x then some (x - y) else none
 
 def chargeGas (cost : Nat) (evm : Evm) : Except (Evm × String) Evm := do
   match safeSub evm.gas_left cost with
   | none => .error ⟨evm, "OutOfGasError"⟩
   | some gas => .ok {evm with gas_left := gas}
-
 
 def B256.toAdr : B256 → Adr
   | ⟨⟨_, x⟩, ⟨y, z⟩⟩ => {high := x.toUInt32, mid := y, low := z}
@@ -1141,7 +1140,6 @@ def fakeExp (fac num den : Nat) : Nat :=
   let lim := (max (fac * num) <| num * num) + 2
   let out := fakeExpAux num den 1 (fac * den) lim
   out / den
-
 
 def calculate_blob_gas_price (excessBlobGas : Nat) : Nat :=
   fakeExp 1 excessBlobGas blobBaseFeeUpdateFraction
@@ -1647,7 +1645,7 @@ def Rinst.run (evm : Evm) : Rinst → Execution
       }
   | .dup n => do
     let evm ← chargeGas gVerylow evm
-    match evm.stack.get? n with
+    match evm.stack[n]? with
     | none => .error ⟨evm, "StackUnderflowError"⟩
     | some word => evm.push word >>= Evm.incrPc
   | .sload => do
@@ -2334,13 +2332,6 @@ def get_blake2_parameters (data : B8L) :
   let f := B8L.toNat <| data.drop 212
   ⟨rounds, h, m, t.getD 0 0, t.getD 1 0, f⟩
 
--- def Blake2.maxWord (b2 : Blake2) : B64 := 1 <<< b2.w
--- def Blake2.wR1 (b2 : Blake2)     : B64 := b2.w - b2.R1
--- def Blake2.wR2 (b2 : Blake2)     : B64 := b2.w - b2.R2
--- def Blake2.wR3 (b2 : Blake2)     : B64 := b2.w - b2.R3
--- def Blake2.wR4 (b2 : Blake2)     : B64 := b2.w - b2.R4
-
-
 def b2wR1 : B64 := 32
 def b2wR2 : B64 := 40
 def b2wR3 : B64 := 48
@@ -2348,25 +2339,25 @@ def b2wR4 : B64 := 1
 
 /- def G -/
 def Blake2.g (v : Array B64) (a b c d : Nat) (x y : B64) : Array B64 :=
-  let na : B64 := ((v.get! a) + (v.get! b) + x)
-  let v := v.setD a na
-  let shiftArg : B64 := (v.get! d ^^^ na)
+  let na : B64 := ((v[a]!) + (v[b]!) + x)
+  let v := v.set! a na
+  let shiftArg : B64 := (v[d]! ^^^ na)
   let nd : B64 := ((shiftArg >>> b2R1) ^^^ (shiftArg <<< b2wR1)) -- % b2.maxWord
-  let v := v.setD d nd
-  let nc := (v.get! c + nd) -- % b2.maxWord
-  let v := v.setD c nc
-  let shiftArg : B64 := (v.get! b ^^^ v.get! c)
+  let v := v.set! d nd
+  let nc := (v[c]! + nd) -- % b2.maxWord
+  let v := v.set! c nc
+  let shiftArg : B64 := (v[b]! ^^^ v[c]!)
   let nb := ((shiftArg >>> b2R2) ^^^ (shiftArg <<< b2wR2)) -- % b2maxWord
-  let v := v.setD b nb
-  let na := (v.get! a + nb + y) -- % b2maxWord
-  let v := v.setD a na
-  let shiftArg : B64 := (v.get! d ^^^ v.get! a)
+  let v := v.set! b nb
+  let na := (v[a]! + nb + y) -- % b2maxWord
+  let v := v.set! a na
+  let shiftArg : B64 := (v[d]! ^^^ v[a]!)
   let nd := ((shiftArg >>> b2R3) ^^^ (shiftArg <<< b2wR3)) -- % b2maxWord
-  let v := v.setD d nd
-  let nc := (v.get! c + nd) -- % b2maxWord
-  let v := v.setD c nc
-  let shiftArg : B64 := (v.get! b ^^^ nc)
-  let v := v.setD b <| ((shiftArg >>> b2R4) ^^^ (shiftArg <<< b2wR4)) -- % b2.maxWord
+  let v := v.set! d nd
+  let nc := (v[c]! + nd) -- % b2maxWord
+  let v := v.set! c nc
+  let shiftArg : B64 := (v[b]! ^^^ nc)
+  let v := v.set! b <| ((shiftArg >>> b2R4) ^^^ (shiftArg <<< b2wR4)) -- % b2.maxWord
   v
 
 def traceId {ξ : Type} (msg : String) (x : ξ) :=
@@ -2415,10 +2406,10 @@ def bCompress (numRounds : Nat)
 
   let innerFun (s : Array Nat) (i : Nat) (v : Array B64) : Array B64 :=
     Blake2.g v
-      ((blake2MixTable.get! i).get! 0)
-      ((blake2MixTable.get! i).get! 1)
-      ((blake2MixTable.get! i).get! 2)
-      ((blake2MixTable.get! i).get! 3)
+      ((blake2MixTable[i]!)[0]!)
+      ((blake2MixTable[i]!)[1]!)
+      ((blake2MixTable[i]!)[2]!)
+      ((blake2MixTable[i]!)[3]!)
       (m.get! (s.get! (i * 2)))
       (m.get! (s.get! ((i * 2) + 1)))
 
@@ -2429,7 +2420,7 @@ def bCompress (numRounds : Nat)
   let arr := iterRangeTrace numRounds numRounds outerFun ⟨v⟩
   let v := arr.toList
   let resultMsgWords :=
-    (List.range 8).map <| fun i => h.get! i ^^^ v.get! i ^^^ v.get! (i + 8)
+    (List.range 8).map <| fun i => h[i]! ^^^ v[i]! ^^^ v.get! (i + 8)
   List.flatten <| resultMsgWords.map (fun n => n.toB8L.reverse.takeD 8 (0x00 : B8))
 
 -- blake2f
@@ -3311,8 +3302,7 @@ mutual
   termination_by _ lim => lim
 
   def exec : Bool → Nat → Evm → Execution
-    | vb, 0, evm => do
-      .print "execution recursion limit (*NOT* execution depth limit) reached"
+    | _, 0, evm =>
       .error ⟨evm, "RecursionLimit"⟩
     | vb, lim + 1, evm => do
       let mut evm := evm
@@ -3408,20 +3398,6 @@ def Sta.toStrings : Sta → List String
   | ⟨xs, n⟩ => Sta.toStringsCore xs n
 
 def Sta.toString (s : Sta) : String := String.joinln s.toStrings
-
-def Sta.swap : Sta → Nat → Option Sta
-  | ⟨xs, n + 2⟩, k =>
-    if n < k
-    then none
-    else some ⟨xs.swap! (n + 1) (n - k), n + 2⟩
-  | _, _ => none
-
-def Sta.dup : Sta → Nat → Option Sta
-  | ⟨xs, n⟩, k =>
-    if n < k + 1
-    then none
-    else do let x ← xs.get? (n - (k + 1))
-            Sta.push1 ⟨xs, n⟩ x
 
 def Sta.toProlog (σ : Sta) : String :=
   match σ.toList with
@@ -3968,12 +3944,6 @@ def setDelegation (msg : Msg) : Except String (Msg × B256) := do
 
   .ok ⟨msg, refundCounter⟩
 
-def Int.toNat? (i : Int) : Option Nat :=
-  if i < 0 then
-    none
-  else
-    some (i.toNat)
-
 /- process_msg_call -/
 def processMessageCall (vb : Bool) (msg : Msg) :
   Except String (State × MsgCallOutput) := do
@@ -3989,7 +3959,7 @@ def processMessageCall (vb : Bool) (msg : Msg) :
       accountHasCodeOrNonce benv.state msg.currentTarget || accountHasStorage benv.state msg.currentTarget
 
     if isCollision then
-      return ⟨benv.state, ⟨0, 0, [], .empty, "AddressCollision", []⟩⟩
+      return ⟨benv.state, ⟨0, 0, [], .emptyWithCapacity, "AddressCollision", []⟩⟩
     else
       evm ← Except.bimap (Prod.snd ∘ Prod.snd) id <| processCreateMessage vb msg (msg.gas + 50)
 
@@ -4556,7 +4526,7 @@ def B8L.toExStrTx : B8L → Except String Tx
             (← receiver.toAdr?.toExcept "DecodingError")
             (← accessList.toAccessList.toExcept "cannot decode access list")
             maxBlobFee.toNat
-            (← mapM (λ r => r.toB256.toExcept "cannot decode blob hash") blobHashes)
+            (← List.mapM (λ r => r.toB256.toExcept "cannot decode blob hash") blobHashes)
       }
 
     | x, _ => .error s!"ERROR : type-{x} txs do not exist, decoding failed"
@@ -4987,9 +4957,9 @@ def BLT.toExStrBlock : BLT → Except String Block
       | .b8s xs => .ok <| .inl xs
 
     let header ← HeaderBLT.toExStrHeader
-    let txs ← mapM aux TxBLTs
-    let ommers ← mapM BLT.toExStrHeader OmmerBLTs
-    let withdrawals ← mapM BLT.toExStrWithdrawal WithdrawalBLTs
+    let txs ← List.mapM aux TxBLTs
+    let ommers ← List.mapM BLT.toExStrHeader OmmerBLTs
+    let withdrawals ← List.mapM BLT.toExStrWithdrawal WithdrawalBLTs
     .ok {
       header := header,
       txs := txs,

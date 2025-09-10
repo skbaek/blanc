@@ -5,10 +5,8 @@ import Mathlib.Data.Nat.Basic
 import Mathlib.Data.List.Lemmas
 import Mathlib.Util.Notation3
 import Mathlib.Data.Vector.Basic
--- import Lean.Data.Json
 
 
-#check Prod
 -- Boolean lemmas --
 
 instance : @Zero Bool := ⟨false⟩
@@ -90,7 +88,7 @@ theorem Nat.forall_lt_succ_iff_forall_le {n : ℕ} {p : ℕ → Prop} :
 theorem Nat.forall_le_succ {n : ℕ} {p : ℕ → Prop} :
     (∀ m ≤ n + 1, p m) ↔ (∀ m ≤ n, p m) ∧ p (n + 1) := by
   rw [← Nat.forall_lt_succ_iff_forall_le, ← Nat.forall_lt_succ_iff_forall_le]
-  apply Nat.forall_lt_succ
+  apply Nat.forall_lt_succ_right
 
 syntax "asm" : term
 macro_rules
@@ -238,7 +236,7 @@ instance {n} {xs ys : Bits n} : Decidable (xs < ys) := by
     match xs, ys with
     | x +> xs, y +> ys =>
       cases x <;> cases y <;>
-      simp [Bits.cons_lt_cons, false_lt_true, not_true_lt] <;>
+      simp [Bits.cons_lt_cons, not_true_lt] <;>
       try {apply ih}; apply instDecidableTrue; apply instDecidableFalse
 
 def Bits.le : ∀ {n : ℕ}, Bits n → Bits n → Prop
@@ -1107,7 +1105,7 @@ theorem Bits.eq_max_iff_succ_toNat_eq_pow {n : Nat} (xs : Bits n) :
 
 theorem toNat_toBits {k n} (h : n < 2 ^ k) : (Nat.toBits k n).toNat = n := by
   induction n with
-  | zero => simp [Nat.toBits, Bits.toNat, Bits.toNat_zero]
+  | zero => simp [Nat.toBits, Bits.toNat_zero]
   | succ n ih =>
     simp only [Nat.toBits]
     rw [Bits.toNat_succ]
@@ -1460,7 +1458,7 @@ theorem toBits'_toBytes {n} (xs : Bits (8 * n)) :
 
 theorem toBits_toBytes {n} (xs : Bits (8 * n)) :
     Bytes.toBits n (Bits.toBytes xs) = xs := by
-  simp only [Bits.toBytes, Bytes.toBits];
+  simp only [Bytes.toBits];
   rw [List.takeD_eq_self, List.reverse_reverse]
   · apply toBits'_toBytes
   · rw [List.length_reverse, Bits.length_toBytes]
@@ -1585,13 +1583,13 @@ theorem List.drop?_add {ξ : Type u} (m n : Nat) (xs : List ξ) :
     · apply ih
 
 theorem List.get?_eq_drop?_head? {ξ : Type u} {xs : List ξ} {n : Nat} :
-    get? xs n = drop? n xs >>= head? := by
+    xs[n]? = drop? n xs >>= head? := by
   induction n generalizing xs with
   | zero => cases xs <;> simp [drop?]
   | succ n ih =>
     cases xs
     · simp [drop?]
-    · simp only [get?, drop?, ih]
+    · simp [drop?]; apply ih
 
 def List.take? {ξ : Type u} : Nat → List ξ → Option (List ξ)
   | 0, _ => some []
@@ -1615,23 +1613,23 @@ def List.slice! {ξ : Type u} [Inhabited ξ] (xs : List ξ) (m n : Nat) : List �
 
 theorem List.slice?_eq_cons_iff {ξ : Type u} {xs : List ξ} {m n : Nat} {y} {ys} :
     slice? xs m (n + 1) = some (y :: ys) ↔
-      (get? xs m = some y ∧ slice? xs (m + 1) n = some ys) := by
+      (xs[m]? = some y ∧ slice? xs (m + 1) n = some ys) := by
   induction m generalizing xs with
   | zero =>
     match xs with
-    | [] => simp [slice?, drop?, Bind.bind, Option.bind, take?, get?]
+    | [] => simp [slice?, drop?, Bind.bind, Option.bind, take?]
     | x :: xs =>
       simp only
-        [slice?, drop?, Bind.bind, Option.bind, get?, Option.some_inj, take?]
+        [slice?, drop?, Bind.bind, Option.bind, take?]
       cases take? n xs <;> simp
   | succ m ih =>
     match xs with
-    | [] => simp [slice?, drop?, Bind.bind, Option.bind, take?, get?]
+    | [] => simp [slice?, drop?, Bind.bind, Option.bind]
     | x :: xs =>
       rw [List.slice?_cons, ih]; rfl
 
 theorem List.slice_cons_iff {ξ : Type u} {xs : List ξ} {m : Nat} {y} {ys} :
-    xs.Slice m (y :: ys) ↔ (get? xs m = some y ∧ xs.Slice (m + 1) ys) := by
+    xs.Slice m (y :: ys) ↔ (xs[m]? = some y ∧ xs.Slice (m + 1) ys) := by
   simp only [Slice]
   constructor <;> intro h
   · rcases h with ⟨_ | n, h⟩
@@ -1657,11 +1655,11 @@ theorem List.length_slice? {ξ : Type u} {xs} {m n : Nat} {ys : List ξ} :
   unfold slice?; cases xs.drop? m <;> simp; apply length_take?
 
 theorem List.get?_eq_of_slice {ξ : Type u} {xs : List ξ} {m : Nat} {y} {ys} :
-    Slice xs m (y :: ys) → get? xs m = some y := by
+    Slice xs m (y :: ys) → xs[m]? = some y := by
   rw [slice_cons_iff]; apply And.left
 
 theorem List.slice_iff_get?_eq {ξ : Type u} {xs : List ξ} {m : Nat} {y} :
-    Slice xs m [y] ↔ get? xs m = some y := by
+    Slice xs m [y] ↔ xs[m]? = some y := by
   refine' ⟨get?_eq_of_slice, λ h => ⟨1, _⟩⟩;
   revert h; rw [get?_eq_drop?_head?]; unfold slice?
   cases xs.drop? m with
@@ -1953,8 +1951,8 @@ def B256.smod (xs ys : B256) : B256 :=
        if isNeg xs then neg mod else mod
 
 def Bits.bexpCore : ∀ {m n : Nat}, Bits m → Bits n → (Bits m × Bits m)
-  | m, 0, x, ⦃⦄ => ⟨1, 1⟩
-  | m, 1, x, ⦃b⦄ => ⟨cond b x 1, x⟩
+  | _, 0, _, ⦃⦄ => ⟨1, 1⟩
+  | _, 1, x, ⦃b⦄ => ⟨cond b x 1, x⟩
   | m, n + 1, x, Bits.cons y ys =>
     let ⟨r, s⟩ := @Bits.bexpCore m n x ys
     let s₂ := s * s
@@ -2021,8 +2019,8 @@ def Bits.ordering {n} (xs ys : Bits n) : Ordering :=
 
 instance {n} : Ord (Bits n) := ⟨Bits.ordering⟩
 
-def String.joinln (l : List String) : String :=
-  l.foldl (fun r s => r ++ "\n" ++ s) ""
+def String.joinln : List String → String :=
+  String.intercalate "\n"
 
 def Hexit.toB4 : Char → Option B8
   | '0' => some 0x00
@@ -2363,16 +2361,16 @@ def B8L.toB4s : B8L → B8L
 
 -- infixr:65 " ^^ " => Bits.xor
 
-instance {n} : Xor (Bits n) := ⟨Bits.xor⟩
+instance {n} : XorOp (Bits n) := ⟨Bits.xor⟩
 
 def Array.teg {ξ : Type u} (xs : Array ξ) (n : Nat) : Option ξ :=
-  xs.get? <| xs.size - n
+  xs[xs.size - n]?
 
 def Array.tegD {ξ : Type u} (xs : Array ξ) (n : Nat) (x : ξ) : ξ :=
   xs.getD (xs.size - n) x
 
 def Array.teg! {ξ : Type u} [Inhabited ξ] (xs : Array ξ) (n : Nat) : ξ :=
-  xs.get! (xs.size - n)
+  xs[xs.size - n]!
 
 instance {n : Nat} : ToString (Bits n) := ⟨@Bits.toString n⟩
 
