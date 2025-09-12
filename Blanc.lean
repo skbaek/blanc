@@ -1,4 +1,4 @@
-import «Blanc».ExSem
+import «Blanc».Execution
 
 
 
@@ -23,28 +23,13 @@ def Lean.Json.toIoString : Lean.Json → IO String
   | .str s => return s
   | _ => IO.throw "not a string"
 
-def Lean.Json.toB8L? (j : Json) : Option B8L := do
-  let x ← toString? j >>= .remove0x
-  (Hex.toB8L x)
-
 def Lean.Json.toIoB8L (j : Json) : IO B8L := do
   let x ← toIoString j >>= .remove0x
   (Hex.toB8L x).toIO ""
 
-def Lean.Json.toAdr? (j : Json) : Option Adr := do
-  let x ← toString? j >>= .remove0x
-  (Hex.toAdr? x)
-
 def Lean.Json.toIoAdr (j : Json) : IO Adr := do
   let x ← toIoString j >>= .remove0x
   (Hex.toAdr? x).toIO ""
-
-def Lean.Json.toIoAdrs (j : Json) : IO (List Adr) :=
-  toIoList j >>= List.mapM toIoAdr
-
-def Lean.Json.toB64? (j : Json) : Option B64:= do
-  let x ← toString? j >>= .remove0x
-  (Hex.toB64? x)
 
 def Lean.Json.toIoB64 (j : Json) : IO B64 := do
   let x ← toIoString j >>= .remove0x
@@ -67,15 +52,6 @@ def Lean.Json.toIoB256P (j : Json) : IO B256 := do
   let x ← toIoString j >>= .remove0x
   let xs ← (Hex.toB8L x).toIO ""
   return (B8L.toB256P xs)
-
-def Lean.Json.toIoAccessItem (j : Json) : IO (Adr × List B256) := do
-  let r ← toIoRBNode j
-  let a ← (r.get? "address").toIO "" >>= toIoAdr
-  let ks ← (r.get? "storageKeys").toIO "" >>= toIoList >>= List.mapM toIoB256P
-  return ⟨a, ks⟩
-
-def Lean.Json.toIoAccessList (j : Json) : IO AccessList := do
-  toIoList j >>= List.mapM toIoAccessItem
 
 def Lean.Json.toAcct : Lean.Json → IO Acct
   | .obj r => do
@@ -112,48 +88,6 @@ def Lean.Json.find : String → Lean.Json → IO Lean.Json
   | k, .obj r => (r.get? k).toIO s!"ERROR : FAILED JSON RETRIEVAL WITH KEY : {k}"
   | k, _ => .throw s!"ERROR : INPUT JSON IS NOT OBJECT, FAILED RETRIEVAL WITH KEY : {k}"
 
-def Lean.Json.get? : Nat → Lean.Json → IO Lean.Json
-  | k, .arr js => (js.get? k).toIO ""
-  | _, _ => .throw ""
-
-def getXWS (j : Lean.Json) : IO ExpectedWorldState := do
-  let r ← j.toIoRBNode
-  match r.get? "postState" with
-  | some wj => do --hj.toB256?
-    let w ← Lean.Json.toWorld wj
-    pure (.wor w)
-  | .none => do
-    let hj ← j.find "postStateHash"
-    let h ← hj.toIoB256
-    pure (.root h)
-
-def getPostRoot (j : Lean.Json) : IO B256 := do
-  let r ← j.toIoRBNode
-  match r.get? "postStateHash" with
-  | some hj => hj.toIoB256
-  | none => do
-    let wj ← j.find "postState"
-    let w ← Lean.Json.toWorld wj
-    pure w.root
-
-def mkTest : (String × Lean.Json) → IO Test
-  | ⟨name, j⟩ => do
-    let info ← j.find "_info"
-    let blocks ← j.find "blocks"
-    let gbh ← j.find "genesisBlockHeader"
-    let grlp ← j.find "genesisRLP"
-    let lbh ← j.find "lastblockhash"
-    let network ← j.find "network"
-    let xws ← getXWS j
-    let pre ← j.find "pre"
-    let sealEngine ← j.find "sealEngine"
-    return ⟨name, info, blocks, gbh, grlp, lbh, network, pre, xws, sealEngine⟩
-
-def Lean.Json.toTests (j : Lean.Json) : IO (List Test) := do
-  let r ← j.toIoRBNode
-  let l := r.toArray.toList
-  List.mapM mkTest l
-
 def getTxExMap (j : Lean.Json) : IO (Option String × B8L) := do
   let rlp ← j.find "rlp" >>= Lean.Json.toIoB8L
   match j.find? "expectException" with
@@ -161,13 +95,6 @@ def getTxExMap (j : Lean.Json) : IO (Option String × B8L) := do
   | .some exj => do
     let exs ← exj.toIoString
     pure ⟨.some exs, rlp⟩
-
-def getBlockHeader : Lean.Json → Option Lean.Json
-  | .obj r =>
-    r.get? "blockHeader" <|>
-    ( do let (.obj r') ← r.get? "rlp_decoded" | .none
-         r'.get? "blockHeader" )
-  | _ => .none
 
 def Lean.Json.toHeader (json : Lean.Json) : IO Header := do
   let parentHash ← json.find "parentHash" >>= Lean.Json.toIoB256
@@ -214,63 +141,6 @@ def Lean.Json.toHeader (json : Lean.Json) : IO Header := do
     parentBeaconBlockRoot := parentBeaconBlockRoot
     requestsHash := requestsHash
   }
-
-def Lean.Json.toIoLegacyTx (json : Lean.Json) : IO Tx := do
-  let nonce ← (json.find "nonce" >>= Lean.Json.toIoB8L) <&> B8L.toB64P
-  let gas ← (json.find "gasLimit" >>= Lean.Json.toIoB8L) <&> B8L.toNat
-  let receiver ← json.find "to" >>= Lean.Json.toIoAdr
-  let value ← (json.find "value" >>= Lean.Json.toIoB8L) <&> B8L.toNat
-  let data ← json.find "data" >>= Lean.Json.toIoB8L
-  let v ← (json.find "v" >>= Lean.Json.toIoB8L) <&> B8L.toNat
-  let r ← json.find "r" >>= Lean.Json.toIoB8L
-  let s ← json.find "s" >>= Lean.Json.toIoB8L
-  let gasPrice ← (json.find "gasPrice" >>= Lean.Json.toIoB8L) <&> B8L.toNat
-  .ok {
-    nonce := nonce
-    gas := gas
-    value := value
-    data := data
-    v := v
-    r := r
-    s := s
-    type := .zero gasPrice receiver
-  }
-
-def Lean.Json.toIoTypeTwoTx (json : Lean.Json) : IO Tx := do
-  let nonce ← (json.find "nonce" >>= Lean.Json.toIoB8L) <&> B8L.toB64P
-  let gas ← (json.find "gasLimit" >>= Lean.Json.toIoB8L) <&> B8L.toNat
-  let receiver ← json.find "to" >>= Lean.Json.toIoAdr
-  let value ← (json.find "value" >>= Lean.Json.toIoB8L) <&> B8L.toNat
-  let data ← json.find "data" >>= Lean.Json.toIoB8L
-  let v ← (json.find "v" >>= Lean.Json.toIoB8L) <&> B8L.toNat
-  let r ← json.find "r" >>= Lean.Json.toIoB8L
-  let s ← json.find "s" >>= Lean.Json.toIoB8L
-
-  let chainId ← (json.find "chainId" >>= Lean.Json.toIoB8L) <&> B8L.toB64P
-  let maxFee ← (json.find "maxFeePerGas" >>= Lean.Json.toIoB8L) <&> B8L.toNat
-  let maxPriorityFee ← (json.find "maxPriorityFeePerGas" >>= Lean.Json.toIoB8L) <&> B8L.toNat
-  let temp ← json.find "accessList" >>= Lean.Json.toIoList
-  .guard temp.isEmpty "UNIMP : access list read"
-
-  .ok {
-    nonce := nonce
-    gas := gas
-    value := value
-    data := data
-    v := v
-    r := r
-    s := s
-    type :=
-      .two
-        chainId
-        maxPriorityFee
-        maxFee
-        receiver
-        []
-  }
-
-def Lean.Json.toIoTx (json : Lean.Json) : IO Tx :=
-  json.toIoLegacyTx <|> json.toIoTypeTwoTx
 
 def getPostStateRoot (json : Lean.Json) : IO B256 :=
   ( do let stateJson ← json.find "postState"
@@ -324,14 +194,14 @@ def runBlockchainStTest (vb : Bool) (idx? : Option Nat)
     let gbh ← gbh_json.toHeader
     let gb : Block := {header := gbh, txs := [], ommers := [], wds := []}
     let gbh_hash ← gbh_json.find "hash" >>= Lean.Json.toIoB256
-    let gbh_hash' := (BLT.encode (Header.toBLT gbh)).keccak
+    let gbh_hash' := (BLT.toB8L (Header.toBLT gbh)).keccak
 
     .guard
       (gbh_hash = gbh_hash')
       s!"error : genesis block header hash, expected = {gbh_hash}, computed = {gbh_hash'}"
 
     let genesisRLP ← json.find "genesisRLP" >>= Lean.Json.toIoB8L
-    let genesisRLP' := gb.toBLT.encode
+    let genesisRLP' := gb.toBLT.toB8L
     .guard (genesisRLP = genesisRLP') "error : unexpected genesis block RLP."
     let (chainId : Nat) ←
       match gbh_json.find? "chainId" with
@@ -351,7 +221,7 @@ def runBlockchainStTest (vb : Bool) (idx? : Option Nat)
     let (some chain) ← processBlockJsons vb chain blockJsons | .ok ()
     let lastBlockHash ← json.find "lastblockhash" >>= Lean.Json.toIoB256
     let lastBlock ← chain.blocks.getLast?.toIO "error : no last block "
-    let lastBlockHash' := (Header.toBLT lastBlock.header).encode.keccak--  (B8L.keccak ∘ BLT.encode)
+    let lastBlockHash' := (Header.toBLT lastBlock.header).toB8L.keccak--  (B8L.keccak ∘ BLT.encode)
     .guard
       (lastBlockHash = lastBlockHash')
       s!"error : last block hash does not match\n  expected : {lastBlockHash}\n  computed : {lastBlockHash'}"
@@ -361,7 +231,7 @@ def runBlockchainStTest (vb : Bool) (idx? : Option Nat)
       (postStateRoot = chain.state.root)
       s!"error : end state root does not match\n  expected : {postStateRoot}\n  computed : {chain.state.root}"
 
-def runPyTestFile (vb : Bool) (testIdx : Option Nat) -- (nw : Option String)
+def runTestFile (vb : Bool) (testIdx : Option Nat)
   (incls excls : List String) (idxPath : Nat × String) : IO Unit := do
   let fileIdx := idxPath.fst
   let path := idxPath.snd
@@ -371,17 +241,6 @@ def runPyTestFile (vb : Bool) (testIdx : Option Nat) -- (nw : Option String)
   let js := rb.toArray.toList.putIndex
   let _ ← js.mapM <| runBlockchainStTest vb testIdx incls excls
   .ok ()
-
-def getFileNames (fins fexs : List String) :
-  List String → (List String × List String)
-  | option :: arg :: strs =>
-    if option = "--file"
-    then getFileNames (arg :: fins) fexs strs
-    else
-      if option = "--notFile"
-      then getFileNames fins (arg :: fexs) strs
-      else getFileNames fins fexs (arg :: strs)
-  | _ => ⟨fins, fexs⟩
 
 def getTestNames (incls excls : List String) :
   List String → (List String × List String)
@@ -394,13 +253,6 @@ def getTestNames (incls excls : List String) :
       else getTestNames incls excls (arg :: strs)
   | [_] => ⟨incls, excls⟩
   | [] => ⟨incls, excls⟩
-
-def getTestNetwork : List String → Option String
-  | s0 :: s1 :: ss =>
-    if s0 = "--network"
-    then some s1
-    else getTestNetwork <| s1 :: ss
-  | _ => none
 
 def getSkip : List String → Option Nat
   | s0 :: s1 :: ss =>
@@ -416,14 +268,6 @@ def getTestIndex : List String → Option Nat
     else getTestIndex <| s1 :: ss
   | _ => none
 
-def List.removeDups {α : Type} [BEq α] : List α → List α
-  | [] => []
-  | x :: xs =>
-    if xs.contains x then
-      xs.removeDups
-    else
-      x :: xs.removeDups
-
 def getFiles (path : System.FilePath) : IO (List System.FilePath) := do
   if (← System.FilePath.isDir path) then
     let paths ← System.FilePath.walkDir path
@@ -433,23 +277,18 @@ def getFiles (path : System.FilePath) : IO (List System.FilePath) := do
 
 def main : List String → IO Unit
   | path :: opts => do
-    dbg_trace "ENTER : MAIN"
     let vb : Bool := List.contains opts "--verbose"
     let testIdx : Option Nat := getTestIndex opts
     let skip : Option Nat := getSkip opts
     let ⟨incls, excls⟩ := getTestNames [] [] opts
     let files ← getFiles path
-
     let files :=
       match skip with
       | none => files
       | some n => files.drop n
-
-    dbg_trace "begin looping over files..."
-
     let _ ←
       List.mapM
-        (runPyTestFile vb testIdx incls excls)
+        (runTestFile vb testIdx incls excls)
         (files.map System.FilePath.toString).putIndex
     pure ()
   | _ => IO.throw "error : invalid arguments"

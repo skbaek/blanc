@@ -2525,6 +2525,7 @@ def B8.toBools (x0 : B8) :
     x4.highBit, x5.highBit, x6.highBit, x7.highBit ⟩
 
 mutual
+
   def ByteArray.toBLTIndices? :
     Nat → ByteArray → Nat → Nat → Option (BLT × Nat × Nat)
     | _, _, _, 0 => none
@@ -2562,6 +2563,7 @@ mutual
       let ⟨blt, loc', sz'⟩ ← ByteArray.toBLTIndices? (lim + 1) bs loc sz
       let blts ← ByteArray.toBLTs? lim bs loc' sz'
       some (blt :: blts)
+
 end
 
 def ByteArray.toBLT? (bs : ByteArray) : Option BLT :=
@@ -2570,7 +2572,8 @@ def ByteArray.toBLT? (bs : ByteArray) : Option BLT :=
   | _ => none
 
 mutual
-  def BLT.decode' : Nat → B8L → Option (BLT × B8L)
+
+  def B8L.toBLTDiff? : Nat → B8L → Option (BLT × B8L)
     | _, [] => none
     | 0, _ :: _ => none
     | k + 1, b :: bs =>
@@ -2585,24 +2588,25 @@ mutual
     | ⟨1, 1, 1, 1, 1, _, _, _⟩ => do
       let (lbs, bs') ← List.splitAt? (b - 0xF7).toNat bs
       let (rbs, bs'') ← List.splitAt? (B8L.toNat lbs) bs'
-      let rs ← RLPs'.decode k rbs
+      let rs ← B8L.toBLTs? k rbs
       return ⟨.list rs, bs''⟩
     | ⟨1, 1, _, _, _, _, _, _⟩ => do
       let (rbs, bs') ← List.splitAt? (b - 0xC0).toNat bs
-      let rs ← RLPs'.decode k rbs
+      let rs ← B8L.toBLTs? k rbs
       return ⟨.list rs, bs'⟩
 
-  def RLPs'.decode : Nat → B8L → Option (List BLT)
+  def B8L.toBLTs? : Nat → B8L → Option (List BLT)
     | _, [] => some []
     | 0, _ :: _ => none
     | k + 1, bs@(_ :: _) => do
-      let (r, bs') ← BLT.decode' (k + 1) bs
-      let rs ← RLPs'.decode k bs'
+      let (r, bs') ← B8L.toBLTDiff? (k + 1) bs
+      let rs ← B8L.toBLTs? k bs'
       return (r :: rs)
+
 end
 
-def BLT.decode (bs : B8L) : Option BLT :=
-  match BLT.decode' bs.length bs with
+def B8L.toBLT? (bs : B8L) : Option BLT :=
+  match B8L.toBLTDiff? bs.length bs with
   | some (r, []) => some r
   | _ => none
 

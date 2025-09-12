@@ -2,7 +2,7 @@
 -- precompiled EVM contracts. Unless otherwise noted, definitions
 -- are ported from execution-specs and the libraries it uses.
 
-import Blanc.Types
+import Blanc.TypesE
 import Blanc.Hash
 
 
@@ -136,7 +136,7 @@ lemma zipWithZero_length {ξ} [Zero ξ] (xs ys : List ξ) :
       induction ys with
       | nil => simp [zipWithZero, ih]
       | cons y ys ih' =>
-        simp [zipWithZero, ih, ih', List.length, Nat.succ_max_succ]
+        simp [zipWithZero, ih, List.length, Nat.succ_max_succ]
 
 def zipWithZeroLeft {ξ} [Zero ξ] (xs ys : List ξ) : List (ξ × ξ) :=
   (zipWithZero xs.reverse ys.reverse).reverse
@@ -159,11 +159,6 @@ lemma FinFields.sub_length {p} (xs ys : FinFields p) :
 
 def FinFields.add {p} (xs ys : FinFields p) : FinFields p :=
   trimZero <| (zipWithZeroLeft xs ys).map (fun ⟨x, y⟩ => x + y)
-
-lemma FinFields.add_length {p} (xs ys : FinFields p) :
-  (FinFields.add xs ys).length ≤ max xs.length ys.length := by
-  apply le_trans (trimZero_length _)
-  simp [List.length_map, zipWithZeroLeft_length]
 
 def FinFields.mul {p} (xs : FinFields p) : FinFields p → FinFields p
   | [] => []
@@ -203,7 +198,7 @@ lemma FinFields.divMod_snd_length {p} (xs) (len) (y) (ys : FinFields p) :
   induction len with
   | zero =>
     intro xs h_eq; rw [Nat.le_zero] at h_eq
-    simp [List.length_eq_zero.mp h_eq, divMod]
+    simp [List.length_eq_zero_iff.mp h_eq, divMod]
   | succ len ih =>
     intro xs h_le
     rcases xs with _ | ⟨x, xs⟩ <;> simp [divMod] -- try {simp [divMod]; done}
@@ -431,17 +426,15 @@ instance {F} [Zero F] [DecidableEq F] [HAdd F F F] [HSub F F F]
 def BNP.toB8L (p : BNP) : B8L :=
   p.x.val.toB8L.pack 32 ++ p.y.val.toB8L.pack 32
 
-def BNP.toBNP12 : BNP → BNP12
-  | ⟨x, y⟩ => ⟨⟨[x]⟩, ⟨[y]⟩⟩
 
 -- def twist(pt: Optimized_Point3D[FQP]) -> Optimized_Point3D[FQ12]:
 def twist (p : BNP2) : BNP12 :=
   let xs := List.ekat 2 p.x.val
   let ys := List.ekat 2 p.y.val
-  let x0 := xs.get! 0
-  let x1 := xs.get! 1
-  let y0 := ys.get! 0
-  let y1 := ys.get! 1
+  let x0 := xs[0]!
+  let x1 := xs[1]!
+  let y0 := ys[0]!
+  let y1 := ys[1]!
   let nx : BNF12 := ⟨[x0, 0, 0, 0, 0, 0, x1 - (x0 * 9)]⟩
   let ny : BNF12 := ⟨[y0, 0, 0, 0, 0, 0, y1 - (y0 * 9)]⟩
   let w : BNF12 := ⟨[1, 0]⟩
@@ -520,13 +513,6 @@ instance {F} [Neg F] [Zero F] [DecidableEq F]
   HSub (EllipticCurve F a b) (EllipticCurve F a b) (EllipticCurve F a b) :=
   ⟨EllipticCurve.sub⟩
 
-/-
-def miller_loop(
-    Q: Optimized_Point3D[FQ12],
-    P: Optimized_Point3D[FQ12],
-    final_exponentiate: bool = True,
-) -> FQ12:
--/
 def millerLoop (q p : BNP12) (finalExp : Bool := true) : Option BNF12 := do
   let mut r : BNP12 := q
   let mut fNum : BNF12 := 1
@@ -559,6 +545,9 @@ def millerLoop (q p : BNP12) (finalExp : Bool := true) : Option BNF12 := do
     then f ^ ((altBn128Prime ^ 12 - 1) / altBn128CurveOrder)
     else f
   )
+
+def BNP.toBNP12 : BNP → BNP12
+  | ⟨x, y⟩ => ⟨⟨[x]⟩, ⟨[y]⟩⟩
 
 def pairing (q : BNP2) (p : BNP) (finalExp : Bool := true) : Option BNF12 := do
   guard q.isOnCurve
