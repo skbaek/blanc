@@ -88,12 +88,12 @@ lemma Xinst.prep_inv_solvent
 
 -- Precond & Postcond : invariants in the main induction for proof of solvency preservation
 
-structure Precond (wa : Addr) (e : Env) (s : State) : Prop :=
+structure Precond (wa : Addr) (e : Env) (s : State) : Prop where
   (code : some (s.code wa) = Prog.compile weth)
   (nof : sum s.bal < 2 ^ 256)
   (solvent : s.Solvent wa e)
 
-structure Postcond (wa : Addr) (e : Env) (r : Result) : Prop :=
+structure Postcond (wa : Addr) (e : Env) (r : Result) : Prop where
   (code : some (r.code wa) = Prog.compile weth)
   (nof : sum r.bal < 2 ^ 256)
   (solvent : r.Solvent wa)
@@ -430,7 +430,7 @@ lemma result_solvent_of_state_solvent' {e : Env} {s : State} {r : Result}
     (h_sum : wbsum (s.stor e.cta) = wbsum (r.stor e.cta))
     (h_bal : s.bal e.cta = r.bal e.cta) : r.Solvent e.cta := by
   apply @solvent_zero_of_solvent _ e.clv
-  simp [State.Solvent, Result.Solvent, Storage.Solvent] at *
+  simp [State.Solvent, Storage.Solvent] at *
   rw [← h_sum, ← h_bal]; exact h_sv
 
 lemma result_solvent_of_state_solvent {e : Env} {s : State} {r : Result} :
@@ -546,7 +546,7 @@ lemma of_withdrawLoadCheck {e : Env} {s s'} (h : Line.Run e s withdrawLoadCheck 
     ∃ wad cbal,
       ([cbal <? wad, cbal, wad, wad] <<+ s'.stk) ∧
       (cbal = s'.stor e.cta (Addr.toWord e.cla)) := by
-  refine' ⟨_, _, _, _⟩ <;> try {linv; done}; revert h
+  refine' ⟨_, _, _, _⟩ <;> try {linv}; revert h
   apply cdl_append_elim (∃ _, _); intro wad; lexen 3
   have hs₀ : [] <<+ s.stk := nil_pref
   have hs₁ : [Addr.toWord e.cla, wad, wad] <<+ s₁.stk := by lpfx
@@ -817,7 +817,7 @@ theorem weth_inv_solvent (wa : Addr) :
           storage_solvent_zero_of_state_solvent
             <| Xinst.prep_inv_solvent asm asm h_ne h_nof h_sv
       | fail =>
-        simp [State.Rels.dft] at *; unfold State.Solvent
+        simp at *; unfold State.Solvent
         rw [← fail_inv_bal asm, ← fail_inv_stor asm]; exact h_sv
       | jump =>
         have h := Jinst.inv_stor asm
@@ -893,9 +893,9 @@ lemma transact_inv_solvent {ST RT w r wa}
       · simp only []
         rw [← transfer_inv_sum h_nof h_di]
         exact h_nof
-      · simp only [State.Solvent]
+      · simp only []
         intro hc; cases h_ne hc
-      · intro h; clear h; simp only [State.Solvent]
+      · intro h; clear h; simp only []
         rw [← h_eq]; apply h_wb
   | call gpr cld clv bal _ h_di cr =>
     apply (@weth_inv_solvent wa _ _ _ cr h_code _ _).solvent
@@ -904,7 +904,7 @@ lemma transact_inv_solvent {ST RT w r wa}
       · simp only []
         rw [← transfer_inv_sum h_nof h_di]
         exact h_nof
-      · simp only [State.Solvent]; intro h_eq
+      · simp only []; intro h_eq
         have h_eq : w.bal wa + clv = bal wa := by
           rcases h_di with ⟨_, bal', hd, hi⟩
           rw [(hd wa).right h_wa, ← (hi wa).left h_eq]
@@ -918,7 +918,7 @@ lemma transact_inv_solvent {ST RT w r wa}
         rw [Bits.toNat_add_eq_of_nof _ _ h_nof, Nat.add_le_add_iff_right]
         simp [World.Solvent, Storage.Solvent, Bits.toNat_zero] at h_wb
         apply h_wb
-      · simp only [State.Solvent]; intro h_ne
+      · simp only []; intro h_ne
         have h_eq : w.bal wa = bal wa := by
           rcases h_di with ⟨_, bal', hd, hi⟩
           apply Eq.trans ((hd wa).right h_wa) ((hi wa).right h_ne)

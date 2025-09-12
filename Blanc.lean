@@ -453,13 +453,3 @@ def main : List String → IO Unit
         (files.map System.FilePath.toString).putIndex
     pure ()
   | _ => IO.throw "error : invalid arguments"
-
-
--- def Bytes.toHexLine (bs : Bytes) : String :=
---   s!"hex\"{bs.toHex}\""
---
--- def WethByteCode : String :=
---   List.foldr
---      (λ s0 s1 => s0 ++ "\n" ++ s1)
---      "" <| List.map Bytes.toHexLine
---         <| List.chunks 31 <| Option.getD weth.compile []
