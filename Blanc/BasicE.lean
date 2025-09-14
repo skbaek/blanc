@@ -3,8 +3,8 @@
 
 import Mathlib.Data.Nat.Basic
 import Mathlib.Data.List.Lemmas
-import Mathlib.Util.Notation3
-import Mathlib.Data.Vector.Basic
+-- import Mathlib.Util.Notation3
+-- import Mathlib.Data.Vector.Basic
 
 instance : @Zero Bool := ⟨false⟩
 instance : @One Bool := ⟨true⟩
@@ -725,10 +725,16 @@ def List.ekat {ξ : Type u} (n : Nat) (xs : List ξ) : List ξ :=
 def List.ekatD {ξ : Type u} (n : Nat) (xs : List ξ) (x : ξ) : List ξ :=
   (xs.reverse.takeD n x).reverse
 
+theorem List.length_takeD {ξ : Type u} (n : Nat) (xs : List ξ) (x : ξ) :
+    (List.takeD n xs x).length = n := by
+  induction n generalizing xs with
+  | zero => simp
+  | succ n ih => simp; apply ih
+
 theorem List.length_ekatD {ξ : Type u} (n : Nat) (xs : List ξ) (x : ξ) :
     (List.ekatD n xs x).length = n := by
   apply Eq.trans List.length_reverse
-  apply Eq.trans (List.takeD_length _ _ _) rfl
+  apply Eq.trans (List.length_takeD _ _ _) rfl
 
 def B8L.toB256? (xs : B8L) : Option B256 := do
   let ⟨h, xs'⟩ ← xs.toB128Diff

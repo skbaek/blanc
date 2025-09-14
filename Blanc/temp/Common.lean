@@ -2,9 +2,9 @@
 -- verifying Blanc programs, including a correctness proof for the Blanc
 -- compiler and tactics for automating Blanc program verification.
 
-
 import Mathlib.Tactic.Have
-import Blanc.Semantics
+import Blanc.temp.Semantics
+
 
 
 def Ninst.toString : Ninst → String
@@ -22,8 +22,6 @@ def Func.toString : Func → String
   | .call _ => "[TAIL]"
 
 instance : Repr Func := ⟨λ p _ => Func.toString p⟩
-
-def Hex.toWord : String → Option Word := Hex.toBits 64
 
 def Func.stop : Func := .last .stop
 def Func.rev : Func := .last .rev
@@ -438,11 +436,6 @@ def Bools.shlo : List Bool → Bool → List Bool
 def Bools.shl : Nat → List Bool → List Bool
   | 0, xs => xs
   | n + 1, xs => shlo (shl n xs) 0
-
-lemma Bools.shl_nil {m} : Bools.shl m [] = [] := by
-  induction m with
-  | zero => rfl
-  | succ m ih => simp [shl, ih]; rfl
 
 lemma Bits.toBools_snoc {n} (xs : Bits n) (y) :
     (Bits.snoc xs y).toBools = xs.toBools ++ [y] := by
@@ -3122,9 +3115,6 @@ def show_nth' : Nat → Lean.Elab.Tactic.TacticM Unit
   | 0 => "Stack.Nth.head".apply
   | n +1 => do "Stack.Nth.tail".apply; show_nth' n
 
-def appRefl : Lean.Elab.Tactic.TacticM Unit :=
-  Lean.Elab.Tactic.evalRefl Lean.Syntax.missing
-
 def show_swap' : Nat → Lean.Elab.Tactic.TacticM Unit
   | 0 => "Stack.swapCore_zero".apply
   | n + 1 => do "Stack.swapCore_succ".apply; show_swap' n
@@ -3171,7 +3161,6 @@ partial def line_pref : Lean.Elab.Tactic.TacticM Unit :=
         let x ← get_take (n.val + 2) px
         Lean.Expr.apply <| Lean.mkApp "Line.spx_log".toExpr x
         Lean.Elab.Tactic.evalRefl Lean.Syntax.missing
-        --appRefl
       | ~q(Ninst.swap $nx) =>
         let n ← unsafe Lean.Meta.evalExpr (Fin 16) q(Fin 16) nx
         let x ← get_swap n.val px

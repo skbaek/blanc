@@ -1,6 +1,8 @@
 -- Solvent.lean : proof of solvency preservation for the ported WETH contract
 
-import Blanc.Weth
+import Blanc.temp.Weth
+
+
 
 def Storage.rest (s : Storage) : Addr → Word := s ∘ Addr.toWord
 

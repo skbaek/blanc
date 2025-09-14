@@ -1,7 +1,10 @@
 -- Semantics.lean : formalized semantics of the EVM and Blanc
 
-import Blanc.Types
+import Blanc.temp.Basic
+import Blanc.TypesE
 import Blanc.Hash
+
+
 
 def Rinst.toByte : Rinst → Byte
   | add          => Ox x0 x1
@@ -295,6 +298,11 @@ infix:70 " ±<? " => slt_check
 infix:70 " ±>? " => sgt_check
 infix:70 " =? " => eq_check
 
+def Bytes.toB8L : Bytes → B8L := List.map Byte.toB8
+def Bytes.keccak (xs : Bytes) : Word :=
+  xs.toB8L.keccak.toBits
+
+def String.keccak (s : String) : Word := s.toBytes.keccak
 
 def State.Lt (s s' : State) : Prop := ∃ x y, State.Diff [x, y] [x <? y] s s'
 def State.Gt (s s' : State) : Prop := ∃ x y, State.Diff [x, y] [x >? y] s s'

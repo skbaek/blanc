@@ -468,16 +468,10 @@ def ByteArray.run (bnd n : Nat) (wc : Fin 17) (bs : ByteArray) (ws : Array B64) 
 
 end KECCAK
 
--- def Bytes.keccak (bs : Bytes) : Word :=
---   KECCAK.Bytes.run (0 : Fin 17) bs <| .replicate 25 <| .zero 64
-
 def B8L.keccak (bs : B8L) : B256 :=
   KECCAK.B8L.run (0 : Fin 17) bs <| .replicate 25 0
 
 def ByteArray.keccak (loc sz : Nat) (bs : ByteArray) : B256 :=
   KECCAK.ByteArray.run (loc + sz) sz (0 : Fin 17) bs <| .replicate 25 0
-
--- def String.keccak (s : String) : Word :=
---   Bytes.keccak s.toBytes
 
 def B256.keccak (x : B256) : B256 := B8L.keccak <| x.toB8L

@@ -2,7 +2,7 @@ import «Blanc».Execution
 
 
 
-/- ----------------- TESTING DEFS ------------------ -/
+----------------- TESTING DEFS ------------------
 
 def Lean.Json.toIoList : Lean.Json → IO (List Json)
   | .arr a => return a.toList
@@ -221,7 +221,7 @@ def runBlockchainStTest (vb : Bool) (idx? : Option Nat)
     let (some chain) ← processBlockJsons vb chain blockJsons | .ok ()
     let lastBlockHash ← json.find "lastblockhash" >>= Lean.Json.toIoB256
     let lastBlock ← chain.blocks.getLast?.toIO "error : no last block "
-    let lastBlockHash' := (Header.toBLT lastBlock.header).toB8L.keccak--  (B8L.keccak ∘ BLT.encode)
+    let lastBlockHash' := (Header.toBLT lastBlock.header).toB8L.keccak
     .guard
       (lastBlockHash = lastBlockHash')
       s!"error : last block hash does not match\n  expected : {lastBlockHash}\n  computed : {lastBlockHash'}"
