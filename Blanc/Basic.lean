@@ -5,7 +5,8 @@ import Mathlib.Data.Nat.Basic
 import Mathlib.Data.List.Lemmas
 import Mathlib.Util.Notation3
 import Mathlib.Data.Vector.Basic
-import Blanc.BasicE
+import Elevm.Basic
+
 
 
 -- Boolean lemmas --

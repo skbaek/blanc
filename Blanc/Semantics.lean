@@ -1,8 +1,8 @@
 -- Semantics.lean : formalized semantics of the EVM and Blanc
 
-import Blanc.temp.Basic
-import Blanc.TypesE
-import Blanc.Hash
+import Blanc.Basic
+import Elevm.Hash
+import Elevm.Types
 
 
 

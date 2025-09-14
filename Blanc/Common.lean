@@ -3,7 +3,7 @@
 -- compiler and tactics for automating Blanc program verification.
 
 import Mathlib.Tactic.Have
-import Blanc.temp.Semantics
+import Blanc.Semantics
 
 
 

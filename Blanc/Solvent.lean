@@ -1,6 +1,6 @@
 -- Solvent.lean : proof of solvency preservation for the ported WETH contract
 
-import Blanc.temp.Weth
+import Blanc.Weth
 
 
 
