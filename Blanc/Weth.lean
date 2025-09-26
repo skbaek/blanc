@@ -1,4 +1,4 @@
--- Weth.lean : a proof-of-concept port of the Wrapped Ether (WETH) contract
+-- Weth.lean : proof-of-concept implementation of the Wrapped Ether (WETH) contract
 
 import Blanc.Common
 

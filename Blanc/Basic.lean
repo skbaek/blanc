@@ -1,5 +1,5 @@
 -- Basic.lean : generic definitions and lemmas (e.g. for Booleans, lists,
--- bit vectors and bytes) that are useful for but not specific to Blanc
+-- bit vectors and bytes) useful for but not specific to Blanc
 
 import Mathlib.Data.Nat.Basic
 import Mathlib.Data.List.Lemmas
