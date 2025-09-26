@@ -7,11 +7,11 @@ This repo contains the following files:
 - [Basic.lean](Blanc/Basic.lean): generic definitions and lemmas (for Booleans, 
   lists, bit vectors, bytes, etc.) useful for but not specific to Blanc.
 - [Semantics.lean](Blanc/Semantics.lean): formalized semantics of EVM and Blanc.
-- [Common.lean](Blanc/Common.lean): definitions and lemmas generally useful for 
-  writing and verifying Blanc programs, including the correctness proof for the 
-  Blanc compiler and tactics for automating Blanc program verification. 
+- [Common.lean](Blanc/Common.lean): definitions and lemmas for writing and 
+  verifying Blanc programs, including the Blanc compiler's correctness proof and 
+  tactics for automating Blanc program verification. 
 - [Weth.lean](Blanc/Weth.lean): proof-of-concept implementation of the Wrapped 
-  Ether (WETH) contract.
-- [Solvent.lean](Blanc/Solvent.lean): proof of solvency for WETH implementation.
+  Ether (WETH) contract in Blanc.
+- [Solvent.lean](Blanc/Solvent.lean): proof of solvency for the WETH implementation.
 
 
