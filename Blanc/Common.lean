@@ -114,7 +114,7 @@ def prepend : Line → Func → Func
 
 infixr:65 " +++ " => prepend
 
-inductive Line.Run : Env → State → Line → State → Prop
+inductive Line.Run : Env → Desc → Line → Desc → Prop
   | nil : ∀ {e s}, Line.Run e s [] s
   | cons :
     ∀ {e s i s' l s''},
@@ -176,7 +176,7 @@ def returnTrue : Func :=
 abbrev Exec.Pred : Type :=
   ∀ e s pc r, Exec e s pc r → Prop
 
-abbrev Prog.Pred : Type := Env → State → Prog → Result → Prop
+abbrev Prog.Pred : Type := Env → Desc → Prog → Result → Prop
 
 def Exec.Fa (π : Exec.Pred) : Prop :=
   ∀ e s pc r (ex : Exec e s pc r), π _ _ _ _ ex
@@ -359,19 +359,19 @@ lemma of_run_append  {e s} (a) {b s''} (h : Line.Run e s (a ++ b) s'') :
 lemma of_run_last {o : Linst} {c e s r} (h : (o ::.).Run c e s r) : o.Run e s r := by
   cases h; assumption
 
-lemma of_run_next {c e} {s : State} {i} {p : Func} {r}
+lemma of_run_next {c e} {s : Desc} {i} {p : Func} {r}
     (h : Func.Run c e s (i ::: p) r) :
     ∃ s', (Ninst.Run e s i s' ∧ Func.Run c e s' p r) := by
-  cases h; rename State => s'; refine ⟨s', asm, asm⟩
+  cases h; rename Desc => s'; refine ⟨s', asm, asm⟩
 
 lemma of_run_branch {e s r} {p q : Func} (h : Func.Run c e s (q <?> p) r) :
-    (∃ s', State.Pop [0] s s' ∧ Func.Run c e s' p r) ∨
-    (∃ w s', w ≠ 0 ∧ State.Pop [w] s s' ∧ Func.Run c e s' q r) := by
+    (∃ s', Desc.Pop [0] s s' ∧ Func.Run c e s' p r) ∨
+    (∃ w s', w ≠ 0 ∧ Desc.Pop [w] s s' ∧ Func.Run c e s' q r) := by
   cases h
   · left; refine ⟨_, asm, asm⟩
   · right; refine ⟨_, _, asm, asm, asm⟩
 
-lemma run_pop (e) {x s s'} (h : State.Pop [x] s s') : Run e s pop s' :=
+lemma run_pop (e) {x s s'} (h : Desc.Pop [x] s s') : Run e s pop s' :=
   Ninst.Run.reg ⟨x, h⟩
 
 lemma of_run_branch' {c e s r} {p q : Func} (h : Func.Run c e s (q <?> p) r) :
@@ -495,7 +495,7 @@ instance {w} : Decidable (ValidAddr w) := by
   apply decidable_of_iff _ validAddr_iff.symm
 
 lemma of_run_branch_rev {e s p r} (h : Func.Run c e s (.rev <?> p) r) :
-    ∃ s', State.Pop [0] s s' ∧ Func.Run c e s' p r := by
+    ∃ s', Desc.Pop [0] s s' ∧ Func.Run c e s' p r := by
   rcases of_run_branch h with h' | ⟨_, _, _, _, h'⟩
   · apply h'
   · cases of_run_last h'
@@ -509,18 +509,18 @@ lemma op_run_iff_inst_run {o} : Rinst.Run e s o s' ↔ Ninst.Run e s (Ninst.reg 
   · apply opRun_of_instRun
 
 lemma of_run_push {e s s' xs p} (h : Ninst.Run e s (push xs p) s') :
-    State.Push [xs.toBits 32] s s' := by cases h with | push h => assumption
+    Desc.Push [xs.toBits 32] s s' := by cases h with | push h => assumption
 
 lemma of_run_pushWord {e s s' x} (h : Ninst.Run e s (pushWord x) s') :
-    State.Push [x] s s' := by
+    Desc.Push [x] s s' := by
   cases h with
   | push h => rw [Bytes.sig_toBits, toBits_toBytes] at h; exact h
 
-lemma run_pushWord (e) {s s' x} (h : State.Push [x] s s') : Ninst.Run e s (pushWord x) s' := by
+lemma run_pushWord (e) {s s' x} (h : Desc.Push [x] s s') : Ninst.Run e s (pushWord x) s' := by
   apply Ninst.Run.push; rw [Bytes.sig_toBits, toBits_toBytes]; exact h
 
-lemma frel_of_sstore {e} {s s' : State} {x y xs}:
-    State.Sstore e s s' → (x :: y :: xs <<+ s.stk) →
+lemma frel_of_sstore {e} {s s' : Desc} {x y xs}:
+    Desc.Sstore e s s' → (x :: y :: xs <<+ s.stk) →
     (Frel e.cta (Overwrite x y) s.stor s'.stor) := by
   intros h0 h1
   rcases h0 with ⟨x', y', h2, h3⟩; clear h3
@@ -541,32 +541,32 @@ lemma of_run_call {e} {s s'} (h : Ninst.Run e s .call s') :
   · left; refine ⟨_, _, _, asm, .inr asm⟩
   · right; assumption
 
-def Rinst.Inv {ξ : Type} (r : State → ξ) (o : Rinst) : Prop :=
+def Rinst.Inv {ξ : Type} (r : Desc → ξ) (o : Rinst) : Prop :=
   ∀ {e s s'}, Rinst.Run e s o s' → r s = r s'
 
-def Jinst.Inv {ξ : Type} (r : State → ξ) (o : Jinst) : Prop :=
+def Jinst.Inv {ξ : Type} (r : Desc → ξ) (o : Jinst) : Prop :=
   ∀ {e s pc s' pc'}, Jinst.Run e s pc o s' pc' → r s = r s'
 
-def Linst.Inv {ξ : Type} (f : State → ξ) (g : Result → ξ) (o : Linst) : Prop :=
+def Linst.Inv {ξ : Type} (f : Desc → ξ) (g : Result → ξ) (o : Linst) : Prop :=
   ∀ {e s r}, Linst.Run e s o r → f s = g r
 
-def Ninst.Inv {ξ : Type} (r : State → ξ) (i : Ninst) : Prop :=
+def Ninst.Inv {ξ : Type} (r : Desc → ξ) (i : Ninst) : Prop :=
   ∀ {e s s'}, Ninst.Run e s i s' → r s = r s'
 
-def Line.Inv {ξ : Type} (f : State → ξ) (l : Line) : Prop :=
+def Line.Inv {ξ : Type} (f : Desc → ξ) (l : Line) : Prop :=
   ∀ {e s s'}, l.Run e s s' → f s = f s'
 
-def Func.Inv {ξ : Type} (f : State → ξ) (g : Result → ξ) (p : Func) : Prop :=
+def Func.Inv {ξ : Type} (f : Desc → ξ) (g : Result → ξ) (p : Func) : Prop :=
   ∀ {c e s r}, Func.Run c e s p r → f s = g r
 
 def RelInv {X Y} (f : X → Y) (r : X → X → Prop) : Prop :=
   ∀ {x x'}, r x x' → f x = f x'
 
-class Rinst.Hinv {ξ : Type} (f : State → ξ) (o : Rinst) where (inv : Rinst.Inv f o)
-class Linst.Hinv {ξ : Type} (f : State → ξ) (g : Result → ξ) (o : Linst) where (inv : Linst.Inv f g o)
-class Ninst.Hinv {ξ : Type} (f : State → ξ) (i : Ninst) where (inv : Ninst.Inv f i)
+class Rinst.Hinv {ξ : Type} (f : Desc → ξ) (o : Rinst) where (inv : Rinst.Inv f o)
+class Linst.Hinv {ξ : Type} (f : Desc → ξ) (g : Result → ξ) (o : Linst) where (inv : Linst.Inv f g o)
+class Ninst.Hinv {ξ : Type} (f : Desc → ξ) (i : Ninst) where (inv : Ninst.Inv f i)
 
-lemma fail_inv_bal {o : Xinst} : RelInv State.bal (Fail · o ·) := by
+lemma fail_inv_bal {o : Xinst} : RelInv Desc.bal (Fail · o ·) := by
   intro s s'
   match o with
   | .create => simp [Fail]; intro _ _ _ h; apply h.bal
@@ -576,7 +576,7 @@ lemma fail_inv_bal {o : Xinst} : RelInv State.bal (Fail · o ·) := by
   | .create2 => simp [Fail]; intro _ _ _ _ h; apply h.bal
   | .statcall => simp [Fail]; intro _ _ _ _ _ _ h; apply h.bal
 
-lemma fail_inv_stor {o : Xinst} : RelInv State.stor (Fail · o ·) := by
+lemma fail_inv_stor {o : Xinst} : RelInv Desc.stor (Fail · o ·) := by
   intro s s'
   match o with
   | .create => simp [Fail]; intro _ _ _ h; apply h.stor
@@ -586,7 +586,7 @@ lemma fail_inv_stor {o : Xinst} : RelInv State.stor (Fail · o ·) := by
   | .create2 => simp [Fail]; intro _ _ _ _ h; apply h.stor
   | .statcall => simp [Fail]; intro _ _ _ _ _ _ h; apply h.stor
 
-lemma fail_inv_code {o : Xinst} : RelInv State.code (Fail · o ·) := by
+lemma fail_inv_code {o : Xinst} : RelInv Desc.code (Fail · o ·) := by
   intro s s'
   match o with
   | .create => simp [Fail]; intro _ _ _ h; apply h.code
@@ -598,52 +598,52 @@ lemma fail_inv_code {o : Xinst} : RelInv State.code (Fail · o ·) := by
 
 syntax "app_bal" : tactic
 macro_rules
-  | `(tactic| app_bal) =>  `(tactic| {have h' := State.Rel.bal asm; apply h'})
+  | `(tactic| app_bal) =>  `(tactic| {have h' := Desc.Rel.bal asm; apply h'})
 
 syntax "app_code" : tactic
 macro_rules
-  | `(tactic| app_code) => `(tactic| {have h' := State.Rel.code asm; apply h'})
+  | `(tactic| app_code) => `(tactic| {have h' := Desc.Rel.code asm; apply h'})
 
 syntax "app_stor" : tactic
 macro_rules
-  | `(tactic| app_stor) => `(tactic| {have h' := State.Rel.stor asm; rw[h']})
+  | `(tactic| app_stor) => `(tactic| {have h' := Desc.Rel.stor asm; rw[h']})
 
 syntax "app_dest" : tactic
 macro_rules
-  | `(tactic| app_dest) => `(tactic| {have h' := State.Rel.dest asm; apply h'})
+  | `(tactic| app_dest) => `(tactic| {have h' := Desc.Rel.dest asm; apply h'})
 
 syntax "app_ret" : tactic
 macro_rules
-  | `(tactic| app_ret) => `(tactic| {have h' := State.Rel.ret asm; apply h'})
+  | `(tactic| app_ret) => `(tactic| {have h' := Desc.Rel.ret asm; apply h'})
 
 syntax "app_mem" : tactic
 macro_rules
-  | `(tactic| app_mem) => `(tactic| {have h' := State.Rel.mem asm; apply h'})
+  | `(tactic| app_mem) => `(tactic| {have h' := Desc.Rel.mem asm; apply h'})
 
-lemma Jinst.inv_bal {o} : Jinst.Inv State.bal o := by
+lemma Jinst.inv_bal {o} : Jinst.Inv Desc.bal o := by
   intros e s pc s' pc' h
-  cases h <;> try {have h' := State.Rel.bal asm; apply h'}; rfl
+  cases h <;> try {have h' := Desc.Rel.bal asm; apply h'}; rfl
 
-lemma Jinst.inv_code {o} : Jinst.Inv State.code o := by
+lemma Jinst.inv_code {o} : Jinst.Inv Desc.code o := by
   intros e s pc s' pc' h
-  cases h <;> try {have h' := State.Rel.code asm; apply h'}; rfl
+  cases h <;> try {have h' := Desc.Rel.code asm; apply h'}; rfl
 
-lemma Jinst.inv_stor {o} : Jinst.Inv State.stor o := by
+lemma Jinst.inv_stor {o} : Jinst.Inv Desc.stor o := by
   intros e s pc s' pc' h
-  cases h <;> try {have h' := State.Rel.stor asm; apply h'}; rfl
+  cases h <;> try {have h' := Desc.Rel.stor asm; apply h'}; rfl
 
-lemma Linst.inv_stor {o} : Linst.Inv State.stor Result.stor o := by intros e s r h; cases h <;> rfl
-lemma Linst.inv_code {o} : Linst.Inv State.code Result.code o := by intros e s r h; cases h <;> rfl
+lemma Linst.inv_stor {o} : Linst.Inv Desc.stor Result.stor o := by intros e s r h; cases h <;> rfl
+lemma Linst.inv_code {o} : Linst.Inv Desc.code Result.code o := by intros e s r h; cases h <;> rfl
 
-lemma stop_inv_bal : Linst.Inv State.bal Result.bal (Linst.stop) := by intros e s r h; cases h; rfl
-lemma ret_inv_bal : Linst.Inv State.bal Result.bal Linst.ret := by intros e s r h; cases h; rfl
+lemma stop_inv_bal : Linst.Inv Desc.bal Result.bal (Linst.stop) := by intros e s r h; cases h; rfl
+lemma ret_inv_bal : Linst.Inv Desc.bal Result.bal Linst.ret := by intros e s r h; cases h; rfl
 
-instance {o} : Linst.Hinv State.stor Result.stor o := ⟨Linst.inv_stor⟩
-instance {o} : Linst.Hinv State.code Result.code o := ⟨Linst.inv_code⟩
+instance {o} : Linst.Hinv Desc.stor Result.stor o := ⟨Linst.inv_stor⟩
+instance {o} : Linst.Hinv Desc.code Result.code o := ⟨Linst.inv_code⟩
 
 instance {ξ} {f g}: @Linst.Hinv ξ f g Linst.rev := by constructor; intros e s r h; cases h
-instance : Linst.Hinv State.bal Result.bal Linst.ret := ⟨ret_inv_bal⟩
-instance : Linst.Hinv State.bal Result.bal Linst.stop := ⟨stop_inv_bal⟩
+instance : Linst.Hinv Desc.bal Result.bal Linst.ret := ⟨ret_inv_bal⟩
+instance : Linst.Hinv Desc.bal Result.bal Linst.stop := ⟨stop_inv_bal⟩
 
 syntax "app_bal_rec" : tactic
 macro_rules
@@ -697,67 +697,67 @@ macro_rules
   | `(tactic| show_hinv_mem) =>
     `(tactic| constructor; intros e s s' h; app_mem_rec)
 
-instance : Rinst.Hinv State.mem Rinst.add := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.mul := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.sub := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.div := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.sdiv := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.mod := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.smod := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.addmod := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.mulmod := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.exp := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.signextend := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.lt := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.gt := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.slt := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.sgt := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.eq := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.iszero := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.and := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.or := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.xor := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.not := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.byte := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.shr := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.shl := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.sar := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.kec := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.address := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.balance := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.origin := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.caller := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.callvalue := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.calldataload := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.calldatasize := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.codesize := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.gasprice := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.extcodesize := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.retdatasize := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.extcodehash := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.blockhash := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.coinbase := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.timestamp := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.number := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.prevrandao := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.gaslimit := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.chainid := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.selfbalance := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.basefee := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.blobhash := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.blobbasefee := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.pop := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.mload := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.sload := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.sstore := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.tload := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.tstore := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.pc := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.msize := by show_hinv_mem
-instance : Rinst.Hinv State.mem Rinst.gas := by show_hinv_mem
-instance {n} : Rinst.Hinv State.mem (Rinst.dup n) := by show_hinv_mem
-instance {n} : Rinst.Hinv State.mem (Rinst.swap n) := by show_hinv_mem
-instance {n} : Rinst.Hinv State.mem (Rinst.log n) := by
+instance : Rinst.Hinv Desc.mem Rinst.add := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.mul := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.sub := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.div := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.sdiv := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.mod := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.smod := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.addmod := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.mulmod := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.exp := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.signextend := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.lt := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.gt := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.slt := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.sgt := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.eq := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.iszero := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.and := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.or := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.xor := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.not := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.byte := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.shr := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.shl := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.sar := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.kec := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.address := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.balance := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.origin := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.caller := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.callvalue := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.calldataload := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.calldatasize := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.codesize := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.gasprice := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.extcodesize := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.retdatasize := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.extcodehash := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.blockhash := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.coinbase := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.timestamp := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.number := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.prevrandao := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.gaslimit := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.chainid := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.selfbalance := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.basefee := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.blobhash := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.blobbasefee := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.pop := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.mload := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.sload := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.sstore := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.tload := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.tstore := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.pc := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.msize := by show_hinv_mem
+instance : Rinst.Hinv Desc.mem Rinst.gas := by show_hinv_mem
+instance {n} : Rinst.Hinv Desc.mem (Rinst.dup n) := by show_hinv_mem
+instance {n} : Rinst.Hinv Desc.mem (Rinst.swap n) := by show_hinv_mem
+instance {n} : Rinst.Hinv Desc.mem (Rinst.log n) := by
   match n with
   | ⟨0, _⟩ => show_hinv_mem
   | ⟨1, _⟩ => show_hinv_mem
@@ -766,71 +766,71 @@ instance {n} : Rinst.Hinv State.mem (Rinst.log n) := by
   | ⟨4, _⟩ => show_hinv_mem
   | ⟨5, h⟩ => cases (Nat.lt_irrefl _ h)
 
-instance : Rinst.Hinv State.stor Rinst.add := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.mul := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.sub := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.div := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.sdiv := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.mod := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.smod := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.addmod := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.mulmod := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.exp := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.signextend := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.lt := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.gt := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.slt := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.sgt := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.eq := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.iszero := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.and := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.or := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.xor := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.not := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.byte := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.shr := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.shl := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.sar := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.kec := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.address := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.balance := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.origin := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.caller := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.callvalue := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.calldataload := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.calldatasize := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.calldatacopy := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.codesize := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.codecopy := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.gasprice := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.extcodesize := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.extcodecopy := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.retdatasize := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.retdatacopy := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.extcodehash := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.blockhash := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.coinbase := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.timestamp := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.number := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.prevrandao := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.gaslimit := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.chainid := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.selfbalance := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.basefee := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.blobhash := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.blobbasefee := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.pop := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.mload := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.mstore := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.mstore8 := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.sload := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.tload := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.pc := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.msize := by show_hinv_stor
-instance : Rinst.Hinv State.stor Rinst.gas := by show_hinv_stor
-instance {n} : Rinst.Hinv State.stor (Rinst.dup n) := by show_hinv_stor
-instance {n} : Rinst.Hinv State.stor (Rinst.swap n) := by show_hinv_stor
-instance {n} : Rinst.Hinv State.stor (Rinst.log n) := by
+instance : Rinst.Hinv Desc.stor Rinst.add := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.mul := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.sub := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.div := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.sdiv := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.mod := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.smod := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.addmod := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.mulmod := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.exp := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.signextend := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.lt := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.gt := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.slt := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.sgt := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.eq := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.iszero := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.and := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.or := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.xor := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.not := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.byte := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.shr := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.shl := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.sar := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.kec := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.address := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.balance := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.origin := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.caller := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.callvalue := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.calldataload := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.calldatasize := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.calldatacopy := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.codesize := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.codecopy := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.gasprice := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.extcodesize := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.extcodecopy := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.retdatasize := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.retdatacopy := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.extcodehash := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.blockhash := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.coinbase := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.timestamp := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.number := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.prevrandao := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.gaslimit := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.chainid := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.selfbalance := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.basefee := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.blobhash := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.blobbasefee := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.pop := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.mload := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.mstore := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.mstore8 := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.sload := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.tload := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.pc := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.msize := by show_hinv_stor
+instance : Rinst.Hinv Desc.stor Rinst.gas := by show_hinv_stor
+instance {n} : Rinst.Hinv Desc.stor (Rinst.dup n) := by show_hinv_stor
+instance {n} : Rinst.Hinv Desc.stor (Rinst.swap n) := by show_hinv_stor
+instance {n} : Rinst.Hinv Desc.stor (Rinst.log n) := by
   match n with
   | ⟨0, _⟩ => show_hinv_stor
   | ⟨1, _⟩ => show_hinv_stor
@@ -839,7 +839,7 @@ instance {n} : Rinst.Hinv State.stor (Rinst.log n) := by
   | ⟨4, _⟩ => show_hinv_stor
   | ⟨5, h⟩ => cases (Nat.lt_irrefl _ h)
 
-lemma Rinst.inv_bal {o} : Rinst.Inv State.bal o := by
+lemma Rinst.inv_bal {o} : Rinst.Inv Desc.bal o := by
   intros e s s' h; cases o <;>
   simp [Rinst.Run, Function.swap] at h <;> try {app_bal_rec}
   rename (Fin 5) => n
@@ -851,7 +851,7 @@ lemma Rinst.inv_bal {o} : Rinst.Inv State.bal o := by
   | ⟨4, _⟩ => app_bal_rec
   | ⟨5, h⟩ => cases (Nat.lt_irrefl _ h)
 
-lemma Rinst.inv_code {o} : Rinst.Inv State.code o := by
+lemma Rinst.inv_code {o} : Rinst.Inv Desc.code o := by
   intros e s s' h; cases o <;>
   simp [Rinst.Run, Function.swap] at h <;> try {app_code_rec}
   rename (Fin 5) => n
@@ -877,7 +877,7 @@ lemma Rinst.inv_stor {e s o s' a}
     | ⟨4, _⟩ => app_stor_rec
     | ⟨5, h⟩ => cases (Nat.lt_irrefl _ h)
 
-lemma Rinst.inv_dest {o} : Rinst.Inv State.dest o := by
+lemma Rinst.inv_dest {o} : Rinst.Inv Desc.dest o := by
   intros e s s' h; cases o <;>
   simp [Rinst.Run, Function.swap] at h <;> try app_dest_rec
   rename (Fin 5) => n
@@ -889,7 +889,7 @@ lemma Rinst.inv_dest {o} : Rinst.Inv State.dest o := by
   | ⟨4, _⟩ => app_dest_rec
   | ⟨5, h⟩ => cases (Nat.lt_irrefl _ h)
 
-lemma Rinst.inv_ret {o} : Rinst.Inv State.ret o := by
+lemma Rinst.inv_ret {o} : Rinst.Inv Desc.ret o := by
   intros e s s' h; cases o <;>
   simp [Rinst.Run, Function.swap] at h <;> try app_ret_rec
   rename (Fin 5) => n
@@ -903,7 +903,7 @@ lemma Rinst.inv_ret {o} : Rinst.Inv State.ret o := by
 
 lemma Xinst.prep_inv_code {e s ep sp o r sw}
     (h : Xinst.Run' e s ep sp o r sw) : s.code = sp.code := by
-  cases h <;> simp [State.prep]
+  cases h <;> simp [Desc.prep]
 
 lemma Xinst.code_eq_nil_of_run' {e s ep sp o rx sw}
     (h : Xinst.Run' e s ep sp o rx sw)
@@ -913,22 +913,22 @@ lemma Xinst.code_eq_nil_of_run' {e s ep sp o rx sw}
 
 lemma Xinst.wrap_inv_stor {e s ep sp o r sw}
     (h : Xinst.Run' e s ep sp o r sw) : r.stor = sw.stor := by
-  cases h <;> try {simp [State.wrap']} <;> {simp [State.wrap]}
+  cases h <;> try {simp [Desc.wrap']} <;> {simp [Desc.wrap]}
 
 lemma Xinst.prep_inv_stor {e s ep sp o r sw}
     (h : Xinst.Run' e s ep sp o r sw) : s.stor = sp.stor := by
-  cases h <;> simp [State.prep]
+  cases h <;> simp [Desc.prep]
 
 lemma Xinst.wrap_inv_bal {e s ep sp o r sw}
     (h : Xinst.Run' e s ep sp o r sw) : r.bal = sw.bal := by cases h <;> rfl
 
 lemma Xinst.wrap_inv_code {e s ep sp o r sw}
     (h : Xinst.Run' e s ep sp o r sw) (h' : o.isCall) : r.code = sw.code := by
-  cases h' <;> cases h <;> simp [State.wrap]
+  cases h' <;> cases h <;> simp [Desc.wrap]
 
 lemma Xinst.wrap_inv_code' {e s ep sp o r sw a}
     (h : Xinst.Run' e s ep sp o r sw) (h' : ep.cta ≠ a) : r.code a = sw.code a := by
-  cases h <;> try {simp [State.wrap]} <;>
+  cases h <;> try {simp [Desc.wrap]} <;>
   {rename (Overwrite _ _ _ _) => h_ow; apply (h_ow a).right h'}
 
 lemma Xinst.wrap_inv_code'' {a : Addr} {e s ep sp o r sw}
@@ -936,7 +936,7 @@ lemma Xinst.wrap_inv_code'' {a : Addr} {e s ep sp o r sw}
   cases o <;> try {rw [Xinst.wrap_inv_code h cst]} <;>
   {apply Xinst.wrap_inv_code' h; intro hc; apply h'; rw [← hc]; cases h <;> assumption}
 
-lemma Step.inv_code {e : Env} {s : State} {pc : ℕ} {s' : State} {pc' : ℕ}
+lemma Step.inv_code {e : Env} {s : Desc} {pc : ℕ} {s' : Desc} {pc' : ℕ}
     (h_step : Step e s pc s' pc') : s.code = s'.code := by
   cases h_step with
   | reg => exact Rinst.inv_code asm
@@ -946,7 +946,7 @@ lemma Step.inv_code {e : Env} {s : State} {pc : ℕ} {s' : State} {pc' : ℕ}
     apply Xinst.wrap_inv_code asm asm
   | fail => rw [fail_inv_code asm]
   | jump => rw [Jinst.inv_code asm]
-  | push => rw [(asm : State.Push _ _ _).code]
+  | push => rw [(asm : Desc.Push _ _ _).code]
 
 lemma Exec.inv_code {a} :
     ∀ {e s pc r}, Exec e s pc r → s.code a ≠ [] → s.code a = r.code a := by
@@ -982,48 +982,48 @@ lemma Ninst.inv_code {e s i s' a} (h_run : Ninst.Run e s i s')
   cases h_run
   · rw [Rinst.inv_code asm]
   · rw [Xinst.inv_code asm h_ne]
-  · rw [(asm : State.Push _ _ _).code]
+  · rw [(asm : Desc.Push _ _ _).code]
 
-lemma Line.nil_inv {ξ : Type} {f : State → ξ} : Line.Inv f [] := by
+lemma Line.nil_inv {ξ : Type} {f : Desc → ξ} : Line.Inv f [] := by
   intros e s s' h; cases h; rfl
 
-lemma Line.cons_inv {ξ : Type} {f : State → ξ} {i l} :
+lemma Line.cons_inv {ξ : Type} {f : Desc → ξ} {i l} :
     Ninst.Inv f i → Line.Inv f l → Line.Inv f (i :: l) := by
   intros h0 h1 e s s'' h2
   rcases Line.of_run_cons h2 with ⟨s', h3, h4⟩
   apply Eq.trans (h0 h3) (h1 h4)
 
-instance {ξ : Type} (f : State → ξ) (o : Rinst) [Rinst.Hinv f o] :
+instance {ξ : Type} (f : Desc → ξ) (o : Rinst) [Rinst.Hinv f o] :
     Ninst.Hinv f (Ninst.reg o) := by
   constructor; intros e s s' h
   apply Rinst.Hinv.inv <| opRun_of_instRun h
 
-instance {o : Rinst} : Rinst.Hinv State.bal o := ⟨Rinst.inv_bal⟩
-instance {o : Rinst} : Rinst.Hinv State.code o := ⟨Rinst.inv_code⟩
-instance {o : Rinst} : Rinst.Hinv State.ret o := ⟨Rinst.inv_ret⟩
-instance {o : Rinst} : Rinst.Hinv State.dest o := ⟨Rinst.inv_dest⟩
+instance {o : Rinst} : Rinst.Hinv Desc.bal o := ⟨Rinst.inv_bal⟩
+instance {o : Rinst} : Rinst.Hinv Desc.code o := ⟨Rinst.inv_code⟩
+instance {o : Rinst} : Rinst.Hinv Desc.ret o := ⟨Rinst.inv_ret⟩
+instance {o : Rinst} : Rinst.Hinv Desc.dest o := ⟨Rinst.inv_dest⟩
 
-instance {bs h_le} : Ninst.Hinv State.bal (Ninst.push bs h_le) := by
+instance {bs h_le} : Ninst.Hinv Desc.bal (Ninst.push bs h_le) := by
   constructor; intros e s s' h
   cases h with | push h => apply h.bal
 
-instance {bs h_le} : Ninst.Hinv State.code (Ninst.push bs h_le) := by
+instance {bs h_le} : Ninst.Hinv Desc.code (Ninst.push bs h_le) := by
   constructor; intros e s s' h
   cases h with | push h => apply h.code
 
-instance {bs h_le} : Ninst.Hinv State.stor (Ninst.push bs h_le) := by
+instance {bs h_le} : Ninst.Hinv Desc.stor (Ninst.push bs h_le) := by
   constructor; intros e s s' h
   cases h with | push h => apply h.stor
 
-instance {bs h_le} : Ninst.Hinv State.ret (Ninst.push bs h_le) := by
+instance {bs h_le} : Ninst.Hinv Desc.ret (Ninst.push bs h_le) := by
   constructor; intros e s s' h
   cases h with | push h => apply h.ret
 
-instance {bs h_le} : Ninst.Hinv State.dest (Ninst.push bs h_le) := by
+instance {bs h_le} : Ninst.Hinv Desc.dest (Ninst.push bs h_le) := by
   constructor; intros e s s' h
   cases h with | push h => apply h.dest
 
-instance {bs h_le} : Ninst.Hinv State.mem (Ninst.push bs h_le) := by
+instance {bs h_le} : Ninst.Hinv Desc.mem (Ninst.push bs h_le) := by
   constructor; intros e s s' h
   cases h with | push h => apply h.mem
 
@@ -1032,15 +1032,15 @@ macro_rules
   | `(tactic| show_pushWord_hinv) =>
     `(tactic| constructor; unfold Ninst.pushWord; apply Ninst.Hinv.inv)
 
-instance {x} : Ninst.Hinv State.bal (Ninst.pushWord x) := by
+instance {x} : Ninst.Hinv Desc.bal (Ninst.pushWord x) := by
   constructor; unfold Ninst.pushWord; apply Ninst.Hinv.inv
 
-instance {x} : Ninst.Hinv State.bal (Ninst.pushWord x) := by show_pushWord_hinv
-instance {x} : Ninst.Hinv State.code (Ninst.pushWord x) := by show_pushWord_hinv
-instance {x} : Ninst.Hinv State.stor (Ninst.pushWord x) := by show_pushWord_hinv
-instance {x} : Ninst.Hinv State.mem (Ninst.pushWord x) := by show_pushWord_hinv
-instance {x} : Ninst.Hinv State.ret (Ninst.pushWord x) := by show_pushWord_hinv
-instance {x} : Ninst.Hinv State.dest (Ninst.pushWord x) := by show_pushWord_hinv
+instance {x} : Ninst.Hinv Desc.bal (Ninst.pushWord x) := by show_pushWord_hinv
+instance {x} : Ninst.Hinv Desc.code (Ninst.pushWord x) := by show_pushWord_hinv
+instance {x} : Ninst.Hinv Desc.stor (Ninst.pushWord x) := by show_pushWord_hinv
+instance {x} : Ninst.Hinv Desc.mem (Ninst.pushWord x) := by show_pushWord_hinv
+instance {x} : Ninst.Hinv Desc.ret (Ninst.pushWord x) := by show_pushWord_hinv
+instance {x} : Ninst.Hinv Desc.dest (Ninst.pushWord x) := by show_pushWord_hinv
 
 open Qq
 
@@ -1073,7 +1073,7 @@ def instInv : Lean.Elab.Tactic.TacticM Unit :=
     Lean.Elab.Tactic.closeMainGoal `tacName x
   | _ => dbg_trace "Not a Ninst.Inv goal"
 
-lemma Line.of_inv {ξ : Type} {e s s'} (r : _root_.State → ξ) {l : Line} :
+lemma Line.of_inv {ξ : Type} {e s s'} (r : _root_.Desc → ξ) {l : Line} :
   Line.Inv r l → l.Run e s s' → r s = r s' := λ h => h
 
 def line_nil_inv : Lean.Elab.Tactic.TacticM Unit :=
@@ -1110,7 +1110,7 @@ lemma branch_inv {ξ : Type} {f g} {p q}
   · apply hp h_run
   · apply hq h_run
 
-lemma next_inv {ξ : Type} {f : _root_.State → ξ} {g} {i p}
+lemma next_inv {ξ : Type} {f : _root_.Desc → ξ} {g} {i p}
     (h : Ninst.Inv f i) (h' : Func.Inv f g p) : Func.Inv f g (i ::: p) := by
   intros c e s r h_run
   rcases of_run_next h_run with ⟨s', hi, hp⟩
@@ -1143,11 +1143,11 @@ lemma Func.inv_code {c e s p r a} (h : Func.Run c e s p r)
   induction h with
   | zero =>
     rename (_ ≠ _) → _ => ih
-    have h := State.Rel.code asm
+    have h := Desc.Rel.code asm
     rw [h , ih _]; rw [← h]; exact h_ne
   | succ =>
     rename (_ ≠ _) → _ => ih
-    have h := State.Rel.code asm
+    have h := Desc.Rel.code asm
     rw [h , ih _]; rw [← h]; exact h_ne
   | last => rw [Linst.inv_code asm]
   | next =>
@@ -1337,7 +1337,7 @@ lemma Xinst.wrap_inv_nof {e s ep sp o r sw}
     (h : Xinst.Run' e s ep sp o r sw) (h' : SumNof r.bal) : SumNof sw.bal := by
   cases h <;> apply h'
 
-lemma Step.inv_nof {e : Env} {s : State} {pc : ℕ} {s' : State} {pc' : ℕ}
+lemma Step.inv_nof {e : Env} {s : Desc} {pc : ℕ} {s' : Desc} {pc' : ℕ}
     (h_nof : SumNof s.bal) (h_step : Step e s pc s' pc') : SumNof s'.bal := by
   cases h_step with
   | reg => rw [← Rinst.inv_bal asm]; exact h_nof
@@ -1347,9 +1347,9 @@ lemma Step.inv_nof {e : Env} {s : State} {pc : ℕ} {s' : State} {pc' : ℕ}
     apply Xinst.prep_inv_nof asm h_nof
   | fail => rw [← fail_inv_bal asm]; exact h_nof
   | jump => rw [← Jinst.inv_bal asm]; exact h_nof
-  | push => rw [← (asm : State.Push _ _ _).bal]; exact h_nof
+  | push => rw [← (asm : Desc.Push _ _ _).bal]; exact h_nof
 
-lemma Step.inv_sum_bal {e : Env} {s : State} {pc : ℕ} {s' : State} {pc' : ℕ}
+lemma Step.inv_sum_bal {e : Env} {s : Desc} {pc : ℕ} {s' : Desc} {pc' : ℕ}
     (h_nof : SumNof s.bal) (h_step : Step e s pc s' pc') : sum s.bal = sum s'.bal := by
   cases h_step with
   | reg => apply congr_arg _ <| Rinst.inv_bal asm
@@ -1358,7 +1358,7 @@ lemma Step.inv_sum_bal {e : Env} {s : State} {pc : ℕ} {s' : State} {pc' : ℕ}
     rw [(asm : PreRun _ _).bal, Xinst.wrap_inv_bal asm]
   | fail => rw [fail_inv_bal asm]
   | jump => rw [Jinst.inv_bal asm]
-  | push => rw [(asm : State.Push _ _ _).bal]
+  | push => rw [(asm : Desc.Push _ _ _).bal]
 
 lemma Exec.inv_nof :
     ∀ {e s pc r}, Exec e s pc r → SumNof s.bal → SumNof r.bal := by
@@ -1405,9 +1405,9 @@ lemma Func.inv_nof {c e} :
     ∀ {s p r}, Func.Run c e s p r → SumNof s.bal → SumNof r.bal := by
   apply @Func.Run.rec c e (λ s p r _ => SumNof s.bal → SumNof r.bal)
   · intros s s' _ _ r h_pop _ ih h_nof
-    rw [← State.Rel.bal h_pop] at ih; apply ih h_nof
+    rw [← Desc.Rel.bal h_pop] at ih; apply ih h_nof
   · intros s x s' _ _ r _ h_pop _ ih h_nof
-    rw [← State.Rel.bal h_pop] at ih; apply ih h_nof
+    rw [← Desc.Rel.bal h_pop] at ih; apply ih h_nof
   · intros s o r h_run h_nof
     apply Linst.inv_nof h_run h_nof
   · intros s i s' _ _ h_run _ ih h_nof
@@ -1907,11 +1907,11 @@ lemma Stack.push_cons_pop_cons
     rw [List.cons_eq_cons] at h'
     refine' ⟨Eq.trans h.left.symm h'.left, zs, h.right, h'.right⟩
 
-lemma State.push_cons_pop_cons
+lemma Desc.push_cons_pop_cons
     {x y} {xs ys} {s s' s''}
-    (h : State.Push (x :: xs) s s')
-    (h' : State.Pop (y :: ys) s' s'') :
-    (x = y ∧ ∃ st, State.Push xs s st ∧ State.Pop ys st s'') := by
+    (h : Desc.Push (x :: xs) s s')
+    (h' : Desc.Pop (y :: ys) s' s'') :
+    (x = y ∧ ∃ st, Desc.Push xs s st ∧ Desc.Pop ys st s'') := by
   rcases h with ⟨_, _, _, h, _, _, _⟩
   rcases h' with ⟨_, _, _, h', _, _, _⟩
   rcases Stack.push_cons_pop_cons h h' with ⟨h_eq, stk, h_push, h_pop⟩
@@ -1922,7 +1922,7 @@ lemma State.push_cons_pop_cons
     ⟨_, _, _, h_pop,  _, _, _⟩
    ⟩ <;> try {assumption}
 
-lemma State.pop_nil {s s'} (h : State.Pop [] s s') : s = s' := by
+lemma Desc.pop_nil {s s'} (h : Desc.Pop [] s s') : s = s' := by
   match s, s', h with
   | ⟨_, _, _, _, _, _, _⟩,
     ⟨_, _, _, _, _, _, _⟩,
@@ -1930,7 +1930,7 @@ lemma State.pop_nil {s s'} (h : State.Pop [] s s') : s = s' := by
     simp [Rels.dft] at *
     refine' ⟨_, _, _, h, _, _, _⟩ <;> assumption
 
-lemma State.push_nil {s s'} (h : State.Push [] s s') : s = s' := by
+lemma Desc.push_nil {s s'} (h : Desc.Push [] s s') : s = s' := by
   match s, s', h with
   | ⟨_, _, _, _, _, _, _⟩,
     ⟨_, _, _, _, _, _, _⟩,
@@ -2115,7 +2115,7 @@ lemma Prog.get?_table {m n} {c : List Func} :
 -- alternative version of Exec which rolls all arguments into a structure.k
 structure Exec' : Type where
   (e : Env)
-  (s : State)
+  (s : Desc)
   (pc : Nat)
   (r : Result)
   (cr : Exec e s pc r)
@@ -2209,11 +2209,11 @@ def Exec'.strongRec (π : Exec'.Pred) : □p (carryover π) → □p π := by
   apply ih' _ h_gt
 
 lemma Rinst.run_of_at {e s pc o r} (cr : Exec e s pc r) (h_at : Rinst.At e pc o) :
-    ∃ (s' : State) (cr' : Exec e s' (pc + 1) r),
+    ∃ (s' : Desc) (cr' : Exec e s' (pc + 1) r),
       Rinst.Run e s o s' ∧ Exec'.Rel ⟨e, s', pc + 1, r, cr'⟩ ⟨e, s, pc, r, cr⟩ := by
   cases cr with
   | step =>
-    rename State => s'; refine' ⟨s', _⟩
+    rename Desc => s'; refine' ⟨s', _⟩
     have h_prec := Exec'.Rel.step asm asm
     cases (asm : Step _ _ _ _ _)
     · rw [Rinst.at_unique h_at asm]; refine' ⟨asm, asm, asm⟩
@@ -2229,12 +2229,12 @@ lemma Rinst.run_of_at {e s pc o r} (cr : Exec e s pc r) (h_at : Rinst.At e pc o)
 
 lemma Xinst.run_of_at {e s pc o r}
     (cr : Exec e s pc r) (h_at : Xinst.At e pc o) :
-    ∃ (s' : State) (cr' : Exec e s' (pc + 1) r),
+    ∃ (s' : Desc) (cr' : Exec e s' (pc + 1) r),
       Xinst.Run e s o s' ∧
       Exec'.Rel ⟨e, s', pc + 1, r, cr'⟩ ⟨e, s, pc, r, cr⟩ := by
   cases cr with
   | step =>
-    rename State => s'; refine' ⟨s', _⟩
+    rename Desc => s'; refine' ⟨s', _⟩
     have h_prec := Exec'.Rel.step asm asm
     cases (asm : Step _ _ _ _ _)
     · cases not_cop_at_of_op_at asm h_at
@@ -2254,12 +2254,12 @@ lemma Xinst.run_of_at {e s pc o r}
     · cases List.get?_length_ne_some h_at
 
 lemma push_of_pushAt {e s pc bs r} (cr : Exec e s pc r) (h_at :PushAt e pc bs) :
-    ∃ (s' : State) (cr' : Exec e s' (pc + bs.length + 1) r),
-      State.Push [Bytes.toBits 32 bs] s s' ∧
+    ∃ (s' : Desc) (cr' : Exec e s' (pc + bs.length + 1) r),
+      Desc.Push [Bytes.toBits 32 bs] s s' ∧
       Exec'.Rel ⟨e, s', pc + bs.length + 1, r, cr'⟩ ⟨e, s, pc, r, cr⟩ := by
   cases cr with
   | step =>
-    rename State => s'; refine' ⟨s', _⟩
+    rename Desc => s'; refine' ⟨s', _⟩
     have h_prec := Exec'.Rel.step asm asm
     rename Step _ _ _ _ _ => h_step; cases h_step
     · cases not_pushAt_of_op_at  asm h_at
@@ -2281,7 +2281,7 @@ lemma length_pushToBytes {bs} : (pushToBytes bs).length = bs.length + 1 := by
 
 lemma Ninst.run_of_at {e s pc i r}
     (cr : Exec e s pc r) (h_at : Ninst.At e pc i) :
-    ∃ (s' : State) (cr' : Exec e s' (pc + i.toBytes.length) r),
+    ∃ (s' : Desc) (cr' : Exec e s' (pc + i.toBytes.length) r),
       Ninst.Run e s i s' ∧
       Exec'.Rel ⟨e, s', pc + i.toBytes.length, r, cr'⟩ ⟨e, s, pc,r, cr⟩ := by
   cases i with
@@ -2297,12 +2297,12 @@ lemma Ninst.run_of_at {e s pc i r}
     refine' ⟨s', _, _, h_prec⟩; exact Ninst.Run.push _ h_push
 
 lemma Jinst.run_of_at {e s pc o r} (cr : Exec e s pc r) (h_at : Jinst.At e pc o) :
-    ∃ (s' : State) (pc' : Nat), ∃ (cr' : Exec e s' pc' r),
+    ∃ (s' : Desc) (pc' : Nat), ∃ (cr' : Exec e s' pc' r),
       Jinst.Run e s pc o s' pc' ∧
       Exec'.Rel ⟨e, s', pc', r, cr'⟩ ⟨e, s, pc, r, cr⟩ := by
   cases cr with
   | step =>
-    rename State => s'; refine' ⟨s', _⟩
+    rename Desc => s'; refine' ⟨s', _⟩
     have h_prec := Exec'.Rel.step asm asm
     rename Step _ _ _ _ _ => h_step; cases h_step
     · cases not_jop_at_of_op_at asm h_at
@@ -2319,19 +2319,19 @@ lemma Jinst.run_of_at {e s pc o r} (cr : Exec e s pc r) (h_at : Jinst.At e pc o)
     · cases List.get?_length_ne_some h_at
 
 lemma jump_at {e s pc r} (cr : Exec e s pc r) (h : Jinst.At e pc Jinst.jump) :
-    ∃ (x : Word) (s' : State) (cr' : Exec e s' x.toNat r),
-      State.Pop [x] s s' ∧
+    ∃ (x : Word) (s' : Desc) (cr' : Exec e s' x.toNat r),
+      Desc.Pop [x] s s' ∧
       Jumpable e x.toNat ∧
       Exec'.Rel ⟨e, s', x.toNat, r, cr'⟩ ⟨e, s, pc, r, cr⟩ := by
   rcases Jinst.run_of_at cr h with ⟨s', pc', cr', h_run, h_prec⟩
   cases h_run; refine ⟨_, _, cr', asm, asm, h_prec⟩
 
 lemma jumpi_at {e s pc r} (cr : Exec e s pc r) (h : Jinst.At e pc Jinst.jumpi) :
-    ( ∃ (x : Word) (s' : State) (cr' : Exec e s' (pc + 1) r),
-        State.Pop [x, 0] s s' ∧
+    ( ∃ (x : Word) (s' : Desc) (cr' : Exec e s' (pc + 1) r),
+        Desc.Pop [x, 0] s s' ∧
         Exec'.Rel ⟨e, s', pc + 1, r, cr'⟩ ⟨e, s, pc, r, cr⟩ ) ∨
-    ( ∃ (x y : Word) (s' : State) (cr' : Exec e s' x.toNat r),
-        State.Pop [x, y] s s' ∧
+    ( ∃ (x y : Word) (s' : Desc) (cr' : Exec e s' x.toNat r),
+        Desc.Pop [x, y] s s' ∧
         Jumpable e x.toNat ∧ y ≠ 0 ∧
         Exec'.Rel ⟨e, s', x.toNat, r, cr'⟩ ⟨e, s, pc, r, cr⟩ ) := by
   rcases Jinst.run_of_at cr h with ⟨s', pc', cr', h_run, h_prec⟩
@@ -2493,8 +2493,8 @@ theorem correct_core (f : Func) (fs : List Func) :
   | .branch p q =>
     rcases subcode_compile_branch h_sub with
       ⟨loc, h_loc, h_push, h_jumpi, h_scp, h_jumpdest, h_scq⟩
-    have h : ∃ (s' : State) (cr' : Exec pk.e s' (pk.pc + 3) pk.r),
-             State.Push [Nat.toBits 256 loc] pk.s s' ∧
+    have h : ∃ (s' : Desc) (cr' : Exec pk.e s' (pk.pc + 3) pk.r),
+             Desc.Push [Nat.toBits 256 loc] pk.s s' ∧
              Exec'.Rel ⟨pk.e, s', pk.pc + 3, pk.r, cr'⟩ pk := by
       rcases push_of_pushAt pk.cr h_push with ⟨s', cr', h, h_prec⟩
       rw [@toBits_toBytes_toBits_pow_add loc 2 30 h_loc] at h
@@ -2507,10 +2507,10 @@ theorem correct_core (f : Func) (fs : List Func) :
         ⟨x, s'', cr', h_pop, h_prec'⟩
       | ⟨x, y, s'', cr', h_pop, h_jmp, hy, h_prec'⟩ <;> clear h_jumpi
     · clear h_scq h_jumpdest
-      have h_pop' : State.Pop [0] pk.s s'' := by
-        rcases (State.push_cons_pop_cons h_push h_pop).right
+      have h_pop' : Desc.Pop [0] pk.s s'' := by
+        rcases (Desc.push_cons_pop_cons h_push h_pop).right
           with ⟨st, h_push', h_pop'⟩
-        rw [State.push_nil h_push']; exact h_pop'
+        rw [Desc.push_nil h_push']; exact h_pop'
       apply Func.Run.zero h_pop'
       have h_lt : Exec'.lt ⟨pk.e, s'', pk.pc +4, pk.r, cr'⟩ pk := by
         refine' ⟨_, _, h_prec⟩
@@ -2521,10 +2521,10 @@ theorem correct_core (f : Func) (fs : List Func) :
       have h_loc' : loc < 2 ^ 256 := by
         apply Nat.lt_trans h_loc
         rw [Nat.pow_lt_pow_iff_right] <;> omega
-      have h : x.toNat = loc ∧ State.Pop [y] pk.s s'' := by
-        rcases State.push_cons_pop_cons h_push h_pop
+      have h : x.toNat = loc ∧ Desc.Pop [y] pk.s s'' := by
+        rcases Desc.push_cons_pop_cons h_push h_pop
           with ⟨hx, st, h_push', h_pop'⟩
-        rw [ State.push_nil h_push',
+        rw [ Desc.push_nil h_push',
              ← congrArg Bits.toNat hx,
              toNat_toBits h_loc' ]
         refine ⟨rfl, h_pop'⟩
@@ -2545,8 +2545,8 @@ theorem correct_core (f : Func) (fs : List Func) :
     have h_get' : (f :: fs)[k]? = p := by
       rw [← @Prog.get?_table 0 k (f :: fs), h_get]; rfl
     apply Func.Run.call h_get'
-    have h : ∃ (s' : State) (cr' : Exec pk.e s' (pk.pc + 3) pk.r),
-             State.Push [Nat.toBits 256 loc] pk.s s' ∧
+    have h : ∃ (s' : Desc) (cr' : Exec pk.e s' (pk.pc + 3) pk.r),
+             Desc.Push [Nat.toBits 256 loc] pk.s s' ∧
              Exec'.Rel ⟨pk.e, s', pk.pc + 3, pk.r, cr'⟩ pk := by
       rcases push_of_pushAt pk.cr h_push with ⟨s', cr', h, h_prec⟩
       rw [@toBits_toBytes_toBits_pow_add loc 2 30 h_loc, toBits_toBytes] at h
@@ -2562,8 +2562,8 @@ theorem correct_core (f : Func) (fs : List Func) :
       apply Nat.lt_trans h_loc
       rw [Nat.pow_lt_pow_iff_right] <;> omega
     have h : loc = x.toNat ∧ pk.s = s' := by
-      rcases State.push_cons_pop_cons h_push h_pop with ⟨hx, st, h_push', h_pop'⟩
-      rw [State.push_nil h_push', State.pop_nil h_pop']
+      rcases Desc.push_cons_pop_cons h_push h_pop with ⟨hx, st, h_push', h_pop'⟩
+      rw [Desc.push_nil h_push', Desc.pop_nil h_pop']
       rw [← congrArg Bits.toNat hx, toNat_toBits h_loc']; simp
     rcases h with ⟨h_rw, h_rw'⟩
     rw [h_rw']; rw [h_rw] at hp
@@ -2574,7 +2574,7 @@ theorem correct_core (f : Func) (fs : List Func) :
       apply Exec'.le.refl _
     apply ih ⟨pk.e, s', toNat x + 1, pk.r, cr''⟩ h_lt p h_eq hp
 
-theorem correct (e : Env) (s : State) (p : Prog) (r : Result)
+theorem correct (e : Env) (s : Desc) (p : Prog) (r : Result)
     (cr : Exec e s 0 r) (h : some e.code = p.compile) :
     Prog.Run e s p r := by
   --rcases @subcode_of_get?_eq_some 0 p.main p.aux e 0 p.main h rfl
@@ -2583,8 +2583,11 @@ theorem correct (e : Env) (s : State) (p : Prog) (r : Result)
   rcases jumpdest_at cr h_at with ⟨cr', h⟩; clear h h_at
   apply correct_core p.main p.aux ⟨e, s, 1, r, cr'⟩ p.main h h_sub
 
+
+
+#exit
 def Prog.At (p : Prog) (ca : Addr)
-    (e : Env) (s : State) (pc : Nat) : Prop :=
+    (e : Env) (s : Desc) (pc : Nat) : Prop :=
   some (s.code ca) = Prog.compile p ∧
   (e.cta = ca → (some e.code = Prog.compile p ∧ pc = 0))
 
@@ -2642,7 +2645,7 @@ lemma combine_prog
       ∀ {e s r},
         Prog.Run e s p r → e.cta = ca →
         ForallDeeperAt e.exd ca p ε → π e s p r )
-    {e : Env} {s : State}
+    {e : Env} {s : Desc}
     {r : Result} {pc : Nat}
     (h_fa : ForallDeeperAt e.exd ca p ε)
     (h_cond : e.cta = ca → some e.code = Prog.compile p ∧ pc = 0)
@@ -2726,7 +2729,7 @@ lemma lift_core
     · exact halt_inv h_halt h_ne
 
 def ForallSubExec (k : Nat) (ca : Addr) (p : Prog)
-    (R : Env → State → Result → Prop) : Prop :=
+    (R : Env → Desc → Result → Prop) : Prop :=
   ∀ e s pc r,
     Exec e s pc r →
     e.exd < k →
@@ -2734,7 +2737,7 @@ def ForallSubExec (k : Nat) (ca : Addr) (p : Prog)
     R e s r
 
 lemma lift
-    (R : Env → State → Result → Prop)
+    (R : Env → Desc → Result → Prop)
     (ca : Addr) -- contract address
     (p : Prog)
     ( depth_ind :
@@ -2780,7 +2783,7 @@ lemma lift
 
 lemma lift_inv
     (ca : Addr) (p : Prog)
-    (σ : Env → State → Prop)
+    (σ : Env → Desc → Prop)
     (ρ : Env → Result → Prop)
     ( with_depth_ind :
       ∀ {e s r},
@@ -2838,46 +2841,46 @@ macro_rules
               rcases of_cons_cons_pref_of_cons_cons_pref h1 (pref_of_split h2) with ⟨hx, hy, h⟩;
               cases hx; cases hy; clear h; apply append_pref h3 (of_append_pref h2 h1) )
 
-lemma prefix_of_not {x xs} {s s' : State} :
-    State.Not s s' → (x :: xs <<+ s.stk) → (~ x :: xs <<+ s'.stk) := by show_prefix_one
+lemma prefix_of_not {x xs} {s s' : Desc} :
+    Desc.Not s s' → (x :: xs <<+ s.stk) → (~ x :: xs <<+ s'.stk) := by show_prefix_one
 
 lemma prefix_of_eq {x y xs} {s s'} :
-    State.Eq s s' → (x :: y :: xs <<+ s.stk) → ((x =? y) :: xs <<+ s'.stk) := by show_prefix_two
+    Desc.Eq s s' → (x :: y :: xs <<+ s.stk) → ((x =? y) :: xs <<+ s'.stk) := by show_prefix_two
 
 lemma prefix_of_lt {x y xs} {s s'} :
-    State.Lt s s' → (x :: y :: xs <<+ s.stk) → ((x <? y) :: xs <<+ s'.stk) :=
+    Desc.Lt s s' → (x :: y :: xs <<+ s.stk) → ((x <? y) :: xs <<+ s'.stk) :=
   by show_prefix_two
 
 lemma prefix_of_gt {x y xs} {s s'} :
-    State.Gt s s' → (x :: y :: xs <<+ s.stk) → ((x >? y) :: xs <<+ s'.stk) :=
+    Desc.Gt s s' → (x :: y :: xs <<+ s.stk) → ((x >? y) :: xs <<+ s'.stk) :=
   by show_prefix_two
 
-lemma prefix_of_shl {x y xs} {s s' : State} :
-    State.Shl s s' → (x :: y :: xs <<+ s.stk) → (Bits.shl x.toNat y :: xs <<+ s'.stk) :=
+lemma prefix_of_shl {x y xs} {s s' : Desc} :
+    Desc.Shl s s' → (x :: y :: xs <<+ s.stk) → (Bits.shl x.toNat y :: xs <<+ s'.stk) :=
   by show_prefix_two
 
-lemma prefix_of_shr {x y xs} {s s' : State} :
-    State.Shr s s' → (x :: y :: xs <<+ s.stk) → (Bits.shr x.toNat y :: xs <<+ s'.stk) :=
+lemma prefix_of_shr {x y xs} {s s' : Desc} :
+    Desc.Shr s s' → (x :: y :: xs <<+ s.stk) → (Bits.shr x.toNat y :: xs <<+ s'.stk) :=
   by show_prefix_two
 
-lemma prefix_of_or {x y xs} {s s' : State} :
-    State.Or s s' → (x :: y :: xs <<+ s.stk) → (Bits.or x y :: xs <<+ s'.stk) :=
+lemma prefix_of_or {x y xs} {s s' : Desc} :
+    Desc.Or s s' → (x :: y :: xs <<+ s.stk) → (Bits.or x y :: xs <<+ s'.stk) :=
   by show_prefix_two
 
-lemma prefix_of_and {x y xs} {s s' : State} :
-    State.And s s' → (x :: y :: xs <<+ s.stk) → (Bits.and x y :: xs <<+ s'.stk) :=
+lemma prefix_of_and {x y xs} {s s' : Desc} :
+    Desc.And s s' → (x :: y :: xs <<+ s.stk) → (Bits.and x y :: xs <<+ s'.stk) :=
   by show_prefix_two
 
-lemma prefix_of_add {x y xs} {s s' : State} :
-    State.Add s s' → (x :: y :: xs <<+ s.stk) → ((x + y) :: xs <<+ s'.stk) :=
+lemma prefix_of_add {x y xs} {s s' : Desc} :
+    Desc.Add s s' → (x :: y :: xs <<+ s.stk) → ((x + y) :: xs <<+ s'.stk) :=
   by show_prefix_two
 
-lemma prefix_of_sub {x y xs} {s s' : State} :
-    State.Sub s s' → (x :: y :: xs <<+ s.stk) → ((x - y) :: xs <<+ s'.stk) :=
+lemma prefix_of_sub {x y xs} {s s' : Desc} :
+    Desc.Sub s s' → (x :: y :: xs <<+ s.stk) → ((x - y) :: xs <<+ s'.stk) :=
   by show_prefix_two
 
 lemma prefix_of_mstore {x y xs} {s s'} :
-    State.Mstore s s' → (x :: y :: xs <<+ s.stk) → (xs <<+ s'.stk) := by
+    Desc.Mstore s s' → (x :: y :: xs <<+ s.stk) → (xs <<+ s'.stk) := by
   intros h_mstore h_pfx
   rcases h_mstore with ⟨x', y', h⟩
   have h_pop := Stack.of_diff_nil h.stk; clear h
@@ -2886,8 +2889,8 @@ lemma prefix_of_mstore {x y xs} {s s'} :
   rw [hx, hy] at h_pfx
   apply @of_append_pref _ _ xs _ _ h_pop h_pfx
 
-lemma prefix_of_sstore {e} {x y xs} {s s' : State} :
-    State.Sstore e s s' → (x :: y :: xs <<+ s.stk) → (xs <<+ s'.stk) := by
+lemma prefix_of_sstore {e} {x y xs} {s s' : Desc} :
+    Desc.Sstore e s s' → (x :: y :: xs <<+ s.stk) → (xs <<+ s'.stk) := by
   intros h0 h1;
   rcases h0 with ⟨x', y', h4, h5⟩; clear h5
   have h5 : ([x', y'] <++ s.stk ++> s'.stk) := by
@@ -2899,42 +2902,42 @@ lemma prefix_of_sstore {e} {x y xs} {s s' : State} :
   refine ⟨sfx, h_eq.right.right⟩
 
 lemma prefix_of_sload {e x xs} {s s'} :
-    State.Sload e s s' → (x :: xs <<+ s.stk) →
+    Desc.Sload e s s' → (x :: xs <<+ s.stk) →
     (s.stor e.cta x :: xs <<+ s'.stk) :=
   by show_prefix_one
 
 lemma prefix_of_sload' {e x xs} {s s'} :
-    State.Sload e s s' → (x :: xs <<+ s.stk) →
+    Desc.Sload e s s' → (x :: xs <<+ s.stk) →
     ∃ y, (y :: xs <<+ s'.stk) ∧ y = s.stor e.cta x := by
   intros h0 h1; refine ⟨_, prefix_of_sload h0 h1, rfl⟩
 
 lemma prefix_of_push {xs ys} {s s'} :
-    State.Push xs s s' → (ys <<+ s.stk) → ((xs ++ ys) <<+ s'.stk) :=
+    Desc.Push xs s s' → (ys <<+ s.stk) → ((xs ++ ys) <<+ s'.stk) :=
   λ h0 h1 => append_pref h0.stk h1
 
-lemma prefix_of_pop {y : Word} {xs} {s s' : State} :
-    (∃ x, State.Pop [x] s s') → (y :: xs <<+ s.stk) → (xs <<+ s'.stk) := by
+lemma prefix_of_pop {y : Word} {xs} {s s' : Desc} :
+    (∃ x, Desc.Pop [x] s s') → (y :: xs <<+ s.stk) → (xs <<+ s'.stk) := by
   intros h h'; rcases h with ⟨x, hx⟩
   have h_eq : y = x :=
     (List.of_cons_pref_of_cons_pref h' (pref_of_split hx.stk)).left
   rw [h_eq] at h'; apply @of_append_pref _ [x] _ _ _ hx.stk h'
 
-lemma prefix_of_iszero {x xs} {s s' : State} :
-    State.Iszero s s' → (x :: xs <<+ s.stk) → ((if x = 0 then 1 else 0) :: xs <<+ s'.stk) :=
+lemma prefix_of_iszero {x xs} {s s' : Desc} :
+    Desc.Iszero s s' → (x :: xs <<+ s.stk) → ((if x = 0 then 1 else 0) :: xs <<+ s'.stk) :=
   by show_prefix_one
 
-lemma prefix_of_caller {e xs} {s s' : State} :
-    State.Caller e s s' → (xs <<+ s.stk) → (e.cla.toWord :: xs <<+ s'.stk) :=
+lemma prefix_of_caller {e xs} {s s' : Desc} :
+    Desc.Caller e s s' → (xs <<+ s.stk) → (e.cla.toWord :: xs <<+ s'.stk) :=
   by show_prefix_zero
 
-lemma prefix_of_callvalue {e xs} {s s' : State} :
-   State.Callvalue e s s' → (xs <<+ s.stk) → (e.clv :: xs <<+ s'.stk) :=
+lemma prefix_of_callvalue {e xs} {s s' : Desc} :
+   Desc.Callvalue e s s' → (xs <<+ s.stk) → (e.clv :: xs <<+ s'.stk) :=
  by show_prefix_zero
 
-lemma prefix_of_calldatacopy {e x y z xs} {s s' : State} :
-    State.Calldatacopy e s s' → (x :: y :: z :: xs <<+ s.stk) → (xs <<+ s'.stk) := by
+lemma prefix_of_calldatacopy {e x y z xs} {s s' : Desc} :
+    Desc.Calldatacopy e s s' → (x :: y :: z :: xs <<+ s.stk) → (xs <<+ s'.stk) := by
   intros h0 h1;
-  simp [State.Calldatacopy] at h0
+  simp [Desc.Calldatacopy] at h0
   rcases h0 with ⟨x', y', z', h0⟩
   have h2 := h0.stk; clear h0;
   rcases of_cons_cons_pref_of_cons_cons_pref h1 (pref_of_split h2)
@@ -2944,23 +2947,23 @@ lemma prefix_of_calldatacopy {e x y z xs} {s s' : State} :
 
 lemma Line.spx_scheme {e s' i l xs xs' ys}
     (h : ∀ s0 s1, Ninst.Run e s0 i s1 → (xs <<+ s0.stk) → (xs' <<+ s1.stk))
-    (h' : ∀ s : State, (xs' <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) :
-    ∀ s : State, (xs <<+ s.stk) → Line.Run e s (i :: l) s'→ (ys <<+ s'.stk) := by
+    (h' : ∀ s : Desc, (xs' <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) :
+    ∀ s : Desc, (xs <<+ s.stk) → Line.Run e s (i :: l) s'→ (ys <<+ s'.stk) := by
   intros s h_pfx h_run
   rcases Line.of_run_cons h_run with ⟨s_mid, h_head, h_tail⟩
   apply h' s_mid (h _ _ h_head h_pfx) h_tail
 
 lemma Line.spx_push {e : Env} {s' l bs p xs ys} :
-    (∀ s : State, (bs.toBits 32 :: xs <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
-    (∀ s : State, (xs <<+ s.stk) → Line.Run e s (push bs p :: l) s'→ (ys <<+ s'.stk)) := by
+    (∀ s : Desc, (bs.toBits 32 :: xs <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
+    (∀ s : Desc, (xs <<+ s.stk) → Line.Run e s (push bs p :: l) s'→ (ys <<+ s'.stk)) := by
   intros h_next s h_pfx h_run
   rcases Line.of_run_cons h_run with ⟨s_mid, h_head, h_tail⟩
   apply h_next s_mid _ h_tail
   apply prefix_of_push (of_run_push h_head) h_pfx
 
 lemma Line.spx_pushWord {e : Env} {s' l x xs ys} :
-    (∀ s : State, (x :: xs <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
-    (∀ s : State, (xs <<+ s.stk) → Line.Run e s (pushWord x :: l) s'→ (ys <<+ s'.stk)) := by
+    (∀ s : Desc, (x :: xs <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
+    (∀ s : Desc, (xs <<+ s.stk) → Line.Run e s (pushWord x :: l) s'→ (ys <<+ s'.stk)) := by
   intros h_next s h_pfx h_run
   rcases Line.of_run_cons h_run with ⟨s_mid, h_head, h_tail⟩
   apply h_next s_mid _ h_tail
@@ -2970,27 +2973,27 @@ macro "spx_conv" : tactic =>
   `(tactic| conv => ext; ext; rw [← op_run_iff_inst_run]; rfl)
 
 lemma Line.spx_mstore {e : Env} {s' l x y xs ys} :
-    (∀ s : State, (xs <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
-    (∀ s : State, (x :: y :: xs <<+ s.stk) → Line.Run e s (mstore :: l) s'→ (ys <<+ s'.stk)) := by
+    (∀ s : Desc, (xs <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
+    (∀ s : Desc, (x :: y :: xs <<+ s.stk) → Line.Run e s (mstore :: l) s'→ (ys <<+ s'.stk)) := by
   apply Line.spx_scheme; spx_conv; apply prefix_of_mstore
 
 lemma Line.spx_sstore {e : Env} {s' l x y xs ys} :
-    (∀ s : State, (xs <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
-    (∀ s : State, (x :: y :: xs <<+ s.stk) → Line.Run e s (sstore :: l) s'→ (ys <<+ s'.stk)) := by
+    (∀ s : Desc, (xs <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
+    (∀ s : Desc, (x :: y :: xs <<+ s.stk) → Line.Run e s (sstore :: l) s'→ (ys <<+ s'.stk)) := by
   apply Line.spx_scheme; spx_conv; apply prefix_of_sstore
 
 lemma Line.spx_dup {e s' l xs ys} {n : Fin 16} (x) :
   Stack.Nth n.val x xs →
-    (∀ s : State, (x :: xs <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
-    (∀ s : State, (xs <<+ s.stk) → Line.Run e s (dup n :: l) s' → (ys <<+ s'.stk)) := by
+    (∀ s : Desc, (x :: xs <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
+    (∀ s : Desc, (xs <<+ s.stk) → Line.Run e s (dup n :: l) s' → (ys <<+ s'.stk)) := by
   intro h_nth; apply Line.spx_scheme
   spx_conv; intros s0 s1 h_step
   apply Stack.prefix_of_dup ⟨x, rfl, h_nth⟩ h_step.stk
 
 lemma Line.spx_log (zs : Stack) {e s' l xs ys} {n : Fin 5} :
     zs.length = n.val + 2 →
-    (∀ s : State, (xs <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
-    (∀ s : State, (zs ++ xs <<+ s.stk) → Line.Run e s (log n :: l) s' → (ys <<+ s'.stk)) := by
+    (∀ s : Desc, (xs <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
+    (∀ s : Desc, (zs ++ xs <<+ s.stk) → Line.Run e s (log n :: l) s' → (ys <<+ s'.stk)) := by
   intro h_len; apply Line.spx_scheme; spx_conv; intros s₀ s₁ h_step h_pfx
   have hh : ∃ zs', zs'.length = n.val + 2 ∧ Stack.Pop zs' s₀.stk s₁.stk := by
     match n with
@@ -3018,89 +3021,89 @@ lemma Line.spx_log (zs : Stack) {e s' l xs ys} {n : Fin 5} :
 
 lemma Line.spx_swap (xs') {e s' l xs ys} {n : Fin 16} :
     Stack.Swap n.val xs xs' →
-    (∀ s : State, (xs' <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
-    (∀ s : State, (xs <<+ s.stk) → Line.Run e s (swap n :: l) s' → (ys <<+ s'.stk)) := by
+    (∀ s : Desc, (xs' <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
+    (∀ s : Desc, (xs <<+ s.stk) → Line.Run e s (swap n :: l) s' → (ys <<+ s'.stk)) := by
   intro h_swap; apply Line.spx_scheme;
   spx_conv; intros s0 s1 h_step
   apply Stack.prefix_of_swap h_swap h_step.stk
 
 lemma Line.spx_iszero {e s' l} {x} {xs ys} :
-    (∀ s : State, ((x =? 0) :: xs <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
-    (∀ s : State, (x :: xs <<+ s.stk) → Line.Run e s (iszero :: l) s' → (ys <<+ s'.stk)) := by
+    (∀ s : Desc, ((x =? 0) :: xs <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
+    (∀ s : Desc, (x :: xs <<+ s.stk) → Line.Run e s (iszero :: l) s' → (ys <<+ s'.stk)) := by
   apply Line.spx_scheme; spx_conv; apply prefix_of_iszero
 
 lemma Line.spx_pop {e : Env} {s' l x xs ys} :
-    (∀ s : State, (xs <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
-    (∀ s : State, (x :: xs <<+ s.stk) → Line.Run e s (pop :: l) s'→ (ys <<+ s'.stk)) :=by
+    (∀ s : Desc, (xs <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
+    (∀ s : Desc, (x :: xs <<+ s.stk) → Line.Run e s (pop :: l) s'→ (ys <<+ s'.stk)) :=by
   apply Line.spx_scheme; spx_conv; apply prefix_of_pop
 
 lemma Line.spx_eq {e s' l x y xs ys}  :
-    (∀ s : State, ((x =? y) :: xs <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
-    (∀ s : State, (x :: y :: xs <<+ s.stk) → Line.Run e s (eq :: l) s' → (ys <<+ s'.stk)) :=by
+    (∀ s : Desc, ((x =? y) :: xs <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
+    (∀ s : Desc, (x :: y :: xs <<+ s.stk) → Line.Run e s (eq :: l) s' → (ys <<+ s'.stk)) :=by
   apply Line.spx_scheme; spx_conv; apply prefix_of_eq
 
 lemma Line.spx_lt {e s' l x y xs ys}  :
-    (∀ s : State, ((x <? y) :: xs <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
-    (∀ s : State, (x :: y :: xs <<+ s.stk) → Line.Run e s (lt :: l) s' → (ys <<+ s'.stk)) := by
+    (∀ s : Desc, ((x <? y) :: xs <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
+    (∀ s : Desc, (x :: y :: xs <<+ s.stk) → Line.Run e s (lt :: l) s' → (ys <<+ s'.stk)) := by
   apply Line.spx_scheme; spx_conv; apply prefix_of_lt
 
 lemma Line.spx_gt {e s' l x y xs ys}  :
-    (∀ s : State, ((x >? y) :: xs <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
-    (∀ s : State, (x :: y :: xs <<+ s.stk) → Line.Run e s (gt :: l) s' → (ys <<+ s'.stk)) := by
+    (∀ s : Desc, ((x >? y) :: xs <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
+    (∀ s : Desc, (x :: y :: xs <<+ s.stk) → Line.Run e s (gt :: l) s' → (ys <<+ s'.stk)) := by
   apply Line.spx_scheme; spx_conv; apply prefix_of_gt
 
 lemma Line.spx_sub {e s' l x y xs ys}  :
-    (∀ s : State, ((x - y) :: xs <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
-    (∀ s : State, (x :: y :: xs <<+ s.stk) → Line.Run e s (sub :: l) s' → (ys <<+ s'.stk)) := by
+    (∀ s : Desc, ((x - y) :: xs <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
+    (∀ s : Desc, (x :: y :: xs <<+ s.stk) → Line.Run e s (sub :: l) s' → (ys <<+ s'.stk)) := by
   apply Line.spx_scheme; spx_conv; apply prefix_of_sub
 
 lemma Line.spx_not {e s' l x xs ys}  :
-    (∀ s : State, (~ x :: xs <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
-    (∀ s : State, (x :: xs <<+ s.stk) → Line.Run e s (not :: l) s' → (ys <<+ s'.stk)) := by
+    (∀ s : Desc, (~ x :: xs <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
+    (∀ s : Desc, (x :: xs <<+ s.stk) → Line.Run e s (not :: l) s' → (ys <<+ s'.stk)) := by
   apply Line.spx_scheme; spx_conv; apply prefix_of_not
 
 lemma Line.spx_or {e s' l x y xs ys}  :
-    (∀ s : State, (Bits.or x y :: xs <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
-    (∀ s : State, (x :: y :: xs <<+ s.stk) → Line.Run e s (or :: l) s' → (ys <<+ s'.stk)) := by
+    (∀ s : Desc, (Bits.or x y :: xs <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
+    (∀ s : Desc, (x :: y :: xs <<+ s.stk) → Line.Run e s (or :: l) s' → (ys <<+ s'.stk)) := by
   apply Line.spx_scheme; spx_conv; apply prefix_of_or
 
 lemma Line.spx_and {e s' l x y xs ys}  :
-    (∀ s : State, (Bits.and x y :: xs <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
-    (∀ s : State, (x :: y :: xs <<+ s.stk) → Line.Run e s (and :: l) s' → (ys <<+ s'.stk)) := by
+    (∀ s : Desc, (Bits.and x y :: xs <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
+    (∀ s : Desc, (x :: y :: xs <<+ s.stk) → Line.Run e s (and :: l) s' → (ys <<+ s'.stk)) := by
   apply Line.spx_scheme; spx_conv; apply prefix_of_and
 
 lemma Line.spx_shl {e s' l} {x y : Word} {xs ys}  :
-    (∀ s : State, (Bits.shl x.toNat y :: xs <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
-    (∀ s : State, (x :: y :: xs <<+ s.stk) → Line.Run e s (shl :: l) s' → (ys <<+ s'.stk)) := by
+    (∀ s : Desc, (Bits.shl x.toNat y :: xs <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
+    (∀ s : Desc, (x :: y :: xs <<+ s.stk) → Line.Run e s (shl :: l) s' → (ys <<+ s'.stk)) := by
   apply Line.spx_scheme; spx_conv; apply prefix_of_shl
 
 lemma Line.spx_shr {e s' l} {x y : Word} {xs ys}  :
-    (∀ s : State, (Bits.shr x.toNat y :: xs <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
-    (∀ s : State, (x :: y :: xs <<+ s.stk) → Line.Run e s (shr :: l) s' → (ys <<+ s'.stk)) := by
+    (∀ s : Desc, (Bits.shr x.toNat y :: xs <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
+    (∀ s : Desc, (x :: y :: xs <<+ s.stk) → Line.Run e s (shr :: l) s' → (ys <<+ s'.stk)) := by
   apply Line.spx_scheme; spx_conv; apply prefix_of_shr
 
 lemma Line.spx_add {e s' l x y xs ys}  :
-    (∀ s : State, ((x + y) :: xs <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
-    (∀ s : State, (x :: y :: xs <<+ s.stk) → Line.Run e s (add :: l) s' → (ys <<+ s'.stk)) := by
+    (∀ s : Desc, ((x + y) :: xs <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
+    (∀ s : Desc, (x :: y :: xs <<+ s.stk) → Line.Run e s (add :: l) s' → (ys <<+ s'.stk)) := by
   apply Line.spx_scheme; spx_conv; apply prefix_of_add
 
 lemma Line.spx_caller {e : Env} {s' l xs ys}  :
-    (∀ s : State, (e.cla.toWord :: xs <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
-    (∀ s : State, (xs <<+ s.stk) → Line.Run e s (caller :: l) s' → (ys <<+ s'.stk)) := by
+    (∀ s : Desc, (e.cla.toWord :: xs <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
+    (∀ s : Desc, (xs <<+ s.stk) → Line.Run e s (caller :: l) s' → (ys <<+ s'.stk)) := by
   apply Line.spx_scheme; spx_conv; apply prefix_of_caller
 
 lemma Line.spx_callvalue {e : Env} {s' l xs ys}  :
-    (∀ s : State, (e.clv :: xs <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
-    (∀ s : State, (xs <<+ s.stk) → Line.Run e s (callvalue :: l) s' → (ys <<+ s'.stk)) := by
+    (∀ s : Desc, (e.clv :: xs <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
+    (∀ s : Desc, (xs <<+ s.stk) → Line.Run e s (callvalue :: l) s' → (ys <<+ s'.stk)) := by
   apply Line.spx_scheme; spx_conv; apply prefix_of_callvalue
 
 lemma Line.spx_calldatacopy {e : Env} {s' l x y z xs ys}  :
-    (∀ s : State, (xs <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
-    (∀ s : State, (x :: y :: z :: xs <<+ s.stk) → Line.Run e s (calldatacopy :: l) s' → (ys <<+ s'.stk)) := by
+    (∀ s : Desc, (xs <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
+    (∀ s : Desc, (x :: y :: z :: xs <<+ s.stk) → Line.Run e s (calldatacopy :: l) s' → (ys <<+ s'.stk)) := by
   apply Line.spx_scheme; spx_conv; apply prefix_of_calldatacopy
 
-lemma Line.spx_unwrap {e xs} {s' : State} :
-    ∀ s : State, (xs <<+ s.stk) → Line.Run e s [] s' → (xs <<+ s'.stk) := by
+lemma Line.spx_unwrap {e xs} {s' : Desc} :
+    ∀ s : Desc, (xs <<+ s.stk) → Line.Run e s [] s' → (xs <<+ s'.stk) := by
   intros _ h0 h1; cases h1; apply h0
 
 syntax "show_nth" : tactic
@@ -3147,7 +3150,7 @@ partial def line_pref : Lean.Elab.Tactic.TacticM Unit :=
   Lean.Elab.Tactic.withMainContext do
   let t : Q(Prop) ← Lean.Elab.Tactic.getMainTarget
   match t with
-  | ~q(∀ s : _root_.State, ($px <<+ s.stk) → Line.Run _ s $lx _ → _) =>
+  | ~q(∀ s : _root_.Desc, ($px <<+ s.stk) → Line.Run _ s $lx _ → _) =>
     let lx' : Q(Line) ← Lean.Meta.whnf lx
     match lx' with
     | ~q([]) => "Line.spx_unwrap".apply
@@ -3245,7 +3248,7 @@ def replaceWithBvar (x : Expr) (k : Nat) (e : Expr) : Expr :=
     | e => e
 
 lemma Line.of_inv_state (motive : (Addr → Storage) → Prop) (e s l s') (h_run : Line.Run e s l s')
-    (h_inv : Line.Inv State.stor l) (hs' : motive s'.stor) : motive s.stor := by
+    (h_inv : Line.Inv Desc.stor l) (hs' : motive s'.stor) : motive s.stor := by
   rw [Line.of_inv _ h_inv h_run]; exact hs'
 
 def String.toSyntax (s : String) : Lean.Syntax :=
@@ -3267,10 +3270,10 @@ elab "lstor" : tactic =>
     let d ← findDeclWithM isLineRun
     let (e, s, l, s') ← breakLineRun (← Meta.inferType d.toExpr)
     let ctx ← Lean.MonadLCtx.getLCtx -- get the local context.
-    let ds ← ctx.foldlM (addIfOcc <| Expr.app q(State.stor) s) []
+    let ds ← ctx.foldlM (addIfOcc <| Expr.app q(Desc.stor) s) []
     Lean.FVarId.revert (ds.map LocalDecl.fvarId)
     let g ← Lean.Elab.Tactic.getMainTarget
-    let g' := replaceWithBvar (Expr.app q(State.stor) s) 0 g
+    let g' := replaceWithBvar (Expr.app q(Desc.stor) s) 0 g
     Expr.apply <|
       Lean.mkApp6 q(Line.of_inv_state)
         (Expr.lam `s q(Addr → Storage) g' BinderInfo.default)
@@ -3353,12 +3356,12 @@ lemma rev_branch_elim' {x xs} {e s p r} (φ : Prop)
   apply rev_branch_elim ; intro h''
   apply h' (pref_head_unique h h'')
 
-lemma run_prepend_elim (φ : Prop) (l) {p} {c e} {s : _root_.State} {r}
+lemma run_prepend_elim (φ : Prop) (l) {p} {c e} {s : _root_.Desc} {r}
     (h : ∀ s', Line.Run e s l s' → Func.Run c e s' p r → φ)
     (h' : Func.Run c e s (l +++ p) r) : φ := by
   rcases of_run_prepend _ _ h' with ⟨s', hs, hs'⟩; apply h s' hs hs'
 
-lemma run_append_elim (φ : Prop) (l) {l'} {e} {s s'' : _root_.State}
+lemma run_append_elim (φ : Prop) (l) {l'} {e} {s s'' : _root_.Desc}
     (h : ∀ s', Line.Run e s l s' → Line.Run e s' l' s'' → φ)
     (h' : Line.Run e s (l ++ l') s'') : φ := by
   rcases of_run_append _ h' with ⟨s', hs, hs'⟩; apply h s' hs hs'
@@ -3444,22 +3447,22 @@ def clear_if (i i' : FVarId) (sx : Expr) (ld : LocalDecl)  : Lean.Elab.Tactic.Ta
 def isPref (x : Lean.Expr) (ld : Lean.LocalDecl) : TacticM Bool := do
   let px : Q(Prop) ← Meta.inferType ld.toExpr
   match px with
-  | ~q(_ <<+ (State.stk $x')) => pure (← Lean.Meta.isDefEq x x')
+  | ~q(_ <<+ (Desc.stk $x')) => pure (← Lean.Meta.isDefEq x x')
   | _ => pure false
 
-def initStateOfRun : Q(Prop) → TacticM Expr
+def initDescOfRun : Q(Prop) → TacticM Expr
   | ~q(Line.Run _ $sx _ _) => pure sx
   | _ => failure
 
 def Expr.imp (x y : Expr) : Expr := Expr.forallE Name.anonymous x y BinderInfo.default
 
 def mkMotive : Q(Prop) → TacticM Expr
-| ~q(($p <<+ (State.stk $s₀)) → (Line.Run $e $s₀ $l $s₁) → $φ) => do
+| ~q(($p <<+ (Desc.stk $s₀)) → (Line.Run $e $s₀ $l $s₁) → $φ) => do
   pure <|
-    Expr.lam `s q(_root_.State)
+    Expr.lam `s q(_root_.Desc)
       ( Expr.imp
-          (Expr.app q(λ s : _root_.State => $p <<+ s.stk) (Expr.bvar 0))
-          (Expr.imp (Expr.app q(λ s : _root_.State => Line.Run $e s $l $s₁) (Expr.bvar 1)) φ) )
+          (Expr.app q(λ s : _root_.Desc => $p <<+ s.stk) (Expr.bvar 0))
+          (Expr.imp (Expr.app q(λ s : _root_.Desc => Line.Run $e s $l $s₁) (Expr.bvar 1)) φ) )
       BinderInfo.default
 | _ => failure
 
@@ -3468,7 +3471,7 @@ lemma apply_univ {ξ : Type} (φ : ξ → Prop) (x : ξ) (h : ∀ x, φ x) : φ 
 elab "lpfx" : tactic =>
   withMainContext do
     let rd ← findDeclWithM isLineRun
-    let sx ← initStateOfRun (← Meta.inferType rd.toExpr)
+    let sx ← initDescOfRun (← Meta.inferType rd.toExpr)
     let pd ← findDeclWithM (isPref sx)
     let sd ← findDeclWithM (λ dd => Meta.isDefEq dd.toExpr sx)
     let ctx ← Lean.MonadLCtx.getLCtx -- get the local context.
@@ -3477,7 +3480,7 @@ elab "lpfx" : tactic =>
     Lean.FVarId.rvt pd.fvarId
     let g : Q(Prop) ← getMainTarget
     let m ← mkMotive g
-    Expr.apply <| mkApp2 q(@apply_univ _root_.State) m sd.toExpr
+    Expr.apply <| mkApp2 q(@apply_univ _root_.Desc) m sd.toExpr
     line_pref
 
 syntax "linv" : tactic
@@ -3535,7 +3538,7 @@ def dispatch : DispatchTree → Func
     pushWord (leftmostFsig tr) ::: gt :::
     (dispatch tl <?> dispatch tr)
 
-lemma dispatchWith_inv {c k f} (σ : Env → State → Prop) (ρ : Env → Result → Prop)
+lemma dispatchWith_inv {c k f} (σ : Env → Desc → Prop) (ρ : Env → Result → Prop)
     (h0 : ∀ {e s x s'}, σ e s → Line.Run e s [pushWord x, eq, pop] s' → σ e s')
     (h1 : ∀ {e s x s'}, σ e s → Line.Run e s [dup 0, pushWord x, gt, pop] s' → σ e s')
     (h2 : c[k]? = some f)
@@ -3593,22 +3596,22 @@ lemma Stack.push_of_cdl {n} {e s s'} :
     List.append_inj_right (Eq.trans h_push.symm h_pop) rfl
   rw [h_eq]; refine ⟨x, h_push'⟩
 
-lemma State.push_of_cdl {e s w s'} (h : Line.Run e s (cdl w) s') :
-    ∃ x, State.Push [x] s s' := by
+lemma Desc.push_of_cdl {e s w s'} (h : Line.Run e s (cdl w) s') :
+    ∃ x, Desc.Push [x] s s' := by
   rcases Stack.push_of_cdl h with ⟨x, h'⟩
   refine' ⟨x, _, _, _, h', _, _, _⟩ <;>
-  simp only [State.Rels.dft] <;>
+  simp only [Desc.Rels.dft] <;>
   apply Line.of_inv _ _ asm <;> line_inv
 
-lemma State.of_diff {xs ys} {s s''} (h : State.Diff xs ys s s'') :
-    ∃ s', State.Pop xs s s' ∧ State.Push ys s' s'' := by
+lemma Desc.of_diff {xs ys} {s s''} (h : Desc.Diff xs ys s s'') :
+    ∃ s', Desc.Pop xs s s' ∧ Desc.Push ys s' s'' := by
   rcases h.stk with ⟨stk, h_pop, h_push⟩
   refine' ⟨{s with stk := stk}, _, _⟩
   · refine ⟨rfl, rfl, rfl, h_pop, rfl, rfl, rfl⟩
   · cases h; refine' ⟨asm, asm, asm, h_push, asm, asm, asm⟩
 
-lemma State.of_pop_cons {x xs} {s s''} (h : State.Pop (x :: xs) s s'') :
-    ∃ s', State.Pop [x] s s' ∧ State.Pop xs s' s'' := by
+lemma Desc.of_pop_cons {x xs} {s s''} (h : Desc.Pop (x :: xs) s s'') :
+    ∃ s', Desc.Pop [x] s s' ∧ Desc.Pop xs s' s'' := by
   rcases List.of_cons_split h.stk with ⟨stk, h_eq, h_split⟩
   refine' ⟨{s with stk := stk}, _, _⟩
   · refine' ⟨rfl, rfl, rfl, h_eq, rfl, rfl, rfl⟩
@@ -3619,8 +3622,8 @@ lemma kec_elim {e s s'} (φ : Prop)
     (h' : Ninst.Run e s kec s') : φ := by
   rcases opRun_of_instRun h' with ⟨x, y, h_diff⟩
   apply h (s.mem.slice x y).keccak
-  rcases State.of_diff h_diff with ⟨s₁, h_pop, h_push⟩
-  rcases State.of_pop_cons h_pop with ⟨s₀, hx, hy⟩
+  rcases Desc.of_diff h_diff with ⟨s₁, h_pop, h_push⟩
+  rcases Desc.of_pop_cons h_pop with ⟨s₀, hx, hy⟩
   apply Line.Run.cons <| run_pop e hx
   apply Line.Run.cons <| run_pop e hy
   apply Line.Run.cons (run_pushWord e h_push) cst
@@ -3647,21 +3650,21 @@ lemma cdl_append_elim {e s n l r} (φ : Prop)
     (h : ∀ x, Line.Run e s (pushWord x :: l) r → φ) :
     Line.Run e s (cdl n ++ l) r → φ := by
   lexec (cdl n); intro h₂
-  rcases State.push_of_cdl h₁ with ⟨x, hp₁⟩
+  rcases Desc.push_of_cdl h₁ with ⟨x, hp₁⟩
   apply h x <| .cons (run_pushWord _ hp₁) h₂
 
 lemma cdl_prepend_elim {c e s n p r} (φ : Prop)
     (h : ∀ x, Func.Run c e s (pushWord x ::: p) r → φ) :
     Func.Run c e s (cdl n +++ p) r → φ := by
   pexec (cdl n); intro h₂
-  rcases State.push_of_cdl h₁ with ⟨x, hp₁⟩
+  rcases Desc.push_of_cdl h₁ with ⟨x, hp₁⟩
   apply h x <| .next (run_pushWord _ hp₁) h₂
 
 lemma sload_elim {e s s'} (φ : Prop)
     (h : ∀ x, Line.Run e s [pop, pushWord x] s' → φ)
     (h' : Ninst.Run e s sload s') : φ := by
   rcases opRun_of_instRun h' with ⟨x, hx⟩
-  rcases State.of_diff hx with ⟨s₀, h_pop, h_push⟩
+  rcases Desc.of_diff hx with ⟨s₀, h_pop, h_push⟩
   apply h (s.stor e.cta x);
   apply Line.Run.cons (run_pop e h_pop)
   apply Line.Run.cons (run_pushWord e h_push) cst
@@ -3694,7 +3697,7 @@ lemma prepend_cdl_prepend_elim {e s} (l) {n p r} (φ : Prop)
     (h : ∀ x, Func.Run c e s (l +++ pushWord x ::: p) r → φ) :
     Func.Run c e s (l +++ cdl n +++ p) r → φ := by
   pexec l; pexec (cdl n); intro h₃
-  rcases State.push_of_cdl h₂ with ⟨x, hp₂⟩
+  rcases Desc.push_of_cdl h₂ with ⟨x, hp₂⟩
   apply h x <| run_prepend h₁ <| .next (run_pushWord _ hp₂) h₃
 
 lemma of_nof_of_transfer {m n} {a b : Bits m} {v : Bits n} {f h : Bits m → Bits n}

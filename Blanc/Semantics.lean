@@ -120,11 +120,7 @@ inductive Stack.Nth : Nat → Word → Stack → Prop
 
 def Stack.Dup (n : Nat) (s s' : Stack) : Prop := ∃ x, Push [x] s s' ∧ Stack.Nth n x s
 
-
-
-
-
-structure State where
+structure Desc where
   -- balance, storage, & code : parts of the world state
   (bal : Addr → Word)
   (stor : Addr → Storage)
@@ -217,7 +213,7 @@ def Transfer {m n : Nat}
     Decrease kd v b c ∧
     Increase ki v c d
 
-structure State.Rels where
+structure Desc.Rels where
   (bal : Balances → Balances → Prop)
   (stor : Storages → Storages → Prop)
   (code : Codes → Codes → Prop)
@@ -226,46 +222,46 @@ structure State.Rels where
   (ret : Bytes → Bytes → Prop)
   (dest : List Addr → List Addr → Prop)
 
-def State.Rels.dft : Rels :=
+def Desc.Rels.dft : Rels :=
   {bal := Eq, stor := Eq, code := Eq, stk := Eq, mem := Eq, ret := Eq, dest := Eq}
 
-structure State.Rel (r : Rels) (s s' : State) : Prop where
-  (bal  : r.bal  (State.bal s) (State.bal s'))
-  (stor : r.stor (State.stor s) (State.stor s'))
-  (code : r.code (State.code s) (State.code s'))
-  (stk  : r.stk  (State.stk s) (State.stk s'))
-  (mem  : r.mem  (State.mem s) (State.mem s'))
-  (ret  : r.ret  (State.ret s) (State.ret s'))
-  (dest : r.dest (State.dest s) (State.dest s'))
+structure Desc.Rel (r : Rels) (s s' : Desc) : Prop where
+  (bal  : r.bal  (Desc.bal s) (Desc.bal s'))
+  (stor : r.stor (Desc.stor s) (Desc.stor s'))
+  (code : r.code (Desc.code s) (Desc.code s'))
+  (stk  : r.stk  (Desc.stk s) (Desc.stk s'))
+  (mem  : r.mem  (Desc.mem s) (Desc.mem s'))
+  (ret  : r.ret  (Desc.ret s) (Desc.ret s'))
+  (dest : r.dest (Desc.dest s) (Desc.dest s'))
 
-def State.Diff (xs ys : List (Bits 256)) : State → State → Prop :=
+def Desc.Diff (xs ys : List (Bits 256)) : Desc → Desc → Prop :=
   Rel {Rels.dft with stk := Stack.Diff xs ys}
 
-def State.Push (xs : List (Bits 256)) : State → State → Prop :=
+def Desc.Push (xs : List (Bits 256)) : Desc → Desc → Prop :=
   Rel {Rels.dft with stk := Stack.Push xs}
 
-def State.Pop (xs : List (Bits 256)) : State → State → Prop :=
+def Desc.Pop (xs : List (Bits 256)) : Desc → Desc → Prop :=
   Rel {Rels.dft with stk := Stack.Pop xs}
 
-def State.Swap (n : Nat) : State → State → Prop :=
+def Desc.Swap (n : Nat) : Desc → Desc → Prop :=
   Rel {Rels.dft with stk := Stack.Swap n}
 
-def State.Dup (n : Nat) : State → State → Prop :=
+def Desc.Dup (n : Nat) : Desc → Desc → Prop :=
   Rel {Rels.dft with stk := Stack.Dup n}
 
-def State.Add (s s' : State) : Prop :=  ∃ x y, State.Diff [x, y] [x + y] s s'
-def State.Sub (s s' : State) : Prop :=  ∃ x y, State.Diff [x, y] [x - y] s s'
-def State.Mul (s s' : State) : Prop := ∃ x y, State.Diff [x, y] [x * y] s s'
-def State.Div (s s' : State) : Prop := ∃ x y, State.Diff [x, y] [x / y] s s'
-def State.Mod (s s' : State) : Prop := ∃ x y, State.Diff [x, y] [x % y] s s'
-def State.Sdiv (s s' : State) : Prop := ∃ x y, State.Diff [x, y] [Bits.sdiv x y] s s'
-def State.Smod (s s' : State) : Prop := ∃ x y, State.Diff [x, y] [Bits.smod x y] s s'
-def State.Addmod (s s' : State) : Prop := ∃ x y z, State.Diff [x, y, z] [Bits.addmod x y z] s s'
-def State.Mulmod (s s' : State) : Prop := ∃ x y z, State.Diff [x, y, z] [Bits.mulmod x y z] s s'
-def State.Exp (s s' : State) : Prop := ∃ x y, State.Diff [x, y] [x ^ y] s s'
-def State.Signextend (s s' : State) : Prop :=
+def Desc.Add (s s' : Desc) : Prop :=  ∃ x y, Desc.Diff [x, y] [x + y] s s'
+def Desc.Sub (s s' : Desc) : Prop :=  ∃ x y, Desc.Diff [x, y] [x - y] s s'
+def Desc.Mul (s s' : Desc) : Prop := ∃ x y, Desc.Diff [x, y] [x * y] s s'
+def Desc.Div (s s' : Desc) : Prop := ∃ x y, Desc.Diff [x, y] [x / y] s s'
+def Desc.Mod (s s' : Desc) : Prop := ∃ x y, Desc.Diff [x, y] [x % y] s s'
+def Desc.Sdiv (s s' : Desc) : Prop := ∃ x y, Desc.Diff [x, y] [Bits.sdiv x y] s s'
+def Desc.Smod (s s' : Desc) : Prop := ∃ x y, Desc.Diff [x, y] [Bits.smod x y] s s'
+def Desc.Addmod (s s' : Desc) : Prop := ∃ x y z, Desc.Diff [x, y, z] [Bits.addmod x y z] s s'
+def Desc.Mulmod (s s' : Desc) : Prop := ∃ x y z, Desc.Diff [x, y, z] [Bits.mulmod x y z] s s'
+def Desc.Exp (s s' : Desc) : Prop := ∃ x y, Desc.Diff [x, y] [x ^ y] s s'
+def Desc.Signextend (s s' : Desc) : Prop :=
   ∃ x y z,
-    State.Diff [x, y] [z] s s' ∧
+    Desc.Diff [x, y] [z] s s' ∧
     Word.Signext x y z
 
 instance slt_decidable {n} (xs ys : Bits n) : Decidable (xs ±< ys) := by
@@ -304,141 +300,141 @@ def Bytes.keccak (xs : Bytes) : Word :=
 
 def String.keccak (s : String) : Word := s.toBytes.keccak
 
-def State.Lt (s s' : State) : Prop := ∃ x y, State.Diff [x, y] [x <? y] s s'
-def State.Gt (s s' : State) : Prop := ∃ x y, State.Diff [x, y] [x >? y] s s'
-def State.Slt (s s' : State) : Prop := ∃ x y, State.Diff [x, y] [x ±<? y] s s'
-def State.Sgt (s s' : State) : Prop := ∃ x y, State.Diff [x, y] [x ±>? y] s s'
-def State.Eq (s s' : State) : Prop := ∃ x y, State.Diff [x, y] [x =? y] s s'
-def State.Iszero (s s' : State) : Prop := ∃ x, State.Diff [x] [x =? 0] s s'
-def State.And (s s' : State) : Prop := ∃ x y, State.Diff [x, y] [Bits.and x y] s s'
-def State.Or (s s' : State) : Prop := ∃ x y, State.Diff [x, y] [Bits.or x y] s s'
-def State.Xor (s s' : State) : Prop := ∃ x y, State.Diff [x, y] [Bits.xor x y] s s'
-def State.Not (s s' : State) : Prop := ∃ x, State.Diff [x] [~ x] s s'
-def State.Byte (s s' : State) : Prop :=
+def Desc.Lt (s s' : Desc) : Prop := ∃ x y, Desc.Diff [x, y] [x <? y] s s'
+def Desc.Gt (s s' : Desc) : Prop := ∃ x y, Desc.Diff [x, y] [x >? y] s s'
+def Desc.Slt (s s' : Desc) : Prop := ∃ x y, Desc.Diff [x, y] [x ±<? y] s s'
+def Desc.Sgt (s s' : Desc) : Prop := ∃ x y, Desc.Diff [x, y] [x ±>? y] s s'
+def Desc.Eq (s s' : Desc) : Prop := ∃ x y, Desc.Diff [x, y] [x =? y] s s'
+def Desc.Iszero (s s' : Desc) : Prop := ∃ x, Desc.Diff [x] [x =? 0] s s'
+def Desc.And (s s' : Desc) : Prop := ∃ x y, Desc.Diff [x, y] [Bits.and x y] s s'
+def Desc.Or (s s' : Desc) : Prop := ∃ x y, Desc.Diff [x, y] [Bits.or x y] s s'
+def Desc.Xor (s s' : Desc) : Prop := ∃ x y, Desc.Diff [x, y] [Bits.xor x y] s s'
+def Desc.Not (s s' : Desc) : Prop := ∃ x, Desc.Diff [x] [~ x] s s'
+def Desc.Byte (s s' : Desc) : Prop :=
   ∃ (x y : Word) (b : Bits 8),
-    State.Diff [x, y] [(0 : Bits 248) ++ b] s s' ∧
+    Desc.Diff [x, y] [(0 : Bits 248) ++ b] s s' ∧
     List.getD (@Bits.toBytes 32 y) x.toNat 0 = b
-def State.Shl (s s' : State) : Prop := ∃ x y, State.Diff [x, y] [Bits.shl x.toNat y] s s'
-def State.Shr (s s' : State) : Prop := ∃ x y, State.Diff [x, y] [Bits.shr x.toNat y] s s'
-def State.Sar (s s' : State) : Prop := ∃ x y, State.Diff [x, y] [Bits.sar x.toNat y] s s'
-def State.Kec (s s' : State) : Prop :=
-  ∃ x y, State.Diff [x, y] [(Memory.slice s.mem x y).keccak] s s'
+def Desc.Shl (s s' : Desc) : Prop := ∃ x y, Desc.Diff [x, y] [Bits.shl x.toNat y] s s'
+def Desc.Shr (s s' : Desc) : Prop := ∃ x y, Desc.Diff [x, y] [Bits.shr x.toNat y] s s'
+def Desc.Sar (s s' : Desc) : Prop := ∃ x y, Desc.Diff [x, y] [Bits.sar x.toNat y] s s'
+def Desc.Kec (s s' : Desc) : Prop :=
+  ∃ x y, Desc.Diff [x, y] [(Memory.slice s.mem x y).keccak] s s'
 
 def Bytes.Size (bs : Bytes) (sz : Word) : Prop := bs.length = sz.toNat
 
-def State.Address (e : Env) (s s' : State) : Prop := State.Push [Addr.toWord e.cta] s s'
-def State.Balance (s s' : State) : Prop := ∃ x, State.Diff [x] [s.bal (toAddr x)] s s'
-def State.Origin (e : Env) (s s' : State) : Prop := State.Push [Addr.toWord e.oga] s s'
-def State.Caller (e : Env) (s s' : State) : Prop := State.Push [Addr.toWord e.cla] s s'
-def State.Callvalue (e : Env) (s s' : State) : Prop := State.Push [e.clv] s s'
-def State.Calldatasize (e : Env) (s s' : State) : Prop := ∃ sz, State.Push [sz] s s' ∧ Bytes.Size e.cld sz
-def State.Codesize (e : Env) (s s' : State) : Prop := ∃ sz, State.Push [sz] s s' ∧ Bytes.Size e.code sz
-def State.Gasprice (e : Env) (s s' : State) : Prop := State.Push [e.gpr] s s'
-def State.Extcodesize (s s' : State) : Prop :=
-  ∃ x sz, State.Diff [x] [sz] s s' ∧ Bytes.Size (s.code (toAddr x)) sz
-def State.Retdatasize (s s' : State) : Prop :=
-  ∃ x r, State.Push [x] s s' ∧ s.ret = r ∧ Bytes.Size r x
+def Desc.Address (e : Env) (s s' : Desc) : Prop := Desc.Push [Addr.toWord e.cta] s s'
+def Desc.Balance (s s' : Desc) : Prop := ∃ x, Desc.Diff [x] [s.bal (toAddr x)] s s'
+def Desc.Origin (e : Env) (s s' : Desc) : Prop := Desc.Push [Addr.toWord e.oga] s s'
+def Desc.Caller (e : Env) (s s' : Desc) : Prop := Desc.Push [Addr.toWord e.cla] s s'
+def Desc.Callvalue (e : Env) (s s' : Desc) : Prop := Desc.Push [e.clv] s s'
+def Desc.Calldatasize (e : Env) (s s' : Desc) : Prop := ∃ sz, Desc.Push [sz] s s' ∧ Bytes.Size e.cld sz
+def Desc.Codesize (e : Env) (s s' : Desc) : Prop := ∃ sz, Desc.Push [sz] s s' ∧ Bytes.Size e.code sz
+def Desc.Gasprice (e : Env) (s s' : Desc) : Prop := Desc.Push [e.gpr] s s'
+def Desc.Extcodesize (s s' : Desc) : Prop :=
+  ∃ x sz, Desc.Diff [x] [sz] s s' ∧ Bytes.Size (s.code (toAddr x)) sz
+def Desc.Retdatasize (s s' : Desc) : Prop :=
+  ∃ x r, Desc.Push [x] s s' ∧ s.ret = r ∧ Bytes.Size r x
 
 -- For verification tasks where using correct values of Keccak hashes is crucial for correctness,
--- we can define a (keccak : Bytes → Word) and use it in the definition of State.extcodehash,
+-- we can define a (keccak : Bytes → Word) and use it in the definition of Desc.extcodehash,
 -- and also the Rinst.kec constructor of 'step'. For correctness of the WETH contract, however,
 -- it suffices to require that _some_ hash value is computed and added to the Stack.
 
-def State.Extcodehash (s s' : State) : Prop :=
-  ∃ x y, State.Diff [x] [y] s s'
+def Desc.Extcodehash (s s' : Desc) : Prop :=
+  ∃ x y, Desc.Diff [x] [y] s s'
 
-def State.Calldataload (e : Env) (s s' : State) : Prop :=
+def Desc.Calldataload (e : Env) (s s' : Desc) : Prop :=
   ∃ x y,
-    State.Diff [x] [y] s s' ∧
+    Desc.Diff [x] [y] s s' ∧
     List.sliceD e.cld x.toNat 32 0 = @Bits.toBytes 32 y
 
-def State.Calldatacopy (e : Env) (s s' : State) : Prop :=
+def Desc.Calldatacopy (e : Env) (s s' : Desc) : Prop :=
   ∃ x y z,
-    State.Rel
-      { State.Rels.dft with
+    Desc.Rel
+      { Desc.Rels.dft with
         stk := Stack.Pop [x, y, z],
         mem := Mstored x <| List.sliceD e.cld y.toNat z.toNat 0 } s s'
 
-def State.Mcopy (s s' : State) : Prop :=
+def Desc.Mcopy (s s' : Desc) : Prop :=
   ∃ x y z,
-    State.Rel
+    Desc.Rel
       {
-        State.Rels.dft with
+        Desc.Rels.dft with
         stk := Stack.Pop [x, y, z],
         mem := Mstored x <| Memory.slice s.mem y z
       }
       s s'
 
-def State.Codecopy (e : Env) (s s' : State) : Prop :=
+def Desc.Codecopy (e : Env) (s s' : Desc) : Prop :=
   ∃ x y z bs,
-    State.Rel
-      { State.Rels.dft with
+    Desc.Rel
+      { Desc.Rels.dft with
         stk := Stack.Pop [x, y, z],
         mem := Mstored x bs } s s' ∧
     List.slice? e.code y.toNat z.toNat = some bs
 
-def State.Extcodecopy (s s' : State) : Prop :=
+def Desc.Extcodecopy (s s' : Desc) : Prop :=
   ∃ w x y z bs,
-    State.Rel
-      { State.Rels.dft with
+    Desc.Rel
+      { Desc.Rels.dft with
         stk := Stack.Pop [w, x, y, z],
         mem := Mstored x bs }
       s s' ∧
     List.slice? (s.code <| toAddr w) y.toNat z.toNat = some bs
 
-def State.Retdatacopy (s s' : State) : Prop :=
+def Desc.Retdatacopy (s s' : Desc) : Prop :=
   ∃ x y z,
-    State.Rel
-      { State.Rels.dft with
+    Desc.Rel
+      { Desc.Rels.dft with
         stk := Stack.Pop [x, y, z],
         mem := Mstored x <| List.sliceD s.ret y.toNat z.toNat 0 }
       s s'
 
 -- One thing that all block operations have in common is that they consume
 -- no Stack items, leave exactly one new item on the Stack, and change nothing
--- else in the State. The contents of the new item depend on the operation used,
+-- else in the Desc. The contents of the new item depend on the operation used,
 -- but their differences are immaterial for current purposes of the formalization,
 -- so that part is unspecified here. These definitions will need to be augmented
 -- to  verify more detailed properties about block operations.
 
-def State.Tstore (e : Env) (s s' : State) : Prop :=
+def Desc.Tstore (e : Env) (s s' : Desc) : Prop :=
   ∃ x y : Word,
-    State.Rel
-    { State.Rels.dft with
+    Desc.Rel
+    { Desc.Rels.dft with
       -- todo : add t-storage condition
       stk := Stack.Diff [x, y] [] } s s' ∧
     e.wup = 1
 
-def State.Sstore (e : Env) (s s' : State) : Prop :=
+def Desc.Sstore (e : Env) (s s' : Desc) : Prop :=
   ∃ x y : Word,
-    State.Rel
-    { State.Rels.dft with
+    Desc.Rel
+    { Desc.Rels.dft with
       stor := Frel e.cta (Overwrite x y),
       stk := Stack.Diff [x, y] [] } s s' ∧
     e.wup = 1
 
-def State.Sload (e : Env) (s s' : State) : Prop :=
-  ∃ x, State.Diff [x] [s.stor e.cta x] s s'
+def Desc.Sload (e : Env) (s s' : Desc) : Prop :=
+  ∃ x, Desc.Diff [x] [s.stor e.cta x] s s'
 
-def State.Tload (s s' : State) : Prop :=
-  ∃ x y, State.Diff [x] [y] s s' -- todo : use value from t-storage
+def Desc.Tload (s s' : Desc) : Prop :=
+  ∃ x y, Desc.Diff [x] [y] s s' -- todo : use value from t-storage
 
-def State.Mload (s s' : State) : Prop :=
-  ∃ x y, State.Diff [x] [y] s s' ∧
+def Desc.Mload (s s' : Desc) : Prop :=
+  ∃ x y, Desc.Diff [x] [y] s s' ∧
     Memory.slice s.mem x 32 = @Bits.toBytes 32 y
 
-def State.Mstore (s s' : State) : Prop :=
+def Desc.Mstore (s s' : Desc) : Prop :=
   ∃ x y,
-    State.Rel
-      { State.Rels.dft with
+    Desc.Rel
+      { Desc.Rels.dft with
         stk := Stack.Diff [x, y] [],
         mem := Mstored x (@Bits.toBytes 32 y) }
       s s'
 
-def State.Mstore8 (s s' : State) : Prop :=
+def Desc.Mstore8 (s s' : Desc) : Prop :=
   ∃ (x y : Word),
-    State.Rel
-      { State.Rels.dft with
+    Desc.Rel
+      { Desc.Rels.dft with
         stk := Stack.Diff [x, y] [],
         mem := Mstored x [@Bits.suffix 8 248 y] } s s'
 
@@ -453,7 +449,7 @@ def State.Mstore8 (s s' : State) : Prop :=
 -- to the original defs. In other Words, this formalization asks users to squint a little
 -- harder to convince themselves that it really describes the EVM, because it is worth it.
 
-def Result.wrap (s : State) (ret : Bytes) : Result :=
+def Result.wrap (s : Desc) (ret : Bytes) : Result :=
   {
     bal := s.bal,
     stor := s.stor,
@@ -492,14 +488,14 @@ def Linst.At (e : Env) (pc : Nat) (o : Linst) : Prop := e.code[pc]? = some (Lins
 def PushAt (e : Env) (pc : Nat) (bs : Bytes) : Prop :=
   List.Slice e.code pc (pushToBytes bs) ∧ bs.length ≤ 32
 
-inductive Linst.Run : Env → State → Linst → Result → Prop
+inductive Linst.Run : Env → Desc → Linst → Result → Prop
   | stop : ∀ e s, Linst.Run e s Linst.stop (Result.wrap s [])
   | ret :
     ∀ e s x y,
       ([x, y] <+: s.stk) →
       Linst.Run e s Linst.ret (.wrap s <| s.mem.slice x y)
   | dest :
-    ∀ (e : Env) (s : State) x bal bal',
+    ∀ (e : Env) (s : Desc) x bal bal',
       e.wup = 1 →
       ([x] <+: s.stk) →
       Overwrite e.cta 0 s.bal bal →
@@ -512,115 +508,115 @@ def insidePushArg (e : Env) (loc : Nat) : Prop :=
 def Jumpable (e : Env) (n : Nat) : Prop :=
   Jinst.At e n Jinst.jumpdest ∧ ¬ insidePushArg e n
 
-def Fail (s : State) (o : Xinst) (s' : State) : Prop :=
+def Fail (s : Desc) (o : Xinst) (s' : Desc) : Prop :=
   match o with
-  | .create => ∃ x y z, State.Pop [x, y, z] s s'
-  | .call => ∃ x₀ x₁ x₂ x₃ x₄ x₅ x₆, State.Pop [x₀, x₁, x₂, x₃, x₄, x₅, x₆] s s'
-  | .callcode => ∃ x₀ x₁ x₂ x₃ x₄ x₅ x₆, State.Pop [x₀, x₁, x₂, x₃, x₄, x₅, x₆] s s'
-  | .delcall => ∃ x₀ x₁ x₂ x₃ x₄ x₅, State.Pop [x₀, x₁, x₂, x₃, x₄, x₅] s s'
-  | .create2 => ∃ x₀ x₁ x₂ x₃, State.Pop [x₀, x₁, x₂, x₃] s s'
-  | .statcall => ∃ x₀ x₁ x₂ x₃ x₄ x₅, State.Pop [x₀, x₁, x₂, x₃, x₄, x₅] s s'
+  | .create => ∃ x y z, Desc.Pop [x, y, z] s s'
+  | .call => ∃ x₀ x₁ x₂ x₃ x₄ x₅ x₆, Desc.Pop [x₀, x₁, x₂, x₃, x₄, x₅, x₆] s s'
+  | .callcode => ∃ x₀ x₁ x₂ x₃ x₄ x₅ x₆, Desc.Pop [x₀, x₁, x₂, x₃, x₄, x₅, x₆] s s'
+  | .delcall => ∃ x₀ x₁ x₂ x₃ x₄ x₅, Desc.Pop [x₀, x₁, x₂, x₃, x₄, x₅] s s'
+  | .create2 => ∃ x₀ x₁ x₂ x₃, Desc.Pop [x₀, x₁, x₂, x₃] s s'
+  | .statcall => ∃ x₀ x₁ x₂ x₃ x₄ x₅, Desc.Pop [x₀, x₁, x₂, x₃, x₄, x₅] s s'
 
-def Rinst.Run (e : Env) : State → Rinst → State → Prop :=
+def Rinst.Run (e : Env) : Desc → Rinst → Desc → Prop :=
   Function.swap <|
     fun
-    | Rinst.add => State.Add
-    | Rinst.sub => State.Sub
-    | Rinst.mul => State.Mul
-    | Rinst.div => State.Div
-    | Rinst.mod => State.Mod
-    | Rinst.sdiv => State.Sdiv
-    | Rinst.smod => State.Smod
-    | Rinst.addmod => State.Addmod
-    | Rinst.mulmod => State.Mulmod
-    | Rinst.exp => State.Exp
-    | Rinst.signextend => State.Signextend
-    | Rinst.lt => State.Lt
-    | Rinst.gt => State.Gt
-    | Rinst.slt => State.Slt
-    | Rinst.sgt => State.Sgt
-    | Rinst.eq => State.Eq
-    | Rinst.iszero => State.Iszero
-    | Rinst.and => State.And
-    | Rinst.or => State.Or
-    | Rinst.xor => State.Xor
-    | Rinst.not => State.Not
-    | Rinst.byte => State.Byte
-    | Rinst.shl => State.Shl
-    | Rinst.shr => State.Shr
-    | Rinst.sar => State.Sar
-    | Rinst.kec => State.Kec
-    | Rinst.address => State.Address e
-    | Rinst.balance => State.Balance
-    | Rinst.origin => State.Origin e
-    | Rinst.caller => State.Caller e
-    | Rinst.callvalue => State.Callvalue e
-    | Rinst.calldataload => State.Calldataload e
-    | Rinst.calldatasize => State.Calldatasize e
-    | Rinst.calldatacopy => State.Calldatacopy e
-    | Rinst.codesize => State.Codesize e
-    | Rinst.codecopy => State.Codecopy e
-    | Rinst.gasprice => State.Gasprice e
-    | Rinst.extcodesize => State.Extcodesize
-    | Rinst.extcodecopy => State.Extcodecopy
-    | Rinst.retdatasize => State.Retdatasize
-    | Rinst.retdatacopy => State.Retdatacopy
-    | Rinst.extcodehash => State.Extcodehash
-    | Rinst.blockhash => λ s s' => ∃ x, State.Push [x] s s'
-    | Rinst.coinbase => λ s s' => ∃ x, State.Push [x] s s'
-    | Rinst.timestamp => λ s s' => ∃ x, State.Push [x] s s'
-    | Rinst.number => λ s s' => ∃ x, State.Push [x] s s'
-    | Rinst.prevrandao => λ s s' => ∃ x, State.Push [x] s s'
-    | Rinst.gaslimit => λ s s' => ∃ x, State.Push [x] s s'
-    | Rinst.chainid => λ s s' => ∃ x, State.Push [x] s s'
-    | Rinst.selfbalance => λ s s' => ∃ x, State.Push [x] s s'
-    | Rinst.basefee => λ s s' => ∃ x, State.Push [x] s s'
-    | Rinst.blobhash => λ s s' => ∃ x y, State.Diff [x] [y] s s'
-    | Rinst.blobbasefee => λ s s' => ∃ x, State.Push [x] s s'
-    | Rinst.pop => λ s s' => ∃ x, State.Pop [x] s s'
-    | Rinst.mload => State.Mload
-    | Rinst.mstore => State.Mstore
-    | Rinst.mstore8 => State.Mstore8
-    | Rinst.sload => State.Sload e
-    | Rinst.sstore => State.Sstore e
-    | Rinst.tload => State.Tload
-    | Rinst.tstore => State.Tstore e
-    | Rinst.mcopy => State.Mcopy
-    | Rinst.msize => λ s s' => ∃ x, State.Push [x] s s'
-    | Rinst.gas => λ s s' => ∃ x, State.Push [x] s s'
-    | Rinst.pc => λ s s' => ∃ x, State.Push [x] s s'
-    | Rinst.dup n => State.Dup n.val
-    | Rinst.swap n => State.Swap n.val
+    | Rinst.add => Desc.Add
+    | Rinst.sub => Desc.Sub
+    | Rinst.mul => Desc.Mul
+    | Rinst.div => Desc.Div
+    | Rinst.mod => Desc.Mod
+    | Rinst.sdiv => Desc.Sdiv
+    | Rinst.smod => Desc.Smod
+    | Rinst.addmod => Desc.Addmod
+    | Rinst.mulmod => Desc.Mulmod
+    | Rinst.exp => Desc.Exp
+    | Rinst.signextend => Desc.Signextend
+    | Rinst.lt => Desc.Lt
+    | Rinst.gt => Desc.Gt
+    | Rinst.slt => Desc.Slt
+    | Rinst.sgt => Desc.Sgt
+    | Rinst.eq => Desc.Eq
+    | Rinst.iszero => Desc.Iszero
+    | Rinst.and => Desc.And
+    | Rinst.or => Desc.Or
+    | Rinst.xor => Desc.Xor
+    | Rinst.not => Desc.Not
+    | Rinst.byte => Desc.Byte
+    | Rinst.shl => Desc.Shl
+    | Rinst.shr => Desc.Shr
+    | Rinst.sar => Desc.Sar
+    | Rinst.kec => Desc.Kec
+    | Rinst.address => Desc.Address e
+    | Rinst.balance => Desc.Balance
+    | Rinst.origin => Desc.Origin e
+    | Rinst.caller => Desc.Caller e
+    | Rinst.callvalue => Desc.Callvalue e
+    | Rinst.calldataload => Desc.Calldataload e
+    | Rinst.calldatasize => Desc.Calldatasize e
+    | Rinst.calldatacopy => Desc.Calldatacopy e
+    | Rinst.codesize => Desc.Codesize e
+    | Rinst.codecopy => Desc.Codecopy e
+    | Rinst.gasprice => Desc.Gasprice e
+    | Rinst.extcodesize => Desc.Extcodesize
+    | Rinst.extcodecopy => Desc.Extcodecopy
+    | Rinst.retdatasize => Desc.Retdatasize
+    | Rinst.retdatacopy => Desc.Retdatacopy
+    | Rinst.extcodehash => Desc.Extcodehash
+    | Rinst.blockhash => λ s s' => ∃ x, Desc.Push [x] s s'
+    | Rinst.coinbase => λ s s' => ∃ x, Desc.Push [x] s s'
+    | Rinst.timestamp => λ s s' => ∃ x, Desc.Push [x] s s'
+    | Rinst.number => λ s s' => ∃ x, Desc.Push [x] s s'
+    | Rinst.prevrandao => λ s s' => ∃ x, Desc.Push [x] s s'
+    | Rinst.gaslimit => λ s s' => ∃ x, Desc.Push [x] s s'
+    | Rinst.chainid => λ s s' => ∃ x, Desc.Push [x] s s'
+    | Rinst.selfbalance => λ s s' => ∃ x, Desc.Push [x] s s'
+    | Rinst.basefee => λ s s' => ∃ x, Desc.Push [x] s s'
+    | Rinst.blobhash => λ s s' => ∃ x y, Desc.Diff [x] [y] s s'
+    | Rinst.blobbasefee => λ s s' => ∃ x, Desc.Push [x] s s'
+    | Rinst.pop => λ s s' => ∃ x, Desc.Pop [x] s s'
+    | Rinst.mload => Desc.Mload
+    | Rinst.mstore => Desc.Mstore
+    | Rinst.mstore8 => Desc.Mstore8
+    | Rinst.sload => Desc.Sload e
+    | Rinst.sstore => Desc.Sstore e
+    | Rinst.tload => Desc.Tload
+    | Rinst.tstore => Desc.Tstore e
+    | Rinst.mcopy => Desc.Mcopy
+    | Rinst.msize => λ s s' => ∃ x, Desc.Push [x] s s'
+    | Rinst.gas => λ s s' => ∃ x, Desc.Push [x] s s'
+    | Rinst.pc => λ s s' => ∃ x, Desc.Push [x] s s'
+    | Rinst.dup n => Desc.Dup n.val
+    | Rinst.swap n => Desc.Swap n.val
     | Rinst.log n =>
       match n with
-      | ⟨0, _⟩ => λ s s' => ∃ x₀ x₁, State.Pop [x₀, x₁] s s'
-      | ⟨1, _⟩ => λ s s' => ∃ x₀ x₁ x₂, State.Pop [x₀, x₁, x₂] s s'
-      | ⟨2, _⟩ => λ s s' => ∃ x₀ x₁ x₂ x₃, State.Pop [x₀, x₁, x₂, x₃] s s'
-      | ⟨3, _⟩ => λ s s' => ∃ x₀ x₁ x₂ x₃ x₄, State.Pop [x₀, x₁, x₂, x₃, x₄] s s'
-      | ⟨4, _⟩ => λ s s' => ∃ x₀ x₁ x₂ x₃ x₄ x₅, State.Pop [x₀, x₁, x₂, x₃, x₄, x₅] s s'
+      | ⟨0, _⟩ => λ s s' => ∃ x₀ x₁, Desc.Pop [x₀, x₁] s s'
+      | ⟨1, _⟩ => λ s s' => ∃ x₀ x₁ x₂, Desc.Pop [x₀, x₁, x₂] s s'
+      | ⟨2, _⟩ => λ s s' => ∃ x₀ x₁ x₂ x₃, Desc.Pop [x₀, x₁, x₂, x₃] s s'
+      | ⟨3, _⟩ => λ s s' => ∃ x₀ x₁ x₂ x₃ x₄, Desc.Pop [x₀, x₁, x₂, x₃, x₄] s s'
+      | ⟨4, _⟩ => λ s s' => ∃ x₀ x₁ x₂ x₃ x₄ x₅, Desc.Pop [x₀, x₁, x₂, x₃, x₄, x₅] s s'
       | ⟨5, h⟩ => False.elim <| Nat.lt_irrefl _ h
     -- | Rinst.invalid => λ _ _ => False
 
-inductive Jinst.Run : Env → State → Nat → Jinst → State → Nat → Prop
+inductive Jinst.Run : Env → Desc → Nat → Jinst → Desc → Nat → Prop
   | jump :
     ∀ e s s' pc x,
-      State.Pop [x] s s' →
+      Desc.Pop [x] s s' →
       Jumpable e x.toNat →
       Jinst.Run e s pc jump s' x.toNat
   | zero :
     ∀ e s s' pc x,
-      State.Pop [x, 0] s s' →
+      Desc.Pop [x, 0] s s' →
       Jinst.Run e s pc jumpi s' (pc + 1)
   | succ :
     ∀ e s s' pc x y,
-      State.Pop [x, y] s s' →
+      Desc.Pop [x, y] s s' →
       y ≠ 0 →
       Jumpable e x.toNat →
       Jinst.Run e s pc jumpi s' x.toNat
   | dest :
     ∀ e s pc, Jinst.Run e s pc jumpdest s (pc + 1)
 
-structure PreRun (s : State) (r : Result) : Prop where
+structure PreRun (s : Desc) (r : Result) : Prop where
   (bal : s.bal = r.bal)
   (stor : s.stor = r.stor)
   (code : s.code = r.code)
@@ -632,7 +628,7 @@ inductive Xinst.isCall : Xinst → Prop
 | delcall : Xinst.isCall .delcall
 | statcall : Xinst.isCall .statcall
 
-def Env.prep (e : Env) (s : State)
+def Env.prep (e : Env) (s : Desc)
     (cta : Addr) (cld : Bytes) (cla : Addr)
     (clv : Word) (cda : Addr) (exd : Nat) (wup : Bool) : Env :=
   { cta := cta, oga := e.oga, gpr := e.gpr, cld := cld, cla := cla,
@@ -643,26 +639,26 @@ def Env.prep' (e : Env)
   { cta := cta, oga := e.oga, gpr := e.gpr, cld := [], cla := e.cta,
     clv := clv, code := ctc, exd := exd, wup := 1 }
 
-def State.prep (s : State) (bal : Balances) : State :=
+def Desc.prep (s : Desc) (bal : Balances) : Desc :=
   { bal := bal, stor := s.stor, code := s.code, stk := [],
     mem := Memory.init, ret := [], dest := s.dest }
 
-def State.wrap (r : Result) (stk : Stack) (mem : Memory) : State :=
+def Desc.wrap (r : Result) (stk : Stack) (mem : Memory) : Desc :=
   { bal := r.bal, stor := r.stor, code := r.code,
     stk := stk, mem := mem, ret := r.ret, dest := r.dest }
 
-def State.wrap' (r : Result) (cd : Codes) (mem : Memory) (stk : Stack) : State :=
+def Desc.wrap' (r : Result) (cd : Codes) (mem : Memory) (stk : Stack) : Desc :=
   { bal := r.bal, stor := r.stor, code := cd, mem := mem,
     stk := stk, ret := r.ret, dest := r.dest }
 
 def storeRet (mem : Memory) (ret : Bytes) (loc sz : Word) (mem' : Memory) : Prop :=
   Mstored loc (List.take sz.toNat ret) mem mem'
 
-inductive Xinst.Run' : Env → State → Env → State → Xinst → Result → State → Prop
+inductive Xinst.Run' : Env → Desc → Env → Desc → Xinst → Result → Desc → Prop
   | create :
     ∀ e : Env, e.wup = 1 →
     ∀ exd, e.exd = exd.succ →
-    ∀ (s : State) (cta : Addr), s.code cta = [] →
+    ∀ (s : Desc) (cta : Addr), s.code cta = [] →
     ∀ (clv clc csz : Word) (stk : Stack),
       Stack.Diff [clv, clc, csz] [Addr.toWord cta] s.stk stk →
     ∀ bal : Balances, Transfer s.bal e.cta clv cta bal →
@@ -673,7 +669,7 @@ inductive Xinst.Run' : Env → State → Env → State → Xinst → Result → 
   | create2 :
     ∀ e : Env, e.wup = 1 →
     ∀ exd, e.exd = exd.succ →
-    ∀ (s : State) (cta : Addr), s.code cta = [] →
+    ∀ (s : Desc) (cta : Addr), s.code cta = [] →
     ∀ (clv clc csz slt : Word) (stk : Stack),
       Stack.Diff [clv, clc, csz, slt] [Addr.toWord cta] s.stk stk →
     ∀ bal : Balances, Transfer s.bal e.cta clv cta bal →
@@ -722,7 +718,7 @@ inductive Xinst.Run' : Env → State → Env → State → Xinst → Result → 
         (.prep e s (toAddr adr) (s.mem.slice ilc isz) e.cta 0 (toAddr adr) exd 0)
         (.prep s s.bal) .statcall r (.wrap r stk mem)
 
-inductive Step : Env → State → Nat → State → Nat → Type
+inductive Step : Env → Desc → Nat → Desc → Nat → Type
   | reg :
     ∀ e s pc o s',
       Rinst.At e pc o →
@@ -748,10 +744,10 @@ inductive Step : Env → State → Nat → State → Nat → Type
   | push :
     ∀ e s pc bs s',
       PushAt e pc bs →
-      State.Push [bs.toBits 32] s s' →
+      Desc.Push [bs.toBits 32] s s' →
       Step e s pc s' (pc + bs.length + 1)
 
-inductive Halt : Env → State → Nat → Result → Prop
+inductive Halt : Env → Desc → Nat → Result → Prop
   | inst :
     ∀ e s pc o r,
       Linst.At e pc o →
@@ -759,7 +755,7 @@ inductive Halt : Env → State → Nat → Result → Prop
       Halt e s pc r
   | eoc : ∀ e s, Halt e s e.code.length (.wrap s [])
 
-inductive Exec : Env → State → Nat → Result → Type
+inductive Exec : Env → Desc → Nat → Result → Type
   | step :
     ∀ {e s pc s' pc' r},
       Step e s pc s' pc' →
@@ -876,7 +872,7 @@ def Ninst.At (e : Env) (pc : Nat) : Ninst → Prop
   | exec o => o.At e pc
   | push bs _ => PushAt e pc bs
 
-inductive Xinst.Run : Env → State → Xinst → State → Prop
+inductive Xinst.Run : Env → Desc → Xinst → Desc → Prop
   | exec :
     ∀ {e s ep sp o r s'},
       Xinst.Run' e s ep sp o r s' →
@@ -890,7 +886,7 @@ inductive Xinst.Run : Env → State → Xinst → State → Prop
       Xinst.Run e s o s'
   | fail : ∀ {e s o s'}, Fail s o s' → Xinst.Run e s o s'
 
-inductive Ninst.Run : Env → State → Ninst → State → Prop
+inductive Ninst.Run : Env → Desc → Ninst → Desc → Prop
   | reg :
     ∀ {e s o s'},
       Rinst.Run e s o s' →
@@ -901,19 +897,19 @@ inductive Ninst.Run : Env → State → Ninst → State → Prop
       Ninst.Run e s (Ninst.exec o) s'
   | push :
     ∀ e {s bs h s'},
-      State.Push [Bytes.toBits 32 bs] s s' →
+      Desc.Push [Bytes.toBits 32 bs] s s' →
       Ninst.Run e s (Ninst.push bs h) s'
 
-inductive Func.Run : List Func → Env → State → Func → Result → Prop
+inductive Func.Run : List Func → Env → Desc → Func → Result → Prop
   | zero :
     ∀ {fs e s s' f g r},
-      State.Pop [0] s s' →
+      Desc.Pop [0] s s' →
       Func.Run fs e s' f r →
       Func.Run fs e s (branch f g) r
   | succ :
     ∀ {fs e s w s' f g r},
       w ≠ 0 →
-      State.Pop [w] s s' →
+      Desc.Pop [w] s s' →
       Func.Run fs e s' g r →
       Func.Run fs e s (branch f g) r
   | last :
@@ -931,5 +927,5 @@ inductive Func.Run : List Func → Env → State → Func → Result → Prop
       Func.Run fs e s f r →
       Func.Run fs e s (call k) r
 
-def Prog.Run (e : Env) (s : State) (p : Prog) (r : Result) : Prop :=
+def Prog.Run (e : Env) (s : Desc) (p : Prog) (r : Result) : Prop :=
   Func.Run (p.main :: p.aux) e s p.main r
