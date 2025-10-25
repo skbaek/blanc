@@ -2,94 +2,94 @@
 
 import Blanc.Basic
 import Elevm.Hash
-import Elevm.Types
+import Elevm.Execution
 
 
 
-def Rinst.toByte : Rinst → Byte
-  | add          => Ox x0 x1
-  | mul          => Ox x0 x2
-  | sub          => Ox x0 x3
-  | div          => Ox x0 x4
-  | sdiv         => Ox x0 x5
-  | mod          => Ox x0 x6
-  | smod         => Ox x0 x7
-  | addmod       => Ox x0 x8
-  | mulmod       => Ox x0 x9
-  | exp          => Ox x0 xA
-  | signextend   => Ox x0 xB
-  | lt           => Ox x1 x0
-  | gt           => Ox x1 x1
-  | slt          => Ox x1 x2
-  | sgt          => Ox x1 x3
-  | eq           => Ox x1 x4
-  | iszero       => Ox x1 x5
-  | and          => Ox x1 x6
-  | or           => Ox x1 x7
-  | xor          => Ox x1 x8
-  | not          => Ox x1 x9
-  | byte         => Ox x1 xA
-  | shl          => Ox x1 xB
-  | shr          => Ox x1 xC
-  | sar          => Ox x1 xD
-  | kec          => Ox x2 x0
-  | address      => Ox x3 x0
-  | balance      => Ox x3 x1
-  | origin       => Ox x3 x2
-  | caller       => Ox x3 x3
-  | callvalue    => Ox x3 x4
-  | calldataload => Ox x3 x5
-  | calldatasize => Ox x3 x6
-  | calldatacopy => Ox x3 x7
-  | codesize     => Ox x3 x8
-  | codecopy     => Ox x3 x9
-  | gasprice     => Ox x3 xA
-  | extcodesize  => Ox x3 xB
-  | extcodecopy  => Ox x3 xC
-  | retdatasize  => Ox x3 xD
-  | retdatacopy  => Ox x3 xE
-  | extcodehash  => Ox x3 xF
-  | blockhash    => Ox x4 x0
-  | coinbase     => Ox x4 x1
-  | timestamp    => Ox x4 x2
-  | number       => Ox x4 x3
-  | prevrandao   => Ox x4 x4
-  | gaslimit     => Ox x4 x5
-  | chainid      => Ox x4 x6
-  | selfbalance  => Ox x4 x7
-  | basefee      => Ox x4 x8
-  | blobhash     => Ox x4 x9
-  | blobbasefee  => Ox x4 xA
-  | pop          => Ox x5 x0
-  | mload        => Ox x5 x1
-  | mstore       => Ox x5 x2
-  | mstore8      => Ox x5 x3
-  | sload        => Ox x5 x4
-  | sstore       => Ox x5 x5
-  | tload        => Ox x5 xC
-  | tstore       => Ox x5 xD
-  | mcopy        => Ox x5 xE
-  | pc           => Ox x5 x8
-  | msize        => Ox x5 x9
-  | gas          => Ox x5 xA
-  | dup n        => Ox x8 (@Nat.toBits 4 n)
-  | swap n       => Ox x9 (@Nat.toBits 4 n)
-  | log n        => Ox xA (@Nat.toBits 4 n)
+def Rinst.toB8 : Rinst → B8
+  | add          => 0x01
+  | mul          => 0x02
+  | sub          => 0x03
+  | div          => 0x04
+  | sdiv         => 0x05
+  | mod          => 0x06
+  | smod         => 0x07
+  | addmod       => 0x08
+  | mulmod       => 0x09
+  | exp          => 0x0A
+  | signextend   => 0x0B
+  | lt           => 0x10
+  | gt           => 0x11
+  | slt          => 0x12
+  | sgt          => 0x13
+  | eq           => 0x14
+  | iszero       => 0x15
+  | and          => 0x16
+  | or           => 0x17
+  | xor          => 0x18
+  | not          => 0x19
+  | byte         => 0x1A
+  | shl          => 0x1B
+  | shr          => 0x1C
+  | sar          => 0x1D
+  | kec          => 0x20
+  | address      => 0x30
+  | balance      => 0x31
+  | origin       => 0x32
+  | caller       => 0x33
+  | callvalue    => 0x34
+  | calldataload => 0x35
+  | calldatasize => 0x36
+  | calldatacopy => 0x37
+  | codesize     => 0x38
+  | codecopy     => 0x39
+  | gasprice     => 0x3A
+  | extcodesize  => 0x3B
+  | extcodecopy  => 0x3C
+  | retdatasize  => 0x3D
+  | retdatacopy  => 0x3E
+  | extcodehash  => 0x3F
+  | blockhash    => 0x40
+  | coinbase     => 0x41
+  | timestamp    => 0x42
+  | number       => 0x43
+  | prevrandao   => 0x44
+  | gaslimit     => 0x45
+  | chainid      => 0x46
+  | selfbalance  => 0x47
+  | basefee      => 0x48
+  | blobhash     => 0x49
+  | blobbasefee  => 0x4A
+  | pop          => 0x50
+  | mload        => 0x51
+  | mstore       => 0x52
+  | mstore8      => 0x53
+  | sload        => 0x54
+  | sstore       => 0x55
+  | tload        => 0x5C
+  | tstore       => 0x5D
+  | mcopy        => 0x5E
+  | pc           => 0x58
+  | msize        => 0x59
+  | gas          => 0x5A
+  | dup n        => 0x80 + n.val.toUInt8
+  | swap n       => 0x90 + n.val.toUInt8
+  | log n        => 0xA0 + n.val.toUInt8
 
-def Memory : Type := Word → Byte
-def Storage : Type := Word → Word
-abbrev Balances : Type := Addr → Word
-abbrev Storages : Type := Addr → Storage
-abbrev Codes : Type := Addr → Bytes
+def Memory : Type := B256 → B8
+def Storage : Type := B256 → B256
+abbrev Balances : Type := Adr → B256
+abbrev Storages : Type := Adr → Storage
+abbrev Codes : Type := Adr → B8L
 
 structure Env where
-  (cta : Addr) -- contract address (YP : a)
-  (oga : Addr) -- origin address (YP : o)
-  (gpr : Word) -- gas price (YP : p)
-  (cld : Bytes) -- calldata (YP : d)
-  (cla : Addr) -- caller Addr (YP : s)
-  (clv : Word) -- callvalue (YP : v)
-  (code : Bytes) -- contract code  (YP : b)
+  (cta : Adr) -- contract address (YP : a)
+  (oga : Adr) -- origin address (YP : o)
+  (gpr : B256) -- gas price (YP : p)
+  (cld : B8L) -- calldata (YP : d)
+  (cla : Adr) -- caller Adr (YP : s)
+  (clv : B256) -- callvalue (YP : v)
+  (code : B8L) -- contract code  (YP : b)
   (exd : Nat) -- execution depth (YP : e)
   (wup : Bool) -- World-State update permission (YP : w)
 
@@ -98,14 +98,14 @@ structure World where
   (stor : Storages)
   (code : Codes)
 
-abbrev Stack : Type := List Word
+abbrev Stack : Type := List B256
 
 def Stack.Push (x y xy : Stack) : Prop := x <++ xy ++> y
 def Stack.Pop (x xy y : Stack) : Prop := x <++ xy ++> y
 def Stack.Diff (xs zs : Stack) (s s'' : Stack) : Prop := -- Pop xs ⊚ Push ys
   ∃ s' : Stack, Pop xs s s' ∧ Push zs s' s''
 
-def Stack.SwapCore (x y : Word) : Nat → Stack → Stack → Prop
+def Stack.SwapCore (x y : B256) : Nat → Stack → Stack → Prop
   | 0, y' :: xs, x' :: xs' => x = x' ∧ y = y' ∧ xs = xs'
   | n + 1, z :: xs, z' :: xs' => z = z' ∧ SwapCore x y n xs xs'
   | _, _, _ => False
@@ -114,7 +114,7 @@ def Stack.Swap (n : Nat) : Stack → Stack → Prop
   | x :: xs, y :: xs' => SwapCore x y n xs xs'
   | _, _ => False
 
-inductive Stack.Nth : Nat → Word → Stack → Prop
+inductive Stack.Nth : Nat → B256 → Stack → Prop
   | head : ∀ x xs, Nth 0 x (x :: xs)
   | tail : ∀ m x y xs, Nth m x xs → Nth (m + 1) x (y :: xs)
 
@@ -122,22 +122,22 @@ def Stack.Dup (n : Nat) (s s' : Stack) : Prop := ∃ x, Push [x] s s' ∧ Stack.
 
 structure Desc where
   -- balance, storage, & code : parts of the world state
-  (bal : Addr → Word)
-  (stor : Addr → Storage)
-  (code : Addr → Bytes)
+  (bal : Adr → B256)
+  (stor : Adr → Storage)
+  (code : Adr → B8L)
   -- stack, memory, & return data from last call: parts of the machine state
   (stk : Stack)
   (mem : Memory)
-  (ret : Bytes)
+  (ret : B8L)
   -- addresses marked for destruction : part of the substate
-  (dest : List Addr)
+  (dest : List Adr)
 
 -- Q : should 'ret' (the 'return buffer' part of machine State) be represented by an
--- option type, such that the last field of structure above is (r : Option Bytes) instead?
+-- option type, such that the last field of structure above is (r : Option B8L) instead?
 -- At a cursory glance this seems to be the case, since YP discusses varions edge cases
 -- where o = ∅. But upon closer inspection, it seems '∅' is always an intermediate
 -- helper term for defining how the return buffer should be updated in edge cases, but
--- never a final value that the return buffer is updated *to*. In other Words, there are
+-- never a final value that the return buffer is updated *to*. In other B256s, there are
 -- parts that say "if the code execution Result is o = ∅, then do this..." but never any
 -- case that says "the return beffer is o = ∅ at the end of the transition". Therefore,
 -- it seems safe to assume that the return buffer is always a definite List of Bytes at
@@ -149,14 +149,14 @@ structure Desc where
 
 structure Result where
   -- balance, Storage, & code : parts of the 'World-State'
-  (bal : Addr → Word)
-  (stor : Addr → Storage)
-  (code : Addr → Bytes)
+  (bal : Adr → B256)
+  (stor : Adr → Storage)
+  (code : Adr → B8L)
   -- ret : similar to 'ret' of State, but this is the Byte
   -- sequence returned at the end of a code execution
-  (ret : Bytes)
-  -- List of Addres earmarke for destruction : parts of the 'subState'
-  (dest : List Addr)
+  (ret : B8L)
+  -- List of Adres earmarke for destruction : parts of the 'subState'
+  (dest : List Adr)
 
 
 
@@ -182,34 +182,36 @@ structure Result where
 -- 2^256 bytes will never be allocated, but it would be good to
 -- double-check it is indeed correct.
 
-def Memory.slice' : Memory → Word → Nat → Bytes
+def Memory.slice' : Memory → B256 → Nat → B8L
   | _, _, 0 => []
-  | m, x, n + 1 => m x :: slice' m x.succ n
+  | m, x, n + 1 => m x :: slice' m (x + 1) n
 
-def Memory.slice (m : Memory) (x y : Word) : Bytes := slice' m x y.toNat
+def Memory.slice (m : Memory) (x y : B256) : B8L := slice' m x y.toNat
 
-def Memory.store (x : Word) : Bytes → Memory → Memory
+def Memory.store (x : B256) : B8L → Memory → Memory
   | [], m => m
   | b :: bs, m =>
-    let m' := store x.succ bs m
+    let m' := store (x + 1) bs m
     λ y => if x = y then b else m' y
 
-def Memory.init : Memory := λ _ => Bits.zero _
+def Memory.init : Memory := λ _ => 0
 
-def Mstored (x : Word) (bs : Bytes) (m m' : Memory) : Prop := m' = Memory.store x bs m
+def Mstored (x : B256) (bs : B8L) (m m' : Memory) : Prop := m' = Memory.store x bs m
 
-def Decrease {m n} (k : Bits m) (v : Bits n) (f g : Bits m → Bits n) : Prop :=
+-- def Decrease (k : Adr) (v : B256) (f g : Adr → B256) : Prop :=
+--   Frel k (λ x y => x - v = y) f g
+def Decrease (k : Adr) (v : B256) (f g : Adr → B256) : Prop :=
   Frel k (λ x y => x - v = y) f g
 
-def Increase {m n} (k : Bits m) (v : Bits n) (f g : Bits m → Bits n) : Prop :=
+def Increase (k : Adr) (v : B256) (f g : Adr → B256) : Prop :=
   Frel k (λ x y => x + v = y) f g
 
-def Transfer {m n : Nat}
-    (b : Bits m → Bits n)
-    (kd : Bits m) (v : Bits n) (ki : Bits m)
-    (d : Bits m → Bits n) : Prop :=
+def Transfer
+    (b : Adr → B256)
+    (kd : Adr) (v : B256) (ki : Adr)
+    (d : Adr → B256) : Prop :=
     v ≤ b kd ∧
-  ∃ c : Bits m → Bits n,
+  ∃ c : Adr → B256,
     Decrease kd v b c ∧
     Increase ki v c d
 
@@ -219,8 +221,8 @@ structure Desc.Rels where
   (code : Codes → Codes → Prop)
   (stk : Stack → Stack → Prop)
   (mem : Memory → Memory → Prop)
-  (ret : Bytes → Bytes → Prop)
-  (dest : List Addr → List Addr → Prop)
+  (ret : B8L → B8L → Prop)
+  (dest : List Adr → List Adr → Prop)
 
 def Desc.Rels.dft : Rels :=
   {bal := Eq, stor := Eq, code := Eq, stk := Eq, mem := Eq, ret := Eq, dest := Eq}
@@ -234,13 +236,13 @@ structure Desc.Rel (r : Rels) (s s' : Desc) : Prop where
   (ret  : r.ret  (Desc.ret s) (Desc.ret s'))
   (dest : r.dest (Desc.dest s) (Desc.dest s'))
 
-def Desc.Diff (xs ys : List (Bits 256)) : Desc → Desc → Prop :=
+def Desc.Diff (xs ys : List B256) : Desc → Desc → Prop :=
   Rel {Rels.dft with stk := Stack.Diff xs ys}
 
-def Desc.Push (xs : List (Bits 256)) : Desc → Desc → Prop :=
+def Desc.Push (xs : List B256) : Desc → Desc → Prop :=
   Rel {Rels.dft with stk := Stack.Push xs}
 
-def Desc.Pop (xs : List (Bits 256)) : Desc → Desc → Prop :=
+def Desc.Pop (xs : List B256) : Desc → Desc → Prop :=
   Rel {Rels.dft with stk := Stack.Pop xs}
 
 def Desc.Swap (n : Nat) : Desc → Desc → Prop :=
@@ -254,51 +256,44 @@ def Desc.Sub (s s' : Desc) : Prop :=  ∃ x y, Desc.Diff [x, y] [x - y] s s'
 def Desc.Mul (s s' : Desc) : Prop := ∃ x y, Desc.Diff [x, y] [x * y] s s'
 def Desc.Div (s s' : Desc) : Prop := ∃ x y, Desc.Diff [x, y] [x / y] s s'
 def Desc.Mod (s s' : Desc) : Prop := ∃ x y, Desc.Diff [x, y] [x % y] s s'
-def Desc.Sdiv (s s' : Desc) : Prop := ∃ x y, Desc.Diff [x, y] [Bits.sdiv x y] s s'
-def Desc.Smod (s s' : Desc) : Prop := ∃ x y, Desc.Diff [x, y] [Bits.smod x y] s s'
-def Desc.Addmod (s s' : Desc) : Prop := ∃ x y z, Desc.Diff [x, y, z] [Bits.addmod x y z] s s'
-def Desc.Mulmod (s s' : Desc) : Prop := ∃ x y z, Desc.Diff [x, y, z] [Bits.mulmod x y z] s s'
+def Desc.Sdiv (s s' : Desc) : Prop := ∃ x y, Desc.Diff [x, y] [B256.sdiv x y] s s'
+def Desc.Smod (s s' : Desc) : Prop := ∃ x y, Desc.Diff [x, y] [B256.smod x y] s s'
+def Desc.Addmod (s s' : Desc) : Prop := ∃ x y z, Desc.Diff [x, y, z] [B256.addmod x y z] s s'
+def Desc.Mulmod (s s' : Desc) : Prop := ∃ x y z, Desc.Diff [x, y, z] [B256.mulmod x y z] s s'
 def Desc.Exp (s s' : Desc) : Prop := ∃ x y, Desc.Diff [x, y] [x ^ y] s s'
+
+-- def B256.Signext (x y y' : B256) : Prop :=
+--   ∃ b, Bits.Signext (256 - (8 * (x.toNat + 1))) b y y'
+
 def Desc.Signextend (s s' : Desc) : Prop :=
   ∃ x y z,
     Desc.Diff [x, y] [z] s s' ∧
-    Word.Signext x y z
+    -- B256.Signext x y z
+    B256.signext x y = z
 
-instance slt_decidable {n} (xs ys : Bits n) : Decidable (xs ±< ys) := by
-  induction n with
-  | zero => cases xs; cases ys; apply instDecidableFalse
-  | succ n ih =>
-    cases n with
-    | zero =>
-      match xs, ys with
-      | ⦃x⦄, ⦃y⦄ =>
-        rw [Bits.singleton_slt_singleton]
-        apply instDecidableAnd
-    | succ m =>
-      match xs, ys with
-      | xs +> x, ys +> y =>
-      apply instDecidableOr
 
-instance {n} (xs ys : Bits n) : Decidable (xs ±> ys) := by
-  unfold Bits.Sgt; apply slt_decidable
+-- def lt_check (x y : B256) : B256 := if x < y then 1 else 0
+-- def gt_check (x y : B256) : B256 := if x > y then 1 else 0
+-- def slt_check (x y : B256) : B256 := if x ±< y then 1 else 0
+-- def sgt_check (x y : B256) : B256 := if x ±> y then 1 else 0
+-- def eq_check (x y : B256) : B256 := if x = y then 1 else 0
 
-def lt_check (x y : Bits 256) : Bits 256 := if x < y then 1 else 0
-def gt_check (x y : Bits 256) : Bits 256 := if x > y then 1 else 0
-def slt_check (x y : Bits 256) : Bits 256 := if x ±< y then 1 else 0
-def sgt_check (x y : Bits 256) : Bits 256 := if x ±> y then 1 else 0
-def eq_check (x y : Bits 256) : Bits 256 := if x = y then 1 else 0
+infix:70 " <? "  => B256.lt_check
+infix:70 " >? "  => B256.gt_check
+infix:70 " ±<? " => B256.slt_check
+infix:70 " ±>? " => B256.sgt_check
+infix:70 " =? "  => B256.eq_check
 
-infix:70 " <? " => lt_check
-infix:70 " >? " => gt_check
-infix:70 " ±<? " => slt_check
-infix:70 " ±>? " => sgt_check
-infix:70 " =? " => eq_check
+def Char.toB8 (c : Char) : B8 := Nat.toUInt8 c.toNat
+def String.toB8L (s : String) : B8L := s.data.map Char.toB8
 
-def Bytes.toB8L : Bytes → B8L := List.map Byte.toB8
-def Bytes.keccak (xs : Bytes) : Word :=
-  xs.toB8L.keccak.toBits
 
-def String.keccak (s : String) : Word := s.toBytes.keccak
+
+-- def Bytes.keccak (xs : Bytes) : B256 :=
+--   xs.toB8L.keccak.toBits
+
+
+def String.keccak (s : String) : B256 := s.toB8L.keccak
 
 def Desc.Lt (s s' : Desc) : Prop := ∃ x y, Desc.Diff [x, y] [x <? y] s s'
 def Desc.Gt (s s' : Desc) : Prop := ∃ x y, Desc.Diff [x, y] [x >? y] s s'
@@ -306,37 +301,39 @@ def Desc.Slt (s s' : Desc) : Prop := ∃ x y, Desc.Diff [x, y] [x ±<? y] s s'
 def Desc.Sgt (s s' : Desc) : Prop := ∃ x y, Desc.Diff [x, y] [x ±>? y] s s'
 def Desc.Eq (s s' : Desc) : Prop := ∃ x y, Desc.Diff [x, y] [x =? y] s s'
 def Desc.Iszero (s s' : Desc) : Prop := ∃ x, Desc.Diff [x] [x =? 0] s s'
-def Desc.And (s s' : Desc) : Prop := ∃ x y, Desc.Diff [x, y] [Bits.and x y] s s'
-def Desc.Or (s s' : Desc) : Prop := ∃ x y, Desc.Diff [x, y] [Bits.or x y] s s'
-def Desc.Xor (s s' : Desc) : Prop := ∃ x y, Desc.Diff [x, y] [Bits.xor x y] s s'
-def Desc.Not (s s' : Desc) : Prop := ∃ x, Desc.Diff [x] [~ x] s s'
+def Desc.And (s s' : Desc) : Prop := ∃ x y, Desc.Diff [x, y] [x &&& y] s s'
+def Desc.Or (s s' : Desc) : Prop := ∃ x y, Desc.Diff [x, y] [x ||| y] s s'
+def Desc.Xor (s s' : Desc) : Prop := ∃ x y, Desc.Diff [x, y] [x ^^^ y] s s'
+def Desc.Not (s s' : Desc) : Prop := ∃ x, Desc.Diff [x] [~~~ x] s s'
+-- def Desc.Byte (s s' : Desc) : Prop :=
+--   ∃ (x y : B256) (b : B8),
+--     Desc.Diff [x, y] [(0 : Bits 248) ++ b] s s' ∧
+--     List.getD (@Bits.toBytes 32 y) x.toNat 0 = b
 def Desc.Byte (s s' : Desc) : Prop :=
-  ∃ (x y : Word) (b : Bits 8),
-    Desc.Diff [x, y] [(0 : Bits 248) ++ b] s s' ∧
-    List.getD (@Bits.toBytes 32 y) x.toNat 0 = b
-def Desc.Shl (s s' : Desc) : Prop := ∃ x y, Desc.Diff [x, y] [Bits.shl x.toNat y] s s'
-def Desc.Shr (s s' : Desc) : Prop := ∃ x y, Desc.Diff [x, y] [Bits.shr x.toNat y] s s'
-def Desc.Sar (s s' : Desc) : Prop := ∃ x y, Desc.Diff [x, y] [Bits.sar x.toNat y] s s'
+  ∃ (x y : B256),
+    Desc.Diff [x, y] [(List.getD y.toB8L x.toNat 0).toB256] s s'
+def Desc.Shl (s s' : Desc) : Prop := ∃ x y, Desc.Diff [x, y] [y <<< x.toNat] s s'
+def Desc.Shr (s s' : Desc) : Prop := ∃ x y, Desc.Diff [x, y] [y >>> x.toNat] s s'
+def Desc.Sar (s s' : Desc) : Prop := ∃ x y, Desc.Diff [x, y] [B256.arithShiftRight y x.toNat] s s'
 def Desc.Kec (s s' : Desc) : Prop :=
   ∃ x y, Desc.Diff [x, y] [(Memory.slice s.mem x y).keccak] s s'
-
-def Bytes.Size (bs : Bytes) (sz : Word) : Prop := bs.length = sz.toNat
-
-def Desc.Address (e : Env) (s s' : Desc) : Prop := Desc.Push [Addr.toWord e.cta] s s'
-def Desc.Balance (s s' : Desc) : Prop := ∃ x, Desc.Diff [x] [s.bal (toAddr x)] s s'
-def Desc.Origin (e : Env) (s s' : Desc) : Prop := Desc.Push [Addr.toWord e.oga] s s'
-def Desc.Caller (e : Env) (s s' : Desc) : Prop := Desc.Push [Addr.toWord e.cla] s s'
+def B8L.Size (bs : B8L) (sz : B256) : Prop := bs.length = sz.toNat
+def Desc.Adress (e : Env) (s s' : Desc) : Prop := Desc.Push [Adr.toB256 e.cta] s s'
+def Desc.Balance (s s' : Desc) : Prop :=
+  ∃ x : B256, Desc.Diff [x] [s.bal x.toAdr] s s'
+def Desc.Origin (e : Env) (s s' : Desc) : Prop := Desc.Push [Adr.toB256 e.oga] s s'
+def Desc.Caller (e : Env) (s s' : Desc) : Prop := Desc.Push [Adr.toB256 e.cla] s s'
 def Desc.Callvalue (e : Env) (s s' : Desc) : Prop := Desc.Push [e.clv] s s'
-def Desc.Calldatasize (e : Env) (s s' : Desc) : Prop := ∃ sz, Desc.Push [sz] s s' ∧ Bytes.Size e.cld sz
-def Desc.Codesize (e : Env) (s s' : Desc) : Prop := ∃ sz, Desc.Push [sz] s s' ∧ Bytes.Size e.code sz
+def Desc.Calldatasize (e : Env) (s s' : Desc) : Prop := ∃ sz, Desc.Push [sz] s s' ∧ B8L.Size e.cld sz
+def Desc.Codesize (e : Env) (s s' : Desc) : Prop := ∃ sz, Desc.Push [sz] s s' ∧ B8L.Size e.code sz
 def Desc.Gasprice (e : Env) (s s' : Desc) : Prop := Desc.Push [e.gpr] s s'
 def Desc.Extcodesize (s s' : Desc) : Prop :=
-  ∃ x sz, Desc.Diff [x] [sz] s s' ∧ Bytes.Size (s.code (toAddr x)) sz
+  ∃ x sz, Desc.Diff [x] [sz] s s' ∧ B8L.Size (s.code x.toAdr) sz
 def Desc.Retdatasize (s s' : Desc) : Prop :=
-  ∃ x r, Desc.Push [x] s s' ∧ s.ret = r ∧ Bytes.Size r x
+  ∃ x r, Desc.Push [x] s s' ∧ s.ret = r ∧ B8L.Size r x
 
 -- For verification tasks where using correct values of Keccak hashes is crucial for correctness,
--- we can define a (keccak : Bytes → Word) and use it in the definition of Desc.extcodehash,
+-- we can define a (keccak : B8L → B256) and use it in the definition of Desc.extcodehash,
 -- and also the Rinst.kec constructor of 'step'. For correctness of the WETH contract, however,
 -- it suffices to require that _some_ hash value is computed and added to the Stack.
 
@@ -346,7 +343,7 @@ def Desc.Extcodehash (s s' : Desc) : Prop :=
 def Desc.Calldataload (e : Env) (s s' : Desc) : Prop :=
   ∃ x y,
     Desc.Diff [x] [y] s s' ∧
-    List.sliceD e.cld x.toNat 32 0 = @Bits.toBytes 32 y
+    List.sliceD e.cld x.toNat 32 0 = y.toB8L -- @Bits.toBytes 32 y
 
 def Desc.Calldatacopy (e : Env) (s s' : Desc) : Prop :=
   ∃ x y z,
@@ -380,7 +377,7 @@ def Desc.Extcodecopy (s s' : Desc) : Prop :=
         stk := Stack.Pop [w, x, y, z],
         mem := Mstored x bs }
       s s' ∧
-    List.slice? (s.code <| toAddr w) y.toNat z.toNat = some bs
+    List.slice? (s.code w.toAdr) y.toNat z.toNat = some bs
 
 def Desc.Retdatacopy (s s' : Desc) : Prop :=
   ∃ x y z,
@@ -398,7 +395,7 @@ def Desc.Retdatacopy (s s' : Desc) : Prop :=
 -- to  verify more detailed properties about block operations.
 
 def Desc.Tstore (e : Env) (s s' : Desc) : Prop :=
-  ∃ x y : Word,
+  ∃ x y : B256,
     Desc.Rel
     { Desc.Rels.dft with
       -- todo : add t-storage condition
@@ -406,7 +403,7 @@ def Desc.Tstore (e : Env) (s s' : Desc) : Prop :=
     e.wup = 1
 
 def Desc.Sstore (e : Env) (s s' : Desc) : Prop :=
-  ∃ x y : Word,
+  ∃ x y : B256,
     Desc.Rel
     { Desc.Rels.dft with
       stor := Frel e.cta (Overwrite x y),
@@ -421,22 +418,22 @@ def Desc.Tload (s s' : Desc) : Prop :=
 
 def Desc.Mload (s s' : Desc) : Prop :=
   ∃ x y, Desc.Diff [x] [y] s s' ∧
-    Memory.slice s.mem x 32 = @Bits.toBytes 32 y
+    Memory.slice s.mem x 32 = y.toB8L
 
 def Desc.Mstore (s s' : Desc) : Prop :=
   ∃ x y,
     Desc.Rel
       { Desc.Rels.dft with
         stk := Stack.Diff [x, y] [],
-        mem := Mstored x (@Bits.toBytes 32 y) }
+        mem := Mstored x y.toB8L }
       s s'
 
 def Desc.Mstore8 (s s' : Desc) : Prop :=
-  ∃ (x y : Word),
+  ∃ (x y : B256),
     Desc.Rel
       { Desc.Rels.dft with
         stk := Stack.Diff [x, y] [],
-        mem := Mstored x [@Bits.suffix 8 248 y] } s s'
+        mem := Mstored x [y.2.2.toUInt8] } s s'
 
 -- Design choice notes: in this formalization, definition of EVM operational semantics
 -- does not follow the 'obvious' path that a cursory reading of YP may suggest,
@@ -446,10 +443,10 @@ def Desc.Mstore8 (s s' : Desc) : Prop :=
 -- opcode cases that are defined in terms of Θ and Λ. Doing this in lean with mutual
 -- recursion/induction isn't impossible, but comes with significant additional complexity
 -- & proof difficulty that aren't justified by marginal improvements in staying faithful
--- to the original defs. In other Words, this formalization asks users to squint a little
+-- to the original defs. In other B256s, this formalization asks users to squint a little
 -- harder to convince themselves that it really describes the EVM, because it is worth it.
 
-def Result.wrap (s : Desc) (ret : Bytes) : Result :=
+def Result.wrap (s : Desc) (ret : B8L) : Result :=
   {
     bal := s.bal,
     stor := s.stor,
@@ -458,35 +455,23 @@ def Result.wrap (s : Desc) (ret : Bytes) : Result :=
     dest := s.dest
   }
 
-def Linst.toByte : Linst → Byte
-  | .stop => Ox x0 x0
-  | .ret => Ox xF x3
-  | .rev => Ox xF xD
-  | .dest => Ox xF xF
-  -- | .invalid => Ox xF xE
+def Xinst.toB8 : Xinst → B8
+  | create   => 0xF0
+  | call     => 0xF1
+  | callcode => 0xF2
+  | delcall  => 0xF4
+  | create2  => 0xF5
+  | statcall => 0xFA
 
-def Jinst.toByte : Jinst → Byte
-  | jump => Ox x5 x6     -- 0x56 / 1 / 0 / Unconditional jump.
-  | jumpi => Ox x5 x7    -- 0x57 / 2 / 0 / Conditional jump.
-  | jumpdest => Ox x5 xB -- 0x5b / 0 / 0 / Mark a valid jump destination.
+def pushToB8 (bs : B8L) : B8 := 0x5F + Nat.toUInt8 bs.length
+def pushToB8L (bs : B8L) : B8L := pushToB8 bs :: bs
 
-def Xinst.toByte : Xinst → Byte
-  | create   => Ox xF x0
-  | call     => Ox xF x1
-  | callcode => Ox xF x2
-  | delcall  => Ox xF x4
-  | create2  => Ox xF x5
-  | statcall => Ox xF xA
-
-def pushToByte (bs : Bytes) : Byte := Ox x5 xF + Nat.toByte bs.length
-def pushToBytes (bs : Bytes) : Bytes := pushToByte bs :: bs
-
-def Rinst.At (e : Env) (pc : Nat) (o : Rinst) : Prop := e.code[pc]? = some (Rinst.toByte o)
-def Jinst.At (e : Env) (pc : Nat) (o : Jinst) : Prop := e.code[pc]? = some (Jinst.toByte o)
-def Xinst.At (e : Env) (pc : Nat) (o : Xinst) : Prop := e.code[pc]? = some (Xinst.toByte o)
-def Linst.At (e : Env) (pc : Nat) (o : Linst) : Prop := e.code[pc]? = some (Linst.toByte o)
-def PushAt (e : Env) (pc : Nat) (bs : Bytes) : Prop :=
-  List.Slice e.code pc (pushToBytes bs) ∧ bs.length ≤ 32
+def Rinst.At (e : Env) (pc : Nat) (o : Rinst) : Prop := e.code[pc]? = some (Rinst.toB8 o)
+def Jinst.At (e : Env) (pc : Nat) (o : Jinst) : Prop := e.code[pc]? = some (Jinst.toB8 o)
+def Xinst.At (e : Env) (pc : Nat) (o : Xinst) : Prop := e.code[pc]? = some (Xinst.toB8 o)
+def Linst.At (e : Env) (pc : Nat) (o : Linst) : Prop := e.code[pc]? = some (Linst.toB8 o)
+def PushAt (e : Env) (pc : Nat) (bs : B8L) : Prop :=
+  List.Slice e.code pc (pushToB8L bs) ∧ bs.length ≤ 32
 
 inductive Linst.Run : Env → Desc → Linst → Result → Prop
   | stop : ∀ e s, Linst.Run e s Linst.stop (Result.wrap s [])
@@ -499,11 +484,11 @@ inductive Linst.Run : Env → Desc → Linst → Result → Prop
       e.wup = 1 →
       ([x] <+: s.stk) →
       Overwrite e.cta 0 s.bal bal →
-      Increase (toAddr x) (s.bal e.cta) bal bal' →
+      Increase x.toAdr (s.bal e.cta) bal bal' →
       Linst.Run e s Linst.dest {s with bal := bal', ret := [], dest := e.cta :: s.dest}
 
 def insidePushArg (e : Env) (loc : Nat) : Prop :=
-  ∃ (pc : Nat) (bs : Bytes), PushAt e pc bs ∧ pc < loc ∧ loc ≤ pc + bs.length
+  ∃ (pc : Nat) (bs : B8L), PushAt e pc bs ∧ pc < loc ∧ loc ≤ pc + bs.length
 
 def Jumpable (e : Env) (n : Nat) : Prop :=
   Jinst.At e n Jinst.jumpdest ∧ ¬ insidePushArg e n
@@ -546,7 +531,7 @@ def Rinst.Run (e : Env) : Desc → Rinst → Desc → Prop :=
     | Rinst.shr => Desc.Shr
     | Rinst.sar => Desc.Sar
     | Rinst.kec => Desc.Kec
-    | Rinst.address => Desc.Address e
+    | Rinst.address => Desc.Adress e
     | Rinst.balance => Desc.Balance
     | Rinst.origin => Desc.Origin e
     | Rinst.caller => Desc.Caller e
@@ -629,13 +614,13 @@ inductive Xinst.isCall : Xinst → Prop
 | statcall : Xinst.isCall .statcall
 
 def Env.prep (e : Env) (s : Desc)
-    (cta : Addr) (cld : Bytes) (cla : Addr)
-    (clv : Word) (cda : Addr) (exd : Nat) (wup : Bool) : Env :=
+    (cta : Adr) (cld : B8L) (cla : Adr)
+    (clv : B256) (cda : Adr) (exd : Nat) (wup : Bool) : Env :=
   { cta := cta, oga := e.oga, gpr := e.gpr, cld := cld, cla := cla,
     clv := clv, code := s.code cda, exd := exd, wup := wup }
 
 def Env.prep' (e : Env)
-    (cta : Addr) (clv : Word) (ctc : Bytes) (exd : Nat) : Env :=
+    (cta : Adr) (clv : B256) (ctc : B8L) (exd : Nat) : Env :=
   { cta := cta, oga := e.oga, gpr := e.gpr, cld := [], cla := e.cta,
     clv := clv, code := ctc, exd := exd, wup := 1 }
 
@@ -651,16 +636,16 @@ def Desc.wrap' (r : Result) (cd : Codes) (mem : Memory) (stk : Stack) : Desc :=
   { bal := r.bal, stor := r.stor, code := cd, mem := mem,
     stk := stk, ret := r.ret, dest := r.dest }
 
-def storeRet (mem : Memory) (ret : Bytes) (loc sz : Word) (mem' : Memory) : Prop :=
+def storeRet (mem : Memory) (ret : B8L) (loc sz : B256) (mem' : Memory) : Prop :=
   Mstored loc (List.take sz.toNat ret) mem mem'
 
 inductive Xinst.Run' : Env → Desc → Env → Desc → Xinst → Result → Desc → Prop
   | create :
     ∀ e : Env, e.wup = 1 →
     ∀ exd, e.exd = exd.succ →
-    ∀ (s : Desc) (cta : Addr), s.code cta = [] →
-    ∀ (clv clc csz : Word) (stk : Stack),
-      Stack.Diff [clv, clc, csz] [Addr.toWord cta] s.stk stk →
+    ∀ (s : Desc) (cta : Adr), s.code cta = [] →
+    ∀ (clv clc csz : B256) (stk : Stack),
+      Stack.Diff [clv, clc, csz] [Adr.toB256 cta] s.stk stk →
     ∀ bal : Balances, Transfer s.bal e.cta clv cta bal →
     ∀ (r : Result) (cd : Codes),
       Overwrite cta r.ret r.code cd →
@@ -669,9 +654,9 @@ inductive Xinst.Run' : Env → Desc → Env → Desc → Xinst → Result → De
   | create2 :
     ∀ e : Env, e.wup = 1 →
     ∀ exd, e.exd = exd.succ →
-    ∀ (s : Desc) (cta : Addr), s.code cta = [] →
-    ∀ (clv clc csz slt : Word) (stk : Stack),
-      Stack.Diff [clv, clc, csz, slt] [Addr.toWord cta] s.stk stk →
+    ∀ (s : Desc) (cta : Adr), s.code cta = [] →
+    ∀ (clv clc csz slt : B256) (stk : Stack),
+      Stack.Diff [clv, clc, csz, slt] [Adr.toB256 cta] s.stk stk →
     ∀ bal : Balances, Transfer s.bal e.cta clv cta bal →
     ∀ (r : Result) (cd : Codes),
       Overwrite cta r.ret r.code cd →
@@ -681,11 +666,11 @@ inductive Xinst.Run' : Env → Desc → Env → Desc → Xinst → Result → De
     ∀ (e : Env) exd, e.exd = exd.succ →
     ∀ gas adr clv ilc isz olc osz s stk,
       Stack.Diff [gas, adr, clv, ilc, isz, olc, osz] [1] s.stk stk →
-    ∀ bal : Balances, Transfer s.bal e.cta clv (toAddr adr) bal →
+    ∀ bal : Balances, Transfer s.bal e.cta clv adr.toAdr bal →
     ∀ r : Result,
     ∀ mem : Memory, storeRet s.mem r.ret olc osz mem →
       Xinst.Run' e s
-        (.prep e s (toAddr adr) (s.mem.slice ilc isz) e.cta clv (toAddr adr) exd e.wup)
+        (.prep e s adr.toAdr (s.mem.slice ilc isz) e.cta clv adr.toAdr exd e.wup)
         (.prep s bal) .call r (.wrap r stk mem)
   -- Two design flaws of CALLCODE:
   -- (1) it accepts a useless call value argument that doesn't actually do anything
@@ -697,7 +682,7 @@ inductive Xinst.Run' : Env → Desc → Env → Desc → Xinst → Result → De
     ∀ r : Result,
     ∀ mem : Memory, storeRet s.mem r.ret olc osz mem →
       Xinst.Run' e s
-        (.prep e s e.cta (s.mem.slice ilc isz) e.cta clv (toAddr adr) exd e.wup)
+        (.prep e s e.cta (s.mem.slice ilc isz) e.cta clv adr.toAdr exd e.wup)
         (.prep s s.bal) .callcode r (.wrap r stk mem)
   | delcall :
     ∀ (e : Env) exd, e.exd = exd.succ →
@@ -706,7 +691,7 @@ inductive Xinst.Run' : Env → Desc → Env → Desc → Xinst → Result → De
     ∀ r : Result,
     ∀ mem : Memory, storeRet s.mem r.ret olc osz mem →
       Xinst.Run' e s
-        (.prep e s e.cta (s.mem.slice ilc isz) e.cla e.clv (toAddr adr) exd e.wup)
+        (.prep e s e.cta (s.mem.slice ilc isz) e.cla e.clv adr.toAdr exd e.wup)
         (.prep s s.bal) .delcall r (.wrap r stk mem)
   | statcall :
     ∀ (e : Env) exd, e.exd = exd.succ →
@@ -715,7 +700,7 @@ inductive Xinst.Run' : Env → Desc → Env → Desc → Xinst → Result → De
     ∀ r : Result,
     ∀ mem : Memory, storeRet s.mem r.ret olc osz mem →
       Xinst.Run' e s
-        (.prep e s (toAddr adr) (s.mem.slice ilc isz) e.cta 0 (toAddr adr) exd 0)
+        (.prep e s adr.toAdr (s.mem.slice ilc isz) e.cta 0 adr.toAdr exd 0)
         (.prep s s.bal) .statcall r (.wrap r stk mem)
 
 inductive Step : Env → Desc → Nat → Desc → Nat → Type
@@ -744,7 +729,7 @@ inductive Step : Env → Desc → Nat → Desc → Nat → Type
   | push :
     ∀ e s pc bs s',
       PushAt e pc bs →
-      Desc.Push [bs.toBits 32] s s' →
+      Desc.Push [B8L.toB256 bs] s s' →
       Step e s pc s' (pc + bs.length + 1)
 
 inductive Halt : Env → Desc → Nat → Result → Prop
@@ -777,9 +762,9 @@ inductive Exec : Env → Desc → Nat → Result → Type
 -- upfront gas payment, and before the distribution of gas refund/reward and
 -- deletion of self-destructed contract codes.
 inductive Transact
-    (sda : Addr) -- tx sender address
+    (sda : Adr) -- tx sender address
                  -- (always an EOA & never has contract code, per EIP-3607)
-    (rca : Addr) -- tx receiver address
+    (rca : Adr) -- tx receiver address
                  -- · for contract calls, rca = address of called contract
                  -- · for contract creations, rca = address of newly created contract
     (w : World)  -- initial world state
@@ -813,26 +798,26 @@ inductive Transact
         {bal := bal, stor := w.stor, code := w.code, ret := ret, dest := []}
   | fail : Transact sda rca w {w with ret := .nil, dest := []}
 
-def DeleteCodes : List Addr → Codes → Codes → Prop
+def DeleteCodes : List Adr → Codes → Codes → Prop
   | [], c, c' => c = c'
   | a :: as, c, c'' => ∃ c' : Codes, Overwrite a [] c c' ∧ DeleteCodes as c' c''
 
   structure Transaction (w w' : World) : Type where
-    (vs : Word) -- gas ultimately refunded to sender
-    (vv : Word) -- gas ultimately rewarded to validator
-    (vb : Word) -- gas ultimately burned
+    (vs : B256) -- gas ultimately refunded to sender
+    (vv : B256) -- gas ultimately rewarded to validator
+    (vb : B256) -- gas ultimately burned
     (nof : vs.toNat + vv.toNat + vb.toNat < 2 ^ 256)
-    (sda : Addr) -- tx sender address
+    (sda : Adr) -- tx sender address
     (eoa : w.code sda = []) -- per EIP-3607
     (bal : Balances) -- balances after upfront deduction
     (decr : Decrease sda (vs + vv + vb) w.bal bal)
     (le : vs + vv + vb ≤ w.bal sda)
-    (rca : Addr) -- tx receiver address
+    (rca : Adr) -- tx receiver address
     (r : Result) -- execution result
     (act : Transact sda rca {w with bal := bal} r)
     (bal' : Balances) -- balances after refund to sender
     (incr : Increase sda vs r.bal bal')
-    (vla : Addr) -- validator address
+    (vla : Adr) -- validator address
     (incr' : Increase vla vv bal' w'.bal)
     (del : DeleteCodes r.dest r.code w'.code)
     (stor : w'.stor = r.stor)
@@ -840,11 +825,6 @@ def DeleteCodes : List Addr → Codes → Codes → Prop
 
 
 -- Blanc semantics --
-
-inductive Ninst : Type
-  | reg : Rinst → Ninst
-  | exec : Xinst → Ninst
-  | push : ∀ bs : Bytes, bs.length ≤ 32 → Ninst
 
 inductive Func : Type
   | branch : Func → Func → Func
@@ -862,10 +842,10 @@ infixr:65 " <?> " => λ f g => Func.branch g f
 infixr:65 " ::: " => Func.next
 postfix:100 " ::. " => Func.last
 
-def Ninst.toBytes : Ninst → Bytes
-  | reg o => [o.toByte]
-  | exec o => [o.toByte]
-  | push bs _ => pushToBytes bs
+def Ninst.toBytes : Ninst → B8L
+  | reg o => [o.toB8]
+  | exec o => [o.toB8]
+  | push bs _ => pushToB8L bs
 
 def Ninst.At (e : Env) (pc : Nat) : Ninst → Prop
   | reg o => o.At e pc
@@ -897,7 +877,7 @@ inductive Ninst.Run : Env → Desc → Ninst → Desc → Prop
       Ninst.Run e s (Ninst.exec o) s'
   | push :
     ∀ e {s bs h s'},
-      Desc.Push [Bytes.toBits 32 bs] s s' →
+      Desc.Push [B8L.toB256 bs] s s' →
       Ninst.Run e s (Ninst.push bs h) s'
 
 inductive Func.Run : List Func → Env → Desc → Func → Result → Prop

@@ -1,5 +1,7 @@
 -- Weth.lean : proof-of-concept implementation of the Wrapped Ether (WETH) contract
 
+#exit
+
 import Blanc.Common
 
 

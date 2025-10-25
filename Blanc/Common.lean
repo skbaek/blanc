@@ -7,14 +7,6 @@ import Blanc.Semantics
 
 
 
-def Ninst.toString : Ninst → String
-  | reg o => Rinst.toString o
-  | exec o => Xinst.toString o
-  | push [] _ => "PUSH0"
-  | push bs _ => "PUSH" ++ bs.length.repr ++ " " ++ Bytes.toString bs
-instance : ToString Ninst := ⟨Ninst.toString⟩
-instance : Repr Ninst := ⟨λ i _ => i.toString⟩
-
 def Func.toString : Func → String
   | .last o => Linst.toString o ++ " ::."
   | .next o p => o.toString ++ " ::: " ++ p.toString
@@ -27,9 +19,9 @@ def Func.stop : Func := .last .stop
 def Func.rev : Func := .last .rev
 def Func.ret : Func := .last .ret
 
-def Ninst.pushWord (w : Word) : Ninst :=
-  push (@Bits.toBytes 32 w).sig <|
-    le_of_le_of_eq (List.length_dropWhile_le _ _) (Bits.length_toBytes _)
+def Ninst.pushB256 (w : B256) : Ninst :=
+  push w.toB8L.sig <|
+    le_of_le_of_eq (List.length_dropWhile_le _ _) (B256.length_toB8L _)
 
 abbrev Ninst.add : Ninst := Ninst.reg Rinst.add
 abbrev Ninst.mul : Ninst := Ninst.reg Rinst.mul
@@ -124,43 +116,42 @@ inductive Line.Run : Env → Desc → Line → Desc → Prop
 
 open Ninst
 
-def mstoreAt (x : Word) : Line := [pushWord (x * 32), mstore]
+def mstoreAt (x : B256) : Line := [pushB256 (x * 32), mstore]
 
 -- assumes : k = # of indexed items (max 3)
 -- assumes : Stack = ev_sig :: idx_item_0 ... idx_item_{k-1}
 -- assumes : mem[x * 32, (x + y) * 32 - 1] = unindexed data
-def logWith (k : Fin 4) (x y : Word) : Line :=
-  pushWord (y * 32) :: pushWord (x * 32) :: -- x * 32 :: y * 32 :: ev_sig :: idx_item_0 ... idx_item_{k+1}
+def logWith (k : Fin 4) (x y : B256) : Line :=
+  pushB256 (y * 32) :: pushB256 (x * 32) :: -- x * 32 :: y * 32 :: ev_sig :: idx_item_0 ... idx_item_{k+1}
   log k.succ :: []
 
 -- cdc X Y Z := calldatacopy(X, Y, Z)
 -- I.e., look at the calldata, skip its first Y bytes,
 -- and copy the next Z bytes into location X of memory.
-def cdc (x y z : Word) : Line :=
-  pushWord z :: -- z
-  pushWord y :: -- y :: z
-  pushWord x :: -- x :: y :: z
+def cdc (x y z : B256) : Line :=
+  pushB256 z :: -- z
+  pushB256 y :: -- y :: z
+  pushB256 x :: -- x :: y :: z
   calldatacopy :: []
 
-def argCopy (x y z : Word) : Line :=
+def argCopy (x y z : B256) : Line :=
   cdc (x * 32) ((y * 32) + 4) (z * 32)
 
-def pushList : List Word → Line := List.map pushWord
+def pushList : List B256 → Line := List.map pushB256
 
-def returnMemoryRange (x y : Word) : Func := pushList [y, x] +++ Func.ret
+def returnMemoryRange (x y : B256) : Func := pushList [y, x] +++ Func.ret
 
-def cdl (x : Word) : Line := [pushWord x, calldataload]
+def cdl (x : B256) : Line := [pushB256 x, calldataload]
 
-def arg (k : Word) : Line := cdl ((32 * k) + 4)
+def arg (k : B256) : Line := cdl ((32 * k) + 4)
+
+
 
 -- Push a 256-bit word used for testing address validity.
 -- NOT and SHL are used so it takes up only 6 bytes of code,
 -- whereas pushing the value directly would take up 32.
 
-def Nat.toWord : Nat → Word := Nat.toBits 256
-def Nat.toWord' : Nat → Word := Nat.toBits' 256
-
-def pushAddressMask : Line := [pushWord 0, not, pushWord (Nat.toWord 160), shl]
+def pushAddressMask : Line := [pushB256 0, not, pushB256 (Nat.toB256 160), shl]
 
 -- ( adr -- adr_invalid? )
 def checkNonAddress : Line := pushAddressMask ++ [Ninst.and]
@@ -169,7 +160,7 @@ def checkNonAddress : Line := pushAddressMask ++ [Ninst.and]
 def checkAddress : Line := checkNonAddress ++ [iszero]
 
 def returnTrue : Func :=
-  pushWord 1 ::: mstoreAt 0 +++ -- || 1
+  pushB256 1 ::: mstoreAt 0 +++ -- || 1
   pushList [32, 0] +++ -- 0 :: 32 || 1
   Func.ret
 
@@ -381,115 +372,63 @@ lemma of_run_branch' {c e s r} {p q : Func} (h : Func.Run c e s (q <?> p) r) :
   · left; refine' ⟨⟨s'.stk, h'.stk⟩, Func.Run.next (run_pop _ h') h''⟩
   · right; refine' ⟨⟨w, hw, s'.stk, h'.stk⟩, Func.Run.next (run_pop _ h') h''⟩
 
-lemma Bits.of_mask_and_eq_zero (m n : Nat) :
-   ∀ (xs : Bits (m + n)),
-     Bits.and (Bits.max n ++ Bits.zero m) xs = 0 →
-     ∃ ys : Bits m, (Bits.zero n ++ ys) = xs := by
-  induction n with
-  | zero => intro xs _; refine' ⟨xs, rfl⟩
-  | succ n ih =>
-    intro xs h
-    match xs with
-    | x +> xs' =>
-      rw [max_eq_cons, cons_append, cons_and_cons, cons_eq_zero_iff] at h
-      simp [Bool.and] at h
-      rcases ih xs' h.right with ⟨ys, h'⟩
-      rw [← h', h.left]; refine' ⟨ys, rfl⟩
+def ValidAddr (w : B256) : Prop := ∃ a : Adr, a.toB256 = w
 
--- the mask 0xffffffffffffffffffffffff0000000000000000000000000000000000000000,
--- for checking that a given word is a valid Ethereum addresses
-def addressMask : Word := (@Bits.max 96) ++ (@Bits.zero 160)
+def validAddr_toB256 (a : Adr) : ValidAddr a.toB256 := ⟨a, rfl⟩
 
-def Bits.toBools : ∀ {n}, Bits n → List Bool
-| 0, ⦃⦄ => []
-| _ + 1, x +> xs => x :: xs.toBools
+theorem Adr.toAdr_toB256 (a : Adr) :
+    B256.toAdr (Adr.toB256 a) = a := by
+  simp [Adr.toB256, B256.toAdr]
 
-lemma Bits.toBools_inj :
-    ∀ {k : ℕ} (xs ys : Bits k), xs.toBools = ys.toBools → xs = ys := by
-  apply Bits.rec2
-  · intro _; rfl
-  · intro n x xs y ys ih h
-    simp [toBools] at h
-    rw [h.left, ih h.right]
+lemma B256.toB256_toAdr {w : B256} :
+    ValidAddr w → w.toAdr.toB256 = w := by
+  intro h; rcases h with ⟨a, ha⟩;
+  rw [← ha, Adr.toAdr_toB256]
 
-lemma Bits.toBools_append {m n : ℕ} (xs : Bits m) (ys : Bits n) :
-    (xs ++ ys).toBools = xs.toBools ++ ys.toBools := by
-  induction m with
-  | zero => cases xs; rfl
-  | succ m ih =>
-    cases xs; simp [cons_append, toBools]; apply ih
+def addressMask : B256 := ⟨⟨.max, 0xffffffff00000000⟩, 0⟩
 
-lemma Bits.toBools_max {n : ℕ} : (max n).toBools = List.replicate n 1 := by
-  induction n with
-  | zero => rfl
-  | succ n ih => simp [max, toBools, List.replicate]; apply ih
 
-lemma Bits.toBools_zero {n : ℕ} : (zero n).toBools = List.replicate n 0 := by
-  induction n with
-  | zero => rfl
-  | succ n ih => simp [zero, toBools, List.replicate]; apply ih
+lemma B128.and_eq_and_prod_and (x y : B128) :
+    x &&& y = ⟨x.1 &&& y.1, x.2 &&& y.2⟩ := rfl
 
-def Bools.shlo : List Bool → Bool → List Bool
-  | [], _ => []
-  | _ :: xs, x => xs ++ [x]
+lemma B256.and_eq_and_prod_and (x y : B256) :
+    x &&& y = ⟨x.1 &&& y.1, x.2 &&& y.2⟩ := rfl
 
-def Bools.shl : Nat → List Bool → List Bool
-  | 0, xs => xs
-  | n + 1, xs => shlo (shl n xs) 0
+lemma B128.zero_and {x : B128} : 0 &&& x = 0 := by
+  simp [B128.and_eq_and_prod_and];
+  apply Prod.ext <;> simp <;> apply UInt64.zero_and
 
-lemma Bits.toBools_snoc {n} (xs : Bits n) (y) :
-    (Bits.snoc xs y).toBools = xs.toBools ++ [y] := by
-  induction xs with
-  | nil => rfl
-  | cons x xs ih => simp [snoc, toBools, ih]
+lemma B64.mask_and_eq_zero (x : B32) :
+    (0xffffffff00000000 : B64) &&& x.toUInt64 = 0 := by
+  rw [← @UInt32.and_neg_one x, UInt32.toUInt64_and]
+  rw [UInt64.and_comm (UInt32.toUInt64 _), ← UInt64.and_assoc]
+  apply UInt64.zero_and
 
-lemma Bits.toBools_shlo {n} (xs : Bits n) (x) :
-    (Bits.shlo xs x).toBools = Bools.shlo xs.toBools x := by
-  cases xs; rfl; simp [shlo, toBools, Bools.shlo, toBools_snoc]
+lemma validAddr_iff {w : B256} :
+    ValidAddr w ↔ addressMask &&& w = 0 := by
+  constructor <;> intro h
+  · rcases h with ⟨⟨high, mid, low⟩, ⟨_⟩⟩
+    simp [Adr.toB256, addressMask]
+    rw [B256.and_eq_and_prod_and]
+    simp [B128.zero_and]
+    rw [B128.and_eq_and_prod_and]
+    simp
+    apply Prod.ext
+    · apply Prod.ext
+      · rfl
+      · apply B64.mask_and_eq_zero
+    · rfl
+  · refine' ⟨w.toAdr, _⟩
+    rcases w with ⟨⟨wz, wh⟩, ⟨wm, wl⟩⟩
+    have h_wz : wz = 0 := sorry
+    simp only [B256.toAdr, Adr.toB256]
+    apply Prod.ext <;> simp
+    apply Prod.ext <;> simp [h_wz]
+    sorry
 
-lemma Bits.toBools_shl {m n} (xs : Bits n) :
-    (Bits.shl m xs).toBools = Bools.shl m xs.toBools := by
-  induction m generalizing xs with
-  | zero => rfl
-  | succ m ih => simp [shl, Bools.shl, toBools_shlo]; rw [ih]
-
-lemma Bits.max_append_zero {m n} :
-    Bits.max m ++ Bits.zero n = Bits.shl n (Bits.max (n + m)) := by
-  apply toBools_inj
-  rw [ toBools_append, toBools_zero, toBools_max,
-       toBools_shl, toBools_max, Nat.add_comm ]
-  induction n generalizing m with
-  | zero => simp [Bools.shl]
-  | succ n ih =>
-    simp [Bools.shl]
-    have h_rw : m + (n + 1) = m + 1 + n := by omega
-    rw [h_rw, ← ih]; simp [List.replicate, Bools.shlo]
-    apply List.replicate_add n 1 0
-
-lemma addressMask_eq_shl :
-    addressMask = Bits.shl (160 : Nat).toWord.toNat (Bits.max 256) := by
-  have h_rw : (160 : Nat).toWord.toNat = (160 : Nat) := by
-    apply toNat_toBits; omega
-  rw [h_rw]; apply Bits.max_append_zero
-
-def ValidAddr (w : Word) : Prop := ∃ a : Addr, a.toWord = w
-
-def validAddr_toWord (a : Addr) : ValidAddr a.toWord := ⟨a, rfl⟩
-
-lemma toAddr_toWord_eq {w : Word} :
-    ValidAddr w → Addr.toWord (toAddr w) = w := by
-  intro h; rcases h with ⟨a, ha⟩; rw [← ha, toAddr_toWord]
-
-lemma Bits.mask_and_eq_zero (m n : Nat) (xs : Bits (m + n))
-    (h : ∃ ys : Bits m, (Bits.zero n ++ ys) = xs) :
-    Bits.and (Bits.max n ++ Bits.zero m) xs = 0 := by
-  rcases h with ⟨a, h⟩
-  rw [← h, append_and_append, ← @zero_append_zero m n, append_eq_append_iff]
-  refine ⟨and_zero, zero_and⟩
-
-lemma validAddr_iff {w : Word} :
-    ValidAddr w ↔ Bits.and addressMask w = 0 :=
-  ⟨Bits.mask_and_eq_zero _ _ _, Bits.of_mask_and_eq_zero _ _ _⟩
+-- lemma validAddr_iff {w : B256} :
+--     ValidAddr w ↔ Bits.and addressMask w = 0 :=
+--   ⟨Bits.mask_and_eq_zero _ _ _, Bits.of_mask_and_eq_zero _ _ _⟩
 
 instance {w} : Decidable (ValidAddr w) := by
   apply decidable_of_iff _ validAddr_iff.symm
@@ -509,15 +448,44 @@ lemma op_run_iff_inst_run {o} : Rinst.Run e s o s' ↔ Ninst.Run e s (Ninst.reg 
   · apply opRun_of_instRun
 
 lemma of_run_push {e s s' xs p} (h : Ninst.Run e s (push xs p) s') :
-    Desc.Push [xs.toBits 32] s s' := by cases h with | push h => assumption
+    Desc.Push [xs.toB256] s s' := by cases h with | push h => assumption
 
-lemma of_run_pushWord {e s s' x} (h : Ninst.Run e s (pushWord x) s') :
+lemma Vector.ext' {ξ n} (xs ys : Array ξ)
+    (hx : xs.size = n) (hy : ys.size = n) (h_eq : xs = ys) :
+    Vector.mk xs hx = Vector.mk ys hy := by
+  cases h_eq; rfl
+
+lemma B8L.sig_zero_cons (xs) : B8L.sig (0 :: xs) = B8L.sig xs := rfl
+lemma B8L.sig_nonzero_cons (x xs) (h : x ≠ 0) : B8L.sig (x :: xs) = x :: xs := by
+  simp only [sig]; rw [List.dropWhile_cons_of_neg]; simp [h]
+
+lemma B8L.pack_zero_cons (xs n) : B8L.pack (0 :: xs) n = B8L.pack xs n := by
+  simp only [pack, List.ekatD]
+  rw [List.reverse_cons', List.takeD_concat]
+
+lemma B8L.pack_sig (xs n) : B8L.pack (B8L.sig xs) n = B8L.pack xs n := by
+  induction xs with
+  | nil => simp [sig, pack]
+  | cons b bs ih =>
+    by_cases h : b = 0
+    · cases h; rw [sig_zero_cons, pack_zero_cons, ih]
+    · rw [sig_nonzero_cons b bs h]
+
+lemma B8L.toB256_sig (bs : B8L) : B8L.toB256 (B8L.sig bs) = bs.toB256 := by
+  simp only [B8L.toB256]; rw [B8L.pack_sig]
+
+lemma of_run_pushB256 {e s s' x} (h : Ninst.Run e s (pushB256 x) s') :
     Desc.Push [x] s s' := by
   cases h with
-  | push h => rw [Bytes.sig_toBits, toBits_toBytes] at h; exact h
+  | push h =>
+    rw [B8L.toB256_sig, B256.toB256_toB8L] at h
+    apply h
 
-lemma run_pushWord (e) {s s' x} (h : Desc.Push [x] s s') : Ninst.Run e s (pushWord x) s' := by
-  apply Ninst.Run.push; rw [Bytes.sig_toBits, toBits_toBytes]; exact h
+lemma run_pushB256 (e) {s s' x} (h : Desc.Push [x] s s') :
+    Ninst.Run e s (pushB256 x) s' := by
+  apply Ninst.Run.push
+  rw [B8L.toB256_sig, B256.toB256_toB8L]
+  apply h
 
 lemma frel_of_sstore {e} {s s' : Desc} {x y xs}:
     Desc.Sstore e s s' → (x :: y :: xs <<+ s.stk) →
@@ -931,8 +899,9 @@ lemma Xinst.wrap_inv_code' {e s ep sp o r sw a}
   cases h <;> try {simp [Desc.wrap]} <;>
   {rename (Overwrite _ _ _ _) => h_ow; apply (h_ow a).right h'}
 
-lemma Xinst.wrap_inv_code'' {a : Addr} {e s ep sp o r sw}
-    (h : Xinst.Run' e s ep sp o r sw) (h' : s.code a ≠ []) : r.code a = sw.code a := by
+lemma Xinst.wrap_inv_code'' {a : Adr} {e s ep sp o r sw}
+    (h : Xinst.Run' e s ep sp o r sw) (h' : s.code a ≠ []) :
+    r.code a = sw.code a := by
   cases o <;> try {rw [Xinst.wrap_inv_code h cst]} <;>
   {apply Xinst.wrap_inv_code' h; intro hc; apply h'; rw [← hc]; cases h <;> assumption}
 
@@ -1027,20 +996,20 @@ instance {bs h_le} : Ninst.Hinv Desc.mem (Ninst.push bs h_le) := by
   constructor; intros e s s' h
   cases h with | push h => apply h.mem
 
-syntax "show_pushWord_hinv" : tactic
+syntax "show_pushB256_hinv" : tactic
 macro_rules
-  | `(tactic| show_pushWord_hinv) =>
-    `(tactic| constructor; unfold Ninst.pushWord; apply Ninst.Hinv.inv)
+  | `(tactic| show_pushB256_hinv) =>
+    `(tactic| constructor; unfold Ninst.pushB256; apply Ninst.Hinv.inv)
 
-instance {x} : Ninst.Hinv Desc.bal (Ninst.pushWord x) := by
-  constructor; unfold Ninst.pushWord; apply Ninst.Hinv.inv
+instance {x} : Ninst.Hinv Desc.bal (Ninst.pushB256 x) := by
+  constructor; unfold Ninst.pushB256; apply Ninst.Hinv.inv
 
-instance {x} : Ninst.Hinv Desc.bal (Ninst.pushWord x) := by show_pushWord_hinv
-instance {x} : Ninst.Hinv Desc.code (Ninst.pushWord x) := by show_pushWord_hinv
-instance {x} : Ninst.Hinv Desc.stor (Ninst.pushWord x) := by show_pushWord_hinv
-instance {x} : Ninst.Hinv Desc.mem (Ninst.pushWord x) := by show_pushWord_hinv
-instance {x} : Ninst.Hinv Desc.ret (Ninst.pushWord x) := by show_pushWord_hinv
-instance {x} : Ninst.Hinv Desc.dest (Ninst.pushWord x) := by show_pushWord_hinv
+instance {x} : Ninst.Hinv Desc.bal (Ninst.pushB256 x) := by show_pushB256_hinv
+instance {x} : Ninst.Hinv Desc.code (Ninst.pushB256 x) := by show_pushB256_hinv
+instance {x} : Ninst.Hinv Desc.stor (Ninst.pushB256 x) := by show_pushB256_hinv
+instance {x} : Ninst.Hinv Desc.mem (Ninst.pushB256 x) := by show_pushB256_hinv
+instance {x} : Ninst.Hinv Desc.ret (Ninst.pushB256 x) := by show_pushB256_hinv
+instance {x} : Ninst.Hinv Desc.dest (Ninst.pushB256 x) := by show_pushB256_hinv
 
 open Qq
 
@@ -1175,122 +1144,165 @@ partial def prog_inv : Lean.Elab.Tactic.TacticM Unit :=
 
 elab "prog_inv" : tactic => prog_inv
 
-def comp {n} {ξ} (f : Bits (n + 1) → ξ) (x : Bool) (xs : Bits n) : ξ := f (x +> xs)
+def sumBelow (f : Adr → B256) : Nat → Nat
+  | 0 => 0
+  | n + 1 => sumBelow f n + (f n.toAdr).toNat
 
-@[irreducible] def sum : ∀ {m n}, (Bits m → Bits n) → Nat
-| 0, _, f => (f ⦃⦄).toNat
-| _ + 1, _, f => sum (comp f 0) + sum (comp f 1)
+def sumBelow_succ {f : Adr → B256} {n} :
+    sumBelow f (n + 1) = sumBelow f n + (f n.toAdr).toNat := by
+  delta sumBelow; rfl
 
-lemma sum_zero {n} (f : Bits 0 → Bits n) : sum f = (f ⦃⦄).toNat := by delta sum; rfl
+def sum (f : Adr → B256) : Nat :=
+  sumBelow f Adr.max.toNat.succ
 
-lemma sum_succ {m n} (f : Bits (m + 1) → Bits n) :
-    sum f = sum (comp f 0) + sum (comp f 1) := by delta sum; rfl
+def SumNof (f : Adr → B256) : Prop := sum f < 2 ^ 256
 
-def SumNof {m n} (f : Bits m → Bits n) : Prop := sum f < 2 ^ n
+lemma le_sumBelow (f : Adr → B256) {k : Adr} {n} (h : k.toNat < n) :
+    (f k).toNat ≤ sumBelow f n := by
+  induction n with
+  | zero => cases Nat.not_lt_zero _ h
+  | succ n ih =>
+    rcases Nat.lt_succ_iff_lt_or_eq.mp h with hk | hk
+    · apply le_trans (ih hk); simp [sumBelow]
+    · simp [sumBelow]
+      rw [← hk, Adr.toAdr_toNat]; simp
 
-lemma frel_succ {ξ} {n k b r} {f g : Bits (n + 1) → ξ} (h : Frel (b +> k) r f g) :
-    Frel k r (comp f b) (comp g b) ∧ (comp f !b) = (comp g !b) := by
-  constructor
-  · intro k'; constructor <;> intro h_k'
-    · apply (h (b +> k')).left (by rw [h_k'])
-    · apply (h (b +> k')).right
-      intro hc; rw [Bits.cons_eq_cons] at hc
-      cases h_k' hc.right
-  · apply funext; intro k'
-    apply (h ((!b) +> k')).right
-    intro hc; rw [Bits.cons_eq_cons] at hc
-    cases b <;> cases hc.left
+def eq_below (n : Nat) (f g : Adr → B256) : Prop :=
+  ∀ k, k.toNat < n → f k = g k
 
-lemma sum_succ_with {m n} {f : Bits (m + 1) → Bits n} (b : Bool) :
-    sum f = sum (comp f b) + sum (comp f !b) := by
-  cases b; apply sum_succ; rw [Nat.add_comm (sum _)]; apply sum_succ
-
-lemma le_sum {m n} {f : Bits m → Bits n} {xs} : (f xs).toNat ≤ sum f := by
+lemma sumBelow_eq_sumBelow_of_eq_below {m n} {f g : Adr → B256}
+    (hm : m < 2 ^ 160) (h_le : m ≤ n) (h_eqb : eq_below n f g) :
+    sumBelow f m = sumBelow g m := by
   induction m with
-  | zero => rw [sum_zero]; cases xs; apply Nat.le_refl
+  | zero => rfl
   | succ m ih =>
-    match xs with
-    | x +> xs =>
-      rw [sum_succ]
-      rcases Bool.zero_or_one x with h | h <;> cases h
-      · apply @le_trans _ _ _ (sum (comp f 0)) _ (@ih (comp f 0) xs) (Nat.le_add_right _ _)
-      · apply @le_trans _ _ _ (sum (comp f 1)) _ (@ih (comp f 1) xs) (Nat.le_add_left _ _)
+    simp only [sumBelow]
+    have hm' : m < 2 ^ 160 := Nat.lt_of_succ_lt hm
+    rw [ih hm' (Nat.le_of_succ_le h_le), h_eqb m.toAdr]
+    rw [Nat.toNat_toAdr, Nat.mod_eq_of_lt hm']
+    apply Nat.lt_of_succ_le h_le
 
-open Bits
+lemma Adr.toNat_lt_size (a : Adr) : a.toNat < 2 ^ 160 := by
+  rw [← Adr.toAdr_toNat a, Nat.toNat_toAdr];
+  apply Nat.mod_lt _ (Nat.two_pow_pos _)
 
-lemma sum_sub_assoc {m n k v}
-    {f g : Bits m → Bits n}
-    (h : Decrease k v f g) (h' : v ≤ f k) :
-    sum f - v.toNat = sum g := by
-  induction m with
-  | zero =>
-    simp [sum_zero]; cases k
-    rw [← Bits.toNat_sub_eq_of_le _ _ h', (h ⦃⦄).left rfl]
-  | succ m ih =>
-    match k with
-    | b +> k =>
-      rcases frel_succ h with ⟨h_frel, h_eq⟩
-      rw [sum_succ_with b, sum_succ_with b, h_eq]
-      have h_le : toNat v ≤ sum (comp f b) := by
-        apply Nat.le_trans _ (@le_sum _ _ _ k)
-        apply toNat_le_toNat _ _ h'
-      conv =>
-        lhs;
-        rw [ Nat.add_comm, Nat.add_sub_assoc h_le,
-             ih h_frel h', Nat.add_comm ]; rfl
+lemma eq_below_of_frel {k} {r} {f g : Adr → B256} (h : Frel k r f g) :
+    eq_below k.toNat f g := by
+  intro x hx; apply (h x).2
+  intro h; rw [h] at hx; cases lt_irrefl _ hx
 
-lemma sum_add_assoc {m n k v} {f g : Bits m → Bits n}
-    (h : Increase k v f g) (h' : Nof (f k) v) :
-    sum f + v.toNat = sum g := by
-  induction m with
-  | zero =>
-    cases k; simp [sum_zero]
-    rw [← Bits.toNat_add_eq_of_nof _ _ h']
-    apply congr_arg _ <| (h ⦃⦄).left nil_eq_nil
-  | succ m ih =>
-    match k with
-    | b +> k =>
-      rcases frel_succ h with ⟨h_frel, h_eq⟩
-      rw [sum_succ_with b, sum_succ_with b, h_eq]
-      conv => lhs; lhs; rw [Nat.add_comm]
-      rw [Nat.add_assoc, ih h_frel h', Nat.add_comm]
+lemma sumBelow_sub_assoc {k : Adr} {v : B256} {n} {f g : Adr → B256}
+    (dec : Decrease k v f g) (k_lt_n : k.toNat < n)
+    (hv : v ≤ f k) (hn : n ≤ 2 ^ 160) :
+    sumBelow f n - v.toNat = sumBelow g n := by
+  induction n with
+  | zero => cases Nat.not_lt_zero _ k_lt_n
+  | succ n ih =>
+    simp only [sumBelow];
+    rw [Nat.lt_succ_iff_lt_or_eq] at k_lt_n
+    rcases k_lt_n with hk | hk
+    · have h_ne : k ≠ n.toAdr := by
+        intro hc; rw [hc, Nat.toNat_toAdr, Nat.mod_eq_of_lt] at hk
+        apply lt_irrefl _ hk; apply Nat.lt_of_succ_le hn
+      rw [← ih hk (le_trans (Nat.le_succ _) hn), (dec n.toAdr).2 h_ne]
+      rw [Nat.sub_add_comm]
+      apply le_trans _ <| le_sumBelow f hk
+      apply B256.toNat_le_toNat hv
+    · have rw : sumBelow g n = sumBelow f n := by
+        have hn' : n < 2 ^ 160 := Nat.lt_of_succ_le hn
+        have hkn : n ≤ k.toNat := by rw [hk]
+        have h_eq := eq_below_of_frel dec
+        rw [← sumBelow_eq_sumBelow_of_eq_below hn' hkn h_eq]
+      rw [rw]; clear rw
+      have rw : n.toAdr = k := by rw [← hk, Adr.toAdr_toNat]
+      rw [rw]; clear rw
+      rw [← (dec k).1 rfl, B256.toNat_sub_eq_of_le _ _ hv]
+      rw [Nat.add_sub_assoc (B256.toNat_le_toNat hv)]
 
-lemma add_le_sum_of_ne {m n} (f : Bits m → Bits n) {xs ys : Bits m}
-    (h : xs ≠ ys) : (f xs).toNat + (f ys).toNat ≤ sum f := by
-  induction m with
-  | zero => cases h nil_eq_nil
-  | succ m ih =>
-    match xs, ys with
-    | x +> xs, y +> ys =>
-      rw [sum_succ];
-      rcases Bool.zero_or_one x with h | h <;> cases h <;>
-      rcases Bool.zero_or_one y with h | h <;> cases h <;> simp at h
-      · apply @Nat.le_trans _ (sum (comp f 0)) _ _ (Nat.le_add_right _ _)
-        apply @ih (comp f 0) _ _ h
-      · apply Nat.add_le_add (@le_sum _ _ (comp f 0) _) (@le_sum _ _ (comp f 1) _)
-      · rw [Nat.add_comm]
-        apply Nat.add_le_add (@le_sum _ _ (comp f 0) _) (@le_sum _ _ (comp f 1) _)
-      · apply @Nat.le_trans _ (sum (comp f 1)) _ _ (Nat.le_add_left _ _)
-        apply @ih (comp f 1) _ _ h
+lemma sum_sub_assoc {k v} {f g : Adr → B256}
+    (dec : Decrease k v f g) (v_le : v ≤ f k) : sum f - v.toNat = sum g :=
+  sumBelow_sub_assoc dec (Adr.toNat_lt_size k) v_le (Nat.le_refl _)
 
-lemma transfer_inv_sum {m n} {kd ki v} {b d : Bits m → Bits n}
-    (h' : SumNof b)
-    (h : Transfer b kd v ki d) : sum b = sum d := by
+lemma le_sum {f : Adr → B256} {k} : (f k).toNat ≤ sum f :=
+  le_sumBelow f (Adr.toNat_lt_size k)
+
+lemma sumBelow_add_assoc {k v} {n} {f g : Adr → B256} (inc : Increase k v f g)
+    (k_lt : k.toNat < n) (nof : B256.Nof (f k) v) (n_lt : n ≤ 2 ^ 160) :
+    sumBelow f n + v.toNat = sumBelow g n := by
+  induction n with
+  | zero => cases Nat.not_lt_zero _ k_lt
+  | succ n ih =>
+    simp only [sumBelow];
+    rw [Nat.lt_succ_iff_lt_or_eq] at k_lt
+    rcases k_lt with hk | hk
+    · have h_ne : k ≠ n.toAdr := by
+        intro hc; rw [hc, Nat.toNat_toAdr, Nat.mod_eq_of_lt] at hk
+        apply lt_irrefl _ hk; apply Nat.lt_of_succ_le n_lt
+      rw [← ih hk (le_trans (Nat.le_succ _) n_lt), (inc n.toAdr).2 h_ne]
+      omega
+    · have rw : sumBelow g n = sumBelow f n := by
+        have hn' : n < 2 ^ 160 := Nat.lt_of_succ_le n_lt
+        have hkn : n ≤ k.toNat := by rw [hk]
+        have h_eq := eq_below_of_frel inc
+        rw [← sumBelow_eq_sumBelow_of_eq_below hn' hkn h_eq]
+      rw [rw]; clear rw
+      have rw : n.toAdr = k := by rw [← hk, Adr.toAdr_toNat]
+      rw [rw]; clear rw
+      rw [← (inc k).1 rfl, B256.toNat_add_eq_of_nof _ _ nof, Nat.add_assoc]
+
+lemma sum_add_assoc {k v} {f g : Adr → B256}
+    (inc : Increase k v f g) (nof : B256.Nof (f k) v) :
+    sum f + v.toNat = sum g :=
+  sumBelow_add_assoc inc
+    (Adr.toNat_lt_size _)
+    nof
+    (Nat.succ_le_of_lt <| Adr.toNat_lt_size _)
+
+lemma add_le_sumBelow (f : Adr → B256) {x y : Adr} {n}
+    (x_lt : x.toNat < y.toNat) (y_lt : y.toNat < n) :
+    (f x).toNat + (f y).toNat ≤ sumBelow f n := by
+  induction n with
+  | zero => cases Nat.not_lt_zero _ y_lt
+  | succ n ih =>
+    rcases lt_or_eq_of_le (Nat.le_of_lt_succ y_lt) with y_lt' | y_eq
+    · apply le_trans (ih y_lt' ); simp [sumBelow]
+    · rw [sumBelow_succ, ← y_eq, Adr.toAdr_toNat]
+      apply Nat.add_le_add_right
+      apply le_sumBelow _ x_lt
+
+lemma Adr.toNat_inj {x y : Adr} (h : x.toNat = y.toNat) : x = y := by
+  rw [← Adr.toAdr_toNat x, ← Adr.toAdr_toNat y, h]
+
+lemma add_le_sum_of_ne (f : Adr → B256) {x y : Adr} (ne : x ≠ y) :
+    (f x).toNat + (f y).toNat ≤ sum f := by
+  have hh := Adr.toAdr_toNat
+  rcases Nat.lt_trichotomy x.toNat y.toNat with x_lt_y | x_eq_y | y_lt_x
+  · apply add_le_sumBelow f x_lt_y (Adr.toNat_lt_size y)
+  · cases ne <| Adr.toNat_inj x_eq_y
+  · rw [Nat.add_comm]
+    apply add_le_sumBelow f y_lt_x (Adr.toNat_lt_size x)
+
+lemma transfer_inv_sum {kd ki v} {b d : Adr → B256}
+    (hb : SumNof b) (h : Transfer b kd v ki d) : sum b = sum d := by
   rcases h with ⟨h, c, hd, hi⟩
   apply @Eq.trans _ _ (sum c + v.toNat)
   · rw [← sum_sub_assoc hd h, Nat.sub_add_cancel]
-    apply Nat.le_trans (toNat_le_toNat _ _ h) le_sum
-  · apply @sum_add_assoc _ _ ki
+    have hh := le_sumBelow
+    apply Nat.le_trans (B256.toNat_le_toNat h) le_sum
+  · apply @sum_add_assoc ki
     apply frel_of_frel _ hi; intro h_eq; exact h_eq
     by_cases hk : ki = kd
-    · rw [hk, ← (hd kd).left rfl]; simp [Nof]
-      rw [toNat_sub_eq_of_le _ _ h, Nat.sub_add_cancel (toNat_le_toNat _ _ h)]
-      apply toNat_lt_pow
+    · rw [hk, ← (hd kd).left rfl]; simp only [B256.Nof]
+      rw [B256.toNat_sub_eq_of_le _ _ h, Nat.sub_add_cancel (B256.toNat_le_toNat h)]
+      apply B256.toNat_lt_size
     · rw [← (hd ki).right (Ne.symm hk)]
-      apply lt_of_le_of_lt (Nat.le_trans _ <| add_le_sum_of_ne b hk) h'
-      apply Nat.add_le_add_left <| toNat_le_toNat _ _ h
+      apply lt_of_le_of_lt (Nat.le_trans _ <| add_le_sum_of_ne b hk) hb
+      apply Nat.add_le_add_left <| B256.toNat_le_toNat h
 
-lemma transfer_inv_nof {m n} {kd ki v} {f g : Bits m → Bits n}
+
+#exit
+
+lemma transfer_inv_nof {kd ki v} {f g : Adr → B256}
     (h : Transfer f kd v ki g) (h' : SumNof f) : SumNof g := by
   simp [SumNof]; rw [← transfer_inv_sum h' h]; apply h'
 
@@ -1298,9 +1310,9 @@ lemma of_run_dest {e s r} (h : Linst.Run e s Linst.dest r) :
     ∃ a, Transfer s.bal e.cta (s.bal e.cta) a r.bal := by
   cases h with
   | dest x bal bal' h_wup h_stk h_ow hi =>
-    refine' ⟨toAddr x, Bits.le_refl, bal, _, hi⟩
+    refine' ⟨x.toAdr, B256.le_refl _, bal, _, hi⟩
     intro a; constructor <;> intro ha
-    · rw [ha, Bits.sub_self, (h_ow a).left ha]
+    · rw [ha, B256.sub_self, (h_ow a).left ha]
     · exact (h_ow a).right ha
 
 lemma Linst.inv_nof {e s o r}
@@ -1312,7 +1324,8 @@ lemma Linst.inv_nof {e s o r}
   | dest =>
     rcases of_run_dest h with ⟨a, h'⟩
     exact transfer_inv_nof asm h_nof
-  -- | invalid => cases h
+
+#exit
 
 lemma Linst.inv_sum_bal {e s o r}
     (h : Linst.Run e s o r) (h_nof : SumNof s.bal) : sum s.bal = sum r.bal := by
@@ -2319,7 +2332,7 @@ lemma Jinst.run_of_at {e s pc o r} (cr : Exec e s pc r) (h_at : Jinst.At e pc o)
     · cases List.get?_length_ne_some h_at
 
 lemma jump_at {e s pc r} (cr : Exec e s pc r) (h : Jinst.At e pc Jinst.jump) :
-    ∃ (x : Word) (s' : Desc) (cr' : Exec e s' x.toNat r),
+    ∃ (x : B256) (s' : Desc) (cr' : Exec e s' x.toNat r),
       Desc.Pop [x] s s' ∧
       Jumpable e x.toNat ∧
       Exec'.Rel ⟨e, s', x.toNat, r, cr'⟩ ⟨e, s, pc, r, cr⟩ := by
@@ -2327,10 +2340,10 @@ lemma jump_at {e s pc r} (cr : Exec e s pc r) (h : Jinst.At e pc Jinst.jump) :
   cases h_run; refine ⟨_, _, cr', asm, asm, h_prec⟩
 
 lemma jumpi_at {e s pc r} (cr : Exec e s pc r) (h : Jinst.At e pc Jinst.jumpi) :
-    ( ∃ (x : Word) (s' : Desc) (cr' : Exec e s' (pc + 1) r),
+    ( ∃ (x : B256) (s' : Desc) (cr' : Exec e s' (pc + 1) r),
         Desc.Pop [x, 0] s s' ∧
         Exec'.Rel ⟨e, s', pc + 1, r, cr'⟩ ⟨e, s, pc, r, cr⟩ ) ∨
-    ( ∃ (x y : Word) (s' : Desc) (cr' : Exec e s' x.toNat r),
+    ( ∃ (x y : B256) (s' : Desc) (cr' : Exec e s' x.toNat r),
         Desc.Pop [x, y] s s' ∧
         Jumpable e x.toNat ∧ y ≠ 0 ∧
         Exec'.Rel ⟨e, s', x.toNat, r, cr'⟩ ⟨e, s, pc, r, cr⟩ ) := by
@@ -2915,7 +2928,7 @@ lemma prefix_of_push {xs ys} {s s'} :
     Desc.Push xs s s' → (ys <<+ s.stk) → ((xs ++ ys) <<+ s'.stk) :=
   λ h0 h1 => append_pref h0.stk h1
 
-lemma prefix_of_pop {y : Word} {xs} {s s' : Desc} :
+lemma prefix_of_pop {y : B256} {xs} {s s' : Desc} :
     (∃ x, Desc.Pop [x] s s') → (y :: xs <<+ s.stk) → (xs <<+ s'.stk) := by
   intros h h'; rcases h with ⟨x, hx⟩
   have h_eq : y = x :=
@@ -2927,7 +2940,7 @@ lemma prefix_of_iszero {x xs} {s s' : Desc} :
   by show_prefix_one
 
 lemma prefix_of_caller {e xs} {s s' : Desc} :
-    Desc.Caller e s s' → (xs <<+ s.stk) → (e.cla.toWord :: xs <<+ s'.stk) :=
+    Desc.Caller e s s' → (xs <<+ s.stk) → (e.cla.toB256 :: xs <<+ s'.stk) :=
   by show_prefix_zero
 
 lemma prefix_of_callvalue {e xs} {s s' : Desc} :
@@ -2961,13 +2974,13 @@ lemma Line.spx_push {e : Env} {s' l bs p xs ys} :
   apply h_next s_mid _ h_tail
   apply prefix_of_push (of_run_push h_head) h_pfx
 
-lemma Line.spx_pushWord {e : Env} {s' l x xs ys} :
+lemma Line.spx_pushB256 {e : Env} {s' l x xs ys} :
     (∀ s : Desc, (x :: xs <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
-    (∀ s : Desc, (xs <<+ s.stk) → Line.Run e s (pushWord x :: l) s'→ (ys <<+ s'.stk)) := by
+    (∀ s : Desc, (xs <<+ s.stk) → Line.Run e s (pushB256 x :: l) s'→ (ys <<+ s'.stk)) := by
   intros h_next s h_pfx h_run
   rcases Line.of_run_cons h_run with ⟨s_mid, h_head, h_tail⟩
   apply h_next s_mid _ h_tail
-  apply prefix_of_push (of_run_pushWord h_head) h_pfx
+  apply prefix_of_push (of_run_pushB256 h_head) h_pfx
 
 macro "spx_conv" : tactic =>
   `(tactic| conv => ext; ext; rw [← op_run_iff_inst_run]; rfl)
@@ -3072,12 +3085,12 @@ lemma Line.spx_and {e s' l x y xs ys}  :
     (∀ s : Desc, (x :: y :: xs <<+ s.stk) → Line.Run e s (and :: l) s' → (ys <<+ s'.stk)) := by
   apply Line.spx_scheme; spx_conv; apply prefix_of_and
 
-lemma Line.spx_shl {e s' l} {x y : Word} {xs ys}  :
+lemma Line.spx_shl {e s' l} {x y : B256} {xs ys}  :
     (∀ s : Desc, (Bits.shl x.toNat y :: xs <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
     (∀ s : Desc, (x :: y :: xs <<+ s.stk) → Line.Run e s (shl :: l) s' → (ys <<+ s'.stk)) := by
   apply Line.spx_scheme; spx_conv; apply prefix_of_shl
 
-lemma Line.spx_shr {e s' l} {x y : Word} {xs ys}  :
+lemma Line.spx_shr {e s' l} {x y : B256} {xs ys}  :
     (∀ s : Desc, (Bits.shr x.toNat y :: xs <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
     (∀ s : Desc, (x :: y :: xs <<+ s.stk) → Line.Run e s (shr :: l) s' → (ys <<+ s'.stk)) := by
   apply Line.spx_scheme; spx_conv; apply prefix_of_shr
@@ -3088,7 +3101,7 @@ lemma Line.spx_add {e s' l x y xs ys}  :
   apply Line.spx_scheme; spx_conv; apply prefix_of_add
 
 lemma Line.spx_caller {e : Env} {s' l xs ys}  :
-    (∀ s : Desc, (e.cla.toWord :: xs <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
+    (∀ s : Desc, (e.cla.toB256 :: xs <<+ s.stk) → Line.Run e s l s' → (ys <<+ s'.stk)) →
     (∀ s : Desc, (xs <<+ s.stk) → Line.Run e s (caller :: l) s' → (ys <<+ s'.stk)) := by
   apply Line.spx_scheme; spx_conv; apply prefix_of_caller
 
@@ -3125,7 +3138,7 @@ def show_swap' : Nat → Lean.Elab.Tactic.TacticM Unit
 def fail {ξ} (s : String) : Lean.Elab.Tactic.TacticM ξ := do
   dbg_trace s; failure
 
-def get_swap_core (xx : Q(Word)) : Nat → Q(Stack) → Lean.Elab.Tactic.TacticM (Q(Word) × Q(Stack))
+def get_swap_core (xx : Q(B256)) : Nat → Q(Stack) → Lean.Elab.Tactic.TacticM (Q(B256) × Q(Stack))
   | 0, ~q($yx :: $lx) => pure (yx, q($xx :: $lx))
   | n + 1, ~q($yx :: $lx) => do
     let (zx, lx') ← get_swap_core xx n lx
@@ -3169,7 +3182,7 @@ partial def line_pref : Lean.Elab.Tactic.TacticM Unit :=
         let x ← get_swap n.val px
         Lean.Expr.apply <| Lean.mkApp "Line.spx_swap".toExpr x
         show_swap' n.val
-      | ~q(Ninst.pushWord _) => "Line.spx_pushWord".apply
+      | ~q(Ninst.pushB256 _) => "Line.spx_pushB256".apply
       | ~q(Ninst.push _ _) => "Line.spx_push".apply
       | ~q(Ninst.sub) => "Line.spx_sub".apply
       | ~q(Ninst.add) => "Line.spx_add".apply
@@ -3504,18 +3517,18 @@ elab_rules : tactic
 end
 
 inductive DispatchTree : Type
-  | leaf : Word → Func → DispatchTree
+  | leaf : B256 → Func → DispatchTree
   | fork : DispatchTree → DispatchTree → DispatchTree
 
 open DispatchTree
 
-def DispatchTree.mem : DispatchTree → (Word × Func) → Prop
+def DispatchTree.mem : DispatchTree → (B256 × Func) → Prop
   | (leaf w p), wp => wp = (w, p)
   | (fork tl tr), wp => DispatchTree.mem tl wp ∨ DispatchTree.mem tr wp
 
-instance : Membership (Word × Func) DispatchTree := ⟨DispatchTree.mem⟩
+instance : Membership (B256 × Func) DispatchTree := ⟨DispatchTree.mem⟩
 
-def leftmostFsig : DispatchTree → Word
+def leftmostFsig : DispatchTree → B256
   | (DispatchTree.leaf w _) => w
   | (DispatchTree.fork t _) => leftmostFsig t
 
@@ -3525,22 +3538,22 @@ def leftmostFsig : DispatchTree → Word
 -- (2) the functions are ordered in ascending order of their signatures (right is higher)
 
 def dispatchWith (k : Nat) : DispatchTree → Func
-  | DispatchTree.leaf w p => pushWord w ::: eq ::: (p <?> .call k)
+  | DispatchTree.leaf w p => pushB256 w ::: eq ::: (p <?> .call k)
   | DispatchTree.fork tl tr =>
     dup 0 :::
-    pushWord (leftmostFsig tr) ::: gt :::
+    pushB256 (leftmostFsig tr) ::: gt :::
     (dispatchWith k tl <?> dispatchWith k tr)
 
 def dispatch : DispatchTree → Func
-  | DispatchTree.leaf w p => pushWord w ::: eq ::: (p <?> .rev)
+  | DispatchTree.leaf w p => pushB256 w ::: eq ::: (p <?> .rev)
   | DispatchTree.fork tl tr =>
     dup 0 :::
-    pushWord (leftmostFsig tr) ::: gt :::
+    pushB256 (leftmostFsig tr) ::: gt :::
     (dispatch tl <?> dispatch tr)
 
 lemma dispatchWith_inv {c k f} (σ : Env → Desc → Prop) (ρ : Env → Result → Prop)
-    (h0 : ∀ {e s x s'}, σ e s → Line.Run e s [pushWord x, eq, pop] s' → σ e s')
-    (h1 : ∀ {e s x s'}, σ e s → Line.Run e s [dup 0, pushWord x, gt, pop] s' → σ e s')
+    (h0 : ∀ {e s x s'}, σ e s → Line.Run e s [pushB256 x, eq, pop] s' → σ e s')
+    (h1 : ∀ {e s x s'}, σ e s → Line.Run e s [dup 0, pushB256 x, gt, pop] s' → σ e s')
     (h2 : c[k]? = some f)
     (h3 : ∀ {e s r}, σ e s → Func.Run c e s f r → ρ e r) :
     ∀ t : DispatchTree,
@@ -3569,7 +3582,7 @@ lemma dispatchWith_inv {c k f} (σ : Env → Desc → Prop) (ρ : Env → Result
         apply h3 (h0 hs <| run_append h₁ h₂) h_run
     · apply ht ⟨w, p⟩ cst (h0 hs <| run_append h₁ h₂) h
 
-def shiftRight (w : Word) : Line := [pushWord w, shr]
+def shiftRight (w : B256) : Line := [pushB256 w, shr]
 
 def fsig : Line := cdl 0 ++ shiftRight 224
 
@@ -3589,7 +3602,7 @@ lemma Stack.push_of_cdl {n} {e s s'} :
     Line.Run e s (cdl n) s' → ∃ x, Stack.Push [x] s.stk s'.stk := by
   lexen 1; intro h₂
   have h_push : Push [n] s.stk s₁.stk :=
-    (of_run_pushWord <| of_run_singleton h₁).stk
+    (of_run_pushB256 <| of_run_singleton h₁).stk
   rcases (of_run_singleton' h₂) with ⟨_, x, h_diff, _⟩
   rcases h_diff.stk with ⟨stk, h_pop, h_push'⟩
   have h_eq : s.stk = stk :=
@@ -3618,7 +3631,7 @@ lemma Desc.of_pop_cons {x xs} {s s''} (h : Desc.Pop (x :: xs) s s'') :
   · cases h; refine' ⟨asm, asm, asm, h_split, asm, asm, asm⟩
 
 lemma kec_elim {e s s'} (φ : Prop)
-    (h : ∀ x, Line.Run e s [pop, pop, pushWord x] s' → φ)
+    (h : ∀ x, Line.Run e s [pop, pop, pushB256 x] s' → φ)
     (h' : Ninst.Run e s kec s') : φ := by
   rcases opRun_of_instRun h' with ⟨x, y, h_diff⟩
   apply h (s.mem.slice x y).keccak
@@ -3626,79 +3639,79 @@ lemma kec_elim {e s s'} (φ : Prop)
   rcases Desc.of_pop_cons h_pop with ⟨s₀, hx, hy⟩
   apply Line.Run.cons <| run_pop e hx
   apply Line.Run.cons <| run_pop e hy
-  apply Line.Run.cons (run_pushWord e h_push) cst
+  apply Line.Run.cons (run_pushB256 e h_push) cst
 
 lemma kec_cons_elim {e s l s'} (φ : Prop)
-    (h : ∀ x, Line.Run e s (pop :: pop :: pushWord x :: l) s' → φ) :
+    (h : ∀ x, Line.Run e s (pop :: pop :: pushB256 x :: l) s' → φ) :
     Line.Run e s (kec :: l) s' → φ := by
   lexen 1; apply kec_elim _ _ <| of_run_singleton h₁
   intro x h₂ h₃; apply h x <| run_append h₂ h₃
 
 lemma kec_next_elim {e s p s'} (φ : Prop)
-    (h : ∀ x, Func.Run c e s (pop ::: pop ::: pushWord x ::: p) s' → φ) :
+    (h : ∀ x, Func.Run c e s (pop ::: pop ::: pushB256 x ::: p) s' → φ) :
     Func.Run c e s (kec ::: p) s' → φ := by
   pexen 1; apply kec_elim _ _ <| of_run_singleton h₁
   intro x h₂ h₃; apply h x <| run_prepend h₂ h₃
 
 lemma prepend_kec_next_elim {e s} (l) {p r} (φ : Prop)
-    (h : ∀ x, Func.Run c e s (l +++ pop ::: pop ::: pushWord x ::: p) r → φ) :
+    (h : ∀ x, Func.Run c e s (l +++ pop ::: pop ::: pushB256 x ::: p) r → φ) :
     Func.Run c e s (l +++ kec ::: p) r → φ := by
   pexec l; apply kec_next_elim
   intro x h'; apply h x <| run_prepend h₁ h'
 
 lemma cdl_append_elim {e s n l r} (φ : Prop)
-    (h : ∀ x, Line.Run e s (pushWord x :: l) r → φ) :
+    (h : ∀ x, Line.Run e s (pushB256 x :: l) r → φ) :
     Line.Run e s (cdl n ++ l) r → φ := by
   lexec (cdl n); intro h₂
   rcases Desc.push_of_cdl h₁ with ⟨x, hp₁⟩
-  apply h x <| .cons (run_pushWord _ hp₁) h₂
+  apply h x <| .cons (run_pushB256 _ hp₁) h₂
 
 lemma cdl_prepend_elim {c e s n p r} (φ : Prop)
-    (h : ∀ x, Func.Run c e s (pushWord x ::: p) r → φ) :
+    (h : ∀ x, Func.Run c e s (pushB256 x ::: p) r → φ) :
     Func.Run c e s (cdl n +++ p) r → φ := by
   pexec (cdl n); intro h₂
   rcases Desc.push_of_cdl h₁ with ⟨x, hp₁⟩
-  apply h x <| .next (run_pushWord _ hp₁) h₂
+  apply h x <| .next (run_pushB256 _ hp₁) h₂
 
 lemma sload_elim {e s s'} (φ : Prop)
-    (h : ∀ x, Line.Run e s [pop, pushWord x] s' → φ)
+    (h : ∀ x, Line.Run e s [pop, pushB256 x] s' → φ)
     (h' : Ninst.Run e s sload s') : φ := by
   rcases opRun_of_instRun h' with ⟨x, hx⟩
   rcases Desc.of_diff hx with ⟨s₀, h_pop, h_push⟩
   apply h (s.stor e.cta x);
   apply Line.Run.cons (run_pop e h_pop)
-  apply Line.Run.cons (run_pushWord e h_push) cst
+  apply Line.Run.cons (run_pushB256 e h_push) cst
 
 lemma sload_cons_elim {e s l s'} (φ : Prop)
-    (h : ∀ x, Line.Run e s (pop :: pushWord x :: l) s' → φ) :
+    (h : ∀ x, Line.Run e s (pop :: pushB256 x :: l) s' → φ) :
     Line.Run e s (sload :: l) s' → φ := by
   lexen 1; apply sload_elim _ _ <| of_run_singleton h₁
   intro x h₂ h₃; apply h x <| run_append h₂ h₃
 
 lemma append_sload_cons_elim {e s} (a) {b s'} (φ : Prop)
-    (h : ∀ x, Line.Run e s (a ++ pop :: pushWord x :: b) s' → φ) :
+    (h : ∀ x, Line.Run e s (a ++ pop :: pushB256 x :: b) s' → φ) :
     Line.Run e s (a ++ sload :: b) s' → φ := by
   lexec a; apply sload_cons_elim
   intro x h'; apply h x <| run_append h₁ h'
 
 lemma sload_next_elim {e s p r} (φ : Prop)
-    (h : ∀ x, Func.Run c e s (pop ::: pushWord x ::: p) r → φ) :
+    (h : ∀ x, Func.Run c e s (pop ::: pushB256 x ::: p) r → φ) :
     Func.Run c e s (sload ::: p) r → φ := by
   pexen 1; apply sload_elim _ _ <| of_run_singleton h₁
   intro x h₂ h₃; apply h x <| run_prepend h₂ h₃
 
 lemma prepend_sload_next_elim {e s} (l) {p r} (φ : Prop)
-    (h : ∀ x, Func.Run c e s (l +++ pop ::: pushWord x ::: p) r → φ) :
+    (h : ∀ x, Func.Run c e s (l +++ pop ::: pushB256 x ::: p) r → φ) :
     Func.Run c e s (l +++ sload ::: p) r → φ := by
   pexec l; apply sload_next_elim
   intro x h'; apply h x <| run_prepend h₁ h'
 
 lemma prepend_cdl_prepend_elim {e s} (l) {n p r} (φ : Prop)
-    (h : ∀ x, Func.Run c e s (l +++ pushWord x ::: p) r → φ) :
+    (h : ∀ x, Func.Run c e s (l +++ pushB256 x ::: p) r → φ) :
     Func.Run c e s (l +++ cdl n +++ p) r → φ := by
   pexec l; pexec (cdl n); intro h₃
   rcases Desc.push_of_cdl h₂ with ⟨x, hp₂⟩
-  apply h x <| run_prepend h₁ <| .next (run_pushWord _ hp₂) h₃
+  apply h x <| run_prepend h₁ <| .next (run_pushB256 _ hp₂) h₃
 
 lemma of_nof_of_transfer {m n} {a b : Bits m} {v : Bits n} {f h : Bits m → Bits n}
     (h_nof : SumNof f) (h_di : Transfer f a v b h) :

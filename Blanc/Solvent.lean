@@ -1,5 +1,7 @@
 -- Solvent.lean : proof of solvency for WETH implementation
 
+#exit
+
 import Blanc.Weth
 
 
@@ -136,7 +138,7 @@ lemma of_check_address {e} {s s' : State} {x xs} :
 lemma frel_to_address {w r} {f g : Storage} :
     ValidAddr w → Frel w r f g → Frel (toAddr w) r f.rest g.rest := by
   intros h0 h1 a; constructor <;> intro h3
-  · apply (h1 <| Addr.toWord a).left; rw [← h3, toAddr_toWord_eq h0]
+  · apply (h1 <| Addr.toWord a).left; rw [← h3, B256.toB256_toAdr h0]
   · apply (h1 <| Addr.toWord a).right
     intro hc; apply h3; rw [hc, toAddr_toWord]
 
@@ -167,10 +169,10 @@ lemma incrAt_of_incrWbal {e s s' wad dst} (h_dst : ValidAddr dst)
   have h5 : s.stor e.cta dst + wad = s'.stor e.cta dst := by
     have h5 := (h4 a).left ha
     simp [Storage.rest] at h5
-    rw [← ha, toAddr_toWord_eq h_dst] at h5
+    rw [← ha, B256.toB256_toAdr h_dst] at h5
     apply h5
   simp [Storage.rest]
-  rw [← ha, toAddr_toWord_eq h_dst, h5]
+  rw [← ha, B256.toB256_toAdr h_dst, h5]
 
 lemma sstore_inv_stor_rest {x xs} {e} {s s' : State} :
   ¬ ValidAddr x →
@@ -204,11 +206,11 @@ lemma of_transferFromUpdateSbal {e s₀ sₙ} {sbal wad src}
   simp [Storage.rest]; constructor
   · intro a; constructor <;> intro ha
     · rw [← ha]; simp
-      rw [toAddr_toWord_eq h_src, ← h_sbal]
+      rw [B256.toB256_toAdr h_src, ← h_sbal]
       apply (h_ow src).left rfl
     · apply (h_ow <| Addr.toWord a).right
       intro hc; apply ha; rw [← toAddr_toWord a, hc]
-  · rw [toAddr_toWord_eq h_src, ← h_sbal]; exact h_le
+  · rw [B256.toB256_toAdr h_src, ← h_sbal]; exact h_le
 
 lemma updateAllowance_inv_stor_rest {wad dst} {e s r}
     (hs : [wad, dst] <<+ s.stk) :
@@ -359,9 +361,9 @@ theorem transfer_of_transfer {e : Env} {s : State} {r : Result} :
   clear hp₄ h₅; intro h_run'
   refine'
     ⟨wad, toAddr caller, toAddr dst, _, (s₅.stor e.cta).rest, _, _ ⟩
-  · simp [Storage.rest]; rw [toAddr_toWord_eq h_caller]; exact h_le
+  · simp [Storage.rest]; rw [B256.toB256_toAdr h_caller]; exact h_le
   · apply frel_of_frel _ <| frel_to_address h_caller <| (hs₅ e.cta).left rfl
-    simp [Storage.rest, toAddr_toWord_eq h_caller]
+    simp [Storage.rest, B256.toB256_toAdr h_caller]
   · revert h_run'; pexec incrWbal; intro hr
     have h : s₆.stor = r.stor := by apply Func.of_inv _ _ _ hr; prog_inv
     rw [← h]; apply incrAt_of_incrWbal h_dst h₆ hp₅
