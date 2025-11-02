@@ -1,5 +1,6 @@
 -- Semantics.lean : formalized semantics of the EVM and Blanc
 
+
 import Blanc.Basic
 import Elevm.Hash
 import Elevm.Execution
@@ -66,12 +67,12 @@ def Rinst.toB8 : Rinst → B8
   | mstore8      => 0x53
   | sload        => 0x54
   | sstore       => 0x55
-  | tload        => 0x5C
-  | tstore       => 0x5D
-  | mcopy        => 0x5E
   | pc           => 0x58
   | msize        => 0x59
   | gas          => 0x5A
+  | tload        => 0x5C
+  | tstore       => 0x5D
+  | mcopy        => 0x5E
   | dup n        => 0x80 + n.val.toUInt8
   | swap n       => 0x90 + n.val.toUInt8
   | log n        => 0xA0 + n.val.toUInt8
@@ -287,12 +288,6 @@ infix:70 " =? "  => B256.eq_check
 def Char.toB8 (c : Char) : B8 := Nat.toUInt8 c.toNat
 def String.toB8L (s : String) : B8L := s.data.map Char.toB8
 
-
-
--- def Bytes.keccak (xs : Bytes) : B256 :=
---   xs.toB8L.keccak.toBits
-
-
 def String.keccak (s : String) : B256 := s.toB8L.keccak
 
 def Desc.Lt (s s' : Desc) : Prop := ∃ x y, Desc.Diff [x, y] [x <? y] s s'
@@ -305,10 +300,6 @@ def Desc.And (s s' : Desc) : Prop := ∃ x y, Desc.Diff [x, y] [x &&& y] s s'
 def Desc.Or (s s' : Desc) : Prop := ∃ x y, Desc.Diff [x, y] [x ||| y] s s'
 def Desc.Xor (s s' : Desc) : Prop := ∃ x y, Desc.Diff [x, y] [x ^^^ y] s s'
 def Desc.Not (s s' : Desc) : Prop := ∃ x, Desc.Diff [x] [~~~ x] s s'
--- def Desc.Byte (s s' : Desc) : Prop :=
---   ∃ (x y : B256) (b : B8),
---     Desc.Diff [x, y] [(0 : Bits 248) ++ b] s s' ∧
---     List.getD (@Bits.toBytes 32 y) x.toNat 0 = b
 def Desc.Byte (s s' : Desc) : Prop :=
   ∃ (x y : B256),
     Desc.Diff [x, y] [(List.getD y.toB8L x.toNat 0).toB256] s s'
@@ -343,7 +334,7 @@ def Desc.Extcodehash (s s' : Desc) : Prop :=
 def Desc.Calldataload (e : Env) (s s' : Desc) : Prop :=
   ∃ x y,
     Desc.Diff [x] [y] s s' ∧
-    List.sliceD e.cld x.toNat 32 0 = y.toB8L -- @Bits.toBytes 32 y
+    List.sliceD e.cld x.toNat 32 0 = y.toB8L
 
 def Desc.Calldatacopy (e : Env) (s s' : Desc) : Prop :=
   ∃ x y z,
@@ -842,7 +833,7 @@ infixr:65 " <?> " => λ f g => Func.branch g f
 infixr:65 " ::: " => Func.next
 postfix:100 " ::. " => Func.last
 
-def Ninst.toBytes : Ninst → B8L
+def Ninst.toB8L : Ninst → B8L
   | reg o => [o.toB8]
   | exec o => [o.toB8]
   | push bs _ => pushToB8L bs

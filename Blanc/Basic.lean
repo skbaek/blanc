@@ -1,6 +1,7 @@
 -- Basic.lean : generic definitions and lemmas (e.g. for Booleans, lists,
 -- bit vectors and bytes) useful for but not specific to Blanc
 
+
 import Mathlib.Data.Nat.Basic
 import Mathlib.Data.List.Lemmas
 import Mathlib.Util.Notation3
@@ -335,6 +336,11 @@ lemma B128.sub_self (a : B128) : a - a = 0 := by
 lemma B128.lt_irrefl (x : B128) : ¬ x < x := by
   intro h; rcases h with h | h <;> simp [UInt64.lt_irrefl] at h
 
+lemma B256.lt_irrefl (x : B256) : ¬ x < x := by
+  intro h; rcases h with h | h <;> simp [B128.lt_irrefl] at h
+
+
+
 lemma B256.sub_self (a : B256) : a - a = 0 := by
   rw [B256.sub_eq]; simp [B128.sub_self, B128.lt_irrefl]; rfl
 
@@ -351,7 +357,6 @@ lemma Nat.lt_of_lt_high {sz high low high' low' : Nat}
     · apply Nat.mul_le_mul_right _ h_le
     · apply Nat.lt_add_right _ h_low
 
-
 lemma B128.lt_iff (x y : B128) :
   x < y ↔ (x.1 < y.1 ∨ (x.1 = y.1 ∧ x.2 < y.2)) := Iff.refl _
 
@@ -363,8 +368,6 @@ lemma B128.le_iff (x y : B128) :
 
 lemma B256.le_iff (x y : B256) :
     x ≤ y ↔ (x.1 < y.1 ∨ (x.1 = y.1 ∧ x.2 ≤ y.2)) := Iff.refl _
-
-lemma B256.le_or_gt (a b : B256) : a ≤ b ∨ a > b := by sorry
 
 lemma B128.le_or_gt (a b : B128) : a ≤ b ∨ a > b := by
   simp [GT.gt]; rw [B128.le_iff, B128.lt_iff];
@@ -393,7 +396,6 @@ lemma B128.toNat_lt_toNat {a b : B128} (h : a < b) : a.toNat < b.toNat := by
   · rw [h.1]; apply Nat.add_lt_add_left
     rw [← UInt64.lt_iff_toNat_lt]; apply h.2
 
-
 lemma B128.toNat_lt_size (x : B128) : x.toNat < 2 ^ 128 := by
   rcases x with ⟨xh, xl⟩; simp only [B128.toNat]
   have h : 2 ^ 128 = 2 ^ 64 * 2 ^ 64 + 0 := rfl
@@ -420,6 +422,27 @@ lemma B256.lt_or_eq_of_le {n m : B256} (h : n ≤ m) : n < m ∨ n = m := by
     · left; right; refine ⟨h.1, h'⟩
     · right; apply Prod.ext h.1 h'
 
+lemma B128.le_of_lt_or_eq {n m : B128} (h : n < m ∨ n = m) : n ≤ m := by
+  rcases h with (h | ⟨h, h'⟩) | h
+  · left; apply h
+  · right; refine' ⟨h, UInt64.le_of_lt h'⟩
+  · rw [h]; apply le_refl
+
+
+lemma B128.le_iff_lt_or_eq {n m : B128} : n ≤ m ↔ (n < m ∨ n = m) :=
+  ⟨B128.lt_or_eq_of_le, B128.le_of_lt_or_eq⟩
+
+
+lemma B256.le_or_gt (a b : B256) : a ≤ b ∨ a > b := by
+  simp [GT.gt]; rw [B256.le_iff, B128.lt_iff];
+  rcases B128.le_or_gt a.1 b.1 with h | h
+  · rcases B128.lt_or_eq_of_le h with h' | h'
+    · left; left; apply h'
+    · rcases B128.le_or_gt a.2 b.2 with h'' | h''
+      · left; right; refine ⟨h', h''⟩
+      · right; right; refine ⟨h'.symm, h''⟩
+  · right; left; apply h
+
 lemma B256.toNat_lt_toNat {a b : B256} (h : a < b) : a.toNat < b.toNat := by
   rcases a with ⟨ah, al⟩; rcases b with ⟨bh, bl⟩
   rcases h with h | h <;> simp at h <;> simp only [B256.toNat]
@@ -437,6 +460,15 @@ lemma B256.le_of_lt {a b : B256} (h : a < b) : a ≤ b := by
   rcases h with h | h
   · left; apply h
   · right; refine' ⟨h.1, B128.le_of_lt h.2⟩
+
+lemma B256.le_of_lt_or_eq {n m : B256} (h : n < m ∨ n = m) : n ≤ m := by
+  rcases h with (h | ⟨h, h'⟩) | h
+  · left; apply h
+  · right; refine' ⟨h, B128.le_of_lt h'⟩
+  · rw [h]; apply le_refl
+
+lemma B256.le_iff_lt_or_eq {n m : B256} : n ≤ m ↔ (n < m ∨ n = m) :=
+  ⟨B256.lt_or_eq_of_le, B256.le_of_lt_or_eq⟩
 
 lemma B128.toNat_le_toNat {a b : B128} (h : a ≤ b) : a.toNat ≤ b.toNat := by
   rcases B128.lt_or_eq_of_le h with h | h
@@ -467,6 +499,36 @@ lemma B256.lt_iff_toNat_lt_toNat {a b : B256} : a < b ↔ a.toNat < b.toNat := b
   constructor
   · apply B256.toNat_lt_toNat
   · apply B256.lt_of_toNat_lt_toNat
+
+lemma B128.not_lt {a b : B128} : ¬ a < b ↔ b ≤ a := by
+  simp [B128.lt_iff, B128.le_iff]
+  rw [@Eq.comm _ a.1 b.1, @UInt64.le_iff_lt_or_eq b.1 a.1]
+  aesop
+
+lemma B256.not_lt {a b : B256} : ¬ a < b ↔ b ≤ a := by
+  simp [B256.lt_iff, B256.le_iff, B128.not_lt]
+  rw [@Eq.comm _ a.1 b.1, @B128.le_iff_lt_or_eq b.1 a.1]
+  by_cases h : b.1 < a.1 <;> simp [h] <;> intro h'
+  · rw [h'] at h; cases B128.lt_irrefl _ h
+  · apply Or.inl h'
+
+lemma B128.not_le {a b : B128} : ¬ a ≤ b ↔ b < a := by
+  rw [not_iff_comm, B128.not_lt]
+
+lemma B256.not_le {a b : B256} : ¬ a ≤ b ↔ b < a := by
+  rw [not_iff_comm, B256.not_lt]
+
+lemma B128.le_iff_toNat_le_toNat {a b : B128} : a ≤ b ↔ a.toNat ≤ b.toNat := by
+  rw [← not_iff_not, not_le, Nat.not_le, lt_iff_toNat_lt_toNat]
+
+lemma B256.le_iff_toNat_le_toNat {a b : B256} : a ≤ b ↔ a.toNat ≤ b.toNat := by
+  rw [← not_iff_not, not_le, Nat.not_le, lt_iff_toNat_lt_toNat]
+
+lemma B128.le_of_toNat_le_toNat {a b : B128} : a.toNat ≤ b.toNat → a ≤ b :=
+  B128.le_iff_toNat_le_toNat.mpr
+
+lemma B256.le_of_toNat_le_toNat {a b : B256} : a.toNat ≤ b.toNat → a ≤ b :=
+  B256.le_iff_toNat_le_toNat.mpr
 
 lemma UInt64.toNat_sub_of_lt (a b : UInt64) (h : a < b) :
     (a - b).toNat = 2 ^ 64 + a.toNat - b.toNat := by
@@ -677,7 +739,6 @@ lemma B64.toNat_overflow {x y : B64} :
     rw [Nat.sub_lt_iff_lt_add h]
     apply Nat.add_lt_add_left <| UInt64.toNat_lt_size _
 
-
 lemma B128.toNat_add (x y : B128) :
     (x + y).toNat = (x.toNat + y.toNat) % 2 ^ 128 := by
   rw [B128.add_eq]; simp only [B128.toNat]
@@ -704,6 +765,7 @@ lemma B128.toNat_add (x y : B128) :
     simp only [UInt64.toNat_add, UInt64.toNat_zero, Nat.add_zero, Nat.mod_mod]
 
 lemma B128.toNat_zero : (0 : B128).toNat = 0 := rfl
+lemma B256.toNat_zero : (0 : B256).toNat = 0 := rfl
 
 lemma B128.toNat_overflow {x y : B128} :
     x + y < x ↔ 2 ^ 128 ≤ x.toNat + y.toNat := by
@@ -711,7 +773,7 @@ lemma B128.toNat_overflow {x y : B128} :
   by_cases h : x.toNat + y.toNat < 2 ^ 128
   · rw [Nat.mod_eq_of_lt h]
     apply iff_of_false <;> omega
-  · rw [not_lt] at h
+  · rw [Nat.not_lt] at h
     rw [
       Nat.add_mod_eq_add_sub
         (B128.toNat_lt_size _)
@@ -794,7 +856,7 @@ lemma B128.lt_iff_toNat_lt_toNat' {x y : B128} : x < y ↔ x.toNat < y.toNat := 
   apply Iff.intro B128.toNat_lt_toNat;
   intro h
   rcases B128.le_or_gt y x with h' | h'
-  · rw [← not_le] at h; cases h <| B128.toNat_le_toNat h'
+  · rw [← Nat.not_le] at h; cases h <| B128.toNat_le_toNat h'
   · apply h'
 
 lemma B256.toNat_sub (a b : B256) :
@@ -839,15 +901,4 @@ theorem B256.toNat_sub_eq_of_le (xs ys : B256) (h : ys ≤ xs) :
   · apply B256.toNat_lt_size
   · apply B256.toNat_le_toNat h
 
-
-
-
-
-
-
-
-
-#exit
-
-lemma B256.toNat_add (x y : B256) :
-    (x + y).toNat = (x.toNat + y.toNat) % 2 ^ 256 := by
+lemma B256.zero_ne_one : (0 : B256) ≠ 1 := by intro h; cases h

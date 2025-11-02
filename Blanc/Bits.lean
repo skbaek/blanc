@@ -1546,5 +1546,111 @@ lemma transfer_inv_nof {m n} {kd ki v} {f g : Bits m → Bits n}
     (h : Transfer f kd v ki g) (h' : SumNof f) : SumNof g := by
   simp [SumNof]; rw [← transfer_inv_sum h' h]; apply h'
 
+lemma nib0_append_nib1 : ∀ {b : Byte}, b.nib0 ++ b.nib1 = b
+  | ⦃_, _, _, _, _, _, _, _⦄ => rfl
 
-open Bits
+lemma Bits.prefix_zero {m n : Nat} : (0 : Bits (m + n)).prefix = (0 : Bits n) := by
+  rw [← zero_append_zero, prefix_append]
+
+lemma Bits.suffix_zero {m n : Nat} : (0 : Bits (m + n)).suffix = (0 : Bits m) := by
+  rw [← zero_append_zero, suffix_append]
+
+lemma Bits.factor_zero {k m n : Nat} :
+    factor (0 : Bits (k * m + k * n)) = (0 : Bits (k * (m + n))) := by
+  induction n with
+  | zero => rfl
+  | succ n ih =>
+    simp [factor]
+    rw [← @zero_append_zero (k * (m + n)) k, ← ih]
+    simp [prefix_zero, suffix_zero]
+    rw [zero_append_zero]
+
+lemma Bits.factor_eq_max {k m n : Nat} (xs : Bits (k * m)) (ys : Bits (k * n)) :
+    factor (xs ++ ys) = (max (k * (n + m))) ↔ (xs = max _ ∧ ys = max _) := by
+  induction m with
+  | zero =>
+    cases xs; simp [factor, @nil_eq_nil ⦃⦄ (max (k * 0))]
+    rw [← @nil_eq_nil ⦃⦄ (max 0)]; rfl
+  | succ m ih =>
+    simp [factor, prefix_append, suffix_append]
+    have h_rw := @max_append_max k (k * (n + m))
+    conv => lhs; rhs; apply h_rw.symm
+    rw [append_eq_append_iff, ih]
+    have h_rw' := @max_append_max k (k * m)
+    conv => rhs; lhs; rhs; apply h_rw'.symm
+    conv => rhs; lhs; lhs; apply (prefix_append_suffix xs).symm
+    rw [append_eq_append_iff, and_assoc]
+
+lemma Bits.factor_max {k m n : Nat} :
+    factor (max (k * m + k * n)) = (max (k * (m + n))) := by
+  rw [← max_append_max, factor_eq_max]; simp
+
+lemma Bits.zero_fappend_zero {k m n : ℕ} :
+    fappend (0 : Bits (k * m)) (0 : Bits (k * n)) = 0 := by
+  simp only [fappend, zero_append_zero, factor_zero]
+
+lemma Bits.succ_fappend {k m n} (xs : Bits (k * m)) (ys : Bits (k * n)) :
+    (fappend xs ys).succ = fappend (if ys = max _ then xs.succ else xs) ys.succ := by
+  simp only [fappend]
+  induction m with
+  | zero => cases xs; split <;> {simp [factor]; rfl}
+  | succ m ih =>
+    have h_sfx : xs.suffix.succ = xs.succ.suffix := by
+      rw [← prefix_append_suffix xs]
+      simp [suffix_append, succ_append]
+    have h_pfx :
+      xs.succ.prefix =
+        if xs.suffix = max (k * m) then xs.prefix.succ else xs.prefix := by
+      rw [← prefix_append_suffix xs]
+      simp [prefix_append, suffix_append, succ_append]
+    simp [factor, prefix_append, suffix_append, succ_append, ih xs.suffix, h_sfx]
+    by_cases h : ys = max (k * n)
+    · simp [if_pos h]; apply congr_arg₂ _ _ rfl; rw [h_pfx]
+      by_cases h' : xs.suffix = max (k * m)
+      · rw [h, h', max_append_max, if_pos factor_max, if_pos rfl]
+      · rw [if_neg h', if_neg _]
+        rw [factor_eq_max]; simp [h']
+    · simp [if_neg h]; rw [if_neg _]
+      rw [factor_eq_max]; simp [h]
+
+lemma Nat.toBits_pow_add {k m n : Nat} (h : k < 2 ^ (8 * m)) :
+    toBits (8 * (m + n)) k = fappend (0 : Bits (8 * n)) (toBits (8 * m) k) := by
+  induction k with
+  | zero => simp [toBits, zero_fappend_zero]
+  | succ k ih =>
+    have h_lt := lt_trans (lt_succ_self k) h; simp only [toBits]
+    rw [ih h_lt, Bits.succ_fappend, if_neg _]; intro hc
+    have h' : k + 1 = 2 ^ (8 * m) := by
+      rw [← toNat_toBits h_lt, hc, toNat_max_add_one_eq_pow]
+    rw [h'] at h; cases Nat.lt_irrefl _ h
+
+lemma List.takeD_eq_takeD_append_replicate
+    {ξ : Type u} {m n} {xs : List ξ} (y : ξ) :
+    takeD m xs y = takeD m (xs ++ replicate n y) y := by
+  induction m generalizing xs n with
+  | zero => simp [takeD]
+  | succ m ih =>
+    match xs with
+    | [] =>
+      cases n <;> simp [takeD, replicate]; rename Nat => n
+      have h := @ih n []; simp at h; apply h
+    | x :: xs =>
+      cases n <;> simp [takeD, replicate]; rename Nat => n
+      apply @ih (n + 1) xs
+
+lemma toBits_toBytes_toBits_pow_add {k m n : Nat} (h : k < 2 ^ (8 * m)) :
+          (Nat.toBits (8 * m) k).toBytes.toBits (m + n) =
+    (Nat.toBits (8 * (m + n)) k).toBytes.toBits (m + n) := by
+  simp only [Bytes.toBits]
+  apply congr_arg; apply congr_arg
+  suffices h_rw :
+    ((8 * (m + n)).toBits k).toBytes.reverse =
+      ((8 * m).toBits k).toBytes.reverse ++ List.replicate n (0 : Byte) by
+    rw [h_rw]; apply List.takeD_eq_takeD_append_replicate
+  rw [← List.reverse_replicate, ← List.reverse_append, List.reverse_inj]
+  rw [← toBytes_zero_eq_replicate_zero, ← Bits.toBytes_eq_append]
+  apply congr_arg
+  apply Nat.toBits_pow_add h
+
+lemma Bits.zero_ne_one {n} : (0 : Bits (n + 1)) ≠ (1 : Bits (n + 1)) := by
+  apply Bits.zero_ne_succ

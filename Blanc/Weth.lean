@@ -1,6 +1,5 @@
 -- Weth.lean : proof-of-concept implementation of the Wrapped Ether (WETH) contract
 
-#exit
 
 import Blanc.Common
 
@@ -12,7 +11,7 @@ open Ninst
 
 def logDeposit : Func :=
   callvalue ::: mstoreAt 0 +++ caller ::: -- caller || wad
-  pushWord "Deposit(address,uint256)".keccak ::: -- depositEventSig :: caller || wad
+  pushB256 "Deposit(address,uint256)".keccak ::: -- depositEventSig :: caller || wad
   logWith 1 0 1 +++ -- 1 indexed topic : caller address
                     -- 1 unindexed data : deposit value
   Func.stop
@@ -31,7 +30,7 @@ def deposit : Func :=
 -- assumes : args := [wad]
 def logWithdraw : Func :=
   caller :::
-  pushWord "Withdrawal(address,uint256)".keccak ::: -- withdrawEventSig :: caller
+  pushB256 "Withdrawal(address,uint256)".keccak ::: -- withdrawEventSig :: caller
   argCopy 0 0 1 +++ -- withdrawEventSig :: caller || wad
   logWith 1 0 1 +++ -- 1 indexed topic : caller address
                     -- 1 unindexed data : withdraw amount
@@ -41,7 +40,7 @@ def logWithdraw : Func :=
 def sendToCaller : Line :=
   pushList [0, 0, 0, 0] ++ -- 0 :: 0 :: 0 :: 0 :: wad
   swap 3 :: caller :: -- caller :: wad :: 0 :: 0 :: 0 :: 0
-  push [Ox x5 x2, Ox x0 x8] (by {simp [List.length]}) :: -- 21000 :: caller :: wad :: 0 :: 0 :: 0 :: 0
+  push [0x52, 0x08] (by {simp [List.length]}) :: -- 21000 :: caller :: wad :: 0 :: 0 :: 0 :: 0
   call :: -- 'wad' amount of ethers now sent to 'caller'
   []
 
@@ -69,7 +68,7 @@ def withdraw : Func :=
 -- decimals() --
 
 def decimals : Func :=
-  pushWord 0x12 ::: -- 0x12 ||
+  pushB256 0x12 ::: -- 0x12 ||
   mstoreAt 0 +++ -- || 0x12
   returnMemoryRange 0 32
 
@@ -78,9 +77,9 @@ def decimals : Func :=
 -- name() --
 
 def name : Func :=
-  --pushWord wrappedEtherStringShift ::: -- wrappedEtherStringShift ||
-  pushWord ("Wrapped Ether".toBytes.toBits 32) :::
-  pushWord 152 ::: shl ::: -- "Wrapped Ether" ||
+  --pushB256 wrappedEtherStringShift ::: -- wrappedEtherStringShift ||
+  pushB256 "Wrapped Ether".toB8L.toB256 :::
+  pushB256 152 ::: shl ::: -- "Wrapped Ether" ||
   pushList [13, 32] +++ -- 32 :: 13 :: "Wrapped Ether" ||
   mstoreAt 0 +++ -- 13 :: "Wrapped Ether" || 32
   mstoreAt 1 +++ -- "Wrapped Ether" || 32 13
@@ -93,8 +92,8 @@ def name : Func :=
 
 def symbol : Func :=
   -- pushList [wethStringShift] +++ -- wethStringShift
-  pushWord ("WETH".toBytes.toBits 32) :::
-  pushWord 224 ::: shl ::: -- "WETH""
+  pushB256 "WETH".toB8L.toB256 :::
+  pushB256 224 ::: shl ::: -- "WETH""
   pushList [4, 32] +++ -- 32 :: 4 :: "WETH""
   mstoreAt 0 +++ -- 4 :: "WETH"" || 32
   mstoreAt 1 +++ -- "WETH" || 32 4
@@ -149,7 +148,7 @@ def prepApprove : Line :=
 def logApprove : Line :=
   argCopy 0 1 1 ++ -- || wad
   arg 0 ++ caller ::
-  pushWord "Approval(address,address,uint256)".keccak :: -- approvalEventSig :: caller :: guy || wad
+  pushB256 "Approval(address,address,uint256)".keccak :: -- approvalEventSig :: caller :: guy || wad
   logWith 2 0 1 -- 2 indexed topics : caller address, approvee address
                 -- 1 unindexed data : approval value
 
@@ -176,7 +175,7 @@ def approve : Func :=
 def logTransfer : Line :=
   argCopy 0 1 1 ++ -- || wad
   arg 0 ++ caller ::
-  pushWord "Transfer(address,address,uint256)".keccak :: -- transferEventSig :: src :: dst || wad
+  pushB256 "Transfer(address,address,uint256)".keccak :: -- transferEventSig :: src :: dst || wad
   logWith 2 0 1 -- 2 indexed topics : source address, destination address
                 -- 1 unindexed data : transfer value
 
@@ -236,7 +235,7 @@ def transferFromUpdateSbal : Line :=
 -- ( dst :: wad :: src -- wad :: src )
 def transferFromLog : Line :=
   dup 2 :: -- src :: dst :: wad :: src
-  pushWord "Transfer(address,address,uint256)".keccak :: -- transferEventSig :: src :: dst :: wad :: src
+  pushB256 "Transfer(address,address,uint256)".keccak :: -- transferEventSig :: src :: dst :: wad :: src
   dup 3 :: mstoreAt 0 ++ -- transferEventSig :: src :: dst :: wad :: src || wad
   logWith 2 0 1 -- [Transfer(src,dst,wad) is logged]
                 -- wad :: src
@@ -299,8 +298,8 @@ def selectorArgs : List ArgType → String
   | [] => ""
   | t :: ts => List.foldl (λ s t' => s!"{s},{t'.toString}") t.toString ts
 
-def selector (name : String) (args : List ArgType) : Word :=
-  (s!"{name}({selectorArgs args})").keccak.shr 224
+def selector (name : String) (args : List ArgType) : B256 :=
+  (s!"{name}({selectorArgs args})").keccak.shiftRight 224
 
 def wethTree : DispatchTree :=
   .fork

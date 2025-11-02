@@ -1,37 +1,35 @@
 -- Solvent.lean : proof of solvency for WETH implementation
 
-#exit
 
 import Blanc.Weth
 
 
-
-def Storage.rest (s : Storage) : Addr → Word := s ∘ Addr.toWord
+def Storage.rest (s : Storage) : Adr → B256 := s ∘ Adr.toB256
 
 -- sum of all WETH balances, provided that s is the storage of WETH contract
 def wbsum (s : Storage) : Nat := sum s.rest
 
-def Storage.Solvent (s : Storage) (v : Word) (b : Word) : Prop :=
+def Storage.Solvent (s : Storage) (v : B256) (b : B256) : Prop :=
   wbsum s + v.toNat ≤ b.toNat
 
-def World.Solvent (w : World) (a : Addr) : Prop :=
+def World.Solvent (w : World) (a : Adr) : Prop :=
   Storage.Solvent (w.stor a) 0 (w.bal a)
 
-def State.Solvent (s : State) (a : Addr) (e : Env) : Prop :=
+def Desc.Solvent (s : Desc) (a : Adr) (e : Env) : Prop :=
   (e.cta = a → Storage.Solvent (s.stor a) e.clv (s.bal a)) ∧
   (e.cta ≠ a → Storage.Solvent (s.stor a) 0 (s.bal a))
 
-def Result.Solvent (r : Result) (a : Addr) : Prop :=
+def Result.Solvent (r : Result) (a : Adr) : Prop :=
   Storage.Solvent (r.stor a) 0 (r.bal a)
 
-lemma solvent_of_same_stor {s s' : Storage} {v : Word} {b b' : Word} :
+lemma solvent_of_same_stor {s s' : Storage} {v : B256} {b b' : B256} :
     s.Solvent v b → s = s' → b = b' → s'.Solvent v b' := by
   intros h0 h1 h2; rw [h1, h2] at h0; exact h0
 
 lemma Rinst.inv_solvent {e s o s' wa}
     (h : Rinst.Run e s o s') (h_ne : e.cta ≠ wa) (h_sv : s.Solvent wa e) : s'.Solvent wa e := by
-  simp [h_ne, State.Solvent] at h_sv
-  simp [h_ne, State.Solvent]
+  simp [h_ne, Desc.Solvent] at h_sv
+  simp [h_ne, Desc.Solvent]
   rw [← Rinst.inv_bal h, ← Rinst.inv_stor h h_ne]; exact h_sv
 
 lemma transfer_inv_solvent {a wa} {v} {s : Storage} {b b' : Balances}
@@ -42,16 +40,16 @@ lemma transfer_inv_solvent {a wa} {v} {s : Storage} {b b' : Balances}
     s.Solvent v (b' wa) := by
   simp [Storage.Solvent]
   simp [Storage.Solvent] at h_sv
-  rw [Bits.toNat_zero, Nat.add_zero] at h_sv
+  rw [B256.toNat_zero, Nat.add_zero] at h_sv
   have h_eq : b' wa = b wa + v := by
     rcases h_di with ⟨_, _, hd, hi⟩
     rw [(hd wa).right h_ne, (hi wa).left rfl]
-  have h_nof : Nof  (b wa) v := by
-    unfold Nof ; apply Nat.lt_of_le_of_lt _ h_nof
+  have h_nof : B256.Nof (b wa) v := by
+    unfold B256.Nof ; apply Nat.lt_of_le_of_lt _ h_nof
     apply le_trans _ <| add_le_sum_of_ne b h_ne.symm
     apply Nat.add_le_add (le_refl _)
-    apply Bits.toNat_le_toNat _ _ h_di.left
-  rw [h_eq, Bits.toNat_add_eq_of_nof _ _ h_nof]
+    apply B256.toNat_le_toNat h_di.left
+  rw [h_eq, B256.toNat_add_eq_of_nof _ _ h_nof]
   apply Nat.add_le_add h_sv (le_refl _)
 
 lemma Xinst.prep_inv_solvent'
@@ -60,13 +58,22 @@ lemma Xinst.prep_inv_solvent'
     (h_cr : Xinst.Run' e s ep sp o rx sw)
     (ha : e.cta ≠ wa) (ha' : ep.cta ≠ wa)
     (h_sv : s.Solvent wa e) : sp.Solvent wa ep := by
-  simp [State.Solvent, ha] at h_sv
-  simp [State.Solvent, ha']
+  simp [Desc.Solvent, ha] at h_sv
+  simp [Desc.Solvent, ha']
   cases h_cr <;> try {apply (ho cst).elim} <;>
-  { simp [State.prep]
+  { simp [Desc.prep]
     rcases (asm : Transfer _ _ _ _ _) with ⟨_, b, hd, hi⟩
     rw [← (hi wa).right ha', ← (hd wa).right ha]
     apply h_sv }
+
+lemma Env.prep_eq (e : Env) (s : Desc)
+    (cta : Adr) (cld : B8L) (cla : Adr)
+    (clv : B256) (cda : Adr) (exd : Nat) (wup : Bool) :
+    Env.prep (e : Env) (s : Desc)
+      (cta : Adr) (cld : B8L) (cla : Adr)
+      (clv : B256) (cda : Adr) (exd : Nat) (wup : Bool) =
+    { cta := cta, oga := e.oga, gpr := e.gpr, cld := cld, cla := cla,
+      clv := clv, code := s.code cda, exd := exd, wup := wup } := by rfl
 
 lemma Xinst.prep_inv_solvent
     {e s ep sp o rx sw wa}
@@ -76,8 +83,8 @@ lemma Xinst.prep_inv_solvent
     (h_sv : s.Solvent wa e) : sp.Solvent wa ep := by
   have h_stor := (Xinst.prep_inv_stor h_cr).symm
   cases h_cr <;> try {cases ho} <;>
-  try {simp [State.Solvent, Env.prep, State.prep, ha]; apply h_sv.right ha}
-  simp [Env.prep, State.prep, State.Solvent]
+  try {rw [Env.prep_eq]; simp [Desc.Solvent, Desc.prep, ha]; apply h_sv.right ha}
+  simp [Env.prep, Desc.prep, Desc.Solvent]
   constructor <;> intro ha'
   · apply transfer_inv_solvent ha h_nof
     · rw [← ha']; assumption
@@ -88,44 +95,48 @@ lemma Xinst.prep_inv_solvent
       rw [(hd wa).right ha, (hi wa).right ha']
     rw [h_bal']; apply h_sv.right ha
 
-
-
 -- Precond & Postcond : invariants in the main induction for proof of solvency preservation
 
-structure Precond (wa : Addr) (e : Env) (s : State) : Prop where
+structure Precond (wa : Adr) (e : Env) (s : Desc) : Prop where
   (code : some (s.code wa) = Prog.compile weth)
   (nof : sum s.bal < 2 ^ 256)
   (solvent : s.Solvent wa e)
 
-structure Postcond (wa : Addr) (e : Env) (r : Result) : Prop where
+structure Postcond (wa : Adr) (e : Env) (r : Result) : Prop where
   (code : some (r.code wa) = Prog.compile weth)
   (nof : sum r.bal < 2 ^ 256)
   (solvent : r.Solvent wa)
 
 open Ninst
 
-lemma of_push_addressMask {e} {s s' : State} {xs}
+lemma addressMask_eq_shl :
+    addressMask = B256.shiftLeft B256.max (160 : Nat).toB256.toNat := by
+  rw [toNat_toB256, Nat.mod_eq_of_lt (by omega)]; rfl
+
+theorem B256.invert_zero_eq_max : ~~~ (0 : B256) = .max := by rfl
+
+lemma of_push_addressMask {e} {s s' : Desc} {xs}
     (h_pfx : xs <<+ s.stk) (h_run : Line.Run e s pushAddressMask s') :
     (addressMask :: xs <<+ s'.stk) := by
-  rw [addressMask_eq_shl, ← Bits.invert_zero_eq_max]
+  rw [addressMask_eq_shl, ← B256.invert_zero_eq_max]
   revert s; simp only [pushAddressMask]; line_pref
 
-lemma of_check_non_address {e} {s s' : State} {x xs}
+lemma of_check_non_address {e} {s s' : Desc} {x xs}
     (h_pfx : x :: xs <<+ s.stk) (h_run : Line.Run e s checkNonAddress s') :
-    ∃ y, (y :: xs <<+ s'.stk) ∧ (y = 0 ↔ ValidAddr x) := by
+    ∃ y, (y :: xs <<+ s'.stk) ∧ (y = 0 ↔ ValidAdr x) := by
   rename' s' => s''; rcases_append
   rename Line.Run _ _ pushAddressMask _ => h_run
   rename Line.Run _ _ [_] _ => h_run'
-  rename State => s'
+  rename Desc => s'
   have h_pfx' := of_push_addressMask h_pfx h_run; clear h_pfx h_run s
-  have h_pfx : Bits.and addressMask x :: xs <<+ s''.stk := by
+  have h_pfx : (addressMask &&& x) :: xs <<+ s''.stk := by
     revert h_run'; revert s'; line_pref
-  refine ⟨_, h_pfx, Iff.symm validAddr_iff⟩
+  refine ⟨_, h_pfx, Iff.symm validAdr_iff⟩
 
-lemma of_check_address {e} {s s' : State} {x xs} :
+lemma of_check_address {e} {s s' : Desc} {x xs} :
     (x :: xs <<+ s.stk) →
     Line.Run e s checkAddress s' →
-    ∃ y, (y :: xs <<+ s'.stk) ∧ (y = 0 ↔ ¬ ValidAddr x) := by
+    ∃ y, (y :: xs <<+ s'.stk) ∧ (y = 0 ↔ ¬ ValidAdr x) := by
   rename' s' => s''; intros h_pfx h_run;
   rcases of_run_append _ h_run with ⟨s', hs', h_run'⟩; clear h_run
   rcases of_check_non_address h_pfx hs'
@@ -133,18 +144,18 @@ lemma of_check_address {e} {s s' : State} {x xs} :
   have h_pfx : (ite (y = 0) 1 0 :: xs <<+ s''.stk) := by
     revert h_run'; revert s'; line_pref
   refine' ⟨_, h_pfx, _⟩; rw [← h_iff]
-  apply Ne.ite_eq_right_iff <| Ne.symm Bits.zero_ne_succ
+  apply Ne.ite_eq_right_iff <| Ne.symm B256.zero_ne_one
 
-lemma frel_to_address {w r} {f g : Storage} :
-    ValidAddr w → Frel w r f g → Frel (toAddr w) r f.rest g.rest := by
+lemma frel_to_address {w : B256} {r} {f g : Storage} :
+    ValidAdr w → Frel w r f g → Frel w.toAdr r f.rest g.rest := by
   intros h0 h1 a; constructor <;> intro h3
-  · apply (h1 <| Addr.toWord a).left; rw [← h3, B256.toB256_toAdr h0]
-  · apply (h1 <| Addr.toWord a).right
-    intro hc; apply h3; rw [hc, toAddr_toWord]
+  · apply (h1 <| Adr.toB256 a).left; rw [← h3, toB256_toAdr h0]
+  · apply (h1 <| Adr.toB256 a).right
+    intro hc; apply h3; rw [hc, toAdr_toB256]
 
-lemma incrAt_of_incrWbal {e s s' wad dst} (h_dst : ValidAddr dst)
+lemma incrAt_of_incrWbal {e s s' wad dst} (h_dst : ValidAdr dst)
     (h0 : Line.Run e s incrWbal s') (h1 : [wad, dst] <<+ s.stk) :
-    Increase (toAddr dst) wad (s.stor e.cta).rest (s'.stor e.cta).rest := by
+    Increase dst.toAdr wad (s.stor e.cta).rest (s'.stor e.cta).rest := by
   rcases of_run_append [dup 1, sload] h0 with ⟨s0, h2, h3⟩; clear h0
   have h_s0_stk : ([s.stor e.cta dst, wad, dst] <<+ s0.stk) := by
     rcases of_run_append [dup 1] h2 with ⟨sm, hm, h_run⟩; clear h2
@@ -169,15 +180,15 @@ lemma incrAt_of_incrWbal {e s s' wad dst} (h_dst : ValidAddr dst)
   have h5 : s.stor e.cta dst + wad = s'.stor e.cta dst := by
     have h5 := (h4 a).left ha
     simp [Storage.rest] at h5
-    rw [← ha, B256.toB256_toAdr h_dst] at h5
+    rw [← ha, toB256_toAdr h_dst] at h5
     apply h5
   simp [Storage.rest]
-  rw [← ha, B256.toB256_toAdr h_dst, h5]
+  rw [← ha, toB256_toAdr h_dst, h5]
 
-lemma sstore_inv_stor_rest {x xs} {e} {s s' : State} :
-  ¬ ValidAddr x →
+lemma sstore_inv_stor_rest {x xs} {e} {s s' : Desc} :
+  ¬ ValidAdr x →
   (x :: xs <<+ s.stk) →
-  State.Sstore e s s' →
+  Desc.Sstore e s s' →
   (s.stor e.cta).rest = (s'.stor e.cta).rest := by
   intros h_nv h_pfx_fst h_sstore
   have h_pfx : ∃ y, ([x, y] <<+ s.stk) := by
@@ -189,16 +200,16 @@ lemma sstore_inv_stor_rest {x xs} {e} {s s' : State} :
   rcases h_pfx with ⟨y, h_pfx⟩
   apply funext; intro a
   simp [Storage.rest]
-  apply ((frel_of_sstore h_sstore h_pfx e.cta).left rfl a.toWord).right
+  apply ((frel_of_sstore h_sstore h_pfx e.cta).left rfl a.toB256).right
   intro hc; apply h_nv
   refine ⟨a, hc.symm⟩
 
 lemma of_transferFromUpdateSbal {e s₀ sₙ} {sbal wad src}
-    (h_src : ValidAddr src) (h_sbal : sbal = s₀.stor e.cta src)
+    (h_src : ValidAdr src) (h_sbal : sbal = s₀.stor e.cta src)
     (h_le : wad ≤ sbal) (hp₀ : [sbal, wad, wad, src] <<+ s₀.stk) :
     Line.Run e s₀ transferFromUpdateSbal sₙ →
-    ( Decrease (toAddr src) wad (s₀.stor e.cta).rest (sₙ.stor e.cta).rest ∧
-      wad ≤ (s₀.stor e.cta).rest (toAddr src) ) := by
+    ( Decrease src.toAdr wad (s₀.stor e.cta).rest (sₙ.stor e.cta).rest ∧
+      wad ≤ (s₀.stor e.cta).rest src.toAdr ) := by
   lexen 2; lstor; intro h₂
   have hp₁ : [src, sbal - wad, wad, src] <<+ s₁.stk := by lpfx
   have h_ow : Overwrite src (sbal - wad) (s₁.stor e.cta) (sₙ.stor e.cta) :=
@@ -206,11 +217,11 @@ lemma of_transferFromUpdateSbal {e s₀ sₙ} {sbal wad src}
   simp [Storage.rest]; constructor
   · intro a; constructor <;> intro ha
     · rw [← ha]; simp
-      rw [B256.toB256_toAdr h_src, ← h_sbal]
+      rw [toB256_toAdr h_src, ← h_sbal]
       apply (h_ow src).left rfl
-    · apply (h_ow <| Addr.toWord a).right
-      intro hc; apply ha; rw [← toAddr_toWord a, hc]
-  · rw [B256.toB256_toAdr h_src, ← h_sbal]; exact h_le
+    · apply (h_ow <| Adr.toB256 a).right
+      intro hc; apply ha; rw [← toAdr_toB256 a, hc]
+  · rw [toB256_toAdr h_src, ← h_sbal]; exact h_le
 
 lemma updateAllowance_inv_stor_rest {wad dst} {e s r}
     (hs : [wad, dst] <<+ s.stk) :
@@ -230,9 +241,9 @@ lemma updateAllowance_inv_stor_rest {wad dst} {e s r}
     intro h_eq; simp [h_eq] at h_hash; clear h_eq;
     apply prepend_sload_next_elim [_, _] (_ = _)
     intro amnt; pexen 7
-    have hs₄ : [~ amnt =? 0, amnt, wad, hash] <<+ s₄.stk := by lpfx
+    have hs₄ : [~~~ amnt =? 0, amnt, wad, hash] <<+ s₄.stk := by lpfx
     lstor; cstate s₃; apply branch_elim' (_ = _) hs₄ <;> intro h
-    · intro h₅; rw [Func.of_inv State.stor Result.stor _ h₅]; prog_inv
+    · intro h₅; rw [Func.of_inv Desc.stor Result.stor _ h₅]; prog_inv
     · clear h; pexen 4;
       have hs₅ : [amnt <? wad, amnt, wad, hash] <<+ s₅.stk := by lpfx
       lstor; cstate s₄; apply rev_branch_elim' (_ = _) hs₅
@@ -240,12 +251,12 @@ lemma updateAllowance_inv_stor_rest {wad dst} {e s r}
       have hs₆ : [hash, amnt - wad] <<+ s₆.stk := by lpfx
       lstor; cstate s₅; pexen 1; intro h₈
       rw [sstore_inv_stor_rest h_hash hs₆ <| of_run_singleton' h₇]
-      rw [Func.of_inv State.stor Result.stor _ h₈]; prog_inv
-  · intro _ h; rw [Func.of_inv State.stor Result.stor _ h]; prog_inv
+      rw [Func.of_inv Desc.stor Result.stor _ h₈]; prog_inv
+  · intro _ h; rw [Func.of_inv Desc.stor Result.stor _ h]; prog_inv
 
-lemma transfer_of_transferFrom {e : Env} {s : State} {r : Result} :
+lemma transfer_of_transferFrom {e : Env} {s : Desc} {r : Result} :
     Func.Run c e s transferFrom r →
-    ∃ (x : Word) (a a' : Addr),
+    ∃ (x : B256) (a a' : Adr),
       Transfer (s.stor e.cta).rest a x a' (r.stor e.cta).rest := by
   rename' s => s₀; apply cdl_prepend_elim; intro src
   have hp₀ : [] <<+ s₀.stk := nil_pref; pexec [_, _]
@@ -265,7 +276,7 @@ lemma transfer_of_transferFrom {e : Env} {s : State} {r : Result} :
   lstor; cstate s₄
   apply rev_branch_elim' (∃ _, _) hp₅; intro h_eq
   have h_le : wad ≤ sbal := by
-    rw [← Bits.not_lt]; apply (Ne.ite_eq_right_iff Bits.zero_ne_succ.symm).mp h_eq
+    rw [← B256.not_lt]; apply (Ne.ite_eq_right_iff B256.zero_ne_one.symm).mp h_eq
   clear h_eq; pexen 1
   have hp₆ : [sbal, wad, wad, src] <<+ s₆.stk := by lpfx
   lstor; cstate s₅; pexec transferFromUpdateSbal
@@ -284,18 +295,18 @@ lemma transfer_of_transferFrom {e : Env} {s : State} {r : Result} :
     revert h₁₁; apply append_sload_cons_elim [_]
     intro dst_bal; intro h₁₁; lpfx
   intro h₁₂
-  refine' ⟨wad, toAddr src, toAddr dst, h_le', (s₁₀.stor e.cta).rest, h_dec, _⟩
+  refine' ⟨wad, src.toAdr, dst.toAdr, h_le', (s₁₀.stor e.cta).rest, h_dec, _⟩
   have h_eq : (s₁₁.stor e.cta).rest = (r.stor e.cta).rest := by
     revert h₁₂; cstate s₁₀; pexec transferFromLog
     have hp₁₂ : [wad, src] <<+ s₁₂.stk := by lpfx
     lstor; apply updateAllowance_inv_stor_rest hp₁₂
   rw [← h_eq]; apply incrAt_of_incrWbal h_dst h₁₁ <| pref_trans ⟨_, rfl⟩ hp₁₀
 
-theorem of_transferTestDst {e : Env} {s s' : State} :
+theorem of_transferTestDst {e : Env} {s s' : Desc} :
   Line.Run e s transferTestDst s' →
   ∃ na_dst dst,
     ([na_dst, dst] <<+ s'.stk) ∧
-    (na_dst = 0 ↔ ValidAddr dst) := by
+    (na_dst = 0 ↔ ValidAdr dst) := by
   rename' s => s₀; lexec (arg 0)
   rcases Stack.push_of_cdl h₁ with ⟨dst, h_push⟩; clear h₁
   have hp₁ : [dst] <<+ s₁.stk := pref_of_split h_push
@@ -306,35 +317,31 @@ theorem of_transferTestDst {e : Env} {s s' : State} :
     with ⟨na_dst, h_pfx, h_iff⟩; clear h hp₂
   refine ⟨_, _, h_pfx, h_iff⟩
 
-lemma Bits.zero_ne_one {n} : (0 : Bits (n + 1)) ≠ (1 : Bits (n + 1)) := by
-  apply Bits.zero_ne_succ
-
 theorem of_transferTestLt {e s s'} {dst} (h_stk : [dst] <<+ s.stk) :
     Line.Run e s transferTestLt s' →
     ∃ lt? caller wad,
       ([lt?, caller, s.stor e.cta caller - wad, wad, dst] <<+ s'.stk) ∧
       (lt? = 0 ↔ wad ≤ s.stor e.cta caller) ∧
-      ValidAddr caller := by
+      ValidAdr caller := by
   rename' s => s₀, h_stk => hp₀; lexec (arg 1)
   rcases Stack.push_of_cdl h₁ with ⟨wad, h_push⟩
   have hp₁ : [wad, dst] <<+ s₁.stk := append_pref h_push hp₀
   lstor; cstate s₀; lexec [_, _]
-  have hp₂ : [Addr.toWord e.cla, Addr.toWord e.cla, wad, dst] <<+ s₂.stk := by lpfx
+  have hp₂ : [Adr.toB256 e.cla, Adr.toB256 e.cla, wad, dst] <<+ s₂.stk := by lpfx
   lstor; cstate s₁; lexec [_]
-  have hp₃ : [s₂.stor e.cta (Addr.toWord e.cla), Addr.toWord e.cla, wad, dst] <<+ s₃.stk :=
+  have hp₃ : [s₂.stor e.cta (Adr.toB256 e.cla), Adr.toB256 e.cla, wad, dst] <<+ s₃.stk :=
     prefix_of_sload (opRun_of_instRun <| of_run_singleton h₃) hp₂
   lstor; cstate s₂; intro h
   have hp' :
-    [ if (s₃.stor e.cta (Addr.toWord e.cla) < wad) then 1 else 0, Addr.toWord e.cla,
-      s₃.stor e.cta (Addr.toWord e.cla) - wad, wad, dst ] <<+ s'.stk := by lpfx
+    [ if (s₃.stor e.cta (Adr.toB256 e.cla) < wad) then 1 else 0, Adr.toB256 e.cla,
+      s₃.stor e.cta (Adr.toB256 e.cla) - wad, wad, dst ] <<+ s'.stk := by lpfx
   lstor;
   refine'
-    ⟨ if (s'.stor e.cta (Addr.toWord e.cla) < wad) then 1 else 0,
-      Addr.toWord e.cla, wad, hp', _, validAddr_toWord _ ⟩
-  rw [Ne.ite_eq_right_iff Bits.zero_ne_one.symm, Bits.not_lt]
+    ⟨ if (s'.stor e.cta (Adr.toB256 e.cla) < wad) then 1 else 0,
+      Adr.toB256 e.cla, wad, hp', _, validAdr_toB256 _ ⟩
+  rw [Ne.ite_eq_right_iff B256.zero_ne_one.symm, B256.not_lt]
 
-
-theorem transfer_of_transfer {e : Env} {s : State} {r : Result} :
+theorem transfer_of_transfer {e : Env} {s : Desc} {r : Result} :
     Func.Run c e s transfer r →
     ∃ x a a', Transfer (s.stor e.cta).rest a x a' (r.stor e.cta).rest := by
   simp only [Transfer, Increase]
@@ -360,17 +367,17 @@ theorem transfer_of_transfer {e : Env} {s : State} {r : Result} :
     apply frel_of_sstore h hp₄
   clear hp₄ h₅; intro h_run'
   refine'
-    ⟨wad, toAddr caller, toAddr dst, _, (s₅.stor e.cta).rest, _, _ ⟩
-  · simp [Storage.rest]; rw [B256.toB256_toAdr h_caller]; exact h_le
+    ⟨wad, caller.toAdr, dst.toAdr, _, (s₅.stor e.cta).rest, _, _ ⟩
+  · simp [Storage.rest]; rw [toB256_toAdr h_caller]; exact h_le
   · apply frel_of_frel _ <| frel_to_address h_caller <| (hs₅ e.cta).left rfl
-    simp [Storage.rest, B256.toB256_toAdr h_caller]
+    simp [Storage.rest, toB256_toAdr h_caller]
   · revert h_run'; pexec incrWbal; intro hr
     have h : s₆.stor = r.stor := by apply Func.of_inv _ _ _ hr; prog_inv
     rw [← h]; apply incrAt_of_incrWbal h_dst h₆ hp₅
 
 lemma of_prepApprove {e s s'} :
     Line.Run e s prepApprove s' →
-    ∃ vx x y, ([vx, x, y] <<+ s'.stk) ∧ (vx = 0 ↔ ¬ ValidAddr x) := by
+    ∃ vx x y, ([vx, x, y] <<+ s'.stk) ∧ (vx = 0 ↔ ¬ ValidAdr x) := by
   lexen 7;
   have hp₁ : [] <<+ s₁.stk := nil_pref
   cstate s; apply cdl_append_elim; intro wad; lexen 3
@@ -414,49 +421,49 @@ lemma approve_inv_wbal {e s r} (h_run : Func.Run c e s approve r) :
     apply Func.of_inv _ _ _ h_run'; prog_inv
   rw [← h_r_stor]; apply hh
 
-lemma transferFrom_inv_bal : Func.Inv State.bal Result.bal transferFrom := by prog_inv
+lemma transferFrom_inv_bal : Func.Inv Desc.bal Result.bal transferFrom := by prog_inv
 
-lemma transfer_inv_bal : Func.Inv State.bal Result.bal transfer := by prog_inv
+lemma transfer_inv_bal : Func.Inv Desc.bal Result.bal transfer := by prog_inv
 
-lemma solvent_zero_of_solvent {s : Storage} {v : Word} {b : Word}
+lemma solvent_zero_of_solvent {s : Storage} {v : B256} {b : B256}
     (h : s.Solvent v b) : s.Solvent 0 b := by
-  simp [Storage.Solvent, Bits.toNat_zero]
+  simp [Storage.Solvent, B256.toNat_zero]
   apply Nat.le_trans (Nat.le_add_right _ _) h
 
-lemma storage_solvent_zero_of_state_solvent {s : State} {a e}
+lemma storage_solvent_zero_of_state_solvent {s : Desc} {a e}
     (h : s.Solvent a e) : (s.stor a).Solvent 0 (s.bal a) := by
-  by_cases h' : e.cta = a <;> simp [State.Solvent, h'] at h
+  by_cases h' : e.cta = a <;> simp [Desc.Solvent, h'] at h
   · apply solvent_zero_of_solvent h
   · exact h
 
-lemma result_solvent_of_state_solvent' {e : Env} {s : State} {r : Result}
+lemma result_solvent_of_state_solvent' {e : Env} {s : Desc} {r : Result}
     (h_sv : s.Solvent e.cta e)
     (h_sum : wbsum (s.stor e.cta) = wbsum (r.stor e.cta))
     (h_bal : s.bal e.cta = r.bal e.cta) : r.Solvent e.cta := by
   apply @solvent_zero_of_solvent _ e.clv
-  simp [State.Solvent, Storage.Solvent] at *
+  simp [Desc.Solvent, Storage.Solvent] at *
   rw [← h_sum, ← h_bal]; exact h_sv
 
-lemma result_solvent_of_state_solvent {e : Env} {s : State} {r : Result} :
+lemma result_solvent_of_state_solvent {e : Env} {s : Desc} {r : Result} :
     (s.stor e.cta).rest = (r.stor e.cta).rest →
       s.bal e.cta = r.bal e.cta →
       s.Solvent e.cta e → r.Solvent e.cta := by
-  simp [State.Solvent, Result.Solvent]
+  simp [Desc.Solvent, Result.Solvent]
   intros h_wbsum h_bal h_solvent
   apply @solvent_zero_of_solvent _ e.clv
   simp [Storage.Solvent, wbsum]
   rw [← h_wbsum, ← h_bal]; exact h_solvent
 
-lemma approve_inv_bal : Func.Inv State.bal Result.bal approve := by prog_inv
+lemma approve_inv_bal : Func.Inv Desc.bal Result.bal approve := by prog_inv
 
 theorem approve_inv_solvent {e s r} (h : Func.Run c e s approve r)
     (h' : s.Solvent e.cta e) : r.Solvent e.cta := by
   apply result_solvent_of_state_solvent (approve_inv_wbal h) _ h'
   rw [approve_inv_bal h]
 
-lemma nof_of_solvent {s a e} (h : State.Solvent s a e) : SumNof (s.stor a).rest := by
-  apply lt_of_le_of_lt _ (Bits.toNat_lt_pow <| s.bal a)
-  simp [State.Solvent, Storage.Solvent] at h
+lemma nof_of_solvent {s a e} (h : Desc.Solvent s a e) : SumNof (s.stor a).rest := by
+  apply lt_of_le_of_lt _ (B256.toNat_lt_size <| s.bal a)
+  simp [Desc.Solvent, Storage.Solvent] at h
   by_cases h' : e.cta = a
   · apply le_trans (Nat.le_add_right _ _) (h.left h')
   · apply le_trans (Nat.le_add_right _ _) (h.right h')
@@ -481,7 +488,7 @@ theorem transferFrom_inv_solvent {e s r}
 syntax "simple_solvent" : tactic
 macro_rules
 | `(tactic| simple_solvent) =>
-  `(tactic| simp [State.Solvent]; intro h h';
+  `(tactic| simp [Desc.Solvent]; intro h h';
             apply solvent_zero_of_solvent <| solvent_of_same_stor h' _ _ <;>
             apply congr_fun <| Func.of_inv _ _ (by prog_inv) h )
 
@@ -503,32 +510,32 @@ theorem decimals_inv_solvent {e s r} :
 theorem totalSupply_inv_solvent {e s r} :
   Func.Run c e s totalSupply r → s.Solvent e.cta e → r.Solvent e.cta := by simple_solvent
 
-theorem wbsum_after_deposit {e : Env} {s : State} {r}
+theorem wbsum_after_deposit {e : Env} {s : Desc} {r}
     (h_nof : (wbsum (s.stor e.cta)) + e.clv.toNat < 2 ^ 256) :
     Func.Run c e s deposit r →
     wbsum (s.stor e.cta) + e.clv.toNat = wbsum (r.stor e.cta) := by
   have hp0 : [] <<+ s.stk := nil_pref; pexen 1
-  have hp₁ : [Addr.toWord e.cla] <<+ s₁.stk := by lpfx
+  have hp₁ : [Adr.toB256 e.cla] <<+ s₁.stk := by lpfx
   lstor; cstate s; pexen 1
   rcases prefix_of_sload' (of_run_singleton' h₂) hp₁ with ⟨cbal, h_stk, h_cbal⟩
   lstor; cstate s₁; pexen 3
-  have hp₃ : [Addr.toWord e.cla, e.clv + cbal] <<+ s₃.stk := by lpfx
+  have hp₃ : [Adr.toB256 e.cla, e.clv + cbal] <<+ s₃.stk := by lpfx
   lstor; cstate s₂; pexen 1; intro h₅
   have h_stor : s₄.stor = r.stor := by apply Func.of_inv _ _ _ h₅; prog_inv
   rw [← h_stor]; clear h_stor h₅
   have h_incr : Increase e.cla e.clv (s₃.stor e.cta).rest (s₄.stor e.cta).rest := by
     have h := (frel_of_sstore (of_run_singleton' h₄) hp₃ e.cta).left rfl
     intro x; constructor <;> intro hx
-    · simp [Storage.rest]; rw [← hx, ← h_cbal, Bits.add_comm]
-      exact (h (Addr.toWord e.cla)).left rfl
-    · apply (h (Addr.toWord x)).right <| mt (@Addr.toWord_inj e.cla x) hx
-  have h_nof' : Nof (Storage.rest (s₃.stor e.cta) e.cla) e.clv := by
-    simp only [Nof ]; apply lt_of_le_of_lt _ h_nof
+    · simp [Storage.rest]; rw [← hx, ← h_cbal, B256.add_comm]
+      exact (h (Adr.toB256 e.cla)).left rfl
+    · apply (h (Adr.toB256 x)).right <| mt (@Adr.toB256_inj e.cla x) hx
+  have h_nof' : B256.Nof (Storage.rest (s₃.stor e.cta) e.cla) e.clv := by
+    simp only [B256.Nof ]; apply lt_of_le_of_lt _ h_nof
     rw [Nat.add_le_add_iff_right]; apply le_sum
   exact sum_add_assoc h_incr h_nof'
 
 lemma solvent_zero_iff {s b} : Storage.Solvent s 0 b ↔ wbsum s ≤ b.toNat := by
-  simp [Storage.Solvent, wbsum, Bits.toNat_zero]
+  simp [Storage.Solvent, wbsum, B256.toNat_zero]
 
 theorem deposit_inv_solvent {e s r} :
     Func.Run c e s deposit r → s.Solvent e.cta e → r.Solvent e.cta := by
@@ -537,9 +544,9 @@ theorem deposit_inv_solvent {e s r} :
   have h_bal : s.bal = r.bal := by
     apply Func.of_inv _ _ _ h_run; prog_inv
   rw [solvent_zero_iff, ← h_bal]
-  simp [State.Solvent, Storage.Solvent] at h_solvent
-  have h_lt : wbsum (s.stor e.cta) + Bits.toNat e.clv < 2 ^ 256 :=
-    lt_of_le_of_lt h_solvent (Bits.toNat_lt_pow _)
+  simp [Desc.Solvent, Storage.Solvent] at h_solvent
+  have h_lt : wbsum (s.stor e.cta) + B256.toNat e.clv < 2 ^ 256 :=
+    lt_of_le_of_lt h_solvent (B256.toNat_lt_size _)
   rw [← wbsum_after_deposit h_lt h_run]
   apply h_solvent
 
@@ -549,29 +556,29 @@ lemma of_withdrawLoadCheck {e : Env} {s s'} (h : Line.Run e s withdrawLoadCheck 
     s.code = s'.code ∧
     ∃ wad cbal,
       ([cbal <? wad, cbal, wad, wad] <<+ s'.stk) ∧
-      (cbal = s'.stor e.cta (Addr.toWord e.cla)) := by
+      (cbal = s'.stor e.cta (Adr.toB256 e.cla)) := by
   refine' ⟨_, _, _, _⟩ <;> try {linv}; revert h
   apply cdl_append_elim (∃ _, _); intro wad; lexen 3
   have hs₀ : [] <<+ s.stk := nil_pref
-  have hs₁ : [Addr.toWord e.cla, wad, wad] <<+ s₁.stk := by lpfx
+  have hs₁ : [Adr.toB256 e.cla, wad, wad] <<+ s₁.stk := by lpfx
   cstate s; lexen 1
   rcases prefix_of_sload' (of_run_singleton' h₂) hs₁ with ⟨cbal, hs₂, h_cbal⟩
   lstor; cstate s₁; intro h₃
   have hs₃ : [cbal <? wad, cbal, wad, wad] <<+ s'.stk := by lpfx
   lstor; refine ⟨wad, cbal, hs₃, h_cbal⟩
 
-lemma precond_of_precond {a e} {s s' : State}
+lemma precond_of_precond {a e} {s s' : Desc}
     (h : Precond a e s) (h_bal : s.bal = s'.bal)
     (h_stor : s.stor = s'.stor) (h_code : s.code = s'.code) :
     Precond a e s' := by
   refine' ⟨_, _, _⟩
   · rw [← h_code]; apply h.code
   · rw [← h_bal]; apply h.nof
-  · simp [State.Solvent]; rw [← h_stor, ← h_bal]; apply h.solvent
+  · simp [Desc.Solvent]; rw [← h_stor, ← h_bal]; apply h.solvent
 
 lemma solvent_of_callPrep {e s ep sp r sw send_gas send_amnt}
     (cr : Xinst.Run' e s ep sp .call r sw)
-    (h_stk : [send_gas, (Addr.toWord e.cla), send_amnt] <<+ s.stk)
+    (h_stk : [send_gas, (Adr.toB256 e.cla), send_amnt] <<+ s.stk)
     (h_sv : Storage.Solvent (s.stor e.cta) 0 (s.bal e.cta - send_amnt)) :
     sp.Solvent e.cta ep := by
   have h_clv : ep.clv = send_amnt := by
@@ -586,16 +593,16 @@ lemma solvent_of_callPrep {e s ep sp r sw send_gas send_amnt}
   rcases h_di with ⟨h_le, s', hd, hi⟩
   constructor <;> (intro h_cta; rw [← Xinst.prep_inv_stor cr])
   · conv => arg 3; tactic => apply ((hi e.cta).left h_cta).symm
-    simp [Storage.Solvent, Bits.toNat_zero] at h_sv
-    rw [Bits.toNat_sub_eq_of_le _ _ h_le] at h_sv
+    simp [Storage.Solvent, B256.toNat_zero] at h_sv
+    rw [B256.toNat_sub_eq_of_le _ _ h_le] at h_sv
     rw [← (hd e.cta).left rfl]
-    simp [Storage.Solvent, Bits.sub_add_cancel]
-    rw [← Nat.sub_add_cancel (Bits.toNat_le_toNat _ _ h_le), h_clv]
+    simp [Storage.Solvent, B256.sub_add_cancel]
+    rw [← Nat.sub_add_cancel (B256.toNat_le_toNat h_le), h_clv]
     apply Nat.add_le_add_right h_sv send_amnt.toNat
   · rw [← (hi e.cta).right h_cta, ← (hd e.cta).left rfl]; exact h_sv
 
-def Exec.InvDepth (k : Nat) (ca : Addr) (p : Prog)
-    (σ : Env → State → Prop) (ρ : Env → Result → Prop) : Prop :=
+def Exec.InvDepth (k : Nat) (ca : Adr) (p : Prog)
+    (σ : Env → Desc → Prop) (ρ : Env → Result → Prop) : Prop :=
   ForallDeeperAt k ca p (λ e s _ r _ => σ e s → ρ e r)
 
 lemma of_send_to_caller' {e : Env} {s sf} {wad}
@@ -608,15 +615,15 @@ lemma of_send_to_caller' {e : Env} {s sf} {wad}
     Line.Run e s sendToCaller sf →
     Storage.Solvent (sf.stor e.cta) 0 (sf.bal e.cta) := by
   have h_nof' : wbsum (s.stor e.cta) + wad.toNat < 2 ^ 256 := by
-    simp [Storage.Solvent, Bits.toNat_zero] at h_sv
-    rw [Bits.toNat_sub_eq_of_le _ _ h_le] at h_sv
+    simp [Storage.Solvent, B256.toNat_zero] at h_sv
+    rw [B256.toNat_sub_eq_of_le _ _ h_le] at h_sv
     apply lt_of_le_of_lt <| Nat.add_le_add_right h_sv wad.toNat
-    rw [Nat.sub_add_cancel <| Bits.toNat_le_toNat _ _ h_le]
-    apply Bits.toNat_lt_pow
+    rw [Nat.sub_add_cancel <| B256.toNat_le_toNat  h_le]
+    apply B256.toNat_lt_size
   lexen 7
   have hs₁ :
-    [ Bytes.toBits 32 [Ox x5 x2, Ox x0 x8],
-      Addr.toWord e.cla, wad, 0, 0, 0, 0 ] <<+ s₁.stk := by lpfx
+      [B8L.toB256 [0x52, 0x08], e.cla.toB256, wad, 0, 0, 0, 0] <<+ s₁.stk :=
+    by lpfx
   have hc₁ : s.code = s₁.code := by apply Line.of_inv _ _ asm; line_inv
   rw [hc₁] at h_code; clear hc₁
   have hb₁ : s.bal = s₁.bal := by linv
@@ -627,8 +634,8 @@ lemma of_send_to_caller' {e : Env} {s sf} {wad}
     have h_weth' : some (sp.code e.cta) = Prog.compile weth := by
       rw [← Xinst.prep_inv_code h_rm, h_code]
     have h_teth' : SumNof sp.bal := Xinst.prep_inv_nof h_rm h_nof
-    have h_sv : State.Solvent sp e.cta ep := by
-      have hs : [ Bytes.toBits 32 [Ox x5 x2, Ox x0 x8], Addr.toWord e.cla, wad] <<+ s₁.stk := by
+    have h_sv : Desc.Solvent sp e.cta ep := by
+      have hs : [ B8L.toB256 [0x52, 0x08], Adr.toB256 e.cla, wad] <<+ s₁.stk := by
         apply pref_trans _ hs₁; show_pref
       apply solvent_of_callPrep h_rm hs h_sv
     have h_pc : Precond e.cta ep sp := by refine' ⟨h_weth', h_teth', h_sv⟩
@@ -644,12 +651,12 @@ lemma of_send_to_caller' {e : Env} {s sf} {wad}
       · apply solvent_zero_of_solvent (h_sv.left h_cta)
       · apply h_sv.right h_cta
   · rw [← fail_inv_bal hf, ← fail_inv_stor hf]; apply le_trans h_sv
-    rw [Bits.toNat_sub_eq_of_le _ _ h_le]; apply Nat.sub_le
+    rw [B256.toNat_sub_eq_of_le _ _ h_le]; apply Nat.sub_le
 
 lemma solvent_of_withdraw_update_bal' {e : Env} {s s'} {lt? cbal wad}
     (h_pc : Precond e.cta e s)
     (h_stk : [lt?, cbal, wad, wad] <<+ s.stk)
-    (h_cbal : cbal = s.stor e.cta (Addr.toWord e.cla))
+    (h_cbal : cbal = s.stor e.cta (Adr.toB256 e.cla))
     (h_le : wad ≤ cbal)
     (h_run : Line.Run e s [pop, sub, caller, sstore] s') :
     wad ≤ s'.bal e.cta ∧
@@ -657,31 +664,31 @@ lemma solvent_of_withdraw_update_bal' {e : Env} {s s'} {lt? cbal wad}
   revert h_run; lexen 3
   have h_pc' : Precond e.cta e s₁ := by
     apply precond_of_precond h_pc <;> (apply Line.of_inv _ _ h₁; line_inv)
-  have hp₁ : [Addr.toWord e.cla, cbal - wad, wad] <<+ s₁.stk := by lpfx
+  have hp₁ : [Adr.toB256 e.cla, cbal - wad, wad] <<+ s₁.stk := by lpfx
   lstor; cstate s; intro h₂
   have h_dec : Decrease e.cla wad (s₁.stor e.cta).rest (s'.stor e.cta).rest := by
     have h := (frel_of_sstore (of_run_singleton' h₂) hp₁ e.cta).left rfl
     intro a; constructor <;> (intro ha; simp [Storage.rest])
-    · rw [← ha, ← h_cbal]; apply (h (Addr.toWord e.cla)).left rfl
-    · apply (h (Addr.toWord a)).right <| mt Addr.toWord_inj ha
+    · rw [← ha, ← h_cbal]; apply (h (Adr.toB256 e.cla)).left rfl
+    · apply (h (Adr.toB256 a)).right <| mt Adr.toB256_inj ha
   have h_eq : wbsum (s₁.stor e.cta) - wad.toNat = wbsum (s'.stor e.cta) := by
     apply sum_sub_assoc h_dec
     simp [Storage.rest]; rw [← h_cbal]; exact h_le
   clear h_dec
   have h_le' : wad.toNat ≤ wbsum (s₁.stor e.cta) := by
-    apply Nat.le_trans (Bits.toNat_le_toNat _ _ h_le); rw [h_cbal]
-    apply @le_sum _ _ (s₁.stor e.cta).rest
+    apply Nat.le_trans (B256.toNat_le_toNat  h_le); rw [h_cbal]
+    apply @le_sum (s₁.stor e.cta).rest
   have h_bal : s₁.bal = s'.bal := by apply Line.of_inv _ _ h₂; line_inv
   rw [← h_bal]
   have h_le'' : wad.toNat ≤ (s₁.bal e.cta).toNat := by
     apply le_trans h_le' <| le_trans _ <| h_pc'.solvent.left rfl
     apply Nat.le_add_right
-  have h_le''' := Bits.of_toNat_le_toNat h_le''
+  have h_le''' := B256.le_of_toNat_le_toNat h_le''
   refine' ⟨h_le''', _⟩
-  · simp [Storage.Solvent, Bits.toNat_zero]
-    rw [Bits.toNat_sub_eq_of_le _ _ h_le''', ← h_eq, Nat.sub_le_sub_iff_right h_le'']
+  · simp [Storage.Solvent, B256.toNat_zero]
+    rw [B256.toNat_sub_eq_of_le _ _ h_le''', ← h_eq, Nat.sub_le_sub_iff_right h_le'']
     have h' := solvent_zero_of_solvent <| (Precond.solvent asm).left rfl
-    simp [Storage.Solvent, Bits.toNat_zero] at h'; exact h'
+    simp [Storage.Solvent, B256.toNat_zero] at h'; exact h'
 
 theorem withdraw_inv_solvent {e : Env} {s r} (h_pc : Precond e.cta e s)
     (ih : Exec.InvDepth e.exd e.cta weth (Precond e.cta) (Postcond e.cta)) :
@@ -694,31 +701,31 @@ theorem withdraw_inv_solvent {e : Env} {s r} (h_pc : Precond e.cta e s)
   apply rev_branch_elim' (Result.Solvent _ _) hp₁
   intro h_eq
   have h_wad : wad ≤ cbal := by
-    rw [← Bits.not_lt];
-    apply (Ne.ite_eq_right_iff <| Ne.symm Bits.zero_ne_one).mp h_eq
+    rw [← B256.not_lt];
+    apply (Ne.ite_eq_right_iff <| Ne.symm B256.zero_ne_one).mp h_eq
   clear h_eq; pexen 4
   rcases solvent_of_withdraw_update_bal' h_pc hp₁ h_cbal h_wad h₂ with ⟨h_le, h_sv⟩
   clear h_cbal h_wad
   have h_code : some (s₂.code e.cta) = Prog.compile weth := by
-    rw [← Line.of_inv State.code (by line_inv) h₂]; apply h_pc.code
+    rw [← Line.of_inv Desc.code (by line_inv) h₂]; apply h_pc.code
   have h_nof : sum s₂.bal < 2 ^ 256 := by
-    rw [← Line.of_inv State.bal (by line_inv) h₂]; apply h_pc.nof
+    rw [← Line.of_inv Desc.bal (by line_inv) h₂]; apply h_pc.nof
   have hp₂ : [wad] <<+ s₂.stk := by lpfx
   cstate s₁; pexec sendToCaller; intro h₄
   unfold Result.Solvent
-  rw [← Func.of_inv State.stor Result.stor (by prog_inv) h₄]
-  rw [← Func.of_inv State.bal Result.bal (by prog_inv) h₄]
+  rw [← Func.of_inv Desc.stor Result.stor (by prog_inv) h₄]
+  rw [← Func.of_inv Desc.bal Result.bal (by prog_inv) h₄]
   apply of_send_to_caller' ih hp₂ h_code h_nof h_le h_sv h₃
 
 lemma Line.inv_solvent {e e' s l s' a}
-    (h_bal : Line.Inv State.bal l) (h_stor : Line.Inv State.stor l)
-    (h_sv : State.Solvent s a e) (h_run : Line.Run e' s l s') : State.Solvent s' a e := by
-  unfold State.Solvent; rw [← h_bal h_run, ← h_stor h_run]; exact h_sv
+    (h_bal : Line.Inv Desc.bal l) (h_stor : Line.Inv Desc.stor l)
+    (h_sv : Desc.Solvent s a e) (h_run : Line.Run e' s l s') : Desc.Solvent s' a e := by
+  unfold Desc.Solvent; rw [← h_bal h_run, ← h_stor h_run]; exact h_sv
 
 lemma run_inv_cond (f : Func)
-    (h : ∀ {e : Env} {s : State} {r : Result}, Func.Run c e s f r →
-       State.Solvent s e.cta e → Result.Solvent r e.cta) :
-    ∀ {e : Env} {s : State} {r : Result}, Func.Run c e s f r →
+    (h : ∀ {e : Env} {s : Desc} {r : Result}, Func.Run c e s f r →
+       Desc.Solvent s e.cta e → Result.Solvent r e.cta) :
+    ∀ {e : Env} {s : Desc} {r : Result}, Func.Run c e s f r →
       Precond e.cta e s → Postcond e.cta e r := by
   intro e s r h_run h_pc
   refine' ⟨_, Func.inv_nof h_run h_pc.nof, h h_run h_pc.solvent⟩
@@ -734,8 +741,8 @@ lemma weth_inv' {e s r}
   pexec fsig
   have hs₁ : Precond e.cta e s₁ := by
     refine' ⟨_, _, _⟩
-    · rw [← Line.of_inv State.code (by line_inv) h₁, hs.code]
-    · rw [← Line.of_inv State.bal (by line_inv) h₁]; exact hs.nof
+    · rw [← Line.of_inv Desc.code (by line_inv) h₁, hs.code]
+    · rw [← Line.of_inv Desc.bal (by line_inv) h₁]; exact hs.nof
     · apply Line.inv_solvent _ _ hs.solvent h₁ <;> line_inv
   clear hs
   apply
@@ -748,13 +755,13 @@ lemma weth_inv' {e s r}
     (clear h₁ hs₁ ih e s r s₁; simp)
   · intro e s x s' h_pc h_inv h_run;
     refine' ⟨⟨_, _, _⟩, h_inv⟩
-    · rw [← Line.of_inv State.code (by line_inv) h_run]; apply h_pc.code
-    · rw [← Line.of_inv State.bal (by line_inv) h_run]; apply h_pc.nof
+    · rw [← Line.of_inv Desc.code (by line_inv) h_run]; apply h_pc.code
+    · rw [← Line.of_inv Desc.bal (by line_inv) h_run]; apply h_pc.nof
     · apply Line.inv_solvent _ _ h_pc.solvent h_run <;> line_inv
   · intro e s x s' h_pc h_inv h_run;
     refine' ⟨⟨_, _, _⟩, h_inv⟩
-    · rw [← Line.of_inv State.code (by line_inv) h_run]; apply h_pc.code
-    · rw [← Line.of_inv State.bal (by line_inv) h_run]; apply h_pc.nof
+    · rw [← Line.of_inv Desc.code (by line_inv) h_run]; apply h_pc.code
+    · rw [← Line.of_inv Desc.bal (by line_inv) h_run]; apply h_pc.nof
     · apply Line.inv_solvent _ _ h_pc.solvent h_run <;> line_inv
   · intro e s r h_pc _ h_run
     apply run_inv_cond _ deposit_inv_solvent h_run h_pc
@@ -778,10 +785,10 @@ lemma weth_inv' {e s r}
 lemma Xinst.wrap_inv_solvent {e s ep sp o r sw wa}
     (h : Xinst.Run' e s ep sp o r sw)
     (h_ne : e.cta ≠ wa) (h_sv : r.Solvent wa) : sw.Solvent wa e := by
-  simp [h_ne, State.Solvent];
-  cases h <;> {simp [State.wrap, State.wrap']; apply h_sv}
+  simp [h_ne, Desc.Solvent];
+  cases h <;> {simp [Desc.wrap, Desc.wrap']; apply h_sv}
 
-theorem weth_inv_solvent (wa : Addr) :
+theorem weth_inv_solvent (wa : Adr) :
     ∀ e s r,
       Exec e s 0 r →
       some (s.code wa) = Prog.compile weth →
@@ -805,7 +812,7 @@ theorem weth_inv_solvent (wa : Addr) :
       | fail => rw [← fail_inv_bal asm]; exact h_nof
       | jump => rw [← Jinst.inv_bal asm]; exact h_nof
       | push =>
-        have h := State.Rel.bal asm
+        have h := Desc.Rel.bal asm
         rw [← h]; exact h_nof
     · have h_sv := h_pc.solvent
       have h_nof := h_pc.nof
@@ -821,16 +828,16 @@ theorem weth_inv_solvent (wa : Addr) :
           storage_solvent_zero_of_state_solvent
             <| Xinst.prep_inv_solvent asm asm h_ne h_nof h_sv
       | fail =>
-        simp at *; unfold State.Solvent
+        simp at *; unfold Desc.Solvent
         rw [← fail_inv_bal asm, ← fail_inv_stor asm]; exact h_sv
       | jump =>
         have h := Jinst.inv_stor asm
         have h' := Jinst.inv_bal asm
-        unfold State.Solvent; rw [← h, ← h']; exact h_sv
+        unfold Desc.Solvent; rw [← h, ← h']; exact h_sv
       | push =>
-        have h := State.Rel.bal asm
-        have h' := State.Rel.stor asm
-        unfold State.Solvent; rw [← h, ← h']; exact h_sv
+        have h := Desc.Rel.bal asm
+        have h' := Desc.Rel.stor asm
+        unfold Desc.Solvent; rw [← h, ← h']; exact h_sv
   · intros e s ep sp o rx sw h_cr ha h_pc; constructor
     · constructor
       · rw [← Xinst.prep_inv_code h_cr, h_pc.code]
@@ -855,7 +862,7 @@ theorem weth_inv_solvent (wa : Addr) :
       · rw [← Linst.inv_code asm]; apply h_pc.code
       · exact Linst.inv_nof asm h_pc.nof
       · have h_sv : Storage.Solvent (s.stor wa) 0 (s.bal wa) := by
-          have h := h_pc.solvent; simp [State.Solvent, h_ne] at h; exact h
+          have h := h_pc.solvent; simp [Desc.Solvent, h_ne] at h; exact h
         have h_le : (s.bal wa).toNat ≤ (r.bal wa).toNat := by
           rename Linst.Run _ _ _ _ => h_run
           cases (asm : Linst) with
@@ -867,16 +874,16 @@ theorem weth_inv_solvent (wa : Addr) :
             by_cases ha : a = wa
             · have h_rw : r.bal wa = s.bal wa + s.bal e.cta := by
                 rw [(hd wa).right h_ne]; apply ((hi wa).left ha).symm
-              have hle : Nof  (s.bal wa) (s.bal e.cta) :=
+              have hle : B256.Nof (s.bal wa) (s.bal e.cta) :=
                 lt_of_le_of_lt (add_le_sum_of_ne s.bal h_ne.symm) h_pc.nof
-              rw [h_rw, Bits.toNat_add_eq_of_nof _ _ hle]; apply Nat.le_add_right
+              rw [h_rw, B256.toNat_add_eq_of_nof _ _ hle]; apply Nat.le_add_right
             · rw [(hd wa).right h_ne, (hi wa).right ha]
           -- | invalid => cases h_run
         unfold Result.Solvent; rw [← Linst.inv_stor asm]
         apply le_trans h_sv h_le
     · refine' ⟨h_pc.code, h_pc.nof, _⟩
       have h := h_pc.solvent
-      simp [State.Solvent, h_ne] at h
+      simp [Desc.Solvent, h_ne] at h
       apply h
 
 lemma transact_inv_solvent {ST RT w r wa}
@@ -912,15 +919,15 @@ lemma transact_inv_solvent {ST RT w r wa}
         have h_eq : w.bal wa + clv = bal wa := by
           rcases h_di with ⟨_, bal', hd, hi⟩
           rw [(hd wa).right h_wa, ← (hi wa).left h_eq]
-        have h_nof : Nof  (w.bal wa) clv := by
+        have h_nof : B256.Nof (w.bal wa) clv := by
           apply lt_of_le_of_lt _ <| h_nof
           apply le_trans _ <| add_le_sum_of_ne w.bal h_wa
           rw [Nat.add_comm, Nat.add_le_add_iff_right]
-          apply Bits.toNat_le_toNat
+          apply B256.toNat_le_toNat
           rcases h_di with ⟨h_le, _⟩; exact h_le
         rw [← h_eq]; simp [Storage.Solvent]
-        rw [Bits.toNat_add_eq_of_nof _ _ h_nof, Nat.add_le_add_iff_right]
-        simp [World.Solvent, Storage.Solvent, Bits.toNat_zero] at h_wb
+        rw [B256.toNat_add_eq_of_nof _ _ h_nof, Nat.add_le_add_iff_right]
+        simp [World.Solvent, Storage.Solvent, B256.toNat_zero] at h_wb
         apply h_wb
       · simp only []; intro h_ne
         have h_eq : w.bal wa = bal wa := by
@@ -931,7 +938,7 @@ lemma transact_inv_solvent {ST RT w r wa}
     apply le_trans h_wb
     rcases of_nof_of_transfer h_nof h_di with ⟨bal', hd, hi, h_nof'⟩
     rw [(hd wa).right h_wa]
-    apply Bits.toNat_le_toNat _ _ <| le_of_increase hi h_nof' _
+    apply B256.toNat_le_toNat  <| le_of_increase hi h_nof' _
   | fail => apply h_wb
 
 theorem transact_inv_sum_bal {sda rca w r} (h : Transact sda rca w r)
@@ -949,7 +956,7 @@ theorem transact_inv_sum_bal {sda rca w r} (h : Transact sda rca w r)
   | fail => rfl
 
 theorem transaction_inv_solvent
-    (wa : Addr) (w w' : World)
+    (wa : Adr) (w w' : World)
     (h_code : some (w.code wa) = weth.compile)
     (h_solv : w.Solvent wa)
     (h_bal : SumNof w.bal)
@@ -960,19 +967,19 @@ theorem transaction_inv_solvent
     cases Prog.compile_ne_nil h_code.symm
   have h_nof_bal :
     sum tx.bal + tx.vs.toNat + tx.vv.toNat + tx.vb.toNat < 2 ^ 256 := by
-    have h_nof' : Nof tx.vs tx.vv :=
+    have h_nof' : B256.Nof tx.vs tx.vv :=
       lt_of_le_of_lt (Nat.le_add_right _ _) tx.nof
-    have h_nof'' : Nof  (tx.vs + tx.vv) tx.vb := by
-      simp only [Nof ]; rw [Bits.toNat_add_eq_of_nof _ _ h_nof']; apply tx.nof
+    have h_nof'' :B256.Nof (tx.vs + tx.vv) tx.vb := by
+      simp only [B256.Nof]; rw [B256.toNat_add_eq_of_nof _ _ h_nof']; apply tx.nof
     have h_eq :
       (tx.vs + tx.vv + tx.vb).toNat =
         tx.vs.toNat + tx.vv.toNat + tx.vb.toNat := by
-      rw [Bits.toNat_add_eq_of_nof _ _ h_nof'', Bits.toNat_add_eq_of_nof _ _ h_nof']
+      rw [B256.toNat_add_eq_of_nof _ _ h_nof'', B256.toNat_add_eq_of_nof _ _ h_nof']
     have h_eq' :
       sum tx.bal + tx.vs.toNat + tx.vv.toNat + tx.vb.toNat = sum w.bal := by
       rw [Nat.add_assoc (sum _), Nat.add_assoc, ← h_eq]
-      have h_le : Bits.toNat (tx.vs + tx.vv + tx.vb) ≤ sum w.bal := by
-        apply le_trans <| Bits.toNat_le_toNat _ _ <| tx.le
+      have h_le : B256.toNat (tx.vs + tx.vv + tx.vb) ≤ sum w.bal := by
+        apply le_trans <| B256.toNat_le_toNat  <| tx.le
         apply le_sum
       rw [← sum_sub_assoc tx.decr tx.le, Nat.sub_add_cancel h_le]
     rw [h_eq']; apply h_bal
@@ -982,7 +989,7 @@ theorem transaction_inv_solvent
   have h_sv : Storage.Solvent (w.stor wa) 0 (tx.bal wa) := by
     rw [← (tx.decr wa).right h_ne]; apply h_solv
   have hq := transact_inv_solvent tx.act h_ne h_nof h_sv h_code
-  have h_nof' : Nof (tx.r.bal tx.sda) tx.vs := by
+  have h_nof' : B256.Nof (tx.r.bal tx.sda) tx.vs := by
     apply lt_of_le_of_lt _ h_nof_bal
     apply le_trans _ <| Nat.le_add_right _ _
     apply le_trans _ <| Nat.le_add_right _ _
@@ -994,9 +1001,9 @@ theorem transaction_inv_solvent
   rw [tx.stor]
   apply le_trans hq
   rw [(tx.incr wa).right h_ne]
-  apply Bits.toNat_le_toNat
-  have h_nof'' : Nof (tx.bal' tx.vla) tx.vv := by
-    simp only [Nof ]
+  apply B256.toNat_le_toNat
+  have h_nof'' : B256.Nof (tx.bal' tx.vla) tx.vv := by
+    simp only [B256.Nof]
     rw [ transact_inv_sum_bal tx.act h_nof,
          sum_add_assoc tx.incr h_nof' ] at h_nof_bal
     apply lt_of_le_of_lt _ h_nof_bal
