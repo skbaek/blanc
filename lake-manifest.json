@@ -5,7 +5,7 @@
    "type": "git",
    "subDir": null,
    "scope": "",
-   "rev": "985b2a7ad32c899e2e14804b89e03a83688b2b56",
+   "rev": "838a33bce11c2d7460080faf1846dfb7d8779372",
    "name": "elevm",
    "manifestFile": "lake-manifest.json",
    "inputRev": "ninst",

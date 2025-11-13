@@ -1011,3 +1011,327 @@ theorem transaction_inv_solvent
     apply Nat.add_le_add_right _ _
     apply le_sum
   apply le_of_increase tx.incr' h_nof''
+
+def State.bal (w : State) (a : Adr) : B256 := (w.get a).bal
+
+def State.codes (s : State) : Codes :=
+  ByteArray.toList ∘ s.getCode
+
+def State.stor (s : State) : Storages :=
+  λ a k => (s.getStor a).findD k 0
+
+def State.toWorld (s : State) : World :=
+  { code := ByteArray.toList ∘ s.getCode,
+    stor := λ a k => (s.getStor a).findD k 0,
+    bal  := s.bal }
+
+def BlockChain.toWorld (c : BlockChain) : World :=
+  { code := ByteArray.toList ∘ c.state.getCode
+    stor := λ a k => (c.state.getStor a).findD k 0,
+    bal  := c.state.bal }
+
+def State.Solvent (s : State) (wa : Adr) : Prop :=
+  Storage.Solvent (s.stor wa) 0 (s.bal wa)
+
+def BlockChain.Solvent (c : BlockChain) (wa : Adr) : Prop :=
+  c.state.Solvent wa
+
+lemma ByteArray.toList.loop_eq
+    {bs : ByteArray} {i : Nat} (r : List UInt8) :
+    ByteArray.toList.loop bs i r =
+    if i < bs.size then
+      ByteArray.toList.loop bs (i + 1) (bs.get! i :: r)
+    else
+      r.reverse := by
+  conv => lhs; unfold ByteArray.toList.loop
+
+lemma ByteArray.toList.loop_eq_of_lt
+    {bs : ByteArray} {i : Nat} (h : i < bs.size) (r : List UInt8) :
+    ByteArray.toList.loop bs i r
+      = ByteArray.toList.loop bs (i + 1) (bs.get! i :: r) := by
+  apply Eq.trans (ByteArray.toList.loop_eq r); rw [if_pos h]
+
+lemma ByteArray.toList.loop_eq_of_ge
+    {bs : ByteArray} {i : Nat} (h : i ≥ bs.size) (r : List UInt8) :
+    ByteArray.toList.loop bs i r = r.reverse := by
+  apply Eq.trans (ByteArray.toList.loop_eq r)
+  rw [if_neg]; rw [Nat.not_lt]; apply h
+
+
+lemma ByteArray.toList.loop_eq_append (m) :
+    ∀ n (xs ys : B8L),
+      m = (⟨⟨xs⟩⟩ : ByteArray).size - n →
+      ByteArray.toList.loop ⟨⟨xs⟩⟩ n ys = ys.reverse ++ xs.drop n := by
+  induction m with
+    | zero =>
+      intro n xs ys h
+      rw [Eq.comm, Nat.sub_eq_zero_iff_le] at h
+      rw [ByteArray.toList.loop_eq_of_ge h]
+      simp [List.drop_eq_nil_of_le h]
+    | succ m ih =>
+      intro n xs ys h
+      have lt := Nat.lt_of_sub_eq_succ h.symm
+      rw [ByteArray.toList.loop_eq_of_lt lt]
+      have eq : m = (⟨⟨xs⟩⟩ : ByteArray).size - (n + 1) := by omega
+      apply Eq.trans <| ih (n + 1) xs ((⟨⟨xs⟩⟩ : ByteArray).get! n :: ys) eq
+      rw [List.reverse_cons, List.append_assoc]
+      apply congr_arg₂ _ rfl
+      apply Eq.trans _ List.drop_eq_getElem?_toList_append.symm
+      apply congr_arg₂ _ _ rfl
+      simp [ByteArray.get!]
+      have hh :=
+        Option.eq_some_of_isSome <| (iff_of_eq <| isSome_getElem? xs n).mpr lt
+      rw [hh]
+      simp
+
+lemma toList_toByteArray (xs : B8L) :
+    xs.toByteArray.toList = xs := by
+  simp only [B8L.toByteArray, ByteArray.toList]
+  apply Eq.trans (ByteArray.toList.loop_eq_append xs.length 0 xs [] _)
+  · simp [List.reverse_nil]
+  · simp [Nat.sub_zero]; rfl
+
+lemma of_bind_eq_ok {ξ υ ζ} {f : Except ξ υ}
+    {g : υ → Except ξ ζ} {z} :
+    f >>= g = .ok z → ∃ x, f = .ok x ∧ g x = .ok z := by
+  intro h;
+  cases f with
+  | error => cases h
+  | ok x => refine ⟨x, rfl, h⟩
+
+
+-- lemma of_bind_eq_ok' {ξ υ} {f : Except ξ Unit}
+--     {g : Except ξ υ} {y} :
+--     f >> g = .ok y → ∃ x, f = .ok () ∧ g = .ok y := by
+--
+-- #exit
+
+
+-- def executeCode (vb : Bool) (msg : Msg) :
+--   Nat → Except (Benv × Tenv × String) Evm
+
+-- inductive Exec : Env → Desc → Nat → Result → Type
+
+inductive Except.IsOk {ξ υ} : Except ξ υ → Prop
+  | intro {x : υ} : Except.IsOk (Except.ok x)
+
+
+-- structure Evm : Type where
+--   pc : Nat
+--   stack: List B256
+--   memory: Mem
+--   code: ByteArray
+--   gas_left: Nat
+--   logs: List Log
+--   refund_counter: Int
+--   msg: Msg
+--   output: B8L
+--   accountsToDelete: AdrSet
+--   return_data: B8L
+--   error: Option String
+--   accessedAddresses: AdrSet
+--   accessedStorageKeys: KeySet
+
+-- structure Result where
+--   -- balance, Storage, & code : parts of the 'World-State'
+--   (bal : Adr → B256)
+--   (stor : Adr → Storage)
+--   (code : Adr → B8L)
+--   -- ret : similar to 'ret' of State, but this is the Byte
+--   -- sequence returned at the end of a code execution
+--   (ret : B8L)
+--   -- List of Address earmarked for destruction : parts of the 'subState'
+--   (dest : List Adr)
+
+def Evm.toResult (evm : Evm) : Result :=
+  let hh := evm.msg.benv.state
+  {
+    bal := hh.bal,
+    stor := hh.stor,
+    code := ByteArray.toList ∘ hh.getCode,
+    ret := evm.output,
+    dest := evm.accountsToDelete.toList
+  }
+
+def Msg.toEnv (msg : Msg) : Env :=
+  {
+    cta := msg.currentTarget,
+    oga := msg.tenv.origin,
+    gpr := msg.tenv.gasPrice.toB256,
+    cld := msg.data
+    cla := msg.caller,
+    clv := msg.value,
+    code := msg.code.toList,
+    exd := 1024 - msg.depth,
+    wup := !msg.isStatic
+  }
+
+def Msg.toDesc (msg : Msg) : Desc :=
+  {
+    bal := msg.benv.state.bal,
+    stor := msg.benv.state.stor,
+    code := ByteArray.toList ∘ msg.benv.state.getCode,
+    stk := [],
+    mem := .init
+    ret := []
+    dest := []
+  }
+
+lemma exec_of_executeCode
+    (msg : Msg) (lim : Nat) (evm : Evm)
+    (xc : (executeCode false msg lim) = .ok evm) :
+    ∃ x :
+      Exec
+        msg.toEnv
+        msg.toDesc
+        (msg.codeAddress.getD 0).toNat evm.toResult,
+      True := by
+  sorry
+
+#check processMessageCall
+#check Transact
+#check Msg.caller
+
+lemma transact_of_processMessageCall
+    (msg : Msg) (s : State) (mco : MsgCallOutput)
+    (h : processMessageCall false msg = .ok (s, mco)) :
+    Transact msg.caller _ _ _ := sorry
+
+#exit
+
+lemma transaction_of_processTransaction (benv : Benv) (bout : BlockOutput)
+    (tx : Tx) (idx : Nat) (sf : State) (bout' : BlockOutput)
+    (h : processTransaction false benv bout tx idx = .ok (sf, bout)) :
+    ∃ x : Transaction benv.state.toWorld sf.toWorld, True := by
+  rename' h => h'
+  rcases of_bind_eq_ok h' with ⟨⟨intrinsicGas, calldataFloorGasCost⟩, h0, h⟩
+  clear h'
+  rename' h => h'
+  rcases of_bind_eq_ok h' with ⟨
+    ⟨sender, effectiveGasPrice, blobVersionedHashes, txBlobGasUsed⟩,
+    h1,
+    h
+  ⟩
+  clear h'
+  rename' h => h'
+  rcases of_bind_eq_ok h' with ⟨s1, h2, h⟩
+  clear h'
+  rename' h => h'
+  rcases of_bind_eq_ok h' with ⟨msg, h3, h⟩
+  clear h'
+  rename' h => h'
+  rcases of_bind_eq_ok h' with ⟨⟨s1, mco⟩, h4, h⟩
+  clear h'
+  rename' h => h'
+  rcases of_bind_eq_ok h' with ⟨refundCounter, h5, h⟩; clear h'
+  rename' h => h'
+  rcases of_bind_eq_ok h' with ⟨s2, h6, h⟩; clear h'
+  simp at h6
+  simp at h
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#exit
+
+def Transition (c c' : BlockChain) : Prop :=
+  ∃ b : Block, stateTransition false c b = Except.ok c'
+
+lemma transaction_of_transition (c c' : BlockChain)
+    (tn : Transition c c') : ∃ tx : Transaction c.toWorld c'.toWorld, True := by
+
+  rcases tn with ⟨b, h⟩
+  rename' h => h'
+  rcases of_bind_eq_ok h' with ⟨_, h0, h⟩
+  clear h'
+  rename' h => h'
+  rcases of_bind_eq_ok h' with ⟨_, h1, h⟩
+  clear h'
+  rename' h => h'
+  rcases of_bind_eq_ok h' with ⟨⟨s', bout⟩, h2, h⟩
+  clear h'
+  simp at h
+  rename' h => h'
+  rcases of_bind_eq_ok h' with ⟨_, h3, h⟩
+  clear h'
+  simp at h
+  refine' ⟨_, .intro⟩
+  simp [BlockChain.toWorld]
+  simp [initBenv] at h2
+
+  sorry
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+theorem transition_inv_solvent
+    (wa : Adr) (c c' : BlockChain)
+    (code_eq : some (c.state.getCode wa) = weth.compile <&> B8L.toByteArray)
+    (solv : c.Solvent wa)
+    (nof : SumNof c.state.getBal)
+    (tn : Transition c c') :
+    c'.Solvent wa := by
+
+  have prm : some (c.toWorld.code wa) = weth.compile := by
+    simp [BlockChain.toWorld]
+    rcases Option.eq_none_or_eq_some weth.compile with rw | ⟨cd, rw⟩
+    · rw [rw] at code_eq; cases code_eq
+    · rw [rw] at code_eq;
+      rw [rw, Option.some_inj.mp code_eq]
+      apply congr_arg
+      rw [toList_toByteArray]
+  have solv' : c.toWorld.Solvent wa := by
+    simp [BlockChain.toWorld, World.Solvent]
+    simp [BlockChain.Solvent, State.Solvent] at solv
+    apply solv
+
+  have hh :=
+    transaction_inv_solvent wa
+      c.toWorld
+      c'.toWorld
+      prm
+      solv'
+      nof

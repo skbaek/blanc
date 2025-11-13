@@ -2730,7 +2730,6 @@ theorem correct_core (f : Func) (fs : List Func) :
 theorem correct (e : Env) (s : Desc) (p : Prog) (r : Result)
     (cr : Exec e s 0 r) (h : some e.code = p.compile) :
     Prog.Run e s p r := by
-  --rcases @subcode_of_get?_eq_some 0 p.main p.aux e 0 p.main h rfl
   rcases @subcode_of_get?_eq_some p.main p.aux e 0 _ p.main h rfl
     with ⟨h_at, h_sub⟩
   rcases jumpdest_at cr h_at with ⟨cr', h⟩; clear h h_at
