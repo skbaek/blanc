@@ -103,7 +103,7 @@ abbrev Stack : Type := List B256
 
 def Stack.Push (x y xy : Stack) : Prop := x <++ xy ++> y
 def Stack.Pop (x xy y : Stack) : Prop := x <++ xy ++> y
-def Stack.Diff (xs zs : Stack) (s s'' : Stack) : Prop := -- Pop xs ⊚ Push ys
+def Stack.Diff (xs zs : Stack) (s s'' : Stack) : Prop :=
   ∃ s' : Stack, Pop xs s s' ∧ Push zs s' s''
 
 def Stack.SwapCore (x y : B256) : Nat → Stack → Stack → Prop
@@ -749,10 +749,21 @@ inductive Exec : Env → Desc → Nat → Result → Type
       Halt e s pc r →
       Exec e s pc r
 
+def Desc.init (bal : Adr → B256) (stor : Adr → Storage) (code : Adr → B8L) : Desc :=
+  {
+    bal := bal,
+    stor := stor,
+    code := code,
+    stk := [],
+    mem := Memory.init,
+    ret := [],
+    dest := []
+  }
+
 -- The execution part of transaction, which happens after the deduction of
 -- upfront gas payment, and before the distribution of gas refund/reward and
 -- deletion of self-destructed contract codes.
-inductive Transact
+inductive MessageCall
     (sda : Adr) -- tx sender address
                  -- (always an EOA & never has contract code, per EIP-3607)
     (rca : Adr) -- tx receiver address
@@ -767,27 +778,29 @@ inductive Transact
       Exec
         { cta := rca, oga := sda, gpr := gpr, cld := [], cla := sda,
           clv := clv, code := ctc, exd := 1024, wup := true }
-        { bal := bal, stor := w.stor, code := w.code, stk := [],
-          mem := Memory.init, ret := [], dest := [] }
+        --{ bal := bal, stor := w.stor, code := w.code, stk := [],
+        --  mem := Memory.init, ret := [], dest := [] }
+        (Desc.init bal w.stor w.code)
         0 r →
       Overwrite rca r.ret r.code code →
-      Transact sda rca w {r with code := code}
+      MessageCall sda rca w {r with code := code}
   | call :
     ∀ gpr cld clv bal r,
       Transfer w.bal sda clv rca bal →
       Exec
         { cta := rca, oga := sda, gpr := gpr, cld := cld, cla := sda,
           clv := clv, code := w.code rca, exd := 1024, wup := true }
-        { bal := bal, stor := w.stor, code := w.code, stk := []
-          mem := Memory.init, ret := [], dest := []}
+        -- { bal := bal, stor := w.stor, code := w.code, stk := []
+        --   mem := Memory.init, ret := [], dest := []}
+        (Desc.init bal w.stor w.code)
         0 r →
-      Transact sda rca w r
+      MessageCall sda rca w r
   | pre :
     ∀ clv bal ret,
       Transfer w.bal sda clv rca bal →
-      Transact sda rca w
+      MessageCall sda rca w
         {bal := bal, stor := w.stor, code := w.code, ret := ret, dest := []}
-  | fail : Transact sda rca w {w with ret := .nil, dest := []}
+  | fail : MessageCall sda rca w {w with ret := .nil, dest := []}
 
 def DeleteCodes : List Adr → Codes → Codes → Prop
   | [], c, c' => c = c'
@@ -805,7 +818,7 @@ def DeleteCodes : List Adr → Codes → Codes → Prop
     (le : vs + vv + vb ≤ w.bal sda)
     (rca : Adr) -- tx receiver address
     (r : Result) -- execution result
-    (act : Transact sda rca {w with bal := bal} r)
+    (act : MessageCall sda rca {w with bal := bal} r)
     (bal' : Balances) -- balances after refund to sender
     (incr : Increase sda vs r.bal bal')
     (vla : Adr) -- validator address

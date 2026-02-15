@@ -1,0 +1,7 @@
+# Lean 4 Multi-Project Rules
+- This workspace contains Project `elevm` (library) and Project `blanc` (main).
+- Project `blanc` depends on Project `elevm` via a local path in lakefile.lean.
+- CRITICAL: Whenever you (the AI) modify any file within the Project `elevm` directory, you MUST immediately run the following command in the Project `blanc` directory: `lake update elevm`
+- CRITICAL: If the task is proving a lemma or theorem, then before reporting that the task is complete, you MUST perform a final check by running the command `lake build` in the Project `blanc` directory and ensuring that Lean reports no errors, in order to verify that the proof is complete. Do not report that your task is complete until you have done this.
+- For any task other than proving (defining a function, making syntactic changes, etc.), do not perform the `lake build` check.
+- Never delete any `#exit` command.  

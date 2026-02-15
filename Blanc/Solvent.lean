@@ -2,6 +2,7 @@
 
 
 import Blanc.Weth
+import Std.Data.TreeMap.Lemmas
 
 
 def Storage.rest (s : Storage) : Adr → B256 := s ∘ Adr.toB256
@@ -111,7 +112,7 @@ open Ninst
 
 lemma addressMask_eq_shl :
     addressMask = B256.shiftLeft B256.max (160 : Nat).toB256.toNat := by
-  rw [toNat_toB256, Nat.mod_eq_of_lt (by omega)]; rfl
+  rw [toNat_toB256, Nat.lo_eq_of_lt (by omega)]; rfl
 
 theorem B256.invert_zero_eq_max : ~~~ (0 : B256) = .max := by rfl
 
@@ -462,7 +463,7 @@ theorem approve_inv_solvent {e s r} (h : Func.Run c e s approve r)
   rw [approve_inv_bal h]
 
 lemma nof_of_solvent {s a e} (h : Desc.Solvent s a e) : SumNof (s.stor a).rest := by
-  apply lt_of_le_of_lt _ (B256.toNat_lt_size <| s.bal a)
+  apply lt_of_le_of_lt _ (B256.toNat_lt <| s.bal a)
   simp [Desc.Solvent, Storage.Solvent] at h
   by_cases h' : e.cta = a
   · apply le_trans (Nat.le_add_right _ _) (h.left h')
@@ -546,7 +547,7 @@ theorem deposit_inv_solvent {e s r} :
   rw [solvent_zero_iff, ← h_bal]
   simp [Desc.Solvent, Storage.Solvent] at h_solvent
   have h_lt : wbsum (s.stor e.cta) + B256.toNat e.clv < 2 ^ 256 :=
-    lt_of_le_of_lt h_solvent (B256.toNat_lt_size _)
+    lt_of_le_of_lt h_solvent (B256.toNat_lt _)
   rw [← wbsum_after_deposit h_lt h_run]
   apply h_solvent
 
@@ -619,7 +620,7 @@ lemma of_send_to_caller' {e : Env} {s sf} {wad}
     rw [B256.toNat_sub_eq_of_le _ _ h_le] at h_sv
     apply lt_of_le_of_lt <| Nat.add_le_add_right h_sv wad.toNat
     rw [Nat.sub_add_cancel <| B256.toNat_le_toNat  h_le]
-    apply B256.toNat_lt_size
+    apply B256.toNat_lt
   lexen 7
   have hs₁ :
       [B8L.toB256 [0x52, 0x08], e.cla.toB256, wad, 0, 0, 0, 0] <<+ s₁.stk :=
@@ -887,7 +888,7 @@ theorem weth_inv_solvent (wa : Adr) :
       apply h
 
 lemma transact_inv_solvent {ST RT w r wa}
-    (h : Transact ST RT w r) (h_wa : ST ≠ wa)
+    (h : MessageCall ST RT w r) (h_wa : ST ≠ wa)
     (h_nof : SumNof w.bal) (h_wb : w.Solvent wa)
     (h_code : some (w.code wa) = Prog.compile weth) : r.Solvent wa := by
   cases h with
@@ -901,18 +902,18 @@ lemma transact_inv_solvent {ST RT w r wa}
     apply (@weth_inv_solvent wa _ _ _ cr h_code _ _).solvent
     · intro hc; cases h_ne hc
     · refine' ⟨h_code, _, _, _⟩
-      · simp only []
+      · simp only [Desc.init]
         rw [← transfer_inv_sum h_nof h_di]
         exact h_nof
       · simp only []
         intro hc; cases h_ne hc
-      · intro h; clear h; simp only []
+      · intro h; clear h; simp only [Desc.init]
         rw [← h_eq]; apply h_wb
   | call gpr cld clv bal _ h_di cr =>
     apply (@weth_inv_solvent wa _ _ _ cr h_code _ _).solvent
     · simp; intro h_eq; rw [h_eq]; apply h_code
     · refine' ⟨h_code, _, _, _⟩
-      · simp only []
+      · simp only [Desc.init]
         rw [← transfer_inv_sum h_nof h_di]
         exact h_nof
       · simp only []; intro h_eq
@@ -925,7 +926,7 @@ lemma transact_inv_solvent {ST RT w r wa}
           rw [Nat.add_comm, Nat.add_le_add_iff_right]
           apply B256.toNat_le_toNat
           rcases h_di with ⟨h_le, _⟩; exact h_le
-        rw [← h_eq]; simp [Storage.Solvent]
+        simp only [Desc.init]; rw [← h_eq]; simp [Storage.Solvent]
         rw [B256.toNat_add_eq_of_nof _ _ h_nof, Nat.add_le_add_iff_right]
         simp [World.Solvent, Storage.Solvent, B256.toNat_zero] at h_wb
         apply h_wb
@@ -933,7 +934,7 @@ lemma transact_inv_solvent {ST RT w r wa}
         have h_eq : w.bal wa = bal wa := by
           rcases h_di with ⟨_, bal', hd, hi⟩
           apply Eq.trans ((hd wa).right h_wa) ((hi wa).right h_ne)
-        rw [← h_eq]; apply h_wb
+        simp only [Desc.init]; rw [← h_eq]; apply h_wb
   | pre clv bal ret h_di =>
     apply le_trans h_wb
     rcases of_nof_of_transfer h_nof h_di with ⟨bal', hd, hi, h_nof'⟩
@@ -941,16 +942,18 @@ lemma transact_inv_solvent {ST RT w r wa}
     apply B256.toNat_le_toNat  <| le_of_increase hi h_nof' _
   | fail => apply h_wb
 
-theorem transact_inv_sum_bal {sda rca w r} (h : Transact sda rca w r)
+theorem transact_inv_sum_bal {sda rca w r} (h : MessageCall sda rca w r)
     (h' : SumNof w.bal) : sum w.bal = sum r.bal := by
   cases h with
   | create =>
     rename Exec _ _ _ _ => cr
-    rw [transfer_inv_sum h' asm, Exec.inv_sum_bal cr _]
+    rw [transfer_inv_sum h' asm]
+    apply Exec.inv_sum_bal cr
     apply transfer_inv_nof asm h'
   | call =>
     rename Exec _ _ _ _ => cr
-    rw [transfer_inv_sum h' asm, Exec.inv_sum_bal cr _]
+    rw [transfer_inv_sum h' asm]
+    apply Exec.inv_sum_bal cr
     apply transfer_inv_nof asm h'
   | pre => rw [transfer_inv_sum h' asm]
   | fail => rfl
@@ -1012,23 +1015,24 @@ theorem transaction_inv_solvent
     apply le_sum
   apply le_of_increase tx.incr' h_nof''
 
-def State.bal (w : State) (a : Adr) : B256 := (w.get a).bal
+#exit
 
 def State.codes (s : State) : Codes :=
   ByteArray.toList ∘ s.getCode
 
 def State.stor (s : State) : Storages :=
-  λ a k => (s.getStor a).findD k 0
+  λ a k => (s.getStor a).getD k 0
 
 def State.toWorld (s : State) : World :=
   { code := ByteArray.toList ∘ s.getCode,
-    stor := λ a k => (s.getStor a).findD k 0,
+    stor := λ a k => (s.getStor a).getD k 0,
     bal  := s.bal }
 
 def BlockChain.toWorld (c : BlockChain) : World :=
-  { code := ByteArray.toList ∘ c.state.getCode
-    stor := λ a k => (c.state.getStor a).findD k 0,
-    bal  := c.state.bal }
+  c.state.toWorld
+  --{ code := ByteArray.toList ∘ c.state.getCode
+  --  stor := λ a k => (c.state.getStor a).getD k 0,
+  --  bal  := c.state.bal }
 
 def State.Solvent (s : State) (wa : Adr) : Prop :=
   Storage.Solvent (s.stor wa) 0 (s.bal wa)
@@ -1090,31 +1094,6 @@ lemma toList_toByteArray (xs : B8L) :
   apply Eq.trans (ByteArray.toList.loop_eq_append xs.length 0 xs [] _)
   · simp [List.reverse_nil]
   · simp [Nat.sub_zero]; rfl
-
-lemma of_bind_eq_ok {ξ υ ζ} {f : Except ξ υ}
-    {g : υ → Except ξ ζ} {z} :
-    f >>= g = .ok z → ∃ x, f = .ok x ∧ g x = .ok z := by
-  intro h;
-  cases f with
-  | error => cases h
-  | ok x => refine ⟨x, rfl, h⟩
-
-
--- lemma of_bind_eq_ok' {ξ υ} {f : Except ξ Unit}
---     {g : Except ξ υ} {y} :
---     f >> g = .ok y → ∃ x, f = .ok () ∧ g = .ok y := by
---
--- #exit
-
-
--- def executeCode (vb : Bool) (msg : Msg) :
---   Nat → Except (Benv × Tenv × String) Evm
-
--- inductive Exec : Env → Desc → Nat → Result → Type
-
-inductive Except.IsOk {ξ υ} : Except ξ υ → Prop
-  | intro {x : υ} : Except.IsOk (Except.ok x)
-
 
 -- structure Evm : Type where
 --   pc : Nat
@@ -1180,31 +1159,1330 @@ def Msg.toDesc (msg : Msg) : Desc :=
 lemma exec_of_executeCode
     (msg : Msg) (lim : Nat) (evm : Evm)
     (xc : (executeCode false msg lim) = .ok evm) :
-    ∃ x :
+    Nonempty (
       Exec
         msg.toEnv
         msg.toDesc
-        (msg.codeAddress.getD 0).toNat evm.toResult,
-      True := by
+        (msg.codeAddress.getD 0).toNat evm.toResult
+    ) := by
   sorry
 
-#check processMessageCall
-#check Transact
-#check Msg.caller
+def mkResult (s : State) (mco : MsgCallOutput) : Result :=
+  {
+    bal := s.bal
+    stor := s.stor
+    code := s.codes
+    ret := mco.returnData
+    dest := mco.accountsToDelete.toList
+  }
 
-lemma transact_of_processMessageCall
+lemma Std.HashSet.toList_emptyWithCapacity
+    {α : Type u} [BEq α] [EquivBEq α] [Hashable α] [LawfulHashable α] (k : Nat) :
+    (Std.HashSet.emptyWithCapacity k : Std.HashSet α).toList = [] := by
+  rw [List.eq_nil_iff_length_eq_zero, Std.HashSet.length_toList]
+  apply Std.HashSet.size_emptyWithCapacity
+
+lemma Except.of_bimap_eq_ok
+  {ε : Type u0} {δ : Type u1} {ξ : Type u2} {υ : Type u3}
+  (f : ε → δ) (g : ξ → υ) (e : Except ε ξ) (y : υ)
+  (eq : Except.bimap f g e = .ok y) :
+    ∃ x : ξ, e = .ok x ∧ g x = y := by
+  rcases e with _ | x <;> simp [Except.bimap] at eq
+  refine' ⟨x, rfl, eq⟩
+
+-- def processCreateMessage (vb : Bool) (msg : Msg) :
+--   Nat → Except (Benv × Tenv × String) Evm
+--   | 0 => .error ⟨msg.benv, msg.tenv, "RecursionLimit"⟩
+--   | lim + 1 => do
+--     let init_state := msg.benv.state
+--     let init_tra := msg.tenv.transientStorage
+--     let evm ←
+--       processMessage vb
+--         {msg with benv := processCreateMessageBenv msg}
+--         lim
+--     if evm.error.isNone
+--     then
+--       let result : Execution :=
+--         processCreateMessageExecution evm
+--       match result with
+--       | .ok evm => .ok <| evm.setCode msg.currentTarget ⟨⟨evm.output⟩⟩
+--       | .error (evm, err) =>
+--         if isExceptionalHalt err
+--         then
+--           let evm := evm.rollback init_state init_tra
+--           .ok {evm with gas_left := 0, output := [], error := .some err}
+--         else .error ⟨evm.msg.benv, evm.msg.tenv, err⟩
+--     else .ok <| evm.rollback init_state init_tra
+-- termination_by lim => lim
+
+lemma Except.match_error {ξ υ ζ} (f : ξ → ζ) (g : υ → ζ) (x : ξ) :
+  (
+    match (.error x : Except ξ υ) with
+    | .ok y' => g y'
+    | .error x' => f x'
+  ) = f x := by rfl
+
+#check processCreateMessage
+lemma of_processCreateMessage (msg : Msg) (evm : Evm) (lim : Nat)
+    (h : processCreateMessage false msg lim = .ok evm) :
+    ∃ (evm' : Evm) (lim' : Nat),
+      processMessage false
+        (processCreateMessageMsg msg) lim' = .ok evm' ∧
+      if evm'.error.isNone then
+        (
+
+          (
+            ∃ evm'' : Evm,
+              processCreateMessageExecution evm' = .ok evm'' ∧
+              evm = evm''.setCode msg.currentTarget ⟨⟨evm''.output⟩⟩
+          ) ∨
+          (
+            ∃ (evm'' : Evm) (err : String),
+              isExceptionalHalt err ∧
+              processCreateMessageExecution evm' = .error (evm'', err) ∧
+              evm = processCreateMessageExeptionalHalt evm'' err
+                msg.benv.state
+                msg.tenv.transientStorage
+          )
+        )
+      else
+        evm = evm'.rollback msg.benv.state msg.tenv.transientStorage := by
+  rcases lim with _ | lim' <;> try {simp [processCreateMessage] at h; done}
+  simp only [processCreateMessage] at h
+  rename' h => h'
+  rcases of_bind_eq_ok h' with ⟨evm', h0, h⟩; clear h'
+  refine' ⟨evm', lim', h0, _⟩; clear h0
+  by_cases h_isNone : evm'.error.isNone
+  · rw [if_pos h_isNone] at h
+    rw [if_pos h_isNone]
+    revert h
+    rcases (processCreateMessageExecution evm') with ⟨evm'', err⟩ | evm''
+    · intro h;
+      simp only [] at h
+      by_cases h_err : isExceptionalHalt err
+      · rw [if_pos h_err] at h
+        refine' .inr ⟨evm'', err, h_err, rfl, _⟩
+        cases h; rfl
+      · rw [if_neg h_err] at h
+        cases h
+    · intro h
+      simp only [] at h
+      refine' .inl ⟨evm'', rfl, _⟩
+      cases h; rfl
+  · rw [if_neg h_isNone] at h
+    rw [if_neg h_isNone]
+    cases h; rfl
+
+
+
+
+-- structure Benv : Type where
+--   chainId : B64
+--   state : State
+--   origState : State
+--   createdAccounts : AdrSet
+--   blockGasLimit : Nat
+--   blockHashes: List B256
+--   coinbase : Adr
+--   number : Nat
+--   baseFeePerGas : Nat
+--   time : B256
+--   prevRandao : B256
+--   excessBlobGas : Nat
+--   parentBeaconBlockRoot : B256
+
+structure Benv.Rels where
+  (chainId : B64 → B64 → Prop)
+  (state : State → State → Prop)
+  (origState : State → State → Prop)
+  (createdAccounts : AdrSet → AdrSet → Prop)
+  (blockGasLimit : Nat → Nat → Prop)
+  (blockHashes : List B256 → List B256 → Prop)
+  (coinbase : Adr → Adr → Prop)
+  (number : Nat → Nat → Prop)
+  (baseFeePerGas : Nat → Nat → Prop)
+  (time : B256 → B256 → Prop)
+  (prevRandao : B256 → B256 → Prop)
+  (excessBlobGas : Nat → Nat → Prop)
+  (parentBeaconBlockRoot : B256 → B256 → Prop)
+
+def Benv.Rels.dft : Benv.Rels where
+  chainId := Eq
+  state := Eq
+  origState := Eq
+  createdAccounts := Eq
+  blockGasLimit := Eq
+  blockHashes := Eq
+  coinbase := Eq
+  number := Eq
+  baseFeePerGas := Eq
+  time := Eq
+  prevRandao := Eq
+  excessBlobGas := Eq
+  parentBeaconBlockRoot := Eq
+
+structure Benv.Rel (r : Benv.Rels) (b b' : Benv) : Prop where
+  (chainId : r.chainId b.chainId b'.chainId)
+  (state : r.state b.state b'.state)
+  (origState : r.origState b.origState b'.origState)
+  (createdAccounts :
+    r.createdAccounts b.createdAccounts b'.createdAccounts)
+  (blockGasLimit :
+    r.blockGasLimit b.blockGasLimit b'.blockGasLimit)
+  (blockHashes :
+    r.blockHashes b.blockHashes b'.blockHashes)
+  (coinbase : r.coinbase b.coinbase b'.coinbase)
+  (number : r.number b.number b'.number)
+  (baseFeePerGas :
+    r.baseFeePerGas b.baseFeePerGas b'.baseFeePerGas)
+  (time : r.time b.time b'.time)
+  (prevRandao : r.prevRandao b.prevRandao b'.prevRandao)
+  (excessBlobGas :
+    r.excessBlobGas b.excessBlobGas b'.excessBlobGas)
+  (parentBeaconBlockRoot :
+    r.parentBeaconBlockRoot
+      b.parentBeaconBlockRoot
+      b'.parentBeaconBlockRoot)
+
+
+
+-- #exit
+-- def Benv.Transfer (benv : Benv) (kd : Adr) (v : B256) (ki : Adr) (benv' : Benv) : Prop :=
+--   benv' = benv.withState benv'.state ∧
+--   _root_.Transfer benv.state.bal kd v ki benv'.state.bal
+
+structure Msg.Rels where
+  (benv : Benv → Benv → Prop)
+  (tenv : Tenv → Tenv → Prop)
+  (caller : Adr → Adr → Prop)
+  (target : Option Adr → Option Adr → Prop)
+  (currentTarget : Adr → Adr → Prop)
+  (gas : Nat → Nat → Prop)
+  (value : B256 → B256 → Prop)
+  (data : B8L → B8L → Prop)
+  (codeAddress : Option Adr → Option Adr → Prop)
+  (code : ByteArray → ByteArray → Prop)
+  (depth : Nat → Nat → Prop)
+  (shouldTransferValue : Bool → Bool → Prop)
+  (isStatic : Bool → Bool → Prop)
+  (accessedAddresses : AdrSet → AdrSet → Prop)
+  (accessedStorageKeys : KeySet → KeySet → Prop)
+  (disablePrecompiles : Bool → Bool → Prop)
+
+def Msg.Rels.dft : Msg.Rels where
+  benv := Eq
+  tenv := Eq
+  caller := Eq
+  target := Eq
+  currentTarget := Eq
+  gas := Eq
+  value := Eq
+  data := Eq
+  codeAddress := Eq
+  code := Eq
+  depth := Eq
+  shouldTransferValue := Eq
+  isStatic := Eq
+  accessedAddresses := Eq
+  accessedStorageKeys := Eq
+  disablePrecompiles := Eq
+
+structure Msg.Rel (r : Rels) (m m' : Msg) : Prop where
+  (benv : r.benv m.benv m'.benv)
+  (tenv : r.tenv m.tenv m'.tenv)
+  (caller : r.caller m.caller m'.caller)
+  (target : r.target m.target m'.target)
+  (currentTarget : r.currentTarget m.currentTarget m'.currentTarget)
+  (gas : r.gas m.gas m'.gas)
+  (value : r.value m.value m'.value)
+  (data : r.data m.data m'.data)
+  (codeAddress : r.codeAddress m.codeAddress m'.codeAddress)
+  (code : r.code m.code m'.code)
+  (depth : r.depth m.depth m'.depth)
+  (shouldTransferValue :
+    r.shouldTransferValue m.shouldTransferValue m'.shouldTransferValue)
+  (isStatic : r.isStatic m.isStatic m'.isStatic)
+  (accessedAddresses :
+    r.accessedAddresses m.accessedAddresses m'.accessedAddresses)
+  (accessedStorageKeys :
+    r.accessedStorageKeys m.accessedStorageKeys m'.accessedStorageKeys)
+  (disablePrecompiles :
+    r.disablePrecompiles m.disablePrecompiles m'.disablePrecompiles)
+
+
+-- #exit
+-- def Msg.Transfer (msg : Msg) (kd : Adr) (v : B256) (ki : Adr) (msg' : Msg) : Prop :=
+--   msg' = msg.withBenv msg'.benv ∧
+--   Benv.Transfer msg.benv kd v ki msg'.benv
+
+lemma Except.of_assert_eq_ok {ξ} (p : Prop) [Decidable p] (x : ξ)
+    (h : Except.assert p x = .ok ()) : p := by
+  simp [Except.assert] at h; apply h
+
+/-
+lemma Lean.RBNode.find_setBlack
+    (α : Type u) (β : Type v) (cmp : α → α → Ordering)
+    (nd : RBNode α (fun _ ↦ β)) (a : α) : nd.setBlack.find cmp a = nd.find cmp a := by
+  induction nd <;> simp [find, RBNode.setBlack]
+
+lemma Ordering.trichotomy {α : Type u} (cmp : α → α → Ordering) (a b : α) :
+    (cmp a b = .lt) ∨ (cmp a b = .eq) ∨ (cmp a b = .gt) := by
+  cases h : cmp a b <;> simp [h]
+
+def Lean.RBNode.sizeRec (α : Type u) (β : α → Type v) (p : RBNode α β → Type w)
+    (h : (x : RBNode α β) → ((y : RBNode α β) → y.size < x.size → p y) → p x) :
+    ∀ x : RBNode α β, p x := by
+  intro x
+  let r := fun (a b : RBNode α β) => a.size < b.size
+  let wf_nat := Nat.lt_wfRel.wf
+  let wf := InvImage.wf (@Lean.RBNode.size α β) wf_nat
+  apply @WellFounded.fix (RBNode α β) p r wf
+  exact h
+
+
+lemma Lean.RBNode.balLeft_cases (α : Type u) (β : α → Type v)
+    (k : α) (v : β k) (l r : RBNode α β) :
+    ( ∃ a kx vx b,
+        l = node .red a kx vx b ∧
+        RBNode.balLeft l k v r = node .red (node .black a kx vx b) k v r ) ∨
+    ( ∃ a ky vy b,
+        r = .node .black a ky vy b ∧
+        RBNode.balLeft l k v r = .balance2 l k v (node .red a ky vy b) ) ∨
+    ( ∃ a ky vy b kz vz c,
+        r = node .red (node .black a ky vy b) kz vz c ∧
+        RBNode.balLeft l k v r =
+          node .red (node .black l k v a) ky vy (balance2 b kz vz (setRed c)) ) ∨
+    (RBNode.balLeft l k v r = .node .red l k v r) := by
+  rcases l with _ | ⟨(_ | _), _⟩
+  · right;
+    rcases r with _ | ⟨(_ | _), l', _⟩
+    · right; right; rfl
+    · rcases l' with _ | ⟨(_ | _), _⟩
+      · right; right; rfl
+      · right; right; rfl
+      · right; left; refine ⟨_, _, _, _, _, _, _, rfl, rfl⟩
+    · left; refine ⟨_, _, _, _, rfl, rfl⟩
+  · left; refine' ⟨_, _, _, _, rfl, _⟩; simp only [balLeft]
+  · right;
+    rcases r with _ | ⟨(_ | _), l', _⟩
+    · right; right; rfl
+    · rcases l' with _ | ⟨(_ | _), _⟩
+      · right; right; rfl
+      · right; right; rfl
+      · right; left; refine ⟨_, _, _, _, _, _, _, rfl, rfl⟩
+    · left; refine ⟨_, _, _, _, rfl, rfl⟩
+
+lemma Lean.RBNode.find_balLeft {α : Type u} {β : Type v} (cmp : α → α → Ordering)
+    (k k' : α) (v : β) (l r : RBNode α (fun x ↦ β)) (c : RBColor) :
+    (RBNode.balLeft l k v r).find cmp k' = (node c l k v r).find cmp k' := by
+  rcases Lean.RBNode.balLeft_cases α (fun x ↦ β) k v l r with
+      ⟨a, kx, vx, b, eq, rw⟩
+    | ⟨a, ky, vy, b, eq, rw⟩
+    | ⟨a, ky, vy, b, kz, vz, c, eq, rw⟩
+    | bar
+
+  · rw [rw, eq]; simp only [find]
+  · sorry
+  · rw [rw, eq]
+    simp only [find]
+    rcases Ordering.trichotomy cmp k' k with hk | hk | hk
+      <;> rw [hk] <;> simp only []
+
+lemma Lean.RBNode.find_del {α : Type u} {β : Type v} (cmp : α → α → Ordering)
+    (j : α) (x : RBNode α fun x ↦ β) :
+    RBNode.find cmp (RBNode.del cmp j x) j = none := by
+  induction x with
+  | leaf => simp [RBNode.del, RBNode.find]
+  | node cl l k v r ihl ihr  =>
+    simp only [del]
+    rcases Ordering.trichotomy cmp j k with jk | jk | jk
+      <;> rw [jk] <;> simp only []
+    · by_cases l_color : l.isBlack = true
+      · rw [if_pos l_color]
+        have fooo := ((del cmp j l).balLeft k v r)
+
+lemma Lean.RBNode.find_del {α : Type u} {β : Type v} (cmp : α → α → Ordering)
+    (j : α) (x : RBNode α fun x ↦ β) :
+    RBNode.find cmp (RBNode.del cmp j x) j = none := by
+  let wf := InvImage.wf (@Lean.RBNode.size α (fun x ↦ β)) Nat.lt_wfRel.wf
+  induction x using WellFounded.induction (hwf := wf)
+  rename (RBNode α (fun x ↦ β)) => x
+  rename (∀ (x : RBNode α (fun x ↦ β)), _) => ih
+  cases x with
+  | leaf => simp [RBNode.del, RBNode.find]
+  | node cl l k v r  =>
+    simp only [del]
+    rcases Ordering.trichotomy cmp j k with rw | rw | rw <;> rw [rw] <;> simp only []
+    · by_cases h_color : l.isBlack = true
+      · rw [if_pos h_color]
+        rcases Lean.RBNode.balLeft_cases α (fun x ↦ β) k v (del cmp j l) r with
+          ⟨a, kx, vx, b, eq, rw'⟩ | bar`
+        · rw [rw']
+          simp only [find]
+          rw [rw]; simp only []
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+lemma Lean.RBMap.find?_erase (α : Type u) (β : Type v) (cmp : α → α → Ordering)
+    (m : Lean.RBMap α β cmp) (a : α) : (m.erase a).find? a = .none := by
+  rcases m with ⟨nd, wf⟩
+
+  simp [Lean.RBMap.erase, Lean.RBMap.find?,
+    Lean.RBNode.erase,
+  ]
+  rw [Lean.RBNode.find_setBlack]
+
+
+-/
+
+#synth Ord Nat
+#synth LT B256
+#check B128
+#check B256.lt_iff_toNat_lt_toNat
+#synth Ord Adr --instOrdAdr
+#check instOrdAdr
+#check Ord Adr --instOrdAdr
+
+lemma B32.lt_trichotomy (a b : B32) : a < b ∨ a = b ∨ b < a := by
+  by_cases ab : a < b
+  · left; exact ab
+  · right; rw [eq_comm, or_comm];
+    apply UInt32.lt_or_eq_of_le <| UInt32.not_lt.mp ab
+
+lemma B64.lt_trichotomy (a b : B64) : a < b ∨ a = b ∨ b < a := by
+  by_cases ab : a < b
+  · left; exact ab
+  · right; rw [eq_comm, or_comm];
+    apply UInt64.lt_or_eq_of_le <| UInt64.not_lt.mp ab
+
+lemma B128.lt_trichotomy (a b : B128) : a < b ∨ a = b ∨ b < a := by
+  by_cases ab : a < b
+  · left; exact ab
+  · right; rw [eq_comm, or_comm];
+    apply B128.lt_or_eq_of_le <| B128.not_lt.mp ab
+
+
+lemma B256.lt_trichotomy (a b : B256) : a < b ∨ a = b ∨ b < a := by
+  by_cases ab : a < b
+  · left; exact ab
+  · right; rw [eq_comm, or_comm];
+    apply B256.lt_or_eq_of_le <| B256.not_lt.mp ab
+
+lemma Adr.lt_trichotomy (a b : Adr) : a < b ∨ a = b ∨ b < a := by
+  by_cases ab : a ≤ b <;> by_cases ba : b ≤ a
+  · right; left; apply Adr.le_antisymm ab ba
+  · left; apply Adr.lt_iff_le_not_ge.mpr ⟨ab, ba⟩
+  · right; right; apply Adr.lt_iff_le_not_ge.mpr ⟨ba, ab⟩
+  · cases not_or_intro ab ba <| Adr.le_total _ _
+
+
+instance : @Std.OrientedCmp B32 (@compare B32 instOrdUInt32) := by
+  constructor; intro a b
+  simp only [compare, compareOfLessAndEq]
+  rcases B32.lt_trichotomy a b with h | h | h
+  · rw [if_pos h, if_neg <| UInt32.lt_asymm h]
+    rw [if_neg <| ne_comm.mp <| UInt32.ne_of_lt h]; rfl
+  · cases h; rw [if_neg (UInt32.lt_irrefl _), if_pos rfl]; rfl
+  · rw [if_pos h, if_neg <| UInt32.lt_asymm h]
+    rw [if_neg <| ne_comm.mp <| UInt32.ne_of_lt h]; rfl
+
+instance : @Std.OrientedCmp B64 (@compare B64 instOrdUInt64) := by
+  constructor; intro a b
+  simp only [compare, compareOfLessAndEq]
+  rcases B64.lt_trichotomy a b with h | h | h
+  · rw [if_pos h, if_neg <| UInt64.lt_asymm h]
+    rw [if_neg <| ne_comm.mp <| UInt64.ne_of_lt h]; rfl
+  · cases h; rw [if_neg (UInt64.lt_irrefl _), if_pos rfl]; rfl
+  · rw [if_pos h, if_neg <| UInt64.lt_asymm h]
+    rw [if_neg <| ne_comm.mp <| UInt64.ne_of_lt h]; rfl
+
+lemma B128.ne_of_lt {a b : B128} (h : a < b) : a ≠ b := by
+  intro h'; rw [h'] at h; apply B128.lt_irrefl b h
+
+lemma B256.ne_of_lt {a b : B256} (h : a < b) : a ≠ b := by
+  intro h'; rw [h'] at h; apply B256.lt_irrefl b h
+
+lemma Adr.ne_of_lt {a b : Adr} (h : a < b) : a ≠ b := by
+  intro h'; rw [h'] at h; apply Adr.lt_irrefl b h
+
+instance : @Std.OrientedCmp B128 (@compare B128 instOrdB128) := by
+  constructor; intro a b
+  simp only [compare, compareOfLessAndEq]
+  rcases B128.lt_trichotomy a b with h | h | h
+  · rw [if_pos h, if_neg <| B128.lt_asymm h]
+    rw [if_neg <| ne_comm.mp <| B128.ne_of_lt h]; rfl
+  · cases h; rw [if_neg (B128.lt_irrefl _), if_pos rfl]; rfl
+  · rw [if_pos h, if_neg <| B128.lt_asymm h]
+    rw [if_neg <| ne_comm.mp <| B128.ne_of_lt h]; rfl
+
+instance : @Std.OrientedCmp B256 (@compare B256 instOrdB256) := by
+  constructor; intro a b
+  simp only [compare, compareOfLessAndEq]
+  rcases B256.lt_trichotomy a b with h | h | h
+  · rw [if_pos h, if_neg <| B256.lt_asymm h]
+    rw [if_neg <| ne_comm.mp <| B256.ne_of_lt h]; rfl
+  · cases h; rw [if_neg (B256.lt_irrefl _), if_pos rfl]; rfl
+  · rw [if_pos h, if_neg <| B256.lt_asymm h]
+    rw [if_neg <| ne_comm.mp <| B256.ne_of_lt h]; rfl
+
+instance : @Std.OrientedCmp Adr (@compare Adr instOrdAdr) := by
+  constructor; intro a b
+  simp only [compare, compareOfLessAndEq]
+  rcases Adr.lt_trichotomy a b with h | h | h
+  · rw [if_pos h, if_neg <| Adr.lt_asymm h]
+    rw [if_neg <| ne_comm.mp <| Adr.ne_of_lt h]; rfl
+  · cases h; rw [if_neg (Adr.lt_irrefl _), if_pos rfl]; rfl
+  · rw [if_pos h, if_neg <| Adr.lt_asymm h]
+    rw [if_neg <| ne_comm.mp <| Adr.ne_of_lt h]; rfl
+
+
+-- instance : @Std.OrientedCmp Adr (@compare Adr instOrdAdr) := by
+--   constructor; intro ⟨x, x'⟩ ⟨y, y'⟩
+--   simp only [compare]; simp only [Adr.compare]
+--   have rw : compare x y = (compare y x).swap := Std.OrientedCmp.eq_swap
+--   have rw' : compare x' y' = (compare y' x').swap := Std.OrientedCmp.eq_swap
+--   rw [rw, rw']; cases (compare y x) <;> cases (compare y' x') <;> simp
+
+-- def Adr.LE (x y : Adr) : Prop :=
+--   x.1 < y.1 ∨ (x.1 = y.1 ∧ x.2 ≤ y.2)
+-- instance : @LE Adr := ⟨Adr.LE⟩
+-- instance {x y : Adr} : Decidable (x ≤ y) := instDecidableOr
+--
+-- lemma Adr.le_iff (x y : Adr) :
+--   x ≤ y ↔ (x.1 < y.1 ∨ (x.1 = y.1 ∧ x.2 ≤ y.2)) := Iff.refl _
+--
+-- lemma Adr.le_refl (x : Adr) : x ≤ x := by
+--   right; refine ⟨rfl, B128.le_refl _⟩
+--
+-- lemma Adr.le_trans {a b c : Adr} (ab : a ≤ b) (bc : b ≤ c) : a ≤ c := by
+--   rcases ab with ab | ab <;> rcases bc with bc | bc
+--   · left; apply UInt32.lt_trans ab bc
+--   · left; rw [← bc.1]; exact ab
+--   · left; rw [ab.1]; exact bc
+--   · right; refine ⟨Eq.trans ab.1 bc.1, B128.le_trans ab.2 bc.2⟩
+--
+-- lemma Adr.lt_iff_le_not_ge {a b : Adr} : a < b ↔ a ≤ b ∧ ¬b ≤ a := by
+--   constructor <;> intro h
+--   · rcases h with h | h
+--     · refine' ⟨.inl h, not_or_intro (UInt32.lt_asymm h) _⟩
+--       apply not_and_of_not_left _ <| Ne.symm <| UInt32.ne_of_lt h
+--     · refine' ⟨.inr ⟨h.1, B128.le_of_lt h.2⟩, not_or_intro _ _⟩
+--       · rw [h.1]; apply UInt32.lt_irrefl
+--       · apply not_and_of_not_right; rw [B128.not_le]; apply h.2
+--   · rcases h with ⟨h | ⟨h1, h2⟩, h'⟩
+--     · apply Or.inl h
+--     · rcases not_or.mp h' with ⟨h1', h2'⟩
+--       right; refine' ⟨h1, B128.lt_iff_le_not_ge.mpr ⟨h2, not_and.mp h2' h1.symm⟩⟩
+--
+-- instance : Preorder Adr where
+--   le_refl := Adr.le_refl
+--   le_trans _ _ _ := Adr.le_trans
+--   lt := Adr.LT
+--   lt_iff_le_not_ge _ _ := Adr.lt_iff_le_not_ge
+--
+-- lemma Adr.le_antisymm {a b : Adr} : a ≤ b → b ≤ a → a = b := by
+--   intro h₁ h₂
+--   rcases h₁ with h₁ | h₁ <;> rcases h₂ with h₂ | h₂
+--   · cases lt_asymm h₁ h₂
+--   · cases UInt32.ne_of_lt h₁ h₂.1.symm
+--   · cases UInt32.ne_of_lt h₂ h₁.1.symm
+--   · exact Prod.ext h₁.1 <| B128.le_antisymm h₁.2 h₂.2
+--
+-- instance : PartialOrder Adr where
+--   le_antisymm _ _ := Adr.le_antisymm
+--
+-- lemma Adr.le_total (m n : Adr) : m ≤ n ∨ n ≤ m := by
+--   by_cases h : m.1 < n.1
+--   · left; left; exact h
+--   · rw [not_lt, UInt32.le_iff_lt_or_eq] at h
+--     rcases h with h | h
+--     · right; left; exact h
+--     · rcases B128.le_total m.2 n.2 with h' | h'
+--       · left; right; refine ⟨h.symm, h'⟩
+--       · right; right; refine ⟨h, h'⟩
+--
+-- instance : DecidableLT Adr :=
+--   fun a b => by rw [Adr.lt_iff]; infer_instance
+--
+-- instance : DecidableLE Adr :=
+--   fun a b => by rw [Adr.le_iff]; infer_instance
+--
+-- instance : DecidableEq Adr :=
+--   fun a b => by rw [Prod.ext_iff]; infer_instance
+--
+--
+-- instance : LinearOrder Adr where
+--   le_total := Adr.le_total
+--   toDecidableLE := by infer_instance
+--
+
+
+
+-- lemma B64.isLE_compare_eq_true (a b : B64) :
+--     (compare a b).isLE = true ↔ (a ≤ b) := by
+--   simp [Ord.compare, compareOfLessAndEq]
+--   by_cases h : a < b
+--   · rw [if_pos h]; simp; apply le_of_lt h
+--   · rw [if_neg h]
+--     by_cases h' : a = b
+--     · rw [if_pos h']; simp; apply UInt64.le_of_eq h'
+--     · rw [if_neg h']; simp
+--       have h'' := lt_trichotomy a b
+--       simp [h, h'] at h''; apply h''
+
+
+
+
+-- lemma B128.isLE_compare_eq_true (a b : B128) :
+--     (compare a b).isLE = true ↔ (a ≤ b) := by
+--   rcases a with ⟨a1, a2⟩;  rcases b with ⟨b1, b2⟩
+--   simp [B128.compare, LE.le, B128.LE, Ord.compare, compareOfLessAndEq]
+--   by_cases h1 : a1 < b1
+--   · rw [if_pos h1]; simp [h1]
+--   · rw [if_neg h1]
+--     by_cases h2 : a1 = b1
+--     · rw [if_pos h2]; simp [h2]
+--       apply B64.isLE_compare_eq_true
+--     · rw [if_neg h2]; simp [h1, h2]
+
+-- lemma B32.not_lt {a b : B32} : ¬ a < b ↔ b ≤ a := UInt32.not_lt
+--
+-- lemma Adr.isLE_compare_eq_true (a b : Adr) :
+--     (compare a b).isLE = true ↔ (a ≤ b) := by
+--
+--   simp [Adr.compare, LE.le, Adr.LE, Ord.compare,compareOfLessAndEq]
+--   by_cases h1 : a.1 < b.1
+--   · rw [if_pos h1]; simp [h1]
+--   · rw [if_neg h1]
+--     by_cases h2 : a.1 = b.1
+--     · rw [if_pos h2]; simp; simp [h2]
+--       apply compare_le_iff_le
+--
+--
+
+
+--
+--lemma Adr.le_trans {a b c : Adr} (ab : a ≤ b) (bc : b ≤ c) : a ≤ c := by
+--  rcases ab with ab | ab <;> rcases bc with bc | bc
+--  · left; apply UInt32.lt_trans ab bc
+--  · left; rw [← bc.1]; exact ab
+--  · left; rw [ab.1]; exact bc
+--  · right; refine ⟨Eq.trans ab.1 bc.1, B128.le_trans ab.2 bc.2⟩
+
+instance : @Std.TransCmp Adr (@compare Adr instOrdAdr) := by
+  constructor; intro a b c
+  iterate 3 rw [Ordering.isLE_iff_ne_gt, ← ne_eq, compare_le_iff_le]
+  apply Adr.le_trans
+
+lemma State.setBal_eq (st : State) (adr : Adr) (val : B256) :
+    st.setBal adr val = st.set adr ((st.get adr).withBal val) := rfl
+
+lemma State.bal_eq (st : State) (adr : Adr) :
+    st.bal adr = (st.get adr).bal := rfl
+
+lemma State.get_set (st : State) (adr adr' : Adr) (acct : Acct) :
+    (st.set adr acct).get adr' = if adr = adr' then acct else st.get adr' := by
+  simp only [set, get]
+  by_cases erase : acct = Acct.nil
+  · rw [if_pos erase]; apply Eq.trans Std.TreeMap.getD_erase
+    rw [ite_eq_ite_of_iff compare_eq_iff_eq rfl rfl, erase]
+  · rw [if_neg erase]; apply Eq.trans Std.TreeMap.getD_insert
+    rw [ite_eq_ite_of_iff compare_eq_iff_eq rfl rfl]
+
+lemma State.bal_setBal (st : State) (adr adr' : Adr) (val : B256) :
+    (st.setBal adr val).bal adr' = if adr = adr' then val else st.bal adr' := by
+  rw [setBal_eq, bal_eq, get_set, @ite_distrib _ _ Acct.bal]; rfl
+
+lemma State.bal_setBal_self (st : State) (adr : Adr) (val : B256) :
+    (st.setBal adr val).bal adr = val := by rw [bal_setBal, if_pos rfl]
+
+lemma State.bal_set_self (st : State) (adr : Adr) (acct : Acct) :
+    (st.set adr acct).bal adr = acct.bal := by
+  rw [bal_eq, get_set, if_pos rfl]
+
+lemma State.get_setBal (st : State) (adr adr' : Adr) (val : B256) :
+    (st.setBal adr val).get adr' =
+      if adr = adr' then (st.get adr).withBal val else st.get adr' := by
+  rw [setBal_eq, get_set]
+
+def Acct.addBal (ac : Acct) (val : B256) : Acct := {ac with bal := ac.bal + val}
+
+lemma State.get_addBal (st : State) (adr adr' : Adr) (val : B256) :
+    (st.addBal adr val).get adr' =
+      if adr = adr' then (st.get adr).addBal val else st.get adr' := by
+  rw [State.addBal, get_setBal]; rfl
+
+
+
+
+-- lemma Std.TreeMap.getD_erase_of_ne {α : Type u} {β : Type v}
+--     {cmp : α → α → Ordering} {t : Std.TreeMap α β cmp}
+--     [Std.TransCmp cmp] {k a : α} {fallback : β} :
+--     (t.erase k).getD a fallback = if cmp k a = Ordering.eq then fallback else t.getD a fallback
+--
+
+--lemma B64.compare_eq_iff_eq {a b : B64} :
+--    B128.compare a b = Ordering.eq ↔ a = b := by
+
+
+
+--lemma B128.compare_eq_iff_eq {a b : B128} :
+--    B128.compare a b = Ordering.eq ↔ a = b := by
+--  rcases a with ⟨a1, a2⟩; rcases b with ⟨b1, b2⟩
+--  simp only [B128.compare, Ord.compare, compareOfLessAndEq]
+--  by_cases h : a1 < b1
+--  · rw [if_pos h]; simp; intro eq
+--    have rw := congr_arg Prod.fst eq
+--    simp at rw; rw [rw] at h; cases UInt64.lt_irrefl _ h
+--  · rw [if_neg h]
+--    by_cases h' : a1 = b1
+--    · rw [if_pos h']; simp; --rw [compare_eq_iff_eq]
+--
+--
+--
+--
+
+
+
+
+
+
+
+
+
+
+    --cases UInt32.lt_irrefl _ h
+
+
+
+
+
+--
+--lemma Adr.compare_eq_iff_eq {a b : Adr} : Adr.compare a b = Ordering.eq ↔ a = b := by
+--  simp only [Adr.compare, Ord.compare, compareOfLessAndEq]
+--  by_cases h : a.1 < b.1
+--  · rw [if_pos h]; simp; intro eq
+--    rw [congr_arg Prod.fst eq] at h; cases UInt32.lt_irrefl _ h
+--  · rw [if_neg h]
+--    by_cases h' : a.1 = b.1
+--    · rw [if_pos h']; simp; rw [B128.compare_eq_iff_eq]
+--      rw [@Prod.eq_iff_fst_eq_snd_eq B32]; simp [h']
+--    · rw [if_neg h']; rw [@Prod.eq_iff_fst_eq_snd_eq B32]; simp [h']
+
+lemma State.bal_set_of_ne {st : State} {adr adr' : Adr} {acct : Acct}
+    (ne : adr ≠ adr') : (st.set adr acct).bal adr' = st.bal adr' := by
+  rw [bal_eq, get_set, if_neg ne, ← bal_eq]
+
+lemma State.of_subBal_eq_some {st st' : State} {adr : Adr} {val : B256}
+    (h : st.subBal adr val = .some st') :
+    Decrease adr val st.bal st'.bal := by
+  simp [State.subBal] at h
+  rcases h with ⟨le, eq⟩; simp [Decrease]
+  intro adr'; constructor <;> intro h_adr'
+  · cases h_adr'; rw [← eq, bal_setBal_self]
+  · rw [← eq, eq_comm]; apply bal_set_of_ne h_adr'
+
+lemma Benv.withState_eq (benv : Benv) (st : State) :
+  benv.withState st = {benv with state := st} := rfl
+
+lemma Benv.le_of_subBal_eq_some {benv benv' : Benv} {adr : Adr} {val : B256}
+    (h : benv.subBal adr val = .some benv') : val ≤ benv.state.bal adr := by
+  by_contra h'; rcases Option.bind_eq_some_iff.mp h with ⟨st, h_sub, eq⟩
+  simp [State.subBal] at h_sub; exact h' h_sub.1
+
+
+--   (nonce : B64)
+--   (bal : B256)
+--   (stor : Stor)
+--   (code : ByteArray)
+
+structure Acct.Rels where
+  (nonce : B64 → B64 → Prop)
+  (bal : B256 → B256 → Prop)
+  (stor : Stor → Stor → Prop)
+  (code : ByteArray → ByteArray → Prop)
+
+def Acct.Rels.dft : Acct.Rels where
+  nonce := Eq
+  bal := Eq
+  stor := Eq
+  code := Eq
+
+structure Acct.Rel (r : Acct.Rels) (a a' : Acct) : Prop where
+  (nonce : r.nonce a.nonce a'.nonce)
+  (bal : r.bal a.bal a'.bal)
+  (stor : r.stor a.stor a'.stor)
+  (code : r.code a.code a'.code)
+
+-- def State.Decrease (st : State) (adr : Adr) (val : B256) (st' : State) : Prop :=
+--   Frel adr (λ ac ac' => Acct.Decrease ac val ac') st.get st'.get
+
+-- def Transfer
+--     (b : Adr → B256)
+--     (kd : Adr) (v : B256) (ki : Adr)
+--     (d : Adr → B256) : Prop :=
+--     v ≤ b kd ∧
+--   ∃ c : Adr → B256,
+--     Decrease kd v b c ∧
+--     Increase ki v c d
+
+def Acct.Increase (ac : Acct) (val : B256) (ac' : Acct) : Prop :=
+  Acct.Rel {Rels.dft with bal := λ x y => x + val = y} ac ac'
+
+def Acct.Decrease (ac : Acct) (val : B256) (ac' : Acct) : Prop :=
+  Acct.Rel {Rels.dft with bal := λ x y => x - val = y} ac ac'
+
+def Acct.SafeDecrease (ac : Acct) (val : B256) (ac' : Acct) : Prop :=
+  Acct.Rel {
+    Rels.dft with bal := λ x y => val ≤ x ∧ x - val = y
+  } ac ac'
+
+def State.Increase (st : State) (adr : Adr) (val : B256) (st' : State) : Prop :=
+  Frel adr (λ ac ac' => Acct.Increase ac val ac') st.get st'.get
+
+def State.Decrease (st : State) (adr : Adr) (val : B256) (st' : State) : Prop :=
+  Frel adr (λ ac ac' => Acct.Decrease ac val ac') st.get st'.get
+
+def State.SafeDecrease (st : State) (adr : Adr) (val : B256) (st' : State) : Prop :=
+  Frel adr (λ ac ac' => Acct.SafeDecrease ac val ac') st.get st'.get
+
+def State.Transfer (st : State) (kd : Adr) (v : B256) (ki : Adr) (st'' : State) : Prop :=
+  ∃ st' : State,
+    State.SafeDecrease st kd v st' ∧
+    State.Increase st' ki v st''
+
+def Benv.Increase (benv : Benv) (adr : Adr) (val : B256) (benv' : Benv) : Prop :=
+  Rel {Rels.dft with state := λ st st' => State.Increase st adr val st'} benv benv'
+
+def Benv.Decrease (benv : Benv) (adr : Adr) (val : B256) (benv' : Benv) : Prop :=
+  Rel {Rels.dft with state := λ st st' => State.Decrease st adr val st'} benv benv'
+
+def Benv.SafeDecrease (benv : Benv) (adr : Adr) (val : B256) (benv' : Benv) : Prop :=
+  Rel {Rels.dft with state := λ st st' => State.SafeDecrease st adr val st'} benv benv'
+
+def Benv.Transfer (benv : Benv) (kd : Adr) (v : B256) (ki : Adr) (benv' : Benv) : Prop :=
+  Rel {Rels.dft with state := λ st st' => State.Transfer st kd v ki st'} benv benv'
+
+def Msg.Transfer (msg : Msg) (kd : Adr) (v : B256) (ki : Adr) (msg' : Msg) : Prop :=
+  Rel {Rels.dft with benv := λ benv benv' => Benv.Transfer benv kd v ki benv'} msg msg'
+
+lemma State.increase_of_addBal (st st' : State) (adr : Adr) (val : B256)
+    (h : State.addBal st adr val = st') :
+    State.Increase st adr val st' := by
+  rw [← h]; intro x; constructor
+  · intro eq; rw [get_addBal, if_pos eq, eq]; constructor <;> rfl
+  · intro ne; rw [get_addBal, if_neg ne]
+
+lemma Benv.of_subBal_eq_some (benv benv' : Benv) (adr : Adr) (val : B256)
+    (h : benv.subBal adr val = .some benv') :
+    ∃ st : State,
+      benv' = benv.withState st ∧
+      _root_.Decrease adr val benv.state.bal st.bal := by
+  rcases Option.bind_eq_some_iff.mp h with ⟨st, h_sub, eq⟩
+  simp at eq; refine' ⟨st, eq.symm, State.of_subBal_eq_some h_sub⟩
+
+lemma Benv.increase_of_addBal {benv benv' : Benv} {adr : Adr} {val : B256}
+    (h : benv.addBal adr val = benv') :
+    Benv.Increase benv adr val benv' := by
+  rw [← h]; constructor <;> try {rfl}
+  simp [Benv.addBal, Benv.withState]
+  apply State.increase_of_addBal _ _ _ _ rfl
+
+lemma State.decrease_of_subBal (st st' : State) (adr : Adr) (val : B256)
+    (h : State.subBal st adr val = .some st') :
+    State.Decrease st adr val st' := by
+  simp [subBal] at h; simp [Decrease]; rw [← h.2]
+  intro adr'; constructor
+  · intro eq; cases eq;
+    rw [get_setBal, if_pos rfl]; constructor <;> rfl
+  · intro ne; rw [get_setBal, if_neg ne]
+
+lemma State.safeDecrease_of_subBal (st st' : State) (adr : Adr) (val : B256)
+    (h : State.subBal st adr val = .some st') :
+    State.SafeDecrease st adr val st' := by
+  simp [subBal] at h; simp [SafeDecrease]; rw [← h.2]
+  intro adr'; constructor
+  · intro eq; cases eq;
+    rw [get_setBal, if_pos rfl];
+    constructor <;> try {rfl}; refine' ⟨h.1, rfl⟩
+  · intro ne; rw [get_setBal, if_neg ne]
+
+lemma Benv.decrease_of_subBal {benv benv' : Benv} {adr : Adr} {val : B256}
+    (h : benv.subBal adr val = .some benv') :
+    Benv.Decrease benv adr val benv' := by
+  rcases of_bind_eq_some h with ⟨st, h', h''⟩
+  rw [← Option.some_inj.mp h'']
+  constructor <;> try {rfl}
+  simp [Benv.withState]
+  apply State.decrease_of_subBal _ _ _ _ h'
+
+lemma Benv.safeDecrease_of_subBal {benv benv' : Benv} {adr : Adr} {val : B256}
+    (h : benv.subBal adr val = .some benv') :
+    Benv.SafeDecrease benv adr val benv' := by
+  rcases of_bind_eq_some h with ⟨st, h', h''⟩
+  rw [← Option.some_inj.mp h'']
+  constructor <;> try {rfl}
+  simp [Benv.withState]
+  apply State.safeDecrease_of_subBal _ _ _ _ h'
+
+-- lemma Benv.of_addBal_eq (benv benv' : Benv) (adr : Adr) (val : B256)
+--     (h : benv.addBal adr val = benv') :
+--     Increase adr val benv.state.bal benv'.state.bal := by
+--   simp only [Increase]; rw [← h];
+--   simp [Benv.addBal, State.addBal, State.bal, Benv.withState]
+--   intro x; constructor
+--   · intro eq; rw [State.bal_setBal, if_pos eq, ← State.bal_eq, eq]
+--   · intro ne; rw [State.bal_setBal, if_neg ne]
+
+-- lemma Benv.of_subBal_eq_some (benv benv' : Benv) (adr : Adr) (val : B256)
+--     (h : benv.subBal adr val = .some benv') :
+--     ∃ st : State,
+--       benv' = benv.withState st ∧
+--       Decrease adr val benv.state.bal st.bal := by
+--   rcases Option.bind_eq_some_iff.mp h with ⟨st, h_sub, eq⟩
+--   simp at eq; refine' ⟨st, eq.symm, State.of_subBal_eq_some h_sub⟩
+
+lemma Option.toExcept_eq_ok {ξ : Type u} {υ : Type v} (x : ξ) (y : υ) (o : Option υ) :
+    Option.toExcept x o = Except.ok y ↔ o = .some y := by
+  cases o <;> simp [toExcept]
+
+def Benv.bal (benv : Benv) : Adr → B256 := benv.state.bal
+def Msg.bal (msg : Msg) : Adr → B256 := msg.benv.bal
+
+lemma Benv.transfer_of_subBal_of_addBal {benv benv' benv'' : Benv}
+    {src tgt : Adr} {val : B256}
+    (sub : benv.subBal src val = some benv')
+    (add : benv'.addBal tgt val = benv'') :
+    Benv.Transfer benv src val tgt benv'' := by
+  have dec := Benv.safeDecrease_of_subBal sub
+  have inc := Benv.increase_of_addBal add
+  constructor <;> simp
+  · apply Eq.trans dec.chainId inc.chainId
+  · refine' ⟨benv'.state, dec.state, inc.state⟩
+  · apply Eq.trans dec.origState inc.origState
+  · apply Eq.trans dec.createdAccounts inc.createdAccounts
+  · apply Eq.trans dec.blockGasLimit inc.blockGasLimit
+  · apply Eq.trans dec.blockHashes inc.blockHashes
+  · apply Eq.trans dec.coinbase inc.coinbase
+  · apply Eq.trans dec.number inc.number
+  · apply Eq.trans dec.baseFeePerGas inc.baseFeePerGas
+  · apply Eq.trans dec.time inc.time
+  · apply Eq.trans dec.prevRandao inc.prevRandao
+  · apply Eq.trans dec.excessBlobGas inc.excessBlobGas
+  · apply Eq.trans dec.parentBeaconBlockRoot inc.parentBeaconBlockRoot
+
+-- lemma transfer_of_subBal_of_addBal {benv benv' benv'' : Benv}
+--     {src tgt : Adr} {val : B256}
+--     (sub : benv.subBal src val = some benv')
+--     (add : benv'.addBal tgt val = benv'') :
+--     Transfer benv.bal src val tgt benv''.bal := by
+--   rcases @Benv.of_subBal_eq_some benv benv' src val sub with ⟨st, h_st, h_dec⟩
+--   refine' ⟨Benv.le_of_subBal_eq_some sub, _, h_dec, _⟩
+--   have h_inc := Benv.of_addBal_eq _ _ _ _ add
+--   rw [h_st] at h_inc; simp [Benv.withState] at h_inc; apply h_inc
+
+lemma of_processMessage (msg : Msg) (lim : Nat) (evm : Evm)
+    (h_value : msg.shouldTransferValue = true)
+    (h_error : evm.error.isNone = true)
+    (h : processMessage false msg lim = .ok evm) :
+    msg.depth ≤ 1024 ∧
+    ∃ msg' : Msg,
+      Msg.Transfer msg msg.caller msg.value msg.currentTarget msg' ∧
+    ∃ lim' : Nat,
+      lim' + 1 = lim ∧
+      executeCode false msg' lim' = .ok evm := by
+  rcases lim with _ | lim' <;> try {simp [processMessage] at h; done}
+  rename' h => h'
+
+  simp only [processMessage] at h'
+
+
+
+
+  simp [Msg.benvAfterTransfer] at h'
+
+  rcases of_bind_eq_ok h' with ⟨_, h_depth, h⟩; clear h'
+
+
+  rw [if_pos h_value] at h
+
+  simp [Except.assert] at h_depth
+
+  refine' ⟨h_depth, _⟩
+
+
+  rename' h => h'
+  rcases of_bind_eq_ok h' with ⟨benv'', h_benv', h⟩; clear h'
+
+  rcases of_bind_eq_ok h_benv' with ⟨benv', h_subbal, h_addbal⟩; clear h_benv'
+
+  rw [Option.toExcept_eq_ok] at h_subbal
+  rw [Except.ok.injEq] at h_addbal
+
+
+  rename' h => h'
+  rcases of_bind_eq_ok h' with ⟨evm', exec, h⟩; clear h'
+  have eq : evm' = evm := by
+    by_cases h_some : evm'.error.isSome = true
+    · rw [if_pos h_some] at h
+      cases h; simp [Evm.rollback] at h_error
+      rw [h_error] at h_some; simp at h_some
+    · rw [if_neg h_some] at h
+      cases h; rfl
+  rw [eq] at exec
+  refine' ⟨msg.withBenv benv'', _, lim', rfl, exec⟩
+  constructor <;> try {rfl}; simp
+  simp only [Msg.withBenv]
+  apply Benv.transfer_of_subBal_of_addBal h_subbal h_addbal
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/-
+def processMessageCall (vb : Bool) (msg : Msg) :
+  Except String (State × MsgCallOutput) := do
+  let benv := msg.benv
+  let mut msg : Msg := msg
+  let mut refundCounter : Nat := 0
+  let mut evm : Evm := default
+  if msg.target.isNone then
+    let isCollision : Bool :=
+      accountHasCodeOrNonce benv.state msg.currentTarget || accountHasStorage benv.state msg.currentTarget
+    if isCollision then
+      ...
+    else
+      evm ← Except.bimap (Prod.snd ∘ Prod.snd) id <| processCreateMessage vb msg (msg.gas + 50)
+  else
+    ...
+  let mut logs : List Log := []
+  let mut accountsToDelete : AdrSet := .emptyWithCapacity
+  if evm.error.isNone then
+    logs := evm.logs
+    accountsToDelete := evm.accountsToDelete
+    let evmRc ← (Int.toNat? evm.refund_counter).toExcept "ERROR : refund counter is negative"
+    refundCounter := refundCounter + evmRc
+  .ok ⟨
+    evm.msg.benv.state,
+    {
+      gasLeft := evm.gas_left,
+      refundCounter := refundCounter
+      logs := logs,
+      accountsToDelete := accountsToDelete,
+      error := evm.error,
+      returnData := evm.output
+    }
+  ⟩
+-/
+
+/-
+  def processCreateMessage (vb : Bool) (msg : Msg) :
+    Nat → Except (Benv × Tenv × String) Evm
+    | 0 => ...
+    | lim + 1 => do
+      let init_state := msg.benv.state
+      let init_tra := msg.tenv.transientStorage
+      let evm ← processMessage vb (processCreateMessageMsg msg) lim
+      if evm.error.isNone
+      then
+        let result : Execution :=
+          processCreateMessageExecution evm
+        match result with
+        | .ok evm => .ok <| evm.setCode msg.currentTarget ⟨⟨evm.output⟩⟩
+        | .error (evm, err) => ...
+      else ...
+-/
+
+/-
+
+def processCreateMessageMsg (msg : Msg) : Msg :=
+  let adr := msg.currentTarget
+  let benv := msg.benv.setStor adr .empty
+  let benv := add_created_account benv adr
+  let benv := benv.incrNonce adr
+  msg.withBenv benv
+-/
+
+/-
+
+tx target is none
+receiver account has no code
+receiver account nonce is 0
+receiver account has no stor
+processCreateMessage
+  processCreateMessageMsg
+    set receiver stor to empty
+    add receiver to created accounts
+    increment receiver nonce
+  processMessage
+    depth ≤ 1024
+    benvAfterTransfer
+      transfer from caller to currentTarget
+    executeCode
+  processCreateMessageExecution
+  set new code
+
+error is none
+refund counter from processCreateMessage is not negative
+add [refund counter from processCreateMessage] to total refund counter
+
+-----------------------------------
+
+eth transferred from sender to receiver
+receiver has no code
+exec
+write code to receiver account
+
+-/
+/-
+  def processMessage (vb : Bool) (msg : Msg) :
+    Nat → Except (Benv × Tenv × String) Evm
+    | 0 => ...
+    | lim + 1 => do
+      .assert
+        (msg.depth ≤ 1024)
+        ⟨msg.benv, msg.tenv, "StackDepthLimitError"⟩
+      let benv ← msg.benvAfterTransfer
+      let mut evm ← executeCode vb (msg.withBenv benv) lim
+      if evm.error.isSome
+        then ...
+      .ok evm
+-/
+
+/-
+    ∀ gpr clv ctc bal r code,
+      Transfer w.bal sda clv rca bal →
+      w.code rca = [] →
+      Exec
+        { cta := rca, oga := sda, gpr := gpr, cld := [], cla := sda,
+          clv := clv, code := ctc, exd := 1024, wup := true }
+        --{ bal := bal, stor := w.stor, code := w.code, stk := [],
+        --  mem := Memory.init, ret := [], dest := [] }
+        (Desc.init bal w.stor w.code)
+        0 r →
+      Overwrite rca r.ret r.code code →
+      MessageCall sda rca w {r with code := code}
+-/
+
+/-
+def Msg.benvAfterTransfer (msg : Msg) :
+    Except (Benv × Tenv × String) Benv :=
+  if msg.shouldTransferValue then do
+    let benv ←
+      (msg.benv.subBal msg.caller msg.value).toExcept
+        ⟨msg.benv, msg.tenv, "AssertionError"⟩
+    .ok <| benv.addBal msg.currentTarget msg.value
+  else
+    .ok msg.benv
+-/
+
+
+
+lemma transfer_of_benvAfterTransfer (msg : Msg) (benv : Benv)
+    (should : msg.shouldTransferValue = true)
+    (eq : msg.benvAfterTransfer = .ok benv) :
+    Transfer msg.bal msg.caller msg.value msg.currentTarget benv.bal := by
+  simp [Msg.benvAfterTransfer, if_pos should] at eq
+  rcases of_bind_eq_ok eq with ⟨benv', sub, add⟩; clear eq
+  rw [Option.toExcept_eq_ok] at sub; simp at add
+  --apply transfer_of_subBal_of_addBal sub add
+  have hh := Benv.transfer_of_subBal_of_addBal sub add--msg.benv benv' benv sub add
+  simp [Transfer]
+  sorry
+
+
+
+
+lemma messageCall_of_processMessageCall
     (msg : Msg) (s : State) (mco : MsgCallOutput)
+    (should : msg.shouldTransferValue = true)
     (h : processMessageCall false msg = .ok (s, mco)) :
-    Transact msg.caller _ _ _ := sorry
+    MessageCall
+      msg.caller
+      msg.currentTarget
+      msg.benv.state.toWorld
+      (mkResult s mco) := by
+
+  simp [processMessageCall] at h
+
+  by_cases h_target : msg.target = none
+  · rw [if_pos h_target] at h
+
+
+    by_cases h_account :
+      accountHasCodeOrNonce msg.benv.state msg.currentTarget = true
+        ∨ accountHasStorage msg.benv.state msg.currentTarget = true
+
+    · rw [if_pos h_account] at h
+      cases h
+      simp [mkResult]
+      have hh := @MessageCall.fail
+      rw [Std.HashSet.toList_emptyWithCapacity]
+      apply hh
+    · rw [if_neg h_account] at h
+
+      rw [not_or] at h_account
+      rcases h_account with ⟨h_code_or_nonce, h_stor⟩
+      rename' h => h'
+      rcases of_bind_eq_ok h' with ⟨evm', h0, h⟩; clear h'
+      rcases Except.of_bimap_eq_ok _ _ _ _ h0 with ⟨evm, h_evm, ⟨_⟩⟩
+      clear h0
+      by_cases h_error : (id evm).error = none
+      · rw [if_pos h_error] at h
+        rename' h => h'
+        rcases of_bind_eq_ok h' with ⟨rc, h1, h⟩; clear h'
+        -- simp only [] at h
+        rcases h with ⟨hs, h_mco⟩
+
+        rcases (of_processCreateMessage msg evm (msg.gas + 50) h_evm)
+          with ⟨evm', lim', h_pm, h⟩
+
+        by_cases h_isNone : evm'.error.isNone
+        · rw [if_pos h_isNone] at h
+          rcases h with ⟨evm'', h, h'⟩ | h
+          · have should' :
+                (processCreateMessageMsg msg).shouldTransferValue = true := by
+              simp only [processCreateMessageMsg, Msg.withBenv]; exact should
+
+
+
+
+            rcases of_processMessage _ _ _ should' h_isNone h_pm
+              with ⟨le1024, msg', h_transfer, lim'', eq_lim', h_exec⟩
+
+            have hh := @MessageCall.create
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            sorry
+          sorry
+        · sorry
+      · sorry
+  · sorry
+
+
+inductive MessageCallNT
+    (sda : Adr) -- tx sender address
+                 -- (always an EOA & never has contract code, per EIP-3607)
+    (rca : Adr) -- tx receiver address
+                 -- · for contract calls, rca = address of called contract
+                 -- · for contract creations, rca = address of newly created contract
+    (w : World)  -- initial world state
+    : Result → Prop
+  -- | create :
+  --   ∀ gpr clv ctc bal r code,
+  --     Transfer w.bal sda clv rca bal →
+  --     w.code rca = [] →
+  --     Exec
+  --       { cta := rca, oga := sda, gpr := gpr, cld := [], cla := sda,
+  --         clv := clv, code := ctc, exd := 1024, wup := true }
+  --       --{ bal := bal, stor := w.stor, code := w.code, stk := [],
+  --       --  mem := Memory.init, ret := [], dest := [] }
+  --       (Desc.init bal w.stor w.code)
+  --       0 r →
+  --     Overwrite rca r.ret r.code code →
+  --     MessageCall sda rca w {r with code := code}
+  | call :
+    ∀ gpr cld r,
+      -- Transfer w.bal sda clv rca bal →
+      Exec
+        { cta := rca, oga := sda, gpr := gpr, cld := cld, cla := sda,
+          clv := 0, code := w.code rca, exd := 1024, wup := true }
+        -- { bal := bal, stor := w.stor, code := w.code, stk := []
+        --   mem := Memory.init, ret := [], dest := []}
+        (Desc.init w.bal w.stor w.code)
+        0 r →
+      MessageCallNT sda rca w r
+  -- | pre :
+  --   ∀ clv bal ret,
+  --     Transfer w.bal sda clv rca bal →
+  --     MessageCall sda rca w
+  --       {bal := bal, stor := w.stor, code := w.code, ret := ret, dest := []}
+  -- | fail : MessageCall sda rca w {w with ret := .nil, dest := []}
+
+
+lemma of_processSystemTransaction
+    (benv : Benv) (target : Adr) (code : ByteArray)
+    (data : B8L) (st : State) (mco : MsgCallOutput)
+    (stx : processSystemTransaction false benv target code data = .ok (st, mco)) :
+    MessageCallNT
+      systemAddress
+      target
+      benv.state.toWorld
+      (mkResult st mco) := by
+  sorry
+
+-- def processUncheckedSystemTransaction
+--   (vb : Bool) (benv : Benv) (target : Adr) (data : B8L) :
+--   Except String (State × MsgCallOutput) := do
+--   let systemContractCode : ByteArray := benv.state.getCode target
+--   processSystemTransaction vb benv target systemContractCode data
+
+lemma of_processUncheckedSystemTransaction
+   (benv : Benv) (target : Adr) (data : B8L) (st : State) (mco : MsgCallOutput)
+   (ustx : processUncheckedSystemTransaction false benv target data = .ok (st, mco)) :
+   MessageCallNT
+     systemAddress
+     target
+     benv.state.toWorld
+     (mkResult st mco) := by
+
+  _
 
 #exit
 
+/-
 lemma transaction_of_processTransaction (benv : Benv) (bout : BlockOutput)
     (tx : Tx) (idx : Nat) (sf : State) (bout' : BlockOutput)
     (h : processTransaction false benv bout tx idx = .ok (sf, bout)) :
     ∃ x : Transaction benv.state.toWorld sf.toWorld, True := by
   rename' h => h'
   rcases of_bind_eq_ok h' with ⟨⟨intrinsicGas, calldataFloorGasCost⟩, h0, h⟩
+  simp at h
+
+#exit
+
+
   clear h'
   rename' h => h'
   rcases of_bind_eq_ok h' with ⟨
@@ -1229,6 +2507,194 @@ lemma transaction_of_processTransaction (benv : Benv) (bout : BlockOutput)
   simp at h6
   simp at h
 
+-/
+
+
+
+def Transition (c c' : BlockChain) : Prop :=
+  ∃ b : Block, stateTransition false c b = Except.ok c'
+
+-- structure Transaction (w w' : World) : Type where
+--   (vs : B256) -- gas ultimately refunded to sender
+--   (vv : B256) -- gas ultimately rewarded to validator
+--   (vb : B256) -- gas ultimately burned
+--   (nof : vs.toNat + vv.toNat + vb.toNat < 2 ^ 256)
+--   (sda : Adr) -- tx sender address
+--   (eoa : w.code sda = []) -- per EIP-3607
+--   (bal : Balances) -- balances after upfront deduction
+--   (decr : Decrease sda (vs + vv + vb) w.bal bal)
+--   (le : vs + vv + vb ≤ w.bal sda)
+--   (rca : Adr) -- tx receiver address
+--   (r : Result) -- execution result
+--   (act : MessageCall sda rca {w with bal := bal} r)
+--   (bal' : Balances) -- balances after refund to sender
+--   (incr : Increase sda vs r.bal bal')
+--   (vla : Adr) -- validator address
+--   (incr' : Increase vla vv bal' w'.bal)
+--   (del : DeleteCodes r.dest r.code w'.code)
+--   (stor : w'.stor = r.stor)
+
+inductive Transactions : World → World → Type
+  | refl {w : World} : Transactions w w
+  | step {w1 w2 w3 : World}
+      (tx : Transaction w1 w2)
+      (txs : Transactions w2 w3) :
+      Transactions w1 w3
+
+
+def ProcessUncheckedSystemTransaction (w w' : World) : Prop := sorry
+def ProcessWithdrawals (w w' : World) : Prop := sorry
+
+structure ApplyBody (wInit wFinal : World) : Type where
+  (wBeacon : World)
+  (beacon : ProcessUncheckedSystemTransaction wInit wBeacon)
+  (wHistory : World)
+  (history : ProcessUncheckedSystemTransaction wBeacon wHistory)
+  (wTxs : World)
+  (txs : Transactions wHistory wTxs)
+  (withdrawals : ProcessWithdrawals wTxs wFinal)
+
+-- def applyBody
+--   (vb : Bool) (benv : Benv) (txs : List (B8L ⊕ Tx)) (wds : List Withdrawal) :
+--   Except String (State × BlockOutput) := do
+--   let mut bout := BlockOutput.init
+--   cprint vb "\n================================ BEACON ROOTS TX ================================\n"
+--   let ⟨state, _⟩ ←
+--     processUncheckedSystemTransaction false benv
+--       beaconRootsAddress
+--       benv.parentBeaconBlockRoot.toB8L
+--   let mut benv : Benv := {benv with state := state}
+--   cprint vb "\n================================ HISTORY STORAGE TX ================================\n"
+--   let lastHash ←
+--      benv.blockHashes.getLast?.toExcept "ERROR : block hashes is empty"
+--   let ⟨state, _⟩ ←
+--     processUncheckedSystemTransaction false benv
+--       historyStorageAddress
+--       lastHash.toB8L
+--   benv := {benv with state := state}
+--   cprint vb "\n================================ MAIN TXS ================================\n"
+--   for ⟨i, tx⟩ in (← txs.mapM decodeTx).putIndex do
+--     let ⟨state, bout'⟩ ← processTransaction vb benv bout tx i
+--     benv := {benv with state := state}
+--     bout := bout'
+--   cprint vb s!"\nSTATE AFTER TEST TXS :"
+--   cprint vb s!"{benv.state}"
+--   cprint vb "\n================================ PROCESS WITHDRAWALS ================================\n"
+--   let ⟨state, bout'⟩ :=
+--     processWithdrawals benv bout wds
+--   benv := {benv with state := state}
+--   bout := bout'
+--   cprint vb "\n================================ PROCESS GENERAL PURPOSE REQUESTS ================================\n"
+--   processGeneralPurposeRequests vb benv bout
+
+
+lemma applyBody_of_applyBody
+    (ch ch' : BlockChain) (blk : Block) (st' : State) (bo' : BlockOutput)
+    (app : applyBody false (initBenv ch blk.header) blk.txs blk.wds =
+      Except.ok (st', bo')) :
+    Nonempty (ApplyBody ch.toWorld st'.toWorld) := by
+  rcases of_bind_eq_ok app with ⟨⟨_⟩, ⟨_⟩, beaconCont⟩
+  clear app
+
+  rcases of_bind_eq_ok beaconCont with ⟨⟨stBeacon, mo⟩, beacon, printCont⟩
+
+  clear beaconCont
+
+  rcases of_bind_eq_ok printCont with ⟨⟨_⟩, ⟨_⟩, hashCont⟩
+  clear printCont;
+
+  rcases of_bind_eq_ok hashCont with ⟨lastHash, eqLastHash, historyCont⟩
+
+
+  clear hashCont eqLastHash
+  rcases of_bind_eq_ok historyCont with ⟨⟨stHistory, moHistory⟩, history, cont⟩
+  clear historyCont
+
+  rcases of_bind_eq_ok cont with ⟨⟨_⟩, ⟨_⟩, decodeCont⟩
+  clear cont
+  rcases of_bind_eq_ok decodeCont with ⟨txs, decode, txsCont⟩
+  clear decodeCont
+
+  rcases of_bind_eq_ok txsCont with ⟨⟨benvTxs, boTxs⟩, applyTxs, printCont⟩
+  clear txsCont
+  rcases of_bind_eq_ok printCont with ⟨⟨_⟩, ⟨_⟩, printCont'⟩
+  clear printCont
+  rcases of_bind_eq_ok printCont' with ⟨⟨_⟩, ⟨_⟩, printCont⟩
+  clear printCont'
+  rcases of_bind_eq_ok printCont with ⟨⟨_⟩, ⟨_⟩, withdrawalCont⟩
+  clear printCont
+
+
+  rcases of_bind_eq_ok withdrawalCont with ⟨⟨_⟩, print, requests⟩
+
+  clear withdrawalCont print
+  have hh :=
+    @ApplyBody.mk
+      ch.toWorld
+      st'.toWorld
+      stBeacon.toWorld
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#exit
+  --rcases of_bind_eq_ok cont with ⟨foo, bar, cont⟩
+
+  rcases of_bind_eq_ok cont with ⟨foo', bar', cont'⟩
+  clear cont
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1261,32 +2727,49 @@ lemma transaction_of_processTransaction (benv : Benv) (bout : BlockOutput)
 
 #exit
 
-def Transition (c c' : BlockChain) : Prop :=
-  ∃ b : Block, stateTransition false c b = Except.ok c'
-
 lemma transaction_of_transition (c c' : BlockChain)
     (tn : Transition c c') : ∃ tx : Transaction c.toWorld c'.toWorld, True := by
 
   rcases tn with ⟨b, h⟩
   rename' h => h'
-  rcases of_bind_eq_ok h' with ⟨_, h0, h⟩
+  rcases of_bind_eq_ok h' with ⟨u, h0, h⟩
   clear h'
   rename' h => h'
   rcases of_bind_eq_ok h' with ⟨_, h1, h⟩
   clear h'
   rename' h => h'
-  rcases of_bind_eq_ok h' with ⟨⟨s', bout⟩, h2, h⟩
+  rcases of_bind_eq_ok h' with ⟨⟨s, bo⟩, h2, h⟩
   clear h'
   simp at h
+
   rename' h => h'
   rcases of_bind_eq_ok h' with ⟨_, h3, h⟩
+
   clear h'
+
   simp at h
   refine' ⟨_, .intro⟩
-  simp [BlockChain.toWorld]
-  simp [initBenv] at h2
 
+  rw [← h]; clear h
+
+
+  simp [BlockChain.toWorld]
   sorry
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1311,7 +2794,7 @@ theorem transition_inv_solvent
     (wa : Adr) (c c' : BlockChain)
     (code_eq : some (c.state.getCode wa) = weth.compile <&> B8L.toByteArray)
     (solv : c.Solvent wa)
-    (nof : SumNof c.state.getBal)
+    (nof : SumNof c.state.bal)
     (tn : Transition c c') :
     c'.Solvent wa := by
 
@@ -1319,14 +2802,18 @@ theorem transition_inv_solvent
     simp [BlockChain.toWorld]
     rcases Option.eq_none_or_eq_some weth.compile with rw | ⟨cd, rw⟩
     · rw [rw] at code_eq; cases code_eq
-    · rw [rw] at code_eq;
-      rw [rw, Option.some_inj.mp code_eq]
-      apply congr_arg
-      rw [toList_toByteArray]
+    · have h : some (c.state.getCode wa).toList = weth.compile := by
+        rw [rw] at code_eq;
+        rw [rw, Option.some_inj.mp code_eq]
+        apply congr_arg
+        rw [toList_toByteArray]
+      apply h
   have solv' : c.toWorld.Solvent wa := by
     simp [BlockChain.toWorld, World.Solvent]
     simp [BlockChain.Solvent, State.Solvent] at solv
     apply solv
+
+  rcases transaction_of_transition _ _ tn with ⟨tx, _⟩
 
   have hh :=
     transaction_inv_solvent wa
@@ -1335,3 +2822,6 @@ theorem transition_inv_solvent
       prm
       solv'
       nof
+      tx
+
+  apply hh
