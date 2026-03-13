@@ -1953,10 +1953,6 @@ lemma subcode_compile_call {e l m n}
   rw [List.slice_iff_get?_eq] at hh
   apply hh
 
-
-
-
-
 lemma subcode_compile_branch {e k l p q}
   (h : subcode e.code k (Func.compile l k (Func.branch p q))) :
     ∃ loc : Nat,
@@ -1967,13 +1963,9 @@ lemma subcode_compile_branch {e k l p q}
       Jinst.jumpdest.At e loc ∧
       subcode e.code (loc + 1) (Func.compile l (loc + 1) q) := by
   rcases of_subcode h with ⟨cd, h', h_slice⟩; clear h
-
   rcases of_bind_eq_some h' with ⟨qcd, h_qcd, h⟩; clear h'
-
   rcases of_guard_eq_some h with ⟨h_loc, h'⟩; clear h
-
   rcases of_bind_eq_some h' with ⟨pcd, h_pcd, h⟩; clear h'
-
   rw [← of_pure_eq_some h] at h_slice; clear h cd; rename' h_slice => h
   rw [List.append_assoc, List.append_assoc, List.append_assoc] at h
   let loc : Nat := k + qcd.length + 4
@@ -2676,9 +2668,10 @@ theorem correct_core (f : Func) (fs : List Func) :
   | .branch p q =>
     rcases subcode_compile_branch h_sub with
       ⟨loc, h_loc, h_push, h_jumpi, h_scp, h_jumpdest, h_scq⟩
-    have h : ∃ (s' : Desc) (cr' : Exec pk.e s' (pk.pc + 3) pk.r),
-             Desc.Push [Nat.toB256 loc] pk.s s' ∧
-             Exec'.Rel ⟨pk.e, s', pk.pc + 3, pk.r, cr'⟩ pk := by
+    have h :
+        ∃ (s' : Desc) (cr' : Exec pk.e s' (pk.pc + 3) pk.r),
+          Desc.Push [Nat.toB256 loc] pk.s s' ∧
+          Exec'.Rel ⟨pk.e, s', pk.pc + 3, pk.r, cr'⟩ pk := by
       rcases push_of_pushAt pk.cr h_push with ⟨s', cr', h, h_prec⟩
       rw [List.toB256_pair _ h_loc] at h
       refine' ⟨s', cr', h, h_prec⟩

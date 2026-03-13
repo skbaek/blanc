@@ -713,7 +713,7 @@ inductive Step : Env → Desc → Nat → Desc → Nat → Type
       Fail s o s' →
       Step e s pc s' (pc + 1)
   | jump :
-    ∀ e s pc s' pc',
+    ∀ e s pc o s' pc',
       Jinst.At e pc o →
       Jinst.Run e s pc o s' pc' →
       Step e s pc s' pc'

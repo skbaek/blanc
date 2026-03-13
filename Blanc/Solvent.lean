@@ -1015,8 +1015,8 @@ theorem transaction_inv_solvent
     apply le_sum
   apply le_of_increase tx.incr' h_nof''
 
-#exit
 
+#exit
 def State.codes (s : State) : Codes :=
   ByteArray.toList ∘ s.getCode
 
