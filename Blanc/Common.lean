@@ -1971,8 +1971,7 @@ lemma subcode_compile_branch {e k l p q}
   let loc : Nat := k + qcd.length + 4
   refine' ⟨loc, h_loc, _⟩
   simp [PushAt, pushToB8L, pushToB8]
-  have foo := List.slice_prefix h
-  refine' ⟨foo, _⟩
+  refine' ⟨List.slice_prefix h, _⟩
   have h' := List.slice_suffix h; clear h
   rw [← List.singleton_append] at h'
   refine' ⟨List.slice_iff_get?_eq.mp <| List.slice_prefix h', _⟩
@@ -2275,7 +2274,6 @@ lemma Func.length_compile {l k p bs} (h : Func.compile l k p = some bs) :
     simp at h; rw [← h];
     simp [List.length, compsize]
 
-
 lemma of_get?_table_eq_some {f fs} {bs} {m n : ℕ} {p : Func}
     (h_eq : some bs = Prog.compile ⟨f, fs⟩)
     (h_get : (table 0 (f :: fs))[m]? = some (n, p)) :
@@ -2347,10 +2345,11 @@ lemma subcode_of_get?_eq_some {f fs} {e : Env} {k loc : ℕ} {p : Func}
   have h_slice : List.Slice e.code loc sfx := by
     rw [← h_pfx, h_split']; apply List.append_slice_suffix
   rw [h_sfx', List.append_assoc] at h_slice
-  rw [← List.slice_iff_get?_eq]
-  refine' ⟨List.slice_prefix h_slice, _⟩
-  rw [h_bs]; simp [subcode]
-  apply List.slice_prefix <| List.slice_suffix h_slice
+  constructor
+  · rw [← List.slice_iff_get?_eq]
+    apply List.slice_prefix h_slice
+  · rw [h_bs]; simp [subcode]
+    apply List.slice_prefix <| List.slice_suffix h_slice
 
 lemma toUInt16_toNat {x : UInt16} : Nat.toUInt16 x.toNat = x :=
   UInt16.ofNat_toNat
@@ -2367,42 +2366,12 @@ def B16.concat (x y : B16) : B32 :=
 def B32.concat (x y : B32) : B64 :=
   x.toB64 <<< 32 ||| y.toB64
 
--- def Nat.toB32 : Nat → B32 := Nat.toUInt32
--- def Nat.toB64 : Nat → B64 := Nat.toUInt64
--- def B64.toNat : B64 → Nat := UInt64.toNat
--- def B32.toNat : B32 → Nat := UInt32.toNat
---
--- lemma toNat_toB32 {n : ℕ} : B32.toNat n.toB32 = n ↾ 32 :=
---   UInt32.toNat_ofNat
---
--- lemma toNat_toB64 {n : ℕ} : B64.toNat (n.toB64) = n ↾ 64 :=
---   UInt64.toNat_ofNat
-
 lemma Nat.toB64_eq (n : Nat) : n.toB64 = n.toUInt64 := rfl
 
 lemma B64.toNat_eq (x : B64) : x.toNat = UInt64.toNat x := rfl
 
--- lemma Nat.lo_lo_of_le {k m n : Nat} (le : m ≤ n) :
---     (k ↾ m) ↾ n = k ↾ m := mod_mod_of_dvd' <| pow_dvd_pow _ le
---
--- lemma Nat.lo_lo_of_ge {k m n : Nat} (ge : m ≥ n) :
---     (k ↾ m) ↾ n = k ↾ n := mod_mod_of_dvd _ <| pow_dvd_pow _ ge
-
 lemma Nat.lo_eq (m n : Nat) : m ↾ n = m % (2 ^ n) := rfl
 lemma Nat.hi_eq (m n : Nat) : m ↿ n = (m >>> n) <<< n := rfl
-
-
--- lemma B64.ofNat_eq_iff_mod_eq_toNat (a : Nat) (b : B64) :
---     a.toB64 = b ↔ a ↾ 64 = b.toNat :=
---   UInt64.ofNat_eq_iff_mod_eq_toNat a b
-
-
-#check UInt16.toUInt16_toUInt32
-#check UInt32.toUInt32_toUInt16
-
-#check UInt32.toUInt16_toUInt64
-#check B64.toNat_mod
-#check B64.ofNat_eq_iff_mod_eq_toNat
 
 lemma B32.ofNat_eq_iff_mod_eq_toNat (a : Nat) (b : B32) :
     a.toB32 = b ↔ a ↾ 32 = b.toNat :=

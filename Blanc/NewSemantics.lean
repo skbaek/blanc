@@ -212,7 +212,7 @@ def Transfer
     Increase ki v c d
 
 structure Evm.Rels where
-  (pc : Nat → Nat → Prop)
+  -- (pc : Nat → Nat → Prop)
   (stack : List B256 → List B256 → Prop)
   (memory : Mem → Mem → Prop)
   (code : ByteArray → ByteArray → Prop)
@@ -227,8 +227,8 @@ structure Evm.Rels where
   -- (accessedAddresses : AdrSet → AdrSet → Prop)
   -- (accessedStorageKeys : KeySet → KeySet → Prop)
 
-def Evm.Rels.eqs : Evm.Rels where
-  pc := Eq
+def Evm.Rels.equiv : Evm.Rels where
+  -- pc := Eq
   stack := Eq
   memory := Eq
   code := Eq
@@ -244,7 +244,7 @@ def Evm.Rels.eqs : Evm.Rels where
   -- accessedStorageKeys := Eq
 
 structure Evm.Rel (rels : Evm.Rels) (evm evm' : Evm) : Prop where
-  (pc : rels.pc evm.pc evm'.pc)
+  -- (pc : rels.pc evm.pc evm'.pc)
   (stack : rels.stack evm.stack evm'.stack)
   (memory : rels.memory evm.memory evm'.memory)
   (code : rels.code evm.code evm'.code)
@@ -263,19 +263,19 @@ structure Evm.Rel (rels : Evm.Rels) (evm evm' : Evm) : Prop where
   --   rels.accessedStorageKeys evm.accessedStorageKeys evm'.accessedStorageKeys )
 
 def Evm.Diff (xs ys : List B256) : Evm → Evm → Prop :=
-  Rel {Rels.eqs with stack := Stack.Diff xs ys}
+  Rel {Rels.equiv with stack := Stack.Diff xs ys}
 
 def Evm.Push (xs : List B256) : Evm → Evm → Prop :=
-  Rel {Rels.eqs with stack := Stack.Push xs}
+  Rel {Rels.equiv with stack := Stack.Push xs}
 
 def Evm.Pop (xs : List B256) : Evm → Evm → Prop :=
-  Rel {Rels.eqs with stack := Stack.Pop xs}
+  Rel {Rels.equiv with stack := Stack.Pop xs}
 
 def Evm.Swap (n : Nat) : Evm → Evm → Prop :=
-  Rel {Rels.eqs with stack := Stack.Swap n}
+  Rel {Rels.equiv with stack := Stack.Swap n}
 
 def Evm.Dup (n : Nat) : Evm → Evm → Prop :=
-  Rel {Rels.eqs with stack := Stack.Dup n}
+  Rel {Rels.equiv with stack := Stack.Dup n}
 
 def Evm.Add (evm evm' : Evm) : Prop :=  ∃ x y, Evm.Diff [x, y] [x + y] evm evm'
 def Evm.Sub (evm evm' : Evm) : Prop :=  ∃ x y, Evm.Diff [x, y] [x - y] evm evm'
@@ -395,7 +395,7 @@ def Mstored (x : B256) (bs : B8L) (m m' : Mem) : Prop :=
 def Evm.Calldatacopy (s s' : Evm) : Prop :=
   ∃ x y z,
     Evm.Rel
-      { Evm.Rels.eqs with
+      { Evm.Rels.equiv with
         stack := Stack.Pop [x, y, z],
         memory :=
           λ mem mem' =>
@@ -425,7 +425,7 @@ def Evm.Calldatacopy (s s' : Evm) : Prop :=
 def Evm.Mcopy (s s' : Evm) : Prop :=
   ∃ x y z,
     Evm.Rel
-      { Evm.Rels.eqs with
+      { Evm.Rels.equiv with
         stack := Stack.Pop [x, y, z],
         memory :=
           λ mem mem' =>
@@ -436,7 +436,7 @@ def Evm.Mcopy (s s' : Evm) : Prop :=
 def Evm.Codecopy (s s' : Evm) : Prop :=
   ∃ x y z,
     Evm.Rel
-      { Evm.Rels.eqs with
+      { Evm.Rels.equiv with
         stack := Stack.Pop [x, y, z],
         memory :=
           Mstored x (s.code.sliceD y.toNat z.toNat (Linst.toB8 .stop)) } s s'
@@ -444,7 +444,7 @@ def Evm.Codecopy (s s' : Evm) : Prop :=
 def Evm.Extcodecopy (s s' : Evm) : Prop :=
   ∃ w x y z,
     Evm.Rel
-      { Evm.Rels.eqs with
+      { Evm.Rels.equiv with
         stack := Stack.Pop [w, x, y, z],
         memory :=
           let code := s.getCode w.toAdr
@@ -457,7 +457,7 @@ def Evm.Retdatacopy (s s' : Evm) : Prop :=
   -- z -- let ⟨size, evm⟩ ← evm.popToNat
   ∃ x y z,
     Evm.Rel
-      { Evm.Rels.eqs with
+      { Evm.Rels.equiv with
         stack := Stack.Pop [x, y, z],
         memory :=
           let value := s.returnData.sliceD y.toNat z.toNat 0
@@ -474,7 +474,7 @@ def Evm.Retdatacopy (s s' : Evm) : Prop :=
 def Evm.Tstore (s s' : Evm) : Prop :=
   ∃ x y : B256,
     Evm.Rel
-    { Evm.Rels.eqs with
+    { Evm.Rels.equiv with
       -- todo : add t-storage condition
       stack := Stack.Diff [x, y] [] } s s' ∧
     s.msg.isStatic = 0
@@ -484,7 +484,7 @@ def Evm.Sstore (s s' : Evm) : Prop :=
   -- y -- let ⟨new_value, evm2⟩ ← evm1.pop
   ∃ x y : B256,
     Evm.Rel
-    { Evm.Rels.eqs with
+    { Evm.Rels.equiv with
       stack := Stack.Diff [x, y] []
       msg := λ m m' => m' = m.setStorVal s.contract x y } s s' ∧
     s.msg.isStatic = 0
@@ -503,7 +503,7 @@ def Evm.Mload (s s' : Evm) : Prop :=
 def Evm.Mstore (s s' : Evm) : Prop :=
   ∃ x y,
     Evm.Rel
-      { Evm.Rels.eqs with
+      { Evm.Rels.equiv with
         stack := Stack.Diff [x, y] [],
         memory := Mstored x y.toB8L }
       s s'
@@ -511,7 +511,7 @@ def Evm.Mstore (s s' : Evm) : Prop :=
 def Evm.Mstore8 (s s' : Evm) : Prop :=
   ∃ (x y : B256),
     Evm.Rel
-      { Evm.Rels.eqs with
+      { Evm.Rels.equiv with
         stack := Stack.Diff [x, y] [],
         memory := Mstored x [y.2.2.toUInt8] } s s'
 
@@ -545,9 +545,6 @@ def Xinst.toB8 : Xinst → B8
 
 def pushToB8 (bs : B8L) : B8 := 0x5F + Nat.toUInt8 bs.length
 def pushToB8L (bs : B8L) : B8L := pushToB8 bs :: bs
-
-#check ByteArray.getInst
-
 
 def Linst.At (code : ByteArray) (pc : Nat) (l : Linst) : Prop := code.getInst pc = some (.last l)
 def Ninst.At (code : ByteArray) (pc : Nat) (n : Ninst) : Prop := code.getInst pc = some (.next n)
@@ -930,10 +927,10 @@ def Ninst.toB8L : Ninst → B8L
 --
 --
 -- def Evm.Pop (xs : List B256) : Evm → Evm → Prop :=
---   Rel {Rels.eqs with stack := Stack.Pop xs}
+--   Rel {Rels.equiv with stack := Stack.Pop xs}
 
-def Jinst.Run' (evm : Evm) : Jinst → Execution → Prop := λ j ex => j.run evm = ex
-def Linst.Run' (evm : Evm) : Linst → Execution → Prop := λ l ex => l.run evm = ex
+def Jinst.Run (evm : Evm) : Jinst → Execution → Prop := λ j ex => j.run evm = ex
+def Linst.Run (evm : Evm) : Linst → Execution → Prop := λ l ex => l.run evm = ex
 
 
 
@@ -1423,7 +1420,6 @@ lemma of_processCreateMessage (msg : Msg) (lim : Nat)
       · rename_i neg; rw [if_neg neg]; exact eq
     · rw [pcm_eq] at eq; exact eq
   · rename_i neg; rw [if_neg neg]; exact eq
-
 
 lemma of_genericCreate
     {evm : Evm} {endow : B256} {newAdr : Adr}
@@ -2251,14 +2247,14 @@ inductive Exec : Evm → Execution → Type
     Exec evm' exn' → Exec evm'' exn → Exec evm exn
   | jumpErr {evm : Evm} {j : Jinst} {exn : Execution} :
     j.At evm.code evm.pc →
-    Jinst.Run' evm j exn →
+    Jinst.Run evm j exn →
     exn.IsError → Exec evm exn
   | jumpRec {evm : Evm} {j : Jinst} {evm' : Evm} {exn : Execution} :
     j.At evm.code evm.pc →
-    Jinst.Run' evm j (.ok evm') →
+    Jinst.Run evm j (.ok evm') →
     Exec evm' exn → Exec evm exn
   | last {evm : Evm} {l : Linst} {exn : Execution} :
-    l.At evm.code evm.pc  → Linst.Run' evm l exn → Exec evm exn
+    l.At evm.code evm.pc  → Linst.Run evm l exn → Exec evm exn
 
 syntax "bind_step " ident rcasesPat : tactic
 macro_rules
@@ -3259,9 +3255,9 @@ lemma unlim_pop_n {evm : Evm} {n : Nat} : ¬ (evm.popN n).Limited := by
     unlim_bind_step ltd ih; cases ltd
 
 lemma Linst.unlim_of_run {evm : Evm} {l : Linst} {ex : Execution}
-    (run : Linst.Run' evm l ex) : ¬ ex.Limited := by
+    (run : Linst.Run evm l ex) : ¬ ex.Limited := by
   intro ltd;
-  simp only [Linst.Run'] at run
+  simp only [Linst.Run] at run
   rw [← run] at ltd; cases l
   case stop => cases ltd
   case rev =>
@@ -3870,7 +3866,7 @@ lemma of_exec' :
     apply exec_eq _ (by omega)
   · intro evm j ex get run is_err;
     simp only [Jinst.At] at get
-    simp only [Jinst.Run'] at run
+    simp only [Jinst.Run] at run
     constructor
     · rw [← run]; apply Jinst.unlim_run
     · refine' ⟨0, _⟩; intro lim gt
@@ -3879,14 +3875,14 @@ lemma of_exec' :
       apply Except.bind_eq_of_is_error; exact is_err
   · intro evm j evm' ex get run exc ⟨unlim, lim, exec_eq⟩  ----is_err;
     simp only [Jinst.At] at get
-    simp only [Jinst.Run'] at run
+    simp only [Jinst.Run] at run
     refine' ⟨unlim, lim + 1, _⟩; intro lim' gt
     rcases lim' with _ | lim'; {cases Nat.not_lt_zero _ gt}
     simp only [Evm.getInst, exec, get, Option.toExcept, ok_bind, run]
     apply exec_eq _ (by omega)
   · intro evm l ex get run;
     simp only [Linst.At] at get
-    simp only [Linst.Run'] at run
+    simp only [Linst.Run] at run
     refine' ⟨Linst.unlim_of_run run, 0, _⟩; intro lim' gt
     rcases lim' with _ | lim'; {cases Nat.not_lt_zero _ gt}
     simp only [Evm.getInst, exec, get, Option.toExcept, ok_bind, run]
@@ -3906,6 +3902,37 @@ def Xlot.Filled : Xlot → Prop
 def Ninst.Run (evm : Evm) (n : Ninst) (evm' : Evm) : Prop :=
   ∃ xl, xl.Filled ∧ Ninst.Run' evm n xl (.ok evm')
 
+inductive Func.Run : List Func → Evm → Func → Evm → Prop
+  | zero :
+    ∀ {fs evm evm' f g evm''},
+      Evm.Pop [0] evm evm' →
+      Func.Run fs evm' f evm'' →
+      Func.Run fs evm (branch f g) evm''
+  | succ :
+    ∀ {fs evm w evm' f g evm''},
+      w ≠ 0 →
+      Evm.Pop [w] evm evm' →
+      Func.Run fs evm' g evm'' →
+      Func.Run fs evm (branch f g) evm''
+  | last :
+    ∀ {fs evm i evm'},
+      Linst.Run evm i (.ok evm') →
+      Func.Run fs evm (last i) evm'
+  | next :
+    ∀ {fs evm i evm' f evm''},
+      Ninst.Run evm i evm' →
+      Func.Run fs evm' f evm'' →
+      Func.Run fs evm (next i f) evm''
+  | call :
+    ∀ {fs evm k f evm'},
+      fs[k]? = some f →
+      Func.Run fs evm f evm' →
+      Func.Run fs evm (call k) evm'
+
+def Prog.Run (evm : Evm) (p : Prog) (evm' : Evm) : Prop :=
+  Func.Run (p.main :: p.aux) evm p.main evm'
+
+#exit
 inductive Func.Run : List Func → Evm → Func → Execution → Prop
   | zero :
     ∀ {fs evm evm' f g exn},
