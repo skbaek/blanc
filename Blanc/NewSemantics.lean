@@ -2254,7 +2254,7 @@ inductive Exec : Evm → Execution → Type
     Jinst.Run evm j (.ok evm') →
     Exec evm' exn → Exec evm exn
   | last {evm : Evm} {l : Linst} {exn : Execution} :
-    l.At evm.code evm.pc  → Linst.Run evm l exn → Exec evm exn
+    l.At evm.code evm.pc → Linst.Run evm l exn → Exec evm exn
 
 syntax "bind_step " ident rcasesPat : tactic
 macro_rules
@@ -3902,6 +3902,62 @@ def Xlot.Filled : Xlot → Prop
 def Ninst.Run (evm : Evm) (n : Ninst) (evm' : Evm) : Prop :=
   ∃ xl, xl.Filled ∧ Ninst.Run' evm n xl (.ok evm')
 
+def Evm.Equiv (evm evm' : Evm) : Prop :=
+  Evm.Rel Evm.Rels.equiv evm evm'
+
+infix:70 " ≅ "  => Evm.Equiv
+
+lemma Evm.equiv_refl (evm : Evm) : evm ≅ evm := by
+  constructor <;> rfl
+
+lemma Evm.equiv_symm {evm evm' : Evm} (h : evm ≅ evm') : evm' ≅ evm := by
+  constructor
+  · exact h.stack.symm
+  · exact h.memory.symm
+  · exact h.code.symm
+  · exact h.logs.symm
+  · exact h.msg.symm
+  · exact h.output.symm
+  · exact h.returnData.symm
+  · exact h.error.symm
+
+lemma Evm.equiv_trans {evm₁ evm₂ evm₃ : Evm} (h1 : evm₁ ≅ evm₂) (h2 : evm₂ ≅ evm₃) : evm₁ ≅ evm₃ := by
+  constructor
+  · exact h1.stack.trans h2.stack
+  · exact h1.memory.trans h2.memory
+  · exact h1.code.trans h2.code
+  · exact h1.logs.trans h2.logs
+  · exact h1.msg.trans h2.msg
+  · exact h1.output.trans h2.output
+  · exact h1.returnData.trans h2.returnData
+  · exact h1.error.trans h2.error
+
+lemma rel_of_rel_of_equiv {evm evm' evm''} {rs : Evm.Rels}
+    (rel : Evm.Rel rs evm evm') (equiv : evm' ≅ evm'') :
+    Evm.Rel rs evm evm'' := by
+  constructor
+  · rw [← equiv.stack]; exact rel.stack
+  · rw [← equiv.memory]; exact rel.memory
+  · rw [← equiv.code]; exact rel.code
+  · rw [← equiv.logs]; exact rel.logs
+  · rw [← equiv.msg]; exact rel.msg
+  · rw [← equiv.output]; exact rel.output
+  · rw [← equiv.returnData]; exact rel.returnData
+  · rw [← equiv.error]; exact rel.error
+
+lemma rel_of_equiv_of_rel {evm evm' evm''} {rs : Evm.Rels}
+    (equiv : evm ≅ evm') (rel : Evm.Rel rs evm' evm'') :
+    Evm.Rel rs evm evm'' := by
+  constructor
+  · rw [equiv.stack]; exact rel.stack
+  · rw [equiv.memory]; exact rel.memory
+  · rw [equiv.code]; exact rel.code
+  · rw [equiv.logs]; exact rel.logs
+  · rw [equiv.msg]; exact rel.msg
+  · rw [equiv.output]; exact rel.output
+  · rw [equiv.returnData]; exact rel.returnData
+  · rw [equiv.error]; exact rel.error
+
 inductive Func.Run : List Func → Evm → Func → Evm → Prop
   | zero :
     ∀ {fs evm evm' f g evm''},
@@ -3915,19 +3971,42 @@ inductive Func.Run : List Func → Evm → Func → Evm → Prop
       Func.Run fs evm' g evm'' →
       Func.Run fs evm (branch f g) evm''
   | last :
-    ∀ {fs evm i evm'},
-      Linst.Run evm i (.ok evm') →
-      Func.Run fs evm (last i) evm'
+    ∀ {fs evm evm' i evm'' evm'''},
+      evm ≅ evm' →
+      Linst.Run evm' i (.ok evm'') →
+      evm'' ≅ evm''' →
+      Func.Run fs evm (last i) evm'''
   | next :
-    ∀ {fs evm i evm' f evm''},
-      Ninst.Run evm i evm' →
-      Func.Run fs evm' f evm'' →
-      Func.Run fs evm (next i f) evm''
+    ∀ {fs evm evm' i evm'' f evm'''},
+      evm ≅ evm' →
+      Ninst.Run evm' i evm'' →
+      Func.Run fs evm'' f evm''' →
+      Func.Run fs evm (next i f) evm'''
   | call :
     ∀ {fs evm k f evm'},
       fs[k]? = some f →
       Func.Run fs evm f evm' →
       Func.Run fs evm (call k) evm'
+
+lemma Func.run_well_def {fs ievm ievm' f fevm fevm'}
+    (run : Func.Run fs ievm f fevm) (ieqv : ievm ≅ ievm')
+    (feqv : fevm ≅ fevm') : Func.Run fs ievm' f fevm' := by
+  induction run generalizing ievm' fevm'
+  case zero pop run ih =>
+    apply Func.Run.zero (rel_of_equiv_of_rel (Evm.equiv_symm ieqv) pop)
+    apply ih (Evm.equiv_refl _) feqv
+  case succ h pop run ih =>
+    apply Func.Run.succ h (rel_of_equiv_of_rel (Evm.equiv_symm ieqv) pop)
+    apply ih (Evm.equiv_refl _) feqv
+  case last h_eqv run_l h_eqv' =>
+    apply Func.Run.last (Evm.equiv_trans (Evm.equiv_symm ieqv) h_eqv) run_l
+    apply Evm.equiv_trans h_eqv' feqv
+  case next eqv_next run_i run_f ih =>
+    apply Func.Run.next (Evm.equiv_trans (Evm.equiv_symm ieqv) eqv_next) run_i
+    apply ih (Evm.equiv_refl _) feqv
+  case call h_get run ih =>
+    apply Func.Run.call h_get
+    apply ih ieqv feqv
 
 def Prog.Run (evm : Evm) (p : Prog) (evm' : Evm) : Prop :=
   Func.Run (p.main :: p.aux) evm p.main evm'

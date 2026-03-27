@@ -2527,11 +2527,6 @@ lemma toB64_eq_concat (n : Nat) :
   rw [rw, ← @Nat.lo_lo_of_ge n 64 32 (by omega)]
   apply (Nat.hi_or_lo _ _).symm
 
--- lemma Nat.div_eq_zero_of_lt {k x : Nat} (h : x < k) : x / k = 0 := by
---   rw [Nat.div_eq_zero_iff_lt (by omega)]; apply h
-
-lemma toNat_toB16 {n : Nat} : n.toB16.toNat = n ↾ 16 := UInt16.toNat_ofNat'
-
 lemma pair_aux (n m : Nat) :
     ((n >>> m ↾ m) ↾ (m + m)) <<< m ↾ (m + m) ||| (n ↾ m) ↾ (m + m) =
       n ↾ (m + m) := by

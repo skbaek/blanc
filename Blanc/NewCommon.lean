@@ -66,175 +66,6 @@ def subcode (cd : B8L) (k : Nat) : Option B8L → Prop
   | none => False
   | some bs => List.Slice cd k bs
 
-/-----------------------------------------------------
-
-structure Pack : Type where
-  (evm : Evm)
-  (evm' : Evm)
-  (ex : Exec evm (.ok evm'))
-
-abbrev Pack.Pred : Type := Pack → Prop
-
-def Pack.imp (π π' : Pack.Pred) : Pack.Pred := λ pk => π pk → π' pk
-
-infix:70 " →p " => Pack.imp
-
-def Pack.Fa (π : Pack.Pred) : Prop := ∀ pk, π pk
-
-notation "□p" => Pack.Fa
-
-inductive Pack.Rel : Pack → Pack → Prop
-  | none {evm : Evm} {n : Ninst} {evm' evm'' : Evm}
-    (n_at : n.At evm.code evm.pc)
-    (run : Ninst.Run' evm n .none (.ok evm'))
-    (ex : Exec evm' (.ok evm'')) :
-    Pack.Rel ⟨evm', evm'', ex⟩ ⟨evm, evm'', .nextNoneRec n_at run ex ⟩
-  | fst {evm : Evm} {n : Ninst} {revm revm' : Evm} {evm' evm'' : Evm}
-    (n_at : n.At evm.code evm.pc)
-    (run : Ninst.Run' evm n (.some (revm, .ok revm')) (.ok evm'))
-    (rex : Exec revm (.ok revm')) (ex : Exec evm' (.ok evm'')) :
-    Pack.Rel ⟨revm, revm', rex⟩ ⟨evm, evm'', .nextSomeRec n_at run rex ex⟩
-  | snd {evm : Evm} {n : Ninst} {revm : Evm}
-    {rexn : Execution} {evm' evm'' : Evm}
-    (n_at : n.At evm.code evm.pc)
-    (run : Ninst.Run' evm n (.some (revm, rexn)) (.ok evm'))
-    (rex : Exec revm rexn) (ex : Exec evm' (.ok evm'')) :
-    Pack.Rel ⟨evm', evm'', ex⟩ ⟨evm, evm'', .nextSomeRec n_at run rex ex⟩
-  | jump {evm : Evm} {j : Jinst} {evm' evm'' : Evm}
-    (j_at : j.At evm.code evm.pc)
-    (run : Jinst.Run' evm j (.ok evm'))
-    (ex : Exec evm' (.ok evm'')) :
-    Pack.Rel ⟨evm', evm'', ex⟩ ⟨evm, evm'', .jumpRec j_at run ex⟩
-
-inductive Pack.le : Pack → Pack → Prop
-  | refl : ∀ p, Pack.le p p
-  | step : ∀ p p' p'', Pack.le p p' → Pack.Rel p' p'' → Pack.le p p''
-
-inductive Pack.lt : Pack → Pack → Prop
-  | intro {pk pk' pk'' : Pack} :
-    Pack.le pk pk' → Pack.Rel pk' pk'' → Pack.lt pk pk''
-
-lemma Pack.lt_of_prec {pk pk' : Pack} (rel : Rel pk pk') : lt pk pk' :=
-  .intro (le.refl pk) rel
-
-def Pack.gt (pk pk' : Pack) : Prop := Pack.lt pk' pk
-
-lemma Pack.eq_or_lt_of_le :
-  ∀ {p p'}, Pack.le p p' → p = p' ∨ Pack.lt p p' := by
-  intros p p'' h0
-  rcases h0 with ⟨_, _, p'⟩ | ⟨p', _, h1, h2⟩
-  · left; rfl
-  · right; refine (.intro h1 h2)
-
-lemma Pack.acc_of_le {pk pk' : Pack}
-    (h_le : Pack.le pk pk') (h_acc : Acc Pack.lt pk') : Acc Pack.lt pk := by
-  cases Pack.eq_or_lt_of_le h_le with
-  | inl h => rw [h]; exact h_acc
-  | inr h => exact Acc.inv h_acc h
-
-theorem Pack.lt.well_founded : WellFounded Pack.lt := by
-
-  have foo :=
-    @Exec.rec
-      ( λ evm exn ex =>
-        ∀ (evm' : Evm) (eq : exn = (.ok evm')),
-          let ex' : Exec evm (.ok evm') := by
-            rw [← eq]; exact ex
-          Acc Pack.lt ⟨evm, evm', ex'⟩ )
-      (by intro _ _ _ eq; cases eq)
-      ( by intro _ _ exn _ _ err _ eq;
-           rw [eq] at err
-           simp [Except.IsError] at err )
-      ( by intro _ _ _ _ _ _ _ _ err _ _ eq
-           rw [eq] at err
-           simp [Except.IsError] at err )
-      ( by intro evm n evm' exn n_at run ex ih
-           intro _evm eq _ex
-           cases _ex; clear _ex
-
-
-
-
-
-
-
-
-
-      )
-
-
-
-
-
-      sorry
-      sorry
-      sorry
-      sorry
-
-
-
-  constructor; intro pk; rcases pk with ⟨evm_0, evm_1, ex_0⟩
-  apply @foo evm_0 (.ok evm_1) ex_0 evm_1 rfl
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-  --apply @Exec.rec (λ s r cr => Acc Pack.lt ⟨s, r, cr⟩)
-
-
-
-#exit
-theorem Pack.lt.well_founded : WellFounded Pack.lt := by
-  constructor; intro pk; rcases pk with ⟨_, _, cr⟩
-  apply @Exec.rec (λ s r cr => Acc Pack.lt ⟨s, r, cr⟩)
-  · intro evm get; constructor;
-    intro _ h; rcases h with ⟨_, _, _, ⟨_⟩⟩
-  · intro _ _ _ _ _ _; constructor;
-    intro _ h; rcases h with ⟨_, _, _, ⟨_⟩⟩
-  · intro evm n evm' exn' exn get run ex' err acc;
-    constructor; intro _ lt
-    rcases lt with ⟨le, ⟨_⟩⟩
-    apply Pack.acc_of_le le acc
-  · intro _ _ _ _ _ _ _ _; constructor;
-    intro _ h; rcases h with ⟨_, _, _, ⟨_⟩⟩
-  · intro evm n evm' exn' evm'' exn get run ex' ex acc acc'
-    constructor; intro _ lt; rcases lt with ⟨le, ⟨_⟩⟩
-    · apply Pack.acc_of_le le acc
-    · apply Pack.acc_of_le le acc'
-  · intro _ _ _ _ _ _; constructor
-    intro _ h; rcases h with ⟨_, _, _, ⟨_⟩⟩
-  · intro _ _ _ _ _ _ _ _; constructor
-    intro _ h; rcases h with ⟨_, _, _, ⟨_⟩⟩
-  · intro _ _ _ _ _; constructor
-    intro _ h; rcases h with ⟨_, _, _, ⟨_⟩⟩
-
-def carryover (π : Pack.Pred) : Pack.Pred :=
-(λ pk => □p (Pack.gt pk →p π)) →p π
-
-def Exec'.strongRec (π : Exec'.Pred) : □p (carryover π) → □p π := by
-  intro ih pk
-  apply @WellFounded.induction _ Exec'.lt Exec'.lt.well_founded π pk
-  clear pk; intro pk ih'
-  apply ih
-  intro pk' h_gt
-  apply ih' _ h_gt
-infix:70 " →p " => Exec'.imp
-
--------------------------------------------------------------------------/
-
 structure Pack : Type where
   (evm : Evm)
   (exn : Execution)
@@ -270,7 +101,7 @@ inductive Pack.Rel : Pack → Pack → Prop
     Pack.Rel ⟨evm', .ok evm'', ex⟩ ⟨evm, .ok evm'', .nextSomeRec n_at run rex ex⟩
   | jump {evm : Evm} {j : Jinst} {evm' evm'' : Evm}
     (j_at : j.At evm.code evm.pc)
-    (run : Jinst.Run' evm j (.ok evm'))
+    (run : Jinst.Run evm j (.ok evm'))
     (ex : Exec evm' (.ok evm'')) :
     Pack.Rel ⟨evm', .ok evm'', ex⟩ ⟨evm, .ok evm'', .jumpRec j_at run ex⟩
 
@@ -336,106 +167,8 @@ def Pack.strongRec (π : Pack.Pred) : □p (carryover π) → □p π := by
   intro pk' h_gt
   apply ih' _ h_gt
 
-
-
-/-
-structure Exec' : Type where
-  (evm : Evm)
-  (exn : Execution)
-  (ex : Exec evm exn)
-
-abbrev Exec'.Pred : Type := Exec' → Prop
-
-def Exec'.imp (π π' : Exec'.Pred) : Exec'.Pred := λ pk => π pk → π' pk
-
-def Exec'.Fa (π : Exec'.Pred) : Prop := ∀ pk, π pk
-
-notation "□p" => Exec'.Fa
-
-inductive Exec'.Rel : Exec' → Exec' → Prop
-  | err {evm : Evm} {n : Ninst}
-    {evm' : Evm} {exn' : Execution } {exn : Execution}
-    (get : n.At evm.code evm.pc)
-    (run : Ninst.Run' evm n (.some (evm', exn')) exn)
-    (ex : Exec evm' exn') (err : exn.IsError) :
-    Exec'.Rel ⟨evm', exn', ex⟩ ⟨evm, exn, .nextSomeErr get run ex err⟩
-  | fst {evm : Evm} {n : Ninst} {evm' : Evm}
-    {exn' : Execution} {evm'' : Evm} {exn : Execution}
-    (get : n.At evm.code evm.pc)
-    (run : Ninst.Run' evm n (.some (evm', exn')) (.ok evm''))
-    (ex : Exec evm' exn') (ex' : Exec evm'' exn) :
-    Exec'.Rel ⟨evm', exn', ex⟩ ⟨evm, exn, .nextSomeRec get run ex ex'⟩
-  | snd {evm : Evm} {n : Ninst} {evm' : Evm}
-    {exn' : Execution} {evm'' : Evm} {exn : Execution}
-    (get : n.At evm.code evm.pc)
-    (run : Ninst.Run' evm n (.some (evm', exn')) (.ok evm''))
-    (ex : Exec evm' exn') (ex' : Exec evm'' exn) :
-    Exec'.Rel ⟨evm'', exn, ex'⟩ ⟨evm, exn, .nextSomeRec get run ex ex'⟩
-
-inductive Exec'.le : Exec' → Exec' → Prop
-  | refl : ∀ p, Exec'.le p p
-  | step : ∀ p p' p'', Exec'.le p p' → Exec'.Rel p' p'' → Exec'.le p p''
-
-inductive Exec'.lt : Exec' → Exec' → Prop
-  | intro {pk pk' pk'' : Exec'} :
-    Exec'.le pk pk' → Exec'.Rel pk' pk'' → Exec'.lt pk pk''
-
-lemma Exec'.lt_of_prec {pk pk' : Exec'} (rel : Rel pk pk') : lt pk pk' :=
-  .intro (le.refl pk) rel
-
-def Exec'.gt (pk pk' : Exec') : Prop := Exec'.lt pk' pk
-
-lemma Exec'.eq_or_lt_of_le :
-  ∀ {p p'}, Exec'.le p p' → p = p' ∨ Exec'.lt p p' := by
-  intros p p'' h0
-  rcases h0 with ⟨_, _, p'⟩ | ⟨p', _, h1, h2⟩
-  · left; rfl
-  · right; refine (.intro h1 h2)
-
-lemma Exec'.acc_of_le {pk pk' : Exec'}
-    (h_le : Exec'.le pk pk') (h_acc : Acc Exec'.lt pk') : Acc Exec'.lt pk := by
-  cases Exec'.eq_or_lt_of_le h_le with
-  | inl h => rw [h]; exact h_acc
-  | inr h => exact Acc.inv h_acc h
-
-theorem Exec'.lt.well_founded : WellFounded Exec'.lt := by
-  constructor; intro pk; rcases pk with ⟨_, _, cr⟩
-  apply @Exec.rec (λ s r cr => Acc Exec'.lt ⟨s, r, cr⟩)
-  · intro evm get; constructor;
-    intro _ h; rcases h with ⟨_, _, _, ⟨_⟩⟩
-  · intro _ _ _ _ _ _; constructor;
-    intro _ h; rcases h with ⟨_, _, _, ⟨_⟩⟩
-  · intro evm n evm' exn' exn get run ex' err acc;
-    constructor; intro _ lt
-    rcases lt with ⟨le, ⟨_⟩⟩
-    apply Exec'.acc_of_le le acc
-  · intro _ _ _ _ _ _ _ _; constructor;
-    intro _ h; rcases h with ⟨_, _, _, ⟨_⟩⟩
-  · intro evm n evm' exn' evm'' exn get run ex' ex acc acc'
-    constructor; intro _ lt; rcases lt with ⟨le, ⟨_⟩⟩
-    · apply Exec'.acc_of_le le acc
-    · apply Exec'.acc_of_le le acc'
-  · intro _ _ _ _ _ _; constructor
-    intro _ h; rcases h with ⟨_, _, _, ⟨_⟩⟩
-  · intro _ _ _ _ _ _ _ _; constructor
-    intro _ h; rcases h with ⟨_, _, _, ⟨_⟩⟩
-  · intro _ _ _ _ _; constructor
-    intro _ h; rcases h with ⟨_, _, _, ⟨_⟩⟩
-
-def carryover (π : Exec'.Pred) : Exec'.Pred :=
-(λ pk => □p (Exec'.gt pk →p π)) →p π
-
-def Exec'.strongRec (π : Exec'.Pred) : □p (carryover π) → □p π := by
-  intro ih pk
-  apply @WellFounded.induction _ Exec'.lt Exec'.lt.well_founded π pk
-  clear pk; intro pk ih'
-  apply ih
-  intro pk' h_gt
-  apply ih' _ h_gt
--/
-
 lemma Linst.run_of_at {evm l exn} (ex : Exec evm exn)
-    (get : l.At evm.code evm.pc) : Linst.Run' evm l exn := by
+    (get : l.At evm.code evm.pc) : Linst.Run evm l exn := by
   simp [Linst.At] at get
   cases ex
   <;> rename (evm.getInst = _) => get'
@@ -541,6 +274,125 @@ lemma Jinst.toXinst_toB8_eq_none {j : Jinst} : j.toB8.toXinst = .none := by case
 lemma Jinst.toLinst_toB8_eq_none {j : Jinst} : j.toB8.toLinst = .none := by cases j <;> rfl
 lemma Jinst.toJinst_toB8_eq_some {j : Jinst} : j.toB8.toJinst = .some j := by cases j <;> rfl
 
+
+#exit
+
+lemma foo (x : Nat) (le : x ≤ 32) : 95 + x.toUInt8 ≠ 86 := by
+  intro h
+  have h_nat : (95 + x.toUInt8).toNat = (86 : UInt8).toNat := by rw [h]
+  have h_x : x.toUInt8.toNat = x := by
+    apply Nat.mod_eq_of_lt
+    omega
+  simp [UInt8.toNat_add, h_x] at h_nat
+  have h_sum : 95 + x < 256 := by omega
+  rw [Nat.mod_eq_of_lt h_sum] at h_nat
+  omega
+
+lemma toInstType_eq_x_of_toXinst_eq_some {x : B8} {o}
+    (h : x.toXinst = some o) : x.toInstType = .X := by
+  unfold B8.toXinst at h; split at h <;> try {rfl}; cases h
+
+lemma toInstType_eq_j_of_toJinst_eq_some {x : B8} {j}
+    (h : x.toJinst = some j) : x.toInstType = .J := by
+  unfold B8.toJinst at h; split at h <;> try {rfl}; cases h
+
+lemma toInstType_eq_l_of_toLinst_eq_some {x : B8} {l}
+    (h : x.toLinst = some l) : x.toInstType = .L := by
+  unfold B8.toLinst at h; split at h <;> try {rfl}; cases h
+
+def UInt8.highs (x : UInt8) : UInt8 := (x >>> 4)
+def UInt8.lows (x : UInt8) : UInt8 := (x &&& 0x0F)
+
+lemma Nat.hi_le (a b : Nat) : a ↿ b ≤ a := by
+  rw [hi, shiftLeft_eq, shiftRight_eq_div_pow]
+  apply Nat.div_mul_le_self
+
+lemma B8.shl_highs_or_lows_eq_self (x : B8) : (x.highs <<< 4) ||| x.lows = x := by
+  apply UInt8.toNat_inj.mp
+  unfold B8.lows
+  rw [UInt8.toNat_or]
+  rw [UInt8.toNat_and]
+  have rw : UInt8.toNat 15 = 15 := by rfl
+  rw [rw]; clear rw
+  rw [Nat.and_two_pow_sub_one_eq_mod _ 4]
+  have hh := Nat.hi_or_lo
+  rw [UInt8.toNat_shiftLeft]
+  unfold B8.highs
+  rw [UInt8.toNat_shiftRight]
+  have rw : (UInt8.toNat 4 % 8) = 4 := by rfl
+  rw [rw]; clear rw
+  have hh := Nat.hi_le x.toNat 4
+  rw [Nat.mod_eq_of_lt (Nat.lt_of_le_of_lt _ (UInt8.toNat_lt x))]
+  · apply Nat.hi_or_lo
+  · apply Nat.hi_le
+
+-- lemma fooo {x : B8} : 0 ≤ x := by
+--   cases x
+--
+--
+-- #exit
+-- lemma fooo {x : B8} (eq : x.toInstType = .L) : x.toLinst.isSome := by
+--   unfold B8.toInstType at eq; split at eq --<;> try {rfl}; cases eq
+--   · rename (B8.highs _ = _) => highs_eq
+--     split at eq
+--     · rename (B8.lows _ = _) => lows_eq
+--       have rw := B8.shl_highs_or_lows_eq_self x
+--       rw [highs_eq, lows_eq] at rw
+--       simp at rw; rw [← rw]
+--       simp [B8.toLinst]
+--
+-- #exit
+-- lemma toInstType_eq_r_of_toRinst_eq_some {x : B8} {r}
+--     (h : x.toRinst = some r) : x.toInstType = .R := by
+--   unfold B8.toRinst at h; split at r --<;> try {rfl}; cases h
+--
+--
+--
+--
+-- #exit
+
+lemma toInstType_pushToB8 {bs : B8L} (h : bs.length ≤ 32) :
+    (pushToB8 bs).toInstType = .P := by
+  rw [← Nat.lt_succ] at h
+  simp only [pushToB8]; revert h
+  generalize bs.length = n; revert n
+  repeat (rw [Nat.forall_lt_succ_right']; refine' ⟨_, rfl⟩)
+  simp only [Nat.not_lt_zero, Nat.toUInt8_eq, IsEmpty.forall_iff, implies_true]
+
+lemma toJinst_pushToB8_eq_none {xs : B8L} (le : xs.length ≤ 32) :
+    (pushToB8 xs).toJinst = .none := by
+  cases h : (pushToB8 xs).toJinst; {rfl}
+
+  cases
+    Eq.trans
+      (toInstType_pushToB8 le).symm
+      (toInstType_eq_j_of_toJinst_eq_some h)
+
+lemma toXinst_pushToB8_eq_none {xs : B8L} (le : xs.length ≤ 32) :
+    (pushToB8 xs).toXinst = .none := by
+  cases h : (pushToB8 xs).toXinst; {rfl}
+  cases
+    Eq.trans
+      (toInstType_pushToB8 le).symm
+      (toInstType_eq_x_of_toXinst_eq_some h)
+
+lemma toRinst_pushToB8_eq_none {xs : B8L} (le : xs.length ≤ 32) :
+    (pushToB8 xs).toRinst = .none := by
+  unfold pushToB8
+  rw [Nat.le_iff_lt_add_one] at le; revert le
+  generalize xs.length = n; revert n
+  repeat (rw [Nat.forall_lt_succ_right']; refine' ⟨_, rfl⟩)
+  simp
+
+
+lemma toLinst_pushToB8_eq_none {xs : B8L} (le : xs.length ≤ 32) :
+    (pushToB8 xs).toLinst = .none := by
+  cases h : (pushToB8 xs).toLinst; {rfl}
+  cases
+    Eq.trans
+      (toInstType_pushToB8 le).symm
+      (toInstType_eq_l_of_toLinst_eq_some h)
+
 lemma none_mapRev {ξ υ} {f : ξ → υ} : (Option.none <&> f) = .none := by rfl
 
 lemma none_orElse {ξ} {x : Option ξ} : (Option.none <|> x) = x := by rfl
@@ -555,7 +407,9 @@ lemma Linst.getInst_of_slice {evm : Evm} {l : Linst} {xs : B8L}
     simp only [ByteArray.size, Array.size]
     rcases List.getElem?_eq_some_iff.mp eq with ⟨lt, _⟩
     rw [ByteArray.toList_eq_toList_data] at lt; exact lt
+
   rw [if_pos lt]
+
   conv => lhs; arg 1; lhs; rhs; rw [rw]; rfl
   rw [Linst.toRinst_toB8_eq_none, none_mapRev, none_orElse]
   conv => lhs; arg 1; lhs; rhs; rw [rw]; rfl
@@ -565,22 +419,6 @@ lemma Linst.getInst_of_slice {evm : Evm} {l : Linst} {xs : B8L}
   conv => lhs; arg 1; lhs; rhs; rw [rw]; rfl
   rw [Linst.toLinst_toB8_eq_some]; rfl
 
-lemma Jinst.at_of_slice {code : ByteArray} {pc} {j : Jinst}
-    (slice : code.toList.Slice pc [j.toB8]) : Jinst.At code pc j := by
-  have eq := List.get?_eq_of_slice slice
-  simp only [Jinst.At, ByteArray.getInst]
-  have rw := ByteArray.of_getElem?_eq_some eq
-  have lt : pc < code.size := by
-    simp only [ByteArray.size, Array.size]
-    rcases List.getElem?_eq_some_iff.mp eq with ⟨lt, _⟩
-    rw [ByteArray.toList_eq_toList_data] at lt; exact lt
-  rw [if_pos lt]
-  conv => lhs; arg 1; lhs; rhs; rw [rw]; rfl
-  rw [Jinst.toRinst_toB8_eq_none, none_mapRev, none_orElse]
-  conv => lhs; arg 1; lhs; rhs; rw [rw]; rfl
-  rw [Jinst.toXinst_toB8_eq_none, none_mapRev, none_orElse]
-  conv => lhs; arg 1; lhs; rhs; rw [rw]; rfl
-  rw [Jinst.toJinst_toB8_eq_some]; rfl
 
 lemma at_of_jumpable {code : ByteArray} {pc}
     (jump : jumpable code pc = true) : Jinst.At code pc .jumpdest := by
@@ -608,8 +446,143 @@ lemma at_of_jumpable {code : ByteArray} {pc}
 def PushAt (code : ByteArray) (pc : Nat) (xs : B8L) : Prop :=
   ∃ le : xs.length ≤ 32, code.getInst pc = some (.next (.push xs le))
 
+lemma ByteArray.lt_size_of_getElem?_eq_some {xs : ByteArray} {n} {x}
+    (eq : xs.toList[n]? = some x) : n < xs.size := by
+  simp only [ByteArray.size, Array.size]
+  rcases List.getElem?_eq_some_iff.mp eq with ⟨lt, _⟩
+  rw [ByteArray.toList_eq_toList_data] at lt; exact lt
+
+lemma Jinst.at_of_slice {code : ByteArray} {pc} {j : Jinst}
+    (slice : code.toList.Slice pc [j.toB8]) : Jinst.At code pc j := by
+  have eq := List.get?_eq_of_slice slice
+  simp only [Jinst.At, ByteArray.getInst]
+  have rw := ByteArray.of_getElem?_eq_some eq
+  rw [if_pos (ByteArray.lt_size_of_getElem?_eq_some eq)]
+  conv => lhs; arg 1; lhs; rhs; rw [rw]; rfl
+  rw [Jinst.toRinst_toB8_eq_none, none_mapRev, none_orElse]
+  conv => lhs; arg 1; lhs; rhs; rw [rw]; rfl
+  rw [Jinst.toXinst_toB8_eq_none, none_mapRev, none_orElse]
+  conv => lhs; arg 1; lhs; rhs; rw [rw]; rfl
+  rw [Jinst.toJinst_toB8_eq_some]; rfl
+
+-- lemma le_toNat_pushToB8 (bs : B8L) (le : bs.length ≤ 32) :
+--     95 ≤ (pushToB8 bs).toNat := by
+--   simp only [pushToB8]
+--   rw [B8.toNat_add, Nat.lo_eq_of_lt];
+--   · apply Nat.le_add_right
+--   · simp only [B8.toNat, UInt8.reduceToNat, UInt8.toNat_ofNat']
+--     rw [Nat.mod_eq_of_lt] <;> omega
+
+--lemma toNat_pushToB8_le (bs : B8L) (le : bs.length ≤ 32) :
+--    (pushToB8 bs).toNat ≤ 127 := by
+--  simp only [pushToB8]
+--  rw [B8.toNat_add, Nat.lo_eq_of_lt];
+--  · simp only [B8.toNat, UInt8.reduceToNat, UInt8.toNat_ofNat']
+--    rw [Nat.mod_eq_of_lt] <;> omega
+--  · simp only [B8.toNat, UInt8.reduceToNat, UInt8.toNat_ofNat']
+--    rw [Nat.mod_eq_of_lt] <;> omega
+--
+
+lemma toNat_pushToB8_eq {xs : B8L} (le : xs.length ≤ 32) :
+    (pushToB8 xs).toNat = xs.length + 95:= by
+  simp only [pushToB8]; rw [B8.toNat_add, Nat.lo_eq_of_lt] <;>
+  {simp only [B8.toNat, UInt8.reduceToNat, UInt8.toNat_ofNat']; omega}
+
+lemma toNat_pushToB8_le {bs : B8L} (le : bs.length ≤ 32) :
+    (pushToB8 bs).toNat ≤ 127 := by
+  rw [toNat_pushToB8_eq le]; omega
+
+lemma Ninst.push_ext {xs ys : B8L}
+    (le : xs.length ≤ 32) (le' : ys.length ≤ 32) (eq : xs = ys) :
+    Ninst.push xs le = Ninst.push ys le' := by
+  revert le le'; rw [eq]; simp
+
 lemma pushAt_of_slice {code : ByteArray} {pc} {xs : B8L}
-    (slice : code.toList.Slice pc (pushToB8L xs)) : PushAt code pc xs := sorry
+    (le : xs.length ≤ 32)
+    (slice : code.toList.Slice pc (pushToB8L xs)) : PushAt code pc xs := by
+
+    -- (Ninst.push (code.sliceD (pc + 1) (B8.toNat (code.get! pc) - 95) 0) ⋯)
+
+
+  -- have slice' : ∃ n, code.toList.slice? pc n = some (pushToB8L xs)
+
+  have eq := List.get?_eq_of_slice slice
+  have rw := ByteArray.of_getElem?_eq_some eq
+  simp only [PushAt, ByteArray.getInst]
+  refine' ⟨le, _⟩
+  rw [if_pos (ByteArray.lt_size_of_getElem?_eq_some eq)]
+  conv => lhs; arg 1; lhs; rhs; rw [rw]; rfl
+  rw [toRinst_pushToB8_eq_none le, none_mapRev, none_orElse]
+  conv => lhs; arg 1; lhs; rhs; rw [rw]; rfl
+  rw [toXinst_pushToB8_eq_none le, none_mapRev, none_orElse]
+  conv => lhs; arg 1; lhs; rhs; rw [rw]; rfl
+  rw [toJinst_pushToB8_eq_none le, none_mapRev, none_orElse]
+  conv => lhs; arg 1; lhs; rhs; rw [rw]; rfl
+  rw [toLinst_pushToB8_eq_none le, none_mapRev, none_orElse]
+  have lft := le_toNat_pushToB8 xs le
+  have rgt := le_toNat_pushToB8 xs le
+
+  rw [dif_pos]
+  · simp [List.Slice] at slice
+    apply congr_arg
+    apply congr_arg
+
+    conv => lhs; arg 1; arg 3; arg 1; arg 1; rw [rw]
+    have eq_len : (pushToB8 xs).toNat - 95 = xs.length := sorry
+
+    apply Ninst.push_ext
+    rw [eq_len]; sorry
+  · rw [rw]; refine' ⟨le_toNat_pushToB8 xs le, toNat_pushToB8_le xs le⟩
+
+
+
+
+
+
+
+
+    --have eq_xs : code.sliceD (pc + 1) ((pushToB8 xs).toNat - 95) 0 = xs := sorry
+
+
+
+  #exit
+
+    conv => lhs; arg 1; arg 3; rw [rw']; rfl
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  sorry
+
 
 lemma Ninst.getInst_of_slice {evm : Evm} {n : Ninst} :
     evm.code.toList.Slice evm.pc n.toB8L → n.At evm.code evm.pc := by sorry
@@ -727,7 +700,6 @@ lemma Evm.push_cons_pop_cons
     (x = y ∧ ∃ st, Evm.Push xs s st ∧ Evm.Pop ys st s'') := by
   rcases Stack.push_cons_pop_cons h.stack g.stack
     with ⟨h_eq, stk, h_push, h_pop⟩
-
   refine' ⟨
     h_eq,
     {s' with stack := stk},
@@ -735,41 +707,13 @@ lemma Evm.push_cons_pop_cons
     {g with stack := h_pop}
   ⟩
 
-def Evm.Equiv (evm evm' : Evm) : Prop :=
-  Evm.Rel Evm.Rels.equiv evm evm'
-
-infix:70 " ≅ "  => Evm.Equiv
-
 lemma Evm.push_nil {evm evm'} (h : Evm.Push [] evm evm') : evm ≅ evm' := by
   have h_stk : evm.stack = evm'.stack := h.stack.symm
   exact {h with stack := h_stk}
 
-lemma rel_of_rel_of_equiv {evm evm' evm''} {rs : Evm.Rels}
-    (rel : Evm.Rel rs evm evm') (equiv : evm' ≅ evm'') :
-    Evm.Rel rs evm evm'' := by
-  constructor
-  · rw [← equiv.stack]; exact rel.stack
-  · rw [← equiv.memory]; exact rel.memory
-  · rw [← equiv.code]; exact rel.code
-  · rw [← equiv.logs]; exact rel.logs
-  · rw [← equiv.msg]; exact rel.msg
-  · rw [← equiv.output]; exact rel.output
-  · rw [← equiv.returnData]; exact rel.returnData
-  · rw [← equiv.error]; exact rel.error
-
-lemma rel_of_equiv_of_rel {evm evm' evm''} {rs : Evm.Rels}
-    (equiv : evm ≅ evm') (rel : Evm.Rel rs evm' evm'') :
-    Evm.Rel rs evm evm'' := by
-  constructor
-  · rw [equiv.stack]; exact rel.stack
-  · rw [equiv.memory]; exact rel.memory
-  · rw [equiv.code]; exact rel.code
-  · rw [equiv.logs]; exact rel.logs
-  · rw [equiv.msg]; exact rel.msg
-  · rw [equiv.output]; exact rel.output
-  · rw [equiv.returnData]; exact rel.returnData
-  · rw [equiv.error]; exact rel.error
-
+lemma Evm.pop_nil {s s'} (h : Evm.Pop [] s s') : s ≅ s' := by
+  have h_stk : s.stack = s'.stack := h.stack
+  exact {h with stack := h_stk}
 
 lemma push_of_pushAt {evm bs exn} (cr : Exec evm exn)
     (h_at : PushAt evm.code evm.pc bs) :
@@ -805,11 +749,27 @@ lemma push_of_pushAt {evm bs exn} (cr : Exec evm exn)
 lemma Nat.lo_eq (m n : Nat) : m ↾ n = m % (2 ^ n) := rfl
 lemma Nat.hi_eq (m n : Nat) : m ↿ n = (m >>> n) <<< n := rfl
 
+lemma B16.ofNat_eq_iff_mod_eq_toNat (a : Nat) (b : B16) :
+    a.toB16 = b ↔ a ↾ 16 = b.toNat :=
+  UInt16.ofNat_eq_iff_mod_eq_toNat a b
+
 lemma B32.ofNat_eq_iff_mod_eq_toNat (a : Nat) (b : B32) :
     a.toB32 = b ↔ a ↾ 32 = b.toNat :=
   UInt32.ofNat_eq_iff_mod_eq_toNat a b
 
-lemma Nat.toB16_toB8 (n : Nat) : n.toB8.toB16 = (n ↾ 8).toB16 := by sorry
+lemma Nat.toB16_toB8 (n : Nat) : n.toB8.toB16 = (n ↾ 8).toB16 := by
+  have h0 : n.toB8.toB16 = n.toB16 % (2 ^ 8) :=
+      (UInt8.toUInt16_eq_mod_256_iff n.toUInt8 n.toUInt16).mpr
+        (UInt16.toUInt8_ofNat' _).symm
+  have h1: (n.toB16 % 2 ^ 8).toNat = n ↾ 8 := by
+    have rw : B16.toNat (2 ^ 8) = 2 ^ 8 := rfl
+    rw [B16.toNat_mod, rw]; clear rw
+    rw [toNat_toB16, ← Nat.lo_eq]
+    apply Nat.lo_lo_of_ge (by omega)
+  have h2 : (n ↾ 8).toB16 = n.toB16 % (2 ^ 8) := by
+    apply (B16.ofNat_eq_iff_mod_eq_toNat _ _).mpr
+    apply Eq.trans (Nat.lo_lo_of_le (by omega)) h1.symm
+  apply Eq.trans h0 h2.symm
 
 lemma Nat.toB32_toB16 (n : Nat) : n.toB16.toB32 = (n ↾ 16).toB32 := by
   have h0 : n.toB16.toB32 = n.toB32 % (2 ^ 16) :=
@@ -838,7 +798,6 @@ lemma Nat.toB64_toB32 (n : Nat) : n.toB32.toB64 = (n ↾ 32).toB64 := by
     apply (B64.ofNat_eq_iff_mod_eq_toNat _ _).mpr
     apply Eq.trans (Nat.lo_lo_of_le (by omega)) h1.symm
   apply Eq.trans h0 h2.symm
-lemma toNat_toB16 {n : Nat} : n.toB16.toNat = n ↾ 16 := UInt16.toNat_ofNat'
 
 lemma pair_aux (n m : Nat) :
     ((n >>> m ↾ m) ↾ (m + m)) <<< m ↾ (m + m) ||| (n ↾ m) ↾ (m + m) =
@@ -951,12 +910,25 @@ lemma toNat_toB256 (n : Nat) : n.toB256.toNat = n ↾ 256 := by
 lemma toNat_toB256_of_lt {n : Nat} (h : n < 2 ^ 256) : n.toB256.toNat = n := by
   rw [toNat_toB256, Nat.lo_eq_of_lt h]
 
-lemma Jinst.run_of_at {evm exn o}
-    (cr : Exec evm exn) (h_at : Jinst.At evm.code evm.pc o) :
+lemma Jinst.run_of_at {evm exn j}
+    (cr : Exec evm exn) (h_ok : exn.isOk)
+    (h_at : Jinst.At evm.code evm.pc j) :
     ∃ (evm' : Evm) (cr' : Exec evm' exn),
-      Jinst.Run' evm o (.ok evm') ∧
+      Jinst.Run evm j (.ok evm') ∧
       Pack.Rel ⟨evm', exn, cr'⟩ ⟨evm, exn, cr⟩ := by
-  sorry
+  cases cr <;>
+    try {rename (Evm.getInst _ = _) => eq; cases Eq.trans eq.symm h_at}
+  · cases exn
+    · cases h_ok
+    · rename (Except.IsError _) => err; cases err
+  · rename (Jinst.Run _ _ _) => run
+    rename (Jinst.At _ _ _) => h_at'
+    rename (Exec _ _) => ex
+    have eq := Eq.trans h_at.symm h_at'
+    cases eq
+    refine' ⟨_, ex, run, _⟩
+    rcases exn with _ | evm''; {cases h_ok}
+    apply Pack.Rel.jump h_at run ex
 
 class HPrsv (f : Evm → Execution) where
   (prsv : ∀ {evm evm'}, f evm = .ok evm' → evm ≅ evm')
@@ -983,20 +955,6 @@ lemma exec_inv_code {evm evm' : Evm} :
     Exec evm (.ok evm') → evm.code = evm'.code := by
   sorry
 
-
-lemma Evm.equiv_trans {evm evm' evm''}
-    (h₁ : Evm.Equiv evm evm') (h₂ : Evm.Equiv evm' evm'') :
-    Evm.Equiv evm evm'' := by
-  constructor
-  · rw [h₁.stack, h₂.stack]; rfl
-  · rw [h₁.memory, h₂.memory]; rfl
-  · rw [h₁.code, h₂.code]; rfl
-  · rw [h₁.logs, h₂.logs]; rfl
-  · rw [h₁.msg, h₂.msg]; rfl
-  · rw [h₁.output, h₂.output]; rfl
-  · rw [h₁.returnData, h₂.returnData]; rfl
-  · rw [h₁.error, h₂.error]; rfl
-
 lemma incrPc_incr_pc {evm evm' : Evm} :
     evm.incrPc = .ok evm' → evm.pc + 1 = evm'.pc := by
   simp only [Evm.incrPc]; intro h; rw [← Except.ok.inj h]
@@ -1009,14 +967,14 @@ lemma Evm.pop_of_pop {evm evm' : Evm} {x}
   rename (evm.stack = _) => rw; rw [rw, eq]; rfl
 
 lemma jumpdest_at {evm exn} (cr : Exec evm exn)
+    (ok : Except.isOk exn)
     (h : Jinst.At evm.code evm.pc Jinst.jumpdest) :
     ∃ (evm' : Evm) (cr' : Exec evm' exn),
       evm ≅ evm' ∧
       evm'.pc = evm.pc + 1 ∧
       Pack.Rel ⟨evm', exn, cr'⟩ ⟨evm, exn, cr⟩ := by
-  rcases Jinst.run_of_at cr h with ⟨evm', exn', h_run, h_prec⟩
-  simp only [Jinst.Run', Jinst.run] at h_run
-
+  rcases Jinst.run_of_at cr ok h with ⟨evm', exn', h_run, h_prec⟩
+  simp only [Jinst.Run, Jinst.run] at h_run
   have eqv : evm ≅ evm' := by
     rcases of_bind_eq_ok h_run with ⟨evm_mid, eq, eq'⟩
     apply @Evm.equiv_trans _ evm_mid
@@ -1031,14 +989,15 @@ lemma Except.of_assert_eq_ok {p : Prop} [Decidable p] {ξ} {x : ξ}
   simp [Except.assert] at h; apply h
 
 lemma jump_at {s r} (cr : Exec s r)
+    (ok : Except.isOk r)
     (h : Jinst.At s.code s.pc Jinst.jump) :
     ∃ (x : B256) (s' : Evm) (cr' : Exec s' r),
       s'.pc = x.toNat ∧
       Evm.Pop [x] s s' ∧
       jumpable s.code x.toNat = true ∧
       Pack.Rel ⟨s', r, cr'⟩ ⟨s, r, cr⟩ := by
-  rcases Jinst.run_of_at cr h with ⟨s_j, cr_j, h_run, h_prec⟩
-  simp only [Jinst.Run', Jinst.run] at h_run
+  rcases Jinst.run_of_at cr ok h with ⟨s_j, cr_j, h_run, h_prec⟩
+  simp only [Jinst.Run, Jinst.run] at h_run
   rcases of_bind_eq_ok h_run with ⟨⟨loc, s'⟩, pop_eq, run'⟩; clear h_run
   rcases of_bind_eq_ok run' with ⟨s'', cg_eq, run''⟩; clear run'
   rcases of_bind_eq_ok run'' with ⟨u, asrt_eq, run'''⟩; clear run''
@@ -1077,6 +1036,7 @@ lemma subcode_compile_call {code : ByteArray} {l m n}
   refine' ⟨
     @pushAt_of_slice code m
       [UInt8.ofNat (loc >>> 8), UInt8.ofNat loc]
+      (by simp)
       (List.slice_prefix h_slice),
     _
   ⟩
@@ -1218,6 +1178,16 @@ lemma subcode_of_get?_eq_some {f fs} {code : ByteArray} {k loc : ℕ} {p : Func}
   · rw [h_bs]; simp [subcode]
     apply List.slice_prefix <| List.slice_suffix h_slice
 
+
+--   simp [Stack.Push, Split] at h
+--   simp [Stack.Pop, Split] at h'
+--   match s' with
+--   | [] => cases h
+--   | z :: zs =>
+--     rw [List.cons_eq_cons] at h
+--     rw [List.cons_eq_cons] at h'
+--     refine' ⟨Eq.trans h.left.symm h'.left, zs, h.right, h'.right⟩
+
 theorem correct_core (f : Func) (fs : List Func) :
     ∀ (pk : Pack) (p : Func) (tevm : Evm),
       some pk.evm.code.toList = Prog.compile ⟨f, fs⟩ →
@@ -1228,8 +1198,9 @@ theorem correct_core (f : Func) (fs : List Func) :
   apply Pack.strongRec; intro pk ih p tevm eq sc eq_tevm
   match p with
   | .last o =>
-    apply Func.Run.last; rw [← eq_tevm]
-    apply Linst.run_of_at pk.ex <| Linst.getInst_of_slice sc
+    have run : Linst.Run pk.evm o (Except.ok tevm) := by
+      rw [← eq_tevm]; apply Linst.run_of_at pk.ex <| Linst.getInst_of_slice sc
+    apply Func.Run.last (Evm.equiv_refl _) run (Evm.equiv_refl _)
   | .next n p =>
     rcases of_subcode sc with ⟨cd, h_eq', h_slice⟩; clear sc
     rcases of_bind_eq_some h_eq' with ⟨cd', h_eq'', h_rw⟩; clear h_eq'
@@ -1243,100 +1214,51 @@ theorem correct_core (f : Func) (fs : List Func) :
       · simp; rw [h_pc, h_eq'', ← Ninst.inv_code h_run]
         apply List.slice_suffix h_slice
       · apply eq_tevm
-    apply Func.Run.next h_run h_run'
-  | .branch p q => sorry
+    apply Func.Run.next (Evm.equiv_refl _) h_run h_run'
   | .call k =>
     rcases subcode_compile_call sc with ⟨loc, p, h_get, h_loc, h_push, h_jump⟩
     have h_get' : (f :: fs)[k]? = p := by
       rw [← @Prog.get?_table 0 k (f :: fs), h_get]; rfl
-
     apply Func.Run.call h_get'
-
-
-
     have h :
         ∃ (s' : Evm) (cr' : Exec s' pk.exn),
           s'.pc = pk.evm.pc + 3  ∧
           Evm.Push [loc.toB256] pk.evm s' ∧
           Pack.Rel ⟨s', pk.exn, cr'⟩ pk := by
-      sorry
-
-
+      rcases push_of_pushAt pk.ex h_push with ⟨s', cr', h_pc', h, h_prec⟩
+      rw [List.toB256_pair _ h_loc] at h
+      refine' ⟨s', cr', h_pc', h, h_prec⟩
     clear h_push; rcases h with ⟨s, cr, h_pc, h_push, h_prec⟩
-
     have h_jump' : Jinst.At s.code s.pc Jinst.jump := by
       rw [← h_push.code, h_pc]; apply h_jump
-    rcases jump_at cr h_jump' with ⟨x, s', cr', h_pc', h_pop, h, h_prec'⟩
+    have h_ok : pk.exn.isOk := sorry
+    rcases jump_at cr h_ok h_jump' with ⟨x, s', cr', h_pc', h_pop, h, h_prec'⟩
     have h_jumpable : Jinst.At s'.code s'.pc Jinst.jumpdest := by
       rw [← h_pop.code, h_pc']; apply at_of_jumpable h;
-
     clear h;
-
     rcases subcode_of_get?_eq_some eq h_get with ⟨h, hp⟩; clear h
-
-    rcases jumpdest_at cr' h_jumpable with ⟨s'', cr'', eqv'', h_pc'', h_prec''⟩
-
-
-    have h_lt : Pack.lt ⟨s'', pk.exn, cr''⟩ pk := by sorry
-
-    have hh := ih ⟨s'', pk.exn, cr''⟩ h_lt p tevm sorry sorry --hp
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-   --  rcases subcode_compile_call h_sub with ⟨loc, p, h_get, h_loc, h_push, h_jump⟩
-   --  have h_get' : (f :: fs)[k]? = p := by
-   --    rw [← @Prog.get?_table 0 k (f :: fs), h_get]; rfl
-   --  apply Func.Run.call h_get'
-   --  have h :
-   --    ∃ (s' : Desc) (cr' : Exec pk.e s' (pk.pc + 3) pk.r),
-   --      Desc.Push [loc.toB256] pk.s s' ∧
-   --      Exec'.Rel ⟨pk.e, s', pk.pc + 3, pk.r, cr'⟩ pk := by
-   --    rcases push_of_pushAt pk.cr h_push with ⟨s', cr', h, h_prec⟩
-   --    rw [List.toB256_pair _ h_loc] at h
-   --    refine' ⟨s', cr', h, h_prec⟩
-   --  clear h_push; rcases h with ⟨s, cr, h_push, h_prec⟩
-   --  rcases jump_at cr h_jump with ⟨x, s', cr', h_pop, h, h_prec'⟩
-   --  rcases h with ⟨h_jumpable, h⟩; clear h
-   --  rcases subcode_of_get?_eq_some h_eq h_get with ⟨h, hp⟩; clear h
-   --  rcases jumpdest_at cr' h_jumpable with ⟨cr'', h_prec''⟩
-   --  have h_loc' : loc < 2 ^ 256 := by
-   --    apply Nat.lt_trans h_loc
-   --    rw [Nat.pow_lt_pow_iff_right] <;> omega
-   --  have h : loc = x.toNat ∧ pk.s = s' := by
-   --    rcases Desc.push_cons_pop_cons h_push h_pop with ⟨hx, st, h_push', h_pop'⟩
-   --    rw [Desc.push_nil h_push', Desc.pop_nil h_pop']
-   --    rw [← congrArg B256.toNat hx, toNat_toB256_of_lt h_loc']; simp
-   --  rcases h with ⟨h_rw, h_rw'⟩
-   --  rw [h_rw']; rw [h_rw] at hp
-   --  have h_lt : Exec'.lt ⟨pk.e, s', x.toNat + 1, pk.r, cr''⟩ pk := by
-   --    refine' ⟨_, _, h_prec⟩
-   --    apply Exec'.le.step _ _ _ _ h_prec'
-   --    apply Exec'.le.step _ _ _ _ h_prec''
-   --    apply Exec'.le.refl _
-   --  apply ih ⟨pk.e, s', x.toNat + 1, pk.r, cr''⟩ h_lt p h_eq hp
-
-
-  #exit
-
-
-
-
-    /-
+    rcases jumpdest_at cr' h_ok h_jumpable with ⟨s'', cr'', eqv'', h_pc'', h_prec''⟩
+    have h_loc' : loc < 2 ^ 256 := by
+      apply Nat.lt_trans h_loc
+      rw [Nat.pow_lt_pow_iff_right] <;> omega
+    have h : loc = x.toNat ∧ pk.evm ≅ s'' := by
+      rcases Evm.push_cons_pop_cons h_push h_pop with ⟨hx, st, h_push', h_pop'⟩
+      constructor
+      · rw [← congrArg B256.toNat hx, toNat_toB256_of_lt h_loc']
+      · apply Evm.equiv_trans _ eqv''
+        apply Evm.equiv_trans (Evm.push_nil h_push') (Evm.pop_nil h_pop')
+    rcases h with ⟨h_rw, h_rw'⟩
+    apply Func.run_well_def _ (Evm.equiv_symm h_rw') (Evm.equiv_refl _)
+    rw [h_rw] at hp
+    rw [h_rw'.code] at eq
+    have h_lt : Pack.lt ⟨s'', pk.exn, cr''⟩ pk := by
+      apply Pack.lt.intro _ h_prec
+      apply Pack.le.step _ h_prec'
+      apply Pack.le.step (Pack.le.refl _) h_prec''
+    rw [h_rw'.code] at hp
+    apply ih ⟨s'', pk.exn, cr''⟩ h_lt p tevm eq _ eq_tevm
+    simp; rw [h_pc'', h_pc']; apply hp
+  | .branch p q =>
     rcases subcode_compile_branch sc with
       ⟨loc, h_loc, h_push, h_jumpi, h_scp, h_jumpdest, h_scq⟩
     have h :
@@ -1385,7 +1307,8 @@ theorem correct_core (f : Func) (fs : List Func) :
         rw [h_push.code, h_pop.code]
       have h_jumpdest' : Jinst.At s''.code s''.pc Jinst.jumpdest := by
         rw [← code_inv, h_pc'', hx]; exact h_jumpdest
-      rcases jumpdest_at cr' h_jumpdest'
+      have h_ok : pk.exn.isOk := sorry
+      rcases jumpdest_at cr' h_ok h_jumpdest'
         with ⟨s''', cr''', eqv, h_pc''', h_prec'''⟩
       have h_pop_fin : Evm.Pop [y] pk.evm s''' :=
         rel_of_rel_of_equiv h_pop' eqv
@@ -1402,8 +1325,7 @@ theorem correct_core (f : Func) (fs : List Func) :
              apply Pack.le.refl
         apply ih ⟨s''', pk.exn, cr'''⟩ h_lt q tevm eq_compile subcode_q eq_tevm
       apply Func.Run.succ hy h_pop_fin h_run_fin
-      -/
-      sorry
+
 
 
 
