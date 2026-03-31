@@ -264,67 +264,44 @@ lemma toB8_toRinst {i : Rinst} : B8.toRinst i.toB8 = some i := by
   · apply swap_toByte_toRinst?
   · apply log_toByte_toRinst?
 
-lemma Linst.toRinst_toB8_eq_none {l : Linst} : l.toB8.toRinst = .none := by cases l <;> rfl
-lemma Linst.toXinst_toB8_eq_none {l : Linst} : l.toB8.toXinst = .none := by cases l <;> rfl
-lemma Linst.toJinst_toB8_eq_none {l : Linst} : l.toB8.toJinst = .none := by cases l <;> rfl
-lemma Linst.toLinst_toB8_eq_some {l : Linst} : l.toB8.toLinst = .some l := by cases l <;> rfl
-
-lemma Jinst.toRinst_toB8_eq_none {j : Jinst} : j.toB8.toRinst = .none := by cases j <;> rfl
-lemma Jinst.toXinst_toB8_eq_none {j : Jinst} : j.toB8.toXinst = .none := by cases j <;> rfl
-lemma Jinst.toLinst_toB8_eq_none {j : Jinst} : j.toB8.toLinst = .none := by cases j <;> rfl
-lemma Jinst.toJinst_toB8_eq_some {j : Jinst} : j.toB8.toJinst = .some j := by cases j <;> rfl
-
-
-#exit
-
-lemma foo (x : Nat) (le : x ≤ 32) : 95 + x.toUInt8 ≠ 86 := by
-  intro h
-  have h_nat : (95 + x.toUInt8).toNat = (86 : UInt8).toNat := by rw [h]
-  have h_x : x.toUInt8.toNat = x := by
-    apply Nat.mod_eq_of_lt
-    omega
-  simp [UInt8.toNat_add, h_x] at h_nat
-  have h_sum : 95 + x < 256 := by omega
-  rw [Nat.mod_eq_of_lt h_sum] at h_nat
-  omega
-
-lemma toInstType_eq_x_of_toXinst_eq_some {x : B8} {o}
-    (h : x.toXinst = some o) : x.toInstType = .X := by
-  unfold B8.toXinst at h; split at h <;> try {rfl}; cases h
-
-lemma toInstType_eq_j_of_toJinst_eq_some {x : B8} {j}
-    (h : x.toJinst = some j) : x.toInstType = .J := by
-  unfold B8.toJinst at h; split at h <;> try {rfl}; cases h
-
-lemma toInstType_eq_l_of_toLinst_eq_some {x : B8} {l}
-    (h : x.toLinst = some l) : x.toInstType = .L := by
-  unfold B8.toLinst at h; split at h <;> try {rfl}; cases h
-
-def UInt8.highs (x : UInt8) : UInt8 := (x >>> 4)
-def UInt8.lows (x : UInt8) : UInt8 := (x &&& 0x0F)
-
-lemma Nat.hi_le (a b : Nat) : a ↿ b ≤ a := by
-  rw [hi, shiftLeft_eq, shiftRight_eq_div_pow]
-  apply Nat.div_mul_le_self
-
-lemma B8.shl_highs_or_lows_eq_self (x : B8) : (x.highs <<< 4) ||| x.lows = x := by
-  apply UInt8.toNat_inj.mp
-  unfold B8.lows
-  rw [UInt8.toNat_or]
-  rw [UInt8.toNat_and]
-  have rw : UInt8.toNat 15 = 15 := by rfl
-  rw [rw]; clear rw
-  rw [Nat.and_two_pow_sub_one_eq_mod _ 4]
-  have hh := Nat.hi_or_lo
-  rw [UInt8.toNat_shiftLeft]
-  unfold B8.highs
-  rw [UInt8.toNat_shiftRight]
-  have rw : (UInt8.toNat 4 % 8) = 4 := by rfl
-  rw [rw]; clear rw
-  have hh := Nat.hi_le x.toNat 4
-  rw [Nat.mod_eq_of_lt (Nat.lt_of_le_of_lt _ (UInt8.toNat_lt x))]
-  · apply Nat.hi_or_lo
-  · apply Nat.hi_le
+lemma toB8_toXinst {o : Xinst} : B8.toXinst o.toB8 = some o := by cases o <;> rfl
+lemma toB8_toJinst {o : Jinst} : B8.toJinst o.toB8 = some o := by cases o <;> rfl
+lemma toB8_toLinst {o : Linst} : B8.toLinst o.toB8 = some o := by cases o <;> rfl
+--
+-- lemma Linst.toRinst_toB8_eq_none {l : Linst} : l.toB8.toRinst = .none := by cases l <;> rfl
+-- lemma Linst.toXinst_toB8_eq_none {l : Linst} : l.toB8.toXinst = .none := by cases l <;> rfl
+-- lemma Linst.toJinst_toB8_eq_none {l : Linst} : l.toB8.toJinst = .none := by cases l <;> rfl
+-- lemma Linst.toLinst_toB8_eq_some {l : Linst} : l.toB8.toLinst = .some l := by cases l <;> rfl
+-- lemma Jinst.toRinst_toB8_eq_none {j : Jinst} : j.toB8.toRinst = .none := by cases j <;> rfl
+-- lemma Jinst.toXinst_toB8_eq_none {j : Jinst} : j.toB8.toXinst = .none := by cases j <;> rfl
+-- lemma Jinst.toLinst_toB8_eq_none {j : Jinst} : j.toB8.toLinst = .none := by cases j <;> rfl
+-- lemma Jinst.toJinst_toB8_eq_some {j : Jinst} : j.toB8.toJinst = .some j := by cases j <;> rfl
+--
+--
+-- #exit
+--
+-- lemma foo (x : Nat) (le : x ≤ 32) : 95 + x.toUInt8 ≠ 86 := by
+--   intro h
+--   have h_nat : (95 + x.toUInt8).toNat = (86 : UInt8).toNat := by rw [h]
+--   have h_x : x.toUInt8.toNat = x := by
+--     apply Nat.mod_eq_of_lt
+--     omega
+--   simp [UInt8.toNat_add, h_x] at h_nat
+--   have h_sum : 95 + x < 256 := by omega
+--   rw [Nat.mod_eq_of_lt h_sum] at h_nat
+--   omega
+--
+-- lemma toInstType_eq_x_of_toXinst_eq_some {x : B8} {o}
+--     (h : x.toXinst = some o) : x.toInstType = .X := by
+--   unfold B8.toXinst at h; split at h <;> try {rfl}; cases h
+--
+-- lemma toInstType_eq_j_of_toJinst_eq_some {x : B8} {j}
+--     (h : x.toJinst = some j) : x.toInstType = .J := by
+--   unfold B8.toJinst at h; split at h <;> try {rfl}; cases h
+--
+-- lemma toInstType_eq_l_of_toLinst_eq_some {x : B8} {l}
+--     (h : x.toLinst = some l) : x.toInstType = .L := by
+--   unfold B8.toLinst at h; split at h <;> try {rfl}; cases h
 
 -- lemma fooo {x : B8} : 0 ≤ x := by
 --   cases x
@@ -351,6 +328,92 @@ lemma B8.shl_highs_or_lows_eq_self (x : B8) : (x.highs <<< 4) ||| x.lows = x := 
 --
 -- #exit
 
+-- lemma toJinst_pushToB8_eq_none {xs : B8L} (le : xs.length ≤ 32) :
+--     (pushToB8 xs).toJinst = .none := by
+--   cases h : (pushToB8 xs).toJinst; {rfl}
+--   cases
+--     Eq.trans
+--       (toInstType_pushToB8 le).symm
+--       (toInstType_eq_j_of_toJinst_eq_some h)
+--
+-- lemma toXinst_pushToB8_eq_none {xs : B8L} (le : xs.length ≤ 32) :
+--     (pushToB8 xs).toXinst = .none := by
+--   cases h : (pushToB8 xs).toXinst; {rfl}
+--   cases
+--     Eq.trans
+--       (toInstType_pushToB8 le).symm
+--       (toInstType_eq_x_of_toXinst_eq_some h)
+--
+-- lemma toRinst_pushToB8_eq_none {xs : B8L} (le : xs.length ≤ 32) :
+--     (pushToB8 xs).toRinst = .none := by
+--   unfold pushToB8
+--   rw [Nat.le_iff_lt_add_one] at le; revert le
+--   generalize xs.length = n; revert n
+--   repeat (rw [Nat.forall_lt_succ_right']; refine' ⟨_, rfl⟩)
+--   simp
+
+
+-- lemma toLinst_pushToB8_eq_none {xs : B8L} (le : xs.length ≤ 32) :
+--     (pushToB8 xs).toLinst = .none := by
+--   cases h : (pushToB8 xs).toLinst; {rfl}
+--   cases
+--     Eq.trans
+--       (toInstType_pushToB8 le).symm
+--       (toInstType_eq_l_of_toLinst_eq_some h)
+--
+lemma none_mapRev {ξ υ} {f : ξ → υ} : (Option.none <&> f) = .none := by rfl
+
+lemma none_orElse {ξ} {x : Option ξ} : (Option.none <|> x) = x := by rfl
+
+
+-- #check ByteArray.getInst.match_1
+--
+-- #exit
+-- lemma ByteArray.getInst.match_1_ext
+--      (m : InstType → Sort u_1) (x : InstType)
+--      (rm : x = InstType.R → motive InstType.R)
+--      (xm : x = InstType.X → motive InstType.X)
+--      (jm : x = InstType.J → motive InstType.J)
+--      (lm : x = InstType.L → motive InstType.L)
+--      (pm : x = InstType.P → motive InstType.P) :
+--
+--
+--
+-- #exit
+
+lemma toInstType_toB8_swap (x : Fin 16) :
+    (Rinst.swap x).toB8.toInstType = .R := by
+  rcases x with ⟨n, h⟩; revert h n
+  repeat (rw [Nat.forall_lt_succ_left']; refine' ⟨rfl, _⟩)
+  simp
+
+lemma toInstType_toB8_dup (x : Fin 16) :
+    (Rinst.dup x).toB8.toInstType = .R := by
+  rcases x with ⟨n, h⟩; revert h n
+  repeat (rw [Nat.forall_lt_succ_left']; refine' ⟨rfl, _⟩)
+  simp
+
+lemma toInstType_toB8_log (x : Fin 5) :
+    (Rinst.log x).toB8.toInstType = .R := by
+  rcases x with ⟨n, h⟩; revert h n
+  repeat (rw [Nat.forall_lt_succ_left']; refine' ⟨rfl, _⟩)
+  simp
+
+lemma Rinst.toInstType_toB8 (r : Rinst) : r.toB8.toInstType = .R := by
+  cases r <;> try {rfl}
+  · apply toInstType_toB8_dup
+  · apply toInstType_toB8_swap
+  · apply toInstType_toB8_log
+
+lemma Linst.toInstType_toB8 (l : Linst) : l.toB8.toInstType = .L := by
+  cases l <;> rfl
+
+lemma Xinst.toInstType_toB8 (x : Xinst) : x.toB8.toInstType = .X := by
+  cases x <;> rfl
+
+lemma Jinst.toInstType_toB8 (j : Jinst) : j.toB8.toInstType = .J := by
+  cases j <;> rfl
+
 lemma toInstType_pushToB8 {bs : B8L} (h : bs.length ≤ 32) :
     (pushToB8 bs).toInstType = .P := by
   rw [← Nat.lt_succ] at h
@@ -359,66 +422,30 @@ lemma toInstType_pushToB8 {bs : B8L} (h : bs.length ≤ 32) :
   repeat (rw [Nat.forall_lt_succ_right']; refine' ⟨_, rfl⟩)
   simp only [Nat.not_lt_zero, Nat.toUInt8_eq, IsEmpty.forall_iff, implies_true]
 
-lemma toJinst_pushToB8_eq_none {xs : B8L} (le : xs.length ≤ 32) :
-    (pushToB8 xs).toJinst = .none := by
-  cases h : (pushToB8 xs).toJinst; {rfl}
+lemma toXinst_toB8 {o : Xinst} :
+  B8.toXinst o.toB8 = some o := by cases o <;> rfl
+lemma toJinst_toB8 {o : Jinst} :
+  B8.toJinst o.toB8 = some o := by cases o <;> rfl
+lemma toLinst_toB8 {o : Linst} :
+  B8.toLinst o.toB8 = some o := by cases o <;> rfl
 
-  cases
-    Eq.trans
-      (toInstType_pushToB8 le).symm
-      (toInstType_eq_j_of_toJinst_eq_some h)
+lemma ByteArray.lt_size_of_getElem?_eq_some {xs : ByteArray} {n} {x}
+    (eq : xs.toList[n]? = some x) : n < xs.size := by
+  simp only [ByteArray.size, Array.size]
+  rcases List.getElem?_eq_some_iff.mp eq with ⟨lt, _⟩
+  rw [ByteArray.toList_eq_toList_data] at lt; exact lt
 
-lemma toXinst_pushToB8_eq_none {xs : B8L} (le : xs.length ≤ 32) :
-    (pushToB8 xs).toXinst = .none := by
-  cases h : (pushToB8 xs).toXinst; {rfl}
-  cases
-    Eq.trans
-      (toInstType_pushToB8 le).symm
-      (toInstType_eq_x_of_toXinst_eq_some h)
-
-lemma toRinst_pushToB8_eq_none {xs : B8L} (le : xs.length ≤ 32) :
-    (pushToB8 xs).toRinst = .none := by
-  unfold pushToB8
-  rw [Nat.le_iff_lt_add_one] at le; revert le
-  generalize xs.length = n; revert n
-  repeat (rw [Nat.forall_lt_succ_right']; refine' ⟨_, rfl⟩)
-  simp
-
-
-lemma toLinst_pushToB8_eq_none {xs : B8L} (le : xs.length ≤ 32) :
-    (pushToB8 xs).toLinst = .none := by
-  cases h : (pushToB8 xs).toLinst; {rfl}
-  cases
-    Eq.trans
-      (toInstType_pushToB8 le).symm
-      (toInstType_eq_l_of_toLinst_eq_some h)
-
-lemma none_mapRev {ξ υ} {f : ξ → υ} : (Option.none <&> f) = .none := by rfl
-
-lemma none_orElse {ξ} {x : Option ξ} : (Option.none <|> x) = x := by rfl
-
-lemma Linst.getInst_of_slice {evm : Evm} {l : Linst} {xs : B8L}
+lemma Linst.at_of_slice {evm : Evm} {l : Linst} {xs : B8L}
     (slice : evm.code.toList.Slice evm.pc (l.toB8 :: xs)) :
     l.At evm.code evm.pc := by
   have eq := List.get?_eq_of_slice slice
   simp only [Linst.At, ByteArray.getInst]
   have rw := ByteArray.of_getElem?_eq_some eq
-  have lt : evm.pc < evm.code.size := by
-    simp only [ByteArray.size, Array.size]
-    rcases List.getElem?_eq_some_iff.mp eq with ⟨lt, _⟩
-    rw [ByteArray.toList_eq_toList_data] at lt; exact lt
-
-  rw [if_pos lt]
-
-  conv => lhs; arg 1; lhs; rhs; rw [rw]; rfl
-  rw [Linst.toRinst_toB8_eq_none, none_mapRev, none_orElse]
-  conv => lhs; arg 1; lhs; rhs; rw [rw]; rfl
-  rw [Linst.toXinst_toB8_eq_none, none_mapRev, none_orElse]
-  conv => lhs; arg 1; lhs; rhs; rw [rw]; rfl
-  rw [Linst.toJinst_toB8_eq_none, none_mapRev, none_orElse]
-  conv => lhs; arg 1; lhs; rhs; rw [rw]; rfl
-  rw [Linst.toLinst_toB8_eq_some]; rfl
-
+  rw [if_pos (ByteArray.lt_size_of_getElem?_eq_some eq)]
+  split <;>
+  try { rename (B8.toInstType _ = _) => h
+        rw [rw, Linst.toInstType_toB8] at h; cases h }
+  rw [rw, toLinst_toB8]; rfl
 
 lemma at_of_jumpable {code : ByteArray} {pc}
     (jump : jumpable code pc = true) : Jinst.At code pc .jumpdest := by
@@ -432,25 +459,14 @@ lemma at_of_jumpable {code : ByteArray} {pc}
           [ByteArray.get!, Array.getElem!_eq_getD, Array.getD_eq_getD_getElem?]
         rw [Array.getElem?_eq_none_iff.mpr h]; rfl
       rw [h_get0] at h_get; cases h_get
-    rw [if_pos lt]
-    have r_none : B8.toRinst (code.get! pc) = none := by
-      rw [h_get]; apply Jinst.toRinst_toB8_eq_none
-    have x_none : B8.toXinst (code.get! pc) = none := by
-      rw [h_get]; apply Jinst.toXinst_toB8_eq_none
-    have j_some : B8.toJinst (code.get! pc) = some .jumpdest := by
-      rw [h_get]; apply Jinst.toJinst_toB8_eq_some
-    simp only [r_none, x_none, j_some, none_mapRev, none_orElse]
-    rfl
+    rw [if_pos lt]; split <;>
+    try { rename (B8.toInstType _ = _) => h
+          rw [h_get, Jinst.toInstType_toB8] at h; cases h }
+    rw [h_get]; rfl
   · cases jump
 
 def PushAt (code : ByteArray) (pc : Nat) (xs : B8L) : Prop :=
   ∃ le : xs.length ≤ 32, code.getInst pc = some (.next (.push xs le))
-
-lemma ByteArray.lt_size_of_getElem?_eq_some {xs : ByteArray} {n} {x}
-    (eq : xs.toList[n]? = some x) : n < xs.size := by
-  simp only [ByteArray.size, Array.size]
-  rcases List.getElem?_eq_some_iff.mp eq with ⟨lt, _⟩
-  rw [ByteArray.toList_eq_toList_data] at lt; exact lt
 
 lemma Jinst.at_of_slice {code : ByteArray} {pc} {j : Jinst}
     (slice : code.toList.Slice pc [j.toB8]) : Jinst.At code pc j := by
@@ -458,12 +474,10 @@ lemma Jinst.at_of_slice {code : ByteArray} {pc} {j : Jinst}
   simp only [Jinst.At, ByteArray.getInst]
   have rw := ByteArray.of_getElem?_eq_some eq
   rw [if_pos (ByteArray.lt_size_of_getElem?_eq_some eq)]
-  conv => lhs; arg 1; lhs; rhs; rw [rw]; rfl
-  rw [Jinst.toRinst_toB8_eq_none, none_mapRev, none_orElse]
-  conv => lhs; arg 1; lhs; rhs; rw [rw]; rfl
-  rw [Jinst.toXinst_toB8_eq_none, none_mapRev, none_orElse]
-  conv => lhs; arg 1; lhs; rhs; rw [rw]; rfl
-  rw [Jinst.toJinst_toB8_eq_some]; rfl
+  split <;>
+  try { rename (B8.toInstType _ = _) => h
+        rw [rw, Jinst.toInstType_toB8] at h; cases h }
+  rw [rw, toJinst_toB8]; rfl
 
 -- lemma le_toNat_pushToB8 (bs : B8L) (le : bs.length ≤ 32) :
 --     95 ≤ (pushToB8 bs).toNat := by
@@ -481,7 +495,6 @@ lemma Jinst.at_of_slice {code : ByteArray} {pc} {j : Jinst}
 --    rw [Nat.mod_eq_of_lt] <;> omega
 --  · simp only [B8.toNat, UInt8.reduceToNat, UInt8.toNat_ofNat']
 --    rw [Nat.mod_eq_of_lt] <;> omega
---
 
 lemma toNat_pushToB8_eq {xs : B8L} (le : xs.length ≤ 32) :
     (pushToB8 xs).toNat = xs.length + 95:= by
@@ -497,95 +510,134 @@ lemma Ninst.push_ext {xs ys : B8L}
     Ninst.push xs le = Ninst.push ys le' := by
   revert le le'; rw [eq]; simp
 
-lemma pushAt_of_slice {code : ByteArray} {pc} {xs : B8L}
-    (le : xs.length ≤ 32)
+lemma List.sliceD_succ {ξ} (xs : List ξ) (m n : Nat) (d : ξ) :
+    xs.sliceD m (n + 1) d = xs.getD m d :: xs.sliceD (m + 1) n d := by
+  cases m <;> cases xs <;> simp [List.sliceD, takeD, List.getD, List.drop]
+
+lemma ByteArray.get!_eq_getElem!_toList
+    (xs : ByteArray) (i : Nat) : xs.get! i = xs.toList[i]! := by
+  simp only [ByteArray.get!]
+  rw [List.getElem!_eq_getElem?_getD, Array.getElem!_eq_getD]
+  rw [Array.getD_eq_getD_getElem?, ByteArray.toList_eq_toList_data]
+  rcases Nat.lt_or_ge i xs.data.size with lt | ge
+  · rw [Array.getElem?_eq_getElem lt, List.getElem?_eq_getElem lt]; rfl
+  · rw [Array.getElem?_eq_none ge, List.getElem?_eq_none ge]
+
+lemma List.getD_eq_getElem!_of_lt_length {ξ} [Inhabited ξ]
+    {xs : List ξ} {i : Nat} {d : ξ} : i < xs.length → xs.getD i d = xs[i]! := by
+  intro lt; rw [List.getD_eq_getElem?_getD, List.getElem!_eq_getElem?_getD]
+  rw [List.getElem?_eq_getElem lt]; rfl
+
+lemma ByteArray.size_eq_length_toList (xs : ByteArray) :
+    xs.size = xs.toList.length := by
+  simp only [ByteArray.size, Array.size]
+  rw [ByteArray.toList_eq_toList_data]
+
+lemma List.getD_eq_default {ξ} {xs : List ξ} {i : Nat} {d : ξ}
+    (le : xs.length ≤ i) : xs.getD i d = d := by
+  rw [List.getD_eq_getElem?_getD, List.getElem?_eq_none_iff.mpr le]; rfl
+
+lemma ByteArray.sliceD_eq_replicate (xs : ByteArray) (m n : Nat) (d : B8)
+    (le : xs.size ≤ m) : ByteArray.sliceD xs m n d = List.replicate n d := by
+  induction n generalizing xs m
+  case zero => rfl
+  case succ n ih =>
+    simp only [ByteArray.sliceD];
+    rw [if_neg]; rw [not_lt]; exact le
+
+lemma ByteArray.sliceD_eq (xs : ByteArray) (m n : Nat) (d : B8) :
+    ByteArray.sliceD xs m n d = xs.toList.sliceD m n d := by
+  induction n generalizing xs m
+  case zero => rfl
+  case succ n ih =>
+    simp only [ByteArray.sliceD]; split
+    · rename (_ < _) => lt
+      have lt' : m < xs.toList.length := by
+        simp only [ByteArray.size] at lt
+        rw [ Array.size_eq_length_toList,
+             ← ByteArray.toList_eq_toList_data ] at lt
+        apply lt
+      rw [List.sliceD_succ, ih]
+      rw [ByteArray.get!_eq_getElem!_toList]
+      rw [List.getD_eq_getElem!_of_lt_length lt']
+    · rename (¬ _ < _) => nlt
+      rw [not_lt] at nlt
+      simp only [List.replicate]
+      rw [List.sliceD_succ]
+      apply congr_arg₂
+      · rw [ByteArray.size_eq_length_toList] at nlt
+        rw [List.getD_eq_default nlt]
+      · rw [← ih]; rw [ByteArray.sliceD_eq_replicate]; omega
+
+lemma List.drop_eq_of_drop?_eq_some {ξ} {xs ys : List ξ} {m : Nat} :
+    xs.drop? m = some ys → xs.drop m = ys := by
+  induction m generalizing xs ys
+  case zero => simp [List.drop?]
+  case succ m ih => cases xs <;> simp [List.drop?]; apply ih
+
+lemma List.takeD_eq_of_take?_eq_some {ξ} {xs ys : List ξ} {m : Nat} {d} :
+    xs.take? m = some ys → xs.takeD m d = ys := by
+  induction m generalizing xs ys
+  case zero => simp [List.take?]
+  case succ m ih =>
+    cases xs <;> simp [List.take?]
+    intro _ eq eq'; cases ys; {cases eq'}
+    cases eq'; simp [ih eq]
+
+lemma List.take_eq_of_take?_eq_some {ξ} (xs ys : List ξ) (m : Nat) :
+    xs.take m = some ys → xs.take m = ys := by
+  induction m generalizing xs ys
+  case zero => simp [List.take]
+  case succ m ih => cases xs <;> simp
+
+lemma List.sliceD_eq_of_slice?_eq_some {ξ} {xs ys : List ξ} {m n : Nat} {d} :
+    xs.slice? m n = some ys → xs.sliceD m n d = ys := by
+  intro eq; simp only [List.slice?] at eq; simp only [List.sliceD]
+  rcases of_bind_eq_some eq with ⟨zs, rw, rw'⟩
+  rw [drop_eq_of_drop?_eq_some rw, takeD_eq_of_take?_eq_some rw']
+
+lemma pushAt_of_slice {code : ByteArray} {pc} {xs : B8L} (le : xs.length ≤ 32)
     (slice : code.toList.Slice pc (pushToB8L xs)) : PushAt code pc xs := by
-
-    -- (Ninst.push (code.sliceD (pc + 1) (B8.toNat (code.get! pc) - 95) 0) ⋯)
-
-
-  -- have slice' : ∃ n, code.toList.slice? pc n = some (pushToB8L xs)
-
   have eq := List.get?_eq_of_slice slice
   have rw := ByteArray.of_getElem?_eq_some eq
   simp only [PushAt, ByteArray.getInst]
   refine' ⟨le, _⟩
   rw [if_pos (ByteArray.lt_size_of_getElem?_eq_some eq)]
-  conv => lhs; arg 1; lhs; rhs; rw [rw]; rfl
-  rw [toRinst_pushToB8_eq_none le, none_mapRev, none_orElse]
-  conv => lhs; arg 1; lhs; rhs; rw [rw]; rfl
-  rw [toXinst_pushToB8_eq_none le, none_mapRev, none_orElse]
-  conv => lhs; arg 1; lhs; rhs; rw [rw]; rfl
-  rw [toJinst_pushToB8_eq_none le, none_mapRev, none_orElse]
-  conv => lhs; arg 1; lhs; rhs; rw [rw]; rfl
-  rw [toLinst_pushToB8_eq_none le, none_mapRev, none_orElse]
-  have lft := le_toNat_pushToB8 xs le
-  have rgt := le_toNat_pushToB8 xs le
+  split <;>
+  try { rename (B8.toInstType _ = _) => h
+        rw [rw, toInstType_pushToB8 le] at h; cases h }
+  apply congr_arg; apply congr_arg; apply Ninst.push_ext
+  rcases slice with ⟨len, slice⟩
+  have rw' : B8.toNat (code.get! pc) - 95 = xs.length := by
+    rw [rw, toNat_pushToB8_eq le]; omega
+  rw [rw', ByteArray.sliceD_eq]; simp [pushToB8L] at slice
+  rw [List.length_slice? slice, List.length_cons] at slice
+  apply List.sliceD_eq_of_slice?_eq_some (List.slice?_eq_cons_iff.mp slice).2
 
-  rw [dif_pos]
-  · simp [List.Slice] at slice
-    apply congr_arg
-    apply congr_arg
-
-    conv => lhs; arg 1; arg 3; arg 1; arg 1; rw [rw]
-    have eq_len : (pushToB8 xs).toNat - 95 = xs.length := sorry
-
-    apply Ninst.push_ext
-    rw [eq_len]; sorry
-  · rw [rw]; refine' ⟨le_toNat_pushToB8 xs le, toNat_pushToB8_le xs le⟩
-
-
-
-
-
-
-
-
-    --have eq_xs : code.sliceD (pc + 1) ((pushToB8 xs).toNat - 95) 0 = xs := sorry
-
-
-
-  #exit
-
-    conv => lhs; arg 1; arg 3; rw [rw']; rfl
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-  sorry
-
-
-lemma Ninst.getInst_of_slice {evm : Evm} {n : Ninst} :
-    evm.code.toList.Slice evm.pc n.toB8L → n.At evm.code evm.pc := by sorry
+lemma Ninst.at_of_slice {evm : Evm} {n : Ninst}
+    (slice : evm.code.toList.Slice evm.pc n.toB8L) : n.At evm.code evm.pc := by
+  cases n
+  case reg r =>
+    simp [Ninst.toB8L] at slice
+    have eq := List.get?_eq_of_slice slice
+    simp only [Ninst.At, ByteArray.getInst]
+    have rw := ByteArray.of_getElem?_eq_some eq
+    rw [if_pos (ByteArray.lt_size_of_getElem?_eq_some eq)]
+    split <;>
+    try { rename (B8.toInstType _ = _) => h
+          rw [rw, Rinst.toInstType_toB8] at h; cases h }
+    rw [rw, toB8_toRinst]; rfl
+  case exec x =>
+    simp [Ninst.toB8L] at slice
+    have eq := List.get?_eq_of_slice slice
+    simp only [Ninst.At, ByteArray.getInst]
+    have rw := ByteArray.of_getElem?_eq_some eq
+    rw [if_pos (ByteArray.lt_size_of_getElem?_eq_some eq)]
+    split <;>
+    try { rename (B8.toInstType _ = _) => h
+          rw [rw, Xinst.toInstType_toB8] at h; cases h }
+    rw [rw, toB8_toXinst]; rfl
+  case push xs le => apply (pushAt_of_slice le slice).2
 
 lemma of_subcode {cd k} :
     ∀ {obs}, subcode cd k obs →
@@ -596,13 +648,277 @@ lemma of_subcode {cd k} :
 def Ninst.Inv {ξ : Type} (r : Evm → ξ) (n : Ninst) : Prop :=
   ∀ {evm evm'}, Ninst.Run evm n evm' → r evm = r evm'
 
+lemma Evm.pop_inv_pc {evm evm' : Evm} {x}
+    (pop : Evm.pop evm = .ok ⟨x, evm'⟩) : evm.pc = evm'.pc := by
+  simp only [Evm.pop] at pop; split at pop; {cases pop}
+  injection pop with eq; injection eq with eq eq'; rw [← eq']
+
+lemma Evm.popToNat_inv_pc {evm evm' : Evm} {x}
+    (pop : Evm.popToNat evm = .ok ⟨x, evm'⟩) : evm.pc = evm'.pc := by
+  simp only [Evm.popToNat] at pop;
+  cases h : evm.pop <;> rename (_ = _) => rw <;> simp [rw] at pop
+  rename (_ × _) => pair; rcases pair with ⟨x, evm'⟩
+  simp only [Prod.mapFst, Prod.map_apply, id_eq, Prod.mk.injEq] at pop
+  rw [← pop.2, Evm.pop_inv_pc rw]
+
+lemma Evm.pop_of_pop {evm evm' : Evm} {x}
+    (pop : Evm.pop evm = .ok ⟨x, evm'⟩) : Evm.Pop [x] evm evm' := by
+  simp only [Evm.pop] at pop; split at pop; {cases pop}
+  injection pop with eq; injection eq with eq eq'
+  constructor <;> simp <;> rw [← eq'] <;> try {rfl}
+  rename (evm.stack = _) => rw; rw [rw, eq]; rfl
+
+lemma chargeGas_inv_pc {gas : Nat} {evm evm' : Evm} :
+    chargeGas gas evm = .ok evm' → evm.pc = evm'.pc := by
+  simp only [chargeGas]; split <;> intro h
+  · cases h
+  · rw [← Except.ok.inj h]
+
 lemma Ninst.inv_code {n} : Ninst.Inv Evm.code n := by sorry
 
+lemma Rinst.run_of_at {evm o exn}
+    (cr : Exec evm exn) (ok : exn.isOk)
+    (h_at : Rinst.At evm.code evm.pc o) :
+    ∃ (evm' : Evm) (cr' : Exec evm' exn),
+      evm'.pc = evm.pc + 1 ∧
+      Rinst.Run evm o evm' ∧
+      Pack.Rel ⟨evm', exn, cr'⟩ ⟨evm, exn, cr⟩ := by
+  cases cr
+  case invOp eq => cases Eq.trans h_at.symm eq
+  case nextNoneErr => sorry
+  case nextSomeErr => sorry
+  case nextNoneRec => sorry
+  case nextSomeRec => sorry
+  case jumpErr => sorry
+  case jumpRec => sorry
+  case last => sorry
+
+-- inductive Exec : Evm → Execution → Type
+--   | invOp {evm : Evm} :
+--     evm.getInst = none →
+--     Exec evm (.error ⟨"InvalidOpcode", evm⟩)
+--   | nextNoneErr {evm : Evm} {n : Ninst} {exn : Execution} :
+--     n.At evm.code evm.pc →
+--     Ninst.Run' evm n .none exn →
+--     exn.IsError → Exec evm exn
+--   | nextSomeErr {evm : Evm} {n : Ninst}
+--     {evm' : Evm} {ex' : Execution } {exn : Execution} :
+--     n.At evm.code evm.pc→
+--     Ninst.Run' evm n (.some (evm', ex')) exn →
+--     Exec evm' ex' → exn.IsError → Exec evm exn
+--   | nextNoneRec {evm : Evm} {n : Ninst} {evm' : Evm} {exn : Execution} :
+--     n.At evm.code evm.pc→
+--     Ninst.Run' evm n .none (.ok evm') →
+--     Exec evm' exn → Exec evm exn
+--   | nextSomeRec {evm : Evm} {n : Ninst} {evm' : Evm}
+--     {exn' : Execution} {evm'' : Evm} {exn : Execution} :
+--     n.At evm.code evm.pc→
+--     Ninst.Run' evm n (.some (evm', exn')) (.ok evm'') →
+--     Exec evm' exn' → Exec evm'' exn → Exec evm exn
+--   | jumpErr {evm : Evm} {j : Jinst} {exn : Execution} :
+--     j.At evm.code evm.pc →
+--     Jinst.Run evm j exn →
+--     exn.IsError → Exec evm exn
+--   | jumpRec {evm : Evm} {j : Jinst} {evm' : Evm} {exn : Execution} :
+--     j.At evm.code evm.pc →
+--     Jinst.Run evm j (.ok evm') →
+--     Exec evm' exn → Exec evm exn
+--   | last {evm : Evm} {l : Linst} {exn : Execution} :
+--     l.At evm.code evm.pc → Linst.Run evm l exn → Exec evm exn
+
+-- lemma Rinst.run_of_at {e s pc o r} (cr : Exec e s pc r) (h_at : Rinst.At e pc o) :
+--     ∃ (s' : Desc) (cr' : Exec e s' (pc + 1) r),
+--       Rinst.Run e s o s' ∧ Exec'.Rel ⟨e, s', pc + 1, r, cr'⟩ ⟨e, s, pc, r, cr⟩ := by
+--   cases cr with
+--   | step =>
+--     rename Desc => s'; refine' ⟨s', _⟩
+--     have h_prec := Exec'.Rel.step asm asm
+--     cases (asm : Step _ _ _ _ _)
+--     · rw [Rinst.at_unique h_at asm]; refine' ⟨asm, asm, asm⟩
+--     · cases not_cop_at_of_op_at h_at asm
+--     · cases not_cop_at_of_op_at h_at asm
+--     · cases not_jop_at_of_op_at h_at asm
+--     · cases not_pushAt_of_op_at h_at asm
+--   | exec => cases not_cop_at_of_op_at h_at asm
+--   | halt =>
+--     rename Halt _ _ _ _ => h_halt; cases h_halt
+--     · cases not_hop_at_of_op_at h_at asm
+--     · cases List.get?_length_ne_some h_at
+
+-- lemma pc_eq_of_run {evm n lim evm'} --(run : Ninst.Run' evm n xl (.ok evm')) :
+--     (run : Ninst.run false evm n lim = .ok evm') :
+--     evm'.pc = evm.pc + n.toB8L.length := by
+--   cases n
+--   case reg => sorry
+--   case push xs le => sorry
+--   case exec x =>
+--     cases x
+--     case create =>
+--       unfold Ninst.run at run
+
+
+lemma of_split_eq_ok {ξ υ ζ : Type} {xy : Except ξ υ} {z : ζ} {p : υ → Prop}
+    (h : Except.Split xy (.ok z) p) : ∃ y, xy = .ok y ∧ p y := by
+  cases xy
+  case error =>
+    simp only
+      [ Except.Split, Except.error.injEq, reduceCtorEq,
+        and_false, exists_false, false_and, or_self ] at h
+  case ok y =>
+    simp only
+      [ Except.Split, reduceCtorEq, and_self, exists_false,
+        Except.ok.injEq, exists_eq_left', false_or ] at h
+    refine' ⟨y, rfl, h⟩
+
+lemma genericCreate_inv_pc {evm : Evm} {endowment : B256}
+    {newAddress : Adr} {memoryIndex memorySize : ℕ} {xl : Xlot} {evm' : Evm}
+    (gc : GenericCreate evm endowment newAddress memoryIndex memorySize xl (.ok evm')) :
+    evm.pc = evm'.pc := by
+  sorry
+
+#check Evm.memExtends
+
+lemma pc_eq_of_run' {evm n xl evm'}
+    (run : Ninst.Run' evm n xl (.ok evm')) :
+    evm'.pc = evm.pc + n.toB8L.length := by
+  cases n
+  case reg => sorry
+  case push xs le => sorry
+  case exec x =>
+    cases x
+    case create =>
+      simp? [Ninst.Run'] at run
+
+      rename' run => temp
+      rcases of_split_eq_ok temp with ⟨⟨foo, evm1⟩, pop, run⟩; clear temp
+      rw [Evm.pop_inv_pc pop]; clear pop
+
+      rename' run => temp
+      rcases of_split_eq_ok temp with ⟨⟨bar, evm2⟩, pop, run⟩; clear temp
+      rw [Evm.popToNat_inv_pc pop];
+      simp only at run; clear evm1 pop
+
+      rename' run => temp
+      rcases of_split_eq_ok temp with ⟨⟨quz, evm3⟩, pop, run⟩; clear temp
+      rw [Evm.popToNat_inv_pc pop];
+      simp only at run;
+      clear evm2 pop
+
+      rename' run => temp
+      rcases of_split_eq_ok temp with ⟨evm4, cg, run⟩; clear temp
+      rw [chargeGas_inv_pc cg];
+      clear cg evm3
+
+      rcases run with ⟨exn, gc, run⟩
+
+      rename' run => temp
+      rcases of_split_eq_ok temp with ⟨evm5, rw, run⟩; clear temp
+      rw [rw] at gc; clear rw
+      have hh := genericCreate_inv_pc gc
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#exit
+
 lemma Ninst.run_of_at {evm n exn}
-    (ex : Exec evm exn) (h_at : n.At evm.code evm.pc) :
-    ∃ (evm' : Evm) (ex' : Exec evm' exn)
-      (rel : Pack.Rel ⟨evm', exn, ex'⟩ ⟨evm, exn, ex⟩),
-      evm'.pc = evm.pc + n.toB8L.length ∧ Ninst.Run evm n evm' := sorry
+    (ex : Exec evm exn) (ok : exn.isOk)
+    (nat : n.At evm.code evm.pc) :
+    ∃ (evm' : Evm) (ex' : Exec evm' exn),
+      evm'.pc = evm.pc + n.toB8L.length ∧ Ninst.Run evm n evm' ∧
+      Pack.Rel ⟨evm', exn, ex'⟩ ⟨evm, exn, ex⟩ := by
+  cases ex
+  case invOp eq => cases Eq.trans nat.symm eq
+  case nextNoneErr err _ => cases exn; cases ok; cases err
+  case nextSomeErr err _ => cases exn; cases ok; cases err
+  case nextNoneRec n evm' nat' run ex' =>
+    have eq := Eq.trans nat.symm nat'
+    injection eq with eq
+    injection eq with eq
+    rw [eq]
+    refine' ⟨evm', ex', _, ⟨.none, .intro, run⟩ , _⟩
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#exit
+  case nextNoneRec => sorry
+  case nextSomeRec => sorry
+  case jumpErr => sorry
+  case jumpRec => sorry
+  case last => sorry
+
+
+
+--   cases i with
+--   | reg o =>
+--     rcases Rinst.run_of_at cr h_at with ⟨s', cr', h_run, h_prec⟩
+--     refine' ⟨s', cr', .reg h_run, h_prec⟩
+--   | exec o =>
+--     rcases Xinst.run_of_at cr h_at with ⟨s', cr', h_run, h_prec⟩
+--     refine' ⟨s', cr', .exec h_run, h_prec⟩
+--   | push bs h =>
+--     rcases push_of_pushAt cr h_at with ⟨s', cr', h_push, h_prec⟩
+--     simp [toB8L]; rw [length_pushToB8L, ← Nat.add_assoc]
+--     refine' ⟨s', _, _, h_prec⟩; exact Ninst.Run.push _ h_push
 
 -- lemma Ninst.run_of_at {e s pc i r}
 --     (cr : Exec e s pc r) (h_at : Ninst.At e pc i) :
@@ -624,32 +940,10 @@ lemma Ninst.run_of_at {evm n exn}
 def Evm.getInst' (evm : Evm) (pc : Nat) : Option Inst :=
   ByteArray.getInst evm.code pc
 
--- #exit
---   if pc < evm.code.size
---   then
---     let b : B8 := evm.code.get! pc
---     (b.toRinst <&> (.next ∘ .reg)) <|>
---     (b.toXinst <&> (.next ∘ .exec)) <|>
---     (b.toJinst <&> .jump) <|>
---     (b.toLinst <&> .last) <|>
---     (
---       let bn := b.toNat
---       if h_bn : 95 ≤ bn ∧ bn ≤ 127 then
---         let bs : B8L := evm.code.sliceD (pc + 1) (bn - 95) 0
---         let h_bs : bs.length ≤ 32 := by
---           simp [bs, ByteArray.length_sliceD, h_bn.right]
---         some <| .next <| .push bs h_bs
---       else
---         none
---     )
---   else
---     some (.last .stop)
-
 lemma Evm.getInst_eq_getInst' {evm : Evm} : evm.getInst = evm.getInst' evm.pc := rfl
 
 -- def Jinst.At' (evm : Evm) (pc : Nat) (j : Jinst) : Prop :=
   -- evm.getInst' pc = some (.jump j)
-
 
 lemma subcode_compile_branch {evm : Evm} {k l p q}
     (h : subcode evm.code.toList k (Func.compile l k (Func.branch p q))) :
@@ -830,10 +1124,6 @@ def B16.concat (x y : B16) : B32 :=
 def B32.concat (x y : B32) : B64 :=
   x.toB64 <<< 32 ||| y.toB64
 
-lemma Nat.hi_le (a b : Nat) : a ↿ b ≤ a := by
-  rw [hi, shiftLeft_eq, shiftRight_eq_div_pow]
-  apply Nat.div_mul_le_self
-
 lemma toB32_eq_concat (n : Nat) :
     n.toB32 = B16.concat (n >>> 16).toB16 n.toB16 := by
   rw [← B32.toNat_inj, toNat_toB32]
@@ -945,11 +1235,6 @@ instance : HPrsv Evm.incrPc := by
   injection h with rw; rw [← rw]
   constructor <;> rfl
 
-lemma chargeGas_inv_pc {gas : Nat} {evm evm' : Evm} :
-    chargeGas gas evm = .ok evm' → evm.pc = evm'.pc := by
-  simp only [chargeGas]; split <;> intro h
-  · cases h
-  · rw [← Except.ok.inj h]
 
 lemma exec_inv_code {evm evm' : Evm} :
     Exec evm (.ok evm') → evm.code = evm'.code := by
@@ -959,12 +1244,6 @@ lemma incrPc_incr_pc {evm evm' : Evm} :
     evm.incrPc = .ok evm' → evm.pc + 1 = evm'.pc := by
   simp only [Evm.incrPc]; intro h; rw [← Except.ok.inj h]
 
-lemma Evm.pop_of_pop {evm evm' : Evm} {x}
-    (pop : Evm.pop evm = .ok ⟨x, evm'⟩) : Evm.Pop [x] evm evm' := by
-  simp only [Evm.pop] at pop; split at pop; {cases pop}
-  injection pop with eq; injection eq with eq eq'
-  constructor <;> simp <;> rw [← eq'] <;> try {rfl}
-  rename (evm.stack = _) => rw; rw [rw, eq]; rfl
 
 lemma jumpdest_at {evm exn} (cr : Exec evm exn)
     (ok : Except.isOk exn)
@@ -1199,15 +1478,16 @@ theorem correct_core (f : Func) (fs : List Func) :
   match p with
   | .last o =>
     have run : Linst.Run pk.evm o (Except.ok tevm) := by
-      rw [← eq_tevm]; apply Linst.run_of_at pk.ex <| Linst.getInst_of_slice sc
+      rw [← eq_tevm]; apply Linst.run_of_at pk.ex <| Linst.at_of_slice sc
     apply Func.Run.last (Evm.equiv_refl _) run (Evm.equiv_refl _)
   | .next n p =>
     rcases of_subcode sc with ⟨cd, h_eq', h_slice⟩; clear sc
     rcases of_bind_eq_some h_eq' with ⟨cd', h_eq'', h_rw⟩; clear h_eq'
     simp [pure] at h_rw; rw [← h_rw] at h_slice; clear h_rw cd
     have h_at : n.At pk.evm.code pk.evm.pc := by
-      apply Ninst.getInst_of_slice; apply List.slice_prefix h_slice
-    rcases Ninst.run_of_at pk.ex h_at with ⟨evm', ex', h_prec, h_pc, h_run⟩
+      apply Ninst.at_of_slice; apply List.slice_prefix h_slice
+
+    rcases Ninst.run_of_at pk.ex h_at with ⟨evm', ex', h_pc, h_run, h_prec⟩
     have h_run' : Func.Run (f :: fs) evm' p tevm := by
       apply ih ⟨evm', pk.exn, ex'⟩ (Pack.lt_of_prec h_prec) p
       · simp; rw [← Ninst.inv_code h_run]; apply eq

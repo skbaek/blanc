@@ -1664,30 +1664,29 @@ lemma Xinst.toB8_eq_ox (o : Xinst) : ∃ hx, o.toByte = Ox xF hx := by
   cases o <;> refine ⟨_, rfl⟩
 -/
 
-inductive InstType
-  | R | X | J | L | P
-
-def B8.toInstType (b : B8) : InstType :=
-  match b.highs with
-  | 0x00 => if b.lows = 0x00 then .L else .R
-  | 0x05 =>
-    match b.lows with
-    | 0x06 => .J
-    | 0x07 => .J
-    | 0x0B => .J
-    | 0x0F => .P
-    | _ => .R
-  | 0x06 => .P
-  | 0x07 => .P
-  | 0x0F =>
-    match b.lows with
-    | 0x03 => .L
-    | 0x0D => .L
-    | 0x0F => .L
-    | _ => .X
-  | _ => .R
-
-
+-- inductive InstType
+--   | R | X | J | L | P
+--
+-- def B8.toInstType (b : B8) : InstType :=
+--   match b.highs with
+--   | 0x00 => if b.lows = 0x00 then .L else .R
+--   | 0x05 =>
+--     match b.lows with
+--     | 0x06 => .J
+--     | 0x07 => .J
+--     | 0x0B => .J
+--     | 0x0F => .P
+--     | _ => .R
+--   | 0x06 => .P
+--   | 0x07 => .P
+--   | 0x0F =>
+--     match b.lows with
+--     | 0x03 => .L
+--     | 0x0D => .L
+--     | 0x0F => .L
+--     | _ => .X
+--   | _ => .R
+--
 lemma toInstType_toB8_swap (x : Fin 16) :
     (Rinst.swap x).toB8.toInstType = .R := by
   rcases x with ⟨n, h⟩; revert h n
@@ -2096,7 +2095,7 @@ lemma Rinst.run_of_at {e s pc o r} (cr : Exec e s pc r) (h_at : Rinst.At e pc o)
   | step =>
     rename Desc => s'; refine' ⟨s', _⟩
     have h_prec := Exec'.Rel.step asm asm
-    cases (asm : Step _ _ _ _ _)
+        cases (asm : Step _ _ _ _ _)
     · rw [Rinst.at_unique h_at asm]; refine' ⟨asm, asm, asm⟩
     · cases not_cop_at_of_op_at h_at asm
     · cases not_cop_at_of_op_at h_at asm
@@ -2469,13 +2468,6 @@ lemma toB64_eq_concat_of_lt (n : Nat) (n_lt : n < 2 ^ 64) :
   rw [Nat.shiftLeft_eq]
   omega
   -/
-
-lemma Nat.hi_le (a b : Nat) : a ↿ b ≤ a := by
-  rw [hi, shiftLeft_eq, shiftRight_eq_div_pow]
-  apply Nat.div_mul_le_self
-
--- lemma Nat.lo_lt (x y : Nat) : x ↾ y < 2 ^ y :=
---   Nat.mod_lt _ (Nat.pow_pos (by omega))
 
 lemma B64.toNat_shl (a b : B64) :
     (a <<< b).toNat = (a.toNat <<< (b.toNat % 64)) ↾ 64 :=

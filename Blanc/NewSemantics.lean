@@ -549,6 +549,8 @@ def pushToB8L (bs : B8L) : B8L := pushToB8 bs :: bs
 def Linst.At (code : ByteArray) (pc : Nat) (l : Linst) : Prop := code.getInst pc = some (.last l)
 def Ninst.At (code : ByteArray) (pc : Nat) (n : Ninst) : Prop := code.getInst pc = some (.next n)
 def Jinst.At (code : ByteArray) (pc : Nat) (j : Jinst) : Prop := code.getInst pc = some (.jump j)
+def Rinst.At (code : ByteArray) (pc : Nat) (r : Rinst) : Prop := code.getInst pc = some (.next (.reg r))
+
 
 -- def PushAt (e : Env) (pc : Nat) (bs : B8L) : Prop :=
 --   List.Slice e.code pc (pushToB8L bs) ∧ bs.length ≤ 32
@@ -959,22 +961,9 @@ def Except.IsError {ξ υ : Type} (e : Except ξ υ) : Prop :=
 def Xlot : Type := Option (Evm × Execution)
 
 def Except.Split {ξ υ ζ : Type}
-    (e : Except ξ υ)  (e' : Except ξ ζ) (q : υ → Prop) : Prop :=
+    (e : Except ξ υ) (e' : Except ξ ζ) (q : υ → Prop) : Prop :=
   (∃ x, e = .error x ∧ e' = .error x) ∨ (∃ y : υ, e = .ok y ∧ q y)
 
-  -- def executeCode (vb : Bool) (msg : Msg) :
-  --   Nat → Except (Benv × Tenv × String) Evm
-  --   | 0 => .error ⟨msg.benv, msg.tenv, "RecursionLimit"⟩
-  --   | lim + 1 => do
-  --     let evm : Evm := initEvm msg
-  --     match msg.codeAddress with
-  --     | .none =>
-  --       executeCode.handleError <| exec vb lim evm
-  --     | .some adr =>
-  --       if adr.isPrecomp then
-  --         executeCode.handleError <| executePrecomp evm adr
-  --       else
-  --         executeCode.handleError <| exec vb lim evm
 def ExecuteCode (msg : Msg) (xl : Xlot)
     (ex : Except (String × Benv × Tenv) Evm) : Prop :=
   let evm : Evm := initEvm msg
@@ -986,7 +975,6 @@ def ExecuteCode (msg : Msg) (xl : Xlot)
       (xl = .none ∧  executeCode.handleError (executePrecomp evm adr) = ex)
     else
       ∃ ex', xl = .some ⟨evm, ex'⟩ ∧ executeCode.handleError ex' = ex
-
 
 def ProcessMessage (msg : Msg) (xl : Xlot)
     (ex : Except (String × Benv × Tenv) Evm) : Prop :=
