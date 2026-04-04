@@ -1512,7 +1512,7 @@ def Ninst.Run' (evm : Evm) : Ninst → Xlot → Execution → Prop
   | .exec .call, xl, ex =>
       (evm.pop).Split ex <|
     λ ⟨gas, evm1⟩ =>
-      (evm1.pop <&> Prod.mapFst B256.toAdr).Split ex <|
+      (evm1.popToAdr).Split ex <|
     λ ⟨callee, evm2⟩ =>
       (evm2.pop).Split ex <|
     λ ⟨value, evm3⟩ =>
@@ -1530,9 +1530,10 @@ def Ninst.Run' (evm : Evm) : Ninst → Xlot → Execution → Prop
       And (preAccessCost = access_cost callee evm7.accessedAddresses) <|
     ∃ evm8,
       And (evm8 = addAccessedAddress evm7 callee) <|
-    ∃ disablePrecompiles fooo code delegatedAccessGasCost evm9,
+    ∃ disablePrecompiles codeAdr code delegatedAccessGasCost evm9,
       And
-        (⟨disablePrecompiles, fooo, code, delegatedAccessGasCost, evm9⟩ = accessDelegation evm8 callee) <|
+        ( ⟨disablePrecompiles, codeAdr, code, delegatedAccessGasCost, evm9⟩ =
+          accessDelegation evm8 callee ) <|
     ∃ accessCost,
       And (accessCost = preAccessCost + delegatedAccessGasCost) <|
     ∃ createCost,
@@ -1567,7 +1568,7 @@ def Ninst.Run' (evm : Evm) : Ninst → Xlot → Execution → Prop
   | .exec .callcode, xl, ex =>
       (evm.pop).Split ex <|
     λ ⟨gas, evm1⟩ =>
-      (evm1.pop <&> Prod.mapFst B256.toAdr).Split ex <|
+      (evm1.popToAdr).Split ex <|
     λ ⟨codeAddress, evm2⟩ =>
       (evm2.pop).Split ex <|
     λ ⟨value, evm3⟩ =>
@@ -1617,7 +1618,7 @@ def Ninst.Run' (evm : Evm) : Ninst → Xlot → Execution → Prop
   | .exec .delcall, xl, ex =>
       (evm.pop).Split ex <|
     λ ⟨gas, evm1⟩ =>
-      (evm1.pop <&> Prod.mapFst B256.toAdr).Split ex <|
+      (evm1.popToAdr).Split ex <|
     λ ⟨codeAddress, evm2⟩ =>
       (evm2.popToNat).Split ex <|
     λ ⟨inputIndex, evm3⟩ =>
@@ -1654,7 +1655,7 @@ def Ninst.Run' (evm : Evm) : Ninst → Xlot → Execution → Prop
   | .exec .statcall, xl, ex =>
       (evm.pop).Split ex <|
     λ ⟨gas, evm1⟩ =>
-      (evm1.pop <&> Prod.mapFst B256.toAdr).Split ex <|
+      (evm1.popToAdr).Split ex <|
     λ ⟨target, evm2⟩ =>
       (evm2.popToNat).Split ex <|
     λ ⟨inputIndex, evm3⟩ =>
@@ -1670,8 +1671,8 @@ def Ninst.Run' (evm : Evm) : Ninst → Xlot → Execution → Prop
       And (preAccessCost = access_cost target evm6.accessedAddresses) <|
     ∃ evm7,
       And (evm7 = addAccessedAddress evm6 target) <|
-    ∃ disablePrecompiles fooo code delegatedAccessGasCost evm8,
-      And (⟨disablePrecompiles, fooo, code, delegatedAccessGasCost, evm8⟩ = accessDelegation evm7 target) <|
+    ∃ disablePrecompiles codeAdr code delegatedAccessGasCost evm8,
+      And (⟨disablePrecompiles, codeAdr, code, delegatedAccessGasCost, evm8⟩ = accessDelegation evm7 target) <|
     ∃ accessCost,
       And (accessCost = preAccessCost + delegatedAccessGasCost) <|
     ∃ msgCallCost msgCallStipend,
@@ -3259,7 +3260,7 @@ lemma Linst.unlim_of_run {evm : Evm} {l : Linst} {ex : Execution}
     unlim_bind_step ltd unlim_chargeGas
     simp [Except.Limited, Except.toError?] at ltd
   case dest =>
-    simp only [bind_map_left, Linst.run] at ltd
+    simp only [Evm.popToAdr, bind_map_left, Linst.run] at ltd
     unlim_bind_step ltd unlim_pop
     unlim_bind_step ltd unlim_chargeGas
     unlim_bind_step ltd unlim_assertDynamic

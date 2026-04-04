@@ -2095,7 +2095,7 @@ lemma Rinst.run_of_at {e s pc o r} (cr : Exec e s pc r) (h_at : Rinst.At e pc o)
   | step =>
     rename Desc => s'; refine' ⟨s', _⟩
     have h_prec := Exec'.Rel.step asm asm
-        cases (asm : Step _ _ _ _ _)
+    cases (asm : Step _ _ _ _ _)
     · rw [Rinst.at_unique h_at asm]; refine' ⟨asm, asm, asm⟩
     · cases not_cop_at_of_op_at h_at asm
     · cases not_cop_at_of_op_at h_at asm

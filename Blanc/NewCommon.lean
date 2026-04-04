@@ -648,18 +648,37 @@ lemma of_subcode {cd k} :
 def Ninst.Inv {ξ : Type} (r : Evm → ξ) (n : Ninst) : Prop :=
   ∀ {evm evm'}, Ninst.Run evm n evm' → r evm = r evm'
 
+
+lemma Except.of_assert_eq_ok {p : Prop} [Decidable p] {ξ} {x : ξ}
+    (h : Except.assert p x = .ok ()) : p := by
+  simp [Except.assert] at h; apply h
+
+lemma Evm.push_inv_pc {evm evm' : Evm} {x}
+    (push : Evm.push x evm = .ok evm') : evm.pc = evm'.pc := by
+  simp only [Evm.push] at push
+  rcases of_bind_eq_ok push with ⟨_, temp, eq⟩; clear temp
+  injection eq with eq; rw [← eq]
+
 lemma Evm.pop_inv_pc {evm evm' : Evm} {x}
     (pop : Evm.pop evm = .ok ⟨x, evm'⟩) : evm.pc = evm'.pc := by
   simp only [Evm.pop] at pop; split at pop; {cases pop}
   injection pop with eq; injection eq with eq eq'; rw [← eq']
 
-lemma Evm.popToNat_inv_pc {evm evm' : Evm} {x}
-    (pop : Evm.popToNat evm = .ok ⟨x, evm'⟩) : evm.pc = evm'.pc := by
-  simp only [Evm.popToNat] at pop;
+lemma Evm.pop_mapFst_inv_pc {evm evm' : Evm} {ξ} {x : ξ} {f : B256 → ξ}
+    (pop : evm.pop <&> Prod.mapFst f = Except.ok (x, evm')) :
+    evm.pc = evm'.pc := by
   cases h : evm.pop <;> rename (_ = _) => rw <;> simp [rw] at pop
   rename (_ × _) => pair; rcases pair with ⟨x, evm'⟩
   simp only [Prod.mapFst, Prod.map_apply, id_eq, Prod.mk.injEq] at pop
   rw [← pop.2, Evm.pop_inv_pc rw]
+
+-- lemma Evm.pop_mapFst_inv_pc {evm evm' : Evm} {x}
+--     (pop : Evm.popToNat evm = .ok ⟨x, evm'⟩) : evm.pc = evm'.pc := by
+--   simp only [Evm.popToNat] at pop;
+--   cases h : evm.pop <;> rename (_ = _) => rw <;> simp [rw] at pop
+--   rename (_ × _) => pair; rcases pair with ⟨x, evm'⟩
+--   simp only [Prod.mapFst, Prod.map_apply, id_eq, Prod.mk.injEq] at pop
+--   rw [← pop.2, Evm.pop_inv_pc rw]
 
 lemma Evm.pop_of_pop {evm evm' : Evm} {x}
     (pop : Evm.pop evm = .ok ⟨x, evm'⟩) : Evm.Pop [x] evm evm' := by
@@ -775,88 +794,128 @@ lemma genericCreate_inv_pc {evm : Evm} {endowment : B256}
     (gc : GenericCreate evm endowment newAddress memoryIndex memorySize xl (.ok evm')) :
     evm.pc = evm'.pc := by
   sorry
+lemma genericCall_inv_pc {evm : Evm} {gas : ℕ} {value : B256}
+    {caller target codeAddress : Adr} {shouldTransferValue isStaticcall : Bool}
+    {input_index input_size output_index output_size : ℕ} {code : ByteArray}
+    {disablePrecompiles : Bool} {xlot : Xlot} {evm' : Evm}
+    ( gc :
+      GenericCall
+        evm gas value caller target codeAddress shouldTransferValue
+        isStaticcall input_index input_size output_index output_size
+        code disablePrecompiles xlot (.ok evm') ) :  evm.pc = evm'.pc := by
+  sorry
 
-#check Evm.memExtends
+lemma Evm.memExtends_inv_pc {evm : Evm} {prs : List (ℕ × ℕ)} :
+    evm.pc = (evm.memExtends prs).pc := rfl
 
-lemma pc_eq_of_run' {evm n xl evm'}
+lemma pc_eq_of_incrPc {evm evm' : Evm} (eq : evm.incrPc = .ok evm') :
+   evm.pc + 1 = evm'.pc := by injection eq with eq; rw [← eq]
+
+syntax "inv_step_split " ident term:max rcasesPat : tactic
+macro_rules
+  | `(tactic| inv_step_split $run $lem $pat) => `(tactic|
+      -- We use 'set_option hygiene false' or 'withMainContext'
+      -- inside a tactic block if this were a full 'elab' tactic.
+      -- For a macro, ensure the identifiers are resolved correctly:
+      rename' $run => temp;
+      rcases of_split_eq_ok temp with ⟨$pat, temp_eq, $run⟩;
+      clear temp;
+      -- Use 'rw' on the specific identifier generated in this scope
+      rw [($lem temp_eq)];
+      clear temp_eq
+    )
+
+lemma addAccessedAddress_inv_pc {evm : Evm} {adr : Adr} :
+    (addAccessedAddress evm adr).pc = evm.pc := rfl
+
+lemma accessDelegation_inv_pc {evm : Evm} {adr : Adr} : --Bool × Adr × ByteArray × ℕ × Evm
+    (accessDelegation evm adr).2.2.2.2.pc = evm.pc := by
+  simp only [accessDelegation]; split
+  · apply addAccessedAddress_inv_pc
+  · rfl
+
+lemma incrPc_incr_pc {evm evm' : Evm} :
+    evm.incrPc = .ok evm' → evm.pc + 1 = evm'.pc := by
+  simp only [Evm.incrPc]; intro h; rw [← Except.ok.inj h]
+
+lemma Rinst.pc_eq_of_run {evm : Evm} {r : Rinst} {evm' : Evm}
+    (run : Rinst.run evm r = Except.ok evm') : evm'.pc = evm.pc + 1 := sorry
+
+#exit
+
+lemma Ninst.pc_eq_of_run' {evm n xl evm'}
     (run : Ninst.Run' evm n xl (.ok evm')) :
     evm'.pc = evm.pc + n.toB8L.length := by
   cases n
-  case reg => sorry
-  case push xs le => sorry
+  case reg => exact Rinst.pc_eq_of_run run
+  case push xs le =>
+    simp [Ninst.Run'] at run
+    rename' run => temp
+    rcases of_bind_eq_ok temp with ⟨evm1, temp_eq, run⟩; clear temp
+    rw [chargeGas_inv_pc temp_eq]; clear temp_eq
+    rename' run => temp
+    rcases of_bind_eq_ok temp with ⟨evm2, temp_eq, run⟩; clear temp
+    rw [Evm.push_inv_pc temp_eq]; clear temp_eq
+    injection run with rw; rw [← rw]
+    simp only [toB8L, pushToB8L, List.length_cons]; omega
   case exec x =>
     cases x
     case create =>
-      simp? [Ninst.Run'] at run
-
-      rename' run => temp
-      rcases of_split_eq_ok temp with ⟨⟨foo, evm1⟩, pop, run⟩; clear temp
-      rw [Evm.pop_inv_pc pop]; clear pop
-
-      rename' run => temp
-      rcases of_split_eq_ok temp with ⟨⟨bar, evm2⟩, pop, run⟩; clear temp
-      rw [Evm.popToNat_inv_pc pop];
-      simp only at run; clear evm1 pop
-
-      rename' run => temp
-      rcases of_split_eq_ok temp with ⟨⟨quz, evm3⟩, pop, run⟩; clear temp
-      rw [Evm.popToNat_inv_pc pop];
-      simp only at run;
-      clear evm2 pop
-
-      rename' run => temp
-      rcases of_split_eq_ok temp with ⟨evm4, cg, run⟩; clear temp
-      rw [chargeGas_inv_pc cg];
-      clear cg evm3
-
+      simp only [Ninst.Run', exists_eq_left] at run
+      inv_step_split run Evm.pop_inv_pc ⟨foo, evm1⟩
+      inv_step_split run Evm.pop_mapFst_inv_pc ⟨memIndex, evm2⟩
+      inv_step_split run Evm.pop_mapFst_inv_pc ⟨memSize, evm3⟩
+      inv_step_split run chargeGas_inv_pc evm4
       rcases run with ⟨exn, gc, run⟩
-
       rename' run => temp
       rcases of_split_eq_ok temp with ⟨evm5, rw, run⟩; clear temp
       rw [rw] at gc; clear rw
-      have hh := genericCreate_inv_pc gc
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+      have rw : evm4.pc = evm5.pc := by
+        rw [← genericCreate_inv_pc gc]; rfl
+      rw [rw, ← pc_eq_of_incrPc run]; rfl
+    case call =>
+      simp only [Ninst.Run'] at run
+      inv_step_split run Evm.pop_inv_pc ⟨_, evm1⟩
+      inv_step_split run Evm.pop_mapFst_inv_pc ⟨adr, evm2⟩
+      inv_step_split run Evm.pop_inv_pc ⟨_, evm3⟩
+      inv_step_split run Evm.pop_mapFst_inv_pc ⟨_, evm4⟩
+      inv_step_split run Evm.pop_mapFst_inv_pc ⟨_, evm5⟩
+      inv_step_split run Evm.pop_mapFst_inv_pc ⟨_, evm6⟩
+      inv_step_split run Evm.pop_mapFst_inv_pc ⟨_, evm7⟩
+      rcases run with ⟨extendCost, temp, run⟩; clear temp
+      rcases run with ⟨preAccessCost, temp, run⟩; clear temp
+      rcases run with ⟨evm8, temp, run⟩
+      have rw1 : evm7.pc = evm8.pc := by
+        rw [temp, addAccessedAddress_inv_pc]
+      rw [rw1]; clear rw1 temp
+      rcases run with ⟨_, _, _, _, evm9, temp, run⟩
+      have rw2 : evm8.pc = evm9.pc := by
+        rw [← @accessDelegation_inv_pc evm8 adr, ← temp]
+      rw [rw2]; clear rw2 temp
+      rcases run with ⟨accessCost, temp, run⟩; clear temp
+      rcases run with ⟨createCost, temp, run⟩; clear temp
+      rcases run with ⟨transferCost, temp, run⟩; clear temp
+      rcases run with ⟨msgCallCost, msgCallStipend, temp, run⟩; clear temp
+      inv_step_split run chargeGas_inv_pc evm10
+      rename' run => temp
+      rcases of_split_eq_ok temp with ⟨_, temp', run⟩;
+      clear temp temp'
+      rcases run with ⟨evm11, temp_eq, run⟩
+      have rw : evm10.pc = evm11.pc := by
+        rw [temp_eq]; apply Evm.memExtends_inv_pc
+      rw [rw]; clear rw temp_eq
+      rcases run with ⟨senderBal, temp, run⟩; clear temp
+      split at run
+      · inv_step_split run Evm.push_inv_pc evm12
+        rw [← incrPc_incr_pc run]; clear run; rfl
+      · rcases run with ⟨exn, gc, run⟩
+        rcases of_split_eq_ok run with ⟨evm12, rw, eq⟩
+        rw [rw] at gc
+        rw [genericCall_inv_pc gc, ← incrPc_incr_pc eq]; rfl
+    case callcode => sorry
+    case delcall => sorry
+    case create2 => sorry
+    case statcall => sorry
 
 #exit
 
@@ -1240,10 +1299,6 @@ lemma exec_inv_code {evm evm' : Evm} :
     Exec evm (.ok evm') → evm.code = evm'.code := by
   sorry
 
-lemma incrPc_incr_pc {evm evm' : Evm} :
-    evm.incrPc = .ok evm' → evm.pc + 1 = evm'.pc := by
-  simp only [Evm.incrPc]; intro h; rw [← Except.ok.inj h]
-
 
 lemma jumpdest_at {evm exn} (cr : Exec evm exn)
     (ok : Except.isOk exn)
@@ -1262,10 +1317,6 @@ lemma jumpdest_at {evm exn} (cr : Exec evm exn)
   refine' ⟨evm', exn', eqv, _, h_prec⟩
   rcases of_bind_eq_ok h_run with ⟨evm_gas, eq, eq'⟩
   rw [chargeGas_inv_pc eq, incrPc_incr_pc eq']
-
-lemma Except.of_assert_eq_ok {p : Prop} [Decidable p] {ξ} {x : ξ}
-    (h : Except.assert p x = .ok ()) : p := by
-  simp [Except.assert] at h; apply h
 
 lemma jump_at {s r} (cr : Exec s r)
     (ok : Except.isOk r)
