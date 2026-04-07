@@ -3332,7 +3332,7 @@ open Lean.Elab.Tactic
 open Lean.Parser.Tactic
 open Lean.Elab.Term
 open Lean
-open Qq
+-- open Qq
 
 def breakLineRun : Q(Prop) → TacticM (Expr × Expr × Expr × Expr)
 | ~q(Line.Run $e $s $l $s') => pure (e, s, l, s')

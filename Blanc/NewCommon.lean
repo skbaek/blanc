@@ -6,6 +6,7 @@ import Mathlib.Tactic.Have
 import Blanc.NewSemantics
 
 
+
 def compsize : Func → Nat
   | .last _ => 1
   | .next i p => compsize p + i.toB8L.length
@@ -672,14 +673,6 @@ lemma Evm.pop_mapFst_inv_pc {evm evm' : Evm} {ξ} {x : ξ} {f : B256 → ξ}
   simp only [Prod.mapFst, Prod.map_apply, id_eq, Prod.mk.injEq] at pop
   rw [← pop.2, Evm.pop_inv_pc rw]
 
--- lemma Evm.pop_mapFst_inv_pc {evm evm' : Evm} {x}
---     (pop : Evm.popToNat evm = .ok ⟨x, evm'⟩) : evm.pc = evm'.pc := by
---   simp only [Evm.popToNat] at pop;
---   cases h : evm.pop <;> rename (_ = _) => rw <;> simp [rw] at pop
---   rename (_ × _) => pair; rcases pair with ⟨x, evm'⟩
---   simp only [Prod.mapFst, Prod.map_apply, id_eq, Prod.mk.injEq] at pop
---   rw [← pop.2, Evm.pop_inv_pc rw]
-
 lemma Evm.pop_of_pop {evm evm' : Evm} {x}
     (pop : Evm.pop evm = .ok ⟨x, evm'⟩) : Evm.Pop [x] evm evm' := by
   simp only [Evm.pop] at pop; split at pop; {cases pop}
@@ -794,6 +787,7 @@ lemma genericCreate_inv_pc {evm : Evm} {endowment : B256}
     (gc : GenericCreate evm endowment newAddress memoryIndex memorySize xl (.ok evm')) :
     evm.pc = evm'.pc := by
   sorry
+
 lemma genericCall_inv_pc {evm : Evm} {gas : ℕ} {value : B256}
     {caller target codeAddress : Adr} {shouldTransferValue isStaticcall : Bool}
     {input_index input_size output_index output_size : ℕ} {code : ByteArray}
@@ -806,10 +800,10 @@ lemma genericCall_inv_pc {evm : Evm} {gas : ℕ} {value : B256}
   sorry
 
 lemma Evm.memExtends_inv_pc {evm : Evm} {prs : List (ℕ × ℕ)} :
-    evm.pc = (evm.memExtends prs).pc := rfl
+    (evm.memExtends prs).pc = evm.pc := rfl
 
 lemma pc_eq_of_incrPc {evm evm' : Evm} (eq : evm.incrPc = .ok evm') :
-   evm.pc + 1 = evm'.pc := by injection eq with eq; rw [← eq]
+   evm'.pc = evm.pc + 1 := by injection eq with eq; rw [← eq]
 
 syntax "inv_step_split " ident term:max rcasesPat : tactic
 macro_rules
@@ -825,23 +819,225 @@ macro_rules
       clear temp_eq
     )
 
+syntax "inv_step_exists " ident term:max term:max rcasesPat* : tactic
+macro_rules
+  | `(tactic| inv_step_exists $run $lem $func) => `(tactic|
+      have run' := $run; clear $run;
+      rcases run' with ⟨temp, $run⟩;
+      rw [← (Eq.trans (congr_arg $func temp) $lem)];
+      clear temp
+
+    )
+  | `(tactic| inv_step_exists $run $lem $func $pat $pats*) => `(tactic|
+      have run' := $run; clear $run;
+      rcases run' with ⟨$pat, $run⟩;
+      inv_step_exists $run $lem $func $pats*
+    )
+
 lemma addAccessedAddress_inv_pc {evm : Evm} {adr : Adr} :
     (addAccessedAddress evm adr).pc = evm.pc := rfl
 
+--lemma pc_eq_of_incrPc {evm evm' : Evm} :
+--    evm.incrPc = .ok evm' → evm'.pc = evm.pc + 1 := by
+--  simp only [Evm.incrPc]; intro h; rw [← Except.ok.inj h]
+
+lemma pc_eq_of_pushItem {x : B256} {gas : Nat} {evm evm' : Evm}
+    (run : pushItem x gas evm = Except.ok evm') : evm'.pc = evm.pc + 1 := by
+  simp only [pushItem] at run
+  rcases of_bind_eq_ok run with ⟨evm1, run', eq⟩; clear run
+  rw [pc_eq_of_incrPc eq]; clear eq
+  rcases of_bind_eq_ok run' with ⟨evm2, eq', eq⟩; clear run'
+  rw [← Evm.push_inv_pc eq, ← chargeGas_inv_pc eq']
+
+lemma pc_eq_of_applyUnary {f : B256 → B256} {gas : Nat} {evm evm' : Evm}
+    (run : applyUnary f gas evm = Except.ok evm') : evm'.pc = evm.pc + 1 := by
+  simp only [applyUnary] at run
+  rcases of_bind_eq_ok run with ⟨⟨_, evm1⟩, eq, run'⟩; clear run
+  rw [Evm.pop_inv_pc eq]; clear eq
+  apply pc_eq_of_pushItem run'
+
+lemma pc_eq_of_applyTernary {f : B256 → B256 → B256 → B256}
+    {gas : Nat} {evm evm' : Evm}
+    (run : applyTernary f gas evm = Except.ok evm') : evm'.pc = evm.pc + 1 := by
+  simp only [applyTernary] at run
+  rcases of_bind_eq_ok run with ⟨⟨_, evm1⟩, eq, run'⟩; clear run
+  rw [Evm.pop_inv_pc eq]; clear eq
+  rcases of_bind_eq_ok run' with ⟨⟨_, evm2⟩, eq, run⟩; clear run'
+  rw [Evm.pop_inv_pc eq]; clear eq
+  rcases of_bind_eq_ok run with ⟨⟨_, evm3⟩, eq, run'⟩; clear run
+  rw [Evm.pop_inv_pc eq]; clear eq
+  apply pc_eq_of_pushItem run'
+
+lemma pc_eq_of_applyBinary {f : B256 → B256 → B256} {gas : Nat} {evm evm' : Evm}
+    (run : applyBinary f gas evm = Except.ok evm') : evm'.pc = evm.pc + 1 := by
+  simp only [applyBinary] at run
+  rcases of_bind_eq_ok run with ⟨⟨_, evm1⟩, eq, run'⟩; clear run
+  rw [Evm.pop_inv_pc eq]; clear eq
+  rcases of_bind_eq_ok run' with ⟨⟨_, evm2⟩, eq, run⟩; clear run'
+  rw [Evm.pop_inv_pc eq]; clear eq
+  apply pc_eq_of_pushItem run
+
+
+open Lean.Elab.Tactic
+open Lean.Parser.Tactic
+open Lean.Elab.Term
+open Lean
+open Qq
+
+def breakLineRun : Q(Prop) → TacticM (Expr × Expr × Expr)
+  | ~q(Ninst.Run $s $l $s') => pure (s, l, s')
+  | _ => failure
+
+lemma Rinst.pc_eq_of_run {evm : Evm} {r : Rinst} {evm' : Evm}
+    (run : Rinst.run evm r = Except.ok evm') : evm'.pc = evm.pc + 1 := by
+  cases r
+  case balance =>
+    rcases of_bind_eq_ok run with ⟨_ , eq, run'⟩; clear run
+    rw [Evm.pop_inv_pc eq]; clear eq
+    simp only [] at run'
+    split at run'
+    · rcases of_bind_eq_ok run' with ⟨_, eq, run⟩
+      rw [chargeGas_inv_pc eq]; clear eq
+      rcases of_bind_eq_ok run with ⟨_, eq, run'⟩; clear run
+      rw [Evm.push_inv_pc  eq]; clear eq
+      apply pc_eq_of_incrPc run'
+    · rcases of_bind_eq_ok run' with ⟨_, eq, run⟩; clear run'
+      have hh :=chargeGas_inv_pc eq
+      rw [addAccessedAddress_inv_pc] at hh
+      rw [hh]
+      clear hh eq
+      rcases of_bind_eq_ok run with ⟨_, eq, run'⟩; clear run
+      rw [Evm.push_inv_pc  eq]; clear eq
+      apply pc_eq_of_incrPc run'
+  case exp =>
+    simp only [Rinst.run] at run
+    rcases of_bind_eq_ok run with ⟨_ , eq, run'⟩; clear run
+    rw [Evm.pop_inv_pc eq]; clear eq
+    rcases of_bind_eq_ok run' with ⟨_, eq, run⟩; clear run'
+    rw [Evm.pop_inv_pc eq]; clear eq
+    rcases of_bind_eq_ok run with ⟨_, eq, run'⟩; clear run
+    rw [chargeGas_inv_pc eq]; clear eq
+    rcases of_bind_eq_ok run' with ⟨_, eq, run⟩; clear run'
+    rw [Evm.push_inv_pc eq]; clear eq
+    apply pc_eq_of_incrPc run
+  case sstore =>
+    simp only [Rinst.run] at run
+    rcases of_bind_eq_ok run with ⟨_ , eq, run'⟩; clear run
+    rw [Evm.pop_inv_pc eq]; clear eq
+    rcases of_bind_eq_ok run' with ⟨_ , eq, run⟩; clear run'
+    rw [Evm.pop_inv_pc eq]; clear eq
+    rcases of_bind_eq_ok run with ⟨_ , eq, run'⟩; clear run eq
+    rcases of_bind_eq_ok run' with ⟨_ , eq, run⟩; clear run'
+    have hh := chargeGas_inv_pc eq; clear eq
+    simp at hh
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#exit
+  case exp =>
+    simp only [Rinst.run]
+    sorry
+
+#exit
+    <;> simp only [Rinst.run]
+    <;> try {apply pc_eq_of_pushItem}
+    <;> try {apply pc_eq_of_applyUnary}
+    <;> try {apply pc_eq_of_applyBinary}
+    <;> try {apply pc_eq_of_applyTernary}
+
+
+
+
+#exit
+
+
+lemma Rinst.pc_eq_of_run {evm : Evm} {r : Rinst} {evm' : Evm}
+    (run : Rinst.run evm r = Except.ok evm') : evm'.pc = evm.pc + 1 := by
+  cases r
+    <;> simp only [Rinst.run] at run
+    <;> try {apply pc_eq_of_pushItem asm}
+    <;> try {apply pc_eq_of_applyUnary asm}
+    <;> try {apply pc_eq_of_applyBinary asm}
+    <;> try {apply pc_eq_of_applyTernary asm}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#exit
+  · simp only [Rinst.run] at run
+    apply pc_eq_of_applyBinary run
+
+
+
+
+
+
+
+
+
+#exit
+
+def fooo : Nat := (⟨0, 1⟩ : Nat × Nat).2
+
+def third {ξ υ ζ} : ξ × υ × ζ → ζ
+  | ⟨_, _, z⟩ => z
+
+def fourth {ξ υ ζ α} : ξ × υ × ζ × α → α
+  | ⟨_, _, _, a⟩ => a
+
+def fifth {ξ υ ζ α β} : ξ × υ × ζ × α × β → β
+  | ⟨_, _, _, _, b⟩ => b
+
 lemma accessDelegation_inv_pc {evm : Evm} {adr : Adr} : --Bool × Adr × ByteArray × ℕ × Evm
-    (accessDelegation evm adr).2.2.2.2.pc = evm.pc := by
+    (fifth (accessDelegation evm adr)).pc = evm.pc := by
   simp only [accessDelegation]; split
   · apply addAccessedAddress_inv_pc
   · rfl
-
-lemma incrPc_incr_pc {evm evm' : Evm} :
-    evm.incrPc = .ok evm' → evm.pc + 1 = evm'.pc := by
-  simp only [Evm.incrPc]; intro h; rw [← Except.ok.inj h]
-
-lemma Rinst.pc_eq_of_run {evm : Evm} {r : Rinst} {evm' : Evm}
-    (run : Rinst.run evm r = Except.ok evm') : evm'.pc = evm.pc + 1 := sorry
-
-#exit
 
 lemma Ninst.pc_eq_of_run' {evm n xl evm'}
     (run : Ninst.Run' evm n xl (.ok evm')) :
@@ -861,17 +1057,18 @@ lemma Ninst.pc_eq_of_run' {evm n xl evm'}
   case exec x =>
     cases x
     case create =>
-      simp only [Ninst.Run', exists_eq_left] at run
+      simp only [Ninst.Run'] at run
       inv_step_split run Evm.pop_inv_pc ⟨foo, evm1⟩
       inv_step_split run Evm.pop_mapFst_inv_pc ⟨memIndex, evm2⟩
       inv_step_split run Evm.pop_mapFst_inv_pc ⟨memSize, evm3⟩
+      rcases run with ⟨_, t0, _, t1, run⟩; clear t0 t1
       inv_step_split run chargeGas_inv_pc evm4
-      rcases run with ⟨exn, gc, run⟩
+      inv_step_exists run Evm.memExtends_inv_pc Evm.pc evm5;
+      rcases run with ⟨_, temp, exn, gc, run⟩; clear temp
       rename' run => temp
-      rcases of_split_eq_ok temp with ⟨evm5, rw, run⟩; clear temp
+      rcases of_split_eq_ok temp with ⟨evm6, rw, run⟩; clear temp
       rw [rw] at gc; clear rw
-      have rw : evm4.pc = evm5.pc := by
-        rw [← genericCreate_inv_pc gc]; rfl
+      have rw : evm5.pc = evm6.pc := by rw [← genericCreate_inv_pc gc]
       rw [rw, ← pc_eq_of_incrPc run]; rfl
     case call =>
       simp only [Ninst.Run'] at run
@@ -882,40 +1079,115 @@ lemma Ninst.pc_eq_of_run' {evm n xl evm'}
       inv_step_split run Evm.pop_mapFst_inv_pc ⟨_, evm5⟩
       inv_step_split run Evm.pop_mapFst_inv_pc ⟨_, evm6⟩
       inv_step_split run Evm.pop_mapFst_inv_pc ⟨_, evm7⟩
-      rcases run with ⟨extendCost, temp, run⟩; clear temp
-      rcases run with ⟨preAccessCost, temp, run⟩; clear temp
-      rcases run with ⟨evm8, temp, run⟩
-      have rw1 : evm7.pc = evm8.pc := by
-        rw [temp, addAccessedAddress_inv_pc]
-      rw [rw1]; clear rw1 temp
-      rcases run with ⟨_, _, _, _, evm9, temp, run⟩
-      have rw2 : evm8.pc = evm9.pc := by
-        rw [← @accessDelegation_inv_pc evm8 adr, ← temp]
-      rw [rw2]; clear rw2 temp
-      rcases run with ⟨accessCost, temp, run⟩; clear temp
-      rcases run with ⟨createCost, temp, run⟩; clear temp
-      rcases run with ⟨transferCost, temp, run⟩; clear temp
-      rcases run with ⟨msgCallCost, msgCallStipend, temp, run⟩; clear temp
+      rcases run with ⟨_, t0, _, t1, run⟩; clear t0 t1
+      inv_step_exists run addAccessedAddress_inv_pc Evm.pc evm8;
+      inv_step_exists run accessDelegation_inv_pc (Evm.pc ∘ fifth) _ _ _ _ evm9;
+      simp only [Function.comp_apply, fifth]
+      rcases run with ⟨_, t0, _, t1, _, t2, _, _, t3, run⟩; clear t0 t1 t2 t3;
       inv_step_split run chargeGas_inv_pc evm10
       rename' run => temp
-      rcases of_split_eq_ok temp with ⟨_, temp', run⟩;
-      clear temp temp'
-      rcases run with ⟨evm11, temp_eq, run⟩
-      have rw : evm10.pc = evm11.pc := by
-        rw [temp_eq]; apply Evm.memExtends_inv_pc
-      rw [rw]; clear rw temp_eq
-      rcases run with ⟨senderBal, temp, run⟩; clear temp
+      rcases of_split_eq_ok temp with ⟨_, temp', run⟩; clear temp temp'
+      inv_step_exists run Evm.memExtends_inv_pc Evm.pc evm11;
+      rcases run with ⟨_, temp, run⟩; clear temp
       split at run
       · inv_step_split run Evm.push_inv_pc evm12
         rw [← incrPc_incr_pc run]; clear run; rfl
       · rcases run with ⟨exn, gc, run⟩
-        rcases of_split_eq_ok run with ⟨evm12, rw, eq⟩
-        rw [rw] at gc
+        rcases of_split_eq_ok run with ⟨evm12, rw, eq⟩; rw [rw] at gc
         rw [genericCall_inv_pc gc, ← incrPc_incr_pc eq]; rfl
-    case callcode => sorry
-    case delcall => sorry
-    case create2 => sorry
-    case statcall => sorry
+    case callcode =>
+      simp only [Ninst.Run'] at run
+      inv_step_split run Evm.pop_inv_pc ⟨_, evm1⟩
+      inv_step_split run Evm.pop_mapFst_inv_pc ⟨adr, evm2⟩
+      inv_step_split run Evm.pop_inv_pc ⟨_, evm3⟩
+      inv_step_split run Evm.pop_mapFst_inv_pc ⟨_, evm4⟩
+      inv_step_split run Evm.pop_mapFst_inv_pc ⟨_, evm5⟩
+      inv_step_split run Evm.pop_mapFst_inv_pc ⟨_, evm6⟩
+      inv_step_split run Evm.pop_mapFst_inv_pc ⟨_, evm7⟩
+      rcases run with ⟨_, t0, _, t1, _, t2, run⟩; clear t0 t1 t2
+      inv_step_exists run addAccessedAddress_inv_pc Evm.pc evm8;
+      inv_step_exists run accessDelegation_inv_pc (Evm.pc ∘ fifth) _ _ _ _ evm9;
+      simp only [Function.comp_apply, fifth]
+      rcases run with ⟨_, t0, _, t1, _, _, t2, run⟩; clear t0 t1 t2
+      inv_step_split run chargeGas_inv_pc evm10
+      inv_step_exists run Evm.memExtends_inv_pc Evm.pc evm11;
+      rcases run with ⟨_, temp, run⟩; clear temp
+      split at run
+      · inv_step_split run Evm.push_inv_pc evm12
+        rw [← incrPc_incr_pc run]; clear run; rfl
+      · rcases run with ⟨exn, gc, run⟩
+        rcases of_split_eq_ok run with ⟨evm12, rw, eq⟩; rw [rw] at gc
+        rw [genericCall_inv_pc gc, ← incrPc_incr_pc eq]; rfl
+    case delcall =>
+      simp only [Ninst.Run'] at run
+      inv_step_split run Evm.pop_inv_pc ⟨_, evm1⟩
+      inv_step_split run Evm.pop_mapFst_inv_pc ⟨adr, evm2⟩
+      inv_step_split run Evm.pop_mapFst_inv_pc ⟨_, evm3⟩
+      inv_step_split run Evm.pop_mapFst_inv_pc ⟨_, evm4⟩
+      inv_step_split run Evm.pop_mapFst_inv_pc ⟨_, evm5⟩
+      inv_step_split run Evm.pop_mapFst_inv_pc ⟨_, evm6⟩
+      rcases run with ⟨_, t0, _, t1, run⟩; clear t0 t1
+      inv_step_exists run addAccessedAddress_inv_pc Evm.pc evm7;
+      inv_step_exists run accessDelegation_inv_pc (Evm.pc ∘ fifth) _ _ _ _ evm8;
+      simp only [Function.comp_apply, fifth]
+      rcases run with ⟨_, t0, _, _, t1, run⟩; clear t0 t1
+      inv_step_split run chargeGas_inv_pc evm9
+      inv_step_exists run Evm.memExtends_inv_pc Evm.pc evm10;
+      rcases run with ⟨exn, gc, run⟩
+      rcases of_split_eq_ok run with ⟨evm11, rw, eq⟩; rw [rw] at gc
+      rw [genericCall_inv_pc gc, ← incrPc_incr_pc eq]; rfl
+    case create2 =>
+      simp only [Ninst.Run'] at run
+      inv_step_split run Evm.pop_inv_pc ⟨_, evm1⟩
+      inv_step_split run Evm.pop_mapFst_inv_pc ⟨_, evm2⟩
+      inv_step_split run Evm.pop_mapFst_inv_pc ⟨_, evm3⟩
+      inv_step_split run Evm.pop_inv_pc ⟨_, evm4⟩
+      rcases run with ⟨_, t0, _, t1, _, t2, run⟩; clear t0 t1 t2
+      inv_step_split run chargeGas_inv_pc evm5
+      inv_step_exists run Evm.memExtends_inv_pc Evm.pc evm6;
+      rcases run with ⟨_, temp, exn, gc, run⟩; clear temp
+      rename' run => temp
+      rcases of_split_eq_ok temp with ⟨evm7, rw, run⟩; clear temp
+      rw [rw] at gc; clear rw
+      have rw : evm6.pc = evm7.pc := by rw [← genericCreate_inv_pc gc]
+      rw [rw, ← pc_eq_of_incrPc run]; rfl
+    case statcall =>
+      simp only [Ninst.Run'] at run
+      inv_step_split run Evm.pop_inv_pc ⟨_, evm1⟩
+      inv_step_split run Evm.pop_mapFst_inv_pc ⟨adr, evm2⟩
+      inv_step_split run Evm.pop_mapFst_inv_pc ⟨_, evm3⟩
+      inv_step_split run Evm.pop_mapFst_inv_pc ⟨_, evm4⟩
+      inv_step_split run Evm.pop_mapFst_inv_pc ⟨_, evm5⟩
+      inv_step_split run Evm.pop_mapFst_inv_pc ⟨_, evm6⟩
+      rcases run with ⟨_, t0, _, t1, run⟩; clear t0 t1
+      inv_step_exists run addAccessedAddress_inv_pc Evm.pc evm7;
+      inv_step_exists run accessDelegation_inv_pc (Evm.pc ∘ fifth) _ _ _ _ evm8;
+      rcases run with ⟨_, t0, _, _, t1, run⟩; clear t0 t1
+      simp only [Function.comp_apply, fifth]
+      inv_step_split run chargeGas_inv_pc evm9
+      inv_step_exists run Evm.memExtends_inv_pc Evm.pc evm10;
+      rcases run with ⟨exn, gc, run⟩
+      rcases of_split_eq_ok run with ⟨evm12, rw, eq⟩; rw [rw] at gc
+      rw [genericCall_inv_pc gc, ← incrPc_incr_pc eq]; rfl
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 #exit
 
