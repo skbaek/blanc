@@ -893,8 +893,8 @@ lemma Rinst.pc_eq_of_run {evm : Evm} {r : Rinst} {evm' : Evm}
   cases r
   case balance =>
     rcases of_bind_eq_ok run with ⟨_ , eq, run'⟩; clear run
-    rw [Evm.pop_inv_pc eq]; clear eq
     simp only [] at run'
+    rw [Evm.pop_inv_pc eq]; clear eq
     split at run'
     · rcases of_bind_eq_ok run' with ⟨_, eq, run⟩
       rw [chargeGas_inv_pc eq]; clear eq
@@ -930,6 +930,7 @@ lemma Rinst.pc_eq_of_run {evm : Evm} {r : Rinst} {evm' : Evm}
     rcases of_bind_eq_ok run' with ⟨_ , eq, run⟩; clear run'
     have hh := chargeGas_inv_pc eq; clear eq
     simp at hh
+
 
 
 

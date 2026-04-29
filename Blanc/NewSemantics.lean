@@ -1,9 +1,11 @@
 -- Semantics.lean : formalized semantics of the EVM and Blanc
 
-
 import Blanc.Basic
 import Elevm.Hash
-import Elevm.Execution
+import Elevm.BakExecution
+
+
+
 def Rinst.toB8 : Rinst → B8
   | add          => 0x01
   | mul          => 0x02
@@ -552,32 +554,6 @@ def Jinst.At (code : ByteArray) (pc : Nat) (j : Jinst) : Prop := code.getInst pc
 def Rinst.At (code : ByteArray) (pc : Nat) (r : Rinst) : Prop := code.getInst pc = some (.next (.reg r))
 
 
--- def PushAt (e : Env) (pc : Nat) (bs : B8L) : Prop :=
---   List.Slice e.code pc (pushToB8L bs) ∧ bs.length ≤ 32
-
--- inductive Linst.Run : Env → Desc → Linst → Result → Prop
---   | stop : ∀ e s, Linst.Run e s Linst.stop (Result.wrap s [])
---   | ret :
---     ∀ e s x y,
---       ([x, y] <+: s.stk) →
---       Linst.Run e s Linst.ret (.wrap s <| s.mem.slice x y)
---   | dest :
---     ∀ (e : Env) (s : Desc) x bal bal',
---       s.msg.isStatic = 0 →
---       ([x] <+: s.stk) →
---       Overwrite e.cta 0 s.bal bal →
---       Increase x.toAdr (s.bal e.cta) bal bal' →
---       Linst.Run e s Linst.dest {s with bal := bal', ret := [], dest := e.cta :: s.dest}
-
--- def Fail (s : Desc) (o : Xinst) (s' : Desc) : Prop :=
---   match o with
---   | .create => ∃ x y z, Desc.Pop [x, y, z] s s'
---   | .call => ∃ x₀ x₁ x₂ x₃ x₄ x₅ x₆, Desc.Pop [x₀, x₁, x₂, x₃, x₄, x₅, x₆] s s'
---   | .callcode => ∃ x₀ x₁ x₂ x₃ x₄ x₅ x₆, Desc.Pop [x₀, x₁, x₂, x₃, x₄, x₅, x₆] s s'
---   | .delcall => ∃ x₀ x₁ x₂ x₃ x₄ x₅, Desc.Pop [x₀, x₁, x₂, x₃, x₄, x₅] s s'
---   | .create2 => ∃ x₀ x₁ x₂ x₃, Desc.Pop [x₀, x₁, x₂, x₃] s s'
---   | .statcall => ∃ x₀ x₁ x₂ x₃ x₄ x₅, Desc.Pop [x₀, x₁, x₂, x₃, x₄, x₅] s s'
-
 
 -- Blanc semantics --
 
@@ -733,203 +709,14 @@ def Desc.wrap' (r : Result) (cd : Codes) (mem : Memory) (stk : Stack) : Desc :=
   { bal := r.bal, stor := r.stor, code := cd, mem := mem,
     stk := stk, ret := r.ret, dest := r.dest }
 
-/-
-def storeRet (mem : Memory) (ret : B8L) (loc sz : B256) (mem' : Memory) : Prop :=
-  Mstored loc (List.take sz.toNat ret) mem mem'
-
-inductive Xinst.Run' : Env → Desc → Env → Desc → Xinst → Result → Desc → Prop
-  | create :
-    ∀ e : Env, e.wup = 1 →
-    ∀ exd, e.exd = exd.succ →
-    ∀ (s : Desc) (cta : Adr), s.code cta = [] →
-    ∀ (clv clc csz : B256) (stk : Stack),
-      Stack.Diff [clv, clc, csz] [Adr.toB256 cta] s.stk stk →
-    ∀ bal : Balances, Transfer s.bal e.cta clv cta bal →
-    ∀ (r : Result) (cd : Codes),
-      Overwrite cta r.ret r.code cd →
-      Xinst.Run' e s (.prep' e cta clv (s.mem.slice clc csz) exd)
-        (.prep s bal) .create r (.wrap' r cd s.mem stk)
-  | create2 :
-    ∀ e : Env, e.wup = 1 →
-    ∀ exd, e.exd = exd.succ →
-    ∀ (s : Desc) (cta : Adr), s.code cta = [] →
-    ∀ (clv clc csz slt : B256) (stk : Stack),
-      Stack.Diff [clv, clc, csz, slt] [Adr.toB256 cta] s.stk stk →
-    ∀ bal : Balances, Transfer s.bal e.cta clv cta bal →
-    ∀ (r : Result) (cd : Codes),
-      Overwrite cta r.ret r.code cd →
-      Xinst.Run' e s (.prep' e cta clv (s.mem.slice clc csz) exd)
-        (.prep s bal) .create r (.wrap' r cd s.mem stk)
-  | call :
-    ∀ (e : Env) exd, e.exd = exd.succ →
-    ∀ gas adr clv ilc isz olc osz s stk,
-      Stack.Diff [gas, adr, clv, ilc, isz, olc, osz] [1] s.stk stk →
-    ∀ bal : Balances, Transfer s.bal e.cta clv adr.toAdr bal →
-    ∀ r : Result,
-    ∀ mem : Memory, storeRet s.mem r.ret olc osz mem →
-      Xinst.Run' e s
-        (.prep e s adr.toAdr (s.mem.slice ilc isz) e.cta clv adr.toAdr exd e.wup)
-        (.prep s bal) .call r (.wrap r stk mem)
-  -- Two design flaws of CALLCODE:
-  -- (1) it accepts a useless call value argument that doesn't actually do anything
-  -- (2) it updates the caller address when it shouldn't
-  | callcode :
-    ∀ (e : Env) exd, e.exd = exd.succ →
-    ∀ gas adr clv ilc isz olc osz s stk,
-      Stack.Diff [gas, adr, clv, ilc, isz, olc, osz] [1] s.stk stk →
-    ∀ r : Result,
-    ∀ mem : Memory, storeRet s.mem r.ret olc osz mem →
-      Xinst.Run' e s
-        (.prep e s e.cta (s.mem.slice ilc isz) e.cta clv adr.toAdr exd e.wup)
-        (.prep s s.bal) .callcode r (.wrap r stk mem)
-  | delcall :
-    ∀ (e : Env) exd, e.exd = exd.succ →
-    ∀ gas adr ilc isz olc osz s stk,
-      Stack.Diff [gas, adr, ilc, isz, olc, osz] [1] s.stk stk →
-    ∀ r : Result,
-    ∀ mem : Memory, storeRet s.mem r.ret olc osz mem →
-      Xinst.Run' e s
-        (.prep e s e.cta (s.mem.slice ilc isz) e.cla e.clv adr.toAdr exd e.wup)
-        (.prep s s.bal) .delcall r (.wrap r stk mem)
-  | statcall :
-    ∀ (e : Env) exd, e.exd = exd.succ →
-    ∀ gas adr ilc isz olc osz s stk,
-      Stack.Diff [gas, adr, ilc, isz, olc, osz] [1] s.stk stk →
-    ∀ r : Result,
-    ∀ mem : Memory, storeRet s.mem r.ret olc osz mem →
-      Xinst.Run' e s
-        (.prep e s adr.toAdr (s.mem.slice ilc isz) e.cta 0 adr.toAdr exd 0)
-        (.prep s s.bal) .statcall r (.wrap r stk mem)
-
-inductive Halt : Env → Desc → Nat → Result → Prop
-  | inst :
-    ∀ e s pc o r,
-      Linst.At e pc o →
-      Linst.Run e s o r →
-      Halt e s pc r
-  | eoc : ∀ e s, Halt e s e.code.length (.wrap s [])
--/
-
--- inductive ExecOld : Env → Desc → Nat → Result → Type
---   | step :
---     ∀ {e s pc s' pc' r},
---       Step e s pc s' pc' →
---       ExecOld e s' pc' r →
---       ExecOld e s pc r
---   | exec :
---     ∀ {e s pc ep sp o r s' r'},
---       Xinst.At e pc o →
---       Xinst.Run' e s ep sp o r s' →
---       ExecOld ep sp 0 r →
---       ExecOld e s' (pc + 1) r' →
---       ExecOld e s pc r'
---   | halt :
---     ∀ {e s pc r},
---       Halt e s pc r →
---       ExecOld e s pc r
-
--- def Desc.init (bal : Adr → B256) (stor : Adr → Storage) (code : Adr → B8L) : Desc :=
---   {
---     bal := bal,
---     stor := stor,
---     code := code,
---     stk := [],
---     mem := Memory.init,
---     ret := [],
---     dest := []
---   }
-
---- -- The execution part of transaction, which happens after the deduction of
---- -- upfront gas payment, and before the distribution of gas refund/reward and
---- -- deletion of self-destructed contract codes.
---- inductive MessageCall
----     (sda : Adr) -- tx sender address
----                  -- (always an EOA & never has contract code, per EIP-3607)
----     (rca : Adr) -- tx receiver address
----                  -- · for contract calls, rca = address of called contract
----                  -- · for contract creations, rca = address of newly created contract
----     (w : World)  -- initial world state
----     : Result → Prop
----   | create :
----     ∀ gpr clv ctc bal r code,
----       Transfer w.bal sda clv rca bal →
----       w.code rca = [] →
----       ExecOld
----         { cta := rca, oga := sda, gpr := gpr, cld := [], cla := sda,
----           clv := clv, code := ctc, exd := 1024, wup := true }
----         --{ bal := bal, stor := w.stor, code := w.code, stk := [],
----         --  mem := Memory.init, ret := [], dest := [] }
----         (Desc.init bal w.stor w.code)
----         0 r →
----       Overwrite rca r.ret r.code code →
----       MessageCall sda rca w {r with code := code}
----   | call :
----     ∀ gpr cld clv bal r,
----       Transfer w.bal sda clv rca bal →
----       ExecOld
----         { cta := rca, oga := sda, gpr := gpr, cld := cld, cla := sda,
----           clv := clv, code := w.code rca, exd := 1024, wup := true }
----         -- { bal := bal, stor := w.stor, code := w.code, stk := []
----         --   mem := Memory.init, ret := [], dest := []}
----         (Desc.init bal w.stor w.code)
----         0 r →
----       MessageCall sda rca w r
----   | pre :
----     ∀ clv bal ret,
----       Transfer w.bal sda clv rca bal →
----       MessageCall sda rca w
----         {bal := bal, stor := w.stor, code := w.code, ret := ret, dest := []}
----   | fail : MessageCall sda rca w {w with ret := .nil, dest := []}
-
 def DeleteCodes : List Adr → Codes → Codes → Prop
   | [], c, c' => c = c'
   | a :: as, c, c'' => ∃ c' : Codes, Overwrite a [] c c' ∧ DeleteCodes as c' c''
-
-  -- structure Transaction (w w' : World) : Type where
-  --   (vs : B256) -- gas ultimately refunded to sender
-  --   (vv : B256) -- gas ultimately rewarded to validator
-  --   (vb : B256) -- gas ultimately burned
-  --   (nof : vs.toNat + vv.toNat + vb.toNat < 2 ^ 256)
-  --   (sda : Adr) -- tx sender address
-  --   (eoa : w.code sda = []) -- per EIP-3607
-  --   (bal : Balances) -- balances after upfront deduction
-  --   (decr : Decrease sda (vs + vv + vb) w.bal bal)
-  --   (le : vs + vv + vb ≤ w.bal sda)
-  --   (rca : Adr) -- tx receiver address
-  --   (r : Result) -- execution result
-  --   (act : MessageCall sda rca {w with bal := bal} r)
-  --   (bal' : Balances) -- balances after refund to sender
-  --   (incr : Increase sda vs r.bal bal')
-  --   (vla : Adr) -- validator address
-  --   (incr' : Increase vla vv bal' w'.bal)
-  --   (del : DeleteCodes r.dest r.code w'.code)
-  --   (stor : w'.stor = r.stor)
---
-
-
 
 def Ninst.toB8L : Ninst → B8L
   | reg o => [o.toB8]
   | exec o => [o.toB8]
   | push bs _ => pushToB8L bs
-
--- inductive Xinst.Run : Env → Desc → Xinst → Desc → Prop
---   | exec :
---     ∀ {e s ep sp o r s'},
---       Xinst.Run' e s ep sp o r s' →
---       ExecOld ep sp 0 r →
---       Xinst.Run e s o s'
---   | pre :
---     ∀ {e s ep sp o r s'},
---       o.isCall →
---       Xinst.Run' e s ep sp o r s' →
---       PreRun sp r →
---       Xinst.Run e s o s'
---   | fail : ∀ {e s o s'}, Fail s o s' → Xinst.Run e s o s'
---
---
--- def Evm.Pop (xs : List B256) : Evm → Evm → Prop :=
---   Rel {Rels.equiv with stack := Stack.Pop xs}
 
 def Jinst.Run (evm : Evm) : Jinst → Execution → Prop := λ j ex => j.run evm = ex
 def Linst.Run (evm : Evm) : Linst → Execution → Prop := λ l ex => l.run evm = ex
@@ -1112,14 +899,6 @@ def GenericCall (evm : Evm) (gas : ℕ) (value : B256)
   ∃ ex' : Except (String × Benv × Tenv) Evm,
     And (ProcessMessage childMsg xlot ex') <|
     (liftToExecution evm1 ex').Split ex <|
-  -- λ child =>
-  --   ( if child.error.isSome then
-  --       (incorporateChildOnError evm1 child child.output).push 0
-  --     else
-  --       (incorporateChildOnSuccess evm1 child child.output).push 1 ).Split ex <|
-  -- λ evm2 =>
-  --   let actualOutput := child.output.take output_size
-  --   .ok (evm2.memWrite output_index actualOutput) = ex
   λ child =>
   let actualOutput := child.output.take output_size
   if child.error.isSome then
@@ -1129,23 +908,9 @@ def GenericCall (evm : Evm) (gas : ℕ) (value : B256)
     ((incorporateChildOnSuccess evm1 child child.output).push 1 ).Split ex <|
     λ evm2 => .ok (evm2.memWrite output_index actualOutput) = ex
 
-
-
--- def Xlot.Good (lim : Nat) (ex : Execution) : Xlot → Prop
---   | .none => True
---   | .some (evm', ex') =>
---     ∃ lim' < lim,
---       exec false lim' evm' = ex' ∧
---       (ex'.IsError → ex' = ex)
-
 def Except.toError? {ξ υ} : Except (String × ξ) υ → Option String
   | .ok _ => none
   | .error ⟨err, _⟩ => some err
-
--- def Execution.Good (oerr : Option String) : Execution → Prop
---   | .ok _ => True
---   | .error ⟨_, err⟩ =>
---     err = "RecursionLimit" →  oerr = some "RecursionLimit"
 
 def Xlot.Good (lim : Nat) (oe : Option String) : Xlot → Prop
   | .none => True
@@ -1170,7 +935,6 @@ lemma Except.of_toError?_eq_some {ξ} (ex : Except (String × ξ) Evm)
   rcases ex with ⟨err', _⟩ | _ <;> simp [Except.toError?] at eq
   cases eq; refine ⟨_, rfl⟩
 
-
 lemma Xlot.good_of_good_of_notLimited {lim lim' : Nat} {oe oe' : Option String}
     {xl : Xlot} (le : lim ≤ lim') (ne : oe ≠ some "RecursionLimit")
     (good : xl.Good lim oe) : xl.Good lim' oe' := by
@@ -1178,7 +942,6 @@ lemma Xlot.good_of_good_of_notLimited {lim lim' : Nat} {oe oe' : Option String}
   rcases good with ⟨_, lt, exec, of_eq⟩
   refine' ⟨_, Nat.lt_of_lt_of_le lt le, exec,  _⟩
   intro eq; cases ne <| of_eq eq
-
 
 syntax "okStep1 " ident rcasesPat : tactic
 macro_rules
@@ -1269,12 +1032,6 @@ lemma of_unlim_bind {ξ υ ζ} {x : Except (String × ξ) υ}
     · cases ltd
   · intro y eq; rw [eq] at unlim; exact unlim
 
-
-
-
-
-
-
 lemma of_executeCode {msg : Msg} {lim : Nat}
     {ex : Except (String × Benv × Tenv) Evm}
     (notLimited : ex.toError? ≠ some "RecursionLimit")
@@ -1340,6 +1097,7 @@ lemma ite_of_true {c : Prop} [Decidable c] {p q : Prop} :
 lemma ite_of_false {c : Prop} [Decidable c] {p q : Prop} :
     ¬ c → q → if c then p else q := by
   intro hc hp; rw [if_neg hc]; exact hp
+
 lemma of_genericCall {evm : Evm} {gas : Nat} {value : B256}
     {caller target codeAddress : Adr} {shouldTransferValue isStaticcall : Bool}
     {input_index input_size output_index output_size : Nat} {code : ByteArray}
@@ -1689,7 +1447,6 @@ def Ninst.Run' (evm : Evm) : Ninst → Xlot → Execution → Prop
     λ evm11 =>
       evm11.incrPc = ex
 
-
 lemma Except.bind_eq_bind {ξ υ ζ} {e : Except ξ υ} {f g : υ → Except ξ ζ}
     (eq : ∀ x, e = Except.ok x → f x = g x) : e >>= f = e >>= g := by
   cases e; rfl; apply eq _ rfl
@@ -1697,11 +1454,9 @@ lemma Except.bind_eq_bind {ξ υ ζ} {e : Except ξ υ} {f g : υ → Except ξ 
 def ok_bind {ξ : Type u} {υ ζ : Type v} {y : υ} {g : υ → Except ξ ζ} :
     (.ok y) >>= g = g y := rfl
 
-
 syntax "eee_bind " ident  : tactic
 macro_rules
   | `(tactic| eee_bind $unlim) => `(tactic|
-
       apply Except.bind_eq_bind;
       intro _ eq_ok;
       have temp := $unlim; clear $unlim;
@@ -1999,35 +1754,6 @@ lemma forall_eq_of_le_of_unlim :
       · rfl
 -/
 
-
-
-
-
--- lemma Ninst.of_run {evm : Evm} {n : Ninst} {lim : Nat}
---     {ex : Execution} (notLimited : ex.Unlim)
---     (eq : Ninst.run false evm n lim = ex) :
---     (∀ lim' ≥ lim, Ninst.run false evm n lim' = ex) ∧
---     ∃ xl : Xlot,
---       xl.Good lim ex.toError? ∧
---       Ninst.Run' evm n xl ex :=
---   match n, lim with
---   | exec _, 0 => by
---     simp only [Ninst.run] at eq
---     rw [← eq] at notLimited
---     cases notLimited rfl
---   | push xs lt, lim => by
---     simp [Ninst.run] at eq; simp [Ninst.run]
---     refine' ⟨λ _ _ => eq, .none, .intro, eq⟩
---   | reg r, _ => by
---     simp [Ninst.run] at eq; simp [Ninst.run]
---     refine' ⟨λ _ _ => eq, .none, .intro, eq⟩
---   | exec .create, lim + 1 => by
---     simp [Ninst.run] at eq; simp [Ninst.Run']
---     constructor
---     · intro lim' ge; rcases lim' with _ | lim'
---       {cases Nat.not_succ_le_zero _ ge}
---       simp [run]
---   | reg r, _ => sorry
 
 
 lemma Ninst.of_run {evm : Evm} {n : Ninst} {lim : Nat}
@@ -2329,53 +2055,6 @@ def of_exec :
         · rcases ih _ (Nat.lt_succ_self _) _ _ notLimited ex_eq with ⟨ih'⟩
           constructor; apply Exec.jumpRec getInst_eq run_eq ih'
 
---- def of_exec :
----     ∀ (lim : Nat) (evm : Evm) (ex : Execution),
----       ex.Unlim → (exec false evm lim = ex) → Exec evm ex := by
----   apply Nat.strongRec; intro lim ih evm ex notLimited exec_eq;
----   cases lim with
----   | zero =>
----     rw [← exec_eq] at notLimited
----     simp [exec, Except.toError?, Except.Unlim, Except.Limited] at notLimited
----   | succ lim =>
----     simp [exec] at exec_eq
----     rcases Option.eq_none_or_eq_some evm.getInst with
----       getInst_eq | ⟨i, getInst_eq⟩
----       <;> rw [getInst_eq] at exec_eq
----       <;> simp [Option.toExcept] at exec_eq
----     · rw [← exec_eq];
----       apply Exec.invOp getInst_eq
----     · rw [ok_bind] at exec_eq
----       rcases i with l | n | j <;> simp only [] at exec_eq
----       · apply Exec.last getInst_eq exec_eq
----       · rcases of_bind_eq exec_eq with
----           ⟨es, run_eq, ex_eq⟩ | ⟨evm', run_eq, ex_eq⟩
----         · rw [ex_eq] at notLimited
----           rcases Ninst.run_of_run notLimited run_eq
----             with ⟨_ | ⟨evm', ex'⟩, good, run⟩
----           · rw [ex_eq]; exact Exec.nextNoneErr getInst_eq run .intro
----           · rw [ex_eq];
----             apply Exec.nextSomeErr getInst_eq run _ .intro
----             rcases good with ⟨lim', lt, exec_eq', notLimited_of⟩
----             have notLimited' : ¬ ex'.Limited := by
----               intro h; cases notLimited <| notLimited_of h
----             apply @ih _ (by omega) _ _ notLimited' exec_eq'
----         · rcases Ninst.run_of_run (by {intro h; cases h}) run_eq
----             with ⟨_ | ⟨evm', ex'⟩, good, run⟩
----           · apply @Exec.nextNoneRec _ _ _ _ getInst_eq run ;
----             apply ih _ (by omega) _ _ notLimited ex_eq;
----           · rcases good with ⟨lim', lt, exec_eq', notLimited_of⟩
----             have notLimited' : ¬ ex'.Limited := by intro h; cases notLimited_of h
----             have ih'  := @ih _ (by omega) _ _ notLimited' exec_eq'
----             apply @Exec.nextSomeRec _ _ _ _ _ _ getInst_eq run ih'
----             apply @ih _ (by omega) _ _ notLimited ex_eq
----       · rcases of_bind_eq exec_eq
----           with ⟨es, run_eq, ex_eq⟩ | ⟨evm', run_eq, ex_eq⟩
----         · rw [ex_eq]; exact Exec.jumpErr getInst_eq run_eq .intro
----         · apply Exec.jumpRec getInst_eq run_eq
----           apply ih _ (Nat.lt_succ_self _) _ _ notLimited ex_eq
----
-
 lemma unlim_push {evm : Evm} {x : B256} : ¬ (evm.push x).Limited := by
   unfold Except.Limited Evm.push Except.assert
   split
@@ -2438,9 +2117,7 @@ macro_rules
 lemma unlim_execute_ecrecover (evm : Evm) :
     (executeEcrecover evm).Unlim := by
   intro ltd;
-
   unlim_bind_step ltd unlim_chargeGas
-
   unlim_bind_step ltd unlim_ok
   split at ltd
   · simp only [] at ltd
@@ -2944,41 +2621,21 @@ lemma of_process_message' {msg : Msg} {xl : Xlot}
   · apply Exists.imp forall_gt_of_forall_gt_succ_pred
     simp only [processMessage]
     efg_step_split run; efg_step_split run;
-    --efg_step_exec run good of_execute_code'
-
     have temp := run; clear run;
     rcases temp with ⟨ex', runs, run⟩;
     have temp := of_execute_code' good runs;
     clear good runs;
     rcases temp with ⟨unlim, lim, run_eq⟩;
     clear unlim;
-
     refine' ⟨lim + 1, _⟩;
-
     intro lim' gt;
     have gt' : lim'.pred > lim :=
     ( by cases lim' <;>
          [ (cases Nat.not_lt_zero _ gt);
            (exact Nat.lt_of_succ_lt_succ gt) ] );
-
     rw [run_eq lim'.pred gt'];
     clear gt gt' run_eq;
-
-
-
     eq_split run; eq_ite run <;> exact run
-
-
---- lemma of_process_message'' {msg : Msg} {xl : Xlot}
----     {ex : Except (String × Benv × Tenv) Evm} (good : xl.Good')
----     (eq : ProcessMessage msg xl ex) :
----     ex.Unlim ∧ ∃ lim, processMessage false msg (lim + 1) = ex := by
----   simp only [processMessage]
----   ule_split eq (unlim_assert (by decide))
----   ule_split eq unlim_benvAfterTransfer
----   ule_exec eq good of_execute_code' id
----   · split at eq <;> {rw [← eq]; apply unlim_ok}
----   · eq_split eq; eq_ite eq <;> exact eq
 
 lemma processCreateMessage.unlim_chargeCodeGas {evm : Evm} :
     (processCreateMessage.chargeCodeGas evm).Unlim := by
@@ -3206,33 +2863,6 @@ lemma of_generic_call' {evm : Evm} {gas : Nat} {value : B256}
     efg_step_exists run; efg_step_exists run;
     efg_step_exec run good of_process_message'; eq_split run;
     eq_ite run <;> {eq_split run; exact run}
-
--- lemma of_generic_call' {evm : Evm} {gas : Nat} {value : B256}
---     {caller target codeAddress : Adr} {shouldTransferValue isStaticcall : Bool}
---     {input_index input_size output_index output_size : Nat} {code : ByteArray}
---     {disablePrecompiles : Bool} {xl : Xlot} {ex : Execution} (good : xl.Good')
---     ( eq :
---       GenericCall evm gas value caller target codeAddress
---         shouldTransferValue isStaticcall input_index input_size
---         output_index output_size code disablePrecompiles xl ex ) :
---     ex.Unlim ∧
---       ∃ lim,
---         genericCall false evm gas value caller target codeAddress
---           shouldTransferValue isStaticcall input_index input_size
---           output_index output_size code disablePrecompiles (lim + 1) = ex := by
---   simp only [GenericCall] at eq
---   simp only [genericCall]
---   ule_exists eq; ule_of_ite eq
---   · refine' ⟨_, 0, _⟩
---     · rw [← eq]; apply unlim_push
---     · simp only [bind_pure]; exact eq
---   · simp only [pure_bind]
---     ule_exists eq; ule_exists eq
---     ule_exec eq good of_process_message' unlim_liftToExecution
---     · split at eq <;>
---       { rcases eq with ⟨_, eq', eq⟩ | ⟨_, eq', eq⟩ <;>
---         [(rw [eq, ← eq']; apply unlim_push); (rw [← eq]; apply unlim_ok)] }
---     · eq_split eq; eq_ite eq <;> {eq_split eq; exact eq}
 
 lemma unlim_pop_n {evm : Evm} {n : Nat} : ¬ (evm.popN n).Limited := by
   induction n generalizing evm
@@ -3638,129 +3268,6 @@ lemma Ninst.run_of_run' {evm : Evm} {n : Ninst} (xl : Xlot)
       unlim_bind_step ltd unlim_push; cases ltd
     · simp only [Ninst.run]; refine' ⟨0, λ _ _ => run⟩
 
-
-
-/-
-lemma Ninst.run_of_run' (evm : Evm) (n : Ninst) (xl : Xlot)
-    (ex : Execution) (good : xl.Good') (run : Ninst.Run' evm n xl ex) :
-    ex.Unlim ∧ ∃ lim, Ninst.run false evm n (lim + 1) = ex := by
-  rcases n with r | x | ⟨xs, le⟩
-  · simp only [Ninst.Run'] at run
-    simp only [Ninst.run]
-    constructor
-    · rw [← run]; apply Rinst.unlim_run
-    · refine ⟨0, run⟩
-  · cases x <;> (simp only [Ninst.Run'] at run; simp only [Ninst.run])
-    · ule_split run unlim_pop
-      ule_split run unlim_popToNat
-      ule_split run unlim_popToNat
-      ule_exists run; ule_exists run
-      ule_split run unlim_chargeGas
-      ule_exists run; ule_exists run
-      ule_exec run good of_generic_create' id
-      · rw [← run]; apply unlim_ok
-      · eq_split run; exact run
-    · ule_split run unlim_pop; ule_split run (unlim_map_rev unlim_pop)
-      ule_split run unlim_pop; ule_split run unlim_popToNat
-      ule_split run unlim_popToNat; ule_split run unlim_popToNat
-      ule_split run unlim_popToNat; ule_exists run; ule_exists run;
-      ule_exists run
-      ule_exists_5 run
-      ule_exists run
-      ule_exists run
-      ule_exists run
-      ule_exists_2 run
-      ule_split run unlim_chargeGas
-      ule_split run (unlim_assert (by decide))
-      ule_exists run
-      ule_exists run
-      ule_of_ite run
-      · ule_split run unlim_push
-        refine' ⟨_, 0, run⟩
-        rw [← run]; intro ltd; cases ltd
-      · ule_exec run good of_generic_call' id
-        · rw [← run]; intro ltd; cases ltd
-        · eq_split run; exact run
-    · ule_split run unlim_pop; ule_split run (unlim_map_rev unlim_pop)
-      ule_split run unlim_pop; ule_split run unlim_popToNat
-      ule_split run unlim_popToNat
-      ule_split run unlim_popToNat
-      ule_split run unlim_popToNat
-      ule_exists run
-      ule_exists run
-      ule_exists run
-      ule_exists run
-      ule_exists_5 run
-      ule_exists run
-      ule_exists run
-      ule_exists_2 run
-      ule_split run unlim_chargeGas
-      ule_exists run
-      ule_exists run
-      ule_of_ite run
-      · ule_split run unlim_push
-        refine' ⟨_, 0, run⟩
-        rw [← run]; intro ltd; cases ltd
-      · ule_exec run good of_generic_call' id
-        · rw [← run]; intro ltd; cases ltd
-        · eq_split run; exact run
-    · ule_split run unlim_pop; ule_split run (unlim_map_rev unlim_pop)
-      ule_split run unlim_popToNat
-      ule_split run unlim_popToNat
-      ule_split run unlim_popToNat
-      ule_split run unlim_popToNat
-      ule_exists run
-      ule_exists run
-      ule_exists run
-      ule_exists_5 run
-      ule_exists run
-      ule_exists_2 run
-      ule_split run unlim_chargeGas
-      ule_exists run
-      ule_exec run good of_generic_call' id
-      · rw [← run]; intro ltd; cases ltd
-      · eq_split run; exact run
-    · ule_split run unlim_pop; ule_split run (unlim_map_rev unlim_pop)
-      ule_split run unlim_popToNat
-      ule_split run unlim_pop
-      ule_exists run
-      ule_exists run
-      ule_exists run
-      ule_split run unlim_chargeGas
-      ule_exists run
-      ule_exists run
-      ule_exec run good of_generic_create' id
-      · rw [← run]; intro ltd; cases ltd
-      · eq_split run; exact run
-    · ule_split run unlim_pop; ule_split run (unlim_map_rev unlim_pop)
-      ule_split run unlim_popToNat
-      ule_split run unlim_popToNat
-      ule_split run unlim_popToNat
-      ule_split run unlim_popToNat
-      ule_exists run
-      ule_exists run
-      ule_exists run
-      ule_exists_5 run
-      ule_exists run
-      ule_exists_2 run
-      ule_split run unlim_chargeGas
-      ule_exists run
-      ule_exec run good of_generic_call' id
-      · rw [← run]; intro ltd; cases ltd
-      · eq_split run; exact run
-  · simp [Ninst.Run'] at run
-    simp only [Ninst.run]
-    refine' ⟨_, 0, run⟩
-    rw [← run]; clear run; intro ltd
-    unlim_bind_step ltd unlim_chargeGas
-    unlim_bind_step ltd unlim_push
-    cases ltd
--/
-
---lemma Ninst.unlim_run (evm : Evm) (n : Ninst) :
---    ¬ (Rinst.run evm r).Limited := by
---  sorry
-
 lemma Except.bind_eq_of_is_error {ξ υ : Type} {e : Except ξ υ}
     {f : υ → Except ξ υ} : e.IsError → (e >>= f) = e := by
   intro h; cases e
@@ -3839,6 +3346,7 @@ lemma of_exec' :
     rw [run_eq lim' (by omega)]
     apply exec_eq _ (by omega)
   · intro evm n evm' ex' evm'' ex get run exec' exec
+
       ⟨unlim', limExec', exec_eq'⟩
       ⟨unlim, limExec, exec_eq⟩
     rcases
@@ -3877,7 +3385,6 @@ lemma of_exec' :
     simp only [Evm.getInst, exec, get, Option.toExcept, ok_bind, run]
 
 lemma exec_iff_exec (evm : Evm) (ex : Execution) :
-    --Exec evm ex ↔ (ex.Unlim ∧ ∃ lim, exec false evm lim = ex) := by
     Nonempty (Exec evm ex) ↔ (ex.Unlim ∧ ∃ lim, exec false evm lim = ex) := by
   constructor
   · intro ⟨exc⟩; rcases of_exec' _ _ exc with ⟨unlim, lim, eq⟩
