@@ -174,6 +174,7 @@ def Linst.At (code : ByteArray) (pc : Nat) (l : Linst) : Prop := code.getInst pc
 def Ninst.At (code : ByteArray) (pc : Nat) (n : Ninst) : Prop := code.getInst pc = some (.next n)
 def Jinst.At (code : ByteArray) (pc : Nat) (j : Jinst) : Prop := code.getInst pc = some (.jump j)
 def Rinst.At (code : ByteArray) (pc : Nat) (r : Rinst) : Prop := code.getInst pc = some (.next (.reg r))
+def Xinst.At (code : ByteArray) (pc : Nat) (x : Xinst) : Prop := code.getInst pc = some (.next (.exec x))
 
 def Execution.withPc (pc : Nat) (exn : Execution) :
      Except (String × Devm) (Nat × Devm) := do
@@ -681,39 +682,43 @@ inductive Exec : Nat → Sevm → Devm → Execution → Type
   | invOp {pc} {sevm} {devm} :
     sevm.code.getInst pc = none →
     Exec pc sevm devm (.error ⟨"InvalidOpcode", devm⟩)
-  | nextNoneErr {pc} {sevm} {devm} {n : Ninst} {err} {devm'} :
+  | nextNoneErr {pc} {sevm} {devm} {n} {err} {devm'} :
     n.At sevm.code pc →
     Ninst.Run' pc sevm devm n .none (.error ⟨err, devm'⟩) →
     Exec pc sevm devm (.error ⟨err, devm'⟩)
-  | nextSomeErr {pc} {sevm} {devm}
-    {n : Ninst} {evm} {exn} {err} {devm'} :
+  | nextSomeErr
+    {pc} {sevm} {devm} {n} {pc_} {sevm_} {devm_} {exn_} {err} {devm'} :
     n.At sevm.code pc →
-    Ninst.Run' pc sevm devm n (.some (evm, exn)) (.error ⟨err, devm'⟩) →
-    Exec evm.pc evm.sta evm.dyna exn →
+    Ninst.Run' pc sevm devm n
+      (.some (⟨pc_, sevm_, devm_⟩, exn_))
+      (.error ⟨err, devm'⟩) →
+    Exec pc_ sevm_ devm_ exn_ →
     Exec pc sevm devm (.error ⟨err, devm'⟩)
-  | nextNoneRec {pc} {sevm : Sevm} {devm} {n : Ninst}
-    {pc'} {devm'} {exn : Execution} :
-    n.At sevm.code pc→
+  | nextNoneRec {pc} {sevm : Sevm} {devm} {n} {pc'} {devm'} {exn} :
+    n.At sevm.code pc →
     Ninst.Run' pc sevm devm n .none (.ok ⟨pc', devm'⟩) →
     Exec pc' sevm devm' exn →
     Exec pc sevm devm exn
-  | nextSomeRec {pc} {sevm} {devm} {n : Ninst} {evm' : Evm}
-    {exn' : Execution} {pc'} {devm'} {exn : Execution} :
-    n.At sevm.code pc→
-    Ninst.Run' pc sevm devm n (.some (evm', exn')) (.ok ⟨pc', devm'⟩) →
-    Exec evm'.pc evm'.sta evm'.dyna exn' →
+  | nextSomeRec
+    {pc} {sevm} {devm} {n} {pc_} {sevm_} {devm_}
+    {exn_ : Execution} {pc'} {devm'} {exn} :
+    n.At sevm.code pc →
+    Ninst.Run' pc sevm devm n
+      (.some (⟨pc_, sevm_, devm_⟩, exn_))
+      (.ok ⟨pc', devm'⟩) →
+    Exec pc_ sevm_ devm_ exn_ →
     Exec pc' sevm devm' exn →
     Exec pc sevm devm exn
-  | jumpErr {pc} {sevm} {devm} {j : Jinst} {err} {devm'} :
+  | jumpErr {pc} {sevm} {devm} {j} {err} {devm'} :
     j.At sevm.code pc →
     Jinst.Run ⟨pc, sevm, devm⟩ j (.error ⟨err, devm'⟩) →
     Exec pc sevm devm (.error ⟨err, devm'⟩)
-  | jumpRec {pc} {sevm} {devm} {j : Jinst} {pc'} {devm'} {exn} :
+  | jumpRec {pc} {sevm} {devm} {j} {pc'} {devm'} {exn} :
     j.At sevm.code pc →
     Jinst.Run ⟨pc, sevm, devm⟩ j (.ok ⟨pc', devm'⟩) →
     Exec pc' sevm devm' exn →
     Exec pc sevm devm exn
-  | last {pc} {sevm} {devm} {l : Linst} {exn : Execution} :
+  | last {pc} {sevm} {devm} {l} {exn} :
     l.At sevm.code pc →
     Linst.Run sevm devm l exn →
     Exec pc sevm devm exn
@@ -1933,11 +1938,11 @@ lemma of_exec' :
     simp only [Ninst.At] at nat
     simp only [Evm.getInst, exec, Option.toExcept, nat, ok_bind]
     rw [eq lim' (by omega)]; rfl
-  · intro pc sevm devm n evm' exn' exn devm' nat run exc ⟨fit', limExec, exec_eq⟩
+  · intro pc sevm devm n pc_ sevm_ devm_ exn_ exn devm' nat run exc ⟨fit_, limExec, exec_eq⟩
     rcases
       Ninst.run_of_run'
-        (.some ⟨evm', exn'⟩)
-        ⟨fit', limExec + 1, exec_eq _ (by omega)⟩
+        (.some ⟨⟨pc_, sevm_, devm_⟩, exn_⟩)
+        ⟨fit_, limExec + 1, exec_eq _ (by omega)⟩
         run
       with ⟨fit, limRun, run_eq⟩
     refine' ⟨fit, (max limExec limRun) + 1, _⟩
@@ -1953,13 +1958,13 @@ lemma of_exec' :
     simp only [Ninst.At] at nat
     simp only [Evm.getInst, ok_bind, exec, Option.toExcept, nat]
     rw [run_eq lim' (by omega)]; apply exec_eq _ (by omega)
-  · intro pc devm devm n evm' exn' pc'' devm'' exn nat run exc' exc
-      ⟨fit', limExec', exec_eq'⟩
-      ⟨fit, limExec, exec_eq⟩
+  · intro pc sevm devm n pc_ sevm_ devm_ exn_ pc' devm' exn nat run exc_ exc
+      ⟨fit_, limExec_, eq_⟩
+      ⟨fit, limExec, eq⟩
     rcases
       Ninst.run_of_run'
-        (.some ⟨evm', exn'⟩)
-        ⟨fit', limExec' + 1, exec_eq' _ (by omega)⟩
+        (.some ⟨⟨pc_, sevm_, devm_⟩, exn_⟩)
+        ⟨fit_, limExec_ + 1, eq_ _ (by omega)⟩
         run
       with ⟨fitRun, limRun, run_eq⟩
     refine' ⟨fit, max limRun limExec + 1, _⟩
@@ -1967,7 +1972,7 @@ lemma of_exec' :
     simp only [Ninst.At] at nat
     simp only [Evm.getInst, ok_bind, _root_.exec, Option.toExcept, nat]
     rw [run_eq lim' (by omega)]
-    apply exec_eq _ (by omega)
+    apply eq _ (by omega)
   · intro pc sevm devm j err devm' nat run
     simp only [Jinst.At] at nat
     simp only [Jinst.Run] at run
@@ -2390,7 +2395,7 @@ def of_exec :
             rcases @ih _ (by omega) _ _ _ _ fit' exec_eq' with ⟨ih'⟩
             rcases @ih _ (by omega) _ _ _ _ fit ex_eq with ⟨ih''⟩
             constructor
-            apply @Exec.nextSomeRec _ _ _ _ _ _ _ _ _ getInst_eq run ih' ih''
+            apply @Exec.nextSomeRec _ _ _ _ _ _ _ _ _ _ _ getInst_eq run ih' ih''
       · rcases of_bind_eq exec_eq
           with ⟨es, run_eq, ex_eq⟩ | ⟨evm', run_eq, ex_eq⟩
         · rw [ex_eq]; constructor

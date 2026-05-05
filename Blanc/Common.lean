@@ -2616,6 +2616,7 @@ theorem correct_core (f : Func) (fs : List Func) :
     have h_at : Ninst.At pk.e pk.pc i := by
       rw [Ninst.at_iff_slice]; apply List.slice_prefix h_slice
     rcases Ninst.run_of_at pk.cr h_at with ⟨s', cr', h_run, h_prec⟩
+
     have h_run' : Func.Run (f :: fs) pk.e s' p pk.r := by
       apply ih ⟨pk.e, s', _, pk.r, cr'⟩ (Exec'.lt_of_prec h_prec) p
       · simp; apply h_eq
