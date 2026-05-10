@@ -176,11 +176,6 @@ def Jinst.At (code : ByteArray) (pc : Nat) (j : Jinst) : Prop := code.getInst pc
 def Rinst.At (code : ByteArray) (pc : Nat) (r : Rinst) : Prop := code.getInst pc = some (.next (.reg r))
 def Xinst.At (code : ByteArray) (pc : Nat) (x : Xinst) : Prop := code.getInst pc = some (.next (.exec x))
 
-def Execution.withPc (pc : Nat) (exn : Execution) :
-     Except (String × Devm) (Nat × Devm) := do
-  let devm ← exn
-  .ok ⟨pc, devm⟩
-
 def Except.Split {ξ υ ζ : Type}
     (e : Except ξ υ) (e' : Except ξ ζ) (q : υ → Prop) : Prop :=
   (∃ x, e = .error x ∧ e' = .error x) ∨ (∃ y : υ, e = .ok y ∧ q y)
@@ -355,14 +350,9 @@ def GenericCall
         ((incorporateChildOnSuccess evm1 child child.output).push 1).Split ex <|
       λ evm2 => .ok (evm2.memWrite output_index actualOutput) = ex
 
-def Ninst.Run' (pc : Nat) (sevm : Sevm) (devm : Devm) :
-    Ninst → Xlot → Except (String × Devm) (Nat × Devm) → Prop
-  | .push xs _, _, ex =>
-    ( do let devm1 ← chargeGas (if xs = [] then gBase else gVerylow) devm
-         let devm2 ← devm1.push xs.toB256
-         .ok ⟨pc + xs.length + 1, devm2⟩ ) = ex
-  | .reg r, _, ex => (Rinst.run ⟨pc, sevm, devm⟩ r).withPc (pc + 1) = ex
-  | .exec .create, xl, ex =>
+def Xinst.Run (sevm : Sevm) (devm : Devm) :
+    Xinst → Xlot → Execution → Prop
+  | .create, xl, ex =>
       (devm.pop).Split ex <|
     λ ⟨endowment, devm1⟩ =>
       (devm1.popToNat).Split ex <|
@@ -382,21 +372,16 @@ def Ninst.Run' (pc : Nat) (sevm : Sevm) (devm : Devm) :
             sevm.currentTarget
             (devm5.state.get sevm.currentTarget).nonce ) <|
     λ newAddress =>
-    ∃ ex',
-      And
-        ( GenericCreate
-            sevm
-            devm5
-            endowment
-            newAddress
-            memoryIndex
-            memorySize
-            xl
-            ex' ) <|
-      ex'.Split ex <|
-    λ devm6 =>
-      .ok ⟨pc + 1, devm6⟩ = ex
-  | .exec .create2, xl, ex =>
+      GenericCreate
+        sevm
+        devm5
+        endowment
+        newAddress
+        memoryIndex
+        memorySize
+        xl
+        ex
+  | .create2, xl, ex =>
       (devm.pop).Split ex <|
     λ ⟨endowment, devm1⟩ =>
       (devm1.popToNat).Split ex <|
@@ -421,21 +406,16 @@ def Ninst.Run' (pc : Nat) (sevm : Sevm) (devm : Devm) :
             salt
             (devm6.memory.data.sliceD memoryIndex memorySize 0) ) <|
     λ newAddress =>
-    ∃ ex',
-      And
-        ( GenericCreate
-            sevm
-            devm6
-            endowment
-            newAddress
-            memoryIndex
-            memorySize
-            xl
-            ex' ) <|
-      ex'.Split ex <|
-    λ devm7 =>
-      .ok ⟨pc + 1, devm7⟩ = ex
-  | .exec .call, xl, ex =>
+      GenericCreate
+        sevm
+        devm6
+        endowment
+        newAddress
+        memoryIndex
+        memorySize
+        xl
+        ex
+  | .call, xl, ex =>
       (devm.pop).Split ex <|
     λ ⟨gas, devm1⟩ =>
       (devm1.popToAdr).Split ex <|
@@ -477,32 +457,27 @@ def Ninst.Run' (pc : Nat) (sevm : Sevm) (devm : Devm) :
       if senderBal < value then
           (devm11.push 0).Split ex <|
         λ devm12 =>
-          .ok ⟨pc + 1, {devm12 with returnData := [], gasLeft := devm12.gasLeft + msgCallStipend}⟩ = ex
+          .ok {devm12 with returnData := [], gasLeft := devm12.gasLeft + msgCallStipend} = ex
       else
-    ∃ ex',
-      And
-        ( GenericCall
-            sevm
-            devm11
-            msgCallStipend
-            value
-            sevm.currentTarget
-            callee
-            callee
-            true
-            false
-            inputIndex
-            inputSize
-            outputIndex
-            outputSize
-            code
-            disablePrecompiles
-            xl
-            ex' ) <|
-      ex'.Split ex <|
-    λ devm12 =>
-      .ok ⟨pc + 1, devm12⟩ = ex
-  | .exec .callcode, xl, ex =>
+        GenericCall
+          sevm
+          devm11
+          msgCallStipend
+          value
+          sevm.currentTarget
+          callee
+          callee
+          true
+          false
+          inputIndex
+          inputSize
+          outputIndex
+          outputSize
+          code
+          disablePrecompiles
+          xl
+          ex
+  | .callcode, xl, ex =>
       (devm.pop).Split ex <|
     λ ⟨gas, devm1⟩ =>
       (devm1.popToAdr).Split ex <|
@@ -540,32 +515,27 @@ def Ninst.Run' (pc : Nat) (sevm : Sevm) (devm : Devm) :
       if senderBal < value then
           (devm11.push 0).Split ex <|
         λ devm12 =>
-          .ok ⟨pc + 1, {devm12 with returnData := [], gasLeft := devm12.gasLeft + msgCallStipend}⟩ = ex
+          .ok {devm12 with returnData := [], gasLeft := devm12.gasLeft + msgCallStipend} = ex
       else
-    ∃ ex',
-      And
-        ( GenericCall
-            sevm
-            devm11
-            msgCallStipend
-            value
-            sevm.currentTarget
-            sevm.currentTarget
-            newCodeAddress
-            true
-            false
-            inputIndex
-            inputSize
-            outputIndex
-            outputSize
-            code
-            disablePrecompiles
-            xl
-            ex' ) <|
-      ex'.Split ex <|
-    λ devm12 =>
-      .ok ⟨pc + 1, devm12⟩ = ex
-  | .exec .delcall, xl, ex =>
+        GenericCall
+          sevm
+          devm11
+          msgCallStipend
+          value
+          sevm.currentTarget
+          sevm.currentTarget
+          newCodeAddress
+          true
+          false
+          inputIndex
+          inputSize
+          outputIndex
+          outputSize
+          code
+          disablePrecompiles
+          xl
+          ex
+  | .delcall, xl, ex =>
       (devm.pop).Split ex <|
     λ ⟨gas, devm1⟩ =>
       (devm1.popToAdr).Split ex <|
@@ -594,30 +564,25 @@ def Ninst.Run' (pc : Nat) (sevm : Sevm) (devm : Devm) :
     λ devm9 =>
       ExistsEq (devm9.memExtends [⟨inputIndex, inputSize⟩, ⟨outputIndex, outputSize⟩]) <|
     λ devm10 =>
-    ∃ ex',
-      And
-        ( GenericCall
-            sevm
-            devm10
-            msgCallStipend
-            sevm.value
-            sevm.caller
-            sevm.currentTarget
-            newCodeAddress
-            false
-            false
-            inputIndex
-            inputSize
-            outputIndex
-            outputSize
-            code
-            disablePrecompiles
-            xl
-            ex' ) <|
-      ex'.Split ex <|
-    λ devm11 =>
-      .ok ⟨pc + 1, devm11⟩ = ex
-  | .exec .statcall, xl, ex =>
+      GenericCall
+        sevm
+        devm10
+        msgCallStipend
+        sevm.value
+        sevm.caller
+        sevm.currentTarget
+        newCodeAddress
+        false
+        false
+        inputIndex
+        inputSize
+        outputIndex
+        outputSize
+        code
+        disablePrecompiles
+        xl
+        ex
+  | .statcall, xl, ex =>
       (devm.pop).Split ex <|
     λ ⟨gas, devm1⟩ =>
       (devm1.popToAdr).Split ex <|
@@ -646,29 +611,36 @@ def Ninst.Run' (pc : Nat) (sevm : Sevm) (devm : Devm) :
     λ devm9 =>
       ExistsEq (devm9.memExtends [⟨inputIndex, inputSize⟩, ⟨outputIndex, outputSize⟩]) <|
     λ devm10 =>
-    ∃ ex',
-      And
-        ( GenericCall
-            sevm
-            devm10
-            msgCallStipend
-            0
-            sevm.currentTarget
-            target
-            target
-            true
-            true
-            inputIndex
-            inputSize
-            outputIndex
-            outputSize
-            code
-            disablePrecompiles
-            xl
-            ex' ) <|
-      ex'.Split ex <|
-    λ devm11 =>
-      .ok ⟨pc + 1, devm11⟩ = ex
+      GenericCall
+        sevm
+        devm10
+        msgCallStipend
+        0
+        sevm.currentTarget
+        target
+        target
+        true
+        true
+        inputIndex
+        inputSize
+        outputIndex
+        outputSize
+        code
+        disablePrecompiles
+        xl
+        ex
+
+def Ninst.Run' (pc : Nat) (sevm : Sevm) (devm : Devm) :
+    Ninst → Xlot → Except (String × Devm) (Nat × Devm) → Prop
+  | .push xs _, _, ex =>
+    ( do let devm' ← chargeGas (if xs = [] then gBase else gVerylow) devm
+         (devm'.push xs.toB256).withPc (pc + xs.length + 1) ) = ex
+  | .reg r, _, ex =>
+    (Rinst.run ⟨pc, sevm, devm⟩ r).withPc (pc + 1) = ex
+  | .exec x, xl, ex =>
+    ∃ exn,
+      And (Xinst.Run sevm devm x xl exn) <|
+      exn.withPc (pc + 1) = ex
 
 def Except.IsError {ξ υ : Type} (e : Except ξ υ) : Prop :=
   match e with
@@ -1146,6 +1118,8 @@ lemma of_lim_handleError {ex : Execution} :
 def Saturates {ξ υ} (n : Nat) (f : Nat → Except (String × ξ) υ) : Prop :=
   (f n).Fit → ∀ m, n < m → (f n = f m)
 
+#check Xinst.run
+#check Ninst.Run
 structure Saturation (lim : Nat) : Prop where
   (executeCode : ∀ (msg : Msg), Saturates lim (executeCode false msg))
   (processMessage : ∀ (msg : Msg), Saturates lim (processMessage false msg))
@@ -1167,7 +1141,10 @@ structure Saturation (lim : Nat) : Prop where
         ( genericCall false sevm devm gas value caller target codeAddress
             shouldTransferValue isStaticcall inputIndex inputSize outputIndex
             outputSize code disablePrecompiles ) )
-  (run : ∀ (evm : Evm) (n : Ninst), Saturates lim (Ninst.run false evm n))
+  ( xinstRun :
+    ∀ (sevm : Sevm) (devm : Devm) (x : Xinst),
+      Saturates lim (Xinst.run false sevm devm x) )
+  (ninstRun : ∀ (evm : Evm) (n : Ninst), Saturates lim (Ninst.run false evm n))
   (exec : ∀ (evm : Evm), Saturates lim (exec false evm))
 
 lemma lim_handleError {ex : Execution} :
@@ -1212,20 +1189,22 @@ lemma of_fit_liftToExecution {evm : Devm}
 lemma saturation (lim : Nat) : Saturation lim := by
   induction lim
   case zero =>
-    refine' ⟨_, _, _, _, _, _, _⟩
+    refine' ⟨_, _, _, _, _, _, _, _⟩
     · intro _ fit; simp only [executeCode] at fit; cases fit rfl
     · intro _ fit; simp only [processMessage] at fit; cases fit rfl
     · intro _ fit; simp only [processCreateMessage] at fit; cases fit rfl
     · intro _ _ _ _ _ _ fit; simp only [genericCreate] at fit; cases fit rfl
     · intro _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ fit;
       simp only [genericCall] at fit; cases fit rfl
+    · intro _ _ x fit; cases x <;>
+      {simp only [Xinst.run, Except.Fit] at fit; cases fit rfl}
     · intro _ n fit; cases n
       · simp only [Ninst.run, implies_true]
       · simp only [Ninst.run] at fit; cases fit rfl
       · simp only [Ninst.run, implies_true]
     · intro _ fit; simp only [exec] at fit; cases fit rfl
   case succ lim ih =>
-    refine' ⟨_, _, _, _, _, _, _⟩
+    refine' ⟨_, _, _, _, _, _, _, _⟩
     · intro _ fit lim' lt
       rcases lim' with _ | lim'; {cases Nat.not_lt_zero _ lt}
       simp only [executeCode] at *
@@ -1264,35 +1243,34 @@ lemma saturation (lim : Nat) : Saturation lim := by
         iterate 3 (eee_bind fit)
         have fit' := of_fit_liftToExecution (of_fit_bind fit).1
         rw [ih.processMessage _ fit' lim' (by omega)]
-    · intro _ n fit lim' lt
+    · intro _ _ x fit lim' lt
       rcases lim' with _ | lim'; {cases Nat.not_lt_zero _ lt}
-      rcases n  with _ | (_ | _ | _ | _ | _ | _) | _ <;>
-        simp only [Ninst.run] at *
+      rcases x  with _ | _ | _ | _ | _ | _ <;> simp only [Xinst.run] at *
       · iterate 8 (eee_bind fit)
-        rw [ih.genericCreate _ _ _ _ _ _ (of_fit_bind fit).1 lim' (by omega)]
+        rw [ih.genericCreate _ _ _ _ _ _ fit lim' (by omega)]
       · iterate 19 (eee_bind fit)
         split; {rfl}; rename_i neg
         rw [if_neg neg] at fit; clear neg
-        rw [ ih.genericCall _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
-             (of_fit_bind fit).1 lim' (by omega) ]
+        rw [ih.genericCall _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ fit lim' (by omega)]
       · iterate 17 (eee_bind fit)
         split; {rfl}; rename_i neg
         rw [if_neg neg] at fit; clear neg
-        rw [ ih.genericCall _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
-             (of_fit_bind fit).1 lim' (by omega) ]
+        rw [ih.genericCall _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ fit lim' (by omega)]
       · iterate 14 (eee_bind fit)
-        rw [ ih.genericCall _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
-             (of_fit_bind fit).1 lim' (by omega) ]
+        rw [ih.genericCall _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ fit lim' (by omega)]
       · iterate 10 (eee_bind fit)
-        rw [ih.genericCreate _ _ _ _ _ _ (of_fit_bind fit).1 lim' (by omega)]
+        rw [ih.genericCreate _ _ _ _ _ _ fit lim' (by omega)]
       · iterate 14 (eee_bind fit)
-        rw [ ih.genericCall _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
-             (of_fit_bind fit).1 lim' (by omega) ]
+        rw [ih.genericCall _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ fit lim' (by omega)]
+    · intro _ n fit lim' lt
+      rcases lim' with _ | lim'; {cases Nat.not_lt_zero _ lt}
+      rcases n  with _ | _ | _ <;> simp only [Ninst.run] at *
+      rw [ih.xinstRun _ _ _ (of_fit_bind fit).1 lim' (by omega)]
     · intro _ fit lim' lt
       rcases lim' with _ | lim'; {cases Nat.not_lt_zero _ lt}
       simp only [exec] at *; eee_bind fit; split
       · simp only at fit
-        rw [← ih.run _ _ (of_fit_bind fit).1 lim' (by omega)]
+        rw [← ih.ninstRun _ _ (of_fit_bind fit).1 lim' (by omega)]
         eee_bind fit; apply ih.exec _ fit lim' (by omega)
       · simp only at fit; eee_bind fit
         apply ih.exec _ fit lim' (by omega)
@@ -1597,6 +1575,33 @@ macro_rules
       clear gt gt' run_eq;
     )
 
+syntax "efg_end_exec " ident ident term:max : tactic
+macro_rules
+  | `(tactic| efg_end_exec $run $good $lem) =>
+    `(tactic|
+      --have temp := $run; clear $run;
+      --rcases temp with ⟨ex', runs, $run⟩;
+      have temp := $lem $good $run; clear $good $run;
+      rcases temp with ⟨fit, lim, run_eq⟩; clear fit;
+      refine' ⟨lim + 1, _⟩;
+      intro lim' gt;
+      have gt' : lim'.pred > lim :=
+      ( by cases lim' <;>
+           [ (cases Nat.not_lt_zero _ gt);
+             (exact Nat.lt_of_succ_lt_succ gt) ] );
+      rw [run_eq lim'.pred gt']
+    )
+
+
+   -- rcases (of_generic_create' good run).2 with ⟨lim, fa⟩
+   -- refine' ⟨lim + 1, λ lim' gt => _⟩
+   -- have gt' : lim'.pred > lim :=
+   --   ( by cases lim' <;>
+   --        [ (cases Nat.not_lt_zero _ gt);
+   --          (exact Nat.lt_of_succ_lt_succ gt) ] );
+   -- rw [fa lim'.pred gt']
+
+
 lemma of_process_create_message' {msg : Msg} {xl : Xlot}
     {ex : Except (String × State × AdrSet × Tra) Devm} (good : xl.Good')
     (run : ProcessCreateMessage msg xl ex) :
@@ -1720,7 +1725,7 @@ lemma of_generic_call' {sevm : Sevm} {devm : Devm} {gas : Nat} {value : B256}
     simp only [genericCall]; efg_step_exists run;
     efg_step_early run; {refine' ⟨0, _⟩; intro _ _; exact run}
     efg_step_exists run; efg_step_exists run;
-    efg_step_exec run good of_process_message'; eq_split run;
+    efg_step_exec run good of_process_message'; eq_split run
     eq_ite run <;> {eq_split run; exact run}
 
 syntax "efg_step_ite " ident : tactic
@@ -1737,6 +1742,130 @@ macro_rules
       ]
     )
 
+lemma Xinst.run_eq_of_run {sevm} {devm} {x : Xinst} {xl : Xlot}
+    {ex} (good : xl.Good') (run : Xinst.Run sevm devm x xl ex) :
+    ex.Fit ∧ ∃ lim, ∀ lim' > lim, Xinst.run false sevm devm x lim' = ex := by
+  cases x <;>
+    ( constructor <;>
+      [ skip;
+        ( apply Exists.imp forall_gt_of_forall_gt_succ_pred ;
+          simp only [Xinst.run] ) ] )
+  · fit_step_split run fit_pop
+    fit_step_split run fit_popToNat
+    fit_step_split run fit_popToNat
+    fit_step_exists run; fit_step_exists run
+    fit_step_split run fit_chargeGas
+    fit_step_exists run; fit_step_exists run
+    exact (of_generic_create' good run).1
+  · iterate 3 (efg_step_split run)
+    iterate 2 (efg_step_exists run)
+    efg_step_split run
+    iterate 2 (efg_step_exists run)
+    efg_end_exec run good of_generic_create'
+  · fit_step_split run fit_pop
+    fit_step_split run (fit_map_rev fit_pop)
+    fit_step_split run fit_pop
+    iterate 4 (fit_step_split run fit_popToNat)
+    iterate 3 (fit_step_exists run)
+    fit_step_exists run
+    iterate 3 (fit_step_exists run)
+    fit_step_exists run
+    fit_step_split run fit_chargeGas
+    fit_step_split run (fit_assert (by decide))
+    fit_step_exists run; fit_step_exists run
+    split at run
+    · fit_step_split run fit_push
+      rw [← run]; apply fit_ok
+    · exact (of_generic_call' good run).1
+  · iterate 7 (efg_step_split run)
+    iterate 3 (efg_step_exists run)
+    efg_step_exists run;
+    iterate 3 (efg_step_exists run)
+    efg_step_exists run;
+    efg_step_split run; efg_step_split run;
+    efg_step_exists run; efg_step_exists run;
+    efg_step_ite run
+    · efg_step_split run; refine ⟨0, λ _ _ => run⟩
+    · efg_end_exec run good of_generic_call'
+  · fit_step_split run fit_pop
+    fit_step_split run (fit_map_rev fit_pop)
+    fit_step_split run fit_pop
+    iterate 4 (fit_step_split run fit_popToNat)
+    iterate 4 (fit_step_exists run)
+    fit_step_exists run
+    fit_step_exists run; fit_step_exists run
+    fit_step_split run fit_chargeGas
+    fit_step_exists run; fit_step_exists run
+    split at run
+    · fit_step_split run fit_push
+      rw [← run]; apply fit_ok
+    · exact (of_generic_call' good run).1
+  · iterate 7 (efg_step_split run)
+    iterate 3 (efg_step_exists run)
+    efg_step_exists run;
+    iterate 2 (efg_step_exists run)
+    efg_step_exists run;
+    efg_step_split run
+    iterate 2 (efg_step_exists run)
+    efg_step_ite run
+    · efg_step_split run; refine ⟨0, λ _ _ => run⟩
+    · efg_end_exec run good of_generic_call'
+  · fit_step_split run fit_pop
+    fit_step_split run (fit_map_rev fit_pop)
+    iterate 4 (fit_step_split run fit_popToNat)
+    iterate 3 (fit_step_exists run)
+    fit_step_exists run
+    fit_step_exists run
+    fit_step_exists run
+    fit_step_split run fit_chargeGas
+    fit_step_exists run;
+    exact (of_generic_call' good run).1
+  · iterate 6 (efg_step_split run)
+    iterate 3 (efg_step_exists run)
+    efg_step_exists run;
+    efg_step_exists run
+    efg_step_exists run;
+    efg_step_split run
+    efg_step_exists run
+    efg_end_exec run good of_generic_call'
+  · fit_step_split run fit_pop
+    iterate 2 (fit_step_split run fit_popToNat)
+    fit_step_split run fit_pop
+    iterate 3 (fit_step_exists run)
+    fit_step_split run fit_chargeGas
+    iterate 2 (fit_step_exists run)
+    exact (of_generic_create' good run).1
+  · iterate 4 (efg_step_split run)
+    iterate 3 (efg_step_exists run)
+    efg_step_split run
+    iterate 2 (efg_step_exists run)
+    efg_end_exec run good of_generic_create'
+  · fit_step_split run fit_pop
+    fit_step_split run (fit_map_rev fit_pop)
+    iterate 4 (fit_step_split run fit_popToNat)
+    iterate 3 (fit_step_exists run)
+    fit_step_exists run
+    fit_step_exists run
+    fit_step_exists run
+    fit_step_split run fit_chargeGas
+    fit_step_exists run;
+    exact (of_generic_call' good run).1
+  · iterate 6 (efg_step_split run)
+    iterate 3 (efg_step_exists run)
+    efg_step_exists run;
+    efg_step_exists run
+    efg_step_exists run;
+    efg_step_split run
+    efg_step_exists run
+    efg_end_exec run good of_generic_call'
+
+lemma cast_fit {ξ υ ζ} {erx : String × ξ}
+    (fit : (.error erx : Except (String × ξ) υ).Fit) :
+    (.error erx : Except (String × ξ) ζ).Fit := by
+  simp only [Except.Fit] at *; apply mt _ fit
+  simp only [Except.toError?, Except.Lim] at *
+  simp only [fit, imp_self]
+
 lemma Ninst.run_of_run' {pc} {sevm} {devm} {n : Ninst} (xl : Xlot)
     {ex} (good : xl.Good') (run : Ninst.Run' pc sevm devm n xl ex) :
     ex.Fit ∧ ∃ lim, ∀ lim' > lim, Ninst.run false ⟨pc, sevm, devm⟩ n lim' = ex := by
@@ -1745,130 +1874,17 @@ lemma Ninst.run_of_run' {pc} {sevm} {devm} {n : Ninst} (xl : Xlot)
     simp only [Ninst.run]; constructor;
     · rw [← run]; apply fit_withPc Rinst.fit_run
     · refine ⟨0, λ _ _ => run⟩;
-  · cases x <;>
-      ( constructor <;>
-        [ skip;
-          (apply Exists.imp forall_gt_of_forall_gt_succ_pred ; simp only [Ninst.run]) ] )
-    · fit_step_split run fit_pop
-      fit_step_split run fit_popToNat
-      fit_step_split run fit_popToNat
-      fit_step_exists run; fit_step_exists run
-      fit_step_split run fit_chargeGas
-      fit_step_exists run; fit_step_exists run
-      fit_step_exec run good of_generic_create' id
-      rw [← run]; apply fit_ok
-    · iterate 3 (efg_step_split run)
-      efg_step_exists run; efg_step_exists run
-      efg_step_split run
-      efg_step_exists run; efg_step_exists run
-      efg_step_exec run good of_generic_create'
-      eq_split run; exact run
-    · fit_step_split run fit_pop
-      fit_step_split run (fit_map_rev fit_pop)
-      fit_step_split run fit_pop
-      iterate 4 (fit_step_split run fit_popToNat)
-      iterate 3 (fit_step_exists run)
-      fit_step_exists run
-      iterate 3 (fit_step_exists run)
-      fit_step_exists run
-      fit_step_split run fit_chargeGas
-      fit_step_split run (fit_assert (by decide))
-      fit_step_exists run; fit_step_exists run
-      split at run
-      · fit_step_split run fit_push
-        rw [← run]; apply fit_ok
-      · fit_step_exec run good of_generic_call' id
-        rw [← run]; apply fit_ok
-    · iterate 7 (efg_step_split run)
-      iterate 3 (efg_step_exists run)
-      efg_step_exists run;
-      iterate 3 (efg_step_exists run)
-      efg_step_exists run;
-      efg_step_split run; efg_step_split run;
-      efg_step_exists run; efg_step_exists run;
-      efg_step_ite run
-      · efg_step_split run; refine ⟨0, λ _ _ => run⟩
-      · efg_step_exec run good of_generic_call'
-        eq_split run; exact run
-    · fit_step_split run fit_pop
-      fit_step_split run (fit_map_rev fit_pop)
-      fit_step_split run fit_pop
-      iterate 4 (fit_step_split run fit_popToNat)
-      iterate 4 (fit_step_exists run)
-      fit_step_exists run
-      fit_step_exists run; fit_step_exists run
-      fit_step_split run fit_chargeGas
-      fit_step_exists run; fit_step_exists run
-      split at run
-      · fit_step_split run fit_push
-        rw [← run]; apply fit_ok
-      · fit_step_exec run good of_generic_call' id
-        rw [← run]; apply fit_ok
-    · iterate 7 (efg_step_split run)
-      iterate 3 (efg_step_exists run)
-      efg_step_exists run;
-      iterate 2 (efg_step_exists run)
-      efg_step_exists run;
-      efg_step_split run
-      iterate 2 (efg_step_exists run)
-      efg_step_ite run
-      · efg_step_split run; refine ⟨0, λ _ _ => run⟩
-      · efg_step_exec run good of_generic_call'
-        eq_split run; exact run
-    · fit_step_split run fit_pop
-      fit_step_split run (fit_map_rev fit_pop)
-      iterate 4 (fit_step_split run fit_popToNat)
-      iterate 3 (fit_step_exists run)
-      fit_step_exists run
-      fit_step_exists run
-      fit_step_exists run
-      fit_step_split run fit_chargeGas
-      fit_step_exists run;
-      fit_step_exec run good of_generic_call' id
-      rw [← run]; apply fit_ok
-    · iterate 6 (efg_step_split run)
-      iterate 3 (efg_step_exists run)
-      efg_step_exists run;
-      efg_step_exists run
-      efg_step_exists run;
-      efg_step_split run
-      efg_step_exists run
-      efg_step_exec run good of_generic_call'
-      eq_split run; exact run
-    · fit_step_split run fit_pop
-      iterate 2 (fit_step_split run fit_popToNat)
-      fit_step_split run fit_pop
-      iterate 3 (fit_step_exists run)
-      fit_step_split run fit_chargeGas
-      iterate 2 (fit_step_exists run)
-      fit_step_exec run good of_generic_create' id
-      rw [← run]; apply fit_ok
-    · iterate 4 (efg_step_split run)
-      iterate 3 (efg_step_exists run)
-      efg_step_split run
-      iterate 2 (efg_step_exists run)
-      efg_step_exec run good of_generic_create'
-      eq_split run; exact run
-    · fit_step_split run fit_pop
-      fit_step_split run (fit_map_rev fit_pop)
-      iterate 4 (fit_step_split run fit_popToNat)
-      iterate 3 (fit_step_exists run)
-      fit_step_exists run
-      fit_step_exists run
-      fit_step_exists run
-      fit_step_split run fit_chargeGas
-      fit_step_exists run;
-      fit_step_exec run good of_generic_call' id
-      rw [← run]; apply fit_ok
-    · iterate 6 (efg_step_split run)
-      iterate 3 (efg_step_exists run)
-      efg_step_exists run;
-      efg_step_exists run
-      efg_step_exists run;
-      efg_step_split run
-      efg_step_exists run
-      efg_step_exec run good of_generic_call'
-      eq_split run; exact run
+  · simp only [Ninst.Run'] at run; constructor
+    · rcases run with ⟨_, runs, run⟩;
+      rcases Xinst.run_eq_of_run good runs with ⟨fit, lim, run_eq⟩;
+      clear lim run_eq;
+      rw [← run]; exact fit_withPc fit
+    · rcases run with ⟨exn, runs, run⟩;
+      rcases Xinst.run_eq_of_run good runs with ⟨fit, lim, run_eq⟩;
+      refine' ⟨lim + 1, λ lim' gt => _⟩
+      rcases lim' with _ | lim'; {cases Nat.not_lt_zero _ gt}
+      simp only [Ninst.run]; rw [← run_eq lim' (by omega)] at run
+      exact run
   · simp [Ninst.Run'] at run; constructor
     · rw [← run]; intro ltd
       fit_bind_step ltd fit_chargeGas
@@ -1997,12 +2013,11 @@ lemma of_exec' :
     rcases lim' with _ | lim'; {cases Nat.not_lt_zero _ gt}
     simp only [Evm.getInst, exec, lat, Option.toExcept, ok_bind, run]
 
-def Xlot.Good (lim : Nat) (oe : Option String) : Xlot → Prop
+--def Except.Fit {ξ υ} (ex : Except (String × ξ) υ) : Prop := ¬ ex.Lim
+def Xlot.Good {ξ υ} (lim : Nat) (ex : Except (String × ξ) υ) : Xlot → Prop
   | .none => True
-  | .some (evm, ex) =>
-    ∃ lim' < lim,
-      exec false evm lim' = ex ∧
-      (ex.toError? = some "RecursionLimit" → oe = some "RecursionLimit")
+  | .some (evm, exn) =>
+    ∃ lim' < lim, exec false evm lim' = exn ∧ (exn.Lim → ex.Lim)
 
 syntax "bind_step_good " ident rcasesPat : tactic
 macro_rules
@@ -2088,9 +2103,9 @@ lemma Except.of_toError?_eq_some {ξ} {υ} (ex : Except (String × ξ) υ)
 
 lemma of_executeCode {msg : Msg} {lim : Nat}
     {ex : Except (String × State × AdrSet × Tra) Devm}
-    (notLimited : ex.toError? ≠ some "RecursionLimit")
+    (notLimited : ex.Fit)
     (eq : executeCode false msg lim = ex) :
-    ∃ xl : Xlot, xl.Good lim ex.toError? ∧ ExecuteCode msg xl ex := by
+    ∃ xl : Xlot, xl.Good lim ex ∧ ExecuteCode msg xl ex := by
   rcases lim with _ | lim <;> simp only [executeCode] at eq
   {rw [← eq] at notLimited; cases notLimited rfl}
   split at eq
@@ -2116,48 +2131,52 @@ lemma of_executeCode {msg : Msg} {lim : Nat}
       · simp only [ExecuteCode]; rw [eq_some]
         simp only []; rw [if_neg neg]; refine' ⟨_, rfl, eq⟩
 
-lemma Xlot.good_of_good_of_notLimited {lim lim' : Nat} {oe oe' : Option String}
-    {xl : Xlot} (le : lim ≤ lim') (ne : oe ≠ some "RecursionLimit")
+lemma good_of_good_of_fit
+    {ξ υ ζ ω}
+    {lim lim' : Nat}
+    {oe  : Except (String × ξ) υ}
+    {oe' : Except (String × ζ) ω}
+    {xl : Xlot} (le : lim ≤ lim') (ne : oe.Fit)
     (good : xl.Good lim oe) : xl.Good lim' oe' := by
   rcases xl with _ | ⟨evm, ex⟩; {constructor}
   rcases good with ⟨_, lt, exec, of_eq⟩
+
   refine' ⟨_, Nat.lt_of_lt_of_le lt le, exec,  _⟩
   intro eq; cases ne <| of_eq eq
 
 lemma of_processMessage (msg : Msg) (lim : Nat)
     (ex : Except (String × State × AdrSet × Tra) Devm)
-    (notLimited : ex.toError? ≠ some "RecursionLimit")
+    (notLimited : ex.Fit)
     (eq : processMessage false msg lim = ex) :
-    ∃ xl : Xlot, xl.Good lim ex.toError? ∧ ProcessMessage msg xl ex := by
+    ∃ xl : Xlot, xl.Good lim ex ∧ ProcessMessage msg xl ex := by
   rcases lim with _ | lim <;> simp only [processMessage] at eq
   {rw [← eq] at notLimited; cases notLimited rfl}
   bind_step_good eq _; bind_step_good eq _
   have notLimited' := Except.fit_of_fit notLimited eq
   rcases of_executeCode notLimited' rfl with ⟨xl, good, ec⟩
-  refine' ⟨_, Xlot.good_of_good_of_notLimited (by omega) notLimited' good, _, ec, _⟩
+  refine' ⟨_, good_of_good_of_fit (by omega) notLimited' good, _, ec, _⟩
   bind_step' eq _; split at eq
   · rename_i pos; rw [if_pos pos]; exact eq
   · rename_i neg; rw [if_neg neg]; exact eq
 
 lemma of_processCreateMessage (msg : Msg) (lim : Nat)
     (ex : Except (String × State × AdrSet × Tra) Devm)
-    (notLimited : ex.toError? ≠ some "RecursionLimit")
+    (notLimited : ex.Fit)
     (eq : processCreateMessage false msg lim = ex) :
     ∃ xl : Xlot,
-      xl.Good lim ex.toError? ∧
+      xl.Good lim ex ∧
       ProcessCreateMessage msg xl ex := by
   rcases lim with _ | lim <;> simp only [processCreateMessage] at eq
   {rw [← eq] at notLimited; cases notLimited rfl}
   have notLimited' :
-    (processMessage false (processCreateMessage.msg msg) lim).toError?
-      ≠ some "RecursionLimit" := by
+    (processMessage false (processCreateMessage.msg msg) lim).Fit := by
     intro pm_eq
     rcases Except.of_toError?_eq_some _ _ pm_eq with ⟨_, rw⟩
     rw [← eq, rw] at notLimited
     cases notLimited rfl
   rcases @of_processMessage _ _ _ notLimited' rfl
     with ⟨xl, good, pcm⟩
-  refine' ⟨_, Xlot.good_of_good_of_notLimited (by omega) notLimited' good, _, pcm, _⟩
+  refine' ⟨_, good_of_good_of_fit (by omega) notLimited' good, _, pcm, _⟩
   bind_step' eq evm'
   split at eq
   · rename_i pos; rw [if_pos pos]
@@ -2174,10 +2193,10 @@ lemma of_processCreateMessage (msg : Msg) (lim : Nat)
 lemma of_genericCreate
     {sevm : Sevm} {devm : Devm} {endow : B256} {newAdr : Adr}
     {memIndex memSize lim : ℕ} {ex : Execution}
-    (notLimited : ex.toError? ≠ some "RecursionLimit")
+    (notLimited : ex.Fit)
     (eq : genericCreate false sevm devm endow newAdr memIndex memSize lim = ex) :
     ∃ xl : Xlot,
-      xl.Good lim ex.toError? ∧
+      xl.Good lim ex ∧
       GenericCreate sevm devm endow newAdr memIndex memSize xl ex := by
   rcases lim with _ | lim <;> simp only [genericCreate] at eq
   {rw [← eq] at notLimited; cases notLimited rfl}
@@ -2201,15 +2220,13 @@ lemma of_genericCreate
       apply Exists.imp (λ _ (conj : _ ∧ _) => ⟨conj.1, ite_of_false neg conj.2⟩)
       clear neg
       okStep1 eq msg
-      have notLimited' :
-          (processCreateMessage false msg lim).toError?
-            ≠ some "RecursionLimit" := by
+      have notLimited' : (processCreateMessage false msg lim).Fit := by
         intro pm_eq
         rcases Except.of_toError?_eq_some _ _ pm_eq with ⟨_, rw⟩
         rw [← eq, rw] at notLimited; cases notLimited rfl
       rcases of_processCreateMessage _ _ _ notLimited' rfl
         with ⟨xl, good, pm⟩
-      refine' ⟨_, Xlot.good_of_good_of_notLimited (by omega) notLimited' good, _, pm, _⟩
+      refine' ⟨xl, good_of_good_of_fit (by omega) notLimited' good, _, pm, _⟩
       bind_step' eq _
       split at eq
       · rename_i pos; rw [if_pos pos]; exact eq
@@ -2225,7 +2242,7 @@ lemma of_genericCall {sevm : Sevm} {devm : Devm} {gas : Nat} {value : B256}
         shouldTransferValue isStaticcall input_index input_size
         output_index output_size code disablePrecompiles lim = ex ) :
     ∃ xl : Xlot,
-      xl.Good lim ex.toError? ∧
+      xl.Good lim ex ∧
       GenericCall sevm devm gas value caller target codeAddress
         shouldTransferValue isStaticcall input_index input_size
         output_index output_size code disablePrecompiles xl ex := by
@@ -2240,114 +2257,108 @@ lemma of_genericCall {sevm : Sevm} {devm : Devm} {gas : Nat} {value : B256}
   simp only [pure_bind] at eq
   okStep1 eq _; okStep1 eq msg
   have notLimited' :
-    (processMessage false msg lim).toError? ≠ some "RecursionLimit" := by
+    (processMessage false msg lim).Fit := by
     intro pm_eq
     rcases Except.of_toError?_eq_some _ _ pm_eq with ⟨_, rw⟩
     rw [← eq, rw] at notLimited
     cases notLimited rfl
   rcases of_processMessage msg lim _ notLimited' rfl
     with ⟨xl, good, pm⟩
-  refine' ⟨_, Xlot.good_of_good_of_notLimited (by omega) notLimited' good, _, pm, _⟩
+  refine' ⟨_, good_of_good_of_fit (by omega) notLimited' good, _, pm, _⟩
+
   bind_step' eq _
   split at eq
   · rename_i pos; rw [if_pos pos]; bind_step' eq _; exact eq
   · rename_i neg; rw [if_neg neg]; bind_step' eq _; exact eq
 
-lemma Ninst.run_of_run
-    {pc}
-    {sevm : Sevm}
-    {devm : Devm}
-    {n : Ninst} {lim : Nat}
-    {exn} (notLimited : exn.Fit)
-    (eq : Ninst.run false ⟨pc, sevm, devm⟩ n lim = exn) :
-    ∃ xl : Xlot,
-      xl.Good lim exn.toError? ∧
-      Ninst.Run' pc sevm devm n xl exn :=
-  match n, lim with
-  | exec _, 0 => by
-    simp only [Ninst.run] at eq
+lemma Xinst.run_of_run_eq
+    {sevm : Sevm} {devm : Devm} {x : Xinst} {lim : Nat} {exn}
+    (notLimited : exn.Fit) (eq : Xinst.run false sevm devm x lim = exn) :
+    ∃ xl : Xlot, xl.Good lim exn ∧ Xinst.Run sevm devm x xl exn :=
+  match x, lim with
+  | _, 0 => by
+    simp only [Xinst.run] at eq
     rw [← eq] at notLimited
     cases notLimited rfl
+  | create, lim + 1 => by
+    simp only [Xinst.run] at eq
+    iterate 3 (bind_step_good eq _)
+    okStep1 eq _; okStep1 eq _;
+
+    bind_step_good eq _;
+    okStep1 eq _; okStep1 eq _;
+    rcases of_genericCreate notLimited eq with ⟨xl, good, gc⟩
+    refine' ⟨_, good_of_good_of_fit (by omega) notLimited good, gc⟩
+  | .create2, lim + 1 => by
+    simp only [Xinst.run] at eq
+    iterate 4 (bind_step_good eq _)
+    iterate 3 (okStep1 eq _)
+    bind_step_good eq _; okStep1 eq _; okStep1 eq _;
+    rcases of_genericCreate notLimited eq with ⟨xl, good, gc⟩
+    refine' ⟨_, good_of_good_of_fit (by omega) notLimited good, gc⟩
+  | .call, lim + 1 => by
+    simp only [Xinst.run] at eq
+    iterate 6 (bind_step_good eq _)
+    bind_step_good eq _
+    iterate 8 (okStep1 eq _)
+    iterate 2 (bind_step_good eq _)
+    okStep1 eq _; okStep1 eq _; split at eq
+    · rename_i lt; refine' ⟨.none, .intro, _⟩
+      simp only []; rw [if_pos lt]
+      bind_step' eq _; exact eq
+    · rename_i nlt
+      apply Exists.imp (λ _ (conj : _ ∧ _) => ⟨conj.1, ite_of_false nlt conj.2⟩)
+      rcases of_genericCall notLimited eq with ⟨xl, good, gc⟩
+      refine' ⟨_, good_of_good_of_fit (by omega) notLimited good, gc⟩
+  | .callcode, lim + 1 => by
+    simp only [Xinst.run] at eq
+    iterate 7 bind_step_good eq _
+    iterate 7 okStep1 eq _
+    bind_step_good eq _; okStep1 eq _; okStep1 eq _; split at eq
+    · rename_i lt; refine' ⟨.none, .intro, _⟩
+      simp only []; rw [if_pos lt]
+      bind_step' eq _; exact eq
+    · rename_i nlt
+      apply Exists.imp (λ _ (conj : _ ∧ _) => ⟨conj.1, ite_of_false nlt conj.2⟩)
+      rcases of_genericCall notLimited eq with ⟨xl, good, gc⟩
+      refine' ⟨_, good_of_good_of_fit (by omega) notLimited good, gc⟩
+  | .delcall, lim + 1 => by
+    simp only [Xinst.run] at eq
+    iterate 6 bind_step_good eq _
+    iterate 6 okStep1 eq _
+    bind_step_good eq _; okStep1 eq _
+    rcases of_genericCall notLimited eq with ⟨xl, good, gc⟩
+    refine' ⟨_, good_of_good_of_fit (by omega) notLimited good, gc⟩
+  | .statcall, lim + 1 => by
+    simp only [Xinst.run] at eq
+    iterate 6 bind_step_good eq _
+    iterate 6 okStep1 eq _
+    bind_step_good eq _; okStep1 eq _;
+    rcases of_genericCall notLimited eq with ⟨xl, good, gc⟩
+    refine' ⟨_, good_of_good_of_fit (by omega) notLimited good, gc⟩
+
+lemma Ninst.run_of_run_eq
+    {pc} {sevm : Sevm} {devm : Devm} {n : Ninst} {lim : Nat} {exn}
+    (fit : exn.Fit) (eq : Ninst.run false ⟨pc, sevm, devm⟩ n lim = exn) :
+    ∃ xl : Xlot,
+      xl.Good lim exn ∧
+      Ninst.Run' pc sevm devm n xl exn :=
+  match n, lim with
   | push xs lt, lim => by
     refine' ⟨.none, .intro, _⟩
     simp only [Ninst.run] at eq; apply eq
   | reg r, _ => by
     simp [Ninst.run] at eq
     refine' ⟨.none, .intro, eq⟩
-  | exec .create, lim + 1 => by
+  | exec _, 0 => by
     simp only [Ninst.run] at eq
-    bind_step_good eq _
-    bind_step_good eq _; bind_step_good eq _; okStep1 eq _;
-    okStep1 eq _; bind_step_good eq _; okStep1 eq _; okStep1 eq _;
-    have notLimited' := Execution.fit_of_fit notLimited eq
-    rcases of_genericCreate notLimited' rfl with ⟨xl, good, gc⟩
-    refine' ⟨_, Xlot.good_of_good_of_notLimited (by omega) notLimited' good, _, gc, _⟩
-    bind_step' eq _; exact eq;
-  | exec .create2, lim + 1 => by
+    rw [← eq] at fit; cases fit rfl
+  | exec x, lim + 1 => by
     simp only [Ninst.run] at eq
-    bind_step_good eq _; bind_step_good eq _; bind_step_good eq _;
-    bind_step_good eq _; okStep1 eq _; okStep1 eq _; okStep1 eq _;
-    bind_step_good eq _; okStep1 eq _; okStep1 eq _;
-    have notLimited' := Execution.fit_of_fit notLimited eq
-    rcases of_genericCreate notLimited' rfl with ⟨xl, good, gc⟩
-    refine' ⟨_, Xlot.good_of_good_of_notLimited (by omega) notLimited' good, _, gc, _⟩
-    bind_step' eq _; exact eq
-  | exec .call, lim + 1 => by
-    simp only [Ninst.run] at eq
-    bind_step_good eq _; bind_step_good eq _; bind_step_good eq _;
-    bind_step_good eq _; bind_step_good eq _; bind_step_good eq _;
-    bind_step_good eq _; okStep1 eq _; okStep1 eq _; okStep1 eq _;
-    okStep5 eq _ _ _ _ _; okStep1 eq _; okStep1 eq _; okStep1 eq _;
-    okStep2 eq _ _; bind_step_good eq _; bind_step_good eq _;
-    okStep1 eq _; okStep1 eq _; split at eq
-    · rename_i lt
-      refine' ⟨.none, .intro, _⟩
-      simp only []
-      rw [if_pos lt]
-      bind_step' eq _; exact eq
-    · rename_i nlt
-      apply Exists.imp (λ _ (conj : _ ∧ _) => ⟨conj.1, ite_of_false nlt conj.2⟩)
-      have notLimited' := Execution.fit_of_fit notLimited eq
-      rcases of_genericCall notLimited' rfl with ⟨xl, good, gc⟩
-      refine' ⟨_, Xlot.good_of_good_of_notLimited (by omega) notLimited' good, _, gc, _⟩
-      bind_step' eq _; exact eq
-  | exec .callcode, lim + 1 => by
-    simp only [Ninst.run] at eq
-    bind_step_good eq _; bind_step_good eq _; bind_step_good eq _;
-    bind_step_good eq _; bind_step_good eq _; bind_step_good eq _;
-    bind_step_good eq _; okStep1 eq _; okStep1 eq _;
-    okStep1 eq _; okStep5 eq _ _ _ _ _; okStep1 eq _; okStep1 eq _;
-    okStep2 eq _ _; bind_step_good eq _; okStep1 eq _; okStep1 eq _;
-    split at eq
-    · rename_i lt; refine' ⟨.none, .intro, _⟩
-      simp only []
-      rw [if_pos lt]; bind_step' eq _; exact eq
-    · rename_i nlt
-      apply Exists.imp (λ _ (conj : _ ∧ _) => ⟨conj.1, ite_of_false nlt conj.2⟩)
-      have notLimited' := Execution.fit_of_fit notLimited eq
-      rcases of_genericCall notLimited' rfl with ⟨xl, good, gc⟩
-      refine' ⟨_, Xlot.good_of_good_of_notLimited (by omega) notLimited' good, _, gc, _⟩
-      bind_step' eq _; exact eq
-  | exec .delcall, lim + 1 => by
-    simp only [Ninst.run] at eq
-    bind_step_good eq _; bind_step_good eq _; bind_step_good eq _;
-    bind_step_good eq _; bind_step_good eq _; bind_step_good eq _;
-    okStep1 eq _; okStep1 eq _; okStep1 eq _; okStep5 eq _ _ _ _ _;
-    okStep1 eq _; okStep2 eq _ _; bind_step_good eq _; okStep1 eq _;
-    have notLimited' := Execution.fit_of_fit notLimited eq
-    rcases of_genericCall notLimited' rfl with ⟨xl, good, gc⟩
-    refine' ⟨_, Xlot.good_of_good_of_notLimited (by omega) notLimited' good, _, gc, _⟩
-    bind_step' eq _; exact eq
-  | exec .statcall, lim + 1 => by
-    simp only [Ninst.run] at eq
-    bind_step_good eq _; bind_step_good eq _; bind_step_good eq _;
-    bind_step_good eq _; bind_step_good eq _; bind_step_good eq _;
-    okStep1 eq _; okStep1 eq _; okStep1 eq _; okStep5 eq _ _ _ _ _;
-    okStep1 eq _; okStep2 eq _ _; bind_step_good eq _; okStep1 eq _;
-    have notLimited' := Execution.fit_of_fit notLimited eq
-    rcases of_genericCall notLimited' rfl with ⟨xl, good, gc⟩
-    refine' ⟨_, Xlot.good_of_good_of_notLimited (by omega) notLimited' good, _, gc, _⟩
-    bind_step' eq _; exact eq
+    have fit' := Except.fit_of_fit fit eq
+    rcases Xinst.run_of_run_eq fit' rfl with ⟨xl, good, run⟩   --(cast_fit fit) eq
+    refine' ⟨xl, good_of_good_of_fit (by omega) fit' good, _, run, _⟩
+    exact eq
 
 def of_exec :
     ∀ (lim : Nat) (pc : Nat) (sevm : Sevm) (devm : Devm) (exn : Execution),
@@ -2373,7 +2384,7 @@ def of_exec :
       · rcases of_bind_eq exec_eq with
           ⟨es, run_eq, ex_eq⟩ | ⟨evm', run_eq, ex_eq⟩
         · rw [ex_eq] at fit
-          rcases Ninst.run_of_run fit run_eq
+          rcases Ninst.run_of_run_eq fit run_eq
             with ⟨_ | ⟨evm', ex'⟩, good, run⟩
           · rw [ex_eq]; constructor
             exact Exec.nextNoneErr getInst_eq run
@@ -2385,7 +2396,7 @@ def of_exec :
               apply @ih _ (by omega) _ _ _ _ fit' exec_eq'
             rcases ne_ex with ⟨exc⟩; constructor
             apply Exec.nextSomeErr getInst_eq run exc
-        · rcases Ninst.run_of_run (by {intro h; cases h}) run_eq
+        · rcases Ninst.run_of_run_eq (by {intro h; cases h}) run_eq
             with ⟨_ | ⟨evm', ex'⟩, good, run⟩
           · rcases (ih _ (by omega) _ _ _ _ fit ex_eq) with ⟨exc⟩
             constructor

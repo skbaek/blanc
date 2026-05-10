@@ -1594,26 +1594,26 @@ lemma toB8_toJinst {o : Jinst} :
 lemma toB8_toLinst {o : Linst} :
   B8.toLinst o.toB8 = some o := by cases o <;> rfl
 
+-/
+
 lemma Rinst.at_unique {e pc o o'} (h : At e pc o) (h' : At e pc o') : o = o' := by
-  apply Option.some_injective
-  rw [← @toB8_toRinst o, ← @toB8_toRinst o']
-  rw [Option.some_injective _ <| Eq.trans h.symm h']
+  injection Eq.trans h.symm h' with eq
+  injection eq with eq; injection eq with eq
 
 lemma Xinst.at_unique {e pc o o'} (h : At e pc o) (h' : At e pc o') : o = o' := by
-  apply Option.some_injective
-  rw [← @toB8_toXinst o, ← @toB8_toXinst o']
-  rw [Option.some_injective _ <| Eq.trans h.symm h']
+  injection Eq.trans h.symm h' with eq
+  injection eq with eq; injection eq with eq
 
 lemma Jinst.at_unique {e pc o o'} (h : At e pc o) (h' : At e pc o') : o = o' := by
-  apply Option.some_injective
-  rw [← @toB8_toJinst o, ← @toB8_toJinst o']
-  rw [Option.some_injective _ <| Eq.trans h.symm h']
+  injection Eq.trans h.symm h' with eq; injection eq with eq
 
 lemma Linst.at_unique {e pc o o'} (h : At e pc o) (h' : At e pc o') : o = o' := by
-  apply Option.some_injective
-  rw [← @toB8_toLinst o, ← @toB8_toLinst o']
-  rw [Option.some_injective _ <| Eq.trans h.symm h']
+  injection Eq.trans h.symm h' with eq; injection eq with eq
 
+lemma Ninst.at_unique {e pc o o'} (h : At e pc o) (h' : At e pc o') : o = o' := by
+  injection Eq.trans h.symm h' with eq; injection eq with eq
+
+/-
 lemma Nat.toUInt8_inj {a b : Nat} (a_lt : a < 2 ^ 8) (b_lt : b < 2 ^ 8)
     (eq : a.toUInt8 = b.toUInt8) : a = b := by
   rw [← @UInt8.toNat_ofNatLT _ a_lt]
@@ -1921,7 +1921,6 @@ inductive Exec'.Prec : Exec' → Exec' → Prop
     {pc : Nat} {sevm : Sevm} {devm : Devm} {n : Ninst}
     {pc_ : Nat} {sevm_ : Sevm} {devm_ : Devm} {exn_ : Execution}
     {pc' : Nat} {devm' : Devm}
-    --{pc'' : Nat}
     {devm'' : Devm}
     (nat : n.At sevm.code pc)
     ( run :
@@ -2043,7 +2042,14 @@ def Ninst.of_run'_reg {pc : Nat} {sevm : Sevm} {devm : Devm}
     {r : Rinst} {xl : Xlot} {ex : Except (String × Devm) (Nat × Devm)}
   (run : Ninst.Run' pc sevm devm (.reg r) xl ex) :
   (Rinst.run ⟨pc, sevm, devm⟩ r).withPc (pc + 1) = ex := run
-
+--
+-- #check Xinst.run
+-- def Xinst.of_run'_reg {pc : Nat} {sevm : Sevm} {devm : Devm}
+--     {x : Xinst} {xl : Xlot} {ex : Except (String × Devm) (Nat × Devm)}
+--   (run : Ninst.Run' pc sevm devm (.exec x) xl ex) :
+--   (Xinst.run false sevm devm x).withPc (pc + 1) = ex := run
+--
+-- #exit
 lemma of_withPc_eq_ok {pc : ℕ} {exn : Execution} {pc'} {devm}
     (eq : exn.withPc pc = .ok ⟨pc', devm⟩) : exn = .ok devm ∧ pc = pc' := by
   rcases of_bind_eq_ok eq with ⟨devm', exn_eq, eq'⟩; clear eq
@@ -2080,22 +2086,18 @@ lemma Rinst.run_of_at {pc sevm pre r post}
   case last _ lat _ =>
     injection Eq.trans lat.symm rat with eq; injection eq
 
-
-lemma foo {pc} {sevm} {devm} {n} {xl} {pc'} {devm'}
+lemma Ninst.pc_eq_of_run {pc} {sevm} {devm} {n} {xl} {pc'} {devm'}
     (run : Ninst.Run' pc sevm devm n xl (.ok ⟨pc', devm'⟩)) :
     pc' = pc + n.toB8L.length := by
   cases n
-  case reg r => rw [← (of_withPc_eq_ok (Ninst.of_run'_reg run)).2]; rfl
-
-
-
+  case reg r =>
+    rw [← (of_withPc_eq_ok run).2]; rfl
   case exec x =>
-    simp only [Ninst.Run'] at run
-
-    sorry
-  case push xs le => sorry
-
-#exit
+    rcases run with ⟨exn, _, run⟩
+    rw [← (of_withPc_eq_ok run).2]; rfl
+  case push xs le =>
+    rcases of_bind_eq_ok run with ⟨_, _, eq⟩
+    rw [← (of_withPc_eq_ok eq).2]; rfl
 
 lemma Ninst.run_of_at {pc sevm pre n post}
     (exc : Exec pc sevm pre (.ok post))
@@ -2108,7 +2110,34 @@ lemma Ninst.run_of_at {pc sevm pre n post}
         ⟨pc, sevm, pre, .ok post, exc⟩ := by
   cases exc
   case nextNoneRec n' pc' inter nat' run exc =>
-    refine' ⟨inter, _⟩
+    cases Ninst.at_unique nat' nat
+    rw [Ninst.pc_eq_of_run run] at exc
+    refine' ⟨inter, exc, ⟨.none, .intro, pc, pc', run⟩, _⟩
+    have hh := @Exec'.Prec.none pc sevm pre n pc' inter (.ok post) nat run
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
