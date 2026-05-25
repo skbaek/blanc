@@ -888,6 +888,7 @@ def breakLineRun : Q(Prop) → TacticM (Expr × Expr × Expr)
   | ~q(Ninst.Run $s $l $s') => pure (s, l, s')
   | _ => failure
 
+#exit
 lemma Rinst.pc_eq_of_run {evm : Evm} {r : Rinst} {evm' : Evm}
     (run : Rinst.run evm r = Except.ok evm') : evm'.pc = evm.pc + 1 := by
   cases r
@@ -930,6 +931,8 @@ lemma Rinst.pc_eq_of_run {evm : Evm} {r : Rinst} {evm' : Evm}
     rcases of_bind_eq_ok run' with ⟨_ , eq, run⟩; clear run'
     have hh := chargeGas_inv_pc eq; clear eq
     simp at hh
+    sorry
+
 
 
 

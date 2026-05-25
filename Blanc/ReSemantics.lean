@@ -78,10 +78,10 @@ def Rinst.toB8 : Rinst → B8
 
 abbrev Stack : Type := List B256
 
-def Stack.Push (x y xy : Stack) : Prop := x <++ xy ++> y
+-- def Stack.Push (x y xy : Stack) : Prop := x <++ xy ++> y
 def Stack.Pop (x xy y : Stack) : Prop := x <++ xy ++> y
-def Stack.Diff (xs zs : Stack) (s s'' : Stack) : Prop :=
-  ∃ s' : Stack, Pop xs s s' ∧ Push zs s' s''
+-- def Stack.Diff (xs zs : Stack) (s s'' : Stack) : Prop :=
+--   ∃ s' : Stack, Pop xs s s' ∧ Push zs s' s''
 
 inductive Func : Type
   | branch : Func → Func → Func
@@ -631,16 +631,14 @@ def Xinst.Run (sevm : Sevm) (devm : Devm) :
         ex
 
 def Ninst.Run' (pc : Nat) (sevm : Sevm) (devm : Devm) :
-    Ninst → Xlot → Except (String × Devm) (Nat × Devm) → Prop
-  | .push xs _, _, ex =>
+    Ninst → Xlot → Execution → Prop
+  | .push xs _, _, exn =>
     ( do let devm' ← chargeGas (if xs = [] then gBase else gVerylow) devm
-         (devm'.push xs.toB256).withPc (pc + xs.length + 1) ) = ex
-  | .reg r, _, ex =>
-    (Rinst.run ⟨pc, sevm, devm⟩ r).withPc (pc + 1) = ex
-  | .exec x, xl, ex =>
-    ∃ exn,
-      And (Xinst.Run sevm devm x xl exn) <|
-      exn.withPc (pc + 1) = ex
+         (devm'.push xs.toB256) ) = exn
+  | .reg r, _, exn =>
+    Rinst.run ⟨pc, sevm, devm⟩ r = exn
+  | .exec x, xl, exn =>
+    Xinst.Run sevm devm x xl exn
 
 def Except.IsError {ξ υ : Type} (e : Except ξ υ) : Prop :=
   match e with
@@ -666,20 +664,20 @@ inductive Exec : Nat → Sevm → Devm → Execution → Type
       (.error ⟨err, devm'⟩) →
     Exec pc_ sevm_ devm_ exn_ →
     Exec pc sevm devm (.error ⟨err, devm'⟩)
-  | nextNoneRec {pc} {sevm : Sevm} {devm} {n} {pc'} {devm'} {exn} :
+  | nextNoneRec {pc} {sevm : Sevm} {devm} {n} {devm'} {exn} :
     n.At sevm.code pc →
-    Ninst.Run' pc sevm devm n .none (.ok ⟨pc', devm'⟩) →
-    Exec pc' sevm devm' exn →
+    Ninst.Run' pc sevm devm n .none (.ok devm') →
+    Exec (pc + n.size) sevm devm' exn →
     Exec pc sevm devm exn
   | nextSomeRec
     {pc} {sevm} {devm} {n} {pc_} {sevm_} {devm_}
-    {exn_ : Execution} {pc'} {devm'} {exn} :
+    {exn_ : Execution} {devm'} {exn} :
     n.At sevm.code pc →
     Ninst.Run' pc sevm devm n
       (.some (⟨pc_, sevm_, devm_⟩, exn_))
-      (.ok ⟨pc', devm'⟩) →
+      (.ok devm') →
     Exec pc_ sevm_ devm_ exn_ →
-    Exec pc' sevm devm' exn →
+    Exec (pc + n.size) sevm devm' exn →
     Exec pc sevm devm exn
   | jumpErr {pc} {sevm} {devm} {j} {err} {devm'} :
     j.At sevm.code pc →
@@ -699,10 +697,9 @@ def Xlot.Filled : Xlot → Prop
   | .none => True
   | .some ⟨⟨pc, sevm, devm⟩, exn⟩ => Nonempty (Exec pc sevm devm exn)
 
-def Ninst.Run (sevm : Sevm) (devm : Devm) (n : Ninst)
-    (devm' : Devm) : Prop :=
+def Ninst.Run (sevm : Sevm) (devm : Devm) (n : Ninst) (devm' : Devm) : Prop :=
   ∃ xl : Xlot, xl.Filled ∧
-    ∃ pc pc', Ninst.Run' pc sevm devm n xl (.ok ⟨pc', devm'⟩)
+    ∃ pc, Ninst.Run' pc sevm devm n xl (.ok devm')
 
 inductive Func.Run : List Func → Sevm → Devm → Func → Devm → Prop
   | zero :
@@ -1118,8 +1115,6 @@ lemma of_lim_handleError {ex : Execution} :
 def Saturates {ξ υ} (n : Nat) (f : Nat → Except (String × ξ) υ) : Prop :=
   (f n).Fit → ∀ m, n < m → (f n = f m)
 
-#check Xinst.run
-#check Ninst.Run
 structure Saturation (lim : Nat) : Prop where
   (executeCode : ∀ (msg : Msg), Saturates lim (executeCode false msg))
   (processMessage : ∀ (msg : Msg), Saturates lim (processMessage false msg))
@@ -1265,7 +1260,7 @@ lemma saturation (lim : Nat) : Saturation lim := by
     · intro _ n fit lim' lt
       rcases lim' with _ | lim'; {cases Nat.not_lt_zero _ lt}
       rcases n  with _ | _ | _ <;> simp only [Ninst.run] at *
-      rw [ih.xinstRun _ _ _ (of_fit_bind fit).1 lim' (by omega)]
+      rw [ih.xinstRun _ _ _ fit lim' (by omega)]
     · intro _ fit lim' lt
       rcases lim' with _ | lim'; {cases Nat.not_lt_zero _ lt}
       simp only [exec] at *; eee_bind fit; split
@@ -1872,23 +1867,19 @@ lemma Ninst.run_of_run' {pc} {sevm} {devm} {n : Ninst} (xl : Xlot)
   rcases n with r | x | ⟨xs, le⟩
   · simp only [Ninst.Run'] at run
     simp only [Ninst.run]; constructor;
-    · rw [← run]; apply fit_withPc Rinst.fit_run
+    · rw [← run]; apply Rinst.fit_run
     · refine ⟨0, λ _ _ => run⟩;
   · simp only [Ninst.Run'] at run; constructor
-    · rcases run with ⟨_, runs, run⟩;
-      rcases Xinst.run_eq_of_run good runs with ⟨fit, lim, run_eq⟩;
-      clear lim run_eq;
-      rw [← run]; exact fit_withPc fit
-    · rcases run with ⟨exn, runs, run⟩;
-      rcases Xinst.run_eq_of_run good runs with ⟨fit, lim, run_eq⟩;
+    · exact (Xinst.run_eq_of_run good run).1
+    · rcases Xinst.run_eq_of_run good run with ⟨fit, lim, run_eq⟩;
       refine' ⟨lim + 1, λ lim' gt => _⟩
       rcases lim' with _ | lim'; {cases Nat.not_lt_zero _ gt}
-      simp only [Ninst.run]; rw [← run_eq lim' (by omega)] at run
-      exact run
+      simp only [Ninst.run];
+      apply run_eq lim' (by omega)
   · simp [Ninst.Run'] at run; constructor
     · rw [← run]; intro ltd
       fit_bind_step ltd fit_chargeGas
-      fit_bind_step ltd fit_push; cases ltd
+      exact fit_push ltd
     · simp only [Ninst.run]; refine' ⟨0, λ _ _ => run⟩
 
 lemma Except.bind_eq_of_is_error {ξ υ : Type} {e : Except ξ υ}
@@ -1966,7 +1957,7 @@ lemma of_exec' :
     simp only [Ninst.At] at nat
     simp only [Evm.getInst, ok_bind, exec, Option.toExcept, nat]
     rw [run_eq lim' (by omega)]; rfl
-  · intro pc sevm devm n pc' devm' exn nat run exc ⟨fit, limExec, exec_eq⟩
+  · intro pc sevm devm n devm' exn nat run exc ⟨fit, limExec, exec_eq⟩
     rcases Ninst.run_of_run' .none .intro run
       with ⟨temp, limRun, run_eq⟩; clear temp
     refine' ⟨fit, (max limExec limRun) + 1, _⟩
@@ -1974,7 +1965,7 @@ lemma of_exec' :
     simp only [Ninst.At] at nat
     simp only [Evm.getInst, ok_bind, exec, Option.toExcept, nat]
     rw [run_eq lim' (by omega)]; apply exec_eq _ (by omega)
-  · intro pc sevm devm n pc_ sevm_ devm_ exn_ pc' devm' exn nat run exc_ exc
+  · intro pc sevm devm n pc_ sevm_ devm_ exn_ devm' exn nat run exc_ exc
       ⟨fit_, limExec_, eq_⟩
       ⟨fit, limExec, eq⟩
     rcases
@@ -2355,10 +2346,9 @@ lemma Ninst.run_of_run_eq
     rw [← eq] at fit; cases fit rfl
   | exec x, lim + 1 => by
     simp only [Ninst.run] at eq
-    have fit' := Except.fit_of_fit fit eq
-    rcases Xinst.run_of_run_eq fit' rfl with ⟨xl, good, run⟩   --(cast_fit fit) eq
-    refine' ⟨xl, good_of_good_of_fit (by omega) fit' good, _, run, _⟩
-    exact eq
+    --have fit' := Except.fit_of_fit fit eq
+    rcases Xinst.run_of_run_eq fit eq with ⟨xl, good, run⟩   --(cast_fit fit) eq
+    refine' ⟨xl, good_of_good_of_fit (by omega) fit good, run⟩ --, run, _⟩
 
 def of_exec :
     ∀ (lim : Nat) (pc : Nat) (sevm : Sevm) (devm : Devm) (exn : Execution),
@@ -2400,13 +2390,13 @@ def of_exec :
             with ⟨_ | ⟨evm', ex'⟩, good, run⟩
           · rcases (ih _ (by omega) _ _ _ _ fit ex_eq) with ⟨exc⟩
             constructor
-            exact @Exec.nextNoneRec _ _ _ _ _ _ _ getInst_eq run exc
+            exact @Exec.nextNoneRec _ _ _ _ _ _ getInst_eq run exc
           · rcases good with ⟨lim', lt, exec_eq', notLimited_of⟩
             have fit' : ex'.Fit := by intro h; cases notLimited_of h
             rcases @ih _ (by omega) _ _ _ _ fit' exec_eq' with ⟨ih'⟩
             rcases @ih _ (by omega) _ _ _ _ fit ex_eq with ⟨ih''⟩
             constructor
-            apply @Exec.nextSomeRec _ _ _ _ _ _ _ _ _ _ _ getInst_eq run ih' ih''
+            apply @Exec.nextSomeRec _ _ _ _ _ _ _ _ _ _ getInst_eq run ih' ih''
       · rcases of_bind_eq exec_eq
           with ⟨es, run_eq, ex_eq⟩ | ⟨evm', run_eq, ex_eq⟩
         · rw [ex_eq]; constructor
