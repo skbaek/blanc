@@ -162,12 +162,20 @@ def Devm.Burn : Devm → Devm → Prop :=
       λ gas gas' => ∃ diff : Nat, gas = gas' + diff
   }
 
+lemma Nat.le_iff_exists (m n : Nat) : m ≤ n ↔ ∃ k, n = m + k := by
+  sorry
+
+
+#exit
+def Burn (gas gas' : Nat) : Prop :=
+
+
 def Devm.PopBurn (xs : List B256) : Devm → Devm → Prop :=
   Rel {
     Rels.eq with
     stack := Stack.Pop xs
-    gasLeft :=
-      λ gas gas' => ∃ diff : Nat, gas = gas' + diff
+    gasLeft := _
+      -- λ gas gas' => ∃ diff : Nat, gas = gas' + diff
   }
 
 def Linst.At (code : ByteArray) (pc : Nat) (l : Linst) : Prop := code.getInst pc = some (.last l)

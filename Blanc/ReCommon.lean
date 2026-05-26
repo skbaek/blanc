@@ -2933,15 +2933,17 @@ lemma Except.bind_associative
   x >>= f >>= g = x >>= fun x ↦ f x >>= g := by
   apply bind_assoc
 
-#check Devm.pop
-#check Devm.Rels.eq
-
 def Devm.Pop (xs : List B256): Devm → Devm → Prop :=
---def Desc.Pop (xs : List B256) : Desc → Desc → Prop :=
   Rel {Rels.eq with stack := Stack.Pop xs}
 
-
-#exit
+lemma Devm.pop_of_pop {x : B256} {devm devm' : Devm} :
+    Devm.pop devm = .ok ⟨x, devm'⟩ → Devm.Pop [x] devm devm' := by
+  intro pop
+  simp only [Devm.pop] at pop
+  split at pop; {cases pop}
+  injection pop with eq; injection eq with eq eq'
+  constructor <;> simp <;> rw [← eq'] <;> try {rfl}
+  rename (devm.stack = _) => rw; rw [rw, eq]; rfl
 
 lemma temp {pc sevm pre pc' inter}
     ( run :
@@ -2967,8 +2969,8 @@ lemma temp {pc sevm pre pc' inter}
     iterate 3 (rename_i eq; cases eq)
     refine' ⟨x, rfl, _⟩
     simp only [Devm.PopBurn, Devm.Rels.eq]
-
-
+    have pop1 := Devm.pop_of_pop eq1; clear eq1
+    have pop2 := Devm.pop_of_pop eq2; clear eq2
     sorry
   · sorry
 
