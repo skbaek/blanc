@@ -716,10 +716,11 @@ inductive Func.Run : List Func → Sevm → Devm → Func → Devm → Prop
       Func.Run fs sevm devm' f devm'' →
       Func.Run fs sevm devm (branch f g) devm''
   | succ :
-    ∀ {fs sevm devm w devm' f g devm''},
+    ∀ {fs sevm devm w devm' f g devm_jd devm''},
       w ≠ 0 →
       Devm.PopBurn [w] devm devm' →
-      Func.Run fs sevm devm' g devm'' →
+      Devm.Burn devm' devm_jd →
+      Func.Run fs sevm devm_jd g devm'' →
       Func.Run fs sevm devm (branch f g) devm''
   | last :
     ∀ {fs sevm devm i devm' },
@@ -735,12 +736,14 @@ inductive Func.Run : List Func → Sevm → Devm → Func → Devm → Prop
       fs[k]? = some f →
       Devm.Burn devm devm' →
       Func.Run fs sevm devm' f devm'' →
-      Func.Run fs sevm devm (call k) devm'
+      Func.Run fs sevm devm (call k) devm''
 
 def Prog.Run (sevm : Sevm) (devm : Devm) (p : Prog) (devm' : Devm) : Prop :=
   Func.Run (p.main :: p.aux) sevm devm p.main devm'
 
 -------------------------------------------------------------------------------
+
+
 
 def Except.toError? {ξ υ} : Except (String × ξ) υ → Option String
   | .ok _ => none

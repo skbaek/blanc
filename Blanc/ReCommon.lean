@@ -1835,14 +1835,13 @@ lemma Ninst.at_iff_slice {e pc} {i : Ninst} :
   | exec => simp [At, Xinst.At, toB8L, List.slice_iff_get?_eq]
   | push bs h => simp [At, PushAt, toB8L, h, and_true]
 
-lemma subcode_compile_call {e l m n}
-  (h : subcode e.code m (Func.compile l m (Func.call n))) :
+lemma subcode_compile_call {code : ByteArray} {l m n}
+  (h : subcode code.toList m (Func.compile l m (Func.call n))) :
     ∃ (loc : Nat) (p : Func),
       l[n]? = some (loc, p) ∧
       loc < 2 ^ 16 ∧
-      --PushAt e m (B16.toB8L (Nat.toUInt16 loc)) ∧
-      PushAt e m ([(loc >>> 8).toUInt8, loc.toUInt8]) ∧
-      Jinst.jump.At e (m + 3) := by
+      PushAt code m ([(loc >>> 8).toUInt8, loc.toUInt8]) ∧
+      Jinst.jump.At code (m + 3) := by
   rcases of_subcode h with ⟨cd, h', h_slice⟩; clear h
   rcases of_bind_eq_some h' with ⟨⟨loc, p⟩, h_get, h⟩; clear h'
   simp at h
@@ -3073,6 +3072,59 @@ lemma of_jumpi_run {pc sevm pre pc' inter}
     have burn := Devm.burn_of_chargeGas eq3; clear eq3
     exact Devm.popBurn_of_pop_of_burn pop burn
 
+lemma of_jumpdest_run {pc sevm pre pc' inter}
+    ( run :
+      Jinst.Run
+        {pc := pc, sta := sevm, dyna := pre}
+        .jumpdest (.ok ⟨pc', inter⟩) ) :
+    pc' = pc + 1 ∧ Devm.Burn pre inter := by
+  rcases of_bind_eq_ok run with ⟨devm, eq_charge, eq_ok⟩
+  injection eq_ok with eq
+  injection eq with eq_pc eq_devm
+  cases eq_pc; cases eq_devm
+  refine' ⟨rfl, Devm.burn_of_chargeGas eq_charge⟩
+
+lemma jumpdest_at {pc sevm pre post}
+    (exc : Exec pc sevm pre (.ok post))
+    (jat : Jinst.At sevm.code pc .jumpdest) :
+    ∃ (inter : Devm) (exc' : Exec (pc + 1) sevm inter (.ok post)),
+      Devm.Burn pre inter ∧
+      ⟨pc + 1, sevm, inter, .ok post, exc'⟩ ≺
+      ⟨pc, sevm, pre, .ok post, exc⟩ := by
+  rcases Jinst.run_of_at exc jat with ⟨pc', inter, exc', run, prec⟩
+  rcases of_jumpdest_run run with ⟨eq_pc, burn⟩
+  cases eq_pc
+  refine' ⟨inter, exc', burn, prec⟩
+
+lemma of_jump_run {pc sevm pre pc' inter}
+    ( run :
+      Jinst.Run
+        {pc := pc, sta := sevm, dyna := pre}
+        .jump (.ok ⟨pc', inter⟩) ) :
+    ∃ (x : B256),
+      pc' = x.toNat ∧
+      Devm.PopBurn [x] pre inter ∧
+      jumpable sevm.code x.toNat = true := by
+  rcases of_bind_eq_ok run with ⟨⟨x, devm1⟩, eq1, run⟩
+  rcases of_bind_eq_ok run with ⟨devm2, eq2, run⟩
+  rcases of_bind_eq_ok run with ⟨_, eq3, run⟩
+  injection run with eq; injection eq with eq_pc eq_devm
+  cases eq_pc; cases eq_devm
+  refine' ⟨x, rfl, Devm.popBurn_of_pop_of_burn (Devm.pop_of_pop eq1) (Devm.burn_of_chargeGas eq2), Except.of_assert_eq_ok eq3⟩
+
+lemma jump_at {pc sevm pre post}
+    (exc : Exec pc sevm pre (.ok post))
+    (jat : Jinst.At sevm.code pc .jump) :
+    ∃ (x : B256) (inter : Devm) (exc' : Exec x.toNat sevm inter (.ok post)),
+      Devm.PopBurn [x] pre inter ∧
+      jumpable sevm.code x.toNat = true ∧
+      ⟨x.toNat, sevm, inter, .ok post, exc'⟩ ≺
+      ⟨pc, sevm, pre, .ok post, exc⟩ := by
+  rcases Jinst.run_of_at exc jat with ⟨pc', inter, exc', run, prec⟩
+  rcases of_jump_run run with ⟨x, eq_pc, pb, jp⟩
+  cases eq_pc
+  refine' ⟨x, inter, exc', pb, jp, prec⟩
+
 lemma jumpi_at {pc sevm pre post}
     (exc : Exec pc sevm pre (.ok post))
     (jat : Jinst.At sevm.code pc .jumpi) :
@@ -3349,6 +3401,11 @@ lemma Devm.burn_of_pushBurn_nil {s s'} (h : Devm.PushBurn [] s s') :
     ⟨h, _, _, _, _, _, _, _, _, _, _, _, _⟩ =>
     refine' ⟨h.symm, _, _, _, _, _, _, _, _, _, _, _, _⟩ <;> assumption
 
+lemma Devm.burn_trans {x y z} (h1 : Devm.Burn x y) (h2 : Devm.Burn y z) : Devm.Burn x z := by
+  rcases h1 with ⟨h1_stack, h1_mem, h1_gas, h1_logs, h1_refund, h1_out, h1_del, h1_ret, h1_err, h1_acc, h1_keys, h1_state, h1_trans⟩
+  rcases h2 with ⟨h2_stack, h2_mem, h2_gas, h2_logs, h2_refund, h2_out, h2_del, h2_ret, h2_err, h2_acc, h2_keys, h2_state, h2_trans⟩
+  refine' ⟨Eq.trans h1_stack h2_stack, Eq.trans h1_mem h2_mem, Nat.le_trans h2_gas h1_gas, Eq.trans h1_logs h2_logs, Eq.trans h1_refund h2_refund, Eq.trans h1_out h2_out, Eq.trans h1_del h2_del, Eq.trans h1_ret h2_ret, Eq.trans h1_err h2_err, Eq.trans h1_acc h2_acc, Eq.trans h1_keys h2_keys, Eq.trans h1_state h2_state, Eq.trans h1_trans h2_trans⟩
+
 lemma Devm.popBurn_of_burn_of_popBurn {devm devm' devm''} {xs}
     (burn : Devm.Burn devm devm')
     (popBurn : Devm.PopBurn xs devm' devm'') :
@@ -3371,6 +3428,157 @@ lemma Devm.popBurn_of_burn_of_popBurn {devm devm' devm''} {xs}
 lemma toNat_toB256 (n : Nat) : n.toB256.toNat = n ↾ 256 := by
   simp only [Nat.toB256, B256.toNat]; rw [toNat_toB128, toNat_toB128]
   apply Nat.or_eq_lo_add
+
+lemma toNat_toB128_of_lt {n : Nat} (h : n < 2 ^ 128) : n.toB128.toNat = n := by
+  rw [toNat_toB128, Nat.lo_eq_of_lt h]
+
+lemma toNat_toB256_of_lt {n : Nat} (h : n < 2 ^ 256) : n.toB256.toNat = n := by
+  rw [toNat_toB256, Nat.lo_eq_of_lt h]
+lemma List.of_get?_succ_eq_some {X} {l : List X} {k : ℕ} {x} :
+    l[k + 1]? = some x → ∃ y, l[k]? = some y := by
+  induction k generalizing l x with
+  | zero =>
+    match l with
+    | [] => simp
+    | [_] => simp
+    | (y :: _ :: _) => intro _; refine' ⟨y, rfl⟩
+  | succ k ih =>
+    match l with
+    | [] => simp
+    | y :: l' =>
+      intro h; simp at h
+      rcases ih h with ⟨y', h'⟩
+      exact ⟨y', h'⟩
+
+lemma table_suffix {c k pfx sfx} (h : pfx <++ (table k c) ++> sfx) :
+    ∃ k' c', sfx = table k' c' := by
+  induction c generalizing k pfx sfx with
+  | nil => refine' ⟨k, [], (List.append_eq_nil_iff.mp h.symm).right⟩
+  | cons p ps ih =>
+    simp [table] at h
+    rcases List.cons_eq_append_iff.mp h with
+      ⟨_, h'⟩ | ⟨pfx', _, h'⟩
+    · refine ⟨k, p :: ps, h'⟩
+    · exact ih h'
+
+lemma Func.length_compile {l k p bs} (h : Func.compile l k p = some bs) :
+    bs.length = compsize p := by
+  induction p generalizing k bs with
+  | branch p q ihp ihq =>
+    rcases of_bind_eq_some h with ⟨cp, h_cp, h'⟩; clear h
+    rcases of_guard_eq_some h' with ⟨h'', h⟩; clear h' h''
+    rcases of_bind_eq_some h with ⟨cq, h_cq, h'⟩; clear h
+    simp at h'; rw [← h']
+    simp [List.length_append, List.length, compsize]
+    rw [ihp h_cp, ihq h_cq]; omega
+  | last o => simp [compile] at h; rw [← h]; rfl
+  | next o p ih =>
+    rcases of_bind_eq_some h with ⟨bs', h, h'⟩;
+    simp at h'; rw [← h']
+    simp [List.length_append, compsize]
+    rw [ih h, Nat.add_comm]
+  | call m =>
+    rcases of_bind_eq_some h with ⟨⟨_, _⟩, _, h'⟩; clear h
+    rcases of_guard_eq_some h' with ⟨h'', h⟩; clear h' h''
+    simp at h; rw [← h];
+    simp [List.length, compsize]
+
+lemma of_get?_table_eq_some {f fs} {bs} {m n : ℕ} {p : Func}
+    (h_eq : some bs = Prog.compile ⟨f, fs⟩)
+    (h_get : (table 0 (f :: fs))[m]? = some (n, p)) :
+    ∃ lft rgt,
+      lft.length = m ∧
+      (lft <++ (table 0 (f :: fs)) ++> ((n, p) :: rgt)) ∧
+    ∃ pfx sfx,
+      pfx.length = n ∧
+      (pfx <++ bs ++> sfx) ∧
+      (some sfx = Table.compile (table 0 (f :: fs)) ((n, p) :: rgt)) := by
+  revert n p h_get
+  induction m with
+  | zero =>
+    intro n p h_get
+    simp [table] at h_get
+    cases h_get.left; cases h_get.right; clear h_get
+    simp only [table]
+    refine' ⟨ [], _ , rfl, List.nil_append _, [],
+              bs, rfl, (List.nil_append _).symm, _ ⟩
+    rw [h_eq]; simp [Prog.compile, table]
+  | succ m ih =>
+    intro n p h_get
+    rcases List.of_get?_succ_eq_some h_get with ⟨⟨k, q⟩, h⟩
+    rcases ih h with
+      ⟨lft, rgt, h_lft, h_split, pfx, sfx, h_pfx, h_split', h_sfx⟩
+    clear ih h
+    refine' ⟨lft ++ [(k, q)], _⟩
+    have h : ∃ rgt', rgt = (n, p) :: rgt' := by
+      have h_sub : m.succ - m = 1 := by omega
+      have h_le : List.length lft ≤ Nat.succ m := by
+        rw [h_lft]; apply Nat.le_succ
+      have heq : (lft ++ (k, q) :: rgt)[m.succ]? = ((k, q) :: rgt)[m.succ - lft.length]? := by
+        simp [List.getElem?_append_right, h_le]
+      rw [h_split, heq, h_lft, h_sub] at h_get
+      match rgt with
+      | [] => simp  at h_get
+      | _ :: rgt' =>
+        simp at h_get
+        rw [h_get]; refine ⟨_, rfl⟩
+    rcases h with ⟨rgt', h_rgt'⟩
+    refine' ⟨rgt', _, _, _⟩
+    · simp [List.length, h_lft]
+    · simp [Split]; rw [← h_rgt', h_split]
+    · rcases Table.compile_cons_eq_some h_sfx.symm with
+        ⟨cq, cl, h_cq, h_cl, h_sfx'⟩
+      refine' ⟨pfx ++ ([Jinst.jumpdest.toB8] ++ cq), cl, _, _, _⟩
+      · have hn : n = k + compsize q + 1 := by
+          rcases table_suffix h_split with
+            ⟨k', _ | ⟨q', c'⟩, h⟩ <;> simp [table] at h
+          rcases h with ⟨⟨⟨_⟩,⟨_⟩⟩, h⟩
+          rw [h_rgt'] at h
+          cases c' <;> simp [table] at h
+          apply h.left.left
+        simp [List.length_append, List.length]
+        rw [h_pfx, hn, Func.length_compile h_cq]
+        omega
+      · simp only [Split]; rw [List.append_assoc, ← h_sfx', h_split']
+      · rw [← h_cl, ← h_rgt']
+
+lemma subcode_of_get?_eq_some {f fs} {code : ByteArray} {k loc : ℕ} {p : Func}
+    (h_eq : some code.toList = Prog.compile ⟨f, fs⟩)
+    (h_get : getElem? (table 0 (f :: fs)) k = some ⟨loc, p⟩) :
+    Jinst.jumpdest.At code loc ∧
+    subcode code.toList (loc + 1) (Func.compile (table 0 (f :: fs)) (loc + 1) p) := by
+  rcases of_get?_table_eq_some h_eq h_get with
+    ⟨lft, rgt, _, _, pfx, sfx, h_pfx, h_split', h_sfx⟩
+  rcases Table.compile_cons_eq_some h_sfx.symm with ⟨bs, bs', h_bs, _, h_sfx'⟩
+  have h_slice : List.Slice code.toList loc sfx := by
+    rw [← h_pfx, h_split']; apply List.append_slice_suffix
+  rw [h_sfx', List.append_assoc] at h_slice
+  constructor
+  · apply Jinst.at_of_slice
+    apply List.slice_prefix h_slice
+  · rw [h_bs]; simp [subcode]
+    apply List.slice_prefix <| List.slice_suffix h_slice
+
+lemma subcode_compile_call {code : ByteArray} {l m n}
+  (h : subcode code.toList m (Func.compile l m (Func.call n))) :
+    ∃ (loc : Nat) (p : Func),
+      l[n]? = some (loc, p) ∧
+      loc < 2 ^ 16 ∧
+      PushAt code m ([(loc >>> 8).toUInt8, loc.toUInt8]) ∧
+      Jinst.jump.At code (m + 3) := by
+  rcases of_subcode h with ⟨cd, h', h_slice⟩; clear h
+  rcases of_bind_eq_some h' with ⟨⟨loc, p⟩, h_get, h⟩; clear h'
+  simp at h
+  rcases of_guard_eq_some h with ⟨h_lt, h_eq⟩; clear h
+  refine' ⟨loc, p, h_get, h_lt, _⟩
+  simp at h_eq; rw [← h_eq] at h_slice
+  have le : ([(loc >>> 8).toUInt8, loc.toUInt8] : B8L).length ≤ 32 := by simp [List.length]
+  have h_push_slice : List.Slice code.toList m (Ninst.push [(loc >>> 8).toUInt8, loc.toUInt8] le).toB8L := by
+    exact List.slice_prefix h_slice
+  have h_jump_slice : List.Slice code.toList (m + 3) [Jinst.jump.toB8] := by
+    have hh := @List.slice_suffix _ _ m [_, _, _] _ h_slice
+    exact hh
+  refine ⟨⟨le, Ninst.at_of_slice h_push_slice⟩, Jinst.at_of_slice h_jump_slice⟩
 
 theorem correct_core (f : Func) (fs : List Func) :
     ∀ (pk : Exec') (p : Func),
@@ -3418,7 +3626,7 @@ theorem correct_core (f : Func) (fs : List Func) :
     rcases subcode_compile_branch sub with
       ⟨loc, h_loc, pushAt, h_jumpi, h_scp, h_jumpdest, h_scq⟩
     have h :
-        ∃ (devm' : Devm) (exc' : Exec (pc  + 3) sevm devm' (.ok post)),
+        ∃ (devm' : Devm) (exc' : Exec (pc + 3) sevm devm' (.ok post)),
           Devm.PushBurn [Nat.toB256 loc] pre devm' ∧
           ⟨pc + 3, sevm, devm', .ok post, exc'⟩ ≺ ⟨pc, sevm, pre, .ok post, exc⟩ := by
       simp at pushAt
@@ -3444,7 +3652,7 @@ theorem correct_core (f : Func) (fs : List Func) :
         apply Exec'.le.step _ prec
         apply Exec'.le.refl _
       apply ih ⟨pc + 4, sevm, devm'', .ok post, exc''⟩ h_lt p h_eq h_scp
-    · clear ih
+    · clear h_scp
       have h_loc' : loc < 2 ^ 256 := by
         apply Nat.lt_trans h_loc
         rw [Nat.pow_lt_pow_iff_right] <;> omega
@@ -3456,111 +3664,62 @@ theorem correct_core (f : Func) (fs : List Func) :
         rw [← congrArg B256.toNat hx, h_loc_toNat]
         refine ⟨rfl, Devm.popBurn_of_burn_of_popBurn (Devm.burn_of_pushBurn_nil pushBurn') popBurn'⟩
       rcases h with ⟨hx, popBurn'⟩
-      have run : Func.Run (f :: fs) sevm devm'' q post := by sorry
-      apply Func.Run.succ ne popBurn' run
+      rw [← hx] at h_jumpdest
+      rcases jumpdest_at exc'' h_jumpdest with ⟨inter_jd, exc_jd, burn_jd, prec_jd⟩
+      have run : Func.Run (f :: fs) sevm inter_jd q post := by
+        have h_lt : Exec'.lt ⟨x.toNat + 1, sevm, inter_jd, .ok post, exc_jd⟩ ⟨pc, sevm, pre, .ok post, exc⟩ := by
+          refine' ⟨_, _, h_prec⟩
+          apply Exec'.le.step _ prec
+          apply Exec'.le.step _ prec_jd
+          apply Exec'.le.refl _
+        rw [← hx] at h_scq
+        apply ih ⟨x.toNat + 1, sevm, inter_jd, .ok post, exc_jd⟩ h_lt q h_eq h_scq
+      apply Func.Run.succ ne popBurn' burn_jd run
   | .call k =>
-    sorry
+    rcases subcode_compile_call sub with ⟨loc, p, h_get, h_loc, pushAt, h_jump⟩
+    have h_get' : (f :: fs)[k]? = some p := by
+      rw [← @Prog.get?_table 0 k (f :: fs), h_get]; rfl
+    have hd :
+      ∃ (devm' : Devm) (exc' : Exec (pc + 3) sevm devm' (.ok post)),
+        Devm.PushBurn [loc.toB256] pre devm' ∧
+        ⟨pc + 3, sevm, devm', .ok post, exc'⟩ ≺ ⟨pc, sevm, pre, .ok post, exc⟩ := by
+      rcases push_of_pushAt exc pushAt with ⟨inter, exc', h, h_prec⟩
+      rw [List.toB256_pair _ h_loc] at h
+      refine' ⟨inter, exc', h, h_prec⟩
+    rcases hd with ⟨devm', exc', h_push, h_prec⟩
+    rcases jump_at exc' h_jump with ⟨x, devm'', exc'', h_pop, h_jumpable, h_prec'⟩
+    rcases subcode_of_get?_eq_some h_eq h_get with ⟨h_jd, hp⟩; clear h_get
+    have h_loc' : loc < 2 ^ 256 := by
+      apply Nat.lt_trans h_loc
+      rw [Nat.pow_lt_pow_iff_right] <;> omega
+    have h_rw : loc = x.toNat ∧ Devm.Burn pre devm'' := by
+      rcases Devm.pushBurn_cons_popBurn_cons h_push h_pop with ⟨hx, st, pushBurn', popBurn'⟩
+      have h_loc_toNat : loc.toB256.toNat = loc := by
+        rw [toNat_toB256_of_lt h_loc']
+      rw [← congrArg B256.toNat hx, h_loc_toNat]
+      have b1 := Devm.burn_of_pushBurn_nil pushBurn'
+      have b2 := Devm.burn_of_popBurn_nil popBurn'
+      refine ⟨rfl, Devm.burn_trans b1 b2⟩
+    rcases h_rw with ⟨h_rw, h_burn⟩
+    rw [h_rw] at h_jd
+    rcases jumpdest_at exc'' h_jd with ⟨inter_jd, exc''', burn_jd, h_prec''⟩
+    rw [h_rw] at hp
+    have h_lt : Exec'.lt ⟨x.toNat + 1, sevm, inter_jd, .ok post, exc'''⟩ ⟨pc, sevm, pre, .ok post, exc⟩ := by
+      refine' ⟨_, _, h_prec⟩
+      apply Exec'.le.step _ h_prec'
+      apply Exec'.le.step _ h_prec''
+      apply Exec'.le.refl _
+    have run : Func.Run (f :: fs) sevm inter_jd p post := by
+      apply ih ⟨x.toNat + 1, sevm, inter_jd, .ok post, exc'''⟩ h_lt p h_eq hp
+    exact Func.Run.call h_get' (Devm.burn_trans h_burn burn_jd) run
 
+theorem correct (sevm : Sevm) (pre : Devm) (p : Prog) (post : Devm)
+    (exc : Exec 0 sevm pre (.ok post))
+    (eq : some sevm.code.toList = p.compile) :
+    Prog.Run sevm pre p post := by
+  sorry
 
-
-
-  #exit
-
-
-
-      --apply Linst.run_of_at pk.exc <| Linst.at_of_slice sub
-
-
-
-
-    --  rw [← eq_post]; apply Linst.run_of_at pk.exc <| Linst.at_of_slice sub
-    --apply Func.Run.last run
-
-
-
-
--- theorem correct_core (f : Func) (fs : List Func) :
---     ∀ (pk : Exec') (post : Devm) (p : Func),
---       some pk.sevm.code.toList = Prog.compile ⟨f, fs⟩ →
---       subcode pk.sevm.code.toList pk.pc (Func.compile (table 0 (f :: fs)) pk.pc p) →
---       pk.exn = .ok post →
---       Func.Run (f :: fs) pk.sevm pk.devm p post := by
---   apply Exec'.strongRec; intro pk ih post p h_eq sub eq_post
---   match p with
---   | .last l =>
---     have run : Linst.Run pk.sevm pk.devm l (.ok post) := by
---       rw [← eq_post]; apply Linst.run_of_at pk.exc <| Linst.at_of_slice sub
---     apply Func.Run.last run
---   | .next n p =>
---     rcases of_subcode sub with ⟨cd, h_eq', h_slice⟩;
---     rcases of_bind_eq_some h_eq' with ⟨cd', h_eq'', h_rw⟩; clear h_eq'
---     simp [pure] at h_rw;
---     rw [← h_rw] at h_slice;
---     clear h_rw cd
---     have h_at : Ninst.At pk.sevm.code pk.pc n := by
---       apply Ninst.at_of_slice
---       apply List.slice_prefix h_slice
---     have bar' :
---       ∃ inter exc',
---         Run pk.sevm pk.devm n inter ∧
---         ⟨pk.pc + n.size, pk.sevm, inter, pk.exn, exc'⟩ ≺ pk := by
---       have bar := @Ninst.run_of_at pk.pc pk.sevm pk.devm n post
---       rw [← eq_post] at bar; apply bar pk.exc h_at
---     rcases bar' with ⟨inter, exc', h_run, h_prec⟩
---     apply @Func.Run.next (f :: fs) pk.sevm pk.devm n inter p post h_run
---     have quz :
---       subcode pk.sevm.code.toList (pk.pc + n.size)
---         (Func.compile (table 0 (f :: fs)) (pk.pc + n.size) p) := by
---       rw [h_eq'']
---       simp only [subcode]
---       rw [Ninst.size_eq_length_toB8L]
---       apply List.slice_suffix h_slice
---     apply
---       @ih ⟨pk.pc + n.size, pk.sevm, inter, pk.exn, exc'⟩
---         (Exec'.lt_of_prec h_prec)
---         post
---         p
---         h_eq
---         quz
---         eq_post
---   | .branch p q =>
---     rcases subcode_compile_branch sub with
---       ⟨loc, h_loc, h_push, h_jumpi, h_scp, h_jumpdest, h_scq⟩
---     have h :
---         ∃ (devm' : Devm) (exc' : Exec (pk.pc  + 3) pk.sevm devm' (.ok post)), --(pk.pc + 3) pk.r),
---           Devm.Push [Nat.toB256 loc] pk.devm devm' ∧
---           Exec'.Prec ⟨pk.pc + 3, pk.sevm, devm', pk.exn, eq_post ▸ exc'⟩ pk := by
---       sorry
---     rcases h with ⟨devm', exc', h_push, h_prec⟩
---     rcases jumpi_at exc' h_jumpi with
---         ⟨x, devm'', exc'', popBurn, prec⟩
---       | ⟨x, y, devm'', exc'', popBurn, jumpable, ne, prec⟩ <;> clear h_jumpi
---     · clear h_scq h_jumpdest
---
---       have h_pop' : Devm.PopBurn [0] pk.devm devm'' := by sorry
---       apply Func.Run.zero h_pop'
---       have h_lt : Exec'.lt ⟨pk.pc + 4, pk.sevm, devm'', pk.exn, eq_post ▸ exc''⟩ pk := by sorry
---       apply ih ⟨pk.pc + 4, pk.sevm, devm'', pk.exn, eq_post ▸ exc''⟩ h_lt post p h_eq h_scp eq_post
---
---     · clear ih
---       have h_loc' : loc < 2 ^ 256 := by
---         apply Nat.lt_trans h_loc
---         rw [Nat.pow_lt_pow_iff_right] <;> omega
---       have h : x.toNat = loc ∧ Devm.PopBurn [y] pk.devm devm'' := by
---         --rcases Desc.push_cons_pop_cons h_push h_pop
---         --  with ⟨hx, st, h_push', h_pop'⟩
---         --rw [ Desc.push_nil h_push',
---         --     ← congrArg B256.toNat hx,
---         --     toNat_toB256_of_lt h_loc' ]
---         -- refine ⟨rfl, h_pop'⟩
---         sorry
---
---       rcases h with ⟨hx, popBurn'⟩
---       have run : Func.Run (f :: fs) pk.sevm devm'' q post := by sorry
---
---       apply Func.Run.succ ne popBurn' run
---   | .call k => sorry
-
+#exit
 
 theorem correct (e : Env) (s : Desc) (p : Prog) (r : Result)
     (cr : Exec e s 0 r) (h : some e.code = p.compile) :
