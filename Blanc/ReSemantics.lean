@@ -78,7 +78,7 @@ def Rinst.toB8 : Rinst → B8
 
 abbrev Stack : Type := List B256
 
--- def Stack.Push (x y xy : Stack) : Prop := x <++ xy ++> y
+def Stack.Push (x y xy : Stack) : Prop := x <++ xy ++> y
 def Stack.Pop (x xy y : Stack) : Prop := x <++ xy ++> y
 -- def Stack.Diff (xs zs : Stack) (s s'' : Stack) : Prop :=
 --   ∃ s' : Stack, Pop xs s s' ∧ Push zs s' s''
@@ -158,23 +158,23 @@ def Devm.Rels.eq : Devm.Rels :=
 def Devm.Burn : Devm → Devm → Prop :=
   Rel {
     Rels.eq with
-    gasLeft :=
-      λ gas gas' => ∃ diff : Nat, gas = gas' + diff
+    gasLeft := (· ≥ · )
   }
 
 lemma Nat.le_iff_exists (m n : Nat) : m ≤ n ↔ ∃ k, n = m + k := by
-  sorry
-
-
-#exit
-def Burn (gas gas' : Nat) : Prop :=
+  constructor
+  · intro _
+    exists n - m
+    omega
+  · rintro ⟨k, hk⟩
+    omega
 
 
 def Devm.PopBurn (xs : List B256) : Devm → Devm → Prop :=
   Rel {
     Rels.eq with
     stack := Stack.Pop xs
-    gasLeft := _
+    gasLeft := (· ≥ ·)
       -- λ gas gas' => ∃ diff : Nat, gas = gas' + diff
   }
 
