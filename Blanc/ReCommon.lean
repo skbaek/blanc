@@ -2765,7 +2765,19 @@ lemma B32.ofNat_eq_iff_mod_eq_toNat (a : Nat) (b : B32) :
     a.toB32 = b ↔ a ↾ 32 = b.toNat :=
   UInt32.ofNat_eq_iff_mod_eq_toNat a b
 
-lemma Nat.toB16_toB8 (n : Nat) : n.toB8.toB16 = (n ↾ 8).toB16 := by sorry
+lemma Nat.toB16_toB8 (n : Nat) : n.toB8.toB16 = (n ↾ 8).toB16 := by
+  have h0 : n.toB8.toB16 = n.toB16 % (2 ^ 8) :=
+      (UInt8.toUInt16_eq_mod_256_iff n.toUInt8 n.toUInt16).mpr
+        (UInt16.toUInt8_ofNat' _).symm
+  have h1: (n.toB16 % 2 ^ 8).toNat = n ↾ 8 := by
+    have rw : B16.toNat (2 ^ 8) = 2 ^ 8 := rfl
+    rw [B16.toNat_mod, rw]; clear rw
+    rw [toNat_toB16, ← Nat.lo_eq]
+    apply Nat.lo_lo_of_ge (by omega)
+  have h2 : (n ↾ 8).toB16 = n.toB16 % (2 ^ 8) := by
+    apply (UInt16.ofNat_eq_iff_mod_eq_toNat _ _).mpr
+    apply Eq.trans (Nat.lo_lo_of_le (by omega)) h1.symm
+  apply Eq.trans h0 h2.symm
 
 lemma Nat.toB32_toB16 (n : Nat) : n.toB16.toB32 = (n ↾ 16).toB32 := by
   have h0 : n.toB16.toB32 = n.toB32 % (2 ^ 16) :=
@@ -3154,7 +3166,19 @@ lemma pair_aux (n m : Nat) :
   apply congr_arg₂  _ _ (Nat.lo_lo_of_ge (by omega)).symm
   rw [@Nat.lo_add_shr n m m, ← Nat.lo_eq _ m, Nat.lo_lo]; rfl
 
-lemma Nat.toB16_toB8 (n : Nat) : n.toB8.toB16 = (n ↾ 8).toB16 := by sorry
+lemma Nat.toB16_toB8 (n : Nat) : n.toB8.toB16 = (n ↾ 8).toB16 := by
+  have h0 : n.toB8.toB16 = n.toB16 % (2 ^ 8) :=
+      (UInt8.toUInt16_eq_mod_256_iff n.toUInt8 n.toUInt16).mpr
+        (UInt16.toUInt8_ofNat' _).symm
+  have h1: (n.toB16 % 2 ^ 8).toNat = n ↾ 8 := by
+    have rw : B16.toNat (2 ^ 8) = 2 ^ 8 := rfl
+    rw [B16.toNat_mod, rw]; clear rw
+    rw [toNat_toB16, ← Nat.lo_eq]
+    apply Nat.lo_lo_of_ge (by omega)
+  have h2 : (n ↾ 8).toB16 = n.toB16 % (2 ^ 8) := by
+    apply (UInt16.ofNat_eq_iff_mod_eq_toNat _ _).mpr
+    apply Eq.trans (Nat.lo_lo_of_le (by omega)) h1.symm
+  apply Eq.trans h0 h2.symm
 
 lemma List.toB16_pair (n : Nat) :
     B8L.toB16 [(n >>> 8).toB8, n.toB8] = n.toB16 := by
@@ -3279,6 +3303,13 @@ lemma List.toB256_pair (n : Nat) (n_lt : n < 2 ^ 16):
   · simp only [Nat.toB256]; apply congr_arg₂ _ _ rfl
     rw [Nat.shiftRight_eq_zero _ _ (by omega)]; rfl
 
+lemma Devm.pushBurn_cons_popBurn_cons
+    {x y} {xs ys} {s s' s''}
+    (h : Devm.PushBurn (x :: xs) s s')
+    (h' : Devm.PopBurn (y :: ys) s' s'') :
+    (x = y ∧ ∃ st, Devm.PushBurn xs s st ∧ Devm.PopBurn ys st s'') := by
+  sorry
+
 theorem correct_core (f : Func) (fs : List Func) :
     ∀ (pk : Exec') (p : Func),
       some pk.sevm.code.toList = Prog.compile ⟨f, fs⟩ →
@@ -3323,29 +3354,35 @@ theorem correct_core (f : Func) (fs : List Func) :
         quz
   | .branch p q =>
     rcases subcode_compile_branch sub with
-      ⟨loc, h_loc, h_push, h_jumpi, h_scp, h_jumpdest, h_scq⟩
+      ⟨loc, h_loc, pushAt, h_jumpi, h_scp, h_jumpdest, h_scq⟩
+
     have h :
         ∃ (devm' : Devm) (exc' : Exec (pc  + 3) sevm devm' (.ok post)),
           Devm.PushBurn [Nat.toB256 loc] pre devm' ∧
           ⟨pc + 3, sevm, devm', .ok post, exc'⟩ ≺ ⟨pc, sevm, pre, .ok post, exc⟩ := by
-      simp at h_push
+      simp at pushAt
+      rcases push_of_pushAt exc ⟨_, pushAt⟩ with ⟨s', cr', h, h_prec⟩
+      rw [List.toB256_pair _ h_loc] at h
+      refine' ⟨s', cr', h, h_prec⟩
 
-      rcases push_of_pushAt exc ⟨_, h_push⟩ with ⟨s', cr', h, h_prec⟩
-      --rw [List.toB256_pair _ h_loc] at h
-      -- refine' ⟨s', cr', h, h_prec⟩
-      refine' ⟨s', cr', _, h_prec⟩
+    rcases h with ⟨devm', exc', pushBurn, h_prec⟩
 
-      sorry
-    rcases h with ⟨devm', exc', h_push, h_prec⟩
+
     rcases jumpi_at exc' h_jumpi with
         ⟨x, devm'', exc'', popBurn, prec⟩
       | ⟨x, y, devm'', exc'', popBurn, jumpable, ne, prec⟩ <;> clear h_jumpi
     · clear h_scq h_jumpdest
-      have h_pop' : Devm.PopBurn [0] pre devm'' := by sorry
+      have h_pop' : Devm.PopBurn [0] pre devm'' := by
+
+        sorry
       apply Func.Run.zero h_pop'
       have h_lt :
-          Exec'.lt ⟨pc + 4, sevm, devm'', .ok post, exc''⟩ ⟨pc, sevm, pre, .ok post, exc⟩ := by
-        sorry
+          Exec'.lt
+            ⟨pc + 4, sevm, devm'', .ok post, exc''⟩
+            ⟨pc, sevm, pre, .ok post, exc⟩ := by
+        refine' ⟨_, _, h_prec⟩;
+        apply Exec'.le.step _ prec
+        apply Exec'.le.refl _
       apply ih ⟨pc + 4, sevm, devm'', .ok post, exc''⟩ h_lt p h_eq h_scp
     · clear ih
       have h_loc' : loc < 2 ^ 256 := by
