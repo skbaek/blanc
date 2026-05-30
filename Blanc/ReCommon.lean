@@ -2914,9 +2914,6 @@ lemma toNat_toB256_of_lt {n : Nat} (h : n < 2 ^ 256) : n.toB256.toNat = n := by
 --     rcases Rinst.run_of_at cr h_at with ⟨s', cr', h_run, h_prec⟩
 --     refine' ⟨s', cr', .reg h_run, h_prec⟩
 --   | exec o =>
---     rcases Xinst.run_of_at cr h_at with ⟨s', cr', h_run, h_prec⟩
---     refine' ⟨s', cr', .exec h_run, h_prec⟩
---   | push bs h =>
 --     rcases push_of_pushAt cr h_at with ⟨s', cr', h_push, h_prec⟩
 --     simp [toB8L]; rw [length_pushToB8L, ← Nat.add_assoc]
 --     refine' ⟨s', _, _, h_prec⟩; exact Ninst.Run.push _ h_push
@@ -2936,8 +2933,29 @@ lemma Except.bind_associative
 def Devm.Pop (xs : List B256): Devm → Devm → Prop :=
   Rel {Rels.eq with stack := Stack.Pop xs}
 
-def Devm.Push (xs : List B256): Devm → Devm → Prop :=
-  Rel {Rels.eq with stack := Stack.Push xs}
+def Devm.PushBurn (xs : List B256): Devm → Devm → Prop :=
+  Rel {Devm.Rels.eq with stack := _root_.Stack.Push xs, gasLeft := (· ≥ ·)}
+
+lemma Devm.pushBurn_of_run {x : B256} {pre inter : Devm} {cost : Nat} :
+    (chargeGas cost pre >>= fun d => d.push x) = .ok inter →
+    Devm.PushBurn [x] pre inter := by
+  intro run
+  simp only [bind, Except.bind] at run
+  split at run; {cases run}
+  rename_i d h_charge
+  simp only [chargeGas] at h_charge
+  split at h_charge
+  · cases h_charge
+  · rename_i gas h_safe
+    injection h_charge with eq_d; subst eq_d
+    unfold safeSub at h_safe
+    split at h_safe
+    · injection h_safe with eq_gas; subst eq_gas
+      simp only [Devm.push, Except.assert, bind, Except.bind] at run
+      split at run; {cases run}
+      injection run with eq_inter; subst eq_inter
+      constructor <;> simp [_root_.Stack.Push, Split, Devm.Rels.eq]
+    · contradiction
 
 lemma Devm.pop_of_pop {x : B256} {devm devm' : Devm} :
     Devm.pop devm = .ok ⟨x, devm'⟩ → Devm.Pop [x] devm devm' := by
@@ -2970,7 +2988,6 @@ lemma Devm.burn_of_chargeGas {cost : Nat} {devm devm' : Devm} :
       omega
     · intro h
       cases h
-
 
 lemma Devm.pop_append {xs ys : List B256} {devm devm' devm'' : Devm} :
     Devm.Pop xs devm devm' →
@@ -3094,18 +3111,173 @@ lemma Exec'.of_exn_eq_ok {pk : Exec'} {devm : Devm}
     ) := by
   cases pk; simp at *; apply eq
 
+#check Ninst.at_of_slice
+#check PushAt
+
 lemma push_of_pushAt
     {pc sevm pre xs post} (exc : Exec pc sevm pre (.ok post))
     (h_at : PushAt sevm.code pc xs) :
     ∃ (inter : Devm) (exc' : Exec (pc + xs.length + 1) sevm inter (.ok post)),
-      Devm.Push [B8L.toB256 xs] pre inter ∧
+      Devm.PushBurn [B8L.toB256 xs] pre inter ∧
       ⟨pc + xs.length + 1, sevm, inter, .ok post, exc'⟩ ≺
         ⟨pc, sevm, pre, .ok post, exc⟩ := by
-  sorry
+  rcases h_at with ⟨le, h_at⟩
+  cases exc
+  case nextNoneRec n inter nat run exc =>
+    injection Eq.trans nat.symm h_at with eq; injection eq with eq
+    cases eq
+    refine' ⟨inter, exc, _, .none nat run exc⟩
+    exact Devm.pushBurn_of_run run
+  case nextSomeRec n pc_ sevm_ devm_ exn_ inter exc_ nat run exc =>
+    injection Eq.trans nat.symm h_at with eq; injection eq with eq
+    cases eq
+    refine' ⟨inter, exc, _, .snd nat run exc_ exc⟩
+    exact Devm.pushBurn_of_run run
+  case jumpRec j pc' inter jat run exc' =>
+    injection Eq.trans jat.symm h_at with eq; injection eq
+  case last l lat run =>
+    injection Eq.trans lat.symm h_at with eq; injection eq
 
 def Func.Run' (fs : List Func) (sevm : Sevm) (devm : Devm) (f : Func) : Execution → Prop
   | .error _ => True
   | .ok devm' => Func.Run fs sevm devm f devm'
+
+lemma Nat.lo_eq (m n : Nat) : m ↾ n = m % (2 ^ n) := rfl
+lemma Nat.hi_eq (m n : Nat) : m ↿ n = (m >>> n) <<< n := rfl
+
+lemma pair_aux (n m : Nat) :
+    ((n >>> m ↾ m) ↾ (m + m)) <<< m ↾ (m + m) ||| (n ↾ m) ↾ (m + m) =
+      n ↾ (m + m) := by
+  rw [Nat.lo_lo_of_le (by omega)]
+  rw [Nat.lo_lo_of_le (by omega)]
+  apply Eq.trans _ <| high_or_low_eq_self (n ↾ (m + m)) m Nat.lo_lt
+  apply congr_arg₂  _ _ (Nat.lo_lo_of_ge (by omega)).symm
+  rw [@Nat.lo_add_shr n m m, ← Nat.lo_eq _ m, Nat.lo_lo]; rfl
+
+lemma Nat.toB16_toB8 (n : Nat) : n.toB8.toB16 = (n ↾ 8).toB16 := by sorry
+
+lemma List.toB16_pair (n : Nat) :
+    B8L.toB16 [(n >>> 8).toB8, n.toB8] = n.toB16 := by
+  have h : (n >>> 8 ↾ 8).toB16 <<< 8 ||| (n ↾ 8).toB16 = n.toB16 := by
+    rw [← B16.toNat_inj, toNat_toB16, B16.toNat_or, toNat_toB16]
+    rw [B16.toNat_shiftLeft, toNat_toB16]; apply pair_aux n 8
+  simp [B8L.toB16, B8L.pack, ekatD, takeD, reverse, reverseAux, tail, headD]
+  rw [Nat.toB16_toB8, Nat.toB16_toB8, h]
+
+def B16.concat (x y : B16) : B32 :=
+  x.toB32 <<< 16 ||| y.toB32
+
+lemma B32.ofNat_eq_iff_mod_eq_toNat (a : Nat) (b : B32) :
+    a.toB32 = b ↔ a ↾ 32 = b.toNat :=
+  UInt32.ofNat_eq_iff_mod_eq_toNat a b
+
+lemma Nat.toB32_toB16 (n : Nat) : n.toB16.toB32 = (n ↾ 16).toB32 := by
+  have h0 : n.toB16.toB32 = n.toB32 % (2 ^ 16) :=
+      (UInt16.toUInt32_eq_mod_65536_iff n.toUInt16 n.toUInt32).mpr
+        (UInt32.toUInt16_ofNat' _).symm
+  have h1: (n.toB32 % 2 ^ 16).toNat = n ↾ 16 := by
+    have rw : B32.toNat (2 ^ 16) = 2 ^ 16 := rfl
+    rw [B32.toNat_mod, rw]; clear rw
+    rw [toNat_toB32, ← Nat.lo_eq]
+    apply Nat.lo_lo_of_ge (by omega)
+  have h2 : (n ↾ 16).toB32 = n.toB32 % (2 ^ 16) := by
+    apply (B32.ofNat_eq_iff_mod_eq_toNat _ _).mpr
+    apply Eq.trans (Nat.lo_lo_of_le (by omega)) h1.symm
+  apply Eq.trans h0 h2.symm
+
+lemma B32.toNat_shl (a b : B32) :
+    (a <<< b).toNat = a.toNat <<< (b.toNat % 32) ↾ 32 :=
+  UInt32.toNat_shiftLeft a b
+
+lemma B64.toNat_shl (a b : B64) :
+    (a <<< b).toNat = (a.toNat <<< (b.toNat % 64)) ↾ 64 :=
+  UInt64.toNat_shiftLeft a b
+
+lemma toB32_eq_concat (n : Nat) :
+    n.toB32 = B16.concat (n >>> 16).toB16 n.toB16 := by
+  rw [← B32.toNat_inj, toNat_toB32]
+  simp only [B16.concat, Nat.toB32_toB16]
+  rw [B32.toNat_or, B32.toNat_shl, toNat_toB32, toNat_toB32]
+  rw [Nat.lo_lo_of_le (by omega), Nat.lo_lo_of_le (by omega)]
+  have rw : (B32.toNat 16 % 32) = 16 := rfl
+  rw [rw]; clear rw
+  have rw : (n >>> 16 ↾ 16) <<< 16 ↾ 32 = (n ↾ 32) ↿ 16 := by
+    rw [← Nat.lo_add_shr, ← Nat.hi_eq]
+    apply Nat.lo_eq_of_lt
+    apply lt_of_le_of_lt (Nat.hi_le _ _) Nat.lo_lt
+  rw [rw, ← @Nat.lo_lo_of_ge n 32 16 (by omega)]
+  apply (Nat.hi_or_lo _ _).symm
+
+lemma List.toB32_pair (n : Nat) (n_lt : n < 2 ^ 16) :
+    B8L.toB32 [(n >>> 8).toB8, n.toB8] = n.toB32 := by
+  simp only [ B8L.toB32, B8L.pack, ekatD, takeD,
+    reverse, reverseAux, tail, headD, take, drop ]
+  apply Eq.trans _ (toB32_eq_concat _).symm
+  apply congr_arg₂ _ _ (congr_arg _ _)
+  · apply congr_arg (λ x : B32 => x <<< 16) <| congr_arg _ _
+    rw [Nat.shiftRight_eq_div_pow, Nat.div_eq_zero_of_lt (by omega)]; rfl
+  · apply List.toB16_pair
+
+def B32.concat (x y : B32) : B64 :=
+  x.toB64 <<< 32 ||| y.toB64
+
+lemma Nat.toB64_toB32 (n : Nat) : n.toB32.toB64 = (n ↾ 32).toB64 := by
+  have h0 : n.toB32.toB64 = n.toB64 % (2 ^ 32) :=
+      (UInt32.toUInt64_eq_mod_4294967296_iff n.toUInt32 n.toUInt64).mpr
+        (UInt64.toUInt32_ofNat' _).symm
+  have h1: (n.toB64 % 2 ^ 32).toNat = n ↾ 32 := by
+    have rw : B64.toNat (2 ^ 32) = 2 ^ 32 := rfl
+    rw [B64.toNat_mod, rw]; clear rw
+    rw [toNat_toB64, ← Nat.lo_eq]
+    apply Nat.lo_lo_of_ge (by omega)
+  have h2 : (n ↾ 32).toB64 = n.toB64 % (2 ^ 32) := by
+    apply (B64.ofNat_eq_iff_mod_eq_toNat _ _).mpr
+    apply Eq.trans (Nat.lo_lo_of_le (by omega)) h1.symm
+  apply Eq.trans h0 h2.symm
+
+lemma toB64_eq_concat (n : Nat) :
+    n.toB64 = B32.concat (n >>> 32).toB32 n.toB32 := by
+  rw [← B64.toNat_inj, toNat_toB64]
+  simp only [B32.concat, Nat.toB64_toB32]
+  rw [B64.toNat_or, B64.toNat_shl, toNat_toB64, toNat_toB64]
+  rw [Nat.lo_lo_of_le (by omega), Nat.lo_lo_of_le (by omega)]
+  have rw : (B64.toNat 32 % 64) = 32 := rfl
+  rw [rw]; clear rw
+  have rw : (n >>> 32 ↾ 32) <<< 32 ↾ 64 = (n ↾ 64) ↿ 32 := by
+    rw [← Nat.lo_add_shr, ← Nat.hi_eq]
+    apply Nat.lo_eq_of_lt
+    apply lt_of_le_of_lt (Nat.hi_le _ _) Nat.lo_lt
+  rw [rw, ← @Nat.lo_lo_of_ge n 64 32 (by omega)]
+  apply (Nat.hi_or_lo _ _).symm
+
+lemma List.toB64_pair (n : Nat) (n_lt : n < 2 ^ 16) :
+    B8L.toB64 [(n >>> 8).toB8, n.toB8] = n.toB64 := by
+  simp only [ B8L.toB64, B8L.pack, ekatD, takeD,
+    reverse, reverseAux, tail, headD, take, drop ]
+  apply Eq.trans _ (toB64_eq_concat _).symm
+  apply congr_arg₂ _ _ (congr_arg _ _)
+  · apply congr_arg (λ x : B64 => x <<< 32) <| congr_arg _ _
+    rw [Nat.shiftRight_eq_div_pow, Nat.div_eq_zero_of_lt (by omega)]; rfl
+  · apply List.toB32_pair _ n_lt
+
+lemma List.toB128_pair (n : Nat) (n_lt : n < 2 ^ 16):
+    B8L.toB128 [(n >>> 8).toUInt8, n.toUInt8] = n.toB128 := by
+  apply @Eq.trans _ _ ⟨0, n.toB64⟩
+  · apply @Eq.trans _ _ ⟨0, B8L.toB64 [(n >>> 8).toUInt8, n.toUInt8]⟩
+    · simp [B8L.toB128, List.ekatD, B8L.pack]
+      apply congr_arg₂ _ rfl rfl
+    · apply congr_arg₂ _ rfl <| List.toB64_pair _ n_lt
+  · simp only [Nat.toB128]; apply congr_arg₂ _ _ rfl
+    rw [Nat.shiftRight_eq_zero _ _ (by omega)]; rfl
+lemma List.toB256_pair (n : Nat) (n_lt : n < 2 ^ 16):
+    B8L.toB256 [(n >>> 8).toUInt8, n.toUInt8] = n.toB256 := by
+  apply @Eq.trans _ _ ⟨0, n.toB128⟩
+  · apply @Eq.trans _ _ ⟨0, B8L.toB128 [(n >>> 8).toUInt8, n.toUInt8]⟩
+    · simp [B8L.toB256, List.ekatD, B8L.pack]
+      apply congr_arg₂ _ rfl rfl
+    · apply congr_arg₂ _ rfl <| List.toB128_pair _ n_lt
+  · simp only [Nat.toB256]; apply congr_arg₂ _ _ rfl
+    rw [Nat.shiftRight_eq_zero _ _ (by omega)]; rfl
 
 theorem correct_core (f : Func) (fs : List Func) :
     ∀ (pk : Exec') (p : Func),
@@ -3154,11 +3326,15 @@ theorem correct_core (f : Func) (fs : List Func) :
       ⟨loc, h_loc, h_push, h_jumpi, h_scp, h_jumpdest, h_scq⟩
     have h :
         ∃ (devm' : Devm) (exc' : Exec (pc  + 3) sevm devm' (.ok post)),
-          Devm.Push [Nat.toB256 loc] pre devm' ∧
+          Devm.PushBurn [Nat.toB256 loc] pre devm' ∧
           ⟨pc + 3, sevm, devm', .ok post, exc'⟩ ≺ ⟨pc, sevm, pre, .ok post, exc⟩ := by
-      -- rcases push_of_pushAt pk.cr h_push with ⟨s', cr', h, h_prec⟩
-      -- rw [List.toB256_pair _ h_loc] at h
+      simp at h_push
+
+      rcases push_of_pushAt exc ⟨_, h_push⟩ with ⟨s', cr', h, h_prec⟩
+      --rw [List.toB256_pair _ h_loc] at h
       -- refine' ⟨s', cr', h, h_prec⟩
+      refine' ⟨s', cr', _, h_prec⟩
+
       sorry
     rcases h with ⟨devm', exc', h_push, h_prec⟩
     rcases jumpi_at exc' h_jumpi with
