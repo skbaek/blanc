@@ -3303,11 +3303,56 @@ lemma List.toB256_pair (n : Nat) (n_lt : n < 2 ^ 16):
   · simp only [Nat.toB256]; apply congr_arg₂ _ _ rfl
     rw [Nat.shiftRight_eq_zero _ _ (by omega)]; rfl
 
+lemma Stack.push_cons_pop_cons
+    {x y} {xs ys} {s s' s''}
+    (h : Stack.Push (x :: xs) s s')
+    (h' : Stack.Pop (y :: ys) s' s'') :
+    (x = y ∧ ∃ zs, Stack.Push xs s zs ∧ Stack.Pop ys zs s'') := by
+  simp [Stack.Push, Split] at h
+  simp [Stack.Pop, Split] at h'
+  match s' with
+  | [] => cases h
+  | z :: zs =>
+    rw [List.cons_eq_cons] at h
+    rw [List.cons_eq_cons] at h'
+    refine' ⟨Eq.trans h.left.symm h'.left, zs, h.right, h'.right⟩
+
 lemma Devm.pushBurn_cons_popBurn_cons
     {x y} {xs ys} {s s' s''}
     (h : Devm.PushBurn (x :: xs) s s')
     (h' : Devm.PopBurn (y :: ys) s' s'') :
     (x = y ∧ ∃ st, Devm.PushBurn xs s st ∧ Devm.PopBurn ys st s'') := by
+  rcases h with ⟨h_stack, h_mem, h_gas, h_logs, h_refund, h_out, h_del, h_ret, h_err, h_acc, h_keys, h_state, h_trans⟩
+  rcases h' with ⟨h'_stack, h'_mem, h'_gas, h'_logs, h'_refund, h'_out, h'_del, h'_ret, h'_err, h'_acc, h'_keys, h'_state, h'_trans⟩
+  have push_pop_stack := Stack.push_cons_pop_cons h_stack h'_stack
+  rcases push_pop_stack with ⟨h_eq, stk, h_push, h_pop⟩
+  refine' ⟨
+    h_eq,
+    { s' with stack := stk },
+    ⟨h_push, h_mem, h_gas, h_logs, h_refund, h_out, h_del, h_ret, h_err, h_acc, h_keys, h_state, h_trans⟩,
+    ⟨h_pop, h'_mem, h'_gas, h'_logs, h'_refund, h'_out, h'_del, h'_ret, h'_err, h'_acc, h'_keys, h'_state, h'_trans⟩
+  ⟩
+
+lemma Devm.burn_of_popBurn_nil {s s'} (h : Devm.PopBurn [] s s') :
+    Devm.Burn s s' := by
+  match s, s', h with
+  | ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _⟩,
+    ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _⟩,
+    ⟨h, _, _, _, _, _, _, _, _, _, _, _, _⟩ =>
+    refine' ⟨h, _, _, _, _, _, _, _, _, _, _, _, _⟩ <;> assumption
+
+lemma Devm.burn_of_pushBurn_nil {s s'} (h : Devm.PushBurn [] s s') :
+    Devm.Burn s s' := by
+  match s, s', h with
+  | ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _⟩,
+    ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _⟩,
+    ⟨h, _, _, _, _, _, _, _, _, _, _, _, _⟩ =>
+    refine' ⟨h.symm, _, _, _, _, _, _, _, _, _, _, _, _⟩ <;> assumption
+
+lemma Devm.popBurn_of_burn_of_popBurn {devm devm' devm''} {xs}
+    (burn : Devm.Burn devm devm')
+    (popBurn : Devm.PopBurn xs devm' devm'') :
+    Devm.PopBurn xs devm devm'' := by
   sorry
 
 theorem correct_core (f : Func) (fs : List Func) :
@@ -3373,6 +3418,12 @@ theorem correct_core (f : Func) (fs : List Func) :
       | ⟨x, y, devm'', exc'', popBurn, jumpable, ne, prec⟩ <;> clear h_jumpi
     · clear h_scq h_jumpdest
       have h_pop' : Devm.PopBurn [0] pre devm'' := by
+        rcases (Devm.pushBurn_cons_popBurn_cons pushBurn popBurn).right
+          with ⟨st, pushBurn', popBurn'⟩
+        have hh := Devm.burn_of_pushBurn_nil pushBurn'
+
+
+
 
         sorry
       apply Func.Run.zero h_pop'
