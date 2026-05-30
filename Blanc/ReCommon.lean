@@ -3353,7 +3353,20 @@ lemma Devm.popBurn_of_burn_of_popBurn {devm devm' devm''} {xs}
     (burn : Devm.Burn devm devm')
     (popBurn : Devm.PopBurn xs devm' devm'') :
     Devm.PopBurn xs devm devm'' := by
-  sorry
+  constructor
+  · exact burn.stack.symm ▸ popBurn.stack
+  · exact Eq.trans burn.memory popBurn.memory
+  · exact Nat.le_trans popBurn.gasLeft burn.gasLeft
+  · exact Eq.trans burn.logs popBurn.logs
+  · exact Eq.trans burn.refundCounter popBurn.refundCounter
+  · exact Eq.trans burn.output popBurn.output
+  · exact Eq.trans burn.accountsToDelete popBurn.accountsToDelete
+  · exact Eq.trans burn.returnData popBurn.returnData
+  · exact Eq.trans burn.error popBurn.error
+  · exact Eq.trans burn.accessedAddresses popBurn.accessedAddresses
+  · exact Eq.trans burn.accessedStorageKeys popBurn.accessedStorageKeys
+  · exact Eq.trans burn.state popBurn.state
+  · exact Eq.trans burn.transientStorage popBurn.transientStorage
 
 theorem correct_core (f : Func) (fs : List Func) :
     ∀ (pk : Exec') (p : Func),
@@ -3400,7 +3413,6 @@ theorem correct_core (f : Func) (fs : List Func) :
   | .branch p q =>
     rcases subcode_compile_branch sub with
       ⟨loc, h_loc, pushAt, h_jumpi, h_scp, h_jumpdest, h_scq⟩
-
     have h :
         ∃ (devm' : Devm) (exc' : Exec (pc  + 3) sevm devm' (.ok post)),
           Devm.PushBurn [Nat.toB256 loc] pre devm' ∧
@@ -3409,10 +3421,7 @@ theorem correct_core (f : Func) (fs : List Func) :
       rcases push_of_pushAt exc ⟨_, pushAt⟩ with ⟨s', cr', h, h_prec⟩
       rw [List.toB256_pair _ h_loc] at h
       refine' ⟨s', cr', h, h_prec⟩
-
     rcases h with ⟨devm', exc', pushBurn, h_prec⟩
-
-
     rcases jumpi_at exc' h_jumpi with
         ⟨x, devm'', exc'', popBurn, prec⟩
       | ⟨x, y, devm'', exc'', popBurn, jumpable, ne, prec⟩ <;> clear h_jumpi
@@ -3420,12 +3429,8 @@ theorem correct_core (f : Func) (fs : List Func) :
       have h_pop' : Devm.PopBurn [0] pre devm'' := by
         rcases (Devm.pushBurn_cons_popBurn_cons pushBurn popBurn).right
           with ⟨st, pushBurn', popBurn'⟩
-        have hh := Devm.burn_of_pushBurn_nil pushBurn'
-
-
-
-
-        sorry
+        apply Devm.popBurn_of_burn_of_popBurn _ popBurn'
+        apply Devm.burn_of_pushBurn_nil pushBurn'
       apply Func.Run.zero h_pop'
       have h_lt :
           Exec'.lt
