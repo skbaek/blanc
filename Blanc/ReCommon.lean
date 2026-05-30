@@ -3368,6 +3368,10 @@ lemma Devm.popBurn_of_burn_of_popBurn {devm devm' devm''} {xs}
   · exact Eq.trans burn.state popBurn.state
   · exact Eq.trans burn.transientStorage popBurn.transientStorage
 
+lemma toNat_toB256 (n : Nat) : n.toB256.toNat = n ↾ 256 := by
+  simp only [Nat.toB256, B256.toNat]; rw [toNat_toB128, toNat_toB128]
+  apply Nat.or_eq_lo_add
+
 theorem correct_core (f : Func) (fs : List Func) :
     ∀ (pk : Exec') (p : Func),
       some pk.sevm.code.toList = Prog.compile ⟨f, fs⟩ →
@@ -3445,7 +3449,12 @@ theorem correct_core (f : Func) (fs : List Func) :
         apply Nat.lt_trans h_loc
         rw [Nat.pow_lt_pow_iff_right] <;> omega
       have h : x.toNat = loc ∧ Devm.PopBurn [y] pre devm'' := by
-        sorry
+        rcases Devm.pushBurn_cons_popBurn_cons pushBurn popBurn
+          with ⟨hx, st, pushBurn', popBurn'⟩
+        have h_loc_toNat : loc.toB256.toNat = loc := by
+          rw [toNat_toB256, Nat.lo_eq_of_lt h_loc']
+        rw [← congrArg B256.toNat hx, h_loc_toNat]
+        refine ⟨rfl, Devm.popBurn_of_burn_of_popBurn (Devm.burn_of_pushBurn_nil pushBurn') popBurn'⟩
       rcases h with ⟨hx, popBurn'⟩
       have run : Func.Run (f :: fs) sevm devm'' q post := by sorry
       apply Func.Run.succ ne popBurn' run
