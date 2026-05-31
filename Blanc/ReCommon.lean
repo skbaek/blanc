@@ -1152,6 +1152,7 @@ partial def prog_inv : Lean.Elab.Tactic.TacticM Unit :=
     | _ => dbg_trace "not a Func.Inv goal"
 
 elab "prog_inv" : tactic => prog_inv
+-/
 
 def sumBelow (f : Adr → B256) : Nat → Nat
   | 0 => 0
@@ -1164,6 +1165,7 @@ def sumBelow_succ {f : Adr → B256} {n} :
 def sum (f : Adr → B256) : Nat :=
   sumBelow f Adr.max.toNat.succ
 
+/-
 def SumNof (f : Adr → B256) : Prop := sum f < 2 ^ 256
 
 lemma le_sumBelow (f : Adr → B256) {k : Adr} {n} (h : k.toNat < n) :
@@ -2386,14 +2388,6 @@ def Ninst.of_run'_reg {pc : Nat} {sevm : Sevm} {devm : Devm}
   (run : Ninst.Run' pc sevm devm (.reg r) xl ex) :
   (Rinst.run ⟨pc, sevm, devm⟩ r) = ex := run
 
---
--- #check Xinst.run
--- def Xinst.of_run'_reg {pc : Nat} {sevm : Sevm} {devm : Devm}
---     {x : Xinst} {xl : Xlot} {ex : Except (String × Devm) (Nat × Devm)}
---   (run : Ninst.Run' pc sevm devm (.exec x) xl ex) :
---   (Xinst.run false sevm devm x).withPc (pc + 1) = ex := run
---
--- #exit
 lemma of_withPc_eq_ok {pc : ℕ} {exn : Execution} {pc'} {devm}
     (eq : exn.withPc pc = .ok ⟨pc', devm⟩) : exn = .ok devm ∧ pc = pc' := by
   rcases of_bind_eq_ok eq with ⟨devm', exn_eq, eq'⟩; clear eq
@@ -3717,17 +3711,93 @@ theorem correct (sevm : Sevm) (pre : Devm) (p : Prog) (post : Devm)
     (exc : Exec 0 sevm pre (.ok post))
     (eq : some sevm.code.toList = p.compile) :
     Prog.Run sevm pre p post := by
-  sorry
+  rcases @subcode_of_get?_eq_some p.main p.aux sevm.code 0 _ p.main eq rfl
+    with ⟨h_at, h_sub⟩
+  rcases jumpdest_at exc h_at with ⟨inter, exc', burn, prec⟩;
+  apply @Func.Run.call (p.main :: p.aux) sevm pre inter 0 p.main post rfl burn
+  apply correct_core p.main p.aux ⟨1, sevm, inter, .ok post, exc'⟩ p.main eq h_sub
+
+def Char.toB8 (c : Char) : B8 := Nat.toUInt8 c.toNat
+def String.toB8L (s : String) : B8L := s.data.map Char.toB8
+def String.keccak (s : String) : B256 := s.toB8L.keccak
+
+def isMax : Line := [not, iszero]
+
+inductive DispatchTree : Type
+  | leaf : B256 → Func → DispatchTree
+  | fork : DispatchTree → DispatchTree → DispatchTree
+
+open DispatchTree
+
+def DispatchTree.mem : DispatchTree → (B256 × Func) → Prop
+  | (leaf w p), wp => wp = (w, p)
+  | (fork tl tr), wp => DispatchTree.mem tl wp ∨ DispatchTree.mem tr wp
+
+instance : Membership (B256 × Func) DispatchTree := ⟨DispatchTree.mem⟩
+
+def leftmostFsig : DispatchTree → B256
+  | (DispatchTree.leaf w _) => w
+  | (DispatchTree.fork t _) => leftmostFsig t
+
+-- given a dispatch tree of functions and their signatures, construct the main program.
+-- note it assumes that:
+-- (1) the calldata function selector is already at the op of the stack (i.e, it has to be preceded by 'fsig').
+-- (2) the functions are ordered in ascending order of their signatures (right is higher)
+
+def dispatchWith (k : Nat) : DispatchTree → Func
+  | DispatchTree.leaf w p => pushB256 w ::: eq ::: (p <?> .call k)
+  | DispatchTree.fork tl tr =>
+    dup 0 :::
+    pushB256 (leftmostFsig tr) ::: gt :::
+    (dispatchWith k tl <?> dispatchWith k tr)
+
+def dispatch : DispatchTree → Func
+  | DispatchTree.leaf w p => pushB256 w ::: eq ::: (p <?> .rev)
+  | DispatchTree.fork tl tr =>
+    dup 0 :::
+    pushB256 (leftmostFsig tr) ::: gt :::
+    (dispatch tl <?> dispatch tr)
+
+def shiftRight (w : B256) : Line := [pushB256 w, shr]
+
+def fsig : Line := cdl 0 ++ shiftRight 224
+
+def Func.main (dt : DispatchTree) : Func := fsig +++ dispatch dt
+def Func.mainWith (k : Nat) (dt : DispatchTree) : Func := fsig +++ dispatchWith k dt
 
 #exit
+lemma dispatchWith_inv {c k f} (σ : Env → Desc → Prop) (ρ : Env → Result → Prop)
+    (h0 : ∀ {e s x s'}, σ e s → Line.Run e s [pushB256 x, eq, pop] s' → σ e s')
+    (h1 : ∀ {e s x s'}, σ e s → Line.Run e s [dup 0, pushB256 x, gt, pop] s' → σ e s')
+    (h2 : c[k]? = some f)
+    (h3 : ∀ {e s r}, σ e s → Func.Run c e s f r → ρ e r) :
+    ∀ t : DispatchTree,
+      (∀ {e s r}, ∀ wf ∈ t, σ e s → Func.Run c e s wf.2 r → ρ e r) →
+    ∀ (e s r), σ e s → Func.Run c e s (dispatchWith k t) r → ρ e r := by
+  intro t; induction t with
+  | fork t t' ih ih' =>
+    intro htt'
+    have ht : ∀ {e s r}, ∀ wp ∈ t, σ e s → Func.Run c e s wp.2 r → ρ e r := by
+      intro e s r wp h_in; apply htt' _ <| Or.inl h_in
+    have ht' : ∀ {e s r}, ∀ wp ∈ t', σ e s → Func.Run c e s wp.2 r → ρ e r := by
+      intro e s r wp h_in; apply htt' _ (Or.inr h_in)
+    intro e s r hs; pexen 3; intro h₂
+    rcases of_run_branch' h₂ with ⟨_, h⟩ | ⟨_, h⟩ <;>
+    (revert h; pexen 1; intro h₃)
+    · apply ih' ht' e s₂ r (h1 hs <| run_append h₁ h₂) h₃
+    · apply ih ht e s₂ r (h1 hs <| run_append h₁ h₂) h₃
+  | leaf w p =>
+    intro ht e s r hs; pexen 2; intro h'
+    rcases of_run_branch' h' with ⟨_, h⟩ | ⟨_, h⟩ <;>
+      (clear h'; revert h; pexen 1; intro h)
+    · cases h with
+      | @call _ _ f' _ h_eq h_run =>
+        have hh := Eq.trans h2.symm h_eq
+        simp at hh; cases hh
+        apply h3 (h0 hs <| run_append h₁ h₂) h_run
+    · apply ht ⟨w, p⟩ cst (h0 hs <| run_append h₁ h₂) h
 
-theorem correct (e : Env) (s : Desc) (p : Prog) (r : Result)
-    (cr : Exec e s 0 r) (h : some e.code = p.compile) :
-    Prog.Run e s p r := by
-  rcases @subcode_of_get?_eq_some p.main p.aux e 0 _ p.main h rfl
-    with ⟨h_at, h_sub⟩
-  rcases jumpdest_at cr h_at with ⟨cr', h⟩; clear h h_at
-  apply correct_core p.main p.aux ⟨e, s, 1, r, cr'⟩ p.main h h_sub
+#exit
 
 def Prog.At (p : Prog) (ca : Adr)
     (e : Env) (s : Desc) (pc : Nat) : Prop :=
@@ -4652,71 +4722,6 @@ elab_rules : tactic
       d.fvarId.clear
 end
 
-inductive DispatchTree : Type
-  | leaf : B256 → Func → DispatchTree
-  | fork : DispatchTree → DispatchTree → DispatchTree
-
-open DispatchTree
-
-def DispatchTree.mem : DispatchTree → (B256 × Func) → Prop
-  | (leaf w p), wp => wp = (w, p)
-  | (fork tl tr), wp => DispatchTree.mem tl wp ∨ DispatchTree.mem tr wp
-
-instance : Membership (B256 × Func) DispatchTree := ⟨DispatchTree.mem⟩
-
-def leftmostFsig : DispatchTree → B256
-  | (DispatchTree.leaf w _) => w
-  | (DispatchTree.fork t _) => leftmostFsig t
-
--- given a dispatch tree of functions and their signatures, construct the main program.
--- note it assumes that:
--- (1) the calldata function selector is already at the op of the stack (i.e, it has to be preceded by 'fsig').
--- (2) the functions are ordered in ascending order of their signatures (right is higher)
-
-def dispatchWith (k : Nat) : DispatchTree → Func
-  | DispatchTree.leaf w p => pushB256 w ::: eq ::: (p <?> .call k)
-  | DispatchTree.fork tl tr =>
-    dup 0 :::
-    pushB256 (leftmostFsig tr) ::: gt :::
-    (dispatchWith k tl <?> dispatchWith k tr)
-
-def dispatch : DispatchTree → Func
-  | DispatchTree.leaf w p => pushB256 w ::: eq ::: (p <?> .rev)
-  | DispatchTree.fork tl tr =>
-    dup 0 :::
-    pushB256 (leftmostFsig tr) ::: gt :::
-    (dispatch tl <?> dispatch tr)
-
-lemma dispatchWith_inv {c k f} (σ : Env → Desc → Prop) (ρ : Env → Result → Prop)
-    (h0 : ∀ {e s x s'}, σ e s → Line.Run e s [pushB256 x, eq, pop] s' → σ e s')
-    (h1 : ∀ {e s x s'}, σ e s → Line.Run e s [dup 0, pushB256 x, gt, pop] s' → σ e s')
-    (h2 : c[k]? = some f)
-    (h3 : ∀ {e s r}, σ e s → Func.Run c e s f r → ρ e r) :
-    ∀ t : DispatchTree,
-      (∀ {e s r}, ∀ wf ∈ t, σ e s → Func.Run c e s wf.2 r → ρ e r) →
-    ∀ (e s r), σ e s → Func.Run c e s (dispatchWith k t) r → ρ e r := by
-  intro t; induction t with
-  | fork t t' ih ih' =>
-    intro htt'
-    have ht : ∀ {e s r}, ∀ wp ∈ t, σ e s → Func.Run c e s wp.2 r → ρ e r := by
-      intro e s r wp h_in; apply htt' _ <| Or.inl h_in
-    have ht' : ∀ {e s r}, ∀ wp ∈ t', σ e s → Func.Run c e s wp.2 r → ρ e r := by
-      intro e s r wp h_in; apply htt' _ (Or.inr h_in)
-    intro e s r hs; pexen 3; intro h₂
-    rcases of_run_branch' h₂ with ⟨_, h⟩ | ⟨_, h⟩ <;>
-    (revert h; pexen 1; intro h₃)
-    · apply ih' ht' e s₂ r (h1 hs <| run_append h₁ h₂) h₃
-    · apply ih ht e s₂ r (h1 hs <| run_append h₁ h₂) h₃
-  | leaf w p =>
-    intro ht e s r hs; pexen 2; intro h'
-    rcases of_run_branch' h' with ⟨_, h⟩ | ⟨_, h⟩ <;>
-      (clear h'; revert h; pexen 1; intro h)
-    · cases h with
-      | @call _ _ f' _ h_eq h_run =>
-        have hh := Eq.trans h2.symm h_eq
-        simp at hh; cases hh
-        apply h3 (h0 hs <| run_append h₁ h₂) h_run
-    · apply ht ⟨w, p⟩ cst (h0 hs <| run_append h₁ h₂) h
 
 def shiftRight (w : B256) : Line := [pushB256 w, shr]
 

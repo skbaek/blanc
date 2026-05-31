@@ -739,7 +739,7 @@ inductive Func.Run : List Func → Sevm → Devm → Func → Devm → Prop
       Func.Run fs sevm devm (call k) devm''
 
 def Prog.Run (sevm : Sevm) (devm : Devm) (p : Prog) (devm' : Devm) : Prop :=
-  Func.Run (p.main :: p.aux) sevm devm p.main devm'
+  Func.Run (p.main :: p.aux) sevm devm (.call 0) devm'
 
 -------------------------------------------------------------------------------
 
