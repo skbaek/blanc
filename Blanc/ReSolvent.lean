@@ -809,7 +809,29 @@ theorem weth_inv_solvent (wa : Adr) :
       (sevm.currentTarget = wa → some sevm.code.toList = Prog.compile weth) →
       Precond wa sevm devm →
       Postcond wa sevm exn := by
-  sorry
+  intro sevm devm exn exc h_code h_pc
+  apply lift_inv (Precond wa) (Postcond wa)
+  · intros; trivial
+  · intros; trivial
+  · intros; trivial
+  · intros _ _ _ _ _ _ _ h_ih h_pc
+    -- TODO: Port `Ninst.run_inv_solvent` and apply it here
+    -- to prove that `Ninst.Run'` (with `Xlot = none`) preserves `Precond`.
+    sorry
+  · intros _ _ _ _ _ _ _ _ _ _ _ h_run h_ih_child h_ih_parent h_pc
+    -- TODO: Port `Xinst.run_inv_solvent` and apply it here
+    -- Here `h_run` gives the child execution returning `exn_`.
+    -- `h_ih_child` is the induction hypothesis for the child execution!
+    sorry
+  · intros; trivial
+  · intros _ _ _ _ _ _ _ _ _ h_ih h_pc
+    -- TODO: Port `Jinst.run_inv_solvent`
+    sorry
+  · intros _ _ _ _ _ _ _ h_pc
+    -- TODO: Port `Linst.run_inv_solvent`
+    sorry
+  · exact exc
+  · exact h_pc
 
 /-
   intro e s r ex h h'

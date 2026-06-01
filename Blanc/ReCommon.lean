@@ -3765,7 +3765,7 @@ def fsig : Line := cdl 0 ++ shiftRight 224
 def Func.main (dt : DispatchTree) : Func := fsig +++ dispatch dt
 def Func.mainWith (k : Nat) (dt : DispatchTree) : Func := fsig +++ dispatchWith k dt
 
-#exit
+/-
 lemma dispatchWith_inv {c k f} (σ : Env → Desc → Prop) (ρ : Env → Result → Prop)
     (h0 : ∀ {e s x s'}, σ e s → Line.Run e s [pushB256 x, eq, pop] s' → σ e s')
     (h1 : ∀ {e s x s'}, σ e s → Line.Run e s [dup 0, pushB256 x, gt, pop] s' → σ e s')
@@ -3796,248 +3796,72 @@ lemma dispatchWith_inv {c k f} (σ : Env → Desc → Prop) (ρ : Env → Result
         simp at hh; cases hh
         apply h3 (h0 hs <| run_append h₁ h₂) h_run
     · apply ht ⟨w, p⟩ cst (h0 hs <| run_append h₁ h₂) h
+-/
+
+lemma lift_inv
+    (σ : Sevm → Devm → Prop)
+    (ρ : Sevm → Execution → Prop)
+    (invOp : ∀ {pc sevm devm},
+      sevm.code.getInst pc = none →
+      σ sevm devm → ρ sevm (.error ⟨"InvalidOpcode", devm⟩))
+    (nextNoneErr : ∀ {pc sevm devm n err devm'},
+      n.At sevm.code pc →
+      Ninst.Run' pc sevm devm n .none (.error ⟨err, devm'⟩) →
+      σ sevm devm → ρ sevm (.error ⟨err, devm'⟩))
+    (nextSomeErr : ∀ {pc sevm devm n pc_ sevm_ devm_ exn_ err devm'},
+      n.At sevm.code pc →
+      Ninst.Run' pc sevm devm n (.some (⟨pc_, sevm_, devm_⟩, exn_)) (.error ⟨err, devm'⟩) →
+      (σ sevm_ devm_ → ρ sevm_ exn_) →
+      σ sevm devm → ρ sevm (.error ⟨err, devm'⟩))
+    (nextNoneRec : ∀ {pc sevm devm n devm' exn},
+      n.At sevm.code pc →
+      Ninst.Run' pc sevm devm n .none (.ok devm') →
+      (σ sevm devm' → ρ sevm exn) →
+      σ sevm devm → ρ sevm exn)
+    (nextSomeRec : ∀ {pc sevm devm n pc_ sevm_ devm_ exn_ devm' exn},
+      n.At sevm.code pc →
+      Ninst.Run' pc sevm devm n (.some (⟨pc_, sevm_, devm_⟩, exn_)) (.ok devm') →
+      (σ sevm_ devm_ → ρ sevm_ exn_) →
+      (σ sevm devm' → ρ sevm exn) →
+      σ sevm devm → ρ sevm exn)
+    (jumpErr : ∀ {pc sevm devm j err devm'},
+      j.At sevm.code pc →
+      Jinst.Run ⟨pc, sevm, devm⟩ j (.error ⟨err, devm'⟩) →
+      σ sevm devm → ρ sevm (.error ⟨err, devm'⟩))
+    (jumpRec : ∀ {pc sevm devm j pc' devm' exn},
+      j.At sevm.code pc →
+      Jinst.Run ⟨pc, sevm, devm⟩ j (.ok ⟨pc', devm'⟩) →
+      (σ sevm devm' → ρ sevm exn) →
+      σ sevm devm → ρ sevm exn)
+    (last : ∀ {pc sevm devm l exn},
+      l.At sevm.code pc →
+      Linst.Run sevm devm l exn →
+      σ sevm devm → ρ sevm exn) :
+    ∀ pc sevm devm exn,
+      Exec pc sevm devm exn →
+      σ sevm devm → ρ sevm exn := by
+  intro pc sevm devm exn exc
+  induction exc with
+  | invOp h => apply invOp h
+  | nextNoneErr nat run => apply nextNoneErr nat run
+  | nextSomeErr nat run exc_ ih_exc_ =>
+    intro hσ
+    apply nextSomeErr nat run ih_exc_ hσ
+  | nextNoneRec nat run exc ih_exc =>
+    intro hσ
+    apply nextNoneRec nat run ih_exc hσ
+  | nextSomeRec nat run exc_ exc ih_exc_ ih_exc =>
+    intro hσ
+    apply nextSomeRec nat run ih_exc_ ih_exc hσ
+  | jumpErr jat run => apply jumpErr jat run
+  | jumpRec jat run exc ih_exc =>
+    intro hσ
+    apply jumpRec jat run ih_exc hσ
+  | last lat run => apply last lat run
 
 #exit
 
-def Prog.At (p : Prog) (ca : Adr)
-    (e : Env) (s : Desc) (pc : Nat) : Prop :=
-  some (s.code ca) = Prog.compile p ∧
-  (e.cta = ca → (some e.code = Prog.compile p ∧ pc = 0))
 
-def Exec.Wkn (ca : Adr) (p : Prog)
-    (π : Exec.Pred)
-    (e s pc r) (ex : Exec e s pc r) : Prop :=
-  p.At ca e s pc → π _ _ _ _ ex
-
-def ForallDeeper (k : Nat) (ε : Exec.Pred) : Prop :=
-  ∀ e s pc r (ex : Exec e s pc r), e.exd < k → ε _ _ _ _ ex
-
-def ForallDeeperAt (k : Nat) (ca : Adr) (p : Prog) (ε : Exec.Pred) : Prop :=
-  ForallDeeper k (λ e s pc _ ex => p.At ca e s pc → ε _ _ _ _ ex)
-
-lemma Xinst.exd_lt_of_run' {e s ep sp o r sw}
-    (h : Xinst.Run' e s ep sp o r sw) : ep.exd < e.exd := by
-  cases h <;> {simp [(asm : e.exd = _)]; apply Nat.lt_succ_self}
-
-lemma ctc_eq_of_call {e s ep sp rx sw}
-    (h : Xinst.Run' e s ep sp .call rx sw) : ep.code = s.code ep.cta := by
-  cases h; simp [Env.prep]
-
-lemma ctc_eq_of_statcall {e s ep sp rx sw}
-    (h : Xinst.Run' e s ep sp .statcall rx sw) : ep.code = s.code ep.cta := by
-  cases h; simp [Env.prep]
-
-lemma Env.cta_prep_eq {e : Env} {d : Desc}
-  {adr adr'} {slc v a n w} :
-  (Env.prep e d adr slc adr' v a n w).cta = adr := rfl
-
-lemma call_or_statcall_of_ne {e s ep sp o rx sw}
-    (ho : Xinst.isCall o)
-    (h_run : Xinst.Run' e s ep sp o rx sw)
-    (h_ne : e.cta ≠ ep.cta) : o = .call ∨ o = .statcall := by
-  cases h_run
-  · cases ho
-  · cases ho
-  · left; rfl
-  · rw [Env.cta_prep_eq] at h_ne
-    cases (h_ne rfl)
-  · rw [Env.cta_prep_eq] at h_ne
-    cases (h_ne rfl)
-  · right; rfl
-
-lemma Xinst.rel_inv_code {a} {e s ep sp o rx sw}
-    (h_cr : Xinst.Run' e s ep sp o rx sw)
-    (h_ne : s.code a ≠ [])
-    (h_run : Exec ep sp 0 rx) : s.code a = sw.code a := by
-  have h_ne' : sp.code a ≠ List.nil := by
-    rw [← Xinst.prep_inv_code h_cr]; exact h_ne
-  rw [Xinst.prep_inv_code h_cr, Exec.inv_code h_run h_ne']
-  apply Xinst.wrap_inv_code'' h_cr h_ne
-
-lemma combine_prog
-    {ε : Exec.Pred}
-    {π : Prog.Pred}
-    (h_imp : ∀ {e s p r} (ex : Exec e s 0 r), π e s p r → ε _ _ _ _ ex)
-    {ca : Adr}
-    {p : Prog}
-    ( h_inv :
-      ∀ {e s r},
-        Prog.Run e s p r → e.cta = ca →
-        ForallDeeperAt e.exd ca p ε → π e s p r )
-    {e : Env} {s : Desc}
-    {r : Result} {pc : Nat}
-    (h_fa : ForallDeeperAt e.exd ca p ε)
-    (h_cond : e.cta = ca → some e.code = Prog.compile p ∧ pc = 0)
-    (h_cta : e.cta = ca)
-    (ex : Exec e s pc r) :
-    ε _ _ _ _ ex := by
-  rcases h_cond h_cta with ⟨h_code, ⟨_⟩⟩
-  have h_run : Prog.Run e s p r := correct _ _ _ _ ex h_code
-  apply h_imp ex <| h_inv h_run h_cta h_fa
-
-lemma lift_core
-    (ε : Exec.Pred)
-    (π : Prog.Pred)
-    (analog : ∀ {e s p r} (ex : Exec e s 0 r), π e s p r → ε _ _ _ _ ex)
-    (ca : Adr) (p : Prog)
-    ( depth_ind :
-      ∀ {e s r},
-        Prog.Run e s p r →
-        e.cta = ca →
-        ForallDeeperAt e.exd ca p ε →
-        π e s p r )
-    ( step_inv :
-      ∀ {e s pc s' pc' r}
-        (h : Step e s pc s' pc')
-        (ex : Exec e s' pc' r),
-        e.cta ≠ ca →
-        ε e s' pc' r ex →
-        ε e s pc r (.step h ex) )
-    ( exec_inv :
-      ∀ {e s pc ep sp i r s' r'}
-        (h_at : Xinst.At e pc i)
-        (h_run : Xinst.Run' e s ep sp i r s')
-        (ex : Exec ep sp 0 r)
-        (ex' : Exec e s' (pc + 1) r'),
-        e.cta ≠ ca →
-        ε ep sp 0 r ex →
-        ε e s' (pc + 1) r' ex' →
-        ε e s pc r' (.exec h_at h_run ex ex') )
-    ( halt_inv :
-      ∀ {e s pc r} (h : Halt e s pc r),
-        e.cta ≠ ca →
-        ε e s pc r (.halt h) )
-    : Exec.Fa (@Exec.Wkn ca p ε) := by
-  apply Exec.strong_rec; apply @Exec.rec (Fortify (Exec.Wkn ca p ε))
-  · intro e s pc s' pc' r h_step ex ih ih' h_at
-    rcases em (e.cta = ca) with h_eq | h_ne
-    · apply combine_prog analog depth_ind ih' h_at.right h_eq
-    · clear depth_ind analog
-      have h_code_inv : some (s'.code ca) = Prog.compile p := by
-        rw [← Step.inv_code h_step, h_at.left]
-      have hε : ε e s' pc' r ex :=
-        ih ih' ⟨h_code_inv, λ hc => (h_ne hc).elim⟩
-      apply step_inv h_step ex h_ne hε
-  · intro e s pc ep sp i r s' r' h_at h_run ex ex' ih ih' h_fa h_at'
-    have h_comp := h_at'.left
-    rcases em (e.cta = ca) with h_eq | h_ne
-    · apply combine_prog analog depth_ind h_fa h_at'.right h_eq
-    · clear analog depth_ind step_inv
-      apply exec_inv h_at h_run ex ex' h_ne
-      · apply ih _ ⟨_, _⟩
-        . intro e_ s_ pc_ r_ ex_ h_lt; apply h_fa
-          apply _root_.lt_trans h_lt <| Xinst.exd_lt_of_run' h_run
-        · rw [← Xinst.prep_inv_code h_run, h_comp]
-        · intro h_eq; refine' ⟨_, rfl⟩
-          by_cases ho : i.isCall
-          · rw [← h_eq] at h_ne
-            rcases call_or_statcall_of_ne ho h_run h_ne with
-              h | h <;> rw [h] at h_run <;> clear h
-            · rw [ctc_eq_of_call h_run, h_eq, h_comp]
-            · rw [ctc_eq_of_statcall h_run, h_eq, h_comp]
-          · rw [← h_eq, Xinst.code_eq_nil_of_run' h_run ho] at h_comp
-            cases Prog.compile_ne_nil h_comp.symm
-      · apply ih' h_fa ⟨_, λ hc => (h_ne hc).elim⟩
-        rw [← h_comp]; simp;
-        rw [Xinst.rel_inv_code h_run _ ex]
-        intro hc; apply Prog.compile_ne_nil
-        rw [← hc]; apply h_comp.symm
-  · intro e s pc r h_halt h_fa h_at
-    rcases em (e.cta = ca) with h_eq | h_ne
-    · exact combine_prog analog depth_ind h_fa h_at.right h_eq (.halt h_halt)
-    · exact halt_inv h_halt h_ne
-
-def ForallSubExec (k : Nat) (ca : Adr) (p : Prog)
-    (R : Env → Desc → Result → Prop) : Prop :=
-  ∀ e s pc r,
-    Exec e s pc r →
-    e.exd < k →
-    p.At ca e s pc →
-    R e s r
-
-lemma lift
-    (R : Env → Desc → Result → Prop)
-    (ca : Adr) -- contract address
-    (p : Prog)
-    ( depth_ind :
-      ∀ {e s r},
-        Prog.Run e s p r →
-        e.cta = ca →
-        ForallSubExec e.exd ca p R →
-        R e s r )
-    ( step_inv :
-      ∀ {e s pc s' pc' r},
-        Step e s pc s' pc' →
-        Exec e s' pc' r →
-        e.cta ≠ ca →
-        R e s' r → R e s r )
-    ( exec_inv :
-      ∀ {e s pc ep sp i r s' r'},
-        Xinst.At e pc i →
-        Xinst.Run' e s ep sp i r s' →
-        Exec ep sp 0 r →
-        Exec e s' (pc + 1) r' →
-        e.cta ≠ ca →
-        R ep sp r → R e s' r' → R e s r' )
-    ( halt_inv :
-      ∀ {e s pc r},
-        Halt e s pc r →
-        e.cta ≠ ca →
-        R e s r ) :
-    ∀ e s pc r,
-      Exec e s pc r →
-      Prog.At p ca e s pc →
-      R e s r := by
-  intro e s pc r ex h
-  apply
-    lift_core
-      (λ e s _ r _ => R e s r)
-      (λ e s _ r => R e s r)
-      (λ _ h => h) ca p
-      depth_ind
-      step_inv
-      exec_inv
-      halt_inv
-      e s pc r ex h
-
-lemma lift_inv
-    (ca : Adr) (p : Prog)
-    (σ : Env → Desc → Prop)
-    (ρ : Env → Result → Prop)
-    ( with_depth_ind :
-      ∀ {e s r},
-        Prog.Run e s p r →
-        e.cta = ca →
-        (∀ e' s' pc' r',
-           Exec e' s' pc' r' →
-           e'.exd < e.exd →
-           Prog.At p ca e' s' pc' →
-           σ e' s' → ρ e' r') →
-        σ e s → ρ e r )
-    ( step_inv :
-      ∀ {e s pc s' pc'},
-        Step e s pc s' pc' →
-        e.cta ≠ ca → σ e s → σ e s' )
-    ( exec_inv :
-      ∀ {e s ep sp o rx sw},
-        Xinst.Run' e s ep sp o rx sw →
-        e.cta ≠ ca → σ e s →
-        (σ ep sp ∧ (ρ ep rx → σ e sw)) )
-    ( halt_inv :
-      ∀ {e s pc r},
-        Halt e s pc r → e.cta ≠ ca →
-        σ e s → ρ e r ) :
-    ∀ e s pc r,
-      Exec e s pc r →
-      Prog.At p ca e s pc →
-      σ e s → ρ e r := by
-  apply @lift (λ e s r => σ e s → ρ e r) ca p with_depth_ind
-  · intro e s pc s' pc' r h_step _ h_ne ih --hσ
-    apply ih ∘ step_inv h_step h_ne
-  · intro e s pc ep sp i r s' r' _ h_run _ _ h_ne ih ih' hσ
-    rcases exec_inv h_run h_ne hσ with ⟨hσ', h_imp⟩
-    apply ih' <| h_imp <| ih hσ'
-  · intro e s pc r h_halt h_ne; exact halt_inv h_halt h_ne
 
 syntax "show_prefix_zero" : tactic
 macro_rules
