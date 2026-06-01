@@ -5,25 +5,35 @@ import Blanc.ReWeth
 import Std.Data.TreeMap.Lemmas
 
 
-#exit
-
-def Storage.rest (s : Storage) : Adr → B256 := s ∘ Adr.toB256
+def Stor.rest (s : Stor) : Adr → B256 := s.get ∘ Adr.toB256
 
 -- sum of all WETH balances, provided that s is the storage of WETH contract
-def wbsum (s : Storage) : Nat := sum s.rest
+def wbsum (s : Stor) : Nat := sum s.rest
 
-def Storage.Solvent (s : Storage) (v : B256) (b : B256) : Prop :=
+def Stor.Solvent (s : Stor) (v : B256) (b : B256) : Prop :=
   wbsum s + v.toNat ≤ b.toNat
 
-def World.Solvent (w : World) (a : Adr) : Prop :=
-  Storage.Solvent (w.stor a) 0 (w.bal a)
+def State.Solvent (w : State) (a : Adr) : Prop :=
+  Stor.Solvent (w.getStor a) 0 (w.bal a)
 
-def Desc.Solvent (s : Desc) (a : Adr) (e : Env) : Prop :=
-  (e.cta = a → Storage.Solvent (s.stor a) e.clv (s.bal a)) ∧
-  (e.cta ≠ a → Storage.Solvent (s.stor a) 0 (s.bal a))
+def Devm.getStor (devm : Devm) (adr : Adr) : Stor :=
+  (devm.getAcct adr).stor
 
-def Result.Solvent (r : Result) (a : Adr) : Prop :=
-  Storage.Solvent (r.stor a) 0 (r.bal a)
+def Devm.Solvent (devm : Devm) (a : Adr) (sevm : Sevm) : Prop :=
+  (sevm.currentTarget = a → Stor.Solvent (devm.getStor a) sevm.value (devm.getBal a)) ∧
+  (sevm.currentTarget ≠ a → Stor.Solvent (devm.getStor a) 0 (devm.getBal a))
+
+-- def Execution.Solvent (exn : Execution) (a : Adr) : Prop :=
+def Execution.Solvent (sevm : Sevm) : Execution → Adr → Prop
+  | .error _, _ => True
+  | .ok devm, adr => devm.Solvent adr sevm
+
+-- def Result.Solvent (r : Result) (a : Adr) : Prop :=
+--   Storage.Solvent (r.stor a) 0 (r.bal a)
+
+/-
+
+
 
 lemma solvent_of_same_stor {s s' : Storage} {v : B256} {b b' : B256} :
     s.Solvent v b → s = s' → b = b' → s'.Solvent v b' := by
@@ -97,19 +107,20 @@ lemma Xinst.prep_inv_solvent
       rcases (asm : Transfer _ _ _ _ _) with ⟨_, b, hd, hi⟩
       rw [(hd wa).right ha, (hi wa).right ha']
     rw [h_bal']; apply h_sv.right ha
+    -/
 
 -- Precond & Postcond : invariants in the main induction for proof of solvency preservation
 
-structure Precond (wa : Adr) (e : Env) (s : Desc) : Prop where
-  (code : some (s.code wa) = Prog.compile weth)
-  (nof : sum s.bal < 2 ^ 256)
-  (solvent : s.Solvent wa e)
+structure Precond (wa : Adr) (sevm : Sevm) (devm : Devm) : Prop where
+  (nof : sum devm.getBal < 2 ^ 256)
+  (solvent : devm.Solvent wa sevm)
 
-structure Postcond (wa : Adr) (e : Env) (r : Result) : Prop where
-  (code : some (r.code wa) = Prog.compile weth)
-  (nof : sum r.bal < 2 ^ 256)
-  (solvent : r.Solvent wa)
+def Postcond (wa : Adr) (sevm : Sevm) : Execution → Prop
+  | .error _ => True
+  | .ok devm => Precond wa sevm devm
 
+
+/-
 open Ninst
 
 lemma addressMask_eq_shl :
@@ -790,13 +801,17 @@ lemma Xinst.wrap_inv_solvent {e s ep sp o r sw wa}
     (h_ne : e.cta ≠ wa) (h_sv : r.Solvent wa) : sw.Solvent wa e := by
   simp [h_ne, Desc.Solvent];
   cases h <;> {simp [Desc.wrap, Desc.wrap']; apply h_sv}
+  -/
 
 theorem weth_inv_solvent (wa : Adr) :
-    ∀ e s r,
-      Exec e s 0 r →
-      some (s.code wa) = Prog.compile weth →
-      (e.cta = wa → some e.code = Prog.compile weth) →
-      Precond wa e s → Postcond wa e r := by
+    ∀ sevm devm exn,
+      Exec 0 sevm devm exn →
+      (sevm.currentTarget = wa → some sevm.code.toList = Prog.compile weth) →
+      Precond wa sevm devm →
+      Postcond wa sevm exn := by
+  sorry
+
+/-
   intro e s r ex h h'
   apply
     lift_inv wa weth (Precond wa) (Postcond wa) _ _ _ _
@@ -2827,3 +2842,5 @@ theorem transition_inv_solvent
       tx
 
   apply hh
+
+-/
