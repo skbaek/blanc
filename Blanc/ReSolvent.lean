@@ -119,6 +119,22 @@ def Postcond (wa : Adr) (sevm : Sevm) : Execution → Prop
   | .error _ => True
   | .ok devm => Precond wa sevm devm
 
+lemma Precond.state_eq {wa sevm devm devm'} (h_pc : Precond wa sevm devm) (h_eq : devm'.state = devm.state) :
+    Precond wa sevm devm' := by
+  cases h_pc with
+  | mk h_nof h_solv =>
+    have h_bal : devm'.getBal = devm.getBal := by
+      funext a; simp [Devm.getBal, Devm.getAcct]; rw [h_eq]
+    have h_stor : ∀ a, devm'.getStor a = devm.getStor a := by
+      intro a; simp [Devm.getStor, Devm.getAcct]; rw [h_eq]
+    constructor
+    · rw [h_bal]; exact h_nof
+    · cases h_solv with
+      | intro hl hr =>
+        constructor
+        · intro h; rw [h_bal, h_stor wa]; exact hl h
+        · intro h; rw [h_bal, h_stor wa]; exact hr h
+
 
 /-
 open Ninst
@@ -803,6 +819,32 @@ lemma Xinst.wrap_inv_solvent {e s ep sp o r sw wa}
   cases h <;> {simp [Desc.wrap, Desc.wrap']; apply h_sv}
   -/
 
+lemma Linst.inv_nof {sevm devm l devm'} :
+    Linst.Run sevm devm l (.ok devm') →
+    sum devm.getBal < 2 ^ 256 →
+    sum devm'.getBal < 2 ^ 256 := by
+  sorry
+
+lemma Linst.run_inv_solvent (wa : Adr) :
+    ∀ sevm devm l exn,
+      Linst.Run sevm devm l exn →
+      Precond wa sevm devm →
+      Postcond wa sevm exn := by
+  intro sevm devm l exn h_run h_pc
+  cases l
+  · simp [Linst.Run, Linst.run] at h_run
+    rw [← h_run]
+    exact h_pc
+  · -- ret
+    -- TODO: Unfold the `do` block and apply `Precond.state_eq`
+    sorry
+  · -- rev
+    -- TODO: Unfold the `do` block and apply `Precond.state_eq`
+    sorry
+  · -- dest
+    -- TODO: Prove that `dest` preserves `Precond` using `transfer_inv_solvent` logic
+    sorry
+
 theorem weth_inv_solvent (wa : Adr) :
     ∀ sevm devm exn,
       Exec 0 sevm devm exn →
@@ -827,9 +869,8 @@ theorem weth_inv_solvent (wa : Adr) :
   · intros _ _ _ _ _ _ _ _ _ h_ih h_pc
     -- TODO: Port `Jinst.run_inv_solvent`
     sorry
-  · intros _ _ _ _ _ _ _ h_pc
-    -- TODO: Port `Linst.run_inv_solvent`
-    sorry
+  · intros _ sevm_ devm_ l_ exn_ _ h_run h_pc
+    exact Linst.run_inv_solvent wa sevm_ devm_ l_ exn_ h_run h_pc
   · exact exc
   · exact h_pc
 
