@@ -825,7 +825,23 @@ lemma Linst.inv_nof {sevm devm l devm'} :
     sum devm'.getBal < 2 ^ 256 := by
   sorry
 
-lemma Linst.run_inv_solvent (wa : Adr) :
+def Inv0 {ξ} (r : Devm → ξ) (f : Devm → Except (String × Devm) Devm) : Prop :=
+    ∀ {pre y post}, f pre = .ok post → r pre = r post
+
+def Inv1 {ξ υ} (r : Devm → ξ) (f : Devm → Except (String × Devm) (υ × Devm)) : Prop :=
+    ∀ {pre y post}, f pre = .ok ⟨y, post⟩ → r pre = r post
+
+class Hinv0 {ξ} (r : Devm → ξ) (f : Devm → Except (String × Devm) Devm) where
+  (inv : Inv0 r f)
+
+class Hinv1 {ξ υ} (r : Devm → ξ)
+    (f : Devm → Except (String × Devm) (υ × Devm)) where
+  (inv : Inv1 r f)
+
+instance {ca} {cost} : Inv0 (λ devm => devm.getBal ca) (chargeGas cost) := sorry
+instance {ca} : Inv1 (λ devm => devm.getBal ca) Devm.popToNat := sorry
+
+lemma Linst.inv_solvent (wa : Adr) :
     ∀ sevm devm l exn,
       Linst.Run sevm devm l exn →
       Precond wa sevm devm →
@@ -870,7 +886,7 @@ theorem weth_inv_solvent (wa : Adr) :
     -- TODO: Port `Jinst.run_inv_solvent`
     sorry
   · intros _ sevm_ devm_ l_ exn_ _ h_run h_pc
-    exact Linst.run_inv_solvent wa sevm_ devm_ l_ exn_ h_run h_pc
+    exact Linst.inv_solvent wa sevm_ devm_ l_ exn_ h_run h_pc
   · exact exc
   · exact h_pc
 
