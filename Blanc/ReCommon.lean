@@ -3798,70 +3798,56 @@ lemma dispatchWith_inv {c k f} (σ : Env → Desc → Prop) (ρ : Env → Result
     · apply ht ⟨w, p⟩ cst (h0 hs <| run_append h₁ h₂) h
 -/
 
+def ifOk {ε α} (π : α → Prop) : Except ε α → Prop
+  | .error _ => True
+  | .ok a => π a
+
+def Prog.At (p : Prog) (ca : Adr)
+    (pc : Nat) (sevm : Sevm) (devm : Devm) : Prop :=
+  some (devm.getCode ca).toList = Prog.compile p ∧
+  (sevm.currentTarget = ca → (some sevm.code.toList = Prog.compile p ∧ pc = 0))
+
 lemma lift_inv
-    (σ : Sevm → Devm → Prop)
-    (ρ : Sevm → Execution → Prop)
-    (invOp : ∀ {pc sevm devm},
-      sevm.code.getInst pc = none →
-      σ sevm devm → ρ sevm (.error ⟨"InvalidOpcode", devm⟩))
-    (nextNoneErr : ∀ {pc sevm devm n err devm'},
-      n.At sevm.code pc →
-      Ninst.Run' pc sevm devm n .none (.error ⟨err, devm'⟩) →
-      σ sevm devm → ρ sevm (.error ⟨err, devm'⟩))
-    (nextSomeErr : ∀ {pc sevm devm n pc_ sevm_ devm_ exn_ err devm'},
-      n.At sevm.code pc →
-      Ninst.Run' pc sevm devm n (.some (⟨pc_, sevm_, devm_⟩, exn_)) (.error ⟨err, devm'⟩) →
-      (σ sevm_ devm_ → ρ sevm_ exn_) →
-      σ sevm devm → ρ sevm (.error ⟨err, devm'⟩))
-    (nextNoneRec : ∀ {pc sevm devm n devm' exn},
-      n.At sevm.code pc →
-      Ninst.Run' pc sevm devm n .none (.ok devm') →
-      (σ sevm devm' → ρ sevm exn) →
-      σ sevm devm → ρ sevm exn)
-    (nextSomeRec : ∀ {pc sevm devm n pc_ sevm_ devm_ exn_ devm' exn},
-      n.At sevm.code pc →
-      Ninst.Run' pc sevm devm n (.some (⟨pc_, sevm_, devm_⟩, exn_)) (.ok devm') →
-      (σ sevm_ devm_ → ρ sevm_ exn_) →
-      (σ sevm devm' → ρ sevm exn) →
-      σ sevm devm → ρ sevm exn)
-    (jumpErr : ∀ {pc sevm devm j err devm'},
-      j.At sevm.code pc →
-      Jinst.Run ⟨pc, sevm, devm⟩ j (.error ⟨err, devm'⟩) →
-      σ sevm devm → ρ sevm (.error ⟨err, devm'⟩))
-    (jumpRec : ∀ {pc sevm devm j pc' devm' exn},
-      j.At sevm.code pc →
-      Jinst.Run ⟨pc, sevm, devm⟩ j (.ok ⟨pc', devm'⟩) →
-      (σ sevm devm' → ρ sevm exn) →
-      σ sevm devm → ρ sevm exn)
-    (last : ∀ {pc sevm devm l exn},
-      l.At sevm.code pc →
-      Linst.Run sevm devm l exn →
-      σ sevm devm → ρ sevm exn) :
+    (ca : Adr) (p : Prog)
+    (π : Sevm → Devm → Prop)
+    ( with_depth_ind :
+      ∀ {sevm pre post},
+        Prog.Run sevm pre p post →
+        sevm.currentTarget = ca →
+        ( ∀ pc' sevm' pre' exn',
+            Exec pc' sevm' pre' exn' →
+            sevm.depth < sevm'.depth →
+            Prog.At p ca pc' sevm' pre' →
+            π sevm' pre' →
+            ifOk (π sevm') exn' ) →
+        π sevm pre →
+        π sevm post )
+    ( next :
+      ∀ {pc} {sevm} {pre} {n} {xl} {inter},
+        n.At sevm.code pc →
+        Ninst.Run' pc sevm pre n xl (.ok inter) →
+        sevm.currentTarget ≠ ca →
+        π sevm pre →
+        π sevm inter )
+    ( jump :
+      ∀ {pc} {sevm} {pre} {j} {pc'} {inter},
+        j.At sevm.code pc →
+        Jinst.Run ⟨pc, sevm, pre⟩ j (.ok ⟨pc', inter⟩) →
+        sevm.currentTarget ≠ ca →
+        π sevm pre →
+        π sevm inter )
+    ( last :
+      ∀ {pc} {sevm} {pre} {l} {post},
+        l.At sevm.code pc →
+        Linst.Run sevm devm l (.ok post) →
+        sevm.currentTarget ≠ ca →
+        π sevm pre →
+        π sevm post ) :
     ∀ pc sevm devm exn,
       Exec pc sevm devm exn →
-      σ sevm devm → ρ sevm exn := by
-  intro pc sevm devm exn exc
-  induction exc with
-  | invOp h => apply invOp h
-  | nextNoneErr nat run => apply nextNoneErr nat run
-  | nextSomeErr nat run exc_ ih_exc_ =>
-    intro hσ
-    apply nextSomeErr nat run ih_exc_ hσ
-  | nextNoneRec nat run exc ih_exc =>
-    intro hσ
-    apply nextNoneRec nat run ih_exc hσ
-  | nextSomeRec nat run exc_ exc ih_exc_ ih_exc =>
-    intro hσ
-    apply nextSomeRec nat run ih_exc_ ih_exc hσ
-  | jumpErr jat run => apply jumpErr jat run
-  | jumpRec jat run exc ih_exc =>
-    intro hσ
-    apply jumpRec jat run ih_exc hσ
-  | last lat run => apply last lat run
+      π sevm devm → ifOk (π sevm) exn := by sorry
 
 #exit
-
-
 
 syntax "show_prefix_zero" : tactic
 macro_rules
