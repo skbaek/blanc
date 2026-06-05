@@ -3809,11 +3809,11 @@ def Prog.At (p : Prog) (ca : Adr)
 
 def ForallSubExec (k : Nat) (ca : Adr) (p : Prog)
     (R : Sevm → Devm → Devm → Prop) : Prop :=
-  ∀ pc sevm devm exn,
-    Exec pc sevm devm exn →
+  ∀ pc sevm devm post,
+    Exec pc sevm devm (.ok post) →
     k < sevm.depth →
     p.At ca pc sevm devm →
-    ifOk (R sevm devm) exn
+    R sevm devm post
 
 lemma lift
     (R : Sevm → Devm → Devm → Prop)
@@ -3872,12 +3872,12 @@ lemma lift_inv
       ∀ {sevm pre post},
         Prog.Run sevm pre p post →
         sevm.currentTarget = ca →
-        ( ∀ pc' sevm' pre' exn',
-            Exec pc' sevm' pre' exn' →
+        ( ∀ pc' sevm' pre' post',
+            Exec pc' sevm' pre' (.ok post') →
             sevm.depth < sevm'.depth →
             Prog.At p ca pc' sevm' pre' →
             π sevm' pre' →
-            ifOk (π sevm') exn' ) →
+            π sevm' post' ) →
         π sevm pre →
         π sevm post )
     ( nextNone :
@@ -3912,7 +3912,20 @@ lemma lift_inv
       Exec pc sevm devm (.ok post) →
       Prog.At p ca pc sevm devm →
       π sevm devm →
-      π sevm post := by sorry
+      π sevm post := by
+  apply @lift (fun sevm pre post => π sevm pre → π sevm post) ca p with_depth_ind
+  · intro pc sevm pre n inter post h_at h_run _ h_ne h_ih h_pi
+    exact h_ih (nextNone h_at h_run h_ne h_pi)
+  · intro pc sevm pre n pc' sevm' devm' exn' inter post h_at h_run _ _ h_ne h_ifOk h_ih h_pi
+    rcases nextSome h_at h_run h_ne h_pi with ⟨h_pi_sub, h_imp⟩
+    apply h_ih; apply h_imp
+    cases exn' with
+    | error e => exact trivial
+    | ok post' => exact h_ifOk h_pi_sub
+  · intro pc sevm pre j pc' inter post h_at h_run _ h_ne h_ih h_pi
+    exact h_ih (jump h_at h_run h_ne h_pi)
+  · intro pc sevm pre l post h_at h_run h_ne h_pi
+    exact last h_at h_run h_ne h_pi
 
 #exit
 
