@@ -3807,6 +3807,64 @@ def Prog.At (p : Prog) (ca : Adr)
   some (devm.getCode ca).toList = Prog.compile p ∧
   (sevm.currentTarget = ca → (some sevm.code.toList = Prog.compile p ∧ pc = 0))
 
+def ForallSubExec (k : Nat) (ca : Adr) (p : Prog)
+    (R : Sevm → Devm → Devm → Prop) : Prop :=
+  ∀ pc sevm devm exn,
+    Exec pc sevm devm exn →
+    k < sevm.depth →
+    p.At ca pc sevm devm →
+    ifOk (R sevm devm) exn
+
+lemma lift
+    (R : Sevm → Devm → Devm → Prop)
+    (ca : Adr) -- contract address
+    (p : Prog)
+    ( depth_ind :
+      ∀ {sevm pre post},
+        Prog.Run sevm pre p post →
+        sevm.currentTarget = ca →
+        ForallSubExec sevm.depth ca p R →
+        R sevm pre post )
+    ( nextNone :
+      ∀ {pc} {sevm} {pre} {n} {inter} {post},
+        n.At sevm.code pc →
+        Ninst.Run' pc sevm pre n .none (.ok inter) →
+        Exec (pc + n.size) sevm inter (.ok post) →
+        sevm.currentTarget ≠ ca →
+        R sevm inter post →
+        R sevm pre post )
+    ( nextSome :
+      ∀ {pc} {sevm} {pre} {n} {pc'} {sevm'} {devm'}
+        {exn' : Execution} {inter} {post},
+        n.At sevm.code pc →
+        Ninst.Run' pc sevm pre n
+          (.some (⟨pc', sevm', devm'⟩, exn'))
+          (.ok inter) →
+        Exec pc' sevm' devm' exn' →
+        Exec (pc + n.size) sevm inter (.ok post) →
+        sevm.currentTarget ≠ ca →
+        ifOk (R sevm' devm') exn' →
+        R sevm inter post →
+        R sevm pre post )
+    ( jump :
+      ∀ {pc} {sevm} {pre} {j} {pc'} {inter} {post},
+        j.At sevm.code pc →
+        Jinst.Run ⟨pc, sevm, pre⟩ j (.ok ⟨pc', inter⟩) →
+        Exec pc' sevm inter (.ok post) →
+        sevm.currentTarget ≠ ca →
+        R sevm inter post →
+        R sevm pre post )
+    ( last :
+      ∀ {pc} {sevm} {pre} {l} {post},
+        l.At sevm.code pc →
+        Linst.Run sevm pre l (.ok post) →
+        sevm.currentTarget ≠ ca →
+        R sevm pre post ) :
+    ∀ pc sevm pre post,
+      Exec pc sevm pre (.ok post) →
+      Prog.At p ca pc sevm pre →
+      R sevm pre post := by sorry
+
 lemma lift_inv
     (ca : Adr) (p : Prog)
     (π : Sevm → Devm → Prop)
@@ -3822,13 +3880,20 @@ lemma lift_inv
             ifOk (π sevm') exn' ) →
         π sevm pre →
         π sevm post )
-    ( next :
-      ∀ {pc} {sevm} {pre} {n} {xl} {inter},
+    ( nextNone :
+      ∀ {pc} {sevm} {pre} {n} {inter},
         n.At sevm.code pc →
-        Ninst.Run' pc sevm pre n xl (.ok inter) →
+        Ninst.Run' pc sevm pre n .none (.ok inter) →
         sevm.currentTarget ≠ ca →
         π sevm pre →
         π sevm inter )
+    ( nextSome :
+      ∀ {pc} {sevm} {pre} {n} {pc'} {sevm'} {devm'} {exn'} {inter},
+        n.At sevm.code pc →
+        Ninst.Run' pc sevm pre n (.some (⟨pc', sevm', devm'⟩, exn')) (.ok inter) →
+        sevm.currentTarget ≠ ca →
+        π sevm pre →
+        π sevm' devm' ∧ (ifOk (π sevm') exn' → π sevm inter) )
     ( jump :
       ∀ {pc} {sevm} {pre} {j} {pc'} {inter},
         j.At sevm.code pc →
@@ -3839,13 +3904,15 @@ lemma lift_inv
     ( last :
       ∀ {pc} {sevm} {pre} {l} {post},
         l.At sevm.code pc →
-        Linst.Run sevm devm l (.ok post) →
+        Linst.Run sevm pre l (.ok post) →
         sevm.currentTarget ≠ ca →
         π sevm pre →
         π sevm post ) :
-    ∀ pc sevm devm exn,
-      Exec pc sevm devm exn →
-      π sevm devm → ifOk (π sevm) exn := by sorry
+    ∀ pc sevm devm post,
+      Exec pc sevm devm (.ok post) →
+      Prog.At p ca pc sevm devm →
+      π sevm devm →
+      π sevm post := by sorry
 
 #exit
 
