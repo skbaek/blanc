@@ -908,16 +908,20 @@ lemma Ninst.run_of_at {pc sevm pre n post}
         ⟨pc, sevm, pre, .ok post, exc⟩ := by
   cases exc
   case nextNoneRec n' inter nat' run exc =>
-    sorry
-  case nextSomeRec n sevm_ devm_ exn_ inter exc_ nat run exc =>
-    sorry
+    injection Eq.trans nat.symm nat' with eq; injection eq with rw
+    cases rw
+    refine' ⟨inter, exc, ⟨.none, trivial, pc, run⟩, Exec'.Prec.none nat' run exc⟩
+  case nextSomeRec n' sevm_ devm_ exn_ inter exc_ nat' run exc =>
+    injection Eq.trans nat.symm nat' with eq; injection eq with rw
+    cases rw
+    refine' ⟨inter, exc, ⟨.some ⟨sevm_, devm_, exn_⟩, ⟨exc_⟩, pc, run⟩, Exec'.Prec.snd nat' run exc_ exc⟩
   case jumpRec jat _ _ =>
-    sorry
+    injection Eq.trans nat.symm jat with eq; injection eq
   case last _ lat _ =>
-    sorry
+    injection Eq.trans nat.symm lat with eq; injection eq
 
 lemma Ninst.size_eq_length_toB8L (n : Ninst) :
-    n.size = n.toB8L.length := by sorry
+    n.size = n.toB8L.length := by cases n <;> rfl
 
 lemma Except.bind_associative
   {ξ υ ζ ω}
