@@ -479,7 +479,31 @@ lemma Linst.run_of_at {pc sevm devm l exn}
     (cr : Exec pc sevm devm exn)
     (h_at : Linst.At sevm.code pc l) :
     Linst.Run sevm devm l exn := by
-    sorry
+  cases cr
+  case invOp eq =>
+    simp only [Linst.At] at h_at
+    rw [eq] at h_at; cases h_at
+  case nextNoneErr nat _ =>
+    simp only [Linst.At, Ninst.At] at h_at nat
+    rw [nat] at h_at; cases h_at
+  case nextSomeErr _ nat _ =>
+    simp only [Linst.At, Ninst.At] at h_at nat
+    rw [nat] at h_at; cases h_at
+  case nextNoneRec nat _ _ =>
+    simp only [Linst.At, Ninst.At] at h_at nat
+    rw [nat] at h_at; cases h_at
+  case nextSomeRec _ nat _ _ =>
+    simp only [Linst.At, Ninst.At] at h_at nat
+    rw [nat] at h_at; cases h_at
+  case jumpErr jat _ =>
+    simp only [Linst.At, Jinst.At] at h_at jat
+    rw [jat] at h_at; cases h_at
+  case jumpRec jat _ _ =>
+    simp only [Linst.At, Jinst.At] at h_at jat
+    rw [jat] at h_at; cases h_at
+  case last lat run =>
+    have eq := Linst.at_unique h_at lat
+    rw [eq]; exact run
 
 def PushAt (code : ByteArray) (pc : Nat) (xs : B8L) : Prop :=
   ∃ le : xs.length ≤ 32, code.getInst pc = some (.next (.push xs le))
@@ -524,7 +548,6 @@ lemma ByteArray.size_eq_length_toList (xs : ByteArray) :
     xs.size = xs.toList.length := by
   simp only [ByteArray.size, Array.size]
   rw [ByteArray.toList_eq_toList_data]
-
 
 lemma List.getD_eq_default {ξ} {xs : List ξ} {i : Nat} {d : ξ}
     (le : xs.length ≤ i) : xs.getD i d = d := by
@@ -723,9 +746,7 @@ inductive Exec'.Prec : Exec' → Exec' → Prop
       ⟨pc, sevm, devm, .ok devm'', .nextSomeRec nat run exc_ exc⟩
   | snd {pc : Nat} {sevm : Sevm} {devm : Devm} {n : Ninst}
     {sevm_ : Sevm} {devm_ : Devm} {exn_ : Execution}
-    {devm' : Devm}
-    --{pc'' : Nat}
-    {devm'' : Devm}
+    {devm' : Devm} {devm'' : Devm}
     (nat : n.At sevm.code pc)
     ( run :
       Ninst.Run' pc sevm devm n
@@ -854,11 +875,27 @@ lemma Rinst.run_of_at {pc sevm pre r post}
     have n_eq : n = .reg r := by
       injection Eq.trans nat.symm rat with eq; injection eq
     cases n_eq; revert run; simp [Ninst.Run']
-
   case jumpRec jat _ _ =>
     injection Eq.trans jat.symm rat with eq; injection eq
   case last _ lat _ =>
     injection Eq.trans lat.symm rat with eq; injection eq
+
+lemma Jinst.run_of_at {pc sevm pre j post}
+    (exc : Exec pc sevm pre (.ok post)) (jat : Jinst.At sevm.code pc j) :
+    ∃ (pc' : Nat) (inter : Devm), ∃ (exc' : Exec pc' sevm inter (.ok post)),
+      Jinst.Run ⟨pc, sevm, pre⟩ j (.ok ⟨pc', inter⟩) ∧
+      ⟨pc', sevm, inter, .ok post, exc'⟩ ≺ ⟨pc, sevm, pre, .ok post, exc⟩ := by
+  cases exc
+  case nextNoneRec eq _ _ =>
+    injection Eq.trans jat.symm eq with eq; injection eq
+  case nextSomeRec eq _ _ =>
+    injection Eq.trans jat.symm eq with eq; injection eq
+  case jumpRec j' pc' inter jat' run exc' =>
+    injection Eq.trans jat.symm jat' with eq; injection eq with rw
+    rw [← rw] at run
+    refine' ⟨pc', inter, exc', run, Exec'.Prec.jump _ _ _⟩
+  case last eq _ =>
+    injection Eq.trans jat.symm eq with eq; injection eq
 
 lemma Ninst.run_of_at {pc sevm pre n post}
     (exc : Exec pc sevm pre (.ok post))
@@ -879,47 +916,10 @@ lemma Ninst.run_of_at {pc sevm pre n post}
   case last _ lat _ =>
     sorry
 
--- lemma Jinst.run_of_at {e s pc o r}
---     (cr : Exec e s pc r) (h_at : Jinst.At e pc o) :
---     ∃ (s' : Desc) (pc' : Nat), ∃ (cr' : Exec e s' pc' r),
---       Jinst.Run e s pc o s' pc' ∧
---       Exec'.Rel ⟨e, s', pc', r, cr'⟩ ⟨e, s, pc, r, cr⟩ := by
-lemma Jinst.run_of_at {pc sevm pre j post}
-    (exc : Exec pc sevm pre (.ok post)) (jat : Jinst.At sevm.code pc j) :
-    ∃ (pc' : Nat) (inter : Devm), ∃ (exc' : Exec pc' sevm inter (.ok post)),
-      Jinst.Run ⟨pc, sevm, pre⟩ j (.ok ⟨pc', inter⟩) ∧
-      ⟨pc', sevm, inter, .ok post, exc'⟩ ≺ ⟨pc, sevm, pre, .ok post, exc⟩ := by
-  cases exc
-  case nextNoneRec eq _ _ =>
-    injection Eq.trans jat.symm eq with eq; injection eq
-  case nextSomeRec eq _ _ =>
-    injection Eq.trans jat.symm eq with eq; injection eq
-  case jumpRec j' pc' inter jat' run exc' =>
-    injection Eq.trans jat.symm jat' with eq; injection eq with rw
-    rw [← rw] at run
-    refine' ⟨pc', inter, exc', run, Exec'.Prec.jump _ _ _⟩
-  case last eq _ =>
-    injection Eq.trans jat.symm eq with eq; injection eq
-
--- lemma Ninst.run_of_at {e s pc i r}
---     (cr : Exec e s pc r) (h_at : Ninst.At e pc i) :
---     ∃ (s' : Desc) (cr' : Exec e s' (pc + i.toB8L.length) r),
---       Ninst.Run e s i s' ∧
---       Exec'.Rel ⟨e, s', pc + i.toB8L.length, r, cr'⟩ ⟨e, s, pc,r, cr⟩ := by
---   cases i with
---   | reg o =>
---     rcases Rinst.run_of_at cr h_at with ⟨s', cr', h_run, h_prec⟩
---     refine' ⟨s', cr', .reg h_run, h_prec⟩
---   | exec o =>
---     rcases push_of_pushAt cr h_at with ⟨s', cr', h_push, h_prec⟩
---     simp [toB8L]; rw [length_pushToB8L, ← Nat.add_assoc]
---     refine' ⟨s', _, _, h_prec⟩; exact Ninst.Run.push _ h_push
-
 lemma Ninst.size_eq_length_toB8L (n : Ninst) :
     n.size = n.toB8L.length := by sorry
 
 lemma Except.bind_associative
-  --{m : Type u → Type v} --{inst✝ : Monad m} [self : LawfulMonad m]
   {ξ υ ζ ω}
   (x : Except ξ υ)
   (f : υ → Except ξ ζ)
