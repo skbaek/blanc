@@ -819,8 +819,8 @@ def Exec'.strongRec (π : Exec'.Pred) : □p (carryover π) → □p π := by
   apply ih' _ h_gt
 
 def Ninst.of_run'_reg {pc : Nat} {sevm : Sevm} {devm : Devm}
-    {r : Rinst} {xl : Xlot} {ex : Execution}
-  (run : Ninst.Run' pc sevm devm (.reg r) xl ex) :
+    {r : Rinst} {ex : Execution}
+  (run : Ninst.Run' pc sevm devm (.reg r) .none ex) :
   (Rinst.run ⟨pc, sevm, devm⟩ r) = ex := run
 
 lemma of_withPc_eq_ok {pc : ℕ} {exn : Execution} {pc'} {devm}
@@ -844,8 +844,7 @@ lemma Rinst.run_of_at {pc sevm pre r post}
   case nextSomeRec n sevm_ devm_ exn_ inter exc_ nat run exc =>
     have n_eq : n = .reg r := by
       injection Eq.trans nat.symm rat with eq; injection eq
-    cases n_eq; refine' ⟨inter, exc, Ninst.of_run'_reg run, _⟩
-    apply @Exec'.Prec.snd _ _ _ (.reg r)
+    cases n_eq; revert run; simp [Ninst.Run']
 
   case jumpRec jat _ _ =>
     injection Eq.trans jat.symm rat with eq; injection eq
@@ -1189,9 +1188,6 @@ lemma Exec'.of_exn_eq_ok {pk : Exec'} {devm : Devm}
     ) := by
   cases pk; simp at *; apply eq
 
-#check Ninst.at_of_slice
-#check PushAt
-
 lemma push_of_pushAt
     {pc sevm pre xs post} (exc : Exec pc sevm pre (.ok post))
     (h_at : PushAt sevm.code pc xs) :
@@ -1209,8 +1205,7 @@ lemma push_of_pushAt
   case nextSomeRec n sevm_ devm_ exn_ inter exc_ nat run exc =>
     injection Eq.trans nat.symm h_at with eq; injection eq with eq
     cases eq
-    refine' ⟨inter, exc, _, .snd nat run exc_ exc⟩
-    exact Devm.pushBurn_of_run run
+    revert run; simp [Ninst.Run']
   case jumpRec j pc' inter jat run exc' =>
     injection Eq.trans jat.symm h_at with eq; injection eq
   case last l lat run =>
@@ -1816,12 +1811,26 @@ def ForallDeeperAt (k : Nat) (ca : Adr) (p : Prog) (ε : Exec.Pred) : Prop :=
 lemma Ninst.getCode_eq_of_run'_some
     {pc sevm devm n sevm_ devm_ exn_ res}
     (run : Ninst.Run' pc sevm devm n (.some ⟨sevm_, devm_, exn_⟩) res) (a : Adr) :
-    devm_.getCode a = devm.getCode a := by sorry
+    devm_.getCode a = devm.getCode a := by
+  cases n
+  case push xs lt =>
+    contradiction
+  case reg r =>
+    contradiction
+  case exec x =>
+    sorry
 
 lemma Ninst.code_eq_of_run'_some
     {pc sevm devm n sevm_ devm_ exn_ res}
     (run : Ninst.Run' pc sevm devm n (.some ⟨sevm_, devm_, exn_⟩) res) :
-    sevm_.code = devm.getCode sevm_.currentTarget := by sorry
+    sevm_.code = devm.getCode sevm_.currentTarget := by
+  cases n
+  case push xs lt =>
+    contradiction
+  case reg r =>
+    contradiction
+  case exec x =>
+    sorry
 
 lemma Ninst.depth_gt_of_run'_some
     {pc sevm devm n sevm_ devm_ exn_ res}

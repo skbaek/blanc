@@ -640,13 +640,14 @@ def Xinst.Run (sevm : Sevm) (devm : Devm) :
 
 def Ninst.Run' (pc : Nat) (sevm : Sevm) (devm : Devm) :
     Ninst → Xlot → Execution → Prop
-  | .push xs _, _, exn =>
+  | .push xs _, .none, exn =>
     ( do let devm' ← chargeGas (if xs = [] then gBase else gVerylow) devm
          (devm'.push xs.toB256) ) = exn
-  | .reg r, _, exn =>
+  | .reg r, .none, exn =>
     Rinst.run ⟨pc, sevm, devm⟩ r = exn
   | .exec x, xl, exn =>
     Xinst.Run sevm devm x xl exn
+  | _, _, _ => False
 
 def Except.IsError {ξ υ : Type} (e : Except ξ υ) : Prop :=
   match e with
@@ -1880,10 +1881,12 @@ lemma Ninst.run_of_run' {pc} {sevm} {devm} {n : Ninst} (xl : Xlot)
     {ex} (good : xl.Good') (run : Ninst.Run' pc sevm devm n xl ex) :
     ex.Fit ∧ ∃ lim, ∀ lim' > lim, Ninst.run false ⟨pc, sevm, devm⟩ n lim' = ex := by
   rcases n with r | x | ⟨xs, le⟩
-  · simp only [Ninst.Run'] at run
-    simp only [Ninst.run]; constructor;
-    · rw [← run]; apply Rinst.fit_run
-    · refine ⟨0, λ _ _ => run⟩;
+  · cases xl
+    · simp only [Ninst.Run'] at run
+      simp only [Ninst.run]; constructor;
+      · rw [← run]; apply Rinst.fit_run
+      · refine ⟨0, λ _ _ => run⟩;
+    · revert run; simp [Ninst.Run']
   · simp only [Ninst.Run'] at run; constructor
     · exact (Xinst.run_eq_of_run good run).1
     · rcases Xinst.run_eq_of_run good run with ⟨fit, lim, run_eq⟩;
@@ -1891,11 +1894,13 @@ lemma Ninst.run_of_run' {pc} {sevm} {devm} {n : Ninst} (xl : Xlot)
       rcases lim' with _ | lim'; {cases Nat.not_lt_zero _ gt}
       simp only [Ninst.run];
       apply run_eq lim' (by omega)
-  · simp [Ninst.Run'] at run; constructor
-    · rw [← run]; intro ltd
-      fit_bind_step ltd fit_chargeGas
-      exact fit_push ltd
-    · simp only [Ninst.run]; refine' ⟨0, λ _ _ => run⟩
+  · cases xl
+    · simp [Ninst.Run'] at run; constructor
+      · rw [← run]; intro ltd
+        fit_bind_step ltd fit_chargeGas
+        exact fit_push ltd
+      · simp only [Ninst.run]; refine' ⟨0, λ _ _ => run⟩
+    · revert run; simp [Ninst.Run']
 
 lemma Except.bind_eq_of_is_error {ξ υ : Type} {e : Except ξ υ}
     {f : υ → Except ξ υ} : e.IsError → (e >>= f) = e := by
