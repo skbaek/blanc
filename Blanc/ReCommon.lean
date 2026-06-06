@@ -179,10 +179,19 @@ def Exec.Fa (π : Exec.Pred) : Prop :=
 
 def Fortify (π : Exec.Pred) : Exec.Pred :=
   λ _ sevm _ _ exn =>
-    (Exec.Fa <| λ _ sevm' _ _ exn' => sevm.depth < sevm'.depth → π _ _ _ _ exn') → π _ _ _ _ exn
+    (Exec.Fa <| λ _ sevm' _ _ exn' => sevm'.depth < sevm.depth → π _ _ _ _ exn') → π _ _ _ _ exn
 
 lemma Exec.strong_rec (π : Exec.Pred)
-  (fa : Exec.Fa (Fortify π)) : Exec.Fa π := by sorry
+  (h_fa : Exec.Fa (Fortify π)) : Exec.Fa π := by
+  intros pc sevm devm exn exc
+  apply
+    @Nat.strongRecOn
+      (λ n => ∀ pc_ sevm_ devm_ exn_ (exc_ : Exec pc_ sevm_ devm_ exn_), n = sevm_.depth → π _ _ _ _ exc_)
+      sevm.depth
+  · intros n h pc_ sevm_ devm_ exn_ exc_ h_eq; apply h_fa
+    intros pc' sevm' devm' exn' exc' h_lt; rw [← h_eq] at h_lt
+    apply h sevm'.depth h_lt _ _ _ _ exc' rfl
+  · rfl
 
 def sumBelow (f : Adr → B256) : Nat → Nat
   | 0 => 0
@@ -851,19 +860,6 @@ lemma Rinst.run_of_at {pc sevm pre r post}
   case last _ lat _ =>
     injection Eq.trans lat.symm rat with eq; injection eq
 
---lemma Ninst.pc_eq_of_run {pc} {sevm} {devm} {n} {xl} {pc'} {devm'}
---    (run : Ninst.Run' pc sevm devm n xl (.ok ⟨pc', devm'⟩)) :
---    pc' = pc + n.toB8L.length := by
---  cases n
---  case reg r =>
---    rw [← (of_withPc_eq_ok run).2]; rfl
---  case exec x =>
---    rcases run with ⟨exn, _, run⟩
---    rw [← (of_withPc_eq_ok run).2]; rfl
---  case push xs le =>
---    rcases of_bind_eq_ok run with ⟨_, _, eq⟩
---    rw [← (of_withPc_eq_ok eq).2]; rfl
-
 lemma Ninst.run_of_at {pc sevm pre n post}
     (exc : Exec pc sevm pre (.ok post))
     (nat : Ninst.At sevm.code pc n) :
@@ -875,35 +871,12 @@ lemma Ninst.run_of_at {pc sevm pre n post}
         ⟨pc, sevm, pre, .ok post, exc⟩ := by
   cases exc
   case nextNoneRec n' inter nat' run exc =>
-
-    -- cases Ninst.at_unique nat' nat
-    -- rw [Ninst.pc_eq_of_run run] at exc
-    -- refine' ⟨inter, exc, ⟨.none, .intro, pc, pc', run⟩, _⟩
-    -- have hh := @Exec'.Prec.none pc sevm pre n pc' inter (.ok post) nat run
     sorry
-    -- have n_eq : n = .reg r := by
-    --   injection Eq.trans nat.symm rat with eq; injection eq
-    -- have conj :
-    --   Ninst.run false {pc := pc, sta := sevm, dyna := pre} n = .ok ⟨pc', inter⟩ ∧
-    --   pc + 1 = pc' := by
-    --   rw [n_eq] at run; apply of_withPc_eq_ok (Ninst.of_run'_reg run)
-    -- rw [conj.2]; refine' ⟨inter, exc, conj.1, _⟩
-    -- apply Exec'.Prec.none
   case nextSomeRec n sevm_ devm_ exn_ inter exc_ nat run exc =>
-    -- have n_eq : n = .reg r := by
-    --   injection Eq.trans nat.symm rat with eq; injection eq
-    -- have conj :
-    --   Rinst.run {pc := pc, sta := sevm, dyna := pre} r = .ok inter ∧
-    --   pc + 1 = pc' := by
-    --   rw [n_eq] at run; apply of_withPc_eq_ok (Ninst.of_run'_reg run)
-    -- rw [conj.2]; refine' ⟨inter, exc, conj.1, _⟩
-    -- apply Exec'.Prec.snd
     sorry
   case jumpRec jat _ _ =>
-    -- injection Eq.trans jat.symm rat with eq; injection eq
     sorry
   case last _ lat _ =>
-    -- injection Eq.trans lat.symm rat with eq; injection eq
     sorry
 
 -- lemma Jinst.run_of_at {e s pc o r}
@@ -1793,7 +1766,7 @@ def ForallSubExec (k : Nat) (ca : Adr) (p : Prog)
     (R : Sevm → Devm → Devm → Prop) : Prop :=
   ∀ pc sevm devm post,
     Exec pc sevm devm (.ok post) →
-    k < sevm.depth →
+    sevm.depth < k →
     p.At ca pc sevm devm →
     R sevm devm post
 
@@ -1803,7 +1776,7 @@ def Exec.Wkn (ca : Adr) (p : Prog)
   p.At ca pc sevm devm → π pc sevm devm exn ex
 
 def ForallDeeper (k : Nat) (ε : Exec.Pred) : Prop :=
-  ∀ pc sevm devm exn (ex : Exec pc sevm devm exn), k < sevm.depth → ε pc sevm devm exn ex
+  ∀ pc sevm devm exn (ex : Exec pc sevm devm exn), sevm.depth < k → ε pc sevm devm exn ex
 
 def ForallDeeperAt (k : Nat) (ca : Adr) (p : Prog) (ε : Exec.Pred) : Prop :=
   ForallDeeper k (fun pc sevm devm exn ex => p.At ca pc sevm devm → ε pc sevm devm exn ex)
@@ -1832,10 +1805,10 @@ lemma Ninst.code_eq_of_run'_some
   case exec x =>
     sorry
 
-lemma Ninst.depth_gt_of_run'_some
+lemma Ninst.depth_lt_of_run'_some
     {pc sevm devm n sevm_ devm_ exn_ res}
     (run : Ninst.Run' pc sevm devm n (.some ⟨sevm_, devm_, exn_⟩) res) :
-    sevm.depth < sevm_.depth := by sorry
+    sevm_.depth < sevm.depth := by sorry
 
 lemma Ninst.getCode_eq_of_run'_ok
     {pc sevm devm n xlot devm'}
@@ -1934,7 +1907,7 @@ lemma lift_core
     rcases em (sevm.currentTarget = ca) with h_eq | h_ne
     · exact errAtTarget (.nextSomeErr h_at h_run ex_sub) h_eq
     · apply nextSomeErr h_at h_run ex_sub h_ne
-      have h_lt : sevm.depth < sevm_.depth := Ninst.depth_gt_of_run'_some h_run
+      have h_lt : sevm_.depth < sevm.depth := Ninst.depth_lt_of_run'_some h_run
       have h_sub_wkn := h_fa 0 sevm_ devm_ exn_ ex_sub h_lt
       have h1 : some (devm_.getCode ca).toList = Prog.compile p := by
         rw [Ninst.getCode_eq_of_run'_some h_run ca]
@@ -1970,7 +1943,7 @@ lemma lift_core
           exact h_fa pc' sevm' devm' exn' ex' h_lt
         exact analog (.nextSomeRec h_at h_run ex_sub ex_next) (depth_ind h_run_prog h_eq h_fa_deeper)
     · apply nextSomeRec h_at h_run ex_sub ex_next h_ne
-      · have h_lt : sevm.depth < sevm_.depth := Ninst.depth_gt_of_run'_some h_run
+      · have h_lt : sevm_.depth < sevm.depth := Ninst.depth_lt_of_run'_some h_run
         have h_sub_wkn := h_fa 0 sevm_ devm_ exn_ ex_sub h_lt
         have h1 : some (devm_.getCode ca).toList = Prog.compile p := by
           rw [Ninst.getCode_eq_of_run'_some h_run ca]
@@ -2099,7 +2072,7 @@ lemma lift_inv
         sevm.currentTarget = ca →
         ( ∀ pc' sevm' pre' post',
             Exec pc' sevm' pre' (.ok post') →
-            sevm.depth < sevm'.depth →
+            sevm'.depth < sevm.depth →
             Prog.At p ca pc' sevm' pre' →
             π sevm' pre' →
             π sevm' post' ) →

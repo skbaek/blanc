@@ -202,12 +202,6 @@ def ExecuteCode (msg : Msg) (xl : Xlot)
 
 def ProcessMessage (msg : Msg) (xl : Xlot)
     (ex : Except (String × State × AdrSet × Tra) Devm) : Prop :=
-    ( Except.assert (msg.depth ≤ 1024)
-        ⟨ "StackDepthLimitError",
-          msg.benv.state,
-          msg.benv.createdAccounts,
-          msg.tenv.transientStorage ⟩ ).Split ex <|
-  λ _ =>
     msg.benvAfterTransfer.Split ex <|
   λ benv =>
   ∃ ex' : Except (String × State × AdrSet × Tra) Devm,
@@ -262,7 +256,7 @@ def GenericCreate (sevm : Sevm) (devm : Devm) (endowment : B256) (newAddress : A
   λ devm3 =>
     ExistsEq (devm3.state.get sevm.currentTarget) <|
   λ sender =>
-   if (sender.bal < endowment ∨ sender.nonce = B64.max ∨ sevm.depth + 1 > 1024) then
+   if (sender.bal < endowment ∨ sender.nonce = B64.max ∨ sevm.depth = 0) then
      ({devm3 with gasLeft := devm3.gasLeft + createMsgGas}.push 0 = ex)
    else
    ExistsEq (devm3.incrNonce sevm.currentTarget) <|
@@ -283,7 +277,7 @@ def GenericCreate (sevm : Sevm) (devm : Devm) (endowment : B256) (newAddress : A
         data := []
         code := .mk <| .mk calldata
         currentTarget := newAddress
-        depth := sevm.depth + 1
+        depth := sevm.depth - 1
         codeAddress := .none
         shouldTransferValue := true
         isStatic := false
@@ -321,7 +315,7 @@ def GenericCall
     (ex : Execution) : Prop :=
     ExistsEq {devm with returnData := []} <|
   λ evm1 =>
-    if (sevm.depth + 1 > 1024) then
+    if (sevm.depth = 0) then
       (({evm1 with gasLeft := evm1.gasLeft + gas}).push 0 = ex)
     else
     ExistsEq (evm1.memory.data.sliceD input_index input_size 0) <|
@@ -338,7 +332,7 @@ def GenericCall
         data := calldata
         codeAddress := codeAddress
         code := code
-        depth := sevm.depth + 1
+        depth := sevm.depth - 1
         shouldTransferValue := shouldTransferValue
         isStatic := isStaticcall || sevm.isStatic
         accessedAddresses := evm1.accessedAddresses
@@ -1224,7 +1218,7 @@ lemma saturation (lim : Nat) : Saturation lim := by
     · intro _ fit lim' lt
       rcases lim' with _ | lim'; {cases Nat.not_lt_zero _ lt}
       simp only [processMessage] at *
-      eee_bind fit; eee_bind fit
+      eee_bind fit
       rw [ih.executeCode _ (of_fit_bind fit).1 lim' (by omega)]
     · intro _ fit lim' lt
       rcases lim' with _ | lim'; {cases Nat.not_lt_zero _ lt}
@@ -1532,13 +1526,12 @@ lemma of_process_message' {msg : Msg} {xl : Xlot}
     (run : ProcessMessage msg xl ex) :
     ex.Fit ∧ ∃ lim, ∀ lim' > lim, processMessage false msg lim' = ex := by
   simp only [ProcessMessage] at run; constructor
-  · fit_step_split run (fit_assert (by decide))
-    fit_step_split run fit_benvAfterTransfer
+  · fit_step_split run fit_benvAfterTransfer
     fit_step_exec run good of_execute_code' id
     split at run <;> (rw [← run]; apply fit_ok)
   · apply Exists.imp forall_gt_of_forall_gt_succ_pred
     simp only [processMessage]
-    efg_step_split run; efg_step_split run;
+    efg_step_split run;
     have temp := run; clear run;
     rcases temp with ⟨ex', runs, run⟩;
     have temp := of_execute_code' good runs;
@@ -2162,7 +2155,7 @@ lemma of_processMessage (msg : Msg) (lim : Nat)
     ∃ xl : Xlot, xl.Good lim ex ∧ ProcessMessage msg xl ex := by
   rcases lim with _ | lim <;> simp only [processMessage] at eq
   {rw [← eq] at notLimited; cases notLimited rfl}
-  bind_step_good eq _; bind_step_good eq _
+  bind_step_good eq _
   have notLimited' := Except.fit_of_fit notLimited eq
   rcases of_executeCode notLimited' rfl with ⟨xl, good, ec⟩
   refine' ⟨_, good_of_good_of_fit (by omega) notLimited' good, _, ec, _⟩
