@@ -100,7 +100,7 @@ def Jinst.Run (evm : Evm) :
 def Linst.Run (sevm : Sevm) (devm : Devm) : Linst → Execution → Prop :=
   λ l ex => l.run sevm devm = ex
 
-def Xlot : Type := Option (Evm × Execution)
+def Xlot : Type := Option (Sevm × Devm × Execution)
 
 structure Devm.Rels : Type where
   (stack : List B256 → List B256 → Prop)
@@ -193,12 +193,12 @@ def ExecuteCode (msg : Msg) (xl : Xlot)
   let evm : Evm := initEvm msg
   match msg.codeAddress with
   | .none =>
-    ∃ ex', xl = .some ⟨evm, ex'⟩ ∧ executeCode.handleError ex' = ex
+    ∃ ex', xl = .some ⟨evm.sta, evm.dyna, ex'⟩ ∧ executeCode.handleError ex' = ex
   | .some adr =>
     if adr.isPrecomp then
       (xl = .none ∧  executeCode.handleError (executePrecomp evm adr) = ex)
     else
-      ∃ ex', xl = .some ⟨evm, ex'⟩ ∧ executeCode.handleError ex' = ex
+      ∃ ex', xl = .some ⟨evm.sta, evm.dyna, ex'⟩ ∧ executeCode.handleError ex' = ex
 
 def ProcessMessage (msg : Msg) (xl : Xlot)
     (ex : Except (String × State × AdrSet × Tra) Devm) : Prop :=
@@ -665,12 +665,12 @@ inductive Exec : Nat → Sevm → Devm → Execution → Type
     Ninst.Run' pc sevm devm n .none (.error ⟨err, devm'⟩) →
     Exec pc sevm devm (.error ⟨err, devm'⟩)
   | nextSomeErr
-    {pc} {sevm} {devm} {n} {pc_} {sevm_} {devm_} {exn_} {err} {devm'} :
+    {pc} {sevm} {devm} {n} {sevm_} {devm_} {exn_} {err} {devm'} :
     n.At sevm.code pc →
     Ninst.Run' pc sevm devm n
-      (.some (⟨pc_, sevm_, devm_⟩, exn_))
+      (.some ⟨sevm_, devm_, exn_⟩)
       (.error ⟨err, devm'⟩) →
-    Exec pc_ sevm_ devm_ exn_ →
+    Exec 0 sevm_ devm_ exn_ →
     Exec pc sevm devm (.error ⟨err, devm'⟩)
   | nextNoneRec {pc} {sevm : Sevm} {devm} {n} {devm'} {exn} :
     n.At sevm.code pc →
@@ -678,13 +678,13 @@ inductive Exec : Nat → Sevm → Devm → Execution → Type
     Exec (pc + n.size) sevm devm' exn →
     Exec pc sevm devm exn
   | nextSomeRec
-    {pc} {sevm} {devm} {n} {pc_} {sevm_} {devm_}
+    {pc} {sevm} {devm} {n} {sevm_} {devm_}
     {exn_ : Execution} {devm'} {exn} :
     n.At sevm.code pc →
     Ninst.Run' pc sevm devm n
-      (.some (⟨pc_, sevm_, devm_⟩, exn_))
+      (.some ⟨sevm_, devm_, exn_⟩)
       (.ok devm') →
-    Exec pc_ sevm_ devm_ exn_ →
+    Exec 0 sevm_ devm_ exn_ →
     Exec (pc + n.size) sevm devm' exn →
     Exec pc sevm devm exn
   | jumpErr {pc} {sevm} {devm} {j} {err} {devm'} :
@@ -703,7 +703,7 @@ inductive Exec : Nat → Sevm → Devm → Execution → Type
 
 def Xlot.Filled : Xlot → Prop
   | .none => True
-  | .some ⟨⟨pc, sevm, devm⟩, exn⟩ => Nonempty (Exec pc sevm devm exn)
+  | .some ⟨sevm, devm, exn⟩ => Nonempty (Exec 0 sevm devm exn)
 
 def Ninst.Run (sevm : Sevm) (devm : Devm) (n : Ninst) (devm' : Devm) : Prop :=
   ∃ xl : Xlot, xl.Filled ∧
@@ -756,8 +756,8 @@ def Except.Fit {ξ υ} (ex : Except (String × ξ) υ) : Prop := ¬ ex.Lim
 
 def Xlot.Good' : Xlot → Prop
   | .none => True
-  | .some (evm, ex) =>
-    ex.Fit ∧ ∃ lim, exec false evm lim = ex
+  | .some ⟨sevm, devm, ex⟩ =>
+    ex.Fit ∧ ∃ lim, exec false { pc := 0, sta := sevm, dyna := devm } lim = ex
 
 lemma of_lim_bind {ξ υ ζ} {x : Except (String × ξ) υ}
     {f : υ → Except (String × ξ) ζ} (h : (x >>= f).Lim) :
@@ -1419,6 +1419,8 @@ lemma fit_execute_precomp (evm : Evm) (adr : Adr) :
   · intro ltd; injection ltd; rename_i eq
     cases congr_arg String.head eq
 
+lemma initEvm_eq (msg : Msg) : initEvm msg = { pc := 0, sta := (initEvm msg).sta, dyna := (initEvm msg).dyna } := rfl
+
 lemma of_execute_code' {msg : Msg} {xl : Xlot}
     {ex : Except (String × State × AdrSet × Tra) Devm}
     (good : xl.Good') (ec : ExecuteCode msg xl ex) :
@@ -1438,6 +1440,7 @@ lemma of_execute_code' {msg : Msg} {xl : Xlot}
     simp only [executeCode]
     rw [eq_none]; simp only
     rw [← eq_ex'] at fit'
+    rw [initEvm_eq msg]
     rw [← (saturation lim).exec _ fit' lim' (by omega), eq_ex', eq_ex]
   · rename Adr => adr
     rename (msg.codeAddress = some adr) => eq_some
@@ -1459,6 +1462,7 @@ lemma of_execute_code' {msg : Msg} {xl : Xlot}
         simp only [executeCode]
         rw [eq_some]; simp only
         rw [if_neg neg]; rw [← eq_ex'] at fit
+        rw [initEvm_eq msg]
         rw [← (saturation lim).exec _ fit lim' (by omega), eq_ex', eq_ex]
 
 lemma exists_forall_gt_ok_bind_eq {ξ υ ζ}
@@ -1956,10 +1960,10 @@ lemma of_exec' :
     simp only [Ninst.At] at nat
     simp only [Evm.getInst, exec, Option.toExcept, nat, ok_bind]
     rw [eq lim' (by omega)]; rfl
-  · intro pc sevm devm n pc_ sevm_ devm_ exn_ exn devm' nat run exc ⟨fit_, limExec, exec_eq⟩
+  · intro pc sevm devm n sevm_ devm_ exn_ exn devm' nat run exc ⟨fit_, limExec, exec_eq⟩
     rcases
       Ninst.run_of_run'
-        (.some ⟨⟨pc_, sevm_, devm_⟩, exn_⟩)
+        (.some ⟨sevm_, devm_, exn_⟩)
         ⟨fit_, limExec + 1, exec_eq _ (by omega)⟩
         run
       with ⟨fit, limRun, run_eq⟩
@@ -1976,12 +1980,12 @@ lemma of_exec' :
     simp only [Ninst.At] at nat
     simp only [Evm.getInst, ok_bind, exec, Option.toExcept, nat]
     rw [run_eq lim' (by omega)]; apply exec_eq _ (by omega)
-  · intro pc sevm devm n pc_ sevm_ devm_ exn_ devm' exn nat run exc_ exc
+  · intro pc sevm devm n sevm_ devm_ exn_ devm' exn nat run exc_ exc
       ⟨fit_, limExec_, eq_⟩
       ⟨fit, limExec, eq⟩
     rcases
       Ninst.run_of_run'
-        (.some ⟨⟨pc_, sevm_, devm_⟩, exn_⟩)
+        (.some ⟨sevm_, devm_, exn_⟩)
         ⟨fit_, limExec_ + 1, eq_ _ (by omega)⟩
         run
       with ⟨fitRun, limRun, run_eq⟩
@@ -2018,8 +2022,8 @@ lemma of_exec' :
 --def Except.Fit {ξ υ} (ex : Except (String × ξ) υ) : Prop := ¬ ex.Lim
 def Xlot.Good {ξ υ} (lim : Nat) (ex : Except (String × ξ) υ) : Xlot → Prop
   | .none => True
-  | .some (evm, exn) =>
-    ∃ lim' < lim, exec false evm lim' = exn ∧ (exn.Lim → ex.Lim)
+  | .some ⟨sevm, devm, exn⟩ =>
+    ∃ lim' < lim, exec false { pc := 0, sta := sevm, dyna := devm } lim' = exn ∧ (exn.Lim → ex.Lim)
 
 syntax "bind_step_good " ident rcasesPat : tactic
 macro_rules
@@ -2113,7 +2117,7 @@ lemma of_executeCode {msg : Msg} {lim : Nat}
   split at eq
   · rename msg.codeAddress = .none => eq_none
     refine'
-      ⟨ .some ⟨initEvm msg, exec false (initEvm msg) lim⟩,
+      ⟨ .some ⟨(initEvm msg).sta, (initEvm msg).dyna, exec false (initEvm msg) lim⟩,
         ⟨lim, (by omega), rfl, λ halts => _⟩, _ ⟩
     · rcases Except.of_toError?_eq_some _ _ halts with ⟨evm, rw⟩
       rw [← eq, rw] at notLimited; cases notLimited rfl
@@ -2126,7 +2130,7 @@ lemma of_executeCode {msg : Msg} {lim : Nat}
       simp only []; rw [if_pos pos]; simp [eq]
     · rename_i neg
       refine'
-        ⟨ .some ⟨initEvm msg, exec false (initEvm msg) lim⟩,
+        ⟨ .some ⟨(initEvm msg).sta, (initEvm msg).dyna, exec false (initEvm msg) lim⟩,
           ⟨lim, (by omega), rfl, λ halts => _⟩, _ ⟩
       · rcases Except.of_toError?_eq_some _ _ halts with ⟨evm, rw⟩
         rw [← eq, rw] at notLimited; cases notLimited rfl
@@ -2386,11 +2390,11 @@ def of_exec :
           ⟨es, run_eq, ex_eq⟩ | ⟨evm', run_eq, ex_eq⟩
         · rw [ex_eq] at fit
           rcases Ninst.run_of_run_eq fit run_eq
-            with ⟨_ | ⟨evm', ex'⟩, good, run⟩
+            with ⟨_ | ⟨sevm', devm', ex'⟩, good, run⟩
           · rw [ex_eq]; constructor
             exact Exec.nextNoneErr getInst_eq run
           · rw [ex_eq];
-            have ne_ex : Nonempty (Exec evm'.pc evm'.sta evm'.dyna ex') := by
+            have ne_ex : Nonempty (Exec 0 sevm' devm' ex') := by
               rcases good with ⟨lim', lt, exec_eq', notLimited_of⟩
               have fit' : ex'.Fit := by
                 intro h; cases fit <| notLimited_of h
@@ -2398,7 +2402,7 @@ def of_exec :
             rcases ne_ex with ⟨exc⟩; constructor
             apply Exec.nextSomeErr getInst_eq run exc
         · rcases Ninst.run_of_run_eq (by {intro h; cases h}) run_eq
-            with ⟨_ | ⟨evm', ex'⟩, good, run⟩
+            with ⟨_ | ⟨sevm', devm', ex'⟩, good, run⟩
           · rcases (ih _ (by omega) _ _ _ _ fit ex_eq) with ⟨exc⟩
             constructor
             exact @Exec.nextNoneRec _ _ _ _ _ _ getInst_eq run exc
@@ -2407,7 +2411,7 @@ def of_exec :
             rcases @ih _ (by omega) _ _ _ _ fit' exec_eq' with ⟨ih'⟩
             rcases @ih _ (by omega) _ _ _ _ fit ex_eq with ⟨ih''⟩
             constructor
-            apply @Exec.nextSomeRec _ _ _ _ _ _ _ _ _ _ getInst_eq run ih' ih''
+            exact Exec.nextSomeRec getInst_eq run ih' ih''
       · rcases of_bind_eq exec_eq
           with ⟨es, run_eq, ex_eq⟩ | ⟨evm', run_eq, ex_eq⟩
         · rw [ex_eq]; constructor

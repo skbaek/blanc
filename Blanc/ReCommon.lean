@@ -2253,30 +2253,30 @@ inductive Exec'.Prec : Exec' → Exec' → Prop
       ⟨pc, sevm, devm, exn, .nextNoneRec nat run exc⟩
   | fst
     {pc : Nat} {sevm : Sevm} {devm : Devm} {n : Ninst}
-    {pc_ : Nat} {sevm_ : Sevm} {devm_ : Devm} {exn_ : Execution}
+    {sevm_ : Sevm} {devm_ : Devm} {exn_ : Execution}
     {devm' : Devm}
     {devm'' : Devm}
     (nat : n.At sevm.code pc)
     ( run :
       Ninst.Run' pc sevm devm n
-        (.some (⟨pc_, sevm_, devm_⟩, exn_))
+        (.some ⟨sevm_, devm_, exn_⟩)
         (.ok devm') )
-    (exc_ : Exec pc_ sevm_ devm_ exn_)
+    (exc_ : Exec 0 sevm_ devm_ exn_)
     (exc : Exec (pc + n.size) sevm devm' (.ok devm'')) :
     Exec'.Prec
-      ⟨pc_, sevm_, devm_, exn_, exc_⟩
+      ⟨0, sevm_, devm_, exn_, exc_⟩
       ⟨pc, sevm, devm, .ok devm'', .nextSomeRec nat run exc_ exc⟩
   | snd {pc : Nat} {sevm : Sevm} {devm : Devm} {n : Ninst}
-    {pc_ : Nat} {sevm_ : Sevm} {devm_ : Devm} {exn_ : Execution}
+    {sevm_ : Sevm} {devm_ : Devm} {exn_ : Execution}
     {devm' : Devm}
     --{pc'' : Nat}
     {devm'' : Devm}
     (nat : n.At sevm.code pc)
     ( run :
       Ninst.Run' pc sevm devm n
-        (.some (⟨pc_, sevm_, devm_⟩, exn_))
+        (.some ⟨sevm_, devm_, exn_⟩)
         (.ok devm') )
-    (exc_ : Exec pc_ sevm_ devm_ exn_)
+    (exc_ : Exec 0 sevm_ devm_ exn_)
     (exc : Exec (pc + n.size) sevm devm' (.ok devm'')) :
     Exec'.Prec
       ⟨pc + n.size, sevm, devm', .ok devm'', exc⟩
@@ -2327,14 +2327,14 @@ theorem Exec'.lt.well_founded : WellFounded Exec'.lt := by
     intro _ lt; rcases lt with ⟨_, _, ⟨_⟩⟩
   · intro _ _ _ _ _ _ _ _; constructor
     intro _ lt; rcases lt with ⟨_, _, ⟨_⟩⟩
-  · intro _ _ _ _ _ _ _ _ _ _ _ _ _ _
+  · intro _ _ _ _ _ _ _ _ _ _ _ _ _
     constructor; intro _ lt
     rcases lt with ⟨_, _, ⟨_⟩⟩
   · intro _ _ _ _ _ _ _ _ _ acc
     constructor; intro _ lt
     rcases lt with ⟨_, le, ⟨_⟩⟩
     exact acc_of_le le acc
-  · intro pc sevm devm n pc_ sevm_ devm_ exn_ devm' exn nat run exc_ exc ih ih'
+  · intro pc sevm devm n sevm_ devm_ exn_ devm' exn nat run exc_ exc ih ih'
     constructor; intro exc' lt
     rcases lt with ⟨exc'', le, prec⟩
     cases prec
@@ -2395,7 +2395,7 @@ lemma Rinst.run_of_at {pc sevm pre r post}
       injection Eq.trans nat.symm rat with eq; injection eq
     cases n_eq; refine' ⟨inter, exc, Ninst.of_run'_reg run, _⟩
     apply @Exec'.Prec.none _ _ _ (reg r)
-  case nextSomeRec n pc_ sevm_ devm_ exn_ inter exc_ nat run exc =>
+  case nextSomeRec n sevm_ devm_ exn_ inter exc_ nat run exc =>
     have n_eq : n = .reg r := by
       injection Eq.trans nat.symm rat with eq; injection eq
     cases n_eq; refine' ⟨inter, exc, Ninst.of_run'_reg run, _⟩
@@ -2444,7 +2444,7 @@ lemma Ninst.run_of_at {pc sevm pre n post}
     --   rw [n_eq] at run; apply of_withPc_eq_ok (Ninst.of_run'_reg run)
     -- rw [conj.2]; refine' ⟨inter, exc, conj.1, _⟩
     -- apply Exec'.Prec.none
-  case nextSomeRec n pc_ sevm_ devm_ exn_ inter exc_ nat run exc =>
+  case nextSomeRec n sevm_ devm_ exn_ inter exc_ nat run exc =>
     -- have n_eq : n = .reg r := by
     --   injection Eq.trans nat.symm rat with eq; injection eq
     -- have conj :
@@ -3175,7 +3175,7 @@ lemma push_of_pushAt
     cases eq
     refine' ⟨inter, exc, _, .none nat run exc⟩
     exact Devm.pushBurn_of_run run
-  case nextSomeRec n pc_ sevm_ devm_ exn_ inter exc_ nat run exc =>
+  case nextSomeRec n sevm_ devm_ exn_ inter exc_ nat run exc =>
     injection Eq.trans nat.symm h_at with eq; injection eq with eq
     cases eq
     refine' ⟨inter, exc, _, .snd nat run exc_ exc⟩
@@ -3816,31 +3816,26 @@ def ForallDeeperAt (k : Nat) (ca : Adr) (p : Prog) (ε : Exec.Pred) : Prop :=
   ForallDeeper k (fun pc sevm devm exn ex => p.At ca pc sevm devm → ε pc sevm devm exn ex)
 
 lemma Ninst.getCode_eq_of_run'_some
-    {pc sevm devm n pc_ sevm_ devm_ exn_ res}
-    (run : Ninst.Run' pc sevm devm n (.some (⟨pc_, sevm_, devm_⟩, exn_)) res) (a : Adr) :
+    {pc sevm devm n sevm_ devm_ exn_ res}
+    (run : Ninst.Run' pc sevm devm n (.some ⟨sevm_, devm_, exn_⟩) res) (a : Adr) :
     devm_.getCode a = devm.getCode a := by sorry
 
 lemma Ninst.code_eq_of_run'_some
-    {pc sevm devm n pc_ sevm_ devm_ exn_ res}
-    (run : Ninst.Run' pc sevm devm n (.some (⟨pc_, sevm_, devm_⟩, exn_)) res) :
+    {pc sevm devm n sevm_ devm_ exn_ res}
+    (run : Ninst.Run' pc sevm devm n (.some ⟨sevm_, devm_, exn_⟩) res) :
     sevm_.code = devm.getCode sevm_.currentTarget := by sorry
 
-lemma Ninst.pc_eq_of_run'_some
-    {pc sevm devm n pc_ sevm_ devm_ exn_ res}
-    (run : Ninst.Run' pc sevm devm n (.some (⟨pc_, sevm_, devm_⟩, exn_)) res) :
-    pc_ = 0 := by sorry
-
 lemma Ninst.depth_gt_of_run'_some
-    {pc sevm devm n pc_ sevm_ devm_ exn_ res}
-    (run : Ninst.Run' pc sevm devm n (.some (⟨pc_, sevm_, devm_⟩, exn_)) res) :
+    {pc sevm devm n sevm_ devm_ exn_ res}
+    (run : Ninst.Run' pc sevm devm n (.some ⟨sevm_, devm_, exn_⟩) res) :
     sevm.depth < sevm_.depth := by sorry
 
 lemma Prog.At_of_nextNoneRec {ca : Adr} {p : Prog} {pc sevm devm n devm'}
     (h_run : Ninst.Run' pc sevm devm n .none (.ok devm')) :
     p.At ca pc sevm devm → p.At ca (pc + n.size) sevm devm' := by sorry
 
-lemma Prog.At_of_nextSomeRec {ca : Adr} {p : Prog} {pc sevm devm n pc_ sevm_ devm_ exn_ devm'}
-    (h_run : Ninst.Run' pc sevm devm n (.some (⟨pc_, sevm_, devm_⟩, exn_)) (.ok devm')) :
+lemma Prog.At_of_nextSomeRec {ca : Adr} {p : Prog} {pc sevm devm n sevm_ devm_ exn_ devm'}
+    (h_run : Ninst.Run' pc sevm devm n (.some ⟨sevm_, devm_, exn_⟩) (.ok devm')) :
     p.At ca pc sevm devm → p.At ca (pc + n.size) sevm devm' := by sorry
 
 lemma Prog.At_of_jumpRec {ca : Adr} {p : Prog} {pc sevm devm j pc' devm'}
@@ -3874,12 +3869,12 @@ lemma lift_core
         sevm.currentTarget ≠ ca →
         ε pc sevm devm (.error ⟨err, devm'⟩) (.nextNoneErr h_at h_run) )
     ( nextSomeErr :
-      ∀ {pc sevm devm n pc_ sevm_ devm_ exn_ err devm'}
+      ∀ {pc sevm devm n sevm_ devm_ exn_ err devm'}
         (h_at : n.At sevm.code pc)
-        (h_run : Ninst.Run' pc sevm devm n (.some (⟨pc_, sevm_, devm_⟩, exn_)) (.error ⟨err, devm'⟩))
-        (ex_sub : Exec pc_ sevm_ devm_ exn_),
+        (h_run : Ninst.Run' pc sevm devm n (.some ⟨sevm_, devm_, exn_⟩) (.error ⟨err, devm'⟩))
+        (ex_sub : Exec 0 sevm_ devm_ exn_),
         sevm.currentTarget ≠ ca →
-        ε pc_ sevm_ devm_ exn_ ex_sub →
+        ε 0 sevm_ devm_ exn_ ex_sub →
         ε pc sevm devm (.error ⟨err, devm'⟩) (.nextSomeErr h_at h_run ex_sub) )
     ( nextNoneRec :
       ∀ {pc sevm devm n devm' exn}
@@ -3890,13 +3885,13 @@ lemma lift_core
         ε (pc + n.size) sevm devm' exn ex →
         ε pc sevm devm exn (.nextNoneRec h_at h_run ex) )
     ( nextSomeRec :
-      ∀ {pc sevm devm n pc_ sevm_ devm_ exn_ devm' exn}
+      ∀ {pc sevm devm n sevm_ devm_ exn_ devm' exn}
         (h_at : n.At sevm.code pc)
-        (h_run : Ninst.Run' pc sevm devm n (.some (⟨pc_, sevm_, devm_⟩, exn_)) (.ok devm'))
-        (ex_sub : Exec pc_ sevm_ devm_ exn_)
+        (h_run : Ninst.Run' pc sevm devm n (.some ⟨sevm_, devm_, exn_⟩) (.ok devm'))
+        (ex_sub : Exec 0 sevm_ devm_ exn_)
         (ex : Exec (pc + n.size) sevm devm' exn),
         sevm.currentTarget ≠ ca →
-        ε pc_ sevm_ devm_ exn_ ex_sub →
+        ε 0 sevm_ devm_ exn_ ex_sub →
         ε (pc + n.size) sevm devm' exn ex →
         ε pc sevm devm exn (.nextSomeRec h_at h_run ex_sub ex) )
     ( jumpErr :
@@ -3930,19 +3925,19 @@ lemma lift_core
     rcases em (sevm.currentTarget = ca) with h_eq | h_ne
     · exact errAtTarget (.nextNoneErr h_at h_run) h_eq
     · exact nextNoneErr h_at h_run h_ne
-  · intro pc sevm devm n pc_ sevm_ devm_ exn_ err devm' h_at h_run ex_sub ih_sub h_fa h_at_p
+  · intro pc sevm devm n sevm_ devm_ exn_ err devm' h_at h_run ex_sub ih_sub h_fa h_at_p
     rcases em (sevm.currentTarget = ca) with h_eq | h_ne
     · exact errAtTarget (.nextSomeErr h_at h_run ex_sub) h_eq
     · apply nextSomeErr h_at h_run ex_sub h_ne
       have h_lt : sevm.depth < sevm_.depth := Ninst.depth_gt_of_run'_some h_run
-      have h_sub_wkn := h_fa pc_ sevm_ devm_ exn_ ex_sub h_lt
+      have h_sub_wkn := h_fa 0 sevm_ devm_ exn_ ex_sub h_lt
       have h1 : some (devm_.getCode ca).toList = Prog.compile p := by
         rw [Ninst.getCode_eq_of_run'_some h_run ca]
         exact h_at_p.left
-      have h2 : sevm_.currentTarget = ca → some sevm_.code.toList = Prog.compile p ∧ pc_ = 0 := by
+      have h2 : sevm_.currentTarget = ca → some sevm_.code.toList = Prog.compile p ∧ 0 = 0 := by
         intro h_ca
         rw [Ninst.code_eq_of_run'_some h_run, h_ca]
-        exact ⟨h_at_p.left, Ninst.pc_eq_of_run'_some h_run⟩
+        exact ⟨h_at_p.left, rfl⟩
       exact h_sub_wkn ⟨h1, h2⟩
   · intro pc sevm devm n devm' exn h_at h_run ex_next ih_next h_fa h_at_p
     rcases em (sevm.currentTarget = ca) with h_eq | h_ne
@@ -3957,7 +3952,7 @@ lemma lift_core
           exact h_fa pc' sevm' devm' exn' ex' h_lt
         exact analog (.nextNoneRec h_at h_run ex_next) (depth_ind h_run_prog h_eq h_fa_deeper)
     · exact nextNoneRec h_at h_run ex_next h_ne (ih_next h_fa (Prog.At_of_nextNoneRec h_run h_at_p))
-  · intro pc sevm devm n pc_ sevm_ devm_ exn_ devm' exn h_at h_run ex_sub ex_next ih_sub ih_next h_fa h_at_p
+  · intro pc sevm devm n sevm_ devm_ exn_ devm' exn h_at h_run ex_sub ex_next ih_sub ih_next h_fa h_at_p
     rcases em (sevm.currentTarget = ca) with h_eq | h_ne
     · cases exn with
       | error e => exact errAtTarget (.nextSomeRec h_at h_run ex_sub ex_next) h_eq
@@ -3971,14 +3966,14 @@ lemma lift_core
         exact analog (.nextSomeRec h_at h_run ex_sub ex_next) (depth_ind h_run_prog h_eq h_fa_deeper)
     · apply nextSomeRec h_at h_run ex_sub ex_next h_ne
       · have h_lt : sevm.depth < sevm_.depth := Ninst.depth_gt_of_run'_some h_run
-        have h_sub_wkn := h_fa pc_ sevm_ devm_ exn_ ex_sub h_lt
+        have h_sub_wkn := h_fa 0 sevm_ devm_ exn_ ex_sub h_lt
         have h1 : some (devm_.getCode ca).toList = Prog.compile p := by
           rw [Ninst.getCode_eq_of_run'_some h_run ca]
           exact h_at_p.left
-        have h2 : sevm_.currentTarget = ca → some sevm_.code.toList = Prog.compile p ∧ pc_ = 0 := by
+        have h2 : sevm_.currentTarget = ca → some sevm_.code.toList = Prog.compile p ∧ 0 = 0 := by
           intro h_ca
           rw [Ninst.code_eq_of_run'_some h_run, h_ca]
-          exact ⟨h_at_p.left, Ninst.pc_eq_of_run'_some h_run⟩
+          exact ⟨h_at_p.left, rfl⟩
         exact h_sub_wkn ⟨h1, h2⟩
       · exact ih_next h_fa (Prog.At_of_nextSomeRec h_run h_at_p)
   · intro pc sevm devm j err devm' h_at h_run h_fa h_at_p
@@ -4031,13 +4026,13 @@ lemma lift
         R sevm inter post →
         R sevm pre post )
     ( nextSome :
-      ∀ {pc} {sevm} {pre} {n} {pc'} {sevm'} {devm'}
+      ∀ {pc} {sevm} {pre} {n} {sevm'} {devm'}
         {exn' : Execution} {inter} {post},
         n.At sevm.code pc →
         Ninst.Run' pc sevm pre n
-          (.some (⟨pc', sevm', devm'⟩, exn'))
+          (.some ⟨sevm', devm', exn'⟩)
           (.ok inter) →
-        Exec pc' sevm' devm' exn' →
+        Exec 0 sevm' devm' exn' →
         Exec (pc + n.size) sevm inter (.ok post) →
         sevm.currentTarget ≠ ca →
         ifOk (R sevm' devm') exn' →
@@ -4071,12 +4066,12 @@ lemma lift
   · intro pc' sevm' devm' err devm'' ex_err h_eq; exact trivial
   · intro pc' sevm' devm' h_get h_ne; exact trivial
   · intro pc' sevm' devm' n err devm'' h_at' h_run h_ne; exact trivial
-  · intro pc' sevm' devm' n pc_ sevm_ devm_ exn_ err devm'' h_at' h_run ex_sub h_ne h_ih; exact trivial
+  · intro pc' sevm' devm' n sevm_ devm_ exn_ err devm'' h_at' h_run ex_sub h_ne h_ih; exact trivial
   · intro pc' sevm' devm' n devm'' exn h_at' h_run ex h_ne h_ih
     cases exn with
     | error e => exact trivial
     | ok post' => exact nextNone h_at' h_run ex h_ne h_ih
-  · intro pc' sevm' devm' n pc_ sevm_ devm_ exn_ devm'' exn h_at' h_run ex_sub ex h_ne h_ih_sub h_ih
+  · intro pc' sevm' devm' n sevm_ devm_ exn_ devm'' exn h_at' h_run ex_sub ex h_ne h_ih_sub h_ih
     cases exn with
     | error e => exact trivial
     | ok post' => exact nextSome h_at' h_run ex_sub ex h_ne h_ih_sub h_ih
@@ -4113,9 +4108,9 @@ lemma lift_inv
         π sevm pre →
         π sevm inter )
     ( nextSome :
-      ∀ {pc} {sevm} {pre} {n} {pc'} {sevm'} {devm'} {exn'} {inter},
+      ∀ {pc} {sevm} {pre} {n} {sevm'} {devm'} {exn'} {inter},
         n.At sevm.code pc →
-        Ninst.Run' pc sevm pre n (.some (⟨pc', sevm', devm'⟩, exn')) (.ok inter) →
+        Ninst.Run' pc sevm pre n (.some ⟨sevm', devm', exn'⟩) (.ok inter) →
         sevm.currentTarget ≠ ca →
         π sevm pre →
         π sevm' devm' ∧ (ifOk (π sevm') exn' → π sevm inter) )
@@ -4141,7 +4136,7 @@ lemma lift_inv
   apply @lift (fun sevm pre post => π sevm pre → π sevm post) ca p with_depth_ind
   · intro pc sevm pre n inter post h_at h_run _ h_ne h_ih h_pi
     exact h_ih (nextNone h_at h_run h_ne h_pi)
-  · intro pc sevm pre n pc' sevm' devm' exn' inter post h_at h_run _ _ h_ne h_ifOk h_ih h_pi
+  · intro pc sevm pre n sevm' devm' exn' inter post h_at h_run _ _ h_ne h_ifOk h_ih h_pi
     rcases nextSome h_at h_run h_ne h_pi with ⟨h_pi_sub, h_imp⟩
     apply h_ih; apply h_imp
     cases exn' with
