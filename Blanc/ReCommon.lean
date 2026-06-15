@@ -1809,6 +1809,46 @@ lemma Ninst.code_eq_of_run'_some
   case exec x =>
     sorry
 
+
+lemma ExecuteCode.depth_eq
+    {msg : Msg} {sevm_ devm_ exn_ ex}
+    (run : ExecuteCode msg (.some ⟨sevm_, devm_, exn_⟩) ex) :
+    sevm_.depth = msg.depth := by sorry
+
+lemma ProcessMessage.depth_eq
+    {msg : Msg} {sevm_ devm_ exn_ ex}
+    (run : ProcessMessage msg (.some ⟨sevm_, devm_, exn_⟩) ex) :
+    sevm_.depth = msg.depth := by sorry
+
+lemma ProcessCreateMessage.depth_eq
+    {msg : Msg} {sevm_ devm_ exn_ ex}
+    (run : ProcessCreateMessage msg (.some ⟨sevm_, devm_, exn_⟩) ex) :
+    sevm_.depth = msg.depth := by sorry
+
+lemma GenericCall.depth_lt
+    {sevm devm msgCallGas value caller currentTarget target
+      shouldTransferValue isStatic inputIndex inputSize
+      outputIndex outputSize code disablePrecompiles}
+    {sevm_ devm_ exn_ ex}
+    (run : GenericCall sevm devm msgCallGas value caller currentTarget target
+      shouldTransferValue isStatic inputIndex inputSize
+      outputIndex outputSize code disablePrecompiles (.some ⟨sevm_, devm_, exn_⟩) ex) :
+    sevm_.depth < sevm.depth := by sorry
+
+lemma GenericCreate.depth_lt
+    {sevm devm endowment
+      newAddress memoryIndex memorySize}
+    {sevm_ devm_ exn_ ex}
+    (run : GenericCreate sevm devm endowment
+      newAddress memoryIndex memorySize (.some ⟨sevm_, devm_, exn_⟩) ex) :
+    sevm_.depth < sevm.depth := by sorry
+
+lemma Xinst.depth_lt
+    {sevm devm x}
+    {sevm_ devm_ exn_ ex}
+    (run : Xinst.Run sevm devm x (.some ⟨sevm_, devm_, exn_⟩) ex) :
+    sevm_.depth < sevm.depth := by sorry
+
 lemma Ninst.depth_lt_of_run'_some
     {pc sevm devm n sevm_ devm_ exn_ res}
     (run : Ninst.Run' pc sevm devm n (.some ⟨sevm_, devm_, exn_⟩) res) :

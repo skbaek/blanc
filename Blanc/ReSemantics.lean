@@ -188,6 +188,10 @@ def Except.Split {ξ υ ζ : Type}
     (e : Except ξ υ) (e' : Except ξ ζ) (q : υ → Prop) : Prop :=
   (∃ x, e = .error x ∧ e' = .error x) ∨ (∃ y : υ, e = .ok y ∧ q y)
 
+def Except.SplitXl {ξ υ ζ : Type}
+    (e : Except ξ υ) (xl : Xlot) (e' : Except ξ ζ) (q : υ → Prop) : Prop :=
+  (∃ x, e = .error x ∧ e' = .error x ∧ xl = .none) ∨ (∃ y : υ, e = .ok y ∧ q y)
+
 def ExecuteCode (msg : Msg) (xl : Xlot)
     (ex : Except (String × State × AdrSet × Tra) Devm) : Prop :=
   let evm : Evm := initEvm msg
@@ -202,7 +206,7 @@ def ExecuteCode (msg : Msg) (xl : Xlot)
 
 def ProcessMessage (msg : Msg) (xl : Xlot)
     (ex : Except (String × State × AdrSet × Tra) Devm) : Prop :=
-    msg.benvAfterTransfer.Split ex <|
+    msg.benvAfterTransfer.SplitXl xl ex <|
   λ benv =>
   ∃ ex' : Except (String × State × AdrSet × Tra) Devm,
     And (ExecuteCode (msg.withBenv benv) xl ex') <|
@@ -242,7 +246,7 @@ def GenericCreate (sevm : Sevm) (devm : Devm) (endowment : B256) (newAddress : A
   λ calldata =>
     ( Except.assert
         (memorySize ≤ maxInitcodeSize)
-        ⟨"OutOfGasError", devm⟩ ).Split ex <|
+        ⟨"OutOfGasError", devm⟩ ).SplitXl xl ex <|
   λ _ =>
     ExistsEq (addAccessedAddress devm newAddress) <|
   λ devm1 =>
@@ -250,7 +254,7 @@ def GenericCreate (sevm : Sevm) (devm : Devm) (endowment : B256) (newAddress : A
   λ createMsgGas =>
     ExistsEq ({devm1 with gasLeft := devm1.gasLeft - createMsgGas}) <|
   λ devm2 =>
-    (assertDynamic sevm devm2).Split ex <|
+    (assertDynamic sevm devm2).SplitXl xl ex <|
   λ _ =>
     ExistsEq ({devm2 with returnData := []}) <|
   λ devm3 =>
@@ -355,17 +359,17 @@ def GenericCall
 def Xinst.Run (sevm : Sevm) (devm : Devm) :
     Xinst → Xlot → Execution → Prop
   | .create, xl, ex =>
-      (devm.pop).Split ex <|
+      (devm.pop).SplitXl xl ex <|
     λ ⟨endowment, devm1⟩ =>
-      (devm1.popToNat).Split ex <|
+      (devm1.popToNat).SplitXl xl ex <|
     λ ⟨memoryIndex, devm2⟩ =>
-      (devm2.popToNat).Split ex <|
+      (devm2.popToNat).SplitXl xl ex <|
     λ ⟨memorySize, devm3⟩ =>
       ExistsEq (devm3.extCost [⟨memoryIndex, memorySize⟩]) <|
     λ extendCost =>
       ExistsEq (gasInitCodeWordCost * (ceilDiv memorySize 32)) <|
     λ initCodeCost =>
-      (chargeGas (gasCreate + extendCost + initCodeCost) devm3).Split ex <|
+      (chargeGas (gasCreate + extendCost + initCodeCost) devm3).SplitXl xl ex <|
     λ devm4 =>
       ExistsEq (devm4.memExtends [⟨memoryIndex, memorySize⟩]) <|
     λ devm5 =>
@@ -384,13 +388,13 @@ def Xinst.Run (sevm : Sevm) (devm : Devm) :
         xl
         ex
   | .create2, xl, ex =>
-      (devm.pop).Split ex <|
+      (devm.pop).SplitXl xl ex <|
     λ ⟨endowment, devm1⟩ =>
-      (devm1.popToNat).Split ex <|
+      (devm1.popToNat).SplitXl xl ex <|
     λ ⟨memoryIndex, devm2⟩ =>
-      (devm2.popToNat).Split ex <|
+      (devm2.popToNat).SplitXl xl ex <|
     λ ⟨memorySize, devm3⟩ =>
-      (devm3.pop).Split ex <|
+      (devm3.pop).SplitXl xl ex <|
     λ ⟨salt, devm4⟩ =>
       ExistsEq (devm4.extCost [⟨memoryIndex, memorySize⟩]) <|
     λ extendCost =>
@@ -398,7 +402,7 @@ def Xinst.Run (sevm : Sevm) (devm : Devm) :
     λ initCodeHashCost =>
       ExistsEq (gasInitCodeWordCost * (ceilDiv memorySize 32)) <|
     λ initCodeCost =>
-      (chargeGas (gasCreate + initCodeHashCost + extendCost + initCodeCost) devm4).Split ex <|
+      (chargeGas (gasCreate + initCodeHashCost + extendCost + initCodeCost) devm4).SplitXl xl ex <|
     λ devm5 =>
       ExistsEq (devm5.memExtends [⟨memoryIndex, memorySize⟩]) <|
     λ devm6 =>
@@ -418,19 +422,19 @@ def Xinst.Run (sevm : Sevm) (devm : Devm) :
         xl
         ex
   | .call, xl, ex =>
-      (devm.pop).Split ex <|
+      (devm.pop).SplitXl xl ex <|
     λ ⟨gas, devm1⟩ =>
-      (devm1.popToAdr).Split ex <|
+      (devm1.popToAdr).SplitXl xl ex <|
     λ ⟨callee, devm2⟩ =>
-      (devm2.pop).Split ex <|
+      (devm2.pop).SplitXl xl ex <|
     λ ⟨value, devm3⟩ =>
-      (devm3.popToNat).Split ex <|
+      (devm3.popToNat).SplitXl xl ex <|
     λ ⟨inputIndex, devm4⟩ =>
-      (devm4.popToNat).Split ex <|
+      (devm4.popToNat).SplitXl xl ex <|
     λ ⟨inputSize, devm5⟩ =>
-      (devm5.popToNat).Split ex <|
+      (devm5.popToNat).SplitXl xl ex <|
     λ ⟨outputIndex, devm6⟩ =>
-      (devm6.popToNat).Split ex <|
+      (devm6.popToNat).SplitXl xl ex <|
     λ ⟨outputSize, devm7⟩ =>
       ExistsEq (devm7.extCost [⟨inputIndex, inputSize⟩, ⟨outputIndex, outputSize⟩]) <|
     λ extendCost =>
@@ -448,16 +452,16 @@ def Xinst.Run (sevm : Sevm) (devm : Devm) :
     λ transferCost =>
       ExistsEq (calculateMsgCallGas value.toNat gas.toNat devm9.gasLeft extendCost (accessCost + createCost + transferCost)) <|
     λ ⟨msgCallCost, msgCallStipend⟩ =>
-      (chargeGas (msgCallCost + extendCost) devm9).Split ex <|
+      (chargeGas (msgCallCost + extendCost) devm9).SplitXl xl ex <|
     λ devm10 =>
-      (Except.assert (!sevm.isStatic ∨ value = 0) ⟨"WriteInStaticContext", devm10⟩).Split ex <|
+      (Except.assert (!sevm.isStatic ∨ value = 0) ⟨"WriteInStaticContext", devm10⟩).SplitXl xl ex <|
     λ _ =>
       ExistsEq (devm10.memExtends [⟨inputIndex, inputSize⟩, ⟨outputIndex, outputSize⟩]) <|
     λ devm11 =>
       ExistsEq ((devm11.getAcct sevm.currentTarget).bal) <|
     λ senderBal =>
       if senderBal < value then
-          (devm11.push 0).Split ex <|
+          (devm11.push 0).SplitXl xl ex <|
         λ devm12 =>
           .ok {devm12 with returnData := [], gasLeft := devm12.gasLeft + msgCallStipend} = ex
       else
@@ -480,19 +484,19 @@ def Xinst.Run (sevm : Sevm) (devm : Devm) :
           xl
           ex
   | .callcode, xl, ex =>
-      (devm.pop).Split ex <|
+      (devm.pop).SplitXl xl ex <|
     λ ⟨gas, devm1⟩ =>
-      (devm1.popToAdr).Split ex <|
+      (devm1.popToAdr).SplitXl xl ex <|
     λ ⟨codeAddress, devm2⟩ =>
-      (devm2.pop).Split ex <|
+      (devm2.pop).SplitXl xl ex <|
     λ ⟨value, devm3⟩ =>
-      (devm3.popToNat).Split ex <|
+      (devm3.popToNat).SplitXl xl ex <|
     λ ⟨inputIndex, devm4⟩ =>
-      (devm4.popToNat).Split ex <|
+      (devm4.popToNat).SplitXl xl ex <|
     λ ⟨inputSize, devm5⟩ =>
-      (devm5.popToNat).Split ex <|
+      (devm5.popToNat).SplitXl xl ex <|
     λ ⟨outputIndex, devm6⟩ =>
-      (devm6.popToNat).Split ex <|
+      (devm6.popToNat).SplitXl xl ex <|
     λ ⟨outputSize, devm7⟩ =>
       ExistsEq (devm7.extCost [⟨inputIndex, inputSize⟩, ⟨outputIndex, outputSize⟩]) <|
     λ extendCost =>
@@ -508,14 +512,14 @@ def Xinst.Run (sevm : Sevm) (devm : Devm) :
     λ transferCost =>
       ExistsEq (calculateMsgCallGas value.toNat gas.toNat devm9.gasLeft extendCost (accessCost + transferCost)) <|
     λ ⟨msgCallCost, msgCallStipend⟩ =>
-      (chargeGas (msgCallCost + extendCost) devm9).Split ex <|
+      (chargeGas (msgCallCost + extendCost) devm9).SplitXl xl ex <|
     λ devm10 =>
       ExistsEq (devm10.memExtends [⟨inputIndex, inputSize⟩, ⟨outputIndex, outputSize⟩]) <|
     λ devm11 =>
       ExistsEq (devm11.getAcct sevm.currentTarget).bal <|
     λ senderBal =>
       if senderBal < value then
-          (devm11.push 0).Split ex <|
+          (devm11.push 0).SplitXl xl ex <|
         λ devm12 =>
           .ok {devm12 with returnData := [], gasLeft := devm12.gasLeft + msgCallStipend} = ex
       else
@@ -538,17 +542,17 @@ def Xinst.Run (sevm : Sevm) (devm : Devm) :
           xl
           ex
   | .delcall, xl, ex =>
-      (devm.pop).Split ex <|
+      (devm.pop).SplitXl xl ex <|
     λ ⟨gas, devm1⟩ =>
-      (devm1.popToAdr).Split ex <|
+      (devm1.popToAdr).SplitXl xl ex <|
     λ ⟨codeAddress, devm2⟩ =>
-      (devm2.popToNat).Split ex <|
+      (devm2.popToNat).SplitXl xl ex <|
     λ ⟨inputIndex, devm3⟩ =>
-      (devm3.popToNat).Split ex <|
+      (devm3.popToNat).SplitXl xl ex <|
     λ ⟨inputSize, devm4⟩ =>
-      (devm4.popToNat).Split ex <|
+      (devm4.popToNat).SplitXl xl ex <|
     λ ⟨outputIndex, devm5⟩ =>
-      (devm5.popToNat).Split ex <|
+      (devm5.popToNat).SplitXl xl ex <|
     λ ⟨outputSize, devm6⟩ =>
       ExistsEq (devm6.extCost [⟨inputIndex, inputSize⟩, ⟨outputIndex, outputSize⟩]) <|
     λ extendCost =>
@@ -562,7 +566,7 @@ def Xinst.Run (sevm : Sevm) (devm : Devm) :
     λ accessCost =>
       ExistsEq (calculateMsgCallGas 0 gas.toNat devm8.gasLeft extendCost accessCost) <|
     λ ⟨msgCallCost, msgCallStipend⟩ =>
-      (chargeGas (msgCallCost + extendCost) devm8).Split ex <|
+      (chargeGas (msgCallCost + extendCost) devm8).SplitXl xl ex <|
     λ devm9 =>
       ExistsEq (devm9.memExtends [⟨inputIndex, inputSize⟩, ⟨outputIndex, outputSize⟩]) <|
     λ devm10 =>
@@ -585,17 +589,17 @@ def Xinst.Run (sevm : Sevm) (devm : Devm) :
         xl
         ex
   | .statcall, xl, ex =>
-      (devm.pop).Split ex <|
+      (devm.pop).SplitXl xl ex <|
     λ ⟨gas, devm1⟩ =>
-      (devm1.popToAdr).Split ex <|
+      (devm1.popToAdr).SplitXl xl ex <|
     λ ⟨target, devm2⟩ =>
-      (devm2.popToNat).Split ex <|
+      (devm2.popToNat).SplitXl xl ex <|
     λ ⟨inputIndex, devm3⟩ =>
-      (devm3.popToNat).Split ex <|
+      (devm3.popToNat).SplitXl xl ex <|
     λ ⟨inputSize, devm4⟩ =>
-      (devm4.popToNat).Split ex <|
+      (devm4.popToNat).SplitXl xl ex <|
     λ ⟨outputIndex, devm5⟩ =>
-      (devm5.popToNat).Split ex <|
+      (devm5.popToNat).SplitXl xl ex <|
     λ ⟨outputSize, devm6⟩ =>
       ExistsEq (devm6.extCost [⟨inputIndex, inputSize⟩, ⟨outputIndex, outputSize⟩]) <|
     λ extendCost =>
@@ -609,7 +613,7 @@ def Xinst.Run (sevm : Sevm) (devm : Devm) :
     λ accessCost =>
       ExistsEq (calculateMsgCallGas 0 gas.toNat devm8.gasLeft extendCost accessCost) <|
     λ ⟨msgCallCost, msgCallStipend⟩ =>
-      (chargeGas (msgCallCost + extendCost) devm8).Split ex <|
+      (chargeGas (msgCallCost + extendCost) devm8).SplitXl xl ex <|
     λ devm9 =>
       ExistsEq (devm9.memExtends [⟨inputIndex, inputSize⟩, ⟨outputIndex, outputSize⟩]) <|
     λ devm10 =>
@@ -1078,6 +1082,44 @@ lemma fit_of_split_of_fit {ξ υ ζ} {x : Except (String × ξ) υ}
     rw [rw, rw''] at fit; cases fit rfl
   · exact (prem _ eq py)
 
+
+lemma fit_of_splitXl_of_fit {ξ υ ζ} {e : Except (String × ξ) υ} {xl : Xlot} {e' : Except (String × ξ) ζ} {q}
+    (split : Except.SplitXl e xl e' q) (fit : e.Fit) (prem : ∀ y, e = .ok y → q y → Except.Fit e') : Except.Fit e' := by
+  rcases split with ⟨x, h1, eq', _⟩ | ⟨y, eq, qy⟩
+  · intro ltd; apply fit; rw [h1]; rw [eq'] at ltd; exact ltd
+  · exact prem y eq qy
+
+lemma exists_forall_gt_of_splitXl {ξ υ ζ} {x : Except (String × ξ) υ} {xl}
+    {ex : Except (String × ξ) ζ} {p} {f : υ → ℕ → Except (String × ξ) ζ}
+    (split : Except.SplitXl x xl ex p)
+    (efg : ∀ y, x = .ok y → p y → ∃ lim, ∀ lim' > lim, f y lim' = ex) :
+    ∃ lim, ∀ lim' > lim, (x >>= λ y => f y lim') = ex := by
+  rcases split with ⟨e, he, he', hxl⟩ | ⟨y, hy, hy'⟩
+  · refine ⟨0, λ _ _ => ?_⟩
+    rw [he, he']
+    rfl
+  · have ⟨lim, hlim⟩ := efg y hy hy'
+    refine ⟨lim, λ lim' hlim' => ?_⟩
+    rw [hy]
+    exact hlim lim' hlim'
+
+
+syntax "fit_step_splitXl " ident term : tactic
+macro_rules
+  | `(tactic| fit_step_splitXl $run $lem) =>
+    `(tactic|
+      apply fit_of_splitXl_of_fit $run $lem;
+      clear $run; intro _ temp $run; clear temp;
+    )
+
+syntax "efg_step_splitXl " ident : tactic
+macro_rules
+  | `(tactic| efg_step_splitXl $run) =>
+    `(tactic|
+      apply exists_forall_gt_of_splitXl $run;
+      clear $run; intro _ temp $run; clear temp
+    )
+
 syntax "fit_step_split " ident term : tactic
 macro_rules
   | `(tactic| fit_step_split $run $lem) =>
@@ -1526,12 +1568,12 @@ lemma of_process_message' {msg : Msg} {xl : Xlot}
     (run : ProcessMessage msg xl ex) :
     ex.Fit ∧ ∃ lim, ∀ lim' > lim, processMessage false msg lim' = ex := by
   simp only [ProcessMessage] at run; constructor
-  · fit_step_split run fit_benvAfterTransfer
+  · fit_step_splitXl run fit_benvAfterTransfer
     fit_step_exec run good of_execute_code' id
     split at run <;> (rw [← run]; apply fit_ok)
   · apply Exists.imp forall_gt_of_forall_gt_succ_pred
     simp only [processMessage]
-    efg_step_split run;
+    efg_step_splitXl run;
     have temp := run; clear run;
     rcases temp with ⟨ex', runs, run⟩;
     have temp := of_execute_code' good runs;
@@ -1679,9 +1721,9 @@ lemma of_generic_create' {sevm : Sevm} {devm : Devm} {endowment : B256} {newAddr
             newAddress memoryIndex memorySize lim' = ex := by
   simp only [GenericCreate] at run; constructor
   · fit_step_exists run
-    fit_step_split run (fit_assert (by decide))
+    fit_step_splitXl run (fit_assert (by decide))
     iterate 3 (fit_step_exists run);
-    fit_step_split run fit_assertDynamic
+    fit_step_splitXl run fit_assertDynamic
     iterate 2 (fit_step_exists run);
     split at run; {rw [← run]; apply fit_push}
     fit_step_exists run
@@ -1691,9 +1733,9 @@ lemma of_generic_create' {sevm : Sevm} {devm : Devm} {endowment : B256} {newAddr
     split at run <;> (rw [← run]; apply fit_push)
   · apply Exists.imp forall_gt_of_forall_gt_succ_pred
     simp only [genericCreate]
-    efg_step_exists run; efg_step_split run
+    efg_step_exists run; efg_step_splitXl run
     iterate 3 (efg_step_exists run)
-    efg_step_split run; iterate 2 (efg_step_exists run)
+    efg_step_splitXl run; iterate 2 (efg_step_exists run)
     efg_step_early run; {refine' ⟨0, _⟩; intro _ _; exact run}
     efg_step_exists run
     efg_step_early run; {refine' ⟨0, _⟩; intro _ _; exact run}
@@ -1754,112 +1796,112 @@ lemma Xinst.run_eq_of_run {sevm} {devm} {x : Xinst} {xl : Xlot}
       [ skip;
         ( apply Exists.imp forall_gt_of_forall_gt_succ_pred ;
           simp only [Xinst.run] ) ] )
-  · fit_step_split run fit_pop
-    fit_step_split run fit_popToNat
-    fit_step_split run fit_popToNat
+  · fit_step_splitXl run fit_pop
+    fit_step_splitXl run fit_popToNat
+    fit_step_splitXl run fit_popToNat
     fit_step_exists run; fit_step_exists run
-    fit_step_split run fit_chargeGas
+    fit_step_splitXl run fit_chargeGas
     fit_step_exists run; fit_step_exists run
     exact (of_generic_create' good run).1
-  · iterate 3 (efg_step_split run)
+  · iterate 3 (efg_step_splitXl run)
     iterate 2 (efg_step_exists run)
-    efg_step_split run
+    efg_step_splitXl run
     iterate 2 (efg_step_exists run)
     efg_end_exec run good of_generic_create'
-  · fit_step_split run fit_pop
-    fit_step_split run (fit_map_rev fit_pop)
-    fit_step_split run fit_pop
-    iterate 4 (fit_step_split run fit_popToNat)
+  · fit_step_splitXl run fit_pop
+    fit_step_splitXl run (fit_map_rev fit_pop)
+    fit_step_splitXl run fit_pop
+    iterate 4 (fit_step_splitXl run fit_popToNat)
     iterate 3 (fit_step_exists run)
     fit_step_exists run
     iterate 3 (fit_step_exists run)
     fit_step_exists run
-    fit_step_split run fit_chargeGas
-    fit_step_split run (fit_assert (by decide))
+    fit_step_splitXl run fit_chargeGas
+    fit_step_splitXl run (fit_assert (by decide))
     fit_step_exists run; fit_step_exists run
     split at run
-    · fit_step_split run fit_push
+    · fit_step_splitXl run fit_push
       rw [← run]; apply fit_ok
     · exact (of_generic_call' good run).1
-  · iterate 7 (efg_step_split run)
+  · iterate 7 (efg_step_splitXl run)
     iterate 3 (efg_step_exists run)
     efg_step_exists run;
     iterate 3 (efg_step_exists run)
     efg_step_exists run;
-    efg_step_split run; efg_step_split run;
+    efg_step_splitXl run; efg_step_splitXl run;
     efg_step_exists run; efg_step_exists run;
     efg_step_ite run
-    · efg_step_split run; refine ⟨0, λ _ _ => run⟩
+    · efg_step_splitXl run; refine ⟨0, λ _ _ => run⟩
     · efg_end_exec run good of_generic_call'
-  · fit_step_split run fit_pop
-    fit_step_split run (fit_map_rev fit_pop)
-    fit_step_split run fit_pop
-    iterate 4 (fit_step_split run fit_popToNat)
+  · fit_step_splitXl run fit_pop
+    fit_step_splitXl run (fit_map_rev fit_pop)
+    fit_step_splitXl run fit_pop
+    iterate 4 (fit_step_splitXl run fit_popToNat)
     iterate 4 (fit_step_exists run)
     fit_step_exists run
     fit_step_exists run; fit_step_exists run
-    fit_step_split run fit_chargeGas
+    fit_step_splitXl run fit_chargeGas
     fit_step_exists run; fit_step_exists run
     split at run
-    · fit_step_split run fit_push
+    · fit_step_splitXl run fit_push
       rw [← run]; apply fit_ok
     · exact (of_generic_call' good run).1
-  · iterate 7 (efg_step_split run)
+  · iterate 7 (efg_step_splitXl run)
     iterate 3 (efg_step_exists run)
     efg_step_exists run;
     iterate 2 (efg_step_exists run)
     efg_step_exists run;
-    efg_step_split run
+    efg_step_splitXl run
     iterate 2 (efg_step_exists run)
     efg_step_ite run
-    · efg_step_split run; refine ⟨0, λ _ _ => run⟩
+    · efg_step_splitXl run; refine ⟨0, λ _ _ => run⟩
     · efg_end_exec run good of_generic_call'
-  · fit_step_split run fit_pop
-    fit_step_split run (fit_map_rev fit_pop)
-    iterate 4 (fit_step_split run fit_popToNat)
+  · fit_step_splitXl run fit_pop
+    fit_step_splitXl run (fit_map_rev fit_pop)
+    iterate 4 (fit_step_splitXl run fit_popToNat)
     iterate 3 (fit_step_exists run)
     fit_step_exists run
     fit_step_exists run
     fit_step_exists run
-    fit_step_split run fit_chargeGas
+    fit_step_splitXl run fit_chargeGas
     fit_step_exists run;
     exact (of_generic_call' good run).1
-  · iterate 6 (efg_step_split run)
+  · iterate 6 (efg_step_splitXl run)
     iterate 3 (efg_step_exists run)
     efg_step_exists run;
     efg_step_exists run
     efg_step_exists run;
-    efg_step_split run
+    efg_step_splitXl run
     efg_step_exists run
     efg_end_exec run good of_generic_call'
-  · fit_step_split run fit_pop
-    iterate 2 (fit_step_split run fit_popToNat)
-    fit_step_split run fit_pop
+  · fit_step_splitXl run fit_pop
+    iterate 2 (fit_step_splitXl run fit_popToNat)
+    fit_step_splitXl run fit_pop
     iterate 3 (fit_step_exists run)
-    fit_step_split run fit_chargeGas
+    fit_step_splitXl run fit_chargeGas
     iterate 2 (fit_step_exists run)
     exact (of_generic_create' good run).1
-  · iterate 4 (efg_step_split run)
+  · iterate 4 (efg_step_splitXl run)
     iterate 3 (efg_step_exists run)
-    efg_step_split run
+    efg_step_splitXl run
     iterate 2 (efg_step_exists run)
     efg_end_exec run good of_generic_create'
-  · fit_step_split run fit_pop
-    fit_step_split run (fit_map_rev fit_pop)
-    iterate 4 (fit_step_split run fit_popToNat)
+  · fit_step_splitXl run fit_pop
+    fit_step_splitXl run (fit_map_rev fit_pop)
+    iterate 4 (fit_step_splitXl run fit_popToNat)
     iterate 3 (fit_step_exists run)
     fit_step_exists run
     fit_step_exists run
     fit_step_exists run
-    fit_step_split run fit_chargeGas
+    fit_step_splitXl run fit_chargeGas
     fit_step_exists run;
     exact (of_generic_call' good run).1
-  · iterate 6 (efg_step_split run)
+  · iterate 6 (efg_step_splitXl run)
     iterate 3 (efg_step_exists run)
     efg_step_exists run;
     efg_step_exists run
     efg_step_exists run;
-    efg_step_split run
+    efg_step_splitXl run
     efg_step_exists run
     efg_end_exec run good of_generic_call'
 
@@ -2027,7 +2069,8 @@ syntax "bind_step_good " ident rcasesPat : tactic
 macro_rules
   | `(tactic| bind_step_good $h $pat) => `(tactic|
       rcases of_bind_eq $h with im | ⟨$pat, temp_eq, eq'⟩;
-      { refine ⟨.none, .intro, .inl im⟩ };
+      { refine ⟨.none, .intro, .inl ?_⟩;
+        first | exact im | (rcases im with ⟨x, h1, h2⟩; exact ⟨x, h1, h2, rfl⟩) };
       clear $h; rename' eq' => $h;
       apply Exists.imp
         (λ _ (conj : _ ∧ _) => ⟨conj.1, Or.inr ⟨_, temp_eq, conj.2⟩⟩);
@@ -2069,7 +2112,9 @@ syntax "bind_step' " ident rcasesPat : tactic
 macro_rules
   | `(tactic| bind_step' $h $pat) => `(tactic|
       rcases of_bind_eq $h with im | ⟨$pat, temp_eq, eq'⟩;
-      {left; exact im}; clear $h; rename' eq' => $h;
+      { left;
+        first | exact im | (rcases im with ⟨x, h1, h2⟩; exact ⟨x, h1, h2, rfl⟩) };
+      clear $h; rename' eq' => $h;
       right; refine' ⟨_, temp_eq, _⟩; clear temp_eq
     )
 
