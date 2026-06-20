@@ -1999,7 +1999,9 @@ lemma Xinst.depth_lt
 lemma Ninst.depth_lt_of_run'_some
     {pc sevm devm n sevm_ devm_ exn_ res}
     (run : Ninst.Run' pc sevm devm n (.some ⟨sevm_, devm_, exn_⟩) res) :
-    sevm_.depth < sevm.depth := by sorry
+    sevm_.depth < sevm.depth := by
+  cases n <;> dsimp [Ninst.Run'] at run
+  case exec => exact Xinst.depth_lt run
 
 lemma Ninst.getCode_eq_of_run'_ok
     {pc sevm devm n xlot devm'}
