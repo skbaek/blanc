@@ -1820,7 +1820,18 @@ lemma GenericCall.depth_lt
     (run : GenericCall sevm devm msgCallGas value caller currentTarget target
       shouldTransferValue isStatic inputIndex inputSize
       outputIndex outputSize code disablePrecompiles (.some ⟨sevm_, devm_, exn_⟩) ex) :
-    sevm_.depth < sevm.depth := by sorry
+    sevm_.depth < sevm.depth := by
+  dsimp [GenericCall] at run
+  rcases run with ⟨evm1, _, run⟩
+  split at run
+  · exact Option.noConfusion run.1
+  rename_i h_depth
+  rcases run with ⟨calldata, _, run⟩
+  rcases run with ⟨_, rfl, run⟩
+  rcases run with ⟨ex', run_process, run_split⟩
+  have h := ProcessMessage.depth_eq run_process
+  change sevm_.depth = sevm.depth - 1 at h
+  omega
 
 lemma GenericCreate.depth_lt
     {sevm devm endowment
