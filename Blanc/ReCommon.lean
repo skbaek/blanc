@@ -1800,17 +1800,40 @@ lemma Ninst.code_eq_of_run'_some
 lemma ExecuteCode.depth_eq
     {msg : Msg} {sevm_ devm_ exn_ ex}
     (run : ExecuteCode msg (.some ⟨sevm_, devm_, exn_⟩) ex) :
-    sevm_.depth = msg.depth := by sorry
+    sevm_.depth = msg.depth := by
+  dsimp [ExecuteCode] at run
+  split at run
+  · rcases run with ⟨_, h, _⟩
+    cases h
+    rfl
+  · split at run
+    · rcases run with ⟨h, _⟩
+      contradiction
+    · rcases run with ⟨_, h, _⟩
+      cases h
+      rfl
 
 lemma ProcessMessage.depth_eq
     {msg : Msg} {sevm_ devm_ exn_ ex}
     (run : ProcessMessage msg (.some ⟨sevm_, devm_, exn_⟩) ex) :
-    sevm_.depth = msg.depth := by sorry
+    sevm_.depth = msg.depth := by
+  dsimp [ProcessMessage] at run
+  dsimp [Except.SplitXl] at run
+  rcases run with ⟨x, _, _, h⟩ | ⟨benv, _, ex', run, _⟩
+  · contradiction
+  · have h := ExecuteCode.depth_eq run
+    rw [h]
+    rfl
 
 lemma ProcessCreateMessage.depth_eq
     {msg : Msg} {sevm_ devm_ exn_ ex}
     (run : ProcessCreateMessage msg (.some ⟨sevm_, devm_, exn_⟩) ex) :
-    sevm_.depth = msg.depth := by sorry
+    sevm_.depth = msg.depth := by
+  dsimp [ProcessCreateMessage] at run
+  rcases run with ⟨ex', run, _⟩
+  have h := ProcessMessage.depth_eq run
+  rw [h]
+  rfl
 
 lemma GenericCall.depth_lt
     {sevm devm msgCallGas value caller currentTarget target
