@@ -1847,7 +1847,110 @@ lemma Xinst.depth_lt
     {sevm devm x}
     {sevm_ devm_ exn_ ex}
     (run : Xinst.Run sevm devm x (.some ⟨sevm_, devm_, exn_⟩) ex) :
-    sevm_.depth < sevm.depth := by sorry
+    sevm_.depth < sevm.depth := by
+  cases x
+  · dsimp [Xinst.Run] at run
+    rcases run with ⟨_, _, _, h_none⟩ | ⟨⟨endowment, devm1⟩, _, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_none⟩ | ⟨⟨memoryIndex, devm2⟩, _, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_none⟩ | ⟨⟨memorySize, devm3⟩, _, run⟩; contradiction
+    rcases run with ⟨extendCost, _, run⟩
+    rcases run with ⟨initCodeCost, _, run⟩
+    rcases run with ⟨_, _, _, h_none⟩ | ⟨devm4, _, run⟩; contradiction
+    rcases run with ⟨devm5, _, run⟩
+    rcases run with ⟨newAddress, _, run⟩
+    exact GenericCreate.depth_lt run
+  · dsimp [Xinst.Run] at run
+    rcases run with ⟨_, _, _, h_none⟩ | ⟨⟨gas, devm1⟩, _, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_none⟩ | ⟨⟨callee, devm2⟩, _, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_none⟩ | ⟨⟨value, devm3⟩, _, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_none⟩ | ⟨⟨inputIndex, devm4⟩, _, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_none⟩ | ⟨⟨inputSize, devm5⟩, _, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_none⟩ | ⟨⟨outputIndex, devm6⟩, _, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_none⟩ | ⟨⟨outputSize, devm7⟩, _, run⟩; contradiction
+    rcases run with ⟨extendCost, _, run⟩
+    rcases run with ⟨preAccessCost, _, run⟩
+    rcases run with ⟨devm8, _, run⟩
+    rcases run with ⟨⟨disablePrecompiles, _, code, delegatedAccessGasCost, devm9⟩, _, run⟩
+    rcases run with ⟨accessCost, _, run⟩
+    rcases run with ⟨createCost, _, run⟩
+    rcases run with ⟨transferCost, _, run⟩
+    rcases run with ⟨⟨msgCallCost, msgCallStipend⟩, _, run⟩
+    rcases run with ⟨_, _, _, h_none⟩ | ⟨devm10, _, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_none⟩ | ⟨_, _, run⟩; contradiction
+    rcases run with ⟨devm11, _, run⟩
+    rcases run with ⟨senderBal, _, run⟩
+    split_ifs at run
+    · rcases run with ⟨_, _, _, h_none⟩ | ⟨devm12, _, h_none, run⟩
+      · contradiction
+      · contradiction
+    · exact GenericCall.depth_lt run
+  · dsimp [Xinst.Run] at run
+    rcases run with ⟨_, _, _, h_none⟩ | ⟨⟨gas, devm1⟩, _, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_none⟩ | ⟨⟨codeAddress, devm2⟩, _, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_none⟩ | ⟨⟨value, devm3⟩, _, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_none⟩ | ⟨⟨inputIndex, devm4⟩, _, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_none⟩ | ⟨⟨inputSize, devm5⟩, _, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_none⟩ | ⟨⟨outputIndex, devm6⟩, _, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_none⟩ | ⟨⟨outputSize, devm7⟩, _, run⟩; contradiction
+    rcases run with ⟨extendCost, _, run⟩
+    rcases run with ⟨preAccessCost, _, run⟩
+    rcases run with ⟨devm8, _, run⟩
+    rcases run with ⟨⟨disablePrecompiles, newCodeAddress, code, delegatedAccessGasCost, devm9⟩, _, run⟩
+    rcases run with ⟨accessCost, _, run⟩
+    rcases run with ⟨transferCost, _, run⟩
+    rcases run with ⟨⟨msgCallCost, msgCallStipend⟩, _, run⟩
+    rcases run with ⟨_, _, _, h_none⟩ | ⟨devm10, _, run⟩; contradiction
+    rcases run with ⟨devm11, _, run⟩
+    rcases run with ⟨senderBal, _, run⟩
+    split_ifs at run
+    · rcases run with ⟨_, _, _, h_none⟩ | ⟨devm12, _, h_none, run⟩
+      · contradiction
+      · contradiction
+    · exact GenericCall.depth_lt run
+  · dsimp [Xinst.Run] at run
+    rcases run with ⟨_, _, _, h_none⟩ | ⟨⟨gas, devm1⟩, _, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_none⟩ | ⟨⟨codeAddress, devm2⟩, _, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_none⟩ | ⟨⟨inputIndex, devm3⟩, _, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_none⟩ | ⟨⟨inputSize, devm4⟩, _, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_none⟩ | ⟨⟨outputIndex, devm5⟩, _, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_none⟩ | ⟨⟨outputSize, devm6⟩, _, run⟩; contradiction
+    rcases run with ⟨extendCost, _, run⟩
+    rcases run with ⟨preAccessCost, _, run⟩
+    rcases run with ⟨devm7, _, run⟩
+    rcases run with ⟨⟨disablePrecompiles, newCodeAddress, code, delegatedAccessGasCost, devm8⟩, _, run⟩
+    rcases run with ⟨accessCost, _, run⟩
+    rcases run with ⟨⟨msgCallCost, msgCallStipend⟩, _, run⟩
+    rcases run with ⟨_, _, _, h_none⟩ | ⟨devm9, _, run⟩; contradiction
+    rcases run with ⟨devm10, _, run⟩
+    exact GenericCall.depth_lt run
+  · dsimp [Xinst.Run] at run
+    rcases run with ⟨_, _, _, h_none⟩ | ⟨⟨endowment, devm1⟩, _, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_none⟩ | ⟨⟨memoryIndex, devm2⟩, _, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_none⟩ | ⟨⟨memorySize, devm3⟩, _, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_none⟩ | ⟨⟨salt, devm4⟩, _, run⟩; contradiction
+    rcases run with ⟨extendCost, _, run⟩
+    rcases run with ⟨initCodeHashCost, _, run⟩
+    rcases run with ⟨initCodeCost, _, run⟩
+    rcases run with ⟨_, _, _, h_none⟩ | ⟨devm5, _, run⟩; contradiction
+    rcases run with ⟨devm6, _, run⟩
+    rcases run with ⟨newAddress, _, run⟩
+    exact GenericCreate.depth_lt run
+  · dsimp [Xinst.Run] at run
+    rcases run with ⟨_, _, _, h_none⟩ | ⟨⟨gas, devm1⟩, _, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_none⟩ | ⟨⟨target, devm2⟩, _, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_none⟩ | ⟨⟨inputIndex, devm3⟩, _, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_none⟩ | ⟨⟨inputSize, devm4⟩, _, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_none⟩ | ⟨⟨outputIndex, devm5⟩, _, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_none⟩ | ⟨⟨outputSize, devm6⟩, _, run⟩; contradiction
+    rcases run with ⟨extendCost, _, run⟩
+    rcases run with ⟨preAccessCost, _, run⟩
+    rcases run with ⟨devm7, _, run⟩
+    rcases run with ⟨⟨disablePrecompiles, _, code, delegatedAccessGasCost, devm8⟩, _, run⟩
+    rcases run with ⟨accessCost, _, run⟩
+    rcases run with ⟨⟨msgCallCost, msgCallStipend⟩, _, run⟩
+    rcases run with ⟨_, _, _, h_none⟩ | ⟨devm9, _, run⟩; contradiction
+    rcases run with ⟨devm10, _, run⟩
+    exact GenericCall.depth_lt run
 
 lemma Ninst.depth_lt_of_run'_some
     {pc sevm devm n sevm_ devm_ exn_ res}

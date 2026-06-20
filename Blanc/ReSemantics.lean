@@ -463,6 +463,7 @@ def Xinst.Run (sevm : Sevm) (devm : Devm) :
       if senderBal < value then
           (devm11.push 0).SplitXl xl ex <|
         λ devm12 =>
+          xl = .none ∧
           .ok {devm12 with returnData := [], gasLeft := devm12.gasLeft + msgCallStipend} = ex
       else
         GenericCall
@@ -521,6 +522,7 @@ def Xinst.Run (sevm : Sevm) (devm : Devm) :
       if senderBal < value then
           (devm11.push 0).SplitXl xl ex <|
         λ devm12 =>
+          xl = .none ∧
           .ok {devm12 with returnData := [], gasLeft := devm12.gasLeft + msgCallStipend} = ex
       else
         GenericCall
@@ -1821,7 +1823,7 @@ lemma Xinst.run_eq_of_run {sevm} {devm} {x : Xinst} {xl : Xlot}
     fit_step_exists run; fit_step_exists run
     split at run
     · fit_step_splitXl run fit_push
-      rw [← run]; apply fit_ok
+      rw [← run.2]; apply fit_ok
     · exact (of_generic_call' good run).1
   · iterate 7 (efg_step_splitXl run)
     iterate 3 (efg_step_exists run)
@@ -1831,7 +1833,7 @@ lemma Xinst.run_eq_of_run {sevm} {devm} {x : Xinst} {xl : Xlot}
     efg_step_splitXl run; efg_step_splitXl run;
     efg_step_exists run; efg_step_exists run;
     efg_step_ite run
-    · efg_step_splitXl run; refine ⟨0, λ _ _ => run⟩
+    · efg_step_splitXl run; refine ⟨0, λ _ _ => run.2⟩
     · efg_end_exec run good of_generic_call'
   · fit_step_splitXl run fit_pop
     fit_step_splitXl run (fit_map_rev fit_pop)
@@ -1844,7 +1846,7 @@ lemma Xinst.run_eq_of_run {sevm} {devm} {x : Xinst} {xl : Xlot}
     fit_step_exists run; fit_step_exists run
     split at run
     · fit_step_splitXl run fit_push
-      rw [← run]; apply fit_ok
+      rw [← run.2]; apply fit_ok
     · exact (of_generic_call' good run).1
   · iterate 7 (efg_step_splitXl run)
     iterate 3 (efg_step_exists run)
@@ -1854,7 +1856,7 @@ lemma Xinst.run_eq_of_run {sevm} {devm} {x : Xinst} {xl : Xlot}
     efg_step_splitXl run
     iterate 2 (efg_step_exists run)
     efg_step_ite run
-    · efg_step_splitXl run; refine ⟨0, λ _ _ => run⟩
+    · efg_step_splitXl run; refine ⟨0, λ _ _ => run.2⟩
     · efg_end_exec run good of_generic_call'
   · fit_step_splitXl run fit_pop
     fit_step_splitXl run (fit_map_rev fit_pop)
@@ -2354,7 +2356,7 @@ lemma Xinst.run_of_run_eq
     okStep1 eq _; okStep1 eq _; split at eq
     · rename_i lt; refine' ⟨.none, .intro, _⟩
       simp only []; rw [if_pos lt]
-      bind_step' eq _; exact eq
+      bind_step' eq _; exact ⟨trivial, eq⟩
     · rename_i nlt
       apply Exists.imp (λ _ (conj : _ ∧ _) => ⟨conj.1, ite_of_false nlt conj.2⟩)
       rcases of_genericCall notLimited eq with ⟨xl, good, gc⟩
@@ -2366,7 +2368,7 @@ lemma Xinst.run_of_run_eq
     bind_step_good eq _; okStep1 eq _; okStep1 eq _; split at eq
     · rename_i lt; refine' ⟨.none, .intro, _⟩
       simp only []; rw [if_pos lt]
-      bind_step' eq _; exact eq
+      bind_step' eq _; exact ⟨trivial, eq⟩
     · rename_i nlt
       apply Exists.imp (λ _ (conj : _ ∧ _) => ⟨conj.1, ite_of_false nlt conj.2⟩)
       rcases of_genericCall notLimited eq with ⟨xl, good, gc⟩
