@@ -1789,26 +1789,13 @@ lemma Ninst.getCode_eq_of_run'_some
     {pc sevm devm n sevm_ devm_ exn_ res}
     (run : Ninst.Run' pc sevm devm n (.some ⟨sevm_, devm_, exn_⟩) res) (a : Adr) :
     devm_.getCode a = devm.getCode a := by
-  cases n
-  case push xs lt =>
-    contradiction
-  case reg r =>
-    contradiction
-  case exec x =>
-    sorry
+  sorry
 
 lemma Ninst.code_eq_of_run'_some
     {pc sevm devm n sevm_ devm_ exn_ res}
     (run : Ninst.Run' pc sevm devm n (.some ⟨sevm_, devm_, exn_⟩) res) :
     sevm_.code = devm.getCode sevm_.currentTarget := by
-  cases n
-  case push xs lt =>
-    contradiction
-  case reg r =>
-    contradiction
-  case exec x =>
-    sorry
-
+  sorry
 
 lemma ExecuteCode.depth_eq
     {msg : Msg} {sevm_ devm_ exn_ ex}
@@ -1841,7 +1828,30 @@ lemma GenericCreate.depth_lt
     {sevm_ devm_ exn_ ex}
     (run : GenericCreate sevm devm endowment
       newAddress memoryIndex memorySize (.some ⟨sevm_, devm_, exn_⟩) ex) :
-    sevm_.depth < sevm.depth := by sorry
+    sevm_.depth < sevm.depth := by
+  dsimp [GenericCreate] at run
+  rcases run with ⟨calldata, _, run⟩
+  rcases run with ⟨_, _, _, h_none⟩ | ⟨_, _, run⟩
+  · contradiction
+  rcases run with ⟨devm1, _, run⟩
+  rcases run with ⟨createMsgGas, _, run⟩
+  rcases run with ⟨devm2, _, run⟩
+  rcases run with ⟨_, _, _, h_none⟩ | ⟨_, _, run⟩
+  · contradiction
+  rcases run with ⟨devm3, _, run⟩
+  rcases run with ⟨sender, _, run⟩
+  split at run
+  · exact Option.noConfusion run.1
+  rename_i h_depth
+  rcases run with ⟨devm4, _, run⟩
+  split at run
+  · exact Option.noConfusion run.1
+  rename_i h_nonce
+  rcases run with ⟨_, rfl, run⟩
+  rcases run with ⟨ex', run_process, run_split⟩
+  have h := ProcessCreateMessage.depth_eq run_process
+  change sevm_.depth = sevm.depth - 1 at h
+  omega
 
 lemma Xinst.depth_lt
     {sevm devm x}
@@ -1986,7 +1996,7 @@ lemma Jinst.getCode_eq_of_run_ok
       · simp only [Jinst.Run, Jinst.run, runCore, chargeGas, bind, Except.bind, safeSub] at run
         rw [h1] at run
         have h_gas_not : ¬(gJumpdest ≤ devm.gasLeft) := by omega
-        simp only [h_gas_not, if_neg, Except.ok.injEq, Prod.mk.injEq] at run
+        simp only [h_gas_not] at run
         try contradiction
   · rename_i x xs
     cases h2 : xs

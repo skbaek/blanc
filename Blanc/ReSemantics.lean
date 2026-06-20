@@ -261,14 +261,14 @@ def GenericCreate (sevm : Sevm) (devm : Devm) (endowment : B256) (newAddress : A
     ExistsEq (devm3.state.get sevm.currentTarget) <|
   λ sender =>
    if (sender.bal < endowment ∨ sender.nonce = B64.max ∨ sevm.depth = 0) then
-     ({devm3 with gasLeft := devm3.gasLeft + createMsgGas}.push 0 = ex)
+     (xl = .none ∧ {devm3 with gasLeft := devm3.gasLeft + createMsgGas}.push 0 = ex)
    else
    ExistsEq (devm3.incrNonce sevm.currentTarget) <|
   λ devm4 =>
     if
       ( let target := devm4.state.get newAddress
         target.nonce ≠ (0 : B64) ∨ target.code.size ≠ 0 ∨ target.stor.size ≠ 0 ) then
-      (devm4.push 0 = ex)
+      (xl = .none ∧ devm4.push 0 = ex)
     else
     ExistsEq
       {
@@ -320,7 +320,7 @@ def GenericCall
     ExistsEq {devm with returnData := []} <|
   λ evm1 =>
     if (sevm.depth = 0) then
-      (({evm1 with gasLeft := evm1.gasLeft + gas}).push 0 = ex)
+      (xl = .none ∧ ({evm1 with gasLeft := evm1.gasLeft + gas}).push 0 = ex)
     else
     ExistsEq (evm1.memory.data.sliceD input_index input_size 0) <|
   λ calldata =>
@@ -350,11 +350,11 @@ def GenericCall
     λ child =>
       let actualOutput := child.output.take output_size
       if child.error.isSome then
-        ((incorporateChildOnError evm1 child child.output).push 0).Split ex <|
-      λ evm2 => .ok (evm2.memWrite output_index actualOutput) = ex
+          ((incorporateChildOnError evm1 child child.output).push 0).Split ex <|
+        λ evm2 => .ok (evm2.memWrite output_index actualOutput) = ex
       else
-        ((incorporateChildOnSuccess evm1 child child.output).push 1).Split ex <|
-      λ evm2 => .ok (evm2.memWrite output_index actualOutput) = ex
+          ((incorporateChildOnSuccess evm1 child child.output).push 1).Split ex <|
+        λ evm2 => .ok (evm2.memWrite output_index actualOutput) = ex
 
 def Xinst.Run (sevm : Sevm) (devm : Devm) :
     Xinst → Xlot → Execution → Prop
@@ -1727,9 +1727,9 @@ lemma of_generic_create' {sevm : Sevm} {devm : Devm} {endowment : B256} {newAddr
     iterate 3 (fit_step_exists run);
     fit_step_splitXl run fit_assertDynamic
     iterate 2 (fit_step_exists run);
-    split at run; {rw [← run]; apply fit_push}
+    split at run; {rw [← run.2]; apply fit_push}
     fit_step_exists run
-    split at run; {rw [← run]; apply fit_push}
+    split at run; {rw [← run.2]; apply fit_push}
     fit_step_exists run
     fit_step_exec run good of_process_create_message' fit_liftToExecution
     split at run <;> (rw [← run]; apply fit_push)
@@ -1738,9 +1738,9 @@ lemma of_generic_create' {sevm : Sevm} {devm : Devm} {endowment : B256} {newAddr
     efg_step_exists run; efg_step_splitXl run
     iterate 3 (efg_step_exists run)
     efg_step_splitXl run; iterate 2 (efg_step_exists run)
-    efg_step_early run; {refine' ⟨0, _⟩; intro _ _; exact run}
+    efg_step_early run; {refine' ⟨0, _⟩; intro _ _; exact run.2}
     efg_step_exists run
-    efg_step_early run; {refine' ⟨0, _⟩; intro _ _; exact run}
+    efg_step_early run; {refine' ⟨0, _⟩; intro _ _; exact run.2}
     efg_step_exists run
     efg_step_exec run good of_process_create_message'
     eq_split run; eq_ite run <;> exact run
@@ -1763,7 +1763,7 @@ lemma of_generic_call' {sevm : Sevm} {devm : Devm} {gas : Nat} {value : B256}
           output_index output_size code disablePrecompiles lim' = ex := by
   simp only [GenericCall] at run; constructor
   · fit_step_exists run
-    split at run; {rw [← run]; apply fit_push}
+    split at run; {rw [← run.2]; apply fit_push}
     fit_step_exists run
     fit_step_exists run
     fit_step_exec run good of_process_message' fit_liftToExecution
@@ -1771,7 +1771,7 @@ lemma of_generic_call' {sevm : Sevm} {devm : Devm} {gas : Nat} {value : B256}
     {fit_step_split run fit_push; rw [← run]; apply fit_ok}
   · apply Exists.imp forall_gt_of_forall_gt_succ_pred
     simp only [genericCall]; efg_step_exists run;
-    efg_step_early run; {refine' ⟨0, _⟩; intro _ _; exact run}
+    efg_step_early run; {refine' ⟨0, _⟩; intro _ _; exact run.2}
     efg_step_exists run; efg_step_exists run;
     efg_step_exec run good of_process_message'; eq_split run
     eq_ite run <;> {eq_split run; exact run}
@@ -2257,8 +2257,8 @@ lemma of_genericCreate
   · rename_i pos
     apply Exists.imp (λ _ (conj : _ ∧ _) => ⟨conj.1, ite_of_true pos conj.2⟩)
     rcases of_bind_eq eq with ⟨es, push_eq, ex_eq⟩ | ⟨evm, push_eq, eq_ex⟩;
-    · refine' ⟨.none, .intro, _⟩; rw [ex_eq]; exact push_eq
-    · refine' ⟨.none, .intro, _⟩; rw [← eq_ex]; exact push_eq
+    · refine' ⟨.none, .intro, _⟩; rw [ex_eq]; exact ⟨rfl, push_eq⟩
+    · refine' ⟨.none, .intro, _⟩; rw [← eq_ex]; exact ⟨rfl, push_eq⟩
   · rename_i neg
     apply Exists.imp (λ _ (conj : _ ∧ _) => ⟨conj.1, ite_of_false neg conj.2⟩)
     clear neg; simp at eq
@@ -2266,7 +2266,7 @@ lemma of_genericCreate
     split at eq
     · rename_i pos
       apply Exists.imp (λ _ (conj : _ ∧ _) => ⟨conj.1, ite_of_true pos conj.2⟩)
-      refine' ⟨.none, .intro, eq⟩
+      refine' ⟨.none, .intro, rfl, eq⟩
     · rename_i neg
       apply Exists.imp (λ _ (conj : _ ∧ _) => ⟨conj.1, ite_of_false neg conj.2⟩)
       clear neg
@@ -2302,7 +2302,7 @@ lemma of_genericCall {sevm : Sevm} {devm : Devm} {gas : Nat} {value : B256}
   okStep1 eq _; split at eq
   { rename_i pos; refine' ⟨.none, .intro, _⟩
     simp only [bind_pure] at eq;
-    simp only []; rw [if_pos pos, eq] }
+    simp only []; rw [if_pos pos]; exact ⟨trivial, eq⟩ }
   rename_i neg
   apply Exists.imp (λ _ (h' : _ ∧ _) => ⟨h'.1, ite_of_false neg h'.2⟩);
   simp only [pure_bind] at eq
