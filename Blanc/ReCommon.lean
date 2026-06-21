@@ -2004,12 +2004,47 @@ lemma Ninst.depth_lt_of_run'_some
   cases n <;> dsimp [Ninst.Run'] at run
   case exec => exact Xinst.depth_lt run
 
+lemma Rinst.getCode_eq_of_run_ok
+    {pc sevm devm r devm'}
+    (run : Rinst.run ⟨pc, sevm, devm⟩ r = .ok devm') (a : Adr)
+    (ne : (devm.getCode a).toList ≠ []) :
+    devm'.getCode a = devm.getCode a := by
+  sorry
+
+lemma Xinst.getCode_eq_of_run_ok
+    {sevm devm x xl devm'}
+    (run : Xinst.Run sevm devm x xl (.ok devm')) (a : Adr)
+    (ne : (devm.getCode a).toList ≠ []) :
+    devm'.getCode a = devm.getCode a := by
+  sorry
+
 lemma Ninst.getCode_eq_of_run'_ok
     {pc sevm devm n xlot devm'}
     (run : Ninst.Run' pc sevm devm n xlot (.ok devm')) (a : Adr)
     (ne : (devm.getCode a).toList ≠ []) :
     devm'.getCode a = devm.getCode a := by
-  sorry
+  cases n <;> dsimp [Ninst.Run'] at run
+  case push xs _ =>
+    rcases xlot with _ | xl
+    · revert run; dsimp
+      cases hc : chargeGas (if xs = [] then gBase else gVerylow) devm <;> simp [bind, Except.bind]
+      case ok devm_gas =>
+        intro run
+        cases hp : Devm.push xs.toB256 devm_gas <;> simp [hp] at run
+        case ok devm_push =>
+          subst run
+          simp only [chargeGas] at hc; split at hc <;> try contradiction
+          simp only [Except.ok.injEq] at hc; subst devm_gas
+          simp only [Devm.push, bind, Except.bind, Except.assert] at hp; split at hp <;> try contradiction
+          simp only [Except.ok.injEq] at hp; subst devm_push
+          rfl
+    · revert run; dsimp; exact fun h => h.elim
+  case reg r =>
+    rcases xlot with _ | xl
+    · revert run; exact fun h => Rinst.getCode_eq_of_run_ok h a ne
+    · revert run; exact fun h => h.elim
+  case exec x =>
+    revert run; exact fun h => Xinst.getCode_eq_of_run_ok h a ne
 
 lemma Jinst.getCode_eq_of_run_ok
     {pc sevm devm j pc' devm'}
