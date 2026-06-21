@@ -2004,12 +2004,43 @@ lemma Ninst.depth_lt_of_run'_some
   cases n <;> dsimp [Ninst.Run'] at run
   case exec => exact Xinst.depth_lt run
 
+lemma Devm.pop_getCode_eq {x devm devm'} (h : Devm.pop devm = .ok ⟨x, devm'⟩) (a : Adr) : devm'.getCode a = devm.getCode a := by
+  simp only [Devm.pop] at h
+  split at h <;> try contradiction
+  cases h; rfl
+
+lemma chargeGas_getCode_eq {cost devm devm'} (h : chargeGas cost devm = .ok devm') (a : Adr) : devm'.getCode a = devm.getCode a := by
+  simp only [chargeGas] at h
+  split at h <;> try contradiction
+  cases h; rfl
+
+lemma Devm.push_getCode_eq {v devm devm'} (h : Devm.push v devm = .ok devm') (a : Adr) : devm'.getCode a = devm.getCode a := by
+  simp only [Devm.push, bind, Except.bind, Except.assert] at h
+  split at h <;> try contradiction
+  cases h; rfl
+
+lemma getCode_eq_of_bind {α ε} {ma : Except ε α} {f : α → Except ε Devm} {devm devm' : Devm} {a : Adr}
+    (run : (ma >>= f) = .ok devm')
+    (getDevm : α → Devm)
+    (h_first : ∀ v, ma = .ok v → (getDevm v).getCode a = devm.getCode a)
+    (h_rest : ∀ v, ma = .ok v → f v = .ok devm' → devm'.getCode a = (getDevm v).getCode a) :
+    devm'.getCode a = devm.getCode a := by
+  rcases of_bind_eq_ok run with ⟨v, hm, hf⟩
+  rw [h_rest v hm hf, h_first v hm]
+
 lemma Rinst.getCode_eq_of_run_ok
     {pc sevm devm r devm'}
     (run : Rinst.run ⟨pc, sevm, devm⟩ r = .ok devm') (a : Adr)
     (ne : (devm.getCode a).toList ≠ []) :
     devm'.getCode a = devm.getCode a := by
-  sorry
+  cases r <;> dsimp [Rinst.run, runCore] at run
+  case blobhash =>
+    refine getCode_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a}
+    intro ⟨x, devm1⟩ hp run; refine getCode_eq_of_bind run id ?_ ?_
+    {intro devm2 hc; exact chargeGas_getCode_eq hc a}
+    intro devm2 hc run; exact Devm.push_getCode_eq run a
+  all_goals sorry
 
 lemma Xinst.getCode_eq_of_run_ok
     {sevm devm x xl devm'}
