@@ -1790,13 +1790,19 @@ lemma Ninst.getCode_eq_of_run'_some
     (run : Ninst.Run' pc sevm devm n (.some ⟨sevm_, devm_, exn_⟩) res) (a : Adr)
     (h_ne : (devm.getCode a).toList ≠ []) :
     devm_.getCode a = devm.getCode a := by
-  sorry
+  cases n
+  case push xs _ => revert run; dsimp [Ninst.Run']; exact fun h => h.elim
+  case reg r => revert run; dsimp [Ninst.Run']; exact fun h => h.elim
+  case exec x => revert run; dsimp [Ninst.Run']; intro run; sorry
 
 lemma Ninst.code_eq_of_run'_some
     {pc sevm devm n sevm_ devm_ exn_ res}
     (run : Ninst.Run' pc sevm devm n (.some ⟨sevm_, devm_, exn_⟩) res) :
     sevm_.code = devm.getCode sevm_.currentTarget := by
-  sorry
+  cases n
+  case push xs _ => revert run; dsimp [Ninst.Run']; exact fun h => h.elim
+  case reg r => revert run; dsimp [Ninst.Run']; exact fun h => h.elim
+  case exec x => revert run; dsimp [Ninst.Run']; intro run; sorry
 
 lemma ExecuteCode.depth_eq
     {msg : Msg} {sevm_ devm_ exn_ ex}
@@ -2001,8 +2007,10 @@ lemma Ninst.depth_lt_of_run'_some
     {pc sevm devm n sevm_ devm_ exn_ res}
     (run : Ninst.Run' pc sevm devm n (.some ⟨sevm_, devm_, exn_⟩) res) :
     sevm_.depth < sevm.depth := by
-  cases n <;> dsimp [Ninst.Run'] at run
-  case exec => exact Xinst.depth_lt run
+  cases n
+  case push xs _ => revert run; dsimp [Ninst.Run']; exact fun h => h.elim
+  case reg r => revert run; dsimp [Ninst.Run']; exact fun h => h.elim
+  case exec x => revert run; dsimp [Ninst.Run']; intro run; exact Xinst.depth_lt run
 
 lemma Devm.pop_getCode_eq {x devm devm'} (h : Devm.pop devm = .ok ⟨x, devm'⟩) (a : Adr) : devm'.getCode a = devm.getCode a := by
   simp only [Devm.pop] at h
@@ -2019,6 +2027,33 @@ lemma Devm.push_getCode_eq {v devm devm'} (h : Devm.push v devm = .ok devm') (a 
   split at h <;> try contradiction
   cases h; rfl
 
+lemma Devm.popToNat_getCode_eq {devm devm' n} (h : Devm.popToNat devm = .ok ⟨n, devm'⟩) (a : Adr) : devm'.getCode a = devm.getCode a := by
+  dsimp [Devm.popToNat, Functor.map, Except.map] at h
+  rcases hp : devm.pop with _ | ⟨x, devm1⟩
+  · simp [hp] at h
+  · simp [hp] at h
+    rcases h with ⟨_, rfl⟩
+    exact Devm.pop_getCode_eq hp a
+
+lemma Devm.popToAdr_getCode_eq {devm devm' adr} (h : Devm.popToAdr devm = .ok ⟨adr, devm'⟩) (a : Adr) : devm'.getCode a = devm.getCode a := by
+  dsimp [Devm.popToAdr, Functor.map, Except.map] at h
+  rcases hp : devm.pop with _ | ⟨x, devm1⟩
+  · simp [hp] at h
+  · simp [hp] at h
+    rcases h with ⟨_, rfl⟩
+    exact Devm.pop_getCode_eq hp a
+
+lemma Devm.pop_map_snd_getCode_eq {devm devm1 : Devm} (hp : (devm.pop <&> Prod.snd) = .ok devm1) (a : Adr) : devm1.getCode a = devm.getCode a := by
+  dsimp [(· <&> ·), Functor.mapRev, Functor.map, Except.map] at hp
+  rcases hp2 : devm.pop with _ | ⟨x, devm2⟩
+  · simp [hp2] at hp
+  · simp [hp2] at hp
+    rcases hp with ⟨_, rfl⟩
+    exact Devm.pop_getCode_eq hp2 a
+
+@[simp] lemma Except.bind_error {α β ε} (e : ε) (f : α → Except ε β) : (Except.error e >>= f) = Except.error e := rfl
+@[simp] lemma Except.bind_ok {α β ε} (x : α) (f : α → Except ε β) : (Except.ok x >>= f) = f x := rfl
+
 lemma getCode_eq_of_bind {α ε} {ma : Except ε α} {f : α → Except ε Devm} {devm devm' : Devm} {a : Adr}
     (run : (ma >>= f) = .ok devm')
     (getDevm : α → Devm)
@@ -2028,19 +2063,191 @@ lemma getCode_eq_of_bind {α ε} {ma : Except ε α} {f : α → Except ε Devm}
   rcases of_bind_eq_ok run with ⟨v, hm, hf⟩
   rw [h_rest v hm hf, h_first v hm]
 
+lemma pushItem_getCode_eq {x c devm devm'} (h : pushItem x c devm = .ok devm') (a : Adr) : devm'.getCode a = devm.getCode a := by
+  simp only [pushItem] at h
+  refine getCode_eq_of_bind h id ?_ ?_
+  {intro devm1 hc; exact chargeGas_getCode_eq hc a}
+  intro devm1 hc run; exact Devm.push_getCode_eq run a
+
+lemma applyUnary_getCode_eq {f : B256 → B256} {cost devm devm'}
+    (h : applyUnary f cost devm = .ok devm') (a : Adr) :
+    devm'.getCode a = devm.getCode a := by
+  simp only [applyUnary] at h
+  refine getCode_eq_of_bind h Prod.snd ?_ ?_
+  {intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a}
+  intro ⟨x, devm1⟩ hp run; exact pushItem_getCode_eq run a
+
+lemma applyBinary_getCode_eq {f : B256 → B256 → B256} {cost devm devm'}
+    (h : applyBinary f cost devm = .ok devm') (a : Adr) :
+    devm'.getCode a = devm.getCode a := by
+  simp only [applyBinary] at h
+  refine getCode_eq_of_bind h Prod.snd ?_ ?_
+  {intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a}
+  intro ⟨x, devm1⟩ hp run; refine getCode_eq_of_bind run Prod.snd ?_ ?_
+  {intro ⟨y, devm2⟩ hp2; exact Devm.pop_getCode_eq hp2 a}
+  intro ⟨y, devm2⟩ hp2 run; exact pushItem_getCode_eq run a
+
+lemma applyTernary_getCode_eq {f : B256 → B256 → B256 → B256} {cost devm devm'}
+    (h : applyTernary f cost devm = .ok devm') (a : Adr) :
+    devm'.getCode a = devm.getCode a := by
+  simp only [applyTernary] at h
+  refine getCode_eq_of_bind h Prod.snd ?_ ?_
+  {intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a}
+  intro ⟨x, devm1⟩ hp run; refine getCode_eq_of_bind run Prod.snd ?_ ?_
+  {intro ⟨y, devm2⟩ hp2; exact Devm.pop_getCode_eq hp2 a}
+  intro ⟨y, devm2⟩ hp2 run; refine getCode_eq_of_bind run Prod.snd ?_ ?_
+  {intro ⟨z, devm3⟩ hp3; exact Devm.pop_getCode_eq hp3 a}
+  intro ⟨z, devm3⟩ hp3 run; exact pushItem_getCode_eq run a
+
+lemma getCode_eq_of_SplitXl {ξ α : Type} {e : Except ξ (α × Devm)} {xl : Xlot} {q} {devm devm' : Devm} {a : Adr}
+    (h : e.SplitXl xl (.ok devm') q)
+    (h_getCode : ∀ y : α × Devm, e = .ok y → y.snd.getCode a = devm.getCode a)
+    (h_q : ∀ y : α × Devm, q y → devm'.getCode a = y.snd.getCode a) :
+    devm'.getCode a = devm.getCode a := by
+  rcases h with ⟨x, h_err, h_contra, _⟩ | ⟨y, h_eq, h_q_y⟩
+  · contradiction
+  · exact Eq.trans (h_q y h_q_y) (h_getCode y h_eq)
+
+lemma getCode_eq_of_SplitXl_id {ξ : Type} {e : Except ξ Devm} {xl : Xlot} {q} {devm devm' : Devm} {a : Adr}
+    (h : e.SplitXl xl (.ok devm') q)
+    (h_getCode : ∀ y : Devm, e = .ok y → y.getCode a = devm.getCode a)
+    (h_q : ∀ y : Devm, q y → devm'.getCode a = y.getCode a) :
+    devm'.getCode a = devm.getCode a := by
+  rcases h with ⟨x, h_err, h_contra, _⟩ | ⟨y, h_eq, h_q_y⟩
+  · contradiction
+  · exact Eq.trans (h_q y h_q_y) (h_getCode y h_eq)
+
+syntax "solve_getCode" ident : tactic
+macro_rules
+  | `(tactic| solve_getCode $r:ident) => `(tactic|
+    first
+    | exact applyUnary_getCode_eq $r _
+    | exact applyBinary_getCode_eq $r _
+    | exact applyTernary_getCode_eq $r _
+  )
+
+
+syntax "solve_getCode_with" ident : tactic
+macro_rules
+  | `(tactic| solve_getCode_with $r:ident) => `(tactic|
+    first
+    | exact Devm.push_getCode_eq $r _
+    | exact Devm.pop_getCode_eq $r _
+    | exact chargeGas_getCode_eq $r _
+    | exact Devm.popToNat_getCode_eq $r _
+    | exact Devm.popToAdr_getCode_eq $r _
+    | exact Devm.pop_map_snd_getCode_eq $r _
+    | exact applyBinary_getCode_eq $r _
+    | exact applyUnary_getCode_eq $r _
+    | exact applyTernary_getCode_eq $r _
+    | exact pushItem_getCode_eq $r _
+    | (injection $r with h_eq; subst h_eq; rfl)
+    | contradiction
+    | (simp only [Except.bind_error, Except.bind_ok] at $r:ident; solve_getCode_with $r:ident)
+    | (split at $r:ident <;> solve_getCode_with $r:ident)
+    | (refine getCode_eq_of_bind $r id ?_ ?_
+       · intro _ hp
+         first | exact chargeGas_getCode_eq hp _ | exact applyBinary_getCode_eq hp _ | exact applyUnary_getCode_eq hp _ | exact applyTernary_getCode_eq hp _
+       · intro _ hp r_new
+         solve_getCode_with r_new)
+    | (refine getCode_eq_of_bind $r Prod.snd ?_ ?_
+       · intro ⟨_, _⟩ hp
+         first | exact Devm.pop_getCode_eq hp _ | exact Devm.popToNat_getCode_eq hp _ | exact Devm.popToAdr_getCode_eq hp _ | exact Devm.pop_map_snd_getCode_eq hp _
+       · intro ⟨_, _⟩ hp r_new
+         solve_getCode_with r_new)
+    | (refine getCode_eq_of_bind $r id ?_ ?_
+       · intro _ hp
+         first | exact chargeGas_getCode_eq hp _ | exact Devm.pop_map_snd_getCode_eq hp _
+       · intro _ hp r_new
+         solve_getCode_with r_new)
+    | (refine getCode_eq_of_SplitXl $r ?_ ?_
+       · intro ⟨_, _⟩ hp
+         first | exact Devm.pop_getCode_eq hp _ | exact Devm.popToNat_getCode_eq hp _ | exact Devm.popToAdr_getCode_eq hp _ | exact Devm.pop_map_snd_getCode_eq hp _
+       · intro ⟨_, _⟩ hp r_new
+         solve_getCode_with r_new)
+    | (refine getCode_eq_of_SplitXl_id $r ?_ ?_
+       · intro _ hp
+         first | exact chargeGas_getCode_eq hp a | exact Devm.pop_map_snd_getCode_eq hp a | (injection hp with h_eq; subst h_eq; rfl)
+       · intro _ hp r_new
+         solve_getCode_with r_new)
+  )
+
 lemma Rinst.getCode_eq_of_run_ok
     {pc sevm devm r devm'}
     (run : Rinst.run ⟨pc, sevm, devm⟩ r = .ok devm') (a : Adr)
     (ne : (devm.getCode a).toList ≠ []) :
     devm'.getCode a = devm.getCode a := by
-  cases r <;> dsimp [Rinst.run, runCore] at run
-  case blobhash =>
-    refine getCode_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a}
-    intro ⟨x, devm1⟩ hp run; refine getCode_eq_of_bind run id ?_ ?_
-    {intro devm2 hc; exact chargeGas_getCode_eq hc a}
-    intro devm2 hc run; exact Devm.push_getCode_eq run a
-  all_goals sorry
+  cases r
+  case add => apply applyBinary_getCode_eq run
+  case mul => sorry -- 0x02 / 2 / 1 / multiplication operation.
+  case sub => sorry -- 0x03 / 2 / 1 / subtraction operation.
+  case div => sorry -- 0x04 / 2 / 1 / integer division operation.
+  case sdiv => sorry -- 0x05 / 2 / 1 / signed integer division operation.
+  case mod => sorry -- 0x06 / 2 / 1 / modulo operation.
+  case smod => sorry -- 0x07 / 2 / 1 / signed modulo operation.
+  case addmod => sorry -- 0x08 / 3 / 1 / modulo addition operation.
+  case mulmod => sorry -- 0x09 / 3 / 1 / modulo multiplication operation.
+  case exp => sorry -- 0x0A / 2 / 1 / exponentiation operation.
+  case signextend => sorry -- 0x0B / 2 / 1 / sign extend operation.
+  case lt => sorry -- 0x10 / 2 / 1 / less-than comparison.
+  case gt => sorry -- 0x11 / 2 / 1 / greater-than comparison.
+  case slt => sorry -- 0x12 / 2 / 1 / signed less-than comparison.
+  case sgt => sorry -- 0x13 / 2 / 1 / signed greater-than comparison.
+  case eq => sorry -- 0x14 / 2 / 1 / equality comparison.
+  case iszero => sorry -- 0x15 / 1 / 1 / tests if the input is zero.
+  case and => sorry -- 0x16 / 2 / 1 / bitwise and operation.
+  case or => sorry -- 0x17 / 2 / 1 / bitwise or operation.
+  case xor => sorry -- 0x18 / 2 / 1 / bitwise xor operation.
+  case not => sorry -- 0x19 / 1 / 1 / bitwise not operation.
+  case byte => sorry -- 0x1A / 2 / 1 / retrieve a single Byte from a Word.
+  case shr => sorry -- 0x1B / 2 / 1 / logical shift right operation.
+  case shl => sorry -- 0x1C / 2 / 1 / logical shift left operation.
+  case sar => sorry -- 0x1D / 2 / 1 / arithmetic (signed) shift right operation.
+  case kec => sorry -- 0x20 / 2 / 1 / compute Keccak-256 hash.
+  case address => sorry -- 0x30 / 0 / 1 / Get the Addr of the currently executing account.
+  case balance => sorry -- 0x31 / 1 / 1 / Get the balance of the specified account.
+  case origin => sorry -- 0x32 / 0 / 1 / Get the Addr that initiated the current transaction.
+  case caller => sorry -- 0x33 / 0 / 1 / Get the Addr that directly called the currently executing contract.
+  case callvalue => sorry -- 0x34 / 0 / 1 / Get the value (in wei) sent with the current transaction.
+  case calldataload => sorry -- 0x35 / 1 / 1 / Load input data from the current transaction.
+  case calldatasize => sorry -- 0x36 / 0 / 1 / Get the size of the input data from the current transaction.
+  case calldatacopy => sorry -- 0x37 / 3 / 0 / Copy input data from the current transaction to Memory.
+  case codesize => sorry -- 0x38 / 0 / 1 / Get the size of the code of the currently executing contract.
+  case codecopy => sorry -- 0x39 / 3 / 0 / Copy the code of the currently executing contract to memory.
+  case gasprice => sorry -- 0x3a / 0 / 1 / Get the gas price of the current transaction.
+  case extcodesize => sorry -- 0x3B / 1 / 1 / Get the size of the code of an external account.
+  case extcodecopy => sorry -- 0x3C / 4 / 0 / Copy the code of an external account to memory.
+  case retdatasize => sorry -- 0x3D / 0 / 1 / Get the size of the output data from the previous call.
+  case retdatacopy => sorry -- 0x3E / 3 / 0 / Copy output data from the previous call to memory.
+  case extcodehash => sorry -- 0x3F / 1 / 1 / Get the code hash of an external account.
+  case blockhash => sorry -- 0x40 / 1 / 1 / get the hash of the specified block.
+  case coinbase => sorry -- 0x41 / 0 / 1 / get the Addr of the current block's miner.
+  case timestamp => sorry -- 0x42 / 0 / 1 / get the timestamp of the current block.
+  case number => sorry -- 0x43 / 0 / 1 / get the current block number.
+  case prevrandao => sorry -- 0x44 / 0 / 1 / get the latest RANDAO mix of the post beacon state of the previous block.
+  case gaslimit => sorry -- 0x45 / 0 / 1 / get the gas limit of the current block.
+  case chainid => sorry -- 0x46 / 0 / 1 / get the chain id of the current blockchain.
+  case selfbalance => sorry -- 0x47 / 0 / 1 / get the balance of the currently executing account.
+  case basefee => sorry -- 0x48 / 0 / 1 / get the current block's base fee.
+  case blobhash => sorry -- 0x49 / 1 / 1 /
+  case blobbasefee => sorry -- 0x4A / 0 / 1 / get the current block's blob base fee.
+  case pop => sorry -- 0x50 / 1 / 0 / Remove an item from the Stack.
+  case mload => sorry -- 0x51 / 1 / 1 / Load a Word from memory.
+  case mstore => sorry -- 0x52 / 2 / 0 / Store a Word in memory.
+  case mstore8 => sorry -- 0x53 / 2 / 0 / store a Byte in memory.
+  case sload => sorry -- 0x54 / 1 / 1 / load a word from storage.
+  case sstore => sorry -- 0x55 / 2 / 0 / store a word in storage.
+  case tload => sorry -- 0x5C / 1 / 1 / load a word from transient torage.
+  case tstore => sorry -- 0x5D / 2 / 0 / store a word in transient storage.
+  case mcopy => sorry -- 0x5E / 3 / 0 /
+  case pc => sorry -- 0x58 / 0 / 1 / Get the current program counter value.
+  case msize => sorry -- 0x59 / 0 / 1 / Get the size of the memory.
+  case gas => sorry -- 0x5a / 0 / 1 / Get the amount of remaining gas.
+  case dup => sorry
+  case swap => sorry
+  case log => sorry
+
+#exit
 
 lemma Xinst.getCode_eq_of_run_ok
     {sevm devm x xl devm'}
@@ -2056,20 +2263,20 @@ lemma Ninst.getCode_eq_of_run'_ok
     devm'.getCode a = devm.getCode a := by
   cases n <;> dsimp [Ninst.Run'] at run
   case push xs _ =>
-    rcases xlot with _ | xl
-    · revert run; dsimp
-      cases hc : chargeGas (if xs = [] then gBase else gVerylow) devm <;> simp [bind, Except.bind]
-      case ok devm_gas =>
-        intro run
-        cases hp : Devm.push xs.toB256 devm_gas <;> simp [hp] at run
-        case ok devm_push =>
-          subst run
-          simp only [chargeGas] at hc; split at hc <;> try contradiction
-          simp only [Except.ok.injEq] at hc; subst devm_gas
-          simp only [Devm.push, bind, Except.bind, Except.assert] at hp; split at hp <;> try contradiction
-          simp only [Except.ok.injEq] at hp; subst devm_push
-          rfl
-    · revert run; dsimp; exact fun h => h.elim
+     rcases xlot with _ | xl
+     · revert run; dsimp
+       cases hc : chargeGas (if xs = [] then gBase else gVerylow) devm <;> simp [bind, Except.bind]
+       case ok devm_gas =>
+         intro run
+         cases hp : Devm.push xs.toB256 devm_gas <;> simp [hp] at run
+         case ok devm_push =>
+           subst run
+           simp only [chargeGas] at hc; split at hc <;> try contradiction
+           simp only [Except.ok.injEq] at hc; subst devm_gas
+           simp only [Devm.push, bind, Except.bind, Except.assert] at hp; split at hp <;> try contradiction
+           simp only [Except.ok.injEq] at hp; subst devm_push
+           rfl
+     · revert run; dsimp; exact fun h => h.elim
   case reg r =>
     rcases xlot with _ | xl
     · revert run; exact fun h => Rinst.getCode_eq_of_run_ok h a ne
@@ -2077,6 +2284,8 @@ lemma Ninst.getCode_eq_of_run'_ok
   case exec x =>
     revert run; exact fun h => Xinst.getCode_eq_of_run_ok h a ne
 
+set_option linter.unusedVariables false in
+set_option linter.unusedSimpArgs false in
 lemma Jinst.getCode_eq_of_run_ok
     {pc sevm devm j pc' devm'}
     (run : Jinst.Run ⟨pc, sevm, devm⟩ j (.ok ⟨pc', devm'⟩)) (a : Adr)
