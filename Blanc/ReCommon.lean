@@ -1787,7 +1787,8 @@ def ForallDeeperAt (k : Nat) (ca : Adr) (p : Prog) (ε : Exec.Pred) : Prop :=
 
 lemma Ninst.getCode_eq_of_run'_some
     {pc sevm devm n sevm_ devm_ exn_ res}
-    (run : Ninst.Run' pc sevm devm n (.some ⟨sevm_, devm_, exn_⟩) res) (a : Adr) :
+    (run : Ninst.Run' pc sevm devm n (.some ⟨sevm_, devm_, exn_⟩) res) (a : Adr)
+    (h_ne : (devm.getCode a).toList ≠ []) :
     devm_.getCode a = devm.getCode a := by
   sorry
 
@@ -2005,12 +2006,15 @@ lemma Ninst.depth_lt_of_run'_some
 
 lemma Ninst.getCode_eq_of_run'_ok
     {pc sevm devm n xlot devm'}
-    (run : Ninst.Run' pc sevm devm n xlot (.ok devm')) (a : Adr) :
-    devm'.getCode a = devm.getCode a := by sorry
+    (run : Ninst.Run' pc sevm devm n xlot (.ok devm')) (a : Adr)
+    (ne : (devm.getCode a).toList ≠ []) :
+    devm'.getCode a = devm.getCode a := by
+  sorry
 
 lemma Jinst.getCode_eq_of_run_ok
     {pc sevm devm j pc' devm'}
-    (run : Jinst.Run ⟨pc, sevm, devm⟩ j (.ok ⟨pc', devm'⟩)) (a : Adr) :
+    (run : Jinst.Run ⟨pc, sevm, devm⟩ j (.ok ⟨pc', devm'⟩)) (a : Adr)
+    (h_ne : (devm.getCode a).toList ≠ []) :
     devm'.getCode a = devm.getCode a := by
   cases h1 : devm.stack
   · cases j
@@ -2207,7 +2211,8 @@ lemma lift_core
       have h_lt : sevm_.depth < sevm.depth := Ninst.depth_lt_of_run'_some h_run
       have h_sub_wkn := h_fa 0 sevm_ devm_ exn_ ex_sub h_lt
       have h1 : some (devm_.getCode ca).toList = Prog.compile p := by
-        rw [Ninst.getCode_eq_of_run'_some h_run ca]
+        have h_ne_code : (devm.getCode ca).toList ≠ [] := fun hc => Prog.compile_ne_nil (Eq.trans h_at_p.left.symm (congrArg some hc))
+        rw [Ninst.getCode_eq_of_run'_some h_run ca h_ne_code]
         exact h_at_p.left
       have h2 : sevm_.currentTarget = ca → some sevm_.code.toList = Prog.compile p ∧ 0 = 0 := by
         intro h_ca
@@ -2226,7 +2231,8 @@ lemma lift_core
           intro pc' sevm' devm' exn' ex' h_lt
           exact h_fa pc' sevm' devm' exn' ex' h_lt
         exact analog (.nextNoneRec h_at h_run ex_next) (depth_ind h_run_prog h_eq h_fa_deeper)
-    · exact nextNoneRec h_at h_run ex_next h_ne (ih_next h_fa ⟨by rw [Ninst.getCode_eq_of_run'_ok h_run ca]; exact h_at_p.left, fun hc => (h_ne hc).elim⟩)
+    · have h_ne_code : (devm.getCode ca).toList ≠ [] := fun hc => Prog.compile_ne_nil (Eq.trans h_at_p.left.symm (congrArg some hc))
+      exact nextNoneRec h_at h_run ex_next h_ne (ih_next h_fa ⟨by rw [Ninst.getCode_eq_of_run'_ok h_run ca h_ne_code]; exact h_at_p.left, fun hc => (h_ne hc).elim⟩)
   · intro pc sevm devm n sevm_ devm_ exn_ devm' exn h_at h_run ex_sub ex_next ih_sub ih_next h_fa h_at_p
     rcases em (sevm.currentTarget = ca) with h_eq | h_ne
     · cases exn with
@@ -2243,14 +2249,16 @@ lemma lift_core
       · have h_lt : sevm_.depth < sevm.depth := Ninst.depth_lt_of_run'_some h_run
         have h_sub_wkn := h_fa 0 sevm_ devm_ exn_ ex_sub h_lt
         have h1 : some (devm_.getCode ca).toList = Prog.compile p := by
-          rw [Ninst.getCode_eq_of_run'_some h_run ca]
+          have h_ne_code : (devm.getCode ca).toList ≠ [] := fun hc => Prog.compile_ne_nil (Eq.trans h_at_p.left.symm (congrArg some hc))
+          rw [Ninst.getCode_eq_of_run'_some h_run ca h_ne_code]
           exact h_at_p.left
         have h2 : sevm_.currentTarget = ca → some sevm_.code.toList = Prog.compile p ∧ 0 = 0 := by
           intro h_ca
           rw [Ninst.code_eq_of_run'_some h_run, h_ca]
           exact ⟨h_at_p.left, rfl⟩
         exact h_sub_wkn ⟨h1, h2⟩
-      · exact ih_next h_fa ⟨by rw [Ninst.getCode_eq_of_run'_ok h_run ca]; exact h_at_p.left, fun hc => (h_ne hc).elim⟩
+      · have h_ne_code : (devm.getCode ca).toList ≠ [] := fun hc => Prog.compile_ne_nil (Eq.trans h_at_p.left.symm (congrArg some hc))
+        exact ih_next h_fa ⟨by rw [Ninst.getCode_eq_of_run'_ok h_run ca h_ne_code]; exact h_at_p.left, fun hc => (h_ne hc).elim⟩
   · intro pc sevm devm j err devm' h_at h_run h_fa h_at_p
     rcases em (sevm.currentTarget = ca) with h_eq | h_ne
     · exact errAtTarget (.jumpErr h_at h_run) h_eq
@@ -2267,7 +2275,8 @@ lemma lift_core
           intro pc' sevm' devm' exn' ex' h_lt
           exact h_fa pc' sevm' devm' exn' ex' h_lt
         exact analog (.jumpRec h_at h_run ex_next) (depth_ind h_run_prog h_eq h_fa_deeper)
-    · exact jumpRec h_at h_run ex_next h_ne (ih_next h_fa ⟨by rw [Jinst.getCode_eq_of_run_ok h_run ca]; exact h_at_p.left, fun hc => (h_ne hc).elim⟩)
+    · have h_ne_code : (devm.getCode ca).toList ≠ [] := fun hc => Prog.compile_ne_nil (Eq.trans h_at_p.left.symm (congrArg some hc))
+      exact jumpRec h_at h_run ex_next h_ne (ih_next h_fa ⟨by rw [Jinst.getCode_eq_of_run_ok h_run ca h_ne_code]; exact h_at_p.left, fun hc => (h_ne hc).elim⟩)
   · intro pc sevm devm l exn h_at h_run h_fa h_at_p
     rcases em (sevm.currentTarget = ca) with h_eq | h_ne
     · cases exn with
