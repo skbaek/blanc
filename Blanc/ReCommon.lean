@@ -2117,120 +2117,78 @@ lemma getCode_eq_of_SplitXl_id {ξ : Type} {e : Except ξ Devm} {xl : Xlot} {q} 
   · contradiction
   · exact Eq.trans (h_q y h_q_y) (h_getCode y h_eq)
 
-syntax "solve_getCode" ident : tactic
-macro_rules
-  | `(tactic| solve_getCode $r:ident) => `(tactic|
-    first
-    | exact applyUnary_getCode_eq $r _
-    | exact applyBinary_getCode_eq $r _
-    | exact applyTernary_getCode_eq $r _
-  )
-
-
-syntax "solve_getCode_with" ident : tactic
-macro_rules
-  | `(tactic| solve_getCode_with $r:ident) => `(tactic|
-    first
-    | exact Devm.push_getCode_eq $r _
-    | exact Devm.pop_getCode_eq $r _
-    | exact chargeGas_getCode_eq $r _
-    | exact Devm.popToNat_getCode_eq $r _
-    | exact Devm.popToAdr_getCode_eq $r _
-    | exact Devm.pop_map_snd_getCode_eq $r _
-    | exact applyBinary_getCode_eq $r _
-    | exact applyUnary_getCode_eq $r _
-    | exact applyTernary_getCode_eq $r _
-    | exact pushItem_getCode_eq $r _
-    | (injection $r with h_eq; subst h_eq; rfl)
-    | contradiction
-    | (simp only [Except.bind_error, Except.bind_ok] at $r:ident; solve_getCode_with $r:ident)
-    | (split at $r:ident <;> solve_getCode_with $r:ident)
-    | (refine getCode_eq_of_bind $r id ?_ ?_
-       · intro _ hp
-         first | exact chargeGas_getCode_eq hp _ | exact applyBinary_getCode_eq hp _ | exact applyUnary_getCode_eq hp _ | exact applyTernary_getCode_eq hp _
-       · intro _ hp r_new
-         solve_getCode_with r_new)
-    | (refine getCode_eq_of_bind $r Prod.snd ?_ ?_
-       · intro ⟨_, _⟩ hp
-         first | exact Devm.pop_getCode_eq hp _ | exact Devm.popToNat_getCode_eq hp _ | exact Devm.popToAdr_getCode_eq hp _ | exact Devm.pop_map_snd_getCode_eq hp _
-       · intro ⟨_, _⟩ hp r_new
-         solve_getCode_with r_new)
-    | (refine getCode_eq_of_bind $r id ?_ ?_
-       · intro _ hp
-         first | exact chargeGas_getCode_eq hp _ | exact Devm.pop_map_snd_getCode_eq hp _
-       · intro _ hp r_new
-         solve_getCode_with r_new)
-    | (refine getCode_eq_of_SplitXl $r ?_ ?_
-       · intro ⟨_, _⟩ hp
-         first | exact Devm.pop_getCode_eq hp _ | exact Devm.popToNat_getCode_eq hp _ | exact Devm.popToAdr_getCode_eq hp _ | exact Devm.pop_map_snd_getCode_eq hp _
-       · intro ⟨_, _⟩ hp r_new
-         solve_getCode_with r_new)
-    | (refine getCode_eq_of_SplitXl_id $r ?_ ?_
-       · intro _ hp
-         first | exact chargeGas_getCode_eq hp a | exact Devm.pop_map_snd_getCode_eq hp a | (injection hp with h_eq; subst h_eq; rfl)
-       · intro _ hp r_new
-         solve_getCode_with r_new)
-  )
-
 lemma Rinst.getCode_eq_of_run_ok
     {pc sevm devm r devm'}
     (run : Rinst.run ⟨pc, sevm, devm⟩ r = .ok devm') (a : Adr)
     (ne : (devm.getCode a).toList ≠ []) :
     devm'.getCode a = devm.getCode a := by
-  cases r
+  cases r <;> dsimp [Rinst.run, Rinst.runCore] at run
   case add => apply applyBinary_getCode_eq run
-  case mul => sorry -- 0x02 / 2 / 1 / multiplication operation.
-  case sub => sorry -- 0x03 / 2 / 1 / subtraction operation.
-  case div => sorry -- 0x04 / 2 / 1 / integer division operation.
-  case sdiv => sorry -- 0x05 / 2 / 1 / signed integer division operation.
-  case mod => sorry -- 0x06 / 2 / 1 / modulo operation.
-  case smod => sorry -- 0x07 / 2 / 1 / signed modulo operation.
-  case addmod => sorry -- 0x08 / 3 / 1 / modulo addition operation.
-  case mulmod => sorry -- 0x09 / 3 / 1 / modulo multiplication operation.
-  case exp => sorry -- 0x0A / 2 / 1 / exponentiation operation.
-  case signextend => sorry -- 0x0B / 2 / 1 / sign extend operation.
-  case lt => sorry -- 0x10 / 2 / 1 / less-than comparison.
-  case gt => sorry -- 0x11 / 2 / 1 / greater-than comparison.
-  case slt => sorry -- 0x12 / 2 / 1 / signed less-than comparison.
-  case sgt => sorry -- 0x13 / 2 / 1 / signed greater-than comparison.
-  case eq => sorry -- 0x14 / 2 / 1 / equality comparison.
-  case iszero => sorry -- 0x15 / 1 / 1 / tests if the input is zero.
-  case and => sorry -- 0x16 / 2 / 1 / bitwise and operation.
-  case or => sorry -- 0x17 / 2 / 1 / bitwise or operation.
-  case xor => sorry -- 0x18 / 2 / 1 / bitwise xor operation.
-  case not => sorry -- 0x19 / 1 / 1 / bitwise not operation.
-  case byte => sorry -- 0x1A / 2 / 1 / retrieve a single Byte from a Word.
-  case shr => sorry -- 0x1B / 2 / 1 / logical shift right operation.
-  case shl => sorry -- 0x1C / 2 / 1 / logical shift left operation.
-  case sar => sorry -- 0x1D / 2 / 1 / arithmetic (signed) shift right operation.
-  case kec => sorry -- 0x20 / 2 / 1 / compute Keccak-256 hash.
-  case address => sorry -- 0x30 / 0 / 1 / Get the Addr of the currently executing account.
+  case mul => apply applyBinary_getCode_eq run
+  case sub => apply applyBinary_getCode_eq run
+  case div => apply applyBinary_getCode_eq run
+  case sdiv => apply applyBinary_getCode_eq run
+  case mod => apply applyBinary_getCode_eq run
+  case smod => apply applyBinary_getCode_eq run
+  case addmod => apply applyTernary_getCode_eq run
+  case mulmod => apply applyTernary_getCode_eq run
+  case exp =>
+    refine getCode_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a}
+    intro ⟨x, devm1⟩ hp run; refine getCode_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨y, devm2⟩ hp2; exact Devm.pop_getCode_eq hp2 a}
+    intro ⟨y, devm2⟩ hp2 run; exact pushItem_getCode_eq run a
+  case signextend => apply applyBinary_getCode_eq run
+  case lt => apply applyBinary_getCode_eq run
+  case gt => apply applyBinary_getCode_eq run
+  case slt => apply applyBinary_getCode_eq run
+  case sgt => apply applyBinary_getCode_eq run
+  case eq => apply applyBinary_getCode_eq run
+  case iszero => apply applyUnary_getCode_eq run
+  case and => apply applyBinary_getCode_eq run
+  case or => apply applyBinary_getCode_eq run
+  case xor => apply applyBinary_getCode_eq run
+  case not => apply applyUnary_getCode_eq run
+  case byte => apply applyBinary_getCode_eq run
+  case shr => apply applyBinary_getCode_eq run
+  case shl => apply applyBinary_getCode_eq run
+  case sar => apply applyBinary_getCode_eq run
+  case kec =>
+    refine getCode_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getCode_eq hp a}
+    intro ⟨x, devm1⟩ hp run; refine getCode_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_getCode_eq hp2 a}
+    intro ⟨y, devm2⟩ hp2 run;
+    refine getCode_eq_of_bind run id ?_ ?_
+    {intro devm1 hc; exact chargeGas_getCode_eq hc a}
+    intro devm1 hc run; exact Devm.push_getCode_eq run a
+  case address => apply pushItem_getCode_eq run
   case balance => sorry -- 0x31 / 1 / 1 / Get the balance of the specified account.
-  case origin => sorry -- 0x32 / 0 / 1 / Get the Addr that initiated the current transaction.
-  case caller => sorry -- 0x33 / 0 / 1 / Get the Addr that directly called the currently executing contract.
-  case callvalue => sorry -- 0x34 / 0 / 1 / Get the value (in wei) sent with the current transaction.
+  case origin => apply pushItem_getCode_eq run
+  case caller => apply pushItem_getCode_eq run
+  case callvalue => apply pushItem_getCode_eq run
   case calldataload => sorry -- 0x35 / 1 / 1 / Load input data from the current transaction.
-  case calldatasize => sorry -- 0x36 / 0 / 1 / Get the size of the input data from the current transaction.
+  case calldatasize => apply pushItem_getCode_eq run
   case calldatacopy => sorry -- 0x37 / 3 / 0 / Copy input data from the current transaction to Memory.
-  case codesize => sorry -- 0x38 / 0 / 1 / Get the size of the code of the currently executing contract.
+  case codesize => apply pushItem_getCode_eq run
   case codecopy => sorry -- 0x39 / 3 / 0 / Copy the code of the currently executing contract to memory.
-  case gasprice => sorry -- 0x3a / 0 / 1 / Get the gas price of the current transaction.
+  case gasprice => apply pushItem_getCode_eq run
   case extcodesize => sorry -- 0x3B / 1 / 1 / Get the size of the code of an external account.
   case extcodecopy => sorry -- 0x3C / 4 / 0 / Copy the code of an external account to memory.
-  case retdatasize => sorry -- 0x3D / 0 / 1 / Get the size of the output data from the previous call.
+  case retdatasize => apply pushItem_getCode_eq run
   case retdatacopy => sorry -- 0x3E / 3 / 0 / Copy output data from the previous call to memory.
   case extcodehash => sorry -- 0x3F / 1 / 1 / Get the code hash of an external account.
   case blockhash => sorry -- 0x40 / 1 / 1 / get the hash of the specified block.
-  case coinbase => sorry -- 0x41 / 0 / 1 / get the Addr of the current block's miner.
-  case timestamp => sorry -- 0x42 / 0 / 1 / get the timestamp of the current block.
-  case number => sorry -- 0x43 / 0 / 1 / get the current block number.
-  case prevrandao => sorry -- 0x44 / 0 / 1 / get the latest RANDAO mix of the post beacon state of the previous block.
-  case gaslimit => sorry -- 0x45 / 0 / 1 / get the gas limit of the current block.
-  case chainid => sorry -- 0x46 / 0 / 1 / get the chain id of the current blockchain.
-  case selfbalance => sorry -- 0x47 / 0 / 1 / get the balance of the currently executing account.
-  case basefee => sorry -- 0x48 / 0 / 1 / get the current block's base fee.
+  case coinbase => apply pushItem_getCode_eq run
+  case timestamp => apply pushItem_getCode_eq run
+  case number => apply pushItem_getCode_eq run
+  case prevrandao => apply pushItem_getCode_eq run
+  case gaslimit => apply pushItem_getCode_eq run
+  case chainid => apply pushItem_getCode_eq run
+  case selfbalance => apply pushItem_getCode_eq run
+  case basefee => apply pushItem_getCode_eq run
   case blobhash => sorry -- 0x49 / 1 / 1 /
-  case blobbasefee => sorry -- 0x4A / 0 / 1 / get the current block's blob base fee.
+  case blobbasefee => apply pushItem_getCode_eq run
   case pop => sorry -- 0x50 / 1 / 0 / Remove an item from the Stack.
   case mload => sorry -- 0x51 / 1 / 1 / Load a Word from memory.
   case mstore => sorry -- 0x52 / 2 / 0 / Store a Word in memory.
@@ -2240,8 +2198,8 @@ lemma Rinst.getCode_eq_of_run_ok
   case tload => sorry -- 0x5C / 1 / 1 / load a word from transient torage.
   case tstore => sorry -- 0x5D / 2 / 0 / store a word in transient storage.
   case mcopy => sorry -- 0x5E / 3 / 0 /
-  case pc => sorry -- 0x58 / 0 / 1 / Get the current program counter value.
-  case msize => sorry -- 0x59 / 0 / 1 / Get the size of the memory.
+  case pc => apply pushItem_getCode_eq run
+  case msize => apply pushItem_getCode_eq run
   case gas => sorry -- 0x5a / 0 / 1 / Get the amount of remaining gas.
   case dup => sorry
   case swap => sorry
