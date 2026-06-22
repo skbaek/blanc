@@ -1420,6 +1420,7 @@ lemma toNat_toB128_of_lt {n : Nat} (h : n < 2 ^ 128) : n.toB128.toNat = n := by
 
 lemma toNat_toB256_of_lt {n : Nat} (h : n < 2 ^ 256) : n.toB256.toNat = n := by
   rw [toNat_toB256, Nat.lo_eq_of_lt h]
+
 lemma List.of_get?_succ_eq_some {X} {l : List X} {k : ℕ} {x} :
     l[k + 1]? = some x → ∃ y, l[k]? = some y := by
   induction k generalizing l x with
@@ -1785,15 +1786,28 @@ def ForallDeeper (k : Nat) (ε : Exec.Pred) : Prop :=
 def ForallDeeperAt (k : Nat) (ca : Adr) (p : Prog) (ε : Exec.Pred) : Prop :=
   ForallDeeper k (fun pc sevm devm exn ex => p.At ca pc sevm devm → ε pc sevm devm exn ex)
 
-lemma Ninst.inv_getCode
+lemma Xinst.prep_inv_getCode
+    {sevm : Sevm}
+    {devm : Devm}
+    {sevm_ : Sevm}
+    {devm_ : Devm}
+    {exn_ res : Execution}
+    {adr : Adr}
+    {x : Xinst}
+    -- (ne : (devm.getCode a).toList ≠ [])
+    (run : Xinst.Run sevm devm x (some (sevm_, devm_, exn_)) res) :
+    devm_.getCode adr = devm.getCode adr := by
+  sorry
+
+lemma Ninst.prep_inv_getCode
     {pc sevm devm n sevm_ devm_ exn_ res}
     (run : Ninst.Run' pc sevm devm n (.some ⟨sevm_, devm_, exn_⟩) res) (a : Adr)
-    (h_ne : (devm.getCode a).toList ≠ []) :
-    devm_.getCode a = devm.getCode a := by
+    --(ne : (devm.getCode a).toList ≠ [])
+    : devm_.getCode a = devm.getCode a := by
   cases n
   case push xs _ => revert run; dsimp [Ninst.Run']; exact fun h => h.elim
   case reg r => revert run; dsimp [Ninst.Run']; exact fun h => h.elim
-  case exec x => revert run; dsimp [Ninst.Run']; intro run; sorry
+  case exec x => revert run; dsimp [Ninst.Run']; apply Xinst.prep_inv_getCode
 
 lemma Ninst.code_eq_of_run'_some
     {pc sevm devm n sevm_ devm_ exn_ res}
@@ -2701,7 +2715,8 @@ lemma lift_core
       have h_sub_wkn := h_fa 0 sevm_ devm_ exn_ ex_sub h_lt
       have h1 : some (devm_.getCode ca).toList = Prog.compile p := by
         have h_ne_code : (devm.getCode ca).toList ≠ [] := fun hc => Prog.compile_ne_nil (Eq.trans h_at_p.left.symm (congrArg some hc))
-        rw [Ninst.inv_getCode h_run ca h_ne_code]
+        -- rw [Ninst.prep_inv_getCode h_run ca h_ne_code]
+        rw [Ninst.prep_inv_getCode h_run ca]
         exact h_at_p.left
       have h2 : sevm_.currentTarget = ca → some sevm_.code.toList = Prog.compile p ∧ 0 = 0 := by
         intro h_ca
@@ -2739,7 +2754,7 @@ lemma lift_core
         have h_sub_wkn := h_fa 0 sevm_ devm_ exn_ ex_sub h_lt
         have h1 : some (devm_.getCode ca).toList = Prog.compile p := by
           have h_ne_code : (devm.getCode ca).toList ≠ [] := fun hc => Prog.compile_ne_nil (Eq.trans h_at_p.left.symm (congrArg some hc))
-          rw [Ninst.inv_getCode h_run ca h_ne_code]
+          rw [Ninst.prep_inv_getCode h_run ca]
           exact h_at_p.left
         have h2 : sevm_.currentTarget = ca → some sevm_.code.toList = Prog.compile p ∧ 0 = 0 := by
           intro h_ca
