@@ -2119,7 +2119,27 @@ lemma getCode_eq_of_SplitXl_id {ξ : Type} {e : Except ξ Devm} {xl : Xlot} {q} 
   · exact Eq.trans (h_q y h_q_y) (h_getCode y h_eq)
 
 lemma setStorVal_inv_getCode {devm : Devm} {adr adr'} {key} {val} :
-    (devm.setStorVal adr key val).getCode adr' = devm.getCode adr' := sorry
+    (devm.setStorVal adr key val).getCode adr' = devm.getCode adr' := by
+  simp [Devm.getCode, Devm.getAcct, Devm.setStorVal]
+  unfold State.setStorVal State.get State.set
+  dsimp
+  split_ifs with h_if
+  · by_cases h_cmp : compare adr adr' = Ordering.eq
+    · have h : adr = adr' := compare_eq_iff_eq.mp h_cmp
+      subst h
+      rw [Std.TreeMap.getD_erase]
+      simp
+      have h2 := congrArg Acct.code h_if
+      exact h2.symm
+    · rw [Std.TreeMap.getD_erase]
+      simp [h_cmp]
+  · by_cases h_cmp : compare adr adr' = Ordering.eq
+    · have h : adr = adr' := compare_eq_iff_eq.mp h_cmp
+      subst h
+      rw [Std.TreeMap.getD_insert]
+      simp
+    · rw [Std.TreeMap.getD_insert]
+      simp [h_cmp]
 
 lemma sstore_inv_getCode
     {pc sevm devm devm'}
@@ -2167,21 +2187,6 @@ lemma sstore_inv_getCode
       clear bar run; injection run' with rw
       rw [← rw]
       apply setStorVal_inv_getCode
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 lemma Rinst.inv_getCode
     {pc sevm devm r devm'}
