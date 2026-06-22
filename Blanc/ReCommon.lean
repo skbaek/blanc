@@ -1895,7 +1895,80 @@ lemma Xinst.prep_inv_getCode
     devm_.getCode adr = devm.getCode adr := by
   cases x
   case create => sorry
-  case call => sorry
+  case call =>
+    dsimp [Xinst.Run] at run
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨gas, devm1⟩, eq1, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨callee, devm2⟩, eq2, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨value, devm3⟩, eq3, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨inputIndex, devm4⟩, eq4, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨inputSize, devm5⟩, eq5, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨outputIndex, devm6⟩, eq6, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨outputSize, devm7⟩, eq7, run⟩; contradiction
+    rcases run with ⟨extendCost, hp8, run⟩
+    rcases run with ⟨preAccessCost, hp9, run⟩
+    rcases run with ⟨devm8, hp10, run⟩
+    rcases run with ⟨⟨disablePrecompiles, newCodeAddress, code, delegatedAccessGasCost, devm9⟩, hp11, run⟩
+    rcases run with ⟨accessCost, hp12, run⟩
+    rcases run with ⟨createCost, hp13, run⟩
+    rcases run with ⟨transferCost, hp14, run⟩
+    rcases run with ⟨⟨msgCallCost, msgCallStipend⟩, hp15, run⟩
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨devm10, eq16, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨_, _, run⟩; contradiction
+    rcases run with ⟨devm11, hp18, run⟩
+    rcases run with ⟨senderBal, hp19, run⟩
+    split_ifs at run with h_bal
+    · rcases run with ⟨_, _, _, h_contra⟩ | ⟨devm12, eq20, run⟩; contradiction
+      rcases run with ⟨h_xl, h_ex⟩
+      cases h_xl
+    · dsimp [GenericCall] at run
+      rcases run with ⟨evm1, hp_evm1, run⟩
+      split_ifs at run with h_depth
+      · rcases run with ⟨h_xl, _⟩; contradiction
+      · rcases run with ⟨calldata, _, run⟩
+        rcases run with ⟨childMsg, hp_childMsg, run⟩
+        rcases run with ⟨ex', run, _⟩
+        dsimp [ProcessMessage] at run
+        rcases run with ⟨_, _, _, h_contra⟩ | ⟨benv, eq_benv, run⟩; contradiction
+        rcases run with ⟨ex'', run, _⟩
+        dsimp [ExecuteCode] at run
+        dsimp [initEvm] at run
+        have h_devm : benv.state.getCode adr = devm.getCode adr := by
+          subst hp_childMsg hp_evm1
+          dsimp [Msg.benvAfterTransfer] at eq_benv
+          rcases hp_sub : ({ state := devm11.state, createdAccounts := devm11.createdAccounts, stat := sevm.benvStat } : Benv).subBal sevm.currentTarget value with _ | benv_sub
+          · simp [hp_sub, Option.toExcept, Bind.bind, Except.bind] at eq_benv
+          · simp [hp_sub, Option.toExcept, Bind.bind, Except.bind] at eq_benv
+            subst eq_benv
+            have h1 := Benv.addBal_getCode benv_sub callee adr value
+            have h2 := Benv.subBal_getCode (a := adr) hp_sub
+            have h_devm11_state : ({ state := devm11.state, createdAccounts := devm11.createdAccounts, stat := sevm.benvStat } : Benv).state.getCode adr = devm11.getCode adr := rfl
+            rw [h_devm11_state] at h2
+            rw [h1, h2]
+            have h11 : devm11.getCode adr = devm10.getCode adr := by subst hp18; exact Devm.memExtends_getCode
+            have h10 : devm10.getCode adr = devm9.getCode adr := chargeGas_getCode eq16
+            have h9 : devm9.getCode adr = devm8.getCode adr := by
+              have h9' := @accessDelegation_getCode devm8 callee adr
+              rw [← hp11] at h9'
+              exact h9'
+            have h8 : devm8.getCode adr = devm7.getCode adr := by subst hp10; exact addAccessedAddress_getCode
+            have h7 : devm7.getCode adr = devm6.getCode adr := Devm.popToNat_getCode eq7
+            have h6 : devm6.getCode adr = devm5.getCode adr := Devm.popToNat_getCode eq6
+            have h5 : devm5.getCode adr = devm4.getCode adr := Devm.popToNat_getCode eq5
+            have h4 : devm4.getCode adr = devm3.getCode adr := Devm.popToNat_getCode eq4
+            have h3 : devm3.getCode adr = devm2.getCode adr := Devm.pop_getCode eq3
+            have h2' : devm2.getCode adr = devm1.getCode adr := Devm.popToAdr_getCode eq2
+            have h1' : devm1.getCode adr = devm.getCode adr := Devm.pop_getCode eq1
+            rw [h11, h10, h9, h8, h7, h6, h5, h4, h3, h2', h1']
+        subst hp_childMsg
+        dsimp [Msg.withBenv] at run
+        split_ifs at run with h_precomp
+        · rcases run with ⟨h_xl, _⟩; cases h_xl
+        · rcases run with ⟨ex''', h_xl, _⟩
+          injection h_xl with h_xl_eq
+          injection h_xl_eq with _ h_devm_eq
+          injection h_devm_eq with h_devm_eq _
+          subst h_devm_eq
+          exact h_devm
   case callcode => sorry
   case delcall => sorry
   case create2 => sorry
