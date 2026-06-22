@@ -1785,7 +1785,7 @@ def ForallDeeper (k : Nat) (ε : Exec.Pred) : Prop :=
 def ForallDeeperAt (k : Nat) (ca : Adr) (p : Prog) (ε : Exec.Pred) : Prop :=
   ForallDeeper k (fun pc sevm devm exn ex => p.At ca pc sevm devm → ε pc sevm devm exn ex)
 
-lemma Ninst.getCode_eq_of_run'_some
+lemma Ninst.inv_getCode
     {pc sevm devm n sevm_ devm_ exn_ res}
     (run : Ninst.Run' pc sevm devm n (.some ⟨sevm_, devm_, exn_⟩) res) (a : Adr)
     (h_ne : (devm.getCode a).toList ≠ []) :
@@ -2143,8 +2143,7 @@ lemma setStorVal_inv_getCode {devm : Devm} {adr adr'} {key} {val} :
 
 lemma sstore_inv_getCode
     {pc sevm devm devm'}
-    (run : Rinst.run ⟨pc, sevm, devm⟩ .sstore = .ok devm') (a : Adr)
-    (ne : (devm.getCode a).toList ≠ []) :
+    (run : Rinst.run ⟨pc, sevm, devm⟩ .sstore = .ok devm') (a : Adr) :
     devm'.getCode a = devm.getCode a := by
   simp only [Rinst.run, Rinst.runCore] at run
   refine getCode_eq_of_bind run Prod.snd ?_ ?_
@@ -2187,6 +2186,25 @@ lemma sstore_inv_getCode
       clear bar run; injection run' with rw
       rw [← rw]
       apply setStorVal_inv_getCode
+
+lemma Devm.popN_getCode_eq {n : Nat} {devm devm' : Devm} {l : List B256}
+    (hp : devm.popN n = Except.ok (l, devm')) (a : Adr) :
+    devm'.getCode a = devm.getCode a := by
+  induction n generalizing devm devm' l with
+  | zero =>
+    simp [Devm.popN] at hp
+    rcases hp with ⟨_, eq⟩
+    rw [eq]
+  | succ n ih =>
+    simp [Devm.popN] at hp
+    rcases of_bind_eq_ok hp with ⟨⟨x, devm1⟩, hp1, hp2⟩
+    rcases of_bind_eq_ok hp2 with ⟨⟨xs, devm2⟩, hp3, hp4⟩
+    injection hp4 with eq
+    injection eq with eq1 eq2
+    subst eq2
+    have h1 := Devm.pop_getCode_eq hp1 a
+    have h2 := ih hp3
+    rw [h2, h1]
 
 lemma Rinst.inv_getCode
     {pc sevm devm r devm'}
@@ -2385,13 +2403,23 @@ lemma Rinst.inv_getCode
   case sstore =>
     have h := @sstore_inv_getCode pc sevm devm devm'
     simp only [Rinst.run, Rinst.runCore] at h
-    apply h run _ ne
+    apply h run _
   case tload =>
     refine getCode_eq_of_bind run Prod.snd ?_ ?_
     {intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a}
     intro ⟨x, devm1⟩ hp run; exact pushItem_getCode_eq run a
   case tstore =>
-    sorry
+    refine getCode_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a}
+    intro ⟨x, devm1⟩ hp run; refine getCode_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨y, devm2⟩ hp; exact Devm.pop_getCode_eq hp a}
+    intro ⟨y, devm2⟩ hp run; refine getCode_eq_of_bind run id ?_ ?_
+    {intro devm3 hc; exact chargeGas_getCode_eq hc a}
+    intro devm3 hc run
+    rcases of_bind_eq_ok run with ⟨_, _, run'⟩
+    injection run' with rw
+    rw [← rw]
+    simp [Devm.getCode, Devm.getAcct, Devm.setTransVal]
   case mcopy =>
     refine getCode_eq_of_bind run Prod.snd ?_ ?_
     {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getCode_eq hp a}
@@ -2421,9 +2449,19 @@ lemma Rinst.inv_getCode
     · cases run
     · injection run with eq; subst eq; rfl
   case log =>
-    sorry
-
-#exit
+    refine getCode_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getCode_eq hp a}
+    intro ⟨x, devm1⟩ hp run; refine getCode_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨y, devm2⟩ hp; exact Devm.popToNat_getCode_eq hp a}
+    intro ⟨y, devm2⟩ hp run; refine getCode_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨z, devm3⟩ hp; exact Devm.popN_getCode_eq hp a}
+    intro ⟨z, devm3⟩ hp run; refine getCode_eq_of_bind run id ?_ ?_
+    {intro devm4 hc; exact chargeGas_getCode_eq hc a}
+    intro devm4 hc run
+    rcases of_bind_eq_ok run with ⟨_, _, run'⟩
+    injection run' with rw
+    rw [← rw]
+    rfl
 
 lemma Xinst.getCode_eq_of_run_ok
     {sevm devm x xl devm'}
@@ -2663,7 +2701,7 @@ lemma lift_core
       have h_sub_wkn := h_fa 0 sevm_ devm_ exn_ ex_sub h_lt
       have h1 : some (devm_.getCode ca).toList = Prog.compile p := by
         have h_ne_code : (devm.getCode ca).toList ≠ [] := fun hc => Prog.compile_ne_nil (Eq.trans h_at_p.left.symm (congrArg some hc))
-        rw [Ninst.getCode_eq_of_run'_some h_run ca h_ne_code]
+        rw [Ninst.inv_getCode h_run ca h_ne_code]
         exact h_at_p.left
       have h2 : sevm_.currentTarget = ca → some sevm_.code.toList = Prog.compile p ∧ 0 = 0 := by
         intro h_ca
@@ -2701,7 +2739,7 @@ lemma lift_core
         have h_sub_wkn := h_fa 0 sevm_ devm_ exn_ ex_sub h_lt
         have h1 : some (devm_.getCode ca).toList = Prog.compile p := by
           have h_ne_code : (devm.getCode ca).toList ≠ [] := fun hc => Prog.compile_ne_nil (Eq.trans h_at_p.left.symm (congrArg some hc))
-          rw [Ninst.getCode_eq_of_run'_some h_run ca h_ne_code]
+          rw [Ninst.inv_getCode h_run ca h_ne_code]
           exact h_at_p.left
         have h2 : sevm_.currentTarget = ca → some sevm_.code.toList = Prog.compile p ∧ 0 = 0 := by
           intro h_ca
