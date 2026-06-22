@@ -1786,6 +1786,102 @@ def ForallDeeper (k : Nat) (ε : Exec.Pred) : Prop :=
 def ForallDeeperAt (k : Nat) (ca : Adr) (p : Prog) (ε : Exec.Pred) : Prop :=
   ForallDeeper k (fun pc sevm devm exn ex => p.At ca pc sevm devm → ε pc sevm devm exn ex)
 
+lemma State.setBal_getCode (st : State) (adr a : Adr) (val : B256) :
+  (st.setBal adr val).getCode a = st.getCode a := by
+  dsimp [State.setBal, State.set, State.getCode, State.get]
+  split_ifs with h_if
+  · by_cases h : compare adr a = Ordering.eq
+    · have h2 : adr = a := compare_eq_iff_eq.mp h
+      subst h2
+      rw [Std.TreeMap.getD_erase]
+      split_ifs <;> try rfl
+      · have h3 := congrArg Acct.code h_if
+        exact h3.symm
+    · rw [Std.TreeMap.getD_erase]
+      simp [h]
+  · by_cases h : compare adr a = Ordering.eq
+    · have h2 : adr = a := compare_eq_iff_eq.mp h
+      subst h2
+      rw [Std.TreeMap.getD_insert]
+      dsimp [Acct.withBal]
+      simp
+    · rw [Std.TreeMap.getD_insert]
+      simp [h]
+
+lemma State.addBal_getCode (st : State) (adr a : Adr) (val : B256) :
+  (st.addBal adr val).getCode a = st.getCode a := by
+  dsimp [State.addBal]
+  exact State.setBal_getCode st adr a (st.bal adr + val)
+
+lemma State.subBal_getCode {st st' : State} {adr a : Adr} {val : B256} (h : st.subBal adr val = some st') :
+  st'.getCode a = st.getCode a := by
+  dsimp [State.subBal] at h
+  split at h
+  · contradiction
+  · injection h with h2
+    subst h2
+    exact State.setBal_getCode st adr a (st.bal adr - val)
+
+lemma Benv.addBal_getCode (benv : Benv) (adr a : Adr) (val : B256) :
+  (benv.addBal adr val).state.getCode a = benv.state.getCode a := by
+  dsimp [Benv.addBal, Benv.withState]
+  exact State.addBal_getCode benv.state adr a val
+
+lemma Benv.subBal_getCode {benv benv' : Benv} {adr a : Adr} {val : B256} (h : benv.subBal adr val = some benv') :
+  benv'.state.getCode a = benv.state.getCode a := by
+  dsimp [Benv.subBal, Option.bind] at h
+  split at h
+  · contradiction
+  · rename_i st' h_sub
+    injection h with h2
+    subst h2
+    dsimp [Benv.withState]
+    exact State.subBal_getCode h_sub
+
+lemma Devm.pop_getCode {devm devm' : Devm} {val : B256} {a : Adr} (h : devm.pop = Except.ok (val, devm')) : devm'.getCode a = devm.getCode a := by
+  dsimp [Devm.pop] at h
+  split at h
+  · contradiction
+  · simp at h; rcases h with ⟨_, rfl⟩; rfl
+
+lemma Devm.popToAdr_getCode {devm devm' : Devm} {val : Adr} {a : Adr} (h : devm.popToAdr = Except.ok (val, devm')) : devm'.getCode a = devm.getCode a := by
+  dsimp [Devm.popToAdr, Except.map, Prod.mapFst] at h
+  cases h_pop : devm.pop
+  · simp [h_pop, Except.bind] at h
+  · rename_i val_pop
+    simp [h_pop, Except.bind] at h
+    rcases val_pop with ⟨v, devm''⟩
+    simp at h
+    rcases h with ⟨_, rfl⟩
+    exact Devm.pop_getCode h_pop
+
+lemma Devm.popToNat_getCode {devm devm' : Devm} {val : ℕ} {a : Adr} (h : devm.popToNat = Except.ok (val, devm')) : devm'.getCode a = devm.getCode a := by
+  dsimp [Devm.popToNat, Except.map, Prod.mapFst] at h
+  cases h_pop : devm.pop
+  · simp [h_pop, Except.bind] at h
+  · rename_i val_pop
+    simp [h_pop, Except.bind] at h
+    rcases val_pop with ⟨v, devm''⟩
+    simp at h
+    rcases h with ⟨_, rfl⟩
+    exact Devm.pop_getCode h_pop
+
+lemma addAccessedAddress_getCode {devm : Devm} {adr a : Adr} : (addAccessedAddress devm adr).getCode a = devm.getCode a := rfl
+
+lemma accessDelegation_getCode {devm : Devm} {adr a : Adr} : (accessDelegation devm adr).2.2.2.2.getCode a = devm.getCode a := by
+  dsimp [accessDelegation]
+  split_ifs
+  · exact addAccessedAddress_getCode
+  · rfl
+
+lemma chargeGas_getCode {devm devm' : Devm} {cost : ℕ} {a : Adr} (h : chargeGas cost devm = Except.ok devm') : devm'.getCode a = devm.getCode a := by
+  dsimp [chargeGas] at h
+  cases h_sub : safeSub devm.gasLeft cost
+  · simp [h_sub, Except.bind] at h
+  · simp [h_sub, Except.bind] at h; subst h; rfl
+
+lemma Devm.memExtends_getCode {devm : Devm} {ranges : List (ℕ × ℕ)} {a : Adr} : (devm.memExtends ranges).getCode a = devm.getCode a := rfl
+
 lemma Xinst.prep_inv_getCode
     {sevm : Sevm}
     {devm : Devm}
@@ -1797,7 +1893,76 @@ lemma Xinst.prep_inv_getCode
     -- (ne : (devm.getCode a).toList ≠ [])
     (run : Xinst.Run sevm devm x (some (sevm_, devm_, exn_)) res) :
     devm_.getCode adr = devm.getCode adr := by
-  sorry
+  cases x
+  case create => sorry
+  case call => sorry
+  case callcode => sorry
+  case delcall => sorry
+  case create2 => sorry
+  case statcall =>
+    dsimp [Xinst.Run] at run
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨gas, devm1⟩, eq1, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨target, devm2⟩, eq2, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨inputIndex, devm3⟩, eq3, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨inputSize, devm4⟩, eq4, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨outputIndex, devm5⟩, eq5, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨outputSize, devm6⟩, eq6, run⟩; contradiction
+    rcases run with ⟨extendCost, hp7, run⟩
+    rcases run with ⟨preAccessCost, hp8, run⟩
+    rcases run with ⟨devm7, hp9, run⟩
+    rcases run with ⟨⟨disablePrecompiles, newCodeAddress, code, delegatedAccessGasCost, devm8⟩, hp10, run⟩
+    rcases run with ⟨accessCost, hp11, run⟩
+    rcases run with ⟨⟨msgCallCost, msgCallStipend⟩, hp12, run⟩
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨devm9, eq13, run⟩; contradiction
+    rcases run with ⟨devm10, hp14, run⟩
+    dsimp [GenericCall] at run
+    rcases run with ⟨evm1, hp_evm1, run⟩
+    split_ifs at run with h_depth
+    · rcases run with ⟨h_xl, _⟩; contradiction
+    · rcases run with ⟨calldata, _, run⟩
+      rcases run with ⟨childMsg, hp_childMsg, run⟩
+      rcases run with ⟨ex', run, _⟩
+      dsimp [ProcessMessage] at run
+      rcases run with ⟨_, _, _, h_contra⟩ | ⟨benv, eq_benv, run⟩; contradiction
+      rcases run with ⟨ex'', run, _⟩
+      dsimp [ExecuteCode] at run
+      dsimp [initEvm] at run
+      have h_devm : benv.state.getCode adr = devm.getCode adr := by
+        subst hp_childMsg hp_evm1
+        dsimp [Msg.benvAfterTransfer] at eq_benv
+        rcases hp_sub : ({ state := devm10.state, createdAccounts := devm10.createdAccounts, stat := sevm.benvStat } : Benv).subBal sevm.currentTarget 0 with _ | benv_sub
+        · simp [hp_sub, Option.toExcept, Bind.bind, Except.bind] at eq_benv
+        · simp [hp_sub, Option.toExcept, Bind.bind, Except.bind] at eq_benv
+          subst eq_benv
+          have h1 := Benv.addBal_getCode benv_sub target adr 0
+          have h2 := Benv.subBal_getCode (a := adr) hp_sub
+          have h_devm10_state : ({ state := devm10.state, createdAccounts := devm10.createdAccounts, stat := sevm.benvStat } : Benv).state.getCode adr = devm10.getCode adr := rfl
+          rw [h_devm10_state] at h2
+          rw [h1, h2]
+          have h14 : devm10.getCode adr = devm9.getCode adr := by subst hp14; exact Devm.memExtends_getCode
+          have h13 : devm9.getCode adr = devm8.getCode adr := chargeGas_getCode eq13
+          have h10 : devm8.getCode adr = devm7.getCode adr := by
+            have h10' := @accessDelegation_getCode devm7 target adr
+            rw [← hp10] at h10'
+            exact h10'
+          have h9 : devm7.getCode adr = devm6.getCode adr := by subst hp9; exact addAccessedAddress_getCode
+          have h6 : devm6.getCode adr = devm5.getCode adr := Devm.popToNat_getCode eq6
+          have h5 : devm5.getCode adr = devm4.getCode adr := Devm.popToNat_getCode eq5
+          have h4 : devm4.getCode adr = devm3.getCode adr := Devm.popToNat_getCode eq4
+          have h3 : devm3.getCode adr = devm2.getCode adr := Devm.popToNat_getCode eq3
+          have h2' : devm2.getCode adr = devm1.getCode adr := Devm.popToAdr_getCode eq2
+          have h1' : devm1.getCode adr = devm.getCode adr := Devm.pop_getCode eq1
+          rw [h14, h13, h10, h9, h6, h5, h4, h3, h2', h1']
+      subst hp_childMsg
+      dsimp [Msg.withBenv] at run
+      split_ifs at run with h_precomp
+      · rcases run with ⟨h_xl, _⟩; cases h_xl
+      · rcases run with ⟨ex''', h_xl, _⟩
+        injection h_xl with h_xl_eq
+        injection h_xl_eq with _ h_devm_eq
+        injection h_devm_eq with h_devm_eq _
+        subst h_devm_eq
+        exact h_devm
 
 lemma Ninst.prep_inv_getCode
     {pc sevm devm n sevm_ devm_ exn_ res}
