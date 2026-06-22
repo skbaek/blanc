@@ -2118,6 +2118,7 @@ lemma getCode_eq_of_SplitXl_id {ξ : Type} {e : Except ξ Devm} {xl : Xlot} {q} 
   · contradiction
   · exact Eq.trans (h_q y h_q_y) (h_getCode y h_eq)
 
+
 lemma sstore_inv_getCode
     {pc sevm devm devm'}
     (run : Rinst.run ⟨pc, sevm, devm⟩ .sstore = .ok devm') (a : Adr)
@@ -2136,12 +2137,41 @@ lemma sstore_inv_getCode
   clear run
   refine getCode_eq_of_bind run' Prod.fst ?_ ?_
   · clear run';
-    intro ⟨devm', foo⟩
+    intro ⟨devm', _⟩
     simp only [ite_not, Except.ok.injEq]
     split
     · intro eq; injection eq with eq _; rw [eq]
-    · sorry
-  · sorry
+    · simp [addAccessedStorageKey, Devm.withAccessedStorageKeys]
+      intro rw _; rw [← rw]; clear rw
+      simp [Devm.getCode, Devm.getAcct]
+  · clear run';
+    intro ⟨devm3, _⟩ eq run; clear eq
+    rcases of_bind_eq_ok run with ⟨_, bar, run'⟩;
+    clear bar run
+    simp only at run'
+    refine getCode_eq_of_bind run' id ?_ ?_
+    · clear run'
+      intro devm4 eq
+      injection eq with rw
+      rw [← rw]
+      simp [Devm.getCode, Devm.getAcct]
+    · clear run'
+      intro devm4 temp eq; clear temp
+      sorry
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
