@@ -2118,6 +2118,8 @@ lemma getCode_eq_of_SplitXl_id {ξ : Type} {e : Except ξ Devm} {xl : Xlot} {q} 
   · contradiction
   · exact Eq.trans (h_q y h_q_y) (h_getCode y h_eq)
 
+lemma setStorVal_inv_getCode {devm : Devm} {adr adr'} {key} {val} :
+    (devm.setStorVal adr key val).getCode adr' = devm.getCode adr' := sorry
 
 lemma sstore_inv_getCode
     {pc sevm devm devm'}
@@ -2156,13 +2158,15 @@ lemma sstore_inv_getCode
       rw [← rw]
       simp [Devm.getCode, Devm.getAcct]
     · clear run'
-      intro devm4 temp eq; clear temp
-      sorry
-
-
-
-
-
+      intro devm4 temp run; clear temp
+      refine getCode_eq_of_bind run id ?_ ?_
+      {intro devm5 hc; exact chargeGas_getCode_eq hc a}
+      clear run
+      intro devm5 eq run
+      rcases of_bind_eq_ok run with ⟨_, bar, run'⟩;
+      clear bar run; injection run' with rw
+      rw [← rw]
+      apply setStorVal_inv_getCode
 
 
 
