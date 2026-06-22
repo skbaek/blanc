@@ -2054,7 +2054,8 @@ lemma Devm.pop_map_snd_getCode_eq {devm devm1 : Devm} (hp : (devm.pop <&> Prod.s
 @[simp] lemma Except.bind_error {α β ε} (e : ε) (f : α → Except ε β) : (Except.error e >>= f) = Except.error e := rfl
 @[simp] lemma Except.bind_ok {α β ε} (x : α) (f : α → Except ε β) : (Except.ok x >>= f) = f x := rfl
 
-lemma getCode_eq_of_bind {α ε} {ma : Except ε α} {f : α → Except ε Devm} {devm devm' : Devm} {a : Adr}
+lemma getCode_eq_of_bind {α ε} {ma : Except ε α} {f : α → Except ε Devm}
+    {devm devm' : Devm} {a : Adr}
     (run : (ma >>= f) = .ok devm')
     (getDevm : α → Devm)
     (h_first : ∀ v, ma = .ok v → (getDevm v).getCode a = devm.getCode a)
@@ -2117,7 +2118,38 @@ lemma getCode_eq_of_SplitXl_id {ξ : Type} {e : Except ξ Devm} {xl : Xlot} {q} 
   · contradiction
   · exact Eq.trans (h_q y h_q_y) (h_getCode y h_eq)
 
-lemma Rinst.getCode_eq_of_run_ok
+lemma sstore_inv_getCode
+    {pc sevm devm devm'}
+    (run : Rinst.run ⟨pc, sevm, devm⟩ .sstore = .ok devm') (a : Adr)
+    (ne : (devm.getCode a).toList ≠ []) :
+    devm'.getCode a = devm.getCode a := by
+  simp only [Rinst.run, Rinst.runCore] at run
+  refine getCode_eq_of_bind run Prod.snd ?_ ?_
+  {intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a}
+  clear run
+  intro ⟨x, devm1⟩ hp run;
+  refine getCode_eq_of_bind run Prod.snd ?_ ?_
+  {intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a}
+  clear run
+  intro ⟨y, devm2⟩ hp run;
+  rcases of_bind_eq_ok run with ⟨⟨_⟩, _, run'⟩
+  clear run
+  refine getCode_eq_of_bind run' Prod.fst ?_ ?_
+  · clear run';
+    intro ⟨devm', foo⟩
+    simp only [ite_not, Except.ok.injEq]
+    split
+    · intro eq; injection eq with eq _; rw [eq]
+    · sorry
+  · sorry
+
+
+
+
+
+
+
+lemma Rinst.inv_getCode
     {pc sevm devm r devm'}
     (run : Rinst.run ⟨pc, sevm, devm⟩ r = .ok devm') (a : Adr)
     (ne : (devm.getCode a).toList ≠ []) :
@@ -2163,22 +2195,103 @@ lemma Rinst.getCode_eq_of_run_ok
     {intro devm1 hc; exact chargeGas_getCode_eq hc a}
     intro devm1 hc run; exact Devm.push_getCode_eq run a
   case address => apply pushItem_getCode_eq run
-  case balance => sorry -- 0x31 / 1 / 1 / Get the balance of the specified account.
+  case balance =>
+    refine getCode_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a}
+    intro ⟨x, devm1⟩ hp run; split at run
+    · refine getCode_eq_of_bind run id ?_ ?_
+      {intro devm2 hc; exact chargeGas_getCode_eq hc a}
+      intro devm2 hc run; exact Devm.push_getCode_eq run a
+    · refine getCode_eq_of_bind run id ?_ ?_
+      {intro devm2 hc; exact chargeGas_getCode_eq hc a}
+      intro devm2 hc run; exact Devm.push_getCode_eq run a
   case origin => apply pushItem_getCode_eq run
   case caller => apply pushItem_getCode_eq run
   case callvalue => apply pushItem_getCode_eq run
-  case calldataload => sorry -- 0x35 / 1 / 1 / Load input data from the current transaction.
+  case calldataload =>
+    refine getCode_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a}
+    intro ⟨x, devm1⟩ hp run; refine getCode_eq_of_bind run id ?_ ?_
+    {intro devm2 hc; exact chargeGas_getCode_eq hc a}
+    intro devm2 hc run; exact Devm.push_getCode_eq run a
   case calldatasize => apply pushItem_getCode_eq run
-  case calldatacopy => sorry -- 0x37 / 3 / 0 / Copy input data from the current transaction to Memory.
+  case calldatacopy =>
+    refine getCode_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getCode_eq hp a}
+    intro ⟨x, devm1⟩ hp run; refine getCode_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨y, devm2⟩ hp; exact Devm.popToNat_getCode_eq hp a}
+    intro ⟨y, devm2⟩ hp run; refine getCode_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨z, devm3⟩ hp; exact Devm.popToNat_getCode_eq hp a}
+    intro ⟨z, devm3⟩ hp run; refine getCode_eq_of_bind run id ?_ ?_
+    {intro devm4 hc; exact chargeGas_getCode_eq hc a}
+    intro devm4 hc run; injection run with eq; subst eq; rfl
   case codesize => apply pushItem_getCode_eq run
-  case codecopy => sorry -- 0x39 / 3 / 0 / Copy the code of the currently executing contract to memory.
+  case codecopy =>
+    refine getCode_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getCode_eq hp a}
+    intro ⟨x, devm1⟩ hp run; refine getCode_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨y, devm2⟩ hp; exact Devm.popToNat_getCode_eq hp a}
+    intro ⟨y, devm2⟩ hp run; refine getCode_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨z, devm3⟩ hp; exact Devm.popToNat_getCode_eq hp a}
+    intro ⟨z, devm3⟩ hp run; refine getCode_eq_of_bind run id ?_ ?_
+    {intro devm4 hc; exact chargeGas_getCode_eq hc a}
+    intro devm4 hc run; injection run with eq; subst eq; rfl
   case gasprice => apply pushItem_getCode_eq run
-  case extcodesize => sorry -- 0x3B / 1 / 1 / Get the size of the code of an external account.
-  case extcodecopy => sorry -- 0x3C / 4 / 0 / Copy the code of an external account to memory.
+  case extcodesize =>
+    refine getCode_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.popToAdr_getCode_eq hp a}
+    intro ⟨x, devm1⟩ hp run; split at run
+    · refine getCode_eq_of_bind run id ?_ ?_
+      {intro devm2 hc; exact chargeGas_getCode_eq hc a}
+      intro devm2 hc run; exact Devm.push_getCode_eq run a
+    · refine getCode_eq_of_bind run id ?_ ?_
+      {intro devm2 hc; exact chargeGas_getCode_eq hc a}
+      intro devm2 hc run; exact Devm.push_getCode_eq run a
+  case extcodecopy =>
+    refine getCode_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.popToAdr_getCode_eq hp a}
+    intro ⟨x, devm1⟩ hp run; refine getCode_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨y, devm2⟩ hp; exact Devm.popToNat_getCode_eq hp a}
+    intro ⟨y, devm2⟩ hp run; refine getCode_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨z, devm3⟩ hp; exact Devm.popToNat_getCode_eq hp a}
+    intro ⟨z, devm3⟩ hp run; refine getCode_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨w, devm4⟩ hp; exact Devm.popToNat_getCode_eq hp a}
+    intro ⟨w, devm4⟩ hp run; split at run
+    · refine getCode_eq_of_bind run id ?_ ?_
+      {intro devm5 hc; exact chargeGas_getCode_eq hc a}
+      intro devm5 hc run; injection run with eq; subst eq; rfl
+    · refine getCode_eq_of_bind run id ?_ ?_
+      {intro devm5 hc; exact chargeGas_getCode_eq hc a}
+      intro devm5 hc run; injection run with eq; subst eq; rfl
   case retdatasize => apply pushItem_getCode_eq run
-  case retdatacopy => sorry -- 0x3E / 3 / 0 / Copy output data from the previous call to memory.
-  case extcodehash => sorry -- 0x3F / 1 / 1 / Get the code hash of an external account.
-  case blockhash => sorry -- 0x40 / 1 / 1 / get the hash of the specified block.
+  case retdatacopy =>
+    refine getCode_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getCode_eq hp a}
+    intro ⟨x, devm1⟩ hp run; refine getCode_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨y, devm2⟩ hp; exact Devm.popToNat_getCode_eq hp a}
+    intro ⟨y, devm2⟩ hp run; refine getCode_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨z, devm3⟩ hp; exact Devm.popToNat_getCode_eq hp a}
+    intro ⟨z, devm3⟩ hp run; refine getCode_eq_of_bind run id ?_ ?_
+    {intro devm4 hc; exact chargeGas_getCode_eq hc a}
+    intro devm4 hc run; split at run
+    · cases run
+    · injection run with eq; subst eq; rfl
+  case extcodehash =>
+    refine getCode_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.popToAdr_getCode_eq hp a}
+    intro ⟨x, devm1⟩ hp run; split at run
+    · refine getCode_eq_of_bind run id ?_ ?_
+      {intro devm2 hc; exact chargeGas_getCode_eq hc a}
+      intro devm2 hc run; exact Devm.push_getCode_eq run a
+    · refine getCode_eq_of_bind run id ?_ ?_
+      {intro devm2 hc; exact chargeGas_getCode_eq hc a}
+      intro devm2 hc run; exact Devm.push_getCode_eq run a
+  case blockhash =>
+    refine getCode_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a}
+    intro ⟨x, devm1⟩ hp run; refine getCode_eq_of_bind run id ?_ ?_
+    {intro devm2 hc; exact chargeGas_getCode_eq hc a}
+    intro devm2 hc run; exact Devm.push_getCode_eq run a
   case coinbase => apply pushItem_getCode_eq run
   case timestamp => apply pushItem_getCode_eq run
   case number => apply pushItem_getCode_eq run
@@ -2187,23 +2300,89 @@ lemma Rinst.getCode_eq_of_run_ok
   case chainid => apply pushItem_getCode_eq run
   case selfbalance => apply pushItem_getCode_eq run
   case basefee => apply pushItem_getCode_eq run
-  case blobhash => sorry -- 0x49 / 1 / 1 /
+  case blobhash =>
+    refine getCode_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a}
+    intro ⟨x, devm1⟩ hp run; refine getCode_eq_of_bind run id ?_ ?_
+    {intro devm2 hc; exact chargeGas_getCode_eq hc a}
+    intro devm2 hc run; exact Devm.push_getCode_eq run a
   case blobbasefee => apply pushItem_getCode_eq run
-  case pop => sorry -- 0x50 / 1 / 0 / Remove an item from the Stack.
-  case mload => sorry -- 0x51 / 1 / 1 / Load a Word from memory.
-  case mstore => sorry -- 0x52 / 2 / 0 / Store a Word in memory.
-  case mstore8 => sorry -- 0x53 / 2 / 0 / store a Byte in memory.
-  case sload => sorry -- 0x54 / 1 / 1 / load a word from storage.
-  case sstore => sorry -- 0x55 / 2 / 0 / store a word in storage.
-  case tload => sorry -- 0x5C / 1 / 1 / load a word from transient torage.
-  case tstore => sorry -- 0x5D / 2 / 0 / store a word in transient storage.
-  case mcopy => sorry -- 0x5E / 3 / 0 /
+  case pop =>
+    refine getCode_eq_of_bind run id ?_ ?_
+    {intro devm1 hc; exact Devm.pop_map_snd_getCode_eq hc a}
+    intro devm1 hc run; exact chargeGas_getCode_eq run a
+  case mload =>
+    refine getCode_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getCode_eq hp a}
+    intro ⟨x, devm1⟩ hp run; refine getCode_eq_of_bind run id ?_ ?_
+    {intro devm2 hc; exact chargeGas_getCode_eq hc a}
+    intro devm2 hc run; exact Devm.push_getCode_eq run a
+  case mstore =>
+    refine getCode_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getCode_eq hp a}
+    intro ⟨x, devm1⟩ hp run; refine getCode_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨y, devm2⟩ hp; exact Devm.pop_getCode_eq hp a}
+    intro ⟨y, devm2⟩ hp run; refine getCode_eq_of_bind run id ?_ ?_
+    {intro devm3 hc; exact chargeGas_getCode_eq hc a}
+    intro devm3 hc run; injection run with eq; subst eq; rfl
+  case mstore8 =>
+    refine getCode_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getCode_eq hp a}
+    intro ⟨x, devm1⟩ hp run; refine getCode_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨y, devm2⟩ hp; exact Devm.pop_getCode_eq hp a}
+    intro ⟨y, devm2⟩ hp run; refine getCode_eq_of_bind run id ?_ ?_
+    {intro devm3 hc; exact chargeGas_getCode_eq hc a}
+    intro devm3 hc run; injection run with eq; subst eq; rfl
+  case sload =>
+    refine getCode_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a}
+    intro ⟨x, devm1⟩ hp run; split at run
+    · refine getCode_eq_of_bind run id ?_ ?_
+      {intro devm2 hc; exact chargeGas_getCode_eq hc a}
+      intro devm2 hc run; exact Devm.push_getCode_eq run a
+    · refine getCode_eq_of_bind run id ?_ ?_
+      {intro devm2 hc; exact chargeGas_getCode_eq hc a}
+      intro devm2 hc run; exact Devm.push_getCode_eq run a
+  case sstore =>
+    have h := @sstore_inv_getCode pc sevm devm devm'
+    simp only [Rinst.run, Rinst.runCore] at h
+    apply h run _ ne
+  case tload =>
+    refine getCode_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a}
+    intro ⟨x, devm1⟩ hp run; exact pushItem_getCode_eq run a
+  case tstore =>
+    sorry
+  case mcopy =>
+    refine getCode_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getCode_eq hp a}
+    intro ⟨x, devm1⟩ hp run; refine getCode_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨y, devm2⟩ hp; exact Devm.popToNat_getCode_eq hp a}
+    intro ⟨y, devm2⟩ hp run; refine getCode_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨z, devm3⟩ hp; exact Devm.popToNat_getCode_eq hp a}
+    intro ⟨z, devm3⟩ hp run; refine getCode_eq_of_bind run id ?_ ?_
+    {intro devm4 hc; exact chargeGas_getCode_eq hc a}
+    intro devm4 hc run; injection run with eq; subst eq; rfl
   case pc => apply pushItem_getCode_eq run
   case msize => apply pushItem_getCode_eq run
-  case gas => sorry -- 0x5a / 0 / 1 / Get the amount of remaining gas.
-  case dup => sorry
-  case swap => sorry
-  case log => sorry
+  case gas =>
+    refine getCode_eq_of_bind run id ?_ ?_
+    {intro devm1 hc; exact chargeGas_getCode_eq hc a}
+    intro devm1 hc run; exact Devm.push_getCode_eq run a
+  case dup =>
+    refine getCode_eq_of_bind run id ?_ ?_
+    {intro devm1 hc; exact chargeGas_getCode_eq hc a}
+    intro devm1 hc run; split at run
+    · cases run
+    · exact Devm.push_getCode_eq run a
+  case swap =>
+    refine getCode_eq_of_bind run id ?_ ?_
+    {intro devm1 hc; exact chargeGas_getCode_eq hc a}
+    intro devm1 hc run; split at run
+    · cases run
+    · injection run with eq; subst eq; rfl
+  case log =>
+    sorry
 
 #exit
 
@@ -2237,7 +2416,7 @@ lemma Ninst.getCode_eq_of_run'_ok
      · revert run; dsimp; exact fun h => h.elim
   case reg r =>
     rcases xlot with _ | xl
-    · revert run; exact fun h => Rinst.getCode_eq_of_run_ok h a ne
+    · revert run; exact fun h => Rinst.inv_getCode h a ne
     · revert run; exact fun h => h.elim
   case exec x =>
     revert run; exact fun h => Xinst.getCode_eq_of_run_ok h a ne

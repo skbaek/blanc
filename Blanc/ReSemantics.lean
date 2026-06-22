@@ -1008,6 +1008,9 @@ lemma Rinst.fit_run {evm : Evm} {r : Rinst} :
     fit_bind_step ltd fit_pop
     have ne : "OutOfGasError" ≠ "RecursionLimit" := by decide
     fit_bind_step ltd (fit_assert ne)
+    fit_bind_step ltd (fit_ok)
+    fit_bind_step ltd (fit_ok)
+    fit_bind_step ltd (fit_ok)
     fit_bind_step ltd fit_chargeGas
     fit_bind_step ltd fit_assertDynamic
     cases ltd
