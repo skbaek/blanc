@@ -429,8 +429,8 @@ lemma validAdr_iff {w : B256} :
 --     ValidAdr w ↔ Bits.and addressMask w = 0 :=
 --   ⟨Bits.mask_and_eq_zero _ _ _, Bits.of_mask_and_eq_zero _ _ _⟩
 
-instance {w} : Decidable (ValidAdr w) := by
-  apply decidable_of_iff _ validAdr_iff.symm
+-- instance {w} : Decidable (ValidAdr w) := by
+--   apply decidable_of_iff _ validAdr_iff.symm
 
 lemma of_run_branch_rev {e s p r} (h : Func.Run c e s (.rev <?> p) r) :
     ∃ s', Desc.Pop [0] s s' ∧ Func.Run c e s' p r := by
@@ -2820,7 +2820,10 @@ lemma lift_core
         e.cta ≠ ca →
         ε e s pc r (.halt h) )
     : Exec.Fa (@Exec.Wkn ca p ε) := by
-  apply Exec.strong_rec; apply @Exec.rec (Fortify (Exec.Wkn ca p ε))
+  apply Exec.strong_rec
+
+  apply @Exec.rec (Fortify (Exec.Wkn ca p ε))
+
   · intro e s pc s' pc' r h_step ex ih ih' h_at
     rcases em (e.cta = ca) with h_eq | h_ne
     · apply combine_prog analog depth_ind ih' h_at.right h_eq
@@ -2830,7 +2833,11 @@ lemma lift_core
       have hε : ε e s' pc' r ex :=
         ih ih' ⟨h_code_inv, λ hc => (h_ne hc).elim⟩
       apply step_inv h_step ex h_ne hε
-  · intro e s pc ep sp i r s' r' h_at h_run ex ex' ih ih' h_fa h_at'
+  ·
+
+    intro e s pc ep sp i r s' r' h_at h_run ex ex' ih ih' h_fa
+
+    intro h_at'
     have h_comp := h_at'.left
     rcases em (e.cta = ca) with h_eq | h_ne
     · apply combine_prog analog depth_ind h_fa h_at'.right h_eq
