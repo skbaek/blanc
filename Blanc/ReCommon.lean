@@ -3546,6 +3546,17 @@ lemma Jinst.getCode_eq_of_run_ok
           simp only [h_gas_not, if_neg, Except.ok.injEq, Prod.mk.injEq] at run
           contradiction
 
+lemma not_empty_of_compile {p : Prog} {code : ByteArray} (h : some code.toList = Prog.compile p) : code ≠ .empty := by
+  intro hc
+  have h_ne : Prog.compile p ≠ some [] := Prog.compile_ne_nil
+  rw [←h, hc] at h_ne
+  have h_empty_toList : ByteArray.empty.toList = [] := by
+    unfold ByteArray.toList
+    unfold ByteArray.toList.loop
+    rfl
+  rw [h_empty_toList] at h_ne
+  exact h_ne rfl
+
 lemma lift_core
     (ε : Exec.Pred)
     (π : Sevm → Devm → Devm → Prop)
@@ -3645,8 +3656,11 @@ lemma lift_core
         exact h_at_p.left
       have h2 : sevm_.currentTarget = ca → some sevm_.code.toList = Prog.compile p ∧ 0 = 0 := by
         intro h_ca
-        rw [Ninst.prep_inv_code h_run, h_ca]
-        exact ⟨h_at_p.left, rfl⟩
+        rw [Ninst.prep_inv_code _ _ _ h_run, h_ca]
+        · exact ⟨h_at_p.left, rfl⟩
+        · rw [h_ca]; assumption
+        · rw [h_ca]; exact not_empty_of_compile h_at_p.left
+        · sorry
       exact h_sub_wkn ⟨h1, h2⟩
   · intro pc sevm devm n devm' exn h_at h_run ex_next ih_next h_fa h_at_p
     rcases em (sevm.currentTarget = ca) with h_eq | h_ne
@@ -3683,8 +3697,11 @@ lemma lift_core
           exact h_at_p.left
         have h2 : sevm_.currentTarget = ca → some sevm_.code.toList = Prog.compile p ∧ 0 = 0 := by
           intro h_ca
-          rw [Ninst.prep_inv_code h_run, h_ca]
-          exact ⟨h_at_p.left, rfl⟩
+          rw [Ninst.prep_inv_code _ _ _ h_run, h_ca]
+          · exact ⟨h_at_p.left, rfl⟩
+          · rw [h_ca]; assumption
+          · rw [h_ca]; exact not_empty_of_compile h_at_p.left
+          · sorry
         exact h_sub_wkn ⟨h1, h2⟩
       · have h_ne_code : (devm.getCode ca).toList ≠ [] := fun hc => Prog.compile_ne_nil (Eq.trans h_at_p.left.symm (congrArg some hc))
         exact ih_next h_fa ⟨by rw [Ninst.getCode_eq_of_run'_ok h_run ca h_ne_code]; exact h_at_p.left, fun hc => (h_ne hc).elim⟩
