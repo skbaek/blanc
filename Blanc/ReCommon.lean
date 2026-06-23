@@ -2603,15 +2603,135 @@ lemma Xinst.prep_inv_code
         injection h_xl_eq with h_sevm_eq _
         subst h_sevm_eq
         rfl
-  case create2 => sorry
-  case statcall => sorry
-
-#exit
+  case create2 =>
+    exfalso
+    apply notEmpty
+    dsimp [Xinst.Run] at run
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨v15, eq15, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨v14, eq14, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨v13, eq13, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨v12, eq12, run⟩; contradiction
+    rcases run with ⟨_, _, run⟩
+    rcases run with ⟨_, _, run⟩
+    rcases run with ⟨_, _, run⟩
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨devm9, eq9, run⟩; contradiction
+    rcases run with ⟨devm8, eq8, run⟩
+    rcases run with ⟨newAddress, hp_newAddress, run⟩
+    dsimp [GenericCreate] at run
+    rcases run with ⟨_, _, run⟩
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨_, eq6, run⟩; contradiction
+    rcases run with ⟨devm5, eq5, run⟩
+    rcases run with ⟨_, _, run⟩
+    rcases run with ⟨devm3, eq3, run⟩
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨_, eq2, run⟩; contradiction
+    rcases run with ⟨devm1, eq1, run⟩
+    rcases run with ⟨_, _, run⟩
+    split_ifs at run with h_sender_bal
+    · rcases run with ⟨h_xl, _⟩; cases h_xl
+    · rcases run with ⟨devm4, hp_devm4, run⟩
+      split_ifs at run with h_target_nonce
+      · rcases run with ⟨h_xl, _⟩; cases h_xl
+      · rcases run with ⟨childMsg, hp_childMsg, run⟩
+        subst hp_childMsg
+        rcases run with ⟨ex', run, _⟩
+        dsimp [ProcessCreateMessage] at run
+        rcases run with ⟨ex_create, run, _⟩
+        dsimp [ProcessMessage] at run
+        rcases run with ⟨_, _, _, h_contra⟩ | ⟨benv, eq_benv, run⟩; contradiction
+        rcases run with ⟨ex'', run, _⟩
+        dsimp [ExecuteCode] at run
+        dsimp [initEvm] at run
+        dsimp [processCreateMessage.msg] at run
+        dsimp [Msg.withBenv] at run
+        rcases run with ⟨ex''', h_xl, _⟩
+        injection h_xl with h_xl_eq
+        injection h_xl_eq with h_sevm_eq _
+        subst h_sevm_eq
+        push_neg at h_target_nonce
+        rcases h_target_nonce with ⟨_, h_code_size, _⟩
+        have h1 : devm4.getCode newAddress = devm1.getCode newAddress := by subst hp_devm4; exact Devm.incrNonce_getCode
+        have h2 : devm1.getCode newAddress = devm3.getCode newAddress := by subst eq1; rfl
+        have h3 : devm3.getCode newAddress = devm5.getCode newAddress := by subst eq3; rfl
+        have h4 : devm5.getCode newAddress = devm8.getCode newAddress := by subst eq5; exact addAccessedAddress_getCode
+        have h5 : devm8.getCode newAddress = devm9.getCode newAddress := by subst eq8; exact Devm.memExtends_getCode
+        have h6 : devm9.getCode newAddress = v12.2.getCode newAddress := chargeGas_getCode eq9
+        have h7 : v12.2.getCode newAddress = v13.2.getCode newAddress := Devm.pop_getCode eq12
+        have h8 : v13.2.getCode newAddress = v14.2.getCode newAddress := Devm.popToNat_getCode eq13
+        have h9 : v14.2.getCode newAddress = v15.2.getCode newAddress := Devm.popToNat_getCode eq14
+        have h10 : v15.2.getCode newAddress = devm.getCode newAddress := Devm.pop_getCode eq15
+        have h_devm4 : devm4.getCode newAddress = devm.getCode newAddress := by
+          rw [h1, h2, h3, h4, h5, h6, h7, h8, h9, h10]
+        have h_size : (devm4.getCode newAddress).size = 0 := h_code_size
+        have h_empty' : devm.getCode newAddress = .empty := by
+          rw [← h_devm4]
+          cases h_code : devm4.getCode newAddress with | mk data =>
+          rw [h_code] at h_size
+          cases data with | mk l =>
+          cases l
+          · rfl
+          · contradiction
+        exact h_empty'
+  case statcall =>
+    dsimp [Xinst.Run] at run
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨v15, eq1, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨callee_tuple, eq2, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨v14, eq3, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨v13, eq4, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨v12, eq5, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨v11, eq6, run⟩; contradiction
+    rcases run with ⟨_, _, run⟩
+    rcases run with ⟨_, _, run⟩
+    rcases run with ⟨devm8, hp_devm8, run⟩
+    rcases run with ⟨del_res, hp_del_res, run⟩
+    rcases run with ⟨_, _, run⟩
+    rcases run with ⟨_, _, run⟩
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨_, eq8, run⟩; contradiction
+    rcases run with ⟨_, _, run⟩
+    dsimp [GenericCall] at run
+    rcases run with ⟨evm1, hp_evm1, run⟩
+    split_ifs at run with h_depth
+    · rcases run with ⟨h_xl, _⟩; cases h_xl
+    · rcases run with ⟨_, _, run⟩
+      rcases run with ⟨childMsg, hp_childMsg, run⟩
+      subst hp_childMsg
+      rcases run with ⟨ex', run, _⟩
+      dsimp [ProcessMessage] at run
+      rcases run with ⟨_, _, _, h_contra⟩ | ⟨benv, eq_benv, run⟩; contradiction
+      rcases run with ⟨ex'', run, _⟩
+      dsimp [ExecuteCode] at run
+      dsimp [initEvm] at run
+      dsimp [Msg.withBenv] at run
+      split_ifs at run with h_precomp
+      · rcases run with ⟨h_xl, _⟩; cases h_xl
+      · rcases run with ⟨ex''', h_xl, _⟩
+        injection h_xl with h_xl_eq
+        injection h_xl_eq with h_sevm_eq _
+        subst h_sevm_eq
+        have h_code : del_res.2.2.1 = devm.getCode callee_tuple.1 := by
+          subst hp_del_res
+          have h1 : devm8.getCode callee_tuple.1 = devm.getCode callee_tuple.1 := by
+            subst hp_devm8
+            have h2 : v11.2.getCode callee_tuple.1 = v12.2.getCode callee_tuple.1 := Devm.popToNat_getCode eq6
+            have h3 : v12.2.getCode callee_tuple.1 = v13.2.getCode callee_tuple.1 := Devm.popToNat_getCode eq5
+            have h4 : v13.2.getCode callee_tuple.1 = v14.2.getCode callee_tuple.1 := Devm.popToNat_getCode eq4
+            have h5 : v14.2.getCode callee_tuple.1 = callee_tuple.2.getCode callee_tuple.1 := Devm.popToNat_getCode eq3
+            have h6 : callee_tuple.2.getCode callee_tuple.1 = v15.2.getCode callee_tuple.1 := Devm.popToAdr_getCode eq2
+            have h7 : v15.2.getCode callee_tuple.1 = devm.getCode callee_tuple.1 := Devm.pop_getCode eq1
+            rw [addAccessedAddress_getCode, h2, h3, h4, h5, h6, h7]
+          dsimp [accessDelegation]
+          split_ifs with h_del
+          · exfalso; apply notDel
+            change isValidDelegation (devm8.getCode callee_tuple.1) at h_del
+            rw [h1] at h_del
+            exact h_del
+          · exact h1
+        exact h_code
 
 lemma Ninst.prep_inv_code
     {pc sevm devm n sevm_ devm_ exn_ res}
-    -- (ne : sevm.currentTarget ≠ sevm_.currentTarget)
-    -- (notDel : ¬ isValidDelegation (devm.getCode sevm_.currentTarget))
+    (ne : sevm.currentTarget ≠ sevm_.currentTarget)
+    (notEmpty : devm.getCode sevm_.currentTarget ≠ .empty)
+    (notDel : ¬ isValidDelegation (devm.getCode sevm_.currentTarget))
     (run : Ninst.Run' pc sevm devm n (.some ⟨sevm_, devm_, exn_⟩) res) :
     sevm_.code = devm.getCode sevm_.currentTarget := by
   cases n
@@ -2619,8 +2739,7 @@ lemma Ninst.prep_inv_code
   case reg r => revert run; dsimp [Ninst.Run']; exact fun h => h.elim
   case exec x =>
     revert run; dsimp [Ninst.Run'];
-    -- apply Xinst.prep_inv_code ne notDel
-    sorry
+    apply Xinst.prep_inv_code ne notEmpty notDel
 
 lemma ExecuteCode.depth_eq
     {msg : Msg} {sevm_ devm_ exn_ ex}
@@ -3522,7 +3641,6 @@ lemma lift_core
       have h_sub_wkn := h_fa 0 sevm_ devm_ exn_ ex_sub h_lt
       have h1 : some (devm_.getCode ca).toList = Prog.compile p := by
         have h_ne_code : (devm.getCode ca).toList ≠ [] := fun hc => Prog.compile_ne_nil (Eq.trans h_at_p.left.symm (congrArg some hc))
-        -- rw [Ninst.prep_inv_getCode h_run ca h_ne_code]
         rw [Ninst.prep_inv_getCode h_run ca]
         exact h_at_p.left
       have h2 : sevm_.currentTarget = ca → some sevm_.code.toList = Prog.compile p ∧ 0 = 0 := by
