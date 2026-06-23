@@ -2375,12 +2375,69 @@ lemma Xinst.prep_inv_getCode
 lemma Ninst.prep_inv_getCode
     {pc sevm devm n sevm_ devm_ exn_ res}
     (run : Ninst.Run' pc sevm devm n (.some ⟨sevm_, devm_, exn_⟩) res) (a : Adr)
-    --(ne : (devm.getCode a).toList ≠ [])
     : devm_.getCode a = devm.getCode a := by
   cases n
   case push xs _ => revert run; dsimp [Ninst.Run']; exact fun h => h.elim
   case reg r => revert run; dsimp [Ninst.Run']; exact fun h => h.elim
   case exec x => revert run; dsimp [Ninst.Run']; apply Xinst.prep_inv_getCode
+
+lemma Xinst.prep_inv_code
+    {sevm : Sevm} {devm : Devm} {sevm_ : Sevm} {devm_ : Devm} {exn_ res : Execution}
+    {x : Xinst} (run : Xinst.Run sevm devm x (some (sevm_, devm_, exn_)) res) :
+    sevm_.code = devm.getCode sevm_.currentTarget := by
+  cases x
+  case create => sorry
+  case call => sorry
+  case callcode => sorry
+  case delcall => sorry
+  case create2 => sorry
+  case statcall =>
+    dsimp [Xinst.Run] at run
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨gas, devm1⟩, eq1, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨target, devm2⟩, eq2, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨inputIndex, devm3⟩, eq3, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨inputSize, devm4⟩, eq4, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨outputIndex, devm5⟩, eq5, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨outputSize, devm6⟩, eq6, run⟩; contradiction
+    rcases run with ⟨extendCost, hp7, run⟩
+    rcases run with ⟨preAccessCost, hp8, run⟩
+    rcases run with ⟨devm7, hp9, run⟩
+    rcases run with ⟨⟨disablePrecompiles, newCodeAddress, code, delegatedAccessGasCost, devm8⟩, hp10, run⟩
+    rcases run with ⟨accessCost, hp11, run⟩
+    rcases run with ⟨⟨msgCallCost, msgCallStipend⟩, hp12, run⟩
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨devm9, eq13, run⟩; contradiction
+    rcases run with ⟨devm10, hp14, run⟩
+    dsimp [GenericCall] at run
+    rcases run with ⟨evm1, hp_evm1, run⟩
+    split_ifs at run with h_depth
+    · rcases run with ⟨h_xl, _⟩; contradiction
+    · rcases run with ⟨calldata, _, run⟩
+      rcases run with ⟨childMsg, hp_childMsg, run⟩
+      rcases run with ⟨ex', run, _⟩
+      dsimp [ProcessMessage] at run
+      rcases run with ⟨_, _, _, h_contra⟩ | ⟨benv, eq_benv, run⟩; contradiction
+      rcases run with ⟨ex'', run, _⟩
+      dsimp [ExecuteCode] at run
+      dsimp [initEvm] at run
+      have h_code : code = devm.getCode target := by
+        have h1 : code = devm7.getCode target := sorry
+        have h9 : devm7.getCode target = devm6.getCode target := by subst hp9; exact addAccessedAddress_getCode
+        have h6 : devm6.getCode target = devm5.getCode target := Devm.popToNat_getCode eq6
+        have h5 : devm5.getCode target = devm4.getCode target := Devm.popToNat_getCode eq5
+        have h4 : devm4.getCode target = devm3.getCode target := Devm.popToNat_getCode eq4
+        have h3 : devm3.getCode target = devm2.getCode target := Devm.popToNat_getCode eq3
+        have h2' : devm2.getCode target = devm1.getCode target := Devm.popToAdr_getCode eq2
+        have h1' : devm1.getCode target = devm.getCode target := Devm.pop_getCode eq1
+        rw [h1, h9, h6, h5, h4, h3, h2', h1']
+      subst hp_childMsg
+      dsimp [Msg.withBenv] at run
+      split_ifs at run with h_precomp
+      · rcases run with ⟨h_xl, _⟩; cases h_xl
+      · rcases run with ⟨ex''', h_xl, _⟩
+        injection h_xl with h_xl_eq
+        injection h_xl_eq with h_sevm_eq _
+        subst h_sevm_eq
+        exact h_code
 
 lemma Ninst.prep_inv_code
     {pc sevm devm n sevm_ devm_ exn_ res}
@@ -2389,9 +2446,7 @@ lemma Ninst.prep_inv_code
   cases n
   case push xs _ => revert run; dsimp [Ninst.Run']; exact fun h => h.elim
   case reg r => revert run; dsimp [Ninst.Run']; exact fun h => h.elim
-  case exec x =>
-    revert run; dsimp [Ninst.Run']; intro run;
-    sorry
+  case exec x => revert run; dsimp [Ninst.Run']; apply Xinst.prep_inv_code
 
 lemma ExecuteCode.depth_eq
     {msg : Msg} {sevm_ devm_ exn_ ex}
@@ -3052,7 +3107,7 @@ lemma Rinst.inv_getCode
     rw [← rw]
     rfl
 
-lemma Xinst.getCode_eq_of_run_ok
+lemma Xinst.inv_getCode
     {sevm devm x xl devm'}
     (run : Xinst.Run sevm devm x xl (.ok devm')) (a : Adr)
     (ne : (devm.getCode a).toList ≠ []) :
@@ -3085,10 +3140,8 @@ lemma Ninst.getCode_eq_of_run'_ok
     · revert run; exact fun h => Rinst.inv_getCode h a ne
     · revert run; exact fun h => h.elim
   case exec x =>
-    revert run; exact fun h => Xinst.getCode_eq_of_run_ok h a ne
+    revert run; exact fun h => Xinst.inv_getCode h a ne
 
-set_option linter.unusedVariables false in
-set_option linter.unusedSimpArgs false in
 lemma Jinst.getCode_eq_of_run_ok
     {pc sevm devm j pc' devm'}
     (run : Jinst.Run ⟨pc, sevm, devm⟩ j (.ok ⟨pc', devm'⟩)) (a : Adr)
