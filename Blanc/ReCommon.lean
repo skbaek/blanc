@@ -3400,14 +3400,29 @@ lemma Rinst.inv_getCode
     rw [← rw]
     rfl
 
-lemma Xinst.inv_getCode
+def Execution.getCode : Execution → Adr → ByteArray
+  | .error ⟨_, devm⟩, adr => devm.getCode adr
+  | .ok devm, adr => devm.getCode adr
+
+def Xlot.InvGetCode : Xlot → Prop
+  | .none => True
+  | .some ⟨sevm, devm, exn⟩ =>
+    ∃ exec : Exec 0 sevm devm exn,
+    ∀ adr,
+      (devm.getCode adr).toList ≠ [] →
+      devm.getCode adr = exn.getCode adr
+
+lemma Xinst.inv_getCode_cond
     {sevm devm x xl devm'}
     (run : Xinst.Run sevm devm x xl (.ok devm')) (a : Adr)
+    (inv : xl.InvGetCode)
     (ne : (devm.getCode a).toList ≠ []) :
     devm'.getCode a = devm.getCode a := by
   sorry
 
-lemma Ninst.getCode_eq_of_run'_ok
+#exit
+
+lemma Ninst.inv_getCode
     {pc sevm devm n xlot devm'}
     (run : Ninst.Run' pc sevm devm n xlot (.ok devm')) (a : Adr)
     (ne : (devm.getCode a).toList ≠ []) :
@@ -3435,7 +3450,6 @@ lemma Ninst.getCode_eq_of_run'_ok
   case exec x =>
     revert run; exact fun h => Xinst.inv_getCode h a ne
 
-#check Prog.compile
 lemma Jinst.getCode_eq_of_run_ok
     {pc sevm devm j pc' devm'}
     (run : Jinst.Run ⟨pc, sevm, devm⟩ j (.ok ⟨pc', devm'⟩)) (a : Adr)
@@ -3557,6 +3571,28 @@ lemma not_empty_of_compile {p : Prog} {code : ByteArray} (h : some code.toList =
   rw [h_empty_toList] at h_ne
   exact h_ne rfl
 
+lemma not_delegation_of_compile {p : Prog} {code : ByteArray}
+    (h : some code.toList = Prog.compile p) : ¬ isValidDelegation code := by
+  unfold isValidDelegation
+  unfold Prog.compile at h
+  unfold table at h
+  simp only [Table.compile] at h
+  simp only [bind] at h
+  symm at h
+  rcases of_bind_eq_some h with ⟨bs, h_bs, h'⟩
+  rcases of_bind_eq_some h' with ⟨bss, h_bss, h_eq⟩
+  injection h_eq with h_eq
+  intro h_del
+  rcases h_del with ⟨h_size, h_slice⟩
+  have h_slice_eq : code.sliceD 0 3 0 = code.toList.sliceD 0 3 0 := ByteArray.sliceD_eq _ _ _ _
+  rw [h_slice_eq, ←h_eq, eoaDelegationMarker] at h_slice
+  revert h_slice
+  simp only [List.sliceD]
+  intro h_false
+  injection h_false with h_false
+  change (91 : B8) = 239 at h_false
+  contradiction
+
 lemma lift_core
     (ε : Exec.Pred)
     (π : Sevm → Devm → Devm → Prop)
@@ -3660,7 +3696,8 @@ lemma lift_core
         · exact ⟨h_at_p.left, rfl⟩
         · rw [h_ca]; assumption
         · rw [h_ca]; exact not_empty_of_compile h_at_p.left
-        · sorry
+        · rw [h_ca, ← Ninst.prep_inv_getCode h_run ca]
+          exact not_delegation_of_compile h1
       exact h_sub_wkn ⟨h1, h2⟩
   · intro pc sevm devm n devm' exn h_at h_run ex_next ih_next h_fa h_at_p
     rcases em (sevm.currentTarget = ca) with h_eq | h_ne
@@ -3675,7 +3712,8 @@ lemma lift_core
           exact h_fa pc' sevm' devm' exn' ex' h_lt
         exact analog (.nextNoneRec h_at h_run ex_next) (depth_ind h_run_prog h_eq h_fa_deeper)
     · have h_ne_code : (devm.getCode ca).toList ≠ [] := fun hc => Prog.compile_ne_nil (Eq.trans h_at_p.left.symm (congrArg some hc))
-      exact nextNoneRec h_at h_run ex_next h_ne (ih_next h_fa ⟨by rw [Ninst.getCode_eq_of_run'_ok h_run ca h_ne_code]; exact h_at_p.left, fun hc => (h_ne hc).elim⟩)
+      exact
+        nextNoneRec h_at h_run ex_next h_ne (ih_next h_fa ⟨by rw [Ninst.inv_getCode h_run ca h_ne_code]; exact h_at_p.left, fun hc => (h_ne hc).elim⟩)
   · intro pc sevm devm n sevm_ devm_ exn_ devm' exn h_at h_run ex_sub ex_next ih_sub ih_next h_fa h_at_p
     rcases em (sevm.currentTarget = ca) with h_eq | h_ne
     · cases exn with
@@ -3701,10 +3739,11 @@ lemma lift_core
           · exact ⟨h_at_p.left, rfl⟩
           · rw [h_ca]; assumption
           · rw [h_ca]; exact not_empty_of_compile h_at_p.left
-          · sorry
+          · rw [h_ca, ← Ninst.prep_inv_getCode h_run ca]
+            exact not_delegation_of_compile h1
         exact h_sub_wkn ⟨h1, h2⟩
       · have h_ne_code : (devm.getCode ca).toList ≠ [] := fun hc => Prog.compile_ne_nil (Eq.trans h_at_p.left.symm (congrArg some hc))
-        exact ih_next h_fa ⟨by rw [Ninst.getCode_eq_of_run'_ok h_run ca h_ne_code]; exact h_at_p.left, fun hc => (h_ne hc).elim⟩
+        exact ih_next h_fa ⟨by rw [Ninst.inv_getCode h_run ca h_ne_code]; exact h_at_p.left, fun hc => (h_ne hc).elim⟩
   · intro pc sevm devm j err devm' h_at h_run h_fa h_at_p
     rcases em (sevm.currentTarget = ca) with h_eq | h_ne
     · exact errAtTarget (.jumpErr h_at h_run) h_eq
