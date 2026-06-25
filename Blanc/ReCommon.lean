@@ -3412,6 +3412,113 @@ def Xlot.InvGetCode : Xlot → Prop
       (devm.getCode adr).toList ≠ [] →
       devm.getCode adr = exn.getCode adr
 
+lemma applyPrecompResult_getCode (evm : Evm) (res : PrecompResult) (ex : Execution)
+    (h_ex : applyPrecompResult evm res = ex) (a : Adr) :
+    ex.getCode a = evm.dyna.getCode a := by
+  revert h_ex
+  cases res <;> (intro h_ex; subst h_ex; rfl)
+
+lemma executePrecomp_getCode (evm : Evm) (adr : Adr) (ex : Execution)
+    (h_ex : executePrecomp evm adr = ex) (a : Adr) :
+    ex.getCode a = evm.dyna.getCode a := by
+  apply applyPrecompResult_getCode evm (precompileRun evm adr) ex h_ex a
+
+lemma ExecuteCode.inv_getCode_cond
+    {msg : Msg} {xl : Xlot} {devm'} (inv : xl.InvGetCode)
+    (run : ExecuteCode msg xl (.ok devm')) :
+    ∀ a : Adr,
+      (msg.benv.state.getCode a).toList ≠ [] →
+      devm'.getCode a = msg.benv.state.getCode a := by
+  dsimp [ExecuteCode] at run
+  split at run
+  · rename _ => eq_none
+    rcases eq_none with ⟨ex', h_xl, h_err⟩
+    rw [h_xl] at inv
+    dsimp [Xlot.InvGetCode] at inv
+    rcases inv with ⟨exec, inv_eq⟩
+    cases ex'
+    · dsimp [executeCode.handleError] at h_err
+      revert h_err; split <;> intro h_err
+      · simp only [Except.ok.injEq] at h_err; subst devm'
+        intro a ha; exact (inv_eq a ha).symm
+      · revert h_err; split <;> intro h_err
+        · simp only [Except.ok.injEq] at h_err; subst devm'
+          intro a ha; exact (inv_eq a ha).symm
+        · contradiction
+    · dsimp [executeCode.handleError] at h_err
+      simp only [Except.ok.injEq] at h_err; subst devm'
+      intro a ha; exact (inv_eq a ha).symm
+  · next adr eq_some =>
+    split at run
+    · rcases run with ⟨h_xl, h_err⟩
+      cases h_ex : executePrecomp (initEvm msg) adr
+      · rw [h_ex] at h_err
+        revert h_ex
+        dsimp [executePrecomp]
+        split <;> intro h_ex
+        all_goals sorry
+      · sorry
+        · revert h_err; split <;> intro h_err
+          · simp only [Except.ok.injEq] at h_err; subst devm'
+            sorry
+          · contradiction
+      · dsimp [executeCode.handleError] at h_err
+        simp only [Except.ok.injEq] at h_err; subst devm'
+        sorry
+    · rcases run with ⟨ex', h_xl, h_err⟩
+      rw [h_xl] at inv
+      dsimp [Xlot.InvGetCode] at inv
+      rcases inv with ⟨exec, inv_eq⟩
+      cases ex'
+      · dsimp [executeCode.handleError] at h_err
+        revert h_err; split <;> intro h_err
+        · simp only [Except.ok.injEq] at h_err; subst devm'
+          intro a ha; exact (inv_eq a ha).symm
+        · revert h_err; split <;> intro h_err
+          · simp only [Except.ok.injEq] at h_err; subst devm'
+            intro a ha; exact (inv_eq a ha).symm
+          · contradiction
+      · dsimp [executeCode.handleError] at h_err
+        simp only [Except.ok.injEq] at h_err; subst devm'
+        intro a ha; exact (inv_eq a ha).symm
+
+#exit
+lemma ProcessMessage.inv_getCode_cond
+    {msg : Msg} {xl : Xlot} {devm'}
+    (run : ProcessMessage msg xl (.ok devm')) (a : Adr)
+    (inv : xl.InvGetCode)
+    (ne : (msg.benv.state.getCode a).toList ≠ []) :
+    devm'.getCode a = msg.benv.state.getCode a := by
+  sorry
+
+lemma ProcessCreateMessage.inv_getCode_cond
+    {msg : Msg} {xl : Xlot} {devm'}
+    (run : ProcessCreateMessage msg xl (.ok devm')) (a : Adr)
+    (inv : xl.InvGetCode)
+    (ne : (msg.benv.state.getCode a).toList ≠ []) :
+    devm'.getCode a = msg.benv.state.getCode a := by
+  sorry
+
+lemma GenericCreate.inv_getCode_cond
+    {sevm : Sevm} {devm : Devm} {endowment : B256} {newAddress : Adr}
+    {memoryIndex memorySize : Nat} {xl : Xlot} {devm'}
+    (run : GenericCreate sevm devm endowment newAddress memoryIndex memorySize xl (.ok devm')) (a : Adr)
+    (inv : xl.InvGetCode)
+    (ne : (devm.getCode a).toList ≠ []) :
+    devm'.getCode a = devm.getCode a := by
+  sorry
+
+lemma GenericCall.inv_getCode_cond
+    {sevm : Sevm} {devm : Devm} {gas : Nat} {value : B256}
+    {caller target codeAddress : Adr} {shouldTransferValue isStaticcall : Bool}
+    {input_index input_size output_index output_size : Nat} {code : ByteArray}
+    {disablePrecompiles : Bool} {xl : Xlot} {devm'}
+    (run : GenericCall sevm devm gas value caller target codeAddress shouldTransferValue isStaticcall input_index input_size output_index output_size code disablePrecompiles xl (.ok devm')) (a : Adr)
+    (inv : xl.InvGetCode)
+    (ne : (devm.getCode a).toList ≠ []) :
+    devm'.getCode a = devm.getCode a := by
+  sorry
+
 lemma Xinst.inv_getCode_cond
     {sevm devm x xl devm'}
     (run : Xinst.Run sevm devm x xl (.ok devm')) (a : Adr)

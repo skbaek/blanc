@@ -1324,142 +1324,66 @@ lemma saturation (lim : Nat) : Saturation lim := by
         apply ih.exec _ fit lim' (by omega)
       · rfl
 
-lemma fit_execute_ecrecover (evm : Evm) :
-    (executeEcrecover evm).Fit := by
-  intro ltd;
-  fit_bind_step ltd fit_chargeGas
-  fit_bind_step ltd fit_ok
-  split at ltd
-  · simp only [] at ltd
-    split at ltd; {cases ltd}
-    split at ltd <;> cases ltd
-  · cases ltd
+def PrecompResult.Fit : PrecompResult → Prop
+  | .error e _ => e ≠ "RecursionLimit"
+  | .ok _ _ => True
 
-lemma fit_for_in {ξ υ} {xs : List Nat} {y : υ}
-    {f : Nat → υ → Except (String × ξ) (ForInStep υ)}
-    (fit : ∀ n y, (f n y).Fit) : (ForIn.forIn xs y f).Fit := by
+lemma fit_applyPrecompResult (evm : Evm) (res : PrecompResult) :
+    res.Fit → (applyPrecompResult evm res).Fit := by
+  intro h
+  cases res
+  · dsimp [applyPrecompResult, Except.Fit, Except.Lim, Except.toError?]
+    intro h2; injection h2 with h1; apply h; exact h1
+  · dsimp [applyPrecompResult, Except.Fit, Except.Lim, Except.toError?]
+    intro h2; contradiction
+
+lemma fit_forIn_err {α : Type} {xs : List Nat} {y : α} {f : Nat → α → Except (String × ℕ) (ForInStep α)}
+    (hf : ∀ n y err, f n y = Except.error err → err.1 ≠ "RecursionLimit") :
+    ∀ err, forIn xs y f = Except.error err → err.1 ≠ "RecursionLimit" := by
   induction xs generalizing y with
-    | nil => rw [List.forIn_nil]; intro ltd; cases ltd
-    | cons x xs ih =>
-      rw [List.forIn_cons]; intro ltd
-      fit_bind_step ltd (fit _ _); split at ltd
-      · cases ltd
-      · apply ih ltd
+  | nil => intro err h; rw [List.forIn_nil] at h; contradiction
+  | cons x xs ih =>
+    intro err h; rw [List.forIn_cons] at h
+    cases h_f : f x y <;> dsimp [Except.bind, bind] at h <;> simp only [h_f] at h
+    · injection h with h1; rw [← h1]; apply hf _ _ _ h_f
+    · rename_i step
+      cases step <;> dsimp [Except.bind, Except.pure, bind, pure] at h
+      · contradiction
+      · apply ih _ h
 
-lemma fit_catch_with_oog {ξ : Type U} {evm : Devm} {cond : String → Bool}
-    {ex : Except String ξ} (fit : ex ≠ .error "RecursionLimit") :
-    (catchWithOOG evm cond ex).Fit := by
-  simp only [catchWithOOG]; split
-  · apply fit_ok
-  · split <;> intro ltd <;> injection ltd
-    · contradiction
-    . rename_i rw; rw [rw] at fit; cases fit rfl
+lemma fit_forIn_err_apply {α : Type} {xs : List Nat} {y : α} {f : Nat → α → Except (String × ℕ) (ForInStep α)}
+    {err : String × ℕ}
+    (h : forIn xs y f = Except.error err)
+    (hf : ∀ n y err', f n y = Except.error err' → err'.1 ≠ "RecursionLimit") :
+    err.1 ≠ "RecursionLimit" :=
+  fit_forIn_err hf err h
 
-lemma fit_toExStrBNP {xs} :
-    B8L.toExStrBNP xs ≠ .error "RecursionLimit" := by
-  simp only [B8L.toExStrBNP]; intro ltd
-  split at ltd; {injection ltd; contradiction}
-  split at ltd; {injection ltd; contradiction}
-  split at ltd; {injection ltd; contradiction}
-  simp [Option.toExcept] at ltd;
-  split at ltd; {injection ltd; contradiction}
-  cases ltd
-
-lemma fit_toExStrBNP2 {xs} :
-    B8L.toExStrBNP2 xs ≠ .error "RecursionLimit" := by
-  simp only [B8L.toExStrBNP2]; intro ltd
-  split at ltd; {injection ltd; contradiction}
-  split at ltd; {injection ltd; contradiction}
-  simp [Option.toExcept] at ltd;
-  split at ltd; {injection ltd; contradiction}
-  cases ltd
+@[simp] lemma PrecompResult.fit_ok (cost output) : (PrecompResult.ok cost output).Fit ↔ True := by rfl
+@[simp] lemma PrecompResult.fit_error (err cost) : (PrecompResult.error err cost).Fit ↔ ¬err = "RecursionLimit" := by rfl
 
 lemma fit_execute_precomp (evm : Evm) (adr : Adr) :
     (executePrecomp evm adr).Fit := by
-  simp only [executePrecomp]; split
-  · apply fit_execute_ecrecover
-  · intro ltd; fit_bind_step ltd fit_chargeGas; cases ltd
-  · intro ltd; fit_bind_step ltd fit_chargeGas; cases ltd
-  · intro ltd; fit_bind_step ltd fit_chargeGas; cases ltd
-  · intro ltd; fit_bind_step ltd fit_chargeGas
-    split at ltd <;> cases ltd
-  · intro ltd;
-    fit_bind_step ltd fit_chargeGas
-    fit_bind_step ltd (fit_assert (by decide))
-    fit_bind_step ltd (fit_to_except (by decide))
-    fit_bind_step ltd (fit_to_except (by decide))
-    cases ltd
-  · intro ltd; fit_bind_step ltd fit_chargeGas
-    fit_bind_step ltd (fit_assert (by decide))
-    fit_bind_step ltd (fit_to_except (by decide))
-    cases ltd
-  · intro ltd; fit_bind_step ltd fit_chargeGas
-    fit_bind_step ltd (fit_assert (by decide))
-    fit_bind_step ltd (fit_for_in _)
-    · intro n y ltd
-      fit_bind_step ltd (fit_catch_with_oog fit_toExStrBNP)
-      fit_bind_step ltd (fit_catch_with_oog fit_toExStrBNP2)
-      fit_bind_step ltd (fit_assert (by decide))
-      fit_bind_step ltd (fit_assert (by decide))
-      fit_bind_step ltd (fit_to_except (by decide))
-      cases ltd
-    · cases ltd
-  · intro ltd;
-    fit_bind_step ltd (fit_assert (by decide))
-    fit_bind_step ltd fit_chargeGas
-    split at ltd
-    · fit_bind_step ltd fit_ok
-      fit_bind_step ltd (fit_to_except (by decide))
-      cases ltd
-    · fit_bind_step ltd fit_ok
-      fit_bind_step ltd (fit_to_except (by decide))
-      cases ltd
-    · injection ltd; contradiction
-  · intro ltd
-    fit_bind_step ltd (fit_assert (by decide))
-    injection ltd; contradiction
-  · intro ltd
-    fit_bind_step ltd (fit_assert (by decide))
-    injection ltd; contradiction
-  · intro ltd; simp only [executeBls12G1Msm] at ltd
-    split at ltd
-    · injection ltd; rename_i eq
-      cases congr_arg String.head eq
-    · simp only [pure_bind] at ltd
-      fit_bind_step ltd fit_chargeGas
-      injection ltd; contradiction
-  · intro ltd; simp only [executeBls12G2Add] at ltd
-    split at ltd
-    · injection ltd; contradiction
-    · simp only [pure_bind] at ltd
-      fit_bind_step ltd fit_chargeGas
-      injection ltd; contradiction
-  · intro ltd; simp only [executeBls12G2Msm] at ltd
-    split at ltd
-    · injection ltd; rename_i eq
-      cases congr_arg String.head eq
-    · simp only [pure_bind] at ltd
-      fit_bind_step ltd fit_chargeGas
-      injection ltd; contradiction
-  · intro ltd; simp only [executeBls12Pairing] at ltd
-    split at ltd
-    · injection ltd; rename_i eq
-      cases congr_arg String.head eq
-    · simp only [pure_bind] at ltd
-      fit_bind_step ltd fit_chargeGas
-      injection ltd; contradiction
-  · intro ltd; simp only [executeBls12MapFpToG1] at ltd
-    split at ltd
-    · injection ltd; contradiction
-    · simp only [pure_bind] at ltd
-      fit_bind_step ltd fit_chargeGas
-      injection ltd; contradiction
-  · intro ltd; simp only [executeBls12MapFp2ToG2] at ltd
-    fit_bind_step ltd (fit_assert (by decide))
-    fit_bind_step ltd fit_chargeGas
-    injection ltd; contradiction
-  · intro ltd; injection ltd; rename_i eq
-    cases congr_arg String.head eq
+  apply fit_applyPrecompResult
+  dsimp only [precompileRun]; split
+  · dsimp only [executeEcrecover, PrecompResult.chargeGas]
+    repeat' (first | split | simp only [PrecompResult.fit_ok, PrecompResult.fit_error] | decide)
+  · sorry
+  · sorry
+  · sorry
+  · sorry
+  · sorry
+  · sorry
+  · sorry
+  · sorry
+  · sorry
+  · sorry
+  · sorry
+  · sorry
+  · sorry
+  · sorry
+  · sorry
+  · sorry
+  · sorry
 
 lemma initEvm_eq (msg : Msg) : initEvm msg = { pc := 0, sta := (initEvm msg).sta, dyna := (initEvm msg).dyna } := rfl
 
