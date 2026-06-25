@@ -1361,29 +1361,65 @@ lemma fit_forIn_err_apply {α : Type} {xs : List Nat} {y : α} {f : Nat → α �
 @[simp] lemma PrecompResult.fit_ok (cost output) : (PrecompResult.ok cost output).Fit ↔ True := by rfl
 @[simp] lemma PrecompResult.fit_error (err cost) : (PrecompResult.error err cost).Fit ↔ ¬err = "RecursionLimit" := by rfl
 
+macro "precomp_fit" id:ident : tactic =>
+  `(tactic| (
+    dsimp only [$id:ident, PrecompResult.chargeGas]
+    repeat' (first
+      | split
+      | simp only [PrecompResult.fit_ok, PrecompResult.fit_error]
+      | decide
+      | (intro h
+         have h2 := congr_arg String.length h
+         repeat rw [String.length_append] at h2
+         have h3 : (toString "InvalidParameter : ").length = 19 := rfl
+         have h4 : "RecursionLimit".length = 14 := rfl
+         rw [h3, h4] at h2
+         omega)
+      | (intro h
+         have h2 := congr_arg String.length h
+         repeat rw [String.length_append] at h2
+         have h3 : (toString "ERROR : precompiled contract ").length = 29 := rfl
+         have h4 : "RecursionLimit".length = 14 := rfl
+         rw [h3, h4] at h2
+         omega)
+    )
+  ))
+
+lemma error_msg_ne_recursion_limit (adr : Adr) :
+  s!"ERROR : precompiled contract {adr} does not exist" ≠ "RecursionLimit" := by
+  intro h
+  have h2 := congr_arg String.length h
+  repeat rw [String.length_append] at h2
+  have h3 : (toString "ERROR : precompiled contract ").length = 29 := rfl
+  have h4 : "RecursionLimit".length = 14 := rfl
+  rw [h3, h4] at h2
+  omega
+
+lemma executePairingCheck_Fit (evm : Evm) : (executePairingCheck evm).Fit := by
+  sorry
+
 lemma fit_execute_precomp (evm : Evm) (adr : Adr) :
     (executePrecomp evm adr).Fit := by
   apply fit_applyPrecompResult
   dsimp only [precompileRun]; split
-  · dsimp only [executeEcrecover, PrecompResult.chargeGas]
-    repeat' (first | split | simp only [PrecompResult.fit_ok, PrecompResult.fit_error] | decide)
-  · sorry
-  · sorry
-  · sorry
-  · sorry
-  · sorry
-  · sorry
-  · sorry
-  · sorry
-  · sorry
-  · sorry
-  · sorry
-  · sorry
-  · sorry
-  · sorry
-  · sorry
-  · sorry
-  · sorry
+  · precomp_fit executeEcrecover
+  · precomp_fit executeSha256
+  · precomp_fit executeRipemd160
+  · precomp_fit executeId
+  · precomp_fit executeModexp
+  · precomp_fit executeEcadd
+  · precomp_fit executeEcmul
+  · exact executePairingCheck_Fit evm
+  · precomp_fit executeBlake2F
+  · precomp_fit executePointEval
+  · precomp_fit executeBls12G1Add
+  · precomp_fit executeBls12G1Msm
+  · precomp_fit executeBls12G2Add
+  · precomp_fit executeBls12G2Msm
+  · precomp_fit executeBls12Pairing
+  · precomp_fit executeBls12MapFpToG1
+  · precomp_fit executeBls12MapFp2ToG2
+  · simp [PrecompResult.Fit, error_msg_ne_recursion_limit adr]
 
 lemma initEvm_eq (msg : Msg) : initEvm msg = { pc := 0, sta := (initEvm msg).sta, dyna := (initEvm msg).dyna } := rfl
 
