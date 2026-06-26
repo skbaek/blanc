@@ -1396,15 +1396,63 @@ lemma error_msg_ne_recursion_limit (adr : Adr) :
   omega
 
 lemma PrecompResult.fit_chargeGas (cost : ℕ) (evm : Evm)
-    (pr : Unit → PrecompResult) (fit : (pr ()).Fit) : (chargeGas cost evm pr).Fit := by
+    (pr : Unit → PrecompResult) (fit : (pr ()).Fit) : (PrecompResult.chargeGas cost evm pr).Fit := by
   simp only [PrecompResult.chargeGas]; split
   · exact fit
   · simp only [Fit, ne_eq, String.reduceEq, not_false_eq_true]
 
-lemma fit_executePairingCheckInner (data) (cost) :
-    (executePairingCheckInner data cost).Fit := by sorry
+lemma toExStrBNP_ne_RecursionLimit (data) (e) :
+    B8L.toExStrBNP data = Except.error e → e ≠ "RecursionLimit" := by
+  dsimp [B8L.toExStrBNP, Option.toExcept, Except.bind, bind, Except.pure, pure]
+  repeat' (first | split | intro h | injection h with h | subst h | decide | contradiction)
 
-#exit
+lemma toExStrBNP2_ne_RecursionLimit (data) (e) :
+    B8L.toExStrBNP2 data = Except.error e → e ≠ "RecursionLimit" := by
+  dsimp [B8L.toExStrBNP2, Option.toExcept, Except.bind, bind, Except.pure, pure]
+  repeat' (first | split | intro h | injection h with h | subst h | decide | contradiction)
+
+lemma fit_catchWithOOGPrecomp {ξ cost cond} {e : Except String ξ} {err : String × ℕ}
+    (h : catchWithOOGPrecomp cost cond e = Except.error err)
+    (he : ∀ e', e = Except.error e' → e' ≠ "RecursionLimit") :
+    err.1 ≠ "RecursionLimit" := by
+  dsimp [catchWithOOGPrecomp] at h
+  split at h
+  · contradiction
+  · split at h
+    · injection h with h_inj; rw [← h_inj]; simp only []; decide
+    · injection h with h_inj; rw [← h_inj]; dsimp
+      intro h_eq
+      apply he _ rfl h_eq
+
+lemma fit_executePairingCheckInner (data) (cost) :
+    (executePairingCheckInner data cost).Fit := by
+  dsimp [executePairingCheckInner]
+  split
+  · dsimp [Except.bind, bind, Except.pure, pure]
+    simp [Except.Fit, Except.Lim, Except.toError?]
+  · rename_i h1
+    generalize hf : (forIn (List.range (data.length / 192)) (1 : BNF12) _ : Except (String × ℕ) BNF12) = fres
+    cases fres
+    · rename_i err
+      dsimp [Except.bind, bind, Except.pure, pure]
+      simp [Except.Fit, Except.Lim, Except.toError?]
+      apply fit_forIn_err_apply hf
+      intro n y err' h_err
+      dsimp [Except.bind, bind, Except.pure, pure] at h_err
+      repeat' (first
+        | split at h_err
+        | contradiction
+        | injection h_err with h_inj; subst h_inj
+        | dsimp only []; decide
+        | (apply fit_catchWithOOGPrecomp
+           · assumption
+           · intro e' h_eq
+             first
+             | exact toExStrBNP_ne_RecursionLimit _ _ h_eq
+             | exact toExStrBNP2_ne_RecursionLimit _ _ h_eq)
+      )
+    · dsimp [Except.bind, bind, Except.pure, pure]
+      simp [Except.Fit, Except.Lim, Except.toError?]
 
 lemma executePairingCheck_Fit (evm : Evm) : (executePairingCheck evm).Fit := by
   dsimp [executePairingCheck]
