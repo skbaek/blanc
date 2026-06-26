@@ -3492,13 +3492,40 @@ lemma ExecuteCode.inv_getCode_cond
 
 lemma ProcessMessage.inv_getCode_cond
     {msg : Msg} {xl : Xlot} {devm'}
-    (run : ProcessMessage msg xl (.ok devm')) (a : Adr)
     (inv : xl.InvGetCode)
-    (ne : (msg.benv.state.getCode a).toList ≠ []) :
-    devm'.getCode a = msg.benv.state.getCode a := by
-  sorry
-
-#exit
+    (run : ProcessMessage msg xl (.ok devm')) :
+    ∀ a : Adr,
+      (msg.benv.state.getCode a).toList ≠ [] →
+      devm'.getCode a = msg.benv.state.getCode a := by
+  dsimp [ProcessMessage] at run
+  dsimp [Except.SplitXl] at run
+  rcases run with ⟨x, _, h_err, _⟩ | ⟨benv, h_benv, ex', h_exec, h_ex'⟩
+  · contradiction
+  · dsimp [Except.Split] at h_ex'
+    rcases h_ex' with ⟨x, _, h_err⟩ | ⟨evm, eq_ok, h_if⟩
+    · contradiction
+    · subst ex'
+      intro a ha
+      have h_exec_cond := ExecuteCode.inv_getCode_cond inv h_exec a
+      have h_benv_code : benv.state.getCode a = msg.benv.state.getCode a := by
+        dsimp [Msg.benvAfterTransfer, Msg.shouldTransferValue] at h_benv
+        split at h_benv
+        · cases h_sub : msg.benv.subBal msg.caller msg.value
+          · simp [h_sub, Option.toExcept, Bind.bind, Except.bind] at h_benv
+          · simp [h_sub, Option.toExcept, Bind.bind, Except.bind] at h_benv
+            subst benv
+            rw [Benv.addBal_getCode]
+            exact Benv.subBal_getCode h_sub
+        · simp only [Except.ok.injEq] at h_benv; subst benv
+          rfl
+      split at h_if
+      · simp only [Except.ok.injEq] at h_if; subst devm'
+        dsimp [Devm.rollback]
+        rfl
+      · simp only [Except.ok.injEq] at h_if; subst devm'
+        dsimp [Msg.withBenv] at h_exec_cond
+        rw [h_benv_code] at h_exec_cond
+        exact h_exec_cond ha
 
 lemma ProcessCreateMessage.inv_getCode_cond
     {msg : Msg} {xl : Xlot} {devm'}
@@ -3507,6 +3534,8 @@ lemma ProcessCreateMessage.inv_getCode_cond
     (ne : (msg.benv.state.getCode a).toList ≠ []) :
     devm'.getCode a = msg.benv.state.getCode a := by
   sorry
+
+#exit
 
 lemma GenericCreate.inv_getCode_cond
     {sevm : Sevm} {devm : Devm} {endowment : B256} {newAddress : Adr}
