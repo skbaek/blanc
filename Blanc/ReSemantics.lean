@@ -1395,8 +1395,26 @@ lemma error_msg_ne_recursion_limit (adr : Adr) :
   rw [h3, h4] at h2
   omega
 
+lemma PrecompResult.fit_chargeGas (cost : ℕ) (evm : Evm)
+    (pr : Unit → PrecompResult) (fit : (pr ()).Fit) : (chargeGas cost evm pr).Fit := by
+  simp only [PrecompResult.chargeGas]; split
+  · exact fit
+  · simp only [Fit, ne_eq, String.reduceEq, not_false_eq_true]
+
+lemma fit_executePairingCheckInner (data) (cost) :
+    (executePairingCheckInner data cost).Fit := by sorry
+
+#exit
+
 lemma executePairingCheck_Fit (evm : Evm) : (executePairingCheck evm).Fit := by
-  sorry
+  dsimp [executePairingCheck]
+  apply PrecompResult.fit_chargeGas;
+  split
+  · simp [PrecompResult.Fit]
+  · rename (_ = _) => eq
+    have hh := eq ▸ (fit_executePairingCheckInner _ _)
+    simp [Except.toError?, Except.Fit, Except.Lim] at hh
+    apply hh
 
 lemma fit_execute_precomp (evm : Evm) (adr : Adr) :
     (executePrecomp evm adr).Fit := by
