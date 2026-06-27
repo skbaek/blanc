@@ -3599,6 +3599,59 @@ lemma ProcessMessage.inv_getCode_cond
         rw [h_benv_code] at h_exec_cond
         exact h_exec_cond ha
 
+lemma ProcessMessage.inv_getCode_gen
+    {msg : Msg} {xl : Xlot} {exn : Except (String × State × AdrSet × Tra) Devm}
+    (inv : xl.InvGetCode)
+    (run : ProcessMessage msg xl exn) :
+    ∀ a : Adr,
+      (msg.benv.state.getCode a).toList ≠ [] →
+      MsgResult.getCode exn a = msg.benv.state.getCode a := by
+  dsimp [ProcessMessage] at run
+  dsimp [Except.SplitXl] at run
+  rcases run with ⟨x, h_benv_err, h_exn_err, _⟩ | ⟨benv, h_benv, ex', h_exec, h_ex'⟩
+  · intro a _
+    rw [h_exn_err]
+    dsimp [MsgResult.getCode]
+    dsimp [Msg.benvAfterTransfer, Msg.shouldTransferValue] at h_benv_err
+    split at h_benv_err
+    · cases h_sub : msg.benv.subBal msg.caller msg.value
+      · simp [h_sub, Option.toExcept, Bind.bind, Except.bind] at h_benv_err
+        subst x
+        rfl
+      · simp [h_sub, Option.toExcept, Bind.bind, Except.bind] at h_benv_err
+    · contradiction
+  · intro a ha
+    have h_benv_code : benv.state.getCode a = msg.benv.state.getCode a := by
+      dsimp [Msg.benvAfterTransfer, Msg.shouldTransferValue] at h_benv
+      split at h_benv
+      · cases h_sub : msg.benv.subBal msg.caller msg.value
+        · simp [h_sub, Option.toExcept, Bind.bind, Except.bind] at h_benv
+        · simp [h_sub, Option.toExcept, Bind.bind, Except.bind] at h_benv
+          subst benv
+          rw [Benv.addBal_getCode]
+          exact Benv.subBal_getCode h_sub
+      · simp only [Except.ok.injEq] at h_benv; subst benv
+        rfl
+    have ha' : ( (msg.withBenv benv).benv.state.getCode a ).toList ≠ [] := by
+      dsimp [Msg.withBenv]
+      rw [h_benv_code]
+      exact ha
+    have h_exec_cond := ExecuteCode.inv_getCode_gen inv h_exec a ha'
+    dsimp [Msg.withBenv] at h_exec_cond
+    rw [h_benv_code] at h_exec_cond
+    dsimp [Except.Split] at h_ex'
+    rcases h_ex' with ⟨x, h_ex'_err, h_exn_err⟩ | ⟨evm, eq_ok, h_if⟩
+    · rw [h_exn_err]
+      rw [h_ex'_err] at h_exec_cond
+      exact h_exec_cond
+    · split at h_if
+      · rw [← h_if]
+        dsimp [MsgResult.getCode, Devm.rollback]
+        rfl
+      · rw [← h_if]
+        rw [eq_ok] at h_exec_cond
+        exact h_exec_cond
+
 lemma setCode_getCode {evm : Devm} {a b : Adr} {code : ByteArray} (h : a ≠ b) :
   (evm.setCode a code).getCode b = evm.getCode b := by
   dsimp [Devm.setCode, Devm.getCode, Devm.state, Devm.getAcct, State.setCode, State.set, State.getCode, State.get]
