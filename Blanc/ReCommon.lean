@@ -3527,23 +3527,76 @@ lemma ProcessMessage.inv_getCode_cond
         rw [h_benv_code] at h_exec_cond
         exact h_exec_cond ha
 
+lemma setCode_getCode {evm : Devm} {a b : Adr} {code : ByteArray} (h : a ≠ b) :
+  (evm.setCode a code).getCode b = evm.getCode b := by
+  dsimp [Devm.setCode, Devm.getCode, Devm.state, Devm.getAcct, State.setCode, State.set, State.getCode, State.get]
+  split_ifs with h_if
+  · by_cases hc : compare a b = Ordering.eq
+    · exact False.elim (h (compare_eq_iff_eq.mp hc))
+    · rw [Std.TreeMap.getD_erase]
+      simp [hc]
+  · by_cases hc : compare a b = Ordering.eq
+    · exact False.elim (h (compare_eq_iff_eq.mp hc))
+    · rw [Std.TreeMap.getD_insert]
+      simp [hc]
+
 lemma ProcessCreateMessage.inv_getCode_cond
     {msg : Msg} {xl : Xlot} {devm'}
-    (run : ProcessCreateMessage msg xl (.ok devm')) (a : Adr)
     (inv : xl.InvGetCode)
-    (ne : (msg.benv.state.getCode a).toList ≠ []) :
-    devm'.getCode a = msg.benv.state.getCode a := by
-  sorry
-
-#exit
+    (run : ProcessCreateMessage msg xl (.ok devm')) :
+    ∀ a : Adr,
+      a ≠ msg.currentTarget →
+      (msg.benv.state.getCode a).toList ≠ [] →
+      devm'.getCode a = msg.benv.state.getCode a := by
+  dsimp [ProcessCreateMessage] at run
+  rcases run with ⟨ex', h_exec, h_ex'⟩
+  dsimp [Except.Split] at h_ex'
+  rcases h_ex' with ⟨x, _, h_err⟩ | ⟨evm, eq_ok, h_if⟩
+  · contradiction
+  · subst ex'
+    intro a h_a ha
+    have h_exec_cond := ProcessMessage.inv_getCode_cond inv h_exec a
+    have h_benv_code : (processCreateMessage.msg msg).benv.state.getCode a = msg.benv.state.getCode a := by
+      dsimp [processCreateMessage.msg, Msg.withBenv]
+      rw [Benv.incrNonce_getCode, addCreatedAccount_getCode, Benv.setStor_getCode]
+    rw [h_benv_code] at h_exec_cond
+    have h_exec_cond' := h_exec_cond ha
+    split at h_if
+    · rename_i h_none
+      split at h_if
+      · rename_i x_ evm' heq
+        simp only [Except.ok.injEq] at h_if; subst devm'
+        · dsimp [processCreateMessage.chargeCodeGas] at heq
+          split at heq
+          · cases heq
+          · dsimp [Bind.bind, Except.bind] at heq; split at heq
+            · cases heq
+            · rename_i devm_charge eq_chargeGas
+              split at heq
+              · cases heq
+              · simp only [Except.ok.injEq] at heq; subst evm'
+                have h_charge := chargeGas_getCode_eq eq_chargeGas a
+                rw [setCode_getCode h_a.symm, h_charge]
+                exact h_exec_cond'
+      · rename_i x_ err_ err_evm heq
+        split at h_if
+        · rename_i h_halt
+          simp only [Except.ok.injEq] at h_if; subst devm'
+          dsimp [processCreateMessage.exceptionalHalt]
+          rfl
+        · contradiction
+    · rename_i h_some
+      simp only [Except.ok.injEq] at h_if; subst devm'
+      dsimp [Devm.rollback]
+      rfl
 
 lemma GenericCreate.inv_getCode_cond
     {sevm : Sevm} {devm : Devm} {endowment : B256} {newAddress : Adr}
-    {memoryIndex memorySize : Nat} {xl : Xlot} {devm'}
-    (run : GenericCreate sevm devm endowment newAddress memoryIndex memorySize xl (.ok devm')) (a : Adr)
-    (inv : xl.InvGetCode)
-    (ne : (devm.getCode a).toList ≠ []) :
-    devm'.getCode a = devm.getCode a := by
+    {memoryIndex memorySize : Nat} {xl : Xlot} {devm'} (inv : xl.InvGetCode)
+    (run : GenericCreate sevm devm endowment newAddress memoryIndex memorySize xl (.ok devm')) :
+    ∀ (a : Adr),
+      (devm.getCode a).toList ≠ [] →
+      devm'.getCode a = devm.getCode a := by
   sorry
 
 lemma GenericCall.inv_getCode_cond
