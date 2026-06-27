@@ -3429,6 +3429,16 @@ lemma processCreateMessage.chargeCodeGas_getCode_gen {evm : Devm} {exn : Executi
         have h_charge := chargeGas_getCode_eq eq_ok a
         exact h_charge
 
+lemma Devm.push_getCode_gen {v devm} {exn : Execution} (h : Devm.push v devm = exn) (a : Adr) : Execution.getCode exn a = devm.getCode a := by
+  dsimp [Devm.push, Except.assert] at h
+  split at h
+  · dsimp [Bind.bind, Except.bind] at h
+    rw [← h]
+    rfl
+  · dsimp [Bind.bind, Except.bind] at h
+    rw [← h]
+    rfl
+
 def Xlot.InvGetCode : Xlot → Prop
   | .none => True
   | .some ⟨sevm, devm, exn⟩ =>
@@ -3907,6 +3917,239 @@ lemma GenericCreate.inv_getCode_cond
                   dsimp [incorporateChildOnSuccess]
                   rfl
 
+lemma GenericCreate.inv_getCode_gen
+    {sevm : Sevm} {devm : Devm} {endowment : B256} {newAddress : Adr}
+    {memoryIndex memorySize : Nat} {xl : Xlot} {exn : Execution} (inv : xl.InvGetCode)
+    (run : GenericCreate sevm devm endowment newAddress memoryIndex memorySize xl exn) :
+    ∀ (a : Adr),
+      (devm.getCode a).toList ≠ [] →
+      Execution.getCode exn a = devm.getCode a := by
+  dsimp [GenericCreate] at run
+  rcases run with ⟨calldata, eq_calldata, run⟩; subst eq_calldata
+  rcases run with ⟨x, h_err, eq_err, _⟩ | ⟨_, h_ok, run⟩
+  · intro a ha
+    rw [eq_err]
+    have h : Except.assert (memorySize ≤ maxInitcodeSize) ⟨"OutOfGasError", devm⟩ = Except.error x := h_err
+    dsimp [Except.assert] at h
+    split at h
+    · contradiction
+    · injection h with h_eq; subst h_eq
+      rfl
+  · rcases run with ⟨devm1, eq_devm1, run⟩; subst eq_devm1
+    rcases run with ⟨createMsgGas, eq_createMsgGas, run⟩; subst eq_createMsgGas
+    rcases run with ⟨devm2, eq_devm2, run⟩; subst eq_devm2
+    rcases run with ⟨x, h_err, eq_err, _⟩ | ⟨_, h_ok, run⟩
+    · intro a ha
+      rw [eq_err]
+      dsimp [assertDynamic, Except.assert] at h_err
+      split at h_err
+      · contradiction
+      · injection h_err with h_eq; subst h_eq
+        rfl
+    · rcases run with ⟨devm3, eq_devm3, run⟩; subst eq_devm3
+      rcases run with ⟨sender, eq_sender, run⟩; subst eq_sender
+      split at run
+      · rcases run with ⟨h_xl, eq_ok⟩
+        intro a ha
+        rw [← eq_ok]
+        exact Devm.push_getCode_gen rfl a
+      · rename_i h_if1
+        rcases run with ⟨devm4, eq_devm4, run⟩
+        split at run
+        · rename_i h_if2
+          rcases run with ⟨h_xl, eq_ok⟩
+          intro a ha
+          rw [← eq_ok]
+          have h_push : Execution.getCode (devm4.push 0) a = devm4.getCode a := Devm.push_getCode_gen rfl a
+          rw [h_push]
+          subst eq_devm4
+          exact Devm.incrNonce_getCode
+        · rename_i h_if2
+          rcases run with ⟨childMsg, eq_childMsg, run⟩; subst eq_childMsg
+          rcases run with ⟨ex', h_exec, h_ex'⟩
+          rcases h_ex' with ⟨x, h_err, eq_err⟩ | ⟨child, h_ok, run⟩
+          · intro a ha
+            rw [eq_err]
+            have h_a_ne : a ≠ newAddress := by
+              intro heq
+              push_neg at h_if2
+              have h_code_size : (devm4.getCode newAddress).size = 0 := h_if2.2.1
+              have h_empty : devm4.getCode newAddress = .empty := by
+                cases h_code' : devm4.getCode newAddress with | mk data =>
+                rw [h_code'] at h_code_size
+                cases data with | mk l =>
+                cases l
+                · rfl
+                · contradiction
+              have h_devm4 : devm4.getCode newAddress = devm.getCode newAddress := by
+                subst eq_devm4; exact Devm.incrNonce_getCode
+              rw [heq] at ha
+              rw [← h_devm4] at ha
+              rw [h_empty] at ha
+              have h_empty_toList : ByteArray.empty.toList = [] := by
+                unfold ByteArray.toList
+                unfold ByteArray.toList.loop
+                rfl
+              rw [h_empty_toList] at ha
+              exact False.elim (ha rfl)
+            have h_devm4 : devm4.getCode a = devm.getCode a := by subst eq_devm4; exact Devm.incrNonce_getCode
+            have h_goal : (devm4.getCode a).toList ≠ [] := by
+              rw [h_devm4]
+              exact ha
+            have h_exec_cond := ProcessCreateMessage.inv_getCode_gen inv h_exec a h_a_ne h_goal
+            rcases ex' with err | devm_child
+            · dsimp [liftToExecution] at h_err
+              injection h_err with h_eq
+              subst h_eq
+              dsimp [Execution.getCode]
+              change MsgResult.getCode (Except.error err) a = devm.getCode a
+              rw [h_exec_cond]
+              exact h_devm4
+            · dsimp [liftToExecution] at h_err
+              contradiction
+          · intro a ha
+            have h_a_ne : a ≠ newAddress := by
+              intro heq
+              push_neg at h_if2
+              have h_code_size : (devm4.getCode newAddress).size = 0 := h_if2.2.1
+              have h_empty : devm4.getCode newAddress = .empty := by
+                cases h_code' : devm4.getCode newAddress with | mk data =>
+                rw [h_code'] at h_code_size
+                cases data with | mk l =>
+                cases l
+                · rfl
+                · contradiction
+              have h_devm4 : devm4.getCode newAddress = devm.getCode newAddress := by
+                subst eq_devm4; exact Devm.incrNonce_getCode
+              rw [heq] at ha
+              rw [← h_devm4] at ha
+              rw [h_empty] at ha
+              have h_empty_toList : ByteArray.empty.toList = [] := by
+                unfold ByteArray.toList
+                unfold ByteArray.toList.loop
+                rfl
+              rw [h_empty_toList] at ha
+              exact False.elim (ha rfl)
+            have h_devm4 : devm4.getCode a = devm.getCode a := by subst eq_devm4; exact Devm.incrNonce_getCode
+            have h_goal : (devm4.getCode a).toList ≠ [] := by
+              rw [h_devm4]
+              exact ha
+            have h_exec_cond := ProcessCreateMessage.inv_getCode_gen inv h_exec a h_a_ne h_goal
+            rcases ex' with err | devm_child
+            · dsimp [liftToExecution] at h_ok
+              contradiction
+            · dsimp [liftToExecution] at h_ok
+              injection h_ok with h_eq
+              symm at h_eq
+              subst h_eq
+              split at run
+              · rename_i h_child_err
+                have h_push := Devm.push_getCode_gen run a
+                rw [h_push]
+                dsimp [incorporateChildOnError]
+                change child.getCode a = devm.getCode a
+                change child.getCode a = _ at h_exec_cond
+                rw [h_exec_cond]
+                exact h_devm4
+              · rename_i h_child_err
+                have h_push := Devm.push_getCode_gen run a
+                rw [h_push]
+                dsimp [incorporateChildOnSuccess]
+                change child.getCode a = devm.getCode a
+                change child.getCode a = _ at h_exec_cond
+                rw [h_exec_cond]
+                exact h_devm4
+
+lemma GenericCall.inv_getCode_gen
+    {sevm : Sevm} {devm : Devm} {gas : Nat} {value : B256}
+    {caller target codeAddress : Adr} {shouldTransferValue isStaticcall : Bool}
+    {input_index input_size output_index output_size : Nat} {code : ByteArray}
+    {disablePrecompiles : Bool} {xl : Xlot} {exn : Execution}
+    (inv : xl.InvGetCode)
+    (run : GenericCall sevm devm gas value caller target codeAddress shouldTransferValue isStaticcall input_index input_size output_index output_size code disablePrecompiles xl exn) :
+    ∀ a : Adr,
+      (devm.getCode a).toList ≠ [] →
+      exn.getCode a = devm.getCode a := by
+  dsimp [GenericCall] at run
+  rcases run with ⟨evm1, eq_evm1, run⟩; subst eq_evm1
+  split at run
+  · rcases run with ⟨h_xl, eq_ok⟩
+    intro a ha
+    exact Devm.push_getCode_gen eq_ok a
+  · rcases run with ⟨calldata, eq_calldata, run⟩; subst eq_calldata
+    rcases run with ⟨childMsg, eq_childMsg, run⟩; subst eq_childMsg
+    rcases run with ⟨ex', h_exec, h_ex'⟩
+    rcases h_ex' with ⟨x, h_err, eq_err⟩ | ⟨child, h_ok, run⟩
+    · intro a ha
+      rw [eq_err]
+      have h_exec_cond := ProcessMessage.inv_getCode_gen inv h_exec a ha
+      rcases ex' with err | child
+      · dsimp [liftToExecution] at h_err
+        injection h_err with h_eq
+        subst h_eq
+        dsimp [Execution.getCode]
+        change MsgResult.getCode (Except.error err) a = devm.getCode a
+        rw [h_exec_cond]
+        rfl
+      · dsimp [liftToExecution] at h_err
+        contradiction
+    · intro a ha
+      have h_exec_cond := ProcessMessage.inv_getCode_gen inv h_exec a ha
+      rcases ex' with err | child
+      · dsimp [liftToExecution] at h_ok
+        contradiction
+      · dsimp [liftToExecution] at h_ok
+        injection h_ok with h_eq
+        symm at h_eq
+        subst h_eq
+        split at run
+        · rename_i h_child_err
+          dsimp [Except.Split] at run
+          rcases run with ⟨y, h_err, eq_err⟩ | ⟨evm2, h_ok, eq_ok⟩
+          · rw [eq_err]
+            have h_push := Devm.push_getCode_gen h_err a
+            rw [h_push]
+            dsimp [incorporateChildOnError]
+            change child.getCode a = devm.getCode a
+            change child.getCode a = _ at h_exec_cond
+            rw [h_exec_cond]
+            rfl
+          · rw [← eq_ok]
+            dsimp [Execution.getCode]
+            have h_memWrite : (evm2.memWrite output_index (child.output.take output_size)).getCode a = evm2.getCode a := rfl
+            rw [h_memWrite]
+            have h_push := Devm.push_getCode_gen h_ok a
+            change evm2.getCode a = _ at h_push
+            rw [h_push]
+            dsimp [incorporateChildOnError]
+            change child.getCode a = devm.getCode a
+            change child.getCode a = _ at h_exec_cond
+            rw [h_exec_cond]
+            rfl
+        · rename_i h_child_err
+          dsimp [Except.Split] at run
+          rcases run with ⟨y, h_err, eq_err⟩ | ⟨evm2, h_ok, eq_ok⟩
+          · rw [eq_err]
+            have h_push := Devm.push_getCode_gen h_err a
+            rw [h_push]
+            dsimp [incorporateChildOnSuccess]
+            change child.getCode a = devm.getCode a
+            change child.getCode a = _ at h_exec_cond
+            rw [h_exec_cond]
+            rfl
+          · rw [← eq_ok]
+            dsimp [Execution.getCode]
+            have h_memWrite : (evm2.memWrite output_index (child.output.take output_size)).getCode a = evm2.getCode a := rfl
+            rw [h_memWrite]
+            have h_push := Devm.push_getCode_gen h_ok a
+            change evm2.getCode a = _ at h_push
+            rw [h_push]
+            dsimp [incorporateChildOnSuccess]
+            change child.getCode a = devm.getCode a
+            change child.getCode a = _ at h_exec_cond
+            rw [h_exec_cond]
+            rfl
+
 lemma GenericCall.inv_getCode_cond
     {sevm : Sevm} {devm : Devm} {gas : Nat} {value : B256}
     {caller target codeAddress : Adr} {shouldTransferValue isStaticcall : Bool}
@@ -4333,6 +4576,15 @@ lemma Xinst.inv_getCode_cond
     have h_gen := GenericCall.inv_getCode_cond inv run a ha_10
     rw [h_gen, h_code]
 
+lemma Xinst.inv_getCode_gen
+    {sevm devm x xl exn}
+    (inv : xl.InvGetCode)
+    (run : Xinst.Run sevm devm x xl exn) :
+    ∀ a : Adr,
+      (devm.getCode a).toList ≠ [] →
+      exn.getCode a = devm.getCode a := by
+  sorry
+
 lemma Ninst.inv_getCode_cond
     {pc sevm devm n xl devm'}
     (inv : xl.InvGetCode)
@@ -4362,7 +4614,16 @@ lemma Ninst.inv_getCode_cond
   case exec x =>
     apply Xinst.inv_getCode_cond inv run a ha
 
-#check Xlot.InvGetCode
+lemma Ninst.inv_getCode_gen
+    {pc sevm devm n xl exn}
+    (inv : xl.InvGetCode)
+    (run : Ninst.Run' pc sevm devm n xl exn) :
+    ∀ a : Adr,
+      (devm.getCode a).toList ≠ [] →
+      exn.getCode a = devm.getCode a := by
+  sorry
+
+#exit
 lemma Exec.inv_getCode {pc} {sevm} {devm} {devm'}
     (run : Exec pc sevm devm (.ok devm')) :
     ∀ a : Adr,
