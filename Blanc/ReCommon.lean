@@ -3490,6 +3490,78 @@ lemma ExecuteCode.inv_getCode_cond
         simp only [Except.ok.injEq] at h_err; subst devm'
         intro a ha; exact (inv_eq a ha).symm
 
+def MsgResult.getCode (exn : Except (String × State × AdrSet × Tra) Devm) (a : Adr) : ByteArray :=
+  match exn with
+  | .ok d => d.getCode a
+  | .error ⟨_, state, _, _⟩ => state.getCode a
+
+lemma ExecuteCode.inv_getCode_gen
+    {msg : Msg} {xl : Xlot} {exn : Except (String × State × AdrSet × Tra) Devm}
+    (inv : xl.InvGetCode)
+    (run : ExecuteCode msg xl exn) :
+    ∀ a : Adr,
+      (msg.benv.state.getCode a).toList ≠ [] →
+      MsgResult.getCode exn a = msg.benv.state.getCode a := by
+  dsimp [ExecuteCode] at run
+  split at run
+  · rename _ => eq_none
+    rcases eq_none with ⟨ex', h_xl, h_err⟩
+    rw [h_xl] at inv
+    dsimp [Xlot.InvGetCode] at inv
+    rcases inv with ⟨exec, inv_eq⟩
+    subst h_err
+    cases ex'
+    · dsimp [executeCode.handleError]
+      split
+      · intro a ha; dsimp [MsgResult.getCode]; exact (inv_eq a ha).symm
+      · split
+        · intro a ha; dsimp [MsgResult.getCode]; exact (inv_eq a ha).symm
+        · intro a ha; dsimp [MsgResult.getCode, Execution.getCode, Devm.getCode]; exact (inv_eq a ha).symm
+    · intro a ha; dsimp [executeCode.handleError, MsgResult.getCode]; exact (inv_eq a ha).symm
+  · next adr eq_some =>
+    split at run
+    · rcases run with ⟨h_xl, h_err⟩
+      cases h_ex : executePrecomp (initEvm msg) adr
+      · rename_i ex_err
+        rw [h_ex] at h_err
+        subst h_err
+        dsimp [executeCode.handleError]
+        split
+        · intro a _
+          dsimp [MsgResult.getCode]
+          have := executePrecomp_inv_getCode (initEvm msg) adr (Except.error ex_err) h_ex a
+          exact this
+        · split
+          · intro a _
+            dsimp [MsgResult.getCode]
+            have := executePrecomp_inv_getCode (initEvm msg) adr (Except.error ex_err) h_ex a
+            exact this
+          · intro a _
+            dsimp [MsgResult.getCode, Execution.getCode, Devm.getCode]
+            have := executePrecomp_inv_getCode (initEvm msg) adr (Except.error ex_err) h_ex a
+            exact this
+      · rename_i ex_ok
+        rw [h_ex] at h_err
+        subst h_err
+        dsimp [executeCode.handleError]
+        intro a _
+        dsimp [MsgResult.getCode]
+        have := executePrecomp_inv_getCode (initEvm msg) adr (Except.ok ex_ok) h_ex a
+        exact this
+    · rcases run with ⟨ex', h_xl, h_err⟩
+      rw [h_xl] at inv
+      dsimp [Xlot.InvGetCode] at inv
+      rcases inv with ⟨exec, inv_eq⟩
+      subst h_err
+      cases ex'
+      · dsimp [executeCode.handleError]
+        split
+        · intro a ha; dsimp [MsgResult.getCode]; exact (inv_eq a ha).symm
+        · split
+          · intro a ha; dsimp [MsgResult.getCode]; exact (inv_eq a ha).symm
+          · intro a ha; dsimp [MsgResult.getCode, Execution.getCode, Devm.getCode]; exact (inv_eq a ha).symm
+      · intro a ha; dsimp [executeCode.handleError, MsgResult.getCode]; exact (inv_eq a ha).symm
+
 lemma ProcessMessage.inv_getCode_cond
     {msg : Msg} {xl : Xlot} {devm'}
     (inv : xl.InvGetCode)
@@ -4148,6 +4220,7 @@ lemma Ninst.inv_getCode_cond
   case exec x =>
     apply Xinst.inv_getCode_cond inv run a ha
 
+#check Xlot.InvGetCode
 lemma Exec.inv_getCode {pc} {sevm} {devm} {devm'}
     (run : Exec pc sevm devm (.ok devm')) :
     ∀ a : Adr,
