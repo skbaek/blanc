@@ -4126,7 +4126,39 @@ lemma Ninst.inv_getCode_cond
     ∀ a : Adr,
       (devm.getCode a).toList ≠ [] →
       devm'.getCode a = devm.getCode a := by
+  intro a ha
+  cases n <;> dsimp [Ninst.Run'] at run
+  case push xs p =>
+     rcases xl with _ | _
+     · cases hc : chargeGas (if xs = [] then gBase else gVerylow) devm <;> simp [hc, bind, Except.bind] at run
+       case ok devm_gas =>
+         cases hp : Devm.push xs.toB256 devm_gas <;> simp [hp] at run
+         case ok devm_push =>
+           subst run
+           simp only [chargeGas] at hc; split at hc <;> try contradiction
+           simp only [Except.ok.injEq] at hc; subst devm_gas
+           simp only [Devm.push, bind, Except.bind, Except.assert] at hp; split at hp <;> try contradiction
+           simp only [Except.ok.injEq] at hp; subst devm_push
+           rfl
+     · cases run
+  case reg r =>
+    rcases xl with _ | _
+    · apply Rinst.inv_getCode run a ha
+    · cases run
+  case exec x =>
+    apply Xinst.inv_getCode_cond inv run a ha
+
+lemma Exec.inv_getCode {pc} {sevm} {devm} {devm'}
+    (run : Exec pc sevm devm (.ok devm')) :
+    ∀ a : Adr,
+      (devm.getCode a).toList ≠ [] →
+      devm'.getCode a = devm.getCode a := by
   sorry
+
+#exit
+
+Exec : ℕ → Sevm → Devm → Execution → Type
+
 
 #exit
 lemma Ninst.inv_getCode
