@@ -3698,18 +3698,76 @@ lemma GenericCall.inv_getCode_cond
     {caller target codeAddress : Adr} {shouldTransferValue isStaticcall : Bool}
     {input_index input_size output_index output_size : Nat} {code : ByteArray}
     {disablePrecompiles : Bool} {xl : Xlot} {devm'}
-    (run : GenericCall sevm devm gas value caller target codeAddress shouldTransferValue isStaticcall input_index input_size output_index output_size code disablePrecompiles xl (.ok devm')) (a : Adr)
     (inv : xl.InvGetCode)
-    (ne : (devm.getCode a).toList ≠ []) :
-    devm'.getCode a = devm.getCode a := by
-  sorry
+    (run : GenericCall sevm devm gas value caller target codeAddress shouldTransferValue isStaticcall input_index input_size output_index output_size code disablePrecompiles xl (.ok devm')) :
+    ∀ a : Adr,
+      (devm.getCode a).toList ≠ [] →
+      devm'.getCode a = devm.getCode a := by
+  dsimp [GenericCall] at run
+  rcases run with ⟨evm1, eq_evm1, run⟩; subst eq_evm1
+  split at run
+  · rcases run with ⟨h_xl, eq_ok⟩
+    dsimp [Devm.push, Bind.bind, Except.bind] at eq_ok
+    split at eq_ok
+    · cases eq_ok
+    · simp only [Except.ok.injEq] at eq_ok
+      subst devm'
+      intro a ha
+      rfl
+  · rename_i h_if
+    rcases run with ⟨calldata, eq_calldata, run⟩; subst eq_calldata
+    rcases run with ⟨childMsg, eq_childMsg, run⟩; subst eq_childMsg
+    rcases run with ⟨ex', h_exec, h_ex'⟩
+    rcases h_ex' with ⟨x, h_err, eq_err⟩ | ⟨child, h_ok, run⟩
+    · contradiction
+    · intro a ha
+      rcases ex' with err | devm_child
+      · simp [liftToExecution] at h_ok
+      · dsimp [liftToExecution] at h_ok
+        simp only [Except.ok.injEq] at h_ok
+        symm at h_ok
+        subst h_ok
+        have h_exec_cond := ProcessMessage.inv_getCode_cond inv h_exec a
+        have h_child_code : child.getCode a = devm.getCode a := h_exec_cond ha
+        split at run
+        · rename_i h_child_err
+          dsimp [Except.Split] at run
+          rcases run with ⟨x, h_err, eq_err⟩ | ⟨evm2, h_ok, eq_ok⟩
+          · contradiction
+          · simp only [Except.ok.injEq] at eq_ok
+            symm at eq_ok
+            subst eq_ok
+            dsimp [Devm.push, Bind.bind, Except.bind] at h_ok
+            split at h_ok
+            · cases h_ok
+            · simp only [Except.ok.injEq] at h_ok
+              symm at h_ok
+              subst h_ok
+              rw [← h_child_code]
+              rfl
+        · rename_i h_child_err
+          dsimp [Except.Split] at run
+          rcases run with ⟨x, h_err, eq_err⟩ | ⟨evm2, h_ok, eq_ok⟩
+          · contradiction
+          · simp only [Except.ok.injEq] at eq_ok
+            symm at eq_ok
+            subst eq_ok
+            dsimp [Devm.push, Bind.bind, Except.bind] at h_ok
+            split at h_ok
+            · cases h_ok
+            · simp only [Except.ok.injEq] at h_ok
+              symm at h_ok
+              subst h_ok
+              rw [← h_child_code]
+              rfl
 
 lemma Xinst.inv_getCode_cond
     {sevm devm x xl devm'}
-    (run : Xinst.Run sevm devm x xl (.ok devm')) (a : Adr)
     (inv : xl.InvGetCode)
-    (ne : (devm.getCode a).toList ≠ []) :
-    devm'.getCode a = devm.getCode a := by
+    (run : Xinst.Run sevm devm x xl (.ok devm')) :
+    ∀ a : Adr,
+      (devm.getCode a).toList ≠ [] →
+      devm'.getCode a = devm.getCode a := by
   sorry
 
 #exit
