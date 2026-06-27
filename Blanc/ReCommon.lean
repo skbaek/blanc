@@ -3404,6 +3404,31 @@ def Execution.getCode : Execution → Adr → ByteArray
   | .error ⟨_, devm⟩, adr => devm.getCode adr
   | .ok devm, adr => devm.getCode adr
 
+lemma chargeGas_getCode_gen {cost devm exn} (h : chargeGas cost devm = exn) (a : Adr) : Execution.getCode exn a = devm.getCode a := by
+  simp only [chargeGas] at h
+  split at h
+  · subst h; rfl
+  · subst h; rfl
+
+lemma processCreateMessage.chargeCodeGas_getCode_gen {evm : Devm} {exn : Execution}
+    (h : processCreateMessage.chargeCodeGas evm = exn) (a : Adr) :
+    Execution.getCode exn a = evm.getCode a := by
+  simp only [processCreateMessage.chargeCodeGas] at h
+  split at h
+  · subst h; rfl
+  · dsimp [Bind.bind, Except.bind] at h
+    split at h
+    · rename_i eq_err; subst h
+      have h_charge := chargeGas_getCode_gen eq_err a
+      exact h_charge
+    · rename_i eq_ok; split at h
+      · subst h
+        have h_charge := chargeGas_getCode_eq eq_ok a
+        exact h_charge
+      · subst h
+        have h_charge := chargeGas_getCode_eq eq_ok a
+        exact h_charge
+
 def Xlot.InvGetCode : Xlot → Prop
   | .none => True
   | .some ⟨sevm, devm, exn⟩ =>
@@ -3713,6 +3738,70 @@ lemma ProcessCreateMessage.inv_getCode_cond
     · rename_i h_some
       simp only [Except.ok.injEq] at h_if; subst devm'
       dsimp [Devm.rollback]
+      rfl
+
+lemma ProcessCreateMessage.inv_getCode_gen
+    {msg : Msg} {xl : Xlot} {exn : Except (String × State × AdrSet × Tra) Devm}
+    (inv : xl.InvGetCode)
+    (run : ProcessCreateMessage msg xl exn) :
+    ∀ a : Adr,
+      a ≠ msg.currentTarget →
+      (msg.benv.state.getCode a).toList ≠ [] →
+      MsgResult.getCode exn a = msg.benv.state.getCode a := by
+  dsimp [ProcessCreateMessage] at run
+  rcases run with ⟨ex', h_exec, h_ex'⟩
+  dsimp [Except.Split] at h_ex'
+  rcases h_ex' with ⟨x, eq_ex'_err, h_exn_err⟩ | ⟨evm, eq_ok, h_if⟩
+  · intro a h_a ha
+    rw [h_exn_err]
+    have h_exec_cond := ProcessMessage.inv_getCode_gen inv h_exec a
+    have h_benv_code : (processCreateMessage.msg msg).benv.state.getCode a = msg.benv.state.getCode a := by
+      dsimp [processCreateMessage.msg, Msg.withBenv]
+      rw [Benv.incrNonce_getCode, addCreatedAccount_getCode, Benv.setStor_getCode]
+    rw [h_benv_code] at h_exec_cond
+    have h_exec_cond' := h_exec_cond ha
+    rw [eq_ex'_err] at h_exec_cond'
+    exact h_exec_cond'
+  · intro a h_a ha
+    have h_exec_cond := ProcessMessage.inv_getCode_gen inv h_exec a
+    have h_benv_code : (processCreateMessage.msg msg).benv.state.getCode a = msg.benv.state.getCode a := by
+      dsimp [processCreateMessage.msg, Msg.withBenv]
+      rw [Benv.incrNonce_getCode, addCreatedAccount_getCode, Benv.setStor_getCode]
+    rw [h_benv_code] at h_exec_cond
+    have h_exec_cond' := h_exec_cond ha
+    split at h_if
+    · rename_i h_none
+      cases h_charge : processCreateMessage.chargeCodeGas evm
+      · rename_i err
+        rcases err with ⟨err_msg, err_evm⟩
+        rw [h_charge] at h_if
+        dsimp at h_if
+        split at h_if
+        · rename_i h_halt
+          rw [← h_if]
+          dsimp [processCreateMessage.exceptionalHalt, MsgResult.getCode]
+          rfl
+        · rw [← h_if]
+          dsimp [MsgResult.getCode]
+          have h_getCode := processCreateMessage.chargeCodeGas_getCode_gen h_charge a
+          change err_evm.state.getCode a = evm.state.getCode a at h_getCode
+          rw [h_getCode]
+          rw [eq_ok] at h_exec_cond'
+          exact h_exec_cond'
+      · rename_i devm_charge
+        rw [h_charge] at h_if
+        dsimp at h_if
+        rw [← h_if]
+        dsimp [MsgResult.getCode]
+        have h_getCode := processCreateMessage.chargeCodeGas_getCode_gen h_charge a
+        dsimp [Execution.getCode] at h_getCode
+        rw [setCode_getCode h_a.symm]
+        rw [h_getCode]
+        rw [eq_ok] at h_exec_cond'
+        exact h_exec_cond'
+    · rename_i h_some
+      rw [← h_if]
+      dsimp [MsgResult.getCode, Devm.rollback]
       rfl
 
 lemma GenericCreate.inv_getCode_cond
