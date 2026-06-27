@@ -3597,7 +3597,101 @@ lemma GenericCreate.inv_getCode_cond
     ∀ (a : Adr),
       (devm.getCode a).toList ≠ [] →
       devm'.getCode a = devm.getCode a := by
-  sorry
+  dsimp [GenericCreate] at run
+  rcases run with ⟨calldata, eq_calldata, run⟩; subst eq_calldata
+  rcases run with ⟨x, h_err, eq_err, _⟩ | ⟨_, h_ok, run⟩
+  · contradiction
+  · rcases run with ⟨devm1, eq_devm1, run⟩; subst eq_devm1
+    rcases run with ⟨createMsgGas, eq_createMsgGas, run⟩; subst eq_createMsgGas
+    rcases run with ⟨devm2, eq_devm2, run⟩; subst eq_devm2
+    rcases run with ⟨x, h_err, eq_err, _⟩ | ⟨_, h_ok, run⟩
+    · contradiction
+    · rcases run with ⟨devm3, eq_devm3, run⟩; subst eq_devm3
+      rcases run with ⟨sender, eq_sender, run⟩; subst eq_sender
+      split at run
+      · rcases run with ⟨h_xl, eq_ok⟩
+        dsimp [Devm.push, Bind.bind, Except.bind] at eq_ok
+        split at eq_ok
+        · cases eq_ok
+        · simp only [Except.ok.injEq] at eq_ok
+          subst devm'
+          intro a ha
+          rfl
+      · rename_i h_if1
+        rcases run with ⟨devm4, eq_devm4, run⟩
+        split at run
+        · rename_i h_if2
+          rcases run with ⟨h_xl, eq_ok⟩
+          dsimp [Devm.push, Bind.bind, Except.bind] at eq_ok
+          split at eq_ok
+          · cases eq_ok
+          · simp only [Except.ok.injEq] at eq_ok
+            subst devm'
+            intro a ha
+            subst eq_devm4
+            exact Devm.incrNonce_getCode
+        · rename_i h_if2
+          rcases run with ⟨childMsg, eq_childMsg, run⟩; subst eq_childMsg
+          rcases run with ⟨ex', h_exec, h_ex'⟩
+          rcases h_ex' with ⟨x, h_err, eq_err⟩ | ⟨child, h_ok, run⟩
+          · contradiction
+          · intro a ha
+            rcases ex' with err | devm_child
+            · simp [liftToExecution] at h_ok
+            · dsimp [liftToExecution] at h_ok
+              simp only [Except.ok.injEq] at h_ok
+              symm at h_ok
+              subst h_ok
+              have h_exec_cond := ProcessCreateMessage.inv_getCode_cond inv h_exec a
+              have h_a_ne : a ≠ newAddress := by
+                intro heq
+                push_neg at h_if2
+                have h_code_size : (devm4.getCode newAddress).size = 0 := h_if2.2.1
+                have h_empty : devm4.getCode newAddress = .empty := by
+                  cases h_code' : devm4.getCode newAddress with | mk data =>
+                  rw [h_code'] at h_code_size
+                  cases data with | mk l =>
+                  cases l
+                  · rfl
+                  · contradiction
+                have h_devm4 : devm4.getCode newAddress = devm.getCode newAddress := by
+                  subst eq_devm4; exact Devm.incrNonce_getCode
+                rw [heq] at ha
+                rw [← h_devm4] at ha
+                rw [h_empty] at ha
+                have h_empty_toList : ByteArray.empty.toList = [] := by
+                  unfold ByteArray.toList
+                  unfold ByteArray.toList.loop
+                  rfl
+                rw [h_empty_toList] at ha
+                exact False.elim (ha rfl)
+              have h_child_code : child.getCode a = devm4.getCode a := by
+                apply h_exec_cond h_a_ne
+                have h_devm4 : devm4.getCode a = devm.getCode a := by subst eq_devm4; exact Devm.incrNonce_getCode
+                have h_goal : (devm4.getCode a).toList ≠ [] := by
+                  rw [h_devm4]
+                  exact ha
+                exact h_goal
+              have h1 : devm4.getCode a = devm.getCode a := by subst eq_devm4; exact Devm.incrNonce_getCode
+              split at run
+              · rename_i h_child_err
+                dsimp [Devm.push, Bind.bind, Except.bind] at run
+                split at run
+                · cases run
+                · simp only [Except.ok.injEq] at run
+                  subst devm'
+                  rw [← h1, ← h_child_code]
+                  dsimp [incorporateChildOnError]
+                  rfl
+              · rename_i h_child_err
+                dsimp [Devm.push, Bind.bind, Except.bind] at run
+                split at run
+                · cases run
+                · simp only [Except.ok.injEq] at run
+                  subst devm'
+                  rw [← h1, ← h_child_code]
+                  dsimp [incorporateChildOnSuccess]
+                  rfl
 
 lemma GenericCall.inv_getCode_cond
     {sevm : Sevm} {devm : Devm} {gas : Nat} {value : B256}
