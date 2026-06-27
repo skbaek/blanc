@@ -3768,10 +3768,367 @@ lemma Xinst.inv_getCode_cond
     ∀ a : Adr,
       (devm.getCode a).toList ≠ [] →
       devm'.getCode a = devm.getCode a := by
+  intro a ha
+  cases x
+  case create =>
+    dsimp [Xinst.Run] at run
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨endowment, devm1⟩, eq1, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨memoryIndex, devm2⟩, eq2, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨memorySize, devm3⟩, eq3, run⟩; contradiction
+    rcases run with ⟨extendCost, hp4, run⟩
+    rcases run with ⟨initCodeCost, hp5, run⟩
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨devm4, eq6, run⟩; contradiction
+    rcases run with ⟨calldata, hp7, run⟩
+    rcases run with ⟨newAddress, hp8, run⟩
+    have hc1 : devm1.getCode a = devm.getCode a := by
+      revert eq1; dsimp [Devm.pop]; split <;> intro eq1
+      · contradiction
+      · injection eq1 with h1; injection h1 with _ h2; subst h2; rfl
+    have hc2 : devm2.getCode a = devm1.getCode a := by
+      revert eq2; unfold Devm.popToNat Devm.pop; split <;> intro eq2
+      · contradiction
+      · injection eq2 with h3; injection h3 with _ h4; subst h4; rfl
+    have hc3 : devm3.getCode a = devm2.getCode a := by
+      revert eq3; unfold Devm.popToNat Devm.pop; split <;> intro eq3
+      · contradiction
+      · injection eq3 with h5; injection h5 with _ h6; subst h6; rfl
+    have hc4 : devm4.getCode a = devm3.getCode a := by
+      revert eq6; unfold chargeGas; split <;> intro eq6
+      · contradiction
+      · injection eq6 with h7; subst h7; rfl
+    have hc5 : calldata.getCode a = devm4.getCode a := by
+      subst hp7; dsimp [Devm.getCode, Devm.memExtends]; rfl
+    have h_code : calldata.getCode a = devm.getCode a := by
+      rw [hc5, hc4, hc3, hc2, hc1]
+    have ha_calldata : (calldata.getCode a).toList ≠ [] := by
+      rw [h_code]
+      exact ha
+    have h_gen := GenericCreate.inv_getCode_cond inv run a ha_calldata
+    rwa [h_code] at h_gen
+  case call =>
+    dsimp [Xinst.Run] at run
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨gas, devm1⟩, eq1, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨callee, devm2⟩, eq2, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨value, devm3⟩, eq3, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨inputIndex, devm4⟩, eq4, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨inputSize, devm5⟩, eq5, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨outputIndex, devm6⟩, eq6, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨outputSize, devm7⟩, eq7, run⟩; contradiction
+    rcases run with ⟨extendCost, hp8, run⟩
+    rcases run with ⟨preAccessCost, hp9, run⟩
+    rcases run with ⟨devm8, hp10, run⟩
+    rcases run with ⟨⟨disablePrecompiles, _, code, delegatedAccessGasCost, devm9⟩, hp11, run⟩
+    rcases run with ⟨accessCost, hp12, run⟩
+    rcases run with ⟨createCost, hp13, run⟩
+    rcases run with ⟨transferCost, hp14, run⟩
+    rcases run with ⟨⟨msgCallCost, msgCallStipend⟩, hp15, run⟩
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨devm10, eq16, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨_, eq17, run⟩; contradiction
+    rcases run with ⟨devm11, hp18, run⟩
+    rcases run with ⟨senderBal, hp19, run⟩
+    have hc1 : devm1.getCode a = devm.getCode a := by
+      revert eq1; unfold Devm.pop; split <;> intro eq1
+      · contradiction
+      · injection eq1 with h1; injection h1 with _ h2; subst h2; rfl
+    have hc2 : devm2.getCode a = devm1.getCode a := by
+      revert eq2; unfold Devm.popToAdr Devm.pop; split <;> intro eq2
+      · contradiction
+      · injection eq2 with h3; injection h3 with _ h4; subst h4; rfl
+    have hc3 : devm3.getCode a = devm2.getCode a := by
+      revert eq3; unfold Devm.pop; split <;> intro eq3
+      · contradiction
+      · injection eq3 with h5; injection h5 with _ h6; subst h6; rfl
+    have hc4 : devm4.getCode a = devm3.getCode a := by
+      revert eq4; unfold Devm.popToNat Devm.pop; split <;> intro eq4
+      · contradiction
+      · injection eq4 with h7; injection h7 with _ h8; subst h8; rfl
+    have hc5 : devm5.getCode a = devm4.getCode a := by
+      revert eq5; unfold Devm.popToNat Devm.pop; split <;> intro eq5
+      · contradiction
+      · injection eq5 with h9; injection h9 with _ h10; subst h10; rfl
+    have hc6 : devm6.getCode a = devm5.getCode a := by
+      revert eq6; unfold Devm.popToNat Devm.pop; split <;> intro eq6
+      · contradiction
+      · injection eq6 with h11; injection h11 with _ h12; subst h12; rfl
+    have hc7 : devm7.getCode a = devm6.getCode a := by
+      revert eq7; unfold Devm.popToNat Devm.pop; split <;> intro eq7
+      · contradiction
+      · injection eq7 with h13; injection h13 with _ h14; subst h14; rfl
+    have hc8 : devm8.getCode a = devm7.getCode a := by
+      subst hp10; dsimp [addAccessedAddress]; rfl
+    have hc9 : devm9.getCode a = devm8.getCode a := by
+      have h_acc := @accessDelegation_getCode devm8 callee a
+      rw [← hp11] at h_acc
+      exact h_acc
+    have hc10 : devm10.getCode a = devm9.getCode a := by
+      revert eq16; unfold chargeGas; split <;> intro eq16
+      · contradiction
+      · injection eq16 with h15; subst h15; rfl
+    have hc11 : devm11.getCode a = devm10.getCode a := by
+      subst hp18; dsimp [Devm.getCode, Devm.memExtends]; rfl
+    split_ifs at run with h_bal
+    · rcases run with ⟨_, _, _, h_contra⟩ | ⟨devm12, eq20, ⟨h_xl, h_ex⟩⟩; contradiction
+      have hc12 : devm12.getCode a = devm11.getCode a := by
+        revert eq20; unfold Devm.push Except.assert; dsimp [Bind.bind, Except.bind]; split <;> intro eq20
+        · contradiction
+        · injection eq20 with h16; subst h16; rfl
+      have hc_final : devm'.getCode a = devm12.getCode a := by
+        injection h_ex with h_ex2; subst h_ex2; rfl
+      rw [hc_final, hc12, hc11, hc10, hc9, hc8, hc7, hc6, hc5, hc4, hc3, hc2, hc1]
+    · have h_code : devm11.getCode a = devm.getCode a := by
+        rw [hc11, hc10, hc9, hc8, hc7, hc6, hc5, hc4, hc3, hc2, hc1]
+      have ha_11 : (devm11.getCode a).toList ≠ [] := by
+        rw [h_code]; exact ha
+      have h_gen := GenericCall.inv_getCode_cond inv run a ha_11
+      rw [h_gen, h_code]
+  case callcode =>
+    dsimp [Xinst.Run] at run
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨gas, devm1⟩, eq1, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨codeAddress, devm2⟩, eq2, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨value, devm3⟩, eq3, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨inputIndex, devm4⟩, eq4, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨inputSize, devm5⟩, eq5, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨outputIndex, devm6⟩, eq6, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨outputSize, devm7⟩, eq7, run⟩; contradiction
+    rcases run with ⟨extendCost, hp8, run⟩
+    rcases run with ⟨preAccessCost, hp9, run⟩
+    rcases run with ⟨devm8, hp10, run⟩
+    rcases run with ⟨⟨disablePrecompiles, newCodeAddress, code, delegatedAccessGasCost, devm9⟩, hp11, run⟩
+    rcases run with ⟨accessCost, hp12, run⟩
+    rcases run with ⟨transferCost, hp13, run⟩
+    rcases run with ⟨⟨msgCallCost, msgCallStipend⟩, hp14, run⟩
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨devm10, eq15, run⟩; contradiction
+    rcases run with ⟨devm11, hp16, run⟩
+    rcases run with ⟨senderBal, hp17, run⟩
+
+    have hc1 : devm1.getCode a = devm.getCode a := by
+      revert eq1; unfold Devm.pop; split <;> intro eq1
+      · contradiction
+      · injection eq1 with h1; injection h1 with _ h2; subst h2; rfl
+    have hc2 : devm2.getCode a = devm1.getCode a := by
+      revert eq2; unfold Devm.popToAdr Devm.pop; split <;> intro eq2
+      · contradiction
+      · injection eq2 with h3; injection h3 with _ h4; subst h4; rfl
+    have hc3 : devm3.getCode a = devm2.getCode a := by
+      revert eq3; unfold Devm.pop; split <;> intro eq3
+      · contradiction
+      · injection eq3 with h5; injection h5 with _ h6; subst h6; rfl
+    have hc4 : devm4.getCode a = devm3.getCode a := by
+      revert eq4; unfold Devm.popToNat Devm.pop; split <;> intro eq4
+      · contradiction
+      · injection eq4 with h7; injection h7 with _ h8; subst h8; rfl
+    have hc5 : devm5.getCode a = devm4.getCode a := by
+      revert eq5; unfold Devm.popToNat Devm.pop; split <;> intro eq5
+      · contradiction
+      · injection eq5 with h9; injection h9 with _ h10; subst h10; rfl
+    have hc6 : devm6.getCode a = devm5.getCode a := by
+      revert eq6; unfold Devm.popToNat Devm.pop; split <;> intro eq6
+      · contradiction
+      · injection eq6 with h11; injection h11 with _ h12; subst h12; rfl
+    have hc7 : devm7.getCode a = devm6.getCode a := by
+      revert eq7; unfold Devm.popToNat Devm.pop; split <;> intro eq7
+      · contradiction
+      · injection eq7 with h13; injection h13 with _ h14; subst h14; rfl
+    have hc8 : devm8.getCode a = devm7.getCode a := by
+      subst hp10; dsimp [addAccessedAddress]; rfl
+    have hc9 : devm9.getCode a = devm8.getCode a := by
+      have h_acc := @accessDelegation_getCode devm8 codeAddress a
+      rw [← hp11] at h_acc
+      exact h_acc
+    have hc10 : devm10.getCode a = devm9.getCode a := by
+      revert eq15; unfold chargeGas; split <;> intro eq15
+      · contradiction
+      · injection eq15 with h15; subst h15; rfl
+    have hc11 : devm11.getCode a = devm10.getCode a := by
+      subst hp16; dsimp [Devm.getCode, Devm.memExtends]; rfl
+    split_ifs at run with h_bal
+    · rcases run with ⟨_, _, _, h_contra⟩ | ⟨devm12, eq20, ⟨h_xl, h_ex⟩⟩; contradiction
+      have hc12 : devm12.getCode a = devm11.getCode a := by
+        revert eq20; unfold Devm.push Except.assert; dsimp [Bind.bind, Except.bind]; split <;> intro eq20
+        · contradiction
+        · injection eq20 with h16; subst h16; rfl
+      have hc_final : devm'.getCode a = devm12.getCode a := by
+        injection h_ex with h_ex2; subst h_ex2; rfl
+      rw [hc_final, hc12, hc11, hc10, hc9, hc8, hc7, hc6, hc5, hc4, hc3, hc2, hc1]
+    · have h_code : devm11.getCode a = devm.getCode a := by
+        rw [hc11, hc10, hc9, hc8, hc7, hc6, hc5, hc4, hc3, hc2, hc1]
+      have ha_11 : (devm11.getCode a).toList ≠ [] := by
+        rw [h_code]; exact ha
+      have h_gen := GenericCall.inv_getCode_cond inv run a ha_11
+      rw [h_gen, h_code]
+  case delcall =>
+    dsimp [Xinst.Run] at run
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨gas, devm1⟩, eq1, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨codeAddress, devm2⟩, eq2, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨inputIndex, devm3⟩, eq3, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨inputSize, devm4⟩, eq4, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨outputIndex, devm5⟩, eq5, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨outputSize, devm6⟩, eq6, run⟩; contradiction
+    rcases run with ⟨extendCost, hp7, run⟩
+    rcases run with ⟨preAccessCost, hp8, run⟩
+    rcases run with ⟨devm7, hp9, run⟩
+    rcases run with ⟨⟨disablePrecompiles, newCodeAddress, code, delegatedAccessGasCost, devm8⟩, hp10, run⟩
+    rcases run with ⟨accessCost, hp11, run⟩
+    rcases run with ⟨⟨msgCallCost, msgCallStipend⟩, hp12, run⟩
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨devm9, eq13, run⟩; contradiction
+    rcases run with ⟨devm10, hp14, run⟩
+
+    have hc1 : devm1.getCode a = devm.getCode a := by
+      revert eq1; unfold Devm.pop; split <;> intro eq1
+      · contradiction
+      · injection eq1 with h1; injection h1 with _ h2; subst h2; rfl
+    have hc2 : devm2.getCode a = devm1.getCode a := by
+      revert eq2; unfold Devm.popToAdr Devm.pop; split <;> intro eq2
+      · contradiction
+      · injection eq2 with h3; injection h3 with _ h4; subst h4; rfl
+    have hc3 : devm3.getCode a = devm2.getCode a := by
+      revert eq3; unfold Devm.popToNat Devm.pop; split <;> intro eq3
+      · contradiction
+      · injection eq3 with h5; injection h5 with _ h6; subst h6; rfl
+    have hc4 : devm4.getCode a = devm3.getCode a := by
+      revert eq4; unfold Devm.popToNat Devm.pop; split <;> intro eq4
+      · contradiction
+      · injection eq4 with h7; injection h7 with _ h8; subst h8; rfl
+    have hc5 : devm5.getCode a = devm4.getCode a := by
+      revert eq5; unfold Devm.popToNat Devm.pop; split <;> intro eq5
+      · contradiction
+      · injection eq5 with h9; injection h9 with _ h10; subst h10; rfl
+    have hc6 : devm6.getCode a = devm5.getCode a := by
+      revert eq6; unfold Devm.popToNat Devm.pop; split <;> intro eq6
+      · contradiction
+      · injection eq6 with h11; injection h11 with _ h12; subst h12; rfl
+    have hc7 : devm7.getCode a = devm6.getCode a := by
+      subst hp9; dsimp [addAccessedAddress]; rfl
+    have hc8 : devm8.getCode a = devm7.getCode a := by
+      have h_acc := @accessDelegation_getCode devm7 codeAddress a
+      rw [← hp10] at h_acc
+      exact h_acc
+    have hc9 : devm9.getCode a = devm8.getCode a := by
+      revert eq13; unfold chargeGas; split <;> intro eq13
+      · contradiction
+      · injection eq13 with h13; subst h13; rfl
+    have hc10 : devm10.getCode a = devm9.getCode a := by
+      subst hp14; dsimp [Devm.getCode, Devm.memExtends]; rfl
+
+    have h_code : devm10.getCode a = devm.getCode a := by
+      rw [hc10, hc9, hc8, hc7, hc6, hc5, hc4, hc3, hc2, hc1]
+    have ha_10 : (devm10.getCode a).toList ≠ [] := by
+      rw [h_code]; exact ha
+    have h_gen := GenericCall.inv_getCode_cond inv run a ha_10
+    rw [h_gen, h_code]
+  case create2 =>
+    dsimp [Xinst.Run] at run
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨endowment, devm1⟩, eq1, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨memoryIndex, devm2⟩, eq2, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨memorySize, devm3⟩, eq3, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨salt, devm4⟩, eq4, run⟩; contradiction
+    rcases run with ⟨extendCost, hp5, run⟩
+    rcases run with ⟨initCodeHashCost, hp6, run⟩
+    rcases run with ⟨initCodeCost, hp7, run⟩
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨devm5, eq8, run⟩; contradiction
+    rcases run with ⟨devm6, hp9, run⟩
+    rcases run with ⟨newAddress, hp10, run⟩
+
+    have hc1 : devm1.getCode a = devm.getCode a := by
+      revert eq1; dsimp [Devm.pop]; split <;> intro eq1
+      · contradiction
+      · injection eq1 with h1; injection h1 with _ h2; subst h2; rfl
+    have hc2 : devm2.getCode a = devm1.getCode a := by
+      revert eq2; unfold Devm.popToNat Devm.pop; split <;> intro eq2
+      · contradiction
+      · injection eq2 with h3; injection h3 with _ h4; subst h4; rfl
+    have hc3 : devm3.getCode a = devm2.getCode a := by
+      revert eq3; unfold Devm.popToNat Devm.pop; split <;> intro eq3
+      · contradiction
+      · injection eq3 with h5; injection h5 with _ h6; subst h6; rfl
+    have hc4 : devm4.getCode a = devm3.getCode a := by
+      revert eq4; dsimp [Devm.pop]; split <;> intro eq4
+      · contradiction
+      · injection eq4 with h7; injection h7 with _ h8; subst h8; rfl
+    have hc5 : devm5.getCode a = devm4.getCode a := by
+      revert eq8; unfold chargeGas; split <;> intro eq8
+      · contradiction
+      · injection eq8 with h9; subst h9; rfl
+    have hc6 : devm6.getCode a = devm5.getCode a := by
+      subst hp9; dsimp [Devm.getCode, Devm.memExtends]; rfl
+
+    have h_code : devm6.getCode a = devm.getCode a := by
+      rw [hc6, hc5, hc4, hc3, hc2, hc1]
+    have ha_6 : (devm6.getCode a).toList ≠ [] := by
+      rw [h_code]; exact ha
+    have h_gen := GenericCreate.inv_getCode_cond inv run a ha_6
+    rw [h_gen, h_code]
+  case statcall =>
+    dsimp [Xinst.Run] at run
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨gas, devm1⟩, eq1, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨target, devm2⟩, eq2, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨inputIndex, devm3⟩, eq3, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨inputSize, devm4⟩, eq4, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨outputIndex, devm5⟩, eq5, run⟩; contradiction
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨⟨outputSize, devm6⟩, eq6, run⟩; contradiction
+    rcases run with ⟨extendCost, hp7, run⟩
+    rcases run with ⟨preAccessCost, hp8, run⟩
+    rcases run with ⟨devm7, hp9, run⟩
+    rcases run with ⟨⟨disablePrecompiles, _, code, delegatedAccessGasCost, devm8⟩, hp10, run⟩
+    rcases run with ⟨accessCost, hp11, run⟩
+    rcases run with ⟨⟨msgCallCost, msgCallStipend⟩, hp12, run⟩
+    rcases run with ⟨_, _, _, h_contra⟩ | ⟨devm9, eq13, run⟩; contradiction
+    rcases run with ⟨devm10, hp14, run⟩
+
+    have hc1 : devm1.getCode a = devm.getCode a := by
+      revert eq1; unfold Devm.pop; split <;> intro eq1
+      · contradiction
+      · injection eq1 with h1; injection h1 with _ h2; subst h2; rfl
+    have hc2 : devm2.getCode a = devm1.getCode a := by
+      revert eq2; unfold Devm.popToAdr Devm.pop; split <;> intro eq2
+      · contradiction
+      · injection eq2 with h3; injection h3 with _ h4; subst h4; rfl
+    have hc3 : devm3.getCode a = devm2.getCode a := by
+      revert eq3; unfold Devm.popToNat Devm.pop; split <;> intro eq3
+      · contradiction
+      · injection eq3 with h5; injection h5 with _ h6; subst h6; rfl
+    have hc4 : devm4.getCode a = devm3.getCode a := by
+      revert eq4; unfold Devm.popToNat Devm.pop; split <;> intro eq4
+      · contradiction
+      · injection eq4 with h7; injection h7 with _ h8; subst h8; rfl
+    have hc5 : devm5.getCode a = devm4.getCode a := by
+      revert eq5; unfold Devm.popToNat Devm.pop; split <;> intro eq5
+      · contradiction
+      · injection eq5 with h9; injection h9 with _ h10; subst h10; rfl
+    have hc6 : devm6.getCode a = devm5.getCode a := by
+      revert eq6; unfold Devm.popToNat Devm.pop; split <;> intro eq6
+      · contradiction
+      · injection eq6 with h11; injection h11 with _ h12; subst h12; rfl
+    have hc7 : devm7.getCode a = devm6.getCode a := by
+      subst hp9; dsimp [addAccessedAddress]; rfl
+    have hc8 : devm8.getCode a = devm7.getCode a := by
+      have h_acc := @accessDelegation_getCode devm7 target a
+      rw [← hp10] at h_acc
+      exact h_acc
+    have hc9 : devm9.getCode a = devm8.getCode a := by
+      revert eq13; unfold chargeGas; split <;> intro eq13
+      · contradiction
+      · injection eq13 with h13; subst h13; rfl
+    have hc10 : devm10.getCode a = devm9.getCode a := by
+      subst hp14; dsimp [Devm.getCode, Devm.memExtends]; rfl
+
+    have h_code : devm10.getCode a = devm.getCode a := by
+      rw [hc10, hc9, hc8, hc7, hc6, hc5, hc4, hc3, hc2, hc1]
+    have ha_10 : (devm10.getCode a).toList ≠ [] := by
+      rw [h_code]; exact ha
+    have h_gen := GenericCall.inv_getCode_cond inv run a ha_10
+    rw [h_gen, h_code]
+
+lemma Ninst.inv_getCode_cond
+    {pc sevm devm n xl devm'}
+    (inv : xl.InvGetCode)
+    (run : Ninst.Run' pc sevm devm n xl (.ok devm')) :
+    ∀ a : Adr,
+      (devm.getCode a).toList ≠ [] →
+      devm'.getCode a = devm.getCode a := by
   sorry
 
 #exit
-
 lemma Ninst.inv_getCode
     {pc sevm devm n xlot devm'}
     (run : Ninst.Run' pc sevm devm n xlot (.ok devm')) (a : Adr)
@@ -3798,7 +4155,7 @@ lemma Ninst.inv_getCode
     · revert run; exact fun h => Rinst.inv_getCode h a ne
     · revert run; exact fun h => h.elim
   case exec x =>
-    revert run; exact fun h => Xinst.inv_getCode h a ne
+    exact fun h => Xinst.inv_getCode h a ne
 
 lemma Jinst.getCode_eq_of_run_ok
     {pc sevm devm j pc' devm'}
