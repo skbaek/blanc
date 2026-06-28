@@ -4706,7 +4706,8 @@ lemma applyTernary_getCode_err {f : B256 → B256 → B256 → B256} {cost devm 
 lemma Rinst.inv_getCode_err
     {pc sevm devm r err}
     (run : Rinst.run ⟨pc, sevm, devm⟩ r = Except.error err) (a : Adr)
-    (ne : (devm.getCode a).toList ≠ []) :
+    --(ne : (devm.getCode a).toList ≠ [])
+    :
     err.2.getCode a = devm.getCode a := by
   cases r <;> dsimp [Rinst.run, Rinst.runCore] at run
   case add => apply applyBinary_getCode_err run
@@ -4980,16 +4981,21 @@ lemma Rinst.inv_getCode_err
       · intro ⟨y, devm2⟩ hp2; exact Devm.pop_getCode_eq hp2 a
       · intro e hp2; exact Devm.pop_getCode_err hp2 a
       · intro ⟨y, devm2⟩ hp2 run3
-        dsimp [assertDynamic, Except.assert, addAccessedStorageKey, Devm.withAccessedStorageKeys, chargeGas] at run3
-        simp only [bind, Except.bind] at run3
-        try split_ifs at run3 <;> simp at run3
-        all_goals (try split at run3 <;> simp at run3)
-        try split_ifs at run3 <;> simp at run3
-        all_goals (try split at run3 <;> simp at run3)
-        try split_ifs at run3 <;> simp at run3
-        all_goals (try { injection run3 with h_eq; cases h_eq; rfl })
-        all_goals (try { rw [← run3]; rfl })
-        all_goals (try contradiction)
+        refine getCode_err_of_bind run3 (fun _ => devm2) ?_ ?_ ?_
+        · intro u h_assert; rfl
+        · intro e h_assert; exact assert_getCode_err h_assert a
+        · intro u h_assert run4
+          split_ifs at run4
+          all_goals {
+            refine getCode_err_of_bind run4 id ?_ ?_ ?_
+            · intro devm3 hc; exact chargeGas_getCode_eq hc a
+            · intro e hc; exact chargeGas_getCode_err hc a
+            · intro devm3 hc run5
+              dsimp [assertDynamic, Except.assert] at run5
+              split_ifs at run5
+              all_goals (try { cases run5; rfl })
+              all_goals (try injection run5)
+          }
   case pc =>
     refine getCode_err_of_bind run id ?_ ?_ ?_
     · intro devm1 hc; exact chargeGas_getCode_eq hc a
@@ -5029,12 +5035,8 @@ lemma Rinst.inv_getCode_err
         · intro devm3 hc run4
           dsimp [assertDynamic, Except.assert] at run4
           simp only [bind, Except.bind] at run4
-          try split_ifs at run4 <;> simp at run4
-          all_goals (try split at run4 <;> simp at run4)
-          try split_ifs at run4 <;> simp at run4
-          all_goals (try { injection run4 with h_eq; cases h_eq; rfl })
-          all_goals (try { rw [← run4]; rfl })
-          all_goals (try contradiction)
+          try split_ifs at run4; simp at run4
+          rw [← run4]; rfl
   case mcopy =>
     refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
     · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getCode_eq hp a
@@ -5051,12 +5053,7 @@ lemma Rinst.inv_getCode_err
           refine getCode_err_of_bind run4 id ?_ ?_ ?_
           · intro devm4 hc; exact chargeGas_getCode_eq hc a
           · intro e hc; exact chargeGas_getCode_err hc a
-          · intro devm4 hc run5
-            try split_ifs at run5 <;> simp at run5
-            all_goals (try split at run5 <;> simp at run5)
-            try split_ifs at run5 <;> simp at run5
-            all_goals (try { rw [← run5]; rfl })
-            all_goals (try contradiction)
+          · intro devm4 hc run5; contradiction
   case dup =>
     refine getCode_err_of_bind run id ?_ ?_ ?_
     · intro devm1 hc; exact chargeGas_getCode_eq hc a
@@ -5092,11 +5089,8 @@ lemma Rinst.inv_getCode_err
           · intro devm4 hc run5
             dsimp [assertDynamic, Except.assert] at run5
             simp only [bind, Except.bind] at run5
-            try split_ifs at run5 <;> simp at run5
-            all_goals (try split at run5 <;> simp at run5)
-            try split_ifs at run5 <;> simp at run5
-            all_goals (try { rw [← run5]; rfl })
-            all_goals (try contradiction)
+            try split_ifs at run5; simp at run5
+            rw [← run5]; rfl
 
 lemma Rinst.inv_getCode_gen
     {pc sevm devm r exn}
@@ -5104,7 +5098,7 @@ lemma Rinst.inv_getCode_gen
     (ne : (devm.getCode a).toList ≠ []) :
     Execution.getCode exn a = devm.getCode a := by
   cases h_exn : exn
-  · exact Rinst.inv_getCode_err (run.trans h_exn) a ne
+  · exact Rinst.inv_getCode_err (run.trans h_exn) a
   · exact Rinst.inv_getCode (run.trans h_exn) a ne
 
 lemma Xinst.inv_getCode_gen
@@ -5568,7 +5562,6 @@ lemma Ninst.inv_getCode_gen
   case exec x =>
     exact Xinst.inv_getCode_gen inv run a ha
 
-#exit
 lemma Exec.inv_getCode {pc} {sevm} {devm} {devm'}
     (run : Exec pc sevm devm (.ok devm')) :
     ∀ a : Adr,
