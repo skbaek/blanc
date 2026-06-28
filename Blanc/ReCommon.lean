@@ -5876,7 +5876,7 @@ lemma Exec.inv_getCode {pc} {sevm} {devm} {exn}
     change devm'.getCode adr = devm.getCode adr at h1
     rw [← h1] at ne; rw [ih adr ne, h1]
   · intro pc sevm devm l exn lat run adr ne
-    sorry
+    exact Linst.inv_getCode run adr
 
 lemma Ninst.inv_getCode
     {pc sevm devm n xlot devm'}
