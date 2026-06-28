@@ -2988,6 +2988,15 @@ lemma Devm.pop_map_snd_getCode_eq {devm devm1 : Devm} (hp : (devm.pop <&> Prod.s
     rcases hp with ⟨_, rfl⟩
     exact Devm.pop_getCode_eq hp2 a
 
+lemma Devm.pop_map_snd_getCode_err {devm : Devm} {err : String × Devm} (hp : (devm.pop <&> Prod.snd) = .error err) (a : Adr) : err.2.getCode a = devm.getCode a := by
+  dsimp [(· <&> ·), Functor.mapRev, Functor.map, Except.map] at hp
+  rcases hp2 : devm.pop with e | ⟨x, devm2⟩
+  · simp [hp2] at hp; cases hp
+    simp only [Devm.pop] at hp2
+    split at hp2 <;> try contradiction
+    cases hp2; rfl
+  · simp [hp2] at hp
+
 @[simp] lemma Except.bind_error {α β ε} (e : ε) (f : α → Except ε β) : (Except.error e >>= f) = Except.error e := rfl
 @[simp] lemma Except.bind_ok {α β ε} (x : α) (f : α → Except ε β) : (Except.ok x >>= f) = f x := rfl
 
@@ -3024,6 +3033,8 @@ lemma applyBinary_getCode_eq {f : B256 → B256 → B256} {cost devm devm'}
   intro ⟨x, devm1⟩ hp run; refine getCode_eq_of_bind run Prod.snd ?_ ?_
   {intro ⟨y, devm2⟩ hp2; exact Devm.pop_getCode_eq hp2 a}
   intro ⟨y, devm2⟩ hp2 run; exact pushItem_getCode_eq run a
+
+
 
 lemma applyTernary_getCode_eq {f : B256 → B256 → B256 → B256} {cost devm devm'}
     (h : applyTernary f cost devm = .ok devm') (a : Adr) :
@@ -3142,6 +3153,8 @@ lemma Devm.popN_getCode_eq {n : Nat} {devm devm' : Devm} {l : List B256}
     have h1 := Devm.pop_getCode_eq hp1 a
     have h2 := ih hp3
     rw [h2, h1]
+
+
 
 lemma Rinst.inv_getCode
     {pc sevm devm r devm'}
@@ -3401,8 +3414,8 @@ lemma Rinst.inv_getCode
     rfl
 
 def Execution.getCode : Execution → Adr → ByteArray
-  | .error ⟨_, devm⟩, adr => devm.getCode adr
-  | .ok devm, adr => devm.getCode adr
+  | Except.error ⟨_, devm⟩, adr => devm.getCode adr
+  | Except.ok devm, adr => devm.getCode adr
 
 lemma chargeGas_getCode_gen {cost devm exn} (h : chargeGas cost devm = exn) (a : Adr) : Execution.getCode exn a = devm.getCode a := by
   simp only [chargeGas] at h
@@ -4576,6 +4589,524 @@ lemma Xinst.inv_getCode_cond
     have h_gen := GenericCall.inv_getCode_cond inv run a ha_10
     rw [h_gen, h_code]
 
+lemma Devm.pop_getCode_err {err devm} (h : Devm.pop devm = .error err) (a : Adr) : err.2.getCode a = devm.getCode a := by
+  simp only [Devm.pop] at h
+  split at h <;> try contradiction
+  cases h; rfl
+
+lemma chargeGas_getCode_err {cost devm err} (h : chargeGas cost devm = .error err) (a : Adr) : err.2.getCode a = devm.getCode a := by
+  simp only [chargeGas] at h
+  split at h <;> try contradiction
+  cases h; rfl
+
+lemma Devm.push_getCode_err {v devm err} (h : Devm.push v devm = Except.error err) (a : Adr) : err.2.getCode a = devm.getCode a := by
+  unfold Devm.push Except.assert at h; dsimp [Bind.bind, Except.bind] at h
+  split_ifs at h <;> try contradiction
+  injection h with h1; rw [← h1]
+
+lemma assert_getCode_err {cond : Prop} [Decidable cond] {msg : String} {devm : Devm} {err : String × Devm} (h : Except.assert cond (msg, devm) = Except.error err) (a : Adr) : err.2.getCode a = devm.getCode a := by
+  unfold Except.assert at h
+  split_ifs at h <;> try contradiction
+  injection h with h1; rw [← h1]
+
+lemma Devm.popToNat_getCode_err {devm err} (h : Devm.popToNat devm = .error err) (a : Adr) : err.2.getCode a = devm.getCode a := by
+  dsimp [Devm.popToNat, Functor.map, Except.map] at h
+  rcases hp : devm.pop with err_pop | ⟨x, devm1⟩
+  · simp [hp] at h; cases h; exact Devm.pop_getCode_err hp a
+  · simp [hp] at h
+
+lemma Devm.popToAdr_getCode_err {devm err} (h : Devm.popToAdr devm = .error err) (a : Adr) : err.2.getCode a = devm.getCode a := by
+  dsimp [Devm.popToAdr, Functor.map, Except.map] at h
+  rcases hp : devm.pop with err_pop | ⟨x, devm1⟩
+  · simp [hp] at h; cases h; exact Devm.pop_getCode_err hp a
+  · simp [hp] at h
+
+lemma getCode_err_of_bind {α} {ma : Except (String × Devm) α} {f : α → Execution}
+    {devm : Devm} {a : Adr} {err : String × Devm}
+    (run : (ma >>= f) = Except.error err)
+    (getDevm : α → Devm)
+    (h_first_ok : ∀ v, ma = Except.ok v → (getDevm v).getCode a = devm.getCode a)
+    (h_first_err : ∀ e, ma = Except.error e → e.2.getCode a = devm.getCode a)
+    (h_rest_err : ∀ v, ma = Except.ok v → f v = Except.error err → err.2.getCode a = (getDevm v).getCode a) :
+    err.2.getCode a = devm.getCode a := by
+  cases h_ma : ma
+  case error e =>
+    rw [h_ma, Except.bind_error] at run
+    injection run with h_eq; subst h_eq
+    exact h_first_err _ h_ma
+  case ok v =>
+    rw [h_ma, Except.bind_ok] at run
+    have h1 := h_rest_err v h_ma run
+    have h2 := h_first_ok v h_ma
+    exact h1.trans h2
+
+lemma Devm.popN_getCode_err {n : Nat} {devm : Devm} {err : String × Devm}
+    (hp : devm.popN n = Except.error err) (a : Adr) :
+    err.2.getCode a = devm.getCode a := by
+  induction n generalizing devm err with
+  | zero => simp [Devm.popN] at hp
+  | succ n ih =>
+    simp [Devm.popN, bind, Except.bind] at hp
+    split at hp
+    · rename_i eq_err; injection hp with eq; subst eq
+      exact Devm.pop_getCode_err eq_err a
+    · rename_i eq_ok; split at hp
+      · rename_i eq_err; injection hp with eq; subst eq
+        have h1 := ih eq_err
+        have h2 := Devm.pop_getCode_eq eq_ok a
+        exact h1.trans h2
+      · rename_i eq_ok2; injection hp
+
+lemma pushItem_getCode_err {x c devm err} (h : pushItem x c devm = Except.error err) (a : Adr) : err.2.getCode a = devm.getCode a := by
+  simp only [pushItem] at h
+  refine getCode_err_of_bind h id ?_ ?_ ?_
+  · intro devm1 hc; exact chargeGas_getCode_eq hc a
+  · intro e hc; exact chargeGas_getCode_err hc a
+  · intro devm1 hc run; exact Devm.push_getCode_err run a
+
+lemma applyUnary_getCode_err {f : B256 → B256} {cost devm err}
+    (h : applyUnary f cost devm = Except.error err) (a : Adr) :
+    err.2.getCode a = devm.getCode a := by
+  simp only [applyUnary] at h
+  refine getCode_err_of_bind h Prod.snd ?_ ?_ ?_
+  · intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a
+  · intro e hp; exact Devm.pop_getCode_err hp a
+  · intro ⟨x, devm1⟩ hp run; exact pushItem_getCode_err run a
+
+lemma applyBinary_getCode_err {f : B256 → B256 → B256} {cost devm err}
+    (h : applyBinary f cost devm = Except.error err) (a : Adr) :
+    err.2.getCode a = devm.getCode a := by
+  simp only [applyBinary] at h
+  refine getCode_err_of_bind h Prod.snd ?_ ?_ ?_
+  · intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a
+  · intro e hp; exact Devm.pop_getCode_err hp a
+  · intro ⟨x, devm1⟩ hp run
+    refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨y, devm2⟩ hp2; exact Devm.pop_getCode_eq hp2 a
+    · intro e hp2; exact Devm.pop_getCode_err hp2 a
+    · intro ⟨y, devm2⟩ hp2 run2; exact pushItem_getCode_err run2 a
+
+lemma applyTernary_getCode_err {f : B256 → B256 → B256 → B256} {cost devm err}
+    (h : applyTernary f cost devm = Except.error err) (a : Adr) :
+    err.2.getCode a = devm.getCode a := by
+  simp only [applyTernary] at h
+  refine getCode_err_of_bind h Prod.snd ?_ ?_ ?_
+  · intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a
+  · intro e hp; exact Devm.pop_getCode_err hp a
+  · intro ⟨x, devm1⟩ hp run
+    refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨y, devm2⟩ hp2; exact Devm.pop_getCode_eq hp2 a
+    · intro e hp2; exact Devm.pop_getCode_err hp2 a
+    · intro ⟨y, devm2⟩ hp2 run2
+      refine getCode_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨z, devm3⟩ hp3; exact Devm.pop_getCode_eq hp3 a
+      · intro e hp3; exact Devm.pop_getCode_err hp3 a
+      · intro ⟨z, devm3⟩ hp3 run3; exact pushItem_getCode_err run3 a
+
+lemma Rinst.inv_getCode_err
+    {pc sevm devm r err}
+    (run : Rinst.run ⟨pc, sevm, devm⟩ r = Except.error err) (a : Adr)
+    (ne : (devm.getCode a).toList ≠ []) :
+    err.2.getCode a = devm.getCode a := by
+  cases r <;> dsimp [Rinst.run, Rinst.runCore] at run
+  case add => apply applyBinary_getCode_err run
+  case mul => apply applyBinary_getCode_err run
+  case sub => apply applyBinary_getCode_err run
+  case div => apply applyBinary_getCode_err run
+  case sdiv => apply applyBinary_getCode_err run
+  case mod => apply applyBinary_getCode_err run
+  case smod => apply applyBinary_getCode_err run
+  case addmod => apply applyTernary_getCode_err run
+  case mulmod => apply applyTernary_getCode_err run
+  case exp =>
+    refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a
+    · intro e hp; exact Devm.pop_getCode_err hp a
+    · intro ⟨x, devm1⟩ hp run2
+      refine getCode_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.pop_getCode_eq hp2 a
+      · intro e hp2; exact Devm.pop_getCode_err hp2 a
+      · intro ⟨y, devm2⟩ hp2 run3; exact pushItem_getCode_err run3 a
+  case signextend => apply applyBinary_getCode_err run
+  case lt => apply applyBinary_getCode_err run
+  case gt => apply applyBinary_getCode_err run
+  case slt => apply applyBinary_getCode_err run
+  case sgt => apply applyBinary_getCode_err run
+  case eq => apply applyBinary_getCode_err run
+  case iszero => apply applyUnary_getCode_err run
+  case and => apply applyBinary_getCode_err run
+  case or => apply applyBinary_getCode_err run
+  case xor => apply applyBinary_getCode_err run
+  case not => apply applyUnary_getCode_err run
+  case byte => apply applyBinary_getCode_err run
+  case shr => apply applyBinary_getCode_err run
+  case shl => apply applyBinary_getCode_err run
+  case sar => apply applyBinary_getCode_err run
+  case kec =>
+    refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getCode_eq hp a
+    · intro e hp; exact Devm.popToNat_getCode_err hp a
+    · intro ⟨x, devm1⟩ hp run2
+      refine getCode_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_getCode_eq hp2 a
+      · intro e hp2; exact Devm.popToNat_getCode_err hp2 a
+      · intro ⟨y, devm2⟩ hp2 run3
+        refine getCode_err_of_bind run3 id ?_ ?_ ?_
+        · intro devm3 hc; exact chargeGas_getCode_eq hc a
+        · intro e hc; exact chargeGas_getCode_err hc a
+        · intro devm3 hc run4; exact Devm.push_getCode_err run4 a
+  case address => apply pushItem_getCode_err run
+  case balance =>
+    refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a
+    · intro e hp; exact Devm.pop_getCode_err hp a
+    · intro ⟨x, devm1⟩ hp run2; split at run2
+      · refine getCode_err_of_bind run2 id ?_ ?_ ?_
+        · intro devm2 hc; exact chargeGas_getCode_eq hc a
+        · intro e hc; exact chargeGas_getCode_err hc a
+        · intro devm2 hc run3; exact Devm.push_getCode_err run3 a
+      · refine getCode_err_of_bind run2 id ?_ ?_ ?_
+        · intro devm2 hc; exact chargeGas_getCode_eq hc a
+        · intro e hc; exact chargeGas_getCode_err hc a
+        · intro devm2 hc run3; exact Devm.push_getCode_err run3 a
+  case origin => apply pushItem_getCode_err run
+  case caller => apply pushItem_getCode_err run
+  case callvalue => apply pushItem_getCode_err run
+  case calldataload =>
+    refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a
+    · intro e hp; exact Devm.pop_getCode_err hp a
+    · intro ⟨x, devm1⟩ hp run2
+      refine getCode_err_of_bind run2 id ?_ ?_ ?_
+      · intro devm2 hc; exact chargeGas_getCode_eq hc a
+      · intro e hc; exact chargeGas_getCode_err hc a
+      · intro devm2 hc run3; exact Devm.push_getCode_err run3 a
+  case calldatasize => apply pushItem_getCode_err run
+  case calldatacopy =>
+    refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getCode_eq hp a
+    · intro e hp; exact Devm.popToNat_getCode_err hp a
+    · intro ⟨x, devm1⟩ hp run2
+      refine getCode_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_getCode_eq hp2 a
+      · intro e hp2; exact Devm.popToNat_getCode_err hp2 a
+      · intro ⟨y, devm2⟩ hp2 run3
+        refine getCode_err_of_bind run3 Prod.snd ?_ ?_ ?_
+        · intro ⟨z, devm3⟩ hp3; exact Devm.popToNat_getCode_eq hp3 a
+        · intro e hp3; exact Devm.popToNat_getCode_err hp3 a
+        · intro ⟨z, devm3⟩ hp3 run4
+          refine getCode_err_of_bind run4 id ?_ ?_ ?_
+          · intro devm4 hc; exact chargeGas_getCode_eq hc a
+          · intro e hc; exact chargeGas_getCode_err hc a
+          · intro devm4 hc run5; injection run5
+  case codesize => apply pushItem_getCode_err run
+  case codecopy =>
+    refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getCode_eq hp a
+    · intro e hp; exact Devm.popToNat_getCode_err hp a
+    · intro ⟨x, devm1⟩ hp run2
+      refine getCode_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_getCode_eq hp2 a
+      · intro e hp2; exact Devm.popToNat_getCode_err hp2 a
+      · intro ⟨y, devm2⟩ hp2 run3
+        refine getCode_err_of_bind run3 Prod.snd ?_ ?_ ?_
+        · intro ⟨z, devm3⟩ hp3; exact Devm.popToNat_getCode_eq hp3 a
+        · intro e hp3; exact Devm.popToNat_getCode_err hp3 a
+        · intro ⟨z, devm3⟩ hp3 run4
+          refine getCode_err_of_bind run4 id ?_ ?_ ?_
+          · intro devm4 hc; exact chargeGas_getCode_eq hc a
+          · intro e hc; exact chargeGas_getCode_err hc a
+          · intro devm4 hc run5; injection run5
+  case gasprice => apply pushItem_getCode_err run
+  case extcodesize =>
+    refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToAdr_getCode_eq hp a
+    · intro e hp; exact Devm.popToAdr_getCode_err hp a
+    · intro ⟨x, devm1⟩ hp run2; split at run2
+      · refine getCode_err_of_bind run2 id ?_ ?_ ?_
+        · intro devm2 hc; exact chargeGas_getCode_eq hc a
+        · intro e hc; exact chargeGas_getCode_err hc a
+        · intro devm2 hc run3; exact Devm.push_getCode_err run3 a
+      · refine getCode_err_of_bind run2 id ?_ ?_ ?_
+        · intro devm2 hc; exact chargeGas_getCode_eq hc a
+        · intro e hc; exact chargeGas_getCode_err hc a
+        · intro devm2 hc run3; exact Devm.push_getCode_err run3 a
+  case extcodecopy =>
+    refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToAdr_getCode_eq hp a
+    · intro e hp; exact Devm.popToAdr_getCode_err hp a
+    · intro ⟨x, devm1⟩ hp run2
+      refine getCode_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_getCode_eq hp2 a
+      · intro e hp2; exact Devm.popToNat_getCode_err hp2 a
+      · intro ⟨y, devm2⟩ hp2 run3
+        refine getCode_err_of_bind run3 Prod.snd ?_ ?_ ?_
+        · intro ⟨z, devm3⟩ hp3; exact Devm.popToNat_getCode_eq hp3 a
+        · intro e hp3; exact Devm.popToNat_getCode_err hp3 a
+        · intro ⟨z, devm3⟩ hp3 run4
+          refine getCode_err_of_bind run4 Prod.snd ?_ ?_ ?_
+          · intro ⟨w, devm4⟩ hp4; exact Devm.popToNat_getCode_eq hp4 a
+          · intro e hp4; exact Devm.popToNat_getCode_err hp4 a
+          · intro ⟨w, devm4⟩ hp4 run5
+            split at run5
+            · refine getCode_err_of_bind run5 id ?_ ?_ ?_
+              · intro devm5 hc; exact chargeGas_getCode_eq hc a
+              · intro e hc; exact chargeGas_getCode_err hc a
+              · intro devm5 hc run6; injection run6
+            · refine getCode_err_of_bind run5 id ?_ ?_ ?_
+              · intro devm5 hc; exact chargeGas_getCode_eq hc a
+              · intro e hc; exact chargeGas_getCode_err hc a
+              · intro devm5 hc run6; injection run6
+  case retdatasize => apply pushItem_getCode_err run
+  case retdatacopy =>
+    refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getCode_eq hp a
+    · intro e hp; exact Devm.popToNat_getCode_err hp a
+    · intro ⟨x, devm1⟩ hp run2
+      refine getCode_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_getCode_eq hp2 a
+      · intro e hp2; exact Devm.popToNat_getCode_err hp2 a
+      · intro ⟨y, devm2⟩ hp2 run3
+        refine getCode_err_of_bind run3 Prod.snd ?_ ?_ ?_
+        · intro ⟨z, devm3⟩ hp3; exact Devm.popToNat_getCode_eq hp3 a
+        · intro e hp3; exact Devm.popToNat_getCode_err hp3 a
+        · intro ⟨z, devm3⟩ hp3 run4
+          refine getCode_err_of_bind run4 id ?_ ?_ ?_
+          · intro devm4 hc; exact chargeGas_getCode_eq hc a
+          · intro e hc; exact chargeGas_getCode_err hc a
+          · intro devm4 hc run5
+            split_ifs at run5
+            all_goals (try { cases run5; rfl })
+            all_goals (try contradiction)
+  case extcodehash =>
+    refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToAdr_getCode_eq hp a
+    · intro e hp; exact Devm.popToAdr_getCode_err hp a
+    · intro ⟨x, devm1⟩ hp run2; split at run2
+      · refine getCode_err_of_bind run2 id ?_ ?_ ?_
+        · intro devm2 hc; exact chargeGas_getCode_eq hc a
+        · intro e hc; exact chargeGas_getCode_err hc a
+        · intro devm2 hc run3; exact Devm.push_getCode_err run3 a
+      · refine getCode_err_of_bind run2 id ?_ ?_ ?_
+        · intro devm2 hc; exact chargeGas_getCode_eq hc a
+        · intro e hc; exact chargeGas_getCode_err hc a
+        · intro devm2 hc run3; exact Devm.push_getCode_err run3 a
+  case blockhash =>
+    refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a
+    · intro e hp; exact Devm.pop_getCode_err hp a
+    · intro ⟨x, devm1⟩ hp run2
+      refine getCode_err_of_bind run2 id ?_ ?_ ?_
+      · intro devm2 hc; exact chargeGas_getCode_eq hc a
+      · intro e hc; exact chargeGas_getCode_err hc a
+      · intro devm2 hc run3; exact Devm.push_getCode_err run3 a
+  case coinbase => apply pushItem_getCode_err run
+  case timestamp => apply pushItem_getCode_err run
+  case number => apply pushItem_getCode_err run
+  case prevrandao => apply pushItem_getCode_err run
+  case gaslimit => apply pushItem_getCode_err run
+  case chainid => apply pushItem_getCode_err run
+  case selfbalance => apply pushItem_getCode_err run
+  case basefee => apply pushItem_getCode_err run
+  case blobhash =>
+    refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
+    exact fun ⟨x, devm1⟩ hp => Devm.pop_getCode_eq hp a
+    exact fun e hp => Devm.pop_getCode_err hp a
+    intro ⟨x, devm1⟩ hp run2
+    refine getCode_err_of_bind run2 id ?_ ?_ ?_
+    exact fun devm2 hc => chargeGas_getCode_eq hc a
+    exact fun e hc => chargeGas_getCode_err hc a
+    intro devm2 hc run3; exact Devm.push_getCode_err run3 a
+  case blobbasefee => apply pushItem_getCode_err run
+  case pop =>
+    refine getCode_err_of_bind run id ?_ ?_ ?_
+    exact fun devm1 hc => Devm.pop_map_snd_getCode_eq hc a
+    exact fun e hc => Devm.pop_map_snd_getCode_err hc a
+    intro devm1 hc run2; exact chargeGas_getCode_err run2 a
+  case mload =>
+    refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
+    exact fun ⟨x, devm1⟩ hp => Devm.popToNat_getCode_eq hp a
+    exact fun e hp => Devm.popToNat_getCode_err hp a
+    intro ⟨x, devm1⟩ hp run2
+    refine getCode_err_of_bind run2 id ?_ ?_ ?_
+    exact fun devm2 hc => chargeGas_getCode_eq hc a
+    exact fun e hc => chargeGas_getCode_err hc a
+    intro devm2 hc run3; exact Devm.push_getCode_err run3 a
+  case mstore =>
+    refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getCode_eq hp a
+    · intro e hp; exact Devm.popToNat_getCode_err hp a
+    · intro ⟨x, devm1⟩ hp run2
+      refine getCode_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.pop_getCode_eq hp2 a
+      · intro e hp2; exact Devm.pop_getCode_err hp2 a
+      · intro ⟨y, devm2⟩ hp2 run3
+        refine getCode_err_of_bind run3 id ?_ ?_ ?_
+        · intro devm3 hc; exact chargeGas_getCode_eq hc a
+        · intro e hc; exact chargeGas_getCode_err hc a
+        · intro devm3 hc run4; cases run4
+  case mstore8 =>
+    refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getCode_eq hp a
+    · intro e hp; exact Devm.popToNat_getCode_err hp a
+    · intro ⟨x, devm1⟩ hp run2
+      refine getCode_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.pop_getCode_eq hp2 a
+      · intro e hp2; exact Devm.pop_getCode_err hp2 a
+      · intro ⟨y, devm2⟩ hp2 run3
+        refine getCode_err_of_bind run3 id ?_ ?_ ?_
+        · intro devm3 hc; exact chargeGas_getCode_eq hc a
+        · intro e hc; exact chargeGas_getCode_err hc a
+        · intro devm3 hc run4; injection run4
+  case sload =>
+    refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a
+    · intro e hp; exact Devm.pop_getCode_err hp a
+    · intro ⟨x, devm1⟩ hp run2; split at run2
+      · refine getCode_err_of_bind run2 id ?_ ?_ ?_
+        · intro devm2 hc; exact chargeGas_getCode_eq hc a
+        · intro e hc; exact chargeGas_getCode_err hc a
+        · intro devm2 hc run3; exact Devm.push_getCode_err run3 a
+      · refine getCode_err_of_bind run2 id ?_ ?_ ?_
+        · intro devm2 hc; exact chargeGas_getCode_eq hc a
+        · intro e hc; exact chargeGas_getCode_err hc a
+        · intro devm2 hc run3; exact Devm.push_getCode_err run3 a
+  case sstore =>
+    refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a
+    · intro e hp; exact Devm.pop_getCode_err hp a
+    · intro ⟨x, devm1⟩ hp run2
+      refine getCode_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.pop_getCode_eq hp2 a
+      · intro e hp2; exact Devm.pop_getCode_err hp2 a
+      · intro ⟨y, devm2⟩ hp2 run3
+        dsimp [assertDynamic, Except.assert, addAccessedStorageKey, Devm.withAccessedStorageKeys, chargeGas] at run3
+        simp only [bind, Except.bind] at run3
+        try split_ifs at run3 <;> simp at run3
+        all_goals (try split at run3 <;> simp at run3)
+        try split_ifs at run3 <;> simp at run3
+        all_goals (try split at run3 <;> simp at run3)
+        try split_ifs at run3 <;> simp at run3
+        all_goals (try { injection run3 with h_eq; cases h_eq; rfl })
+        all_goals (try { rw [← run3]; rfl })
+        all_goals (try contradiction)
+  case pc =>
+    refine getCode_err_of_bind run id ?_ ?_ ?_
+    · intro devm1 hc; exact chargeGas_getCode_eq hc a
+    · intro e hc; exact chargeGas_getCode_err hc a
+    · intro devm1 hc run2; exact Devm.push_getCode_err run2 a
+  case msize =>
+    refine getCode_err_of_bind run id ?_ ?_ ?_
+    · intro devm1 hc; exact chargeGas_getCode_eq hc a
+    · intro e hc; exact chargeGas_getCode_err hc a
+    · intro devm1 hc run2; exact Devm.push_getCode_err run2 a
+  case gas =>
+    refine getCode_err_of_bind run id ?_ ?_ ?_
+    · intro devm1 hc; exact chargeGas_getCode_eq hc a
+    · intro e hc; exact chargeGas_getCode_err hc a
+    · intro devm1 hc run2; exact Devm.push_getCode_err run2 a
+  case tload =>
+    refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a
+    · intro e hp; exact Devm.pop_getCode_err hp a
+    · intro ⟨x, devm1⟩ hp run2
+      refine getCode_err_of_bind run2 id ?_ ?_ ?_
+      · intro devm2 hc; exact chargeGas_getCode_eq hc a
+      · intro e hc; exact chargeGas_getCode_err hc a
+      · intro devm2 hc run3; exact Devm.push_getCode_err run3 a
+  case tstore =>
+    refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a
+    · intro e hp; exact Devm.pop_getCode_err hp a
+    · intro ⟨x, devm1⟩ hp run2
+      refine getCode_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.pop_getCode_eq hp2 a
+      · intro e hp2; exact Devm.pop_getCode_err hp2 a
+      · intro ⟨y, devm2⟩ hp2 run3
+        refine getCode_err_of_bind run3 id ?_ ?_ ?_
+        · intro devm3 hc; exact chargeGas_getCode_eq hc a
+        · intro e hc; exact chargeGas_getCode_err hc a
+        · intro devm3 hc run4
+          dsimp [assertDynamic, Except.assert] at run4
+          simp only [bind, Except.bind] at run4
+          try split_ifs at run4 <;> simp at run4
+          all_goals (try split at run4 <;> simp at run4)
+          try split_ifs at run4 <;> simp at run4
+          all_goals (try { injection run4 with h_eq; cases h_eq; rfl })
+          all_goals (try { rw [← run4]; rfl })
+          all_goals (try contradiction)
+  case mcopy =>
+    refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getCode_eq hp a
+    · intro e hp; exact Devm.popToNat_getCode_err hp a
+    · intro ⟨x, devm1⟩ hp run2
+      refine getCode_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_getCode_eq hp2 a
+      · intro e hp2; exact Devm.popToNat_getCode_err hp2 a
+      · intro ⟨y, devm2⟩ hp2 run3
+        refine getCode_err_of_bind run3 Prod.snd ?_ ?_ ?_
+        · intro ⟨z, devm3⟩ hp3; exact Devm.popToNat_getCode_eq hp3 a
+        · intro e hp3; exact Devm.popToNat_getCode_err hp3 a
+        · intro ⟨z, devm3⟩ hp3 run4
+          refine getCode_err_of_bind run4 id ?_ ?_ ?_
+          · intro devm4 hc; exact chargeGas_getCode_eq hc a
+          · intro e hc; exact chargeGas_getCode_err hc a
+          · intro devm4 hc run5
+            try split_ifs at run5 <;> simp at run5
+            all_goals (try split at run5 <;> simp at run5)
+            try split_ifs at run5 <;> simp at run5
+            all_goals (try { rw [← run5]; rfl })
+            all_goals (try contradiction)
+  case dup =>
+    refine getCode_err_of_bind run id ?_ ?_ ?_
+    · intro devm1 hc; exact chargeGas_getCode_eq hc a
+    · intro e hc; exact chargeGas_getCode_err hc a
+    · intro devm1 hc run2
+      split at run2
+      · injection run2 with h_eq; cases h_eq; rfl
+      · exact Devm.push_getCode_err run2 a
+  case swap =>
+    refine getCode_err_of_bind run id ?_ ?_ ?_
+    · intro devm1 hc; exact chargeGas_getCode_eq hc a
+    · intro e hc; exact chargeGas_getCode_err hc a
+    · intro devm1 hc run2
+      split at run2
+      · injection run2 with h_eq; cases h_eq; rfl
+      · contradiction
+  case log =>
+    refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getCode_eq hp a
+    · intro e hp; exact Devm.popToNat_getCode_err hp a
+    · intro ⟨x, devm1⟩ hp run2
+      refine getCode_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_getCode_eq hp2 a
+      · intro e hp2; exact Devm.popToNat_getCode_err hp2 a
+      · intro ⟨y, devm2⟩ hp2 run3
+        refine getCode_err_of_bind run3 Prod.snd ?_ ?_ ?_
+        · intro ⟨z, devm3⟩ hp3; exact Devm.popN_getCode_eq hp3 a
+        · intro e hp3; exact Devm.popN_getCode_err hp3 a
+        · intro ⟨z, devm3⟩ hp3 run4
+          refine getCode_err_of_bind run4 id ?_ ?_ ?_
+          · intro devm4 hc; exact chargeGas_getCode_eq hc a
+          · intro e hc; exact chargeGas_getCode_err hc a
+          · intro devm4 hc run5
+            dsimp [assertDynamic, Except.assert] at run5
+            simp only [bind, Except.bind] at run5
+            try split_ifs at run5 <;> simp at run5
+            all_goals (try split at run5 <;> simp at run5)
+            try split_ifs at run5 <;> simp at run5
+            all_goals (try { rw [← run5]; rfl })
+            all_goals (try contradiction)
+
+lemma Rinst.inv_getCode_gen
+    {pc sevm devm r exn}
+    (run : Rinst.run ⟨pc, sevm, devm⟩ r = exn) (a : Adr)
+    (ne : (devm.getCode a).toList ≠ []) :
+    Execution.getCode exn a = devm.getCode a := by
+  cases h_exn : exn
+  · exact Rinst.inv_getCode_err (run.trans h_exn) a ne
+  · exact Rinst.inv_getCode (run.trans h_exn) a ne
+
 lemma Xinst.inv_getCode_gen
     {sevm devm x xl exn}
     (inv : xl.InvGetCode)
@@ -4583,7 +5114,394 @@ lemma Xinst.inv_getCode_gen
     ∀ a : Adr,
       (devm.getCode a).toList ≠ [] →
       exn.getCode a = devm.getCode a := by
-  sorry
+  intro a ha
+  cases x
+  case create =>
+    dsimp [Xinst.Run] at run
+    rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨endowment, devm1⟩, eq1, run⟩
+    · rw [eq_exn]; exact Devm.pop_getCode_err h_err a
+    have hc1 : devm1.getCode a = devm.getCode a := by
+      revert eq1; dsimp [Devm.pop]; split <;> intro eq1
+      · contradiction
+      · injection eq1 with h1; injection h1 with _ h2; subst h2; rfl
+    rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨memoryIndex, devm2⟩, eq2, run⟩
+    · rw [eq_exn]; exact (Devm.popToNat_getCode_err h_err a).trans hc1
+    have hc2 : devm2.getCode a = devm1.getCode a := by
+      revert eq2; unfold Devm.popToNat Devm.pop; split <;> intro eq2
+      · contradiction
+      · injection eq2 with h3; injection h3 with _ h4; subst h4; rfl
+    rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨memorySize, devm3⟩, eq3, run⟩
+    · rw [eq_exn]; exact (Devm.popToNat_getCode_err h_err a).trans (hc2.trans hc1)
+    have hc3 : devm3.getCode a = devm2.getCode a := by
+      revert eq3; unfold Devm.popToNat Devm.pop; split <;> intro eq3
+      · contradiction
+      · injection eq3 with h5; injection h5 with _ h6; subst h6; rfl
+    rcases run with ⟨extendCost, hp4, run⟩
+    rcases run with ⟨initCodeCost, hp5, run⟩
+    rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨devm4, eq6, run⟩
+    · rw [eq_exn]; exact (chargeGas_getCode_err h_err a).trans (hc3.trans (hc2.trans hc1))
+    have hc4 : devm4.getCode a = devm3.getCode a := by
+      revert eq6; unfold chargeGas; split <;> intro eq6
+      · contradiction
+      · injection eq6 with h7; subst h7; rfl
+    rcases run with ⟨calldata, hp7, run⟩
+    rcases run with ⟨newAddress, hp8, run⟩
+    have hc5 : calldata.getCode a = devm4.getCode a := by
+      subst hp7; dsimp [Devm.getCode, Devm.memExtends]; rfl
+    have h_code : calldata.getCode a = devm.getCode a := by
+      rw [hc5, hc4, hc3, hc2, hc1]
+    have ha_calldata : (calldata.getCode a).toList ≠ [] := by
+      rw [h_code]
+      exact ha
+    have h_gen := GenericCreate.inv_getCode_gen inv run a ha_calldata
+    rw [h_gen, h_code]
+  case call =>
+    dsimp [Xinst.Run] at run
+    rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨gas, devm1⟩, eq1, run⟩
+    · rw [eq_exn]; exact Devm.pop_getCode_err h_err a
+    have hc1 : devm1.getCode a = devm.getCode a := by
+      revert eq1; unfold Devm.pop; split <;> intro eq1
+      · contradiction
+      · injection eq1 with h1; injection h1 with _ h2; subst h2; rfl
+    rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨callee, devm2⟩, eq2, run⟩
+    · rw [eq_exn]; exact (Devm.popToAdr_getCode_err h_err a).trans hc1
+    have hc2 : devm2.getCode a = devm1.getCode a := by
+      revert eq2; unfold Devm.popToAdr Devm.pop; split <;> intro eq2
+      · contradiction
+      · injection eq2 with h3; injection h3 with _ h4; subst h4; rfl
+    rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨value, devm3⟩, eq3, run⟩
+    · rw [eq_exn]; exact (Devm.pop_getCode_err h_err a).trans (hc2.trans hc1)
+    have hc3 : devm3.getCode a = devm2.getCode a := by
+      revert eq3; unfold Devm.pop; split <;> intro eq3
+      · contradiction
+      · injection eq3 with h5; injection h5 with _ h6; subst h6; rfl
+    rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨inputIndex, devm4⟩, eq4, run⟩
+    · rw [eq_exn]; exact (Devm.popToNat_getCode_err h_err a).trans (hc3.trans (hc2.trans hc1))
+    have hc4 : devm4.getCode a = devm3.getCode a := by
+      revert eq4; unfold Devm.popToNat Devm.pop; split <;> intro eq4
+      · contradiction
+      · injection eq4 with h7; injection h7 with _ h8; subst h8; rfl
+    rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨inputSize, devm5⟩, eq5, run⟩
+    · rw [eq_exn]; exact (Devm.popToNat_getCode_err h_err a).trans (hc4.trans (hc3.trans (hc2.trans hc1)))
+    have hc5 : devm5.getCode a = devm4.getCode a := by
+      revert eq5; unfold Devm.popToNat Devm.pop; split <;> intro eq5
+      · contradiction
+      · injection eq5 with h9; injection h9 with _ h10; subst h10; rfl
+    rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨outputIndex, devm6⟩, eq6, run⟩
+    · rw [eq_exn]; exact (Devm.popToNat_getCode_err h_err a).trans (hc5.trans (hc4.trans (hc3.trans (hc2.trans hc1))))
+    have hc6 : devm6.getCode a = devm5.getCode a := by
+      revert eq6; unfold Devm.popToNat Devm.pop; split <;> intro eq6
+      · contradiction
+      · injection eq6 with h11; injection h11 with _ h12; subst h12; rfl
+    rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨outputSize, devm7⟩, eq7, run⟩
+    · rw [eq_exn]; exact (Devm.popToNat_getCode_err h_err a).trans (hc6.trans (hc5.trans (hc4.trans (hc3.trans (hc2.trans hc1)))))
+    have hc7 : devm7.getCode a = devm6.getCode a := by
+      revert eq7; unfold Devm.popToNat Devm.pop; split <;> intro eq7
+      · contradiction
+      · injection eq7 with h13; injection h13 with _ h14; subst h14; rfl
+    rcases run with ⟨extendCost, hp8, run⟩
+    rcases run with ⟨preAccessCost, hp9, run⟩
+    rcases run with ⟨devm8, hp10, run⟩
+    have hc8 : devm8.getCode a = devm7.getCode a := by
+      subst hp10; dsimp [addAccessedAddress]; rfl
+    rcases run with ⟨⟨disablePrecompiles, _, code, delegatedAccessGasCost, devm9⟩, hp11, run⟩
+    have hc9 : devm9.getCode a = devm8.getCode a := by
+      have h_acc := @accessDelegation_getCode devm8 callee a
+      rw [← hp11] at h_acc
+      exact h_acc
+    rcases run with ⟨accessCost, hp12, run⟩
+    rcases run with ⟨createCost, hp13, run⟩
+    rcases run with ⟨transferCost, hp14, run⟩
+    rcases run with ⟨⟨msgCallCost, msgCallStipend⟩, hp15, run⟩
+    rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨devm10, eq16, run⟩
+    · rw [eq_exn]; exact (chargeGas_getCode_err h_err a).trans (hc9.trans (hc8.trans (hc7.trans (hc6.trans (hc5.trans (hc4.trans (hc3.trans (hc2.trans hc1))))))))
+    have hc10 : devm10.getCode a = devm9.getCode a := by
+      revert eq16; unfold chargeGas; split <;> intro eq16
+      · contradiction
+      · injection eq16 with h15; subst h15; rfl
+    rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨_, eq17, run⟩
+    · rw [eq_exn]; exact (assert_getCode_err h_err a).trans (hc10.trans (hc9.trans (hc8.trans (hc7.trans (hc6.trans (hc5.trans (hc4.trans (hc3.trans (hc2.trans hc1)))))))))
+    rcases run with ⟨devm11, hp18, run⟩
+    have hc11 : devm11.getCode a = devm10.getCode a := by
+      subst hp18; dsimp [Devm.getCode, Devm.memExtends]; rfl
+    rcases run with ⟨senderBal, hp19, run⟩
+    split_ifs at run with h_bal
+    · rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨devm12, eq20, h_xl2, h_ex⟩
+      · rw [eq_exn]; exact (Devm.push_getCode_err h_err a).trans (hc11.trans (hc10.trans (hc9.trans (hc8.trans (hc7.trans (hc6.trans (hc5.trans (hc4.trans (hc3.trans (hc2.trans hc1))))))))))
+      have hc12 : devm12.getCode a = devm11.getCode a := by
+        revert eq20; unfold Devm.push Except.assert; dsimp [Bind.bind, Except.bind]; split <;> intro eq20
+        · contradiction
+        · injection eq20 with h16; subst h16; rfl
+      have hc_final : exn.getCode a = devm12.getCode a := by
+        rw [← h_ex]; rfl
+      rw [hc_final, hc12, hc11, hc10, hc9, hc8, hc7, hc6, hc5, hc4, hc3, hc2, hc1]
+    · have h_code : devm11.getCode a = devm.getCode a := by
+        rw [hc11, hc10, hc9, hc8, hc7, hc6, hc5, hc4, hc3, hc2, hc1]
+      have ha_11 : (devm11.getCode a).toList ≠ [] := by
+        rw [h_code]; exact ha
+      have h_gen := GenericCall.inv_getCode_gen inv run a ha_11
+      rw [h_gen, h_code]
+  case callcode =>
+    dsimp [Xinst.Run] at run
+    rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨gas, devm1⟩, eq1, run⟩
+    · rw [eq_exn]; exact Devm.pop_getCode_err h_err a
+    have hc1 : devm1.getCode a = devm.getCode a := by
+      revert eq1; unfold Devm.pop; split <;> intro eq1
+      · contradiction
+      · injection eq1 with h1; injection h1 with _ h2; subst h2; rfl
+    rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨codeAddress, devm2⟩, eq2, run⟩
+    · rw [eq_exn]; exact (Devm.popToAdr_getCode_err h_err a).trans hc1
+    have hc2 : devm2.getCode a = devm1.getCode a := by
+      revert eq2; unfold Devm.popToAdr Devm.pop; split <;> intro eq2
+      · contradiction
+      · injection eq2 with h3; injection h3 with _ h4; subst h4; rfl
+    rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨value, devm3⟩, eq3, run⟩
+    · rw [eq_exn]; exact (Devm.pop_getCode_err h_err a).trans (hc2.trans hc1)
+    have hc3 : devm3.getCode a = devm2.getCode a := by
+      revert eq3; unfold Devm.pop; split <;> intro eq3
+      · contradiction
+      · injection eq3 with h5; injection h5 with _ h6; subst h6; rfl
+    rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨inputIndex, devm4⟩, eq4, run⟩
+    · rw [eq_exn]; exact (Devm.popToNat_getCode_err h_err a).trans (hc3.trans (hc2.trans hc1))
+    have hc4 : devm4.getCode a = devm3.getCode a := by
+      revert eq4; unfold Devm.popToNat Devm.pop; split <;> intro eq4
+      · contradiction
+      · injection eq4 with h7; injection h7 with _ h8; subst h8; rfl
+    rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨inputSize, devm5⟩, eq5, run⟩
+    · rw [eq_exn]; exact (Devm.popToNat_getCode_err h_err a).trans (hc4.trans (hc3.trans (hc2.trans hc1)))
+    have hc5 : devm5.getCode a = devm4.getCode a := by
+      revert eq5; unfold Devm.popToNat Devm.pop; split <;> intro eq5
+      · contradiction
+      · injection eq5 with h9; injection h9 with _ h10; subst h10; rfl
+    rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨outputIndex, devm6⟩, eq6, run⟩
+    · rw [eq_exn]; exact (Devm.popToNat_getCode_err h_err a).trans (hc5.trans (hc4.trans (hc3.trans (hc2.trans hc1))))
+    have hc6 : devm6.getCode a = devm5.getCode a := by
+      revert eq6; unfold Devm.popToNat Devm.pop; split <;> intro eq6
+      · contradiction
+      · injection eq6 with h11; injection h11 with _ h12; subst h12; rfl
+    rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨outputSize, devm7⟩, eq7, run⟩
+    · rw [eq_exn]; exact (Devm.popToNat_getCode_err h_err a).trans (hc6.trans (hc5.trans (hc4.trans (hc3.trans (hc2.trans hc1)))))
+    have hc7 : devm7.getCode a = devm6.getCode a := by
+      revert eq7; unfold Devm.popToNat Devm.pop; split <;> intro eq7
+      · contradiction
+      · injection eq7 with h13; injection h13 with _ h14; subst h14; rfl
+    rcases run with ⟨extendCost, hp8, run⟩
+    rcases run with ⟨preAccessCost, hp9, run⟩
+    rcases run with ⟨devm8, hp10, run⟩
+    have hc8 : devm8.getCode a = devm7.getCode a := by
+      subst hp10; dsimp [addAccessedAddress]; rfl
+    rcases run with ⟨⟨disablePrecompiles, newCodeAddress, code, delegatedAccessGasCost, devm9⟩, hp11, run⟩
+    have hc9 : devm9.getCode a = devm8.getCode a := by
+      have h_acc := @accessDelegation_getCode devm8 codeAddress a
+      rw [← hp11] at h_acc
+      exact h_acc
+    rcases run with ⟨accessCost, hp12, run⟩
+    rcases run with ⟨transferCost, hp13, run⟩
+    rcases run with ⟨⟨msgCallCost, msgCallStipend⟩, hp14, run⟩
+    rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨devm10, eq15, run⟩
+    · rw [eq_exn]; exact (chargeGas_getCode_err h_err a).trans (hc9.trans (hc8.trans (hc7.trans (hc6.trans (hc5.trans (hc4.trans (hc3.trans (hc2.trans hc1))))))))
+    have hc10 : devm10.getCode a = devm9.getCode a := by
+      revert eq15; unfold chargeGas; split <;> intro eq15
+      · contradiction
+      · injection eq15 with h15; subst h15; rfl
+    rcases run with ⟨devm11, hp16, run⟩
+    have hc11 : devm11.getCode a = devm10.getCode a := by
+      subst hp16; dsimp [Devm.getCode, Devm.memExtends]; rfl
+    rcases run with ⟨senderBal, hp17, run⟩
+    split_ifs at run with h_bal
+    · rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨devm12, eq20, h_xl2, h_ex⟩
+      · rw [eq_exn]; exact (Devm.push_getCode_err h_err a).trans (hc11.trans (hc10.trans (hc9.trans (hc8.trans (hc7.trans (hc6.trans (hc5.trans (hc4.trans (hc3.trans (hc2.trans hc1))))))))))
+      have hc12 : devm12.getCode a = devm11.getCode a := by
+        revert eq20; unfold Devm.push Except.assert; dsimp [Bind.bind, Except.bind]; split <;> intro eq20
+        · contradiction
+        · injection eq20 with h16; subst h16; rfl
+      have hc_final : exn.getCode a = devm12.getCode a := by
+        rw [← h_ex]; rfl
+      rw [hc_final, hc12, hc11, hc10, hc9, hc8, hc7, hc6, hc5, hc4, hc3, hc2, hc1]
+    · have h_code : devm11.getCode a = devm.getCode a := by
+        rw [hc11, hc10, hc9, hc8, hc7, hc6, hc5, hc4, hc3, hc2, hc1]
+      have ha_11 : (devm11.getCode a).toList ≠ [] := by
+        rw [h_code]; exact ha
+      have h_gen := GenericCall.inv_getCode_gen inv run a ha_11
+      rw [h_gen, h_code]
+  case delcall =>
+    dsimp [Xinst.Run] at run
+    rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨gas, devm1⟩, eq1, run⟩
+    · rw [eq_exn]; exact Devm.pop_getCode_err h_err a
+    have hc1 : devm1.getCode a = devm.getCode a := by
+      revert eq1; unfold Devm.pop; split <;> intro eq1
+      · contradiction
+      · injection eq1 with h1; injection h1 with _ h2; subst h2; rfl
+    rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨codeAddress, devm2⟩, eq2, run⟩
+    · rw [eq_exn]; exact (Devm.popToAdr_getCode_err h_err a).trans hc1
+    have hc2 : devm2.getCode a = devm1.getCode a := by
+      revert eq2; unfold Devm.popToAdr Devm.pop; split <;> intro eq2
+      · contradiction
+      · injection eq2 with h3; injection h3 with _ h4; subst h4; rfl
+    rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨inputIndex, devm3⟩, eq3, run⟩
+    · rw [eq_exn]; exact (Devm.popToNat_getCode_err h_err a).trans (hc2.trans hc1)
+    have hc3 : devm3.getCode a = devm2.getCode a := by
+      revert eq3; unfold Devm.popToNat Devm.pop; split <;> intro eq3
+      · contradiction
+      · injection eq3 with h5; injection h5 with _ h6; subst h6; rfl
+    rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨inputSize, devm4⟩, eq4, run⟩
+    · rw [eq_exn]; exact (Devm.popToNat_getCode_err h_err a).trans (hc3.trans (hc2.trans hc1))
+    have hc4 : devm4.getCode a = devm3.getCode a := by
+      revert eq4; unfold Devm.popToNat Devm.pop; split <;> intro eq4
+      · contradiction
+      · injection eq4 with h7; injection h7 with _ h8; subst h8; rfl
+    rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨outputIndex, devm5⟩, eq5, run⟩
+    · rw [eq_exn]; exact (Devm.popToNat_getCode_err h_err a).trans (hc4.trans (hc3.trans (hc2.trans hc1)))
+    have hc5 : devm5.getCode a = devm4.getCode a := by
+      revert eq5; unfold Devm.popToNat Devm.pop; split <;> intro eq5
+      · contradiction
+      · injection eq5 with h9; injection h9 with _ h10; subst h10; rfl
+    rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨outputSize, devm6⟩, eq6, run⟩
+    · rw [eq_exn]; exact (Devm.popToNat_getCode_err h_err a).trans (hc5.trans (hc4.trans (hc3.trans (hc2.trans hc1))))
+    have hc6 : devm6.getCode a = devm5.getCode a := by
+      revert eq6; unfold Devm.popToNat Devm.pop; split <;> intro eq6
+      · contradiction
+      · injection eq6 with h11; injection h11 with _ h12; subst h12; rfl
+    rcases run with ⟨extendCost, hp7, run⟩
+    rcases run with ⟨preAccessCost, hp8, run⟩
+    rcases run with ⟨devm7, hp9, run⟩
+    have hc7 : devm7.getCode a = devm6.getCode a := by
+      subst hp9; dsimp [addAccessedAddress]; rfl
+    rcases run with ⟨⟨disablePrecompiles, newCodeAddress, code, delegatedAccessGasCost, devm8⟩, hp10, run⟩
+    have hc8 : devm8.getCode a = devm7.getCode a := by
+      have h_acc := @accessDelegation_getCode devm7 codeAddress a
+      rw [← hp10] at h_acc
+      exact h_acc
+    rcases run with ⟨accessCost, hp11, run⟩
+    rcases run with ⟨⟨msgCallCost, msgCallStipend⟩, hp12, run⟩
+    rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨devm9, eq13, run⟩
+    · rw [eq_exn]; exact (chargeGas_getCode_err h_err a).trans (hc8.trans (hc7.trans (hc6.trans (hc5.trans (hc4.trans (hc3.trans (hc2.trans hc1)))))))
+    have hc9 : devm9.getCode a = devm8.getCode a := by
+      revert eq13; unfold chargeGas; split <;> intro eq13
+      · contradiction
+      · injection eq13 with h13; subst h13; rfl
+    rcases run with ⟨devm10, hp14, run⟩
+    have hc10 : devm10.getCode a = devm9.getCode a := by
+      subst hp14; dsimp [Devm.getCode, Devm.memExtends]; rfl
+
+    have h_code : devm10.getCode a = devm.getCode a := by
+      rw [hc10, hc9, hc8, hc7, hc6, hc5, hc4, hc3, hc2, hc1]
+    have ha_10 : (devm10.getCode a).toList ≠ [] := by
+      rw [h_code]; exact ha
+    have h_gen := GenericCall.inv_getCode_gen inv run a ha_10
+    rw [h_gen, h_code]
+  case create2 =>
+    dsimp [Xinst.Run] at run
+    rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨endowment, devm1⟩, eq1, run⟩
+    · rw [eq_exn]; exact Devm.pop_getCode_err h_err a
+    have hc1 : devm1.getCode a = devm.getCode a := by
+      revert eq1; dsimp [Devm.pop]; split <;> intro eq1
+      · contradiction
+      · injection eq1 with h1; injection h1 with _ h2; subst h2; rfl
+    rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨memoryIndex, devm2⟩, eq2, run⟩
+    · rw [eq_exn]; exact (Devm.popToNat_getCode_err h_err a).trans hc1
+    have hc2 : devm2.getCode a = devm1.getCode a := by
+      revert eq2; unfold Devm.popToNat Devm.pop; split <;> intro eq2
+      · contradiction
+      · injection eq2 with h3; injection h3 with _ h4; subst h4; rfl
+    rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨memorySize, devm3⟩, eq3, run⟩
+    · rw [eq_exn]; exact (Devm.popToNat_getCode_err h_err a).trans (hc2.trans hc1)
+    have hc3 : devm3.getCode a = devm2.getCode a := by
+      revert eq3; unfold Devm.popToNat Devm.pop; split <;> intro eq3
+      · contradiction
+      · injection eq3 with h5; injection h5 with _ h6; subst h6; rfl
+    rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨salt, devm4⟩, eq4, run⟩
+    · rw [eq_exn]; exact (Devm.pop_getCode_err h_err a).trans (hc3.trans (hc2.trans hc1))
+    have hc4 : devm4.getCode a = devm3.getCode a := by
+      revert eq4; dsimp [Devm.pop]; split <;> intro eq4
+      · contradiction
+      · injection eq4 with h7; injection h7 with _ h8; subst h8; rfl
+    rcases run with ⟨extendCost, hp5, run⟩
+    rcases run with ⟨initCodeHashCost, hp6, run⟩
+    rcases run with ⟨initCodeCost, hp7, run⟩
+    rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨devm5, eq8, run⟩
+    · rw [eq_exn]; exact (chargeGas_getCode_err h_err a).trans (hc4.trans (hc3.trans (hc2.trans hc1)))
+    have hc5 : devm5.getCode a = devm4.getCode a := by
+      revert eq8; unfold chargeGas; split <;> intro eq8
+      · contradiction
+      · injection eq8 with h9; subst h9; rfl
+    rcases run with ⟨devm6, hp9, run⟩
+    have hc6 : devm6.getCode a = devm5.getCode a := by
+      subst hp9; dsimp [Devm.getCode, Devm.memExtends]; rfl
+    rcases run with ⟨newAddress, hp10, run⟩
+
+    have h_code : devm6.getCode a = devm.getCode a := by
+      rw [hc6, hc5, hc4, hc3, hc2, hc1]
+    have ha_6 : (devm6.getCode a).toList ≠ [] := by
+      rw [h_code]; exact ha
+    have h_gen := GenericCreate.inv_getCode_gen inv run a ha_6
+    rw [h_gen, h_code]
+  case statcall =>
+    dsimp [Xinst.Run] at run
+    rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨gas, devm1⟩, eq1, run⟩
+    · rw [eq_exn]; exact Devm.pop_getCode_err h_err a
+    have hc1 : devm1.getCode a = devm.getCode a := by
+      revert eq1; unfold Devm.pop; split <;> intro eq1
+      · contradiction
+      · injection eq1 with h1; injection h1 with _ h2; subst h2; rfl
+    rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨target, devm2⟩, eq2, run⟩
+    · rw [eq_exn]; exact (Devm.popToAdr_getCode_err h_err a).trans hc1
+    have hc2 : devm2.getCode a = devm1.getCode a := by
+      revert eq2; unfold Devm.popToAdr Devm.pop; split <;> intro eq2
+      · contradiction
+      · injection eq2 with h3; injection h3 with _ h4; subst h4; rfl
+    rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨inputIndex, devm3⟩, eq3, run⟩
+    · rw [eq_exn]; exact (Devm.popToNat_getCode_err h_err a).trans (hc2.trans hc1)
+    have hc3 : devm3.getCode a = devm2.getCode a := by
+      revert eq3; unfold Devm.popToNat Devm.pop; split <;> intro eq3
+      · contradiction
+      · injection eq3 with h5; injection h5 with _ h6; subst h6; rfl
+    rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨inputSize, devm4⟩, eq4, run⟩
+    · rw [eq_exn]; exact (Devm.popToNat_getCode_err h_err a).trans (hc3.trans (hc2.trans hc1))
+    have hc4 : devm4.getCode a = devm3.getCode a := by
+      revert eq4; unfold Devm.popToNat Devm.pop; split <;> intro eq4
+      · contradiction
+      · injection eq4 with h7; injection h7 with _ h8; subst h8; rfl
+    rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨outputIndex, devm5⟩, eq5, run⟩
+    · rw [eq_exn]; exact (Devm.popToNat_getCode_err h_err a).trans (hc4.trans (hc3.trans (hc2.trans hc1)))
+    have hc5 : devm5.getCode a = devm4.getCode a := by
+      revert eq5; unfold Devm.popToNat Devm.pop; split <;> intro eq5
+      · contradiction
+      · injection eq5 with h9; injection h9 with _ h10; subst h10; rfl
+    rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨outputSize, devm6⟩, eq6, run⟩
+    · rw [eq_exn]; exact (Devm.popToNat_getCode_err h_err a).trans (hc5.trans (hc4.trans (hc3.trans (hc2.trans hc1))))
+    have hc6 : devm6.getCode a = devm5.getCode a := by
+      revert eq6; unfold Devm.popToNat Devm.pop; split <;> intro eq6
+      · contradiction
+      · injection eq6 with h11; injection h11 with _ h12; subst h12; rfl
+    rcases run with ⟨extendCost, hp7, run⟩
+    rcases run with ⟨preAccessCost, hp8, run⟩
+    rcases run with ⟨devm7, hp9, run⟩
+    have hc7 : devm7.getCode a = devm6.getCode a := by
+      subst hp9; dsimp [addAccessedAddress]; rfl
+    rcases run with ⟨⟨disablePrecompiles, _, code, delegatedAccessGasCost, devm8⟩, hp10, run⟩
+    have hc8 : devm8.getCode a = devm7.getCode a := by
+      have h_acc := @accessDelegation_getCode devm7 target a
+      rw [← hp10] at h_acc
+      exact h_acc
+    rcases run with ⟨accessCost, hp11, run⟩
+    rcases run with ⟨⟨msgCallCost, msgCallStipend⟩, hp12, run⟩
+    rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨devm9, eq13, run⟩
+    · rw [eq_exn]; exact (chargeGas_getCode_err h_err a).trans (hc8.trans (hc7.trans (hc6.trans (hc5.trans (hc4.trans (hc3.trans (hc2.trans hc1)))))))
+    have hc9 : devm9.getCode a = devm8.getCode a := by
+      revert eq13; unfold chargeGas; split <;> intro eq13
+      · contradiction
+      · injection eq13 with h13; subst h13; rfl
+    rcases run with ⟨devm10, hp14, run⟩
+    have hc10 : devm10.getCode a = devm9.getCode a := by
+      subst hp14; dsimp [Devm.getCode, Devm.memExtends]; rfl
+
+    have h_code : devm10.getCode a = devm.getCode a := by
+      rw [hc10, hc9, hc8, hc7, hc6, hc5, hc4, hc3, hc2, hc1]
+    have ha_10 : (devm10.getCode a).toList ≠ [] := by
+      rw [h_code]; exact ha
+    have h_gen := GenericCall.inv_getCode_gen inv run a ha_10
+    rw [h_gen, h_code]
 
 lemma Ninst.inv_getCode_cond
     {pc sevm devm n xl devm'}
@@ -4621,7 +5539,34 @@ lemma Ninst.inv_getCode_gen
     ∀ a : Adr,
       (devm.getCode a).toList ≠ [] →
       exn.getCode a = devm.getCode a := by
-  sorry
+  intro a ha
+  cases n <;> dsimp [Ninst.Run'] at run
+  case push xs p =>
+     rcases xl with _ | _
+     · cases hc : chargeGas (if xs = [] then gBase else gVerylow) devm <;> simp [hc, bind, Except.bind] at run
+       case error err =>
+         rw [← run]
+         exact chargeGas_getCode_err hc a
+       case ok devm_gas =>
+         cases hp : Devm.push xs.toB256 devm_gas <;> simp [hp] at run
+         case error err =>
+           rw [← run]
+           have h1 := chargeGas_getCode_eq hc a
+           exact (Devm.push_getCode_err hp a).trans h1
+         case ok devm_push =>
+           subst run
+           simp only [chargeGas] at hc; split at hc <;> try contradiction
+           simp only [Except.ok.injEq] at hc; subst devm_gas
+           simp only [Devm.push, bind, Except.bind, Except.assert] at hp; split at hp <;> try contradiction
+           simp only [Except.ok.injEq] at hp; subst devm_push
+           rfl
+     · cases run
+  case reg r =>
+    rcases xl with _ | _
+    · exact Rinst.inv_getCode_gen run a ha
+    · cases run
+  case exec x =>
+    exact Xinst.inv_getCode_gen inv run a ha
 
 #exit
 lemma Exec.inv_getCode {pc} {sevm} {devm} {devm'}
