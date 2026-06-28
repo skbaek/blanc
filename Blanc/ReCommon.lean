@@ -5769,7 +5769,24 @@ lemma Linst.inv_getCode
           intro run; rw [← run]
           change res3.getCode adr = _
           exact (chargeGas_getCode_eq h3 adr).trans ((Devm.popToNat_getCode_eq h2 adr).trans (Devm.popToNat_getCode_eq h1 adr))
-  case rev => sorry
+  case rev =>
+    revert run
+    dsimp [bind, Except.bind]
+    cases h1 : devm.popToNat <;> dsimp
+    case error err =>
+      intro run; rw [← run]; exact (Devm.popToNat_getCode_err h1 adr)
+    case ok res1 =>
+      cases h2 : res1.2.popToNat <;> dsimp
+      case error err =>
+        intro run; rw [← run]; exact (Devm.popToNat_getCode_err h2 adr).trans (Devm.popToNat_getCode_eq h1 adr)
+      case ok res2 =>
+        cases h3 : chargeGas (res2.2.extCost [(res1.1, res2.1)]) res2.2 <;> dsimp
+        case error err =>
+          intro run; rw [← run]; exact (chargeGas_getCode_err h3 adr).trans ((Devm.popToNat_getCode_eq h2 adr).trans (Devm.popToNat_getCode_eq h1 adr))
+        case ok res3 =>
+          intro run; rw [← run]
+          change res3.getCode adr = _
+          exact (chargeGas_getCode_eq h3 adr).trans ((Devm.popToNat_getCode_eq h2 adr).trans (Devm.popToNat_getCode_eq h1 adr))
   case dest => sorry
 
 lemma Exec.inv_getCode {pc} {sevm} {devm} {exn}
