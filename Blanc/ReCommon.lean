@@ -5744,6 +5744,17 @@ lemma Jinst.inv_getCode_gen
         · have h_gas_not : ¬(gJumpdest ≤ devm.gasLeft) := by omega
           simp only [h_gas_not, if_neg] at run; cases run; rfl
 
+lemma Linst.inv_getCode
+    {sevm devm l exn}
+    (run : Linst.Run sevm devm l exn) :
+    ∀ adr : Adr, exn.getCode adr = devm.getCode adr := by
+  intro adr
+  cases l <;> dsimp [Linst.Run, Linst.run] at run
+  case stop => rw [← run]; rfl
+  case ret => sorry
+  case rev => sorry
+  case dest => sorry
+
 lemma Exec.inv_getCode {pc} {sevm} {devm} {exn}
     (run : Exec pc sevm devm exn) :
     ∀ a : Adr,
@@ -5765,11 +5776,14 @@ lemma Exec.inv_getCode {pc} {sevm} {devm} {exn}
                  ⟨exec_x, fun adr hadr => (ih_x adr hadr).symm⟩ run adr ne
     change devm'.getCode adr = devm.getCode adr at h1
     rw [← h1] at ne; rw [ih adr ne, h1]
-  · sorry
-  · sorry
-  · sorry
-
-#exit
+  · intros pc sevm devm j err devm' hAt run adr ne
+    exact Jinst.inv_getCode_gen run adr
+  · intros pc sevm devm j pc' devm' exn hAt run exec ih adr ne
+    have h1 := Jinst.inv_getCode_gen run adr
+    change devm'.getCode adr = devm.getCode adr at h1
+    rw [← h1] at ne; rw [ih adr ne, h1]
+  · intro pc sevm devm l exn lat run adr ne
+    sorry
 
 lemma Ninst.inv_getCode
     {pc sevm devm n xlot devm'}
@@ -5799,6 +5813,8 @@ lemma Ninst.inv_getCode
   case exec x =>
     -- exact fun h => Xinst.inv_getCode h a ne
     sorry
+
+#exit
 
 lemma not_empty_of_compile {p : Prog} {code : ByteArray} (h : some code.toList = Prog.compile p) : code ≠ .empty := by
   intro hc
