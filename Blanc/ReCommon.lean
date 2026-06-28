@@ -3,6 +3,7 @@
 -- compiler and tactics for automating Blanc program verification.
 
 import Mathlib.Tactic.Have
+import Mathlib.Tactic.Clear_
 import Blanc.ReSemantics
 
 
@@ -5562,19 +5563,23 @@ lemma Ninst.inv_getCode_gen
   case exec x =>
     exact Xinst.inv_getCode_gen inv run a ha
 
-lemma Exec.inv_getCode {pc} {sevm} {devm} {devm'}
-    (run : Exec pc sevm devm (.ok devm')) :
+lemma Exec.inv_getCode {pc} {sevm} {devm} {exn}
+    (run : Exec pc sevm devm exn) :
     ∀ a : Adr,
       (devm.getCode a).toList ≠ [] →
-      devm'.getCode a = devm.getCode a := by
-  sorry
+      exn.getCode a = devm.getCode a := by
+  revert exn devm sevm pc; apply Exec.rec
+  · sorry
+  · sorry
+  · sorry
+  · sorry
+  · sorry
+  · sorry
+  · sorry
+  · sorry
 
 #exit
 
-Exec : ℕ → Sevm → Devm → Execution → Type
-
-
-#exit
 lemma Ninst.inv_getCode
     {pc sevm devm n xlot devm'}
     (run : Ninst.Run' pc sevm devm n xlot (.ok devm')) (a : Adr)
