@@ -5787,7 +5787,66 @@ lemma Linst.inv_getCode
           intro run; rw [← run]
           change res3.getCode adr = _
           exact (chargeGas_getCode_eq h3 adr).trans ((Devm.popToNat_getCode_eq h2 adr).trans (Devm.popToNat_getCode_eq h1 adr))
-  case dest => sorry
+  case dest =>
+    revert run
+    dsimp [bind, Except.bind]
+    cases h1 : devm.popToAdr <;> dsimp
+    case error err =>
+      intro run; rw [← run]; exact (Devm.popToAdr_getCode_err h1 adr)
+    case ok res1 =>
+      have h_acc : (if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).1.getCode adr = res1.2.getCode adr := by
+        split
+        · exact addAccessedAddress_getCode
+        · rfl
+      cases h2 : chargeGas (if ((if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).1.getAcct res1.1).Empty ∧ ¬(res1.2.getAcct sevm.currentTarget).bal = 0 then (if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).2 + gasSelfDestructNewAccount else (if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).2) (if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).1 <;> dsimp
+      case error err =>
+        intro run; rw [← run]
+        change err.2.getCode adr = devm.getCode adr
+        exact (chargeGas_getCode_err h2 adr).trans (h_acc.trans (Devm.popToAdr_getCode_eq h1 adr))
+      case ok res2 =>
+        cases h3 : assertDynamic sevm res2
+        case error err =>
+          intro run; rw [← run]
+          dsimp [assertDynamic, Except.assert] at h3
+          split at h3
+          · contradiction
+          · simp only [Except.error.injEq] at h3; subst h3
+            change res2.getCode adr = devm.getCode adr
+            exact (chargeGas_getCode_eq h2 adr).trans (h_acc.trans (Devm.popToAdr_getCode_eq h1 adr))
+        case ok _ =>
+          cases h4 : res2.subBal sevm.currentTarget (res1.2.getAcct sevm.currentTarget).bal <;> dsimp [Option.toExcept]
+          case none =>
+            intro run; rw [← run]
+            change res2.getCode adr = devm.getCode adr
+            exact (chargeGas_getCode_eq h2 adr).trans (h_acc.trans (Devm.popToAdr_getCode_eq h1 adr))
+          case some res3 =>
+            have h_sub : res3.getCode adr = res2.getCode adr := by
+              dsimp [Devm.subBal] at h4
+              cases h_st : res2.state.subBal sevm.currentTarget (res1.2.getAcct sevm.currentTarget).bal
+              case none =>
+                rw [h_st] at h4; contradiction
+              case some st =>
+                rw [h_st] at h4; dsimp at h4
+                simp only [Option.some.injEq] at h4; subst h4
+                change st.getCode adr = res2.getCode adr
+                exact State.subBal_getCode h_st
+            by_cases h_if : sevm.currentTarget ∈ (res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).createdAccounts
+            · simp only [h_if, if_pos]
+              intro run; rw [← run]
+              change (addAccountToDelete _ _).getCode adr = devm.getCode adr
+              have h_add : (res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).getCode adr = res3.getCode adr := by
+                dsimp [Devm.addBal, Devm.getCode]; exact State.addBal_getCode res3.state _ _ _
+              have h_set : ((res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).setBal sevm.currentTarget 0).getCode adr = (res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).getCode adr := by
+                dsimp [Devm.setBal, Devm.getCode]; exact State.setBal_getCode _ _ _ _
+              have h_del : (addAccountToDelete ((res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).setBal sevm.currentTarget 0) sevm.currentTarget).getCode adr = ((res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).setBal sevm.currentTarget 0).getCode adr := by
+                rfl
+              exact h_del.trans (h_set.trans (h_add.trans (h_sub.trans ((chargeGas_getCode_eq h2 adr).trans (h_acc.trans (Devm.popToAdr_getCode_eq h1 adr))))))
+            · simp only [h_if]
+              intro run; rw [← run]
+              change (res3.addBal _ _).getCode adr = devm.getCode adr
+              have h_add : (res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).getCode adr = res3.getCode adr := by
+                dsimp [Devm.addBal, Devm.getCode]; exact State.addBal_getCode res3.state _ _ _
+              exact h_add.trans (h_sub.trans ((chargeGas_getCode_eq h2 adr).trans (h_acc.trans (Devm.popToAdr_getCode_eq h1 adr))))
 
 lemma Exec.inv_getCode {pc} {sevm} {devm} {exn}
     (run : Exec pc sevm devm exn) :
