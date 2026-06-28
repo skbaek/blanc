@@ -5569,8 +5569,9 @@ lemma Exec.inv_getCode {pc} {sevm} {devm} {exn}
       (devm.getCode a).toList ≠ [] →
       exn.getCode a = devm.getCode a := by
   revert exn devm sevm pc; apply Exec.rec
-  · sorry
-  · sorry
+  · intros; rfl
+  · intros _ _ _ _ _ _ _ hrun a ha;
+    exact Ninst.inv_getCode_gen (xl := .none) trivial hrun a ha
   · sorry
   · sorry
   · sorry
