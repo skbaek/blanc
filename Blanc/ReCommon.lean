@@ -5563,61 +5563,9 @@ lemma Ninst.inv_getCode_gen
   case exec x =>
     exact Xinst.inv_getCode_gen inv run a ha
 
-lemma Exec.inv_getCode {pc} {sevm} {devm} {exn}
-    (run : Exec pc sevm devm exn) :
-    ∀ a : Adr,
-      (devm.getCode a).toList ≠ [] →
-      exn.getCode a = devm.getCode a := by
-  revert exn devm sevm pc; apply Exec.rec
-  · intros; rfl
-  · intros _ _ _ _ _ _ _ run adr ne;
-    exact Ninst.inv_getCode_gen (xl := .none) trivial run adr ne
-  · intros _ _ _ _ _ _ _ _ _ _ run exec ih adr ne;
-    exact Ninst.inv_getCode_gen (xl := some _)
-            ⟨exec, fun adr hadr => (ih adr hadr).symm⟩ run adr ne
-  · intros pc sevm devm n devm' exn hAt run exec ih adr ne
-    have h1 := Ninst.inv_getCode_gen (xl := .none) trivial run adr ne
-    change devm'.getCode adr = devm.getCode adr at h1
-    rw [← h1] at ne; rw [ih adr ne, h1]
-  · sorry
-  · sorry
-  · sorry
-  · sorry
-
-#exit
-
-lemma Ninst.inv_getCode
-    {pc sevm devm n xlot devm'}
-    (run : Ninst.Run' pc sevm devm n xlot (.ok devm')) (a : Adr)
-    (ne : (devm.getCode a).toList ≠ []) :
-    devm'.getCode a = devm.getCode a := by
-  cases n <;> dsimp [Ninst.Run'] at run
-  case push xs _ =>
-     rcases xlot with _ | xl
-     · revert run; dsimp
-       cases hc : chargeGas (if xs = [] then gBase else gVerylow) devm <;> simp [bind, Except.bind]
-       case ok devm_gas =>
-         intro run
-         cases hp : Devm.push xs.toB256 devm_gas <;> simp [hp] at run
-         case ok devm_push =>
-           subst run
-           simp only [chargeGas] at hc; split at hc <;> try contradiction
-           simp only [Except.ok.injEq] at hc; subst devm_gas
-           simp only [Devm.push, bind, Except.bind, Except.assert] at hp; split at hp <;> try contradiction
-           simp only [Except.ok.injEq] at hp; subst devm_push
-           rfl
-     · revert run; dsimp; exact fun h => h.elim
-  case reg r =>
-    rcases xlot with _ | xl
-    · revert run; exact fun h => Rinst.inv_getCode h a ne
-    · revert run; exact fun h => h.elim
-  case exec x =>
-    exact fun h => Xinst.inv_getCode h a ne
-
-lemma Jinst.getCode_eq_of_run_ok
+lemma Jinst.inv_getCode
     {pc sevm devm j pc' devm'}
-    (run : Jinst.Run ⟨pc, sevm, devm⟩ j (.ok ⟨pc', devm'⟩)) (a : Adr)
-    (h_ne : (devm.getCode a).toList ≠ []) :
+    (run : Jinst.Run ⟨pc, sevm, devm⟩ j (.ok ⟨pc', devm'⟩)) (a : Adr) :
     devm'.getCode a = devm.getCode a := by
   cases h1 : devm.stack
   · cases j
@@ -5723,6 +5671,75 @@ lemma Jinst.getCode_eq_of_run_ok
         · have h_gas_not : ¬(gJumpdest ≤ devm.gasLeft) := by omega
           simp only [h_gas_not, if_neg, Except.ok.injEq, Prod.mk.injEq] at run
           contradiction
+
+def JumpResult.getCode (ex : Except (String × Devm) (Nat × Devm)) (a : Adr) : ByteArray :=
+  match ex with
+  | .ok ⟨_, devm⟩ => devm.getCode a
+  | .error ⟨_, devm⟩ => devm.getCode a
+
+lemma Jinst.inv_getCode_gen
+    {pc sevm devm j ex}
+    (run : Jinst.Run ⟨pc, sevm, devm⟩ j ex) :
+    ∀ a : Adr, JumpResult.getCode ex a = devm.getCode a := by
+  sorry
+
+#exit
+
+lemma Exec.inv_getCode {pc} {sevm} {devm} {exn}
+    (run : Exec pc sevm devm exn) :
+    ∀ a : Adr,
+      (devm.getCode a).toList ≠ [] →
+      exn.getCode a = devm.getCode a := by
+  revert exn devm sevm pc; apply Exec.rec
+  · intros; rfl
+  · intros _ _ _ _ _ _ _ run adr ne;
+    exact Ninst.inv_getCode_gen (xl := .none) trivial run adr ne
+  · intros _ _ _ _ _ _ _ _ _ _ run exec ih adr ne;
+    exact Ninst.inv_getCode_gen (xl := some _)
+            ⟨exec, fun adr hadr => (ih adr hadr).symm⟩ run adr ne
+  · intros pc sevm devm n devm' exn hAt run exec ih adr ne
+    have h1 := Ninst.inv_getCode_gen (xl := .none) trivial run adr ne
+    change devm'.getCode adr = devm.getCode adr at h1
+    rw [← h1] at ne; rw [ih adr ne, h1]
+  · intros pc sevm devm n sevm_ devm_ exn_ devm' exn hAt run exec_x exec ih_x ih adr ne
+    have h1 := Ninst.inv_getCode_gen (xl := some ⟨sevm_, devm_, exn_⟩)
+                 ⟨exec_x, fun adr hadr => (ih_x adr hadr).symm⟩ run adr ne
+    change devm'.getCode adr = devm.getCode adr at h1
+    rw [← h1] at ne; rw [ih adr ne, h1]
+  · sorry
+  · sorry
+  · sorry
+
+#exit
+
+lemma Ninst.inv_getCode
+    {pc sevm devm n xlot devm'}
+    (run : Ninst.Run' pc sevm devm n xlot (.ok devm')) (a : Adr)
+    (ne : (devm.getCode a).toList ≠ []) :
+    devm'.getCode a = devm.getCode a := by
+  cases n <;> dsimp [Ninst.Run'] at run
+  case push xs _ =>
+     rcases xlot with _ | xl
+     · revert run; dsimp
+       cases hc : chargeGas (if xs = [] then gBase else gVerylow) devm <;> simp [bind, Except.bind]
+       case ok devm_gas =>
+         intro run
+         cases hp : Devm.push xs.toB256 devm_gas <;> simp [hp] at run
+         case ok devm_push =>
+           subst run
+           simp only [chargeGas] at hc; split at hc <;> try contradiction
+           simp only [Except.ok.injEq] at hc; subst devm_gas
+           simp only [Devm.push, bind, Except.bind, Except.assert] at hp; split at hp <;> try contradiction
+           simp only [Except.ok.injEq] at hp; subst devm_push
+           rfl
+     · revert run; dsimp; exact fun h => h.elim
+  case reg r =>
+    rcases xlot with _ | xl
+    · revert run; exact fun h => Rinst.inv_getCode h a ne
+    · revert run; exact fun h => h.elim
+  case exec x =>
+    -- exact fun h => Xinst.inv_getCode h a ne
+    sorry
 
 lemma not_empty_of_compile {p : Prog} {code : ByteArray} (h : some code.toList = Prog.compile p) : code ≠ .empty := by
   intro hc
@@ -5924,8 +5941,9 @@ lemma lift_core
           intro pc' sevm' devm' exn' ex' h_lt
           exact h_fa pc' sevm' devm' exn' ex' h_lt
         exact analog (.jumpRec h_at h_run ex_next) (depth_ind h_run_prog h_eq h_fa_deeper)
-    · have h_ne_code : (devm.getCode ca).toList ≠ [] := fun hc => Prog.compile_ne_nil (Eq.trans h_at_p.left.symm (congrArg some hc))
-      exact jumpRec h_at h_run ex_next h_ne (ih_next h_fa ⟨by rw [Jinst.getCode_eq_of_run_ok h_run ca h_ne_code]; exact h_at_p.left, fun hc => (h_ne hc).elim⟩)
+    · -- have h_ne_code : (devm.getCode ca).toList ≠ [] := fun hc => Prog.compile_ne_nil (Eq.trans h_at_p.left.symm (congrArg some hc))
+      exact jumpRec h_at h_run ex_next h_ne
+        (ih_next h_fa ⟨by rw [Jinst.inv_getCode h_run ca]; exact h_at_p.left, fun hc => (h_ne hc).elim⟩)
   · intro pc sevm devm l exn h_at h_run h_fa h_at_p
     rcases em (sevm.currentTarget = ca) with h_eq | h_ne
     · cases exn with
