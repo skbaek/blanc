@@ -5570,9 +5570,11 @@ lemma Exec.inv_getCode {pc} {sevm} {devm} {exn}
       exn.getCode a = devm.getCode a := by
   revert exn devm sevm pc; apply Exec.rec
   · intros; rfl
-  · intros _ _ _ _ _ _ _ hrun a ha;
-    exact Ninst.inv_getCode_gen (xl := .none) trivial hrun a ha
-  · sorry
+  · intros _ _ _ _ _ _ _ run adr ne;
+    exact Ninst.inv_getCode_gen (xl := .none) trivial run adr ne
+  · intros _ _ _ _ _ _ _ _ _ _ run exec ih adr ne;
+    exact Ninst.inv_getCode_gen (xl := some _)
+            ⟨exec, fun adr hadr => (ih adr hadr).symm⟩ run adr ne
   · sorry
   · sorry
   · sorry
