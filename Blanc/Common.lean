@@ -3661,6 +3661,7 @@ def leftmostFsig : DispatchTree → B256
 -- note it assumes that:
 -- (1) the calldata function selector is already at the op of the stack (i.e, it has to be preceded by 'fsig').
 -- (2) the functions are ordered in ascending order of their signatures (right is higher)
+-- (3) the kth function of the program is the fallback function
 
 def dispatchWith (k : Nat) : DispatchTree → Func
   | DispatchTree.leaf w p => pushB256 w ::: eq ::: (p <?> .call k)

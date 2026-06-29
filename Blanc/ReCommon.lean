@@ -111,7 +111,7 @@ def prepend : Line → Func → Func
 
 infixr:65 " +++ " => prepend
 
-inductive Line.Run : Env → Desc → Line → Desc → Prop
+inductive Line.Run : Sevm → Devm → Line → Devm → Prop
   | nil : ∀ {e s}, Line.Run e s [] s
   | cons :
     ∀ {e s i s' l s''},
@@ -6237,8 +6237,6 @@ lemma lift_inv
   · intro pc sevm pre l post h_at h_run h_ne h_pi
     exact last h_at h_run h_ne h_pi
 
-#exit
-
 syntax "show_prefix_zero" : tactic
 macro_rules
   | `(tactic| show_prefix_zero) =>
@@ -6260,6 +6258,7 @@ macro_rules
               rcases of_cons_cons_pref_of_cons_cons_pref h1 (pref_of_split h2) with ⟨hx, hy, h⟩;
               cases hx; cases hy; clear h; apply append_pref h3 (of_append_pref h2 h1) )
 
+/-
 lemma prefix_of_not {x xs} {s s' : Desc} :
     Desc.Not s s' → (x :: xs <<+ s.stk) → (~~~ x :: xs <<+ s'.stk) := by show_prefix_one
 
@@ -6670,9 +6669,20 @@ lemma Line.of_inv_state (motive : (Adr → Storage) → Prop) (e s l s') (h_run 
     (h_inv : Line.Inv Desc.stor l) (hs' : motive s'.stor) : motive s.stor := by
   rw [Line.of_inv _ h_inv h_run]; exact hs'
 
+-/
+
+section
+
+open Lean.Elab.Tactic
+open Lean.Parser.Tactic
+open Lean.Elab.Term
+open Lean
+open Qq
+
 def String.toSyntax (s : String) : Lean.Syntax :=
   Lean.Syntax.ident Lean.SourceInfo.none s.toSubstring
     (Lean.Name.str Lean.Name.anonymous s) []
+
 
 def Strings.intro (ss : List String) : Lean.Elab.Tactic.TacticM Unit := do
   let ids : Lean.TSyntaxArray [`ident, `Lean.Parser.Term.hole] :=
@@ -6684,6 +6694,7 @@ def Strings.intro (ss : List String) : Lean.Elab.Tactic.TacticM Unit := do
     for stx in ids, fvar in fvars do
       Lean.Elab.Term.addLocalVarInfo stx (Lean.mkFVar fvar)
 
+/-
 elab "lstor" : tactic =>
   withMainContext do
     let d ← findDeclWithM isLineRun
@@ -6699,6 +6710,8 @@ elab "lstor" : tactic =>
         e s l s' d.toExpr
     line_inv
     Strings.intro (ds.reverse.map (Name.toString ∘ LocalDecl.userName))
+-/
+
 
 def matchingName (x : Lean.Expr) (d : Lean.LocalDecl) :
     Lean.Elab.Tactic.TacticM (Option Lean.Name) := do
@@ -6742,6 +6755,7 @@ def findSubscript (x : Lean.Expr) : Lean.Elab.Tactic.TacticM String := do
       | _ => failure
     | _ => failure
 
+/-
 open Ninst
 
 lemma branch_elim (φ : Prop) {c e s p q r}
@@ -6775,12 +6789,34 @@ lemma rev_branch_elim' {x xs} {e s p r} (φ : Prop)
   apply rev_branch_elim ; intro h''
   apply h' (pref_head_unique h h'')
 
-lemma run_prepend_elim (φ : Prop) (l) {p} {c e} {s : _root_.Desc} {r}
+-/
+
+lemma of_run_prepend {c e s r} :
+   ∀ p q, Func.Run c e s (p +++ q) r →
+   ∃ s', (Line.Run e s p s' ∧ Func.Run c e s' q r)
+| [], _, h => ⟨s, cst, h⟩
+| (_ :: p), q, (@Func.Run.next c e _ i _ _ _ h h') => by
+  let ⟨s', hp, hq⟩ := of_run_prepend p q h'
+  refine' ⟨s', Line.Run.cons h hp, hq⟩
+
+lemma run_prepend_elim (φ : Prop) (l) {p} {c e} {s r}
     (h : ∀ s', Line.Run e s l s' → Func.Run c e s' p r → φ)
     (h' : Func.Run c e s (l +++ p) r) : φ := by
   rcases of_run_prepend _ _ h' with ⟨s', hs, hs'⟩; apply h s' hs hs'
 
-lemma run_append_elim (φ : Prop) (l) {l'} {e} {s s'' : _root_.Desc}
+lemma Line.of_run_cons {e s i l s''} (h : Line.Run e s (i :: l) s'') :
+    ∃ s', i.Run e s s' ∧ Line.Run e s' l s'' := by cases h; refine' ⟨_, asm, asm⟩
+
+lemma of_run_append  {e s} (a) {b s''} (h : Line.Run e s (a ++ b) s'') :
+    ∃ s', a.Run e s s' ∧ b.Run e s' s'' := by
+  induction a generalizing s with
+  | nil => refine' ⟨s, cst, h⟩
+  | cons i a ih =>
+    rcases Line.of_run_cons h with ⟨s0, hi, h_ab⟩
+    rcases ih h_ab with ⟨s1, ha, hb⟩
+    refine ⟨s1, Line.Run.cons hi ha, hb⟩
+
+lemma run_append_elim (φ : Prop) (l) {l'} {e} {s s''}
     (h : ∀ s', Line.Run e s l s' → Line.Run e s' l' s'' → φ)
     (h' : Line.Run e s (l ++ l') s'') : φ := by
   rcases of_run_append _ h' with ⟨s', hs, hs'⟩; apply h s' hs hs'
@@ -6794,6 +6830,8 @@ elab "pexec" e:term : tactic =>
       let ss ← findSubscript s
       Lean.Expr.apply (Lean.mkApp2 q(@run_prepend_elim) c x)
       Strings.intro ["s" ++ ss, "h" ++ ss]
+
+#exit
 
 def Func.take : Nat → Q(Func) → TacticM Q(Line)
 | 0, _ => pure q([] : Line)

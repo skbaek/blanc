@@ -2,6 +2,7 @@
 
 
 import Blanc.ReWeth
+import Blanc.ReCommon
 import Std.Data.TreeMap.Lemmas
 
 
@@ -111,16 +112,17 @@ lemma Xinst.prep_inv_solvent
 
 -- Precond & Postcond : invariants in the main induction for proof of solvency preservation
 
-structure Precond (wa : Adr) (sevm : Sevm) (devm : Devm) : Prop where
+structure Cond (wa : Adr) (sevm : Sevm) (devm : Devm) : Prop where
   (nof : sum devm.getBal < 2 ^ 256)
   (solvent : devm.Solvent wa sevm)
 
-def Postcond (wa : Adr) (sevm : Sevm) : Execution → Prop
-  | .error _ => True
-  | .ok devm => Precond wa sevm devm
+-- def Postcond (wa : Adr) (sevm : Sevm) : Execution → Prop
+--   | .error _ => True
+--   | .ok devm => Precond wa sevm devm
 
-lemma Precond.state_eq {wa sevm devm devm'} (h_pc : Precond wa sevm devm) (h_eq : devm'.state = devm.state) :
-    Precond wa sevm devm' := by
+lemma Precond.state_eq {wa sevm devm devm'}
+    (h_pc : Cond wa sevm devm) (h_eq : devm'.state = devm.state) :
+    Cond wa sevm devm' := by
   cases h_pc with
   | mk h_nof h_solv =>
     have h_bal : devm'.getBal = devm.getBal := by
@@ -826,7 +828,7 @@ lemma Linst.inv_nof {sevm devm l devm'} :
   sorry
 
 def Inv0 {ξ} (r : Devm → ξ) (f : Devm → Except (String × Devm) Devm) : Prop :=
-    ∀ {pre y post}, f pre = .ok post → r pre = r post
+    ∀ {pre post}, f pre = .ok post → r pre = r post
 
 def Inv1 {ξ υ} (r : Devm → ξ) (f : Devm → Except (String × Devm) (υ × Devm)) : Prop :=
     ∀ {pre y post}, f pre = .ok ⟨y, post⟩ → r pre = r post
@@ -842,10 +844,10 @@ instance {ca} {cost} : Inv0 (λ devm => devm.getBal ca) (chargeGas cost) := sorr
 instance {ca} : Inv1 (λ devm => devm.getBal ca) Devm.popToNat := sorry
 
 lemma Linst.inv_solvent (wa : Adr) :
-    ∀ sevm devm l exn,
-      Linst.Run sevm devm l exn →
-      Precond wa sevm devm →
-      Postcond wa sevm exn := by
+    ∀ sevm devm l post,
+      Linst.Run sevm devm l (.ok post) →
+      Cond wa sevm devm →
+      Cond wa sevm post := by
   intro sevm devm l exn h_run h_pc
   cases l
   · simp [Linst.Run, Linst.run] at h_run
@@ -861,15 +863,73 @@ lemma Linst.inv_solvent (wa : Adr) :
     -- TODO: Prove that `dest` preserves `Precond` using `transfer_inv_solvent` logic
     sorry
 
+def Exec.InvDepth (k : Nat) (ca : Adr) (p : Prog) (σ : Sevm → Devm → Prop) : Prop :=
+  ForallDeeperAt k ca p (λ _ sevm pre exn _ => σ sevm pre → ifOk (σ sevm) exn)
+
+def Line.Inv {ξ : Type} (f : Devm → ξ) (l : Line) : Prop :=
+  ∀ {e s s'}, l.Run e s s' → f s = f s'
+
+lemma Line.of_inv {ξ : Type} {e s s'} (r : Devm → ξ) {l : Line} :
+  Line.Inv r l → l.Run e s s' → r s = r s' := λ h => h
+
+lemma Line.inv_solvent {e e' s l s' a}
+    (h_bal : Line.Inv Devm.getBal l) (h_stor : Line.Inv Devm.getStor l)
+    (h_sv : Devm.Solvent s a e) (h_run : Line.Run e' s l s') : Devm.Solvent s' a e := by
+  unfold Devm.Solvent; rw [← h_bal h_run, ← h_stor h_run]; exact h_sv
+
+lemma weth_inv' {sevm : Sevm} {s r}
+    (cond : Cond sevm.currentTarget sevm s)
+    (ih : Exec.InvDepth sevm.depth sevm.currentTarget weth (Cond sevm.currentTarget)) :
+    Func.Run (weth.main :: weth.aux) sevm s (Func.call 0) r →
+    Cond sevm.currentTarget sevm r := by
+
+  -- unwrap the initial `call 0` (this part does not exist in original proof in Solvent.lean)
+  intro run; cases run
+  rename (_ = _) => eq
+  rename (Func.Run _ _ _ _ _) => run
+  rename (Devm.Burn _ _) => burn
+  rename Devm => s₀
+  cases eq
+  have cond₀ : Cond sevm.currentTarget sevm s₀ :=
+    sorry
+  clear cond burn s
+  revert run
+
+  -- this point corresponds to the starting point of weth_inv' in Solvent.lean
+  pexec fsig
+  have cond₁  : Cond sevm.currentTarget sevm s₁ := by
+    refine' ⟨_, _⟩
+    · rw [← Line.of_inv Devm.getBal sorry h₁]; exact cond₀.nof
+    · apply Line.inv_solvent _ _ cond₀.solvent h₁ <;> sorry -- line_inv
+  clear cond₀
+  sorry
+
 theorem weth_inv_solvent (wa : Adr) :
-    ∀ sevm devm exn,
-      Exec 0 sevm devm exn →
+    ∀ sevm pre post,
+      Exec 0 sevm pre (.ok post)  →
       (sevm.currentTarget = wa → some sevm.code.toList = Prog.compile weth) →
-      Precond wa sevm devm →
-      Postcond wa sevm exn := by
+      Cond wa sevm pre →
+      Cond wa sevm post := by
   intro sevm devm exn exc h_code h_pc
-  apply lift_inv (Precond wa) (Postcond wa)
-  · intros; trivial
+  apply lift_inv wa weth (Cond wa) --(Postcond wa)
+  · intro sevm pre post run eq; rw [← eq]
+    dsimp [Prog.Run] at run
+    intro ih cond; apply weth_inv' cond _ run
+    intro pc' sevm' devm' exn'
+    cases exn'; {simp only [ifOk, implies_true]}
+    apply ih
+  · sorry
+  · sorry
+  · sorry
+  · sorry
+  · sorry
+  · sorry
+  · sorry
+  · sorry
+  · sorry
+
+
+#exit
   · intros; trivial
   · intros; trivial
   · intros _ _ _ _ _ _ _ h_ih h_pc

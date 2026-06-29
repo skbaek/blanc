@@ -737,7 +737,7 @@ lemma run_inv_cond (f : Func)
 lemma weth_inv' {e s r}
     (hs : Precond e.cta e s)
     (ih : Exec.InvDepth e.exd e.cta weth (Precond e.cta) (Postcond e.cta)) :
-    Func.Run (weth.main :: weth.aux) e s (Func.mainWith 1 wethTree) r →
+    Func.Run (weth.main :: weth.aux) e s weth.main r →
     Postcond e.cta e r := by
   pexec fsig
   have hs₁ : Precond e.cta e s₁ := by
@@ -800,7 +800,9 @@ theorem weth_inv_solvent (wa : Adr) :
     lift_inv wa weth (Precond wa) (Postcond wa) _ _ _ _
       e s 0 r ex ⟨h, λ h_eq => ⟨h' h_eq, rfl⟩⟩ <;> clear e s r ex h h'
   · intro e s r h_run h_eq; rw [← h_eq]
-    intro h_inv h_pc; apply weth_inv' h_pc h_inv asm
+    intro h_inv h_pc;
+    dsimp [Prog.Run] at h_run
+    apply weth_inv' h_pc h_inv h_run
   · intros e s pc s' pc' h_step h_ne h_pc; constructor
     · rw [← Step.inv_code h_step, h_pc.code]
     · have h_nof := h_pc.nof; clear h_pc
