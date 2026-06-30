@@ -1393,6 +1393,12 @@ lemma Devm.burn_trans {x y z} (h1 : Devm.Burn x y) (h2 : Devm.Burn y z) : Devm.B
   rcases h2 with ⟨h2_stack, h2_mem, h2_gas, h2_logs, h2_refund, h2_out, h2_del, h2_ret, h2_err, h2_acc, h2_keys, h2_state, h2_trans⟩
   refine' ⟨Eq.trans h1_stack h2_stack, Eq.trans h1_mem h2_mem, Nat.le_trans h2_gas h1_gas, Eq.trans h1_logs h2_logs, Eq.trans h1_refund h2_refund, Eq.trans h1_out h2_out, Eq.trans h1_del h2_del, Eq.trans h1_ret h2_ret, Eq.trans h1_err h2_err, Eq.trans h1_acc h2_acc, Eq.trans h1_keys h2_keys, Eq.trans h1_state h2_state, Eq.trans h1_trans h2_trans⟩
 
+lemma Devm.popBurn_of_popBurn_of_pop {devm devm' devm''} {xs}
+    (popBurn : Devm.PopBurn xs devm devm')
+    (burn : Devm.Burn devm' devm'') :
+    Devm.PopBurn xs devm devm'' := by
+  sorry
+
 lemma Devm.popBurn_of_burn_of_popBurn {devm devm' devm''} {xs}
     (burn : Devm.Burn devm devm')
     (popBurn : Devm.PopBurn xs devm' devm'') :
@@ -1751,6 +1757,57 @@ def dispatch : DispatchTree → Func
     dup 0 :::
     pushB256 (leftmostFsig tr) ::: gt :::
     (dispatch tl <?> dispatch tr)
+
+
+lemma dispatchWith_inv {c k f} (σ : Sevm → Devm → Prop)
+    (h0_zero : ∀ {e s x s1 s2 s'}, σ e s → Ninst.Run e s (pushB256 x) s1 → Ninst.Run e s1 eq s2 → Devm.PopBurn [0] s2 s' → σ e s')
+    (h0_succ : ∀ {e s x w s1 s2 s3 s'}, w ≠ 0 → σ e s → Ninst.Run e s (pushB256 x) s1 → Ninst.Run e s1 eq s2 → Devm.PopBurn [w] s2 s3 → Devm.Burn s3 s' → σ e s')
+    (h1_zero : ∀ {e s x s1 s2 s3 s'}, σ e s → Ninst.Run e s (dup 0) s1 → Ninst.Run e s1 (pushB256 x) s2 → Ninst.Run e s2 gt s3 → Devm.PopBurn [0] s3 s' → σ e s')
+    (h1_succ : ∀ {e s x w s1 s2 s3 s4 s'}, w ≠ 0 → σ e s → Ninst.Run e s (dup 0) s1 → Ninst.Run e s1 (pushB256 x) s2 → Ninst.Run e s2 gt s3 → Devm.PopBurn [w] s3 s4 → Devm.Burn s4 s' → σ e s')
+    (h2 : c[k]? = some f)
+    (h3 : ∀ {e s s' r}, σ e s → Devm.Burn s s' → Func.Run c e s' f r → σ e r) :
+    ∀ t : DispatchTree,
+      (∀ {e s r}, ∀ wf ∈ t, σ e s → Func.Run c e s wf.2 r → σ e r) →
+    ∀ (e s r), σ e s → Func.Run c e s (dispatchWith k t) r → σ e r := by
+  intro t
+  induction t with
+  | fork t t' ih ih' =>
+    intro htt' e s r hs h_run
+    cases h_run with
+    | next h_dup h_run =>
+      cases h_run with
+      | next h_push h_run =>
+        cases h_run with
+        | next h_gt h_run =>
+          cases h_run with
+          | zero h_pop h_run_branch =>
+            apply ih'
+            · intro e' s' r' wp h_in
+              apply htt' _ (Or.inr h_in)
+            · exact h1_zero hs h_dup h_push h_gt h_pop
+            · exact h_run_branch
+          | succ h_w h_pop h_burn h_run_branch =>
+            apply ih
+            · intro e' s' r' wp h_in
+              apply htt' _ (Or.inl h_in)
+            · exact h1_succ h_w hs h_dup h_push h_gt h_pop h_burn
+            · exact h_run_branch
+  | leaf w p =>
+    intro htt' e s r hs h_run
+    cases h_run with
+    | next h_push h_run =>
+      cases h_run with
+      | next h_eq h_run =>
+        cases h_run with
+        | zero h_pop h_run_branch =>
+          cases h_run_branch with
+          | call h_eq_f h_burn h_run_f =>
+            have hh := Eq.trans h2.symm h_eq_f
+            injection hh with heq
+            subst heq
+            apply h3 (h0_zero hs h_push h_eq h_pop) h_burn h_run_f
+        | succ h_w h_pop h_burn h_run_branch =>
+          apply htt' ⟨w, p⟩ rfl (h0_succ h_w hs h_push h_eq h_pop h_burn) h_run_branch
 
 def shiftRight (w : B256) : Line := [pushB256 w, shr]
 
