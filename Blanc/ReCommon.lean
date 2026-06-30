@@ -1757,6 +1757,142 @@ def dispatch : DispatchTree → Func
     pushB256 (leftmostFsig tr) ::: gt :::
     (dispatch tl <?> dispatch tr)
 
+section
+
+open Lean.Elab.Tactic
+open Lean.Parser.Tactic
+open Lean.Elab.Term
+open Lean
+open Qq
+
+def String.toSyntax (s : String) : Lean.Syntax :=
+  Lean.Syntax.ident Lean.SourceInfo.none s.toSubstring
+    (Lean.Name.str Lean.Name.anonymous s) []
+
+
+def Strings.intro (ss : List String) : Lean.Elab.Tactic.TacticM Unit := do
+  let ids : Lean.TSyntaxArray [`ident, `Lean.Parser.Term.hole] :=
+    ⟨ss.map (λ s => {raw := String.toSyntax s})⟩
+  let fvars ← liftMetaTacticAux fun mvarId => do
+    let (fvars, mvarId) ← mvarId.introN ids.size (ids.map getNameOfIdent').toList
+    return (fvars, [mvarId])
+  withMainContext do
+    for stx in ids, fvar in fvars do
+      Lean.Elab.Term.addLocalVarInfo stx (Lean.mkFVar fvar)
+
+def matchingName (x : Lean.Expr) (d : Lean.LocalDecl) :
+    Lean.Elab.Tactic.TacticM (Option Lean.Name) := do
+  if (← Lean.Meta.isExprDefEq x d.toExpr) -- Check if type equals goal type.
+  then return some d.userName -- If equal, success!
+  else return none
+
+def subscript_succ_core : List Char → Option (List Char)
+| [] => ['₁']
+| '₀' :: cs => '₁' :: cs
+| '₁' :: cs => '₂' :: cs
+| '₂' :: cs => '₃' :: cs
+| '₃' :: cs => '₄' :: cs
+| '₄' :: cs => '₅' :: cs
+| '₅' :: cs => '₆' :: cs
+| '₆' :: cs => '₇' :: cs
+| '₇' :: cs => '₈' :: cs
+| '₈' :: cs => '₉' :: cs
+| '₉' :: cs =>
+  match subscript_succ_core cs with
+  | some cs' => '₀' :: cs'
+  | none => none
+| _ => none
+
+def subscript_succ (cs : List Char) : Option (List Char) :=
+match subscript_succ_core cs.reverse with
+| none => none
+| some cs' => some cs'.reverse
+
+def findSubscript (x : Lean.Expr) : Lean.Elab.Tactic.TacticM String := do
+  Lean.Elab.Tactic.withMainContext do
+    let ctx ← Lean.MonadLCtx.getLCtx -- get the local context.
+    let some nm ← ctx.findDeclM? (matchingName x) | failure
+    match nm with
+    | Lean.Name.str _ s =>
+      match s.data with
+      | 's' :: cs =>
+        match subscript_succ cs with
+        | none => failure
+        | some cs' => pure ⟨cs'⟩
+      | _ => failure
+    | _ => failure
+
+lemma of_run_prepend {c e s r} :
+   ∀ p q, Func.Run c e s (p +++ q) r →
+   ∃ s', (Line.Run e s p s' ∧ Func.Run c e s' q r)
+| [], _, h => ⟨s, cst, h⟩
+| (_ :: p), q, (@Func.Run.next c e _ i _ _ _ h h') => by
+  let ⟨s', hp, hq⟩ := of_run_prepend p q h'
+  refine' ⟨s', Line.Run.cons h hp, hq⟩
+
+lemma run_prepend_elim (φ : Prop) (l) {p} {c e} {s r}
+    (h : ∀ s', Line.Run e s l s' → Func.Run c e s' p r → φ)
+    (h' : Func.Run c e s (l +++ p) r) : φ := by
+  rcases of_run_prepend _ _ h' with ⟨s', hs, hs'⟩; apply h s' hs hs'
+
+lemma Line.of_run_cons {e s i l s''} (h : Line.Run e s (i :: l) s'') :
+    ∃ s', i.Run e s s' ∧ Line.Run e s' l s'' := by cases h; refine' ⟨_, asm, asm⟩
+
+lemma of_run_append  {e s} (a) {b s''} (h : Line.Run e s (a ++ b) s'') :
+    ∃ s', a.Run e s s' ∧ b.Run e s' s'' := by
+  induction a generalizing s with
+  | nil => refine' ⟨s, cst, h⟩
+  | cons i a ih =>
+    rcases Line.of_run_cons h with ⟨s0, hi, h_ab⟩
+    rcases ih h_ab with ⟨s1, ha, hb⟩
+    refine ⟨s1, Line.Run.cons hi ha, hb⟩
+
+lemma run_append_elim (φ : Prop) (l) {l'} {e} {s s''}
+    (h : ∀ s', Line.Run e s l s' → Line.Run e s' l' s'' → φ)
+    (h' : Line.Run e s (l ++ l') s'') : φ := by
+  rcases of_run_append _ h' with ⟨s', hs, hs'⟩; apply h s' hs hs'
+
+elab "pexec" e:term : tactic =>
+  withMainContext do
+    let x ← elabTermForApply e
+    let g : Q(Prop) ← getMainTarget
+    match g with
+    | ~q(Func.Run _ _ $s _ _ → $c) =>
+      let ss ← findSubscript s
+      Lean.Expr.apply (Lean.mkApp2 q(@run_prepend_elim) c x)
+      Strings.intro ["s" ++ ss, "h" ++ ss]
+
+def Func.take : Nat → Q(Func) → TacticM Q(Line)
+| 0, _ => pure q([] : Line)
+| n + 1, p => do
+  let p' : Q(Func) ← Meta.whnf p
+  match p' with
+  | ~q(Func.next $i $q) =>
+    let x ← Func.take n q
+    pure q($i :: $x)
+  | _ => failure
+
+elab "pexen" e:num : tactic =>
+  withMainContext do
+    let n := Lean.TSyntax.getNat e
+    let g : Q(Prop) ← getMainTarget
+    match g with
+    | ~q(Func.Run _ _ $s $p _ → $c) =>
+      let ss ← findSubscript s
+      let x ← Func.take n p
+      Lean.Expr.apply (Lean.mkApp2 q(@run_prepend_elim) c x)
+      Strings.intro ["s" ++ ss, "h" ++ ss]
+
+end
+
+lemma of_run_branch {c e s r} {p q : Func} (h : Func.Run c e s (Func.branch p q) r) :
+    (∃ s', Devm.PopBurn [0] s s' ∧ Func.Run c e s' p r) ∨
+    (∃ w s' s'', w ≠ 0 ∧ Devm.PopBurn [w] s s' ∧ Devm.Burn s' s'' ∧ Func.Run c e s'' q r) := by
+  cases h with
+  | zero h1 h2 => left; exact ⟨_, h1, h2⟩
+  | succ h1 h2 h3 h4 => right; exact ⟨_, _, _, h1, h2, h3, h4⟩
+
+
 lemma dispatchWith_inv {c k f} (σ : Sevm → Devm → Prop)
     ( h0 :
       ∀ {e s x w s' s''},
@@ -1765,11 +1901,11 @@ lemma dispatchWith_inv {c k f} (σ : Sevm → Devm → Prop)
         Devm.PopBurn [w] s' s'' →
         σ e s'' )
     ( h1 :
-      ∀ {e s x w s3 s'},
+      ∀ {e s x w s' s''},
         σ e s →
-        Line.Run e s [dup 0, pushB256 x, gt] s3 →
-        Devm.PopBurn [w] s3 s' →
-        σ e s' )
+        Line.Run e s [dup 0, pushB256 x, gt] s' →
+        Devm.PopBurn [w] s' s'' →
+        σ e s'' )
     (h2 : c[k]? = some f)
     (h3 : ∀ {e s s' r}, σ e s → Devm.Burn s s' → Func.Run c e s' f r → σ e r) :
     ∀ t : DispatchTree,
@@ -1778,42 +1914,26 @@ lemma dispatchWith_inv {c k f} (σ : Sevm → Devm → Prop)
   intro t
   induction t with
   | fork t t' ih ih' =>
-    intro htt' e s r hs h_run
-    cases h_run with
-    | next h_dup h_run =>
-      cases h_run with
-      | next h_push h_run =>
-        cases h_run with
-        | next h_gt h_run =>
-          cases h_run with
-          | zero h_pop h_run_branch =>
-            apply ih'
-            · intro e' s' r' wp h_in
-              apply htt' _ (Or.inr h_in)
-            · exact h1 hs (.cons h_dup <| .cons h_push <| .cons h_gt .nil) h_pop
-            · exact h_run_branch
-          | succ h_w h_pop h_burn h_run_branch =>
-            apply ih
-            · intro e' s' r' wp h_in
-              apply htt' _ (Or.inl h_in)
-            · apply h1 hs (.cons h_dup <| .cons h_push <| .cons h_gt .nil)  <| Devm.popBurn_of_popBurn_of_pop h_pop h_burn
-            · exact h_run_branch
+    intro htt' e s r hs
+    have ht : ∀ {e s r}, ∀ wp ∈ t, σ e s → Func.Run c e s wp.2 r → σ e r := by
+      intro e s r wp h_in; apply htt' _ (Or.inl h_in)
+    have ht' : ∀ {e s r}, ∀ wp ∈ t', σ e s → Func.Run c e s wp.2 r → σ e r := by
+      intro e s r wp h_in; apply htt' _ (Or.inr h_in)
+    pexen 3; intro h₂
+    rcases of_run_branch h₂ with ⟨s₂, h_pop, h_run'⟩ | ⟨w, s₂, s₃, hw, h_pop, h_burn, h_run'⟩
+    · apply ih' ht' e s₂ r (h1 hs h₁ h_pop) h_run'
+    · apply ih ht e s₃ r (h1 hs h₁ (Devm.popBurn_of_popBurn_of_pop h_pop h_burn)) h_run'
   | leaf w p =>
-    intro htt' e s r hs h_run
-    cases h_run with
-    | next h_push h_run =>
-      cases h_run with
-      | next h_eq h_run =>
-        cases h_run with
-        | zero h_pop h_run_branch =>
-          cases h_run_branch with
-          | call h_eq_f h_burn h_run_f =>
-            have hh := Eq.trans h2.symm h_eq_f
-            injection hh with heq
-            subst heq
-            apply h3 (h0 hs (.cons h_push (.cons h_eq .nil)) h_pop) h_burn h_run_f
-        | succ h_w h_pop h_burn h_run_branch =>
-          apply htt' ⟨w, p⟩ rfl (h0 hs (.cons h_push (.cons h_eq .nil)) (Devm.popBurn_of_popBurn_of_pop h_pop h_burn)) h_run_branch
+    intro htt' e s r hs
+    pexen 2; intro h'
+    rcases of_run_branch h' with ⟨s₂, h_pop, h_run'⟩ | ⟨w', s₂, s₃, hw', h_pop, h_burn, h_run'⟩
+    · cases h_run' with
+      | call h_eq_f h_burn' h_run_f =>
+        have hh := Eq.trans h2.symm h_eq_f
+        injection hh with heq
+        subst heq
+        apply h3 (h0 hs h₁ h_pop) h_burn' h_run_f
+    · apply htt' ⟨w, p⟩ rfl (h0 hs h₁ (Devm.popBurn_of_popBurn_of_pop h_pop h_burn)) h_run'
 
 def shiftRight (w : B256) : Line := [pushB256 w, shr]
 
@@ -6317,108 +6437,3 @@ macro_rules
               rcases h0.stk with ⟨stk, h2, h3⟩; clear h0;
               rcases of_cons_cons_pref_of_cons_cons_pref h1 (pref_of_split h2) with ⟨hx, hy, h⟩;
               cases hx; cases hy; clear h; apply append_pref h3 (of_append_pref h2 h1) )
-
-section
-
-open Lean.Elab.Tactic
-open Lean.Parser.Tactic
-open Lean.Elab.Term
-open Lean
-open Qq
-
-def String.toSyntax (s : String) : Lean.Syntax :=
-  Lean.Syntax.ident Lean.SourceInfo.none s.toSubstring
-    (Lean.Name.str Lean.Name.anonymous s) []
-
-
-def Strings.intro (ss : List String) : Lean.Elab.Tactic.TacticM Unit := do
-  let ids : Lean.TSyntaxArray [`ident, `Lean.Parser.Term.hole] :=
-    ⟨ss.map (λ s => {raw := String.toSyntax s})⟩
-  let fvars ← liftMetaTacticAux fun mvarId => do
-    let (fvars, mvarId) ← mvarId.introN ids.size (ids.map getNameOfIdent').toList
-    return (fvars, [mvarId])
-  withMainContext do
-    for stx in ids, fvar in fvars do
-      Lean.Elab.Term.addLocalVarInfo stx (Lean.mkFVar fvar)
-
-def matchingName (x : Lean.Expr) (d : Lean.LocalDecl) :
-    Lean.Elab.Tactic.TacticM (Option Lean.Name) := do
-  if (← Lean.Meta.isExprDefEq x d.toExpr) -- Check if type equals goal type.
-  then return some d.userName -- If equal, success!
-  else return none
-
-def subscript_succ_core : List Char → Option (List Char)
-| [] => ['₁']
-| '₀' :: cs => '₁' :: cs
-| '₁' :: cs => '₂' :: cs
-| '₂' :: cs => '₃' :: cs
-| '₃' :: cs => '₄' :: cs
-| '₄' :: cs => '₅' :: cs
-| '₅' :: cs => '₆' :: cs
-| '₆' :: cs => '₇' :: cs
-| '₇' :: cs => '₈' :: cs
-| '₈' :: cs => '₉' :: cs
-| '₉' :: cs =>
-  match subscript_succ_core cs with
-  | some cs' => '₀' :: cs'
-  | none => none
-| _ => none
-
-def subscript_succ (cs : List Char) : Option (List Char) :=
-match subscript_succ_core cs.reverse with
-| none => none
-| some cs' => some cs'.reverse
-
-def findSubscript (x : Lean.Expr) : Lean.Elab.Tactic.TacticM String := do
-  Lean.Elab.Tactic.withMainContext do
-    let ctx ← Lean.MonadLCtx.getLCtx -- get the local context.
-    let some nm ← ctx.findDeclM? (matchingName x) | failure
-    match nm with
-    | Lean.Name.str _ s =>
-      match s.data with
-      | 's' :: cs =>
-        match subscript_succ cs with
-        | none => failure
-        | some cs' => pure ⟨cs'⟩
-      | _ => failure
-    | _ => failure
-
-lemma of_run_prepend {c e s r} :
-   ∀ p q, Func.Run c e s (p +++ q) r →
-   ∃ s', (Line.Run e s p s' ∧ Func.Run c e s' q r)
-| [], _, h => ⟨s, cst, h⟩
-| (_ :: p), q, (@Func.Run.next c e _ i _ _ _ h h') => by
-  let ⟨s', hp, hq⟩ := of_run_prepend p q h'
-  refine' ⟨s', Line.Run.cons h hp, hq⟩
-
-lemma run_prepend_elim (φ : Prop) (l) {p} {c e} {s r}
-    (h : ∀ s', Line.Run e s l s' → Func.Run c e s' p r → φ)
-    (h' : Func.Run c e s (l +++ p) r) : φ := by
-  rcases of_run_prepend _ _ h' with ⟨s', hs, hs'⟩; apply h s' hs hs'
-
-lemma Line.of_run_cons {e s i l s''} (h : Line.Run e s (i :: l) s'') :
-    ∃ s', i.Run e s s' ∧ Line.Run e s' l s'' := by cases h; refine' ⟨_, asm, asm⟩
-
-lemma of_run_append  {e s} (a) {b s''} (h : Line.Run e s (a ++ b) s'') :
-    ∃ s', a.Run e s s' ∧ b.Run e s' s'' := by
-  induction a generalizing s with
-  | nil => refine' ⟨s, cst, h⟩
-  | cons i a ih =>
-    rcases Line.of_run_cons h with ⟨s0, hi, h_ab⟩
-    rcases ih h_ab with ⟨s1, ha, hb⟩
-    refine ⟨s1, Line.Run.cons hi ha, hb⟩
-
-lemma run_append_elim (φ : Prop) (l) {l'} {e} {s s''}
-    (h : ∀ s', Line.Run e s l s' → Line.Run e s' l' s'' → φ)
-    (h' : Line.Run e s (l ++ l') s'') : φ := by
-  rcases of_run_append _ h' with ⟨s', hs, hs'⟩; apply h s' hs hs'
-
-elab "pexec" e:term : tactic =>
-  withMainContext do
-    let x ← elabTermForApply e
-    let g : Q(Prop) ← getMainTarget
-    match g with
-    | ~q(Func.Run _ _ $s _ _ → $c) =>
-      let ss ← findSubscript s
-      Lean.Expr.apply (Lean.mkApp2 q(@run_prepend_elim) c x)
-      Strings.intro ["s" ++ ss, "h" ++ ss]

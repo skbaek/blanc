@@ -344,14 +344,35 @@ lemma weth_inv' {sevm : Sevm} {s r}
     Precond.state_eq cond burn.state.symm
   clear cond burn s
   revert run
+
   -- this point corresponds to the starting point of weth_inv' in Solvent.lean
+
   pexec fsig
   have cond₁  : Cond sevm.currentTarget sevm s₁ := by
     refine' ⟨_, _⟩
     · rw [← Line.of_inv Devm.getBal sorry h₁]; exact cond₀.nof
     · apply Line.inv_solvent _ _ cond₀.solvent h₁ <;> line_inv
   clear cond₀
-  sorry
+  clear h₁
+  clear s₀
+  intro temp
+  apply
+    ( @dispatchWith_inv
+      (weth.main :: weth.aux) 1 deposit
+      (λ e s =>
+         Cond e.currentTarget e s ∧
+         Exec.InvDepth e.depth e.currentTarget weth (Cond e.currentTarget) )
+      ?_ ?_ rfl ?_ wethTree ?_ sevm s₁ r ⟨cond₁, ih⟩ temp ).1
+    <;> clear temp cond₁ ih r s₁ sevm
+  · sorry
+  · sorry
+  · sorry
+  · sorry
+
+
+
+
+
 
 theorem weth_inv_solvent (wa : Adr) :
     ∀ sevm pre post,
