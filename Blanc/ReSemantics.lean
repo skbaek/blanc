@@ -80,8 +80,6 @@ abbrev Stack : Type := List B256
 
 def Stack.Push (x y xy : Stack) : Prop := x <++ xy ++> y
 def Stack.Pop (x xy y : Stack) : Prop := x <++ xy ++> y
--- def Stack.Diff (xs zs : Stack) (s s'' : Stack) : Prop :=
---   ∃ s' : Stack, Pop xs s s' ∧ Push zs s' s''
 
 inductive Func : Type
   | branch : Func → Func → Func
@@ -1668,16 +1666,6 @@ macro_rules
              (exact Nat.lt_of_succ_lt_succ gt) ] );
       rw [run_eq lim'.pred gt']
     )
-
-
-   -- rcases (of_generic_create' good run).2 with ⟨lim, fa⟩
-   -- refine' ⟨lim + 1, λ lim' gt => _⟩
-   -- have gt' : lim'.pred > lim :=
-   --   ( by cases lim' <;>
-   --        [ (cases Nat.not_lt_zero _ gt);
-   --          (exact Nat.lt_of_succ_lt_succ gt) ] );
-   -- rw [fa lim'.pred gt']
-
 
 lemma of_process_create_message' {msg : Msg} {xl : Xlot}
     {ex : Except (String × State × AdrSet × Tra) Devm} (good : xl.Good')
