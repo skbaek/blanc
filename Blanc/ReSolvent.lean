@@ -95,30 +95,10 @@ lemma Linst.inv_solvent (wa : Adr) :
 def Exec.InvDepth (k : Nat) (ca : Adr) (p : Prog) (σ : Sevm → Devm → Prop) : Prop :=
   ForallDeeperAt k ca p (λ _ sevm pre exn _ => σ sevm pre → ifOk (σ sevm) exn)
 
-def Line.Inv {ξ : Type} (f : Devm → ξ) (l : Line) : Prop :=
-  ∀ {e s s'}, l.Run e s s' → f s = f s'
-
-lemma Line.of_inv {ξ : Type} {e s s'} (r : Devm → ξ) {l : Line} :
-  Line.Inv r l → l.Run e s s' → r s = r s' := λ h => h
-
 lemma Line.inv_solvent {e e' s l s' a}
     (h_bal : Line.Inv Devm.getBal l) (h_stor : Line.Inv Devm.getStor l)
     (h_sv : Devm.Solvent s a e) (h_run : Line.Run e' s l s') : Devm.Solvent s' a e := by
   unfold Devm.Solvent; rw [← h_bal h_run, ← h_stor h_run]; exact h_sv
-
-def Ninst.Inv {ξ : Type} (r : Devm → ξ) (i : Ninst) : Prop :=
-  ∀ {e s s'}, Ninst.Run e s i s' → r s = r s'
-
-lemma Line.nil_inv {ξ : Type} {f : Devm → ξ} : Line.Inv f [] := by
-  intros e s s' h; cases h; rfl
-
-lemma Line.cons_inv {ξ : Type} {f : Devm → ξ} {i l} :
-    Ninst.Inv f i → Line.Inv f l → Line.Inv f (i :: l) := by
-  intros h0 h1 e s s'' h2
-  rcases Line.of_run_cons h2 with ⟨s', h3, h4⟩
-  apply Eq.trans (h0 h3) (h1 h4)
-
-class Ninst.Hinv {ξ : Type} (f : Devm → ξ) (i : Ninst) where (inv : Ninst.Inv f i)
 
 lemma chargeGas_getBal_eq {cost devm devm'} (h : chargeGas cost devm = .ok devm') : devm.getBal = devm'.getBal := by
   dsimp [chargeGas] at h
@@ -290,42 +270,6 @@ instance : Ninst.Hinv Devm.getStor (Ninst.reg Rinst.shr) := ⟨by
           exact (Devm.pop_getStor_eq hp1).trans <| (Devm.pop_getStor_eq hp2).trans <| (pushItem_getStor_eq hpush)
 ⟩
 
-open Qq
-
-def Ninst.inv_expr (ξx fx : Lean.Expr) (ix : Q(Ninst)) : Lean.Elab.Tactic.TacticM Lean.Expr := do
-  let x ← Lean.Meta.synthInstance <| Lean.mkApp3 q(@Ninst.Hinv) ξx fx ix
-  pure <| Lean.mkApp4 q(@Ninst.Hinv.inv) ξx fx ix x
-
-def instInv : Lean.Elab.Tactic.TacticM Unit :=
-  Lean.Elab.Tactic.withMainContext do
-  let t ← Lean.Elab.Tactic.getMainTarget
-  have t' : Q(Prop) := t
-  match t' with
-  | ~q(@Ninst.Inv $ξx $fx $ix) =>
-    let x ← Ninst.inv_expr ξx fx ix
-    Lean.Elab.Tactic.closeMainGoal `tacName x
-  | _ => dbg_trace "Not a Ninst.Inv goal"
-
-def line_nil_inv : Lean.Elab.Tactic.TacticM Unit :=
-  Lean.Expr.apply <|
-    Lean.Expr.const (Lean.Name.str (Lean.Name.str Lean.Name.anonymous "Line") "nil_inv") []
-
-def line_cons_inv : Lean.Elab.Tactic.TacticM Unit :=
-  Lean.Expr.apply <|
-    Lean.Expr.const (Lean.Name.str (Lean.Name.str Lean.Name.anonymous "Line") "cons_inv") []
-
-partial def line_inv : Lean.Elab.Tactic.TacticM Unit :=
-  Lean.Elab.Tactic.withMainContext do
-  let t : Q(Prop) ← Lean.Elab.Tactic.getMainTarget
-  match t with
-  | ~q(@Line.Inv $ξx $fx $lx) =>
-    let lx' : Q(Line) ← Lean.Meta.whnf lx
-    match lx' with
-    | ~q([]) => line_nil_inv
-    | _ => line_cons_inv; instInv; line_inv
-  | _ => dbg_trace "Not a Line.Inv goal"
-
-elab "line_inv" : tactic => line_inv
 
 lemma weth_inv' {sevm : Sevm} {s r}
     (cond : Cond sevm.currentTarget sevm s)
@@ -350,7 +294,7 @@ lemma weth_inv' {sevm : Sevm} {s r}
   pexec fsig
   have cond₁  : Cond sevm.currentTarget sevm s₁ := by
     refine' ⟨_, _⟩
-    · rw [← Line.of_inv Devm.getBal sorry h₁]; exact cond₀.nof
+    · rw [← Line.of_inv Devm.getBal (by line_inv) h₁]; exact cond₀.nof
     · apply Line.inv_solvent _ _ cond₀.solvent h₁ <;> line_inv
   clear cond₀
   clear h₁

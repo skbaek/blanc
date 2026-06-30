@@ -1883,6 +1883,61 @@ elab "pexen" e:num : tactic =>
       Lean.Expr.apply (Lean.mkApp2 q(@run_prepend_elim) c x)
       Strings.intro ["s" ++ ss, "h" ++ ss]
 
+def Line.Inv {ξ : Type} (f : Devm → ξ) (l : Line) : Prop :=
+  ∀ {e s s'}, l.Run e s s' → f s = f s'
+
+lemma Line.of_inv {ξ : Type} {e s s'} (r : Devm → ξ) {l : Line} :
+  Line.Inv r l → l.Run e s s' → r s = r s' := λ h => h
+
+def Ninst.Inv {ξ : Type} (r : Devm → ξ) (i : Ninst) : Prop :=
+  ∀ {e s s'}, Ninst.Run e s i s' → r s = r s'
+
+lemma Line.nil_inv {ξ : Type} {f : Devm → ξ} : Line.Inv f [] := by
+  intros e s s' h; cases h; rfl
+
+lemma Line.cons_inv {ξ : Type} {f : Devm → ξ} {i l} :
+    Ninst.Inv f i → Line.Inv f l → Line.Inv f (i :: l) := by
+  intros h0 h1 e s s'' h2
+  rcases Line.of_run_cons h2 with ⟨s', h3, h4⟩
+  apply Eq.trans (h0 h3) (h1 h4)
+
+class Ninst.Hinv {ξ : Type} (f : Devm → ξ) (i : Ninst) where (inv : Ninst.Inv f i)
+
+def Ninst.inv_expr (ξx fx : Lean.Expr) (ix : Q(Ninst)) : Lean.Elab.Tactic.TacticM Lean.Expr := do
+  let x ← Lean.Meta.synthInstance <| Lean.mkApp3 q(@Ninst.Hinv) ξx fx ix
+  pure <| Lean.mkApp4 q(@Ninst.Hinv.inv) ξx fx ix x
+
+def instInv : Lean.Elab.Tactic.TacticM Unit :=
+  Lean.Elab.Tactic.withMainContext do
+  let t ← Lean.Elab.Tactic.getMainTarget
+  have t' : Q(Prop) := t
+  match t' with
+  | ~q(@Ninst.Inv $ξx $fx $ix) =>
+    let x ← Ninst.inv_expr ξx fx ix
+    Lean.Elab.Tactic.closeMainGoal `tacName x
+  | _ => dbg_trace "Not a Ninst.Inv goal"
+
+def line_nil_inv : Lean.Elab.Tactic.TacticM Unit :=
+  Lean.Expr.apply <|
+    Lean.Expr.const (Lean.Name.str (Lean.Name.str Lean.Name.anonymous "Line") "nil_inv") []
+
+def line_cons_inv : Lean.Elab.Tactic.TacticM Unit :=
+  Lean.Expr.apply <|
+    Lean.Expr.const (Lean.Name.str (Lean.Name.str Lean.Name.anonymous "Line") "cons_inv") []
+
+partial def line_inv : Lean.Elab.Tactic.TacticM Unit :=
+  Lean.Elab.Tactic.withMainContext do
+  let t : Q(Prop) ← Lean.Elab.Tactic.getMainTarget
+  match t with
+  | ~q(@Line.Inv $ξx $fx $lx) =>
+    let lx' : Q(Line) ← Lean.Meta.whnf lx
+    match lx' with
+    | ~q([]) => line_nil_inv
+    | _ => line_cons_inv; instInv; line_inv
+  | _ => dbg_trace "Not a Line.Inv goal"
+
+elab "line_inv" : tactic => line_inv
+
 end
 
 lemma of_run_branch {c e s r} {p q : Func} (h : Func.Run c e s (Func.branch p q) r) :
