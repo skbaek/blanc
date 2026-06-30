@@ -356,6 +356,70 @@ lemma deposit_inv_solvent {sevm : Sevm} {s r : Devm}
     (h_sv : s.Solvent sevm.currentTarget sevm) :
     r.Solvent sevm.currentTarget sevm := sorry
 
+lemma Func.inv_nof {c : List Func} {sevm : Sevm} {s r : Devm} {f : Func}
+    (run : Func.Run c sevm s f r) (h_nof : sum s.getBal < 2 ^ 256) :
+    sum r.getBal < 2 ^ 256 := sorry
+
+lemma name_inv_solvent {sevm : Sevm} {s r : Devm}
+    (run : Func.Run (weth.main :: weth.aux) sevm s name r)
+    (h_sv : s.Solvent sevm.currentTarget sevm) :
+    r.Solvent sevm.currentTarget sevm := sorry
+
+lemma approve_inv_solvent {sevm : Sevm} {s r : Devm}
+    (run : Func.Run (weth.main :: weth.aux) sevm s approve r)
+    (h_sv : s.Solvent sevm.currentTarget sevm) :
+    r.Solvent sevm.currentTarget sevm := sorry
+
+lemma totalSupply_inv_solvent {sevm : Sevm} {s r : Devm}
+    (run : Func.Run (weth.main :: weth.aux) sevm s totalSupply r)
+    (h_sv : s.Solvent sevm.currentTarget sevm) :
+    r.Solvent sevm.currentTarget sevm := sorry
+
+lemma transferFrom_inv_solvent {sevm : Sevm} {s r : Devm}
+    (run : Func.Run (weth.main :: weth.aux) sevm s transferFrom r)
+    (h_sv : s.Solvent sevm.currentTarget sevm) :
+    r.Solvent sevm.currentTarget sevm := sorry
+
+lemma withdraw_inv_solvent {sevm : Sevm} {s r : Devm}
+    (cond : Cond sevm.currentTarget sevm s)
+    (ih : Exec.InvDepth sevm.depth sevm.currentTarget weth (Cond sevm.currentTarget))
+    (run : Func.Run (weth.main :: weth.aux) sevm s withdraw r) :
+    r.Solvent sevm.currentTarget sevm := sorry
+
+lemma decimals_inv_solvent {sevm : Sevm} {s r : Devm}
+    (run : Func.Run (weth.main :: weth.aux) sevm s decimals r)
+    (h_sv : s.Solvent sevm.currentTarget sevm) :
+    r.Solvent sevm.currentTarget sevm := sorry
+
+lemma balanceOf_inv_solvent {sevm : Sevm} {s r : Devm}
+    (run : Func.Run (weth.main :: weth.aux) sevm s balanceOf r)
+    (h_sv : s.Solvent sevm.currentTarget sevm) :
+    r.Solvent sevm.currentTarget sevm := sorry
+
+lemma symbol_inv_solvent {sevm : Sevm} {s r : Devm}
+    (run : Func.Run (weth.main :: weth.aux) sevm s symbol r)
+    (h_sv : s.Solvent sevm.currentTarget sevm) :
+    r.Solvent sevm.currentTarget sevm := sorry
+
+lemma transfer_inv_solvent {sevm : Sevm} {s r : Devm}
+    (run : Func.Run (weth.main :: weth.aux) sevm s transfer r)
+    (h_sv : s.Solvent sevm.currentTarget sevm) :
+    r.Solvent sevm.currentTarget sevm := sorry
+
+lemma allowance_inv_solvent {sevm : Sevm} {s r : Devm}
+    (run : Func.Run (weth.main :: weth.aux) sevm s allowance r)
+    (h_sv : s.Solvent sevm.currentTarget sevm) :
+    r.Solvent sevm.currentTarget sevm := sorry
+
+lemma run_inv_cond (f : Func)
+    (h_solv : ∀ {sevm : Sevm} {s r : Devm}, Func.Run (weth.main :: weth.aux) sevm s f r → s.Solvent sevm.currentTarget sevm → r.Solvent sevm.currentTarget sevm) :
+    ∀ {sevm : Sevm} {s r : Devm}, Func.Run (weth.main :: weth.aux) sevm s f r →
+      Cond sevm.currentTarget sevm s → Cond sevm.currentTarget sevm r := by
+  intro sevm s r run cond
+  constructor
+  · apply Func.inv_nof run cond.nof
+  · apply h_solv run cond.solvent
+
 lemma weth_inv' {sevm : Sevm} {s r}
     (cond : Cond sevm.currentTarget sevm s)
     (ih : Exec.InvDepth sevm.depth sevm.currentTarget weth (Cond sevm.currentTarget)) :
@@ -411,7 +475,20 @@ lemma weth_inv' {sevm : Sevm} {s r}
     constructor
     · rw [← deposit_inv_bal run]; exact cond'.nof
     · apply deposit_inv_solvent run cond'.solvent
-  · sorry
+  · intro e s r wf h_mem ⟨cond, ih⟩ h_run
+    refine' ⟨_, ih⟩
+    rcases h_mem with (((h | h) | h) | (h | h)) | (((h | h) | h) | (h | h)) <;>
+      (cases h)
+    · apply run_inv_cond name name_inv_solvent h_run cond
+    · apply run_inv_cond approve approve_inv_solvent h_run cond
+    · apply run_inv_cond totalSupply totalSupply_inv_solvent h_run cond
+    · apply run_inv_cond transferFrom transferFrom_inv_solvent h_run cond
+    · refine' ⟨Func.inv_nof h_run cond.nof, withdraw_inv_solvent cond ih h_run⟩
+    · apply run_inv_cond decimals decimals_inv_solvent h_run cond
+    · apply run_inv_cond balanceOf balanceOf_inv_solvent h_run cond
+    · apply run_inv_cond symbol symbol_inv_solvent h_run cond
+    · apply run_inv_cond transfer transfer_inv_solvent h_run cond
+    · apply run_inv_cond allowance allowance_inv_solvent h_run cond
 
 
 
