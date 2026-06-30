@@ -50,12 +50,6 @@ lemma Precond.state_eq {wa sevm devm devm'}
         · intro h; rw [h_bal, h_stor wa]; exact hl h
         · intro h; rw [h_bal, h_stor wa]; exact hr h
 
-lemma Linst.inv_nof {sevm devm l devm'} :
-    Linst.Run sevm devm l (.ok devm') →
-    sum devm.getBal < 2 ^ 256 →
-    sum devm'.getBal < 2 ^ 256 := by
-  sorry
-
 def Inv0 {ξ} (r : Devm → ξ) (f : Devm → Except (String × Devm) Devm) : Prop :=
     ∀ {pre post}, f pre = .ok post → r pre = r post
 
@@ -69,9 +63,6 @@ class Hinv1 {ξ υ} (r : Devm → ξ)
     (f : Devm → Except (String × Devm) (υ × Devm)) where
   (inv : Inv1 r f)
 
-instance {ca} {cost} : Inv0 (λ devm => devm.getBal ca) (chargeGas cost) := sorry
-instance {ca} : Inv1 (λ devm => devm.getBal ca) Devm.popToNat := sorry
-
 lemma Linst.inv_solvent (wa : Adr) :
     ∀ sevm devm l post,
       Linst.Run sevm devm l (.ok post) →
@@ -83,13 +74,10 @@ lemma Linst.inv_solvent (wa : Adr) :
     rw [← h_run]
     exact h_pc
   · -- ret
-    -- TODO: Unfold the `do` block and apply `Precond.state_eq`
     sorry
   · -- rev
-    -- TODO: Unfold the `do` block and apply `Precond.state_eq`
     sorry
   · -- dest
-    -- TODO: Prove that `dest` preserves `Precond` using `transfer_inv_solvent` logic
     sorry
 
 def Exec.InvDepth (k : Nat) (ca : Adr) (p : Prog) (σ : Sevm → Devm → Prop) : Prop :=
