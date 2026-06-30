@@ -347,6 +347,15 @@ instance : Ninst.Hinv Devm.state (Ninst.reg Rinst.gt) := ⟨by
 ⟩
 
 
+lemma deposit_inv_bal {sevm : Sevm} {s r : Devm}
+    (run : Func.Run (weth.main :: weth.aux) sevm s deposit r) :
+    s.getBal = r.getBal := sorry
+
+lemma deposit_inv_solvent {sevm : Sevm} {s r : Devm}
+    (run : Func.Run (weth.main :: weth.aux) sevm s deposit r)
+    (h_sv : s.Solvent sevm.currentTarget sevm) :
+    r.Solvent sevm.currentTarget sevm := sorry
+
 lemma weth_inv' {sevm : Sevm} {s r}
     (cond : Cond sevm.currentTarget sevm s)
     (ih : Exec.InvDepth sevm.depth sevm.currentTarget weth (Cond sevm.currentTarget)) :
@@ -396,7 +405,12 @@ lemma weth_inv' {sevm : Sevm} {s r}
     rcases h_pop with ⟨_, _, _, _, _, _, _, _, _, _, _, h_pop_state, _⟩
     apply Precond.state_eq h_cond
     exact h_pop_state.symm.trans h_run_state.symm
-  · sorry
+  · intro e s s' r ⟨cond, ih⟩ burn run
+    refine' ⟨_, ih⟩
+    have cond' : Cond e.currentTarget e s' := Precond.state_eq cond burn.state.symm
+    constructor
+    · rw [← deposit_inv_bal run]; exact cond'.nof
+    · apply deposit_inv_solvent run cond'.solvent
   · sorry
 
 
