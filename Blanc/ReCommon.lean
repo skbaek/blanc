@@ -1393,18 +1393,12 @@ lemma Devm.burn_trans {x y z} (h1 : Devm.Burn x y) (h2 : Devm.Burn y z) : Devm.B
   rcases h2 with ⟨h2_stack, h2_mem, h2_gas, h2_logs, h2_refund, h2_out, h2_del, h2_ret, h2_err, h2_acc, h2_keys, h2_state, h2_trans⟩
   refine' ⟨Eq.trans h1_stack h2_stack, Eq.trans h1_mem h2_mem, Nat.le_trans h2_gas h1_gas, Eq.trans h1_logs h2_logs, Eq.trans h1_refund h2_refund, Eq.trans h1_out h2_out, Eq.trans h1_del h2_del, Eq.trans h1_ret h2_ret, Eq.trans h1_err h2_err, Eq.trans h1_acc h2_acc, Eq.trans h1_keys h2_keys, Eq.trans h1_state h2_state, Eq.trans h1_trans h2_trans⟩
 
-lemma Devm.popBurn_of_popBurn_of_pop {devm devm' devm''} {xs}
-    (popBurn : Devm.PopBurn xs devm devm')
-    (burn : Devm.Burn devm' devm'') :
-    Devm.PopBurn xs devm devm'' := by
-  sorry
-
 lemma Devm.popBurn_of_burn_of_popBurn {devm devm' devm''} {xs}
     (burn : Devm.Burn devm devm')
     (popBurn : Devm.PopBurn xs devm' devm'') :
     Devm.PopBurn xs devm devm'' := by
   constructor
-  · exact burn.stack.symm ▸ popBurn.stack
+  · exact burn.stack ▸ popBurn.stack
   · exact Eq.trans burn.memory popBurn.memory
   · exact Nat.le_trans popBurn.gasLeft burn.gasLeft
   · exact Eq.trans burn.logs popBurn.logs
@@ -1417,6 +1411,25 @@ lemma Devm.popBurn_of_burn_of_popBurn {devm devm' devm''} {xs}
   · exact Eq.trans burn.accessedStorageKeys popBurn.accessedStorageKeys
   · exact Eq.trans burn.state popBurn.state
   · exact Eq.trans burn.transientStorage popBurn.transientStorage
+
+lemma Devm.popBurn_of_popBurn_of_pop {devm devm' devm''} {xs}
+    (popBurn : Devm.PopBurn xs devm devm')
+    (burn : Devm.Burn devm' devm'') :
+    Devm.PopBurn xs devm devm'' := by
+  constructor
+  · exact burn.stack ▸ popBurn.stack
+  · exact Eq.trans popBurn.memory burn.memory
+  · exact Nat.le_trans burn.gasLeft popBurn.gasLeft
+  · exact Eq.trans popBurn.logs burn.logs
+  · exact Eq.trans popBurn.refundCounter burn.refundCounter
+  · exact Eq.trans popBurn.output burn.output
+  · exact Eq.trans popBurn.accountsToDelete burn.accountsToDelete
+  · exact Eq.trans popBurn.returnData burn.returnData
+  · exact Eq.trans popBurn.error burn.error
+  · exact Eq.trans popBurn.accessedAddresses burn.accessedAddresses
+  · exact Eq.trans popBurn.accessedStorageKeys burn.accessedStorageKeys
+  · exact Eq.trans popBurn.state burn.state
+  · exact Eq.trans popBurn.transientStorage burn.transientStorage
 
 lemma toNat_toB256 (n : Nat) : n.toB256.toNat = n ↾ 256 := by
   simp only [Nat.toB256, B256.toNat]; rw [toNat_toB128, toNat_toB128]
@@ -1617,7 +1630,7 @@ theorem correct_core (f : Func) (fs : List Func) :
         h_eq
         quz
   | .branch p q =>
-    rcases subcode_compile_branch sub with
+    rcases subcode_compile_b-- sub with
       ⟨loc, h_loc, pushAt, h_jumpi, h_scp, h_jumpdest, h_scq⟩
     have h :
         ∃ (devm' : Devm) (exc' : Exec (pc + 3) sevm devm' (.ok post)),
@@ -1758,12 +1771,19 @@ def dispatch : DispatchTree → Func
     pushB256 (leftmostFsig tr) ::: gt :::
     (dispatch tl <?> dispatch tr)
 
-
 lemma dispatchWith_inv {c k f} (σ : Sevm → Devm → Prop)
-    (h0_zero : ∀ {e s x s1 s2 s'}, σ e s → Ninst.Run e s (pushB256 x) s1 → Ninst.Run e s1 eq s2 → Devm.PopBurn [0] s2 s' → σ e s')
-    (h0_succ : ∀ {e s x w s1 s2 s3 s'}, w ≠ 0 → σ e s → Ninst.Run e s (pushB256 x) s1 → Ninst.Run e s1 eq s2 → Devm.PopBurn [w] s2 s3 → Devm.Burn s3 s' → σ e s')
-    (h1_zero : ∀ {e s x s1 s2 s3 s'}, σ e s → Ninst.Run e s (dup 0) s1 → Ninst.Run e s1 (pushB256 x) s2 → Ninst.Run e s2 gt s3 → Devm.PopBurn [0] s3 s' → σ e s')
-    (h1_succ : ∀ {e s x w s1 s2 s3 s4 s'}, w ≠ 0 → σ e s → Ninst.Run e s (dup 0) s1 → Ninst.Run e s1 (pushB256 x) s2 → Ninst.Run e s2 gt s3 → Devm.PopBurn [w] s3 s4 → Devm.Burn s4 s' → σ e s')
+    ( h0 :
+      ∀ {e s x w s' s''},
+        σ e s →
+        Line.Run e s [pushB256 x, eq] s' →
+        Devm.PopBurn [w] s' s'' →
+        σ e s'' )
+    ( h1 :
+      ∀ {e s x w s3 s'},
+        σ e s →
+        Line.Run e s [dup 0, pushB256 x, gt] s3 →
+        Devm.PopBurn [w] s3 s' →
+        σ e s' )
     (h2 : c[k]? = some f)
     (h3 : ∀ {e s s' r}, σ e s → Devm.Burn s s' → Func.Run c e s' f r → σ e r) :
     ∀ t : DispatchTree,
@@ -1784,13 +1804,13 @@ lemma dispatchWith_inv {c k f} (σ : Sevm → Devm → Prop)
             apply ih'
             · intro e' s' r' wp h_in
               apply htt' _ (Or.inr h_in)
-            · exact h1_zero hs h_dup h_push h_gt h_pop
+            · exact h1 hs (.cons h_dup <| .cons h_push <| .cons h_gt .nil) h_pop
             · exact h_run_branch
           | succ h_w h_pop h_burn h_run_branch =>
             apply ih
             · intro e' s' r' wp h_in
               apply htt' _ (Or.inl h_in)
-            · exact h1_succ h_w hs h_dup h_push h_gt h_pop h_burn
+            · apply h1 hs (.cons h_dup <| .cons h_push <| .cons h_gt .nil)  <| Devm.popBurn_of_popBurn_of_pop h_pop h_burn
             · exact h_run_branch
   | leaf w p =>
     intro htt' e s r hs h_run
@@ -1805,9 +1825,9 @@ lemma dispatchWith_inv {c k f} (σ : Sevm → Devm → Prop)
             have hh := Eq.trans h2.symm h_eq_f
             injection hh with heq
             subst heq
-            apply h3 (h0_zero hs h_push h_eq h_pop) h_burn h_run_f
+            apply h3 (h0 hs (.cons h_push (.cons h_eq .nil)) h_pop) h_burn h_run_f
         | succ h_w h_pop h_burn h_run_branch =>
-          apply htt' ⟨w, p⟩ rfl (h0_succ h_w hs h_push h_eq h_pop h_burn) h_run_branch
+          apply htt' ⟨w, p⟩ rfl (h0 hs (.cons h_push (.cons h_eq .nil)) (Devm.popBurn_of_popBurn_of_pop h_pop h_burn)) h_run_branch
 
 def shiftRight (w : B256) : Line := [pushB256 w, shr]
 
