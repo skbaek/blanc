@@ -1630,7 +1630,7 @@ theorem correct_core (f : Func) (fs : List Func) :
         h_eq
         quz
   | .branch p q =>
-    rcases subcode_compile_b-- sub with
+    rcases subcode_compile_branch sub with
       ⟨loc, h_loc, pushAt, h_jumpi, h_scp, h_jumpdest, h_scq⟩
     have h :
         ∃ (devm' : Devm) (exc' : Exec (pc + 3) sevm devm' (.ok post)),
