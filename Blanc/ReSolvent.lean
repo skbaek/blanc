@@ -258,6 +258,46 @@ instance : Ninst.Hinv Devm.getStor (Ninst.reg Rinst.shr) := ⟨by
           exact (Devm.pop_getStor_eq hp1).trans <| (Devm.pop_getStor_eq hp2).trans <| (pushItem_getStor_eq hpush)
 ⟩
 
+instance {x} : Ninst.Hinv Devm.state (Ninst.pushB256 x) := ⟨by
+  intros e s s' h
+  rcases h with ⟨xl, h_filled, pc, run⟩
+  cases xl with
+  | some _ => cases run
+  | none =>
+    dsimp [Ninst.Run', Ninst.pushB256] at run
+    have h_pb := Devm.pushBurn_of_run run
+    rcases h_pb with ⟨_, _, _, _, _, _, _, _, _, _, _, h_state, _⟩
+    exact h_state
+⟩
+
+instance : Ninst.Hinv Devm.state (Ninst.reg Rinst.eq) := ⟨by
+  intros e s s' h
+  rcases h with ⟨xl, h_filled, pc, run⟩
+  cases xl with
+  | some _ => cases run
+  | none =>
+    dsimp [Ninst.Run', Rinst.run, Rinst.runCore, applyBinary] at run
+    rcases hp1 : Devm.pop s with _ | val1
+    · rw [hp1] at run; dsimp [bind, Except.bind] at run; contradiction
+    · rw [hp1] at run; dsimp [bind, Except.bind] at run
+      rcases val1 with ⟨x1, s1⟩
+      rcases hp2 : Devm.pop s1 with _ | val2
+      · rw [hp2] at run; dsimp [bind, Except.bind] at run; contradiction
+      · rw [hp2] at run; dsimp [bind, Except.bind] at run
+        rcases val2 with ⟨x2, s2⟩
+        rcases hpush : pushItem _ gVerylow s2 with _ | s''
+        · rw [hpush] at run; contradiction
+        · rw [hpush] at run
+          injection run with h_eq; subst h_eq
+          have h_pop1 := Devm.pop_of_pop hp1
+          have h_pop2 := Devm.pop_of_pop hp2
+          have h_push := Devm.pushBurn_of_run hpush
+          rcases h_pop1 with ⟨_, _, _, _, _, _, _, _, _, _, _, hs1, _⟩
+          rcases h_pop2 with ⟨_, _, _, _, _, _, _, _, _, _, _, hs2, _⟩
+          rcases h_push with ⟨_, _, _, _, _, _, _, _, _, _, _, hs3, _⟩
+          exact hs1.trans (hs2.trans hs3)
+⟩
+
 
 lemma weth_inv' {sevm : Sevm} {s r}
     (cond : Cond sevm.currentTarget sevm s)
@@ -296,7 +336,12 @@ lemma weth_inv' {sevm : Sevm} {s r}
          Exec.InvDepth e.depth e.currentTarget weth (Cond e.currentTarget) )
       ?_ ?_ rfl ?_ wethTree ?_ sevm s₁ r ⟨cond₁, ih⟩ temp ).1
     <;> clear temp cond₁ ih r s₁ sevm
-  · sorry
+  · intro e s x w s' s'' ⟨h_cond, h_ih⟩ h_run h_pop
+    refine' ⟨_, h_ih⟩
+    have h_run_state : s.state = s'.state := Line.of_inv Devm.state (by line_inv) h_run
+    rcases h_pop with ⟨_, _, _, _, _, _, _, _, _, _, _, h_pop_state, _⟩
+    apply Precond.state_eq h_cond
+    exact h_pop_state.symm.trans h_run_state.symm
   · sorry
   · sorry
   · sorry
