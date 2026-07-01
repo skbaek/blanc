@@ -24,6 +24,13 @@ def Devm.Solvent (devm : Devm) (a : Adr) (sevm : Sevm) : Prop :=
   (sevm.currentTarget = a → Stor.Solvent (devm.getStor a) sevm.value (devm.getBal a)) ∧
   (sevm.currentTarget ≠ a → Stor.Solvent (devm.getStor a) 0 (devm.getBal a))
 
+def Devm.PreSolvent (devm : Devm) (a : Adr) (sevm : Sevm) : Prop :=
+  (sevm.currentTarget = a → Stor.Solvent (devm.getStor a) sevm.value (devm.getBal a)) ∧
+  (sevm.currentTarget ≠ a → Stor.Solvent (devm.getStor a) 0 (devm.getBal a))
+
+def Devm.PostSolvent (devm : Devm) (a : Adr) : Prop :=
+  Stor.Solvent (devm.getStor a) 0 (devm.getBal a)
+
 def Execution.Solvent (sevm : Sevm) : Execution → Adr → Prop
   | .error _, _ => True
   | .ok devm, adr => devm.Solvent adr sevm
@@ -32,6 +39,31 @@ def Execution.Solvent (sevm : Sevm) : Execution → Adr → Prop
 structure Cond (wa : Adr) (sevm : Sevm) (devm : Devm) : Prop where
   (nof : sum devm.getBal < 2 ^ 256)
   (solvent : devm.Solvent wa sevm)
+
+structure Precond (wa : Adr) (sevm : Sevm) (devm : Devm) : Prop where
+  (nof : sum devm.getBal < 2 ^ 256)
+  (solvent : devm.PreSolvent wa sevm)
+
+structure Postcond (wa : Adr) (sevm : Sevm) (devm : Devm) : Prop where
+  (nof : sum devm.getBal < 2 ^ 256)
+  (solvent : devm.PostSolvent wa)
+
+lemma Precond.state_eq_pp {wa sevm devm devm'}
+    (h_pc : Precond wa sevm devm) (h_eq : devm'.state = devm.state) :
+    Precond wa sevm devm' := by
+  cases h_pc with
+  | mk h_nof h_solv =>
+    have h_bal : devm'.getBal = devm.getBal := by
+      funext a; simp [Devm.getBal, Devm.getAcct]; rw [h_eq]
+    have h_stor : ∀ a, devm'.getStor a = devm.getStor a := by
+      intro a; simp [Devm.getStor, Devm.getAcct]; rw [h_eq]
+    constructor
+    · rw [h_bal]; exact h_nof
+    · cases h_solv with
+      | intro hl hr =>
+        constructor
+        · intro h; rw [h_bal, h_stor wa]; exact hl h
+        · intro h; rw [h_bal, h_stor wa]; exact hr h
 
 lemma Precond.state_eq {wa sevm devm devm'}
     (h_pc : Cond wa sevm devm) (h_eq : devm'.state = devm.state) :
@@ -63,25 +95,12 @@ class Hinv1 {ξ υ} (r : Devm → ξ)
     (f : Devm → Except (String × Devm) (υ × Devm)) where
   (inv : Inv1 r f)
 
-lemma Linst.inv_solvent (wa : Adr) :
-    ∀ sevm devm l post,
-      Linst.Run sevm devm l (.ok post) →
-      Cond wa sevm devm →
-      Cond wa sevm post := by
-  intro sevm devm l exn h_run h_pc
-  cases l
-  · simp [Linst.Run, Linst.run] at h_run
-    rw [← h_run]
-    exact h_pc
-  · -- ret
-    sorry
-  · -- rev
-    sorry
-  · -- dest
-    sorry
-
 def Exec.InvDepth (k : Nat) (ca : Adr) (p : Prog) (σ : Sevm → Devm → Prop) : Prop :=
   ForallDeeperAt k ca p (λ _ sevm pre exn _ => σ sevm pre → ifOk (σ sevm) exn)
+
+def Exec.InvDepth_pp (k : Nat) (ca : Adr) (p : Prog)
+  (σ : Sevm → Devm → Prop) (ρ : Sevm → Devm → Prop) : Prop :=
+  ForallDeeperAt k ca p (λ _ sevm pre exn _ => σ sevm pre → ifOk (ρ sevm) exn)
 
 lemma Line.inv_solvent {e e' s l s' a}
     (h_bal : Line.Inv Devm.getBal l) (h_stor : Line.Inv Devm.getStor l)
@@ -349,7 +368,7 @@ instance : Ninst.Hinv Devm.state (Ninst.reg Rinst.gt) := ⟨by
 
 lemma deposit_inv_solvent {sevm : Sevm} {s r : Devm}
     (run : Func.Run (weth.main :: weth.aux) sevm s deposit r)
-    (h_sv : s.Solvent sevm.currentTarget sevm) :
+    (h_sv : s.PreSolvent sevm.currentTarget sevm) :
     r.Solvent sevm.currentTarget sevm := sorry
 
 lemma Func.inv_nof {c : List Func} {sevm : Sevm} {s r : Devm} {f : Func}
@@ -407,6 +426,18 @@ lemma allowance_inv_solvent {sevm : Sevm} {s r : Devm}
     (h_sv : s.Solvent sevm.currentTarget sevm) :
     r.Solvent sevm.currentTarget sevm := sorry
 
+lemma run_inv_cond_pp (f : Func)
+    ( h_solv :
+      ∀ {sevm : Sevm} {s r : Devm},
+        Func.Run (weth.main :: weth.aux) sevm s f r →
+        s.PreSolvent sevm.currentTarget sevm →
+        r.PostSolvent sevm.currentTarget ) :
+    ∀ {sevm : Sevm} {s r : Devm},
+      Func.Run (weth.main :: weth.aux) sevm s f r →
+      Precond sevm.currentTarget sevm s →
+      Postcond sevm.currentTarget sevm r := by
+  sorry
+
 lemma run_inv_cond (f : Func)
     (h_solv : ∀ {sevm : Sevm} {s r : Devm}, Func.Run (weth.main :: weth.aux) sevm s f r → s.Solvent sevm.currentTarget sevm → r.Solvent sevm.currentTarget sevm) :
     ∀ {sevm : Sevm} {s r : Devm}, Func.Run (weth.main :: weth.aux) sevm s f r →
@@ -415,6 +446,59 @@ lemma run_inv_cond (f : Func)
   constructor
   · apply Func.inv_nof run cond.nof
   · apply h_solv run cond.solvent
+
+lemma weth_inv_pp {sevm : Sevm} {s r}
+    (cond : Precond sevm.currentTarget sevm s)
+    ( ih :
+      Exec.InvDepth_pp sevm.depth sevm.currentTarget weth
+        (Precond sevm.currentTarget)
+        (Postcond sevm.currentTarget) ) :
+    Func.Run (weth.main :: weth.aux) sevm s (Func.call 0) r →
+    Postcond sevm.currentTarget sevm r := by
+  -- unwrap the initial `call 0` (this part does not exist in original proof in Solvent.lean)
+  intro run; cases run
+  rename (_ = _) => eq
+  rename (Func.Run _ _ _ _ _) => run
+  rename (Devm.Burn _ _) => burn
+  rename Devm => s₀
+  cases eq
+  have cond₀ : Precond sevm.currentTarget sevm s₀ :=
+    Precond.state_eq_pp cond burn.state.symm
+  clear cond burn s
+  revert run
+  pexec fsig
+  have cond₁ : Precond sevm.currentTarget sevm s₁ := by
+    refine' ⟨_, _⟩
+    · rw [← Line.of_inv Devm.getBal (by line_inv) h₁]; exact cond₀.nof
+    · apply Line.inv_solvent _ _ cond₀.solvent h₁ <;> line_inv
+  clear cond₀
+  clear h₁
+  clear s₀
+  intro temp
+  apply
+    ( @dispatchWith_inv_pp
+      (weth.main :: weth.aux) 1 deposit
+      (λ e s =>
+         Precond e.currentTarget e s ∧
+         Exec.InvDepth_pp e.depth e.currentTarget weth (Precond e.currentTarget) (Postcond e.currentTarget) )
+      (λ e r => Postcond e.currentTarget e r)
+
+      ?_ ?_ rfl ?_ wethTree ?_ sevm s₁ r ⟨cond₁, ih⟩ temp )
+    <;> clear temp cond₁ ih r s₁ sevm
+  · intro e s x w s' s'' ⟨h_cond, h_ih⟩ h_run h_pop
+    refine' ⟨_, h_ih⟩
+    have h_run_state : s.state = s'.state := Line.of_inv Devm.state (by line_inv) h_run
+    rcases h_pop with ⟨_, _, _, _, _, _, _, _, _, _, _, h_pop_state, _⟩
+    apply Precond.state_eq_pp h_cond
+    exact h_pop_state.symm.trans h_run_state.symm
+  · intro e s x w s' s'' ⟨h_cond, h_ih⟩ h_run h_pop
+    refine' ⟨_, h_ih⟩
+    have h_run_state : s.state = s'.state := Line.of_inv Devm.state (by line_inv) h_run
+    rcases h_pop with ⟨_, _, _, _, _, _, _, _, _, _, _, h_pop_state, _⟩
+    apply Precond.state_eq_pp h_cond
+    exact h_pop_state.symm.trans h_run_state.symm
+  · sorry
+  · sorry
 
 lemma weth_inv' {sevm : Sevm} {s r}
     (cond : Cond sevm.currentTarget sevm s)

@@ -1948,7 +1948,30 @@ lemma of_run_branch {c e s r} {p q : Func} (h : Func.Run c e s (Func.branch p q)
   | succ h1 h2 h3 h4 => right; exact ⟨_, _, _, h1, h2, h3, h4⟩
 
 
-lemma dispatchWith_inv {c k f} (σ : Sevm → Devm → Prop)
+lemma dispatchWith_inv_pp {c k f}
+    (σ : Sevm → Devm → Prop)
+    (ρ : Sevm → Devm → Prop)
+    ( h0 :
+      ∀ {e s x w s' s''},
+        σ e s →
+        Line.Run e s [pushB256 x, eq] s' →
+        Devm.PopBurn [w] s' s'' →
+        σ e s'' )
+    ( h1 :
+      ∀ {e s x w s' s''},
+        σ e s →
+        Line.Run e s [dup 0, pushB256 x, gt] s' →
+        Devm.PopBurn [w] s' s'' →
+        σ e s'' )
+    (h2 : c[k]? = some f)
+    (h3 : ∀ {e s s' r}, σ e s → Devm.Burn s s' → Func.Run c e s' f r → ρ e r) :
+    ∀ t : DispatchTree,
+      (∀ {e s r}, ∀ wf ∈ t, σ e s → Func.Run c e s wf.2 r → ρ e r) →
+    ∀ (e s r), σ e s → Func.Run c e s (dispatchWith k t) r → ρ e r := by
+  sorry
+
+lemma dispatchWith_inv {c k f}
+    (σ : Sevm → Devm → Prop)
     ( h0 :
       ∀ {e s x w s' s''},
         σ e s →
