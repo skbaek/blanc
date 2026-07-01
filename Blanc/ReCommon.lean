@@ -1967,34 +1967,13 @@ lemma dispatchWith_inv {c k f}
     ∀ t : DispatchTree,
       (∀ {e s r}, ∀ wf ∈ t, σ e s → Func.Run c e s wf.2 r → ρ e r) →
     ∀ (e s r), σ e s → Func.Run c e s (dispatchWith k t) r → ρ e r := by
-  sorry
-
-lemma dispatchWith_inv_old {c k f}
-    (σ : Sevm → Devm → Prop)
-    ( h0 :
-      ∀ {e s x w s' s''},
-        σ e s →
-        Line.Run e s [pushB256 x, eq] s' →
-        Devm.PopBurn [w] s' s'' →
-        σ e s'' )
-    ( h1 :
-      ∀ {e s x w s' s''},
-        σ e s →
-        Line.Run e s [dup 0, pushB256 x, gt] s' →
-        Devm.PopBurn [w] s' s'' →
-        σ e s'' )
-    (h2 : c[k]? = some f)
-    (h3 : ∀ {e s s' r}, σ e s → Devm.Burn s s' → Func.Run c e s' f r → σ e r) :
-    ∀ t : DispatchTree,
-      (∀ {e s r}, ∀ wf ∈ t, σ e s → Func.Run c e s wf.2 r → σ e r) →
-    ∀ (e s r), σ e s → Func.Run c e s (dispatchWith k t) r → σ e r := by
   intro t
   induction t with
   | fork t t' ih ih' =>
     intro htt' e s r hs
-    have ht : ∀ {e s r}, ∀ wp ∈ t, σ e s → Func.Run c e s wp.2 r → σ e r := by
+    have ht : ∀ {e s r}, ∀ wp ∈ t, σ e s → Func.Run c e s wp.2 r → ρ e r := by
       intro e s r wp h_in; apply htt' _ (Or.inl h_in)
-    have ht' : ∀ {e s r}, ∀ wp ∈ t', σ e s → Func.Run c e s wp.2 r → σ e r := by
+    have ht' : ∀ {e s r}, ∀ wp ∈ t', σ e s → Func.Run c e s wp.2 r → ρ e r := by
       intro e s r wp h_in; apply htt' _ (Or.inr h_in)
     pexen 3; intro h₂
     rcases of_run_branch h₂ with ⟨s₂, h_pop, h_run'⟩ | ⟨w, s₂, s₃, hw, h_pop, h_burn, h_run'⟩
