@@ -425,13 +425,6 @@ lemma validAdr_iff {w : B256} :
     apply Prod.ext <;> simp [h_wz]
     sorry
 
--- lemma validAdr_iff {w : B256} :
---     ValidAdr w ↔ Bits.and addressMask w = 0 :=
---   ⟨Bits.mask_and_eq_zero _ _ _, Bits.of_mask_and_eq_zero _ _ _⟩
-
--- instance {w} : Decidable (ValidAdr w) := by
---   apply decidable_of_iff _ validAdr_iff.symm
-
 lemma of_run_branch_rev {e s p r} (h : Func.Run c e s (.rev <?> p) r) :
     ∃ s', Desc.Pop [0] s s' ∧ Func.Run c e s' p r := by
   rcases of_run_branch h with h' | ⟨_, _, _, _, h'⟩

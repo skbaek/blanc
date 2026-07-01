@@ -348,10 +348,44 @@ instance : Ninst.Hinv Devm.state (Ninst.reg Rinst.gt) := ⟨by
           exact hs1.trans (hs2.trans hs3)
 ⟩
 
+instance : Linst.Hinv Devm.getBal Devm.getBal Linst.stop := by
+  constructor; intros e s r h; injection h with h_eq; subst h_eq; rfl
+instance : Linst.Hinv Devm.getBal Devm.getBal Linst.ret := by constructor; sorry
+
+instance : Ninst.Hinv Devm.getBal Ninst.caller := ⟨sorry⟩
+instance : Ninst.Hinv Devm.getBal Ninst.sload := ⟨sorry⟩
+instance : Ninst.Hinv Devm.getBal Ninst.callvalue := ⟨sorry⟩
+instance : Ninst.Hinv Devm.getBal (Ninst.reg Rinst.add) := ⟨sorry⟩
+instance : Ninst.Hinv Devm.getBal Ninst.sstore := ⟨sorry⟩
+instance : Ninst.Hinv Devm.getBal Ninst.mstore := ⟨sorry⟩
+instance {n} : Ninst.Hinv Devm.getBal (Ninst.log n) := ⟨sorry⟩
+
+lemma deposit_inv_bal : Func.Inv Devm.getBal Devm.getBal deposit := by prog_inv
+
+lemma wbsum_after_deposit {sevm : Sevm} {s r : Devm}
+    (h_nof : wbsum (s.getStor sevm.currentTarget) + sevm.value.toNat < 2 ^ 256)
+    (run : Func.Run (weth.main :: weth.aux) sevm s deposit r) :
+    wbsum (s.getStor sevm.currentTarget) + sevm.value.toNat = wbsum (r.getStor sevm.currentTarget) := sorry
+
 lemma deposit_inv_solvent {sevm : Sevm} {s r : Devm}
     (run : Func.Run (weth.main :: weth.aux) sevm s deposit r)
     (h_sv : s.PreSolvent sevm.currentTarget sevm) :
-    r.PostSolvent sevm.currentTarget := sorry
+    r.PostSolvent sevm.currentTarget := by
+  unfold Devm.PostSolvent
+  unfold Stor.Solvent
+  rw [B256.toNat_zero]
+  have h_bal : s.getBal = r.getBal := Func.of_inv _ _ deposit_inv_bal run
+  rw [← h_bal]
+  have h_sv' : wbsum (s.getStor sevm.currentTarget) + sevm.value.toNat ≤ (s.getBal sevm.currentTarget).toNat := by
+    have h := h_sv.left rfl
+    unfold Stor.Solvent at h
+    exact h
+  have h_lt : wbsum (s.getStor sevm.currentTarget) + sevm.value.toNat < 2 ^ 256 := by
+    apply lt_of_le_of_lt h_sv'
+    apply B256.toNat_lt
+  rw [← wbsum_after_deposit h_lt run]
+  rw [Nat.add_zero]
+  exact h_sv'
 
 lemma Func.inv_nof {c : List Func} {sevm : Sevm} {s r : Devm} {f : Func}
     (run : Func.Run c sevm s f r) (h_nof : sum s.getBal < 2 ^ 256) :

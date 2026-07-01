@@ -1938,6 +1938,79 @@ partial def line_inv : Lean.Elab.Tactic.TacticM Unit :=
 
 elab "line_inv" : tactic => line_inv
 
+
+def Strings.toName : List String → Lean.Name
+  | [] => Lean.Name.anonymous
+  | s :: ss => Lean.Name.str (Strings.toName ss) s
+
+def Strings.toExpr (l : List String) : Lean.Expr :=
+  Lean.Expr.const (Strings.toName l.reverse) []
+
+def String.toExpr (s : String) : Lean.Expr :=
+  Strings.toExpr <| String.splitOn s "."
+
+def String.apply (s : String): Lean.Elab.Tactic.TacticM Unit :=
+  Lean.Expr.apply <| String.toExpr s
+
+def Func.Inv {ξ : Type} (f : Devm → ξ) (g : Devm → ξ) (p : Func) : Prop :=
+  ∀ {c sevm s r}, Func.Run c sevm s p r → f s = g r
+
+def Linst.Inv {ξ : Type} (f : Devm → ξ) (g : Devm → ξ) (o : Linst) : Prop :=
+  ∀ {e s r}, Linst.Run e s o (.ok r) → f s = g r
+
+class Linst.Hinv {ξ : Type} (f : Devm → ξ) (g : Devm → ξ) (o : Linst) where (inv : Linst.Inv f g o)
+
+def Linst.inv_expr (ξx fx gx : Lean.Expr) (ox : Q(Linst)) :
+    Lean.Elab.Tactic.TacticM Lean.Expr := do
+  let x ← Lean.Meta.synthInstance <| Lean.mkApp4 q(@Linst.Hinv) ξx fx gx ox
+  pure <| Lean.mkApp5 q(@Linst.Hinv.inv) ξx fx gx ox x
+
+def hopInv : Lean.Elab.Tactic.TacticM Unit :=
+  Lean.Elab.Tactic.withMainContext do
+  let t ← Lean.Elab.Tactic.getMainTarget
+  have t' : Q(Prop) := t
+  match t' with
+  | ~q(@Linst.Inv $ξx $fx $gx $ox) =>
+    let x ← Linst.inv_expr ξx fx gx ox
+    Lean.Elab.Tactic.closeMainGoal `tacName x
+  | _ => dbg_trace "Not a Linst.Inv goal"
+
+lemma Func.of_inv {ξ : Type} {e s r} (f g) {p : Func} :
+  @Func.Inv ξ f g p → Func.Run c e s p r → f s = g r := λ h => h
+
+lemma last_inv {ξ} {f g o} (h : Linst.Inv f g o) :
+    @Func.Inv ξ f g (Func.last o) := by
+  intros c e s r h'; cases h'; rename_i hl
+  apply h hl
+
+lemma prepend_inv {ξ : Type} {f g} {l p} (hl : Line.Inv f l)
+    (hp : Func.Inv f g p) : @Func.Inv ξ f g (l +++ p) := by
+  intros c e s r h; rcases of_run_prepend _ _ h with ⟨s', hl', hp'⟩
+  apply Eq.trans (hl hl') (hp hp')
+
+lemma next_inv {ξ : Type} {f : Devm → ξ} {g} {i p}
+    (h : Ninst.Inv f i) (h' : Func.Inv f g p) : Func.Inv f g (i ::: p) := by
+  intros c e s r h_run
+  cases h_run; rename_i hi hp
+  rw [h hi, h' hp]
+
+partial def prog_inv : Lean.Elab.Tactic.TacticM Unit :=
+  Lean.Elab.Tactic.withMainContext do
+    let t : Q(Prop) ← Lean.Elab.Tactic.getMainTarget
+    match t with
+    | ~q(@Func.Inv $ξx $fx $gx $px) =>
+      match px with
+      | ~q(_ +++ _) => String.apply "prepend_inv"; line_inv; prog_inv
+      | _ =>
+        let px' : Q(Func) ← Lean.Meta.whnf px
+        match px' with
+        | ~q(Func.next _ _) => "next_inv".apply; instInv; prog_inv
+        | ~q(Func.last _) =>   "last_inv".apply; hopInv
+        | _ => dbg_trace "not matching next or last"
+    | _ => dbg_trace "not a Func.Inv goal"
+
+elab "prog_inv" : tactic => prog_inv
+
 end
 
 lemma of_run_branch {c e s r} {p q : Func} (h : Func.Run c e s (Func.branch p q) r) :
