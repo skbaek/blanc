@@ -1097,33 +1097,6 @@ lemma toList_toByteArray (xs : B8L) :
   · simp [List.reverse_nil]
   · simp [Nat.sub_zero]; rfl
 
--- structure Evm : Type where
---   pc : Nat
---   stack: List B256
---   memory: Mem
---   code: ByteArray
---   gas_left: Nat
---   logs: List Log
---   refund_counter: Int
---   msg: Msg
---   output: B8L
---   accountsToDelete: AdrSet
---   return_data: B8L
---   error: Option String
---   accessedAddresses: AdrSet
---   accessedStorageKeys: KeySet
-
--- structure Result where
---   -- balance, Storage, & code : parts of the 'World-State'
---   (bal : Adr → B256)
---   (stor : Adr → Storage)
---   (code : Adr → B8L)
---   -- ret : similar to 'ret' of State, but this is the Byte
---   -- sequence returned at the end of a code execution
---   (ret : B8L)
---   -- List of Address earmarked for destruction : parts of the 'subState'
---   (dest : List Adr)
-
 def Evm.toResult (evm : Evm) : Result :=
   let hh := evm.msg.benv.state
   {
@@ -1192,31 +1165,6 @@ lemma Except.of_bimap_eq_ok
   rcases e with _ | x <;> simp [Except.bimap] at eq
   refine' ⟨x, rfl, eq⟩
 
--- def processCreateMessage (vb : Bool) (msg : Msg) :
---   Nat → Except (Benv × Tenv × String) Evm
---   | 0 => .error ⟨msg.benv, msg.tenv, "RecursionLimit"⟩
---   | lim + 1 => do
---     let init_state := msg.benv.state
---     let init_tra := msg.tenv.transientStorage
---     let evm ←
---       processMessage vb
---         {msg with benv := processCreateMessageBenv msg}
---         lim
---     if evm.error.isNone
---     then
---       let result : Execution :=
---         processCreateMessageExecution evm
---       match result with
---       | .ok evm => .ok <| evm.setCode msg.currentTarget ⟨⟨evm.output⟩⟩
---       | .error (evm, err) =>
---         if isExceptionalHalt err
---         then
---           let evm := evm.rollback init_state init_tra
---           .ok {evm with gas_left := 0, output := [], error := .some err}
---         else .error ⟨evm.msg.benv, evm.msg.tenv, err⟩
---     else .ok <| evm.rollback init_state init_tra
--- termination_by lim => lim
-
 lemma Except.match_error {ξ υ ζ} (f : ξ → ζ) (g : υ → ζ) (x : ξ) :
   (
     match (.error x : Except ξ υ) with
@@ -1274,24 +1222,6 @@ lemma of_processCreateMessage (msg : Msg) (evm : Evm) (lim : Nat)
   · rw [if_neg h_isNone] at h
     rw [if_neg h_isNone]
     cases h; rfl
-
-
-
-
--- structure Benv : Type where
---   chainId : B64
---   state : State
---   origState : State
---   createdAccounts : AdrSet
---   blockGasLimit : Nat
---   blockHashes: List B256
---   coinbase : Adr
---   number : Nat
---   baseFeePerGas : Nat
---   time : B256
---   prevRandao : B256
---   excessBlobGas : Nat
---   parentBeaconBlockRoot : B256
 
 structure Benv.Rels where
   (chainId : B64 → B64 → Prop)
@@ -1410,12 +1340,6 @@ structure Msg.Rel (r : Rels) (m m' : Msg) : Prop where
     r.accessedStorageKeys m.accessedStorageKeys m'.accessedStorageKeys)
   (disablePrecompiles :
     r.disablePrecompiles m.disablePrecompiles m'.disablePrecompiles)
-
-
--- #exit
--- def Msg.Transfer (msg : Msg) (kd : Adr) (v : B256) (ki : Adr) (msg' : Msg) : Prop :=
---   msg' = msg.withBenv msg'.benv ∧
---   Benv.Transfer msg.benv kd v ki msg'.benv
 
 lemma Except.of_assert_eq_ok {ξ} (p : Prop) [Decidable p] (x : ξ)
     (h : Except.assert p x = .ok ()) : p := by
@@ -1587,7 +1511,6 @@ lemma Adr.lt_trichotomy (a b : Adr) : a < b ∨ a = b ∨ b < a := by
   · left; apply Adr.lt_iff_le_not_ge.mpr ⟨ab, ba⟩
   · right; right; apply Adr.lt_iff_le_not_ge.mpr ⟨ba, ab⟩
   · cases not_or_intro ab ba <| Adr.le_total _ _
-
 
 instance : @Std.OrientedCmp B32 (@compare B32 instOrdUInt32) := by
   constructor; intro a b

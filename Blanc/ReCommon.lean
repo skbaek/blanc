@@ -1947,8 +1947,7 @@ lemma of_run_branch {c e s r} {p q : Func} (h : Func.Run c e s (Func.branch p q)
   | zero h1 h2 => left; exact ⟨_, h1, h2⟩
   | succ h1 h2 h3 h4 => right; exact ⟨_, _, _, h1, h2, h3, h4⟩
 
-
-lemma dispatchWith_inv_pp {c k f}
+lemma dispatchWith_inv {c k f}
     (σ : Sevm → Devm → Prop)
     (ρ : Sevm → Devm → Prop)
     ( h0 :
@@ -1970,7 +1969,7 @@ lemma dispatchWith_inv_pp {c k f}
     ∀ (e s r), σ e s → Func.Run c e s (dispatchWith k t) r → ρ e r := by
   sorry
 
-lemma dispatchWith_inv {c k f}
+lemma dispatchWith_inv_old {c k f}
     (σ : Sevm → Devm → Prop)
     ( h0 :
       ∀ {e s x w s' s''},
@@ -6435,7 +6434,8 @@ lemma lift
 
 lemma lift_inv
     (ca : Adr) (p : Prog)
-    (π : Sevm → Devm → Prop)
+    (σ : Sevm → Devm → Prop)
+    (ρ : Sevm → Devm → Prop)
     ( with_depth_ind :
       ∀ {sevm pre post},
         Prog.Run sevm pre p post →
@@ -6444,44 +6444,44 @@ lemma lift_inv
             Exec pc' sevm' pre' (.ok post') →
             sevm'.depth < sevm.depth →
             Prog.At p ca pc' sevm' pre' →
-            π sevm' pre' →
-            π sevm' post' ) →
-        π sevm pre →
-        π sevm post )
+            σ sevm' pre' →
+            ρ sevm' post' ) →
+        σ sevm pre →
+        ρ sevm post )
     ( nextNone :
       ∀ {pc} {sevm} {pre} {n} {inter},
         n.At sevm.code pc →
         Ninst.Run' pc sevm pre n .none (.ok inter) →
         sevm.currentTarget ≠ ca →
-        π sevm pre →
-        π sevm inter )
+        σ sevm pre →
+        σ sevm inter )
     ( nextSome :
       ∀ {pc} {sevm} {pre} {n} {sevm'} {devm'} {exn'} {inter},
         n.At sevm.code pc →
         Ninst.Run' pc sevm pre n (.some ⟨sevm', devm', exn'⟩) (.ok inter) →
         sevm.currentTarget ≠ ca →
-        π sevm pre →
-        π sevm' devm' ∧ (ifOk (π sevm') exn' → π sevm inter) )
+        σ sevm pre →
+        σ sevm' devm' ∧ (ifOk (ρ sevm') exn' → σ sevm inter) )
     ( jump :
       ∀ {pc} {sevm} {pre} {j} {pc'} {inter},
         j.At sevm.code pc →
         Jinst.Run ⟨pc, sevm, pre⟩ j (.ok ⟨pc', inter⟩) →
         sevm.currentTarget ≠ ca →
-        π sevm pre →
-        π sevm inter )
+        σ sevm pre →
+        σ sevm inter )
     ( last :
       ∀ {pc} {sevm} {pre} {l} {post},
         l.At sevm.code pc →
         Linst.Run sevm pre l (.ok post) →
         sevm.currentTarget ≠ ca →
-        π sevm pre →
-        π sevm post ) :
+        σ sevm pre →
+        ρ sevm post ) :
     ∀ pc sevm devm post,
       Exec pc sevm devm (.ok post) →
       Prog.At p ca pc sevm devm →
-      π sevm devm →
-      π sevm post := by
-  apply @lift (fun sevm pre post => π sevm pre → π sevm post) ca p with_depth_ind
+      σ sevm devm →
+      ρ sevm post := by
+  apply @lift (fun sevm pre post => σ sevm pre → ρ sevm post) ca p with_depth_ind
   · intro pc sevm pre n inter post h_at h_run _ h_ne h_ih h_pi
     exact h_ih (nextNone h_at h_run h_ne h_pi)
   · intro pc sevm pre n sevm' devm' exn' inter post h_at h_run _ _ h_ne h_ifOk h_ih h_pi
