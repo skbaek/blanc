@@ -48,6 +48,31 @@ structure Postcond (wa : Adr) (sevm : Sevm) (devm : Devm) : Prop where
   (nof : sum devm.getBal < 2 ^ 256)
   (solvent : devm.PostSolvent wa)
 
+lemma Postcond.of_cond {wa : Adr} {sevm : Sevm} {devm : Devm}
+    (h : Cond wa sevm devm) : Postcond wa sevm devm := by
+  constructor
+  · exact h.nof
+  · unfold Devm.PostSolvent
+    have h_solv := h.solvent
+    unfold Devm.Solvent at h_solv
+    by_cases hc : sevm.currentTarget = wa
+    · have h1 := h_solv.left hc
+      unfold Stor.Solvent at h1
+      unfold Stor.Solvent
+      rw [B256.toNat_zero] at *
+      omega
+    · exact h_solv.right hc
+
+lemma Cond.of_precond {wa : Adr} {sevm : Sevm} {devm : Devm}
+    (h : Precond wa sevm devm) : Cond wa sevm devm := by
+  constructor
+  · exact h.nof
+  · exact h.solvent
+
+lemma Postcond.of_precond {wa : Adr} {sevm : Sevm} {devm : Devm}
+    (h : Precond wa sevm devm) : Postcond wa sevm devm :=
+  Postcond.of_cond (Cond.of_precond h)
+
 lemma Precond.state_eq_pp {wa sevm devm devm'}
     (h_pc : Precond wa sevm devm) (h_eq : devm'.state = devm.state) :
     Precond wa sevm devm' := by
@@ -401,6 +426,13 @@ lemma withdraw_inv_solvent {sevm : Sevm} {s r : Devm}
     (run : Func.Run (weth.main :: weth.aux) sevm s withdraw r) :
     r.Solvent sevm.currentTarget sevm := sorry
 
+lemma withdraw_inv_solvent_pp {sevm : Sevm} {s r : Devm}
+    (cond : Precond sevm.currentTarget sevm s)
+    (ih : Exec.InvDepth_pp sevm.depth sevm.currentTarget weth (Precond sevm.currentTarget) (Postcond sevm.currentTarget))
+    (run : Func.Run (weth.main :: weth.aux) sevm s withdraw r) :
+    r.Solvent sevm.currentTarget sevm := sorry
+
+
 lemma decimals_inv_solvent {sevm : Sevm} {s r : Devm}
     (run : Func.Run (weth.main :: weth.aux) sevm s decimals r)
     (h_sv : s.Solvent sevm.currentTarget sevm) :
@@ -436,7 +468,10 @@ lemma run_inv_cond_pp (f : Func)
       Func.Run (weth.main :: weth.aux) sevm s f r →
       Precond sevm.currentTarget sevm s →
       Postcond sevm.currentTarget sevm r := by
-  sorry
+  intro sevm s r run cond
+  constructor
+  · apply Func.inv_nof run cond.nof
+  · apply h_solv run cond.solvent
 
 lemma run_inv_cond (f : Func)
     (h_solv : ∀ {sevm : Sevm} {s r : Devm}, Func.Run (weth.main :: weth.aux) sevm s f r → s.Solvent sevm.currentTarget sevm → r.Solvent sevm.currentTarget sevm) :
@@ -447,7 +482,7 @@ lemma run_inv_cond (f : Func)
   · apply Func.inv_nof run cond.nof
   · apply h_solv run cond.solvent
 
-lemma weth_inv_pp {sevm : Sevm} {s r}
+lemma weth_inv'_pp {sevm : Sevm} {s r}
     (cond : Precond sevm.currentTarget sevm s)
     ( ih :
       Exec.InvDepth_pp sevm.depth sevm.currentTarget weth
@@ -497,8 +532,26 @@ lemma weth_inv_pp {sevm : Sevm} {s r}
     rcases h_pop with ⟨_, _, _, _, _, _, _, _, _, _, _, h_pop_state, _⟩
     apply Precond.state_eq_pp h_cond
     exact h_pop_state.symm.trans h_run_state.symm
-  · sorry
-  · sorry
+  · intro e s s' r ⟨cond, ih⟩ burn run
+    have cond' : Precond e.currentTarget e s' := Precond.state_eq_pp cond burn.state.symm
+    have cond_c : Cond e.currentTarget e s' := Cond.of_precond cond'
+    have r_cond : Cond e.currentTarget e r := run_inv_cond deposit deposit_inv_solvent run cond_c
+    exact Postcond.of_cond r_cond
+  · intro e s r wf h_mem ⟨cond, ih⟩ h_run
+    rcases h_mem with (((h | h) | h) | (h | h)) | (((h | h) | h) | (h | h)) <;>
+      (cases h)
+    · apply Postcond.of_cond <| run_inv_cond name name_inv_solvent h_run (Cond.of_precond cond)
+    · apply Postcond.of_cond <| run_inv_cond approve approve_inv_solvent h_run (Cond.of_precond cond)
+    · apply Postcond.of_cond <| run_inv_cond totalSupply totalSupply_inv_solvent h_run (Cond.of_precond cond)
+    · apply Postcond.of_cond <| run_inv_cond transferFrom transferFrom_inv_solvent h_run (Cond.of_precond cond)
+    · have r_cond : Cond e.currentTarget e r := ⟨Func.inv_nof h_run cond.nof, withdraw_inv_solvent_pp cond ih h_run⟩
+      exact Postcond.of_cond r_cond
+    · apply Postcond.of_cond <| run_inv_cond decimals decimals_inv_solvent h_run (Cond.of_precond cond)
+    · apply Postcond.of_cond <| run_inv_cond balanceOf balanceOf_inv_solvent h_run (Cond.of_precond cond)
+    · apply Postcond.of_cond <| run_inv_cond symbol symbol_inv_solvent h_run (Cond.of_precond cond)
+    · apply Postcond.of_cond <| run_inv_cond transfer transfer_inv_solvent h_run (Cond.of_precond cond)
+    · apply Postcond.of_cond <| run_inv_cond allowance allowance_inv_solvent h_run (Cond.of_precond cond)
+
 
 lemma weth_inv' {sevm : Sevm} {s r}
     (cond : Cond sevm.currentTarget sevm s)
