@@ -1975,6 +1975,12 @@ def hopInv : Lean.Elab.Tactic.TacticM Unit :=
     Lean.Elab.Tactic.closeMainGoal `tacName x
   | _ => dbg_trace "Not a Linst.Inv goal"
 
+lemma Devm.Burn.getBal {s s' : Devm} (h : Devm.Burn s s') (a : Adr) : s'.getBal a = s.getBal a := by
+  simp [Devm.getBal, Devm.getAcct]; rw [h.state]
+
+lemma Devm.PopBurn.getBal {xs} {s s' : Devm} (h : Devm.PopBurn xs s s') (a : Adr) : s'.getBal a = s.getBal a := by
+  simp [Devm.getBal, Devm.getAcct]; rw [h.state]
+
 lemma Func.of_inv {ξ : Type} {e s r} (f g) {p : Func} :
   @Func.Inv ξ f g p → Func.Run c e s p r → f s = g r := λ h => h
 
@@ -1987,6 +1993,43 @@ lemma prepend_inv {ξ : Type} {f g} {l p} (hl : Line.Inv f l)
     (hp : Func.Inv f g p) : @Func.Inv ξ f g (l +++ p) := by
   intros c e s r h; rcases of_run_prepend _ _ h with ⟨s', hl', hp'⟩
   apply Eq.trans (hl hl') (hp hp')
+
+lemma of_run_branch {c e s r} {p q : Func} (h : Func.Run c e s (Func.branch p q) r) :
+    (∃ s', Devm.PopBurn [0] s s' ∧ Func.Run c e s' p r) ∨
+    (∃ w s' s'', w ≠ 0 ∧ Devm.PopBurn [w] s s' ∧ Devm.Burn s' s'' ∧ Func.Run c e s'' q r) := by
+  cases h with
+  | zero h1 h2 => left; exact ⟨_, h1, h2⟩
+  | succ h1 h2 h3 h4 => right; exact ⟨_, _, _, h1, h2, h3, h4⟩
+
+class PopBurn.Inv {ξ} (f : Devm → ξ) : Prop where
+  (inv : ∀ {xs s s'}, Devm.PopBurn xs s s' → f s = f s')
+
+class Burn.Inv {ξ} (f : Devm → ξ) : Prop where
+  (inv : ∀ {s s'}, Devm.Burn s s' → f s = f s')
+
+instance : PopBurn.Inv Devm.getBal := ⟨by
+  intros xs s s' h
+  funext a
+  exact (Devm.PopBurn.getBal h a).symm
+⟩
+
+instance : Burn.Inv Devm.getBal := ⟨by
+  intros s s' h
+  funext a
+  exact (Devm.Burn.getBal h a).symm
+⟩
+
+lemma branch_inv {ξ : Type} {f : Devm → ξ} {g} {p q}
+    [h_pop : PopBurn.Inv f] [h_burn : Burn.Inv f]
+    (hp : Func.Inv f g p) (hq : Func.Inv f g q) :
+    @Func.Inv ξ f g (Func.branch p q) := by
+  intros c e s r h_run
+  rcases of_run_branch h_run with ⟨s', h_pb, h_run⟩ | ⟨w, s', s'', h_ne, h_pb, h_b, h_run⟩
+  · rw [h_pop.inv h_pb]
+    exact hp h_run
+  · rw [h_pop.inv h_pb]
+    rw [h_burn.inv h_b]
+    exact hq h_run
 
 lemma next_inv {ξ : Type} {f : Devm → ξ} {g} {i p}
     (h : Ninst.Inv f i) (h' : Func.Inv f g p) : Func.Inv f g (i ::: p) := by
@@ -2006,19 +2049,34 @@ partial def prog_inv : Lean.Elab.Tactic.TacticM Unit :=
         match px' with
         | ~q(Func.next _ _) => "next_inv".apply; instInv; prog_inv
         | ~q(Func.last _) =>   "last_inv".apply; hopInv
-        | _ => dbg_trace "not matching next or last"
+        | ~q(Func.branch _ _) => "branch_inv".apply; prog_inv; prog_inv
+        | _ => do
+          let pp ← Lean.Meta.ppExpr px'
+          Lean.logInfo s!"not matching: {pp}"
     | _ => dbg_trace "not a Func.Inv goal"
 
 elab "prog_inv" : tactic => prog_inv
 
 end
 
-lemma of_run_branch {c e s r} {p q : Func} (h : Func.Run c e s (Func.branch p q) r) :
-    (∃ s', Devm.PopBurn [0] s s' ∧ Func.Run c e s' p r) ∨
-    (∃ w s' s'', w ≠ 0 ∧ Devm.PopBurn [w] s s' ∧ Devm.Burn s' s'' ∧ Func.Run c e s'' q r) := by
+lemma not_run_rev {c e s r} : ¬ Func.Run c e s Func.rev r := by
+  intro h
   cases h with
-  | zero h1 h2 => left; exact ⟨_, h1, h2⟩
-  | succ h1 h2 h3 h4 => right; exact ⟨_, _, _, h1, h2, h3, h4⟩
+  | last h_run =>
+    simp only [Linst.Run, Linst.run] at h_run
+    rcases of_bind_eq_ok h_run with ⟨v1, h1, h2⟩
+    rcases of_bind_eq_ok h2 with ⟨v2, h3, h4⟩
+    rcases of_bind_eq_ok h4 with ⟨v3, h5, h6⟩
+    contradiction
+
+lemma of_run_branch_rev {c e s r} {p : Func} (h : Func.Run c e s (.rev <?> p) r) :
+    ∃ s', Devm.PopBurn [0] s s' ∧ Func.Run c e s' p r := by
+  rcases of_run_branch h with ⟨s', h_pb, h_run⟩ | ⟨w, s', s'', h_ne, h_pb, h_b, h_run⟩
+  · exact ⟨s', h_pb, h_run⟩
+  · exfalso; exact not_run_rev h_run
+
+
+
 
 lemma dispatchWith_inv {c k f}
     (σ : Sevm → Devm → Prop)
@@ -3430,6 +3488,12 @@ lemma applyTernary_getBal_eq {f : B256 → B256 → B256 → B256} {cost devm de
 
 def Devm.getStor (devm : Devm) (adr : Adr) : Stor :=
   (devm.getAcct adr).stor
+
+lemma Devm.Burn.getStor {s s' : Devm} (h : Devm.Burn s s') (a : Adr) : s'.getStor a = s.getStor a := by
+  simp [Devm.getStor, Devm.getAcct]; rw [h.state]
+
+lemma Devm.PopBurn.getStor {xs} {s s' : Devm} (h : Devm.PopBurn xs s s') (a : Adr) : s'.getStor a = s.getStor a := by
+  simp [Devm.getStor, Devm.getAcct]; rw [h.state]
 
 lemma addAccessedAddress_getStor {devm : Devm} {adr : Adr} : (addAccessedAddress devm adr).getStor = devm.getStor := rfl
 

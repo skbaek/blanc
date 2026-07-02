@@ -224,6 +224,14 @@ instance : Linst.Hinv Devm.getBal Devm.getBal Linst.stop := by
 
 instance : Linst.Hinv Devm.getBal Devm.getBal Linst.ret := by constructor; sorry
 
+instance : Linst.Hinv Devm.getBal Devm.getBal Linst.rev := by
+  constructor; intros e s r h
+  simp only [Linst.Run, Linst.run] at h
+  rcases of_bind_eq_ok h with ⟨v1, h1, h2⟩
+  rcases of_bind_eq_ok h2 with ⟨v2, h3, h4⟩
+  rcases of_bind_eq_ok h4 with ⟨v3, h5, h6⟩
+  contradiction
+
 instance : Linst.Hinv Devm.getStor Devm.getStor Linst.stop := by
   constructor; intros e s r h; injection h with h_eq; subst h_eq; rfl
 
@@ -270,10 +278,34 @@ lemma name_inv_solvent {sevm : Sevm} {s r : Devm}
     (h_sv : s.PreSolvent sevm.currentTarget sevm) :
     r.PostSolvent sevm.currentTarget := by simple_solvent
 
+lemma approve_inv_bal : Func.Inv Devm.getBal Devm.getBal approve := by prog_inv
+
+lemma approve_inv_wbal {sevm : Sevm} {s r : Devm}
+    (run : Func.Run (weth.main :: weth.aux) sevm s approve r) :
+    (s.getStor sevm.currentTarget).rest = (r.getStor sevm.currentTarget).rest := sorry
+
+lemma result_solvent_of_state_solvent {sevm : Sevm} {s r : Devm}
+    (h_wbsum : (s.getStor sevm.currentTarget).rest = (r.getStor sevm.currentTarget).rest)
+    (h_bal : s.getBal sevm.currentTarget = r.getBal sevm.currentTarget)
+    (h_solvent : s.PreSolvent sevm.currentTarget sevm) :
+    r.PostSolvent sevm.currentTarget := by
+  unfold Devm.PostSolvent Stor.Solvent
+  rw [B256.toNat_zero, Nat.add_zero]
+  have h_sv' := h_solvent.left rfl
+  unfold Stor.Solvent at h_sv'
+  rw [← h_bal]
+  have h_wbsum_eq : wbsum (s.getStor sevm.currentTarget) = wbsum (r.getStor sevm.currentTarget) := by
+    simp [wbsum, h_wbsum]
+  rw [← h_wbsum_eq]
+  omega
+
 lemma approve_inv_solvent {sevm : Sevm} {s r : Devm}
     (run : Func.Run (weth.main :: weth.aux) sevm s approve r)
     (h_sv : s.PreSolvent sevm.currentTarget sevm) :
-    r.PostSolvent sevm.currentTarget := sorry
+    r.PostSolvent sevm.currentTarget := by
+  have h_bal_fun := Func.of_inv Devm.getBal Devm.getBal approve_inv_bal run
+  have h_bal := congr_fun h_bal_fun sevm.currentTarget
+  exact result_solvent_of_state_solvent (approve_inv_wbal run) h_bal h_sv
 
 lemma totalSupply_inv_solvent {sevm : Sevm} {s r : Devm}
     (run : Func.Run (weth.main :: weth.aux) sevm s totalSupply r)
