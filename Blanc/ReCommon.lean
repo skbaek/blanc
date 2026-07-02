@@ -3371,6 +3371,23 @@ lemma Devm.push_getBal_eq {v devm devm'} (h : Devm.push v devm = .ok devm') (a :
   split at h <;> try contradiction
   cases h; rfl
 
+lemma Devm.popToAdr_getBal_eq {devm devm' adr} (h : Devm.popToAdr devm = .ok ⟨adr, devm'⟩) (a : Adr) : devm'.getBal a = devm.getBal a := by
+  dsimp [Devm.popToAdr, Functor.map, Except.map] at h
+  rcases hp : devm.pop with _ | ⟨x, devm1⟩
+  · simp [hp] at h
+  · simp [hp] at h
+    rcases h with ⟨_, rfl⟩
+    exact Devm.pop_getBal_eq hp a
+
+lemma Devm.popToNat_getBal_eq {devm devm' n} (h : Devm.popToNat devm = .ok ⟨n, devm'⟩) (a : Adr) : devm'.getBal a = devm.getBal a := by
+  dsimp [Devm.popToNat, Functor.map, Except.map] at h
+  rcases hp : devm.pop with _ | ⟨x, devm1⟩
+  · simp [hp] at h
+  · simp [hp] at h
+    rcases h with ⟨_, rfl⟩
+    exact Devm.pop_getBal_eq hp a
+
+
 lemma pushItem_getBal_eq {x c devm devm'} (h : pushItem x c devm = .ok devm') (a : Adr) : devm'.getBal a = devm.getBal a := by
   simp only [pushItem] at h
   refine getBal_eq_of_bind h id ?_ ?_
@@ -6631,6 +6648,16 @@ macro_rules
               rcases of_cons_cons_pref_of_cons_cons_pref h1 (pref_of_split h2) with ⟨hx, hy, h⟩;
               cases hx; cases hy; clear h; apply append_pref h3 (of_append_pref h2 h1) )
 
+lemma memRead_getBal_eq {x n : Nat} {devm devm' : Devm} {value : B8L} (h : devm.memRead x n = ⟨value, devm'⟩) (a : Adr) : devm'.getBal a = devm.getBal a := by
+  simp only [Devm.memRead] at h
+  rcases h_read : devm.memory.read x n with ⟨val, mem⟩
+  rw [h_read] at h
+  injection h with _ h_devm
+  rw [← h_devm]
+  rfl
+
+lemma memWrite_getBal_eq {idx : Nat} {val : B8L} {devm : Devm} (a : Adr) : (devm.memWrite idx val).getBal a = devm.getBal a := rfl
+
 def Rinst.Inv {ξ : Type} (f : Devm → ξ) (r : Rinst) : Prop :=
   ∀ {pc sevm pre post}, Rinst.run ⟨pc, sevm, pre⟩ r = (.ok post) → f pre = f post
 
@@ -6673,4 +6700,55 @@ lemma Rinst.inv_bal {r} : Rinst.Inv Devm.getBal r := by
       · refine getBal_eq_of_bind run id ?_ ?_
         · intro devm2 hc; exact chargeGas_getBal_eq hc a
         · intro devm2 hc run2; exact Devm.push_getBal_eq run2 a
+  case extcodesize =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply funext; intro a; apply Eq.symm
+    refine getBal_eq_of_bind h Prod.snd ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToAdr_getBal_eq hp a
+    · intro ⟨x, devm1⟩ hp run; split at run
+      · refine getBal_eq_of_bind run id ?_ ?_
+        · intro devm2 hc; exact chargeGas_getBal_eq hc a
+        · intro devm2 hc run2; exact Devm.push_getBal_eq run2 a
+      · refine getBal_eq_of_bind run id ?_ ?_
+        · intro devm2 hc; exact chargeGas_getBal_eq hc a
+        · intro devm2 hc run2; exact Devm.push_getBal_eq run2 a
+  case mload =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply funext; intro a; apply Eq.symm
+    refine getBal_eq_of_bind h Prod.snd ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getBal_eq hp a
+    · intro ⟨x, devm1⟩ hp run; refine getBal_eq_of_bind run id ?_ ?_
+      · intro devm2 hc; exact chargeGas_getBal_eq hc a
+      · intro devm2 hc run2
+        rcases h_read : devm2.memRead x 32 with ⟨value, devm3⟩
+        rw [h_read] at run2
+        change post.getBal a = devm2.getBal a
+        rw [← memRead_getBal_eq h_read a]
+        exact Devm.push_getBal_eq run2 a
+  case mstore =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply funext; intro a; apply Eq.symm
+    refine getBal_eq_of_bind h Prod.snd ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getBal_eq hp a
+    · intro ⟨x, devm1⟩ hp run; refine getBal_eq_of_bind run Prod.snd ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.pop_getBal_eq hp2 a
+      · intro ⟨y, devm2⟩ hp2 run2; refine getBal_eq_of_bind run2 id ?_ ?_
+        · intro devm3 hc; exact chargeGas_getBal_eq hc a
+        · intro devm3 hc run3
+          injection run3 with h_post
+          rw [← h_post]
+          exact memWrite_getBal_eq a
+  case mstore8 =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply funext; intro a; apply Eq.symm
+    refine getBal_eq_of_bind h Prod.snd ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getBal_eq hp a
+    · intro ⟨x, devm1⟩ hp run; refine getBal_eq_of_bind run Prod.snd ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.pop_getBal_eq hp2 a
+      · intro ⟨y, devm2⟩ hp2 run2; refine getBal_eq_of_bind run2 id ?_ ?_
+        · intro devm3 hc; exact chargeGas_getBal_eq hc a
+        · intro devm3 hc run3
+          injection run3 with h_post
+          rw [← h_post]
+          exact memWrite_getBal_eq a
   all_goals sorry
