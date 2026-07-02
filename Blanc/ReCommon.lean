@@ -6660,4 +6660,17 @@ lemma Rinst.inv_bal {r} : Rinst.Inv Devm.getBal r := by
   case mulmod => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyTernary_getBal_eq h
   case iszero => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyUnary_getBal_eq h
   case not => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyUnary_getBal_eq h
+  case blobhash => intro h; change applyUnary (fun x => sevm.tenvStat.blobVersionedHashes.getD x.toNat 0) gHashopcode pre = Except.ok post at h; exact applyUnary_getBal_eq h
+  case balance =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply funext; intro a; apply Eq.symm
+    refine getBal_eq_of_bind h Prod.snd ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a
+    · intro ⟨x, devm1⟩ hp run; split at run
+      · refine getBal_eq_of_bind run id ?_ ?_
+        · intro devm2 hc; exact chargeGas_getBal_eq hc a
+        · intro devm2 hc run2; exact Devm.push_getBal_eq run2 a
+      · refine getBal_eq_of_bind run id ?_ ?_
+        · intro devm2 hc; exact chargeGas_getBal_eq hc a
+        · intro devm2 hc run2; exact Devm.push_getBal_eq run2 a
   all_goals sorry
