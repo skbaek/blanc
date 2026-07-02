@@ -28,6 +28,16 @@ def Devm.PreSolvent (devm : Devm) (a : Adr) (sevm : Sevm) : Prop :=
 def Devm.PostSolvent (devm : Devm) (a : Adr) : Prop :=
   Stor.Solvent (devm.getStor a) 0 (devm.getBal a)
 
+lemma solvent_of_same_stor {s s' : Stor} {v : B256} {b b' : B256} :
+    Stor.Solvent s v b → s = s' → b = b' → Stor.Solvent s' v b' := by
+  intros h0 h1 h2; rw [h1, h2] at h0; exact h0
+
+lemma solvent_zero_of_solvent {s : Stor} {v : B256} {b : B256}
+    (h : Stor.Solvent s v b) : Stor.Solvent s 0 b := by
+  simp [Stor.Solvent] at h
+  simp [Stor.Solvent, B256.toNat_zero]
+  omega
+
 structure Precond (wa : Adr) (sevm : Sevm) (devm : Devm) : Prop where
   (nof : sum devm.getBal < 2 ^ 256)
   (solvent : devm.PreSolvent wa sevm)
@@ -208,6 +218,14 @@ instance : Ninst.Hinv Devm.getStor (Ninst.reg Rinst.shr) := ⟨by
           exact (Devm.pop_getStor_eq hp1).trans <| (Devm.pop_getStor_eq hp2).trans <| (pushItem_getStor_eq hpush)
 ⟩
 
+instance : Ninst.Hinv Devm.getStor Ninst.shl := ⟨sorry⟩
+instance : Ninst.Hinv Devm.getStor Ninst.mstore := ⟨sorry⟩
+instance : Ninst.Hinv Devm.getStor Ninst.sload := ⟨sorry⟩
+instance : Ninst.Hinv Devm.getStor Ninst.calldatacopy := ⟨sorry⟩
+instance : Ninst.Hinv Devm.getStor Ninst.address := ⟨sorry⟩
+instance : Ninst.Hinv Devm.getStor Ninst.balance := ⟨sorry⟩
+instance : Ninst.Hinv Devm.getStor Ninst.kec := ⟨sorry⟩
+
 instance {x} : Ninst.Hinv Devm.state (Ninst.pushB256 x) := ⟨by
   intros e s s' h
   rcases h with ⟨xl, h_filled, pc, run⟩
@@ -301,6 +319,11 @@ instance : Linst.Hinv Devm.getBal Devm.getBal Linst.stop := by
 
 instance : Linst.Hinv Devm.getBal Devm.getBal Linst.ret := by constructor; sorry
 
+instance : Linst.Hinv Devm.getStor Devm.getStor Linst.stop := by
+  constructor; intros e s r h; injection h with h_eq; subst h_eq; rfl
+
+instance : Linst.Hinv Devm.getStor Devm.getStor Linst.ret := by constructor; sorry
+
 lemma deposit_inv_bal : Func.Inv Devm.getBal Devm.getBal deposit := by prog_inv
 
 lemma wbsum_after_deposit {sevm : Sevm} {s r : Devm}
@@ -328,10 +351,19 @@ lemma deposit_inv_solvent {sevm : Sevm} {s r : Devm}
   rw [Nat.add_zero]
   exact h_sv'
 
+syntax "simple_solvent" : tactic
+set_option hygiene false in
+macro_rules
+| `(tactic| simple_solvent) =>
+  `(tactic| revert h_sv; simp [Devm.PostSolvent, Devm.PreSolvent]; intro h_sv;
+            apply solvent_zero_of_solvent;
+            apply solvent_of_same_stor h_sv <;>
+            apply congr_fun <| Func.of_inv _ _ (by prog_inv) run )
+
 lemma name_inv_solvent {sevm : Sevm} {s r : Devm}
     (run : Func.Run (weth.main :: weth.aux) sevm s name r)
     (h_sv : s.PreSolvent sevm.currentTarget sevm) :
-    r.PostSolvent sevm.currentTarget := sorry
+    r.PostSolvent sevm.currentTarget := by simple_solvent
 
 lemma approve_inv_solvent {sevm : Sevm} {s r : Devm}
     (run : Func.Run (weth.main :: weth.aux) sevm s approve r)
@@ -341,7 +373,7 @@ lemma approve_inv_solvent {sevm : Sevm} {s r : Devm}
 lemma totalSupply_inv_solvent {sevm : Sevm} {s r : Devm}
     (run : Func.Run (weth.main :: weth.aux) sevm s totalSupply r)
     (h_sv : s.PreSolvent sevm.currentTarget sevm) :
-    r.PostSolvent sevm.currentTarget := sorry
+    r.PostSolvent sevm.currentTarget := by simple_solvent
 
 lemma transferFrom_inv_solvent {sevm : Sevm} {s r : Devm}
     (run : Func.Run (weth.main :: weth.aux) sevm s transferFrom r)
@@ -357,17 +389,17 @@ lemma withdraw_inv_solvent {sevm : Sevm} {s r : Devm}
 lemma decimals_inv_solvent {sevm : Sevm} {s r : Devm}
     (run : Func.Run (weth.main :: weth.aux) sevm s decimals r)
     (h_sv : s.PreSolvent sevm.currentTarget sevm) :
-    r.PostSolvent sevm.currentTarget := sorry
+    r.PostSolvent sevm.currentTarget := by simple_solvent
 
 lemma balanceOf_inv_solvent {sevm : Sevm} {s r : Devm}
     (run : Func.Run (weth.main :: weth.aux) sevm s balanceOf r)
     (h_sv : s.PreSolvent sevm.currentTarget sevm) :
-    r.PostSolvent sevm.currentTarget := sorry
+    r.PostSolvent sevm.currentTarget := by simple_solvent
 
 lemma symbol_inv_solvent {sevm : Sevm} {s r : Devm}
     (run : Func.Run (weth.main :: weth.aux) sevm s symbol r)
     (h_sv : s.PreSolvent sevm.currentTarget sevm) :
-    r.PostSolvent sevm.currentTarget := sorry
+    r.PostSolvent sevm.currentTarget := by simple_solvent
 
 lemma transfer_inv_solvent' {sevm : Sevm} {s r : Devm}
     (run : Func.Run (weth.main :: weth.aux) sevm s transfer r)
@@ -377,7 +409,7 @@ lemma transfer_inv_solvent' {sevm : Sevm} {s r : Devm}
 lemma allowance_inv_solvent {sevm : Sevm} {s r : Devm}
     (run : Func.Run (weth.main :: weth.aux) sevm s allowance r)
     (h_sv : s.PreSolvent sevm.currentTarget sevm) :
-    r.PostSolvent sevm.currentTarget := sorry
+    r.PostSolvent sevm.currentTarget := by simple_solvent
 
 lemma Func.inv_nof {c : List Func} {sevm : Sevm} {s r : Devm} {f : Func}
     (run : Func.Run c sevm s f r) (h_nof : sum s.getBal < 2 ^ 256) :
