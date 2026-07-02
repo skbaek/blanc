@@ -3481,6 +3481,76 @@ lemma setStorVal_inv_getCode {devm : Devm} {adr adr'} {key} {val} :
     · rw [Std.TreeMap.getD_insert]
       simp [h_cmp]
 
+lemma setStorVal_inv_getBal {devm : Devm} {adr adr'} {key} {val} :
+    (devm.setStorVal adr key val).getBal adr' = devm.getBal adr' := by
+  simp [Devm.getBal, Devm.getAcct, Devm.setStorVal]
+  unfold State.setStorVal State.get State.set
+  dsimp
+  split_ifs with h_if
+  · by_cases h_cmp : compare adr adr' = Ordering.eq
+    · have h : adr = adr' := compare_eq_iff_eq.mp h_cmp
+      subst h
+      rw [Std.TreeMap.getD_erase]
+      simp
+      have h2 := congrArg Acct.bal h_if
+      exact h2.symm
+    · rw [Std.TreeMap.getD_erase]
+      simp [h_cmp]
+  · by_cases h_cmp : compare adr adr' = Ordering.eq
+    · have h : adr = adr' := compare_eq_iff_eq.mp h_cmp
+      subst h
+      rw [Std.TreeMap.getD_insert]
+      simp
+    · rw [Std.TreeMap.getD_insert]
+      simp [h_cmp]
+
+lemma sstore_inv_getBal
+    {pc sevm devm devm'}
+    (run : Rinst.run ⟨pc, sevm, devm⟩ .sstore = .ok devm') (a : Adr) :
+    devm'.getBal a = devm.getBal a := by
+  simp only [Rinst.run, Rinst.runCore] at run
+  refine getBal_eq_of_bind run Prod.snd ?_ ?_
+  {intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a}
+  clear run
+  intro ⟨x, devm1⟩ hp run;
+  refine getBal_eq_of_bind run Prod.snd ?_ ?_
+  {intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a}
+  clear run
+  intro ⟨y, devm2⟩ hp run;
+  rcases of_bind_eq_ok run with ⟨⟨_⟩, _, run'⟩
+  clear run
+  refine getBal_eq_of_bind run' Prod.fst ?_ ?_
+  · clear run';
+    intro ⟨devm', _⟩
+    simp only [ite_not, Except.ok.injEq]
+    split
+    · intro eq; injection eq with eq _; rw [eq]
+    · simp [addAccessedStorageKey, Devm.withAccessedStorageKeys]
+      intro rw _; rw [← rw]; clear rw
+      simp [Devm.getBal, Devm.getAcct]
+  · clear run';
+    intro ⟨devm3, _⟩ eq run; clear eq
+    rcases of_bind_eq_ok run with ⟨_, bar, run'⟩;
+    clear bar run
+    simp only at run'
+    refine getBal_eq_of_bind run' id ?_ ?_
+    · clear run'
+      intro devm4 eq
+      injection eq with rw
+      rw [← rw]
+      simp [Devm.getBal, Devm.getAcct]
+    · clear run'
+      intro devm4 temp run; clear temp
+      refine getBal_eq_of_bind run id ?_ ?_
+      {intro devm5 hc; exact chargeGas_getBal_eq hc a}
+      clear run
+      intro devm5 eq run
+      rcases of_bind_eq_ok run with ⟨_, bar, run'⟩;
+      clear bar run; injection run' with rw
+      rw [← rw]
+      apply setStorVal_inv_getBal
+
+
 lemma sstore_inv_getCode
     {pc sevm devm devm'}
     (run : Rinst.run ⟨pc, sevm, devm⟩ .sstore = .ok devm') (a : Adr) :
@@ -6940,7 +7010,10 @@ lemma Rinst.inv_bal {r} : Rinst.Inv Devm.getBal r := by
     · refine getBal_eq_of_bind run id ?_ ?_
       {intro devm2 hc; exact chargeGas_getBal_eq hc a}
       intro devm2 hc run; exact Devm.push_getBal_eq run a
-  case sstore => sorry
+  case sstore =>
+    intro h
+    apply funext; intro a; apply Eq.symm
+    exact sstore_inv_getBal h a
   case mcopy =>
     intro h; simp only [Rinst.run, Rinst.runCore] at h
     apply funext; intro a; apply Eq.symm
