@@ -705,8 +705,7 @@ def Xlot.Filled : Xlot → Prop
   | .some ⟨sevm, devm, exn⟩ => Nonempty (Exec 0 sevm devm exn)
 
 def Ninst.Run (sevm : Sevm) (devm : Devm) (n : Ninst) (devm' : Devm) : Prop :=
-  ∃ xl : Xlot, xl.Filled ∧
-    ∃ pc, Ninst.Run' pc sevm devm n xl (.ok devm')
+  ∃ xl : Xlot, xl.Filled ∧ ∃ pc, Ninst.Run' pc sevm devm n xl (.ok devm')
 
 inductive Func.Run : List Func → Sevm → Devm → Func → Devm → Prop
   | zero :

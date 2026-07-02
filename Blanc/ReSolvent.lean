@@ -350,8 +350,34 @@ instance : Ninst.Hinv Devm.state (Ninst.reg Rinst.gt) := ⟨by
 
 instance : Linst.Hinv Devm.getBal Devm.getBal Linst.stop := by
   constructor; intros e s r h; injection h with h_eq; subst h_eq; rfl
+
 instance : Linst.Hinv Devm.getBal Devm.getBal Linst.ret := by constructor; sorry
 
+
+#exit
+#check Ninst.Run'
+instance : Ninst.Hinv Devm.getBal Ninst.caller := by
+  constructor;
+  intro sevm pre post run
+
+  simp [Ninst.Inv, Ninst.Run, Ninst.Run'] at run
+  rcases run with ⟨xl, filled, pc, run⟩
+  simp at run
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#exit
 instance : Ninst.Hinv Devm.getBal Ninst.caller := ⟨sorry⟩
 instance : Ninst.Hinv Devm.getBal Ninst.sload := ⟨sorry⟩
 instance : Ninst.Hinv Devm.getBal Ninst.callvalue := ⟨sorry⟩

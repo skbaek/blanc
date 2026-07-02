@@ -3346,6 +3346,47 @@ lemma applyBinary_getCode_eq {f : B256 → B256 → B256} {cost devm devm'}
   {intro ⟨y, devm2⟩ hp2; exact Devm.pop_getCode_eq hp2 a}
   intro ⟨y, devm2⟩ hp2 run; exact pushItem_getCode_eq run a
 
+lemma getBal_eq_of_bind {α ε} {ma : Except ε α} {f : α → Except ε Devm}
+    {devm devm' : Devm} {a : Adr}
+    (run : (ma >>= f) = .ok devm')
+    (getDevm : α → Devm)
+    (h_first : ∀ v, ma = .ok v → (getDevm v).getBal a = devm.getBal a)
+    (h_rest : ∀ v, ma = .ok v → f v = .ok devm' → devm'.getBal a = (getDevm v).getBal a) :
+    devm'.getBal a = devm.getBal a := by
+  rcases of_bind_eq_ok run with ⟨v, hm, hf⟩
+  rw [h_rest v hm hf, h_first v hm]
+
+lemma Devm.pop_getBal_eq {x devm devm'} (h : Devm.pop devm = .ok ⟨x, devm'⟩) (a : Adr) : devm'.getBal a = devm.getBal a := by
+  simp only [Devm.pop] at h
+  split at h <;> try contradiction
+  cases h; rfl
+
+lemma chargeGas_getBal_eq {cost devm devm'} (h : chargeGas cost devm = .ok devm') (a : Adr) : devm'.getBal a = devm.getBal a := by
+  simp only [chargeGas] at h
+  split at h <;> try contradiction
+  cases h; rfl
+
+lemma Devm.push_getBal_eq {v devm devm'} (h : Devm.push v devm = .ok devm') (a : Adr) : devm'.getBal a = devm.getBal a := by
+  simp only [Devm.push, bind, Except.bind, Except.assert] at h
+  split at h <;> try contradiction
+  cases h; rfl
+
+lemma pushItem_getBal_eq {x c devm devm'} (h : pushItem x c devm = .ok devm') (a : Adr) : devm'.getBal a = devm.getBal a := by
+  simp only [pushItem] at h
+  refine getBal_eq_of_bind h id ?_ ?_
+  {intro devm1 hc; exact chargeGas_getBal_eq hc a}
+  intro devm1 hc run; exact Devm.push_getBal_eq run a
+
+lemma applyBinary_getBal_eq {f : B256 → B256 → B256} {cost devm devm'}
+    (h : applyBinary f cost devm = .ok devm') :
+    devm.getBal = devm'.getBal := by
+  simp only [applyBinary] at h
+  apply funext; intro a; apply Eq.symm
+  refine getBal_eq_of_bind h Prod.snd ?_ ?_
+  {intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a}
+  intro ⟨x, devm1⟩ hp run; refine getBal_eq_of_bind run Prod.snd ?_ ?_
+  {intro ⟨y, devm2⟩ hp2; exact Devm.pop_getBal_eq hp2 a}
+  intro ⟨y, devm2⟩ hp2 run; exact pushItem_getBal_eq run a
 
 
 lemma applyTernary_getCode_eq {f : B256 → B256 → B256 → B256} {cost devm devm'}
@@ -6567,3 +6608,11 @@ macro_rules
               rcases h0.stk with ⟨stk, h2, h3⟩; clear h0;
               rcases of_cons_cons_pref_of_cons_cons_pref h1 (pref_of_split h2) with ⟨hx, hy, h⟩;
               cases hx; cases hy; clear h; apply append_pref h3 (of_append_pref h2 h1) )
+
+def Rinst.Inv {ξ : Type} (f : Devm → ξ) (r : Rinst) : Prop :=
+  ∀ {pc sevm pre post}, Rinst.run ⟨pc, sevm, pre⟩ r = (.ok post) → f pre = f post
+
+lemma Rinst.inv_bal {r} : Rinst.Inv Devm.getBal r := by
+  intros pc sevm pre post; cases r
+  case add => exact applyBinary_getBal_eq
+  all_goals sorry
