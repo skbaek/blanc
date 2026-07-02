@@ -3388,6 +3388,28 @@ lemma applyBinary_getBal_eq {f : B256 → B256 → B256} {cost devm devm'}
   {intro ⟨y, devm2⟩ hp2; exact Devm.pop_getBal_eq hp2 a}
   intro ⟨y, devm2⟩ hp2 run; exact pushItem_getBal_eq run a
 
+lemma applyUnary_getBal_eq {f : B256 → B256} {cost devm devm'}
+    (h : applyUnary f cost devm = .ok devm') :
+    devm.getBal = devm'.getBal := by
+  simp only [applyUnary] at h
+  apply funext; intro a; apply Eq.symm
+  refine getBal_eq_of_bind h Prod.snd ?_ ?_
+  {intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a}
+  intro ⟨x, devm1⟩ hp run; exact pushItem_getBal_eq run a
+
+lemma applyTernary_getBal_eq {f : B256 → B256 → B256 → B256} {cost devm devm'}
+    (h : applyTernary f cost devm = .ok devm') :
+    devm.getBal = devm'.getBal := by
+  simp only [applyTernary] at h
+  apply funext; intro a; apply Eq.symm
+  refine getBal_eq_of_bind h Prod.snd ?_ ?_
+  {intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a}
+  intro ⟨x, devm1⟩ hp run; refine getBal_eq_of_bind run Prod.snd ?_ ?_
+  {intro ⟨y, devm2⟩ hp2; exact Devm.pop_getBal_eq hp2 a}
+  intro ⟨y, devm2⟩ hp2 run; refine getBal_eq_of_bind run Prod.snd ?_ ?_
+  {intro ⟨z, devm3⟩ hp3; exact Devm.pop_getBal_eq hp3 a}
+  intro ⟨z, devm3⟩ hp3 run; exact pushItem_getBal_eq run a
+
 
 lemma applyTernary_getCode_eq {f : B256 → B256 → B256 → B256} {cost devm devm'}
     (h : applyTernary f cost devm = .ok devm') (a : Adr) :
@@ -6634,4 +6656,8 @@ lemma Rinst.inv_bal {r} : Rinst.Inv Devm.getBal r := by
   case shr => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyBinary_getBal_eq h
   case shl => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyBinary_getBal_eq h
   case sar => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyBinary_getBal_eq h
+  case addmod => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyTernary_getBal_eq h
+  case mulmod => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyTernary_getBal_eq h
+  case iszero => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyUnary_getBal_eq h
+  case not => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyUnary_getBal_eq h
   all_goals sorry
