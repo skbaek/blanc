@@ -6658,6 +6658,25 @@ lemma memRead_getBal_eq {x n : Nat} {devm devm' : Devm} {value : B8L} (h : devm.
 
 lemma memWrite_getBal_eq {idx : Nat} {val : B8L} {devm : Devm} (a : Adr) : (devm.memWrite idx val).getBal a = devm.getBal a := rfl
 
+lemma Devm.popN_getBal_eq {n : Nat} {devm devm' : Devm} {l : List B256}
+    (hp : devm.popN n = Except.ok (l, devm')) (a : Adr) :
+    devm'.getBal a = devm.getBal a := by
+  induction n generalizing devm devm' l with
+  | zero =>
+    simp [Devm.popN] at hp
+    rcases hp with ⟨_, eq⟩
+    rw [eq]
+  | succ n ih =>
+    simp [Devm.popN] at hp
+    rcases of_bind_eq_ok hp with ⟨⟨x, devm1⟩, hp1, hp2⟩
+    rcases of_bind_eq_ok hp2 with ⟨⟨xs, devm2⟩, hp3, hp4⟩
+    injection hp4 with eq
+    injection eq with eq1 eq2
+    subst eq2
+    have h1 := Devm.pop_getBal_eq hp1 a
+    have h2 := ih hp3
+    rw [h2, h1]
+
 def Rinst.Inv {ξ : Type} (f : Devm → ξ) (r : Rinst) : Prop :=
   ∀ {pc sevm pre post}, Rinst.run ⟨pc, sevm, pre⟩ r = (.ok post) → f pre = f post
 
@@ -6822,4 +6841,131 @@ lemma Rinst.inv_bal {r} : Rinst.Inv Devm.getBal r := by
           injection run3 with h_post
           rw [← h_post]
           rfl
-  all_goals sorry
+  case kec =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply funext; intro a; apply Eq.symm
+    refine getBal_eq_of_bind h Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getBal_eq hp a}
+    intro ⟨x, devm1⟩ hp run; refine getBal_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_getBal_eq hp2 a}
+    intro ⟨y, devm2⟩ hp2 run;
+    refine getBal_eq_of_bind run id ?_ ?_
+    {intro devm3 hc; exact chargeGas_getBal_eq hc a}
+    intro devm3 hc run; exact Devm.push_getBal_eq run a
+  case calldatacopy =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply funext; intro a; apply Eq.symm
+    refine getBal_eq_of_bind h Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getBal_eq hp a}
+    intro ⟨x, devm1⟩ hp run; refine getBal_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨y, devm2⟩ hp; exact Devm.popToNat_getBal_eq hp a}
+    intro ⟨y, devm2⟩ hp run; refine getBal_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨z, devm3⟩ hp; exact Devm.popToNat_getBal_eq hp a}
+    intro ⟨z, devm3⟩ hp run; refine getBal_eq_of_bind run id ?_ ?_
+    {intro devm4 hc; exact chargeGas_getBal_eq hc a}
+    intro devm4 hc run; injection run with eq; subst eq; rfl
+  case codecopy =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply funext; intro a; apply Eq.symm
+    refine getBal_eq_of_bind h Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getBal_eq hp a}
+    intro ⟨x, devm1⟩ hp run; refine getBal_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨y, devm2⟩ hp; exact Devm.popToNat_getBal_eq hp a}
+    intro ⟨y, devm2⟩ hp run; refine getBal_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨z, devm3⟩ hp; exact Devm.popToNat_getBal_eq hp a}
+    intro ⟨z, devm3⟩ hp run; refine getBal_eq_of_bind run id ?_ ?_
+    {intro devm4 hc; exact chargeGas_getBal_eq hc a}
+    intro devm4 hc run; injection run with eq; subst eq; rfl
+  case extcodecopy =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply funext; intro a; apply Eq.symm
+    refine getBal_eq_of_bind h Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.popToAdr_getBal_eq hp a}
+    intro ⟨x, devm1⟩ hp run; refine getBal_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨y, devm2⟩ hp; exact Devm.popToNat_getBal_eq hp a}
+    intro ⟨y, devm2⟩ hp run; refine getBal_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨z, devm3⟩ hp; exact Devm.popToNat_getBal_eq hp a}
+    intro ⟨z, devm3⟩ hp run; refine getBal_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨w, devm4⟩ hp; exact Devm.popToNat_getBal_eq hp a}
+    intro ⟨w, devm4⟩ hp run; split at run
+    · refine getBal_eq_of_bind run id ?_ ?_
+      {intro devm5 hc; exact chargeGas_getBal_eq hc a}
+      intro devm5 hc run; injection run with eq; subst eq; rfl
+    · refine getBal_eq_of_bind run id ?_ ?_
+      {intro devm5 hc; exact chargeGas_getBal_eq hc a}
+      intro devm5 hc run; injection run with eq; subst eq; rfl
+  case retdatacopy =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply funext; intro a; apply Eq.symm
+    refine getBal_eq_of_bind h Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getBal_eq hp a}
+    intro ⟨x, devm1⟩ hp run; refine getBal_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨y, devm2⟩ hp; exact Devm.popToNat_getBal_eq hp a}
+    intro ⟨y, devm2⟩ hp run; refine getBal_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨z, devm3⟩ hp; exact Devm.popToNat_getBal_eq hp a}
+    intro ⟨z, devm3⟩ hp run; refine getBal_eq_of_bind run id ?_ ?_
+    {intro devm4 hc; exact chargeGas_getBal_eq hc a}
+    intro devm4 hc run; split at run
+    · cases run
+    · injection run with eq; subst eq; rfl
+  case extcodehash =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply funext; intro a; apply Eq.symm
+    refine getBal_eq_of_bind h Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.popToAdr_getBal_eq hp a}
+    intro ⟨x, devm1⟩ hp run; split at run
+    · refine getBal_eq_of_bind run id ?_ ?_
+      {intro devm2 hc; exact chargeGas_getBal_eq hc a}
+      intro devm2 hc run; exact Devm.push_getBal_eq run a
+    · refine getBal_eq_of_bind run id ?_ ?_
+      {intro devm2 hc; exact chargeGas_getBal_eq hc a}
+      intro devm2 hc run; exact Devm.push_getBal_eq run a
+  case blockhash =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply funext; intro a; apply Eq.symm
+    refine getBal_eq_of_bind h Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a}
+    intro ⟨x, devm1⟩ hp run; refine getBal_eq_of_bind run id ?_ ?_
+    {intro devm2 hc; exact chargeGas_getBal_eq hc a}
+    intro devm2 hc run; exact Devm.push_getBal_eq run a
+  case sload =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply funext; intro a; apply Eq.symm
+    refine getBal_eq_of_bind h Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a}
+    intro ⟨x, devm1⟩ hp run; split at run
+    · refine getBal_eq_of_bind run id ?_ ?_
+      {intro devm2 hc; exact chargeGas_getBal_eq hc a}
+      intro devm2 hc run; exact Devm.push_getBal_eq run a
+    · refine getBal_eq_of_bind run id ?_ ?_
+      {intro devm2 hc; exact chargeGas_getBal_eq hc a}
+      intro devm2 hc run; exact Devm.push_getBal_eq run a
+  case sstore => sorry
+  case mcopy =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply funext; intro a; apply Eq.symm
+    refine getBal_eq_of_bind h Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getBal_eq hp a}
+    intro ⟨x, devm1⟩ hp run; refine getBal_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨y, devm2⟩ hp; exact Devm.popToNat_getBal_eq hp a}
+    intro ⟨y, devm2⟩ hp run; refine getBal_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨z, devm3⟩ hp; exact Devm.popToNat_getBal_eq hp a}
+    intro ⟨z, devm3⟩ hp run; refine getBal_eq_of_bind run id ?_ ?_
+    {intro devm4 hc; exact chargeGas_getBal_eq hc a}
+    intro devm4 hc run; injection run with eq; subst eq; rfl
+  case log =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply funext; intro a; apply Eq.symm
+    refine getBal_eq_of_bind h Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getBal_eq hp a}
+    intro ⟨x, devm1⟩ hp run; refine getBal_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨y, devm2⟩ hp; exact Devm.popToNat_getBal_eq hp a}
+    intro ⟨y, devm2⟩ hp run; refine getBal_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨z, devm3⟩ hp; exact Devm.popN_getBal_eq hp a}
+    intro ⟨z, devm3⟩ hp run; refine getBal_eq_of_bind run id ?_ ?_
+    {intro devm4 hc; exact chargeGas_getBal_eq hc a}
+    intro devm4 hc run
+    rcases of_bind_eq_ok run with ⟨_, _, run'⟩
+    injection run' with rw
+    rw [← rw]
+    rfl
