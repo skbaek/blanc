@@ -6615,4 +6615,23 @@ def Rinst.Inv {ξ : Type} (f : Devm → ξ) (r : Rinst) : Prop :=
 lemma Rinst.inv_bal {r} : Rinst.Inv Devm.getBal r := by
   intros pc sevm pre post; cases r
   case add => exact applyBinary_getBal_eq
+  case mul => exact applyBinary_getBal_eq
+  case sub => exact applyBinary_getBal_eq
+  case div => exact applyBinary_getBal_eq
+  case sdiv => exact applyBinary_getBal_eq
+  case mod => exact applyBinary_getBal_eq
+  case smod => exact applyBinary_getBal_eq
+  case signextend => exact applyBinary_getBal_eq
+  case lt => exact applyBinary_getBal_eq
+  case gt => exact applyBinary_getBal_eq
+  case slt => exact applyBinary_getBal_eq
+  case sgt => exact applyBinary_getBal_eq
+  case eq => exact applyBinary_getBal_eq
+  case and => exact applyBinary_getBal_eq
+  case or => exact applyBinary_getBal_eq
+  case xor => exact applyBinary_getBal_eq
+  case byte => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyBinary_getBal_eq h
+  case shr => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyBinary_getBal_eq h
+  case shl => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyBinary_getBal_eq h
+  case sar => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyBinary_getBal_eq h
   all_goals sorry
