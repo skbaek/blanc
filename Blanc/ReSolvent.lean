@@ -294,9 +294,85 @@ lemma cons_pref_cons_inv {α} {x : α} {xs ys : List α} (h : (x :: xs) <<+ (x :
   injection h with _ h_tail
   exact ⟨zs, h_tail⟩
 
+open Lean.Elab.Tactic
+open Lean.Parser.Tactic
+open Lean.Elab.Term
+open Lean
+open Qq
+open Ninst
+
+def Line.take : Nat → Q(Line) → TacticM Q(Line)
+| 0, _ => pure q([] : Line)
+| n + 1, l => do
+  let l' : Q(Line) ← Meta.whnf l
+  match l' with
+  | ~q([]) => failure
+  | ~q($i :: $is) =>
+    let x ← Line.take n is
+    pure q($i :: $x)
+  | _ => failure
+
+elab "lexen" e:num : tactic =>
+  withMainContext do
+    let n := Lean.TSyntax.getNat e
+    let g : Q(Prop) ← getMainTarget
+    match g with
+    | ~q(Line.Run _ $s $l _ → $c) =>
+      let ss ← findSubscript s
+      let x ← Line.take n l
+      Lean.Expr.apply (Lean.mkApp2 q(@run_append_elim) c x)
+      Strings.intro ["s" ++ ss, "h" ++ ss]
+    | _ => throwError "unexpected goal for lexen"
+
+elab "lexec" e:term : tactic =>
+  withMainContext do
+    let x ← elabTermForApply e
+    let g : Q(Prop) ← getMainTarget
+    match g with
+    | ~q(Line.Run _ $s _ _ → $c) =>
+      let ss ← findSubscript s
+      Lean.Expr.apply (Lean.mkApp2 q(@run_append_elim) c x)
+      Strings.intro ["s" ++ ss, "h" ++ ss]
+    | _ => throwError "unexpected goal for lexec"
+
+lemma cdl_append_elim {e : Sevm} {s r : Devm} {n l} (φ : Prop)
+    (h : ∀ x, Line.Run e s (pushB256 x :: l) r → φ) :
+    Line.Run e s (cdl n ++ l) r → φ := sorry
+
+lemma kec_cons_elim {e : Sevm} {s s' : Devm} {l} (φ : Prop)
+    (h : ∀ x, Line.Run e s (pop :: pop :: pushB256 x :: l) s' → φ) :
+    Line.Run e s (kec :: l) s' → φ := sorry
+
+lemma of_check_address {e : Sevm} {s s' : Devm} {x xs} :
+    (x :: xs <<+ s.stack) →
+    Line.Run e s checkAddress s' →
+    ∃ y, (y :: xs <<+ s'.stack) ∧ (y = 0 ↔ ¬ ValidAdr x) := sorry
+
+lemma prefix_of_push2 {e : Sevm} {s₁ s₂ : Devm} {wad : B256} :
+    Line.Run e s₁ [pushB256 wad, pushB256 64, pushB256 0] s₂ →
+    [0, 64, wad] <<+ s₂.stack := sorry
+
+lemma prefix_of_push3 {e : Sevm} {s₂ s₃ : Devm} {hash wad : B256} :
+    [0, 64, wad] <<+ s₂.stack →
+    Line.Run e s₂ [pop, pop, pushB256 hash, dup 0] s₃ →
+    [hash, hash, wad] <<+ s₃.stack := sorry
+
 lemma of_prepApprove {sevm : Sevm} {s s' : Devm} :
     Line.Run sevm s prepApprove s' →
-    ∃ vx x y, ([vx, x, y] <<+ s'.stack) ∧ (vx = 0 ↔ ¬ ValidAdr x) := sorry
+    ∃ vx x y, ([vx, x, y] <<+ s'.stack) ∧ (vx = 0 ↔ ¬ ValidAdr x) := by
+  lexen 7
+  have hp₁ : [] <<+ s₁.stack := nil_pref
+  apply cdl_append_elim (∃ vx x y, ([vx, x, y] <<+ s'.stack) ∧ (vx = 0 ↔ ¬ ValidAdr x))
+  intro wad
+  lexen 3
+  have hp₂ : [0, 64, wad] <<+ s₂.stack := prefix_of_push2 h₂
+  apply kec_cons_elim (∃ vx x y, ([vx, x, y] <<+ s'.stack) ∧ (vx = 0 ↔ ¬ ValidAdr x))
+  intro hash
+  lexen 4
+  have hp₃ : [hash, hash, wad] <<+ s₃.stack := prefix_of_push3 hp₂ h₃
+  intro h
+  rcases of_check_address hp₃ h with ⟨vx, h_vx, h_iff⟩
+  refine ⟨vx, hash, wad, h_vx, h_iff⟩
 
 lemma sstore_inv_stor_rest {x xs} {sevm : Sevm} {s s' : Devm} :
   ¬ ValidAdr x →
