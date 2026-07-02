@@ -280,9 +280,92 @@ lemma name_inv_solvent {sevm : Sevm} {s r : Devm}
 
 lemma approve_inv_bal : Func.Inv Devm.getBal Devm.getBal approve := by prog_inv
 
+def ValidAdr (w : B256) : Prop := ∃ a : Adr, a.toB256 = w
+
+def validAdr_toB256 (a : Adr) : ValidAdr a.toB256 := ⟨a, rfl⟩
+
+lemma toB256_toAdr {w : B256} :
+    ValidAdr w → w.toAdr.toB256 = w := by
+  intro h; rcases h with ⟨a, ha⟩;
+  rw [← ha, toAdr_toB256]
+
+lemma cons_pref_cons_inv {α} {x : α} {xs ys : List α} (h : (x :: xs) <<+ (x :: ys)) : xs <<+ ys := by
+  rcases h with ⟨zs, h⟩
+  injection h with _ h_tail
+  exact ⟨zs, h_tail⟩
+
+lemma of_prepApprove {sevm : Sevm} {s s' : Devm} :
+    Line.Run sevm s prepApprove s' →
+    ∃ vx x y, ([vx, x, y] <<+ s'.stack) ∧ (vx = 0 ↔ ¬ ValidAdr x) := sorry
+
+lemma sstore_inv_stor_rest {x xs} {sevm : Sevm} {s s' : Devm} :
+  ¬ ValidAdr x →
+  (x :: xs <<+ s.stack) →
+  Ninst.Run sevm s .sstore s' →
+  (s.getStor sevm.currentTarget).rest = (s'.getStor sevm.currentTarget).rest := sorry
+
+syntax "linv" : tactic
+macro_rules
+| `(tactic| linv) =>
+  `(tactic| first | apply Line.of_inv _ _ (by assumption); line_inv
+                  | apply Func.of_inv _ _ _ (by assumption); prog_inv)
+
+lemma of_run_next {fs sevm devm i f devm''}
+    (h : Func.Run fs sevm devm (Func.next i f) devm'') :
+    ∃ devm', Ninst.Run sevm devm i devm' ∧ Func.Run fs sevm devm' f devm'' := by
+  cases h with
+  | next h1 h2 => exact ⟨_, h1, h2⟩
+
 lemma approve_inv_wbal {sevm : Sevm} {s r : Devm}
     (run : Func.Run (weth.main :: weth.aux) sevm s approve r) :
-    (s.getStor sevm.currentTarget).rest = (r.getStor sevm.currentTarget).rest := sorry
+    (s.getStor sevm.currentTarget).rest = (r.getStor sevm.currentTarget).rest := by
+  rcases of_run_prepend (arg 0 ++ checkNonAddress) _ run
+    with ⟨s0, h_s0, h_run'⟩; clear run
+  have h_s0_stor_eq : s.getStor = s0.getStor := by linv
+  have h_s0_stor : s.getStor sevm.currentTarget = s0.getStor sevm.currentTarget :=
+    congr_fun h_s0_stor_eq sevm.currentTarget
+  rw [h_s0_stor]; clear h_s0_stor h_s0_stor_eq h_s0 s
+  rcases of_run_branch_rev h_run' with ⟨s1, h_pop, h_run⟩; clear h_run'
+  have h_s1_stor : s0.getStor sevm.currentTarget = s1.getStor sevm.currentTarget :=
+    (Devm.PopBurn.getStor h_pop sevm.currentTarget).symm
+  rw [h_s1_stor]; clear h_s1_stor h_pop s0
+  rcases of_run_prepend prepApprove _ h_run
+    with ⟨s2, h_s2, h_run'⟩; clear h_run
+  rcases of_prepApprove h_s2
+    with ⟨hash_valid, hash, wad, h_s2_stk, h_iff⟩
+  have h_s2_stor_eq : s1.getStor = s2.getStor := by linv
+  have h_s2_stor : s1.getStor sevm.currentTarget = s2.getStor sevm.currentTarget :=
+    congr_fun h_s2_stor_eq sevm.currentTarget
+  rw [h_s2_stor]; clear h_s2_stor h_s2_stor_eq h_s2 s1
+  rcases of_run_branch_rev h_run' with ⟨s3, h_pop, h_run⟩; clear h_run'
+  have h_hv_eq_zero : hash_valid = 0 := by
+    have h_pop_stk := h_pop.stack
+    simp [Stack.Pop, Split] at h_pop_stk
+    have h_s2_pref : [0] <<+ s2.stack := by
+      rw [h_pop_stk]
+      exact pref_append _ _
+    exact pref_head_unique h_s2_stk h_s2_pref
+  rw [h_hv_eq_zero] at h_s2_stk
+  simp [h_hv_eq_zero] at h_iff
+  clear h_hv_eq_zero hash_valid
+  have h_s3_stk : [hash, wad] <<+ s3.stack := by
+    have h_pop_stk := h_pop.stack
+    simp [Stack.Pop, Split] at h_pop_stk
+    rw [h_pop_stk] at h_s2_stk
+    exact cons_pref_cons_inv h_s2_stk
+  clear h_s2_stk
+  have h_s3_stor : s2.getStor sevm.currentTarget = s3.getStor sevm.currentTarget :=
+    (Devm.PopBurn.getStor h_pop sevm.currentTarget).symm
+  rw [h_s3_stor]; clear h_s3_stor h_pop s2
+  rcases of_run_next h_run with ⟨s4, h_sstore, h_run'⟩; clear h_run
+  have hh := sstore_inv_stor_rest h_iff h_s3_stk h_sstore
+  have h_r_stor_eq : s4.getStor = r.getStor := by
+    apply Func.of_inv Devm.getStor Devm.getStor _ h_run'
+    prog_inv
+  have h_r_stor : s4.getStor sevm.currentTarget = r.getStor sevm.currentTarget :=
+    congr_fun h_r_stor_eq sevm.currentTarget
+  rw [← h_r_stor]
+  apply hh
 
 lemma result_solvent_of_state_solvent {sevm : Sevm} {s r : Devm}
     (h_wbsum : (s.getStor sevm.currentTarget).rest = (r.getStor sevm.currentTarget).rest)
