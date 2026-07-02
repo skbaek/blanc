@@ -3428,6 +3428,90 @@ lemma applyTernary_getBal_eq {f : B256 → B256 → B256 → B256} {cost devm de
   intro ⟨z, devm3⟩ hp3 run; exact pushItem_getBal_eq run a
 
 
+def Devm.getStor (devm : Devm) (adr : Adr) : Stor :=
+  (devm.getAcct adr).stor
+
+lemma addAccessedAddress_getStor {devm : Devm} {adr : Adr} : (addAccessedAddress devm adr).getStor = devm.getStor := rfl
+
+lemma addAccessedStorageKey_getStor {devm : Devm} {adr : Adr} {key : B256} : (addAccessedStorageKey devm adr key).getStor = devm.getStor := rfl
+
+lemma getStor_eq_of_bind {α ε} {ma : Except ε α} {f : α → Except ε Devm}
+    {devm devm' : Devm}
+    (run : (ma >>= f) = .ok devm')
+    (getDevm : α → Devm)
+    (h_first : ∀ v, ma = .ok v → devm.getStor = (getDevm v).getStor)
+    (h_rest : ∀ v, ma = .ok v → f v = .ok devm' → (getDevm v).getStor = devm'.getStor) :
+    devm.getStor = devm'.getStor := by
+  rcases of_bind_eq_ok run with ⟨v, hm, hf⟩
+  rw [h_first v hm, h_rest v hm hf]
+
+lemma Devm.pop_getStor_eq {x devm devm'} (h : Devm.pop devm = .ok ⟨x, devm'⟩) : devm.getStor = devm'.getStor := by
+  simp only [Devm.pop] at h
+  split at h <;> try contradiction
+  cases h; rfl
+
+lemma chargeGas_getStor_eq {cost devm devm'} (h : chargeGas cost devm = .ok devm') : devm.getStor = devm'.getStor := by
+  simp only [chargeGas] at h
+  split at h <;> try contradiction
+  cases h; rfl
+
+lemma Devm.push_getStor_eq {v devm devm'} (h : Devm.push v devm = .ok devm') : devm.getStor = devm'.getStor := by
+  simp only [Devm.push, bind, Except.bind, Except.assert] at h
+  split at h <;> try contradiction
+  cases h; rfl
+
+lemma Devm.popToAdr_getStor_eq {devm devm' adr} (h : Devm.popToAdr devm = .ok ⟨adr, devm'⟩) : devm.getStor = devm'.getStor := by
+  dsimp [Devm.popToAdr, Functor.map, Except.map] at h
+  rcases hp : devm.pop with _ | ⟨x, devm1⟩
+  · simp [hp] at h
+  · simp [hp] at h
+    rcases h with ⟨_, rfl⟩
+    exact Devm.pop_getStor_eq hp
+
+lemma Devm.popToNat_getStor_eq {devm devm' n} (h : Devm.popToNat devm = .ok ⟨n, devm'⟩) : devm.getStor = devm'.getStor := by
+  dsimp [Devm.popToNat, Functor.map, Except.map] at h
+  rcases hp : devm.pop with _ | ⟨x, devm1⟩
+  · simp [hp] at h
+  · simp [hp] at h
+    rcases h with ⟨_, rfl⟩
+    exact Devm.pop_getStor_eq hp
+
+lemma pushItem_getStor_eq {x c devm devm'} (h : pushItem x c devm = .ok devm') : devm.getStor = devm'.getStor := by
+  simp only [pushItem] at h
+  refine getStor_eq_of_bind h id ?_ ?_
+  {intro devm1 hc; exact chargeGas_getStor_eq hc}
+  intro devm1 hc run; exact Devm.push_getStor_eq run
+
+lemma applyBinary_getStor_eq {f : B256 → B256 → B256} {cost devm devm'}
+    (h : applyBinary f cost devm = .ok devm') :
+    devm.getStor = devm'.getStor := by
+  simp only [applyBinary] at h
+  refine getStor_eq_of_bind h Prod.snd ?_ ?_
+  {intro ⟨x, devm1⟩ hp; exact Devm.pop_getStor_eq hp}
+  intro ⟨x, devm1⟩ hp run; refine getStor_eq_of_bind run Prod.snd ?_ ?_
+  {intro ⟨y, devm2⟩ hp2; exact Devm.pop_getStor_eq hp2}
+  intro ⟨y, devm2⟩ hp2 run; exact pushItem_getStor_eq run
+
+lemma applyUnary_getStor_eq {f : B256 → B256} {cost devm devm'}
+    (h : applyUnary f cost devm = .ok devm') :
+    devm.getStor = devm'.getStor := by
+  simp only [applyUnary] at h
+  refine getStor_eq_of_bind h Prod.snd ?_ ?_
+  {intro ⟨x, devm1⟩ hp; exact Devm.pop_getStor_eq hp}
+  intro ⟨x, devm1⟩ hp run; exact pushItem_getStor_eq run
+
+lemma applyTernary_getStor_eq {f : B256 → B256 → B256 → B256} {cost devm devm'}
+    (h : applyTernary f cost devm = .ok devm') :
+    devm.getStor = devm'.getStor := by
+  simp only [applyTernary] at h
+  refine getStor_eq_of_bind h Prod.snd ?_ ?_
+  {intro ⟨x, devm1⟩ hp; exact Devm.pop_getStor_eq hp}
+  intro ⟨x, devm1⟩ hp run; refine getStor_eq_of_bind run Prod.snd ?_ ?_
+  {intro ⟨y, devm2⟩ hp2; exact Devm.pop_getStor_eq hp2}
+  intro ⟨y, devm2⟩ hp2 run; refine getStor_eq_of_bind run Prod.snd ?_ ?_
+  {intro ⟨z, devm3⟩ hp3; exact Devm.pop_getStor_eq hp3}
+  intro ⟨z, devm3⟩ hp3 run; exact pushItem_getStor_eq run
+
 lemma applyTernary_getCode_eq {f : B256 → B256 → B256 → B256} {cost devm devm'}
     (h : applyTernary f cost devm = .ok devm') (a : Adr) :
     devm'.getCode a = devm.getCode a := by
@@ -7042,3 +7126,396 @@ lemma Rinst.inv_bal {r} : Rinst.Inv Devm.getBal r := by
     injection run' with rw
     rw [← rw]
     rfl
+
+
+lemma memRead_getStor_eq {x n : Nat} {devm devm' : Devm} {value : B8L} (h : devm.memRead x n = ⟨value, devm'⟩) : devm'.getStor = devm.getStor := by
+  simp only [Devm.memRead] at h
+  rcases h_read : devm.memory.read x n with ⟨val, mem⟩
+  rw [h_read] at h
+  injection h with _ h_devm
+  rw [← h_devm]
+  rfl
+
+lemma memWrite_getStor_eq {idx : Nat} {val : B8L} {devm : Devm} : (devm.memWrite idx val).getStor = devm.getStor := rfl
+
+lemma Devm.popN_getStor_eq {n : Nat} {devm devm' : Devm} {l : List B256}
+    (hp : devm.popN n = Except.ok (l, devm')) :
+    devm'.getStor = devm.getStor := by
+  induction n generalizing devm devm' l with
+  | zero =>
+    simp [Devm.popN] at hp
+    rcases hp with ⟨_, eq⟩
+    rw [eq]
+  | succ n ih =>
+    simp [Devm.popN] at hp
+    rcases of_bind_eq_ok hp with ⟨⟨x, devm1⟩, hp1, hp2⟩
+    rcases of_bind_eq_ok hp2 with ⟨⟨xs, devm2⟩, hp3, hp4⟩
+    injection hp4 with eq
+    injection eq with eq1 eq2
+    subst eq2
+    have h1 := Devm.pop_getStor_eq hp1
+    have h2 := ih hp3
+    rw [h2, h1]
+
+lemma Rinst.inv_stor {r} (h_not_sstore : r ≠ Rinst.sstore) : Rinst.Inv Devm.getStor r := by
+  intros pc sevm pre post; cases r
+  case add => exact applyBinary_getStor_eq
+  case mul => exact applyBinary_getStor_eq
+  case sub => exact applyBinary_getStor_eq
+  case div => exact applyBinary_getStor_eq
+  case sdiv => exact applyBinary_getStor_eq
+  case mod => exact applyBinary_getStor_eq
+  case smod => exact applyBinary_getStor_eq
+  case signextend => exact applyBinary_getStor_eq
+  case lt => exact applyBinary_getStor_eq
+  case gt => exact applyBinary_getStor_eq
+  case slt => exact applyBinary_getStor_eq
+  case sgt => exact applyBinary_getStor_eq
+  case eq => exact applyBinary_getStor_eq
+  case and => exact applyBinary_getStor_eq
+  case or => exact applyBinary_getStor_eq
+  case xor => exact applyBinary_getStor_eq
+  case byte => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyBinary_getStor_eq h
+  case shr => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyBinary_getStor_eq h
+  case shl => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyBinary_getStor_eq h
+  case sar => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyBinary_getStor_eq h
+  case addmod => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyTernary_getStor_eq h
+  case mulmod => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyTernary_getStor_eq h
+  case iszero => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyUnary_getStor_eq h
+  case not => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyUnary_getStor_eq h
+  case blobhash => intro h; change applyUnary (fun x => sevm.tenvStat.blobVersionedHashes.getD x.toNat 0) gHashopcode pre = Except.ok post at h; exact applyUnary_getStor_eq h
+  case balance =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    refine getStor_eq_of_bind h Prod.snd ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.pop_getStor_eq hp
+    · intro ⟨x, devm1⟩ hp run; split at run
+      · refine getStor_eq_of_bind run id ?_ ?_
+        · intro devm2 hc; exact chargeGas_getStor_eq hc
+        · intro devm2 hc run2; exact Devm.push_getStor_eq run2
+      · refine getStor_eq_of_bind run id ?_ ?_
+        · intro devm2 hc; exact (addAccessedAddress_getStor.symm).trans (chargeGas_getStor_eq hc)
+        · intro devm2 hc run2; exact Devm.push_getStor_eq run2
+  case extcodesize =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    refine getStor_eq_of_bind h Prod.snd ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToAdr_getStor_eq hp
+    · intro ⟨x, devm1⟩ hp run; split at run
+      · refine getStor_eq_of_bind run id ?_ ?_
+        · intro devm2 hc; exact chargeGas_getStor_eq hc
+        · intro devm2 hc run2; exact Devm.push_getStor_eq run2
+      · refine getStor_eq_of_bind run id ?_ ?_
+        · intro devm2 hc; exact (addAccessedAddress_getStor.symm).trans (chargeGas_getStor_eq hc)
+        · intro devm2 hc run2; exact Devm.push_getStor_eq run2
+  case mload =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    refine getStor_eq_of_bind h Prod.snd ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getStor_eq hp
+    · intro ⟨x, devm1⟩ hp run; refine getStor_eq_of_bind run id ?_ ?_
+      · intro devm2 hc; exact chargeGas_getStor_eq hc
+      · intro devm2 hc run2
+        rcases h_read : devm2.memRead x 32 with ⟨value, devm3⟩
+        rw [h_read] at run2
+        change devm2.getStor = post.getStor
+        rw [← memRead_getStor_eq h_read]
+        exact Devm.push_getStor_eq run2
+  case mstore =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    refine getStor_eq_of_bind h Prod.snd ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getStor_eq hp
+    · intro ⟨x, devm1⟩ hp run; refine getStor_eq_of_bind run Prod.snd ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.pop_getStor_eq hp2
+      · intro ⟨y, devm2⟩ hp2 run2; refine getStor_eq_of_bind run2 id ?_ ?_
+        · intro devm3 hc; exact chargeGas_getStor_eq hc
+        · intro devm3 hc run3
+          injection run3 with h_post
+          rw [← h_post]
+          exact memWrite_getStor_eq.symm
+  case mstore8 =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    refine getStor_eq_of_bind h Prod.snd ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getStor_eq hp
+    · intro ⟨x, devm1⟩ hp run; refine getStor_eq_of_bind run Prod.snd ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.pop_getStor_eq hp2
+      · intro ⟨y, devm2⟩ hp2 run2; refine getStor_eq_of_bind run2 id ?_ ?_
+        · intro devm3 hc; exact chargeGas_getStor_eq hc
+        · intro devm3 hc run3
+          injection run3 with h_post
+          rw [← h_post]
+          exact memWrite_getStor_eq.symm
+  case address | origin | caller | callvalue | calldatasize | codesize | gasprice | retdatasize | coinbase | timestamp | number | prevrandao | gaslimit | chainid | selfbalance | basefee | blobbasefee | pc | msize =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    exact pushItem_getStor_eq h
+  case pop =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    refine getStor_eq_of_bind h id ?_ ?_
+    · intro devm1 hp; rcases of_bind_eq_ok hp with ⟨⟨x, devm2⟩, hp1, hp2⟩; injection hp2 with h_eq; rw [← h_eq]; exact Devm.pop_getStor_eq hp1
+    · intro devm1 hp run; exact chargeGas_getStor_eq run
+  case tload =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    refine getStor_eq_of_bind h Prod.snd ?_ ?_
+    · intro ⟨key, devm1⟩ hp; exact Devm.pop_getStor_eq hp
+    · intro ⟨key, devm1⟩ hp run; exact pushItem_getStor_eq run
+  case calldataload =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    refine getStor_eq_of_bind h Prod.snd ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.pop_getStor_eq hp
+    · intro ⟨x, devm1⟩ hp run; refine getStor_eq_of_bind run id ?_ ?_
+      · intro devm2 hc; exact chargeGas_getStor_eq hc
+      · intro devm2 hc run2; exact Devm.push_getStor_eq run2
+  case gas =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    refine getStor_eq_of_bind h id ?_ ?_
+    · intro devm1 hc; exact chargeGas_getStor_eq hc
+    · intro devm1 hc run; exact Devm.push_getStor_eq run
+  case dup =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    refine getStor_eq_of_bind h id ?_ ?_
+    · intro devm1 hc; exact chargeGas_getStor_eq hc
+    · intro devm1 hc run; split at run
+      · contradiction
+      · exact Devm.push_getStor_eq run
+  case swap =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    refine getStor_eq_of_bind h id ?_ ?_
+    · intro devm1 hc; exact chargeGas_getStor_eq hc
+    · intro devm1 hc run; split at run
+      · contradiction
+      · injection run with h_eq; rw [← h_eq]; rfl
+  case exp =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    refine getStor_eq_of_bind h Prod.snd ?_ ?_
+    · intro ⟨base, devm1⟩ hp; exact Devm.pop_getStor_eq hp
+    · intro ⟨base, devm1⟩ hp run; refine getStor_eq_of_bind run Prod.snd ?_ ?_
+      · intro ⟨exponent, devm2⟩ hp2; exact Devm.pop_getStor_eq hp2
+      · intro ⟨exponent, devm2⟩ hp2 run2; refine getStor_eq_of_bind run2 id ?_ ?_
+        · intro devm3 hc; exact chargeGas_getStor_eq hc
+        · intro devm3 hc run3; exact Devm.push_getStor_eq run3
+  case tstore =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    refine getStor_eq_of_bind h Prod.snd ?_ ?_
+    · intro ⟨key, devm1⟩ hp; exact Devm.pop_getStor_eq hp
+    · intro ⟨key, devm1⟩ hp run; refine getStor_eq_of_bind run Prod.snd ?_ ?_
+      · intro ⟨new_value, devm2⟩ hp2; exact Devm.pop_getStor_eq hp2
+      · intro ⟨new_value, devm2⟩ hp2 run2; refine getStor_eq_of_bind run2 id ?_ ?_
+        · intro devm3 hc; exact chargeGas_getStor_eq hc
+        · intro devm3 hc run3
+          dsimp [assertDynamic, Except.assert] at run3
+          split at run3 <;> try contradiction
+          injection run3 with h_post
+          rw [← h_post]
+          rfl
+  case kec =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    refine getStor_eq_of_bind h Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getStor_eq hp}
+    intro ⟨x, devm1⟩ hp run; refine getStor_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_getStor_eq hp2}
+    intro ⟨y, devm2⟩ hp2 run;
+    refine getStor_eq_of_bind run id ?_ ?_
+    {intro devm3 hc; exact chargeGas_getStor_eq hc}
+    intro devm3 hc run
+    rcases h_read : devm3.memRead (x, devm1).1 (y, devm2).1 with ⟨value, devm4⟩
+    rw [h_read] at run
+    change devm3.getStor = post.getStor
+    rw [← memRead_getStor_eq h_read]
+    exact Devm.push_getStor_eq run
+  case calldatacopy =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    refine getStor_eq_of_bind h Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getStor_eq hp}
+    intro ⟨x, devm1⟩ hp run; refine getStor_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨y, devm2⟩ hp; exact Devm.popToNat_getStor_eq hp}
+    intro ⟨y, devm2⟩ hp run; refine getStor_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨z, devm3⟩ hp; exact Devm.popToNat_getStor_eq hp}
+    intro ⟨z, devm3⟩ hp run; refine getStor_eq_of_bind run id ?_ ?_
+    {intro devm4 hc; exact chargeGas_getStor_eq hc}
+    intro devm4 hc run; injection run with eq; subst eq; rfl
+  case codecopy =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    refine getStor_eq_of_bind h Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getStor_eq hp}
+    intro ⟨x, devm1⟩ hp run; refine getStor_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨y, devm2⟩ hp; exact Devm.popToNat_getStor_eq hp}
+    intro ⟨y, devm2⟩ hp run; refine getStor_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨z, devm3⟩ hp; exact Devm.popToNat_getStor_eq hp}
+    intro ⟨z, devm3⟩ hp run; refine getStor_eq_of_bind run id ?_ ?_
+    {intro devm4 hc; exact chargeGas_getStor_eq hc}
+    intro devm4 hc run; injection run with eq; subst eq; rfl
+  case extcodecopy =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    refine getStor_eq_of_bind h Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.popToAdr_getStor_eq hp}
+    intro ⟨x, devm1⟩ hp run; refine getStor_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨y, devm2⟩ hp; exact Devm.popToNat_getStor_eq hp}
+    intro ⟨y, devm2⟩ hp run; refine getStor_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨z, devm3⟩ hp; exact Devm.popToNat_getStor_eq hp}
+    intro ⟨z, devm3⟩ hp run; refine getStor_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨w, devm4⟩ hp; exact Devm.popToNat_getStor_eq hp}
+    intro ⟨w, devm4⟩ hp run; split at run
+    · refine getStor_eq_of_bind run id ?_ ?_
+      {intro devm5 hc; exact chargeGas_getStor_eq hc}
+      intro devm5 hc run; injection run with eq; subst eq; rfl
+    · refine getStor_eq_of_bind run id ?_ ?_
+      {intro devm5 hc; exact (addAccessedAddress_getStor.symm).trans (chargeGas_getStor_eq hc)}
+      intro devm5 hc run; injection run with eq; subst eq; rfl
+  case retdatacopy =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    refine getStor_eq_of_bind h Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getStor_eq hp}
+    intro ⟨x, devm1⟩ hp run; refine getStor_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨y, devm2⟩ hp; exact Devm.popToNat_getStor_eq hp}
+    intro ⟨y, devm2⟩ hp run; refine getStor_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨z, devm3⟩ hp; exact Devm.popToNat_getStor_eq hp}
+    intro ⟨z, devm3⟩ hp run; refine getStor_eq_of_bind run id ?_ ?_
+    {intro devm4 hc; exact chargeGas_getStor_eq hc}
+    intro devm4 hc run; split at run
+    · cases run
+    · injection run with eq; subst eq; rfl
+  case extcodehash =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    refine getStor_eq_of_bind h Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.popToAdr_getStor_eq hp}
+    intro ⟨x, devm1⟩ hp run; split at run
+    · refine getStor_eq_of_bind run id ?_ ?_
+      {intro devm2 hc; exact chargeGas_getStor_eq hc}
+      intro devm2 hc run; exact Devm.push_getStor_eq run
+    · refine getStor_eq_of_bind run id ?_ ?_
+      {intro devm2 hc; exact (addAccessedAddress_getStor.symm).trans (chargeGas_getStor_eq hc)}
+      intro devm2 hc run; exact Devm.push_getStor_eq run
+  case blockhash =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    refine getStor_eq_of_bind h Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.pop_getStor_eq hp}
+    intro ⟨x, devm1⟩ hp run; refine getStor_eq_of_bind run id ?_ ?_
+    {intro devm2 hc; exact chargeGas_getStor_eq hc}
+    intro devm2 hc run; exact Devm.push_getStor_eq run
+  case sload =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    refine getStor_eq_of_bind h Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.pop_getStor_eq hp}
+    intro ⟨x, devm1⟩ hp run; split at run
+    · refine getStor_eq_of_bind run id ?_ ?_
+      {intro devm2 hc; exact chargeGas_getStor_eq hc}
+      intro devm2 hc run; exact Devm.push_getStor_eq run
+    · refine getStor_eq_of_bind run id ?_ ?_
+      {intro devm2 hc; exact (addAccessedStorageKey_getStor.symm).trans (chargeGas_getStor_eq hc)}
+      intro devm2 hc run; exact Devm.push_getStor_eq run
+  case sstore =>
+    contradiction
+  case mcopy =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    refine getStor_eq_of_bind h Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getStor_eq hp}
+    intro ⟨x, devm1⟩ hp run; refine getStor_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨y, devm2⟩ hp; exact Devm.popToNat_getStor_eq hp}
+    intro ⟨y, devm2⟩ hp run; refine getStor_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨z, devm3⟩ hp; exact Devm.popToNat_getStor_eq hp}
+    intro ⟨z, devm3⟩ hp run; refine getStor_eq_of_bind run id ?_ ?_
+    {intro devm4 hc; exact chargeGas_getStor_eq hc}
+    intro devm4 hc run; injection run with eq; subst eq; rfl
+  case log =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    refine getStor_eq_of_bind h Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getStor_eq hp}
+    intro ⟨x, devm1⟩ hp run; refine getStor_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨y, devm2⟩ hp; exact Devm.popToNat_getStor_eq hp}
+    intro ⟨y, devm2⟩ hp run; refine getStor_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨z, devm3⟩ hp; exact (Devm.popN_getStor_eq hp).symm}
+    intro ⟨z, devm3⟩ hp run; refine getStor_eq_of_bind run id ?_ ?_
+    {intro devm4 hc; exact chargeGas_getStor_eq hc}
+    intro devm4 hc run
+    rcases of_bind_eq_ok run with ⟨_, _, run'⟩
+    injection run' with rw'
+    change devm4.getStor = post.getStor
+    rw [rw'.symm]
+    rfl
+
+class Rinst.Hinv {ξ : Type} (f : Devm → ξ) (o : Rinst) where (inv : Rinst.Inv f o)
+
+instance {ξ : Type} (f : Devm → ξ) (o : Rinst) [Rinst.Hinv f o] :
+    Ninst.Hinv f (Ninst.reg o) := ⟨by
+  intros e s s' h
+  rcases h with ⟨xl, h_filled, pc, run⟩
+  cases xl with
+  | some _ => cases run
+  | none =>
+    dsimp [Ninst.Run'] at run
+    exact Rinst.Hinv.inv run
+⟩
+
+instance {o : Rinst} : Rinst.Hinv Devm.getBal o := ⟨Rinst.inv_bal⟩
+
+syntax "show_hinv_stor" : tactic
+macro_rules
+  | `(tactic| show_hinv_stor) =>
+    `(tactic| exact ⟨Rinst.inv_stor (by intro; contradiction)⟩)
+
+instance : Rinst.Hinv Devm.getStor Rinst.add := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.mul := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.sub := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.div := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.sdiv := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.mod := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.smod := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.addmod := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.mulmod := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.exp := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.signextend := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.lt := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.gt := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.slt := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.sgt := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.eq := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.iszero := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.and := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.or := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.xor := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.not := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.byte := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.shr := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.shl := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.sar := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.kec := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.address := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.balance := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.origin := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.caller := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.callvalue := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.calldataload := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.calldatasize := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.calldatacopy := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.codesize := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.codecopy := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.gasprice := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.extcodesize := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.extcodecopy := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.retdatasize := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.retdatacopy := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.extcodehash := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.blockhash := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.coinbase := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.timestamp := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.number := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.prevrandao := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.gaslimit := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.chainid := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.selfbalance := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.basefee := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.blobhash := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.blobbasefee := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.pop := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.mload := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.mstore := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.mstore8 := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.sload := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.tload := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.tstore := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.mcopy := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.pc := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.msize := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.gas := by show_hinv_stor
+instance {n} : Rinst.Hinv Devm.getStor (Rinst.dup n) := by show_hinv_stor
+instance {n} : Rinst.Hinv Devm.getStor (Rinst.swap n) := by show_hinv_stor
+instance {n} : Rinst.Hinv Devm.getStor (Rinst.log n) := by show_hinv_stor
+
+

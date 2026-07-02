@@ -457,7 +457,7 @@ lemma result_solvent_of_state_solvent {e : Env} {s : Desc} {r : Result} :
 
 lemma approve_inv_bal : Func.Inv Desc.bal Result.bal approve := by prog_inv
 
-theorem approve_inv_solvent {e s r} (h : Func.Run c e s approve r)
+theorem approve_inv_solvent {c e s r} (h : Func.Run c e s approve r)
     (h' : s.Solvent e.cta e) : r.Solvent e.cta := by
   apply result_solvent_of_state_solvent (approve_inv_wbal h) _ h'
   rw [approve_inv_bal h]
