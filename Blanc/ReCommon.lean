@@ -6751,4 +6751,75 @@ lemma Rinst.inv_bal {r} : Rinst.Inv Devm.getBal r := by
           injection run3 with h_post
           rw [← h_post]
           exact memWrite_getBal_eq a
+  case address | origin | caller | callvalue | calldatasize | codesize | gasprice | retdatasize | coinbase | timestamp | number | prevrandao | gaslimit | chainid | selfbalance | basefee | blobbasefee | pc | msize =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply funext; intro a; apply Eq.symm
+    exact pushItem_getBal_eq h a
+  case pop =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply funext; intro a; apply Eq.symm
+    refine getBal_eq_of_bind h id ?_ ?_
+    · intro devm1 hp; rcases of_bind_eq_ok hp with ⟨⟨x, devm2⟩, hp1, hp2⟩; injection hp2 with h_eq; rw [← h_eq]; exact Devm.pop_getBal_eq hp1 a
+    · intro devm1 hp run; exact chargeGas_getBal_eq run a
+  case tload =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply funext; intro a; apply Eq.symm
+    refine getBal_eq_of_bind h Prod.snd ?_ ?_
+    · intro ⟨key, devm1⟩ hp; exact Devm.pop_getBal_eq hp a
+    · intro ⟨key, devm1⟩ hp run; exact pushItem_getBal_eq run a
+  case calldataload =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply funext; intro a; apply Eq.symm
+    refine getBal_eq_of_bind h Prod.snd ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a
+    · intro ⟨x, devm1⟩ hp run; refine getBal_eq_of_bind run id ?_ ?_
+      · intro devm2 hc; exact chargeGas_getBal_eq hc a
+      · intro devm2 hc run2; exact Devm.push_getBal_eq run2 a
+  case gas =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply funext; intro a; apply Eq.symm
+    refine getBal_eq_of_bind h id ?_ ?_
+    · intro devm1 hc; exact chargeGas_getBal_eq hc a
+    · intro devm1 hc run; exact Devm.push_getBal_eq run a
+  case dup =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply funext; intro a; apply Eq.symm
+    refine getBal_eq_of_bind h id ?_ ?_
+    · intro devm1 hc; exact chargeGas_getBal_eq hc a
+    · intro devm1 hc run; split at run
+      · contradiction
+      · exact Devm.push_getBal_eq run a
+  case swap =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply funext; intro a; apply Eq.symm
+    refine getBal_eq_of_bind h id ?_ ?_
+    · intro devm1 hc; exact chargeGas_getBal_eq hc a
+    · intro devm1 hc run; split at run
+      · contradiction
+      · injection run with h_eq; rw [← h_eq]; rfl
+  case exp =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply funext; intro a; apply Eq.symm
+    refine getBal_eq_of_bind h Prod.snd ?_ ?_
+    · intro ⟨base, devm1⟩ hp; exact Devm.pop_getBal_eq hp a
+    · intro ⟨base, devm1⟩ hp run; refine getBal_eq_of_bind run Prod.snd ?_ ?_
+      · intro ⟨exponent, devm2⟩ hp2; exact Devm.pop_getBal_eq hp2 a
+      · intro ⟨exponent, devm2⟩ hp2 run2; refine getBal_eq_of_bind run2 id ?_ ?_
+        · intro devm3 hc; exact chargeGas_getBal_eq hc a
+        · intro devm3 hc run3; exact Devm.push_getBal_eq run3 a
+  case tstore =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply funext; intro a; apply Eq.symm
+    refine getBal_eq_of_bind h Prod.snd ?_ ?_
+    · intro ⟨key, devm1⟩ hp; exact Devm.pop_getBal_eq hp a
+    · intro ⟨key, devm1⟩ hp run; refine getBal_eq_of_bind run Prod.snd ?_ ?_
+      · intro ⟨new_value, devm2⟩ hp2; exact Devm.pop_getBal_eq hp2 a
+      · intro ⟨new_value, devm2⟩ hp2 run2; refine getBal_eq_of_bind run2 id ?_ ?_
+        · intro devm3 hc; exact chargeGas_getBal_eq hc a
+        · intro devm3 hc run3
+          dsimp [assertDynamic, Except.assert] at run3
+          split at run3 <;> try contradiction
+          injection run3 with h_post
+          rw [← h_post]
+          rfl
   all_goals sorry
