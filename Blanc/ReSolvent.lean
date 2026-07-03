@@ -222,7 +222,7 @@ instance : Ninst.Hinv Devm.state (Ninst.reg Rinst.gt) := ⟨by
 instance : Linst.Hinv Devm.getBal Devm.getBal Linst.stop := by
   constructor; intros e s r h; injection h with h_eq; subst h_eq; rfl
 
-instance : Linst.Hinv Devm.getBal Devm.getBal Linst.ret := by constructor; sorry
+instance : Linst.Hinv Devm.getBal Devm.getBal Linst.ret := sorry
 
 instance : Linst.Hinv Devm.getBal Devm.getBal Linst.rev := by
   constructor; intros e s r h
@@ -235,7 +235,7 @@ instance : Linst.Hinv Devm.getBal Devm.getBal Linst.rev := by
 instance : Linst.Hinv Devm.getStor Devm.getStor Linst.stop := by
   constructor; intros e s r h; injection h with h_eq; subst h_eq; rfl
 
-instance : Linst.Hinv Devm.getStor Devm.getStor Linst.ret := by constructor; sorry
+instance : Linst.Hinv Devm.getStor Devm.getStor Linst.ret := sorry
 
 lemma deposit_inv_bal : Func.Inv Devm.getBal Devm.getBal deposit := by prog_inv
 
@@ -348,28 +348,22 @@ lemma of_check_address {e : Sevm} {s s' : Devm} {x xs} :
     Line.Run e s checkAddress s' →
     ∃ y, (y :: xs <<+ s'.stack) ∧ (y = 0 ↔ ¬ ValidAdr x) := sorry
 
-lemma prefix_of_push2 {e : Sevm} {s₁ s₂ : Devm} {wad : B256} :
-    Line.Run e s₁ [pushB256 wad, pushB256 64, pushB256 0] s₂ →
-    [0, 64, wad] <<+ s₂.stack := sorry
-
-lemma prefix_of_push3 {e : Sevm} {s₂ s₃ : Devm} {hash wad : B256} :
-    [0, 64, wad] <<+ s₂.stack →
-    Line.Run e s₂ [pop, pop, pushB256 hash, dup 0] s₃ →
-    [hash, hash, wad] <<+ s₃.stack := sorry
-
 lemma of_prepApprove {sevm : Sevm} {s s' : Devm} :
     Line.Run sevm s prepApprove s' →
     ∃ vx x y, ([vx, x, y] <<+ s'.stack) ∧ (vx = 0 ↔ ¬ ValidAdr x) := by
   lexen 7
   have hp₁ : [] <<+ s₁.stack := nil_pref
+  cstate s
   apply cdl_append_elim (∃ vx x y, ([vx, x, y] <<+ s'.stack) ∧ (vx = 0 ↔ ¬ ValidAdr x))
   intro wad
   lexen 3
-  have hp₂ : [0, 64, wad] <<+ s₂.stack := prefix_of_push2 h₂
+  have hp₂ : [0, 64, wad] <<+ s₂.stack := by lpfx
+  cstate s₁
   apply kec_cons_elim (∃ vx x y, ([vx, x, y] <<+ s'.stack) ∧ (vx = 0 ↔ ¬ ValidAdr x))
   intro hash
   lexen 4
-  have hp₃ : [hash, hash, wad] <<+ s₃.stack := prefix_of_push3 hp₂ h₃
+  have hp₃ : [hash, hash, wad] <<+ s₃.stack := by lpfx
+  cstate s₂
   intro h
   rcases of_check_address hp₃ h with ⟨vx, h_vx, h_iff⟩
   refine ⟨vx, hash, wad, h_vx, h_iff⟩

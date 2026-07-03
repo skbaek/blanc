@@ -6848,13 +6848,13 @@ lemma lift_inv
 syntax "show_prefix_zero" : tactic
 macro_rules
   | `(tactic| show_prefix_zero) =>
-    `(tactic| intros h0 h1; apply append_pref h0.stk h1)
+    `(tactic| intros h0 h1; apply append_pref h0.stack h1)
 
 syntax "show_prefix_one" : tactic
 macro_rules
   | `(tactic| show_prefix_one) =>
     `(tactic| intros h0 h1; rcases h0 with ⟨x', h0⟩;
-              rcases h0.stk with ⟨stk, h2, h3⟩; clear h0;
+              rcases h0.stack with ⟨stk, h2, h3⟩; clear h0;
               rcases List.of_cons_pref_of_cons_pref h1 (pref_of_split h2) with ⟨hx, h⟩;
               cases hx; clear h; apply append_pref h3 (of_append_pref h2 h1) )
 
@@ -6862,9 +6862,831 @@ syntax "show_prefix_two" : tactic
 macro_rules
   | `(tactic| show_prefix_two) =>
     `(tactic| intros h0 h1; rcases h0 with ⟨x', y', h0⟩;
-              rcases h0.stk with ⟨stk, h2, h3⟩; clear h0;
+              rcases h0.stack with ⟨stk, h2, h3⟩; clear h0;
               rcases of_cons_cons_pref_of_cons_cons_pref h1 (pref_of_split h2) with ⟨hx, hy, h⟩;
               cases hx; cases hy; clear h; apply append_pref h3 (of_append_pref h2 h1) )
+
+infix:70 " <? "  => B256.lt_check
+infix:70 " >? "  => B256.gt_check
+infix:70 " ±<? " => B256.slt_check
+infix:70 " ±>? " => B256.sgt_check
+infix:70 " =? "  => B256.eq_check
+
+lemma B8L.sig_zero_cons (xs) : B8L.sig (0 :: xs) = B8L.sig xs := rfl
+lemma B8L.sig_nonzero_cons (x xs) (h : x ≠ 0) : B8L.sig (x :: xs) = x :: xs := by
+  simp only [sig]; rw [List.dropWhile_cons_of_neg]; simp [h]
+
+lemma B8L.pack_zero_cons (xs n) : B8L.pack (0 :: xs) n = B8L.pack xs n := by
+  simp only [pack, List.ekatD]
+  rw [List.reverse_cons', List.takeD_concat]
+
+lemma B8L.pack_sig (xs n) : B8L.pack (B8L.sig xs) n = B8L.pack xs n := by
+  induction xs with
+  | nil => simp [sig, pack]
+  | cons b bs ih =>
+    by_cases h : b = 0
+    · cases h; rw [sig_zero_cons, pack_zero_cons, ih]
+    · rw [sig_nonzero_cons b bs h]
+
+lemma B8L.toB256_sig (bs : B8L) : B8L.toB256 (B8L.sig bs) = bs.toB256 := by
+  simp only [B8L.toB256]; rw [B8L.pack_sig]
+
+def Stack.Diff (xs zs : Stack) (s s'' : Stack) : Prop :=
+  ∃ s' : Stack, Stack.Pop xs s s' ∧ Stack.Push zs s' s''
+
+def Stack.SwapCore (x y : B256) : Nat → Stack → Stack → Prop
+  | 0, y' :: xs, x' :: xs' => x = x' ∧ y = y' ∧ xs = xs'
+  | n + 1, z :: xs, z' :: xs' => z = z' ∧ SwapCore x y n xs xs'
+  | _, _, _ => False
+
+def Stack.Swap (n : Nat) : Stack → Stack → Prop
+  | x :: xs, y :: xs' => SwapCore x y n xs xs'
+  | _, _ => False
+
+inductive Stack.Nth : Nat → B256 → Stack → Prop
+  | head : ∀ x xs, Nth 0 x (x :: xs)
+  | tail : ∀ m x y xs, Nth m x xs → Nth (m + 1) x (y :: xs)
+
+def Devm.Push (xs : List B256) : Devm → Devm → Prop :=
+  Rel {Rels.eq with stack := _root_.Stack.Push xs}
+
+def Devm.DiffBurn (xs ys : List B256) : Devm → Devm → Prop :=
+  Rel {Rels.eq with stack := Stack.Diff xs ys, gasLeft := (· ≥ ·)}
+
+lemma Devm.push_of_push {x : B256} {s s' : Devm} (h : Devm.push x s = .ok s') :
+    Devm.Push [x] s s' := by
+  simp only [Devm.push, Except.assert, bind, Except.bind] at h
+  split at h
+  · cases h
+  · injection h with eq; subst eq
+    constructor <;> simp [Devm.Rels.eq, _root_.Stack.Push, Split]
+
+lemma Devm.pushBurn_of_burn_of_push {xs : List B256} {s s' s'' : Devm}
+    (burn : Devm.Burn s s') (push : Devm.Push xs s' s'') :
+    Devm.PushBurn xs s s'' := by
+  constructor
+  · exact burn.stack ▸ push.stack
+  · exact Eq.trans burn.memory push.memory
+  · rw [← push.gasLeft]; exact burn.gasLeft
+  · exact Eq.trans burn.logs push.logs
+  · exact Eq.trans burn.refundCounter push.refundCounter
+  · exact Eq.trans burn.output push.output
+  · exact Eq.trans burn.accountsToDelete push.accountsToDelete
+  · exact Eq.trans burn.returnData push.returnData
+  · exact Eq.trans burn.error push.error
+  · exact Eq.trans burn.accessedAddresses push.accessedAddresses
+  · exact Eq.trans burn.accessedStorageKeys push.accessedStorageKeys
+  · exact Eq.trans burn.state push.state
+  · exact Eq.trans burn.transientStorage push.transientStorage
+
+lemma Devm.diffBurn_of_pop_of_pushBurn {xs ys : List B256} {s s' s'' : Devm}
+    (pop : Devm.Pop xs s s') (push : Devm.PushBurn ys s' s'') :
+    Devm.DiffBurn xs ys s s'' := by
+  constructor
+  · exact ⟨s'.stack, pop.stack, push.stack⟩
+  · exact Eq.trans pop.memory push.memory
+  · rw [pop.gasLeft]; exact push.gasLeft
+  · exact Eq.trans pop.logs push.logs
+  · exact Eq.trans pop.refundCounter push.refundCounter
+  · exact Eq.trans pop.output push.output
+  · exact Eq.trans pop.accountsToDelete push.accountsToDelete
+  · exact Eq.trans pop.returnData push.returnData
+  · exact Eq.trans pop.error push.error
+  · exact Eq.trans pop.accessedAddresses push.accessedAddresses
+  · exact Eq.trans pop.accessedStorageKeys push.accessedStorageKeys
+  · exact Eq.trans pop.state push.state
+  · exact Eq.trans pop.transientStorage push.transientStorage
+
+lemma Devm.pushBurn_of_pushItem {v : B256} {cost : Nat} {s s' : Devm}
+    (h : pushItem v cost s = .ok s') : Devm.PushBurn [v] s s' := by
+  simp only [pushItem] at h; exact Devm.pushBurn_of_run h
+
+lemma Devm.diffBurn_of_applyUnary {f : B256 → B256} {cost : Nat} {s s' : Devm}
+    (h : applyUnary f cost s = .ok s') :
+    ∃ x, Devm.DiffBurn [x] [f x] s s' := by
+  simp only [applyUnary] at h
+  rcases of_bind_eq_ok h with ⟨⟨x, s₁⟩, h1, h2⟩
+  simp only [pushItem] at h2
+  refine ⟨x, Devm.diffBurn_of_pop_of_pushBurn (Devm.pop_of_pop h1) (Devm.pushBurn_of_run h2)⟩
+
+lemma Devm.diffBurn_of_applyBinary {f : B256 → B256 → B256} {cost : Nat} {s s' : Devm}
+    (h : applyBinary f cost s = .ok s') :
+    ∃ x y, Devm.DiffBurn [x, y] [f x y] s s' := by
+  simp only [applyBinary] at h
+  rcases of_bind_eq_ok h with ⟨⟨x, s₁⟩, h1, h'⟩
+  rcases of_bind_eq_ok h' with ⟨⟨y, s₂⟩, h2, h3⟩
+  simp only [pushItem] at h3
+  refine ⟨x, y, Devm.diffBurn_of_pop_of_pushBurn
+    (Devm.pop_append (Devm.pop_of_pop h1) (Devm.pop_of_pop h2))
+    (Devm.pushBurn_of_run h3)⟩
+
+lemma Devm.pop_of_popToNat {k : Nat} {devm devm' : Devm}
+    (h : Devm.popToNat devm = .ok ⟨k, devm'⟩) :
+    ∃ x, Devm.Pop [x] devm devm' := by
+  dsimp [Devm.popToNat, Functor.map, Except.map] at h
+  rcases hp : devm.pop with _ | ⟨x, devm1⟩ <;> simp [hp] at h
+  rcases h with ⟨_, rfl⟩
+  exact ⟨x, Devm.pop_of_pop hp⟩
+
+lemma of_run_reg {e : Sevm} {s s' : Devm} {r : Rinst}
+    (h : Ninst.Run e s (Ninst.reg r) s') :
+    ∃ pc, Rinst.run ⟨pc, e, s⟩ r = .ok s' := by
+  rcases h with ⟨xl, _, pc, run⟩
+  cases xl with
+  | some _ => cases run
+  | none => dsimp [Ninst.Run'] at run; exact ⟨pc, run⟩
+
+lemma of_run_push {e s s' xs p} (h : Ninst.Run e s (push xs p) s') :
+    Devm.PushBurn [xs.toB256] s s' := by
+  rcases h with ⟨xl, _, pc, run⟩
+  cases xl with
+  | some _ => cases run
+  | none => dsimp [Ninst.Run'] at run; exact Devm.pushBurn_of_run run
+
+lemma of_run_pushB256 {e s s' x} (h : Ninst.Run e s (pushB256 x) s') :
+    Devm.PushBurn [x] s s' := by
+  have h' := of_run_push h
+  rwa [B8L.toB256_sig, B256.toB256_toB8L] at h'
+
+lemma of_run_pop {e : Sevm} {s s' : Devm} (h : Ninst.Run e s pop s') :
+    ∃ x, Devm.PopBurn [x] s s' := by
+  rcases of_run_reg h with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases of_bind_eq_ok run with ⟨s₁, h1, h2⟩
+  simp only [Functor.mapRev, Functor.map, Except.map] at h1
+  rcases hp : Devm.pop s with _ | ⟨x, s₂⟩ <;> simp [hp] at h1
+  subst h1
+  exact ⟨x, Devm.popBurn_of_pop_of_burn (Devm.pop_of_pop hp) (Devm.burn_of_chargeGas h2)⟩
+
+lemma of_run_dup {e : Sevm} {s s' : Devm} {n : Fin 16} (h : Ninst.Run e s (dup n) s') :
+    ∃ x, s.stack[n.val]? = some x ∧ Devm.PushBurn [x] s s' := by
+  rcases of_run_reg h with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases of_bind_eq_ok run with ⟨s₁, h1, h2⟩
+  have hb := Devm.burn_of_chargeGas h1
+  split at h2
+  · cases h2
+  · rename_i x hx
+    refine ⟨x, ?_, Devm.pushBurn_of_burn_of_push hb (Devm.push_of_push h2)⟩
+    rw [hb.stack]; exact hx
+
+lemma of_run_swap {e : Sevm} {s s' : Devm} {n : Fin 16} (h : Ninst.Run e s (swap n) s') :
+    List.swap s.stack n.val = some s'.stack := by
+  rcases of_run_reg h with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases of_bind_eq_ok run with ⟨s₁, h1, h2⟩
+  have hb := Devm.burn_of_chargeGas h1
+  split at h2
+  · cases h2
+  · rename_i stk hstk
+    injection h2 with eq; subst eq
+    rw [hb.stack]; exact hstk
+
+lemma of_run_caller {e : Sevm} {s s' : Devm} (h : Ninst.Run e s caller s') :
+    Devm.PushBurn [e.caller.toB256] s s' := by
+  rcases of_run_reg h with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  exact Devm.pushBurn_of_pushItem run
+
+lemma of_run_callvalue {e : Sevm} {s s' : Devm} (h : Ninst.Run e s callvalue s') :
+    Devm.PushBurn [e.value] s s' := by
+  rcases of_run_reg h with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  exact Devm.pushBurn_of_pushItem run
+
+lemma of_run_mstore {e : Sevm} {s s' : Devm} (h : Ninst.Run e s mstore s') :
+    ∃ x y, _root_.Stack.Pop [x, y] s.stack s'.stack := by
+  rcases of_run_reg h with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases of_bind_eq_ok run with ⟨⟨i, s₁⟩, h1, run'⟩
+  rcases of_bind_eq_ok run' with ⟨⟨v, s₂⟩, h2, run''⟩
+  rcases of_bind_eq_ok run'' with ⟨s₃, h3, h4⟩
+  rcases Devm.pop_of_popToNat h1 with ⟨x, p1⟩
+  have p2 := Devm.pop_of_pop h2
+  have hb := Devm.burn_of_chargeGas h3
+  injection h4 with eq
+  refine ⟨x, v, ?_⟩
+  have hp := (Devm.pop_append p1 p2).stack
+  rw [← eq]
+  rw [show (Devm.memWrite s₃ i v.toB8L).stack = s₃.stack from rfl, ← hb.stack]
+  exact hp
+
+lemma Devm.pop_of_popN {n : Nat} {devm devm' : Devm} {l : List B256}
+    (hp : devm.popN n = Except.ok (l, devm')) :
+    l.length = n ∧ Devm.Pop l devm devm' := by
+  induction n generalizing devm l with
+  | zero =>
+    simp only [Devm.popN] at hp
+    injection hp with eq
+    injection eq with eq1 eq2
+    subst eq1; subst eq2
+    refine ⟨rfl, ?_⟩
+    constructor <;> simp [Devm.Rels.eq, _root_.Stack.Pop, Split]
+  | succ n ih =>
+    simp only [Devm.popN] at hp
+    rcases of_bind_eq_ok hp with ⟨⟨x, devm1⟩, hp1, hp2⟩
+    rcases of_bind_eq_ok hp2 with ⟨⟨xs, devm2⟩, hp3, hp4⟩
+    injection hp4 with eq
+    injection eq with eq1 eq2
+    subst eq1; subst eq2
+    rcases ih hp3 with ⟨h_len, h_pop⟩
+    refine ⟨by simp [h_len], Devm.pop_append (Devm.pop_of_pop hp1) h_pop⟩
+
+lemma of_run_sstore {e : Sevm} {s s' : Devm} (h : Ninst.Run e s sstore s') :
+    ∃ x y, _root_.Stack.Pop [x, y] s.stack s'.stack := by
+  rcases of_run_reg h with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases of_bind_eq_ok run with ⟨⟨x, s₁⟩, h1, run₁⟩
+  rcases of_bind_eq_ok run₁ with ⟨⟨y, s₂⟩, h2, run₂⟩
+  rcases of_bind_eq_ok run₂ with ⟨_, h3, run₃⟩
+  rcases of_bind_eq_ok run₃ with ⟨⟨s₃, g₂⟩, h4, run₄⟩
+  rcases of_bind_eq_ok run₄ with ⟨g₃, h5, run₅⟩
+  rcases of_bind_eq_ok run₅ with ⟨s₄, h6, run₆⟩
+  rcases of_bind_eq_ok run₆ with ⟨s₅, h7, run₇⟩
+  rcases of_bind_eq_ok run₇ with ⟨_, h8, h9⟩
+  have hp := (Devm.pop_append (Devm.pop_of_pop h1) (Devm.pop_of_pop h2)).stack
+  have hb := Devm.burn_of_chargeGas h7
+  have h_s₃ : s₃.stack = s₂.stack := by
+    injection h4 with eq
+    split at eq <;> (injection eq with eq _; subst eq; rfl)
+  have h_s₄ : s₄.stack = s₃.stack := by
+    injection h6 with eq; rw [← eq]
+  injection h9 with eq
+  refine ⟨x, y, ?_⟩
+  rw [← eq]
+  show _root_.Stack.Pop [x, y] s.stack s₅.stack
+  rw [← hb.stack, h_s₄, h_s₃]
+  exact hp
+
+lemma of_run_calldatacopy {e : Sevm} {s s' : Devm} (h : Ninst.Run e s calldatacopy s') :
+    ∃ x y z, _root_.Stack.Pop [x, y, z] s.stack s'.stack := by
+  rcases of_run_reg h with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases of_bind_eq_ok run with ⟨⟨mi, s₁⟩, h1, run₁⟩
+  rcases of_bind_eq_ok run₁ with ⟨⟨di, s₂⟩, h2, run₂⟩
+  rcases of_bind_eq_ok run₂ with ⟨⟨sz, s₃⟩, h3, run₃⟩
+  rcases of_bind_eq_ok run₃ with ⟨s₄, h4, h5⟩
+  rcases Devm.pop_of_popToNat h1 with ⟨x, p1⟩
+  rcases Devm.pop_of_popToNat h2 with ⟨y, p2⟩
+  rcases Devm.pop_of_popToNat h3 with ⟨z, p3⟩
+  have hb := Devm.burn_of_chargeGas h4
+  injection h5 with eq
+  refine ⟨x, y, z, ?_⟩
+  have hp := (Devm.pop_append p1 (Devm.pop_append p2 p3)).stack
+  rw [← eq]
+  show _root_.Stack.Pop [x, y, z] s.stack s₄.stack
+  rw [← hb.stack]
+  exact hp
+
+lemma of_run_log {e : Sevm} {s s' : Devm} {n : Fin 5} (h : Ninst.Run e s (log n) s') :
+    ∃ zs, zs.length = n.val + 2 ∧ _root_.Stack.Pop zs s.stack s'.stack := by
+  rcases of_run_reg h with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases of_bind_eq_ok run with ⟨⟨mi, s₁⟩, h1, run₁⟩
+  rcases of_bind_eq_ok run₁ with ⟨⟨sz, s₂⟩, h2, run₂⟩
+  rcases of_bind_eq_ok run₂ with ⟨⟨topics, s₃⟩, h3, run₃⟩
+  rcases of_bind_eq_ok run₃ with ⟨s₄, h4, run₄⟩
+  rcases of_bind_eq_ok run₄ with ⟨_, h5, run₅⟩
+  rcases Devm.pop_of_popToNat h1 with ⟨x, p1⟩
+  rcases Devm.pop_of_popToNat h2 with ⟨y, p2⟩
+  rcases Devm.pop_of_popN h3 with ⟨h_len, p3⟩
+  have hb := Devm.burn_of_chargeGas h4
+  rcases h_mem : Devm.memRead s₄ mi sz with ⟨data, s₅⟩
+  rw [h_mem] at run₅
+  injection run₅ with eq
+  have h_s₅ : s₅.stack = s₄.stack := by
+    simp only [Devm.memRead] at h_mem
+    rcases h_read : s₄.memory.read mi sz with ⟨val, mem⟩
+    rw [h_read] at h_mem
+    injection h_mem with _ h_devm
+    rw [← h_devm]; rfl
+  refine ⟨x :: y :: topics, by simp [h_len], ?_⟩
+  have hp := (Devm.pop_append p1 (Devm.pop_append p2 p3)).stack
+  rw [← eq]
+  show _root_.Stack.Pop (x :: y :: topics) s.stack s₅.stack
+  rw [h_s₅, ← hb.stack]
+  exact hp
+
+lemma Stack.swapCore_of_swap {n} {xxs yys : Stack} (h : Swap n xxs yys) :
+    ∃ x y xs ys, xxs = x :: xs ∧ yys = y :: ys ∧ SwapCore x y n xs ys := by
+  cases xxs; cases h; cases yys; cases h; refine ⟨_, _, _, _, rfl, rfl, h⟩
+
+lemma Stack.swapCore_zero {x y s} : SwapCore x y 0 (y :: s) (x :: s) := by simp [SwapCore]
+
+lemma Stack.swapCore_succ {n x y z s s'} :
+    SwapCore x z n s s' → SwapCore x z (n + 1) (y :: s) (y :: s') := by simp [SwapCore]
+
+lemma Stack.swapCore_getElem_set {x y : B256} {n : Nat} {xs xs' : Stack}
+    (h : SwapCore x y n xs xs') (t : Stack) :
+    (xs ++ t)[n]? = some y ∧ (xs ++ t).set n x = xs' ++ t := by
+  induction n generalizing xs xs' with
+  | zero =>
+    cases xs; cases h; cases xs'; cases h
+    rcases h with ⟨hx, hy, hl⟩
+    subst hx; subst hy; subst hl
+    constructor <;> rfl
+  | succ n ih =>
+    cases xs; cases h; cases xs'; cases h
+    rcases h with ⟨hz, h⟩
+    subst hz
+    rcases ih h with ⟨h1, h2⟩
+    constructor
+    · simpa using h1
+    · simp only [List.cons_append, List.set_cons_succ]
+      rw [h2]
+
+lemma Stack.prefix_of_swap {n} {xs xs' stk stk' : Stack} :
+    Swap n xs xs' → List.swap stk n = some stk' → (xs <<+ stk) → (xs' <<+ stk') := by
+  intro h0 h1 h2
+  rcases swapCore_of_swap h0 with ⟨x, y, xs₀, ys₀, hxs, hys, hc⟩
+  subst hxs; subst hys
+  rcases h2 with ⟨t, h2⟩
+  rw [show stk = (x :: xs₀) ++ t from h2] at h1
+  rcases swapCore_getElem_set hc t with ⟨hget, hset⟩
+  simp only [List.cons_append, List.swap, hget, hset] at h1
+  injection h1 with h1
+  refine ⟨t, ?_⟩
+  rw [← h1]
+  rfl
+
+lemma Stack.nth_getElem {n : Nat} {x : B256} {xs ys : Stack}
+    (h : Nth n x xs) (h' : xs <<+ ys) : ys[n]? = some x := by
+  revert h'
+  induction h generalizing ys with
+  | head z zs =>
+    intro h'
+    rcases h' with ⟨t, h'⟩
+    rw [show ys = (z :: zs) ++ t from h']; rfl
+  | tail m z w zs h ih =>
+    intro h'
+    rcases h' with ⟨t, h'⟩
+    rw [show ys = (w :: zs) ++ t from h']
+    simp only [List.cons_append, List.getElem?_cons_succ]
+    exact ih ⟨t, rfl⟩
+
+lemma prefix_of_diffBurn_one (v : B256 → B256) {x xs} {s s' : Devm} :
+    (∃ x', Devm.DiffBurn [x'] [v x'] s s') →
+    (x :: xs <<+ s.stack) → (v x :: xs <<+ s'.stack) := by show_prefix_one
+
+lemma prefix_of_diffBurn_two (v : B256 → B256 → B256) {x y xs} {s s' : Devm} :
+    (∃ x' y', Devm.DiffBurn [x', y'] [v x' y'] s s') →
+    (x :: y :: xs <<+ s.stack) → (v x y :: xs <<+ s'.stack) := by show_prefix_two
+
+lemma prefix_of_not {e} {x xs} {s s' : Devm} :
+    Ninst.Run e s not s' → (x :: xs <<+ s.stack) → ((~~~ x) :: xs <<+ s'.stack) := by
+  intro h0 h1
+  refine prefix_of_diffBurn_one (~~~ ·) ?_ h1
+  rcases of_run_reg h0 with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  exact Devm.diffBurn_of_applyUnary run
+
+lemma prefix_of_iszero {e} {x xs} {s s' : Devm} :
+    Ninst.Run e s iszero s' → (x :: xs <<+ s.stack) → ((x =? 0) :: xs <<+ s'.stack) := by
+  intro h0 h1
+  refine prefix_of_diffBurn_one (· =? 0) ?_ h1
+  rcases of_run_reg h0 with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  exact Devm.diffBurn_of_applyUnary run
+
+lemma prefix_of_eq {e} {x y xs} {s s' : Devm} :
+    Ninst.Run e s eq s' → (x :: y :: xs <<+ s.stack) → ((x =? y) :: xs <<+ s'.stack) := by
+  intro h0 h1
+  refine prefix_of_diffBurn_two B256.eq_check ?_ h1
+  rcases of_run_reg h0 with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  exact Devm.diffBurn_of_applyBinary run
+
+lemma prefix_of_lt {e} {x y xs} {s s' : Devm} :
+    Ninst.Run e s lt s' → (x :: y :: xs <<+ s.stack) → ((x <? y) :: xs <<+ s'.stack) := by
+  intro h0 h1
+  refine prefix_of_diffBurn_two B256.lt_check ?_ h1
+  rcases of_run_reg h0 with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  exact Devm.diffBurn_of_applyBinary run
+
+lemma prefix_of_gt {e} {x y xs} {s s' : Devm} :
+    Ninst.Run e s gt s' → (x :: y :: xs <<+ s.stack) → ((x >? y) :: xs <<+ s'.stack) := by
+  intro h0 h1
+  refine prefix_of_diffBurn_two B256.gt_check ?_ h1
+  rcases of_run_reg h0 with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  exact Devm.diffBurn_of_applyBinary run
+
+lemma prefix_of_shl {e} {x y : B256} {xs} {s s' : Devm} :
+    Ninst.Run e s shl s' → (x :: y :: xs <<+ s.stack) → (y <<< x.toNat :: xs <<+ s'.stack) := by
+  intro h0 h1
+  refine prefix_of_diffBurn_two (fun x y => y <<< x.toNat) ?_ h1
+  rcases of_run_reg h0 with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  exact Devm.diffBurn_of_applyBinary run
+
+lemma prefix_of_shr {e} {x y : B256} {xs} {s s' : Devm} :
+    Ninst.Run e s shr s' → (x :: y :: xs <<+ s.stack) → (y >>> x.toNat :: xs <<+ s'.stack) := by
+  intro h0 h1
+  refine prefix_of_diffBurn_two (fun x y => y >>> x.toNat) ?_ h1
+  rcases of_run_reg h0 with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  exact Devm.diffBurn_of_applyBinary run
+
+lemma prefix_of_or {e} {x y xs} {s s' : Devm} :
+    Ninst.Run e s or s' → (x :: y :: xs <<+ s.stack) → ((x ||| y) :: xs <<+ s'.stack) := by
+  intro h0 h1
+  refine prefix_of_diffBurn_two B256.or ?_ h1
+  rcases of_run_reg h0 with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  exact Devm.diffBurn_of_applyBinary run
+
+lemma prefix_of_and {e} {x y xs} {s s' : Devm} :
+    Ninst.Run e s and s' → (x :: y :: xs <<+ s.stack) → ((x &&& y) :: xs <<+ s'.stack) := by
+  intro h0 h1
+  refine prefix_of_diffBurn_two B256.and ?_ h1
+  rcases of_run_reg h0 with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  exact Devm.diffBurn_of_applyBinary run
+
+lemma prefix_of_add {e} {x y xs} {s s' : Devm} :
+    Ninst.Run e s add s' → (x :: y :: xs <<+ s.stack) → ((x + y) :: xs <<+ s'.stack) := by
+  intro h0 h1
+  refine prefix_of_diffBurn_two (· + ·) ?_ h1
+  rcases of_run_reg h0 with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  exact Devm.diffBurn_of_applyBinary run
+
+lemma prefix_of_sub {e} {x y xs} {s s' : Devm} :
+    Ninst.Run e s sub s' → (x :: y :: xs <<+ s.stack) → ((x - y) :: xs <<+ s'.stack) := by
+  intro h0 h1
+  refine prefix_of_diffBurn_two (· - ·) ?_ h1
+  rcases of_run_reg h0 with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  exact Devm.diffBurn_of_applyBinary run
+
+lemma prefix_of_push {xs ys} {s s' : Devm} :
+    Devm.PushBurn xs s s' → (ys <<+ s.stack) → ((xs ++ ys) <<+ s'.stack) :=
+  λ h0 h1 => append_pref h0.stack h1
+
+lemma prefix_of_pop {y : B256} {xs} {s s' : Devm} :
+    (∃ x, Devm.PopBurn [x] s s') → (y :: xs <<+ s.stack) → (xs <<+ s'.stack) := by
+  intros h h'; rcases h with ⟨x, hx⟩
+  have h_eq : y = x :=
+    (List.of_cons_pref_of_cons_pref h' (pref_of_split hx.stack)).left
+  rw [h_eq] at h'
+  exact of_append_pref hx.stack h'
+
+lemma prefix_of_mstore {e} {x y xs} {s s' : Devm} :
+    Ninst.Run e s mstore s' → (x :: y :: xs <<+ s.stack) → (xs <<+ s'.stack) := by
+  intros h0 h1
+  rcases of_run_mstore h0 with ⟨x', y', h2⟩
+  rcases of_cons_cons_pref_of_cons_cons_pref h1 (pref_of_split h2) with ⟨hx, hy, h⟩
+  clear h; rw [hx, hy] at h1
+  exact of_append_pref h2 h1
+
+lemma prefix_of_sstore {e} {x y xs} {s s' : Devm} :
+    Ninst.Run e s sstore s' → (x :: y :: xs <<+ s.stack) → (xs <<+ s'.stack) := by
+  intros h0 h1
+  rcases of_run_sstore h0 with ⟨x', y', h2⟩
+  rcases of_cons_cons_pref_of_cons_cons_pref h1 (pref_of_split h2) with ⟨hx, hy, h⟩
+  clear h; rw [hx, hy] at h1
+  exact of_append_pref h2 h1
+
+lemma prefix_of_calldatacopy {e} {x y z xs} {s s' : Devm} :
+    Ninst.Run e s calldatacopy s' → (x :: y :: z :: xs <<+ s.stack) → (xs <<+ s'.stack) := by
+  intros h0 h1
+  rcases of_run_calldatacopy h0 with ⟨x', y', z', h2⟩
+  rcases of_cons_cons_pref_of_cons_cons_pref h1 (pref_of_split h2)
+    with ⟨hx, hy, ws, h, h'⟩
+  rcases List.of_cons_pref_of_cons_pref h h' with ⟨hz, _⟩
+  rw [hx, hy, hz] at h1
+  exact of_append_pref h2 h1
+
+lemma Line.spx_scheme {e s' i l xs xs' ys}
+    (h : ∀ s0 s1, Ninst.Run e s0 i s1 → (xs <<+ s0.stack) → (xs' <<+ s1.stack))
+    (h' : ∀ s : Devm, (xs' <<+ s.stack) → Line.Run e s l s' → (ys <<+ s'.stack)) :
+    ∀ s : Devm, (xs <<+ s.stack) → Line.Run e s (i :: l) s' → (ys <<+ s'.stack) := by
+  intros s h_pfx h_run
+  rcases Line.of_run_cons h_run with ⟨s_mid, h_head, h_tail⟩
+  apply h' s_mid (h _ _ h_head h_pfx) h_tail
+
+lemma Line.spx_push {e : Sevm} {s' l bs p xs ys} :
+    (∀ s : Devm, (bs.toB256 :: xs <<+ s.stack) → Line.Run e s l s' → (ys <<+ s'.stack)) →
+    (∀ s : Devm, (xs <<+ s.stack) → Line.Run e s (push bs p :: l) s' → (ys <<+ s'.stack)) := by
+  intros h_next s h_pfx h_run
+  rcases Line.of_run_cons h_run with ⟨s_mid, h_head, h_tail⟩
+  apply h_next s_mid _ h_tail
+  apply prefix_of_push (of_run_push h_head) h_pfx
+
+lemma Line.spx_pushB256 {e : Sevm} {s' l x xs ys} :
+    (∀ s : Devm, (x :: xs <<+ s.stack) → Line.Run e s l s' → (ys <<+ s'.stack)) →
+    (∀ s : Devm, (xs <<+ s.stack) → Line.Run e s (pushB256 x :: l) s' → (ys <<+ s'.stack)) := by
+  intros h_next s h_pfx h_run
+  rcases Line.of_run_cons h_run with ⟨s_mid, h_head, h_tail⟩
+  apply h_next s_mid _ h_tail
+  apply prefix_of_push (of_run_pushB256 h_head) h_pfx
+
+lemma Line.spx_mstore {e : Sevm} {s' l x y xs ys} :
+    (∀ s : Devm, (xs <<+ s.stack) → Line.Run e s l s' → (ys <<+ s'.stack)) →
+    (∀ s : Devm, (x :: y :: xs <<+ s.stack) → Line.Run e s (mstore :: l) s' → (ys <<+ s'.stack)) := by
+  apply Line.spx_scheme; intro s0 s1; apply prefix_of_mstore
+
+lemma Line.spx_sstore {e : Sevm} {s' l x y xs ys} :
+    (∀ s : Devm, (xs <<+ s.stack) → Line.Run e s l s' → (ys <<+ s'.stack)) →
+    (∀ s : Devm, (x :: y :: xs <<+ s.stack) → Line.Run e s (sstore :: l) s' → (ys <<+ s'.stack)) := by
+  apply Line.spx_scheme; intro s0 s1; apply prefix_of_sstore
+
+lemma Line.spx_dup {e s' l xs ys} {n : Fin 16} (x) :
+    Stack.Nth n.val x xs →
+    (∀ s : Devm, (x :: xs <<+ s.stack) → Line.Run e s l s' → (ys <<+ s'.stack)) →
+    (∀ s : Devm, (xs <<+ s.stack) → Line.Run e s (dup n :: l) s' → (ys <<+ s'.stack)) := by
+  intro h_nth; apply Line.spx_scheme
+  intros s0 s1 h_step h_pfx
+  rcases of_run_dup h_step with ⟨w, h_get, h_pb⟩
+  rw [Stack.nth_getElem h_nth h_pfx] at h_get
+  injection h_get with h_get
+  rw [h_get]
+  apply prefix_of_push h_pb h_pfx
+
+lemma Line.spx_log (zs : Stack) {e s' l xs ys} {n : Fin 5} :
+    zs.length = n.val + 2 →
+    (∀ s : Devm, (xs <<+ s.stack) → Line.Run e s l s' → (ys <<+ s'.stack)) →
+    (∀ s : Devm, (zs ++ xs <<+ s.stack) → Line.Run e s (log n :: l) s' → (ys <<+ s'.stack)) := by
+  intro h_len; apply Line.spx_scheme
+  intros s₀ s₁ h_step h_pfx
+  rcases of_run_log h_step with ⟨zs', h_len', h_pop⟩
+  have h_zs : (zs <<+ s₀.stack) := @pref_trans _ zs (zs ++ xs) _ ⟨xs, rfl⟩ h_pfx
+  have h_zs' : (zs' <<+ s₀.stack) := pref_of_split h_pop
+  cases List.pref_unique (Eq.trans h_len h_len'.symm) h_zs h_zs'
+  exact of_append_pref h_pop h_pfx
+
+lemma Line.spx_swap (xs') {e s' l xs ys} {n : Fin 16} :
+    Stack.Swap n.val xs xs' →
+    (∀ s : Devm, (xs' <<+ s.stack) → Line.Run e s l s' → (ys <<+ s'.stack)) →
+    (∀ s : Devm, (xs <<+ s.stack) → Line.Run e s (swap n :: l) s' → (ys <<+ s'.stack)) := by
+  intro h_swap; apply Line.spx_scheme
+  intros s0 s1 h_step
+  exact Stack.prefix_of_swap h_swap (of_run_swap h_step)
+
+lemma Line.spx_iszero {e s' l} {x} {xs ys} :
+    (∀ s : Devm, ((x =? 0) :: xs <<+ s.stack) → Line.Run e s l s' → (ys <<+ s'.stack)) →
+    (∀ s : Devm, (x :: xs <<+ s.stack) → Line.Run e s (iszero :: l) s' → (ys <<+ s'.stack)) := by
+  apply Line.spx_scheme; intro s0 s1; apply prefix_of_iszero
+
+lemma Line.spx_pop {e : Sevm} {s' l x xs ys} :
+    (∀ s : Devm, (xs <<+ s.stack) → Line.Run e s l s' → (ys <<+ s'.stack)) →
+    (∀ s : Devm, (x :: xs <<+ s.stack) → Line.Run e s (pop :: l) s' → (ys <<+ s'.stack)) := by
+  apply Line.spx_scheme; intros s0 s1 h_step
+  exact prefix_of_pop (of_run_pop h_step)
+
+lemma Line.spx_eq {e s' l x y xs ys} :
+    (∀ s : Devm, ((x =? y) :: xs <<+ s.stack) → Line.Run e s l s' → (ys <<+ s'.stack)) →
+    (∀ s : Devm, (x :: y :: xs <<+ s.stack) → Line.Run e s (eq :: l) s' → (ys <<+ s'.stack)) := by
+  apply Line.spx_scheme; intro s0 s1; apply prefix_of_eq
+
+lemma Line.spx_lt {e s' l x y xs ys} :
+    (∀ s : Devm, ((x <? y) :: xs <<+ s.stack) → Line.Run e s l s' → (ys <<+ s'.stack)) →
+    (∀ s : Devm, (x :: y :: xs <<+ s.stack) → Line.Run e s (lt :: l) s' → (ys <<+ s'.stack)) := by
+  apply Line.spx_scheme; intro s0 s1; apply prefix_of_lt
+
+lemma Line.spx_gt {e s' l x y xs ys} :
+    (∀ s : Devm, ((x >? y) :: xs <<+ s.stack) → Line.Run e s l s' → (ys <<+ s'.stack)) →
+    (∀ s : Devm, (x :: y :: xs <<+ s.stack) → Line.Run e s (gt :: l) s' → (ys <<+ s'.stack)) := by
+  apply Line.spx_scheme; intro s0 s1; apply prefix_of_gt
+
+lemma Line.spx_sub {e s' l x y xs ys} :
+    (∀ s : Devm, ((x - y) :: xs <<+ s.stack) → Line.Run e s l s' → (ys <<+ s'.stack)) →
+    (∀ s : Devm, (x :: y :: xs <<+ s.stack) → Line.Run e s (sub :: l) s' → (ys <<+ s'.stack)) := by
+  apply Line.spx_scheme; intro s0 s1; apply prefix_of_sub
+
+lemma Line.spx_not {e s' l x xs ys} :
+    (∀ s : Devm, (~~~ x :: xs <<+ s.stack) → Line.Run e s l s' → (ys <<+ s'.stack)) →
+    (∀ s : Devm, (x :: xs <<+ s.stack) → Line.Run e s (not :: l) s' → (ys <<+ s'.stack)) := by
+  apply Line.spx_scheme; intro s0 s1; apply prefix_of_not
+
+lemma Line.spx_or {e s' l x y xs ys} :
+    (∀ s : Devm, ((x ||| y) :: xs <<+ s.stack) → Line.Run e s l s' → (ys <<+ s'.stack)) →
+    (∀ s : Devm, (x :: y :: xs <<+ s.stack) → Line.Run e s (or :: l) s' → (ys <<+ s'.stack)) := by
+  apply Line.spx_scheme; intro s0 s1; apply prefix_of_or
+
+lemma Line.spx_and {e s' l x y xs ys} :
+    (∀ s : Devm, ((x &&& y) :: xs <<+ s.stack) → Line.Run e s l s' → (ys <<+ s'.stack)) →
+    (∀ s : Devm, (x :: y :: xs <<+ s.stack) → Line.Run e s (and :: l) s' → (ys <<+ s'.stack)) := by
+  apply Line.spx_scheme; intro s0 s1; apply prefix_of_and
+
+lemma Line.spx_shl {e s' l} {x y : B256} {xs ys} :
+    (∀ s : Devm, (y <<< x.toNat :: xs <<+ s.stack) → Line.Run e s l s' → (ys <<+ s'.stack)) →
+    (∀ s : Devm, (x :: y :: xs <<+ s.stack) → Line.Run e s (shl :: l) s' → (ys <<+ s'.stack)) := by
+  apply Line.spx_scheme; intro s0 s1; apply prefix_of_shl
+
+lemma Line.spx_shr {e s' l} {x y : B256} {xs ys} :
+    (∀ s : Devm, (y >>> x.toNat :: xs <<+ s.stack) → Line.Run e s l s' → (ys <<+ s'.stack)) →
+    (∀ s : Devm, (x :: y :: xs <<+ s.stack) → Line.Run e s (shr :: l) s' → (ys <<+ s'.stack)) := by
+  apply Line.spx_scheme; intro s0 s1; apply prefix_of_shr
+
+lemma Line.spx_add {e s' l x y xs ys} :
+    (∀ s : Devm, ((x + y) :: xs <<+ s.stack) → Line.Run e s l s' → (ys <<+ s'.stack)) →
+    (∀ s : Devm, (x :: y :: xs <<+ s.stack) → Line.Run e s (add :: l) s' → (ys <<+ s'.stack)) := by
+  apply Line.spx_scheme; intro s0 s1; apply prefix_of_add
+
+lemma Line.spx_caller {e : Sevm} {s' l xs ys} :
+    (∀ s : Devm, (e.caller.toB256 :: xs <<+ s.stack) → Line.Run e s l s' → (ys <<+ s'.stack)) →
+    (∀ s : Devm, (xs <<+ s.stack) → Line.Run e s (caller :: l) s' → (ys <<+ s'.stack)) := by
+  apply Line.spx_scheme; intros s0 s1 h_step h_pfx
+  apply prefix_of_push (of_run_caller h_step) h_pfx
+
+lemma Line.spx_callvalue {e : Sevm} {s' l xs ys} :
+    (∀ s : Devm, (e.value :: xs <<+ s.stack) → Line.Run e s l s' → (ys <<+ s'.stack)) →
+    (∀ s : Devm, (xs <<+ s.stack) → Line.Run e s (callvalue :: l) s' → (ys <<+ s'.stack)) := by
+  apply Line.spx_scheme; intros s0 s1 h_step h_pfx
+  apply prefix_of_push (of_run_callvalue h_step) h_pfx
+
+lemma Line.spx_calldatacopy {e : Sevm} {s' l x y z xs ys} :
+    (∀ s : Devm, (xs <<+ s.stack) → Line.Run e s l s' → (ys <<+ s'.stack)) →
+    (∀ s : Devm, (x :: y :: z :: xs <<+ s.stack) → Line.Run e s (calldatacopy :: l) s' → (ys <<+ s'.stack)) := by
+  apply Line.spx_scheme; intro s0 s1; apply prefix_of_calldatacopy
+
+lemma Line.spx_unwrap {e xs} {s' : Devm} :
+    ∀ s : Devm, (xs <<+ s.stack) → Line.Run e s [] s' → (xs <<+ s'.stack) := by
+  intros _ h0 h1; cases h1; apply h0
+
+lemma apply_univ {ξ : Type} (φ : ξ → Prop) (x : ξ) (h : ∀ x, φ x) : φ x := h x
+
+section
+
+open Lean.Elab.Tactic
+open Lean.Parser.Tactic
+open Lean.Elab.Term
+open Lean
+open Qq
+
+syntax "show_nth" : tactic
+macro_rules
+  | `(tactic| show_nth) =>
+    `(tactic| first | apply Stack.Nth.head | (apply Stack.Nth.tail ; show_nth))
+
+partial def show_nth : Lean.Elab.Tactic.TacticM Unit :=
+  "Stack.Nth.head".apply <|> (do "Stack.Nth.tail".apply; show_nth)
+
+def show_nth' : Nat → Lean.Elab.Tactic.TacticM Unit
+  | 0 => "Stack.Nth.head".apply
+  | n +1 => do "Stack.Nth.tail".apply; show_nth' n
+
+def show_swap' : Nat → Lean.Elab.Tactic.TacticM Unit
+  | 0 => "Stack.swapCore_zero".apply
+  | n + 1 => do "Stack.swapCore_succ".apply; show_swap' n
+
+def fail {ξ} (s : String) : Lean.Elab.Tactic.TacticM ξ := do
+  dbg_trace s; failure
+
+def get_swap_core (xx : Q(B256)) : Nat → Q(Stack) → Lean.Elab.Tactic.TacticM (Q(B256) × Q(Stack))
+  | 0, ~q($yx :: $lx) => pure (yx, q($xx :: $lx))
+  | n + 1, ~q($yx :: $lx) => do
+    let (zx, lx') ← get_swap_core xx n lx
+    pure (zx, q($yx :: $lx'))
+  | _, _ =>fail "get_swap_core : cannot decompose list"
+
+def get_swap (n : Nat) : Q(Stack) → Lean.Elab.Tactic.TacticM Q(Stack)
+  | ~q($xx :: $lx) => do
+    let (yx, lx') ← get_swap_core xx n lx
+    pure q($yx :: $lx')
+  | _ => fail "get_swap : cannot decompose list"
+
+def get_take : Nat → Q(Stack) → Lean.Elab.Tactic.TacticM Q(Stack)
+  | 0, _ => pure q([])
+  | _ + 1, ~q([]) => fail "cannot take from empty list"
+  | n + 1, ~q($xx :: $lx) => do
+    let lx' ← get_take n lx
+    pure q($xx :: $lx')
+  | _, _ => fail "get take : cannot decompose list"
+
+partial def line_pref : Lean.Elab.Tactic.TacticM Unit :=
+  Lean.Elab.Tactic.withMainContext do
+  let t : Q(Prop) ← Lean.Elab.Tactic.getMainTarget
+  match t with
+  | ~q(∀ s : Devm, ($px <<+ s.stack) → Line.Run _ s $lx _ → _) =>
+    let lx' : Q(Line) ← Lean.Meta.whnf lx
+    match lx' with
+    | ~q([]) => "Line.spx_unwrap".apply
+    | ~q($ix :: _) =>
+      match ix with
+      | ~q(Ninst.dup $nx) =>
+        let n ← unsafe Lean.Meta.evalExpr (Fin 16) q(Fin 16) nx
+        "Line.spx_dup".apply; show_nth' n.val
+      | ~q(Ninst.log $nx) =>
+        let n ← unsafe Lean.Meta.evalExpr (Fin 5) q(Fin 5) nx
+        let x ← get_take (n.val + 2) px
+        Lean.Expr.apply <| Lean.mkApp "Line.spx_log".toExpr x
+        Lean.Elab.Tactic.evalRefl Lean.Syntax.missing
+      | ~q(Ninst.swap $nx) =>
+        let n ← unsafe Lean.Meta.evalExpr (Fin 16) q(Fin 16) nx
+        let x ← get_swap n.val px
+        Lean.Expr.apply <| Lean.mkApp "Line.spx_swap".toExpr x
+        show_swap' n.val
+      | ~q(Ninst.pushB256 _) => "Line.spx_pushB256".apply
+      | ~q(Ninst.push _ _) => "Line.spx_push".apply
+      | ~q(Ninst.sub) => "Line.spx_sub".apply
+      | ~q(Ninst.add) => "Line.spx_add".apply
+      | ~q(Ninst.pop) => "Line.spx_pop".apply
+      | ~q(Ninst.sstore) => "Line.spx_sstore".apply
+      | ~q(Ninst.mstore) => "Line.spx_mstore".apply
+      | ~q(Ninst.lt) => "Line.spx_lt".apply
+      | ~q(Ninst.gt) => "Line.spx_gt".apply
+      | ~q(Ninst.eq) => "Line.spx_eq".apply
+      | ~q(Ninst.not) => "Line.spx_not".apply
+      | ~q(Ninst.and) => "Line.spx_and".apply
+      | ~q(Ninst.or) => "Line.spx_or".apply
+      | ~q(Ninst.shl) => "Line.spx_shl".apply
+      | ~q(Ninst.shr) => "Line.spx_shr".apply
+      | ~q(Ninst.iszero) => "Line.spx_iszero".apply
+      | ~q(Ninst.caller) => "Line.spx_caller".apply
+      | ~q(Ninst.callvalue) => "Line.spx_callvalue".apply
+      | ~q(Ninst.calldatacopy) => "Line.spx_calldatacopy".apply
+      | _ => dbg_trace "line_pref : unimplemented inst"; failure
+      line_pref
+  | _ =>
+    dbg_trace "Not a pref goal : "
+    dbg_trace t
+
+elab "line_pref" : tactic => line_pref
+
+def findDeclWithM (f : LocalDecl → TacticM Bool) : TacticM Lean.LocalDecl := do
+  let g : LocalDecl → TacticM (Option LocalDecl) := fun d => do
+    if (← f d) then pure (some d) else pure none
+  let ctx ← MonadLCtx.getLCtx
+  let (some d) ← ctx.findDeclM? g | failure
+  pure d
+
+def isLineRun (ld : Lean.LocalDecl) : TacticM Bool := do
+  let px : Q(Prop) ← Meta.inferType ld.toExpr
+  match px with
+  | ~q(Line.Run _ $sx _ $sx') => pure true
+  | _ => pure false
+
+def Lean.FVarId.clear (i : Lean.FVarId) : Lean.Elab.Tactic.TacticM Unit :=
+  withMainContext do
+    let mvarId ← (← getMainGoal).clear i
+    replaceMainGoal [mvarId]
+
+def Lean.FVarId.rvt (i : Lean.FVarId) : TacticM Unit := do
+  let (_, mvarId) ← (← getMainGoal).revert #[i]
+  replaceMainGoal [mvarId]
+
+def clear_if (i i' : FVarId) (sx : Expr) (ld : LocalDecl)  : Lean.Elab.Tactic.TacticM Unit := do
+  let pre_t ← Meta.inferType ld.toExpr
+  let t ← instantiateMVars pre_t
+  if (¬ BEq.beq ld.fvarId i ∧ ¬ BEq.beq ld.fvarId i' ∧ Expr.occurs sx t)
+  then Lean.FVarId.clear ld.fvarId
+  else pure ()
+
+def isPref (x : Lean.Expr) (ld : Lean.LocalDecl) : TacticM Bool := do
+  let px : Q(Prop) ← Meta.inferType ld.toExpr
+  match px with
+  | ~q(_ <<+ (Devm.stack $x')) => pure (← Lean.Meta.isDefEq x x')
+  | _ => pure false
+
+def initDescOfRun : Q(Prop) → TacticM Expr
+  | ~q(Line.Run _ $sx _ _) => pure sx
+  | _ => failure
+
+def Expr.imp (x y : Expr) : Expr := Expr.forallE Name.anonymous x y BinderInfo.default
+
+def mkMotive : Q(Prop) → TacticM Expr
+| ~q(($p <<+ (Devm.stack $s₀)) → (Line.Run $e $s₀ $l $s₁) → $φ) => do
+  pure <|
+    Expr.lam `s q(Devm)
+      ( Expr.imp
+          (Expr.app q(λ s : Devm => $p <<+ s.stack) (Expr.bvar 0))
+          (Expr.imp (Expr.app q(λ s : Devm => Line.Run $e s $l $s₁) (Expr.bvar 1)) φ) )
+      BinderInfo.default
+| _ => failure
+
+elab "lpfx" : tactic =>
+  withMainContext do
+    let rd ← findDeclWithM isLineRun
+    let sx ← initDescOfRun (← Meta.inferType rd.toExpr)
+    let pd ← findDeclWithM (isPref sx)
+    let sd ← findDeclWithM (λ dd => Meta.isDefEq dd.toExpr sx)
+    let ctx ← Lean.MonadLCtx.getLCtx -- get the local context.
+    ctx.forM (clear_if rd.fvarId pd.fvarId sx)
+    Lean.FVarId.rvt rd.fvarId
+    Lean.FVarId.rvt pd.fvarId
+    let g : Q(Prop) ← getMainTarget
+    let m ← mkMotive g
+    Expr.apply <| mkApp2 q(@apply_univ Devm) m sd.toExpr
+    line_pref
+
+def clearIfOcc (sx : Expr) (ld : LocalDecl) : Lean.Elab.Tactic.TacticM Unit := do
+  let t' ← instantiateMVars (← Meta.inferType ld.toExpr)
+  if Expr.occurs sx t' then ld.fvarId.clear
+
+syntax "cstate" (ppSpace colGt term:max) : tactic
+elab_rules : tactic
+  | `(tactic| cstate $hs) =>
+    Lean.Elab.Tactic.withMainContext do
+      let i ← getFVarId hs
+      let d ← findDeclWithM (λ d => pure <| BEq.beq d.fvarId i)
+      let ctx ← Lean.MonadLCtx.getLCtx -- get the local context.
+      ctx.forM (clearIfOcc d.toExpr)
+      d.fvarId.clear
+
+end
 
 lemma memRead_getBal_eq {x n : Nat} {devm devm' : Devm} {value : B8L} (h : devm.memRead x n = ⟨value, devm'⟩) (a : Adr) : devm'.getBal a = devm.getBal a := by
   simp only [Devm.memRead] at h
