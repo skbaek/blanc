@@ -222,7 +222,18 @@ instance : Ninst.Hinv Devm.state (Ninst.reg Rinst.gt) := ⟨by
 instance : Linst.Hinv Devm.getBal Devm.getBal Linst.stop := by
   constructor; intros e s r h; injection h with h_eq; subst h_eq; rfl
 
-instance : Linst.Hinv Devm.getBal Devm.getBal Linst.ret := sorry
+instance : Linst.Hinv Devm.getBal Devm.getBal Linst.ret := by
+  constructor; intros e s r h
+  simp only [Linst.Run, Linst.run] at h
+  rcases of_bind_eq_ok h with ⟨⟨n1, s1⟩, h1, h2⟩
+  rcases of_bind_eq_ok h2 with ⟨⟨n2, s2⟩, h3, h4⟩
+  rcases of_bind_eq_ok h4 with ⟨s3, h5, h6⟩
+  injection h6 with h6
+  funext a
+  rw [← h6]
+  have h_mem : s3.memRead n1 n2 = ⟨(s3.memRead n1 n2).1, (s3.memRead n1 n2).2⟩ := rfl
+  show s.getBal a = (s3.memRead n1 n2).2.getBal a
+  rw [memRead_getBal_eq h_mem a, chargeGas_getBal_eq h5 a, Devm.popToNat_getBal_eq h3 a, Devm.popToNat_getBal_eq h1 a]
 
 instance : Linst.Hinv Devm.getBal Devm.getBal Linst.rev := by
   constructor; intros e s r h
@@ -235,7 +246,17 @@ instance : Linst.Hinv Devm.getBal Devm.getBal Linst.rev := by
 instance : Linst.Hinv Devm.getStor Devm.getStor Linst.stop := by
   constructor; intros e s r h; injection h with h_eq; subst h_eq; rfl
 
-instance : Linst.Hinv Devm.getStor Devm.getStor Linst.ret := sorry
+instance : Linst.Hinv Devm.getStor Devm.getStor Linst.ret := by
+  constructor; intros e s r h
+  simp only [Linst.Run, Linst.run] at h
+  rcases of_bind_eq_ok h with ⟨⟨n1, s1⟩, h1, h2⟩
+  rcases of_bind_eq_ok h2 with ⟨⟨n2, s2⟩, h3, h4⟩
+  rcases of_bind_eq_ok h4 with ⟨s3, h5, h6⟩
+  injection h6 with h6
+  rw [← h6]
+  have h_mem : s3.memRead n1 n2 = ⟨(s3.memRead n1 n2).1, (s3.memRead n1 n2).2⟩ := rfl
+  show s.getStor = (s3.memRead n1 n2).2.getStor
+  rw [memRead_getStor_eq h_mem, ← chargeGas_getStor_eq h5, ← Devm.popToNat_getStor_eq h3, ← Devm.popToNat_getStor_eq h1]
 
 lemma deposit_inv_bal : Func.Inv Devm.getBal Devm.getBal deposit := by prog_inv
 
