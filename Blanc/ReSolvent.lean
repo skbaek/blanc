@@ -471,11 +471,68 @@ lemma of_prepApprove {sevm : Sevm} {s s' : Devm} :
   rcases of_check_address hp₄ h with ⟨vx, h_vx, h_iff⟩
   refine ⟨vx, hash, wad, h_vx, h_iff⟩
 
+lemma State.get_set_self {w : _root_.State} {a : Adr} {ac : Acct} :
+    (w.set a ac).get a = ac := by
+  unfold State.set State.get
+  split_ifs with h
+  · rw [Std.TreeMap.getD_erase]; simp; exact h.symm
+  · rw [Std.TreeMap.getD_insert]; simp
+
+lemma setStorVal_getStor_self {devm : Devm} {adr : Adr} {key val : B256} :
+    (devm.setStorVal adr key val).getStor adr = (devm.getStor adr).set key val := by
+  simp only [Devm.getStor, Devm.getAcct, Devm.setStorVal, State.setStorVal]
+  rw [State.get_set_self]
+
+lemma Stor.get_set_ne {s : Stor} {k k' v : B256} (h : k ≠ k') :
+    (s.set k' v).get k = s.get k := by
+  unfold Stor.set Stor.get
+  have hc : compare k' k ≠ Ordering.eq := by
+    intro hcc; exact h (compare_eq_iff_eq.mp hcc).symm
+  split_ifs with hv
+  · rw [Std.TreeMap.getD_erase]; simp [hc]
+  · rw [Std.TreeMap.getD_insert]; simp [hc]
+
+lemma sstore_getStor_setStorVal {sevm : Sevm} {s s' : Devm} {x xs}
+    (h_run : Ninst.Run sevm s .sstore s') (hx : x :: xs <<+ s.stack) :
+    ∃ v, s'.getStor sevm.currentTarget = (s.getStor sevm.currentTarget).set x v := by
+  rcases of_run_reg h_run with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases of_bind_eq_ok run with ⟨⟨key, s₁⟩, h1, run₁⟩
+  rcases of_bind_eq_ok run₁ with ⟨⟨val, s₂⟩, h2, run₂⟩
+  rcases of_bind_eq_ok run₂ with ⟨_, h3, run₃⟩
+  rcases of_bind_eq_ok run₃ with ⟨⟨s₃, g₂⟩, h4, run₄⟩
+  rcases of_bind_eq_ok run₄ with ⟨g₃, h5, run₅⟩
+  rcases of_bind_eq_ok run₅ with ⟨s₄, h6, run₆⟩
+  rcases of_bind_eq_ok run₆ with ⟨s₅, h7, run₇⟩
+  rcases of_bind_eq_ok run₇ with ⟨_, h8, h9⟩
+  have hkx : x = key :=
+    (List.of_cons_pref_of_cons_pref hx (pref_of_split (Devm.pop_of_pop h1).stack)).left
+  have e1 : s.getStor = s₁.getStor := Devm.pop_getStor_eq h1
+  have e2 : s₁.getStor = s₂.getStor := Devm.pop_getStor_eq h2
+  have e4 : s₂.getStor = s₃.getStor := by
+    split at h4 <;> (injection h4 with eq; injection eq with eq _; subst eq)
+    · exact addAccessedStorageKey_getStor.symm
+    · rfl
+  have e6 : s₃.getStor = s₄.getStor := by
+    injection h6 with eq; rw [← eq]; rfl
+  have e7 : s₄.getStor = s₅.getStor := chargeGas_getStor_eq h7
+  have E : s.getStor = s₅.getStor := e1.trans (e2.trans (e4.trans (e6.trans e7)))
+  injection h9 with eq
+  refine ⟨val, ?_⟩
+  rw [← eq, setStorVal_getStor_self, hkx, E]
+
 lemma sstore_inv_stor_rest {x xs} {sevm : Sevm} {s s' : Devm} :
   ¬ ValidAdr x →
   (x :: xs <<+ s.stack) →
   Ninst.Run sevm s .sstore s' →
-  (s.getStor sevm.currentTarget).rest = (s'.getStor sevm.currentTarget).rest := sorry
+  (s.getStor sevm.currentTarget).rest = (s'.getStor sevm.currentTarget).rest := by
+  intro h_nv h_pfx h_run
+  rcases sstore_getStor_setStorVal h_run h_pfx with ⟨v, h_set⟩
+  rw [h_set]
+  funext a
+  have hne : a.toB256 ≠ x := fun hc => h_nv ⟨a, hc⟩
+  simp only [Stor.rest, Function.comp_apply]
+  rw [Stor.get_set_ne hne]
 
 syntax "linv" : tactic
 macro_rules

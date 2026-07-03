@@ -255,7 +255,7 @@ lemma updateAllowance_inv_stor_rest {wad dst} {e s r}
       rw [Func.of_inv Desc.stor Result.stor _ h₈]; prog_inv
   · intro _ h; rw [Func.of_inv Desc.stor Result.stor _ h]; prog_inv
 
-lemma transfer_of_transferFrom {e : Env} {s : Desc} {r : Result} :
+lemma transfer_of_transferFrom {c} {e : Env} {s : Desc} {r : Result} :
     Func.Run c e s transferFrom r →
     ∃ (x : B256) (a a' : Adr),
       Transfer (s.stor e.cta).rest a x a' (r.stor e.cta).rest := by
