@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "lean-lsp": {
+      "command": "uvx",
+      "args": [
+        "lean-lsp-mcp"
+      ],
+      "env": {
+        "LEAN_LOG_LEVEL": "INFO"
+      }
+    }
+  }
+}
