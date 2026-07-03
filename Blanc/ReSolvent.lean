@@ -374,10 +374,80 @@ elab "lexec" e:term : tactic =>
       Strings.intro ["s" ++ ss, "h" ++ ss]
     | _ => throwError "unexpected goal for lexec"
 
+def addressMask : B256 := ⟨⟨.max, 0xffffffff00000000⟩, 0⟩
+
+lemma B128.and_eq_and_prod_and (x y : B128) :
+    x &&& y = ⟨x.1 &&& y.1, x.2 &&& y.2⟩ := rfl
+
+lemma B256.and_eq_and_prod_and (x y : B256) :
+    x &&& y = ⟨x.1 &&& y.1, x.2 &&& y.2⟩ := rfl
+
+lemma B128.zero_and {x : B128} : 0 &&& x = 0 := by
+  simp [B128.and_eq_and_prod_and]
+  apply Prod.ext <;> simp
+
+lemma B64.mask_and_eq_zero (x : B32) :
+    (0xffffffff00000000 : B64) &&& x.toB64 = 0 := by
+  simp only [B32.toB64]
+  rw [← @UInt32.and_neg_one x, UInt32.toUInt64_and]
+  rw [UInt64.and_comm (UInt32.toUInt64 _), ← UInt64.and_assoc]
+  apply UInt64.zero_and
+
+lemma validAdr_iff {w : B256} :
+    ValidAdr w ↔ addressMask &&& w = 0 := by
+  constructor <;> intro h
+  · rcases h with ⟨⟨a32, a128⟩, ⟨_⟩⟩
+    simp [Adr.toB256, addressMask]
+    rw [B256.and_eq_and_prod_and]
+    simp [B128.zero_and]
+    rw [B128.and_eq_and_prod_and]
+    simp
+    apply Prod.ext
+    · apply Prod.ext
+      · rfl
+      · apply B64.mask_and_eq_zero
+    · rfl
+  · refine' ⟨w.toAdr, _⟩
+    rcases w with ⟨⟨wz, wh⟩, wl⟩
+    simp only [addressMask, B256.and_eq_and_prod_and, B128.and_eq_and_prod_and] at h
+    rw [show (0 : B256) = ((0, 0), (0, 0)) from rfl,
+      Prod.mk.injEq, Prod.mk.injEq, Prod.mk.injEq] at h
+    obtain ⟨⟨hz, hm⟩, -⟩ := h
+    have h_wz : wz = 0 := by simp only [B64.max] at hz; bv_decide
+    have h_wh : wh.toB32.toB64 = wh := by rw [toB64_toB32]; bv_decide
+    simp only [B256.toAdr, Adr.toB256, h_wz, h_wh]
+
+lemma addressMask_eq_shl :
+    addressMask = (~~~ (0 : B256)) <<< (160 : Nat).toB256.toNat := by
+  rw [toNat_toB256, Nat.lo_eq_of_lt (by omega)]; rfl
+
+lemma of_push_addressMask {e : Sevm} {s s' : Devm} {xs}
+    (h_pfx : xs <<+ s.stack) (h_run : Line.Run e s pushAddressMask s') :
+    (addressMask :: xs <<+ s'.stack) := by
+  rw [addressMask_eq_shl]
+  revert s; simp only [pushAddressMask]; line_pref
+
+lemma of_check_non_address {e : Sevm} {s s' : Devm} {x xs}
+    (h_pfx : x :: xs <<+ s.stack) (h_run : Line.Run e s checkNonAddress s') :
+    ∃ y, (y :: xs <<+ s'.stack) ∧ (y = 0 ↔ ValidAdr x) := by
+  rename' s' => s''
+  rcases of_run_append _ h_run with ⟨sm, h_push, h_and⟩; clear h_run
+  have h_pfx' := of_push_addressMask h_pfx h_push; clear h_pfx h_push s
+  have h_pfx2 : (addressMask &&& x) :: xs <<+ s''.stack := by
+    revert h_and; revert sm; line_pref
+  refine ⟨_, h_pfx2, Iff.symm validAdr_iff⟩
+
 lemma of_check_address {e : Sevm} {s s' : Devm} {x xs} :
     (x :: xs <<+ s.stack) →
     Line.Run e s checkAddress s' →
-    ∃ y, (y :: xs <<+ s'.stack) ∧ (y = 0 ↔ ¬ ValidAdr x) := sorry
+    ∃ y, (y :: xs <<+ s'.stack) ∧ (y = 0 ↔ ¬ ValidAdr x) := by
+  rename' s' => s''; intros h_pfx h_run
+  rcases of_run_append _ h_run with ⟨sm, hs', h_run'⟩; clear h_run
+  rcases of_check_non_address h_pfx hs' with ⟨y, h_pfx', h_iff⟩; clear h_pfx hs' s
+  have h_pfx2 : ((y =? 0) :: xs <<+ s''.stack) := by
+    revert h_run'; revert sm; line_pref
+  refine' ⟨_, h_pfx2, _⟩; rw [← h_iff]
+  apply Ne.ite_eq_right_iff <| Ne.symm B256.zero_ne_one
 
 lemma of_prepApprove {sevm : Sevm} {s s' : Devm} :
     Line.Run sevm s prepApprove s' →
