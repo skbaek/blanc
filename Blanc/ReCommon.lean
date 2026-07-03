@@ -7138,6 +7138,42 @@ lemma of_run_calldatacopy {e : Sevm} {s s' : Devm} (h : Ninst.Run e s calldataco
   rw [← hb.stack]
   exact hp
 
+lemma of_run_singleton {e s i s'} (h : Line.Run e s [i] s') : Ninst.Run e s i s' := by
+  rcases Line.of_run_cons h with ⟨_, hrun, hnil⟩
+  cases hnil; exact hrun
+
+lemma of_run_calldataload {e : Sevm} {s s' : Devm} (h : Ninst.Run e s calldataload s') :
+    ∃ x y, _root_.Stack.Diff [x] [y] s.stack s'.stack := by
+  rcases of_run_reg h with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases of_bind_eq_ok run with ⟨⟨si, s₁⟩, h1, run₁⟩
+  rcases of_bind_eq_ok run₁ with ⟨s₂, h2, run₂⟩
+  have hpop := Devm.pop_of_pop h1
+  have hb := Devm.burn_of_chargeGas h2
+  obtain ⟨val, hpush⟩ : ∃ val, Devm.Push [val] s₂ s' := ⟨_, Devm.push_of_push run₂⟩
+  refine ⟨si, val, s₁.stack, hpop.stack, ?_⟩
+  rw [show s₁.stack = s₂.stack from hb.stack]
+  exact hpush.stack
+
+lemma Devm.memRead_stack (devm : Devm) (i n : Nat) :
+    (devm.memRead i n).2.stack = devm.stack := rfl
+
+lemma of_run_kec {e : Sevm} {s s' : Devm} (h : Ninst.Run e s kec s') :
+    ∃ x y z, _root_.Stack.Diff [x, y] [z] s.stack s'.stack := by
+  rcases of_run_reg h with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases of_bind_eq_ok run with ⟨⟨mi, s₁⟩, h1, run₁⟩
+  rcases of_bind_eq_ok run₁ with ⟨⟨sz, s₂⟩, h2, run₂⟩
+  rcases of_bind_eq_ok run₂ with ⟨s₃, h3, run₃⟩
+  rcases Devm.pop_of_popToNat h1 with ⟨x, p1⟩
+  rcases Devm.pop_of_popToNat h2 with ⟨y, p2⟩
+  have hb := Devm.burn_of_chargeGas h3
+  obtain ⟨val, hpush⟩ : ∃ val, Devm.Push [val] (s₃.memRead mi sz).2 s' :=
+    ⟨_, Devm.push_of_push run₃⟩
+  refine ⟨x, y, val, s₂.stack, (Devm.pop_append p1 p2).stack, ?_⟩
+  rw [show s₂.stack = s₃.stack from hb.stack, ← Devm.memRead_stack s₃ mi sz]
+  exact hpush.stack
+
 lemma of_run_log {e : Sevm} {s s' : Devm} {n : Fin 5} (h : Ninst.Run e s (log n) s') :
     ∃ zs, zs.length = n.val + 2 ∧ _root_.Stack.Pop zs s.stack s'.stack := by
   rcases of_run_reg h with ⟨pc, run⟩
@@ -7357,6 +7393,67 @@ lemma prefix_of_calldatacopy {e} {x y z xs} {s s' : Devm} :
   rcases List.of_cons_pref_of_cons_pref h h' with ⟨hz, _⟩
   rw [hx, hy, hz] at h1
   exact of_append_pref h2 h1
+
+lemma prefix_of_calldataload {e} {x xs} {s s' : Devm} :
+    Ninst.Run e s calldataload s' → (x :: xs <<+ s.stack) → ∃ z, z :: xs <<+ s'.stack := by
+  intro h0 h1
+  rcases of_run_calldataload h0 with ⟨x', y', stk, h2, h3⟩
+  have hx : x = x' := (List.of_cons_pref_of_cons_pref h1 (pref_of_split h2)).left
+  rw [hx] at h1
+  exact ⟨y', append_pref h3 (of_append_pref h2 h1)⟩
+
+lemma prefix_of_kec {e} {x y xs} {s s' : Devm} :
+    Ninst.Run e s kec s' → (x :: y :: xs <<+ s.stack) → ∃ z, z :: xs <<+ s'.stack := by
+  intro h0 h1
+  rcases of_run_kec h0 with ⟨x', y', z', stk, h2, h3⟩
+  rcases of_cons_cons_pref_of_cons_cons_pref h1 (pref_of_split h2) with ⟨hx, hy, h⟩
+  clear h; rw [hx, hy] at h1
+  exact ⟨z', append_pref h3 (of_append_pref h2 h1)⟩
+
+lemma prefix_of_cdl {e n xs} {s s' : Devm} :
+    (xs <<+ s.stack) → Line.Run e s (cdl n) s' → ∃ z, z :: xs <<+ s'.stack := by
+  intro h_pfx h_run
+  rcases Line.of_run_cons h_run with ⟨s₁, h_push, h_rest⟩
+  rcases Line.of_run_cons h_rest with ⟨s₂, h_cdl, h_nil⟩
+  cases h_nil
+  have h1 : n :: xs <<+ s₁.stack := prefix_of_push (of_run_pushB256 h_push) h_pfx
+  exact prefix_of_calldataload h_cdl h1
+
+lemma of_run_sload {e : Sevm} {s s' : Devm} (h : Ninst.Run e s sload s') :
+    ∃ x, _root_.Stack.Diff [x] [Devm.getStorVal s e.currentTarget x] s.stack s'.stack := by
+  rcases of_run_reg h with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases of_bind_eq_ok run with ⟨⟨key, s₁⟩, h1, run₁⟩
+  have hpop := Devm.pop_of_pop h1
+  have e1 : s.getStor = s₁.getStor := Devm.pop_getStor_eq h1
+  refine ⟨key, s₁.stack, hpop.stack, ?_⟩
+  suffices H : ∀ (d : Devm) (c : Nat), s₁.getStor = d.getStor → s₁.stack = d.stack →
+      (chargeGas c d >>= fun y => Devm.push (Devm.getStorVal y e.currentTarget key) y) = .ok s' →
+      _root_.Stack.Push [Devm.getStorVal s e.currentTarget key] s₁.stack s'.stack by
+    split at run₁
+    · exact H s₁ gasWarmAccess rfl rfl run₁
+    · exact H (addAccessedStorageKey s₁ e.currentTarget key) gasColdSload
+        (@addAccessedStorageKey_getStor s₁ e.currentTarget key).symm rfl run₁
+  intro d c hgs hst run'
+  rcases of_bind_eq_ok run' with ⟨s₂, h2, run₂⟩
+  have hpush := Devm.push_of_push run₂
+  have hstk : d.stack = s₂.stack := (Devm.burn_of_chargeGas h2).stack
+  have e2 : d.getStor = s₂.getStor := chargeGas_getStor_eq h2
+  have hval : Devm.getStorVal s₂ e.currentTarget key
+      = Devm.getStorVal s e.currentTarget key := by
+    show (s₂.getStor e.currentTarget).get key = (s.getStor e.currentTarget).get key
+    rw [← e2, ← hgs, ← e1]
+  rw [hst, hstk, ← hval]
+  exact hpush.stack
+
+lemma prefix_of_sload' {e x xs} {s s' : Devm} :
+    Ninst.Run e s sload s' → (x :: xs <<+ s.stack) →
+    ∃ y, (y :: xs <<+ s'.stack) ∧ y = Devm.getStorVal s e.currentTarget x := by
+  intro h0 h1
+  rcases of_run_sload h0 with ⟨x', stk, h2, h3⟩
+  have hx : x = x' := (List.of_cons_pref_of_cons_pref h1 (pref_of_split h2)).left
+  subst hx
+  exact ⟨_, append_pref h3 (of_append_pref h2 h1), rfl⟩
 
 lemma Line.spx_scheme {e s' i l xs xs' ys}
     (h : ∀ s0 s1, Ninst.Run e s0 i s1 → (xs <<+ s0.stack) → (xs' <<+ s1.stack))

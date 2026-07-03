@@ -356,14 +356,6 @@ elab "lexec" e:term : tactic =>
       Strings.intro ["s" ++ ss, "h" ++ ss]
     | _ => throwError "unexpected goal for lexec"
 
-lemma cdl_append_elim {e : Sevm} {s r : Devm} {n l} (φ : Prop)
-    (h : ∀ x, Line.Run e s (pushB256 x :: l) r → φ) :
-    Line.Run e s (cdl n ++ l) r → φ := sorry
-
-lemma kec_cons_elim {e : Sevm} {s s' : Devm} {l} (φ : Prop)
-    (h : ∀ x, Line.Run e s (pop :: pop :: pushB256 x :: l) s' → φ) :
-    Line.Run e s (kec :: l) s' → φ := sorry
-
 lemma of_check_address {e : Sevm} {s s' : Devm} {x xs} :
     (x :: xs <<+ s.stack) →
     Line.Run e s checkAddress s' →
@@ -373,20 +365,22 @@ lemma of_prepApprove {sevm : Sevm} {s s' : Devm} :
     Line.Run sevm s prepApprove s' →
     ∃ vx x y, ([vx, x, y] <<+ s'.stack) ∧ (vx = 0 ↔ ¬ ValidAdr x) := by
   lexen 7
-  have hp₁ : [] <<+ s₁.stack := nil_pref
+  have hp₀ : [] <<+ s₁.stack := nil_pref
   cstate s
-  apply cdl_append_elim (∃ vx x y, ([vx, x, y] <<+ s'.stack) ∧ (vx = 0 ↔ ¬ ValidAdr x))
-  intro wad
-  lexen 3
-  have hp₂ : [0, 64, wad] <<+ s₂.stack := by lpfx
+  lexen 2
+  rcases prefix_of_cdl hp₀ h₂ with ⟨wad, hp₁⟩
   cstate s₁
-  apply kec_cons_elim (∃ vx x y, ([vx, x, y] <<+ s'.stack) ∧ (vx = 0 ↔ ¬ ValidAdr x))
-  intro hash
-  lexen 4
-  have hp₃ : [hash, hash, wad] <<+ s₃.stack := by lpfx
+  lexen 2
+  have hp₂ : [0, 64, wad] <<+ s₃.stack := by lpfx
   cstate s₂
+  lexen 1
+  rcases prefix_of_kec (of_run_singleton h₄) hp₂ with ⟨hash, hp₃⟩
+  cstate s₃
+  lexen 1
+  have hp₄ : [hash, hash, wad] <<+ s₅.stack := by lpfx
+  cstate s₄
   intro h
-  rcases of_check_address hp₃ h with ⟨vx, h_vx, h_iff⟩
+  rcases of_check_address hp₄ h with ⟨vx, h_vx, h_iff⟩
   refine ⟨vx, hash, wad, h_vx, h_iff⟩
 
 lemma sstore_inv_stor_rest {x xs} {sevm : Sevm} {s s' : Devm} :
@@ -406,6 +400,37 @@ lemma of_run_next {fs sevm devm i f devm''}
     ∃ devm', Ninst.Run sevm devm i devm' ∧ Func.Run fs sevm devm' f devm'' := by
   cases h with
   | next h1 h2 => exact ⟨_, h1, h2⟩
+
+lemma of_withdrawLoadCheck {sevm : Sevm} {s s' : Devm}
+    (h : Line.Run sevm s withdrawLoadCheck s') :
+    s.getBal = s'.getBal ∧
+    s.getStor = s'.getStor ∧
+    ∃ wad cbal, ([cbal <? wad, cbal, wad, wad] <<+ s'.stack) ∧
+      (cbal = Devm.getStorVal s' sevm.currentTarget sevm.caller.toB256) := by
+  refine ⟨by linv, by linv, ?_⟩
+  revert h
+  lexen 2
+  rcases prefix_of_cdl nil_pref h₁ with ⟨wad, hp₁⟩
+  cstate s
+  lexen 2
+  have hp₂ : [sevm.caller.toB256, wad, wad] <<+ s₂.stack := by lpfx
+  cstate s₁
+  lexen 1
+  rcases prefix_of_sload' (of_run_singleton h₃) hp₂ with ⟨cbal, hp₃, h_cbal⟩
+  have hstor3 : Devm.getStorVal s₂ sevm.currentTarget sevm.caller.toB256
+              = Devm.getStorVal s₃ sevm.currentTarget sevm.caller.toB256 := by
+    show (s₂.getStor _).get _ = (s₃.getStor _).get _
+    rw [Line.of_inv Devm.getStor (by line_inv) h₃]
+  rw [hstor3] at h_cbal
+  cstate s₂
+  intro h₄
+  have hp₄ : [cbal <? wad, cbal, wad, wad] <<+ s'.stack := by lpfx
+  have hstor4 : Devm.getStorVal s₃ sevm.currentTarget sevm.caller.toB256
+              = Devm.getStorVal s' sevm.currentTarget sevm.caller.toB256 := by
+    show (s₃.getStor _).get _ = (s'.getStor _).get _
+    rw [Line.of_inv Devm.getStor (by line_inv) h₄]
+  rw [hstor4] at h_cbal
+  exact ⟨wad, cbal, hp₄, h_cbal⟩
 
 lemma approve_inv_wbal {sevm : Sevm} {s r : Devm}
     (run : Func.Run (weth.main :: weth.aux) sevm s approve r) :
