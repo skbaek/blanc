@@ -131,6 +131,24 @@ instance {x} : Ninst.Hinv Devm.getStor (Ninst.pushB256 x) := ⟨by
         exact (chargeGas_getStor_eq hc).trans (Devm.push_getStor_eq hp)
 ⟩
 
+instance {x} : Ninst.Hinv Devm.getCode (Ninst.pushB256 x) := ⟨by
+  intros e s s' h
+  rcases h with ⟨xl, h_filled, pc, run⟩
+  cases xl with
+  | some _ => cases run
+  | none =>
+    dsimp [Ninst.Run', Ninst.pushB256] at run
+    rcases hc : chargeGas (if (x.toB8L.sig) = [] then gBase else gVerylow) s with _ | s_gas
+    · rw [hc] at run; dsimp [bind, Except.bind] at run; contradiction
+    · rw [hc] at run; dsimp [bind, Except.bind] at run
+      rcases hp : Devm.push x.toB8L.sig.toB256 s_gas with _ | s''
+      · rw [hp] at run; contradiction
+      · rw [hp] at run
+        injection run with h_eq; subst h_eq
+        apply funext; intro a
+        exact (chargeGas_getCode_eq hc a).symm.trans (Devm.push_getCode_eq hp a).symm
+⟩
+
 instance {x} : Ninst.Hinv Devm.state (Ninst.pushB256 x) := ⟨by
   intros e s s' h
   rcases h with ⟨xl, h_filled, pc, run⟩
@@ -405,9 +423,10 @@ lemma of_withdrawLoadCheck {sevm : Sevm} {s s' : Devm}
     (h : Line.Run sevm s withdrawLoadCheck s') :
     s.getBal = s'.getBal ∧
     s.getStor = s'.getStor ∧
+    s.getCode = s'.getCode ∧
     ∃ wad cbal, ([cbal <? wad, cbal, wad, wad] <<+ s'.stack) ∧
       (cbal = Devm.getStorVal s' sevm.currentTarget sevm.caller.toB256) := by
-  refine ⟨by linv, by linv, ?_⟩
+  refine ⟨by linv, by linv, by linv, ?_⟩
   revert h
   lexen 2
   rcases prefix_of_cdl nil_pref h₁ with ⟨wad, hp₁⟩
