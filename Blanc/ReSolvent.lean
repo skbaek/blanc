@@ -2142,10 +2142,147 @@ lemma symbol_inv_solvent {sevm : Sevm} {s r : Devm}
     (h_sv : s.PreSolvent sevm.currentTarget sevm) :
     r.PostSolvent sevm.currentTarget := by simple_solvent
 
+lemma transfer_inv_bal : Func.Inv Devm.getBal Devm.getBal transfer := by prog_inv
+
+lemma of_transferTestDst {sevm : Sevm} {s s' : Devm} :
+    Line.Run sevm s transferTestDst s' →
+    ∃ na_dst dst,
+      ([na_dst, dst] <<+ s'.stack) ∧
+      (na_dst = 0 ↔ ValidAdr dst) := by
+  simp only [transferTestDst]
+  lexec (arg 0)
+  rcases prefix_of_cdl nil_pref h₁ with ⟨dst, hp₁⟩
+  clear h₁
+  lexen 1
+  have hp₂ : [dst, dst] <<+ s₂.stack := by lpfx
+  clear hp₁ h₂
+  intro h
+  rcases of_check_non_address hp₂ h with ⟨na_dst, h_pfx, h_iff⟩
+  exact ⟨_, _, h_pfx, h_iff⟩
+
+lemma of_transferTestLt {sevm : Sevm} {s s' : Devm} {dst}
+    (h_stk : [dst] <<+ s.stack) :
+    Line.Run sevm s transferTestLt s' →
+    ∃ lt? caller wad,
+      ([lt?, caller, Devm.getStorVal s' sevm.currentTarget caller - wad, wad, dst] <<+ s'.stack) ∧
+      (lt? = 0 ↔ wad ≤ Devm.getStorVal s' sevm.currentTarget caller) ∧
+      ValidAdr caller := by
+  simp only [transferTestLt]
+  -- arg 1 : push wad
+  lexec (arg 1)
+  rcases prefix_of_cdl h_stk h₁ with ⟨wad, hp₁⟩
+  clear h₁
+  -- caller, dup 0 : [caller, caller, wad, dst]
+  lexen 2
+  have hp₂ : [sevm.caller.toB256, sevm.caller.toB256, wad, dst] <<+ s₂.stack := by lpfx
+  clear h₂
+  -- sload : [cbal, caller, wad, dst]
+  lexen 1
+  rcases prefix_of_sload' (of_run_singleton h₃) hp₂ with ⟨cbal, hp₃, h_cbal⟩
+  have hstor23 : s₂.getStor = s₃.getStor := Line.of_inv Devm.getStor (by line_inv) h₃
+  clear h₃
+  -- swap 0, dup 2, dup 0, dup 3, sub, swap 2, lt :
+  --   [cbal <? wad, caller, cbal - wad, wad, dst]
+  intro h₄
+  have hp₄ : [cbal <? wad, sevm.caller.toB256, cbal - wad, wad, dst] <<+ s'.stack := by lpfx
+  have hstor34 : s₃.getStor = s'.getStor := Line.of_inv Devm.getStor (by line_inv) h₄
+  have h_cbal' : cbal = Devm.getStorVal s' sevm.currentTarget sevm.caller.toB256 := by
+    rw [h_cbal]
+    show (s₂.getStor _).get _ = (s'.getStor _).get _
+    rw [hstor23, hstor34]
+  refine ⟨cbal <? wad, sevm.caller.toB256, wad, ?_, ?_, validAdr_toB256 sevm.caller⟩
+  · rw [← h_cbal']; exact hp₄
+  · rw [← h_cbal', B256.lt_check, Ne.ite_eq_right_iff B256.zero_ne_one.symm, B256.not_lt]
+
+lemma transfer_of_transfer {fs : List Func} {sevm : Sevm} {s r : Devm} :
+    Func.Run fs sevm s transfer r →
+    ∃ (x : B256) (a a' : Adr),
+      Transfer (s.getStor sevm.currentTarget).rest a x a'
+        (r.getStor sevm.currentTarget).rest := by
+  intro h_run
+  simp only [transfer] at h_run
+  -- transferTestDst : [dst_invalid?, dst]
+  rcases of_run_prepend transferTestDst _ h_run with ⟨s1, h1, h_run⟩
+  rcases of_transferTestDst h1 with ⟨dst_invalid, dst, hp1, h_dst⟩
+  have hg1 : s.getStor = s1.getStor := Line.of_inv Devm.getStor (by line_inv) h1
+  clear h1
+  -- rev-branch : dst is a valid address
+  rcases of_run_branch_rev h_run with ⟨s2, hp2b, h_run⟩
+  have hp2bs := hp2b.stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hp2bs
+  rw [hp2bs] at hp1
+  have h_dst_valid : ValidAdr dst := h_dst.mp (pref_head_unique hp1 (pref_append [0] s2.stack))
+  rw [pref_head_unique hp1 (pref_append [0] s2.stack)] at hp1
+  have hp2 : [dst] <<+ s2.stack := cons_pref_cons_inv hp1
+  have hg2 : s.getStor = s2.getStor :=
+    hg1.trans (funext (fun a => (Devm.PopBurn.getStor hp2b a).symm))
+  clear hp1 hp2bs hp2b h_dst
+  -- transferTestLt : [lt?, caller, cbal - wad, wad, dst]
+  rcases of_run_prepend transferTestLt _ h_run with ⟨s3, h3, h_run⟩
+  rcases of_transferTestLt hp2 h3 with ⟨lt?, caller, wad, hp3, h_le, h_caller⟩
+  have hg3 : s.getStor = s3.getStor :=
+    hg2.trans (Line.of_inv Devm.getStor (by line_inv) h3)
+  clear h3 hp2
+  -- rev-branch : wad ≤ caller balance
+  rcases of_run_branch_rev h_run with ⟨s4, hp4b, h_run⟩
+  have hp4bs := hp4b.stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hp4bs
+  rw [hp4bs] at hp3
+  have h_lt0 : lt? = 0 := pref_head_unique hp3 (pref_append [0] s4.stack)
+  have h_le' : wad ≤ Devm.getStorVal s3 sevm.currentTarget caller := h_le.mp h_lt0
+  rw [h_lt0] at hp3
+  have hp4 : [caller, Devm.getStorVal s3 sevm.currentTarget caller - wad, wad, dst] <<+ s4.stack :=
+    cons_pref_cons_inv hp3
+  have hg4 : s.getStor = s4.getStor :=
+    hg3.trans (funext (fun a => (Devm.PopBurn.getStor hp4b a).symm))
+  clear hp3 hp4bs hp4b h_le h_lt0
+  -- transferCore : sstore ::: incrWbal +++ logTransfer +++ returnTrue
+  simp only [transferCore] at h_run
+  -- sstore : set caller's WETH balance to cbal - wad
+  rcases of_run_next h_run with ⟨s5, r5, h_run⟩
+  have h_set : s5.getStor sevm.currentTarget
+      = (s4.getStor sevm.currentTarget).set caller
+          (Devm.getStorVal s3 sevm.currentTarget caller - wad) :=
+    sstore_getStor_set r5 hp4
+  have hp5 : [wad, dst] <<+ s5.stack := prefix_of_sstore r5 hp4
+  clear hp4
+  -- incrWbal : increase destination balance
+  rcases of_run_prepend incrWbal _ h_run with ⟨s6, h6, h_run⟩
+  have h_incr : Increase dst.toAdr wad (s5.getStor sevm.currentTarget).rest
+      (s6.getStor sevm.currentTarget).rest :=
+    incrAt_of_incrWbal h_dst_valid h6 hp5
+  -- logTransfer, returnTrue : do not touch storage
+  have h_rest : s6.getStor sevm.currentTarget = r.getStor sevm.currentTarget :=
+    congr_fun (Func.of_inv Devm.getStor Devm.getStor (by prog_inv) h_run) sevm.currentTarget
+  -- assemble the Transfer
+  refine ⟨wad, caller.toAdr, dst.toAdr, ?_, (s5.getStor sevm.currentTarget).rest, ?_, ?_⟩
+  · show wad ≤ (s.getStor sevm.currentTarget).rest caller.toAdr
+    simp only [Stor.rest, Function.comp_apply]
+    rw [toB256_toAdr h_caller, congr_fun hg3 sevm.currentTarget]
+    exact h_le'
+  · intro a
+    constructor
+    · intro h_eq; subst h_eq
+      simp only [Stor.rest, Function.comp_apply]
+      rw [toB256_toAdr h_caller, h_set, Stor.get_set_self, congr_fun hg3 sevm.currentTarget]
+      rfl
+    · intro h_ne
+      simp only [Stor.rest, Function.comp_apply]
+      rw [h_set]
+      have h_key_ne : a.toB256 ≠ caller := by
+        intro hc; apply h_ne; rw [← toAdr_toB256 a, hc]
+      rw [Stor.get_set_ne h_key_ne, congr_fun hg4 sevm.currentTarget]
+  · rw [← h_rest]; exact h_incr
+
 lemma transfer_inv_solvent' {sevm : Sevm} {s r : Devm}
     (run : Func.Run (weth.main :: weth.aux) sevm s transfer r)
     (h_sv : s.PreSolvent sevm.currentTarget sevm) :
-    r.PostSolvent sevm.currentTarget := sorry
+    r.PostSolvent sevm.currentTarget := by
+  rcases transfer_of_transfer run with ⟨x, a, a', h_di⟩
+  refine result_solvent_of_state_solvent' h_sv ?_ ?_
+  · exact transfer_inv_sum (nof_of_solvent h_sv) h_di
+  · exact congr_fun (Func.of_inv Devm.getBal Devm.getBal transfer_inv_bal run)
+      sevm.currentTarget
 
 lemma allowance_inv_solvent {sevm : Sevm} {s r : Devm}
     (run : Func.Run (weth.main :: weth.aux) sevm s allowance r)
