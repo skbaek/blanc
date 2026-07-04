@@ -315,32 +315,16 @@ def GenericCall
     (disablePrecompiles: Bool)
     (xl : Xlot)
     (ex : Execution) : Prop :=
-    ExistsEq {devm with returnData := []} <|
+    ExistsEq (devm.withReturnData []) <|
   λ evm1 =>
     if (sevm.depth = 0) then
-      (xl = .none ∧ ({evm1 with gasLeft := evm1.gasLeft + gas}).push 0 = ex)
+      (xl = .none ∧ (evm1.withGasLeft (evm1.gasLeft + gas)).push 0 = ex)
     else
     ExistsEq (evm1.memory.data.sliceD input_index input_size 0) <|
   λ calldata =>
     ExistsEq
-      {
-        benv := {state := evm1.state, createdAccounts := evm1.createdAccounts, stat := sevm.benvStat}
-        tenv := {transientStorage := evm1.transientStorage, stat := sevm.tenvStat}
-        caller := caller
-        target := target
-        gas := gas
-        currentTarget := target
-        value := value
-        data := calldata
-        codeAddress := codeAddress
-        code := code
-        depth := sevm.depth - 1
-        shouldTransferValue := shouldTransferValue
-        isStatic := isStaticcall || sevm.isStatic
-        accessedAddresses := evm1.accessedAddresses
-        accessedStorageKeys := evm1.accessedStorageKeys
-        disablePrecompiles := disablePrecompiles
-      } <|
+      ( callMsg sevm evm1 gas value caller target codeAddress
+          shouldTransferValue isStaticcall calldata code disablePrecompiles ) <|
     λ (childMsg : Msg) =>
     ∃ ex',
       And (ProcessMessage childMsg xl ex') <|
@@ -462,7 +446,7 @@ def Xinst.Run (sevm : Sevm) (devm : Devm) :
           (devm11.push 0).SplitXl xl ex <|
         λ devm12 =>
           xl = .none ∧
-          .ok {devm12 with returnData := [], gasLeft := devm12.gasLeft + msgCallStipend} = ex
+          .ok ((devm12.withReturnData []).withGasLeft (devm12.gasLeft + msgCallStipend)) = ex
       else
         GenericCall
           sevm
@@ -521,7 +505,7 @@ def Xinst.Run (sevm : Sevm) (devm : Devm) :
           (devm11.push 0).SplitXl xl ex <|
         λ devm12 =>
           xl = .none ∧
-          .ok {devm12 with returnData := [], gasLeft := devm12.gasLeft + msgCallStipend} = ex
+          .ok ((devm12.withReturnData []).withGasLeft (devm12.gasLeft + msgCallStipend)) = ex
       else
         GenericCall
           sevm

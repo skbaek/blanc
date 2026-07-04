@@ -2437,7 +2437,7 @@ lemma Xinst.prep_inv_getCode
         dsimp [initEvm] at run
         have h_devm : benv.state.getCode adr = devm.getCode adr := by
           subst hp_childMsg hp_evm1
-          dsimp [Msg.benvAfterTransfer] at eq_benv
+          dsimp [Msg.benvAfterTransfer, callMsg, Devm.withReturnData] at eq_benv
           rcases hp_sub : ({ state := devm11.state, createdAccounts := devm11.createdAccounts, stat := sevm.benvStat } : Benv).subBal sevm.currentTarget value with _ | benv_sub
           · simp [hp_sub, Option.toExcept, Bind.bind, Except.bind] at eq_benv
           · simp [hp_sub, Option.toExcept, Bind.bind, Except.bind] at eq_benv
@@ -2463,7 +2463,7 @@ lemma Xinst.prep_inv_getCode
             have h1' : devm1.getCode adr = devm.getCode adr := Devm.pop_getCode eq1
             rw [h11, h10, h9, h8, h7, h6, h5, h4, h3, h2', h1']
         subst hp_childMsg
-        dsimp [Msg.withBenv] at run
+        dsimp [Msg.withBenv, callMsg] at run
         split_ifs at run with h_precomp
         · rcases run with ⟨h_xl, _⟩; cases h_xl
         · rcases run with ⟨ex''', h_xl, _⟩
@@ -2509,7 +2509,7 @@ lemma Xinst.prep_inv_getCode
         dsimp [initEvm] at run
         have h_devm : benv.state.getCode adr = devm.getCode adr := by
           subst hp_childMsg hp_evm1
-          dsimp [Msg.benvAfterTransfer] at eq_benv
+          dsimp [Msg.benvAfterTransfer, callMsg, Devm.withReturnData] at eq_benv
           rcases hp_sub : ({ state := devm11.state, createdAccounts := devm11.createdAccounts, stat := sevm.benvStat } : Benv).subBal sevm.currentTarget value with _ | benv_sub
           · simp [hp_sub, Option.toExcept, Bind.bind, Except.bind] at eq_benv
           · simp [hp_sub, Option.toExcept, Bind.bind, Except.bind] at eq_benv
@@ -2535,7 +2535,7 @@ lemma Xinst.prep_inv_getCode
             have h1' : devm1.getCode adr = devm.getCode adr := Devm.pop_getCode eq1
             rw [h11, h10, h9, h8, h7, h6, h5, h4, h3, h2', h1']
         subst hp_childMsg
-        dsimp [Msg.withBenv] at run
+        dsimp [Msg.withBenv, callMsg] at run
         split_ifs at run with h_precomp
         · rcases run with ⟨h_xl, _⟩; cases h_xl
         · rcases run with ⟨ex''', h_xl, _⟩
@@ -2574,7 +2574,7 @@ lemma Xinst.prep_inv_getCode
       dsimp [initEvm] at run
       have h_devm : benv.state.getCode adr = devm.getCode adr := by
         subst hp_childMsg hp_evm1
-        dsimp [Msg.benvAfterTransfer] at eq_benv
+        dsimp [Msg.benvAfterTransfer, callMsg, Devm.withReturnData] at eq_benv
         injection eq_benv with eq_benv
         subst eq_benv
         have h_devm10_state : ({ state := devm10.state, createdAccounts := devm10.createdAccounts, stat := sevm.benvStat } : Benv).state.getCode adr = devm10.getCode adr := rfl
@@ -2594,7 +2594,7 @@ lemma Xinst.prep_inv_getCode
         have h1' : devm1.getCode adr = devm.getCode adr := Devm.pop_getCode eq1
         rw [h14, h13, h10, h9, h6, h5, h4, h3, h2', h1']
       subst hp_childMsg
-      dsimp [Msg.withBenv] at run
+      dsimp [Msg.withBenv, callMsg] at run
       split_ifs at run with h_precomp
       · rcases run with ⟨h_xl, _⟩; cases h_xl
       · rcases run with ⟨ex''', h_xl, _⟩
@@ -2707,7 +2707,7 @@ lemma Xinst.prep_inv_getCode
       dsimp [initEvm] at run
       have h_devm : benv.state.getCode adr = devm.getCode adr := by
         subst hp_childMsg hp_evm1
-        dsimp [Msg.benvAfterTransfer] at eq_benv
+        dsimp [Msg.benvAfterTransfer, callMsg, Devm.withReturnData] at eq_benv
         rcases hp_sub : ({ state := devm10.state, createdAccounts := devm10.createdAccounts, stat := sevm.benvStat } : Benv).subBal sevm.currentTarget 0 with _ | benv_sub
         · simp [hp_sub, Option.toExcept, Bind.bind, Except.bind] at eq_benv
         · simp [hp_sub, Option.toExcept, Bind.bind, Except.bind] at eq_benv
@@ -2732,7 +2732,7 @@ lemma Xinst.prep_inv_getCode
           have h1' : devm1.getCode adr = devm.getCode adr := Devm.pop_getCode eq1
           rw [h14, h13, h10, h9, h6, h5, h4, h3, h2', h1']
       subst hp_childMsg
-      dsimp [Msg.withBenv] at run
+      dsimp [Msg.withBenv, callMsg] at run
       split_ifs at run with h_precomp
       · rcases run with ⟨h_xl, _⟩; cases h_xl
       · rcases run with ⟨ex''', h_xl, _⟩
@@ -2862,7 +2862,7 @@ lemma Xinst.prep_inv_code
         rcases run with ⟨ex'', run, _⟩
         dsimp [ExecuteCode] at run
         dsimp [initEvm] at run
-        dsimp [Msg.withBenv] at run
+        dsimp [Msg.withBenv, callMsg] at run
         split_ifs at run with h_precomp
         · rcases run with ⟨h_xl, _⟩; cases h_xl
         · rcases run with ⟨ex''', h_xl, _⟩
@@ -2926,7 +2926,7 @@ lemma Xinst.prep_inv_code
         rcases run with ⟨ex'', run, _⟩
         dsimp [ExecuteCode] at run
         dsimp [initEvm] at run
-        dsimp [Msg.withBenv] at run
+        dsimp [Msg.withBenv, callMsg] at run
         split_ifs at run with h_precomp
         · rcases run with ⟨h_xl, _⟩; cases h_xl
         · rcases run with ⟨ex''', h_xl, _⟩
@@ -2965,7 +2965,7 @@ lemma Xinst.prep_inv_code
       rcases run with ⟨ex'', run, _⟩
       dsimp [ExecuteCode] at run
       dsimp [initEvm] at run
-      dsimp [Msg.withBenv] at run
+      dsimp [Msg.withBenv, callMsg] at run
       split_ifs at run with h_precomp
       · rcases run with ⟨h_xl, _⟩; cases h_xl
       · rcases run with ⟨ex''', h_xl, _⟩
@@ -3070,7 +3070,7 @@ lemma Xinst.prep_inv_code
       rcases run with ⟨ex'', run, _⟩
       dsimp [ExecuteCode] at run
       dsimp [initEvm] at run
-      dsimp [Msg.withBenv] at run
+      dsimp [Msg.withBenv, callMsg] at run
       split_ifs at run with h_precomp
       · rcases run with ⟨h_xl, _⟩; cases h_xl
       · rcases run with ⟨ex''', h_xl, _⟩
