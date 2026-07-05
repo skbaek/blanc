@@ -2342,9 +2342,70 @@ lemma allowance_inv_solvent {sevm : Sevm} {s r : Devm}
     (h_sv : s.PreSolvent sevm.currentTarget sevm) :
     r.PostSolvent sevm.currentTarget := by simple_solvent
 
+lemma Xinst.inv_nof {sevm : Sevm} {s r : Devm} {x : Xinst} {xl : Xlot}
+    (h : Xinst.Run sevm s x xl (.ok r)) (h_nof : sum s.getBal < 2 ^ 256) :
+    sum r.getBal < 2 ^ 256 := sorry
+
+lemma Linst.inv_nof {sevm : Sevm} {s r : Devm} {o : Linst}
+    (h : Linst.Run sevm s o (.ok r)) (h_nof : sum s.getBal < 2 ^ 256) :
+    sum r.getBal < 2 ^ 256 := by
+  cases o
+  case stop => cases h; exact h_nof
+  case ret =>
+    have h_bal : s.getBal = r.getBal :=
+      (inferInstanceAs (Linst.Hinv Devm.getBal Devm.getBal Linst.ret)).inv h
+    rw [← h_bal]
+    exact h_nof
+  case rev =>
+    dsimp [Linst.Run, Linst.run] at h
+    rcases of_bind_eq_ok h with ⟨_, _, h2⟩
+    rcases of_bind_eq_ok h2 with ⟨_, _, h4⟩
+    rcases of_bind_eq_ok h4 with ⟨_, _, h6⟩
+    contradiction
+  case dest =>
+    simp [Linst.run, Linst.Run] at h
+    sorry
+
+lemma Ninst.inv_nof {sevm : Sevm} {s r : Devm} {i : Ninst}
+    (h : Ninst.Run sevm s i r) (h_nof : sum s.getBal < 2 ^ 256) :
+    sum r.getBal < 2 ^ 256 := by
+  rcases h with ⟨xl, h_filled, pc, h_run'⟩
+  cases xl with
+  | none =>
+    cases i with
+    | push xs n =>
+      dsimp [Ninst.Run'] at h_run'
+      rcases of_bind_eq_ok h_run' with ⟨s', h_charge, h_push⟩
+      have h_eq1 : s.getBal = s'.getBal := by
+        funext a
+        exact (chargeGas_getBal_eq h_charge a).symm
+      have h_eq2 : s'.getBal = r.getBal := by
+        funext a
+        exact (Devm.push_getBal_eq h_push a).symm
+      have h_eq : s.getBal = r.getBal := h_eq1.trans h_eq2
+      rw [← h_eq]
+      exact h_nof
+    | reg reg_inst =>
+      dsimp [Ninst.Run'] at h_run'
+      have h_bal := (inferInstanceAs (Rinst.Hinv Devm.getBal reg_inst)).inv h_run'
+      rw [← h_bal]
+      exact h_nof
+    | exec xinst =>
+      dsimp [Ninst.Run'] at h_run'
+      exact Xinst.inv_nof h_run' h_nof
+  | some y =>
+    cases i with
+    | push xs n =>
+      dsimp [Ninst.Run'] at h_run'
+    | reg reg_inst =>
+      dsimp [Ninst.Run'] at h_run'
+    | exec xinst =>
+      dsimp [Ninst.Run'] at h_run'
+      exact Xinst.inv_nof h_run' h_nof
+
 lemma Func.inv_nof {c : List Func} {sevm : Sevm} {s r : Devm} {f : Func}
     (run : Func.Run c sevm s f r) (h_nof : sum s.getBal < 2 ^ 256) :
-    sum r.getBal < 2 ^ 256 := sorry
+    sum r.getBal < 2 ^ 256 := by sorry
 
 lemma run_inv_cond (f : Func)
     ( h_solv :
@@ -3819,6 +3880,45 @@ lemma Jinst.inv_state
           simp only [h_gas_not, if_neg, Except.ok.injEq, Prod.mk.injEq] at run
           contradiction
 
+lemma Postcond.dest_delete {wa : Adr} {sevm : Sevm} {devm : Devm}
+    (h_ne : sevm.currentTarget ≠ wa) (h_pc : Precond wa sevm devm) :
+    Postcond wa sevm
+      (addAccountToDelete (devm.setBal sevm.currentTarget 0) sevm.currentTarget) := by
+  have h_bal_self :
+      (addAccountToDelete (devm.setBal sevm.currentTarget 0) sevm.currentTarget).getBal
+        sevm.currentTarget = 0 := by
+    show ((devm.state.setBal sevm.currentTarget 0).get sevm.currentTarget).bal = 0
+    rw [State.setBal_get_self]; rfl
+  have h_bal_ne : ∀ a, sevm.currentTarget ≠ a →
+      (addAccountToDelete (devm.setBal sevm.currentTarget 0) sevm.currentTarget).getBal a =
+        devm.getBal a := by
+    intro a ha
+    show ((devm.state.setBal sevm.currentTarget 0).get a).bal = (devm.state.get a).bal
+    rw [State.setBal_get_ne ha]
+  have h_stor_eq :
+      (addAccountToDelete (devm.setBal sevm.currentTarget 0) sevm.currentTarget).getStor wa =
+        devm.getStor wa := by
+    show ((devm.state.setBal sevm.currentTarget 0).get wa).stor = (devm.state.get wa).stor
+    apply State.setBal_get_stor
+  have h_dec :
+      Decrease sevm.currentTarget (devm.getBal sevm.currentTarget) devm.getBal
+        (addAccountToDelete (devm.setBal sevm.currentTarget 0) sevm.currentTarget).getBal := by
+    intro a
+    constructor
+    · intro h_eq; subst h_eq
+      rw [h_bal_self, B256.sub_self]
+    · intro ha; exact (h_bal_ne a ha).symm
+  have h_sum :
+      sum devm.getBal - (devm.getBal sevm.currentTarget).toNat =
+        sum (addAccountToDelete (devm.setBal sevm.currentTarget 0) sevm.currentTarget).getBal :=
+    sum_sub_assoc h_dec (B256.le_of_toNat_le_toNat (Nat.le_refl _))
+  constructor
+  · have h_nof := h_pc.nof
+    omega
+  · unfold Devm.PostSolvent
+    rw [h_stor_eq, h_bal_ne wa h_ne]
+    exact h_pc.solvent.right h_ne
+
 lemma Linst.inv_postcond {wa : Adr} {sevm : Sevm} {pre post : Devm} {l : Linst}
     (h_run : Linst.Run sevm pre l (.ok post))
     (h_ne : sevm.currentTarget ≠ wa)
@@ -3893,27 +3993,12 @@ lemma Linst.inv_postcond {wa : Adr} {sevm : Sevm} {pre post : Devm} {l : Linst}
         exact congr_fun h_stor wa
     have h_pc3 : Precond wa sevm (devm3.addBal dest_a ((dest_a, devm1).2.getAcct sevm.currentTarget).bal) := by
       exact Precond.transfer_state h_pc2 h_ne h_sub_st rfl
-    -- split at h_run4 <;> (injection h_run4 with h_eq; subst h_eq)
-    -- · constructor
-    --   · have h_nof := h_pc3.nof
-    --     have h_dec : Decrease sevm.currentTarget ((devm3.addBal dest_a ((dest_a, devm1).2.getAcct sevm.currentTarget).bal).getBal sevm.currentTarget) post.getBal (devm3.addBal dest_a ((dest_a, devm1).2.getAcct sevm.currentTarget).bal).getBal := by
-    --       unfold Decrease
-    --       constructor
-    --       · simp [Devm.getBal, Devm.setBal, addAccountToDelete]
-    --       · intro a ha
-    --         simp [Devm.getBal, Devm.setBal, addAccountToDelete]
-    --         have : a ≠ sevm.currentTarget := ha
-    --         simp [this]
-    --     rw [sum_sub_assoc h_dec]
-    --     omega
-    --   · unfold Devm.PostSolvent
-    --     have h_solv := h_pc3.solvent
-    --     unfold Devm.PreSolvent at h_solv
-    --     have h1 := h_solv.right h_ne
-    --     simp [Devm.getStor, Devm.getBal, Devm.setBal, addAccountToDelete, h_ne.symm]
-    --     exact h1
-    -- · exact postcond_of_precond h_pc3
-    sorry
+    clear h_run h_run1 h_run2 h_run3
+    split at h_run4
+    · rw [← Except.ok.inj h_run4]
+      exact Postcond.dest_delete h_ne h_pc3
+    · rw [← Except.ok.inj h_run4]
+      exact postcond_of_precond h_pc3
 
 theorem weth_inv_solvent (wa : Adr) :
     ∀ sevm pre post,
