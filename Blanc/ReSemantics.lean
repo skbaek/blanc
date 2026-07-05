@@ -1979,10 +1979,14 @@ lemma Linst.fit_run {sevm} {devm} {l : Linst} : (Linst.run sevm devm l).Fit := b
   case dest =>
     simp only [Devm.popToAdr, bind_map_left, Linst.run] at ltd
     fit_bind_step ltd fit_pop
+    fit_bind_step ltd fit_ok
+    fit_bind_step ltd fit_ok
+    fit_bind_step ltd fit_ok
     fit_bind_step ltd fit_chargeGas
     fit_bind_step ltd fit_assertDynamic
     have ne : "ERROR : InsufficientBalanceError" ≠ "RecursionLimit" := by decide
     fit_bind_step ltd (fit_to_except ne)
+    fit_bind_step ltd fit_ok
     split at ltd <;> simp [Except.Lim, Except.toError?] at ltd
 
 lemma of_exec' :

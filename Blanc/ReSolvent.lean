@@ -2363,7 +2363,7 @@ lemma Linst.inv_nof {sevm : Sevm} {s r : Devm} {o : Linst}
     rcases of_bind_eq_ok h4 with ⟨_, _, h6⟩
     contradiction
   case dest =>
-    simp [Linst.run, Linst.Run] at h
+    simp only [Linst.run, Linst.Run] at h
     sorry
 
 lemma Ninst.inv_nof {sevm : Sevm} {s r : Devm} {i : Ninst}
@@ -3828,7 +3828,7 @@ lemma Jinst.inv_state
           subst_vars
           rfl
         · have h_gas_not : ¬(gJumpdest ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not, if_neg, Except.ok.injEq, Prod.mk.injEq] at run
+          simp only [h_gas_not] at run
           contradiction
     · rename_i x2 xs2
       cases j
