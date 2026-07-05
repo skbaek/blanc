@@ -2363,8 +2363,66 @@ lemma Linst.inv_nof {sevm : Sevm} {s r : Devm} {o : Linst}
     rcases of_bind_eq_ok h4 with ⟨_, _, h6⟩
     contradiction
   case dest =>
-    simp only [Linst.run, Linst.Run] at h
-    sorry
+    dsimp [Linst.Run, Linst.run] at h
+    rcases of_bind_eq_ok h with ⟨⟨dest_a, devm1⟩, h_pop, h_run1⟩
+    rcases of_bind_eq_ok h_run1 with ⟨devm2, h_charge, h_run2⟩
+    rcases of_bind_eq_ok h_run2 with ⟨_, h_assert, h_run3⟩
+    rcases of_bind_eq_ok h_run3 with ⟨devm3, h_sub, h_run4⟩
+    have h_sub_some : devm2.subBal sevm.currentTarget ((dest_a, devm1).2.getAcct sevm.currentTarget).bal = some devm3 := by
+      cases eq : devm2.subBal sevm.currentTarget ((dest_a, devm1).2.getAcct sevm.currentTarget).bal
+      · rw [eq] at h_sub; contradiction
+      · rw [eq] at h_sub; injection h_sub with h'; subst h'; rfl
+    have h_sub_st : devm2.state.subBal sevm.currentTarget ((dest_a, devm1).2.getAcct sevm.currentTarget).bal = some devm3.state := by
+      dsimp [Devm.subBal, Option.bind] at h_sub_some
+      cases hq : devm2.state.subBal sevm.currentTarget ((dest_a, devm1).2.getAcct sevm.currentTarget).bal
+      · rw [hq] at h_sub_some; contradiction
+      · rw [hq] at h_sub_some; injection h_sub_some with h'; subst h'; rfl
+    have h_bal1 : devm1.getBal = s.getBal := by
+      funext a; exact Devm.popToAdr_getBal_eq h_pop a
+    have h_bal2 : devm2.getBal = devm1.getBal := by
+      ext a
+      have := chargeGas_getBal_eq h_charge a
+      rw [this]
+      split
+      · rfl
+      · rfl
+    have h_nof2 : sum devm2.state.bal < 2 ^ 256 := by
+      have h_eq : devm2.state.bal = s.getBal := h_bal2.trans h_bal1
+      rw [h_eq]; exact h_nof
+    rcases of_state_transfer h_sub_st h_nof2 with ⟨_, _, h_sum, _, _, _⟩
+    have h_bal4 : (devm3.addBal dest_a ((dest_a, devm1).2.getAcct sevm.currentTarget).bal).getBal
+        = (devm3.state.addBal dest_a ((dest_a, devm1).2.getAcct sevm.currentTarget).bal).bal := rfl
+    have h_nof4 : sum (devm3.addBal dest_a ((dest_a, devm1).2.getAcct sevm.currentTarget).bal).getBal < 2 ^ 256 := by
+      rw [h_bal4, h_sum]; exact h_nof2
+    split at h_run4
+    · rw [← Except.ok.inj h_run4]
+      set devm4 := devm3.addBal dest_a ((dest_a, devm1).2.getAcct sevm.currentTarget).bal with h_devm4
+      have h_bal_self :
+          (addAccountToDelete (devm4.setBal sevm.currentTarget 0) sevm.currentTarget).getBal
+            sevm.currentTarget = 0 := by
+        show ((devm4.state.setBal sevm.currentTarget 0).get sevm.currentTarget).bal = 0
+        rw [State.setBal_get_self]; rfl
+      have h_bal_ne : ∀ a, sevm.currentTarget ≠ a →
+          (addAccountToDelete (devm4.setBal sevm.currentTarget 0) sevm.currentTarget).getBal a =
+            devm4.getBal a := by
+        intro a ha
+        show ((devm4.state.setBal sevm.currentTarget 0).get a).bal = (devm4.state.get a).bal
+        rw [State.setBal_get_ne ha]
+      have h_dec :
+          Decrease sevm.currentTarget (devm4.getBal sevm.currentTarget) devm4.getBal
+            (addAccountToDelete (devm4.setBal sevm.currentTarget 0) sevm.currentTarget).getBal := by
+        intro a
+        constructor
+        · intro h_eq; subst h_eq
+          rw [h_bal_self, B256.sub_self]
+        · intro ha; exact (h_bal_ne a ha).symm
+      have h_sum' :
+          sum devm4.getBal - (devm4.getBal sevm.currentTarget).toNat =
+            sum (addAccountToDelete (devm4.setBal sevm.currentTarget 0) sevm.currentTarget).getBal :=
+        sum_sub_assoc h_dec (B256.le_of_toNat_le_toNat (Nat.le_refl _))
+      omega
+    · rw [← Except.ok.inj h_run4]
+      exact h_nof4
 
 lemma Ninst.inv_nof {sevm : Sevm} {s r : Devm} {i : Ninst}
     (h : Ninst.Run sevm s i r) (h_nof : sum s.getBal < 2 ^ 256) :
