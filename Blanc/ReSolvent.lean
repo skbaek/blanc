@@ -2342,10 +2342,6 @@ lemma allowance_inv_solvent {sevm : Sevm} {s r : Devm}
     (h_sv : s.PreSolvent sevm.currentTarget sevm) :
     r.PostSolvent sevm.currentTarget := by simple_solvent
 
-lemma Xinst.inv_nof {sevm : Sevm} {s r : Devm} {x : Xinst} {xl : Xlot}
-    (h : Xinst.Run sevm s x xl (.ok r)) (h_nof : sum s.getBal < 2 ^ 256) :
-    sum r.getBal < 2 ^ 256 := sorry
-
 lemma Linst.inv_nof {sevm : Sevm} {s r : Devm} {o : Linst}
     (h : Linst.Run sevm s o (.ok r)) (h_nof : sum s.getBal < 2 ^ 256) :
     sum r.getBal < 2 ^ 256 := by
@@ -2424,6 +2420,654 @@ lemma Linst.inv_nof {sevm : Sevm} {s r : Devm} {o : Linst}
     · rw [← Except.ok.inj h_run4]
       exact h_nof4
 
+lemma Jinst.inv_state
+    {pc sevm devm j pc' devm'}
+    (run : Jinst.Run ⟨pc, sevm, devm⟩ j (.ok ⟨pc', devm'⟩)) :
+    devm'.state = devm.state := by
+  cases h1 : devm.stack
+  · cases j
+    · simp only [Jinst.Run, Jinst.run, runCore, chargeGas, Devm.pop, Except.assert, safeSub, bind, Except.bind] at run
+      rw [h1] at run
+      dsimp at run
+      contradiction
+    · simp only [Jinst.Run, Jinst.run, runCore, chargeGas, Devm.pop, Except.assert, safeSub, bind, Except.bind] at run
+      rw [h1] at run
+      dsimp at run
+      contradiction
+    · by_cases h_gas : gJumpdest ≤ devm.gasLeft
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas, bind, Except.bind, safeSub] at run
+        rw [h1] at run
+        simp only [h_gas, if_pos, Except.ok.injEq, Prod.mk.injEq] at run
+        cases run
+        subst_vars
+        rfl
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas, bind, Except.bind, safeSub] at run
+        rw [h1] at run
+        have h_gas_not : ¬(gJumpdest ≤ devm.gasLeft) := by omega
+        simp only [h_gas_not] at run
+        try contradiction
+  · rename_i x xs
+    cases h2 : xs
+    · cases j
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas, Devm.pop, bind, Except.bind, safeSub] at run
+        rw [h1] at run
+        dsimp at run
+        by_cases h_gas : gMid ≤ devm.gasLeft
+        · simp only [h_gas, if_pos, Except.ok.injEq, Prod.mk.injEq] at run
+          by_cases h_jump : jumpable sevm.code x.toNat = true
+          · simp only [h_jump, if_pos, Except.ok.injEq, Prod.mk.injEq] at run
+            cases run
+            subst_vars
+            rfl
+          · simp only [h_jump, if_neg, Except.ok.injEq, Prod.mk.injEq] at run
+            contradiction
+        · have h_gas_not : ¬(gMid ≤ devm.gasLeft) := by omega
+          simp only [h_gas_not, if_neg, Except.ok.injEq, Prod.mk.injEq] at run
+          contradiction
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas, Devm.pop, bind, Except.bind, safeSub] at run
+        rw [h1] at run
+        rw [h2] at run
+        dsimp at run
+        contradiction
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas, bind, Except.bind, safeSub] at run
+        rw [h1] at run
+        by_cases h_gas : gJumpdest ≤ devm.gasLeft
+        · simp only [h_gas, if_pos, Except.ok.injEq, Prod.mk.injEq] at run
+          cases run
+          subst_vars
+          rfl
+        · have h_gas_not : ¬(gJumpdest ≤ devm.gasLeft) := by omega
+          simp only [h_gas_not] at run
+          contradiction
+    · rename_i x2 xs2
+      cases j
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas, Devm.pop, bind, Except.bind, safeSub] at run
+        rw [h1] at run
+        dsimp at run
+        by_cases h_gas : gMid ≤ devm.gasLeft
+        · simp only [h_gas, if_pos, Except.ok.injEq, Prod.mk.injEq] at run
+          by_cases h_jump : jumpable sevm.code x.toNat = true
+          · simp only [h_jump, if_pos, Except.ok.injEq, Prod.mk.injEq] at run
+            cases run
+            subst_vars
+            rfl
+          · simp only [h_jump, if_neg, Except.ok.injEq, Prod.mk.injEq] at run
+            contradiction
+        · have h_gas_not : ¬(gMid ≤ devm.gasLeft) := by omega
+          simp only [h_gas_not, if_neg, Except.ok.injEq, Prod.mk.injEq] at run
+          contradiction
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas, Devm.pop, bind, Except.bind, safeSub] at run
+        rw [h1] at run
+        rw [h2] at run
+        dsimp at run
+        by_cases h_gas : gHigh ≤ devm.gasLeft
+        · simp only [h_gas, if_pos, Except.ok.injEq, Prod.mk.injEq] at run
+          by_cases h_cond : x2 = 0
+          · simp only [h_cond, if_pos, Except.ok.injEq, Prod.mk.injEq] at run
+            cases run
+            subst_vars
+            rfl
+          · simp only [h_cond, if_neg, Except.ok.injEq, Prod.mk.injEq] at run
+            by_cases h_jump : jumpable sevm.code x.toNat = true
+            · simp only [h_jump, if_pos, Except.ok.injEq, Prod.mk.injEq] at run
+              cases run
+              subst_vars
+              rfl
+            · simp only [h_jump, if_neg, Except.ok.injEq, Prod.mk.injEq] at run
+              contradiction
+        · have h_gas_not : ¬(gHigh ≤ devm.gasLeft) := by omega
+          simp only [h_gas_not, if_neg, Except.ok.injEq, Prod.mk.injEq] at run
+          contradiction
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas, bind, Except.bind, safeSub] at run
+        rw [h1] at run
+        by_cases h_gas : gJumpdest ≤ devm.gasLeft
+        · simp only [h_gas, if_pos, Except.ok.injEq, Prod.mk.injEq] at run
+          cases run
+          subst_vars
+          rfl
+        · have h_gas_not : ¬(gJumpdest ≤ devm.gasLeft) := by omega
+          simp only [h_gas_not, if_neg, Except.ok.injEq, Prod.mk.injEq] at run
+          contradiction
+
+-- nof-invariance of the sub-execution recorded in an Xlot oracle
+def Xlot.InvNof : Xlot → Prop
+  | .none => True
+  | .some ⟨_, devm_, exn_⟩ =>
+    ∀ devm' : Devm, exn_ = .ok devm' →
+      sum devm_.getBal < 2 ^ 256 → sum devm'.getBal < 2 ^ 256
+
+lemma sum_getBal_state {d : Devm} : sum d.getBal = sum d.state.bal := by
+  have h : d.getBal = d.state.bal := funext (fun _ => rfl)
+  rw [h]
+
+lemma nof_of_state_eq {d d' : Devm} (h : d'.state = d.state)
+    (h_nof : sum d.getBal < 2 ^ 256) : sum d'.getBal < 2 ^ 256 := by
+  have h' : d'.getBal = d.getBal := funext (getBal_eq_of_state_eq h)
+  rw [h']; exact h_nof
+
+lemma State.set_bal {st : _root_.State} {a : Adr} {ac : Acct}
+    (h : ac.bal = (st.get a).bal) : (st.set a ac).bal = st.bal := by
+  funext b
+  by_cases hb : b = a
+  · subst hb
+    show ((st.set b ac).get b).bal = (st.get b).bal
+    rw [State.get_set_self]; exact h
+  · show ((st.set a ac).get b).bal = (st.get b).bal
+    rw [State.get_set_ne (fun hc => hb hc.symm)]
+
+lemma State.setStor_bal {st : _root_.State} {a : Adr} {s : Stor} :
+    (st.setStor a s).bal = st.bal := State.set_bal rfl
+
+lemma State.incrNonce_bal {st : _root_.State} {a : Adr} :
+    (st.incrNonce a).bal = st.bal := State.set_bal rfl
+
+lemma State.setCode_bal {st : _root_.State} {a : Adr} {cd : ByteArray} :
+    (st.setCode a cd).bal = st.bal := State.set_bal rfl
+
+lemma Devm.incrNonce_state {d : Devm} {a : Adr} :
+    (d.incrNonce a).state = d.state.incrNonce a := rfl
+
+-- the value transfer preceding a sub-message run preserves the balance sum
+lemma sum_bal_of_benvAfterTransfer {msg : Msg} {benv' : Benv}
+    (h : msg.benvAfterTransfer = .ok benv')
+    (h_nof : sum msg.benv.state.bal < 2 ^ 256) :
+    sum benv'.state.bal = sum msg.benv.state.bal := by
+  by_cases h_stv : msg.shouldTransferValue = true
+  · rcases of_benvAfterTransfer h_stv h with ⟨st_mid, h_sub, hB⟩
+    have hBs : benv'.state = st_mid.addBal msg.currentTarget msg.value := by
+      rw [hB]; rfl
+    rw [hBs]
+    exact (of_state_transfer h_sub h_nof).2.2.1
+  · unfold Msg.benvAfterTransfer at h
+    rw [if_neg h_stv] at h
+    rw [← Except.ok.inj h]
+
+lemma of_executeCode_cases {msg : Msg} {xl : Xlot}
+    {ex : Except (String × _root_.State × AdrSet × Tra) Devm}
+    (h : ExecuteCode msg xl ex) :
+    (∃ adr, executeCode.handleError (executePrecomp (initEvm msg) adr) = ex) ∨
+    (∃ ex', xl = .some ⟨initSevm msg, initDevm msg, ex'⟩ ∧
+      executeCode.handleError ex' = ex) := by
+  rcases h_ca : msg.codeAddress with _ | adr
+  · unfold ExecuteCode at h
+    rw [h_ca] at h
+    dsimp only [initEvm] at h
+    exact Or.inr h
+  · rcases of_executeCode_someCode h_ca h with ⟨_, _, h'⟩ | ⟨_, ex', h1, h2⟩
+    · exact Or.inl ⟨adr, h'⟩
+    · exact Or.inr ⟨ex', h1, h2⟩
+
+lemma chargeCodeGas_state {d d' : Devm}
+    (h : processCreateMessage.chargeCodeGas d = .ok d') : d'.state = d.state := by
+  unfold processCreateMessage.chargeCodeGas at h
+  dsimp only at h
+  split at h
+  · cases h
+  · rcases of_bind_eq_ok h with ⟨d1, h_charge, h_rest⟩
+    split_ifs at h_rest
+    cases h_rest
+    exact (Devm.burn_of_chargeGas h_charge).state.symm
+
+lemma ProcessMessage.inv_nof {msg : Msg} {xl : Xlot}
+    {ex : Except (String × _root_.State × AdrSet × Tra) Devm} {child : Devm}
+    (inv : Xlot.InvNof xl)
+    (run : ProcessMessage msg xl ex)
+    (h_ex : ex = .ok child)
+    (h_nof : sum msg.benv.state.bal < 2 ^ 256) :
+    sum child.state.bal < 2 ^ 256 := by
+  subst h_ex
+  dsimp only [ProcessMessage] at run
+  rcases run with ⟨_, _, h_contra, _⟩ | ⟨benv', eq_bt, run⟩
+  · cases h_contra
+  rcases run with ⟨ex'', run_ec, h_split⟩
+  have h_nof' : sum benv'.state.bal < 2 ^ 256 := by
+    rw [sum_bal_of_benvAfterTransfer eq_bt h_nof]; exact h_nof
+  rcases h_split with ⟨_, _, h_contra⟩ | ⟨evm2, h_ex'', h_if⟩
+  · cases h_contra
+  by_cases h_err : evm2.error.isSome = true
+  · -- sub-message failed : state rolled back to the pre-transfer state
+    rw [if_pos h_err] at h_if
+    rw [← Except.ok.inj h_if]
+    exact h_nof
+  · rw [if_neg h_err] at h_if
+    rw [← Except.ok.inj h_if]
+    rcases of_executeCode_cases run_ec with ⟨adr, h_he⟩ | ⟨ex₀, h_xl, h_he⟩
+    · -- precompile : state unchanged from the post-transfer state
+      rw [h_ex''] at h_he
+      have h_state : evm2.state = benv'.state :=
+        state_of_executePrecomp_ok h_he h_err
+      rw [h_state]; exact h_nof'
+    · -- proper sub-execution recorded in the oracle
+      rw [h_xl] at inv
+      dsimp only [Xlot.InvNof] at inv
+      rw [h_ex''] at h_he
+      rcases ex₀ with e | dc
+      · rcases of_handleError_err h_he with ⟨evm4, h_ok4, h_some4, _⟩ | ⟨_, h_err4⟩
+        · rw [← Except.ok.inj h_ok4] at h_some4
+          exact absurd h_some4 h_err
+        · cases h_err4
+      · simp only [executeCode.handleError] at h_he
+        rw [← Except.ok.inj h_he]
+        have h_nof_in : sum (initDevm (msg.withBenv benv')).getBal < 2 ^ 256 := by
+          rw [sum_getBal_state]
+          exact h_nof'
+        have h_out := inv dc rfl h_nof_in
+        rw [sum_getBal_state] at h_out
+        exact h_out
+
+lemma GenericCall.inv_nof {sevm : Sevm} {devm : Devm}
+    {gas : Nat} {value : B256} {caller target codeAddress : Adr}
+    {stv istat : Bool} {ii is oi os : Nat} {code : ByteArray} {dp : Bool}
+    {xl : Xlot} {r : Devm}
+    (inv : Xlot.InvNof xl)
+    (h : GenericCall sevm devm gas value caller target codeAddress
+      stv istat ii is oi os code dp xl (.ok r))
+    (h_nof : sum devm.getBal < 2 ^ 256) :
+    sum r.getBal < 2 ^ 256 := by
+  dsimp only [GenericCall] at h
+  rcases h with ⟨evm1, h_evm1, h⟩
+  split_ifs at h with h_depth
+  · -- depth limit reached : call fails, state unchanged
+    rcases h with ⟨_, h_push⟩
+    apply nof_of_state_eq _ h_nof
+    rw [← (Devm.push_of_push h_push).state, h_evm1]
+    rfl
+  · rcases h with ⟨calldata, _, h⟩
+    rcases h with ⟨childMsg, h_cm, h⟩
+    rcases h with ⟨ex', run_pm, h_split⟩
+    have h_nof_cm : sum childMsg.benv.state.bal < 2 ^ 256 := by
+      have h_st : childMsg.benv.state = devm.state := by rw [h_cm, h_evm1]; rfl
+      rw [h_st, ← sum_getBal_state]
+      exact h_nof
+    rcases ex' with e | child
+    · rcases e with ⟨e1, e2, e3, e4⟩
+      dsimp only [liftToExecution] at h_split
+      rcases h_split with ⟨_, _, h_contra⟩ | ⟨_, h_contra, _⟩ <;> cases h_contra
+    · dsimp only [liftToExecution] at h_split
+      rcases h_split with ⟨_, h_contra, _⟩ | ⟨c, h_c, h_body⟩
+      · cases h_contra
+      cases h_c
+      have h_child : sum child.state.bal < 2 ^ 256 :=
+        ProcessMessage.inv_nof inv run_pm rfl h_nof_cm
+      by_cases h_err : child.error.isSome = true
+      · rw [if_pos h_err] at h_body
+        rw [sum_getBal_state, state_of_push_split h_body]
+        exact h_child
+      · rw [if_neg h_err] at h_body
+        rw [sum_getBal_state, state_of_push_split h_body]
+        exact h_child
+
+lemma ProcessCreateMessage.inv_nof {msg : Msg} {xl : Xlot}
+    {ex : Except (String × _root_.State × AdrSet × Tra) Devm} {child : Devm}
+    (inv : Xlot.InvNof xl)
+    (run : ProcessCreateMessage msg xl ex)
+    (h_ex : ex = .ok child)
+    (h_nof : sum msg.benv.state.bal < 2 ^ 256) :
+    sum child.state.bal < 2 ^ 256 := by
+  subst h_ex
+  dsimp only [ProcessCreateMessage] at run
+  rcases run with ⟨ex', run_pm, h_split⟩
+  have h_nof' : sum (processCreateMessage.msg msg).benv.state.bal < 2 ^ 256 := by
+    have h_st : (processCreateMessage.msg msg).benv.state
+        = (msg.benv.state.setStor msg.currentTarget .empty).incrNonce
+            msg.currentTarget := rfl
+    rw [h_st, State.incrNonce_bal, State.setStor_bal]
+    exact h_nof
+  rcases h_split with ⟨_, _, h_contra⟩ | ⟨evm, h_ex', h_if⟩
+  · cases h_contra
+  have h_evm : sum evm.state.bal < 2 ^ 256 :=
+    ProcessMessage.inv_nof inv run_pm h_ex' h_nof'
+  by_cases h_err : evm.error.isNone = true
+  · rw [if_pos h_err] at h_if
+    rcases h_cg : processCreateMessage.chargeCodeGas evm with ⟨err, evm'⟩ | evm' <;>
+      rw [h_cg] at h_if <;> dsimp only at h_if
+    · split_ifs at h_if with h_halt
+      rw [← Except.ok.inj h_if]
+      exact h_nof
+    · rw [← Except.ok.inj h_if]
+      have h_st : (evm'.setCode msg.currentTarget ⟨⟨evm'.output⟩⟩).state
+          = evm'.state.setCode msg.currentTarget ⟨⟨evm'.output⟩⟩ := rfl
+      rw [h_st, State.setCode_bal, chargeCodeGas_state h_cg]
+      exact h_evm
+  · rw [if_neg h_err] at h_if
+    rw [← Except.ok.inj h_if]
+    exact h_nof
+
+lemma GenericCreate.inv_nof {sevm : Sevm} {devm : Devm} {endowment : B256}
+    {newAddress : Adr} {mi ms : Nat} {xl : Xlot} {r : Devm}
+    (inv : Xlot.InvNof xl)
+    (h : GenericCreate sevm devm endowment newAddress mi ms xl (.ok r))
+    (h_nof : sum devm.getBal < 2 ^ 256) :
+    sum r.getBal < 2 ^ 256 := by
+  dsimp only [GenericCreate] at h
+  rcases h with ⟨calldata, _, h⟩
+  rcases h with ⟨_, _, h_contra, _⟩ | ⟨_, _, h⟩
+  · cases h_contra
+  rcases h with ⟨devm1, h_d1, h⟩
+  rcases h with ⟨createMsgGas, _, h⟩
+  rcases h with ⟨devm2, h_d2, h⟩
+  rcases h with ⟨_, _, h_contra, _⟩ | ⟨_, _, h⟩
+  · cases h_contra
+  rcases h with ⟨devm3, h_d3, h⟩
+  rcases h with ⟨sender, _, h⟩
+  have h_st1 : devm1.state = devm.state := by rw [h_d1]; rfl
+  have h_st2 : devm2.state = devm1.state := by rw [h_d2]
+  have h_st3 : devm3.state = devm2.state := by rw [h_d3]
+  have h_nof3 : sum devm3.state.bal < 2 ^ 256 := by
+    rw [h_st3, h_st2, h_st1, ← sum_getBal_state]
+    exact h_nof
+  split_ifs at h with h_c1
+  · -- create fails : state unchanged
+    rcases h with ⟨_, h_push⟩
+    rw [sum_getBal_state, ← (Devm.push_of_push h_push).state]
+    exact h_nof3
+  · rcases h with ⟨devm4, h_d4, h⟩
+    have h_bal4 : devm4.state.bal = devm3.state.bal := by
+      rw [h_d4, Devm.incrNonce_state, State.incrNonce_bal]
+    have h_nof4 : sum devm4.state.bal < 2 ^ 256 := by
+      rw [h_bal4]; exact h_nof3
+    split_ifs at h with h_c2
+    · -- target account exists : create fails, state unchanged
+      rcases h with ⟨_, h_push⟩
+      rw [sum_getBal_state, ← (Devm.push_of_push h_push).state]
+      exact h_nof4
+    · rcases h with ⟨childMsg, h_cm, h⟩
+      rcases h with ⟨ex', run_pcm, h_split⟩
+      have h_nof_cm : sum childMsg.benv.state.bal < 2 ^ 256 := by
+        have h_st : childMsg.benv.state = devm4.state := by rw [h_cm]
+        rw [h_st]; exact h_nof4
+      rcases ex' with e | child
+      · rcases e with ⟨e1, e2, e3, e4⟩
+        dsimp only [liftToExecution] at h_split
+        rcases h_split with ⟨_, _, h_contra⟩ | ⟨_, h_contra, _⟩ <;> cases h_contra
+      · dsimp only [liftToExecution] at h_split
+        rcases h_split with ⟨_, h_contra, _⟩ | ⟨c, h_c, h_body⟩
+        · cases h_contra
+        cases h_c
+        have h_child : sum child.state.bal < 2 ^ 256 :=
+          ProcessCreateMessage.inv_nof inv run_pcm rfl h_nof_cm
+        by_cases h_err : child.error.isSome = true
+        · rw [if_pos h_err] at h_body
+          rw [sum_getBal_state, ← (Devm.push_of_push h_body).state]
+          exact h_child
+        · rw [if_neg h_err] at h_body
+          rw [sum_getBal_state, ← (Devm.push_of_push h_body).state]
+          exact h_child
+
+lemma Xinst.inv_nof_gen {sevm : Sevm} {s r : Devm} {x : Xinst} {xl : Xlot}
+    (inv : Xlot.InvNof xl)
+    (h : Xinst.Run sevm s x xl (.ok r))
+    (h_nof : sum s.getBal < 2 ^ 256) :
+    sum r.getBal < 2 ^ 256 := by
+  cases x
+  case create =>
+    dsimp only [Xinst.Run] at h
+    rcases h with ⟨_, _, h_contra, _⟩ | ⟨⟨endowment, d1⟩, e1, h⟩; · cases h_contra
+    rcases h with ⟨_, _, h_contra, _⟩ | ⟨⟨mi, d2⟩, e2, h⟩; · cases h_contra
+    rcases h with ⟨_, _, h_contra, _⟩ | ⟨⟨ms, d3⟩, e3, h⟩; · cases h_contra
+    rcases h with ⟨extendCost, _, h⟩
+    rcases h with ⟨initCodeCost, _, h⟩
+    rcases h with ⟨_, _, h_contra, _⟩ | ⟨d4, e4, h⟩; · cases h_contra
+    rcases h with ⟨d5, h_d5, h⟩
+    rcases h with ⟨newAddress, _, h⟩
+    rcases Devm.pop_of_popToNat e2 with ⟨_, hp2⟩
+    rcases Devm.pop_of_popToNat e3 with ⟨_, hp3⟩
+    have h_st3 : s.state = d3.state :=
+      ((Devm.pop_of_pop e1).state).trans (hp2.state.trans hp3.state)
+    have h_st4 : d3.state = d4.state := (Devm.burn_of_chargeGas e4).state
+    have h_st5 : d5.state = d4.state := by rw [h_d5]; rfl
+    apply GenericCreate.inv_nof inv h
+    apply nof_of_state_eq _ h_nof
+    rw [h_st5, ← h_st4, ← h_st3]
+  case create2 =>
+    dsimp only [Xinst.Run] at h
+    rcases h with ⟨_, _, h_contra, _⟩ | ⟨⟨endowment, d1⟩, e1, h⟩; · cases h_contra
+    rcases h with ⟨_, _, h_contra, _⟩ | ⟨⟨mi, d2⟩, e2, h⟩; · cases h_contra
+    rcases h with ⟨_, _, h_contra, _⟩ | ⟨⟨ms, d3⟩, e3, h⟩; · cases h_contra
+    rcases h with ⟨_, _, h_contra, _⟩ | ⟨⟨salt, d4⟩, e4, h⟩; · cases h_contra
+    rcases h with ⟨extendCost, _, h⟩
+    rcases h with ⟨initCodeHashCost, _, h⟩
+    rcases h with ⟨initCodeCost, _, h⟩
+    rcases h with ⟨_, _, h_contra, _⟩ | ⟨d5, e5, h⟩; · cases h_contra
+    rcases h with ⟨d6, h_d6, h⟩
+    rcases h with ⟨newAddress, _, h⟩
+    rcases Devm.pop_of_popToNat e2 with ⟨_, hp2⟩
+    rcases Devm.pop_of_popToNat e3 with ⟨_, hp3⟩
+    have h_st4 : s.state = d4.state :=
+      ((Devm.pop_of_pop e1).state).trans
+        (hp2.state.trans (hp3.state.trans (Devm.pop_of_pop e4).state))
+    have h_st5 : d4.state = d5.state := (Devm.burn_of_chargeGas e5).state
+    have h_st6 : d6.state = d5.state := by rw [h_d6]; rfl
+    apply GenericCreate.inv_nof inv h
+    apply nof_of_state_eq _ h_nof
+    rw [h_st6, ← h_st5, ← h_st4]
+  case call =>
+    dsimp only [Xinst.Run] at h
+    rcases h with ⟨_, _, h_contra, _⟩ | ⟨⟨gas, d1⟩, e1, h⟩; · cases h_contra
+    rcases h with ⟨_, _, h_contra, _⟩ | ⟨⟨callee, d2⟩, e2, h⟩; · cases h_contra
+    rcases h with ⟨_, _, h_contra, _⟩ | ⟨⟨value, d3⟩, e3, h⟩; · cases h_contra
+    rcases h with ⟨_, _, h_contra, _⟩ | ⟨⟨ii, d4⟩, e4, h⟩; · cases h_contra
+    rcases h with ⟨_, _, h_contra, _⟩ | ⟨⟨is, d5⟩, e5, h⟩; · cases h_contra
+    rcases h with ⟨_, _, h_contra, _⟩ | ⟨⟨oi, d6⟩, e6, h⟩; · cases h_contra
+    rcases h with ⟨_, _, h_contra, _⟩ | ⟨⟨os, d7⟩, e7, h⟩; · cases h_contra
+    rcases h with ⟨extendCost, _, h⟩
+    rcases h with ⟨preAccessCost, _, h⟩
+    rcases h with ⟨d8, h_d8, h⟩
+    rcases h with ⟨⟨dp, na, code0, dagc, d9⟩, h_d9, h⟩
+    rcases h with ⟨accessCost, _, h⟩
+    rcases h with ⟨createCost, _, h⟩
+    rcases h with ⟨transferCost, _, h⟩
+    rcases h with ⟨⟨mcc, mcs⟩, _, h⟩
+    rcases h with ⟨_, _, h_contra, _⟩ | ⟨d10, e10, h⟩; · cases h_contra
+    rcases h with ⟨_, _, h_contra, _⟩ | ⟨_, _, h⟩; · cases h_contra
+    rcases h with ⟨d11, h_d11, h⟩
+    rcases h with ⟨senderBal, _, h⟩
+    rcases Devm.pop_of_popToAdr e2 with ⟨_, _, hp2⟩
+    rcases Devm.pop_of_popToNat e4 with ⟨_, hp4⟩
+    rcases Devm.pop_of_popToNat e5 with ⟨_, hp5⟩
+    rcases Devm.pop_of_popToNat e6 with ⟨_, hp6⟩
+    rcases Devm.pop_of_popToNat e7 with ⟨_, hp7⟩
+    have h_st7 : s.state = d7.state :=
+      ((Devm.pop_of_pop e1).state).trans
+        (((Devm.pop_of_pop hp2).state).trans
+          (((Devm.pop_of_pop e3).state).trans
+            (hp4.state.trans (hp5.state.trans (hp6.state.trans hp7.state)))))
+    have h_st8 : d8.state = d7.state := by rw [h_d8]; rfl
+    have h_st9 : d9.state = d8.state := by
+      have hq := congrArg (fun q => (q.2.2.2.2 : Devm).state) h_d9
+      dsimp at hq
+      rw [hq, accessDelegation_state]
+    have h_st10 : d9.state = d10.state := (Devm.burn_of_chargeGas e10).state
+    have h_st11 : d11.state = d10.state := by rw [h_d11]; rfl
+    have h_nof11 : sum d11.getBal < 2 ^ 256 := by
+      apply nof_of_state_eq _ h_nof
+      rw [h_st11, ← h_st10, h_st9, h_st8, ← h_st7]
+    split_ifs at h with h_lt
+    · rcases h with ⟨_, _, h_contra, _⟩ | ⟨d12, e12, h⟩; · cases h_contra
+      rcases h with ⟨_, h_ex⟩
+      rw [← Except.ok.inj h_ex]
+      apply nof_of_state_eq _ h_nof11
+      exact ((Devm.push_of_push e12).state).symm
+    · exact GenericCall.inv_nof inv h h_nof11
+  case callcode =>
+    dsimp only [Xinst.Run] at h
+    rcases h with ⟨_, _, h_contra, _⟩ | ⟨⟨gas, d1⟩, e1, h⟩; · cases h_contra
+    rcases h with ⟨_, _, h_contra, _⟩ | ⟨⟨codeAddress, d2⟩, e2, h⟩; · cases h_contra
+    rcases h with ⟨_, _, h_contra, _⟩ | ⟨⟨value, d3⟩, e3, h⟩; · cases h_contra
+    rcases h with ⟨_, _, h_contra, _⟩ | ⟨⟨ii, d4⟩, e4, h⟩; · cases h_contra
+    rcases h with ⟨_, _, h_contra, _⟩ | ⟨⟨is, d5⟩, e5, h⟩; · cases h_contra
+    rcases h with ⟨_, _, h_contra, _⟩ | ⟨⟨oi, d6⟩, e6, h⟩; · cases h_contra
+    rcases h with ⟨_, _, h_contra, _⟩ | ⟨⟨os, d7⟩, e7, h⟩; · cases h_contra
+    rcases h with ⟨extendCost, _, h⟩
+    rcases h with ⟨preAccessCost, _, h⟩
+    rcases h with ⟨d8, h_d8, h⟩
+    rcases h with ⟨⟨dp, na, code0, dagc, d9⟩, h_d9, h⟩
+    rcases h with ⟨accessCost, _, h⟩
+    rcases h with ⟨transferCost, _, h⟩
+    rcases h with ⟨⟨mcc, mcs⟩, _, h⟩
+    rcases h with ⟨_, _, h_contra, _⟩ | ⟨d10, e10, h⟩; · cases h_contra
+    rcases h with ⟨d11, h_d11, h⟩
+    rcases h with ⟨senderBal, _, h⟩
+    rcases Devm.pop_of_popToAdr e2 with ⟨_, _, hp2⟩
+    rcases Devm.pop_of_popToNat e4 with ⟨_, hp4⟩
+    rcases Devm.pop_of_popToNat e5 with ⟨_, hp5⟩
+    rcases Devm.pop_of_popToNat e6 with ⟨_, hp6⟩
+    rcases Devm.pop_of_popToNat e7 with ⟨_, hp7⟩
+    have h_st7 : s.state = d7.state :=
+      ((Devm.pop_of_pop e1).state).trans
+        (((Devm.pop_of_pop hp2).state).trans
+          (((Devm.pop_of_pop e3).state).trans
+            (hp4.state.trans (hp5.state.trans (hp6.state.trans hp7.state)))))
+    have h_st8 : d8.state = d7.state := by rw [h_d8]; rfl
+    have h_st9 : d9.state = d8.state := by
+      have hq := congrArg (fun q => (q.2.2.2.2 : Devm).state) h_d9
+      dsimp at hq
+      rw [hq, accessDelegation_state]
+    have h_st10 : d9.state = d10.state := (Devm.burn_of_chargeGas e10).state
+    have h_st11 : d11.state = d10.state := by rw [h_d11]; rfl
+    have h_nof11 : sum d11.getBal < 2 ^ 256 := by
+      apply nof_of_state_eq _ h_nof
+      rw [h_st11, ← h_st10, h_st9, h_st8, ← h_st7]
+    split_ifs at h with h_lt
+    · rcases h with ⟨_, _, h_contra, _⟩ | ⟨d12, e12, h⟩; · cases h_contra
+      rcases h with ⟨_, h_ex⟩
+      rw [← Except.ok.inj h_ex]
+      apply nof_of_state_eq _ h_nof11
+      exact ((Devm.push_of_push e12).state).symm
+    · exact GenericCall.inv_nof inv h h_nof11
+  case delcall =>
+    dsimp only [Xinst.Run] at h
+    rcases h with ⟨_, _, h_contra, _⟩ | ⟨⟨gas, d1⟩, e1, h⟩; · cases h_contra
+    rcases h with ⟨_, _, h_contra, _⟩ | ⟨⟨codeAddress, d2⟩, e2, h⟩; · cases h_contra
+    rcases h with ⟨_, _, h_contra, _⟩ | ⟨⟨ii, d3⟩, e3, h⟩; · cases h_contra
+    rcases h with ⟨_, _, h_contra, _⟩ | ⟨⟨is, d4⟩, e4, h⟩; · cases h_contra
+    rcases h with ⟨_, _, h_contra, _⟩ | ⟨⟨oi, d5⟩, e5, h⟩; · cases h_contra
+    rcases h with ⟨_, _, h_contra, _⟩ | ⟨⟨os, d6⟩, e6, h⟩; · cases h_contra
+    rcases h with ⟨extendCost, _, h⟩
+    rcases h with ⟨preAccessCost, _, h⟩
+    rcases h with ⟨d7, h_d7, h⟩
+    rcases h with ⟨⟨dp, na, code0, dagc, d8⟩, h_d8, h⟩
+    rcases h with ⟨accessCost, _, h⟩
+    rcases h with ⟨⟨mcc, mcs⟩, _, h⟩
+    rcases h with ⟨_, _, h_contra, _⟩ | ⟨d9, e9, h⟩; · cases h_contra
+    rcases h with ⟨d10, h_d10, h⟩
+    rcases Devm.pop_of_popToAdr e2 with ⟨_, _, hp2⟩
+    rcases Devm.pop_of_popToNat e3 with ⟨_, hp3⟩
+    rcases Devm.pop_of_popToNat e4 with ⟨_, hp4⟩
+    rcases Devm.pop_of_popToNat e5 with ⟨_, hp5⟩
+    rcases Devm.pop_of_popToNat e6 with ⟨_, hp6⟩
+    have h_st6 : s.state = d6.state :=
+      ((Devm.pop_of_pop e1).state).trans
+        (((Devm.pop_of_pop hp2).state).trans
+          (hp3.state.trans (hp4.state.trans (hp5.state.trans hp6.state))))
+    have h_st7 : d7.state = d6.state := by rw [h_d7]; rfl
+    have h_st8 : d8.state = d7.state := by
+      have hq := congrArg (fun q => (q.2.2.2.2 : Devm).state) h_d8
+      dsimp at hq
+      rw [hq, accessDelegation_state]
+    have h_st9 : d8.state = d9.state := (Devm.burn_of_chargeGas e9).state
+    have h_st10 : d10.state = d9.state := by rw [h_d10]; rfl
+    apply GenericCall.inv_nof inv h
+    apply nof_of_state_eq _ h_nof
+    rw [h_st10, ← h_st9, h_st8, h_st7, ← h_st6]
+  case statcall =>
+    dsimp only [Xinst.Run] at h
+    rcases h with ⟨_, _, h_contra, _⟩ | ⟨⟨gas, d1⟩, e1, h⟩; · cases h_contra
+    rcases h with ⟨_, _, h_contra, _⟩ | ⟨⟨target, d2⟩, e2, h⟩; · cases h_contra
+    rcases h with ⟨_, _, h_contra, _⟩ | ⟨⟨ii, d3⟩, e3, h⟩; · cases h_contra
+    rcases h with ⟨_, _, h_contra, _⟩ | ⟨⟨is, d4⟩, e4, h⟩; · cases h_contra
+    rcases h with ⟨_, _, h_contra, _⟩ | ⟨⟨oi, d5⟩, e5, h⟩; · cases h_contra
+    rcases h with ⟨_, _, h_contra, _⟩ | ⟨⟨os, d6⟩, e6, h⟩; · cases h_contra
+    rcases h with ⟨extendCost, _, h⟩
+    rcases h with ⟨preAccessCost, _, h⟩
+    rcases h with ⟨d7, h_d7, h⟩
+    rcases h with ⟨⟨dp, na, code0, dagc, d8⟩, h_d8, h⟩
+    rcases h with ⟨accessCost, _, h⟩
+    rcases h with ⟨⟨mcc, mcs⟩, _, h⟩
+    rcases h with ⟨_, _, h_contra, _⟩ | ⟨d9, e9, h⟩; · cases h_contra
+    rcases h with ⟨d10, h_d10, h⟩
+    rcases Devm.pop_of_popToAdr e2 with ⟨_, _, hp2⟩
+    rcases Devm.pop_of_popToNat e3 with ⟨_, hp3⟩
+    rcases Devm.pop_of_popToNat e4 with ⟨_, hp4⟩
+    rcases Devm.pop_of_popToNat e5 with ⟨_, hp5⟩
+    rcases Devm.pop_of_popToNat e6 with ⟨_, hp6⟩
+    have h_st6 : s.state = d6.state :=
+      ((Devm.pop_of_pop e1).state).trans
+        (((Devm.pop_of_pop hp2).state).trans
+          (hp3.state.trans (hp4.state.trans (hp5.state.trans hp6.state))))
+    have h_st7 : d7.state = d6.state := by rw [h_d7]; rfl
+    have h_st8 : d8.state = d7.state := by
+      have hq := congrArg (fun q => (q.2.2.2.2 : Devm).state) h_d8
+      dsimp at hq
+      rw [hq, accessDelegation_state]
+    have h_st9 : d8.state = d9.state := (Devm.burn_of_chargeGas e9).state
+    have h_st10 : d10.state = d9.state := by rw [h_d10]; rfl
+    apply GenericCall.inv_nof inv h
+    apply nof_of_state_eq _ h_nof
+    rw [h_st10, ← h_st9, h_st8, h_st7, ← h_st6]
+
+lemma Ninst.inv_nof_gen {pc : Nat} {sevm : Sevm} {devm devm' : Devm}
+    {n : Ninst} {xl : Xlot}
+    (inv : Xlot.InvNof xl)
+    (run : Ninst.Run' pc sevm devm n xl (.ok devm'))
+    (h_nof : sum devm.getBal < 2 ^ 256) :
+    sum devm'.getBal < 2 ^ 256 := by
+  cases n with
+  | push xs le =>
+    cases xl with
+    | none =>
+      dsimp only [Ninst.Run'] at run
+      rcases of_bind_eq_ok run with ⟨d1, h_charge, h_push⟩
+      apply nof_of_state_eq _ h_nof
+      exact ((Devm.burn_of_chargeGas h_charge).state.trans
+        (Devm.push_of_push h_push).state).symm
+    | some y => dsimp only [Ninst.Run'] at run
+  | reg rg =>
+    cases xl with
+    | none =>
+      dsimp only [Ninst.Run'] at run
+      have h_bal := (inferInstanceAs (Rinst.Hinv Devm.getBal rg)).inv run
+      rw [← h_bal]; exact h_nof
+    | some y => dsimp only [Ninst.Run'] at run
+  | exec xinst =>
+    dsimp only [Ninst.Run'] at run
+    exact Xinst.inv_nof_gen inv run h_nof
+
+lemma Exec.inv_nof {pc : Nat} {sevm : Sevm} {devm : Devm} {exn : Execution}
+    (run : Exec pc sevm devm exn) :
+    ∀ r : Devm, exn = .ok r →
+      sum devm.getBal < 2 ^ 256 → sum r.getBal < 2 ^ 256 := by
+  revert exn devm sevm pc
+  apply Exec.rec
+  · intro _ _ _ _ r h_eq; cases h_eq
+  · intro _ _ _ _ _ _ _ _ r h_eq; cases h_eq
+  · intro _ _ _ _ _ _ _ _ _ _ _ _ _ r h_eq; cases h_eq
+  · intro pc sevm devm n devm' exn h_at h_run ex ih r h_eq h_nof
+    exact ih r h_eq (Ninst.inv_nof_gen (xl := .none) trivial h_run h_nof)
+  · intro pc sevm devm n sevm_ devm_ exn_ devm' exn h_at h_run ex_sub ex ih_sub ih
+      r h_eq h_nof
+    refine ih r h_eq
+      (Ninst.inv_nof_gen (xl := some ⟨sevm_, devm_, exn_⟩) ?_ h_run h_nof)
+    exact fun d' hd' h' => ih_sub d' hd' h'
+  · intro _ _ _ _ _ _ _ _ r h_eq; cases h_eq
+  · intro pc sevm devm j pc' devm' exn h_at h_run ex ih r h_eq h_nof
+    exact ih r h_eq (nof_of_state_eq (Jinst.inv_state h_run) h_nof)
+  · intro pc sevm devm l exn h_at h_run r h_eq h_nof
+    subst h_eq
+    exact Linst.inv_nof h_run h_nof
+
+lemma Xinst.inv_nof {sevm : Sevm} {s r : Devm} {x : Xinst} {xl : Xlot}
+    (h : Xinst.Run sevm s x xl (.ok r)) (h_nof : sum s.getBal < 2 ^ 256)
+    (h_fill : xl.Filled) :
+    sum r.getBal < 2 ^ 256 := by
+  apply Xinst.inv_nof_gen _ h h_nof
+  cases xl with
+  | none => trivial
+  | some y =>
+    rcases y with ⟨sevm_, devm_, exn_⟩
+    obtain ⟨ex_sub⟩ := h_fill
+    exact fun d' hd' h' => Exec.inv_nof ex_sub d' hd' h'
+
 lemma Ninst.inv_nof {sevm : Sevm} {s r : Devm} {i : Ninst}
     (h : Ninst.Run sevm s i r) (h_nof : sum s.getBal < 2 ^ 256) :
     sum r.getBal < 2 ^ 256 := by
@@ -2450,7 +3094,7 @@ lemma Ninst.inv_nof {sevm : Sevm} {s r : Devm} {i : Ninst}
       exact h_nof
     | exec xinst =>
       dsimp [Ninst.Run'] at h_run'
-      exact Xinst.inv_nof h_run' h_nof
+      exact Xinst.inv_nof h_run' h_nof h_filled
   | some y =>
     cases i with
     | push xs n =>
@@ -2459,7 +3103,7 @@ lemma Ninst.inv_nof {sevm : Sevm} {s r : Devm} {i : Ninst}
       dsimp [Ninst.Run'] at h_run'
     | exec xinst =>
       dsimp [Ninst.Run'] at h_run'
-      exact Xinst.inv_nof h_run' h_nof
+      exact Xinst.inv_nof h_run' h_nof h_filled
 
 lemma Func.inv_nof {c : List Func} {sevm : Sevm} {s r : Devm} {f : Func}
     (run : Func.Run c sevm s f r) (h_nof : sum s.getBal < 2 ^ 256) :
@@ -3846,115 +4490,6 @@ lemma Xinst.some_inv_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm} {x : X
         ← (Devm.pop_of_pop eq1).state]
     exact GenericCall.some_inv_precond h_run ex_sub h_ne (fun _ => h_ne)
       (fun h => Bool.noConfusion h) (h_pc.state_eq h_st)
-
-lemma Jinst.inv_state
-    {pc sevm devm j pc' devm'}
-    (run : Jinst.Run ⟨pc, sevm, devm⟩ j (.ok ⟨pc', devm'⟩)) :
-    devm'.state = devm.state := by
-  cases h1 : devm.stack
-  · cases j
-    · simp only [Jinst.Run, Jinst.run, runCore, chargeGas, Devm.pop, Except.assert, safeSub, bind, Except.bind] at run
-      rw [h1] at run
-      dsimp at run
-      contradiction
-    · simp only [Jinst.Run, Jinst.run, runCore, chargeGas, Devm.pop, Except.assert, safeSub, bind, Except.bind] at run
-      rw [h1] at run
-      dsimp at run
-      contradiction
-    · by_cases h_gas : gJumpdest ≤ devm.gasLeft
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas, bind, Except.bind, safeSub] at run
-        rw [h1] at run
-        simp only [h_gas, if_pos, Except.ok.injEq, Prod.mk.injEq] at run
-        cases run
-        subst_vars
-        rfl
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas, bind, Except.bind, safeSub] at run
-        rw [h1] at run
-        have h_gas_not : ¬(gJumpdest ≤ devm.gasLeft) := by omega
-        simp only [h_gas_not] at run
-        try contradiction
-  · rename_i x xs
-    cases h2 : xs
-    · cases j
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas, Devm.pop, bind, Except.bind, safeSub] at run
-        rw [h1] at run
-        dsimp at run
-        by_cases h_gas : gMid ≤ devm.gasLeft
-        · simp only [h_gas, if_pos, Except.ok.injEq, Prod.mk.injEq] at run
-          by_cases h_jump : jumpable sevm.code x.toNat = true
-          · simp only [h_jump, if_pos, Except.ok.injEq, Prod.mk.injEq] at run
-            cases run
-            subst_vars
-            rfl
-          · simp only [h_jump, if_neg, Except.ok.injEq, Prod.mk.injEq] at run
-            contradiction
-        · have h_gas_not : ¬(gMid ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not, if_neg, Except.ok.injEq, Prod.mk.injEq] at run
-          contradiction
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas, Devm.pop, bind, Except.bind, safeSub] at run
-        rw [h1] at run
-        rw [h2] at run
-        dsimp at run
-        contradiction
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas, bind, Except.bind, safeSub] at run
-        rw [h1] at run
-        by_cases h_gas : gJumpdest ≤ devm.gasLeft
-        · simp only [h_gas, if_pos, Except.ok.injEq, Prod.mk.injEq] at run
-          cases run
-          subst_vars
-          rfl
-        · have h_gas_not : ¬(gJumpdest ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not] at run
-          contradiction
-    · rename_i x2 xs2
-      cases j
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas, Devm.pop, bind, Except.bind, safeSub] at run
-        rw [h1] at run
-        dsimp at run
-        by_cases h_gas : gMid ≤ devm.gasLeft
-        · simp only [h_gas, if_pos, Except.ok.injEq, Prod.mk.injEq] at run
-          by_cases h_jump : jumpable sevm.code x.toNat = true
-          · simp only [h_jump, if_pos, Except.ok.injEq, Prod.mk.injEq] at run
-            cases run
-            subst_vars
-            rfl
-          · simp only [h_jump, if_neg, Except.ok.injEq, Prod.mk.injEq] at run
-            contradiction
-        · have h_gas_not : ¬(gMid ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not, if_neg, Except.ok.injEq, Prod.mk.injEq] at run
-          contradiction
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas, Devm.pop, bind, Except.bind, safeSub] at run
-        rw [h1] at run
-        rw [h2] at run
-        dsimp at run
-        by_cases h_gas : gHigh ≤ devm.gasLeft
-        · simp only [h_gas, if_pos, Except.ok.injEq, Prod.mk.injEq] at run
-          by_cases h_cond : x2 = 0
-          · simp only [h_cond, if_pos, Except.ok.injEq, Prod.mk.injEq] at run
-            cases run
-            subst_vars
-            rfl
-          · simp only [h_cond, if_neg, Except.ok.injEq, Prod.mk.injEq] at run
-            by_cases h_jump : jumpable sevm.code x.toNat = true
-            · simp only [h_jump, if_pos, Except.ok.injEq, Prod.mk.injEq] at run
-              cases run
-              subst_vars
-              rfl
-            · simp only [h_jump, if_neg, Except.ok.injEq, Prod.mk.injEq] at run
-              contradiction
-        · have h_gas_not : ¬(gHigh ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not, if_neg, Except.ok.injEq, Prod.mk.injEq] at run
-          contradiction
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas, bind, Except.bind, safeSub] at run
-        rw [h1] at run
-        by_cases h_gas : gJumpdest ≤ devm.gasLeft
-        · simp only [h_gas, if_pos, Except.ok.injEq, Prod.mk.injEq] at run
-          cases run
-          subst_vars
-          rfl
-        · have h_gas_not : ¬(gJumpdest ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not, if_neg, Except.ok.injEq, Prod.mk.injEq] at run
-          contradiction
 
 lemma Postcond.dest_delete {wa : Adr} {sevm : Sevm} {devm : Devm}
     (h_ne : sevm.currentTarget ≠ wa) (h_pc : Precond wa sevm devm) :
