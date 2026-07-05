@@ -3766,6 +3766,102 @@ lemma Jinst.inv_state
           simp only [h_gas_not, if_neg, Except.ok.injEq, Prod.mk.injEq] at run
           contradiction
 
+lemma Linst.inv_postcond {wa : Adr} {sevm : Sevm} {pre post : Devm} {l : Linst}
+    (h_run : Linst.Run sevm pre l (.ok post))
+    (h_ne : sevm.currentTarget ≠ wa)
+    (h_pc : Precond wa sevm pre) :
+    Postcond wa sevm post := by
+  cases l
+  case stop =>
+    dsimp [Linst.Run, Linst.run] at h_run
+    injection h_run with h_eq; subst h_eq
+    exact postcond_of_precond h_pc
+  case ret =>
+    have h_bal : pre.getBal = post.getBal :=
+      (inferInstanceAs (Linst.Hinv Devm.getBal Devm.getBal Linst.ret)).inv h_run
+    have h_stor : pre.getStor = post.getStor :=
+      (inferInstanceAs (Linst.Hinv Devm.getStor Devm.getStor Linst.ret)).inv h_run
+    constructor
+    · rw [← h_bal]; exact h_pc.nof
+    · unfold Devm.PostSolvent Stor.Solvent
+      have hb : post.getBal wa = pre.getBal wa := (congr_fun h_bal wa).symm
+      have hs : post.getStor wa = pre.getStor wa := (congr_fun h_stor wa).symm
+      rw [hb, hs]
+      exact h_pc.solvent.right h_ne
+  case rev =>
+    dsimp [Linst.Run, Linst.run] at h_run
+    rcases of_bind_eq_ok h_run with ⟨_, _, h2⟩
+    rcases of_bind_eq_ok h2 with ⟨_, _, h4⟩
+    rcases of_bind_eq_ok h4 with ⟨_, _, h6⟩
+    contradiction
+  case dest =>
+    dsimp [Linst.Run, Linst.run] at h_run
+    rcases of_bind_eq_ok h_run with ⟨⟨dest_a, devm1⟩, h_pop, h_run1⟩
+    rcases of_bind_eq_ok h_run1 with ⟨devm2, h_charge, h_run2⟩
+    rcases of_bind_eq_ok h_run2 with ⟨_, h_assert, h_run3⟩
+    rcases of_bind_eq_ok h_run3 with ⟨devm3, h_sub, h_run4⟩
+    have h_sub_some : devm2.subBal sevm.currentTarget ((dest_a, devm1).2.getAcct sevm.currentTarget).bal = some devm3 := by
+      cases eq : devm2.subBal sevm.currentTarget ((dest_a, devm1).2.getAcct sevm.currentTarget).bal
+      · rw [eq] at h_sub; contradiction
+      · rw [eq] at h_sub; injection h_sub with h; subst h; rfl
+    have h_sub_st : devm2.state.subBal sevm.currentTarget ((dest_a, devm1).2.getAcct sevm.currentTarget).bal = some devm3.state := by
+      dsimp [Devm.subBal, Option.bind] at h_sub_some
+      cases h : devm2.state.subBal sevm.currentTarget ((dest_a, devm1).2.getAcct sevm.currentTarget).bal
+      · rw [h] at h_sub_some; contradiction
+      · rw [h] at h_sub_some; injection h_sub_some with h2; subst h2; rfl
+    have h_bal2 : devm2.getBal = devm1.getBal := by
+      ext a
+      have := chargeGas_getBal_eq h_charge a
+      rw [this]
+      split
+      · simp [Devm.getBal, Devm.getAcct]
+        rw [addAccessedAddress_state]
+      · rfl
+    have h_pc1 : Precond wa sevm devm1 := by
+      apply Precond.of_eqs h_pc
+      · exact Devm.popToAdr_getCode_eq h_pop wa
+      · ext a; exact Devm.popToAdr_getBal_eq h_pop a
+      · exact congr_fun (Devm.popToAdr_getStor_eq h_pop).symm wa
+    have h_pc2 : Precond wa sevm devm2 := by
+      apply Precond.of_eqs h_pc1
+      · have h_code : devm2.getCode = devm1.getCode := by
+          funext a
+          have h1 := chargeGas_getCode_eq h_charge a
+          have h2 : (if ((dest_a, devm1).1 ∉ (dest_a, devm1).2.accessedAddresses) then (addAccessedAddress (dest_a, devm1).2 (dest_a, devm1).1, gasSelfDestruct + gasColdAccountAccess) else ((dest_a, devm1).2, gasSelfDestruct)).1.getCode a = devm1.getCode a := by
+            split <;> rfl
+          exact h1.trans h2
+        exact congr_fun h_code wa
+      · exact h_bal2
+      · have h_stor : devm2.getStor = devm1.getStor := by
+          have h1 := (chargeGas_getStor_eq h_charge).symm
+          have h2 : (if ((dest_a, devm1).1 ∉ (dest_a, devm1).2.accessedAddresses) then (addAccessedAddress (dest_a, devm1).2 (dest_a, devm1).1, gasSelfDestruct + gasColdAccountAccess) else ((dest_a, devm1).2, gasSelfDestruct)).1.getStor = devm1.getStor := by
+            split <;> rfl
+          exact h1.trans h2
+        exact congr_fun h_stor wa
+    have h_pc3 : Precond wa sevm (devm3.addBal dest_a ((dest_a, devm1).2.getAcct sevm.currentTarget).bal) := by
+      exact Precond.transfer_state h_pc2 h_ne h_sub_st rfl
+    -- split at h_run4 <;> (injection h_run4 with h_eq; subst h_eq)
+    -- · constructor
+    --   · have h_nof := h_pc3.nof
+    --     have h_dec : Decrease sevm.currentTarget ((devm3.addBal dest_a ((dest_a, devm1).2.getAcct sevm.currentTarget).bal).getBal sevm.currentTarget) post.getBal (devm3.addBal dest_a ((dest_a, devm1).2.getAcct sevm.currentTarget).bal).getBal := by
+    --       unfold Decrease
+    --       constructor
+    --       · simp [Devm.getBal, Devm.setBal, addAccountToDelete]
+    --       · intro a ha
+    --         simp [Devm.getBal, Devm.setBal, addAccountToDelete]
+    --         have : a ≠ sevm.currentTarget := ha
+    --         simp [this]
+    --     rw [sum_sub_assoc h_dec]
+    --     omega
+    --   · unfold Devm.PostSolvent
+    --     have h_solv := h_pc3.solvent
+    --     unfold Devm.PreSolvent at h_solv
+    --     have h1 := h_solv.right h_ne
+    --     simp [Devm.getStor, Devm.getBal, Devm.setBal, addAccountToDelete, h_ne.symm]
+    --     exact h1
+    -- · exact postcond_of_precond h_pc3
+    sorry
+
 theorem weth_inv_solvent (wa : Adr) :
     ∀ sevm pre post,
       Exec 0 sevm pre (.ok post)  →
@@ -3806,7 +3902,8 @@ theorem weth_inv_solvent (wa : Adr) :
     | exec x => exact Xinst.some_inv_precond h_run' ex_sub' h_ne' h_pc'
   · intro pc' sevm' pre' j' pc'' inter' h_at' h_run' h_ne' h_pc'
     exact Precond.state_eq h_pc' (Jinst.inv_state h_run')
-  · sorry
+  · intro pc' sevm' pre' l' post' h_at' h_run' h_ne' h_pc'
+    exact Linst.inv_postcond h_run' h_ne' h_pc'
   · exact exc
   · exact ⟨h_pc.1, λ h => ⟨h_code h, rfl⟩⟩
   · exact h_pc
