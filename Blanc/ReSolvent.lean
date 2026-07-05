@@ -2463,7 +2463,25 @@ lemma Ninst.inv_nof {sevm : Sevm} {s r : Devm} {i : Ninst}
 
 lemma Func.inv_nof {c : List Func} {sevm : Sevm} {s r : Devm} {f : Func}
     (run : Func.Run c sevm s f r) (h_nof : sum s.getBal < 2 ^ 256) :
-    sum r.getBal < 2 ^ 256 := by sorry
+    sum r.getBal < 2 ^ 256 := by
+  induction run with
+  | zero h_pop _ ih =>
+    have h_bal : _ = _ := (inferInstanceAs (PopBurn.Inv Devm.getBal)).inv h_pop
+    rw [h_bal] at h_nof
+    exact ih h_nof
+  | succ _ h_pop h_burn _ ih =>
+    have h_bal1 : _ = _ := (inferInstanceAs (PopBurn.Inv Devm.getBal)).inv h_pop
+    have h_bal2 : _ = _ := (inferInstanceAs (Burn.Inv Devm.getBal)).inv h_burn
+    rw [h_bal1, h_bal2] at h_nof
+    exact ih h_nof
+  | last h_run =>
+    exact Linst.inv_nof h_run h_nof
+  | next h_run _ ih =>
+    exact ih (Ninst.inv_nof h_run h_nof)
+  | call _ h_burn _ ih =>
+    have h_bal : _ = _ := (inferInstanceAs (Burn.Inv Devm.getBal)).inv h_burn
+    rw [h_bal] at h_nof
+    exact ih h_nof
 
 lemma run_inv_cond (f : Func)
     ( h_solv :
