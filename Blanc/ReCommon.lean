@@ -6096,6 +6096,7 @@ lemma lift_inv
       ∀ {pc} {sevm} {pre} {n} {sevm'} {devm'} {exn'} {inter},
         n.At sevm.code pc →
         Ninst.Run' pc sevm pre n (.some ⟨sevm', devm', exn'⟩) (.ok inter) →
+        Exec 0 sevm' devm' exn' →
         sevm.currentTarget ≠ ca →
         σ sevm pre →
         σ sevm' devm' ∧ (ifOk (ρ sevm') exn' → σ sevm inter) )
@@ -6121,8 +6122,8 @@ lemma lift_inv
   apply @lift (fun sevm pre post => σ sevm pre → ρ sevm post) ca p with_depth_ind
   · intro pc sevm pre n inter post h_at h_run _ h_ne h_ih h_pi
     exact h_ih (nextNone h_at h_run h_ne h_pi)
-  · intro pc sevm pre n sevm' devm' exn' inter post h_at h_run _ _ h_ne h_ifOk h_ih h_pi
-    rcases nextSome h_at h_run h_ne h_pi with ⟨h_pi_sub, h_imp⟩
+  · intro pc sevm pre n sevm' devm' exn' inter post h_at h_run ex_sub _ h_ne h_ifOk h_ih h_pi
+    rcases nextSome h_at h_run ex_sub h_ne h_pi with ⟨h_pi_sub, h_imp⟩
     apply h_ih; apply h_imp
     cases exn' with
     | error e => exact trivial
