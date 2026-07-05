@@ -313,32 +313,7 @@ instance : Linst.Hinv Devm.getStor Devm.getStor Linst.ret := by
   show s.getStor = (s3.memRead n1 n2).2.getStor
   rw [memRead_getStor_eq h_mem, ← chargeGas_getStor_eq h5, ← Devm.popToNat_getStor_eq h3, ← Devm.popToNat_getStor_eq h1]
 
-lemma deposit_inv_bal : Func.Inv Devm.getBal Devm.getBal deposit := by prog_inv
 
-lemma wbsum_after_deposit {sevm : Sevm} {s r : Devm}
-    (h_nof : wbsum (s.getStor sevm.currentTarget) + sevm.value.toNat < 2 ^ 256)
-    (run : Func.Run (weth.main :: weth.aux) sevm s deposit r) :
-    wbsum (s.getStor sevm.currentTarget) + sevm.value.toNat = wbsum (r.getStor sevm.currentTarget) := sorry
-
-lemma deposit_inv_solvent {sevm : Sevm} {s r : Devm}
-    (run : Func.Run (weth.main :: weth.aux) sevm s deposit r)
-    (h_sv : s.PreSolvent sevm.currentTarget sevm) :
-    r.PostSolvent sevm.currentTarget := by
-  unfold Devm.PostSolvent
-  unfold Stor.Solvent
-  rw [B256.toNat_zero]
-  have h_bal : s.getBal = r.getBal := Func.of_inv _ _ deposit_inv_bal run
-  rw [← h_bal]
-  have h_sv' : wbsum (s.getStor sevm.currentTarget) + sevm.value.toNat ≤ (s.getBal sevm.currentTarget).toNat := by
-    have h := h_sv.left rfl
-    unfold Stor.Solvent at h
-    exact h
-  have h_lt : wbsum (s.getStor sevm.currentTarget) + sevm.value.toNat < 2 ^ 256 := by
-    apply lt_of_le_of_lt h_sv'
-    apply B256.toNat_lt
-  rw [← wbsum_after_deposit h_lt run]
-  rw [Nat.add_zero]
-  exact h_sv'
 
 syntax "simple_solvent" : tactic
 set_option hygiene false in
@@ -860,6 +835,84 @@ lemma sum_add_assoc {k v} {f g : Adr → B256}
     (Adr.toNat_lt_size _)
     nof
     (Nat.succ_le_of_lt <| Adr.toNat_lt_size _)
+
+lemma deposit_inv_bal : Func.Inv Devm.getBal Devm.getBal deposit := by prog_inv
+
+lemma wbsum_after_deposit {sevm : Sevm} {s r : Devm}
+    (h_nof : wbsum (s.getStor sevm.currentTarget) + sevm.value.toNat < 2 ^ 256)
+    (run : Func.Run (weth.main :: weth.aux) sevm s deposit r) :
+    wbsum (s.getStor sevm.currentTarget) + sevm.value.toNat = wbsum (r.getStor sevm.currentTarget) := by
+  unfold deposit at run
+  rcases of_run_next run with ⟨s1, h_caller, run1⟩
+  rcases of_run_next run1 with ⟨s2, h_sload, run2⟩
+  rcases of_run_next run2 with ⟨s3, h_callvalue, run3⟩
+  rcases of_run_next run3 with ⟨s4, h_add, run4⟩
+  rcases of_run_next run4 with ⟨s5, h_caller2, run5⟩
+  rcases of_run_next run5 with ⟨s6, h_sstore, run6⟩
+  have hp0 : [] <<+ s.stack := nil_pref
+  have hp1 : [sevm.caller.toB256] <<+ s1.stack := prefix_of_push (of_run_caller h_caller) hp0
+  have hs1 : s.getStor = s1.getStor := Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons h_caller Line.Run.nil)
+
+  rcases prefix_of_sload' h_sload hp1 with ⟨cbal, hp2, hcbal⟩
+  have hs2 : s1.getStor = s2.getStor := Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons h_sload Line.Run.nil)
+
+  have hp3 : [sevm.value, cbal] <<+ s3.stack := prefix_of_push (of_run_callvalue h_callvalue) hp2
+  have hs3 : s2.getStor = s3.getStor := Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons h_callvalue Line.Run.nil)
+
+  have hp4 : [sevm.value + cbal] <<+ s4.stack := prefix_of_add h_add hp3
+  have hs4 : s3.getStor = s4.getStor := Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons h_add Line.Run.nil)
+
+  have hp5 : [sevm.caller.toB256, sevm.value + cbal] <<+ s5.stack := prefix_of_push (of_run_caller h_caller2) hp4
+  have hs5 : s4.getStor = s5.getStor := Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons h_caller2 Line.Run.nil)
+
+  have hs_eq : s.getStor = s5.getStor := by rw [hs1, hs2, hs3, hs4, hs5]
+  have hcbal' : cbal = (s5.getStor sevm.currentTarget).get sevm.caller.toB256 := by
+    rw [hcbal]; show (s1.getStor sevm.currentTarget).get sevm.caller.toB256 = _
+    rw [hs2, hs3, hs4, hs5]
+
+  have h_set : s6.getStor sevm.currentTarget = (s5.getStor sevm.currentTarget).set sevm.caller.toB256 (sevm.value + cbal) :=
+    sstore_getStor_set h_sstore hp5
+
+  have hs6 : s6.getStor = r.getStor := by apply Func.of_inv _ _ _ run6; prog_inv
+
+  have h_incr : Increase sevm.caller sevm.value (s5.getStor sevm.currentTarget).rest (s6.getStor sevm.currentTarget).rest := by
+    intro a
+    constructor
+    · intro h_eq
+      simp [Stor.rest, ← h_eq, h_set, Stor.get_set_self]
+      rw [← hcbal', B256.add_comm]
+    · intro h_neq
+      simp [Stor.rest, h_set]
+      exact (Stor.get_set_ne (fun hc => h_neq (Adr.toB256_inj hc).symm)).symm
+
+  have h_nof' : B256.Nof ((s5.getStor sevm.currentTarget).rest sevm.caller) sevm.value := by
+    simp only [B256.Nof]
+    apply lt_of_le_of_lt _ h_nof
+    rw [hs_eq, Nat.add_le_add_iff_right]
+    apply le_sum
+
+  rw [hs_eq, ← hs6]
+  exact sum_add_assoc h_incr h_nof'
+
+lemma deposit_inv_solvent {sevm : Sevm} {s r : Devm}
+    (run : Func.Run (weth.main :: weth.aux) sevm s deposit r)
+    (h_sv : s.PreSolvent sevm.currentTarget sevm) :
+    r.PostSolvent sevm.currentTarget := by
+  unfold Devm.PostSolvent
+  unfold Stor.Solvent
+  rw [B256.toNat_zero]
+  have h_bal : s.getBal = r.getBal := Func.of_inv _ _ deposit_inv_bal run
+  rw [← h_bal]
+  have h_sv' : wbsum (s.getStor sevm.currentTarget) + sevm.value.toNat ≤ (s.getBal sevm.currentTarget).toNat := by
+    have h := h_sv.left rfl
+    unfold Stor.Solvent at h
+    exact h
+  have h_lt : wbsum (s.getStor sevm.currentTarget) + sevm.value.toNat < 2 ^ 256 := by
+    apply lt_of_le_of_lt h_sv'
+    apply B256.toNat_lt
+  rw [← wbsum_after_deposit h_lt run]
+  rw [Nat.add_zero]
+  exact h_sv'
 
 lemma add_le_sumBelow (f : Adr → B256) {x y : Adr} {n}
     (x_lt : x.toNat < y.toNat) (y_lt : y.toNat < n) :

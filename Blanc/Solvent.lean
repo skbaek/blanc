@@ -511,7 +511,7 @@ theorem decimals_inv_solvent {e s r} :
 theorem totalSupply_inv_solvent {e s r} :
   Func.Run c e s totalSupply r → s.Solvent e.cta e → r.Solvent e.cta := by simple_solvent
 
-theorem wbsum_after_deposit {e : Env} {s : Desc} {r}
+theorem wbsum_after_deposit {c} {e : Env} {s : Desc} {r}
     (h_nof : (wbsum (s.stor e.cta)) + e.clv.toNat < 2 ^ 256) :
     Func.Run c e s deposit r →
     wbsum (s.stor e.cta) + e.clv.toNat = wbsum (r.stor e.cta) := by
