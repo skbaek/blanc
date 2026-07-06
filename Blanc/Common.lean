@@ -4,7 +4,7 @@
 
 import Mathlib.Tactic.Have
 import Mathlib.Tactic.Clear_
-import Blanc.ReSemantics
+import Blanc.Semantics
 
 
 

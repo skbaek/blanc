@@ -1,8 +1,7 @@
 -- Solvent.lean : proof of solvency for WETH implementation
 
 
-import Blanc.ReWeth
-import Blanc.ReCommon
+import Blanc.Weth
 import Std.Data.TreeMap.Lemmas
 
 
@@ -312,8 +311,6 @@ instance : Linst.Hinv Devm.getStor Devm.getStor Linst.ret := by
   have h_mem : s3.memRead n1 n2 = ⟨(s3.memRead n1 n2).1, (s3.memRead n1 n2).2⟩ := rfl
   show s.getStor = (s3.memRead n1 n2).2.getStor
   rw [memRead_getStor_eq h_mem, ← chargeGas_getStor_eq h5, ← Devm.popToNat_getStor_eq h3, ← Devm.popToNat_getStor_eq h1]
-
-
 
 syntax "simple_solvent" : tactic
 set_option hygiene false in
