@@ -4656,3 +4656,87 @@ theorem weth_inv_solvent (wa : Adr) :
   · exact exc
   · exact ⟨h_pc.1, λ h => ⟨h_code h, rfl⟩⟩
   · exact h_pc
+
+
+
+-- Solvency preservation above the frame level : the theorems below lift
+-- `weth_inv_solvent` through each layer of the executable semantics in
+-- Elevm/Execution.lean, stated directly over the raw execution functions.
+
+-- The WETH invariant on a bare world state, as it stands between
+-- transactions and blocks (no active call frame).
+structure State.Inv (wa : Adr) (w : _root_.State) : Prop where
+  (code : some (w.getCode wa).toList = Prog.compile weth)
+  (nof : SumNof w.bal)
+  (solvent : w.Solvent wa)
+
+-- Counterpart of `weth_inv_solvent` for the raw executable `exec`, with
+-- the recursion limit and verbosity flag quantified away.
+theorem exec_inv_solvent (wa : Adr) (vb : Bool) (lim : Nat)
+    (sevm : Sevm) (pre post : Devm)
+    (h_run : exec vb ⟨0, sevm, pre⟩ lim = .ok post)
+    (h_code : sevm.currentTarget = wa → some sevm.code.toList = Prog.compile weth)
+    (h_pc : Precond wa sevm pre) : Postcond wa sevm post := by
+  sorry
+
+theorem processTransaction_inv_solvent (wa : Adr) (vb : Bool)
+    (benv : Benv) (bout bout' : BlockOutput) (tx : Tx) (i : Nat) (st : _root_.State)
+    (h_run : processTransaction vb benv bout tx i = .ok ⟨st, bout'⟩)
+    (h_inv : State.Inv wa benv.state) : State.Inv wa st := by
+  sorry
+
+theorem applyTransactions_inv_solvent (wa : Adr) (vb : Bool)
+    (txis : List (Nat × Tx)) (benv benv' : Benv) (bout bout' : BlockOutput)
+    (h_run : applyTransactions vb txis benv bout = .ok ⟨benv', bout'⟩)
+    (h_inv : State.Inv wa benv.state) : State.Inv wa benv'.state := by
+  sorry
+
+-- Total wei credited by a list of withdrawals, computed in ℕ. Withdrawals
+-- mint ether with wrapping addition (`State.addBal`), so the block-level
+-- theorems need the bound `sum _.bal + wdsum wds < 2 ^ 256` : without it,
+-- a withdrawal crediting `wa` could wrap `wa`'s balance to near zero and
+-- destroy both solvency and `SumNof`.
+def wdsum (wds : List Withdrawal) : Nat :=
+  (wds.map (fun wd => wd.amount.toNat * 10 ^ 9)).sum
+
+theorem applyBody_inv_solvent (wa : Adr) (vb : Bool)
+    (benv : Benv) (txs : List (B8L ⊕ Tx)) (wds : List Withdrawal)
+    (st : _root_.State) (bout : BlockOutput)
+    (h_run : applyBody vb benv txs wds = .ok ⟨st, bout⟩)
+    (h_wds : sum benv.state.bal + wdsum wds < 2 ^ 256)
+    (h_inv : State.Inv wa benv.state) : State.Inv wa st := by
+  sorry
+
+theorem stateTransition_inv_solvent (wa : Adr) (vb : Bool)
+    (ch ch' : BlockChain) (block : Block)
+    (h_run : stateTransition vb ch block = .ok ch')
+    (h_wds : sum ch.state.bal + wdsum block.wds < 2 ^ 256)
+    (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state := by
+  sorry
+
+-- `BlockChain.Reach vb ch ch'` : chain `ch'` is reachable from `ch` by a
+-- sequence of valid blocks, each of whose withdrawals stays within the
+-- no-overflow bound.
+inductive BlockChain.Reach (vb : Bool) : BlockChain → BlockChain → Prop
+  | refl (ch : BlockChain) : Reach vb ch ch
+  | step {ch ch' ch'' : BlockChain} {block : Block} :
+      Reach vb ch ch' →
+      sum ch'.state.bal + wdsum block.wds < 2 ^ 256 →
+      stateTransition vb ch' block = .ok ch'' →
+      Reach vb ch ch''
+
+-- Chain-level induction corollary : no sequence of valid blocks can break
+-- WETH solvency.
+theorem chain_inv_solvent (wa : Adr) (vb : Bool) (ch ch' : BlockChain)
+    (h_reach : BlockChain.Reach vb ch ch')
+    (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state := by
+  sorry
+
+-- Bonus level : preservation through RLP decoding and block hash checks.
+theorem addBlockToChain_inv_solvent (wa : Adr) (vb : Bool)
+    (ch ch' : BlockChain) (rlp : B8L)
+    (h_run : addBlockToChain vb ch rlp = .ok (.inl ch'))
+    (h_wds : ∀ block hash, rlpToBlock rlp = .ok ⟨block, hash⟩ →
+      sum ch.state.bal + wdsum block.wds < 2 ^ 256)
+    (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state := by
+  sorry
