@@ -953,6 +953,30 @@ lemma transfer_inv_sum {kd ki v} {b d : Adr → B256}
       apply lt_of_le_of_lt (Nat.le_trans _ <| add_le_sum_of_ne b hk) hb
       apply Nat.add_le_add_left <| B256.toNat_le_toNat h
 
+lemma of_nof_of_transfer {a b : Adr} {v : B256} {f h : Adr → B256}
+    (h_nof : SumNof f) (h_di : Transfer f a v b h) :
+    ∃ g, Decrease a v f g ∧ Increase b v g h ∧ B256.Nof (g b) v := by
+  rcases h_di with ⟨h_le, g, hd, hi⟩; refine' ⟨g, hd, hi, _⟩
+  apply lt_of_le_of_lt _ h_nof
+  by_cases h_ab : a = b
+  · rw [← (hd b).left h_ab, ← h_ab, B256.toNat_sub_eq_of_le _ _ h_le]
+    rw [Nat.sub_add_cancel (B256.toNat_le_toNat h_le)]
+    exact le_sum
+  · rw [← (hd b).right h_ab, Nat.add_comm]
+    apply _root_.le_trans (Nat.add_le_add_right _ _) <| add_le_sum_of_ne f h_ab
+    apply B256.toNat_le_toNat h_le
+
+lemma B256.le_add_right {xs ys : B256} (h : B256.Nof xs ys) : xs ≤ xs + ys := by
+  rw [B256.le_iff_toNat_le_toNat, B256.toNat_add_eq_of_nof _ _ h]; simp
+
+lemma le_of_increase {k : Adr} {v : B256} {f g : Adr → B256}
+    (h : Increase k v f g) (h' : B256.Nof (f k) v) : ∀ k', f k' ≤ g k' := by
+  intro k'; by_cases h_eq : k = k'
+  · rw [← h_eq]
+    have h_rw : f k + v = g k := (h k).left rfl
+    rw [← h_rw]; apply B256.le_add_right h'
+  · rw [(h k').right h_eq]
+
 lemma incrAt_of_incrWbal {sevm : Sevm} {s s' : Devm} {wad dst} (h_dst : ValidAdr dst)
     (h_run : Line.Run sevm s incrWbal s') (h_stk : [wad, dst] <<+ s.stack) :
     Increase dst.toAdr wad (s.getStor sevm.currentTarget).rest (s'.getStor sevm.currentTarget).rest := by
