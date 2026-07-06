@@ -637,7 +637,7 @@ def Except.IsError {ξ υ : Type} (e : Except ξ υ) : Prop :=
   | .ok _ => False
 
 /- Exec evm ex is provable iff
-    ∃ lim : Nat, ∀ vb : bool, exec vb lim evm = ex
+    ∃ lim : Nat, exec evm lim = ex
    holds, and ex is not a recursion limit error case.  -/
 inductive Exec : Nat → Sevm → Devm → Execution → Type
   | invOp {pc} {sevm} {devm} :
@@ -739,7 +739,7 @@ def Except.Fit {ξ υ} (ex : Except (String × ξ) υ) : Prop := ¬ ex.Lim
 def Xlot.Good' : Xlot → Prop
   | .none => True
   | .some ⟨sevm, devm, ex⟩ =>
-    ex.Fit ∧ ∃ lim, exec false { pc := 0, sta := sevm, dyna := devm } lim = ex
+    ex.Fit ∧ ∃ lim, exec { pc := 0, sta := sevm, dyna := devm } lim = ex
 
 lemma of_lim_bind {ξ υ ζ} {x : Except (String × ξ) υ}
     {f : υ → Except (String × ξ) ζ} (h : (x >>= f).Lim) :
@@ -1150,16 +1150,16 @@ def Saturates {ξ υ} (n : Nat) (f : Nat → Except (String × ξ) υ) : Prop :=
   (f n).Fit → ∀ m, n < m → (f n = f m)
 
 structure Saturation (lim : Nat) : Prop where
-  (executeCode : ∀ (msg : Msg), Saturates lim (executeCode false msg))
-  (processMessage : ∀ (msg : Msg), Saturates lim (processMessage false msg))
+  (executeCode : ∀ (msg : Msg), Saturates lim (executeCode msg))
+  (processMessage : ∀ (msg : Msg), Saturates lim (processMessage msg))
   ( processCreateMessage :
-    ∀ (msg : Msg), Saturates lim (processCreateMessage false msg) )
+    ∀ (msg : Msg), Saturates lim (processCreateMessage msg) )
   ( genericCreate :
     ∀ (sevm : Sevm) (devm : Devm)
       (endowment : B256) (newAddress : Adr)
       (memoryIndex : Nat) (memorySize : Nat),
       Saturates lim
-        (genericCreate false sevm devm endowment newAddress memoryIndex memorySize) )
+        (genericCreate sevm devm endowment newAddress memoryIndex memorySize) )
   ( genericCall :
     ∀ (sevm : Sevm) (devm : Devm)
       (gas : Nat) (value : B256) (caller : Adr) (target : Adr)
@@ -1167,14 +1167,14 @@ structure Saturation (lim : Nat) : Prop where
       (inputIndex :Nat) (inputSize : Nat) (outputIndex : Nat)
       (outputSize : Nat) (code : ByteArray) (disablePrecompiles: Bool),
       Saturates lim
-        ( genericCall false sevm devm gas value caller target codeAddress
+        ( genericCall sevm devm gas value caller target codeAddress
             shouldTransferValue isStaticcall inputIndex inputSize outputIndex
             outputSize code disablePrecompiles ) )
   ( xinstRun :
     ∀ (sevm : Sevm) (devm : Devm) (x : Xinst),
-      Saturates lim (Xinst.run false sevm devm x) )
-  (ninstRun : ∀ (evm : Evm) (n : Ninst), Saturates lim (Ninst.run false evm n))
-  (exec : ∀ (evm : Evm), Saturates lim (exec false evm))
+      Saturates lim (Xinst.run sevm devm x) )
+  (ninstRun : ∀ (evm : Evm) (n : Ninst), Saturates lim (Ninst.run evm n))
+  (exec : ∀ (evm : Evm), Saturates lim (exec evm))
 
 lemma lim_handleError {ex : Execution} :
     ex.Lim → (executeCode.handleError ex).Lim := by
@@ -1473,7 +1473,7 @@ lemma initEvm_eq (msg : Msg) : initEvm msg = { pc := 0, sta := (initEvm msg).sta
 lemma of_execute_code' {msg : Msg} {xl : Xlot}
     {ex : Except (String × State × AdrSet × Tra) Devm}
     (good : xl.Good') (ec : ExecuteCode msg xl ex) :
-    ex.Fit ∧ ∃ lim, ∀ lim' > lim, executeCode false msg lim' = ex := by
+    ex.Fit ∧ ∃ lim, ∀ lim' > lim, executeCode msg lim' = ex := by
   simp only [ExecuteCode] at ec; split at ec
   · rename (msg.codeAddress = none) => eq_none
     rcases ec with ⟨ex', xl_eq, eq_ex⟩
@@ -1578,7 +1578,7 @@ macro_rules
 lemma of_process_message' {msg : Msg} {xl : Xlot}
     {ex : Except (String × State × AdrSet × Tra) Devm} (good : xl.Good')
     (run : ProcessMessage msg xl ex) :
-    ex.Fit ∧ ∃ lim, ∀ lim' > lim, processMessage false msg lim' = ex := by
+    ex.Fit ∧ ∃ lim, ∀ lim' > lim, processMessage msg lim' = ex := by
   simp only [ProcessMessage] at run; constructor
   · fit_step_splitXl run fit_benvAfterTransfer
     fit_step_exec run good of_execute_code' id
@@ -1654,7 +1654,7 @@ lemma of_process_create_message' {msg : Msg} {xl : Xlot}
     {ex : Except (String × State × AdrSet × Tra) Devm} (good : xl.Good')
     (run : ProcessCreateMessage msg xl ex) :
     ex.Fit ∧
-      ∃ lim, ∀ lim' > lim, processCreateMessage false msg lim' = ex := by
+      ∃ lim, ∀ lim' > lim, processCreateMessage msg lim' = ex := by
   simp only [ProcessCreateMessage] at run; constructor
   · fit_step_exec run good of_process_message' id
     rename Devm => evm; split at run
@@ -1719,7 +1719,7 @@ lemma of_generic_create' {sevm : Sevm} {devm : Devm} {endowment : B256} {newAddr
     ex.Fit ∧
       ∃ lim,
         ∀ lim' > lim,
-          genericCreate false sevm devm endowment
+          genericCreate sevm devm endowment
             newAddress memoryIndex memorySize lim' = ex := by
   simp only [GenericCreate] at run; constructor
   · fit_step_exists run
@@ -1758,7 +1758,7 @@ lemma of_generic_call' {sevm : Sevm} {devm : Devm} {gas : Nat} {value : B256}
         output_index output_size code disablePrecompiles xl ex ) :
     ex.Fit ∧
       ∃ lim, ∀ lim' > lim,
-        genericCall false sevm devm gas value caller target codeAddress
+        genericCall sevm devm gas value caller target codeAddress
           shouldTransferValue isStaticcall input_index input_size
           output_index output_size code disablePrecompiles lim' = ex := by
   simp only [GenericCall] at run; constructor
@@ -1792,7 +1792,7 @@ macro_rules
 
 lemma Xinst.run_eq_of_run {sevm} {devm} {x : Xinst} {xl : Xlot}
     {ex} (good : xl.Good') (run : Xinst.Run sevm devm x xl ex) :
-    ex.Fit ∧ ∃ lim, ∀ lim' > lim, Xinst.run false sevm devm x lim' = ex := by
+    ex.Fit ∧ ∃ lim, ∀ lim' > lim, Xinst.run sevm devm x lim' = ex := by
   cases x <;>
     ( constructor <;>
       [ skip;
@@ -1916,7 +1916,7 @@ lemma cast_fit {ξ υ ζ} {erx : String × ξ}
 
 lemma Ninst.run_of_run' {pc} {sevm} {devm} {n : Ninst} (xl : Xlot)
     {ex} (good : xl.Good') (run : Ninst.Run' pc sevm devm n xl ex) :
-    ex.Fit ∧ ∃ lim, ∀ lim' > lim, Ninst.run false ⟨pc, sevm, devm⟩ n lim' = ex := by
+    ex.Fit ∧ ∃ lim, ∀ lim' > lim, Ninst.run ⟨pc, sevm, devm⟩ n lim' = ex := by
   rcases n with r | x | ⟨xs, le⟩
   · cases xl
     · simp only [Ninst.Run'] at run
@@ -1993,7 +1993,7 @@ lemma of_exec' :
     ∀ (pc : Nat) (sevm : Sevm) (devm : Devm) (exn : Execution),
       Exec pc sevm devm exn →
       exn.Fit ∧
-        ∃ lim, ∀ lim' > lim, (exec false ⟨pc, sevm, devm⟩ lim' = exn) := by
+        ∃ lim, ∀ lim' > lim, (exec ⟨pc, sevm, devm⟩ lim' = exn) := by
   apply Exec.rec
   · intro pc sevm devm eq; refine' ⟨_, 0, _⟩
     · intro ltd; injection ltd; contradiction
@@ -2069,7 +2069,7 @@ lemma of_exec' :
 def Xlot.Good {ξ υ} (lim : Nat) (ex : Except (String × ξ) υ) : Xlot → Prop
   | .none => True
   | .some ⟨sevm, devm, exn⟩ =>
-    ∃ lim' < lim, exec false { pc := 0, sta := sevm, dyna := devm } lim' = exn ∧ (exn.Lim → ex.Lim)
+    ∃ lim' < lim, exec { pc := 0, sta := sevm, dyna := devm } lim' = exn ∧ (exn.Lim → ex.Lim)
 
 syntax "bind_step_good " ident rcasesPat : tactic
 macro_rules
@@ -2159,14 +2159,14 @@ lemma Except.of_toError?_eq_some {ξ} {υ} (ex : Except (String × ξ) υ)
 lemma of_executeCode {msg : Msg} {lim : Nat}
     {ex : Except (String × State × AdrSet × Tra) Devm}
     (notLimited : ex.Fit)
-    (eq : executeCode false msg lim = ex) :
+    (eq : executeCode msg lim = ex) :
     ∃ xl : Xlot, xl.Good lim ex ∧ ExecuteCode msg xl ex := by
   rcases lim with _ | lim <;> simp only [executeCode] at eq
   {rw [← eq] at notLimited; cases notLimited rfl}
   split at eq
   · rename msg.codeAddress = .none => eq_none
     refine'
-      ⟨ .some ⟨(initEvm msg).sta, (initEvm msg).dyna, exec false (initEvm msg) lim⟩,
+      ⟨ .some ⟨(initEvm msg).sta, (initEvm msg).dyna, exec (initEvm msg) lim⟩,
         ⟨lim, (by omega), rfl, λ halts => _⟩, _ ⟩
     · rcases Except.of_toError?_eq_some _ _ halts with ⟨evm, rw⟩
       rw [← eq, rw] at notLimited; cases notLimited rfl
@@ -2179,7 +2179,7 @@ lemma of_executeCode {msg : Msg} {lim : Nat}
       simp only []; rw [if_pos pos]; simp [eq]
     · rename_i neg
       refine'
-        ⟨ .some ⟨(initEvm msg).sta, (initEvm msg).dyna, exec false (initEvm msg) lim⟩,
+        ⟨ .some ⟨(initEvm msg).sta, (initEvm msg).dyna, exec (initEvm msg) lim⟩,
           ⟨lim, (by omega), rfl, λ halts => _⟩, _ ⟩
       · rcases Except.of_toError?_eq_some _ _ halts with ⟨evm, rw⟩
         rw [← eq, rw] at notLimited; cases notLimited rfl
@@ -2202,7 +2202,7 @@ lemma good_of_good_of_fit
 lemma of_processMessage (msg : Msg) (lim : Nat)
     (ex : Except (String × State × AdrSet × Tra) Devm)
     (notLimited : ex.Fit)
-    (eq : processMessage false msg lim = ex) :
+    (eq : processMessage msg lim = ex) :
     ∃ xl : Xlot, xl.Good lim ex ∧ ProcessMessage msg xl ex := by
   rcases lim with _ | lim <;> simp only [processMessage] at eq
   {rw [← eq] at notLimited; cases notLimited rfl}
@@ -2217,14 +2217,14 @@ lemma of_processMessage (msg : Msg) (lim : Nat)
 lemma of_processCreateMessage (msg : Msg) (lim : Nat)
     (ex : Except (String × State × AdrSet × Tra) Devm)
     (notLimited : ex.Fit)
-    (eq : processCreateMessage false msg lim = ex) :
+    (eq : processCreateMessage msg lim = ex) :
     ∃ xl : Xlot,
       xl.Good lim ex ∧
       ProcessCreateMessage msg xl ex := by
   rcases lim with _ | lim <;> simp only [processCreateMessage] at eq
   {rw [← eq] at notLimited; cases notLimited rfl}
   have notLimited' :
-    (processMessage false (processCreateMessage.msg msg) lim).Fit := by
+    (processMessage (processCreateMessage.msg msg) lim).Fit := by
     intro pm_eq
     rcases Except.of_toError?_eq_some _ _ pm_eq with ⟨_, rw⟩
     rw [← eq, rw] at notLimited
@@ -2249,7 +2249,7 @@ lemma of_genericCreate
     {sevm : Sevm} {devm : Devm} {endow : B256} {newAdr : Adr}
     {memIndex memSize lim : ℕ} {ex : Execution}
     (notLimited : ex.Fit)
-    (eq : genericCreate false sevm devm endow newAdr memIndex memSize lim = ex) :
+    (eq : genericCreate sevm devm endow newAdr memIndex memSize lim = ex) :
     ∃ xl : Xlot,
       xl.Good lim ex ∧
       GenericCreate sevm devm endow newAdr memIndex memSize xl ex := by
@@ -2275,7 +2275,7 @@ lemma of_genericCreate
       apply Exists.imp (λ _ (conj : _ ∧ _) => ⟨conj.1, ite_of_false neg conj.2⟩)
       clear neg
       okStep1 eq msg
-      have notLimited' : (processCreateMessage false msg lim).Fit := by
+      have notLimited' : (processCreateMessage msg lim).Fit := by
         intro pm_eq
         rcases Except.of_toError?_eq_some _ _ pm_eq with ⟨_, rw⟩
         rw [← eq, rw] at notLimited; cases notLimited rfl
@@ -2293,7 +2293,7 @@ lemma of_genericCall {sevm : Sevm} {devm : Devm} {gas : Nat} {value : B256}
     {disablePrecompiles : Bool} {lim : Nat} {ex : Execution}
     (notLimited : ex.Fit)
     ( eq :
-      genericCall false sevm devm gas value caller target codeAddress
+      genericCall sevm devm gas value caller target codeAddress
         shouldTransferValue isStaticcall input_index input_size
         output_index output_size code disablePrecompiles lim = ex ) :
     ∃ xl : Xlot,
@@ -2312,7 +2312,7 @@ lemma of_genericCall {sevm : Sevm} {devm : Devm} {gas : Nat} {value : B256}
   simp only [pure_bind] at eq
   okStep1 eq _; okStep1 eq msg
   have notLimited' :
-    (processMessage false msg lim).Fit := by
+    (processMessage msg lim).Fit := by
     intro pm_eq
     rcases Except.of_toError?_eq_some _ _ pm_eq with ⟨_, rw⟩
     rw [← eq, rw] at notLimited
@@ -2328,7 +2328,7 @@ lemma of_genericCall {sevm : Sevm} {devm : Devm} {gas : Nat} {value : B256}
 
 lemma Xinst.run_of_run_eq
     {sevm : Sevm} {devm : Devm} {x : Xinst} {lim : Nat} {exn}
-    (notLimited : exn.Fit) (eq : Xinst.run false sevm devm x lim = exn) :
+    (notLimited : exn.Fit) (eq : Xinst.run sevm devm x lim = exn) :
     ∃ xl : Xlot, xl.Good lim exn ∧ Xinst.Run sevm devm x xl exn :=
   match x, lim with
   | _, 0 => by
@@ -2394,7 +2394,7 @@ lemma Xinst.run_of_run_eq
 
 lemma Ninst.run_of_run_eq
     {pc} {sevm : Sevm} {devm : Devm} {n : Ninst} {lim : Nat} {exn}
-    (fit : exn.Fit) (eq : Ninst.run false ⟨pc, sevm, devm⟩ n lim = exn) :
+    (fit : exn.Fit) (eq : Ninst.run ⟨pc, sevm, devm⟩ n lim = exn) :
     ∃ xl : Xlot,
       xl.Good lim exn ∧
       Ninst.Run' pc sevm devm n xl exn :=
@@ -2416,7 +2416,7 @@ lemma Ninst.run_of_run_eq
 
 def of_exec :
     ∀ (lim : Nat) (pc : Nat) (sevm : Sevm) (devm : Devm) (exn : Execution),
-      exn.Fit → (exec false ⟨pc, sevm, devm⟩ lim = exn) →
+      exn.Fit → (exec ⟨pc, sevm, devm⟩ lim = exn) →
       Nonempty (Exec pc sevm devm exn) := by
   apply Nat.strongRec; intro lim ih pc sevm devm exn fit exec_eq;
   cases lim with
@@ -2470,7 +2470,7 @@ def of_exec :
 
 lemma exec_iff_exec (pc : Nat) (sevm : Sevm) (devm : Devm) (exn : Execution) :
     Nonempty (Exec pc sevm devm exn) ↔
-      (exn.Fit ∧ ∃ lim, exec false ⟨pc, sevm, devm⟩ lim = exn) := by
+      (exn.Fit ∧ ∃ lim, exec ⟨pc, sevm, devm⟩ lim = exn) := by
   constructor
   · intro ⟨exc⟩;
     rcases of_exec' _ _ _ _ exc with ⟨fit, lim, eq⟩

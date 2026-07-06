@@ -1,4 +1,4 @@
-import Blanc.ReCommon
+import Blanc.Solvent
 
 def main : List String → IO Unit
   | _ => IO.print "Hello World!"

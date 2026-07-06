@@ -4692,23 +4692,23 @@ structure State.Inv (wa : Adr) (w : _root_.State) : Prop where
   (solvent : w.Solvent wa)
 
 -- Counterpart of `weth_inv_solvent` for the raw executable `exec`, with
--- the recursion limit and verbosity flag quantified away.
-theorem exec_inv_solvent (wa : Adr) (vb : Bool) (lim : Nat)
+-- the recursion limit quantified away.
+theorem exec_inv_solvent (wa : Adr) (lim : Nat)
     (sevm : Sevm) (pre post : Devm)
-    (h_run : exec vb ⟨0, sevm, pre⟩ lim = .ok post)
+    (h_run : exec ⟨0, sevm, pre⟩ lim = .ok post)
     (h_code : sevm.currentTarget = wa → some sevm.code.toList = Prog.compile weth)
     (h_pc : Precond wa sevm pre) : Postcond wa sevm post := by
   sorry
 
-theorem processTransaction_inv_solvent (wa : Adr) (vb : Bool)
+theorem processTransaction_inv_solvent (wa : Adr)
     (benv : Benv) (bout bout' : BlockOutput) (tx : Tx) (i : Nat) (st : _root_.State)
-    (h_run : processTransaction vb benv bout tx i = .ok ⟨st, bout'⟩)
+    (h_run : processTransaction benv bout tx i = .ok ⟨st, bout'⟩)
     (h_inv : State.Inv wa benv.state) : State.Inv wa st := by
   sorry
 
-theorem applyTransactions_inv_solvent (wa : Adr) (vb : Bool)
+theorem applyTransactions_inv_solvent (wa : Adr)
     (txis : List (Nat × Tx)) (benv benv' : Benv) (bout bout' : BlockOutput)
-    (h_run : applyTransactions vb txis benv bout = .ok ⟨benv', bout'⟩)
+    (h_run : applyTransactions txis benv bout = .ok ⟨benv', bout'⟩)
     (h_inv : State.Inv wa benv.state) : State.Inv wa benv'.state := by
   sorry
 
@@ -4720,43 +4720,43 @@ theorem applyTransactions_inv_solvent (wa : Adr) (vb : Bool)
 def wdsum (wds : List Withdrawal) : Nat :=
   (wds.map (fun wd => wd.amount.toNat * 10 ^ 9)).sum
 
-theorem applyBody_inv_solvent (wa : Adr) (vb : Bool)
+theorem applyBody_inv_solvent (wa : Adr)
     (benv : Benv) (txs : List (B8L ⊕ Tx)) (wds : List Withdrawal)
     (st : _root_.State) (bout : BlockOutput)
-    (h_run : applyBody vb benv txs wds = .ok ⟨st, bout⟩)
+    (h_run : applyBody benv txs wds = .ok ⟨st, bout⟩)
     (h_wds : sum benv.state.bal + wdsum wds < 2 ^ 256)
     (h_inv : State.Inv wa benv.state) : State.Inv wa st := by
   sorry
 
-theorem stateTransition_inv_solvent (wa : Adr) (vb : Bool)
+theorem stateTransition_inv_solvent (wa : Adr)
     (ch ch' : BlockChain) (block : Block)
-    (h_run : stateTransition vb ch block = .ok ch')
+    (h_run : stateTransition ch block = .ok ch')
     (h_wds : sum ch.state.bal + wdsum block.wds < 2 ^ 256)
     (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state := by
   sorry
 
--- `BlockChain.Reach vb ch ch'` : chain `ch'` is reachable from `ch` by a
+-- `BlockChain.Reach ch ch'` : chain `ch'` is reachable from `ch` by a
 -- sequence of valid blocks, each of whose withdrawals stays within the
 -- no-overflow bound.
-inductive BlockChain.Reach (vb : Bool) : BlockChain → BlockChain → Prop
-  | refl (ch : BlockChain) : Reach vb ch ch
+inductive BlockChain.Reach : BlockChain → BlockChain → Prop
+  | refl (ch : BlockChain) : Reach ch ch
   | step {ch ch' ch'' : BlockChain} {block : Block} :
-      Reach vb ch ch' →
+      Reach ch ch' →
       sum ch'.state.bal + wdsum block.wds < 2 ^ 256 →
-      stateTransition vb ch' block = .ok ch'' →
-      Reach vb ch ch''
+      stateTransition ch' block = .ok ch'' →
+      Reach ch ch''
 
 -- Chain-level induction corollary : no sequence of valid blocks can break
 -- WETH solvency.
-theorem chain_inv_solvent (wa : Adr) (vb : Bool) (ch ch' : BlockChain)
-    (h_reach : BlockChain.Reach vb ch ch')
+theorem chain_inv_solvent (wa : Adr) (ch ch' : BlockChain)
+    (h_reach : BlockChain.Reach ch ch')
     (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state := by
   sorry
 
 -- Bonus level : preservation through RLP decoding and block hash checks.
-theorem addBlockToChain_inv_solvent (wa : Adr) (vb : Bool)
+theorem addBlockToChain_inv_solvent (wa : Adr)
     (ch ch' : BlockChain) (rlp : B8L)
-    (h_run : addBlockToChain vb ch rlp = .ok (.inl ch'))
+    (h_run : addBlockToChain ch rlp = .ok (.inl ch'))
     (h_wds : ∀ block hash, rlpToBlock rlp = .ok ⟨block, hash⟩ →
       sum ch.state.bal + wdsum block.wds < 2 ^ 256)
     (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state := by
