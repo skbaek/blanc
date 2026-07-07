@@ -2470,7 +2470,7 @@ def of_exec :
         · rcases ih _ (Nat.lt_succ_self _) _ _ _ _ fit ex_eq with ⟨ih'⟩
           constructor; apply Exec.jumpRec getInst_eq run_eq ih'
 
-lemma exec_iff_exec (pc : Nat) (sevm : Sevm) (devm : Devm) (exn : Execution) :
+lemma exec_iff_exec_eq (pc : Nat) (sevm : Sevm) (devm : Devm) (exn : Execution) :
     Nonempty (Exec pc sevm devm exn) ↔
       (exn.Fit ∧ ∃ lim, exec ⟨pc, sevm, devm⟩ lim = exn) := by
   constructor

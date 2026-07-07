@@ -4706,7 +4706,10 @@ theorem exec_inv_solvent (wa : Adr) (lim : Nat)
     (h_run : exec ⟨0, sevm, pre⟩ lim = .ok post)
     (h_code : sevm.currentTarget = wa → some sevm.code.toList = Prog.compile weth)
     (h_pc : Precond wa sevm pre) : Postcond wa sevm post := by
-  sorry
+  have fit : (Except.ok post : Execution).Fit := by
+    simp [Except.Fit, Except.Lim, Except.toError?]
+  obtain ⟨exc⟩ := (exec_iff_exec_eq 0 sevm pre (.ok post)).mpr ⟨fit, lim, h_run⟩
+  exact weth_inv_solvent wa sevm pre post exc h_code h_pc
 
 theorem processTransaction_inv_solvent (wa : Adr)
     (benv : Benv) (bout bout' : BlockOutput) (tx : Tx) (i : Nat) (st : _root_.State)
