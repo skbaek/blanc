@@ -5135,69 +5135,142 @@ theorem processMessage_inv_solvent {wa : Adr} {msg : Msg} {evm : Devm} {lim : Na
             rw [if_neg hp] at hec
             exact State.Inv.of_exec_precond h_pc h_code' (exec_ok_of_handleError hec herr)
 
--- Same, for the create path.
+-- Overwriting the storage of a *foreign* account (`a ≠ wa`) preserves `State.Inv`
+-- (`wa`'s account is untouched, and `setStor` leaves every balance alone).
+lemma State.Inv.setStor_ne {wa a : Adr} {s : Stor} {w : _root_.State}
+    (hne : a ≠ wa) (h : State.Inv wa w) : State.Inv wa (w.setStor a s) := by
+  have hget : (w.setStor a s).get wa = w.get wa := by
+    unfold State.setStor; exact State.get_set_ne hne
+  refine ⟨?_, ?_, ?_⟩
+  · show some (((w.setStor a s).get wa).code).toList = Prog.compile weth
+    rw [hget]; exact h.code
+  · rw [State.setStor_bal]; exact h.nof
+  · show Stor.Solvent (((w.setStor a s).get wa).stor) 0 ((w.setStor a s).get wa).bal
+    rw [hget]; exact h.solvent
+
+-- Likewise for installing code at a foreign account.
+lemma State.Inv.setCode_ne {wa a : Adr} {cd : ByteArray} {w : _root_.State}
+    (hne : a ≠ wa) (h : State.Inv wa w) : State.Inv wa (w.setCode a cd) := by
+  have hget : (w.setCode a cd).get wa = w.get wa := by
+    unfold State.setCode; exact State.get_set_ne hne
+  refine ⟨?_, ?_, ?_⟩
+  · show some (((w.setCode a cd).get wa).code).toList = Prog.compile weth
+    rw [hget]; exact h.code
+  · rw [State.setCode_bal]; exact h.nof
+  · show Stor.Solvent (((w.setCode a cd).get wa).stor) 0 ((w.setCode a cd).get wa).bal
+    rw [hget]; exact h.solvent
+
+-- Create path.  `processCreateMessage` seeds the account being created
+-- (`setStor .empty` + `incrNonce`, both at `currentTarget ≠ wa`), runs
+-- `processMessage`, then on clean success charges code gas and installs the
+-- returned code at `currentTarget`; the exceptional-halt and error paths roll
+-- the state back to `msg.benv.state`.
+-- `h_ct_ne` (the create address is fresh, hence `≠ wa`) subsumes both the
+-- WETH-code condition and the `value = 0` condition: their premises are all
+-- `currentTarget = wa`, so `h_ct_ne` discharges them vacuously.
 theorem processCreateMessage_inv_solvent {wa : Adr} {msg : Msg} {evm : Devm} {lim : Nat}
     (h_run : processCreateMessage msg lim = .ok evm)
-    (h_code : msg.currentTarget = wa → some msg.code.toList = Prog.compile weth)
+    (h_ct_ne : msg.currentTarget ≠ wa)
+    (h_ne : msg.shouldTransferValue = true → msg.caller ≠ wa)
     (h_inv : State.Inv wa msg.benv.state) :
-    State.Inv wa evm.state ∧ (∀ a ∈ evm.accountsToDelete.toList, a ≠ wa) := by
-  sorry
+    State.Inv wa evm.state := by
+  cases lim with
+  | zero => simp [processCreateMessage] at h_run
+  | succ k =>
+    rw [processCreateMessage] at h_run
+    rcases of_bind_eq_ok h_run with ⟨evm2, hpm, h_rest⟩
+    -- the seeded sub-message still satisfies the invariant (`currentTarget ≠ wa`)
+    have h_inv_cm : State.Inv wa (processCreateMessage.msg msg).benv.state := by
+      show State.Inv wa ((msg.benv.state.setStor msg.currentTarget .empty).incrNonce
+        msg.currentTarget)
+      exact State.Inv.incrNonce (State.Inv.setStor_ne h_ct_ne h_inv)
+    have h_pm : State.Inv wa evm2.state :=
+      processMessage_inv_solvent hpm (fun h => absurd h h_ct_ne) h_ne
+        (fun _ h => absurd h h_ct_ne) h_inv_cm
+    by_cases herr : evm2.error.isNone = true
+    · rw [if_pos herr] at h_rest
+      rcases hcg : processCreateMessage.chargeCodeGas evm2 with ⟨err, evm3⟩ | evm3
+      · -- code-gas charge failed
+        rw [hcg] at h_rest; dsimp only at h_rest
+        by_cases hex : isExceptionalHalt err
+        · -- exceptional halt : state rolled back to `msg.benv.state`
+          rw [if_pos hex] at h_rest
+          rw [← Except.ok.inj h_rest]; exact h_inv
+        · rw [if_neg hex] at h_rest; exact absurd h_rest (by simp)
+      · -- clean success : install the returned code at `currentTarget ≠ wa`
+        rw [hcg] at h_rest; dsimp only at h_rest
+        rw [← Except.ok.inj h_rest, Devm.setCode_state, chargeCodeGas_state_ok hcg]
+        exact State.Inv.setCode_ne h_ct_ne h_pm
+    · -- sub-message failed : state rolled back to `msg.benv.state`
+      rw [if_neg herr] at h_rest
+      rw [← Except.ok.inj h_rest]; exact h_inv
 
 theorem processMessageCall_inv_solvent {wa : Adr} {msg : Msg} {st' : _root_.State}
     {out : MsgCallOutput}
     (h_run : processMessageCall msg = .ok ⟨st', out⟩)
     (h_inv : State.Inv wa msg.benv.state) :
     State.Inv wa st' ∧ (∀ a ∈ out.accountsToDelete.toList, a ≠ wa) := by
-  -- REDUCTION PLAN — dispatch on `msg.target.isNone` (`processMessageCall`):
+  -- Dispatch on `msg.target.isNone`.  Both helpers below now conclude `State.Inv`
+  -- ONLY (see NOTE for the second conjunct) and take side conditions:
+  --   `processMessage_inv_solvent`      (h_run) (h_code) (h_ne) (h_val0) (h_inv)
+  --   `processCreateMessage_inv_solvent`(h_run) (h_ct_ne) (h_ne) (h_inv)
   --
-  --  • create path (`processMessageCall.create`): early-return on
-  --    `AddressCollision` keeps `msg.benv.state` (so `h_inv` transfers directly,
-  --    `accountsToDelete = ∅`); otherwise invert the `.ok` do-block —
-  --    `evm ← processCreateMessage msg (msg.gas + 50)`, `st' = evm.state`,
-  --    `out.accountsToDelete = if evm.error.isNone then evm.accountsToDelete
-  --    else ∅` — and finish with `processCreateMessage_inv_solvent`.
+  --  • create (`processMessageCall.create`): early `AddressCollision` return keeps
+  --    `msg.benv.state` (h_inv direct, accountsToDelete = ∅).  Otherwise the
+  --    collision check *failed*, i.e. `¬ accountHasCodeOrNonce`, which gives
+  --    `msg.currentTarget ≠ wa` (wa has weth code) = `h_ct_ne`; invert
+  --    `evm ← processCreateMessage msg (msg.gas+50)`, `st' = evm.state`; finish
+  --    with `processCreateMessage_inv_solvent`.
   --
-  --  • call path (`processMessageCall.call`): the delegation prelude
-  --    (`setDelegation`, `getDelegatedCodeAddress`) yields `msgPc` with
-  --    `State.Inv wa msgPc.benv.state` (delegation only rewrites code, not
-  --    balances/solvency at `wa`) and the WETH-code hypothesis for `msgPc`;
-  --    invert `evm ← Except.bimap Prod.fst id <| processMessage msgPc _`,
-  --    `st' = evm.state`, and finish with `processMessage_inv_solvent`.
+  --  • call (`processMessageCall.call`): the delegation prelude (`setDelegation`,
+  --    `getDelegatedCodeAddress`) yields `msgPc`.  Show `State.Inv wa msgPc.benv.state`
+  --    (setDelegation only touches code/nonce at the authority — `setCode_ne`/an
+  --    incrNonce-style lemma) and pass `h_code`/`h_ne`/`h_val0` for `msgPc` (its
+  --    currentTarget/code/caller/stv agree with `msg`'s); invert
+  --    `evm ← Except.bimap Prod.fst id <| processMessage msgPc _`, `st' = evm.state`;
+  --    finish with `processMessage_inv_solvent`.  (For the top call from
+  --    `processTransaction`, h_ne/h_val0/h_code hold: sender ≠ wa by EIP-3607, a tx
+  --    transfers value; but this lemma may need them threaded as hypotheses.)
   --
-  -- In both branches `out.accountsToDelete ⊆ evm.accountsToDelete ∪ ∅`, so the
-  -- deletion-avoids-`wa` conclusion follows from the helper's second component.
+  -- NOTE (second conjunct `∀ a ∈ out.accountsToDelete, a ≠ wa`): `out.accountsToDelete`
+  -- is `∅` on error else `evm.accountsToDelete`.  This needs a SEPARATE new invariant
+  -- (see the `wa ∉ createdAccounts` stack to build): post-EIP-6780 an address enters
+  -- `accountsToDelete` only when it is in `createdAccounts` (elevm Execution.lean:1936,
+  -- donor = `sevm.currentTarget`), and `wa ∉ createdAccounts` because wa already
+  -- carries weth code and CREATE's collision check refuses code-bearing addresses.
   sorry
 
 theorem processTransaction_inv_solvent (wa : Adr)
     (benv : Benv) (bout bout' : BlockOutput) (tx : Tx) (i : Nat) (st : _root_.State)
     (h_run : processTransaction benv bout tx i = .ok ⟨st, bout'⟩)
     (h_inv : State.Inv wa benv.state) : State.Inv wa st := by
-  -- PROOF PLAN (fill in once `elevm` is rebuilt against the linearized
-  -- `processTransaction`; the block is now a straight `.ok`-bind chain, so each
-  -- `←` peels with `of_bind_eq_ok` keeping every call opaque):
-  --
-  --   unfold processTransaction at h_run
-  --   -- peel the leading binds we don't need (transactionsTrie, validate,
-  --   -- checkTransaction) — record only `sender` and, from EIP-3607 in
-  --   -- checkTransaction, `hsender : sender ≠ wa`.
-  --   -- s₀ := benv.state.incrNonce sender          h_inv.incrNonce
-  --   -- s₁ := (s₀.subBal sender fee).get            (State.Inv.subBal hsender)
-  --   -- ⟨s₂, out⟩ := processMessageCall msg         processMessageCall_inv_solvent
-  --   --      (gives `State.Inv wa s₂` *and* `∀ a ∈ out.accountsToDelete, a ≠ wa`)
-  --   -- s₃ := s₂.addBal sender refund               (State.Inv.addBal <nof₃>)
-  --   -- s₄ := s₃.addBal coinbase txFee              (State.Inv.addBal <nof₄>)
-  --   -- st := out.accountsToDelete.toList.foldl destroyAccount s₄
-  --   --                                             (State.Inv.foldl_destroyAccount)
-  --
-  -- The two `addBal` `nof` obligations (<nof₃>, <nof₄>) come from a single
-  -- conservation lemma `sum st.bal ≤ sum benv.state.bal` (ether is moved, not
-  -- minted) combined with `h_inv.nof`.
+  -- The linearized `processTransaction` (elevm already rebuilt) is a straight
+  -- `.ok`-bind chain; peel each `←` with `of_bind_eq_ok`, keeping calls opaque.
+  --   unfold processTransaction at h_run; peel transactionsTrie / validateTransaction
+  --   / checkTransaction (record `sender`; from checkTransaction, EIP-3607 gives
+  --   `hsender : sender ≠ wa` — a code-bearing account, and wa carries weth code,
+  --   cannot be a tx sender).
+  --   s₀ = benv.state.incrNonce sender             State.Inv.incrNonce
+  --   s₁ = (s₀.subBal sender fee).get              State.Inv.subBal hsender
+  --   ⟨s₂,out⟩ = processMessageCall msg            processMessageCall_inv_solvent
+  --                                                (gives State.Inv wa s₂ AND out.2)
+  --   s₃ = s₂.addBal sender refund                 State.Inv.addBal <bound₃>
+  --   s₄ = s₃.addBal coinbase txFee                State.Inv.addBal <bound₄>
+  --   st = out.accountsToDelete.toList.foldl destroyAccount s₄
+  --                                                State.Inv.foldl_destroyAccount out.2
+  -- <boundᵢ> = `sum sᵢ.bal + amt.toNat < 2^256` : leverage `ProcessMessage.inv_nof`
+  -- (already preserves the balance sum across processMessageCall) + h_inv.nof; the
+  -- credited amounts (refund, fee) were debited via the earlier subBal, so total wei
+  -- is non-increasing. (A `sum st.bal ≤ sum benv.state.bal` conservation lemma is the
+  -- clean way to package this.)
   sorry
 
 theorem applyTransactions_inv_solvent (wa : Adr)
     (txis : List (Nat × Tx)) (benv benv' : Benv) (bout bout' : BlockOutput)
     (h_run : applyTransactions txis benv bout = .ok ⟨benv', bout'⟩)
     (h_inv : State.Inv wa benv.state) : State.Inv wa benv'.state := by
+  -- list induction over `txis`; each step is `processTransaction_inv_solvent`
+  -- (note `processTransaction` threads `Benv`, so track `benv.state`).
   sorry
 
 -- Total wei credited by a list of withdrawals, computed in ℕ. Withdrawals
@@ -5214,6 +5287,9 @@ theorem applyBody_inv_solvent (wa : Adr)
     (h_run : applyBody benv txs wds = .ok ⟨st, bout⟩)
     (h_wds : sum benv.state.bal + wdsum wds < 2 ^ 256)
     (h_inv : State.Inv wa benv.state) : State.Inv wa st := by
+  -- `applyTransactions` (conserves sum) then `processWithdrawals`.  Withdrawals
+  -- MINT via `addBal wd.recipient (amount * 10^9)`; fold `State.Inv.addBal`, whose
+  -- `sum + amt < 2^256` bounds come from `h_wds` (each partial sum ≤ start + wdsum).
   sorry
 
 theorem stateTransition_inv_solvent (wa : Adr)
@@ -5221,6 +5297,8 @@ theorem stateTransition_inv_solvent (wa : Adr)
     (h_run : stateTransition ch block = .ok ch')
     (h_wds : sum ch.state.bal + wdsum block.wds < 2 ^ 256)
     (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state := by
+  -- invert `stateTransition`'s do-block; the state change is `applyBody`, so this
+  -- is `applyBody_inv_solvent` (the block-check helpers don't touch state).
   sorry
 
 -- `BlockChain.Reach ch ch'` : chain `ch'` is reachable from `ch` by a
@@ -5239,6 +5317,8 @@ inductive BlockChain.Reach : BlockChain → BlockChain → Prop
 theorem chain_inv_solvent (wa : Adr) (ch ch' : BlockChain)
     (h_reach : BlockChain.Reach ch ch')
     (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state := by
+  -- induction on `h_reach`; `refl` is `h_inv`, `step` chains `stateTransition_inv_solvent`
+  -- (the `sum + wdsum < 2^256` bound is carried by the `step` constructor).
   sorry
 
 -- Bonus level : preservation through RLP decoding and block hash checks.
@@ -5248,4 +5328,6 @@ theorem addBlockToChain_inv_solvent (wa : Adr)
     (h_wds : ∀ block hash, rlpToBlock rlp = .ok ⟨block, hash⟩ →
       sum ch.state.bal + wdsum block.wds < 2 ^ 256)
     (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state := by
+  -- invert `addBlockToChain` (rlpToBlock decode + hash check), then one
+  -- `stateTransition_inv_solvent` step (h_wds instantiated at the decoded block).
   sorry
