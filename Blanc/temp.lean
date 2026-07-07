@@ -269,7 +269,17 @@ lemma Msg.NoDel.benvAfterTransfer {wa : Adr} {msg : Msg} {benv : Benv}
 lemma Msg.NoDel.processCreateMessage_msg {wa : Adr} {msg : Msg}
     (h_ct : msg.currentTarget ≠ wa)
     (h : Msg.NoDel wa msg) : Msg.NoDel wa (processCreateMessage.msg msg) := by
-  sorry
+  rcases h with ⟨hca, hcode⟩
+  refine ⟨?_, ?_⟩
+  · show wa ∉ msg.benv.createdAccounts.insert msg.currentTarget
+    exact AdrSet.not_mem_insert (Ne.symm h_ct) hca
+  · show (((msg.benv.state.setStor msg.currentTarget .empty).incrNonce msg.currentTarget).getCode wa).toList ≠ []
+    have h_get : ((msg.benv.state.setStor msg.currentTarget .empty).incrNonce msg.currentTarget).get wa = msg.benv.state.get wa := by
+      dsimp only [State.incrNonce, State.setStor]
+      rw [State.get_set_ne h_ct, State.get_set_ne h_ct]
+    show (((msg.benv.state.setStor msg.currentTarget .empty).incrNonce msg.currentTarget).get wa).code.toList ≠ []
+    rw [h_get]
+    exact hcode
 
 -- [FILL-05] [MECH] Precompiles never touch the sets or code.
 -- CRIB: `executePrecomp_inv_getCode` + `applyPrecompResult_getCode`
