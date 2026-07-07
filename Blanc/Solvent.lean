@@ -4950,6 +4950,140 @@ lemma Precond.of_inv_transfer {wa : Adr} {sevm' : Sevm} {devm' : Devm}
     show Stor.Solvent (st.getStor wa) 0 (st.bal wa)
     exact h_solv
 
+-- Reusable core: a full `exec` run started after a value transfer preserves
+-- `State.Inv`.  Combines `Precond.of_inv_transfer` (build the precondition),
+-- `exec_inv_solvent` (frame-level solvency + nof), and `code_eq_of_exec` (the
+-- WETH code at `wa` is untouched) through `State.Inv.of_postcond`.
+lemma State.Inv.of_exec_transfer {wa : Adr} {sevm : Sevm} {pre post : Devm}
+    {st st_mid : _root_.State} {caller target : Adr} {value : B256} {lim : Nat}
+    (h_inv : State.Inv wa st)
+    (h_ne : caller ≠ wa)
+    (h_sub : st.subBal caller value = some st_mid)
+    (h_pre_state : pre.state = st_mid.addBal target value)
+    (h_ct : sevm.currentTarget = target)
+    (h_val : sevm.currentTarget = wa → sevm.value = value)
+    (h_code : sevm.currentTarget = wa → some sevm.code.toList = Prog.compile weth)
+    (h_run : exec ⟨0, sevm, pre⟩ lim = .ok post) :
+    State.Inv wa post.state := by
+  have h_pc : Precond wa sevm pre :=
+    Precond.of_inv_transfer h_inv h_ne h_sub h_pre_state h_ct h_val
+  have h_post : Postcond wa sevm post :=
+    exec_inv_solvent wa lim sevm pre post h_run h_code h_pc
+  apply State.Inv.of_postcond h_post
+  have fit : (Except.ok post : Execution).Fit := by
+    simp [Except.Fit, Except.Lim, Except.toError?]
+  obtain ⟨exc⟩ := (exec_iff_exec_eq 0 sevm pre (.ok post)).mpr ⟨fit, lim, h_run⟩
+  have h_ce : post.getCode wa = pre.getCode wa := code_eq_of_exec exc h_pc.code
+  show some (post.state.getCode wa).toList = Prog.compile weth
+  rw [show post.state.getCode wa = post.getCode wa from rfl, h_ce]
+  exact h_pc.code
+
+-- No-transfer counterpart of `Precond.of_inv_transfer`: when no value moves,
+-- the pre-state is the invariant state itself, and `PreSolvent` reduces to the
+-- value-free solvency provided `value = 0` whenever the frame targets `wa`.
+lemma Precond.of_inv_eqs {wa : Adr} {sevm : Sevm} {devm : Devm}
+    (h_inv : State.Inv wa devm.state)
+    (h_val0 : sevm.currentTarget = wa → sevm.value = 0) :
+    Precond wa sevm devm := by
+  refine ⟨h_inv.code, ?_, ?_, ?_⟩
+  · show sum devm.getBal < 2 ^ 256
+    rw [sum_getBal_state]; exact h_inv.nof
+  · intro h_eq
+    rw [h_val0 h_eq]; exact h_inv.solvent
+  · intro _; exact h_inv.solvent
+
+-- Shared tail: given the precondition already holds for `pre`, a successful
+-- `exec` run preserves `State.Inv` (frame solvency + nof via `exec_inv_solvent`,
+-- code via `code_eq_of_exec`).
+lemma State.Inv.of_exec_precond {wa : Adr} {sevm : Sevm} {pre post : Devm} {lim : Nat}
+    (h_pc : Precond wa sevm pre)
+    (h_code : sevm.currentTarget = wa → some sevm.code.toList = Prog.compile weth)
+    (h_run : exec ⟨0, sevm, pre⟩ lim = .ok post) :
+    State.Inv wa post.state := by
+  have h_post : Postcond wa sevm post :=
+    exec_inv_solvent wa lim sevm pre post h_run h_code h_pc
+  apply State.Inv.of_postcond h_post
+  have fit : (Except.ok post : Execution).Fit := by
+    simp [Except.Fit, Except.Lim, Except.toError?]
+  obtain ⟨exc⟩ := (exec_iff_exec_eq 0 sevm pre (.ok post)).mpr ⟨fit, lim, h_run⟩
+  have h_ce : post.getCode wa = pre.getCode wa := code_eq_of_exec exc h_pc.code
+  show some (post.state.getCode wa).toList = Prog.compile weth
+  rw [show post.state.getCode wa = post.getCode wa from rfl, h_ce]
+  exact h_pc.code
+
+-- `handleError` only returns a clean (`error = none`) devm when the underlying
+-- execution itself returned `.ok`; the exceptional-halt / revert branches all
+-- set the error flag, and the hard-error branch returns `.error`.
+lemma exec_ok_of_handleError {exn : Execution} {evm' : Devm}
+    (h : executeCode.handleError exn = .ok evm') (herr : ¬ evm'.error.isSome = true) :
+    exn = .ok evm' := by
+  cases exn with
+  | error ee =>
+    obtain ⟨err, d⟩ := ee
+    rcases of_handleError_err h with ⟨evm2, h_ok, h_some, _⟩ | ⟨e2, h_e2⟩
+    · rw [Except.ok.inj h_ok] at herr; exact absurd h_some herr
+    · exact absurd h_e2 (by simp)
+  | ok e =>
+    simp only [executeCode.handleError] at h; rw [Except.ok.inj h]
+
+-- The precondition for the sub-execution's initial `evm`, built directly from
+-- the bare-state invariant across `benvAfterTransfer` (transfer / no-transfer).
+lemma Precond.of_inv_benvAfterTransfer {wa : Adr} {msg : Msg} {benv : Benv}
+    (h_ne : msg.shouldTransferValue = true → msg.caller ≠ wa)
+    (h_val0 : msg.shouldTransferValue = false → msg.currentTarget = wa → msg.value = 0)
+    (hb : msg.benvAfterTransfer = .ok benv)
+    (h_inv : State.Inv wa msg.benv.state) :
+    Precond wa (initSevm (msg.withBenv benv)) (initDevm (msg.withBenv benv)) := by
+  by_cases h_stv : msg.shouldTransferValue = true
+  · rcases of_benvAfterTransfer h_stv hb with ⟨st_mid, h_sub, hbenv⟩
+    have hbs : (initDevm (msg.withBenv benv)).state
+        = st_mid.addBal msg.currentTarget msg.value := by
+      show benv.state = _; rw [hbenv]; rfl
+    exact Precond.of_inv_transfer h_inv (h_ne h_stv) h_sub hbs rfl (fun _ => rfl)
+  · have hbenv : benv = msg.benv := of_benvAfterTransfer_no h_stv hb
+    have h_false : msg.shouldTransferValue = false := by
+      cases hh : msg.shouldTransferValue
+      · rfl
+      · exact absurd hh h_stv
+    have h_inv' : State.Inv wa (initDevm (msg.withBenv benv)).state := by
+      show State.Inv wa benv.state; rw [hbenv]; exact h_inv
+    exact Precond.of_inv_eqs h_inv' (fun he => h_val0 h_false he)
+
+-- The post-transfer state itself still satisfies `State.Inv` (the transfer only
+-- credits `wa` or moves value between accounts other than `wa`).  Used for the
+-- precompile branch, where `executePrecomp` leaves the state untouched.
+lemma State.Inv.of_benvAfterTransfer {wa : Adr} {msg : Msg} {benv : Benv}
+    (h_ne : msg.shouldTransferValue = true → msg.caller ≠ wa)
+    (hb : msg.benvAfterTransfer = .ok benv)
+    (h_inv : State.Inv wa msg.benv.state) :
+    State.Inv wa benv.state := by
+  by_cases h_stv : msg.shouldTransferValue = true
+  · rcases _root_.of_benvAfterTransfer h_stv hb with ⟨st_mid, h_sub, hbenv⟩
+    have hbs : benv.state = st_mid.addBal msg.currentTarget msg.value := by
+      rw [hbenv]; rfl
+    rw [hbs]
+    have h_inv_mid : State.Inv wa st_mid := State.Inv.subBal (h_ne h_stv) h_sub h_inv
+    rcases State.of_subBal h_sub with ⟨h_le, h_mid⟩
+    have hdec : Decrease msg.caller msg.value msg.benv.state.bal st_mid.bal := by
+      rw [h_mid]; intro b; constructor
+      · intro he; subst he
+        show msg.benv.state.bal msg.caller - msg.value
+          = ((msg.benv.state.setBal msg.caller
+              (msg.benv.state.bal msg.caller - msg.value)).get msg.caller).bal
+        rw [State.setBal_get_self]; rfl
+      · intro hnb
+        show msg.benv.state.bal b
+          = ((msg.benv.state.setBal msg.caller
+              (msg.benv.state.bal msg.caller - msg.value)).get b).bal
+        rw [State.setBal_get_ne hnb]; rfl
+    have hss := sum_sub_assoc hdec h_le
+    have h_vle : msg.value.toNat ≤ sum msg.benv.state.bal :=
+      le_trans (B256.toNat_le_toNat h_le) le_sum
+    have hnof := h_inv.nof; unfold SumNof at hnof
+    exact State.Inv.addBal (by omega) h_inv_mid
+  · have hbenv : benv = msg.benv := _root_.of_benvAfterTransfer_no h_stv hb
+    rw [hbenv]; exact h_inv
+
 -- Deep helper: one `processMessage` run preserves `State.Inv` and never
 -- self-destructs `wa`.  This is where the frame-level `exec_inv_solvent` gets
 -- lifted: `processMessage` = `benvAfterTransfer` (value transfer) then
@@ -4961,9 +5095,45 @@ lemma Precond.of_inv_transfer {wa : Adr} {sevm' : Sevm} {devm' : Devm}
 theorem processMessage_inv_solvent {wa : Adr} {msg : Msg} {evm : Devm} {lim : Nat}
     (h_run : processMessage msg lim = .ok evm)
     (h_code : msg.currentTarget = wa → some msg.code.toList = Prog.compile weth)
+    (h_ne : msg.shouldTransferValue = true → msg.caller ≠ wa)
+    (h_val0 : msg.shouldTransferValue = false → msg.currentTarget = wa → msg.value = 0)
     (h_inv : State.Inv wa msg.benv.state) :
-    State.Inv wa evm.state ∧ (∀ a ∈ evm.accountsToDelete.toList, a ≠ wa) := by
-  sorry
+    State.Inv wa evm.state := by
+  cases lim with
+  | zero => simp [processMessage] at h_run
+  | succ k =>
+    rw [processMessage] at h_run
+    rcases of_bind_eq_ok h_run with ⟨benv, hb, h_run'⟩
+    rcases of_bind_eq_ok h_run' with ⟨evm', hec, h_if⟩
+    by_cases herr : evm'.error.isSome = true
+    · -- sub-execution failed : state rolled back to the pre-transfer state
+      rw [if_pos herr] at h_if
+      rw [← Except.ok.inj h_if]; exact h_inv
+    · -- clean success : `evm = evm'` comes straight from `executeCode`
+      rw [if_neg herr] at h_if
+      rw [← Except.ok.inj h_if]
+      have h_pc : Precond wa (initSevm (msg.withBenv benv)) (initDevm (msg.withBenv benv)) :=
+        Precond.of_inv_benvAfterTransfer h_ne h_val0 hb h_inv
+      have h_code' : (initSevm (msg.withBenv benv)).currentTarget = wa →
+          some (initSevm (msg.withBenv benv)).code.toList = Prog.compile weth := h_code
+      cases k with
+      | zero => simp [executeCode] at hec
+      | succ j =>
+        rw [executeCode] at hec
+        rcases hca : (msg.withBenv benv).codeAddress with _ | adr
+        · -- no code address : run the interpreter directly
+          rw [hca] at hec
+          exact State.Inv.of_exec_precond h_pc h_code' (exec_ok_of_handleError hec herr)
+        · rw [hca] at hec
+          dsimp only at hec
+          by_cases hp : adr.isPrecomp
+          · -- precompile : the state is left untouched
+            rw [if_pos hp] at hec
+            rw [state_of_executePrecomp_ok hec herr]
+            exact State.Inv.of_benvAfterTransfer h_ne hb h_inv
+          · -- ordinary code at a delegated address : run the interpreter
+            rw [if_neg hp] at hec
+            exact State.Inv.of_exec_precond h_pc h_code' (exec_ok_of_handleError hec herr)
 
 -- Same, for the create path.
 theorem processCreateMessage_inv_solvent {wa : Adr} {msg : Msg} {evm : Devm} {lim : Nat}
