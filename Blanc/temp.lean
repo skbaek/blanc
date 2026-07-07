@@ -238,7 +238,26 @@ lemma ne_wa_of_not_hasCodeOrNonce {st : State} {wa ct : Adr}
 lemma Msg.NoDel.benvAfterTransfer {wa : Adr} {msg : Msg} {benv : Benv}
     (h_run : msg.benvAfterTransfer = .ok benv)
     (h : Msg.NoDel wa msg) : Msg.NoDel wa (msg.withBenv benv) := by
-  sorry
+  by_cases h_stv : msg.shouldTransferValue = true
+  · rcases of_benvAfterTransfer h_stv h_run with ⟨st_mid, h_sub, hB⟩
+    have hBc : benv.createdAccounts = msg.benv.createdAccounts := by
+      rw [hB]; rfl
+    have h_code_add : benv.state.getCode wa = st_mid.getCode wa := by
+      have hBs : benv.state = st_mid.addBal msg.currentTarget msg.value := by
+        rw [hB]; rfl
+      rw [hBs]; exact State.addBal_getCode st_mid msg.currentTarget wa msg.value
+    have h_code_sub : st_mid.getCode wa = msg.benv.state.getCode wa := by
+      exact State.subBal_getCode h_sub
+    have h_code : ((msg.withBenv benv).benv.state.getCode wa).toList ≠ [] := by
+      change (benv.state.getCode wa).toList ≠ []
+      rw [h_code_add, h_code_sub]
+      exact h.code
+    exact ⟨hBc ▸ h.ca, h_code⟩
+  · unfold Msg.benvAfterTransfer at h_run
+    rw [if_neg h_stv] at h_run
+    have heq : benv = msg.benv := (Except.ok.inj h_run).symm
+    subst heq
+    exact h
 
 -- [FILL-04] [MECH] The create-seeding step (elevm Execution.lean:2617-2622):
 -- setStor ct ∅ (code untouched), addCreatedAccount ct (use
