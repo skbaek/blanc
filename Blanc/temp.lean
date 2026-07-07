@@ -209,7 +209,24 @@ lemma ne_wa_of_code_size_zero {st : State} {wa b : Adr}
 lemma ne_wa_of_not_hasCodeOrNonce {st : State} {wa ct : Adr}
     (hwa : (st.getCode wa).toList ≠ [])
     (h : accountHasCodeOrNonce st ct = false) : ct ≠ wa := by
-  sorry
+  intro heq
+  subst heq
+  unfold accountHasCodeOrNonce at h
+  rw [Bool.or_eq_false_iff] at h
+  have h_empty_not := h.2
+  have h_empty : (st.getCode ct).isEmpty = true := by
+    simp at h_empty_not
+    exact h_empty_not
+  have hb : (st.getCode ct).size = 0 := by
+    unfold ByteArray.isEmpty at h_empty
+    simp at h_empty
+    exact h_empty
+  have h_empty_list : (st.getCode ct).toList = [] := by
+    unfold ByteArray.toList
+    unfold ByteArray.toList.loop
+    simp [hb]
+  rw [h_empty_list] at hwa
+  exact hwa rfl
 
 -- [FILL-03] [MECH] The pre-execution value transfer keeps ca and wa's code
 -- (it only moves balances).  CRIB: `sum_bal_of_benvAfterTransfer`
