@@ -5271,7 +5271,17 @@ theorem applyTransactions_inv_solvent (wa : Adr)
     (h_inv : State.Inv wa benv.state) : State.Inv wa benv'.state := by
   -- list induction over `txis`; each step is `processTransaction_inv_solvent`
   -- (note `processTransaction` threads `Benv`, so track `benv.state`).
-  sorry
+  induction txis generalizing benv bout with
+  | nil =>
+    rw [applyTransactions] at h_run
+    obtain ⟨hb, hbo⟩ := Prod.mk.inj (Except.ok.inj h_run)
+    subst hb; exact h_inv
+  | cons hd tl ih =>
+    obtain ⟨i, tx⟩ := hd
+    rw [applyTransactions] at h_run
+    obtain ⟨⟨st, bout''⟩, h1, h2⟩ := of_bind_eq_ok h_run
+    have hstep := processTransaction_inv_solvent wa benv bout bout'' tx i st h1 h_inv
+    exact ih (benv.withState st) bout'' h2 hstep
 
 -- Total wei credited by a list of withdrawals, computed in ℕ. Withdrawals
 -- mint ether with wrapping addition (`State.addBal`), so the block-level
@@ -5299,7 +5309,15 @@ theorem stateTransition_inv_solvent (wa : Adr)
     (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state := by
   -- invert `stateTransition`'s do-block; the state change is `applyBody`, so this
   -- is `applyBody_inv_solvent` (the block-check helpers don't touch state).
-  sorry
+  rw [stateTransition] at h_run
+  obtain ⟨_, _, h_run⟩ := of_bind_eq_ok h_run
+  obtain ⟨_, _, h_run⟩ := of_bind_eq_ok h_run
+  dsimp only at h_run
+  obtain ⟨⟨st, bout⟩, h_ab, h_run⟩ := of_bind_eq_ok h_run
+  dsimp only at h_run
+  obtain ⟨_, _, h_run⟩ := of_bind_eq_ok h_run
+  rw [← Except.ok.inj h_run]
+  exact applyBody_inv_solvent wa (initBenv ch block.header) block.txs block.wds st bout h_ab h_wds h_inv
 
 -- `BlockChain.Reach ch ch'` : chain `ch'` is reachable from `ch` by a
 -- sequence of valid blocks, each of whose withdrawals stays within the
@@ -5319,7 +5337,9 @@ theorem chain_inv_solvent (wa : Adr) (ch ch' : BlockChain)
     (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state := by
   -- induction on `h_reach`; `refl` is `h_inv`, `step` chains `stateTransition_inv_solvent`
   -- (the `sum + wdsum < 2^256` bound is carried by the `step` constructor).
-  sorry
+  induction h_reach with
+  | refl => exact h_inv
+  | step h_reach' h_bound h_st ih => exact stateTransition_inv_solvent wa _ _ _ h_st h_bound ih
 
 -- Bonus level : preservation through RLP decoding and block hash checks.
 theorem addBlockToChain_inv_solvent (wa : Adr)
@@ -5330,4 +5350,26 @@ theorem addBlockToChain_inv_solvent (wa : Adr)
     (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state := by
   -- invert `addBlockToChain` (rlpToBlock decode + hash check), then one
   -- `stateTransition_inv_solvent` step (h_wds instantiated at the decoded block).
-  sorry
+  rw [addBlockToChain] at h_run
+  obtain ⟨⟨block, hash⟩, h_rlp, h_run⟩ := of_bind_eq_ok h_run
+  dsimp only at h_run
+  obtain ⟨_, _, h_run⟩ := of_bind_eq_ok h_run
+  obtain ⟨_, _, h_run⟩ := of_bind_eq_ok h_run
+  -- outer hash check
+  split at h_run
+  · exact absurd h_run (by simp)
+  · simp only [pure_bind] at h_run
+    -- inner rlp check
+    split at h_run
+    · exact absurd h_run (by simp)
+    · -- case on `stateTransition ch block`
+      split at h_run
+      · exact absurd h_run (by simp [Pure.pure, Except.pure])
+      · rename_i chain h_st
+        obtain ⟨y, hy, h_run⟩ := of_bind_eq_ok h_run
+        obtain ⟨_, _, h_run⟩ := of_bind_eq_ok h_run
+        obtain ⟨_, _, h_run⟩ := of_bind_eq_ok h_run
+        have hyc : chain = ch' :=
+          (Except.ok.inj hy).trans (Sum.inl.inj (Except.ok.inj h_run))
+        subst hyc
+        exact stateTransition_inv_solvent wa ch _ block h_st (h_wds block hash h_rlp) h_inv
