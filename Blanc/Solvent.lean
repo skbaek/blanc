@@ -4896,6 +4896,60 @@ lemma State.Inv.of_postcond {wa : Adr} {sevm : Sevm} {devm : Devm}
     unfold Devm.PostSolvent at hs
     exact hs
 
+-- Building `Precond` for a sub-execution's initial state directly from the
+-- bare-state invariant across a value transfer.  This is the `State.Inv`
+-- counterpart of `Precond.child_of_transfer`: that lemma only ever consults the
+-- parent's `code`/`nof`/`solvent.right` (the value-free solvency), which are
+-- exactly the three fields of `State.Inv`.  As there, `caller ≠ wa` is required
+-- so the credited value keeps `wa` over-collateralized when `target = wa`.
+lemma Precond.of_inv_transfer {wa : Adr} {sevm' : Sevm} {devm' : Devm}
+    {st st_mid : _root_.State} {caller target : Adr} {value : B256}
+    (h_inv : State.Inv wa st)
+    (h_ne : caller ≠ wa)
+    (h_sub : st.subBal caller value = some st_mid)
+    (h_state : devm'.state = st_mid.addBal target value)
+    (h_ct' : sevm'.currentTarget = target)
+    (h_val : sevm'.currentTarget = wa → sevm'.value = value) :
+    Precond wa sevm' devm' := by
+  have h_nof_st : sum st.bal < 2 ^ 256 := h_inv.nof
+  rcases of_state_transfer (callee := target) h_sub h_nof_st with
+    ⟨h_t_stor, h_t_code, h_t_sum, _, _, _⟩
+  have h_stor' : devm'.getStor wa = st.getStor wa := by
+    show (devm'.state.get wa).stor = (st.get wa).stor
+    rw [h_state, h_t_stor wa]
+  have h_code' : devm'.getCode wa = st.getCode wa := by
+    show (devm'.state.get wa).code = (st.get wa).code
+    rw [h_state, h_t_code wa]
+  have h_bal_fun : ∀ a, devm'.getBal a = (st_mid.addBal target value).bal a := by
+    intro a; show (devm'.state.get a).bal = _; rw [h_state]; rfl
+  have h_solv := h_inv.solvent
+  refine ⟨?_, ?_, ?_, ?_⟩
+  · show some (devm'.getCode wa).toList = Prog.compile weth
+    rw [h_code']; exact h_inv.code
+  · have h_sum' : sum devm'.getBal = sum st.bal := by
+      apply Eq.trans _ h_t_sum
+      apply congrArg; funext a; exact h_bal_fun a
+    rw [h_sum']; exact h_inv.nof
+  · intro h_eq
+    have h_v : sevm'.value = value := h_val h_eq
+    have h_t_wa : target = wa := h_ct'.symm.trans h_eq
+    subst h_t_wa
+    have h_bal_wa : (devm'.getBal target).toNat
+        = (st.bal target).toNat + value.toNat := by
+      rw [h_bal_fun target, of_transfer_bal_target h_sub h_ne h_nof_st]
+    rw [h_stor', h_v]
+    unfold State.Solvent Stor.Solvent at h_solv
+    unfold Stor.Solvent
+    rw [B256.toNat_zero] at h_solv
+    omega
+  · intro h_ne_ct
+    have h_t_ne : target ≠ wa := fun hc => h_ne_ct (h_ct'.trans hc)
+    have h_bal_wa : devm'.getBal wa = st.bal wa := by
+      rw [h_bal_fun wa, of_transfer_bal_other h_sub h_ne h_t_ne]
+    rw [h_stor', h_bal_wa]
+    show Stor.Solvent (st.getStor wa) 0 (st.bal wa)
+    exact h_solv
+
 -- Deep helper: one `processMessage` run preserves `State.Inv` and never
 -- self-destructs `wa`.  This is where the frame-level `exec_inv_solvent` gets
 -- lifted: `processMessage` = `benvAfterTransfer` (value transfer) then
