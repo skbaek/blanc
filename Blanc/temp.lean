@@ -288,7 +288,20 @@ lemma Msg.NoDel.processCreateMessage_msg {wa : Adr} {msg : Msg}
 lemma executePrecomp_noDel {wa : Adr} {evm : Evm} {adr : Adr} {exn : Execution}
     (h_ex : executePrecomp evm adr = exn)
     (h : Devm.NoDel wa evm.dyna) : Execution.NoDel wa exn := by
-  sorry
+  unfold executePrecomp at h_ex
+  revert h_ex
+  generalize h_res : precompileRun evm adr = res
+  intro h_ex
+  subst h_ex
+  cases res
+  · apply Devm.NoDel.of_eqs (d := evm.dyna)
+    · rfl
+    · rfl
+    · exact h
+  · apply Devm.NoDel.of_eqs (d := evm.dyna)
+    · rfl
+    · rfl
+    · exact h
 
 /-! ## §5 Instruction level (sorried) -/
 
