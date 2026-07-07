@@ -4306,7 +4306,7 @@ lemma GenericCreate.inv_getCode_gen
   rcases run with ⟨x, h_err, eq_err, _⟩ | ⟨_, h_ok, run⟩
   · intro a ha
     rw [eq_err]
-    have h : Except.assert (memorySize ≤ maxInitcodeSize) ⟨"OutOfGasError", devm⟩ = Except.error x := h_err
+    have h : Except.assert (memorySize ≤ maxInitCodeSize) ⟨"OutOfGasError", devm⟩ = Except.error x := h_err
     dsimp [Except.assert] at h
     split at h
     · contradiction

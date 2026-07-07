@@ -245,7 +245,7 @@ def GenericCreate (sevm : Sevm) (devm : Devm) (endowment : B256) (newAddress : A
     ExistsEq (devm.memory.data.sliceD memoryIndex memorySize 0) <|
   λ calldata =>
     ( Except.assert
-        (memorySize ≤ maxInitcodeSize)
+        (memorySize ≤ maxInitCodeSize)
         ⟨"OutOfGasError", devm⟩ ).SplitXl xl ex <|
   λ _ =>
     ExistsEq (addAccessedAddress devm newAddress) <|
