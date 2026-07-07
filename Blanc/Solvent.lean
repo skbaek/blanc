@@ -4711,10 +4711,101 @@ theorem exec_inv_solvent (wa : Adr) (lim : Nat)
   obtain ⟨exc⟩ := (exec_iff_exec_eq 0 sevm pre (.ok post)).mpr ⟨fit, lim, h_run⟩
   exact weth_inv_solvent wa sevm pre post exc h_code h_pc
 
+/-! ### Atomic `State.Inv`-preservation lemmas
+
+`processTransaction` mutates the world state through exactly five operations:
+`incrNonce`, `subBal`, `processMessageCall`, `addBal`, and `destroyAccount`.
+Each preserves `State.Inv wa` under the minimal side condition noted below.
+The `code` field survives every op (all of them touch only `bal`/`nonce`/erase
+a foreign account); `solvent` needs `a ≠ wa` wherever `wa`'s own balance could
+drop; `nof` (`SumNof`) survives the *decreasing* ops for free but for `addBal`
+is deferred to the caller via a hypothesis, to be discharged by the global
+wei-conservation argument (a transaction moves but never mints ether, so the
+total balance is non-increasing — hence no overflow bound is needed on the
+theorem, unlike the withdrawal-carrying `applyBody`/`stateTransition`).
+
+Bodies are `sorry` — this is the scaffold. -/
+
+-- Bumping a nonce leaves `code`, `bal`, and `stor` untouched.
+theorem State.Inv.incrNonce {wa a : Adr} {w : _root_.State}
+    (h : State.Inv wa w) : State.Inv wa (w.incrNonce a) := by
+  sorry
+
+-- `addBal` can only raise a balance: `code` (bal field only) and `solvent`
+-- (`bal wa` only grows) survive unconditionally; `nof` for the new sum is the
+-- caller's obligation.
+theorem State.Inv.addBal {wa a : Adr} {val : B256} {w : _root_.State}
+    (hnof : SumNof (w.addBal a val).bal)
+    (h : State.Inv wa w) : State.Inv wa (w.addBal a val) := by
+  sorry
+
+-- `subBal` lowers a balance, so `nof` survives; dropping `wa`'s balance could
+-- break solvency, hence `a ≠ wa`.  (In `processTransaction` the debited account
+-- is the tx `sender`, which differs from the code-carrying `wa` by EIP-3607.)
+theorem State.Inv.subBal {wa a : Adr} {val : B256} {w w' : _root_.State}
+    (hne : a ≠ wa) (h_sub : w.subBal a val = some w')
+    (h : State.Inv wa w) : State.Inv wa w' := by
+  sorry
+
+-- Deleting a foreign account (`a ≠ wa`) removes its balance from the sum and
+-- leaves `wa`'s code/balance/storage alone.
+theorem State.Inv.destroyAccount {wa a : Adr} {w : _root_.State}
+    (hne : a ≠ wa) (h : State.Inv wa w) : State.Inv wa (destroyAccount w a) := by
+  sorry
+
+-- Folded form for the `accountsToDelete` set (post-linearization `foldl`).
+-- This one is proved outright from the atomic lemma to exercise the pattern.
+theorem State.Inv.foldl_destroyAccount {wa : Adr} :
+    ∀ {as : List Adr} {w : _root_.State},
+      (∀ a ∈ as, a ≠ wa) → State.Inv wa w →
+        State.Inv wa (as.foldl _root_.destroyAccount w)
+  | [], _, _, h => h
+  | a :: as, w, hne, h => by
+    rw [List.foldl_cons]
+    exact State.Inv.foldl_destroyAccount
+      (fun b hb => hne b (List.mem_cons_of_mem _ hb))
+      (h.destroyAccount (hne a List.mem_cons_self))
+
+/-! ### Bridge to the frame-level invariant
+
+The substantive gap: descend from the message-call layer to the already-proven
+`exec_inv_solvent`.  This must connect `processMessageCall` — via
+`prepareMessage`, the interpreter loop, and `processMessageCall.{call,create}` —
+to the `Exec`/`weth_inv_solvent` machinery, discharge the WETH-code
+precondition, and certify that a WETH run never self-destructs `wa`
+(so the deletion set avoids `wa`). -/
+
+theorem processMessageCall_inv_solvent {wa : Adr} {msg : Msg} {st' : _root_.State}
+    {out : MsgCallOutput}
+    (h_run : processMessageCall msg = .ok ⟨st', out⟩)
+    (h_inv : State.Inv wa msg.benv.state) :
+    State.Inv wa st' ∧ (∀ a ∈ out.accountsToDelete.toList, a ≠ wa) := by
+  sorry
+
 theorem processTransaction_inv_solvent (wa : Adr)
     (benv : Benv) (bout bout' : BlockOutput) (tx : Tx) (i : Nat) (st : _root_.State)
     (h_run : processTransaction benv bout tx i = .ok ⟨st, bout'⟩)
     (h_inv : State.Inv wa benv.state) : State.Inv wa st := by
+  -- PROOF PLAN (fill in once `elevm` is rebuilt against the linearized
+  -- `processTransaction`; the block is now a straight `.ok`-bind chain, so each
+  -- `←` peels with `of_bind_eq_ok` keeping every call opaque):
+  --
+  --   unfold processTransaction at h_run
+  --   -- peel the leading binds we don't need (transactionsTrie, validate,
+  --   -- checkTransaction) — record only `sender` and, from EIP-3607 in
+  --   -- checkTransaction, `hsender : sender ≠ wa`.
+  --   -- s₀ := benv.state.incrNonce sender          h_inv.incrNonce
+  --   -- s₁ := (s₀.subBal sender fee).get            (State.Inv.subBal hsender)
+  --   -- ⟨s₂, out⟩ := processMessageCall msg         processMessageCall_inv_solvent
+  --   --      (gives `State.Inv wa s₂` *and* `∀ a ∈ out.accountsToDelete, a ≠ wa`)
+  --   -- s₃ := s₂.addBal sender refund               (State.Inv.addBal <nof₃>)
+  --   -- s₄ := s₃.addBal coinbase txFee              (State.Inv.addBal <nof₄>)
+  --   -- st := out.accountsToDelete.toList.foldl destroyAccount s₄
+  --   --                                             (State.Inv.foldl_destroyAccount)
+  --
+  -- The two `addBal` `nof` obligations (<nof₃>, <nof₄>) come from a single
+  -- conservation lemma `sum st.bal ≤ sum benv.state.bal` (ether is moved, not
+  -- minted) combined with `h_inv.nof`.
   sorry
 
 theorem applyTransactions_inv_solvent (wa : Adr)
