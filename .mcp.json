@@ -3,7 +3,7 @@
     "lean-lsp": {
       "command": "uvx",
       "args": [
-        "lean-lsp-mcp"
+        "lean-lsp-mcp==0.26.1"
       ],
       "env": {
         "LEAN_LOG_LEVEL": "INFO"

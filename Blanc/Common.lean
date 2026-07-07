@@ -3495,6 +3495,18 @@ lemma Devm.Burn.getStor {s s' : Devm} (h : Devm.Burn s s') (a : Adr) : s'.getSto
 lemma Devm.PopBurn.getStor {xs} {s s' : Devm} (h : Devm.PopBurn xs s s') (a : Adr) : s'.getStor a = s.getStor a := by
   simp [Devm.getStor, Devm.getAcct]; rw [h.state]
 
+instance : PopBurn.Inv Devm.getStor := ⟨by
+  intros xs s s' h
+  funext a
+  exact (Devm.PopBurn.getStor h a).symm
+⟩
+
+instance : Burn.Inv Devm.getStor := ⟨by
+  intros s s' h
+  funext a
+  exact (Devm.Burn.getStor h a).symm
+⟩
+
 lemma addAccessedAddress_getStor {devm : Devm} {adr : Adr} : (addAccessedAddress devm adr).getStor = devm.getStor := rfl
 
 lemma addAccessedStorageKey_getStor {devm : Devm} {adr : Adr} {key : B256} : (addAccessedStorageKey devm adr key).getStor = devm.getStor := rfl

@@ -39,7 +39,7 @@ def logWithdraw : Func :=
 def sendToCaller : Line :=
   pushList [0, 0, 0, 0] ++ -- 0 :: 0 :: 0 :: 0 :: wad
   swap 3 :: caller :: -- caller :: wad :: 0 :: 0 :: 0 :: 0
-  push [0x52, 0x08] (by {simp [List.length]}) :: -- 21000 :: caller :: wad :: 0 :: 0 :: 0 :: 0
+  pushB256 0 :: -- 0 :: caller :: wad :: 0 :: 0 :: 0 :: 0
   call :: -- 'wad' amount of ethers now sent to 'caller'
   []
 
@@ -59,8 +59,8 @@ def withdraw : Func :=
   sub ::: caller ::: -- caller :: (caller_bal - wad) :: wad
   sstore ::: -- wad
              -- 'wad' amount of eth subtracted from caller balance
-  sendToCaller +++
-  logWithdraw
+  sendToCaller +++ -- success?
+  logWithdraw <?> .rev -- you revert if flag from sendToCaller is 0, because 0 after `call` opcode means failure.
 
 
 

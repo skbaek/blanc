@@ -312,6 +312,14 @@ instance : Linst.Hinv Devm.getStor Devm.getStor Linst.ret := by
   show s.getStor = (s3.memRead n1 n2).2.getStor
   rw [memRead_getStor_eq h_mem, ← chargeGas_getStor_eq h5, ← Devm.popToNat_getStor_eq h3, ← Devm.popToNat_getStor_eq h1]
 
+instance : Linst.Hinv Devm.getStor Devm.getStor Linst.rev := by
+  constructor; intros e s r h
+  simp only [Linst.Run, Linst.run] at h
+  rcases of_bind_eq_ok h with ⟨v1, h1, h2⟩
+  rcases of_bind_eq_ok h2 with ⟨v2, h3, h4⟩
+  rcases of_bind_eq_ok h4 with ⟨v3, h5, h6⟩
+  contradiction
+
 syntax "simple_solvent" : tactic
 set_option hygiene false in
 macro_rules
@@ -1852,7 +1860,7 @@ lemma of_send_to_caller' {sevm : Sevm} {s sf : Devm} {wad}
     Line.Run sevm s sendToCaller sf →
     Stor.Solvent (sf.getStor sevm.currentTarget) 0 (sf.getBal sevm.currentTarget) := by
   lexen 7
-  have hs₁ : [B8L.toB256 [0x52, 0x08], sevm.caller.toB256, wad, 0, 0, 0, 0] <<+ s₁.stack := by
+  have hs₁ : [0, sevm.caller.toB256, wad, 0, 0, 0, 0] <<+ s₁.stack := by
     lpfx
   -- transport the hypotheses to s₁
   have h_bal₁ : s.getBal = s₁.getBal := Line.of_inv Devm.getBal (by line_inv) h₁
@@ -1873,7 +1881,7 @@ lemma of_send_to_caller' {sevm : Sevm} {s sf : Devm} {wad}
   have e1 := (Devm.pop_of_pop eq1).stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e1
   rw [e1] at hs₁
-  have h_gas : B8L.toB256 [0x52, 0x08] = gas :=
+  have h_gas : (0 : B256) = gas :=
     pref_head_unique hs₁ (pref_append [gas] devm1.stack)
   subst h_gas
   have hs₂ : [sevm.caller.toB256, wad, 0, 0, 0, 0] <<+ devm1.stack := cons_pref_cons_inv hs₁
