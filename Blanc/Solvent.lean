@@ -4729,15 +4729,69 @@ Bodies are `sorry` — this is the scaffold. -/
 -- Bumping a nonce leaves `code`, `bal`, and `stor` untouched.
 theorem State.Inv.incrNonce {wa a : Adr} {w : _root_.State}
     (h : State.Inv wa w) : State.Inv wa (w.incrNonce a) := by
-  sorry
+  have hbal : (w.incrNonce a).bal = w.bal := by
+    funext b
+    show ((w.incrNonce a).get b).bal = (w.get b).bal
+    by_cases hb : b = a
+    · subst hb; simp only [State.incrNonce, State.get_set_self]
+    · simp only [State.incrNonce, State.get_set_ne (Ne.symm hb)]
+  have hstor : (w.incrNonce a).getStor wa = w.getStor wa := by
+    show ((w.incrNonce a).get wa).stor = (w.get wa).stor
+    by_cases hb : wa = a
+    · subst hb; simp only [State.incrNonce, State.get_set_self]
+    · simp only [State.incrNonce, State.get_set_ne (Ne.symm hb)]
+  have hcode : (w.incrNonce a).getCode wa = w.getCode wa := by
+    show ((w.incrNonce a).get wa).code = (w.get wa).code
+    by_cases hb : wa = a
+    · subst hb; simp only [State.incrNonce, State.get_set_self]
+    · simp only [State.incrNonce, State.get_set_ne (Ne.symm hb)]
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hcode]; exact h.code
+  · rw [hbal]; exact h.nof
+  · show Stor.Solvent ((w.incrNonce a).getStor wa) 0 ((w.incrNonce a).bal wa)
+    rw [hstor, hbal]; exact h.solvent
 
 -- `addBal` can only raise a balance: `code` (bal field only) and `solvent`
--- (`bal wa` only grows) survive unconditionally; `nof` for the new sum is the
--- caller's obligation.
+-- (`bal wa` only grows) survive.  Both `nof` of the result *and* the absence of
+-- a wrap at `wa` need the pre-sum bound `sum w.bal + val < 2 ^ 256`, supplied by
+-- the caller's wei-conservation argument (a `SumNof` on the *result* would not
+-- rule out a wrap, so it is not enough).
 theorem State.Inv.addBal {wa a : Adr} {val : B256} {w : _root_.State}
-    (hnof : SumNof (w.addBal a val).bal)
+    (hsum : sum w.bal + val.toNat < 2 ^ 256)
     (h : State.Inv wa w) : State.Inv wa (w.addBal a val) := by
-  sorry
+  have hnof_a : B256.Nof (w.bal a) val := by
+    unfold B256.Nof; have := @le_sum w.bal a; omega
+  have hinc : Increase a val w.bal (w.addBal a val).bal := by
+    intro b; constructor
+    · intro heq; subst heq
+      show w.bal a + val = ((w.addBal a val).get a).bal
+      unfold State.addBal; rw [State.setBal_get_self]; rfl
+    · intro hnb
+      show w.bal b = ((w.addBal a val).get b).bal
+      unfold State.addBal; rw [State.setBal_get_ne hnb]; rfl
+  have hsum' := sum_add_assoc hinc hnof_a
+  have hstor_wa : ((w.addBal a val).get wa).stor = (w.get wa).stor := by
+    unfold State.addBal; rw [State.setBal_get_stor]
+  have hbal_wa : (w.bal wa).toNat ≤ ((w.addBal a val).get wa).bal.toNat := by
+    by_cases hwa : a = wa
+    · subst hwa
+      unfold State.addBal; rw [State.setBal_get_self]
+      change (w.bal a).toNat ≤ (w.bal a + val).toNat
+      rw [B256.toNat_add_eq_of_nof _ _ hnof_a]; omega
+    · unfold State.addBal; rw [State.setBal_get_ne hwa]; exact Nat.le_refl _
+  refine ⟨?_, ?_, ?_⟩
+  · show some (((w.addBal a val).get wa).code).toList = Prog.compile weth
+    unfold State.addBal; rw [State.setBal_get_code]; exact h.code
+  · unfold SumNof; omega
+  · show Stor.Solvent (((w.addBal a val).get wa).stor) 0 ((w.addBal a val).get wa).bal
+    have hsolv := h.solvent
+    unfold State.Solvent Stor.Solvent at hsolv
+    unfold Stor.Solvent
+    rw [hstor_wa]
+    simp only [B256.toNat_zero, Nat.add_zero] at hsolv ⊢
+    change wbsum ((w.get wa).stor) ≤ _
+    have : wbsum (w.getStor wa) = wbsum ((w.get wa).stor) := rfl
+    omega
 
 -- `subBal` lowers a balance, so `nof` survives; dropping `wa`'s balance could
 -- break solvency, hence `a ≠ wa`.  (In `processTransaction` the debited account
@@ -4745,13 +4799,65 @@ theorem State.Inv.addBal {wa a : Adr} {val : B256} {w : _root_.State}
 theorem State.Inv.subBal {wa a : Adr} {val : B256} {w w' : _root_.State}
     (hne : a ≠ wa) (h_sub : w.subBal a val = some w')
     (h : State.Inv wa w) : State.Inv wa w' := by
-  sorry
+  rcases State.of_subBal h_sub with ⟨h_le, rfl⟩
+  refine ⟨?_, ?_, ?_⟩
+  · -- code: `wa`'s account is untouched (`a ≠ wa`)
+    show some (((w.setBal a (w.bal a - val)).get wa).code).toList = Prog.compile weth
+    rw [State.setBal_get_code]; exact h.code
+  · -- nof: the total sum can only decrease
+    have hdec : Decrease a val w.bal (w.setBal a (w.bal a - val)).bal := by
+      intro b; constructor
+      · intro heq; subst heq
+        show w.bal a - val = ((w.setBal a (w.bal a - val)).get a).bal
+        rw [State.setBal_get_self]; rfl
+      · intro hnb
+        show w.bal b = ((w.setBal a (w.bal a - val)).get b).bal
+        rw [State.setBal_get_ne hnb]; rfl
+    have hsum := sum_sub_assoc hdec h_le
+    have hnof := h.nof; unfold SumNof at hnof ⊢
+    omega
+  · -- solvent: `wa`'s storage and balance are both untouched
+    show Stor.Solvent (((w.setBal a (w.bal a - val)).get wa).stor) 0
+      ((w.setBal a (w.bal a - val)).get wa).bal
+    rw [State.setBal_get_stor, State.setBal_get_ne hne]; exact h.solvent
+
+lemma State.get_erase_ne {w : _root_.State} {a b : Adr} (h : b ≠ a) :
+    State.get (w.erase a) b = State.get w b := by
+  unfold State.get
+  have hc : compare a b ≠ Ordering.eq := fun hcc => h (compare_eq_iff_eq.mp hcc).symm
+  rw [Std.TreeMap.getD_erase]; simp [hc]
 
 -- Deleting a foreign account (`a ≠ wa`) removes its balance from the sum and
--- leaves `wa`'s code/balance/storage alone.
+-- leaves `wa`'s code/balance/storage alone.  (`_root_.destroyAccount` is used
+-- explicitly in the body: its return type is `State`, so `.get`/`.bal` resolve
+-- to `State.*` rather than the underlying `Std.TreeMap.*`, and the bare name
+-- would clash with the theorem being defined.)
 theorem State.Inv.destroyAccount {wa a : Adr} {w : _root_.State}
     (hne : a ≠ wa) (h : State.Inv wa w) : State.Inv wa (destroyAccount w a) := by
-  sorry
+  have hget : (_root_.destroyAccount w a).get wa = w.get wa :=
+    State.get_erase_ne (Ne.symm hne)
+  refine ⟨?_, ?_, ?_⟩
+  · show some (((_root_.destroyAccount w a).get wa).code).toList = Prog.compile weth
+    rw [hget]; exact h.code
+  · -- nof: erasing `a` removes its balance from the sum
+    have h0 : ((_root_.destroyAccount w a).get a).bal = 0 := by
+      show (State.get (w.erase a) a).bal = 0
+      unfold State.get
+      rw [Std.TreeMap.getD_erase]; simp [Acct.nil]
+    have hdec : Decrease a (w.bal a) w.bal (_root_.destroyAccount w a).bal := by
+      intro b; constructor
+      · intro heq; subst heq
+        show w.bal a - w.bal a = ((_root_.destroyAccount w a).get a).bal
+        rw [h0, B256.sub_self]
+      · intro hnb
+        show w.bal b = (State.get (w.erase a) b).bal
+        rw [State.get_erase_ne (Ne.symm hnb)]; rfl
+    have hsum := sum_sub_assoc hdec (le_refl _)
+    have hnof := h.nof; unfold SumNof at hnof ⊢
+    omega
+  · show Stor.Solvent (((_root_.destroyAccount w a).get wa).stor) 0
+      ((_root_.destroyAccount w a).get wa).bal
+    rw [hget]; exact h.solvent
 
 -- Folded form for the `accountsToDelete` set (post-linearization `foldl`).
 -- This one is proved outright from the atomic lemma to exercise the pattern.
