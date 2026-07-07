@@ -193,7 +193,15 @@ lemma Msg.NoDel.of_state_inv {wa : Adr} {msg : Msg}
 lemma ne_wa_of_code_size_zero {st : State} {wa b : Adr}
     (hwa : (st.getCode wa).toList ≠ []) (hb : (st.get b).code.size = 0) :
     b ≠ wa := by
-  sorry
+  intro h
+  subst h
+  have h_empty : (st.get b).code.toList = [] := by
+    unfold ByteArray.toList
+    unfold ByteArray.toList.loop
+    simp [hb]
+  unfold State.getCode at hwa
+  rw [h_empty] at hwa
+  exact hwa rfl
 
 -- [FILL-02] [MECH] Same bridge via the collision predicate used by
 -- `processMessageCall.create` (elevm Execution.lean:3475-3477): read
