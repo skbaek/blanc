@@ -132,6 +132,8 @@ structure Devm.Rel (rels : Devm.Rels) (devm devm' : Devm) : Prop where
   ( accessedStorageKeys :
     rels.accessedStorageKeys devm.accessedStorageKeys devm'.accessedStorageKeys )
   (state : rels.state devm.state devm'.state)
+  ( createdAccounts :
+    rels.createdAccounts devm.createdAccounts devm'.createdAccounts )
   ( transientStorage :
     rels.transientStorage devm.transientStorage devm'.transientStorage )
 

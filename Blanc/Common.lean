@@ -1024,6 +1024,7 @@ lemma Devm.popBurn_of_pop_of_burn
   · exact Eq.trans pop.accessedAddresses burn.accessedAddresses
   · exact Eq.trans pop.accessedStorageKeys burn.accessedStorageKeys
   · exact Eq.trans pop.state burn.state
+  · exact Eq.trans pop.createdAccounts burn.createdAccounts
   · exact Eq.trans pop.transientStorage burn.transientStorage
 
 lemma of_jumpi_run {pc sevm pre pc' inter}
@@ -1347,37 +1348,37 @@ lemma Devm.pushBurn_cons_popBurn_cons
     (h : Devm.PushBurn (x :: xs) s s')
     (h' : Devm.PopBurn (y :: ys) s' s'') :
     (x = y ∧ ∃ st, Devm.PushBurn xs s st ∧ Devm.PopBurn ys st s'') := by
-  rcases h with ⟨h_stack, h_mem, h_gas, h_logs, h_refund, h_out, h_del, h_ret, h_err, h_acc, h_keys, h_state, h_trans⟩
-  rcases h' with ⟨h'_stack, h'_mem, h'_gas, h'_logs, h'_refund, h'_out, h'_del, h'_ret, h'_err, h'_acc, h'_keys, h'_state, h'_trans⟩
+  rcases h with ⟨h_stack, h_mem, h_gas, h_logs, h_refund, h_out, h_del, h_ret, h_err, h_acc, h_keys, h_state, h_cas, h_trans⟩
+  rcases h' with ⟨h'_stack, h'_mem, h'_gas, h'_logs, h'_refund, h'_out, h'_del, h'_ret, h'_err, h'_acc, h'_keys, h'_cas, h'_state, h'_trans⟩
   have push_pop_stack := Stack.push_cons_pop_cons h_stack h'_stack
   rcases push_pop_stack with ⟨h_eq, stk, h_push, h_pop⟩
   refine' ⟨
     h_eq,
     { s' with stack := stk },
-    ⟨h_push, h_mem, h_gas, h_logs, h_refund, h_out, h_del, h_ret, h_err, h_acc, h_keys, h_state, h_trans⟩,
-    ⟨h_pop, h'_mem, h'_gas, h'_logs, h'_refund, h'_out, h'_del, h'_ret, h'_err, h'_acc, h'_keys, h'_state, h'_trans⟩
+    ⟨h_push, h_mem, h_gas, h_logs, h_refund, h_out, h_del, h_ret, h_err, h_acc, h_keys, h_state, h_cas, h_trans⟩,
+    ⟨h_pop, h'_mem, h'_gas, h'_logs, h'_refund, h'_out, h'_del, h'_ret, h'_err, h'_acc, h'_keys, h'_cas, h'_state, h'_trans⟩
   ⟩
 
 lemma Devm.burn_of_popBurn_nil {s s'} (h : Devm.PopBurn [] s s') :
     Devm.Burn s s' := by
   match s, s', h with
-  | ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _⟩,
-    ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _⟩,
-    ⟨h, _, _, _, _, _, _, _, _, _, _, _, _⟩ =>
-    refine' ⟨h, _, _, _, _, _, _, _, _, _, _, _, _⟩ <;> assumption
+  | ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _, _⟩,
+    ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _, _⟩,
+    ⟨h, _, _, _, _, _, _, _, _, _, _, _, _, _⟩ =>
+    refine' ⟨h, _, _, _, _, _, _, _, _, _, _, _, _, _⟩ <;> assumption
 
 lemma Devm.burn_of_pushBurn_nil {s s'} (h : Devm.PushBurn [] s s') :
     Devm.Burn s s' := by
   match s, s', h with
-  | ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _⟩,
-    ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _⟩,
-    ⟨h, _, _, _, _, _, _, _, _, _, _, _, _⟩ =>
-    refine' ⟨h.symm, _, _, _, _, _, _, _, _, _, _, _, _⟩ <;> assumption
+  | ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _, _⟩,
+    ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _, _⟩,
+    ⟨h, _, _, _, _, _, _, _, _, _, _, _, _, _⟩ =>
+    refine' ⟨h.symm, _, _, _, _, _, _, _, _, _, _, _, _, _⟩ <;> assumption
 
 lemma Devm.burn_trans {x y z} (h1 : Devm.Burn x y) (h2 : Devm.Burn y z) : Devm.Burn x z := by
-  rcases h1 with ⟨h1_stack, h1_mem, h1_gas, h1_logs, h1_refund, h1_out, h1_del, h1_ret, h1_err, h1_acc, h1_keys, h1_state, h1_trans⟩
-  rcases h2 with ⟨h2_stack, h2_mem, h2_gas, h2_logs, h2_refund, h2_out, h2_del, h2_ret, h2_err, h2_acc, h2_keys, h2_state, h2_trans⟩
-  refine' ⟨Eq.trans h1_stack h2_stack, Eq.trans h1_mem h2_mem, Nat.le_trans h2_gas h1_gas, Eq.trans h1_logs h2_logs, Eq.trans h1_refund h2_refund, Eq.trans h1_out h2_out, Eq.trans h1_del h2_del, Eq.trans h1_ret h2_ret, Eq.trans h1_err h2_err, Eq.trans h1_acc h2_acc, Eq.trans h1_keys h2_keys, Eq.trans h1_state h2_state, Eq.trans h1_trans h2_trans⟩
+  rcases h1 with ⟨h1_stack, h1_mem, h1_gas, h1_logs, h1_refund, h1_out, h1_del, h1_ret, h1_err, h1_acc, h1_keys, h1_state, h1_cas, h1_trans⟩
+  rcases h2 with ⟨h2_stack, h2_mem, h2_gas, h2_logs, h2_refund, h2_out, h2_del, h2_ret, h2_err, h2_acc, h2_keys, h2_state, h2_cas, h2_trans⟩
+  refine' ⟨Eq.trans h1_stack h2_stack, Eq.trans h1_mem h2_mem, Nat.le_trans h2_gas h1_gas, Eq.trans h1_logs h2_logs, Eq.trans h1_refund h2_refund, Eq.trans h1_out h2_out, Eq.trans h1_del h2_del, Eq.trans h1_ret h2_ret, Eq.trans h1_err h2_err, Eq.trans h1_acc h2_acc, Eq.trans h1_keys h2_keys, Eq.trans h1_state h2_state, Eq.trans h1_cas h2_cas, Eq.trans h1_trans h2_trans⟩
 
 lemma Devm.popBurn_of_burn_of_popBurn {devm devm' devm''} {xs}
     (burn : Devm.Burn devm devm')
@@ -1396,6 +1397,7 @@ lemma Devm.popBurn_of_burn_of_popBurn {devm devm' devm''} {xs}
   · exact Eq.trans burn.accessedAddresses popBurn.accessedAddresses
   · exact Eq.trans burn.accessedStorageKeys popBurn.accessedStorageKeys
   · exact Eq.trans burn.state popBurn.state
+  · exact Eq.trans burn.createdAccounts popBurn.createdAccounts
   · exact Eq.trans burn.transientStorage popBurn.transientStorage
 
 lemma Devm.popBurn_of_popBurn_of_pop {devm devm' devm''} {xs}
@@ -1415,6 +1417,7 @@ lemma Devm.popBurn_of_popBurn_of_pop {devm devm' devm''} {xs}
   · exact Eq.trans popBurn.accessedAddresses burn.accessedAddresses
   · exact Eq.trans popBurn.accessedStorageKeys burn.accessedStorageKeys
   · exact Eq.trans popBurn.state burn.state
+  · exact Eq.trans popBurn.createdAccounts burn.createdAccounts
   · exact Eq.trans popBurn.transientStorage burn.transientStorage
 
 lemma toNat_toB256 (n : Nat) : n.toB256.toNat = n ↾ 256 := by
@@ -2074,9 +2077,6 @@ lemma of_run_branch_rev {c e s r} {p : Func} (h : Func.Run c e s (.rev <?> p) r)
   rcases of_run_branch h with ⟨s', h_pb, h_run⟩ | ⟨w, s', s'', h_ne, h_pb, h_b, h_run⟩
   · exact ⟨s', h_pb, h_run⟩
   · exfalso; exact not_run_rev h_run
-
-
-
 
 lemma dispatchWith_inv {c k f}
     (σ : Sevm → Devm → Prop)
@@ -6237,6 +6237,7 @@ lemma Devm.pushBurn_of_burn_of_push {xs : List B256} {s s' s'' : Devm}
   · exact Eq.trans burn.accessedAddresses push.accessedAddresses
   · exact Eq.trans burn.accessedStorageKeys push.accessedStorageKeys
   · exact Eq.trans burn.state push.state
+  · exact Eq.trans burn.createdAccounts push.createdAccounts
   · exact Eq.trans burn.transientStorage push.transientStorage
 
 lemma Devm.diffBurn_of_pop_of_pushBurn {xs ys : List B256} {s s' s'' : Devm}
@@ -6255,6 +6256,7 @@ lemma Devm.diffBurn_of_pop_of_pushBurn {xs ys : List B256} {s s' s'' : Devm}
   · exact Eq.trans pop.accessedAddresses push.accessedAddresses
   · exact Eq.trans pop.accessedStorageKeys push.accessedStorageKeys
   · exact Eq.trans pop.state push.state
+  · exact Eq.trans pop.createdAccounts push.createdAccounts
   · exact Eq.trans pop.transientStorage push.transientStorage
 
 lemma Devm.pushBurn_of_pushItem {v : B256} {cost : Nat} {s s' : Devm}
