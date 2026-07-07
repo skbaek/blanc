@@ -4881,11 +4881,67 @@ to the `Exec`/`weth_inv_solvent` machinery, discharge the WETH-code
 precondition, and certify that a WETH run never self-destructs `wa`
 (so the deletion set avoids `wa`). -/
 
+-- Translation between the bare-state invariant and the frame-level
+-- `Postcond`: `Devm.get{Bal,Stor,Code}` are by definition the corresponding
+-- `State.*` projections of `devm.state`, so a `Postcond` plus code-preservation
+-- is exactly `State.Inv` on the underlying state.
+lemma State.Inv.of_postcond {wa : Adr} {sevm : Sevm} {devm : Devm}
+    (h_post : Postcond wa sevm devm)
+    (h_code : some (devm.state.getCode wa).toList = Prog.compile weth) :
+    State.Inv wa devm.state := by
+  refine ⟨h_code, ?_, ?_⟩
+  · show sum devm.state.bal < 2 ^ 256
+    rw [← sum_getBal_state]; exact h_post.nof
+  · have hs := h_post.solvent
+    unfold Devm.PostSolvent at hs
+    exact hs
+
+-- Deep helper: one `processMessage` run preserves `State.Inv` and never
+-- self-destructs `wa`.  This is where the frame-level `exec_inv_solvent` gets
+-- lifted: `processMessage` = `benvAfterTransfer` (value transfer) then
+-- `executeCode` (→ `exec (initEvm ·) lim`) with on-error rollback.  The `nof`
+-- and `getCode` parts are already available through the relational-mirror
+-- stacks (`ProcessMessage.inv_nof`, `ProcessMessage.inv_getCode_gen`); the
+-- solvency part is the genuinely new content, obtained from `exec_inv_solvent`
+-- via `Postcond` and `State.Inv.of_postcond`.  Still open.
+theorem processMessage_inv_solvent {wa : Adr} {msg : Msg} {evm : Devm} {lim : Nat}
+    (h_run : processMessage msg lim = .ok evm)
+    (h_code : msg.currentTarget = wa → some msg.code.toList = Prog.compile weth)
+    (h_inv : State.Inv wa msg.benv.state) :
+    State.Inv wa evm.state ∧ (∀ a ∈ evm.accountsToDelete.toList, a ≠ wa) := by
+  sorry
+
+-- Same, for the create path.
+theorem processCreateMessage_inv_solvent {wa : Adr} {msg : Msg} {evm : Devm} {lim : Nat}
+    (h_run : processCreateMessage msg lim = .ok evm)
+    (h_code : msg.currentTarget = wa → some msg.code.toList = Prog.compile weth)
+    (h_inv : State.Inv wa msg.benv.state) :
+    State.Inv wa evm.state ∧ (∀ a ∈ evm.accountsToDelete.toList, a ≠ wa) := by
+  sorry
+
 theorem processMessageCall_inv_solvent {wa : Adr} {msg : Msg} {st' : _root_.State}
     {out : MsgCallOutput}
     (h_run : processMessageCall msg = .ok ⟨st', out⟩)
     (h_inv : State.Inv wa msg.benv.state) :
     State.Inv wa st' ∧ (∀ a ∈ out.accountsToDelete.toList, a ≠ wa) := by
+  -- REDUCTION PLAN — dispatch on `msg.target.isNone` (`processMessageCall`):
+  --
+  --  • create path (`processMessageCall.create`): early-return on
+  --    `AddressCollision` keeps `msg.benv.state` (so `h_inv` transfers directly,
+  --    `accountsToDelete = ∅`); otherwise invert the `.ok` do-block —
+  --    `evm ← processCreateMessage msg (msg.gas + 50)`, `st' = evm.state`,
+  --    `out.accountsToDelete = if evm.error.isNone then evm.accountsToDelete
+  --    else ∅` — and finish with `processCreateMessage_inv_solvent`.
+  --
+  --  • call path (`processMessageCall.call`): the delegation prelude
+  --    (`setDelegation`, `getDelegatedCodeAddress`) yields `msgPc` with
+  --    `State.Inv wa msgPc.benv.state` (delegation only rewrites code, not
+  --    balances/solvency at `wa`) and the WETH-code hypothesis for `msgPc`;
+  --    invert `evm ← Except.bimap Prod.fst id <| processMessage msgPc _`,
+  --    `st' = evm.state`, and finish with `processMessage_inv_solvent`.
+  --
+  -- In both branches `out.accountsToDelete ⊆ evm.accountsToDelete ∪ ∅`, so the
+  -- deletion-avoids-`wa` conclusion follows from the helper's second component.
   sorry
 
 theorem processTransaction_inv_solvent (wa : Adr)
