@@ -2338,7 +2338,25 @@ theorem exec_inv_noDel {wa : Adr} (lim : Nat) (sevm : Sevm) (pre : Devm)
 -- split; contradictions by `decide`/`simp` on the string tests.
 lemma Fit_of_handleError_ok {exn : Execution} {evm : Devm}
     (h : executeCode.handleError exn = .ok evm) : exn.Fit := by
-  sorry
+  cases exn
+  · dsimp [executeCode.handleError] at h
+    split at h
+    · next h_halt =>
+      intro h_lim
+      simp only [Except.Lim, Except.toError?, Option.some.injEq] at h_lim
+      rw [h_lim] at h_halt
+      revert h_halt
+      decide
+    · split at h
+      · next h_rev =>
+        intro h_lim
+        simp only [Except.Lim, Except.toError?, Option.some.injEq] at h_lim
+        rw [h_lim] at h_rev
+        revert h_rev
+        decide
+      · contradiction
+  · intro h_lim
+    cases h_lim
 
 -- [FILL-19] [MECH] Raw executeCode.  Invert (lim cases; `rw [executeCode]`;
 -- codeAddress match; isPrecomp if) exactly as in
