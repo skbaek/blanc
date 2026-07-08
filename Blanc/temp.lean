@@ -2438,7 +2438,48 @@ theorem processCreateMessage_inv_noDel {wa : Adr} {msg : Msg} {evm : Devm}
     (h_run : processCreateMessage msg lim = .ok evm)
     (h_ct : msg.currentTarget ≠ wa)
     (h : Msg.NoDel wa msg) : Devm.NoDel wa evm := by
-  sorry
+  cases lim with
+  | zero => simp [processCreateMessage] at h_run
+  | succ k =>
+    rw [processCreateMessage] at h_run
+    rcases of_bind_eq_ok h_run with ⟨evm2, hpm, h_rest⟩
+    have h_inv_cm : Msg.NoDel wa (processCreateMessage.msg msg) :=
+      Msg.NoDel.processCreateMessage_msg h_ct h
+    have h_pm : Devm.NoDel wa evm2 :=
+      processMessage_inv_noDel hpm h_inv_cm
+    by_cases herr : evm2.error.isNone = true
+    · rw [if_pos herr] at h_rest
+      rcases hcg : processCreateMessage.chargeCodeGas evm2 with ⟨err, evm3⟩ | evm3
+      · rw [hcg] at h_rest; dsimp only at h_rest
+        by_cases hex : isExceptionalHalt err
+        · rw [if_pos hex] at h_rest
+          rw [← Except.ok.inj h_rest]
+          have h_ds : evm3.delSets = evm2.delSets := chargeCodeGas_delSets_err hcg
+          have h_atd_eq : evm3.accountsToDelete = evm2.accountsToDelete := congrArg Prod.fst h_ds
+          have h_ca_eq : evm3.createdAccounts = evm2.createdAccounts := congrArg Prod.snd h_ds
+          have h_atd : wa ∉ evm3.accountsToDelete := by rw [h_atd_eq]; exact h_pm.atd
+          have h_ca : wa ∉ evm3.createdAccounts := by rw [h_ca_eq]; exact h_pm.ca
+          unfold processCreateMessage.exceptionalHalt
+          exact Devm.NoDel.of_eqs (d := evm3.rollback msg.benv.state msg.tenv.transientStorage) rfl rfl (Devm.NoDel.rollback h_atd h_ca h.code)
+        · rw [if_neg hex] at h_rest
+          exact absurd h_rest (by simp)
+      · rw [hcg] at h_rest; dsimp only at h_rest
+        rw [← Except.ok.inj h_rest]
+        have h_ds : evm3.delSets = evm2.delSets := chargeCodeGas_delSets_ok hcg
+        have h_atd_eq : evm3.accountsToDelete = evm2.accountsToDelete := congrArg Prod.fst h_ds
+        have h_ca_eq : evm3.createdAccounts = evm2.createdAccounts := congrArg Prod.snd h_ds
+        have h_atd : wa ∉ evm3.accountsToDelete := by rw [h_atd_eq]; exact h_pm.atd
+        have h_ca : wa ∉ evm3.createdAccounts := by rw [h_ca_eq]; exact h_pm.ca
+        have h_gc : evm3.getCode wa = evm2.getCode wa := by
+          have hh := processCreateMessage.chargeCodeGas_getCode_gen hcg wa
+          simpa only [Execution.getCode] using hh
+        refine ⟨h_atd, h_ca, ?_⟩
+        show ((evm3.setCode msg.currentTarget ⟨⟨evm3.output⟩⟩).getCode wa).toList ≠ []
+        rw [setCode_getCode h_ct, h_gc]
+        exact h_pm.code
+    · rw [if_neg herr] at h_rest
+      rw [← Except.ok.inj h_rest]
+      exact Devm.NoDel.rollback h_pm.atd h_pm.ca h.code
 
 -- [FILL-22] [ESCALATE: `for`-loop-with-`continue` inversion in the Except
 -- monad] EIP-7702 delegation processing keeps Msg.NoDel: an authority only
