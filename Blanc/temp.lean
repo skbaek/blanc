@@ -2271,7 +2271,38 @@ lemma Ninst.inv_noDel_gen {wa : Adr} {pc : Nat} {sevm : Sevm} {devm : Devm}
     (inv : Xlot.InvNoDel wa xl) (invc : xl.InvGetCode)
     (run : Ninst.Run' pc sevm devm n xl exn)
     (h : Devm.NoDel wa devm) : Execution.NoDel wa exn := by
-  sorry
+  cases n with
+  | push xs le =>
+    cases xl with
+    | none =>
+      dsimp only [Ninst.Run'] at run
+      rw [← run]
+      cases h_charge : chargeGas (if xs = [] then gBase else gVerylow) devm
+      case error err =>
+        exact Devm.NoDel.of_eqs (chargeGas_delSets_err h_charge).symm (chargeGas_getCode_err h_charge wa).symm h
+      case ok d1 =>
+        have h1 : Devm.NoDel wa d1 := Devm.NoDel.of_eqs (chargeGas_delSets_eq h_charge).symm (chargeGas_getCode_eq h_charge wa).symm h
+        dsimp only [bind, Except.bind]
+        cases h_push : Devm.push xs.toB256 d1
+        case error err2 =>
+          exact Devm.NoDel.of_eqs (Devm.push_delSets_err h_push).symm (Devm.push_getCode_err h_push wa).symm h1
+        case ok d2 =>
+          exact Devm.NoDel.of_eqs (Devm.push_delSets_eq h_push).symm (Devm.push_getCode_eq h_push wa).symm h1
+    | some y => dsimp only [Ninst.Run'] at run
+  | reg rg =>
+    cases xl with
+    | none =>
+      dsimp only [Ninst.Run'] at run
+      rw [← run]
+      cases h_run : Rinst.run { pc := pc, sta := sevm, dyna := devm } rg
+      case error err =>
+        exact Devm.NoDel.of_eqs (Rinst.inv_delSets_err h_run).symm (Rinst.inv_getCode_err h_run wa).symm h
+      case ok d1 =>
+        exact Devm.NoDel.of_eqs (Rinst.inv_delSets h_run) (Rinst.inv_getCode h_run wa).symm h
+    | some y => dsimp only [Ninst.Run'] at run
+  | exec xinst =>
+    dsimp only [Ninst.Run'] at run
+    exact Xinst.inv_noDel_gen inv invc run h
 
 -- [FILL-17] [ESCALATE-MAYBE: recursor mechanics over the Type-valued Exec]
 -- The main induction.  CRIB: mirror `Exec.inv_getCode` (Common.lean:5757)
