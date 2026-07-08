@@ -2368,7 +2368,35 @@ lemma Fit_of_handleError_ok {exn : Execution} {evm : Devm}
 theorem executeCode_inv_noDel {wa : Adr} {msg : Msg} {lim : Nat} {evm : Devm}
     (h_run : executeCode msg lim = .ok evm)
     (h : Msg.NoDel wa msg) : Devm.NoDel wa evm := by
-  sorry
+  cases lim with
+  | zero => simp [executeCode] at h_run
+  | succ j =>
+    rw [executeCode] at h_run
+    rcases hca : msg.codeAddress with _ | adr
+    · rw [hca] at h_run
+      dsimp only at h_run
+      have h_fit := Fit_of_handleError_ok h_run
+      have h_ex := exec_inv_noDel j (initSevm msg) (initDevm msg) _ rfl h_fit (Msg.NoDel.initDevm h)
+      have h_res := handleError_noDel h_ex
+      dsimp only [initEvm] at h_run h_res
+      rw [h_run] at h_res
+      exact h_res
+    · rw [hca] at h_run
+      dsimp only at h_run
+      by_cases hp : adr.isPrecomp
+      · rw [if_pos hp] at h_run
+        have h_ex := executePrecomp_noDel (evm := initEvm msg) (adr := adr) rfl (Msg.NoDel.initDevm h)
+        have h_res := handleError_noDel h_ex
+        dsimp only [initEvm] at h_run h_res
+        rw [h_run] at h_res
+        exact h_res
+      · rw [if_neg hp] at h_run
+        have h_fit := Fit_of_handleError_ok h_run
+        have h_ex := exec_inv_noDel j (initSevm msg) (initDevm msg) _ rfl h_fit (Msg.NoDel.initDevm h)
+        have h_res := handleError_noDel h_ex
+        dsimp only [initEvm] at h_run h_res
+        rw [h_run] at h_res
+        exact h_res
 
 -- [FILL-20] [MECH] Raw processMessage.  CRIB: `processMessage_inv_solvent`
 -- (Solvent.lean:5095) — same lim/bind/if skeleton.  benvAfterTransfer via
