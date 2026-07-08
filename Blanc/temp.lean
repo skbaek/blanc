@@ -2513,7 +2513,91 @@ theorem processMessageCall_inv_noDel {wa : Adr} {msg : Msg} {st' : State}
     {out : MsgCallOutput}
     (h_run : processMessageCall msg = .ok ⟨st', out⟩)
     (h : Msg.NoDel wa msg) : wa ∉ out.accountsToDelete := by
-  sorry
+  unfold processMessageCall at h_run
+  split at h_run
+  · unfold processMessageCall.create at h_run
+    dsimp only at h_run
+    split at h_run
+    · injection h_run with h_eq
+      injection h_eq with _ h_out
+      subst h_out
+      exact AdrSet.not_mem_empty
+    · rename_i h_col
+      simp only [Bool.not_eq_true, Bool.or_eq_false_iff] at h_col
+      have h_ct := ne_wa_of_not_hasCodeOrNonce h.code h_col.1
+      revert h_run
+      rcases h_evm : processCreateMessage msg (msg.gas + 50) with ⟨err⟩ | ⟨evm⟩
+      · simp only [Except.bimap, bind, Except.bind]
+        intro h_run
+        injection h_run
+      · simp only [Except.bimap, bind, Except.bind]
+        intro h_run
+        have h_nodel := processCreateMessage_inv_noDel h_evm h_ct h
+        split at h_run
+        · split at h_run
+          · injection h_run
+          · simp only [Except.ok.injEq, Prod.mk.injEq] at h_run
+            rcases h_run with ⟨_, rfl⟩
+            exact h_nodel.atd
+        · simp only [id_eq, Except.ok.injEq, Prod.mk.injEq] at h_run
+          rcases h_run with ⟨_, rfl⟩
+          exact AdrSet.not_mem_empty
+  · unfold processMessageCall.call at h_run
+    dsimp only at h_run
+    split at h_run
+    · simp only [bind, Except.bind] at h_run
+      unfold Except.bimap at h_run
+      split at h_run
+      · injection h_run
+      · rename_i evm h_evm
+        split at h_evm
+        · injection h_evm
+        · rename_i evm' h_pm
+          simp only [id_eq, Except.ok.injEq] at h_evm
+          subst h_evm
+          have h_pc : Msg.NoDel wa (match getDelegatedCodeAddress msg.code with | none => msg | some dca => { benv := msg.benv, tenv := msg.tenv, caller := msg.caller, target := msg.target, currentTarget := msg.currentTarget, gas := msg.gas, value := msg.value, data := msg.data, codeAddress := some dca, code := msg.benv.state.getCode dca, depth := msg.depth, shouldTransferValue := msg.shouldTransferValue, isStatic := msg.isStatic, accessedAddresses := Std.HashSet.insert msg.accessedAddresses dca, accessedStorageKeys := msg.accessedStorageKeys, disablePrecompiles := true }) := by
+            split
+            · exact h
+            · exact ⟨h.ca, h.code⟩
+          have h_nodel_evm := processMessage_inv_noDel h_pm h_pc
+          split at h_run
+          · split at h_run
+            · injection h_run
+            · simp only [Except.ok.injEq, Prod.mk.injEq] at h_run
+              rcases h_run with ⟨_, rfl⟩
+              exact h_nodel_evm.atd
+          · simp only [Except.ok.injEq, Prod.mk.injEq] at h_run
+            rcases h_run with ⟨_, rfl⟩
+            exact AdrSet.not_mem_empty
+    · rename_i h_col
+      rcases h_del : setDelegation msg with ⟨err⟩ | ⟨⟨msgDelegation, val⟩⟩
+      · simp only [h_del, bind, Except.bind] at h_run
+        injection h_run
+      · simp only [h_del, bind, Except.bind] at h_run
+        have h_del_nodel := setDelegation_msg_noDel h_del h
+        unfold Except.bimap at h_run
+        split at h_run
+        · injection h_run
+        · rename_i evm h_evm
+          split at h_evm
+          · injection h_evm
+          · rename_i evm' h_pm
+            simp only [id_eq, Except.ok.injEq] at h_evm
+            subst h_evm
+            have h_pc : Msg.NoDel wa (match getDelegatedCodeAddress msgDelegation.code with | none => msgDelegation | some dca => { benv := msgDelegation.benv, tenv := msgDelegation.tenv, caller := msgDelegation.caller, target := msgDelegation.target, currentTarget := msgDelegation.currentTarget, gas := msgDelegation.gas, value := msgDelegation.value, data := msgDelegation.data, codeAddress := some dca, code := msg.benv.state.getCode dca, depth := msgDelegation.depth, shouldTransferValue := msgDelegation.shouldTransferValue, isStatic := msgDelegation.isStatic, accessedAddresses := Std.HashSet.insert msgDelegation.accessedAddresses dca, accessedStorageKeys := msgDelegation.accessedStorageKeys, disablePrecompiles := true }) := by
+              split
+              · exact h_del_nodel
+              · exact ⟨h_del_nodel.ca, h_del_nodel.code⟩
+            have h_nodel_evm := processMessage_inv_noDel h_pm h_pc
+            split at h_run
+            · split at h_run
+              · injection h_run
+              · simp only [Except.ok.injEq, Prod.mk.injEq] at h_run
+                rcases h_run with ⟨_, rfl⟩
+                exact h_nodel_evm.atd
+            · simp only [Except.ok.injEq, Prod.mk.injEq] at h_run
+              rcases h_run with ⟨_, rfl⟩
+              exact AdrSet.not_mem_empty
 
 -- The form consumed by `processMessageCall_inv_solvent`'s second conjunct
 -- (PROVED given FILL-23).
