@@ -2535,7 +2535,44 @@ lemma forIn_inv {α β : Type} {I : β → Prop} {l : List α} {init : β}
     (h_done : ∀ a b b', a ∈ l → I b → f a b = .ok (.done b') → I b')
     {res : β}
     (h_run : Id.run (ExceptT.run (forIn l init f)) = .ok res) : I res := by
-  sorry
+  induction l generalizing init res with
+  | nil =>
+    rw [List.forIn_nil] at h_run
+    simp [ExceptT.run, pure] at h_run
+    injection h_run with h_eq
+    subst h_eq
+    exact h_init
+  | cons a as ih =>
+    rw [List.forIn_cons] at h_run
+    dsimp [ExceptT.run, bind, Except.bind] at h_run
+    cases h_fab : f a init with
+    | error err =>
+      simp [h_fab] at h_run
+      cases h_run
+    | ok step =>
+      simp [h_fab] at h_run
+      cases step with
+      | done b =>
+        simp [pure] at h_run
+        injection h_run with h_eq
+        subst h_eq
+        apply h_done a init b
+        · exact List.Mem.head as
+        · exact h_init
+        · exact h_fab
+      | yield b =>
+        apply ih
+        · apply h_step a init b
+          · exact List.Mem.head as
+          · exact h_init
+          · exact h_fab
+        · intro a' b1 b2 h_in
+          apply h_step a' b1 b2
+          exact List.Mem.tail a h_in
+        · intro a' b1 b2 h_in
+          apply h_done a' b1 b2
+          exact List.Mem.tail a h_in
+        · exact h_run
 
 lemma setDelegation_benv_equiv {msg msg' : Msg} {v : B256}
     (h_run : setDelegation msg = .ok ⟨msg', v⟩) :
