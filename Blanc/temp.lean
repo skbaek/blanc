@@ -767,6 +767,140 @@ lemma Rinst.inv_delSets {r : Rinst} : Rinst.Inv Devm.delSets r := by
     rw [← rw]
     rfl
 
+-- delSets error combinators (mirror the `*_getCode_err` family,
+-- Common.lean:4530-4642; error payload is `String × Devm`, so `err.2` is the
+-- failed devm — every building block leaves its sets untouched).
+lemma Devm.pop_delSets_err {err devm} (h : Devm.pop devm = .error err) : err.2.delSets = devm.delSets := by
+  simp only [Devm.pop] at h
+  split at h <;> try contradiction
+  cases h; rfl
+
+lemma chargeGas_delSets_err {cost devm err} (h : chargeGas cost devm = .error err) : err.2.delSets = devm.delSets := by
+  simp only [chargeGas] at h
+  split at h <;> try contradiction
+  cases h; rfl
+
+lemma Devm.push_delSets_err {v devm err} (h : Devm.push v devm = Except.error err) : err.2.delSets = devm.delSets := by
+  unfold Devm.push Except.assert at h; dsimp [Bind.bind, Except.bind] at h
+  split_ifs at h <;> try contradiction
+  injection h with h1; rw [← h1]
+
+lemma assert_delSets_err {cond : Prop} [Decidable cond] {msg : String} {devm : Devm} {err : String × Devm} (h : Except.assert cond (msg, devm) = Except.error err) : err.2.delSets = devm.delSets := by
+  unfold Except.assert at h
+  split_ifs at h <;> try contradiction
+  injection h with h1; rw [← h1]
+
+lemma Devm.popToNat_delSets_err {devm err} (h : Devm.popToNat devm = .error err) : err.2.delSets = devm.delSets := by
+  dsimp [Devm.popToNat, Functor.map, Except.map] at h
+  rcases hp : devm.pop with err_pop | ⟨x, devm1⟩
+  · simp [hp] at h; cases h; exact Devm.pop_delSets_err hp
+  · simp [hp] at h
+
+lemma Devm.popToAdr_delSets_err {devm err} (h : Devm.popToAdr devm = .error err) : err.2.delSets = devm.delSets := by
+  dsimp [Devm.popToAdr, Functor.map, Except.map] at h
+  rcases hp : devm.pop with err_pop | ⟨x, devm1⟩
+  · simp [hp] at h; cases h; exact Devm.pop_delSets_err hp
+  · simp [hp] at h
+
+lemma delSets_err_of_bind {α} {ma : Except (String × Devm) α} {f : α → Execution}
+    {devm : Devm} {err : String × Devm}
+    (run : (ma >>= f) = Except.error err)
+    (getDevm : α → Devm)
+    (h_first_ok : ∀ v, ma = Except.ok v → (getDevm v).delSets = devm.delSets)
+    (h_first_err : ∀ e, ma = Except.error e → e.2.delSets = devm.delSets)
+    (h_rest_err : ∀ v, ma = Except.ok v → f v = Except.error err → err.2.delSets = (getDevm v).delSets) :
+    err.2.delSets = devm.delSets := by
+  cases h_ma : ma
+  case error e =>
+    rw [h_ma, Except.bind_error] at run
+    injection run with h_eq; subst h_eq
+    exact h_first_err _ h_ma
+  case ok v =>
+    rw [h_ma, Except.bind_ok] at run
+    have h1 := h_rest_err v h_ma run
+    have h2 := h_first_ok v h_ma
+    exact h1.trans h2
+
+lemma Devm.popN_delSets_err {n : Nat} {devm : Devm} {err : String × Devm}
+    (hp : devm.popN n = Except.error err) :
+    err.2.delSets = devm.delSets := by
+  induction n generalizing devm err with
+  | zero => simp [Devm.popN] at hp
+  | succ n ih =>
+    simp [Devm.popN, bind, Except.bind] at hp
+    split at hp
+    · rename_i eq_err; injection hp with eq; subst eq
+      exact Devm.pop_delSets_err eq_err
+    · rename_i eq_ok; split at hp
+      · rename_i eq_err; injection hp with eq; subst eq
+        have h1 := ih eq_err
+        have h2 := Devm.pop_delSets_eq eq_ok
+        exact h1.trans h2
+      · rename_i eq_ok2; injection hp
+
+lemma Devm.pop_map_snd_delSets_eq {devm devm1 : Devm} (hp : (devm.pop <&> Prod.snd) = .ok devm1) : devm1.delSets = devm.delSets := by
+  dsimp [(· <&> ·), Functor.mapRev, Functor.map, Except.map] at hp
+  rcases hp2 : devm.pop with _ | ⟨x, devm2⟩
+  · simp [hp2] at hp
+  · simp [hp2] at hp
+    rcases hp with ⟨_, rfl⟩
+    exact Devm.pop_delSets_eq hp2
+
+lemma Devm.pop_map_snd_delSets_err {devm : Devm} {err : String × Devm} (hp : (devm.pop <&> Prod.snd) = .error err) : err.2.delSets = devm.delSets := by
+  dsimp [(· <&> ·), Functor.mapRev, Functor.map, Except.map] at hp
+  rcases hp2 : devm.pop with e | ⟨x, devm2⟩
+  · simp [hp2] at hp; cases hp
+    simp only [Devm.pop] at hp2
+    split at hp2 <;> try contradiction
+    cases hp2; rfl
+  · simp [hp2] at hp
+
+lemma pushItem_delSets_err {x c devm err} (h : pushItem x c devm = Except.error err) : err.2.delSets = devm.delSets := by
+  simp only [pushItem] at h
+  refine delSets_err_of_bind h id ?_ ?_ ?_
+  · intro devm1 hc; exact (chargeGas_delSets_eq hc).trans rfl
+  · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+  · intro devm1 hc run; exact Devm.push_delSets_err run
+
+lemma applyUnary_delSets_err {f : B256 → B256} {cost devm err}
+    (h : applyUnary f cost devm = Except.error err) :
+    err.2.delSets = devm.delSets := by
+  simp only [applyUnary] at h
+  refine delSets_err_of_bind h Prod.snd ?_ ?_ ?_
+  · intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp
+  · intro e hp; exact Devm.pop_delSets_err hp
+  · intro ⟨x, devm1⟩ hp run; exact pushItem_delSets_err run
+
+lemma applyBinary_delSets_err {f : B256 → B256 → B256} {cost devm err}
+    (h : applyBinary f cost devm = Except.error err) :
+    err.2.delSets = devm.delSets := by
+  simp only [applyBinary] at h
+  refine delSets_err_of_bind h Prod.snd ?_ ?_ ?_
+  · intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp
+  · intro e hp; exact Devm.pop_delSets_err hp
+  · intro ⟨x, devm1⟩ hp run
+    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨y, devm2⟩ hp2; exact Devm.pop_delSets_eq hp2
+    · intro e hp2; exact Devm.pop_delSets_err hp2
+    · intro ⟨y, devm2⟩ hp2 run2; exact pushItem_delSets_err run2
+
+lemma applyTernary_delSets_err {f : B256 → B256 → B256 → B256} {cost devm err}
+    (h : applyTernary f cost devm = Except.error err) :
+    err.2.delSets = devm.delSets := by
+  simp only [applyTernary] at h
+  refine delSets_err_of_bind h Prod.snd ?_ ?_ ?_
+  · intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp
+  · intro e hp; exact Devm.pop_delSets_err hp
+  · intro ⟨x, devm1⟩ hp run
+    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨y, devm2⟩ hp2; exact Devm.pop_delSets_eq hp2
+    · intro e hp2; exact Devm.pop_delSets_err hp2
+    · intro ⟨y, devm2⟩ hp2 run2
+      refine delSets_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨z, devm3⟩ hp3; exact Devm.pop_delSets_eq hp3
+      · intro e hp3; exact Devm.pop_delSets_err hp3
+      · intro ⟨z, devm3⟩ hp3 run3; exact pushItem_delSets_err run3
+
 -- [FILL-07] [MECH-LARGE] Same for error results (error payloads are the
 -- intermediate devms).  CRIB: `Rinst.inv_getCode_err` (Common.lean:4644)
 -- — same skeleton, delSets instead of getCode.
@@ -774,7 +908,388 @@ lemma Rinst.inv_delSets_err {pc : Nat} {sevm : Sevm} {devm : Devm} {r : Rinst}
     {err : String} {devm' : Devm}
     (run : Rinst.run ⟨pc, sevm, devm⟩ r = .error ⟨err, devm'⟩) :
     devm'.delSets = devm.delSets := by
-  sorry
+  cases r <;> dsimp [Rinst.run, Rinst.runCore] at run
+  case add => apply applyBinary_delSets_err run
+  case mul => apply applyBinary_delSets_err run
+  case sub => apply applyBinary_delSets_err run
+  case div => apply applyBinary_delSets_err run
+  case sdiv => apply applyBinary_delSets_err run
+  case mod => apply applyBinary_delSets_err run
+  case smod => apply applyBinary_delSets_err run
+  case addmod => apply applyTernary_delSets_err run
+  case mulmod => apply applyTernary_delSets_err run
+  case exp =>
+    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp
+    · intro e hp; exact Devm.pop_delSets_err hp
+    · intro ⟨x, devm1⟩ hp run2
+      refine delSets_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.pop_delSets_eq hp2
+      · intro e hp2; exact Devm.pop_delSets_err hp2
+      · intro ⟨y, devm2⟩ hp2 run3; exact pushItem_delSets_err run3
+  case signextend => apply applyBinary_delSets_err run
+  case lt => apply applyBinary_delSets_err run
+  case gt => apply applyBinary_delSets_err run
+  case slt => apply applyBinary_delSets_err run
+  case sgt => apply applyBinary_delSets_err run
+  case eq => apply applyBinary_delSets_err run
+  case iszero => apply applyUnary_delSets_err run
+  case and => apply applyBinary_delSets_err run
+  case or => apply applyBinary_delSets_err run
+  case xor => apply applyBinary_delSets_err run
+  case not => apply applyUnary_delSets_err run
+  case byte => apply applyBinary_delSets_err run
+  case shr => apply applyBinary_delSets_err run
+  case shl => apply applyBinary_delSets_err run
+  case sar => apply applyBinary_delSets_err run
+  case kec =>
+    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_delSets_eq hp
+    · intro e hp; exact Devm.popToNat_delSets_err hp
+    · intro ⟨x, devm1⟩ hp run2
+      refine delSets_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_delSets_eq hp2
+      · intro e hp2; exact Devm.popToNat_delSets_err hp2
+      · intro ⟨y, devm2⟩ hp2 run3
+        refine delSets_err_of_bind run3 id ?_ ?_ ?_
+        · intro devm3 hc; exact (chargeGas_delSets_eq hc).trans rfl
+        · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+        · intro devm3 hc run4; exact (Devm.push_delSets_err run4).trans rfl
+  case address => apply pushItem_delSets_err run
+  case balance =>
+    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp
+    · intro e hp; exact Devm.pop_delSets_err hp
+    · intro ⟨x, devm1⟩ hp run2; split at run2
+      · refine delSets_err_of_bind run2 id ?_ ?_ ?_
+        · intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl
+        · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+        · intro devm2 hc run3; exact (Devm.push_delSets_err run3).trans rfl
+      · refine delSets_err_of_bind run2 id ?_ ?_ ?_
+        · intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl
+        · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+        · intro devm2 hc run3; exact (Devm.push_delSets_err run3).trans rfl
+  case origin => apply pushItem_delSets_err run
+  case caller => apply pushItem_delSets_err run
+  case callvalue => apply pushItem_delSets_err run
+  case calldataload =>
+    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp
+    · intro e hp; exact Devm.pop_delSets_err hp
+    · intro ⟨x, devm1⟩ hp run2
+      refine delSets_err_of_bind run2 id ?_ ?_ ?_
+      · intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl
+      · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+      · intro devm2 hc run3; exact (Devm.push_delSets_err run3).trans rfl
+  case calldatasize => apply pushItem_delSets_err run
+  case calldatacopy =>
+    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_delSets_eq hp
+    · intro e hp; exact Devm.popToNat_delSets_err hp
+    · intro ⟨x, devm1⟩ hp run2
+      refine delSets_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_delSets_eq hp2
+      · intro e hp2; exact Devm.popToNat_delSets_err hp2
+      · intro ⟨y, devm2⟩ hp2 run3
+        refine delSets_err_of_bind run3 Prod.snd ?_ ?_ ?_
+        · intro ⟨z, devm3⟩ hp3; exact Devm.popToNat_delSets_eq hp3
+        · intro e hp3; exact Devm.popToNat_delSets_err hp3
+        · intro ⟨z, devm3⟩ hp3 run4
+          refine delSets_err_of_bind run4 id ?_ ?_ ?_
+          · intro devm4 hc; exact (chargeGas_delSets_eq hc).trans rfl
+          · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+          · intro devm4 hc run5; injection run5
+  case codesize => apply pushItem_delSets_err run
+  case codecopy =>
+    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_delSets_eq hp
+    · intro e hp; exact Devm.popToNat_delSets_err hp
+    · intro ⟨x, devm1⟩ hp run2
+      refine delSets_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_delSets_eq hp2
+      · intro e hp2; exact Devm.popToNat_delSets_err hp2
+      · intro ⟨y, devm2⟩ hp2 run3
+        refine delSets_err_of_bind run3 Prod.snd ?_ ?_ ?_
+        · intro ⟨z, devm3⟩ hp3; exact Devm.popToNat_delSets_eq hp3
+        · intro e hp3; exact Devm.popToNat_delSets_err hp3
+        · intro ⟨z, devm3⟩ hp3 run4
+          refine delSets_err_of_bind run4 id ?_ ?_ ?_
+          · intro devm4 hc; exact (chargeGas_delSets_eq hc).trans rfl
+          · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+          · intro devm4 hc run5; injection run5
+  case gasprice => apply pushItem_delSets_err run
+  case extcodesize =>
+    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToAdr_delSets_eq hp
+    · intro e hp; exact Devm.popToAdr_delSets_err hp
+    · intro ⟨x, devm1⟩ hp run2; split at run2
+      · refine delSets_err_of_bind run2 id ?_ ?_ ?_
+        · intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl
+        · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+        · intro devm2 hc run3; exact (Devm.push_delSets_err run3).trans rfl
+      · refine delSets_err_of_bind run2 id ?_ ?_ ?_
+        · intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl
+        · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+        · intro devm2 hc run3; exact (Devm.push_delSets_err run3).trans rfl
+  case extcodecopy =>
+    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToAdr_delSets_eq hp
+    · intro e hp; exact Devm.popToAdr_delSets_err hp
+    · intro ⟨x, devm1⟩ hp run2
+      refine delSets_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_delSets_eq hp2
+      · intro e hp2; exact Devm.popToNat_delSets_err hp2
+      · intro ⟨y, devm2⟩ hp2 run3
+        refine delSets_err_of_bind run3 Prod.snd ?_ ?_ ?_
+        · intro ⟨z, devm3⟩ hp3; exact Devm.popToNat_delSets_eq hp3
+        · intro e hp3; exact Devm.popToNat_delSets_err hp3
+        · intro ⟨z, devm3⟩ hp3 run4
+          refine delSets_err_of_bind run4 Prod.snd ?_ ?_ ?_
+          · intro ⟨w, devm4⟩ hp4; exact Devm.popToNat_delSets_eq hp4
+          · intro e hp4; exact Devm.popToNat_delSets_err hp4
+          · intro ⟨w, devm4⟩ hp4 run5
+            split at run5
+            · refine delSets_err_of_bind run5 id ?_ ?_ ?_
+              · intro devm5 hc; exact (chargeGas_delSets_eq hc).trans rfl
+              · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+              · intro devm5 hc run6; injection run6
+            · refine delSets_err_of_bind run5 id ?_ ?_ ?_
+              · intro devm5 hc; exact (chargeGas_delSets_eq hc).trans rfl
+              · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+              · intro devm5 hc run6; injection run6
+  case retdatasize => apply pushItem_delSets_err run
+  case retdatacopy =>
+    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_delSets_eq hp
+    · intro e hp; exact Devm.popToNat_delSets_err hp
+    · intro ⟨x, devm1⟩ hp run2
+      refine delSets_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_delSets_eq hp2
+      · intro e hp2; exact Devm.popToNat_delSets_err hp2
+      · intro ⟨y, devm2⟩ hp2 run3
+        refine delSets_err_of_bind run3 Prod.snd ?_ ?_ ?_
+        · intro ⟨z, devm3⟩ hp3; exact Devm.popToNat_delSets_eq hp3
+        · intro e hp3; exact Devm.popToNat_delSets_err hp3
+        · intro ⟨z, devm3⟩ hp3 run4
+          refine delSets_err_of_bind run4 id ?_ ?_ ?_
+          · intro devm4 hc; exact (chargeGas_delSets_eq hc).trans rfl
+          · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+          · intro devm4 hc run5
+            split_ifs at run5
+            all_goals (try { cases run5; rfl })
+            all_goals (try contradiction)
+  case extcodehash =>
+    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToAdr_delSets_eq hp
+    · intro e hp; exact Devm.popToAdr_delSets_err hp
+    · intro ⟨x, devm1⟩ hp run2; split at run2
+      · refine delSets_err_of_bind run2 id ?_ ?_ ?_
+        · intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl
+        · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+        · intro devm2 hc run3; exact (Devm.push_delSets_err run3).trans rfl
+      · refine delSets_err_of_bind run2 id ?_ ?_ ?_
+        · intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl
+        · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+        · intro devm2 hc run3; exact (Devm.push_delSets_err run3).trans rfl
+  case blockhash =>
+    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp
+    · intro e hp; exact Devm.pop_delSets_err hp
+    · intro ⟨x, devm1⟩ hp run2
+      refine delSets_err_of_bind run2 id ?_ ?_ ?_
+      · intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl
+      · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+      · intro devm2 hc run3; exact (Devm.push_delSets_err run3).trans rfl
+  case coinbase => apply pushItem_delSets_err run
+  case timestamp => apply pushItem_delSets_err run
+  case number => apply pushItem_delSets_err run
+  case prevrandao => apply pushItem_delSets_err run
+  case gaslimit => apply pushItem_delSets_err run
+  case chainid => apply pushItem_delSets_err run
+  case selfbalance => apply pushItem_delSets_err run
+  case basefee => apply pushItem_delSets_err run
+  case blobhash =>
+    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
+    exact fun ⟨x, devm1⟩ hp => Devm.pop_delSets_eq hp
+    exact fun e hp => Devm.pop_delSets_err hp
+    intro ⟨x, devm1⟩ hp run2
+    refine delSets_err_of_bind run2 id ?_ ?_ ?_
+    exact fun devm2 hc => (chargeGas_delSets_eq hc).trans rfl
+    exact fun e hc => (chargeGas_delSets_err hc).trans rfl
+    intro devm2 hc run3; exact (Devm.push_delSets_err run3).trans rfl
+  case blobbasefee => apply pushItem_delSets_err run
+  case pop =>
+    refine delSets_err_of_bind run id ?_ ?_ ?_
+    exact fun devm1 hc => Devm.pop_map_snd_delSets_eq hc
+    exact fun e hc => Devm.pop_map_snd_delSets_err hc
+    intro devm1 hc run2; exact chargeGas_delSets_err run2
+  case mload =>
+    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
+    exact fun ⟨x, devm1⟩ hp => Devm.popToNat_delSets_eq hp
+    exact fun e hp => Devm.popToNat_delSets_err hp
+    intro ⟨x, devm1⟩ hp run2
+    refine delSets_err_of_bind run2 id ?_ ?_ ?_
+    exact fun devm2 hc => (chargeGas_delSets_eq hc).trans rfl
+    exact fun e hc => (chargeGas_delSets_err hc).trans rfl
+    intro devm2 hc run3; exact (Devm.push_delSets_err run3).trans rfl
+  case mstore =>
+    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_delSets_eq hp
+    · intro e hp; exact Devm.popToNat_delSets_err hp
+    · intro ⟨x, devm1⟩ hp run2
+      refine delSets_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.pop_delSets_eq hp2
+      · intro e hp2; exact Devm.pop_delSets_err hp2
+      · intro ⟨y, devm2⟩ hp2 run3
+        refine delSets_err_of_bind run3 id ?_ ?_ ?_
+        · intro devm3 hc; exact (chargeGas_delSets_eq hc).trans rfl
+        · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+        · intro devm3 hc run4; cases run4
+  case mstore8 =>
+    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_delSets_eq hp
+    · intro e hp; exact Devm.popToNat_delSets_err hp
+    · intro ⟨x, devm1⟩ hp run2
+      refine delSets_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.pop_delSets_eq hp2
+      · intro e hp2; exact Devm.pop_delSets_err hp2
+      · intro ⟨y, devm2⟩ hp2 run3
+        refine delSets_err_of_bind run3 id ?_ ?_ ?_
+        · intro devm3 hc; exact (chargeGas_delSets_eq hc).trans rfl
+        · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+        · intro devm3 hc run4; injection run4
+  case sload =>
+    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp
+    · intro e hp; exact Devm.pop_delSets_err hp
+    · intro ⟨x, devm1⟩ hp run2; split at run2
+      · refine delSets_err_of_bind run2 id ?_ ?_ ?_
+        · intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl
+        · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+        · intro devm2 hc run3; exact (Devm.push_delSets_err run3).trans rfl
+      · refine delSets_err_of_bind run2 id ?_ ?_ ?_
+        · intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl
+        · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+        · intro devm2 hc run3; exact (Devm.push_delSets_err run3).trans rfl
+  case sstore =>
+    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp
+    · intro e hp; exact Devm.pop_delSets_err hp
+    · intro ⟨x, devm1⟩ hp run2
+      refine delSets_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.pop_delSets_eq hp2
+      · intro e hp2; exact Devm.pop_delSets_err hp2
+      · intro ⟨y, devm2⟩ hp2 run3
+        refine delSets_err_of_bind run3 (fun _ => devm2) ?_ ?_ ?_
+        · intro u h_assert; rfl
+        · intro e h_assert; exact assert_delSets_err h_assert
+        · intro u h_assert run4
+          split_ifs at run4
+          all_goals {
+            refine delSets_err_of_bind run4 id ?_ ?_ ?_
+            · intro devm3 hc; exact (chargeGas_delSets_eq hc).trans rfl
+            · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+            · intro devm3 hc run5
+              dsimp [assertDynamic, Except.assert] at run5
+              split_ifs at run5
+              all_goals (try { cases run5; rfl })
+              all_goals (try injection run5)
+          }
+  case pc =>
+    refine delSets_err_of_bind run id ?_ ?_ ?_
+    · intro devm1 hc; exact (chargeGas_delSets_eq hc).trans rfl
+    · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+    · intro devm1 hc run2; exact Devm.push_delSets_err run2
+  case msize =>
+    refine delSets_err_of_bind run id ?_ ?_ ?_
+    · intro devm1 hc; exact (chargeGas_delSets_eq hc).trans rfl
+    · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+    · intro devm1 hc run2; exact Devm.push_delSets_err run2
+  case gas =>
+    refine delSets_err_of_bind run id ?_ ?_ ?_
+    · intro devm1 hc; exact (chargeGas_delSets_eq hc).trans rfl
+    · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+    · intro devm1 hc run2; exact Devm.push_delSets_err run2
+  case tload =>
+    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp
+    · intro e hp; exact Devm.pop_delSets_err hp
+    · intro ⟨x, devm1⟩ hp run2
+      refine delSets_err_of_bind run2 id ?_ ?_ ?_
+      · intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl
+      · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+      · intro devm2 hc run3; exact (Devm.push_delSets_err run3).trans rfl
+  case tstore =>
+    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp
+    · intro e hp; exact Devm.pop_delSets_err hp
+    · intro ⟨x, devm1⟩ hp run2
+      refine delSets_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.pop_delSets_eq hp2
+      · intro e hp2; exact Devm.pop_delSets_err hp2
+      · intro ⟨y, devm2⟩ hp2 run3
+        refine delSets_err_of_bind run3 id ?_ ?_ ?_
+        · intro devm3 hc; exact (chargeGas_delSets_eq hc).trans rfl
+        · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+        · intro devm3 hc run4
+          dsimp [assertDynamic, Except.assert] at run4
+          simp only [bind, Except.bind] at run4
+          try split_ifs at run4; simp at run4
+          exact congrArg Devm.delSets run4.2.symm
+  case mcopy =>
+    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_delSets_eq hp
+    · intro e hp; exact Devm.popToNat_delSets_err hp
+    · intro ⟨x, devm1⟩ hp run2
+      refine delSets_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_delSets_eq hp2
+      · intro e hp2; exact Devm.popToNat_delSets_err hp2
+      · intro ⟨y, devm2⟩ hp2 run3
+        refine delSets_err_of_bind run3 Prod.snd ?_ ?_ ?_
+        · intro ⟨z, devm3⟩ hp3; exact Devm.popToNat_delSets_eq hp3
+        · intro e hp3; exact Devm.popToNat_delSets_err hp3
+        · intro ⟨z, devm3⟩ hp3 run4
+          refine delSets_err_of_bind run4 id ?_ ?_ ?_
+          · intro devm4 hc; exact (chargeGas_delSets_eq hc).trans rfl
+          · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+          · intro devm4 hc run5; contradiction
+  case dup =>
+    refine delSets_err_of_bind run id ?_ ?_ ?_
+    · intro devm1 hc; exact (chargeGas_delSets_eq hc).trans rfl
+    · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+    · intro devm1 hc run2
+      split at run2
+      · injection run2 with h_eq; cases h_eq; rfl
+      · exact Devm.push_delSets_err run2
+  case swap =>
+    refine delSets_err_of_bind run id ?_ ?_ ?_
+    · intro devm1 hc; exact (chargeGas_delSets_eq hc).trans rfl
+    · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+    · intro devm1 hc run2
+      split at run2
+      · injection run2 with h_eq; cases h_eq; rfl
+      · contradiction
+  case log =>
+    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_delSets_eq hp
+    · intro e hp; exact Devm.popToNat_delSets_err hp
+    · intro ⟨x, devm1⟩ hp run2
+      refine delSets_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_delSets_eq hp2
+      · intro e hp2; exact Devm.popToNat_delSets_err hp2
+      · intro ⟨y, devm2⟩ hp2 run3
+        refine delSets_err_of_bind run3 Prod.snd ?_ ?_ ?_
+        · intro ⟨z, devm3⟩ hp3; exact Devm.popN_delSets_eq hp3
+        · intro e hp3; exact Devm.popN_delSets_err hp3
+        · intro ⟨z, devm3⟩ hp3 run4
+          refine delSets_err_of_bind run4 id ?_ ?_ ?_
+          · intro devm4 hc; exact (chargeGas_delSets_eq hc).trans rfl
+          · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+          · intro devm4 hc run5
+            dsimp [assertDynamic, Except.assert] at run5
+            simp only [bind, Except.bind] at run5
+            try split_ifs at run5; simp at run5
+            exact congrArg Devm.delSets run5.2.symm
 
 -- [FILL-08] [MECH] Jumps touch only stack/gas/pc.  CRIB: `Jinst.inv_state`
 -- (Solvent.lean:2452) — same case bash, reading off the sets instead of
