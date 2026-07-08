@@ -2316,7 +2316,24 @@ lemma Exec.inv_noDel {wa : Adr} {pc : Nat} {sevm : Sevm} {devm : Devm}
     {exn : Execution}
     (run : Exec pc sevm devm exn)
     (h : Devm.NoDel wa devm) : Execution.NoDel wa exn := by
-  sorry
+  revert exn devm sevm pc
+  apply Exec.rec
+  · intro pc sevm devm h_inst h_nof
+    exact h_nof
+  · intro pc sevm devm n err devm' h_at h_run h_nof
+    exact Ninst.inv_noDel_gen (xl := .none) trivial trivial h_run h_nof
+  · intro pc sevm devm n sevm_ devm_ exn_ err devm' h_at h_run ex_sub ih_sub h_nof
+    exact Ninst.inv_noDel_gen (xl := some ⟨sevm_, devm_, exn_⟩) ih_sub ⟨ex_sub, fun a ha => (Exec.inv_getCode ex_sub a ha).symm⟩ h_run h_nof
+  · intro pc sevm devm n devm' exn h_at h_run ex ih h_nof
+    exact ih (Ninst.inv_noDel_gen (xl := .none) trivial trivial h_run h_nof)
+  · intro pc sevm devm n sevm_ devm_ exn_ devm' exn h_at h_run ex_sub ex ih_sub ih h_nof
+    exact ih (Ninst.inv_noDel_gen (xl := some ⟨sevm_, devm_, exn_⟩) ih_sub ⟨ex_sub, fun a ha => (Exec.inv_getCode ex_sub a ha).symm⟩ h_run h_nof)
+  · intro pc sevm devm j err devm' h_at h_run h_nof
+    exact Devm.NoDel.of_eqs (Jinst.inv_delSets_err h_run).symm (Jinst.inv_getCode_gen h_run wa).symm h_nof
+  · intro pc sevm devm j pc' devm' exn h_at h_run ex ih h_nof
+    exact ih (Devm.NoDel.of_eqs (Jinst.inv_delSets h_run).symm (Jinst.inv_getCode_gen h_run wa).symm h_nof)
+  · intro pc sevm devm l exn h_at h_run h_nof
+    exact Linst.inv_noDel h_run h_nof
 
 /-! ## §7 Raw executable lift (top three sorried; first one PROVED) -/
 
