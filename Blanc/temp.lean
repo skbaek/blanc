@@ -1587,6 +1587,25 @@ lemma ExecuteCode.inv_noDel {wa : Adr} {msg : Msg} {xl : Xlot}
     rw [← h_err]
     exact handleError_noDel h_ex'_noDel
 
+lemma Msg.NoDel.benvAfterTransfer_err {wa : Adr} {msg : Msg}
+    {x : String × State × AdrSet × Tra}
+    (h_run : msg.benvAfterTransfer = .error x)
+    (h : Msg.NoDel wa msg) : wa ∉ x.2.2.1 ∧ (x.2.1.getCode wa).toList ≠ [] := by
+  by_cases h_stv : msg.shouldTransferValue = true
+  · unfold Msg.benvAfterTransfer at h_run
+    rw [if_pos h_stv] at h_run
+    cases h_sub : msg.benv.subBal msg.caller msg.value
+    · rw [h_sub] at h_run
+      simp only [Except.error.injEq, Option.toExcept, Except.bind, bind] at h_run
+      subst h_run
+      exact ⟨h.ca, h.code⟩
+    · rw [h_sub] at h_run
+      dsimp [Option.toExcept] at h_run
+      contradiction
+  · unfold Msg.benvAfterTransfer at h_run
+    rw [if_neg h_stv] at h_run
+    contradiction
+
 -- [FILL-11] [MECH] CRIB: `ProcessMessage.inv_nof` (Solvent.lean:2640) for
 -- the SplitXl/Split inversion skeleton — but keep the error branches
 -- (benvAfterTransfer error payload is ⟨_, msg.benv.state, msg.benv.ca, _⟩,
@@ -1597,7 +1616,28 @@ lemma ProcessMessage.inv_noDel {wa : Adr} {msg : Msg} {xl : Xlot}
     (inv : Xlot.InvNoDel wa xl) (invc : xl.InvGetCode)
     (run : ProcessMessage msg xl ex)
     (h : Msg.NoDel wa msg) : MsgResult.NoDel wa ex := by
-  sorry
+  dsimp only [ProcessMessage] at run
+  rcases run with ⟨x, eq_bt_err, eq_ex_err, _⟩ | ⟨benv', eq_bt, run⟩
+  · rw [eq_ex_err]
+    exact Msg.NoDel.benvAfterTransfer_err eq_bt_err h
+  · have h_nof' : Msg.NoDel wa (msg.withBenv benv') := Msg.NoDel.benvAfterTransfer eq_bt h
+    rcases run with ⟨ex'', run_ec, h_split⟩
+    rcases h_split with ⟨x, eq_ec_err, eq_ex_err⟩ | ⟨evm2, h_ex'', h_if⟩
+    · rw [eq_ex_err]
+      have h_exec : MsgResult.NoDel wa ex'' := ExecuteCode.inv_noDel inv invc run_ec h_nof'
+      rw [eq_ec_err] at h_exec
+      exact h_exec
+    · by_cases h_err : evm2.error.isSome = true
+      · rw [if_pos h_err] at h_if
+        rw [← h_if]
+        have h_exec : MsgResult.NoDel wa ex'' := ExecuteCode.inv_noDel inv invc run_ec h_nof'
+        rw [h_ex''] at h_exec
+        exact Devm.NoDel.rollback h_exec.atd h_exec.ca h.code
+      · rw [if_neg h_err] at h_if
+        rw [← h_if]
+        have h_exec : MsgResult.NoDel wa ex'' := ExecuteCode.inv_noDel inv invc run_ec h_nof'
+        rw [h_ex''] at h_exec
+        exact h_exec
 
 -- [FILL-12] [MECH] CRIB: `ProcessCreateMessage.inv_nof` (Solvent.lean:2729)
 -- + the raw `processCreateMessage_inv_solvent` (Solvent.lean:5171) for the
