@@ -2,24 +2,21 @@
   "enableAllProjectMcpServers": true,
   "permissions": {
     "allow": [
-      "mcp__lean-lsp__lean_goal",
-      "mcp__lean-lsp__lean_term_goal",
-      "mcp__lean-lsp__lean_diagnostic_messages",
-      "mcp__lean-lsp__lean_file_outline",
-      "mcp__lean-lsp__lean_hover_info",
-      "mcp__lean-lsp__lean_completions",
-      "mcp__lean-lsp__lean_declaration_file",
-      "mcp__lean-lsp__lean_references",
-      "mcp__lean-lsp__lean_local_search",
-      "mcp__lean-lsp__lean_leansearch",
-      "mcp__lean-lsp__lean_loogle",
-      "mcp__lean-lsp__lean_leanfinder",
-      "mcp__lean-lsp__lean_state_search",
-      "mcp__lean-lsp__lean_hammer_premise",
-      "mcp__lean-lsp__lean_multi_attempt",
-      "mcp__lean-lsp__lean_run_code",
-      "mcp__lean-lsp__lean_verify",
-      "mcp__lean-lsp__lean_code_actions"
+      "mcp__lean-lsp-mcp"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/permit.py\"",
+            "timeout": 10
+          }
+        ]
+      }
     ]
   }
 }
