@@ -45,6 +45,12 @@ READONLY = {
 # Output-redirect targets that don't write real files.
 SAFE_REDIR_TARGETS = {"/dev/null", "/dev/stdout", "/dev/stderr", "/dev/tty"}
 
+# Real files that MAY be written to via an output redirect, despite the default
+# "no state change" policy. Resolved the shell's way (~ expanded, relative paths
+# joined to cwd) so every spelling of the path maps to the same file. t.log is
+# the scratch log that temp.lean instructs agents to write.
+ALLOWED_WRITE_FILES = {"/Users/bsk/blanc/t.log"}
+
 # `find` primaries that mutate the filesystem or execute programs.
 FIND_WRITE = {
     "-delete", "-exec", "-execdir", "-ok", "-okdir",
@@ -92,7 +98,7 @@ class Unsafe(Exception):
         self.reason = reason
 
 
-def parse_segments(cmd: str):
+def parse_segments(cmd: str, cwd: str = ""):
     """Quote-aware split of a command line into simple-command segments.
 
     Returns a list of segments, each a list of literal word strings, with
@@ -117,7 +123,7 @@ def parse_segments(cmd: str):
         cur, have_word = [], False
         if pending_redir == "out":
             pending_redir = None
-            if w not in SAFE_REDIR_TARGETS:
+            if w not in SAFE_REDIR_TARGETS and not _is_allowed_write(w, cwd):
                 raise Unsafe("ask", "writes to file: " + w)
             return  # consumed as redirect target, not a word
         if pending_redir == "in":
@@ -252,16 +258,38 @@ def _fence_targets(prog: str, args: list) -> list:
     return targets
 
 
+def _is_allowed_write(word: str, cwd: str) -> bool:
+    """True iff an output-redirect target resolves to a file on the write
+    allowlist. Mirrors the shell: ~ expanded, relative paths joined to cwd,
+    ../ collapsed — so `t.log`, `./t.log`, `~/blanc/t.log` and the absolute
+    path all map to the same file."""
+    base = cwd or os.getcwd()
+    w = os.path.expanduser(word)
+    p = w if os.path.isabs(w) else os.path.join(base, w)
+    return os.path.normpath(p) in ALLOWED_WRITE_FILES
+
+
+def _resolve_path(word: str, cwd: str) -> str:
+    """Resolve a path token the shell's way: ~ expanded, relative joined to cwd,
+    ../ collapsed. (No symlink resolution — avoids touching the filesystem.)"""
+    base = cwd or os.getcwd()
+    word = os.path.expanduser(word)
+    p = word if os.path.isabs(word) else os.path.join(base, word)
+    return os.path.normpath(p)
+
+
+def _under_roots(real: str) -> bool:
+    if ALLOWED_ROOTS is None:
+        return True
+    return any(real == r or real.startswith(r + os.sep) for r in ALLOWED_ROOTS)
+
+
 def _outside_roots(word: str, cwd: str) -> bool:
     if ALLOWED_ROOTS is None:
         return False
     if word.startswith("-"):
         return False  # option flag, not a path
-    base = cwd or os.getcwd()
-    word = os.path.expanduser(word)  # leading ~ / ~user, like the shell
-    p = word if os.path.isabs(word) else os.path.join(base, word)
-    real = os.path.normpath(p)  # collapses ../ ; escapes leave the roots
-    return not any(real == r or real.startswith(r + os.sep) for r in ALLOWED_ROOTS)
+    return not _under_roots(_resolve_path(word, cwd))
 
 
 def _match_paren(s, i):
@@ -379,17 +407,42 @@ def decide(command: str, cwd: str = ""):
             return aborted
         command = stripped
 
-    segments = parse_segments(command)  # may raise Unsafe
+    segments = parse_segments(command, cwd)  # may raise Unsafe
     if not segments:
         return "ask", "no command"
 
+    # normalize segments: drop leading VAR=val assignments, keep non-empty ones
+    norm = []
     for seg in segments:
         w = list(seg)
-        # drop leading VAR=val environment assignments
         while w and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", w[0]):
             w.pop(0)
-        if not w:
-            continue  # assignment-only / redirect-only segment
+        if w:
+            norm.append(w)
+    if not norm:
+        return "ask", "no command"
+
+    # `cd` is allowed ONLY standalone. On its own it just moves the shell, and the
+    # next command's hook cwd reflects the move (verified), so the fence catches
+    # any out-of-root access then. Chained into a compound, permit.py sees only the
+    # pre-cd cwd and can't tell — so refuse, forcing cds to stand alone.
+    if any(os.path.basename(w[0]) in ("cd", "pushd", "popd") for w in norm):
+        if len(norm) == 1:
+            return "allow", "standalone cd"
+        # DENY (not ask) so the reason routes back to the agent to reformulate,
+        # instead of surfacing as a user prompt. This is a fix-your-command case:
+        # the agent should split it, not the human approve it.
+        return "deny", ("chained cd is not allowed — send the cd as its own separate "
+                        "command (or omit it: the shell already starts in the project "
+                        "root), then send the rest as a second command")
+
+    # If the shell is parked outside the roots (only reachable via a prior
+    # standalone cd), refuse: relative and implicit-cwd (e.g. bare `ls`) reads
+    # would land there. This closes the deferred-catch gap.
+    if not _under_roots(_resolve_path(".", cwd)):
+        return "ask", "shell cwd outside allowed roots: " + (cwd or os.getcwd())
+
+    for w in norm:
         prog = os.path.basename(w[0])
         if prog not in READONLY:
             return "ask", "not on read-only allowlist: " + prog
@@ -408,7 +461,7 @@ def decide(command: str, cwd: str = ""):
             if "system(" in prog_src or re.search(r'>\s*"', prog_src) or re.search(r'\|\s*"', prog_src):
                 return "ask", "awk exec/redirect"
 
-        # optional directory fence: every *path* argument must resolve inside roots
+        # directory fence: every *path* argument must resolve inside roots
         for t in _fence_targets(prog, w[1:]):
             if _outside_roots(t, cwd):
                 return "ask", "path outside allowed roots: " + t

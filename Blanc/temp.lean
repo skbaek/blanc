@@ -1921,6 +1921,101 @@ lemma GenericCreate.inv_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
             · exact Devm.push_noDel run (incorporateChildOnError_noDel hnd4.atd h_child)
             · exact Devm.push_noDel run (incorporateChildOnSuccess_noDel hnd4.atd h_child)
 
+/-! Helpers for FILL-15: single-step NoDel transports for the argument-popping
+    and bookkeeping ops used by `Xinst.Run`, plus error-payload transports.
+    Every op preserves both `delSets` and wa's code, and every error payload
+    carries the input devm unchanged. -/
+
+lemma accessDelegation_delSets {d : Devm} {adr : Adr} :
+    (accessDelegation d adr).2.2.2.2.delSets = d.delSets := by
+  simp only [accessDelegation]; split <;> rfl
+
+-- An error payload whose devm is NoDel yields a NoDel Execution result.
+lemma Execution.NoDel.error_of {wa : Adr} {d : Devm} {x : String × Devm}
+    (hd : Devm.NoDel wa d) (h : x.2 = d) : Execution.NoDel wa (.error x) := by
+  obtain ⟨s, d'⟩ := x
+  dsimp only at h
+  subst h
+  exact hd
+
+-- Each op's error payload carries the input devm as its second component.
+lemma Devm.pop_err_snd {d : Devm} {x : String × Devm}
+    (h : Devm.pop d = .error x) : x.2 = d := by
+  simp only [Devm.pop] at h
+  split at h
+  · injection h with h; exact (congrArg Prod.snd h).symm
+  · exact absurd h (by simp)
+
+lemma Devm.popToNat_err_snd {d : Devm} {x : String × Devm}
+    (h : Devm.popToNat d = .error x) : x.2 = d := by
+  dsimp only [Devm.popToNat, Functor.map, Except.map] at h
+  rcases hp : d.pop with e | ⟨v, d0⟩
+  · rw [hp] at h; injection h with h; rw [← h]; exact Devm.pop_err_snd hp
+  · rw [hp] at h; exact absurd h (by simp)
+
+lemma Devm.popToAdr_err_snd {d : Devm} {x : String × Devm}
+    (h : Devm.popToAdr d = .error x) : x.2 = d := by
+  dsimp only [Devm.popToAdr, Functor.map, Except.map] at h
+  rcases hp : d.pop with e | ⟨v, d0⟩
+  · rw [hp] at h; injection h with h; rw [← h]; exact Devm.pop_err_snd hp
+  · rw [hp] at h; exact absurd h (by simp)
+
+lemma chargeGas_err_snd {cost : Nat} {d : Devm} {x : String × Devm}
+    (h : chargeGas cost d = .error x) : x.2 = d := by
+  simp only [chargeGas] at h
+  split at h
+  · injection h with h; exact (congrArg Prod.snd h).symm
+  · exact absurd h (by simp)
+
+lemma Except.assert_err_snd {p : Prop} [Decidable p] {d : Devm} {s : String}
+    {x : String × Devm} (h : Except.assert p (⟨s, d⟩ : String × Devm) = .error x) :
+    x.2 = d := by
+  simp only [Except.assert] at h
+  split at h
+  · exact absurd h (by simp)
+  · injection h with h; exact (congrArg Prod.snd h).symm
+
+-- ok-case transports.
+lemma Devm.NoDel.pop {wa : Adr} {d d' : Devm} {v : B256}
+    (hd : Devm.NoDel wa d) (h : Devm.pop d = .ok ⟨v, d'⟩) : Devm.NoDel wa d' :=
+  hd.of_eqs (Devm.pop_delSets_eq h).symm (Devm.pop_getCode h).symm
+
+lemma Devm.NoDel.popToNat {wa : Adr} {d d' : Devm} {n : Nat}
+    (hd : Devm.NoDel wa d) (h : Devm.popToNat d = .ok ⟨n, d'⟩) : Devm.NoDel wa d' :=
+  hd.of_eqs (Devm.popToNat_delSets_eq h).symm (Devm.popToNat_getCode h).symm
+
+lemma Devm.NoDel.popToAdr {wa : Adr} {d d' : Devm} {a : Adr}
+    (hd : Devm.NoDel wa d) (h : Devm.popToAdr d = .ok ⟨a, d'⟩) : Devm.NoDel wa d' :=
+  hd.of_eqs (Devm.popToAdr_delSets_eq h).symm (Devm.popToAdr_getCode h).symm
+
+lemma Devm.NoDel.chargeGas {wa : Adr} {d d' : Devm} {cost : Nat}
+    (hd : Devm.NoDel wa d) (h : chargeGas cost d = .ok d') : Devm.NoDel wa d' :=
+  hd.of_eqs (chargeGas_delSets_eq h).symm (chargeGas_getCode h).symm
+
+lemma Devm.NoDel.memExtends {wa : Adr} {d : Devm} {ranges : List (Nat × Nat)}
+    (hd : Devm.NoDel wa d) : Devm.NoDel wa (d.memExtends ranges) := by
+  refine hd.of_eqs ?_ Devm.memExtends_getCode.symm
+  rfl
+
+lemma Devm.NoDel.addAccessedAddress {wa : Adr} {d : Devm} {a : Adr}
+    (hd : Devm.NoDel wa d) : Devm.NoDel wa (_root_.addAccessedAddress d a) := by
+  refine hd.of_eqs ?_ addAccessedAddress_getCode.symm
+  rfl
+
+lemma Devm.NoDel.incrNonce {wa : Adr} {d : Devm} {a : Adr}
+    (hd : Devm.NoDel wa d) : Devm.NoDel wa (d.incrNonce a) := by
+  refine hd.of_eqs ?_ Devm.incrNonce_getCode.symm
+  rfl
+
+lemma Devm.NoDel.of_accessDelegation {wa : Adr} {d d' : Devm} {adr na : Adr}
+    {dp : Bool} {code : ByteArray} {dagc : Nat}
+    (hd : Devm.NoDel wa d)
+    (h : (dp, na, code, dagc, d') = _root_.accessDelegation d adr) : Devm.NoDel wa d' := by
+  have hd' : d' = (_root_.accessDelegation d adr).2.2.2.2 := congrArg (fun q => q.2.2.2.2) h
+  refine hd.of_eqs ?_ ?_
+  · rw [hd']; exact accessDelegation_delSets.symm
+  · rw [hd']; exact accessDelegation_getCode.symm
+
 -- [FILL-15] [MECH-LARGE] Six-way dispatch (create/create2/call/callcode/
 -- delegatecall/staticcall) onto FILL-13/14 after popping arguments.
 -- CRIB: `Xinst.inv_nof_gen` (Solvent.lean:2826-3036) — copy the rcases
@@ -1932,7 +2027,238 @@ lemma Xinst.inv_noDel_gen {wa : Adr} {sevm : Sevm} {s : Devm} {x : Xinst}
     (inv : Xlot.InvNoDel wa xl) (invc : xl.InvGetCode)
     (h : Xinst.Run sevm s x xl exn)
     (hnd : Devm.NoDel wa s) : Execution.NoDel wa exn := by
-  sorry
+  cases x
+  case create =>
+    dsimp only [Xinst.Run] at h
+    rcases h with ⟨xerr, h_e, h_ex, _⟩ | ⟨⟨endowment, d1⟩, e1, h⟩
+    · rw [h_ex]; exact Execution.NoDel.error_of hnd (Devm.pop_err_snd h_e)
+    rcases h with ⟨xerr, h_e, h_ex, _⟩ | ⟨⟨mi, d2⟩, e2, h⟩
+    · rw [h_ex]; exact Execution.NoDel.error_of (hnd.pop e1) (Devm.popToNat_err_snd h_e)
+    rcases h with ⟨xerr, h_e, h_ex, _⟩ | ⟨⟨ms, d3⟩, e3, h⟩
+    · rw [h_ex]
+      exact Execution.NoDel.error_of ((hnd.pop e1).popToNat e2) (Devm.popToNat_err_snd h_e)
+    rcases h with ⟨extendCost, _, h⟩
+    rcases h with ⟨initCodeCost, _, h⟩
+    rcases h with ⟨xerr, h_e, h_ex, _⟩ | ⟨d4, e4, h⟩
+    · rw [h_ex]
+      exact Execution.NoDel.error_of (((hnd.pop e1).popToNat e2).popToNat e3)
+        (chargeGas_err_snd h_e)
+    rcases h with ⟨d5, h_d5, h⟩
+    rcases h with ⟨newAddress, _, h⟩
+    have hnd4 : Devm.NoDel wa d4 := (((hnd.pop e1).popToNat e2).popToNat e3).chargeGas e4
+    have hnd5 : Devm.NoDel wa d5 := by rw [h_d5]; exact hnd4.memExtends
+    exact GenericCreate.inv_noDel inv invc h hnd5
+  case create2 =>
+    dsimp only [Xinst.Run] at h
+    rcases h with ⟨xerr, h_e, h_ex, _⟩ | ⟨⟨endowment, d1⟩, e1, h⟩
+    · rw [h_ex]; exact Execution.NoDel.error_of hnd (Devm.pop_err_snd h_e)
+    rcases h with ⟨xerr, h_e, h_ex, _⟩ | ⟨⟨mi, d2⟩, e2, h⟩
+    · rw [h_ex]; exact Execution.NoDel.error_of (hnd.pop e1) (Devm.popToNat_err_snd h_e)
+    rcases h with ⟨xerr, h_e, h_ex, _⟩ | ⟨⟨ms, d3⟩, e3, h⟩
+    · rw [h_ex]
+      exact Execution.NoDel.error_of ((hnd.pop e1).popToNat e2) (Devm.popToNat_err_snd h_e)
+    rcases h with ⟨xerr, h_e, h_ex, _⟩ | ⟨⟨salt, d4⟩, e4, h⟩
+    · rw [h_ex]
+      exact Execution.NoDel.error_of (((hnd.pop e1).popToNat e2).popToNat e3)
+        (Devm.pop_err_snd h_e)
+    rcases h with ⟨extendCost, _, h⟩
+    rcases h with ⟨initCodeHashCost, _, h⟩
+    rcases h with ⟨initCodeCost, _, h⟩
+    rcases h with ⟨xerr, h_e, h_ex, _⟩ | ⟨d5, e5, h⟩
+    · rw [h_ex]
+      exact Execution.NoDel.error_of ((((hnd.pop e1).popToNat e2).popToNat e3).pop e4)
+        (chargeGas_err_snd h_e)
+    rcases h with ⟨d6, h_d6, h⟩
+    rcases h with ⟨newAddress, _, h⟩
+    have hnd5 : Devm.NoDel wa d5 :=
+      ((((hnd.pop e1).popToNat e2).popToNat e3).pop e4).chargeGas e5
+    have hnd6 : Devm.NoDel wa d6 := by rw [h_d6]; exact hnd5.memExtends
+    exact GenericCreate.inv_noDel inv invc h hnd6
+  case call =>
+    dsimp only [Xinst.Run] at h
+    rcases h with ⟨xerr, h_e, h_ex, _⟩ | ⟨⟨gas, d1⟩, e1, h⟩
+    · rw [h_ex]; exact Execution.NoDel.error_of hnd (Devm.pop_err_snd h_e)
+    rcases h with ⟨xerr, h_e, h_ex, _⟩ | ⟨⟨callee, d2⟩, e2, h⟩
+    · rw [h_ex]; exact Execution.NoDel.error_of (hnd.pop e1) (Devm.popToAdr_err_snd h_e)
+    rcases h with ⟨xerr, h_e, h_ex, _⟩ | ⟨⟨value, d3⟩, e3, h⟩
+    · rw [h_ex]
+      exact Execution.NoDel.error_of ((hnd.pop e1).popToAdr e2) (Devm.pop_err_snd h_e)
+    rcases h with ⟨xerr, h_e, h_ex, _⟩ | ⟨⟨ii, d4⟩, e4, h⟩
+    · rw [h_ex]
+      exact Execution.NoDel.error_of (((hnd.pop e1).popToAdr e2).pop e3)
+        (Devm.popToNat_err_snd h_e)
+    rcases h with ⟨xerr, h_e, h_ex, _⟩ | ⟨⟨is, d5⟩, e5, h⟩
+    · rw [h_ex]
+      exact Execution.NoDel.error_of ((((hnd.pop e1).popToAdr e2).pop e3).popToNat e4)
+        (Devm.popToNat_err_snd h_e)
+    rcases h with ⟨xerr, h_e, h_ex, _⟩ | ⟨⟨oi, d6⟩, e6, h⟩
+    · rw [h_ex]
+      exact Execution.NoDel.error_of
+        (((((hnd.pop e1).popToAdr e2).pop e3).popToNat e4).popToNat e5)
+        (Devm.popToNat_err_snd h_e)
+    rcases h with ⟨xerr, h_e, h_ex, _⟩ | ⟨⟨os, d7⟩, e7, h⟩
+    · rw [h_ex]
+      exact Execution.NoDel.error_of
+        ((((((hnd.pop e1).popToAdr e2).pop e3).popToNat e4).popToNat e5).popToNat e6)
+        (Devm.popToNat_err_snd h_e)
+    have hnd7 : Devm.NoDel wa d7 :=
+      ((((((hnd.pop e1).popToAdr e2).pop e3).popToNat e4).popToNat e5).popToNat e6).popToNat e7
+    rcases h with ⟨extendCost, _, h⟩
+    rcases h with ⟨preAccessCost, _, h⟩
+    rcases h with ⟨d8, h_d8, h⟩
+    have hnd8 : Devm.NoDel wa d8 := by rw [h_d8]; exact hnd7.addAccessedAddress
+    rcases h with ⟨⟨dp, na, code0, dagc, d9⟩, h_d9, h⟩
+    have hnd9 : Devm.NoDel wa d9 := hnd8.of_accessDelegation h_d9
+    rcases h with ⟨accessCost, _, h⟩
+    rcases h with ⟨createCost, _, h⟩
+    rcases h with ⟨transferCost, _, h⟩
+    rcases h with ⟨⟨mcc, mcs⟩, _, h⟩
+    rcases h with ⟨xerr, h_e, h_ex, _⟩ | ⟨d10, e10, h⟩
+    · rw [h_ex]; exact Execution.NoDel.error_of hnd9 (chargeGas_err_snd h_e)
+    have hnd10 : Devm.NoDel wa d10 := hnd9.chargeGas e10
+    rcases h with ⟨xerr, h_e, h_ex, _⟩ | ⟨_, _, h⟩
+    · rw [h_ex]; exact Execution.NoDel.error_of hnd10 (Except.assert_err_snd h_e)
+    rcases h with ⟨d11, h_d11, h⟩
+    have hnd11 : Devm.NoDel wa d11 := by rw [h_d11]; exact hnd10.memExtends
+    rcases h with ⟨senderBal, _, h⟩
+    split_ifs at h with h_lt
+    · rcases h with ⟨xerr, h_e, h_ex, _⟩ | ⟨d12, e12, h⟩
+      · rw [h_ex]; exact Devm.push_noDel h_e hnd11
+      · rcases h with ⟨_, h_ex⟩
+        rw [← h_ex]
+        exact Devm.NoDel.of_eqs (d := d12)
+          (d' := (d12.withReturnData []).withGasLeft (d12.gasLeft + mcs))
+          rfl rfl (Devm.push_noDel e12 hnd11)
+    · exact GenericCall.inv_noDel inv invc h hnd11
+  case callcode =>
+    dsimp only [Xinst.Run] at h
+    rcases h with ⟨xerr, h_e, h_ex, _⟩ | ⟨⟨gas, d1⟩, e1, h⟩
+    · rw [h_ex]; exact Execution.NoDel.error_of hnd (Devm.pop_err_snd h_e)
+    rcases h with ⟨xerr, h_e, h_ex, _⟩ | ⟨⟨codeAddress, d2⟩, e2, h⟩
+    · rw [h_ex]; exact Execution.NoDel.error_of (hnd.pop e1) (Devm.popToAdr_err_snd h_e)
+    rcases h with ⟨xerr, h_e, h_ex, _⟩ | ⟨⟨value, d3⟩, e3, h⟩
+    · rw [h_ex]
+      exact Execution.NoDel.error_of ((hnd.pop e1).popToAdr e2) (Devm.pop_err_snd h_e)
+    rcases h with ⟨xerr, h_e, h_ex, _⟩ | ⟨⟨ii, d4⟩, e4, h⟩
+    · rw [h_ex]
+      exact Execution.NoDel.error_of (((hnd.pop e1).popToAdr e2).pop e3)
+        (Devm.popToNat_err_snd h_e)
+    rcases h with ⟨xerr, h_e, h_ex, _⟩ | ⟨⟨is, d5⟩, e5, h⟩
+    · rw [h_ex]
+      exact Execution.NoDel.error_of ((((hnd.pop e1).popToAdr e2).pop e3).popToNat e4)
+        (Devm.popToNat_err_snd h_e)
+    rcases h with ⟨xerr, h_e, h_ex, _⟩ | ⟨⟨oi, d6⟩, e6, h⟩
+    · rw [h_ex]
+      exact Execution.NoDel.error_of
+        (((((hnd.pop e1).popToAdr e2).pop e3).popToNat e4).popToNat e5)
+        (Devm.popToNat_err_snd h_e)
+    rcases h with ⟨xerr, h_e, h_ex, _⟩ | ⟨⟨os, d7⟩, e7, h⟩
+    · rw [h_ex]
+      exact Execution.NoDel.error_of
+        ((((((hnd.pop e1).popToAdr e2).pop e3).popToNat e4).popToNat e5).popToNat e6)
+        (Devm.popToNat_err_snd h_e)
+    have hnd7 : Devm.NoDel wa d7 :=
+      ((((((hnd.pop e1).popToAdr e2).pop e3).popToNat e4).popToNat e5).popToNat e6).popToNat e7
+    rcases h with ⟨extendCost, _, h⟩
+    rcases h with ⟨preAccessCost, _, h⟩
+    rcases h with ⟨d8, h_d8, h⟩
+    have hnd8 : Devm.NoDel wa d8 := by rw [h_d8]; exact hnd7.addAccessedAddress
+    rcases h with ⟨⟨dp, newCodeAddress, code0, dagc, d9⟩, h_d9, h⟩
+    have hnd9 : Devm.NoDel wa d9 := hnd8.of_accessDelegation h_d9
+    rcases h with ⟨accessCost, _, h⟩
+    rcases h with ⟨transferCost, _, h⟩
+    rcases h with ⟨⟨mcc, mcs⟩, _, h⟩
+    rcases h with ⟨xerr, h_e, h_ex, _⟩ | ⟨d10, e10, h⟩
+    · rw [h_ex]; exact Execution.NoDel.error_of hnd9 (chargeGas_err_snd h_e)
+    have hnd10 : Devm.NoDel wa d10 := hnd9.chargeGas e10
+    rcases h with ⟨d11, h_d11, h⟩
+    have hnd11 : Devm.NoDel wa d11 := by rw [h_d11]; exact hnd10.memExtends
+    rcases h with ⟨senderBal, _, h⟩
+    split_ifs at h with h_lt
+    · rcases h with ⟨xerr, h_e, h_ex, _⟩ | ⟨d12, e12, h⟩
+      · rw [h_ex]; exact Devm.push_noDel h_e hnd11
+      · rcases h with ⟨_, h_ex⟩
+        rw [← h_ex]
+        exact Devm.NoDel.of_eqs (d := d12)
+          (d' := (d12.withReturnData []).withGasLeft (d12.gasLeft + mcs))
+          rfl rfl (Devm.push_noDel e12 hnd11)
+    · exact GenericCall.inv_noDel inv invc h hnd11
+  case delcall =>
+    dsimp only [Xinst.Run] at h
+    rcases h with ⟨xerr, h_e, h_ex, _⟩ | ⟨⟨gas, d1⟩, e1, h⟩
+    · rw [h_ex]; exact Execution.NoDel.error_of hnd (Devm.pop_err_snd h_e)
+    rcases h with ⟨xerr, h_e, h_ex, _⟩ | ⟨⟨codeAddress, d2⟩, e2, h⟩
+    · rw [h_ex]; exact Execution.NoDel.error_of (hnd.pop e1) (Devm.popToAdr_err_snd h_e)
+    rcases h with ⟨xerr, h_e, h_ex, _⟩ | ⟨⟨ii, d3⟩, e3, h⟩
+    · rw [h_ex]
+      exact Execution.NoDel.error_of ((hnd.pop e1).popToAdr e2) (Devm.popToNat_err_snd h_e)
+    rcases h with ⟨xerr, h_e, h_ex, _⟩ | ⟨⟨is, d4⟩, e4, h⟩
+    · rw [h_ex]
+      exact Execution.NoDel.error_of (((hnd.pop e1).popToAdr e2).popToNat e3)
+        (Devm.popToNat_err_snd h_e)
+    rcases h with ⟨xerr, h_e, h_ex, _⟩ | ⟨⟨oi, d5⟩, e5, h⟩
+    · rw [h_ex]
+      exact Execution.NoDel.error_of ((((hnd.pop e1).popToAdr e2).popToNat e3).popToNat e4)
+        (Devm.popToNat_err_snd h_e)
+    rcases h with ⟨xerr, h_e, h_ex, _⟩ | ⟨⟨os, d6⟩, e6, h⟩
+    · rw [h_ex]
+      exact Execution.NoDel.error_of
+        (((((hnd.pop e1).popToAdr e2).popToNat e3).popToNat e4).popToNat e5)
+        (Devm.popToNat_err_snd h_e)
+    have hnd6 : Devm.NoDel wa d6 :=
+      (((((hnd.pop e1).popToAdr e2).popToNat e3).popToNat e4).popToNat e5).popToNat e6
+    rcases h with ⟨extendCost, _, h⟩
+    rcases h with ⟨preAccessCost, _, h⟩
+    rcases h with ⟨d7, h_d7, h⟩
+    have hnd7 : Devm.NoDel wa d7 := by rw [h_d7]; exact hnd6.addAccessedAddress
+    rcases h with ⟨⟨dp, newCodeAddress, code0, dagc, d8⟩, h_d8, h⟩
+    have hnd8 : Devm.NoDel wa d8 := hnd7.of_accessDelegation h_d8
+    rcases h with ⟨accessCost, _, h⟩
+    rcases h with ⟨⟨mcc, mcs⟩, _, h⟩
+    rcases h with ⟨xerr, h_e, h_ex, _⟩ | ⟨d9, e9, h⟩
+    · rw [h_ex]; exact Execution.NoDel.error_of hnd8 (chargeGas_err_snd h_e)
+    have hnd9 : Devm.NoDel wa d9 := hnd8.chargeGas e9
+    rcases h with ⟨d10, h_d10, h⟩
+    have hnd10 : Devm.NoDel wa d10 := by rw [h_d10]; exact hnd9.memExtends
+    exact GenericCall.inv_noDel inv invc h hnd10
+  case statcall =>
+    dsimp only [Xinst.Run] at h
+    rcases h with ⟨xerr, h_e, h_ex, _⟩ | ⟨⟨gas, d1⟩, e1, h⟩
+    · rw [h_ex]; exact Execution.NoDel.error_of hnd (Devm.pop_err_snd h_e)
+    rcases h with ⟨xerr, h_e, h_ex, _⟩ | ⟨⟨target, d2⟩, e2, h⟩
+    · rw [h_ex]; exact Execution.NoDel.error_of (hnd.pop e1) (Devm.popToAdr_err_snd h_e)
+    rcases h with ⟨xerr, h_e, h_ex, _⟩ | ⟨⟨ii, d3⟩, e3, h⟩
+    · rw [h_ex]
+      exact Execution.NoDel.error_of ((hnd.pop e1).popToAdr e2) (Devm.popToNat_err_snd h_e)
+    rcases h with ⟨xerr, h_e, h_ex, _⟩ | ⟨⟨is, d4⟩, e4, h⟩
+    · rw [h_ex]
+      exact Execution.NoDel.error_of (((hnd.pop e1).popToAdr e2).popToNat e3)
+        (Devm.popToNat_err_snd h_e)
+    rcases h with ⟨xerr, h_e, h_ex, _⟩ | ⟨⟨oi, d5⟩, e5, h⟩
+    · rw [h_ex]
+      exact Execution.NoDel.error_of ((((hnd.pop e1).popToAdr e2).popToNat e3).popToNat e4)
+        (Devm.popToNat_err_snd h_e)
+    rcases h with ⟨xerr, h_e, h_ex, _⟩ | ⟨⟨os, d6⟩, e6, h⟩
+    · rw [h_ex]
+      exact Execution.NoDel.error_of
+        (((((hnd.pop e1).popToAdr e2).popToNat e3).popToNat e4).popToNat e5)
+        (Devm.popToNat_err_snd h_e)
+    have hnd6 : Devm.NoDel wa d6 :=
+      (((((hnd.pop e1).popToAdr e2).popToNat e3).popToNat e4).popToNat e5).popToNat e6
+    rcases h with ⟨extendCost, _, h⟩
+    rcases h with ⟨preAccessCost, _, h⟩
+    rcases h with ⟨d7, h_d7, h⟩
+    have hnd7 : Devm.NoDel wa d7 := by rw [h_d7]; exact hnd6.addAccessedAddress
+    rcases h with ⟨⟨dp, newCodeAddress, code0, dagc, d8⟩, h_d8, h⟩
+    have hnd8 : Devm.NoDel wa d8 := hnd7.of_accessDelegation h_d8
+    rcases h with ⟨accessCost, _, h⟩
+    rcases h with ⟨⟨mcc, mcs⟩, _, h⟩
+    rcases h with ⟨xerr, h_e, h_ex, _⟩ | ⟨d9, e9, h⟩
+    · rw [h_ex]; exact Execution.NoDel.error_of hnd8 (chargeGas_err_snd h_e)
+    have hnd9 : Devm.NoDel wa d9 := hnd8.chargeGas e9
+    rcases h with ⟨d10, h_d10, h⟩
+    have hnd10 : Devm.NoDel wa d10 := by rw [h_d10]; exact hnd9.memExtends
+    exact GenericCall.inv_noDel inv invc h hnd10
 
 -- [FILL-16] [MECH] Three-way dispatch on the Ninst shape.  CRIB:
 -- `Ninst.inv_nof_gen` (Solvent.lean:3038): push = chargeGas + push
