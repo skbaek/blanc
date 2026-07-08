@@ -1849,7 +1849,77 @@ lemma GenericCreate.inv_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
     (inv : Xlot.InvNoDel wa xl) (invc : xl.InvGetCode)
     (h : GenericCreate sevm devm endowment newAddress mi ms xl exn)
     (hnd : Devm.NoDel wa devm) : Execution.NoDel wa exn := by
-  sorry
+  dsimp only [GenericCreate] at h
+  rcases h with ⟨calldata, eq_calldata, h⟩; subst eq_calldata
+  -- SplitXl 1 : OutOfGasError assert on the init-code size
+  rcases h with ⟨x, h_err, eq_err, _⟩ | ⟨_, _, h⟩
+  · rw [eq_err]
+    dsimp only [Except.assert] at h_err
+    split at h_err
+    · contradiction
+    · injection h_err with h_eq; subst h_eq; exact hnd
+  · rcases h with ⟨devm1, eq_devm1, h⟩
+    rcases h with ⟨createMsgGas, _, h⟩
+    rcases h with ⟨devm2, eq_devm2, h⟩
+    have hnd2 : Devm.NoDel wa devm2 := by
+      refine Devm.NoDel.of_eqs (d := devm) ?_ ?_ hnd
+      · rw [eq_devm2, eq_devm1]; rfl
+      · rw [eq_devm2, eq_devm1]; rfl
+    -- SplitXl 2 : WriteInStaticContext assert
+    rcases h with ⟨x, h_err, eq_err, _⟩ | ⟨_, _, h⟩
+    · rw [eq_err]
+      dsimp only [assertDynamic, Except.assert] at h_err
+      split at h_err
+      · contradiction
+      · injection h_err with h_eq; subst h_eq; exact hnd2
+    · rcases h with ⟨devm3, eq_devm3, h⟩
+      rcases h with ⟨sender, _, h⟩
+      have hnd3 : Devm.NoDel wa devm3 := by
+        refine Devm.NoDel.of_eqs (d := devm2) ?_ ?_ hnd2
+        · rw [eq_devm3]; rfl
+        · rw [eq_devm3]; rfl
+      split at h
+      · -- sender can't afford / nonce maxed / depth 0 : create fails, push 0
+        rcases h with ⟨_, h_push⟩
+        refine Devm.push_noDel h_push ?_
+        exact Devm.NoDel.of_eqs (d := devm3) rfl rfl hnd3
+      · rcases h with ⟨devm4, eq_devm4, h⟩
+        have hnd4 : Devm.NoDel wa devm4 := by
+          refine Devm.NoDel.of_eqs (d := devm3) ?_ ?_ hnd3
+          · rw [eq_devm4]; rfl
+          · rw [eq_devm4]; exact Devm.incrNonce_getCode.symm
+        split at h
+        · -- target account already exists : create fails, push 0
+          rcases h with ⟨_, h_push⟩
+          exact Devm.push_noDel h_push hnd4
+        · -- emptiness guard passed : (devm4.state.get newAddress).code.size = 0
+          rename_i h_c2
+          rcases h with ⟨childMsg, eq_childMsg, h⟩; subst eq_childMsg
+          rcases h with ⟨ex', run_pcm, h_split⟩
+          have h_ct : newAddress ≠ wa := by
+            push_neg at h_c2
+            exact ne_wa_of_code_size_zero hnd4.code h_c2.2.1
+          have h_pm : MsgResult.NoDel wa ex' :=
+            ProcessCreateMessage.inv_noDel inv invc run_pcm h_ct ⟨hnd4.ca, hnd4.code⟩
+          rcases h_split with ⟨y, h_lift_err, eq_exn⟩ | ⟨child, h_lift_ok, run⟩
+          · -- child lift errored : exn carries the payload's ca/state on devm4
+            rw [eq_exn]
+            rcases ex' with err | c
+            · rcases err with ⟨e_str, e_st, e_ca, e_tra⟩
+              dsimp only [liftToExecution] at h_lift_err
+              injection h_lift_err with h_eq; subst h_eq
+              rcases h_pm with ⟨h_ca, h_code⟩
+              exact ⟨hnd4.atd, h_ca, h_code⟩
+            · dsimp only [liftToExecution] at h_lift_err; contradiction
+          · -- child lift ok : merge via incorporateChild*, then push
+            have h_child : Devm.NoDel wa child := by
+              rcases ex' with err | c
+              · dsimp only [liftToExecution] at h_lift_ok; contradiction
+              · dsimp only [liftToExecution] at h_lift_ok
+                injection h_lift_ok with h_eq; subst h_eq; exact h_pm
+            split at run
+            · exact Devm.push_noDel run (incorporateChildOnError_noDel hnd4.atd h_child)
+            · exact Devm.push_noDel run (incorporateChildOnSuccess_noDel hnd4.atd h_child)
 
 -- [FILL-15] [MECH-LARGE] Six-way dispatch (create/create2/call/callcode/
 -- delegatecall/staticcall) onto FILL-13/14 after popping arguments.
