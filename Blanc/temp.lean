@@ -1739,6 +1739,33 @@ lemma ProcessCreateMessage.inv_noDel {wa : Adr} {msg : Msg} {xl : Xlot}
       rw [← h_if]
       exact Devm.NoDel.rollback h_evm.atd h_evm.ca h.code
 
+-- push transports NoDel to the Execution level: the ok payload changes only
+-- the stack, and the overflow-error payload is the input devm itself.
+lemma Devm.push_noDel {wa : Adr} {x : B256} {d : Devm} {exn : Execution}
+    (heq : Devm.push x d = exn) (h : Devm.NoDel wa d) : Execution.NoDel wa exn := by
+  unfold Devm.push Except.assert at heq
+  by_cases hlt : d.stack.length < 1024
+  · rw [if_pos hlt] at heq
+    dsimp only [bind, Except.bind] at heq
+    rw [← heq]; exact ⟨h.atd, h.ca, h.code⟩
+  · rw [if_neg hlt] at heq
+    dsimp only [bind, Except.bind] at heq
+    rw [← heq]; exact ⟨h.atd, h.ca, h.code⟩
+
+-- incorporateChildOnError (elevm Execution.lean:1953): keeps the parent's atd,
+-- adopts the child's ca/state — so wa stays out of both and keeps its code.
+lemma incorporateChildOnError_noDel {wa : Adr} {parent child : Devm} {rd : B8L}
+    (hp_atd : wa ∉ parent.accountsToDelete) (hc : Devm.NoDel wa child) :
+    Devm.NoDel wa (incorporateChildOnError parent child rd) :=
+  ⟨hp_atd, hc.ca, hc.code⟩
+
+-- incorporateChildOnSuccess (elevm Execution.lean:1963): atd := parent ∪ child
+-- (both wa-free, via not_mem_union), ca/state := child's.
+lemma incorporateChildOnSuccess_noDel {wa : Adr} {parent child : Devm} {rd : B8L}
+    (hp_atd : wa ∉ parent.accountsToDelete) (hc : Devm.NoDel wa child) :
+    Devm.NoDel wa (incorporateChildOnSuccess parent child rd) :=
+  ⟨AdrSet.not_mem_union hp_atd hc.atd, hc.ca, hc.code⟩
+
 -- [FILL-13] [MECH] CRIB: `GenericCall.inv_nof` (Solvent.lean:2687) for the
 -- rcases skeleton.  childMsg = callMsg …, whose benv is
 -- ⟨evm1.state, evm1.createdAccounts, _⟩ (elevm Execution.lean:2729) — so
@@ -1754,7 +1781,57 @@ lemma GenericCall.inv_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
     (h : GenericCall sevm devm gas value caller target codeAddress
       stv istat ii is oi os code dp xl exn)
     (hnd : Devm.NoDel wa devm) : Execution.NoDel wa exn := by
-  sorry
+  dsimp only [GenericCall] at h
+  rcases h with ⟨evm1, eq_evm1, h⟩; subst eq_evm1
+  split at h
+  · -- depth limit reached : call fails, result is a push onto the parent
+    rcases h with ⟨_, eq_ok⟩
+    exact Devm.push_noDel eq_ok ⟨hnd.atd, hnd.ca, hnd.code⟩
+  · rcases h with ⟨calldata, _, h⟩
+    rcases h with ⟨childMsg, eq_childMsg, h⟩
+    rcases h with ⟨ex', run_pm, h_split⟩
+    have h_cm : Msg.NoDel wa childMsg := by
+      rw [eq_childMsg]; exact ⟨hnd.ca, hnd.code⟩
+    have h_pm : MsgResult.NoDel wa ex' :=
+      ProcessMessage.inv_noDel inv invc run_pm h_cm
+    rcases h_split with ⟨x, h_err, eq_err⟩ | ⟨child, h_ok, run⟩
+    · -- sub-message lift errored : exn = the same error, payload carried through
+      rw [eq_err]
+      rcases ex' with err | c
+      · rcases err with ⟨e_str, e_st, e_ca, e_tra⟩
+        dsimp only [liftToExecution] at h_err
+        injection h_err with h_eq
+        subst h_eq
+        rcases h_pm with ⟨h_ca, h_code⟩
+        exact ⟨hnd.atd, h_ca, h_code⟩
+      · dsimp only [liftToExecution] at h_err
+        contradiction
+    · -- sub-message lift ok : child carries NoDel
+      have h_child : Devm.NoDel wa child := by
+        rcases ex' with err | c
+        · dsimp only [liftToExecution] at h_ok
+          contradiction
+        · dsimp only [liftToExecution] at h_ok
+          injection h_ok with h_eq
+          subst h_eq
+          exact h_pm
+      split at run
+      · -- child errored : incorporateChildOnError, then push + memWrite
+        rcases run with ⟨y, h_perr, eq_err⟩ | ⟨evm2, h_pok, eq_ok⟩
+        · rw [eq_err]
+          exact Devm.push_noDel h_perr (incorporateChildOnError_noDel hnd.atd h_child)
+        · rw [← eq_ok]
+          exact Devm.NoDel.of_eqs (Devm.push_delSets_eq h_pok).symm
+            (Devm.push_getCode_gen h_pok wa).symm
+            (incorporateChildOnError_noDel hnd.atd h_child)
+      · -- child ok : incorporateChildOnSuccess, then push + memWrite
+        rcases run with ⟨y, h_perr, eq_err⟩ | ⟨evm2, h_pok, eq_ok⟩
+        · rw [eq_err]
+          exact Devm.push_noDel h_perr (incorporateChildOnSuccess_noDel hnd.atd h_child)
+        · rw [← eq_ok]
+          exact Devm.NoDel.of_eqs (Devm.push_delSets_eq h_pok).symm
+            (Devm.push_getCode_gen h_pok wa).symm
+            (incorporateChildOnSuccess_noDel hnd.atd h_child)
 
 -- [FILL-14] [ESCALATE first time; contains the CREATE collision argument]
 -- CRIB: `GenericCreate.inv_nof` (Solvent.lean:2765) for the rcases
