@@ -2406,7 +2406,26 @@ theorem executeCode_inv_noDel {wa : Adr} {msg : Msg} {lim : Nat} {evm : Devm}
 theorem processMessage_inv_noDel {wa : Adr} {msg : Msg} {evm : Devm} {lim : Nat}
     (h_run : processMessage msg lim = .ok evm)
     (h : Msg.NoDel wa msg) : Devm.NoDel wa evm := by
-  sorry
+  cases lim with
+  | zero => simp [processMessage] at h_run
+  | succ k =>
+    rw [processMessage] at h_run
+    rcases of_bind_eq_ok h_run with ⟨benv, hb, h_run'⟩
+    rcases of_bind_eq_ok h_run' with ⟨evm', hec, h_if⟩
+    by_cases herr : evm'.error.isSome = true
+    · rw [if_pos herr] at h_if
+      have h_evm : evm = evm'.rollback msg.benv.state msg.tenv.transientStorage := by
+        rw [← Except.ok.inj h_if]
+      rw [h_evm]
+      have hbenv := Msg.NoDel.benvAfterTransfer hb h
+      have hevm' := executeCode_inv_noDel hec hbenv
+      exact Devm.NoDel.rollback hevm'.atd hevm'.ca h.code
+    · rw [if_neg herr] at h_if
+      have h_evm : evm = evm' := by
+        rw [← Except.ok.inj h_if]
+      rw [h_evm]
+      have hbenv := Msg.NoDel.benvAfterTransfer hb h
+      exact executeCode_inv_noDel hec hbenv
 
 -- [FILL-21] [MECH] Raw processCreateMessage.  CRIB:
 -- `processCreateMessage_inv_solvent` (Solvent.lean:5171) — same skeleton.
