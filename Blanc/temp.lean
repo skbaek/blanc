@@ -40,7 +40,7 @@ never re-proved: each level cites the SAME-level `inv_getCode` lemma
 FILL PROTOCOL (for future sessions, any model tier):
 - Work ONLY in this file; never touch Solvent.lean/Common.lean/Semantics.lean.
 - Verify each fill with:
-    cd /Users/bsk/blanc && lake env lean --tstack=65536 Blanc/temp.lean > /tmp/t.log 2>&1; echo EXIT=$?
+    cd /Users/bsk/blanc && lake env lean --tstack=65536 Blanc/temp.lean > /Users/bsk/blanc/t.log 2>&1; echo EXIT=$?
   EXIT=0 (sorry warnings ok) = good; EXIT=1 = ordinary errors, iterate;
   EXIT=134 = C++ stack blowup — STOP, shrink terms (see memory note
   scratch-file-cli-for-exec-proofs).  lean-lsp MCP `lean_goal` works here too.
@@ -1639,6 +1639,37 @@ lemma ProcessMessage.inv_noDel {wa : Adr} {msg : Msg} {xl : Xlot}
         rw [h_ex''] at h_exec
         exact h_exec
 
+-- chargeCodeGas preserves delSets on a clean (`.ok`) charge.
+lemma chargeCodeGas_delSets_ok {d d' : Devm}
+    (h : processCreateMessage.chargeCodeGas d = .ok d') : d'.delSets = d.delSets := by
+  unfold processCreateMessage.chargeCodeGas at h
+  dsimp only at h
+  split at h
+  · cases h
+  · rcases of_bind_eq_ok h with ⟨d1, h_charge, h_rest⟩
+    split_ifs at h_rest
+    cases h_rest
+    exact chargeGas_delSets_eq h_charge
+
+-- chargeCodeGas preserves delSets on every error payload too (0xEF prefix,
+-- OutOfGas from chargeGas, or maxCodeSize overflow).
+lemma chargeCodeGas_delSets_err {d d' : Devm} {err : String}
+    (h : processCreateMessage.chargeCodeGas d = .error ⟨err, d'⟩) :
+    d'.delSets = d.delSets := by
+  unfold processCreateMessage.chargeCodeGas at h
+  dsimp only at h
+  split at h
+  · cases h; rfl
+  · rcases hcg : chargeGas _ d with ⟨e, dd⟩ | dd
+    · rw [hcg] at h
+      dsimp only [Bind.bind, Except.bind] at h
+      cases h
+      exact chargeGas_delSets_err hcg
+    · rw [hcg] at h
+      dsimp only [Bind.bind, Except.bind] at h
+      split_ifs at h
+      cases h; exact chargeGas_delSets_eq hcg
+
 -- [FILL-12] [MECH] CRIB: `ProcessCreateMessage.inv_nof` (Solvent.lean:2729)
 -- + the raw `processCreateMessage_inv_solvent` (Solvent.lean:5171) for the
 -- chargeCodeGas/exceptionalHalt/setCode case analysis.  Seeding via
@@ -1652,7 +1683,61 @@ lemma ProcessCreateMessage.inv_noDel {wa : Adr} {msg : Msg} {xl : Xlot}
     (run : ProcessCreateMessage msg xl ex)
     (h_ct : msg.currentTarget ≠ wa)
     (h : Msg.NoDel wa msg) : MsgResult.NoDel wa ex := by
-  sorry
+  dsimp only [ProcessCreateMessage] at run
+  rcases run with ⟨ex', run_pm, h_split⟩
+  have h_seed : Msg.NoDel wa (processCreateMessage.msg msg) :=
+    Msg.NoDel.processCreateMessage_msg h_ct h
+  have h_pm : MsgResult.NoDel wa ex' :=
+    ProcessMessage.inv_noDel inv invc run_pm h_seed
+  rcases h_split with ⟨x, h_err_eq, h_ex_eq⟩ | ⟨evm, h_ex', h_if⟩
+  · -- sub-message errored : ex = ex', payload carried through
+    rw [h_err_eq] at h_pm
+    rw [h_ex_eq]
+    exact h_pm
+  · -- sub-message ok : evm carries NoDel
+    rw [h_ex'] at h_pm
+    have h_evm : Devm.NoDel wa evm := h_pm
+    by_cases h_err : evm.error.isNone = true
+    · rw [if_pos h_err] at h_if
+      rcases h_cg : processCreateMessage.chargeCodeGas evm with ⟨err, evm'⟩ | evm' <;>
+        rw [h_cg] at h_if <;> dsimp only at h_if
+      · -- code-gas charge errored
+        have h_ds : evm'.delSets = evm.delSets := chargeCodeGas_delSets_err h_cg
+        have h_atd_eq : evm'.accountsToDelete = evm.accountsToDelete := congrArg Prod.fst h_ds
+        have h_ca_eq : evm'.createdAccounts = evm.createdAccounts := congrArg Prod.snd h_ds
+        have h_atd : wa ∉ evm'.accountsToDelete := by rw [h_atd_eq]; exact h_evm.atd
+        have h_ca : wa ∉ evm'.createdAccounts := by rw [h_ca_eq]; exact h_evm.ca
+        have h_gc : evm'.getCode wa = evm.getCode wa := by
+          have hh := processCreateMessage.chargeCodeGas_getCode_gen h_cg wa
+          simpa only [Execution.getCode] using hh
+        split_ifs at h_if with h_halt
+        · -- exceptional halt : rolled back to msg.benv.state
+          rw [← h_if]
+          exact ⟨h_atd, h_ca, h.code⟩
+        · -- non-halt error : payload = ⟨_, evm'.state, evm'.createdAccounts, _⟩
+          rw [← h_if]
+          refine ⟨h_ca, ?_⟩
+          show (evm'.state.getCode wa).toList ≠ []
+          rw [← Devm.getCode_state, h_gc]
+          exact h_evm.code
+      · -- clean code-gas charge : install code at currentTarget ≠ wa
+        rw [← h_if]
+        have h_ds : evm'.delSets = evm.delSets := chargeCodeGas_delSets_ok h_cg
+        have h_atd_eq : evm'.accountsToDelete = evm.accountsToDelete := congrArg Prod.fst h_ds
+        have h_ca_eq : evm'.createdAccounts = evm.createdAccounts := congrArg Prod.snd h_ds
+        have h_atd : wa ∉ evm'.accountsToDelete := by rw [h_atd_eq]; exact h_evm.atd
+        have h_ca : wa ∉ evm'.createdAccounts := by rw [h_ca_eq]; exact h_evm.ca
+        have h_gc : evm'.getCode wa = evm.getCode wa := by
+          have hh := processCreateMessage.chargeCodeGas_getCode_gen h_cg wa
+          simpa only [Execution.getCode] using hh
+        refine ⟨h_atd, h_ca, ?_⟩
+        show ((evm'.setCode msg.currentTarget ⟨⟨evm'.output⟩⟩).getCode wa).toList ≠ []
+        rw [setCode_getCode h_ct, h_gc]
+        exact h_evm.code
+    · -- sub-message flagged an error : rolled back to msg.benv.state
+      rw [if_neg h_err] at h_if
+      rw [← h_if]
+      exact Devm.NoDel.rollback h_evm.atd h_evm.ca h.code
 
 -- [FILL-13] [MECH] CRIB: `GenericCall.inv_nof` (Solvent.lean:2687) for the
 -- rcases skeleton.  childMsg = callMsg …, whose benv is

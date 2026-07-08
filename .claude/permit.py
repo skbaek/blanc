@@ -56,6 +56,32 @@ FIND_WRITE = {
 # the project cwd). Set to None to disable the fence entirely.
 ALLOWED_ROOTS = ("/Users/bsk/blanc", "/Users/bsk/elevm")
 
+# When True, a command substitution $(...) or `...` is allowed IFF the command
+# inside it is itself a read-only "allow" (validated recursively). When False,
+# any substitution -> ask. The no-state-change guarantee is preserved either way.
+ALLOW_READONLY_SUBST = True
+
+# Tools whose FIRST bare operand is a pattern/script (not a path), so the fence
+# must not mistake e.g. a sed address `/re/,/re/p` for an absolute path.
+GREP_FAMILY = {"grep", "egrep", "fgrep", "rg", "ripgrep"}
+SED_FAMILY = {"sed"}
+AWK_FAMILY = {"awk", "gawk", "mawk"}
+# Options that consume the *next* token as their value (so it isn't the pattern).
+VALUE_OPTS = {
+    "grep": {"-e", "-f", "-m", "-A", "-B", "-C", "-d", "-D", "--regexp", "--file",
+             "--max-count", "--after-context", "--before-context", "--context",
+             "--include", "--exclude", "--include-dir", "--exclude-dir",
+             "--color", "--colour", "--devices", "--binary-files", "--label"},
+    "sed": {"-e", "--expression", "-f", "--file", "-l", "--line-length"},
+    "awk": {"-F", "-v", "-f", "--field-separator", "--assign", "--file"},
+}
+# Flags whose presence means there is NO positional pattern/script operand.
+EXPR_FLAGS = {
+    "grep": {"-e", "-f", "--regexp", "--file"},
+    "sed": {"-e", "--expression", "-f", "--file"},
+    "awk": {"-f", "--file"},
+}
+
 CTRL_OPS = {"|", "||", "&&", ";", "&", "\n"}
 
 
@@ -195,6 +221,37 @@ def _read_operator(cmd: str, i: int):
     return cmd[i], i + 1
 
 
+def _fence_targets(prog: str, args: list) -> list:
+    """Return the subset of args that are in *path* position (to be fenced).
+    For grep/sed/awk the leading pattern/script operand is excluded, so a regex
+    like `/def foo/,/^$/p` is never mistaken for an absolute path."""
+    fam = ("grep" if prog in GREP_FAMILY else
+           "sed" if prog in SED_FAMILY else
+           "awk" if prog in AWK_FAMILY else None)
+    if fam is None:
+        return [a for a in args if not (a.startswith("-") and a != "-")]
+
+    vopts = VALUE_OPTS[fam]
+    # if an -e/-f expression flag is present there is no positional pattern
+    pattern_taken = any(a.split("=", 1)[0] in EXPR_FLAGS[fam] for a in args)
+    targets, skip_next = [], False
+    for a in args:
+        if skip_next:
+            skip_next = False
+            continue
+        if a.startswith("-") and a != "-":
+            if a.split("=", 1)[0] in vopts and "=" not in a:
+                skip_next = True
+            continue
+        if not pattern_taken:
+            pattern_taken = True  # the pattern/script operand — not a path
+            continue
+        if fam == "awk" and "=" in a:
+            continue  # var=value assignment, not a path
+        targets.append(a)
+    return targets
+
+
 def _outside_roots(word: str, cwd: str) -> bool:
     if ALLOWED_ROOTS is None:
         return False
@@ -207,11 +264,120 @@ def _outside_roots(word: str, cwd: str) -> bool:
     return not any(real == r or real.startswith(r + os.sep) for r in ALLOWED_ROOTS)
 
 
+def _match_paren(s, i):
+    """s[i] is just past '$('; return index of the matching ')', or -1."""
+    depth, n = 1, len(s)
+    in_s = in_d = False
+    while i < n:
+        c = s[i]
+        if in_s:
+            if c == "'":
+                in_s = False
+        elif in_d:
+            if c == "\\" and i + 1 < n:
+                i += 2; continue
+            if c == '"':
+                in_d = False
+        elif c == "'":
+            in_s = True
+        elif c == '"':
+            in_d = True
+        elif c == "(":
+            depth += 1
+        elif c == ")":
+            depth -= 1
+            if depth == 0:
+                return i
+        i += 1
+    return -1
+
+
+def _match_arith(s, i):
+    """s[i] is just past '$(('; return index just after the closing '))', or -1."""
+    depth, n = 2, len(s)
+    while i < n:
+        if s[i] == "(":
+            depth += 1
+        elif s[i] == ")":
+            depth -= 1
+            if depth == 0:
+                return i + 1
+        i += 1
+    return -1
+
+
+def _find_backtick_end(s, i):
+    n = len(s)
+    while i < n:
+        if s[i] == "\\" and i + 1 < n:
+            i += 2; continue
+        if s[i] == "`":
+            return i
+        i += 1
+    return -1
+
+
+def resolve_substitutions(command: str, cwd: str):
+    """Replace $(...) / `...` / $((...)) with placeholders, recursively requiring
+    each command substitution to be a read-only 'allow'. Returns
+    (stripped_command, None) on success, or ("", (decision, reason)) to abort.
+    Single-quoted regions are inert (substitutions there are literal)."""
+    out, i, n = [], 0, len(command)
+    in_s = in_d = False
+    while i < n:
+        c = command[i]
+        if in_s:
+            out.append(c)
+            if c == "'":
+                in_s = False
+            i += 1; continue
+        active = True  # $() and ` are active outside quotes and inside "..."
+        if in_d:
+            if c == "\\" and i + 1 < n:
+                out.append(command[i:i + 2]); i += 2; continue
+            if c == '"':
+                in_d = False; out.append(c); i += 1; continue
+        else:
+            if c == "'":
+                in_s = True; out.append(c); i += 1; continue
+            if c == '"':
+                in_d = True; out.append(c); i += 1; continue
+        if active and command[i:i + 3] == "$((":
+            k = _match_arith(command, i + 3)
+            if k == -1:
+                return "", ("ask", "unbalanced arithmetic")
+            out.append("1"); i = k; continue
+        if active and c == "$" and i + 1 < n and command[i + 1] == "(":
+            k = _match_paren(command, i + 2)
+            if k == -1:
+                return "", ("ask", "unbalanced command substitution")
+            d, r = decide(command[i + 2:k], cwd)
+            if d != "allow":
+                return "", ("ask", "substitution not read-only: " + r)
+            out.append("SUBST"); i = k + 1; continue
+        if active and c == "`":
+            j = _find_backtick_end(command, i + 1)
+            if j == -1:
+                return "", ("ask", "unbalanced backtick substitution")
+            d, r = decide(command[i + 1:j], cwd)
+            if d != "allow":
+                return "", ("ask", "substitution not read-only: " + r)
+            out.append("SUBST"); i = j + 1; continue
+        out.append(c); i += 1
+    return "".join(out), None
+
+
 def decide(command: str, cwd: str = ""):
     """Return (decision, reason) for a raw Bash command string."""
     command = command.strip()
     if not command:
         return "ask", "empty command"
+
+    if ALLOW_READONLY_SUBST and ("$(" in command or "`" in command):
+        stripped, aborted = resolve_substitutions(command, cwd)
+        if aborted:
+            return aborted
+        command = stripped
 
     segments = parse_segments(command)  # may raise Unsafe
     if not segments:
@@ -242,8 +408,8 @@ def decide(command: str, cwd: str = ""):
             if "system(" in prog_src or re.search(r'>\s*"', prog_src) or re.search(r'\|\s*"', prog_src):
                 return "ask", "awk exec/redirect"
 
-        # optional directory fence: every path argument must resolve inside roots
-        for t in w[1:]:
+        # optional directory fence: every *path* argument must resolve inside roots
+        for t in _fence_targets(prog, w[1:]):
             if _outside_roots(t, cwd):
                 return "ask", "path outside allowed roots: " + t
 
