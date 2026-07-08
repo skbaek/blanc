@@ -1575,7 +1575,17 @@ lemma ExecuteCode.inv_noDel {wa : Adr} {msg : Msg} {xl : Xlot}
     (inv : Xlot.InvNoDel wa xl) (invc : xl.InvGetCode)
     (run : ExecuteCode msg xl ex)
     (h : Msg.NoDel wa msg) : MsgResult.NoDel wa ex := by
-  sorry
+  rcases of_executeCode_cases run with ⟨adr, h_precomp⟩ | ⟨ex', h_xl, h_err⟩
+  · have h_init : Devm.NoDel wa (initDevm msg) := Msg.NoDel.initDevm h
+    have h_ex_noDel : Execution.NoDel wa (executePrecomp (initEvm msg) adr) := executePrecomp_noDel rfl h_init
+    rw [← h_precomp]
+    exact handleError_noDel h_ex_noDel
+  · rw [h_xl] at inv
+    dsimp [Xlot.InvNoDel] at inv
+    have h_init : Devm.NoDel wa (initDevm msg) := Msg.NoDel.initDevm h
+    have h_ex'_noDel : Execution.NoDel wa ex' := inv h_init
+    rw [← h_err]
+    exact handleError_noDel h_ex'_noDel
 
 -- [FILL-11] [MECH] CRIB: `ProcessMessage.inv_nof` (Solvent.lean:2640) for
 -- the SplitXl/Split inversion skeleton — but keep the error branches
