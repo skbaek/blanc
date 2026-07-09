@@ -2498,18 +2498,13 @@ theorem processCreateMessage_inv_noDel {wa : Adr} {msg : Msg} {evm : Devm}
       rw [← Except.ok.inj h_rest]
       exact Devm.NoDel.rollback h_pm.atd h_pm.ca h.code
 
--- [FILL-22] [ESCALATE: `for`-loop-with-`continue` inversion in the Except
--- monad] EIP-7702 delegation processing keeps Msg.NoDel: an authority only
--- receives setCode/incrNonce if its current code passes the emptiness test
--- (elevm Execution.lean:3648: nonempty code ⟹ `continue`), so the
--- code-bearing wa is never touched; benv.createdAccounts is never written.
--- The `for`/`mut` desugars to `List.forIn` — invert with a generalized
--- loop-invariant lemma over `forIn` (state the invariant as: msg.benv
--- differs from the input only by setCode/incrNonce at non-wa addresses,
--- hence Msg.NoDel is preserved).  The final `msg.code := …` step doesn't
--- touch benv.  NOTE: a future session will need the same loop lemma for
--- `State.Inv` preservation (processMessageCall_inv_solvent's first
--- conjunct) — factor the loop-invariant helper so both can use it.
+-- [FILL-22] [MECH] EIP-7702 delegation processing keeps Msg.NoDel.  The
+-- upstream definition has been refactored into a single-step function
+-- `setDelegationStep`, a structurally recursive `setDelegationLoop`, and a
+-- small final `msg.code := ...` wrapper.  Do not reason about desugared
+-- `forIn`, `ForInStep`, or `continue`: prove preservation for one
+-- `setDelegationStep`, lift it over `setDelegationLoop` by list induction, and
+-- then observe that the wrapper only changes `Msg.code`, not `Msg.benv`.
 
 def Benv.EquivForDelegation (b1 b2 : Benv) : Prop :=
   b2.createdAccounts = b1.createdAccounts ∧
@@ -2540,95 +2535,75 @@ lemma bind_eq_ok_Except {α β ε : Type} {x : Except ε α} {f : α → Except 
     dsimp [bind, Except.bind] at h
     exact ⟨a, rfl, h⟩
 
-lemma loop_equiv {msg : Msg} (auths : List Auth) (init res : Msg × B256)
-  (body : Auth → Msg × B256 → Except String (ForInStep (Msg × B256)))
-  (h_forIn : forIn auths init body = Except.ok res)
-  (h_I : Benv.EquivForDelegation msg.benv init.1.benv)
-  (h_body_yield : ∀ a r r', body a r = Except.ok (ForInStep.yield r') → Benv.EquivForDelegation r.1.benv r'.1.benv)
-  (h_body_done : ∀ a r r', body a r = Except.ok (ForInStep.done r') → Benv.EquivForDelegation r.1.benv r'.1.benv) :
-  Benv.EquivForDelegation msg.benv res.1.benv := by
-  induction auths generalizing init with
-  | nil =>
-    rw [List.forIn_nil] at h_forIn
-    injection h_forIn with h_eq
-    rw [← h_eq]
-    exact h_I
-  | cons a as ih =>
-    rw [List.forIn_cons] at h_forIn
-    cases h_step : body a init with
-    | error e =>
-      simp [h_step] at h_forIn
-    | ok step =>
-      simp [h_step] at h_forIn
-      cases step with
-      | done b =>
-        injection h_forIn with h_eq
-        have h_step_equiv := h_body_done a init b h_step
-        have h_I_next := @Benv.EquivForDelegation_trans msg.benv init.1.benv b.1.benv h_I h_step_equiv
-        rw [← h_eq]
-        exact h_I_next
-      | yield b =>
-        have h_step_equiv := h_body_yield a init b h_step
-        have h_I_next := @Benv.EquivForDelegation_trans msg.benv init.1.benv b.1.benv h_I h_step_equiv
-        exact ih b h_forIn h_I_next
-
 lemma setDelegation_benv_equiv {msg msg' : Msg} {v : B256}
     (h_run : setDelegation msg = .ok ⟨msg', v⟩) :
     Benv.EquivForDelegation msg.benv msg'.benv := by
   unfold setDelegation at h_run
   dsimp [bind, Except.bind] at h_run
   apply bind_eq_ok_Except at h_run
-  rcases h_run with ⟨⟨msg_mid, refundCounter⟩, h_forIn, h_rest⟩
+  rcases h_run with ⟨⟨msg_mid, refundCounter⟩, h_loop, h_rest⟩
   have h_eq_benv : msg_mid.benv = msg'.benv := by
     dsimp only at h_rest
     split at h_rest
     · contradiction
     · simpa using congrArg Msg.benv (congrArg Prod.fst (Except.ok.inj h_rest))
   rw [← h_eq_benv]
-  have h_I : Benv.EquivForDelegation msg.benv (Prod.mk msg (0:B256)).1.benv := Benv.EquivForDelegation_refl _
-  revert h_forIn
-  generalize h_auths : msg.tenv.stat.auths = auths
-  intro h_forIn
-  -- PLAN for this `sorry`: apply the already-proved generic `loop_equiv` to
-  -- the desugared `List.forIn` hypothesis `h_forIn`, with initial state
-  -- `(msg, 0)` and result `(msg_mid, refundCounter)`.  If elaboration has
-  -- trouble inferring the enormous loop body, replace the three lines above by
-  -- a `set body : Auth → Msg × B256 → Except String (ForInStep (Msg × B256))
-  -- := ... at h_forIn` before generalizing `auths`, and pass that `body`
-  -- explicitly to `loop_equiv`.
+  -- New proof plan, matching the refactored upstream definitions.
   --
-  -- The two obligations are body preservation for `ForInStep.yield` and
-  -- `ForInStep.done`.  The `done` obligation is impossible: the EIP-7702 body
-  -- only returns errors or `yield`s, so `dsimp at h_body` followed by the same
-  -- `split at h_body`/`simp at h_body` case analysis should leave only
-  -- contradictions.
+  -- 1. Add a single-step preservation lemma:
+  --      lemma setDelegationStep_benv_equiv
+  --        {auth : Auth} {msg msg' : Msg} {refund refund' : B256}
+  --        (h : setDelegationStep auth msg refund = .ok (msg', refund')) :
+  --        Benv.EquivForDelegation msg.benv msg'.benv := ...
   --
-  -- For the `yield` obligation, introduce `auth r r' h_body`, `dsimp at
-  -- h_body`, then split through the desugared conditionals/matches in order:
-  -- chain-id mismatch, max nonce, `recoverAuthority`, the code-validity test,
-  -- nonce mismatch, and `AccountExists`.  All early-`continue` branches either
-  -- keep the whole message unchanged or only insert into `accessedAddresses`;
-  -- after `injection h_body`/`subst r'`, close them with
-  -- `Benv.EquivForDelegation_refl _` (or the equivalent `constructor; rfl; intro; rfl`).
-  -- The non-`InvalidSignatureError` recovery branch is `.error = .ok`, hence
-  -- contradictory.
+  --    Prove it by `unfold setDelegationStep at h` and case-splitting only the
+  --    explicit guards/match in that definition:
+  --      * chain-id mismatch and max-nonce branches return `(msg, refund)`;
+  --        inject `h` and use `Benv.EquivForDelegation_refl`.
+  --      * `recoverAuthority = .error err`: the `"InvalidSignatureError"`
+  --        branch also returns `(msg, refund)`; the other branch is
+  --        `.error _ = .ok _`, contradiction.
+  --      * `recoverAuthority = .ok authority`: first set
+  --        `msg1 := { msg with accessedAddresses :=
+  --          msg.accessedAddresses.insert authority }`.  This record update
+  --        does not change `benv`, so the failed code-validity and nonce
+  --        branches are again reflexive after injection.
+  --      * In the real update branch, `msg'` is
+  --        `(msg1.setCode authority codeToSet).incrNonce authority` (the
+  --        refund-counter branch from `AccountExists` is irrelevant).  The
+  --        created-account conjunct is by reduction, since neither
+  --        `accessedAddresses`, `Msg.setCode`, nor `Msg.incrNonce` changes
+  --        `benv.createdAccounts`.
+  --      * For the code conjunct, fix `a` with
+  --        `(msg.benv.state.getCode a).toList ≠ []`.  The successful
+  --        code-validity guard gives
+  --        `(msg.benv.state.get authority).code.isEmpty = true`; unfold/simp
+  --        `ByteArray.isEmpty` to obtain size zero.  Then
+  --        `ne_wa_of_code_size_zero` gives `authority ≠ a`.  Rewrite through
+  --        `Msg.incrNonce` using `Benv.incrNonce_getCode`, and through
+  --        `Msg.setCode` using `State.setCode_get_code_ne authority≠a`; the
+  --        remaining equality is reflexive.
   --
-  -- In the two real update branches (`AccountExists` true/false), `h_body`
-  -- identifies `r'` with `((...setCode authority codeToSet).incrNonce
-  -- authority, newRefund)`.  Prove the first conjunct by `rfl`: neither
-  -- `accessedAddresses`, `Msg.setCode`, nor `Msg.incrNonce` changes
-  -- `benv.createdAccounts`.  For the code conjunct, fix an arbitrary address
-  -- `a` with `(r.1.benv.state.getCode a).toList ≠ []`.  From the branch that
-  -- passes the code-validity test, extract
-  -- `(r.1.benv.state.get authority).code.isEmpty = true`, unfold
-  -- `ByteArray.isEmpty`, and simplify to a size-zero fact.  Then use the
-  -- already-proved `ne_wa_of_code_size_zero` with `wa := a` and
-  -- `b := authority` to get `authority ≠ a`.  Rewrite the target code through
-  -- `Msg.incrNonce`/`Benv.incrNonce_getCode`, then through
-  -- `Msg.setCode`/`State.setCode_get_code_ne` using `authority ≠ a`; the
-  -- remaining equality is reflexive.  The refund-counter difference between
-  -- the two `AccountExists` branches is irrelevant because `loop_equiv` only
-  -- talks about `r'.1.benv`.
+  -- 2. Add the loop lemma by structural recursion over the new recursive loop,
+  --    not over `List.forIn`:
+  --      lemma setDelegationLoop_benv_equiv
+  --        {auths : List Auth} {msg msg' : Msg} {refund refund' : B256}
+  --        (h : setDelegationLoop auths msg refund = .ok (msg', refund')) :
+  --        Benv.EquivForDelegation msg.benv msg'.benv := ...
+  --
+  --    Induct on `auths` generalizing `msg refund`.  The nil case injects the
+  --    `.ok`.  In the cons case, unfold `setDelegationLoop`, use
+  --    `bind_eq_ok_Except` to get the intermediate `(msg1, refund1)`, apply
+  --    `setDelegationStep_benv_equiv` to the step, apply the IH to the tail,
+  --    and compose them with `Benv.EquivForDelegation_trans`.
+  --
+  -- 3. This main lemma is already reduced to the loop result:
+  --      h_loop : setDelegationLoop msg.tenv.stat.auths msg 0
+  --          = .ok (msg_mid, refundCounter)
+  --      ⊢ Benv.EquivForDelegation msg.benv msg_mid.benv
+  --    Close it with `exact setDelegationLoop_benv_equiv h_loop`.  The
+  --    preceding `h_eq_benv` handles the final `codeAddress` wrapper: it only
+  --    rewrites `Msg.code`, so `Msg.benv` is unchanged.
   sorry
 
 theorem setDelegation_msg_noDel {wa : Adr} {msg msg' : Msg} {v : B256}
