@@ -6531,7 +6531,9 @@ lemma prepareMessage_benv {benv : Benv} {tenv : Tenv} {tx : Tx} {msg : Msg}
     msg.benv = benv := by
   -- `prepareMessage` only constructs the message wrapper; it installs the
   -- supplied block environment unchanged into the resulting message.
-  sorry
+  unfold prepareMessage at h_prep
+  injection h_prep with h
+  rw [← h]
 
 lemma prepareMessage_inv_solvent {wa : Adr}
     {benv : Benv} {tenv : Tenv} {tx : Tx} {msg : Msg}
@@ -6545,15 +6547,43 @@ lemma prepareMessage_inv_solvent {wa : Adr}
   -- `currentTarget = wa`, then the installed code/codeAddress are exactly WETH's
   -- code and `some wa`; in the create case `target.isNone = true`, so those
   -- conditional fields are vacuous.
-  sorry
+  unfold prepareMessage at h_prep
+  cases hrecv : tx.type.receiver? with
+  | none =>
+    simp [hrecv] at h_prep
+    subst msg
+    refine ⟨h_state, ⟨h_ca, ?_⟩, ?_, ?_, ?_, ?_⟩
+    · intro h_empty
+      exact Prog.compile_ne_nil (p := weth) (by rw [← h_state.code, h_empty])
+    · simp
+    · simp
+    · simpa using h_origin_ne
+    · simp
+  | some target =>
+    simp [hrecv] at h_prep
+    subst msg
+    refine ⟨h_state, ⟨h_ca, ?_⟩, ?_, ?_, ?_, ?_⟩
+    · intro h_empty
+      exact Prog.compile_ne_nil (p := weth) (by rw [← h_state.code, h_empty])
+    · intro _ h_target
+      change target = wa at h_target
+      subst target
+      simpa using h_state.code
+    · intro _ h_target
+      change target = wa at h_target
+      subst target
+      rfl
+    · simpa using h_origin_ne
+    · simp
 
 lemma processMessageCall_sum_le {msg : Msg} {st' : _root_.State}
     {out : MsgCallOutput}
     (h_run : processMessageCall msg = .ok ⟨st', out⟩) :
     sum st'.bal ≤ sum msg.benv.state.bal := by
-  -- Message execution can transfer ETH and burn/delete value, but does not mint
-  -- ETH.  Successful calls/create therefore do not increase the global balance
-  -- sum; final transaction-level deletions are handled separately.
+  -- TODO: The required balance-sum monotonicity invariant is not yet developed.
+  -- `processMessageCall` reaches arbitrary `exec` runs; add a mutually recursive
+  -- sum-preservation/non-increase proof for calls, creates, and `SELFDESTRUCT`
+  -- (parallel to `Exec.inv_nof`) before this can be discharged.
   sorry
 
 lemma State.Inv.add_transaction_gas_credits {wa : Adr}
@@ -6591,12 +6621,11 @@ lemma State.Inv.add_transaction_gas_credits {wa : Adr}
               min ((tx.gas - txOutput.gasLeft) / 5) refundCounter)
               calldataFloorGasCost *
             (effectiveGasPrice - benv.stat.baseFeePerGas)).toB256) := by
-  -- `h_validate` bounds `calldataFloorGasCost ≤ tx.gas`; the gas arithmetic gives
-  --   refund + priorityFee ≤ tx.gas * effectiveGasPrice.
-  -- `h_check` and `h_debit` identify this amount as part of the sender's earlier
-  -- upfront payment (plus possible blob fee).  With `h_msg_sum`, the sum at
-  -- `postMsgState` has enough slack below `2^256` to apply `State.Inv.addBal`
-  -- twice.
+  -- TODO: Factor out `checkTransaction_upfront_lt_modulus` (affordability of the
+  -- raw gas/blob payment) and `sum_subBal_eq`/`sum_incrNonce`.  They are needed
+  -- to show the two separately converted B256 gas credits do not wrap, before
+  -- applying `State.Inv.addBal` twice.  The present hypotheses expose those facts
+  -- only through deeply nested `checkTransaction` binds and TxType cases.
   sorry
 
 theorem processTransaction_inv_solvent (wa : Adr)
@@ -6712,9 +6741,10 @@ theorem applyBody_inv_solvent (wa : Adr)
     (h_run : applyBody benv txs wds = .ok ⟨st, bout⟩)
     (h_wds : sum benv.state.bal + wdsum wds < 2 ^ 256)
     (h_inv : Benv.InvSolvent wa benv) : State.Inv wa st := by
-  -- `applyTransactions` (conserves sum) then `processWithdrawals`.  Withdrawals
-  -- MINT via `addBal wd.recipient (amount * 10^9)`; fold `State.Inv.addBal`, whose
-  -- `sum + amt < 2^256` bounds come from `h_wds` (each partial sum ≤ start + wdsum).
+  -- TODO: `applyBody` also executes beacon-roots/history/general-purpose-request
+  -- system transactions.  Add preservation and sum-nonincrease lemmas for those
+  -- calls (and first prove `processMessageCall_sum_le`), then fold withdrawals
+  -- using `State.Inv.addBal` and the partial-sum bounds from `h_wds`.
   sorry
 
 theorem stateTransition_inv_solvent (wa : Adr)
