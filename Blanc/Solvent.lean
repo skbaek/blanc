@@ -6499,9 +6499,32 @@ lemma checkTransaction_sender_ne_of_inv_solvent {wa : Adr}
         .ok ⟨sender, effectiveGasPrice, blobVersionedHashes, txBlobGasUsed⟩)
     (h_inv : Benv.InvSolvent wa benv) :
     sender ≠ wa := by
-  -- Successful `checkTransaction` passed EIP-3607.  If `sender = wa`, WETH's
-  -- nonempty, non-delegation code contradicts the accepted sender account.
-  sorry
+  intro hsender
+  subst sender
+  unfold checkTransaction at h_check
+  rcases of_bind_eq_ok h_check with ⟨_, _, h_check⟩
+  rcases of_bind_eq_ok h_check with ⟨senderAddress, _, h_check⟩
+  rcases of_bind_eq_ok h_check with ⟨_, _, h_check⟩
+  rcases of_bind_eq_ok h_check with ⟨_, _, h_check⟩
+  rcases of_bind_eq_ok h_check with ⟨_, _, h_check⟩
+  rcases of_bind_eq_ok h_check with ⟨_, _, h_check⟩
+  rcases of_bind_eq_ok h_check with ⟨_, hg, h_check⟩
+  have hs : senderAddress = wa := congrArg Prod.fst (Except.ok.inj h_check)
+  subst senderAddress
+  unfold checkTransactionSenderAccount at hg
+  split at hg <;> try contradiction
+  split at hg <;> try contradiction
+  split at hg <;> try contradiction
+  have h_no : ¬ ((benv.state.get wa).code.isEmpty ∨ isValidDelegation (benv.state.get wa).code) := by
+    intro h
+    rcases h with h_empty | h_del
+    · have h_empty' : (benv.state.getCode wa).toList = [] := by
+        apply List.eq_nil_of_length_eq_zero
+        rw [← ByteArray.size_eq_length_toList]
+        simpa [ByteArray.isEmpty] using h_empty
+      exact Prog.compile_ne_nil (p := weth) (by rw [← h_inv.state.code, h_empty'])
+    · exact not_delegation_of_compile h_inv.state.code h_del
+  simp [checkTransactionSenderCode, h_no] at hg
 
 lemma prepareMessage_benv {benv : Benv} {tenv : Tenv} {tx : Tx} {msg : Msg}
     (h_prep : prepareMessage benv tenv tx = .ok msg) :
