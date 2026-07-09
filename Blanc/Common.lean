@@ -7807,3 +7807,1642 @@ instance : Rinst.Hinv Devm.getStor Rinst.gas := by show_hinv_stor
 instance {n} : Rinst.Hinv Devm.getStor (Rinst.dup n) := by show_hinv_stor
 instance {n} : Rinst.Hinv Devm.getStor (Rinst.swap n) := by show_hinv_stor
 instance {n} : Rinst.Hinv Devm.getStor (Rinst.log n) := by show_hinv_stor
+
+
+/-! ## §1 AdrSet non-membership helpers -/
+
+namespace AdrSet
+
+theorem not_mem_insert {a b : Adr} {s : AdrSet} (hne : a ≠ b) (hs : a ∉ s) :
+    a ∉ s.insert b := by
+  simp only [Std.HashSet.mem_insert, not_or]
+  exact ⟨by simpa using Ne.symm hne, hs⟩
+
+theorem not_mem_foldl_insert {a : Adr} {l : List Adr} {m : AdrSet}
+    (hm : a ∉ m) (hl : a ∉ l) :
+    a ∉ l.foldl (fun acc x => acc.insert x) m := by
+  induction l generalizing m with
+  | nil => simpa using hm
+  | cons x xs ih =>
+    simp only [List.foldl_cons]
+    refine ih (not_mem_insert ?_ hm) (fun h => hl (List.mem_cons_of_mem _ h))
+    exact fun h => hl (h ▸ List.mem_cons_self ..)
+
+theorem not_mem_union {a : Adr} {m₁ m₂ : AdrSet} (h₁ : a ∉ m₁) (h₂ : a ∉ m₂) :
+    a ∉ m₁.union m₂ := by
+  unfold Std.HashSet.union
+  rw [Std.HashSet.fold_eq_foldl_toList]
+  exact not_mem_foldl_insert h₁ (fun h => h₂ (Std.HashSet.mem_toList.mp h))
+
+theorem not_mem_empty {a : Adr} {c : Nat} :
+    a ∉ (Std.HashSet.emptyWithCapacity c : AdrSet) := by
+  simp
+
+end AdrSet
+
+/-! ## §2 The NoDel invariant -/
+
+-- Paired projection of the two deletion-relevant sets
+def Devm.delSets (d : Devm) : AdrSet × AdrSet :=
+  (d.accountsToDelete, d.createdAccounts)
+
+-- rfl-bridge between the Devm-level and State-level code projections.
+lemma Devm.getCode_state (d : Devm) (a : Adr) :
+    d.getCode a = d.state.getCode a := rfl
+
+-- The frame-level invariant. The `code` conjunct is the fuel for the
+-- CREATE collision guards; it is transported by the PROVED getCode ladder,
+-- never re-proved here.
+structure Devm.NoDel (wa : Adr) (d : Devm) : Prop where
+  (atd  : wa ∉ d.accountsToDelete)
+  (ca   : wa ∉ d.createdAccounts)
+  (code : (d.getCode wa).toList ≠ [])
+
+-- The message-level invariant (a fresh frame starts with atd = ∅,
+-- ca = msg.benv.createdAccounts, state = msg.benv.state; see initDevm,
+-- elevm Execution.lean:2657).
+structure Msg.NoDel (wa : Adr) (msg : Msg) : Prop where
+  (ca   : wa ∉ msg.benv.createdAccounts)
+  (code : (msg.benv.state.getCode wa).toList ≠ [])
+
+-- Result-level invariants: error payloads carry live atd/ca (handleError
+-- can resurrect them into ok results), so they must be covered.
+def Execution.NoDel (wa : Adr) : Execution → Prop
+  | .ok d => Devm.NoDel wa d
+  | .error ⟨_, d⟩ => Devm.NoDel wa d
+
+-- Msg-level results (`processMessage`-shaped): the error payload carries
+-- only createdAccounts + state (no atd; consumers merge it via
+-- liftToExecution, keeping the parent's atd).
+def MsgResult.NoDel (wa : Adr) :
+    Except (String × State × AdrSet × Tra) Devm → Prop
+  | .ok d => Devm.NoDel wa d
+  | .error ⟨_, st, ca, _⟩ => wa ∉ ca ∧ (st.getCode wa).toList ≠ []
+
+-- The sub-execution oracle invariant threaded through the Exec induction
+-- (mirrors Xlot.InvNof, Solvent.lean:2562, but result-shaped like
+-- Xlot.InvGetCode, Common.lean:4076).
+def Xlot.InvNoDel (wa : Adr) : Xlot → Prop
+  | .none => True
+  | .some ⟨_, devm_, exn_⟩ => Devm.NoDel wa devm_ → Execution.NoDel wa exn_
+
+/-! ## §3 Proved transports -/
+
+-- Transport NoDel across a step that moves neither set nor wa's code.
+lemma Devm.NoDel.of_eqs {wa : Adr} {d d' : Devm}
+    (hs : d.delSets = d'.delSets) (hc : d.getCode wa = d'.getCode wa)
+    (h : Devm.NoDel wa d) : Devm.NoDel wa d' := by
+  have h1 : d.accountsToDelete = d'.accountsToDelete := congrArg Prod.fst hs
+  have h2 : d.createdAccounts = d'.createdAccounts := congrArg Prod.snd hs
+  exact ⟨h1 ▸ h.atd, h2 ▸ h.ca, hc ▸ h.code⟩
+
+-- A fresh frame satisfies NoDel (initDevm: atd := ∅, ca := benv.ca).
+lemma Msg.NoDel.initDevm {wa : Adr} {msg : Msg}
+    (h : Msg.NoDel wa msg) : Devm.NoDel wa (initDevm msg) :=
+  ⟨AdrSet.not_mem_empty, h.ca, h.code⟩
+
+-- Rollback keeps atd/ca and installs the given state.
+lemma Devm.NoDel.rollback {wa : Adr} {d : Devm} {st : State} {tra : Tra}
+    (h_atd : wa ∉ d.accountsToDelete) (h_ca : wa ∉ d.createdAccounts)
+    (h_code : (st.getCode wa).toList ≠ []) :
+    Devm.NoDel wa (d.rollback st tra) :=
+  ⟨h_atd, h_ca, h_code⟩
+
+-- handleError shuffles error payloads into ok results without touching
+-- the sets (elevm Execution.lean:2692-2701).
+lemma handleError_noDel {wa : Adr} {exn : Execution}
+    (h : Execution.NoDel wa exn) :
+    MsgResult.NoDel wa (executeCode.handleError exn) := by
+  cases exn with
+  | ok d => exact h
+  | error p =>
+    rcases p with ⟨err, d⟩
+    have hd : Devm.NoDel wa d := h
+    dsimp only [executeCode.handleError]
+    split
+    · exact ⟨hd.atd, hd.ca, hd.code⟩
+    · split
+      · exact ⟨hd.atd, hd.ca, hd.code⟩
+      · exact ⟨hd.ca, hd.code⟩
+
+/-! ## §4 Plumbing -/
+
+-- The create-guard bridge: an address whose account has size-0 code cannot be the code-bearing wa.
+lemma ne_wa_of_code_size_zero {st : State} {wa b : Adr}
+    (hwa : (st.getCode wa).toList ≠ []) (hb : (st.get b).code.size = 0) :
+    b ≠ wa := by
+  intro h
+  subst h
+  have h_empty : (st.get b).code.toList = [] := by
+    unfold ByteArray.toList
+    unfold ByteArray.toList.loop
+    simp [hb]
+  unfold State.getCode at hwa
+  rw [h_empty] at hwa
+  exact hwa rfl
+
+-- Same bridge via the collision predicate used by `processMessageCall.create`.
+lemma ne_wa_of_not_hasCodeOrNonce {st : State} {wa ct : Adr}
+    (hwa : (st.getCode wa).toList ≠ [])
+    (h : accountHasCodeOrNonce st ct = false) : ct ≠ wa := by
+  intro heq
+  subst heq
+  unfold accountHasCodeOrNonce at h
+  rw [Bool.or_eq_false_iff] at h
+  have h_empty_not := h.2
+  have h_empty : (st.getCode ct).isEmpty = true := by
+    simp at h_empty_not
+    exact h_empty_not
+  have hb : (st.getCode ct).size = 0 := by
+    unfold ByteArray.isEmpty at h_empty
+    simp at h_empty
+    exact h_empty
+  have h_empty_list : (st.getCode ct).toList = [] := by
+    unfold ByteArray.toList
+    unfold ByteArray.toList.loop
+    simp [hb]
+  rw [h_empty_list] at hwa
+  exact hwa rfl
+
+lemma State.get_set_self {w : _root_.State} {a : Adr} {ac : Acct} :
+    (w.set a ac).get a = ac := by
+  unfold State.set State.get
+  split_ifs with h
+  · rw [Std.TreeMap.getD_erase]; simp; exact h.symm
+  · rw [Std.TreeMap.getD_insert]; simp
+
+lemma State.get_set_ne {w : _root_.State} {a a' : Adr} {ac : Acct} (h : a' ≠ a) :
+    (w.set a' ac).get a = w.get a := by
+  unfold State.set State.get
+  have hc : compare a' a ≠ Ordering.eq := by
+    intro hcc; exact h (compare_eq_iff_eq.mp hcc)
+  split_ifs with hv
+  · rw [Std.TreeMap.getD_erase]; simp [hc]
+  · rw [Std.TreeMap.getD_insert]; simp [hc]
+
+-- The create-seeding step: wa ∉ msg.benv.createdAccounts and code is untouched.
+lemma Msg.NoDel.processCreateMessage_msg {wa : Adr} {msg : Msg}
+    (h_ct : msg.currentTarget ≠ wa)
+    (h : Msg.NoDel wa msg) : Msg.NoDel wa (processCreateMessage.msg msg) := by
+  rcases h with ⟨hca, hcode⟩
+  refine ⟨?_, ?_⟩
+  · show wa ∉ msg.benv.createdAccounts.insert msg.currentTarget
+    exact AdrSet.not_mem_insert (Ne.symm h_ct) hca
+  · show (((msg.benv.state.setStor msg.currentTarget .empty).incrNonce msg.currentTarget).getCode wa).toList ≠ []
+    have h_get : ((msg.benv.state.setStor msg.currentTarget .empty).incrNonce msg.currentTarget).get wa = msg.benv.state.get wa := by
+      dsimp only [State.incrNonce, State.setStor]
+      rw [State.get_set_ne h_ct, State.get_set_ne h_ct]
+    show (((msg.benv.state.setStor msg.currentTarget .empty).incrNonce msg.currentTarget).get wa).code.toList ≠ []
+    rw [h_get]
+    exact hcode
+
+-- Precompiles never touch the sets or code.
+lemma executePrecomp_noDel {wa : Adr} {evm : Evm} {adr : Adr} {exn : Execution}
+    (h_ex : executePrecomp evm adr = exn)
+    (h : Devm.NoDel wa evm.dyna) : Execution.NoDel wa exn := by
+  unfold executePrecomp at h_ex
+  revert h_ex
+  generalize h_res : precompileRun evm adr = res
+  intro h_ex
+  subst h_ex
+  cases res
+  · apply Devm.NoDel.of_eqs (d := evm.dyna)
+    · rfl
+    · rfl
+    · exact h
+  · apply Devm.NoDel.of_eqs (d := evm.dyna)
+    · rfl
+    · rfl
+    · exact h
+
+
+/-! ## §5 Instruction level -/
+
+-- Helper lemmas for the EVM instructions delSets preservation.
+lemma delSets_eq_of_bind {α ε} {ma : Except ε α} {f : α → Except ε Devm}
+    {devm devm' : Devm}
+    (run : (ma >>= f) = .ok devm')
+    (getDevm : α → Devm)
+    (h_first : ∀ v, ma = .ok v → (getDevm v).delSets = devm.delSets)
+    (h_rest : ∀ v, ma = .ok v → f v = .ok devm' → devm'.delSets = (getDevm v).delSets) :
+    devm'.delSets = devm.delSets := by
+  rcases of_bind_eq_ok run with ⟨v, hm, hf⟩
+  rw [h_rest v hm hf, h_first v hm]
+
+lemma Devm.pop_delSets_eq {x devm devm'} (h : Devm.pop devm = .ok ⟨x, devm'⟩) : devm'.delSets = devm.delSets := by
+  simp only [Devm.pop] at h
+  split at h <;> try contradiction
+  cases h; rfl
+
+lemma chargeGas_delSets_eq {cost devm devm'} (h : chargeGas cost devm = .ok devm') : devm'.delSets = devm.delSets := by
+  simp only [chargeGas] at h
+  split at h <;> try contradiction
+  cases h; rfl
+
+lemma Devm.push_delSets_eq {v devm devm'} (h : Devm.push v devm = .ok devm') : devm'.delSets = devm.delSets := by
+  simp only [Devm.push, bind, Except.bind, Except.assert] at h
+  split at h <;> try contradiction
+  cases h; rfl
+
+lemma Devm.popToAdr_delSets_eq {devm devm' adr} (h : Devm.popToAdr devm = .ok ⟨adr, devm'⟩) : devm'.delSets = devm.delSets := by
+  dsimp [Devm.popToAdr, Functor.map, Except.map] at h
+  rcases hp : devm.pop with _ | ⟨x, devm1⟩
+  · simp [hp] at h
+  · simp [hp] at h
+    rcases h with ⟨_, rfl⟩
+    exact Devm.pop_delSets_eq hp
+
+lemma Devm.popToNat_delSets_eq {devm devm' n} (h : Devm.popToNat devm = .ok ⟨n, devm'⟩) : devm'.delSets = devm.delSets := by
+  dsimp [Devm.popToNat, Functor.map, Except.map] at h
+  rcases hp : devm.pop with _ | ⟨x, devm1⟩
+  · simp [hp] at h
+  · simp [hp] at h
+    rcases h with ⟨_, rfl⟩
+    exact Devm.pop_delSets_eq hp
+
+lemma pushItem_delSets_eq {x c devm devm'} (h : pushItem x c devm = .ok devm') : devm'.delSets = devm.delSets := by
+  simp only [pushItem] at h
+  refine delSets_eq_of_bind h id ?_ ?_
+  {intro devm1 hc; exact (chargeGas_delSets_eq hc).trans rfl}
+  intro devm1 hc run; exact Devm.push_delSets_eq run
+
+lemma applyBinary_delSets_eq {f : B256 → B256 → B256} {cost devm devm'}
+    (h : applyBinary f cost devm = .ok devm') :
+    devm.delSets = devm'.delSets := by
+  simp only [applyBinary] at h
+  apply Eq.symm
+  refine delSets_eq_of_bind h Prod.snd ?_ ?_
+  {intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp}
+  intro ⟨x, devm1⟩ hp run; refine delSets_eq_of_bind run Prod.snd ?_ ?_
+  {intro ⟨y, devm2⟩ hp2; exact Devm.pop_delSets_eq hp2}
+  intro ⟨y, devm2⟩ hp2 run; exact pushItem_delSets_eq run
+
+lemma applyUnary_delSets_eq {f : B256 → B256} {cost devm devm'}
+    (h : applyUnary f cost devm = .ok devm') :
+    devm.delSets = devm'.delSets := by
+  simp only [applyUnary] at h
+  apply Eq.symm
+  refine delSets_eq_of_bind h Prod.snd ?_ ?_
+  {intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp}
+  intro ⟨x, devm1⟩ hp run; exact pushItem_delSets_eq run
+
+lemma applyTernary_delSets_eq {f : B256 → B256 → B256 → B256} {cost devm devm'}
+    (h : applyTernary f cost devm = .ok devm') :
+    devm.delSets = devm'.delSets := by
+  simp only [applyTernary] at h
+  apply Eq.symm
+  refine delSets_eq_of_bind h Prod.snd ?_ ?_
+  {intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp}
+  intro ⟨x, devm1⟩ hp run; refine delSets_eq_of_bind run Prod.snd ?_ ?_
+  {intro ⟨y, devm2⟩ hp2; exact Devm.pop_delSets_eq hp2}
+  intro ⟨y, devm2⟩ hp2 run; refine delSets_eq_of_bind run Prod.snd ?_ ?_
+  {intro ⟨z, devm3⟩ hp3; exact Devm.pop_delSets_eq hp3}
+  intro ⟨z, devm3⟩ hp3 run; exact pushItem_delSets_eq run
+
+lemma memRead_delSets_eq {x n : Nat} {devm devm' : Devm} {value : B8L} (h : devm.memRead x n = ⟨value, devm'⟩) : devm'.delSets = devm.delSets := by
+  simp only [Devm.memRead] at h
+  rcases h_read : devm.memory.read x n with ⟨val, mem⟩
+  rw [h_read] at h
+  injection h with _ h_devm
+  rw [← h_devm]
+  rfl
+
+lemma memWrite_delSets_eq {idx : Nat} {val : B8L} {devm : Devm} : (devm.memWrite idx val).delSets = devm.delSets := rfl
+
+lemma Devm.popN_delSets_eq {n : Nat} {devm devm' : Devm} {l : List B256}
+    (hp : devm.popN n = Except.ok (l, devm')) :
+    devm'.delSets = devm.delSets := by
+  induction n generalizing devm devm' l with
+  | zero =>
+    simp [Devm.popN] at hp
+    rcases hp with ⟨_, eq⟩
+    rw [eq]
+  | succ n ih =>
+    simp [Devm.popN] at hp
+    rcases of_bind_eq_ok hp with ⟨⟨x, devm1⟩, hp1, hp2⟩
+    rcases of_bind_eq_ok hp2 with ⟨⟨xs, devm2⟩, hp3, hp4⟩
+    injection hp4 with eq
+    injection eq with eq1 eq2
+    subst eq2
+    have h1 := Devm.pop_delSets_eq hp1
+    have h2 := ih hp3
+    rw [h2, h1]
+
+lemma sstore_inv_delSets
+    {pc sevm devm devm'}
+    (run : Rinst.run ⟨pc, sevm, devm⟩ .sstore = .ok devm') :
+    devm'.delSets = devm.delSets := by
+  simp only [Rinst.run, Rinst.runCore] at run
+  refine delSets_eq_of_bind run Prod.snd ?_ ?_
+  {intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp}
+  clear run
+  intro ⟨x, devm1⟩ hp run;
+  refine delSets_eq_of_bind run Prod.snd ?_ ?_
+  {intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp}
+  clear run
+  intro ⟨y, devm2⟩ hp run;
+  rcases of_bind_eq_ok run with ⟨⟨_⟩, _, run'⟩
+  clear run
+  refine delSets_eq_of_bind run' Prod.fst ?_ ?_
+  · clear run';
+    intro ⟨devm', _⟩
+    simp only [ite_not, Except.ok.injEq]
+    split
+    · intro eq; injection eq with eq _; rw [eq]
+    · simp [addAccessedStorageKey, Devm.withAccessedStorageKeys]
+      intro rw _; rw [← rw]; clear rw
+      simp [Devm.delSets]
+  · clear run';
+    intro ⟨devm3, _⟩ eq run; clear eq
+    rcases of_bind_eq_ok run with ⟨_, bar, run'⟩;
+    clear bar run
+    simp only at run'
+    refine delSets_eq_of_bind run' id ?_ ?_
+    · clear run'
+      intro devm4 eq
+      injection eq with rw
+      rw [← rw]
+      simp [Devm.delSets]
+    · clear run'
+      intro devm4 temp run; clear temp
+      refine delSets_eq_of_bind run id ?_ ?_
+      {intro devm5 hc; exact (chargeGas_delSets_eq hc).trans rfl}
+      clear run
+      intro devm5 eq run
+      rcases of_bind_eq_ok run with ⟨_, bar, run'⟩;
+      clear bar run; injection run' with rw
+      rw [← rw]
+      rfl
+
+lemma Rinst.inv_delSets {r : Rinst} : Rinst.Inv Devm.delSets r := by
+  intros pc sevm pre post; cases r
+  case add => exact applyBinary_delSets_eq
+  case mul => exact applyBinary_delSets_eq
+  case sub => exact applyBinary_delSets_eq
+  case div => exact applyBinary_delSets_eq
+  case sdiv => exact applyBinary_delSets_eq
+  case mod => exact applyBinary_delSets_eq
+  case smod => exact applyBinary_delSets_eq
+  case signextend => exact applyBinary_delSets_eq
+  case lt => exact applyBinary_delSets_eq
+  case gt => exact applyBinary_delSets_eq
+  case slt => exact applyBinary_delSets_eq
+  case sgt => exact applyBinary_delSets_eq
+  case eq => exact applyBinary_delSets_eq
+  case and => exact applyBinary_delSets_eq
+  case or => exact applyBinary_delSets_eq
+  case xor => exact applyBinary_delSets_eq
+  case byte => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyBinary_delSets_eq h
+  case shr => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyBinary_delSets_eq h
+  case shl => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyBinary_delSets_eq h
+  case sar => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyBinary_delSets_eq h
+  case addmod => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyTernary_delSets_eq h
+  case mulmod => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyTernary_delSets_eq h
+  case iszero => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyUnary_delSets_eq h
+  case not => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyUnary_delSets_eq h
+  case blobhash => intro h; change applyUnary (fun x => sevm.tenvStat.blobVersionedHashes.getD x.toNat 0) gHashopcode pre = Except.ok post at h; exact applyUnary_delSets_eq h
+  case balance =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply Eq.symm
+    refine delSets_eq_of_bind h Prod.snd ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp
+    · intro ⟨x, devm1⟩ hp run; split at run
+      · refine delSets_eq_of_bind run id ?_ ?_
+        · intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl
+        · intro devm2 hc run2; exact Devm.push_delSets_eq run2
+      · refine delSets_eq_of_bind run id ?_ ?_
+        · intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl
+        · intro devm2 hc run2; exact Devm.push_delSets_eq run2
+  case extcodesize =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply Eq.symm
+    refine delSets_eq_of_bind h Prod.snd ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToAdr_delSets_eq hp
+    · intro ⟨x, devm1⟩ hp run; split at run
+      · refine delSets_eq_of_bind run id ?_ ?_
+        · intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl
+        · intro devm2 hc run2; exact Devm.push_delSets_eq run2
+      · refine delSets_eq_of_bind run id ?_ ?_
+        · intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl
+        · intro devm2 hc run2; exact Devm.push_delSets_eq run2
+  case mload =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply Eq.symm
+    refine delSets_eq_of_bind h Prod.snd ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_delSets_eq hp
+    · intro ⟨x, devm1⟩ hp run; refine delSets_eq_of_bind run id ?_ ?_
+      · intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl
+      · intro devm2 hc run2
+        rcases h_read : devm2.memRead x 32 with ⟨value, devm3⟩
+        rw [h_read] at run2
+        change post.delSets = devm2.delSets
+        rw [← memRead_delSets_eq h_read]
+        exact Devm.push_delSets_eq run2
+  case mstore =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply Eq.symm
+    refine delSets_eq_of_bind h Prod.snd ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_delSets_eq hp
+    · intro ⟨x, devm1⟩ hp run; refine delSets_eq_of_bind run Prod.snd ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.pop_delSets_eq hp2
+      · intro ⟨y, devm2⟩ hp2 run2; refine delSets_eq_of_bind run2 id ?_ ?_
+        · intro devm3 hc; exact (chargeGas_delSets_eq hc).trans rfl
+        · intro devm3 hc run3
+          injection run3 with h_post
+          rw [← h_post]
+          exact memWrite_delSets_eq
+  case mstore8 =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply Eq.symm
+    refine delSets_eq_of_bind h Prod.snd ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_delSets_eq hp
+    · intro ⟨x, devm1⟩ hp run; refine delSets_eq_of_bind run Prod.snd ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.pop_delSets_eq hp2
+      · intro ⟨y, devm2⟩ hp2 run2; refine delSets_eq_of_bind run2 id ?_ ?_
+        · intro devm3 hc; exact (chargeGas_delSets_eq hc).trans rfl
+        · intro devm3 hc run3
+          injection run3 with h_post
+          rw [← h_post]
+          exact memWrite_delSets_eq
+  case address | origin | caller | callvalue | calldatasize | codesize | gasprice | retdatasize | coinbase | timestamp | number | prevrandao | gaslimit | chainid | selfbalance | basefee | blobbasefee | pc | msize =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply Eq.symm
+    exact pushItem_delSets_eq h
+  case pop =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply Eq.symm
+    refine delSets_eq_of_bind h id ?_ ?_
+    · intro devm1 hp; rcases of_bind_eq_ok hp with ⟨⟨x, devm2⟩, hp1, hp2⟩; injection hp2 with h_eq; rw [← h_eq]; exact Devm.pop_delSets_eq hp1
+    · intro devm1 hp run; exact chargeGas_delSets_eq run
+  case tload =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply Eq.symm
+    refine delSets_eq_of_bind h Prod.snd ?_ ?_
+    · intro ⟨key, devm1⟩ hp; exact Devm.pop_delSets_eq hp
+    · intro ⟨key, devm1⟩ hp run; exact pushItem_delSets_eq run
+  case calldataload =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply Eq.symm
+    refine delSets_eq_of_bind h Prod.snd ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp
+    · intro ⟨x, devm1⟩ hp run; refine delSets_eq_of_bind run id ?_ ?_
+      · intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl
+      · intro devm2 hc run2; exact Devm.push_delSets_eq run2
+  case gas =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply Eq.symm
+    refine delSets_eq_of_bind h id ?_ ?_
+    · intro devm1 hc; exact (chargeGas_delSets_eq hc).trans rfl
+    · intro devm1 hc run; exact Devm.push_delSets_eq run
+  case dup =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply Eq.symm
+    refine delSets_eq_of_bind h id ?_ ?_
+    · intro devm1 hc; exact (chargeGas_delSets_eq hc).trans rfl
+    · intro devm1 hc run; split at run
+      · contradiction
+      · exact Devm.push_delSets_eq run
+  case swap =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply Eq.symm
+    refine delSets_eq_of_bind h id ?_ ?_
+    · intro devm1 hc; exact (chargeGas_delSets_eq hc).trans rfl
+    · intro devm1 hc run; split at run
+      · contradiction
+      · injection run with h_eq; rw [← h_eq]; rfl
+  case exp =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply Eq.symm
+    refine delSets_eq_of_bind h Prod.snd ?_ ?_
+    · intro ⟨base, devm1⟩ hp; exact Devm.pop_delSets_eq hp
+    · intro ⟨base, devm1⟩ hp run; refine delSets_eq_of_bind run Prod.snd ?_ ?_
+      · intro ⟨exponent, devm2⟩ hp2; exact Devm.pop_delSets_eq hp2
+      · intro ⟨exponent, devm2⟩ hp2 run2; refine delSets_eq_of_bind run2 id ?_ ?_
+        · intro devm3 hc; exact (chargeGas_delSets_eq hc).trans rfl
+        · intro devm3 hc run3; exact Devm.push_delSets_eq run3
+  case tstore =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply Eq.symm
+    refine delSets_eq_of_bind h Prod.snd ?_ ?_
+    · intro ⟨key, devm1⟩ hp; exact Devm.pop_delSets_eq hp
+    · intro ⟨key, devm1⟩ hp run; refine delSets_eq_of_bind run Prod.snd ?_ ?_
+      · intro ⟨new_value, devm2⟩ hp2; exact Devm.pop_delSets_eq hp2
+      · intro ⟨new_value, devm2⟩ hp2 run2; refine delSets_eq_of_bind run2 id ?_ ?_
+        · intro devm3 hc; exact (chargeGas_delSets_eq hc).trans rfl
+        · intro devm3 hc run3
+          dsimp [assertDynamic, Except.assert] at run3
+          split at run3 <;> try contradiction
+          injection run3 with h_post
+          rw [← h_post]
+          rfl
+  case kec =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply Eq.symm
+    refine delSets_eq_of_bind h Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_delSets_eq hp}
+    intro ⟨x, devm1⟩ hp run; refine delSets_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_delSets_eq hp2}
+    intro ⟨y, devm2⟩ hp2 run;
+    refine delSets_eq_of_bind run id ?_ ?_
+    {intro devm3 hc; exact (chargeGas_delSets_eq hc).trans rfl}
+    intro devm3 hc run; exact (Devm.push_delSets_eq run).trans rfl
+  case calldatacopy =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply Eq.symm
+    refine delSets_eq_of_bind h Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_delSets_eq hp}
+    intro ⟨x, devm1⟩ hp run; refine delSets_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨y, devm2⟩ hp; exact Devm.popToNat_delSets_eq hp}
+    intro ⟨y, devm2⟩ hp run; refine delSets_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨z, devm3⟩ hp; exact Devm.popToNat_delSets_eq hp}
+    intro ⟨z, devm3⟩ hp run; refine delSets_eq_of_bind run id ?_ ?_
+    {intro devm4 hc; exact (chargeGas_delSets_eq hc).trans rfl}
+    intro devm4 hc run; injection run with eq; subst eq; rfl
+  case codecopy =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply Eq.symm
+    refine delSets_eq_of_bind h Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_delSets_eq hp}
+    intro ⟨x, devm1⟩ hp run; refine delSets_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨y, devm2⟩ hp; exact Devm.popToNat_delSets_eq hp}
+    intro ⟨y, devm2⟩ hp run; refine delSets_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨z, devm3⟩ hp; exact Devm.popToNat_delSets_eq hp}
+    intro ⟨z, devm3⟩ hp run; refine delSets_eq_of_bind run id ?_ ?_
+    {intro devm4 hc; exact (chargeGas_delSets_eq hc).trans rfl}
+    intro devm4 hc run; injection run with eq; subst eq; rfl
+  case extcodecopy =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply Eq.symm
+    refine delSets_eq_of_bind h Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.popToAdr_delSets_eq hp}
+    intro ⟨x, devm1⟩ hp run; refine delSets_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨y, devm2⟩ hp; exact Devm.popToNat_delSets_eq hp}
+    intro ⟨y, devm2⟩ hp run; refine delSets_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨z, devm3⟩ hp; exact Devm.popToNat_delSets_eq hp}
+    intro ⟨z, devm3⟩ hp run; refine delSets_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨w, devm4⟩ hp; exact Devm.popToNat_delSets_eq hp}
+    intro ⟨w, devm4⟩ hp run; split at run
+    · refine delSets_eq_of_bind run id ?_ ?_
+      {intro devm5 hc; exact (chargeGas_delSets_eq hc).trans rfl}
+      intro devm5 hc run; injection run with eq; subst eq; rfl
+    · refine delSets_eq_of_bind run id ?_ ?_
+      {intro devm5 hc; exact (chargeGas_delSets_eq hc).trans rfl}
+      intro devm5 hc run; injection run with eq; subst eq; rfl
+  case retdatacopy =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply Eq.symm
+    refine delSets_eq_of_bind h Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_delSets_eq hp}
+    intro ⟨x, devm1⟩ hp run; refine delSets_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨y, devm2⟩ hp; exact Devm.popToNat_delSets_eq hp}
+    intro ⟨y, devm2⟩ hp run; refine delSets_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨z, devm3⟩ hp; exact Devm.popToNat_delSets_eq hp}
+    intro ⟨z, devm3⟩ hp run; refine delSets_eq_of_bind run id ?_ ?_
+    {intro devm4 hc; exact (chargeGas_delSets_eq hc).trans rfl}
+    intro devm4 hc run; split at run
+    · cases run
+    · injection run with eq; subst eq; rfl
+  case extcodehash =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply Eq.symm
+    refine delSets_eq_of_bind h Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.popToAdr_delSets_eq hp}
+    intro ⟨x, devm1⟩ hp run; split at run
+    · refine delSets_eq_of_bind run id ?_ ?_
+      {intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl}
+      intro devm2 hc run; exact Devm.push_delSets_eq run
+    · refine delSets_eq_of_bind run id ?_ ?_
+      {intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl}
+      intro devm2 hc run; exact Devm.push_delSets_eq run
+  case blockhash =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply Eq.symm
+    refine delSets_eq_of_bind h Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp}
+    intro ⟨x, devm1⟩ hp run; refine delSets_eq_of_bind run id ?_ ?_
+    {intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl}
+    intro devm2 hc run; exact Devm.push_delSets_eq run
+  case sload =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply Eq.symm
+    refine delSets_eq_of_bind h Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp}
+    intro ⟨x, devm1⟩ hp run; split at run
+    · refine delSets_eq_of_bind run id ?_ ?_
+      {intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl}
+      intro devm2 hc run; exact Devm.push_delSets_eq run
+    · refine delSets_eq_of_bind run id ?_ ?_
+      {intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl}
+      intro devm2 hc run; exact Devm.push_delSets_eq run
+  case sstore =>
+    intro h
+    exact (sstore_inv_delSets h).symm
+  case mcopy =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply Eq.symm
+    refine delSets_eq_of_bind h Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_delSets_eq hp}
+    intro ⟨x, devm1⟩ hp run; refine delSets_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨y, devm2⟩ hp; exact Devm.popToNat_delSets_eq hp}
+    intro ⟨y, devm2⟩ hp run; refine delSets_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨z, devm3⟩ hp; exact Devm.popToNat_delSets_eq hp}
+    intro ⟨z, devm3⟩ hp run; refine delSets_eq_of_bind run id ?_ ?_
+    {intro devm4 hc; exact (chargeGas_delSets_eq hc).trans rfl}
+    intro devm4 hc run; injection run with eq; subst eq; rfl
+  case log =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply Eq.symm
+    refine delSets_eq_of_bind h Prod.snd ?_ ?_
+    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_delSets_eq hp}
+    intro ⟨x, devm1⟩ hp run; refine delSets_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨y, devm2⟩ hp; exact Devm.popToNat_delSets_eq hp}
+    intro ⟨y, devm2⟩ hp run; refine delSets_eq_of_bind run Prod.snd ?_ ?_
+    {intro ⟨z, devm3⟩ hp; exact Devm.popN_delSets_eq hp}
+    intro ⟨z, devm3⟩ hp run; refine delSets_eq_of_bind run id ?_ ?_
+    {intro devm4 hc; exact (chargeGas_delSets_eq hc).trans rfl}
+    intro devm4 hc run
+    rcases of_bind_eq_ok run with ⟨_, _, run'⟩
+    injection run' with rw
+    rw [← rw]
+    rfl
+
+-- Rinst execution preserves delSets on error results.
+lemma Devm.pop_delSets_err {err devm} (h : Devm.pop devm = .error err) : err.2.delSets = devm.delSets := by
+  simp only [Devm.pop] at h
+  split at h <;> try contradiction
+  cases h; rfl
+
+lemma chargeGas_delSets_err {cost devm err} (h : chargeGas cost devm = .error err) : err.2.delSets = devm.delSets := by
+  simp only [chargeGas] at h
+  split at h <;> try contradiction
+  cases h; rfl
+
+lemma Devm.push_delSets_err {v devm err} (h : Devm.push v devm = Except.error err) : err.2.delSets = devm.delSets := by
+  unfold Devm.push Except.assert at h; dsimp [Bind.bind, Except.bind] at h
+  split_ifs at h <;> try contradiction
+  injection h with h1; rw [← h1]
+
+lemma assert_delSets_err {cond : Prop} [Decidable cond] {msg : String} {devm : Devm} {err : String × Devm} (h : Except.assert cond (msg, devm) = Except.error err) : err.2.delSets = devm.delSets := by
+  unfold Except.assert at h
+  split_ifs at h <;> try contradiction
+  injection h with h1; rw [← h1]
+
+lemma Devm.popToNat_delSets_err {devm err} (h : Devm.popToNat devm = .error err) : err.2.delSets = devm.delSets := by
+  dsimp [Devm.popToNat, Functor.map, Except.map] at h
+  rcases hp : devm.pop with err_pop | ⟨x, devm1⟩
+  · simp [hp] at h; cases h; exact Devm.pop_delSets_err hp
+  · simp [hp] at h
+
+lemma Devm.popToAdr_delSets_err {devm err} (h : Devm.popToAdr devm = .error err) : err.2.delSets = devm.delSets := by
+  dsimp [Devm.popToAdr, Functor.map, Except.map] at h
+  rcases hp : devm.pop with err_pop | ⟨x, devm1⟩
+  · simp [hp] at h; cases h; exact Devm.pop_delSets_err hp
+  · simp [hp] at h
+
+lemma delSets_err_of_bind {α} {ma : Except (String × Devm) α} {f : α → Execution}
+    {devm : Devm} {err : String × Devm}
+    (run : (ma >>= f) = Except.error err)
+    (getDevm : α → Devm)
+    (h_first_ok : ∀ v, ma = Except.ok v → (getDevm v).delSets = devm.delSets)
+    (h_first_err : ∀ e, ma = Except.error e → e.2.delSets = devm.delSets)
+    (h_rest_err : ∀ v, ma = Except.ok v → f v = Except.error err → err.2.delSets = (getDevm v).delSets) :
+    err.2.delSets = devm.delSets := by
+  cases h_ma : ma
+  case error e =>
+    rw [h_ma, Except.bind_error] at run
+    injection run with h_eq; subst h_eq
+    exact h_first_err _ h_ma
+  case ok v =>
+    rw [h_ma, Except.bind_ok] at run
+    have h1 := h_rest_err v h_ma run
+    have h2 := h_first_ok v h_ma
+    exact h1.trans h2
+
+lemma Devm.popN_delSets_err {n : Nat} {devm : Devm} {err : String × Devm}
+    (hp : devm.popN n = Except.error err) :
+    err.2.delSets = devm.delSets := by
+  induction n generalizing devm err with
+  | zero => simp [Devm.popN] at hp
+  | succ n ih =>
+    simp [Devm.popN, bind, Except.bind] at hp
+    split at hp
+    · rename_i eq_err; injection hp with eq; subst eq
+      exact Devm.pop_delSets_err eq_err
+    · rename_i eq_ok; split at hp
+      · rename_i eq_err; injection hp with eq; subst eq
+        have h1 := ih eq_err
+        have h2 := Devm.pop_delSets_eq eq_ok
+        exact h1.trans h2
+      · rename_i eq_ok2; injection hp
+
+lemma Devm.pop_map_snd_delSets_eq {devm devm1 : Devm} (hp : (devm.pop <&> Prod.snd) = .ok devm1) : devm1.delSets = devm.delSets := by
+  dsimp [(· <&> ·), Functor.mapRev, Functor.map, Except.map] at hp
+  rcases hp2 : devm.pop with _ | ⟨x, devm2⟩
+  · simp [hp2] at hp
+  · simp [hp2] at hp
+    rcases hp with ⟨_, rfl⟩
+    exact Devm.pop_delSets_eq hp2
+
+lemma Devm.pop_map_snd_delSets_err {devm : Devm} {err : String × Devm} (hp : (devm.pop <&> Prod.snd) = .error err) : err.2.delSets = devm.delSets := by
+  dsimp [(· <&> ·), Functor.mapRev, Functor.map, Except.map] at hp
+  rcases hp2 : devm.pop with e | ⟨x, devm2⟩
+  · simp [hp2] at hp; cases hp
+    simp only [Devm.pop] at hp2
+    split at hp2 <;> try contradiction
+    cases hp2; rfl
+  · simp [hp2] at hp
+
+lemma pushItem_delSets_err {x c devm err} (h : pushItem x c devm = Except.error err) : err.2.delSets = devm.delSets := by
+  simp only [pushItem] at h
+  refine delSets_err_of_bind h id ?_ ?_ ?_
+  · intro devm1 hc; exact (chargeGas_delSets_eq hc).trans rfl
+  · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+  · intro devm1 hc run; exact Devm.push_delSets_err run
+
+lemma applyUnary_delSets_err {f : B256 → B256} {cost devm err}
+    (h : applyUnary f cost devm = Except.error err) :
+    err.2.delSets = devm.delSets := by
+  simp only [applyUnary] at h
+  refine delSets_err_of_bind h Prod.snd ?_ ?_ ?_
+  · intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp
+  · intro e hp; exact Devm.pop_delSets_err hp
+  · intro ⟨x, devm1⟩ hp run; exact pushItem_delSets_err run
+
+lemma applyBinary_delSets_err {f : B256 → B256 → B256} {cost devm err}
+    (h : applyBinary f cost devm = Except.error err) :
+    err.2.delSets = devm.delSets := by
+  simp only [applyBinary] at h
+  refine delSets_err_of_bind h Prod.snd ?_ ?_ ?_
+  · intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp
+  · intro e hp; exact Devm.pop_delSets_err hp
+  · intro ⟨x, devm1⟩ hp run
+    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨y, devm2⟩ hp2; exact Devm.pop_delSets_eq hp2
+    · intro e hp2; exact Devm.pop_delSets_err hp2
+    · intro ⟨y, devm2⟩ hp2 run2; exact pushItem_delSets_err run2
+
+lemma applyTernary_delSets_err {f : B256 → B256 → B256 → B256} {cost devm err}
+    (h : applyTernary f cost devm = Except.error err) :
+    err.2.delSets = devm.delSets := by
+  simp only [applyTernary] at h
+  refine delSets_err_of_bind h Prod.snd ?_ ?_ ?_
+  · intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp
+  · intro e hp; exact Devm.pop_delSets_err hp
+  · intro ⟨x, devm1⟩ hp run
+    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨y, devm2⟩ hp2; exact Devm.pop_delSets_eq hp2
+    · intro e hp2; exact Devm.pop_delSets_err hp2
+    · intro ⟨y, devm2⟩ hp2 run2
+      refine delSets_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨z, devm3⟩ hp3; exact Devm.pop_delSets_eq hp3
+      · intro e hp3; exact Devm.pop_delSets_err hp3
+      · intro ⟨z, devm3⟩ hp3 run3; exact pushItem_delSets_err run3
+
+-- Rinst execution preserves delSets on error results.
+lemma Rinst.inv_delSets_err {pc : Nat} {sevm : Sevm} {devm : Devm} {r : Rinst}
+    {err : String} {devm' : Devm}
+    (run : Rinst.run ⟨pc, sevm, devm⟩ r = .error ⟨err, devm'⟩) :
+    devm'.delSets = devm.delSets := by
+  cases r <;> dsimp [Rinst.run, Rinst.runCore] at run
+  case add => apply applyBinary_delSets_err run
+  case mul => apply applyBinary_delSets_err run
+  case sub => apply applyBinary_delSets_err run
+  case div => apply applyBinary_delSets_err run
+  case sdiv => apply applyBinary_delSets_err run
+  case mod => apply applyBinary_delSets_err run
+  case smod => apply applyBinary_delSets_err run
+  case addmod => apply applyTernary_delSets_err run
+  case mulmod => apply applyTernary_delSets_err run
+  case exp =>
+    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp
+    · intro e hp; exact Devm.pop_delSets_err hp
+    · intro ⟨x, devm1⟩ hp run2
+      refine delSets_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.pop_delSets_eq hp2
+      · intro e hp2; exact Devm.pop_delSets_err hp2
+      · intro ⟨y, devm2⟩ hp2 run3; exact pushItem_delSets_err run3
+  case signextend => apply applyBinary_delSets_err run
+  case lt => apply applyBinary_delSets_err run
+  case gt => apply applyBinary_delSets_err run
+  case slt => apply applyBinary_delSets_err run
+  case sgt => apply applyBinary_delSets_err run
+  case eq => apply applyBinary_delSets_err run
+  case iszero => apply applyUnary_delSets_err run
+  case and => apply applyBinary_delSets_err run
+  case or => apply applyBinary_delSets_err run
+  case xor => apply applyBinary_delSets_err run
+  case not => apply applyUnary_delSets_err run
+  case byte => apply applyBinary_delSets_err run
+  case shr => apply applyBinary_delSets_err run
+  case shl => apply applyBinary_delSets_err run
+  case sar => apply applyBinary_delSets_err run
+  case kec =>
+    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_delSets_eq hp
+    · intro e hp; exact Devm.popToNat_delSets_err hp
+    · intro ⟨x, devm1⟩ hp run2
+      refine delSets_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_delSets_eq hp2
+      · intro e hp2; exact Devm.popToNat_delSets_err hp2
+      · intro ⟨y, devm2⟩ hp2 run3
+        refine delSets_err_of_bind run3 id ?_ ?_ ?_
+        · intro devm3 hc; exact (chargeGas_delSets_eq hc).trans rfl
+        · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+        · intro devm3 hc run4; exact (Devm.push_delSets_err run4).trans rfl
+  case address => apply pushItem_delSets_err run
+  case balance =>
+    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp
+    · intro e hp; exact Devm.pop_delSets_err hp
+    · intro ⟨x, devm1⟩ hp run2; split at run2
+      · refine delSets_err_of_bind run2 id ?_ ?_ ?_
+        · intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl
+        · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+        · intro devm2 hc run3; exact (Devm.push_delSets_err run3).trans rfl
+      · refine delSets_err_of_bind run2 id ?_ ?_ ?_
+        · intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl
+        · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+        · intro devm2 hc run3; exact (Devm.push_delSets_err run3).trans rfl
+  case origin => apply pushItem_delSets_err run
+  case caller => apply pushItem_delSets_err run
+  case callvalue => apply pushItem_delSets_err run
+  case calldataload =>
+    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp
+    · intro e hp; exact Devm.pop_delSets_err hp
+    · intro ⟨x, devm1⟩ hp run2
+      refine delSets_err_of_bind run2 id ?_ ?_ ?_
+      · intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl
+      · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+      · intro devm2 hc run3; exact (Devm.push_delSets_err run3).trans rfl
+  case calldatasize => apply pushItem_delSets_err run
+  case calldatacopy =>
+    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_delSets_eq hp
+    · intro e hp; exact Devm.popToNat_delSets_err hp
+    · intro ⟨x, devm1⟩ hp run2
+      refine delSets_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_delSets_eq hp2
+      · intro e hp2; exact Devm.popToNat_delSets_err hp2
+      · intro ⟨y, devm2⟩ hp2 run3
+        refine delSets_err_of_bind run3 Prod.snd ?_ ?_ ?_
+        · intro ⟨z, devm3⟩ hp3; exact Devm.popToNat_delSets_eq hp3
+        · intro e hp3; exact Devm.popToNat_delSets_err hp3
+        · intro ⟨z, devm3⟩ hp3 run4
+          refine delSets_err_of_bind run4 id ?_ ?_ ?_
+          · intro devm4 hc; exact (chargeGas_delSets_eq hc).trans rfl
+          · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+          · intro devm4 hc run5; injection run5
+  case codesize => apply pushItem_delSets_err run
+  case codecopy =>
+    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_delSets_eq hp
+    · intro e hp; exact Devm.popToNat_delSets_err hp
+    · intro ⟨x, devm1⟩ hp run2
+      refine delSets_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_delSets_eq hp2
+      · intro e hp2; exact Devm.popToNat_delSets_err hp2
+      · intro ⟨y, devm2⟩ hp2 run3
+        refine delSets_err_of_bind run3 Prod.snd ?_ ?_ ?_
+        · intro ⟨z, devm3⟩ hp3; exact Devm.popToNat_delSets_eq hp3
+        · intro e hp3; exact Devm.popToNat_delSets_err hp3
+        · intro ⟨z, devm3⟩ hp3 run4
+          refine delSets_err_of_bind run4 id ?_ ?_ ?_
+          · intro devm4 hc; exact (chargeGas_delSets_eq hc).trans rfl
+          · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+          · intro devm4 hc run5; injection run5
+  case gasprice => apply pushItem_delSets_err run
+  case extcodesize =>
+    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToAdr_delSets_eq hp
+    · intro e hp; exact Devm.popToAdr_delSets_err hp
+    · intro ⟨x, devm1⟩ hp run2; split at run2
+      · refine delSets_err_of_bind run2 id ?_ ?_ ?_
+        · intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl
+        · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+        · intro devm2 hc run3; exact (Devm.push_delSets_err run3).trans rfl
+      · refine delSets_err_of_bind run2 id ?_ ?_ ?_
+        · intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl
+        · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+        · intro devm2 hc run3; exact (Devm.push_delSets_err run3).trans rfl
+  case extcodecopy =>
+    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToAdr_delSets_eq hp
+    · intro e hp; exact Devm.popToAdr_delSets_err hp
+    · intro ⟨x, devm1⟩ hp run2
+      refine delSets_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_delSets_eq hp2
+      · intro e hp2; exact Devm.popToNat_delSets_err hp2
+      · intro ⟨y, devm2⟩ hp2 run3
+        refine delSets_err_of_bind run3 Prod.snd ?_ ?_ ?_
+        · intro ⟨z, devm3⟩ hp3; exact Devm.popToNat_delSets_eq hp3
+        · intro e hp3; exact Devm.popToNat_delSets_err hp3
+        · intro ⟨z, devm3⟩ hp3 run4
+          refine delSets_err_of_bind run4 Prod.snd ?_ ?_ ?_
+          · intro ⟨w, devm4⟩ hp4; exact Devm.popToNat_delSets_eq hp4
+          · intro e hp4; exact Devm.popToNat_delSets_err hp4
+          · intro ⟨w, devm4⟩ hp4 run5
+            split at run5
+            · refine delSets_err_of_bind run5 id ?_ ?_ ?_
+              · intro devm5 hc; exact (chargeGas_delSets_eq hc).trans rfl
+              · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+              · intro devm5 hc run6; injection run6
+            · refine delSets_err_of_bind run5 id ?_ ?_ ?_
+              · intro devm5 hc; exact (chargeGas_delSets_eq hc).trans rfl
+              · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+              · intro devm5 hc run6; injection run6
+  case retdatasize => apply pushItem_delSets_err run
+  case retdatacopy =>
+    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_delSets_eq hp
+    · intro e hp; exact Devm.popToNat_delSets_err hp
+    · intro ⟨x, devm1⟩ hp run2
+      refine delSets_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_delSets_eq hp2
+      · intro e hp2; exact Devm.popToNat_delSets_err hp2
+      · intro ⟨y, devm2⟩ hp2 run3
+        refine delSets_err_of_bind run3 Prod.snd ?_ ?_ ?_
+        · intro ⟨z, devm3⟩ hp3; exact Devm.popToNat_delSets_eq hp3
+        · intro e hp3; exact Devm.popToNat_delSets_err hp3
+        · intro ⟨z, devm3⟩ hp3 run4
+          refine delSets_err_of_bind run4 id ?_ ?_ ?_
+          · intro devm4 hc; exact (chargeGas_delSets_eq hc).trans rfl
+          · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+          · intro devm4 hc run5
+            split_ifs at run5
+            all_goals (try { cases run5; rfl })
+            all_goals (try contradiction)
+  case extcodehash =>
+    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToAdr_delSets_eq hp
+    · intro e hp; exact Devm.popToAdr_delSets_err hp
+    · intro ⟨x, devm1⟩ hp run2; split at run2
+      · refine delSets_err_of_bind run2 id ?_ ?_ ?_
+        · intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl
+        · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+        · intro devm2 hc run3; exact (Devm.push_delSets_err run3).trans rfl
+      · refine delSets_err_of_bind run2 id ?_ ?_ ?_
+        · intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl
+        · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+        · intro devm2 hc run3; exact (Devm.push_delSets_err run3).trans rfl
+  case blockhash =>
+    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp
+    · intro e hp; exact Devm.pop_delSets_err hp
+    · intro ⟨x, devm1⟩ hp run2
+      refine delSets_err_of_bind run2 id ?_ ?_ ?_
+      · intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl
+      · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+      · intro devm2 hc run3; exact (Devm.push_delSets_err run3).trans rfl
+  case coinbase => apply pushItem_delSets_err run
+  case timestamp => apply pushItem_delSets_err run
+  case number => apply pushItem_delSets_err run
+  case prevrandao => apply pushItem_delSets_err run
+  case gaslimit => apply pushItem_delSets_err run
+  case chainid => apply pushItem_delSets_err run
+  case selfbalance => apply pushItem_delSets_err run
+  case basefee => apply pushItem_delSets_err run
+  case blobhash =>
+    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
+    exact fun ⟨x, devm1⟩ hp => Devm.pop_delSets_eq hp
+    exact fun e hp => Devm.pop_delSets_err hp
+    intro ⟨x, devm1⟩ hp run2
+    refine delSets_err_of_bind run2 id ?_ ?_ ?_
+    exact fun devm2 hc => (chargeGas_delSets_eq hc).trans rfl
+    exact fun e hc => (chargeGas_delSets_err hc).trans rfl
+    intro devm2 hc run3; exact (Devm.push_delSets_err run3).trans rfl
+  case blobbasefee => apply pushItem_delSets_err run
+  case pop =>
+    refine delSets_err_of_bind run id ?_ ?_ ?_
+    exact fun devm1 hc => Devm.pop_map_snd_delSets_eq hc
+    exact fun e hc => Devm.pop_map_snd_delSets_err hc
+    intro devm1 hc run2; exact chargeGas_delSets_err run2
+  case mload =>
+    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
+    exact fun ⟨x, devm1⟩ hp => Devm.popToNat_delSets_eq hp
+    exact fun e hp => Devm.popToNat_delSets_err hp
+    intro ⟨x, devm1⟩ hp run2
+    refine delSets_err_of_bind run2 id ?_ ?_ ?_
+    exact fun devm2 hc => (chargeGas_delSets_eq hc).trans rfl
+    exact fun e hc => (chargeGas_delSets_err hc).trans rfl
+    intro devm2 hc run3; exact (Devm.push_delSets_err run3).trans rfl
+  case mstore =>
+    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_delSets_eq hp
+    · intro e hp; exact Devm.popToNat_delSets_err hp
+    · intro ⟨x, devm1⟩ hp run2
+      refine delSets_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.pop_delSets_eq hp2
+      · intro e hp2; exact Devm.pop_delSets_err hp2
+      · intro ⟨y, devm2⟩ hp2 run3
+        refine delSets_err_of_bind run3 id ?_ ?_ ?_
+        · intro devm3 hc; exact (chargeGas_delSets_eq hc).trans rfl
+        · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+        · intro devm3 hc run4; cases run4
+  case mstore8 =>
+    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_delSets_eq hp
+    · intro e hp; exact Devm.popToNat_delSets_err hp
+    · intro ⟨x, devm1⟩ hp run2
+      refine delSets_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.pop_delSets_eq hp2
+      · intro e hp2; exact Devm.pop_delSets_err hp2
+      · intro ⟨y, devm2⟩ hp2 run3
+        refine delSets_err_of_bind run3 id ?_ ?_ ?_
+        · intro devm3 hc; exact (chargeGas_delSets_eq hc).trans rfl
+        · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+        · intro devm3 hc run4; injection run4
+  case sload =>
+    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp
+    · intro e hp; exact Devm.pop_delSets_err hp
+    · intro ⟨x, devm1⟩ hp run2; split at run2
+      · refine delSets_err_of_bind run2 id ?_ ?_ ?_
+        · intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl
+        · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+        · intro devm2 hc run3; exact (Devm.push_delSets_err run3).trans rfl
+      · refine delSets_err_of_bind run2 id ?_ ?_ ?_
+        · intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl
+        · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+        · intro devm2 hc run3; exact (Devm.push_delSets_err run3).trans rfl
+  case sstore =>
+    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp
+    · intro e hp; exact Devm.pop_delSets_err hp
+    · intro ⟨x, devm1⟩ hp run2
+      refine delSets_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.pop_delSets_eq hp2
+      · intro e hp2; exact Devm.pop_delSets_err hp2
+      · intro ⟨y, devm2⟩ hp2 run3
+        refine delSets_err_of_bind run3 (fun _ => devm2) ?_ ?_ ?_
+        · intro u h_assert; rfl
+        · intro e h_assert; exact assert_delSets_err h_assert
+        · intro u h_assert run4
+          split_ifs at run4
+          all_goals {
+            refine delSets_err_of_bind run4 id ?_ ?_ ?_
+            · intro devm3 hc; exact (chargeGas_delSets_eq hc).trans rfl
+            · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+            · intro devm3 hc run5
+              dsimp [assertDynamic, Except.assert] at run5
+              split_ifs at run5
+              all_goals (try { cases run5; rfl })
+              all_goals (try injection run5)
+          }
+  case pc =>
+    refine delSets_err_of_bind run id ?_ ?_ ?_
+    · intro devm1 hc; exact (chargeGas_delSets_eq hc).trans rfl
+    · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+    · intro devm1 hc run2; exact Devm.push_delSets_err run2
+  case msize =>
+    refine delSets_err_of_bind run id ?_ ?_ ?_
+    · intro devm1 hc; exact (chargeGas_delSets_eq hc).trans rfl
+    · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+    · intro devm1 hc run2; exact Devm.push_delSets_err run2
+  case gas =>
+    refine delSets_err_of_bind run id ?_ ?_ ?_
+    · intro devm1 hc; exact (chargeGas_delSets_eq hc).trans rfl
+    · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+    · intro devm1 hc run2; exact Devm.push_delSets_err run2
+  case tload =>
+    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp
+    · intro e hp; exact Devm.pop_delSets_err hp
+    · intro ⟨x, devm1⟩ hp run2
+      refine delSets_err_of_bind run2 id ?_ ?_ ?_
+      · intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl
+      · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+      · intro devm2 hc run3; exact (Devm.push_delSets_err run3).trans rfl
+  case tstore =>
+    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp
+    · intro e hp; exact Devm.pop_delSets_err hp
+    · intro ⟨x, devm1⟩ hp run2
+      refine delSets_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.pop_delSets_eq hp2
+      · intro e hp2; exact Devm.pop_delSets_err hp2
+      · intro ⟨y, devm2⟩ hp2 run3
+        refine delSets_err_of_bind run3 id ?_ ?_ ?_
+        · intro devm3 hc; exact (chargeGas_delSets_eq hc).trans rfl
+        · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+        · intro devm3 hc run4
+          dsimp [assertDynamic, Except.assert] at run4
+          simp only [bind, Except.bind] at run4
+          try split_ifs at run4; simp at run4
+          exact congrArg Devm.delSets run4.2.symm
+  case mcopy =>
+    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_delSets_eq hp
+    · intro e hp; exact Devm.popToNat_delSets_err hp
+    · intro ⟨x, devm1⟩ hp run2
+      refine delSets_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_delSets_eq hp2
+      · intro e hp2; exact Devm.popToNat_delSets_err hp2
+      · intro ⟨y, devm2⟩ hp2 run3
+        refine delSets_err_of_bind run3 Prod.snd ?_ ?_ ?_
+        · intro ⟨z, devm3⟩ hp3; exact Devm.popToNat_delSets_eq hp3
+        · intro e hp3; exact Devm.popToNat_delSets_err hp3
+        · intro ⟨z, devm3⟩ hp3 run4
+          refine delSets_err_of_bind run4 id ?_ ?_ ?_
+          · intro devm4 hc; exact (chargeGas_delSets_eq hc).trans rfl
+          · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+          · intro devm4 hc run5; contradiction
+  case dup =>
+    refine delSets_err_of_bind run id ?_ ?_ ?_
+    · intro devm1 hc; exact (chargeGas_delSets_eq hc).trans rfl
+    · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+    · intro devm1 hc run2
+      split at run2
+      · injection run2 with h_eq; cases h_eq; rfl
+      · exact Devm.push_delSets_err run2
+  case swap =>
+    refine delSets_err_of_bind run id ?_ ?_ ?_
+    · intro devm1 hc; exact (chargeGas_delSets_eq hc).trans rfl
+    · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+    · intro devm1 hc run2
+      split at run2
+      · injection run2 with h_eq; cases h_eq; rfl
+      · contradiction
+  case log =>
+    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_delSets_eq hp
+    · intro e hp; exact Devm.popToNat_delSets_err hp
+    · intro ⟨x, devm1⟩ hp run2
+      refine delSets_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_delSets_eq hp2
+      · intro e hp2; exact Devm.popToNat_delSets_err hp2
+      · intro ⟨y, devm2⟩ hp2 run3
+        refine delSets_err_of_bind run3 Prod.snd ?_ ?_ ?_
+        · intro ⟨z, devm3⟩ hp3; exact Devm.popN_delSets_eq hp3
+        · intro e hp3; exact Devm.popN_delSets_err hp3
+        · intro ⟨z, devm3⟩ hp3 run4
+          refine delSets_err_of_bind run4 id ?_ ?_ ?_
+          · intro devm4 hc; exact (chargeGas_delSets_eq hc).trans rfl
+          · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+          · intro devm4 hc run5
+            dsimp [assertDynamic, Except.assert] at run5
+            simp only [bind, Except.bind] at run5
+            try split_ifs at run5; simp at run5
+            exact congrArg Devm.delSets run5.2.symm
+
+-- Jinst execution preserves delSets.
+lemma Jinst.inv_delSets {pc : Nat} {sevm : Sevm} {devm : Devm} {j : Jinst}
+    {pc' : Nat} {devm' : Devm}
+    (run : Jinst.Run ⟨pc, sevm, devm⟩ j (.ok ⟨pc', devm'⟩)) :
+    devm'.delSets = devm.delSets := by
+  cases h1 : devm.stack
+  · cases j
+    · simp only [Jinst.Run, Jinst.run, runCore, chargeGas, Devm.pop, Except.assert, safeSub, bind, Except.bind] at run
+      rw [h1] at run; dsimp at run; contradiction
+    · simp only [Jinst.Run, Jinst.run, runCore, chargeGas, Devm.pop, Except.assert, safeSub, bind, Except.bind] at run
+      rw [h1] at run; dsimp at run; contradiction
+    · simp only [Jinst.Run, Jinst.run, runCore, chargeGas, bind, Except.bind, safeSub] at run
+      rw [h1] at run
+      by_cases h_gas : gJumpdest ≤ devm.gasLeft
+      · simp only [h_gas, if_pos, Except.ok.injEq, Prod.mk.injEq] at run
+        cases run; subst_vars; rfl
+      · have h_gas_not : ¬(gJumpdest ≤ devm.gasLeft) := by omega
+        simp only [h_gas_not, if_neg] at run; contradiction
+  · rename_i x xs
+    cases h2 : xs
+    · cases j
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas, Devm.pop, Except.assert, bind, Except.bind, safeSub] at run
+        rw [h1] at run; dsimp at run
+        by_cases h_gas : gMid ≤ devm.gasLeft
+        · simp only [h_gas, if_pos] at run
+          by_cases h_jump : jumpable sevm.code x.toNat = true
+          · simp only [h_jump, if_pos, Except.ok.injEq, Prod.mk.injEq] at run; cases run; subst_vars; rfl
+          · simp only [h_jump, if_neg] at run; contradiction
+        · have h_gas_not : ¬(gMid ≤ devm.gasLeft) := by omega
+          simp only [h_gas_not, if_neg] at run; contradiction
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas, Devm.pop, Except.assert, bind, Except.bind, safeSub] at run
+        rw [h1] at run; rw [h2] at run; dsimp at run; contradiction
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas, Except.assert, bind, Except.bind, safeSub] at run
+        rw [h1] at run
+        by_cases h_gas : gJumpdest ≤ devm.gasLeft
+        · simp only [h_gas, if_pos, Except.ok.injEq, Prod.mk.injEq] at run; cases run; subst_vars; rfl
+        · have h_gas_not : ¬(gJumpdest ≤ devm.gasLeft) := by omega
+          simp only [h_gas_not, if_neg] at run; contradiction
+    · rename_i x2 xs2
+      cases j
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas, Devm.pop, Except.assert, bind, Except.bind, safeSub] at run
+        rw [h1] at run; dsimp at run
+        by_cases h_gas : gMid ≤ devm.gasLeft
+        · simp only [h_gas, if_pos] at run
+          by_cases h_jump : jumpable sevm.code x.toNat = true
+          · simp only [h_jump, if_pos, Except.ok.injEq, Prod.mk.injEq] at run; cases run; subst_vars; rfl
+          · simp only [h_jump, if_neg] at run; contradiction
+        · have h_gas_not : ¬(gMid ≤ devm.gasLeft) := by omega
+          simp only [h_gas_not, if_neg] at run; contradiction
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas, Devm.pop, Except.assert, bind, Except.bind, safeSub] at run
+        rw [h1] at run; rw [h2] at run; dsimp at run
+        by_cases h_gas : gHigh ≤ devm.gasLeft
+        · simp only [h_gas, if_pos] at run
+          by_cases h_cond : x2 = 0
+          · simp only [h_cond, if_pos, Except.ok.injEq, Prod.mk.injEq] at run; cases run; subst_vars; rfl
+          · simp only [h_cond, if_neg] at run
+            by_cases h_jumpable : jumpable sevm.code x.toNat = true
+            · simp only [h_jumpable, if_pos, Except.ok.injEq, Prod.mk.injEq] at run; cases run; subst_vars; rfl
+            · simp only [h_jumpable, if_neg] at run; contradiction
+        · have h_gas_not : ¬(gHigh ≤ devm.gasLeft) := by omega
+          simp only [h_gas_not, if_neg] at run; contradiction
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas, Except.assert, bind, Except.bind, safeSub] at run
+        rw [h1] at run
+        by_cases h_gas : gJumpdest ≤ devm.gasLeft
+        · simp only [h_gas, if_pos, Except.ok.injEq, Prod.mk.injEq] at run; cases run; subst_vars; rfl
+        · have h_gas_not : ¬(gJumpdest ≤ devm.gasLeft) := by omega
+          simp only [h_gas_not, if_neg] at run; contradiction
+
+lemma Jinst.inv_delSets_err {pc : Nat} {sevm : Sevm} {devm : Devm} {j : Jinst}
+    {err : String} {devm' : Devm}
+    (run : Jinst.Run ⟨pc, sevm, devm⟩ j (.error ⟨err, devm'⟩)) :
+    devm'.delSets = devm.delSets := by
+  cases h1 : devm.stack
+  · cases j
+    · simp only [Jinst.Run, Jinst.run, runCore, chargeGas, Devm.pop, Except.assert, safeSub, bind, Except.bind] at run
+      rw [h1] at run; dsimp at run; cases run; rfl
+    · simp only [Jinst.Run, Jinst.run, runCore, chargeGas, Devm.pop, Except.assert, safeSub, bind, Except.bind] at run
+      rw [h1] at run; dsimp at run; cases run; rfl
+    · simp only [Jinst.Run, Jinst.run, runCore, chargeGas, bind, Except.bind, safeSub] at run
+      rw [h1] at run
+      by_cases h_gas : gJumpdest ≤ devm.gasLeft
+      · simp only [h_gas, if_pos] at run; contradiction
+      · have h_gas_not : ¬(gJumpdest ≤ devm.gasLeft) := by omega
+        simp only [h_gas_not, if_neg] at run; cases run; rfl
+  · rename_i x xs
+    cases h2 : xs
+    · cases j
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas, Devm.pop, Except.assert, bind, Except.bind, safeSub] at run
+        rw [h1] at run; dsimp at run
+        by_cases h_gas : gMid ≤ devm.gasLeft
+        · simp only [h_gas, if_pos] at run
+          by_cases h_jump : jumpable sevm.code x.toNat = true
+          · simp only [h_jump, if_pos] at run; contradiction
+          · simp only [h_jump, if_neg] at run; cases run; rfl
+        · have h_gas_not : ¬(gMid ≤ devm.gasLeft) := by omega
+          simp only [h_gas_not, if_neg] at run; cases run; rfl
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas, Devm.pop, Except.assert, bind, Except.bind, safeSub] at run
+        rw [h1] at run; rw [h2] at run; dsimp at run; cases run; rfl
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas, Except.assert, bind, Except.bind, safeSub] at run
+        rw [h1] at run
+        by_cases h_gas : gJumpdest ≤ devm.gasLeft
+        · simp only [h_gas, if_pos] at run; contradiction
+        · have h_gas_not : ¬(gJumpdest ≤ devm.gasLeft) := by omega
+          simp only [h_gas_not, if_neg] at run; cases run; rfl
+    · rename_i x2 xs2
+      cases j
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas, Devm.pop, Except.assert, bind, Except.bind, safeSub] at run
+        rw [h1] at run; dsimp at run
+        by_cases h_gas : gMid ≤ devm.gasLeft
+        · simp only [h_gas, if_pos] at run
+          by_cases h_jump : jumpable sevm.code x.toNat = true
+          · simp only [h_jump, if_pos] at run; contradiction
+          · simp only [h_jump, if_neg] at run; cases run; rfl
+        · have h_gas_not : ¬(gMid ≤ devm.gasLeft) := by omega
+          simp only [h_gas_not, if_neg] at run; cases run; rfl
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas, Devm.pop, Except.assert, bind, Except.bind, safeSub] at run
+        rw [h1] at run; rw [h2] at run; dsimp at run
+        by_cases h_gas : gHigh ≤ devm.gasLeft
+        · simp only [h_gas, if_pos] at run
+          by_cases h_cond : x2 = 0
+          · simp only [h_cond, if_pos] at run; contradiction
+          · simp only [h_cond, if_neg] at run
+            by_cases h_jumpable : jumpable sevm.code x.toNat = true
+            · simp only [h_jumpable, if_pos] at run; contradiction
+            · simp only [h_jumpable, if_neg] at run; cases run; rfl
+        · have h_gas_not : ¬(gHigh ≤ devm.gasLeft) := by omega
+          simp only [h_gas_not, if_neg] at run; cases run; rfl
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas, Except.assert, bind, Except.bind, safeSub] at run
+        rw [h1] at run
+        by_cases h_gas : gJumpdest ≤ devm.gasLeft
+        · simp only [h_gas, if_pos] at run; contradiction
+        · have h_gas_not : ¬(gJumpdest ≤ devm.gasLeft) := by omega
+          simp only [h_gas_not, if_neg] at run; cases run; rfl
+
+-- Halting/terminal instructions (Linst) preserve NoDel.
+lemma Linst.inv_noDel {wa : Adr} {sevm : Sevm} {devm : Devm} {l : Linst}
+    {exn : Execution}
+    (run : Linst.Run sevm devm l exn)
+    (h : Devm.NoDel wa devm) : Execution.NoDel wa exn := by
+  cases l <;> dsimp [Linst.Run, Linst.run] at run
+  case stop => rw [← run]; exact h
+  case ret =>
+    revert run
+    dsimp [bind, Except.bind]
+    cases h1 : devm.popToNat <;> dsimp
+    case error err => intro run; rw [← run]; exact Devm.NoDel.of_eqs (Devm.popToNat_delSets_err h1).symm (Devm.popToNat_getCode_err h1 wa).symm h
+    case ok res1 =>
+      cases h2 : res1.2.popToNat <;> dsimp
+      case error err => intro run; rw [← run]; exact Devm.NoDel.of_eqs (Devm.popToNat_delSets_err h2).symm (Devm.popToNat_getCode_err h2 wa).symm (Devm.NoDel.of_eqs (Devm.popToNat_delSets_eq h1).symm (Devm.popToNat_getCode_eq h1 wa).symm h)
+      case ok res2 =>
+        cases h3 : chargeGas (res2.2.extCost [(res1.1, res2.1)]) res2.2 <;> dsimp
+        case error err => intro run; rw [← run]; exact Devm.NoDel.of_eqs (chargeGas_delSets_err h3).symm (chargeGas_getCode_err h3 wa).symm (Devm.NoDel.of_eqs (Devm.popToNat_delSets_eq h2).symm (Devm.popToNat_getCode_eq h2 wa).symm (Devm.NoDel.of_eqs (Devm.popToNat_delSets_eq h1).symm (Devm.popToNat_getCode_eq h1 wa).symm h))
+        case ok res3 => intro run; rw [← run]; exact Devm.NoDel.of_eqs (chargeGas_delSets_eq h3).symm (chargeGas_getCode_eq h3 wa).symm (Devm.NoDel.of_eqs (Devm.popToNat_delSets_eq h2).symm (Devm.popToNat_getCode_eq h2 wa).symm (Devm.NoDel.of_eqs (Devm.popToNat_delSets_eq h1).symm (Devm.popToNat_getCode_eq h1 wa).symm h))
+  case rev =>
+    revert run
+    dsimp [bind, Except.bind]
+    cases h1 : devm.popToNat <;> dsimp
+    case error err => intro run; rw [← run]; exact Devm.NoDel.of_eqs (Devm.popToNat_delSets_err h1).symm (Devm.popToNat_getCode_err h1 wa).symm h
+    case ok res1 =>
+      cases h2 : res1.2.popToNat <;> dsimp
+      case error err => intro run; rw [← run]; exact Devm.NoDel.of_eqs (Devm.popToNat_delSets_err h2).symm (Devm.popToNat_getCode_err h2 wa).symm (Devm.NoDel.of_eqs (Devm.popToNat_delSets_eq h1).symm (Devm.popToNat_getCode_eq h1 wa).symm h)
+      case ok res2 =>
+        cases h3 : chargeGas (res2.2.extCost [(res1.1, res2.1)]) res2.2 <;> dsimp
+        case error err => intro run; rw [← run]; exact Devm.NoDel.of_eqs (chargeGas_delSets_err h3).symm (chargeGas_getCode_err h3 wa).symm (Devm.NoDel.of_eqs (Devm.popToNat_delSets_eq h2).symm (Devm.popToNat_getCode_eq h2 wa).symm (Devm.NoDel.of_eqs (Devm.popToNat_delSets_eq h1).symm (Devm.popToNat_getCode_eq h1 wa).symm h))
+        case ok res3 => intro run; rw [← run]; exact Devm.NoDel.of_eqs rfl rfl (Devm.NoDel.of_eqs (chargeGas_delSets_eq h3).symm (chargeGas_getCode_eq h3 wa).symm (Devm.NoDel.of_eqs (Devm.popToNat_delSets_eq h2).symm (Devm.popToNat_getCode_eq h2 wa).symm (Devm.NoDel.of_eqs (Devm.popToNat_delSets_eq h1).symm (Devm.popToNat_getCode_eq h1 wa).symm h)))
+  case dest =>
+    revert run
+    dsimp [bind, Except.bind]
+    cases h1 : devm.popToAdr <;> dsimp
+    case error err => intro run; rw [← run]; exact Devm.NoDel.of_eqs (Devm.popToAdr_delSets_err h1).symm (Devm.popToAdr_getCode_err h1 wa).symm h
+    case ok res1 =>
+      have h_acc : (if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).1.getCode wa = res1.2.getCode wa := by
+        split
+        · exact addAccessedAddress_getCode
+        · rfl
+      have h_acc_ds : (if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).1.delSets = res1.2.delSets := by
+        split
+        · rfl
+        · rfl
+      cases h2 : chargeGas (if ((if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).1.getAcct res1.1).Empty ∧ ¬(res1.2.getAcct sevm.currentTarget).bal = 0 then (if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).2 + gasSelfDestructNewAccount else (if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).2) (if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).1 <;> dsimp
+      case error err => intro run; rw [← run]; exact Devm.NoDel.of_eqs (chargeGas_delSets_err h2).symm (chargeGas_getCode_err h2 wa).symm (Devm.NoDel.of_eqs h_acc_ds.symm h_acc.symm (Devm.NoDel.of_eqs (Devm.popToAdr_delSets_eq h1).symm (Devm.popToAdr_getCode_eq h1 wa).symm h))
+      case ok res2 =>
+        cases h3 : assertDynamic sevm res2
+        case error err =>
+          intro run; rw [← run]
+          dsimp [assertDynamic, Except.assert] at h3
+          split at h3
+          · contradiction
+          · simp only [Except.error.injEq] at h3; subst h3
+            exact Devm.NoDel.of_eqs (chargeGas_delSets_eq h2).symm (chargeGas_getCode_eq h2 wa).symm (Devm.NoDel.of_eqs h_acc_ds.symm h_acc.symm (Devm.NoDel.of_eqs (Devm.popToAdr_delSets_eq h1).symm (Devm.popToAdr_getCode_eq h1 wa).symm h))
+        case ok _ =>
+          cases h4 : res2.subBal sevm.currentTarget (res1.2.getAcct sevm.currentTarget).bal <;> dsimp [Option.toExcept]
+          case none =>
+            intro run; rw [← run]
+            exact Devm.NoDel.of_eqs (chargeGas_delSets_eq h2).symm (chargeGas_getCode_eq h2 wa).symm (Devm.NoDel.of_eqs h_acc_ds.symm h_acc.symm (Devm.NoDel.of_eqs (Devm.popToAdr_delSets_eq h1).symm (Devm.popToAdr_getCode_eq h1 wa).symm h))
+          case some res3 =>
+            have hd : Devm.NoDel wa res2 := Devm.NoDel.of_eqs (chargeGas_delSets_eq h2).symm (chargeGas_getCode_eq h2 wa).symm (Devm.NoDel.of_eqs h_acc_ds.symm h_acc.symm (Devm.NoDel.of_eqs (Devm.popToAdr_delSets_eq h1).symm (Devm.popToAdr_getCode_eq h1 wa).symm h))
+            have h_sub : res3.getCode wa = res2.getCode wa := by
+              dsimp [Devm.subBal] at h4
+              cases h_st : res2.state.subBal sevm.currentTarget (res1.2.getAcct sevm.currentTarget).bal
+              case none =>
+                rw [h_st] at h4; contradiction
+              case some st =>
+                rw [h_st] at h4; dsimp at h4
+                simp only [Option.some.injEq] at h4; subst h4
+                change st.getCode wa = res2.getCode wa
+                exact State.subBal_getCode h_st
+            have h_sub_ds : res3.delSets = res2.delSets := by
+              dsimp [Devm.subBal] at h4
+              cases h_st : res2.state.subBal sevm.currentTarget (res1.2.getAcct sevm.currentTarget).bal
+              case none => rw [h_st] at h4; contradiction
+              case some st =>
+                rw [h_st] at h4; dsimp at h4
+                simp only [Option.some.injEq] at h4; subst h4
+                rfl
+            have hd3 : Devm.NoDel wa res3 := Devm.NoDel.of_eqs h_sub_ds.symm h_sub.symm hd
+            by_cases h_if : sevm.currentTarget ∈ (res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).createdAccounts
+            · simp only [h_if, if_pos]
+              intro run; rw [← run]
+              have h_ca_eq : (res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).createdAccounts = res3.createdAccounts := rfl
+              have h_ca : sevm.currentTarget ∈ res3.createdAccounts := h_ca_eq ▸ h_if
+              have h_ne : sevm.currentTarget ≠ wa := by
+                intro heq; rw [heq] at h_ca
+                exact hd3.ca h_ca
+              constructor
+              · exact AdrSet.not_mem_insert (Ne.symm h_ne) hd3.atd
+              · exact hd3.ca
+              · have h_add : (res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).getCode wa = res3.getCode wa := by
+                  dsimp [Devm.addBal, Devm.getCode]; exact State.addBal_getCode res3.state _ _ _
+                have h_set : ((res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).setBal sevm.currentTarget 0).getCode wa = (res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).getCode wa := by
+                  dsimp [Devm.setBal, Devm.getCode]; exact State.setBal_getCode _ _ _ _
+                have h_code : (addAccountToDelete ((res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).setBal sevm.currentTarget 0) sevm.currentTarget).getCode wa = res3.getCode wa :=
+                  h_set.trans h_add
+                rw [h_code]; exact hd3.code
+            · simp only [h_if, if_neg]
+              intro run; rw [← run]
+              constructor
+              · exact hd3.atd
+              · exact hd3.ca
+              · have h_add : (res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).getCode wa = res3.getCode wa := by
+                  dsimp [Devm.addBal, Devm.getCode]; exact State.addBal_getCode res3.state _ _ _
+                rw [h_add]; exact hd3.code
+
+lemma Msg.NoDel.benvAfterTransfer_err {wa : Adr} {msg : Msg}
+    {x : String × State × AdrSet × Tra}
+    (h_run : msg.benvAfterTransfer = .error x)
+    (h : Msg.NoDel wa msg) : wa ∉ x.2.2.1 ∧ (x.2.1.getCode wa).toList ≠ [] := by
+  by_cases h_stv : msg.shouldTransferValue = true
+  · unfold Msg.benvAfterTransfer at h_run
+    rw [if_pos h_stv] at h_run
+    cases h_sub : msg.benv.subBal msg.caller msg.value
+    · rw [h_sub] at h_run
+      simp only [Except.error.injEq, Option.toExcept, Except.bind, bind] at h_run
+      subst h_run
+      exact ⟨h.ca, h.code⟩
+    · rw [h_sub] at h_run
+      dsimp [Option.toExcept] at h_run
+      contradiction
+  · unfold Msg.benvAfterTransfer at h_run
+    rw [if_neg h_stv] at h_run
+    contradiction
+
+lemma chargeCodeGas_delSets_ok {d d' : Devm}
+    (h : processCreateMessage.chargeCodeGas d = .ok d') : d'.delSets = d.delSets := by
+  unfold processCreateMessage.chargeCodeGas at h
+  dsimp only at h
+  split at h
+  · cases h
+  · rcases of_bind_eq_ok h with ⟨d1, h_charge, h_rest⟩
+    split_ifs at h_rest
+    cases h_rest
+    exact chargeGas_delSets_eq h_charge
+
+lemma chargeCodeGas_delSets_err {d d' : Devm} {err : String}
+    (h : processCreateMessage.chargeCodeGas d = .error ⟨err, d'⟩) :
+    d'.delSets = d.delSets := by
+  unfold processCreateMessage.chargeCodeGas at h
+  dsimp only at h
+  split at h
+  · cases h; rfl
+  · rcases hcg : chargeGas _ d with ⟨e, dd⟩ | dd
+    · rw [hcg] at h
+      dsimp only [Bind.bind, Except.bind] at h
+      cases h
+      exact chargeGas_delSets_err hcg
+    · rw [hcg] at h
+      dsimp only [Bind.bind, Except.bind] at h
+      split_ifs at h
+      cases h; exact chargeGas_delSets_eq hcg
+
+lemma Devm.push_noDel {wa : Adr} {x : B256} {d : Devm} {exn : Execution}
+    (heq : Devm.push x d = exn) (h : Devm.NoDel wa d) : Execution.NoDel wa exn := by
+  unfold Devm.push Except.assert at heq
+  by_cases hlt : d.stack.length < 1024
+  · rw [if_pos hlt] at heq
+    dsimp only [bind, Except.bind] at heq
+    rw [← heq]; exact ⟨h.atd, h.ca, h.code⟩
+  · rw [if_neg hlt] at heq
+    dsimp only [bind, Except.bind] at heq
+    rw [← heq]; exact ⟨h.atd, h.ca, h.code⟩
+
+lemma incorporateChildOnError_noDel {wa : Adr} {parent child : Devm} {rd : B8L}
+    (hp_atd : wa ∉ parent.accountsToDelete) (hc : Devm.NoDel wa child) :
+    Devm.NoDel wa (incorporateChildOnError parent child rd) :=
+  ⟨hp_atd, hc.ca, hc.code⟩
+
+lemma incorporateChildOnSuccess_noDel {wa : Adr} {parent child : Devm} {rd : B8L}
+    (hp_atd : wa ∉ parent.accountsToDelete) (hc : Devm.NoDel wa child) :
+    Devm.NoDel wa (incorporateChildOnSuccess parent child rd) :=
+  ⟨AdrSet.not_mem_union hp_atd hc.atd, hc.ca, hc.code⟩
+
+lemma accessDelegation_delSets {d : Devm} {adr : Adr} :
+    (accessDelegation d adr).2.2.2.2.delSets = d.delSets := by
+  simp only [accessDelegation]; split <;> rfl
+
+lemma Execution.NoDel.error_of {wa : Adr} {d : Devm} {x : String × Devm}
+    (hd : Devm.NoDel wa d) (h : x.2 = d) : Execution.NoDel wa (.error x) := by
+  obtain ⟨s, d'⟩ := x
+  dsimp only at h
+  subst h
+  exact hd
+
+lemma Devm.pop_err_snd {d : Devm} {x : String × Devm}
+    (h : Devm.pop d = .error x) : x.2 = d := by
+  simp only [Devm.pop] at h
+  split at h
+  · injection h with h; exact (congrArg Prod.snd h).symm
+  · exact absurd h (by simp)
+
+lemma Devm.popToNat_err_snd {d : Devm} {x : String × Devm}
+    (h : Devm.popToNat d = .error x) : x.2 = d := by
+  dsimp only [Devm.popToNat, Functor.map, Except.map] at h
+  rcases hp : d.pop with e | ⟨v, d0⟩
+  · rw [hp] at h; injection h with h; rw [← h]; exact Devm.pop_err_snd hp
+  · rw [hp] at h; exact absurd h (by simp)
+
+lemma Devm.popToAdr_err_snd {d : Devm} {x : String × Devm}
+    (h : Devm.popToAdr d = .error x) : x.2 = d := by
+  dsimp only [Devm.popToAdr, Functor.map, Except.map] at h
+  rcases hp : d.pop with e | ⟨v, d0⟩
+  · rw [hp] at h; injection h with h; rw [← h]; exact Devm.pop_err_snd hp
+  · rw [hp] at h; exact absurd h (by simp)
+
+lemma chargeGas_err_snd {cost : Nat} {d : Devm} {x : String × Devm}
+    (h : chargeGas cost d = .error x) : x.2 = d := by
+  simp only [chargeGas] at h
+  split at h
+  · injection h with h; exact (congrArg Prod.snd h).symm
+  · exact absurd h (by simp)
+
+lemma Except.assert_err_snd {p : Prop} [Decidable p] {d : Devm} {s : String}
+    {x : String × Devm} (h : Except.assert p (⟨s, d⟩ : String × Devm) = .error x) :
+    x.2 = d := by
+  simp only [Except.assert] at h
+  split at h
+  · exact absurd h (by simp)
+  · injection h with h; exact (congrArg Prod.snd h).symm
+
+lemma Devm.NoDel.pop {wa : Adr} {d d' : Devm} {v : B256}
+    (hd : Devm.NoDel wa d) (h : Devm.pop d = .ok ⟨v, d'⟩) : Devm.NoDel wa d' :=
+  hd.of_eqs (Devm.pop_delSets_eq h).symm (Devm.pop_getCode h).symm
+
+lemma Devm.NoDel.popToNat {wa : Adr} {d d' : Devm} {n : Nat}
+    (hd : Devm.NoDel wa d) (h : Devm.popToNat d = .ok ⟨n, d'⟩) : Devm.NoDel wa d' :=
+  hd.of_eqs (Devm.popToNat_delSets_eq h).symm (Devm.popToNat_getCode h).symm
+
+lemma Devm.NoDel.popToAdr {wa : Adr} {d d' : Devm} {a : Adr}
+    (hd : Devm.NoDel wa d) (h : Devm.popToAdr d = .ok ⟨a, d'⟩) : Devm.NoDel wa d' :=
+  hd.of_eqs (Devm.popToAdr_delSets_eq h).symm (Devm.popToAdr_getCode h).symm
+
+lemma Devm.NoDel.chargeGas {wa : Adr} {d d' : Devm} {cost : Nat}
+    (hd : Devm.NoDel wa d) (h : chargeGas cost d = .ok d') : Devm.NoDel wa d' :=
+  hd.of_eqs (chargeGas_delSets_eq h).symm (chargeGas_getCode h).symm
+
+lemma Devm.NoDel.memExtends {wa : Adr} {d : Devm} {ranges : List (Nat × Nat)}
+    (hd : Devm.NoDel wa d) : Devm.NoDel wa (d.memExtends ranges) := by
+  refine hd.of_eqs ?_ Devm.memExtends_getCode.symm
+  rfl
+
+lemma Devm.NoDel.addAccessedAddress {wa : Adr} {d : Devm} {a : Adr}
+    (hd : Devm.NoDel wa d) : Devm.NoDel wa (_root_.addAccessedAddress d a) := by
+  refine hd.of_eqs ?_ addAccessedAddress_getCode.symm
+  rfl
+
+lemma Devm.NoDel.incrNonce {wa : Adr} {d : Devm} {a : Adr}
+    (hd : Devm.NoDel wa d) : Devm.NoDel wa (d.incrNonce a) := by
+  refine hd.of_eqs ?_ Devm.incrNonce_getCode.symm
+  rfl
+
+lemma Devm.NoDel.of_accessDelegation {wa : Adr} {d d' : Devm} {adr na : Adr}
+    {dp : Bool} {code : ByteArray} {dagc : Nat}
+    (hd : Devm.NoDel wa d)
+    (h : (dp, na, code, dagc, d') = _root_.accessDelegation d adr) : Devm.NoDel wa d' := by
+  have hd' : d' = (_root_.accessDelegation d adr).2.2.2.2 := congrArg (fun q => q.2.2.2.2) h
+  refine hd.of_eqs ?_ ?_
+  · rw [hd']; exact accessDelegation_delSets.symm
+  · rw [hd']; exact accessDelegation_getCode.symm
+
+def Benv.EquivForDelegation (b1 b2 : Benv) : Prop :=
+  b2.createdAccounts = b1.createdAccounts ∧
+  ∀ a, (b1.state.getCode a).toList ≠ [] → b2.state.getCode a = b1.state.getCode a
+
+lemma Benv.EquivForDelegation_refl (b : Benv) : Benv.EquivForDelegation b b := by
+  refine ⟨rfl, fun a _ => rfl⟩
+
+lemma Benv.EquivForDelegation_trans {b1 b2 b3 : Benv} (h12 : Benv.EquivForDelegation b1 b2) (h23 : Benv.EquivForDelegation b2 b3) :
+    Benv.EquivForDelegation b1 b3 := by
+  rcases h12 with ⟨h1c, h1code⟩
+  rcases h23 with ⟨h2c, h2code⟩
+  refine ⟨by rw [h2c, h1c], fun a ha => ?_⟩
+  have h1 := h1code a ha
+  have ha2' : (b2.state.getCode a).toList ≠ [] := by
+    rw [h1]
+    exact ha
+  rw [h2code a ha2', h1]
+
+lemma bind_eq_ok_Except {α β ε : Type} {x : Except ε α} {f : α → Except ε β} {res : β} :
+    bind x f = Except.ok res → ∃ a, x = Except.ok a ∧ f a = Except.ok res := by
+  intro h
+  cases x with
+  | error e =>
+    dsimp [bind, Except.bind] at h
+    contradiction
+  | ok a =>
+    dsimp [bind, Except.bind] at h
+    exact ⟨a, rfl, h⟩
+
+lemma Msg.NoDel.benvAfterTransfer {wa : Adr} {msg : Msg} {benv : Benv}
+    (h_run : msg.benvAfterTransfer = .ok benv)
+    (h : Msg.NoDel wa msg) : Msg.NoDel wa (msg.withBenv benv) := by
+  by_cases h_stv : msg.shouldTransferValue = true
+  · unfold Msg.benvAfterTransfer at h_run
+    rw [h_stv] at h_run
+    simp only [if_true] at h_run
+    unfold Benv.subBal at h_run
+    rcases h_sub : msg.benv.state.subBal msg.caller msg.value with _ | st_mid
+    · rw [h_sub] at h_run
+      simp only [Option.toExcept, bind, Option.bind, Except.bind] at h_run
+      contradiction
+    · rw [h_sub] at h_run
+      simp only [Option.toExcept, bind, Option.bind, Except.bind] at h_run
+      injection h_run with hB
+      have hBc : benv.createdAccounts = msg.benv.createdAccounts := by
+        rw [← hB]; rfl
+      have h_code_add : benv.state.getCode wa = st_mid.getCode wa := by
+        have hBs : benv.state = st_mid.addBal msg.currentTarget msg.value := by
+          rw [← hB]; rfl
+        rw [hBs]; exact State.addBal_getCode st_mid msg.currentTarget wa msg.value
+      have h_code_sub : st_mid.getCode wa = msg.benv.state.getCode wa := by
+        exact State.subBal_getCode h_sub
+      have h_code : ((msg.withBenv benv).benv.state.getCode wa).toList ≠ [] := by
+        change (benv.state.getCode wa).toList ≠ []
+        rw [h_code_add, h_code_sub]
+        exact h.code
+      exact ⟨hBc ▸ h.ca, h_code⟩
+  · unfold Msg.benvAfterTransfer at h_run
+    rw [if_neg h_stv] at h_run
+    have heq : benv = msg.benv := (Except.ok.inj h_run).symm
+    subst heq
+    exact h
