@@ -6008,6 +6008,7 @@ lemma setDelegationStep_fields {auth : Auth} {msg msg' : Msg}
     {refund refund' : B256}
     (h_run : setDelegationStep auth msg refund = .ok (msg', refund')) :
     msg'.caller = msg.caller ∧
+    msg'.target = msg.target ∧
     msg'.currentTarget = msg.currentTarget ∧
     msg'.shouldTransferValue = msg.shouldTransferValue ∧
     msg'.value = msg.value ∧
@@ -6044,6 +6045,7 @@ lemma setDelegationLoop_fields {auths : List Auth} {msg msg' : Msg}
     {refund refund' : B256}
     (h_run : setDelegationLoop auths msg refund = .ok (msg', refund')) :
     msg'.caller = msg.caller ∧
+    msg'.target = msg.target ∧
     msg'.currentTarget = msg.currentTarget ∧
     msg'.shouldTransferValue = msg.shouldTransferValue ∧
     msg'.value = msg.value ∧
@@ -6056,17 +6058,46 @@ lemma setDelegationLoop_fields {auths : List Auth} {msg msg' : Msg}
   | cons auth auths_tail ih =>
     unfold setDelegationLoop at h_run
     rcases bind_eq_ok_Except h_run with ⟨⟨msg1, refund1⟩, h_step, h_tail⟩
-    rcases setDelegationStep_fields h_step with ⟨hc1, ht1, hstv1, hv1, hca1⟩
-    rcases ih h_tail with ⟨hc2, ht2, hstv2, hv2, hca2⟩
-    exact ⟨hc2.trans hc1, ht2.trans ht1, hstv2.trans hstv1, hv2.trans hv1, hca2.trans hca1⟩
+    rcases setDelegationStep_fields h_step with ⟨hc1, htgt1, ht1, hstv1, hv1, hca1⟩
+    rcases ih h_tail with ⟨hc2, htgt2, ht2, hstv2, hv2, hca2⟩
+    exact ⟨hc2.trans hc1, htgt2.trans htgt1, ht2.trans ht1, hstv2.trans hstv1, hv2.trans hv1, hca2.trans hca1⟩
+
+lemma setDelegation_fields {msg msg' : Msg} {v : B256}
+    (h_run : setDelegation msg = .ok ⟨msg', v⟩) :
+    msg'.caller = msg.caller ∧
+    msg'.target = msg.target ∧
+    msg'.currentTarget = msg.currentTarget ∧
+    msg'.shouldTransferValue = msg.shouldTransferValue ∧
+    msg'.value = msg.value ∧
+    msg'.codeAddress = msg.codeAddress := by
+  unfold setDelegation at h_run
+  dsimp [bind, Except.bind] at h_run
+  apply bind_eq_ok_Except at h_run
+  rcases h_run with ⟨⟨msg_mid, refundCounter⟩, h_loop, h_rest⟩
+  rcases setDelegationLoop_fields h_loop with ⟨hc, htgt, hct, hstv, hv, hca⟩
+  dsimp only at h_rest
+  split at h_rest
+  · contradiction
+  · rename_i ca h_ca
+    have h_msg' : msg' =
+        { msg_mid with code := msg_mid.benv.state.getCode ca } := by
+      exact (congrArg Prod.fst (Except.ok.inj h_rest)).symm
+    subst msg'
+    exact ⟨hc, htgt, hct, hstv, hv, hca⟩
 
 structure Msg.InvSolvent (wa : Adr) (msg : Msg) : Prop where
   (state : State.Inv wa msg.benv.state)
   (nodel : Msg.NoDel wa msg)
-  (code : msg.currentTarget = wa → some msg.code.toList = Prog.compile weth)
-  (codeAddress : msg.currentTarget = wa → msg.codeAddress = some wa)
+  (code : msg.target.isNone = false → msg.currentTarget = wa →
+    some msg.code.toList = Prog.compile weth)
+  (codeAddress : msg.target.isNone = false → msg.currentTarget = wa →
+    msg.codeAddress = some wa)
   (ne : msg.shouldTransferValue = true → msg.caller ≠ wa)
   (val0 : msg.shouldTransferValue = false → msg.currentTarget = wa → msg.value = 0)
+
+structure Benv.InvSolvent (wa : Adr) (benv : Benv) : Prop where
+  (state : State.Inv wa benv.state)
+  (ca : wa ∉ benv.createdAccounts)
 
 lemma Msg.InvSolvent.pc {wa : Adr} {msg : Msg} {codeSrc : Adr → ByteArray}
     (h : Msg.InvSolvent wa msg) :
@@ -6083,17 +6114,19 @@ lemma Msg.InvSolvent.pc {wa : Adr} {msg : Msg} {codeSrc : Adr → ByteArray}
   · exact h
   · rename_i dca h_dca
     refine ⟨h.state, ⟨h.nodel.ca, h.nodel.code⟩, ?_, ?_, h.ne, h.val0⟩
-    · intro h_ct
+    · intro h_tgt h_ct
       have h_not_del : ¬ isValidDelegation msg.code :=
-        not_delegation_of_compile (h.code h_ct)
+        not_delegation_of_compile
+          (h.code (by simpa using h_tgt) (by simpa using h_ct))
       unfold getDelegatedCodeAddress at h_dca
       split at h_dca
       · rename_i h_del
         exact False.elim (h_not_del h_del)
       · contradiction
-    · intro h_ct
+    · intro h_tgt h_ct
       have h_not_del : ¬ isValidDelegation msg.code :=
-        not_delegation_of_compile (h.code h_ct)
+        not_delegation_of_compile
+          (h.code (by simpa using h_tgt) (by simpa using h_ct))
       unfold getDelegatedCodeAddress at h_dca
       split at h_dca
       · rename_i h_del
@@ -6107,12 +6140,12 @@ lemma setDelegation_inv_msg_solvent {wa : Adr} {msg msg' : Msg} {v : B256}
   have h_run_orig := h_run
   refine ⟨setDelegation_inv_solvent h_run h.state,
     setDelegation_msg_noDel h_run h.nodel, ?_, ?_, ?_, ?_⟩
-  · intro h_ct
+  · intro h_tgt h_ct
     unfold setDelegation at h_run
     dsimp [bind, Except.bind] at h_run
     apply bind_eq_ok_Except at h_run
     rcases h_run with ⟨⟨msg_mid, refundCounter⟩, h_loop, h_rest⟩
-    rcases setDelegationLoop_fields h_loop with ⟨_, h_mid_ct, _, _, h_mid_ca⟩
+    rcases setDelegationLoop_fields h_loop with ⟨_, h_mid_tgt, h_mid_ct, _, _, h_mid_ca⟩
     have h_loop_equiv := setDelegationLoop_benv_equiv h_loop
     rcases h_loop_equiv with ⟨_, h_code⟩
     have h_code_ne : (msg.benv.state.getCode wa).toList ≠ [] := by
@@ -6131,19 +6164,22 @@ lemma setDelegation_inv_msg_solvent {wa : Adr} {msg msg' : Msg} {v : B256}
       change msg_mid.currentTarget = wa at h_ct
       rw [h_mid_ct] at h_ct
       have h_ca_wa : ca = wa := by
-        have h_msg_ca := h.codeAddress h_ct
+        have h_msg_tgt : msg.target.isNone = false := by
+          change msg_mid.target.isNone = false at h_tgt
+          rwa [h_mid_tgt] at h_tgt
+        have h_msg_ca := h.codeAddress h_msg_tgt h_ct
         rw [h_mid_ca, h_msg_ca] at h_ca
         injection h_ca with h_eq
         exact h_eq.symm
       subst h_ca_wa
       rw [h_code_wa]
       exact h.state.code
-  · intro h_ct
+  · intro h_tgt h_ct
     unfold setDelegation at h_run_orig
     dsimp [bind, Except.bind] at h_run_orig
     apply bind_eq_ok_Except at h_run_orig
     rcases h_run_orig with ⟨⟨msg_mid, refundCounter⟩, h_loop, h_rest⟩
-    rcases setDelegationLoop_fields h_loop with ⟨_, h_mid_ct, _, _, h_mid_ca⟩
+    rcases setDelegationLoop_fields h_loop with ⟨_, h_mid_tgt, h_mid_ct, _, _, h_mid_ca⟩
     dsimp only at h_rest
     split at h_rest
     · contradiction
@@ -6156,13 +6192,16 @@ lemma setDelegation_inv_msg_solvent {wa : Adr} {msg msg' : Msg} {v : B256}
       change msg_mid.currentTarget = wa at h_ct
       rw [h_mid_ct] at h_ct
       rw [h_mid_ca]
-      exact h.codeAddress h_ct
+      apply h.codeAddress
+      · change msg_mid.target.isNone = false at h_tgt
+        rwa [h_mid_tgt] at h_tgt
+      · exact h_ct
   · intro h_stv
     unfold setDelegation at h_run_orig
     dsimp [bind, Except.bind] at h_run_orig
     apply bind_eq_ok_Except at h_run_orig
     rcases h_run_orig with ⟨⟨msg_mid, refundCounter⟩, h_loop, h_rest⟩
-    rcases setDelegationLoop_fields h_loop with ⟨h_mid_caller, _, h_mid_stv, _, _⟩
+    rcases setDelegationLoop_fields h_loop with ⟨h_mid_caller, _, _, h_mid_stv, _, _⟩
     dsimp only at h_rest
     split at h_rest
     · contradiction
@@ -6181,7 +6220,7 @@ lemma setDelegation_inv_msg_solvent {wa : Adr} {msg msg' : Msg} {v : B256}
     dsimp [bind, Except.bind] at h_run_orig
     apply bind_eq_ok_Except at h_run_orig
     rcases h_run_orig with ⟨⟨msg_mid, refundCounter⟩, h_loop, h_rest⟩
-    rcases setDelegationLoop_fields h_loop with ⟨_, h_mid_ct, h_mid_stv, h_mid_val, _⟩
+    rcases setDelegationLoop_fields h_loop with ⟨_, _, h_mid_ct, h_mid_stv, h_mid_val, _⟩
     dsimp only at h_rest
     split at h_rest
     · contradiction
@@ -6231,7 +6270,10 @@ theorem processMessageCall_inv_noDel {wa : Adr} {msg : Msg} {st' : _root_.State}
         · simp only [id_eq, Except.ok.injEq, Prod.mk.injEq] at h_run
           rcases h_run with ⟨_, rfl⟩
           exact AdrSet.not_mem_empty
-  · unfold processMessageCall.call at h_run
+  · rename_i h_target
+    have h_target_false : msg.target.isNone = false := by
+      cases ht : msg.target.isNone <;> simp [ht] at h_target ⊢
+    unfold processMessageCall.call at h_run
     dsimp only at h_run
     split at h_run
     · simp only [bind, Except.bind] at h_run
@@ -6332,7 +6374,10 @@ theorem processMessageCall_inv_solvent {wa : Adr} {msg : Msg} {st' : _root_.Stat
         · simp only [id_eq, Except.ok.injEq, Prod.mk.injEq] at h_run
           rcases h_run with ⟨rfl, _⟩
           exact h_pm
-  · unfold processMessageCall.call at h_run
+  · rename_i h_target
+    have h_target_false : msg.target.isNone = false := by
+      cases ht : msg.target.isNone <;> simp [ht] at h_target ⊢
+    unfold processMessageCall.call at h_run
     dsimp only at h_run
     split at h_run
     · simp only [bind, Except.bind] at h_run
@@ -6355,8 +6400,19 @@ theorem processMessageCall_inv_solvent {wa : Adr} {msg : Msg} {st' : _root_.Stat
                   code := msg.benv.state.getCode dca,
                   codeAddress := some dca }) :=
             Msg.InvSolvent.pc (codeSrc := fun dca => msg.benv.state.getCode dca) h_inv
+          have h_tgt_pc :
+              (match getDelegatedCodeAddress msg.code with
+              | none => msg
+              | some dca =>
+                { msg with
+                  disablePrecompiles := true,
+                  accessedAddresses := msg.accessedAddresses.insert dca,
+                  code := msg.benv.state.getCode dca,
+                  codeAddress := some dca }).target.isNone = false := by
+            split <;> simpa using h_target_false
           have h_evm_inv :=
-            processMessage_inv_solvent h_pm h_pc.code h_pc.ne h_pc.val0 h_pc.state
+            processMessage_inv_solvent h_pm (fun hct => h_pc.code h_tgt_pc hct)
+              h_pc.ne h_pc.val0 h_pc.state
           split at h_run
           · split at h_run
             · injection h_run
@@ -6391,8 +6447,23 @@ theorem processMessageCall_inv_solvent {wa : Adr} {msg : Msg} {st' : _root_.Stat
                     code := msg.benv.state.getCode dca,
                     codeAddress := some dca }) :=
               Msg.InvSolvent.pc (codeSrc := fun dca => msg.benv.state.getCode dca) h_del_inv
+            have h_del_fields := setDelegation_fields h_del
+            have h_msgDelegation_target_false : msgDelegation.target.isNone = false := by
+              rw [h_del_fields.2.1]
+              exact h_target_false
+            have h_tgt_pc :
+                (match getDelegatedCodeAddress msgDelegation.code with
+                | none => msgDelegation
+                | some dca =>
+                  { msgDelegation with
+                    disablePrecompiles := true,
+                    accessedAddresses := msgDelegation.accessedAddresses.insert dca,
+                    code := msg.benv.state.getCode dca,
+                    codeAddress := some dca }).target.isNone = false := by
+              split <;> simpa using h_msgDelegation_target_false
             have h_evm_inv :=
-              processMessage_inv_solvent h_pm h_pc.code h_pc.ne h_pc.val0 h_pc.state
+              processMessage_inv_solvent h_pm (fun hct => h_pc.code h_tgt_pc hct)
+                h_pc.ne h_pc.val0 h_pc.state
             split at h_run
             · split at h_run
               · injection h_run
@@ -6406,7 +6477,7 @@ theorem processMessageCall_inv_solvent {wa : Adr} {msg : Msg} {st' : _root_.Stat
 theorem processTransaction_inv_solvent (wa : Adr)
     (benv : Benv) (bout bout' : BlockOutput) (tx : Tx) (i : Nat) (st : _root_.State)
     (h_run : processTransaction benv bout tx i = .ok ⟨st, bout'⟩)
-    (h_inv : State.Inv wa benv.state) : State.Inv wa st := by
+    (h_inv : Benv.InvSolvent wa benv) : Benv.InvSolvent wa (benv.withState st) := by
   -- The linearized `processTransaction` (elevm already rebuilt) is a straight
   -- `.ok`-bind chain; peel each `←` with `of_bind_eq_ok`, keeping calls opaque.
   --   unfold processTransaction at h_run; peel transactionsTrie / validateTransaction
@@ -6431,7 +6502,7 @@ theorem processTransaction_inv_solvent (wa : Adr)
 theorem applyTransactions_inv_solvent (wa : Adr)
     (txis : List (Nat × Tx)) (benv benv' : Benv) (bout bout' : BlockOutput)
     (h_run : applyTransactions txis benv bout = .ok ⟨benv', bout'⟩)
-    (h_inv : State.Inv wa benv.state) : State.Inv wa benv'.state := by
+    (h_inv : Benv.InvSolvent wa benv) : Benv.InvSolvent wa benv' := by
   -- list induction over `txis`; each step is `processTransaction_inv_solvent`
   -- (note `processTransaction` threads `Benv`, so track `benv.state`).
   induction txis generalizing benv bout with
@@ -6459,7 +6530,7 @@ theorem applyBody_inv_solvent (wa : Adr)
     (st : _root_.State) (bout : BlockOutput)
     (h_run : applyBody benv txs wds = .ok ⟨st, bout⟩)
     (h_wds : sum benv.state.bal + wdsum wds < 2 ^ 256)
-    (h_inv : State.Inv wa benv.state) : State.Inv wa st := by
+    (h_inv : Benv.InvSolvent wa benv) : State.Inv wa st := by
   -- `applyTransactions` (conserves sum) then `processWithdrawals`.  Withdrawals
   -- MINT via `addBal wd.recipient (amount * 10^9)`; fold `State.Inv.addBal`, whose
   -- `sum + amt < 2^256` bounds come from `h_wds` (each partial sum ≤ start + wdsum).
@@ -6480,7 +6551,8 @@ theorem stateTransition_inv_solvent (wa : Adr)
   dsimp only at h_run
   obtain ⟨_, _, h_run⟩ := of_bind_eq_ok h_run
   rw [← Except.ok.inj h_run]
-  exact applyBody_inv_solvent wa (initBenv ch block.header) block.txs block.wds st bout h_ab h_wds h_inv
+  exact applyBody_inv_solvent wa (initBenv ch block.header) block.txs block.wds st bout h_ab h_wds
+    ⟨h_inv, AdrSet.not_mem_empty⟩
 
 -- `BlockChain.Reach ch ch'` : chain `ch'` is reachable from `ch` by a
 -- sequence of valid blocks, each of whose withdrawals stays within the
