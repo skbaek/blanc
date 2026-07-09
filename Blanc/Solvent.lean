@@ -6474,30 +6474,188 @@ theorem processMessageCall_inv_solvent {wa : Adr} {msg : Msg} {st' : _root_.Stat
               rcases h_run with ⟨rfl, _⟩
               exact h_evm_inv
 
+/-! ### Transaction-level helper lemmas
+
+The proof of `processTransaction_inv_solvent` factors into three local facts.
+They are intentionally stated at the executable-definition boundary:
+
+* a checked transaction sender cannot be the WETH account, since successful
+  `checkTransaction` accepted the sender as an EOA/delegation account;
+* `prepareMessage` packages the post-upfront-fee state into a message satisfying
+  `Msg.InvSolvent`;
+* the final transaction gas credits are funded by the earlier upfront debit, so
+  the two `addBal`s cannot overflow the global balance sum.
+
+These are the intended follow-up proof obligations; with them available, the
+main transaction invariant proof below is just definition inversion and
+composition of already-proved message-level invariants. -/
+
+lemma checkTransaction_sender_ne_of_inv_solvent {wa : Adr}
+    {benv : Benv} {bout : BlockOutput} {tx : Tx}
+    {sender : Adr} {effectiveGasPrice : Nat}
+    {blobVersionedHashes : List B256} {txBlobGasUsed : Nat}
+    (h_check :
+      checkTransaction benv bout tx =
+        .ok ⟨sender, effectiveGasPrice, blobVersionedHashes, txBlobGasUsed⟩)
+    (h_inv : Benv.InvSolvent wa benv) :
+    sender ≠ wa := by
+  -- Successful `checkTransaction` passed EIP-3607.  If `sender = wa`, WETH's
+  -- nonempty, non-delegation code contradicts the accepted sender account.
+  sorry
+
+lemma prepareMessage_benv {benv : Benv} {tenv : Tenv} {tx : Tx} {msg : Msg}
+    (h_prep : prepareMessage benv tenv tx = .ok msg) :
+    msg.benv = benv := by
+  -- `prepareMessage` only constructs the message wrapper; it installs the
+  -- supplied block environment unchanged into the resulting message.
+  sorry
+
+lemma prepareMessage_inv_solvent {wa : Adr}
+    {benv : Benv} {tenv : Tenv} {tx : Tx} {msg : Msg}
+    (h_prep : prepareMessage benv tenv tx = .ok msg)
+    (h_state : State.Inv wa benv.state)
+    (h_ca : wa ∉ benv.createdAccounts)
+    (h_origin_ne : tenv.stat.origin ≠ wa) :
+    Msg.InvSolvent wa msg := by
+  -- `prepareMessage` sets `caller = tenv.stat.origin`,
+  -- `shouldTransferValue = true`, and preserves `benv`.  In the call case, if
+  -- `currentTarget = wa`, then the installed code/codeAddress are exactly WETH's
+  -- code and `some wa`; in the create case `target.isNone = true`, so those
+  -- conditional fields are vacuous.
+  sorry
+
+lemma processMessageCall_sum_le {msg : Msg} {st' : _root_.State}
+    {out : MsgCallOutput}
+    (h_run : processMessageCall msg = .ok ⟨st', out⟩) :
+    sum st'.bal ≤ sum msg.benv.state.bal := by
+  -- Message execution can transfer ETH and burn/delete value, but does not mint
+  -- ETH.  Successful calls/create therefore do not increase the global balance
+  -- sum; final transaction-level deletions are handled separately.
+  sorry
+
+lemma State.Inv.add_transaction_gas_credits {wa : Adr}
+    {baseState debitState postMsgState : _root_.State}
+    {benv : Benv} {bout : BlockOutput} {tx : Tx}
+    {sender : Adr} {effectiveGasPrice : Nat}
+    {blobVersionedHashes : List B256} {txBlobGasUsed : Nat}
+    {intrinsicGas calldataFloorGasCost refundCounter : Nat}
+    {txOutput : MsgCallOutput}
+    (h_validate :
+      validateTransaction tx = .ok ⟨intrinsicGas, calldataFloorGasCost⟩)
+    (h_check :
+      checkTransaction benv bout tx =
+        .ok ⟨sender, effectiveGasPrice, blobVersionedHashes, txBlobGasUsed⟩)
+    (h_debit :
+      (baseState.incrNonce sender).subBal sender
+        (tx.gas * effectiveGasPrice +
+          if tx.isTypeThree = true then
+            calculate_data_fee benv.stat.excessBlobGas tx
+          else
+            0).toB256 =
+        some debitState)
+    (h_msg_sum : sum postMsgState.bal ≤ sum debitState.bal)
+    (h_base : State.Inv wa baseState)
+    (h_post : State.Inv wa postMsgState) :
+    State.Inv wa
+      ((postMsgState.addBal sender
+          ((tx.gas -
+              max (tx.gas - txOutput.gasLeft -
+                min ((tx.gas - txOutput.gasLeft) / 5) refundCounter)
+                calldataFloorGasCost) *
+            effectiveGasPrice).toB256).addBal
+        benv.stat.coinbase
+          (max (tx.gas - txOutput.gasLeft -
+              min ((tx.gas - txOutput.gasLeft) / 5) refundCounter)
+              calldataFloorGasCost *
+            (effectiveGasPrice - benv.stat.baseFeePerGas)).toB256) := by
+  -- `h_validate` bounds `calldataFloorGasCost ≤ tx.gas`; the gas arithmetic gives
+  --   refund + priorityFee ≤ tx.gas * effectiveGasPrice.
+  -- `h_check` and `h_debit` identify this amount as part of the sender's earlier
+  -- upfront payment (plus possible blob fee).  With `h_msg_sum`, the sum at
+  -- `postMsgState` has enough slack below `2^256` to apply `State.Inv.addBal`
+  -- twice.
+  sorry
+
 theorem processTransaction_inv_solvent (wa : Adr)
     (benv : Benv) (bout bout' : BlockOutput) (tx : Tx) (i : Nat) (st : _root_.State)
     (h_run : processTransaction benv bout tx i = .ok ⟨st, bout'⟩)
     (h_inv : Benv.InvSolvent wa benv) : Benv.InvSolvent wa (benv.withState st) := by
-  -- The linearized `processTransaction` (elevm already rebuilt) is a straight
-  -- `.ok`-bind chain; peel each `←` with `of_bind_eq_ok`, keeping calls opaque.
-  --   unfold processTransaction at h_run; peel transactionsTrie / validateTransaction
-  --   / checkTransaction (record `sender`; from checkTransaction, EIP-3607 gives
-  --   `hsender : sender ≠ wa` — a code-bearing account, and wa carries weth code,
-  --   cannot be a tx sender).
-  --   s₀ = benv.state.incrNonce sender             State.Inv.incrNonce
-  --   s₁ = (s₀.subBal sender fee).get              State.Inv.subBal hsender
-  --   ⟨s₂,out⟩ = processMessageCall msg            processMessageCall_inv_solvent
-  --                                                (gives State.Inv wa s₂ AND out.2)
-  --   s₃ = s₂.addBal sender refund                 State.Inv.addBal <bound₃>
-  --   s₄ = s₃.addBal coinbase txFee                State.Inv.addBal <bound₄>
-  --   st = out.accountsToDelete.toList.foldl destroyAccount s₄
-  --                                                State.Inv.foldl_destroyAccount out.2
-  -- <boundᵢ> = `sum sᵢ.bal + amt.toNat < 2^256` : leverage `ProcessMessage.inv_nof`
-  -- (already preserves the balance sum across processMessageCall) + h_inv.nof; the
-  -- credited amounts (refund, fee) were debited via the earlier subBal, so total wei
-  -- is non-increasing. (A `sum st.bal ≤ sum benv.state.bal` conservation lemma is the
-  -- clean way to package this.)
-  sorry
+  unfold processTransaction at h_run
+  rcases of_bind_eq_ok h_run with ⟨bout0, hbout0, h_run⟩
+  rcases of_bind_eq_ok h_run with ⟨gasInfo, hval, h_run⟩
+  rcases gasInfo with ⟨intrinsicGas, calldataFloorGasCost⟩
+  rcases of_bind_eq_ok h_run with ⟨chk, hcheck, h_run⟩
+  rcases chk with ⟨sender, effectiveGasPrice, blobVersionedHashes, txBlobGasUsed⟩
+  rcases of_bind_eq_ok h_run with ⟨state1, hsub, h_run⟩
+  rcases of_bind_eq_ok h_run with ⟨msg, hprep, h_run⟩
+  rcases of_bind_eq_ok h_run with ⟨pmout, hpm, h_run⟩
+  rcases pmout with ⟨state2, txOutput⟩
+  rcases of_bind_eq_ok h_run with ⟨refundCounter, hrefund, h_run⟩
+  simp only [Prod.mk.injEq] at h_run
+  rcases h_run with ⟨rfl, rfl⟩
+  have hsender : sender ≠ wa :=
+    checkTransaction_sender_ne_of_inv_solvent hcheck h_inv
+  have hsub_some :
+      (benv.state.incrNonce sender).subBal sender
+        (tx.gas * effectiveGasPrice +
+          if tx.isTypeThree = true then
+            calculate_data_fee benv.stat.excessBlobGas tx
+          else
+            0).toB256 = some state1 := by
+    generalize hopt : (benv.state.incrNonce sender).subBal sender
+        (tx.gas * effectiveGasPrice +
+          if tx.isTypeThree = true then
+            calculate_data_fee benv.stat.excessBlobGas tx
+          else
+            0).toB256 = o at hsub ⊢
+    cases o with
+    | none => simp [Option.toExcept] at hsub
+    | some s => simpa [Option.toExcept] using hsub
+  have hstate1 : State.Inv wa state1 :=
+    State.Inv.subBal hsender hsub_some (State.Inv.incrNonce h_inv.state)
+  have horigin :
+      ({ transientStorage := Std.TreeMap.empty,
+          stat :=
+            { origin := sender, gasPrice := effectiveGasPrice,
+              gas := tx.gas - intrinsicGas,
+              accessListAddresses :=
+                Std.HashSet.ofList (benv.stat.coinbase :: List.map Prod.fst tx.accessList),
+              accessListStorageKeys :=
+                Std.HashSet.ofList
+                  (List.map
+                    (fun x =>
+                      match x with
+                      | (adr, keys) => List.map (fun x => (adr, x)) keys)
+                    tx.accessList).flatten,
+              blobVersionedHashes := blobVersionedHashes, auths := tx.auths,
+              indexInBlock := some i, txHash := some (getTxHash tx) } } :
+            Tenv).stat.origin ≠ wa := by
+    exact hsender
+  have hmsg : Msg.InvSolvent wa msg :=
+    prepareMessage_inv_solvent hprep hstate1 (by simpa using h_inv.ca) horigin
+  have hpm_inv := processMessageCall_inv_solvent hpm hmsg
+  have hmsg_benv := prepareMessage_benv hprep
+  have hsum_le : sum state2.bal ≤ sum state1.bal := by
+    have h := processMessageCall_sum_le hpm
+    rw [hmsg_benv] at h
+    exact h
+  have hcredits : State.Inv wa
+      ((state2.addBal sender
+          ((tx.gas -
+              max (tx.gas - txOutput.gasLeft -
+                min ((tx.gas - txOutput.gasLeft) / 5) refundCounter)
+                calldataFloorGasCost) *
+            effectiveGasPrice).toB256).addBal
+        benv.stat.coinbase
+          (max (tx.gas - txOutput.gasLeft -
+              min ((tx.gas - txOutput.gasLeft) / 5) refundCounter)
+              calldataFloorGasCost *
+            (effectiveGasPrice - benv.stat.baseFeePerGas)).toB256) :=
+    State.Inv.add_transaction_gas_credits hval hcheck hsub_some hsum_le
+      h_inv.state hpm_inv.1
+  refine ⟨?_, ?_⟩
+  · exact State.Inv.foldl_destroyAccount hpm_inv.2 hcredits
+  · simpa [Benv.withState] using h_inv.ca
 
 theorem applyTransactions_inv_solvent (wa : Adr)
     (txis : List (Nat × Tx)) (benv benv' : Benv) (bout bout' : BlockOutput)
