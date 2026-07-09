@@ -5930,6 +5930,274 @@ theorem setDelegation_msg_noDel {wa : Adr} {msg msg' : Msg} {v : B256}
   · rw [h_ca]; exact h.ca
   · rw [h2]; exact h.code
 
+lemma setDelegationStep_inv_solvent {wa : Adr} {auth : Auth} {msg msg' : Msg}
+    {refund refund' : B256}
+    (h_run : setDelegationStep auth msg refund = .ok (msg', refund'))
+    (h_inv : State.Inv wa msg.benv.state) :
+    State.Inv wa msg'.benv.state := by
+  unfold setDelegationStep at h_run
+  split at h_run
+  · injection h_run with h1; injection h1 with h_msg h_refund
+    subst h_msg
+    exact h_inv
+  · split at h_run
+    · injection h_run with h1; injection h1 with h_msg h_refund
+      subst h_msg
+      exact h_inv
+    · split at h_run
+      · split at h_run
+        · injection h_run with h1; injection h1 with h_msg h_refund
+          subst h_msg
+          exact h_inv
+        · contradiction
+      · rename_i authority heq
+        dsimp only at h_run
+        split at h_run
+        · injection h_run with h1; injection h1 with h_msg h_refund
+          subst h_msg
+          exact h_inv
+        · split at h_run
+          · injection h_run with h1; injection h1 with h_msg h_refund
+            subst h_msg
+            exact h_inv
+          · injection h_run with h1; injection h1 with h_msg h_refund
+            subst h_msg
+            have h_code_ne : (msg.benv.state.getCode wa).toList ≠ [] := by
+              intro h_empty
+              exact Prog.compile_ne_nil (p := weth) (by rw [← h_inv.code, h_empty])
+            have h_emp : (msg.benv.state.get authority).code.isEmpty = true := by
+              simp_all
+            have h_size : (msg.benv.state.get authority).code.size = 0 := by
+              simp_all [ByteArray.isEmpty]
+            have h_ne : authority ≠ wa := ne_wa_of_code_size_zero h_code_ne h_size
+            change State.Inv wa ((msg.benv.state.setCode authority _).incrNonce authority)
+            exact State.Inv.incrNonce (State.Inv.setCode_ne h_ne h_inv)
+
+lemma setDelegationLoop_inv_solvent {wa : Adr} {auths : List Auth} {msg msg' : Msg}
+    {refund refund' : B256}
+    (h_run : setDelegationLoop auths msg refund = .ok (msg', refund'))
+    (h_inv : State.Inv wa msg.benv.state) :
+    State.Inv wa msg'.benv.state := by
+  induction auths generalizing msg refund with
+  | nil =>
+    injection h_run with h1; injection h1 with h_msg h_refund
+    subst h_msg
+    exact h_inv
+  | cons auth auths_tail ih =>
+    unfold setDelegationLoop at h_run
+    rcases bind_eq_ok_Except h_run with ⟨⟨msg1, refund1⟩, h_step, h_tail⟩
+    exact ih h_tail (setDelegationStep_inv_solvent h_step h_inv)
+
+lemma setDelegation_inv_solvent {wa : Adr} {msg msg' : Msg} {v : B256}
+    (h_run : setDelegation msg = .ok ⟨msg', v⟩)
+    (h_inv : State.Inv wa msg.benv.state) :
+    State.Inv wa msg'.benv.state := by
+  unfold setDelegation at h_run
+  dsimp [bind, Except.bind] at h_run
+  apply bind_eq_ok_Except at h_run
+  rcases h_run with ⟨⟨msg_mid, refundCounter⟩, h_loop, h_rest⟩
+  have h_eq_benv : msg_mid.benv = msg'.benv := by
+    dsimp only at h_rest
+    split at h_rest
+    · contradiction
+    · simpa using congrArg Msg.benv (congrArg Prod.fst (Except.ok.inj h_rest))
+  rw [← h_eq_benv]
+  exact setDelegationLoop_inv_solvent h_loop h_inv
+
+lemma setDelegationStep_fields {auth : Auth} {msg msg' : Msg}
+    {refund refund' : B256}
+    (h_run : setDelegationStep auth msg refund = .ok (msg', refund')) :
+    msg'.caller = msg.caller ∧
+    msg'.currentTarget = msg.currentTarget ∧
+    msg'.shouldTransferValue = msg.shouldTransferValue ∧
+    msg'.value = msg.value ∧
+    msg'.codeAddress = msg.codeAddress := by
+  unfold setDelegationStep at h_run
+  split at h_run
+  · injection h_run with h1; injection h1 with h_msg h_refund
+    subst h_msg
+    simp
+  · split at h_run
+    · injection h_run with h1; injection h1 with h_msg h_refund
+      subst h_msg
+      simp
+    · split at h_run
+      · split at h_run
+        · injection h_run with h1; injection h1 with h_msg h_refund
+          subst h_msg
+          simp
+        · contradiction
+      · dsimp only at h_run
+        split at h_run
+        · injection h_run with h1; injection h1 with h_msg h_refund
+          subst h_msg
+          simp
+        · split at h_run
+          · injection h_run with h1; injection h1 with h_msg h_refund
+            subst h_msg
+            simp
+          · injection h_run with h1; injection h1 with h_msg h_refund
+            subst h_msg
+            simp [Msg.setCode, Msg.incrNonce]
+
+lemma setDelegationLoop_fields {auths : List Auth} {msg msg' : Msg}
+    {refund refund' : B256}
+    (h_run : setDelegationLoop auths msg refund = .ok (msg', refund')) :
+    msg'.caller = msg.caller ∧
+    msg'.currentTarget = msg.currentTarget ∧
+    msg'.shouldTransferValue = msg.shouldTransferValue ∧
+    msg'.value = msg.value ∧
+    msg'.codeAddress = msg.codeAddress := by
+  induction auths generalizing msg refund with
+  | nil =>
+    injection h_run with h1; injection h1 with h_msg h_refund
+    subst h_msg
+    simp
+  | cons auth auths_tail ih =>
+    unfold setDelegationLoop at h_run
+    rcases bind_eq_ok_Except h_run with ⟨⟨msg1, refund1⟩, h_step, h_tail⟩
+    rcases setDelegationStep_fields h_step with ⟨hc1, ht1, hstv1, hv1, hca1⟩
+    rcases ih h_tail with ⟨hc2, ht2, hstv2, hv2, hca2⟩
+    exact ⟨hc2.trans hc1, ht2.trans ht1, hstv2.trans hstv1, hv2.trans hv1, hca2.trans hca1⟩
+
+structure Msg.InvSolvent (wa : Adr) (msg : Msg) : Prop where
+  (state : State.Inv wa msg.benv.state)
+  (nodel : Msg.NoDel wa msg)
+  (code : msg.currentTarget = wa → some msg.code.toList = Prog.compile weth)
+  (codeAddress : msg.currentTarget = wa → msg.codeAddress = some wa)
+  (ne : msg.shouldTransferValue = true → msg.caller ≠ wa)
+  (val0 : msg.shouldTransferValue = false → msg.currentTarget = wa → msg.value = 0)
+
+lemma Msg.InvSolvent.pc {wa : Adr} {msg : Msg} {codeSrc : Adr → ByteArray}
+    (h : Msg.InvSolvent wa msg) :
+    Msg.InvSolvent wa
+      (match getDelegatedCodeAddress msg.code with
+      | none => msg
+      | some dca =>
+        { msg with
+          disablePrecompiles := true,
+          accessedAddresses := msg.accessedAddresses.insert dca,
+          code := codeSrc dca,
+          codeAddress := some dca }) := by
+  split
+  · exact h
+  · rename_i dca h_dca
+    refine ⟨h.state, ⟨h.nodel.ca, h.nodel.code⟩, ?_, ?_, h.ne, h.val0⟩
+    · intro h_ct
+      have h_not_del : ¬ isValidDelegation msg.code :=
+        not_delegation_of_compile (h.code h_ct)
+      unfold getDelegatedCodeAddress at h_dca
+      split at h_dca
+      · rename_i h_del
+        exact False.elim (h_not_del h_del)
+      · contradiction
+    · intro h_ct
+      have h_not_del : ¬ isValidDelegation msg.code :=
+        not_delegation_of_compile (h.code h_ct)
+      unfold getDelegatedCodeAddress at h_dca
+      split at h_dca
+      · rename_i h_del
+        exact False.elim (h_not_del h_del)
+      · contradiction
+
+lemma setDelegation_inv_msg_solvent {wa : Adr} {msg msg' : Msg} {v : B256}
+    (h_run : setDelegation msg = .ok ⟨msg', v⟩)
+    (h : Msg.InvSolvent wa msg) :
+    Msg.InvSolvent wa msg' := by
+  have h_run_orig := h_run
+  refine ⟨setDelegation_inv_solvent h_run h.state,
+    setDelegation_msg_noDel h_run h.nodel, ?_, ?_, ?_, ?_⟩
+  · intro h_ct
+    unfold setDelegation at h_run
+    dsimp [bind, Except.bind] at h_run
+    apply bind_eq_ok_Except at h_run
+    rcases h_run with ⟨⟨msg_mid, refundCounter⟩, h_loop, h_rest⟩
+    rcases setDelegationLoop_fields h_loop with ⟨_, h_mid_ct, _, _, h_mid_ca⟩
+    have h_loop_equiv := setDelegationLoop_benv_equiv h_loop
+    rcases h_loop_equiv with ⟨_, h_code⟩
+    have h_code_ne : (msg.benv.state.getCode wa).toList ≠ [] := by
+      intro h_empty
+      exact Prog.compile_ne_nil (p := weth) (by rw [← h.state.code, h_empty])
+    have h_code_wa := h_code wa h_code_ne
+    dsimp only at h_rest
+    split at h_rest
+    · contradiction
+    · rename_i ca h_ca
+      have h_msg' : msg' =
+          { msg_mid with code := msg_mid.benv.state.getCode ca } := by
+        exact (congrArg Prod.fst (Except.ok.inj h_rest)).symm
+      subst msg'
+      change some (msg_mid.benv.state.getCode ca).toList = Prog.compile weth
+      change msg_mid.currentTarget = wa at h_ct
+      rw [h_mid_ct] at h_ct
+      have h_ca_wa : ca = wa := by
+        have h_msg_ca := h.codeAddress h_ct
+        rw [h_mid_ca, h_msg_ca] at h_ca
+        injection h_ca with h_eq
+        exact h_eq.symm
+      subst h_ca_wa
+      rw [h_code_wa]
+      exact h.state.code
+  · intro h_ct
+    unfold setDelegation at h_run_orig
+    dsimp [bind, Except.bind] at h_run_orig
+    apply bind_eq_ok_Except at h_run_orig
+    rcases h_run_orig with ⟨⟨msg_mid, refundCounter⟩, h_loop, h_rest⟩
+    rcases setDelegationLoop_fields h_loop with ⟨_, h_mid_ct, _, _, h_mid_ca⟩
+    dsimp only at h_rest
+    split at h_rest
+    · contradiction
+    · rename_i ca h_ca
+      have h_msg' : msg' =
+          { msg_mid with code := msg_mid.benv.state.getCode ca } := by
+        exact (congrArg Prod.fst (Except.ok.inj h_rest)).symm
+      subst msg'
+      change msg_mid.codeAddress = some wa
+      change msg_mid.currentTarget = wa at h_ct
+      rw [h_mid_ct] at h_ct
+      rw [h_mid_ca]
+      exact h.codeAddress h_ct
+  · intro h_stv
+    unfold setDelegation at h_run_orig
+    dsimp [bind, Except.bind] at h_run_orig
+    apply bind_eq_ok_Except at h_run_orig
+    rcases h_run_orig with ⟨⟨msg_mid, refundCounter⟩, h_loop, h_rest⟩
+    rcases setDelegationLoop_fields h_loop with ⟨h_mid_caller, _, h_mid_stv, _, _⟩
+    dsimp only at h_rest
+    split at h_rest
+    · contradiction
+    · rename_i ca h_ca
+      have h_msg' : msg' =
+          { msg_mid with code := msg_mid.benv.state.getCode ca } := by
+        exact (congrArg Prod.fst (Except.ok.inj h_rest)).symm
+      subst msg'
+      change msg_mid.caller ≠ wa
+      rw [h_mid_caller]
+      apply h.ne
+      change msg_mid.shouldTransferValue = true at h_stv
+      rwa [h_mid_stv] at h_stv
+  · intro h_stv h_ct
+    unfold setDelegation at h_run_orig
+    dsimp [bind, Except.bind] at h_run_orig
+    apply bind_eq_ok_Except at h_run_orig
+    rcases h_run_orig with ⟨⟨msg_mid, refundCounter⟩, h_loop, h_rest⟩
+    rcases setDelegationLoop_fields h_loop with ⟨_, h_mid_ct, h_mid_stv, h_mid_val, _⟩
+    dsimp only at h_rest
+    split at h_rest
+    · contradiction
+    · rename_i ca h_ca
+      have h_msg' : msg' =
+          { msg_mid with code := msg_mid.benv.state.getCode ca } := by
+        exact (congrArg Prod.fst (Except.ok.inj h_rest)).symm
+      subst msg'
+      change msg_mid.value = 0
+      rw [h_mid_val]
+      apply h.val0
+      · change msg_mid.shouldTransferValue = false at h_stv
+        rwa [h_mid_stv] at h_stv
+      · change msg_mid.currentTarget = wa at h_ct
+        rwa [h_mid_ct] at h_ct
+
 theorem processMessageCall_inv_noDel {wa : Adr} {msg : Msg} {st' : _root_.State}
     {out : MsgCallOutput}
     (h_run : processMessageCall msg = .ok ⟨st', out⟩)
@@ -6032,37 +6300,108 @@ theorem processMessageCall_accountsToDelete_ne {wa : Adr} {msg : Msg}
 theorem processMessageCall_inv_solvent {wa : Adr} {msg : Msg} {st' : _root_.State}
     {out : MsgCallOutput}
     (h_run : processMessageCall msg = .ok ⟨st', out⟩)
-    (h_inv : State.Inv wa msg.benv.state) :
+    (h_inv : Msg.InvSolvent wa msg) :
     State.Inv wa st' ∧ (∀ a ∈ out.accountsToDelete.toList, a ≠ wa) := by
-  -- Dispatch on `msg.target.isNone`.  Both helpers below now conclude `State.Inv`
-  -- ONLY (see NOTE for the second conjunct) and take side conditions:
-  --   `processMessage_inv_solvent`      (h_run) (h_code) (h_ne) (h_val0) (h_inv)
-  --   `processCreateMessage_inv_solvent`(h_run) (h_ct_ne) (h_ne) (h_inv)
-  --
-  --  • create (`processMessageCall.create`): early `AddressCollision` return keeps
-  --    `msg.benv.state` (h_inv direct, accountsToDelete = ∅).  Otherwise the
-  --    collision check *failed*, i.e. `¬ accountHasCodeOrNonce`, which gives
-  --    `msg.currentTarget ≠ wa` (wa has weth code) = `h_ct_ne`; invert
-  --    `evm ← processCreateMessage msg (msg.gas+50)`, `st' = evm.state`; finish
-  --    with `processCreateMessage_inv_solvent`.
-  --
-  --  • call (`processMessageCall.call`): the delegation prelude (`setDelegation`,
-  --    `getDelegatedCodeAddress`) yields `msgPc`.  Show `State.Inv wa msgPc.benv.state`
-  --    (setDelegation only touches code/nonce at the authority — `setCode_ne`/an
-  --    incrNonce-style lemma) and pass `h_code`/`h_ne`/`h_val0` for `msgPc` (its
-  --    currentTarget/code/caller/stv agree with `msg`'s); invert
-  --    `evm ← Except.bimap Prod.fst id <| processMessage msgPc _`, `st' = evm.state`;
-  --    finish with `processMessage_inv_solvent`.  (For the top call from
-  --    `processTransaction`, h_ne/h_val0/h_code hold: sender ≠ wa by EIP-3607, a tx
-  --    transfers value; but this lemma may need them threaded as hypotheses.)
-  --
-  -- NOTE (second conjunct `∀ a ∈ out.accountsToDelete, a ≠ wa`): `out.accountsToDelete`
-  -- is `∅` on error else `evm.accountsToDelete`.  This needs a SEPARATE new invariant
-  -- (see the `wa ∉ createdAccounts` stack to build): post-EIP-6780 an address enters
-  -- `accountsToDelete` only when it is in `createdAccounts` (elevm Execution.lean:1936,
-  -- donor = `sevm.currentTarget`), and `wa ∉ createdAccounts` because wa already
-  -- carries weth code and CREATE's collision check refuses code-bearing addresses.
-  sorry
+  refine ⟨?_, processMessageCall_accountsToDelete_ne h_run h_inv.nodel⟩
+  unfold processMessageCall at h_run
+  split at h_run
+  · unfold processMessageCall.create at h_run
+    dsimp only at h_run
+    split at h_run
+    · injection h_run with h_eq
+      cases h_eq
+      exact h_inv.state
+    · rename_i h_col
+      simp only [Bool.not_eq_true, Bool.or_eq_false_iff] at h_col
+      have h_ct : msg.currentTarget ≠ wa :=
+        ne_wa_of_not_hasCodeOrNonce h_inv.nodel.code h_col.1
+      revert h_run
+      rcases h_evm : processCreateMessage msg (msg.gas + 50) with ⟨err⟩ | evm
+      · simp only [Except.bimap, bind, Except.bind]
+        intro h_run
+        injection h_run
+      · simp only [Except.bimap, bind, Except.bind]
+        intro h_run
+        have h_pm := processCreateMessage_inv_solvent h_evm h_ct h_inv.ne h_inv.state
+        split at h_run
+        · split at h_run
+          · injection h_run
+          · simp only [Except.ok.injEq, Prod.mk.injEq] at h_run
+            rcases h_run with ⟨rfl, _⟩
+            exact h_pm
+        · simp only [id_eq, Except.ok.injEq, Prod.mk.injEq] at h_run
+          rcases h_run with ⟨rfl, _⟩
+          exact h_pm
+  · unfold processMessageCall.call at h_run
+    dsimp only at h_run
+    split at h_run
+    · simp only [bind, Except.bind] at h_run
+      unfold Except.bimap at h_run
+      split at h_run
+      · injection h_run
+      · rename_i evm h_evm
+        split at h_evm
+        · injection h_evm
+        · rename_i evm' h_pm
+          simp only [id_eq, Except.ok.injEq] at h_evm
+          subst h_evm
+          have h_pc : Msg.InvSolvent wa
+              (match getDelegatedCodeAddress msg.code with
+              | none => msg
+              | some dca =>
+                { msg with
+                  disablePrecompiles := true,
+                  accessedAddresses := msg.accessedAddresses.insert dca,
+                  code := msg.benv.state.getCode dca,
+                  codeAddress := some dca }) :=
+            Msg.InvSolvent.pc (codeSrc := fun dca => msg.benv.state.getCode dca) h_inv
+          have h_evm_inv :=
+            processMessage_inv_solvent h_pm h_pc.code h_pc.ne h_pc.val0 h_pc.state
+          split at h_run
+          · split at h_run
+            · injection h_run
+            · simp only [Except.ok.injEq, Prod.mk.injEq] at h_run
+              rcases h_run with ⟨rfl, _⟩
+              exact h_evm_inv
+          · simp only [Except.ok.injEq, Prod.mk.injEq] at h_run
+            rcases h_run with ⟨rfl, _⟩
+            exact h_evm_inv
+    · rename_i h_col
+      rcases h_del : setDelegation msg with ⟨err⟩ | ⟨⟨msgDelegation, val⟩⟩
+      · simp only [h_del, bind, Except.bind] at h_run
+        injection h_run
+      · simp only [h_del, bind, Except.bind] at h_run
+        have h_del_inv := setDelegation_inv_msg_solvent h_del h_inv
+        unfold Except.bimap at h_run
+        split at h_run
+        · injection h_run
+        · rename_i evm h_evm
+          split at h_evm
+          · injection h_evm
+          · rename_i evm' h_pm
+            simp only [id_eq, Except.ok.injEq] at h_evm
+            subst h_evm
+            have h_pc : Msg.InvSolvent wa
+                (match getDelegatedCodeAddress msgDelegation.code with
+                | none => msgDelegation
+                | some dca =>
+                  { msgDelegation with
+                    disablePrecompiles := true,
+                    accessedAddresses := msgDelegation.accessedAddresses.insert dca,
+                    code := msg.benv.state.getCode dca,
+                    codeAddress := some dca }) :=
+              Msg.InvSolvent.pc (codeSrc := fun dca => msg.benv.state.getCode dca) h_del_inv
+            have h_evm_inv :=
+              processMessage_inv_solvent h_pm h_pc.code h_pc.ne h_pc.val0 h_pc.state
+            split at h_run
+            · split at h_run
+              · injection h_run
+              · simp only [Except.ok.injEq, Prod.mk.injEq] at h_run
+                rcases h_run with ⟨rfl, _⟩
+                exact h_evm_inv
+            · simp only [Except.ok.injEq, Prod.mk.injEq] at h_run
+              rcases h_run with ⟨rfl, _⟩
+              exact h_evm_inv
 
 theorem processTransaction_inv_solvent (wa : Adr)
     (benv : Benv) (bout bout' : BlockOutput) (tx : Tx) (i : Nat) (st : _root_.State)
