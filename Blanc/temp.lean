@@ -2583,17 +2583,7 @@ lemma setDelegation_benv_equiv {msg msg' : Msg} {v : B256}
     dsimp only at h_rest
     split at h_rest
     · contradiction
-    · -- PLAN for this `sorry`: this is only the final `msg.code := ...` step of
-      -- `setDelegation`.  In this branch `h_rest` has the shape
-      --   Except.ok ({ msg_mid with code := msg_mid.benv.state.getCode adr }, refundCounter)
-      --     = Except.ok (msg', v)
-      -- and the goal is just `msg_mid.benv = msg'.benv`.  Take
-      -- `hp := Except.ok.inj h_rest`, project the first component with
-      -- `congrArg Prod.fst hp`, then project `Msg.benv` from that equality.
-      -- The updated message has the same `benv` as `msg_mid` by record-field
-      -- reduction, so `simpa using congrArg Msg.benv (congrArg Prod.fst hp)`
-      -- should close the goal.  Do not case-split the loop again here.
-      sorry
+    · simpa using congrArg Msg.benv (congrArg Prod.fst (Except.ok.inj h_rest))
   rw [← h_eq_benv]
   have h_I : Benv.EquivForDelegation msg.benv (Prod.mk msg (0:B256)).1.benv := Benv.EquivForDelegation_refl _
   revert h_forIn
