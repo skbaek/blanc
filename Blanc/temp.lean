@@ -1,4 +1,5 @@
 import Blanc.Solvent
+import Elevm.Execution
 
 /-!
 # NoDel : the "no self-destruction" invariant (scaffold)
@@ -2535,6 +2536,56 @@ lemma bind_eq_ok_Except {α β ε : Type} {x : Except ε α} {f : α → Except 
     dsimp [bind, Except.bind] at h
     exact ⟨a, rfl, h⟩
 
+lemma setDelegationStep_benv_equiv {auth : Auth} {msg msg' : Msg} {refund refund' : B256}
+    (h : setDelegationStep auth msg refund = .ok (msg', refund')) :
+    Benv.EquivForDelegation msg.benv msg'.benv := by
+  unfold setDelegationStep at h
+  split at h
+  · injection h with h1; injection h1 with h2 h3; subst h2
+    exact Benv.EquivForDelegation_refl _
+  · split at h
+    · injection h with h1; injection h1 with h2 h3; subst h2
+      exact Benv.EquivForDelegation_refl _
+    · split at h
+      · split at h
+        · injection h with h1; injection h1 with h2 h3; subst h2
+          exact Benv.EquivForDelegation_refl _
+        · contradiction
+      · rename_i authority heq
+        dsimp only at h
+        split at h
+        · injection h with h1; injection h1 with h2 h3; subst h2
+          exact Benv.EquivForDelegation_refl _
+        · split at h
+          · injection h with h1; injection h1 with h2 h3; subst h2
+            exact Benv.EquivForDelegation_refl _
+          · injection h with h1; injection h1 with h_msg h_refund
+            subst h_msg
+            refine ⟨rfl, fun a ha => ?_⟩
+            have h_emp : (msg.benv.state.get authority).code.isEmpty = true := by
+              simp_all
+            have h_size : (msg.benv.state.get authority).code.size = 0 := by
+              simp_all [ByteArray.isEmpty]
+            have h_ne : authority ≠ a := ne_wa_of_code_size_zero ha h_size
+            change ((_ : Msg).benv.incrNonce authority).state.getCode a = _
+            rw [Benv.incrNonce_getCode]
+            dsimp [Msg.setCode, State.getCode]
+            rw [State.setCode_get_code_ne h_ne]
+
+lemma setDelegationLoop_benv_equiv {auths : List Auth} {msg msg' : Msg} {refund refund' : B256}
+    (h : setDelegationLoop auths msg refund = .ok (msg', refund')) :
+    Benv.EquivForDelegation msg.benv msg'.benv := by
+  induction auths generalizing msg refund with
+  | nil =>
+    injection h with h1; injection h1 with h2 h3; subst h2
+    exact Benv.EquivForDelegation_refl _
+  | cons auth auths_tail ih =>
+    unfold setDelegationLoop at h
+    rcases bind_eq_ok_Except h with ⟨⟨msg1, refund1⟩, h_step, h_tail⟩
+    have h_equiv1 := setDelegationStep_benv_equiv h_step
+    have h_equiv2 := ih h_tail
+    exact Benv.EquivForDelegation_trans h_equiv1 h_equiv2
+
 lemma setDelegation_benv_equiv {msg msg' : Msg} {v : B256}
     (h_run : setDelegation msg = .ok ⟨msg', v⟩) :
     Benv.EquivForDelegation msg.benv msg'.benv := by
@@ -2598,13 +2649,13 @@ lemma setDelegation_benv_equiv {msg msg' : Msg} {v : B256}
   --    and compose them with `Benv.EquivForDelegation_trans`.
   --
   -- 3. This main lemma is already reduced to the loop result:
-  --      h_loop : setDelegationLoop msg.tenv.stat.auths msg 0
-  --          = .ok (msg_mid, refundCounter)
-  --      ⊢ Benv.EquivForDelegation msg.benv msg_mid.benv
-  --    Close it with `exact setDelegationLoop_benv_equiv h_loop`.  The
-  --    preceding `h_eq_benv` handles the final `codeAddress` wrapper: it only
-  --    rewrites `Msg.code`, so `Msg.benv` is unchanged.
-  sorry
+  --    h_loop : setDelegationLoop msg.tenv.stat.auths msg 0
+  --        = .ok (msg_mid, refundCounter)
+  --    ⊢ Benv.EquivForDelegation msg.benv msg_mid.benv
+  --  Close it with `exact setDelegationLoop_benv_equiv h_loop`.  The
+  --  preceding `h_eq_benv` handles the final `codeAddress` wrapper: it only
+  --  rewrites `Msg.code`, so `Msg.benv` is unchanged.
+  exact setDelegationLoop_benv_equiv h_loop
 
 theorem setDelegation_msg_noDel {wa : Adr} {msg msg' : Msg} {v : B256}
     (h_run : setDelegation msg = .ok ⟨msg', v⟩)
