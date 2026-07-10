@@ -1894,7 +1894,12 @@ lemma Xlot.balance_rel_of_good {ξ υ : Type} {lim : Nat}
     {outer : Except (String × ξ) υ} {xl : Xlot}
     (hfit : outer.Fit) (hgood : xl.Good lim outer) :
     Xlot.Rel Devm.BalNoninc xl := by
-  sorry
+  rcases xl with _ | ⟨sevm, devm, exn⟩
+  · constructor
+  · rcases hgood with ⟨lim', _, exec_eq, lim_of_lim⟩
+    have hfit' : exn.Fit := fun h => hfit (lim_of_lim h)
+    rcases of_exec lim' 0 sevm devm exn hfit' exec_eq with ⟨exc⟩
+    exact Exec.balance_effect exc
 
 /-
 (1) Difficulty: ★★★☆☆
