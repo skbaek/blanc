@@ -2085,7 +2085,32 @@ lemma processMessageCall.create_balance_noninc
     {msg : Msg} {post : _root_.State} {out : MsgCallOutput}
     (h : processMessageCall.create msg = .ok ⟨post, out⟩) :
     State.BalNoninc msg.benv.state post := by
-  sorry
+  unfold processMessageCall.create at h
+  dsimp only at h
+  split at h
+  · simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
+    rcases h with ⟨rfl, _⟩
+    exact le_refl _
+  · simp only [bind, Except.bind] at h
+    unfold Except.bimap at h
+    split at h
+    · injection h
+    · rename_i evm h_evm
+      split at h_evm
+      · injection h_evm
+      · rename_i evm' h_pm
+        simp only [id_eq, Except.ok.injEq] at h_evm
+        subst h_evm
+        have hbal := processCreateMessage_balance_noninc h_pm
+        split at h
+        · split at h
+          · injection h
+          · simp only [Except.ok.injEq, Prod.mk.injEq] at h
+            rcases h with ⟨rfl, _⟩
+            exact hbal
+        · simp only [Except.ok.injEq, Prod.mk.injEq] at h
+          rcases h with ⟨rfl, _⟩
+          exact hbal
 
 /-
 (1) Difficulty: ★☆☆☆☆
