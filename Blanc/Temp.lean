@@ -1863,7 +1863,85 @@ lemma GenericCall.balance_effect
     (run : GenericCall sevm pre gas value caller target codeAddress
       stv istat ii is oi os code dp xl out) :
     Execution.Rel Devm.BalNoninc pre out := by
-  sorry
+  dsimp only [GenericCall] at run
+  rcases run with ⟨evm1, h_evm1, run⟩
+  split_ifs at run with h_depth
+  · -- depth limit reached : call fails, state unchanged
+    rcases run with ⟨_, h_push⟩
+    have h_bal : Devm.BalNoninc pre (evm1.withGasLeft (evm1.gasLeft + gas)) := by
+      apply Devm.balNoninc_of_state
+      rw [h_evm1]
+      exact balNoninc_refl_trans.1.1 _
+    rcases out with ⟨err, d⟩ | d
+    · simp only [Execution.Rel, Outcome.Rel]
+      refine balNoninc_refl_trans.2.2 h_bal ?_
+      apply Devm.balNoninc_of_getBal_eq
+      funext a
+      exact Devm.push_getBal_err h_push a
+    · simp only [Execution.Rel, Outcome.Rel, id]
+      refine balNoninc_refl_trans.2.2 h_bal ?_
+      apply Devm.balNoninc_of_state
+      rw [← (Devm.push_of_push h_push).state]
+      exact balNoninc_refl_trans.1.1 _
+  · rcases run with ⟨calldata, _, run⟩
+    rcases run with ⟨childMsg, h_cm, run⟩
+    rcases run with ⟨ex', run_pm, h_split⟩
+    have h_pm := ProcessMessage.balance_effect hxl run_pm
+    have h_st : childMsg.benv.state = pre.state := by rw [h_cm, h_evm1]; rfl
+    unfold MessageExecution.Rel at h_pm
+    rw [h_st] at h_pm
+    rcases ex' with ⟨e1, e2, e3, e4⟩ | child
+    · dsimp only [liftToExecution] at h_split
+      rcases h_split with ⟨x, h_err, h_out⟩ | ⟨c, h_contra, _⟩
+      · have hx := Except.error.inj h_err
+        subst hx
+        rw [h_out]
+        simp only [Execution.Rel, Outcome.Rel]
+        exact h_pm
+      · cases h_contra
+    · dsimp only [liftToExecution] at h_split
+      rcases h_split with ⟨x, h_contra, _⟩ | ⟨c, h_c, h_body⟩
+      · cases h_contra
+      have hc := Except.ok.inj h_c
+      subst hc
+      dsimp only [MessageExecution.state] at h_pm
+      by_cases h_err : child.error.isSome = true
+      · rw [if_pos h_err] at h_body
+        have h_bal : Devm.BalNoninc pre (incorporateChildOnError evm1 child child.output) := by
+          apply Devm.balNoninc_of_state
+          exact h_pm
+        rcases h_body with ⟨e, h_pusherr, h_out⟩ | ⟨evm2, h_push, h_out⟩
+        · rw [h_out]
+          simp only [Execution.Rel, Outcome.Rel]
+          refine balNoninc_refl_trans.2.2 h_bal ?_
+          apply Devm.balNoninc_of_getBal_eq
+          funext a
+          exact Devm.push_getBal_err h_pusherr a
+        · rw [← h_out]
+          simp only [Execution.Rel, Outcome.Rel, id]
+          refine balNoninc_refl_trans.2.2 h_bal ?_
+          apply Devm.balNoninc_of_state
+          show State.BalNoninc _ evm2.state
+          rw [← (Devm.push_of_push h_push).state]
+          exact balNoninc_refl_trans.1.1 _
+      · rw [if_neg h_err] at h_body
+        have h_bal : Devm.BalNoninc pre (incorporateChildOnSuccess evm1 child child.output) := by
+          apply Devm.balNoninc_of_state
+          exact h_pm
+        rcases h_body with ⟨e, h_pusherr, h_out⟩ | ⟨evm2, h_push, h_out⟩
+        · rw [h_out]
+          simp only [Execution.Rel, Outcome.Rel]
+          refine balNoninc_refl_trans.2.2 h_bal ?_
+          apply Devm.balNoninc_of_getBal_eq
+          funext a
+          exact Devm.push_getBal_err h_pusherr a
+        · rw [← h_out]
+          simp only [Execution.Rel, Outcome.Rel, id]
+          refine balNoninc_refl_trans.2.2 h_bal ?_
+          apply Devm.balNoninc_of_state
+          show State.BalNoninc _ evm2.state
+          rw [← (Devm.push_of_push h_push).state]
+          exact balNoninc_refl_trans.1.1 _
 
 /-
 (1) Difficulty: ★★★★★
