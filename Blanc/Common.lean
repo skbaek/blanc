@@ -7980,6 +7980,29 @@ lemma State.get_set_ne {w : _root_.State} {a a' : Adr} {ac : Acct} (h : a' ≠ a
   · rw [Std.TreeMap.getD_erase]; simp [hc]
   · rw [Std.TreeMap.getD_insert]; simp [hc]
 
+lemma State.set_bal {st : _root_.State} {a : Adr} {ac : Acct}
+    (h : ac.bal = (st.get a).bal) : (st.set a ac).bal = st.bal := by
+  funext b
+  by_cases hb : b = a
+  · subst hb
+    show ((st.set b ac).get b).bal = (st.get b).bal
+    rw [State.get_set_self]
+    exact h
+  · show ((st.set a ac).get b).bal = (st.get b).bal
+    rw [State.get_set_ne (fun hc => hb hc.symm)]
+
+lemma State.setStor_bal {st : _root_.State} {a : Adr} {s : Stor} :
+    (st.setStor a s).bal = st.bal := State.set_bal rfl
+
+lemma State.incrNonce_bal {st : _root_.State} {a : Adr} :
+    (st.incrNonce a).bal = st.bal := State.set_bal rfl
+
+lemma State.setCode_bal {st : _root_.State} {a : Adr} {cd : ByteArray} :
+    (st.setCode a cd).bal = st.bal := State.set_bal rfl
+
+lemma Devm.incrNonce_state {d : Devm} {a : Adr} :
+    (d.incrNonce a).state = d.state.incrNonce a := rfl
+
 -- The create-seeding step: wa ∉ msg.benv.createdAccounts and code is untouched.
 lemma Msg.NoDel.processCreateMessage_msg {wa : Adr} {msg : Msg}
     (h_ct : msg.currentTarget ≠ wa)

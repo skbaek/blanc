@@ -1196,11 +1196,51 @@ lemma ProcessCreateMessage.balance_effect {msg : Msg} {xl : Xlot}
     (hxl : Xlot.Rel Devm.BalNoninc xl)
     (run : ProcessCreateMessage msg xl out) :
     MessageExecution.Rel State.BalNoninc msg.benv.state out := by
-  /- Blocked: the required balance-frame lemmas for `setStor`, `incrNonce`, and
-  `setCode` are not available in `Common`; direct unfolding reaches recursion
-  depth limits. Move/prove those lightweight frames near the primitives, then
-  compose them with `ProcessMessage.balance_effect` and charge-code-gas. -/
-  sorry
+  dsimp only [ProcessCreateMessage] at run
+  rcases run with ⟨ex', run_pm, h_split⟩
+  have h_seed : (processCreateMessage.msg msg).benv.state.bal = msg.benv.state.bal := by
+    change ((msg.benv.state.setStor msg.currentTarget .empty).incrNonce
+      msg.currentTarget).bal = msg.benv.state.bal
+    rw [State.incrNonce_bal, State.setStor_bal]
+  have h_pm := ProcessMessage.balance_effect hxl run_pm
+  unfold MessageExecution.Rel State.BalNoninc State.balSum at h_pm
+  rw [h_seed] at h_pm
+  dsimp only [Except.Split] at h_split
+  rcases h_split with ⟨x, h_ex', h_out⟩ | ⟨evm, h_ex', h_body⟩
+  · subst ex'
+    subst out
+    exact h_pm
+  · subst ex'
+    by_cases h_err : evm.error.isNone = true
+    · rw [if_pos h_err] at h_body
+      rcases h_cg : processCreateMessage.chargeCodeGas evm with ⟨err, evm'⟩ | evm'
+      · rw [h_cg] at h_body
+        dsimp only at h_body
+        by_cases h_halt : isExceptionalHalt err
+        · rw [if_pos h_halt] at h_body
+          rw [← h_body]
+          exact balNoninc_refl_trans.1.1 _
+        · rw [if_neg h_halt] at h_body
+          have h_charge := processCreateMessage.chargeCodeGas_balance_effect h_cg
+          unfold Execution.Rel Outcome.Rel Devm.BalNoninc Devm.balSum State.balSum at h_charge
+          dsimp only [id] at h_charge
+          dsimp only [MessageExecution.state] at h_pm
+          rw [← h_body]
+          exact Nat.le_trans h_charge h_pm
+      · rw [h_cg] at h_body
+        dsimp only at h_body
+        have h_charge := processCreateMessage.chargeCodeGas_balance_effect h_cg
+        unfold Execution.Rel Outcome.Rel Devm.BalNoninc Devm.balSum State.balSum at h_charge
+        dsimp only [id] at h_charge
+        dsimp only [MessageExecution.state] at h_pm
+        rw [← h_body]
+        change sum (evm'.state.setCode msg.currentTarget ⟨⟨evm'.output⟩⟩).bal ≤
+          sum msg.benv.state.bal
+        rw [State.setCode_bal]
+        exact Nat.le_trans h_charge h_pm
+    · rw [if_neg h_err] at h_body
+      rw [← h_body]
+      exact balNoninc_refl_trans.1.1 _
 
 /-
 (1) Difficulty: ★★★★★
@@ -1395,10 +1435,6 @@ lemma processMessageCall.call_balance_noninc
     {msg : Msg} {post : _root_.State} {out : MsgCallOutput}
     (h : processMessageCall.call msg = .ok ⟨post, out⟩) :
     State.BalNoninc msg.benv.state post := by
-  /- Blocked: unfolding this pseudo-imperative call wrapper produces enormous
-  nested bind terms and reaches recursion depth. Expose an inversion/frame lemma
-  saying a successful call contains a successful `processMessage` and preserves
-  the pre-call balance frame through delegation/msgPc preparation. -/
   sorry
 
 /-
