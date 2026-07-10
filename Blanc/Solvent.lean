@@ -4663,7 +4663,7 @@ theorem weth_inv_solvent (wa : Adr) :
 -- transactions and blocks (no active call frame).
 structure State.Inv (wa : Adr) (w : _root_.State) : Prop where
   (code : some (w.getCode wa).toList = Prog.compile weth)
-  (nof : SumNof w.bal)
+  (nof : _root_.SumNof w.bal)
   (solvent : w.Solvent wa)
 
 -- Counterpart of `weth_inv_solvent` for the raw executable `exec`, with
@@ -4749,7 +4749,7 @@ theorem State.Inv.addBal {wa a : Adr} {val : B256} {w : _root_.State}
   refine ⟨?_, ?_, ?_⟩
   · show some (((w.addBal a val).get wa).code).toList = Prog.compile weth
     unfold State.addBal; rw [State.setBal_get_code]; exact h.code
-  · unfold SumNof; omega
+  · unfold _root_.SumNof; omega
   · show Stor.Solvent (((w.addBal a val).get wa).stor) 0 ((w.addBal a val).get wa).bal
     have hsolv := h.solvent
     unfold State.Solvent Stor.Solvent at hsolv
@@ -4781,7 +4781,7 @@ theorem State.Inv.subBal {wa a : Adr} {val : B256} {w w' : _root_.State}
         show w.bal b = ((w.setBal a (w.bal a - val)).get b).bal
         rw [State.setBal_get_ne hnb]; rfl
     have hsum := sum_sub_assoc hdec h_le
-    have hnof := h.nof; unfold SumNof at hnof ⊢
+    have hnof := h.nof; unfold _root_.SumNof at hnof ⊢
     omega
   · -- solvent: `wa`'s storage and balance are both untouched
     show Stor.Solvent (((w.setBal a (w.bal a - val)).get wa).stor) 0
@@ -4820,7 +4820,7 @@ theorem State.Inv.destroyAccount {wa a : Adr} {w : _root_.State}
         show w.bal b = (State.get (w.erase a) b).bal
         rw [State.get_erase_ne (Ne.symm hnb)]; rfl
     have hsum := sum_sub_assoc hdec (le_refl _)
-    have hnof := h.nof; unfold SumNof at hnof ⊢
+    have hnof := h.nof; unfold _root_.SumNof at hnof ⊢
     omega
   · show Stor.Solvent (((_root_.destroyAccount w a).get wa).stor) 0
       ((_root_.destroyAccount w a).get wa).bal
@@ -5046,7 +5046,7 @@ lemma State.Inv.of_benvAfterTransfer {wa : Adr} {msg : Msg} {benv : Benv}
     have hss := sum_sub_assoc hdec h_le
     have h_vle : msg.value.toNat ≤ sum msg.benv.state.bal :=
       le_trans (B256.toNat_le_toNat h_le) le_sum
-    have hnof := h_inv.nof; unfold SumNof at hnof
+    have hnof := h_inv.nof; unfold _root_.SumNof at hnof
     exact State.Inv.addBal (by omega) h_inv_mid
   · have hbenv : benv = msg.benv := _root_.of_benvAfterTransfer_no h_stv hb
     rw [hbenv]; exact h_inv
@@ -6553,16 +6553,6 @@ lemma prepareMessage_inv_solvent {wa : Adr}
       rfl
     · simpa using h_origin_ne
     · simp
-
-lemma processMessageCall_sum_le {msg : Msg} {st' : _root_.State}
-    {out : MsgCallOutput}
-    (h_run : processMessageCall msg = .ok ⟨st', out⟩) :
-    sum st'.bal ≤ sum msg.benv.state.bal := by
-  -- TODO: The required balance-sum monotonicity invariant is not yet developed.
-  -- `processMessageCall` reaches arbitrary `exec` runs; add a mutually recursive
-  -- sum-preservation/non-increase proof for calls, creates, and `SELFDESTRUCT`
-  -- (parallel to `Exec.inv_nof`) before this can be discharged.
-  sorry
 
 lemma State.Inv.add_transaction_gas_credits {wa : Adr}
     {baseState debitState postMsgState : _root_.State}
