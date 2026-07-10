@@ -670,6 +670,14 @@ lemma State.sub_addBal_noninc {st mid : _root_.State}
   have h2 := State.balSum_subBal hsub
   omega
 
+lemma State.setBal_zero_noninc (st : _root_.State) (a : Adr) :
+    State.BalNoninc st (st.setBal a 0) := by
+  unfold State.BalNoninc
+  have h := State.balSum_setBal st a 0
+  have hz : ((0 : B256).toNat) = 0 := by native_decide
+  rw [hz, Nat.add_zero] at h
+  omega
+
 /-
 (1) Difficulty: ★☆☆☆☆
 (2) Proof sketch: both definitions reduce to the same inequality on
@@ -679,6 +687,12 @@ update lemmas and the interpreter's `Devm` relation.
 lemma Devm.balNoninc_of_state {pre post : Devm}
     (h : State.BalNoninc pre.state post.state) : Devm.BalNoninc pre post := by
   exact h
+
+lemma Devm.balNoninc_of_getBal_eq {pre post : Devm}
+    (h : post.getBal = pre.getBal) : Devm.BalNoninc pre post := by
+  unfold Devm.BalNoninc Devm.balSum State.balSum
+  change sum post.getBal ≤ sum pre.getBal
+  rw [h]
 
 /-! ## 5. Balance effects of instruction and message semantic units -/
 
@@ -710,6 +724,10 @@ instruction, but `sstore_inv_getBal` already provides its balance frame fact.
 -/
 lemma Rinst.balance_effect (r : Rinst) :
     Rinst.Effect Devm.BalNoninc r := by
+  /- Blocked: the success case follows from `Rinst.inv_bal`, but error paths
+  require a compositional `Rinst.inv_getBal_err`/`Rinst.inv_state_err` theorem.
+  Expanding `Rinst.runCore` instead blows up its pseudo-imperative interpreter.
+  Refactor it into small relational helpers and prove the error frame there. -/
   sorry
 
 /-
@@ -856,7 +874,196 @@ Handle `donor = donee` explicitly rather than assuming distinct addresses.
 -/
 lemma Linst.balance_effect (l : Linst) :
     Linst.Effect Devm.BalNoninc l := by
-  sorry
+  intro sevm pre out run
+  cases l
+  case stop =>
+    dsimp [Linst.Run, Linst.run] at run
+    rw [← run]
+    exact balNoninc_refl_trans.2.1 pre
+  case ret =>
+    dsimp [Linst.Run, Linst.run] at run
+    revert run
+    dsimp [bind, Except.bind]
+    cases h1 : pre.popToNat <;> dsimp
+    case error err =>
+      intro run
+      rw [← run]
+      apply Devm.balNoninc_of_getBal_eq
+      rw [Devm.popToNat_err_snd h1]
+    case ok res1 =>
+      have hp1 : res1.2.getBal = pre.getBal := by
+        funext a
+        exact Devm.popToNat_getBal_eq h1 a
+      cases h2 : res1.2.popToNat <;> dsimp
+      case error err =>
+        intro run
+        rw [← run]
+        apply Devm.balNoninc_of_getBal_eq
+        rw [Devm.popToNat_err_snd h2]
+        exact hp1
+      case ok res2 =>
+        have hp2 : res2.2.getBal = pre.getBal := by
+          funext a
+          exact (Devm.popToNat_getBal_eq h2 a).trans (congrFun hp1 a)
+        cases h3 : chargeGas (res2.2.extCost [(res1.1, res2.1)]) res2.2 <;> dsimp
+        case error err =>
+          intro run
+          rw [← run]
+          apply Devm.balNoninc_of_getBal_eq
+          rw [chargeGas_err_snd h3]
+          exact hp2
+        case ok res3 =>
+          intro run
+          rw [← run]
+          apply Devm.balNoninc_of_getBal_eq
+          funext a
+          have hmem : res3.memRead res1.1 res2.1 =
+              ⟨(res3.memRead res1.1 res2.1).1, (res3.memRead res1.1 res2.1).2⟩ := rfl
+          exact (memRead_getBal_eq hmem a).trans
+            ((chargeGas_getBal_eq h3 a).trans (congrFun hp2 a))
+  case rev =>
+    dsimp [Linst.Run, Linst.run] at run
+    revert run
+    dsimp [bind, Except.bind]
+    cases h1 : pre.popToNat <;> dsimp
+    case error err =>
+      intro run
+      rw [← run]
+      apply Devm.balNoninc_of_getBal_eq
+      rw [Devm.popToNat_err_snd h1]
+    case ok res1 =>
+      have hp1 : res1.2.getBal = pre.getBal := by
+        funext a
+        exact Devm.popToNat_getBal_eq h1 a
+      cases h2 : res1.2.popToNat <;> dsimp
+      case error err =>
+        intro run
+        rw [← run]
+        apply Devm.balNoninc_of_getBal_eq
+        rw [Devm.popToNat_err_snd h2]
+        exact hp1
+      case ok res2 =>
+        have hp2 : res2.2.getBal = pre.getBal := by
+          funext a
+          exact (Devm.popToNat_getBal_eq h2 a).trans (congrFun hp1 a)
+        cases h3 : chargeGas (res2.2.extCost [(res1.1, res2.1)]) res2.2 <;> dsimp
+        case error err =>
+          intro run
+          rw [← run]
+          apply Devm.balNoninc_of_getBal_eq
+          rw [chargeGas_err_snd h3]
+          exact hp2
+        case ok res3 =>
+          intro run
+          rw [← run]
+          apply Devm.balNoninc_of_getBal_eq
+          funext a
+          have hmem : res3.memRead res1.1 res2.1 =
+              ⟨(res3.memRead res1.1 res2.1).1, (res3.memRead res1.1 res2.1).2⟩ := rfl
+          exact (memRead_getBal_eq hmem a).trans
+            ((chargeGas_getBal_eq h3 a).trans (congrFun hp2 a))
+  case dest =>
+    dsimp [Linst.Run, Linst.run] at run
+    revert run
+    dsimp [bind, Except.bind]
+    cases h1 : pre.popToAdr <;> dsimp
+    case error err =>
+      intro run
+      rw [← run]
+      apply Devm.balNoninc_of_getBal_eq
+      rw [Devm.popToAdr_err_snd h1]
+    case ok res1 =>
+      have hpop : res1.2.getBal = pre.getBal := by
+        funext a
+        exact Devm.popToAdr_getBal_eq h1 a
+      have hacc :
+          (if res1.1 ∉ res1.2.accessedAddresses then
+              (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess)
+            else (res1.2, gasSelfDestruct)).1.getBal = res1.2.getBal := by
+        funext a
+        split <;> rfl
+      cases h2 : chargeGas
+          (if ((if res1.1 ∉ res1.2.accessedAddresses then
+                      (addAccessedAddress res1.2 res1.1,
+                        gasSelfDestruct + gasColdAccountAccess)
+                    else (res1.2, gasSelfDestruct)).1.getAcct res1.1).Empty ∧
+                ¬(res1.2.getAcct sevm.currentTarget).bal = 0 then
+            (if res1.1 ∉ res1.2.accessedAddresses then
+                  (addAccessedAddress res1.2 res1.1,
+                    gasSelfDestruct + gasColdAccountAccess)
+                else (res1.2, gasSelfDestruct)).2 + gasSelfDestructNewAccount
+          else
+            (if res1.1 ∉ res1.2.accessedAddresses then
+                (addAccessedAddress res1.2 res1.1,
+                  gasSelfDestruct + gasColdAccountAccess)
+              else (res1.2, gasSelfDestruct)).2)
+          (if res1.1 ∉ res1.2.accessedAddresses then
+              (addAccessedAddress res1.2 res1.1,
+                gasSelfDestruct + gasColdAccountAccess)
+            else (res1.2, gasSelfDestruct)).1 <;> dsimp
+      case error err =>
+        intro run
+        rw [← run]
+        apply Devm.balNoninc_of_getBal_eq
+        rw [chargeGas_err_snd h2]
+        exact hacc.trans hpop
+      case ok res2 =>
+        have hpre : res2.getBal = pre.getBal := by
+          funext a
+          exact (chargeGas_getBal_eq h2 a).trans
+            (congrFun (hacc.trans hpop) a)
+        cases h3 : assertDynamic sevm res2
+        case error err =>
+          intro run
+          rw [← run]
+          apply Devm.balNoninc_of_getBal_eq
+          have herr : err.2 = res2 := by
+            dsimp [assertDynamic] at h3
+            exact Except.assert_err_snd h3
+          rw [herr]
+          exact hpre
+        case ok _ =>
+          cases h4 : res2.subBal sevm.currentTarget
+              (res1.2.getAcct sevm.currentTarget).bal <;> dsimp [Option.toExcept]
+          case none =>
+            intro run
+            rw [← run]
+            exact Devm.balNoninc_of_getBal_eq hpre
+          case some res3 =>
+            have hsub : res2.state.subBal sevm.currentTarget
+                (res1.2.getAcct sevm.currentTarget).bal = some res3.state := by
+              dsimp [Devm.subBal, Option.bind] at h4
+              cases hs : res2.state.subBal sevm.currentTarget
+                  (res1.2.getAcct sevm.currentTarget).bal
+              · rw [hs] at h4
+                contradiction
+              · rw [hs] at h4
+                injection h4 with heq
+                subst heq
+                rfl
+            have htransfer : State.BalNoninc pre.state
+                (res3.addBal res1.1
+                  (res1.2.getAcct sevm.currentTarget).bal).state := by
+              have ht := State.sub_addBal_noninc (dst := res1.1) hsub
+              have hbal : res2.state.bal = pre.state.bal := hpre
+              unfold State.BalNoninc State.balSum at ht ⊢
+              rw [hbal] at ht
+              exact ht
+            by_cases hdel : sevm.currentTarget ∈
+                (res3.addBal res1.1
+                  (res1.2.getAcct sevm.currentTarget).bal).createdAccounts
+            · simp only [hdel, if_pos]
+              intro run
+              rw [← run]
+              unfold Execution.Rel Outcome.Rel
+              apply Devm.balNoninc_of_state
+              apply balNoninc_refl_trans.1.2 htransfer
+              exact State.setBal_zero_noninc _ _
+            · simp only [hdel]
+              intro run
+              rw [← run]
+              unfold Execution.Rel Outcome.Rel
+              exact Devm.balNoninc_of_state htransfer
 
 /-
 (1) Difficulty: ★★★☆☆
@@ -989,6 +1196,10 @@ lemma ProcessCreateMessage.balance_effect {msg : Msg} {xl : Xlot}
     (hxl : Xlot.Rel Devm.BalNoninc xl)
     (run : ProcessCreateMessage msg xl out) :
     MessageExecution.Rel State.BalNoninc msg.benv.state out := by
+  /- Blocked: the required balance-frame lemmas for `setStor`, `incrNonce`, and
+  `setCode` are not available in `Common`; direct unfolding reaches recursion
+  depth limits. Move/prove those lightweight frames near the primitives, then
+  compose them with `ProcessMessage.balance_effect` and charge-code-gas. -/
   sorry
 
 /-
@@ -1132,7 +1343,13 @@ relational `ProcessMessage` run.  Convert `Good` with
 lemma processMessage_balance_noninc {msg : Msg} {lim : Nat} {post : Devm}
     (h : processMessage msg lim = .ok post) :
     State.BalNoninc msg.benv.state post.state := by
-  sorry
+  have hfit : (Except.ok post : Except (String × State × AdrSet × Tra) Devm).Fit := by
+    intro hlim
+    simp [Except.Lim, Except.toError?] at hlim
+  obtain ⟨xl, hgood, hrun⟩ := of_processMessage msg lim (.ok post) hfit h
+  have heff := ProcessMessage.balance_effect (Xlot.balance_rel_of_good hfit hgood) hrun
+  change State.BalNoninc msg.benv.state post.state at heff
+  exact heff
 
 /-
 (1) Difficulty: ★★★☆☆
@@ -1143,7 +1360,14 @@ lemma processCreateMessage_balance_noninc
     {msg : Msg} {lim : Nat} {post : Devm}
     (h : processCreateMessage msg lim = .ok post) :
     State.BalNoninc msg.benv.state post.state := by
-  sorry
+  have hfit : (Except.ok post : Except (String × State × AdrSet × Tra) Devm).Fit := by
+    simp [Except.Fit, Except.Lim]
+    change ¬ (none : Option String) = some "RecursionLimit"
+    simp
+  rcases of_processCreateMessage msg lim (.ok post) hfit h with ⟨xl, hgood, hrun⟩
+  have hxl : Xlot.Rel Devm.BalNoninc xl := Xlot.balance_rel_of_good hfit hgood
+  have heff := ProcessCreateMessage.balance_effect hxl hrun
+  exact heff
 
 /-
 (1) Difficulty: ★★★☆☆
@@ -1171,6 +1395,10 @@ lemma processMessageCall.call_balance_noninc
     {msg : Msg} {post : _root_.State} {out : MsgCallOutput}
     (h : processMessageCall.call msg = .ok ⟨post, out⟩) :
     State.BalNoninc msg.benv.state post := by
+  /- Blocked: unfolding this pseudo-imperative call wrapper produces enormous
+  nested bind terms and reaches recursion depth. Expose an inversion/frame lemma
+  saying a successful call contains a successful `processMessage` and preserves
+  the pre-call balance frame through delegation/msgPc preparation. -/
   sorry
 
 /-
