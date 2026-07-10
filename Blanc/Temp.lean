@@ -712,6 +712,528 @@ def BenvExecution.state : Except (String × _root_.State × AdrSet × Tra) Benv 
   | .ok benv => benv.state
   | .error ⟨_, st, _, _⟩ => st
 
+/-! Error-side `getBal` frame lemmas, mirroring the generated `*_getCode_err`
+family in `Blanc/Common.lean`: every regular-instruction error path leaves
+balances unchanged. -/
+
+lemma Devm.pop_map_snd_getBal_eq {devm devm1 : Devm} (hp : (devm.pop <&> Prod.snd) = .ok devm1) (a : Adr) : devm1.getBal a = devm.getBal a := by
+  dsimp [(· <&> ·), Functor.mapRev, Functor.map, Except.map] at hp
+  rcases hp2 : devm.pop with _ | ⟨x, devm2⟩
+  · simp [hp2] at hp
+  · simp [hp2] at hp
+    rcases hp with ⟨_, rfl⟩
+    exact Devm.pop_getBal_eq hp2 a
+
+lemma Devm.pop_map_snd_getBal_err {devm : Devm} {err : String × Devm} (hp : (devm.pop <&> Prod.snd) = .error err) (a : Adr) : err.2.getBal a = devm.getBal a := by
+  dsimp [(· <&> ·), Functor.mapRev, Functor.map, Except.map] at hp
+  rcases hp2 : devm.pop with e | ⟨x, devm2⟩
+  · simp [hp2] at hp; cases hp
+    simp only [Devm.pop] at hp2
+    split at hp2 <;> try contradiction
+    cases hp2; rfl
+  · simp [hp2] at hp
+
+lemma Devm.pop_getBal_err {err devm} (h : Devm.pop devm = .error err) (a : Adr) : err.2.getBal a = devm.getBal a := by
+  simp only [Devm.pop] at h
+  split at h <;> try contradiction
+  cases h; rfl
+
+lemma chargeGas_getBal_err {cost devm err} (h : chargeGas cost devm = .error err) (a : Adr) : err.2.getBal a = devm.getBal a := by
+  simp only [chargeGas] at h
+  split at h <;> try contradiction
+  cases h; rfl
+
+lemma Devm.push_getBal_err {v devm err} (h : Devm.push v devm = Except.error err) (a : Adr) : err.2.getBal a = devm.getBal a := by
+  unfold Devm.push Except.assert at h; dsimp [Bind.bind, Except.bind] at h
+  split_ifs at h; try contradiction
+  injection h with h1; rw [← h1]
+
+lemma assert_getBal_err {cond : Prop} [Decidable cond] {msg : String} {devm : Devm} {err : String × Devm} (h : Except.assert cond (msg, devm) = Except.error err) (a : Adr) : err.2.getBal a = devm.getBal a := by
+  unfold Except.assert at h
+  split_ifs at h; try contradiction
+  injection h with h1; rw [← h1]
+
+lemma Devm.popToNat_getBal_err {devm err} (h : Devm.popToNat devm = .error err) (a : Adr) : err.2.getBal a = devm.getBal a := by
+  dsimp [Devm.popToNat, Functor.map, Except.map] at h
+  rcases hp : devm.pop with err_pop | ⟨x, devm1⟩
+  · simp [hp] at h; cases h; exact Devm.pop_getBal_err hp a
+  · simp [hp] at h
+
+lemma Devm.popToAdr_getBal_err {devm err} (h : Devm.popToAdr devm = .error err) (a : Adr) : err.2.getBal a = devm.getBal a := by
+  dsimp [Devm.popToAdr, Functor.map, Except.map] at h
+  rcases hp : devm.pop with err_pop | ⟨x, devm1⟩
+  · simp [hp] at h; cases h; exact Devm.pop_getBal_err hp a
+  · simp [hp] at h
+
+lemma getBal_err_of_bind {α} {ma : Except (String × Devm) α} {f : α → Execution}
+    {devm : Devm} {a : Adr} {err : String × Devm}
+    (run : (ma >>= f) = Except.error err)
+    (getDevm : α → Devm)
+    (h_first_ok : ∀ v, ma = Except.ok v → (getDevm v).getBal a = devm.getBal a)
+    (h_first_err : ∀ e, ma = Except.error e → e.2.getBal a = devm.getBal a)
+    (h_rest_err : ∀ v, ma = Except.ok v → f v = Except.error err → err.2.getBal a = (getDevm v).getBal a) :
+    err.2.getBal a = devm.getBal a := by
+  cases h_ma : ma
+  case error e =>
+    rw [h_ma, Except.bind_error] at run
+    injection run with h_eq; subst h_eq
+    exact h_first_err _ h_ma
+  case ok v =>
+    rw [h_ma, Except.bind_ok] at run
+    have h1 := h_rest_err v h_ma run
+    have h2 := h_first_ok v h_ma
+    exact h1.trans h2
+
+lemma Devm.popN_getBal_err {n : Nat} {devm : Devm} {err : String × Devm}
+    (hp : devm.popN n = Except.error err) (a : Adr) :
+    err.2.getBal a = devm.getBal a := by
+  induction n generalizing devm err with
+  | zero => simp [Devm.popN] at hp
+  | succ n ih =>
+    simp [Devm.popN, bind, Except.bind] at hp
+    split at hp
+    · rename_i eq_err; injection hp with eq; subst eq
+      exact Devm.pop_getBal_err eq_err a
+    · rename_i eq_ok; split at hp
+      · rename_i eq_err; injection hp with eq; subst eq
+        have h1 := ih eq_err
+        have h2 := Devm.pop_getBal_eq eq_ok a
+        exact h1.trans h2
+      · rename_i eq_ok2; injection hp
+
+lemma pushItem_getBal_err {x c devm err} (h : pushItem x c devm = Except.error err) (a : Adr) : err.2.getBal a = devm.getBal a := by
+  simp only [pushItem] at h
+  refine getBal_err_of_bind h id ?_ ?_ ?_
+  · intro devm1 hc; exact chargeGas_getBal_eq hc a
+  · intro e hc; exact chargeGas_getBal_err hc a
+  · intro devm1 hc run; exact Devm.push_getBal_err run a
+
+lemma applyUnary_getBal_err {f : B256 → B256} {cost devm err}
+    (h : applyUnary f cost devm = Except.error err) (a : Adr) :
+    err.2.getBal a = devm.getBal a := by
+  simp only [applyUnary] at h
+  refine getBal_err_of_bind h Prod.snd ?_ ?_ ?_
+  · intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a
+  · intro e hp; exact Devm.pop_getBal_err hp a
+  · intro ⟨x, devm1⟩ hp run; exact pushItem_getBal_err run a
+
+lemma applyBinary_getBal_err {f : B256 → B256 → B256} {cost devm err}
+    (h : applyBinary f cost devm = Except.error err) (a : Adr) :
+    err.2.getBal a = devm.getBal a := by
+  simp only [applyBinary] at h
+  refine getBal_err_of_bind h Prod.snd ?_ ?_ ?_
+  · intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a
+  · intro e hp; exact Devm.pop_getBal_err hp a
+  · intro ⟨x, devm1⟩ hp run
+    refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨y, devm2⟩ hp2; exact Devm.pop_getBal_eq hp2 a
+    · intro e hp2; exact Devm.pop_getBal_err hp2 a
+    · intro ⟨y, devm2⟩ hp2 run2; exact pushItem_getBal_err run2 a
+
+lemma applyTernary_getBal_err {f : B256 → B256 → B256 → B256} {cost devm err}
+    (h : applyTernary f cost devm = Except.error err) (a : Adr) :
+    err.2.getBal a = devm.getBal a := by
+  simp only [applyTernary] at h
+  refine getBal_err_of_bind h Prod.snd ?_ ?_ ?_
+  · intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a
+  · intro e hp; exact Devm.pop_getBal_err hp a
+  · intro ⟨x, devm1⟩ hp run
+    refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨y, devm2⟩ hp2; exact Devm.pop_getBal_eq hp2 a
+    · intro e hp2; exact Devm.pop_getBal_err hp2 a
+    · intro ⟨y, devm2⟩ hp2 run2
+      refine getBal_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨z, devm3⟩ hp3; exact Devm.pop_getBal_eq hp3 a
+      · intro e hp3; exact Devm.pop_getBal_err hp3 a
+      · intro ⟨z, devm3⟩ hp3 run3; exact pushItem_getBal_err run3 a
+
+lemma Rinst.inv_getBal_err
+    {pc sevm devm r err}
+    (run : Rinst.run ⟨pc, sevm, devm⟩ r = Except.error err) (a : Adr) :
+    err.2.getBal a = devm.getBal a := by
+  cases r <;> dsimp [Rinst.run, Rinst.runCore] at run
+  case add => apply applyBinary_getBal_err run
+  case mul => apply applyBinary_getBal_err run
+  case sub => apply applyBinary_getBal_err run
+  case div => apply applyBinary_getBal_err run
+  case sdiv => apply applyBinary_getBal_err run
+  case mod => apply applyBinary_getBal_err run
+  case smod => apply applyBinary_getBal_err run
+  case addmod => apply applyTernary_getBal_err run
+  case mulmod => apply applyTernary_getBal_err run
+  case exp =>
+    refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a
+    · intro e hp; exact Devm.pop_getBal_err hp a
+    · intro ⟨x, devm1⟩ hp run2
+      refine getBal_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.pop_getBal_eq hp2 a
+      · intro e hp2; exact Devm.pop_getBal_err hp2 a
+      · intro ⟨y, devm2⟩ hp2 run3; exact pushItem_getBal_err run3 a
+  case signextend => apply applyBinary_getBal_err run
+  case lt => apply applyBinary_getBal_err run
+  case gt => apply applyBinary_getBal_err run
+  case slt => apply applyBinary_getBal_err run
+  case sgt => apply applyBinary_getBal_err run
+  case eq => apply applyBinary_getBal_err run
+  case iszero => apply applyUnary_getBal_err run
+  case and => apply applyBinary_getBal_err run
+  case or => apply applyBinary_getBal_err run
+  case xor => apply applyBinary_getBal_err run
+  case not => apply applyUnary_getBal_err run
+  case byte => apply applyBinary_getBal_err run
+  case shr => apply applyBinary_getBal_err run
+  case shl => apply applyBinary_getBal_err run
+  case sar => apply applyBinary_getBal_err run
+  case kec =>
+    refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getBal_eq hp a
+    · intro e hp; exact Devm.popToNat_getBal_err hp a
+    · intro ⟨x, devm1⟩ hp run2
+      refine getBal_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_getBal_eq hp2 a
+      · intro e hp2; exact Devm.popToNat_getBal_err hp2 a
+      · intro ⟨y, devm2⟩ hp2 run3
+        refine getBal_err_of_bind run3 id ?_ ?_ ?_
+        · intro devm3 hc; exact chargeGas_getBal_eq hc a
+        · intro e hc; exact chargeGas_getBal_err hc a
+        · intro devm3 hc run4; exact Devm.push_getBal_err run4 a
+  case address => apply pushItem_getBal_err run
+  case balance =>
+    refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a
+    · intro e hp; exact Devm.pop_getBal_err hp a
+    · intro ⟨x, devm1⟩ hp run2; split at run2
+      · refine getBal_err_of_bind run2 id ?_ ?_ ?_
+        · intro devm2 hc; exact chargeGas_getBal_eq hc a
+        · intro e hc; exact chargeGas_getBal_err hc a
+        · intro devm2 hc run3; exact Devm.push_getBal_err run3 a
+      · refine getBal_err_of_bind run2 id ?_ ?_ ?_
+        · intro devm2 hc; exact chargeGas_getBal_eq hc a
+        · intro e hc; exact chargeGas_getBal_err hc a
+        · intro devm2 hc run3; exact Devm.push_getBal_err run3 a
+  case origin => apply pushItem_getBal_err run
+  case caller => apply pushItem_getBal_err run
+  case callvalue => apply pushItem_getBal_err run
+  case calldataload =>
+    refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a
+    · intro e hp; exact Devm.pop_getBal_err hp a
+    · intro ⟨x, devm1⟩ hp run2
+      refine getBal_err_of_bind run2 id ?_ ?_ ?_
+      · intro devm2 hc; exact chargeGas_getBal_eq hc a
+      · intro e hc; exact chargeGas_getBal_err hc a
+      · intro devm2 hc run3; exact Devm.push_getBal_err run3 a
+  case calldatasize => apply pushItem_getBal_err run
+  case calldatacopy =>
+    refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getBal_eq hp a
+    · intro e hp; exact Devm.popToNat_getBal_err hp a
+    · intro ⟨x, devm1⟩ hp run2
+      refine getBal_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_getBal_eq hp2 a
+      · intro e hp2; exact Devm.popToNat_getBal_err hp2 a
+      · intro ⟨y, devm2⟩ hp2 run3
+        refine getBal_err_of_bind run3 Prod.snd ?_ ?_ ?_
+        · intro ⟨z, devm3⟩ hp3; exact Devm.popToNat_getBal_eq hp3 a
+        · intro e hp3; exact Devm.popToNat_getBal_err hp3 a
+        · intro ⟨z, devm3⟩ hp3 run4
+          refine getBal_err_of_bind run4 id ?_ ?_ ?_
+          · intro devm4 hc; exact chargeGas_getBal_eq hc a
+          · intro e hc; exact chargeGas_getBal_err hc a
+          · intro devm4 hc run5; injection run5
+  case codesize => apply pushItem_getBal_err run
+  case codecopy =>
+    refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getBal_eq hp a
+    · intro e hp; exact Devm.popToNat_getBal_err hp a
+    · intro ⟨x, devm1⟩ hp run2
+      refine getBal_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_getBal_eq hp2 a
+      · intro e hp2; exact Devm.popToNat_getBal_err hp2 a
+      · intro ⟨y, devm2⟩ hp2 run3
+        refine getBal_err_of_bind run3 Prod.snd ?_ ?_ ?_
+        · intro ⟨z, devm3⟩ hp3; exact Devm.popToNat_getBal_eq hp3 a
+        · intro e hp3; exact Devm.popToNat_getBal_err hp3 a
+        · intro ⟨z, devm3⟩ hp3 run4
+          refine getBal_err_of_bind run4 id ?_ ?_ ?_
+          · intro devm4 hc; exact chargeGas_getBal_eq hc a
+          · intro e hc; exact chargeGas_getBal_err hc a
+          · intro devm4 hc run5; injection run5
+  case gasprice => apply pushItem_getBal_err run
+  case extcodesize =>
+    refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToAdr_getBal_eq hp a
+    · intro e hp; exact Devm.popToAdr_getBal_err hp a
+    · intro ⟨x, devm1⟩ hp run2; split at run2
+      · refine getBal_err_of_bind run2 id ?_ ?_ ?_
+        · intro devm2 hc; exact chargeGas_getBal_eq hc a
+        · intro e hc; exact chargeGas_getBal_err hc a
+        · intro devm2 hc run3; exact Devm.push_getBal_err run3 a
+      · refine getBal_err_of_bind run2 id ?_ ?_ ?_
+        · intro devm2 hc; exact chargeGas_getBal_eq hc a
+        · intro e hc; exact chargeGas_getBal_err hc a
+        · intro devm2 hc run3; exact Devm.push_getBal_err run3 a
+  case extcodecopy =>
+    refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToAdr_getBal_eq hp a
+    · intro e hp; exact Devm.popToAdr_getBal_err hp a
+    · intro ⟨x, devm1⟩ hp run2
+      refine getBal_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_getBal_eq hp2 a
+      · intro e hp2; exact Devm.popToNat_getBal_err hp2 a
+      · intro ⟨y, devm2⟩ hp2 run3
+        refine getBal_err_of_bind run3 Prod.snd ?_ ?_ ?_
+        · intro ⟨z, devm3⟩ hp3; exact Devm.popToNat_getBal_eq hp3 a
+        · intro e hp3; exact Devm.popToNat_getBal_err hp3 a
+        · intro ⟨z, devm3⟩ hp3 run4
+          refine getBal_err_of_bind run4 Prod.snd ?_ ?_ ?_
+          · intro ⟨w, devm4⟩ hp4; exact Devm.popToNat_getBal_eq hp4 a
+          · intro e hp4; exact Devm.popToNat_getBal_err hp4 a
+          · intro ⟨w, devm4⟩ hp4 run5
+            split at run5
+            · refine getBal_err_of_bind run5 id ?_ ?_ ?_
+              · intro devm5 hc; exact chargeGas_getBal_eq hc a
+              · intro e hc; exact chargeGas_getBal_err hc a
+              · intro devm5 hc run6; injection run6
+            · refine getBal_err_of_bind run5 id ?_ ?_ ?_
+              · intro devm5 hc; exact chargeGas_getBal_eq hc a
+              · intro e hc; exact chargeGas_getBal_err hc a
+              · intro devm5 hc run6; injection run6
+  case retdatasize => apply pushItem_getBal_err run
+  case retdatacopy =>
+    refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getBal_eq hp a
+    · intro e hp; exact Devm.popToNat_getBal_err hp a
+    · intro ⟨x, devm1⟩ hp run2
+      refine getBal_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_getBal_eq hp2 a
+      · intro e hp2; exact Devm.popToNat_getBal_err hp2 a
+      · intro ⟨y, devm2⟩ hp2 run3
+        refine getBal_err_of_bind run3 Prod.snd ?_ ?_ ?_
+        · intro ⟨z, devm3⟩ hp3; exact Devm.popToNat_getBal_eq hp3 a
+        · intro e hp3; exact Devm.popToNat_getBal_err hp3 a
+        · intro ⟨z, devm3⟩ hp3 run4
+          refine getBal_err_of_bind run4 id ?_ ?_ ?_
+          · intro devm4 hc; exact chargeGas_getBal_eq hc a
+          · intro e hc; exact chargeGas_getBal_err hc a
+          · intro devm4 hc run5
+            split_ifs at run5
+            all_goals (try { cases run5; rfl })
+            all_goals (try contradiction)
+  case extcodehash =>
+    refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToAdr_getBal_eq hp a
+    · intro e hp; exact Devm.popToAdr_getBal_err hp a
+    · intro ⟨x, devm1⟩ hp run2; split at run2
+      · refine getBal_err_of_bind run2 id ?_ ?_ ?_
+        · intro devm2 hc; exact chargeGas_getBal_eq hc a
+        · intro e hc; exact chargeGas_getBal_err hc a
+        · intro devm2 hc run3; exact Devm.push_getBal_err run3 a
+      · refine getBal_err_of_bind run2 id ?_ ?_ ?_
+        · intro devm2 hc; exact chargeGas_getBal_eq hc a
+        · intro e hc; exact chargeGas_getBal_err hc a
+        · intro devm2 hc run3; exact Devm.push_getBal_err run3 a
+  case blockhash =>
+    refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a
+    · intro e hp; exact Devm.pop_getBal_err hp a
+    · intro ⟨x, devm1⟩ hp run2
+      refine getBal_err_of_bind run2 id ?_ ?_ ?_
+      · intro devm2 hc; exact chargeGas_getBal_eq hc a
+      · intro e hc; exact chargeGas_getBal_err hc a
+      · intro devm2 hc run3; exact Devm.push_getBal_err run3 a
+  case coinbase => apply pushItem_getBal_err run
+  case timestamp => apply pushItem_getBal_err run
+  case number => apply pushItem_getBal_err run
+  case prevrandao => apply pushItem_getBal_err run
+  case gaslimit => apply pushItem_getBal_err run
+  case chainid => apply pushItem_getBal_err run
+  case selfbalance => apply pushItem_getBal_err run
+  case basefee => apply pushItem_getBal_err run
+  case blobhash =>
+    refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
+    exact fun ⟨x, devm1⟩ hp => Devm.pop_getBal_eq hp a
+    exact fun e hp => Devm.pop_getBal_err hp a
+    intro ⟨x, devm1⟩ hp run2
+    refine getBal_err_of_bind run2 id ?_ ?_ ?_
+    exact fun devm2 hc => chargeGas_getBal_eq hc a
+    exact fun e hc => chargeGas_getBal_err hc a
+    intro devm2 hc run3; exact Devm.push_getBal_err run3 a
+  case blobbasefee => apply pushItem_getBal_err run
+  case pop =>
+    refine getBal_err_of_bind run id ?_ ?_ ?_
+    exact fun devm1 hc => Devm.pop_map_snd_getBal_eq hc a
+    exact fun e hc => Devm.pop_map_snd_getBal_err hc a
+    intro devm1 hc run2; exact chargeGas_getBal_err run2 a
+  case mload =>
+    refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
+    exact fun ⟨x, devm1⟩ hp => Devm.popToNat_getBal_eq hp a
+    exact fun e hp => Devm.popToNat_getBal_err hp a
+    intro ⟨x, devm1⟩ hp run2
+    refine getBal_err_of_bind run2 id ?_ ?_ ?_
+    exact fun devm2 hc => chargeGas_getBal_eq hc a
+    exact fun e hc => chargeGas_getBal_err hc a
+    intro devm2 hc run3; exact Devm.push_getBal_err run3 a
+  case mstore =>
+    refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getBal_eq hp a
+    · intro e hp; exact Devm.popToNat_getBal_err hp a
+    · intro ⟨x, devm1⟩ hp run2
+      refine getBal_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.pop_getBal_eq hp2 a
+      · intro e hp2; exact Devm.pop_getBal_err hp2 a
+      · intro ⟨y, devm2⟩ hp2 run3
+        refine getBal_err_of_bind run3 id ?_ ?_ ?_
+        · intro devm3 hc; exact chargeGas_getBal_eq hc a
+        · intro e hc; exact chargeGas_getBal_err hc a
+        · intro devm3 hc run4; cases run4
+  case mstore8 =>
+    refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getBal_eq hp a
+    · intro e hp; exact Devm.popToNat_getBal_err hp a
+    · intro ⟨x, devm1⟩ hp run2
+      refine getBal_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.pop_getBal_eq hp2 a
+      · intro e hp2; exact Devm.pop_getBal_err hp2 a
+      · intro ⟨y, devm2⟩ hp2 run3
+        refine getBal_err_of_bind run3 id ?_ ?_ ?_
+        · intro devm3 hc; exact chargeGas_getBal_eq hc a
+        · intro e hc; exact chargeGas_getBal_err hc a
+        · intro devm3 hc run4; injection run4
+  case sload =>
+    refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a
+    · intro e hp; exact Devm.pop_getBal_err hp a
+    · intro ⟨x, devm1⟩ hp run2; split at run2
+      · refine getBal_err_of_bind run2 id ?_ ?_ ?_
+        · intro devm2 hc; exact chargeGas_getBal_eq hc a
+        · intro e hc; exact chargeGas_getBal_err hc a
+        · intro devm2 hc run3; exact Devm.push_getBal_err run3 a
+      · refine getBal_err_of_bind run2 id ?_ ?_ ?_
+        · intro devm2 hc; exact chargeGas_getBal_eq hc a
+        · intro e hc; exact chargeGas_getBal_err hc a
+        · intro devm2 hc run3; exact Devm.push_getBal_err run3 a
+  case sstore =>
+    refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a
+    · intro e hp; exact Devm.pop_getBal_err hp a
+    · intro ⟨x, devm1⟩ hp run2
+      refine getBal_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.pop_getBal_eq hp2 a
+      · intro e hp2; exact Devm.pop_getBal_err hp2 a
+      · intro ⟨y, devm2⟩ hp2 run3
+        refine getBal_err_of_bind run3 (fun _ => devm2) ?_ ?_ ?_
+        · intro u h_assert; rfl
+        · intro e h_assert; exact assert_getBal_err h_assert a
+        · intro u h_assert run4
+          split_ifs at run4
+          all_goals {
+            refine getBal_err_of_bind run4 id ?_ ?_ ?_
+            · intro devm3 hc; exact chargeGas_getBal_eq hc a
+            · intro e hc; exact chargeGas_getBal_err hc a
+            · intro devm3 hc run5
+              dsimp [assertDynamic, Except.assert] at run5
+              split_ifs at run5
+              all_goals (try { cases run5; rfl })
+              all_goals (try injection run5)
+          }
+  case pc =>
+    refine getBal_err_of_bind run id ?_ ?_ ?_
+    · intro devm1 hc; exact chargeGas_getBal_eq hc a
+    · intro e hc; exact chargeGas_getBal_err hc a
+    · intro devm1 hc run2; exact Devm.push_getBal_err run2 a
+  case msize =>
+    refine getBal_err_of_bind run id ?_ ?_ ?_
+    · intro devm1 hc; exact chargeGas_getBal_eq hc a
+    · intro e hc; exact chargeGas_getBal_err hc a
+    · intro devm1 hc run2; exact Devm.push_getBal_err run2 a
+  case gas =>
+    refine getBal_err_of_bind run id ?_ ?_ ?_
+    · intro devm1 hc; exact chargeGas_getBal_eq hc a
+    · intro e hc; exact chargeGas_getBal_err hc a
+    · intro devm1 hc run2; exact Devm.push_getBal_err run2 a
+  case tload =>
+    refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a
+    · intro e hp; exact Devm.pop_getBal_err hp a
+    · intro ⟨x, devm1⟩ hp run2
+      refine getBal_err_of_bind run2 id ?_ ?_ ?_
+      · intro devm2 hc; exact chargeGas_getBal_eq hc a
+      · intro e hc; exact chargeGas_getBal_err hc a
+      · intro devm2 hc run3; exact Devm.push_getBal_err run3 a
+  case tstore =>
+    refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a
+    · intro e hp; exact Devm.pop_getBal_err hp a
+    · intro ⟨x, devm1⟩ hp run2
+      refine getBal_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.pop_getBal_eq hp2 a
+      · intro e hp2; exact Devm.pop_getBal_err hp2 a
+      · intro ⟨y, devm2⟩ hp2 run3
+        refine getBal_err_of_bind run3 id ?_ ?_ ?_
+        · intro devm3 hc; exact chargeGas_getBal_eq hc a
+        · intro e hc; exact chargeGas_getBal_err hc a
+        · intro devm3 hc run4
+          dsimp [assertDynamic, Except.assert] at run4
+          simp only [bind, Except.bind] at run4
+          try split_ifs at run4; simp at run4
+          rw [← run4]; rfl
+  case mcopy =>
+    refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getBal_eq hp a
+    · intro e hp; exact Devm.popToNat_getBal_err hp a
+    · intro ⟨x, devm1⟩ hp run2
+      refine getBal_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_getBal_eq hp2 a
+      · intro e hp2; exact Devm.popToNat_getBal_err hp2 a
+      · intro ⟨y, devm2⟩ hp2 run3
+        refine getBal_err_of_bind run3 Prod.snd ?_ ?_ ?_
+        · intro ⟨z, devm3⟩ hp3; exact Devm.popToNat_getBal_eq hp3 a
+        · intro e hp3; exact Devm.popToNat_getBal_err hp3 a
+        · intro ⟨z, devm3⟩ hp3 run4
+          refine getBal_err_of_bind run4 id ?_ ?_ ?_
+          · intro devm4 hc; exact chargeGas_getBal_eq hc a
+          · intro e hc; exact chargeGas_getBal_err hc a
+          · intro devm4 hc run5; contradiction
+  case dup =>
+    refine getBal_err_of_bind run id ?_ ?_ ?_
+    · intro devm1 hc; exact chargeGas_getBal_eq hc a
+    · intro e hc; exact chargeGas_getBal_err hc a
+    · intro devm1 hc run2
+      split at run2
+      · injection run2 with h_eq; cases h_eq; rfl
+      · exact Devm.push_getBal_err run2 a
+  case swap =>
+    refine getBal_err_of_bind run id ?_ ?_ ?_
+    · intro devm1 hc; exact chargeGas_getBal_eq hc a
+    · intro e hc; exact chargeGas_getBal_err hc a
+    · intro devm1 hc run2
+      split at run2
+      · injection run2 with h_eq; cases h_eq; rfl
+      · contradiction
+  case log =>
+    refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getBal_eq hp a
+    · intro e hp; exact Devm.popToNat_getBal_err hp a
+    · intro ⟨x, devm1⟩ hp run2
+      refine getBal_err_of_bind run2 Prod.snd ?_ ?_ ?_
+      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_getBal_eq hp2 a
+      · intro e hp2; exact Devm.popToNat_getBal_err hp2 a
+      · intro ⟨y, devm2⟩ hp2 run3
+        refine getBal_err_of_bind run3 Prod.snd ?_ ?_ ?_
+        · intro ⟨z, devm3⟩ hp3; exact Devm.popN_getBal_eq hp3 a
+        · intro e hp3; exact Devm.popN_getBal_err hp3 a
+        · intro ⟨z, devm3⟩ hp3 run4
+          refine getBal_err_of_bind run4 id ?_ ?_ ?_
+          · intro devm4 hc; exact chargeGas_getBal_eq hc a
+          · intro e hc; exact chargeGas_getBal_err hc a
+          · intro devm4 hc run5
+            dsimp [assertDynamic, Except.assert] at run5
+            simp only [bind, Except.bind] at run5
+            try split_ifs at run5; simp at run5
+            rw [← run5]; rfl
+
 /-
 (1) Difficulty: ★★★★☆
 (2) Proof sketch: cases on `r`.  For successful runs, reuse `Rinst.inv_bal` and
@@ -724,7 +1246,13 @@ instruction, but `sstore_inv_getBal` already provides its balance frame fact.
 -/
 lemma Rinst.balance_effect (r : Rinst) :
     Rinst.Effect Devm.BalNoninc r := by
-  sorry
+  intro pc sevm pre out h
+  cases out with
+  | ok post =>
+    exact Devm.balNoninc_of_getBal_eq (Rinst.inv_bal h).symm
+  | error err =>
+    exact Devm.balNoninc_of_getBal_eq
+      (funext (fun a => Rinst.inv_getBal_err h a))
 
 /-
 (1) Difficulty: ★★★☆☆
