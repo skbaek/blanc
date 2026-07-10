@@ -1721,7 +1721,69 @@ lemma ProcessMessage.balance_effect {msg : Msg} {xl : Xlot}
     (hxl : Xlot.Rel Devm.BalNoninc xl)
     (run : ProcessMessage msg xl out) :
     MessageExecution.Rel State.BalNoninc msg.benv.state out := by
-  sorry
+  dsimp only [ProcessMessage] at run
+  rcases run with ⟨x, hbt, hout, hnone⟩ | ⟨benv, hbt, ex', hec, hsplit⟩
+  · have ht := Msg.benvAfterTransfer_balance_effect hbt
+    unfold MessageExecution.Rel
+    rw [hout]
+    exact ht
+  · have htransfer := Msg.benvAfterTransfer_balance_effect hbt
+    have hexec : State.BalNoninc benv.state (MessageExecution.state ex') := by
+      have handle_balance {pre : Devm} {raw : Execution} {handled : MessageExecution}
+          (hb : Execution.Rel Devm.BalNoninc pre raw)
+          (hh : executeCode.handleError raw = handled) :
+          State.BalNoninc pre.state (MessageExecution.state handled) := by
+        rcases raw with ⟨err, d⟩ | d
+        · simp only [executeCode.handleError] at hh
+          split at hh
+          · subst handled
+            exact hb
+          · split at hh
+            · subst handled
+              exact hb
+            · subst handled
+              exact hb
+        · simp only [executeCode.handleError] at hh
+          subst handled
+          exact hb
+      unfold ExecuteCode at hec
+      rcases hca : (msg.withBenv benv).codeAddress with _ | adr
+      · rw [hca] at hec
+        dsimp only at hec
+        rcases hec with ⟨raw, hxl_eq, hh⟩
+        rw [hxl_eq] at hxl
+        have hinit : (initEvm (msg.withBenv benv)).dyna.state = benv.state := rfl
+        rw [← hinit]
+        exact handle_balance hxl hh
+      · rw [hca] at hec
+        dsimp only at hec
+        by_cases hpre : adr.isPrecomp
+        · rw [if_pos hpre] at hec
+          rcases hec with ⟨_, hh⟩
+          have hp := executePrecomp_balance_effect
+            (h := (rfl : executePrecomp (initEvm (msg.withBenv benv)) adr =
+              executePrecomp (initEvm (msg.withBenv benv)) adr))
+          have hinit : (initEvm (msg.withBenv benv)).dyna.state = benv.state := rfl
+          rw [← hinit]
+          exact handle_balance hp hh
+        · rw [if_neg hpre] at hec
+          rcases hec with ⟨raw, hxl_eq, hh⟩
+          rw [hxl_eq] at hxl
+          have hinit : (initEvm (msg.withBenv benv)).dyna.state = benv.state := rfl
+          rw [← hinit]
+          exact handle_balance hxl hh
+    rcases hsplit with ⟨x, hex', hout⟩ | ⟨evm, hex', hfinal⟩
+    · subst ex'
+      subst out
+      exact Nat.le_trans hexec htransfer
+    · by_cases herr : evm.error.isSome = true
+      · rw [if_pos herr] at hfinal
+        rw [← hfinal]
+        exact balNoninc_refl_trans.1.1 _
+      · rw [if_neg herr] at hfinal
+        subst ex'
+        rw [← hfinal]
+        exact Nat.le_trans hexec htransfer
 
 /-
 (1) Difficulty: ★★★★☆
