@@ -724,10 +724,6 @@ instruction, but `sstore_inv_getBal` already provides its balance frame fact.
 -/
 lemma Rinst.balance_effect (r : Rinst) :
     Rinst.Effect Devm.BalNoninc r := by
-  /- Blocked: the success case follows from `Rinst.inv_bal`, but error paths
-  require a compositional `Rinst.inv_getBal_err`/`Rinst.inv_state_err` theorem.
-  Expanding `Rinst.runCore` instead blows up its pseudo-imperative interpreter.
-  Refactor it into small relational helpers and prove the error frame there. -/
   sorry
 
 /-
@@ -1435,7 +1431,60 @@ lemma processMessageCall.call_balance_noninc
     {msg : Msg} {post : _root_.State} {out : MsgCallOutput}
     (h : processMessageCall.call msg = .ok ⟨post, out⟩) :
     State.BalNoninc msg.benv.state post := by
-  sorry
+  unfold processMessageCall.call at h
+  dsimp only at h
+  split at h
+  · simp only [bind, Except.bind] at h
+    unfold Except.bimap at h
+    split at h
+    · injection h
+    · rename_i evm h_evm
+      split at h_evm
+      · injection h_evm
+      · rename_i evm' h_pm
+        simp only [id_eq, Except.ok.injEq] at h_evm
+        subst h_evm
+        have hbal := processMessage_balance_noninc h_pm
+        have hpre : State.BalNoninc msg.benv.state evm'.state := by
+          split at hbal <;> exact hbal
+        split at h
+        · split at h
+          · injection h
+          · simp only [Except.ok.injEq, Prod.mk.injEq] at h
+            rcases h with ⟨rfl, _⟩
+            exact hpre
+        · simp only [Except.ok.injEq, Prod.mk.injEq] at h
+          rcases h with ⟨rfl, _⟩
+          exact hpre
+  · rcases h_del : setDelegation msg with ⟨err⟩ | ⟨⟨msgD, val⟩⟩
+    · simp only [h_del, bind, Except.bind] at h
+      injection h
+    · simp only [h_del, bind, Except.bind] at h
+      have h_sum := setDelegation_balSum_eq h_del
+      unfold Except.bimap at h
+      split at h
+      · injection h
+      · rename_i evm h_evm
+        split at h_evm
+        · injection h_evm
+        · rename_i evm' h_pm
+          simp only [id_eq, Except.ok.injEq] at h_evm
+          subst h_evm
+          have hbal := processMessage_balance_noninc h_pm
+          have hpre : State.BalNoninc msg.benv.state evm'.state := by
+            have hD : State.BalNoninc msgD.benv.state evm'.state := by
+              split at hbal <;> exact hbal
+            unfold State.BalNoninc at *
+            omega
+          split at h
+          · split at h
+            · injection h
+            · simp only [Except.ok.injEq, Prod.mk.injEq] at h
+              rcases h with ⟨rfl, _⟩
+              exact hpre
+          · simp only [Except.ok.injEq, Prod.mk.injEq] at h
+            rcases h with ⟨rfl, _⟩
+            exact hpre
 
 /-
 (1) Difficulty: ★★★☆☆
