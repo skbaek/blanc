@@ -54,7 +54,12 @@ right and `a` for the inner witness.  Prove the converse identically.
 -/
 lemma comp_assoc {σ : Type} (R S T : Rel σ) :
     Comp (Comp R S) T = Comp R (Comp S T) := by
-  sorry
+  ext s u
+  constructor
+  · rintro ⟨b, ⟨a, hRa, hSab⟩, hTbu⟩
+    exact ⟨a, hRa, b, hSab, hTbu⟩
+  · rintro ⟨a, hRa, b, hSab, hTbu⟩
+    exact ⟨b, ⟨a, hRa, hSab⟩, hTbu⟩
 
 /-
 (1) Difficulty: ★☆☆☆☆
@@ -65,7 +70,8 @@ second, then reuse the same intermediate state for the effect composition.
 lemma holds_comp {σ : Type} {run₁ run₂ R S : Rel σ}
     (hR : Holds run₁ R) (hS : Holds run₂ S) :
     Holds (Comp run₁ run₂) (Comp R S) := by
-  sorry
+  rintro s t ⟨u, h1, h2⟩
+  exact ⟨u, hR h1, hS h2⟩
 
 /-
 (1) Difficulty: ★☆☆☆☆
@@ -74,7 +80,8 @@ lemma holds_comp {σ : Type} {run₁ run₂ R S : Rel σ}
 -/
 lemma holds_weaken {σ : Type} {run R S : Rel σ}
     (h : Holds run R) (hweak : Refines R S) : Holds run S := by
-  sorry
+  intro s t hrun
+  exact hweak (h hrun)
 
 /-
 (1) Difficulty: ★☆☆☆☆
@@ -85,7 +92,9 @@ lemma holds_comp_of_transitive {σ : Type} {run₁ run₂ R : Rel σ}
     (htrans : Transitive R)
     (h₁ : Holds run₁ R) (h₂ : Holds run₂ R) :
     Holds (Comp run₁ run₂) R := by
-  sorry
+  intro s u hrun
+  rcases hrun with ⟨t, hR1, hR2⟩
+  exact htrans (h₁ hR1) (h₂ hR2)
 
 /-
 (1) Difficulty: ★★☆☆☆
@@ -121,7 +130,11 @@ Use `rfl` for reflexivity and `Eq.trans` for transitivity.
 -/
 lemma obsEq_refl_trans {σ α : Type} (obs : σ → α) :
     Reflexive (ObsEq obs) ∧ Transitive (ObsEq obs) := by
-  sorry
+  constructor
+  · intro x
+    rfl
+  · intro x y z hxy hyz
+    exact Eq.trans hxy hyz
 
 /-
 (1) Difficulty: ★☆☆☆☆
@@ -130,7 +143,7 @@ first obtain equality of `obs`; apply congruence with `f`.
 -/
 lemma Stable.comp {σ α β : Type} {obs : σ → α} {R : Rel σ}
     (h : Stable obs R) (f : α → β) : Stable (f ∘ obs) R := by
-  sorry
+  intro s t hR; exact congrArg f (h hR)
 
 end CEffect
 
@@ -180,7 +193,22 @@ goals; solve explicitly first, then consider a small constructor tactic.
 lemma Devm.Rel.comp {r s : Devm.Rels} {a b c : Devm}
     (hab : Devm.Rel r a b) (hbc : Devm.Rel s b c) :
     Devm.Rel (Devm.Rels.comp r s) a c := by
-  sorry
+  exact {
+    stack := ⟨b.stack, hab.stack, hbc.stack⟩
+    memory := ⟨b.memory, hab.memory, hbc.memory⟩
+    gasLeft := ⟨b.gasLeft, hab.gasLeft, hbc.gasLeft⟩
+    logs := ⟨b.logs, hab.logs, hbc.logs⟩
+    refundCounter := ⟨b.refundCounter, hab.refundCounter, hbc.refundCounter⟩
+    output := ⟨b.output, hab.output, hbc.output⟩
+    accountsToDelete := ⟨b.accountsToDelete, hab.accountsToDelete, hbc.accountsToDelete⟩
+    returnData := ⟨b.returnData, hab.returnData, hbc.returnData⟩
+    error := ⟨b.error, hab.error, hbc.error⟩
+    accessedAddresses := ⟨b.accessedAddresses, hab.accessedAddresses, hbc.accessedAddresses⟩
+    accessedStorageKeys := ⟨b.accessedStorageKeys, hab.accessedStorageKeys, hbc.accessedStorageKeys⟩
+    state := ⟨b.state, hab.state, hbc.state⟩
+    createdAccounts := ⟨b.createdAccounts, hab.createdAccounts, hbc.createdAccounts⟩
+    transientStorage := ⟨b.transientStorage, hab.transientStorage, hbc.transientStorage⟩
+  }
 
 /-
 (1) Difficulty: ★☆☆☆☆
@@ -190,7 +218,23 @@ projection of `d`.
 -/
 lemma Devm.rel_refl {r : Devm.Rels} (hr : Devm.Rels.Refl r) :
     Reflexive (Devm.Rel r) := by
-  sorry
+  intro d
+  rcases hr with ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14⟩
+  constructor
+  · exact h1 _
+  · exact h2 _
+  · exact h3 _
+  · exact h4 _
+  · exact h5 _
+  · exact h6 _
+  · exact h7 _
+  · exact h8 _
+  · exact h9 _
+  · exact h10 _
+  · exact h11 _
+  · exact h12 _
+  · exact h13 _
+  · exact h14 _
 
 /-
 (1) Difficulty: ★★☆☆☆
@@ -216,7 +260,8 @@ observation; this is the concrete footprint example requested by the review.
 -/
 lemma Devm.onlyGas_stable_state :
     CEffect.Stable Devm.state Devm.OnlyGas := by
-  sorry
+  intro x y h
+  exact h.state
 
 /-! ## 3. Outcome-aware effects for the EVM semantic layers -/
 
@@ -240,7 +285,7 @@ lemma Rel.mono {σ ε α : Type}
     (hrefine : CEffect.Refines R S)
     (h : Rel errState okState R pre out) :
     Rel errState okState S pre out := by
-  sorry
+  cases out <;> exact hrefine h
 
 end Outcome
 
@@ -286,7 +331,10 @@ branch, apply `hr` to the defining equality for `Rinst.run`.
 -/
 lemma Ninst.effectGen_reg {R : Devm → Devm → Prop} {r : Rinst}
     (hr : Rinst.Effect R r) : Ninst.EffectGen R (.reg r) := by
-  sorry
+  intro pc sevm pre xl out hxl hrun
+  cases xl with
+  | none => exact hr hrun
+  | some val => exact False.elim hrun
 
 /-
 (1) Difficulty: ★☆☆☆☆
@@ -296,7 +344,8 @@ minor simplification.
 -/
 lemma Ninst.effectGen_exec {R : Devm → Devm → Prop} {x : Xinst}
     (hx : Xinst.EffectGen R x) : Ninst.EffectGen R (.exec x) := by
-  sorry
+  intro pc sevm pre xl out hxl hrun
+  exact hx hxl hrun
 
 /-
 (1) Difficulty: ★★★★★
@@ -373,7 +422,12 @@ arguments.  Prove both directions by applying the supplied function.
 -/
 lemma Ninst.effect_obsEq_iff_inv {α : Type} (obs : Devm → α) (n : Ninst) :
     Ninst.Effect (CEffect.ObsEq obs) n ↔ Ninst.Inv obs n := by
-  sorry
+  unfold Ninst.Effect CEffect.ObsEq Ninst.Inv
+  constructor
+  · intro h
+    exact h
+  · intro h
+    exact h
 
 /-
 (1) Difficulty: ★☆☆☆☆
@@ -384,7 +438,7 @@ proofs to migrate incrementally to the new relational traversal.
 -/
 lemma Func.effect_obsEq_iff_inv {α : Type} (obs : Devm → α) (p : Func) :
     Func.Effect (CEffect.ObsEq obs) p ↔ Func.Inv obs obs p := by
-  sorry
+  exact Iff.rfl
 
 /-! ## 4. Balance-sum relations and primitive state updates -/
 
@@ -418,7 +472,8 @@ oriented `post ≤ pre`.
 lemma balNoninc_refl_trans :
     (Reflexive State.BalNoninc ∧ Transitive State.BalNoninc) ∧
     (Reflexive Devm.BalNoninc ∧ Transitive Devm.BalNoninc) := by
-  sorry
+  exact ⟨⟨fun _ => Nat.le_refl _, fun _ _ _ h1 h2 => Nat.le_trans h2 h1⟩,
+         ⟨fun _ => Nat.le_refl _, fun _ _ _ h1 h2 => Nat.le_trans h2 h1⟩⟩
 
 /-
 (1) Difficulty: ★☆☆☆☆
@@ -428,8 +483,8 @@ over `≤` (`omega` also closes it).  The Devm version later follows identically
 -/
 lemma State.SumNof.of_noninc {pre post : _root_.State}
     (hrel : State.BalNoninc pre post) (hnof : State.SumNof pre) :
-    State.SumNof post := by
-  sorry
+    State.SumNof post :=
+  Nat.lt_of_le_of_lt hrel hnof
 
 /-
 (1) Difficulty: ★★★☆☆
@@ -491,7 +546,7 @@ update lemmas and the interpreter's `Devm` relation.
 -/
 lemma Devm.balNoninc_of_state {pre post : Devm}
     (h : State.BalNoninc pre.state post.state) : Devm.BalNoninc pre post := by
-  sorry
+  exact h
 
 /-! ## 5. Balance effects of instruction and message semantic units -/
 
@@ -820,7 +875,10 @@ lemma processMessageCall_balance_noninc
     {msg : Msg} {post : _root_.State} {out : MsgCallOutput}
     (h : processMessageCall msg = .ok ⟨post, out⟩) :
     State.BalNoninc msg.benv.state post := by
-  sorry
+  unfold processMessageCall at h
+  split at h
+  · exact processMessageCall.create_balance_noninc h
+  · exact processMessageCall.call_balance_noninc h
 
 /-
 (1) Difficulty: ★☆☆☆☆
@@ -832,7 +890,7 @@ lemma processMessageCall_sum_le
     {msg : Msg} {post : _root_.State} {out : MsgCallOutput}
     (h : processMessageCall msg = .ok ⟨post, out⟩) :
     sum post.bal ≤ sum msg.benv.state.bal := by
-  sorry
+  exact processMessageCall_balance_noninc h
 
 /-
 (1) Difficulty: ★☆☆☆☆
@@ -845,6 +903,6 @@ lemma processMessageCall_preserves_sumNof
     {msg : Msg} {post : _root_.State} {out : MsgCallOutput}
     (h : processMessageCall msg = .ok ⟨post, out⟩)
     (hnof : State.SumNof msg.benv.state) : State.SumNof post := by
-  sorry
+  exact State.SumNof.of_noninc (processMessageCall_balance_noninc h) hnof
 
 end Temp
