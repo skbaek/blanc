@@ -532,10 +532,86 @@ using `State.get_set_self`/`State.get_set_ne`; exactly one summand changes.  Thi
 is the fundamental finite-map update theorem and should replace repeated ad-hoc
 sum calculations elsewhere.
 -/
+lemma adr_toNat_lt_size_local (a : Adr) : a.toNat < 2 ^ 160 := by
+  rw [← toAdr_toNat a, Nat.toNat_toAdr, Nat.lo]
+  exact Nat.mod_lt _ (Nat.two_pow_pos _)
+
+lemma sumBelow_setBal_eq_local (st : _root_.State) (a : Adr) (v : B256)
+    (n : Nat) (hn : n ≤ a.toNat) (hsize : n ≤ 2 ^ 160) :
+    sumBelow (fun x => (st.setBal a v).bal x) n =
+      sumBelow (fun x => st.bal x) n := by
+  induction n with
+  | zero => rfl
+  | succ n ih =>
+    rw [sumBelow_succ, sumBelow_succ]
+    rw [ih (Nat.le_of_succ_le hn) (Nat.le_of_succ_le hsize)]
+    have hnlt : n < a.toNat := Nat.lt_of_succ_le hn
+    have hnsize : n < 2 ^ 160 := Nat.lt_of_succ_le hsize
+    have hne : n.toAdr ≠ a := by
+      intro heq
+      have hnat := congrArg Adr.toNat heq
+      rw [Nat.toNat_toAdr, Nat.lo_eq_of_lt hnsize] at hnat
+      omega
+    have hget : (st.setBal a v).get n.toAdr = st.get n.toAdr :=
+      State.get_set_ne hne.symm
+    have hbal : (st.setBal a v).bal n.toAdr = st.bal n.toAdr := by
+      dsimp [State.bal, State.setBal]
+      have hget' : (st.set a ((st.get a).withBal v)).get n.toAdr =
+          st.get n.toAdr := by
+        simpa [State.setBal] using hget
+      rw [hget']
+    rw [hbal]
+
+lemma sumBelow_setBal_add_local (st : _root_.State) (a : Adr) (v : B256)
+    (n : Nat) (hsize : n ≤ 2 ^ 160) (ha : a.toNat < n) :
+    sumBelow (fun x => (st.setBal a v).bal x) n + (st.bal a).toNat =
+      sumBelow (fun x => st.bal x) n + v.toNat := by
+  induction n with
+  | zero => omega
+  | succ n ih =>
+    rw [sumBelow_succ, sumBelow_succ]
+    have hnsize : n < 2 ^ 160 := Nat.lt_of_succ_le hsize
+    rcases Nat.lt_succ_iff_lt_or_eq.mp ha with ha_lt | ha_eq
+    · have hih := ih (Nat.le_of_succ_le hsize) ha_lt
+      have hne : n.toAdr ≠ a := by
+        intro heq
+        have hnat := congrArg Adr.toNat heq
+        rw [Nat.toNat_toAdr, Nat.lo_eq_of_lt hnsize] at hnat
+        omega
+      have hget : (st.setBal a v).get n.toAdr = st.get n.toAdr :=
+        State.get_set_ne hne.symm
+      change sumBelow (fun x => (st.setBal a v).bal x) n +
+          ((st.setBal a v).get n.toAdr).bal.toNat + (st.bal a).toNat =
+        sumBelow (fun x => st.bal x) n + (st.get n.toAdr).bal.toNat + v.toNat
+      rw [hget]
+      omega
+    · have hprefix := sumBelow_setBal_eq_local st a v n
+        (Nat.le_of_eq ha_eq.symm) (Nat.le_of_succ_le hsize)
+      have haddr : n.toAdr = a := by
+        rw [← ha_eq]
+        exact toAdr_toNat a
+      rw [hprefix, haddr]
+      change sumBelow (fun x => st.bal x) n +
+          ((st.setBal a v).get a).bal.toNat + (st.bal a).toNat =
+        sumBelow (fun x => st.bal x) n + (st.get a).bal.toNat + v.toNat
+      dsimp [State.setBal]
+      rw [State.get_set_self]
+      change sumBelow (fun x => st.bal x) n + v.toNat +
+          (st.get a).bal.toNat =
+        sumBelow (fun x => st.bal x) n + (st.get a).bal.toNat + v.toNat
+      omega
+
+
 lemma State.balSum_setBal (st : _root_.State) (a : Adr) (v : B256) :
     State.balSum (st.setBal a v) + (st.bal a).toNat =
       State.balSum st + v.toNat := by
-  sorry
+  have hmax : Adr.max.toNat.succ = 2 ^ 160 := by native_decide
+  have ha : a.toNat < Adr.max.toNat.succ := by
+    rw [hmax]
+    exact adr_toNat_lt_size_local a
+  simpa [State.balSum, sum] using
+    (sumBelow_setBal_add_local st a v Adr.max.toNat.succ
+      (by rw [hmax]) ha)
 
 /-
 (1) Difficulty: ★★☆☆☆
@@ -731,7 +807,43 @@ balance sum is equal in every outcome.
 -/
 lemma Ninst.push_balance_effectGen {xs : B8L} {hxs : xs.length ≤ 32} :
     Ninst.EffectGen Devm.BalNoninc (.push xs hxs) := by
-  sorry
+  unfold Ninst.EffectGen Ninst.Run'
+  intro pc sevm pre xl out hxl hRun
+  cases xl
+  · simp only at hRun
+    cases hcg : chargeGas (if xs = [] then gBase else gVerylow) pre with
+    | error e =>
+      simp [hcg] at hRun
+      subst hRun
+      unfold Execution.Rel Outcome.Rel
+      simp only [chargeGas] at hcg
+      split at hcg
+      · cases hcg; exact balNoninc_refl_trans.2.1 pre
+      · contradiction
+    | ok devm' =>
+      simp [hcg] at hRun
+      cases hpush : Devm.push xs.toB256 devm'
+      · rw [← hRun, hpush]
+        simp only [Execution.Rel, Outcome.Rel]
+        simp only [Devm.push, Except.assert, bind, Except.bind] at hpush
+        split at hpush <;> try contradiction
+        rename_i a x err heq
+        cases hpush
+        split at heq <;> try contradiction
+        have hs : devm' = a.2 := by
+          simpa using congrArg (fun e : Except (String × Devm) Unit =>
+            match e with | .error (_, d) => d | .ok _ => devm') heq
+        apply Devm.balNoninc_of_state
+        rw [← hs, ← (Devm.burn_of_chargeGas hcg).state]
+        exact balNoninc_refl_trans.1.1 pre.state
+      · rw [← hRun, hpush]
+        simp only [Execution.Rel, Outcome.Rel]
+        apply Devm.balNoninc_of_state
+        simp only [id]
+        rw [← (Devm.push_of_push hpush).state,
+          ← (Devm.burn_of_chargeGas hcg).state]
+        exact balNoninc_refl_trans.1.1 pre.state
+  · simp only at hRun
 
 /-
 (1) Difficulty: ★★★★☆
@@ -758,7 +870,25 @@ lemma Msg.benvAfterTransfer_balance_effect {msg : Msg}
     {out : Except (String × _root_.State × AdrSet × Tra) Benv}
     (h : msg.benvAfterTransfer = out) :
     State.BalNoninc msg.benv.state (BenvExecution.state out) := by
-  sorry
+  by_cases h_stv : msg.shouldTransferValue = true
+  · unfold Msg.benvAfterTransfer at h
+    rw [h_stv] at h
+    simp only [if_true] at h
+    unfold Benv.subBal at h
+    rcases h_sub : msg.benv.state.subBal msg.caller msg.value with _ | st_mid
+    · rw [h_sub] at h
+      simp only [Option.toExcept, bind, Option.bind, Except.bind] at h
+      rw [← h]
+      exact Nat.le_refl _
+    · rw [h_sub] at h
+      simp only [Option.toExcept, bind, Option.bind, Except.bind] at h
+      rw [← h]
+      change State.BalNoninc msg.benv.state (st_mid.addBal msg.currentTarget msg.value)
+      exact State.sub_addBal_noninc h_sub
+  · unfold Msg.benvAfterTransfer at h
+    rw [if_neg h_stv] at h
+    rw [← h]
+    exact Nat.le_refl _
 
 /-
 (1) Difficulty: ★★★☆☆
@@ -771,7 +901,46 @@ lemma processCreateMessage.chargeCodeGas_balance_effect
     {pre : Devm} {out : Execution}
     (h : processCreateMessage.chargeCodeGas pre = out) :
     Execution.Rel Devm.BalNoninc pre out := by
-  sorry
+  rcases out with ⟨err, d⟩ | d <;> simp only [Execution.Rel, Outcome.Rel]
+  · simp only [processCreateMessage.chargeCodeGas] at h
+    split at h
+    · simp only [Except.error.injEq] at h
+      cases h
+      exact balNoninc_refl_trans.2.1 pre
+    · dsimp [Bind.bind, Except.bind] at h
+      split at h
+      · rename_i code neq ex errCharge hCharge
+        simp only [Except.error.injEq] at h
+        cases h
+        have hstate := chargeGas_err_snd hCharge
+        change d = pre at hstate
+        rw [hstate]
+        exact balNoninc_refl_trans.2.1 pre
+      · split at h
+        · simp only [Except.error.injEq] at h
+          cases h
+          rename_i code neq ex hSize hCharge
+          have hb := Devm.burn_of_chargeGas hCharge
+          apply Devm.balNoninc_of_state
+          rw [hb.state]
+          exact balNoninc_refl_trans.1.1 d.state
+        · cases h
+  · simp only [id]
+    simp only [processCreateMessage.chargeCodeGas] at h
+    split at h
+    · cases h
+    · dsimp [Bind.bind, Except.bind] at h
+      split at h
+      · cases h
+      · split at h
+        · cases h
+        · rename_i code neq ex hSize hCharge
+          simp only [Except.ok.injEq] at h
+          cases h
+          have hb := Devm.burn_of_chargeGas hSize
+          apply Devm.balNoninc_of_state
+          rw [hb.state]
+          exact balNoninc_refl_trans.1.1 d.state
 
 /-
 (1) Difficulty: ★★★☆☆
@@ -783,7 +952,10 @@ accessor conclusion by equality of `state`, then weaken to balance nonincrease.
 lemma executePrecomp_balance_effect {evm : Evm} {a : Adr} {out : Execution}
     (h : executePrecomp evm a = out) :
     Execution.Rel Devm.BalNoninc evm.dyna out := by
-  sorry
+  subst out
+  unfold executePrecomp applyPrecompResult Execution.Rel Outcome.Rel
+    Devm.BalNoninc Devm.balSum State.balSum
+  cases precompileRun evm a <;> rfl
 
 /-
 (1) Difficulty: ★★★★★
