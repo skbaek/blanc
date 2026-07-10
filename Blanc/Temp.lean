@@ -108,7 +108,9 @@ lemma reflTransGen_mono {σ : Type} {step effect : Rel σ} {s t : σ}
     (hrefine : Refines step effect)
     (h : Relation.ReflTransGen step s t) :
     Relation.ReflTransGen effect s t := by
-  sorry
+  induction h with
+  | refl => exact Relation.ReflTransGen.refl
+  | tail h1 h2 ih => exact Relation.ReflTransGen.tail ih (hrefine h2)
 
 /-
 (1) Difficulty: ★★☆☆☆
@@ -121,7 +123,9 @@ lemma reflTransGen_collapse {σ : Type} {step R : Rel σ} {s t : σ}
     (hrefl : Reflexive R) (htrans : Transitive R)
     (hrefine : Refines step R)
     (h : Relation.ReflTransGen step s t) : R s t := by
-  sorry
+  induction h with
+  | refl => exact hrefl _
+  | tail h_prev h_step ih => exact htrans ih (hrefine h_step)
 
 /-
 (1) Difficulty: ★☆☆☆☆
@@ -245,7 +249,22 @@ be the only fourteen-field transitivity proof needed by clients.
 -/
 lemma Devm.rel_trans {r : Devm.Rels} (hr : Devm.Rels.Trans r) :
     Transitive (Devm.Rel r) := by
-  sorry
+  intro a b c hab hbc
+  constructor
+  · exact hr.1 hab.stack hbc.stack
+  · exact hr.2.1 hab.memory hbc.memory
+  · exact hr.2.2.1 hab.gasLeft hbc.gasLeft
+  · exact hr.2.2.2.1 hab.logs hbc.logs
+  · exact hr.2.2.2.2.1 hab.refundCounter hbc.refundCounter
+  · exact hr.2.2.2.2.2.1 hab.output hbc.output
+  · exact hr.2.2.2.2.2.2.1 hab.accountsToDelete hbc.accountsToDelete
+  · exact hr.2.2.2.2.2.2.2.1 hab.returnData hbc.returnData
+  · exact hr.2.2.2.2.2.2.2.2.1 hab.error hbc.error
+  · exact hr.2.2.2.2.2.2.2.2.2.1 hab.accessedAddresses hbc.accessedAddresses
+  · exact hr.2.2.2.2.2.2.2.2.2.2.1 hab.accessedStorageKeys hbc.accessedStorageKeys
+  · exact hr.2.2.2.2.2.2.2.2.2.2.2.1 hab.state hbc.state
+  · exact hr.2.2.2.2.2.2.2.2.2.2.2.2.1 hab.createdAccounts hbc.createdAccounts
+  · exact hr.2.2.2.2.2.2.2.2.2.2.2.2.2 hab.transientStorage hbc.transientStorage
 
 def Devm.OnlyGas : Devm → Devm → Prop :=
   Devm.Rel { Devm.Rels.eq with gasLeft := fun _ _ => True }
@@ -394,7 +413,10 @@ lemma Ninst.effect_of_effectGen {R : Devm → Devm → Prop}
     (hj : ∀ j, Jinst.Effect R j)
     (hl : ∀ l, Linst.Effect R l) :
     ∀ n, Ninst.Effect R n := by
-  sorry
+  intro n sevm pre post hrun
+  rcases hrun with ⟨xl, hfilled, pc, hrun'⟩
+  have hrel := Xlot.rel_of_filled hrefl htrans hn hj hl hfilled
+  exact hn n hrel hrun'
 
 /-
 (1) Difficulty: ★★★☆☆
@@ -511,7 +533,17 @@ writing the arithmetic step.
 lemma State.balSum_subBal {st mid : _root_.State} {a : Adr} {v : B256}
     (h : st.subBal a v = some mid) :
     State.balSum mid + v.toNat = State.balSum st := by
-  sorry
+  unfold State.subBal at h
+  split at h
+  · contradiction
+  · injection h with h_mid
+    subst h_mid
+    have h_set := State.balSum_setBal st a (st.bal a - v)
+    rename_i h_not_lt
+    have h_le : v ≤ st.bal a := le_of_not_gt h_not_lt
+    have h_le2 : v.toNat ≤ (st.bal a).toNat := B256.toNat_le_toNat h_le
+    rw [B256.toNat_sub_eq_of_le _ _ h_le] at h_set
+    omega
 
 /-
 (1) Difficulty: ★★☆☆☆
@@ -522,7 +554,12 @@ Verify the exact B256 lemma name with `lean_local_search`.
 -/
 lemma State.addBal_growth (st : _root_.State) (a : Adr) (v : B256) :
     State.BalGrowth v.toNat st (st.addBal a v) := by
-  sorry
+  unfold State.addBal State.BalGrowth
+  have h := State.balSum_setBal st a (st.bal a + v)
+  rw [B256.toNat_add] at h
+  unfold Nat.lo at h
+  have h_mod := Nat.mod_le ((st.bal a).toNat + v.toNat) (2^256)
+  omega
 
 /-
 (1) Difficulty: ★★☆☆☆
@@ -536,7 +573,11 @@ lemma State.sub_addBal_noninc {st mid : _root_.State}
     {src dst : Adr} {v : B256}
     (hsub : st.subBal src v = some mid) :
     State.BalNoninc st (mid.addBal dst v) := by
-  sorry
+  dsimp [State.BalNoninc]
+  have h1 := State.addBal_growth mid dst v
+  dsimp [State.BalGrowth] at h1
+  have h2 := State.balSum_subBal hsub
+  omega
 
 /-
 (1) Difficulty: ★☆☆☆☆
@@ -748,7 +789,15 @@ lemma Xinst.balance_effectGen (x : Xinst) :
 -/
 lemma Ninst.balance_effectGen (n : Ninst) :
     Ninst.EffectGen Devm.BalNoninc n := by
-  sorry
+  cases n
+  case reg r =>
+    apply Ninst.effectGen_reg
+    apply Rinst.balance_effect
+  case exec x =>
+    apply Ninst.effectGen_exec
+    apply Xinst.balance_effectGen
+  case push xs hxs =>
+    apply Ninst.push_balance_effectGen
 
 /-
 (1) Difficulty: ★★☆☆☆
@@ -759,8 +808,8 @@ case split should appear in this proof.
 -/
 theorem Exec.balance_effect {pc : Nat} {sevm : Sevm} {pre : Devm}
     {out : Execution} (run : Exec pc sevm pre out) :
-    Execution.Rel Devm.BalNoninc pre out := by
-  sorry
+    Execution.Rel Devm.BalNoninc pre out :=
+  Exec.effect balNoninc_refl_trans.2.1 balNoninc_refl_trans.2.2 Ninst.balance_effectGen Jinst.balance_effect Linst.balance_effect run
 
 /-
 (1) Difficulty: ★★☆☆☆
@@ -769,7 +818,10 @@ relations and the three balance effect tables.  This is the public instruction
 theorem corresponding to `Ninst.Run`; it should contain no semantic inversion.
 -/
 lemma Ninst.balance_effect (n : Ninst) : Ninst.Effect Devm.BalNoninc n := by
-  sorry
+  apply Ninst.effect_of_effectGen balNoninc_refl_trans.2.1 balNoninc_refl_trans.2.2
+  · exact Ninst.balance_effectGen
+  · exact Jinst.balance_effect
+  · exact Linst.balance_effect
 
 /-
 (1) Difficulty: ★★☆☆☆
@@ -782,7 +834,15 @@ the separate `Func.inv_nof` traversal.
 theorem Func.balance_effect {fs : List Func} {sevm : Sevm}
     {pre post : Devm} {p : Func}
     (run : Func.Run fs sevm pre p post) : Devm.BalNoninc pre post := by
-  sorry
+  apply Func.effect (R := Devm.BalNoninc) (htrans := balNoninc_refl_trans.2.2) _ _ Ninst.balance_effect Linst.balance_effect run
+  · intro xs pr po hpop
+    apply Devm.balNoninc_of_state
+    rw [hpop.state]
+    exact balNoninc_refl_trans.1.1 _
+  · intro pr po hburn
+    apply Devm.balNoninc_of_state
+    rw [hburn.state]
+    exact balNoninc_refl_trans.1.1 _
 
 /-! ## 6. Executable wrappers and the Solvent.lean endpoint -/
 
