@@ -399,7 +399,12 @@ lemma Xlot.rel_of_filled {R : Devm → Devm → Prop}
     (hj : ∀ j, Jinst.Effect R j)
     (hl : ∀ l, Linst.Effect R l)
     {xl : Xlot} (hfilled : xl.Filled) : Xlot.Rel R xl := by
-  sorry
+  cases xl with
+  | none => trivial
+  | some tuple =>
+    rcases tuple with ⟨sevm, pre, out⟩
+    rcases hfilled with ⟨hrun⟩
+    exact Exec.effect hrefl htrans hn hj hl hrun
 
 /-
 (1) Difficulty: ★★☆☆☆
@@ -434,7 +439,17 @@ theorem Func.effect {R : Devm → Devm → Prop}
     (hl : ∀ l, Linst.Effect R l)
     {fs : List Func} {sevm : Sevm} {pre post : Devm} {p : Func}
     (run : Func.Run fs sevm pre p post) : R pre post := by
-  sorry
+  induction run with
+  | zero pop run' ih =>
+    exact htrans (hpop _ _ _ pop) ih
+  | succ neq pop burn run' ih =>
+    exact htrans (hpop _ _ _ pop) (htrans (hburn _ _ burn) ih)
+  | last run' =>
+    exact hl _ run'
+  | next runi run' ih =>
+    exact htrans (hn _ runi) ih
+  | call eq burn run' ih =>
+    exact htrans (hburn _ _ burn) ih
 
 /-
 (1) Difficulty: ★☆☆☆☆
@@ -631,7 +646,81 @@ reflexivity of `BalNoninc`.  Existing `Devm.pop_of_pop` and
 -/
 lemma Jinst.balance_effect (j : Jinst) :
     Jinst.Effect Devm.BalNoninc j := by
-  sorry
+  cases j
+  · intro pre out H; unfold Jinst.Run Jinst.run Jinst.runCore at H; revert H; dsimp; intro H; subst H
+    simp only [bind, Except.bind]
+    split; rename_i d eq
+    · unfold Outcome.Rel
+      apply Devm.balNoninc_of_state
+      rw [Devm.pop_err_snd eq]
+      apply balNoninc_refl_trans.1.1
+    · rename_i discr eq
+      rcases discr with ⟨jump_dest, devm'⟩
+      split; rename_i d' eq'
+      · unfold Outcome.Rel
+        apply Devm.balNoninc_of_state
+        rw [chargeGas_err_snd eq', ←(Devm.pop_of_pop eq).state]
+        apply balNoninc_refl_trans.1.1
+      · rename_i devm'' eq'
+        split; rename_i d'' eq''
+        · unfold Outcome.Rel
+          apply Devm.balNoninc_of_state
+          rw [Except.assert_err_snd eq'', ←(Devm.burn_of_chargeGas eq').state, ←(Devm.pop_of_pop eq).state]
+          apply balNoninc_refl_trans.1.1
+        · rename_i dest_pc eq''
+          unfold Outcome.Rel
+          apply Devm.balNoninc_of_state
+          rw [←(Devm.burn_of_chargeGas eq').state, ←(Devm.pop_of_pop eq).state]
+          apply balNoninc_refl_trans.1.1
+  · intro pre out H; unfold Jinst.Run Jinst.run Jinst.runCore at H; revert H; dsimp; intro H; subst H
+    simp only [bind, Except.bind]
+    split; rename_i d eq
+    · unfold Outcome.Rel
+      apply Devm.balNoninc_of_state
+      rw [Devm.pop_err_snd eq]
+      apply balNoninc_refl_trans.1.1
+    · rename_i discr eq
+      rcases discr with ⟨dest, devm'⟩
+      split; rename_i d' eq'
+      · unfold Outcome.Rel
+        apply Devm.balNoninc_of_state
+        rw [Devm.pop_err_snd eq', ←(Devm.pop_of_pop eq).state]
+        apply balNoninc_refl_trans.1.1
+      · rename_i discr' eq'
+        rcases discr' with ⟨cond, devm''⟩
+        split; rename_i d'' eq''
+        · unfold Outcome.Rel
+          apply Devm.balNoninc_of_state
+          rw [chargeGas_err_snd eq'', ←(Devm.pop_of_pop eq').state, ←(Devm.pop_of_pop eq).state]
+          apply balNoninc_refl_trans.1.1
+        · rename_i devm''' eq''
+          split; rename_i hcond
+          · unfold Outcome.Rel
+            apply Devm.balNoninc_of_state
+            rw [←(Devm.burn_of_chargeGas eq'').state, ←(Devm.pop_of_pop eq').state, ←(Devm.pop_of_pop eq).state]
+            apply balNoninc_refl_trans.1.1
+          · split; rename_i d''' eq'''
+            · unfold Outcome.Rel
+              apply Devm.balNoninc_of_state
+              rw [Except.assert_err_snd eq''', ←(Devm.burn_of_chargeGas eq'').state, ←(Devm.pop_of_pop eq').state, ←(Devm.pop_of_pop eq).state]
+              apply balNoninc_refl_trans.1.1
+            · rename_i dest_pc eq'''
+              unfold Outcome.Rel
+              apply Devm.balNoninc_of_state
+              rw [←(Devm.burn_of_chargeGas eq'').state, ←(Devm.pop_of_pop eq').state, ←(Devm.pop_of_pop eq).state]
+              apply balNoninc_refl_trans.1.1
+  · intro pre out H; unfold Jinst.Run Jinst.run Jinst.runCore at H; revert H; dsimp; intro H; subst H
+    simp only [bind, Except.bind]
+    split; rename_i d eq
+    · unfold Outcome.Rel
+      apply Devm.balNoninc_of_state
+      rw [chargeGas_err_snd eq]
+      apply balNoninc_refl_trans.1.1
+    · rename_i devm' eq
+      unfold Outcome.Rel
+      apply Devm.balNoninc_of_state
+      rw [←(Devm.burn_of_chargeGas eq).state]
+      apply balNoninc_refl_trans.1.1
 
 /-
 (1) Difficulty: ★★★☆☆
