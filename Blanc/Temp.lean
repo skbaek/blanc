@@ -384,7 +384,24 @@ theorem Exec.effect {R : Devm → Devm → Prop}
     (hl : ∀ l, Linst.Effect R l)
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out) : Execution.Rel R pre out := by
-  sorry
+  have hcomp : ∀ {a b : Devm} {o : Execution},
+      R a b → Execution.Rel R b o → Execution.Rel R a o := by
+    intro a b o hab hbo
+    cases o <;> exact htrans hab hbo
+  induction run with
+  | invOp h => exact hrefl _
+  | nextNoneErr hAt hRun =>
+    exact hn _ (xl := .none) (by trivial) hRun
+  | nextSomeErr hAt hRun hExec ih =>
+    exact hn _ (xl := .some ⟨_, _, _⟩) ih hRun
+  | nextNoneRec hAt hRun hExec ih =>
+    exact hcomp (hn _ (xl := .none) (by trivial) hRun) ih
+  | nextSomeRec hAt hRun hExecSub hExec ihSub ih =>
+    exact hcomp (hn _ (xl := .some ⟨_, _, _⟩) ihSub hRun) ih
+  | jumpErr hAt hRun => exact hj _ hRun
+  | jumpRec hAt hRun hExec ih =>
+    exact hcomp (hj _ hRun) ih
+  | last hAt hRun => exact hl _ hRun
 
 /-
 (1) Difficulty: ★★★☆☆
