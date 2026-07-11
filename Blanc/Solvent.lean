@@ -6777,6 +6777,20 @@ lemma processWithdrawalsState_inv_solvent (wa : Adr)
     State.Inv wa (processWithdrawalsState st wds) := by
   sorry
 
+lemma processCheckedSystemTransaction_to_unchecked {benv : Benv} {target : Adr} {data : B8L}
+    {st : _root_.State} {out : MsgCallOutput}
+    (h : processCheckedSystemTransaction benv target data = .ok ⟨st, out⟩) :
+    processUncheckedSystemTransaction benv target data = .ok ⟨st, out⟩ := by
+  dsimp [processCheckedSystemTransaction, processUncheckedSystemTransaction] at h ⊢
+  split at h
+  · exact (Except.noConfusion h)
+  · simp only [pure_bind] at h
+    rcases of_bind_eq_ok h with ⟨⟨st', out'⟩, h1, h2⟩
+    split at h2
+    · exact (Except.noConfusion h2)
+    · obtain ⟨h3, h4⟩ := Prod.mk.inj (Except.ok.inj h2)
+      subst h3; subst h4; exact h1
+
 /-
 (1) Difficulty: ★★☆☆☆
 (2) Proof plan: invert `processGeneralPurposeRequests`.  Parsing deposits and
@@ -6793,7 +6807,27 @@ lemma processGeneralPurposeRequests_inv_solvent_sum_le (wa : Adr)
     (h_run : processGeneralPurposeRequests benv bout = .ok ⟨st, bout'⟩)
     (h_inv : Benv.InvSolvent wa benv) :
     State.Inv wa st ∧ sum st.bal ≤ sum benv.state.bal := by
-  sorry
+  rw [processGeneralPurposeRequests] at h_run
+  rcases of_bind_eq_ok h_run with ⟨deposits, h_dep, h_run⟩
+  dsimp only at h_run
+  split at h_run <;>
+    (simp only [pure_bind] at h_run;
+     rcases of_bind_eq_ok h_run with ⟨⟨st1, out1⟩, h1, h_run⟩;
+     dsimp only at h_run;
+     have hu1 := processUncheckedSystemTransaction_inv_solvent_sum_le wa benv
+       withdrawalRequestPredeployAddress [] st1 out1
+       (processCheckedSystemTransaction_to_unchecked h1) h_inv;
+     have h_inv1 : Benv.InvSolvent wa (benv.withState st1) :=
+       ⟨hu1.1, by simpa [Benv.withState] using h_inv.ca⟩;
+     split at h_run <;>
+       (rcases of_bind_eq_ok h_run with ⟨⟨st2, out2⟩, h2, h_run⟩;
+        have hu2 := processUncheckedSystemTransaction_inv_solvent_sum_le wa (benv.withState st1)
+          consolidationRequestPredeployAddress [] st2 out2
+          (processCheckedSystemTransaction_to_unchecked h2) h_inv1;
+        split at h_run <;>
+          (obtain ⟨h3, h4⟩ := Prod.mk.inj (Except.ok.inj h_run);
+           subst h3;
+           exact ⟨hu2.1, le_trans (by simpa [Benv.withState] using hu2.2) hu1.2⟩)))
 
 theorem applyBody_inv_solvent (wa : Adr)
     (benv : Benv) (txs : List (B8L ⊕ Tx)) (wds : List Withdrawal)
