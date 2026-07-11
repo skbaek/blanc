@@ -4569,7 +4569,7 @@ theorem processCreateMessage_inv_solvent {wa : Adr} {msg : Msg} {evm : Devm} {li
 
 lemma ExecuteCode.inv_noDel {wa : Adr} {msg : Msg} {xl : Xlot}
     {ex : Except (String × _root_.State × AdrSet × Tra) Devm}
-    (inv : Xlot.InvNoDel wa xl) (invc : xl.InvGetCode)
+    (inv : Xlot.InvNoDel wa xl)
     (run : ExecuteCode msg xl ex)
     (h : Msg.NoDel wa msg) : MsgResult.NoDel wa ex := by
   rcases of_executeCode_cases run with ⟨adr, h_precomp⟩ | ⟨ex', h_xl, h_err⟩
@@ -4586,7 +4586,7 @@ lemma ExecuteCode.inv_noDel {wa : Adr} {msg : Msg} {xl : Xlot}
 
 lemma ProcessMessage.inv_noDel {wa : Adr} {msg : Msg} {xl : Xlot}
     {ex : Except (String × _root_.State × AdrSet × Tra) Devm}
-    (inv : Xlot.InvNoDel wa xl) (invc : xl.InvGetCode)
+    (inv : Xlot.InvNoDel wa xl)
     (run : ProcessMessage msg xl ex)
     (h : Msg.NoDel wa msg) : MsgResult.NoDel wa ex := by
   dsimp only [ProcessMessage] at run
@@ -4597,24 +4597,24 @@ lemma ProcessMessage.inv_noDel {wa : Adr} {msg : Msg} {xl : Xlot}
     rcases run with ⟨ex'', run_ec, h_split⟩
     rcases h_split with ⟨x, eq_ec_err, eq_ex_err⟩ | ⟨evm2, h_ex'', h_if⟩
     · rw [eq_ex_err]
-      have h_exec : MsgResult.NoDel wa ex'' := ExecuteCode.inv_noDel inv invc run_ec h_nof'
+      have h_exec : MsgResult.NoDel wa ex'' := ExecuteCode.inv_noDel inv run_ec h_nof'
       rw [eq_ec_err] at h_exec
       exact h_exec
     · by_cases h_err : evm2.error.isSome = true
       · rw [if_pos h_err] at h_if
         rw [← h_if]
-        have h_exec : MsgResult.NoDel wa ex'' := ExecuteCode.inv_noDel inv invc run_ec h_nof'
+        have h_exec : MsgResult.NoDel wa ex'' := ExecuteCode.inv_noDel inv run_ec h_nof'
         rw [h_ex''] at h_exec
         exact Devm.NoDel.rollback h_exec.atd h_exec.ca h.code
       · rw [if_neg h_err] at h_if
         rw [← h_if]
-        have h_exec : MsgResult.NoDel wa ex'' := ExecuteCode.inv_noDel inv invc run_ec h_nof'
+        have h_exec : MsgResult.NoDel wa ex'' := ExecuteCode.inv_noDel inv run_ec h_nof'
         rw [h_ex''] at h_exec
         exact h_exec
 
 lemma ProcessCreateMessage.inv_noDel {wa : Adr} {msg : Msg} {xl : Xlot}
     {ex : Except (String × _root_.State × AdrSet × Tra) Devm}
-    (inv : Xlot.InvNoDel wa xl) (invc : xl.InvGetCode)
+    (inv : Xlot.InvNoDel wa xl)
     (run : ProcessCreateMessage msg xl ex)
     (h_ct : msg.currentTarget ≠ wa)
     (h : Msg.NoDel wa msg) : MsgResult.NoDel wa ex := by
@@ -4623,7 +4623,7 @@ lemma ProcessCreateMessage.inv_noDel {wa : Adr} {msg : Msg} {xl : Xlot}
   have h_seed : Msg.NoDel wa (processCreateMessage.msg msg) :=
     Msg.NoDel.processCreateMessage_msg h_ct h
   have h_pm : MsgResult.NoDel wa ex' :=
-    ProcessMessage.inv_noDel inv invc run_pm h_seed
+    ProcessMessage.inv_noDel inv run_pm h_seed
   rcases h_split with ⟨x, h_err_eq, h_ex_eq⟩ | ⟨evm, h_ex', h_if⟩
   · rw [h_err_eq] at h_pm
     rw [h_ex_eq]
@@ -4671,7 +4671,7 @@ lemma GenericCall.inv_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
     {gas : Nat} {value : B256} {caller target codeAddress : Adr}
     {stv istat : Bool} {ii is oi os : Nat} {code : ByteArray} {dp : Bool}
     {xl : Xlot} {exn : Execution}
-    (inv : Xlot.InvNoDel wa xl) (invc : xl.InvGetCode)
+    (inv : Xlot.InvNoDel wa xl)
     (h : GenericCall sevm devm gas value caller target codeAddress
       stv istat ii is oi os code dp xl exn)
     (hnd : Devm.NoDel wa devm) : Execution.NoDel wa exn := by
@@ -4686,7 +4686,7 @@ lemma GenericCall.inv_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
     have h_cm : Msg.NoDel wa childMsg := by
       rw [eq_childMsg]; exact ⟨hnd.ca, hnd.code⟩
     have h_pm : MsgResult.NoDel wa ex' :=
-      ProcessMessage.inv_noDel inv invc run_pm h_cm
+      ProcessMessage.inv_noDel inv run_pm h_cm
     rcases h_split with ⟨x, h_err, eq_err⟩ | ⟨child, h_ok, run⟩
     · rw [eq_err]
       rcases ex' with err | c
@@ -4725,7 +4725,7 @@ lemma GenericCall.inv_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
 lemma GenericCreate.inv_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
     {endowment : B256} {newAddress : Adr} {mi ms : Nat}
     {xl : Xlot} {exn : Execution}
-    (inv : Xlot.InvNoDel wa xl) (invc : xl.InvGetCode)
+    (inv : Xlot.InvNoDel wa xl)
     (h : GenericCreate sevm devm endowment newAddress mi ms xl exn)
     (hnd : Devm.NoDel wa devm) : Execution.NoDel wa exn := by
   dsimp only [GenericCreate] at h
@@ -4774,7 +4774,7 @@ lemma GenericCreate.inv_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
             push_neg at h_c2
             exact ne_wa_of_code_size_zero hnd4.code h_c2.2.1
           have h_pm : MsgResult.NoDel wa ex' :=
-            ProcessCreateMessage.inv_noDel inv invc run_pcm h_ct ⟨hnd4.ca, hnd4.code⟩
+            ProcessCreateMessage.inv_noDel inv run_pcm h_ct ⟨hnd4.ca, hnd4.code⟩
           rcases h_split with ⟨y, h_lift_err, eq_exn⟩ | ⟨child, h_lift_ok, run⟩
           · rw [eq_exn]
             rcases ex' with err | c
@@ -4795,7 +4795,7 @@ lemma GenericCreate.inv_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
 
 lemma Xinst.inv_noDel_gen {wa : Adr} {sevm : Sevm} {s : Devm} {x : Xinst}
     {xl : Xlot} {exn : Execution}
-    (inv : Xlot.InvNoDel wa xl) (invc : xl.InvGetCode)
+    (inv : Xlot.InvNoDel wa xl)
     (h : Xinst.Run sevm s x xl exn)
     (hnd : Devm.NoDel wa s) : Execution.NoDel wa exn := by
   cases x
@@ -4818,7 +4818,7 @@ lemma Xinst.inv_noDel_gen {wa : Adr} {sevm : Sevm} {s : Devm} {x : Xinst}
     rcases h with ⟨newAddress, _, h⟩
     have hnd4 : Devm.NoDel wa d4 := (((hnd.pop e1).popToNat e2).popToNat e3).chargeGas e4
     have hnd5 : Devm.NoDel wa d5 := by rw [h_d5]; exact hnd4.memExtends
-    exact GenericCreate.inv_noDel inv invc h hnd5
+    exact GenericCreate.inv_noDel inv h hnd5
   case create2 =>
     dsimp only [Xinst.Run] at h
     rcases h with ⟨xerr, h_e, h_ex, _⟩ | ⟨⟨endowment, d1⟩, e1, h⟩
@@ -4844,7 +4844,7 @@ lemma Xinst.inv_noDel_gen {wa : Adr} {sevm : Sevm} {s : Devm} {x : Xinst}
     have hnd5 : Devm.NoDel wa d5 :=
       ((((hnd.pop e1).popToNat e2).popToNat e3).pop e4).chargeGas e5
     have hnd6 : Devm.NoDel wa d6 := by rw [h_d6]; exact hnd5.memExtends
-    exact GenericCreate.inv_noDel inv invc h hnd6
+    exact GenericCreate.inv_noDel inv h hnd6
   case call =>
     dsimp only [Xinst.Run] at h
     rcases h with ⟨xerr, h_e, h_ex, _⟩ | ⟨⟨gas, d1⟩, e1, h⟩
@@ -4900,7 +4900,7 @@ lemma Xinst.inv_noDel_gen {wa : Adr} {sevm : Sevm} {s : Devm} {x : Xinst}
         exact Devm.NoDel.of_eqs (d := d12)
           (d' := (d12.withReturnData []).withGasLeft (d12.gasLeft + mcs))
           rfl rfl (Devm.push_noDel e12 hnd11)
-    · exact GenericCall.inv_noDel inv invc h hnd11
+    · exact GenericCall.inv_noDel inv h hnd11
   case callcode =>
     dsimp only [Xinst.Run] at h
     rcases h with ⟨xerr, h_e, h_ex, _⟩ | ⟨⟨gas, d1⟩, e1, h⟩
@@ -4953,7 +4953,7 @@ lemma Xinst.inv_noDel_gen {wa : Adr} {sevm : Sevm} {s : Devm} {x : Xinst}
         exact Devm.NoDel.of_eqs (d := d12)
           (d' := (d12.withReturnData []).withGasLeft (d12.gasLeft + mcs))
           rfl rfl (Devm.push_noDel e12 hnd11)
-    · exact GenericCall.inv_noDel inv invc h hnd11
+    · exact GenericCall.inv_noDel inv h hnd11
   case delcall =>
     dsimp only [Xinst.Run] at h
     rcases h with ⟨xerr, h_e, h_ex, _⟩ | ⟨⟨gas, d1⟩, e1, h⟩
@@ -4991,7 +4991,7 @@ lemma Xinst.inv_noDel_gen {wa : Adr} {sevm : Sevm} {s : Devm} {x : Xinst}
     have hnd9 : Devm.NoDel wa d9 := hnd8.chargeGas e9
     rcases h with ⟨d10, h_d10, h⟩
     have hnd10 : Devm.NoDel wa d10 := by rw [h_d10]; exact hnd9.memExtends
-    exact GenericCall.inv_noDel inv invc h hnd10
+    exact GenericCall.inv_noDel inv h hnd10
   case statcall =>
     dsimp only [Xinst.Run] at h
     rcases h with ⟨xerr, h_e, h_ex, _⟩ | ⟨⟨gas, d1⟩, e1, h⟩
@@ -5029,11 +5029,11 @@ lemma Xinst.inv_noDel_gen {wa : Adr} {sevm : Sevm} {s : Devm} {x : Xinst}
     have hnd9 : Devm.NoDel wa d9 := hnd8.chargeGas e9
     rcases h with ⟨d10, h_d10, h⟩
     have hnd10 : Devm.NoDel wa d10 := by rw [h_d10]; exact hnd9.memExtends
-    exact GenericCall.inv_noDel inv invc h hnd10
+    exact GenericCall.inv_noDel inv h hnd10
 
 lemma Ninst.inv_noDel_gen {wa : Adr} {pc : Nat} {sevm : Sevm} {devm : Devm}
     {n : Ninst} {xl : Xlot} {exn : Execution}
-    (inv : Xlot.InvNoDel wa xl) (invc : xl.InvGetCode)
+    (inv : Xlot.InvNoDel wa xl)
     (run : Ninst.Run' pc sevm devm n xl exn)
     (h : Devm.NoDel wa devm) : Execution.NoDel wa exn := by
   cases n with
@@ -5067,20 +5067,18 @@ lemma Ninst.inv_noDel_gen {wa : Adr} {pc : Nat} {sevm : Sevm} {devm : Devm}
     | some y => dsimp only [Ninst.Run'] at run
   | exec xinst =>
     dsimp only [Ninst.Run'] at run
-    exact Xinst.inv_noDel_gen inv invc run h
+    exact Xinst.inv_noDel_gen inv run h
 
--- The composite relation carried through `Exec.effect` for the NoDel
--- invariant: NoDel transport plus code preservation (the latter discharges
--- the `Xlot.InvGetCode` oracle obligation of `Ninst.inv_noDel_gen`).
+-- The composite relation carried through `Exec.effect` for the NoDel invariant.
 def Devm.NoDelCode (wa : Adr) (pre post : Devm) : Prop :=
-  (Devm.NoDel wa pre → Devm.NoDel wa post) ∧ Devm.CodePreserve pre post
+  Devm.NoDel wa pre → Devm.NoDel wa post
 
 lemma noDelCode_refl_trans (wa : Adr) :
     Reflexive (Devm.NoDelCode wa) ∧ Transitive (Devm.NoDelCode wa) := by
   constructor
-  · exact fun d => ⟨id, codePreserve_refl_trans.1 d⟩
+  · exact fun _ => id
   · intro a b c hab hbc
-    exact ⟨fun h => hbc.1 (hab.1 h), codePreserve_refl_trans.2 hab.2 hbc.2⟩
+    exact fun h => hbc (hab h)
 
 lemma Xlot.invNoDel_of_rel {wa : Adr} {xl : Xlot}
     (h : Xlot.Rel (Devm.NoDelCode wa) xl) : Xlot.InvNoDel wa xl := by
@@ -5088,21 +5086,17 @@ lemma Xlot.invNoDel_of_rel {wa : Adr} {xl : Xlot}
   · trivial
   · intro hnd
     cases exn with
-    | error e => exact h.1 hnd
-    | ok d => exact h.1 hnd
+    | error e => exact h hnd
+    | ok d => exact h hnd
 
 lemma Ninst.noDelCode_effectGen (wa : Adr) (n : Ninst) :
     Ninst.EffectGen (Devm.NoDelCode wa) n := by
   intro pc sevm pre xl out hxl hrun
-  have hxlc : Xlot.Rel Devm.CodePreserve xl :=
-    Xlot.rel_mono (fun _ _ h => h.2) hxl
-  have hcp := Ninst.codePreserve_effectGen n hxlc hrun
   have hnd := fun h =>
-    Ninst.inv_noDel_gen (Xlot.invNoDel_of_rel hxl)
-      (Xlot.invGetCode_of_rel hxlc) hrun h
+    Ninst.inv_noDel_gen (Xlot.invNoDel_of_rel hxl) hrun h
   cases out with
-  | error e => exact ⟨hnd, hcp⟩
-  | ok d => exact ⟨hnd, hcp⟩
+  | error e => exact hnd
+  | ok d => exact hnd
 
 lemma Jinst.noDelCode_effect (wa : Adr) (j : Jinst) :
     Jinst.Effect (Devm.NoDelCode wa) j := by
@@ -5112,21 +5106,20 @@ lemma Jinst.noDelCode_effect (wa : Adr) (j : Jinst) :
   cases out with
   | error e =>
     rcases e with ⟨err, devm'⟩
-    refine ⟨fun h => ?_, fun a _ => hcode a⟩
+    refine fun h => ?_
     exact Devm.NoDel.of_eqs (Jinst.inv_delSets_err hrun).symm (hcode wa).symm h
   | ok v =>
     rcases v with ⟨pc', devm'⟩
-    refine ⟨fun h => ?_, fun a _ => hcode a⟩
+    refine fun h => ?_
     exact Devm.NoDel.of_eqs (Jinst.inv_delSets hrun).symm (hcode wa).symm h
 
 lemma Linst.noDelCode_effect (wa : Adr) (l : Linst) :
     Linst.Effect (Devm.NoDelCode wa) l := by
   intro sevm pre out hrun
   have hnd := Linst.inv_noDel (wa := wa) hrun
-  have hcp := Linst.codePreserve_effect l hrun
   cases out with
-  | error e => exact ⟨hnd, hcp⟩
-  | ok d => exact ⟨hnd, hcp⟩
+  | error e => exact hnd
+  | ok d => exact hnd
 
 lemma Exec.inv_noDel {wa : Adr} {pc : Nat} {sevm : Sevm} {devm : Devm}
     {exn : Execution}
@@ -5136,8 +5129,8 @@ lemma Exec.inv_noDel {wa : Adr} {pc : Nat} {sevm : Sevm} {devm : Devm}
     (Ninst.noDelCode_effectGen wa) (Jinst.noDelCode_effect wa)
     (Linst.noDelCode_effect wa) run
   cases exn with
-  | error e => exact heff.1 h
-  | ok d => exact heff.1 h
+  | error e => exact heff h
+  | ok d => exact heff h
 
 theorem exec_inv_noDel {wa : Adr} (lim : Nat) (sevm : Sevm) (pre : Devm)
     (exn : Execution)
