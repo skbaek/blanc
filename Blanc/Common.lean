@@ -4075,8 +4075,7 @@ lemma Devm.push_getCode_gen {v devm} {exn : Execution} (h : Devm.push v devm = e
 
 def Xlot.InvGetCode : Xlot → Prop
   | .none => True
-  | .some ⟨sevm, devm, exn⟩ =>
-    ∃ exec : Exec 0 sevm devm exn,
+  | .some ⟨_, devm, exn⟩ =>
     ∀ adr,
       (devm.getCode adr).toList ≠ [] →
       devm.getCode adr = exn.getCode adr
@@ -4110,7 +4109,7 @@ lemma ExecuteCode.inv_getCode_gen
     rcases eq_none with ⟨ex', h_xl, h_err⟩
     rw [h_xl] at inv
     dsimp [Xlot.InvGetCode] at inv
-    rcases inv with ⟨exec, inv_eq⟩
+    have inv_eq := inv
     subst h_err
     cases ex'
     · dsimp [executeCode.handleError]
@@ -4153,7 +4152,7 @@ lemma ExecuteCode.inv_getCode_gen
     · rcases run with ⟨ex', h_xl, h_err⟩
       rw [h_xl] at inv
       dsimp [Xlot.InvGetCode] at inv
-      rcases inv with ⟨exec, inv_eq⟩
+      have inv_eq := inv
       subst h_err
       cases ex'
       · dsimp [executeCode.handleError]
@@ -5754,35 +5753,541 @@ lemma Linst.inv_getCode
                 dsimp [Devm.addBal, Devm.getCode]; exact State.addBal_getCode res3.state _ _ _
               exact h_add.trans (h_sub.trans ((chargeGas_getCode_eq h2 adr).trans (h_acc.trans (Devm.popToAdr_getCode_eq h1 adr))))
 
+/-! ## 1. Generic compositional relations -/
+
+namespace CEffect
+
+abbrev Rel (σ : Type) := σ → σ → Prop
+
+def Refines {σ : Type} (R S : Rel σ) : Prop :=
+  ∀ ⦃s t⦄, R s t → S s t
+
+def Comp {σ : Type} (R S : Rel σ) : Rel σ :=
+  fun s u => ∃ t, R s t ∧ S t u
+
+def Holds {σ : Type} (run effect : Rel σ) : Prop :=
+  Refines run effect
+
+def ObsEq {σ α : Type} (obs : σ → α) : Rel σ :=
+  fun s t => obs s = obs t
+
+def Stable {σ α : Type} (obs : σ → α) (effect : Rel σ) : Prop :=
+  Refines effect (ObsEq obs)
+
+/-
+(1) Difficulty: ★☆☆☆☆
+(2) Proof sketch: unfold `Comp`; reassociate the two existential witnesses.
+Given `s --R--> a --S--> b --T--> u`, use `b` for the outer witness on the
+right and `a` for the inner witness.  Prove the converse identically.
+-/
+lemma comp_assoc {σ : Type} (R S T : Rel σ) :
+    Comp (Comp R S) T = Comp R (Comp S T) := by
+  ext s u
+  constructor
+  · rintro ⟨b, ⟨a, hRa, hSab⟩, hTbu⟩
+    exact ⟨a, hRa, b, hSab, hTbu⟩
+  · rintro ⟨a, hRa, b, hSab, hTbu⟩
+    exact ⟨b, ⟨a, hRa, hSab⟩, hTbu⟩
+
+/-
+(1) Difficulty: ★☆☆☆☆
+(2) Proof sketch: unfold `Holds`, `Refines`, and `Comp`.  Extract the intermediate
+state from the run composition, apply `hR` to the first run and `hS` to the
+second, then reuse the same intermediate state for the effect composition.
+-/
+lemma holds_comp {σ : Type} {run₁ run₂ R S : Rel σ}
+    (hR : Holds run₁ R) (hS : Holds run₂ S) :
+    Holds (Comp run₁ run₂) (Comp R S) := by
+  rintro s t ⟨u, h1, h2⟩
+  exact ⟨u, hR h1, hS h2⟩
+
+/-
+(1) Difficulty: ★☆☆☆☆
+(2) Proof sketch: this is implication composition.  Unfold `Holds` and
+`Refines`; apply `hweak` to the result of `h`.
+-/
+lemma holds_weaken {σ : Type} {run R S : Rel σ}
+    (h : Holds run R) (hweak : Refines R S) : Holds run S := by
+  intro s t hrun
+  exact hweak (h hrun)
+
+/-
+(1) Difficulty: ★☆☆☆☆
+(2) Proof sketch: use `holds_comp`, then unfold `Refines`/`Comp` and apply
+`htrans` to the two effect facts around the intermediate state.
+-/
+lemma holds_comp_of_transitive {σ : Type} {run₁ run₂ R : Rel σ}
+    (htrans : Transitive R)
+    (h₁ : Holds run₁ R) (h₂ : Holds run₂ R) :
+    Holds (Comp run₁ run₂) R := by
+  intro s u hrun
+  rcases hrun with ⟨t, hR1, hR2⟩
+  exact htrans (h₁ hR1) (h₂ hR2)
+
+/-
+(1) Difficulty: ★★☆☆☆
+(2) Proof sketch: induct on `Relation.ReflTransGen step s t`.  The reflexive
+case is `Relation.ReflTransGen.refl`; in the tail case, map the new `step` edge
+through `hrefine` and append it with the constructor corresponding to one more
+transitive-closure step.  Inspect the constructors with LSP before writing the
+induction, because their argument order is easy to reverse.
+-/
+lemma reflTransGen_mono {σ : Type} {step effect : Rel σ} {s t : σ}
+    (hrefine : Refines step effect)
+    (h : Relation.ReflTransGen step s t) :
+    Relation.ReflTransGen effect s t := by
+  induction h with
+  | refl => exact Relation.ReflTransGen.refl
+  | tail h1 h2 ih => exact Relation.ReflTransGen.tail ih (hrefine h2)
+
+/-
+(1) Difficulty: ★★☆☆☆
+(2) Proof sketch: induct on the closure proof.  The reflexive case uses `hrefl`;
+the step case combines the induction hypothesis with `hrefine` applied to the
+last edge, using `htrans`.  This is the generic “every small step has `R`, hence
+the whole run has `R`” theorem.
+-/
+lemma reflTransGen_collapse {σ : Type} {step R : Rel σ} {s t : σ}
+    (hrefl : Reflexive R) (htrans : Transitive R)
+    (hrefine : Refines step R)
+    (h : Relation.ReflTransGen step s t) : R s t := by
+  induction h with
+  | refl => exact hrefl _
+  | tail h_prev h_step ih => exact htrans ih (hrefine h_step)
+
+/-
+(1) Difficulty: ★☆☆☆☆
+(2) Proof sketch: unfold `ObsEq`; both results are ordinary equality facts.
+Use `rfl` for reflexivity and `Eq.trans` for transitivity.
+-/
+lemma obsEq_refl_trans {σ α : Type} (obs : σ → α) :
+    Reflexive (ObsEq obs) ∧ Transitive (ObsEq obs) := by
+  constructor
+  · intro x
+    rfl
+  · intro x y z hxy hyz
+    exact Eq.trans hxy hyz
+
+/-
+(1) Difficulty: ★☆☆☆☆
+(2) Proof sketch: unfold `Stable`, `Refines`, and `ObsEq`.  Given an `R`-step,
+first obtain equality of `obs`; apply congruence with `f`.
+-/
+lemma Stable.comp {σ α β : Type} {obs : σ → α} {R : Rel σ}
+    (h : Stable obs R) (f : α → β) : Stable (f ∘ obs) R := by
+  intro s t hR; exact congrArg f (h hR)
+
+end CEffect
+
+/-! ## 2. Composing the fieldwise `Devm.Rels` already present in Semantics -/
+
+def Devm.Rels.comp (r s : Devm.Rels) : Devm.Rels :=
+  {
+    stack := CEffect.Comp r.stack s.stack
+    memory := CEffect.Comp r.memory s.memory
+    gasLeft := CEffect.Comp r.gasLeft s.gasLeft
+    logs := CEffect.Comp r.logs s.logs
+    refundCounter := CEffect.Comp r.refundCounter s.refundCounter
+    output := CEffect.Comp r.output s.output
+    accountsToDelete := CEffect.Comp r.accountsToDelete s.accountsToDelete
+    returnData := CEffect.Comp r.returnData s.returnData
+    error := CEffect.Comp r.error s.error
+    accessedAddresses := CEffect.Comp r.accessedAddresses s.accessedAddresses
+    accessedStorageKeys := CEffect.Comp r.accessedStorageKeys s.accessedStorageKeys
+    state := CEffect.Comp r.state s.state
+    createdAccounts := CEffect.Comp r.createdAccounts s.createdAccounts
+    transientStorage := CEffect.Comp r.transientStorage s.transientStorage
+  }
+
+def Devm.Rels.Refl (r : Devm.Rels) : Prop :=
+  Reflexive r.stack ∧ Reflexive r.memory ∧ Reflexive r.gasLeft ∧
+  Reflexive r.logs ∧ Reflexive r.refundCounter ∧ Reflexive r.output ∧
+  Reflexive r.accountsToDelete ∧ Reflexive r.returnData ∧ Reflexive r.error ∧
+  Reflexive r.accessedAddresses ∧ Reflexive r.accessedStorageKeys ∧
+  Reflexive r.state ∧ Reflexive r.createdAccounts ∧
+  Reflexive r.transientStorage
+
+def Devm.Rels.Trans (r : Devm.Rels) : Prop :=
+  Transitive r.stack ∧ Transitive r.memory ∧ Transitive r.gasLeft ∧
+  Transitive r.logs ∧ Transitive r.refundCounter ∧ Transitive r.output ∧
+  Transitive r.accountsToDelete ∧ Transitive r.returnData ∧ Transitive r.error ∧
+  Transitive r.accessedAddresses ∧ Transitive r.accessedStorageKeys ∧
+  Transitive r.state ∧ Transitive r.createdAccounts ∧
+  Transitive r.transientStorage
+
+/-
+(1) Difficulty: ★☆☆☆☆
+(2) Proof sketch: construct `Devm.Rel (r.comp s) a c`.  For each record field,
+use the corresponding field of the intermediate `b` as the existential witness,
+then pair the matching fields of `hab` and `hbc`.  There are fourteen repetitive
+goals; solve explicitly first, then consider a small constructor tactic.
+-/
+lemma Devm.Rel.comp {r s : Devm.Rels} {a b c : Devm}
+    (hab : Devm.Rel r a b) (hbc : Devm.Rel s b c) :
+    Devm.Rel (Devm.Rels.comp r s) a c := by
+  exact {
+    stack := ⟨b.stack, hab.stack, hbc.stack⟩
+    memory := ⟨b.memory, hab.memory, hbc.memory⟩
+    gasLeft := ⟨b.gasLeft, hab.gasLeft, hbc.gasLeft⟩
+    logs := ⟨b.logs, hab.logs, hbc.logs⟩
+    refundCounter := ⟨b.refundCounter, hab.refundCounter, hbc.refundCounter⟩
+    output := ⟨b.output, hab.output, hbc.output⟩
+    accountsToDelete := ⟨b.accountsToDelete, hab.accountsToDelete, hbc.accountsToDelete⟩
+    returnData := ⟨b.returnData, hab.returnData, hbc.returnData⟩
+    error := ⟨b.error, hab.error, hbc.error⟩
+    accessedAddresses := ⟨b.accessedAddresses, hab.accessedAddresses, hbc.accessedAddresses⟩
+    accessedStorageKeys := ⟨b.accessedStorageKeys, hab.accessedStorageKeys, hbc.accessedStorageKeys⟩
+    state := ⟨b.state, hab.state, hbc.state⟩
+    createdAccounts := ⟨b.createdAccounts, hab.createdAccounts, hbc.createdAccounts⟩
+    transientStorage := ⟨b.transientStorage, hab.transientStorage, hbc.transientStorage⟩
+  }
+
+/-
+(1) Difficulty: ★☆☆☆☆
+(2) Proof sketch: unpack `hr` into its fourteen reflexivity hypotheses and
+construct `Devm.Rel r d d`, applying each hypothesis to the corresponding
+projection of `d`.
+-/
+lemma Devm.rel_refl {r : Devm.Rels} (hr : Devm.Rels.Refl r) :
+    Reflexive (Devm.Rel r) := by
+  intro d
+  rcases hr with ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14⟩
+  constructor
+  · exact h1 _
+  · exact h2 _
+  · exact h3 _
+  · exact h4 _
+  · exact h5 _
+  · exact h6 _
+  · exact h7 _
+  · exact h8 _
+  · exact h9 _
+  · exact h10 _
+  · exact h11 _
+  · exact h12 _
+  · exact h13 _
+  · exact h14 _
+
+/-
+(1) Difficulty: ★★☆☆☆
+(2) Proof sketch: unpack `hr`, then construct the output relation field by
+field.  Each field is the corresponding transitivity hypothesis applied to the
+matching fields of `hab` and `hbc`.  This is intentionally generic and should
+be the only fourteen-field transitivity proof needed by clients.
+-/
+lemma Devm.rel_trans {r : Devm.Rels} (hr : Devm.Rels.Trans r) :
+    Transitive (Devm.Rel r) := by
+  intro a b c hab hbc
+  constructor
+  · exact hr.1 hab.stack hbc.stack
+  · exact hr.2.1 hab.memory hbc.memory
+  · exact hr.2.2.1 hab.gasLeft hbc.gasLeft
+  · exact hr.2.2.2.1 hab.logs hbc.logs
+  · exact hr.2.2.2.2.1 hab.refundCounter hbc.refundCounter
+  · exact hr.2.2.2.2.2.1 hab.output hbc.output
+  · exact hr.2.2.2.2.2.2.1 hab.accountsToDelete hbc.accountsToDelete
+  · exact hr.2.2.2.2.2.2.2.1 hab.returnData hbc.returnData
+  · exact hr.2.2.2.2.2.2.2.2.1 hab.error hbc.error
+  · exact hr.2.2.2.2.2.2.2.2.2.1 hab.accessedAddresses hbc.accessedAddresses
+  · exact hr.2.2.2.2.2.2.2.2.2.2.1 hab.accessedStorageKeys hbc.accessedStorageKeys
+  · exact hr.2.2.2.2.2.2.2.2.2.2.2.1 hab.state hbc.state
+  · exact hr.2.2.2.2.2.2.2.2.2.2.2.2.1 hab.createdAccounts hbc.createdAccounts
+  · exact hr.2.2.2.2.2.2.2.2.2.2.2.2.2 hab.transientStorage hbc.transientStorage
+
+def Devm.OnlyGas : Devm → Devm → Prop :=
+  Devm.Rel { Devm.Rels.eq with gasLeft := fun _ _ => True }
+
+/-
+(1) Difficulty: ★☆☆☆☆
+(2) Proof sketch: unfold `CEffect.Stable`, `CEffect.Refines`, `CEffect.ObsEq`,
+and `Devm.OnlyGas`.  The `state` field of the supplied `Devm.Rel` proof is
+literally an equality, so return it.  `CEffect.Stable.comp` then gives stability
+of every observation factoring through `Devm.state` without one lemma per
+observation; this is the concrete footprint example requested by the review.
+-/
+lemma Devm.onlyGas_stable_state :
+    CEffect.Stable Devm.state Devm.OnlyGas := by
+  intro x y h
+  exact h.state
+
+/-! ## 3. Outcome-aware effects for the EVM semantic layers -/
+
+namespace Outcome
+
+def Rel {σ ε α : Type}
+    (errState : ε → σ) (okState : α → σ)
+    (R : σ → σ → Prop) (pre : σ) : Except ε α → Prop
+  | .error err => R pre (errState err)
+  | .ok value => R pre (okState value)
+
+/-
+(1) Difficulty: ★☆☆☆☆
+(2) Proof sketch: cases on `out`; in each branch unfold `Rel` and apply
+`hrefine` to `h`.  This is the generic weakening rule for both success and
+error outcomes, replacing duplicated `_eq`, `_err`, and `_gen` lemmas.
+-/
+lemma Rel.mono {σ ε α : Type}
+    {errState : ε → σ} {okState : α → σ} {R S : σ → σ → Prop}
+    {pre : σ} {out : Except ε α}
+    (hrefine : CEffect.Refines R S)
+    (h : Rel errState okState R pre out) :
+    Rel errState okState S pre out := by
+  cases out <;> exact hrefine h
+
+end Outcome
+
+def Execution.Rel (R : Devm → Devm → Prop) (pre : Devm) (out : Execution) : Prop :=
+  Outcome.Rel Prod.snd id R pre out
+
+def Xlot.Rel (R : Devm → Devm → Prop) : Xlot → Prop
+  | .none => True
+  | .some ⟨_, pre, out⟩ => Execution.Rel R pre out
+
+def Rinst.Effect (R : Devm → Devm → Prop) (r : Rinst) : Prop :=
+  ∀ {pc sevm pre out},
+    Rinst.run ⟨pc, sevm, pre⟩ r = out → Execution.Rel R pre out
+
+def Jinst.Effect (R : Devm → Devm → Prop) (j : Jinst) : Prop :=
+  ∀ {evm out},
+    Jinst.Run evm j out →
+      Outcome.Rel Prod.snd Prod.snd R evm.dyna out
+
+def Linst.Effect (R : Devm → Devm → Prop) (l : Linst) : Prop :=
+  ∀ {sevm pre out},
+    Linst.Run sevm pre l out → Execution.Rel R pre out
+
+def Xinst.EffectGen (R : Devm → Devm → Prop) (x : Xinst) : Prop :=
+  ∀ {sevm pre xl out},
+    Xlot.Rel R xl → Xinst.Run sevm pre x xl out → Execution.Rel R pre out
+
+def Ninst.EffectGen (R : Devm → Devm → Prop) (n : Ninst) : Prop :=
+  ∀ {pc sevm pre xl out},
+    Xlot.Rel R xl → Ninst.Run' pc sevm pre n xl out → Execution.Rel R pre out
+
+def Ninst.Effect (R : Devm → Devm → Prop) (n : Ninst) : Prop :=
+  ∀ {sevm pre post}, Ninst.Run sevm pre n post → R pre post
+
+def Func.Effect (R : Devm → Devm → Prop) (p : Func) : Prop :=
+  ∀ {fs sevm pre post}, Func.Run fs sevm pre p post → R pre post
+
+/-
+(1) Difficulty: ★☆☆☆☆
+(2) Proof sketch: unfold `Ninst.EffectGen` and `Ninst.Run'`.  The only possible
+oracle for `.reg r` is `.none`; the `.some` branch is `False`.  In the `.none`
+branch, apply `hr` to the defining equality for `Rinst.run`.
+-/
+lemma Ninst.effectGen_reg {R : Devm → Devm → Prop} {r : Rinst}
+    (hr : Rinst.Effect R r) : Ninst.EffectGen R (.reg r) := by
+  intro pc sevm pre xl out hxl hrun
+  cases xl with
+  | none => exact hr hrun
+  | some val => exact False.elim hrun
+
+/-
+(1) Difficulty: ★☆☆☆☆
+(2) Proof sketch: unfold `Ninst.EffectGen` and `Ninst.Run'`.  The `.exec x`
+definition is exactly `Xinst.Run`, so this should close with `hx hxl hrun` after
+minor simplification.
+-/
+lemma Ninst.effectGen_exec {R : Devm → Devm → Prop} {x : Xinst}
+    (hx : Xinst.EffectGen R x) : Ninst.EffectGen R (.exec x) := by
+  intro pc sevm pre xl out hxl hrun
+  exact hx hxl hrun
+
+/-
+(1) Difficulty: ★★★★★
+(2) Proof sketch: perform `Exec.rec` on `run`, exactly once for arbitrary `R`.
+Invalid-opcode uses `hrefl`.  Error constructors use the matching instruction
+effect directly.  Recursive constructors first obtain the instruction effect,
+then compose it with the induction hypothesis using `htrans`.  For
+`nextSomeErr`/`nextSomeRec`, build `Xlot.Rel R (.some ...)` from the induction
+hypothesis for the nested execution before applying `hn`.  Jump and last cases
+use `hj`/`hl`.  This theorem is the central payoff: future properties must not
+repeat an `Exec.rec` traversal.
+-/
+theorem Exec.effect {R : Devm → Devm → Prop}
+    (hrefl : Reflexive R) (htrans : Transitive R)
+    (hn : ∀ n, Ninst.EffectGen R n)
+    (hj : ∀ j, Jinst.Effect R j)
+    (hl : ∀ l, Linst.Effect R l)
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) : Execution.Rel R pre out := by
+  have hcomp : ∀ {a b : Devm} {o : Execution},
+      R a b → Execution.Rel R b o → Execution.Rel R a o := by
+    intro a b o hab hbo
+    cases o <;> exact htrans hab hbo
+  induction run with
+  | invOp h => exact hrefl _
+  | nextNoneErr hAt hRun =>
+    exact hn _ (xl := .none) (by trivial) hRun
+  | nextSomeErr hAt hRun hExec ih =>
+    exact hn _ (xl := .some ⟨_, _, _⟩) ih hRun
+  | nextNoneRec hAt hRun hExec ih =>
+    exact hcomp (hn _ (xl := .none) (by trivial) hRun) ih
+  | nextSomeRec hAt hRun hExecSub hExec ihSub ih =>
+    exact hcomp (hn _ (xl := .some ⟨_, _, _⟩) ihSub hRun) ih
+  | jumpErr hAt hRun => exact hj _ hRun
+  | jumpRec hAt hRun hExec ih =>
+    exact hcomp (hj _ hRun) ih
+  | last hAt hRun => exact hl _ hRun
+
+/-
+(1) Difficulty: ★★★☆☆
+(2) Proof sketch: cases on `xl`.  `.none` is trivial.  In the filled case,
+unpack `Nonempty (Exec 0 sevm pre out)` and apply `Exec.effect` with the supplied
+local effect tables.  This packages the oracle side condition used by public
+`Ninst.Run` proofs.
+-/
+lemma Xlot.rel_of_filled {R : Devm → Devm → Prop}
+    (hrefl : Reflexive R) (htrans : Transitive R)
+    (hn : ∀ n, Ninst.EffectGen R n)
+    (hj : ∀ j, Jinst.Effect R j)
+    (hl : ∀ l, Linst.Effect R l)
+    {xl : Xlot} (hfilled : xl.Filled) : Xlot.Rel R xl := by
+  cases xl with
+  | none => trivial
+  | some tuple =>
+    rcases tuple with ⟨sevm, pre, out⟩
+    rcases hfilled with ⟨hrun⟩
+    exact Exec.effect hrefl htrans hn hj hl hrun
+
+/-
+(1) Difficulty: ★★☆☆☆
+(2) Proof sketch: unpack `Ninst.Run` into `xl`, `hfilled`, `pc`, and `hrun`.
+Use `Xlot.rel_of_filled` to discharge the oracle contract, apply `hn n`, and
+simplify `Execution.Rel` for the final `.ok post` result.
+-/
+lemma Ninst.effect_of_effectGen {R : Devm → Devm → Prop}
+    (hrefl : Reflexive R) (htrans : Transitive R)
+    (hn : ∀ n, Ninst.EffectGen R n)
+    (hj : ∀ j, Jinst.Effect R j)
+    (hl : ∀ l, Linst.Effect R l) :
+    ∀ n, Ninst.Effect R n := by
+  intro n sevm pre post hrun
+  rcases hrun with ⟨xl, hfilled, pc, hrun'⟩
+  have hrel := Xlot.rel_of_filled hrefl htrans hn hj hl hfilled
+  exact hn n hrel hrun'
+
+/-
+(1) Difficulty: ★★★☆☆
+(2) Proof sketch: induct on the supplied `Func.Run` derivation, not on `p`.
+Branch cases compose `hpop`, optionally `hburn`, and the branch induction
+hypothesis.  `last` uses `hl` and simplifies the `.ok` outcome.  `next` composes
+`hn` with the continuation IH.  `call` composes `hburn` with its IH.  All
+composition is `htrans`; no observable-specific reasoning should occur here.
+-/
+theorem Func.effect {R : Devm → Devm → Prop}
+    (htrans : Transitive R)
+    (hpop : ∀ xs pre post, Devm.PopBurn xs pre post → R pre post)
+    (hburn : ∀ pre post, Devm.Burn pre post → R pre post)
+    (hn : ∀ n, Ninst.Effect R n)
+    (hl : ∀ l, Linst.Effect R l)
+    {fs : List Func} {sevm : Sevm} {pre post : Devm} {p : Func}
+    (run : Func.Run fs sevm pre p post) : R pre post := by
+  induction run with
+  | zero pop run' ih =>
+    exact htrans (hpop _ _ _ pop) ih
+  | succ neq pop burn run' ih =>
+    exact htrans (hpop _ _ _ pop) (htrans (hburn _ _ burn) ih)
+  | last run' =>
+    exact hl _ run'
+  | next runi run' ih =>
+    exact htrans (hn _ runi) ih
+  | call eq burn run' ih =>
+    exact htrans (hburn _ _ burn) ih
+
+/-
+(1) Difficulty: ★☆☆☆☆
+(2) Proof sketch: unfold `Ninst.Effect`, `CEffect.ObsEq`, and `Ninst.Inv`; the
+two propositions are definitionally the same after reordering implicit
+arguments.  Prove both directions by applying the supplied function.
+-/
+lemma Ninst.effect_obsEq_iff_inv {α : Type} (obs : Devm → α) (n : Ninst) :
+    Ninst.Effect (CEffect.ObsEq obs) n ↔ Ninst.Inv obs n := by
+  unfold Ninst.Effect CEffect.ObsEq Ninst.Inv
+  constructor
+  · intro h
+    exact h
+  · intro h
+    exact h
+
+/-
+(1) Difficulty: ★☆☆☆☆
+(2) Proof sketch: as above, unfold `Func.Effect`, `CEffect.ObsEq`, and
+`Func.Inv`.  Specializing both observations of `Func.Inv` to `obs` makes the
+statements identical.  This bridge is what allows existing program-level frame
+proofs to migrate incrementally to the new relational traversal.
+-/
+lemma Func.effect_obsEq_iff_inv {α : Type} (obs : Devm → α) (p : Func) :
+    Func.Effect (CEffect.ObsEq obs) p ↔ Func.Inv obs obs p := by
+  exact Iff.rfl
+
+-- Relational form of code preservation: nonempty code is never modified.
+def Devm.CodePreserve (pre post : Devm) : Prop :=
+  ∀ a : Adr, (pre.getCode a).toList ≠ [] → post.getCode a = pre.getCode a
+
+lemma codePreserve_refl_trans :
+    Reflexive Devm.CodePreserve ∧ Transitive Devm.CodePreserve := by
+  constructor
+  · intro d a _; rfl
+  · intro a b c hab hbc adr ha
+    have h1 := hab adr ha
+    have h2 : (b.getCode adr).toList ≠ [] := by rw [h1]; exact ha
+    exact (hbc adr h2).trans h1
+
+lemma Xlot.rel_mono {R S : Devm → Devm → Prop}
+    (hRS : CEffect.Refines R S) {xl : Xlot} (h : Xlot.Rel R xl) :
+    Xlot.Rel S xl := by
+  rcases xl with _ | ⟨sevm, devm, exn⟩
+  · trivial
+  · exact Outcome.Rel.mono hRS h
+
+lemma Xlot.invGetCode_of_rel {xl : Xlot}
+    (h : Xlot.Rel Devm.CodePreserve xl) : xl.InvGetCode := by
+  rcases xl with _ | ⟨sevm, devm, exn⟩
+  · trivial
+  · intro a ha
+    cases exn with
+    | error e => exact (h a ha).symm
+    | ok d => exact (h a ha).symm
+
+lemma Ninst.codePreserve_effectGen (n : Ninst) :
+    Ninst.EffectGen Devm.CodePreserve n := by
+  intro pc sevm pre xl out hxl hrun
+  have h := Ninst.inv_getCode_gen (Xlot.invGetCode_of_rel hxl) hrun
+  cases out with
+  | error e => exact fun a ha => h a ha
+  | ok d => exact fun a ha => h a ha
+
+lemma Jinst.codePreserve_effect (j : Jinst) :
+    Jinst.Effect Devm.CodePreserve j := by
+  intro evm out hrun
+  rcases evm with ⟨pc, sevm, devm⟩
+  have h := Jinst.inv_getCode_gen hrun
+  cases out with
+  | error e => exact fun a _ => h a
+  | ok v => exact fun a _ => h a
+
+lemma Linst.codePreserve_effect (l : Linst) :
+    Linst.Effect Devm.CodePreserve l := by
+  intro sevm pre out hrun
+  have h := Linst.inv_getCode hrun
+  cases out with
+  | error e => exact fun a _ => h a
+  | ok d => exact fun a _ => h a
+
 lemma Exec.inv_getCode {pc} {sevm} {devm} {exn}
     (run : Exec pc sevm devm exn) :
     ∀ a : Adr,
       (devm.getCode a).toList ≠ [] →
       exn.getCode a = devm.getCode a := by
-  revert exn devm sevm pc; apply Exec.rec
-  · intros; rfl
-  · intros _ _ _ _ _ _ _ run adr ne;
-    exact Ninst.inv_getCode_gen (xl := .none) trivial run adr ne
-  · intros _ _ _ _ _ _ _ _ _ _ run exec ih adr ne;
-    exact Ninst.inv_getCode_gen (xl := some _)
-            ⟨exec, fun adr hadr => (ih adr hadr).symm⟩ run adr ne
-  · intros pc sevm devm n devm' exn hAt run exec ih adr ne
-    have h1 := Ninst.inv_getCode_gen (xl := .none) trivial run adr ne
-    change devm'.getCode adr = devm.getCode adr at h1
-    rw [← h1] at ne; rw [ih adr ne, h1]
-  · intros pc sevm devm n sevm_ devm_ exn_ devm' exn hAt run exec_x exec ih_x ih adr ne
-    have h1 := Ninst.inv_getCode_gen (xl := some ⟨sevm_, devm_, exn_⟩)
-                 ⟨exec_x, fun adr hadr => (ih_x adr hadr).symm⟩ run adr ne
-    change devm'.getCode adr = devm.getCode adr at h1
-    rw [← h1] at ne; rw [ih adr ne, h1]
-  · intros pc sevm devm j err devm' hAt run adr ne
-    exact Jinst.inv_getCode_gen run adr
-  · intros pc sevm devm j pc' devm' exn hAt run exec ih adr ne
-    have h1 := Jinst.inv_getCode_gen run adr
-    change devm'.getCode adr = devm.getCode adr at h1
-    rw [← h1] at ne; rw [ih adr ne, h1]
-  · intro pc sevm devm l exn lat run adr ne
-    exact Linst.inv_getCode run adr
+  intro a ha
+  have h := Exec.effect codePreserve_refl_trans.1 codePreserve_refl_trans.2
+    Ninst.codePreserve_effectGen Jinst.codePreserve_effect
+    Linst.codePreserve_effect run
+  cases exn with
+  | error e => exact h a ha
+  | ok d => exact h a ha
 
 lemma not_empty_of_compile {p : Prog} {code : ByteArray} (h : some code.toList = Prog.compile p) : code ≠ .empty := by
   intro hc
@@ -5968,7 +6473,7 @@ lemma lift_core
             exact not_delegation_of_compile h1
         exact h_sub_wkn ⟨h1, h2⟩
       · have h_ne_code : (devm.getCode ca).toList ≠ [] := fun hc => Prog.compile_ne_nil (Eq.trans h_at_p.left.symm (congrArg some hc))
-        have inv : Xlot.InvGetCode (some ⟨sevm_, devm_, exn_⟩) := ⟨ex_sub, fun adr h => (Exec.inv_getCode ex_sub adr h).symm⟩
+        have inv : Xlot.InvGetCode (some ⟨sevm_, devm_, exn_⟩) := fun adr h => (Exec.inv_getCode ex_sub adr h).symm
         have h_inv : devm'.getCode ca = devm.getCode ca := Ninst.inv_getCode_gen inv h_run ca h_ne_code
         exact ih_next h_fa ⟨by rw [h_inv]; exact h_at_p.left, fun hc => (h_ne hc).elim⟩
   · intro pc sevm devm j err devm' h_at h_run h_fa h_at_p
@@ -9475,13 +9980,11 @@ lemma Msg.NoDel.benvAfterTransfer {wa : Adr} {msg : Msg} {benv : Benv}
 
 /-
 
-development below serves 2 purposes:
-
-1. one reusable relational-effect traversal of the EVM execution hierarchy,
-   instantiable with equality, footprints, monotone metrics, bounded changes,
-   and other transitive effects; and
-2. a complete balance-sum-nonincreasing instance, ending in the theorem needed
-   to replace `processMessageCall_sum_le` in `Blanc/Solvent.lean`.
+The generic relational-effect traversal (CEffect, sections 1-3) now lives
+earlier in this file, just before `Exec.inv_getCode`, so that the getCode /
+noDel invariants can also be instances of it.  The development below is the
+balance-sum-nonincreasing instance, ending in the theorem needed to replace
+`processMessageCall_sum_le` in `Blanc/Solvent.lean`.
 
 * ★☆☆☆☆: routine unfolding / constructors;
 * ★★☆☆☆: short structural induction or arithmetic;
@@ -9489,475 +9992,6 @@ development below serves 2 purposes:
 * ★★★★☆: substantial interpreter inversion;
 * ★★★★★: central recursive/oracle proof requiring careful bookkeeping.
 -/
-
-/-! ## 1. Generic compositional relations -/
-
-namespace CEffect
-
-abbrev Rel (σ : Type) := σ → σ → Prop
-
-def Refines {σ : Type} (R S : Rel σ) : Prop :=
-  ∀ ⦃s t⦄, R s t → S s t
-
-def Comp {σ : Type} (R S : Rel σ) : Rel σ :=
-  fun s u => ∃ t, R s t ∧ S t u
-
-def Holds {σ : Type} (run effect : Rel σ) : Prop :=
-  Refines run effect
-
-def ObsEq {σ α : Type} (obs : σ → α) : Rel σ :=
-  fun s t => obs s = obs t
-
-def Stable {σ α : Type} (obs : σ → α) (effect : Rel σ) : Prop :=
-  Refines effect (ObsEq obs)
-
-/-
-(1) Difficulty: ★☆☆☆☆
-(2) Proof sketch: unfold `Comp`; reassociate the two existential witnesses.
-Given `s --R--> a --S--> b --T--> u`, use `b` for the outer witness on the
-right and `a` for the inner witness.  Prove the converse identically.
--/
-lemma comp_assoc {σ : Type} (R S T : Rel σ) :
-    Comp (Comp R S) T = Comp R (Comp S T) := by
-  ext s u
-  constructor
-  · rintro ⟨b, ⟨a, hRa, hSab⟩, hTbu⟩
-    exact ⟨a, hRa, b, hSab, hTbu⟩
-  · rintro ⟨a, hRa, b, hSab, hTbu⟩
-    exact ⟨b, ⟨a, hRa, hSab⟩, hTbu⟩
-
-/-
-(1) Difficulty: ★☆☆☆☆
-(2) Proof sketch: unfold `Holds`, `Refines`, and `Comp`.  Extract the intermediate
-state from the run composition, apply `hR` to the first run and `hS` to the
-second, then reuse the same intermediate state for the effect composition.
--/
-lemma holds_comp {σ : Type} {run₁ run₂ R S : Rel σ}
-    (hR : Holds run₁ R) (hS : Holds run₂ S) :
-    Holds (Comp run₁ run₂) (Comp R S) := by
-  rintro s t ⟨u, h1, h2⟩
-  exact ⟨u, hR h1, hS h2⟩
-
-/-
-(1) Difficulty: ★☆☆☆☆
-(2) Proof sketch: this is implication composition.  Unfold `Holds` and
-`Refines`; apply `hweak` to the result of `h`.
--/
-lemma holds_weaken {σ : Type} {run R S : Rel σ}
-    (h : Holds run R) (hweak : Refines R S) : Holds run S := by
-  intro s t hrun
-  exact hweak (h hrun)
-
-/-
-(1) Difficulty: ★☆☆☆☆
-(2) Proof sketch: use `holds_comp`, then unfold `Refines`/`Comp` and apply
-`htrans` to the two effect facts around the intermediate state.
--/
-lemma holds_comp_of_transitive {σ : Type} {run₁ run₂ R : Rel σ}
-    (htrans : Transitive R)
-    (h₁ : Holds run₁ R) (h₂ : Holds run₂ R) :
-    Holds (Comp run₁ run₂) R := by
-  intro s u hrun
-  rcases hrun with ⟨t, hR1, hR2⟩
-  exact htrans (h₁ hR1) (h₂ hR2)
-
-/-
-(1) Difficulty: ★★☆☆☆
-(2) Proof sketch: induct on `Relation.ReflTransGen step s t`.  The reflexive
-case is `Relation.ReflTransGen.refl`; in the tail case, map the new `step` edge
-through `hrefine` and append it with the constructor corresponding to one more
-transitive-closure step.  Inspect the constructors with LSP before writing the
-induction, because their argument order is easy to reverse.
--/
-lemma reflTransGen_mono {σ : Type} {step effect : Rel σ} {s t : σ}
-    (hrefine : Refines step effect)
-    (h : Relation.ReflTransGen step s t) :
-    Relation.ReflTransGen effect s t := by
-  induction h with
-  | refl => exact Relation.ReflTransGen.refl
-  | tail h1 h2 ih => exact Relation.ReflTransGen.tail ih (hrefine h2)
-
-/-
-(1) Difficulty: ★★☆☆☆
-(2) Proof sketch: induct on the closure proof.  The reflexive case uses `hrefl`;
-the step case combines the induction hypothesis with `hrefine` applied to the
-last edge, using `htrans`.  This is the generic “every small step has `R`, hence
-the whole run has `R`” theorem.
--/
-lemma reflTransGen_collapse {σ : Type} {step R : Rel σ} {s t : σ}
-    (hrefl : Reflexive R) (htrans : Transitive R)
-    (hrefine : Refines step R)
-    (h : Relation.ReflTransGen step s t) : R s t := by
-  induction h with
-  | refl => exact hrefl _
-  | tail h_prev h_step ih => exact htrans ih (hrefine h_step)
-
-/-
-(1) Difficulty: ★☆☆☆☆
-(2) Proof sketch: unfold `ObsEq`; both results are ordinary equality facts.
-Use `rfl` for reflexivity and `Eq.trans` for transitivity.
--/
-lemma obsEq_refl_trans {σ α : Type} (obs : σ → α) :
-    Reflexive (ObsEq obs) ∧ Transitive (ObsEq obs) := by
-  constructor
-  · intro x
-    rfl
-  · intro x y z hxy hyz
-    exact Eq.trans hxy hyz
-
-/-
-(1) Difficulty: ★☆☆☆☆
-(2) Proof sketch: unfold `Stable`, `Refines`, and `ObsEq`.  Given an `R`-step,
-first obtain equality of `obs`; apply congruence with `f`.
--/
-lemma Stable.comp {σ α β : Type} {obs : σ → α} {R : Rel σ}
-    (h : Stable obs R) (f : α → β) : Stable (f ∘ obs) R := by
-  intro s t hR; exact congrArg f (h hR)
-
-end CEffect
-
-/-! ## 2. Composing the fieldwise `Devm.Rels` already present in Semantics -/
-
-def Devm.Rels.comp (r s : Devm.Rels) : Devm.Rels :=
-  {
-    stack := CEffect.Comp r.stack s.stack
-    memory := CEffect.Comp r.memory s.memory
-    gasLeft := CEffect.Comp r.gasLeft s.gasLeft
-    logs := CEffect.Comp r.logs s.logs
-    refundCounter := CEffect.Comp r.refundCounter s.refundCounter
-    output := CEffect.Comp r.output s.output
-    accountsToDelete := CEffect.Comp r.accountsToDelete s.accountsToDelete
-    returnData := CEffect.Comp r.returnData s.returnData
-    error := CEffect.Comp r.error s.error
-    accessedAddresses := CEffect.Comp r.accessedAddresses s.accessedAddresses
-    accessedStorageKeys := CEffect.Comp r.accessedStorageKeys s.accessedStorageKeys
-    state := CEffect.Comp r.state s.state
-    createdAccounts := CEffect.Comp r.createdAccounts s.createdAccounts
-    transientStorage := CEffect.Comp r.transientStorage s.transientStorage
-  }
-
-def Devm.Rels.Refl (r : Devm.Rels) : Prop :=
-  Reflexive r.stack ∧ Reflexive r.memory ∧ Reflexive r.gasLeft ∧
-  Reflexive r.logs ∧ Reflexive r.refundCounter ∧ Reflexive r.output ∧
-  Reflexive r.accountsToDelete ∧ Reflexive r.returnData ∧ Reflexive r.error ∧
-  Reflexive r.accessedAddresses ∧ Reflexive r.accessedStorageKeys ∧
-  Reflexive r.state ∧ Reflexive r.createdAccounts ∧
-  Reflexive r.transientStorage
-
-def Devm.Rels.Trans (r : Devm.Rels) : Prop :=
-  Transitive r.stack ∧ Transitive r.memory ∧ Transitive r.gasLeft ∧
-  Transitive r.logs ∧ Transitive r.refundCounter ∧ Transitive r.output ∧
-  Transitive r.accountsToDelete ∧ Transitive r.returnData ∧ Transitive r.error ∧
-  Transitive r.accessedAddresses ∧ Transitive r.accessedStorageKeys ∧
-  Transitive r.state ∧ Transitive r.createdAccounts ∧
-  Transitive r.transientStorage
-
-/-
-(1) Difficulty: ★☆☆☆☆
-(2) Proof sketch: construct `Devm.Rel (r.comp s) a c`.  For each record field,
-use the corresponding field of the intermediate `b` as the existential witness,
-then pair the matching fields of `hab` and `hbc`.  There are fourteen repetitive
-goals; solve explicitly first, then consider a small constructor tactic.
--/
-lemma Devm.Rel.comp {r s : Devm.Rels} {a b c : Devm}
-    (hab : Devm.Rel r a b) (hbc : Devm.Rel s b c) :
-    Devm.Rel (Devm.Rels.comp r s) a c := by
-  exact {
-    stack := ⟨b.stack, hab.stack, hbc.stack⟩
-    memory := ⟨b.memory, hab.memory, hbc.memory⟩
-    gasLeft := ⟨b.gasLeft, hab.gasLeft, hbc.gasLeft⟩
-    logs := ⟨b.logs, hab.logs, hbc.logs⟩
-    refundCounter := ⟨b.refundCounter, hab.refundCounter, hbc.refundCounter⟩
-    output := ⟨b.output, hab.output, hbc.output⟩
-    accountsToDelete := ⟨b.accountsToDelete, hab.accountsToDelete, hbc.accountsToDelete⟩
-    returnData := ⟨b.returnData, hab.returnData, hbc.returnData⟩
-    error := ⟨b.error, hab.error, hbc.error⟩
-    accessedAddresses := ⟨b.accessedAddresses, hab.accessedAddresses, hbc.accessedAddresses⟩
-    accessedStorageKeys := ⟨b.accessedStorageKeys, hab.accessedStorageKeys, hbc.accessedStorageKeys⟩
-    state := ⟨b.state, hab.state, hbc.state⟩
-    createdAccounts := ⟨b.createdAccounts, hab.createdAccounts, hbc.createdAccounts⟩
-    transientStorage := ⟨b.transientStorage, hab.transientStorage, hbc.transientStorage⟩
-  }
-
-/-
-(1) Difficulty: ★☆☆☆☆
-(2) Proof sketch: unpack `hr` into its fourteen reflexivity hypotheses and
-construct `Devm.Rel r d d`, applying each hypothesis to the corresponding
-projection of `d`.
--/
-lemma Devm.rel_refl {r : Devm.Rels} (hr : Devm.Rels.Refl r) :
-    Reflexive (Devm.Rel r) := by
-  intro d
-  rcases hr with ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14⟩
-  constructor
-  · exact h1 _
-  · exact h2 _
-  · exact h3 _
-  · exact h4 _
-  · exact h5 _
-  · exact h6 _
-  · exact h7 _
-  · exact h8 _
-  · exact h9 _
-  · exact h10 _
-  · exact h11 _
-  · exact h12 _
-  · exact h13 _
-  · exact h14 _
-
-/-
-(1) Difficulty: ★★☆☆☆
-(2) Proof sketch: unpack `hr`, then construct the output relation field by
-field.  Each field is the corresponding transitivity hypothesis applied to the
-matching fields of `hab` and `hbc`.  This is intentionally generic and should
-be the only fourteen-field transitivity proof needed by clients.
--/
-lemma Devm.rel_trans {r : Devm.Rels} (hr : Devm.Rels.Trans r) :
-    Transitive (Devm.Rel r) := by
-  intro a b c hab hbc
-  constructor
-  · exact hr.1 hab.stack hbc.stack
-  · exact hr.2.1 hab.memory hbc.memory
-  · exact hr.2.2.1 hab.gasLeft hbc.gasLeft
-  · exact hr.2.2.2.1 hab.logs hbc.logs
-  · exact hr.2.2.2.2.1 hab.refundCounter hbc.refundCounter
-  · exact hr.2.2.2.2.2.1 hab.output hbc.output
-  · exact hr.2.2.2.2.2.2.1 hab.accountsToDelete hbc.accountsToDelete
-  · exact hr.2.2.2.2.2.2.2.1 hab.returnData hbc.returnData
-  · exact hr.2.2.2.2.2.2.2.2.1 hab.error hbc.error
-  · exact hr.2.2.2.2.2.2.2.2.2.1 hab.accessedAddresses hbc.accessedAddresses
-  · exact hr.2.2.2.2.2.2.2.2.2.2.1 hab.accessedStorageKeys hbc.accessedStorageKeys
-  · exact hr.2.2.2.2.2.2.2.2.2.2.2.1 hab.state hbc.state
-  · exact hr.2.2.2.2.2.2.2.2.2.2.2.2.1 hab.createdAccounts hbc.createdAccounts
-  · exact hr.2.2.2.2.2.2.2.2.2.2.2.2.2 hab.transientStorage hbc.transientStorage
-
-def Devm.OnlyGas : Devm → Devm → Prop :=
-  Devm.Rel { Devm.Rels.eq with gasLeft := fun _ _ => True }
-
-/-
-(1) Difficulty: ★☆☆☆☆
-(2) Proof sketch: unfold `CEffect.Stable`, `CEffect.Refines`, `CEffect.ObsEq`,
-and `Devm.OnlyGas`.  The `state` field of the supplied `Devm.Rel` proof is
-literally an equality, so return it.  `CEffect.Stable.comp` then gives stability
-of every observation factoring through `Devm.state` without one lemma per
-observation; this is the concrete footprint example requested by the review.
--/
-lemma Devm.onlyGas_stable_state :
-    CEffect.Stable Devm.state Devm.OnlyGas := by
-  intro x y h
-  exact h.state
-
-/-! ## 3. Outcome-aware effects for the EVM semantic layers -/
-
-namespace Outcome
-
-def Rel {σ ε α : Type}
-    (errState : ε → σ) (okState : α → σ)
-    (R : σ → σ → Prop) (pre : σ) : Except ε α → Prop
-  | .error err => R pre (errState err)
-  | .ok value => R pre (okState value)
-
-/-
-(1) Difficulty: ★☆☆☆☆
-(2) Proof sketch: cases on `out`; in each branch unfold `Rel` and apply
-`hrefine` to `h`.  This is the generic weakening rule for both success and
-error outcomes, replacing duplicated `_eq`, `_err`, and `_gen` lemmas.
--/
-lemma Rel.mono {σ ε α : Type}
-    {errState : ε → σ} {okState : α → σ} {R S : σ → σ → Prop}
-    {pre : σ} {out : Except ε α}
-    (hrefine : CEffect.Refines R S)
-    (h : Rel errState okState R pre out) :
-    Rel errState okState S pre out := by
-  cases out <;> exact hrefine h
-
-end Outcome
-
-def Execution.Rel (R : Devm → Devm → Prop) (pre : Devm) (out : Execution) : Prop :=
-  Outcome.Rel Prod.snd id R pre out
-
-def Xlot.Rel (R : Devm → Devm → Prop) : Xlot → Prop
-  | .none => True
-  | .some ⟨_, pre, out⟩ => Execution.Rel R pre out
-
-def Rinst.Effect (R : Devm → Devm → Prop) (r : Rinst) : Prop :=
-  ∀ {pc sevm pre out},
-    Rinst.run ⟨pc, sevm, pre⟩ r = out → Execution.Rel R pre out
-
-def Jinst.Effect (R : Devm → Devm → Prop) (j : Jinst) : Prop :=
-  ∀ {evm out},
-    Jinst.Run evm j out →
-      Outcome.Rel Prod.snd Prod.snd R evm.dyna out
-
-def Linst.Effect (R : Devm → Devm → Prop) (l : Linst) : Prop :=
-  ∀ {sevm pre out},
-    Linst.Run sevm pre l out → Execution.Rel R pre out
-
-def Xinst.EffectGen (R : Devm → Devm → Prop) (x : Xinst) : Prop :=
-  ∀ {sevm pre xl out},
-    Xlot.Rel R xl → Xinst.Run sevm pre x xl out → Execution.Rel R pre out
-
-def Ninst.EffectGen (R : Devm → Devm → Prop) (n : Ninst) : Prop :=
-  ∀ {pc sevm pre xl out},
-    Xlot.Rel R xl → Ninst.Run' pc sevm pre n xl out → Execution.Rel R pre out
-
-def Ninst.Effect (R : Devm → Devm → Prop) (n : Ninst) : Prop :=
-  ∀ {sevm pre post}, Ninst.Run sevm pre n post → R pre post
-
-def Func.Effect (R : Devm → Devm → Prop) (p : Func) : Prop :=
-  ∀ {fs sevm pre post}, Func.Run fs sevm pre p post → R pre post
-
-/-
-(1) Difficulty: ★☆☆☆☆
-(2) Proof sketch: unfold `Ninst.EffectGen` and `Ninst.Run'`.  The only possible
-oracle for `.reg r` is `.none`; the `.some` branch is `False`.  In the `.none`
-branch, apply `hr` to the defining equality for `Rinst.run`.
--/
-lemma Ninst.effectGen_reg {R : Devm → Devm → Prop} {r : Rinst}
-    (hr : Rinst.Effect R r) : Ninst.EffectGen R (.reg r) := by
-  intro pc sevm pre xl out hxl hrun
-  cases xl with
-  | none => exact hr hrun
-  | some val => exact False.elim hrun
-
-/-
-(1) Difficulty: ★☆☆☆☆
-(2) Proof sketch: unfold `Ninst.EffectGen` and `Ninst.Run'`.  The `.exec x`
-definition is exactly `Xinst.Run`, so this should close with `hx hxl hrun` after
-minor simplification.
--/
-lemma Ninst.effectGen_exec {R : Devm → Devm → Prop} {x : Xinst}
-    (hx : Xinst.EffectGen R x) : Ninst.EffectGen R (.exec x) := by
-  intro pc sevm pre xl out hxl hrun
-  exact hx hxl hrun
-
-/-
-(1) Difficulty: ★★★★★
-(2) Proof sketch: perform `Exec.rec` on `run`, exactly once for arbitrary `R`.
-Invalid-opcode uses `hrefl`.  Error constructors use the matching instruction
-effect directly.  Recursive constructors first obtain the instruction effect,
-then compose it with the induction hypothesis using `htrans`.  For
-`nextSomeErr`/`nextSomeRec`, build `Xlot.Rel R (.some ...)` from the induction
-hypothesis for the nested execution before applying `hn`.  Jump and last cases
-use `hj`/`hl`.  This theorem is the central payoff: future properties must not
-repeat an `Exec.rec` traversal.
--/
-theorem Exec.effect {R : Devm → Devm → Prop}
-    (hrefl : Reflexive R) (htrans : Transitive R)
-    (hn : ∀ n, Ninst.EffectGen R n)
-    (hj : ∀ j, Jinst.Effect R j)
-    (hl : ∀ l, Linst.Effect R l)
-    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
-    (run : Exec pc sevm pre out) : Execution.Rel R pre out := by
-  have hcomp : ∀ {a b : Devm} {o : Execution},
-      R a b → Execution.Rel R b o → Execution.Rel R a o := by
-    intro a b o hab hbo
-    cases o <;> exact htrans hab hbo
-  induction run with
-  | invOp h => exact hrefl _
-  | nextNoneErr hAt hRun =>
-    exact hn _ (xl := .none) (by trivial) hRun
-  | nextSomeErr hAt hRun hExec ih =>
-    exact hn _ (xl := .some ⟨_, _, _⟩) ih hRun
-  | nextNoneRec hAt hRun hExec ih =>
-    exact hcomp (hn _ (xl := .none) (by trivial) hRun) ih
-  | nextSomeRec hAt hRun hExecSub hExec ihSub ih =>
-    exact hcomp (hn _ (xl := .some ⟨_, _, _⟩) ihSub hRun) ih
-  | jumpErr hAt hRun => exact hj _ hRun
-  | jumpRec hAt hRun hExec ih =>
-    exact hcomp (hj _ hRun) ih
-  | last hAt hRun => exact hl _ hRun
-
-/-
-(1) Difficulty: ★★★☆☆
-(2) Proof sketch: cases on `xl`.  `.none` is trivial.  In the filled case,
-unpack `Nonempty (Exec 0 sevm pre out)` and apply `Exec.effect` with the supplied
-local effect tables.  This packages the oracle side condition used by public
-`Ninst.Run` proofs.
--/
-lemma Xlot.rel_of_filled {R : Devm → Devm → Prop}
-    (hrefl : Reflexive R) (htrans : Transitive R)
-    (hn : ∀ n, Ninst.EffectGen R n)
-    (hj : ∀ j, Jinst.Effect R j)
-    (hl : ∀ l, Linst.Effect R l)
-    {xl : Xlot} (hfilled : xl.Filled) : Xlot.Rel R xl := by
-  cases xl with
-  | none => trivial
-  | some tuple =>
-    rcases tuple with ⟨sevm, pre, out⟩
-    rcases hfilled with ⟨hrun⟩
-    exact Exec.effect hrefl htrans hn hj hl hrun
-
-/-
-(1) Difficulty: ★★☆☆☆
-(2) Proof sketch: unpack `Ninst.Run` into `xl`, `hfilled`, `pc`, and `hrun`.
-Use `Xlot.rel_of_filled` to discharge the oracle contract, apply `hn n`, and
-simplify `Execution.Rel` for the final `.ok post` result.
--/
-lemma Ninst.effect_of_effectGen {R : Devm → Devm → Prop}
-    (hrefl : Reflexive R) (htrans : Transitive R)
-    (hn : ∀ n, Ninst.EffectGen R n)
-    (hj : ∀ j, Jinst.Effect R j)
-    (hl : ∀ l, Linst.Effect R l) :
-    ∀ n, Ninst.Effect R n := by
-  intro n sevm pre post hrun
-  rcases hrun with ⟨xl, hfilled, pc, hrun'⟩
-  have hrel := Xlot.rel_of_filled hrefl htrans hn hj hl hfilled
-  exact hn n hrel hrun'
-
-/-
-(1) Difficulty: ★★★☆☆
-(2) Proof sketch: induct on the supplied `Func.Run` derivation, not on `p`.
-Branch cases compose `hpop`, optionally `hburn`, and the branch induction
-hypothesis.  `last` uses `hl` and simplifies the `.ok` outcome.  `next` composes
-`hn` with the continuation IH.  `call` composes `hburn` with its IH.  All
-composition is `htrans`; no observable-specific reasoning should occur here.
--/
-theorem Func.effect {R : Devm → Devm → Prop}
-    (htrans : Transitive R)
-    (hpop : ∀ xs pre post, Devm.PopBurn xs pre post → R pre post)
-    (hburn : ∀ pre post, Devm.Burn pre post → R pre post)
-    (hn : ∀ n, Ninst.Effect R n)
-    (hl : ∀ l, Linst.Effect R l)
-    {fs : List Func} {sevm : Sevm} {pre post : Devm} {p : Func}
-    (run : Func.Run fs sevm pre p post) : R pre post := by
-  induction run with
-  | zero pop run' ih =>
-    exact htrans (hpop _ _ _ pop) ih
-  | succ neq pop burn run' ih =>
-    exact htrans (hpop _ _ _ pop) (htrans (hburn _ _ burn) ih)
-  | last run' =>
-    exact hl _ run'
-  | next runi run' ih =>
-    exact htrans (hn _ runi) ih
-  | call eq burn run' ih =>
-    exact htrans (hburn _ _ burn) ih
-
-/-
-(1) Difficulty: ★☆☆☆☆
-(2) Proof sketch: unfold `Ninst.Effect`, `CEffect.ObsEq`, and `Ninst.Inv`; the
-two propositions are definitionally the same after reordering implicit
-arguments.  Prove both directions by applying the supplied function.
--/
-lemma Ninst.effect_obsEq_iff_inv {α : Type} (obs : Devm → α) (n : Ninst) :
-    Ninst.Effect (CEffect.ObsEq obs) n ↔ Ninst.Inv obs n := by
-  unfold Ninst.Effect CEffect.ObsEq Ninst.Inv
-  constructor
-  · intro h
-    exact h
-  · intro h
-    exact h
-
-/-
-(1) Difficulty: ★☆☆☆☆
-(2) Proof sketch: as above, unfold `Func.Effect`, `CEffect.ObsEq`, and
-`Func.Inv`.  Specializing both observations of `Func.Inv` to `obs` makes the
-statements identical.  This bridge is what allows existing program-level frame
-proofs to migrate incrementally to the new relational traversal.
--/
-lemma Func.effect_obsEq_iff_inv {α : Type} (obs : Devm → α) (p : Func) :
-    Func.Effect (CEffect.ObsEq obs) p ↔ Func.Inv obs obs p := by
-  exact Iff.rfl
 
 /-! ## 4. Balance-sum relations and primitive state updates -/
 

@@ -5069,28 +5069,75 @@ lemma Ninst.inv_noDel_gen {wa : Adr} {pc : Nat} {sevm : Sevm} {devm : Devm}
     dsimp only [Ninst.Run'] at run
     exact Xinst.inv_noDel_gen inv invc run h
 
+-- The composite relation carried through `Exec.effect` for the NoDel
+-- invariant: NoDel transport plus code preservation (the latter discharges
+-- the `Xlot.InvGetCode` oracle obligation of `Ninst.inv_noDel_gen`).
+def Devm.NoDelCode (wa : Adr) (pre post : Devm) : Prop :=
+  (Devm.NoDel wa pre → Devm.NoDel wa post) ∧ Devm.CodePreserve pre post
+
+lemma noDelCode_refl_trans (wa : Adr) :
+    Reflexive (Devm.NoDelCode wa) ∧ Transitive (Devm.NoDelCode wa) := by
+  constructor
+  · exact fun d => ⟨id, codePreserve_refl_trans.1 d⟩
+  · intro a b c hab hbc
+    exact ⟨fun h => hbc.1 (hab.1 h), codePreserve_refl_trans.2 hab.2 hbc.2⟩
+
+lemma Xlot.invNoDel_of_rel {wa : Adr} {xl : Xlot}
+    (h : Xlot.Rel (Devm.NoDelCode wa) xl) : Xlot.InvNoDel wa xl := by
+  rcases xl with _ | ⟨sevm, devm, exn⟩
+  · trivial
+  · intro hnd
+    cases exn with
+    | error e => exact h.1 hnd
+    | ok d => exact h.1 hnd
+
+lemma Ninst.noDelCode_effectGen (wa : Adr) (n : Ninst) :
+    Ninst.EffectGen (Devm.NoDelCode wa) n := by
+  intro pc sevm pre xl out hxl hrun
+  have hxlc : Xlot.Rel Devm.CodePreserve xl :=
+    Xlot.rel_mono (fun _ _ h => h.2) hxl
+  have hcp := Ninst.codePreserve_effectGen n hxlc hrun
+  have hnd := fun h =>
+    Ninst.inv_noDel_gen (Xlot.invNoDel_of_rel hxl)
+      (Xlot.invGetCode_of_rel hxlc) hrun h
+  cases out with
+  | error e => exact ⟨hnd, hcp⟩
+  | ok d => exact ⟨hnd, hcp⟩
+
+lemma Jinst.noDelCode_effect (wa : Adr) (j : Jinst) :
+    Jinst.Effect (Devm.NoDelCode wa) j := by
+  intro evm out hrun
+  rcases evm with ⟨pc, sevm, devm⟩
+  have hcode := Jinst.inv_getCode_gen hrun
+  cases out with
+  | error e =>
+    rcases e with ⟨err, devm'⟩
+    refine ⟨fun h => ?_, fun a _ => hcode a⟩
+    exact Devm.NoDel.of_eqs (Jinst.inv_delSets_err hrun).symm (hcode wa).symm h
+  | ok v =>
+    rcases v with ⟨pc', devm'⟩
+    refine ⟨fun h => ?_, fun a _ => hcode a⟩
+    exact Devm.NoDel.of_eqs (Jinst.inv_delSets hrun).symm (hcode wa).symm h
+
+lemma Linst.noDelCode_effect (wa : Adr) (l : Linst) :
+    Linst.Effect (Devm.NoDelCode wa) l := by
+  intro sevm pre out hrun
+  have hnd := Linst.inv_noDel (wa := wa) hrun
+  have hcp := Linst.codePreserve_effect l hrun
+  cases out with
+  | error e => exact ⟨hnd, hcp⟩
+  | ok d => exact ⟨hnd, hcp⟩
+
 lemma Exec.inv_noDel {wa : Adr} {pc : Nat} {sevm : Sevm} {devm : Devm}
     {exn : Execution}
     (run : Exec pc sevm devm exn)
     (h : Devm.NoDel wa devm) : Execution.NoDel wa exn := by
-  revert exn devm sevm pc
-  apply Exec.rec
-  · intro pc sevm devm h_inst h_nof
-    exact h_nof
-  · intro pc sevm devm n err devm' h_at h_run h_nof
-    exact Ninst.inv_noDel_gen (xl := .none) trivial trivial h_run h_nof
-  · intro pc sevm devm n sevm_ devm_ exn_ err devm' h_at h_run ex_sub ih_sub h_nof
-    exact Ninst.inv_noDel_gen (xl := some ⟨sevm_, devm_, exn_⟩) ih_sub ⟨ex_sub, fun a ha => (Exec.inv_getCode ex_sub a ha).symm⟩ h_run h_nof
-  · intro pc sevm devm n devm' exn h_at h_run ex ih h_nof
-    exact ih (Ninst.inv_noDel_gen (xl := .none) trivial trivial h_run h_nof)
-  · intro pc sevm devm n sevm_ devm_ exn_ devm' exn h_at h_run ex_sub ex ih_sub ih h_nof
-    exact ih (Ninst.inv_noDel_gen (xl := some ⟨sevm_, devm_, exn_⟩) ih_sub ⟨ex_sub, fun a ha => (Exec.inv_getCode ex_sub a ha).symm⟩ h_run h_nof)
-  · intro pc sevm devm j err devm' h_at h_run h_nof
-    exact Devm.NoDel.of_eqs (Jinst.inv_delSets_err h_run).symm (Jinst.inv_getCode_gen h_run wa).symm h_nof
-  · intro pc sevm devm j pc' devm' exn h_at h_run ex ih h_nof
-    exact ih (Devm.NoDel.of_eqs (Jinst.inv_delSets h_run).symm (Jinst.inv_getCode_gen h_run wa).symm h_nof)
-  · intro pc sevm devm l exn h_at h_run h_nof
-    exact Linst.inv_noDel h_run h_nof
+  have heff := Exec.effect (noDelCode_refl_trans wa).1 (noDelCode_refl_trans wa).2
+    (Ninst.noDelCode_effectGen wa) (Jinst.noDelCode_effect wa)
+    (Linst.noDelCode_effect wa) run
+  cases exn with
+  | error e => exact heff.1 h
+  | ok d => exact heff.1 h
 
 theorem exec_inv_noDel {wa : Adr} (lim : Nat) (sevm : Sevm) (pre : Devm)
     (exn : Execution)
