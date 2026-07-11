@@ -6554,6 +6554,168 @@ lemma prepareMessage_inv_solvent {wa : Adr}
     · simpa using h_origin_ne
     · simp
 
+-- A successfully checked transaction can afford its actual up-front gas and
+-- blob charge.  In particular, that charge is represented exactly by B256.
+lemma checkTransaction_upfront_lt_modulus {benv : Benv} {bout : BlockOutput}
+    {tx : Tx} {sender : Adr} {effectiveGasPrice : Nat}
+    {blobVersionedHashes : List B256} {txBlobGasUsed : Nat}
+    (h_check :
+      checkTransaction benv bout tx =
+        .ok ⟨sender, effectiveGasPrice, blobVersionedHashes, txBlobGasUsed⟩) :
+    tx.gas * effectiveGasPrice +
+      (if tx.isTypeThree = true then
+        calculate_data_fee benv.stat.excessBlobGas tx
+      else 0) < 2 ^ 256 := by
+  unfold checkTransaction at h_check
+  rcases of_bind_eq_ok h_check with ⟨txBlobGasUsed', h_limit, h_check⟩
+  rcases of_bind_eq_ok h_check with ⟨senderAddress, h_recover, h_check⟩
+  rcases of_bind_eq_ok h_check with ⟨fee, h_fee, h_check⟩
+  rcases fee with ⟨effectiveGasPrice', maxGasFee⟩
+  rcases of_bind_eq_ok h_check with ⟨blob, h_blob, h_check⟩
+  rcases blob with ⟨maxGasFee', blobVersionedHashes'⟩
+  rcases of_bind_eq_ok h_check with ⟨_, h_receiver, h_check⟩
+  rcases of_bind_eq_ok h_check with ⟨_, h_auth, h_check⟩
+  rcases of_bind_eq_ok h_check with ⟨_, h_account, h_check⟩
+  have h_result := Except.ok.inj h_check
+  simp only [Prod.mk.injEq] at h_result
+  obtain ⟨rfl, rfl, rfl, rfl⟩ := h_result
+  have h_afford :
+      maxGasFee' ≤ ((benv.state.get senderAddress).bal).toNat := by
+    unfold checkTransactionSenderAccount at h_account
+    split at h_account <;> try contradiction
+    split at h_account <;> try contradiction
+    split at h_account <;> try contradiction
+    rename_i hlt
+    omega
+  have h_balance_lt :
+      ((benv.state.get senderAddress).bal).toNat < 2 ^ 256 :=
+    B256.toNat_lt _
+  cases h_type : tx.type with
+  | zero gasPrice receiver =>
+    simp only [checkTransactionGasFee, h_type, checkTransactionLegacyGasFee] at h_fee
+    split at h_fee
+    · cases h_fee
+    · have h_fee' := Except.ok.inj h_fee
+      simp only [Prod.mk.injEq] at h_fee'
+      obtain ⟨rfl, rfl⟩ := h_fee'
+      simp only [checkTransactionBlobData, h_type] at h_blob
+      have h_blob' := Except.ok.inj h_blob
+      simp only [Prod.mk.injEq] at h_blob'
+      obtain ⟨rfl, rfl⟩ := h_blob'
+      simp only [Tx.isTypeThree, h_type, Bool.false_eq_true, if_false]
+      omega
+  | one chainId gasPrice receiver accessList =>
+    simp only [checkTransactionGasFee, h_type, checkTransactionLegacyGasFee] at h_fee
+    split at h_fee
+    · cases h_fee
+    · have h_fee' := Except.ok.inj h_fee
+      simp only [Prod.mk.injEq] at h_fee'
+      obtain ⟨rfl, rfl⟩ := h_fee'
+      simp only [checkTransactionBlobData, h_type] at h_blob
+      have h_blob' := Except.ok.inj h_blob
+      simp only [Prod.mk.injEq] at h_blob'
+      obtain ⟨rfl, rfl⟩ := h_blob'
+      simp only [Tx.isTypeThree, h_type, Bool.false_eq_true, if_false]
+      omega
+  | two chainId maxPriorityFeePerGas maxFeePerGas receiver accessList =>
+    simp only [checkTransactionGasFee, h_type, checkTransactionDynamicGasFee] at h_fee
+    split at h_fee
+    · cases h_fee
+    · split at h_fee
+      · cases h_fee
+      · rename_i h_priority h_base_fee
+        have h_fee' := Except.ok.inj h_fee
+        simp only [Prod.mk.injEq] at h_fee'
+        obtain ⟨rfl, rfl⟩ := h_fee'
+        simp only [checkTransactionBlobData, h_type] at h_blob
+        have h_blob' := Except.ok.inj h_blob
+        simp only [Prod.mk.injEq] at h_blob'
+        obtain ⟨rfl, rfl⟩ := h_blob'
+        simp only [Tx.isTypeThree, h_type, Bool.false_eq_true, if_false]
+        have h_effective :
+            min maxPriorityFeePerGas (maxFeePerGas - benv.stat.baseFeePerGas) +
+                benv.stat.baseFeePerGas ≤ maxFeePerGas := by
+          omega
+        have h_mul := Nat.mul_le_mul_left tx.gas h_effective
+        omega
+  | three chainId maxPriorityFeePerGas maxFeePerGas receiver accessList
+      maxFeePerBlobGas blobHashes =>
+    simp only [checkTransactionGasFee, h_type, checkTransactionDynamicGasFee] at h_fee
+    split at h_fee
+    · cases h_fee
+    · split at h_fee
+      · cases h_fee
+      · rename_i h_priority h_base_fee
+        have h_fee' := Except.ok.inj h_fee
+        simp only [Prod.mk.injEq] at h_fee'
+        obtain ⟨rfl, rfl⟩ := h_fee'
+        simp only [checkTransactionBlobData, h_type] at h_blob
+        split at h_blob
+        · cases h_blob
+        · split at h_blob
+          · cases h_blob
+          · split at h_blob
+            · cases h_blob
+            · rename_i h_blob_fee
+              have h_blob' := Except.ok.inj h_blob
+              simp only [Prod.mk.injEq] at h_blob'
+              obtain ⟨rfl, rfl⟩ := h_blob'
+              simp only [Tx.isTypeThree, h_type, reduceIte]
+              have h_effective :
+                  min maxPriorityFeePerGas
+                      (maxFeePerGas - benv.stat.baseFeePerGas) +
+                      benv.stat.baseFeePerGas ≤ maxFeePerGas := by
+                omega
+              have h_mul := Nat.mul_le_mul_left tx.gas h_effective
+              have h_blob_mul :
+                  calculate_data_fee benv.stat.excessBlobGas tx ≤
+                    calculateTotalBlobGas tx * maxFeePerBlobGas := by
+                unfold calculate_data_fee
+                exact Nat.mul_le_mul_left _ (by omega)
+              omega
+  | four chainId maxPriorityFeePerGas maxFeePerGas receiver accessList auths =>
+    simp only [checkTransactionGasFee, h_type, checkTransactionDynamicGasFee] at h_fee
+    split at h_fee
+    · cases h_fee
+    · split at h_fee
+      · cases h_fee
+      · rename_i h_priority h_base_fee
+        have h_fee' := Except.ok.inj h_fee
+        simp only [Prod.mk.injEq] at h_fee'
+        obtain ⟨rfl, rfl⟩ := h_fee'
+        simp only [checkTransactionBlobData, h_type] at h_blob
+        have h_blob' := Except.ok.inj h_blob
+        simp only [Prod.mk.injEq] at h_blob'
+        obtain ⟨rfl, rfl⟩ := h_blob'
+        simp only [Tx.isTypeThree, h_type, Bool.false_eq_true, if_false]
+        have h_effective :
+            min maxPriorityFeePerGas (maxFeePerGas - benv.stat.baseFeePerGas) +
+                benv.stat.baseFeePerGas ≤ maxFeePerGas := by
+          omega
+        have h_mul := Nat.mul_le_mul_left tx.gas h_effective
+        omega
+
+lemma validateTransaction_calldataFloorGasCost_le_gas {tx : Tx}
+    {intrinsicGas calldataFloorGasCost : Nat}
+    (h_validate :
+      validateTransaction tx = .ok ⟨intrinsicGas, calldataFloorGasCost⟩) :
+    calldataFloorGasCost ≤ tx.gas := by
+  unfold validateTransaction at h_validate
+  rcases h_cost : calculateIntrinsicCost tx with ⟨ig, floorCost⟩
+  rw [h_cost] at h_validate
+  dsimp only at h_validate
+  split at h_validate
+  · cases h_validate
+  · split at h_validate
+    · cases h_validate
+    · split at h_validate
+      · cases h_validate
+      · rename_i h_gas _ _
+        have h_result := Except.ok.inj h_validate
+        simp only [Prod.mk.injEq] at h_result
+        obtain ⟨rfl, rfl⟩ := h_result
+        omega
+
 lemma State.Inv.add_transaction_gas_credits {wa : Adr}
     {baseState debitState postMsgState : _root_.State}
     {benv : Benv} {bout : BlockOutput} {tx : Tx}
@@ -6589,12 +6751,83 @@ lemma State.Inv.add_transaction_gas_credits {wa : Adr}
               min ((tx.gas - txOutput.gasLeft) / 5) refundCounter)
               calldataFloorGasCost *
             (effectiveGasPrice - benv.stat.baseFeePerGas)).toB256) := by
-  -- TODO: Factor out `checkTransaction_upfront_lt_modulus` (affordability of the
-  -- raw gas/blob payment) and `sum_subBal_eq`/`sum_incrNonce`.  They are needed
-  -- to show the two separately converted B256 gas credits do not wrap, before
-  -- applying `State.Inv.addBal` twice.  The present hypotheses expose those facts
-  -- only through deeply nested `checkTransaction` binds and TxType cases.
-  sorry
+  have h_fee_lt := checkTransaction_upfront_lt_modulus h_check
+  have h_floor := validateTransaction_calldataFloorGasCost_le_gas h_validate
+  have h_debit_sum := State.balSum_subBal h_debit
+  dsimp only [State.balSum] at h_debit_sum
+  rw [State.incrNonce_bal] at h_debit_sum
+  have h_debit_exact := toNat_toB256_of_lt h_fee_lt
+  rw [h_debit_exact] at h_debit_sum
+  have h_base_sum := h_base.nof
+  unfold _root_.SumNof at h_base_sum
+  have h_used_le :
+      max (tx.gas - txOutput.gasLeft -
+          min ((tx.gas - txOutput.gasLeft) / 5) refundCounter)
+          calldataFloorGasCost ≤ tx.gas := by
+    apply max_le
+    · omega
+    · exact h_floor
+  have h_credits_le :
+      (tx.gas -
+          max (tx.gas - txOutput.gasLeft -
+            min ((tx.gas - txOutput.gasLeft) / 5) refundCounter)
+            calldataFloorGasCost) *
+        effectiveGasPrice +
+      max (tx.gas - txOutput.gasLeft -
+          min ((tx.gas - txOutput.gasLeft) / 5) refundCounter)
+          calldataFloorGasCost *
+        (effectiveGasPrice - benv.stat.baseFeePerGas) ≤
+      tx.gas * effectiveGasPrice := by
+    apply le_trans (Nat.add_le_add_left
+      (Nat.mul_le_mul_left _
+        (Nat.sub_le effectiveGasPrice benv.stat.baseFeePerGas)) _)
+    rw [← Nat.add_mul, Nat.sub_add_cancel h_used_le]
+  have h_refund_le :
+      (((tx.gas -
+          max (tx.gas - txOutput.gasLeft -
+            min ((tx.gas - txOutput.gasLeft) / 5) refundCounter)
+            calldataFloorGasCost) *
+        effectiveGasPrice).toB256).toNat ≤
+      (tx.gas -
+          max (tx.gas - txOutput.gasLeft -
+            min ((tx.gas - txOutput.gasLeft) / 5) refundCounter)
+            calldataFloorGasCost) *
+        effectiveGasPrice := by
+    rw [toNat_toB256]
+    unfold Nat.lo
+    exact Nat.mod_le _ _
+  have h_tip_le :
+      ((max (tx.gas - txOutput.gasLeft -
+          min ((tx.gas - txOutput.gasLeft) / 5) refundCounter)
+          calldataFloorGasCost *
+        (effectiveGasPrice - benv.stat.baseFeePerGas)).toB256).toNat ≤
+      max (tx.gas - txOutput.gasLeft -
+          min ((tx.gas - txOutput.gasLeft) / 5) refundCounter)
+          calldataFloorGasCost *
+        (effectiveGasPrice - benv.stat.baseFeePerGas) := by
+    rw [toNat_toB256]
+    unfold Nat.lo
+    exact Nat.mod_le _ _
+  have h_sender_sum :
+      sum postMsgState.bal +
+        (((tx.gas -
+            max (tx.gas - txOutput.gasLeft -
+              min ((tx.gas - txOutput.gasLeft) / 5) refundCounter)
+              calldataFloorGasCost) *
+          effectiveGasPrice).toB256).toNat < 2 ^ 256 := by
+    omega
+  have h_sender_inv :=
+    State.Inv.addBal (a := sender) h_sender_sum h_post
+  have h_growth := State.addBal_growth postMsgState sender
+    ((tx.gas -
+        max (tx.gas - txOutput.gasLeft -
+          min ((tx.gas - txOutput.gasLeft) / 5) refundCounter)
+          calldataFloorGasCost) *
+      effectiveGasPrice).toB256
+  dsimp only [State.BalGrowth, State.balSum] at h_growth
+  apply State.Inv.addBal
+  · omega
+  · exact h_sender_inv
 
 theorem processTransaction_inv_solvent (wa : Adr)
     (benv : Benv) (bout bout' : BlockOutput) (tx : Tx) (i : Nat) (st : _root_.State)
