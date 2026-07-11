@@ -6695,6 +6695,43 @@ theorem applyTransactions_inv_solvent (wa : Adr)
     have hstep := processTransaction_inv_solvent wa benv bout bout'' tx i st h1 h_inv
     exact ih (benv.withState st) bout'' h2 hstep
 
+/-
+(1) Difficulty: ★★☆☆☆
+(2) Proof plan: unfold the two system-transaction wrappers, build
+`Msg.InvSolvent` for the resulting zero-value/no-transfer message from the
+`Benv.InvSolvent` hypothesis, and apply `processMessageCall_inv_solvent` and
+`processMessageCall_sum_le`.  The wrapper only chooses the target's current
+code and otherwise does not alter the starting state.
+-/
+lemma processUncheckedSystemTransaction_inv_solvent_sum_le (wa : Adr)
+    (benv : Benv) (target : Adr) (data : B8L)
+    (st : _root_.State) (out : MsgCallOutput)
+    (h_run : processUncheckedSystemTransaction benv target data = .ok ⟨st, out⟩)
+    (h_inv : Benv.InvSolvent wa benv) :
+    State.Inv wa st ∧ sum st.bal ≤ sum benv.state.bal := by
+  dsimp [processUncheckedSystemTransaction, processSystemTransaction] at h_run
+  have h_msg : Msg.InvSolvent wa
+      (processSystemTransactionMsg benv (processSystemTransactionTenv benv)
+        target data (benv.state.getCode target)) := by
+    refine ⟨h_inv.state, ?_, ?_, ?_, ?_, ?_⟩
+    · refine ⟨h_inv.ca, ?_⟩
+      intro hnil
+      exact Prog.compile_ne_nil (p := weth) (by
+        rw [← h_inv.state.code]
+        simpa [processSystemTransactionMsg] using hnil)
+    · intro _ htarget
+      simp only [processSystemTransactionMsg] at htarget ⊢
+      subst target
+      exact h_inv.state.code
+    · intro _ htarget
+      simp only [processSystemTransactionMsg] at htarget ⊢
+      subst target
+      rfl
+    · simp [processSystemTransactionMsg]
+    · simp [processSystemTransactionMsg]
+  have hsum := processMessageCall_sum_le h_run
+  exact ⟨(processMessageCall_inv_solvent h_run h_msg).1, hsum⟩
+
 -- Total wei credited by a list of withdrawals, computed in ℕ. Withdrawals
 -- mint ether with wrapping addition (`State.addBal`), so the block-level
 -- theorems need the bound `sum _.bal + wdsum wds < 2 ^ 256` : without it,
@@ -6703,17 +6740,111 @@ theorem applyTransactions_inv_solvent (wa : Adr)
 def wdsum (wds : List Withdrawal) : Nat :=
   (wds.map (fun wd => wd.amount.toNat * 10 ^ 9)).sum
 
+/-
+(1) Difficulty: ★★★★☆
+(2) Proof plan: first prove the one-step statement for `processTransaction`.
+Invert its successful do-block as in `processTransaction_inv_solvent`; use
+`State.balSum_subBal` for the up-front debit,
+`processMessageCall_sum_le` for the call, and `State.addBal_growth` for the
+sender refund and coinbase tip.  The inequalities checked by
+`checkTransaction`, together with the definitions of refunded gas and the
+priority fee, show that the two credits are at most the up-front debit (the
+blob fee is simply an additional debit).  Account destruction is
+nonincreasing.  Then induct over `txis`, composing the one-step inequalities.
+-/
+lemma applyTransactions_sum_le
+    {txis : List (Nat × Tx)} {benv benv' : Benv}
+    {bout bout' : BlockOutput}
+    (h_run : applyTransactions txis benv bout = .ok ⟨benv', bout'⟩) :
+    sum benv'.state.bal ≤ sum benv.state.bal := by
+  sorry
+
+/-
+(1) Difficulty: ★★★☆☆
+(2) Proof plan: induct on `wds`, generalizing the starting state.  For the
+head withdrawal, prove that
+`(wd.amount * (10 ^ 9).toB256).toNat = wd.amount.toNat * 10 ^ 9`; the product
+cannot wrap because a withdrawal amount is 64-bit.  The head/tail decomposition
+of `wdsum` and the global bound then gives the exact pre-sum bound required by
+`State.Inv.addBal`.  Apply that lemma for the head and feed the resulting sum
+identity (or `State.balSum_setBal`) and residual bound to the induction
+hypothesis.
+-/
+lemma processWithdrawalsState_inv_solvent (wa : Adr)
+    (st : _root_.State) (wds : List Withdrawal)
+    (h_bound : sum st.bal + wdsum wds < 2 ^ 256)
+    (h_inv : State.Inv wa st) :
+    State.Inv wa (processWithdrawalsState st wds) := by
+  sorry
+
+/-
+(1) Difficulty: ★★☆☆☆
+(2) Proof plan: invert `processGeneralPurposeRequests`.  Parsing deposits and
+updating the request list do not touch state.  Each of the two checked system
+transactions reduces, on its successful branch, to the corresponding
+unchecked system transaction, so apply
+`processUncheckedSystemTransaction_inv_solvent_sum_le` twice.  Thread
+`createdAccounts` through `Benv.withState` and compose the two sum
+inequalities.
+-/
+lemma processGeneralPurposeRequests_inv_solvent_sum_le (wa : Adr)
+    (benv : Benv) (bout : BlockOutput)
+    (st : _root_.State) (bout' : BlockOutput)
+    (h_run : processGeneralPurposeRequests benv bout = .ok ⟨st, bout'⟩)
+    (h_inv : Benv.InvSolvent wa benv) :
+    State.Inv wa st ∧ sum st.bal ≤ sum benv.state.bal := by
+  sorry
+
 theorem applyBody_inv_solvent (wa : Adr)
     (benv : Benv) (txs : List (B8L ⊕ Tx)) (wds : List Withdrawal)
     (st : _root_.State) (bout : BlockOutput)
     (h_run : applyBody benv txs wds = .ok ⟨st, bout⟩)
     (h_wds : sum benv.state.bal + wdsum wds < 2 ^ 256)
     (h_inv : Benv.InvSolvent wa benv) : State.Inv wa st := by
-  -- TODO: `applyBody` also executes beacon-roots/history/general-purpose-request
-  -- system transactions.  Add preservation and sum-nonincrease lemmas for those
-  -- calls (and first prove `processMessageCall_sum_le`), then fold withdrawals
-  -- using `State.Inv.addBal` and the partial-sum bounds from `h_wds`.
-  sorry
+  rw [applyBody] at h_run
+  simp only [cprint, verbose, Bool.false_eq_true, if_false, pure_bind] at h_run
+  rcases of_bind_eq_ok h_run with ⟨⟨stBeacon, outBeacon⟩, h_beacon, h_run⟩
+  rcases of_bind_eq_ok h_run with ⟨lastHash, h_lastHash, h_run⟩
+  rcases of_bind_eq_ok h_run with ⟨⟨stHistory, outHistory⟩, h_history, h_run⟩
+  rcases of_bind_eq_ok h_run with ⟨decodedTxs, h_decode, h_run⟩
+  rcases of_bind_eq_ok h_run with ⟨⟨benvTxs, boutTxs⟩, h_txs, h_requests⟩
+  dsimp only at h_history h_txs h_requests
+  have h_beacon_inv :=
+    processUncheckedSystemTransaction_inv_solvent_sum_le wa benv
+      beaconRootsAddress benv.stat.parentBeaconBlockRoot.toB8L
+      stBeacon outBeacon h_beacon h_inv
+  have h_benv_beacon : Benv.InvSolvent wa (benv.withState stBeacon) :=
+    ⟨h_beacon_inv.1, by simpa [Benv.withState] using h_inv.ca⟩
+  have h_history_inv :=
+    processUncheckedSystemTransaction_inv_solvent_sum_le wa
+      (benv.withState stBeacon) historyStorageAddress lastHash.toB8L
+      stHistory outHistory h_history h_benv_beacon
+  have h_benv_history :
+      Benv.InvSolvent wa ((benv.withState stBeacon).withState stHistory) :=
+    ⟨h_history_inv.1, by simpa [Benv.withState] using h_benv_beacon.ca⟩
+  have h_txs_inv : Benv.InvSolvent wa benvTxs :=
+    applyTransactions_inv_solvent wa decodedTxs.putIndex
+      ((benv.withState stBeacon).withState stHistory) benvTxs
+      BlockOutput.init boutTxs h_txs h_benv_history
+  have h_txs_sum := applyTransactions_sum_le h_txs
+  dsimp [processWithdrawals] at h_requests
+  have h_txs_bound : sum benvTxs.state.bal + wdsum wds < 2 ^ 256 := by
+    have h_history_sum : sum stHistory.bal ≤ sum stBeacon.bal := by
+      simpa [Benv.withState] using h_history_inv.2
+    have h_txs_sum' : sum benvTxs.state.bal ≤ sum stHistory.bal := by
+      simpa [Benv.withState] using h_txs_sum
+    omega
+  have h_wds_inv :=
+    processWithdrawalsState_inv_solvent wa benvTxs.state wds
+      h_txs_bound h_txs_inv.state
+  have h_benv_wds : Benv.InvSolvent wa
+      (benvTxs.withState (processWithdrawalsState benvTxs.state wds)) :=
+    ⟨h_wds_inv, by simpa [Benv.withState] using h_txs_inv.ca⟩
+  exact (processGeneralPurposeRequests_inv_solvent_sum_le wa
+    (benvTxs.withState (processWithdrawalsState benvTxs.state wds))
+    (boutTxs.withWithdrawalsTrie
+      (processWithdrawalsTrie boutTxs.withdrawalsTrie wds))
+    st bout h_requests h_benv_wds).1
 
 theorem stateTransition_inv_solvent (wa : Adr)
     (ch ch' : BlockChain) (block : Block)
