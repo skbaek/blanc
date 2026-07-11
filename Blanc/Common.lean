@@ -7880,8 +7880,8 @@ def MsgResult.NoDel (wa : Adr) :
   | .error ⟨_, st, ca, _⟩ => wa ∉ ca ∧ (st.getCode wa).toList ≠ []
 
 -- The sub-execution oracle invariant threaded through the Exec induction
--- (mirrors Xlot.InvNof, Solvent.lean:2562, but result-shaped like
--- Xlot.InvGetCode, Common.lean:4076).
+-- (result-shaped like Xlot.InvGetCode, Common.lean:4076; the former
+-- Xlot.InvNof mirror in Solvent.lean was replaced by Exec.balance_effect).
 def Xlot.InvNoDel (wa : Adr) : Xlot → Prop
   | .none => True
   | .some ⟨_, devm_, exn_⟩ => Devm.NoDel wa devm_ → Execution.NoDel wa exn_
