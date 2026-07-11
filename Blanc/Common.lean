@@ -3776,43 +3776,22 @@ lemma Devm.popN_getCode_eq {n : Nat} {devm devm' : Devm} {l : List B256}
     have h2 := ih hp3
     rw [h2, h1]
 
-
-
 lemma Rinst.inv_getCode
     {pc sevm devm r devm'}
     (run : Rinst.run ⟨pc, sevm, devm⟩ r = .ok devm') (a : Adr) :
     devm'.getCode a = devm.getCode a := by
   cases r <;> dsimp [Rinst.run, Rinst.runCore] at run
-  case add => apply applyBinary_getCode_eq run
-  case mul => apply applyBinary_getCode_eq run
-  case sub => apply applyBinary_getCode_eq run
-  case div => apply applyBinary_getCode_eq run
-  case sdiv => apply applyBinary_getCode_eq run
-  case mod => apply applyBinary_getCode_eq run
-  case smod => apply applyBinary_getCode_eq run
-  case addmod => apply applyTernary_getCode_eq run
-  case mulmod => apply applyTernary_getCode_eq run
+  all_goals try with_reducible first
+    | exact applyBinary_getCode_eq run a
+    | exact applyTernary_getCode_eq run a
+    | exact applyUnary_getCode_eq run a
+    | exact pushItem_getCode_eq run a
   case exp =>
     refine getCode_eq_of_bind run Prod.snd ?_ ?_
     {intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a}
     intro ⟨x, devm1⟩ hp run; refine getCode_eq_of_bind run Prod.snd ?_ ?_
     {intro ⟨y, devm2⟩ hp2; exact Devm.pop_getCode_eq hp2 a}
     intro ⟨y, devm2⟩ hp2 run; exact pushItem_getCode_eq run a
-  case signextend => apply applyBinary_getCode_eq run
-  case lt => apply applyBinary_getCode_eq run
-  case gt => apply applyBinary_getCode_eq run
-  case slt => apply applyBinary_getCode_eq run
-  case sgt => apply applyBinary_getCode_eq run
-  case eq => apply applyBinary_getCode_eq run
-  case iszero => apply applyUnary_getCode_eq run
-  case and => apply applyBinary_getCode_eq run
-  case or => apply applyBinary_getCode_eq run
-  case xor => apply applyBinary_getCode_eq run
-  case not => apply applyUnary_getCode_eq run
-  case byte => apply applyBinary_getCode_eq run
-  case shr => apply applyBinary_getCode_eq run
-  case shl => apply applyBinary_getCode_eq run
-  case sar => apply applyBinary_getCode_eq run
   case kec =>
     refine getCode_eq_of_bind run Prod.snd ?_ ?_
     {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getCode_eq hp a}
@@ -3822,7 +3801,6 @@ lemma Rinst.inv_getCode
     refine getCode_eq_of_bind run id ?_ ?_
     {intro devm1 hc; exact chargeGas_getCode_eq hc a}
     intro devm1 hc run; exact Devm.push_getCode_eq run a
-  case address => apply pushItem_getCode_eq run
   case balance =>
     refine getCode_eq_of_bind run Prod.snd ?_ ?_
     {intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a}
@@ -3833,16 +3811,12 @@ lemma Rinst.inv_getCode
     · refine getCode_eq_of_bind run id ?_ ?_
       {intro devm2 hc; exact chargeGas_getCode_eq hc a}
       intro devm2 hc run; exact Devm.push_getCode_eq run a
-  case origin => apply pushItem_getCode_eq run
-  case caller => apply pushItem_getCode_eq run
-  case callvalue => apply pushItem_getCode_eq run
   case calldataload =>
     refine getCode_eq_of_bind run Prod.snd ?_ ?_
     {intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a}
     intro ⟨x, devm1⟩ hp run; refine getCode_eq_of_bind run id ?_ ?_
     {intro devm2 hc; exact chargeGas_getCode_eq hc a}
     intro devm2 hc run; exact Devm.push_getCode_eq run a
-  case calldatasize => apply pushItem_getCode_eq run
   case calldatacopy =>
     refine getCode_eq_of_bind run Prod.snd ?_ ?_
     {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getCode_eq hp a}
@@ -3853,7 +3827,6 @@ lemma Rinst.inv_getCode
     intro ⟨z, devm3⟩ hp run; refine getCode_eq_of_bind run id ?_ ?_
     {intro devm4 hc; exact chargeGas_getCode_eq hc a}
     intro devm4 hc run; injection run with eq; subst eq; rfl
-  case codesize => apply pushItem_getCode_eq run
   case codecopy =>
     refine getCode_eq_of_bind run Prod.snd ?_ ?_
     {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getCode_eq hp a}
@@ -3864,7 +3837,6 @@ lemma Rinst.inv_getCode
     intro ⟨z, devm3⟩ hp run; refine getCode_eq_of_bind run id ?_ ?_
     {intro devm4 hc; exact chargeGas_getCode_eq hc a}
     intro devm4 hc run; injection run with eq; subst eq; rfl
-  case gasprice => apply pushItem_getCode_eq run
   case extcodesize =>
     refine getCode_eq_of_bind run Prod.snd ?_ ?_
     {intro ⟨x, devm1⟩ hp; exact Devm.popToAdr_getCode_eq hp a}
@@ -3891,7 +3863,6 @@ lemma Rinst.inv_getCode
     · refine getCode_eq_of_bind run id ?_ ?_
       {intro devm5 hc; exact chargeGas_getCode_eq hc a}
       intro devm5 hc run; injection run with eq; subst eq; rfl
-  case retdatasize => apply pushItem_getCode_eq run
   case retdatacopy =>
     refine getCode_eq_of_bind run Prod.snd ?_ ?_
     {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getCode_eq hp a}
@@ -3920,21 +3891,12 @@ lemma Rinst.inv_getCode
     intro ⟨x, devm1⟩ hp run; refine getCode_eq_of_bind run id ?_ ?_
     {intro devm2 hc; exact chargeGas_getCode_eq hc a}
     intro devm2 hc run; exact Devm.push_getCode_eq run a
-  case coinbase => apply pushItem_getCode_eq run
-  case timestamp => apply pushItem_getCode_eq run
-  case number => apply pushItem_getCode_eq run
-  case prevrandao => apply pushItem_getCode_eq run
-  case gaslimit => apply pushItem_getCode_eq run
-  case chainid => apply pushItem_getCode_eq run
-  case selfbalance => apply pushItem_getCode_eq run
-  case basefee => apply pushItem_getCode_eq run
   case blobhash =>
     refine getCode_eq_of_bind run Prod.snd ?_ ?_
     {intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a}
     intro ⟨x, devm1⟩ hp run; refine getCode_eq_of_bind run id ?_ ?_
     {intro devm2 hc; exact chargeGas_getCode_eq hc a}
     intro devm2 hc run; exact Devm.push_getCode_eq run a
-  case blobbasefee => apply pushItem_getCode_eq run
   case pop =>
     refine getCode_eq_of_bind run id ?_ ?_
     {intro devm1 hc; exact Devm.pop_map_snd_getCode_eq hc a}
@@ -4001,8 +3963,6 @@ lemma Rinst.inv_getCode
     intro ⟨z, devm3⟩ hp run; refine getCode_eq_of_bind run id ?_ ?_
     {intro devm4 hc; exact chargeGas_getCode_eq hc a}
     intro devm4 hc run; injection run with eq; subst eq; rfl
-  case pc => apply pushItem_getCode_eq run
-  case msize => apply pushItem_getCode_eq run
   case gas =>
     refine getCode_eq_of_bind run id ?_ ?_
     {intro devm1 hc; exact chargeGas_getCode_eq hc a}
@@ -4645,15 +4605,11 @@ lemma Rinst.inv_getCode_err
     (run : Rinst.run ⟨pc, sevm, devm⟩ r = Except.error err) (a : Adr) :
     err.2.getCode a = devm.getCode a := by
   cases r <;> dsimp [Rinst.run, Rinst.runCore] at run
-  case add => apply applyBinary_getCode_err run
-  case mul => apply applyBinary_getCode_err run
-  case sub => apply applyBinary_getCode_err run
-  case div => apply applyBinary_getCode_err run
-  case sdiv => apply applyBinary_getCode_err run
-  case mod => apply applyBinary_getCode_err run
-  case smod => apply applyBinary_getCode_err run
-  case addmod => apply applyTernary_getCode_err run
-  case mulmod => apply applyTernary_getCode_err run
+  all_goals try with_reducible first
+    | exact applyBinary_getCode_err run a
+    | exact applyTernary_getCode_err run a
+    | exact applyUnary_getCode_err run a
+    | exact pushItem_getCode_err run a
   case exp =>
     refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
     · intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a
@@ -4663,21 +4619,6 @@ lemma Rinst.inv_getCode_err
       · intro ⟨y, devm2⟩ hp2; exact Devm.pop_getCode_eq hp2 a
       · intro e hp2; exact Devm.pop_getCode_err hp2 a
       · intro ⟨y, devm2⟩ hp2 run3; exact pushItem_getCode_err run3 a
-  case signextend => apply applyBinary_getCode_err run
-  case lt => apply applyBinary_getCode_err run
-  case gt => apply applyBinary_getCode_err run
-  case slt => apply applyBinary_getCode_err run
-  case sgt => apply applyBinary_getCode_err run
-  case eq => apply applyBinary_getCode_err run
-  case iszero => apply applyUnary_getCode_err run
-  case and => apply applyBinary_getCode_err run
-  case or => apply applyBinary_getCode_err run
-  case xor => apply applyBinary_getCode_err run
-  case not => apply applyUnary_getCode_err run
-  case byte => apply applyBinary_getCode_err run
-  case shr => apply applyBinary_getCode_err run
-  case shl => apply applyBinary_getCode_err run
-  case sar => apply applyBinary_getCode_err run
   case kec =>
     refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
     · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getCode_eq hp a
@@ -4691,7 +4632,6 @@ lemma Rinst.inv_getCode_err
         · intro devm3 hc; exact chargeGas_getCode_eq hc a
         · intro e hc; exact chargeGas_getCode_err hc a
         · intro devm3 hc run4; exact Devm.push_getCode_err run4 a
-  case address => apply pushItem_getCode_err run
   case balance =>
     refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
     · intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a
@@ -4705,9 +4645,6 @@ lemma Rinst.inv_getCode_err
         · intro devm2 hc; exact chargeGas_getCode_eq hc a
         · intro e hc; exact chargeGas_getCode_err hc a
         · intro devm2 hc run3; exact Devm.push_getCode_err run3 a
-  case origin => apply pushItem_getCode_err run
-  case caller => apply pushItem_getCode_err run
-  case callvalue => apply pushItem_getCode_err run
   case calldataload =>
     refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
     · intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a
@@ -4717,7 +4654,6 @@ lemma Rinst.inv_getCode_err
       · intro devm2 hc; exact chargeGas_getCode_eq hc a
       · intro e hc; exact chargeGas_getCode_err hc a
       · intro devm2 hc run3; exact Devm.push_getCode_err run3 a
-  case calldatasize => apply pushItem_getCode_err run
   case calldatacopy =>
     refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
     · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getCode_eq hp a
@@ -4735,7 +4671,6 @@ lemma Rinst.inv_getCode_err
           · intro devm4 hc; exact chargeGas_getCode_eq hc a
           · intro e hc; exact chargeGas_getCode_err hc a
           · intro devm4 hc run5; injection run5
-  case codesize => apply pushItem_getCode_err run
   case codecopy =>
     refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
     · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getCode_eq hp a
@@ -4753,7 +4688,6 @@ lemma Rinst.inv_getCode_err
           · intro devm4 hc; exact chargeGas_getCode_eq hc a
           · intro e hc; exact chargeGas_getCode_err hc a
           · intro devm4 hc run5; injection run5
-  case gasprice => apply pushItem_getCode_err run
   case extcodesize =>
     refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
     · intro ⟨x, devm1⟩ hp; exact Devm.popToAdr_getCode_eq hp a
@@ -4793,7 +4727,6 @@ lemma Rinst.inv_getCode_err
               · intro devm5 hc; exact chargeGas_getCode_eq hc a
               · intro e hc; exact chargeGas_getCode_err hc a
               · intro devm5 hc run6; injection run6
-  case retdatasize => apply pushItem_getCode_err run
   case retdatacopy =>
     refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
     · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getCode_eq hp a
@@ -4836,14 +4769,6 @@ lemma Rinst.inv_getCode_err
       · intro devm2 hc; exact chargeGas_getCode_eq hc a
       · intro e hc; exact chargeGas_getCode_err hc a
       · intro devm2 hc run3; exact Devm.push_getCode_err run3 a
-  case coinbase => apply pushItem_getCode_err run
-  case timestamp => apply pushItem_getCode_err run
-  case number => apply pushItem_getCode_err run
-  case prevrandao => apply pushItem_getCode_err run
-  case gaslimit => apply pushItem_getCode_err run
-  case chainid => apply pushItem_getCode_err run
-  case selfbalance => apply pushItem_getCode_err run
-  case basefee => apply pushItem_getCode_err run
   case blobhash =>
     refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
     exact fun ⟨x, devm1⟩ hp => Devm.pop_getCode_eq hp a
@@ -4853,7 +4778,6 @@ lemma Rinst.inv_getCode_err
     exact fun devm2 hc => chargeGas_getCode_eq hc a
     exact fun e hc => chargeGas_getCode_err hc a
     intro devm2 hc run3; exact Devm.push_getCode_err run3 a
-  case blobbasefee => apply pushItem_getCode_err run
   case pop =>
     refine getCode_err_of_bind run id ?_ ?_ ?_
     exact fun devm1 hc => Devm.pop_map_snd_getCode_eq hc a
@@ -4931,16 +4855,6 @@ lemma Rinst.inv_getCode_err
               all_goals (try { cases run5; rfl })
               all_goals (try injection run5)
           }
-  case pc =>
-    refine getCode_err_of_bind run id ?_ ?_ ?_
-    · intro devm1 hc; exact chargeGas_getCode_eq hc a
-    · intro e hc; exact chargeGas_getCode_err hc a
-    · intro devm1 hc run2; exact Devm.push_getCode_err run2 a
-  case msize =>
-    refine getCode_err_of_bind run id ?_ ?_ ?_
-    · intro devm1 hc; exact chargeGas_getCode_eq hc a
-    · intro e hc; exact chargeGas_getCode_err hc a
-    · intro devm1 hc run2; exact Devm.push_getCode_err run2 a
   case gas =>
     refine getCode_err_of_bind run id ?_ ?_ ?_
     · intro devm1 hc; exact chargeGas_getCode_eq hc a
@@ -7626,30 +7540,14 @@ def Rinst.Inv {ξ : Type} (f : Devm → ξ) (r : Rinst) : Prop :=
 
 lemma Rinst.inv_bal {r} : Rinst.Inv Devm.getBal r := by
   intros pc sevm pre post; cases r
-  case add => exact applyBinary_getBal_eq
-  case mul => exact applyBinary_getBal_eq
-  case sub => exact applyBinary_getBal_eq
-  case div => exact applyBinary_getBal_eq
-  case sdiv => exact applyBinary_getBal_eq
-  case mod => exact applyBinary_getBal_eq
-  case smod => exact applyBinary_getBal_eq
-  case signextend => exact applyBinary_getBal_eq
-  case lt => exact applyBinary_getBal_eq
-  case gt => exact applyBinary_getBal_eq
-  case slt => exact applyBinary_getBal_eq
-  case sgt => exact applyBinary_getBal_eq
-  case eq => exact applyBinary_getBal_eq
-  case and => exact applyBinary_getBal_eq
-  case or => exact applyBinary_getBal_eq
-  case xor => exact applyBinary_getBal_eq
-  case byte => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyBinary_getBal_eq h
-  case shr => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyBinary_getBal_eq h
-  case shl => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyBinary_getBal_eq h
-  case sar => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyBinary_getBal_eq h
-  case addmod => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyTernary_getBal_eq h
-  case mulmod => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyTernary_getBal_eq h
-  case iszero => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyUnary_getBal_eq h
-  case not => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyUnary_getBal_eq h
+  all_goals try (
+    intro h
+    simp only [Rinst.run, Rinst.runCore] at h
+    with_reducible first
+      | exact applyBinary_getBal_eq h
+      | exact applyTernary_getBal_eq h
+      | exact applyUnary_getBal_eq h
+      | exact funext fun a => (pushItem_getBal_eq h a).symm)
   case blobhash => intro h; change applyUnary (fun x => sevm.tenvStat.blobVersionedHashes.getD x.toNat 0) gHashopcode pre = Except.ok post at h; exact applyUnary_getBal_eq h
   case balance =>
     intro h; simp only [Rinst.run, Rinst.runCore] at h
@@ -7714,10 +7612,6 @@ lemma Rinst.inv_bal {r} : Rinst.Inv Devm.getBal r := by
           injection run3 with h_post
           rw [← h_post]
           exact memWrite_getBal_eq a
-  case address | origin | caller | callvalue | calldatasize | codesize | gasprice | retdatasize | coinbase | timestamp | number | prevrandao | gaslimit | chainid | selfbalance | basefee | blobbasefee | pc | msize =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    apply funext; intro a; apply Eq.symm
-    exact pushItem_getBal_eq h a
   case pop =>
     intro h; simp only [Rinst.run, Rinst.runCore] at h
     apply funext; intro a; apply Eq.symm
@@ -10368,15 +10262,11 @@ lemma Rinst.inv_getBal_err
     (run : Rinst.run ⟨pc, sevm, devm⟩ r = Except.error err) (a : Adr) :
     err.2.getBal a = devm.getBal a := by
   cases r <;> dsimp [Rinst.run, Rinst.runCore] at run
-  case add => apply applyBinary_getBal_err run
-  case mul => apply applyBinary_getBal_err run
-  case sub => apply applyBinary_getBal_err run
-  case div => apply applyBinary_getBal_err run
-  case sdiv => apply applyBinary_getBal_err run
-  case mod => apply applyBinary_getBal_err run
-  case smod => apply applyBinary_getBal_err run
-  case addmod => apply applyTernary_getBal_err run
-  case mulmod => apply applyTernary_getBal_err run
+  all_goals try with_reducible first
+    | exact applyBinary_getBal_err run a
+    | exact applyTernary_getBal_err run a
+    | exact applyUnary_getBal_err run a
+    | exact pushItem_getBal_err run a
   case exp =>
     refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
     · intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a
@@ -10386,21 +10276,6 @@ lemma Rinst.inv_getBal_err
       · intro ⟨y, devm2⟩ hp2; exact Devm.pop_getBal_eq hp2 a
       · intro e hp2; exact Devm.pop_getBal_err hp2 a
       · intro ⟨y, devm2⟩ hp2 run3; exact pushItem_getBal_err run3 a
-  case signextend => apply applyBinary_getBal_err run
-  case lt => apply applyBinary_getBal_err run
-  case gt => apply applyBinary_getBal_err run
-  case slt => apply applyBinary_getBal_err run
-  case sgt => apply applyBinary_getBal_err run
-  case eq => apply applyBinary_getBal_err run
-  case iszero => apply applyUnary_getBal_err run
-  case and => apply applyBinary_getBal_err run
-  case or => apply applyBinary_getBal_err run
-  case xor => apply applyBinary_getBal_err run
-  case not => apply applyUnary_getBal_err run
-  case byte => apply applyBinary_getBal_err run
-  case shr => apply applyBinary_getBal_err run
-  case shl => apply applyBinary_getBal_err run
-  case sar => apply applyBinary_getBal_err run
   case kec =>
     refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
     · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getBal_eq hp a
@@ -10414,7 +10289,6 @@ lemma Rinst.inv_getBal_err
         · intro devm3 hc; exact chargeGas_getBal_eq hc a
         · intro e hc; exact chargeGas_getBal_err hc a
         · intro devm3 hc run4; exact Devm.push_getBal_err run4 a
-  case address => apply pushItem_getBal_err run
   case balance =>
     refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
     · intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a
@@ -10428,9 +10302,6 @@ lemma Rinst.inv_getBal_err
         · intro devm2 hc; exact chargeGas_getBal_eq hc a
         · intro e hc; exact chargeGas_getBal_err hc a
         · intro devm2 hc run3; exact Devm.push_getBal_err run3 a
-  case origin => apply pushItem_getBal_err run
-  case caller => apply pushItem_getBal_err run
-  case callvalue => apply pushItem_getBal_err run
   case calldataload =>
     refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
     · intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a
@@ -10440,7 +10311,6 @@ lemma Rinst.inv_getBal_err
       · intro devm2 hc; exact chargeGas_getBal_eq hc a
       · intro e hc; exact chargeGas_getBal_err hc a
       · intro devm2 hc run3; exact Devm.push_getBal_err run3 a
-  case calldatasize => apply pushItem_getBal_err run
   case calldatacopy =>
     refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
     · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getBal_eq hp a
@@ -10458,7 +10328,6 @@ lemma Rinst.inv_getBal_err
           · intro devm4 hc; exact chargeGas_getBal_eq hc a
           · intro e hc; exact chargeGas_getBal_err hc a
           · intro devm4 hc run5; injection run5
-  case codesize => apply pushItem_getBal_err run
   case codecopy =>
     refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
     · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getBal_eq hp a
@@ -10476,7 +10345,6 @@ lemma Rinst.inv_getBal_err
           · intro devm4 hc; exact chargeGas_getBal_eq hc a
           · intro e hc; exact chargeGas_getBal_err hc a
           · intro devm4 hc run5; injection run5
-  case gasprice => apply pushItem_getBal_err run
   case extcodesize =>
     refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
     · intro ⟨x, devm1⟩ hp; exact Devm.popToAdr_getBal_eq hp a
@@ -10516,7 +10384,6 @@ lemma Rinst.inv_getBal_err
               · intro devm5 hc; exact chargeGas_getBal_eq hc a
               · intro e hc; exact chargeGas_getBal_err hc a
               · intro devm5 hc run6; injection run6
-  case retdatasize => apply pushItem_getBal_err run
   case retdatacopy =>
     refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
     · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getBal_eq hp a
@@ -10559,14 +10426,6 @@ lemma Rinst.inv_getBal_err
       · intro devm2 hc; exact chargeGas_getBal_eq hc a
       · intro e hc; exact chargeGas_getBal_err hc a
       · intro devm2 hc run3; exact Devm.push_getBal_err run3 a
-  case coinbase => apply pushItem_getBal_err run
-  case timestamp => apply pushItem_getBal_err run
-  case number => apply pushItem_getBal_err run
-  case prevrandao => apply pushItem_getBal_err run
-  case gaslimit => apply pushItem_getBal_err run
-  case chainid => apply pushItem_getBal_err run
-  case selfbalance => apply pushItem_getBal_err run
-  case basefee => apply pushItem_getBal_err run
   case blobhash =>
     refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
     exact fun ⟨x, devm1⟩ hp => Devm.pop_getBal_eq hp a
@@ -10576,7 +10435,6 @@ lemma Rinst.inv_getBal_err
     exact fun devm2 hc => chargeGas_getBal_eq hc a
     exact fun e hc => chargeGas_getBal_err hc a
     intro devm2 hc run3; exact Devm.push_getBal_err run3 a
-  case blobbasefee => apply pushItem_getBal_err run
   case pop =>
     refine getBal_err_of_bind run id ?_ ?_ ?_
     exact fun devm1 hc => Devm.pop_map_snd_getBal_eq hc a
@@ -10654,16 +10512,6 @@ lemma Rinst.inv_getBal_err
               all_goals (try { cases run5; rfl })
               all_goals (try injection run5)
           }
-  case pc =>
-    refine getBal_err_of_bind run id ?_ ?_ ?_
-    · intro devm1 hc; exact chargeGas_getBal_eq hc a
-    · intro e hc; exact chargeGas_getBal_err hc a
-    · intro devm1 hc run2; exact Devm.push_getBal_err run2 a
-  case msize =>
-    refine getBal_err_of_bind run id ?_ ?_ ?_
-    · intro devm1 hc; exact chargeGas_getBal_eq hc a
-    · intro e hc; exact chargeGas_getBal_err hc a
-    · intro devm1 hc run2; exact Devm.push_getBal_err run2 a
   case gas =>
     refine getBal_err_of_bind run id ?_ ?_ ?_
     · intro devm1 hc; exact chargeGas_getBal_eq hc a

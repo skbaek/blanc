@@ -800,7 +800,7 @@ lemma fit_pushItem {x : B256} {c : Nat} {evm : Devm} :
   · cases fit_push run'
 
 lemma fit_applyUnary {f : B256 → B256} {cost : Nat} {devm : Devm} :
-    (applyUnary f cost devm).Fit := by
+    ¬ (applyUnary f cost devm).Lim := by
   simp only [applyUnary]; intro run
   rcases of_lim_bind run with run' | ⟨_, _, run'⟩
   · cases fit_pop run'
@@ -855,70 +855,43 @@ lemma fit_pop_n {evm : Devm} {n : Nat} : ¬ (evm.popN n).Lim := by
 lemma Rinst.fit_run {evm : Evm} {r : Rinst} :
     (Rinst.run evm r).Fit := by
   intro ltd; cases r <;> simp only [Rinst.run, Rinst.runCore] at ltd
-  case add => exact fit_applyBinary ltd
-  case mul => exact fit_applyBinary ltd
-  case sub => exact fit_applyBinary ltd
-  case div => exact fit_applyBinary ltd
-  case sdiv => exact fit_applyBinary ltd
-  case mod => exact fit_applyBinary ltd
-  case smod => exact fit_applyBinary ltd
-  case addmod => exact fit_applyTernary ltd
-  case mulmod => exact fit_applyTernary ltd
+  all_goals try with_reducible first
+    | exact absurd ltd fit_applyBinary
+    | exact absurd ltd fit_applyTernary
+    | exact absurd ltd fit_applyUnary
+    | exact absurd ltd fit_pushItem
   case exp =>
     fit_bind_step ltd fit_pop
     fit_bind_step ltd fit_pop
     fit_bind_step ltd fit_chargeGas
     exact fit_push ltd
 
-  case signextend => exact fit_applyBinary ltd
-  case lt => exact fit_applyBinary ltd
-  case gt => exact fit_applyBinary ltd
-  case slt => exact fit_applyBinary ltd
-  case sgt => exact fit_applyBinary ltd
-  case eq => exact fit_applyBinary ltd
-  case iszero =>
-    exact fit_applyUnary ltd
-  case and => exact fit_applyBinary ltd
-  case or => exact fit_applyBinary ltd
-  case xor => exact fit_applyBinary ltd
-  case not => exact fit_applyUnary ltd
-  case byte => exact fit_applyBinary ltd
-  case shr => exact fit_applyBinary ltd
-  case shl => exact fit_applyBinary ltd
-  case sar => exact fit_applyBinary ltd
   case kec =>
     fit_bind_step ltd fit_popToNat
     fit_bind_step ltd fit_popToNat
     fit_bind_step ltd fit_chargeGas
     exact fit_push ltd
-  case address => exact fit_pushItem ltd
   case balance =>
     fit_bind_step ltd fit_pop
     split at ltd <;>
     { fit_bind_step ltd fit_chargeGas;
       exact fit_push ltd }
-  case origin => exact fit_pushItem ltd
-  case caller => exact fit_pushItem ltd
-  case callvalue => exact fit_pushItem ltd
   case calldataload =>
     fit_bind_step ltd fit_pop
     fit_bind_step ltd fit_chargeGas
     exact fit_push ltd
-  case calldatasize => exact fit_pushItem ltd
   case calldatacopy =>
     fit_bind_step ltd fit_popToNat
     fit_bind_step ltd fit_popToNat
     fit_bind_step ltd fit_popToNat
     fit_bind_step ltd fit_chargeGas
     simp [Except.toError?, Except.Lim] at ltd
-  case codesize => exact fit_pushItem ltd
   case codecopy =>
     fit_bind_step ltd fit_popToNat
     fit_bind_step ltd fit_popToNat
     fit_bind_step ltd fit_popToNat
     fit_bind_step ltd fit_chargeGas
     simp [Except.toError?, Except.Lim] at ltd
-  case gasprice => exact fit_pushItem ltd
   case extcodesize =>
     fit_bind_step ltd fit_pop_to_adr
     split at ltd <;> fit_bind_step ltd fit_chargeGas
@@ -932,7 +905,6 @@ lemma Rinst.fit_run {evm : Evm} {r : Rinst} :
     split at ltd <;> fit_bind_step ltd fit_chargeGas
     · simp [Except.toError?, Except.Lim] at ltd
     · simp [Except.toError?, Except.Lim] at ltd
-  case retdatasize => exact fit_pushItem ltd
   case retdatacopy =>
     fit_bind_step ltd fit_popToNat
     fit_bind_step ltd fit_popToNat
@@ -951,19 +923,10 @@ lemma Rinst.fit_run {evm : Evm} {r : Rinst} :
     fit_bind_step ltd fit_pop
     fit_bind_step ltd fit_chargeGas
     exact fit_push ltd
-  case coinbase => exact fit_pushItem ltd
-  case timestamp => exact fit_pushItem ltd
-  case number => exact fit_pushItem ltd
-  case prevrandao => exact fit_pushItem ltd
-  case gaslimit => exact fit_pushItem ltd
-  case chainid => exact fit_pushItem ltd
-  case selfbalance => exact fit_pushItem ltd
-  case basefee => exact fit_pushItem ltd
   case blobhash =>
     fit_bind_step ltd fit_pop
     fit_bind_step ltd fit_chargeGas
     exact fit_push ltd
-  case blobbasefee => exact fit_pushItem ltd
   case pop =>
     fit_bind_step' ltd fit_chargeGas
     exact fit_pop <| of_lim_map_rev ltd
@@ -1012,8 +975,6 @@ lemma Rinst.fit_run {evm : Evm} {r : Rinst} :
     fit_bind_step ltd fit_popToNat
     fit_bind_step ltd fit_chargeGas
     cases ltd
-  case pc => exact fit_pushItem ltd
-  case msize => exact fit_pushItem ltd
   case gas =>
     fit_bind_step ltd fit_chargeGas
     exact fit_push ltd
