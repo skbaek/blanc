@@ -963,7 +963,7 @@ lemma Devm.pushBurn_of_run {x : B256} {pre inter : Devm} {cost : Nat} :
 lemma Devm.pop_of_pop {x : B256} {devm devm' : Devm} :
     Devm.pop devm = .ok ⟨x, devm'⟩ → Devm.Pop [x] devm devm' := by
   intro pop
-  simp only [Devm.pop] at pop
+  simp only [Devm.pop_def] at pop
   split at pop; {cases pop}
   injection pop with eq; injection eq with eq eq'
   constructor <;> simp <;> rw [← eq'] <;> try {rfl}
@@ -2210,12 +2210,6 @@ lemma Benv.subBal_getCode {benv benv' : Benv} {adr a : Adr} {val : B256} (h : be
     dsimp [Benv.withState]
     exact State.subBal_getCode h_sub
 
-lemma Devm.pop_getCode {devm devm' : Devm} {val : B256} {a : Adr} (h : devm.pop = Except.ok (val, devm')) : devm'.getCode a = devm.getCode a := by
-  dsimp [Devm.pop] at h
-  split at h
-  · contradiction
-  · simp at h; rcases h with ⟨_, rfl⟩; rfl
-
 lemma addAccessedAddress_getCode {devm : Devm} {adr a : Adr} : (addAccessedAddress devm adr).getCode a = devm.getCode a := rfl
 
 lemma accessDelegation_getCode {devm : Devm} {adr a : Adr} : (accessDelegation devm adr).2.2.2.2.getCode a = devm.getCode a := by
@@ -2314,6 +2308,18 @@ lemma chargeGas_getCode {devm devm' : Devm} {cost : ℕ} {a : Adr}
     (h : chargeGas cost devm = Except.ok devm') :
     devm'.getCode a = devm.getCode a := by
   exact (chargeGas_worldEq_of_ok h).getCode a |>.symm
+
+lemma Devm.pop_worldEq_of_ok {devm devm' : Devm} {x : B256}
+    (h : devm.pop = .ok (x, devm')) : Devm.WorldEq devm devm' := by
+  exact liftMach_worldEq_of_ok (core := Mach.pop) h
+
+lemma Devm.pop_worldEq_of_error {devm : Devm} {err : String × Devm}
+    (h : devm.pop = .error err) : Devm.WorldEq devm err.2 := by
+  exact liftMach_worldEq_of_error (core := Mach.pop) h
+
+lemma Devm.pop_getCode {devm devm' : Devm} {val : B256} {a : Adr}
+    (h : devm.pop = Except.ok (val, devm')) : devm'.getCode a = devm.getCode a := by
+  exact (Devm.pop_worldEq_of_ok h).getCode a |>.symm
 
 lemma Devm.popToNat_worldEq_of_ok {devm devm' : Devm} {n : Nat}
     (h : devm.popToNat = .ok (n, devm')) : Devm.WorldEq devm devm' := by
@@ -3404,9 +3410,7 @@ lemma Ninst.depth_lt_of_run'_some
   case exec x => revert run; dsimp [Ninst.Run']; intro run; exact Xinst.depth_lt run
 
 lemma Devm.pop_getCode_eq {x devm devm'} (h : Devm.pop devm = .ok ⟨x, devm'⟩) (a : Adr) : devm'.getCode a = devm.getCode a := by
-  simp only [Devm.pop] at h
-  split at h <;> try contradiction
-  cases h; rfl
+  exact (Devm.pop_worldEq_of_ok h).getCode a |>.symm
 
 lemma chargeGas_getCode_eq {cost devm devm'} (h : chargeGas cost devm = .ok devm') (a : Adr) : devm'.getCode a = devm.getCode a := by
   exact (chargeGas_worldEq_of_ok h).getCode a |>.symm
@@ -3426,15 +3430,13 @@ lemma Devm.pop_map_snd_getCode_eq {devm devm1 : Devm} (hp : (devm.pop <&> Prod.s
   · simp [hp2] at hp
   · simp [hp2] at hp
     rcases hp with ⟨_, rfl⟩
-    exact Devm.pop_getCode_eq hp2 a
+    exact (Devm.pop_worldEq_of_ok hp2).getCode a |>.symm
 
 lemma Devm.pop_map_snd_getCode_err {devm : Devm} {err : String × Devm} (hp : (devm.pop <&> Prod.snd) = .error err) (a : Adr) : err.2.getCode a = devm.getCode a := by
   dsimp [(· <&> ·), Functor.mapRev, Functor.map, Except.map] at hp
   rcases hp2 : devm.pop with e | ⟨x, devm2⟩
   · simp [hp2] at hp; cases hp
-    simp only [Devm.pop] at hp2
-    split at hp2 <;> try contradiction
-    cases hp2; rfl
+    exact (Devm.pop_worldEq_of_error hp2).getCode a |>.symm
   · simp [hp2] at hp
 
 @[simp] lemma Except.bind_error {α β ε} (e : ε) (f : α → Except ε β) : (Except.error e >>= f) = Except.error e := rfl
@@ -3474,9 +3476,7 @@ lemma getBal_eq_of_bind {α ε} {ma : Except ε α} {f : α → Except ε Devm}
   rw [h_rest v hm hf, h_first v hm]
 
 lemma Devm.pop_getBal_eq {x devm devm'} (h : Devm.pop devm = .ok ⟨x, devm'⟩) (a : Adr) : devm'.getBal a = devm.getBal a := by
-  simp only [Devm.pop] at h
-  split at h <;> try contradiction
-  cases h; rfl
+  exact (Devm.pop_worldEq_of_ok h).getBal a |>.symm
 
 lemma chargeGas_getBal_eq {cost devm devm'} (h : chargeGas cost devm = .ok devm') (a : Adr) : devm'.getBal a = devm.getBal a := by
   exact (chargeGas_worldEq_of_ok h).getBal a |>.symm
@@ -3554,9 +3554,8 @@ lemma getStor_eq_of_bind {α ε} {ma : Except ε α} {f : α → Except ε Devm}
   rw [h_first v hm, h_rest v hm hf]
 
 lemma Devm.pop_getStor_eq {x devm devm'} (h : Devm.pop devm = .ok ⟨x, devm'⟩) : devm.getStor = devm'.getStor := by
-  simp only [Devm.pop] at h
-  split at h <;> try contradiction
-  cases h; rfl
+  funext a
+  exact (Devm.pop_worldEq_of_ok h).getStor a
 
 lemma chargeGas_getStor_eq {cost devm devm'} (h : chargeGas cost devm = .ok devm') : devm.getStor = devm'.getStor := by
   funext a
@@ -4476,9 +4475,7 @@ lemma GenericCall.inv_getCode_gen
             rfl
 
 lemma Devm.pop_getCode_err {err devm} (h : Devm.pop devm = .error err) (a : Adr) : err.2.getCode a = devm.getCode a := by
-  simp only [Devm.pop] at h
-  split at h <;> try contradiction
-  cases h; rfl
+  exact (Devm.pop_worldEq_of_error h).getCode a |>.symm
 
 lemma chargeGas_getCode_err {cost devm err} (h : chargeGas cost devm = .error err) (a : Adr) : err.2.getCode a = devm.getCode a := by
   exact (chargeGas_worldEq_of_error h).getCode a |>.symm
@@ -4903,7 +4900,7 @@ lemma Xinst.inv_getCode_gen
     rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨endowment, devm1⟩, eq1, run⟩
     · rw [eq_exn]; exact Devm.pop_getCode_err h_err a
     have hc1 : devm1.getCode a = devm.getCode a := by
-      revert eq1; dsimp [Devm.pop]; split <;> intro eq1
+      revert eq1; simp only [Devm.pop_def]; split <;> intro eq1
       · contradiction
       · injection eq1 with h1; injection h1 with _ h2; subst h2; rfl
     rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨memoryIndex, devm2⟩, eq2, run⟩
@@ -4936,7 +4933,7 @@ lemma Xinst.inv_getCode_gen
     rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨gas, devm1⟩, eq1, run⟩
     · rw [eq_exn]; exact Devm.pop_getCode_err h_err a
     have hc1 : devm1.getCode a = devm.getCode a := by
-      revert eq1; unfold Devm.pop; split <;> intro eq1
+      revert eq1; rw [Devm.pop_def]; split <;> intro eq1
       · contradiction
       · injection eq1 with h1; injection h1 with _ h2; subst h2; rfl
     rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨callee, devm2⟩, eq2, run⟩
@@ -4946,7 +4943,7 @@ lemma Xinst.inv_getCode_gen
     rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨value, devm3⟩, eq3, run⟩
     · rw [eq_exn]; exact (Devm.pop_getCode_err h_err a).trans (hc2.trans hc1)
     have hc3 : devm3.getCode a = devm2.getCode a := by
-      revert eq3; unfold Devm.pop; split <;> intro eq3
+      revert eq3; rw [Devm.pop_def]; split <;> intro eq3
       · contradiction
       · injection eq3 with h5; injection h5 with _ h6; subst h6; rfl
     rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨inputIndex, devm4⟩, eq4, run⟩
@@ -5006,7 +5003,7 @@ lemma Xinst.inv_getCode_gen
     rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨gas, devm1⟩, eq1, run⟩
     · rw [eq_exn]; exact Devm.pop_getCode_err h_err a
     have hc1 : devm1.getCode a = devm.getCode a := by
-      revert eq1; unfold Devm.pop; split <;> intro eq1
+      revert eq1; rw [Devm.pop_def]; split <;> intro eq1
       · contradiction
       · injection eq1 with h1; injection h1 with _ h2; subst h2; rfl
     rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨codeAddress, devm2⟩, eq2, run⟩
@@ -5016,7 +5013,7 @@ lemma Xinst.inv_getCode_gen
     rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨value, devm3⟩, eq3, run⟩
     · rw [eq_exn]; exact (Devm.pop_getCode_err h_err a).trans (hc2.trans hc1)
     have hc3 : devm3.getCode a = devm2.getCode a := by
-      revert eq3; unfold Devm.pop; split <;> intro eq3
+      revert eq3; rw [Devm.pop_def]; split <;> intro eq3
       · contradiction
       · injection eq3 with h5; injection h5 with _ h6; subst h6; rfl
     rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨inputIndex, devm4⟩, eq4, run⟩
@@ -5073,7 +5070,7 @@ lemma Xinst.inv_getCode_gen
     rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨gas, devm1⟩, eq1, run⟩
     · rw [eq_exn]; exact Devm.pop_getCode_err h_err a
     have hc1 : devm1.getCode a = devm.getCode a := by
-      revert eq1; unfold Devm.pop; split <;> intro eq1
+      revert eq1; rw [Devm.pop_def]; split <;> intro eq1
       · contradiction
       · injection eq1 with h1; injection h1 with _ h2; subst h2; rfl
     rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨codeAddress, devm2⟩, eq2, run⟩
@@ -5125,7 +5122,7 @@ lemma Xinst.inv_getCode_gen
     rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨endowment, devm1⟩, eq1, run⟩
     · rw [eq_exn]; exact Devm.pop_getCode_err h_err a
     have hc1 : devm1.getCode a = devm.getCode a := by
-      revert eq1; dsimp [Devm.pop]; split <;> intro eq1
+      revert eq1; simp only [Devm.pop_def]; split <;> intro eq1
       · contradiction
       · injection eq1 with h1; injection h1 with _ h2; subst h2; rfl
     rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨memoryIndex, devm2⟩, eq2, run⟩
@@ -5137,7 +5134,7 @@ lemma Xinst.inv_getCode_gen
     rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨salt, devm4⟩, eq4, run⟩
     · rw [eq_exn]; exact (Devm.pop_getCode_err h_err a).trans (hc3.trans (hc2.trans hc1))
     have hc4 : devm4.getCode a = devm3.getCode a := by
-      revert eq4; dsimp [Devm.pop]; split <;> intro eq4
+      revert eq4; simp only [Devm.pop_def]; split <;> intro eq4
       · contradiction
       · injection eq4 with h7; injection h7 with _ h8; subst h8; rfl
     rcases run with ⟨extendCost, hp5, run⟩
@@ -5165,7 +5162,7 @@ lemma Xinst.inv_getCode_gen
     rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨gas, devm1⟩, eq1, run⟩
     · rw [eq_exn]; exact Devm.pop_getCode_err h_err a
     have hc1 : devm1.getCode a = devm.getCode a := by
-      revert eq1; unfold Devm.pop; split <;> intro eq1
+      revert eq1; rw [Devm.pop_def]; split <;> intro eq1
       · contradiction
       · injection eq1 with h1; injection h1 with _ h2; subst h2; rfl
     rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨⟨target, devm2⟩, eq2, run⟩
@@ -5251,11 +5248,11 @@ lemma Jinst.inv_getCode
     devm'.getCode a = devm.getCode a := by
   cases h1 : devm.stack
   · cases j
-    · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop, Except.assert, safeSub, bind, Except.bind] at run
+    · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, safeSub, bind, Except.bind] at run
       rw [h1] at run
       dsimp at run
       contradiction
-    · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop, Except.assert, safeSub, bind, Except.bind] at run
+    · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, safeSub, bind, Except.bind] at run
       rw [h1] at run
       dsimp at run
       contradiction
@@ -5274,7 +5271,7 @@ lemma Jinst.inv_getCode
   · rename_i x xs
     cases h2 : xs
     · cases j
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop, bind, Except.bind, safeSub] at run
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, bind, Except.bind, safeSub] at run
         rw [h1] at run
         dsimp at run
         by_cases h_gas : gMid ≤ devm.gasLeft
@@ -5289,7 +5286,7 @@ lemma Jinst.inv_getCode
         · have h_gas_not : ¬(gMid ≤ devm.gasLeft) := by omega
           simp only [h_gas_not, if_neg, Except.ok.injEq, Prod.mk.injEq] at run
           contradiction
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop, bind, Except.bind, safeSub] at run
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, bind, Except.bind, safeSub] at run
         rw [h1] at run
         rw [h2] at run
         dsimp at run
@@ -5306,7 +5303,7 @@ lemma Jinst.inv_getCode
           contradiction
     · rename_i x2 xs2
       cases j
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop, bind, Except.bind, safeSub] at run
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, bind, Except.bind, safeSub] at run
         rw [h1] at run
         dsimp at run
         by_cases h_gas : gMid ≤ devm.gasLeft
@@ -5321,7 +5318,7 @@ lemma Jinst.inv_getCode
         · have h_gas_not : ¬(gMid ≤ devm.gasLeft) := by omega
           simp only [h_gas_not, if_neg, Except.ok.injEq, Prod.mk.injEq] at run
           contradiction
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop, bind, Except.bind, safeSub] at run
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, bind, Except.bind, safeSub] at run
         rw [h1] at run
         rw [h2] at run
         dsimp at run
@@ -5366,9 +5363,9 @@ lemma Jinst.inv_getCode_gen
   intro a
   cases h1 : devm.stack
   · cases j
-    · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop, Except.assert, safeSub, bind, Except.bind] at run
+    · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, safeSub, bind, Except.bind] at run
       rw [h1] at run; dsimp at run; cases run; rfl
-    · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop, Except.assert, safeSub, bind, Except.bind] at run
+    · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, safeSub, bind, Except.bind] at run
       rw [h1] at run; dsimp at run; cases run; rfl
     · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, bind, Except.bind, safeSub] at run
       rw [h1] at run
@@ -5379,7 +5376,7 @@ lemma Jinst.inv_getCode_gen
   · rename_i x xs
     cases h2 : xs
     · cases j
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop, Except.assert, bind, Except.bind, safeSub] at run
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, bind, Except.bind, safeSub] at run
         rw [h1] at run; dsimp at run
         by_cases h_gas : gMid ≤ devm.gasLeft
         · simp only [h_gas, if_pos] at run
@@ -5388,7 +5385,7 @@ lemma Jinst.inv_getCode_gen
           · simp only [h_jump, if_neg] at run; cases run; rfl
         · have h_gas_not : ¬(gMid ≤ devm.gasLeft) := by omega
           simp only [h_gas_not, if_neg] at run; cases run; rfl
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop, Except.assert, bind, Except.bind, safeSub] at run
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, bind, Except.bind, safeSub] at run
         rw [h1] at run; rw [h2] at run; dsimp at run; cases run; rfl
       · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Except.assert, bind, Except.bind, safeSub] at run
         rw [h1] at run
@@ -5398,7 +5395,7 @@ lemma Jinst.inv_getCode_gen
           simp only [h_gas_not, if_neg] at run; cases run; rfl
     · rename_i x2 xs2
       cases j
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop, Except.assert, bind, Except.bind, safeSub] at run
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, bind, Except.bind, safeSub] at run
         rw [h1] at run; dsimp at run
         by_cases h_gas : gMid ≤ devm.gasLeft
         · simp only [h_gas, if_pos] at run
@@ -5407,7 +5404,7 @@ lemma Jinst.inv_getCode_gen
           · simp only [h_jump, if_neg] at run; cases run; rfl
         · have h_gas_not : ¬(gMid ≤ devm.gasLeft) := by omega
           simp only [h_gas_not, if_neg] at run; cases run; rfl
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop, Except.assert, bind, Except.bind, safeSub] at run
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, bind, Except.bind, safeSub] at run
         rw [h1] at run; rw [h2] at run; dsimp at run
         by_cases h_gas : gHigh ≤ devm.gasLeft
         · simp only [h_gas, if_pos] at run
@@ -5766,6 +5763,10 @@ lemma liftMach_worldEq (core : Mach → Footprint.Outcome Mach α) (d : Devm) :
     Outcome.Rel Prod.snd Prod.snd Devm.WorldEq d (liftMach core d) := by
   unfold liftMach
   exact Footprint.liftOutcome_worldEq _ _ _ _ (Devm.worldEq_setMach d)
+
+lemma Devm.pop_worldEq (d : Devm) :
+    Outcome.Rel Prod.snd Prod.snd Devm.WorldEq d d.pop := by
+  exact liftMach_worldEq Mach.pop d
 
 lemma Devm.popToNat_worldEq (d : Devm) :
     Outcome.Rel Prod.snd Prod.snd Devm.WorldEq d d.popToNat := by
@@ -8316,7 +8317,7 @@ lemma liftMachExecution_delSets_of_error {core : Mach → Footprint.Outcome Mach
   · cases h
 
 lemma Devm.pop_delSets_eq {x devm devm'} (h : Devm.pop devm = .ok ⟨x, devm'⟩) : devm'.delSets = devm.delSets := by
-  simp only [Devm.pop] at h
+  simp only [Devm.pop_def] at h
   split at h <;> try contradiction
   cases h; rfl
 
@@ -8714,7 +8715,7 @@ lemma Rinst.inv_delSets {r : Rinst} : Rinst.Inv Devm.delSets r := by
 
 -- Rinst execution preserves delSets on error results.
 lemma Devm.pop_delSets_err {err devm} (h : Devm.pop devm = .error err) : err.2.delSets = devm.delSets := by
-  simp only [Devm.pop] at h
+  simp only [Devm.pop_def] at h
   split at h <;> try contradiction
   cases h; rfl
 
@@ -8773,7 +8774,7 @@ lemma Devm.pop_map_snd_delSets_err {devm : Devm} {err : String × Devm} (hp : (d
   dsimp [(· <&> ·), Functor.mapRev, Functor.map, Except.map] at hp
   rcases hp2 : devm.pop with e | ⟨x, devm2⟩
   · simp [hp2] at hp; cases hp
-    simp only [Devm.pop] at hp2
+    simp only [Devm.pop_def] at hp2
     split at hp2 <;> try contradiction
     cases hp2; rfl
   · simp [hp2] at hp
@@ -9183,9 +9184,9 @@ lemma Jinst.inv_delSets {pc : Nat} {sevm : Sevm} {devm : Devm} {j : Jinst}
     devm'.delSets = devm.delSets := by
   cases h1 : devm.stack
   · cases j
-    · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop, Except.assert, safeSub, bind, Except.bind] at run
+    · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, safeSub, bind, Except.bind] at run
       rw [h1] at run; dsimp at run; contradiction
-    · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop, Except.assert, safeSub, bind, Except.bind] at run
+    · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, safeSub, bind, Except.bind] at run
       rw [h1] at run; dsimp at run; contradiction
     · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, bind, Except.bind, safeSub] at run
       rw [h1] at run
@@ -9197,7 +9198,7 @@ lemma Jinst.inv_delSets {pc : Nat} {sevm : Sevm} {devm : Devm} {j : Jinst}
   · rename_i x xs
     cases h2 : xs
     · cases j
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop, Except.assert, bind, Except.bind, safeSub] at run
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, bind, Except.bind, safeSub] at run
         rw [h1] at run; dsimp at run
         by_cases h_gas : gMid ≤ devm.gasLeft
         · simp only [h_gas, if_pos] at run
@@ -9206,7 +9207,7 @@ lemma Jinst.inv_delSets {pc : Nat} {sevm : Sevm} {devm : Devm} {j : Jinst}
           · simp only [h_jump, if_neg] at run; contradiction
         · have h_gas_not : ¬(gMid ≤ devm.gasLeft) := by omega
           simp only [h_gas_not, if_neg] at run; contradiction
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop, Except.assert, bind, Except.bind, safeSub] at run
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, bind, Except.bind, safeSub] at run
         rw [h1] at run; rw [h2] at run; dsimp at run; contradiction
       · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Except.assert, bind, Except.bind, safeSub] at run
         rw [h1] at run
@@ -9216,7 +9217,7 @@ lemma Jinst.inv_delSets {pc : Nat} {sevm : Sevm} {devm : Devm} {j : Jinst}
           simp only [h_gas_not, if_neg] at run; contradiction
     · rename_i x2 xs2
       cases j
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop, Except.assert, bind, Except.bind, safeSub] at run
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, bind, Except.bind, safeSub] at run
         rw [h1] at run; dsimp at run
         by_cases h_gas : gMid ≤ devm.gasLeft
         · simp only [h_gas, if_pos] at run
@@ -9225,7 +9226,7 @@ lemma Jinst.inv_delSets {pc : Nat} {sevm : Sevm} {devm : Devm} {j : Jinst}
           · simp only [h_jump, if_neg] at run; contradiction
         · have h_gas_not : ¬(gMid ≤ devm.gasLeft) := by omega
           simp only [h_gas_not, if_neg] at run; contradiction
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop, Except.assert, bind, Except.bind, safeSub] at run
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, bind, Except.bind, safeSub] at run
         rw [h1] at run; rw [h2] at run; dsimp at run
         by_cases h_gas : gHigh ≤ devm.gasLeft
         · simp only [h_gas, if_pos] at run
@@ -9250,9 +9251,9 @@ lemma Jinst.inv_delSets_err {pc : Nat} {sevm : Sevm} {devm : Devm} {j : Jinst}
     devm'.delSets = devm.delSets := by
   cases h1 : devm.stack
   · cases j
-    · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop, Except.assert, safeSub, bind, Except.bind] at run
+    · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, safeSub, bind, Except.bind] at run
       rw [h1] at run; dsimp at run; cases run; rfl
-    · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop, Except.assert, safeSub, bind, Except.bind] at run
+    · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, safeSub, bind, Except.bind] at run
       rw [h1] at run; dsimp at run; cases run; rfl
     · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, bind, Except.bind, safeSub] at run
       rw [h1] at run
@@ -9263,7 +9264,7 @@ lemma Jinst.inv_delSets_err {pc : Nat} {sevm : Sevm} {devm : Devm} {j : Jinst}
   · rename_i x xs
     cases h2 : xs
     · cases j
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop, Except.assert, bind, Except.bind, safeSub] at run
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, bind, Except.bind, safeSub] at run
         rw [h1] at run; dsimp at run
         by_cases h_gas : gMid ≤ devm.gasLeft
         · simp only [h_gas, if_pos] at run
@@ -9272,7 +9273,7 @@ lemma Jinst.inv_delSets_err {pc : Nat} {sevm : Sevm} {devm : Devm} {j : Jinst}
           · simp only [h_jump, if_neg] at run; cases run; rfl
         · have h_gas_not : ¬(gMid ≤ devm.gasLeft) := by omega
           simp only [h_gas_not, if_neg] at run; cases run; rfl
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop, Except.assert, bind, Except.bind, safeSub] at run
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, bind, Except.bind, safeSub] at run
         rw [h1] at run; rw [h2] at run; dsimp at run; cases run; rfl
       · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Except.assert, bind, Except.bind, safeSub] at run
         rw [h1] at run
@@ -9282,7 +9283,7 @@ lemma Jinst.inv_delSets_err {pc : Nat} {sevm : Sevm} {devm : Devm} {j : Jinst}
           simp only [h_gas_not, if_neg] at run; cases run; rfl
     · rename_i x2 xs2
       cases j
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop, Except.assert, bind, Except.bind, safeSub] at run
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, bind, Except.bind, safeSub] at run
         rw [h1] at run; dsimp at run
         by_cases h_gas : gMid ≤ devm.gasLeft
         · simp only [h_gas, if_pos] at run
@@ -9291,7 +9292,7 @@ lemma Jinst.inv_delSets_err {pc : Nat} {sevm : Sevm} {devm : Devm} {j : Jinst}
           · simp only [h_jump, if_neg] at run; cases run; rfl
         · have h_gas_not : ¬(gMid ≤ devm.gasLeft) := by omega
           simp only [h_gas_not, if_neg] at run; cases run; rfl
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop, Except.assert, bind, Except.bind, safeSub] at run
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, bind, Except.bind, safeSub] at run
         rw [h1] at run; rw [h2] at run; dsimp at run
         by_cases h_gas : gHigh ≤ devm.gasLeft
         · simp only [h_gas, if_pos] at run
@@ -9508,7 +9509,7 @@ lemma Execution.NoDel.error_of {wa : Adr} {d : Devm} {x : String × Devm}
 
 lemma Devm.pop_err_snd {d : Devm} {x : String × Devm}
     (h : Devm.pop d = .error x) : x.2 = d := by
-  simp only [Devm.pop] at h
+  simp only [Devm.pop_def] at h
   split at h
   · injection h with h; exact (congrArg Prod.snd h).symm
   · exact absurd h (by simp)
@@ -9844,21 +9845,17 @@ lemma Devm.pop_map_snd_getBal_eq {devm devm1 : Devm} (hp : (devm.pop <&> Prod.sn
   · simp [hp2] at hp
   · simp [hp2] at hp
     rcases hp with ⟨_, rfl⟩
-    exact Devm.pop_getBal_eq hp2 a
+    exact (Devm.pop_worldEq_of_ok hp2).getBal a |>.symm
 
 lemma Devm.pop_map_snd_getBal_err {devm : Devm} {err : String × Devm} (hp : (devm.pop <&> Prod.snd) = .error err) (a : Adr) : err.2.getBal a = devm.getBal a := by
   dsimp [(· <&> ·), Functor.mapRev, Functor.map, Except.map] at hp
   rcases hp2 : devm.pop with e | ⟨x, devm2⟩
   · simp [hp2] at hp; cases hp
-    simp only [Devm.pop] at hp2
-    split at hp2 <;> try contradiction
-    cases hp2; rfl
+    exact (Devm.pop_worldEq_of_error hp2).getBal a |>.symm
   · simp [hp2] at hp
 
 lemma Devm.pop_getBal_err {err devm} (h : Devm.pop devm = .error err) (a : Adr) : err.2.getBal a = devm.getBal a := by
-  simp only [Devm.pop] at h
-  split at h <;> try contradiction
-  cases h; rfl
+  exact (Devm.pop_worldEq_of_error h).getBal a |>.symm
 
 lemma chargeGas_getBal_err {cost devm err} (h : chargeGas cost devm = .error err) (a : Adr) : err.2.getBal a = devm.getBal a := by
   exact (chargeGas_worldEq_of_error h).getBal a |>.symm
