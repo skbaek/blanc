@@ -3630,24 +3630,6 @@ lemma applyTernary_getCode_eq {f : B256 → B256 → B256 → B256} {cost devm d
     devm'.getCode a = devm.getCode a := by
   exact (liftMachExecution_worldEq_of_ok (core := Mach.applyTernary f cost) h).getCode a |>.symm
 
-lemma getCode_eq_of_SplitXl {ξ α : Type} {e : Except ξ (α × Devm)} {xl : Xlot} {q} {devm devm' : Devm} {a : Adr}
-    (h : e.SplitXl xl (.ok devm') q)
-    (h_getCode : ∀ y : α × Devm, e = .ok y → y.snd.getCode a = devm.getCode a)
-    (h_q : ∀ y : α × Devm, q y → devm'.getCode a = y.snd.getCode a) :
-    devm'.getCode a = devm.getCode a := by
-  rcases h with ⟨x, h_err, h_contra, _⟩ | ⟨y, h_eq, h_q_y⟩
-  · contradiction
-  · exact Eq.trans (h_q y h_q_y) (h_getCode y h_eq)
-
-lemma getCode_eq_of_SplitXl_id {ξ : Type} {e : Except ξ Devm} {xl : Xlot} {q} {devm devm' : Devm} {a : Adr}
-    (h : e.SplitXl xl (.ok devm') q)
-    (h_getCode : ∀ y : Devm, e = .ok y → y.getCode a = devm.getCode a)
-    (h_q : ∀ y : Devm, q y → devm'.getCode a = y.getCode a) :
-    devm'.getCode a = devm.getCode a := by
-  rcases h with ⟨x, h_err, h_contra, _⟩ | ⟨y, h_eq, h_q_y⟩
-  · contradiction
-  · exact Eq.trans (h_q y h_q_y) (h_getCode y h_eq)
-
 lemma setStorVal_inv_getCode {devm : Devm} {adr adr'} {key} {val} :
     (devm.setStorVal adr key val).getCode adr' = devm.getCode adr' := by
   simp [Devm.getCode, Devm.getAcct, Devm.setStorVal]
@@ -5242,38 +5224,6 @@ lemma Xinst.inv_getCode_gen
     have h_gen := GenericCall.inv_getCode_gen inv run a ha_10
     rw [h_gen, h_code]
 
-lemma Ninst.inv_getCode_gen
-    {pc sevm devm n xl exn}
-    (inv : xl.InvGetCode)
-    (run : Ninst.Run' pc sevm devm n xl exn) :
-    ∀ a : Adr,
-      (devm.getCode a).toList ≠ [] →
-      exn.getCode a = devm.getCode a := by
-  intro a ha
-  cases n <;> dsimp [Ninst.Run'] at run
-  case push xs p =>
-     rcases xl with _ | _
-     · cases hc : chargeGas (if xs = [] then gBase else gVerylow) devm <;> simp [hc, bind, Except.bind] at run
-       case error err =>
-         rw [← run]
-         exact chargeGas_getCode_err hc a
-       case ok devm_gas =>
-         cases hp : Devm.push xs.toB256 devm_gas <;> simp [hp] at run
-         case error err =>
-           rw [← run]
-           have h1 := chargeGas_getCode_eq hc a
-           exact (Devm.push_getCode_err hp a).trans h1
-         case ok devm_push =>
-           subst run
-           exact (Devm.push_getCode_eq hp a).trans (chargeGas_getCode_eq hc a)
-     · cases run
-  case reg r =>
-    rcases xl with _ | _
-    · exact Rinst.inv_getCode_gen run a ha
-    · cases run
-  case exec x =>
-    exact Xinst.inv_getCode_gen inv run a ha
-
 lemma Jinst.inv_getCode
     {pc sevm devm j pc' devm'}
     (run : Jinst.Run ⟨pc, sevm, devm⟩ j (.ok ⟨pc', devm'⟩)) (a : Adr) :
@@ -6025,13 +5975,78 @@ lemma Xlot.invGetCode_of_rel {xl : Xlot}
     | error e => exact (h a ha).symm
     | ok d => exact (h a ha).symm
 
-lemma Ninst.codePreserve_effectGen (n : Ninst) :
-    Ninst.EffectGen Devm.CodePreserve n := by
-  intro pc sevm pre xl out hxl hrun
-  have h := Ninst.inv_getCode_gen (Xlot.invGetCode_of_rel hxl) hrun
+lemma Rinst.codePreserve_effect (r : Rinst) :
+    Rinst.Effect Devm.CodePreserve r := by
+  intro pc sevm pre out hrun
+  by_cases hr : r = .balance
+  · subst r
+    have hw : Execution.Rel Devm.WorldEq pre out := by
+      rw [← hrun]
+      simpa only [Rinst.run] using Rinst.balance_worldEq pc sevm pre
+    exact Outcome.Rel.mono (fun _ _ he a _ => (he.getCode a).symm) hw
+  · have h := Rinst.inv_getCode_gen hrun
+    cases out with
+    | error e => exact fun a ha => h a ha
+    | ok d => exact fun a ha => h a ha
+
+lemma Xinst.codePreserve_effectGen (x : Xinst) :
+    Xinst.EffectGen Devm.CodePreserve x := by
+  intro sevm pre xl out hxl hrun
+  have h := Xinst.inv_getCode_gen (Xlot.invGetCode_of_rel hxl) hrun
   cases out with
   | error e => exact fun a ha => h a ha
   | ok d => exact fun a ha => h a ha
+
+lemma Ninst.push_worldEq_effectGen {xs : B8L} {hxs : xs.length ≤ 32} :
+    Ninst.EffectGen Devm.WorldEq (.push xs hxs) := by
+  unfold Ninst.EffectGen Ninst.Run'
+  intro pc sevm pre xl out hxl hRun
+  cases xl
+  · simp only at hRun
+    cases hcg : chargeGas (if xs = [] then gBase else gVerylow) pre with
+    | error e =>
+      simp [hcg] at hRun
+      subst out
+      exact chargeGas_worldEq_of_error hcg
+    | ok devm' =>
+      simp [hcg] at hRun
+      cases hpush : Devm.push xs.toB256 devm' with
+      | error e =>
+        rw [← hRun, hpush]
+        exact Devm.worldEq_trans (chargeGas_worldEq_of_ok hcg)
+          (liftMachExecution_worldEq_of_error
+            (core := Mach.push xs.toB256) hpush)
+      | ok devm'' =>
+        rw [← hRun, hpush]
+        exact Devm.worldEq_trans (chargeGas_worldEq_of_ok hcg)
+          (liftMachExecution_worldEq_of_ok
+            (core := Mach.push xs.toB256) hpush)
+  · simp only at hRun
+
+lemma Ninst.push_effectGen_of_worldEq {R : Devm → Devm → Prop}
+    {xs : B8L} {hxs : xs.length ≤ 32}
+    (hWR : CEffect.Refines Devm.WorldEq R) :
+    Ninst.EffectGen R (.push xs hxs) := by
+  intro pc sevm pre xl out hxl hRun
+  cases xl
+  · exact Outcome.Rel.mono hWR
+      (Ninst.push_worldEq_effectGen (hxs := hxs) (xl := .none) trivial hRun)
+  · simp only [Ninst.Run'] at hRun
+
+lemma Ninst.push_codePreserve_effectGen {xs : B8L} {hxs : xs.length ≤ 32} :
+  Ninst.EffectGen Devm.CodePreserve (.push xs hxs) := by
+  exact Ninst.push_effectGen_of_worldEq (R := Devm.CodePreserve)
+    (fun _ _ he a _ => (he.getCode a).symm)
+
+lemma Ninst.codePreserve_effectGen (n : Ninst) :
+    Ninst.EffectGen Devm.CodePreserve n := by
+  cases n with
+  | reg r =>
+    exact Ninst.effectGen_reg (Rinst.codePreserve_effect r)
+  | exec x =>
+    exact Ninst.effectGen_exec (Xinst.codePreserve_effectGen x)
+  | push xs hxs =>
+    exact Ninst.push_codePreserve_effectGen
 
 lemma Jinst.codePreserve_effect (j : Jinst) :
     Jinst.Effect Devm.CodePreserve j := by
@@ -6215,7 +6230,8 @@ lemma lift_core
           exact h_fa pc' sevm' devm' exn' ex' h_lt
         exact analog (.nextNoneRec h_at h_run ex_next) (depth_ind h_run_prog h_eq h_fa_deeper)
     · have h_ne_code : (devm.getCode ca).toList ≠ [] := fun hc => Prog.compile_ne_nil (Eq.trans h_at_p.left.symm (congrArg some hc))
-      have h_inv : devm'.getCode ca = devm.getCode ca := Ninst.inv_getCode_gen (xl := .none) trivial h_run ca h_ne_code
+      have h_inv : devm'.getCode ca = devm.getCode ca :=
+        Ninst.codePreserve_effectGen n (xl := .none) trivial h_run ca h_ne_code
       exact
         nextNoneRec h_at h_run ex_next h_ne (ih_next h_fa ⟨by rw [h_inv]; exact h_at_p.left, fun hc => (h_ne hc).elim⟩)
   · intro pc sevm devm n sevm_ devm_ exn_ devm' exn h_at h_run ex_sub ex_next ih_sub ih_next h_fa h_at_p
@@ -6247,8 +6263,12 @@ lemma lift_core
             exact not_delegation_of_compile h1
         exact h_sub_wkn ⟨h1, h2⟩
       · have h_ne_code : (devm.getCode ca).toList ≠ [] := fun hc => Prog.compile_ne_nil (Eq.trans h_at_p.left.symm (congrArg some hc))
-        have inv : Xlot.InvGetCode (some ⟨sevm_, devm_, exn_⟩) := fun adr h => (Exec.inv_getCode ex_sub adr h).symm
-        have h_inv : devm'.getCode ca = devm.getCode ca := Ninst.inv_getCode_gen inv h_run ca h_ne_code
+        have hrel : Xlot.Rel Devm.CodePreserve (some ⟨sevm_, devm_, exn_⟩) :=
+          Exec.effect codePreserve_refl_trans.1 codePreserve_refl_trans.2
+            Ninst.codePreserve_effectGen Jinst.codePreserve_effect
+            Linst.codePreserve_effect ex_sub
+        have h_inv : devm'.getCode ca = devm.getCode ca :=
+          Ninst.codePreserve_effectGen n hrel h_run ca h_ne_code
         exact ih_next h_fa ⟨by rw [h_inv]; exact h_at_p.left, fun hc => (h_ne hc).elim⟩
   · intro pc sevm devm j err devm' h_at h_run h_fa h_at_p
     rcases em (sevm.currentTarget = ca) with h_eq | h_ne
@@ -10292,12 +10312,20 @@ lemma Rinst.inv_getBal_err
 lemma Rinst.balance_effect (r : Rinst) :
     Rinst.Effect Devm.BalNoninc r := by
   intro pc sevm pre out h
-  cases out with
-  | ok post =>
-    exact Devm.balNoninc_of_getBal_eq (Rinst.inv_bal h).symm
-  | error err =>
-    exact Devm.balNoninc_of_getBal_eq
-      (funext (fun a => Rinst.inv_getBal_err h a))
+  by_cases hr : r = .balance
+  · subst r
+    have hw : Execution.Rel Devm.WorldEq pre out := by
+      rw [← h]
+      simpa only [Rinst.run] using Rinst.balance_worldEq pc sevm pre
+    exact Outcome.Rel.mono
+      (fun _ _ he =>
+        Devm.balNoninc_of_getBal_eq (funext fun a => (he.getBal a).symm)) hw
+  · cases out with
+    | ok post =>
+      exact Devm.balNoninc_of_getBal_eq (Rinst.inv_bal h).symm
+    | error err =>
+      exact Devm.balNoninc_of_getBal_eq
+        (funext (fun a => Rinst.inv_getBal_err h a))
 
 lemma Jinst.balance_effect (j : Jinst) :
     Jinst.Effect Devm.BalNoninc j := by
@@ -10379,37 +10407,9 @@ lemma Jinst.balance_effect (j : Jinst) :
 
 lemma Ninst.push_balance_effectGen {xs : B8L} {hxs : xs.length ≤ 32} :
     Ninst.EffectGen Devm.BalNoninc (.push xs hxs) := by
-  unfold Ninst.EffectGen Ninst.Run'
-  intro pc sevm pre xl out hxl hRun
-  cases xl
-  · simp only at hRun
-    cases hcg : chargeGas (if xs = [] then gBase else gVerylow) pre with
-    | error e =>
-      simp [hcg] at hRun
-      subst hRun
-      unfold Execution.Rel Outcome.Rel
-      simp only [chargeGas_def] at hcg
-      split at hcg
-      · cases hcg; exact balNoninc_refl_trans.2.1 pre
-      · contradiction
-    | ok devm' =>
-      simp [hcg] at hRun
-      cases hpush : Devm.push xs.toB256 devm'
-      · rw [← hRun, hpush]
-        simp only [Execution.Rel, Outcome.Rel]
-        apply Devm.balNoninc_of_state
-        rw [← (liftMachExecution_worldEq_of_error
-            (core := Mach.push xs.toB256) hpush).1,
-          ← (Devm.burn_of_chargeGas hcg).state]
-        exact balNoninc_refl_trans.1.1 pre.state
-      · rw [← hRun, hpush]
-        simp only [Execution.Rel, Outcome.Rel]
-        apply Devm.balNoninc_of_state
-        simp only [id]
-        rw [← (Devm.push_of_push hpush).state,
-          ← (Devm.burn_of_chargeGas hcg).state]
-        exact balNoninc_refl_trans.1.1 pre.state
-  · simp only at hRun
+  exact Ninst.push_effectGen_of_worldEq (R := Devm.BalNoninc)
+    (fun _ _ he =>
+      Devm.balNoninc_of_getBal_eq (funext fun a => (he.getBal a).symm))
 
 lemma Linst.balance_effect (l : Linst) :
     Linst.Effect Devm.BalNoninc l := by
