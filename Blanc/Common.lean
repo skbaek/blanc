@@ -953,7 +953,8 @@ lemma Devm.pushBurn_of_run {x : B256} {pre inter : Devm} {cost : Nat} :
     unfold safeSub at h_safe
     split at h_safe
     · injection h_safe with eq_gas; subst eq_gas
-      simp only [Devm.push, Except.assert, bind, Except.bind] at run
+      rw [Devm.push_def] at run
+      simp only [Except.assert, bind, Except.bind] at run
       split at run; {cases run}
       injection run with eq_inter; subst eq_inter
       constructor <;> simp [_root_.Stack.Push, Split, Devm.Rels.eq]
@@ -2288,6 +2289,26 @@ lemma liftMach_worldEq_of_error {core : Mach → Footprint.Outcome Mach α}
     exact Devm.worldEq_setMach d out.2
   | ok out => simp [hc] at h
 
+lemma liftMachExecution_worldEq_of_ok {core : Mach → Footprint.Outcome Mach Unit}
+    {d d' : Devm} (h : liftMachExecution core d = .ok d') :
+    Devm.WorldEq d d' := by
+  unfold liftMachExecution Footprint.toExecution at h
+  split at h
+  · cases h
+  · rename_i out heq
+    cases h
+    exact liftMach_worldEq_of_ok heq
+
+lemma liftMachExecution_worldEq_of_error {core : Mach → Footprint.Outcome Mach Unit}
+    {d : Devm} {err : String × Devm} (h : liftMachExecution core d = .error err) :
+    Devm.WorldEq d err.2 := by
+  unfold liftMachExecution Footprint.toExecution at h
+  split at h
+  · rename_i e heq
+    cases h
+    exact liftMach_worldEq_of_error heq
+  · cases h
+
 lemma Devm.WorldEq.getCode {d d' : Devm} (h : Devm.WorldEq d d') (a : Adr) :
     d.getCode a = d'.getCode a := by
   unfold Devm.getCode Devm.getAcct
@@ -3384,9 +3405,7 @@ lemma chargeGas_getCode_eq {cost devm devm'} (h : chargeGas cost devm = .ok devm
   cases h; rfl
 
 lemma Devm.push_getCode_eq {v devm devm'} (h : Devm.push v devm = .ok devm') (a : Adr) : devm'.getCode a = devm.getCode a := by
-  simp only [Devm.push, bind, Except.bind, Except.assert] at h
-  split at h <;> try contradiction
-  cases h; rfl
+  exact (liftMachExecution_worldEq_of_ok (core := Mach.push v) h).getCode a |>.symm
 
 lemma Devm.popToNat_getCode_eq {devm devm' n} (h : Devm.popToNat devm = .ok ⟨n, devm'⟩) (a : Adr) : devm'.getCode a = devm.getCode a := by
   dsimp [Devm.popToNat, Functor.map, Except.map] at h
@@ -3430,10 +3449,7 @@ lemma getCode_eq_of_bind {α ε} {ma : Except ε α} {f : α → Except ε Devm}
   rw [h_rest v hm hf, h_first v hm]
 
 lemma pushItem_getCode_eq {x c devm devm'} (h : pushItem x c devm = .ok devm') (a : Adr) : devm'.getCode a = devm.getCode a := by
-  simp only [pushItem] at h
-  refine getCode_eq_of_bind h id ?_ ?_
-  {intro devm1 hc; exact chargeGas_getCode_eq hc a}
-  intro devm1 hc run; exact Devm.push_getCode_eq run a
+  exact (liftMachExecution_worldEq_of_ok (core := Mach.pushItem x c) h).getCode a |>.symm
 
 lemma applyUnary_getCode_eq {f : B256 → B256} {cost devm devm'}
     (h : applyUnary f cost devm = .ok devm') (a : Adr) :
@@ -3474,9 +3490,7 @@ lemma chargeGas_getBal_eq {cost devm devm'} (h : chargeGas cost devm = .ok devm'
   cases h; rfl
 
 lemma Devm.push_getBal_eq {v devm devm'} (h : Devm.push v devm = .ok devm') (a : Adr) : devm'.getBal a = devm.getBal a := by
-  simp only [Devm.push, bind, Except.bind, Except.assert] at h
-  split at h <;> try contradiction
-  cases h; rfl
+  exact (liftMachExecution_worldEq_of_ok (core := Mach.push v) h).getBal a |>.symm
 
 lemma Devm.popToAdr_getBal_eq {devm devm' adr} (h : Devm.popToAdr devm = .ok ⟨adr, devm'⟩) (a : Adr) : devm'.getBal a = devm.getBal a := by
   exact (liftMach_worldEq_of_ok (core := Mach.popToAdr) h).getBal a |>.symm
@@ -3491,10 +3505,7 @@ lemma Devm.popToNat_getBal_eq {devm devm' n} (h : Devm.popToNat devm = .ok ⟨n,
 
 
 lemma pushItem_getBal_eq {x c devm devm'} (h : pushItem x c devm = .ok devm') (a : Adr) : devm'.getBal a = devm.getBal a := by
-  simp only [pushItem] at h
-  refine getBal_eq_of_bind h id ?_ ?_
-  {intro devm1 hc; exact chargeGas_getBal_eq hc a}
-  intro devm1 hc run; exact Devm.push_getBal_eq run a
+  exact (liftMachExecution_worldEq_of_ok (core := Mach.pushItem x c) h).getBal a |>.symm
 
 lemma applyBinary_getBal_eq {f : B256 → B256 → B256} {cost devm devm'}
     (h : applyBinary f cost devm = .ok devm') :
@@ -3581,9 +3592,8 @@ lemma chargeGas_getStor_eq {cost devm devm'} (h : chargeGas cost devm = .ok devm
   cases h; rfl
 
 lemma Devm.push_getStor_eq {v devm devm'} (h : Devm.push v devm = .ok devm') : devm.getStor = devm'.getStor := by
-  simp only [Devm.push, bind, Except.bind, Except.assert] at h
-  split at h <;> try contradiction
-  cases h; rfl
+  funext a
+  exact (liftMachExecution_worldEq_of_ok (core := Mach.push v) h).getStor a
 
 lemma Devm.popToAdr_getStor_eq {devm devm' adr} (h : Devm.popToAdr devm = .ok ⟨adr, devm'⟩) : devm.getStor = devm'.getStor := by
   funext a
@@ -3598,10 +3608,8 @@ lemma Devm.popToNat_getStor_eq {devm devm' n} (h : Devm.popToNat devm = .ok ⟨n
     exact Devm.pop_getStor_eq hp
 
 lemma pushItem_getStor_eq {x c devm devm'} (h : pushItem x c devm = .ok devm') : devm.getStor = devm'.getStor := by
-  simp only [pushItem] at h
-  refine getStor_eq_of_bind h id ?_ ?_
-  {intro devm1 hc; exact chargeGas_getStor_eq hc}
-  intro devm1 hc run; exact Devm.push_getStor_eq run
+  funext a
+  exact (liftMachExecution_worldEq_of_ok (core := Mach.pushItem x c) h).getStor a
 
 lemma applyBinary_getStor_eq {f : B256 → B256 → B256} {cost devm devm'}
     (h : applyBinary f cost devm = .ok devm') :
@@ -3822,7 +3830,10 @@ lemma Rinst.inv_getCode
     {intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a}
     intro ⟨x, devm1⟩ hp run; refine getCode_eq_of_bind run Prod.snd ?_ ?_
     {intro ⟨y, devm2⟩ hp2; exact Devm.pop_getCode_eq hp2 a}
-    intro ⟨y, devm2⟩ hp2 run; exact pushItem_getCode_eq run a
+    intro ⟨y, devm2⟩ hp2 run;
+    refine getCode_eq_of_bind run id ?_ ?_
+    {intro devm3 hc; exact chargeGas_getCode_eq hc a}
+    intro devm3 hc run; exact Devm.push_getCode_eq run a
   case kec =>
     refine getCode_eq_of_bind run Prod.snd ?_ ?_
     {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getCode_eq hp a}
@@ -4055,14 +4066,12 @@ lemma processCreateMessage.chargeCodeGas_getCode_gen {evm : Devm} {exn : Executi
         exact h_charge
 
 lemma Devm.push_getCode_gen {v devm} {exn : Execution} (h : Devm.push v devm = exn) (a : Adr) : Execution.getCode exn a = devm.getCode a := by
-  dsimp [Devm.push, Except.assert] at h
-  split at h
-  · dsimp [Bind.bind, Except.bind] at h
-    rw [← h]
-    rfl
-  · dsimp [Bind.bind, Except.bind] at h
-    rw [← h]
-    rfl
+  subst h
+  cases hp : Devm.push v devm with
+  | error err =>
+    exact (liftMachExecution_worldEq_of_error (core := Mach.push v) hp).getCode a |>.symm
+  | ok d =>
+    exact (liftMachExecution_worldEq_of_ok (core := Mach.push v) hp).getCode a |>.symm
 
 def Xlot.InvGetCode : Xlot → Prop
   | .none => True
@@ -4530,9 +4539,7 @@ lemma chargeGas_getCode_err {cost devm err} (h : chargeGas cost devm = .error er
   cases h; rfl
 
 lemma Devm.push_getCode_err {v devm err} (h : Devm.push v devm = Except.error err) (a : Adr) : err.2.getCode a = devm.getCode a := by
-  unfold Devm.push Except.assert at h; dsimp [Bind.bind, Except.bind] at h
-  split_ifs at h <;> try contradiction
-  injection h with h1; rw [← h1]
+  exact (liftMachExecution_worldEq_of_error (core := Mach.push v) h).getCode a |>.symm
 
 lemma assert_getCode_err {cond : Prop} [Decidable cond] {msg : String} {devm : Devm} {err : String × Devm} (h : Except.assert cond (msg, devm) = Except.error err) (a : Adr) : err.2.getCode a = devm.getCode a := by
   unfold Except.assert at h
@@ -4573,11 +4580,7 @@ lemma Devm.popN_getCode_err {n : Nat} {devm : Devm} {err : String × Devm}
   exact (liftMach_worldEq_of_error (core := (Mach.popN · n)) hp).getCode a |>.symm
 
 lemma pushItem_getCode_err {x c devm err} (h : pushItem x c devm = Except.error err) (a : Adr) : err.2.getCode a = devm.getCode a := by
-  simp only [pushItem] at h
-  refine getCode_err_of_bind h id ?_ ?_ ?_
-  · intro devm1 hc; exact chargeGas_getCode_eq hc a
-  · intro e hc; exact chargeGas_getCode_err hc a
-  · intro devm1 hc run; exact Devm.push_getCode_err run a
+  exact (liftMachExecution_worldEq_of_error (core := Mach.pushItem x c) h).getCode a |>.symm
 
 lemma applyUnary_getCode_err {f : B256 → B256} {cost devm err}
     (h : applyUnary f cost devm = Except.error err) (a : Adr) :
@@ -4636,7 +4639,11 @@ lemma Rinst.inv_getCode_err
       refine getCode_err_of_bind run2 Prod.snd ?_ ?_ ?_
       · intro ⟨y, devm2⟩ hp2; exact Devm.pop_getCode_eq hp2 a
       · intro e hp2; exact Devm.pop_getCode_err hp2 a
-      · intro ⟨y, devm2⟩ hp2 run3; exact pushItem_getCode_err run3 a
+      · intro ⟨y, devm2⟩ hp2 run3
+        refine getCode_err_of_bind run3 id ?_ ?_ ?_
+        · intro devm3 hc; exact chargeGas_getCode_eq hc a
+        · intro e hc; exact chargeGas_getCode_err hc a
+        · intro devm3 hc run4; exact Devm.push_getCode_err run4 a
   case kec =>
     refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
     · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getCode_eq hp a
@@ -4882,11 +4889,7 @@ lemma Rinst.inv_getCode_err
     refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
     · intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a
     · intro e hp; exact Devm.pop_getCode_err hp a
-    · intro ⟨x, devm1⟩ hp run2
-      refine getCode_err_of_bind run2 id ?_ ?_ ?_
-      · intro devm2 hc; exact chargeGas_getCode_eq hc a
-      · intro e hc; exact chargeGas_getCode_err hc a
-      · intro devm2 hc run3; exact Devm.push_getCode_err run3 a
+    · intro ⟨x, devm1⟩ hp run2; exact pushItem_getCode_err run2 a
   case tstore =>
     refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
     · intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a
@@ -5087,10 +5090,8 @@ lemma Xinst.inv_getCode_gen
     split_ifs at run with h_bal
     · rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨devm12, eq20, h_xl2, h_ex⟩
       · rw [eq_exn]; exact (Devm.push_getCode_err h_err a).trans (hc11.trans (hc10.trans (hc9.trans (hc8.trans (hc7.trans (hc6.trans (hc5.trans (hc4.trans (hc3.trans (hc2.trans hc1))))))))))
-      have hc12 : devm12.getCode a = devm11.getCode a := by
-        revert eq20; unfold Devm.push Except.assert; dsimp [Bind.bind, Except.bind]; split <;> intro eq20
-        · contradiction
-        · injection eq20 with h16; subst h16; rfl
+      have hc12 : devm12.getCode a = devm11.getCode a :=
+        Devm.push_getCode_eq eq20 a
       have hc_final : exn.getCode a = devm12.getCode a := by
         rw [← h_ex]; rfl
       rw [hc_final, hc12, hc11, hc10, hc9, hc8, hc7, hc6, hc5, hc4, hc3, hc2, hc1]
@@ -5168,10 +5169,8 @@ lemma Xinst.inv_getCode_gen
     split_ifs at run with h_bal
     · rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨devm12, eq20, h_xl2, h_ex⟩
       · rw [eq_exn]; exact (Devm.push_getCode_err h_err a).trans (hc11.trans (hc10.trans (hc9.trans (hc8.trans (hc7.trans (hc6.trans (hc5.trans (hc4.trans (hc3.trans (hc2.trans hc1))))))))))
-      have hc12 : devm12.getCode a = devm11.getCode a := by
-        revert eq20; unfold Devm.push Except.assert; dsimp [Bind.bind, Except.bind]; split <;> intro eq20
-        · contradiction
-        · injection eq20 with h16; subst h16; rfl
+      have hc12 : devm12.getCode a = devm11.getCode a :=
+        Devm.push_getCode_eq eq20 a
       have hc_final : exn.getCode a = devm12.getCode a := by
         rw [← h_ex]; rfl
       rw [hc_final, hc12, hc11, hc10, hc9, hc8, hc7, hc6, hc5, hc4, hc3, hc2, hc1]
@@ -5379,11 +5378,7 @@ lemma Ninst.inv_getCode_gen
            exact (Devm.push_getCode_err hp a).trans h1
          case ok devm_push =>
            subst run
-           simp only [chargeGas] at hc; split at hc <;> try contradiction
-           simp only [Except.ok.injEq] at hc; subst devm_gas
-           simp only [Devm.push, bind, Except.bind, Except.assert] at hp; split at hp <;> try contradiction
-           simp only [Except.ok.injEq] at hp; subst devm_push
-           rfl
+           exact (Devm.push_getCode_eq hp a).trans (chargeGas_getCode_eq hc a)
      · cases run
   case reg r =>
     rcases xl with _ | _
@@ -6602,7 +6597,8 @@ def Devm.DiffBurn (xs ys : List B256) : Devm → Devm → Prop :=
 
 lemma Devm.push_of_push {x : B256} {s s' : Devm} (h : Devm.push x s = .ok s') :
     Devm.Push [x] s s' := by
-  simp only [Devm.push, Except.assert, bind, Except.bind] at h
+  rw [Devm.push_def] at h
+  simp only [Except.assert, bind, Except.bind] at h
   split at h
   · cases h
   · injection h with eq; subst eq
@@ -6648,14 +6644,14 @@ lemma Devm.diffBurn_of_pop_of_pushBurn {xs ys : List B256} {s s' s'' : Devm}
 
 lemma Devm.pushBurn_of_pushItem {v : B256} {cost : Nat} {s s' : Devm}
     (h : pushItem v cost s = .ok s') : Devm.PushBurn [v] s s' := by
-  simp only [pushItem] at h; exact Devm.pushBurn_of_run h
+  rw [pushItem_def] at h; exact Devm.pushBurn_of_run h
 
 lemma Devm.diffBurn_of_applyUnary {f : B256 → B256} {cost : Nat} {s s' : Devm}
     (h : applyUnary f cost s = .ok s') :
     ∃ x, Devm.DiffBurn [x] [f x] s s' := by
   simp only [applyUnary] at h
   rcases of_bind_eq_ok h with ⟨⟨x, s₁⟩, h1, h2⟩
-  simp only [pushItem] at h2
+  rw [pushItem_def] at h2
   refine ⟨x, Devm.diffBurn_of_pop_of_pushBurn (Devm.pop_of_pop h1) (Devm.pushBurn_of_run h2)⟩
 
 lemma Devm.diffBurn_of_applyBinary {f : B256 → B256 → B256} {cost : Nat} {s s' : Devm}
@@ -6664,7 +6660,7 @@ lemma Devm.diffBurn_of_applyBinary {f : B256 → B256 → B256} {cost : Nat} {s 
   simp only [applyBinary] at h
   rcases of_bind_eq_ok h with ⟨⟨x, s₁⟩, h1, h'⟩
   rcases of_bind_eq_ok h' with ⟨⟨y, s₂⟩, h2, h3⟩
-  simp only [pushItem] at h3
+  rw [pushItem_def] at h3
   refine ⟨x, y, Devm.diffBurn_of_pop_of_pushBurn
     (Devm.pop_append (Devm.pop_of_pop h1) (Devm.pop_of_pop h2))
     (Devm.pushBurn_of_run h3)⟩
@@ -7503,7 +7499,14 @@ lemma Rinst.inv_bal {r} : Rinst.Inv Devm.getBal r := by
       | exact applyTernary_getBal_eq h
       | exact applyUnary_getBal_eq h
       | exact funext fun a => (pushItem_getBal_eq h a).symm)
-  case blobhash => intro h; change applyUnary (fun x => sevm.tenvStat.blobVersionedHashes.getD x.toNat 0) gHashopcode pre = Except.ok post at h; exact applyUnary_getBal_eq h
+  case blobhash =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply funext; intro a; apply Eq.symm
+    refine getBal_eq_of_bind h Prod.snd ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a
+    · intro ⟨x, devm1⟩ hp run; refine getBal_eq_of_bind run id ?_ ?_
+      · intro devm2 hc; exact chargeGas_getBal_eq hc a
+      · intro devm2 hc run2; exact Devm.push_getBal_eq run2 a
   case balance =>
     intro h; simp only [Rinst.run, Rinst.runCore] at h
     apply funext; intro a; apply Eq.symm
@@ -7811,7 +7814,13 @@ lemma Rinst.inv_stor {r} (h_not_sstore : r ≠ Rinst.sstore) : Rinst.Inv Devm.ge
   case mulmod => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyTernary_getStor_eq h
   case iszero => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyUnary_getStor_eq h
   case not => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyUnary_getStor_eq h
-  case blobhash => intro h; change applyUnary (fun x => sevm.tenvStat.blobVersionedHashes.getD x.toNat 0) gHashopcode pre = Except.ok post at h; exact applyUnary_getStor_eq h
+  case blobhash =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    refine getStor_eq_of_bind h Prod.snd ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.pop_getStor_eq hp
+    · intro ⟨x, devm1⟩ hp run; refine getStor_eq_of_bind run id ?_ ?_
+      · intro devm2 hc; exact chargeGas_getStor_eq hc
+      · intro devm2 hc run2; exact Devm.push_getStor_eq run2
   case balance =>
     intro h; simp only [Rinst.run, Rinst.runCore] at h
     refine getStor_eq_of_bind h Prod.snd ?_ ?_
@@ -8417,6 +8426,26 @@ lemma liftMach_delSets_of_error {core : Mach → Footprint.Outcome Mach α}
     rfl
   | ok out => simp [hc] at h
 
+lemma liftMachExecution_delSets_of_ok {core : Mach → Footprint.Outcome Mach Unit}
+    {d d' : Devm} (h : liftMachExecution core d = .ok d') :
+    d'.delSets = d.delSets := by
+  unfold liftMachExecution Footprint.toExecution at h
+  split at h
+  · cases h
+  · rename_i out heq
+    cases h
+    exact liftMach_delSets_of_ok heq
+
+lemma liftMachExecution_delSets_of_error {core : Mach → Footprint.Outcome Mach Unit}
+    {d : Devm} {err : String × Devm} (h : liftMachExecution core d = .error err) :
+    err.2.delSets = d.delSets := by
+  unfold liftMachExecution Footprint.toExecution at h
+  split at h
+  · rename_i e heq
+    cases h
+    exact liftMach_delSets_of_error heq
+  · cases h
+
 lemma Devm.pop_delSets_eq {x devm devm'} (h : Devm.pop devm = .ok ⟨x, devm'⟩) : devm'.delSets = devm.delSets := by
   simp only [Devm.pop] at h
   split at h <;> try contradiction
@@ -8428,9 +8457,7 @@ lemma chargeGas_delSets_eq {cost devm devm'} (h : chargeGas cost devm = .ok devm
   cases h; rfl
 
 lemma Devm.push_delSets_eq {v devm devm'} (h : Devm.push v devm = .ok devm') : devm'.delSets = devm.delSets := by
-  simp only [Devm.push, bind, Except.bind, Except.assert] at h
-  split at h <;> try contradiction
-  cases h; rfl
+  exact liftMachExecution_delSets_of_ok (core := Mach.push v) h
 
 lemma Devm.popToAdr_delSets_eq {devm devm' adr} (h : Devm.popToAdr devm = .ok ⟨adr, devm'⟩) : devm'.delSets = devm.delSets := by
   exact liftMach_delSets_of_ok (core := Mach.popToAdr) h
@@ -8444,10 +8471,7 @@ lemma Devm.popToNat_delSets_eq {devm devm' n} (h : Devm.popToNat devm = .ok ⟨n
     exact Devm.pop_delSets_eq hp
 
 lemma pushItem_delSets_eq {x c devm devm'} (h : pushItem x c devm = .ok devm') : devm'.delSets = devm.delSets := by
-  simp only [pushItem] at h
-  refine delSets_eq_of_bind h id ?_ ?_
-  {intro devm1 hc; exact (chargeGas_delSets_eq hc).trans rfl}
-  intro devm1 hc run; exact Devm.push_delSets_eq run
+  exact liftMachExecution_delSets_of_ok (core := Mach.pushItem x c) h
 
 lemma applyBinary_delSets_eq {f : B256 → B256 → B256} {cost devm devm'}
     (h : applyBinary f cost devm = .ok devm') :
@@ -8569,7 +8593,14 @@ lemma Rinst.inv_delSets {r : Rinst} : Rinst.Inv Devm.delSets r := by
   case mulmod => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyTernary_delSets_eq h
   case iszero => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyUnary_delSets_eq h
   case not => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyUnary_delSets_eq h
-  case blobhash => intro h; change applyUnary (fun x => sevm.tenvStat.blobVersionedHashes.getD x.toNat 0) gHashopcode pre = Except.ok post at h; exact applyUnary_delSets_eq h
+  case blobhash =>
+    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    apply Eq.symm
+    refine delSets_eq_of_bind h Prod.snd ?_ ?_
+    · intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp
+    · intro ⟨x, devm1⟩ hp run; refine delSets_eq_of_bind run id ?_ ?_
+      · intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl
+      · intro devm2 hc run2; exact Devm.push_delSets_eq run2
   case balance =>
     intro h; simp only [Rinst.run, Rinst.runCore] at h
     apply Eq.symm
@@ -8847,9 +8878,7 @@ lemma chargeGas_delSets_err {cost devm err} (h : chargeGas cost devm = .error er
   cases h; rfl
 
 lemma Devm.push_delSets_err {v devm err} (h : Devm.push v devm = Except.error err) : err.2.delSets = devm.delSets := by
-  unfold Devm.push Except.assert at h; dsimp [Bind.bind, Except.bind] at h
-  split_ifs at h <;> try contradiction
-  injection h with h1; rw [← h1]
+  exact liftMachExecution_delSets_of_error (core := Mach.push v) h
 
 lemma assert_delSets_err {cond : Prop} [Decidable cond] {msg : String} {devm : Devm} {err : String × Devm} (h : Except.assert cond (msg, devm) = Except.error err) : err.2.delSets = devm.delSets := by
   unfold Except.assert at h
@@ -8907,11 +8936,7 @@ lemma Devm.pop_map_snd_delSets_err {devm : Devm} {err : String × Devm} (hp : (d
   · simp [hp2] at hp
 
 lemma pushItem_delSets_err {x c devm err} (h : pushItem x c devm = Except.error err) : err.2.delSets = devm.delSets := by
-  simp only [pushItem] at h
-  refine delSets_err_of_bind h id ?_ ?_ ?_
-  · intro devm1 hc; exact (chargeGas_delSets_eq hc).trans rfl
-  · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
-  · intro devm1 hc run; exact Devm.push_delSets_err run
+  exact liftMachExecution_delSets_of_error (core := Mach.pushItem x c) h
 
 lemma applyUnary_delSets_err {f : B256 → B256} {cost devm err}
     (h : applyUnary f cost devm = Except.error err) :
@@ -8975,7 +9000,11 @@ lemma Rinst.inv_delSets_err {pc : Nat} {sevm : Sevm} {devm : Devm} {r : Rinst}
       refine delSets_err_of_bind run2 Prod.snd ?_ ?_ ?_
       · intro ⟨y, devm2⟩ hp2; exact Devm.pop_delSets_eq hp2
       · intro e hp2; exact Devm.pop_delSets_err hp2
-      · intro ⟨y, devm2⟩ hp2 run3; exact pushItem_delSets_err run3
+      · intro ⟨y, devm2⟩ hp2 run3
+        refine delSets_err_of_bind run3 id ?_ ?_ ?_
+        · intro devm3 hc; exact (chargeGas_delSets_eq hc).trans rfl
+        · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
+        · intro devm3 hc run4; exact Devm.push_delSets_err run4
   case signextend => apply applyBinary_delSets_err run
   case lt => apply applyBinary_delSets_err run
   case gt => apply applyBinary_delSets_err run
@@ -9244,16 +9273,8 @@ lemma Rinst.inv_delSets_err {pc : Nat} {sevm : Sevm} {devm : Devm} {r : Rinst}
               all_goals (try { cases run5; rfl })
               all_goals (try injection run5)
           }
-  case pc =>
-    refine delSets_err_of_bind run id ?_ ?_ ?_
-    · intro devm1 hc; exact (chargeGas_delSets_eq hc).trans rfl
-    · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
-    · intro devm1 hc run2; exact Devm.push_delSets_err run2
-  case msize =>
-    refine delSets_err_of_bind run id ?_ ?_ ?_
-    · intro devm1 hc; exact (chargeGas_delSets_eq hc).trans rfl
-    · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
-    · intro devm1 hc run2; exact Devm.push_delSets_err run2
+  case pc => apply pushItem_delSets_err run
+  case msize => apply pushItem_delSets_err run
   case gas =>
     refine delSets_err_of_bind run id ?_ ?_ ?_
     · intro devm1 hc; exact (chargeGas_delSets_eq hc).trans rfl
@@ -9263,11 +9284,7 @@ lemma Rinst.inv_delSets_err {pc : Nat} {sevm : Sevm} {devm : Devm} {r : Rinst}
     refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
     · intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp
     · intro e hp; exact Devm.pop_delSets_err hp
-    · intro ⟨x, devm1⟩ hp run2
-      refine delSets_err_of_bind run2 id ?_ ?_ ?_
-      · intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl
-      · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
-      · intro devm2 hc run3; exact (Devm.push_delSets_err run3).trans rfl
+    · intro ⟨x, devm1⟩ hp run2; exact pushItem_delSets_err run2
   case tstore =>
     refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
     · intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp
@@ -9632,14 +9649,22 @@ lemma chargeCodeGas_delSets_err {d d' : Devm} {err : String}
 
 lemma Devm.push_noDel {wa : Adr} {x : B256} {d : Devm} {exn : Execution}
     (heq : Devm.push x d = exn) (h : Devm.NoDel wa d) : Execution.NoDel wa exn := by
-  unfold Devm.push Except.assert at heq
-  by_cases hlt : d.stack.length < 1024
-  · rw [if_pos hlt] at heq
-    dsimp only [bind, Except.bind] at heq
-    rw [← heq]; exact ⟨h.atd, h.ca, h.code⟩
-  · rw [if_neg hlt] at heq
-    dsimp only [bind, Except.bind] at heq
-    rw [← heq]; exact ⟨h.atd, h.ca, h.code⟩
+  subst heq
+  cases hp : Devm.push x d with
+  | error err =>
+    have hd := Devm.push_delSets_err hp
+    refine ⟨?_, ?_, (Devm.push_getCode_err hp wa) ▸ h.code⟩
+    · rw [show err.2.accountsToDelete = d.accountsToDelete from congrArg Prod.fst hd]
+      exact h.atd
+    · rw [show err.2.createdAccounts = d.createdAccounts from congrArg Prod.snd hd]
+      exact h.ca
+  | ok d' =>
+    have hd := Devm.push_delSets_eq hp
+    refine ⟨?_, ?_, (Devm.push_getCode_eq hp wa) ▸ h.code⟩
+    · rw [show d'.accountsToDelete = d.accountsToDelete from congrArg Prod.fst hd]
+      exact h.atd
+    · rw [show d'.createdAccounts = d.createdAccounts from congrArg Prod.snd hd]
+      exact h.ca
 
 lemma incorporateChildOnError_noDel {wa : Adr} {parent child : Devm} {rd : B8L}
     (hp_atd : wa ∉ parent.accountsToDelete) (hc : Devm.NoDel wa child) :
@@ -10021,9 +10046,7 @@ lemma chargeGas_getBal_err {cost devm err} (h : chargeGas cost devm = .error err
   cases h; rfl
 
 lemma Devm.push_getBal_err {v devm err} (h : Devm.push v devm = Except.error err) (a : Adr) : err.2.getBal a = devm.getBal a := by
-  unfold Devm.push Except.assert at h; dsimp [Bind.bind, Except.bind] at h
-  split_ifs at h; try contradiction
-  injection h with h1; rw [← h1]
+  exact (liftMachExecution_worldEq_of_error (core := Mach.push v) h).getBal a |>.symm
 
 lemma assert_getBal_err {cond : Prop} [Decidable cond] {msg : String} {devm : Devm} {err : String × Devm} (h : Except.assert cond (msg, devm) = Except.error err) (a : Adr) : err.2.getBal a = devm.getBal a := by
   unfold Except.assert at h
@@ -10064,11 +10087,7 @@ lemma Devm.popN_getBal_err {n : Nat} {devm : Devm} {err : String × Devm}
   exact (liftMach_worldEq_of_error (core := (Mach.popN · n)) hp).getBal a |>.symm
 
 lemma pushItem_getBal_err {x c devm err} (h : pushItem x c devm = Except.error err) (a : Adr) : err.2.getBal a = devm.getBal a := by
-  simp only [pushItem] at h
-  refine getBal_err_of_bind h id ?_ ?_ ?_
-  · intro devm1 hc; exact chargeGas_getBal_eq hc a
-  · intro e hc; exact chargeGas_getBal_err hc a
-  · intro devm1 hc run; exact Devm.push_getBal_err run a
+  exact (liftMachExecution_worldEq_of_error (core := Mach.pushItem x c) h).getBal a |>.symm
 
 lemma applyUnary_getBal_err {f : B256 → B256} {cost devm err}
     (h : applyUnary f cost devm = Except.error err) (a : Adr) :
@@ -10127,7 +10146,11 @@ lemma Rinst.inv_getBal_err
       refine getBal_err_of_bind run2 Prod.snd ?_ ?_ ?_
       · intro ⟨y, devm2⟩ hp2; exact Devm.pop_getBal_eq hp2 a
       · intro e hp2; exact Devm.pop_getBal_err hp2 a
-      · intro ⟨y, devm2⟩ hp2 run3; exact pushItem_getBal_err run3 a
+      · intro ⟨y, devm2⟩ hp2 run3
+        refine getBal_err_of_bind run3 id ?_ ?_ ?_
+        · intro devm3 hc; exact chargeGas_getBal_eq hc a
+        · intro e hc; exact chargeGas_getBal_err hc a
+        · intro devm3 hc run4; exact Devm.push_getBal_err run4 a
   case kec =>
     refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
     · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getBal_eq hp a
@@ -10373,11 +10396,7 @@ lemma Rinst.inv_getBal_err
     refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
     · intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a
     · intro e hp; exact Devm.pop_getBal_err hp a
-    · intro ⟨x, devm1⟩ hp run2
-      refine getBal_err_of_bind run2 id ?_ ?_ ?_
-      · intro devm2 hc; exact chargeGas_getBal_eq hc a
-      · intro e hc; exact chargeGas_getBal_err hc a
-      · intro devm2 hc run3; exact Devm.push_getBal_err run3 a
+    · intro ⟨x, devm1⟩ hp run2; exact pushItem_getBal_err run2 a
   case tstore =>
     refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
     · intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a
@@ -10558,16 +10577,10 @@ lemma Ninst.push_balance_effectGen {xs : B8L} {hxs : xs.length ≤ 32} :
       cases hpush : Devm.push xs.toB256 devm'
       · rw [← hRun, hpush]
         simp only [Execution.Rel, Outcome.Rel]
-        simp only [Devm.push, Except.assert, bind, Except.bind] at hpush
-        split at hpush <;> try contradiction
-        rename_i a x err heq
-        cases hpush
-        split at heq <;> try contradiction
-        have hs : devm' = a.2 := by
-          simpa using congrArg (fun e : Except (String × Devm) Unit =>
-            match e with | .error (_, d) => d | .ok _ => devm') heq
         apply Devm.balNoninc_of_state
-        rw [← hs, ← (Devm.burn_of_chargeGas hcg).state]
+        rw [← (liftMachExecution_worldEq_of_error
+            (core := Mach.push xs.toB256) hpush).1,
+          ← (Devm.burn_of_chargeGas hcg).state]
         exact balNoninc_refl_trans.1.1 pre.state
       · rw [← hRun, hpush]
         simp only [Execution.Rel, Outcome.Rel]

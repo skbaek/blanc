@@ -221,7 +221,7 @@ instance : Ninst.Hinv Devm.state (Ninst.reg Rinst.eq) := ⟨by
           injection run with h_eq; subst h_eq
           have h_pop1 := Devm.pop_of_pop hp1
           have h_pop2 := Devm.pop_of_pop hp2
-          have h_push := Devm.pushBurn_of_run hpush
+          have h_push := Devm.pushBurn_of_pushItem hpush
           rcases h_pop1 with ⟨_, _, _, _, _, _, _, _, _, _, _, hs1, _⟩
           rcases h_pop2 with ⟨_, _, _, _, _, _, _, _, _, _, _, hs2, _⟩
           rcases h_push with ⟨_, _, _, _, _, _, _, _, _, _, _, hs3, _⟩
@@ -269,7 +269,7 @@ instance : Ninst.Hinv Devm.state (Ninst.reg Rinst.gt) := ⟨by
           injection run with h_eq; subst h_eq
           have h_pop1 := Devm.pop_of_pop hp1
           have h_pop2 := Devm.pop_of_pop hp2
-          have h_push := Devm.pushBurn_of_run hpush
+          have h_push := Devm.pushBurn_of_pushItem hpush
           rcases h_pop1 with ⟨_, _, _, _, _, _, _, _, _, _, _, hs1, _⟩
           rcases h_pop2 with ⟨_, _, _, _, _, _, _, _, _, _, _, hs2, _⟩
           rcases h_push with ⟨_, _, _, _, _, _, _, _, _, _, _, hs3, _⟩
