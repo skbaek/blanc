@@ -2210,14 +2210,6 @@ lemma Benv.subBal_getCode {benv benv' : Benv} {adr a : Adr} {val : B256} (h : be
     dsimp [Benv.withState]
     exact State.subBal_getCode h_sub
 
-lemma addAccessedAddress_getCode {devm : Devm} {adr a : Adr} : (addAccessedAddress devm adr).getCode a = devm.getCode a := rfl
-
-lemma accessDelegation_getCode {devm : Devm} {adr a : Adr} : (accessDelegation devm adr).2.2.2.2.getCode a = devm.getCode a := by
-  dsimp [accessDelegation]
-  split_ifs
-  · exact addAccessedAddress_getCode
-  · rfl
-
 /-! The pure footprint theorem is kept before the early code-frame lemmas that
 use it.  The outcome-aware variants are developed with `CEffect` below. -/
 
@@ -2243,6 +2235,27 @@ lemma Devm.worldEq_setMach (d : Devm) (mach : Mach) :
 lemma liftMachPure_worldEq (core : Mach → Mach) (d : Devm) :
     Devm.WorldEq d (liftMachPure core d) := by
   exact Devm.worldEq_setMach d _
+
+lemma Devm.worldEq_setMachMeta (d : Devm) (view : Mach × Meta) :
+    Devm.WorldEq d (d.setMachMeta view) := by
+  exact ⟨rfl, rfl⟩
+
+lemma liftMachMetaPure_worldEq
+    (core : Mach → Meta → Mach × Meta) (d : Devm) :
+    Devm.WorldEq d (liftMachMetaPure core d) := by
+  exact Devm.worldEq_setMachMeta d _
+
+lemma addAccessedAddress_worldEq (d : Devm) (a : Adr) :
+    Devm.WorldEq d (addAccessedAddress d a) := by
+  exact liftMachMetaPure_worldEq _ _
+
+lemma addAccessedStorageKey_worldEq (d : Devm) (a : Adr) (k : B256) :
+    Devm.WorldEq d (addAccessedStorageKey d a k) := by
+  exact liftMachMetaPure_worldEq _ _
+
+lemma Devm.addLog_worldEq (d : Devm) (log : Log) :
+    Devm.WorldEq d (d.addLog log) := by
+  exact liftMachMetaPure_worldEq _ _
 
 lemma liftMach_worldEq_of_ok {core : Mach → Footprint.Outcome Mach α}
     {d d' : Devm} {x : α} (h : liftMach core d = .ok (x, d')) :
@@ -2303,6 +2316,17 @@ lemma Devm.WorldEq.getBal {d d' : Devm} (h : Devm.WorldEq d d') (a : Adr) :
     d.getBal a = d'.getBal a := by
   unfold Devm.getBal Devm.getAcct
   rw [h.1]
+
+lemma addAccessedAddress_getCode {devm : Devm} {adr a : Adr} :
+    (addAccessedAddress devm adr).getCode a = devm.getCode a := by
+  exact (addAccessedAddress_worldEq devm adr).getCode a |>.symm
+
+lemma accessDelegation_getCode {devm : Devm} {adr a : Adr} :
+    (accessDelegation devm adr).2.2.2.2.getCode a = devm.getCode a := by
+  dsimp [accessDelegation]
+  split_ifs
+  · exact addAccessedAddress_getCode
+  · rfl
 
 lemma chargeGas_getCode {devm devm' : Devm} {cost : ℕ} {a : Adr}
     (h : chargeGas cost devm = Except.ok devm') :
@@ -3539,9 +3563,15 @@ instance : Burn.Inv Devm.getStor := ⟨by
   exact (Devm.Burn.getStor h a).symm
 ⟩
 
-lemma addAccessedAddress_getStor {devm : Devm} {adr : Adr} : (addAccessedAddress devm adr).getStor = devm.getStor := rfl
+lemma addAccessedAddress_getStor {devm : Devm} {adr : Adr} :
+    (addAccessedAddress devm adr).getStor = devm.getStor := by
+  funext a
+  exact (addAccessedAddress_worldEq devm adr).getStor a |>.symm
 
-lemma addAccessedStorageKey_getStor {devm : Devm} {adr : Adr} {key : B256} : (addAccessedStorageKey devm adr key).getStor = devm.getStor := rfl
+lemma addAccessedStorageKey_getStor {devm : Devm} {adr : Adr} {key : B256} :
+    (addAccessedStorageKey devm adr key).getStor = devm.getStor := by
+  funext a
+  exact (addAccessedStorageKey_worldEq devm adr key).getStor a |>.symm
 
 lemma getStor_eq_of_bind {α ε} {ma : Except ε α} {f : α → Except ε Devm}
     {devm devm' : Devm}
@@ -3685,7 +3715,7 @@ lemma sstore_inv_getBal
     simp only [ite_not, Except.ok.injEq]
     split
     · intro eq; injection eq with eq _; rw [eq]
-    · simp [addAccessedStorageKey, Devm.withAccessedStorageKeys]
+    · simp [addAccessedStorageKey_def, Devm.withAccessedStorageKeys]
       intro rw _; rw [← rw]; clear rw
       simp [Devm.getBal, Devm.getAcct]
   · clear run';
@@ -3732,7 +3762,7 @@ lemma sstore_inv_getCode
     simp only [ite_not, Except.ok.injEq]
     split
     · intro eq; injection eq with eq _; rw [eq]
-    · simp [addAccessedStorageKey, Devm.withAccessedStorageKeys]
+    · simp [addAccessedStorageKey_def, Devm.withAccessedStorageKeys]
       intro rw _; rw [← rw]; clear rw
       simp [Devm.getCode, Devm.getAcct]
   · clear run';
@@ -4962,7 +4992,7 @@ lemma Xinst.inv_getCode_gen
     rcases run with ⟨preAccessCost, hp9, run⟩
     rcases run with ⟨devm8, hp10, run⟩
     have hc8 : devm8.getCode a = devm7.getCode a := by
-      subst hp10; dsimp [addAccessedAddress]; rfl
+      subst hp10; rw [addAccessedAddress_def]; rfl
     rcases run with ⟨⟨disablePrecompiles, _, code, delegatedAccessGasCost, devm9⟩, hp11, run⟩
     have hc9 : devm9.getCode a = devm8.getCode a := by
       have h_acc := @accessDelegation_getCode devm8 callee a
@@ -5032,7 +5062,7 @@ lemma Xinst.inv_getCode_gen
     rcases run with ⟨preAccessCost, hp9, run⟩
     rcases run with ⟨devm8, hp10, run⟩
     have hc8 : devm8.getCode a = devm7.getCode a := by
-      subst hp10; dsimp [addAccessedAddress]; rfl
+      subst hp10; rw [addAccessedAddress_def]; rfl
     rcases run with ⟨⟨disablePrecompiles, newCodeAddress, code, delegatedAccessGasCost, devm9⟩, hp11, run⟩
     have hc9 : devm9.getCode a = devm8.getCode a := by
       have h_acc := @accessDelegation_getCode devm8 codeAddress a
@@ -5093,7 +5123,7 @@ lemma Xinst.inv_getCode_gen
     rcases run with ⟨preAccessCost, hp8, run⟩
     rcases run with ⟨devm7, hp9, run⟩
     have hc7 : devm7.getCode a = devm6.getCode a := by
-      subst hp9; dsimp [addAccessedAddress]; rfl
+      subst hp9; rw [addAccessedAddress_def]; rfl
     rcases run with ⟨⟨disablePrecompiles, newCodeAddress, code, delegatedAccessGasCost, devm8⟩, hp10, run⟩
     have hc8 : devm8.getCode a = devm7.getCode a := by
       have h_acc := @accessDelegation_getCode devm7 codeAddress a
@@ -5185,7 +5215,7 @@ lemma Xinst.inv_getCode_gen
     rcases run with ⟨preAccessCost, hp8, run⟩
     rcases run with ⟨devm7, hp9, run⟩
     have hc7 : devm7.getCode a = devm6.getCode a := by
-      subst hp9; dsimp [addAccessedAddress]; rfl
+      subst hp9; rw [addAccessedAddress_def]; rfl
     rcases run with ⟨⟨disablePrecompiles, _, code, delegatedAccessGasCost, devm8⟩, hp10, run⟩
     have hc8 : devm8.getCode a = devm7.getCode a := by
       have h_acc := @accessDelegation_getCode devm7 target a
@@ -5740,10 +5770,6 @@ def Execution.Rel (R : Devm → Devm → Prop) (pre : Devm) (out : Execution) : 
 
 /-! ## World-preserving footprint lifts -/
 
-lemma Devm.worldEq_setMachMeta (d : Devm) (view : Mach × Meta) :
-    Devm.WorldEq d (d.setMachMeta view) := by
-  exact ⟨rfl, rfl⟩
-
 lemma Footprint.liftOutcome_worldEq
     (get : Devm → σ) (set : Devm → σ → Devm)
     (core : σ → Footprint.Outcome σ α) (d : Devm)
@@ -5781,11 +5807,6 @@ lemma liftMachExecution_worldEq
 lemma chargeGas_worldEq (cost : Nat) (d : Devm) :
     Execution.Rel Devm.WorldEq d (chargeGas cost d) := by
   exact liftMachExecution_worldEq (Mach.chargeGas cost) d
-
-lemma liftMachMetaPure_worldEq
-    (core : Mach → Meta → Mach × Meta) (d : Devm) :
-    Devm.WorldEq d (liftMachMetaPure core d) := by
-  exact Devm.worldEq_setMachMeta d _
 
 lemma liftMachMeta_worldEq
     (core : Mach → Meta → Footprint.Outcome (Mach × Meta) α) (d : Devm) :
@@ -8389,7 +8410,7 @@ lemma sstore_inv_delSets
     simp only [ite_not, Except.ok.injEq]
     split
     · intro eq; injection eq with eq _; rw [eq]
-    · simp [addAccessedStorageKey, Devm.withAccessedStorageKeys]
+    · simp [addAccessedStorageKey_def, Devm.withAccessedStorageKeys]
       intro rw _; rw [← rw]; clear rw
       simp [Devm.delSets]
   · clear run';

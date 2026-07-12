@@ -2672,7 +2672,8 @@ lemma State.incrNonce_get_code {st : _root_.State} {adr a : Adr} :
   · rw [State.get_set_ne h]
 
 lemma addAccessedAddress_state {devm : Devm} {a : Adr} :
-    (addAccessedAddress devm a).state = devm.state := rfl
+    (addAccessedAddress devm a).state = devm.state := by
+  exact (addAccessedAddress_worldEq devm a).1.symm
 
 lemma of_benvAfterTransfer_no {msg : Msg} {benv' : Benv}
     (h_stv : ¬ msg.shouldTransferValue = true)
