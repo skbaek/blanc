@@ -2251,7 +2251,40 @@ lemma chargeGas_getCode {devm devm' : Devm} {cost : ℕ} {a : Adr} (h : chargeGa
   · simp [h_sub, Except.bind] at h
   · simp [h_sub, Except.bind] at h; subst h; rfl
 
-lemma Devm.memExtends_getCode {devm : Devm} {ranges : List (ℕ × ℕ)} {a : Adr} : (devm.memExtends ranges).getCode a = devm.getCode a := rfl
+/-! The pure footprint theorem is kept before the early code-frame lemmas that
+use it.  The outcome-aware variants are developed with `CEffect` below. -/
+
+def Devm.WorldEq (d d' : Devm) : Prop :=
+  d.state = d'.state ∧ d.transientStorage = d'.transientStorage
+
+lemma Devm.worldEq_refl : Reflexive Devm.WorldEq := by
+  intro d
+  exact ⟨rfl, rfl⟩
+
+lemma Devm.worldEq_symm : Symmetric Devm.WorldEq := by
+  rintro d d' ⟨hstate, htransient⟩
+  exact ⟨hstate.symm, htransient.symm⟩
+
+lemma Devm.worldEq_trans : Transitive Devm.WorldEq := by
+  rintro d d' d'' ⟨hstate, htransient⟩ ⟨hstate', htransient'⟩
+  exact ⟨hstate.trans hstate', htransient.trans htransient'⟩
+
+lemma Devm.worldEq_setMach (d : Devm) (mach : Mach) :
+    Devm.WorldEq d (d.setMach mach) := by
+  exact ⟨rfl, rfl⟩
+
+lemma liftMachPure_worldEq (core : Mach → Mach) (d : Devm) :
+    Devm.WorldEq d (liftMachPure core d) := by
+  exact Devm.worldEq_setMach d _
+
+lemma Devm.WorldEq.getCode {d d' : Devm} (h : Devm.WorldEq d d') (a : Adr) :
+    d.getCode a = d'.getCode a := by
+  unfold Devm.getCode Devm.getAcct
+  rw [h.1]
+
+lemma Devm.memExtends_getCode {devm : Devm} {ranges : List (ℕ × ℕ)} {a : Adr} :
+    (devm.memExtends ranges).getCode a = devm.getCode a := by
+  exact (liftMachPure_worldEq (Mach.memExtends · ranges) devm).getCode a |>.symm
 
 lemma Devm.incrNonce_getCode {devm : Devm} {adr a : Adr} : (devm.incrNonce adr).getCode a = devm.getCode a := by
   dsimp [Devm.incrNonce, Devm.getCode, Devm.getAcct, State.incrNonce, State.set, State.getCode, State.get]
@@ -4452,7 +4485,8 @@ lemma GenericCall.inv_getCode_gen
             rfl
           · rw [← eq_ok]
             dsimp [Execution.getCode]
-            have h_memWrite : (evm2.memWrite output_index (child.output.take output_size)).getCode a = evm2.getCode a := rfl
+            have h_memWrite : (evm2.memWrite output_index (child.output.take output_size)).getCode a = evm2.getCode a := by
+              exact (liftMachPure_worldEq (Mach.memWrite · output_index (child.output.take output_size)) evm2).getCode a |>.symm
             rw [h_memWrite]
             have h_push := Devm.push_getCode_gen h_ok a
             change evm2.getCode a = _ at h_push
@@ -4475,7 +4509,8 @@ lemma GenericCall.inv_getCode_gen
             rfl
           · rw [← eq_ok]
             dsimp [Execution.getCode]
-            have h_memWrite : (evm2.memWrite output_index (child.output.take output_size)).getCode a = evm2.getCode a := rfl
+            have h_memWrite : (evm2.memWrite output_index (child.output.take output_size)).getCode a = evm2.getCode a := by
+              exact (liftMachPure_worldEq (Mach.memWrite · output_index (child.output.take output_size)) evm2).getCode a |>.symm
             rw [h_memWrite]
             have h_push := Devm.push_getCode_gen h_ok a
             change evm2.getCode a = _ at h_push
@@ -4990,7 +5025,7 @@ lemma Xinst.inv_getCode_gen
     rcases run with ⟨calldata, hp7, run⟩
     rcases run with ⟨newAddress, hp8, run⟩
     have hc5 : calldata.getCode a = devm4.getCode a := by
-      subst hp7; dsimp [Devm.getCode, Devm.memExtends]; rfl
+      subst hp7; dsimp [Devm.getCode, Devm.memExtends_def]; rfl
     have h_code : calldata.getCode a = devm.getCode a := by
       rw [hc5, hc4, hc3, hc2, hc1]
     have ha_calldata : (calldata.getCode a).toList ≠ [] := by
@@ -5066,7 +5101,7 @@ lemma Xinst.inv_getCode_gen
     · rw [eq_exn]; exact (assert_getCode_err h_err a).trans (hc10.trans (hc9.trans (hc8.trans (hc7.trans (hc6.trans (hc5.trans (hc4.trans (hc3.trans (hc2.trans hc1)))))))))
     rcases run with ⟨devm11, hp18, run⟩
     have hc11 : devm11.getCode a = devm10.getCode a := by
-      subst hp18; dsimp [Devm.getCode, Devm.memExtends]; rfl
+      subst hp18; dsimp [Devm.getCode, Devm.memExtends_def]; rfl
     rcases run with ⟨senderBal, hp19, run⟩
     split_ifs at run with h_bal
     · rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨devm12, eq20, h_xl2, h_ex⟩
@@ -5149,7 +5184,7 @@ lemma Xinst.inv_getCode_gen
       · injection eq15 with h15; subst h15; rfl
     rcases run with ⟨devm11, hp16, run⟩
     have hc11 : devm11.getCode a = devm10.getCode a := by
-      subst hp16; dsimp [Devm.getCode, Devm.memExtends]; rfl
+      subst hp16; dsimp [Devm.getCode, Devm.memExtends_def]; rfl
     rcases run with ⟨senderBal, hp17, run⟩
     split_ifs at run with h_bal
     · rcases run with ⟨err, h_err, eq_exn, h_xl⟩ | ⟨devm12, eq20, h_xl2, h_ex⟩
@@ -5225,7 +5260,7 @@ lemma Xinst.inv_getCode_gen
       · injection eq13 with h13; subst h13; rfl
     rcases run with ⟨devm10, hp14, run⟩
     have hc10 : devm10.getCode a = devm9.getCode a := by
-      subst hp14; dsimp [Devm.getCode, Devm.memExtends]; rfl
+      subst hp14; dsimp [Devm.getCode, Devm.memExtends_def]; rfl
 
     have h_code : devm10.getCode a = devm.getCode a := by
       rw [hc10, hc9, hc8, hc7, hc6, hc5, hc4, hc3, hc2, hc1]
@@ -5270,7 +5305,7 @@ lemma Xinst.inv_getCode_gen
       · injection eq8 with h9; subst h9; rfl
     rcases run with ⟨devm6, hp9, run⟩
     have hc6 : devm6.getCode a = devm5.getCode a := by
-      subst hp9; dsimp [Devm.getCode, Devm.memExtends]; rfl
+      subst hp9; dsimp [Devm.getCode, Devm.memExtends_def]; rfl
     rcases run with ⟨newAddress, hp10, run⟩
 
     have h_code : devm6.getCode a = devm.getCode a := by
@@ -5337,7 +5372,7 @@ lemma Xinst.inv_getCode_gen
       · injection eq13 with h13; subst h13; rfl
     rcases run with ⟨devm10, hp14, run⟩
     have hc10 : devm10.getCode a = devm9.getCode a := by
-      subst hp14; dsimp [Devm.getCode, Devm.memExtends]; rfl
+      subst hp14; dsimp [Devm.getCode, Devm.memExtends_def]; rfl
 
     have h_code : devm10.getCode a = devm.getCode a := by
       rw [hc10, hc9, hc8, hc7, hc6, hc5, hc4, hc3, hc2, hc1]
@@ -5880,25 +5915,6 @@ def Execution.Rel (R : Devm → Devm → Prop) (pre : Devm) (out : Execution) : 
 
 /-! ## World-preserving footprint lifts -/
 
-def Devm.WorldEq (d d' : Devm) : Prop :=
-  d.state = d'.state ∧ d.transientStorage = d'.transientStorage
-
-lemma Devm.worldEq_refl : Reflexive Devm.WorldEq := by
-  intro d
-  exact ⟨rfl, rfl⟩
-
-lemma Devm.worldEq_symm : Symmetric Devm.WorldEq := by
-  rintro d d' ⟨hstate, htransient⟩
-  exact ⟨hstate.symm, htransient.symm⟩
-
-lemma Devm.worldEq_trans : Transitive Devm.WorldEq := by
-  rintro d d' d'' ⟨hstate, htransient⟩ ⟨hstate', htransient'⟩
-  exact ⟨hstate.trans hstate', htransient.trans htransient'⟩
-
-lemma Devm.worldEq_setMach (d : Devm) (mach : Mach) :
-    Devm.WorldEq d (d.setMach mach) := by
-  exact ⟨rfl, rfl⟩
-
 lemma Devm.worldEq_setMachMeta (d : Devm) (view : Mach × Meta) :
     Devm.WorldEq d (d.setMachMeta view) := by
   exact ⟨rfl, rfl⟩
@@ -5917,10 +5933,6 @@ lemma outcomeRel_toExecution {R : Devm → Devm → Prop} {pre : Devm}
     (h : Outcome.Rel Prod.snd Prod.snd R pre out) :
     Execution.Rel R pre (Footprint.toExecution out) := by
   cases out <;> exact h
-
-lemma liftMachPure_worldEq (core : Mach → Mach) (d : Devm) :
-    Devm.WorldEq d (liftMachPure core d) := by
-  exact Devm.worldEq_setMach d _
 
 lemma liftMach_worldEq (core : Mach → Footprint.Outcome Mach α) (d : Devm) :
     Outcome.Rel Prod.snd Prod.snd Devm.WorldEq d (liftMach core d) := by
@@ -5976,11 +5988,6 @@ lemma Devm.WorldEq.getBal {d d' : Devm} (h : Devm.WorldEq d d') (a : Adr) :
 lemma Devm.WorldEq.getStor {d d' : Devm} (h : Devm.WorldEq d d') (a : Adr) :
     d.getStor a = d'.getStor a := by
   unfold Devm.getStor Devm.getAcct
-  rw [h.1]
-
-lemma Devm.WorldEq.getCode {d d' : Devm} (h : Devm.WorldEq d d') (a : Adr) :
-    d.getCode a = d'.getCode a := by
-  unfold Devm.getCode Devm.getAcct
   rw [h.1]
 
 lemma Devm.worldEq_stable_getBal (a : Adr) :
@@ -7510,7 +7517,8 @@ lemma memRead_getBal_eq {x n : Nat} {devm devm' : Devm} {value : B8L} (h : devm.
   rw [← h_devm]
   rfl
 
-lemma memWrite_getBal_eq {idx : Nat} {val : B8L} {devm : Devm} (a : Adr) : (devm.memWrite idx val).getBal a = devm.getBal a := rfl
+lemma memWrite_getBal_eq {idx : Nat} {val : B8L} {devm : Devm} (a : Adr) : (devm.memWrite idx val).getBal a = devm.getBal a := by
+  exact (liftMachPure_worldEq (Mach.memWrite · idx val) devm).getBal a |>.symm
 
 lemma Devm.popN_getBal_eq {n : Nat} {devm devm' : Devm} {l : List B256}
     (hp : devm.popN n = Except.ok (l, devm')) (a : Adr) :
@@ -7816,7 +7824,9 @@ lemma memRead_getStor_eq {x n : Nat} {devm devm' : Devm} {value : B8L} (h : devm
   rw [← h_devm]
   rfl
 
-lemma memWrite_getStor_eq {idx : Nat} {val : B8L} {devm : Devm} : (devm.memWrite idx val).getStor = devm.getStor := rfl
+lemma memWrite_getStor_eq {idx : Nat} {val : B8L} {devm : Devm} : (devm.memWrite idx val).getStor = devm.getStor := by
+  funext a
+  exact (liftMachPure_worldEq (Mach.memWrite · idx val) devm).getStor a |>.symm
 
 lemma Devm.popN_getStor_eq {n : Nat} {devm devm' : Devm} {l : List B256}
     (hp : devm.popN n = Except.ok (l, devm')) :
