@@ -5878,6 +5878,126 @@ end Outcome
 def Execution.Rel (R : Devm → Devm → Prop) (pre : Devm) (out : Execution) : Prop :=
   Outcome.Rel Prod.snd id R pre out
 
+/-! ## World-preserving footprint lifts -/
+
+def Devm.WorldEq (d d' : Devm) : Prop :=
+  d.state = d'.state ∧ d.transientStorage = d'.transientStorage
+
+lemma Devm.worldEq_refl : Reflexive Devm.WorldEq := by
+  intro d
+  exact ⟨rfl, rfl⟩
+
+lemma Devm.worldEq_symm : Symmetric Devm.WorldEq := by
+  rintro d d' ⟨hstate, htransient⟩
+  exact ⟨hstate.symm, htransient.symm⟩
+
+lemma Devm.worldEq_trans : Transitive Devm.WorldEq := by
+  rintro d d' d'' ⟨hstate, htransient⟩ ⟨hstate', htransient'⟩
+  exact ⟨hstate.trans hstate', htransient.trans htransient'⟩
+
+lemma Devm.worldEq_setMach (d : Devm) (mach : Mach) :
+    Devm.WorldEq d (d.setMach mach) := by
+  exact ⟨rfl, rfl⟩
+
+lemma Devm.worldEq_setMachMeta (d : Devm) (view : Mach × Meta) :
+    Devm.WorldEq d (d.setMachMeta view) := by
+  exact ⟨rfl, rfl⟩
+
+lemma Footprint.liftOutcome_worldEq
+    (get : Devm → σ) (set : Devm → σ → Devm)
+    (core : σ → Footprint.Outcome σ α) (d : Devm)
+    (hset : ∀ view, Devm.WorldEq d (set d view)) :
+    Outcome.Rel Prod.snd Prod.snd Devm.WorldEq d
+      (Footprint.liftOutcome get set core d) := by
+  unfold Footprint.liftOutcome
+  cases core (get d) <;> exact hset _
+
+lemma outcomeRel_toExecution {R : Devm → Devm → Prop} {pre : Devm}
+    {out : Except (String × Devm) (Unit × Devm)}
+    (h : Outcome.Rel Prod.snd Prod.snd R pre out) :
+    Execution.Rel R pre (Footprint.toExecution out) := by
+  cases out <;> exact h
+
+lemma liftMachPure_worldEq (core : Mach → Mach) (d : Devm) :
+    Devm.WorldEq d (liftMachPure core d) := by
+  exact Devm.worldEq_setMach d _
+
+lemma liftMach_worldEq (core : Mach → Footprint.Outcome Mach α) (d : Devm) :
+    Outcome.Rel Prod.snd Prod.snd Devm.WorldEq d (liftMach core d) := by
+  unfold liftMach
+  exact Footprint.liftOutcome_worldEq _ _ _ _ (Devm.worldEq_setMach d)
+
+lemma liftMachExecution_worldEq
+    (core : Mach → Footprint.Outcome Mach Unit) (d : Devm) :
+    Execution.Rel Devm.WorldEq d (liftMachExecution core d) := by
+  unfold liftMachExecution
+  exact outcomeRel_toExecution (liftMach_worldEq core d)
+
+lemma liftMachMetaPure_worldEq
+    (core : Mach → Meta → Mach × Meta) (d : Devm) :
+    Devm.WorldEq d (liftMachMetaPure core d) := by
+  exact Devm.worldEq_setMachMeta d _
+
+lemma liftMachMeta_worldEq
+    (core : Mach → Meta → Footprint.Outcome (Mach × Meta) α) (d : Devm) :
+    Outcome.Rel Prod.snd Prod.snd Devm.WorldEq d (liftMachMeta core d) := by
+  unfold liftMachMeta
+  exact Footprint.liftOutcome_worldEq _ _ _ _ (Devm.worldEq_setMachMeta d)
+
+lemma liftMachMetaExecution_worldEq
+    (core : Mach → Meta → Footprint.Outcome (Mach × Meta) Unit) (d : Devm) :
+    Execution.Rel Devm.WorldEq d (liftMachMetaExecution core d) := by
+  unfold liftMachMetaExecution
+  exact outcomeRel_toExecution (liftMachMeta_worldEq core d)
+
+lemma liftMachMetaWorldPure_worldEq
+    (core : World → Mach → Meta → Mach × Meta) (d : Devm) :
+    Devm.WorldEq d (liftMachMetaWorldPure core d) := by
+  exact liftMachMetaPure_worldEq _ _
+
+lemma liftMachMetaWorld_worldEq
+    (core : World → Mach → Meta → Footprint.Outcome (Mach × Meta) α)
+    (d : Devm) :
+    Outcome.Rel Prod.snd Prod.snd Devm.WorldEq d
+      (liftMachMetaWorld core d) := by
+  exact liftMachMeta_worldEq _ _
+
+lemma liftMachMetaWorldExecution_worldEq
+    (core : World → Mach → Meta → Footprint.Outcome (Mach × Meta) Unit)
+    (d : Devm) :
+    Execution.Rel Devm.WorldEq d (liftMachMetaWorldExecution core d) := by
+  exact liftMachMetaExecution_worldEq _ _
+
+lemma Devm.WorldEq.getBal {d d' : Devm} (h : Devm.WorldEq d d') (a : Adr) :
+    d.getBal a = d'.getBal a := by
+  unfold Devm.getBal Devm.getAcct
+  rw [h.1]
+
+lemma Devm.WorldEq.getStor {d d' : Devm} (h : Devm.WorldEq d d') (a : Adr) :
+    d.getStor a = d'.getStor a := by
+  unfold Devm.getStor Devm.getAcct
+  rw [h.1]
+
+lemma Devm.WorldEq.getCode {d d' : Devm} (h : Devm.WorldEq d d') (a : Adr) :
+    d.getCode a = d'.getCode a := by
+  unfold Devm.getCode Devm.getAcct
+  rw [h.1]
+
+lemma Devm.worldEq_stable_getBal (a : Adr) :
+    CEffect.Stable (fun d : Devm => d.getBal a) Devm.WorldEq := by
+  intro d d' h
+  exact h.getBal a
+
+lemma Devm.worldEq_stable_getStor (a : Adr) :
+    CEffect.Stable (fun d : Devm => d.getStor a) Devm.WorldEq := by
+  intro d d' h
+  exact h.getStor a
+
+lemma Devm.worldEq_stable_getCode (a : Adr) :
+    CEffect.Stable (fun d : Devm => d.getCode a) Devm.WorldEq := by
+  intro d d' h
+  exact h.getCode a
+
 def Xlot.Rel (R : Devm → Devm → Prop) : Xlot → Prop
   | .none => True
   | .some ⟨_, pre, out⟩ => Execution.Rel R pre out
