@@ -729,272 +729,192 @@ def Prog.Run (sevm : Sevm) (devm : Devm) (p : Prog) (devm' : Devm) : Prop :=
 
 
 
-def Except.toError? {ξ υ} : Except (String × ξ) υ → Option String
-  | .ok _ => none
-  | .error ⟨err, _⟩ => some err
+/- Machinery for reasoning about fuel-bounded (`Fueled`) computations.
+   A completed run is witnessed by an equation `f lim = Fueled.ofExcept ex`;
+   fuel exhaustion (`Fueled.exhausted`) is ruled out by the mere shape of such
+   an equation, so no `≠ "RecursionLimit"` side conditions are needed. -/
 
-def Except.Lim {ξ υ} (ex : Except (String × ξ) υ) : Prop :=
-  ex.toError? = some "RecursionLimit"
+namespace Fueled
 
-def Except.Fit {ξ υ} (ex : Except (String × ξ) υ) : Prop := ¬ ex.Lim
+variable {ε ζ : Type} {α β : Type}
+
+lemma ext {x y : Fueled ε α} (h : x.run = y.run) : x = y := h
+
+lemma exhausted_ne_ofExcept {x : Except ε α} :
+    (Fueled.exhausted : Fueled ε α) ≠ Fueled.ofExcept x :=
+  fun h => nomatch congrArg ExceptT.run h
+
+lemma ofExcept_ne_exhausted {x : Except ε α} :
+    (Fueled.ofExcept x : Fueled ε α) ≠ Fueled.exhausted :=
+  fun h => nomatch congrArg ExceptT.run h
+
+lemma ne_exhausted_of_eq_ofExcept {x : Fueled ε α} {ex : Except ε α}
+    (h : x = Fueled.ofExcept ex) : x ≠ Fueled.exhausted := by
+  rw [h]; exact ofExcept_ne_exhausted
+
+@[simp] lemma ofExcept_inj {x y : Except ε α} :
+    (Fueled.ofExcept x : Fueled ε α) = Fueled.ofExcept y ↔ x = y :=
+  ⟨fun h => Option.some.inj (congrArg ExceptT.run h), fun h => by rw [h]⟩
+
+@[simp] lemma ok_inj {x y : α} :
+    (Fueled.ok x : Fueled ε α) = Fueled.ok y ↔ x = y :=
+  ofExcept_inj.trans ⟨Except.ok.inj, congrArg _⟩
+
+@[simp] lemma error_inj {e e' : ε} :
+    (Fueled.error e : Fueled ε α) = Fueled.error e' ↔ e = e' :=
+  ofExcept_inj.trans ⟨Except.error.inj, congrArg _⟩
+
+@[simp] lemma ok_ne_error {x : α} {e : ε} :
+    (Fueled.ok x : Fueled ε α) = Fueled.error e ↔ False :=
+  ⟨fun h => nomatch ofExcept_inj.mp h, False.elim⟩
+
+@[simp] lemma error_ne_ok {x : α} {e : ε} :
+    (Fueled.error e : Fueled ε α) = Fueled.ok x ↔ False :=
+  ⟨fun h => nomatch ofExcept_inj.mp h, False.elim⟩
+
+@[simp] lemma exhausted_ne_ok {x : α} :
+    (Fueled.exhausted : Fueled ε α) = Fueled.ok x ↔ False :=
+  ⟨fun h => exhausted_ne_ofExcept h, False.elim⟩
+
+@[simp] lemma exhausted_ne_error {e : ε} :
+    (Fueled.exhausted : Fueled ε α) = Fueled.error e ↔ False :=
+  ⟨fun h => exhausted_ne_ofExcept h, False.elim⟩
+
+@[simp] lemma ok_ne_exhausted {x : α} :
+    (Fueled.ok x : Fueled ε α) = Fueled.exhausted ↔ False :=
+  ⟨fun h => ofExcept_ne_exhausted h, False.elim⟩
+
+@[simp] lemma error_ne_exhausted {e : ε} :
+    (Fueled.error e : Fueled ε α) = Fueled.exhausted ↔ False :=
+  ⟨fun h => ofExcept_ne_exhausted h, False.elim⟩
+
+@[simp] lemma exhausted_ne_ofExcept_iff {x : Except ε α} :
+    (Fueled.exhausted : Fueled ε α) = Fueled.ofExcept x ↔ False :=
+  ⟨fun h => exhausted_ne_ofExcept h, False.elim⟩
+
+@[simp] lemma ofExcept_eq_ok_iff {x : Except ε α} {y : α} :
+    (Fueled.ofExcept x : Fueled ε α) = Fueled.ok y ↔ x = .ok y := ofExcept_inj
+
+@[simp] lemma ofExcept_eq_error_iff {x : Except ε α} {e : ε} :
+    (Fueled.ofExcept x : Fueled ε α) = Fueled.error e ↔ x = .error e := ofExcept_inj
+
+lemma ok_bind (y : α) (f : α → Fueled ε β) :
+    (Fueled.ok y : Fueled ε α) >>= f = f y := rfl
+
+lemma error_bind (e : ε) (f : α → Fueled ε β) :
+    (Fueled.error e : Fueled ε α) >>= f = Fueled.error e := rfl
+
+lemma exhausted_bind (f : α → Fueled ε β) :
+    (Fueled.exhausted : Fueled ε α) >>= f = Fueled.exhausted := rfl
+
+lemma ofExcept_ok_bind (y : α) (f : α → Fueled ε β) :
+    Fueled.ofExcept (.ok y) >>= f = f y := rfl
+
+lemma ofExcept_error_bind (e : ε) (f : α → Fueled ε β) :
+    Fueled.ofExcept (.error e) >>= f = Fueled.ofExcept (.error e) := rfl
+
+lemma lift_bind_lift {x : Except ε α} {g : α → Except ε β} :
+    ((liftM x : Fueled ε α) >>= fun y => liftM (g y)) =
+      (liftM (x >>= g) : Fueled ε β) := by
+  cases x <;> rfl
+
+lemma assert_eq (p : Prop) [Decidable p] (e : ε) :
+    (Fueled.assert p e : Fueled ε Unit) =
+      Fueled.ofExcept (Except.assert p e) := by
+  by_cases hp : p
+  · simp only [Fueled.assert, Except.assert, if_pos hp]; rfl
+  · simp only [Fueled.assert, Except.assert, if_neg hp]; rfl
+
+lemma mapResult_ofExcept (g : Except ε α → Except ζ β) (x : Except ε α) :
+    Fueled.mapResult g (Fueled.ofExcept x) = Fueled.ofExcept (g x) := rfl
+
+lemma mapResult_exhausted (g : Except ε α → Except ζ β) :
+    Fueled.mapResult g (Fueled.exhausted : Fueled ε α) = Fueled.exhausted := rfl
+
+def of_bind_eq {x : Fueled ε α} {f : α → Fueled ε β} {ex : Except ε β}
+    (h : x >>= f = Fueled.ofExcept ex) :
+    (∃ e, x = Fueled.ofExcept (.error e) ∧ ex = .error e) ∨
+      (∃ y, x = Fueled.ofExcept (.ok y) ∧ f y = Fueled.ofExcept ex) := by
+  have hrun : x.run >>= ExceptT.bindCont f = some ex := congrArg ExceptT.run h
+  rcases hx : x.run with _ | ⟨e | y⟩ <;> rw [hx] at hrun
+  · cases hrun
+  · left; exact ⟨e, Fueled.ext hx, (Option.some.inj hrun).symm⟩
+  · right; exact ⟨y, Fueled.ext hx, Fueled.ext hrun⟩
+
+def of_lift_bind_eq {x : Except ε α} {f : α → Fueled ε β} {ex : Except ε β}
+    (h : Fueled.ofExcept x >>= f = Fueled.ofExcept ex) :
+    (∃ e, x = .error e ∧ ex = .error e) ∨
+      (∃ y, x = .ok y ∧ f y = Fueled.ofExcept ex) := by
+  rcases of_bind_eq h with ⟨e, hx, hex⟩ | ⟨y, hx, hf⟩
+  · exact Or.inl ⟨e, ofExcept_inj.mp hx, hex⟩
+  · exact Or.inr ⟨y, ofExcept_inj.mp hx, hf⟩
+
+def of_bind_eq' {x : Fueled ε α} {f : α → Fueled ε β} {ex : Except ε β}
+    (h : x >>= f = Fueled.ofExcept ex) :
+    ∃ ex', x = Fueled.ofExcept ex' ∧
+      Fueled.ofExcept ex' >>= f = Fueled.ofExcept ex := by
+  rcases of_bind_eq h with ⟨e, hx, hex⟩ | ⟨y, hx, hf⟩
+  · refine ⟨.error e, hx, ?_⟩; rw [ofExcept_error_bind, hex]
+  · refine ⟨.ok y, hx, ?_⟩; rw [ofExcept_ok_bind]; exact hf
+
+def of_bind_eq_ok {x : Fueled ε α} {f : α → Fueled ε β} {z : β}
+    (h : x >>= f = Fueled.ok z) :
+    ∃ y, x = Fueled.ok y ∧ f y = Fueled.ok z := by
+  rcases of_bind_eq (ex := .ok z) h with ⟨e, _, hex⟩ | ⟨y, hx, hf⟩
+  · cases hex
+  · exact ⟨y, hx, hf⟩
+
+def of_lift_bind_eq_ok {x : Except ε α} {f : α → Fueled ε β} {z : β}
+    (h : Fueled.ofExcept x >>= f = Fueled.ok z) :
+    ∃ y, x = .ok y ∧ f y = Fueled.ok z := by
+  rcases of_lift_bind_eq (ex := .ok z) h with ⟨e, _, hex⟩ | ⟨y, hx, hf⟩
+  · cases hex
+  · exact ⟨y, hx, hf⟩
+
+def of_mapResult_eq {g : Except ε α → Except ζ β} {x : Fueled ε α}
+    {ex : Except ζ β} (h : Fueled.mapResult g x = Fueled.ofExcept ex) :
+    ∃ ex', x = Fueled.ofExcept ex' ∧ g ex' = ex := by
+  have hrun : x.run.map g = some ex := congrArg ExceptT.run h
+  rcases hx : x.run with _ | ex' <;> rw [hx] at hrun
+  · cases hrun
+  · exact ⟨ex', Fueled.ext hx, Option.some.inj hrun⟩
+
+lemma bind_eq_bind {x : Fueled ε α} {f g : α → Fueled ε β}
+    (h : ∀ y, x = Fueled.ok y → f y = g y) : x >>= f = x >>= g := by
+  rcases hx : x.run with _ | ⟨e | y⟩
+  · apply Fueled.ext
+    show x.run >>= ExceptT.bindCont f = x.run >>= ExceptT.bindCont g
+    rw [hx]; rfl
+  · apply Fueled.ext
+    show x.run >>= ExceptT.bindCont f = x.run >>= ExceptT.bindCont g
+    rw [hx]; rfl
+  · have hxy : x = Fueled.ok y := Fueled.ext hx
+    rw [hxy, ok_bind, ok_bind]; exact h y hxy
+
+lemma ne_exhausted_of_bind {x : Fueled ε α} {f : α → Fueled ε β} {y : α}
+    (h : x >>= f ≠ Fueled.exhausted) (eq : x = Fueled.ok y) :
+    f y ≠ Fueled.exhausted := by
+  intro hex; apply h; rw [eq, ok_bind, hex]
+
+lemma head_ne_exhausted_of_bind {x : Fueled ε α} {f : α → Fueled ε β}
+    (h : x >>= f ≠ Fueled.exhausted) : x ≠ Fueled.exhausted := by
+  intro hex; apply h; rw [hex, exhausted_bind]
+
+lemma mapResult_ne_exhausted {g : Except ε α → Except ζ β} {x : Fueled ε α}
+    (h : Fueled.mapResult g x ≠ Fueled.exhausted) : x ≠ Fueled.exhausted := by
+  intro hex; apply h; rw [hex, mapResult_exhausted]
+
+lemma bind_eq_of_eq_ok_of_eq {x : Except ε α} {y : α} {z : Fueled ε β}
+    {f : α → Fueled ε β} (eq_ok : x = .ok y) (eq : f y = z) :
+    Fueled.ofExcept x >>= f = z := by
+  rw [eq_ok, ofExcept_ok_bind]; exact eq
+
+end Fueled
 
 def Xlot.Good' : Xlot → Prop
   | .none => True
   | .some ⟨sevm, devm, ex⟩ =>
-    ex.Fit ∧ ∃ lim, exec { pc := 0, sta := sevm, dyna := devm } lim = ex
-
-lemma of_lim_bind {ξ υ ζ} {x : Except (String × ξ) υ}
-    {f : υ → Except (String × ξ) ζ} (h : (x >>= f).Lim) :
-    x.Lim ∨ (∃ y, x = .ok y ∧ (f y).Lim) := by
-  rcases x with ⟨err, s⟩ | y
-  · left; simp [bind, Except.bind] at h; exact h
-  · right; use y; constructor; rfl
-    simp [bind, Except.bind] at h; exact h
-
-lemma fit_push {evm : Devm} {x : B256} : ¬ (evm.push x).Lim := by
-  unfold Except.Lim Devm.push Except.assert
-  split
-  · simp [Except.toError?, bind, Except.bind]
-  · simp [Except.toError?, bind, Except.bind]
-
-lemma fit_pop {evm : Devm} : ¬ evm.pop.Lim := by
-  simp only [Except.Lim, Devm.pop, Except.toError?]
-  cases evm.stack <;> simp
-
-lemma fit_popToNat {evm : Devm} : ¬ evm.popToNat.Lim := by
-  simp only [Except.Lim, Devm.popToNat, Except.toError?, Devm.pop]
-  cases evm.stack <;> simp
-
-lemma fit_pop_to_adr {evm : Devm} : ¬ evm.popToAdr.Lim := by
-  simp only [Except.Lim, Devm.popToAdr, Except.toError?, Devm.pop]
-  cases evm.stack <;> simp
-
-lemma fit_chargeGas {cost : Nat} {evm : Devm} :
-    ¬ (chargeGas cost evm).Lim := by
-  simp only [Except.Lim, Except.toError?, chargeGas]
-  cases safeSub evm.gasLeft cost <;> simp
-
-lemma fit_assert {p ξ} [Decidable p]
-    {s : String} {x : ξ} (ne : s ≠ "RecursionLimit") :
-    ¬ (Except.assert p ⟨s, x⟩).Lim := by
-  by_cases h : p <;>
-    simp [h, Except.assert, Except.toError?, Except.Lim, ne]
-
-lemma fit_assertDynamic {sevm : Sevm} {devm : Devm} :
-    ¬ (assertDynamic sevm devm).Lim := fit_assert (by decide)
-
-lemma fit_to_except {ξ υ} {x : ξ} {o : Option υ}
-    {s : String} (ne : s ≠ "RecursionLimit") :
-    ¬ (@Option.toExcept (String × ξ) υ ⟨s, x⟩ o).Lim := by
-  simp only [Except.Lim, Except.toError?, Option.toExcept]
-  cases o <;> simp [ne]
-
-lemma fit_ok {ξ υ} {y : υ} :
-    ¬ (.ok y : Except (String × ξ) υ).Lim := by intro h; cases h
-
-lemma fit_pushItem {x : B256} {c : Nat} {evm : Devm} :
-    ¬ (pushItem x c evm).Lim := by
-  simp only [pushItem]; intro run
-  rcases of_lim_bind run with run' | ⟨_, _, run'⟩
-  · cases fit_chargeGas run'
-  · cases fit_push run'
-
-lemma fit_applyUnary {f : B256 → B256} {cost : Nat} {devm : Devm} :
-    ¬ (applyUnary f cost devm).Lim := by
-  simp only [applyUnary]; intro run
-  rcases of_lim_bind run with run' | ⟨_, _, run'⟩
-  · cases fit_pop run'
-  · cases fit_pushItem run'
-
-syntax "fit_bind_step " ident term : tactic
-macro_rules
-  | `(tactic| fit_bind_step $ltd $lem) => `(tactic|
-      rcases of_lim_bind $ltd with ltd' | ⟨_, temp, ltd'⟩ <;>
-      [
-        (clear $ltd; apply $lem ltd' <;> clear ltd');
-        (clear $ltd temp; rename' ltd' => $ltd)
-      ]
-    )
-
-syntax "fit_bind_step' " ident term : tactic
-macro_rules
-  | `(tactic| fit_bind_step' $ltd $lem) => `(tactic|
-      rcases of_lim_bind $ltd with ltd' | ⟨_, temp, ltd'⟩;
-      swap; {apply $lem ltd'};
-      clear $ltd; rename' ltd' => $ltd
-    )
-
-lemma fit_applyBinary {f : B256 → B256 → B256} {cost : Nat} {evm : Devm} :
-    ¬ (applyBinary f cost evm).Lim := by
-  simp only [applyBinary]; intro ltd
-  fit_bind_step ltd fit_pop
-  fit_bind_step ltd fit_pop
-  cases fit_pushItem ltd
-
-lemma fit_applyTernary {f : B256 → B256 → B256 → B256} {cost : Nat} {evm : Devm} :
-    ¬ (applyTernary f cost evm).Lim := by
-  simp only [applyTernary]; intro ltd
-  fit_bind_step ltd fit_pop
-  fit_bind_step ltd fit_pop
-  fit_bind_step ltd fit_pop
-  cases fit_pushItem ltd
-
-lemma of_lim_map_rev {ξ υ ζ} {x : Except (String × ξ) υ}
-    {f : υ → ζ} (ltd : (x <&> f).Lim) : x.Lim := by
-  cases x <;> simp [Except.toError?, Except.Lim] at *; exact ltd
-
-lemma fit_pop_n {evm : Devm} {n : Nat} : ¬ (evm.popN n).Lim := by
-  induction n generalizing evm
-  case zero =>
-    simp [Devm.popN, Except.Lim, Except.toError?]
-  case succ n ih =>
-    simp only [Devm.popN]; intro ltd
-    fit_bind_step ltd fit_pop
-    fit_bind_step ltd ih; cases ltd
-
-lemma Rinst.fit_run {evm : Evm} {r : Rinst} :
-    (Rinst.run evm r).Fit := by
-  intro ltd; cases r <;> simp only [Rinst.run, Rinst.runCore] at ltd
-  all_goals try with_reducible first
-    | exact absurd ltd fit_applyBinary
-    | exact absurd ltd fit_applyTernary
-    | exact absurd ltd fit_applyUnary
-    | exact absurd ltd fit_pushItem
-  case exp =>
-    fit_bind_step ltd fit_pop
-    fit_bind_step ltd fit_pop
-    fit_bind_step ltd fit_chargeGas
-    exact fit_push ltd
-
-  case kec =>
-    fit_bind_step ltd fit_popToNat
-    fit_bind_step ltd fit_popToNat
-    fit_bind_step ltd fit_chargeGas
-    exact fit_push ltd
-  case balance =>
-    fit_bind_step ltd fit_pop
-    split at ltd <;>
-    { fit_bind_step ltd fit_chargeGas;
-      exact fit_push ltd }
-  case calldataload =>
-    fit_bind_step ltd fit_pop
-    fit_bind_step ltd fit_chargeGas
-    exact fit_push ltd
-  case calldatacopy =>
-    fit_bind_step ltd fit_popToNat
-    fit_bind_step ltd fit_popToNat
-    fit_bind_step ltd fit_popToNat
-    fit_bind_step ltd fit_chargeGas
-    simp [Except.toError?, Except.Lim] at ltd
-  case codecopy =>
-    fit_bind_step ltd fit_popToNat
-    fit_bind_step ltd fit_popToNat
-    fit_bind_step ltd fit_popToNat
-    fit_bind_step ltd fit_chargeGas
-    simp [Except.toError?, Except.Lim] at ltd
-  case extcodesize =>
-    fit_bind_step ltd fit_pop_to_adr
-    split at ltd <;> fit_bind_step ltd fit_chargeGas
-    · exact fit_push ltd
-    · exact fit_push ltd
-  case extcodecopy =>
-    fit_bind_step ltd fit_pop_to_adr
-    fit_bind_step ltd fit_popToNat
-    fit_bind_step ltd fit_popToNat
-    fit_bind_step ltd fit_popToNat
-    split at ltd <;> fit_bind_step ltd fit_chargeGas
-    · simp [Except.toError?, Except.Lim] at ltd
-    · simp [Except.toError?, Except.Lim] at ltd
-  case retdatacopy =>
-    fit_bind_step ltd fit_popToNat
-    fit_bind_step ltd fit_popToNat
-    fit_bind_step ltd fit_popToNat
-    fit_bind_step ltd fit_chargeGas
-    split at ltd <;> rename_i h_retdat
-    · simp only [bind, Except.bind, Except.Lim, Except.toError?] at ltd;
-      injection ltd; contradiction
-    · simp [Except.toError?, Except.Lim] at ltd
-  case extcodehash =>
-    fit_bind_step ltd fit_pop_to_adr
-    split at ltd <;> fit_bind_step ltd fit_chargeGas
-    · exact fit_push ltd
-    · exact fit_push ltd
-  case blockhash =>
-    fit_bind_step ltd fit_pop
-    fit_bind_step ltd fit_chargeGas
-    exact fit_push ltd
-  case blobhash =>
-    fit_bind_step ltd fit_pop
-    fit_bind_step ltd fit_chargeGas
-    exact fit_push ltd
-  case pop =>
-    fit_bind_step' ltd fit_chargeGas
-    exact fit_pop <| of_lim_map_rev ltd
-  case mload =>
-    fit_bind_step ltd fit_popToNat
-    fit_bind_step ltd fit_chargeGas
-    exact fit_push ltd
-  case mstore =>
-    fit_bind_step ltd fit_popToNat
-    fit_bind_step ltd fit_pop
-    fit_bind_step ltd fit_chargeGas
-    simp [Except.toError?, Except.Lim] at ltd
-  case mstore8 =>
-    fit_bind_step ltd fit_popToNat
-    fit_bind_step ltd fit_pop
-    fit_bind_step ltd fit_chargeGas
-    simp [Except.toError?, Except.Lim] at ltd
-  case sload =>
-    fit_bind_step ltd fit_pop
-    split at ltd <;> fit_bind_step ltd fit_chargeGas
-    · exact fit_push ltd
-    · exact fit_push ltd
-  case sstore =>
-    fit_bind_step ltd fit_pop
-    fit_bind_step ltd fit_pop
-    have ne : "OutOfGasError" ≠ "RecursionLimit" := by decide
-    fit_bind_step ltd (fit_assert ne)
-    fit_bind_step ltd (fit_ok)
-    fit_bind_step ltd (fit_ok)
-    fit_bind_step ltd (fit_ok)
-    fit_bind_step ltd fit_chargeGas
-    fit_bind_step ltd fit_assertDynamic
-    cases ltd
-  case tload =>
-    fit_bind_step ltd fit_pop
-    exact fit_pushItem ltd
-  case tstore =>
-    fit_bind_step ltd fit_pop
-    fit_bind_step ltd fit_pop
-    fit_bind_step ltd fit_chargeGas
-    fit_bind_step ltd fit_assertDynamic
-    cases ltd
-  case mcopy =>
-    fit_bind_step ltd fit_popToNat
-    fit_bind_step ltd fit_popToNat
-    fit_bind_step ltd fit_popToNat
-    fit_bind_step ltd fit_chargeGas
-    cases ltd
-  case gas =>
-    fit_bind_step ltd fit_chargeGas
-    exact fit_push ltd
-  case dup =>
-    fit_bind_step ltd fit_chargeGas
-    split at ltd
-    · simp [Except.toError?, Except.Lim] at ltd
-    · exact fit_push ltd
-  case swap =>
-    fit_bind_step ltd fit_chargeGas
-    split at ltd
-    · simp [Except.toError?, Except.Lim] at ltd
-    · cases ltd
-  case log =>
-    fit_bind_step ltd fit_popToNat
-    fit_bind_step ltd fit_popToNat
-    fit_bind_step ltd fit_pop_n
-    fit_bind_step ltd fit_chargeGas
-    fit_bind_step ltd fit_assertDynamic
-    cases ltd
+    ∃ lim, exec { pc := 0, sta := sevm, dyna := devm } lim = Fueled.ofExcept ex
 
 lemma Except.of_error_bind_eq {ξ υ ζ : Type}
     {x : ξ} {f : υ → Except ξ ζ} (e : Except ξ ζ)
@@ -1008,41 +928,19 @@ lemma error_bind {ξ υ ζ : Type}
 def ok_bind {ξ : Type u} {υ ζ : Type v} {y : υ} {g : υ → Except ξ ζ} :
     (.ok y) >>= g = g y := rfl
 
-lemma fit_withPc {pc : ℕ} {exn : Execution} (fit : exn.Fit) :
-    (exn.withPc pc).Fit := by
-  simp only [Execution.withPc]
-  rcases exn with ⟨err, devm⟩ | _
-  · rw [error_bind]; exact fit
-  · rw [ok_bind]; exact fit
-
 lemma forall_gt_of_forall_gt_succ_pred {p : Nat → Prop} (n : Nat) :
     (∀ m > n, p (m.pred + 1)) → (∀ m > n, p m) := by
   intro fa m gt; rcases m with _ | m
   · cases Nat.not_lt_zero _ gt
   · apply fa (m + 1) gt
 
-lemma fit_of_split_of_fit {ξ υ ζ} {x : Except (String × ξ) υ}
-    {p : υ → Prop} {ex : Except (String × ξ) ζ}
-    (split : Except.Split x ex p) (fit : x.Fit) :
-    (∀ y, x = .ok y → p y → ex.Fit) → ex.Fit := by
-  intro prem
-  rcases split with ⟨⟨err, _⟩ , rw, rw'⟩ | ⟨y, eq, py⟩
-  · rw [rw']; intro ltd; injection ltd with rw''
-    rw [rw, rw''] at fit; cases fit rfl
-  · exact (prem _ eq py)
-
-
-lemma fit_of_splitXl_of_fit {ξ υ ζ} {e : Except (String × ξ) υ} {xl : Xlot} {e' : Except (String × ξ) ζ} {q}
-    (split : Except.SplitXl e xl e' q) (fit : e.Fit) (prem : ∀ y, e = .ok y → q y → Except.Fit e') : Except.Fit e' := by
-  rcases split with ⟨x, h1, eq', _⟩ | ⟨y, eq, qy⟩
-  · intro ltd; apply fit; rw [h1]; rw [eq'] at ltd; exact ltd
-  · exact prem y eq qy
-
 lemma exists_forall_gt_of_splitXl {ξ υ ζ} {x : Except (String × ξ) υ} {xl}
-    {ex : Except (String × ξ) ζ} {p} {f : υ → ℕ → Except (String × ξ) ζ}
+    {ex : Except (String × ξ) ζ} {p} {f : υ → ℕ → Fueled (String × ξ) ζ}
     (split : Except.SplitXl x xl ex p)
-    (efg : ∀ y, x = .ok y → p y → ∃ lim, ∀ lim' > lim, f y lim' = ex) :
-    ∃ lim, ∀ lim' > lim, (x >>= λ y => f y lim') = ex := by
+    (efg : ∀ y, x = .ok y → p y →
+      ∃ lim, ∀ lim' > lim, f y lim' = Fueled.ofExcept ex) :
+    ∃ lim, ∀ lim' > lim,
+      (Fueled.ofExcept x >>= λ y => f y lim') = Fueled.ofExcept ex := by
   rcases split with ⟨e, he, he', hxl⟩ | ⟨y, hy, hy'⟩
   · refine ⟨0, λ _ _ => ?_⟩
     rw [he, he']
@@ -1052,65 +950,17 @@ lemma exists_forall_gt_of_splitXl {ξ υ ζ} {x : Except (String × ξ) υ} {xl}
     rw [hy]
     exact hlim lim' hlim'
 
-
-syntax "fit_step_splitXl " ident term : tactic
-macro_rules
-  | `(tactic| fit_step_splitXl $run $lem) =>
-    `(tactic|
-      apply fit_of_splitXl_of_fit $run $lem;
-      clear $run; intro _ temp $run; clear temp;
-    )
-
 syntax "efg_step_splitXl " ident : tactic
 macro_rules
   | `(tactic| efg_step_splitXl $run) =>
     `(tactic|
+      (try rw [Fueled.assert_eq]);
       apply exists_forall_gt_of_splitXl $run;
       clear $run; intro _ temp $run; clear temp
     )
 
-syntax "fit_step_split " ident term : tactic
-macro_rules
-  | `(tactic| fit_step_split $run $lem) =>
-    `(tactic|
-      apply fit_of_split_of_fit $run $lem;
-      clear $run; intro _ temp $run; clear temp;
-    )
-
-syntax "fit_step_exists " ident : tactic
-macro_rules
-  | `(tactic| fit_step_exists $run) =>
-    `(tactic|
-      have temp := $run; clear $run;
-      rcases temp with ⟨_, temp, $run⟩; clear temp
-    )
-
-syntax "fit_step_exec " ident ident term:max term : tactic
-macro_rules
-  | `(tactic| fit_step_exec $run $good $lem $lem') =>
-    `(tactic|
-      have temp := $run; clear $run;
-      rcases temp with ⟨ex', runs, $run⟩;
-      have temp := $lem $good runs; clear $good runs;
-      rcases temp with ⟨fit, lim, run_eq⟩; clear lim run_eq;
-      fit_step_split $run ($lem' fit); clear fit
-    )
-
-lemma fit_benvAfterTransfer {msg : Msg} : msg.benvAfterTransfer.Fit := by
-  simp only [Msg.benvAfterTransfer]; intro ltd
-  split at ltd
-  · fit_bind_step ltd (fit_to_except (by decide)); exact fit_ok ltd
-  · exact fit_ok ltd
-
-lemma of_lim_handleError {ex : Execution} :
-    (executeCode.handleError ex).Lim → ex.Lim := by
-  rcases ex with ⟨err, err⟩ | _ <;>
-    simp only [executeCode.handleError] <;> intro h
-  · split at h; {cases h}; split at h; {cases h}; exact h
-  · exact h
-
-def Saturates {ξ υ} (n : Nat) (f : Nat → Except (String × ξ) υ) : Prop :=
-  (f n).Fit → ∀ m, n < m → (f n = f m)
+def Saturates {ε υ} (n : Nat) (f : Nat → Fueled ε υ) : Prop :=
+  f n ≠ Fueled.exhausted → ∀ m, n < m → (f n = f m)
 
 structure Saturation (lim : Nat) : Prop where
   (executeCode : ∀ (msg : Msg), Saturates lim (executeCode msg))
@@ -1139,367 +989,155 @@ structure Saturation (lim : Nat) : Prop where
   (ninstRun : ∀ (evm : Evm) (n : Ninst), Saturates lim (Ninst.run evm n))
   (exec : ∀ (evm : Evm), Saturates lim (exec evm))
 
-lemma lim_handleError {ex : Execution} :
-    ex.Lim → (executeCode.handleError ex).Lim := by
-  intro h; rcases ex with ⟨err, err⟩ | _ <;>
-    simp [Except.Lim, Except.toError?] at h
-  rw [h]; rfl
-
 lemma Except.bind_eq_bind {ξ υ ζ} {e : Except ξ υ} {f g : υ → Except ξ ζ}
     (eq : ∀ x, e = Except.ok x → f x = g x) : e >>= f = e >>= g := by
   cases e; rfl; apply eq _ rfl
 
-lemma of_fit_bind {ξ υ ζ} {x : Except (String × ξ) υ}
-    {f : υ → Except (String × ξ) ζ} (fit : (x >>= f).Fit) :
-    x.Fit ∧ (∀ y, x = .ok y → (f y).Fit) := by
-  constructor
-  · intro ltd
-    rcases x with ⟨_, _⟩ | _
-    · injection ltd; rename_i rw; rw [rw] at fit; cases fit rfl
-    · cases ltd
-  · intro y eq; rw [eq] at fit; exact fit
-
 syntax "eee_bind " ident  : tactic
 macro_rules
-  | `(tactic| eee_bind $fit) => `(tactic|
-      apply Except.bind_eq_bind;
+  | `(tactic| eee_bind $ne) => `(tactic|
+      apply Fueled.bind_eq_bind;
       intro _ eq_ok;
-      have temp := $fit; clear $fit;
-      have $fit :=
-        @Eq.subst _ (Except.Fit) _ _ ok_bind <|
-          @Eq.subst _ (λ e => Except.Fit (e >>= _)) _ _ eq_ok temp;
-      clear temp eq_ok
+      have temp := Fueled.ne_exhausted_of_bind $ne eq_ok; clear $ne eq_ok;
+      rename' temp => $ne
     )
-
-lemma of_fit_liftToExecution {evm : Devm}
-    {f : Except (String × State × AdrSet × Tra) Devm} :
-    (liftToExecution evm f).Fit → f.Fit := by
-  rcases f with ⟨err, _⟩ | _ <;> intro fit ltd
-  · injection ltd; rename_i rw; rw [rw] at fit; cases fit rfl
-  · cases ltd
 
 lemma saturation (lim : Nat) : Saturation lim := by
   induction lim
   case zero =>
     refine' ⟨_, _, _, _, _, _, _, _⟩
-    · intro _ fit; simp only [executeCode] at fit; cases fit rfl
-    · intro _ fit; simp only [processMessage] at fit; cases fit rfl
-    · intro _ fit; simp only [processCreateMessage] at fit; cases fit rfl
-    · intro _ _ _ _ _ _ fit; simp only [genericCreate] at fit; cases fit rfl
-    · intro _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ fit;
-      simp only [genericCall] at fit; cases fit rfl
-    · intro _ _ x fit; cases x <;>
-      {simp only [Xinst.run, Except.Fit] at fit; cases fit rfl}
-    · intro _ n fit; cases n
-      · simp only [Ninst.run, implies_true]
-      · simp only [Ninst.run] at fit; cases fit rfl
-      · simp only [Ninst.run, implies_true]
-    · intro _ fit; simp only [exec] at fit; cases fit rfl
+    · intro _ ne; simp only [executeCode] at ne; cases ne rfl
+    · intro _ ne; simp only [processMessage] at ne; cases ne rfl
+    · intro _ ne; simp only [processCreateMessage] at ne; cases ne rfl
+    · intro _ _ _ _ _ _ ne; simp only [genericCreate] at ne; cases ne rfl
+    · intro _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ne;
+      simp only [genericCall] at ne; cases ne rfl
+    · intro _ _ x ne; cases x <;>
+      {simp only [Xinst.run] at ne; cases ne rfl}
+    · intro _ n ne; cases n
+      · intro m _; simp only [Ninst.run]
+      · simp only [Ninst.run] at ne; cases ne rfl
+      · intro m _; simp only [Ninst.run]
+    · intro _ ne; simp only [exec] at ne; cases ne rfl
   case succ lim ih =>
     refine' ⟨_, _, _, _, _, _, _, _⟩
-    · intro _ fit lim' lt
+    · intro _ ne lim' lt
       rcases lim' with _ | lim'; {cases Nat.not_lt_zero _ lt}
       simp only [executeCode] at *
-      split at fit
-      · rw [ih.exec _ (lim_handleError.mt fit) lim' (by omega)]
-      · split at fit
+      split at ne
+      · rw [ih.exec _ (Fueled.mapResult_ne_exhausted ne) lim' (by omega)]
+      · split at ne
         · rename_i pos; rw [if_pos pos, if_pos pos]
         · rename_i neg; rw [if_neg neg, if_neg neg]
-          rw [ih.exec _ (lim_handleError.mt fit) lim' (by omega)]
-    · intro _ fit lim' lt
+          rw [ih.exec _ (Fueled.mapResult_ne_exhausted ne) lim' (by omega)]
+    · intro _ ne lim' lt
       rcases lim' with _ | lim'; {cases Nat.not_lt_zero _ lt}
       simp only [processMessage] at *
-      eee_bind fit
-      rw [ih.executeCode _ (of_fit_bind fit).1 lim' (by omega)]
-    · intro _ fit lim' lt
+      eee_bind ne
+      rw [ih.executeCode _ (Fueled.head_ne_exhausted_of_bind ne) lim' (by omega)]
+    · intro _ ne lim' lt
       rcases lim' with _ | lim'; {cases Nat.not_lt_zero _ lt}
       simp only [processCreateMessage] at *
-      rw [ih.processMessage _ (of_fit_bind fit).1 lim' (by omega)]
-    · intro _ _ _ _ _ _ fit lim' lt
+      rw [ih.processMessage _ (Fueled.head_ne_exhausted_of_bind ne) lim' (by omega)]
+    · intro _ _ _ _ _ _ ne lim' lt
       rcases lim' with _ | lim'; {cases Nat.not_lt_zero _ lt}
       simp only [genericCreate] at *
-      iterate 8 (eee_bind fit);
+      iterate 8 (eee_bind ne);
       split; {rfl}
-      rename_i neg; rw [if_neg neg] at fit; clear neg
-      eee_bind fit; eee_bind fit; split; {rfl}
-      rename_i neg; rw [if_neg neg] at fit; clear neg
-      eee_bind fit; eee_bind fit
-      have fit' := of_fit_liftToExecution (of_fit_bind fit).1
-      rw [ih.processCreateMessage _ fit' lim' (by omega)]
-    · intro _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ fit lim' lt
+      rename_i neg; rw [if_neg neg] at ne; clear neg
+      eee_bind ne; eee_bind ne; split; {rfl}
+      rename_i neg; rw [if_neg neg] at ne; clear neg
+      eee_bind ne; eee_bind ne
+      have ne' := Fueled.mapResult_ne_exhausted (Fueled.head_ne_exhausted_of_bind ne)
+      rw [ih.processCreateMessage _ ne' lim' (by omega)]
+    · intro _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ne lim' lt
       rcases lim' with _ | lim'; {cases Nat.not_lt_zero _ lt}
       simp only [genericCall] at *
-      eee_bind fit; split at fit
+      eee_bind ne; split at ne
       · rename_i pos; rw [if_pos pos, if_pos pos]
       · rename_i neg; rw [if_neg neg, if_neg neg]
-        iterate 3 (eee_bind fit)
-        have fit' := of_fit_liftToExecution (of_fit_bind fit).1
-        rw [ih.processMessage _ fit' lim' (by omega)]
-    · intro _ _ x fit lim' lt
+        iterate 3 (eee_bind ne)
+        have ne' := Fueled.mapResult_ne_exhausted (Fueled.head_ne_exhausted_of_bind ne)
+        rw [ih.processMessage _ ne' lim' (by omega)]
+    · intro _ _ x ne lim' lt
       rcases lim' with _ | lim'; {cases Nat.not_lt_zero _ lt}
       rcases x  with _ | _ | _ | _ | _ | _ <;> simp only [Xinst.run] at *
-      · iterate 8 (eee_bind fit)
-        rw [ih.genericCreate _ _ _ _ _ _ fit lim' (by omega)]
-      · iterate 19 (eee_bind fit)
+      · iterate 8 (eee_bind ne)
+        rw [ih.genericCreate _ _ _ _ _ _ ne lim' (by omega)]
+      · iterate 19 (eee_bind ne)
         split; {rfl}; rename_i neg
-        rw [if_neg neg] at fit; clear neg
-        rw [ih.genericCall _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ fit lim' (by omega)]
-      · iterate 17 (eee_bind fit)
+        rw [if_neg neg] at ne; clear neg
+        rw [ih.genericCall _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ne lim' (by omega)]
+      · iterate 17 (eee_bind ne)
         split; {rfl}; rename_i neg
-        rw [if_neg neg] at fit; clear neg
-        rw [ih.genericCall _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ fit lim' (by omega)]
-      · iterate 14 (eee_bind fit)
-        rw [ih.genericCall _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ fit lim' (by omega)]
-      · iterate 10 (eee_bind fit)
-        rw [ih.genericCreate _ _ _ _ _ _ fit lim' (by omega)]
-      · iterate 14 (eee_bind fit)
-        rw [ih.genericCall _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ fit lim' (by omega)]
-    · intro _ n fit lim' lt
+        rw [if_neg neg] at ne; clear neg
+        rw [ih.genericCall _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ne lim' (by omega)]
+      · iterate 14 (eee_bind ne)
+        rw [ih.genericCall _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ne lim' (by omega)]
+      · iterate 10 (eee_bind ne)
+        rw [ih.genericCreate _ _ _ _ _ _ ne lim' (by omega)]
+      · iterate 14 (eee_bind ne)
+        rw [ih.genericCall _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ne lim' (by omega)]
+    · intro _ n ne lim' lt
       rcases lim' with _ | lim'; {cases Nat.not_lt_zero _ lt}
       rcases n  with _ | _ | _ <;> simp only [Ninst.run] at *
-      rw [ih.xinstRun _ _ _ fit lim' (by omega)]
-    · intro _ fit lim' lt
+      rw [ih.xinstRun _ _ _ ne lim' (by omega)]
+    · intro _ ne lim' lt
       rcases lim' with _ | lim'; {cases Nat.not_lt_zero _ lt}
-      simp only [exec] at *; eee_bind fit; split
-      · simp only at fit
-        rw [← ih.ninstRun _ _ (of_fit_bind fit).1 lim' (by omega)]
-        eee_bind fit; apply ih.exec _ fit lim' (by omega)
-      · simp only at fit; eee_bind fit
-        apply ih.exec _ fit lim' (by omega)
+      simp only [exec] at *; eee_bind ne; split
+      · simp only at ne
+        rw [← ih.ninstRun _ _ (Fueled.head_ne_exhausted_of_bind ne) lim' (by omega)]
+        eee_bind ne; apply ih.exec _ ne lim' (by omega)
+      · simp only at ne; eee_bind ne
+        apply ih.exec _ ne lim' (by omega)
       · rfl
-
-def PrecompResult.Fit : PrecompResult → Prop
-  | .error e _ => e ≠ "RecursionLimit"
-  | .ok _ _ => True
-
-lemma fit_applyPrecompResult (evm : Evm) (res : PrecompResult) :
-    res.Fit → (applyPrecompResult evm res).Fit := by
-  intro h
-  cases res
-  · dsimp [applyPrecompResult, Except.Fit, Except.Lim, Except.toError?]
-    intro h2; injection h2 with h1; apply h; exact h1
-  · dsimp [applyPrecompResult, Except.Fit, Except.Lim, Except.toError?]
-    intro h2; contradiction
-
-lemma fit_forIn_err {α : Type} {xs : List Nat} {y : α} {f : Nat → α → Except (String × ℕ) (ForInStep α)}
-    (hf : ∀ n y err, f n y = Except.error err → err.1 ≠ "RecursionLimit") :
-    ∀ err, forIn xs y f = Except.error err → err.1 ≠ "RecursionLimit" := by
-  induction xs generalizing y with
-  | nil => intro err h; rw [List.forIn_nil] at h; contradiction
-  | cons x xs ih =>
-    intro err h; rw [List.forIn_cons] at h
-    cases h_f : f x y <;> dsimp [Except.bind, bind] at h <;> simp only [h_f] at h
-    · injection h with h1; rw [← h1]; apply hf _ _ _ h_f
-    · rename_i step
-      cases step <;> dsimp [Except.bind, Except.pure, bind, pure] at h
-      · contradiction
-      · apply ih _ h
-
-lemma fit_forIn_err_apply {α : Type} {xs : List Nat} {y : α} {f : Nat → α → Except (String × ℕ) (ForInStep α)}
-    {err : String × ℕ}
-    (h : forIn xs y f = Except.error err)
-    (hf : ∀ n y err', f n y = Except.error err' → err'.1 ≠ "RecursionLimit") :
-    err.1 ≠ "RecursionLimit" :=
-  fit_forIn_err hf err h
-
-@[simp] lemma PrecompResult.fit_ok (cost output) : (PrecompResult.ok cost output).Fit ↔ True := by rfl
-@[simp] lemma PrecompResult.fit_error (err cost) : (PrecompResult.error err cost).Fit ↔ ¬err = "RecursionLimit" := by rfl
-
-macro "precomp_fit" id:ident : tactic =>
-  `(tactic| (
-    dsimp only [$id:ident, PrecompResult.chargeGas]
-    repeat' (first
-      | split
-      | simp only [PrecompResult.fit_ok, PrecompResult.fit_error]
-      | decide
-      | (intro h
-         have h2 := congr_arg String.length h
-         repeat rw [String.length_append] at h2
-         have h3 : (toString "InvalidParameter : ").length = 19 := rfl
-         have h4 : "RecursionLimit".length = 14 := rfl
-         rw [h3, h4] at h2
-         omega)
-      | (intro h
-         have h2 := congr_arg String.length h
-         repeat rw [String.length_append] at h2
-         have h3 : (toString "ERROR : precompiled contract ").length = 29 := rfl
-         have h4 : "RecursionLimit".length = 14 := rfl
-         rw [h3, h4] at h2
-         omega)
-    )
-  ))
-
-lemma error_msg_ne_recursion_limit (adr : Adr) :
-  s!"ERROR : precompiled contract {adr} does not exist" ≠ "RecursionLimit" := by
-  intro h
-  have h2 := congr_arg String.length h
-  repeat rw [String.length_append] at h2
-  have h3 : (toString "ERROR : precompiled contract ").length = 29 := rfl
-  have h4 : "RecursionLimit".length = 14 := rfl
-  rw [h3, h4] at h2
-  omega
-
-lemma PrecompResult.fit_chargeGas (cost : ℕ) (evm : Evm)
-    (pr : Unit → PrecompResult) (fit : (pr ()).Fit) : (PrecompResult.chargeGas cost evm pr).Fit := by
-  simp only [PrecompResult.chargeGas]; split
-  · exact fit
-  · simp only [Fit, ne_eq, String.reduceEq, not_false_eq_true]
-
-lemma toExStrBNP_ne_RecursionLimit (data) (e) :
-    B8L.toExStrBNP data = Except.error e → e ≠ "RecursionLimit" := by
-  dsimp [B8L.toExStrBNP, Option.toExcept, Except.bind, bind, Except.pure, pure]
-  repeat' (first | split | intro h | injection h with h | subst h | decide | contradiction)
-
-lemma toExStrBNP2_ne_RecursionLimit (data) (e) :
-    B8L.toExStrBNP2 data = Except.error e → e ≠ "RecursionLimit" := by
-  dsimp [B8L.toExStrBNP2, Option.toExcept, Except.bind, bind, Except.pure, pure]
-  repeat' (first | split | intro h | injection h with h | subst h | decide | contradiction)
-
-lemma fit_catchWithOOGPrecomp {ξ cost cond} {e : Except String ξ} {err : String × ℕ}
-    (h : catchWithOOGPrecomp cost cond e = Except.error err)
-    (he : ∀ e', e = Except.error e' → e' ≠ "RecursionLimit") :
-    err.1 ≠ "RecursionLimit" := by
-  dsimp [catchWithOOGPrecomp] at h
-  split at h
-  · contradiction
-  · split at h
-    · injection h with h_inj; rw [← h_inj]; simp only []; decide
-    · injection h with h_inj; rw [← h_inj]; dsimp
-      intro h_eq
-      apply he _ rfl h_eq
-
-lemma fit_executePairingCheckInner (data) (cost) :
-    (executePairingCheckInner data cost).Fit := by
-  dsimp [executePairingCheckInner]
-  split
-  · dsimp [Except.bind, bind, Except.pure, pure]
-    simp [Except.Fit, Except.Lim, Except.toError?]
-  · rename_i h1
-    generalize hf : (forIn (List.range (data.length / 192)) (1 : BNF12) _ : Except (String × ℕ) BNF12) = fres
-    cases fres
-    · rename_i err
-      dsimp [Except.bind, bind, Except.pure, pure]
-      simp [Except.Fit, Except.Lim, Except.toError?]
-      apply fit_forIn_err_apply hf
-      intro n y err' h_err
-      dsimp [Except.bind, bind, Except.pure, pure] at h_err
-      repeat' (first
-        | split at h_err
-        | contradiction
-        | injection h_err with h_inj; subst h_inj
-        | dsimp only []; decide
-        | (apply fit_catchWithOOGPrecomp
-           · assumption
-           · intro e' h_eq
-             first
-             | exact toExStrBNP_ne_RecursionLimit _ _ h_eq
-             | exact toExStrBNP2_ne_RecursionLimit _ _ h_eq)
-      )
-    · dsimp [Except.bind, bind, Except.pure, pure]
-      simp [Except.Fit, Except.Lim, Except.toError?]
-
-lemma executePairingCheck_Fit (evm : Evm) : (executePairingCheck evm).Fit := by
-  dsimp [executePairingCheck]
-  apply PrecompResult.fit_chargeGas;
-  split
-  · simp [PrecompResult.Fit]
-  · rename (_ = _) => eq
-    have hh := eq ▸ (fit_executePairingCheckInner _ _)
-    simp [Except.toError?, Except.Fit, Except.Lim] at hh
-    apply hh
-
-lemma fit_execute_precomp (evm : Evm) (adr : Adr) :
-    (executePrecomp evm adr).Fit := by
-  apply fit_applyPrecompResult
-  dsimp only [precompileRun]; split
-  · precomp_fit executeEcrecover
-  · precomp_fit executeSha256
-  · precomp_fit executeRipemd160
-  · precomp_fit executeId
-  · precomp_fit executeModexp
-  · precomp_fit executeEcadd
-  · precomp_fit executeEcmul
-  · exact executePairingCheck_Fit evm
-  · precomp_fit executeBlake2F
-  · precomp_fit executePointEval
-  · precomp_fit executeBls12G1Add
-  · precomp_fit executeBls12G1Msm
-  · precomp_fit executeBls12G2Add
-  · precomp_fit executeBls12G2Msm
-  · precomp_fit executeBls12Pairing
-  · precomp_fit executeBls12MapFpToG1
-  · precomp_fit executeBls12MapFp2ToG2
-  · simp [PrecompResult.Fit, error_msg_ne_recursion_limit adr]
 
 lemma initEvm_eq (msg : Msg) : initEvm msg = { pc := 0, sta := (initEvm msg).sta, dyna := (initEvm msg).dyna } := rfl
 
 lemma of_execute_code' {msg : Msg} {xl : Xlot}
     {ex : Except (String × State × AdrSet × Tra) Devm}
     (good : xl.Good') (ec : ExecuteCode msg xl ex) :
-    ex.Fit ∧ ∃ lim, ∀ lim' > lim, executeCode msg lim' = ex := by
+    ∃ lim, ∀ lim' > lim, executeCode msg lim' = Fueled.ofExcept ex := by
   simp only [ExecuteCode] at ec; split at ec
   · rename (msg.codeAddress = none) => eq_none
     rcases ec with ⟨ex', xl_eq, eq_ex⟩
     rw [xl_eq] at good
-    simp [Xlot.Good'] at good
-    rcases good with ⟨fit', lim, eq_ex'⟩
-    have fit : ex.Fit := by
-      rw [← eq_ex]
-      exact (of_lim_handleError).mt fit'
-    refine' ⟨fit, lim + 1, _⟩
+    simp only [Xlot.Good'] at good
+    rcases good with ⟨lim, eq_ex'⟩
+    refine' ⟨lim + 1, _⟩
     intro lim' gt
     rcases lim' with _ | lim'; {cases Nat.not_lt_zero _ gt}
     simp only [executeCode]
     rw [eq_none]; simp only
-    rw [← eq_ex'] at fit'
     rw [initEvm_eq msg]
-    rw [← (saturation lim).exec _ fit' lim' (by omega), eq_ex', eq_ex]
+    rw [← (saturation lim).exec _
+          (Fueled.ne_exhausted_of_eq_ofExcept eq_ex') lim' (by omega)]
+    rw [eq_ex', Fueled.mapResult_ofExcept, eq_ex]
   · rename Adr => adr
     rename (msg.codeAddress = some adr) => eq_some
     split at ec
-    · rename_i pos; constructor
-      · rw [← ec.2]; intro ltd
-        cases fit_execute_precomp _ _ <| of_lim_handleError ltd
-      · refine' ⟨1, _⟩; intro lim' gt
-        rcases lim' with _ | lim'; {cases Nat.not_lt_zero _ gt}
-        simp only [executeCode, eq_some, if_pos pos]; exact ec.2
+    · rename_i pos
+      refine' ⟨1, _⟩; intro lim' gt
+      rcases lim' with _ | lim'; {cases Nat.not_lt_zero _ gt}
+      simp only [executeCode, eq_some, if_pos pos]
+      exact congrArg Fueled.ofExcept ec.2
     · rename_i neg; rcases ec with ⟨ex', xl_eq, eq_ex⟩
-      rw [xl_eq] at good; simp [Xlot.Good'] at good
-      rcases good with ⟨fit, lim, eq_ex'⟩
-      constructor
-      · rw [← eq_ex]; intro ltd;
-        cases fit <| of_lim_handleError ltd
-      · refine' ⟨lim + 1, _⟩; intro lim' gt
-        rcases lim' with _ | lim'; {cases Nat.not_lt_zero _ gt}
-        simp only [executeCode]
-        rw [eq_some]; simp only
-        rw [if_neg neg]; rw [← eq_ex'] at fit
-        rw [initEvm_eq msg]
-        rw [← (saturation lim).exec _ fit lim' (by omega), eq_ex', eq_ex]
+      rw [xl_eq] at good; simp only [Xlot.Good'] at good
+      rcases good with ⟨lim, eq_ex'⟩
+      refine' ⟨lim + 1, _⟩; intro lim' gt
+      rcases lim' with _ | lim'; {cases Nat.not_lt_zero _ gt}
+      simp only [executeCode]
+      rw [eq_some]; simp only
+      rw [if_neg neg]
+      rw [initEvm_eq msg]
+      rw [← (saturation lim).exec _
+            (Fueled.ne_exhausted_of_eq_ofExcept eq_ex') lim' (by omega)]
+      rw [eq_ex', Fueled.mapResult_ofExcept, eq_ex]
 
-lemma exists_forall_gt_ok_bind_eq {ξ υ ζ}
-    {f : Nat → υ → Except (String × ξ) ζ} {y : υ} {ex : Except (String × ξ) ζ} :
-    (∃ lim, ∀ lim' > lim, (f lim' y) = ex) →
-    ∃ lim, ∀ lim' > lim, (.ok y >>= f lim') = ex := id
-
-lemma exists_forall_gt_of_split {ξ υ ζ} {x : Except (String × ξ) υ}
-    {ex : Except (String × ξ) ζ} {p : υ → Prop}
-    {f : Nat → υ → Except (String × ξ) ζ} (split : Except.Split x ex p) :
-    (∀ y, x = .ok y → p y → ∃ lim, ∀ lim' > lim, (f lim' y) = ex) →
-    ∃ lim, ∀ lim' > lim, (x >>= f lim') = ex := by
-  intro prem
-  rcases split with ⟨⟨err, _⟩ , rw, rw'⟩ | ⟨y, eq, py⟩
-  · refine' ⟨0, _⟩; intro _ _; rw [rw, rw']; rfl
-  · rcases (prem _ eq py) with ⟨lim, fa⟩
-    refine' ⟨lim, _⟩; intro lim' gt; rw [eq]; apply fa _ gt
-
-syntax "efg_step_split " ident : tactic
-macro_rules
-  | `(tactic| efg_step_split $run) =>
-    `(tactic|
-      apply exists_forall_gt_of_split $run; clear $run;
-      intro _ temp $run; clear temp
-    )
+lemma exists_forall_gt_ok_bind_eq {ε υ ζ : Type}
+    {f : Nat → υ → Fueled ε ζ} {y : υ} {ex : Except ε ζ} :
+    (∃ lim, ∀ lim' > lim, (f lim' y) = Fueled.ofExcept ex) →
+    ∃ lim, ∀ lim' > lim, (Fueled.ok y >>= f lim') = Fueled.ofExcept ex := id
 
 lemma bind_eq_of_eq_ok_of_eq {ξ υ ζ} {x : Except ξ υ} {y} {z : Except ξ ζ}
     {f : υ → Except ξ ζ} (eq_ok : x = .ok y) (eq : f y = z) : (x >>= f) = z := by
@@ -1511,7 +1149,7 @@ macro_rules
       have temp := $eq; clear $eq;
       rcases temp with ⟨⟨_, _, _⟩, rw', rw⟩ | ⟨_, eq', $eq⟩ <;> [
         (rw [rw', rw]; rfl);
-        (apply bind_eq_of_eq_ok_of_eq eq'; clear eq')
+        (apply Fueled.bind_eq_of_eq_ok_of_eq eq'; clear eq')
       ]
     )
 
@@ -1538,44 +1176,6 @@ macro_rules
       ]
     )
 
-lemma of_process_message' {msg : Msg} {xl : Xlot}
-    {ex : Except (String × State × AdrSet × Tra) Devm} (good : xl.Good')
-    (run : ProcessMessage msg xl ex) :
-    ex.Fit ∧ ∃ lim, ∀ lim' > lim, processMessage msg lim' = ex := by
-  simp only [ProcessMessage] at run; constructor
-  · fit_step_splitXl run fit_benvAfterTransfer
-    fit_step_exec run good of_execute_code' id
-    split at run <;> (rw [← run]; apply fit_ok)
-  · apply Exists.imp forall_gt_of_forall_gt_succ_pred
-    simp only [processMessage]
-    efg_step_splitXl run;
-    have temp := run; clear run;
-    rcases temp with ⟨ex', runs, run⟩;
-    have temp := of_execute_code' good runs;
-    clear good runs;
-    rcases temp with ⟨fit, lim, run_eq⟩;
-    clear fit;
-    refine' ⟨lim + 1, _⟩;
-    intro lim' gt;
-    have gt' : lim'.pred > lim :=
-    ( by cases lim' <;>
-         [ (cases Nat.not_lt_zero _ gt);
-           (exact Nat.lt_of_succ_lt_succ gt) ] );
-    rw [run_eq lim'.pred gt'];
-    clear gt gt' run_eq;
-    eq_split run;
-    eq_ite run <;> exact run
-
-lemma processCreateMessage.fit_chargeCodeGas {evm : Devm} :
-    (processCreateMessage.chargeCodeGas evm).Fit := by
-  simp only [processCreateMessage.chargeCodeGas]; intro ltd
-  split at ltd
-  · injection ltd; contradiction
-  · fit_bind_step ltd fit_chargeGas
-    split at ltd
-    · injection ltd; contradiction
-    · cases ltd
-
 syntax "efg_step_exec " ident ident term:max : tactic
 macro_rules
   | `(tactic| efg_step_exec $run $good $lem) =>
@@ -1584,8 +1184,7 @@ macro_rules
       rcases temp with ⟨ex', runs, $run⟩;
       have temp := $lem $good runs;
       clear $good runs;
-      rcases temp with ⟨fit, lim, run_eq⟩;
-      clear fit;
+      rcases temp with ⟨lim, run_eq⟩;
       refine' ⟨lim + 1, _⟩;
       intro lim' gt;
       have gt' : lim'.pred > lim :=
@@ -1593,17 +1192,16 @@ macro_rules
            [ (cases Nat.not_lt_zero _ gt);
              (exact Nat.lt_of_succ_lt_succ gt) ] );
       rw [run_eq lim'.pred gt'];
-      clear gt gt' run_eq;
+      (try rw [Fueled.mapResult_ofExcept]);
+      clear gt gt' run_eq
     )
 
 syntax "efg_end_exec " ident ident term:max : tactic
 macro_rules
   | `(tactic| efg_end_exec $run $good $lem) =>
     `(tactic|
-      --have temp := $run; clear $run;
-      --rcases temp with ⟨ex', runs, $run⟩;
       have temp := $lem $good $run; clear $good $run;
-      rcases temp with ⟨fit, lim, run_eq⟩; clear fit;
+      rcases temp with ⟨lim, run_eq⟩;
       refine' ⟨lim + 1, _⟩;
       intro lim' gt;
       have gt' : lim'.pred > lim :=
@@ -1613,29 +1211,31 @@ macro_rules
       rw [run_eq lim'.pred gt']
     )
 
+lemma of_process_message' {msg : Msg} {xl : Xlot}
+    {ex : Except (String × State × AdrSet × Tra) Devm} (good : xl.Good')
+    (run : ProcessMessage msg xl ex) :
+    ∃ lim, ∀ lim' > lim, processMessage msg lim' = Fueled.ofExcept ex := by
+  simp only [ProcessMessage] at run
+  apply Exists.imp forall_gt_of_forall_gt_succ_pred
+  simp only [processMessage]
+  efg_step_splitXl run
+  efg_step_exec run good of_execute_code'
+  eq_split run
+  eq_ite run <;> exact congrArg Fueled.ofExcept run
+
 lemma of_process_create_message' {msg : Msg} {xl : Xlot}
     {ex : Except (String × State × AdrSet × Tra) Devm} (good : xl.Good')
     (run : ProcessCreateMessage msg xl ex) :
-    ex.Fit ∧
-      ∃ lim, ∀ lim' > lim, processCreateMessage msg lim' = ex := by
-  simp only [ProcessCreateMessage] at run; constructor
-  · fit_step_exec run good of_process_message' id
-    rename Devm => evm; split at run
-    · split at run; {rw [← run]; apply fit_ok}
-      rename_i eq; split at run
-      · rw [← run]; apply fit_ok
-      · rw [← run]; intro ltd; injection ltd with rw
-        have fit := @processCreateMessage.fit_chargeCodeGas evm
-        rw [eq, rw] at fit; cases fit rfl
-    · rw [← run]; apply fit_ok
-  · apply Exists.imp forall_gt_of_forall_gt_succ_pred
-    simp only [processCreateMessage]
-    efg_step_exec run good of_process_message'
-    eq_split run; eq_ite run
-    · split at run <;> rename_i rw <;> rw [rw]
-      · exact run
-      · eq_ite run <;> exact run
-    · exact run
+    ∃ lim, ∀ lim' > lim, processCreateMessage msg lim' = Fueled.ofExcept ex := by
+  simp only [ProcessCreateMessage] at run
+  apply Exists.imp forall_gt_of_forall_gt_succ_pred
+  simp only [processCreateMessage]
+  efg_step_exec run good of_process_message'
+  eq_split run; eq_ite run
+  · split at run <;> rename_i rw <;> rw [rw]
+    · exact congrArg Fueled.ofExcept run
+    · eq_ite run <;> exact congrArg Fueled.ofExcept run
+  · exact congrArg Fueled.ofExcept run
 
 syntax "efg_step_exists " ident : tactic
 macro_rules
@@ -1651,17 +1251,9 @@ lemma exists_forall_gt_imp {p q : Nat → Prop} :
     (∀ n, p n → q n) → (∃ n, ∀ m > n, p m) → (∃ n, ∀ m > n, q m) := by
   intro imp ⟨n, fa⟩; refine ⟨n, λ m gt => imp m (fa m gt)⟩
 
-lemma fit_liftToExecution {evm : Devm}
-    {f : Except (String × State × AdrSet × Tra) Devm}
-    (fit : f.Fit) : (liftToExecution evm f).Fit := by
-  cases f
-  · exact fit
-  · simp only [liftToExecution]; intro ltd; cases ltd
-
-lemma ok_bind' {ξ υ ζ} {y : υ}
-    {f : υ → Except ξ ζ} {z : Except ξ ζ}
-    (eq : f y = z) : (.ok y >>= f) = z := by
-  rw [ok_bind]; exact eq
+lemma ok_bind' {ε : Type} {υ ζ : Type} {y : υ}
+    {f : υ → Fueled ε ζ} {z : Fueled ε ζ}
+    (eq : f y = z) : (Fueled.ok y >>= f) = z := eq
 
 syntax "efg_step_early " ident : tactic
 macro_rules
@@ -1670,7 +1262,7 @@ macro_rules
       have temp := $run; clear $run;
       rcases or_of_ite temp with ⟨pos, $run⟩ | ⟨neg, $run⟩ <;> clear temp <;> [
         ( apply exists_forall_gt_imp (λ _ => ite_eq_left_of_true pos);
-          simp only [bind_pure]; clear pos );
+          (try simp only [bind_pure]); clear pos );
         ( apply exists_forall_gt_imp (λ _ => ite_eq_right_of_false neg ∘ ok_bind');
           clear neg )
       ]
@@ -1679,37 +1271,24 @@ macro_rules
 lemma of_generic_create' {sevm : Sevm} {devm : Devm} {endowment : B256} {newAddress : Adr}
     {memoryIndex memorySize : ℕ} {xl : Xlot} {ex : Execution} (good : xl.Good')
     (run : GenericCreate sevm devm endowment newAddress memoryIndex memorySize xl ex) :
-    ex.Fit ∧
-      ∃ lim,
-        ∀ lim' > lim,
-          genericCreate sevm devm endowment
-            newAddress memoryIndex memorySize lim' = ex := by
-  simp only [GenericCreate] at run; constructor
-  · fit_step_exists run
-    fit_step_splitXl run (fit_assert (by decide))
-    iterate 3 (fit_step_exists run);
-    fit_step_splitXl run fit_assertDynamic
-    iterate 2 (fit_step_exists run);
-    split at run; {rw [← run.2]; apply fit_push}
-    fit_step_exists run
-    split at run; {rw [← run.2]; apply fit_push}
-    fit_step_exists run
-    fit_step_exec run good of_process_create_message' fit_liftToExecution
-    split at run <;> (rw [← run]; apply fit_push)
-  · apply Exists.imp forall_gt_of_forall_gt_succ_pred
-    simp only [genericCreate]
-    efg_step_exists run; efg_step_splitXl run
-    iterate 3 (efg_step_exists run)
-    efg_step_splitXl run; iterate 2 (efg_step_exists run)
-    efg_step_early run; {refine' ⟨0, _⟩; intro _ _; exact run.2}
-    efg_step_exists run
-    efg_step_early run; {refine' ⟨0, _⟩; intro _ _; exact run.2}
-    efg_step_exists run
-    efg_step_exec run good of_process_create_message'
-    eq_split run; eq_ite run <;> exact run
-
-lemma fit_map_rev {ξ υ ζ} {x : Except (String × ξ) υ}
-    {f : υ → ζ} : x.Fit → (x <&> f).Fit  := of_lim_map_rev.mt
+    ∃ lim,
+      ∀ lim' > lim,
+        genericCreate sevm devm endowment
+          newAddress memoryIndex memorySize lim' = Fueled.ofExcept ex := by
+  simp only [GenericCreate] at run
+  apply Exists.imp forall_gt_of_forall_gt_succ_pred
+  simp only [genericCreate]
+  efg_step_exists run; efg_step_splitXl run
+  iterate 3 (efg_step_exists run)
+  efg_step_splitXl run; iterate 2 (efg_step_exists run)
+  efg_step_early run;
+  {refine' ⟨0, _⟩; intro _ _; exact congrArg Fueled.ofExcept run.2}
+  efg_step_exists run
+  efg_step_early run;
+  {refine' ⟨0, _⟩; intro _ _; exact congrArg Fueled.ofExcept run.2}
+  efg_step_exists run
+  efg_step_exec run good of_process_create_message'
+  eq_split run; eq_ite run <;> exact congrArg Fueled.ofExcept run
 
 lemma of_generic_call' {sevm : Sevm} {devm : Devm} {gas : Nat} {value : B256}
     {caller target codeAddress : Adr} {shouldTransferValue isStaticcall : Bool}
@@ -1719,25 +1298,19 @@ lemma of_generic_call' {sevm : Sevm} {devm : Devm} {gas : Nat} {value : B256}
       GenericCall sevm devm gas value caller target codeAddress
         shouldTransferValue isStaticcall input_index input_size
         output_index output_size code disablePrecompiles xl ex ) :
-    ex.Fit ∧
-      ∃ lim, ∀ lim' > lim,
-        genericCall sevm devm gas value caller target codeAddress
-          shouldTransferValue isStaticcall input_index input_size
-          output_index output_size code disablePrecompiles lim' = ex := by
-  simp only [GenericCall] at run; constructor
-  · fit_step_exists run
-    split at run; {rw [← run.2]; apply fit_push}
-    fit_step_exists run
-    fit_step_exists run
-    fit_step_exec run good of_process_message' fit_liftToExecution
-    split at run <;>
-    {fit_step_split run fit_push; rw [← run]; apply fit_ok}
-  · apply Exists.imp forall_gt_of_forall_gt_succ_pred
-    simp only [genericCall]; efg_step_exists run;
-    efg_step_early run; {refine' ⟨0, _⟩; intro _ _; exact run.2}
-    efg_step_exists run; efg_step_exists run;
-    efg_step_exec run good of_process_message'; eq_split run
-    eq_ite run <;> {eq_split run; exact run}
+    ∃ lim, ∀ lim' > lim,
+      genericCall sevm devm gas value caller target codeAddress
+        shouldTransferValue isStaticcall input_index input_size
+        output_index output_size code disablePrecompiles lim' =
+          Fueled.ofExcept ex := by
+  simp only [GenericCall] at run
+  apply Exists.imp forall_gt_of_forall_gt_succ_pred
+  simp only [genericCall]; efg_step_exists run;
+  efg_step_early run;
+  {refine' ⟨0, _⟩; intro _ _; exact congrArg Fueled.ofExcept run.2}
+  efg_step_exists run; efg_step_exists run;
+  efg_step_exec run good of_process_message'; eq_split run
+  eq_ite run <;> {eq_split run; exact congrArg Fueled.ofExcept run}
 
 syntax "efg_step_ite " ident : tactic
 macro_rules
@@ -1755,39 +1328,15 @@ macro_rules
 
 lemma Xinst.run_eq_of_run {sevm} {devm} {x : Xinst} {xl : Xlot}
     {ex} (good : xl.Good') (run : Xinst.Run sevm devm x xl ex) :
-    ex.Fit ∧ ∃ lim, ∀ lim' > lim, Xinst.run sevm devm x lim' = ex := by
+    ∃ lim, ∀ lim' > lim, Xinst.run sevm devm x lim' = Fueled.ofExcept ex := by
   cases x <;>
-    ( constructor <;>
-      [ skip;
-        ( apply Exists.imp forall_gt_of_forall_gt_succ_pred ;
-          simp only [Xinst.run] ) ] )
-  · fit_step_splitXl run fit_pop
-    fit_step_splitXl run fit_popToNat
-    fit_step_splitXl run fit_popToNat
-    fit_step_exists run; fit_step_exists run
-    fit_step_splitXl run fit_chargeGas
-    fit_step_exists run; fit_step_exists run
-    exact (of_generic_create' good run).1
+    ( apply Exists.imp forall_gt_of_forall_gt_succ_pred ;
+      simp only [Xinst.run] )
   · iterate 3 (efg_step_splitXl run)
     iterate 2 (efg_step_exists run)
     efg_step_splitXl run
     iterate 2 (efg_step_exists run)
     efg_end_exec run good of_generic_create'
-  · fit_step_splitXl run fit_pop
-    fit_step_splitXl run (fit_map_rev fit_pop)
-    fit_step_splitXl run fit_pop
-    iterate 4 (fit_step_splitXl run fit_popToNat)
-    iterate 3 (fit_step_exists run)
-    fit_step_exists run
-    iterate 3 (fit_step_exists run)
-    fit_step_exists run
-    fit_step_splitXl run fit_chargeGas
-    fit_step_splitXl run (fit_assert (by decide))
-    fit_step_exists run; fit_step_exists run
-    split at run
-    · fit_step_splitXl run fit_push
-      rw [← run.2]; apply fit_ok
-    · exact (of_generic_call' good run).1
   · iterate 7 (efg_step_splitXl run)
     iterate 3 (efg_step_exists run)
     efg_step_exists run;
@@ -1796,21 +1345,8 @@ lemma Xinst.run_eq_of_run {sevm} {devm} {x : Xinst} {xl : Xlot}
     efg_step_splitXl run; efg_step_splitXl run;
     efg_step_exists run; efg_step_exists run;
     efg_step_ite run
-    · efg_step_splitXl run; refine ⟨0, λ _ _ => run.2⟩
+    · efg_step_splitXl run; refine ⟨0, λ _ _ => congrArg Fueled.ofExcept run.2⟩
     · efg_end_exec run good of_generic_call'
-  · fit_step_splitXl run fit_pop
-    fit_step_splitXl run (fit_map_rev fit_pop)
-    fit_step_splitXl run fit_pop
-    iterate 4 (fit_step_splitXl run fit_popToNat)
-    iterate 4 (fit_step_exists run)
-    fit_step_exists run
-    fit_step_exists run; fit_step_exists run
-    fit_step_splitXl run fit_chargeGas
-    fit_step_exists run; fit_step_exists run
-    split at run
-    · fit_step_splitXl run fit_push
-      rw [← run.2]; apply fit_ok
-    · exact (of_generic_call' good run).1
   · iterate 7 (efg_step_splitXl run)
     iterate 3 (efg_step_exists run)
     efg_step_exists run;
@@ -1819,18 +1355,8 @@ lemma Xinst.run_eq_of_run {sevm} {devm} {x : Xinst} {xl : Xlot}
     efg_step_splitXl run
     iterate 2 (efg_step_exists run)
     efg_step_ite run
-    · efg_step_splitXl run; refine ⟨0, λ _ _ => run.2⟩
+    · efg_step_splitXl run; refine ⟨0, λ _ _ => congrArg Fueled.ofExcept run.2⟩
     · efg_end_exec run good of_generic_call'
-  · fit_step_splitXl run fit_pop
-    fit_step_splitXl run (fit_map_rev fit_pop)
-    iterate 4 (fit_step_splitXl run fit_popToNat)
-    iterate 3 (fit_step_exists run)
-    fit_step_exists run
-    fit_step_exists run
-    fit_step_exists run
-    fit_step_splitXl run fit_chargeGas
-    fit_step_exists run;
-    exact (of_generic_call' good run).1
   · iterate 6 (efg_step_splitXl run)
     iterate 3 (efg_step_exists run)
     efg_step_exists run;
@@ -1839,28 +1365,11 @@ lemma Xinst.run_eq_of_run {sevm} {devm} {x : Xinst} {xl : Xlot}
     efg_step_splitXl run
     efg_step_exists run
     efg_end_exec run good of_generic_call'
-  · fit_step_splitXl run fit_pop
-    iterate 2 (fit_step_splitXl run fit_popToNat)
-    fit_step_splitXl run fit_pop
-    iterate 3 (fit_step_exists run)
-    fit_step_splitXl run fit_chargeGas
-    iterate 2 (fit_step_exists run)
-    exact (of_generic_create' good run).1
   · iterate 4 (efg_step_splitXl run)
     iterate 3 (efg_step_exists run)
     efg_step_splitXl run
     iterate 2 (efg_step_exists run)
     efg_end_exec run good of_generic_create'
-  · fit_step_splitXl run fit_pop
-    fit_step_splitXl run (fit_map_rev fit_pop)
-    iterate 4 (fit_step_splitXl run fit_popToNat)
-    iterate 3 (fit_step_exists run)
-    fit_step_exists run
-    fit_step_exists run
-    fit_step_exists run
-    fit_step_splitXl run fit_chargeGas
-    fit_step_exists run;
-    exact (of_generic_call' good run).1
   · iterate 6 (efg_step_splitXl run)
     iterate 3 (efg_step_exists run)
     efg_step_exists run;
@@ -1870,174 +1379,112 @@ lemma Xinst.run_eq_of_run {sevm} {devm} {x : Xinst} {xl : Xlot}
     efg_step_exists run
     efg_end_exec run good of_generic_call'
 
-lemma cast_fit {ξ υ ζ} {erx : String × ξ}
-    (fit : (.error erx : Except (String × ξ) υ).Fit) :
-    (.error erx : Except (String × ξ) ζ).Fit := by
-  simp only [Except.Fit] at *; apply mt _ fit
-  simp only [Except.toError?, Except.Lim] at *
-  simp only [fit, imp_self]
-
 lemma Ninst.run_of_run' {pc} {sevm} {devm} {n : Ninst} (xl : Xlot)
     {ex} (good : xl.Good') (run : Ninst.Run' pc sevm devm n xl ex) :
-    ex.Fit ∧ ∃ lim, ∀ lim' > lim, Ninst.run ⟨pc, sevm, devm⟩ n lim' = ex := by
+    ∃ lim, ∀ lim' > lim,
+      Ninst.run ⟨pc, sevm, devm⟩ n lim' = Fueled.ofExcept ex := by
   rcases n with r | x | ⟨xs, le⟩
   · cases xl
     · simp only [Ninst.Run'] at run
-      simp only [Ninst.run]; constructor;
-      · rw [← run]; apply Rinst.fit_run
-      · refine ⟨0, λ _ _ => run⟩;
+      refine ⟨0, λ _ _ => ?_⟩
+      simp only [Ninst.run]
+      exact congrArg Fueled.ofExcept run
     · revert run; simp [Ninst.Run']
-  · simp only [Ninst.Run'] at run; constructor
-    · exact (Xinst.run_eq_of_run good run).1
-    · rcases Xinst.run_eq_of_run good run with ⟨fit, lim, run_eq⟩;
-      refine' ⟨lim + 1, λ lim' gt => _⟩
-      rcases lim' with _ | lim'; {cases Nat.not_lt_zero _ gt}
-      simp only [Ninst.run];
-      apply run_eq lim' (by omega)
+  · simp only [Ninst.Run'] at run
+    rcases Xinst.run_eq_of_run good run with ⟨lim, run_eq⟩
+    refine' ⟨lim + 1, λ lim' gt => _⟩
+    rcases lim' with _ | lim'; {cases Nat.not_lt_zero _ gt}
+    simp only [Ninst.run]
+    apply run_eq lim' (by omega)
   · cases xl
-    · simp [Ninst.Run'] at run; constructor
-      · rw [← run]; intro ltd
-        fit_bind_step ltd fit_chargeGas
-        exact fit_push ltd
-      · simp only [Ninst.run]; refine' ⟨0, λ _ _ => run⟩
+    · simp only [Ninst.Run'] at run
+      refine ⟨0, λ _ _ => ?_⟩
+      simp only [Ninst.run]
+      rw [Fueled.lift_bind_lift]
+      exact congrArg Fueled.ofExcept run
     · revert run; simp [Ninst.Run']
-
-lemma Except.bind_eq_of_is_error {ξ υ : Type} {e : Except ξ υ}
-    {f : υ → Except ξ υ} : e.IsError → (e >>= f) = e := by
-  intro h; cases e
-  · rfl
-  · cases h
-
-lemma Jinst.fit_run {evm} {j : Jinst} : (Jinst.run evm j).Fit := by
-  intro ltd; cases j <;> simp only [Jinst.run] at ltd
-  case jumpi =>
-    fit_bind_step ltd fit_pop
-    fit_bind_step ltd fit_pop
-    fit_bind_step ltd fit_chargeGas
-    split at ltd
-    · fit_bind_step ltd fit_ok; cases ltd
-    · fit_bind_step ltd (fit_assert (by decide))
-      fit_bind_step ltd fit_ok; cases ltd
-  case jumpdest =>
-    fit_bind_step ltd fit_chargeGas; cases ltd
-  case jump =>
-    fit_bind_step ltd fit_pop
-    fit_bind_step ltd fit_chargeGas
-    fit_bind_step ltd (fit_assert (by decide))
-    cases ltd
-
-lemma Linst.fit_run {sevm} {devm} {l : Linst} : (Linst.run sevm devm l).Fit := by
-  intro ltd; cases l
-  case stop => cases ltd
-  case rev =>
-    fit_bind_step ltd fit_popToNat
-    fit_bind_step ltd fit_popToNat
-    fit_bind_step ltd fit_chargeGas
-    simp [Except.Lim, Except.toError?] at ltd
-  case ret =>
-    fit_bind_step ltd fit_popToNat
-    fit_bind_step ltd fit_popToNat
-    fit_bind_step ltd fit_chargeGas
-    simp [Except.Lim, Except.toError?] at ltd
-  case dest =>
-    simp only [Devm.popToAdr, bind_map_left, Linst.run] at ltd
-    fit_bind_step ltd fit_pop
-    fit_bind_step ltd fit_ok
-    fit_bind_step ltd fit_ok
-    fit_bind_step ltd fit_ok
-    fit_bind_step ltd fit_chargeGas
-    fit_bind_step ltd fit_assertDynamic
-    have ne : "ERROR : InsufficientBalanceError" ≠ "RecursionLimit" := by decide
-    fit_bind_step ltd (fit_to_except ne)
-    fit_bind_step ltd fit_ok
-    split at ltd <;> simp [Except.Lim, Except.toError?] at ltd
 
 lemma of_exec' :
     ∀ (pc : Nat) (sevm : Sevm) (devm : Devm) (exn : Execution),
       Exec pc sevm devm exn →
-      exn.Fit ∧
-        ∃ lim, ∀ lim' > lim, (exec ⟨pc, sevm, devm⟩ lim' = exn) := by
+      ∃ lim, ∀ lim' > lim, (exec ⟨pc, sevm, devm⟩ lim' = Fueled.ofExcept exn) := by
   apply Exec.rec
-  · intro pc sevm devm eq; refine' ⟨_, 0, _⟩
-    · intro ltd; injection ltd; contradiction
-    · intro lim' gt; cases lim'; {cases Nat.not_lt_zero _ gt}
-      simp only [exec, Option.toExcept, Evm.getInst, eq]; rfl
+  · intro pc sevm devm eq; refine' ⟨0, _⟩
+    intro lim' gt; cases lim'; {cases Nat.not_lt_zero _ gt}
+    simp only [exec, Option.toExcept, Evm.getInst, eq]; rfl
   · intro pc sevm devm n err devm' nat run
-    rcases Ninst.run_of_run' .none .intro run with ⟨fit, lim, eq⟩
-    refine' ⟨fit, lim + 2, _⟩
+    rcases Ninst.run_of_run' .none .intro run with ⟨lim, eq⟩
+    refine' ⟨lim + 2, _⟩
     intro lim' gt; rcases lim' with _ | lim'; {cases Nat.not_lt_zero _ gt}
     simp only [Ninst.At] at nat
-    simp only [Evm.getInst, exec, Option.toExcept, nat, ok_bind]
+    simp only [Evm.getInst, exec, Option.toExcept, nat, Fueled.ofExcept_ok_bind]
     rw [eq lim' (by omega)]; rfl
-  · intro pc sevm devm n sevm_ devm_ exn_ exn devm' nat run exc ⟨fit_, limExec, exec_eq⟩
+  · intro pc sevm devm n sevm_ devm_ exn_ exn devm' nat run exc ⟨limExec, exec_eq⟩
     rcases
       Ninst.run_of_run'
         (.some ⟨sevm_, devm_, exn_⟩)
-        ⟨fit_, limExec + 1, exec_eq _ (by omega)⟩
+        ⟨limExec + 1, exec_eq _ (by omega)⟩
         run
-      with ⟨fit, limRun, run_eq⟩
-    refine' ⟨fit, (max limExec limRun) + 1, _⟩
+      with ⟨limRun, run_eq⟩
+    refine' ⟨(max limExec limRun) + 1, _⟩
     intro lim' gt; rcases lim' with _ | lim'; {cases Nat.not_lt_zero _ gt}
     simp only [Ninst.At] at nat
-    simp only [Evm.getInst, ok_bind, exec, Option.toExcept, nat]
+    simp only [Evm.getInst, exec, Option.toExcept, nat, Fueled.ofExcept_ok_bind]
     rw [run_eq lim' (by omega)]; rfl
-  · intro pc sevm devm n devm' exn nat run exc ⟨fit, limExec, exec_eq⟩
+  · intro pc sevm devm n devm' exn nat run exc ⟨limExec, exec_eq⟩
     rcases Ninst.run_of_run' .none .intro run
-      with ⟨temp, limRun, run_eq⟩; clear temp
-    refine' ⟨fit, (max limExec limRun) + 1, _⟩
+      with ⟨limRun, run_eq⟩
+    refine' ⟨(max limExec limRun) + 1, _⟩
     intro lim' gt; rcases lim' with _ | lim'; {cases Nat.not_lt_zero _ gt}
     simp only [Ninst.At] at nat
-    simp only [Evm.getInst, ok_bind, exec, Option.toExcept, nat]
+    simp only [Evm.getInst, exec, Option.toExcept, nat, Fueled.ofExcept_ok_bind]
     rw [run_eq lim' (by omega)]; apply exec_eq _ (by omega)
   · intro pc sevm devm n sevm_ devm_ exn_ devm' exn nat run exc_ exc
-      ⟨fit_, limExec_, eq_⟩
-      ⟨fit, limExec, eq⟩
+      ⟨limExec_, eq_⟩
+      ⟨limExec, eq⟩
     rcases
       Ninst.run_of_run'
         (.some ⟨sevm_, devm_, exn_⟩)
-        ⟨fit_, limExec_ + 1, eq_ _ (by omega)⟩
+        ⟨limExec_ + 1, eq_ _ (by omega)⟩
         run
-      with ⟨fitRun, limRun, run_eq⟩
-    refine' ⟨fit, max limRun limExec + 1, _⟩
+      with ⟨limRun, run_eq⟩
+    refine' ⟨max limRun limExec + 1, _⟩
     intro lim' gt; rcases lim' with _ | lim'; {cases Nat.not_lt_zero _ gt}
     simp only [Ninst.At] at nat
-    simp only [Evm.getInst, ok_bind, _root_.exec, Option.toExcept, nat]
+    simp only [Evm.getInst, _root_.exec, Option.toExcept, nat, Fueled.ofExcept_ok_bind]
     rw [run_eq lim' (by omega)]
     apply eq _ (by omega)
   · intro pc sevm devm j err devm' nat run
     simp only [Jinst.At] at nat
     simp only [Jinst.Run] at run
-    constructor
-    · have fit := @Jinst.fit_run ⟨pc, sevm, devm⟩ j
-      rw [run] at fit; exact fit
-    · refine' ⟨0, _⟩; intro lim gt
-      rcases lim with _ | lim; {cases Nat.not_lt_zero _ gt}
-      simp only [Evm.getInst, exec, nat, Option.toExcept, ok_bind, run]; rfl
-  · intro pc sevm devm j pc' devm' exn jat run exc ⟨fit, lim, exec_eq⟩
+    refine' ⟨0, _⟩; intro lim gt
+    rcases lim with _ | lim; {cases Nat.not_lt_zero _ gt}
+    simp only [Evm.getInst, exec, nat, Option.toExcept, Fueled.ofExcept_ok_bind, run]; rfl
+  · intro pc sevm devm j pc' devm' exn jat run exc ⟨lim, exec_eq⟩
     simp only [Jinst.At] at jat
     simp only [Jinst.Run] at run
-    refine' ⟨fit, lim + 1, _⟩; intro lim' gt
+    refine' ⟨lim + 1, _⟩; intro lim' gt
     rcases lim' with _ | lim'; {cases Nat.not_lt_zero _ gt}
-    simp only [Evm.getInst, exec, jat, Option.toExcept, ok_bind, run]
+    simp only [Evm.getInst, exec, jat, Option.toExcept, Fueled.ofExcept_ok_bind, run]
     apply exec_eq _ (by omega)
   · intro pc sevm devm l exn lat run
     simp only [Linst.At] at lat
     simp only [Linst.Run] at run
-    have fit := @Linst.fit_run sevm devm l; rw [run] at fit
-    refine' ⟨fit, 0, _⟩; intro lim' gt
+    refine' ⟨0, _⟩; intro lim' gt
     rcases lim' with _ | lim'; {cases Nat.not_lt_zero _ gt}
-    simp only [Evm.getInst, exec, lat, Option.toExcept, ok_bind, run]
+    simp only [Evm.getInst, exec, lat, Option.toExcept, Fueled.ofExcept_ok_bind, run]
 
---def Except.Fit {ξ υ} (ex : Except (String × ξ) υ) : Prop := ¬ ex.Lim
-def Xlot.Good {ξ υ} (lim : Nat) (ex : Except (String × ξ) υ) : Xlot → Prop
+def Xlot.Good (lim : Nat) : Xlot → Prop
   | .none => True
   | .some ⟨sevm, devm, exn⟩ =>
-    ∃ lim' < lim, exec { pc := 0, sta := sevm, dyna := devm } lim' = exn ∧ (exn.Lim → ex.Lim)
+    ∃ lim' < lim,
+      exec { pc := 0, sta := sevm, dyna := devm } lim' = Fueled.ofExcept exn
 
 syntax "bind_step_good " ident rcasesPat : tactic
 macro_rules
   | `(tactic| bind_step_good $h $pat) => `(tactic|
-      rcases of_bind_eq $h with im | ⟨$pat, temp_eq, eq'⟩;
+      (try rw [Fueled.assert_eq] at $h:ident);
+      rcases Fueled.of_lift_bind_eq $h with im | ⟨$pat, temp_eq, eq'⟩;
       { refine ⟨.none, .intro, .inl ?_⟩;
         first | exact im | (rcases im with ⟨x, h1, h2⟩; exact ⟨x, h1, h2, rfl⟩) };
       clear $h; rename' eq' => $h;
@@ -2049,28 +1496,7 @@ macro_rules
 syntax "okStep1 " ident rcasesPat : tactic
 macro_rules
   | `(tactic| okStep1 $h $pat1) => `(tactic|
-      rcases of_bind_eq $h with ⟨_, ⟨_⟩, _⟩ | ⟨$pat1, temp_eq, eq'⟩;
-      clear $h; rename' eq' => $h;
-      apply Exists.imp
-        (λ _ (conj : _ ∧ _) => ⟨conj.1, ⟨_, (Except.ok.inj temp_eq).symm, conj.2⟩⟩);
-      clear temp_eq
-    )
-
-syntax "okStep2 " ident rcasesPat rcasesPat : tactic
-macro_rules
-  | `(tactic| okStep2 $h $pat1 $pat2) => `(tactic|
-      rcases of_bind_eq $h with ⟨_, ⟨_⟩, _⟩ | ⟨⟨$pat1, $pat2⟩, temp_eq, eq'⟩;
-      clear $h; rename' eq' => $h;
-      apply Exists.imp
-        (λ _ (conj : _ ∧ _) => ⟨conj.1, ⟨_, (Except.ok.inj temp_eq).symm, conj.2⟩⟩);
-      clear temp_eq
-    )
-
-syntax "okStep5 " ident rcasesPat rcasesPat rcasesPat rcasesPat rcasesPat : tactic
-macro_rules
-  | `(tactic| okStep5 $h $pat1 $pat2 $pat3 $pat4 $pat5) => `(tactic|
-      rcases of_bind_eq $h
-        with ⟨_, ⟨_⟩, _⟩ | ⟨⟨$pat1, $pat2, $pat3, $pat4, $pat5⟩, temp_eq, eq'⟩;
+      rcases Fueled.of_lift_bind_eq $h with ⟨_, ⟨_⟩, _⟩ | ⟨$pat1, temp_eq, eq'⟩;
       clear $h; rename' eq' => $h;
       apply Exists.imp
         (λ _ (conj : _ ∧ _) => ⟨conj.1, ⟨_, (Except.ok.inj temp_eq).symm, conj.2⟩⟩);
@@ -2080,30 +1506,13 @@ macro_rules
 syntax "bind_step' " ident rcasesPat : tactic
 macro_rules
   | `(tactic| bind_step' $h $pat) => `(tactic|
-      rcases of_bind_eq $h with im | ⟨$pat, temp_eq, eq'⟩;
+      (try rw [Fueled.assert_eq] at $h:ident);
+      rcases Fueled.of_lift_bind_eq $h with im | ⟨$pat, temp_eq, eq'⟩;
       { left;
         first | exact im | (rcases im with ⟨x, h1, h2⟩; exact ⟨x, h1, h2, rfl⟩) };
       clear $h; rename' eq' => $h;
       right; refine' ⟨_, temp_eq, _⟩; clear temp_eq
     )
-
-lemma Except.fit_of_fit {ξ} {υ} {ζ}
-    {f : Except (String × ξ) υ}
-    {g : υ → Except (String × ξ) ζ}
-    {ex : Except (String × ξ) ζ}
-    (notLimited : ex.Fit) (eq : f >>= g = ex) : f.Fit := by
-  intro rw; rcases f with ⟨_, _⟩ | _ <;>
-    simp [Except.Lim, Except.toError?] at rw
-  rw [rw] at eq; rw [← eq] at notLimited; cases notLimited rfl
-
-lemma Execution.fit_of_fit {ξ} {υ}
-    {f : Except (String × Devm) ξ}
-    {g : ξ → Except (String × Devm) υ}
-    {ex : Except (String × Devm) υ}
-    (fit : ex.Fit) (eq : f >>= g = ex) : f.Fit := by
-  intro rw; rcases f with ⟨evm, err⟩ | _ <;>
-    simp [Except.Lim, Except.toError?] at rw
-  rw [rw] at eq; rw [← eq] at fit; cases fit rfl
 
 lemma ite_of_true {c : Prop} [Decidable c] {p q : Prop} :
     c → p → if c then p else q := by
@@ -2113,88 +1522,67 @@ lemma ite_of_false {c : Prop} [Decidable c] {p q : Prop} :
     ¬ c → q → if c then p else q := by
   intro hc hp; rw [if_neg hc]; exact hp
 
-lemma Except.of_toError?_eq_some {ξ} {υ} (ex : Except (String × ξ) υ)
-    (err : String) (eq : ex.toError? = some err) :
-    ∃ x, ex = .error ⟨err, x⟩ := by
-  rcases ex with ⟨err', _⟩ | _ <;> simp [Except.toError?] at eq
-  cases eq; refine ⟨_, rfl⟩
-
 lemma of_executeCode {msg : Msg} {lim : Nat}
     {ex : Except (String × State × AdrSet × Tra) Devm}
-    (notLimited : ex.Fit)
-    (eq : executeCode msg lim = ex) :
-    ∃ xl : Xlot, xl.Good lim ex ∧ ExecuteCode msg xl ex := by
+    (eq : executeCode msg lim = Fueled.ofExcept ex) :
+    ∃ xl : Xlot, xl.Good lim ∧ ExecuteCode msg xl ex := by
   rcases lim with _ | lim <;> simp only [executeCode] at eq
-  {rw [← eq] at notLimited; cases notLimited rfl}
+  {cases Fueled.exhausted_ne_ofExcept eq}
   split at eq
   · rename msg.codeAddress = .none => eq_none
+    rcases Fueled.of_mapResult_eq eq with ⟨ex', hexec, hhe⟩
     refine'
-      ⟨ .some ⟨(initEvm msg).sta, (initEvm msg).dyna, exec (initEvm msg) lim⟩,
-        ⟨lim, (by omega), rfl, λ halts => _⟩, _ ⟩
-    · rcases Except.of_toError?_eq_some _ _ halts with ⟨evm, rw⟩
-      rw [← eq, rw] at notLimited; cases notLimited rfl
-    · simp only [ExecuteCode]; rw [eq_none]; refine' ⟨_, rfl, eq⟩
+      ⟨ .some ⟨(initEvm msg).sta, (initEvm msg).dyna, ex'⟩,
+        ⟨lim, (by omega), _⟩, _ ⟩
+    · rw [← initEvm_eq msg]; exact hexec
+    · simp only [ExecuteCode]; rw [eq_none]; exact ⟨ex', rfl, hhe⟩
   · rename Adr => adr
     rename msg.codeAddress = .some adr => eq_some
     split at eq
     · rename_i pos; refine' ⟨.none, .intro, _⟩
       simp only [ExecuteCode]; rw [eq_some]
-      simp only []; rw [if_pos pos]; simp [eq]
+      simp only []; rw [if_pos pos]
+      exact ⟨rfl, Fueled.ofExcept_inj.mp eq⟩
     · rename_i neg
+      rcases Fueled.of_mapResult_eq eq with ⟨ex', hexec, hhe⟩
       refine'
-        ⟨ .some ⟨(initEvm msg).sta, (initEvm msg).dyna, exec (initEvm msg) lim⟩,
-          ⟨lim, (by omega), rfl, λ halts => _⟩, _ ⟩
-      · rcases Except.of_toError?_eq_some _ _ halts with ⟨evm, rw⟩
-        rw [← eq, rw] at notLimited; cases notLimited rfl
+        ⟨ .some ⟨(initEvm msg).sta, (initEvm msg).dyna, ex'⟩,
+          ⟨lim, (by omega), _⟩, _ ⟩
+      · rw [← initEvm_eq msg]; exact hexec
       · simp only [ExecuteCode]; rw [eq_some]
-        simp only []; rw [if_neg neg]; refine' ⟨_, rfl, eq⟩
+        simp only []; rw [if_neg neg]; exact ⟨ex', rfl, hhe⟩
 
-lemma good_of_good_of_fit
-    {ξ υ ζ ω}
-    {lim lim' : Nat}
-    {oe  : Except (String × ξ) υ}
-    {oe' : Except (String × ζ) ω}
-    {xl : Xlot} (le : lim ≤ lim') (ne : oe.Fit)
-    (good : xl.Good lim oe) : xl.Good lim' oe' := by
-  rcases xl with _ | ⟨evm, ex⟩; {constructor}
-  rcases good with ⟨_, lt, exec, of_eq⟩
-
-  refine' ⟨_, Nat.lt_of_lt_of_le lt le, exec,  _⟩
-  intro eq; cases ne <| of_eq eq
+lemma Xlot.good_mono {lim lim' : Nat} {xl : Xlot}
+    (le : lim ≤ lim') (good : xl.Good lim) : xl.Good lim' := by
+  rcases xl with _ | ⟨sevm, devm, exn⟩; {constructor}
+  rcases good with ⟨k, lt, h⟩
+  exact ⟨k, Nat.lt_of_lt_of_le lt le, h⟩
 
 lemma of_processMessage (msg : Msg) (lim : Nat)
     (ex : Except (String × State × AdrSet × Tra) Devm)
-    (notLimited : ex.Fit)
-    (eq : processMessage msg lim = ex) :
-    ∃ xl : Xlot, xl.Good lim ex ∧ ProcessMessage msg xl ex := by
+    (eq : processMessage msg lim = Fueled.ofExcept ex) :
+    ∃ xl : Xlot, xl.Good lim ∧ ProcessMessage msg xl ex := by
   rcases lim with _ | lim <;> simp only [processMessage] at eq
-  {rw [← eq] at notLimited; cases notLimited rfl}
+  {cases Fueled.exhausted_ne_ofExcept eq}
   bind_step_good eq _
-  have notLimited' := Except.fit_of_fit notLimited eq
-  rcases of_executeCode notLimited' rfl with ⟨xl, good, ec⟩
-  refine' ⟨_, good_of_good_of_fit (by omega) notLimited' good, _, ec, _⟩
+  rcases Fueled.of_bind_eq' eq with ⟨ex', ec_eq, eq⟩
+  rcases of_executeCode ec_eq with ⟨xl, good, ec⟩
+  refine' ⟨_, Xlot.good_mono (Nat.le_succ _) good, _, ec, _⟩
   bind_step' eq _; split at eq
-  · rename_i pos; rw [if_pos pos]; exact eq
-  · rename_i neg; rw [if_neg neg]; exact eq
+  · rename_i pos; rw [if_pos pos]; exact Fueled.ofExcept_inj.mp eq
+  · rename_i neg; rw [if_neg neg]; exact Fueled.ofExcept_inj.mp eq
 
 lemma of_processCreateMessage (msg : Msg) (lim : Nat)
     (ex : Except (String × State × AdrSet × Tra) Devm)
-    (notLimited : ex.Fit)
-    (eq : processCreateMessage msg lim = ex) :
+    (eq : processCreateMessage msg lim = Fueled.ofExcept ex) :
     ∃ xl : Xlot,
-      xl.Good lim ex ∧
+      xl.Good lim ∧
       ProcessCreateMessage msg xl ex := by
   rcases lim with _ | lim <;> simp only [processCreateMessage] at eq
-  {rw [← eq] at notLimited; cases notLimited rfl}
-  have notLimited' :
-    (processMessage (processCreateMessage.msg msg) lim).Fit := by
-    intro pm_eq
-    rcases Except.of_toError?_eq_some _ _ pm_eq with ⟨_, rw⟩
-    rw [← eq, rw] at notLimited
-    cases notLimited rfl
-  rcases @of_processMessage _ _ _ notLimited' rfl
-    with ⟨xl, good, pcm⟩
-  refine' ⟨_, good_of_good_of_fit (by omega) notLimited' good, _, pcm, _⟩
+  {cases Fueled.exhausted_ne_ofExcept eq}
+  rcases Fueled.of_bind_eq' eq with ⟨ex', pm_eq, eq⟩
+  rcases of_processMessage _ _ _ pm_eq with ⟨xl, good, pcm⟩
+  refine' ⟨_, Xlot.good_mono (Nat.le_succ _) good, _, pcm, _⟩
   bind_step' eq evm'
   split at eq
   · rename_i pos; rw [if_pos pos]
@@ -2203,117 +1591,112 @@ lemma of_processCreateMessage (msg : Msg) (lim : Nat)
       rw [pcm_eq] at eq
       simp only [] at eq
       split at eq
-      · rename_i pos; rw [if_pos pos]; exact eq
-      · rename_i neg; rw [if_neg neg]; exact eq
-    · rw [pcm_eq] at eq; exact eq
-  · rename_i neg; rw [if_neg neg]; exact eq
+      · rename_i pos'; rw [if_pos pos']; exact Fueled.ofExcept_inj.mp eq
+      · rename_i neg'; rw [if_neg neg']; exact Fueled.ofExcept_inj.mp eq
+    · rw [pcm_eq] at eq; exact Fueled.ofExcept_inj.mp eq
+  · rename_i neg; rw [if_neg neg]; exact Fueled.ofExcept_inj.mp eq
 
 lemma of_genericCreate
     {sevm : Sevm} {devm : Devm} {endow : B256} {newAdr : Adr}
     {memIndex memSize lim : ℕ} {ex : Execution}
-    (notLimited : ex.Fit)
-    (eq : genericCreate sevm devm endow newAdr memIndex memSize lim = ex) :
+    (eq : genericCreate sevm devm endow newAdr memIndex memSize lim =
+      Fueled.ofExcept ex) :
     ∃ xl : Xlot,
-      xl.Good lim ex ∧
+      xl.Good lim ∧
       GenericCreate sevm devm endow newAdr memIndex memSize xl ex := by
   rcases lim with _ | lim <;> simp only [genericCreate] at eq
-  {rw [← eq] at notLimited; cases notLimited rfl}
+  {cases Fueled.exhausted_ne_ofExcept eq}
   okStep1 eq _; bind_step_good eq _; okStep1 eq _; okStep1 eq _
   okStep1 eq _; bind_step_good eq _; okStep1 eq _; okStep1 eq _
   split at eq
   · rename_i pos
     apply Exists.imp (λ _ (conj : _ ∧ _) => ⟨conj.1, ite_of_true pos conj.2⟩)
-    rcases of_bind_eq eq with ⟨es, push_eq, ex_eq⟩ | ⟨evm, push_eq, eq_ex⟩;
-    · refine' ⟨.none, .intro, _⟩; rw [ex_eq]; exact ⟨rfl, push_eq⟩
-    · refine' ⟨.none, .intro, _⟩; rw [← eq_ex]; exact ⟨rfl, push_eq⟩
+    refine' ⟨.none, .intro, _⟩
+    simp only [bind_pure] at eq
+    exact ⟨rfl, Fueled.ofExcept_inj.mp eq⟩
   · rename_i neg
     apply Exists.imp (λ _ (conj : _ ∧ _) => ⟨conj.1, ite_of_false neg conj.2⟩)
-    clear neg; simp at eq
+    clear neg
     okStep1 eq evm'
     split at eq
     · rename_i pos
       apply Exists.imp (λ _ (conj : _ ∧ _) => ⟨conj.1, ite_of_true pos conj.2⟩)
-      refine' ⟨.none, .intro, rfl, eq⟩
+      simp only [bind_pure] at eq
+      refine' ⟨.none, .intro, rfl, Fueled.ofExcept_inj.mp eq⟩
     · rename_i neg
       apply Exists.imp (λ _ (conj : _ ∧ _) => ⟨conj.1, ite_of_false neg conj.2⟩)
       clear neg
       okStep1 eq msg
-      have notLimited' : (processCreateMessage msg lim).Fit := by
-        intro pm_eq
-        rcases Except.of_toError?_eq_some _ _ pm_eq with ⟨_, rw⟩
-        rw [← eq, rw] at notLimited; cases notLimited rfl
-      rcases of_processCreateMessage _ _ _ notLimited' rfl
-        with ⟨xl, good, pm⟩
-      refine' ⟨xl, good_of_good_of_fit (by omega) notLimited' good, _, pm, _⟩
+      rcases Fueled.of_bind_eq' eq with ⟨ex'', hmap, eq⟩
+      rcases Fueled.of_mapResult_eq hmap with ⟨ex', hrec, hlift⟩
+      rcases of_processCreateMessage _ _ _ hrec with ⟨xl, good, pm⟩
+      refine' ⟨xl, Xlot.good_mono (Nat.le_succ _) good, _, pm, _⟩
+      rw [← hlift] at eq
       bind_step' eq _
       split at eq
-      · rename_i pos; rw [if_pos pos]; exact eq
-      · rename_i neg; rw [if_neg neg]; exact eq
+      · rename_i pos; rw [if_pos pos]; exact Fueled.ofExcept_inj.mp eq
+      · rename_i neg; rw [if_neg neg]; exact Fueled.ofExcept_inj.mp eq
 
 lemma of_genericCall {sevm : Sevm} {devm : Devm} {gas : Nat} {value : B256}
     {caller target codeAddress : Adr} {shouldTransferValue isStaticcall : Bool}
     {input_index input_size output_index output_size : Nat} {code : ByteArray}
     {disablePrecompiles : Bool} {lim : Nat} {ex : Execution}
-    (notLimited : ex.Fit)
     ( eq :
       genericCall sevm devm gas value caller target codeAddress
         shouldTransferValue isStaticcall input_index input_size
-        output_index output_size code disablePrecompiles lim = ex ) :
+        output_index output_size code disablePrecompiles lim =
+          Fueled.ofExcept ex ) :
     ∃ xl : Xlot,
-      xl.Good lim ex ∧
+      xl.Good lim ∧
       GenericCall sevm devm gas value caller target codeAddress
         shouldTransferValue isStaticcall input_index input_size
         output_index output_size code disablePrecompiles xl ex := by
   rcases lim with _ | lim <;> simp only [genericCall] at eq
-  {rw [← eq] at notLimited; cases notLimited rfl}
+  {cases Fueled.exhausted_ne_ofExcept eq}
   okStep1 eq _; split at eq
   { rename_i pos; refine' ⟨.none, .intro, _⟩
-    simp only [bind_pure] at eq;
-    simp only []; rw [if_pos pos]; exact ⟨trivial, eq⟩ }
+    simp only [bind_pure] at eq
+    simp only []; rw [if_pos pos]
+    exact ⟨trivial, Fueled.ofExcept_inj.mp eq⟩ }
   rename_i neg
-  apply Exists.imp (λ _ (h' : _ ∧ _) => ⟨h'.1, ite_of_false neg h'.2⟩);
+  apply Exists.imp (λ _ (h' : _ ∧ _) => ⟨h'.1, ite_of_false neg h'.2⟩)
   simp only [pure_bind] at eq
   okStep1 eq _; okStep1 eq msg
-  have notLimited' :
-    (processMessage msg lim).Fit := by
-    intro pm_eq
-    rcases Except.of_toError?_eq_some _ _ pm_eq with ⟨_, rw⟩
-    rw [← eq, rw] at notLimited
-    cases notLimited rfl
-  rcases of_processMessage msg lim _ notLimited' rfl
-    with ⟨xl, good, pm⟩
-  refine' ⟨_, good_of_good_of_fit (by omega) notLimited' good, _, pm, _⟩
-
+  rcases Fueled.of_bind_eq' eq with ⟨ex'', hmap, eq⟩
+  rcases Fueled.of_mapResult_eq hmap with ⟨ex', hrec, hlift⟩
+  rcases of_processMessage _ _ _ hrec with ⟨xl, good, pm⟩
+  refine' ⟨_, Xlot.good_mono (Nat.le_succ _) good, _, pm, _⟩
+  rw [← hlift] at eq
   bind_step' eq _
   split at eq
-  · rename_i pos; rw [if_pos pos]; bind_step' eq _; exact eq
-  · rename_i neg; rw [if_neg neg]; bind_step' eq _; exact eq
+  · rename_i pos; rw [if_pos pos]; bind_step' eq _
+    exact Fueled.ofExcept_inj.mp eq
+  · rename_i neg; rw [if_neg neg]; bind_step' eq _
+    exact Fueled.ofExcept_inj.mp eq
 
 lemma Xinst.run_of_run_eq
     {sevm : Sevm} {devm : Devm} {x : Xinst} {lim : Nat} {exn}
-    (notLimited : exn.Fit) (eq : Xinst.run sevm devm x lim = exn) :
-    ∃ xl : Xlot, xl.Good lim exn ∧ Xinst.Run sevm devm x xl exn :=
+    (eq : Xinst.run sevm devm x lim = Fueled.ofExcept exn) :
+    ∃ xl : Xlot, xl.Good lim ∧ Xinst.Run sevm devm x xl exn :=
   match x, lim with
   | _, 0 => by
     simp only [Xinst.run] at eq
-    rw [← eq] at notLimited
-    cases notLimited rfl
+    cases Fueled.exhausted_ne_ofExcept eq
   | create, lim + 1 => by
     simp only [Xinst.run] at eq
     iterate 3 (bind_step_good eq _)
     okStep1 eq _; okStep1 eq _;
-
     bind_step_good eq _;
     okStep1 eq _; okStep1 eq _;
-    rcases of_genericCreate notLimited eq with ⟨xl, good, gc⟩
-    refine' ⟨_, good_of_good_of_fit (by omega) notLimited good, gc⟩
+    rcases of_genericCreate eq with ⟨xl, good, gc⟩
+    refine' ⟨_, Xlot.good_mono (Nat.le_succ _) good, gc⟩
   | .create2, lim + 1 => by
     simp only [Xinst.run] at eq
     iterate 4 (bind_step_good eq _)
     iterate 3 (okStep1 eq _)
     bind_step_good eq _; okStep1 eq _; okStep1 eq _;
-    rcases of_genericCreate notLimited eq with ⟨xl, good, gc⟩
-    refine' ⟨_, good_of_good_of_fit (by omega) notLimited good, gc⟩
+    rcases of_genericCreate eq with ⟨xl, good, gc⟩
+    refine' ⟨_, Xlot.good_mono (Nat.le_succ _) good, gc⟩
   | .call, lim + 1 => by
     simp only [Xinst.run] at eq
     iterate 6 (bind_step_good eq _)
@@ -2323,11 +1706,11 @@ lemma Xinst.run_of_run_eq
     okStep1 eq _; okStep1 eq _; split at eq
     · rename_i lt; refine' ⟨.none, .intro, _⟩
       simp only []; rw [if_pos lt]
-      bind_step' eq _; exact ⟨trivial, eq⟩
+      bind_step' eq _; exact ⟨trivial, Fueled.ofExcept_inj.mp eq⟩
     · rename_i nlt
       apply Exists.imp (λ _ (conj : _ ∧ _) => ⟨conj.1, ite_of_false nlt conj.2⟩)
-      rcases of_genericCall notLimited eq with ⟨xl, good, gc⟩
-      refine' ⟨_, good_of_good_of_fit (by omega) notLimited good, gc⟩
+      rcases of_genericCall eq with ⟨xl, good, gc⟩
+      refine' ⟨_, Xlot.good_mono (Nat.le_succ _) good, gc⟩
   | .callcode, lim + 1 => by
     simp only [Xinst.run] at eq
     iterate 7 bind_step_good eq _
@@ -2335,107 +1718,106 @@ lemma Xinst.run_of_run_eq
     bind_step_good eq _; okStep1 eq _; okStep1 eq _; split at eq
     · rename_i lt; refine' ⟨.none, .intro, _⟩
       simp only []; rw [if_pos lt]
-      bind_step' eq _; exact ⟨trivial, eq⟩
+      bind_step' eq _; exact ⟨trivial, Fueled.ofExcept_inj.mp eq⟩
     · rename_i nlt
       apply Exists.imp (λ _ (conj : _ ∧ _) => ⟨conj.1, ite_of_false nlt conj.2⟩)
-      rcases of_genericCall notLimited eq with ⟨xl, good, gc⟩
-      refine' ⟨_, good_of_good_of_fit (by omega) notLimited good, gc⟩
+      rcases of_genericCall eq with ⟨xl, good, gc⟩
+      refine' ⟨_, Xlot.good_mono (Nat.le_succ _) good, gc⟩
   | .delcall, lim + 1 => by
     simp only [Xinst.run] at eq
     iterate 6 bind_step_good eq _
     iterate 6 okStep1 eq _
     bind_step_good eq _; okStep1 eq _
-    rcases of_genericCall notLimited eq with ⟨xl, good, gc⟩
-    refine' ⟨_, good_of_good_of_fit (by omega) notLimited good, gc⟩
+    rcases of_genericCall eq with ⟨xl, good, gc⟩
+    refine' ⟨_, Xlot.good_mono (Nat.le_succ _) good, gc⟩
   | .statcall, lim + 1 => by
     simp only [Xinst.run] at eq
     iterate 6 bind_step_good eq _
     iterate 6 okStep1 eq _
     bind_step_good eq _; okStep1 eq _;
-    rcases of_genericCall notLimited eq with ⟨xl, good, gc⟩
-    refine' ⟨_, good_of_good_of_fit (by omega) notLimited good, gc⟩
+    rcases of_genericCall eq with ⟨xl, good, gc⟩
+    refine' ⟨_, Xlot.good_mono (Nat.le_succ _) good, gc⟩
 
 lemma Ninst.run_of_run_eq
     {pc} {sevm : Sevm} {devm : Devm} {n : Ninst} {lim : Nat} {exn}
-    (fit : exn.Fit) (eq : Ninst.run ⟨pc, sevm, devm⟩ n lim = exn) :
+    (eq : Ninst.run ⟨pc, sevm, devm⟩ n lim = Fueled.ofExcept exn) :
     ∃ xl : Xlot,
-      xl.Good lim exn ∧
+      xl.Good lim ∧
       Ninst.Run' pc sevm devm n xl exn :=
   match n, lim with
   | push xs lt, lim => by
     refine' ⟨.none, .intro, _⟩
-    simp only [Ninst.run] at eq; apply eq
+    simp only [Ninst.run] at eq
+    rw [Fueled.lift_bind_lift] at eq
+    exact Fueled.ofExcept_inj.mp eq
   | reg r, _ => by
-    simp [Ninst.run] at eq
-    refine' ⟨.none, .intro, eq⟩
+    simp only [Ninst.run] at eq
+    exact ⟨.none, .intro, Fueled.ofExcept_inj.mp eq⟩
   | exec _, 0 => by
     simp only [Ninst.run] at eq
-    rw [← eq] at fit; cases fit rfl
+    cases Fueled.exhausted_ne_ofExcept eq
   | exec x, lim + 1 => by
     simp only [Ninst.run] at eq
-    --have fit' := Except.fit_of_fit fit eq
-    rcases Xinst.run_of_run_eq fit eq with ⟨xl, good, run⟩   --(cast_fit fit) eq
-    refine' ⟨xl, good_of_good_of_fit (by omega) fit good, run⟩ --, run, _⟩
+    rcases Xinst.run_of_run_eq eq with ⟨xl, good, run⟩
+    exact ⟨xl, Xlot.good_mono (Nat.le_succ _) good, run⟩
 
 def of_exec :
     ∀ (lim : Nat) (pc : Nat) (sevm : Sevm) (devm : Devm) (exn : Execution),
-      exn.Fit → (exec ⟨pc, sevm, devm⟩ lim = exn) →
+      (exec ⟨pc, sevm, devm⟩ lim = Fueled.ofExcept exn) →
       Nonempty (Exec pc sevm devm exn) := by
-  apply Nat.strongRec; intro lim ih pc sevm devm exn fit exec_eq;
+  apply Nat.strongRec; intro lim ih pc sevm devm exn exec_eq
   cases lim with
   | zero =>
-    rw [← exec_eq] at fit
-    simp [exec, Except.toError?, Except.Fit, Except.Lim] at fit
+    simp only [exec] at exec_eq
+    cases Fueled.exhausted_ne_ofExcept exec_eq
   | succ lim =>
-    simp [exec] at exec_eq
+    simp only [exec] at exec_eq
     rcases Option.eq_none_or_eq_some (Evm.getInst ⟨pc, sevm, devm⟩) with
       getInst_eq | ⟨i, getInst_eq⟩
       <;> rw [getInst_eq] at exec_eq
-      <;> simp [Option.toExcept] at exec_eq
-    · rw [← Except.of_error_bind_eq _ exec_eq]
-      constructor; apply Exec.invOp getInst_eq
-    · rw [ok_bind] at exec_eq
+      <;> simp only [Option.toExcept] at exec_eq
+    · have h : Except.error ("InvalidOpcode", devm) = exn := by
+        rcases Fueled.of_lift_bind_eq exec_eq with ⟨e, he, hex⟩ | ⟨y, hy, _⟩
+        · rw [hex, ← he]
+        · cases hy
+      rw [← h]; constructor; apply Exec.invOp getInst_eq
+    · rw [Fueled.ofExcept_ok_bind] at exec_eq
       rcases i with l | n | j <;> simp only [] at exec_eq
-      · constructor;
-        apply Exec.last getInst_eq exec_eq
-      · rcases of_bind_eq exec_eq with
+      · constructor
+        apply Exec.last getInst_eq (Fueled.ofExcept_inj.mp exec_eq)
+      · rcases Fueled.of_bind_eq exec_eq with
           ⟨es, run_eq, ex_eq⟩ | ⟨evm', run_eq, ex_eq⟩
-        · rw [ex_eq] at fit
-          rcases Ninst.run_of_run_eq fit run_eq
+        · rcases Ninst.run_of_run_eq run_eq
             with ⟨_ | ⟨sevm', devm', ex'⟩, good, run⟩
           · rw [ex_eq]; constructor
             exact Exec.nextNoneErr getInst_eq run
-          · rw [ex_eq];
-            have ne_ex : Nonempty (Exec 0 sevm' devm' ex') := by
-              rcases good with ⟨lim', lt, exec_eq', notLimited_of⟩
-              have fit' : ex'.Fit := by
-                intro h; cases fit <| notLimited_of h
-              apply @ih _ (by omega) _ _ _ _ fit' exec_eq'
-            rcases ne_ex with ⟨exc⟩; constructor
+          · rw [ex_eq]
+            rcases good with ⟨lim', lt, exec_eq'⟩
+            rcases ih _ (by omega) _ _ _ _ exec_eq' with ⟨exc⟩
+            constructor
             apply Exec.nextSomeErr getInst_eq run exc
-        · rcases Ninst.run_of_run_eq (by {intro h; cases h}) run_eq
+        · rcases Ninst.run_of_run_eq run_eq
             with ⟨_ | ⟨sevm', devm', ex'⟩, good, run⟩
-          · rcases (ih _ (by omega) _ _ _ _ fit ex_eq) with ⟨exc⟩
+          · rcases ih _ (by omega) _ _ _ _ ex_eq with ⟨exc⟩
             constructor
             exact @Exec.nextNoneRec _ _ _ _ _ _ getInst_eq run exc
-          · rcases good with ⟨lim', lt, exec_eq', notLimited_of⟩
-            have fit' : ex'.Fit := by intro h; cases notLimited_of h
-            rcases @ih _ (by omega) _ _ _ _ fit' exec_eq' with ⟨ih'⟩
-            rcases @ih _ (by omega) _ _ _ _ fit ex_eq with ⟨ih''⟩
+          · rcases good with ⟨lim', lt, exec_eq'⟩
+            rcases ih _ (by omega) _ _ _ _ exec_eq' with ⟨ih'⟩
+            rcases ih _ (by omega) _ _ _ _ ex_eq with ⟨ih''⟩
             constructor
             exact Exec.nextSomeRec getInst_eq run ih' ih''
-      · rcases of_bind_eq exec_eq
-          with ⟨es, run_eq, ex_eq⟩ | ⟨evm', run_eq, ex_eq⟩
+      · rcases Fueled.of_lift_bind_eq exec_eq
+          with ⟨es, run_eq, ex_eq⟩ | ⟨pd, run_eq, ex_eq⟩
         · rw [ex_eq]; constructor
           exact @Exec.jumpErr pc sevm devm j es.1 es.2 getInst_eq run_eq
-        · rcases ih _ (Nat.lt_succ_self _) _ _ _ _ fit ex_eq with ⟨ih'⟩
+        · rcases ih _ (Nat.lt_succ_self _) _ _ _ _ ex_eq with ⟨ih'⟩
           constructor; apply Exec.jumpRec getInst_eq run_eq ih'
 
 lemma exec_iff_exec_eq (pc : Nat) (sevm : Sevm) (devm : Devm) (exn : Execution) :
     Nonempty (Exec pc sevm devm exn) ↔
-      (exn.Fit ∧ ∃ lim, exec ⟨pc, sevm, devm⟩ lim = exn) := by
+      ∃ lim, exec ⟨pc, sevm, devm⟩ lim = Fueled.ofExcept exn := by
   constructor
-  · intro ⟨exc⟩;
-    rcases of_exec' _ _ _ _ exc with ⟨fit, lim, eq⟩
-    refine ⟨fit, lim + 1, eq (lim + 1) (by omega)⟩
-  · intro ⟨fit, lim, eq⟩; exact of_exec _ _ _ _ _ fit eq
+  · intro ⟨exc⟩
+    rcases of_exec' _ _ _ _ exc with ⟨lim, eq⟩
+    exact ⟨lim + 1, eq (lim + 1) (by omega)⟩
+  · intro ⟨lim, eq⟩; exact of_exec _ _ _ _ _ eq
