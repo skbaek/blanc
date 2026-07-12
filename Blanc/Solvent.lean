@@ -206,7 +206,8 @@ instance : Ninst.Hinv Devm.state (Ninst.reg Rinst.eq) := ⟨by
   cases xl with
   | some _ => cases run
   | none =>
-    dsimp [Ninst.Run', Rinst.run, Rinst.runCore, applyBinary] at run
+    dsimp [Ninst.Run', Rinst.run, Rinst.runCore] at run
+    rw [applyBinary_def] at run
     rcases hp1 : Devm.pop s with _ | val1
     · rw [hp1] at run; dsimp [bind, Except.bind] at run; contradiction
     · rw [hp1] at run; dsimp [bind, Except.bind] at run
@@ -254,7 +255,8 @@ instance : Ninst.Hinv Devm.state (Ninst.reg Rinst.gt) := ⟨by
   cases xl with
   | some _ => cases run
   | none =>
-    dsimp [Ninst.Run', Rinst.run, Rinst.runCore, applyBinary] at run
+    dsimp [Ninst.Run', Rinst.run, Rinst.runCore] at run
+    rw [applyBinary_def] at run
     rcases hp1 : Devm.pop s with _ | val1
     · rw [hp1] at run; dsimp [bind, Except.bind] at run; contradiction
     · rw [hp1] at run; dsimp [bind, Except.bind] at run

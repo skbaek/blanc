@@ -3454,20 +3454,12 @@ lemma pushItem_getCode_eq {x c devm devm'} (h : pushItem x c devm = .ok devm') (
 lemma applyUnary_getCode_eq {f : B256 → B256} {cost devm devm'}
     (h : applyUnary f cost devm = .ok devm') (a : Adr) :
     devm'.getCode a = devm.getCode a := by
-  simp only [applyUnary] at h
-  refine getCode_eq_of_bind h Prod.snd ?_ ?_
-  {intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a}
-  intro ⟨x, devm1⟩ hp run; exact pushItem_getCode_eq run a
+  exact (liftMachExecution_worldEq_of_ok (core := Mach.applyUnary f cost) h).getCode a |>.symm
 
 lemma applyBinary_getCode_eq {f : B256 → B256 → B256} {cost devm devm'}
     (h : applyBinary f cost devm = .ok devm') (a : Adr) :
     devm'.getCode a = devm.getCode a := by
-  simp only [applyBinary] at h
-  refine getCode_eq_of_bind h Prod.snd ?_ ?_
-  {intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a}
-  intro ⟨x, devm1⟩ hp run; refine getCode_eq_of_bind run Prod.snd ?_ ?_
-  {intro ⟨y, devm2⟩ hp2; exact Devm.pop_getCode_eq hp2 a}
-  intro ⟨y, devm2⟩ hp2 run; exact pushItem_getCode_eq run a
+  exact (liftMachExecution_worldEq_of_ok (core := Mach.applyBinary f cost) h).getCode a |>.symm
 
 lemma getBal_eq_of_bind {α ε} {ma : Except ε α} {f : α → Except ε Devm}
     {devm devm' : Devm} {a : Adr}
@@ -3510,35 +3502,20 @@ lemma pushItem_getBal_eq {x c devm devm'} (h : pushItem x c devm = .ok devm') (a
 lemma applyBinary_getBal_eq {f : B256 → B256 → B256} {cost devm devm'}
     (h : applyBinary f cost devm = .ok devm') :
     devm.getBal = devm'.getBal := by
-  simp only [applyBinary] at h
-  apply funext; intro a; apply Eq.symm
-  refine getBal_eq_of_bind h Prod.snd ?_ ?_
-  {intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a}
-  intro ⟨x, devm1⟩ hp run; refine getBal_eq_of_bind run Prod.snd ?_ ?_
-  {intro ⟨y, devm2⟩ hp2; exact Devm.pop_getBal_eq hp2 a}
-  intro ⟨y, devm2⟩ hp2 run; exact pushItem_getBal_eq run a
+  funext a
+  exact (liftMachExecution_worldEq_of_ok (core := Mach.applyBinary f cost) h).getBal a
 
 lemma applyUnary_getBal_eq {f : B256 → B256} {cost devm devm'}
     (h : applyUnary f cost devm = .ok devm') :
     devm.getBal = devm'.getBal := by
-  simp only [applyUnary] at h
-  apply funext; intro a; apply Eq.symm
-  refine getBal_eq_of_bind h Prod.snd ?_ ?_
-  {intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a}
-  intro ⟨x, devm1⟩ hp run; exact pushItem_getBal_eq run a
+  funext a
+  exact (liftMachExecution_worldEq_of_ok (core := Mach.applyUnary f cost) h).getBal a
 
 lemma applyTernary_getBal_eq {f : B256 → B256 → B256 → B256} {cost devm devm'}
     (h : applyTernary f cost devm = .ok devm') :
     devm.getBal = devm'.getBal := by
-  simp only [applyTernary] at h
-  apply funext; intro a; apply Eq.symm
-  refine getBal_eq_of_bind h Prod.snd ?_ ?_
-  {intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a}
-  intro ⟨x, devm1⟩ hp run; refine getBal_eq_of_bind run Prod.snd ?_ ?_
-  {intro ⟨y, devm2⟩ hp2; exact Devm.pop_getBal_eq hp2 a}
-  intro ⟨y, devm2⟩ hp2 run; refine getBal_eq_of_bind run Prod.snd ?_ ?_
-  {intro ⟨z, devm3⟩ hp3; exact Devm.pop_getBal_eq hp3 a}
-  intro ⟨z, devm3⟩ hp3 run; exact pushItem_getBal_eq run a
+  funext a
+  exact (liftMachExecution_worldEq_of_ok (core := Mach.applyTernary f cost) h).getBal a
 
 
 def Devm.getStor (devm : Devm) (adr : Adr) : Stor :=
@@ -3614,44 +3591,25 @@ lemma pushItem_getStor_eq {x c devm devm'} (h : pushItem x c devm = .ok devm') :
 lemma applyBinary_getStor_eq {f : B256 → B256 → B256} {cost devm devm'}
     (h : applyBinary f cost devm = .ok devm') :
     devm.getStor = devm'.getStor := by
-  simp only [applyBinary] at h
-  refine getStor_eq_of_bind h Prod.snd ?_ ?_
-  {intro ⟨x, devm1⟩ hp; exact Devm.pop_getStor_eq hp}
-  intro ⟨x, devm1⟩ hp run; refine getStor_eq_of_bind run Prod.snd ?_ ?_
-  {intro ⟨y, devm2⟩ hp2; exact Devm.pop_getStor_eq hp2}
-  intro ⟨y, devm2⟩ hp2 run; exact pushItem_getStor_eq run
+  funext a
+  exact (liftMachExecution_worldEq_of_ok (core := Mach.applyBinary f cost) h).getStor a
 
 lemma applyUnary_getStor_eq {f : B256 → B256} {cost devm devm'}
     (h : applyUnary f cost devm = .ok devm') :
     devm.getStor = devm'.getStor := by
-  simp only [applyUnary] at h
-  refine getStor_eq_of_bind h Prod.snd ?_ ?_
-  {intro ⟨x, devm1⟩ hp; exact Devm.pop_getStor_eq hp}
-  intro ⟨x, devm1⟩ hp run; exact pushItem_getStor_eq run
+  funext a
+  exact (liftMachExecution_worldEq_of_ok (core := Mach.applyUnary f cost) h).getStor a
 
 lemma applyTernary_getStor_eq {f : B256 → B256 → B256 → B256} {cost devm devm'}
     (h : applyTernary f cost devm = .ok devm') :
     devm.getStor = devm'.getStor := by
-  simp only [applyTernary] at h
-  refine getStor_eq_of_bind h Prod.snd ?_ ?_
-  {intro ⟨x, devm1⟩ hp; exact Devm.pop_getStor_eq hp}
-  intro ⟨x, devm1⟩ hp run; refine getStor_eq_of_bind run Prod.snd ?_ ?_
-  {intro ⟨y, devm2⟩ hp2; exact Devm.pop_getStor_eq hp2}
-  intro ⟨y, devm2⟩ hp2 run; refine getStor_eq_of_bind run Prod.snd ?_ ?_
-  {intro ⟨z, devm3⟩ hp3; exact Devm.pop_getStor_eq hp3}
-  intro ⟨z, devm3⟩ hp3 run; exact pushItem_getStor_eq run
+  funext a
+  exact (liftMachExecution_worldEq_of_ok (core := Mach.applyTernary f cost) h).getStor a
 
 lemma applyTernary_getCode_eq {f : B256 → B256 → B256 → B256} {cost devm devm'}
     (h : applyTernary f cost devm = .ok devm') (a : Adr) :
     devm'.getCode a = devm.getCode a := by
-  simp only [applyTernary] at h
-  refine getCode_eq_of_bind h Prod.snd ?_ ?_
-  {intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a}
-  intro ⟨x, devm1⟩ hp run; refine getCode_eq_of_bind run Prod.snd ?_ ?_
-  {intro ⟨y, devm2⟩ hp2; exact Devm.pop_getCode_eq hp2 a}
-  intro ⟨y, devm2⟩ hp2 run; refine getCode_eq_of_bind run Prod.snd ?_ ?_
-  {intro ⟨z, devm3⟩ hp3; exact Devm.pop_getCode_eq hp3 a}
-  intro ⟨z, devm3⟩ hp3 run; exact pushItem_getCode_eq run a
+  exact (liftMachExecution_worldEq_of_ok (core := Mach.applyTernary f cost) h).getCode a |>.symm
 
 lemma getCode_eq_of_SplitXl {ξ α : Type} {e : Except ξ (α × Devm)} {xl : Xlot} {q} {devm devm' : Devm} {a : Adr}
     (h : e.SplitXl xl (.ok devm') q)
@@ -4585,41 +4543,17 @@ lemma pushItem_getCode_err {x c devm err} (h : pushItem x c devm = Except.error 
 lemma applyUnary_getCode_err {f : B256 → B256} {cost devm err}
     (h : applyUnary f cost devm = Except.error err) (a : Adr) :
     err.2.getCode a = devm.getCode a := by
-  simp only [applyUnary] at h
-  refine getCode_err_of_bind h Prod.snd ?_ ?_ ?_
-  · intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a
-  · intro e hp; exact Devm.pop_getCode_err hp a
-  · intro ⟨x, devm1⟩ hp run; exact pushItem_getCode_err run a
+  exact (liftMachExecution_worldEq_of_error (core := Mach.applyUnary f cost) h).getCode a |>.symm
 
 lemma applyBinary_getCode_err {f : B256 → B256 → B256} {cost devm err}
     (h : applyBinary f cost devm = Except.error err) (a : Adr) :
     err.2.getCode a = devm.getCode a := by
-  simp only [applyBinary] at h
-  refine getCode_err_of_bind h Prod.snd ?_ ?_ ?_
-  · intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a
-  · intro e hp; exact Devm.pop_getCode_err hp a
-  · intro ⟨x, devm1⟩ hp run
-    refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨y, devm2⟩ hp2; exact Devm.pop_getCode_eq hp2 a
-    · intro e hp2; exact Devm.pop_getCode_err hp2 a
-    · intro ⟨y, devm2⟩ hp2 run2; exact pushItem_getCode_err run2 a
+  exact (liftMachExecution_worldEq_of_error (core := Mach.applyBinary f cost) h).getCode a |>.symm
 
 lemma applyTernary_getCode_err {f : B256 → B256 → B256 → B256} {cost devm err}
     (h : applyTernary f cost devm = Except.error err) (a : Adr) :
     err.2.getCode a = devm.getCode a := by
-  simp only [applyTernary] at h
-  refine getCode_err_of_bind h Prod.snd ?_ ?_ ?_
-  · intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a
-  · intro e hp; exact Devm.pop_getCode_err hp a
-  · intro ⟨x, devm1⟩ hp run
-    refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨y, devm2⟩ hp2; exact Devm.pop_getCode_eq hp2 a
-    · intro e hp2; exact Devm.pop_getCode_err hp2 a
-    · intro ⟨y, devm2⟩ hp2 run2
-      refine getCode_err_of_bind run2 Prod.snd ?_ ?_ ?_
-      · intro ⟨z, devm3⟩ hp3; exact Devm.pop_getCode_eq hp3 a
-      · intro e hp3; exact Devm.pop_getCode_err hp3 a
-      · intro ⟨z, devm3⟩ hp3 run3; exact pushItem_getCode_err run3 a
+  exact (liftMachExecution_worldEq_of_error (core := Mach.applyTernary f cost) h).getCode a |>.symm
 
 lemma Rinst.inv_getCode_err
     {pc sevm devm r err}
@@ -6649,17 +6583,19 @@ lemma Devm.pushBurn_of_pushItem {v : B256} {cost : Nat} {s s' : Devm}
 lemma Devm.diffBurn_of_applyUnary {f : B256 → B256} {cost : Nat} {s s' : Devm}
     (h : applyUnary f cost s = .ok s') :
     ∃ x, Devm.DiffBurn [x] [f x] s s' := by
-  simp only [applyUnary] at h
+  rw [applyUnary_def] at h
   rcases of_bind_eq_ok h with ⟨⟨x, s₁⟩, h1, h2⟩
+  simp only at h2
   rw [pushItem_def] at h2
   refine ⟨x, Devm.diffBurn_of_pop_of_pushBurn (Devm.pop_of_pop h1) (Devm.pushBurn_of_run h2)⟩
 
 lemma Devm.diffBurn_of_applyBinary {f : B256 → B256 → B256} {cost : Nat} {s s' : Devm}
     (h : applyBinary f cost s = .ok s') :
     ∃ x y, Devm.DiffBurn [x, y] [f x y] s s' := by
-  simp only [applyBinary] at h
+  rw [applyBinary_def] at h
   rcases of_bind_eq_ok h with ⟨⟨x, s₁⟩, h1, h'⟩
   rcases of_bind_eq_ok h' with ⟨⟨y, s₂⟩, h2, h3⟩
+  simp only at h3
   rw [pushItem_def] at h3
   refine ⟨x, y, Devm.diffBurn_of_pop_of_pushBurn
     (Devm.pop_append (Devm.pop_of_pop h1) (Devm.pop_of_pop h2))
@@ -8476,35 +8412,17 @@ lemma pushItem_delSets_eq {x c devm devm'} (h : pushItem x c devm = .ok devm') :
 lemma applyBinary_delSets_eq {f : B256 → B256 → B256} {cost devm devm'}
     (h : applyBinary f cost devm = .ok devm') :
     devm.delSets = devm'.delSets := by
-  simp only [applyBinary] at h
-  apply Eq.symm
-  refine delSets_eq_of_bind h Prod.snd ?_ ?_
-  {intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp}
-  intro ⟨x, devm1⟩ hp run; refine delSets_eq_of_bind run Prod.snd ?_ ?_
-  {intro ⟨y, devm2⟩ hp2; exact Devm.pop_delSets_eq hp2}
-  intro ⟨y, devm2⟩ hp2 run; exact pushItem_delSets_eq run
+  exact (liftMachExecution_delSets_of_ok (core := Mach.applyBinary f cost) h).symm
 
 lemma applyUnary_delSets_eq {f : B256 → B256} {cost devm devm'}
     (h : applyUnary f cost devm = .ok devm') :
     devm.delSets = devm'.delSets := by
-  simp only [applyUnary] at h
-  apply Eq.symm
-  refine delSets_eq_of_bind h Prod.snd ?_ ?_
-  {intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp}
-  intro ⟨x, devm1⟩ hp run; exact pushItem_delSets_eq run
+  exact (liftMachExecution_delSets_of_ok (core := Mach.applyUnary f cost) h).symm
 
 lemma applyTernary_delSets_eq {f : B256 → B256 → B256 → B256} {cost devm devm'}
     (h : applyTernary f cost devm = .ok devm') :
     devm.delSets = devm'.delSets := by
-  simp only [applyTernary] at h
-  apply Eq.symm
-  refine delSets_eq_of_bind h Prod.snd ?_ ?_
-  {intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp}
-  intro ⟨x, devm1⟩ hp run; refine delSets_eq_of_bind run Prod.snd ?_ ?_
-  {intro ⟨y, devm2⟩ hp2; exact Devm.pop_delSets_eq hp2}
-  intro ⟨y, devm2⟩ hp2 run; refine delSets_eq_of_bind run Prod.snd ?_ ?_
-  {intro ⟨z, devm3⟩ hp3; exact Devm.pop_delSets_eq hp3}
-  intro ⟨z, devm3⟩ hp3 run; exact pushItem_delSets_eq run
+  exact (liftMachExecution_delSets_of_ok (core := Mach.applyTernary f cost) h).symm
 
 lemma memRead_delSets_eq {x n : Nat} {devm devm' : Devm} {value : B8L} (h : devm.memRead x n = ⟨value, devm'⟩) : devm'.delSets = devm.delSets := by
   simp only [Devm.memRead] at h
@@ -8941,41 +8859,17 @@ lemma pushItem_delSets_err {x c devm err} (h : pushItem x c devm = Except.error 
 lemma applyUnary_delSets_err {f : B256 → B256} {cost devm err}
     (h : applyUnary f cost devm = Except.error err) :
     err.2.delSets = devm.delSets := by
-  simp only [applyUnary] at h
-  refine delSets_err_of_bind h Prod.snd ?_ ?_ ?_
-  · intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp
-  · intro e hp; exact Devm.pop_delSets_err hp
-  · intro ⟨x, devm1⟩ hp run; exact pushItem_delSets_err run
+  exact liftMachExecution_delSets_of_error (core := Mach.applyUnary f cost) h
 
 lemma applyBinary_delSets_err {f : B256 → B256 → B256} {cost devm err}
     (h : applyBinary f cost devm = Except.error err) :
     err.2.delSets = devm.delSets := by
-  simp only [applyBinary] at h
-  refine delSets_err_of_bind h Prod.snd ?_ ?_ ?_
-  · intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp
-  · intro e hp; exact Devm.pop_delSets_err hp
-  · intro ⟨x, devm1⟩ hp run
-    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨y, devm2⟩ hp2; exact Devm.pop_delSets_eq hp2
-    · intro e hp2; exact Devm.pop_delSets_err hp2
-    · intro ⟨y, devm2⟩ hp2 run2; exact pushItem_delSets_err run2
+  exact liftMachExecution_delSets_of_error (core := Mach.applyBinary f cost) h
 
 lemma applyTernary_delSets_err {f : B256 → B256 → B256 → B256} {cost devm err}
     (h : applyTernary f cost devm = Except.error err) :
     err.2.delSets = devm.delSets := by
-  simp only [applyTernary] at h
-  refine delSets_err_of_bind h Prod.snd ?_ ?_ ?_
-  · intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp
-  · intro e hp; exact Devm.pop_delSets_err hp
-  · intro ⟨x, devm1⟩ hp run
-    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨y, devm2⟩ hp2; exact Devm.pop_delSets_eq hp2
-    · intro e hp2; exact Devm.pop_delSets_err hp2
-    · intro ⟨y, devm2⟩ hp2 run2
-      refine delSets_err_of_bind run2 Prod.snd ?_ ?_ ?_
-      · intro ⟨z, devm3⟩ hp3; exact Devm.pop_delSets_eq hp3
-      · intro e hp3; exact Devm.pop_delSets_err hp3
-      · intro ⟨z, devm3⟩ hp3 run3; exact pushItem_delSets_err run3
+  exact liftMachExecution_delSets_of_error (core := Mach.applyTernary f cost) h
 
 -- Rinst execution preserves delSets on error results.
 lemma Rinst.inv_delSets_err {pc : Nat} {sevm : Sevm} {devm : Devm} {r : Rinst}
@@ -10092,41 +9986,17 @@ lemma pushItem_getBal_err {x c devm err} (h : pushItem x c devm = Except.error e
 lemma applyUnary_getBal_err {f : B256 → B256} {cost devm err}
     (h : applyUnary f cost devm = Except.error err) (a : Adr) :
     err.2.getBal a = devm.getBal a := by
-  simp only [applyUnary] at h
-  refine getBal_err_of_bind h Prod.snd ?_ ?_ ?_
-  · intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a
-  · intro e hp; exact Devm.pop_getBal_err hp a
-  · intro ⟨x, devm1⟩ hp run; exact pushItem_getBal_err run a
+  exact (liftMachExecution_worldEq_of_error (core := Mach.applyUnary f cost) h).getBal a |>.symm
 
 lemma applyBinary_getBal_err {f : B256 → B256 → B256} {cost devm err}
     (h : applyBinary f cost devm = Except.error err) (a : Adr) :
     err.2.getBal a = devm.getBal a := by
-  simp only [applyBinary] at h
-  refine getBal_err_of_bind h Prod.snd ?_ ?_ ?_
-  · intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a
-  · intro e hp; exact Devm.pop_getBal_err hp a
-  · intro ⟨x, devm1⟩ hp run
-    refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨y, devm2⟩ hp2; exact Devm.pop_getBal_eq hp2 a
-    · intro e hp2; exact Devm.pop_getBal_err hp2 a
-    · intro ⟨y, devm2⟩ hp2 run2; exact pushItem_getBal_err run2 a
+  exact (liftMachExecution_worldEq_of_error (core := Mach.applyBinary f cost) h).getBal a |>.symm
 
 lemma applyTernary_getBal_err {f : B256 → B256 → B256 → B256} {cost devm err}
     (h : applyTernary f cost devm = Except.error err) (a : Adr) :
     err.2.getBal a = devm.getBal a := by
-  simp only [applyTernary] at h
-  refine getBal_err_of_bind h Prod.snd ?_ ?_ ?_
-  · intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a
-  · intro e hp; exact Devm.pop_getBal_err hp a
-  · intro ⟨x, devm1⟩ hp run
-    refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨y, devm2⟩ hp2; exact Devm.pop_getBal_eq hp2 a
-    · intro e hp2; exact Devm.pop_getBal_err hp2 a
-    · intro ⟨y, devm2⟩ hp2 run2
-      refine getBal_err_of_bind run2 Prod.snd ?_ ?_ ?_
-      · intro ⟨z, devm3⟩ hp3; exact Devm.pop_getBal_eq hp3 a
-      · intro e hp3; exact Devm.pop_getBal_err hp3 a
-      · intro ⟨z, devm3⟩ hp3 run3; exact pushItem_getBal_err run3 a
+  exact (liftMachExecution_worldEq_of_error (core := Mach.applyTernary f cost) h).getBal a |>.symm
 
 lemma Rinst.inv_getBal_err
     {pc sevm devm r err}
