@@ -5688,12 +5688,6 @@ def ObsEq {σ α : Type} (obs : σ → α) : Rel σ :=
 def Stable {σ α : Type} (obs : σ → α) (effect : Rel σ) : Prop :=
   Refines effect (ObsEq obs)
 
-/-
-(1) Difficulty: ★☆☆☆☆
-(2) Proof sketch: unfold `Comp`; reassociate the two existential witnesses.
-Given `s --R--> a --S--> b --T--> u`, use `b` for the outer witness on the
-right and `a` for the inner witness.  Prove the converse identically.
--/
 lemma comp_assoc {σ : Type} (R S T : Rel σ) :
     Comp (Comp R S) T = Comp R (Comp S T) := by
   ext s u
@@ -5703,33 +5697,17 @@ lemma comp_assoc {σ : Type} (R S T : Rel σ) :
   · rintro ⟨a, hRa, b, hSab, hTbu⟩
     exact ⟨b, ⟨a, hRa, hSab⟩, hTbu⟩
 
-/-
-(1) Difficulty: ★☆☆☆☆
-(2) Proof sketch: unfold `Holds`, `Refines`, and `Comp`.  Extract the intermediate
-state from the run composition, apply `hR` to the first run and `hS` to the
-second, then reuse the same intermediate state for the effect composition.
--/
 lemma holds_comp {σ : Type} {run₁ run₂ R S : Rel σ}
     (hR : Holds run₁ R) (hS : Holds run₂ S) :
     Holds (Comp run₁ run₂) (Comp R S) := by
   rintro s t ⟨u, h1, h2⟩
   exact ⟨u, hR h1, hS h2⟩
 
-/-
-(1) Difficulty: ★☆☆☆☆
-(2) Proof sketch: this is implication composition.  Unfold `Holds` and
-`Refines`; apply `hweak` to the result of `h`.
--/
 lemma holds_weaken {σ : Type} {run R S : Rel σ}
     (h : Holds run R) (hweak : Refines R S) : Holds run S := by
   intro s t hrun
   exact hweak (h hrun)
 
-/-
-(1) Difficulty: ★☆☆☆☆
-(2) Proof sketch: use `holds_comp`, then unfold `Refines`/`Comp` and apply
-`htrans` to the two effect facts around the intermediate state.
--/
 lemma holds_comp_of_transitive {σ : Type} {run₁ run₂ R : Rel σ}
     (htrans : Transitive R)
     (h₁ : Holds run₁ R) (h₂ : Holds run₂ R) :
@@ -5738,14 +5716,6 @@ lemma holds_comp_of_transitive {σ : Type} {run₁ run₂ R : Rel σ}
   rcases hrun with ⟨t, hR1, hR2⟩
   exact htrans (h₁ hR1) (h₂ hR2)
 
-/-
-(1) Difficulty: ★★☆☆☆
-(2) Proof sketch: induct on `Relation.ReflTransGen step s t`.  The reflexive
-case is `Relation.ReflTransGen.refl`; in the tail case, map the new `step` edge
-through `hrefine` and append it with the constructor corresponding to one more
-transitive-closure step.  Inspect the constructors with LSP before writing the
-induction, because their argument order is easy to reverse.
--/
 lemma reflTransGen_mono {σ : Type} {step effect : Rel σ} {s t : σ}
     (hrefine : Refines step effect)
     (h : Relation.ReflTransGen step s t) :
@@ -5755,11 +5725,7 @@ lemma reflTransGen_mono {σ : Type} {step effect : Rel σ} {s t : σ}
   | tail h1 h2 ih => exact Relation.ReflTransGen.tail ih (hrefine h2)
 
 /-
-(1) Difficulty: ★★☆☆☆
-(2) Proof sketch: induct on the closure proof.  The reflexive case uses `hrefl`;
-the step case combines the induction hypothesis with `hrefine` applied to the
-last edge, using `htrans`.  This is the generic “every small step has `R`, hence
-the whole run has `R`” theorem.
+This is the generic “every small step has `R`, hence the whole run has `R`” theorem.
 -/
 lemma reflTransGen_collapse {σ : Type} {step R : Rel σ} {s t : σ}
     (hrefl : Reflexive R) (htrans : Transitive R)
@@ -5769,11 +5735,6 @@ lemma reflTransGen_collapse {σ : Type} {step R : Rel σ} {s t : σ}
   | refl => exact hrefl _
   | tail h_prev h_step ih => exact htrans ih (hrefine h_step)
 
-/-
-(1) Difficulty: ★☆☆☆☆
-(2) Proof sketch: unfold `ObsEq`; both results are ordinary equality facts.
-Use `rfl` for reflexivity and `Eq.trans` for transitivity.
--/
 lemma obsEq_refl_trans {σ α : Type} (obs : σ → α) :
     Reflexive (ObsEq obs) ∧ Transitive (ObsEq obs) := by
   constructor
@@ -5782,11 +5743,6 @@ lemma obsEq_refl_trans {σ α : Type} (obs : σ → α) :
   · intro x y z hxy hyz
     exact Eq.trans hxy hyz
 
-/-
-(1) Difficulty: ★☆☆☆☆
-(2) Proof sketch: unfold `Stable`, `Refines`, and `ObsEq`.  Given an `R`-step,
-first obtain equality of `obs`; apply congruence with `f`.
--/
 lemma Stable.comp {σ α β : Type} {obs : σ → α} {R : Rel σ}
     (h : Stable obs R) (f : α → β) : Stable (f ∘ obs) R := by
   intro s t hR; exact congrArg f (h hR)
@@ -5829,13 +5785,6 @@ def Devm.Rels.Trans (r : Devm.Rels) : Prop :=
   Transitive r.state ∧ Transitive r.createdAccounts ∧
   Transitive r.transientStorage
 
-/-
-(1) Difficulty: ★☆☆☆☆
-(2) Proof sketch: construct `Devm.Rel (r.comp s) a c`.  For each record field,
-use the corresponding field of the intermediate `b` as the existential witness,
-then pair the matching fields of `hab` and `hbc`.  There are fourteen repetitive
-goals; solve explicitly first, then consider a small constructor tactic.
--/
 lemma Devm.Rel.comp {r s : Devm.Rels} {a b c : Devm}
     (hab : Devm.Rel r a b) (hbc : Devm.Rel s b c) :
     Devm.Rel (Devm.Rels.comp r s) a c := by
@@ -5856,12 +5805,6 @@ lemma Devm.Rel.comp {r s : Devm.Rels} {a b c : Devm}
     transientStorage := ⟨b.transientStorage, hab.transientStorage, hbc.transientStorage⟩
   }
 
-/-
-(1) Difficulty: ★☆☆☆☆
-(2) Proof sketch: unpack `hr` into its fourteen reflexivity hypotheses and
-construct `Devm.Rel r d d`, applying each hypothesis to the corresponding
-projection of `d`.
--/
 lemma Devm.rel_refl {r : Devm.Rels} (hr : Devm.Rels.Refl r) :
     Reflexive (Devm.Rel r) := by
   intro d
@@ -5882,13 +5825,6 @@ lemma Devm.rel_refl {r : Devm.Rels} (hr : Devm.Rels.Refl r) :
   · exact h13 _
   · exact h14 _
 
-/-
-(1) Difficulty: ★★☆☆☆
-(2) Proof sketch: unpack `hr`, then construct the output relation field by
-field.  Each field is the corresponding transitivity hypothesis applied to the
-matching fields of `hab` and `hbc`.  This is intentionally generic and should
-be the only fourteen-field transitivity proof needed by clients.
--/
 lemma Devm.rel_trans {r : Devm.Rels} (hr : Devm.Rels.Trans r) :
     Transitive (Devm.Rel r) := by
   intro a b c hab hbc
@@ -5911,14 +5847,6 @@ lemma Devm.rel_trans {r : Devm.Rels} (hr : Devm.Rels.Trans r) :
 def Devm.OnlyGas : Devm → Devm → Prop :=
   Devm.Rel { Devm.Rels.eq with gasLeft := fun _ _ => True }
 
-/-
-(1) Difficulty: ★☆☆☆☆
-(2) Proof sketch: unfold `CEffect.Stable`, `CEffect.Refines`, `CEffect.ObsEq`,
-and `Devm.OnlyGas`.  The `state` field of the supplied `Devm.Rel` proof is
-literally an equality, so return it.  `CEffect.Stable.comp` then gives stability
-of every observation factoring through `Devm.state` without one lemma per
-observation; this is the concrete footprint example requested by the review.
--/
 lemma Devm.onlyGas_stable_state :
     CEffect.Stable Devm.state Devm.OnlyGas := by
   intro x y h
@@ -5935,10 +5863,7 @@ def Rel {σ ε α : Type}
   | .ok value => R pre (okState value)
 
 /-
-(1) Difficulty: ★☆☆☆☆
-(2) Proof sketch: cases on `out`; in each branch unfold `Rel` and apply
-`hrefine` to `h`.  This is the generic weakening rule for both success and
-error outcomes, replacing duplicated `_eq`, `_err`, and `_gen` lemmas.
+This is the generic weakening rule for both success and error outcomes.
 -/
 lemma Rel.mono {σ ε α : Type}
     {errState : ε → σ} {okState : α → σ} {R S : σ → σ → Prop}
@@ -5984,12 +5909,6 @@ def Ninst.Effect (R : Devm → Devm → Prop) (n : Ninst) : Prop :=
 def Func.Effect (R : Devm → Devm → Prop) (p : Func) : Prop :=
   ∀ {fs sevm pre post}, Func.Run fs sevm pre p post → R pre post
 
-/-
-(1) Difficulty: ★☆☆☆☆
-(2) Proof sketch: unfold `Ninst.EffectGen` and `Ninst.Run'`.  The only possible
-oracle for `.reg r` is `.none`; the `.some` branch is `False`.  In the `.none`
-branch, apply `hr` to the defining equality for `Rinst.run`.
--/
 lemma Ninst.effectGen_reg {R : Devm → Devm → Prop} {r : Rinst}
     (hr : Rinst.Effect R r) : Ninst.EffectGen R (.reg r) := by
   intro pc sevm pre xl out hxl hrun
@@ -5997,27 +5916,14 @@ lemma Ninst.effectGen_reg {R : Devm → Devm → Prop} {r : Rinst}
   | none => exact hr hrun
   | some val => exact False.elim hrun
 
-/-
-(1) Difficulty: ★☆☆☆☆
-(2) Proof sketch: unfold `Ninst.EffectGen` and `Ninst.Run'`.  The `.exec x`
-definition is exactly `Xinst.Run`, so this should close with `hx hxl hrun` after
-minor simplification.
--/
 lemma Ninst.effectGen_exec {R : Devm → Devm → Prop} {x : Xinst}
     (hx : Xinst.EffectGen R x) : Ninst.EffectGen R (.exec x) := by
   intro pc sevm pre xl out hxl hrun
   exact hx hxl hrun
 
 /-
-(1) Difficulty: ★★★★★
-(2) Proof sketch: perform `Exec.rec` on `run`, exactly once for arbitrary `R`.
-Invalid-opcode uses `hrefl`.  Error constructors use the matching instruction
-effect directly.  Recursive constructors first obtain the instruction effect,
-then compose it with the induction hypothesis using `htrans`.  For
-`nextSomeErr`/`nextSomeRec`, build `Xlot.Rel R (.some ...)` from the induction
-hypothesis for the nested execution before applying `hn`.  Jump and last cases
-use `hj`/`hl`.  This theorem is the central payoff: future properties must not
-repeat an `Exec.rec` traversal.
+Future proofs for properties of `Exec` should use this theorem,
+instead of repeating an `Exec.rec` traversal.
 -/
 theorem Exec.effect {R : Devm → Devm → Prop}
     (hrefl : Reflexive R) (htrans : Transitive R)
@@ -6045,13 +5951,6 @@ theorem Exec.effect {R : Devm → Devm → Prop}
     exact hcomp (hj _ hRun) ih
   | last hAt hRun => exact hl _ hRun
 
-/-
-(1) Difficulty: ★★★☆☆
-(2) Proof sketch: cases on `xl`.  `.none` is trivial.  In the filled case,
-unpack `Nonempty (Exec 0 sevm pre out)` and apply `Exec.effect` with the supplied
-local effect tables.  This packages the oracle side condition used by public
-`Ninst.Run` proofs.
--/
 lemma Xlot.rel_of_filled {R : Devm → Devm → Prop}
     (hrefl : Reflexive R) (htrans : Transitive R)
     (hn : ∀ n, Ninst.EffectGen R n)
@@ -6065,12 +5964,6 @@ lemma Xlot.rel_of_filled {R : Devm → Devm → Prop}
     rcases hfilled with ⟨hrun⟩
     exact Exec.effect hrefl htrans hn hj hl hrun
 
-/-
-(1) Difficulty: ★★☆☆☆
-(2) Proof sketch: unpack `Ninst.Run` into `xl`, `hfilled`, `pc`, and `hrun`.
-Use `Xlot.rel_of_filled` to discharge the oracle contract, apply `hn n`, and
-simplify `Execution.Rel` for the final `.ok post` result.
--/
 lemma Ninst.effect_of_effectGen {R : Devm → Devm → Prop}
     (hrefl : Reflexive R) (htrans : Transitive R)
     (hn : ∀ n, Ninst.EffectGen R n)
@@ -6082,14 +5975,6 @@ lemma Ninst.effect_of_effectGen {R : Devm → Devm → Prop}
   have hrel := Xlot.rel_of_filled hrefl htrans hn hj hl hfilled
   exact hn n hrel hrun'
 
-/-
-(1) Difficulty: ★★★☆☆
-(2) Proof sketch: induct on the supplied `Func.Run` derivation, not on `p`.
-Branch cases compose `hpop`, optionally `hburn`, and the branch induction
-hypothesis.  `last` uses `hl` and simplifies the `.ok` outcome.  `next` composes
-`hn` with the continuation IH.  `call` composes `hburn` with its IH.  All
-composition is `htrans`; no observable-specific reasoning should occur here.
--/
 theorem Func.effect {R : Devm → Devm → Prop}
     (htrans : Transitive R)
     (hpop : ∀ xs pre post, Devm.PopBurn xs pre post → R pre post)
@@ -6110,12 +5995,6 @@ theorem Func.effect {R : Devm → Devm → Prop}
   | call eq burn run' ih =>
     exact htrans (hburn _ _ burn) ih
 
-/-
-(1) Difficulty: ★☆☆☆☆
-(2) Proof sketch: unfold `Ninst.Effect`, `CEffect.ObsEq`, and `Ninst.Inv`; the
-two propositions are definitionally the same after reordering implicit
-arguments.  Prove both directions by applying the supplied function.
--/
 lemma Ninst.effect_obsEq_iff_inv {α : Type} (obs : Devm → α) (n : Ninst) :
     Ninst.Effect (CEffect.ObsEq obs) n ↔ Ninst.Inv obs n := by
   unfold Ninst.Effect CEffect.ObsEq Ninst.Inv
@@ -6126,10 +6005,7 @@ lemma Ninst.effect_obsEq_iff_inv {α : Type} (obs : Devm → α) (n : Ninst) :
     exact h
 
 /-
-(1) Difficulty: ★☆☆☆☆
-(2) Proof sketch: as above, unfold `Func.Effect`, `CEffect.ObsEq`, and
-`Func.Inv`.  Specializing both observations of `Func.Inv` to `obs` makes the
-statements identical.  This bridge is what allows existing program-level frame
+This bridge is what allows existing program-level frame
 proofs to migrate incrementally to the new relational traversal.
 -/
 lemma Func.effect_obsEq_iff_inv {α : Type} (obs : Devm → α) (p : Func) :
@@ -9870,23 +9746,6 @@ lemma Msg.NoDel.benvAfterTransfer {wa : Adr} {msg : Msg} {benv : Benv}
     exact h
 
 
-/- newly ported development begins here -/
-
-/-
-
-The generic relational-effect traversal (CEffect, sections 1-3) now lives
-earlier in this file, just before `Exec.inv_getCode`, so that the getCode /
-noDel invariants can also be instances of it.  The development below is the
-balance-sum-nonincreasing instance, ending in the theorem needed to replace
-`processMessageCall_sum_le` in `Blanc/Solvent.lean`.
-
-* ★☆☆☆☆: routine unfolding / constructors;
-* ★★☆☆☆: short structural induction or arithmetic;
-* ★★★☆☆: several semantic cases, but locally contained;
-* ★★★★☆: substantial interpreter inversion;
-* ★★★★★: central recursive/oracle proof requiring careful bookkeeping.
--/
-
 /-! ## 4. Balance-sum relations and primitive state updates -/
 
 def State.balSum (st : _root_.State) : Nat :=
@@ -9910,38 +9769,17 @@ def State.SumNof (st : _root_.State) : Prop :=
 def Devm.SumNof (d : Devm) : Prop :=
   Devm.balSum d < 2 ^ 256
 
-/-
-(1) Difficulty: ★☆☆☆☆
-(2) Proof sketch: unfold the two relations.  Reflexivity is `Nat.le_refl` and
-transitivity follows from `Nat.le_trans`, remembering that the inequalities are
-oriented `post ≤ pre`.
--/
 lemma balNoninc_refl_trans :
     (Reflexive State.BalNoninc ∧ Transitive State.BalNoninc) ∧
     (Reflexive Devm.BalNoninc ∧ Transitive Devm.BalNoninc) := by
   exact ⟨⟨fun _ => Nat.le_refl _, fun _ _ _ h1 h2 => Nat.le_trans h2 h1⟩,
          ⟨fun _ => Nat.le_refl _, fun _ _ _ h1 h2 => Nat.le_trans h2 h1⟩⟩
 
-/-
-(1) Difficulty: ★☆☆☆☆
-(2) Proof sketch: unfold `State.SumNof` and `State.BalNoninc`; combine
-`post.balSum ≤ pre.balSum` with `pre.balSum < 2^256` using transitivity of `<`
-over `≤` (`omega` also closes it).  The Devm version later follows identically.
--/
 lemma State.SumNof.of_noninc {pre post : _root_.State}
     (hrel : State.BalNoninc pre post) (hnof : State.SumNof pre) :
     State.SumNof post :=
   Nat.lt_of_le_of_lt hrel hnof
 
-/-
-(1) Difficulty: ★★★☆☆
-(2) Proof sketch: unfold `State.balSum`, `State.setBal`, `State.bal`, and `sum`.
-Prove the corresponding `sumBelow` replacement identity by induction on the
-bound.  At each successor, split on whether the enumerated address equals `a`,
-using `State.get_set_self`/`State.get_set_ne`; exactly one summand changes.  This
-is the fundamental finite-map update theorem and should replace repeated ad-hoc
-sum calculations elsewhere.
--/
 lemma adr_toNat_lt_size_local (a : Adr) : a.toNat < 2 ^ 160 := by
   rw [← toAdr_toNat a, Nat.toNat_toAdr, Nat.lo]
   exact Nat.mod_lt _ (Nat.two_pow_pos _)
@@ -10015,7 +9853,7 @@ lemma sumBelow_setBal_add_local (st : _root_.State) (a : Adr) (v : B256)
 lemma State.balSum_setBal (st : _root_.State) (a : Adr) (v : B256) :
     State.balSum (st.setBal a v) + (st.bal a).toNat =
       State.balSum st + v.toNat := by
-  have hmax : Adr.max.toNat.succ = 2 ^ 160 := by native_decide
+  have hmax : Adr.max.toNat.succ = 2 ^ 160 := by decide
   have ha : a.toNat < Adr.max.toNat.succ := by
     rw [hmax]
     exact adr_toNat_lt_size_local a
@@ -10023,14 +9861,6 @@ lemma State.balSum_setBal (st : _root_.State) (a : Adr) (v : B256) :
     (sumBelow_setBal_add_local st a v Adr.max.toNat.succ
       (by rw [hmax]) ha)
 
-/-
-(1) Difficulty: ★★☆☆☆
-(2) Proof sketch: unfold `State.subBal` at `h`; the successful branch provides
-`v ≤ st.bal a`.  Substitute `mid = st.setBal a (st.bal a - v)`, apply
-`State.balSum_setBal`, and use the existing B256 `toNat` subtraction lemma plus
-ordinary Nat arithmetic.  Search locally for the exact B256 lemma name before
-writing the arithmetic step.
--/
 lemma State.balSum_subBal {st mid : _root_.State} {a : Adr} {v : B256}
     (h : st.subBal a v = some mid) :
     State.balSum mid + v.toNat = State.balSum st := by
@@ -10046,13 +9876,6 @@ lemma State.balSum_subBal {st mid : _root_.State} {a : Adr} {v : B256}
     rw [B256.toNat_sub_eq_of_le _ _ h_le] at h_set
     omega
 
-/-
-(1) Difficulty: ★★☆☆☆
-(2) Proof sketch: unfold `State.addBal`, rewrite with `State.balSum_setBal`, and
-use the modular-addition bound `(x + v).toNat ≤ x.toNat + v.toNat`.  The proof
-must not assume non-overflow: wrapping is precisely why the conclusion is `≤`.
-Verify the exact B256 lemma name with `lean_local_search`.
--/
 lemma State.addBal_growth (st : _root_.State) (a : Adr) (v : B256) :
     State.BalGrowth v.toNat st (st.addBal a v) := by
   unfold State.addBal State.BalGrowth
@@ -10062,14 +9885,8 @@ lemma State.addBal_growth (st : _root_.State) (a : Adr) (v : B256) :
   have h_mod := Nat.mod_le ((st.bal a).toNat + v.toNat) (2^256)
   omega
 
-/-
-(1) Difficulty: ★★☆☆☆
-(2) Proof sketch: combine `State.balSum_subBal hsub` with
-`State.addBal_growth mid to v`.  The latter bounds the final sum by
-`mid.balSum + v.toNat`, which the former rewrites to `st.balSum`.  This lemma is
-the reusable conservation/nonincrease theorem for value transfer, including
-the recipient-overflow case.
--/
+/- This lemma is the reusable conservation/nonincrease theorem for value transfer,
+   including the recipient-overflow case.  -/
 lemma State.sub_addBal_noninc {st mid : _root_.State}
     {src dst : Adr} {v : B256}
     (hsub : st.subBal src v = some mid) :
@@ -10084,16 +9901,10 @@ lemma State.setBal_zero_noninc (st : _root_.State) (a : Adr) :
     State.BalNoninc st (st.setBal a 0) := by
   unfold State.BalNoninc
   have h := State.balSum_setBal st a 0
-  have hz : ((0 : B256).toNat) = 0 := by native_decide
+  have hz : ((0 : B256).toNat) = 0 := by decide
   rw [hz, Nat.add_zero] at h
   omega
 
-/-
-(1) Difficulty: ★☆☆☆☆
-(2) Proof sketch: both definitions reduce to the same inequality on
-`state.balSum`; use the hypothesis directly.  This is the bridge between state
-update lemmas and the interpreter's `Devm` relation.
--/
 lemma Devm.balNoninc_of_state {pre post : Devm}
     (h : State.BalNoninc pre.state post.state) : Devm.BalNoninc pre post := by
   exact h
@@ -10598,16 +10409,6 @@ lemma Rinst.inv_getBal_err
             try split_ifs at run5; simp at run5
             rw [← run5]; rfl
 
-/-
-(1) Difficulty: ★★★★☆
-(2) Proof sketch: cases on `r`.  For successful runs, reuse `Rinst.inv_bal` and
-turn equality of `getBal` into equality of `balSum`, hence nonincrease.  For
-errors, follow the same bind-decomposition pattern as the existing generated
-`*_getBal_err` lemmas: stack, gas, memory, storage, and transient-storage
-operations leave balances equal.  Prove this once for the entire `Rinst` family
-rather than once per observable.  SSTORE is the only state-writing regular
-instruction, but `sstore_inv_getBal` already provides its balance frame fact.
--/
 lemma Rinst.balance_effect (r : Rinst) :
     Rinst.Effect Devm.BalNoninc r := by
   intro pc sevm pre out h
@@ -10618,14 +10419,6 @@ lemma Rinst.balance_effect (r : Rinst) :
     exact Devm.balNoninc_of_getBal_eq
       (funext (fun a => Rinst.inv_getBal_err h a))
 
-/-
-(1) Difficulty: ★★★☆☆
-(2) Proof sketch: cases on `j` and unfold `Jinst.Run`, `Jinst.run`, and
-`Jinst.runCore`.  Every successful or failed path changes only stack/gas/pc, so
-show equality of the `state` (or `getBal`) of the output Devm and conclude by
-reflexivity of `BalNoninc`.  Existing `Devm.pop_of_pop` and
-`Devm.burn_of_chargeGas` state fields should eliminate most manual rewriting.
--/
 lemma Jinst.balance_effect (j : Jinst) :
     Jinst.Effect Devm.BalNoninc j := by
   cases j
@@ -10704,13 +10497,6 @@ lemma Jinst.balance_effect (j : Jinst) :
       rw [←(Devm.burn_of_chargeGas eq).state]
       apply balNoninc_refl_trans.1.1
 
-/-
-(1) Difficulty: ★★★☆☆
-(2) Proof sketch: unfold `Ninst.EffectGen` and the `.push` branch of
-`Ninst.Run'`; `xl` must be `.none`.  Decompose the `chargeGas >>= push` result,
-including both errors.  `chargeGas` and `Devm.push` preserve state, hence the
-balance sum is equal in every outcome.
--/
 lemma Ninst.push_balance_effectGen {xs : B8L} {hxs : xs.length ≤ 32} :
     Ninst.EffectGen Devm.BalNoninc (.push xs hxs) := by
   unfold Ninst.EffectGen Ninst.Run'
@@ -10751,15 +10537,6 @@ lemma Ninst.push_balance_effectGen {xs : B8L} {hxs : xs.length ≤ 32} :
         exact balNoninc_refl_trans.1.1 pre.state
   · simp only at hRun
 
-/-
-(1) Difficulty: ★★★★☆
-(2) Proof sketch: cases on `l`.  STOP is reflexive.  RETURN and REVERT only pop,
-burn gas, read memory, and set output, so prove state equality for both success
-and error outcomes.  SELFDESTRUCT is the real case: invert its pops/charges,
-use `State.sub_addBal_noninc` for donor-to-donee transfer, and show that the
-optional `setBal donor 0`/account-to-delete update cannot increase the sum.
-Handle `donor = donee` explicitly rather than assuming distinct addresses.
--/
 lemma Linst.balance_effect (l : Linst) :
     Linst.Effect Devm.BalNoninc l := by
   intro sevm pre out run
@@ -10953,14 +10730,6 @@ lemma Linst.balance_effect (l : Linst) :
               unfold Execution.Rel Outcome.Rel
               exact Devm.balNoninc_of_state htransfer
 
-/-
-(1) Difficulty: ★★★☆☆
-(2) Proof sketch: unfold `Msg.benvAfterTransfer` and split on
-`shouldTransferValue`.  The false branch is reflexive.  In the true branch,
-errors carry the original state; a successful subtraction followed by addition
-is exactly `State.sub_addBal_noninc`.  This removes the existing `SumNof`
-assumption needed only for an equality theorem: nonincrease holds unconditionally.
--/
 lemma Msg.benvAfterTransfer_balance_effect {msg : Msg}
     {out : Except (String × _root_.State × AdrSet × Tra) Benv}
     (h : msg.benvAfterTransfer = out) :
@@ -10985,13 +10754,6 @@ lemma Msg.benvAfterTransfer_balance_effect {msg : Msg}
     rw [← h]
     exact Nat.le_refl _
 
-/-
-(1) Difficulty: ★★★☆☆
-(2) Proof sketch: unfold `processCreateMessage.chargeCodeGas`.  Every branch
-either returns the input error state or changes only gas.  Establish state
-equality using the state field of `Devm.burn_of_chargeGas`, then weaken equality
-to `Devm.BalNoninc`.
--/
 lemma processCreateMessage.chargeCodeGas_balance_effect
     {pre : Devm} {out : Execution}
     (h : processCreateMessage.chargeCodeGas pre = out) :
@@ -11037,13 +10799,6 @@ lemma processCreateMessage.chargeCodeGas_balance_effect
           rw [hb.state]
           exact balNoninc_refl_trans.1.1 d.state
 
-/-
-(1) Difficulty: ★★★☆☆
-(2) Proof sketch: unfold `executePrecomp`/`applyPrecompResult` only far enough to
-show that each precompile result changes gas/output/error data but not `state`.
-Reuse the existing `executePrecomp_inv_getCode` proof pattern, replacing the
-accessor conclusion by equality of `state`, then weaken to balance nonincrease.
--/
 lemma executePrecomp_balance_effect {evm : Evm} {a : Adr} {out : Execution}
     (h : executePrecomp evm a = out) :
     Execution.Rel Devm.BalNoninc evm.dyna out := by
@@ -11052,17 +10807,6 @@ lemma executePrecomp_balance_effect {evm : Evm} {a : Adr} {out : Execution}
     Devm.BalNoninc Devm.balSum State.balSum
   cases precompileRun evm a <;> rfl
 
-/-
-(1) Difficulty: ★★★★★
-(2) Proof sketch: unfold the relational `ProcessMessage` definition.  First use
-`Msg.benvAfterTransfer_balance_effect`.  On transfer failure, the error state is
-the original and the result is immediate.  On success, invert `ExecuteCode`:
-precompile paths use `executePrecomp_balance_effect`; bytecode paths use `hxl`.
-Then inspect `executeCode.handleError` and the final error flag.  A failed child
-rolls back to the pre-transfer state; a successful child preserves the child
-nonincrease fact.  Compose initial transfer and execution with transitivity of
-`State.BalNoninc`.
--/
 lemma ProcessMessage.balance_effect {msg : Msg} {xl : Xlot}
     {out : MessageExecution}
     (hxl : Xlot.Rel Devm.BalNoninc xl)
@@ -11132,15 +10876,6 @@ lemma ProcessMessage.balance_effect {msg : Msg} {xl : Xlot}
         rw [← hfinal]
         exact Nat.le_trans hexec htransfer
 
-/-
-(1) Difficulty: ★★★★☆
-(2) Proof sketch: unfold `ProcessCreateMessage`.  Apply
-`ProcessMessage.balance_effect` to the inner message, noting that `setStor` and
-`incrNonce` in `processCreateMessage.msg` leave balances unchanged.  On success,
-`chargeCodeGas_balance_effect` and `setCode` preserve balances.  Exceptional
-halt and explicit rollback return the original state, while the nonexceptional
-error exposes the already-bounded child state.
--/
 lemma ProcessCreateMessage.balance_effect {msg : Msg} {xl : Xlot}
     {out : MessageExecution}
     (hxl : Xlot.Rel Devm.BalNoninc xl)
@@ -11192,15 +10927,6 @@ lemma ProcessCreateMessage.balance_effect {msg : Msg} {xl : Xlot}
       rw [← h_body]
       exact balNoninc_refl_trans.1.1 _
 
-/-
-(1) Difficulty: ★★★★★
-(2) Proof sketch: follow the existing `GenericCall.inv_nof` inversion, but carry
-the stronger relation rather than a unary bound.  All preparation steps preserve
-state.  Apply `ProcessMessage.balance_effect hxl` to the child.  Both
-`incorporateChildOnError` and `incorporateChildOnSuccess` install `child.state`,
-so inherit the child relation; push/memory-write cleanup preserves it.  Depth
-failure is reflexive.  Compose with transitivity where intermediate states occur.
--/
 lemma GenericCall.balance_effect
     {sevm : Sevm} {pre : Devm} {gas : Nat} {value : B256}
     {caller target codeAddress : Adr} {stv istat : Bool}
@@ -11290,15 +11016,6 @@ lemma GenericCall.balance_effect
           rw [← (Devm.push_of_push h_push).state]
           exact balNoninc_refl_trans.1.1 _
 
-/-
-(1) Difficulty: ★★★★★
-(2) Proof sketch: follow `GenericCreate.inv_nof`.  Stack, gas, memory, nonce,
-and return-data preparation preserve balances.  Failure branches are reflexive.
-For the creation branch apply `ProcessCreateMessage.balance_effect hxl` to the
-child.  Incorporating the child installs its state and the final push preserves
-it.  Be careful that creation's endowment transfer occurs inside the child
-message and is already covered by `Msg.benvAfterTransfer_balance_effect`.
--/
 lemma GenericCreate.balance_effect
     {sevm : Sevm} {pre : Devm} {endowment : B256} {newAddress : Adr}
     {mi ms : Nat} {xl : Xlot} {out : Execution}
@@ -11432,15 +11149,6 @@ lemma GenericCreate.balance_effect
             rw [← (Devm.push_of_push h_body).state]
             exact balNoninc_refl_trans.1.1 _
 
-/-
-(1) Difficulty: ★★★★★
-(2) Proof sketch: cases on the six `Xinst` constructors and invert the leading
-stack pops/gas charges as in `Xinst.inv_nof_gen`.  These preparations preserve
-balances for both success and error results.  The terminal semantic call is
-either `GenericCreate.balance_effect` or `GenericCall.balance_effect`; compose
-the equal preparation effects with that result.  This is long but conceptually
-uniform, and should be the last Xinst-wide balance case split needed.
--/
 lemma Xinst.balance_effectGen (x : Xinst) :
     Xinst.EffectGen Devm.BalNoninc x := by
   intro sevm pre xl out hxl run
@@ -11741,13 +11449,6 @@ lemma Xinst.balance_effectGen (x : Xinst) :
       intro a; rw [h_d10]; exact hg9 a
     exact hok hg10 (GenericCall.balance_effect hxl run)
 
-/-
-(1) Difficulty: ★★☆☆☆
-(2) Proof sketch: cases on `n`.  PUSH uses
-`Ninst.push_balance_effectGen`; REG uses `Ninst.effectGen_reg` with
-`Rinst.balance_effect`; EXEC uses `Ninst.effectGen_exec` with
-`Xinst.balance_effectGen`.
--/
 lemma Ninst.balance_effectGen (n : Ninst) :
     Ninst.EffectGen Devm.BalNoninc n := by
   cases n
@@ -11760,38 +11461,17 @@ lemma Ninst.balance_effectGen (n : Ninst) :
   case push xs hxs =>
     apply Ninst.push_balance_effectGen
 
-/-
-(1) Difficulty: ★★☆☆☆
-(2) Proof sketch: obtain reflexivity/transitivity from `balNoninc_refl_trans`
-and instantiate the generic `Exec.effect` with `Ninst.balance_effectGen`,
-`Jinst.balance_effect`, and `Linst.balance_effect`.  No recursion or instruction
-case split should appear in this proof.
--/
 theorem Exec.balance_effect {pc : Nat} {sevm : Sevm} {pre : Devm}
     {out : Execution} (run : Exec pc sevm pre out) :
     Execution.Rel Devm.BalNoninc pre out :=
   Exec.effect balNoninc_refl_trans.2.1 balNoninc_refl_trans.2.2 Ninst.balance_effectGen Jinst.balance_effect Linst.balance_effect run
 
-/-
-(1) Difficulty: ★★☆☆☆
-(2) Proof sketch: instantiate `Ninst.effect_of_effectGen` with the balance
-relations and the three balance effect tables.  This is the public instruction
-theorem corresponding to `Ninst.Run`; it should contain no semantic inversion.
--/
 lemma Ninst.balance_effect (n : Ninst) : Ninst.Effect Devm.BalNoninc n := by
   apply Ninst.effect_of_effectGen balNoninc_refl_trans.2.1 balNoninc_refl_trans.2.2
   · exact Ninst.balance_effectGen
   · exact Jinst.balance_effect
   · exact Linst.balance_effect
 
-/-
-(1) Difficulty: ★★☆☆☆
-(2) Proof sketch: apply generic `Func.effect` with transitivity of
-`Devm.BalNoninc`.  `PopBurn` and `Burn` preserve state by their structure fields,
-so they satisfy the relation reflexively.  Use `Ninst.balance_effect` and
-`Linst.balance_effect` for the instruction hypotheses.  This theorem can replace
-the separate `Func.inv_nof` traversal.
--/
 theorem Func.balance_effect {fs : List Func} {sevm : Sevm}
     {pre post : Devm} {p : Func}
     (run : Func.Run fs sevm pre p post) : Devm.BalNoninc pre post := by
@@ -11807,14 +11487,6 @@ theorem Func.balance_effect {fs : List Func} {sevm : Sevm}
 
 /-! ## 6. Executable wrappers and the Solvent.lean endpoint -/
 
-/-
-(1) Difficulty: ★★★☆☆
-(2) Proof sketch: cases on `xl`.  In the `.some` case unpack `Xlot.Good` into a
-smaller `exec` equation and the implication from the child's recursion-limit
-error to the outer one.  `hfit` makes the child result fit; apply `of_exec` to
-obtain `Nonempty (Exec ...)`, then `Exec.balance_effect`.  This is the executable
-oracle bridge needed by both `processMessage` wrappers.
--/
 lemma Xlot.balance_rel_of_good {ξ υ : Type} {lim : Nat}
     {outer : Except (String × ξ) υ} {xl : Xlot}
     (hfit : outer.Fit) (hgood : xl.Good lim outer) :
@@ -11826,14 +11498,6 @@ lemma Xlot.balance_rel_of_good {ξ υ : Type} {lim : Nat}
     rcases of_exec lim' 0 sevm devm exn hfit' exec_eq with ⟨exc⟩
     exact Exec.balance_effect exc
 
-/-
-(1) Difficulty: ★★★☆☆
-(2) Proof sketch: the successful output is automatically `Fit`.  Apply
-`of_processMessage msg lim (.ok post)` to get `xl`, `Xlot.Good`, and the
-relational `ProcessMessage` run.  Convert `Good` with
-`Xlot.balance_rel_of_good`, apply `ProcessMessage.balance_effect`, and simplify
-`MessageExecution.state (.ok post)`.
--/
 lemma processMessage_balance_noninc {msg : Msg} {lim : Nat} {post : Devm}
     (h : processMessage msg lim = .ok post) :
     State.BalNoninc msg.benv.state post.state := by
@@ -11845,11 +11509,6 @@ lemma processMessage_balance_noninc {msg : Msg} {lim : Nat} {post : Devm}
   change State.BalNoninc msg.benv.state post.state at heff
   exact heff
 
-/-
-(1) Difficulty: ★★★☆☆
-(2) Proof sketch: identical wrapper structure to `processMessage_balance_noninc`,
-using `of_processCreateMessage` and `ProcessCreateMessage.balance_effect`.
--/
 lemma processCreateMessage_balance_noninc
     {msg : Msg} {lim : Nat} {post : Devm}
     (h : processCreateMessage msg lim = .ok post) :
@@ -11863,14 +11522,6 @@ lemma processCreateMessage_balance_noninc
   have heff := ProcessCreateMessage.balance_effect hxl hrun
   exact heff
 
-/-
-(1) Difficulty: ★★★☆☆
-(2) Proof sketch: unfold `setDelegation` and its loop.  Delegation authorization
-steps alter nonce/code but never balances.  Prove or reuse a loop invariant
-`msg'.benv.state.bal = msg.benv.state.bal`; turn this function equality into
-`balSum` equality.  The final delegated-code rewrite also preserves the state.
-This lemma isolates transaction-level preprocessing from EVM execution.
--/
 lemma setDelegationStep_bal_eq {auth : Auth} {msg msg' : Msg} {rc rc' : B256}
     (h : setDelegationStep auth msg rc = .ok ⟨msg', rc'⟩) :
     msg'.benv.state.bal = msg.benv.state.bal := by
@@ -11936,15 +11587,6 @@ lemma setDelegation_balSum_eq {msg msg' : Msg} {refund : B256}
         code := msgL.benv.state.getCode _ } : Msg).benv.state.bal =
           msgL.benv.state.bal from rfl, h_bal]
 
-/-
-(1) Difficulty: ★★★☆☆
-(2) Proof sketch: unfold `processMessageCall.call`.  In the no-authorization
-branch the message state is unchanged; otherwise use `setDelegation_balSum_eq`.
-The delegated-code `msgPc` update changes no state.  Invert the successful
-`processMessage` call, apply `processMessage_balance_noninc`, and simplify the
-final output constructor.  Refund/log/account-delete calculations do not alter
-the returned state.
--/
 lemma processMessageCall.call_balance_noninc
     {msg : Msg} {post : _root_.State} {out : MsgCallOutput}
     (h : processMessageCall.call msg = .ok ⟨post, out⟩) :
@@ -12004,13 +11646,6 @@ lemma processMessageCall.call_balance_noninc
             rcases h with ⟨rfl, _⟩
             exact hpre
 
-/-
-(1) Difficulty: ★★★☆☆
-(2) Proof sketch: unfold `processMessageCall.create`.  Collision/failure paths
-return the original state.  In the proper creation path invert the successful
-`processCreateMessage` call and apply `processCreateMessage_balance_noninc`;
-the subsequent output construction does not change the returned state.
--/
 lemma processMessageCall.create_balance_noninc
     {msg : Msg} {post : _root_.State} {out : MsgCallOutput}
     (h : processMessageCall.create msg = .ok ⟨post, out⟩) :
@@ -12042,12 +11677,6 @@ lemma processMessageCall.create_balance_noninc
           rcases h with ⟨rfl, _⟩
           exact hbal
 
-/-
-(1) Difficulty: ★☆☆☆☆
-(2) Proof sketch: unfold `processMessageCall`, split on `msg.target.isNone`, and
-apply the corresponding call/create balance lemma.  This is the relational form
-of the currently missing `processMessageCall_sum_le` theorem.
--/
 lemma processMessageCall_balance_noninc
     {msg : Msg} {post : _root_.State} {out : MsgCallOutput}
     (h : processMessageCall msg = .ok ⟨post, out⟩) :
@@ -12057,25 +11686,12 @@ lemma processMessageCall_balance_noninc
   · exact processMessageCall.create_balance_noninc h
   · exact processMessageCall.call_balance_noninc h
 
-/-
-(1) Difficulty: ★☆☆☆☆
-(2) Proof sketch: apply `processMessageCall_balance_noninc h` and unfold
-`State.BalNoninc`/`State.balSum`.  This statement is intentionally identical to
-the sorry in `Solvent.lean` after removing the `Temp` namespace.
--/
 lemma processMessageCall_sum_le
     {msg : Msg} {post : _root_.State} {out : MsgCallOutput}
     (h : processMessageCall msg = .ok ⟨post, out⟩) :
     sum post.bal ≤ sum msg.benv.state.bal := by
   exact processMessageCall_balance_noninc h
 
-/-
-(1) Difficulty: ★☆☆☆☆
-(2) Proof sketch: combine `processMessageCall_balance_noninc h` with
-`State.SumNof.of_noninc`.  This is the promised non-overflow-preservation
-corollary; analogous corollaries for `Exec`, `Ninst`, and `Func` should now be
-one-liners rather than separate recursive developments.
--/
 lemma processMessageCall_preserves_sumNof
     {msg : Msg} {post : _root_.State} {out : MsgCallOutput}
     (h : processMessageCall msg = .ok ⟨post, out⟩)

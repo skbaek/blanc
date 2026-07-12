@@ -4085,7 +4085,7 @@ wei-conservation argument (a transaction moves but never mints ether, so the
 total balance is non-increasing — hence no overflow bound is needed on the
 theorem, unlike the withdrawal-carrying `applyBody`/`stateTransition`).
 
-Bodies are `sorry` — this is the scaffold. -/
+-/
 
 -- Bumping a nonce leaves `code`, `bal`, and `stor` untouched.
 theorem State.Inv.incrNonce {wa a : Adr} {w : _root_.State}
