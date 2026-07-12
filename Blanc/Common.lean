@@ -3821,6 +3821,7 @@ lemma Rinst.inv_getCode
     {intro devm1 hc; exact chargeGas_getCode_eq hc a}
     intro devm1 hc run; exact Devm.push_getCode_eq run a
   case balance =>
+    simp only [Rinst.balanceCore_compat] at run
     refine getCode_eq_of_bind run Prod.snd ?_ ?_
     {intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a}
     intro ⟨x, devm1⟩ hp run; split at run
@@ -4603,6 +4604,7 @@ lemma Rinst.inv_getCode_err
         · intro e hc; exact chargeGas_getCode_err hc a
         · intro devm3 hc run4; exact Devm.push_getCode_err run4 a
   case balance =>
+    simp only [Rinst.balanceCore_compat] at run
     refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
     · intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a
     · intro e hp; exact Devm.pop_getCode_err hp a
@@ -5837,6 +5839,13 @@ lemma liftMachMetaWorldExecution_worldEq
     (d : Devm) :
     Execution.Rel Devm.WorldEq d (liftMachMetaWorldExecution core d) := by
   exact liftMachMetaExecution_worldEq _ _
+
+/-- `BALANCE` preserves the world because its named core is lifted with
+    read-only access to `World`; no account-operation unfolding is needed. -/
+lemma Rinst.balance_worldEq (pc : Nat) (sevm : Sevm) (d : Devm) :
+    Execution.Rel Devm.WorldEq d (Rinst.runCore pc d sevm .balance) := by
+  simpa only [Rinst.runCore] using
+    (liftMachMetaWorldExecution_worldEq Rinst.balanceCore d)
 
 lemma Devm.worldEq_stable_getBal (a : Adr) :
     CEffect.Stable (fun d : Devm => d.getBal a) Devm.WorldEq := by
@@ -7399,7 +7408,7 @@ lemma Rinst.inv_bal {r} : Rinst.Inv Devm.getBal r := by
       · intro devm2 hc; exact chargeGas_getBal_eq hc a
       · intro devm2 hc run2; exact Devm.push_getBal_eq run2 a
   case balance =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    intro h; simp only [Rinst.run, Rinst.runCore_balance_def] at h
     apply funext; intro a; apply Eq.symm
     refine getBal_eq_of_bind h Prod.snd ?_ ?_
     · intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a
@@ -7713,7 +7722,7 @@ lemma Rinst.inv_stor {r} (h_not_sstore : r ≠ Rinst.sstore) : Rinst.Inv Devm.ge
       · intro devm2 hc; exact chargeGas_getStor_eq hc
       · intro devm2 hc run2; exact Devm.push_getStor_eq run2
   case balance =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    intro h; simp only [Rinst.run, Rinst.runCore_balance_def] at h
     refine getStor_eq_of_bind h Prod.snd ?_ ?_
     · intro ⟨x, devm1⟩ hp; exact Devm.pop_getStor_eq hp
     · intro ⟨x, devm1⟩ hp run; split at run
@@ -8470,7 +8479,7 @@ lemma Rinst.inv_delSets {r : Rinst} : Rinst.Inv Devm.delSets r := by
       · intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl
       · intro devm2 hc run2; exact Devm.push_delSets_eq run2
   case balance =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
+    intro h; simp only [Rinst.run, Rinst.runCore_balance_def] at h
     apply Eq.symm
     refine delSets_eq_of_bind h Prod.snd ?_ ?_
     · intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp
@@ -8876,6 +8885,7 @@ lemma Rinst.inv_delSets_err {pc : Nat} {sevm : Sevm} {devm : Devm} {r : Rinst}
         · intro devm3 hc run4; exact (Devm.push_delSets_err run4).trans rfl
   case address => apply pushItem_delSets_err run
   case balance =>
+    simp only [Rinst.balanceCore_compat] at run
     refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
     · intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp
     · intro e hp; exact Devm.pop_delSets_err hp
@@ -9974,6 +9984,7 @@ lemma Rinst.inv_getBal_err
         · intro e hc; exact chargeGas_getBal_err hc a
         · intro devm3 hc run4; exact Devm.push_getBal_err run4 a
   case balance =>
+    simp only [Rinst.balanceCore_compat] at run
     refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
     · intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a
     · intro e hp; exact Devm.pop_getBal_err hp a
