@@ -4064,12 +4064,10 @@ structure State.Inv (wa : Adr) (w : _root_.State) : Prop where
 -- the recursion limit quantified away.
 theorem exec_inv_solvent (wa : Adr) (lim : Nat)
     (sevm : Sevm) (pre post : Devm)
-    (h_run : exec ⟨0, sevm, pre⟩ lim = .ok post)
+    (h_run : exec ⟨0, sevm, pre⟩ lim = Fueled.ok post)
     (h_code : sevm.currentTarget = wa → some sevm.code.toList = Prog.compile weth)
     (h_pc : Precond wa sevm pre) : Postcond wa sevm post := by
-  have fit : (Except.ok post : Execution).Fit := by
-    simp [Except.Fit, Except.Lim, Except.toError?]
-  obtain ⟨exc⟩ := (exec_iff_exec_eq 0 sevm pre (.ok post)).mpr ⟨fit, lim, h_run⟩
+  obtain ⟨exc⟩ := (exec_iff_exec_eq 0 sevm pre (.ok post)).mpr ⟨lim, h_run⟩
   exact weth_inv_solvent wa sevm pre post exc h_code h_pc
 
 /-! ### Atomic `State.Inv`-preservation lemmas
@@ -4324,16 +4322,14 @@ lemma State.Inv.of_exec_transfer {wa : Adr} {sevm : Sevm} {pre post : Devm}
     (h_ct : sevm.currentTarget = target)
     (h_val : sevm.currentTarget = wa → sevm.value = value)
     (h_code : sevm.currentTarget = wa → some sevm.code.toList = Prog.compile weth)
-    (h_run : exec ⟨0, sevm, pre⟩ lim = .ok post) :
+    (h_run : exec ⟨0, sevm, pre⟩ lim = Fueled.ok post) :
     State.Inv wa post.state := by
   have h_pc : Precond wa sevm pre :=
     Precond.of_inv_transfer h_inv h_ne h_sub h_pre_state h_ct h_val
   have h_post : Postcond wa sevm post :=
     exec_inv_solvent wa lim sevm pre post h_run h_code h_pc
   apply State.Inv.of_postcond h_post
-  have fit : (Except.ok post : Execution).Fit := by
-    simp [Except.Fit, Except.Lim, Except.toError?]
-  obtain ⟨exc⟩ := (exec_iff_exec_eq 0 sevm pre (.ok post)).mpr ⟨fit, lim, h_run⟩
+  obtain ⟨exc⟩ := (exec_iff_exec_eq 0 sevm pre (.ok post)).mpr ⟨lim, h_run⟩
   have h_ce : post.getCode wa = pre.getCode wa := code_eq_of_exec exc h_pc.code
   show some (post.state.getCode wa).toList = Prog.compile weth
   rw [show post.state.getCode wa = post.getCode wa from rfl, h_ce]
@@ -4359,14 +4355,12 @@ lemma Precond.of_inv_eqs {wa : Adr} {sevm : Sevm} {devm : Devm}
 lemma State.Inv.of_exec_precond {wa : Adr} {sevm : Sevm} {pre post : Devm} {lim : Nat}
     (h_pc : Precond wa sevm pre)
     (h_code : sevm.currentTarget = wa → some sevm.code.toList = Prog.compile weth)
-    (h_run : exec ⟨0, sevm, pre⟩ lim = .ok post) :
+    (h_run : exec ⟨0, sevm, pre⟩ lim = Fueled.ok post) :
     State.Inv wa post.state := by
   have h_post : Postcond wa sevm post :=
     exec_inv_solvent wa lim sevm pre post h_run h_code h_pc
   apply State.Inv.of_postcond h_post
-  have fit : (Except.ok post : Execution).Fit := by
-    simp [Except.Fit, Except.Lim, Except.toError?]
-  obtain ⟨exc⟩ := (exec_iff_exec_eq 0 sevm pre (.ok post)).mpr ⟨fit, lim, h_run⟩
+  obtain ⟨exc⟩ := (exec_iff_exec_eq 0 sevm pre (.ok post)).mpr ⟨lim, h_run⟩
   have h_ce : post.getCode wa = pre.getCode wa := code_eq_of_exec exc h_pc.code
   show some (post.state.getCode wa).toList = Prog.compile weth
   rw [show post.state.getCode wa = post.getCode wa from rfl, h_ce]
@@ -4464,17 +4458,17 @@ theorem processMessage_inv_solvent {wa : Adr} {msg : Msg} {evm : Devm} {lim : Na
   | zero => simp [processMessage] at h_run
   | succ k =>
     rw [processMessage] at h_run
-    rcases of_bind_eq_ok h_run with ⟨benv, hb, h_run'⟩
-    rcases of_bind_eq_ok h_run' with ⟨evm', hec, h_if⟩
+    rcases Fueled.of_bind_eq_ok h_run with ⟨benv, hb, h_run'⟩
+    rcases Fueled.of_bind_eq_ok h_run' with ⟨evm', hec, h_if⟩
     by_cases herr : evm'.error.isSome = true
     · -- sub-execution failed : state rolled back to the pre-transfer state
       rw [if_pos herr] at h_if
-      rw [← Except.ok.inj h_if]; exact h_inv
+      rw [← Fueled.ok_inj.mp h_if]; exact h_inv
     · -- clean success : `evm = evm'` comes straight from `executeCode`
       rw [if_neg herr] at h_if
-      rw [← Except.ok.inj h_if]
+      rw [← Fueled.ok_inj.mp h_if]
       have h_pc : Precond wa (initSevm (msg.withBenv benv)) (initDevm (msg.withBenv benv)) :=
-        Precond.of_inv_benvAfterTransfer h_ne h_val0 hb h_inv
+        Precond.of_inv_benvAfterTransfer h_ne h_val0 (Fueled.ofExcept_inj.mp hb) h_inv
       have h_code' : (initSevm (msg.withBenv benv)).currentTarget = wa →
           some (initSevm (msg.withBenv benv)).code.toList = Prog.compile weth := h_code
       cases k with
@@ -4484,17 +4478,24 @@ theorem processMessage_inv_solvent {wa : Adr} {msg : Msg} {evm : Devm} {lim : Na
         rcases hca : (msg.withBenv benv).codeAddress with _ | adr
         · -- no code address : run the interpreter directly
           rw [hca] at hec
-          exact State.Inv.of_exec_precond h_pc h_code' (exec_ok_of_handleError hec herr)
+          simp only [] at hec
+          rcases Fueled.of_mapResult_eq hec with ⟨exn, h_exec, h_handle⟩
+          have hexn := exec_ok_of_handleError h_handle herr
+          rw [hexn] at h_exec
+          exact State.Inv.of_exec_precond h_pc h_code' h_exec
         · rw [hca] at hec
           dsimp only at hec
           by_cases hp : adr.isPrecomp
           · -- precompile : the state is left untouched
             rw [if_pos hp] at hec
-            rw [state_of_executePrecomp_ok hec herr]
-            exact State.Inv.of_benvAfterTransfer h_ne hb h_inv
+            rw [state_of_executePrecomp_ok (Fueled.ofExcept_inj.mp hec) herr]
+            exact State.Inv.of_benvAfterTransfer h_ne (Fueled.ofExcept_inj.mp hb) h_inv
           · -- ordinary code at a delegated address : run the interpreter
             rw [if_neg hp] at hec
-            exact State.Inv.of_exec_precond h_pc h_code' (exec_ok_of_handleError hec herr)
+            rcases Fueled.of_mapResult_eq hec with ⟨exn, h_exec, h_handle⟩
+            have hexn := exec_ok_of_handleError h_handle herr
+            rw [hexn] at h_exec
+            exact State.Inv.of_exec_precond h_pc h_code' h_exec
 
 -- Overwriting the storage of a *foreign* account (`a ≠ wa`) preserves `State.Inv`
 -- (`wa`'s account is untouched, and `setStor` leaves every balance alone).
@@ -4539,7 +4540,7 @@ theorem processCreateMessage_inv_solvent {wa : Adr} {msg : Msg} {evm : Devm} {li
   | zero => simp [processCreateMessage] at h_run
   | succ k =>
     rw [processCreateMessage] at h_run
-    rcases of_bind_eq_ok h_run with ⟨evm2, hpm, h_rest⟩
+    rcases Fueled.of_bind_eq_ok h_run with ⟨evm2, hpm, h_rest⟩
     -- the seeded sub-message still satisfies the invariant (`currentTarget ≠ wa`)
     have h_inv_cm : State.Inv wa (processCreateMessage.msg msg).benv.state := by
       show State.Inv wa ((msg.benv.state.setStor msg.currentTarget .empty).incrNonce
@@ -4556,15 +4557,15 @@ theorem processCreateMessage_inv_solvent {wa : Adr} {msg : Msg} {evm : Devm} {li
         by_cases hex : isExceptionalHalt err
         · -- exceptional halt : state rolled back to `msg.benv.state`
           rw [if_pos hex] at h_rest
-          rw [← Except.ok.inj h_rest]; exact h_inv
+          rw [← Fueled.ok_inj.mp h_rest]; exact h_inv
         · rw [if_neg hex] at h_rest; exact absurd h_rest (by simp)
       · -- clean success : install the returned code at `currentTarget ≠ wa`
         rw [hcg] at h_rest; dsimp only at h_rest
-        rw [← Except.ok.inj h_rest, Devm.setCode_state, chargeCodeGas_state_ok hcg]
+        rw [← Fueled.ok_inj.mp h_rest, Devm.setCode_state, chargeCodeGas_state_ok hcg]
         exact State.Inv.setCode_ne h_ct_ne h_pm
     · -- sub-message failed : state rolled back to `msg.benv.state`
       rw [if_neg herr] at h_rest
-      rw [← Except.ok.inj h_rest]; exact h_inv
+      rw [← Fueled.ok_inj.mp h_rest]; exact h_inv
 
 
 lemma ExecuteCode.inv_noDel {wa : Adr} {msg : Msg} {xl : Xlot}
@@ -5134,32 +5135,10 @@ lemma Exec.inv_noDel {wa : Adr} {pc : Nat} {sevm : Sevm} {devm : Devm}
 
 theorem exec_inv_noDel {wa : Adr} (lim : Nat) (sevm : Sevm) (pre : Devm)
     (exn : Execution)
-    (h_run : exec ⟨0, sevm, pre⟩ lim = exn) (h_fit : exn.Fit)
+    (h_run : exec ⟨0, sevm, pre⟩ lim = Fueled.ofExcept exn)
     (h : Devm.NoDel wa pre) : Execution.NoDel wa exn := by
-  obtain ⟨exc⟩ := (exec_iff_exec_eq 0 sevm pre exn).mpr ⟨h_fit, lim, h_run⟩
+  obtain ⟨exc⟩ := (exec_iff_exec_eq 0 sevm pre exn).mpr ⟨lim, h_run⟩
   exact Exec.inv_noDel exc h
-
-lemma Fit_of_handleError_ok {exn : Execution} {evm : Devm}
-    (h : executeCode.handleError exn = .ok evm) : exn.Fit := by
-  cases exn
-  · dsimp [executeCode.handleError] at h
-    split at h
-    · next h_halt =>
-      intro h_lim
-      simp only [Except.Lim, Except.toError?, Option.some.injEq] at h_lim
-      rw [h_lim] at h_halt
-      revert h_halt
-      decide
-    · split at h
-      · next h_rev =>
-        intro h_lim
-        simp only [Except.Lim, Except.toError?, Option.some.injEq] at h_lim
-        rw [h_lim] at h_rev
-        revert h_rev
-        decide
-      · contradiction
-  · intro h_lim
-    cases h_lim
 
 theorem executeCode_inv_noDel {wa : Adr} {msg : Msg} {lim : Nat} {evm : Devm}
     (h_run : executeCode msg lim = .ok evm)
@@ -5171,11 +5150,11 @@ theorem executeCode_inv_noDel {wa : Adr} {msg : Msg} {lim : Nat} {evm : Devm}
     rcases hca : msg.codeAddress with _ | adr
     · rw [hca] at h_run
       dsimp only at h_run
-      have h_fit := Fit_of_handleError_ok h_run
-      have h_ex := exec_inv_noDel j (initSevm msg) (initDevm msg) _ rfl h_fit (Msg.NoDel.initDevm h)
+      rcases Fueled.of_mapResult_eq h_run with ⟨exn, h_exec, h_handle⟩
+      have h_ex := exec_inv_noDel j (initSevm msg) (initDevm msg) exn h_exec
+        (Msg.NoDel.initDevm h)
       have h_res := handleError_noDel h_ex
-      dsimp only [initEvm] at h_run h_res
-      rw [h_run] at h_res
+      rw [h_handle] at h_res
       exact h_res
     · rw [hca] at h_run
       dsimp only at h_run
@@ -5183,15 +5162,15 @@ theorem executeCode_inv_noDel {wa : Adr} {msg : Msg} {lim : Nat} {evm : Devm}
       · rw [if_pos hp] at h_run
         have h_ex := executePrecomp_noDel (evm := initEvm msg) (adr := adr) rfl (Msg.NoDel.initDevm h)
         have h_res := handleError_noDel h_ex
-        dsimp only [initEvm] at h_run h_res
-        rw [h_run] at h_res
+        have h_handle := Fueled.ofExcept_inj.mp h_run
+        rw [h_handle] at h_res
         exact h_res
       · rw [if_neg hp] at h_run
-        have h_fit := Fit_of_handleError_ok h_run
-        have h_ex := exec_inv_noDel j (initSevm msg) (initDevm msg) _ rfl h_fit (Msg.NoDel.initDevm h)
+        rcases Fueled.of_mapResult_eq h_run with ⟨exn, h_exec, h_handle⟩
+        have h_ex := exec_inv_noDel j (initSevm msg) (initDevm msg) exn h_exec
+          (Msg.NoDel.initDevm h)
         have h_res := handleError_noDel h_ex
-        dsimp only [initEvm] at h_run h_res
-        rw [h_run] at h_res
+        rw [h_handle] at h_res
         exact h_res
 
 theorem processMessage_inv_noDel {wa : Adr} {msg : Msg} {evm : Devm} {lim : Nat}
@@ -5201,21 +5180,21 @@ theorem processMessage_inv_noDel {wa : Adr} {msg : Msg} {evm : Devm} {lim : Nat}
   | zero => simp [processMessage] at h_run
   | succ k =>
     rw [processMessage] at h_run
-    rcases of_bind_eq_ok h_run with ⟨benv, hb, h_run'⟩
-    rcases of_bind_eq_ok h_run' with ⟨evm', hec, h_if⟩
+    rcases Fueled.of_bind_eq_ok h_run with ⟨benv, hb, h_run'⟩
+    rcases Fueled.of_bind_eq_ok h_run' with ⟨evm', hec, h_if⟩
     by_cases herr : evm'.error.isSome = true
     · rw [if_pos herr] at h_if
       have h_evm : evm = evm'.rollback msg.benv.state msg.tenv.transientStorage := by
-        rw [← Except.ok.inj h_if]
+        rw [← Fueled.ok_inj.mp h_if]
       rw [h_evm]
-      have hbenv := Msg.NoDel.benvAfterTransfer hb h
+      have hbenv := Msg.NoDel.benvAfterTransfer (Fueled.ofExcept_inj.mp hb) h
       have hevm' := executeCode_inv_noDel hec hbenv
       exact Devm.NoDel.rollback hevm'.atd hevm'.ca h.code
     · rw [if_neg herr] at h_if
       have h_evm : evm = evm' := by
-        rw [← Except.ok.inj h_if]
+        rw [← Fueled.ok_inj.mp h_if]
       rw [h_evm]
-      have hbenv := Msg.NoDel.benvAfterTransfer hb h
+      have hbenv := Msg.NoDel.benvAfterTransfer (Fueled.ofExcept_inj.mp hb) h
       exact executeCode_inv_noDel hec hbenv
 
 theorem processCreateMessage_inv_noDel {wa : Adr} {msg : Msg} {evm : Devm}
@@ -5227,7 +5206,7 @@ theorem processCreateMessage_inv_noDel {wa : Adr} {msg : Msg} {evm : Devm}
   | zero => simp [processCreateMessage] at h_run
   | succ k =>
     rw [processCreateMessage] at h_run
-    rcases of_bind_eq_ok h_run with ⟨evm2, hpm, h_rest⟩
+    rcases Fueled.of_bind_eq_ok h_run with ⟨evm2, hpm, h_rest⟩
     have h_inv_cm : Msg.NoDel wa (processCreateMessage.msg msg) :=
       Msg.NoDel.processCreateMessage_msg h_ct h
     have h_pm : Devm.NoDel wa evm2 :=
@@ -5238,7 +5217,7 @@ theorem processCreateMessage_inv_noDel {wa : Adr} {msg : Msg} {evm : Devm}
       · rw [hcg] at h_rest; dsimp only at h_rest
         by_cases hex : isExceptionalHalt err
         · rw [if_pos hex] at h_rest
-          rw [← Except.ok.inj h_rest]
+          rw [← Fueled.ok_inj.mp h_rest]
           have h_ds : evm3.delSets = evm2.delSets := chargeCodeGas_delSets_err hcg
           have h_atd_eq : evm3.accountsToDelete = evm2.accountsToDelete := congrArg Prod.fst h_ds
           have h_ca_eq : evm3.createdAccounts = evm2.createdAccounts := congrArg Prod.snd h_ds
@@ -5249,7 +5228,7 @@ theorem processCreateMessage_inv_noDel {wa : Adr} {msg : Msg} {evm : Devm}
         · rw [if_neg hex] at h_rest
           exact absurd h_rest (by simp)
       · rw [hcg] at h_rest; dsimp only at h_rest
-        rw [← Except.ok.inj h_rest]
+        rw [← Fueled.ok_inj.mp h_rest]
         have h_ds : evm3.delSets = evm2.delSets := chargeCodeGas_delSets_ok hcg
         have h_atd_eq : evm3.accountsToDelete = evm2.accountsToDelete := congrArg Prod.fst h_ds
         have h_ca_eq : evm3.createdAccounts = evm2.createdAccounts := congrArg Prod.snd h_ds
@@ -5263,7 +5242,7 @@ theorem processCreateMessage_inv_noDel {wa : Adr} {msg : Msg} {evm : Devm}
         rw [setCode_getCode h_ct, h_gc]
         exact h_pm.code
     · rw [if_neg herr] at h_rest
-      rw [← Except.ok.inj h_rest]
+      rw [← Fueled.ok_inj.mp h_rest]
       exact Devm.NoDel.rollback h_pm.atd h_pm.ca h.code
 
 lemma setDelegationStep_benv_equiv {auth : Auth} {msg msg' : Msg} {refund refund' : B256}
@@ -5666,21 +5645,28 @@ theorem processMessageCall_inv_noDel {wa : Adr} {msg : Msg} {st' : _root_.State}
       simp only [Bool.not_eq_true, Bool.or_eq_false_iff] at h_col
       have h_ct := ne_wa_of_not_hasCodeOrNonce h.code h_col.1
       revert h_run
-      rcases h_evm : processCreateMessage msg (msg.gas + 50) with ⟨err⟩ | ⟨evm⟩
+      rcases h_evm : processCreateMessage msg (msg.gas + 50) with
+        _ | (⟨err⟩ | ⟨evm⟩)
       · simp only [Except.bimap, bind, Except.bind]
         intro h_run
         injection h_run
       · simp only [Except.bimap, bind, Except.bind]
         intro h_run
-        have h_nodel := processCreateMessage_inv_noDel h_evm h_ct h
+        injection h_run
+      · simp only [Except.bimap, bind, Except.bind]
+        intro h_run
+        have h_nodel := processCreateMessage_inv_noDel (Fueled.ext h_evm) h_ct h
+        change (if evm.error.isNone = true then _ else _) = _ at h_run
         split at h_run
         · split at h_run
           · injection h_run
           · simp only [Except.ok.injEq, Prod.mk.injEq] at h_run
             rcases h_run with ⟨_, rfl⟩
+            simp_all only [id_eq, if_pos]
             exact h_nodel.atd
         · simp only [id_eq, Except.ok.injEq, Prod.mk.injEq] at h_run
           rcases h_run with ⟨_, rfl⟩
+          simp_all only [id_eq, if_neg]
           exact AdrSet.not_mem_empty
   · rename_i h_target
     have h_target_false : msg.target.isNone = false := by
@@ -5702,7 +5688,8 @@ theorem processMessageCall_inv_noDel {wa : Adr} {msg : Msg} {st' : _root_.State}
             split
             · exact h
             · exact ⟨h.ca, h.code⟩
-          have h_nodel_evm := processMessage_inv_noDel h_pm h_pc
+          have h_nodel_evm := processMessage_inv_noDel
+            (Fueled.eq_ok_of_toExcept_eq_ok h_pm) h_pc
           split at h_run
           · split at h_run
             · injection h_run
@@ -5731,7 +5718,8 @@ theorem processMessageCall_inv_noDel {wa : Adr} {msg : Msg} {st' : _root_.State}
               split
               · exact h_del_nodel
               · exact ⟨h_del_nodel.ca, h_del_nodel.code⟩
-            have h_nodel_evm := processMessage_inv_noDel h_pm h_pc
+            have h_nodel_evm := processMessage_inv_noDel
+              (Fueled.eq_ok_of_toExcept_eq_ok h_pm) h_pc
             split at h_run
             · split at h_run
               · injection h_run
@@ -5770,13 +5758,19 @@ theorem processMessageCall_inv_solvent {wa : Adr} {msg : Msg} {st' : _root_.Stat
       have h_ct : msg.currentTarget ≠ wa :=
         ne_wa_of_not_hasCodeOrNonce h_inv.nodel.code h_col.1
       revert h_run
-      rcases h_evm : processCreateMessage msg (msg.gas + 50) with ⟨err⟩ | evm
+      rcases h_evm : processCreateMessage msg (msg.gas + 50) with
+        _ | (⟨err⟩ | ⟨evm⟩)
       · simp only [Except.bimap, bind, Except.bind]
         intro h_run
         injection h_run
       · simp only [Except.bimap, bind, Except.bind]
         intro h_run
-        have h_pm := processCreateMessage_inv_solvent h_evm h_ct h_inv.ne h_inv.state
+        injection h_run
+      · simp only [Except.bimap, bind, Except.bind]
+        intro h_run
+        have h_pm := processCreateMessage_inv_solvent (Fueled.ext h_evm) h_ct
+          h_inv.ne h_inv.state
+        change (if evm.error.isNone = true then _ else _) = _ at h_run
         split at h_run
         · split at h_run
           · injection h_run
@@ -5823,7 +5817,8 @@ theorem processMessageCall_inv_solvent {wa : Adr} {msg : Msg} {st' : _root_.Stat
                   codeAddress := some dca }).target.isNone = false := by
             split <;> simpa using h_target_false
           have h_evm_inv :=
-            processMessage_inv_solvent h_pm (fun hct => h_pc.code h_tgt_pc hct)
+            processMessage_inv_solvent (Fueled.eq_ok_of_toExcept_eq_ok h_pm)
+              (fun hct => h_pc.code h_tgt_pc hct)
               h_pc.ne h_pc.val0 h_pc.state
           split at h_run
           · split at h_run
@@ -5874,7 +5869,8 @@ theorem processMessageCall_inv_solvent {wa : Adr} {msg : Msg} {st' : _root_.Stat
                     codeAddress := some dca }).target.isNone = false := by
               split <;> simpa using h_msgDelegation_target_false
             have h_evm_inv :=
-              processMessage_inv_solvent h_pm (fun hct => h_pc.code h_tgt_pc hct)
+              processMessage_inv_solvent (Fueled.eq_ok_of_toExcept_eq_ok h_pm)
+                (fun hct => h_pc.code h_tgt_pc hct)
                 h_pc.ne h_pc.val0 h_pc.state
             split at h_run
             · split at h_run

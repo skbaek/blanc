@@ -766,11 +766,19 @@ lemma ne_exhausted_of_eq_ofExcept {x : Fueled ε α} {ex : Except ε α}
 
 @[simp] lemma ok_ne_error {x : α} {e : ε} :
     (Fueled.ok x : Fueled ε α) = Fueled.error e ↔ False :=
-  ⟨fun h => nomatch ofExcept_inj.mp h, False.elim⟩
+  by
+    constructor
+    · intro h
+      cases Fueled.ofExcept_inj.mp h
+    · exact False.elim
 
 @[simp] lemma error_ne_ok {x : α} {e : ε} :
     (Fueled.error e : Fueled ε α) = Fueled.ok x ↔ False :=
-  ⟨fun h => nomatch ofExcept_inj.mp h, False.elim⟩
+  by
+    constructor
+    · intro h
+      cases Fueled.ofExcept_inj.mp h
+    · exact False.elim
 
 @[simp] lemma exhausted_ne_ok {x : α} :
     (Fueled.exhausted : Fueled ε α) = Fueled.ok x ↔ False :=
@@ -1542,7 +1550,7 @@ lemma of_executeCode {msg : Msg} {lim : Nat}
     · rename_i pos; refine' ⟨.none, .intro, _⟩
       simp only [ExecuteCode]; rw [eq_some]
       simp only []; rw [if_pos pos]
-      exact ⟨rfl, Fueled.ofExcept_inj.mp eq⟩
+      exact ⟨trivial, Fueled.ofExcept_inj.mp eq⟩
     · rename_i neg
       rcases Fueled.of_mapResult_eq eq with ⟨ex', hexec, hhe⟩
       refine'
@@ -1617,6 +1625,8 @@ lemma of_genericCreate
   · rename_i neg
     apply Exists.imp (λ _ (conj : _ ∧ _) => ⟨conj.1, ite_of_false neg conj.2⟩)
     clear neg
+    change (Fueled.ok PUnit.unit >>= _) = _ at eq
+    rw [Fueled.ok_bind] at eq
     okStep1 eq evm'
     split at eq
     · rename_i pos
@@ -1626,6 +1636,8 @@ lemma of_genericCreate
     · rename_i neg
       apply Exists.imp (λ _ (conj : _ ∧ _) => ⟨conj.1, ite_of_false neg conj.2⟩)
       clear neg
+      change (Fueled.ok PUnit.unit >>= _) = _ at eq
+      rw [Fueled.ok_bind] at eq
       okStep1 eq msg
       rcases Fueled.of_bind_eq' eq with ⟨ex'', hmap, eq⟩
       rcases Fueled.of_mapResult_eq hmap with ⟨ex', hrec, hlift⟩
@@ -1778,7 +1790,7 @@ def of_exec :
       <;> simp only [Option.toExcept] at exec_eq
     · have h : Except.error ("InvalidOpcode", devm) = exn := by
         rcases Fueled.of_lift_bind_eq exec_eq with ⟨e, he, hex⟩ | ⟨y, hy, _⟩
-        · rw [hex, ← he]
+        · simpa [hex] using he
         · cases hy
       rw [← h]; constructor; apply Exec.invOp getInst_eq
     · rw [Fueled.ofExcept_ok_bind] at exec_eq

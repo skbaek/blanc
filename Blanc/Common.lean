@@ -11487,38 +11487,42 @@ theorem Func.balance_effect {fs : List Func} {sevm : Sevm}
 
 /-! ## 6. Executable wrappers and the Solvent.lean endpoint -/
 
-lemma Xlot.balance_rel_of_good {ξ υ : Type} {lim : Nat}
-    {outer : Except (String × ξ) υ} {xl : Xlot}
-    (hfit : outer.Fit) (hgood : xl.Good lim outer) :
+lemma Fueled.eq_ok_of_toExcept_eq_ok {ε α : Type} {x : Fueled ε α}
+    {default : ε} {a : α} (h : x.toExcept default = .ok a) :
+    x = Fueled.ok a := by
+  apply Fueled.ext
+  unfold Fueled.toExcept at h
+  rcases hx : x.run with _ | ex
+  · rw [hx] at h
+    cases h
+  · rw [hx] at h
+    change ex = .ok a at h
+    change some ex = some (.ok a)
+    exact congrArg some h
+
+lemma Xlot.balance_rel_of_good {lim : Nat} {xl : Xlot}
+    (hgood : xl.Good lim) :
     Xlot.Rel Devm.BalNoninc xl := by
   rcases xl with _ | ⟨sevm, devm, exn⟩
   · constructor
-  · rcases hgood with ⟨lim', _, exec_eq, lim_of_lim⟩
-    have hfit' : exn.Fit := fun h => hfit (lim_of_lim h)
-    rcases of_exec lim' 0 sevm devm exn hfit' exec_eq with ⟨exc⟩
+  · rcases hgood with ⟨lim', _, exec_eq⟩
+    rcases of_exec lim' 0 sevm devm exn exec_eq with ⟨exc⟩
     exact Exec.balance_effect exc
 
 lemma processMessage_balance_noninc {msg : Msg} {lim : Nat} {post : Devm}
-    (h : processMessage msg lim = .ok post) :
+    (h : processMessage msg lim = Fueled.ok post) :
     State.BalNoninc msg.benv.state post.state := by
-  have hfit : (Except.ok post : Except (String × State × AdrSet × Tra) Devm).Fit := by
-    intro hlim
-    simp [Except.Lim, Except.toError?] at hlim
-  obtain ⟨xl, hgood, hrun⟩ := of_processMessage msg lim (.ok post) hfit h
-  have heff := ProcessMessage.balance_effect (Xlot.balance_rel_of_good hfit hgood) hrun
+  obtain ⟨xl, hgood, hrun⟩ := of_processMessage msg lim (.ok post) h
+  have heff := ProcessMessage.balance_effect (Xlot.balance_rel_of_good hgood) hrun
   change State.BalNoninc msg.benv.state post.state at heff
   exact heff
 
 lemma processCreateMessage_balance_noninc
     {msg : Msg} {lim : Nat} {post : Devm}
-    (h : processCreateMessage msg lim = .ok post) :
+    (h : processCreateMessage msg lim = Fueled.ok post) :
     State.BalNoninc msg.benv.state post.state := by
-  have hfit : (Except.ok post : Except (String × State × AdrSet × Tra) Devm).Fit := by
-    simp [Except.Fit, Except.Lim]
-    change ¬ (none : Option String) = some "RecursionLimit"
-    simp
-  rcases of_processCreateMessage msg lim (.ok post) hfit h with ⟨xl, hgood, hrun⟩
-  have hxl : Xlot.Rel Devm.BalNoninc xl := Xlot.balance_rel_of_good hfit hgood
+  rcases of_processCreateMessage msg lim (.ok post) h with ⟨xl, hgood, hrun⟩
+  have hxl : Xlot.Rel Devm.BalNoninc xl := Xlot.balance_rel_of_good hgood
   have heff := ProcessCreateMessage.balance_effect hxl hrun
   exact heff
 
@@ -11604,7 +11608,8 @@ lemma processMessageCall.call_balance_noninc
       · rename_i evm' h_pm
         simp only [id_eq, Except.ok.injEq] at h_evm
         subst h_evm
-        have hbal := processMessage_balance_noninc h_pm
+        have hbal := processMessage_balance_noninc
+          (Fueled.eq_ok_of_toExcept_eq_ok h_pm)
         have hpre : State.BalNoninc msg.benv.state evm'.state := by
           split at hbal <;> exact hbal
         split at h
@@ -11630,7 +11635,8 @@ lemma processMessageCall.call_balance_noninc
         · rename_i evm' h_pm
           simp only [id_eq, Except.ok.injEq] at h_evm
           subst h_evm
-          have hbal := processMessage_balance_noninc h_pm
+          have hbal := processMessage_balance_noninc
+            (Fueled.eq_ok_of_toExcept_eq_ok h_pm)
           have hpre : State.BalNoninc msg.benv.state evm'.state := by
             have hD : State.BalNoninc msgD.benv.state evm'.state := by
               split at hbal <;> exact hbal
@@ -11666,7 +11672,8 @@ lemma processMessageCall.create_balance_noninc
       · rename_i evm' h_pm
         simp only [id_eq, Except.ok.injEq] at h_evm
         subst h_evm
-        have hbal := processCreateMessage_balance_noninc h_pm
+        have hbal := processCreateMessage_balance_noninc
+          (Fueled.eq_ok_of_toExcept_eq_ok h_pm)
         split at h
         · split at h
           · injection h
