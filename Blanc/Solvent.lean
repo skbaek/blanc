@@ -1728,7 +1728,7 @@ lemma of_state_transfer {st st' : _root_.State} {ct callee : Adr} {wad : B256}
 lemma Devm.pop_of_popToAdr {a : Adr} {devm devm' : Devm}
     (h : Devm.popToAdr devm = .ok ⟨a, devm'⟩) :
     ∃ x, x.toAdr = a ∧ Devm.pop devm = .ok ⟨x, devm'⟩ := by
-  dsimp [Devm.popToAdr, Functor.map, Except.map] at h
+  rw [Devm.popToAdr_def] at h
   rcases hp : devm.pop with _ | ⟨x, d⟩ <;> rw [hp] at h
   · cases h
   · dsimp [Prod.mapFst, Prod.map, id] at h
