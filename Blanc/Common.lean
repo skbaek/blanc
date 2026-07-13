@@ -2216,14 +2216,6 @@ use it.  The outcome-aware variants are developed with `CEffect` below. -/
 def Devm.WorldEq (d d' : Devm) : Prop :=
   d.state = d'.state ∧ d.transientStorage = d'.transientStorage
 
-lemma Devm.worldEq_refl : Reflexive Devm.WorldEq := by
-  intro d
-  exact ⟨rfl, rfl⟩
-
-lemma Devm.worldEq_symm : Symmetric Devm.WorldEq := by
-  rintro d d' ⟨hstate, htransient⟩
-  exact ⟨hstate.symm, htransient.symm⟩
-
 lemma Devm.worldEq_trans : Transitive Devm.WorldEq := by
   rintro d d' d'' ⟨hstate, htransient⟩ ⟨hstate', htransient'⟩
   exact ⟨hstate.trans hstate', htransient.trans htransient'⟩
@@ -2251,10 +2243,6 @@ lemma addAccessedAddress_worldEq (d : Devm) (a : Adr) :
 
 lemma addAccessedStorageKey_worldEq (d : Devm) (a : Adr) (k : B256) :
     Devm.WorldEq d (addAccessedStorageKey d a k) := by
-  exact liftMachMetaPure_worldEq _ _
-
-lemma Devm.addLog_worldEq (d : Devm) (log : Log) :
-    Devm.WorldEq d (d.addLog log) := by
   exact liftMachMetaPure_worldEq _ _
 
 lemma liftMach_worldEq_of_ok {core : Mach → Footprint.Outcome Mach α}
@@ -5742,23 +5730,11 @@ lemma liftMach_worldEq (core : Mach → Footprint.Outcome Mach α) (d : Devm) :
   unfold liftMach
   exact Footprint.liftOutcome_worldEq _ _ _ _ (Devm.worldEq_setMach d)
 
-lemma Devm.pop_worldEq (d : Devm) :
-    Outcome.Rel Prod.snd Prod.snd Devm.WorldEq d d.pop := by
-  exact liftMach_worldEq Mach.pop d
-
-lemma Devm.popToNat_worldEq (d : Devm) :
-    Outcome.Rel Prod.snd Prod.snd Devm.WorldEq d d.popToNat := by
-  exact liftMach_worldEq Mach.popToNat d
-
 lemma liftMachExecution_worldEq
     (core : Mach → Footprint.Outcome Mach Unit) (d : Devm) :
     Execution.Rel Devm.WorldEq d (liftMachExecution core d) := by
   unfold liftMachExecution
   exact outcomeRel_toExecution (liftMach_worldEq core d)
-
-lemma chargeGas_worldEq (cost : Nat) (d : Devm) :
-    Execution.Rel Devm.WorldEq d (chargeGas cost d) := by
-  exact liftMachExecution_worldEq (Mach.chargeGas cost) d
 
 lemma liftMachMeta_worldEq
     (core : Mach → Meta → Footprint.Outcome (Mach × Meta) α) (d : Devm) :
@@ -5772,18 +5748,6 @@ lemma liftMachMetaExecution_worldEq
   unfold liftMachMetaExecution
   exact outcomeRel_toExecution (liftMachMeta_worldEq core d)
 
-lemma liftMachMetaWorldPure_worldEq
-    (core : World → Mach → Meta → Mach × Meta) (d : Devm) :
-    Devm.WorldEq d (liftMachMetaWorldPure core d) := by
-  exact liftMachMetaPure_worldEq _ _
-
-lemma liftMachMetaWorld_worldEq
-    (core : World → Mach → Meta → Footprint.Outcome (Mach × Meta) α)
-    (d : Devm) :
-    Outcome.Rel Prod.snd Prod.snd Devm.WorldEq d
-      (liftMachMetaWorld core d) := by
-  exact liftMachMeta_worldEq _ _
-
 lemma liftMachMetaWorldExecution_worldEq
     (core : World → Mach → Meta → Footprint.Outcome (Mach × Meta) Unit)
     (d : Devm) :
@@ -5796,21 +5760,6 @@ lemma Rinst.balance_worldEq (pc : Nat) (sevm : Sevm) (d : Devm) :
     Execution.Rel Devm.WorldEq d (Rinst.runCore pc d sevm .balance) := by
   simpa only [Rinst.runCore] using
     (liftMachMetaWorldExecution_worldEq Rinst.balanceCore d)
-
-lemma Devm.worldEq_stable_getBal (a : Adr) :
-    CEffect.Stable (fun d : Devm => d.getBal a) Devm.WorldEq := by
-  intro d d' h
-  exact h.getBal a
-
-lemma Devm.worldEq_stable_getStor (a : Adr) :
-    CEffect.Stable (fun d : Devm => d.getStor a) Devm.WorldEq := by
-  intro d d' h
-  exact h.getStor a
-
-lemma Devm.worldEq_stable_getCode (a : Adr) :
-    CEffect.Stable (fun d : Devm => d.getCode a) Devm.WorldEq := by
-  intro d d' h
-  exact h.getCode a
 
 def Xlot.Rel (R : Devm → Devm → Prop) : Xlot → Prop
   | .none => True
