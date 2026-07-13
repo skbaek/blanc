@@ -2418,16 +2418,23 @@ lemma Benv.incrNonce_getCode {benv : Benv} {adr a : Adr} : (benv.incrNonce adr).
     · rw [Std.TreeMap.getD_insert]
       simp [h]
 
-lemma Xinst.prep_inv_getCode
+/-! The call/create preparation path is not a world frame: child dispatch may
+transfer value, and create dispatch may increment nonces or install code.  It
+does, however, preserve the code map at the suspended parent boundary. -/
+
+def Devm.CodeFrame (before after : Devm) : Prop :=
+  ∀ a : Adr, after.getCode a = before.getCode a
+
+lemma Xinst.prep_codeFrame
     {sevm : Sevm}
     {devm : Devm}
     {sevm_ : Sevm}
     {devm_ : Devm}
     {exn_ res : Execution}
-    {adr : Adr}
     {x : Xinst}
     (run : Xinst.Run sevm devm x (some (sevm_, devm_, exn_)) res) :
-    devm_.getCode adr = devm.getCode adr := by
+    Devm.CodeFrame devm devm_ := by
+  intro adr
   cases x
   case create =>
     dsimp [Xinst.Run] at run
@@ -2843,6 +2850,18 @@ lemma Xinst.prep_inv_getCode
         injection h_devm_eq with h_devm_eq _
         subst h_devm_eq
         exact h_devm
+
+lemma Xinst.prep_inv_getCode
+    {sevm : Sevm}
+    {devm : Devm}
+    {sevm_ : Sevm}
+    {devm_ : Devm}
+    {exn_ res : Execution}
+    {adr : Adr}
+    {x : Xinst}
+    (run : Xinst.Run sevm devm x (some (sevm_, devm_, exn_)) res) :
+    devm_.getCode adr = devm.getCode adr := by
+  exact Xinst.prep_codeFrame run adr
 
 lemma Ninst.prep_inv_getCode
     {pc sevm devm n sevm_ devm_ exn_ res}
@@ -6461,9 +6480,6 @@ lemma Jinst.inv_getCode_gen
   have hf := Jinst.run_instructionFrame ⟨pc, sevm, devm⟩ j
   rw [run] at hf
   cases ex <;> exact (hf.getCode a).symm
-
-def Devm.CodeFrame (pre post : Devm) : Prop :=
-  ∀ a, post.getCode a = pre.getCode a
 
 lemma Linst.dest_inv_getCode {sevm : Sevm} {devm : Devm} {exn : Execution}
     (run : Linst.Run sevm devm .dest exn) :

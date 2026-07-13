@@ -466,48 +466,197 @@ exclusion sets and the precise per-opcode statements matter. Expect another
 
 ---
 
-## Step 7 — Xinst prep-phase consolidation
+## Step 7.0 — Xinst calibration: suspended-parent code frame
 
 ### Agent prompt
 
-Work on the `Xinst` (call/create) family in `/Users/bsk/blanc/Blanc/
-Common.lean`: `Xinst.prep_inv_getCode` (~426 lines), `Xinst.prep_inv_code`
-(~346), `Xinst.inv_getCode_gen` (~324), `Xinst.balance_effectGen` (~300),
-plus the `GenericCall`/`GenericCreate`/`ProcessMessage`/
-`ProcessCreateMessage`/`ExecuteCode` `inv_getCode_gen` cluster (~400 lines
-combined) — re-measure all before starting.
+Calibrate the `Xinst` cleanup on the largest lemma in
+`/Users/bsk/blanc/Blanc/Common.lean`, `Xinst.prep_inv_getCode` (426 lines at
+the start of this step). Inspect `Xinst.run` and the full call/create prep
+path in elevm before editing. Do not claim a full world frame: the path
+contains real state writers.
 
-This is the least mechanical step, because the call/create prep phase is not
-world-silent: value transfer (`benvAfterTransfer`), nonce increments, and
-account creation write real state. Before editing anything:
+Move the existing `Devm.CodeFrame` definition before the early prep lemmas,
+prove `Xinst.prep_codeFrame` for the suspended-parent boundary, and replace
+the proof of `Xinst.prep_inv_getCode` by a verbatim-statement projection from
+that master. Do not delete any declaration. Check the new master and wrapper
+with Lean LSP, then finish with V0 + AX.
 
-1. Inspect `Xinst.run` and the prep path in elevm; classify each phase
-   (argument pops, gas charging, access-set updates, transfer, child
-   dispatch) by its write footprint.
-2. Decide, and record in the report, which portions admit an
-   instruction-frame master (the pop/charge/access prefix almost certainly
-   does) and which need precise effect statements instead (the transfer
-   almost certainly does; `Msg.benvAfterTransfer_balance_effect` shows the
-   existing precise form).
-3. Prove a master frame theorem for the world-silent prefix, precise effect
-   lemmas for the writers, then collapse the listed lemmas onto the
-   composition, statements verbatim.
+Record the phase classification below as the permanent footprint artifact
+for Steps 7.1–7.7:
 
-If the family resists uniform treatment, complete the largest single lemma
-(`Xinst.prep_inv_getCode`) end-to-end as the calibrated instance, stop at
-that viable boundary, and report a proposed subdivision for the rest —
-exactly the PARTITION.md Step 12 discipline. Nothing is deleted in this
-step. Finish with V0 + AX; report per-lemma before/after line counts and the
-footprint classification table.
+| Phase | Write footprint | Classification |
+|---|---|---|
+| argument pops | stack | Mach-only; world-silent |
+| gas charging and memory extension | gas and memory | Mach-only; world-silent |
+| access bookkeeping and delegation lookup | accessed-address metadata; reads code/state | world-silent, but not Mach-only |
+| insufficient-balance/depth short circuit | stack, gas, return data | world-silent |
+| `benvAfterTransfer` | account balances | state writer; use a precise balance effect |
+| create preparation | sender nonce, created accounts, target initialization | state/metadata writer |
+| create completion | target code | code writer with a target exclusion |
+| child execution, rollback, and incorporation | recursive child world and selected rollback state | not uniformly frameable |
 
-### Note for the reader
+### Completed calibrated result
 
-The 426-line `Xinst.prep_inv_getCode` is the single largest lemma in the
-repository, so even a partial result pays. The important review artifact is
-the footprint classification: it becomes the permanent record of which
-call/create phases are world-silent. If the agent reports that the prep
-prefix is *not* cleanly separable from the transfer, believe it and accept
-the subdivision — that seam is semantic, not stylistic. [V0 + AX]
+`Xinst.prep_inv_getCode` was reduced from 426 lines to a 12-line wrapper;
+the proof now lives in the 426-line relational master
+`Xinst.prep_codeFrame`. `Devm.CodeFrame` was relocated, not duplicated or
+deleted. The resulting change is intentionally architectural rather than a
+line-count win (net +16 lines at this boundary). V0 and AX passed. This is
+the calibrated instance permitted by the former monolithic Step 7 fallback.
+[V0 + AX]
+
+---
+
+## Step 7.1 — Xinst suspended-code source
+
+### Agent prompt
+
+Consolidate `Xinst.prep_inv_code` (346 lines at the Step 7.0 boundary) and
+its `Ninst` dispatch wrapper. This theorem is not merely a projection of
+`Devm.CodeFrame`: it identifies the suspended child's executable code and
+therefore has genuine current-target, nonempty-code, and valid-delegation
+conditions.
+
+Inspect the six `Xinst` constructors separately and state the strongest
+honest code-source master that captures their common result without erasing
+those conditions. In particular, preserve the semantic distinctions among
+create/create2's fresh target, call/statcall's delegation lookup, and
+callcode/delcall's current-target behavior. Add the master first, then
+replace the existing `Xinst.prep_inv_code` proof with a verbatim-statement
+application and retarget only the corresponding `Ninst` leaf if needed.
+
+Do not force this theorem into `InstructionFrame` or `CodeFrame` if doing so
+would hide the code-address selection. Nothing is deleted. Finish with V0 +
+AX and report the master statement plus before/after counts for both wrappers.
+[V0 + AX]
+
+---
+
+## Step 7.2 — Message-level code effects
+
+### Agent prompt
+
+Consolidate the message semantic cluster in `Blanc/Common.lean`:
+
+- `ExecuteCode.inv_getCode_gen` (67 lines at Step 7.0);
+- `ProcessMessage.inv_getCode_gen` (53);
+- `ProcessCreateMessage.inv_getCode_gen` (64).
+
+Build precise code-effect leaves for the writers before composing the three
+masters: value transfer preserves code while changing balances;
+`executeCode.handleError` and rollback select states without creating a new
+code write; create completion may write only `msg.currentTarget` through
+`setCode`. Reuse the Step 7.0 `CodeFrame` where it is strong enough and use
+`CodePreserve`/an exclusion-bearing relation where it is not.
+
+Add relational masters from the inside out (`ExecuteCode`, then
+`ProcessMessage`, then `ProcessCreateMessage`) and collapse each listed
+legacy proof immediately after its master is checked. Statements stay
+verbatim and nothing is deleted. Finish with V0 + AX and report every writer
+effect used in the composition. [V0 + AX]
+
+---
+
+## Step 7.3 — GenericCall and GenericCreate code effects
+
+### Agent prompt
+
+Using the Step 7.2 message masters, consolidate:
+
+- `GenericCall.inv_getCode_gen` (92 lines at Step 7.0);
+- `GenericCreate.inv_getCode_gen` (143).
+
+For `GenericCall`, compose the world-silent return-data/memory prefix with
+the precise transfer and child-incorporation effects. For `GenericCreate`,
+separate the world-silent access/gas/return-data prefix from the sender nonce
+increment, fresh-account initialization, child create processing, and final
+code installation. The nonempty-code premise is what excludes overwriting
+the fresh create target; keep that reasoning explicit in the master rather
+than hiding it in automation.
+
+Add one canonical relational master per generic operation, then replace the
+two legacy proofs by verbatim-statement applications. Nothing is deleted.
+Finish with V0 + AX and report which prefix steps used frame composition and
+which writer steps used precise effects. [V0 + AX]
+
+---
+
+## Step 7.4 — Xinst final code-preservation master
+
+### Agent prompt
+
+Collapse `Xinst.inv_getCode_gen` (324 lines at Step 7.0) onto the Step 7.3
+generic-operation masters and the world-silent primitive frames. Make
+`Xinst.EffectGen Devm.CodePreserve` the canonical direction of dependency:
+the relational effect master must carry the proof, while
+`Xinst.inv_getCode_gen` becomes a compatibility projection through the
+`Xlot.InvGetCode`/`Xlot.Rel Devm.CodePreserve` bridge. Do not leave the
+master depending on the legacy observation theorem.
+
+Update the corresponding `Ninst.codePreserve_effectGen` dispatch leaf only
+as necessary to consume the canonical Xinst master. Keep all public
+statements unchanged and delete nothing. Finish with V0 + AX; report the old
+and new dependency direction and before/after line counts. [V0 + AX]
+
+---
+
+## Step 7.5 — Message-level balance effects
+
+### Agent prompt
+
+Consolidate the precise balance effects for the message layer before
+touching the Xinst case split. Start from
+`Msg.benvAfterTransfer_balance_effect` and preserve its exact
+total-balance-nonincreasing statement, including recipient overflow. Then
+make the balance effects for `ExecuteCode`/precompiles, `ProcessMessage`, and
+`ProcessCreateMessage` explicit relational masters.
+
+The proof must distinguish transfer, rollback, exceptional halt, create code
+gas, and code installation. Code and nonce writes do not themselves change
+balances; prove or reuse that precise fact rather than treating the whole
+message path as a world frame. Collapse existing message-level
+`balance_effect` proofs onto the masters where their statements are
+duplicates. Nothing is deleted. Finish with V0 + AX and report every balance
+writer and every non-balance state writer. [V0 + AX]
+
+---
+
+## Step 7.6 — GenericCall and GenericCreate balance effects
+
+### Agent prompt
+
+Consolidate `GenericCall.balance_effect` (89 lines at Step 7.0) and
+`GenericCreate.balance_effect` (133) using the Step 7.5 message effects.
+Compose the pop/charge/access/memory prefixes through frame-to-`BalNoninc`
+transport, then apply precise effects for transfer, nonce/account creation,
+child incorporation, and rollback.
+
+Keep call and create as separate masters: create has nonce and fresh-account
+writers that call does not, and a forced common theorem is not a cleanup.
+Replace the legacy proofs by verbatim-statement applications after each
+master checks. Nothing is deleted. Finish with V0 + AX and report the two
+effect compositions independently. [V0 + AX]
+
+---
+
+## Step 7.7 — Xinst balance master and Step 7 closure
+
+### Agent prompt
+
+Collapse `Xinst.balance_effectGen` (300 lines at Step 7.0) onto the Step 7.6
+generic-operation balance masters plus the primitive frame effects for
+argument pops, gas charging, access bookkeeping, memory extension, asserts,
+and short-circuit returns. `Xinst.EffectGen Devm.BalNoninc` is the canonical
+master; the constructor case split should perform composition only and must
+not reopen the internals of message transfer or child execution.
+
+Retarget the `Ninst.balance_effectGen` Xinst dispatch leaf to the master if
+needed. Re-measure every lemma named in Steps 7.0–7.7 and verify that each
+legacy statement is now a short projection or compatibility wrapper. Nothing
+is deleted in Step 7; Step 8 performs the reference-driven harvest. Finish
+with V0 + AX and publish the final per-lemma before/after table. Proceed to
+Step 8 only after this closure gate passes. [V0 + AX]
 
 ---
 
