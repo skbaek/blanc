@@ -11527,3 +11527,509 @@ lemma processMessageCall_preserves_sumNof
     (h : processMessageCall msg = .ok ⟨post, out⟩)
     (hnof : State.SumNof msg.benv.state) : State.SumNof post := by
   exact State.SumNof.of_noninc (processMessageCall_balance_noninc h) hnof
+
+/-! ## Full-frame relations for instruction preservation -/
+
+/-- A Mach-only step may change exactly the three `Mach` fields. -/
+def Devm.Rels.machFrame : Devm.Rels :=
+  { Devm.Rels.eq with
+    stack := fun _ _ => True
+    memory := fun _ _ => True
+    gasLeft := fun _ _ => True }
+
+/-- A regular instruction may change every field except the world and the two
+    deletion-relevant sets. -/
+def Devm.Rels.instructionFrame : Devm.Rels :=
+  {
+    stack := fun _ _ => True
+    memory := fun _ _ => True
+    gasLeft := fun _ _ => True
+    logs := fun _ _ => True
+    refundCounter := fun _ _ => True
+    output := fun _ _ => True
+    accountsToDelete := _root_.Eq
+    returnData := fun _ _ => True
+    error := fun _ _ => True
+    accessedAddresses := fun _ _ => True
+    accessedStorageKeys := fun _ _ => True
+    state := _root_.Eq
+    createdAccounts := _root_.Eq
+    transientStorage := _root_.Eq }
+
+abbrev Devm.MachFrame : Devm → Devm → Prop :=
+  Devm.Rel Devm.Rels.machFrame
+
+abbrev Devm.InstructionFrame : Devm → Devm → Prop :=
+  Devm.Rel Devm.Rels.instructionFrame
+
+/-- The part of `Meta` that an instruction-frame lift must preserve. -/
+def Meta.InstructionFrame (a b : Meta) : Prop :=
+  a.accountsToDelete = b.accountsToDelete ∧
+    a.createdAccounts = b.createdAccounts
+
+lemma Devm.Rels.machFrame_refl : Devm.Rels.Refl Devm.Rels.machFrame := by
+  simp [Devm.Rels.Refl, Devm.Rels.machFrame, Devm.Rels.eq, Reflexive]
+
+lemma Devm.Rels.machFrame_trans : Devm.Rels.Trans Devm.Rels.machFrame := by
+  simp [Devm.Rels.Trans, Devm.Rels.machFrame, Devm.Rels.eq, Transitive]
+
+lemma Devm.Rels.instructionFrame_refl :
+    Devm.Rels.Refl Devm.Rels.instructionFrame := by
+  simp [Devm.Rels.Refl, Devm.Rels.instructionFrame, Reflexive]
+
+lemma Devm.Rels.instructionFrame_trans :
+    Devm.Rels.Trans Devm.Rels.instructionFrame := by
+  simp [Devm.Rels.Trans, Devm.Rels.instructionFrame, Transitive]
+
+lemma Devm.machFrame_refl : Reflexive Devm.MachFrame :=
+  Devm.rel_refl Devm.Rels.machFrame_refl
+
+lemma Devm.machFrame_trans : Transitive Devm.MachFrame :=
+  Devm.rel_trans Devm.Rels.machFrame_trans
+
+lemma Devm.instructionFrame_refl : Reflexive Devm.InstructionFrame :=
+  Devm.rel_refl Devm.Rels.instructionFrame_refl
+
+lemma Devm.instructionFrame_trans : Transitive Devm.InstructionFrame :=
+  Devm.rel_trans Devm.Rels.instructionFrame_trans
+
+lemma Devm.machFrame_refines_instructionFrame :
+    CEffect.Refines Devm.MachFrame Devm.InstructionFrame := by
+  intro d d' h
+  exact {
+    stack := trivial
+    memory := trivial
+    gasLeft := trivial
+    logs := trivial
+    refundCounter := trivial
+    output := trivial
+    accountsToDelete := h.accountsToDelete
+    returnData := trivial
+    error := trivial
+    accessedAddresses := trivial
+    accessedStorageKeys := trivial
+    state := h.state
+    createdAccounts := h.createdAccounts
+    transientStorage := h.transientStorage }
+
+lemma Devm.MachFrame.worldEq {d d' : Devm} (h : Devm.MachFrame d d') :
+    Devm.WorldEq d d' :=
+  ⟨h.state, h.transientStorage⟩
+
+lemma Devm.MachFrame.getBal {d d' : Devm} (h : Devm.MachFrame d d')
+    (a : Adr) : d.getBal a = d'.getBal a :=
+  h.worldEq.getBal a
+
+lemma Devm.MachFrame.getStor {d d' : Devm} (h : Devm.MachFrame d d')
+    (a : Adr) : d.getStor a = d'.getStor a :=
+  h.worldEq.getStor a
+
+lemma Devm.MachFrame.getCode {d d' : Devm} (h : Devm.MachFrame d d')
+    (a : Adr) : d.getCode a = d'.getCode a :=
+  h.worldEq.getCode a
+
+lemma Devm.MachFrame.delSets {d d' : Devm} (h : Devm.MachFrame d d') :
+    d.delSets = d'.delSets :=
+  Prod.ext h.accountsToDelete h.createdAccounts
+
+lemma Devm.InstructionFrame.worldEq {d d' : Devm}
+    (h : Devm.InstructionFrame d d') : Devm.WorldEq d d' :=
+  ⟨h.state, h.transientStorage⟩
+
+lemma Devm.InstructionFrame.getBal {d d' : Devm}
+    (h : Devm.InstructionFrame d d') (a : Adr) :
+    d.getBal a = d'.getBal a :=
+  h.worldEq.getBal a
+
+lemma Devm.InstructionFrame.getStor {d d' : Devm}
+    (h : Devm.InstructionFrame d d') (a : Adr) :
+    d.getStor a = d'.getStor a :=
+  h.worldEq.getStor a
+
+lemma Devm.InstructionFrame.getCode {d d' : Devm}
+    (h : Devm.InstructionFrame d d') (a : Adr) :
+    d.getCode a = d'.getCode a :=
+  h.worldEq.getCode a
+
+lemma Devm.InstructionFrame.delSets {d d' : Devm}
+    (h : Devm.InstructionFrame d d') : d.delSets = d'.delSets :=
+  Prod.ext h.accountsToDelete h.createdAccounts
+
+lemma Devm.machFrame_setMach (d : Devm) (mach : Mach) :
+    Devm.MachFrame d (d.setMach mach) := by
+  exact {
+    stack := trivial
+    memory := trivial
+    gasLeft := trivial
+    logs := rfl
+    refundCounter := rfl
+    output := rfl
+    accountsToDelete := rfl
+    returnData := rfl
+    error := rfl
+    accessedAddresses := rfl
+    accessedStorageKeys := rfl
+    state := rfl
+    createdAccounts := rfl
+    transientStorage := rfl }
+
+lemma Devm.instructionFrame_setMachMeta (d : Devm) (view : Mach × Meta)
+    (h : Meta.InstructionFrame d.meta view.2) :
+    Devm.InstructionFrame d (d.setMachMeta view) := by
+  rcases h with ⟨hdel, hcreated⟩
+  exact {
+    stack := trivial
+    memory := trivial
+    gasLeft := trivial
+    logs := trivial
+    refundCounter := trivial
+    output := trivial
+    accountsToDelete := hdel
+    returnData := trivial
+    error := trivial
+    accessedAddresses := trivial
+    accessedStorageKeys := trivial
+    state := rfl
+    createdAccounts := hcreated
+    transientStorage := rfl }
+
+/-! ### Full-frame lift rules -/
+
+lemma liftMach_machFrame (core : Mach → Footprint.Outcome Mach α) (d : Devm) :
+    Outcome.Rel Prod.snd Prod.snd Devm.MachFrame d (liftMach core d) := by
+  unfold liftMach Footprint.liftOutcome
+  cases core d.mach <;> exact Devm.machFrame_setMach d _
+
+lemma liftMachPure_machFrame (core : Mach → Mach) (d : Devm) :
+    Devm.MachFrame d (liftMachPure core d) := by
+  exact Devm.machFrame_setMach d _
+
+lemma liftMachExecution_machFrame
+    (core : Mach → Footprint.Outcome Mach Unit) (d : Devm) :
+    Execution.Rel Devm.MachFrame d (liftMachExecution core d) := by
+  unfold liftMachExecution
+  exact outcomeRel_toExecution (liftMach_machFrame core d)
+
+lemma liftMachMeta_instructionFrame
+    (core : Mach → Meta → Footprint.Outcome (Mach × Meta) α) (d : Devm)
+    (hcore : Outcome.Rel (fun e => e.2.2) (fun x => x.2.2)
+      Meta.InstructionFrame d.meta (core d.mach d.meta)) :
+    Outcome.Rel Prod.snd Prod.snd Devm.InstructionFrame d
+      (liftMachMeta core d) := by
+  cases h : core d.mach d.meta with
+  | error e =>
+      rw [h] at hcore
+      simpa only [liftMachMeta, Footprint.liftOutcome, h] using
+        Devm.instructionFrame_setMachMeta d e.2 hcore
+  | ok x =>
+      rw [h] at hcore
+      simpa only [liftMachMeta, Footprint.liftOutcome, h] using
+        Devm.instructionFrame_setMachMeta d x.2 hcore
+
+lemma liftMachMetaPure_instructionFrame
+    (core : Mach → Meta → Mach × Meta) (d : Devm)
+    (hcore : Meta.InstructionFrame d.meta (core d.mach d.meta).2) :
+    Devm.InstructionFrame d (liftMachMetaPure core d) := by
+  exact Devm.instructionFrame_setMachMeta d _ hcore
+
+lemma liftMachMetaExecution_instructionFrame
+    (core : Mach → Meta → Footprint.Outcome (Mach × Meta) Unit) (d : Devm)
+    (hcore : Outcome.Rel (fun e => e.2.2) (fun x => x.2.2)
+      Meta.InstructionFrame d.meta (core d.mach d.meta)) :
+    Execution.Rel Devm.InstructionFrame d (liftMachMetaExecution core d) := by
+  unfold liftMachMetaExecution
+  exact outcomeRel_toExecution (liftMachMeta_instructionFrame core d hcore)
+
+lemma liftMachMetaWorld_instructionFrame
+    (core : World → Mach → Meta → Footprint.Outcome (Mach × Meta) α)
+    (d : Devm)
+    (hcore : Outcome.Rel (fun e => e.2.2) (fun x => x.2.2)
+      Meta.InstructionFrame d.meta (core d.world d.mach d.meta)) :
+    Outcome.Rel Prod.snd Prod.snd Devm.InstructionFrame d
+      (liftMachMetaWorld core d) := by
+  exact liftMachMeta_instructionFrame (core d.world) d hcore
+
+lemma liftMachMetaWorldPure_instructionFrame
+    (core : World → Mach → Meta → Mach × Meta) (d : Devm)
+    (hcore : Meta.InstructionFrame d.meta (core d.world d.mach d.meta).2) :
+    Devm.InstructionFrame d (liftMachMetaWorldPure core d) := by
+  exact liftMachMetaPure_instructionFrame (core d.world) d hcore
+
+lemma liftMachMetaWorldExecution_instructionFrame
+    (core : World → Mach → Meta → Footprint.Outcome (Mach × Meta) Unit)
+    (d : Devm)
+    (hcore : Outcome.Rel (fun e => e.2.2) (fun x => x.2.2)
+      Meta.InstructionFrame d.meta (core d.world d.mach d.meta)) :
+    Execution.Rel Devm.InstructionFrame d
+      (liftMachMetaWorldExecution core d) := by
+  exact liftMachMetaExecution_instructionFrame (core d.world) d hcore
+
+/-! ### Full-frame primitive facts -/
+
+lemma Devm.pop_machFrame (d : Devm) :
+    Outcome.Rel Prod.snd Prod.snd Devm.MachFrame d (Devm.pop d) := by
+  exact liftMach_machFrame Mach.pop d
+
+lemma Devm.pop_instructionFrame (d : Devm) :
+    Outcome.Rel Prod.snd Prod.snd Devm.InstructionFrame d (Devm.pop d) := by
+  exact Outcome.Rel.mono Devm.machFrame_refines_instructionFrame
+    (Devm.pop_machFrame d)
+
+lemma Devm.push_machFrame (x : B256) (d : Devm) :
+    Execution.Rel Devm.MachFrame d (Devm.push x d) := by
+  exact liftMachExecution_machFrame (Mach.push x) d
+
+lemma Devm.push_instructionFrame (x : B256) (d : Devm) :
+    Execution.Rel Devm.InstructionFrame d (Devm.push x d) := by
+  exact Outcome.Rel.mono Devm.machFrame_refines_instructionFrame
+    (Devm.push_machFrame x d)
+
+lemma pushItem_machFrame (x : B256) (cost : Nat) (d : Devm) :
+    Execution.Rel Devm.MachFrame d (pushItem x cost d) := by
+  exact liftMachExecution_machFrame (Mach.pushItem x cost) d
+
+lemma pushItem_instructionFrame (x : B256) (cost : Nat) (d : Devm) :
+    Execution.Rel Devm.InstructionFrame d (pushItem x cost d) := by
+  exact Outcome.Rel.mono Devm.machFrame_refines_instructionFrame
+    (pushItem_machFrame x cost d)
+
+lemma chargeGas_machFrame (cost : Nat) (d : Devm) :
+    Execution.Rel Devm.MachFrame d (chargeGas cost d) := by
+  exact liftMachExecution_machFrame (Mach.chargeGas cost) d
+
+lemma chargeGas_instructionFrame (cost : Nat) (d : Devm) :
+    Execution.Rel Devm.InstructionFrame d (chargeGas cost d) := by
+  exact Outcome.Rel.mono Devm.machFrame_refines_instructionFrame
+    (chargeGas_machFrame cost d)
+
+lemma Devm.popToNat_machFrame (d : Devm) :
+    Outcome.Rel Prod.snd Prod.snd Devm.MachFrame d (Devm.popToNat d) := by
+  exact liftMach_machFrame Mach.popToNat d
+
+lemma Devm.popToNat_instructionFrame (d : Devm) :
+    Outcome.Rel Prod.snd Prod.snd Devm.InstructionFrame d (Devm.popToNat d) := by
+  exact Outcome.Rel.mono Devm.machFrame_refines_instructionFrame
+    (Devm.popToNat_machFrame d)
+
+lemma Devm.popToAdr_machFrame (d : Devm) :
+    Outcome.Rel Prod.snd Prod.snd Devm.MachFrame d (Devm.popToAdr d) := by
+  exact liftMach_machFrame Mach.popToAdr d
+
+lemma Devm.popToAdr_instructionFrame (d : Devm) :
+    Outcome.Rel Prod.snd Prod.snd Devm.InstructionFrame d (Devm.popToAdr d) := by
+  exact Outcome.Rel.mono Devm.machFrame_refines_instructionFrame
+    (Devm.popToAdr_machFrame d)
+
+lemma Devm.popN_machFrame (d : Devm) (n : Nat) :
+    Outcome.Rel Prod.snd Prod.snd Devm.MachFrame d (Devm.popN d n) := by
+  exact liftMach_machFrame (Mach.popN · n) d
+
+lemma Devm.popN_instructionFrame (d : Devm) (n : Nat) :
+    Outcome.Rel Prod.snd Prod.snd Devm.InstructionFrame d (Devm.popN d n) := by
+  exact Outcome.Rel.mono Devm.machFrame_refines_instructionFrame
+    (Devm.popN_machFrame d n)
+
+lemma applyUnary_machFrame (f : B256 → B256) (cost : Nat) (d : Devm) :
+    Execution.Rel Devm.MachFrame d (applyUnary f cost d) := by
+  exact liftMachExecution_machFrame (Mach.applyUnary f cost) d
+
+lemma applyUnary_instructionFrame (f : B256 → B256) (cost : Nat) (d : Devm) :
+    Execution.Rel Devm.InstructionFrame d (applyUnary f cost d) := by
+  exact Outcome.Rel.mono Devm.machFrame_refines_instructionFrame
+    (applyUnary_machFrame f cost d)
+
+lemma applyBinary_machFrame (f : B256 → B256 → B256)
+    (cost : Nat) (d : Devm) :
+    Execution.Rel Devm.MachFrame d (applyBinary f cost d) := by
+  exact liftMachExecution_machFrame (Mach.applyBinary f cost) d
+
+lemma applyBinary_instructionFrame (f : B256 → B256 → B256)
+    (cost : Nat) (d : Devm) :
+    Execution.Rel Devm.InstructionFrame d (applyBinary f cost d) := by
+  exact Outcome.Rel.mono Devm.machFrame_refines_instructionFrame
+    (applyBinary_machFrame f cost d)
+
+lemma applyTernary_machFrame (f : B256 → B256 → B256 → B256)
+    (cost : Nat) (d : Devm) :
+    Execution.Rel Devm.MachFrame d (applyTernary f cost d) := by
+  exact liftMachExecution_machFrame (Mach.applyTernary f cost) d
+
+lemma applyTernary_instructionFrame (f : B256 → B256 → B256 → B256)
+    (cost : Nat) (d : Devm) :
+    Execution.Rel Devm.InstructionFrame d (applyTernary f cost d) := by
+  exact Outcome.Rel.mono Devm.machFrame_refines_instructionFrame
+    (applyTernary_machFrame f cost d)
+
+lemma Devm.memWrite_machFrame (d : Devm) (idx : Nat) (val : B8L) :
+    Devm.MachFrame d (Devm.memWrite d idx val) := by
+  exact liftMachPure_machFrame (Mach.memWrite · idx val) d
+
+lemma Devm.memWrite_instructionFrame (d : Devm) (idx : Nat) (val : B8L) :
+    Devm.InstructionFrame d (Devm.memWrite d idx val) := by
+  exact Devm.machFrame_refines_instructionFrame
+    (Devm.memWrite_machFrame d idx val)
+
+lemma Devm.memExtends_machFrame (d : Devm) (ranges : List (Nat × Nat)) :
+    Devm.MachFrame d (Devm.memExtends d ranges) := by
+  exact liftMachPure_machFrame (Mach.memExtends · ranges) d
+
+lemma Devm.memExtends_instructionFrame (d : Devm)
+    (ranges : List (Nat × Nat)) :
+    Devm.InstructionFrame d (Devm.memExtends d ranges) := by
+  exact Devm.machFrame_refines_instructionFrame
+    (Devm.memExtends_machFrame d ranges)
+
+lemma addAccessedAddress_instructionFrame (d : Devm) (a : Adr) :
+    Devm.InstructionFrame d (addAccessedAddress d a) := by
+  exact liftMachMetaPure_instructionFrame _ d ⟨rfl, rfl⟩
+
+lemma addAccessedStorageKey_instructionFrame
+    (d : Devm) (a : Adr) (k : B256) :
+    Devm.InstructionFrame d (addAccessedStorageKey d a k) := by
+  exact liftMachMetaPure_instructionFrame _ d ⟨rfl, rfl⟩
+
+lemma Devm.addLog_instructionFrame (d : Devm) (log : Log) :
+    Devm.InstructionFrame d (Devm.addLog d log) := by
+  exact liftMachMetaPure_instructionFrame _ d ⟨rfl, rfl⟩
+
+lemma Devm.memRead_instructionFrame (d : Devm) (index size : Nat) :
+    Devm.InstructionFrame d (Devm.memRead d index size).2 := by
+  unfold Devm.memRead
+  split
+  exact {
+    stack := trivial
+    memory := trivial
+    gasLeft := trivial
+    logs := trivial
+    refundCounter := trivial
+    output := trivial
+    accountsToDelete := rfl
+    returnData := trivial
+    error := trivial
+    accessedAddresses := trivial
+    accessedStorageKeys := trivial
+    state := rfl
+    createdAccounts := rfl
+    transientStorage := rfl }
+
+lemma Rinst.balanceCore_meta_instructionFrame
+    (world : World) (mach : Mach) (view : Meta) :
+    Outcome.Rel (fun e => e.2.2) (fun x => x.2.2)
+      Meta.InstructionFrame view (Rinst.balanceCore world mach view) := by
+  cases hpop : mach.pop with
+  | error e =>
+      simp only [Rinst.balanceCore, hpop]
+      exact ⟨rfl, rfl⟩
+  | ok out =>
+      rcases out with ⟨x, mach'⟩
+      simp only [Rinst.balanceCore, hpop]
+      by_cases hw : x.toAdr ∈ view.accessedAddresses
+      · simp only [hw, if_pos]
+        split
+        · exact ⟨rfl, rfl⟩
+        · split <;> exact ⟨rfl, rfl⟩
+      · simp only [hw, if_false]
+        split
+        · exact ⟨rfl, rfl⟩
+        · split <;> exact ⟨rfl, rfl⟩
+
+lemma Rinst.balanceCore_instructionFrame (d : Devm) :
+    Execution.Rel Devm.InstructionFrame d
+      (liftMachMetaWorldExecution Rinst.balanceCore d) := by
+  exact liftMachMetaWorldExecution_instructionFrame Rinst.balanceCore d
+    (Rinst.balanceCore_meta_instructionFrame d.world d.mach d.meta)
+
+/-! ### Bind composition for frame relations -/
+
+lemma Outcome.Rel.pure
+    {R : Devm → Devm → Prop} (hrefl : Reflexive R) (x : α) (d : Devm) :
+    Outcome.Rel Prod.snd Prod.snd R d
+      (.ok (x, d) : Except (String × Devm) (α × Devm)) :=
+  hrefl d
+
+lemma Execution.Rel.pure
+    {R : Devm → Devm → Prop} (hrefl : Reflexive R) (d : Devm) :
+    Execution.Rel R d (.ok d) :=
+  hrefl d
+
+lemma Outcome.Rel.bind
+    {R : Devm → Devm → Prop} (htrans : Transitive R)
+    {pre : Devm} {out : Except (String × Devm) (α × Devm)}
+    {next : α → Devm → Except (String × Devm) (β × Devm)}
+    (hout : Outcome.Rel Prod.snd Prod.snd R pre out)
+    (hnext : ∀ x d, Outcome.Rel Prod.snd Prod.snd R d (next x d)) :
+    Outcome.Rel Prod.snd Prod.snd R pre
+      (out >>= fun x => next x.1 x.2) := by
+  cases out with
+  | error e => exact hout
+  | ok x =>
+      cases hn : next x.1 x.2 with
+      | error e =>
+          have h := hnext x.1 x.2
+          rw [hn] at h
+          simpa only [Except.bind_ok, hn] using htrans hout h
+      | ok y =>
+          have h := hnext x.1 x.2
+          rw [hn] at h
+          simpa only [Except.bind_ok, hn] using htrans hout h
+
+lemma Outcome.Rel.bindExecution
+    {R : Devm → Devm → Prop} (htrans : Transitive R)
+    {pre : Devm} {out : Except (String × Devm) (α × Devm)}
+    {next : α → Devm → Execution}
+    (hout : Outcome.Rel Prod.snd Prod.snd R pre out)
+    (hnext : ∀ x d, Execution.Rel R d (next x d)) :
+    Execution.Rel R pre (out >>= fun x => next x.1 x.2) := by
+  cases out with
+  | error e => exact hout
+  | ok x =>
+      cases hn : next x.1 x.2 with
+      | error e =>
+          have h := hnext x.1 x.2
+          rw [hn] at h
+          simpa only [Except.bind_ok, hn] using htrans hout h
+      | ok d =>
+          have h := hnext x.1 x.2
+          rw [hn] at h
+          simpa only [Except.bind_ok, hn, id_eq] using htrans hout h
+
+lemma Execution.Rel.bind
+    {R : Devm → Devm → Prop} (htrans : Transitive R)
+    {pre : Devm} {out : Execution} {next : Devm → Execution}
+    (hout : Execution.Rel R pre out)
+    (hnext : ∀ d, Execution.Rel R d (next d)) :
+    Execution.Rel R pre (out >>= next) := by
+  cases out with
+  | error e => exact hout
+  | ok d =>
+      cases hn : next d with
+      | error e =>
+          have h := hnext d
+          rw [hn] at h
+          simpa only [Except.bind_ok, hn] using htrans hout h
+      | ok d' =>
+          have h := hnext d
+          rw [hn] at h
+          simpa only [Except.bind_ok, hn, id_eq] using htrans hout h
+
+/-! ### Step 3 calibration cases -/
+
+lemma Rinst.balance_runCore_instructionFrame
+    (pc : Nat) (devm : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.InstructionFrame devm
+      (Rinst.runCore pc devm sevm .balance) := by
+  simpa only [Rinst.runCore] using Rinst.balanceCore_instructionFrame devm
+
+lemma Rinst.blobhash_runCore_instructionFrame
+    (pc : Nat) (devm : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.InstructionFrame devm
+      (Rinst.runCore pc devm sevm .blobhash) := by
+  simp only [Rinst.runCore]
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.pop_instructionFrame devm) (next := fun x d =>
+      chargeGas gHashopcode d >>=
+        Devm.push (sevm.tenvStat.blobVersionedHashes.getD x.toNat 0)) ?_
+  intro x d
+  apply Execution.Rel.bind Devm.instructionFrame_trans
+    (chargeGas_instructionFrame gHashopcode d)
+  exact Devm.push_instructionFrame _
