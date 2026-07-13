@@ -12033,3 +12033,903 @@ lemma Rinst.blobhash_runCore_instructionFrame
   apply Execution.Rel.bind Devm.instructionFrame_trans
     (chargeGas_instructionFrame gHashopcode d)
   exact Devm.push_instructionFrame _
+
+/-! ## Master regular-instruction frame theorem -/
+
+/-- Equality of the balance/code observations of two world states.  Storage is
+    deliberately absent: it is the component written by `SSTORE`. -/
+def State.BalCodeEq (a b : _root_.State) : Prop :=
+  (fun adr => ((a.get adr).bal, (a.get adr).code)) =
+    fun adr => ((b.get adr).bal, (b.get adr).code)
+
+/-- `SSTORE` may change storage in `state`, but preserves balances, code, and
+    the other world/frame fields. -/
+def Devm.Rels.stateWriteFrame : Devm.Rels :=
+  { Devm.Rels.instructionFrame with state := State.BalCodeEq }
+
+/-- `TSTORE` may change `transientStorage`, but preserves the other
+    world/frame fields. -/
+def Devm.Rels.transientWriteFrame : Devm.Rels :=
+  { Devm.Rels.instructionFrame with transientStorage := fun _ _ => True }
+
+abbrev Devm.StateWriteFrame : Devm → Devm → Prop :=
+  Devm.Rel Devm.Rels.stateWriteFrame
+
+abbrev Devm.TransientWriteFrame : Devm → Devm → Prop :=
+  Devm.Rel Devm.Rels.transientWriteFrame
+
+lemma Devm.Rels.stateWriteFrame_refl :
+    Devm.Rels.Refl Devm.Rels.stateWriteFrame := by
+  simp [Devm.Rels.Refl, Devm.Rels.stateWriteFrame,
+    Devm.Rels.instructionFrame, State.BalCodeEq, Reflexive]
+
+lemma Devm.Rels.stateWriteFrame_trans :
+    Devm.Rels.Trans Devm.Rels.stateWriteFrame := by
+  simp_all [Devm.Rels.Trans, Devm.Rels.stateWriteFrame,
+    Devm.Rels.instructionFrame, State.BalCodeEq, Transitive]
+
+lemma Devm.Rels.transientWriteFrame_refl :
+    Devm.Rels.Refl Devm.Rels.transientWriteFrame := by
+  simp [Devm.Rels.Refl, Devm.Rels.transientWriteFrame,
+    Devm.Rels.instructionFrame, Reflexive]
+
+lemma Devm.Rels.transientWriteFrame_trans :
+    Devm.Rels.Trans Devm.Rels.transientWriteFrame := by
+  simp [Devm.Rels.Trans, Devm.Rels.transientWriteFrame,
+    Devm.Rels.instructionFrame, Transitive]
+
+lemma Devm.stateWriteFrame_refl : Reflexive Devm.StateWriteFrame :=
+  Devm.rel_refl Devm.Rels.stateWriteFrame_refl
+
+lemma Devm.stateWriteFrame_trans : Transitive Devm.StateWriteFrame :=
+  Devm.rel_trans Devm.Rels.stateWriteFrame_trans
+
+lemma Devm.transientWriteFrame_refl : Reflexive Devm.TransientWriteFrame :=
+  Devm.rel_refl Devm.Rels.transientWriteFrame_refl
+
+lemma Devm.transientWriteFrame_trans : Transitive Devm.TransientWriteFrame :=
+  Devm.rel_trans Devm.Rels.transientWriteFrame_trans
+
+lemma Devm.instructionFrame_refines_stateWriteFrame :
+    CEffect.Refines Devm.InstructionFrame Devm.StateWriteFrame := by
+  intro d d' h
+  refine { h with state := ?_ }
+  change State.BalCodeEq d.state d'.state
+  rw [h.state]
+  rfl
+
+lemma Devm.instructionFrame_refines_transientWriteFrame :
+    CEffect.Refines Devm.InstructionFrame Devm.TransientWriteFrame := by
+  intro d d' h
+  exact { h with transientStorage := trivial }
+
+lemma Devm.instructionFrame_of_world_eq {d d' : Devm}
+    (hdel : d.accountsToDelete = d'.accountsToDelete)
+    (hstate : d.state = d'.state)
+    (hcreated : d.createdAccounts = d'.createdAccounts)
+    (htransient : d.transientStorage = d'.transientStorage) :
+    Devm.InstructionFrame d d' := by
+  exact {
+    stack := trivial
+    memory := trivial
+    gasLeft := trivial
+    logs := trivial
+    refundCounter := trivial
+    output := trivial
+    accountsToDelete := hdel
+    returnData := trivial
+    error := trivial
+    accessedAddresses := trivial
+    accessedStorageKeys := trivial
+    state := hstate
+    createdAccounts := hcreated
+    transientStorage := htransient }
+
+lemma popChargePush_instructionFrame (pre : Devm)
+    (cost : B256 → Devm → Nat) (value : B256 → Devm → B256) :
+    Execution.Rel Devm.InstructionFrame pre (do
+      let ⟨x, d⟩ ← pre.pop
+      let d ← chargeGas (cost x d) d
+      d.push (value x d)) := by
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.pop_instructionFrame pre) (next := fun x d =>
+      chargeGas (cost x d) d >>= fun d => Devm.push (value x d) d) ?_
+  intro x d
+  apply Execution.Rel.bind Devm.instructionFrame_trans
+    (chargeGas_instructionFrame (cost x d) d)
+  intro d'
+  exact Devm.push_instructionFrame (value x d') d'
+
+lemma Execution.Rel.trans_left {R : Devm → Devm → Prop}
+    (htrans : Transitive R) {a b : Devm} {out : Execution}
+    (hab : R a b) (hout : Execution.Rel R b out) :
+    Execution.Rel R a out := by
+  cases out <;> exact htrans hab hout
+
+lemma pop2ChargePush_instructionFrame (pre : Devm)
+    (cost : B256 → B256 → Devm → Nat)
+    (value : B256 → B256 → Devm → B256) :
+    Execution.Rel Devm.InstructionFrame pre (do
+      let ⟨x, d⟩ ← pre.pop
+      let ⟨y, d⟩ ← d.pop
+      let d ← chargeGas (cost x y d) d
+      d.push (value x y d)) := by
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.pop_instructionFrame pre) (next := fun x d => do
+      let ⟨y, d⟩ ← d.pop
+      let d ← chargeGas (cost x y d) d
+      d.push (value x y d)) ?_
+  intro x d
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.pop_instructionFrame d) (next := fun y d =>
+      chargeGas (cost x y d) d >>= fun d => Devm.push (value x y d) d) ?_
+  intro y d
+  apply Execution.Rel.bind Devm.instructionFrame_trans
+    (chargeGas_instructionFrame (cost x y d) d)
+  intro d'
+  exact Devm.push_instructionFrame (value x y d') d'
+
+lemma Rinst.exp_runCore_instructionFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.InstructionFrame pre
+      (Rinst.runCore pc pre sevm .exp) := by
+  simpa only [Rinst.runCore] using
+    (pop2ChargePush_instructionFrame pre
+      (fun _ exponent _ => gExp + gExpbyte * exponent.bytecount)
+      (fun base exponent _ => B256.bexp base exponent))
+
+lemma Rinst.calldataload_runCore_instructionFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.InstructionFrame pre
+      (Rinst.runCore pc pre sevm .calldataload) := by
+  simpa only [Rinst.runCore] using
+    (popChargePush_instructionFrame pre (fun _ _ => gVerylow)
+      (fun start _ => B8L.toB256 <| sevm.data.sliceD start.toNat 32 0))
+
+lemma Rinst.blockhash_runCore_instructionFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.InstructionFrame pre
+      (Rinst.runCore pc pre sevm .blockhash) := by
+  simpa only [Rinst.runCore] using
+    (popChargePush_instructionFrame pre (fun _ _ => gBlockhash)
+      (fun blockNumberWord _ =>
+        let blockNumber := blockNumberWord.toNat
+        let maxBlockNumber := blockNumber + 256
+        if sevm.benvStat.number ≤ blockNumber ∨
+            maxBlockNumber < sevm.benvStat.number then 0
+        else sevm.benvStat.blockHashes.getD
+          (sevm.benvStat.blockHashes.length -
+            (sevm.benvStat.number - blockNumber)) 0))
+
+lemma Rinst.gas_runCore_instructionFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.InstructionFrame pre
+      (Rinst.runCore pc pre sevm .gas) := by
+  simp only [Rinst.runCore]
+  apply Execution.Rel.bind Devm.instructionFrame_trans
+    (chargeGas_instructionFrame gBase pre)
+  intro d
+  exact Devm.push_instructionFrame d.gasLeft.toB256 d
+
+lemma Rinst.tload_runCore_instructionFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.InstructionFrame pre
+      (Rinst.runCore pc pre sevm .tload) := by
+  simp only [Rinst.runCore]
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.pop_instructionFrame pre) (next := fun key d =>
+      pushItem (d.getTransVal sevm.currentTarget key) gasWarmAccess d) ?_
+  intro key d
+  exact pushItem_instructionFrame _ _ d
+
+lemma popNat3ChargePure_instructionFrame (pre : Devm)
+    (cost : Nat → Nat → Nat → Devm → Nat)
+    (finish : Nat → Nat → Nat → Devm → Devm)
+    (hfinish : ∀ x y z d, Devm.InstructionFrame d (finish x y z d)) :
+    Execution.Rel Devm.InstructionFrame pre (do
+      let ⟨x, d⟩ ← pre.popToNat
+      let ⟨y, d⟩ ← d.popToNat
+      let ⟨z, d⟩ ← d.popToNat
+      let d ← chargeGas (cost x y z d) d
+      .ok (finish x y z d)) := by
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.popToNat_instructionFrame pre) (next := fun x d => do
+      let ⟨y, d⟩ ← d.popToNat
+      let ⟨z, d⟩ ← d.popToNat
+      let d ← chargeGas (cost x y z d) d
+      .ok (finish x y z d)) ?_
+  intro x d
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.popToNat_instructionFrame d) (next := fun y d => do
+      let ⟨z, d⟩ ← d.popToNat
+      let d ← chargeGas (cost x y z d) d
+      .ok (finish x y z d)) ?_
+  intro y d
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.popToNat_instructionFrame d) (next := fun z d =>
+      chargeGas (cost x y z d) d >>= fun d => .ok (finish x y z d)) ?_
+  intro z d
+  apply Execution.Rel.bind Devm.instructionFrame_trans
+    (chargeGas_instructionFrame (cost x y z d) d)
+  intro d'
+  exact hfinish x y z d'
+
+lemma popNatPopChargePure_instructionFrame (pre : Devm)
+    (cost : Nat → B256 → Devm → Nat)
+    (finish : Nat → B256 → Devm → Devm)
+    (hfinish : ∀ x y d, Devm.InstructionFrame d (finish x y d)) :
+    Execution.Rel Devm.InstructionFrame pre (do
+      let ⟨x, d⟩ ← pre.popToNat
+      let ⟨y, d⟩ ← d.pop
+      let d ← chargeGas (cost x y d) d
+      .ok (finish x y d)) := by
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.popToNat_instructionFrame pre) (next := fun x d => do
+      let ⟨y, d⟩ ← d.pop
+      let d ← chargeGas (cost x y d) d
+      .ok (finish x y d)) ?_
+  intro x d
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.pop_instructionFrame d) (next := fun y d =>
+      chargeGas (cost x y d) d >>= fun d => .ok (finish x y d)) ?_
+  intro y d
+  apply Execution.Rel.bind Devm.instructionFrame_trans
+    (chargeGas_instructionFrame (cost x y d) d)
+  intro d'
+  exact hfinish x y d'
+
+lemma Rinst.calldatacopy_runCore_instructionFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.InstructionFrame pre
+      (Rinst.runCore pc pre sevm .calldatacopy) := by
+  simpa only [Rinst.runCore] using
+    (popNat3ChargePure_instructionFrame pre
+      (fun memoryStart _ size d =>
+        gVerylow + gasCopy * ceilDiv size 32 + d.extCost [(memoryStart, size)])
+      (fun memoryStart dataStart size d =>
+        d.memWrite memoryStart (sevm.data.sliceD dataStart size 0))
+      (fun memoryStart dataStart size d =>
+        Devm.memWrite_instructionFrame d memoryStart
+          (sevm.data.sliceD dataStart size 0)))
+
+lemma Rinst.codecopy_runCore_instructionFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.InstructionFrame pre
+      (Rinst.runCore pc pre sevm .codecopy) := by
+  simpa only [Rinst.runCore] using
+    (popNat3ChargePure_instructionFrame pre
+      (fun memoryStart _ size d =>
+        gVerylow + gasCopy * ceilDiv size 32 + d.extCost [(memoryStart, size)])
+      (fun memoryStart codeStart size d =>
+        { d with memory := (d.memory.write memoryStart
+          (sevm.code.sliceD codeStart size (Linst.toB8 .stop))) })
+      (fun _ _ _ _ => Devm.instructionFrame_of_world_eq rfl rfl rfl rfl))
+
+lemma Rinst.mstore_runCore_instructionFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.InstructionFrame pre
+      (Rinst.runCore pc pre sevm .mstore) := by
+  simpa only [Rinst.runCore] using
+    (popNatPopChargePure_instructionFrame pre
+      (fun start _ d => gVerylow + d.extCost [(start, 32)])
+      (fun start value d => d.memWrite start value.toB8L)
+      (fun start value d =>
+        Devm.memWrite_instructionFrame d start value.toB8L))
+
+lemma Rinst.mstore8_runCore_instructionFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.InstructionFrame pre
+      (Rinst.runCore pc pre sevm .mstore8) := by
+  simpa only [Rinst.runCore] using
+    (popNatPopChargePure_instructionFrame pre
+      (fun start _ d => gVerylow + d.extCost [(start, 1)])
+      (fun start value d => d.memWrite start [value.2.2.toUInt8])
+      (fun start value d =>
+        Devm.memWrite_instructionFrame d start [value.2.2.toUInt8]))
+
+lemma Rinst.mload_runCore_instructionFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.InstructionFrame pre
+      (Rinst.runCore pc pre sevm .mload) := by
+  simp only [Rinst.runCore]
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.popToNat_instructionFrame pre) (next := fun start d =>
+      chargeGas (gVerylow + d.extCost [(start, 32)]) d >>= fun d =>
+        Devm.push (B8L.toB256 (d.memRead start 32).1) (d.memRead start 32).2) ?_
+  intro start d
+  apply Execution.Rel.bind Devm.instructionFrame_trans
+    (chargeGas_instructionFrame _ d)
+  intro d'
+  exact Execution.Rel.trans_left Devm.instructionFrame_trans
+    (Devm.memRead_instructionFrame d' start 32)
+    (Devm.push_instructionFrame _ (d'.memRead start 32).2)
+
+lemma Rinst.kec_runCore_instructionFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.InstructionFrame pre
+      (Rinst.runCore pc pre sevm .kec) := by
+  simp only [Rinst.runCore]
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.popToNat_instructionFrame pre) (next := fun start d => do
+      let ⟨size, d⟩ ← d.popToNat
+      let d ← chargeGas
+        (gKeccak256 + gasKeccak256Word * ceilDiv size 32 +
+          d.extCost [(start, size)]) d
+      let ⟨arg, d⟩ := d.memRead start size
+      d.push arg.keccak) ?_
+  intro start d
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.popToNat_instructionFrame d) (next := fun size d =>
+      chargeGas
+        (gKeccak256 + gasKeccak256Word * ceilDiv size 32 +
+          d.extCost [(start, size)]) d >>= fun d =>
+        Devm.push (d.memRead start size).1.keccak (d.memRead start size).2) ?_
+  intro size d
+  apply Execution.Rel.bind Devm.instructionFrame_trans
+    (chargeGas_instructionFrame _ d)
+  intro d'
+  exact Execution.Rel.trans_left Devm.instructionFrame_trans
+    (Devm.memRead_instructionFrame d' start size)
+    (Devm.push_instructionFrame _ (d'.memRead start size).2)
+
+lemma Rinst.mcopy_runCore_instructionFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.InstructionFrame pre
+      (Rinst.runCore pc pre sevm .mcopy) := by
+  simp only [Rinst.runCore]
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.popToNat_instructionFrame pre) (next := fun destination d => do
+      let ⟨source, d⟩ ← d.popToNat
+      let ⟨length, d⟩ ← d.popToNat
+      let d ← chargeGas (gVerylow + gasCopy * ceilDiv length 32 +
+        d.extCost [(source, length), (destination, length)]) d
+      .ok ((d.memRead source length).2.memWrite destination
+        (d.memRead source length).1)) ?_
+  intro destination d
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.popToNat_instructionFrame d) (next := fun source d => do
+      let ⟨length, d⟩ ← d.popToNat
+      let d ← chargeGas (gVerylow + gasCopy * ceilDiv length 32 +
+        d.extCost [(source, length), (destination, length)]) d
+      .ok ((d.memRead source length).2.memWrite destination
+        (d.memRead source length).1)) ?_
+  intro source d
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.popToNat_instructionFrame d) (next := fun length d =>
+      chargeGas (gVerylow + gasCopy * ceilDiv length 32 +
+        d.extCost [(source, length), (destination, length)]) d >>= fun d =>
+      .ok ((d.memRead source length).2.memWrite destination
+        (d.memRead source length).1)) ?_
+  intro length d
+  apply Execution.Rel.bind Devm.instructionFrame_trans
+    (chargeGas_instructionFrame _ d)
+  intro d'
+  exact Devm.instructionFrame_trans
+    (Devm.memRead_instructionFrame d' source length)
+    (Devm.memWrite_instructionFrame (d'.memRead source length).2 destination
+      (d'.memRead source length).1)
+
+lemma popAdrAccessChargePush_instructionFrame (pre : Devm)
+    (value : Adr → Devm → B256) :
+    Execution.Rel Devm.InstructionFrame pre (do
+      let ⟨a, d⟩ ← pre.popToAdr
+      let d ← if a ∈ d.accessedAddresses then chargeGas gasWarmAccess d
+        else chargeGas gasColdAccountAccess (addAccessedAddress d a)
+      d.push (value a d)) := by
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.popToAdr_instructionFrame pre) (next := fun a d => do
+      let d ← if a ∈ d.accessedAddresses then chargeGas gasWarmAccess d
+        else chargeGas gasColdAccountAccess (addAccessedAddress d a)
+      d.push (value a d)) ?_
+  intro a d
+  by_cases h : a ∈ d.accessedAddresses
+  · simp only [h, if_pos]
+    apply Execution.Rel.bind Devm.instructionFrame_trans
+      (chargeGas_instructionFrame gasWarmAccess d)
+    intro d'
+    exact Devm.push_instructionFrame (value a d') d'
+  · simp only [h, if_false]
+    apply Execution.Rel.bind Devm.instructionFrame_trans
+      (Execution.Rel.trans_left Devm.instructionFrame_trans
+        (addAccessedAddress_instructionFrame d a)
+        (chargeGas_instructionFrame gasColdAccountAccess
+          (addAccessedAddress d a)))
+    intro d'
+    exact Devm.push_instructionFrame (value a d') d'
+
+lemma Rinst.extcodesize_runCore_instructionFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.InstructionFrame pre
+      (Rinst.runCore pc pre sevm .extcodesize) := by
+  simpa only [Rinst.runCore] using
+    (popAdrAccessChargePush_instructionFrame pre
+      (fun a d => (d.getCode a).size.toB256))
+
+lemma Rinst.extcodehash_runCore_instructionFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.InstructionFrame pre
+      (Rinst.runCore pc pre sevm .extcodehash) := by
+  simpa only [Rinst.runCore] using
+    (popAdrAccessChargePush_instructionFrame pre (fun a d =>
+      let account := d.getAcct a
+      if account.Empty then 0
+      else ByteArray.keccak 0 account.code.size account.code))
+
+lemma Rinst.sload_runCore_instructionFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.InstructionFrame pre
+      (Rinst.runCore pc pre sevm .sload) := by
+  simp only [Rinst.runCore]
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.pop_instructionFrame pre) (next := fun key d =>
+      if (sevm.currentTarget, key) ∈ d.accessedStorageKeys then
+        chargeGas gasWarmAccess d >>= fun d =>
+          Devm.push (d.getStorVal sevm.currentTarget key) d
+      else chargeGas gasColdSload
+        (addAccessedStorageKey d sevm.currentTarget key) >>= fun d =>
+          Devm.push (d.getStorVal sevm.currentTarget key) d) ?_
+  intro key d
+  by_cases h : (sevm.currentTarget, key) ∈ d.accessedStorageKeys
+  · simp only [h, if_pos]
+    apply Execution.Rel.bind Devm.instructionFrame_trans
+      (chargeGas_instructionFrame gasWarmAccess d)
+    intro d'
+    exact Devm.push_instructionFrame _ d'
+  · simp only [h, if_false]
+    apply Execution.Rel.bind Devm.instructionFrame_trans
+      (Execution.Rel.trans_left Devm.instructionFrame_trans
+        (addAccessedStorageKey_instructionFrame d sevm.currentTarget key)
+        (chargeGas_instructionFrame gasColdSload
+          (addAccessedStorageKey d sevm.currentTarget key)))
+    intro d'
+    exact Devm.push_instructionFrame _ d'
+
+lemma Rinst.pop_runCore_instructionFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.InstructionFrame pre
+      (Rinst.runCore pc pre sevm .pop) := by
+  simp only [Rinst.runCore]
+  have hp := Devm.pop_instructionFrame pre
+  cases h : pre.pop with
+  | error e =>
+      rw [h] at hp
+      simpa [h] using hp
+  | ok x =>
+      rcases x with ⟨word, d⟩
+      rw [h] at hp
+      simpa [h] using
+        (Execution.Rel.trans_left Devm.instructionFrame_trans hp
+          (chargeGas_instructionFrame gBase d))
+
+lemma Rinst.dup_runCore_instructionFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) (n : Fin 16) :
+    Execution.Rel Devm.InstructionFrame pre
+      (Rinst.runCore pc pre sevm (.dup n)) := by
+  simp only [Rinst.runCore]
+  apply Execution.Rel.bind Devm.instructionFrame_trans
+    (chargeGas_instructionFrame gVerylow pre)
+  intro d
+  cases h : d.stack[n]? with
+  | none =>
+      simp only
+      exact Devm.instructionFrame_refl d
+  | some word =>
+      simp only
+      exact Devm.push_instructionFrame word d
+
+lemma Rinst.swap_runCore_instructionFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) (n : Fin 16) :
+    Execution.Rel Devm.InstructionFrame pre
+      (Rinst.runCore pc pre sevm (.swap n)) := by
+  simp only [Rinst.runCore]
+  apply Execution.Rel.bind Devm.instructionFrame_trans
+    (chargeGas_instructionFrame gVerylow pre)
+  intro d
+  cases h : d.stack.swap n with
+  | none =>
+      simp only
+      exact Devm.instructionFrame_refl d
+  | some stack =>
+      simp only
+      exact Devm.instructionFrame_of_world_eq rfl rfl rfl rfl
+
+lemma popNat3Bind_instructionFrame (pre : Devm)
+    (next : Nat → Nat → Nat → Devm → Execution)
+    (hnext : ∀ x y z d, Execution.Rel Devm.InstructionFrame d
+      (next x y z d)) :
+    Execution.Rel Devm.InstructionFrame pre (do
+      let ⟨x, d⟩ ← pre.popToNat
+      let ⟨y, d⟩ ← d.popToNat
+      let ⟨z, d⟩ ← d.popToNat
+      next x y z d) := by
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.popToNat_instructionFrame pre) (next := fun x d => do
+      let ⟨y, d⟩ ← d.popToNat
+      let ⟨z, d⟩ ← d.popToNat
+      next x y z d) ?_
+  intro x d
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.popToNat_instructionFrame d) (next := fun y d => do
+      let ⟨z, d⟩ ← d.popToNat
+      next x y z d) ?_
+  intro y d
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.popToNat_instructionFrame d) (next := next x y) ?_
+  exact hnext x y
+
+lemma popAdrNat3Bind_instructionFrame (pre : Devm)
+    (next : Adr → Nat → Nat → Nat → Devm → Execution)
+    (hnext : ∀ a x y z d, Execution.Rel Devm.InstructionFrame d
+      (next a x y z d)) :
+    Execution.Rel Devm.InstructionFrame pre (do
+      let ⟨a, d⟩ ← pre.popToAdr
+      let ⟨x, d⟩ ← d.popToNat
+      let ⟨y, d⟩ ← d.popToNat
+      let ⟨z, d⟩ ← d.popToNat
+      next a x y z d) := by
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.popToAdr_instructionFrame pre) (next := fun a d => do
+      let ⟨x, d⟩ ← d.popToNat
+      let ⟨y, d⟩ ← d.popToNat
+      let ⟨z, d⟩ ← d.popToNat
+      next a x y z d) ?_
+  intro a d
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.popToNat_instructionFrame d) (next := fun x d => do
+      let ⟨y, d⟩ ← d.popToNat
+      let ⟨z, d⟩ ← d.popToNat
+      next a x y z d) ?_
+  intro x d
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.popToNat_instructionFrame d) (next := fun y d => do
+      let ⟨z, d⟩ ← d.popToNat
+      next a x y z d) ?_
+  intro y d
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.popToNat_instructionFrame d) (next := next a x y) ?_
+  exact hnext a x y
+
+lemma Rinst.retdatacopy_runCore_instructionFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.InstructionFrame pre
+      (Rinst.runCore pc pre sevm .retdatacopy) := by
+  simp only [Rinst.runCore]
+  refine popNat3Bind_instructionFrame pre (next := fun memoryStart returnStart size d => do
+    let d ← chargeGas
+      (gVerylow + gReturnDataCopy * ceilDiv size 32 +
+        d.extCost [(memoryStart, size)]) d
+    if d.returnData.length < returnStart + size then
+      .error ⟨"OutOfBoundsRead", d⟩
+    let value := d.returnData.sliceD returnStart size 0
+    .ok { d with memory := d.memory.write memoryStart value }) ?_
+  intro memoryStart returnStart size d
+  apply Execution.Rel.bind Devm.instructionFrame_trans
+    (chargeGas_instructionFrame
+      (gVerylow + gReturnDataCopy * ceilDiv size 32 +
+        d.extCost [(memoryStart, size)]) d)
+  intro d'
+  by_cases h : d'.returnData.length < returnStart + size
+  · simp only [h, if_pos]
+    exact Devm.instructionFrame_refl d'
+  · simp only [h, if_false]
+    exact Devm.instructionFrame_of_world_eq rfl rfl rfl rfl
+
+lemma Rinst.extcodecopy_runCore_instructionFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.InstructionFrame pre
+      (Rinst.runCore pc pre sevm .extcodecopy) := by
+  simp only [Rinst.runCore]
+  refine popAdrNat3Bind_instructionFrame pre
+    (next := fun a memoryStart codeStart size d =>
+      if a ∈ d.accessedAddresses then do
+        let d ← chargeGas (gasWarmAccess + gasCopy * ceilDiv size 32 +
+          d.extCost [(memoryStart, size)]) d
+        let value := (d.getCode a).sliceD codeStart size (Linst.toB8 .stop)
+        .ok { d with memory := d.memory.write memoryStart value }
+      else do
+        let d ← chargeGas
+          (gasColdAccountAccess + gasCopy * ceilDiv size 32 +
+            d.extCost [(memoryStart, size)]) (addAccessedAddress d a)
+        let value := (d.getCode a).sliceD codeStart size (Linst.toB8 .stop)
+        .ok { d with memory := d.memory.write memoryStart value }) ?_
+  intro a memoryStart codeStart size d
+  by_cases h : a ∈ d.accessedAddresses
+  · simp only [h, if_pos]
+    apply Execution.Rel.bind Devm.instructionFrame_trans
+      (chargeGas_instructionFrame
+        (gasWarmAccess + gasCopy * ceilDiv size 32 +
+          d.extCost [(memoryStart, size)]) d)
+    intro d'
+    exact Devm.instructionFrame_of_world_eq rfl rfl rfl rfl
+  · simp only [h, if_false]
+    apply Execution.Rel.bind Devm.instructionFrame_trans
+      (Execution.Rel.trans_left Devm.instructionFrame_trans
+        (addAccessedAddress_instructionFrame d a)
+        (chargeGas_instructionFrame
+          (gasColdAccountAccess + gasCopy * ceilDiv size 32 +
+            d.extCost [(memoryStart, size)])
+          (addAccessedAddress d a)))
+    intro d'
+    exact Devm.instructionFrame_of_world_eq rfl rfl rfl rfl
+
+lemma Rinst.log_runCore_instructionFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) (n : Fin 5) :
+    Execution.Rel Devm.InstructionFrame pre
+      (Rinst.runCore pc pre sevm (.log n)) := by
+  simp only [Rinst.runCore]
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.popToNat_instructionFrame pre) (next := fun memoryStart d => do
+      let ⟨size, d⟩ ← d.popToNat
+      let ⟨topics, d⟩ ← d.popN n
+      let d ← chargeGas
+        (gLog + gLogdata * size + gLogtopic * n +
+          d.extCost [(memoryStart, size)]) d
+      assertDynamic sevm d
+      let ⟨data, d⟩ := d.memRead memoryStart size
+      .ok (d.addLog ⟨sevm.currentTarget, topics, data⟩)) ?_
+  intro memoryStart d
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.popToNat_instructionFrame d) (next := fun size d => do
+      let ⟨topics, d⟩ ← d.popN n
+      let d ← chargeGas
+        (gLog + gLogdata * size + gLogtopic * n +
+          d.extCost [(memoryStart, size)]) d
+      assertDynamic sevm d
+      let ⟨data, d⟩ := d.memRead memoryStart size
+      .ok (d.addLog ⟨sevm.currentTarget, topics, data⟩)) ?_
+  intro size d
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.popN_instructionFrame d n) (next := fun topics d => do
+      let d ← chargeGas
+        (gLog + gLogdata * size + gLogtopic * n +
+          d.extCost [(memoryStart, size)]) d
+      assertDynamic sevm d
+      let ⟨data, d⟩ := d.memRead memoryStart size
+      .ok (d.addLog ⟨sevm.currentTarget, topics, data⟩)) ?_
+  intro topics d
+  apply Execution.Rel.bind Devm.instructionFrame_trans
+    (chargeGas_instructionFrame _ d)
+  intro d'
+  unfold assertDynamic Except.assert
+  split
+  · exact Devm.instructionFrame_trans
+      (Devm.memRead_instructionFrame d' memoryStart size)
+      (Devm.addLog_instructionFrame (d'.memRead memoryStart size).2
+        ⟨sevm.currentTarget, topics, (d'.memRead memoryStart size).1⟩)
+  · exact Devm.instructionFrame_refl d'
+
+theorem Rinst.runCore_instructionFrame
+    (pc : Nat) (sevm : Sevm) (pre : Devm) (r : Rinst)
+    (h_not_sstore : r ≠ .sstore) (h_not_tstore : r ≠ .tstore) :
+    Execution.Rel Devm.InstructionFrame pre
+      (Rinst.runCore pc pre sevm r) := by
+  cases r
+  all_goals try contradiction
+  all_goals try (
+    with_reducible first
+      | exact Rinst.exp_runCore_instructionFrame pc pre sevm
+      | exact Rinst.kec_runCore_instructionFrame pc pre sevm
+      | exact Rinst.balance_runCore_instructionFrame pc pre sevm
+      | exact Rinst.blobhash_runCore_instructionFrame pc pre sevm
+      | exact Rinst.calldataload_runCore_instructionFrame pc pre sevm
+      | exact Rinst.calldatacopy_runCore_instructionFrame pc pre sevm
+      | exact Rinst.codecopy_runCore_instructionFrame pc pre sevm
+      | exact Rinst.extcodesize_runCore_instructionFrame pc pre sevm
+      | exact Rinst.extcodecopy_runCore_instructionFrame pc pre sevm
+      | exact Rinst.retdatacopy_runCore_instructionFrame pc pre sevm
+      | exact Rinst.extcodehash_runCore_instructionFrame pc pre sevm
+      | exact Rinst.blockhash_runCore_instructionFrame pc pre sevm
+      | exact Rinst.pop_runCore_instructionFrame pc pre sevm
+      | exact Rinst.mload_runCore_instructionFrame pc pre sevm
+      | exact Rinst.mstore_runCore_instructionFrame pc pre sevm
+      | exact Rinst.mstore8_runCore_instructionFrame pc pre sevm
+      | exact Rinst.sload_runCore_instructionFrame pc pre sevm
+      | exact Rinst.tload_runCore_instructionFrame pc pre sevm
+      | exact Rinst.mcopy_runCore_instructionFrame pc pre sevm
+      | exact Rinst.gas_runCore_instructionFrame pc pre sevm
+      | exact Rinst.dup_runCore_instructionFrame pc pre sevm _
+      | exact Rinst.swap_runCore_instructionFrame pc pre sevm _
+      | exact Rinst.log_runCore_instructionFrame pc pre sevm _)
+  all_goals simp only [Rinst.runCore]
+  all_goals with_reducible first
+    | exact applyBinary_instructionFrame _ _ pre
+    | exact applyTernary_instructionFrame _ _ pre
+    | exact applyUnary_instructionFrame _ _ pre
+    | exact pushItem_instructionFrame _ _ pre
+
+lemma Devm.stateWriteFrame_of_world_eq {d d' : Devm}
+    (hdel : d.accountsToDelete = d'.accountsToDelete)
+    (hstate : d.state = d'.state)
+    (hcreated : d.createdAccounts = d'.createdAccounts)
+    (htransient : d.transientStorage = d'.transientStorage) :
+    Devm.StateWriteFrame d d' := by
+  exact {
+    stack := trivial, memory := trivial, gasLeft := trivial, logs := trivial
+    refundCounter := trivial, output := trivial, accountsToDelete := hdel
+    returnData := trivial, error := trivial, accessedAddresses := trivial
+    accessedStorageKeys := trivial, state := by
+      change State.BalCodeEq d.state d'.state
+      rw [hstate]
+      rfl
+    createdAccounts := hcreated, transientStorage := htransient }
+
+/-- The state-writer frame implies the pre-existing `SSTORE` balance fact. -/
+lemma Devm.StateWriteFrame.getBal_eq {d d' : Devm}
+    (h : Devm.StateWriteFrame d d') (adr : Adr) :
+    d.getBal adr = d'.getBal adr := by
+  have hstate : State.BalCodeEq d.state d'.state := h.state
+  unfold State.BalCodeEq at hstate
+  exact congrArg Prod.fst (congrFun hstate adr)
+
+/-- The state-writer frame implies the pre-existing `SSTORE` code fact. -/
+lemma Devm.StateWriteFrame.getCode_eq {d d' : Devm}
+    (h : Devm.StateWriteFrame d d') (adr : Adr) :
+    d.getCode adr = d'.getCode adr := by
+  have hstate : State.BalCodeEq d.state d'.state := h.state
+  unfold State.BalCodeEq at hstate
+  exact congrArg Prod.snd (congrFun hstate adr)
+
+lemma Devm.setStorVal_stateWriteFrame (d : Devm)
+    (adr : Adr) (key value : B256) :
+    Devm.StateWriteFrame d (d.setStorVal adr key value) := by
+  exact {
+    stack := trivial, memory := trivial, gasLeft := trivial, logs := trivial
+    refundCounter := trivial, output := trivial, accountsToDelete := rfl
+    returnData := trivial, error := trivial, accessedAddresses := trivial
+    accessedStorageKeys := trivial, state := by
+      change State.BalCodeEq d.state (d.setStorVal adr key value).state
+      unfold State.BalCodeEq
+      funext adr'
+      apply Prod.ext
+      · change d.getBal adr' = (d.setStorVal adr key value).getBal adr'
+        exact setStorVal_inv_getBal.symm
+      · change d.getCode adr' = (d.setStorVal adr key value).getCode adr'
+        exact setStorVal_inv_getCode.symm
+    createdAccounts := rfl, transientStorage := rfl }
+
+lemma Devm.transientWriteFrame_of_world_eq {d d' : Devm}
+    (hdel : d.accountsToDelete = d'.accountsToDelete)
+    (hstate : d.state = d'.state)
+    (hcreated : d.createdAccounts = d'.createdAccounts) :
+    Devm.TransientWriteFrame d d' := by
+  exact {
+    stack := trivial, memory := trivial, gasLeft := trivial, logs := trivial
+    refundCounter := trivial, output := trivial, accountsToDelete := hdel
+    returnData := trivial, error := trivial, accessedAddresses := trivial
+    accessedStorageKeys := trivial, state := hstate
+    createdAccounts := hcreated, transientStorage := trivial }
+
+lemma Rinst.tstore_runCore_transientWriteFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.TransientWriteFrame pre
+      (Rinst.runCore pc pre sevm .tstore) := by
+  simp only [Rinst.runCore]
+  refine Outcome.Rel.bindExecution Devm.transientWriteFrame_trans
+    (Outcome.Rel.mono Devm.instructionFrame_refines_transientWriteFrame
+      (Devm.pop_instructionFrame pre)) (next := fun key d => do
+        let ⟨value, d⟩ ← d.pop
+        let d ← chargeGas gasWarmAccess d
+        assertDynamic sevm d
+        .ok (d.setTransVal sevm.currentTarget key value)) ?_
+  intro key d
+  refine Outcome.Rel.bindExecution Devm.transientWriteFrame_trans
+    (Outcome.Rel.mono Devm.instructionFrame_refines_transientWriteFrame
+      (Devm.pop_instructionFrame d)) (next := fun value d => do
+        let d ← chargeGas gasWarmAccess d
+        assertDynamic sevm d
+        .ok (d.setTransVal sevm.currentTarget key value)) ?_
+  intro value d
+  apply Execution.Rel.bind Devm.transientWriteFrame_trans
+    (Outcome.Rel.mono Devm.instructionFrame_refines_transientWriteFrame
+      (chargeGas_instructionFrame gasWarmAccess d))
+  intro d'
+  unfold assertDynamic Except.assert
+  split
+  · exact Devm.transientWriteFrame_of_world_eq rfl rfl rfl
+  · exact Devm.transientWriteFrame_refl d'
+
+lemma Rinst.sstore_runCore_stateWriteFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.StateWriteFrame pre
+      (Rinst.runCore pc pre sevm .sstore) := by
+  simp only [Rinst.runCore]
+  refine Outcome.Rel.bindExecution Devm.stateWriteFrame_trans
+    (Outcome.Rel.mono Devm.instructionFrame_refines_stateWriteFrame
+      (Devm.pop_instructionFrame pre)) (next := fun key d => do
+        let ⟨value, d⟩ ← d.pop
+        .assert (gCallStipend < d.gasLeft) ⟨"OutOfGasError", d⟩
+        let ct := sevm.currentTarget
+        let original := getOrigStorVal sevm ct key
+        let current := d.getStorVal ct key
+        let ⟨d3, gas2⟩ ← .ok <|
+          if ⟨ct, key⟩ ∉ d.accessedStorageKeys then
+            (addAccessedStorageKey d ct key, gasColdSload) else (d, 0)
+        let gas3 ← .ok <|
+          if original = current ∧ current ≠ value then
+            if original = 0 then gas2 + gasStorageSet
+            else gas2 + (gasStorageUpdate - gasColdSload)
+          else gas2 + gasWarmAccess
+        let d4 ← .ok <| { d3 with refundCounter :=
+          sstore_new_refund_counter value original current d3.refundCounter }
+        let d5 ← chargeGas gas3 d4
+        assertDynamic sevm d5
+        .ok (d5.setStorVal ct key value)) ?_
+  intro key d
+  refine Outcome.Rel.bindExecution Devm.stateWriteFrame_trans
+    (Outcome.Rel.mono Devm.instructionFrame_refines_stateWriteFrame
+      (Devm.pop_instructionFrame d)) (next := fun value d => do
+        .assert (gCallStipend < d.gasLeft) ⟨"OutOfGasError", d⟩
+        let ct := sevm.currentTarget
+        let original := getOrigStorVal sevm ct key
+        let current := d.getStorVal ct key
+        let ⟨d3, gas2⟩ ← .ok <|
+          if ⟨ct, key⟩ ∉ d.accessedStorageKeys then
+            (addAccessedStorageKey d ct key, gasColdSload) else (d, 0)
+        let gas3 ← .ok <|
+          if original = current ∧ current ≠ value then
+            if original = 0 then gas2 + gasStorageSet
+            else gas2 + (gasStorageUpdate - gasColdSload)
+          else gas2 + gasWarmAccess
+        let d4 ← .ok <| { d3 with refundCounter :=
+          sstore_new_refund_counter value original current d3.refundCounter }
+        let d5 ← chargeGas gas3 d4
+        assertDynamic sevm d5
+        .ok (d5.setStorVal ct key value)) ?_
+  intro value d
+  unfold Except.assert
+  dsimp only
+  split
+  · simp only [Except.bind_ok]
+    let d3gas : Devm × Nat :=
+      if (sevm.currentTarget, key) ∉ d.accessedStorageKeys then
+        (addAccessedStorageKey d sevm.currentTarget key, gasColdSload)
+      else (d, 0)
+    let gas3 :=
+      if getOrigStorVal sevm sevm.currentTarget key =
+          d.getStorVal sevm.currentTarget key ∧
+          d.getStorVal sevm.currentTarget key ≠ value then
+        if getOrigStorVal sevm sevm.currentTarget key = 0 then
+          d3gas.2 + gasStorageSet
+        else d3gas.2 + (gasStorageUpdate - gasColdSload)
+      else d3gas.2 + gasWarmAccess
+    let d4 : Devm := { d3gas.1 with refundCounter := (
+      sstore_new_refund_counter value
+        (getOrigStorVal sevm sevm.currentTarget key)
+        (d.getStorVal sevm.currentTarget key) d3gas.1.refundCounter) }
+    change Execution.Rel Devm.StateWriteFrame d
+      (chargeGas gas3 d4 >>= fun d5 =>
+        assertDynamic sevm d5 >>= fun _ =>
+          .ok (d5.setStorVal sevm.currentTarget key value))
+    have hd4 : Devm.StateWriteFrame d d4 := by
+      unfold d4 d3gas
+      split <;> exact Devm.stateWriteFrame_of_world_eq rfl rfl rfl rfl
+    apply Execution.Rel.bind Devm.stateWriteFrame_trans
+      (Execution.Rel.trans_left Devm.stateWriteFrame_trans hd4
+        (Outcome.Rel.mono Devm.instructionFrame_refines_stateWriteFrame
+          (chargeGas_instructionFrame gas3 d4)))
+    intro d5
+    unfold assertDynamic Except.assert
+    split
+    · exact Devm.setStorVal_stateWriteFrame d5 sevm.currentTarget key value
+    · exact Devm.stateWriteFrame_refl d5
+  · exact Devm.stateWriteFrame_refl d
+
+theorem Rinst.run_instructionFrame
+    (pc : Nat) (sevm : Sevm) (pre : Devm) (r : Rinst)
+    (h_not_sstore : r ≠ .sstore) (h_not_tstore : r ≠ .tstore) :
+    Execution.Rel Devm.InstructionFrame pre
+      (Rinst.run ⟨pc, sevm, pre⟩ r) := by
+  exact Rinst.runCore_instructionFrame pc sevm pre r
+    h_not_sstore h_not_tstore
+
+lemma Rinst.sstore_run_stateWriteFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.StateWriteFrame pre
+      (Rinst.run ⟨pc, sevm, pre⟩ .sstore) := by
+  exact Rinst.sstore_runCore_stateWriteFrame pc pre sevm
+
+lemma Rinst.tstore_run_transientWriteFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.TransientWriteFrame pre
+      (Rinst.run ⟨pc, sevm, pre⟩ .tstore) := by
+  exact Rinst.tstore_runCore_transientWriteFrame pc pre sevm
