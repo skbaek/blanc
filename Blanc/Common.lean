@@ -3762,227 +3762,1649 @@ lemma Devm.popN_getCode_eq {n : Nat} {devm devm' : Devm} {l : List B256}
     devm'.getCode a = devm.getCode a := by
   exact (liftMach_worldEq_of_ok (core := (Mach.popN · n)) hp).getCode a |>.symm
 
+/-! ## 1. Generic compositional relations -/
+
+namespace CEffect
+
+abbrev Rel (σ : Type) := σ → σ → Prop
+
+def Refines {σ : Type} (R S : Rel σ) : Prop :=
+  ∀ ⦃s t⦄, R s t → S s t
+
+def Comp {σ : Type} (R S : Rel σ) : Rel σ :=
+  fun s u => ∃ t, R s t ∧ S t u
+
+def Holds {σ : Type} (run effect : Rel σ) : Prop :=
+  Refines run effect
+
+def ObsEq {σ α : Type} (obs : σ → α) : Rel σ :=
+  fun s t => obs s = obs t
+
+def Stable {σ α : Type} (obs : σ → α) (effect : Rel σ) : Prop :=
+  Refines effect (ObsEq obs)
+
+lemma comp_assoc {σ : Type} (R S T : Rel σ) :
+    Comp (Comp R S) T = Comp R (Comp S T) := by
+  ext s u
+  constructor
+  · rintro ⟨b, ⟨a, hRa, hSab⟩, hTbu⟩
+    exact ⟨a, hRa, b, hSab, hTbu⟩
+  · rintro ⟨a, hRa, b, hSab, hTbu⟩
+    exact ⟨b, ⟨a, hRa, hSab⟩, hTbu⟩
+
+lemma holds_comp {σ : Type} {run₁ run₂ R S : Rel σ}
+    (hR : Holds run₁ R) (hS : Holds run₂ S) :
+    Holds (Comp run₁ run₂) (Comp R S) := by
+  rintro s t ⟨u, h1, h2⟩
+  exact ⟨u, hR h1, hS h2⟩
+
+lemma holds_weaken {σ : Type} {run R S : Rel σ}
+    (h : Holds run R) (hweak : Refines R S) : Holds run S := by
+  intro s t hrun
+  exact hweak (h hrun)
+
+lemma holds_comp_of_transitive {σ : Type} {run₁ run₂ R : Rel σ}
+    (htrans : Transitive R)
+    (h₁ : Holds run₁ R) (h₂ : Holds run₂ R) :
+    Holds (Comp run₁ run₂) R := by
+  intro s u hrun
+  rcases hrun with ⟨t, hR1, hR2⟩
+  exact htrans (h₁ hR1) (h₂ hR2)
+
+lemma reflTransGen_mono {σ : Type} {step effect : Rel σ} {s t : σ}
+    (hrefine : Refines step effect)
+    (h : Relation.ReflTransGen step s t) :
+    Relation.ReflTransGen effect s t := by
+  induction h with
+  | refl => exact Relation.ReflTransGen.refl
+  | tail h1 h2 ih => exact Relation.ReflTransGen.tail ih (hrefine h2)
+
+/-
+This is the generic “every small step has `R`, hence the whole run has `R`” theorem.
+-/
+lemma reflTransGen_collapse {σ : Type} {step R : Rel σ} {s t : σ}
+    (hrefl : Reflexive R) (htrans : Transitive R)
+    (hrefine : Refines step R)
+    (h : Relation.ReflTransGen step s t) : R s t := by
+  induction h with
+  | refl => exact hrefl _
+  | tail h_prev h_step ih => exact htrans ih (hrefine h_step)
+
+lemma obsEq_refl_trans {σ α : Type} (obs : σ → α) :
+    Reflexive (ObsEq obs) ∧ Transitive (ObsEq obs) := by
+  constructor
+  · intro x
+    rfl
+  · intro x y z hxy hyz
+    exact Eq.trans hxy hyz
+
+lemma Stable.comp {σ α β : Type} {obs : σ → α} {R : Rel σ}
+    (h : Stable obs R) (f : α → β) : Stable (f ∘ obs) R := by
+  intro s t hR; exact congrArg f (h hR)
+
+end CEffect
+
+/-! ## 2. Composing the fieldwise `Devm.Rels` already present in Semantics -/
+
+def Devm.Rels.comp (r s : Devm.Rels) : Devm.Rels :=
+  {
+    stack := CEffect.Comp r.stack s.stack
+    memory := CEffect.Comp r.memory s.memory
+    gasLeft := CEffect.Comp r.gasLeft s.gasLeft
+    logs := CEffect.Comp r.logs s.logs
+    refundCounter := CEffect.Comp r.refundCounter s.refundCounter
+    output := CEffect.Comp r.output s.output
+    accountsToDelete := CEffect.Comp r.accountsToDelete s.accountsToDelete
+    returnData := CEffect.Comp r.returnData s.returnData
+    error := CEffect.Comp r.error s.error
+    accessedAddresses := CEffect.Comp r.accessedAddresses s.accessedAddresses
+    accessedStorageKeys := CEffect.Comp r.accessedStorageKeys s.accessedStorageKeys
+    state := CEffect.Comp r.state s.state
+    createdAccounts := CEffect.Comp r.createdAccounts s.createdAccounts
+    transientStorage := CEffect.Comp r.transientStorage s.transientStorage
+  }
+
+def Devm.Rels.Refl (r : Devm.Rels) : Prop :=
+  Reflexive r.stack ∧ Reflexive r.memory ∧ Reflexive r.gasLeft ∧
+  Reflexive r.logs ∧ Reflexive r.refundCounter ∧ Reflexive r.output ∧
+  Reflexive r.accountsToDelete ∧ Reflexive r.returnData ∧ Reflexive r.error ∧
+  Reflexive r.accessedAddresses ∧ Reflexive r.accessedStorageKeys ∧
+  Reflexive r.state ∧ Reflexive r.createdAccounts ∧
+  Reflexive r.transientStorage
+
+def Devm.Rels.Trans (r : Devm.Rels) : Prop :=
+  Transitive r.stack ∧ Transitive r.memory ∧ Transitive r.gasLeft ∧
+  Transitive r.logs ∧ Transitive r.refundCounter ∧ Transitive r.output ∧
+  Transitive r.accountsToDelete ∧ Transitive r.returnData ∧ Transitive r.error ∧
+  Transitive r.accessedAddresses ∧ Transitive r.accessedStorageKeys ∧
+  Transitive r.state ∧ Transitive r.createdAccounts ∧
+  Transitive r.transientStorage
+
+lemma Devm.Rel.comp {r s : Devm.Rels} {a b c : Devm}
+    (hab : Devm.Rel r a b) (hbc : Devm.Rel s b c) :
+    Devm.Rel (Devm.Rels.comp r s) a c := by
+  exact {
+    stack := ⟨b.stack, hab.stack, hbc.stack⟩
+    memory := ⟨b.memory, hab.memory, hbc.memory⟩
+    gasLeft := ⟨b.gasLeft, hab.gasLeft, hbc.gasLeft⟩
+    logs := ⟨b.logs, hab.logs, hbc.logs⟩
+    refundCounter := ⟨b.refundCounter, hab.refundCounter, hbc.refundCounter⟩
+    output := ⟨b.output, hab.output, hbc.output⟩
+    accountsToDelete := ⟨b.accountsToDelete, hab.accountsToDelete, hbc.accountsToDelete⟩
+    returnData := ⟨b.returnData, hab.returnData, hbc.returnData⟩
+    error := ⟨b.error, hab.error, hbc.error⟩
+    accessedAddresses := ⟨b.accessedAddresses, hab.accessedAddresses, hbc.accessedAddresses⟩
+    accessedStorageKeys := ⟨b.accessedStorageKeys, hab.accessedStorageKeys, hbc.accessedStorageKeys⟩
+    state := ⟨b.state, hab.state, hbc.state⟩
+    createdAccounts := ⟨b.createdAccounts, hab.createdAccounts, hbc.createdAccounts⟩
+    transientStorage := ⟨b.transientStorage, hab.transientStorage, hbc.transientStorage⟩
+  }
+
+lemma Devm.rel_refl {r : Devm.Rels} (hr : Devm.Rels.Refl r) :
+    Reflexive (Devm.Rel r) := by
+  intro d
+  rcases hr with ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14⟩
+  constructor
+  · exact h1 _
+  · exact h2 _
+  · exact h3 _
+  · exact h4 _
+  · exact h5 _
+  · exact h6 _
+  · exact h7 _
+  · exact h8 _
+  · exact h9 _
+  · exact h10 _
+  · exact h11 _
+  · exact h12 _
+  · exact h13 _
+  · exact h14 _
+
+lemma Devm.rel_trans {r : Devm.Rels} (hr : Devm.Rels.Trans r) :
+    Transitive (Devm.Rel r) := by
+  intro a b c hab hbc
+  constructor
+  · exact hr.1 hab.stack hbc.stack
+  · exact hr.2.1 hab.memory hbc.memory
+  · exact hr.2.2.1 hab.gasLeft hbc.gasLeft
+  · exact hr.2.2.2.1 hab.logs hbc.logs
+  · exact hr.2.2.2.2.1 hab.refundCounter hbc.refundCounter
+  · exact hr.2.2.2.2.2.1 hab.output hbc.output
+  · exact hr.2.2.2.2.2.2.1 hab.accountsToDelete hbc.accountsToDelete
+  · exact hr.2.2.2.2.2.2.2.1 hab.returnData hbc.returnData
+  · exact hr.2.2.2.2.2.2.2.2.1 hab.error hbc.error
+  · exact hr.2.2.2.2.2.2.2.2.2.1 hab.accessedAddresses hbc.accessedAddresses
+  · exact hr.2.2.2.2.2.2.2.2.2.2.1 hab.accessedStorageKeys hbc.accessedStorageKeys
+  · exact hr.2.2.2.2.2.2.2.2.2.2.2.1 hab.state hbc.state
+  · exact hr.2.2.2.2.2.2.2.2.2.2.2.2.1 hab.createdAccounts hbc.createdAccounts
+  · exact hr.2.2.2.2.2.2.2.2.2.2.2.2.2 hab.transientStorage hbc.transientStorage
+
+def Devm.OnlyGas : Devm → Devm → Prop :=
+  Devm.Rel { Devm.Rels.eq with gasLeft := fun _ _ => True }
+
+lemma Devm.onlyGas_stable_state :
+    CEffect.Stable Devm.state Devm.OnlyGas := by
+  intro x y h
+  exact h.state
+
+/-! ## 3. Outcome-aware effects for the EVM semantic layers -/
+
+namespace Outcome
+
+def Rel {σ ε α : Type}
+    (errState : ε → σ) (okState : α → σ)
+    (R : σ → σ → Prop) (pre : σ) : Except ε α → Prop
+  | .error err => R pre (errState err)
+  | .ok value => R pre (okState value)
+
+/-
+This is the generic weakening rule for both success and error outcomes.
+-/
+lemma Rel.mono {σ ε α : Type}
+    {errState : ε → σ} {okState : α → σ} {R S : σ → σ → Prop}
+    {pre : σ} {out : Except ε α}
+    (hrefine : CEffect.Refines R S)
+    (h : Rel errState okState R pre out) :
+    Rel errState okState S pre out := by
+  cases out <;> exact hrefine h
+
+end Outcome
+
+def Execution.Rel (R : Devm → Devm → Prop) (pre : Devm) (out : Execution) : Prop :=
+  Outcome.Rel Prod.snd id R pre out
+
+lemma outcomeRel_toExecution {R : Devm → Devm → Prop} {pre : Devm}
+    {out : Except (String × Devm) (Unit × Devm)}
+    (h : Outcome.Rel Prod.snd Prod.snd R pre out) :
+    Execution.Rel R pre (Footprint.toExecution out) := by
+  cases out <;> exact h
+
+-- The full-frame infrastructure and master regular-instruction theorem are
+-- declared here so that the legacy observation lemmas below can be stated as
+-- projections of them.
+
+-- Paired projection of the two deletion-relevant sets
+def Devm.delSets (d : Devm) : AdrSet × AdrSet :=
+  (d.accountsToDelete, d.createdAccounts)
+
+
+/-! ## Full-frame relations for instruction preservation -/
+
+/-- A Mach-only step may change exactly the three `Mach` fields. -/
+def Devm.Rels.machFrame : Devm.Rels :=
+  { Devm.Rels.eq with
+    stack := fun _ _ => True
+    memory := fun _ _ => True
+    gasLeft := fun _ _ => True }
+
+/-- A regular instruction may change every field except the world and the two
+    deletion-relevant sets. -/
+def Devm.Rels.instructionFrame : Devm.Rels :=
+  {
+    stack := fun _ _ => True
+    memory := fun _ _ => True
+    gasLeft := fun _ _ => True
+    logs := fun _ _ => True
+    refundCounter := fun _ _ => True
+    output := fun _ _ => True
+    accountsToDelete := _root_.Eq
+    returnData := fun _ _ => True
+    error := fun _ _ => True
+    accessedAddresses := fun _ _ => True
+    accessedStorageKeys := fun _ _ => True
+    state := _root_.Eq
+    createdAccounts := _root_.Eq
+    transientStorage := _root_.Eq }
+
+abbrev Devm.MachFrame : Devm → Devm → Prop :=
+  Devm.Rel Devm.Rels.machFrame
+
+abbrev Devm.InstructionFrame : Devm → Devm → Prop :=
+  Devm.Rel Devm.Rels.instructionFrame
+
+/-- The part of `Meta` that an instruction-frame lift must preserve. -/
+def Meta.InstructionFrame (a b : Meta) : Prop :=
+  a.accountsToDelete = b.accountsToDelete ∧
+    a.createdAccounts = b.createdAccounts
+
+lemma Devm.Rels.machFrame_refl : Devm.Rels.Refl Devm.Rels.machFrame := by
+  simp [Devm.Rels.Refl, Devm.Rels.machFrame, Devm.Rels.eq, Reflexive]
+
+lemma Devm.Rels.machFrame_trans : Devm.Rels.Trans Devm.Rels.machFrame := by
+  simp [Devm.Rels.Trans, Devm.Rels.machFrame, Devm.Rels.eq, Transitive]
+
+lemma Devm.Rels.instructionFrame_refl :
+    Devm.Rels.Refl Devm.Rels.instructionFrame := by
+  simp [Devm.Rels.Refl, Devm.Rels.instructionFrame, Reflexive]
+
+lemma Devm.Rels.instructionFrame_trans :
+    Devm.Rels.Trans Devm.Rels.instructionFrame := by
+  simp [Devm.Rels.Trans, Devm.Rels.instructionFrame, Transitive]
+
+lemma Devm.machFrame_refl : Reflexive Devm.MachFrame :=
+  Devm.rel_refl Devm.Rels.machFrame_refl
+
+lemma Devm.machFrame_trans : Transitive Devm.MachFrame :=
+  Devm.rel_trans Devm.Rels.machFrame_trans
+
+lemma Devm.instructionFrame_refl : Reflexive Devm.InstructionFrame :=
+  Devm.rel_refl Devm.Rels.instructionFrame_refl
+
+lemma Devm.instructionFrame_trans : Transitive Devm.InstructionFrame :=
+  Devm.rel_trans Devm.Rels.instructionFrame_trans
+
+lemma Devm.machFrame_refines_instructionFrame :
+    CEffect.Refines Devm.MachFrame Devm.InstructionFrame := by
+  intro d d' h
+  exact {
+    stack := trivial
+    memory := trivial
+    gasLeft := trivial
+    logs := trivial
+    refundCounter := trivial
+    output := trivial
+    accountsToDelete := h.accountsToDelete
+    returnData := trivial
+    error := trivial
+    accessedAddresses := trivial
+    accessedStorageKeys := trivial
+    state := h.state
+    createdAccounts := h.createdAccounts
+    transientStorage := h.transientStorage }
+
+lemma Devm.MachFrame.worldEq {d d' : Devm} (h : Devm.MachFrame d d') :
+    Devm.WorldEq d d' :=
+  ⟨h.state, h.transientStorage⟩
+
+lemma Devm.MachFrame.getBal {d d' : Devm} (h : Devm.MachFrame d d')
+    (a : Adr) : d.getBal a = d'.getBal a :=
+  h.worldEq.getBal a
+
+lemma Devm.MachFrame.getStor {d d' : Devm} (h : Devm.MachFrame d d')
+    (a : Adr) : d.getStor a = d'.getStor a :=
+  h.worldEq.getStor a
+
+lemma Devm.MachFrame.getCode {d d' : Devm} (h : Devm.MachFrame d d')
+    (a : Adr) : d.getCode a = d'.getCode a :=
+  h.worldEq.getCode a
+
+lemma Devm.MachFrame.delSets {d d' : Devm} (h : Devm.MachFrame d d') :
+    d.delSets = d'.delSets :=
+  Prod.ext h.accountsToDelete h.createdAccounts
+
+lemma Devm.InstructionFrame.worldEq {d d' : Devm}
+    (h : Devm.InstructionFrame d d') : Devm.WorldEq d d' :=
+  ⟨h.state, h.transientStorage⟩
+
+lemma Devm.InstructionFrame.getBal {d d' : Devm}
+    (h : Devm.InstructionFrame d d') (a : Adr) :
+    d.getBal a = d'.getBal a :=
+  h.worldEq.getBal a
+
+lemma Devm.InstructionFrame.getStor {d d' : Devm}
+    (h : Devm.InstructionFrame d d') (a : Adr) :
+    d.getStor a = d'.getStor a :=
+  h.worldEq.getStor a
+
+lemma Devm.InstructionFrame.getCode {d d' : Devm}
+    (h : Devm.InstructionFrame d d') (a : Adr) :
+    d.getCode a = d'.getCode a :=
+  h.worldEq.getCode a
+
+lemma Devm.InstructionFrame.delSets {d d' : Devm}
+    (h : Devm.InstructionFrame d d') : d.delSets = d'.delSets :=
+  Prod.ext h.accountsToDelete h.createdAccounts
+
+lemma Devm.machFrame_setMach (d : Devm) (mach : Mach) :
+    Devm.MachFrame d (d.setMach mach) := by
+  exact {
+    stack := trivial
+    memory := trivial
+    gasLeft := trivial
+    logs := rfl
+    refundCounter := rfl
+    output := rfl
+    accountsToDelete := rfl
+    returnData := rfl
+    error := rfl
+    accessedAddresses := rfl
+    accessedStorageKeys := rfl
+    state := rfl
+    createdAccounts := rfl
+    transientStorage := rfl }
+
+lemma Devm.instructionFrame_setMachMeta (d : Devm) (view : Mach × Meta)
+    (h : Meta.InstructionFrame d.meta view.2) :
+    Devm.InstructionFrame d (d.setMachMeta view) := by
+  rcases h with ⟨hdel, hcreated⟩
+  exact {
+    stack := trivial
+    memory := trivial
+    gasLeft := trivial
+    logs := trivial
+    refundCounter := trivial
+    output := trivial
+    accountsToDelete := hdel
+    returnData := trivial
+    error := trivial
+    accessedAddresses := trivial
+    accessedStorageKeys := trivial
+    state := rfl
+    createdAccounts := hcreated
+    transientStorage := rfl }
+
+/-! ### Full-frame lift rules -/
+
+lemma liftMach_machFrame (core : Mach → Footprint.Outcome Mach α) (d : Devm) :
+    Outcome.Rel Prod.snd Prod.snd Devm.MachFrame d (liftMach core d) := by
+  unfold liftMach Footprint.liftOutcome
+  cases core d.mach <;> exact Devm.machFrame_setMach d _
+
+lemma liftMachPure_machFrame (core : Mach → Mach) (d : Devm) :
+    Devm.MachFrame d (liftMachPure core d) := by
+  exact Devm.machFrame_setMach d _
+
+lemma liftMachExecution_machFrame
+    (core : Mach → Footprint.Outcome Mach Unit) (d : Devm) :
+    Execution.Rel Devm.MachFrame d (liftMachExecution core d) := by
+  unfold liftMachExecution
+  exact outcomeRel_toExecution (liftMach_machFrame core d)
+
+lemma liftMachMeta_instructionFrame
+    (core : Mach → Meta → Footprint.Outcome (Mach × Meta) α) (d : Devm)
+    (hcore : Outcome.Rel (fun e => e.2.2) (fun x => x.2.2)
+      Meta.InstructionFrame d.meta (core d.mach d.meta)) :
+    Outcome.Rel Prod.snd Prod.snd Devm.InstructionFrame d
+      (liftMachMeta core d) := by
+  cases h : core d.mach d.meta with
+  | error e =>
+      rw [h] at hcore
+      simpa only [liftMachMeta, Footprint.liftOutcome, h] using
+        Devm.instructionFrame_setMachMeta d e.2 hcore
+  | ok x =>
+      rw [h] at hcore
+      simpa only [liftMachMeta, Footprint.liftOutcome, h] using
+        Devm.instructionFrame_setMachMeta d x.2 hcore
+
+lemma liftMachMetaPure_instructionFrame
+    (core : Mach → Meta → Mach × Meta) (d : Devm)
+    (hcore : Meta.InstructionFrame d.meta (core d.mach d.meta).2) :
+    Devm.InstructionFrame d (liftMachMetaPure core d) := by
+  exact Devm.instructionFrame_setMachMeta d _ hcore
+
+lemma liftMachMetaExecution_instructionFrame
+    (core : Mach → Meta → Footprint.Outcome (Mach × Meta) Unit) (d : Devm)
+    (hcore : Outcome.Rel (fun e => e.2.2) (fun x => x.2.2)
+      Meta.InstructionFrame d.meta (core d.mach d.meta)) :
+    Execution.Rel Devm.InstructionFrame d (liftMachMetaExecution core d) := by
+  unfold liftMachMetaExecution
+  exact outcomeRel_toExecution (liftMachMeta_instructionFrame core d hcore)
+
+lemma liftMachMetaWorld_instructionFrame
+    (core : World → Mach → Meta → Footprint.Outcome (Mach × Meta) α)
+    (d : Devm)
+    (hcore : Outcome.Rel (fun e => e.2.2) (fun x => x.2.2)
+      Meta.InstructionFrame d.meta (core d.world d.mach d.meta)) :
+    Outcome.Rel Prod.snd Prod.snd Devm.InstructionFrame d
+      (liftMachMetaWorld core d) := by
+  exact liftMachMeta_instructionFrame (core d.world) d hcore
+
+lemma liftMachMetaWorldPure_instructionFrame
+    (core : World → Mach → Meta → Mach × Meta) (d : Devm)
+    (hcore : Meta.InstructionFrame d.meta (core d.world d.mach d.meta).2) :
+    Devm.InstructionFrame d (liftMachMetaWorldPure core d) := by
+  exact liftMachMetaPure_instructionFrame (core d.world) d hcore
+
+lemma liftMachMetaWorldExecution_instructionFrame
+    (core : World → Mach → Meta → Footprint.Outcome (Mach × Meta) Unit)
+    (d : Devm)
+    (hcore : Outcome.Rel (fun e => e.2.2) (fun x => x.2.2)
+      Meta.InstructionFrame d.meta (core d.world d.mach d.meta)) :
+    Execution.Rel Devm.InstructionFrame d
+      (liftMachMetaWorldExecution core d) := by
+  exact liftMachMetaExecution_instructionFrame (core d.world) d hcore
+
+/-! ### Full-frame primitive facts -/
+
+lemma Devm.pop_machFrame (d : Devm) :
+    Outcome.Rel Prod.snd Prod.snd Devm.MachFrame d (Devm.pop d) := by
+  exact liftMach_machFrame Mach.pop d
+
+lemma Devm.pop_instructionFrame (d : Devm) :
+    Outcome.Rel Prod.snd Prod.snd Devm.InstructionFrame d (Devm.pop d) := by
+  exact Outcome.Rel.mono Devm.machFrame_refines_instructionFrame
+    (Devm.pop_machFrame d)
+
+lemma Devm.push_machFrame (x : B256) (d : Devm) :
+    Execution.Rel Devm.MachFrame d (Devm.push x d) := by
+  exact liftMachExecution_machFrame (Mach.push x) d
+
+lemma Devm.push_instructionFrame (x : B256) (d : Devm) :
+    Execution.Rel Devm.InstructionFrame d (Devm.push x d) := by
+  exact Outcome.Rel.mono Devm.machFrame_refines_instructionFrame
+    (Devm.push_machFrame x d)
+
+lemma pushItem_machFrame (x : B256) (cost : Nat) (d : Devm) :
+    Execution.Rel Devm.MachFrame d (pushItem x cost d) := by
+  exact liftMachExecution_machFrame (Mach.pushItem x cost) d
+
+lemma pushItem_instructionFrame (x : B256) (cost : Nat) (d : Devm) :
+    Execution.Rel Devm.InstructionFrame d (pushItem x cost d) := by
+  exact Outcome.Rel.mono Devm.machFrame_refines_instructionFrame
+    (pushItem_machFrame x cost d)
+
+lemma chargeGas_machFrame (cost : Nat) (d : Devm) :
+    Execution.Rel Devm.MachFrame d (chargeGas cost d) := by
+  exact liftMachExecution_machFrame (Mach.chargeGas cost) d
+
+lemma chargeGas_instructionFrame (cost : Nat) (d : Devm) :
+    Execution.Rel Devm.InstructionFrame d (chargeGas cost d) := by
+  exact Outcome.Rel.mono Devm.machFrame_refines_instructionFrame
+    (chargeGas_machFrame cost d)
+
+lemma Devm.popToNat_machFrame (d : Devm) :
+    Outcome.Rel Prod.snd Prod.snd Devm.MachFrame d (Devm.popToNat d) := by
+  exact liftMach_machFrame Mach.popToNat d
+
+lemma Devm.popToNat_instructionFrame (d : Devm) :
+    Outcome.Rel Prod.snd Prod.snd Devm.InstructionFrame d (Devm.popToNat d) := by
+  exact Outcome.Rel.mono Devm.machFrame_refines_instructionFrame
+    (Devm.popToNat_machFrame d)
+
+lemma Devm.popToAdr_machFrame (d : Devm) :
+    Outcome.Rel Prod.snd Prod.snd Devm.MachFrame d (Devm.popToAdr d) := by
+  exact liftMach_machFrame Mach.popToAdr d
+
+lemma Devm.popToAdr_instructionFrame (d : Devm) :
+    Outcome.Rel Prod.snd Prod.snd Devm.InstructionFrame d (Devm.popToAdr d) := by
+  exact Outcome.Rel.mono Devm.machFrame_refines_instructionFrame
+    (Devm.popToAdr_machFrame d)
+
+lemma Devm.popN_machFrame (d : Devm) (n : Nat) :
+    Outcome.Rel Prod.snd Prod.snd Devm.MachFrame d (Devm.popN d n) := by
+  exact liftMach_machFrame (Mach.popN · n) d
+
+lemma Devm.popN_instructionFrame (d : Devm) (n : Nat) :
+    Outcome.Rel Prod.snd Prod.snd Devm.InstructionFrame d (Devm.popN d n) := by
+  exact Outcome.Rel.mono Devm.machFrame_refines_instructionFrame
+    (Devm.popN_machFrame d n)
+
+lemma applyUnary_machFrame (f : B256 → B256) (cost : Nat) (d : Devm) :
+    Execution.Rel Devm.MachFrame d (applyUnary f cost d) := by
+  exact liftMachExecution_machFrame (Mach.applyUnary f cost) d
+
+lemma applyUnary_instructionFrame (f : B256 → B256) (cost : Nat) (d : Devm) :
+    Execution.Rel Devm.InstructionFrame d (applyUnary f cost d) := by
+  exact Outcome.Rel.mono Devm.machFrame_refines_instructionFrame
+    (applyUnary_machFrame f cost d)
+
+lemma applyBinary_machFrame (f : B256 → B256 → B256)
+    (cost : Nat) (d : Devm) :
+    Execution.Rel Devm.MachFrame d (applyBinary f cost d) := by
+  exact liftMachExecution_machFrame (Mach.applyBinary f cost) d
+
+lemma applyBinary_instructionFrame (f : B256 → B256 → B256)
+    (cost : Nat) (d : Devm) :
+    Execution.Rel Devm.InstructionFrame d (applyBinary f cost d) := by
+  exact Outcome.Rel.mono Devm.machFrame_refines_instructionFrame
+    (applyBinary_machFrame f cost d)
+
+lemma applyTernary_machFrame (f : B256 → B256 → B256 → B256)
+    (cost : Nat) (d : Devm) :
+    Execution.Rel Devm.MachFrame d (applyTernary f cost d) := by
+  exact liftMachExecution_machFrame (Mach.applyTernary f cost) d
+
+lemma applyTernary_instructionFrame (f : B256 → B256 → B256 → B256)
+    (cost : Nat) (d : Devm) :
+    Execution.Rel Devm.InstructionFrame d (applyTernary f cost d) := by
+  exact Outcome.Rel.mono Devm.machFrame_refines_instructionFrame
+    (applyTernary_machFrame f cost d)
+
+lemma Devm.memWrite_machFrame (d : Devm) (idx : Nat) (val : B8L) :
+    Devm.MachFrame d (Devm.memWrite d idx val) := by
+  exact liftMachPure_machFrame (Mach.memWrite · idx val) d
+
+lemma Devm.memWrite_instructionFrame (d : Devm) (idx : Nat) (val : B8L) :
+    Devm.InstructionFrame d (Devm.memWrite d idx val) := by
+  exact Devm.machFrame_refines_instructionFrame
+    (Devm.memWrite_machFrame d idx val)
+
+lemma Devm.memExtends_machFrame (d : Devm) (ranges : List (Nat × Nat)) :
+    Devm.MachFrame d (Devm.memExtends d ranges) := by
+  exact liftMachPure_machFrame (Mach.memExtends · ranges) d
+
+lemma Devm.memExtends_instructionFrame (d : Devm)
+    (ranges : List (Nat × Nat)) :
+    Devm.InstructionFrame d (Devm.memExtends d ranges) := by
+  exact Devm.machFrame_refines_instructionFrame
+    (Devm.memExtends_machFrame d ranges)
+
+lemma addAccessedAddress_instructionFrame (d : Devm) (a : Adr) :
+    Devm.InstructionFrame d (addAccessedAddress d a) := by
+  exact liftMachMetaPure_instructionFrame _ d ⟨rfl, rfl⟩
+
+lemma addAccessedStorageKey_instructionFrame
+    (d : Devm) (a : Adr) (k : B256) :
+    Devm.InstructionFrame d (addAccessedStorageKey d a k) := by
+  exact liftMachMetaPure_instructionFrame _ d ⟨rfl, rfl⟩
+
+lemma Devm.addLog_instructionFrame (d : Devm) (log : Log) :
+    Devm.InstructionFrame d (Devm.addLog d log) := by
+  exact liftMachMetaPure_instructionFrame _ d ⟨rfl, rfl⟩
+
+lemma Devm.memRead_instructionFrame (d : Devm) (index size : Nat) :
+    Devm.InstructionFrame d (Devm.memRead d index size).2 := by
+  unfold Devm.memRead
+  split
+  exact {
+    stack := trivial
+    memory := trivial
+    gasLeft := trivial
+    logs := trivial
+    refundCounter := trivial
+    output := trivial
+    accountsToDelete := rfl
+    returnData := trivial
+    error := trivial
+    accessedAddresses := trivial
+    accessedStorageKeys := trivial
+    state := rfl
+    createdAccounts := rfl
+    transientStorage := rfl }
+
+lemma Rinst.balanceCore_meta_instructionFrame
+    (world : World) (mach : Mach) (view : Meta) :
+    Outcome.Rel (fun e => e.2.2) (fun x => x.2.2)
+      Meta.InstructionFrame view (Rinst.balanceCore world mach view) := by
+  cases hpop : mach.pop with
+  | error e =>
+      simp only [Rinst.balanceCore, hpop]
+      exact ⟨rfl, rfl⟩
+  | ok out =>
+      rcases out with ⟨x, mach'⟩
+      simp only [Rinst.balanceCore, hpop]
+      by_cases hw : x.toAdr ∈ view.accessedAddresses
+      · simp only [hw, if_pos]
+        split
+        · exact ⟨rfl, rfl⟩
+        · split <;> exact ⟨rfl, rfl⟩
+      · simp only [hw, if_false]
+        split
+        · exact ⟨rfl, rfl⟩
+        · split <;> exact ⟨rfl, rfl⟩
+
+lemma Rinst.balanceCore_instructionFrame (d : Devm) :
+    Execution.Rel Devm.InstructionFrame d
+      (liftMachMetaWorldExecution Rinst.balanceCore d) := by
+  exact liftMachMetaWorldExecution_instructionFrame Rinst.balanceCore d
+    (Rinst.balanceCore_meta_instructionFrame d.world d.mach d.meta)
+
+/-! ### Bind composition for frame relations -/
+
+lemma Outcome.Rel.pure
+    {R : Devm → Devm → Prop} (hrefl : Reflexive R) (x : α) (d : Devm) :
+    Outcome.Rel Prod.snd Prod.snd R d
+      (.ok (x, d) : Except (String × Devm) (α × Devm)) :=
+  hrefl d
+
+lemma Execution.Rel.pure
+    {R : Devm → Devm → Prop} (hrefl : Reflexive R) (d : Devm) :
+    Execution.Rel R d (.ok d) :=
+  hrefl d
+
+lemma Outcome.Rel.bind
+    {R : Devm → Devm → Prop} (htrans : Transitive R)
+    {pre : Devm} {out : Except (String × Devm) (α × Devm)}
+    {next : α → Devm → Except (String × Devm) (β × Devm)}
+    (hout : Outcome.Rel Prod.snd Prod.snd R pre out)
+    (hnext : ∀ x d, Outcome.Rel Prod.snd Prod.snd R d (next x d)) :
+    Outcome.Rel Prod.snd Prod.snd R pre
+      (out >>= fun x => next x.1 x.2) := by
+  cases out with
+  | error e => exact hout
+  | ok x =>
+      cases hn : next x.1 x.2 with
+      | error e =>
+          have h := hnext x.1 x.2
+          rw [hn] at h
+          simpa only [Except.bind_ok, hn] using htrans hout h
+      | ok y =>
+          have h := hnext x.1 x.2
+          rw [hn] at h
+          simpa only [Except.bind_ok, hn] using htrans hout h
+
+lemma Outcome.Rel.bindExecution
+    {R : Devm → Devm → Prop} (htrans : Transitive R)
+    {pre : Devm} {out : Except (String × Devm) (α × Devm)}
+    {next : α → Devm → Execution}
+    (hout : Outcome.Rel Prod.snd Prod.snd R pre out)
+    (hnext : ∀ x d, Execution.Rel R d (next x d)) :
+    Execution.Rel R pre (out >>= fun x => next x.1 x.2) := by
+  cases out with
+  | error e => exact hout
+  | ok x =>
+      cases hn : next x.1 x.2 with
+      | error e =>
+          have h := hnext x.1 x.2
+          rw [hn] at h
+          simpa only [Except.bind_ok, hn] using htrans hout h
+      | ok d =>
+          have h := hnext x.1 x.2
+          rw [hn] at h
+          simpa only [Except.bind_ok, hn, id_eq] using htrans hout h
+
+lemma Execution.Rel.bind
+    {R : Devm → Devm → Prop} (htrans : Transitive R)
+    {pre : Devm} {out : Execution} {next : Devm → Execution}
+    (hout : Execution.Rel R pre out)
+    (hnext : ∀ d, Execution.Rel R d (next d)) :
+    Execution.Rel R pre (out >>= next) := by
+  cases out with
+  | error e => exact hout
+  | ok d =>
+      cases hn : next d with
+      | error e =>
+          have h := hnext d
+          rw [hn] at h
+          simpa only [Except.bind_ok, hn] using htrans hout h
+      | ok d' =>
+          have h := hnext d
+          rw [hn] at h
+          simpa only [Except.bind_ok, hn, id_eq] using htrans hout h
+
+/-! ### Step 3 calibration cases -/
+
+lemma Rinst.balance_runCore_instructionFrame
+    (pc : Nat) (devm : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.InstructionFrame devm
+      (Rinst.runCore pc devm sevm .balance) := by
+  simpa only [Rinst.runCore] using Rinst.balanceCore_instructionFrame devm
+
+lemma Rinst.blobhash_runCore_instructionFrame
+    (pc : Nat) (devm : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.InstructionFrame devm
+      (Rinst.runCore pc devm sevm .blobhash) := by
+  simp only [Rinst.runCore]
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.pop_instructionFrame devm) (next := fun x d =>
+      chargeGas gHashopcode d >>=
+        Devm.push (sevm.tenvStat.blobVersionedHashes.getD x.toNat 0)) ?_
+  intro x d
+  apply Execution.Rel.bind Devm.instructionFrame_trans
+    (chargeGas_instructionFrame gHashopcode d)
+  exact Devm.push_instructionFrame _
+
+/-! ## Master regular-instruction frame theorem -/
+
+/-- Equality of the balance/code observations of two world states.  Storage is
+    deliberately absent: it is the component written by `SSTORE`. -/
+def State.BalCodeEq (a b : _root_.State) : Prop :=
+  (fun adr => ((a.get adr).bal, (a.get adr).code)) =
+    fun adr => ((b.get adr).bal, (b.get adr).code)
+
+/-- `SSTORE` may change storage in `state`, but preserves balances, code, and
+    the other world/frame fields. -/
+def Devm.Rels.stateWriteFrame : Devm.Rels :=
+  { Devm.Rels.instructionFrame with state := State.BalCodeEq }
+
+/-- `TSTORE` may change `transientStorage`, but preserves the other
+    world/frame fields. -/
+def Devm.Rels.transientWriteFrame : Devm.Rels :=
+  { Devm.Rels.instructionFrame with transientStorage := fun _ _ => True }
+
+abbrev Devm.StateWriteFrame : Devm → Devm → Prop :=
+  Devm.Rel Devm.Rels.stateWriteFrame
+
+abbrev Devm.TransientWriteFrame : Devm → Devm → Prop :=
+  Devm.Rel Devm.Rels.transientWriteFrame
+
+lemma Devm.Rels.stateWriteFrame_refl :
+    Devm.Rels.Refl Devm.Rels.stateWriteFrame := by
+  simp [Devm.Rels.Refl, Devm.Rels.stateWriteFrame,
+    Devm.Rels.instructionFrame, State.BalCodeEq, Reflexive]
+
+lemma Devm.Rels.stateWriteFrame_trans :
+    Devm.Rels.Trans Devm.Rels.stateWriteFrame := by
+  simp_all [Devm.Rels.Trans, Devm.Rels.stateWriteFrame,
+    Devm.Rels.instructionFrame, State.BalCodeEq, Transitive]
+
+lemma Devm.Rels.transientWriteFrame_refl :
+    Devm.Rels.Refl Devm.Rels.transientWriteFrame := by
+  simp [Devm.Rels.Refl, Devm.Rels.transientWriteFrame,
+    Devm.Rels.instructionFrame, Reflexive]
+
+lemma Devm.Rels.transientWriteFrame_trans :
+    Devm.Rels.Trans Devm.Rels.transientWriteFrame := by
+  simp [Devm.Rels.Trans, Devm.Rels.transientWriteFrame,
+    Devm.Rels.instructionFrame, Transitive]
+
+lemma Devm.stateWriteFrame_refl : Reflexive Devm.StateWriteFrame :=
+  Devm.rel_refl Devm.Rels.stateWriteFrame_refl
+
+lemma Devm.stateWriteFrame_trans : Transitive Devm.StateWriteFrame :=
+  Devm.rel_trans Devm.Rels.stateWriteFrame_trans
+
+lemma Devm.transientWriteFrame_refl : Reflexive Devm.TransientWriteFrame :=
+  Devm.rel_refl Devm.Rels.transientWriteFrame_refl
+
+lemma Devm.transientWriteFrame_trans : Transitive Devm.TransientWriteFrame :=
+  Devm.rel_trans Devm.Rels.transientWriteFrame_trans
+
+lemma Devm.instructionFrame_refines_stateWriteFrame :
+    CEffect.Refines Devm.InstructionFrame Devm.StateWriteFrame := by
+  intro d d' h
+  refine { h with state := ?_ }
+  change State.BalCodeEq d.state d'.state
+  rw [h.state]
+  rfl
+
+lemma Devm.instructionFrame_refines_transientWriteFrame :
+    CEffect.Refines Devm.InstructionFrame Devm.TransientWriteFrame := by
+  intro d d' h
+  exact { h with transientStorage := trivial }
+
+lemma Devm.instructionFrame_of_world_eq {d d' : Devm}
+    (hdel : d.accountsToDelete = d'.accountsToDelete)
+    (hstate : d.state = d'.state)
+    (hcreated : d.createdAccounts = d'.createdAccounts)
+    (htransient : d.transientStorage = d'.transientStorage) :
+    Devm.InstructionFrame d d' := by
+  exact {
+    stack := trivial
+    memory := trivial
+    gasLeft := trivial
+    logs := trivial
+    refundCounter := trivial
+    output := trivial
+    accountsToDelete := hdel
+    returnData := trivial
+    error := trivial
+    accessedAddresses := trivial
+    accessedStorageKeys := trivial
+    state := hstate
+    createdAccounts := hcreated
+    transientStorage := htransient }
+
+lemma popChargePush_instructionFrame (pre : Devm)
+    (cost : B256 → Devm → Nat) (value : B256 → Devm → B256) :
+    Execution.Rel Devm.InstructionFrame pre (do
+      let ⟨x, d⟩ ← pre.pop
+      let d ← chargeGas (cost x d) d
+      d.push (value x d)) := by
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.pop_instructionFrame pre) (next := fun x d =>
+      chargeGas (cost x d) d >>= fun d => Devm.push (value x d) d) ?_
+  intro x d
+  apply Execution.Rel.bind Devm.instructionFrame_trans
+    (chargeGas_instructionFrame (cost x d) d)
+  intro d'
+  exact Devm.push_instructionFrame (value x d') d'
+
+lemma Execution.Rel.trans_left {R : Devm → Devm → Prop}
+    (htrans : Transitive R) {a b : Devm} {out : Execution}
+    (hab : R a b) (hout : Execution.Rel R b out) :
+    Execution.Rel R a out := by
+  cases out <;> exact htrans hab hout
+
+lemma pop2ChargePush_instructionFrame (pre : Devm)
+    (cost : B256 → B256 → Devm → Nat)
+    (value : B256 → B256 → Devm → B256) :
+    Execution.Rel Devm.InstructionFrame pre (do
+      let ⟨x, d⟩ ← pre.pop
+      let ⟨y, d⟩ ← d.pop
+      let d ← chargeGas (cost x y d) d
+      d.push (value x y d)) := by
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.pop_instructionFrame pre) (next := fun x d => do
+      let ⟨y, d⟩ ← d.pop
+      let d ← chargeGas (cost x y d) d
+      d.push (value x y d)) ?_
+  intro x d
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.pop_instructionFrame d) (next := fun y d =>
+      chargeGas (cost x y d) d >>= fun d => Devm.push (value x y d) d) ?_
+  intro y d
+  apply Execution.Rel.bind Devm.instructionFrame_trans
+    (chargeGas_instructionFrame (cost x y d) d)
+  intro d'
+  exact Devm.push_instructionFrame (value x y d') d'
+
+lemma Rinst.exp_runCore_instructionFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.InstructionFrame pre
+      (Rinst.runCore pc pre sevm .exp) := by
+  simpa only [Rinst.runCore] using
+    (pop2ChargePush_instructionFrame pre
+      (fun _ exponent _ => gExp + gExpbyte * exponent.bytecount)
+      (fun base exponent _ => B256.bexp base exponent))
+
+lemma Rinst.calldataload_runCore_instructionFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.InstructionFrame pre
+      (Rinst.runCore pc pre sevm .calldataload) := by
+  simpa only [Rinst.runCore] using
+    (popChargePush_instructionFrame pre (fun _ _ => gVerylow)
+      (fun start _ => B8L.toB256 <| sevm.data.sliceD start.toNat 32 0))
+
+lemma Rinst.blockhash_runCore_instructionFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.InstructionFrame pre
+      (Rinst.runCore pc pre sevm .blockhash) := by
+  simpa only [Rinst.runCore] using
+    (popChargePush_instructionFrame pre (fun _ _ => gBlockhash)
+      (fun blockNumberWord _ =>
+        let blockNumber := blockNumberWord.toNat
+        let maxBlockNumber := blockNumber + 256
+        if sevm.benvStat.number ≤ blockNumber ∨
+            maxBlockNumber < sevm.benvStat.number then 0
+        else sevm.benvStat.blockHashes.getD
+          (sevm.benvStat.blockHashes.length -
+            (sevm.benvStat.number - blockNumber)) 0))
+
+lemma Rinst.gas_runCore_instructionFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.InstructionFrame pre
+      (Rinst.runCore pc pre sevm .gas) := by
+  simp only [Rinst.runCore]
+  apply Execution.Rel.bind Devm.instructionFrame_trans
+    (chargeGas_instructionFrame gBase pre)
+  intro d
+  exact Devm.push_instructionFrame d.gasLeft.toB256 d
+
+lemma Rinst.tload_runCore_instructionFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.InstructionFrame pre
+      (Rinst.runCore pc pre sevm .tload) := by
+  simp only [Rinst.runCore]
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.pop_instructionFrame pre) (next := fun key d =>
+      pushItem (d.getTransVal sevm.currentTarget key) gasWarmAccess d) ?_
+  intro key d
+  exact pushItem_instructionFrame _ _ d
+
+lemma popNat3ChargePure_instructionFrame (pre : Devm)
+    (cost : Nat → Nat → Nat → Devm → Nat)
+    (finish : Nat → Nat → Nat → Devm → Devm)
+    (hfinish : ∀ x y z d, Devm.InstructionFrame d (finish x y z d)) :
+    Execution.Rel Devm.InstructionFrame pre (do
+      let ⟨x, d⟩ ← pre.popToNat
+      let ⟨y, d⟩ ← d.popToNat
+      let ⟨z, d⟩ ← d.popToNat
+      let d ← chargeGas (cost x y z d) d
+      .ok (finish x y z d)) := by
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.popToNat_instructionFrame pre) (next := fun x d => do
+      let ⟨y, d⟩ ← d.popToNat
+      let ⟨z, d⟩ ← d.popToNat
+      let d ← chargeGas (cost x y z d) d
+      .ok (finish x y z d)) ?_
+  intro x d
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.popToNat_instructionFrame d) (next := fun y d => do
+      let ⟨z, d⟩ ← d.popToNat
+      let d ← chargeGas (cost x y z d) d
+      .ok (finish x y z d)) ?_
+  intro y d
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.popToNat_instructionFrame d) (next := fun z d =>
+      chargeGas (cost x y z d) d >>= fun d => .ok (finish x y z d)) ?_
+  intro z d
+  apply Execution.Rel.bind Devm.instructionFrame_trans
+    (chargeGas_instructionFrame (cost x y z d) d)
+  intro d'
+  exact hfinish x y z d'
+
+lemma popNatPopChargePure_instructionFrame (pre : Devm)
+    (cost : Nat → B256 → Devm → Nat)
+    (finish : Nat → B256 → Devm → Devm)
+    (hfinish : ∀ x y d, Devm.InstructionFrame d (finish x y d)) :
+    Execution.Rel Devm.InstructionFrame pre (do
+      let ⟨x, d⟩ ← pre.popToNat
+      let ⟨y, d⟩ ← d.pop
+      let d ← chargeGas (cost x y d) d
+      .ok (finish x y d)) := by
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.popToNat_instructionFrame pre) (next := fun x d => do
+      let ⟨y, d⟩ ← d.pop
+      let d ← chargeGas (cost x y d) d
+      .ok (finish x y d)) ?_
+  intro x d
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.pop_instructionFrame d) (next := fun y d =>
+      chargeGas (cost x y d) d >>= fun d => .ok (finish x y d)) ?_
+  intro y d
+  apply Execution.Rel.bind Devm.instructionFrame_trans
+    (chargeGas_instructionFrame (cost x y d) d)
+  intro d'
+  exact hfinish x y d'
+
+lemma Rinst.calldatacopy_runCore_instructionFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.InstructionFrame pre
+      (Rinst.runCore pc pre sevm .calldatacopy) := by
+  simpa only [Rinst.runCore] using
+    (popNat3ChargePure_instructionFrame pre
+      (fun memoryStart _ size d =>
+        gVerylow + gasCopy * ceilDiv size 32 + d.extCost [(memoryStart, size)])
+      (fun memoryStart dataStart size d =>
+        d.memWrite memoryStart (sevm.data.sliceD dataStart size 0))
+      (fun memoryStart dataStart size d =>
+        Devm.memWrite_instructionFrame d memoryStart
+          (sevm.data.sliceD dataStart size 0)))
+
+lemma Rinst.codecopy_runCore_instructionFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.InstructionFrame pre
+      (Rinst.runCore pc pre sevm .codecopy) := by
+  simpa only [Rinst.runCore] using
+    (popNat3ChargePure_instructionFrame pre
+      (fun memoryStart _ size d =>
+        gVerylow + gasCopy * ceilDiv size 32 + d.extCost [(memoryStart, size)])
+      (fun memoryStart codeStart size d =>
+        { d with memory := (d.memory.write memoryStart
+          (sevm.code.sliceD codeStart size (Linst.toB8 .stop))) })
+      (fun _ _ _ _ => Devm.instructionFrame_of_world_eq rfl rfl rfl rfl))
+
+lemma Rinst.mstore_runCore_instructionFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.InstructionFrame pre
+      (Rinst.runCore pc pre sevm .mstore) := by
+  simpa only [Rinst.runCore] using
+    (popNatPopChargePure_instructionFrame pre
+      (fun start _ d => gVerylow + d.extCost [(start, 32)])
+      (fun start value d => d.memWrite start value.toB8L)
+      (fun start value d =>
+        Devm.memWrite_instructionFrame d start value.toB8L))
+
+lemma Rinst.mstore8_runCore_instructionFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.InstructionFrame pre
+      (Rinst.runCore pc pre sevm .mstore8) := by
+  simpa only [Rinst.runCore] using
+    (popNatPopChargePure_instructionFrame pre
+      (fun start _ d => gVerylow + d.extCost [(start, 1)])
+      (fun start value d => d.memWrite start [value.2.2.toUInt8])
+      (fun start value d =>
+        Devm.memWrite_instructionFrame d start [value.2.2.toUInt8]))
+
+lemma Rinst.mload_runCore_instructionFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.InstructionFrame pre
+      (Rinst.runCore pc pre sevm .mload) := by
+  simp only [Rinst.runCore]
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.popToNat_instructionFrame pre) (next := fun start d =>
+      chargeGas (gVerylow + d.extCost [(start, 32)]) d >>= fun d =>
+        Devm.push (B8L.toB256 (d.memRead start 32).1) (d.memRead start 32).2) ?_
+  intro start d
+  apply Execution.Rel.bind Devm.instructionFrame_trans
+    (chargeGas_instructionFrame _ d)
+  intro d'
+  exact Execution.Rel.trans_left Devm.instructionFrame_trans
+    (Devm.memRead_instructionFrame d' start 32)
+    (Devm.push_instructionFrame _ (d'.memRead start 32).2)
+
+lemma Rinst.kec_runCore_instructionFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.InstructionFrame pre
+      (Rinst.runCore pc pre sevm .kec) := by
+  simp only [Rinst.runCore]
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.popToNat_instructionFrame pre) (next := fun start d => do
+      let ⟨size, d⟩ ← d.popToNat
+      let d ← chargeGas
+        (gKeccak256 + gasKeccak256Word * ceilDiv size 32 +
+          d.extCost [(start, size)]) d
+      let ⟨arg, d⟩ := d.memRead start size
+      d.push arg.keccak) ?_
+  intro start d
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.popToNat_instructionFrame d) (next := fun size d =>
+      chargeGas
+        (gKeccak256 + gasKeccak256Word * ceilDiv size 32 +
+          d.extCost [(start, size)]) d >>= fun d =>
+        Devm.push (d.memRead start size).1.keccak (d.memRead start size).2) ?_
+  intro size d
+  apply Execution.Rel.bind Devm.instructionFrame_trans
+    (chargeGas_instructionFrame _ d)
+  intro d'
+  exact Execution.Rel.trans_left Devm.instructionFrame_trans
+    (Devm.memRead_instructionFrame d' start size)
+    (Devm.push_instructionFrame _ (d'.memRead start size).2)
+
+lemma Rinst.mcopy_runCore_instructionFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.InstructionFrame pre
+      (Rinst.runCore pc pre sevm .mcopy) := by
+  simp only [Rinst.runCore]
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.popToNat_instructionFrame pre) (next := fun destination d => do
+      let ⟨source, d⟩ ← d.popToNat
+      let ⟨length, d⟩ ← d.popToNat
+      let d ← chargeGas (gVerylow + gasCopy * ceilDiv length 32 +
+        d.extCost [(source, length), (destination, length)]) d
+      .ok ((d.memRead source length).2.memWrite destination
+        (d.memRead source length).1)) ?_
+  intro destination d
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.popToNat_instructionFrame d) (next := fun source d => do
+      let ⟨length, d⟩ ← d.popToNat
+      let d ← chargeGas (gVerylow + gasCopy * ceilDiv length 32 +
+        d.extCost [(source, length), (destination, length)]) d
+      .ok ((d.memRead source length).2.memWrite destination
+        (d.memRead source length).1)) ?_
+  intro source d
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.popToNat_instructionFrame d) (next := fun length d =>
+      chargeGas (gVerylow + gasCopy * ceilDiv length 32 +
+        d.extCost [(source, length), (destination, length)]) d >>= fun d =>
+      .ok ((d.memRead source length).2.memWrite destination
+        (d.memRead source length).1)) ?_
+  intro length d
+  apply Execution.Rel.bind Devm.instructionFrame_trans
+    (chargeGas_instructionFrame _ d)
+  intro d'
+  exact Devm.instructionFrame_trans
+    (Devm.memRead_instructionFrame d' source length)
+    (Devm.memWrite_instructionFrame (d'.memRead source length).2 destination
+      (d'.memRead source length).1)
+
+lemma popAdrAccessChargePush_instructionFrame (pre : Devm)
+    (value : Adr → Devm → B256) :
+    Execution.Rel Devm.InstructionFrame pre (do
+      let ⟨a, d⟩ ← pre.popToAdr
+      let d ← if a ∈ d.accessedAddresses then chargeGas gasWarmAccess d
+        else chargeGas gasColdAccountAccess (addAccessedAddress d a)
+      d.push (value a d)) := by
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.popToAdr_instructionFrame pre) (next := fun a d => do
+      let d ← if a ∈ d.accessedAddresses then chargeGas gasWarmAccess d
+        else chargeGas gasColdAccountAccess (addAccessedAddress d a)
+      d.push (value a d)) ?_
+  intro a d
+  by_cases h : a ∈ d.accessedAddresses
+  · simp only [h, if_pos]
+    apply Execution.Rel.bind Devm.instructionFrame_trans
+      (chargeGas_instructionFrame gasWarmAccess d)
+    intro d'
+    exact Devm.push_instructionFrame (value a d') d'
+  · simp only [h, if_false]
+    apply Execution.Rel.bind Devm.instructionFrame_trans
+      (Execution.Rel.trans_left Devm.instructionFrame_trans
+        (addAccessedAddress_instructionFrame d a)
+        (chargeGas_instructionFrame gasColdAccountAccess
+          (addAccessedAddress d a)))
+    intro d'
+    exact Devm.push_instructionFrame (value a d') d'
+
+lemma Rinst.extcodesize_runCore_instructionFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.InstructionFrame pre
+      (Rinst.runCore pc pre sevm .extcodesize) := by
+  simpa only [Rinst.runCore] using
+    (popAdrAccessChargePush_instructionFrame pre
+      (fun a d => (d.getCode a).size.toB256))
+
+lemma Rinst.extcodehash_runCore_instructionFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.InstructionFrame pre
+      (Rinst.runCore pc pre sevm .extcodehash) := by
+  simpa only [Rinst.runCore] using
+    (popAdrAccessChargePush_instructionFrame pre (fun a d =>
+      let account := d.getAcct a
+      if account.Empty then 0
+      else ByteArray.keccak 0 account.code.size account.code))
+
+lemma Rinst.sload_runCore_instructionFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.InstructionFrame pre
+      (Rinst.runCore pc pre sevm .sload) := by
+  simp only [Rinst.runCore]
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.pop_instructionFrame pre) (next := fun key d =>
+      if (sevm.currentTarget, key) ∈ d.accessedStorageKeys then
+        chargeGas gasWarmAccess d >>= fun d =>
+          Devm.push (d.getStorVal sevm.currentTarget key) d
+      else chargeGas gasColdSload
+        (addAccessedStorageKey d sevm.currentTarget key) >>= fun d =>
+          Devm.push (d.getStorVal sevm.currentTarget key) d) ?_
+  intro key d
+  by_cases h : (sevm.currentTarget, key) ∈ d.accessedStorageKeys
+  · simp only [h, if_pos]
+    apply Execution.Rel.bind Devm.instructionFrame_trans
+      (chargeGas_instructionFrame gasWarmAccess d)
+    intro d'
+    exact Devm.push_instructionFrame _ d'
+  · simp only [h, if_false]
+    apply Execution.Rel.bind Devm.instructionFrame_trans
+      (Execution.Rel.trans_left Devm.instructionFrame_trans
+        (addAccessedStorageKey_instructionFrame d sevm.currentTarget key)
+        (chargeGas_instructionFrame gasColdSload
+          (addAccessedStorageKey d sevm.currentTarget key)))
+    intro d'
+    exact Devm.push_instructionFrame _ d'
+
+lemma Rinst.pop_runCore_instructionFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.InstructionFrame pre
+      (Rinst.runCore pc pre sevm .pop) := by
+  simp only [Rinst.runCore]
+  have hp := Devm.pop_instructionFrame pre
+  cases h : pre.pop with
+  | error e =>
+      rw [h] at hp
+      simpa [h] using hp
+  | ok x =>
+      rcases x with ⟨word, d⟩
+      rw [h] at hp
+      simpa [h] using
+        (Execution.Rel.trans_left Devm.instructionFrame_trans hp
+          (chargeGas_instructionFrame gBase d))
+
+lemma Rinst.dup_runCore_instructionFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) (n : Fin 16) :
+    Execution.Rel Devm.InstructionFrame pre
+      (Rinst.runCore pc pre sevm (.dup n)) := by
+  simp only [Rinst.runCore]
+  apply Execution.Rel.bind Devm.instructionFrame_trans
+    (chargeGas_instructionFrame gVerylow pre)
+  intro d
+  cases h : d.stack[n]? with
+  | none =>
+      simp only
+      exact Devm.instructionFrame_refl d
+  | some word =>
+      simp only
+      exact Devm.push_instructionFrame word d
+
+lemma Rinst.swap_runCore_instructionFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) (n : Fin 16) :
+    Execution.Rel Devm.InstructionFrame pre
+      (Rinst.runCore pc pre sevm (.swap n)) := by
+  simp only [Rinst.runCore]
+  apply Execution.Rel.bind Devm.instructionFrame_trans
+    (chargeGas_instructionFrame gVerylow pre)
+  intro d
+  cases h : d.stack.swap n with
+  | none =>
+      simp only
+      exact Devm.instructionFrame_refl d
+  | some stack =>
+      simp only
+      exact Devm.instructionFrame_of_world_eq rfl rfl rfl rfl
+
+lemma popNat3Bind_instructionFrame (pre : Devm)
+    (next : Nat → Nat → Nat → Devm → Execution)
+    (hnext : ∀ x y z d, Execution.Rel Devm.InstructionFrame d
+      (next x y z d)) :
+    Execution.Rel Devm.InstructionFrame pre (do
+      let ⟨x, d⟩ ← pre.popToNat
+      let ⟨y, d⟩ ← d.popToNat
+      let ⟨z, d⟩ ← d.popToNat
+      next x y z d) := by
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.popToNat_instructionFrame pre) (next := fun x d => do
+      let ⟨y, d⟩ ← d.popToNat
+      let ⟨z, d⟩ ← d.popToNat
+      next x y z d) ?_
+  intro x d
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.popToNat_instructionFrame d) (next := fun y d => do
+      let ⟨z, d⟩ ← d.popToNat
+      next x y z d) ?_
+  intro y d
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.popToNat_instructionFrame d) (next := next x y) ?_
+  exact hnext x y
+
+lemma popAdrNat3Bind_instructionFrame (pre : Devm)
+    (next : Adr → Nat → Nat → Nat → Devm → Execution)
+    (hnext : ∀ a x y z d, Execution.Rel Devm.InstructionFrame d
+      (next a x y z d)) :
+    Execution.Rel Devm.InstructionFrame pre (do
+      let ⟨a, d⟩ ← pre.popToAdr
+      let ⟨x, d⟩ ← d.popToNat
+      let ⟨y, d⟩ ← d.popToNat
+      let ⟨z, d⟩ ← d.popToNat
+      next a x y z d) := by
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.popToAdr_instructionFrame pre) (next := fun a d => do
+      let ⟨x, d⟩ ← d.popToNat
+      let ⟨y, d⟩ ← d.popToNat
+      let ⟨z, d⟩ ← d.popToNat
+      next a x y z d) ?_
+  intro a d
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.popToNat_instructionFrame d) (next := fun x d => do
+      let ⟨y, d⟩ ← d.popToNat
+      let ⟨z, d⟩ ← d.popToNat
+      next a x y z d) ?_
+  intro x d
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.popToNat_instructionFrame d) (next := fun y d => do
+      let ⟨z, d⟩ ← d.popToNat
+      next a x y z d) ?_
+  intro y d
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.popToNat_instructionFrame d) (next := next a x y) ?_
+  exact hnext a x y
+
+lemma Rinst.retdatacopy_runCore_instructionFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.InstructionFrame pre
+      (Rinst.runCore pc pre sevm .retdatacopy) := by
+  simp only [Rinst.runCore]
+  refine popNat3Bind_instructionFrame pre (next := fun memoryStart returnStart size d => do
+    let d ← chargeGas
+      (gVerylow + gReturnDataCopy * ceilDiv size 32 +
+        d.extCost [(memoryStart, size)]) d
+    if d.returnData.length < returnStart + size then
+      .error ⟨"OutOfBoundsRead", d⟩
+    let value := d.returnData.sliceD returnStart size 0
+    .ok { d with memory := d.memory.write memoryStart value }) ?_
+  intro memoryStart returnStart size d
+  apply Execution.Rel.bind Devm.instructionFrame_trans
+    (chargeGas_instructionFrame
+      (gVerylow + gReturnDataCopy * ceilDiv size 32 +
+        d.extCost [(memoryStart, size)]) d)
+  intro d'
+  by_cases h : d'.returnData.length < returnStart + size
+  · simp only [h, if_pos]
+    exact Devm.instructionFrame_refl d'
+  · simp only [h, if_false]
+    exact Devm.instructionFrame_of_world_eq rfl rfl rfl rfl
+
+lemma Rinst.extcodecopy_runCore_instructionFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.InstructionFrame pre
+      (Rinst.runCore pc pre sevm .extcodecopy) := by
+  simp only [Rinst.runCore]
+  refine popAdrNat3Bind_instructionFrame pre
+    (next := fun a memoryStart codeStart size d =>
+      if a ∈ d.accessedAddresses then do
+        let d ← chargeGas (gasWarmAccess + gasCopy * ceilDiv size 32 +
+          d.extCost [(memoryStart, size)]) d
+        let value := (d.getCode a).sliceD codeStart size (Linst.toB8 .stop)
+        .ok { d with memory := d.memory.write memoryStart value }
+      else do
+        let d ← chargeGas
+          (gasColdAccountAccess + gasCopy * ceilDiv size 32 +
+            d.extCost [(memoryStart, size)]) (addAccessedAddress d a)
+        let value := (d.getCode a).sliceD codeStart size (Linst.toB8 .stop)
+        .ok { d with memory := d.memory.write memoryStart value }) ?_
+  intro a memoryStart codeStart size d
+  by_cases h : a ∈ d.accessedAddresses
+  · simp only [h, if_pos]
+    apply Execution.Rel.bind Devm.instructionFrame_trans
+      (chargeGas_instructionFrame
+        (gasWarmAccess + gasCopy * ceilDiv size 32 +
+          d.extCost [(memoryStart, size)]) d)
+    intro d'
+    exact Devm.instructionFrame_of_world_eq rfl rfl rfl rfl
+  · simp only [h, if_false]
+    apply Execution.Rel.bind Devm.instructionFrame_trans
+      (Execution.Rel.trans_left Devm.instructionFrame_trans
+        (addAccessedAddress_instructionFrame d a)
+        (chargeGas_instructionFrame
+          (gasColdAccountAccess + gasCopy * ceilDiv size 32 +
+            d.extCost [(memoryStart, size)])
+          (addAccessedAddress d a)))
+    intro d'
+    exact Devm.instructionFrame_of_world_eq rfl rfl rfl rfl
+
+lemma Rinst.log_runCore_instructionFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) (n : Fin 5) :
+    Execution.Rel Devm.InstructionFrame pre
+      (Rinst.runCore pc pre sevm (.log n)) := by
+  simp only [Rinst.runCore]
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.popToNat_instructionFrame pre) (next := fun memoryStart d => do
+      let ⟨size, d⟩ ← d.popToNat
+      let ⟨topics, d⟩ ← d.popN n
+      let d ← chargeGas
+        (gLog + gLogdata * size + gLogtopic * n +
+          d.extCost [(memoryStart, size)]) d
+      assertDynamic sevm d
+      let ⟨data, d⟩ := d.memRead memoryStart size
+      .ok (d.addLog ⟨sevm.currentTarget, topics, data⟩)) ?_
+  intro memoryStart d
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.popToNat_instructionFrame d) (next := fun size d => do
+      let ⟨topics, d⟩ ← d.popN n
+      let d ← chargeGas
+        (gLog + gLogdata * size + gLogtopic * n +
+          d.extCost [(memoryStart, size)]) d
+      assertDynamic sevm d
+      let ⟨data, d⟩ := d.memRead memoryStart size
+      .ok (d.addLog ⟨sevm.currentTarget, topics, data⟩)) ?_
+  intro size d
+  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+    (Devm.popN_instructionFrame d n) (next := fun topics d => do
+      let d ← chargeGas
+        (gLog + gLogdata * size + gLogtopic * n +
+          d.extCost [(memoryStart, size)]) d
+      assertDynamic sevm d
+      let ⟨data, d⟩ := d.memRead memoryStart size
+      .ok (d.addLog ⟨sevm.currentTarget, topics, data⟩)) ?_
+  intro topics d
+  apply Execution.Rel.bind Devm.instructionFrame_trans
+    (chargeGas_instructionFrame _ d)
+  intro d'
+  unfold assertDynamic Except.assert
+  split
+  · exact Devm.instructionFrame_trans
+      (Devm.memRead_instructionFrame d' memoryStart size)
+      (Devm.addLog_instructionFrame (d'.memRead memoryStart size).2
+        ⟨sevm.currentTarget, topics, (d'.memRead memoryStart size).1⟩)
+  · exact Devm.instructionFrame_refl d'
+
+theorem Rinst.runCore_instructionFrame
+    (pc : Nat) (sevm : Sevm) (pre : Devm) (r : Rinst)
+    (h_not_sstore : r ≠ .sstore) (h_not_tstore : r ≠ .tstore) :
+    Execution.Rel Devm.InstructionFrame pre
+      (Rinst.runCore pc pre sevm r) := by
+  cases r
+  all_goals try contradiction
+  all_goals try (
+    with_reducible first
+      | exact Rinst.exp_runCore_instructionFrame pc pre sevm
+      | exact Rinst.kec_runCore_instructionFrame pc pre sevm
+      | exact Rinst.balance_runCore_instructionFrame pc pre sevm
+      | exact Rinst.blobhash_runCore_instructionFrame pc pre sevm
+      | exact Rinst.calldataload_runCore_instructionFrame pc pre sevm
+      | exact Rinst.calldatacopy_runCore_instructionFrame pc pre sevm
+      | exact Rinst.codecopy_runCore_instructionFrame pc pre sevm
+      | exact Rinst.extcodesize_runCore_instructionFrame pc pre sevm
+      | exact Rinst.extcodecopy_runCore_instructionFrame pc pre sevm
+      | exact Rinst.retdatacopy_runCore_instructionFrame pc pre sevm
+      | exact Rinst.extcodehash_runCore_instructionFrame pc pre sevm
+      | exact Rinst.blockhash_runCore_instructionFrame pc pre sevm
+      | exact Rinst.pop_runCore_instructionFrame pc pre sevm
+      | exact Rinst.mload_runCore_instructionFrame pc pre sevm
+      | exact Rinst.mstore_runCore_instructionFrame pc pre sevm
+      | exact Rinst.mstore8_runCore_instructionFrame pc pre sevm
+      | exact Rinst.sload_runCore_instructionFrame pc pre sevm
+      | exact Rinst.tload_runCore_instructionFrame pc pre sevm
+      | exact Rinst.mcopy_runCore_instructionFrame pc pre sevm
+      | exact Rinst.gas_runCore_instructionFrame pc pre sevm
+      | exact Rinst.dup_runCore_instructionFrame pc pre sevm _
+      | exact Rinst.swap_runCore_instructionFrame pc pre sevm _
+      | exact Rinst.log_runCore_instructionFrame pc pre sevm _)
+  all_goals simp only [Rinst.runCore]
+  all_goals with_reducible first
+    | exact applyBinary_instructionFrame _ _ pre
+    | exact applyTernary_instructionFrame _ _ pre
+    | exact applyUnary_instructionFrame _ _ pre
+    | exact pushItem_instructionFrame _ _ pre
+
+lemma Devm.stateWriteFrame_of_world_eq {d d' : Devm}
+    (hdel : d.accountsToDelete = d'.accountsToDelete)
+    (hstate : d.state = d'.state)
+    (hcreated : d.createdAccounts = d'.createdAccounts)
+    (htransient : d.transientStorage = d'.transientStorage) :
+    Devm.StateWriteFrame d d' := by
+  exact {
+    stack := trivial, memory := trivial, gasLeft := trivial, logs := trivial
+    refundCounter := trivial, output := trivial, accountsToDelete := hdel
+    returnData := trivial, error := trivial, accessedAddresses := trivial
+    accessedStorageKeys := trivial, state := by
+      change State.BalCodeEq d.state d'.state
+      rw [hstate]
+      rfl
+    createdAccounts := hcreated, transientStorage := htransient }
+
+/-- The state-writer frame implies the pre-existing `SSTORE` balance fact. -/
+lemma Devm.StateWriteFrame.getBal_eq {d d' : Devm}
+    (h : Devm.StateWriteFrame d d') (adr : Adr) :
+    d.getBal adr = d'.getBal adr := by
+  have hstate : State.BalCodeEq d.state d'.state := h.state
+  unfold State.BalCodeEq at hstate
+  exact congrArg Prod.fst (congrFun hstate adr)
+
+/-- The state-writer frame implies the pre-existing `SSTORE` code fact. -/
+lemma Devm.StateWriteFrame.getCode_eq {d d' : Devm}
+    (h : Devm.StateWriteFrame d d') (adr : Adr) :
+    d.getCode adr = d'.getCode adr := by
+  have hstate : State.BalCodeEq d.state d'.state := h.state
+  unfold State.BalCodeEq at hstate
+  exact congrArg Prod.snd (congrFun hstate adr)
+
+lemma Devm.setStorVal_stateWriteFrame (d : Devm)
+    (adr : Adr) (key value : B256) :
+    Devm.StateWriteFrame d (d.setStorVal adr key value) := by
+  exact {
+    stack := trivial, memory := trivial, gasLeft := trivial, logs := trivial
+    refundCounter := trivial, output := trivial, accountsToDelete := rfl
+    returnData := trivial, error := trivial, accessedAddresses := trivial
+    accessedStorageKeys := trivial, state := by
+      change State.BalCodeEq d.state (d.setStorVal adr key value).state
+      unfold State.BalCodeEq
+      funext adr'
+      apply Prod.ext
+      · change d.getBal adr' = (d.setStorVal adr key value).getBal adr'
+        exact setStorVal_inv_getBal.symm
+      · change d.getCode adr' = (d.setStorVal adr key value).getCode adr'
+        exact setStorVal_inv_getCode.symm
+    createdAccounts := rfl, transientStorage := rfl }
+
+lemma Devm.transientWriteFrame_of_world_eq {d d' : Devm}
+    (hdel : d.accountsToDelete = d'.accountsToDelete)
+    (hstate : d.state = d'.state)
+    (hcreated : d.createdAccounts = d'.createdAccounts) :
+    Devm.TransientWriteFrame d d' := by
+  exact {
+    stack := trivial, memory := trivial, gasLeft := trivial, logs := trivial
+    refundCounter := trivial, output := trivial, accountsToDelete := hdel
+    returnData := trivial, error := trivial, accessedAddresses := trivial
+    accessedStorageKeys := trivial, state := hstate
+    createdAccounts := hcreated, transientStorage := trivial }
+
+lemma Rinst.tstore_runCore_transientWriteFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.TransientWriteFrame pre
+      (Rinst.runCore pc pre sevm .tstore) := by
+  simp only [Rinst.runCore]
+  refine Outcome.Rel.bindExecution Devm.transientWriteFrame_trans
+    (Outcome.Rel.mono Devm.instructionFrame_refines_transientWriteFrame
+      (Devm.pop_instructionFrame pre)) (next := fun key d => do
+        let ⟨value, d⟩ ← d.pop
+        let d ← chargeGas gasWarmAccess d
+        assertDynamic sevm d
+        .ok (d.setTransVal sevm.currentTarget key value)) ?_
+  intro key d
+  refine Outcome.Rel.bindExecution Devm.transientWriteFrame_trans
+    (Outcome.Rel.mono Devm.instructionFrame_refines_transientWriteFrame
+      (Devm.pop_instructionFrame d)) (next := fun value d => do
+        let d ← chargeGas gasWarmAccess d
+        assertDynamic sevm d
+        .ok (d.setTransVal sevm.currentTarget key value)) ?_
+  intro value d
+  apply Execution.Rel.bind Devm.transientWriteFrame_trans
+    (Outcome.Rel.mono Devm.instructionFrame_refines_transientWriteFrame
+      (chargeGas_instructionFrame gasWarmAccess d))
+  intro d'
+  unfold assertDynamic Except.assert
+  split
+  · exact Devm.transientWriteFrame_of_world_eq rfl rfl rfl
+  · exact Devm.transientWriteFrame_refl d'
+
+lemma Rinst.sstore_runCore_stateWriteFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.StateWriteFrame pre
+      (Rinst.runCore pc pre sevm .sstore) := by
+  simp only [Rinst.runCore]
+  refine Outcome.Rel.bindExecution Devm.stateWriteFrame_trans
+    (Outcome.Rel.mono Devm.instructionFrame_refines_stateWriteFrame
+      (Devm.pop_instructionFrame pre)) (next := fun key d => do
+        let ⟨value, d⟩ ← d.pop
+        .assert (gCallStipend < d.gasLeft) ⟨"OutOfGasError", d⟩
+        let ct := sevm.currentTarget
+        let original := getOrigStorVal sevm ct key
+        let current := d.getStorVal ct key
+        let ⟨d3, gas2⟩ ← .ok <|
+          if ⟨ct, key⟩ ∉ d.accessedStorageKeys then
+            (addAccessedStorageKey d ct key, gasColdSload) else (d, 0)
+        let gas3 ← .ok <|
+          if original = current ∧ current ≠ value then
+            if original = 0 then gas2 + gasStorageSet
+            else gas2 + (gasStorageUpdate - gasColdSload)
+          else gas2 + gasWarmAccess
+        let d4 ← .ok <| { d3 with refundCounter :=
+          sstore_new_refund_counter value original current d3.refundCounter }
+        let d5 ← chargeGas gas3 d4
+        assertDynamic sevm d5
+        .ok (d5.setStorVal ct key value)) ?_
+  intro key d
+  refine Outcome.Rel.bindExecution Devm.stateWriteFrame_trans
+    (Outcome.Rel.mono Devm.instructionFrame_refines_stateWriteFrame
+      (Devm.pop_instructionFrame d)) (next := fun value d => do
+        .assert (gCallStipend < d.gasLeft) ⟨"OutOfGasError", d⟩
+        let ct := sevm.currentTarget
+        let original := getOrigStorVal sevm ct key
+        let current := d.getStorVal ct key
+        let ⟨d3, gas2⟩ ← .ok <|
+          if ⟨ct, key⟩ ∉ d.accessedStorageKeys then
+            (addAccessedStorageKey d ct key, gasColdSload) else (d, 0)
+        let gas3 ← .ok <|
+          if original = current ∧ current ≠ value then
+            if original = 0 then gas2 + gasStorageSet
+            else gas2 + (gasStorageUpdate - gasColdSload)
+          else gas2 + gasWarmAccess
+        let d4 ← .ok <| { d3 with refundCounter :=
+          sstore_new_refund_counter value original current d3.refundCounter }
+        let d5 ← chargeGas gas3 d4
+        assertDynamic sevm d5
+        .ok (d5.setStorVal ct key value)) ?_
+  intro value d
+  unfold Except.assert
+  dsimp only
+  split
+  · simp only [Except.bind_ok]
+    let d3gas : Devm × Nat :=
+      if (sevm.currentTarget, key) ∉ d.accessedStorageKeys then
+        (addAccessedStorageKey d sevm.currentTarget key, gasColdSload)
+      else (d, 0)
+    let gas3 :=
+      if getOrigStorVal sevm sevm.currentTarget key =
+          d.getStorVal sevm.currentTarget key ∧
+          d.getStorVal sevm.currentTarget key ≠ value then
+        if getOrigStorVal sevm sevm.currentTarget key = 0 then
+          d3gas.2 + gasStorageSet
+        else d3gas.2 + (gasStorageUpdate - gasColdSload)
+      else d3gas.2 + gasWarmAccess
+    let d4 : Devm := { d3gas.1 with refundCounter := (
+      sstore_new_refund_counter value
+        (getOrigStorVal sevm sevm.currentTarget key)
+        (d.getStorVal sevm.currentTarget key) d3gas.1.refundCounter) }
+    change Execution.Rel Devm.StateWriteFrame d
+      (chargeGas gas3 d4 >>= fun d5 =>
+        assertDynamic sevm d5 >>= fun _ =>
+          .ok (d5.setStorVal sevm.currentTarget key value))
+    have hd4 : Devm.StateWriteFrame d d4 := by
+      unfold d4 d3gas
+      split <;> exact Devm.stateWriteFrame_of_world_eq rfl rfl rfl rfl
+    apply Execution.Rel.bind Devm.stateWriteFrame_trans
+      (Execution.Rel.trans_left Devm.stateWriteFrame_trans hd4
+        (Outcome.Rel.mono Devm.instructionFrame_refines_stateWriteFrame
+          (chargeGas_instructionFrame gas3 d4)))
+    intro d5
+    unfold assertDynamic Except.assert
+    split
+    · exact Devm.setStorVal_stateWriteFrame d5 sevm.currentTarget key value
+    · exact Devm.stateWriteFrame_refl d5
+  · exact Devm.stateWriteFrame_refl d
+
+theorem Rinst.run_instructionFrame
+    (pc : Nat) (sevm : Sevm) (pre : Devm) (r : Rinst)
+    (h_not_sstore : r ≠ .sstore) (h_not_tstore : r ≠ .tstore) :
+    Execution.Rel Devm.InstructionFrame pre
+      (Rinst.run ⟨pc, sevm, pre⟩ r) := by
+  exact Rinst.runCore_instructionFrame pc sevm pre r
+    h_not_sstore h_not_tstore
+
+lemma Rinst.sstore_run_stateWriteFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.StateWriteFrame pre
+      (Rinst.run ⟨pc, sevm, pre⟩ .sstore) := by
+  exact Rinst.sstore_runCore_stateWriteFrame pc pre sevm
+
+lemma Rinst.tstore_run_transientWriteFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.TransientWriteFrame pre
+      (Rinst.run ⟨pc, sevm, pre⟩ .tstore) := by
+  exact Rinst.tstore_runCore_transientWriteFrame pc pre sevm
+
 lemma Rinst.inv_getCode
     {pc sevm devm r devm'}
     (run : Rinst.run ⟨pc, sevm, devm⟩ r = .ok devm') (a : Adr) :
     devm'.getCode a = devm.getCode a := by
-  cases r <;> dsimp [Rinst.run, Rinst.runCore] at run
-  all_goals try with_reducible first
-    | exact applyBinary_getCode_eq run a
-    | exact applyTernary_getCode_eq run a
-    | exact applyUnary_getCode_eq run a
-    | exact pushItem_getCode_eq run a
-  case exp =>
-    refine getCode_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a}
-    intro ⟨x, devm1⟩ hp run; refine getCode_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨y, devm2⟩ hp2; exact Devm.pop_getCode_eq hp2 a}
-    intro ⟨y, devm2⟩ hp2 run;
-    refine getCode_eq_of_bind run id ?_ ?_
-    {intro devm3 hc; exact chargeGas_getCode_eq hc a}
-    intro devm3 hc run; exact Devm.push_getCode_eq run a
-  case kec =>
-    refine getCode_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getCode_eq hp a}
-    intro ⟨x, devm1⟩ hp run; refine getCode_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_getCode_eq hp2 a}
-    intro ⟨y, devm2⟩ hp2 run;
-    refine getCode_eq_of_bind run id ?_ ?_
-    {intro devm1 hc; exact chargeGas_getCode_eq hc a}
-    intro devm1 hc run; exact Devm.push_getCode_eq run a
-  case balance =>
-    simp only [Rinst.balanceCore_compat] at run
-    refine getCode_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a}
-    intro ⟨x, devm1⟩ hp run; split at run
-    · refine getCode_eq_of_bind run id ?_ ?_
-      {intro devm2 hc; exact chargeGas_getCode_eq hc a}
-      intro devm2 hc run; exact Devm.push_getCode_eq run a
-    · refine getCode_eq_of_bind run id ?_ ?_
-      {intro devm2 hc; exact chargeGas_getCode_eq hc a}
-      intro devm2 hc run; exact Devm.push_getCode_eq run a
-  case calldataload =>
-    refine getCode_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a}
-    intro ⟨x, devm1⟩ hp run; refine getCode_eq_of_bind run id ?_ ?_
-    {intro devm2 hc; exact chargeGas_getCode_eq hc a}
-    intro devm2 hc run; exact Devm.push_getCode_eq run a
-  case calldatacopy =>
-    refine getCode_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getCode_eq hp a}
-    intro ⟨x, devm1⟩ hp run; refine getCode_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨y, devm2⟩ hp; exact Devm.popToNat_getCode_eq hp a}
-    intro ⟨y, devm2⟩ hp run; refine getCode_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨z, devm3⟩ hp; exact Devm.popToNat_getCode_eq hp a}
-    intro ⟨z, devm3⟩ hp run; refine getCode_eq_of_bind run id ?_ ?_
-    {intro devm4 hc; exact chargeGas_getCode_eq hc a}
-    intro devm4 hc run; injection run with eq; subst eq; rfl
-  case codecopy =>
-    refine getCode_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getCode_eq hp a}
-    intro ⟨x, devm1⟩ hp run; refine getCode_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨y, devm2⟩ hp; exact Devm.popToNat_getCode_eq hp a}
-    intro ⟨y, devm2⟩ hp run; refine getCode_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨z, devm3⟩ hp; exact Devm.popToNat_getCode_eq hp a}
-    intro ⟨z, devm3⟩ hp run; refine getCode_eq_of_bind run id ?_ ?_
-    {intro devm4 hc; exact chargeGas_getCode_eq hc a}
-    intro devm4 hc run; injection run with eq; subst eq; rfl
-  case extcodesize =>
-    refine getCode_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.popToAdr_getCode_eq hp a}
-    intro ⟨x, devm1⟩ hp run; split at run
-    · refine getCode_eq_of_bind run id ?_ ?_
-      {intro devm2 hc; exact chargeGas_getCode_eq hc a}
-      intro devm2 hc run; exact Devm.push_getCode_eq run a
-    · refine getCode_eq_of_bind run id ?_ ?_
-      {intro devm2 hc; exact chargeGas_getCode_eq hc a}
-      intro devm2 hc run; exact Devm.push_getCode_eq run a
-  case extcodecopy =>
-    refine getCode_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.popToAdr_getCode_eq hp a}
-    intro ⟨x, devm1⟩ hp run; refine getCode_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨y, devm2⟩ hp; exact Devm.popToNat_getCode_eq hp a}
-    intro ⟨y, devm2⟩ hp run; refine getCode_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨z, devm3⟩ hp; exact Devm.popToNat_getCode_eq hp a}
-    intro ⟨z, devm3⟩ hp run; refine getCode_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨w, devm4⟩ hp; exact Devm.popToNat_getCode_eq hp a}
-    intro ⟨w, devm4⟩ hp run; split at run
-    · refine getCode_eq_of_bind run id ?_ ?_
-      {intro devm5 hc; exact chargeGas_getCode_eq hc a}
-      intro devm5 hc run; injection run with eq; subst eq; rfl
-    · refine getCode_eq_of_bind run id ?_ ?_
-      {intro devm5 hc; exact chargeGas_getCode_eq hc a}
-      intro devm5 hc run; injection run with eq; subst eq; rfl
-  case retdatacopy =>
-    refine getCode_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getCode_eq hp a}
-    intro ⟨x, devm1⟩ hp run; refine getCode_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨y, devm2⟩ hp; exact Devm.popToNat_getCode_eq hp a}
-    intro ⟨y, devm2⟩ hp run; refine getCode_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨z, devm3⟩ hp; exact Devm.popToNat_getCode_eq hp a}
-    intro ⟨z, devm3⟩ hp run; refine getCode_eq_of_bind run id ?_ ?_
-    {intro devm4 hc; exact chargeGas_getCode_eq hc a}
-    intro devm4 hc run; split at run
-    · cases run
-    · injection run with eq; subst eq; rfl
-  case extcodehash =>
-    refine getCode_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.popToAdr_getCode_eq hp a}
-    intro ⟨x, devm1⟩ hp run; split at run
-    · refine getCode_eq_of_bind run id ?_ ?_
-      {intro devm2 hc; exact chargeGas_getCode_eq hc a}
-      intro devm2 hc run; exact Devm.push_getCode_eq run a
-    · refine getCode_eq_of_bind run id ?_ ?_
-      {intro devm2 hc; exact chargeGas_getCode_eq hc a}
-      intro devm2 hc run; exact Devm.push_getCode_eq run a
-  case blockhash =>
-    refine getCode_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a}
-    intro ⟨x, devm1⟩ hp run; refine getCode_eq_of_bind run id ?_ ?_
-    {intro devm2 hc; exact chargeGas_getCode_eq hc a}
-    intro devm2 hc run; exact Devm.push_getCode_eq run a
-  case blobhash =>
-    refine getCode_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a}
-    intro ⟨x, devm1⟩ hp run; refine getCode_eq_of_bind run id ?_ ?_
-    {intro devm2 hc; exact chargeGas_getCode_eq hc a}
-    intro devm2 hc run; exact Devm.push_getCode_eq run a
-  case pop =>
-    refine getCode_eq_of_bind run id ?_ ?_
-    {intro devm1 hc; exact Devm.pop_map_snd_getCode_eq hc a}
-    intro devm1 hc run; exact chargeGas_getCode_eq run a
-  case mload =>
-    refine getCode_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getCode_eq hp a}
-    intro ⟨x, devm1⟩ hp run; refine getCode_eq_of_bind run id ?_ ?_
-    {intro devm2 hc; exact chargeGas_getCode_eq hc a}
-    intro devm2 hc run; exact Devm.push_getCode_eq run a
-  case mstore =>
-    refine getCode_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getCode_eq hp a}
-    intro ⟨x, devm1⟩ hp run; refine getCode_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨y, devm2⟩ hp; exact Devm.pop_getCode_eq hp a}
-    intro ⟨y, devm2⟩ hp run; refine getCode_eq_of_bind run id ?_ ?_
-    {intro devm3 hc; exact chargeGas_getCode_eq hc a}
-    intro devm3 hc run; injection run with eq; subst eq; rfl
-  case mstore8 =>
-    refine getCode_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getCode_eq hp a}
-    intro ⟨x, devm1⟩ hp run; refine getCode_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨y, devm2⟩ hp; exact Devm.pop_getCode_eq hp a}
-    intro ⟨y, devm2⟩ hp run; refine getCode_eq_of_bind run id ?_ ?_
-    {intro devm3 hc; exact chargeGas_getCode_eq hc a}
-    intro devm3 hc run; injection run with eq; subst eq; rfl
-  case sload =>
-    refine getCode_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a}
-    intro ⟨x, devm1⟩ hp run; split at run
-    · refine getCode_eq_of_bind run id ?_ ?_
-      {intro devm2 hc; exact chargeGas_getCode_eq hc a}
-      intro devm2 hc run; exact Devm.push_getCode_eq run a
-    · refine getCode_eq_of_bind run id ?_ ?_
-      {intro devm2 hc; exact chargeGas_getCode_eq hc a}
-      intro devm2 hc run; exact Devm.push_getCode_eq run a
-  case sstore =>
-    have h := @sstore_inv_getCode pc sevm devm devm'
-    simp only [Rinst.run, Rinst.runCore] at h
-    apply h run _
-  case tload =>
-    refine getCode_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a}
-    intro ⟨x, devm1⟩ hp run; exact pushItem_getCode_eq run a
-  case tstore =>
-    refine getCode_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a}
-    intro ⟨x, devm1⟩ hp run; refine getCode_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨y, devm2⟩ hp; exact Devm.pop_getCode_eq hp a}
-    intro ⟨y, devm2⟩ hp run; refine getCode_eq_of_bind run id ?_ ?_
-    {intro devm3 hc; exact chargeGas_getCode_eq hc a}
-    intro devm3 hc run
-    rcases of_bind_eq_ok run with ⟨_, _, run'⟩
-    injection run' with rw
-    rw [← rw]
-    simp [Devm.getCode, Devm.getAcct, Devm.setTransVal]
-  case mcopy =>
-    refine getCode_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getCode_eq hp a}
-    intro ⟨x, devm1⟩ hp run; refine getCode_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨y, devm2⟩ hp; exact Devm.popToNat_getCode_eq hp a}
-    intro ⟨y, devm2⟩ hp run; refine getCode_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨z, devm3⟩ hp; exact Devm.popToNat_getCode_eq hp a}
-    intro ⟨z, devm3⟩ hp run; refine getCode_eq_of_bind run id ?_ ?_
-    {intro devm4 hc; exact chargeGas_getCode_eq hc a}
-    intro devm4 hc run; injection run with eq; subst eq; rfl
-  case gas =>
-    refine getCode_eq_of_bind run id ?_ ?_
-    {intro devm1 hc; exact chargeGas_getCode_eq hc a}
-    intro devm1 hc run; exact Devm.push_getCode_eq run a
-  case dup =>
-    refine getCode_eq_of_bind run id ?_ ?_
-    {intro devm1 hc; exact chargeGas_getCode_eq hc a}
-    intro devm1 hc run; split at run
-    · cases run
-    · exact Devm.push_getCode_eq run a
-  case swap =>
-    refine getCode_eq_of_bind run id ?_ ?_
-    {intro devm1 hc; exact chargeGas_getCode_eq hc a}
-    intro devm1 hc run; split at run
-    · cases run
-    · injection run with eq; subst eq; rfl
-  case log =>
-    refine getCode_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getCode_eq hp a}
-    intro ⟨x, devm1⟩ hp run; refine getCode_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨y, devm2⟩ hp; exact Devm.popToNat_getCode_eq hp a}
-    intro ⟨y, devm2⟩ hp run; refine getCode_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨z, devm3⟩ hp; exact Devm.popN_getCode_eq hp a}
-    intro ⟨z, devm3⟩ hp run; refine getCode_eq_of_bind run id ?_ ?_
-    {intro devm4 hc; exact chargeGas_getCode_eq hc a}
-    intro devm4 hc run
-    rcases of_bind_eq_ok run with ⟨_, _, run'⟩
-    injection run' with rw
-    rw [← rw]
-    rfl
+  rcases eq_or_ne r .sstore with rfl | hs
+  · have hf := Rinst.sstore_run_stateWriteFrame pc devm sevm; rw [run] at hf
+    exact (hf.getCode_eq a).symm
+  rcases eq_or_ne r .tstore with rfl | ht
+  · have hf := Rinst.tstore_run_transientWriteFrame pc devm sevm; rw [run] at hf
+    simpa only [Devm.getCode, Devm.getAcct] using congrFun (congrArg (fun s => fun a => (s.get a).code) hf.state).symm a
+  · have hf := Rinst.run_instructionFrame pc sevm devm r hs ht; rw [run] at hf; exact (hf.getCode a).symm
 
 def Execution.getCode : Execution → Adr → ByteArray
   | Except.error ⟨_, devm⟩, adr => devm.getCode adr
@@ -4541,352 +5963,20 @@ lemma Rinst.inv_getCode_err
     {pc sevm devm r err}
     (run : Rinst.run ⟨pc, sevm, devm⟩ r = Except.error err) (a : Adr) :
     err.2.getCode a = devm.getCode a := by
-  cases r <;> dsimp [Rinst.run, Rinst.runCore] at run
-  all_goals try with_reducible first
-    | exact applyBinary_getCode_err run a
-    | exact applyTernary_getCode_err run a
-    | exact applyUnary_getCode_err run a
-    | exact pushItem_getCode_err run a
-  case exp =>
-    refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a
-    · intro e hp; exact Devm.pop_getCode_err hp a
-    · intro ⟨x, devm1⟩ hp run2
-      refine getCode_err_of_bind run2 Prod.snd ?_ ?_ ?_
-      · intro ⟨y, devm2⟩ hp2; exact Devm.pop_getCode_eq hp2 a
-      · intro e hp2; exact Devm.pop_getCode_err hp2 a
-      · intro ⟨y, devm2⟩ hp2 run3
-        refine getCode_err_of_bind run3 id ?_ ?_ ?_
-        · intro devm3 hc; exact chargeGas_getCode_eq hc a
-        · intro e hc; exact chargeGas_getCode_err hc a
-        · intro devm3 hc run4; exact Devm.push_getCode_err run4 a
-  case kec =>
-    refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getCode_eq hp a
-    · intro e hp; exact Devm.popToNat_getCode_err hp a
-    · intro ⟨x, devm1⟩ hp run2
-      refine getCode_err_of_bind run2 Prod.snd ?_ ?_ ?_
-      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_getCode_eq hp2 a
-      · intro e hp2; exact Devm.popToNat_getCode_err hp2 a
-      · intro ⟨y, devm2⟩ hp2 run3
-        refine getCode_err_of_bind run3 id ?_ ?_ ?_
-        · intro devm3 hc; exact chargeGas_getCode_eq hc a
-        · intro e hc; exact chargeGas_getCode_err hc a
-        · intro devm3 hc run4; exact Devm.push_getCode_err run4 a
-  case balance =>
-    simp only [Rinst.balanceCore_compat] at run
-    refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a
-    · intro e hp; exact Devm.pop_getCode_err hp a
-    · intro ⟨x, devm1⟩ hp run2; split at run2
-      · refine getCode_err_of_bind run2 id ?_ ?_ ?_
-        · intro devm2 hc; exact chargeGas_getCode_eq hc a
-        · intro e hc; exact chargeGas_getCode_err hc a
-        · intro devm2 hc run3; exact Devm.push_getCode_err run3 a
-      · refine getCode_err_of_bind run2 id ?_ ?_ ?_
-        · intro devm2 hc; exact chargeGas_getCode_eq hc a
-        · intro e hc; exact chargeGas_getCode_err hc a
-        · intro devm2 hc run3; exact Devm.push_getCode_err run3 a
-  case calldataload =>
-    refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a
-    · intro e hp; exact Devm.pop_getCode_err hp a
-    · intro ⟨x, devm1⟩ hp run2
-      refine getCode_err_of_bind run2 id ?_ ?_ ?_
-      · intro devm2 hc; exact chargeGas_getCode_eq hc a
-      · intro e hc; exact chargeGas_getCode_err hc a
-      · intro devm2 hc run3; exact Devm.push_getCode_err run3 a
-  case calldatacopy =>
-    refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getCode_eq hp a
-    · intro e hp; exact Devm.popToNat_getCode_err hp a
-    · intro ⟨x, devm1⟩ hp run2
-      refine getCode_err_of_bind run2 Prod.snd ?_ ?_ ?_
-      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_getCode_eq hp2 a
-      · intro e hp2; exact Devm.popToNat_getCode_err hp2 a
-      · intro ⟨y, devm2⟩ hp2 run3
-        refine getCode_err_of_bind run3 Prod.snd ?_ ?_ ?_
-        · intro ⟨z, devm3⟩ hp3; exact Devm.popToNat_getCode_eq hp3 a
-        · intro e hp3; exact Devm.popToNat_getCode_err hp3 a
-        · intro ⟨z, devm3⟩ hp3 run4
-          refine getCode_err_of_bind run4 id ?_ ?_ ?_
-          · intro devm4 hc; exact chargeGas_getCode_eq hc a
-          · intro e hc; exact chargeGas_getCode_err hc a
-          · intro devm4 hc run5; injection run5
-  case codecopy =>
-    refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getCode_eq hp a
-    · intro e hp; exact Devm.popToNat_getCode_err hp a
-    · intro ⟨x, devm1⟩ hp run2
-      refine getCode_err_of_bind run2 Prod.snd ?_ ?_ ?_
-      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_getCode_eq hp2 a
-      · intro e hp2; exact Devm.popToNat_getCode_err hp2 a
-      · intro ⟨y, devm2⟩ hp2 run3
-        refine getCode_err_of_bind run3 Prod.snd ?_ ?_ ?_
-        · intro ⟨z, devm3⟩ hp3; exact Devm.popToNat_getCode_eq hp3 a
-        · intro e hp3; exact Devm.popToNat_getCode_err hp3 a
-        · intro ⟨z, devm3⟩ hp3 run4
-          refine getCode_err_of_bind run4 id ?_ ?_ ?_
-          · intro devm4 hc; exact chargeGas_getCode_eq hc a
-          · intro e hc; exact chargeGas_getCode_err hc a
-          · intro devm4 hc run5; injection run5
-  case extcodesize =>
-    refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.popToAdr_getCode_eq hp a
-    · intro e hp; exact Devm.popToAdr_getCode_err hp a
-    · intro ⟨x, devm1⟩ hp run2; split at run2
-      · refine getCode_err_of_bind run2 id ?_ ?_ ?_
-        · intro devm2 hc; exact chargeGas_getCode_eq hc a
-        · intro e hc; exact chargeGas_getCode_err hc a
-        · intro devm2 hc run3; exact Devm.push_getCode_err run3 a
-      · refine getCode_err_of_bind run2 id ?_ ?_ ?_
-        · intro devm2 hc; exact chargeGas_getCode_eq hc a
-        · intro e hc; exact chargeGas_getCode_err hc a
-        · intro devm2 hc run3; exact Devm.push_getCode_err run3 a
-  case extcodecopy =>
-    refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.popToAdr_getCode_eq hp a
-    · intro e hp; exact Devm.popToAdr_getCode_err hp a
-    · intro ⟨x, devm1⟩ hp run2
-      refine getCode_err_of_bind run2 Prod.snd ?_ ?_ ?_
-      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_getCode_eq hp2 a
-      · intro e hp2; exact Devm.popToNat_getCode_err hp2 a
-      · intro ⟨y, devm2⟩ hp2 run3
-        refine getCode_err_of_bind run3 Prod.snd ?_ ?_ ?_
-        · intro ⟨z, devm3⟩ hp3; exact Devm.popToNat_getCode_eq hp3 a
-        · intro e hp3; exact Devm.popToNat_getCode_err hp3 a
-        · intro ⟨z, devm3⟩ hp3 run4
-          refine getCode_err_of_bind run4 Prod.snd ?_ ?_ ?_
-          · intro ⟨w, devm4⟩ hp4; exact Devm.popToNat_getCode_eq hp4 a
-          · intro e hp4; exact Devm.popToNat_getCode_err hp4 a
-          · intro ⟨w, devm4⟩ hp4 run5
-            split at run5
-            · refine getCode_err_of_bind run5 id ?_ ?_ ?_
-              · intro devm5 hc; exact chargeGas_getCode_eq hc a
-              · intro e hc; exact chargeGas_getCode_err hc a
-              · intro devm5 hc run6; injection run6
-            · refine getCode_err_of_bind run5 id ?_ ?_ ?_
-              · intro devm5 hc; exact chargeGas_getCode_eq hc a
-              · intro e hc; exact chargeGas_getCode_err hc a
-              · intro devm5 hc run6; injection run6
-  case retdatacopy =>
-    refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getCode_eq hp a
-    · intro e hp; exact Devm.popToNat_getCode_err hp a
-    · intro ⟨x, devm1⟩ hp run2
-      refine getCode_err_of_bind run2 Prod.snd ?_ ?_ ?_
-      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_getCode_eq hp2 a
-      · intro e hp2; exact Devm.popToNat_getCode_err hp2 a
-      · intro ⟨y, devm2⟩ hp2 run3
-        refine getCode_err_of_bind run3 Prod.snd ?_ ?_ ?_
-        · intro ⟨z, devm3⟩ hp3; exact Devm.popToNat_getCode_eq hp3 a
-        · intro e hp3; exact Devm.popToNat_getCode_err hp3 a
-        · intro ⟨z, devm3⟩ hp3 run4
-          refine getCode_err_of_bind run4 id ?_ ?_ ?_
-          · intro devm4 hc; exact chargeGas_getCode_eq hc a
-          · intro e hc; exact chargeGas_getCode_err hc a
-          · intro devm4 hc run5
-            split_ifs at run5
-            all_goals (try { cases run5; rfl })
-            all_goals (try contradiction)
-  case extcodehash =>
-    refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.popToAdr_getCode_eq hp a
-    · intro e hp; exact Devm.popToAdr_getCode_err hp a
-    · intro ⟨x, devm1⟩ hp run2; split at run2
-      · refine getCode_err_of_bind run2 id ?_ ?_ ?_
-        · intro devm2 hc; exact chargeGas_getCode_eq hc a
-        · intro e hc; exact chargeGas_getCode_err hc a
-        · intro devm2 hc run3; exact Devm.push_getCode_err run3 a
-      · refine getCode_err_of_bind run2 id ?_ ?_ ?_
-        · intro devm2 hc; exact chargeGas_getCode_eq hc a
-        · intro e hc; exact chargeGas_getCode_err hc a
-        · intro devm2 hc run3; exact Devm.push_getCode_err run3 a
-  case blockhash =>
-    refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a
-    · intro e hp; exact Devm.pop_getCode_err hp a
-    · intro ⟨x, devm1⟩ hp run2
-      refine getCode_err_of_bind run2 id ?_ ?_ ?_
-      · intro devm2 hc; exact chargeGas_getCode_eq hc a
-      · intro e hc; exact chargeGas_getCode_err hc a
-      · intro devm2 hc run3; exact Devm.push_getCode_err run3 a
-  case blobhash =>
-    refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
-    exact fun ⟨x, devm1⟩ hp => Devm.pop_getCode_eq hp a
-    exact fun e hp => Devm.pop_getCode_err hp a
-    intro ⟨x, devm1⟩ hp run2
-    refine getCode_err_of_bind run2 id ?_ ?_ ?_
-    exact fun devm2 hc => chargeGas_getCode_eq hc a
-    exact fun e hc => chargeGas_getCode_err hc a
-    intro devm2 hc run3; exact Devm.push_getCode_err run3 a
-  case pop =>
-    refine getCode_err_of_bind run id ?_ ?_ ?_
-    exact fun devm1 hc => Devm.pop_map_snd_getCode_eq hc a
-    exact fun e hc => Devm.pop_map_snd_getCode_err hc a
-    intro devm1 hc run2; exact chargeGas_getCode_err run2 a
-  case mload =>
-    refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
-    exact fun ⟨x, devm1⟩ hp => Devm.popToNat_getCode_eq hp a
-    exact fun e hp => Devm.popToNat_getCode_err hp a
-    intro ⟨x, devm1⟩ hp run2
-    refine getCode_err_of_bind run2 id ?_ ?_ ?_
-    exact fun devm2 hc => chargeGas_getCode_eq hc a
-    exact fun e hc => chargeGas_getCode_err hc a
-    intro devm2 hc run3; exact Devm.push_getCode_err run3 a
-  case mstore =>
-    refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getCode_eq hp a
-    · intro e hp; exact Devm.popToNat_getCode_err hp a
-    · intro ⟨x, devm1⟩ hp run2
-      refine getCode_err_of_bind run2 Prod.snd ?_ ?_ ?_
-      · intro ⟨y, devm2⟩ hp2; exact Devm.pop_getCode_eq hp2 a
-      · intro e hp2; exact Devm.pop_getCode_err hp2 a
-      · intro ⟨y, devm2⟩ hp2 run3
-        refine getCode_err_of_bind run3 id ?_ ?_ ?_
-        · intro devm3 hc; exact chargeGas_getCode_eq hc a
-        · intro e hc; exact chargeGas_getCode_err hc a
-        · intro devm3 hc run4; cases run4
-  case mstore8 =>
-    refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getCode_eq hp a
-    · intro e hp; exact Devm.popToNat_getCode_err hp a
-    · intro ⟨x, devm1⟩ hp run2
-      refine getCode_err_of_bind run2 Prod.snd ?_ ?_ ?_
-      · intro ⟨y, devm2⟩ hp2; exact Devm.pop_getCode_eq hp2 a
-      · intro e hp2; exact Devm.pop_getCode_err hp2 a
-      · intro ⟨y, devm2⟩ hp2 run3
-        refine getCode_err_of_bind run3 id ?_ ?_ ?_
-        · intro devm3 hc; exact chargeGas_getCode_eq hc a
-        · intro e hc; exact chargeGas_getCode_err hc a
-        · intro devm3 hc run4; injection run4
-  case sload =>
-    refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a
-    · intro e hp; exact Devm.pop_getCode_err hp a
-    · intro ⟨x, devm1⟩ hp run2; split at run2
-      · refine getCode_err_of_bind run2 id ?_ ?_ ?_
-        · intro devm2 hc; exact chargeGas_getCode_eq hc a
-        · intro e hc; exact chargeGas_getCode_err hc a
-        · intro devm2 hc run3; exact Devm.push_getCode_err run3 a
-      · refine getCode_err_of_bind run2 id ?_ ?_ ?_
-        · intro devm2 hc; exact chargeGas_getCode_eq hc a
-        · intro e hc; exact chargeGas_getCode_err hc a
-        · intro devm2 hc run3; exact Devm.push_getCode_err run3 a
-  case sstore =>
-    refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a
-    · intro e hp; exact Devm.pop_getCode_err hp a
-    · intro ⟨x, devm1⟩ hp run2
-      refine getCode_err_of_bind run2 Prod.snd ?_ ?_ ?_
-      · intro ⟨y, devm2⟩ hp2; exact Devm.pop_getCode_eq hp2 a
-      · intro e hp2; exact Devm.pop_getCode_err hp2 a
-      · intro ⟨y, devm2⟩ hp2 run3
-        refine getCode_err_of_bind run3 (fun _ => devm2) ?_ ?_ ?_
-        · intro u h_assert; rfl
-        · intro e h_assert; exact assert_getCode_err h_assert a
-        · intro u h_assert run4
-          split_ifs at run4
-          all_goals {
-            refine getCode_err_of_bind run4 id ?_ ?_ ?_
-            · intro devm3 hc; exact chargeGas_getCode_eq hc a
-            · intro e hc; exact chargeGas_getCode_err hc a
-            · intro devm3 hc run5
-              dsimp [assertDynamic, Except.assert] at run5
-              split_ifs at run5
-              all_goals (try { cases run5; rfl })
-              all_goals (try injection run5)
-          }
-  case gas =>
-    refine getCode_err_of_bind run id ?_ ?_ ?_
-    · intro devm1 hc; exact chargeGas_getCode_eq hc a
-    · intro e hc; exact chargeGas_getCode_err hc a
-    · intro devm1 hc run2; exact Devm.push_getCode_err run2 a
-  case tload =>
-    refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a
-    · intro e hp; exact Devm.pop_getCode_err hp a
-    · intro ⟨x, devm1⟩ hp run2; exact pushItem_getCode_err run2 a
-  case tstore =>
-    refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a
-    · intro e hp; exact Devm.pop_getCode_err hp a
-    · intro ⟨x, devm1⟩ hp run2
-      refine getCode_err_of_bind run2 Prod.snd ?_ ?_ ?_
-      · intro ⟨y, devm2⟩ hp2; exact Devm.pop_getCode_eq hp2 a
-      · intro e hp2; exact Devm.pop_getCode_err hp2 a
-      · intro ⟨y, devm2⟩ hp2 run3
-        refine getCode_err_of_bind run3 id ?_ ?_ ?_
-        · intro devm3 hc; exact chargeGas_getCode_eq hc a
-        · intro e hc; exact chargeGas_getCode_err hc a
-        · intro devm3 hc run4
-          dsimp [assertDynamic, Except.assert] at run4
-          simp only [bind, Except.bind] at run4
-          try split_ifs at run4; simp at run4
-          rw [← run4]; rfl
-  case mcopy =>
-    refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getCode_eq hp a
-    · intro e hp; exact Devm.popToNat_getCode_err hp a
-    · intro ⟨x, devm1⟩ hp run2
-      refine getCode_err_of_bind run2 Prod.snd ?_ ?_ ?_
-      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_getCode_eq hp2 a
-      · intro e hp2; exact Devm.popToNat_getCode_err hp2 a
-      · intro ⟨y, devm2⟩ hp2 run3
-        refine getCode_err_of_bind run3 Prod.snd ?_ ?_ ?_
-        · intro ⟨z, devm3⟩ hp3; exact Devm.popToNat_getCode_eq hp3 a
-        · intro e hp3; exact Devm.popToNat_getCode_err hp3 a
-        · intro ⟨z, devm3⟩ hp3 run4
-          refine getCode_err_of_bind run4 id ?_ ?_ ?_
-          · intro devm4 hc; exact chargeGas_getCode_eq hc a
-          · intro e hc; exact chargeGas_getCode_err hc a
-          · intro devm4 hc run5; contradiction
-  case dup =>
-    refine getCode_err_of_bind run id ?_ ?_ ?_
-    · intro devm1 hc; exact chargeGas_getCode_eq hc a
-    · intro e hc; exact chargeGas_getCode_err hc a
-    · intro devm1 hc run2
-      split at run2
-      · injection run2 with h_eq; cases h_eq; rfl
-      · exact Devm.push_getCode_err run2 a
-  case swap =>
-    refine getCode_err_of_bind run id ?_ ?_ ?_
-    · intro devm1 hc; exact chargeGas_getCode_eq hc a
-    · intro e hc; exact chargeGas_getCode_err hc a
-    · intro devm1 hc run2
-      split at run2
-      · injection run2 with h_eq; cases h_eq; rfl
-      · contradiction
-  case log =>
-    refine getCode_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getCode_eq hp a
-    · intro e hp; exact Devm.popToNat_getCode_err hp a
-    · intro ⟨x, devm1⟩ hp run2
-      refine getCode_err_of_bind run2 Prod.snd ?_ ?_ ?_
-      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_getCode_eq hp2 a
-      · intro e hp2; exact Devm.popToNat_getCode_err hp2 a
-      · intro ⟨y, devm2⟩ hp2 run3
-        refine getCode_err_of_bind run3 Prod.snd ?_ ?_ ?_
-        · intro ⟨z, devm3⟩ hp3; exact Devm.popN_getCode_eq hp3 a
-        · intro e hp3; exact Devm.popN_getCode_err hp3 a
-        · intro ⟨z, devm3⟩ hp3 run4
-          refine getCode_err_of_bind run4 id ?_ ?_ ?_
-          · intro devm4 hc; exact chargeGas_getCode_eq hc a
-          · intro e hc; exact chargeGas_getCode_err hc a
-          · intro devm4 hc run5
-            dsimp [assertDynamic, Except.assert] at run5
-            simp only [bind, Except.bind] at run5
-            try split_ifs at run5; simp at run5
-            rw [← run5]; rfl
+  rcases eq_or_ne r .sstore with rfl | hs
+  · have hf := Rinst.sstore_run_stateWriteFrame pc devm sevm; rw [run] at hf
+    exact (Devm.StateWriteFrame.getCode_eq hf a).symm
+  rcases eq_or_ne r .tstore with rfl | ht
+  · have hf := Rinst.tstore_run_transientWriteFrame pc devm sevm; rw [run] at hf
+    exact congrFun (congrArg (fun s => fun a => (s.get a).code) hf.state).symm a
+  · have hf := Rinst.run_instructionFrame pc sevm devm r hs ht; rw [run] at hf; exact (Devm.InstructionFrame.getCode hf a).symm
 
 lemma Rinst.inv_getCode_gen
     {pc sevm devm r exn}
     (run : Rinst.run ⟨pc, sevm, devm⟩ r = exn) (a : Adr)
     (_ne : (devm.getCode a).toList ≠ []) :
     Execution.getCode exn a = devm.getCode a := by
-  cases h_exn : exn
-  · exact Rinst.inv_getCode_err (run.trans h_exn) a
-  · exact Rinst.inv_getCode (run.trans h_exn) a
+  cases exn <;> first | exact Rinst.inv_getCode_err run a | exact Rinst.inv_getCode run a
 
 lemma Xinst.inv_getCode_gen
     {sevm devm x xl exn}
@@ -5497,217 +6587,6 @@ lemma Linst.inv_getCode
                 dsimp [Devm.addBal, Devm.getCode]; exact State.addBal_getCode res3.state _ _ _
               exact h_add.trans (h_sub.trans ((chargeGas_getCode_eq h2 adr).trans (h_acc.trans (Devm.popToAdr_getCode_eq h1 adr))))
 
-/-! ## 1. Generic compositional relations -/
-
-namespace CEffect
-
-abbrev Rel (σ : Type) := σ → σ → Prop
-
-def Refines {σ : Type} (R S : Rel σ) : Prop :=
-  ∀ ⦃s t⦄, R s t → S s t
-
-def Comp {σ : Type} (R S : Rel σ) : Rel σ :=
-  fun s u => ∃ t, R s t ∧ S t u
-
-def Holds {σ : Type} (run effect : Rel σ) : Prop :=
-  Refines run effect
-
-def ObsEq {σ α : Type} (obs : σ → α) : Rel σ :=
-  fun s t => obs s = obs t
-
-def Stable {σ α : Type} (obs : σ → α) (effect : Rel σ) : Prop :=
-  Refines effect (ObsEq obs)
-
-lemma comp_assoc {σ : Type} (R S T : Rel σ) :
-    Comp (Comp R S) T = Comp R (Comp S T) := by
-  ext s u
-  constructor
-  · rintro ⟨b, ⟨a, hRa, hSab⟩, hTbu⟩
-    exact ⟨a, hRa, b, hSab, hTbu⟩
-  · rintro ⟨a, hRa, b, hSab, hTbu⟩
-    exact ⟨b, ⟨a, hRa, hSab⟩, hTbu⟩
-
-lemma holds_comp {σ : Type} {run₁ run₂ R S : Rel σ}
-    (hR : Holds run₁ R) (hS : Holds run₂ S) :
-    Holds (Comp run₁ run₂) (Comp R S) := by
-  rintro s t ⟨u, h1, h2⟩
-  exact ⟨u, hR h1, hS h2⟩
-
-lemma holds_weaken {σ : Type} {run R S : Rel σ}
-    (h : Holds run R) (hweak : Refines R S) : Holds run S := by
-  intro s t hrun
-  exact hweak (h hrun)
-
-lemma holds_comp_of_transitive {σ : Type} {run₁ run₂ R : Rel σ}
-    (htrans : Transitive R)
-    (h₁ : Holds run₁ R) (h₂ : Holds run₂ R) :
-    Holds (Comp run₁ run₂) R := by
-  intro s u hrun
-  rcases hrun with ⟨t, hR1, hR2⟩
-  exact htrans (h₁ hR1) (h₂ hR2)
-
-lemma reflTransGen_mono {σ : Type} {step effect : Rel σ} {s t : σ}
-    (hrefine : Refines step effect)
-    (h : Relation.ReflTransGen step s t) :
-    Relation.ReflTransGen effect s t := by
-  induction h with
-  | refl => exact Relation.ReflTransGen.refl
-  | tail h1 h2 ih => exact Relation.ReflTransGen.tail ih (hrefine h2)
-
-/-
-This is the generic “every small step has `R`, hence the whole run has `R`” theorem.
--/
-lemma reflTransGen_collapse {σ : Type} {step R : Rel σ} {s t : σ}
-    (hrefl : Reflexive R) (htrans : Transitive R)
-    (hrefine : Refines step R)
-    (h : Relation.ReflTransGen step s t) : R s t := by
-  induction h with
-  | refl => exact hrefl _
-  | tail h_prev h_step ih => exact htrans ih (hrefine h_step)
-
-lemma obsEq_refl_trans {σ α : Type} (obs : σ → α) :
-    Reflexive (ObsEq obs) ∧ Transitive (ObsEq obs) := by
-  constructor
-  · intro x
-    rfl
-  · intro x y z hxy hyz
-    exact Eq.trans hxy hyz
-
-lemma Stable.comp {σ α β : Type} {obs : σ → α} {R : Rel σ}
-    (h : Stable obs R) (f : α → β) : Stable (f ∘ obs) R := by
-  intro s t hR; exact congrArg f (h hR)
-
-end CEffect
-
-/-! ## 2. Composing the fieldwise `Devm.Rels` already present in Semantics -/
-
-def Devm.Rels.comp (r s : Devm.Rels) : Devm.Rels :=
-  {
-    stack := CEffect.Comp r.stack s.stack
-    memory := CEffect.Comp r.memory s.memory
-    gasLeft := CEffect.Comp r.gasLeft s.gasLeft
-    logs := CEffect.Comp r.logs s.logs
-    refundCounter := CEffect.Comp r.refundCounter s.refundCounter
-    output := CEffect.Comp r.output s.output
-    accountsToDelete := CEffect.Comp r.accountsToDelete s.accountsToDelete
-    returnData := CEffect.Comp r.returnData s.returnData
-    error := CEffect.Comp r.error s.error
-    accessedAddresses := CEffect.Comp r.accessedAddresses s.accessedAddresses
-    accessedStorageKeys := CEffect.Comp r.accessedStorageKeys s.accessedStorageKeys
-    state := CEffect.Comp r.state s.state
-    createdAccounts := CEffect.Comp r.createdAccounts s.createdAccounts
-    transientStorage := CEffect.Comp r.transientStorage s.transientStorage
-  }
-
-def Devm.Rels.Refl (r : Devm.Rels) : Prop :=
-  Reflexive r.stack ∧ Reflexive r.memory ∧ Reflexive r.gasLeft ∧
-  Reflexive r.logs ∧ Reflexive r.refundCounter ∧ Reflexive r.output ∧
-  Reflexive r.accountsToDelete ∧ Reflexive r.returnData ∧ Reflexive r.error ∧
-  Reflexive r.accessedAddresses ∧ Reflexive r.accessedStorageKeys ∧
-  Reflexive r.state ∧ Reflexive r.createdAccounts ∧
-  Reflexive r.transientStorage
-
-def Devm.Rels.Trans (r : Devm.Rels) : Prop :=
-  Transitive r.stack ∧ Transitive r.memory ∧ Transitive r.gasLeft ∧
-  Transitive r.logs ∧ Transitive r.refundCounter ∧ Transitive r.output ∧
-  Transitive r.accountsToDelete ∧ Transitive r.returnData ∧ Transitive r.error ∧
-  Transitive r.accessedAddresses ∧ Transitive r.accessedStorageKeys ∧
-  Transitive r.state ∧ Transitive r.createdAccounts ∧
-  Transitive r.transientStorage
-
-lemma Devm.Rel.comp {r s : Devm.Rels} {a b c : Devm}
-    (hab : Devm.Rel r a b) (hbc : Devm.Rel s b c) :
-    Devm.Rel (Devm.Rels.comp r s) a c := by
-  exact {
-    stack := ⟨b.stack, hab.stack, hbc.stack⟩
-    memory := ⟨b.memory, hab.memory, hbc.memory⟩
-    gasLeft := ⟨b.gasLeft, hab.gasLeft, hbc.gasLeft⟩
-    logs := ⟨b.logs, hab.logs, hbc.logs⟩
-    refundCounter := ⟨b.refundCounter, hab.refundCounter, hbc.refundCounter⟩
-    output := ⟨b.output, hab.output, hbc.output⟩
-    accountsToDelete := ⟨b.accountsToDelete, hab.accountsToDelete, hbc.accountsToDelete⟩
-    returnData := ⟨b.returnData, hab.returnData, hbc.returnData⟩
-    error := ⟨b.error, hab.error, hbc.error⟩
-    accessedAddresses := ⟨b.accessedAddresses, hab.accessedAddresses, hbc.accessedAddresses⟩
-    accessedStorageKeys := ⟨b.accessedStorageKeys, hab.accessedStorageKeys, hbc.accessedStorageKeys⟩
-    state := ⟨b.state, hab.state, hbc.state⟩
-    createdAccounts := ⟨b.createdAccounts, hab.createdAccounts, hbc.createdAccounts⟩
-    transientStorage := ⟨b.transientStorage, hab.transientStorage, hbc.transientStorage⟩
-  }
-
-lemma Devm.rel_refl {r : Devm.Rels} (hr : Devm.Rels.Refl r) :
-    Reflexive (Devm.Rel r) := by
-  intro d
-  rcases hr with ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14⟩
-  constructor
-  · exact h1 _
-  · exact h2 _
-  · exact h3 _
-  · exact h4 _
-  · exact h5 _
-  · exact h6 _
-  · exact h7 _
-  · exact h8 _
-  · exact h9 _
-  · exact h10 _
-  · exact h11 _
-  · exact h12 _
-  · exact h13 _
-  · exact h14 _
-
-lemma Devm.rel_trans {r : Devm.Rels} (hr : Devm.Rels.Trans r) :
-    Transitive (Devm.Rel r) := by
-  intro a b c hab hbc
-  constructor
-  · exact hr.1 hab.stack hbc.stack
-  · exact hr.2.1 hab.memory hbc.memory
-  · exact hr.2.2.1 hab.gasLeft hbc.gasLeft
-  · exact hr.2.2.2.1 hab.logs hbc.logs
-  · exact hr.2.2.2.2.1 hab.refundCounter hbc.refundCounter
-  · exact hr.2.2.2.2.2.1 hab.output hbc.output
-  · exact hr.2.2.2.2.2.2.1 hab.accountsToDelete hbc.accountsToDelete
-  · exact hr.2.2.2.2.2.2.2.1 hab.returnData hbc.returnData
-  · exact hr.2.2.2.2.2.2.2.2.1 hab.error hbc.error
-  · exact hr.2.2.2.2.2.2.2.2.2.1 hab.accessedAddresses hbc.accessedAddresses
-  · exact hr.2.2.2.2.2.2.2.2.2.2.1 hab.accessedStorageKeys hbc.accessedStorageKeys
-  · exact hr.2.2.2.2.2.2.2.2.2.2.2.1 hab.state hbc.state
-  · exact hr.2.2.2.2.2.2.2.2.2.2.2.2.1 hab.createdAccounts hbc.createdAccounts
-  · exact hr.2.2.2.2.2.2.2.2.2.2.2.2.2 hab.transientStorage hbc.transientStorage
-
-def Devm.OnlyGas : Devm → Devm → Prop :=
-  Devm.Rel { Devm.Rels.eq with gasLeft := fun _ _ => True }
-
-lemma Devm.onlyGas_stable_state :
-    CEffect.Stable Devm.state Devm.OnlyGas := by
-  intro x y h
-  exact h.state
-
-/-! ## 3. Outcome-aware effects for the EVM semantic layers -/
-
-namespace Outcome
-
-def Rel {σ ε α : Type}
-    (errState : ε → σ) (okState : α → σ)
-    (R : σ → σ → Prop) (pre : σ) : Except ε α → Prop
-  | .error err => R pre (errState err)
-  | .ok value => R pre (okState value)
-
-/-
-This is the generic weakening rule for both success and error outcomes.
--/
-lemma Rel.mono {σ ε α : Type}
-    {errState : ε → σ} {okState : α → σ} {R S : σ → σ → Prop}
-    {pre : σ} {out : Except ε α}
-    (hrefine : CEffect.Refines R S)
-    (h : Rel errState okState R pre out) :
-    Rel errState okState S pre out := by
-  cases out <;> exact hrefine h
-
-end Outcome
-
-def Execution.Rel (R : Devm → Devm → Prop) (pre : Devm) (out : Execution) : Prop :=
-  Outcome.Rel Prod.snd id R pre out
-
 /-! ## World-preserving footprint lifts -/
 
 lemma Footprint.liftOutcome_worldEq
@@ -5718,12 +6597,6 @@ lemma Footprint.liftOutcome_worldEq
       (Footprint.liftOutcome get set core d) := by
   unfold Footprint.liftOutcome
   cases core (get d) <;> exact hset _
-
-lemma outcomeRel_toExecution {R : Devm → Devm → Prop} {pre : Devm}
-    {out : Except (String × Devm) (Unit × Devm)}
-    (h : Outcome.Rel Prod.snd Prod.snd R pre out) :
-    Execution.Rel R pre (Footprint.toExecution out) := by
-  cases out <;> exact h
 
 lemma liftMach_worldEq (core : Mach → Footprint.Outcome Mach α) (d : Devm) :
     Outcome.Rel Prod.snd Prod.snd Devm.WorldEq d (liftMach core d) := by
@@ -5927,16 +6800,8 @@ lemma Xlot.invGetCode_of_rel {xl : Xlot}
 lemma Rinst.codePreserve_effect (r : Rinst) :
     Rinst.Effect Devm.CodePreserve r := by
   intro pc sevm pre out hrun
-  by_cases hr : r = .balance
-  · subst r
-    have hw : Execution.Rel Devm.WorldEq pre out := by
-      rw [← hrun]
-      simpa only [Rinst.run] using Rinst.balance_worldEq pc sevm pre
-    exact Outcome.Rel.mono (fun _ _ he a _ => (he.getCode a).symm) hw
-  · have h := Rinst.inv_getCode_gen hrun
-    cases out with
-    | error e => exact fun a ha => h a ha
-    | ok d => exact fun a ha => h a ha
+  have h := Rinst.inv_getCode_gen hrun
+  cases out <;> exact fun a ha => h a ha
 
 lemma Xinst.codePreserve_effectGen (x : Xinst) :
     Xinst.EffectGen Devm.CodePreserve x := by
@@ -7359,285 +8224,13 @@ def Rinst.Inv {ξ : Type} (f : Devm → ξ) (r : Rinst) : Prop :=
   ∀ {pc sevm pre post}, Rinst.run ⟨pc, sevm, pre⟩ r = (.ok post) → f pre = f post
 
 lemma Rinst.inv_bal {r} : Rinst.Inv Devm.getBal r := by
-  intros pc sevm pre post; cases r
-  all_goals try (
-    intro h
-    simp only [Rinst.run, Rinst.runCore] at h
-    with_reducible first
-      | exact applyBinary_getBal_eq h
-      | exact applyTernary_getBal_eq h
-      | exact applyUnary_getBal_eq h
-      | exact funext fun a => (pushItem_getBal_eq h a).symm)
-  case blobhash =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    apply funext; intro a; apply Eq.symm
-    refine getBal_eq_of_bind h Prod.snd ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a
-    · intro ⟨x, devm1⟩ hp run; refine getBal_eq_of_bind run id ?_ ?_
-      · intro devm2 hc; exact chargeGas_getBal_eq hc a
-      · intro devm2 hc run2; exact Devm.push_getBal_eq run2 a
-  case balance =>
-    intro h; simp only [Rinst.run, Rinst.runCore_balance_def] at h
-    apply funext; intro a; apply Eq.symm
-    refine getBal_eq_of_bind h Prod.snd ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a
-    · intro ⟨x, devm1⟩ hp run; split at run
-      · refine getBal_eq_of_bind run id ?_ ?_
-        · intro devm2 hc; exact chargeGas_getBal_eq hc a
-        · intro devm2 hc run2; exact Devm.push_getBal_eq run2 a
-      · refine getBal_eq_of_bind run id ?_ ?_
-        · intro devm2 hc; exact chargeGas_getBal_eq hc a
-        · intro devm2 hc run2; exact Devm.push_getBal_eq run2 a
-  case extcodesize =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    apply funext; intro a; apply Eq.symm
-    refine getBal_eq_of_bind h Prod.snd ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.popToAdr_getBal_eq hp a
-    · intro ⟨x, devm1⟩ hp run; split at run
-      · refine getBal_eq_of_bind run id ?_ ?_
-        · intro devm2 hc; exact chargeGas_getBal_eq hc a
-        · intro devm2 hc run2; exact Devm.push_getBal_eq run2 a
-      · refine getBal_eq_of_bind run id ?_ ?_
-        · intro devm2 hc; exact chargeGas_getBal_eq hc a
-        · intro devm2 hc run2; exact Devm.push_getBal_eq run2 a
-  case mload =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    apply funext; intro a; apply Eq.symm
-    refine getBal_eq_of_bind h Prod.snd ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getBal_eq hp a
-    · intro ⟨x, devm1⟩ hp run; refine getBal_eq_of_bind run id ?_ ?_
-      · intro devm2 hc; exact chargeGas_getBal_eq hc a
-      · intro devm2 hc run2
-        rcases h_read : devm2.memRead x 32 with ⟨value, devm3⟩
-        rw [h_read] at run2
-        change post.getBal a = devm2.getBal a
-        rw [← memRead_getBal_eq h_read a]
-        exact Devm.push_getBal_eq run2 a
-  case mstore =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    apply funext; intro a; apply Eq.symm
-    refine getBal_eq_of_bind h Prod.snd ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getBal_eq hp a
-    · intro ⟨x, devm1⟩ hp run; refine getBal_eq_of_bind run Prod.snd ?_ ?_
-      · intro ⟨y, devm2⟩ hp2; exact Devm.pop_getBal_eq hp2 a
-      · intro ⟨y, devm2⟩ hp2 run2; refine getBal_eq_of_bind run2 id ?_ ?_
-        · intro devm3 hc; exact chargeGas_getBal_eq hc a
-        · intro devm3 hc run3
-          injection run3 with h_post
-          rw [← h_post]
-          exact memWrite_getBal_eq a
-  case mstore8 =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    apply funext; intro a; apply Eq.symm
-    refine getBal_eq_of_bind h Prod.snd ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getBal_eq hp a
-    · intro ⟨x, devm1⟩ hp run; refine getBal_eq_of_bind run Prod.snd ?_ ?_
-      · intro ⟨y, devm2⟩ hp2; exact Devm.pop_getBal_eq hp2 a
-      · intro ⟨y, devm2⟩ hp2 run2; refine getBal_eq_of_bind run2 id ?_ ?_
-        · intro devm3 hc; exact chargeGas_getBal_eq hc a
-        · intro devm3 hc run3
-          injection run3 with h_post
-          rw [← h_post]
-          exact memWrite_getBal_eq a
-  case pop =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    apply funext; intro a; apply Eq.symm
-    refine getBal_eq_of_bind h id ?_ ?_
-    · intro devm1 hp; rcases of_bind_eq_ok hp with ⟨⟨x, devm2⟩, hp1, hp2⟩; injection hp2 with h_eq; rw [← h_eq]; exact Devm.pop_getBal_eq hp1 a
-    · intro devm1 hp run; exact chargeGas_getBal_eq run a
-  case tload =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    apply funext; intro a; apply Eq.symm
-    refine getBal_eq_of_bind h Prod.snd ?_ ?_
-    · intro ⟨key, devm1⟩ hp; exact Devm.pop_getBal_eq hp a
-    · intro ⟨key, devm1⟩ hp run; exact pushItem_getBal_eq run a
-  case calldataload =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    apply funext; intro a; apply Eq.symm
-    refine getBal_eq_of_bind h Prod.snd ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a
-    · intro ⟨x, devm1⟩ hp run; refine getBal_eq_of_bind run id ?_ ?_
-      · intro devm2 hc; exact chargeGas_getBal_eq hc a
-      · intro devm2 hc run2; exact Devm.push_getBal_eq run2 a
-  case gas =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    apply funext; intro a; apply Eq.symm
-    refine getBal_eq_of_bind h id ?_ ?_
-    · intro devm1 hc; exact chargeGas_getBal_eq hc a
-    · intro devm1 hc run; exact Devm.push_getBal_eq run a
-  case dup =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    apply funext; intro a; apply Eq.symm
-    refine getBal_eq_of_bind h id ?_ ?_
-    · intro devm1 hc; exact chargeGas_getBal_eq hc a
-    · intro devm1 hc run; split at run
-      · contradiction
-      · exact Devm.push_getBal_eq run a
-  case swap =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    apply funext; intro a; apply Eq.symm
-    refine getBal_eq_of_bind h id ?_ ?_
-    · intro devm1 hc; exact chargeGas_getBal_eq hc a
-    · intro devm1 hc run; split at run
-      · contradiction
-      · injection run with h_eq; rw [← h_eq]; rfl
-  case exp =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    apply funext; intro a; apply Eq.symm
-    refine getBal_eq_of_bind h Prod.snd ?_ ?_
-    · intro ⟨base, devm1⟩ hp; exact Devm.pop_getBal_eq hp a
-    · intro ⟨base, devm1⟩ hp run; refine getBal_eq_of_bind run Prod.snd ?_ ?_
-      · intro ⟨exponent, devm2⟩ hp2; exact Devm.pop_getBal_eq hp2 a
-      · intro ⟨exponent, devm2⟩ hp2 run2; refine getBal_eq_of_bind run2 id ?_ ?_
-        · intro devm3 hc; exact chargeGas_getBal_eq hc a
-        · intro devm3 hc run3; exact Devm.push_getBal_eq run3 a
-  case tstore =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    apply funext; intro a; apply Eq.symm
-    refine getBal_eq_of_bind h Prod.snd ?_ ?_
-    · intro ⟨key, devm1⟩ hp; exact Devm.pop_getBal_eq hp a
-    · intro ⟨key, devm1⟩ hp run; refine getBal_eq_of_bind run Prod.snd ?_ ?_
-      · intro ⟨new_value, devm2⟩ hp2; exact Devm.pop_getBal_eq hp2 a
-      · intro ⟨new_value, devm2⟩ hp2 run2; refine getBal_eq_of_bind run2 id ?_ ?_
-        · intro devm3 hc; exact chargeGas_getBal_eq hc a
-        · intro devm3 hc run3
-          dsimp [assertDynamic, Except.assert] at run3
-          split at run3 <;> try contradiction
-          injection run3 with h_post
-          rw [← h_post]
-          rfl
-  case kec =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    apply funext; intro a; apply Eq.symm
-    refine getBal_eq_of_bind h Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getBal_eq hp a}
-    intro ⟨x, devm1⟩ hp run; refine getBal_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_getBal_eq hp2 a}
-    intro ⟨y, devm2⟩ hp2 run;
-    refine getBal_eq_of_bind run id ?_ ?_
-    {intro devm3 hc; exact chargeGas_getBal_eq hc a}
-    intro devm3 hc run; exact Devm.push_getBal_eq run a
-  case calldatacopy =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    apply funext; intro a; apply Eq.symm
-    refine getBal_eq_of_bind h Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getBal_eq hp a}
-    intro ⟨x, devm1⟩ hp run; refine getBal_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨y, devm2⟩ hp; exact Devm.popToNat_getBal_eq hp a}
-    intro ⟨y, devm2⟩ hp run; refine getBal_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨z, devm3⟩ hp; exact Devm.popToNat_getBal_eq hp a}
-    intro ⟨z, devm3⟩ hp run; refine getBal_eq_of_bind run id ?_ ?_
-    {intro devm4 hc; exact chargeGas_getBal_eq hc a}
-    intro devm4 hc run; injection run with eq; subst eq; rfl
-  case codecopy =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    apply funext; intro a; apply Eq.symm
-    refine getBal_eq_of_bind h Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getBal_eq hp a}
-    intro ⟨x, devm1⟩ hp run; refine getBal_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨y, devm2⟩ hp; exact Devm.popToNat_getBal_eq hp a}
-    intro ⟨y, devm2⟩ hp run; refine getBal_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨z, devm3⟩ hp; exact Devm.popToNat_getBal_eq hp a}
-    intro ⟨z, devm3⟩ hp run; refine getBal_eq_of_bind run id ?_ ?_
-    {intro devm4 hc; exact chargeGas_getBal_eq hc a}
-    intro devm4 hc run; injection run with eq; subst eq; rfl
-  case extcodecopy =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    apply funext; intro a; apply Eq.symm
-    refine getBal_eq_of_bind h Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.popToAdr_getBal_eq hp a}
-    intro ⟨x, devm1⟩ hp run; refine getBal_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨y, devm2⟩ hp; exact Devm.popToNat_getBal_eq hp a}
-    intro ⟨y, devm2⟩ hp run; refine getBal_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨z, devm3⟩ hp; exact Devm.popToNat_getBal_eq hp a}
-    intro ⟨z, devm3⟩ hp run; refine getBal_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨w, devm4⟩ hp; exact Devm.popToNat_getBal_eq hp a}
-    intro ⟨w, devm4⟩ hp run; split at run
-    · refine getBal_eq_of_bind run id ?_ ?_
-      {intro devm5 hc; exact chargeGas_getBal_eq hc a}
-      intro devm5 hc run; injection run with eq; subst eq; rfl
-    · refine getBal_eq_of_bind run id ?_ ?_
-      {intro devm5 hc; exact chargeGas_getBal_eq hc a}
-      intro devm5 hc run; injection run with eq; subst eq; rfl
-  case retdatacopy =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    apply funext; intro a; apply Eq.symm
-    refine getBal_eq_of_bind h Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getBal_eq hp a}
-    intro ⟨x, devm1⟩ hp run; refine getBal_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨y, devm2⟩ hp; exact Devm.popToNat_getBal_eq hp a}
-    intro ⟨y, devm2⟩ hp run; refine getBal_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨z, devm3⟩ hp; exact Devm.popToNat_getBal_eq hp a}
-    intro ⟨z, devm3⟩ hp run; refine getBal_eq_of_bind run id ?_ ?_
-    {intro devm4 hc; exact chargeGas_getBal_eq hc a}
-    intro devm4 hc run; split at run
-    · cases run
-    · injection run with eq; subst eq; rfl
-  case extcodehash =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    apply funext; intro a; apply Eq.symm
-    refine getBal_eq_of_bind h Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.popToAdr_getBal_eq hp a}
-    intro ⟨x, devm1⟩ hp run; split at run
-    · refine getBal_eq_of_bind run id ?_ ?_
-      {intro devm2 hc; exact chargeGas_getBal_eq hc a}
-      intro devm2 hc run; exact Devm.push_getBal_eq run a
-    · refine getBal_eq_of_bind run id ?_ ?_
-      {intro devm2 hc; exact chargeGas_getBal_eq hc a}
-      intro devm2 hc run; exact Devm.push_getBal_eq run a
-  case blockhash =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    apply funext; intro a; apply Eq.symm
-    refine getBal_eq_of_bind h Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a}
-    intro ⟨x, devm1⟩ hp run; refine getBal_eq_of_bind run id ?_ ?_
-    {intro devm2 hc; exact chargeGas_getBal_eq hc a}
-    intro devm2 hc run; exact Devm.push_getBal_eq run a
-  case sload =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    apply funext; intro a; apply Eq.symm
-    refine getBal_eq_of_bind h Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a}
-    intro ⟨x, devm1⟩ hp run; split at run
-    · refine getBal_eq_of_bind run id ?_ ?_
-      {intro devm2 hc; exact chargeGas_getBal_eq hc a}
-      intro devm2 hc run; exact Devm.push_getBal_eq run a
-    · refine getBal_eq_of_bind run id ?_ ?_
-      {intro devm2 hc; exact chargeGas_getBal_eq hc a}
-      intro devm2 hc run; exact Devm.push_getBal_eq run a
-  case sstore =>
-    intro h
-    apply funext; intro a; apply Eq.symm
-    exact sstore_inv_getBal h a
-  case mcopy =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    apply funext; intro a; apply Eq.symm
-    refine getBal_eq_of_bind h Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getBal_eq hp a}
-    intro ⟨x, devm1⟩ hp run; refine getBal_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨y, devm2⟩ hp; exact Devm.popToNat_getBal_eq hp a}
-    intro ⟨y, devm2⟩ hp run; refine getBal_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨z, devm3⟩ hp; exact Devm.popToNat_getBal_eq hp a}
-    intro ⟨z, devm3⟩ hp run; refine getBal_eq_of_bind run id ?_ ?_
-    {intro devm4 hc; exact chargeGas_getBal_eq hc a}
-    intro devm4 hc run; injection run with eq; subst eq; rfl
-  case log =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    apply funext; intro a; apply Eq.symm
-    refine getBal_eq_of_bind h Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getBal_eq hp a}
-    intro ⟨x, devm1⟩ hp run; refine getBal_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨y, devm2⟩ hp; exact Devm.popToNat_getBal_eq hp a}
-    intro ⟨y, devm2⟩ hp run; refine getBal_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨z, devm3⟩ hp; exact Devm.popN_getBal_eq hp a}
-    intro ⟨z, devm3⟩ hp run; refine getBal_eq_of_bind run id ?_ ?_
-    {intro devm4 hc; exact chargeGas_getBal_eq hc a}
-    intro devm4 hc run
-    rcases of_bind_eq_ok run with ⟨_, _, run'⟩
-    injection run' with rw
-    rw [← rw]
-    rfl
-
+  intro pc sevm pre post hrun
+  rcases eq_or_ne r .sstore with rfl | hs
+  · have hf := Rinst.sstore_run_stateWriteFrame pc pre sevm; rw [hrun] at hf; exact funext hf.getBal_eq
+  rcases eq_or_ne r .tstore with rfl | ht
+  · have hf := Rinst.tstore_run_transientWriteFrame pc pre sevm; rw [hrun] at hf
+    simpa only [Devm.getBal] using congrArg (fun s => s.bal) hf.state
+  · have hf := Rinst.run_instructionFrame pc sevm pre r hs ht; rw [hrun] at hf; exact funext hf.getBal
 
 lemma memRead_getStor_eq {x n : Nat} {devm devm' : Devm} {value : B8L} (h : devm.memRead x n = ⟨value, devm'⟩) : devm'.getStor = devm.getStor := by
   simp only [Devm.memRead] at h
@@ -7658,283 +8251,12 @@ lemma Devm.popN_getStor_eq {n : Nat} {devm devm' : Devm} {l : List B256}
   exact (liftMach_worldEq_of_ok (core := (Mach.popN · n)) hp).getStor a |>.symm
 
 lemma Rinst.inv_stor {r} (h_not_sstore : r ≠ Rinst.sstore) : Rinst.Inv Devm.getStor r := by
-  intros pc sevm pre post; cases r
-  case add => exact applyBinary_getStor_eq
-  case mul => exact applyBinary_getStor_eq
-  case sub => exact applyBinary_getStor_eq
-  case div => exact applyBinary_getStor_eq
-  case sdiv => exact applyBinary_getStor_eq
-  case mod => exact applyBinary_getStor_eq
-  case smod => exact applyBinary_getStor_eq
-  case signextend => exact applyBinary_getStor_eq
-  case lt => exact applyBinary_getStor_eq
-  case gt => exact applyBinary_getStor_eq
-  case slt => exact applyBinary_getStor_eq
-  case sgt => exact applyBinary_getStor_eq
-  case eq => exact applyBinary_getStor_eq
-  case and => exact applyBinary_getStor_eq
-  case or => exact applyBinary_getStor_eq
-  case xor => exact applyBinary_getStor_eq
-  case byte => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyBinary_getStor_eq h
-  case shr => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyBinary_getStor_eq h
-  case shl => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyBinary_getStor_eq h
-  case sar => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyBinary_getStor_eq h
-  case addmod => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyTernary_getStor_eq h
-  case mulmod => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyTernary_getStor_eq h
-  case iszero => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyUnary_getStor_eq h
-  case not => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyUnary_getStor_eq h
-  case blobhash =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    refine getStor_eq_of_bind h Prod.snd ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.pop_getStor_eq hp
-    · intro ⟨x, devm1⟩ hp run; refine getStor_eq_of_bind run id ?_ ?_
-      · intro devm2 hc; exact chargeGas_getStor_eq hc
-      · intro devm2 hc run2; exact Devm.push_getStor_eq run2
-  case balance =>
-    intro h; simp only [Rinst.run, Rinst.runCore_balance_def] at h
-    refine getStor_eq_of_bind h Prod.snd ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.pop_getStor_eq hp
-    · intro ⟨x, devm1⟩ hp run; split at run
-      · refine getStor_eq_of_bind run id ?_ ?_
-        · intro devm2 hc; exact chargeGas_getStor_eq hc
-        · intro devm2 hc run2; exact Devm.push_getStor_eq run2
-      · refine getStor_eq_of_bind run id ?_ ?_
-        · intro devm2 hc; exact (addAccessedAddress_getStor.symm).trans (chargeGas_getStor_eq hc)
-        · intro devm2 hc run2; exact Devm.push_getStor_eq run2
-  case extcodesize =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    refine getStor_eq_of_bind h Prod.snd ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.popToAdr_getStor_eq hp
-    · intro ⟨x, devm1⟩ hp run; split at run
-      · refine getStor_eq_of_bind run id ?_ ?_
-        · intro devm2 hc; exact chargeGas_getStor_eq hc
-        · intro devm2 hc run2; exact Devm.push_getStor_eq run2
-      · refine getStor_eq_of_bind run id ?_ ?_
-        · intro devm2 hc; exact (addAccessedAddress_getStor.symm).trans (chargeGas_getStor_eq hc)
-        · intro devm2 hc run2; exact Devm.push_getStor_eq run2
-  case mload =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    refine getStor_eq_of_bind h Prod.snd ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getStor_eq hp
-    · intro ⟨x, devm1⟩ hp run; refine getStor_eq_of_bind run id ?_ ?_
-      · intro devm2 hc; exact chargeGas_getStor_eq hc
-      · intro devm2 hc run2
-        rcases h_read : devm2.memRead x 32 with ⟨value, devm3⟩
-        rw [h_read] at run2
-        change devm2.getStor = post.getStor
-        rw [← memRead_getStor_eq h_read]
-        exact Devm.push_getStor_eq run2
-  case mstore =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    refine getStor_eq_of_bind h Prod.snd ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getStor_eq hp
-    · intro ⟨x, devm1⟩ hp run; refine getStor_eq_of_bind run Prod.snd ?_ ?_
-      · intro ⟨y, devm2⟩ hp2; exact Devm.pop_getStor_eq hp2
-      · intro ⟨y, devm2⟩ hp2 run2; refine getStor_eq_of_bind run2 id ?_ ?_
-        · intro devm3 hc; exact chargeGas_getStor_eq hc
-        · intro devm3 hc run3
-          injection run3 with h_post
-          rw [← h_post]
-          exact memWrite_getStor_eq.symm
-  case mstore8 =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    refine getStor_eq_of_bind h Prod.snd ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getStor_eq hp
-    · intro ⟨x, devm1⟩ hp run; refine getStor_eq_of_bind run Prod.snd ?_ ?_
-      · intro ⟨y, devm2⟩ hp2; exact Devm.pop_getStor_eq hp2
-      · intro ⟨y, devm2⟩ hp2 run2; refine getStor_eq_of_bind run2 id ?_ ?_
-        · intro devm3 hc; exact chargeGas_getStor_eq hc
-        · intro devm3 hc run3
-          injection run3 with h_post
-          rw [← h_post]
-          exact memWrite_getStor_eq.symm
-  case address | origin | caller | callvalue | calldatasize | codesize | gasprice | retdatasize | coinbase | timestamp | number | prevrandao | gaslimit | chainid | selfbalance | basefee | blobbasefee | pc | msize =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    exact pushItem_getStor_eq h
-  case pop =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    refine getStor_eq_of_bind h id ?_ ?_
-    · intro devm1 hp; rcases of_bind_eq_ok hp with ⟨⟨x, devm2⟩, hp1, hp2⟩; injection hp2 with h_eq; rw [← h_eq]; exact Devm.pop_getStor_eq hp1
-    · intro devm1 hp run; exact chargeGas_getStor_eq run
-  case tload =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    refine getStor_eq_of_bind h Prod.snd ?_ ?_
-    · intro ⟨key, devm1⟩ hp; exact Devm.pop_getStor_eq hp
-    · intro ⟨key, devm1⟩ hp run; exact pushItem_getStor_eq run
-  case calldataload =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    refine getStor_eq_of_bind h Prod.snd ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.pop_getStor_eq hp
-    · intro ⟨x, devm1⟩ hp run; refine getStor_eq_of_bind run id ?_ ?_
-      · intro devm2 hc; exact chargeGas_getStor_eq hc
-      · intro devm2 hc run2; exact Devm.push_getStor_eq run2
-  case gas =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    refine getStor_eq_of_bind h id ?_ ?_
-    · intro devm1 hc; exact chargeGas_getStor_eq hc
-    · intro devm1 hc run; exact Devm.push_getStor_eq run
-  case dup =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    refine getStor_eq_of_bind h id ?_ ?_
-    · intro devm1 hc; exact chargeGas_getStor_eq hc
-    · intro devm1 hc run; split at run
-      · contradiction
-      · exact Devm.push_getStor_eq run
-  case swap =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    refine getStor_eq_of_bind h id ?_ ?_
-    · intro devm1 hc; exact chargeGas_getStor_eq hc
-    · intro devm1 hc run; split at run
-      · contradiction
-      · injection run with h_eq; rw [← h_eq]; rfl
-  case exp =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    refine getStor_eq_of_bind h Prod.snd ?_ ?_
-    · intro ⟨base, devm1⟩ hp; exact Devm.pop_getStor_eq hp
-    · intro ⟨base, devm1⟩ hp run; refine getStor_eq_of_bind run Prod.snd ?_ ?_
-      · intro ⟨exponent, devm2⟩ hp2; exact Devm.pop_getStor_eq hp2
-      · intro ⟨exponent, devm2⟩ hp2 run2; refine getStor_eq_of_bind run2 id ?_ ?_
-        · intro devm3 hc; exact chargeGas_getStor_eq hc
-        · intro devm3 hc run3; exact Devm.push_getStor_eq run3
-  case tstore =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    refine getStor_eq_of_bind h Prod.snd ?_ ?_
-    · intro ⟨key, devm1⟩ hp; exact Devm.pop_getStor_eq hp
-    · intro ⟨key, devm1⟩ hp run; refine getStor_eq_of_bind run Prod.snd ?_ ?_
-      · intro ⟨new_value, devm2⟩ hp2; exact Devm.pop_getStor_eq hp2
-      · intro ⟨new_value, devm2⟩ hp2 run2; refine getStor_eq_of_bind run2 id ?_ ?_
-        · intro devm3 hc; exact chargeGas_getStor_eq hc
-        · intro devm3 hc run3
-          dsimp [assertDynamic, Except.assert] at run3
-          split at run3 <;> try contradiction
-          injection run3 with h_post
-          rw [← h_post]
-          rfl
-  case kec =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    refine getStor_eq_of_bind h Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getStor_eq hp}
-    intro ⟨x, devm1⟩ hp run; refine getStor_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_getStor_eq hp2}
-    intro ⟨y, devm2⟩ hp2 run;
-    refine getStor_eq_of_bind run id ?_ ?_
-    {intro devm3 hc; exact chargeGas_getStor_eq hc}
-    intro devm3 hc run
-    rcases h_read : devm3.memRead (x, devm1).1 (y, devm2).1 with ⟨value, devm4⟩
-    rw [h_read] at run
-    change devm3.getStor = post.getStor
-    rw [← memRead_getStor_eq h_read]
-    exact Devm.push_getStor_eq run
-  case calldatacopy =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    refine getStor_eq_of_bind h Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getStor_eq hp}
-    intro ⟨x, devm1⟩ hp run; refine getStor_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨y, devm2⟩ hp; exact Devm.popToNat_getStor_eq hp}
-    intro ⟨y, devm2⟩ hp run; refine getStor_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨z, devm3⟩ hp; exact Devm.popToNat_getStor_eq hp}
-    intro ⟨z, devm3⟩ hp run; refine getStor_eq_of_bind run id ?_ ?_
-    {intro devm4 hc; exact chargeGas_getStor_eq hc}
-    intro devm4 hc run; injection run with eq; subst eq; rfl
-  case codecopy =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    refine getStor_eq_of_bind h Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getStor_eq hp}
-    intro ⟨x, devm1⟩ hp run; refine getStor_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨y, devm2⟩ hp; exact Devm.popToNat_getStor_eq hp}
-    intro ⟨y, devm2⟩ hp run; refine getStor_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨z, devm3⟩ hp; exact Devm.popToNat_getStor_eq hp}
-    intro ⟨z, devm3⟩ hp run; refine getStor_eq_of_bind run id ?_ ?_
-    {intro devm4 hc; exact chargeGas_getStor_eq hc}
-    intro devm4 hc run; injection run with eq; subst eq; rfl
-  case extcodecopy =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    refine getStor_eq_of_bind h Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.popToAdr_getStor_eq hp}
-    intro ⟨x, devm1⟩ hp run; refine getStor_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨y, devm2⟩ hp; exact Devm.popToNat_getStor_eq hp}
-    intro ⟨y, devm2⟩ hp run; refine getStor_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨z, devm3⟩ hp; exact Devm.popToNat_getStor_eq hp}
-    intro ⟨z, devm3⟩ hp run; refine getStor_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨w, devm4⟩ hp; exact Devm.popToNat_getStor_eq hp}
-    intro ⟨w, devm4⟩ hp run; split at run
-    · refine getStor_eq_of_bind run id ?_ ?_
-      {intro devm5 hc; exact chargeGas_getStor_eq hc}
-      intro devm5 hc run; injection run with eq; subst eq; rfl
-    · refine getStor_eq_of_bind run id ?_ ?_
-      {intro devm5 hc; exact (addAccessedAddress_getStor.symm).trans (chargeGas_getStor_eq hc)}
-      intro devm5 hc run; injection run with eq; subst eq; rfl
-  case retdatacopy =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    refine getStor_eq_of_bind h Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getStor_eq hp}
-    intro ⟨x, devm1⟩ hp run; refine getStor_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨y, devm2⟩ hp; exact Devm.popToNat_getStor_eq hp}
-    intro ⟨y, devm2⟩ hp run; refine getStor_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨z, devm3⟩ hp; exact Devm.popToNat_getStor_eq hp}
-    intro ⟨z, devm3⟩ hp run; refine getStor_eq_of_bind run id ?_ ?_
-    {intro devm4 hc; exact chargeGas_getStor_eq hc}
-    intro devm4 hc run; split at run
-    · cases run
-    · injection run with eq; subst eq; rfl
-  case extcodehash =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    refine getStor_eq_of_bind h Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.popToAdr_getStor_eq hp}
-    intro ⟨x, devm1⟩ hp run; split at run
-    · refine getStor_eq_of_bind run id ?_ ?_
-      {intro devm2 hc; exact chargeGas_getStor_eq hc}
-      intro devm2 hc run; exact Devm.push_getStor_eq run
-    · refine getStor_eq_of_bind run id ?_ ?_
-      {intro devm2 hc; exact (addAccessedAddress_getStor.symm).trans (chargeGas_getStor_eq hc)}
-      intro devm2 hc run; exact Devm.push_getStor_eq run
-  case blockhash =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    refine getStor_eq_of_bind h Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.pop_getStor_eq hp}
-    intro ⟨x, devm1⟩ hp run; refine getStor_eq_of_bind run id ?_ ?_
-    {intro devm2 hc; exact chargeGas_getStor_eq hc}
-    intro devm2 hc run; exact Devm.push_getStor_eq run
-  case sload =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    refine getStor_eq_of_bind h Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.pop_getStor_eq hp}
-    intro ⟨x, devm1⟩ hp run; split at run
-    · refine getStor_eq_of_bind run id ?_ ?_
-      {intro devm2 hc; exact chargeGas_getStor_eq hc}
-      intro devm2 hc run; exact Devm.push_getStor_eq run
-    · refine getStor_eq_of_bind run id ?_ ?_
-      {intro devm2 hc; exact (addAccessedStorageKey_getStor.symm).trans (chargeGas_getStor_eq hc)}
-      intro devm2 hc run; exact Devm.push_getStor_eq run
-  case sstore =>
-    contradiction
-  case mcopy =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    refine getStor_eq_of_bind h Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getStor_eq hp}
-    intro ⟨x, devm1⟩ hp run; refine getStor_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨y, devm2⟩ hp; exact Devm.popToNat_getStor_eq hp}
-    intro ⟨y, devm2⟩ hp run; refine getStor_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨z, devm3⟩ hp; exact Devm.popToNat_getStor_eq hp}
-    intro ⟨z, devm3⟩ hp run; refine getStor_eq_of_bind run id ?_ ?_
-    {intro devm4 hc; exact chargeGas_getStor_eq hc}
-    intro devm4 hc run; injection run with eq; subst eq; rfl
-  case log =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    refine getStor_eq_of_bind h Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getStor_eq hp}
-    intro ⟨x, devm1⟩ hp run; refine getStor_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨y, devm2⟩ hp; exact Devm.popToNat_getStor_eq hp}
-    intro ⟨y, devm2⟩ hp run; refine getStor_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨z, devm3⟩ hp; exact (Devm.popN_getStor_eq hp).symm}
-    intro ⟨z, devm3⟩ hp run; refine getStor_eq_of_bind run id ?_ ?_
-    {intro devm4 hc; exact chargeGas_getStor_eq hc}
-    intro devm4 hc run
-    rcases of_bind_eq_ok run with ⟨_, _, run'⟩
-    injection run' with rw'
-    change devm4.getStor = post.getStor
-    rw [rw'.symm]
-    rfl
+  intro pc sevm pre post hrun
+  rcases eq_or_ne r .tstore with rfl | ht
+  · have hf := Rinst.tstore_run_transientWriteFrame pc pre sevm; rw [hrun] at hf
+    simpa only [Devm.getStor, Devm.getAcct] using congrArg (fun s => fun a => (s.get a).stor) hf.state
+  · have hf := Rinst.run_instructionFrame pc sevm pre r h_not_sstore ht; rw [hrun] at hf
+    exact funext hf.getStor
 
 class Rinst.Hinv {ξ : Type} (f : Devm → ξ) (o : Rinst) where (inv : Rinst.Inv f o)
 
@@ -8062,10 +8384,6 @@ theorem not_mem_empty {a : Adr} {c : Nat} :
 end AdrSet
 
 /-! ## §2 The NoDel invariant -/
-
--- Paired projection of the two deletion-relevant sets
-def Devm.delSets (d : Devm) : AdrSet × AdrSet :=
-  (d.accountsToDelete, d.createdAccounts)
 
 -- rfl-bridge between the Devm-level and State-level code projections.
 lemma Devm.getCode_state (d : Devm) (a : Adr) :
@@ -8414,305 +8732,15 @@ lemma sstore_inv_delSets
       rfl
 
 lemma Rinst.inv_delSets {r : Rinst} : Rinst.Inv Devm.delSets r := by
-  intros pc sevm pre post; cases r
-  case add => exact applyBinary_delSets_eq
-  case mul => exact applyBinary_delSets_eq
-  case sub => exact applyBinary_delSets_eq
-  case div => exact applyBinary_delSets_eq
-  case sdiv => exact applyBinary_delSets_eq
-  case mod => exact applyBinary_delSets_eq
-  case smod => exact applyBinary_delSets_eq
-  case signextend => exact applyBinary_delSets_eq
-  case lt => exact applyBinary_delSets_eq
-  case gt => exact applyBinary_delSets_eq
-  case slt => exact applyBinary_delSets_eq
-  case sgt => exact applyBinary_delSets_eq
-  case eq => exact applyBinary_delSets_eq
-  case and => exact applyBinary_delSets_eq
-  case or => exact applyBinary_delSets_eq
-  case xor => exact applyBinary_delSets_eq
-  case byte => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyBinary_delSets_eq h
-  case shr => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyBinary_delSets_eq h
-  case shl => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyBinary_delSets_eq h
-  case sar => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyBinary_delSets_eq h
-  case addmod => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyTernary_delSets_eq h
-  case mulmod => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyTernary_delSets_eq h
-  case iszero => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyUnary_delSets_eq h
-  case not => intro h; simp only [Rinst.run, Rinst.runCore] at h; exact applyUnary_delSets_eq h
-  case blobhash =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    apply Eq.symm
-    refine delSets_eq_of_bind h Prod.snd ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp
-    · intro ⟨x, devm1⟩ hp run; refine delSets_eq_of_bind run id ?_ ?_
-      · intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl
-      · intro devm2 hc run2; exact Devm.push_delSets_eq run2
-  case balance =>
-    intro h; simp only [Rinst.run, Rinst.runCore_balance_def] at h
-    apply Eq.symm
-    refine delSets_eq_of_bind h Prod.snd ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp
-    · intro ⟨x, devm1⟩ hp run; split at run
-      · refine delSets_eq_of_bind run id ?_ ?_
-        · intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl
-        · intro devm2 hc run2; exact Devm.push_delSets_eq run2
-      · refine delSets_eq_of_bind run id ?_ ?_
-        · intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl
-        · intro devm2 hc run2; exact Devm.push_delSets_eq run2
-  case extcodesize =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    apply Eq.symm
-    refine delSets_eq_of_bind h Prod.snd ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.popToAdr_delSets_eq hp
-    · intro ⟨x, devm1⟩ hp run; split at run
-      · refine delSets_eq_of_bind run id ?_ ?_
-        · intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl
-        · intro devm2 hc run2; exact Devm.push_delSets_eq run2
-      · refine delSets_eq_of_bind run id ?_ ?_
-        · intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl
-        · intro devm2 hc run2; exact Devm.push_delSets_eq run2
-  case mload =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    apply Eq.symm
-    refine delSets_eq_of_bind h Prod.snd ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_delSets_eq hp
-    · intro ⟨x, devm1⟩ hp run; refine delSets_eq_of_bind run id ?_ ?_
-      · intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl
-      · intro devm2 hc run2
-        rcases h_read : devm2.memRead x 32 with ⟨value, devm3⟩
-        rw [h_read] at run2
-        change post.delSets = devm2.delSets
-        rw [← memRead_delSets_eq h_read]
-        exact Devm.push_delSets_eq run2
-  case mstore =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    apply Eq.symm
-    refine delSets_eq_of_bind h Prod.snd ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_delSets_eq hp
-    · intro ⟨x, devm1⟩ hp run; refine delSets_eq_of_bind run Prod.snd ?_ ?_
-      · intro ⟨y, devm2⟩ hp2; exact Devm.pop_delSets_eq hp2
-      · intro ⟨y, devm2⟩ hp2 run2; refine delSets_eq_of_bind run2 id ?_ ?_
-        · intro devm3 hc; exact (chargeGas_delSets_eq hc).trans rfl
-        · intro devm3 hc run3
-          injection run3 with h_post
-          rw [← h_post]
-          exact memWrite_delSets_eq
-  case mstore8 =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    apply Eq.symm
-    refine delSets_eq_of_bind h Prod.snd ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_delSets_eq hp
-    · intro ⟨x, devm1⟩ hp run; refine delSets_eq_of_bind run Prod.snd ?_ ?_
-      · intro ⟨y, devm2⟩ hp2; exact Devm.pop_delSets_eq hp2
-      · intro ⟨y, devm2⟩ hp2 run2; refine delSets_eq_of_bind run2 id ?_ ?_
-        · intro devm3 hc; exact (chargeGas_delSets_eq hc).trans rfl
-        · intro devm3 hc run3
-          injection run3 with h_post
-          rw [← h_post]
-          exact memWrite_delSets_eq
-  case address | origin | caller | callvalue | calldatasize | codesize | gasprice | retdatasize | coinbase | timestamp | number | prevrandao | gaslimit | chainid | selfbalance | basefee | blobbasefee | pc | msize =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    apply Eq.symm
-    exact pushItem_delSets_eq h
-  case pop =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    apply Eq.symm
-    refine delSets_eq_of_bind h id ?_ ?_
-    · intro devm1 hp; rcases of_bind_eq_ok hp with ⟨⟨x, devm2⟩, hp1, hp2⟩; injection hp2 with h_eq; rw [← h_eq]; exact Devm.pop_delSets_eq hp1
-    · intro devm1 hp run; exact chargeGas_delSets_eq run
-  case tload =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    apply Eq.symm
-    refine delSets_eq_of_bind h Prod.snd ?_ ?_
-    · intro ⟨key, devm1⟩ hp; exact Devm.pop_delSets_eq hp
-    · intro ⟨key, devm1⟩ hp run; exact pushItem_delSets_eq run
-  case calldataload =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    apply Eq.symm
-    refine delSets_eq_of_bind h Prod.snd ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp
-    · intro ⟨x, devm1⟩ hp run; refine delSets_eq_of_bind run id ?_ ?_
-      · intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl
-      · intro devm2 hc run2; exact Devm.push_delSets_eq run2
-  case gas =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    apply Eq.symm
-    refine delSets_eq_of_bind h id ?_ ?_
-    · intro devm1 hc; exact (chargeGas_delSets_eq hc).trans rfl
-    · intro devm1 hc run; exact Devm.push_delSets_eq run
-  case dup =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    apply Eq.symm
-    refine delSets_eq_of_bind h id ?_ ?_
-    · intro devm1 hc; exact (chargeGas_delSets_eq hc).trans rfl
-    · intro devm1 hc run; split at run
-      · contradiction
-      · exact Devm.push_delSets_eq run
-  case swap =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    apply Eq.symm
-    refine delSets_eq_of_bind h id ?_ ?_
-    · intro devm1 hc; exact (chargeGas_delSets_eq hc).trans rfl
-    · intro devm1 hc run; split at run
-      · contradiction
-      · injection run with h_eq; rw [← h_eq]; rfl
-  case exp =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    apply Eq.symm
-    refine delSets_eq_of_bind h Prod.snd ?_ ?_
-    · intro ⟨base, devm1⟩ hp; exact Devm.pop_delSets_eq hp
-    · intro ⟨base, devm1⟩ hp run; refine delSets_eq_of_bind run Prod.snd ?_ ?_
-      · intro ⟨exponent, devm2⟩ hp2; exact Devm.pop_delSets_eq hp2
-      · intro ⟨exponent, devm2⟩ hp2 run2; refine delSets_eq_of_bind run2 id ?_ ?_
-        · intro devm3 hc; exact (chargeGas_delSets_eq hc).trans rfl
-        · intro devm3 hc run3; exact Devm.push_delSets_eq run3
-  case tstore =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    apply Eq.symm
-    refine delSets_eq_of_bind h Prod.snd ?_ ?_
-    · intro ⟨key, devm1⟩ hp; exact Devm.pop_delSets_eq hp
-    · intro ⟨key, devm1⟩ hp run; refine delSets_eq_of_bind run Prod.snd ?_ ?_
-      · intro ⟨new_value, devm2⟩ hp2; exact Devm.pop_delSets_eq hp2
-      · intro ⟨new_value, devm2⟩ hp2 run2; refine delSets_eq_of_bind run2 id ?_ ?_
-        · intro devm3 hc; exact (chargeGas_delSets_eq hc).trans rfl
-        · intro devm3 hc run3
-          dsimp [assertDynamic, Except.assert] at run3
-          split at run3 <;> try contradiction
-          injection run3 with h_post
-          rw [← h_post]
-          rfl
-  case kec =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    apply Eq.symm
-    refine delSets_eq_of_bind h Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_delSets_eq hp}
-    intro ⟨x, devm1⟩ hp run; refine delSets_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_delSets_eq hp2}
-    intro ⟨y, devm2⟩ hp2 run;
-    refine delSets_eq_of_bind run id ?_ ?_
-    {intro devm3 hc; exact (chargeGas_delSets_eq hc).trans rfl}
-    intro devm3 hc run; exact (Devm.push_delSets_eq run).trans rfl
-  case calldatacopy =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    apply Eq.symm
-    refine delSets_eq_of_bind h Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_delSets_eq hp}
-    intro ⟨x, devm1⟩ hp run; refine delSets_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨y, devm2⟩ hp; exact Devm.popToNat_delSets_eq hp}
-    intro ⟨y, devm2⟩ hp run; refine delSets_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨z, devm3⟩ hp; exact Devm.popToNat_delSets_eq hp}
-    intro ⟨z, devm3⟩ hp run; refine delSets_eq_of_bind run id ?_ ?_
-    {intro devm4 hc; exact (chargeGas_delSets_eq hc).trans rfl}
-    intro devm4 hc run; injection run with eq; subst eq; rfl
-  case codecopy =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    apply Eq.symm
-    refine delSets_eq_of_bind h Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_delSets_eq hp}
-    intro ⟨x, devm1⟩ hp run; refine delSets_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨y, devm2⟩ hp; exact Devm.popToNat_delSets_eq hp}
-    intro ⟨y, devm2⟩ hp run; refine delSets_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨z, devm3⟩ hp; exact Devm.popToNat_delSets_eq hp}
-    intro ⟨z, devm3⟩ hp run; refine delSets_eq_of_bind run id ?_ ?_
-    {intro devm4 hc; exact (chargeGas_delSets_eq hc).trans rfl}
-    intro devm4 hc run; injection run with eq; subst eq; rfl
-  case extcodecopy =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    apply Eq.symm
-    refine delSets_eq_of_bind h Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.popToAdr_delSets_eq hp}
-    intro ⟨x, devm1⟩ hp run; refine delSets_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨y, devm2⟩ hp; exact Devm.popToNat_delSets_eq hp}
-    intro ⟨y, devm2⟩ hp run; refine delSets_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨z, devm3⟩ hp; exact Devm.popToNat_delSets_eq hp}
-    intro ⟨z, devm3⟩ hp run; refine delSets_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨w, devm4⟩ hp; exact Devm.popToNat_delSets_eq hp}
-    intro ⟨w, devm4⟩ hp run; split at run
-    · refine delSets_eq_of_bind run id ?_ ?_
-      {intro devm5 hc; exact (chargeGas_delSets_eq hc).trans rfl}
-      intro devm5 hc run; injection run with eq; subst eq; rfl
-    · refine delSets_eq_of_bind run id ?_ ?_
-      {intro devm5 hc; exact (chargeGas_delSets_eq hc).trans rfl}
-      intro devm5 hc run; injection run with eq; subst eq; rfl
-  case retdatacopy =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    apply Eq.symm
-    refine delSets_eq_of_bind h Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_delSets_eq hp}
-    intro ⟨x, devm1⟩ hp run; refine delSets_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨y, devm2⟩ hp; exact Devm.popToNat_delSets_eq hp}
-    intro ⟨y, devm2⟩ hp run; refine delSets_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨z, devm3⟩ hp; exact Devm.popToNat_delSets_eq hp}
-    intro ⟨z, devm3⟩ hp run; refine delSets_eq_of_bind run id ?_ ?_
-    {intro devm4 hc; exact (chargeGas_delSets_eq hc).trans rfl}
-    intro devm4 hc run; split at run
-    · cases run
-    · injection run with eq; subst eq; rfl
-  case extcodehash =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    apply Eq.symm
-    refine delSets_eq_of_bind h Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.popToAdr_delSets_eq hp}
-    intro ⟨x, devm1⟩ hp run; split at run
-    · refine delSets_eq_of_bind run id ?_ ?_
-      {intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl}
-      intro devm2 hc run; exact Devm.push_delSets_eq run
-    · refine delSets_eq_of_bind run id ?_ ?_
-      {intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl}
-      intro devm2 hc run; exact Devm.push_delSets_eq run
-  case blockhash =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    apply Eq.symm
-    refine delSets_eq_of_bind h Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp}
-    intro ⟨x, devm1⟩ hp run; refine delSets_eq_of_bind run id ?_ ?_
-    {intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl}
-    intro devm2 hc run; exact Devm.push_delSets_eq run
-  case sload =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    apply Eq.symm
-    refine delSets_eq_of_bind h Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp}
-    intro ⟨x, devm1⟩ hp run; split at run
-    · refine delSets_eq_of_bind run id ?_ ?_
-      {intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl}
-      intro devm2 hc run; exact Devm.push_delSets_eq run
-    · refine delSets_eq_of_bind run id ?_ ?_
-      {intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl}
-      intro devm2 hc run; exact Devm.push_delSets_eq run
-  case sstore =>
-    intro h
-    exact (sstore_inv_delSets h).symm
-  case mcopy =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    apply Eq.symm
-    refine delSets_eq_of_bind h Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_delSets_eq hp}
-    intro ⟨x, devm1⟩ hp run; refine delSets_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨y, devm2⟩ hp; exact Devm.popToNat_delSets_eq hp}
-    intro ⟨y, devm2⟩ hp run; refine delSets_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨z, devm3⟩ hp; exact Devm.popToNat_delSets_eq hp}
-    intro ⟨z, devm3⟩ hp run; refine delSets_eq_of_bind run id ?_ ?_
-    {intro devm4 hc; exact (chargeGas_delSets_eq hc).trans rfl}
-    intro devm4 hc run; injection run with eq; subst eq; rfl
-  case log =>
-    intro h; simp only [Rinst.run, Rinst.runCore] at h
-    apply Eq.symm
-    refine delSets_eq_of_bind h Prod.snd ?_ ?_
-    {intro ⟨x, devm1⟩ hp; exact Devm.popToNat_delSets_eq hp}
-    intro ⟨x, devm1⟩ hp run; refine delSets_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨y, devm2⟩ hp; exact Devm.popToNat_delSets_eq hp}
-    intro ⟨y, devm2⟩ hp run; refine delSets_eq_of_bind run Prod.snd ?_ ?_
-    {intro ⟨z, devm3⟩ hp; exact Devm.popN_delSets_eq hp}
-    intro ⟨z, devm3⟩ hp run; refine delSets_eq_of_bind run id ?_ ?_
-    {intro devm4 hc; exact (chargeGas_delSets_eq hc).trans rfl}
-    intro devm4 hc run
-    rcases of_bind_eq_ok run with ⟨_, _, run'⟩
-    injection run' with rw
-    rw [← rw]
-    rfl
+  intro pc sevm pre post hrun
+  rcases eq_or_ne r .sstore with rfl | hs
+  · have hf := Rinst.sstore_run_stateWriteFrame pc pre sevm; rw [hrun] at hf
+    exact Prod.ext hf.accountsToDelete hf.createdAccounts
+  rcases eq_or_ne r .tstore with rfl | ht
+  · have hf := Rinst.tstore_run_transientWriteFrame pc pre sevm; rw [hrun] at hf
+    exact Prod.ext hf.accountsToDelete hf.createdAccounts
+  · have hf := Rinst.run_instructionFrame pc sevm pre r hs ht; rw [hrun] at hf; exact hf.delSets
 
--- Rinst execution preserves delSets on error results.
 lemma Devm.pop_delSets_err {err devm} (h : Devm.pop devm = .error err) : err.2.delSets = devm.delSets := by
   simp only [Devm.pop_def] at h
   split at h <;> try contradiction
@@ -8801,383 +8829,14 @@ lemma Rinst.inv_delSets_err {pc : Nat} {sevm : Sevm} {devm : Devm} {r : Rinst}
     {err : String} {devm' : Devm}
     (run : Rinst.run ⟨pc, sevm, devm⟩ r = .error ⟨err, devm'⟩) :
     devm'.delSets = devm.delSets := by
-  cases r <;> dsimp [Rinst.run, Rinst.runCore] at run
-  case add => apply applyBinary_delSets_err run
-  case mul => apply applyBinary_delSets_err run
-  case sub => apply applyBinary_delSets_err run
-  case div => apply applyBinary_delSets_err run
-  case sdiv => apply applyBinary_delSets_err run
-  case mod => apply applyBinary_delSets_err run
-  case smod => apply applyBinary_delSets_err run
-  case addmod => apply applyTernary_delSets_err run
-  case mulmod => apply applyTernary_delSets_err run
-  case exp =>
-    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp
-    · intro e hp; exact Devm.pop_delSets_err hp
-    · intro ⟨x, devm1⟩ hp run2
-      refine delSets_err_of_bind run2 Prod.snd ?_ ?_ ?_
-      · intro ⟨y, devm2⟩ hp2; exact Devm.pop_delSets_eq hp2
-      · intro e hp2; exact Devm.pop_delSets_err hp2
-      · intro ⟨y, devm2⟩ hp2 run3
-        refine delSets_err_of_bind run3 id ?_ ?_ ?_
-        · intro devm3 hc; exact (chargeGas_delSets_eq hc).trans rfl
-        · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
-        · intro devm3 hc run4; exact Devm.push_delSets_err run4
-  case signextend => apply applyBinary_delSets_err run
-  case lt => apply applyBinary_delSets_err run
-  case gt => apply applyBinary_delSets_err run
-  case slt => apply applyBinary_delSets_err run
-  case sgt => apply applyBinary_delSets_err run
-  case eq => apply applyBinary_delSets_err run
-  case iszero => apply applyUnary_delSets_err run
-  case and => apply applyBinary_delSets_err run
-  case or => apply applyBinary_delSets_err run
-  case xor => apply applyBinary_delSets_err run
-  case not => apply applyUnary_delSets_err run
-  case byte => apply applyBinary_delSets_err run
-  case shr => apply applyBinary_delSets_err run
-  case shl => apply applyBinary_delSets_err run
-  case sar => apply applyBinary_delSets_err run
-  case kec =>
-    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_delSets_eq hp
-    · intro e hp; exact Devm.popToNat_delSets_err hp
-    · intro ⟨x, devm1⟩ hp run2
-      refine delSets_err_of_bind run2 Prod.snd ?_ ?_ ?_
-      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_delSets_eq hp2
-      · intro e hp2; exact Devm.popToNat_delSets_err hp2
-      · intro ⟨y, devm2⟩ hp2 run3
-        refine delSets_err_of_bind run3 id ?_ ?_ ?_
-        · intro devm3 hc; exact (chargeGas_delSets_eq hc).trans rfl
-        · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
-        · intro devm3 hc run4; exact (Devm.push_delSets_err run4).trans rfl
-  case address => apply pushItem_delSets_err run
-  case balance =>
-    simp only [Rinst.balanceCore_compat] at run
-    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp
-    · intro e hp; exact Devm.pop_delSets_err hp
-    · intro ⟨x, devm1⟩ hp run2; split at run2
-      · refine delSets_err_of_bind run2 id ?_ ?_ ?_
-        · intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl
-        · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
-        · intro devm2 hc run3; exact (Devm.push_delSets_err run3).trans rfl
-      · refine delSets_err_of_bind run2 id ?_ ?_ ?_
-        · intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl
-        · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
-        · intro devm2 hc run3; exact (Devm.push_delSets_err run3).trans rfl
-  case origin => apply pushItem_delSets_err run
-  case caller => apply pushItem_delSets_err run
-  case callvalue => apply pushItem_delSets_err run
-  case calldataload =>
-    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp
-    · intro e hp; exact Devm.pop_delSets_err hp
-    · intro ⟨x, devm1⟩ hp run2
-      refine delSets_err_of_bind run2 id ?_ ?_ ?_
-      · intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl
-      · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
-      · intro devm2 hc run3; exact (Devm.push_delSets_err run3).trans rfl
-  case calldatasize => apply pushItem_delSets_err run
-  case calldatacopy =>
-    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_delSets_eq hp
-    · intro e hp; exact Devm.popToNat_delSets_err hp
-    · intro ⟨x, devm1⟩ hp run2
-      refine delSets_err_of_bind run2 Prod.snd ?_ ?_ ?_
-      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_delSets_eq hp2
-      · intro e hp2; exact Devm.popToNat_delSets_err hp2
-      · intro ⟨y, devm2⟩ hp2 run3
-        refine delSets_err_of_bind run3 Prod.snd ?_ ?_ ?_
-        · intro ⟨z, devm3⟩ hp3; exact Devm.popToNat_delSets_eq hp3
-        · intro e hp3; exact Devm.popToNat_delSets_err hp3
-        · intro ⟨z, devm3⟩ hp3 run4
-          refine delSets_err_of_bind run4 id ?_ ?_ ?_
-          · intro devm4 hc; exact (chargeGas_delSets_eq hc).trans rfl
-          · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
-          · intro devm4 hc run5; injection run5
-  case codesize => apply pushItem_delSets_err run
-  case codecopy =>
-    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_delSets_eq hp
-    · intro e hp; exact Devm.popToNat_delSets_err hp
-    · intro ⟨x, devm1⟩ hp run2
-      refine delSets_err_of_bind run2 Prod.snd ?_ ?_ ?_
-      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_delSets_eq hp2
-      · intro e hp2; exact Devm.popToNat_delSets_err hp2
-      · intro ⟨y, devm2⟩ hp2 run3
-        refine delSets_err_of_bind run3 Prod.snd ?_ ?_ ?_
-        · intro ⟨z, devm3⟩ hp3; exact Devm.popToNat_delSets_eq hp3
-        · intro e hp3; exact Devm.popToNat_delSets_err hp3
-        · intro ⟨z, devm3⟩ hp3 run4
-          refine delSets_err_of_bind run4 id ?_ ?_ ?_
-          · intro devm4 hc; exact (chargeGas_delSets_eq hc).trans rfl
-          · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
-          · intro devm4 hc run5; injection run5
-  case gasprice => apply pushItem_delSets_err run
-  case extcodesize =>
-    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.popToAdr_delSets_eq hp
-    · intro e hp; exact Devm.popToAdr_delSets_err hp
-    · intro ⟨x, devm1⟩ hp run2; split at run2
-      · refine delSets_err_of_bind run2 id ?_ ?_ ?_
-        · intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl
-        · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
-        · intro devm2 hc run3; exact (Devm.push_delSets_err run3).trans rfl
-      · refine delSets_err_of_bind run2 id ?_ ?_ ?_
-        · intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl
-        · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
-        · intro devm2 hc run3; exact (Devm.push_delSets_err run3).trans rfl
-  case extcodecopy =>
-    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.popToAdr_delSets_eq hp
-    · intro e hp; exact Devm.popToAdr_delSets_err hp
-    · intro ⟨x, devm1⟩ hp run2
-      refine delSets_err_of_bind run2 Prod.snd ?_ ?_ ?_
-      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_delSets_eq hp2
-      · intro e hp2; exact Devm.popToNat_delSets_err hp2
-      · intro ⟨y, devm2⟩ hp2 run3
-        refine delSets_err_of_bind run3 Prod.snd ?_ ?_ ?_
-        · intro ⟨z, devm3⟩ hp3; exact Devm.popToNat_delSets_eq hp3
-        · intro e hp3; exact Devm.popToNat_delSets_err hp3
-        · intro ⟨z, devm3⟩ hp3 run4
-          refine delSets_err_of_bind run4 Prod.snd ?_ ?_ ?_
-          · intro ⟨w, devm4⟩ hp4; exact Devm.popToNat_delSets_eq hp4
-          · intro e hp4; exact Devm.popToNat_delSets_err hp4
-          · intro ⟨w, devm4⟩ hp4 run5
-            split at run5
-            · refine delSets_err_of_bind run5 id ?_ ?_ ?_
-              · intro devm5 hc; exact (chargeGas_delSets_eq hc).trans rfl
-              · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
-              · intro devm5 hc run6; injection run6
-            · refine delSets_err_of_bind run5 id ?_ ?_ ?_
-              · intro devm5 hc; exact (chargeGas_delSets_eq hc).trans rfl
-              · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
-              · intro devm5 hc run6; injection run6
-  case retdatasize => apply pushItem_delSets_err run
-  case retdatacopy =>
-    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_delSets_eq hp
-    · intro e hp; exact Devm.popToNat_delSets_err hp
-    · intro ⟨x, devm1⟩ hp run2
-      refine delSets_err_of_bind run2 Prod.snd ?_ ?_ ?_
-      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_delSets_eq hp2
-      · intro e hp2; exact Devm.popToNat_delSets_err hp2
-      · intro ⟨y, devm2⟩ hp2 run3
-        refine delSets_err_of_bind run3 Prod.snd ?_ ?_ ?_
-        · intro ⟨z, devm3⟩ hp3; exact Devm.popToNat_delSets_eq hp3
-        · intro e hp3; exact Devm.popToNat_delSets_err hp3
-        · intro ⟨z, devm3⟩ hp3 run4
-          refine delSets_err_of_bind run4 id ?_ ?_ ?_
-          · intro devm4 hc; exact (chargeGas_delSets_eq hc).trans rfl
-          · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
-          · intro devm4 hc run5
-            split_ifs at run5
-            all_goals (try { cases run5; rfl })
-            all_goals (try contradiction)
-  case extcodehash =>
-    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.popToAdr_delSets_eq hp
-    · intro e hp; exact Devm.popToAdr_delSets_err hp
-    · intro ⟨x, devm1⟩ hp run2; split at run2
-      · refine delSets_err_of_bind run2 id ?_ ?_ ?_
-        · intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl
-        · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
-        · intro devm2 hc run3; exact (Devm.push_delSets_err run3).trans rfl
-      · refine delSets_err_of_bind run2 id ?_ ?_ ?_
-        · intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl
-        · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
-        · intro devm2 hc run3; exact (Devm.push_delSets_err run3).trans rfl
-  case blockhash =>
-    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp
-    · intro e hp; exact Devm.pop_delSets_err hp
-    · intro ⟨x, devm1⟩ hp run2
-      refine delSets_err_of_bind run2 id ?_ ?_ ?_
-      · intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl
-      · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
-      · intro devm2 hc run3; exact (Devm.push_delSets_err run3).trans rfl
-  case coinbase => apply pushItem_delSets_err run
-  case timestamp => apply pushItem_delSets_err run
-  case number => apply pushItem_delSets_err run
-  case prevrandao => apply pushItem_delSets_err run
-  case gaslimit => apply pushItem_delSets_err run
-  case chainid => apply pushItem_delSets_err run
-  case selfbalance => apply pushItem_delSets_err run
-  case basefee => apply pushItem_delSets_err run
-  case blobhash =>
-    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
-    exact fun ⟨x, devm1⟩ hp => Devm.pop_delSets_eq hp
-    exact fun e hp => Devm.pop_delSets_err hp
-    intro ⟨x, devm1⟩ hp run2
-    refine delSets_err_of_bind run2 id ?_ ?_ ?_
-    exact fun devm2 hc => (chargeGas_delSets_eq hc).trans rfl
-    exact fun e hc => (chargeGas_delSets_err hc).trans rfl
-    intro devm2 hc run3; exact (Devm.push_delSets_err run3).trans rfl
-  case blobbasefee => apply pushItem_delSets_err run
-  case pop =>
-    refine delSets_err_of_bind run id ?_ ?_ ?_
-    exact fun devm1 hc => Devm.pop_map_snd_delSets_eq hc
-    exact fun e hc => Devm.pop_map_snd_delSets_err hc
-    intro devm1 hc run2; exact chargeGas_delSets_err run2
-  case mload =>
-    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
-    exact fun ⟨x, devm1⟩ hp => Devm.popToNat_delSets_eq hp
-    exact fun e hp => Devm.popToNat_delSets_err hp
-    intro ⟨x, devm1⟩ hp run2
-    refine delSets_err_of_bind run2 id ?_ ?_ ?_
-    exact fun devm2 hc => (chargeGas_delSets_eq hc).trans rfl
-    exact fun e hc => (chargeGas_delSets_err hc).trans rfl
-    intro devm2 hc run3; exact (Devm.push_delSets_err run3).trans rfl
-  case mstore =>
-    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_delSets_eq hp
-    · intro e hp; exact Devm.popToNat_delSets_err hp
-    · intro ⟨x, devm1⟩ hp run2
-      refine delSets_err_of_bind run2 Prod.snd ?_ ?_ ?_
-      · intro ⟨y, devm2⟩ hp2; exact Devm.pop_delSets_eq hp2
-      · intro e hp2; exact Devm.pop_delSets_err hp2
-      · intro ⟨y, devm2⟩ hp2 run3
-        refine delSets_err_of_bind run3 id ?_ ?_ ?_
-        · intro devm3 hc; exact (chargeGas_delSets_eq hc).trans rfl
-        · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
-        · intro devm3 hc run4; cases run4
-  case mstore8 =>
-    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_delSets_eq hp
-    · intro e hp; exact Devm.popToNat_delSets_err hp
-    · intro ⟨x, devm1⟩ hp run2
-      refine delSets_err_of_bind run2 Prod.snd ?_ ?_ ?_
-      · intro ⟨y, devm2⟩ hp2; exact Devm.pop_delSets_eq hp2
-      · intro e hp2; exact Devm.pop_delSets_err hp2
-      · intro ⟨y, devm2⟩ hp2 run3
-        refine delSets_err_of_bind run3 id ?_ ?_ ?_
-        · intro devm3 hc; exact (chargeGas_delSets_eq hc).trans rfl
-        · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
-        · intro devm3 hc run4; injection run4
-  case sload =>
-    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp
-    · intro e hp; exact Devm.pop_delSets_err hp
-    · intro ⟨x, devm1⟩ hp run2; split at run2
-      · refine delSets_err_of_bind run2 id ?_ ?_ ?_
-        · intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl
-        · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
-        · intro devm2 hc run3; exact (Devm.push_delSets_err run3).trans rfl
-      · refine delSets_err_of_bind run2 id ?_ ?_ ?_
-        · intro devm2 hc; exact (chargeGas_delSets_eq hc).trans rfl
-        · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
-        · intro devm2 hc run3; exact (Devm.push_delSets_err run3).trans rfl
-  case sstore =>
-    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp
-    · intro e hp; exact Devm.pop_delSets_err hp
-    · intro ⟨x, devm1⟩ hp run2
-      refine delSets_err_of_bind run2 Prod.snd ?_ ?_ ?_
-      · intro ⟨y, devm2⟩ hp2; exact Devm.pop_delSets_eq hp2
-      · intro e hp2; exact Devm.pop_delSets_err hp2
-      · intro ⟨y, devm2⟩ hp2 run3
-        refine delSets_err_of_bind run3 (fun _ => devm2) ?_ ?_ ?_
-        · intro u h_assert; rfl
-        · intro e h_assert; exact assert_delSets_err h_assert
-        · intro u h_assert run4
-          split_ifs at run4
-          all_goals {
-            refine delSets_err_of_bind run4 id ?_ ?_ ?_
-            · intro devm3 hc; exact (chargeGas_delSets_eq hc).trans rfl
-            · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
-            · intro devm3 hc run5
-              dsimp [assertDynamic, Except.assert] at run5
-              split_ifs at run5
-              all_goals (try { cases run5; rfl })
-              all_goals (try injection run5)
-          }
-  case pc => apply pushItem_delSets_err run
-  case msize => apply pushItem_delSets_err run
-  case gas =>
-    refine delSets_err_of_bind run id ?_ ?_ ?_
-    · intro devm1 hc; exact (chargeGas_delSets_eq hc).trans rfl
-    · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
-    · intro devm1 hc run2; exact Devm.push_delSets_err run2
-  case tload =>
-    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp
-    · intro e hp; exact Devm.pop_delSets_err hp
-    · intro ⟨x, devm1⟩ hp run2; exact pushItem_delSets_err run2
-  case tstore =>
-    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp
-    · intro e hp; exact Devm.pop_delSets_err hp
-    · intro ⟨x, devm1⟩ hp run2
-      refine delSets_err_of_bind run2 Prod.snd ?_ ?_ ?_
-      · intro ⟨y, devm2⟩ hp2; exact Devm.pop_delSets_eq hp2
-      · intro e hp2; exact Devm.pop_delSets_err hp2
-      · intro ⟨y, devm2⟩ hp2 run3
-        refine delSets_err_of_bind run3 id ?_ ?_ ?_
-        · intro devm3 hc; exact (chargeGas_delSets_eq hc).trans rfl
-        · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
-        · intro devm3 hc run4
-          dsimp [assertDynamic, Except.assert] at run4
-          simp only [bind, Except.bind] at run4
-          try split_ifs at run4; simp at run4
-          exact congrArg Devm.delSets run4.2.symm
-  case mcopy =>
-    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_delSets_eq hp
-    · intro e hp; exact Devm.popToNat_delSets_err hp
-    · intro ⟨x, devm1⟩ hp run2
-      refine delSets_err_of_bind run2 Prod.snd ?_ ?_ ?_
-      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_delSets_eq hp2
-      · intro e hp2; exact Devm.popToNat_delSets_err hp2
-      · intro ⟨y, devm2⟩ hp2 run3
-        refine delSets_err_of_bind run3 Prod.snd ?_ ?_ ?_
-        · intro ⟨z, devm3⟩ hp3; exact Devm.popToNat_delSets_eq hp3
-        · intro e hp3; exact Devm.popToNat_delSets_err hp3
-        · intro ⟨z, devm3⟩ hp3 run4
-          refine delSets_err_of_bind run4 id ?_ ?_ ?_
-          · intro devm4 hc; exact (chargeGas_delSets_eq hc).trans rfl
-          · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
-          · intro devm4 hc run5; contradiction
-  case dup =>
-    refine delSets_err_of_bind run id ?_ ?_ ?_
-    · intro devm1 hc; exact (chargeGas_delSets_eq hc).trans rfl
-    · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
-    · intro devm1 hc run2
-      split at run2
-      · injection run2 with h_eq; cases h_eq; rfl
-      · exact Devm.push_delSets_err run2
-  case swap =>
-    refine delSets_err_of_bind run id ?_ ?_ ?_
-    · intro devm1 hc; exact (chargeGas_delSets_eq hc).trans rfl
-    · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
-    · intro devm1 hc run2
-      split at run2
-      · injection run2 with h_eq; cases h_eq; rfl
-      · contradiction
-  case log =>
-    refine delSets_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_delSets_eq hp
-    · intro e hp; exact Devm.popToNat_delSets_err hp
-    · intro ⟨x, devm1⟩ hp run2
-      refine delSets_err_of_bind run2 Prod.snd ?_ ?_ ?_
-      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_delSets_eq hp2
-      · intro e hp2; exact Devm.popToNat_delSets_err hp2
-      · intro ⟨y, devm2⟩ hp2 run3
-        refine delSets_err_of_bind run3 Prod.snd ?_ ?_ ?_
-        · intro ⟨z, devm3⟩ hp3; exact Devm.popN_delSets_eq hp3
-        · intro e hp3; exact Devm.popN_delSets_err hp3
-        · intro ⟨z, devm3⟩ hp3 run4
-          refine delSets_err_of_bind run4 id ?_ ?_ ?_
-          · intro devm4 hc; exact (chargeGas_delSets_eq hc).trans rfl
-          · intro e hc; exact (chargeGas_delSets_err hc).trans rfl
-          · intro devm4 hc run5
-            dsimp [assertDynamic, Except.assert] at run5
-            simp only [bind, Except.bind] at run5
-            try split_ifs at run5; simp at run5
-            exact congrArg Devm.delSets run5.2.symm
+  rcases eq_or_ne r .sstore with rfl | hs
+  · have hf := Rinst.sstore_run_stateWriteFrame pc devm sevm; rw [run] at hf
+    exact (Prod.ext (by simpa only using hf.accountsToDelete) (by simpa only using hf.createdAccounts)).symm
+  rcases eq_or_ne r .tstore with rfl | ht
+  · have hf := Rinst.tstore_run_transientWriteFrame pc devm sevm; rw [run] at hf
+    exact (Prod.ext (by simpa only using hf.accountsToDelete) (by simpa only using hf.createdAccounts)).symm
+  · have hf := Rinst.run_instructionFrame pc sevm devm r hs ht; rw [run] at hf; exact hf.delSets.symm
 
--- Jinst execution preserves delSets.
 lemma Jinst.inv_delSets {pc : Nat} {sevm : Sevm} {devm : Devm} {j : Jinst}
     {pc' : Nat} {devm' : Devm}
     (run : Jinst.Run ⟨pc, sevm, devm⟩ j (.ok ⟨pc', devm'⟩)) :
@@ -9920,361 +9579,20 @@ lemma Rinst.inv_getBal_err
     {pc sevm devm r err}
     (run : Rinst.run ⟨pc, sevm, devm⟩ r = Except.error err) (a : Adr) :
     err.2.getBal a = devm.getBal a := by
-  cases r <;> dsimp [Rinst.run, Rinst.runCore] at run
-  all_goals try with_reducible first
-    | exact applyBinary_getBal_err run a
-    | exact applyTernary_getBal_err run a
-    | exact applyUnary_getBal_err run a
-    | exact pushItem_getBal_err run a
-  case exp =>
-    refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a
-    · intro e hp; exact Devm.pop_getBal_err hp a
-    · intro ⟨x, devm1⟩ hp run2
-      refine getBal_err_of_bind run2 Prod.snd ?_ ?_ ?_
-      · intro ⟨y, devm2⟩ hp2; exact Devm.pop_getBal_eq hp2 a
-      · intro e hp2; exact Devm.pop_getBal_err hp2 a
-      · intro ⟨y, devm2⟩ hp2 run3
-        refine getBal_err_of_bind run3 id ?_ ?_ ?_
-        · intro devm3 hc; exact chargeGas_getBal_eq hc a
-        · intro e hc; exact chargeGas_getBal_err hc a
-        · intro devm3 hc run4; exact Devm.push_getBal_err run4 a
-  case kec =>
-    refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getBal_eq hp a
-    · intro e hp; exact Devm.popToNat_getBal_err hp a
-    · intro ⟨x, devm1⟩ hp run2
-      refine getBal_err_of_bind run2 Prod.snd ?_ ?_ ?_
-      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_getBal_eq hp2 a
-      · intro e hp2; exact Devm.popToNat_getBal_err hp2 a
-      · intro ⟨y, devm2⟩ hp2 run3
-        refine getBal_err_of_bind run3 id ?_ ?_ ?_
-        · intro devm3 hc; exact chargeGas_getBal_eq hc a
-        · intro e hc; exact chargeGas_getBal_err hc a
-        · intro devm3 hc run4; exact Devm.push_getBal_err run4 a
-  case balance =>
-    simp only [Rinst.balanceCore_compat] at run
-    refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a
-    · intro e hp; exact Devm.pop_getBal_err hp a
-    · intro ⟨x, devm1⟩ hp run2; split at run2
-      · refine getBal_err_of_bind run2 id ?_ ?_ ?_
-        · intro devm2 hc; exact chargeGas_getBal_eq hc a
-        · intro e hc; exact chargeGas_getBal_err hc a
-        · intro devm2 hc run3; exact Devm.push_getBal_err run3 a
-      · refine getBal_err_of_bind run2 id ?_ ?_ ?_
-        · intro devm2 hc; exact chargeGas_getBal_eq hc a
-        · intro e hc; exact chargeGas_getBal_err hc a
-        · intro devm2 hc run3; exact Devm.push_getBal_err run3 a
-  case calldataload =>
-    refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a
-    · intro e hp; exact Devm.pop_getBal_err hp a
-    · intro ⟨x, devm1⟩ hp run2
-      refine getBal_err_of_bind run2 id ?_ ?_ ?_
-      · intro devm2 hc; exact chargeGas_getBal_eq hc a
-      · intro e hc; exact chargeGas_getBal_err hc a
-      · intro devm2 hc run3; exact Devm.push_getBal_err run3 a
-  case calldatacopy =>
-    refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getBal_eq hp a
-    · intro e hp; exact Devm.popToNat_getBal_err hp a
-    · intro ⟨x, devm1⟩ hp run2
-      refine getBal_err_of_bind run2 Prod.snd ?_ ?_ ?_
-      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_getBal_eq hp2 a
-      · intro e hp2; exact Devm.popToNat_getBal_err hp2 a
-      · intro ⟨y, devm2⟩ hp2 run3
-        refine getBal_err_of_bind run3 Prod.snd ?_ ?_ ?_
-        · intro ⟨z, devm3⟩ hp3; exact Devm.popToNat_getBal_eq hp3 a
-        · intro e hp3; exact Devm.popToNat_getBal_err hp3 a
-        · intro ⟨z, devm3⟩ hp3 run4
-          refine getBal_err_of_bind run4 id ?_ ?_ ?_
-          · intro devm4 hc; exact chargeGas_getBal_eq hc a
-          · intro e hc; exact chargeGas_getBal_err hc a
-          · intro devm4 hc run5; injection run5
-  case codecopy =>
-    refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getBal_eq hp a
-    · intro e hp; exact Devm.popToNat_getBal_err hp a
-    · intro ⟨x, devm1⟩ hp run2
-      refine getBal_err_of_bind run2 Prod.snd ?_ ?_ ?_
-      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_getBal_eq hp2 a
-      · intro e hp2; exact Devm.popToNat_getBal_err hp2 a
-      · intro ⟨y, devm2⟩ hp2 run3
-        refine getBal_err_of_bind run3 Prod.snd ?_ ?_ ?_
-        · intro ⟨z, devm3⟩ hp3; exact Devm.popToNat_getBal_eq hp3 a
-        · intro e hp3; exact Devm.popToNat_getBal_err hp3 a
-        · intro ⟨z, devm3⟩ hp3 run4
-          refine getBal_err_of_bind run4 id ?_ ?_ ?_
-          · intro devm4 hc; exact chargeGas_getBal_eq hc a
-          · intro e hc; exact chargeGas_getBal_err hc a
-          · intro devm4 hc run5; injection run5
-  case extcodesize =>
-    refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.popToAdr_getBal_eq hp a
-    · intro e hp; exact Devm.popToAdr_getBal_err hp a
-    · intro ⟨x, devm1⟩ hp run2; split at run2
-      · refine getBal_err_of_bind run2 id ?_ ?_ ?_
-        · intro devm2 hc; exact chargeGas_getBal_eq hc a
-        · intro e hc; exact chargeGas_getBal_err hc a
-        · intro devm2 hc run3; exact Devm.push_getBal_err run3 a
-      · refine getBal_err_of_bind run2 id ?_ ?_ ?_
-        · intro devm2 hc; exact chargeGas_getBal_eq hc a
-        · intro e hc; exact chargeGas_getBal_err hc a
-        · intro devm2 hc run3; exact Devm.push_getBal_err run3 a
-  case extcodecopy =>
-    refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.popToAdr_getBal_eq hp a
-    · intro e hp; exact Devm.popToAdr_getBal_err hp a
-    · intro ⟨x, devm1⟩ hp run2
-      refine getBal_err_of_bind run2 Prod.snd ?_ ?_ ?_
-      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_getBal_eq hp2 a
-      · intro e hp2; exact Devm.popToNat_getBal_err hp2 a
-      · intro ⟨y, devm2⟩ hp2 run3
-        refine getBal_err_of_bind run3 Prod.snd ?_ ?_ ?_
-        · intro ⟨z, devm3⟩ hp3; exact Devm.popToNat_getBal_eq hp3 a
-        · intro e hp3; exact Devm.popToNat_getBal_err hp3 a
-        · intro ⟨z, devm3⟩ hp3 run4
-          refine getBal_err_of_bind run4 Prod.snd ?_ ?_ ?_
-          · intro ⟨w, devm4⟩ hp4; exact Devm.popToNat_getBal_eq hp4 a
-          · intro e hp4; exact Devm.popToNat_getBal_err hp4 a
-          · intro ⟨w, devm4⟩ hp4 run5
-            split at run5
-            · refine getBal_err_of_bind run5 id ?_ ?_ ?_
-              · intro devm5 hc; exact chargeGas_getBal_eq hc a
-              · intro e hc; exact chargeGas_getBal_err hc a
-              · intro devm5 hc run6; injection run6
-            · refine getBal_err_of_bind run5 id ?_ ?_ ?_
-              · intro devm5 hc; exact chargeGas_getBal_eq hc a
-              · intro e hc; exact chargeGas_getBal_err hc a
-              · intro devm5 hc run6; injection run6
-  case retdatacopy =>
-    refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getBal_eq hp a
-    · intro e hp; exact Devm.popToNat_getBal_err hp a
-    · intro ⟨x, devm1⟩ hp run2
-      refine getBal_err_of_bind run2 Prod.snd ?_ ?_ ?_
-      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_getBal_eq hp2 a
-      · intro e hp2; exact Devm.popToNat_getBal_err hp2 a
-      · intro ⟨y, devm2⟩ hp2 run3
-        refine getBal_err_of_bind run3 Prod.snd ?_ ?_ ?_
-        · intro ⟨z, devm3⟩ hp3; exact Devm.popToNat_getBal_eq hp3 a
-        · intro e hp3; exact Devm.popToNat_getBal_err hp3 a
-        · intro ⟨z, devm3⟩ hp3 run4
-          refine getBal_err_of_bind run4 id ?_ ?_ ?_
-          · intro devm4 hc; exact chargeGas_getBal_eq hc a
-          · intro e hc; exact chargeGas_getBal_err hc a
-          · intro devm4 hc run5
-            split_ifs at run5
-            all_goals (try { cases run5; rfl })
-            all_goals (try contradiction)
-  case extcodehash =>
-    refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.popToAdr_getBal_eq hp a
-    · intro e hp; exact Devm.popToAdr_getBal_err hp a
-    · intro ⟨x, devm1⟩ hp run2; split at run2
-      · refine getBal_err_of_bind run2 id ?_ ?_ ?_
-        · intro devm2 hc; exact chargeGas_getBal_eq hc a
-        · intro e hc; exact chargeGas_getBal_err hc a
-        · intro devm2 hc run3; exact Devm.push_getBal_err run3 a
-      · refine getBal_err_of_bind run2 id ?_ ?_ ?_
-        · intro devm2 hc; exact chargeGas_getBal_eq hc a
-        · intro e hc; exact chargeGas_getBal_err hc a
-        · intro devm2 hc run3; exact Devm.push_getBal_err run3 a
-  case blockhash =>
-    refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a
-    · intro e hp; exact Devm.pop_getBal_err hp a
-    · intro ⟨x, devm1⟩ hp run2
-      refine getBal_err_of_bind run2 id ?_ ?_ ?_
-      · intro devm2 hc; exact chargeGas_getBal_eq hc a
-      · intro e hc; exact chargeGas_getBal_err hc a
-      · intro devm2 hc run3; exact Devm.push_getBal_err run3 a
-  case blobhash =>
-    refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
-    exact fun ⟨x, devm1⟩ hp => Devm.pop_getBal_eq hp a
-    exact fun e hp => Devm.pop_getBal_err hp a
-    intro ⟨x, devm1⟩ hp run2
-    refine getBal_err_of_bind run2 id ?_ ?_ ?_
-    exact fun devm2 hc => chargeGas_getBal_eq hc a
-    exact fun e hc => chargeGas_getBal_err hc a
-    intro devm2 hc run3; exact Devm.push_getBal_err run3 a
-  case pop =>
-    refine getBal_err_of_bind run id ?_ ?_ ?_
-    exact fun devm1 hc => Devm.pop_map_snd_getBal_eq hc a
-    exact fun e hc => Devm.pop_map_snd_getBal_err hc a
-    intro devm1 hc run2; exact chargeGas_getBal_err run2 a
-  case mload =>
-    refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
-    exact fun ⟨x, devm1⟩ hp => Devm.popToNat_getBal_eq hp a
-    exact fun e hp => Devm.popToNat_getBal_err hp a
-    intro ⟨x, devm1⟩ hp run2
-    refine getBal_err_of_bind run2 id ?_ ?_ ?_
-    exact fun devm2 hc => chargeGas_getBal_eq hc a
-    exact fun e hc => chargeGas_getBal_err hc a
-    intro devm2 hc run3; exact Devm.push_getBal_err run3 a
-  case mstore =>
-    refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getBal_eq hp a
-    · intro e hp; exact Devm.popToNat_getBal_err hp a
-    · intro ⟨x, devm1⟩ hp run2
-      refine getBal_err_of_bind run2 Prod.snd ?_ ?_ ?_
-      · intro ⟨y, devm2⟩ hp2; exact Devm.pop_getBal_eq hp2 a
-      · intro e hp2; exact Devm.pop_getBal_err hp2 a
-      · intro ⟨y, devm2⟩ hp2 run3
-        refine getBal_err_of_bind run3 id ?_ ?_ ?_
-        · intro devm3 hc; exact chargeGas_getBal_eq hc a
-        · intro e hc; exact chargeGas_getBal_err hc a
-        · intro devm3 hc run4; cases run4
-  case mstore8 =>
-    refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getBal_eq hp a
-    · intro e hp; exact Devm.popToNat_getBal_err hp a
-    · intro ⟨x, devm1⟩ hp run2
-      refine getBal_err_of_bind run2 Prod.snd ?_ ?_ ?_
-      · intro ⟨y, devm2⟩ hp2; exact Devm.pop_getBal_eq hp2 a
-      · intro e hp2; exact Devm.pop_getBal_err hp2 a
-      · intro ⟨y, devm2⟩ hp2 run3
-        refine getBal_err_of_bind run3 id ?_ ?_ ?_
-        · intro devm3 hc; exact chargeGas_getBal_eq hc a
-        · intro e hc; exact chargeGas_getBal_err hc a
-        · intro devm3 hc run4; injection run4
-  case sload =>
-    refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a
-    · intro e hp; exact Devm.pop_getBal_err hp a
-    · intro ⟨x, devm1⟩ hp run2; split at run2
-      · refine getBal_err_of_bind run2 id ?_ ?_ ?_
-        · intro devm2 hc; exact chargeGas_getBal_eq hc a
-        · intro e hc; exact chargeGas_getBal_err hc a
-        · intro devm2 hc run3; exact Devm.push_getBal_err run3 a
-      · refine getBal_err_of_bind run2 id ?_ ?_ ?_
-        · intro devm2 hc; exact chargeGas_getBal_eq hc a
-        · intro e hc; exact chargeGas_getBal_err hc a
-        · intro devm2 hc run3; exact Devm.push_getBal_err run3 a
-  case sstore =>
-    refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a
-    · intro e hp; exact Devm.pop_getBal_err hp a
-    · intro ⟨x, devm1⟩ hp run2
-      refine getBal_err_of_bind run2 Prod.snd ?_ ?_ ?_
-      · intro ⟨y, devm2⟩ hp2; exact Devm.pop_getBal_eq hp2 a
-      · intro e hp2; exact Devm.pop_getBal_err hp2 a
-      · intro ⟨y, devm2⟩ hp2 run3
-        refine getBal_err_of_bind run3 (fun _ => devm2) ?_ ?_ ?_
-        · intro u h_assert; rfl
-        · intro e h_assert; exact assert_getBal_err h_assert a
-        · intro u h_assert run4
-          split_ifs at run4
-          all_goals {
-            refine getBal_err_of_bind run4 id ?_ ?_ ?_
-            · intro devm3 hc; exact chargeGas_getBal_eq hc a
-            · intro e hc; exact chargeGas_getBal_err hc a
-            · intro devm3 hc run5
-              dsimp [assertDynamic, Except.assert] at run5
-              split_ifs at run5
-              all_goals (try { cases run5; rfl })
-              all_goals (try injection run5)
-          }
-  case gas =>
-    refine getBal_err_of_bind run id ?_ ?_ ?_
-    · intro devm1 hc; exact chargeGas_getBal_eq hc a
-    · intro e hc; exact chargeGas_getBal_err hc a
-    · intro devm1 hc run2; exact Devm.push_getBal_err run2 a
-  case tload =>
-    refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a
-    · intro e hp; exact Devm.pop_getBal_err hp a
-    · intro ⟨x, devm1⟩ hp run2; exact pushItem_getBal_err run2 a
-  case tstore =>
-    refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a
-    · intro e hp; exact Devm.pop_getBal_err hp a
-    · intro ⟨x, devm1⟩ hp run2
-      refine getBal_err_of_bind run2 Prod.snd ?_ ?_ ?_
-      · intro ⟨y, devm2⟩ hp2; exact Devm.pop_getBal_eq hp2 a
-      · intro e hp2; exact Devm.pop_getBal_err hp2 a
-      · intro ⟨y, devm2⟩ hp2 run3
-        refine getBal_err_of_bind run3 id ?_ ?_ ?_
-        · intro devm3 hc; exact chargeGas_getBal_eq hc a
-        · intro e hc; exact chargeGas_getBal_err hc a
-        · intro devm3 hc run4
-          dsimp [assertDynamic, Except.assert] at run4
-          simp only [bind, Except.bind] at run4
-          try split_ifs at run4; simp at run4
-          rw [← run4]; rfl
-  case mcopy =>
-    refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getBal_eq hp a
-    · intro e hp; exact Devm.popToNat_getBal_err hp a
-    · intro ⟨x, devm1⟩ hp run2
-      refine getBal_err_of_bind run2 Prod.snd ?_ ?_ ?_
-      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_getBal_eq hp2 a
-      · intro e hp2; exact Devm.popToNat_getBal_err hp2 a
-      · intro ⟨y, devm2⟩ hp2 run3
-        refine getBal_err_of_bind run3 Prod.snd ?_ ?_ ?_
-        · intro ⟨z, devm3⟩ hp3; exact Devm.popToNat_getBal_eq hp3 a
-        · intro e hp3; exact Devm.popToNat_getBal_err hp3 a
-        · intro ⟨z, devm3⟩ hp3 run4
-          refine getBal_err_of_bind run4 id ?_ ?_ ?_
-          · intro devm4 hc; exact chargeGas_getBal_eq hc a
-          · intro e hc; exact chargeGas_getBal_err hc a
-          · intro devm4 hc run5; contradiction
-  case dup =>
-    refine getBal_err_of_bind run id ?_ ?_ ?_
-    · intro devm1 hc; exact chargeGas_getBal_eq hc a
-    · intro e hc; exact chargeGas_getBal_err hc a
-    · intro devm1 hc run2
-      split at run2
-      · injection run2 with h_eq; cases h_eq; rfl
-      · exact Devm.push_getBal_err run2 a
-  case swap =>
-    refine getBal_err_of_bind run id ?_ ?_ ?_
-    · intro devm1 hc; exact chargeGas_getBal_eq hc a
-    · intro e hc; exact chargeGas_getBal_err hc a
-    · intro devm1 hc run2
-      split at run2
-      · injection run2 with h_eq; cases h_eq; rfl
-      · contradiction
-  case log =>
-    refine getBal_err_of_bind run Prod.snd ?_ ?_ ?_
-    · intro ⟨x, devm1⟩ hp; exact Devm.popToNat_getBal_eq hp a
-    · intro e hp; exact Devm.popToNat_getBal_err hp a
-    · intro ⟨x, devm1⟩ hp run2
-      refine getBal_err_of_bind run2 Prod.snd ?_ ?_ ?_
-      · intro ⟨y, devm2⟩ hp2; exact Devm.popToNat_getBal_eq hp2 a
-      · intro e hp2; exact Devm.popToNat_getBal_err hp2 a
-      · intro ⟨y, devm2⟩ hp2 run3
-        refine getBal_err_of_bind run3 Prod.snd ?_ ?_ ?_
-        · intro ⟨z, devm3⟩ hp3; exact Devm.popN_getBal_eq hp3 a
-        · intro e hp3; exact Devm.popN_getBal_err hp3 a
-        · intro ⟨z, devm3⟩ hp3 run4
-          refine getBal_err_of_bind run4 id ?_ ?_ ?_
-          · intro devm4 hc; exact chargeGas_getBal_eq hc a
-          · intro e hc; exact chargeGas_getBal_err hc a
-          · intro devm4 hc run5
-            dsimp [assertDynamic, Except.assert] at run5
-            simp only [bind, Except.bind] at run5
-            try split_ifs at run5; simp at run5
-            rw [← run5]; rfl
+  rcases eq_or_ne r .sstore with rfl | hs
+  · have hf := Rinst.sstore_run_stateWriteFrame pc devm sevm; rw [run] at hf
+    exact (Devm.StateWriteFrame.getBal_eq hf a).symm
+  rcases eq_or_ne r .tstore with rfl | ht
+  · have hf := Rinst.tstore_run_transientWriteFrame pc devm sevm; rw [run] at hf
+    exact congrFun (congrArg (fun s => s.bal) hf.state).symm a
+  · have hf := Rinst.run_instructionFrame pc sevm devm r hs ht; rw [run] at hf; exact (hf.getBal a).symm
 
 lemma Rinst.balance_effect (r : Rinst) :
     Rinst.Effect Devm.BalNoninc r := by
-  intro pc sevm pre out h
-  by_cases hr : r = .balance
-  · subst r
-    have hw : Execution.Rel Devm.WorldEq pre out := by
-      rw [← h]
-      simpa only [Rinst.run] using Rinst.balance_worldEq pc sevm pre
-    exact Outcome.Rel.mono
-      (fun _ _ he =>
-        Devm.balNoninc_of_getBal_eq (funext fun a => (he.getBal a).symm)) hw
-  · cases out with
-    | ok post =>
-      exact Devm.balNoninc_of_getBal_eq (Rinst.inv_bal h).symm
-    | error err =>
-      exact Devm.balNoninc_of_getBal_eq
-        (funext (fun a => Rinst.inv_getBal_err h a))
+  intro pc sevm pre out hrun
+  cases out with
+  | ok post => exact Devm.balNoninc_of_getBal_eq (Rinst.inv_bal hrun).symm
+  | error err => exact Devm.balNoninc_of_getBal_eq (funext fun a => Rinst.inv_getBal_err hrun a)
 
 lemma Jinst.balance_effect (j : Jinst) :
     Jinst.Effect Devm.BalNoninc j := by
@@ -11527,1409 +10845,3 @@ lemma processMessageCall_preserves_sumNof
     (h : processMessageCall msg = .ok ⟨post, out⟩)
     (hnof : State.SumNof msg.benv.state) : State.SumNof post := by
   exact State.SumNof.of_noninc (processMessageCall_balance_noninc h) hnof
-
-/-! ## Full-frame relations for instruction preservation -/
-
-/-- A Mach-only step may change exactly the three `Mach` fields. -/
-def Devm.Rels.machFrame : Devm.Rels :=
-  { Devm.Rels.eq with
-    stack := fun _ _ => True
-    memory := fun _ _ => True
-    gasLeft := fun _ _ => True }
-
-/-- A regular instruction may change every field except the world and the two
-    deletion-relevant sets. -/
-def Devm.Rels.instructionFrame : Devm.Rels :=
-  {
-    stack := fun _ _ => True
-    memory := fun _ _ => True
-    gasLeft := fun _ _ => True
-    logs := fun _ _ => True
-    refundCounter := fun _ _ => True
-    output := fun _ _ => True
-    accountsToDelete := _root_.Eq
-    returnData := fun _ _ => True
-    error := fun _ _ => True
-    accessedAddresses := fun _ _ => True
-    accessedStorageKeys := fun _ _ => True
-    state := _root_.Eq
-    createdAccounts := _root_.Eq
-    transientStorage := _root_.Eq }
-
-abbrev Devm.MachFrame : Devm → Devm → Prop :=
-  Devm.Rel Devm.Rels.machFrame
-
-abbrev Devm.InstructionFrame : Devm → Devm → Prop :=
-  Devm.Rel Devm.Rels.instructionFrame
-
-/-- The part of `Meta` that an instruction-frame lift must preserve. -/
-def Meta.InstructionFrame (a b : Meta) : Prop :=
-  a.accountsToDelete = b.accountsToDelete ∧
-    a.createdAccounts = b.createdAccounts
-
-lemma Devm.Rels.machFrame_refl : Devm.Rels.Refl Devm.Rels.machFrame := by
-  simp [Devm.Rels.Refl, Devm.Rels.machFrame, Devm.Rels.eq, Reflexive]
-
-lemma Devm.Rels.machFrame_trans : Devm.Rels.Trans Devm.Rels.machFrame := by
-  simp [Devm.Rels.Trans, Devm.Rels.machFrame, Devm.Rels.eq, Transitive]
-
-lemma Devm.Rels.instructionFrame_refl :
-    Devm.Rels.Refl Devm.Rels.instructionFrame := by
-  simp [Devm.Rels.Refl, Devm.Rels.instructionFrame, Reflexive]
-
-lemma Devm.Rels.instructionFrame_trans :
-    Devm.Rels.Trans Devm.Rels.instructionFrame := by
-  simp [Devm.Rels.Trans, Devm.Rels.instructionFrame, Transitive]
-
-lemma Devm.machFrame_refl : Reflexive Devm.MachFrame :=
-  Devm.rel_refl Devm.Rels.machFrame_refl
-
-lemma Devm.machFrame_trans : Transitive Devm.MachFrame :=
-  Devm.rel_trans Devm.Rels.machFrame_trans
-
-lemma Devm.instructionFrame_refl : Reflexive Devm.InstructionFrame :=
-  Devm.rel_refl Devm.Rels.instructionFrame_refl
-
-lemma Devm.instructionFrame_trans : Transitive Devm.InstructionFrame :=
-  Devm.rel_trans Devm.Rels.instructionFrame_trans
-
-lemma Devm.machFrame_refines_instructionFrame :
-    CEffect.Refines Devm.MachFrame Devm.InstructionFrame := by
-  intro d d' h
-  exact {
-    stack := trivial
-    memory := trivial
-    gasLeft := trivial
-    logs := trivial
-    refundCounter := trivial
-    output := trivial
-    accountsToDelete := h.accountsToDelete
-    returnData := trivial
-    error := trivial
-    accessedAddresses := trivial
-    accessedStorageKeys := trivial
-    state := h.state
-    createdAccounts := h.createdAccounts
-    transientStorage := h.transientStorage }
-
-lemma Devm.MachFrame.worldEq {d d' : Devm} (h : Devm.MachFrame d d') :
-    Devm.WorldEq d d' :=
-  ⟨h.state, h.transientStorage⟩
-
-lemma Devm.MachFrame.getBal {d d' : Devm} (h : Devm.MachFrame d d')
-    (a : Adr) : d.getBal a = d'.getBal a :=
-  h.worldEq.getBal a
-
-lemma Devm.MachFrame.getStor {d d' : Devm} (h : Devm.MachFrame d d')
-    (a : Adr) : d.getStor a = d'.getStor a :=
-  h.worldEq.getStor a
-
-lemma Devm.MachFrame.getCode {d d' : Devm} (h : Devm.MachFrame d d')
-    (a : Adr) : d.getCode a = d'.getCode a :=
-  h.worldEq.getCode a
-
-lemma Devm.MachFrame.delSets {d d' : Devm} (h : Devm.MachFrame d d') :
-    d.delSets = d'.delSets :=
-  Prod.ext h.accountsToDelete h.createdAccounts
-
-lemma Devm.InstructionFrame.worldEq {d d' : Devm}
-    (h : Devm.InstructionFrame d d') : Devm.WorldEq d d' :=
-  ⟨h.state, h.transientStorage⟩
-
-lemma Devm.InstructionFrame.getBal {d d' : Devm}
-    (h : Devm.InstructionFrame d d') (a : Adr) :
-    d.getBal a = d'.getBal a :=
-  h.worldEq.getBal a
-
-lemma Devm.InstructionFrame.getStor {d d' : Devm}
-    (h : Devm.InstructionFrame d d') (a : Adr) :
-    d.getStor a = d'.getStor a :=
-  h.worldEq.getStor a
-
-lemma Devm.InstructionFrame.getCode {d d' : Devm}
-    (h : Devm.InstructionFrame d d') (a : Adr) :
-    d.getCode a = d'.getCode a :=
-  h.worldEq.getCode a
-
-lemma Devm.InstructionFrame.delSets {d d' : Devm}
-    (h : Devm.InstructionFrame d d') : d.delSets = d'.delSets :=
-  Prod.ext h.accountsToDelete h.createdAccounts
-
-lemma Devm.machFrame_setMach (d : Devm) (mach : Mach) :
-    Devm.MachFrame d (d.setMach mach) := by
-  exact {
-    stack := trivial
-    memory := trivial
-    gasLeft := trivial
-    logs := rfl
-    refundCounter := rfl
-    output := rfl
-    accountsToDelete := rfl
-    returnData := rfl
-    error := rfl
-    accessedAddresses := rfl
-    accessedStorageKeys := rfl
-    state := rfl
-    createdAccounts := rfl
-    transientStorage := rfl }
-
-lemma Devm.instructionFrame_setMachMeta (d : Devm) (view : Mach × Meta)
-    (h : Meta.InstructionFrame d.meta view.2) :
-    Devm.InstructionFrame d (d.setMachMeta view) := by
-  rcases h with ⟨hdel, hcreated⟩
-  exact {
-    stack := trivial
-    memory := trivial
-    gasLeft := trivial
-    logs := trivial
-    refundCounter := trivial
-    output := trivial
-    accountsToDelete := hdel
-    returnData := trivial
-    error := trivial
-    accessedAddresses := trivial
-    accessedStorageKeys := trivial
-    state := rfl
-    createdAccounts := hcreated
-    transientStorage := rfl }
-
-/-! ### Full-frame lift rules -/
-
-lemma liftMach_machFrame (core : Mach → Footprint.Outcome Mach α) (d : Devm) :
-    Outcome.Rel Prod.snd Prod.snd Devm.MachFrame d (liftMach core d) := by
-  unfold liftMach Footprint.liftOutcome
-  cases core d.mach <;> exact Devm.machFrame_setMach d _
-
-lemma liftMachPure_machFrame (core : Mach → Mach) (d : Devm) :
-    Devm.MachFrame d (liftMachPure core d) := by
-  exact Devm.machFrame_setMach d _
-
-lemma liftMachExecution_machFrame
-    (core : Mach → Footprint.Outcome Mach Unit) (d : Devm) :
-    Execution.Rel Devm.MachFrame d (liftMachExecution core d) := by
-  unfold liftMachExecution
-  exact outcomeRel_toExecution (liftMach_machFrame core d)
-
-lemma liftMachMeta_instructionFrame
-    (core : Mach → Meta → Footprint.Outcome (Mach × Meta) α) (d : Devm)
-    (hcore : Outcome.Rel (fun e => e.2.2) (fun x => x.2.2)
-      Meta.InstructionFrame d.meta (core d.mach d.meta)) :
-    Outcome.Rel Prod.snd Prod.snd Devm.InstructionFrame d
-      (liftMachMeta core d) := by
-  cases h : core d.mach d.meta with
-  | error e =>
-      rw [h] at hcore
-      simpa only [liftMachMeta, Footprint.liftOutcome, h] using
-        Devm.instructionFrame_setMachMeta d e.2 hcore
-  | ok x =>
-      rw [h] at hcore
-      simpa only [liftMachMeta, Footprint.liftOutcome, h] using
-        Devm.instructionFrame_setMachMeta d x.2 hcore
-
-lemma liftMachMetaPure_instructionFrame
-    (core : Mach → Meta → Mach × Meta) (d : Devm)
-    (hcore : Meta.InstructionFrame d.meta (core d.mach d.meta).2) :
-    Devm.InstructionFrame d (liftMachMetaPure core d) := by
-  exact Devm.instructionFrame_setMachMeta d _ hcore
-
-lemma liftMachMetaExecution_instructionFrame
-    (core : Mach → Meta → Footprint.Outcome (Mach × Meta) Unit) (d : Devm)
-    (hcore : Outcome.Rel (fun e => e.2.2) (fun x => x.2.2)
-      Meta.InstructionFrame d.meta (core d.mach d.meta)) :
-    Execution.Rel Devm.InstructionFrame d (liftMachMetaExecution core d) := by
-  unfold liftMachMetaExecution
-  exact outcomeRel_toExecution (liftMachMeta_instructionFrame core d hcore)
-
-lemma liftMachMetaWorld_instructionFrame
-    (core : World → Mach → Meta → Footprint.Outcome (Mach × Meta) α)
-    (d : Devm)
-    (hcore : Outcome.Rel (fun e => e.2.2) (fun x => x.2.2)
-      Meta.InstructionFrame d.meta (core d.world d.mach d.meta)) :
-    Outcome.Rel Prod.snd Prod.snd Devm.InstructionFrame d
-      (liftMachMetaWorld core d) := by
-  exact liftMachMeta_instructionFrame (core d.world) d hcore
-
-lemma liftMachMetaWorldPure_instructionFrame
-    (core : World → Mach → Meta → Mach × Meta) (d : Devm)
-    (hcore : Meta.InstructionFrame d.meta (core d.world d.mach d.meta).2) :
-    Devm.InstructionFrame d (liftMachMetaWorldPure core d) := by
-  exact liftMachMetaPure_instructionFrame (core d.world) d hcore
-
-lemma liftMachMetaWorldExecution_instructionFrame
-    (core : World → Mach → Meta → Footprint.Outcome (Mach × Meta) Unit)
-    (d : Devm)
-    (hcore : Outcome.Rel (fun e => e.2.2) (fun x => x.2.2)
-      Meta.InstructionFrame d.meta (core d.world d.mach d.meta)) :
-    Execution.Rel Devm.InstructionFrame d
-      (liftMachMetaWorldExecution core d) := by
-  exact liftMachMetaExecution_instructionFrame (core d.world) d hcore
-
-/-! ### Full-frame primitive facts -/
-
-lemma Devm.pop_machFrame (d : Devm) :
-    Outcome.Rel Prod.snd Prod.snd Devm.MachFrame d (Devm.pop d) := by
-  exact liftMach_machFrame Mach.pop d
-
-lemma Devm.pop_instructionFrame (d : Devm) :
-    Outcome.Rel Prod.snd Prod.snd Devm.InstructionFrame d (Devm.pop d) := by
-  exact Outcome.Rel.mono Devm.machFrame_refines_instructionFrame
-    (Devm.pop_machFrame d)
-
-lemma Devm.push_machFrame (x : B256) (d : Devm) :
-    Execution.Rel Devm.MachFrame d (Devm.push x d) := by
-  exact liftMachExecution_machFrame (Mach.push x) d
-
-lemma Devm.push_instructionFrame (x : B256) (d : Devm) :
-    Execution.Rel Devm.InstructionFrame d (Devm.push x d) := by
-  exact Outcome.Rel.mono Devm.machFrame_refines_instructionFrame
-    (Devm.push_machFrame x d)
-
-lemma pushItem_machFrame (x : B256) (cost : Nat) (d : Devm) :
-    Execution.Rel Devm.MachFrame d (pushItem x cost d) := by
-  exact liftMachExecution_machFrame (Mach.pushItem x cost) d
-
-lemma pushItem_instructionFrame (x : B256) (cost : Nat) (d : Devm) :
-    Execution.Rel Devm.InstructionFrame d (pushItem x cost d) := by
-  exact Outcome.Rel.mono Devm.machFrame_refines_instructionFrame
-    (pushItem_machFrame x cost d)
-
-lemma chargeGas_machFrame (cost : Nat) (d : Devm) :
-    Execution.Rel Devm.MachFrame d (chargeGas cost d) := by
-  exact liftMachExecution_machFrame (Mach.chargeGas cost) d
-
-lemma chargeGas_instructionFrame (cost : Nat) (d : Devm) :
-    Execution.Rel Devm.InstructionFrame d (chargeGas cost d) := by
-  exact Outcome.Rel.mono Devm.machFrame_refines_instructionFrame
-    (chargeGas_machFrame cost d)
-
-lemma Devm.popToNat_machFrame (d : Devm) :
-    Outcome.Rel Prod.snd Prod.snd Devm.MachFrame d (Devm.popToNat d) := by
-  exact liftMach_machFrame Mach.popToNat d
-
-lemma Devm.popToNat_instructionFrame (d : Devm) :
-    Outcome.Rel Prod.snd Prod.snd Devm.InstructionFrame d (Devm.popToNat d) := by
-  exact Outcome.Rel.mono Devm.machFrame_refines_instructionFrame
-    (Devm.popToNat_machFrame d)
-
-lemma Devm.popToAdr_machFrame (d : Devm) :
-    Outcome.Rel Prod.snd Prod.snd Devm.MachFrame d (Devm.popToAdr d) := by
-  exact liftMach_machFrame Mach.popToAdr d
-
-lemma Devm.popToAdr_instructionFrame (d : Devm) :
-    Outcome.Rel Prod.snd Prod.snd Devm.InstructionFrame d (Devm.popToAdr d) := by
-  exact Outcome.Rel.mono Devm.machFrame_refines_instructionFrame
-    (Devm.popToAdr_machFrame d)
-
-lemma Devm.popN_machFrame (d : Devm) (n : Nat) :
-    Outcome.Rel Prod.snd Prod.snd Devm.MachFrame d (Devm.popN d n) := by
-  exact liftMach_machFrame (Mach.popN · n) d
-
-lemma Devm.popN_instructionFrame (d : Devm) (n : Nat) :
-    Outcome.Rel Prod.snd Prod.snd Devm.InstructionFrame d (Devm.popN d n) := by
-  exact Outcome.Rel.mono Devm.machFrame_refines_instructionFrame
-    (Devm.popN_machFrame d n)
-
-lemma applyUnary_machFrame (f : B256 → B256) (cost : Nat) (d : Devm) :
-    Execution.Rel Devm.MachFrame d (applyUnary f cost d) := by
-  exact liftMachExecution_machFrame (Mach.applyUnary f cost) d
-
-lemma applyUnary_instructionFrame (f : B256 → B256) (cost : Nat) (d : Devm) :
-    Execution.Rel Devm.InstructionFrame d (applyUnary f cost d) := by
-  exact Outcome.Rel.mono Devm.machFrame_refines_instructionFrame
-    (applyUnary_machFrame f cost d)
-
-lemma applyBinary_machFrame (f : B256 → B256 → B256)
-    (cost : Nat) (d : Devm) :
-    Execution.Rel Devm.MachFrame d (applyBinary f cost d) := by
-  exact liftMachExecution_machFrame (Mach.applyBinary f cost) d
-
-lemma applyBinary_instructionFrame (f : B256 → B256 → B256)
-    (cost : Nat) (d : Devm) :
-    Execution.Rel Devm.InstructionFrame d (applyBinary f cost d) := by
-  exact Outcome.Rel.mono Devm.machFrame_refines_instructionFrame
-    (applyBinary_machFrame f cost d)
-
-lemma applyTernary_machFrame (f : B256 → B256 → B256 → B256)
-    (cost : Nat) (d : Devm) :
-    Execution.Rel Devm.MachFrame d (applyTernary f cost d) := by
-  exact liftMachExecution_machFrame (Mach.applyTernary f cost) d
-
-lemma applyTernary_instructionFrame (f : B256 → B256 → B256 → B256)
-    (cost : Nat) (d : Devm) :
-    Execution.Rel Devm.InstructionFrame d (applyTernary f cost d) := by
-  exact Outcome.Rel.mono Devm.machFrame_refines_instructionFrame
-    (applyTernary_machFrame f cost d)
-
-lemma Devm.memWrite_machFrame (d : Devm) (idx : Nat) (val : B8L) :
-    Devm.MachFrame d (Devm.memWrite d idx val) := by
-  exact liftMachPure_machFrame (Mach.memWrite · idx val) d
-
-lemma Devm.memWrite_instructionFrame (d : Devm) (idx : Nat) (val : B8L) :
-    Devm.InstructionFrame d (Devm.memWrite d idx val) := by
-  exact Devm.machFrame_refines_instructionFrame
-    (Devm.memWrite_machFrame d idx val)
-
-lemma Devm.memExtends_machFrame (d : Devm) (ranges : List (Nat × Nat)) :
-    Devm.MachFrame d (Devm.memExtends d ranges) := by
-  exact liftMachPure_machFrame (Mach.memExtends · ranges) d
-
-lemma Devm.memExtends_instructionFrame (d : Devm)
-    (ranges : List (Nat × Nat)) :
-    Devm.InstructionFrame d (Devm.memExtends d ranges) := by
-  exact Devm.machFrame_refines_instructionFrame
-    (Devm.memExtends_machFrame d ranges)
-
-lemma addAccessedAddress_instructionFrame (d : Devm) (a : Adr) :
-    Devm.InstructionFrame d (addAccessedAddress d a) := by
-  exact liftMachMetaPure_instructionFrame _ d ⟨rfl, rfl⟩
-
-lemma addAccessedStorageKey_instructionFrame
-    (d : Devm) (a : Adr) (k : B256) :
-    Devm.InstructionFrame d (addAccessedStorageKey d a k) := by
-  exact liftMachMetaPure_instructionFrame _ d ⟨rfl, rfl⟩
-
-lemma Devm.addLog_instructionFrame (d : Devm) (log : Log) :
-    Devm.InstructionFrame d (Devm.addLog d log) := by
-  exact liftMachMetaPure_instructionFrame _ d ⟨rfl, rfl⟩
-
-lemma Devm.memRead_instructionFrame (d : Devm) (index size : Nat) :
-    Devm.InstructionFrame d (Devm.memRead d index size).2 := by
-  unfold Devm.memRead
-  split
-  exact {
-    stack := trivial
-    memory := trivial
-    gasLeft := trivial
-    logs := trivial
-    refundCounter := trivial
-    output := trivial
-    accountsToDelete := rfl
-    returnData := trivial
-    error := trivial
-    accessedAddresses := trivial
-    accessedStorageKeys := trivial
-    state := rfl
-    createdAccounts := rfl
-    transientStorage := rfl }
-
-lemma Rinst.balanceCore_meta_instructionFrame
-    (world : World) (mach : Mach) (view : Meta) :
-    Outcome.Rel (fun e => e.2.2) (fun x => x.2.2)
-      Meta.InstructionFrame view (Rinst.balanceCore world mach view) := by
-  cases hpop : mach.pop with
-  | error e =>
-      simp only [Rinst.balanceCore, hpop]
-      exact ⟨rfl, rfl⟩
-  | ok out =>
-      rcases out with ⟨x, mach'⟩
-      simp only [Rinst.balanceCore, hpop]
-      by_cases hw : x.toAdr ∈ view.accessedAddresses
-      · simp only [hw, if_pos]
-        split
-        · exact ⟨rfl, rfl⟩
-        · split <;> exact ⟨rfl, rfl⟩
-      · simp only [hw, if_false]
-        split
-        · exact ⟨rfl, rfl⟩
-        · split <;> exact ⟨rfl, rfl⟩
-
-lemma Rinst.balanceCore_instructionFrame (d : Devm) :
-    Execution.Rel Devm.InstructionFrame d
-      (liftMachMetaWorldExecution Rinst.balanceCore d) := by
-  exact liftMachMetaWorldExecution_instructionFrame Rinst.balanceCore d
-    (Rinst.balanceCore_meta_instructionFrame d.world d.mach d.meta)
-
-/-! ### Bind composition for frame relations -/
-
-lemma Outcome.Rel.pure
-    {R : Devm → Devm → Prop} (hrefl : Reflexive R) (x : α) (d : Devm) :
-    Outcome.Rel Prod.snd Prod.snd R d
-      (.ok (x, d) : Except (String × Devm) (α × Devm)) :=
-  hrefl d
-
-lemma Execution.Rel.pure
-    {R : Devm → Devm → Prop} (hrefl : Reflexive R) (d : Devm) :
-    Execution.Rel R d (.ok d) :=
-  hrefl d
-
-lemma Outcome.Rel.bind
-    {R : Devm → Devm → Prop} (htrans : Transitive R)
-    {pre : Devm} {out : Except (String × Devm) (α × Devm)}
-    {next : α → Devm → Except (String × Devm) (β × Devm)}
-    (hout : Outcome.Rel Prod.snd Prod.snd R pre out)
-    (hnext : ∀ x d, Outcome.Rel Prod.snd Prod.snd R d (next x d)) :
-    Outcome.Rel Prod.snd Prod.snd R pre
-      (out >>= fun x => next x.1 x.2) := by
-  cases out with
-  | error e => exact hout
-  | ok x =>
-      cases hn : next x.1 x.2 with
-      | error e =>
-          have h := hnext x.1 x.2
-          rw [hn] at h
-          simpa only [Except.bind_ok, hn] using htrans hout h
-      | ok y =>
-          have h := hnext x.1 x.2
-          rw [hn] at h
-          simpa only [Except.bind_ok, hn] using htrans hout h
-
-lemma Outcome.Rel.bindExecution
-    {R : Devm → Devm → Prop} (htrans : Transitive R)
-    {pre : Devm} {out : Except (String × Devm) (α × Devm)}
-    {next : α → Devm → Execution}
-    (hout : Outcome.Rel Prod.snd Prod.snd R pre out)
-    (hnext : ∀ x d, Execution.Rel R d (next x d)) :
-    Execution.Rel R pre (out >>= fun x => next x.1 x.2) := by
-  cases out with
-  | error e => exact hout
-  | ok x =>
-      cases hn : next x.1 x.2 with
-      | error e =>
-          have h := hnext x.1 x.2
-          rw [hn] at h
-          simpa only [Except.bind_ok, hn] using htrans hout h
-      | ok d =>
-          have h := hnext x.1 x.2
-          rw [hn] at h
-          simpa only [Except.bind_ok, hn, id_eq] using htrans hout h
-
-lemma Execution.Rel.bind
-    {R : Devm → Devm → Prop} (htrans : Transitive R)
-    {pre : Devm} {out : Execution} {next : Devm → Execution}
-    (hout : Execution.Rel R pre out)
-    (hnext : ∀ d, Execution.Rel R d (next d)) :
-    Execution.Rel R pre (out >>= next) := by
-  cases out with
-  | error e => exact hout
-  | ok d =>
-      cases hn : next d with
-      | error e =>
-          have h := hnext d
-          rw [hn] at h
-          simpa only [Except.bind_ok, hn] using htrans hout h
-      | ok d' =>
-          have h := hnext d
-          rw [hn] at h
-          simpa only [Except.bind_ok, hn, id_eq] using htrans hout h
-
-/-! ### Step 3 calibration cases -/
-
-lemma Rinst.balance_runCore_instructionFrame
-    (pc : Nat) (devm : Devm) (sevm : Sevm) :
-    Execution.Rel Devm.InstructionFrame devm
-      (Rinst.runCore pc devm sevm .balance) := by
-  simpa only [Rinst.runCore] using Rinst.balanceCore_instructionFrame devm
-
-lemma Rinst.blobhash_runCore_instructionFrame
-    (pc : Nat) (devm : Devm) (sevm : Sevm) :
-    Execution.Rel Devm.InstructionFrame devm
-      (Rinst.runCore pc devm sevm .blobhash) := by
-  simp only [Rinst.runCore]
-  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
-    (Devm.pop_instructionFrame devm) (next := fun x d =>
-      chargeGas gHashopcode d >>=
-        Devm.push (sevm.tenvStat.blobVersionedHashes.getD x.toNat 0)) ?_
-  intro x d
-  apply Execution.Rel.bind Devm.instructionFrame_trans
-    (chargeGas_instructionFrame gHashopcode d)
-  exact Devm.push_instructionFrame _
-
-/-! ## Master regular-instruction frame theorem -/
-
-/-- Equality of the balance/code observations of two world states.  Storage is
-    deliberately absent: it is the component written by `SSTORE`. -/
-def State.BalCodeEq (a b : _root_.State) : Prop :=
-  (fun adr => ((a.get adr).bal, (a.get adr).code)) =
-    fun adr => ((b.get adr).bal, (b.get adr).code)
-
-/-- `SSTORE` may change storage in `state`, but preserves balances, code, and
-    the other world/frame fields. -/
-def Devm.Rels.stateWriteFrame : Devm.Rels :=
-  { Devm.Rels.instructionFrame with state := State.BalCodeEq }
-
-/-- `TSTORE` may change `transientStorage`, but preserves the other
-    world/frame fields. -/
-def Devm.Rels.transientWriteFrame : Devm.Rels :=
-  { Devm.Rels.instructionFrame with transientStorage := fun _ _ => True }
-
-abbrev Devm.StateWriteFrame : Devm → Devm → Prop :=
-  Devm.Rel Devm.Rels.stateWriteFrame
-
-abbrev Devm.TransientWriteFrame : Devm → Devm → Prop :=
-  Devm.Rel Devm.Rels.transientWriteFrame
-
-lemma Devm.Rels.stateWriteFrame_refl :
-    Devm.Rels.Refl Devm.Rels.stateWriteFrame := by
-  simp [Devm.Rels.Refl, Devm.Rels.stateWriteFrame,
-    Devm.Rels.instructionFrame, State.BalCodeEq, Reflexive]
-
-lemma Devm.Rels.stateWriteFrame_trans :
-    Devm.Rels.Trans Devm.Rels.stateWriteFrame := by
-  simp_all [Devm.Rels.Trans, Devm.Rels.stateWriteFrame,
-    Devm.Rels.instructionFrame, State.BalCodeEq, Transitive]
-
-lemma Devm.Rels.transientWriteFrame_refl :
-    Devm.Rels.Refl Devm.Rels.transientWriteFrame := by
-  simp [Devm.Rels.Refl, Devm.Rels.transientWriteFrame,
-    Devm.Rels.instructionFrame, Reflexive]
-
-lemma Devm.Rels.transientWriteFrame_trans :
-    Devm.Rels.Trans Devm.Rels.transientWriteFrame := by
-  simp [Devm.Rels.Trans, Devm.Rels.transientWriteFrame,
-    Devm.Rels.instructionFrame, Transitive]
-
-lemma Devm.stateWriteFrame_refl : Reflexive Devm.StateWriteFrame :=
-  Devm.rel_refl Devm.Rels.stateWriteFrame_refl
-
-lemma Devm.stateWriteFrame_trans : Transitive Devm.StateWriteFrame :=
-  Devm.rel_trans Devm.Rels.stateWriteFrame_trans
-
-lemma Devm.transientWriteFrame_refl : Reflexive Devm.TransientWriteFrame :=
-  Devm.rel_refl Devm.Rels.transientWriteFrame_refl
-
-lemma Devm.transientWriteFrame_trans : Transitive Devm.TransientWriteFrame :=
-  Devm.rel_trans Devm.Rels.transientWriteFrame_trans
-
-lemma Devm.instructionFrame_refines_stateWriteFrame :
-    CEffect.Refines Devm.InstructionFrame Devm.StateWriteFrame := by
-  intro d d' h
-  refine { h with state := ?_ }
-  change State.BalCodeEq d.state d'.state
-  rw [h.state]
-  rfl
-
-lemma Devm.instructionFrame_refines_transientWriteFrame :
-    CEffect.Refines Devm.InstructionFrame Devm.TransientWriteFrame := by
-  intro d d' h
-  exact { h with transientStorage := trivial }
-
-lemma Devm.instructionFrame_of_world_eq {d d' : Devm}
-    (hdel : d.accountsToDelete = d'.accountsToDelete)
-    (hstate : d.state = d'.state)
-    (hcreated : d.createdAccounts = d'.createdAccounts)
-    (htransient : d.transientStorage = d'.transientStorage) :
-    Devm.InstructionFrame d d' := by
-  exact {
-    stack := trivial
-    memory := trivial
-    gasLeft := trivial
-    logs := trivial
-    refundCounter := trivial
-    output := trivial
-    accountsToDelete := hdel
-    returnData := trivial
-    error := trivial
-    accessedAddresses := trivial
-    accessedStorageKeys := trivial
-    state := hstate
-    createdAccounts := hcreated
-    transientStorage := htransient }
-
-lemma popChargePush_instructionFrame (pre : Devm)
-    (cost : B256 → Devm → Nat) (value : B256 → Devm → B256) :
-    Execution.Rel Devm.InstructionFrame pre (do
-      let ⟨x, d⟩ ← pre.pop
-      let d ← chargeGas (cost x d) d
-      d.push (value x d)) := by
-  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
-    (Devm.pop_instructionFrame pre) (next := fun x d =>
-      chargeGas (cost x d) d >>= fun d => Devm.push (value x d) d) ?_
-  intro x d
-  apply Execution.Rel.bind Devm.instructionFrame_trans
-    (chargeGas_instructionFrame (cost x d) d)
-  intro d'
-  exact Devm.push_instructionFrame (value x d') d'
-
-lemma Execution.Rel.trans_left {R : Devm → Devm → Prop}
-    (htrans : Transitive R) {a b : Devm} {out : Execution}
-    (hab : R a b) (hout : Execution.Rel R b out) :
-    Execution.Rel R a out := by
-  cases out <;> exact htrans hab hout
-
-lemma pop2ChargePush_instructionFrame (pre : Devm)
-    (cost : B256 → B256 → Devm → Nat)
-    (value : B256 → B256 → Devm → B256) :
-    Execution.Rel Devm.InstructionFrame pre (do
-      let ⟨x, d⟩ ← pre.pop
-      let ⟨y, d⟩ ← d.pop
-      let d ← chargeGas (cost x y d) d
-      d.push (value x y d)) := by
-  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
-    (Devm.pop_instructionFrame pre) (next := fun x d => do
-      let ⟨y, d⟩ ← d.pop
-      let d ← chargeGas (cost x y d) d
-      d.push (value x y d)) ?_
-  intro x d
-  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
-    (Devm.pop_instructionFrame d) (next := fun y d =>
-      chargeGas (cost x y d) d >>= fun d => Devm.push (value x y d) d) ?_
-  intro y d
-  apply Execution.Rel.bind Devm.instructionFrame_trans
-    (chargeGas_instructionFrame (cost x y d) d)
-  intro d'
-  exact Devm.push_instructionFrame (value x y d') d'
-
-lemma Rinst.exp_runCore_instructionFrame
-    (pc : Nat) (pre : Devm) (sevm : Sevm) :
-    Execution.Rel Devm.InstructionFrame pre
-      (Rinst.runCore pc pre sevm .exp) := by
-  simpa only [Rinst.runCore] using
-    (pop2ChargePush_instructionFrame pre
-      (fun _ exponent _ => gExp + gExpbyte * exponent.bytecount)
-      (fun base exponent _ => B256.bexp base exponent))
-
-lemma Rinst.calldataload_runCore_instructionFrame
-    (pc : Nat) (pre : Devm) (sevm : Sevm) :
-    Execution.Rel Devm.InstructionFrame pre
-      (Rinst.runCore pc pre sevm .calldataload) := by
-  simpa only [Rinst.runCore] using
-    (popChargePush_instructionFrame pre (fun _ _ => gVerylow)
-      (fun start _ => B8L.toB256 <| sevm.data.sliceD start.toNat 32 0))
-
-lemma Rinst.blockhash_runCore_instructionFrame
-    (pc : Nat) (pre : Devm) (sevm : Sevm) :
-    Execution.Rel Devm.InstructionFrame pre
-      (Rinst.runCore pc pre sevm .blockhash) := by
-  simpa only [Rinst.runCore] using
-    (popChargePush_instructionFrame pre (fun _ _ => gBlockhash)
-      (fun blockNumberWord _ =>
-        let blockNumber := blockNumberWord.toNat
-        let maxBlockNumber := blockNumber + 256
-        if sevm.benvStat.number ≤ blockNumber ∨
-            maxBlockNumber < sevm.benvStat.number then 0
-        else sevm.benvStat.blockHashes.getD
-          (sevm.benvStat.blockHashes.length -
-            (sevm.benvStat.number - blockNumber)) 0))
-
-lemma Rinst.gas_runCore_instructionFrame
-    (pc : Nat) (pre : Devm) (sevm : Sevm) :
-    Execution.Rel Devm.InstructionFrame pre
-      (Rinst.runCore pc pre sevm .gas) := by
-  simp only [Rinst.runCore]
-  apply Execution.Rel.bind Devm.instructionFrame_trans
-    (chargeGas_instructionFrame gBase pre)
-  intro d
-  exact Devm.push_instructionFrame d.gasLeft.toB256 d
-
-lemma Rinst.tload_runCore_instructionFrame
-    (pc : Nat) (pre : Devm) (sevm : Sevm) :
-    Execution.Rel Devm.InstructionFrame pre
-      (Rinst.runCore pc pre sevm .tload) := by
-  simp only [Rinst.runCore]
-  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
-    (Devm.pop_instructionFrame pre) (next := fun key d =>
-      pushItem (d.getTransVal sevm.currentTarget key) gasWarmAccess d) ?_
-  intro key d
-  exact pushItem_instructionFrame _ _ d
-
-lemma popNat3ChargePure_instructionFrame (pre : Devm)
-    (cost : Nat → Nat → Nat → Devm → Nat)
-    (finish : Nat → Nat → Nat → Devm → Devm)
-    (hfinish : ∀ x y z d, Devm.InstructionFrame d (finish x y z d)) :
-    Execution.Rel Devm.InstructionFrame pre (do
-      let ⟨x, d⟩ ← pre.popToNat
-      let ⟨y, d⟩ ← d.popToNat
-      let ⟨z, d⟩ ← d.popToNat
-      let d ← chargeGas (cost x y z d) d
-      .ok (finish x y z d)) := by
-  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
-    (Devm.popToNat_instructionFrame pre) (next := fun x d => do
-      let ⟨y, d⟩ ← d.popToNat
-      let ⟨z, d⟩ ← d.popToNat
-      let d ← chargeGas (cost x y z d) d
-      .ok (finish x y z d)) ?_
-  intro x d
-  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
-    (Devm.popToNat_instructionFrame d) (next := fun y d => do
-      let ⟨z, d⟩ ← d.popToNat
-      let d ← chargeGas (cost x y z d) d
-      .ok (finish x y z d)) ?_
-  intro y d
-  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
-    (Devm.popToNat_instructionFrame d) (next := fun z d =>
-      chargeGas (cost x y z d) d >>= fun d => .ok (finish x y z d)) ?_
-  intro z d
-  apply Execution.Rel.bind Devm.instructionFrame_trans
-    (chargeGas_instructionFrame (cost x y z d) d)
-  intro d'
-  exact hfinish x y z d'
-
-lemma popNatPopChargePure_instructionFrame (pre : Devm)
-    (cost : Nat → B256 → Devm → Nat)
-    (finish : Nat → B256 → Devm → Devm)
-    (hfinish : ∀ x y d, Devm.InstructionFrame d (finish x y d)) :
-    Execution.Rel Devm.InstructionFrame pre (do
-      let ⟨x, d⟩ ← pre.popToNat
-      let ⟨y, d⟩ ← d.pop
-      let d ← chargeGas (cost x y d) d
-      .ok (finish x y d)) := by
-  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
-    (Devm.popToNat_instructionFrame pre) (next := fun x d => do
-      let ⟨y, d⟩ ← d.pop
-      let d ← chargeGas (cost x y d) d
-      .ok (finish x y d)) ?_
-  intro x d
-  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
-    (Devm.pop_instructionFrame d) (next := fun y d =>
-      chargeGas (cost x y d) d >>= fun d => .ok (finish x y d)) ?_
-  intro y d
-  apply Execution.Rel.bind Devm.instructionFrame_trans
-    (chargeGas_instructionFrame (cost x y d) d)
-  intro d'
-  exact hfinish x y d'
-
-lemma Rinst.calldatacopy_runCore_instructionFrame
-    (pc : Nat) (pre : Devm) (sevm : Sevm) :
-    Execution.Rel Devm.InstructionFrame pre
-      (Rinst.runCore pc pre sevm .calldatacopy) := by
-  simpa only [Rinst.runCore] using
-    (popNat3ChargePure_instructionFrame pre
-      (fun memoryStart _ size d =>
-        gVerylow + gasCopy * ceilDiv size 32 + d.extCost [(memoryStart, size)])
-      (fun memoryStart dataStart size d =>
-        d.memWrite memoryStart (sevm.data.sliceD dataStart size 0))
-      (fun memoryStart dataStart size d =>
-        Devm.memWrite_instructionFrame d memoryStart
-          (sevm.data.sliceD dataStart size 0)))
-
-lemma Rinst.codecopy_runCore_instructionFrame
-    (pc : Nat) (pre : Devm) (sevm : Sevm) :
-    Execution.Rel Devm.InstructionFrame pre
-      (Rinst.runCore pc pre sevm .codecopy) := by
-  simpa only [Rinst.runCore] using
-    (popNat3ChargePure_instructionFrame pre
-      (fun memoryStart _ size d =>
-        gVerylow + gasCopy * ceilDiv size 32 + d.extCost [(memoryStart, size)])
-      (fun memoryStart codeStart size d =>
-        { d with memory := (d.memory.write memoryStart
-          (sevm.code.sliceD codeStart size (Linst.toB8 .stop))) })
-      (fun _ _ _ _ => Devm.instructionFrame_of_world_eq rfl rfl rfl rfl))
-
-lemma Rinst.mstore_runCore_instructionFrame
-    (pc : Nat) (pre : Devm) (sevm : Sevm) :
-    Execution.Rel Devm.InstructionFrame pre
-      (Rinst.runCore pc pre sevm .mstore) := by
-  simpa only [Rinst.runCore] using
-    (popNatPopChargePure_instructionFrame pre
-      (fun start _ d => gVerylow + d.extCost [(start, 32)])
-      (fun start value d => d.memWrite start value.toB8L)
-      (fun start value d =>
-        Devm.memWrite_instructionFrame d start value.toB8L))
-
-lemma Rinst.mstore8_runCore_instructionFrame
-    (pc : Nat) (pre : Devm) (sevm : Sevm) :
-    Execution.Rel Devm.InstructionFrame pre
-      (Rinst.runCore pc pre sevm .mstore8) := by
-  simpa only [Rinst.runCore] using
-    (popNatPopChargePure_instructionFrame pre
-      (fun start _ d => gVerylow + d.extCost [(start, 1)])
-      (fun start value d => d.memWrite start [value.2.2.toUInt8])
-      (fun start value d =>
-        Devm.memWrite_instructionFrame d start [value.2.2.toUInt8]))
-
-lemma Rinst.mload_runCore_instructionFrame
-    (pc : Nat) (pre : Devm) (sevm : Sevm) :
-    Execution.Rel Devm.InstructionFrame pre
-      (Rinst.runCore pc pre sevm .mload) := by
-  simp only [Rinst.runCore]
-  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
-    (Devm.popToNat_instructionFrame pre) (next := fun start d =>
-      chargeGas (gVerylow + d.extCost [(start, 32)]) d >>= fun d =>
-        Devm.push (B8L.toB256 (d.memRead start 32).1) (d.memRead start 32).2) ?_
-  intro start d
-  apply Execution.Rel.bind Devm.instructionFrame_trans
-    (chargeGas_instructionFrame _ d)
-  intro d'
-  exact Execution.Rel.trans_left Devm.instructionFrame_trans
-    (Devm.memRead_instructionFrame d' start 32)
-    (Devm.push_instructionFrame _ (d'.memRead start 32).2)
-
-lemma Rinst.kec_runCore_instructionFrame
-    (pc : Nat) (pre : Devm) (sevm : Sevm) :
-    Execution.Rel Devm.InstructionFrame pre
-      (Rinst.runCore pc pre sevm .kec) := by
-  simp only [Rinst.runCore]
-  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
-    (Devm.popToNat_instructionFrame pre) (next := fun start d => do
-      let ⟨size, d⟩ ← d.popToNat
-      let d ← chargeGas
-        (gKeccak256 + gasKeccak256Word * ceilDiv size 32 +
-          d.extCost [(start, size)]) d
-      let ⟨arg, d⟩ := d.memRead start size
-      d.push arg.keccak) ?_
-  intro start d
-  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
-    (Devm.popToNat_instructionFrame d) (next := fun size d =>
-      chargeGas
-        (gKeccak256 + gasKeccak256Word * ceilDiv size 32 +
-          d.extCost [(start, size)]) d >>= fun d =>
-        Devm.push (d.memRead start size).1.keccak (d.memRead start size).2) ?_
-  intro size d
-  apply Execution.Rel.bind Devm.instructionFrame_trans
-    (chargeGas_instructionFrame _ d)
-  intro d'
-  exact Execution.Rel.trans_left Devm.instructionFrame_trans
-    (Devm.memRead_instructionFrame d' start size)
-    (Devm.push_instructionFrame _ (d'.memRead start size).2)
-
-lemma Rinst.mcopy_runCore_instructionFrame
-    (pc : Nat) (pre : Devm) (sevm : Sevm) :
-    Execution.Rel Devm.InstructionFrame pre
-      (Rinst.runCore pc pre sevm .mcopy) := by
-  simp only [Rinst.runCore]
-  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
-    (Devm.popToNat_instructionFrame pre) (next := fun destination d => do
-      let ⟨source, d⟩ ← d.popToNat
-      let ⟨length, d⟩ ← d.popToNat
-      let d ← chargeGas (gVerylow + gasCopy * ceilDiv length 32 +
-        d.extCost [(source, length), (destination, length)]) d
-      .ok ((d.memRead source length).2.memWrite destination
-        (d.memRead source length).1)) ?_
-  intro destination d
-  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
-    (Devm.popToNat_instructionFrame d) (next := fun source d => do
-      let ⟨length, d⟩ ← d.popToNat
-      let d ← chargeGas (gVerylow + gasCopy * ceilDiv length 32 +
-        d.extCost [(source, length), (destination, length)]) d
-      .ok ((d.memRead source length).2.memWrite destination
-        (d.memRead source length).1)) ?_
-  intro source d
-  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
-    (Devm.popToNat_instructionFrame d) (next := fun length d =>
-      chargeGas (gVerylow + gasCopy * ceilDiv length 32 +
-        d.extCost [(source, length), (destination, length)]) d >>= fun d =>
-      .ok ((d.memRead source length).2.memWrite destination
-        (d.memRead source length).1)) ?_
-  intro length d
-  apply Execution.Rel.bind Devm.instructionFrame_trans
-    (chargeGas_instructionFrame _ d)
-  intro d'
-  exact Devm.instructionFrame_trans
-    (Devm.memRead_instructionFrame d' source length)
-    (Devm.memWrite_instructionFrame (d'.memRead source length).2 destination
-      (d'.memRead source length).1)
-
-lemma popAdrAccessChargePush_instructionFrame (pre : Devm)
-    (value : Adr → Devm → B256) :
-    Execution.Rel Devm.InstructionFrame pre (do
-      let ⟨a, d⟩ ← pre.popToAdr
-      let d ← if a ∈ d.accessedAddresses then chargeGas gasWarmAccess d
-        else chargeGas gasColdAccountAccess (addAccessedAddress d a)
-      d.push (value a d)) := by
-  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
-    (Devm.popToAdr_instructionFrame pre) (next := fun a d => do
-      let d ← if a ∈ d.accessedAddresses then chargeGas gasWarmAccess d
-        else chargeGas gasColdAccountAccess (addAccessedAddress d a)
-      d.push (value a d)) ?_
-  intro a d
-  by_cases h : a ∈ d.accessedAddresses
-  · simp only [h, if_pos]
-    apply Execution.Rel.bind Devm.instructionFrame_trans
-      (chargeGas_instructionFrame gasWarmAccess d)
-    intro d'
-    exact Devm.push_instructionFrame (value a d') d'
-  · simp only [h, if_false]
-    apply Execution.Rel.bind Devm.instructionFrame_trans
-      (Execution.Rel.trans_left Devm.instructionFrame_trans
-        (addAccessedAddress_instructionFrame d a)
-        (chargeGas_instructionFrame gasColdAccountAccess
-          (addAccessedAddress d a)))
-    intro d'
-    exact Devm.push_instructionFrame (value a d') d'
-
-lemma Rinst.extcodesize_runCore_instructionFrame
-    (pc : Nat) (pre : Devm) (sevm : Sevm) :
-    Execution.Rel Devm.InstructionFrame pre
-      (Rinst.runCore pc pre sevm .extcodesize) := by
-  simpa only [Rinst.runCore] using
-    (popAdrAccessChargePush_instructionFrame pre
-      (fun a d => (d.getCode a).size.toB256))
-
-lemma Rinst.extcodehash_runCore_instructionFrame
-    (pc : Nat) (pre : Devm) (sevm : Sevm) :
-    Execution.Rel Devm.InstructionFrame pre
-      (Rinst.runCore pc pre sevm .extcodehash) := by
-  simpa only [Rinst.runCore] using
-    (popAdrAccessChargePush_instructionFrame pre (fun a d =>
-      let account := d.getAcct a
-      if account.Empty then 0
-      else ByteArray.keccak 0 account.code.size account.code))
-
-lemma Rinst.sload_runCore_instructionFrame
-    (pc : Nat) (pre : Devm) (sevm : Sevm) :
-    Execution.Rel Devm.InstructionFrame pre
-      (Rinst.runCore pc pre sevm .sload) := by
-  simp only [Rinst.runCore]
-  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
-    (Devm.pop_instructionFrame pre) (next := fun key d =>
-      if (sevm.currentTarget, key) ∈ d.accessedStorageKeys then
-        chargeGas gasWarmAccess d >>= fun d =>
-          Devm.push (d.getStorVal sevm.currentTarget key) d
-      else chargeGas gasColdSload
-        (addAccessedStorageKey d sevm.currentTarget key) >>= fun d =>
-          Devm.push (d.getStorVal sevm.currentTarget key) d) ?_
-  intro key d
-  by_cases h : (sevm.currentTarget, key) ∈ d.accessedStorageKeys
-  · simp only [h, if_pos]
-    apply Execution.Rel.bind Devm.instructionFrame_trans
-      (chargeGas_instructionFrame gasWarmAccess d)
-    intro d'
-    exact Devm.push_instructionFrame _ d'
-  · simp only [h, if_false]
-    apply Execution.Rel.bind Devm.instructionFrame_trans
-      (Execution.Rel.trans_left Devm.instructionFrame_trans
-        (addAccessedStorageKey_instructionFrame d sevm.currentTarget key)
-        (chargeGas_instructionFrame gasColdSload
-          (addAccessedStorageKey d sevm.currentTarget key)))
-    intro d'
-    exact Devm.push_instructionFrame _ d'
-
-lemma Rinst.pop_runCore_instructionFrame
-    (pc : Nat) (pre : Devm) (sevm : Sevm) :
-    Execution.Rel Devm.InstructionFrame pre
-      (Rinst.runCore pc pre sevm .pop) := by
-  simp only [Rinst.runCore]
-  have hp := Devm.pop_instructionFrame pre
-  cases h : pre.pop with
-  | error e =>
-      rw [h] at hp
-      simpa [h] using hp
-  | ok x =>
-      rcases x with ⟨word, d⟩
-      rw [h] at hp
-      simpa [h] using
-        (Execution.Rel.trans_left Devm.instructionFrame_trans hp
-          (chargeGas_instructionFrame gBase d))
-
-lemma Rinst.dup_runCore_instructionFrame
-    (pc : Nat) (pre : Devm) (sevm : Sevm) (n : Fin 16) :
-    Execution.Rel Devm.InstructionFrame pre
-      (Rinst.runCore pc pre sevm (.dup n)) := by
-  simp only [Rinst.runCore]
-  apply Execution.Rel.bind Devm.instructionFrame_trans
-    (chargeGas_instructionFrame gVerylow pre)
-  intro d
-  cases h : d.stack[n]? with
-  | none =>
-      simp only
-      exact Devm.instructionFrame_refl d
-  | some word =>
-      simp only
-      exact Devm.push_instructionFrame word d
-
-lemma Rinst.swap_runCore_instructionFrame
-    (pc : Nat) (pre : Devm) (sevm : Sevm) (n : Fin 16) :
-    Execution.Rel Devm.InstructionFrame pre
-      (Rinst.runCore pc pre sevm (.swap n)) := by
-  simp only [Rinst.runCore]
-  apply Execution.Rel.bind Devm.instructionFrame_trans
-    (chargeGas_instructionFrame gVerylow pre)
-  intro d
-  cases h : d.stack.swap n with
-  | none =>
-      simp only
-      exact Devm.instructionFrame_refl d
-  | some stack =>
-      simp only
-      exact Devm.instructionFrame_of_world_eq rfl rfl rfl rfl
-
-lemma popNat3Bind_instructionFrame (pre : Devm)
-    (next : Nat → Nat → Nat → Devm → Execution)
-    (hnext : ∀ x y z d, Execution.Rel Devm.InstructionFrame d
-      (next x y z d)) :
-    Execution.Rel Devm.InstructionFrame pre (do
-      let ⟨x, d⟩ ← pre.popToNat
-      let ⟨y, d⟩ ← d.popToNat
-      let ⟨z, d⟩ ← d.popToNat
-      next x y z d) := by
-  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
-    (Devm.popToNat_instructionFrame pre) (next := fun x d => do
-      let ⟨y, d⟩ ← d.popToNat
-      let ⟨z, d⟩ ← d.popToNat
-      next x y z d) ?_
-  intro x d
-  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
-    (Devm.popToNat_instructionFrame d) (next := fun y d => do
-      let ⟨z, d⟩ ← d.popToNat
-      next x y z d) ?_
-  intro y d
-  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
-    (Devm.popToNat_instructionFrame d) (next := next x y) ?_
-  exact hnext x y
-
-lemma popAdrNat3Bind_instructionFrame (pre : Devm)
-    (next : Adr → Nat → Nat → Nat → Devm → Execution)
-    (hnext : ∀ a x y z d, Execution.Rel Devm.InstructionFrame d
-      (next a x y z d)) :
-    Execution.Rel Devm.InstructionFrame pre (do
-      let ⟨a, d⟩ ← pre.popToAdr
-      let ⟨x, d⟩ ← d.popToNat
-      let ⟨y, d⟩ ← d.popToNat
-      let ⟨z, d⟩ ← d.popToNat
-      next a x y z d) := by
-  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
-    (Devm.popToAdr_instructionFrame pre) (next := fun a d => do
-      let ⟨x, d⟩ ← d.popToNat
-      let ⟨y, d⟩ ← d.popToNat
-      let ⟨z, d⟩ ← d.popToNat
-      next a x y z d) ?_
-  intro a d
-  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
-    (Devm.popToNat_instructionFrame d) (next := fun x d => do
-      let ⟨y, d⟩ ← d.popToNat
-      let ⟨z, d⟩ ← d.popToNat
-      next a x y z d) ?_
-  intro x d
-  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
-    (Devm.popToNat_instructionFrame d) (next := fun y d => do
-      let ⟨z, d⟩ ← d.popToNat
-      next a x y z d) ?_
-  intro y d
-  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
-    (Devm.popToNat_instructionFrame d) (next := next a x y) ?_
-  exact hnext a x y
-
-lemma Rinst.retdatacopy_runCore_instructionFrame
-    (pc : Nat) (pre : Devm) (sevm : Sevm) :
-    Execution.Rel Devm.InstructionFrame pre
-      (Rinst.runCore pc pre sevm .retdatacopy) := by
-  simp only [Rinst.runCore]
-  refine popNat3Bind_instructionFrame pre (next := fun memoryStart returnStart size d => do
-    let d ← chargeGas
-      (gVerylow + gReturnDataCopy * ceilDiv size 32 +
-        d.extCost [(memoryStart, size)]) d
-    if d.returnData.length < returnStart + size then
-      .error ⟨"OutOfBoundsRead", d⟩
-    let value := d.returnData.sliceD returnStart size 0
-    .ok { d with memory := d.memory.write memoryStart value }) ?_
-  intro memoryStart returnStart size d
-  apply Execution.Rel.bind Devm.instructionFrame_trans
-    (chargeGas_instructionFrame
-      (gVerylow + gReturnDataCopy * ceilDiv size 32 +
-        d.extCost [(memoryStart, size)]) d)
-  intro d'
-  by_cases h : d'.returnData.length < returnStart + size
-  · simp only [h, if_pos]
-    exact Devm.instructionFrame_refl d'
-  · simp only [h, if_false]
-    exact Devm.instructionFrame_of_world_eq rfl rfl rfl rfl
-
-lemma Rinst.extcodecopy_runCore_instructionFrame
-    (pc : Nat) (pre : Devm) (sevm : Sevm) :
-    Execution.Rel Devm.InstructionFrame pre
-      (Rinst.runCore pc pre sevm .extcodecopy) := by
-  simp only [Rinst.runCore]
-  refine popAdrNat3Bind_instructionFrame pre
-    (next := fun a memoryStart codeStart size d =>
-      if a ∈ d.accessedAddresses then do
-        let d ← chargeGas (gasWarmAccess + gasCopy * ceilDiv size 32 +
-          d.extCost [(memoryStart, size)]) d
-        let value := (d.getCode a).sliceD codeStart size (Linst.toB8 .stop)
-        .ok { d with memory := d.memory.write memoryStart value }
-      else do
-        let d ← chargeGas
-          (gasColdAccountAccess + gasCopy * ceilDiv size 32 +
-            d.extCost [(memoryStart, size)]) (addAccessedAddress d a)
-        let value := (d.getCode a).sliceD codeStart size (Linst.toB8 .stop)
-        .ok { d with memory := d.memory.write memoryStart value }) ?_
-  intro a memoryStart codeStart size d
-  by_cases h : a ∈ d.accessedAddresses
-  · simp only [h, if_pos]
-    apply Execution.Rel.bind Devm.instructionFrame_trans
-      (chargeGas_instructionFrame
-        (gasWarmAccess + gasCopy * ceilDiv size 32 +
-          d.extCost [(memoryStart, size)]) d)
-    intro d'
-    exact Devm.instructionFrame_of_world_eq rfl rfl rfl rfl
-  · simp only [h, if_false]
-    apply Execution.Rel.bind Devm.instructionFrame_trans
-      (Execution.Rel.trans_left Devm.instructionFrame_trans
-        (addAccessedAddress_instructionFrame d a)
-        (chargeGas_instructionFrame
-          (gasColdAccountAccess + gasCopy * ceilDiv size 32 +
-            d.extCost [(memoryStart, size)])
-          (addAccessedAddress d a)))
-    intro d'
-    exact Devm.instructionFrame_of_world_eq rfl rfl rfl rfl
-
-lemma Rinst.log_runCore_instructionFrame
-    (pc : Nat) (pre : Devm) (sevm : Sevm) (n : Fin 5) :
-    Execution.Rel Devm.InstructionFrame pre
-      (Rinst.runCore pc pre sevm (.log n)) := by
-  simp only [Rinst.runCore]
-  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
-    (Devm.popToNat_instructionFrame pre) (next := fun memoryStart d => do
-      let ⟨size, d⟩ ← d.popToNat
-      let ⟨topics, d⟩ ← d.popN n
-      let d ← chargeGas
-        (gLog + gLogdata * size + gLogtopic * n +
-          d.extCost [(memoryStart, size)]) d
-      assertDynamic sevm d
-      let ⟨data, d⟩ := d.memRead memoryStart size
-      .ok (d.addLog ⟨sevm.currentTarget, topics, data⟩)) ?_
-  intro memoryStart d
-  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
-    (Devm.popToNat_instructionFrame d) (next := fun size d => do
-      let ⟨topics, d⟩ ← d.popN n
-      let d ← chargeGas
-        (gLog + gLogdata * size + gLogtopic * n +
-          d.extCost [(memoryStart, size)]) d
-      assertDynamic sevm d
-      let ⟨data, d⟩ := d.memRead memoryStart size
-      .ok (d.addLog ⟨sevm.currentTarget, topics, data⟩)) ?_
-  intro size d
-  refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
-    (Devm.popN_instructionFrame d n) (next := fun topics d => do
-      let d ← chargeGas
-        (gLog + gLogdata * size + gLogtopic * n +
-          d.extCost [(memoryStart, size)]) d
-      assertDynamic sevm d
-      let ⟨data, d⟩ := d.memRead memoryStart size
-      .ok (d.addLog ⟨sevm.currentTarget, topics, data⟩)) ?_
-  intro topics d
-  apply Execution.Rel.bind Devm.instructionFrame_trans
-    (chargeGas_instructionFrame _ d)
-  intro d'
-  unfold assertDynamic Except.assert
-  split
-  · exact Devm.instructionFrame_trans
-      (Devm.memRead_instructionFrame d' memoryStart size)
-      (Devm.addLog_instructionFrame (d'.memRead memoryStart size).2
-        ⟨sevm.currentTarget, topics, (d'.memRead memoryStart size).1⟩)
-  · exact Devm.instructionFrame_refl d'
-
-theorem Rinst.runCore_instructionFrame
-    (pc : Nat) (sevm : Sevm) (pre : Devm) (r : Rinst)
-    (h_not_sstore : r ≠ .sstore) (h_not_tstore : r ≠ .tstore) :
-    Execution.Rel Devm.InstructionFrame pre
-      (Rinst.runCore pc pre sevm r) := by
-  cases r
-  all_goals try contradiction
-  all_goals try (
-    with_reducible first
-      | exact Rinst.exp_runCore_instructionFrame pc pre sevm
-      | exact Rinst.kec_runCore_instructionFrame pc pre sevm
-      | exact Rinst.balance_runCore_instructionFrame pc pre sevm
-      | exact Rinst.blobhash_runCore_instructionFrame pc pre sevm
-      | exact Rinst.calldataload_runCore_instructionFrame pc pre sevm
-      | exact Rinst.calldatacopy_runCore_instructionFrame pc pre sevm
-      | exact Rinst.codecopy_runCore_instructionFrame pc pre sevm
-      | exact Rinst.extcodesize_runCore_instructionFrame pc pre sevm
-      | exact Rinst.extcodecopy_runCore_instructionFrame pc pre sevm
-      | exact Rinst.retdatacopy_runCore_instructionFrame pc pre sevm
-      | exact Rinst.extcodehash_runCore_instructionFrame pc pre sevm
-      | exact Rinst.blockhash_runCore_instructionFrame pc pre sevm
-      | exact Rinst.pop_runCore_instructionFrame pc pre sevm
-      | exact Rinst.mload_runCore_instructionFrame pc pre sevm
-      | exact Rinst.mstore_runCore_instructionFrame pc pre sevm
-      | exact Rinst.mstore8_runCore_instructionFrame pc pre sevm
-      | exact Rinst.sload_runCore_instructionFrame pc pre sevm
-      | exact Rinst.tload_runCore_instructionFrame pc pre sevm
-      | exact Rinst.mcopy_runCore_instructionFrame pc pre sevm
-      | exact Rinst.gas_runCore_instructionFrame pc pre sevm
-      | exact Rinst.dup_runCore_instructionFrame pc pre sevm _
-      | exact Rinst.swap_runCore_instructionFrame pc pre sevm _
-      | exact Rinst.log_runCore_instructionFrame pc pre sevm _)
-  all_goals simp only [Rinst.runCore]
-  all_goals with_reducible first
-    | exact applyBinary_instructionFrame _ _ pre
-    | exact applyTernary_instructionFrame _ _ pre
-    | exact applyUnary_instructionFrame _ _ pre
-    | exact pushItem_instructionFrame _ _ pre
-
-lemma Devm.stateWriteFrame_of_world_eq {d d' : Devm}
-    (hdel : d.accountsToDelete = d'.accountsToDelete)
-    (hstate : d.state = d'.state)
-    (hcreated : d.createdAccounts = d'.createdAccounts)
-    (htransient : d.transientStorage = d'.transientStorage) :
-    Devm.StateWriteFrame d d' := by
-  exact {
-    stack := trivial, memory := trivial, gasLeft := trivial, logs := trivial
-    refundCounter := trivial, output := trivial, accountsToDelete := hdel
-    returnData := trivial, error := trivial, accessedAddresses := trivial
-    accessedStorageKeys := trivial, state := by
-      change State.BalCodeEq d.state d'.state
-      rw [hstate]
-      rfl
-    createdAccounts := hcreated, transientStorage := htransient }
-
-/-- The state-writer frame implies the pre-existing `SSTORE` balance fact. -/
-lemma Devm.StateWriteFrame.getBal_eq {d d' : Devm}
-    (h : Devm.StateWriteFrame d d') (adr : Adr) :
-    d.getBal adr = d'.getBal adr := by
-  have hstate : State.BalCodeEq d.state d'.state := h.state
-  unfold State.BalCodeEq at hstate
-  exact congrArg Prod.fst (congrFun hstate adr)
-
-/-- The state-writer frame implies the pre-existing `SSTORE` code fact. -/
-lemma Devm.StateWriteFrame.getCode_eq {d d' : Devm}
-    (h : Devm.StateWriteFrame d d') (adr : Adr) :
-    d.getCode adr = d'.getCode adr := by
-  have hstate : State.BalCodeEq d.state d'.state := h.state
-  unfold State.BalCodeEq at hstate
-  exact congrArg Prod.snd (congrFun hstate adr)
-
-lemma Devm.setStorVal_stateWriteFrame (d : Devm)
-    (adr : Adr) (key value : B256) :
-    Devm.StateWriteFrame d (d.setStorVal adr key value) := by
-  exact {
-    stack := trivial, memory := trivial, gasLeft := trivial, logs := trivial
-    refundCounter := trivial, output := trivial, accountsToDelete := rfl
-    returnData := trivial, error := trivial, accessedAddresses := trivial
-    accessedStorageKeys := trivial, state := by
-      change State.BalCodeEq d.state (d.setStorVal adr key value).state
-      unfold State.BalCodeEq
-      funext adr'
-      apply Prod.ext
-      · change d.getBal adr' = (d.setStorVal adr key value).getBal adr'
-        exact setStorVal_inv_getBal.symm
-      · change d.getCode adr' = (d.setStorVal adr key value).getCode adr'
-        exact setStorVal_inv_getCode.symm
-    createdAccounts := rfl, transientStorage := rfl }
-
-lemma Devm.transientWriteFrame_of_world_eq {d d' : Devm}
-    (hdel : d.accountsToDelete = d'.accountsToDelete)
-    (hstate : d.state = d'.state)
-    (hcreated : d.createdAccounts = d'.createdAccounts) :
-    Devm.TransientWriteFrame d d' := by
-  exact {
-    stack := trivial, memory := trivial, gasLeft := trivial, logs := trivial
-    refundCounter := trivial, output := trivial, accountsToDelete := hdel
-    returnData := trivial, error := trivial, accessedAddresses := trivial
-    accessedStorageKeys := trivial, state := hstate
-    createdAccounts := hcreated, transientStorage := trivial }
-
-lemma Rinst.tstore_runCore_transientWriteFrame
-    (pc : Nat) (pre : Devm) (sevm : Sevm) :
-    Execution.Rel Devm.TransientWriteFrame pre
-      (Rinst.runCore pc pre sevm .tstore) := by
-  simp only [Rinst.runCore]
-  refine Outcome.Rel.bindExecution Devm.transientWriteFrame_trans
-    (Outcome.Rel.mono Devm.instructionFrame_refines_transientWriteFrame
-      (Devm.pop_instructionFrame pre)) (next := fun key d => do
-        let ⟨value, d⟩ ← d.pop
-        let d ← chargeGas gasWarmAccess d
-        assertDynamic sevm d
-        .ok (d.setTransVal sevm.currentTarget key value)) ?_
-  intro key d
-  refine Outcome.Rel.bindExecution Devm.transientWriteFrame_trans
-    (Outcome.Rel.mono Devm.instructionFrame_refines_transientWriteFrame
-      (Devm.pop_instructionFrame d)) (next := fun value d => do
-        let d ← chargeGas gasWarmAccess d
-        assertDynamic sevm d
-        .ok (d.setTransVal sevm.currentTarget key value)) ?_
-  intro value d
-  apply Execution.Rel.bind Devm.transientWriteFrame_trans
-    (Outcome.Rel.mono Devm.instructionFrame_refines_transientWriteFrame
-      (chargeGas_instructionFrame gasWarmAccess d))
-  intro d'
-  unfold assertDynamic Except.assert
-  split
-  · exact Devm.transientWriteFrame_of_world_eq rfl rfl rfl
-  · exact Devm.transientWriteFrame_refl d'
-
-lemma Rinst.sstore_runCore_stateWriteFrame
-    (pc : Nat) (pre : Devm) (sevm : Sevm) :
-    Execution.Rel Devm.StateWriteFrame pre
-      (Rinst.runCore pc pre sevm .sstore) := by
-  simp only [Rinst.runCore]
-  refine Outcome.Rel.bindExecution Devm.stateWriteFrame_trans
-    (Outcome.Rel.mono Devm.instructionFrame_refines_stateWriteFrame
-      (Devm.pop_instructionFrame pre)) (next := fun key d => do
-        let ⟨value, d⟩ ← d.pop
-        .assert (gCallStipend < d.gasLeft) ⟨"OutOfGasError", d⟩
-        let ct := sevm.currentTarget
-        let original := getOrigStorVal sevm ct key
-        let current := d.getStorVal ct key
-        let ⟨d3, gas2⟩ ← .ok <|
-          if ⟨ct, key⟩ ∉ d.accessedStorageKeys then
-            (addAccessedStorageKey d ct key, gasColdSload) else (d, 0)
-        let gas3 ← .ok <|
-          if original = current ∧ current ≠ value then
-            if original = 0 then gas2 + gasStorageSet
-            else gas2 + (gasStorageUpdate - gasColdSload)
-          else gas2 + gasWarmAccess
-        let d4 ← .ok <| { d3 with refundCounter :=
-          sstore_new_refund_counter value original current d3.refundCounter }
-        let d5 ← chargeGas gas3 d4
-        assertDynamic sevm d5
-        .ok (d5.setStorVal ct key value)) ?_
-  intro key d
-  refine Outcome.Rel.bindExecution Devm.stateWriteFrame_trans
-    (Outcome.Rel.mono Devm.instructionFrame_refines_stateWriteFrame
-      (Devm.pop_instructionFrame d)) (next := fun value d => do
-        .assert (gCallStipend < d.gasLeft) ⟨"OutOfGasError", d⟩
-        let ct := sevm.currentTarget
-        let original := getOrigStorVal sevm ct key
-        let current := d.getStorVal ct key
-        let ⟨d3, gas2⟩ ← .ok <|
-          if ⟨ct, key⟩ ∉ d.accessedStorageKeys then
-            (addAccessedStorageKey d ct key, gasColdSload) else (d, 0)
-        let gas3 ← .ok <|
-          if original = current ∧ current ≠ value then
-            if original = 0 then gas2 + gasStorageSet
-            else gas2 + (gasStorageUpdate - gasColdSload)
-          else gas2 + gasWarmAccess
-        let d4 ← .ok <| { d3 with refundCounter :=
-          sstore_new_refund_counter value original current d3.refundCounter }
-        let d5 ← chargeGas gas3 d4
-        assertDynamic sevm d5
-        .ok (d5.setStorVal ct key value)) ?_
-  intro value d
-  unfold Except.assert
-  dsimp only
-  split
-  · simp only [Except.bind_ok]
-    let d3gas : Devm × Nat :=
-      if (sevm.currentTarget, key) ∉ d.accessedStorageKeys then
-        (addAccessedStorageKey d sevm.currentTarget key, gasColdSload)
-      else (d, 0)
-    let gas3 :=
-      if getOrigStorVal sevm sevm.currentTarget key =
-          d.getStorVal sevm.currentTarget key ∧
-          d.getStorVal sevm.currentTarget key ≠ value then
-        if getOrigStorVal sevm sevm.currentTarget key = 0 then
-          d3gas.2 + gasStorageSet
-        else d3gas.2 + (gasStorageUpdate - gasColdSload)
-      else d3gas.2 + gasWarmAccess
-    let d4 : Devm := { d3gas.1 with refundCounter := (
-      sstore_new_refund_counter value
-        (getOrigStorVal sevm sevm.currentTarget key)
-        (d.getStorVal sevm.currentTarget key) d3gas.1.refundCounter) }
-    change Execution.Rel Devm.StateWriteFrame d
-      (chargeGas gas3 d4 >>= fun d5 =>
-        assertDynamic sevm d5 >>= fun _ =>
-          .ok (d5.setStorVal sevm.currentTarget key value))
-    have hd4 : Devm.StateWriteFrame d d4 := by
-      unfold d4 d3gas
-      split <;> exact Devm.stateWriteFrame_of_world_eq rfl rfl rfl rfl
-    apply Execution.Rel.bind Devm.stateWriteFrame_trans
-      (Execution.Rel.trans_left Devm.stateWriteFrame_trans hd4
-        (Outcome.Rel.mono Devm.instructionFrame_refines_stateWriteFrame
-          (chargeGas_instructionFrame gas3 d4)))
-    intro d5
-    unfold assertDynamic Except.assert
-    split
-    · exact Devm.setStorVal_stateWriteFrame d5 sevm.currentTarget key value
-    · exact Devm.stateWriteFrame_refl d5
-  · exact Devm.stateWriteFrame_refl d
-
-theorem Rinst.run_instructionFrame
-    (pc : Nat) (sevm : Sevm) (pre : Devm) (r : Rinst)
-    (h_not_sstore : r ≠ .sstore) (h_not_tstore : r ≠ .tstore) :
-    Execution.Rel Devm.InstructionFrame pre
-      (Rinst.run ⟨pc, sevm, pre⟩ r) := by
-  exact Rinst.runCore_instructionFrame pc sevm pre r
-    h_not_sstore h_not_tstore
-
-lemma Rinst.sstore_run_stateWriteFrame
-    (pc : Nat) (pre : Devm) (sevm : Sevm) :
-    Execution.Rel Devm.StateWriteFrame pre
-      (Rinst.run ⟨pc, sevm, pre⟩ .sstore) := by
-  exact Rinst.sstore_runCore_stateWriteFrame pc pre sevm
-
-lemma Rinst.tstore_run_transientWriteFrame
-    (pc : Nat) (pre : Devm) (sevm : Sevm) :
-    Execution.Rel Devm.TransientWriteFrame pre
-      (Rinst.run ⟨pc, sevm, pre⟩ .tstore) := by
-  exact Rinst.tstore_runCore_transientWriteFrame pc pre sevm
