@@ -331,7 +331,7 @@ theorem List.append_slice_suffix {ξ : Type y} {xs ys : List ξ} :
 --   x + y = ⟨x.1 + y.1 + if x.2 + y.2 < x.2 then 1 else 0, x.2 + y.2⟩ := rfl
 
 lemma B128.sub_self (a : B128) : a - a = 0 := by
-  rw [B128.sub_eq]; simp [UInt64.sub_self]; rfl
+  rw [B128.sub_eq]; simp; rfl
 
 -- lemma B128.lt_irrefl (x : B128) : ¬ x < x := by
 --   intro h; rcases h with h | h <;> simp [UInt64.lt_irrefl] at h
@@ -342,7 +342,7 @@ lemma B128.sub_self (a : B128) : a - a = 0 := by
 
 
 lemma B256.sub_self (a : B256) : a - a = 0 := by
-  rw [B256.sub_eq]; simp [B128.sub_self, B128.lt_irrefl]; rfl
+  rw [B256.sub_eq]; simp [B128.sub_self]; rfl
 
 def Adr.max : Adr := ⟨-1, -1, -1⟩
 

@@ -2166,7 +2166,7 @@ lemma State.setBal_getCode (st : State) (adr a : Adr) (val : B256) :
     · have h2 : adr = a := compare_eq_iff_eq.mp h
       subst h2
       rw [Std.TreeMap.getD_erase]
-      split_ifs <;> try rfl
+      split_ifs; try rfl
       · have h3 := congrArg Acct.code h_if
         exact h3.symm
     · rw [Std.TreeMap.getD_erase]
@@ -2374,7 +2374,7 @@ lemma Devm.incrNonce_getCode {devm : Devm} {adr a : Adr} : (devm.incrNonce adr).
     · have h2 : adr = a := compare_eq_iff_eq.mp h
       subst h2
       rw [Std.TreeMap.getD_erase]
-      split_ifs <;> try rfl
+      split_ifs; try rfl
       · have h3 := congrArg Acct.code h_if
         exact h3.symm
     · rw [Std.TreeMap.getD_erase]
@@ -2397,7 +2397,7 @@ lemma Benv.setStor_getCode {benv : Benv} {adr a : Adr} {stor : Stor} : (benv.set
     · have h2 : adr = a := compare_eq_iff_eq.mp h
       subst h2
       rw [Std.TreeMap.getD_erase]
-      split_ifs <;> try rfl
+      split_ifs; try rfl
       · have h3 := congrArg Acct.code h_if
         exact h3.symm
     · rw [Std.TreeMap.getD_erase]
@@ -2417,7 +2417,7 @@ lemma Benv.incrNonce_getCode {benv : Benv} {adr a : Adr} : (benv.incrNonce adr).
     · have h2 : adr = a := compare_eq_iff_eq.mp h
       subst h2
       rw [Std.TreeMap.getD_erase]
-      split_ifs <;> try rfl
+      split_ifs; try rfl
       · have h3 := congrArg Acct.code h_if
         exact h3.symm
     · rw [Std.TreeMap.getD_erase]
@@ -4498,7 +4498,7 @@ lemma Devm.push_getCode_err {v devm err} (h : Devm.push v devm = Except.error er
 
 lemma assert_getCode_err {cond : Prop} [Decidable cond] {msg : String} {devm : Devm} {err : String × Devm} (h : Except.assert cond (msg, devm) = Except.error err) (a : Adr) : err.2.getCode a = devm.getCode a := by
   unfold Except.assert at h
-  split_ifs at h <;> try contradiction
+  split_ifs at h; try contradiction
   injection h with h1; rw [← h1]
 
 lemma Devm.popToNat_getCode_err {devm err} (h : Devm.popToNat devm = .error err) (a : Adr) : err.2.getCode a = devm.getCode a := by
@@ -5257,16 +5257,16 @@ lemma Jinst.inv_getCode
         rw [h1] at run
         dsimp at run
         by_cases h_gas : gMid ≤ devm.gasLeft
-        · simp only [h_gas, if_pos, Except.ok.injEq, Prod.mk.injEq] at run
+        · simp only [h_gas, if_pos] at run
           by_cases h_jump : jumpable sevm.code x.toNat = true
-          · simp only [h_jump, if_pos, Except.ok.injEq, Prod.mk.injEq] at run
+          · simp only [h_jump] at run
             cases run
             subst_vars
             rfl
-          · simp only [h_jump, if_neg, Except.ok.injEq, Prod.mk.injEq] at run
+          · simp only [h_jump] at run
             contradiction
         · have h_gas_not : ¬(gMid ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not, if_neg, Except.ok.injEq, Prod.mk.injEq] at run
+          simp only [h_gas_not] at run
           contradiction
       · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, bind, Except.bind, safeSub] at run
         rw [h1] at run
@@ -5281,7 +5281,7 @@ lemma Jinst.inv_getCode
           subst_vars
           rfl
         · have h_gas_not : ¬(gJumpdest ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not, if_neg, Except.ok.injEq, Prod.mk.injEq] at run
+          simp only [h_gas_not] at run
           contradiction
     · rename_i x2 xs2
       cases j
@@ -5289,38 +5289,38 @@ lemma Jinst.inv_getCode
         rw [h1] at run
         dsimp at run
         by_cases h_gas : gMid ≤ devm.gasLeft
-        · simp only [h_gas, if_pos, Except.ok.injEq, Prod.mk.injEq] at run
+        · simp only [h_gas, if_pos] at run
           by_cases h_jump : jumpable sevm.code x.toNat = true
-          · simp only [h_jump, if_pos, Except.ok.injEq, Prod.mk.injEq] at run
+          · simp only [h_jump] at run
             cases run
             subst_vars
             rfl
-          · simp only [h_jump, if_neg, Except.ok.injEq, Prod.mk.injEq] at run
+          · simp only [h_jump] at run
             contradiction
         · have h_gas_not : ¬(gMid ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not, if_neg, Except.ok.injEq, Prod.mk.injEq] at run
+          simp only [h_gas_not] at run
           contradiction
       · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, bind, Except.bind, safeSub] at run
         rw [h1] at run
         rw [h2] at run
         dsimp at run
         by_cases h_gas : gHigh ≤ devm.gasLeft
-        · simp only [h_gas, if_pos, Except.ok.injEq, Prod.mk.injEq] at run
+        · simp only [h_gas, if_pos] at run
           by_cases h_cond : x2 = 0
           · simp only [h_cond, if_pos, Except.ok.injEq, Prod.mk.injEq] at run
             cases run
             subst_vars
             rfl
-          · simp only [h_cond, if_neg, Except.ok.injEq, Prod.mk.injEq] at run
+          · simp only [h_cond] at run
             by_cases h_jump : jumpable sevm.code x.toNat = true
-            · simp only [h_jump, if_pos, Except.ok.injEq, Prod.mk.injEq] at run
+            · simp only [h_jump] at run
               cases run
               subst_vars
               rfl
-            · simp only [h_jump, if_neg, Except.ok.injEq, Prod.mk.injEq] at run
+            · simp only [h_jump] at run
               contradiction
         · have h_gas_not : ¬(gHigh ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not, if_neg, Except.ok.injEq, Prod.mk.injEq] at run
+          simp only [h_gas_not] at run
           contradiction
       · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, bind, Except.bind, safeSub] at run
         rw [h1] at run
@@ -5330,7 +5330,7 @@ lemma Jinst.inv_getCode
           subst_vars
           rfl
         · have h_gas_not : ¬(gJumpdest ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not, if_neg, Except.ok.injEq, Prod.mk.injEq] at run
+          simp only [h_gas_not] at run
           contradiction
 
 def JumpResult.getCode (ex : Except (String × Devm) (Nat × Devm)) (a : Adr) : ByteArray :=
@@ -5354,7 +5354,7 @@ lemma Jinst.inv_getCode_gen
       by_cases h_gas : gJumpdest ≤ devm.gasLeft
       · simp only [h_gas, if_pos] at run; cases run; rfl
       · have h_gas_not : ¬(gJumpdest ≤ devm.gasLeft) := by omega
-        simp only [h_gas_not, if_neg] at run; cases run; rfl
+        simp only [h_gas_not] at run; cases run; rfl
   · rename_i x xs
     cases h2 : xs
     · cases j
@@ -5364,17 +5364,17 @@ lemma Jinst.inv_getCode_gen
         · simp only [h_gas, if_pos] at run
           by_cases h_jump : jumpable sevm.code x.toNat = true
           · simp only [h_jump, if_pos] at run; cases run; rfl
-          · simp only [h_jump, if_neg] at run; cases run; rfl
+          · simp only [h_jump] at run; cases run; rfl
         · have h_gas_not : ¬(gMid ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not, if_neg] at run; cases run; rfl
+          simp only [h_gas_not] at run; cases run; rfl
       · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, bind, Except.bind, safeSub] at run
         rw [h1] at run; rw [h2] at run; dsimp at run; cases run; rfl
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Except.assert, bind, Except.bind, safeSub] at run
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, bind, Except.bind, safeSub] at run
         rw [h1] at run
         by_cases h_gas : gJumpdest ≤ devm.gasLeft
         · simp only [h_gas, if_pos] at run; cases run; rfl
         · have h_gas_not : ¬(gJumpdest ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not, if_neg] at run; cases run; rfl
+          simp only [h_gas_not] at run; cases run; rfl
     · rename_i x2 xs2
       cases j
       · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, bind, Except.bind, safeSub] at run
@@ -5383,27 +5383,27 @@ lemma Jinst.inv_getCode_gen
         · simp only [h_gas, if_pos] at run
           by_cases h_jump : jumpable sevm.code x.toNat = true
           · simp only [h_jump, if_pos] at run; cases run; rfl
-          · simp only [h_jump, if_neg] at run; cases run; rfl
+          · simp only [h_jump] at run; cases run; rfl
         · have h_gas_not : ¬(gMid ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not, if_neg] at run; cases run; rfl
+          simp only [h_gas_not] at run; cases run; rfl
       · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, bind, Except.bind, safeSub] at run
         rw [h1] at run; rw [h2] at run; dsimp at run
         by_cases h_gas : gHigh ≤ devm.gasLeft
         · simp only [h_gas, if_pos] at run
           by_cases h_cond : x2 = 0
           · simp only [h_cond, if_pos] at run; cases run; rfl
-          · simp only [h_cond, if_neg] at run
+          · simp only [h_cond] at run
             by_cases h_jump : jumpable sevm.code x.toNat = true
             · simp only [h_jump, if_pos] at run; cases run; rfl
-            · simp only [h_jump, if_neg] at run; cases run; rfl
+            · simp only [h_jump] at run; cases run; rfl
         · have h_gas_not : ¬(gHigh ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not, if_neg] at run; cases run; rfl
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Except.assert, bind, Except.bind, safeSub] at run
+          simp only [h_gas_not] at run; cases run; rfl
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, bind, Except.bind, safeSub] at run
         rw [h1] at run
         by_cases h_gas : gJumpdest ≤ devm.gasLeft
         · simp only [h_gas, if_pos] at run; cases run; rfl
         · have h_gas_not : ¬(gJumpdest ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not, if_neg] at run; cases run; rfl
+          simp only [h_gas_not] at run; cases run; rfl
 
 lemma Linst.inv_getCode
     {sevm devm l exn}
@@ -8779,7 +8779,7 @@ lemma Devm.push_delSets_err {v devm err} (h : Devm.push v devm = Except.error er
 
 lemma assert_delSets_err {cond : Prop} [Decidable cond] {msg : String} {devm : Devm} {err : String × Devm} (h : Except.assert cond (msg, devm) = Except.error err) : err.2.delSets = devm.delSets := by
   unfold Except.assert at h
-  split_ifs at h <;> try contradiction
+  split_ifs at h; try contradiction
   injection h with h1; rw [← h1]
 
 lemma Devm.popToNat_delSets_err {devm err} (h : Devm.popToNat devm = .error err) : err.2.delSets = devm.delSets := by
@@ -9245,7 +9245,7 @@ lemma Jinst.inv_delSets {pc : Nat} {sevm : Sevm} {devm : Devm} {j : Jinst}
       · simp only [h_gas, if_pos, Except.ok.injEq, Prod.mk.injEq] at run
         cases run; subst_vars; rfl
       · have h_gas_not : ¬(gJumpdest ≤ devm.gasLeft) := by omega
-        simp only [h_gas_not, if_neg] at run; contradiction
+        simp only [h_gas_not] at run; contradiction
   · rename_i x xs
     cases h2 : xs
     · cases j
@@ -9255,17 +9255,17 @@ lemma Jinst.inv_delSets {pc : Nat} {sevm : Sevm} {devm : Devm} {j : Jinst}
         · simp only [h_gas, if_pos] at run
           by_cases h_jump : jumpable sevm.code x.toNat = true
           · simp only [h_jump, if_pos, Except.ok.injEq, Prod.mk.injEq] at run; cases run; subst_vars; rfl
-          · simp only [h_jump, if_neg] at run; contradiction
+          · simp only [h_jump] at run; contradiction
         · have h_gas_not : ¬(gMid ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not, if_neg] at run; contradiction
+          simp only [h_gas_not] at run; contradiction
       · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, bind, Except.bind, safeSub] at run
         rw [h1] at run; rw [h2] at run; dsimp at run; contradiction
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Except.assert, bind, Except.bind, safeSub] at run
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, bind, Except.bind, safeSub] at run
         rw [h1] at run
         by_cases h_gas : gJumpdest ≤ devm.gasLeft
         · simp only [h_gas, if_pos, Except.ok.injEq, Prod.mk.injEq] at run; cases run; subst_vars; rfl
         · have h_gas_not : ¬(gJumpdest ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not, if_neg] at run; contradiction
+          simp only [h_gas_not] at run; contradiction
     · rename_i x2 xs2
       cases j
       · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, bind, Except.bind, safeSub] at run
@@ -9274,27 +9274,27 @@ lemma Jinst.inv_delSets {pc : Nat} {sevm : Sevm} {devm : Devm} {j : Jinst}
         · simp only [h_gas, if_pos] at run
           by_cases h_jump : jumpable sevm.code x.toNat = true
           · simp only [h_jump, if_pos, Except.ok.injEq, Prod.mk.injEq] at run; cases run; subst_vars; rfl
-          · simp only [h_jump, if_neg] at run; contradiction
+          · simp only [h_jump] at run; contradiction
         · have h_gas_not : ¬(gMid ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not, if_neg] at run; contradiction
+          simp only [h_gas_not] at run; contradiction
       · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, bind, Except.bind, safeSub] at run
         rw [h1] at run; rw [h2] at run; dsimp at run
         by_cases h_gas : gHigh ≤ devm.gasLeft
         · simp only [h_gas, if_pos] at run
           by_cases h_cond : x2 = 0
           · simp only [h_cond, if_pos, Except.ok.injEq, Prod.mk.injEq] at run; cases run; subst_vars; rfl
-          · simp only [h_cond, if_neg] at run
+          · simp only [h_cond] at run
             by_cases h_jumpable : jumpable sevm.code x.toNat = true
-            · simp only [h_jumpable, if_pos, Except.ok.injEq, Prod.mk.injEq] at run; cases run; subst_vars; rfl
-            · simp only [h_jumpable, if_neg] at run; contradiction
+            · simp only [h_jumpable, if_pos] at run; cases run; subst_vars; rfl
+            · simp only [h_jumpable] at run; contradiction
         · have h_gas_not : ¬(gHigh ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not, if_neg] at run; contradiction
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Except.assert, bind, Except.bind, safeSub] at run
+          simp only [h_gas_not] at run; contradiction
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, bind, Except.bind, safeSub] at run
         rw [h1] at run
         by_cases h_gas : gJumpdest ≤ devm.gasLeft
         · simp only [h_gas, if_pos, Except.ok.injEq, Prod.mk.injEq] at run; cases run; subst_vars; rfl
         · have h_gas_not : ¬(gJumpdest ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not, if_neg] at run; contradiction
+          simp only [h_gas_not] at run; contradiction
 
 lemma Jinst.inv_delSets_err {pc : Nat} {sevm : Sevm} {devm : Devm} {j : Jinst}
     {err : String} {devm' : Devm}
@@ -9311,7 +9311,7 @@ lemma Jinst.inv_delSets_err {pc : Nat} {sevm : Sevm} {devm : Devm} {j : Jinst}
       by_cases h_gas : gJumpdest ≤ devm.gasLeft
       · simp only [h_gas, if_pos] at run; contradiction
       · have h_gas_not : ¬(gJumpdest ≤ devm.gasLeft) := by omega
-        simp only [h_gas_not, if_neg] at run; cases run; rfl
+        simp only [h_gas_not] at run; cases run; rfl
   · rename_i x xs
     cases h2 : xs
     · cases j
@@ -9321,17 +9321,17 @@ lemma Jinst.inv_delSets_err {pc : Nat} {sevm : Sevm} {devm : Devm} {j : Jinst}
         · simp only [h_gas, if_pos] at run
           by_cases h_jump : jumpable sevm.code x.toNat = true
           · simp only [h_jump, if_pos] at run; contradiction
-          · simp only [h_jump, if_neg] at run; cases run; rfl
+          · simp only [h_jump] at run; cases run; rfl
         · have h_gas_not : ¬(gMid ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not, if_neg] at run; cases run; rfl
+          simp only [h_gas_not] at run; cases run; rfl
       · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, bind, Except.bind, safeSub] at run
         rw [h1] at run; rw [h2] at run; dsimp at run; cases run; rfl
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Except.assert, bind, Except.bind, safeSub] at run
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, bind, Except.bind, safeSub] at run
         rw [h1] at run
         by_cases h_gas : gJumpdest ≤ devm.gasLeft
         · simp only [h_gas, if_pos] at run; contradiction
         · have h_gas_not : ¬(gJumpdest ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not, if_neg] at run; cases run; rfl
+          simp only [h_gas_not] at run; cases run; rfl
     · rename_i x2 xs2
       cases j
       · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, bind, Except.bind, safeSub] at run
@@ -9340,27 +9340,27 @@ lemma Jinst.inv_delSets_err {pc : Nat} {sevm : Sevm} {devm : Devm} {j : Jinst}
         · simp only [h_gas, if_pos] at run
           by_cases h_jump : jumpable sevm.code x.toNat = true
           · simp only [h_jump, if_pos] at run; contradiction
-          · simp only [h_jump, if_neg] at run; cases run; rfl
+          · simp only [h_jump] at run; cases run; rfl
         · have h_gas_not : ¬(gMid ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not, if_neg] at run; cases run; rfl
+          simp only [h_gas_not] at run; cases run; rfl
       · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, bind, Except.bind, safeSub] at run
         rw [h1] at run; rw [h2] at run; dsimp at run
         by_cases h_gas : gHigh ≤ devm.gasLeft
         · simp only [h_gas, if_pos] at run
           by_cases h_cond : x2 = 0
           · simp only [h_cond, if_pos] at run; contradiction
-          · simp only [h_cond, if_neg] at run
+          · simp only [h_cond] at run
             by_cases h_jumpable : jumpable sevm.code x.toNat = true
             · simp only [h_jumpable, if_pos] at run; contradiction
-            · simp only [h_jumpable, if_neg] at run; cases run; rfl
+            · simp only [h_jumpable] at run; cases run; rfl
         · have h_gas_not : ¬(gHigh ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not, if_neg] at run; cases run; rfl
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Except.assert, bind, Except.bind, safeSub] at run
+          simp only [h_gas_not] at run; cases run; rfl
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, bind, Except.bind, safeSub] at run
         rw [h1] at run
         by_cases h_gas : gJumpdest ≤ devm.gasLeft
         · simp only [h_gas, if_pos] at run; contradiction
         · have h_gas_not : ¬(gJumpdest ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not, if_neg] at run; cases run; rfl
+          simp only [h_gas_not] at run; cases run; rfl
 
 -- Halting/terminal instructions (Linst) preserve NoDel.
 lemma Linst.inv_noDel {wa : Adr} {sevm : Sevm} {devm : Devm} {l : Linst}
@@ -9462,7 +9462,7 @@ lemma Linst.inv_noDel {wa : Adr} {sevm : Sevm} {devm : Devm} {l : Linst}
                 have h_code : (addAccountToDelete ((res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).setBal sevm.currentTarget 0) sevm.currentTarget).getCode wa = res3.getCode wa :=
                   h_set.trans h_add
                 rw [h_code]; exact hd3.code
-            · simp only [h_if, if_neg]
+            · simp only [h_if]
               intro run; rw [← run]
               constructor
               · exact hd3.atd

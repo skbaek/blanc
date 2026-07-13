@@ -415,6 +415,35 @@ lemma B64.mask_and_eq_zero (x : B32) :
   rw [UInt64.and_comm (UInt32.toUInt64 _), ← UInt64.and_assoc]
   apply UInt64.zero_and
 
+lemma B64.toB32_toB64_eq_of_highMask_and_eq_zero {x : B64}
+    (h : (0xffffffff00000000 : B64) &&& x = 0) :
+    x.toB32.toB64 = x := by
+  apply UInt64.toBitVec_inj.mp
+  simp only [B64.toB32, B32.toB64, UInt32.toBitVec_toUInt64,
+    UInt64.toBitVec_toUInt32]
+  apply BitVec.eq_of_getElem_eq_iff.mpr
+  intro i hi
+  rw [BitVec.getElem_setWidth]
+  by_cases hi32 : i < 32
+  · rw [BitVec.getLsbD_eq_getElem hi32, BitVec.getElem_setWidth,
+      BitVec.getLsbD_eq_getElem (by omega)]
+  · rw [BitVec.getLsbD_of_ge _ _ (by omega)]
+    have hb := congrArg UInt64.toBitVec h
+    rw [UInt64.toBitVec_and, UInt64.toBitVec_zero] at hb
+    have hb_i := congrArg (fun v : BitVec 64 => v[i]) hb
+    simp only [BitVec.getElem_and hi, BitVec.getElem_zero hi] at hb_i
+    have hmask : ((0xffffffff00000000 : B64).toBitVec)[i] = true := by
+      change (((-1 : B64) <<< 32).toBitVec)[i] = true
+      rw [UInt64.toBitVec_shiftLeft, BitVec.getElem_shiftLeft' hi]
+      simp [hi32]
+      change (BitVec.allOnes 64)[i - 32] = true
+      rw [BitVec.getElem_eq_testBit_toNat _ _ (by omega), BitVec.toNat_allOnes]
+      rw [Nat.testBit_two_pow_sub_succ (x := 0) (by norm_num)]
+      have hi64 : i - 32 < 64 := by omega
+      simp [hi64]
+    rw [hmask] at hb_i
+    exact hb_i.symm
+
 lemma validAdr_iff {w : B256} :
     ValidAdr w ↔ addressMask &&& w = 0 := by
   constructor <;> intro h
@@ -435,8 +464,12 @@ lemma validAdr_iff {w : B256} :
     rw [show (0 : B256) = ((0, 0), (0, 0)) from rfl,
       Prod.mk.injEq, Prod.mk.injEq, Prod.mk.injEq] at h
     obtain ⟨⟨hz, hm⟩, -⟩ := h
-    have h_wz : wz = 0 := by simp only [B64.max] at hz; bv_decide
-    have h_wh : wh.toB32.toB64 = wh := by rw [toB64_toB32]; bv_decide
+    have h_wz : wz = 0 := by
+      simp only [B64.max] at hz
+      change (-1 : B64) &&& wz = 0 at hz
+      simpa using hz
+    have h_wh : wh.toB32.toB64 = wh := by
+      exact B64.toB32_toB64_eq_of_highMask_and_eq_zero hm
     simp only [B256.toAdr, Adr.toB256, h_wz, h_wh]
 
 lemma addressMask_eq_shl :
@@ -2397,16 +2430,16 @@ lemma Jinst.inv_state
         rw [h1] at run
         dsimp at run
         by_cases h_gas : gMid ≤ devm.gasLeft
-        · simp only [h_gas, if_pos, Except.ok.injEq, Prod.mk.injEq] at run
+        · simp only [h_gas, if_pos] at run
           by_cases h_jump : jumpable sevm.code x.toNat = true
-          · simp only [h_jump, if_pos, Except.ok.injEq, Prod.mk.injEq] at run
+          · simp only [h_jump] at run
             cases run
             subst_vars
             rfl
-          · simp only [h_jump, if_neg, Except.ok.injEq, Prod.mk.injEq] at run
+          · simp only [h_jump] at run
             contradiction
         · have h_gas_not : ¬(gMid ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not, if_neg, Except.ok.injEq, Prod.mk.injEq] at run
+          simp only [h_gas_not] at run
           contradiction
       · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, bind, Except.bind, safeSub] at run
         rw [h1] at run
@@ -2416,7 +2449,7 @@ lemma Jinst.inv_state
       · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, bind, Except.bind, safeSub] at run
         rw [h1] at run
         by_cases h_gas : gJumpdest ≤ devm.gasLeft
-        · simp only [h_gas, if_pos, Except.ok.injEq, Prod.mk.injEq] at run
+        · simp only [h_gas, if_pos] at run
           cases run
           subst_vars
           rfl
@@ -2429,38 +2462,38 @@ lemma Jinst.inv_state
         rw [h1] at run
         dsimp at run
         by_cases h_gas : gMid ≤ devm.gasLeft
-        · simp only [h_gas, if_pos, Except.ok.injEq, Prod.mk.injEq] at run
+        · simp only [h_gas, if_pos] at run
           by_cases h_jump : jumpable sevm.code x.toNat = true
-          · simp only [h_jump, if_pos, Except.ok.injEq, Prod.mk.injEq] at run
+          · simp only [h_jump] at run
             cases run
             subst_vars
             rfl
-          · simp only [h_jump, if_neg, Except.ok.injEq, Prod.mk.injEq] at run
+          · simp only [h_jump] at run
             contradiction
         · have h_gas_not : ¬(gMid ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not, if_neg, Except.ok.injEq, Prod.mk.injEq] at run
+          simp only [h_gas_not] at run
           contradiction
       · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, bind, Except.bind, safeSub] at run
         rw [h1] at run
         rw [h2] at run
         dsimp at run
         by_cases h_gas : gHigh ≤ devm.gasLeft
-        · simp only [h_gas, if_pos, Except.ok.injEq, Prod.mk.injEq] at run
+        · simp only [h_gas, if_pos] at run
           by_cases h_cond : x2 = 0
           · simp only [h_cond, if_pos, Except.ok.injEq, Prod.mk.injEq] at run
             cases run
             subst_vars
             rfl
-          · simp only [h_cond, if_neg, Except.ok.injEq, Prod.mk.injEq] at run
+          · simp only [h_cond] at run
             by_cases h_jump : jumpable sevm.code x.toNat = true
-            · simp only [h_jump, if_pos, Except.ok.injEq, Prod.mk.injEq] at run
+            · simp only [h_jump] at run
               cases run
               subst_vars
               rfl
-            · simp only [h_jump, if_neg, Except.ok.injEq, Prod.mk.injEq] at run
+            · simp only [h_jump] at run
               contradiction
         · have h_gas_not : ¬(gHigh ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not, if_neg, Except.ok.injEq, Prod.mk.injEq] at run
+          simp only [h_gas_not] at run
           contradiction
       · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, bind, Except.bind, safeSub] at run
         rw [h1] at run
@@ -2470,7 +2503,7 @@ lemma Jinst.inv_state
           subst_vars
           rfl
         · have h_gas_not : ¬(gJumpdest ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not, if_neg, Except.ok.injEq, Prod.mk.injEq] at run
+          simp only [h_gas_not] at run
           contradiction
 
 lemma sum_getBal_state {d : Devm} : sum d.getBal = sum d.state.bal := by
@@ -5669,8 +5702,7 @@ theorem processMessageCall_inv_noDel {wa : Adr} {msg : Msg} {st' : _root_.State}
             exact h_nodel.atd
         · simp only [id_eq, Except.ok.injEq, Prod.mk.injEq] at h_run
           rcases h_run with ⟨_, rfl⟩
-          simp_all only [id_eq, if_neg]
-          exact AdrSet.not_mem_empty
+          simp_all
   · rename_i h_target
     have h_target_false : msg.target.isNone = false := by
       cases ht : msg.target.isNone <;> simp [ht] at h_target ⊢
@@ -6277,7 +6309,7 @@ theorem processTransaction_inv_solvent (wa : Adr)
   rcases of_bind_eq_ok h_run with ⟨pmout, hpm, h_run⟩
   rcases pmout with ⟨state2, txOutput⟩
   rcases of_bind_eq_ok h_run with ⟨refundCounter, hrefund, h_run⟩
-  simp only [Prod.mk.injEq] at h_run
+  simp only at h_run
   rcases h_run with ⟨rfl, rfl⟩
   have hsender : sender ≠ wa :=
     checkTransaction_sender_ne_of_inv_solvent hcheck h_inv
@@ -6611,7 +6643,7 @@ lemma processTransaction_sum_le {benv : Benv} {bout bout' : BlockOutput}
   rcases of_bind_eq_ok h_run with ⟨pmout, hpm, h_run⟩
   rcases pmout with ⟨state2, txOutput⟩
   rcases of_bind_eq_ok h_run with ⟨refundCounter, hrefund, h_run⟩
-  simp only [Prod.mk.injEq] at h_run
+  simp only at h_run
   rcases h_run with ⟨rfl, rfl⟩
   have hsub_some :
       (benv.state.incrNonce sender).subBal sender
@@ -6818,8 +6850,7 @@ lemma B64.toNat_mulx (x y : B64) :
     have hn2 := decide_eq_false_iff_not.mp h2
     simp only [if_neg hn1] at hc1
     simp only [if_neg hn2] at hc2
-    simp only [decide_eq_true_eq, decide_eq_false_iff_not,
-      B64.highs', B64.lows', B64.toNat, UInt64.toNat_add, UInt64.toNat_mul,
+    simp only [B64.highs', B64.lows', B64.toNat, UInt64.toNat_add, UInt64.toNat_mul,
       UInt64.toNat_and, UInt64.toNat_shiftLeft, UInt64.toNat_shiftRight,
       UInt64.reduceToNat, Nat.shiftLeft_eq, Nat.shiftRight_eq_div_pow,
       Nat.reducePow, Nat.reduceMod, nat_and_mask32, Nat.mod_eq_of_lt hP1,
@@ -6983,7 +7014,7 @@ lemma B128.toNat_mulx (x y : B128) :
       cases h2 : decide (ll + (show B128 from (lh.2, 0)) +
         (show B128 from (hl.2, 0)) <
         ll + (show B128 from (lh.2, 0))) <;>
-      simp only [h1, h2]
+      rfl
   rw [hout, B256.toNat_mk]
   have hlow := B128.toNat_add3_carry ll
     (show B128 from (lh.2, 0)) (show B128 from (hl.2, 0))
@@ -7010,8 +7041,7 @@ lemma B128.toNat_mulx (x y : B128) :
     l.toNat =
     ll.toNat + (show B128 from (lh.2, 0)).toNat +
       (show B128 from (hl.2, 0)).toNat at hlow
-  simp only [B128.toNat_mk, B64.toNat_zero, UInt64.reduceToNat,
-    Nat.reducePow, Nat.zero_mul, Nat.zero_add, Nat.add_zero]
+  simp only [B128.toNat_mk, B64.toNat_zero, Nat.reducePow, Nat.add_zero]
     at hlow
   have htotal : x.toNat * y.toNat =
       (hh.toNat + lh.1.toNat + hl.1.toNat + k) * 2 ^ 128 +
@@ -7025,7 +7055,7 @@ lemma B128.toNat_mulx (x y : B128) :
   have hnat : h.toNat = hh.toNat + lh.1.toNat + hl.1.toNat + k := by
     dsimp only [h]
     simp only [B128.toNat_add, Nat.lo_eq, B128.toNat_mk, B64.toNat_zero,
-      Nat.reducePow, Nat.zero_mul, Nat.zero_add, Nat.add_zero]
+      Nat.reducePow, Nat.zero_mul, Nat.zero_add]
     rw [hc]
     omega
   omega
@@ -7055,8 +7085,7 @@ lemma B256.toNat_mul (x y : B256) :
   have ehldec : hl.toNat = hl.1.toNat * 2 ^ 128 + hl.2.toNat := by
     rw [show hl = (hl.1, hl.2) from (Prod.eta hl).symm, B256.toNat_mk]
   rw [B256.toNat_add, B256.toNat_add]
-  simp only [B256.toNat_mk, B128.toNat_mk, B64.toNat_zero,
-    Nat.reducePow, Nat.zero_mul, Nat.zero_add, Nat.add_zero]
+  simp only [B256.toNat_mk, Nat.reducePow]
   have hz : B128.toNat 0 = 0 := rfl
   rw [hz]
   simp only [Nat.add_zero]

@@ -172,13 +172,46 @@ the details. In summary:
   `chain_inv_solvent`, `addBlockToChain_inv_solvent`, failing on `sorryAx`,
   `ofReduceBool`, or `ofReduceNat`.
 
+**This step is shell scripting, not Lean work — the general Lean rules do
+not apply to it.** Do not open, read, or inspect any existing Lean file; do
+not use any `lean-lsp` tool (`lean_goal`, `lean_diagnostic_messages`,
+`lean_verify`, ...) at any point; do not examine any proof. Elaborating
+`Common.lean`/`Solvent.lean` through the LSP takes minutes per call and can
+crash the worker — and nothing in this step needs it. The only Lean file
+touched is the *new* `blanc/scripts/AxiomCheck.lean`, whose entire content
+is:
+
+```lean
+import Blanc.Solvent
+
+#print axioms weth_inv_solvent
+#print axioms stateTransition_inv_solvent
+#print axioms chain_inv_solvent
+#print axioms addBlockToChain_inv_solvent
+```
+
+It is verified solely by running it: `lake env lean scripts/AxiomCheck.lean`
+(after `lake build`), which prints each theorem's axiom list in seconds; the
+shell script greps that output and fails on `sorryAx`, `ofReduceBool`, or
+`ofReduceNat`. If a name fails to resolve (e.g. it lives in a namespace),
+find the qualified name with a plain `grep -n "theorem <name>"` over
+`Blanc/`, never by opening the file. Budget: the Lean portion of this step
+is minutes; if it is taking longer, the approach is wrong — stop and
+re-read this box.
+
 Both scripts must follow one CLI contract: exit 0 if and only if the gate
 passes, and end their output with a single unambiguous verdict line — e.g.
 `OK — depth: 67 files match baseline (65 PASS, 2 TIMEOUT)` or
 `REGRESSION — 3 files changed classification vs baseline; see
 scripts/report-depth.txt`. A fixture tier passes iff every file's
 PASS/FAIL/TIMEOUT classification equals the committed baseline's — *not* iff
-every file passes. The blanc script prints one verdict per top theorem
+every file passes. Interpret classification changes in two categories:
+`PASS` ↔ `FAIL` is a functional regression, while any change involving
+`TIMEOUT` is environment/performance-sensitive and must be reported as
+`REVIEW`, not asserted to be a regression. A `REVIEW` still exits nonzero so
+automation cannot silently accept it; the output lists each old/new
+classification for the user to assess and optionally re-run under quieter
+machine conditions. The blanc script prints one verdict per top theorem
 (listing the axioms found) plus a final summary line.
 
 Extend the elevm `.gitignore` for `scripts/report-*.txt` if needed. Rebase

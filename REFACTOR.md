@@ -40,6 +40,10 @@ Facts the harness is built around: fixtures live at
 process per file** with a perl-`alarm` timeout (macOS has no coreutils
 `timeout`; default 300 s/file, override `ELEVM_TIMEOUT`), classifying
 PASS / FAIL / TIMEOUT and diffing against a committed per-tier baseline.
+`PASS` ↔ `FAIL` is interpreted as a functional regression. Any change
+involving `TIMEOUT` is instead reported as a nonzero `REVIEW`: it is a
+potential performance or environmental issue, not definitive evidence of a
+functional regression.
 
 - **0.1** ✅ `elevm/scripts/check.sh` with tiers `--depth` / `--smoke` /
   `--full` / `--dir <path>`, plus `--rebase` (accept current results as
