@@ -4472,6 +4472,26 @@ lemma Execution.Rel.bind
           rw [hn] at h
           simpa only [Except.bind_ok, hn, id_eq] using htrans hout h
 
+lemma Execution.Rel.bindOutcome
+    {R : Devm → Devm → Prop} (htrans : Transitive R)
+    {pre : Devm} {out : Execution}
+    {next : Devm → Except (String × Devm) (α × Devm)}
+    (hout : Execution.Rel R pre out)
+    (hnext : ∀ d, Outcome.Rel Prod.snd Prod.snd R d (next d)) :
+    Outcome.Rel Prod.snd Prod.snd R pre (out >>= next) := by
+  cases out with
+  | error e => exact hout
+  | ok d =>
+      cases hn : next d with
+      | error e =>
+          have h := hnext d
+          rw [hn] at h
+          simpa only [Except.bind_ok, hn] using htrans hout h
+      | ok x =>
+          have h := hnext d
+          rw [hn] at h
+          simpa only [Except.bind_ok, hn] using htrans hout h
+
 /-! ### Step 3 calibration cases -/
 
 lemma Rinst.balance_runCore_instructionFrame
@@ -5394,6 +5414,124 @@ lemma Rinst.tstore_run_transientWriteFrame
       (Rinst.run ⟨pc, sevm, pre⟩ .tstore) := by
   exact Rinst.tstore_runCore_transientWriteFrame pc pre sevm
 
+theorem Jinst.runCore_instructionFrame
+    (pc : Nat) (sevm : Sevm) (pre : Devm) (j : Jinst) :
+    Outcome.Rel Prod.snd Prod.snd Devm.InstructionFrame pre
+      (Jinst.runCore pc pre sevm j) := by
+  cases j <;> simp only [Jinst.runCore]
+  case jump =>
+    cases hp : pre.pop <;> simp only [Except.bind_error, Except.bind_ok]
+    · have h := Devm.pop_instructionFrame pre
+      rw [hp] at h
+      exact h
+    · rename_i x
+      rcases x with ⟨dest, d⟩
+      cases hg : chargeGas gMid d <;>
+          simp only [Except.bind_error, Except.bind_ok]
+      · exact Devm.instructionFrame_trans
+          (by have h := Devm.pop_instructionFrame pre; rw [hp] at h; exact h)
+          (by have h := chargeGas_instructionFrame gMid d; rw [hg] at h; exact h)
+      · unfold Except.assert
+        split <;> exact Devm.instructionFrame_trans
+          (by have h := Devm.pop_instructionFrame pre; rw [hp] at h; exact h)
+          (by have h := chargeGas_instructionFrame gMid d; rw [hg] at h; exact h)
+  case jumpi =>
+    cases hp1 : pre.pop <;> simp only [Except.bind_error, Except.bind_ok]
+    · have h := Devm.pop_instructionFrame pre
+      rw [hp1] at h
+      exact h
+    · rename_i x
+      rcases x with ⟨dest, d1⟩
+      have h1 := Devm.pop_instructionFrame pre
+      rw [hp1] at h1
+      cases hp2 : d1.pop <;> simp only [Except.bind_error, Except.bind_ok]
+      · have h2 := Devm.pop_instructionFrame d1
+        rw [hp2] at h2
+        exact Devm.instructionFrame_trans h1 h2
+      · rename_i y
+        rcases y with ⟨cond, d2⟩
+        have h2 := Devm.pop_instructionFrame d1
+        rw [hp2] at h2
+        have h12 := Devm.instructionFrame_trans h1 h2
+        cases hg : chargeGas gHigh d2 <;>
+            simp only [Except.bind_error, Except.bind_ok]
+        · have h3 := chargeGas_instructionFrame gHigh d2
+          rw [hg] at h3
+          exact Devm.instructionFrame_trans h12 h3
+        · rename_i d3
+          have h3 := chargeGas_instructionFrame gHigh d2
+          rw [hg] at h3
+          have h123 := Devm.instructionFrame_trans h12 h3
+          split
+          · exact h123
+          · unfold Except.assert
+            split <;> exact h123
+  case jumpdest =>
+    cases hg : chargeGas gJumpdest pre <;>
+        simp only [Except.bind_error, Except.bind_ok]
+    · have h := chargeGas_instructionFrame gJumpdest pre
+      rw [hg] at h
+      exact h
+    · have h := chargeGas_instructionFrame gJumpdest pre
+      rw [hg] at h
+      exact h
+
+theorem Jinst.run_instructionFrame (evm : Evm) (j : Jinst) :
+    Outcome.Rel Prod.snd Prod.snd Devm.InstructionFrame evm.dyna
+      (Jinst.run evm j) := by
+  exact Jinst.runCore_instructionFrame evm.pc evm.sta evm.dyna j
+
+theorem Linst.run_instructionFrame
+    (sevm : Sevm) (pre : Devm) (l : Linst) (h_not_dest : l ≠ .dest) :
+    Execution.Rel Devm.InstructionFrame pre (Linst.run sevm pre l) := by
+  cases l <;> simp only [Linst.run]
+  case stop => exact Devm.instructionFrame_refl pre
+  case ret =>
+    refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+      (Devm.popToNat_instructionFrame pre)
+      (next := fun index d => do
+        let ⟨size, d⟩ ← d.popToNat
+        let d ← chargeGas (d.extCost [(index, size)]) d
+        let ⟨output, d⟩ := d.memRead index size
+        .ok {d with output := output}) ?_
+    intro index d
+    refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+      (Devm.popToNat_instructionFrame d)
+      (next := fun size d => do
+        let d ← chargeGas (d.extCost [(index, size)]) d
+        let ⟨output, d⟩ := d.memRead index size
+        .ok {d with output := output}) ?_
+    intro size d
+    apply Execution.Rel.bind Devm.instructionFrame_trans
+      (chargeGas_instructionFrame (d.extCost [(index, size)]) d)
+    intro d'
+    exact Devm.instructionFrame_trans
+      (Devm.memRead_instructionFrame d' index size)
+      (Devm.instructionFrame_of_world_eq rfl rfl rfl rfl)
+  case rev =>
+    refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+      (Devm.popToNat_instructionFrame pre)
+      (next := fun index d => do
+        let ⟨size, d⟩ ← d.popToNat
+        let d ← chargeGas (d.extCost [(index, size)]) d
+        let ⟨output, d⟩ := d.memRead index size
+        .error ("Revert", {d with output := output})) ?_
+    intro index d
+    refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
+      (Devm.popToNat_instructionFrame d)
+      (next := fun size d => do
+        let d ← chargeGas (d.extCost [(index, size)]) d
+        let ⟨output, d⟩ := d.memRead index size
+        .error ("Revert", {d with output := output})) ?_
+    intro size d
+    apply Execution.Rel.bind Devm.instructionFrame_trans
+      (chargeGas_instructionFrame (d.extCost [(index, size)]) d)
+    intro d'
+    exact Devm.instructionFrame_trans
+      (Devm.memRead_instructionFrame d' index size)
+      (Devm.instructionFrame_of_world_eq rfl rfl rfl rfl)
+  case dest => contradiction
+
 lemma Rinst.inv_getCode
     {pc sevm devm r devm'}
     (run : Rinst.run ⟨pc, sevm, devm⟩ r = .ok devm') (a : Adr) :
@@ -6306,110 +6444,9 @@ lemma Jinst.inv_getCode
     {pc sevm devm j pc' devm'}
     (run : Jinst.Run ⟨pc, sevm, devm⟩ j (.ok ⟨pc', devm'⟩)) (a : Adr) :
     devm'.getCode a = devm.getCode a := by
-  cases h1 : devm.stack
-  · cases j
-    · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, safeSub, bind, Except.bind] at run
-      rw [h1] at run
-      dsimp at run
-      contradiction
-    · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, safeSub, bind, Except.bind] at run
-      rw [h1] at run
-      dsimp at run
-      contradiction
-    · by_cases h_gas : gJumpdest ≤ devm.gasLeft
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, bind, Except.bind, safeSub] at run
-        rw [h1] at run
-        simp only [h_gas, if_pos, Except.ok.injEq, Prod.mk.injEq] at run
-        cases run
-        subst_vars
-        rfl
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, bind, Except.bind, safeSub] at run
-        rw [h1] at run
-        have h_gas_not : ¬(gJumpdest ≤ devm.gasLeft) := by omega
-        simp only [h_gas_not] at run
-        try contradiction
-  · rename_i x xs
-    cases h2 : xs
-    · cases j
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, bind, Except.bind, safeSub] at run
-        rw [h1] at run
-        dsimp at run
-        by_cases h_gas : gMid ≤ devm.gasLeft
-        · simp only [h_gas, if_pos] at run
-          by_cases h_jump : jumpable sevm.code x.toNat = true
-          · simp only [h_jump] at run
-            cases run
-            subst_vars
-            rfl
-          · simp only [h_jump] at run
-            contradiction
-        · have h_gas_not : ¬(gMid ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not] at run
-          contradiction
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, bind, Except.bind, safeSub] at run
-        rw [h1] at run
-        rw [h2] at run
-        dsimp at run
-        contradiction
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, bind, Except.bind, safeSub] at run
-        rw [h1] at run
-        by_cases h_gas : gJumpdest ≤ devm.gasLeft
-        · simp only [h_gas, if_pos, Except.ok.injEq, Prod.mk.injEq] at run
-          cases run
-          subst_vars
-          rfl
-        · have h_gas_not : ¬(gJumpdest ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not] at run
-          contradiction
-    · rename_i x2 xs2
-      cases j
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, bind, Except.bind, safeSub] at run
-        rw [h1] at run
-        dsimp at run
-        by_cases h_gas : gMid ≤ devm.gasLeft
-        · simp only [h_gas, if_pos] at run
-          by_cases h_jump : jumpable sevm.code x.toNat = true
-          · simp only [h_jump] at run
-            cases run
-            subst_vars
-            rfl
-          · simp only [h_jump] at run
-            contradiction
-        · have h_gas_not : ¬(gMid ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not] at run
-          contradiction
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, bind, Except.bind, safeSub] at run
-        rw [h1] at run
-        rw [h2] at run
-        dsimp at run
-        by_cases h_gas : gHigh ≤ devm.gasLeft
-        · simp only [h_gas, if_pos] at run
-          by_cases h_cond : x2 = 0
-          · simp only [h_cond, if_pos, Except.ok.injEq, Prod.mk.injEq] at run
-            cases run
-            subst_vars
-            rfl
-          · simp only [h_cond] at run
-            by_cases h_jump : jumpable sevm.code x.toNat = true
-            · simp only [h_jump] at run
-              cases run
-              subst_vars
-              rfl
-            · simp only [h_jump] at run
-              contradiction
-        · have h_gas_not : ¬(gHigh ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not] at run
-          contradiction
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, bind, Except.bind, safeSub] at run
-        rw [h1] at run
-        by_cases h_gas : gJumpdest ≤ devm.gasLeft
-        · simp only [h_gas, if_pos, Except.ok.injEq, Prod.mk.injEq] at run
-          cases run
-          subst_vars
-          rfl
-        · have h_gas_not : ¬(gJumpdest ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not] at run
-          contradiction
+  have hf := Jinst.run_instructionFrame ⟨pc, sevm, devm⟩ j
+  rw [run] at hf
+  exact (hf.getCode a).symm
 
 def JumpResult.getCode (ex : Except (String × Devm) (Nat × Devm)) (a : Adr) : ByteArray :=
   match ex with
@@ -6421,171 +6458,93 @@ lemma Jinst.inv_getCode_gen
     (run : Jinst.Run ⟨pc, sevm, devm⟩ j ex) :
     ∀ a : Adr, JumpResult.getCode ex a = devm.getCode a := by
   intro a
-  cases h1 : devm.stack
-  · cases j
-    · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, safeSub, bind, Except.bind] at run
-      rw [h1] at run; dsimp at run; cases run; rfl
-    · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, safeSub, bind, Except.bind] at run
-      rw [h1] at run; dsimp at run; cases run; rfl
-    · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, bind, Except.bind, safeSub] at run
-      rw [h1] at run
-      by_cases h_gas : gJumpdest ≤ devm.gasLeft
-      · simp only [h_gas, if_pos] at run; cases run; rfl
-      · have h_gas_not : ¬(gJumpdest ≤ devm.gasLeft) := by omega
-        simp only [h_gas_not] at run; cases run; rfl
-  · rename_i x xs
-    cases h2 : xs
-    · cases j
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, bind, Except.bind, safeSub] at run
-        rw [h1] at run; dsimp at run
-        by_cases h_gas : gMid ≤ devm.gasLeft
-        · simp only [h_gas, if_pos] at run
-          by_cases h_jump : jumpable sevm.code x.toNat = true
-          · simp only [h_jump, if_pos] at run; cases run; rfl
-          · simp only [h_jump] at run; cases run; rfl
-        · have h_gas_not : ¬(gMid ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not] at run; cases run; rfl
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, bind, Except.bind, safeSub] at run
-        rw [h1] at run; rw [h2] at run; dsimp at run; cases run; rfl
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, bind, Except.bind, safeSub] at run
-        rw [h1] at run
-        by_cases h_gas : gJumpdest ≤ devm.gasLeft
-        · simp only [h_gas, if_pos] at run; cases run; rfl
-        · have h_gas_not : ¬(gJumpdest ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not] at run; cases run; rfl
-    · rename_i x2 xs2
-      cases j
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, bind, Except.bind, safeSub] at run
-        rw [h1] at run; dsimp at run
-        by_cases h_gas : gMid ≤ devm.gasLeft
-        · simp only [h_gas, if_pos] at run
-          by_cases h_jump : jumpable sevm.code x.toNat = true
-          · simp only [h_jump, if_pos] at run; cases run; rfl
-          · simp only [h_jump] at run; cases run; rfl
-        · have h_gas_not : ¬(gMid ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not] at run; cases run; rfl
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, bind, Except.bind, safeSub] at run
-        rw [h1] at run; rw [h2] at run; dsimp at run
-        by_cases h_gas : gHigh ≤ devm.gasLeft
-        · simp only [h_gas, if_pos] at run
-          by_cases h_cond : x2 = 0
-          · simp only [h_cond, if_pos] at run; cases run; rfl
-          · simp only [h_cond] at run
-            by_cases h_jump : jumpable sevm.code x.toNat = true
-            · simp only [h_jump, if_pos] at run; cases run; rfl
-            · simp only [h_jump] at run; cases run; rfl
-        · have h_gas_not : ¬(gHigh ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not] at run; cases run; rfl
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, bind, Except.bind, safeSub] at run
-        rw [h1] at run
-        by_cases h_gas : gJumpdest ≤ devm.gasLeft
-        · simp only [h_gas, if_pos] at run; cases run; rfl
-        · have h_gas_not : ¬(gJumpdest ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not] at run; cases run; rfl
+  have hf := Jinst.run_instructionFrame ⟨pc, sevm, devm⟩ j
+  rw [run] at hf
+  cases ex <;> exact (hf.getCode a).symm
+
+def Devm.CodeFrame (pre post : Devm) : Prop :=
+  ∀ a, post.getCode a = pre.getCode a
+
+lemma Linst.dest_inv_getCode {sevm : Sevm} {devm : Devm} {exn : Execution}
+    (run : Linst.Run sevm devm .dest exn) :
+    ∀ adr : Adr, exn.getCode adr = devm.getCode adr := by
+  intro adr
+  dsimp [Linst.Run, Linst.run] at run
+  revert run
+  dsimp [bind, Except.bind]
+  cases h1 : devm.popToAdr <;> dsimp
+  case error err =>
+    intro run; rw [← run]; exact (Devm.popToAdr_getCode_err h1 adr)
+  case ok res1 =>
+    have h_acc : (if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).1.getCode adr = res1.2.getCode adr := by
+      split
+      · exact addAccessedAddress_getCode
+      · rfl
+    cases h2 : chargeGas (if ((if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).1.getAcct res1.1).Empty ∧ ¬(res1.2.getAcct sevm.currentTarget).bal = 0 then (if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).2 + gasSelfDestructNewAccount else (if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).2) (if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).1 <;> dsimp
+    case error err =>
+      intro run; rw [← run]
+      change err.2.getCode adr = devm.getCode adr
+      exact (chargeGas_getCode_err h2 adr).trans (h_acc.trans (Devm.popToAdr_getCode_eq h1 adr))
+    case ok res2 =>
+      cases h3 : assertDynamic sevm res2
+      case error err =>
+        intro run; rw [← run]
+        dsimp [assertDynamic, Except.assert] at h3
+        split at h3
+        · contradiction
+        · simp only [Except.error.injEq] at h3; subst h3
+          change res2.getCode adr = devm.getCode adr
+          exact (chargeGas_getCode_eq h2 adr).trans (h_acc.trans (Devm.popToAdr_getCode_eq h1 adr))
+      case ok _ =>
+        cases h4 : res2.subBal sevm.currentTarget (res1.2.getAcct sevm.currentTarget).bal <;> dsimp [Option.toExcept]
+        case none =>
+          intro run; rw [← run]
+          change res2.getCode adr = devm.getCode adr
+          exact (chargeGas_getCode_eq h2 adr).trans (h_acc.trans (Devm.popToAdr_getCode_eq h1 adr))
+        case some res3 =>
+          have h_sub : res3.getCode adr = res2.getCode adr := by
+            dsimp [Devm.subBal] at h4
+            cases h_st : res2.state.subBal sevm.currentTarget (res1.2.getAcct sevm.currentTarget).bal
+            case none =>
+              rw [h_st] at h4; contradiction
+            case some st =>
+              rw [h_st] at h4; dsimp at h4
+              simp only [Option.some.injEq] at h4; subst h4
+              change st.getCode adr = res2.getCode adr
+              exact State.subBal_getCode h_st
+          by_cases h_if : sevm.currentTarget ∈ (res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).createdAccounts
+          · simp only [h_if, if_pos]
+            intro run; rw [← run]
+            change (addAccountToDelete _ _).getCode adr = devm.getCode adr
+            have h_add : (res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).getCode adr = res3.getCode adr := by
+              dsimp [Devm.addBal, Devm.getCode]; exact State.addBal_getCode res3.state _ _ _
+            have h_set : ((res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).setBal sevm.currentTarget 0).getCode adr = (res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).getCode adr := by
+              dsimp [Devm.setBal, Devm.getCode]; exact State.setBal_getCode _ _ _ _
+            have h_del : (addAccountToDelete ((res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).setBal sevm.currentTarget 0) sevm.currentTarget).getCode adr = ((res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).setBal sevm.currentTarget 0).getCode adr := by
+              rfl
+            exact h_del.trans (h_set.trans (h_add.trans (h_sub.trans ((chargeGas_getCode_eq h2 adr).trans (h_acc.trans (Devm.popToAdr_getCode_eq h1 adr))))))
+          · simp only [h_if]
+            intro run; rw [← run]
+            change (res3.addBal _ _).getCode adr = devm.getCode adr
+            have h_add : (res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).getCode adr = res3.getCode adr := by
+              dsimp [Devm.addBal, Devm.getCode]; exact State.addBal_getCode res3.state _ _ _
+            exact h_add.trans (h_sub.trans ((chargeGas_getCode_eq h2 adr).trans (h_acc.trans (Devm.popToAdr_getCode_eq h1 adr))))
+
+theorem Linst.run_codeFrame {sevm : Sevm} {devm : Devm} {l : Linst}
+    {exn : Execution} (run : Linst.Run sevm devm l exn) :
+    Execution.Rel Devm.CodeFrame devm exn := by
+  rcases eq_or_ne l .dest with rfl | h_not_dest
+  · cases exn <;> exact Linst.dest_inv_getCode run
+  · have hf := Linst.run_instructionFrame sevm devm l h_not_dest
+    rw [run] at hf
+    cases exn <;> exact fun a => (hf.getCode a).symm
 
 lemma Linst.inv_getCode
     {sevm devm l exn}
     (run : Linst.Run sevm devm l exn) :
     ∀ adr : Adr, exn.getCode adr = devm.getCode adr := by
-  intro adr
-  cases l <;> dsimp [Linst.Run, Linst.run] at run
-  case stop => rw [← run]; rfl
-  case ret =>
-    revert run
-    dsimp [bind, Except.bind]
-    cases h1 : devm.popToNat <;> dsimp
-    case error err =>
-      intro run; rw [← run]; exact (Devm.popToNat_getCode_err h1 adr)
-    case ok res1 =>
-      cases h2 : res1.2.popToNat <;> dsimp
-      case error err =>
-        intro run; rw [← run]; exact (Devm.popToNat_getCode_err h2 adr).trans (Devm.popToNat_getCode_eq h1 adr)
-      case ok res2 =>
-        cases h3 : chargeGas (res2.2.extCost [(res1.1, res2.1)]) res2.2 <;> dsimp
-        case error err =>
-          intro run; rw [← run]; exact (chargeGas_getCode_err h3 adr).trans ((Devm.popToNat_getCode_eq h2 adr).trans (Devm.popToNat_getCode_eq h1 adr))
-        case ok res3 =>
-          intro run; rw [← run]
-          change res3.getCode adr = _
-          exact (chargeGas_getCode_eq h3 adr).trans ((Devm.popToNat_getCode_eq h2 adr).trans (Devm.popToNat_getCode_eq h1 adr))
-  case rev =>
-    revert run
-    dsimp [bind, Except.bind]
-    cases h1 : devm.popToNat <;> dsimp
-    case error err =>
-      intro run; rw [← run]; exact (Devm.popToNat_getCode_err h1 adr)
-    case ok res1 =>
-      cases h2 : res1.2.popToNat <;> dsimp
-      case error err =>
-        intro run; rw [← run]; exact (Devm.popToNat_getCode_err h2 adr).trans (Devm.popToNat_getCode_eq h1 adr)
-      case ok res2 =>
-        cases h3 : chargeGas (res2.2.extCost [(res1.1, res2.1)]) res2.2 <;> dsimp
-        case error err =>
-          intro run; rw [← run]; exact (chargeGas_getCode_err h3 adr).trans ((Devm.popToNat_getCode_eq h2 adr).trans (Devm.popToNat_getCode_eq h1 adr))
-        case ok res3 =>
-          intro run; rw [← run]
-          change res3.getCode adr = _
-          exact (chargeGas_getCode_eq h3 adr).trans ((Devm.popToNat_getCode_eq h2 adr).trans (Devm.popToNat_getCode_eq h1 adr))
-  case dest =>
-    revert run
-    dsimp [bind, Except.bind]
-    cases h1 : devm.popToAdr <;> dsimp
-    case error err =>
-      intro run; rw [← run]; exact (Devm.popToAdr_getCode_err h1 adr)
-    case ok res1 =>
-      have h_acc : (if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).1.getCode adr = res1.2.getCode adr := by
-        split
-        · exact addAccessedAddress_getCode
-        · rfl
-      cases h2 : chargeGas (if ((if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).1.getAcct res1.1).Empty ∧ ¬(res1.2.getAcct sevm.currentTarget).bal = 0 then (if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).2 + gasSelfDestructNewAccount else (if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).2) (if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).1 <;> dsimp
-      case error err =>
-        intro run; rw [← run]
-        change err.2.getCode adr = devm.getCode adr
-        exact (chargeGas_getCode_err h2 adr).trans (h_acc.trans (Devm.popToAdr_getCode_eq h1 adr))
-      case ok res2 =>
-        cases h3 : assertDynamic sevm res2
-        case error err =>
-          intro run; rw [← run]
-          dsimp [assertDynamic, Except.assert] at h3
-          split at h3
-          · contradiction
-          · simp only [Except.error.injEq] at h3; subst h3
-            change res2.getCode adr = devm.getCode adr
-            exact (chargeGas_getCode_eq h2 adr).trans (h_acc.trans (Devm.popToAdr_getCode_eq h1 adr))
-        case ok _ =>
-          cases h4 : res2.subBal sevm.currentTarget (res1.2.getAcct sevm.currentTarget).bal <;> dsimp [Option.toExcept]
-          case none =>
-            intro run; rw [← run]
-            change res2.getCode adr = devm.getCode adr
-            exact (chargeGas_getCode_eq h2 adr).trans (h_acc.trans (Devm.popToAdr_getCode_eq h1 adr))
-          case some res3 =>
-            have h_sub : res3.getCode adr = res2.getCode adr := by
-              dsimp [Devm.subBal] at h4
-              cases h_st : res2.state.subBal sevm.currentTarget (res1.2.getAcct sevm.currentTarget).bal
-              case none =>
-                rw [h_st] at h4; contradiction
-              case some st =>
-                rw [h_st] at h4; dsimp at h4
-                simp only [Option.some.injEq] at h4; subst h4
-                change st.getCode adr = res2.getCode adr
-                exact State.subBal_getCode h_st
-            by_cases h_if : sevm.currentTarget ∈ (res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).createdAccounts
-            · simp only [h_if, if_pos]
-              intro run; rw [← run]
-              change (addAccountToDelete _ _).getCode adr = devm.getCode adr
-              have h_add : (res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).getCode adr = res3.getCode adr := by
-                dsimp [Devm.addBal, Devm.getCode]; exact State.addBal_getCode res3.state _ _ _
-              have h_set : ((res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).setBal sevm.currentTarget 0).getCode adr = (res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).getCode adr := by
-                dsimp [Devm.setBal, Devm.getCode]; exact State.setBal_getCode _ _ _ _
-              have h_del : (addAccountToDelete ((res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).setBal sevm.currentTarget 0) sevm.currentTarget).getCode adr = ((res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).setBal sevm.currentTarget 0).getCode adr := by
-                rfl
-              exact h_del.trans (h_set.trans (h_add.trans (h_sub.trans ((chargeGas_getCode_eq h2 adr).trans (h_acc.trans (Devm.popToAdr_getCode_eq h1 adr))))))
-            · simp only [h_if]
-              intro run; rw [← run]
-              change (res3.addBal _ _).getCode adr = devm.getCode adr
-              have h_add : (res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).getCode adr = res3.getCode adr := by
-                dsimp [Devm.addBal, Devm.getCode]; exact State.addBal_getCode res3.state _ _ _
-              exact h_add.trans (h_sub.trans ((chargeGas_getCode_eq h2 adr).trans (h_acc.trans (Devm.popToAdr_getCode_eq h1 adr))))
+  have hf := Linst.run_codeFrame run
+  cases exn <;> exact hf
 
 /-! ## World-preserving footprint lifts -/
 
@@ -6811,31 +6770,34 @@ lemma Xinst.codePreserve_effectGen (x : Xinst) :
   | error e => exact fun a ha => h a ha
   | ok d => exact fun a ha => h a ha
 
+lemma Ninst.push_instructionFrame_effectGen
+    {xs : B8L} {hxs : xs.length ≤ 32} :
+    Ninst.EffectGen Devm.InstructionFrame (.push xs hxs) := by
+  intro pc sevm pre xl out hxl hRun
+  cases xl with
+  | none =>
+      have hf : Execution.Rel Devm.InstructionFrame pre (do
+          let d ← chargeGas (if xs = [] then gBase else gVerylow) pre
+          d.push xs.toB256) := by
+        apply Execution.Rel.bind Devm.instructionFrame_trans
+          (chargeGas_instructionFrame
+            (if xs = [] then gBase else gVerylow) pre)
+        exact Devm.push_instructionFrame xs.toB256
+      rw [hRun] at hf
+      exact hf
+  | some x => exact False.elim hRun
+
 lemma Ninst.push_worldEq_effectGen {xs : B8L} {hxs : xs.length ≤ 32} :
     Ninst.EffectGen Devm.WorldEq (.push xs hxs) := by
-  unfold Ninst.EffectGen Ninst.Run'
   intro pc sevm pre xl out hxl hRun
-  cases xl
-  · simp only at hRun
-    cases hcg : chargeGas (if xs = [] then gBase else gVerylow) pre with
-    | error e =>
-      simp [hcg] at hRun
-      subst out
-      exact chargeGas_worldEq_of_error hcg
-    | ok devm' =>
-      simp [hcg] at hRun
-      cases hpush : Devm.push xs.toB256 devm' with
-      | error e =>
-        rw [← hRun, hpush]
-        exact Devm.worldEq_trans (chargeGas_worldEq_of_ok hcg)
-          (liftMachExecution_worldEq_of_error
-            (core := Mach.push xs.toB256) hpush)
-      | ok devm'' =>
-        rw [← hRun, hpush]
-        exact Devm.worldEq_trans (chargeGas_worldEq_of_ok hcg)
-          (liftMachExecution_worldEq_of_ok
-            (core := Mach.push xs.toB256) hpush)
-  · simp only at hRun
+  cases xl with
+  | none =>
+      exact Outcome.Rel.mono
+        (show CEffect.Refines Devm.InstructionFrame Devm.WorldEq from
+          fun _ _ h => h.worldEq)
+        (Ninst.push_instructionFrame_effectGen (hxs := hxs) (xl := .none)
+          trivial hRun)
+  | some x => exact False.elim hRun
 
 lemma Ninst.push_effectGen_of_worldEq {R : Devm → Devm → Prop}
     {xs : B8L} {hxs : xs.length ≤ 32}
@@ -6847,10 +6809,22 @@ lemma Ninst.push_effectGen_of_worldEq {R : Devm → Devm → Prop}
       (Ninst.push_worldEq_effectGen (hxs := hxs) (xl := .none) trivial hRun)
   · simp only [Ninst.Run'] at hRun
 
+lemma Ninst.push_effectGen_of_instructionFrame
+    {R : Devm → Devm → Prop} {xs : B8L} {hxs : xs.length ≤ 32}
+    (hIR : CEffect.Refines Devm.InstructionFrame R) :
+    Ninst.EffectGen R (.push xs hxs) := by
+  intro pc sevm pre xl out hxl hRun
+  cases xl with
+  | none =>
+      apply Outcome.Rel.mono hIR
+      exact Ninst.push_instructionFrame_effectGen (hxs := hxs) (xl := .none)
+        trivial hRun
+  | some x => exact False.elim hRun
+
 lemma Ninst.push_codePreserve_effectGen {xs : B8L} {hxs : xs.length ≤ 32} :
   Ninst.EffectGen Devm.CodePreserve (.push xs hxs) := by
-  exact Ninst.push_effectGen_of_worldEq (R := Devm.CodePreserve)
-    (fun _ _ he a _ => (he.getCode a).symm)
+  exact Ninst.push_effectGen_of_instructionFrame (R := Devm.CodePreserve)
+    (fun _ _ hf a _ => (hf.getCode a).symm)
 
 lemma Ninst.codePreserve_effectGen (n : Ninst) :
     Ninst.EffectGen Devm.CodePreserve n := by
@@ -6865,19 +6839,15 @@ lemma Ninst.codePreserve_effectGen (n : Ninst) :
 lemma Jinst.codePreserve_effect (j : Jinst) :
     Jinst.Effect Devm.CodePreserve j := by
   intro evm out hrun
-  rcases evm with ⟨pc, sevm, devm⟩
-  have h := Jinst.inv_getCode_gen hrun
-  cases out with
-  | error e => exact fun a _ => h a
-  | ok v => exact fun a _ => h a
+  have hf := Jinst.run_instructionFrame evm j
+  rw [hrun] at hf
+  cases out <;> exact fun a _ => (hf.getCode a).symm
 
 lemma Linst.codePreserve_effect (l : Linst) :
     Linst.Effect Devm.CodePreserve l := by
   intro sevm pre out hrun
-  have h := Linst.inv_getCode hrun
-  cases out with
-  | error e => exact fun a _ => h a
-  | ok d => exact fun a _ => h a
+  have hf := Linst.run_codeFrame hrun
+  cases out <;> exact fun a _ => hf a
 
 lemma Exec.inv_getCode {pc} {sevm} {devm} {exn}
     (run : Exec pc sevm devm exn) :
@@ -8841,243 +8811,114 @@ lemma Jinst.inv_delSets {pc : Nat} {sevm : Sevm} {devm : Devm} {j : Jinst}
     {pc' : Nat} {devm' : Devm}
     (run : Jinst.Run ⟨pc, sevm, devm⟩ j (.ok ⟨pc', devm'⟩)) :
     devm'.delSets = devm.delSets := by
-  cases h1 : devm.stack
-  · cases j
-    · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, safeSub, bind, Except.bind] at run
-      rw [h1] at run; dsimp at run; contradiction
-    · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, safeSub, bind, Except.bind] at run
-      rw [h1] at run; dsimp at run; contradiction
-    · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, bind, Except.bind, safeSub] at run
-      rw [h1] at run
-      by_cases h_gas : gJumpdest ≤ devm.gasLeft
-      · simp only [h_gas, if_pos, Except.ok.injEq, Prod.mk.injEq] at run
-        cases run; subst_vars; rfl
-      · have h_gas_not : ¬(gJumpdest ≤ devm.gasLeft) := by omega
-        simp only [h_gas_not] at run; contradiction
-  · rename_i x xs
-    cases h2 : xs
-    · cases j
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, bind, Except.bind, safeSub] at run
-        rw [h1] at run; dsimp at run
-        by_cases h_gas : gMid ≤ devm.gasLeft
-        · simp only [h_gas, if_pos] at run
-          by_cases h_jump : jumpable sevm.code x.toNat = true
-          · simp only [h_jump, if_pos, Except.ok.injEq, Prod.mk.injEq] at run; cases run; subst_vars; rfl
-          · simp only [h_jump] at run; contradiction
-        · have h_gas_not : ¬(gMid ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not] at run; contradiction
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, bind, Except.bind, safeSub] at run
-        rw [h1] at run; rw [h2] at run; dsimp at run; contradiction
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, bind, Except.bind, safeSub] at run
-        rw [h1] at run
-        by_cases h_gas : gJumpdest ≤ devm.gasLeft
-        · simp only [h_gas, if_pos, Except.ok.injEq, Prod.mk.injEq] at run; cases run; subst_vars; rfl
-        · have h_gas_not : ¬(gJumpdest ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not] at run; contradiction
-    · rename_i x2 xs2
-      cases j
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, bind, Except.bind, safeSub] at run
-        rw [h1] at run; dsimp at run
-        by_cases h_gas : gMid ≤ devm.gasLeft
-        · simp only [h_gas, if_pos] at run
-          by_cases h_jump : jumpable sevm.code x.toNat = true
-          · simp only [h_jump, if_pos, Except.ok.injEq, Prod.mk.injEq] at run; cases run; subst_vars; rfl
-          · simp only [h_jump] at run; contradiction
-        · have h_gas_not : ¬(gMid ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not] at run; contradiction
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, bind, Except.bind, safeSub] at run
-        rw [h1] at run; rw [h2] at run; dsimp at run
-        by_cases h_gas : gHigh ≤ devm.gasLeft
-        · simp only [h_gas, if_pos] at run
-          by_cases h_cond : x2 = 0
-          · simp only [h_cond, if_pos, Except.ok.injEq, Prod.mk.injEq] at run; cases run; subst_vars; rfl
-          · simp only [h_cond] at run
-            by_cases h_jumpable : jumpable sevm.code x.toNat = true
-            · simp only [h_jumpable, if_pos] at run; cases run; subst_vars; rfl
-            · simp only [h_jumpable] at run; contradiction
-        · have h_gas_not : ¬(gHigh ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not] at run; contradiction
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, bind, Except.bind, safeSub] at run
-        rw [h1] at run
-        by_cases h_gas : gJumpdest ≤ devm.gasLeft
-        · simp only [h_gas, if_pos, Except.ok.injEq, Prod.mk.injEq] at run; cases run; subst_vars; rfl
-        · have h_gas_not : ¬(gJumpdest ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not] at run; contradiction
+  have hf := Jinst.run_instructionFrame ⟨pc, sevm, devm⟩ j
+  rw [run] at hf
+  exact hf.delSets.symm
 
 lemma Jinst.inv_delSets_err {pc : Nat} {sevm : Sevm} {devm : Devm} {j : Jinst}
     {err : String} {devm' : Devm}
     (run : Jinst.Run ⟨pc, sevm, devm⟩ j (.error ⟨err, devm'⟩)) :
     devm'.delSets = devm.delSets := by
-  cases h1 : devm.stack
-  · cases j
-    · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, safeSub, bind, Except.bind] at run
-      rw [h1] at run; dsimp at run; cases run; rfl
-    · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, safeSub, bind, Except.bind] at run
-      rw [h1] at run; dsimp at run; cases run; rfl
-    · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, bind, Except.bind, safeSub] at run
-      rw [h1] at run
-      by_cases h_gas : gJumpdest ≤ devm.gasLeft
-      · simp only [h_gas, if_pos] at run; contradiction
-      · have h_gas_not : ¬(gJumpdest ≤ devm.gasLeft) := by omega
-        simp only [h_gas_not] at run; cases run; rfl
-  · rename_i x xs
-    cases h2 : xs
-    · cases j
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, bind, Except.bind, safeSub] at run
-        rw [h1] at run; dsimp at run
-        by_cases h_gas : gMid ≤ devm.gasLeft
-        · simp only [h_gas, if_pos] at run
-          by_cases h_jump : jumpable sevm.code x.toNat = true
-          · simp only [h_jump, if_pos] at run; contradiction
-          · simp only [h_jump] at run; cases run; rfl
-        · have h_gas_not : ¬(gMid ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not] at run; cases run; rfl
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, bind, Except.bind, safeSub] at run
-        rw [h1] at run; rw [h2] at run; dsimp at run; cases run; rfl
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, bind, Except.bind, safeSub] at run
-        rw [h1] at run
-        by_cases h_gas : gJumpdest ≤ devm.gasLeft
-        · simp only [h_gas, if_pos] at run; contradiction
-        · have h_gas_not : ¬(gJumpdest ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not] at run; cases run; rfl
-    · rename_i x2 xs2
-      cases j
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, bind, Except.bind, safeSub] at run
-        rw [h1] at run; dsimp at run
-        by_cases h_gas : gMid ≤ devm.gasLeft
-        · simp only [h_gas, if_pos] at run
-          by_cases h_jump : jumpable sevm.code x.toNat = true
-          · simp only [h_jump, if_pos] at run; contradiction
-          · simp only [h_jump] at run; cases run; rfl
-        · have h_gas_not : ¬(gMid ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not] at run; cases run; rfl
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, bind, Except.bind, safeSub] at run
-        rw [h1] at run; rw [h2] at run; dsimp at run
-        by_cases h_gas : gHigh ≤ devm.gasLeft
-        · simp only [h_gas, if_pos] at run
-          by_cases h_cond : x2 = 0
-          · simp only [h_cond, if_pos] at run; contradiction
-          · simp only [h_cond] at run
-            by_cases h_jumpable : jumpable sevm.code x.toNat = true
-            · simp only [h_jumpable, if_pos] at run; contradiction
-            · simp only [h_jumpable] at run; cases run; rfl
-        · have h_gas_not : ¬(gHigh ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not] at run; cases run; rfl
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, bind, Except.bind, safeSub] at run
-        rw [h1] at run
-        by_cases h_gas : gJumpdest ≤ devm.gasLeft
-        · simp only [h_gas, if_pos] at run; contradiction
-        · have h_gas_not : ¬(gJumpdest ≤ devm.gasLeft) := by omega
-          simp only [h_gas_not] at run; cases run; rfl
+  have hf := Jinst.run_instructionFrame ⟨pc, sevm, devm⟩ j
+  rw [run] at hf
+  exact hf.delSets.symm
 
 -- Halting/terminal instructions (Linst) preserve NoDel.
+lemma Linst.dest_inv_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
+    {exn : Execution} (run : Linst.Run sevm devm .dest exn)
+    (h : Devm.NoDel wa devm) : Execution.NoDel wa exn := by
+  dsimp [Linst.Run, Linst.run] at run
+  revert run
+  dsimp [bind, Except.bind]
+  cases h1 : devm.popToAdr <;> dsimp
+  case error err => intro run; rw [← run]; exact Devm.NoDel.of_eqs (Devm.popToAdr_delSets_err h1).symm (Devm.popToAdr_getCode_err h1 wa).symm h
+  case ok res1 =>
+    have h_acc : (if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).1.getCode wa = res1.2.getCode wa := by
+      split
+      · exact addAccessedAddress_getCode
+      · rfl
+    have h_acc_ds : (if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).1.delSets = res1.2.delSets := by
+      split
+      · rfl
+      · rfl
+    cases h2 : chargeGas (if ((if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).1.getAcct res1.1).Empty ∧ ¬(res1.2.getAcct sevm.currentTarget).bal = 0 then (if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).2 + gasSelfDestructNewAccount else (if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).2) (if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).1 <;> dsimp
+    case error err => intro run; rw [← run]; exact Devm.NoDel.of_eqs (chargeGas_delSets_err h2).symm (chargeGas_getCode_err h2 wa).symm (Devm.NoDel.of_eqs h_acc_ds.symm h_acc.symm (Devm.NoDel.of_eqs (Devm.popToAdr_delSets_eq h1).symm (Devm.popToAdr_getCode_eq h1 wa).symm h))
+    case ok res2 =>
+      cases h3 : assertDynamic sevm res2
+      case error err =>
+        intro run; rw [← run]
+        dsimp [assertDynamic, Except.assert] at h3
+        split at h3
+        · contradiction
+        · simp only [Except.error.injEq] at h3; subst h3
+          exact Devm.NoDel.of_eqs (chargeGas_delSets_eq h2).symm (chargeGas_getCode_eq h2 wa).symm (Devm.NoDel.of_eqs h_acc_ds.symm h_acc.symm (Devm.NoDel.of_eqs (Devm.popToAdr_delSets_eq h1).symm (Devm.popToAdr_getCode_eq h1 wa).symm h))
+      case ok _ =>
+        cases h4 : res2.subBal sevm.currentTarget (res1.2.getAcct sevm.currentTarget).bal <;> dsimp [Option.toExcept]
+        case none =>
+          intro run; rw [← run]
+          exact Devm.NoDel.of_eqs (chargeGas_delSets_eq h2).symm (chargeGas_getCode_eq h2 wa).symm (Devm.NoDel.of_eqs h_acc_ds.symm h_acc.symm (Devm.NoDel.of_eqs (Devm.popToAdr_delSets_eq h1).symm (Devm.popToAdr_getCode_eq h1 wa).symm h))
+        case some res3 =>
+          have hd : Devm.NoDel wa res2 := Devm.NoDel.of_eqs (chargeGas_delSets_eq h2).symm (chargeGas_getCode_eq h2 wa).symm (Devm.NoDel.of_eqs h_acc_ds.symm h_acc.symm (Devm.NoDel.of_eqs (Devm.popToAdr_delSets_eq h1).symm (Devm.popToAdr_getCode_eq h1 wa).symm h))
+          have h_sub : res3.getCode wa = res2.getCode wa := by
+            dsimp [Devm.subBal] at h4
+            cases h_st : res2.state.subBal sevm.currentTarget (res1.2.getAcct sevm.currentTarget).bal
+            case none =>
+              rw [h_st] at h4; contradiction
+            case some st =>
+              rw [h_st] at h4; dsimp at h4
+              simp only [Option.some.injEq] at h4; subst h4
+              change st.getCode wa = res2.getCode wa
+              exact State.subBal_getCode h_st
+          have h_sub_ds : res3.delSets = res2.delSets := by
+            dsimp [Devm.subBal] at h4
+            cases h_st : res2.state.subBal sevm.currentTarget (res1.2.getAcct sevm.currentTarget).bal
+            case none => rw [h_st] at h4; contradiction
+            case some st =>
+              rw [h_st] at h4; dsimp at h4
+              simp only [Option.some.injEq] at h4; subst h4
+              rfl
+          have hd3 : Devm.NoDel wa res3 := Devm.NoDel.of_eqs h_sub_ds.symm h_sub.symm hd
+          by_cases h_if : sevm.currentTarget ∈ (res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).createdAccounts
+          · simp only [h_if, if_pos]
+            intro run; rw [← run]
+            have h_ca_eq : (res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).createdAccounts = res3.createdAccounts := rfl
+            have h_ca : sevm.currentTarget ∈ res3.createdAccounts := h_ca_eq ▸ h_if
+            have h_ne : sevm.currentTarget ≠ wa := by
+              intro heq; rw [heq] at h_ca
+              exact hd3.ca h_ca
+            constructor
+            · exact AdrSet.not_mem_insert (Ne.symm h_ne) hd3.atd
+            · exact hd3.ca
+            · have h_add : (res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).getCode wa = res3.getCode wa := by
+                dsimp [Devm.addBal, Devm.getCode]; exact State.addBal_getCode res3.state _ _ _
+              have h_set : ((res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).setBal sevm.currentTarget 0).getCode wa = (res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).getCode wa := by
+                dsimp [Devm.setBal, Devm.getCode]; exact State.setBal_getCode _ _ _ _
+              have h_code : (addAccountToDelete ((res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).setBal sevm.currentTarget 0) sevm.currentTarget).getCode wa = res3.getCode wa :=
+                h_set.trans h_add
+              rw [h_code]; exact hd3.code
+          · simp only [h_if]
+            intro run; rw [← run]
+            constructor
+            · exact hd3.atd
+            · exact hd3.ca
+            · have h_add : (res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).getCode wa = res3.getCode wa := by
+                dsimp [Devm.addBal, Devm.getCode]; exact State.addBal_getCode res3.state _ _ _
+              rw [h_add]; exact hd3.code
+
+theorem Linst.run_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
+    {l : Linst} {exn : Execution} (run : Linst.Run sevm devm l exn)
+    (h : Devm.NoDel wa devm) : Execution.NoDel wa exn := by
+  rcases eq_or_ne l .dest with rfl | h_not_dest
+  · exact Linst.dest_inv_noDel run h
+  · have hf := Linst.run_instructionFrame sevm devm l h_not_dest
+    rw [run] at hf
+    cases exn <;> exact Devm.NoDel.of_eqs hf.delSets (hf.getCode wa) h
+
 lemma Linst.inv_noDel {wa : Adr} {sevm : Sevm} {devm : Devm} {l : Linst}
     {exn : Execution}
     (run : Linst.Run sevm devm l exn)
     (h : Devm.NoDel wa devm) : Execution.NoDel wa exn := by
-  cases l <;> dsimp [Linst.Run, Linst.run] at run
-  case stop => rw [← run]; exact h
-  case ret =>
-    revert run
-    dsimp [bind, Except.bind]
-    cases h1 : devm.popToNat <;> dsimp
-    case error err => intro run; rw [← run]; exact Devm.NoDel.of_eqs (Devm.popToNat_delSets_err h1).symm (Devm.popToNat_getCode_err h1 wa).symm h
-    case ok res1 =>
-      cases h2 : res1.2.popToNat <;> dsimp
-      case error err => intro run; rw [← run]; exact Devm.NoDel.of_eqs (Devm.popToNat_delSets_err h2).symm (Devm.popToNat_getCode_err h2 wa).symm (Devm.NoDel.of_eqs (Devm.popToNat_delSets_eq h1).symm (Devm.popToNat_getCode_eq h1 wa).symm h)
-      case ok res2 =>
-        cases h3 : chargeGas (res2.2.extCost [(res1.1, res2.1)]) res2.2 <;> dsimp
-        case error err => intro run; rw [← run]; exact Devm.NoDel.of_eqs (chargeGas_delSets_err h3).symm (chargeGas_getCode_err h3 wa).symm (Devm.NoDel.of_eqs (Devm.popToNat_delSets_eq h2).symm (Devm.popToNat_getCode_eq h2 wa).symm (Devm.NoDel.of_eqs (Devm.popToNat_delSets_eq h1).symm (Devm.popToNat_getCode_eq h1 wa).symm h))
-        case ok res3 => intro run; rw [← run]; exact Devm.NoDel.of_eqs (chargeGas_delSets_eq h3).symm (chargeGas_getCode_eq h3 wa).symm (Devm.NoDel.of_eqs (Devm.popToNat_delSets_eq h2).symm (Devm.popToNat_getCode_eq h2 wa).symm (Devm.NoDel.of_eqs (Devm.popToNat_delSets_eq h1).symm (Devm.popToNat_getCode_eq h1 wa).symm h))
-  case rev =>
-    revert run
-    dsimp [bind, Except.bind]
-    cases h1 : devm.popToNat <;> dsimp
-    case error err => intro run; rw [← run]; exact Devm.NoDel.of_eqs (Devm.popToNat_delSets_err h1).symm (Devm.popToNat_getCode_err h1 wa).symm h
-    case ok res1 =>
-      cases h2 : res1.2.popToNat <;> dsimp
-      case error err => intro run; rw [← run]; exact Devm.NoDel.of_eqs (Devm.popToNat_delSets_err h2).symm (Devm.popToNat_getCode_err h2 wa).symm (Devm.NoDel.of_eqs (Devm.popToNat_delSets_eq h1).symm (Devm.popToNat_getCode_eq h1 wa).symm h)
-      case ok res2 =>
-        cases h3 : chargeGas (res2.2.extCost [(res1.1, res2.1)]) res2.2 <;> dsimp
-        case error err => intro run; rw [← run]; exact Devm.NoDel.of_eqs (chargeGas_delSets_err h3).symm (chargeGas_getCode_err h3 wa).symm (Devm.NoDel.of_eqs (Devm.popToNat_delSets_eq h2).symm (Devm.popToNat_getCode_eq h2 wa).symm (Devm.NoDel.of_eqs (Devm.popToNat_delSets_eq h1).symm (Devm.popToNat_getCode_eq h1 wa).symm h))
-        case ok res3 => intro run; rw [← run]; exact Devm.NoDel.of_eqs rfl rfl (Devm.NoDel.of_eqs (chargeGas_delSets_eq h3).symm (chargeGas_getCode_eq h3 wa).symm (Devm.NoDel.of_eqs (Devm.popToNat_delSets_eq h2).symm (Devm.popToNat_getCode_eq h2 wa).symm (Devm.NoDel.of_eqs (Devm.popToNat_delSets_eq h1).symm (Devm.popToNat_getCode_eq h1 wa).symm h)))
-  case dest =>
-    revert run
-    dsimp [bind, Except.bind]
-    cases h1 : devm.popToAdr <;> dsimp
-    case error err => intro run; rw [← run]; exact Devm.NoDel.of_eqs (Devm.popToAdr_delSets_err h1).symm (Devm.popToAdr_getCode_err h1 wa).symm h
-    case ok res1 =>
-      have h_acc : (if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).1.getCode wa = res1.2.getCode wa := by
-        split
-        · exact addAccessedAddress_getCode
-        · rfl
-      have h_acc_ds : (if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).1.delSets = res1.2.delSets := by
-        split
-        · rfl
-        · rfl
-      cases h2 : chargeGas (if ((if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).1.getAcct res1.1).Empty ∧ ¬(res1.2.getAcct sevm.currentTarget).bal = 0 then (if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).2 + gasSelfDestructNewAccount else (if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).2) (if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).1 <;> dsimp
-      case error err => intro run; rw [← run]; exact Devm.NoDel.of_eqs (chargeGas_delSets_err h2).symm (chargeGas_getCode_err h2 wa).symm (Devm.NoDel.of_eqs h_acc_ds.symm h_acc.symm (Devm.NoDel.of_eqs (Devm.popToAdr_delSets_eq h1).symm (Devm.popToAdr_getCode_eq h1 wa).symm h))
-      case ok res2 =>
-        cases h3 : assertDynamic sevm res2
-        case error err =>
-          intro run; rw [← run]
-          dsimp [assertDynamic, Except.assert] at h3
-          split at h3
-          · contradiction
-          · simp only [Except.error.injEq] at h3; subst h3
-            exact Devm.NoDel.of_eqs (chargeGas_delSets_eq h2).symm (chargeGas_getCode_eq h2 wa).symm (Devm.NoDel.of_eqs h_acc_ds.symm h_acc.symm (Devm.NoDel.of_eqs (Devm.popToAdr_delSets_eq h1).symm (Devm.popToAdr_getCode_eq h1 wa).symm h))
-        case ok _ =>
-          cases h4 : res2.subBal sevm.currentTarget (res1.2.getAcct sevm.currentTarget).bal <;> dsimp [Option.toExcept]
-          case none =>
-            intro run; rw [← run]
-            exact Devm.NoDel.of_eqs (chargeGas_delSets_eq h2).symm (chargeGas_getCode_eq h2 wa).symm (Devm.NoDel.of_eqs h_acc_ds.symm h_acc.symm (Devm.NoDel.of_eqs (Devm.popToAdr_delSets_eq h1).symm (Devm.popToAdr_getCode_eq h1 wa).symm h))
-          case some res3 =>
-            have hd : Devm.NoDel wa res2 := Devm.NoDel.of_eqs (chargeGas_delSets_eq h2).symm (chargeGas_getCode_eq h2 wa).symm (Devm.NoDel.of_eqs h_acc_ds.symm h_acc.symm (Devm.NoDel.of_eqs (Devm.popToAdr_delSets_eq h1).symm (Devm.popToAdr_getCode_eq h1 wa).symm h))
-            have h_sub : res3.getCode wa = res2.getCode wa := by
-              dsimp [Devm.subBal] at h4
-              cases h_st : res2.state.subBal sevm.currentTarget (res1.2.getAcct sevm.currentTarget).bal
-              case none =>
-                rw [h_st] at h4; contradiction
-              case some st =>
-                rw [h_st] at h4; dsimp at h4
-                simp only [Option.some.injEq] at h4; subst h4
-                change st.getCode wa = res2.getCode wa
-                exact State.subBal_getCode h_st
-            have h_sub_ds : res3.delSets = res2.delSets := by
-              dsimp [Devm.subBal] at h4
-              cases h_st : res2.state.subBal sevm.currentTarget (res1.2.getAcct sevm.currentTarget).bal
-              case none => rw [h_st] at h4; contradiction
-              case some st =>
-                rw [h_st] at h4; dsimp at h4
-                simp only [Option.some.injEq] at h4; subst h4
-                rfl
-            have hd3 : Devm.NoDel wa res3 := Devm.NoDel.of_eqs h_sub_ds.symm h_sub.symm hd
-            by_cases h_if : sevm.currentTarget ∈ (res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).createdAccounts
-            · simp only [h_if, if_pos]
-              intro run; rw [← run]
-              have h_ca_eq : (res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).createdAccounts = res3.createdAccounts := rfl
-              have h_ca : sevm.currentTarget ∈ res3.createdAccounts := h_ca_eq ▸ h_if
-              have h_ne : sevm.currentTarget ≠ wa := by
-                intro heq; rw [heq] at h_ca
-                exact hd3.ca h_ca
-              constructor
-              · exact AdrSet.not_mem_insert (Ne.symm h_ne) hd3.atd
-              · exact hd3.ca
-              · have h_add : (res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).getCode wa = res3.getCode wa := by
-                  dsimp [Devm.addBal, Devm.getCode]; exact State.addBal_getCode res3.state _ _ _
-                have h_set : ((res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).setBal sevm.currentTarget 0).getCode wa = (res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).getCode wa := by
-                  dsimp [Devm.setBal, Devm.getCode]; exact State.setBal_getCode _ _ _ _
-                have h_code : (addAccountToDelete ((res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).setBal sevm.currentTarget 0) sevm.currentTarget).getCode wa = res3.getCode wa :=
-                  h_set.trans h_add
-                rw [h_code]; exact hd3.code
-            · simp only [h_if]
-              intro run; rw [← run]
-              constructor
-              · exact hd3.atd
-              · exact hd3.ca
-              · have h_add : (res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).getCode wa = res3.getCode wa := by
-                  dsimp [Devm.addBal, Devm.getCode]; exact State.addBal_getCode res3.state _ _ _
-                rw [h_add]; exact hd3.code
+  exact Linst.run_noDel run h
 
 lemma Msg.NoDel.benvAfterTransfer_err {wa : Adr} {msg : Msg}
     {x : String × State × AdrSet × Tra}
@@ -9596,280 +9437,132 @@ lemma Rinst.balance_effect (r : Rinst) :
 
 lemma Jinst.balance_effect (j : Jinst) :
     Jinst.Effect Devm.BalNoninc j := by
-  cases j
-  · intro pre out H; unfold Jinst.Run Jinst.run Jinst.runCore at H; revert H; dsimp; intro H; subst H
-    simp only [bind, Except.bind]
-    split; rename_i d eq
-    · unfold Outcome.Rel
-      apply Devm.balNoninc_of_state
-      rw [Devm.pop_err_snd eq]
-      apply balNoninc_refl_trans.1.1
-    · rename_i discr eq
-      rcases discr with ⟨jump_dest, devm'⟩
-      split; rename_i d' eq'
-      · unfold Outcome.Rel
-        apply Devm.balNoninc_of_state
-        rw [chargeGas_err_snd eq', ←(Devm.pop_of_pop eq).state]
-        apply balNoninc_refl_trans.1.1
-      · rename_i devm'' eq'
-        split; rename_i d'' eq''
-        · unfold Outcome.Rel
-          apply Devm.balNoninc_of_state
-          rw [Except.assert_err_snd eq'', ←(Devm.burn_of_chargeGas eq').state, ←(Devm.pop_of_pop eq).state]
-          apply balNoninc_refl_trans.1.1
-        · rename_i dest_pc eq''
-          unfold Outcome.Rel
-          apply Devm.balNoninc_of_state
-          rw [←(Devm.burn_of_chargeGas eq').state, ←(Devm.pop_of_pop eq).state]
-          apply balNoninc_refl_trans.1.1
-  · intro pre out H; unfold Jinst.Run Jinst.run Jinst.runCore at H; revert H; dsimp; intro H; subst H
-    simp only [bind, Except.bind]
-    split; rename_i d eq
-    · unfold Outcome.Rel
-      apply Devm.balNoninc_of_state
-      rw [Devm.pop_err_snd eq]
-      apply balNoninc_refl_trans.1.1
-    · rename_i discr eq
-      rcases discr with ⟨dest, devm'⟩
-      split; rename_i d' eq'
-      · unfold Outcome.Rel
-        apply Devm.balNoninc_of_state
-        rw [Devm.pop_err_snd eq', ←(Devm.pop_of_pop eq).state]
-        apply balNoninc_refl_trans.1.1
-      · rename_i discr' eq'
-        rcases discr' with ⟨cond, devm''⟩
-        split; rename_i d'' eq''
-        · unfold Outcome.Rel
-          apply Devm.balNoninc_of_state
-          rw [chargeGas_err_snd eq'', ←(Devm.pop_of_pop eq').state, ←(Devm.pop_of_pop eq).state]
-          apply balNoninc_refl_trans.1.1
-        · rename_i devm''' eq''
-          split; rename_i hcond
-          · unfold Outcome.Rel
-            apply Devm.balNoninc_of_state
-            rw [←(Devm.burn_of_chargeGas eq'').state, ←(Devm.pop_of_pop eq').state, ←(Devm.pop_of_pop eq).state]
-            apply balNoninc_refl_trans.1.1
-          · split; rename_i d''' eq'''
-            · unfold Outcome.Rel
-              apply Devm.balNoninc_of_state
-              rw [Except.assert_err_snd eq''', ←(Devm.burn_of_chargeGas eq'').state, ←(Devm.pop_of_pop eq').state, ←(Devm.pop_of_pop eq).state]
-              apply balNoninc_refl_trans.1.1
-            · rename_i dest_pc eq'''
-              unfold Outcome.Rel
-              apply Devm.balNoninc_of_state
-              rw [←(Devm.burn_of_chargeGas eq'').state, ←(Devm.pop_of_pop eq').state, ←(Devm.pop_of_pop eq).state]
-              apply balNoninc_refl_trans.1.1
-  · intro pre out H; unfold Jinst.Run Jinst.run Jinst.runCore at H; revert H; dsimp; intro H; subst H
-    simp only [bind, Except.bind]
-    split; rename_i d eq
-    · unfold Outcome.Rel
-      apply Devm.balNoninc_of_state
-      rw [chargeGas_err_snd eq]
-      apply balNoninc_refl_trans.1.1
-    · rename_i devm' eq
-      unfold Outcome.Rel
-      apply Devm.balNoninc_of_state
-      rw [←(Devm.burn_of_chargeGas eq).state]
-      apply balNoninc_refl_trans.1.1
+  intro evm out hrun
+  have hf := Jinst.run_instructionFrame evm j
+  rw [hrun] at hf
+  cases out <;> exact Devm.balNoninc_of_getBal_eq
+    (funext fun a => (hf.getBal a).symm)
 
 lemma Ninst.push_balance_effectGen {xs : B8L} {hxs : xs.length ≤ 32} :
     Ninst.EffectGen Devm.BalNoninc (.push xs hxs) := by
-  exact Ninst.push_effectGen_of_worldEq (R := Devm.BalNoninc)
-    (fun _ _ he =>
-      Devm.balNoninc_of_getBal_eq (funext fun a => (he.getBal a).symm))
+  exact Ninst.push_effectGen_of_instructionFrame (R := Devm.BalNoninc)
+    (fun _ _ hf =>
+      Devm.balNoninc_of_getBal_eq (funext fun a => (hf.getBal a).symm))
 
-lemma Linst.balance_effect (l : Linst) :
-    Linst.Effect Devm.BalNoninc l := by
+lemma Linst.dest_balance_effect :
+    Linst.Effect Devm.BalNoninc .dest := by
   intro sevm pre out run
-  cases l
-  case stop =>
-    dsimp [Linst.Run, Linst.run] at run
+  dsimp [Linst.Run, Linst.run] at run
+  revert run
+  dsimp [bind, Except.bind]
+  cases h1 : pre.popToAdr <;> dsimp
+  case error err =>
+    intro run
     rw [← run]
-    exact balNoninc_refl_trans.2.1 pre
-  case ret =>
-    dsimp [Linst.Run, Linst.run] at run
-    revert run
-    dsimp [bind, Except.bind]
-    cases h1 : pre.popToNat <;> dsimp
-    case error err =>
-      intro run
-      rw [← run]
-      apply Devm.balNoninc_of_getBal_eq
-      rw [Devm.popToNat_err_snd h1]
-    case ok res1 =>
-      have hp1 : res1.2.getBal = pre.getBal := by
-        funext a
-        exact Devm.popToNat_getBal_eq h1 a
-      cases h2 : res1.2.popToNat <;> dsimp
-      case error err =>
-        intro run
-        rw [← run]
-        apply Devm.balNoninc_of_getBal_eq
-        rw [Devm.popToNat_err_snd h2]
-        exact hp1
-      case ok res2 =>
-        have hp2 : res2.2.getBal = pre.getBal := by
-          funext a
-          exact (Devm.popToNat_getBal_eq h2 a).trans (congrFun hp1 a)
-        cases h3 : chargeGas (res2.2.extCost [(res1.1, res2.1)]) res2.2 <;> dsimp
-        case error err =>
-          intro run
-          rw [← run]
-          apply Devm.balNoninc_of_getBal_eq
-          rw [chargeGas_err_snd h3]
-          exact hp2
-        case ok res3 =>
-          intro run
-          rw [← run]
-          apply Devm.balNoninc_of_getBal_eq
-          funext a
-          have hmem : res3.memRead res1.1 res2.1 =
-              ⟨(res3.memRead res1.1 res2.1).1, (res3.memRead res1.1 res2.1).2⟩ := rfl
-          exact (memRead_getBal_eq hmem a).trans
-            ((chargeGas_getBal_eq h3 a).trans (congrFun hp2 a))
-  case rev =>
-    dsimp [Linst.Run, Linst.run] at run
-    revert run
-    dsimp [bind, Except.bind]
-    cases h1 : pre.popToNat <;> dsimp
-    case error err =>
-      intro run
-      rw [← run]
-      apply Devm.balNoninc_of_getBal_eq
-      rw [Devm.popToNat_err_snd h1]
-    case ok res1 =>
-      have hp1 : res1.2.getBal = pre.getBal := by
-        funext a
-        exact Devm.popToNat_getBal_eq h1 a
-      cases h2 : res1.2.popToNat <;> dsimp
-      case error err =>
-        intro run
-        rw [← run]
-        apply Devm.balNoninc_of_getBal_eq
-        rw [Devm.popToNat_err_snd h2]
-        exact hp1
-      case ok res2 =>
-        have hp2 : res2.2.getBal = pre.getBal := by
-          funext a
-          exact (Devm.popToNat_getBal_eq h2 a).trans (congrFun hp1 a)
-        cases h3 : chargeGas (res2.2.extCost [(res1.1, res2.1)]) res2.2 <;> dsimp
-        case error err =>
-          intro run
-          rw [← run]
-          apply Devm.balNoninc_of_getBal_eq
-          rw [chargeGas_err_snd h3]
-          exact hp2
-        case ok res3 =>
-          intro run
-          rw [← run]
-          apply Devm.balNoninc_of_getBal_eq
-          funext a
-          have hmem : res3.memRead res1.1 res2.1 =
-              ⟨(res3.memRead res1.1 res2.1).1, (res3.memRead res1.1 res2.1).2⟩ := rfl
-          exact (memRead_getBal_eq hmem a).trans
-            ((chargeGas_getBal_eq h3 a).trans (congrFun hp2 a))
-  case dest =>
-    dsimp [Linst.Run, Linst.run] at run
-    revert run
-    dsimp [bind, Except.bind]
-    cases h1 : pre.popToAdr <;> dsimp
-    case error err =>
-      intro run
-      rw [← run]
-      apply Devm.balNoninc_of_getBal_eq
-      rw [Devm.popToAdr_err_snd h1]
-    case ok res1 =>
-      have hpop : res1.2.getBal = pre.getBal := by
-        funext a
-        exact Devm.popToAdr_getBal_eq h1 a
-      have hacc :
+    apply Devm.balNoninc_of_getBal_eq
+    rw [Devm.popToAdr_err_snd h1]
+  case ok res1 =>
+    have hpop : res1.2.getBal = pre.getBal := by
+      funext a
+      exact Devm.popToAdr_getBal_eq h1 a
+    have hacc :
+        (if res1.1 ∉ res1.2.accessedAddresses then
+            (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess)
+          else (res1.2, gasSelfDestruct)).1.getBal = res1.2.getBal := by
+      funext a
+      split <;> rfl
+    cases h2 : chargeGas
+        (if ((if res1.1 ∉ res1.2.accessedAddresses then
+                    (addAccessedAddress res1.2 res1.1,
+                      gasSelfDestruct + gasColdAccountAccess)
+                  else (res1.2, gasSelfDestruct)).1.getAcct res1.1).Empty ∧
+              ¬(res1.2.getAcct sevm.currentTarget).bal = 0 then
           (if res1.1 ∉ res1.2.accessedAddresses then
-              (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess)
-            else (res1.2, gasSelfDestruct)).1.getBal = res1.2.getBal := by
-        funext a
-        split <;> rfl
-      cases h2 : chargeGas
-          (if ((if res1.1 ∉ res1.2.accessedAddresses then
-                      (addAccessedAddress res1.2 res1.1,
-                        gasSelfDestruct + gasColdAccountAccess)
-                    else (res1.2, gasSelfDestruct)).1.getAcct res1.1).Empty ∧
-                ¬(res1.2.getAcct sevm.currentTarget).bal = 0 then
-            (if res1.1 ∉ res1.2.accessedAddresses then
-                  (addAccessedAddress res1.2 res1.1,
-                    gasSelfDestruct + gasColdAccountAccess)
-                else (res1.2, gasSelfDestruct)).2 + gasSelfDestructNewAccount
-          else
-            (if res1.1 ∉ res1.2.accessedAddresses then
                 (addAccessedAddress res1.2 res1.1,
                   gasSelfDestruct + gasColdAccountAccess)
-              else (res1.2, gasSelfDestruct)).2)
+              else (res1.2, gasSelfDestruct)).2 + gasSelfDestructNewAccount
+        else
           (if res1.1 ∉ res1.2.accessedAddresses then
               (addAccessedAddress res1.2 res1.1,
                 gasSelfDestruct + gasColdAccountAccess)
-            else (res1.2, gasSelfDestruct)).1 <;> dsimp
+            else (res1.2, gasSelfDestruct)).2)
+        (if res1.1 ∉ res1.2.accessedAddresses then
+            (addAccessedAddress res1.2 res1.1,
+              gasSelfDestruct + gasColdAccountAccess)
+          else (res1.2, gasSelfDestruct)).1 <;> dsimp
+    case error err =>
+      intro run
+      rw [← run]
+      apply Devm.balNoninc_of_getBal_eq
+      rw [chargeGas_err_snd h2]
+      exact hacc.trans hpop
+    case ok res2 =>
+      have hpre : res2.getBal = pre.getBal := by
+        funext a
+        exact (chargeGas_getBal_eq h2 a).trans
+          (congrFun (hacc.trans hpop) a)
+      cases h3 : assertDynamic sevm res2
       case error err =>
         intro run
         rw [← run]
         apply Devm.balNoninc_of_getBal_eq
-        rw [chargeGas_err_snd h2]
-        exact hacc.trans hpop
-      case ok res2 =>
-        have hpre : res2.getBal = pre.getBal := by
-          funext a
-          exact (chargeGas_getBal_eq h2 a).trans
-            (congrFun (hacc.trans hpop) a)
-        cases h3 : assertDynamic sevm res2
-        case error err =>
+        have herr : err.2 = res2 := by
+          dsimp [assertDynamic] at h3
+          exact Except.assert_err_snd h3
+        rw [herr]
+        exact hpre
+      case ok _ =>
+        cases h4 : res2.subBal sevm.currentTarget
+            (res1.2.getAcct sevm.currentTarget).bal <;> dsimp [Option.toExcept]
+        case none =>
           intro run
           rw [← run]
-          apply Devm.balNoninc_of_getBal_eq
-          have herr : err.2 = res2 := by
-            dsimp [assertDynamic] at h3
-            exact Except.assert_err_snd h3
-          rw [herr]
-          exact hpre
-        case ok _ =>
-          cases h4 : res2.subBal sevm.currentTarget
-              (res1.2.getAcct sevm.currentTarget).bal <;> dsimp [Option.toExcept]
-          case none =>
+          exact Devm.balNoninc_of_getBal_eq hpre
+        case some res3 =>
+          have hsub : res2.state.subBal sevm.currentTarget
+              (res1.2.getAcct sevm.currentTarget).bal = some res3.state := by
+            dsimp [Devm.subBal, Option.bind] at h4
+            cases hs : res2.state.subBal sevm.currentTarget
+                (res1.2.getAcct sevm.currentTarget).bal
+            · rw [hs] at h4
+              contradiction
+            · rw [hs] at h4
+              injection h4 with heq
+              subst heq
+              rfl
+          have htransfer : State.BalNoninc pre.state
+              (res3.addBal res1.1
+                (res1.2.getAcct sevm.currentTarget).bal).state := by
+            have ht := State.sub_addBal_noninc (dst := res1.1) hsub
+            have hbal : res2.state.bal = pre.state.bal := hpre
+            unfold State.BalNoninc State.balSum at ht ⊢
+            rw [hbal] at ht
+            exact ht
+          by_cases hdel : sevm.currentTarget ∈
+              (res3.addBal res1.1
+                (res1.2.getAcct sevm.currentTarget).bal).createdAccounts
+          · simp only [hdel, if_pos]
             intro run
             rw [← run]
-            exact Devm.balNoninc_of_getBal_eq hpre
-          case some res3 =>
-            have hsub : res2.state.subBal sevm.currentTarget
-                (res1.2.getAcct sevm.currentTarget).bal = some res3.state := by
-              dsimp [Devm.subBal, Option.bind] at h4
-              cases hs : res2.state.subBal sevm.currentTarget
-                  (res1.2.getAcct sevm.currentTarget).bal
-              · rw [hs] at h4
-                contradiction
-              · rw [hs] at h4
-                injection h4 with heq
-                subst heq
-                rfl
-            have htransfer : State.BalNoninc pre.state
-                (res3.addBal res1.1
-                  (res1.2.getAcct sevm.currentTarget).bal).state := by
-              have ht := State.sub_addBal_noninc (dst := res1.1) hsub
-              have hbal : res2.state.bal = pre.state.bal := hpre
-              unfold State.BalNoninc State.balSum at ht ⊢
-              rw [hbal] at ht
-              exact ht
-            by_cases hdel : sevm.currentTarget ∈
-                (res3.addBal res1.1
-                  (res1.2.getAcct sevm.currentTarget).bal).createdAccounts
-            · simp only [hdel, if_pos]
-              intro run
-              rw [← run]
-              unfold Execution.Rel Outcome.Rel
-              apply Devm.balNoninc_of_state
-              apply balNoninc_refl_trans.1.2 htransfer
-              exact State.setBal_zero_noninc _ _
-            · simp only [hdel]
-              intro run
-              rw [← run]
-              unfold Execution.Rel Outcome.Rel
-              exact Devm.balNoninc_of_state htransfer
+            unfold Execution.Rel Outcome.Rel
+            apply Devm.balNoninc_of_state
+            apply balNoninc_refl_trans.1.2 htransfer
+            exact State.setBal_zero_noninc _ _
+          · simp only [hdel]
+            intro run
+            rw [← run]
+            unfold Execution.Rel Outcome.Rel
+            exact Devm.balNoninc_of_state htransfer
+
+lemma Linst.balance_effect (l : Linst) :
+    Linst.Effect Devm.BalNoninc l := by
+  rcases eq_or_ne l .dest with rfl | h_not_dest
+  · exact Linst.dest_balance_effect
+  · intro sevm pre out run
+    have hf := Linst.run_instructionFrame sevm pre l h_not_dest
+    rw [run] at hf
+    cases out <;> exact Devm.balNoninc_of_getBal_eq
+      (funext fun a => (hf.getBal a).symm)
 
 lemma Msg.benvAfterTransfer_balance_effect {msg : Msg}
     {out : Except (String × _root_.State × AdrSet × Tra) Benv}
