@@ -2872,18 +2872,28 @@ lemma Ninst.prep_inv_getCode
   case reg r => revert run; dsimp [Ninst.Run']; exact fun h => h.elim
   case exec x => revert run; dsimp [Ninst.Run']; apply Xinst.prep_inv_getCode
 
-lemma Xinst.prep_inv_code
+/-! The suspended execution source depends essentially on the instruction
+family.  Create instructions enter fresh code, ordinary calls consult the
+callee's delegation marker, while callcode/delegatecall retain the parent's
+current target. -/
+
+lemma Xinst.prep_codeSource
     {sevm : Sevm} {devm : Devm} {sevm_ : Sevm} {devm_ : Devm}
     {exn_ res : Execution} {x : Xinst}
-    (ne : sevm.currentTarget ≠ sevm_.currentTarget)
-    (notEmpty : devm.getCode sevm_.currentTarget ≠ .empty)
-    (notDel : ¬ isValidDelegation (devm.getCode sevm_.currentTarget))
     (run : Xinst.Run sevm devm x (some (sevm_, devm_, exn_)) res) :
-    sevm_.code = devm.getCode sevm_.currentTarget := by
-  cases x
+    match x with
+    | .create => devm.getCode sevm_.currentTarget = .empty
+    | .create2 => devm.getCode sevm_.currentTarget = .empty
+    | .call =>
+      ¬ isValidDelegation (devm.getCode sevm_.currentTarget) →
+        sevm_.code = devm.getCode sevm_.currentTarget
+    | .statcall =>
+      ¬ isValidDelegation (devm.getCode sevm_.currentTarget) →
+        sevm_.code = devm.getCode sevm_.currentTarget
+    | .callcode => sevm_.currentTarget = sevm.currentTarget
+    | .delcall => sevm_.currentTarget = sevm.currentTarget := by
+  cases x <;> simp only
   case create =>
-    exfalso
-    apply notEmpty
     dsimp [Xinst.Run] at run
     rcases run with ⟨_, _, _, h_contra⟩ | ⟨v14, eq14, run⟩; contradiction
     rcases run with ⟨_, _, _, h_contra⟩ | ⟨v13, eq13, run⟩; contradiction
@@ -2947,6 +2957,7 @@ lemma Xinst.prep_inv_code
           · contradiction
         exact h_empty'
   case call =>
+    intro notDel
     dsimp [Xinst.Run] at run
     rcases run with ⟨_, _, _, h_contra⟩ | ⟨v16, eq1, run⟩; contradiction
     rcases run with ⟨_, _, _, h_contra⟩ | ⟨callee_tuple, eq2, run⟩; contradiction
@@ -3011,8 +3022,6 @@ lemma Xinst.prep_inv_code
             · exact h1
           exact h_code
   case callcode =>
-    exfalso
-    apply ne
     dsimp [Xinst.Run] at run
     rcases run with ⟨_, _, _, h_contra⟩ | ⟨_, _, run⟩; contradiction
     rcases run with ⟨_, _, _, h_contra⟩ | ⟨_, _, run⟩; contradiction
@@ -3056,8 +3065,6 @@ lemma Xinst.prep_inv_code
           subst h_sevm_eq
           rfl
   case delcall =>
-    exfalso
-    apply ne
     dsimp [Xinst.Run] at run
     rcases run with ⟨_, _, _, h_contra⟩ | ⟨_, _, run⟩; contradiction
     rcases run with ⟨_, _, _, h_contra⟩ | ⟨_, _, run⟩; contradiction
@@ -3095,8 +3102,6 @@ lemma Xinst.prep_inv_code
         subst h_sevm_eq
         rfl
   case create2 =>
-    exfalso
-    apply notEmpty
     dsimp [Xinst.Run] at run
     rcases run with ⟨_, _, _, h_contra⟩ | ⟨v15, eq15, run⟩; contradiction
     rcases run with ⟨_, _, _, h_contra⟩ | ⟨v14, eq14, run⟩; contradiction
@@ -3163,6 +3168,7 @@ lemma Xinst.prep_inv_code
           · contradiction
         exact h_empty'
   case statcall =>
+    intro notDel
     dsimp [Xinst.Run] at run
     rcases run with ⟨_, _, _, h_contra⟩ | ⟨v15, eq1, run⟩; contradiction
     rcases run with ⟨_, _, _, h_contra⟩ | ⟨callee_tuple, eq2, run⟩; contradiction
@@ -3217,6 +3223,23 @@ lemma Xinst.prep_inv_code
             exact h_del
           · exact h1
         exact h_code
+
+lemma Xinst.prep_inv_code
+    {sevm : Sevm} {devm : Devm} {sevm_ : Sevm} {devm_ : Devm}
+    {exn_ res : Execution} {x : Xinst}
+    (ne : sevm.currentTarget ≠ sevm_.currentTarget)
+    (notEmpty : devm.getCode sevm_.currentTarget ≠ .empty)
+    (notDel : ¬ isValidDelegation (devm.getCode sevm_.currentTarget))
+    (run : Xinst.Run sevm devm x (some (sevm_, devm_, exn_)) res) :
+    sevm_.code = devm.getCode sevm_.currentTarget := by
+  have source := Xinst.prep_codeSource run
+  cases x
+  case create => exact (notEmpty source).elim
+  case create2 => exact (notEmpty source).elim
+  case call => exact source notDel
+  case statcall => exact source notDel
+  case callcode => exact (ne source.symm).elim
+  case delcall => exact (ne source.symm).elim
 
 lemma Ninst.prep_inv_code
     {pc sevm devm n sevm_ devm_ exn_ res}
