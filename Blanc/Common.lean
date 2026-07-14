@@ -6,8 +6,6 @@ import Mathlib.Tactic.Have
 import Mathlib.Tactic.Clear_
 import Blanc.Semantics
 
-
-
 def Func.toString : Func → String
   | .last o => Linst.toString o ++ " ::."
   | .next o p => o.toString ++ " ::: " ++ p.toString
@@ -149,8 +147,6 @@ def returnMemoryRange (x y : B256) : Func := pushList [y, x] +++ Func.ret
 def cdl (x : B256) : Line := [pushB256 x, calldataload]
 
 def arg (k : B256) : Line := cdl ((32 * k) + 4)
-
-
 
 -- Push a 256-bit word used for testing address validity.
 -- NOT and SHL are used so it takes up only 6 bytes of code,
@@ -322,7 +318,6 @@ lemma toInstType_pushToB8 {bs : B8L} (h : bs.length ≤ 32) :
   generalize bs.length = n; revert n
   repeat (rw [Nat.forall_lt_succ_right']; refine' ⟨_, rfl⟩)
   simp only [Nat.not_lt_zero, Nat.toUInt8_eq, IsEmpty.forall_iff, implies_true]
-
 
 lemma toInstType_toB8_swap (x : Fin 16) :
     (Rinst.swap x).toB8.toInstType = .R := by
@@ -692,15 +687,6 @@ lemma subcode_compile_branch {code : ByteArray} {k l p q}
   have h_rw : k + 4 + List.length qcd = k + List.length qcd + 4 := by omega
   rw [h_rw, ← List.singleton_append] at h'; simp [loc]; rw [h_pcd]
   refine' ⟨Jinst.at_of_slice (List.slice_prefix h'), List.slice_suffix h'⟩
-
-
-
-
-
-
-
-
-
 
 lemma Prog.get?_table {m n} {c : List Func} :
     (Prod.snd <$> (table m c)[n]? : Option Func) =
@@ -1773,7 +1759,6 @@ def String.toSyntax (s : String) : Lean.Syntax :=
   Lean.Syntax.ident Lean.SourceInfo.none s.toSubstring
     (Lean.Name.str Lean.Name.anonymous s) []
 
-
 def Strings.intro (ss : List String) : Lean.Elab.Tactic.TacticM Unit := do
   let ids : Lean.TSyntaxArray [`ident, `Lean.Parser.Term.hole] :=
     ⟨ss.map (λ s => {raw := String.toSyntax s})⟩
@@ -1941,7 +1926,6 @@ partial def line_inv : Lean.Elab.Tactic.TacticM Unit :=
   | _ => dbg_trace "Not a Line.Inv goal"
 
 elab "line_inv" : tactic => line_inv
-
 
 def Strings.toName : List String → Lean.Name
   | [] => Lean.Name.anonymous
@@ -2215,10 +2199,6 @@ use it.  The outcome-aware variants are developed with `CEffect` below. -/
 
 def Devm.WorldEq (d d' : Devm) : Prop :=
   d.state = d'.state ∧ d.transientStorage = d'.transientStorage
-
-lemma Devm.worldEq_trans : Transitive Devm.WorldEq := by
-  rintro d d' d'' ⟨hstate, htransient⟩ ⟨hstate', htransient'⟩
-  exact ⟨hstate.trans hstate', htransient.trans htransient'⟩
 
 lemma Devm.worldEq_setMach (d : Devm) (mach : Mach) :
     Devm.WorldEq d (d.setMach mach) := by
@@ -3478,21 +3458,6 @@ lemma Devm.popToNat_getCode_eq {devm devm' n} (h : Devm.popToNat devm = .ok ⟨n
 lemma Devm.popToAdr_getCode_eq {devm devm' adr} (h : Devm.popToAdr devm = .ok ⟨adr, devm'⟩) (a : Adr) : devm'.getCode a = devm.getCode a := by
   exact (liftMach_worldEq_of_ok (core := Mach.popToAdr) h).getCode a |>.symm
 
-lemma Devm.pop_map_snd_getCode_eq {devm devm1 : Devm} (hp : (devm.pop <&> Prod.snd) = .ok devm1) (a : Adr) : devm1.getCode a = devm.getCode a := by
-  dsimp [(· <&> ·), Functor.mapRev, Functor.map, Except.map] at hp
-  rcases hp2 : devm.pop with _ | ⟨x, devm2⟩
-  · simp [hp2] at hp
-  · simp [hp2] at hp
-    rcases hp with ⟨_, rfl⟩
-    exact (Devm.pop_worldEq_of_ok hp2).getCode a |>.symm
-
-lemma Devm.pop_map_snd_getCode_err {devm : Devm} {err : String × Devm} (hp : (devm.pop <&> Prod.snd) = .error err) (a : Adr) : err.2.getCode a = devm.getCode a := by
-  dsimp [(· <&> ·), Functor.mapRev, Functor.map, Except.map] at hp
-  rcases hp2 : devm.pop with e | ⟨x, devm2⟩
-  · simp [hp2] at hp; cases hp
-    exact (Devm.pop_worldEq_of_error hp2).getCode a |>.symm
-  · simp [hp2] at hp
-
 @[simp] lemma Except.bind_error {α β ε} (e : ε) (f : α → Except ε β) : (Except.error e >>= f) = Except.error e := rfl
 @[simp] lemma Except.bind_ok {α β ε} (x : α) (f : α → Except ε β) : (Except.ok x >>= f) = f x := rfl
 
@@ -3505,19 +3470,6 @@ lemma getCode_eq_of_bind {α ε} {ma : Except ε α} {f : α → Except ε Devm}
     devm'.getCode a = devm.getCode a := by
   rcases of_bind_eq_ok run with ⟨v, hm, hf⟩
   rw [h_rest v hm hf, h_first v hm]
-
-lemma pushItem_getCode_eq {x c devm devm'} (h : pushItem x c devm = .ok devm') (a : Adr) : devm'.getCode a = devm.getCode a := by
-  exact (liftMachExecution_worldEq_of_ok (core := Mach.pushItem x c) h).getCode a |>.symm
-
-lemma applyUnary_getCode_eq {f : B256 → B256} {cost devm devm'}
-    (h : applyUnary f cost devm = .ok devm') (a : Adr) :
-    devm'.getCode a = devm.getCode a := by
-  exact (liftMachExecution_worldEq_of_ok (core := Mach.applyUnary f cost) h).getCode a |>.symm
-
-lemma applyBinary_getCode_eq {f : B256 → B256 → B256} {cost devm devm'}
-    (h : applyBinary f cost devm = .ok devm') (a : Adr) :
-    devm'.getCode a = devm.getCode a := by
-  exact (liftMachExecution_worldEq_of_ok (core := Mach.applyBinary f cost) h).getCode a |>.symm
 
 lemma getBal_eq_of_bind {α ε} {ma : Except ε α} {f : α → Except ε Devm}
     {devm devm' : Devm} {a : Adr}
@@ -3543,29 +3495,6 @@ lemma Devm.popToAdr_getBal_eq {devm devm' adr} (h : Devm.popToAdr devm = .ok ⟨
 
 lemma Devm.popToNat_getBal_eq {devm devm' n} (h : Devm.popToNat devm = .ok ⟨n, devm'⟩) (a : Adr) : devm'.getBal a = devm.getBal a := by
   exact (Devm.popToNat_worldEq_of_ok h).getBal a |>.symm
-
-
-lemma pushItem_getBal_eq {x c devm devm'} (h : pushItem x c devm = .ok devm') (a : Adr) : devm'.getBal a = devm.getBal a := by
-  exact (liftMachExecution_worldEq_of_ok (core := Mach.pushItem x c) h).getBal a |>.symm
-
-lemma applyBinary_getBal_eq {f : B256 → B256 → B256} {cost devm devm'}
-    (h : applyBinary f cost devm = .ok devm') :
-    devm.getBal = devm'.getBal := by
-  funext a
-  exact (liftMachExecution_worldEq_of_ok (core := Mach.applyBinary f cost) h).getBal a
-
-lemma applyUnary_getBal_eq {f : B256 → B256} {cost devm devm'}
-    (h : applyUnary f cost devm = .ok devm') :
-    devm.getBal = devm'.getBal := by
-  funext a
-  exact (liftMachExecution_worldEq_of_ok (core := Mach.applyUnary f cost) h).getBal a
-
-lemma applyTernary_getBal_eq {f : B256 → B256 → B256 → B256} {cost devm devm'}
-    (h : applyTernary f cost devm = .ok devm') :
-    devm.getBal = devm'.getBal := by
-  funext a
-  exact (liftMachExecution_worldEq_of_ok (core := Mach.applyTernary f cost) h).getBal a
-
 
 def Devm.getStor (devm : Devm) (adr : Adr) : Stor :=
   (devm.getAcct adr).stor
@@ -3593,25 +3522,10 @@ instance : Burn.Inv Devm.getStor := ⟨by
   exact (Devm.Burn.getStor h a).symm
 ⟩
 
-lemma addAccessedAddress_getStor {devm : Devm} {adr : Adr} :
-    (addAccessedAddress devm adr).getStor = devm.getStor := by
-  funext a
-  exact (addAccessedAddress_worldEq devm adr).getStor a |>.symm
-
 lemma addAccessedStorageKey_getStor {devm : Devm} {adr : Adr} {key : B256} :
     (addAccessedStorageKey devm adr key).getStor = devm.getStor := by
   funext a
   exact (addAccessedStorageKey_worldEq devm adr key).getStor a |>.symm
-
-lemma getStor_eq_of_bind {α ε} {ma : Except ε α} {f : α → Except ε Devm}
-    {devm devm' : Devm}
-    (run : (ma >>= f) = .ok devm')
-    (getDevm : α → Devm)
-    (h_first : ∀ v, ma = .ok v → devm.getStor = (getDevm v).getStor)
-    (h_rest : ∀ v, ma = .ok v → f v = .ok devm' → (getDevm v).getStor = devm'.getStor) :
-    devm.getStor = devm'.getStor := by
-  rcases of_bind_eq_ok run with ⟨v, hm, hf⟩
-  rw [h_first v hm, h_rest v hm hf]
 
 lemma Devm.pop_getStor_eq {x devm devm'} (h : Devm.pop devm = .ok ⟨x, devm'⟩) : devm.getStor = devm'.getStor := by
   funext a
@@ -3632,33 +3546,6 @@ lemma Devm.popToAdr_getStor_eq {devm devm' adr} (h : Devm.popToAdr devm = .ok �
 lemma Devm.popToNat_getStor_eq {devm devm' n} (h : Devm.popToNat devm = .ok ⟨n, devm'⟩) : devm.getStor = devm'.getStor := by
   funext a
   exact (Devm.popToNat_worldEq_of_ok h).getStor a
-
-lemma pushItem_getStor_eq {x c devm devm'} (h : pushItem x c devm = .ok devm') : devm.getStor = devm'.getStor := by
-  funext a
-  exact (liftMachExecution_worldEq_of_ok (core := Mach.pushItem x c) h).getStor a
-
-lemma applyBinary_getStor_eq {f : B256 → B256 → B256} {cost devm devm'}
-    (h : applyBinary f cost devm = .ok devm') :
-    devm.getStor = devm'.getStor := by
-  funext a
-  exact (liftMachExecution_worldEq_of_ok (core := Mach.applyBinary f cost) h).getStor a
-
-lemma applyUnary_getStor_eq {f : B256 → B256} {cost devm devm'}
-    (h : applyUnary f cost devm = .ok devm') :
-    devm.getStor = devm'.getStor := by
-  funext a
-  exact (liftMachExecution_worldEq_of_ok (core := Mach.applyUnary f cost) h).getStor a
-
-lemma applyTernary_getStor_eq {f : B256 → B256 → B256 → B256} {cost devm devm'}
-    (h : applyTernary f cost devm = .ok devm') :
-    devm.getStor = devm'.getStor := by
-  funext a
-  exact (liftMachExecution_worldEq_of_ok (core := Mach.applyTernary f cost) h).getStor a
-
-lemma applyTernary_getCode_eq {f : B256 → B256 → B256 → B256} {cost devm devm'}
-    (h : applyTernary f cost devm = .ok devm') (a : Adr) :
-    devm'.getCode a = devm.getCode a := by
-  exact (liftMachExecution_worldEq_of_ok (core := Mach.applyTernary f cost) h).getCode a |>.symm
 
 lemma setStorVal_inv_getCode {devm : Devm} {adr adr'} {key} {val} :
     (devm.setStorVal adr key val).getCode adr' = devm.getCode adr' := by
@@ -3752,7 +3639,6 @@ lemma sstore_inv_getBal
       rw [← rw]
       apply setStorVal_inv_getBal
 
-
 lemma sstore_inv_getCode
     {pc sevm devm devm'}
     (run : Rinst.run ⟨pc, sevm, devm⟩ .sstore = .ok devm') (a : Adr) :
@@ -3798,13 +3684,6 @@ lemma sstore_inv_getCode
       clear bar run; injection run' with rw
       rw [← rw]
       apply setStorVal_inv_getCode
-
-lemma Devm.popN_getCode_eq {n : Nat} {devm devm' : Devm} {l : List B256}
-    (hp : devm.popN n = Except.ok (l, devm')) (a : Adr) :
-    devm'.getCode a = devm.getCode a := by
-  exact (liftMach_worldEq_of_ok (core := (Mach.popN · n)) hp).getCode a |>.symm
-
-/-! ## 1. Generic compositional relations -/
 
 namespace CEffect
 
@@ -4028,7 +3907,6 @@ lemma outcomeRel_toExecution {R : Devm → Devm → Prop} {pre : Devm}
 -- Paired projection of the two deletion-relevant sets
 def Devm.delSets (d : Devm) : AdrSet × AdrSet :=
   (d.accountsToDelete, d.createdAccounts)
-
 
 /-! ## Full-frame relations for instruction preservation -/
 
@@ -5736,20 +5614,6 @@ lemma ExecuteCode.codePreserve
       dsimp [Xlot.InvGetCode] at inv
       exact (inv a ha).symm
 
-lemma ExecuteCode.inv_getCode_gen
-    {msg : Msg} {xl : Xlot} {exn : Except (String × State × AdrSet × Tra) Devm}
-    (inv : xl.InvGetCode)
-    (run : ExecuteCode msg xl exn) :
-    ∀ a : Adr,
-      (msg.benv.state.getCode a).toList ≠ [] →
-      MsgResult.getCode exn a = msg.benv.state.getCode a :=
-  ExecuteCode.codePreserve inv run
-
-/-- Master: `processMessage` preserves the code of every nonempty-code address.
-Value transfer (`benvAfterTransfer_ok_getCode`) and the failed-transfer
-short-circuit only touch balances; the interpreted body is bounded by
-`ExecuteCode.codePreserve`; the error path selects a state via rollback
-(`Devm.rollback_getCode`). -/
 lemma ProcessMessage.codePreserve
     {msg : Msg} {xl : Xlot} {exn : Except (String × State × AdrSet × Tra) Devm}
     (inv : xl.InvGetCode)
@@ -5870,24 +5734,6 @@ lemma ProcessCreateMessage.codePreserve
       rw [← h_if]
       exact Devm.rollback_getCode evm msg.benv.state msg.tenv.transientStorage a
 
-lemma ProcessCreateMessage.inv_getCode_gen
-    {msg : Msg} {xl : Xlot} {exn : Except (String × State × AdrSet × Tra) Devm}
-    (inv : xl.InvGetCode)
-    (run : ProcessCreateMessage msg xl exn) :
-    ∀ a : Adr,
-      a ≠ msg.currentTarget →
-      (msg.benv.state.getCode a).toList ≠ [] →
-      MsgResult.getCode exn a = msg.benv.state.getCode a :=
-  ProcessCreateMessage.codePreserve inv run
-
-/-- Master: the whole `GenericCreate` operation preserves the code of every
-nonempty-code address.  The world-silent access/gas/return-data prefix and the
-`push`/`incrNonce` steps leave code untouched (`Devm.push_getCode_gen`,
-`Devm.incrNonce_getCode`); the interpreted child-create body is bounded by the
-Step 7.2 master `ProcessCreateMessage.codePreserve` (whose exclusion of the
-fresh create `newAddress` is discharged here from the nonempty-code premise,
-since the fresh target starts with empty code); child incorporation only
-selects between the parent and child worlds. -/
 lemma GenericCreate.codePreserve
     {sevm : Sevm} {devm : Devm} {endowment : B256} {newAddress : Adr}
     {memoryIndex memorySize : Nat} {xl : Xlot} {exn : Execution} (inv : xl.InvGetCode)
@@ -6029,22 +5875,6 @@ lemma GenericCreate.codePreserve
                 rw [h_exec_cond]
                 exact h_devm4
 
-lemma GenericCreate.inv_getCode_gen
-    {sevm : Sevm} {devm : Devm} {endowment : B256} {newAddress : Adr}
-    {memoryIndex memorySize : Nat} {xl : Xlot} {exn : Execution} (inv : xl.InvGetCode)
-    (run : GenericCreate sevm devm endowment newAddress memoryIndex memorySize xl exn) :
-    ∀ (a : Adr),
-      (devm.getCode a).toList ≠ [] →
-      Execution.getCode exn a = devm.getCode a :=
-  GenericCreate.codePreserve inv run
-
-/-- Master: the whole `GenericCall` operation preserves the code of every
-nonempty-code address.  The world-silent return-data/memory prefix leaves code
-untouched (`Devm.push_getCode_gen`, `liftMachPure_worldEq` for `memWrite`); the
-interpreted child body is bounded by the Step 7.2 master
-`ProcessMessage.codePreserve`; child incorporation
-(`incorporateChildOnError`/`OnSuccess`) only selects between the parent and
-child worlds. -/
 lemma GenericCall.codePreserve
     {sevm : Sevm} {devm : Devm} {gas : Nat} {value : B256}
     {caller target codeAddress : Adr} {shouldTransferValue isStaticcall : Bool}
@@ -6135,18 +5965,6 @@ lemma GenericCall.codePreserve
             rw [h_exec_cond]
             rfl
 
-lemma GenericCall.inv_getCode_gen
-    {sevm : Sevm} {devm : Devm} {gas : Nat} {value : B256}
-    {caller target codeAddress : Adr} {shouldTransferValue isStaticcall : Bool}
-    {input_index input_size output_index output_size : Nat} {code : ByteArray}
-    {disablePrecompiles : Bool} {xl : Xlot} {exn : Execution}
-    (inv : xl.InvGetCode)
-    (run : GenericCall sevm devm gas value caller target codeAddress shouldTransferValue isStaticcall input_index input_size output_index output_size code disablePrecompiles xl exn) :
-    ∀ a : Adr,
-      (devm.getCode a).toList ≠ [] →
-      exn.getCode a = devm.getCode a :=
-  GenericCall.codePreserve inv run
-
 lemma Devm.pop_getCode_err {err devm} (h : Devm.pop devm = .error err) (a : Adr) : err.2.getCode a = devm.getCode a := by
   exact (Devm.pop_worldEq_of_error h).getCode a |>.symm
 
@@ -6166,48 +5984,6 @@ lemma Devm.popToNat_getCode_err {devm err} (h : Devm.popToNat devm = .error err)
 
 lemma Devm.popToAdr_getCode_err {devm err} (h : Devm.popToAdr devm = .error err) (a : Adr) : err.2.getCode a = devm.getCode a := by
   exact (liftMach_worldEq_of_error (core := Mach.popToAdr) h).getCode a |>.symm
-
-lemma getCode_err_of_bind {α} {ma : Except (String × Devm) α} {f : α → Execution}
-    {devm : Devm} {a : Adr} {err : String × Devm}
-    (run : (ma >>= f) = Except.error err)
-    (getDevm : α → Devm)
-    (h_first_ok : ∀ v, ma = Except.ok v → (getDevm v).getCode a = devm.getCode a)
-    (h_first_err : ∀ e, ma = Except.error e → e.2.getCode a = devm.getCode a)
-    (h_rest_err : ∀ v, ma = Except.ok v → f v = Except.error err → err.2.getCode a = (getDevm v).getCode a) :
-    err.2.getCode a = devm.getCode a := by
-  cases h_ma : ma
-  case error e =>
-    rw [h_ma, Except.bind_error] at run
-    injection run with h_eq; subst h_eq
-    exact h_first_err _ h_ma
-  case ok v =>
-    rw [h_ma, Except.bind_ok] at run
-    have h1 := h_rest_err v h_ma run
-    have h2 := h_first_ok v h_ma
-    exact h1.trans h2
-
-lemma Devm.popN_getCode_err {n : Nat} {devm : Devm} {err : String × Devm}
-    (hp : devm.popN n = Except.error err) (a : Adr) :
-    err.2.getCode a = devm.getCode a := by
-  exact (liftMach_worldEq_of_error (core := (Mach.popN · n)) hp).getCode a |>.symm
-
-lemma pushItem_getCode_err {x c devm err} (h : pushItem x c devm = Except.error err) (a : Adr) : err.2.getCode a = devm.getCode a := by
-  exact (liftMachExecution_worldEq_of_error (core := Mach.pushItem x c) h).getCode a |>.symm
-
-lemma applyUnary_getCode_err {f : B256 → B256} {cost devm err}
-    (h : applyUnary f cost devm = Except.error err) (a : Adr) :
-    err.2.getCode a = devm.getCode a := by
-  exact (liftMachExecution_worldEq_of_error (core := Mach.applyUnary f cost) h).getCode a |>.symm
-
-lemma applyBinary_getCode_err {f : B256 → B256 → B256} {cost devm err}
-    (h : applyBinary f cost devm = Except.error err) (a : Adr) :
-    err.2.getCode a = devm.getCode a := by
-  exact (liftMachExecution_worldEq_of_error (core := Mach.applyBinary f cost) h).getCode a |>.symm
-
-lemma applyTernary_getCode_err {f : B256 → B256 → B256 → B256} {cost devm err}
-    (h : applyTernary f cost devm = Except.error err) (a : Adr) :
-    err.2.getCode a = devm.getCode a := by
-  exact (liftMachExecution_worldEq_of_error (core := Mach.applyTernary f cost) h).getCode a |>.symm
 
 lemma Rinst.inv_getCode_err
     {pc sevm devm r err}
@@ -6323,60 +6099,6 @@ theorem Linst.run_codeFrame {sevm : Sevm} {devm : Devm} {l : Linst}
   · have hf := Linst.run_instructionFrame sevm devm l h_not_dest
     rw [run] at hf
     cases exn <;> exact fun a => (hf.getCode a).symm
-
-lemma Linst.inv_getCode
-    {sevm devm l exn}
-    (run : Linst.Run sevm devm l exn) :
-    ∀ adr : Adr, exn.getCode adr = devm.getCode adr := by
-  have hf := Linst.run_codeFrame run
-  cases exn <;> exact hf
-
-/-! ## World-preserving footprint lifts -/
-
-lemma Footprint.liftOutcome_worldEq
-    (get : Devm → σ) (set : Devm → σ → Devm)
-    (core : σ → Footprint.Outcome σ α) (d : Devm)
-    (hset : ∀ view, Devm.WorldEq d (set d view)) :
-    Outcome.Rel Prod.snd Prod.snd Devm.WorldEq d
-      (Footprint.liftOutcome get set core d) := by
-  unfold Footprint.liftOutcome
-  cases core (get d) <;> exact hset _
-
-lemma liftMach_worldEq (core : Mach → Footprint.Outcome Mach α) (d : Devm) :
-    Outcome.Rel Prod.snd Prod.snd Devm.WorldEq d (liftMach core d) := by
-  unfold liftMach
-  exact Footprint.liftOutcome_worldEq _ _ _ _ (Devm.worldEq_setMach d)
-
-lemma liftMachExecution_worldEq
-    (core : Mach → Footprint.Outcome Mach Unit) (d : Devm) :
-    Execution.Rel Devm.WorldEq d (liftMachExecution core d) := by
-  unfold liftMachExecution
-  exact outcomeRel_toExecution (liftMach_worldEq core d)
-
-lemma liftMachMeta_worldEq
-    (core : Mach → Meta → Footprint.Outcome (Mach × Meta) α) (d : Devm) :
-    Outcome.Rel Prod.snd Prod.snd Devm.WorldEq d (liftMachMeta core d) := by
-  unfold liftMachMeta
-  exact Footprint.liftOutcome_worldEq _ _ _ _ (Devm.worldEq_setMachMeta d)
-
-lemma liftMachMetaExecution_worldEq
-    (core : Mach → Meta → Footprint.Outcome (Mach × Meta) Unit) (d : Devm) :
-    Execution.Rel Devm.WorldEq d (liftMachMetaExecution core d) := by
-  unfold liftMachMetaExecution
-  exact outcomeRel_toExecution (liftMachMeta_worldEq core d)
-
-lemma liftMachMetaWorldExecution_worldEq
-    (core : World → Mach → Meta → Footprint.Outcome (Mach × Meta) Unit)
-    (d : Devm) :
-    Execution.Rel Devm.WorldEq d (liftMachMetaWorldExecution core d) := by
-  exact liftMachMetaExecution_worldEq _ _
-
-/-- `BALANCE` preserves the world because its named core is lifted with
-    read-only access to `World`; no account-operation unfolding is needed. -/
-lemma Rinst.balance_worldEq (pc : Nat) (sevm : Sevm) (d : Devm) :
-    Execution.Rel Devm.WorldEq d (Rinst.runCore pc d sevm .balance) := by
-  simpa only [Rinst.runCore] using
-    (liftMachMetaWorldExecution_worldEq Rinst.balanceCore d)
 
 def Xlot.Rel (R : Devm → Devm → Prop) : Xlot → Prop
   | .none => True
@@ -6922,28 +6644,6 @@ lemma Ninst.push_instructionFrame_effectGen
       rw [hRun] at hf
       exact hf
   | some x => exact False.elim hRun
-
-lemma Ninst.push_worldEq_effectGen {xs : B8L} {hxs : xs.length ≤ 32} :
-    Ninst.EffectGen Devm.WorldEq (.push xs hxs) := by
-  intro pc sevm pre xl out hxl hRun
-  cases xl with
-  | none =>
-      exact Outcome.Rel.mono
-        (show CEffect.Refines Devm.InstructionFrame Devm.WorldEq from
-          fun _ _ h => h.worldEq)
-        (Ninst.push_instructionFrame_effectGen (hxs := hxs) (xl := .none)
-          trivial hRun)
-  | some x => exact False.elim hRun
-
-lemma Ninst.push_effectGen_of_worldEq {R : Devm → Devm → Prop}
-    {xs : B8L} {hxs : xs.length ≤ 32}
-    (hWR : CEffect.Refines Devm.WorldEq R) :
-    Ninst.EffectGen R (.push xs hxs) := by
-  intro pc sevm pre xl out hxl hRun
-  cases xl
-  · exact Outcome.Rel.mono hWR
-      (Ninst.push_worldEq_effectGen (hxs := hxs) (xl := .none) trivial hRun)
-  · simp only [Ninst.Run'] at hRun
 
 lemma Ninst.push_effectGen_of_instructionFrame
     {R : Devm → Devm → Prop} {xs : B8L} {hxs : xs.length ≤ 32}
@@ -8318,14 +8018,6 @@ lemma memRead_getBal_eq {x n : Nat} {devm devm' : Devm} {value : B8L} (h : devm.
   rw [← h_devm]
   rfl
 
-lemma memWrite_getBal_eq {idx : Nat} {val : B8L} {devm : Devm} (a : Adr) : (devm.memWrite idx val).getBal a = devm.getBal a := by
-  exact (liftMachPure_worldEq (Mach.memWrite · idx val) devm).getBal a |>.symm
-
-lemma Devm.popN_getBal_eq {n : Nat} {devm devm' : Devm} {l : List B256}
-    (hp : devm.popN n = Except.ok (l, devm')) (a : Adr) :
-    devm'.getBal a = devm.getBal a := by
-  exact (liftMach_worldEq_of_ok (core := (Mach.popN · n)) hp).getBal a |>.symm
-
 def Rinst.Inv {ξ : Type} (f : Devm → ξ) (r : Rinst) : Prop :=
   ∀ {pc sevm pre post}, Rinst.run ⟨pc, sevm, pre⟩ r = (.ok post) → f pre = f post
 
@@ -8345,16 +8037,6 @@ lemma memRead_getStor_eq {x n : Nat} {devm devm' : Devm} {value : B8L} (h : devm
   injection h with _ h_devm
   rw [← h_devm]
   rfl
-
-lemma memWrite_getStor_eq {idx : Nat} {val : B8L} {devm : Devm} : (devm.memWrite idx val).getStor = devm.getStor := by
-  funext a
-  exact (liftMachPure_worldEq (Mach.memWrite · idx val) devm).getStor a |>.symm
-
-lemma Devm.popN_getStor_eq {n : Nat} {devm devm' : Devm} {l : List B256}
-    (hp : devm.popN n = Except.ok (l, devm')) :
-    devm'.getStor = devm.getStor := by
-  funext a
-  exact (liftMach_worldEq_of_ok (core := (Mach.popN · n)) hp).getStor a |>.symm
 
 lemma Rinst.inv_stor {r} (h_not_sstore : r ≠ Rinst.sstore) : Rinst.Inv Devm.getStor r := by
   intro pc sevm pre post hrun
@@ -8456,7 +8138,6 @@ instance : Rinst.Hinv Devm.getStor Rinst.gas := by show_hinv_stor
 instance {n} : Rinst.Hinv Devm.getStor (Rinst.dup n) := by show_hinv_stor
 instance {n} : Rinst.Hinv Devm.getStor (Rinst.swap n) := by show_hinv_stor
 instance {n} : Rinst.Hinv Devm.getStor (Rinst.log n) := by show_hinv_stor
-
 
 /-! ## §1 AdrSet non-membership helpers -/
 
@@ -8683,20 +8364,9 @@ lemma executePrecomp_noDel {wa : Adr} {evm : Evm} {adr : Adr} {exn : Execution}
     · rfl
     · exact h
 
-
 /-! ## §5 Instruction level -/
 
 -- Helper lemmas for the EVM instructions delSets preservation.
-lemma delSets_eq_of_bind {α ε} {ma : Except ε α} {f : α → Except ε Devm}
-    {devm devm' : Devm}
-    (run : (ma >>= f) = .ok devm')
-    (getDevm : α → Devm)
-    (h_first : ∀ v, ma = .ok v → (getDevm v).delSets = devm.delSets)
-    (h_rest : ∀ v, ma = .ok v → f v = .ok devm' → devm'.delSets = (getDevm v).delSets) :
-    devm'.delSets = devm.delSets := by
-  rcases of_bind_eq_ok run with ⟨v, hm, hf⟩
-  rw [h_rest v hm hf, h_first v hm]
-
 lemma liftMach_delSets_of_ok {core : Mach → Footprint.Outcome Mach α}
     {d d' : Devm} {x : α} (h : liftMach core d = .ok (x, d')) :
     d'.delSets = d.delSets := by
@@ -8790,52 +8460,6 @@ lemma Devm.popN_delSets_eq {n : Nat} {devm devm' : Devm} {l : List B256}
     (hp : devm.popN n = Except.ok (l, devm')) :
     devm'.delSets = devm.delSets := by
   exact liftMach_delSets_of_ok (core := (Mach.popN · n)) hp
-
-lemma sstore_inv_delSets
-    {pc sevm devm devm'}
-    (run : Rinst.run ⟨pc, sevm, devm⟩ .sstore = .ok devm') :
-    devm'.delSets = devm.delSets := by
-  simp only [Rinst.run, Rinst.runCore] at run
-  refine delSets_eq_of_bind run Prod.snd ?_ ?_
-  {intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp}
-  clear run
-  intro ⟨x, devm1⟩ hp run;
-  refine delSets_eq_of_bind run Prod.snd ?_ ?_
-  {intro ⟨x, devm1⟩ hp; exact Devm.pop_delSets_eq hp}
-  clear run
-  intro ⟨y, devm2⟩ hp run;
-  rcases of_bind_eq_ok run with ⟨⟨_⟩, _, run'⟩
-  clear run
-  refine delSets_eq_of_bind run' Prod.fst ?_ ?_
-  · clear run';
-    intro ⟨devm', _⟩
-    simp only [ite_not, Except.ok.injEq]
-    split
-    · intro eq; injection eq with eq _; rw [eq]
-    · simp [addAccessedStorageKey_def, Devm.withAccessedStorageKeys]
-      intro rw _; rw [← rw]; clear rw
-      simp [Devm.delSets]
-  · clear run';
-    intro ⟨devm3, _⟩ eq run; clear eq
-    rcases of_bind_eq_ok run with ⟨_, bar, run'⟩;
-    clear bar run
-    simp only at run'
-    refine delSets_eq_of_bind run' id ?_ ?_
-    · clear run'
-      intro devm4 eq
-      injection eq with rw
-      rw [← rw]
-      simp [Devm.delSets]
-    · clear run'
-      intro devm4 temp run; clear temp
-      refine delSets_eq_of_bind run id ?_ ?_
-      {intro devm5 hc; exact (chargeGas_delSets_eq hc).trans rfl}
-      clear run
-      intro devm5 eq run
-      rcases of_bind_eq_ok run with ⟨_, bar, run'⟩;
-      clear bar run; injection run' with rw
-      rw [← rw]
-      rfl
 
 lemma Rinst.inv_delSets {r : Rinst} : Rinst.Inv Devm.delSets r := by
   intro pc sevm pre post hrun
@@ -9283,7 +8907,6 @@ lemma Msg.NoDel.benvAfterTransfer {wa : Adr} {msg : Msg} {benv : Benv}
     subst heq
     exact h
 
-
 /-! ## 4. Balance-sum relations and primitive state updates -/
 
 def State.balSum (st : _root_.State) : Nat :=
@@ -9387,7 +9010,6 @@ lemma sumBelow_setBal_add_local (st : _root_.State) (a : Adr) (v : B256)
         sumBelow (fun x => st.bal x) n + (st.get a).bal.toNat + v.toNat
       omega
 
-
 lemma State.balSum_setBal (st : _root_.State) (a : Adr) (v : B256) :
     State.balSum (st.setBal a v) + (st.bal a).toNat =
       State.balSum st + v.toNat := by
@@ -9475,82 +9097,10 @@ def BenvExecution.state : Except (String × _root_.State × AdrSet × Tra) Benv 
 family in `Blanc/Common.lean`: every regular-instruction error path leaves
 balances unchanged. -/
 
-lemma Devm.pop_map_snd_getBal_eq {devm devm1 : Devm} (hp : (devm.pop <&> Prod.snd) = .ok devm1) (a : Adr) : devm1.getBal a = devm.getBal a := by
-  dsimp [(· <&> ·), Functor.mapRev, Functor.map, Except.map] at hp
-  rcases hp2 : devm.pop with _ | ⟨x, devm2⟩
-  · simp [hp2] at hp
-  · simp [hp2] at hp
-    rcases hp with ⟨_, rfl⟩
-    exact (Devm.pop_worldEq_of_ok hp2).getBal a |>.symm
-
-lemma Devm.pop_map_snd_getBal_err {devm : Devm} {err : String × Devm} (hp : (devm.pop <&> Prod.snd) = .error err) (a : Adr) : err.2.getBal a = devm.getBal a := by
-  dsimp [(· <&> ·), Functor.mapRev, Functor.map, Except.map] at hp
-  rcases hp2 : devm.pop with e | ⟨x, devm2⟩
-  · simp [hp2] at hp; cases hp
-    exact (Devm.pop_worldEq_of_error hp2).getBal a |>.symm
-  · simp [hp2] at hp
-
-lemma Devm.pop_getBal_err {err devm} (h : Devm.pop devm = .error err) (a : Adr) : err.2.getBal a = devm.getBal a := by
-  exact (Devm.pop_worldEq_of_error h).getBal a |>.symm
-
-lemma chargeGas_getBal_err {cost devm err} (h : chargeGas cost devm = .error err) (a : Adr) : err.2.getBal a = devm.getBal a := by
-  exact (chargeGas_worldEq_of_error h).getBal a |>.symm
-
-lemma Devm.push_getBal_err {v devm err} (h : Devm.push v devm = Except.error err) (a : Adr) : err.2.getBal a = devm.getBal a := by
-  exact (liftMachExecution_worldEq_of_error (core := Mach.push v) h).getBal a |>.symm
-
 lemma assert_getBal_err {cond : Prop} [Decidable cond] {msg : String} {devm : Devm} {err : String × Devm} (h : Except.assert cond (msg, devm) = Except.error err) (a : Adr) : err.2.getBal a = devm.getBal a := by
   unfold Except.assert at h
   split_ifs at h; try contradiction
   injection h with h1; rw [← h1]
-
-lemma Devm.popToNat_getBal_err {devm err} (h : Devm.popToNat devm = .error err) (a : Adr) : err.2.getBal a = devm.getBal a := by
-  exact (Devm.popToNat_worldEq_of_error h).getBal a |>.symm
-
-lemma Devm.popToAdr_getBal_err {devm err} (h : Devm.popToAdr devm = .error err) (a : Adr) : err.2.getBal a = devm.getBal a := by
-  exact (liftMach_worldEq_of_error (core := Mach.popToAdr) h).getBal a |>.symm
-
-lemma getBal_err_of_bind {α} {ma : Except (String × Devm) α} {f : α → Execution}
-    {devm : Devm} {a : Adr} {err : String × Devm}
-    (run : (ma >>= f) = Except.error err)
-    (getDevm : α → Devm)
-    (h_first_ok : ∀ v, ma = Except.ok v → (getDevm v).getBal a = devm.getBal a)
-    (h_first_err : ∀ e, ma = Except.error e → e.2.getBal a = devm.getBal a)
-    (h_rest_err : ∀ v, ma = Except.ok v → f v = Except.error err → err.2.getBal a = (getDevm v).getBal a) :
-    err.2.getBal a = devm.getBal a := by
-  cases h_ma : ma
-  case error e =>
-    rw [h_ma, Except.bind_error] at run
-    injection run with h_eq; subst h_eq
-    exact h_first_err _ h_ma
-  case ok v =>
-    rw [h_ma, Except.bind_ok] at run
-    have h1 := h_rest_err v h_ma run
-    have h2 := h_first_ok v h_ma
-    exact h1.trans h2
-
-lemma Devm.popN_getBal_err {n : Nat} {devm : Devm} {err : String × Devm}
-    (hp : devm.popN n = Except.error err) (a : Adr) :
-    err.2.getBal a = devm.getBal a := by
-  exact (liftMach_worldEq_of_error (core := (Mach.popN · n)) hp).getBal a |>.symm
-
-lemma pushItem_getBal_err {x c devm err} (h : pushItem x c devm = Except.error err) (a : Adr) : err.2.getBal a = devm.getBal a := by
-  exact (liftMachExecution_worldEq_of_error (core := Mach.pushItem x c) h).getBal a |>.symm
-
-lemma applyUnary_getBal_err {f : B256 → B256} {cost devm err}
-    (h : applyUnary f cost devm = Except.error err) (a : Adr) :
-    err.2.getBal a = devm.getBal a := by
-  exact (liftMachExecution_worldEq_of_error (core := Mach.applyUnary f cost) h).getBal a |>.symm
-
-lemma applyBinary_getBal_err {f : B256 → B256 → B256} {cost devm err}
-    (h : applyBinary f cost devm = Except.error err) (a : Adr) :
-    err.2.getBal a = devm.getBal a := by
-  exact (liftMachExecution_worldEq_of_error (core := Mach.applyBinary f cost) h).getBal a |>.symm
-
-lemma applyTernary_getBal_err {f : B256 → B256 → B256 → B256} {cost devm err}
-    (h : applyTernary f cost devm = Except.error err) (a : Adr) :
-    err.2.getBal a = devm.getBal a := by
-  exact (liftMachExecution_worldEq_of_error (core := Mach.applyTernary f cost) h).getBal a |>.symm
 
 lemma Rinst.inv_getBal_err
     {pc sevm devm r err}
