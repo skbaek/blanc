@@ -5660,6 +5660,12 @@ def MsgResult.CodePreserveExcept (base : State) (w : Adr)
   ∀ a : Adr, a ≠ w → (base.getCode a).toList ≠ [] →
     MsgResult.getCode exn a = base.getCode a
 
+/-- Relational code-preservation over an `Execution` outcome (used by the
+Step 7.3 generic-operation masters): every nonempty-code address of `base` has
+the same code in the result, on both the ok and error branches. -/
+def Execution.CodePreserve (base : Devm) (exn : Execution) : Prop :=
+  ∀ a : Adr, (base.getCode a).toList ≠ [] → Execution.getCode exn a = base.getCode a
+
 /-- Writer leaf: `handleError` reshuffles error payloads into ok results and
 selects states, but never installs new code. -/
 lemma executeCode.handleError_getCode (exn : Execution) (a : Adr) :
@@ -5874,13 +5880,19 @@ lemma ProcessCreateMessage.inv_getCode_gen
       MsgResult.getCode exn a = msg.benv.state.getCode a :=
   ProcessCreateMessage.codePreserve inv run
 
-lemma GenericCreate.inv_getCode_gen
+/-- Master: the whole `GenericCreate` operation preserves the code of every
+nonempty-code address.  The world-silent access/gas/return-data prefix and the
+`push`/`incrNonce` steps leave code untouched (`Devm.push_getCode_gen`,
+`Devm.incrNonce_getCode`); the interpreted child-create body is bounded by the
+Step 7.2 master `ProcessCreateMessage.codePreserve` (whose exclusion of the
+fresh create `newAddress` is discharged here from the nonempty-code premise,
+since the fresh target starts with empty code); child incorporation only
+selects between the parent and child worlds. -/
+lemma GenericCreate.codePreserve
     {sevm : Sevm} {devm : Devm} {endowment : B256} {newAddress : Adr}
     {memoryIndex memorySize : Nat} {xl : Xlot} {exn : Execution} (inv : xl.InvGetCode)
     (run : GenericCreate sevm devm endowment newAddress memoryIndex memorySize xl exn) :
-    ∀ (a : Adr),
-      (devm.getCode a).toList ≠ [] →
-      Execution.getCode exn a = devm.getCode a := by
+    Execution.CodePreserve devm exn := by
   dsimp [GenericCreate] at run
   rcases run with ⟨calldata, eq_calldata, run⟩; subst eq_calldata
   rcases run with ⟨x, h_err, eq_err, _⟩ | ⟨_, h_ok, run⟩
@@ -5953,7 +5965,7 @@ lemma GenericCreate.inv_getCode_gen
             have h_goal : (devm4.getCode a).toList ≠ [] := by
               rw [h_devm4]
               exact ha
-            have h_exec_cond := ProcessCreateMessage.inv_getCode_gen inv h_exec a h_a_ne h_goal
+            have h_exec_cond := ProcessCreateMessage.codePreserve inv h_exec a h_a_ne h_goal
             rcases ex' with err | devm_child
             · dsimp [liftToExecution] at h_err
               injection h_err with h_eq
@@ -5991,7 +6003,7 @@ lemma GenericCreate.inv_getCode_gen
             have h_goal : (devm4.getCode a).toList ≠ [] := by
               rw [h_devm4]
               exact ha
-            have h_exec_cond := ProcessCreateMessage.inv_getCode_gen inv h_exec a h_a_ne h_goal
+            have h_exec_cond := ProcessCreateMessage.codePreserve inv h_exec a h_a_ne h_goal
             rcases ex' with err | devm_child
             · dsimp [liftToExecution] at h_ok
               contradiction
@@ -6017,16 +6029,30 @@ lemma GenericCreate.inv_getCode_gen
                 rw [h_exec_cond]
                 exact h_devm4
 
-lemma GenericCall.inv_getCode_gen
+lemma GenericCreate.inv_getCode_gen
+    {sevm : Sevm} {devm : Devm} {endowment : B256} {newAddress : Adr}
+    {memoryIndex memorySize : Nat} {xl : Xlot} {exn : Execution} (inv : xl.InvGetCode)
+    (run : GenericCreate sevm devm endowment newAddress memoryIndex memorySize xl exn) :
+    ∀ (a : Adr),
+      (devm.getCode a).toList ≠ [] →
+      Execution.getCode exn a = devm.getCode a :=
+  GenericCreate.codePreserve inv run
+
+/-- Master: the whole `GenericCall` operation preserves the code of every
+nonempty-code address.  The world-silent return-data/memory prefix leaves code
+untouched (`Devm.push_getCode_gen`, `liftMachPure_worldEq` for `memWrite`); the
+interpreted child body is bounded by the Step 7.2 master
+`ProcessMessage.codePreserve`; child incorporation
+(`incorporateChildOnError`/`OnSuccess`) only selects between the parent and
+child worlds. -/
+lemma GenericCall.codePreserve
     {sevm : Sevm} {devm : Devm} {gas : Nat} {value : B256}
     {caller target codeAddress : Adr} {shouldTransferValue isStaticcall : Bool}
     {input_index input_size output_index output_size : Nat} {code : ByteArray}
     {disablePrecompiles : Bool} {xl : Xlot} {exn : Execution}
     (inv : xl.InvGetCode)
     (run : GenericCall sevm devm gas value caller target codeAddress shouldTransferValue isStaticcall input_index input_size output_index output_size code disablePrecompiles xl exn) :
-    ∀ a : Adr,
-      (devm.getCode a).toList ≠ [] →
-      exn.getCode a = devm.getCode a := by
+    Execution.CodePreserve devm exn := by
   dsimp [GenericCall] at run
   rcases run with ⟨evm1, eq_evm1, run⟩; subst eq_evm1
   split at run
@@ -6039,7 +6065,7 @@ lemma GenericCall.inv_getCode_gen
     rcases h_ex' with ⟨x, h_err, eq_err⟩ | ⟨child, h_ok, run⟩
     · intro a ha
       rw [eq_err]
-      have h_exec_cond := ProcessMessage.inv_getCode_gen inv h_exec a ha
+      have h_exec_cond := ProcessMessage.codePreserve inv h_exec a ha
       rcases ex' with err | child
       · dsimp [liftToExecution] at h_err
         injection h_err with h_eq
@@ -6051,7 +6077,7 @@ lemma GenericCall.inv_getCode_gen
       · dsimp [liftToExecution] at h_err
         contradiction
     · intro a ha
-      have h_exec_cond := ProcessMessage.inv_getCode_gen inv h_exec a ha
+      have h_exec_cond := ProcessMessage.codePreserve inv h_exec a ha
       rcases ex' with err | child
       · dsimp [liftToExecution] at h_ok
         contradiction
@@ -6108,6 +6134,18 @@ lemma GenericCall.inv_getCode_gen
             change child.getCode a = _ at h_exec_cond
             rw [h_exec_cond]
             rfl
+
+lemma GenericCall.inv_getCode_gen
+    {sevm : Sevm} {devm : Devm} {gas : Nat} {value : B256}
+    {caller target codeAddress : Adr} {shouldTransferValue isStaticcall : Bool}
+    {input_index input_size output_index output_size : Nat} {code : ByteArray}
+    {disablePrecompiles : Bool} {xl : Xlot} {exn : Execution}
+    (inv : xl.InvGetCode)
+    (run : GenericCall sevm devm gas value caller target codeAddress shouldTransferValue isStaticcall input_index input_size output_index output_size code disablePrecompiles xl exn) :
+    ∀ a : Adr,
+      (devm.getCode a).toList ≠ [] →
+      exn.getCode a = devm.getCode a :=
+  GenericCall.codePreserve inv run
 
 lemma Devm.pop_getCode_err {err devm} (h : Devm.pop devm = .error err) (a : Adr) : err.2.getCode a = devm.getCode a := by
   exact (Devm.pop_worldEq_of_error h).getCode a |>.symm
