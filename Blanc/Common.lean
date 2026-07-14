@@ -944,7 +944,11 @@ lemma Devm.pushBurn_of_run {x : B256} {pre inter : Devm} {cost : Nat} :
       split at run; {cases run}
       injection run with eq_inter; subst eq_inter
       constructor <;>
-        simp [_root_.Stack.Push, Split, Devm.Rels.eq, Devm.setMach, Devm.mach]
+        simp [_root_.Stack.Push, Split, Devm.Rels.eq, Devm.setMach, Devm.stack,
+          Devm.memory, Devm.gasLeft, Devm.logs, Devm.refundCounter, Devm.output,
+          Devm.accountsToDelete, Devm.returnData, Devm.error, Devm.accessedAddresses,
+          Devm.accessedStorageKeys, Devm.state, Devm.createdAccounts,
+          Devm.transientStorage]
     · contradiction
 
 lemma Devm.pop_of_pop {x : B256} {devm devm' : Devm} :
@@ -974,7 +978,7 @@ lemma Devm.burn_of_chargeGas {cost : Nat} {devm devm' : Devm} :
     split
     · intro h
       injection h with h
-      simp [Devm.setMach, Devm.mach]
+      change devm.gasLeft ≥ gas
       omega
     · intro h
       cases h
@@ -1342,26 +1346,23 @@ lemma Devm.pushBurn_cons_popBurn_cons
   rcases push_pop_stack with ⟨h_eq, stk, h_push, h_pop⟩
   refine' ⟨
     h_eq,
-    { s' with stack := stk },
+    s'.withStack stk,
     ⟨h_push, h_mem, h_gas, h_logs, h_refund, h_out, h_del, h_ret, h_err, h_acc, h_keys, h_state, h_cas, h_trans⟩,
     ⟨h_pop, h'_mem, h'_gas, h'_logs, h'_refund, h'_out, h'_del, h'_ret, h'_err, h'_acc, h'_keys, h'_cas, h'_state, h'_trans⟩
   ⟩
 
 lemma Devm.burn_of_popBurn_nil {s s'} (h : Devm.PopBurn [] s s') :
     Devm.Burn s s' := by
-  match s, s', h with
-  | ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _, _⟩,
-    ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _, _⟩,
-    ⟨h, _, _, _, _, _, _, _, _, _, _, _, _, _⟩ =>
-    refine' ⟨h, _, _, _, _, _, _, _, _, _, _, _, _, _⟩ <;> assumption
+  simpa [Devm.PopBurn, Devm.Burn, Stack.Pop, Split] using h
 
 lemma Devm.burn_of_pushBurn_nil {s s'} (h : Devm.PushBurn [] s s') :
     Devm.Burn s s' := by
-  match s, s', h with
-  | ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _, _⟩,
-    ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _, _⟩,
-    ⟨h, _, _, _, _, _, _, _, _, _, _, _, _, _⟩ =>
-    refine' ⟨h.symm, _, _, _, _, _, _, _, _, _, _, _, _, _⟩ <;> assumption
+  rcases h with
+    ⟨h_stack, h_mem, h_gas, h_logs, h_refund, h_out, h_del, h_ret, h_err,
+      h_acc, h_keys, h_state, h_cas, h_trans⟩
+  exact ⟨by simpa [Stack.Push, Split] using h_stack.symm, h_mem, h_gas,
+    h_logs, h_refund, h_out, h_del, h_ret, h_err, h_acc, h_keys, h_state,
+    h_cas, h_trans⟩
 
 lemma Devm.burn_trans {x y z} (h1 : Devm.Burn x y) (h2 : Devm.Burn y z) : Devm.Burn x z := by
   rcases h1 with ⟨h1_stack, h1_mem, h1_gas, h1_logs, h1_refund, h1_out, h1_del, h1_ret, h1_err, h1_acc, h1_keys, h1_state, h1_cas, h1_trans⟩
@@ -2382,7 +2383,7 @@ lemma Devm.memExtends_getCode {devm : Devm} {ranges : List (ℕ × ℕ)} {a : Ad
   exact (liftMachPure_worldEq (Mach.memExtends · ranges) devm).getCode a |>.symm
 
 lemma Devm.incrNonce_getCode {devm : Devm} {adr a : Adr} : (devm.incrNonce adr).getCode a = devm.getCode a := by
-  dsimp [Devm.incrNonce, Devm.withState, Devm.setWorld, Devm.world,
+  dsimp [Devm.incrNonce, Devm.withState, Devm.setWorld, Devm.world, Devm.state,
     Devm.getCode, Devm.getAcct, State.incrNonce, State.set, State.getCode, State.get]
   split_ifs with h_if
   · by_cases h : compare adr a = Ordering.eq
@@ -2574,15 +2575,17 @@ lemma Xinst.prep_codeFrame
         have h_devm : benv.state.getCode adr = devm.getCode adr := by
           subst hp_childMsg hp_evm1
           dsimp [Msg.benvAfterTransfer, callMsg, Devm.withReturnData,
-            Devm.withGasLeft, Devm.setMach, Devm.mach, Devm.setMeta, Devm.meta] at eq_benv
+            Devm.withGasLeft, Devm.setMach, Devm.mach, Devm.setMeta, Devm.meta,
+            Devm.state, Devm.createdAccounts, Devm.transientStorage] at eq_benv
           rcases hp_sub : ({ state := devm11.state, createdAccounts := devm11.createdAccounts, stat := sevm.benvStat } : Benv).subBal sevm.currentTarget value with _ | benv_sub
-          · simp [hp_sub, Option.toExcept, Bind.bind, Except.bind] at eq_benv
-          · simp [hp_sub, Option.toExcept, Bind.bind, Except.bind] at eq_benv
+          · simp only [Devm.state, Devm.createdAccounts] at hp_sub
+            simp [hp_sub, Option.toExcept, Bind.bind, Except.bind] at eq_benv
+          · simp only [Devm.state, Devm.createdAccounts] at hp_sub
+            simp [hp_sub, Option.toExcept, Bind.bind, Except.bind] at eq_benv
             subst eq_benv
             have h1 := Benv.addBal_getCode benv_sub callee adr value
             have h2 := Benv.subBal_getCode (a := adr) hp_sub
-            have h_devm11_state : ({ state := devm11.state, createdAccounts := devm11.createdAccounts, stat := sevm.benvStat } : Benv).state.getCode adr = devm11.getCode adr := rfl
-            rw [h_devm11_state] at h2
+            change benv_sub.state.getCode adr = devm11.getCode adr at h2
             rw [h1, h2]
             have h11 : devm11.getCode adr = devm10.getCode adr := by subst hp18; exact Devm.memExtends_getCode
             have h10 : devm10.getCode adr = devm9.getCode adr := chargeGas_getCode eq16
@@ -2647,15 +2650,17 @@ lemma Xinst.prep_codeFrame
         have h_devm : benv.state.getCode adr = devm.getCode adr := by
           subst hp_childMsg hp_evm1
           dsimp [Msg.benvAfterTransfer, callMsg, Devm.withReturnData,
-            Devm.withGasLeft, Devm.setMach, Devm.mach, Devm.setMeta, Devm.meta] at eq_benv
+            Devm.withGasLeft, Devm.setMach, Devm.mach, Devm.setMeta, Devm.meta,
+            Devm.state, Devm.createdAccounts, Devm.transientStorage] at eq_benv
           rcases hp_sub : ({ state := devm11.state, createdAccounts := devm11.createdAccounts, stat := sevm.benvStat } : Benv).subBal sevm.currentTarget value with _ | benv_sub
-          · simp [hp_sub, Option.toExcept, Bind.bind, Except.bind] at eq_benv
-          · simp [hp_sub, Option.toExcept, Bind.bind, Except.bind] at eq_benv
+          · simp only [Devm.state, Devm.createdAccounts] at hp_sub
+            simp [hp_sub, Option.toExcept, Bind.bind, Except.bind] at eq_benv
+          · simp only [Devm.state, Devm.createdAccounts] at hp_sub
+            simp [hp_sub, Option.toExcept, Bind.bind, Except.bind] at eq_benv
             subst eq_benv
             have h1 := Benv.addBal_getCode benv_sub sevm.currentTarget adr value
             have h2 := Benv.subBal_getCode (a := adr) hp_sub
-            have h_devm11_state : ({ state := devm11.state, createdAccounts := devm11.createdAccounts, stat := sevm.benvStat } : Benv).state.getCode adr = devm11.getCode adr := rfl
-            rw [h_devm11_state] at h2
+            change benv_sub.state.getCode adr = devm11.getCode adr at h2
             rw [h1, h2]
             have h11 : devm11.getCode adr = devm10.getCode adr := by subst hp16; exact Devm.memExtends_getCode
             have h10 : devm10.getCode adr = devm9.getCode adr := chargeGas_getCode eq15
@@ -2713,11 +2718,11 @@ lemma Xinst.prep_codeFrame
       have h_devm : benv.state.getCode adr = devm.getCode adr := by
         subst hp_childMsg hp_evm1
         dsimp [Msg.benvAfterTransfer, callMsg, Devm.withReturnData,
-          Devm.withGasLeft, Devm.setMach, Devm.mach, Devm.setMeta, Devm.meta] at eq_benv
+          Devm.withGasLeft, Devm.setMach, Devm.mach, Devm.setMeta, Devm.meta,
+          Devm.state, Devm.createdAccounts, Devm.transientStorage] at eq_benv
         injection eq_benv with eq_benv
         subst eq_benv
-        have h_devm10_state : ({ state := devm10.state, createdAccounts := devm10.createdAccounts, stat := sevm.benvStat } : Benv).state.getCode adr = devm10.getCode adr := rfl
-        rw [h_devm10_state]
+        change devm10.getCode adr = devm.getCode adr
         have h14 : devm10.getCode adr = devm9.getCode adr := by subst hp14; exact Devm.memExtends_getCode
         have h13 : devm9.getCode adr = devm8.getCode adr := chargeGas_getCode eq13
         have h10 : devm8.getCode adr = devm7.getCode adr := by
@@ -2847,15 +2852,17 @@ lemma Xinst.prep_codeFrame
       have h_devm : benv.state.getCode adr = devm.getCode adr := by
         subst hp_childMsg hp_evm1
         dsimp [Msg.benvAfterTransfer, callMsg, Devm.withReturnData,
-          Devm.withGasLeft, Devm.setMach, Devm.mach, Devm.setMeta, Devm.meta] at eq_benv
+          Devm.withGasLeft, Devm.setMach, Devm.mach, Devm.setMeta, Devm.meta,
+          Devm.state, Devm.createdAccounts, Devm.transientStorage] at eq_benv
         rcases hp_sub : ({ state := devm10.state, createdAccounts := devm10.createdAccounts, stat := sevm.benvStat } : Benv).subBal sevm.currentTarget 0 with _ | benv_sub
-        · simp [hp_sub, Option.toExcept, Bind.bind, Except.bind] at eq_benv
-        · simp [hp_sub, Option.toExcept, Bind.bind, Except.bind] at eq_benv
+        · simp only [Devm.state, Devm.createdAccounts] at hp_sub
+          simp [hp_sub, Option.toExcept, Bind.bind, Except.bind] at eq_benv
+        · simp only [Devm.state, Devm.createdAccounts] at hp_sub
+          simp [hp_sub, Option.toExcept, Bind.bind, Except.bind] at eq_benv
           subst eq_benv
           have h1 := Benv.addBal_getCode benv_sub target adr 0
           have h2 := Benv.subBal_getCode (a := adr) hp_sub
-          have h_devm10_state : ({ state := devm10.state, createdAccounts := devm10.createdAccounts, stat := sevm.benvStat } : Benv).state.getCode adr = devm10.getCode adr := rfl
-          rw [h_devm10_state] at h2
+          change benv_sub.state.getCode adr = devm10.getCode adr at h2
           rw [h1, h2]
           have h14 : devm10.getCode adr = devm9.getCode adr := by subst hp14; exact Devm.memExtends_getCode
           have h13 : devm9.getCode adr = devm8.getCode adr := chargeGas_getCode eq13
@@ -3601,7 +3608,7 @@ lemma Devm.popToNat_getStor_eq {devm devm' n} (h : Devm.popToNat devm = .ok ⟨n
 lemma setStorVal_inv_getCode {devm : Devm} {adr adr'} {key} {val} :
     (devm.setStorVal adr key val).getCode adr' = devm.getCode adr' := by
   simp [Devm.getCode, Devm.getAcct, Devm.setStorVal, Devm.withState,
-    Devm.setWorld, Devm.world]
+    Devm.setWorld, Devm.state]
   unfold State.setStorVal State.get State.set
   dsimp
   split_ifs with h_if
@@ -3625,7 +3632,7 @@ lemma setStorVal_inv_getCode {devm : Devm} {adr adr'} {key} {val} :
 lemma setStorVal_inv_getBal {devm : Devm} {adr adr'} {key} {val} :
     (devm.setStorVal adr key val).getBal adr' = devm.getBal adr' := by
   simp [Devm.getBal, Devm.getAcct, Devm.setStorVal, Devm.withState,
-    Devm.setWorld, Devm.world]
+    Devm.setWorld, Devm.state]
   unfold State.setStorVal State.get State.set
   dsimp
   split_ifs with h_if
@@ -3668,9 +3675,9 @@ lemma sstore_inv_getBal
     split
     · intro eq; injection eq with eq _; rw [eq]
     · simp [addAccessedStorageKey_def, Devm.withAccessedStorageKeys,
-        Devm.setMeta, Devm.meta]
+        Devm.setMeta]
       intro rw _; rw [← rw]; clear rw
-      simp [Devm.getBal, Devm.getAcct]
+      rfl
   · clear run';
     intro ⟨devm3, _⟩ eq run; clear eq
     rcases of_bind_eq_ok run with ⟨_, bar, run'⟩;
@@ -3681,8 +3688,7 @@ lemma sstore_inv_getBal
       intro devm4 eq
       injection eq with rw
       rw [← rw]
-      simp [Devm.getBal, Devm.getAcct, Devm.withRefundCounter,
-        Devm.setMeta, Devm.meta]
+      rfl
     · clear run'
       intro devm4 temp run; clear temp
       refine getBal_eq_of_bind run id ?_ ?_
@@ -3716,9 +3722,9 @@ lemma sstore_inv_getCode
     split
     · intro eq; injection eq with eq _; rw [eq]
     · simp [addAccessedStorageKey_def, Devm.withAccessedStorageKeys,
-        Devm.setMeta, Devm.meta]
+        Devm.setMeta]
       intro rw _; rw [← rw]; clear rw
-      simp [Devm.getCode, Devm.getAcct]
+      rfl
   · clear run';
     intro ⟨devm3, _⟩ eq run; clear eq
     rcases of_bind_eq_ok run with ⟨_, bar, run'⟩;
@@ -3729,8 +3735,7 @@ lemma sstore_inv_getCode
       intro devm4 eq
       injection eq with rw
       rw [← rw]
-      simp [Devm.getCode, Devm.getAcct, Devm.withRefundCounter,
-        Devm.setMeta, Devm.meta]
+      rfl
     · clear run'
       intro devm4 temp run; clear temp
       refine getCode_eq_of_bind run id ?_ ?_
@@ -4632,8 +4637,8 @@ lemma Rinst.codecopy_runCore_instructionFrame
       (fun memoryStart _ size d =>
         gVerylow + gasCopy * ceilDiv size 32 + d.extCost [(memoryStart, size)])
       (fun memoryStart codeStart size d =>
-        { d with memory := (d.memory.write memoryStart
-          (sevm.code.sliceD codeStart size (Linst.toB8 .stop))) })
+        d.withMemory (d.memory.write memoryStart
+          (sevm.code.sliceD codeStart size (Linst.toB8 .stop))))
       (fun _ _ _ _ => Devm.instructionFrame_of_world_eq rfl rfl rfl rfl))
 
 lemma Rinst.mstore_runCore_instructionFrame
@@ -4932,7 +4937,7 @@ lemma Rinst.retdatacopy_runCore_instructionFrame
     if d.returnData.length < returnStart + size then
       .error ⟨"OutOfBoundsRead", d⟩
     let value := d.returnData.sliceD returnStart size 0
-    .ok { d with memory := d.memory.write memoryStart value }) ?_
+    .ok (d.withMemory (d.memory.write memoryStart value))) ?_
   intro memoryStart returnStart size d
   apply Execution.Rel.bind Devm.instructionFrame_trans
     (chargeGas_instructionFrame
@@ -4956,13 +4961,13 @@ lemma Rinst.extcodecopy_runCore_instructionFrame
         let d ← chargeGas (gasWarmAccess + gasCopy * ceilDiv size 32 +
           d.extCost [(memoryStart, size)]) d
         let value := (d.getCode a).sliceD codeStart size (Linst.toB8 .stop)
-        .ok { d with memory := d.memory.write memoryStart value }
+        .ok (d.withMemory (d.memory.write memoryStart value))
       else do
         let d ← chargeGas
           (gasColdAccountAccess + gasCopy * ceilDiv size 32 +
             d.extCost [(memoryStart, size)]) (addAccessedAddress d a)
         let value := (d.getCode a).sliceD codeStart size (Linst.toB8 .stop)
-        .ok { d with memory := d.memory.write memoryStart value }) ?_
+        .ok (d.withMemory (d.memory.write memoryStart value))) ?_
   intro a memoryStart codeStart size d
   by_cases h : a ∈ d.accessedAddresses
   · simp only [h, if_pos]
@@ -5180,8 +5185,8 @@ lemma Rinst.sstore_runCore_stateWriteFrame
             if original = 0 then gas2 + gasStorageSet
             else gas2 + (gasStorageUpdate - gasColdSload)
           else gas2 + gasWarmAccess
-        let d4 ← .ok <| { d3 with refundCounter :=
-          sstore_new_refund_counter value original current d3.refundCounter }
+        let d4 ← .ok <| d3.withRefundCounter
+          (sstore_new_refund_counter value original current d3.refundCounter)
         let d5 ← chargeGas gas3 d4
         assertDynamic sevm d5
         .ok (d5.setStorVal ct key value)) ?_
@@ -5201,8 +5206,8 @@ lemma Rinst.sstore_runCore_stateWriteFrame
             if original = 0 then gas2 + gasStorageSet
             else gas2 + (gasStorageUpdate - gasColdSload)
           else gas2 + gasWarmAccess
-        let d4 ← .ok <| { d3 with refundCounter :=
-          sstore_new_refund_counter value original current d3.refundCounter }
+        let d4 ← .ok <| d3.withRefundCounter
+          (sstore_new_refund_counter value original current d3.refundCounter)
         let d5 ← chargeGas gas3 d4
         assertDynamic sevm d5
         .ok (d5.setStorVal ct key value)) ?_
@@ -5223,10 +5228,10 @@ lemma Rinst.sstore_runCore_stateWriteFrame
           d3gas.2 + gasStorageSet
         else d3gas.2 + (gasStorageUpdate - gasColdSload)
       else d3gas.2 + gasWarmAccess
-    let d4 : Devm := { d3gas.1 with refundCounter := (
+    let d4 : Devm := d3gas.1.withRefundCounter (
       sstore_new_refund_counter value
         (getOrigStorVal sevm sevm.currentTarget key)
-        (d.getStorVal sevm.currentTarget key) d3gas.1.refundCounter) }
+        (d.getStorVal sevm.currentTarget key) d3gas.1.refundCounter)
     change Execution.Rel Devm.StateWriteFrame d
       (chargeGas gas3 d4 >>= fun d5 =>
         assertDynamic sevm d5 >>= fun _ =>
@@ -5344,14 +5349,14 @@ theorem Linst.run_instructionFrame
         let ⟨size, d⟩ ← d.popToNat
         let d ← chargeGas (d.extCost [(index, size)]) d
         let ⟨output, d⟩ := d.memRead index size
-        .ok {d with output := output}) ?_
+        .ok (d.withOutput output)) ?_
     intro index d
     refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
       (Devm.popToNat_instructionFrame d)
       (next := fun size d => do
         let d ← chargeGas (d.extCost [(index, size)]) d
         let ⟨output, d⟩ := d.memRead index size
-        .ok {d with output := output}) ?_
+        .ok (d.withOutput output)) ?_
     intro size d
     apply Execution.Rel.bind Devm.instructionFrame_trans
       (chargeGas_instructionFrame (d.extCost [(index, size)]) d)
@@ -5366,14 +5371,14 @@ theorem Linst.run_instructionFrame
         let ⟨size, d⟩ ← d.popToNat
         let d ← chargeGas (d.extCost [(index, size)]) d
         let ⟨output, d⟩ := d.memRead index size
-        .error ("Revert", {d with output := output})) ?_
+        .error ("Revert", d.withOutput output)) ?_
     intro index d
     refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
       (Devm.popToNat_instructionFrame d)
       (next := fun size d => do
         let d ← chargeGas (d.extCost [(index, size)]) d
         let ⟨output, d⟩ := d.memRead index size
-        .error ("Revert", {d with output := output})) ?_
+        .error ("Revert", d.withOutput output)) ?_
     intro size d
     apply Execution.Rel.bind Devm.instructionFrame_trans
       (chargeGas_instructionFrame (d.extCost [(index, size)]) d)
@@ -7051,7 +7056,8 @@ lemma Devm.push_of_push {x : B256} {s s' : Devm} (h : Devm.push x s = .ok s') :
   · cases h
   · injection h with eq; subst eq
     constructor <;>
-      simp [Devm.Rels.eq, _root_.Stack.Push, Split, Devm.setMach, Devm.mach]
+      simp [Devm.Rels.eq, _root_.Stack.Push, Split, Devm.setMach]
+    all_goals rfl
 
 lemma Devm.pushBurn_of_burn_of_push {xs : List B256} {s s' s'' : Devm}
     (burn : Devm.Burn s s') (push : Devm.Push xs s' s'') :
@@ -7248,7 +7254,7 @@ lemma of_run_sstore {e : Sevm} {s s' : Devm} (h : Ninst.Run e s sstore s') :
     split at eq <;> (injection eq with eq _; subst eq; rfl)
   have h_s₄ : s₄.stack = s₃.stack := by
     injection h6 with eq; rw [← eq]
-    simp [Devm.withRefundCounter, Devm.setMeta, Devm.meta]
+    rfl
   injection h9 with eq
   refine ⟨x, y, ?_⟩
   rw [← eq]
@@ -9566,11 +9572,11 @@ lemma GenericCreate.balanceEffect
   · -- sender balance/nonce/depth failure : create fails, state unchanged
     rcases run with ⟨_, h_push⟩
     have h_prefix : Devm.InstructionFrame pre
-        {devm3 with gasLeft := devm3.gasLeft + createMsgGas} := by
+        (devm3.withGasLeft (devm3.gasLeft + createMsgGas)) := by
       refine Devm.instructionFrame_trans h_frame3 ?_
       exact Devm.instructionFrame_of_world_eq rfl rfl rfl rfl
     have h_tail := Devm.push_instructionFrame 0
-      {devm3 with gasLeft := devm3.gasLeft + createMsgGas}
+      (devm3.withGasLeft (devm3.gasLeft + createMsgGas))
     rw [h_push] at h_tail
     exact Execution.Rel.trans_left balNoninc_refl_trans.2.2
       (Devm.instructionFrame_refines_balNoninc h_prefix)

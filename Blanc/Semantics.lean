@@ -254,16 +254,16 @@ def GenericCreate (sevm : Sevm) (devm : Devm) (endowment : B256) (newAddress : A
   λ devm1 =>
     ExistsEq (except64th devm1.gasLeft) <|
   λ createMsgGas =>
-    ExistsEq ({devm1 with gasLeft := devm1.gasLeft - createMsgGas}) <|
+    ExistsEq (devm1.withGasLeft (devm1.gasLeft - createMsgGas)) <|
   λ devm2 =>
     (assertDynamic sevm devm2).SplitXl xl ex <|
   λ _ =>
-    ExistsEq ({devm2 with returnData := []}) <|
+    ExistsEq (devm2.withReturnData []) <|
   λ devm3 =>
     ExistsEq (devm3.state.get sevm.currentTarget) <|
   λ sender =>
    if (sender.bal < endowment ∨ sender.nonce = B64.max ∨ sevm.depth = 0) then
-     (xl = .none ∧ {devm3 with gasLeft := devm3.gasLeft + createMsgGas}.push 0 = ex)
+     (xl = .none ∧ (devm3.withGasLeft (devm3.gasLeft + createMsgGas)).push 0 = ex)
    else
    ExistsEq (devm3.incrNonce sevm.currentTarget) <|
   λ devm4 =>
@@ -1297,8 +1297,6 @@ lemma of_generic_create' {sevm : Sevm} {devm : Devm} {endowment : B256} {newAddr
   efg_step_early run;
   {refine' ⟨0, _⟩; intro _ _; exact congrArg Fueled.ofExcept run.2}
   efg_step_exists run
-  simp only [Devm.withGasLeft, Devm.withReturnData, Devm.setMach, Devm.setMeta,
-    Devm.mach, Devm.meta]
   efg_step_exec run good of_process_create_message'
   eq_split run; eq_ite run <;> exact congrArg Fueled.ofExcept run
 
