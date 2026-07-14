@@ -1218,7 +1218,7 @@ macro_rules
       ( by cases lim' <;>
            [ (cases Nat.not_lt_zero _ gt);
              (exact Nat.lt_of_succ_lt_succ gt) ] );
-      rw [run_eq lim'.pred gt']
+      exact run_eq lim'.pred gt'
     )
 
 lemma of_process_message' {msg : Msg} {xl : Xlot}
@@ -1252,8 +1252,8 @@ macro_rules
   | `(tactic| efg_step_exists $run) =>
     `(tactic|
       have temp := $run; clear $run;
-      rcases temp with ⟨_, rw, $run⟩;
-      rw [← rw]; clear rw;
+      rcases temp with ⟨w, rw, $run⟩;
+      subst w;
       apply exists_forall_gt_ok_bind_eq
     )
 
@@ -1297,6 +1297,8 @@ lemma of_generic_create' {sevm : Sevm} {devm : Devm} {endowment : B256} {newAddr
   efg_step_early run;
   {refine' ⟨0, _⟩; intro _ _; exact congrArg Fueled.ofExcept run.2}
   efg_step_exists run
+  simp only [Devm.withGasLeft, Devm.withReturnData, Devm.setMach, Devm.setMeta,
+    Devm.mach, Devm.meta]
   efg_step_exec run good of_process_create_message'
   eq_split run; eq_ite run <;> exact congrArg Fueled.ofExcept run
 

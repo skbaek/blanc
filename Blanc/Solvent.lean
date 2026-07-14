@@ -530,7 +530,8 @@ lemma of_prepApprove {sevm : Sevm} {s s' : Devm} :
 
 lemma setStorVal_getStor_self {devm : Devm} {adr : Adr} {key val : B256} :
     (devm.setStorVal adr key val).getStor adr = (devm.getStor adr).set key val := by
-  simp only [Devm.getStor, Devm.getAcct, Devm.setStorVal, State.setStorVal]
+  simp only [Devm.getStor, Devm.getAcct, Devm.setStorVal, Devm.withState,
+    Devm.setWorld, Devm.world, State.setStorVal]
   rw [State.get_set_self]
 
 lemma Stor.get_set_ne {s : Stor} {k k' v : B256} (h : k ≠ k') :
@@ -1874,6 +1875,8 @@ lemma state_of_executePrecomp_ok {evm : Evm} {adr : Adr} {child : Devm}
   · simp only [executeCode.handleError] at h
     injection h with h
     rw [← h]
+    simp [Devm.withGasLeft, Devm.withOutput, Devm.setMach, Devm.mach,
+      Devm.setMeta, Devm.meta]
 
 lemma of_send_to_caller' {sevm : Sevm} {s sf : Devm} {wad}
     (ih : Exec.InvDepth sevm.depth sevm.currentTarget weth
@@ -2403,22 +2406,26 @@ lemma Jinst.inv_state
     devm'.state = devm.state := by
   cases h1 : devm.stack
   · cases j
-    · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, safeSub, bind, Except.bind] at run
+    · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def,
+        Devm.setMach, Devm.mach, Except.assert, safeSub, bind, Except.bind] at run
       rw [h1] at run
       dsimp at run
       contradiction
-    · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, Except.assert, safeSub, bind, Except.bind] at run
+    · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def,
+        Devm.setMach, Devm.mach, Except.assert, safeSub, bind, Except.bind] at run
       rw [h1] at run
       dsimp at run
       contradiction
     · by_cases h_gas : gJumpdest ≤ devm.gasLeft
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, bind, Except.bind, safeSub] at run
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.setMach,
+          Devm.mach, bind, Except.bind, safeSub] at run
         rw [h1] at run
         simp only [h_gas, if_pos, Except.ok.injEq, Prod.mk.injEq] at run
         cases run
         subst_vars
         rfl
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, bind, Except.bind, safeSub] at run
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.setMach,
+          Devm.mach, bind, Except.bind, safeSub] at run
         rw [h1] at run
         have h_gas_not : ¬(gJumpdest ≤ devm.gasLeft) := by omega
         simp only [h_gas_not] at run
@@ -2426,7 +2433,8 @@ lemma Jinst.inv_state
   · rename_i x xs
     cases h2 : xs
     · cases j
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, bind, Except.bind, safeSub] at run
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def,
+          Devm.setMach, Devm.mach, bind, Except.bind, safeSub] at run
         rw [h1] at run
         dsimp at run
         by_cases h_gas : gMid ≤ devm.gasLeft
@@ -2441,12 +2449,14 @@ lemma Jinst.inv_state
         · have h_gas_not : ¬(gMid ≤ devm.gasLeft) := by omega
           simp only [h_gas_not] at run
           contradiction
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, bind, Except.bind, safeSub] at run
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def,
+          Devm.setMach, Devm.mach, bind, Except.bind, safeSub] at run
         rw [h1] at run
         rw [h2] at run
         dsimp at run
         contradiction
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, bind, Except.bind, safeSub] at run
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.setMach,
+          Devm.mach, bind, Except.bind, safeSub] at run
         rw [h1] at run
         by_cases h_gas : gJumpdest ≤ devm.gasLeft
         · simp only [h_gas, if_pos] at run
@@ -2458,7 +2468,8 @@ lemma Jinst.inv_state
           contradiction
     · rename_i x2 xs2
       cases j
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, bind, Except.bind, safeSub] at run
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def,
+          Devm.setMach, Devm.mach, bind, Except.bind, safeSub] at run
         rw [h1] at run
         dsimp at run
         by_cases h_gas : gMid ≤ devm.gasLeft
@@ -2473,7 +2484,8 @@ lemma Jinst.inv_state
         · have h_gas_not : ¬(gMid ≤ devm.gasLeft) := by omega
           simp only [h_gas_not] at run
           contradiction
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def, bind, Except.bind, safeSub] at run
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def,
+          Devm.setMach, Devm.mach, bind, Except.bind, safeSub] at run
         rw [h1] at run
         rw [h2] at run
         dsimp at run
@@ -2495,7 +2507,8 @@ lemma Jinst.inv_state
         · have h_gas_not : ¬(gHigh ≤ devm.gasLeft) := by omega
           simp only [h_gas_not] at run
           contradiction
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, bind, Except.bind, safeSub] at run
+      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.setMach,
+          Devm.mach, bind, Except.bind, safeSub] at run
         rw [h1] at run
         by_cases h_gas : gJumpdest ≤ devm.gasLeft
         · simp only [h_gas, if_pos, Except.ok.injEq, Prod.mk.injEq] at run
@@ -2653,7 +2666,8 @@ lemma Precond.of_eqs {wa : Adr} {sevm : Sevm} {pre inter : Devm}
 
 lemma setStorVal_getStor_ne {devm : Devm} {adr a : Adr} {key val : B256} (h : adr ≠ a) :
     (devm.setStorVal adr key val).getStor a = devm.getStor a := by
-  simp only [Devm.getStor, Devm.getAcct, Devm.setStorVal, State.setStorVal]
+  simp only [Devm.getStor, Devm.getAcct, Devm.setStorVal, Devm.withState,
+    Devm.setWorld, Devm.world, State.setStorVal]
   rw [State.get_set_ne h]
 
 lemma sstore_inv_getStor_ne {pc : Nat} {sevm : Sevm} {s s' : Devm} {a : Adr}

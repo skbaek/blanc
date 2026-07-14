@@ -943,7 +943,8 @@ lemma Devm.pushBurn_of_run {x : B256} {pre inter : Devm} {cost : Nat} :
       simp only [Except.assert, bind, Except.bind] at run
       split at run; {cases run}
       injection run with eq_inter; subst eq_inter
-      constructor <;> simp [_root_.Stack.Push, Split, Devm.Rels.eq]
+      constructor <;>
+        simp [_root_.Stack.Push, Split, Devm.Rels.eq, Devm.setMach, Devm.mach]
     · contradiction
 
 lemma Devm.pop_of_pop {x : B256} {devm devm' : Devm} :
@@ -973,7 +974,7 @@ lemma Devm.burn_of_chargeGas {cost : Nat} {devm devm' : Devm} :
     split
     · intro h
       injection h with h
-      simp
+      simp [Devm.setMach, Devm.mach]
       omega
     · intro h
       cases h
@@ -2381,7 +2382,8 @@ lemma Devm.memExtends_getCode {devm : Devm} {ranges : List (ℕ × ℕ)} {a : Ad
   exact (liftMachPure_worldEq (Mach.memExtends · ranges) devm).getCode a |>.symm
 
 lemma Devm.incrNonce_getCode {devm : Devm} {adr a : Adr} : (devm.incrNonce adr).getCode a = devm.getCode a := by
-  dsimp [Devm.incrNonce, Devm.getCode, Devm.getAcct, State.incrNonce, State.set, State.getCode, State.get]
+  dsimp [Devm.incrNonce, Devm.withState, Devm.setWorld, Devm.world,
+    Devm.getCode, Devm.getAcct, State.incrNonce, State.set, State.getCode, State.get]
   split_ifs with h_if
   · by_cases h : compare adr a = Ordering.eq
     · have h2 : adr = a := compare_eq_iff_eq.mp h
@@ -2571,7 +2573,8 @@ lemma Xinst.prep_codeFrame
         dsimp [initEvm] at run
         have h_devm : benv.state.getCode adr = devm.getCode adr := by
           subst hp_childMsg hp_evm1
-          dsimp [Msg.benvAfterTransfer, callMsg, Devm.withReturnData] at eq_benv
+          dsimp [Msg.benvAfterTransfer, callMsg, Devm.withReturnData,
+            Devm.withGasLeft, Devm.setMach, Devm.mach, Devm.setMeta, Devm.meta] at eq_benv
           rcases hp_sub : ({ state := devm11.state, createdAccounts := devm11.createdAccounts, stat := sevm.benvStat } : Benv).subBal sevm.currentTarget value with _ | benv_sub
           · simp [hp_sub, Option.toExcept, Bind.bind, Except.bind] at eq_benv
           · simp [hp_sub, Option.toExcept, Bind.bind, Except.bind] at eq_benv
@@ -2643,7 +2646,8 @@ lemma Xinst.prep_codeFrame
         dsimp [initEvm] at run
         have h_devm : benv.state.getCode adr = devm.getCode adr := by
           subst hp_childMsg hp_evm1
-          dsimp [Msg.benvAfterTransfer, callMsg, Devm.withReturnData] at eq_benv
+          dsimp [Msg.benvAfterTransfer, callMsg, Devm.withReturnData,
+            Devm.withGasLeft, Devm.setMach, Devm.mach, Devm.setMeta, Devm.meta] at eq_benv
           rcases hp_sub : ({ state := devm11.state, createdAccounts := devm11.createdAccounts, stat := sevm.benvStat } : Benv).subBal sevm.currentTarget value with _ | benv_sub
           · simp [hp_sub, Option.toExcept, Bind.bind, Except.bind] at eq_benv
           · simp [hp_sub, Option.toExcept, Bind.bind, Except.bind] at eq_benv
@@ -2708,7 +2712,8 @@ lemma Xinst.prep_codeFrame
       dsimp [initEvm] at run
       have h_devm : benv.state.getCode adr = devm.getCode adr := by
         subst hp_childMsg hp_evm1
-        dsimp [Msg.benvAfterTransfer, callMsg, Devm.withReturnData] at eq_benv
+        dsimp [Msg.benvAfterTransfer, callMsg, Devm.withReturnData,
+          Devm.withGasLeft, Devm.setMach, Devm.mach, Devm.setMeta, Devm.meta] at eq_benv
         injection eq_benv with eq_benv
         subst eq_benv
         have h_devm10_state : ({ state := devm10.state, createdAccounts := devm10.createdAccounts, stat := sevm.benvStat } : Benv).state.getCode adr = devm10.getCode adr := rfl
@@ -2841,7 +2846,8 @@ lemma Xinst.prep_codeFrame
       dsimp [initEvm] at run
       have h_devm : benv.state.getCode adr = devm.getCode adr := by
         subst hp_childMsg hp_evm1
-        dsimp [Msg.benvAfterTransfer, callMsg, Devm.withReturnData] at eq_benv
+        dsimp [Msg.benvAfterTransfer, callMsg, Devm.withReturnData,
+          Devm.withGasLeft, Devm.setMach, Devm.mach, Devm.setMeta, Devm.meta] at eq_benv
         rcases hp_sub : ({ state := devm10.state, createdAccounts := devm10.createdAccounts, stat := sevm.benvStat } : Benv).subBal sevm.currentTarget 0 with _ | benv_sub
         · simp [hp_sub, Option.toExcept, Bind.bind, Except.bind] at eq_benv
         · simp [hp_sub, Option.toExcept, Bind.bind, Except.bind] at eq_benv
@@ -3594,7 +3600,8 @@ lemma Devm.popToNat_getStor_eq {devm devm' n} (h : Devm.popToNat devm = .ok ⟨n
 
 lemma setStorVal_inv_getCode {devm : Devm} {adr adr'} {key} {val} :
     (devm.setStorVal adr key val).getCode adr' = devm.getCode adr' := by
-  simp [Devm.getCode, Devm.getAcct, Devm.setStorVal]
+  simp [Devm.getCode, Devm.getAcct, Devm.setStorVal, Devm.withState,
+    Devm.setWorld, Devm.world]
   unfold State.setStorVal State.get State.set
   dsimp
   split_ifs with h_if
@@ -3617,7 +3624,8 @@ lemma setStorVal_inv_getCode {devm : Devm} {adr adr'} {key} {val} :
 
 lemma setStorVal_inv_getBal {devm : Devm} {adr adr'} {key} {val} :
     (devm.setStorVal adr key val).getBal adr' = devm.getBal adr' := by
-  simp [Devm.getBal, Devm.getAcct, Devm.setStorVal]
+  simp [Devm.getBal, Devm.getAcct, Devm.setStorVal, Devm.withState,
+    Devm.setWorld, Devm.world]
   unfold State.setStorVal State.get State.set
   dsimp
   split_ifs with h_if
@@ -3659,7 +3667,8 @@ lemma sstore_inv_getBal
     simp only [ite_not, Except.ok.injEq]
     split
     · intro eq; injection eq with eq _; rw [eq]
-    · simp [addAccessedStorageKey_def, Devm.withAccessedStorageKeys]
+    · simp [addAccessedStorageKey_def, Devm.withAccessedStorageKeys,
+        Devm.setMeta, Devm.meta]
       intro rw _; rw [← rw]; clear rw
       simp [Devm.getBal, Devm.getAcct]
   · clear run';
@@ -3672,7 +3681,8 @@ lemma sstore_inv_getBal
       intro devm4 eq
       injection eq with rw
       rw [← rw]
-      simp [Devm.getBal, Devm.getAcct]
+      simp [Devm.getBal, Devm.getAcct, Devm.withRefundCounter,
+        Devm.setMeta, Devm.meta]
     · clear run'
       intro devm4 temp run; clear temp
       refine getBal_eq_of_bind run id ?_ ?_
@@ -3705,7 +3715,8 @@ lemma sstore_inv_getCode
     simp only [ite_not, Except.ok.injEq]
     split
     · intro eq; injection eq with eq _; rw [eq]
-    · simp [addAccessedStorageKey_def, Devm.withAccessedStorageKeys]
+    · simp [addAccessedStorageKey_def, Devm.withAccessedStorageKeys,
+        Devm.setMeta, Devm.meta]
       intro rw _; rw [← rw]; clear rw
       simp [Devm.getCode, Devm.getAcct]
   · clear run';
@@ -3718,7 +3729,8 @@ lemma sstore_inv_getCode
       intro devm4 eq
       injection eq with rw
       rw [← rw]
-      simp [Devm.getCode, Devm.getAcct]
+      simp [Devm.getCode, Devm.getAcct, Devm.withRefundCounter,
+        Devm.setMeta, Devm.meta]
     · clear run'
       intro devm4 temp run; clear temp
       refine getCode_eq_of_bind run id ?_ ?_
@@ -5583,7 +5595,9 @@ lemma ProcessMessage.inv_getCode_gen
 
 lemma setCode_getCode {evm : Devm} {a b : Adr} {code : ByteArray} (h : a ≠ b) :
   (evm.setCode a code).getCode b = evm.getCode b := by
-  dsimp [Devm.setCode, Devm.getCode, Devm.state, Devm.getAcct, State.setCode, State.set, State.getCode, State.get]
+  dsimp [Devm.setCode, Devm.withState, Devm.setWorld, Devm.world,
+    Devm.getCode, Devm.state, Devm.getAcct, State.setCode, State.set,
+    State.getCode, State.get]
   split_ifs with h_if
   · by_cases hc : compare a b = Ordering.eq
     · exact False.elim (h (compare_eq_iff_eq.mp hc))
@@ -7036,7 +7050,8 @@ lemma Devm.push_of_push {x : B256} {s s' : Devm} (h : Devm.push x s = .ok s') :
   split at h
   · cases h
   · injection h with eq; subst eq
-    constructor <;> simp [Devm.Rels.eq, _root_.Stack.Push, Split]
+    constructor <;>
+      simp [Devm.Rels.eq, _root_.Stack.Push, Split, Devm.setMach, Devm.mach]
 
 lemma Devm.pushBurn_of_burn_of_push {xs : List B256} {s s' s'' : Devm}
     (burn : Devm.Burn s s') (push : Devm.Push xs s' s'') :
@@ -7233,6 +7248,7 @@ lemma of_run_sstore {e : Sevm} {s s' : Devm} (h : Ninst.Run e s sstore s') :
     split at eq <;> (injection eq with eq _; subst eq; rfl)
   have h_s₄ : s₄.stack = s₃.stack := by
     injection h6 with eq; rw [← eq]
+    simp [Devm.withRefundCounter, Devm.setMeta, Devm.meta]
   injection h9 with eq
   refine ⟨x, y, ?_⟩
   rw [← eq]
