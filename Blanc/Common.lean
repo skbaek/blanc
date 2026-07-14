@@ -10175,305 +10175,355 @@ lemma GenericCreate.balance_effect
     Execution.Rel Devm.BalNoninc pre out :=
   GenericCreate.balanceEffect hxl run
 
+/-- Access-delegation resolves an EOA delegation without touching the world or
+    the deletion sets, so it stays inside the instruction frame. -/
+lemma accessDelegation_instructionFrame (d : Devm) (adr : Adr) :
+    Devm.InstructionFrame d (accessDelegation d adr).2.2.2.2 := by
+  rw [accessDelegation]
+  by_cases h : isValidDelegation (d.state.getCode adr)
+  · simp only [h, if_true]
+    exact addAccessedAddress_instructionFrame d _
+  · simp only [h, if_false]
+    exact Devm.instructionFrame_refl d
+
+/-- A failing `assert` returns its argument state verbatim. -/
+lemma assert_instructionFrame {cond : Prop} [Decidable cond] {msg : String}
+    {devm : Devm} {err : String × Devm}
+    (h : Except.assert cond (msg, devm) = Except.error err) :
+    Devm.InstructionFrame devm err.2 := by
+  unfold Except.assert at h
+  split at h
+  · exact absurd h (by simp)
+  · rw [← Except.error.inj h]
+    exact Devm.instructionFrame_refl devm
+
 lemma Xinst.balance_effectGen (x : Xinst) :
     Xinst.EffectGen Devm.BalNoninc x := by
   intro sevm pre xl out hxl run
+  -- error short-circuit: prefix frame `pre → d` plus failing frame `d → err.2`
   have herr : ∀ {d : Devm} {err : String × Devm},
-      (∀ a, d.getBal a = pre.getBal a) →
-      (∀ a, err.2.getBal a = d.getBal a) →
+      Devm.InstructionFrame pre d → Devm.InstructionFrame d err.2 →
       Execution.Rel Devm.BalNoninc pre (Except.error err) := by
-    intro d err hg hgb
-    simp only [Execution.Rel, Outcome.Rel]
-    apply Devm.balNoninc_of_getBal_eq
-    funext a
-    rw [hgb a, hg a]
+    intro d err hf hfe
+    exact Devm.instructionFrame_refines_balNoninc (Devm.instructionFrame_trans hf hfe)
+  -- master handoff: prefix frame `pre → d` composed with the tail effect
   have hok : ∀ {d : Devm} {o : Execution},
-      (∀ a, d.getBal a = pre.getBal a) →
-      Execution.Rel Devm.BalNoninc d o →
+      Devm.InstructionFrame pre d → Execution.Rel Devm.BalNoninc d o →
       Execution.Rel Devm.BalNoninc pre o := by
-    intro d o hg h
-    have hpd : Devm.BalNoninc pre d := Devm.balNoninc_of_getBal_eq (funext hg)
+    intro d o hf h
+    have hpd : Devm.BalNoninc pre d := Devm.instructionFrame_refines_balNoninc hf
     cases o <;> exact balNoninc_refl_trans.2.2 hpd h
-  have h_ad : ∀ (d : Devm) (adr a : Adr),
-      (accessDelegation d adr).2.2.2.2.getBal a = d.getBal a := by
-    intro d adr a
-    dsimp only [accessDelegation]
-    split_ifs <;> rfl
+  -- extract a frame fact from a `pop`-shaped primitive's ok/error outcome
+  have okSnd : ∀ {α : Type} {d d' : Devm} {v : α}
+      {act : Except (String × Devm) (α × Devm)},
+      Outcome.Rel Prod.snd Prod.snd Devm.InstructionFrame d act →
+      act = .ok (v, d') → Devm.InstructionFrame d d' := by
+    intro α d d' v act h he; rw [he] at h; exact h
+  have errSnd : ∀ {α : Type} {d : Devm} {err : String × Devm}
+      {act : Except (String × Devm) (α × Devm)},
+      Outcome.Rel Prod.snd Prod.snd Devm.InstructionFrame d act →
+      act = .error err → Devm.InstructionFrame d err.2 := by
+    intro α d err act h he; rw [he] at h; exact h
+  -- extract a frame fact from an `Execution`-shaped primitive's ok/error outcome
+  have okId : ∀ {d d' : Devm} {act : Execution},
+      Execution.Rel Devm.InstructionFrame d act →
+      act = .ok d' → Devm.InstructionFrame d d' := by
+    intro d d' act h he; rw [he] at h; exact h
+  have errId : ∀ {d : Devm} {err : String × Devm} {act : Execution},
+      Execution.Rel Devm.InstructionFrame d act →
+      act = .error err → Devm.InstructionFrame d err.2 := by
+    intro d err act h he; rw [he] at h; exact h
   cases x
   case create =>
     dsimp only [Xinst.Run] at run
     rcases run with ⟨er, he, h_out, _⟩ | ⟨⟨endowment, d1⟩, e1, run⟩
-    · rw [h_out]; exact herr (fun _ => rfl) (Devm.pop_getBal_err he)
-    have hg1 : ∀ a, d1.getBal a = pre.getBal a := Devm.pop_getBal_eq e1
+    · rw [h_out]; exact herr (Devm.instructionFrame_refl pre)
+        (errSnd (Devm.pop_instructionFrame pre) he)
+    have hf1 : Devm.InstructionFrame pre d1 :=
+      okSnd (Devm.pop_instructionFrame pre) e1
     rcases run with ⟨er, he, h_out, _⟩ | ⟨⟨mi, d2⟩, e2, run⟩
-    · rw [h_out]; exact herr hg1 (Devm.popToNat_getBal_err he)
-    have hg2 : ∀ a, d2.getBal a = pre.getBal a :=
-      fun a => (Devm.popToNat_getBal_eq e2 a).trans (hg1 a)
+    · rw [h_out]; exact herr hf1 (errSnd (Devm.popToNat_instructionFrame d1) he)
+    have hf2 : Devm.InstructionFrame pre d2 :=
+      Devm.instructionFrame_trans hf1 (okSnd (Devm.popToNat_instructionFrame d1) e2)
     rcases run with ⟨er, he, h_out, _⟩ | ⟨⟨ms, d3⟩, e3, run⟩
-    · rw [h_out]; exact herr hg2 (Devm.popToNat_getBal_err he)
-    have hg3 : ∀ a, d3.getBal a = pre.getBal a :=
-      fun a => (Devm.popToNat_getBal_eq e3 a).trans (hg2 a)
+    · rw [h_out]; exact herr hf2 (errSnd (Devm.popToNat_instructionFrame d2) he)
+    have hf3 : Devm.InstructionFrame pre d3 :=
+      Devm.instructionFrame_trans hf2 (okSnd (Devm.popToNat_instructionFrame d2) e3)
     rcases run with ⟨extendCost, _, run⟩
     rcases run with ⟨initCodeCost, _, run⟩
     rcases run with ⟨er, he, h_out, _⟩ | ⟨d4, e4, run⟩
-    · rw [h_out]; exact herr hg3 (chargeGas_getBal_err he)
-    have hg4 : ∀ a, d4.getBal a = pre.getBal a :=
-      fun a => (chargeGas_getBal_eq e4 a).trans (hg3 a)
+    · rw [h_out]; exact herr hf3 (errId (chargeGas_instructionFrame _ d3) he)
+    have hf4 : Devm.InstructionFrame pre d4 :=
+      Devm.instructionFrame_trans hf3 (okId (chargeGas_instructionFrame _ d3) e4)
     rcases run with ⟨d5, h_d5, run⟩
-    have hg5 : ∀ a, d5.getBal a = pre.getBal a := by
-      intro a; rw [h_d5]; exact hg4 a
+    have hf5 : Devm.InstructionFrame pre d5 := by
+      rw [h_d5]
+      exact Devm.instructionFrame_trans hf4 (Devm.memExtends_instructionFrame d4 _)
     rcases run with ⟨newAddress, _, run⟩
-    exact hok hg5 (GenericCreate.balance_effect hxl run)
+    exact hok hf5 (GenericCreate.balance_effect hxl run)
   case create2 =>
     dsimp only [Xinst.Run] at run
     rcases run with ⟨er, he, h_out, _⟩ | ⟨⟨endowment, d1⟩, e1, run⟩
-    · rw [h_out]; exact herr (fun _ => rfl) (Devm.pop_getBal_err he)
-    have hg1 : ∀ a, d1.getBal a = pre.getBal a := Devm.pop_getBal_eq e1
+    · rw [h_out]; exact herr (Devm.instructionFrame_refl pre)
+        (errSnd (Devm.pop_instructionFrame pre) he)
+    have hf1 : Devm.InstructionFrame pre d1 :=
+      okSnd (Devm.pop_instructionFrame pre) e1
     rcases run with ⟨er, he, h_out, _⟩ | ⟨⟨mi, d2⟩, e2, run⟩
-    · rw [h_out]; exact herr hg1 (Devm.popToNat_getBal_err he)
-    have hg2 : ∀ a, d2.getBal a = pre.getBal a :=
-      fun a => (Devm.popToNat_getBal_eq e2 a).trans (hg1 a)
+    · rw [h_out]; exact herr hf1 (errSnd (Devm.popToNat_instructionFrame d1) he)
+    have hf2 : Devm.InstructionFrame pre d2 :=
+      Devm.instructionFrame_trans hf1 (okSnd (Devm.popToNat_instructionFrame d1) e2)
     rcases run with ⟨er, he, h_out, _⟩ | ⟨⟨ms, d3⟩, e3, run⟩
-    · rw [h_out]; exact herr hg2 (Devm.popToNat_getBal_err he)
-    have hg3 : ∀ a, d3.getBal a = pre.getBal a :=
-      fun a => (Devm.popToNat_getBal_eq e3 a).trans (hg2 a)
+    · rw [h_out]; exact herr hf2 (errSnd (Devm.popToNat_instructionFrame d2) he)
+    have hf3 : Devm.InstructionFrame pre d3 :=
+      Devm.instructionFrame_trans hf2 (okSnd (Devm.popToNat_instructionFrame d2) e3)
     rcases run with ⟨er, he, h_out, _⟩ | ⟨⟨salt, d4⟩, e4, run⟩
-    · rw [h_out]; exact herr hg3 (Devm.pop_getBal_err he)
-    have hg4 : ∀ a, d4.getBal a = pre.getBal a :=
-      fun a => (Devm.pop_getBal_eq e4 a).trans (hg3 a)
+    · rw [h_out]; exact herr hf3 (errSnd (Devm.pop_instructionFrame d3) he)
+    have hf4 : Devm.InstructionFrame pre d4 :=
+      Devm.instructionFrame_trans hf3 (okSnd (Devm.pop_instructionFrame d3) e4)
     rcases run with ⟨extendCost, _, run⟩
     rcases run with ⟨initCodeHashCost, _, run⟩
     rcases run with ⟨initCodeCost, _, run⟩
     rcases run with ⟨er, he, h_out, _⟩ | ⟨d5, e5, run⟩
-    · rw [h_out]; exact herr hg4 (chargeGas_getBal_err he)
-    have hg5 : ∀ a, d5.getBal a = pre.getBal a :=
-      fun a => (chargeGas_getBal_eq e5 a).trans (hg4 a)
+    · rw [h_out]; exact herr hf4 (errId (chargeGas_instructionFrame _ d4) he)
+    have hf5 : Devm.InstructionFrame pre d5 :=
+      Devm.instructionFrame_trans hf4 (okId (chargeGas_instructionFrame _ d4) e5)
     rcases run with ⟨d6, h_d6, run⟩
-    have hg6 : ∀ a, d6.getBal a = pre.getBal a := by
-      intro a; rw [h_d6]; exact hg5 a
+    have hf6 : Devm.InstructionFrame pre d6 := by
+      rw [h_d6]
+      exact Devm.instructionFrame_trans hf5 (Devm.memExtends_instructionFrame d5 _)
     rcases run with ⟨newAddress, _, run⟩
-    exact hok hg6 (GenericCreate.balance_effect hxl run)
+    exact hok hf6 (GenericCreate.balance_effect hxl run)
   case call =>
     dsimp only [Xinst.Run] at run
     rcases run with ⟨er, he, h_out, _⟩ | ⟨⟨gas, d1⟩, e1, run⟩
-    · rw [h_out]; exact herr (fun _ => rfl) (Devm.pop_getBal_err he)
-    have hg1 : ∀ a, d1.getBal a = pre.getBal a := Devm.pop_getBal_eq e1
+    · rw [h_out]; exact herr (Devm.instructionFrame_refl pre)
+        (errSnd (Devm.pop_instructionFrame pre) he)
+    have hf1 : Devm.InstructionFrame pre d1 :=
+      okSnd (Devm.pop_instructionFrame pre) e1
     rcases run with ⟨er, he, h_out, _⟩ | ⟨⟨callee, d2⟩, e2, run⟩
-    · rw [h_out]; exact herr hg1 (Devm.popToAdr_getBal_err he)
-    have hg2 : ∀ a, d2.getBal a = pre.getBal a :=
-      fun a => (Devm.popToAdr_getBal_eq e2 a).trans (hg1 a)
+    · rw [h_out]; exact herr hf1 (errSnd (Devm.popToAdr_instructionFrame d1) he)
+    have hf2 : Devm.InstructionFrame pre d2 :=
+      Devm.instructionFrame_trans hf1 (okSnd (Devm.popToAdr_instructionFrame d1) e2)
     rcases run with ⟨er, he, h_out, _⟩ | ⟨⟨value, d3⟩, e3, run⟩
-    · rw [h_out]; exact herr hg2 (Devm.pop_getBal_err he)
-    have hg3 : ∀ a, d3.getBal a = pre.getBal a :=
-      fun a => (Devm.pop_getBal_eq e3 a).trans (hg2 a)
+    · rw [h_out]; exact herr hf2 (errSnd (Devm.pop_instructionFrame d2) he)
+    have hf3 : Devm.InstructionFrame pre d3 :=
+      Devm.instructionFrame_trans hf2 (okSnd (Devm.pop_instructionFrame d2) e3)
     rcases run with ⟨er, he, h_out, _⟩ | ⟨⟨ii, d4⟩, e4, run⟩
-    · rw [h_out]; exact herr hg3 (Devm.popToNat_getBal_err he)
-    have hg4 : ∀ a, d4.getBal a = pre.getBal a :=
-      fun a => (Devm.popToNat_getBal_eq e4 a).trans (hg3 a)
+    · rw [h_out]; exact herr hf3 (errSnd (Devm.popToNat_instructionFrame d3) he)
+    have hf4 : Devm.InstructionFrame pre d4 :=
+      Devm.instructionFrame_trans hf3 (okSnd (Devm.popToNat_instructionFrame d3) e4)
     rcases run with ⟨er, he, h_out, _⟩ | ⟨⟨is, d5⟩, e5, run⟩
-    · rw [h_out]; exact herr hg4 (Devm.popToNat_getBal_err he)
-    have hg5 : ∀ a, d5.getBal a = pre.getBal a :=
-      fun a => (Devm.popToNat_getBal_eq e5 a).trans (hg4 a)
+    · rw [h_out]; exact herr hf4 (errSnd (Devm.popToNat_instructionFrame d4) he)
+    have hf5 : Devm.InstructionFrame pre d5 :=
+      Devm.instructionFrame_trans hf4 (okSnd (Devm.popToNat_instructionFrame d4) e5)
     rcases run with ⟨er, he, h_out, _⟩ | ⟨⟨oi, d6⟩, e6, run⟩
-    · rw [h_out]; exact herr hg5 (Devm.popToNat_getBal_err he)
-    have hg6 : ∀ a, d6.getBal a = pre.getBal a :=
-      fun a => (Devm.popToNat_getBal_eq e6 a).trans (hg5 a)
+    · rw [h_out]; exact herr hf5 (errSnd (Devm.popToNat_instructionFrame d5) he)
+    have hf6 : Devm.InstructionFrame pre d6 :=
+      Devm.instructionFrame_trans hf5 (okSnd (Devm.popToNat_instructionFrame d5) e6)
     rcases run with ⟨er, he, h_out, _⟩ | ⟨⟨os, d7⟩, e7, run⟩
-    · rw [h_out]; exact herr hg6 (Devm.popToNat_getBal_err he)
-    have hg7 : ∀ a, d7.getBal a = pre.getBal a :=
-      fun a => (Devm.popToNat_getBal_eq e7 a).trans (hg6 a)
+    · rw [h_out]; exact herr hf6 (errSnd (Devm.popToNat_instructionFrame d6) he)
+    have hf7 : Devm.InstructionFrame pre d7 :=
+      Devm.instructionFrame_trans hf6 (okSnd (Devm.popToNat_instructionFrame d6) e7)
     rcases run with ⟨extendCost, _, run⟩
     rcases run with ⟨preAccessCost, _, run⟩
     rcases run with ⟨d8, h_d8, run⟩
-    have hg8 : ∀ a, d8.getBal a = pre.getBal a := by
-      intro a; rw [h_d8]; exact hg7 a
+    have hf8 : Devm.InstructionFrame pre d8 := by
+      rw [h_d8]
+      exact Devm.instructionFrame_trans hf7 (addAccessedAddress_instructionFrame d7 callee)
     rcases run with ⟨⟨dp, na, code0, dagc, d9⟩, h_d9, run⟩
-    have hg9 : ∀ a, d9.getBal a = pre.getBal a := by
-      intro a
-      have hq := congrArg (fun q => (q.2.2.2.2 : Devm).getBal a) h_d9
-      dsimp only at hq
-      rw [hq, h_ad]
-      exact hg8 a
+    have hf9 : Devm.InstructionFrame pre d9 := by
+      have hq : d9 = (accessDelegation d8 callee).2.2.2.2 := by rw [← h_d9]
+      rw [hq]
+      exact Devm.instructionFrame_trans hf8 (accessDelegation_instructionFrame d8 callee)
     rcases run with ⟨accessCost, _, run⟩
     rcases run with ⟨createCost, _, run⟩
     rcases run with ⟨transferCost, _, run⟩
     rcases run with ⟨⟨mcc, mcs⟩, _, run⟩
     rcases run with ⟨er, he, h_out, _⟩ | ⟨d10, e10, run⟩
-    · rw [h_out]; exact herr hg9 (chargeGas_getBal_err he)
-    have hg10 : ∀ a, d10.getBal a = pre.getBal a :=
-      fun a => (chargeGas_getBal_eq e10 a).trans (hg9 a)
+    · rw [h_out]; exact herr hf9 (errId (chargeGas_instructionFrame _ d9) he)
+    have hf10 : Devm.InstructionFrame pre d10 :=
+      Devm.instructionFrame_trans hf9 (okId (chargeGas_instructionFrame _ d9) e10)
     rcases run with ⟨er, he, h_out, _⟩ | ⟨_, _, run⟩
-    · rw [h_out]; exact herr hg10 (assert_getBal_err he)
+    · rw [h_out]; exact herr hf10 (assert_instructionFrame he)
     rcases run with ⟨d11, h_d11, run⟩
-    have hg11 : ∀ a, d11.getBal a = pre.getBal a := by
-      intro a; rw [h_d11]; exact hg10 a
+    have hf11 : Devm.InstructionFrame pre d11 := by
+      rw [h_d11]
+      exact Devm.instructionFrame_trans hf10 (Devm.memExtends_instructionFrame d10 _)
     rcases run with ⟨senderBal, _, run⟩
     split_ifs at run with h_lt
     · rcases run with ⟨er, he, h_out, _⟩ | ⟨d12, e12, run⟩
-      · rw [h_out]; exact herr hg11 (Devm.push_getBal_err he)
+      · rw [h_out]; exact herr hf11 (errId (Devm.push_instructionFrame 0 d11) he)
       rcases run with ⟨_, h_ex⟩
       rw [← h_ex]
-      simp only [Execution.Rel, Outcome.Rel, id]
-      apply Devm.balNoninc_of_getBal_eq
-      funext a
-      exact (Devm.push_getBal_eq e12 a).trans (hg11 a)
-    · exact hok hg11 (GenericCall.balance_effect hxl run)
+      have hf12 : Devm.InstructionFrame pre d12 :=
+        Devm.instructionFrame_trans hf11 (okId (Devm.push_instructionFrame 0 d11) e12)
+      refine Devm.instructionFrame_refines_balNoninc
+        (Devm.instructionFrame_trans hf12 ?_)
+      exact Devm.instructionFrame_of_world_eq rfl rfl rfl rfl
+    · exact hok hf11 (GenericCall.balance_effect hxl run)
   case callcode =>
     dsimp only [Xinst.Run] at run
     rcases run with ⟨er, he, h_out, _⟩ | ⟨⟨gas, d1⟩, e1, run⟩
-    · rw [h_out]; exact herr (fun _ => rfl) (Devm.pop_getBal_err he)
-    have hg1 : ∀ a, d1.getBal a = pre.getBal a := Devm.pop_getBal_eq e1
+    · rw [h_out]; exact herr (Devm.instructionFrame_refl pre)
+        (errSnd (Devm.pop_instructionFrame pre) he)
+    have hf1 : Devm.InstructionFrame pre d1 :=
+      okSnd (Devm.pop_instructionFrame pre) e1
     rcases run with ⟨er, he, h_out, _⟩ | ⟨⟨codeAddress, d2⟩, e2, run⟩
-    · rw [h_out]; exact herr hg1 (Devm.popToAdr_getBal_err he)
-    have hg2 : ∀ a, d2.getBal a = pre.getBal a :=
-      fun a => (Devm.popToAdr_getBal_eq e2 a).trans (hg1 a)
+    · rw [h_out]; exact herr hf1 (errSnd (Devm.popToAdr_instructionFrame d1) he)
+    have hf2 : Devm.InstructionFrame pre d2 :=
+      Devm.instructionFrame_trans hf1 (okSnd (Devm.popToAdr_instructionFrame d1) e2)
     rcases run with ⟨er, he, h_out, _⟩ | ⟨⟨value, d3⟩, e3, run⟩
-    · rw [h_out]; exact herr hg2 (Devm.pop_getBal_err he)
-    have hg3 : ∀ a, d3.getBal a = pre.getBal a :=
-      fun a => (Devm.pop_getBal_eq e3 a).trans (hg2 a)
+    · rw [h_out]; exact herr hf2 (errSnd (Devm.pop_instructionFrame d2) he)
+    have hf3 : Devm.InstructionFrame pre d3 :=
+      Devm.instructionFrame_trans hf2 (okSnd (Devm.pop_instructionFrame d2) e3)
     rcases run with ⟨er, he, h_out, _⟩ | ⟨⟨ii, d4⟩, e4, run⟩
-    · rw [h_out]; exact herr hg3 (Devm.popToNat_getBal_err he)
-    have hg4 : ∀ a, d4.getBal a = pre.getBal a :=
-      fun a => (Devm.popToNat_getBal_eq e4 a).trans (hg3 a)
+    · rw [h_out]; exact herr hf3 (errSnd (Devm.popToNat_instructionFrame d3) he)
+    have hf4 : Devm.InstructionFrame pre d4 :=
+      Devm.instructionFrame_trans hf3 (okSnd (Devm.popToNat_instructionFrame d3) e4)
     rcases run with ⟨er, he, h_out, _⟩ | ⟨⟨is, d5⟩, e5, run⟩
-    · rw [h_out]; exact herr hg4 (Devm.popToNat_getBal_err he)
-    have hg5 : ∀ a, d5.getBal a = pre.getBal a :=
-      fun a => (Devm.popToNat_getBal_eq e5 a).trans (hg4 a)
+    · rw [h_out]; exact herr hf4 (errSnd (Devm.popToNat_instructionFrame d4) he)
+    have hf5 : Devm.InstructionFrame pre d5 :=
+      Devm.instructionFrame_trans hf4 (okSnd (Devm.popToNat_instructionFrame d4) e5)
     rcases run with ⟨er, he, h_out, _⟩ | ⟨⟨oi, d6⟩, e6, run⟩
-    · rw [h_out]; exact herr hg5 (Devm.popToNat_getBal_err he)
-    have hg6 : ∀ a, d6.getBal a = pre.getBal a :=
-      fun a => (Devm.popToNat_getBal_eq e6 a).trans (hg5 a)
+    · rw [h_out]; exact herr hf5 (errSnd (Devm.popToNat_instructionFrame d5) he)
+    have hf6 : Devm.InstructionFrame pre d6 :=
+      Devm.instructionFrame_trans hf5 (okSnd (Devm.popToNat_instructionFrame d5) e6)
     rcases run with ⟨er, he, h_out, _⟩ | ⟨⟨os, d7⟩, e7, run⟩
-    · rw [h_out]; exact herr hg6 (Devm.popToNat_getBal_err he)
-    have hg7 : ∀ a, d7.getBal a = pre.getBal a :=
-      fun a => (Devm.popToNat_getBal_eq e7 a).trans (hg6 a)
+    · rw [h_out]; exact herr hf6 (errSnd (Devm.popToNat_instructionFrame d6) he)
+    have hf7 : Devm.InstructionFrame pre d7 :=
+      Devm.instructionFrame_trans hf6 (okSnd (Devm.popToNat_instructionFrame d6) e7)
     rcases run with ⟨extendCost, _, run⟩
     rcases run with ⟨preAccessCost, _, run⟩
     rcases run with ⟨d8, h_d8, run⟩
-    have hg8 : ∀ a, d8.getBal a = pre.getBal a := by
-      intro a; rw [h_d8]; exact hg7 a
+    have hf8 : Devm.InstructionFrame pre d8 := by
+      rw [h_d8]
+      exact Devm.instructionFrame_trans hf7 (addAccessedAddress_instructionFrame d7 codeAddress)
     rcases run with ⟨⟨dp, na, code0, dagc, d9⟩, h_d9, run⟩
-    have hg9 : ∀ a, d9.getBal a = pre.getBal a := by
-      intro a
-      have hq := congrArg (fun q => (q.2.2.2.2 : Devm).getBal a) h_d9
-      dsimp only at hq
-      rw [hq, h_ad]
-      exact hg8 a
+    have hf9 : Devm.InstructionFrame pre d9 := by
+      have hq : d9 = (accessDelegation d8 codeAddress).2.2.2.2 := by rw [← h_d9]
+      rw [hq]
+      exact Devm.instructionFrame_trans hf8 (accessDelegation_instructionFrame d8 codeAddress)
     rcases run with ⟨accessCost, _, run⟩
     rcases run with ⟨transferCost, _, run⟩
     rcases run with ⟨⟨mcc, mcs⟩, _, run⟩
     rcases run with ⟨er, he, h_out, _⟩ | ⟨d10, e10, run⟩
-    · rw [h_out]; exact herr hg9 (chargeGas_getBal_err he)
-    have hg10 : ∀ a, d10.getBal a = pre.getBal a :=
-      fun a => (chargeGas_getBal_eq e10 a).trans (hg9 a)
+    · rw [h_out]; exact herr hf9 (errId (chargeGas_instructionFrame _ d9) he)
+    have hf10 : Devm.InstructionFrame pre d10 :=
+      Devm.instructionFrame_trans hf9 (okId (chargeGas_instructionFrame _ d9) e10)
     rcases run with ⟨d11, h_d11, run⟩
-    have hg11 : ∀ a, d11.getBal a = pre.getBal a := by
-      intro a; rw [h_d11]; exact hg10 a
+    have hf11 : Devm.InstructionFrame pre d11 := by
+      rw [h_d11]
+      exact Devm.instructionFrame_trans hf10 (Devm.memExtends_instructionFrame d10 _)
     rcases run with ⟨senderBal, _, run⟩
     split_ifs at run with h_lt
     · rcases run with ⟨er, he, h_out, _⟩ | ⟨d12, e12, run⟩
-      · rw [h_out]; exact herr hg11 (Devm.push_getBal_err he)
+      · rw [h_out]; exact herr hf11 (errId (Devm.push_instructionFrame 0 d11) he)
       rcases run with ⟨_, h_ex⟩
       rw [← h_ex]
-      simp only [Execution.Rel, Outcome.Rel, id]
-      apply Devm.balNoninc_of_getBal_eq
-      funext a
-      exact (Devm.push_getBal_eq e12 a).trans (hg11 a)
-    · exact hok hg11 (GenericCall.balance_effect hxl run)
+      have hf12 : Devm.InstructionFrame pre d12 :=
+        Devm.instructionFrame_trans hf11 (okId (Devm.push_instructionFrame 0 d11) e12)
+      refine Devm.instructionFrame_refines_balNoninc
+        (Devm.instructionFrame_trans hf12 ?_)
+      exact Devm.instructionFrame_of_world_eq rfl rfl rfl rfl
+    · exact hok hf11 (GenericCall.balance_effect hxl run)
   case delcall =>
     dsimp only [Xinst.Run] at run
     rcases run with ⟨er, he, h_out, _⟩ | ⟨⟨gas, d1⟩, e1, run⟩
-    · rw [h_out]; exact herr (fun _ => rfl) (Devm.pop_getBal_err he)
-    have hg1 : ∀ a, d1.getBal a = pre.getBal a := Devm.pop_getBal_eq e1
+    · rw [h_out]; exact herr (Devm.instructionFrame_refl pre)
+        (errSnd (Devm.pop_instructionFrame pre) he)
+    have hf1 : Devm.InstructionFrame pre d1 :=
+      okSnd (Devm.pop_instructionFrame pre) e1
     rcases run with ⟨er, he, h_out, _⟩ | ⟨⟨codeAddress, d2⟩, e2, run⟩
-    · rw [h_out]; exact herr hg1 (Devm.popToAdr_getBal_err he)
-    have hg2 : ∀ a, d2.getBal a = pre.getBal a :=
-      fun a => (Devm.popToAdr_getBal_eq e2 a).trans (hg1 a)
+    · rw [h_out]; exact herr hf1 (errSnd (Devm.popToAdr_instructionFrame d1) he)
+    have hf2 : Devm.InstructionFrame pre d2 :=
+      Devm.instructionFrame_trans hf1 (okSnd (Devm.popToAdr_instructionFrame d1) e2)
     rcases run with ⟨er, he, h_out, _⟩ | ⟨⟨ii, d3⟩, e3, run⟩
-    · rw [h_out]; exact herr hg2 (Devm.popToNat_getBal_err he)
-    have hg3 : ∀ a, d3.getBal a = pre.getBal a :=
-      fun a => (Devm.popToNat_getBal_eq e3 a).trans (hg2 a)
+    · rw [h_out]; exact herr hf2 (errSnd (Devm.popToNat_instructionFrame d2) he)
+    have hf3 : Devm.InstructionFrame pre d3 :=
+      Devm.instructionFrame_trans hf2 (okSnd (Devm.popToNat_instructionFrame d2) e3)
     rcases run with ⟨er, he, h_out, _⟩ | ⟨⟨is, d4⟩, e4, run⟩
-    · rw [h_out]; exact herr hg3 (Devm.popToNat_getBal_err he)
-    have hg4 : ∀ a, d4.getBal a = pre.getBal a :=
-      fun a => (Devm.popToNat_getBal_eq e4 a).trans (hg3 a)
+    · rw [h_out]; exact herr hf3 (errSnd (Devm.popToNat_instructionFrame d3) he)
+    have hf4 : Devm.InstructionFrame pre d4 :=
+      Devm.instructionFrame_trans hf3 (okSnd (Devm.popToNat_instructionFrame d3) e4)
     rcases run with ⟨er, he, h_out, _⟩ | ⟨⟨oi, d5⟩, e5, run⟩
-    · rw [h_out]; exact herr hg4 (Devm.popToNat_getBal_err he)
-    have hg5 : ∀ a, d5.getBal a = pre.getBal a :=
-      fun a => (Devm.popToNat_getBal_eq e5 a).trans (hg4 a)
+    · rw [h_out]; exact herr hf4 (errSnd (Devm.popToNat_instructionFrame d4) he)
+    have hf5 : Devm.InstructionFrame pre d5 :=
+      Devm.instructionFrame_trans hf4 (okSnd (Devm.popToNat_instructionFrame d4) e5)
     rcases run with ⟨er, he, h_out, _⟩ | ⟨⟨os, d6⟩, e6, run⟩
-    · rw [h_out]; exact herr hg5 (Devm.popToNat_getBal_err he)
-    have hg6 : ∀ a, d6.getBal a = pre.getBal a :=
-      fun a => (Devm.popToNat_getBal_eq e6 a).trans (hg5 a)
+    · rw [h_out]; exact herr hf5 (errSnd (Devm.popToNat_instructionFrame d5) he)
+    have hf6 : Devm.InstructionFrame pre d6 :=
+      Devm.instructionFrame_trans hf5 (okSnd (Devm.popToNat_instructionFrame d5) e6)
     rcases run with ⟨extendCost, _, run⟩
     rcases run with ⟨preAccessCost, _, run⟩
     rcases run with ⟨d7, h_d7, run⟩
-    have hg7 : ∀ a, d7.getBal a = pre.getBal a := by
-      intro a; rw [h_d7]; exact hg6 a
+    have hf7 : Devm.InstructionFrame pre d7 := by
+      rw [h_d7]
+      exact Devm.instructionFrame_trans hf6 (addAccessedAddress_instructionFrame d6 codeAddress)
     rcases run with ⟨⟨dp, na, code0, dagc, d8⟩, h_d8, run⟩
-    have hg8 : ∀ a, d8.getBal a = pre.getBal a := by
-      intro a
-      have hq := congrArg (fun q => (q.2.2.2.2 : Devm).getBal a) h_d8
-      dsimp only at hq
-      rw [hq, h_ad]
-      exact hg7 a
+    have hf8 : Devm.InstructionFrame pre d8 := by
+      have hq : d8 = (accessDelegation d7 codeAddress).2.2.2.2 := by rw [← h_d8]
+      rw [hq]
+      exact Devm.instructionFrame_trans hf7 (accessDelegation_instructionFrame d7 codeAddress)
     rcases run with ⟨accessCost, _, run⟩
     rcases run with ⟨⟨mcc, mcs⟩, _, run⟩
     rcases run with ⟨er, he, h_out, _⟩ | ⟨d9, e9, run⟩
-    · rw [h_out]; exact herr hg8 (chargeGas_getBal_err he)
-    have hg9 : ∀ a, d9.getBal a = pre.getBal a :=
-      fun a => (chargeGas_getBal_eq e9 a).trans (hg8 a)
+    · rw [h_out]; exact herr hf8 (errId (chargeGas_instructionFrame _ d8) he)
+    have hf9 : Devm.InstructionFrame pre d9 :=
+      Devm.instructionFrame_trans hf8 (okId (chargeGas_instructionFrame _ d8) e9)
     rcases run with ⟨d10, h_d10, run⟩
-    have hg10 : ∀ a, d10.getBal a = pre.getBal a := by
-      intro a; rw [h_d10]; exact hg9 a
-    exact hok hg10 (GenericCall.balance_effect hxl run)
+    have hf10 : Devm.InstructionFrame pre d10 := by
+      rw [h_d10]
+      exact Devm.instructionFrame_trans hf9 (Devm.memExtends_instructionFrame d9 _)
+    exact hok hf10 (GenericCall.balance_effect hxl run)
   case statcall =>
     dsimp only [Xinst.Run] at run
     rcases run with ⟨er, he, h_out, _⟩ | ⟨⟨gas, d1⟩, e1, run⟩
-    · rw [h_out]; exact herr (fun _ => rfl) (Devm.pop_getBal_err he)
-    have hg1 : ∀ a, d1.getBal a = pre.getBal a := Devm.pop_getBal_eq e1
+    · rw [h_out]; exact herr (Devm.instructionFrame_refl pre)
+        (errSnd (Devm.pop_instructionFrame pre) he)
+    have hf1 : Devm.InstructionFrame pre d1 :=
+      okSnd (Devm.pop_instructionFrame pre) e1
     rcases run with ⟨er, he, h_out, _⟩ | ⟨⟨target, d2⟩, e2, run⟩
-    · rw [h_out]; exact herr hg1 (Devm.popToAdr_getBal_err he)
-    have hg2 : ∀ a, d2.getBal a = pre.getBal a :=
-      fun a => (Devm.popToAdr_getBal_eq e2 a).trans (hg1 a)
+    · rw [h_out]; exact herr hf1 (errSnd (Devm.popToAdr_instructionFrame d1) he)
+    have hf2 : Devm.InstructionFrame pre d2 :=
+      Devm.instructionFrame_trans hf1 (okSnd (Devm.popToAdr_instructionFrame d1) e2)
     rcases run with ⟨er, he, h_out, _⟩ | ⟨⟨ii, d3⟩, e3, run⟩
-    · rw [h_out]; exact herr hg2 (Devm.popToNat_getBal_err he)
-    have hg3 : ∀ a, d3.getBal a = pre.getBal a :=
-      fun a => (Devm.popToNat_getBal_eq e3 a).trans (hg2 a)
+    · rw [h_out]; exact herr hf2 (errSnd (Devm.popToNat_instructionFrame d2) he)
+    have hf3 : Devm.InstructionFrame pre d3 :=
+      Devm.instructionFrame_trans hf2 (okSnd (Devm.popToNat_instructionFrame d2) e3)
     rcases run with ⟨er, he, h_out, _⟩ | ⟨⟨is, d4⟩, e4, run⟩
-    · rw [h_out]; exact herr hg3 (Devm.popToNat_getBal_err he)
-    have hg4 : ∀ a, d4.getBal a = pre.getBal a :=
-      fun a => (Devm.popToNat_getBal_eq e4 a).trans (hg3 a)
+    · rw [h_out]; exact herr hf3 (errSnd (Devm.popToNat_instructionFrame d3) he)
+    have hf4 : Devm.InstructionFrame pre d4 :=
+      Devm.instructionFrame_trans hf3 (okSnd (Devm.popToNat_instructionFrame d3) e4)
     rcases run with ⟨er, he, h_out, _⟩ | ⟨⟨oi, d5⟩, e5, run⟩
-    · rw [h_out]; exact herr hg4 (Devm.popToNat_getBal_err he)
-    have hg5 : ∀ a, d5.getBal a = pre.getBal a :=
-      fun a => (Devm.popToNat_getBal_eq e5 a).trans (hg4 a)
+    · rw [h_out]; exact herr hf4 (errSnd (Devm.popToNat_instructionFrame d4) he)
+    have hf5 : Devm.InstructionFrame pre d5 :=
+      Devm.instructionFrame_trans hf4 (okSnd (Devm.popToNat_instructionFrame d4) e5)
     rcases run with ⟨er, he, h_out, _⟩ | ⟨⟨os, d6⟩, e6, run⟩
-    · rw [h_out]; exact herr hg5 (Devm.popToNat_getBal_err he)
-    have hg6 : ∀ a, d6.getBal a = pre.getBal a :=
-      fun a => (Devm.popToNat_getBal_eq e6 a).trans (hg5 a)
+    · rw [h_out]; exact herr hf5 (errSnd (Devm.popToNat_instructionFrame d5) he)
+    have hf6 : Devm.InstructionFrame pre d6 :=
+      Devm.instructionFrame_trans hf5 (okSnd (Devm.popToNat_instructionFrame d5) e6)
     rcases run with ⟨extendCost, _, run⟩
     rcases run with ⟨preAccessCost, _, run⟩
     rcases run with ⟨d7, h_d7, run⟩
-    have hg7 : ∀ a, d7.getBal a = pre.getBal a := by
-      intro a; rw [h_d7]; exact hg6 a
+    have hf7 : Devm.InstructionFrame pre d7 := by
+      rw [h_d7]
+      exact Devm.instructionFrame_trans hf6 (addAccessedAddress_instructionFrame d6 target)
     rcases run with ⟨⟨dp, na, code0, dagc, d8⟩, h_d8, run⟩
-    have hg8 : ∀ a, d8.getBal a = pre.getBal a := by
-      intro a
-      have hq := congrArg (fun q => (q.2.2.2.2 : Devm).getBal a) h_d8
-      dsimp only at hq
-      rw [hq, h_ad]
-      exact hg7 a
+    have hf8 : Devm.InstructionFrame pre d8 := by
+      have hq : d8 = (accessDelegation d7 target).2.2.2.2 := by rw [← h_d8]
+      rw [hq]
+      exact Devm.instructionFrame_trans hf7 (accessDelegation_instructionFrame d7 target)
     rcases run with ⟨accessCost, _, run⟩
     rcases run with ⟨⟨mcc, mcs⟩, _, run⟩
     rcases run with ⟨er, he, h_out, _⟩ | ⟨d9, e9, run⟩
-    · rw [h_out]; exact herr hg8 (chargeGas_getBal_err he)
-    have hg9 : ∀ a, d9.getBal a = pre.getBal a :=
-      fun a => (chargeGas_getBal_eq e9 a).trans (hg8 a)
+    · rw [h_out]; exact herr hf8 (errId (chargeGas_instructionFrame _ d8) he)
+    have hf9 : Devm.InstructionFrame pre d9 :=
+      Devm.instructionFrame_trans hf8 (okId (chargeGas_instructionFrame _ d8) e9)
     rcases run with ⟨d10, h_d10, run⟩
-    have hg10 : ∀ a, d10.getBal a = pre.getBal a := by
-      intro a; rw [h_d10]; exact hg9 a
-    exact hok hg10 (GenericCall.balance_effect hxl run)
+    have hf10 : Devm.InstructionFrame pre d10 := by
+      rw [h_d10]
+      exact Devm.instructionFrame_trans hf9 (Devm.memExtends_instructionFrame d9 _)
+    exact hok hf10 (GenericCall.balance_effect hxl run)
 
 lemma Ninst.balance_effectGen (n : Ninst) :
     Ninst.EffectGen Devm.BalNoninc n := by
