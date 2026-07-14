@@ -9777,6 +9777,60 @@ lemma executePrecomp_balance_effect {evm : Evm} {a : Adr} {out : Execution}
     Devm.BalNoninc Devm.balSum State.balSum
   cases precompileRun evm a <;> rfl
 
+/-- `executeCode.handleError` selects between the raw execution result and a
+rolled-back state without introducing any balance write of its own, so it
+transports a raw `Devm.BalNoninc` frame to a `State.BalNoninc` on the handled
+message outcome. -/
+lemma executeCode.handleError_balance_effect {pre : Devm} {raw : Execution}
+    {handled : MessageExecution}
+    (hb : Execution.Rel Devm.BalNoninc pre raw)
+    (hh : executeCode.handleError raw = handled) :
+    State.BalNoninc pre.state (MessageExecution.state handled) := by
+  rcases raw with ⟨err, d⟩ | d
+  · simp only [executeCode.handleError] at hh
+    split at hh
+    · subst handled
+      exact hb
+    · split at hh
+      · subst handled
+        exact hb
+      · subst handled
+        exact hb
+  · simp only [executeCode.handleError] at hh
+    subst handled
+    exact hb
+
+/-- Master balance effect for the code-execution layer: running the callee's
+code (interpreter, precompile, or the empty-code no-op) never increases the
+total balance relative to the freshly-initialised message state. The `Xlot`
+witness carries the interpreter's own `Devm.BalNoninc` frame; the precompile
+branch supplies its frame directly. -/
+lemma ExecuteCode.balance_effect {msg : Msg} {xl : Xlot}
+    {ex : Except (String × _root_.State × AdrSet × Tra) Devm}
+    (hxl : Xlot.Rel Devm.BalNoninc xl)
+    (hec : ExecuteCode msg xl ex) :
+    State.BalNoninc (initEvm msg).dyna.state (MessageExecution.state ex) := by
+  unfold ExecuteCode at hec
+  rcases hca : msg.codeAddress with _ | adr
+  · rw [hca] at hec
+    dsimp only at hec
+    rcases hec with ⟨raw, hxl_eq, hh⟩
+    rw [hxl_eq] at hxl
+    exact executeCode.handleError_balance_effect hxl hh
+  · rw [hca] at hec
+    dsimp only at hec
+    by_cases hpre : adr.isPrecomp
+    · rw [if_pos hpre] at hec
+      rcases hec with ⟨_, hh⟩
+      have hp := executePrecomp_balance_effect
+        (h := (rfl : executePrecomp (initEvm msg) adr =
+          executePrecomp (initEvm msg) adr))
+      exact executeCode.handleError_balance_effect hp hh
+    · rw [if_neg hpre] at hec
+      rcases hec with ⟨raw, hxl_eq, hh⟩
+      rw [hxl_eq] at hxl
+      exact executeCode.handleError_balance_effect hxl hh
+
 lemma ProcessMessage.balance_effect {msg : Msg} {xl : Xlot}
     {out : MessageExecution}
     (hxl : Xlot.Rel Devm.BalNoninc xl)
@@ -9790,49 +9844,9 @@ lemma ProcessMessage.balance_effect {msg : Msg} {xl : Xlot}
     exact ht
   · have htransfer := Msg.benvAfterTransfer_balance_effect hbt
     have hexec : State.BalNoninc benv.state (MessageExecution.state ex') := by
-      have handle_balance {pre : Devm} {raw : Execution} {handled : MessageExecution}
-          (hb : Execution.Rel Devm.BalNoninc pre raw)
-          (hh : executeCode.handleError raw = handled) :
-          State.BalNoninc pre.state (MessageExecution.state handled) := by
-        rcases raw with ⟨err, d⟩ | d
-        · simp only [executeCode.handleError] at hh
-          split at hh
-          · subst handled
-            exact hb
-          · split at hh
-            · subst handled
-              exact hb
-            · subst handled
-              exact hb
-        · simp only [executeCode.handleError] at hh
-          subst handled
-          exact hb
-      unfold ExecuteCode at hec
-      rcases hca : (msg.withBenv benv).codeAddress with _ | adr
-      · rw [hca] at hec
-        dsimp only at hec
-        rcases hec with ⟨raw, hxl_eq, hh⟩
-        rw [hxl_eq] at hxl
-        have hinit : (initEvm (msg.withBenv benv)).dyna.state = benv.state := rfl
-        rw [← hinit]
-        exact handle_balance hxl hh
-      · rw [hca] at hec
-        dsimp only at hec
-        by_cases hpre : adr.isPrecomp
-        · rw [if_pos hpre] at hec
-          rcases hec with ⟨_, hh⟩
-          have hp := executePrecomp_balance_effect
-            (h := (rfl : executePrecomp (initEvm (msg.withBenv benv)) adr =
-              executePrecomp (initEvm (msg.withBenv benv)) adr))
-          have hinit : (initEvm (msg.withBenv benv)).dyna.state = benv.state := rfl
-          rw [← hinit]
-          exact handle_balance hp hh
-        · rw [if_neg hpre] at hec
-          rcases hec with ⟨raw, hxl_eq, hh⟩
-          rw [hxl_eq] at hxl
-          have hinit : (initEvm (msg.withBenv benv)).dyna.state = benv.state := rfl
-          rw [← hinit]
-          exact handle_balance hxl hh
+      have h := ExecuteCode.balance_effect hxl hec
+      have hinit : (initEvm (msg.withBenv benv)).dyna.state = benv.state := rfl
+      rwa [hinit] at h
     rcases hsplit with ⟨x, hex', hout⟩ | ⟨evm, hex', hfinal⟩
     · subst ex'
       subst out
