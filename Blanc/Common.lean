@@ -9700,6 +9700,15 @@ lemma Linst.balance_effect (l : Linst) :
     cases out <;> exact Devm.balNoninc_of_getBal_eq
       (funext fun a => (hf.getBal a).symm)
 
+/-- An instruction frame is balance-silent, hence transports directly to the
+total-balance preorder used by the balance-effect layer. -/
+lemma Devm.instructionFrame_refines_balNoninc :
+    CEffect.Refines Devm.InstructionFrame Devm.BalNoninc := by
+  intro pre post h
+  apply Devm.balNoninc_of_state
+  rw [h.state]
+  exact balNoninc_refl_trans.1.1 _
+
 lemma Msg.benvAfterTransfer_balance_effect {msg : Msg}
     {out : Except (String × _root_.State × AdrSet × Tra) Benv}
     (h : msg.benvAfterTransfer = out) :
@@ -9911,7 +9920,38 @@ lemma ProcessCreateMessage.balance_effect {msg : Msg} {xl : Xlot}
       rw [← h_body]
       exact balNoninc_refl_trans.1.1 _
 
-lemma GenericCall.balance_effect
+/-- The create prefix's sender nonce bump is a non-balance state write. -/
+lemma Devm.incrNonce_balance_effect (pre : Devm) (a : Adr) :
+    Devm.BalNoninc pre (pre.incrNonce a) := by
+  unfold Devm.BalNoninc Devm.balSum State.balSum
+  rw [Devm.incrNonce_state, State.incrNonce_bal]
+
+/-- Child-error incorporation installs the child's already-accounted world;
+the parent fields it retains do not include balances. -/
+lemma incorporateChildOnError_balance_effect
+    {pre parent child : Devm} {returnData : B8L}
+    (h : State.BalNoninc pre.state child.state) :
+    Devm.BalNoninc pre
+      (incorporateChildOnError parent child returnData) := by
+  apply Devm.balNoninc_of_state
+  dsimp only [incorporateChildOnError]
+  exact h
+
+/-- Child-success incorporation has the same precise balance projection as
+the error form, while differing in the non-balance fields it incorporates. -/
+lemma incorporateChildOnSuccess_balance_effect
+    {pre parent child : Devm} {returnData : B8L}
+    (h : State.BalNoninc pre.state child.state) :
+    Devm.BalNoninc pre
+      (incorporateChildOnSuccess parent child returnData) := by
+  apply Devm.balNoninc_of_state
+  dsimp only [incorporateChildOnSuccess]
+  exact h
+
+/-- Canonical balance-effect master for generic calls.  The call prefix is
+balance-silent; all balance changes are delegated to `ProcessMessage`, and
+child incorporation merely installs the child's already-bounded state. -/
+lemma GenericCall.balanceEffect
     {sevm : Sevm} {pre : Devm} {gas : Nat} {value : B256}
     {caller target codeAddress : Adr} {stv istat : Bool}
     {ii is oi os : Nat} {code : ByteArray} {dp : Bool}
@@ -9925,21 +9965,16 @@ lemma GenericCall.balance_effect
   split_ifs at run with h_depth
   · -- depth limit reached : call fails, state unchanged
     rcases run with ⟨_, h_push⟩
-    have h_bal : Devm.BalNoninc pre (evm1.withGasLeft (evm1.gasLeft + gas)) := by
-      apply Devm.balNoninc_of_state
+    have h_prefix : Devm.InstructionFrame pre
+        (evm1.withGasLeft (evm1.gasLeft + gas)) := by
       rw [h_evm1]
-      exact balNoninc_refl_trans.1.1 _
-    rcases out with ⟨err, d⟩ | d
-    · simp only [Execution.Rel, Outcome.Rel]
-      refine balNoninc_refl_trans.2.2 h_bal ?_
-      apply Devm.balNoninc_of_getBal_eq
-      funext a
-      exact Devm.push_getBal_err h_push a
-    · simp only [Execution.Rel, Outcome.Rel, id]
-      refine balNoninc_refl_trans.2.2 h_bal ?_
-      apply Devm.balNoninc_of_state
-      rw [← (Devm.push_of_push h_push).state]
-      exact balNoninc_refl_trans.1.1 _
+      exact Devm.instructionFrame_of_world_eq rfl rfl rfl rfl
+    have h_tail := Devm.push_instructionFrame 0
+      (evm1.withGasLeft (evm1.gasLeft + gas))
+    rw [h_push] at h_tail
+    exact Execution.Rel.trans_left balNoninc_refl_trans.2.2
+      (Devm.instructionFrame_refines_balNoninc h_prefix)
+      (Outcome.Rel.mono Devm.instructionFrame_refines_balNoninc h_tail)
   · rcases run with ⟨calldata, _, run⟩
     rcases run with ⟨childMsg, h_cm, run⟩
     rcases run with ⟨ex', run_pm, h_split⟩
@@ -9964,43 +9999,61 @@ lemma GenericCall.balance_effect
       dsimp only [MessageExecution.state] at h_pm
       by_cases h_err : child.error.isSome = true
       · rw [if_pos h_err] at h_body
-        have h_bal : Devm.BalNoninc pre (incorporateChildOnError evm1 child child.output) := by
-          apply Devm.balNoninc_of_state
-          exact h_pm
+        have h_bal : Devm.BalNoninc pre
+            (incorporateChildOnError evm1 child child.output) :=
+          incorporateChildOnError_balance_effect h_pm
         rcases h_body with ⟨e, h_pusherr, h_out⟩ | ⟨evm2, h_push, h_out⟩
         · rw [h_out]
-          simp only [Execution.Rel, Outcome.Rel]
-          refine balNoninc_refl_trans.2.2 h_bal ?_
-          apply Devm.balNoninc_of_getBal_eq
-          funext a
-          exact Devm.push_getBal_err h_pusherr a
+          have h_tail := Devm.push_instructionFrame 0
+            (incorporateChildOnError evm1 child child.output)
+          rw [h_pusherr] at h_tail
+          exact Execution.Rel.trans_left balNoninc_refl_trans.2.2 h_bal
+            (Outcome.Rel.mono Devm.instructionFrame_refines_balNoninc h_tail)
         · rw [← h_out]
-          simp only [Execution.Rel, Outcome.Rel, id]
           refine balNoninc_refl_trans.2.2 h_bal ?_
-          apply Devm.balNoninc_of_state
-          show State.BalNoninc _ evm2.state
-          rw [← (Devm.push_of_push h_push).state]
-          exact balNoninc_refl_trans.1.1 _
+          apply Devm.instructionFrame_refines_balNoninc
+          have h_push_frame := Devm.push_instructionFrame 0
+            (incorporateChildOnError evm1 child child.output)
+          rw [h_push] at h_push_frame
+          exact Devm.instructionFrame_trans h_push_frame
+            (Devm.memWrite_instructionFrame evm2 oi
+              (child.output.take os))
       · rw [if_neg h_err] at h_body
-        have h_bal : Devm.BalNoninc pre (incorporateChildOnSuccess evm1 child child.output) := by
-          apply Devm.balNoninc_of_state
-          exact h_pm
+        have h_bal : Devm.BalNoninc pre
+            (incorporateChildOnSuccess evm1 child child.output) :=
+          incorporateChildOnSuccess_balance_effect h_pm
         rcases h_body with ⟨e, h_pusherr, h_out⟩ | ⟨evm2, h_push, h_out⟩
         · rw [h_out]
-          simp only [Execution.Rel, Outcome.Rel]
-          refine balNoninc_refl_trans.2.2 h_bal ?_
-          apply Devm.balNoninc_of_getBal_eq
-          funext a
-          exact Devm.push_getBal_err h_pusherr a
+          have h_tail := Devm.push_instructionFrame 1
+            (incorporateChildOnSuccess evm1 child child.output)
+          rw [h_pusherr] at h_tail
+          exact Execution.Rel.trans_left balNoninc_refl_trans.2.2 h_bal
+            (Outcome.Rel.mono Devm.instructionFrame_refines_balNoninc h_tail)
         · rw [← h_out]
-          simp only [Execution.Rel, Outcome.Rel, id]
           refine balNoninc_refl_trans.2.2 h_bal ?_
-          apply Devm.balNoninc_of_state
-          show State.BalNoninc _ evm2.state
-          rw [← (Devm.push_of_push h_push).state]
-          exact balNoninc_refl_trans.1.1 _
+          apply Devm.instructionFrame_refines_balNoninc
+          have h_push_frame := Devm.push_instructionFrame 1
+            (incorporateChildOnSuccess evm1 child child.output)
+          rw [h_push] at h_push_frame
+          exact Devm.instructionFrame_trans h_push_frame
+            (Devm.memWrite_instructionFrame evm2 oi
+              (child.output.take os))
 
-lemma GenericCreate.balance_effect
+lemma GenericCall.balance_effect
+    {sevm : Sevm} {pre : Devm} {gas : Nat} {value : B256}
+    {caller target codeAddress : Adr} {stv istat : Bool}
+    {ii is oi os : Nat} {code : ByteArray} {dp : Bool}
+    {xl : Xlot} {out : Execution}
+    (hxl : Xlot.Rel Devm.BalNoninc xl)
+    (run : GenericCall sevm pre gas value caller target codeAddress
+      stv istat ii is oi os code dp xl out) :
+    Execution.Rel Devm.BalNoninc pre out :=
+  GenericCall.balanceEffect hxl run
+
+/-- Canonical balance-effect master for generic creates.  Unlike calls, its
+prefix contains the sender nonce write and its child path performs fresh
+account initialisation before installing the child world. -/
+lemma GenericCreate.balanceEffect
     {sevm : Sevm} {pre : Devm} {endowment : B256} {newAddress : Adr}
     {mi ms : Nat} {xl : Xlot} {out : Execution}
     (hxl : Xlot.Rel Devm.BalNoninc xl)
@@ -10018,16 +10071,19 @@ lemma GenericCreate.balance_effect
   rcases run with ⟨devm1, h_d1, run⟩
   rcases run with ⟨createMsgGas, _, run⟩
   rcases run with ⟨devm2, h_d2, run⟩
-  have h_st1 : devm1.state = pre.state := by rw [h_d1]; rfl
-  have h_st2 : devm2.state = devm1.state := by rw [h_d2]
+  have h_frame1 : Devm.InstructionFrame pre devm1 := by
+    rw [h_d1]
+    exact addAccessedAddress_instructionFrame pre newAddress
+  have h_frame2 : Devm.InstructionFrame pre devm2 := by
+    refine Devm.instructionFrame_trans h_frame1 ?_
+    rw [h_d2]
+    exact Devm.instructionFrame_of_world_eq rfl rfl rfl rfl
   rcases run with ⟨x, h_err, h_out, _⟩ | ⟨_, _, run⟩
   · -- static context assertion fails : state unchanged
     rw [h_out]
     simp only [Execution.Rel, Outcome.Rel]
-    have h_bal2 : Devm.BalNoninc pre devm2 := by
-      apply Devm.balNoninc_of_state
-      rw [h_st2, h_st1]
-      exact balNoninc_refl_trans.1.1 _
+    have h_bal2 : Devm.BalNoninc pre devm2 :=
+      Devm.instructionFrame_refines_balNoninc h_frame2
     refine balNoninc_refl_trans.2.2 h_bal2 ?_
     apply Devm.balNoninc_of_getBal_eq
     funext a
@@ -10035,47 +10091,37 @@ lemma GenericCreate.balance_effect
     exact assert_getBal_err h_err a
   rcases run with ⟨devm3, h_d3, run⟩
   rcases run with ⟨sender, _, run⟩
-  have h_st3 : devm3.state = devm2.state := by rw [h_d3]
-  have h_bal3 : Devm.BalNoninc pre devm3 := by
-    apply Devm.balNoninc_of_state
-    rw [h_st3, h_st2, h_st1]
-    exact balNoninc_refl_trans.1.1 _
+  have h_frame3 : Devm.InstructionFrame pre devm3 := by
+    refine Devm.instructionFrame_trans h_frame2 ?_
+    rw [h_d3]
+    exact Devm.instructionFrame_of_world_eq rfl rfl rfl rfl
+  have h_bal3 : Devm.BalNoninc pre devm3 :=
+    Devm.instructionFrame_refines_balNoninc h_frame3
   split_ifs at run with h_c1
   · -- sender balance/nonce/depth failure : create fails, state unchanged
     rcases run with ⟨_, h_push⟩
-    have h_bal : Devm.BalNoninc pre {devm3 with gasLeft := devm3.gasLeft + createMsgGas} := by
-      apply Devm.balNoninc_of_state
-      show State.BalNoninc pre.state devm3.state
-      exact h_bal3
-    rcases out with ⟨err, d⟩ | d
-    · simp only [Execution.Rel, Outcome.Rel]
-      refine balNoninc_refl_trans.2.2 h_bal ?_
-      apply Devm.balNoninc_of_getBal_eq
-      funext a
-      exact Devm.push_getBal_err h_push a
-    · simp only [Execution.Rel, Outcome.Rel, id]
-      refine balNoninc_refl_trans.2.2 h_bal ?_
-      apply Devm.balNoninc_of_state
-      rw [← (Devm.push_of_push h_push).state]
-      exact balNoninc_refl_trans.1.1 _
+    have h_prefix : Devm.InstructionFrame pre
+        {devm3 with gasLeft := devm3.gasLeft + createMsgGas} := by
+      refine Devm.instructionFrame_trans h_frame3 ?_
+      exact Devm.instructionFrame_of_world_eq rfl rfl rfl rfl
+    have h_tail := Devm.push_instructionFrame 0
+      {devm3 with gasLeft := devm3.gasLeft + createMsgGas}
+    rw [h_push] at h_tail
+    exact Execution.Rel.trans_left balNoninc_refl_trans.2.2
+      (Devm.instructionFrame_refines_balNoninc h_prefix)
+      (Outcome.Rel.mono Devm.instructionFrame_refines_balNoninc h_tail)
   · rcases run with ⟨devm4, h_d4, run⟩
     have h_bal4 : Devm.BalNoninc pre devm4 := by
-      unfold Devm.BalNoninc Devm.balSum State.balSum
-      rw [h_d4, Devm.incrNonce_state, State.incrNonce_bal, h_st3, h_st2, h_st1]
+      refine balNoninc_refl_trans.2.2 h_bal3 ?_
+      rw [h_d4]
+      exact Devm.incrNonce_balance_effect devm3 sevm.currentTarget
     split_ifs at run with h_c2
     · -- target account exists : create fails, state unchanged
       rcases run with ⟨_, h_push⟩
-      rcases out with ⟨err, d⟩ | d
-      · simp only [Execution.Rel, Outcome.Rel]
-        refine balNoninc_refl_trans.2.2 h_bal4 ?_
-        apply Devm.balNoninc_of_getBal_eq
-        funext a
-        exact Devm.push_getBal_err h_push a
-      · simp only [Execution.Rel, Outcome.Rel, id]
-        refine balNoninc_refl_trans.2.2 h_bal4 ?_
-        apply Devm.balNoninc_of_state
-        rw [← (Devm.push_of_push h_push).state]
-        exact balNoninc_refl_trans.1.1 _
+      have h_tail := Devm.push_instructionFrame 0 devm4
+      rw [h_push] at h_tail
+      exact Execution.Rel.trans_left balNoninc_refl_trans.2.2 h_bal4
+        (Outcome.Rel.mono Devm.instructionFrame_refines_balNoninc h_tail)
     · rcases run with ⟨childMsg, h_cm, run⟩
       rcases run with ⟨ex', run_pcm, h_split⟩
       have h_pcm := ProcessCreateMessage.balance_effect hxl run_pcm
@@ -10101,37 +10147,33 @@ lemma GenericCreate.balance_effect
         dsimp only [MessageExecution.state] at h_pcm
         by_cases h_err : child.error.isSome = true
         · rw [if_pos h_err] at h_body
-          have h_bal : Devm.BalNoninc pre (incorporateChildOnError devm4 child child.output) := by
-            refine balNoninc_refl_trans.2.2 h_bal4 ?_
-            apply Devm.balNoninc_of_state
-            exact h_pcm
-          rcases out with ⟨err2, d⟩ | d
-          · simp only [Execution.Rel, Outcome.Rel]
-            refine balNoninc_refl_trans.2.2 h_bal ?_
-            apply Devm.balNoninc_of_getBal_eq
-            funext a
-            exact Devm.push_getBal_err h_body a
-          · simp only [Execution.Rel, Outcome.Rel, id]
-            refine balNoninc_refl_trans.2.2 h_bal ?_
-            apply Devm.balNoninc_of_state
-            rw [← (Devm.push_of_push h_body).state]
-            exact balNoninc_refl_trans.1.1 _
+          have h_bal : Devm.BalNoninc pre
+              (incorporateChildOnError devm4 child child.output) :=
+            balNoninc_refl_trans.2.2 h_bal4
+              (incorporateChildOnError_balance_effect h_pcm)
+          have h_tail := Devm.push_instructionFrame 0
+            (incorporateChildOnError devm4 child child.output)
+          rw [h_body] at h_tail
+          exact Execution.Rel.trans_left balNoninc_refl_trans.2.2 h_bal
+            (Outcome.Rel.mono Devm.instructionFrame_refines_balNoninc h_tail)
         · rw [if_neg h_err] at h_body
-          have h_bal : Devm.BalNoninc pre (incorporateChildOnSuccess devm4 child []) := by
-            refine balNoninc_refl_trans.2.2 h_bal4 ?_
-            apply Devm.balNoninc_of_state
-            exact h_pcm
-          rcases out with ⟨err2, d⟩ | d
-          · simp only [Execution.Rel, Outcome.Rel]
-            refine balNoninc_refl_trans.2.2 h_bal ?_
-            apply Devm.balNoninc_of_getBal_eq
-            funext a
-            exact Devm.push_getBal_err h_body a
-          · simp only [Execution.Rel, Outcome.Rel, id]
-            refine balNoninc_refl_trans.2.2 h_bal ?_
-            apply Devm.balNoninc_of_state
-            rw [← (Devm.push_of_push h_body).state]
-            exact balNoninc_refl_trans.1.1 _
+          have h_bal : Devm.BalNoninc pre
+              (incorporateChildOnSuccess devm4 child []) :=
+            balNoninc_refl_trans.2.2 h_bal4
+              (incorporateChildOnSuccess_balance_effect h_pcm)
+          have h_tail := Devm.push_instructionFrame newAddress.toB256
+            (incorporateChildOnSuccess devm4 child [])
+          rw [h_body] at h_tail
+          exact Execution.Rel.trans_left balNoninc_refl_trans.2.2 h_bal
+            (Outcome.Rel.mono Devm.instructionFrame_refines_balNoninc h_tail)
+
+lemma GenericCreate.balance_effect
+    {sevm : Sevm} {pre : Devm} {endowment : B256} {newAddress : Adr}
+    {mi ms : Nat} {xl : Xlot} {out : Execution}
+    (hxl : Xlot.Rel Devm.BalNoninc xl)
+    (run : GenericCreate sevm pre endowment newAddress mi ms xl out) :
+    Execution.Rel Devm.BalNoninc pre out :=
+  GenericCreate.balanceEffect hxl run
 
 lemma Xinst.balance_effectGen (x : Xinst) :
     Xinst.EffectGen Devm.BalNoninc x := by
