@@ -1872,12 +1872,16 @@ elab "pexen" e:num : tactic =>
       Lean.Expr.apply (Lean.mkApp2 q(@run_prepend_elim) c x)
       Strings.intro ["s" ++ ss, "h" ++ ss]
 
+/-- Public observation-preservation shape for a straight-line fragment.  It is
+the successful-run projection of the canonical relational effect idiom. -/
 def Line.Inv {ξ : Type} (f : Devm → ξ) (l : Line) : Prop :=
   ∀ {e s s'}, l.Run e s s' → f s = f s'
 
 lemma Line.of_inv {ξ : Type} {e s s'} (r : Devm → ξ) {l : Line} :
   Line.Inv r l → l.Run e s s' → r s = r s' := λ h => h
 
+/-- Successful-run observation invariant for one nonterminal instruction;
+retained for the `line_inv`/`prog_inv` API built over relational masters. -/
 def Ninst.Inv {ξ : Type} (r : Devm → ξ) (i : Ninst) : Prop :=
   ∀ {e s s'}, Ninst.Run e s i s' → r s = r s'
 
@@ -1940,9 +1944,13 @@ def String.toExpr (s : String) : Lean.Expr :=
 def String.apply (s : String): Lean.Elab.Tactic.TacticM Unit :=
   Lean.Expr.apply <| String.toExpr s
 
+/-- Public program-level invariant consumed by solvency proofs; unlike
+`Execution.Rel`, it records only successful `Func.Run` executions. -/
 def Func.Inv {ξ : Type} (f : Devm → ξ) (g : Devm → ξ) (p : Func) : Prop :=
   ∀ {c sevm s r}, Func.Run c sevm s p r → f s = g r
 
+/-- Successful terminal-instruction projection used to assemble `Func.Inv`;
+outcome-aware preservation is stated canonically with `Execution.Rel`. -/
 def Linst.Inv {ξ : Type} (f : Devm → ξ) (g : Devm → ξ) (o : Linst) : Prop :=
   ∀ {e s r}, Linst.Run e s o (.ok r) → f s = g r
 
@@ -2194,11 +2202,48 @@ lemma Benv.subBal_getCode {benv benv' : Benv} {adr a : Adr} {val : B256} (h : be
     dsimp [Benv.withState]
     exact State.subBal_getCode h_sub
 
-/-! The pure footprint theorem is kept before the early code-frame lemmas that
-use it.  The outcome-aware variants are developed with `CEffect` below. -/
+/-! The solvency-facing world relation and its canonical fieldwise frame. -/
 
+/-- The `Devm.Rel` frame that forgets every field except persistent and
+transient world state. -/
+def Devm.Rels.worldFrame : Devm.Rels :=
+  {
+    stack := fun _ _ => True
+    memory := fun _ _ => True
+    gasLeft := fun _ _ => True
+    logs := fun _ _ => True
+    refundCounter := fun _ _ => True
+    output := fun _ _ => True
+    accountsToDelete := fun _ _ => True
+    returnData := fun _ _ => True
+    error := fun _ _ => True
+    accessedAddresses := fun _ _ => True
+    accessedStorageKeys := fun _ _ => True
+    state := _root_.Eq
+    createdAccounts := fun _ _ => True
+    transientStorage := _root_.Eq }
+
+abbrev Devm.WorldFrame : Devm → Devm → Prop :=
+  Devm.Rel Devm.Rels.worldFrame
+
+/-- Public solvency-facing presentation of `Devm.WorldFrame`. -/
 def Devm.WorldEq (d d' : Devm) : Prop :=
   d.state = d'.state ∧ d.transientStorage = d'.transientStorage
+
+/-- Bridge from the public world relation to the canonical fieldwise frame. -/
+lemma Devm.WorldEq.toWorldFrame {d d' : Devm} (h : Devm.WorldEq d d') :
+    Devm.WorldFrame d d' := by
+  exact {
+    stack := trivial, memory := trivial, gasLeft := trivial, logs := trivial
+    refundCounter := trivial, output := trivial, accountsToDelete := trivial
+    returnData := trivial, error := trivial, accessedAddresses := trivial
+    accessedStorageKeys := trivial, state := h.1, createdAccounts := trivial
+    transientStorage := h.2 }
+
+/-- Bridge from the canonical fieldwise frame to the public world relation. -/
+lemma Devm.WorldFrame.worldEq {d d' : Devm} (h : Devm.WorldFrame d d') :
+    Devm.WorldEq d d' := by
+  exact ⟨h.state, h.transientStorage⟩
 
 lemma Devm.worldEq_setMach (d : Devm) (mach : Mach) :
     Devm.WorldEq d (d.setMach mach) := by
@@ -3685,105 +3730,7 @@ lemma sstore_inv_getCode
       rw [← rw]
       apply setStorVal_inv_getCode
 
-namespace CEffect
-
-abbrev Rel (σ : Type) := σ → σ → Prop
-
-def Refines {σ : Type} (R S : Rel σ) : Prop :=
-  ∀ ⦃s t⦄, R s t → S s t
-
-def Comp {σ : Type} (R S : Rel σ) : Rel σ :=
-  fun s u => ∃ t, R s t ∧ S t u
-
-def Holds {σ : Type} (run effect : Rel σ) : Prop :=
-  Refines run effect
-
-def ObsEq {σ α : Type} (obs : σ → α) : Rel σ :=
-  fun s t => obs s = obs t
-
-def Stable {σ α : Type} (obs : σ → α) (effect : Rel σ) : Prop :=
-  Refines effect (ObsEq obs)
-
-lemma comp_assoc {σ : Type} (R S T : Rel σ) :
-    Comp (Comp R S) T = Comp R (Comp S T) := by
-  ext s u
-  constructor
-  · rintro ⟨b, ⟨a, hRa, hSab⟩, hTbu⟩
-    exact ⟨a, hRa, b, hSab, hTbu⟩
-  · rintro ⟨a, hRa, b, hSab, hTbu⟩
-    exact ⟨b, ⟨a, hRa, hSab⟩, hTbu⟩
-
-lemma holds_comp {σ : Type} {run₁ run₂ R S : Rel σ}
-    (hR : Holds run₁ R) (hS : Holds run₂ S) :
-    Holds (Comp run₁ run₂) (Comp R S) := by
-  rintro s t ⟨u, h1, h2⟩
-  exact ⟨u, hR h1, hS h2⟩
-
-lemma holds_weaken {σ : Type} {run R S : Rel σ}
-    (h : Holds run R) (hweak : Refines R S) : Holds run S := by
-  intro s t hrun
-  exact hweak (h hrun)
-
-lemma holds_comp_of_transitive {σ : Type} {run₁ run₂ R : Rel σ}
-    (htrans : Transitive R)
-    (h₁ : Holds run₁ R) (h₂ : Holds run₂ R) :
-    Holds (Comp run₁ run₂) R := by
-  intro s u hrun
-  rcases hrun with ⟨t, hR1, hR2⟩
-  exact htrans (h₁ hR1) (h₂ hR2)
-
-lemma reflTransGen_mono {σ : Type} {step effect : Rel σ} {s t : σ}
-    (hrefine : Refines step effect)
-    (h : Relation.ReflTransGen step s t) :
-    Relation.ReflTransGen effect s t := by
-  induction h with
-  | refl => exact Relation.ReflTransGen.refl
-  | tail h1 h2 ih => exact Relation.ReflTransGen.tail ih (hrefine h2)
-
-/-
-This is the generic “every small step has `R`, hence the whole run has `R`” theorem.
--/
-lemma reflTransGen_collapse {σ : Type} {step R : Rel σ} {s t : σ}
-    (hrefl : Reflexive R) (htrans : Transitive R)
-    (hrefine : Refines step R)
-    (h : Relation.ReflTransGen step s t) : R s t := by
-  induction h with
-  | refl => exact hrefl _
-  | tail h_prev h_step ih => exact htrans ih (hrefine h_step)
-
-lemma obsEq_refl_trans {σ α : Type} (obs : σ → α) :
-    Reflexive (ObsEq obs) ∧ Transitive (ObsEq obs) := by
-  constructor
-  · intro x
-    rfl
-  · intro x y z hxy hyz
-    exact Eq.trans hxy hyz
-
-lemma Stable.comp {σ α β : Type} {obs : σ → α} {R : Rel σ}
-    (h : Stable obs R) (f : α → β) : Stable (f ∘ obs) R := by
-  intro s t hR; exact congrArg f (h hR)
-
-end CEffect
-
-/-! ## 2. Composing the fieldwise `Devm.Rels` already present in Semantics -/
-
-def Devm.Rels.comp (r s : Devm.Rels) : Devm.Rels :=
-  {
-    stack := CEffect.Comp r.stack s.stack
-    memory := CEffect.Comp r.memory s.memory
-    gasLeft := CEffect.Comp r.gasLeft s.gasLeft
-    logs := CEffect.Comp r.logs s.logs
-    refundCounter := CEffect.Comp r.refundCounter s.refundCounter
-    output := CEffect.Comp r.output s.output
-    accountsToDelete := CEffect.Comp r.accountsToDelete s.accountsToDelete
-    returnData := CEffect.Comp r.returnData s.returnData
-    error := CEffect.Comp r.error s.error
-    accessedAddresses := CEffect.Comp r.accessedAddresses s.accessedAddresses
-    accessedStorageKeys := CEffect.Comp r.accessedStorageKeys s.accessedStorageKeys
-    state := CEffect.Comp r.state s.state
-    createdAccounts := CEffect.Comp r.createdAccounts s.createdAccounts
-    transientStorage := CEffect.Comp r.transientStorage s.transientStorage
-  }
+/-! ## Fieldwise `Devm.Rel` infrastructure -/
 
 def Devm.Rels.Refl (r : Devm.Rels) : Prop :=
   Reflexive r.stack ∧ Reflexive r.memory ∧ Reflexive r.gasLeft ∧
@@ -3800,26 +3747,6 @@ def Devm.Rels.Trans (r : Devm.Rels) : Prop :=
   Transitive r.accessedAddresses ∧ Transitive r.accessedStorageKeys ∧
   Transitive r.state ∧ Transitive r.createdAccounts ∧
   Transitive r.transientStorage
-
-lemma Devm.Rel.comp {r s : Devm.Rels} {a b c : Devm}
-    (hab : Devm.Rel r a b) (hbc : Devm.Rel s b c) :
-    Devm.Rel (Devm.Rels.comp r s) a c := by
-  exact {
-    stack := ⟨b.stack, hab.stack, hbc.stack⟩
-    memory := ⟨b.memory, hab.memory, hbc.memory⟩
-    gasLeft := ⟨b.gasLeft, hab.gasLeft, hbc.gasLeft⟩
-    logs := ⟨b.logs, hab.logs, hbc.logs⟩
-    refundCounter := ⟨b.refundCounter, hab.refundCounter, hbc.refundCounter⟩
-    output := ⟨b.output, hab.output, hbc.output⟩
-    accountsToDelete := ⟨b.accountsToDelete, hab.accountsToDelete, hbc.accountsToDelete⟩
-    returnData := ⟨b.returnData, hab.returnData, hbc.returnData⟩
-    error := ⟨b.error, hab.error, hbc.error⟩
-    accessedAddresses := ⟨b.accessedAddresses, hab.accessedAddresses, hbc.accessedAddresses⟩
-    accessedStorageKeys := ⟨b.accessedStorageKeys, hab.accessedStorageKeys, hbc.accessedStorageKeys⟩
-    state := ⟨b.state, hab.state, hbc.state⟩
-    createdAccounts := ⟨b.createdAccounts, hab.createdAccounts, hbc.createdAccounts⟩
-    transientStorage := ⟨b.transientStorage, hab.transientStorage, hbc.transientStorage⟩
-  }
 
 lemma Devm.rel_refl {r : Devm.Rels} (hr : Devm.Rels.Refl r) :
     Reflexive (Devm.Rel r) := by
@@ -3860,18 +3787,11 @@ lemma Devm.rel_trans {r : Devm.Rels} (hr : Devm.Rels.Trans r) :
   · exact hr.2.2.2.2.2.2.2.2.2.2.2.2.1 hab.createdAccounts hbc.createdAccounts
   · exact hr.2.2.2.2.2.2.2.2.2.2.2.2.2 hab.transientStorage hbc.transientStorage
 
-def Devm.OnlyGas : Devm → Devm → Prop :=
-  Devm.Rel { Devm.Rels.eq with gasLeft := fun _ _ => True }
-
-lemma Devm.onlyGas_stable_state :
-    CEffect.Stable Devm.state Devm.OnlyGas := by
-  intro x y h
-  exact h.state
-
-/-! ## 3. Outcome-aware effects for the EVM semantic layers -/
+/-! ## Outcome-aware effects for the EVM semantic layers -/
 
 namespace Outcome
 
+/-- Outcome-aware lifting of a state relation across both `Except` branches. -/
 def Rel {σ ε α : Type}
     (errState : ε → σ) (okState : α → σ)
     (R : σ → σ → Prop) (pre : σ) : Except ε α → Prop
@@ -3884,13 +3804,14 @@ This is the generic weakening rule for both success and error outcomes.
 lemma Rel.mono {σ ε α : Type}
     {errState : ε → σ} {okState : α → σ} {R S : σ → σ → Prop}
     {pre : σ} {out : Except ε α}
-    (hrefine : CEffect.Refines R S)
+    (hrefine : ∀ ⦃s t⦄, R s t → S s t)
     (h : Rel errState okState R pre out) :
     Rel errState okState S pre out := by
   cases out <;> exact hrefine h
 
 end Outcome
 
+/-- Canonical outcome-aware preservation statement for dynamic EVM execution. -/
 def Execution.Rel (R : Devm → Devm → Prop) (pre : Devm) (out : Execution) : Prop :=
   Outcome.Rel Prod.snd id R pre out
 
@@ -3974,7 +3895,7 @@ lemma Devm.instructionFrame_trans : Transitive Devm.InstructionFrame :=
   Devm.rel_trans Devm.Rels.instructionFrame_trans
 
 lemma Devm.machFrame_refines_instructionFrame :
-    CEffect.Refines Devm.MachFrame Devm.InstructionFrame := by
+    ∀ ⦃d d'⦄, Devm.MachFrame d d' → Devm.InstructionFrame d d' := by
   intro d d' h
   exact {
     stack := trivial
@@ -3992,44 +3913,42 @@ lemma Devm.machFrame_refines_instructionFrame :
     createdAccounts := h.createdAccounts
     transientStorage := h.transientStorage }
 
-lemma Devm.MachFrame.worldEq {d d' : Devm} (h : Devm.MachFrame d d') :
-    Devm.WorldEq d d' :=
-  ⟨h.state, h.transientStorage⟩
-
 lemma Devm.MachFrame.getBal {d d' : Devm} (h : Devm.MachFrame d d')
-    (a : Adr) : d.getBal a = d'.getBal a :=
-  h.worldEq.getBal a
+    (a : Adr) : d.getBal a = d'.getBal a := by
+  unfold Devm.getBal Devm.getAcct
+  rw [h.state]
 
 lemma Devm.MachFrame.getStor {d d' : Devm} (h : Devm.MachFrame d d')
-    (a : Adr) : d.getStor a = d'.getStor a :=
-  h.worldEq.getStor a
+    (a : Adr) : d.getStor a = d'.getStor a := by
+  unfold Devm.getStor Devm.getAcct
+  rw [h.state]
 
 lemma Devm.MachFrame.getCode {d d' : Devm} (h : Devm.MachFrame d d')
-    (a : Adr) : d.getCode a = d'.getCode a :=
-  h.worldEq.getCode a
+    (a : Adr) : d.getCode a = d'.getCode a := by
+  unfold Devm.getCode Devm.getAcct
+  rw [h.state]
 
 lemma Devm.MachFrame.delSets {d d' : Devm} (h : Devm.MachFrame d d') :
     d.delSets = d'.delSets :=
   Prod.ext h.accountsToDelete h.createdAccounts
 
-lemma Devm.InstructionFrame.worldEq {d d' : Devm}
-    (h : Devm.InstructionFrame d d') : Devm.WorldEq d d' :=
-  ⟨h.state, h.transientStorage⟩
-
 lemma Devm.InstructionFrame.getBal {d d' : Devm}
     (h : Devm.InstructionFrame d d') (a : Adr) :
-    d.getBal a = d'.getBal a :=
-  h.worldEq.getBal a
+    d.getBal a = d'.getBal a := by
+  unfold Devm.getBal Devm.getAcct
+  rw [h.state]
 
 lemma Devm.InstructionFrame.getStor {d d' : Devm}
     (h : Devm.InstructionFrame d d') (a : Adr) :
-    d.getStor a = d'.getStor a :=
-  h.worldEq.getStor a
+    d.getStor a = d'.getStor a := by
+  unfold Devm.getStor Devm.getAcct
+  rw [h.state]
 
 lemma Devm.InstructionFrame.getCode {d d' : Devm}
     (h : Devm.InstructionFrame d d') (a : Adr) :
-    d.getCode a = d'.getCode a :=
-  h.worldEq.getCode a
+    d.getCode a = d'.getCode a := by
+  unfold Devm.getCode Devm.getAcct
+  rw [h.state]
 
 lemma Devm.InstructionFrame.delSets {d d' : Devm}
     (h : Devm.InstructionFrame d d') : d.delSets = d'.delSets :=
@@ -4491,7 +4410,7 @@ lemma Devm.transientWriteFrame_trans : Transitive Devm.TransientWriteFrame :=
   Devm.rel_trans Devm.Rels.transientWriteFrame_trans
 
 lemma Devm.instructionFrame_refines_stateWriteFrame :
-    CEffect.Refines Devm.InstructionFrame Devm.StateWriteFrame := by
+    ∀ ⦃d d'⦄, Devm.InstructionFrame d d' → Devm.StateWriteFrame d d' := by
   intro d d' h
   refine { h with state := ?_ }
   change State.BalCodeEq d.state d'.state
@@ -4499,7 +4418,7 @@ lemma Devm.instructionFrame_refines_stateWriteFrame :
   rfl
 
 lemma Devm.instructionFrame_refines_transientWriteFrame :
-    CEffect.Refines Devm.InstructionFrame Devm.TransientWriteFrame := by
+    ∀ ⦃d d'⦄, Devm.InstructionFrame d d' → Devm.TransientWriteFrame d d' := by
   intro d d' h
   exact { h with transientStorage := trivial }
 
@@ -6100,36 +6019,40 @@ theorem Linst.run_codeFrame {sevm : Sevm} {devm : Devm} {l : Linst}
     rw [run] at hf
     cases exn <;> exact fun a => (hf.getCode a).symm
 
+/-- Relational invariant carried by a filled recursive execution slot. -/
 def Xlot.Rel (R : Devm → Devm → Prop) : Xlot → Prop
   | .none => True
   | .some ⟨_, pre, out⟩ => Execution.Rel R pre out
 
+/-- Canonical outcome-aware effect of a regular instruction. -/
 def Rinst.Effect (R : Devm → Devm → Prop) (r : Rinst) : Prop :=
   ∀ {pc sevm pre out},
     Rinst.run ⟨pc, sevm, pre⟩ r = out → Execution.Rel R pre out
 
+/-- Canonical outcome-aware effect of a jump instruction. -/
 def Jinst.Effect (R : Devm → Devm → Prop) (j : Jinst) : Prop :=
   ∀ {evm out},
     Jinst.Run evm j out →
       Outcome.Rel Prod.snd Prod.snd R evm.dyna out
 
+/-- Canonical outcome-aware effect of a terminal instruction. -/
 def Linst.Effect (R : Devm → Devm → Prop) (l : Linst) : Prop :=
   ∀ {sevm pre out},
     Linst.Run sevm pre l out → Execution.Rel R pre out
 
+/-- Recursive-execution effect, parameterized by the relation on its child slot. -/
 def Xinst.EffectGen (R : Devm → Devm → Prop) (x : Xinst) : Prop :=
   ∀ {sevm pre xl out},
     Xlot.Rel R xl → Xinst.Run sevm pre x xl out → Execution.Rel R pre out
 
+/-- Nonterminal effect consumed by the mutual `Exec.effect` traversal. -/
 def Ninst.EffectGen (R : Devm → Devm → Prop) (n : Ninst) : Prop :=
   ∀ {pc sevm pre xl out},
     Xlot.Rel R xl → Ninst.Run' pc sevm pre n xl out → Execution.Rel R pre out
 
+/-- Successful-run relational projection used by `Func.effect`. -/
 def Ninst.Effect (R : Devm → Devm → Prop) (n : Ninst) : Prop :=
   ∀ {sevm pre post}, Ninst.Run sevm pre n post → R pre post
-
-def Func.Effect (R : Devm → Devm → Prop) (p : Func) : Prop :=
-  ∀ {fs sevm pre post}, Func.Run fs sevm pre p post → R pre post
 
 lemma Ninst.effectGen_reg {R : Devm → Devm → Prop} {r : Rinst}
     (hr : Rinst.Effect R r) : Ninst.EffectGen R (.reg r) := by
@@ -6143,10 +6066,8 @@ lemma Ninst.effectGen_exec {R : Devm → Devm → Prop} {x : Xinst}
   intro pc sevm pre xl out hxl hrun
   exact hx hxl hrun
 
-/-
-Future proofs for properties of `Exec` should use this theorem,
-instead of repeating an `Exec.rec` traversal.
--/
+/-- The load-bearing mutual-induction traversal: per-instruction canonical
+effects compose into `Execution.Rel` for a complete `Exec` run. -/
 theorem Exec.effect {R : Devm → Devm → Prop}
     (hrefl : Reflexive R) (htrans : Transitive R)
     (hn : ∀ n, Ninst.EffectGen R n)
@@ -6217,23 +6138,6 @@ theorem Func.effect {R : Devm → Devm → Prop}
   | call eq burn run' ih =>
     exact htrans (hburn _ _ burn) ih
 
-lemma Ninst.effect_obsEq_iff_inv {α : Type} (obs : Devm → α) (n : Ninst) :
-    Ninst.Effect (CEffect.ObsEq obs) n ↔ Ninst.Inv obs n := by
-  unfold Ninst.Effect CEffect.ObsEq Ninst.Inv
-  constructor
-  · intro h
-    exact h
-  · intro h
-    exact h
-
-/-
-This bridge is what allows existing program-level frame
-proofs to migrate incrementally to the new relational traversal.
--/
-lemma Func.effect_obsEq_iff_inv {α : Type} (obs : Devm → α) (p : Func) :
-    Func.Effect (CEffect.ObsEq obs) p ↔ Func.Inv obs obs p := by
-  exact Iff.rfl
-
 -- Relational form of code preservation: nonempty code is never modified.
 def Devm.CodePreserve (pre post : Devm) : Prop :=
   ∀ a : Adr, (pre.getCode a).toList ≠ [] → post.getCode a = pre.getCode a
@@ -6246,13 +6150,6 @@ lemma codePreserve_refl_trans :
     have h1 := hab adr ha
     have h2 : (b.getCode adr).toList ≠ [] := by rw [h1]; exact ha
     exact (hbc adr h2).trans h1
-
-lemma Xlot.rel_mono {R S : Devm → Devm → Prop}
-    (hRS : CEffect.Refines R S) {xl : Xlot} (h : Xlot.Rel R xl) :
-    Xlot.Rel S xl := by
-  rcases xl with _ | ⟨sevm, devm, exn⟩
-  · trivial
-  · exact Outcome.Rel.mono hRS h
 
 lemma Xlot.invGetCode_of_rel {xl : Xlot}
     (h : Xlot.Rel Devm.CodePreserve xl) : xl.InvGetCode := by
@@ -6647,7 +6544,7 @@ lemma Ninst.push_instructionFrame_effectGen
 
 lemma Ninst.push_effectGen_of_instructionFrame
     {R : Devm → Devm → Prop} {xs : B8L} {hxs : xs.length ≤ 32}
-    (hIR : CEffect.Refines Devm.InstructionFrame R) :
+    (hIR : ∀ ⦃d d'⦄, Devm.InstructionFrame d d' → R d d') :
     Ninst.EffectGen R (.push xs hxs) := by
   intro pc sevm pre xl out hxl hRun
   cases xl with
@@ -8018,6 +7915,8 @@ lemma memRead_getBal_eq {x n : Nat} {devm devm' : Devm} {value : B8L} (h : devm.
   rw [← h_devm]
   rfl
 
+/-- Successful-run observation invariant retained as the public projection of
+the canonical regular-instruction effect theorems. -/
 def Rinst.Inv {ξ : Type} (f : Devm → ξ) (r : Rinst) : Prop :=
   ∀ {pc sevm pre post}, Rinst.run ⟨pc, sevm, pre⟩ r = (.ok post) → f pre = f post
 
@@ -9253,7 +9152,7 @@ lemma Linst.balance_effect (l : Linst) :
 /-- An instruction frame is balance-silent, hence transports directly to the
 total-balance preorder used by the balance-effect layer. -/
 lemma Devm.instructionFrame_refines_balNoninc :
-    CEffect.Refines Devm.InstructionFrame Devm.BalNoninc := by
+    ∀ ⦃d d'⦄, Devm.InstructionFrame d d' → Devm.BalNoninc d d' := by
   intro pre post h
   apply Devm.balNoninc_of_state
   rw [h.state]

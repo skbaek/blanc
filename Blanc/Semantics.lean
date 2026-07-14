@@ -100,6 +100,7 @@ def Linst.Run (sevm : Sevm) (devm : Devm) : Linst → Execution → Prop :=
 
 def Xlot : Type := Option (Sevm × Devm × Execution)
 
+/-- Fieldwise relations used to assemble the canonical `Devm.Rel` frames. -/
 structure Devm.Rels : Type where
   (stack : List B256 → List B256 → Prop)
   (memory : Mem → Mem → Prop)
@@ -116,6 +117,7 @@ structure Devm.Rels : Type where
   (createdAccounts : AdrSet → AdrSet → Prop)
   (transientStorage : Tra → Tra → Prop)
 
+/-- Canonical relation between dynamic EVM states, assembled field by field. -/
 structure Devm.Rel (rels : Devm.Rels) (devm devm' : Devm) : Prop where
   (stack : rels.stack devm.stack devm'.stack)
   (memory : rels.memory devm.memory devm'.memory)
