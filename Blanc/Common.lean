@@ -5645,85 +5645,115 @@ def MsgResult.getCode (exn : Except (String × State × AdrSet × Tra) Devm) (a 
   | .ok d => d.getCode a
   | .error ⟨_, state, _, _⟩ => state.getCode a
 
+/-! ## Step 7.2 — message-level code-effect masters
+
+Relational code-preservation over message results.  `CodePreserve` says every
+nonempty-code address is left untouched; `CodePreserveExcept w` weakens that by
+also excluding the single write target `w` (the freshly-created contract). -/
+
+def MsgResult.CodePreserve (base : State)
+    (exn : Except (String × State × AdrSet × Tra) Devm) : Prop :=
+  ∀ a : Adr, (base.getCode a).toList ≠ [] → MsgResult.getCode exn a = base.getCode a
+
+def MsgResult.CodePreserveExcept (base : State) (w : Adr)
+    (exn : Except (String × State × AdrSet × Tra) Devm) : Prop :=
+  ∀ a : Adr, a ≠ w → (base.getCode a).toList ≠ [] →
+    MsgResult.getCode exn a = base.getCode a
+
+/-- Writer leaf: `handleError` reshuffles error payloads into ok results and
+selects states, but never installs new code. -/
+lemma executeCode.handleError_getCode (exn : Execution) (a : Adr) :
+    MsgResult.getCode (executeCode.handleError exn) a = exn.getCode a := by
+  cases exn with
+  | ok d => rfl
+  | error p =>
+    rcases p with ⟨err, evm⟩
+    dsimp only [executeCode.handleError]
+    split
+    · rfl
+    · split <;> rfl
+
+/-- Writer leaf: rollback installs the selected state, so its code map is that
+state's code map. -/
+lemma Devm.rollback_getCode (devm : Devm) (st : State) (tra : Tra) (a : Adr) :
+    (devm.rollback st tra).getCode a = st.getCode a := rfl
+
+/-- Writer leaf: value transfer changes balances but preserves code. -/
+lemma benvAfterTransfer_ok_getCode {msg : Msg} {benv : Benv}
+    (h : msg.benvAfterTransfer = .ok benv) (a : Adr) :
+    benv.state.getCode a = msg.benv.state.getCode a := by
+  dsimp [Msg.benvAfterTransfer, Msg.shouldTransferValue] at h
+  split at h
+  · cases h_sub : msg.benv.subBal msg.caller msg.value with
+    | none => simp [h_sub, Option.toExcept, Bind.bind, Except.bind] at h
+    | some benv_sub =>
+      simp [h_sub, Option.toExcept, Bind.bind, Except.bind] at h
+      subst benv
+      rw [Benv.addBal_getCode]
+      exact Benv.subBal_getCode h_sub
+  · simp only [Except.ok.injEq] at h; subst benv; rfl
+
+/-- Writer leaf: create preparation (nonce bump, created-account marking, empty
+storage) preserves code. -/
+lemma processCreateMessage.msg_getCode (msg : Msg) (a : Adr) :
+    (processCreateMessage.msg msg).benv.state.getCode a = msg.benv.state.getCode a := by
+  dsimp [processCreateMessage.msg, Msg.withBenv]
+  rw [Benv.incrNonce_getCode, addCreatedAccount_getCode, Benv.setStor_getCode]
+
+/-- Master: `executeCode` preserves the code of every nonempty-code address.
+The suspended child's oracle invariant (`inv`) supplies the interpreted-code
+case; `handleError_getCode` covers precompile and error selection. -/
+lemma ExecuteCode.codePreserve
+    {msg : Msg} {xl : Xlot} {exn : Except (String × State × AdrSet × Tra) Devm}
+    (inv : xl.InvGetCode)
+    (run : ExecuteCode msg xl exn) :
+    MsgResult.CodePreserve msg.benv.state exn := by
+  intro a ha
+  dsimp [ExecuteCode] at run
+  split at run
+  · rcases run with ⟨ex', h_xl, h_err⟩
+    subst h_err
+    rw [executeCode.handleError_getCode]
+    rw [h_xl] at inv
+    dsimp [Xlot.InvGetCode] at inv
+    exact (inv a ha).symm
+  · next adr eq_some =>
+    split at run
+    · rcases run with ⟨h_xl, h_err⟩
+      subst h_err
+      rw [executeCode.handleError_getCode]
+      exact executePrecomp_inv_getCode (initEvm msg) adr _ rfl a
+    · rcases run with ⟨ex', h_xl, h_err⟩
+      subst h_err
+      rw [executeCode.handleError_getCode]
+      rw [h_xl] at inv
+      dsimp [Xlot.InvGetCode] at inv
+      exact (inv a ha).symm
+
 lemma ExecuteCode.inv_getCode_gen
     {msg : Msg} {xl : Xlot} {exn : Except (String × State × AdrSet × Tra) Devm}
     (inv : xl.InvGetCode)
     (run : ExecuteCode msg xl exn) :
     ∀ a : Adr,
       (msg.benv.state.getCode a).toList ≠ [] →
-      MsgResult.getCode exn a = msg.benv.state.getCode a := by
-  dsimp [ExecuteCode] at run
-  split at run
-  · rename _ => eq_none
-    rcases eq_none with ⟨ex', h_xl, h_err⟩
-    rw [h_xl] at inv
-    dsimp [Xlot.InvGetCode] at inv
-    have inv_eq := inv
-    subst h_err
-    cases ex'
-    · dsimp [executeCode.handleError]
-      split
-      · intro a ha; dsimp [MsgResult.getCode]; exact (inv_eq a ha).symm
-      · split
-        · intro a ha; dsimp [MsgResult.getCode]; exact (inv_eq a ha).symm
-        · intro a ha; dsimp [MsgResult.getCode, Execution.getCode, Devm.getCode]; exact (inv_eq a ha).symm
-    · intro a ha; dsimp [executeCode.handleError, MsgResult.getCode]; exact (inv_eq a ha).symm
-  · next adr eq_some =>
-    split at run
-    · rcases run with ⟨h_xl, h_err⟩
-      cases h_ex : executePrecomp (initEvm msg) adr
-      · rename_i ex_err
-        rw [h_ex] at h_err
-        subst h_err
-        dsimp [executeCode.handleError]
-        split
-        · intro a _
-          dsimp [MsgResult.getCode]
-          have := executePrecomp_inv_getCode (initEvm msg) adr (Except.error ex_err) h_ex a
-          exact this
-        · split
-          · intro a _
-            dsimp [MsgResult.getCode]
-            have := executePrecomp_inv_getCode (initEvm msg) adr (Except.error ex_err) h_ex a
-            exact this
-          · intro a _
-            dsimp [MsgResult.getCode, Execution.getCode, Devm.getCode]
-            have := executePrecomp_inv_getCode (initEvm msg) adr (Except.error ex_err) h_ex a
-            exact this
-      · rename_i ex_ok
-        rw [h_ex] at h_err
-        subst h_err
-        dsimp [executeCode.handleError]
-        intro a _
-        dsimp [MsgResult.getCode]
-        have := executePrecomp_inv_getCode (initEvm msg) adr (Except.ok ex_ok) h_ex a
-        exact this
-    · rcases run with ⟨ex', h_xl, h_err⟩
-      rw [h_xl] at inv
-      dsimp [Xlot.InvGetCode] at inv
-      have inv_eq := inv
-      subst h_err
-      cases ex'
-      · dsimp [executeCode.handleError]
-        split
-        · intro a ha; dsimp [MsgResult.getCode]; exact (inv_eq a ha).symm
-        · split
-          · intro a ha; dsimp [MsgResult.getCode]; exact (inv_eq a ha).symm
-          · intro a ha; dsimp [MsgResult.getCode, Execution.getCode, Devm.getCode]; exact (inv_eq a ha).symm
-      · intro a ha; dsimp [executeCode.handleError, MsgResult.getCode]; exact (inv_eq a ha).symm
+      MsgResult.getCode exn a = msg.benv.state.getCode a :=
+  ExecuteCode.codePreserve inv run
 
-lemma ProcessMessage.inv_getCode_gen
+/-- Master: `processMessage` preserves the code of every nonempty-code address.
+Value transfer (`benvAfterTransfer_ok_getCode`) and the failed-transfer
+short-circuit only touch balances; the interpreted body is bounded by
+`ExecuteCode.codePreserve`; the error path selects a state via rollback
+(`Devm.rollback_getCode`). -/
+lemma ProcessMessage.codePreserve
     {msg : Msg} {xl : Xlot} {exn : Except (String × State × AdrSet × Tra) Devm}
     (inv : xl.InvGetCode)
     (run : ProcessMessage msg xl exn) :
-    ∀ a : Adr,
-      (msg.benv.state.getCode a).toList ≠ [] →
-      MsgResult.getCode exn a = msg.benv.state.getCode a := by
+    MsgResult.CodePreserve msg.benv.state exn := by
+  intro a ha
   dsimp [ProcessMessage] at run
   dsimp [Except.SplitXl] at run
   rcases run with ⟨x, h_benv_err, h_exn_err, _⟩ | ⟨benv, h_benv, ex', h_exec, h_ex'⟩
-  · intro a _
-    rw [h_exn_err]
+  · rw [h_exn_err]
     dsimp [MsgResult.getCode]
     dsimp [Msg.benvAfterTransfer, Msg.shouldTransferValue] at h_benv_err
     split at h_benv_err
@@ -5733,23 +5763,12 @@ lemma ProcessMessage.inv_getCode_gen
         rfl
       · simp [h_sub, Option.toExcept, Bind.bind, Except.bind] at h_benv_err
     · contradiction
-  · intro a ha
-    have h_benv_code : benv.state.getCode a = msg.benv.state.getCode a := by
-      dsimp [Msg.benvAfterTransfer, Msg.shouldTransferValue] at h_benv
-      split at h_benv
-      · cases h_sub : msg.benv.subBal msg.caller msg.value
-        · simp [h_sub, Option.toExcept, Bind.bind, Except.bind] at h_benv
-        · simp [h_sub, Option.toExcept, Bind.bind, Except.bind] at h_benv
-          subst benv
-          rw [Benv.addBal_getCode]
-          exact Benv.subBal_getCode h_sub
-      · simp only [Except.ok.injEq] at h_benv; subst benv
-        rfl
+  · have h_benv_code := benvAfterTransfer_ok_getCode h_benv a
     have ha' : ( (msg.withBenv benv).benv.state.getCode a ).toList ≠ [] := by
       dsimp [Msg.withBenv]
       rw [h_benv_code]
       exact ha
-    have h_exec_cond := ExecuteCode.inv_getCode_gen inv h_exec a ha'
+    have h_exec_cond := ExecuteCode.codePreserve inv h_exec a ha'
     dsimp [Msg.withBenv] at h_exec_cond
     rw [h_benv_code] at h_exec_cond
     dsimp [Except.Split] at h_ex'
@@ -5759,11 +5778,19 @@ lemma ProcessMessage.inv_getCode_gen
       exact h_exec_cond
     · split at h_if
       · rw [← h_if]
-        dsimp [MsgResult.getCode, Devm.rollback]
-        rfl
+        exact Devm.rollback_getCode evm msg.benv.state msg.tenv.transientStorage a
       · rw [← h_if]
         rw [eq_ok] at h_exec_cond
         exact h_exec_cond
+
+lemma ProcessMessage.inv_getCode_gen
+    {msg : Msg} {xl : Xlot} {exn : Except (String × State × AdrSet × Tra) Devm}
+    (inv : xl.InvGetCode)
+    (run : ProcessMessage msg xl exn) :
+    ∀ a : Adr,
+      (msg.benv.state.getCode a).toList ≠ [] →
+      MsgResult.getCode exn a = msg.benv.state.getCode a :=
+  ProcessMessage.codePreserve inv run
 
 lemma setCode_getCode {evm : Devm} {a b : Adr} {code : ByteArray} (h : a ≠ b) :
   (evm.setCode a code).getCode b = evm.getCode b := by
@@ -5778,39 +5805,35 @@ lemma setCode_getCode {evm : Devm} {a b : Adr} {code : ByteArray} (h : a ≠ b) 
     · rw [Std.TreeMap.getD_insert]
       simp [hc]
 
-lemma ProcessCreateMessage.inv_getCode_gen
+/-- Master: `processCreateMessage` preserves the code of every nonempty-code
+address *other than* the create target.  Create preparation
+(`processCreateMessage.msg_getCode`) and the interpreted body
+(`ProcessMessage.codePreserve`) preserve code; code-gas charging preserves it
+(`chargeCodeGas_getCode_gen`); create completion writes only `msg.currentTarget`
+through `setCode` (`setCode_getCode`, excluded by `a ≠ msg.currentTarget`); the
+halt/error paths select states via rollback (`Devm.rollback_getCode`). -/
+lemma ProcessCreateMessage.codePreserve
     {msg : Msg} {xl : Xlot} {exn : Except (String × State × AdrSet × Tra) Devm}
     (inv : xl.InvGetCode)
     (run : ProcessCreateMessage msg xl exn) :
-    ∀ a : Adr,
-      a ≠ msg.currentTarget →
-      (msg.benv.state.getCode a).toList ≠ [] →
-      MsgResult.getCode exn a = msg.benv.state.getCode a := by
+    MsgResult.CodePreserveExcept msg.benv.state msg.currentTarget exn := by
+  intro a h_a ha
+  have h_benv_code := processCreateMessage.msg_getCode msg a
+  have ha' : ((processCreateMessage.msg msg).benv.state.getCode a).toList ≠ [] := by
+    rw [h_benv_code]; exact ha
   dsimp [ProcessCreateMessage] at run
   rcases run with ⟨ex', h_exec, h_ex'⟩
+  have h_exec_cond := ProcessMessage.codePreserve inv h_exec a ha'
+  rw [h_benv_code] at h_exec_cond
   dsimp [Except.Split] at h_ex'
   rcases h_ex' with ⟨x, eq_ex'_err, h_exn_err⟩ | ⟨evm, eq_ok, h_if⟩
-  · intro a h_a ha
-    rw [h_exn_err]
-    have h_exec_cond := ProcessMessage.inv_getCode_gen inv h_exec a
-    have h_benv_code : (processCreateMessage.msg msg).benv.state.getCode a = msg.benv.state.getCode a := by
-      dsimp [processCreateMessage.msg, Msg.withBenv]
-      rw [Benv.incrNonce_getCode, addCreatedAccount_getCode, Benv.setStor_getCode]
-    rw [h_benv_code] at h_exec_cond
-    have h_exec_cond' := h_exec_cond ha
-    rw [eq_ex'_err] at h_exec_cond'
-    exact h_exec_cond'
-  · intro a h_a ha
-    have h_exec_cond := ProcessMessage.inv_getCode_gen inv h_exec a
-    have h_benv_code : (processCreateMessage.msg msg).benv.state.getCode a = msg.benv.state.getCode a := by
-      dsimp [processCreateMessage.msg, Msg.withBenv]
-      rw [Benv.incrNonce_getCode, addCreatedAccount_getCode, Benv.setStor_getCode]
-    rw [h_benv_code] at h_exec_cond
-    have h_exec_cond' := h_exec_cond ha
-    split at h_if
+  · rw [h_exn_err]
+    rw [eq_ex'_err] at h_exec_cond
+    exact h_exec_cond
+  · split at h_if
     · rename_i h_none
-      cases h_charge : processCreateMessage.chargeCodeGas evm
-      · rename_i err
+      cases h_charge : processCreateMessage.chargeCodeGas evm with
+      | error err =>
         rcases err with ⟨err_msg, err_evm⟩
         rw [h_charge] at h_if
         dsimp at h_if
@@ -5824,9 +5847,9 @@ lemma ProcessCreateMessage.inv_getCode_gen
           have h_getCode := processCreateMessage.chargeCodeGas_getCode_gen h_charge a
           change err_evm.state.getCode a = evm.state.getCode a at h_getCode
           rw [h_getCode]
-          rw [eq_ok] at h_exec_cond'
-          exact h_exec_cond'
-      · rename_i devm_charge
+          rw [eq_ok] at h_exec_cond
+          exact h_exec_cond
+      | ok devm_charge =>
         rw [h_charge] at h_if
         dsimp at h_if
         rw [← h_if]
@@ -5835,12 +5858,21 @@ lemma ProcessCreateMessage.inv_getCode_gen
         dsimp [Execution.getCode] at h_getCode
         rw [setCode_getCode h_a.symm]
         rw [h_getCode]
-        rw [eq_ok] at h_exec_cond'
-        exact h_exec_cond'
+        rw [eq_ok] at h_exec_cond
+        exact h_exec_cond
     · rename_i h_some
       rw [← h_if]
-      dsimp [MsgResult.getCode, Devm.rollback]
-      rfl
+      exact Devm.rollback_getCode evm msg.benv.state msg.tenv.transientStorage a
+
+lemma ProcessCreateMessage.inv_getCode_gen
+    {msg : Msg} {xl : Xlot} {exn : Except (String × State × AdrSet × Tra) Devm}
+    (inv : xl.InvGetCode)
+    (run : ProcessCreateMessage msg xl exn) :
+    ∀ a : Adr,
+      a ≠ msg.currentTarget →
+      (msg.benv.state.getCode a).toList ≠ [] →
+      MsgResult.getCode exn a = msg.benv.state.getCode a :=
+  ProcessCreateMessage.codePreserve inv run
 
 lemma GenericCreate.inv_getCode_gen
     {sevm : Sevm} {devm : Devm} {endowment : B256} {newAddress : Adr}
