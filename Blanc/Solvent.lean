@@ -4073,10 +4073,12 @@ theorem weth_inv_solvent (wa : Adr) :
       have h_reg : Rinst.run ⟨pc', sevm', pre'⟩ r = .ok inter' := h_run'
       by_cases h_ss : r = Rinst.sstore
       · subst h_ss
-        refine Precond.of_eqs h_pc' (sstore_inv_getCode h_reg wa) ?_
+        have h_frame := Rinst.sstore_run_stateWriteFrame pc' pre' sevm'
+        rw [h_reg] at h_frame
+        refine Precond.of_eqs h_pc' (h_frame.getCode_eq wa).symm ?_
           (sstore_inv_getStor_ne h_reg h_ne')
         funext b
-        exact sstore_inv_getBal h_reg b
+        exact (h_frame.getBal_eq b).symm
       · exact Precond.of_eqs h_pc' (Rinst.inv_getCode h_reg wa) (Rinst.inv_bal h_reg).symm
           (congr_fun (Rinst.inv_stor h_ss h_reg) wa).symm
     | exec x => exact Xinst.none_inv_precond h_run' h_ne' h_pc'

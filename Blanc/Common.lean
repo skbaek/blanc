@@ -2204,48 +2204,10 @@ lemma Benv.subBal_getCode {benv benv' : Benv} {adr a : Adr} {val : B256} (h : be
     dsimp [Benv.withState]
     exact State.subBal_getCode h_sub
 
-/-! The solvency-facing world relation and its canonical fieldwise frame. -/
+/-! The solvency-facing world relation. -/
 
-/-- The `Devm.Rel` frame that forgets every field except persistent and
-transient world state. -/
-def Devm.Rels.worldFrame : Devm.Rels :=
-  {
-    stack := fun _ _ => True
-    memory := fun _ _ => True
-    gasLeft := fun _ _ => True
-    logs := fun _ _ => True
-    refundCounter := fun _ _ => True
-    output := fun _ _ => True
-    accountsToDelete := fun _ _ => True
-    returnData := fun _ _ => True
-    error := fun _ _ => True
-    accessedAddresses := fun _ _ => True
-    accessedStorageKeys := fun _ _ => True
-    state := _root_.Eq
-    createdAccounts := fun _ _ => True
-    transientStorage := _root_.Eq }
-
-abbrev Devm.WorldFrame : Devm → Devm → Prop :=
-  Devm.Rel Devm.Rels.worldFrame
-
-/-- Public solvency-facing presentation of `Devm.WorldFrame`. -/
 def Devm.WorldEq (d d' : Devm) : Prop :=
   d.state = d'.state ∧ d.transientStorage = d'.transientStorage
-
-/-- Bridge from the public world relation to the canonical fieldwise frame. -/
-lemma Devm.WorldEq.toWorldFrame {d d' : Devm} (h : Devm.WorldEq d d') :
-    Devm.WorldFrame d d' := by
-  exact {
-    stack := trivial, memory := trivial, gasLeft := trivial, logs := trivial
-    refundCounter := trivial, output := trivial, accountsToDelete := trivial
-    returnData := trivial, error := trivial, accessedAddresses := trivial
-    accessedStorageKeys := trivial, state := h.1, createdAccounts := trivial
-    transientStorage := h.2 }
-
-/-- Bridge from the canonical fieldwise frame to the public world relation. -/
-lemma Devm.WorldFrame.worldEq {d d' : Devm} (h : Devm.WorldFrame d d') :
-    Devm.WorldEq d d' := by
-  exact ⟨h.state, h.transientStorage⟩
 
 lemma Devm.worldEq_setMach (d : Devm) (mach : Mach) :
     Devm.WorldEq d (d.setMach mach) := by
@@ -2255,14 +2217,10 @@ lemma liftMachPure_worldEq (core : Mach → Mach) (d : Devm) :
     Devm.WorldEq d (liftMachPure core d) := by
   exact Devm.worldEq_setMach d _
 
-lemma Devm.worldEq_setMachMeta (d : Devm) (view : Mach × Meta) :
-    Devm.WorldEq d (d.setMachMeta view) := by
-  exact ⟨rfl, rfl⟩
-
 lemma liftMachMetaPure_worldEq
     (core : Mach → Meta → Mach × Meta) (d : Devm) :
     Devm.WorldEq d (liftMachMetaPure core d) := by
-  exact Devm.worldEq_setMachMeta d _
+  exact ⟨rfl, rfl⟩
 
 lemma addAccessedAddress_worldEq (d : Devm) (a : Adr) :
     Devm.WorldEq d (addAccessedAddress d a) := by
@@ -3605,148 +3563,6 @@ lemma Devm.popToNat_getStor_eq {devm devm' n} (h : Devm.popToNat devm = .ok ⟨n
   funext a
   exact (Devm.popToNat_worldEq_of_ok h).getStor a
 
-lemma setStorVal_inv_getCode {devm : Devm} {adr adr'} {key} {val} :
-    (devm.setStorVal adr key val).getCode adr' = devm.getCode adr' := by
-  simp [Devm.getCode, Devm.getAcct, Devm.setStorVal, Devm.withState,
-    Devm.setWorld, Devm.state]
-  unfold State.setStorVal State.get State.set
-  dsimp
-  split_ifs with h_if
-  · by_cases h_cmp : compare adr adr' = Ordering.eq
-    · have h : adr = adr' := compare_eq_iff_eq.mp h_cmp
-      subst h
-      rw [Std.TreeMap.getD_erase]
-      simp
-      have h2 := congrArg Acct.code h_if
-      exact h2.symm
-    · rw [Std.TreeMap.getD_erase]
-      simp [h_cmp]
-  · by_cases h_cmp : compare adr adr' = Ordering.eq
-    · have h : adr = adr' := compare_eq_iff_eq.mp h_cmp
-      subst h
-      rw [Std.TreeMap.getD_insert]
-      simp
-    · rw [Std.TreeMap.getD_insert]
-      simp [h_cmp]
-
-lemma setStorVal_inv_getBal {devm : Devm} {adr adr'} {key} {val} :
-    (devm.setStorVal adr key val).getBal adr' = devm.getBal adr' := by
-  simp [Devm.getBal, Devm.getAcct, Devm.setStorVal, Devm.withState,
-    Devm.setWorld, Devm.state]
-  unfold State.setStorVal State.get State.set
-  dsimp
-  split_ifs with h_if
-  · by_cases h_cmp : compare adr adr' = Ordering.eq
-    · have h : adr = adr' := compare_eq_iff_eq.mp h_cmp
-      subst h
-      rw [Std.TreeMap.getD_erase]
-      simp
-      have h2 := congrArg Acct.bal h_if
-      exact h2.symm
-    · rw [Std.TreeMap.getD_erase]
-      simp [h_cmp]
-  · by_cases h_cmp : compare adr adr' = Ordering.eq
-    · have h : adr = adr' := compare_eq_iff_eq.mp h_cmp
-      subst h
-      rw [Std.TreeMap.getD_insert]
-      simp
-    · rw [Std.TreeMap.getD_insert]
-      simp [h_cmp]
-
-lemma sstore_inv_getBal
-    {pc sevm devm devm'}
-    (run : Rinst.run ⟨pc, sevm, devm⟩ .sstore = .ok devm') (a : Adr) :
-    devm'.getBal a = devm.getBal a := by
-  simp only [Rinst.run, Rinst.runCore] at run
-  refine getBal_eq_of_bind run Prod.snd ?_ ?_
-  {intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a}
-  clear run
-  intro ⟨x, devm1⟩ hp run;
-  refine getBal_eq_of_bind run Prod.snd ?_ ?_
-  {intro ⟨x, devm1⟩ hp; exact Devm.pop_getBal_eq hp a}
-  clear run
-  intro ⟨y, devm2⟩ hp run;
-  rcases of_bind_eq_ok run with ⟨⟨_⟩, _, run'⟩
-  clear run
-  refine getBal_eq_of_bind run' Prod.fst ?_ ?_
-  · clear run';
-    intro ⟨devm', _⟩
-    simp only [ite_not, Except.ok.injEq]
-    split
-    · intro eq; injection eq with eq _; rw [eq]
-    · simp [addAccessedStorageKey_def, Devm.withAccessedStorageKeys,
-        Devm.setMeta]
-      intro rw _; rw [← rw]; clear rw
-      rfl
-  · clear run';
-    intro ⟨devm3, _⟩ eq run; clear eq
-    rcases of_bind_eq_ok run with ⟨_, bar, run'⟩;
-    clear bar run
-    simp only at run'
-    refine getBal_eq_of_bind run' id ?_ ?_
-    · clear run'
-      intro devm4 eq
-      injection eq with rw
-      rw [← rw]
-      rfl
-    · clear run'
-      intro devm4 temp run; clear temp
-      refine getBal_eq_of_bind run id ?_ ?_
-      {intro devm5 hc; exact chargeGas_getBal_eq hc a}
-      clear run
-      intro devm5 eq run
-      rcases of_bind_eq_ok run with ⟨_, bar, run'⟩;
-      clear bar run; injection run' with rw
-      rw [← rw]
-      apply setStorVal_inv_getBal
-
-lemma sstore_inv_getCode
-    {pc sevm devm devm'}
-    (run : Rinst.run ⟨pc, sevm, devm⟩ .sstore = .ok devm') (a : Adr) :
-    devm'.getCode a = devm.getCode a := by
-  simp only [Rinst.run, Rinst.runCore] at run
-  refine getCode_eq_of_bind run Prod.snd ?_ ?_
-  {intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a}
-  clear run
-  intro ⟨x, devm1⟩ hp run;
-  refine getCode_eq_of_bind run Prod.snd ?_ ?_
-  {intro ⟨x, devm1⟩ hp; exact Devm.pop_getCode_eq hp a}
-  clear run
-  intro ⟨y, devm2⟩ hp run;
-  rcases of_bind_eq_ok run with ⟨⟨_⟩, _, run'⟩
-  clear run
-  refine getCode_eq_of_bind run' Prod.fst ?_ ?_
-  · clear run';
-    intro ⟨devm', _⟩
-    simp only [ite_not, Except.ok.injEq]
-    split
-    · intro eq; injection eq with eq _; rw [eq]
-    · simp [addAccessedStorageKey_def, Devm.withAccessedStorageKeys,
-        Devm.setMeta]
-      intro rw _; rw [← rw]; clear rw
-      rfl
-  · clear run';
-    intro ⟨devm3, _⟩ eq run; clear eq
-    rcases of_bind_eq_ok run with ⟨_, bar, run'⟩;
-    clear bar run
-    simp only at run'
-    refine getCode_eq_of_bind run' id ?_ ?_
-    · clear run'
-      intro devm4 eq
-      injection eq with rw
-      rw [← rw]
-      rfl
-    · clear run'
-      intro devm4 temp run; clear temp
-      refine getCode_eq_of_bind run id ?_ ?_
-      {intro devm5 hc; exact chargeGas_getCode_eq hc a}
-      clear run
-      intro devm5 eq run
-      rcases of_bind_eq_ok run with ⟨_, bar, run'⟩;
-      clear bar run; injection run' with rw
-      rw [← rw]
-      apply setStorVal_inv_getCode
-
 /-! ## Fieldwise `Devm.Rel` infrastructure -/
 
 def Devm.Rels.Refl (r : Devm.Rels) : Prop :=
@@ -3885,12 +3701,6 @@ def Meta.InstructionFrame (a b : Meta) : Prop :=
   a.accountsToDelete = b.accountsToDelete ∧
     a.createdAccounts = b.createdAccounts
 
-lemma Devm.Rels.machFrame_refl : Devm.Rels.Refl Devm.Rels.machFrame := by
-  simp [Devm.Rels.Refl, Devm.Rels.machFrame, Devm.Rels.eq, Reflexive]
-
-lemma Devm.Rels.machFrame_trans : Devm.Rels.Trans Devm.Rels.machFrame := by
-  simp [Devm.Rels.Trans, Devm.Rels.machFrame, Devm.Rels.eq, Transitive]
-
 lemma Devm.Rels.instructionFrame_refl :
     Devm.Rels.Refl Devm.Rels.instructionFrame := by
   simp [Devm.Rels.Refl, Devm.Rels.instructionFrame, Reflexive]
@@ -3898,12 +3708,6 @@ lemma Devm.Rels.instructionFrame_refl :
 lemma Devm.Rels.instructionFrame_trans :
     Devm.Rels.Trans Devm.Rels.instructionFrame := by
   simp [Devm.Rels.Trans, Devm.Rels.instructionFrame, Transitive]
-
-lemma Devm.machFrame_refl : Reflexive Devm.MachFrame :=
-  Devm.rel_refl Devm.Rels.machFrame_refl
-
-lemma Devm.machFrame_trans : Transitive Devm.MachFrame :=
-  Devm.rel_trans Devm.Rels.machFrame_trans
 
 lemma Devm.instructionFrame_refl : Reflexive Devm.InstructionFrame :=
   Devm.rel_refl Devm.Rels.instructionFrame_refl
@@ -3929,25 +3733,6 @@ lemma Devm.machFrame_refines_instructionFrame :
     state := h.state
     createdAccounts := h.createdAccounts
     transientStorage := h.transientStorage }
-
-lemma Devm.MachFrame.getBal {d d' : Devm} (h : Devm.MachFrame d d')
-    (a : Adr) : d.getBal a = d'.getBal a := by
-  unfold Devm.getBal Devm.getAcct
-  rw [h.state]
-
-lemma Devm.MachFrame.getStor {d d' : Devm} (h : Devm.MachFrame d d')
-    (a : Adr) : d.getStor a = d'.getStor a := by
-  unfold Devm.getStor Devm.getAcct
-  rw [h.state]
-
-lemma Devm.MachFrame.getCode {d d' : Devm} (h : Devm.MachFrame d d')
-    (a : Adr) : d.getCode a = d'.getCode a := by
-  unfold Devm.getCode Devm.getAcct
-  rw [h.state]
-
-lemma Devm.MachFrame.delSets {d d' : Devm} (h : Devm.MachFrame d d') :
-    d.delSets = d'.delSets :=
-  Prod.ext h.accountsToDelete h.createdAccounts
 
 lemma Devm.InstructionFrame.getBal {d d' : Devm}
     (h : Devm.InstructionFrame d d') (a : Adr) :
@@ -3991,7 +3776,8 @@ lemma Devm.machFrame_setMach (d : Devm) (mach : Mach) :
 
 lemma Devm.instructionFrame_setMachMeta (d : Devm) (view : Mach × Meta)
     (h : Meta.InstructionFrame d.meta view.2) :
-    Devm.InstructionFrame d (d.setMachMeta view) := by
+    Devm.InstructionFrame d
+      { d with mach := view.1, «meta» := view.2 } := by
   rcases h with ⟨hdel, hcreated⟩
   exact {
     stack := trivial
@@ -4055,21 +3841,6 @@ lemma liftMachMetaExecution_instructionFrame
     Execution.Rel Devm.InstructionFrame d (liftMachMetaExecution core d) := by
   unfold liftMachMetaExecution
   exact outcomeRel_toExecution (liftMachMeta_instructionFrame core d hcore)
-
-lemma liftMachMetaWorld_instructionFrame
-    (core : World → Mach → Meta → Footprint.Outcome (Mach × Meta) α)
-    (d : Devm)
-    (hcore : Outcome.Rel (fun e => e.2.2) (fun x => x.2.2)
-      Meta.InstructionFrame d.meta (core d.world d.mach d.meta)) :
-    Outcome.Rel Prod.snd Prod.snd Devm.InstructionFrame d
-      (liftMachMetaWorld core d) := by
-  exact liftMachMeta_instructionFrame (core d.world) d hcore
-
-lemma liftMachMetaWorldPure_instructionFrame
-    (core : World → Mach → Meta → Mach × Meta) (d : Devm)
-    (hcore : Meta.InstructionFrame d.meta (core d.world d.mach d.meta).2) :
-    Devm.InstructionFrame d (liftMachMetaWorldPure core d) := by
-  exact liftMachMetaPure_instructionFrame (core d.world) d hcore
 
 lemma liftMachMetaWorldExecution_instructionFrame
     (core : World → Mach → Meta → Footprint.Outcome (Mach × Meta) Unit)
@@ -4257,38 +4028,6 @@ lemma Rinst.balanceCore_instructionFrame (d : Devm) :
 
 /-! ### Bind composition for frame relations -/
 
-lemma Outcome.Rel.pure
-    {R : Devm → Devm → Prop} (hrefl : Reflexive R) (x : α) (d : Devm) :
-    Outcome.Rel Prod.snd Prod.snd R d
-      (.ok (x, d) : Except (String × Devm) (α × Devm)) :=
-  hrefl d
-
-lemma Execution.Rel.pure
-    {R : Devm → Devm → Prop} (hrefl : Reflexive R) (d : Devm) :
-    Execution.Rel R d (.ok d) :=
-  hrefl d
-
-lemma Outcome.Rel.bind
-    {R : Devm → Devm → Prop} (htrans : Transitive R)
-    {pre : Devm} {out : Except (String × Devm) (α × Devm)}
-    {next : α → Devm → Except (String × Devm) (β × Devm)}
-    (hout : Outcome.Rel Prod.snd Prod.snd R pre out)
-    (hnext : ∀ x d, Outcome.Rel Prod.snd Prod.snd R d (next x d)) :
-    Outcome.Rel Prod.snd Prod.snd R pre
-      (out >>= fun x => next x.1 x.2) := by
-  cases out with
-  | error e => exact hout
-  | ok x =>
-      cases hn : next x.1 x.2 with
-      | error e =>
-          have h := hnext x.1 x.2
-          rw [hn] at h
-          simpa only [Except.bind_ok, hn] using htrans hout h
-      | ok y =>
-          have h := hnext x.1 x.2
-          rw [hn] at h
-          simpa only [Except.bind_ok, hn] using htrans hout h
-
 lemma Outcome.Rel.bindExecution
     {R : Devm → Devm → Prop} (htrans : Transitive R)
     {pre : Devm} {out : Except (String × Devm) (α × Devm)}
@@ -4328,26 +4067,6 @@ lemma Execution.Rel.bind
           rw [hn] at h
           simpa only [Except.bind_ok, hn, id_eq] using htrans hout h
 
-lemma Execution.Rel.bindOutcome
-    {R : Devm → Devm → Prop} (htrans : Transitive R)
-    {pre : Devm} {out : Execution}
-    {next : Devm → Except (String × Devm) (α × Devm)}
-    (hout : Execution.Rel R pre out)
-    (hnext : ∀ d, Outcome.Rel Prod.snd Prod.snd R d (next d)) :
-    Outcome.Rel Prod.snd Prod.snd R pre (out >>= next) := by
-  cases out with
-  | error e => exact hout
-  | ok d =>
-      cases hn : next d with
-      | error e =>
-          have h := hnext d
-          rw [hn] at h
-          simpa only [Except.bind_ok, hn] using htrans hout h
-      | ok x =>
-          have h := hnext d
-          rw [hn] at h
-          simpa only [Except.bind_ok, hn] using htrans hout h
-
 /-! ### Step 3 calibration cases -/
 
 lemma Rinst.balance_runCore_instructionFrame
@@ -4377,6 +4096,33 @@ lemma Rinst.blobhash_runCore_instructionFrame
 def State.BalCodeEq (a b : _root_.State) : Prop :=
   (fun adr => ((a.get adr).bal, (a.get adr).code)) =
     fun adr => ((b.get adr).bal, (b.get adr).code)
+
+/-- Canonical precise effect of the persistent-storage writer: balances and
+code are unchanged at every address. -/
+lemma State.setStorVal_balCodeEq (st : _root_.State)
+    (adr : Adr) (key value : B256) :
+    State.BalCodeEq st (st.setStorVal adr key value) := by
+  unfold State.BalCodeEq State.setStorVal State.get State.set
+  funext adr'
+  dsimp
+  split_ifs with h_if
+  · by_cases h_cmp : compare adr adr' = Ordering.eq
+    · have h : adr = adr' := compare_eq_iff_eq.mp h_cmp
+      subst h
+      rw [Std.TreeMap.getD_erase]
+      simp
+      constructor
+      · simpa only using congrArg Acct.bal h_if
+      · simpa only using congrArg Acct.code h_if
+    · rw [Std.TreeMap.getD_erase]
+      simp [h_cmp]
+  · by_cases h_cmp : compare adr adr' = Ordering.eq
+    · have h : adr = adr' := compare_eq_iff_eq.mp h_cmp
+      subst h
+      rw [Std.TreeMap.getD_insert]
+      simp
+    · rw [Std.TreeMap.getD_insert]
+      simp [h_cmp]
 
 /-- `SSTORE` may change storage in `state`, but preserves balances, code, and
     the other world/frame fields. -/
@@ -5113,14 +4859,8 @@ lemma Devm.setStorVal_stateWriteFrame (d : Devm)
     refundCounter := trivial, output := trivial, accountsToDelete := rfl
     returnData := trivial, error := trivial, accessedAddresses := trivial
     accessedStorageKeys := trivial, state := by
-      change State.BalCodeEq d.state (d.setStorVal adr key value).state
-      unfold State.BalCodeEq
-      funext adr'
-      apply Prod.ext
-      · change d.getBal adr' = (d.setStorVal adr key value).getBal adr'
-        exact setStorVal_inv_getBal.symm
-      · change d.getCode adr' = (d.setStorVal adr key value).getCode adr'
-        exact setStorVal_inv_getCode.symm
+      change State.BalCodeEq d.state (d.state.setStorVal adr key value)
+      exact State.setStorVal_balCodeEq d.state adr key value
     createdAccounts := rfl, transientStorage := rfl }
 
 lemma Devm.transientWriteFrame_of_world_eq {d d' : Devm}
@@ -8247,9 +7987,6 @@ lemma State.incrNonce_bal {st : _root_.State} {a : Adr} :
 lemma State.setCode_bal {st : _root_.State} {a : Adr} {cd : ByteArray} :
     (st.setCode a cd).bal = st.bal := State.set_bal rfl
 
-lemma Devm.incrNonce_state {d : Devm} {a : Adr} :
-    (d.incrNonce a).state = d.state.incrNonce a := rfl
-
 -- The create-seeding step: wa ∉ msg.benv.createdAccounts and code is untouched.
 lemma Msg.NoDel.processCreateMessage_msg {wa : Adr} {msg : Msg}
     (h_ct : msg.currentTarget ≠ wa)
@@ -8749,11 +8486,6 @@ lemma Devm.NoDel.memExtends {wa : Adr} {d : Devm} {ranges : List (Nat × Nat)}
 lemma Devm.NoDel.addAccessedAddress {wa : Adr} {d : Devm} {a : Adr}
     (hd : Devm.NoDel wa d) : Devm.NoDel wa (_root_.addAccessedAddress d a) := by
   refine hd.of_eqs ?_ addAccessedAddress_getCode.symm
-  rfl
-
-lemma Devm.NoDel.incrNonce {wa : Adr} {d : Devm} {a : Adr}
-    (hd : Devm.NoDel wa d) : Devm.NoDel wa (d.incrNonce a) := by
-  refine hd.of_eqs ?_ Devm.incrNonce_getCode.symm
   rfl
 
 lemma Devm.NoDel.of_accessDelegation {wa : Adr} {d d' : Devm} {adr na : Adr}
@@ -9391,11 +9123,12 @@ lemma ProcessCreateMessage.balance_effect {msg : Msg} {xl : Xlot}
       rw [← h_body]
       exact balNoninc_refl_trans.1.1 _
 
-/-- The create prefix's sender nonce bump is a non-balance state write. -/
+/-- The create prefix's sender nonce bump is a non-balance world write. -/
 lemma Devm.incrNonce_balance_effect (pre : Devm) (a : Adr) :
     Devm.BalNoninc pre (pre.incrNonce a) := by
   unfold Devm.BalNoninc Devm.balSum State.balSum
-  rw [Devm.incrNonce_state, State.incrNonce_bal]
+  change sum (pre.state.incrNonce a).bal ≤ sum pre.state.bal
+  rw [State.incrNonce_bal]
 
 /-- Child-error incorporation installs the child's already-accounted world;
 the parent fields it retains do not include balances. -/
