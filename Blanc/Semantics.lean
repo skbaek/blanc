@@ -201,7 +201,7 @@ def ExecuteCode (msg : Msg) (xl : Xlot)
   | .none =>
     ∃ ex', xl = .some ⟨evm.sta, evm.dyna, ex'⟩ ∧ executeCode.handleError ex' = ex
   | .some adr =>
-    if adr.isPrecomp then
+    if !msg.disablePrecompiles && adr.isPrecomp then
       (xl = .none ∧  executeCode.handleError (executePrecomp evm adr) = ex)
     else
       ∃ ex', xl = .some ⟨evm.sta, evm.dyna, ex'⟩ ∧ executeCode.handleError ex' = ex

@@ -8499,21 +8499,26 @@ lemma Devm.NoDel.of_accessDelegation {wa : Adr} {d d' : Devm} {adr na : Adr}
 
 def Benv.EquivForDelegation (b1 b2 : Benv) : Prop :=
   b2.createdAccounts = b1.createdAccounts ∧
-  ∀ a, (b1.state.getCode a).toList ≠ [] → b2.state.getCode a = b1.state.getCode a
+  ∀ a, (b1.state.getCode a).toList ≠ [] →
+    ¬ isValidDelegation (b1.state.getCode a) →
+    b2.state.getCode a = b1.state.getCode a
 
 lemma Benv.EquivForDelegation_refl (b : Benv) : Benv.EquivForDelegation b b := by
-  refine ⟨rfl, fun a _ => rfl⟩
+  refine ⟨rfl, fun _ _ _ => rfl⟩
 
 lemma Benv.EquivForDelegation_trans {b1 b2 b3 : Benv} (h12 : Benv.EquivForDelegation b1 b2) (h23 : Benv.EquivForDelegation b2 b3) :
     Benv.EquivForDelegation b1 b3 := by
   rcases h12 with ⟨h1c, h1code⟩
   rcases h23 with ⟨h2c, h2code⟩
-  refine ⟨by rw [h2c, h1c], fun a ha => ?_⟩
-  have h1 := h1code a ha
+  refine ⟨by rw [h2c, h1c], fun a ha hnd => ?_⟩
+  have h1 := h1code a ha hnd
   have ha2' : (b2.state.getCode a).toList ≠ [] := by
     rw [h1]
     exact ha
-  rw [h2code a ha2', h1]
+  have hnd2 : ¬ isValidDelegation (b2.state.getCode a) := by
+    rw [h1]
+    exact hnd
+  rw [h2code a ha2' hnd2, h1]
 
 lemma bind_eq_ok_Except {α β ε : Type} {x : Except ε α} {f : α → Except ε β} {res : β} :
     bind x f = Except.ok res → ∃ a, x = Except.ok a ∧ f a = Except.ok res := by
@@ -9031,7 +9036,7 @@ lemma ExecuteCode.balance_effect {msg : Msg} {xl : Xlot}
     exact executeCode.handleError_balance_effect hxl hh
   · rw [hca] at hec
     dsimp only at hec
-    by_cases hpre : adr.isPrecomp
+    by_cases hpre : !msg.disablePrecompiles && adr.isPrecomp
     · rw [if_pos hpre] at hec
       rcases hec with ⟨_, hh⟩
       have hp := executePrecomp_balance_effect
