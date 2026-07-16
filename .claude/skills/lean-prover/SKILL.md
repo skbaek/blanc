@@ -8,7 +8,7 @@ description: Actively writes, finishes, or repairs Lean 4 proofs, lemmas, and ta
 - When requested to complete or author a Lean 4 proof.
 - When tasked with eliminating a `sorry` by finding a valid tactic sequence.
 
-All Lean tools below come from the `lean-lsp` MCP server (full names are prefixed `mcp__lean-lsp__`, e.g. `mcp__lean-lsp__lean_goal`).
+All Lean tools below come from the `lean-lsp-mcp` MCP server (full names are prefixed `mcp__lean-lsp-mcp__`, e.g. `mcp__lean-lsp-mcp__lean_goal`).
 
 **Cursor positioning for `lean_goal`:** `line` is 1-indexed, `column` is 0-indexed. Query at the START of a token to see the goal state before it executes. A position past the end of a tactic silently returns an empty `goals` list — never interpret an empty list as proof completion without confirming via `lean_diagnostic_messages` and a correctly placed cursor.
 
