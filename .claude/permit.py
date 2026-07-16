@@ -18,12 +18,13 @@ Protocol:
     deny  -> blocked outright, reason shown to Claude
 
 You have 100% control here. The default policy AUTO-ALLOWS only what it can prove
-is non-state-altering: a whitelist of read-only tools, freely composed with
-pipes / && / ; / || and with output redirected only to /dev/null (or fd dups).
-Everything it cannot prove safe returns "ask" so you still decide by hand. Any
-parse error or exception also returns "ask" — it never fails open.
+is non-state-altering: a whitelist of read-only tools plus read-only git
+subcommands, freely composed with pipes / && / ; / || and with output redirected
+only to /dev/null (or fd dups). Everything it cannot prove safe returns "ask" so
+you still decide by hand. Any parse error or exception also returns "ask" — it
+never fails open.
 
-Edit READONLY, the write-mode guards, or ALLOWED_ROOTS to taste.
+Edit READONLY, GIT_READONLY, the write-mode guards, or ALLOWED_ROOTS to taste.
 """
 
 import sys, json, os, re
@@ -83,6 +84,82 @@ EXPR_FLAGS = {
     "sed": {"-e", "--expression", "-f", "--file"},
     "awk": {"-f", "--file"},
 }
+
+# --- git: fine-grained read-only gate ----------------------------------------
+# `git` is not in READONLY; it is admitted only through _git_gate below, which
+# parses the global options (fencing any -C/--git-dir path), then requires the
+# subcommand to be provably read-only. Env-assignment prefixes before git are
+# refused in decide(): GIT_PAGER / GIT_EXTERNAL_DIFF / GIT_SSH_COMMAND etc. can
+# make even `git diff` execute an arbitrary program.
+
+# git global options (before the subcommand) that cannot change what runs.
+# Notably ABSENT: -c / --config-env (can set core.pager, diff.external, ...)
+# and --exec-path (redirects which git-* binaries get executed).
+GIT_GLOBAL_OK = {
+    "-P", "--no-pager", "-p", "--paginate", "--literal-pathspecs",
+    "--no-optional-locks", "--no-replace-objects", "--bare",
+    "--no-lazy-fetch", "--no-advice",
+}
+
+# Subcommands with no state-altering mode (modulo the arg guards in _git_gate).
+GIT_READONLY = {
+    "show", "log", "whatchanged", "diff", "status", "blame", "annotate",
+    "shortlog", "describe", "grep", "rev-parse", "rev-list", "ls-files",
+    "ls-tree", "cat-file", "merge-base", "name-rev", "for-each-ref",
+    "show-ref", "cherry", "range-diff", "diff-tree", "diff-index",
+    "diff-files", "show-branch", "count-objects", "check-ignore",
+    "check-attr", "verify-commit", "verify-tag", "var", "version",
+}
+
+# Subcommands read-only only in specific modes: the first non-flag argument
+# must be in the set (None = bare invocation, e.g. `git remote -v`).
+GIT_MODAL = {
+    "stash": {"list", "show"},          # bare `git stash` is a push!
+    "remote": {None, "show", "get-url"},
+    "worktree": {"list"},
+    "submodule": {"status", "summary"},
+}
+
+# branch/tag: list-y invocations are allowed; these flags mean a write.
+GIT_BRANCH_WRITE = {
+    "-d", "-D", "--delete", "-m", "-M", "--move", "-c", "-C", "--copy",
+    "-f", "--force", "-u", "--set-upstream-to", "--unset-upstream",
+    "--edit-description", "-t", "--track",
+}
+GIT_TAG_WRITE = {
+    "-a", "--annotate", "-s", "--sign", "-u", "--local-user", "-f",
+    "--force", "-d", "--delete", "-e", "--edit", "-m", "--message",
+    "-F", "--file", "--cleanup", "--trailer",
+}
+
+# branch/tag listing filters that consume the NEXT token as their value. Verified
+# against git's own usage output, which spells them `--contains <commit>` — a
+# detached argument — not `--contains[=<commit>]`. So in `git branch --contains
+# <sha>` the sha is the filter's value, NOT a branch name to create, and the
+# operand scan must skip it. Deliberately excludes the `--no-` forms git does not
+# document as taking a value (--no-sort/--no-points-at/--no-format): over-skipping
+# could swallow a real create operand. (Only the operand scan skips; the write-flag
+# scan below still reads every token, so `--contains -D foo` still trips on -D.)
+GIT_REF_LIST_VALUE_OPTS = {
+    "--contains", "--no-contains", "--merged", "--no-merged",
+    "--points-at", "--sort", "--format",
+}
+
+# config: allowed only with an explicit read flag (or new-style `get`/`list`
+# verb) and none of the write flags/verbs.
+GIT_CONFIG_READ = {
+    "--get", "--get-all", "--get-regexp", "--get-urlmatch",
+    "--get-color", "--get-colorbool", "--list", "-l",
+}
+GIT_CONFIG_WRITE = {
+    "--edit", "-e", "--unset", "--unset-all", "--add", "--replace-all",
+    "--rename-section", "--remove-section",
+}
+GIT_CONFIG_WRITE_VERBS = {  # new-style (git >= 2.46) subcommand verbs
+    "set", "unset", "edit", "rename-section", "remove-section",
+}
+GIT_CONFIG_VALUE_OPTS = {"--file", "-f", "--blob", "--type", "-t",
+                         "--default", "--comment"}
 
 CTRL_OPS = {"|", "||", "&&", ";", "&", "\n"}
 
@@ -392,6 +469,117 @@ def resolve_substitutions(command: str, cwd: str):
     return "".join(out), None
 
 
+def _operands(args: list, value_opts: set) -> list:
+    """Positional operands of a git subcommand: non-flag tokens, skipping the
+    values consumed by detached `--opt <value>` options. `--opt=<value>` needs no
+    skip (the value rides in the same token)."""
+    ops, skip = [], False
+    for a in args:
+        if skip:
+            skip = False
+            continue
+        if a.startswith("-") and a != "-":
+            if a in value_opts:
+                skip = True
+            continue
+        ops.append(a)
+    return ops
+
+
+def _git_gate(args: list, cwd: str):
+    """Decide whether one `git <args>` segment is provably read-only.
+    Returns None to allow, or a reason string (-> ask). Path arguments in
+    plain positional position are NOT checked here — the generic directory
+    fence in decide() already covers them; this handles what the fence
+    can't see (global-option values, --flag=/abs/path) plus subcommand modes."""
+    i, n = 0, len(args)
+    while i < n and args[i].startswith("-"):  # global options
+        a = args[i]
+        if a in GIT_GLOBAL_OK:
+            i += 1; continue
+        if a in ("-C", "--git-dir", "--work-tree") and i + 1 < n:
+            if _outside_roots(args[i + 1], cwd):
+                return "git %s path outside allowed roots: %s" % (a, args[i + 1])
+            i += 2; continue
+        if a.startswith("--git-dir=") or a.startswith("--work-tree="):
+            v = a.split("=", 1)[1]
+            if _outside_roots(v, cwd):
+                return "git path outside allowed roots: " + v
+            i += 1; continue
+        return "git global option not auto-allowed: " + a
+    if i >= n:
+        return "bare git"
+    sub, rest = args[i], args[i + 1:]
+
+    # guards that apply to every subcommand
+    for a in rest:
+        if a.startswith("--output"):  # --output / --output-directory write files
+            return "git --output writes a file"
+        if a.startswith("-") and "=" in a:  # fence --flag=/abs/path values,
+            v = a.split("=", 1)[1]          # which the generic fence skips
+            if v[:1] in ("/", "~") and _outside_roots(v, cwd):
+                return "git option path outside allowed roots: " + v
+
+    if sub in GIT_READONLY:
+        if sub == "grep":
+            for a in rest:
+                if a.startswith("-O") or a.startswith("--open-files-in-pager"):
+                    return "git grep -O launches a program"
+        return None
+
+    mode = next((a for a in rest if not a.startswith("-")), None)
+
+    if sub in GIT_MODAL:
+        if mode in GIT_MODAL[sub]:
+            return None
+        return "git %s %s is not read-only" % (sub, mode or "(bare)")
+
+    if sub == "reflog":  # read-only except the pruning verbs
+        if mode in ("expire", "delete"):
+            return "git reflog %s rewrites reflogs" % mode
+        return None
+
+    if sub in ("branch", "tag"):
+        write = GIT_BRANCH_WRITE if sub == "branch" else GIT_TAG_WRITE
+        for a in rest:  # scans every token, no value-skipping: conservative
+            if a.split("=", 1)[0] in write:
+                return "git %s write flag: %s" % (sub, a)
+        # a leftover positional means create/rename/delete — unless forced into
+        # list mode, where it is just a match pattern
+        listish = any(a == "-l" or a.startswith("--list")
+                      or (sub == "tag" and re.match(r"-n\d*$", a))
+                      for a in rest)
+        ops = _operands(rest, GIT_REF_LIST_VALUE_OPTS)
+        if ops and not listish:
+            return "git %s with operand %r: possible create/modify" % (sub, ops[0])
+        return None
+
+    if sub == "config":
+        for a in rest:
+            if a.split("=", 1)[0] in GIT_CONFIG_WRITE:
+                return "git config write flag: " + a
+        ops = _operands(rest, GIT_CONFIG_VALUE_OPTS)
+        if ops and ops[0] in GIT_CONFIG_WRITE_VERBS:
+            return "git config %s writes config" % ops[0]
+        if ops[:1] in (["get"], ["list"]) or \
+                any(a.split("=", 1)[0] in GIT_CONFIG_READ for a in rest):
+            return None
+        if len(ops) == 1:
+            # `git config <key>` reads, `git config <key> <value>` writes — telling
+            # them apart means trusting an operand count, and a miscount silently
+            # WRITES config. Don't prove it; bounce it to the agent, which has an
+            # exactly-equivalent provable spelling (`--get`). DENY not ask: this is
+            # a fix-your-command case, not a human-judgment one. Real writes (two
+            # operands, or a write flag/verb) still route to the human above.
+            raise Unsafe("deny", "`git config %s` is ambiguous to the policy (read vs "
+                                 "write depends on operand count) — to READ it, use "
+                                 "`git config --get %s`, which is unambiguous and "
+                                 "auto-allowed" % (ops[0], ops[0]))
+        return "git config without a read-only flag"
+
+    return "git subcommand not on read-only allowlist: " + sub
+
+
 def decide(command: str, cwd: str = ""):
     """Return (decision, reason) for a raw Bash command string."""
     command = command.strip()
@@ -410,15 +598,19 @@ def decide(command: str, cwd: str = ""):
 
     # normalize segments: drop leading `VAR=val` assignments and leading shell
     # reserved words (until/while/do/done/if/then/... and !/time), so the real
-    # command each construct wraps is what gets checked. Keep non-empty ones.
+    # command each construct wraps is what gets checked. Keep non-empty ones,
+    # remembering whether env assignments preceded the command (git cares).
     norm = []
     for seg in segments:
         w = list(seg)
+        had_assign = False
         while w and (re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", w[0])
                      or w[0] in SHELL_KEYWORDS):
+            if "=" in w[0]:
+                had_assign = True
             w.pop(0)
         if w:
-            norm.append(w)
+            norm.append((w, had_assign))
     if not norm:
         return "ask", "no command"
 
@@ -426,7 +618,7 @@ def decide(command: str, cwd: str = ""):
     # next command's hook cwd reflects the move (verified), so the fence catches
     # any out-of-root access then. Chained into a compound, permit.py sees only the
     # pre-cd cwd and can't tell — so refuse, forcing cds to stand alone.
-    if any(os.path.basename(w[0]) in ("cd", "pushd", "popd") for w in norm):
+    if any(os.path.basename(w[0]) in ("cd", "pushd", "popd") for w, _ in norm):
         if len(norm) == 1:
             return "allow", "standalone cd"
         # DENY (not ask) so the reason routes back to the agent to reformulate,
@@ -442,9 +634,15 @@ def decide(command: str, cwd: str = ""):
     if not _under_roots(_resolve_path(".", cwd)):
         return "ask", "shell cwd outside allowed roots: " + (cwd or os.getcwd())
 
-    for w in norm:
+    for w, had_assign in norm:
         prog = os.path.basename(w[0])
-        if prog not in READONLY:
+        if prog == "git":
+            if had_assign:
+                return "ask", "env assignment before git (GIT_* vars can run programs)"
+            reason = _git_gate(w[1:], cwd)
+            if reason is not None:
+                return "ask", reason
+        elif prog not in READONLY:
             return "ask", "not on read-only allowlist: " + prog
 
         # guard the write/exec modes of otherwise read-only tools
