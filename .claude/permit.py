@@ -37,19 +37,15 @@ READONLY = {
     "sort", "uniq", "cut", "tr", "column", "rev", "fold", "comm", "diff",
     "pwd", "basename", "dirname", "realpath", "readlink",
     "stat", "file", "find", "sed", "awk", "gawk", "mawk",
-    "echo", "printf", "true", "false", "test", "seq", "expr", "date",
+    "echo", "printf", "true", "false", "test", "seq", "expr", "date", "sleep",
     "jq", "yq", "xxd", "od", "hexdump", "strings", "tree",
-    "which", "type", "cksum", "md5sum", "sha1sum", "sha256sum", "sha512sum",
+    "which", "type", "cksum", "md5sum", "shasum",
+    "sha1sum", "sha224sum", "sha256sum", "sha384sum", "sha512sum",
 }
 
-# Output-redirect targets that don't write real files.
+# Output-redirect targets that don't write real files. Any output redirect to a
+# real file is not provably state-free, so it falls through to "ask".
 SAFE_REDIR_TARGETS = {"/dev/null", "/dev/stdout", "/dev/stderr", "/dev/tty"}
-
-# Real files that MAY be written to via an output redirect, despite the default
-# "no state change" policy. Resolved the shell's way (~ expanded, relative paths
-# joined to cwd) so every spelling of the path maps to the same file. t.log is
-# the scratch log that temp.lean instructs agents to write.
-ALLOWED_WRITE_FILES = {"/Users/bsk/blanc/t.log"}
 
 # `find` primaries that mutate the filesystem or execute programs.
 FIND_WRITE = {
@@ -90,6 +86,18 @@ EXPR_FLAGS = {
 
 CTRL_OPS = {"|", "||", "&&", ";", "&", "\n"}
 
+# Shell reserved words that introduce a command (loops, conditionals, timing,
+# negation). They alter no state themselves, and any command they wrap still
+# lands in its own `;`/`&&`/... segment and is validated against READONLY on its
+# own. So we strip them from the front of each segment before the read-only
+# check: `until grep -q done log; do sleep 1; done` is allowed iff every command
+# it wraps (grep, sleep, ...) is independently allowed, and a body like
+# `do rm x; done` still trips on `rm` and falls through to "ask".
+SHELL_KEYWORDS = {
+    "if", "then", "else", "elif", "fi",
+    "while", "until", "do", "done", "time", "!",
+}
+
 
 class Unsafe(Exception):
     """Raised to short-circuit to a non-allow decision."""
@@ -123,7 +131,7 @@ def parse_segments(cmd: str, cwd: str = ""):
         cur, have_word = [], False
         if pending_redir == "out":
             pending_redir = None
-            if w not in SAFE_REDIR_TARGETS and not _is_allowed_write(w, cwd):
+            if w not in SAFE_REDIR_TARGETS:
                 raise Unsafe("ask", "writes to file: " + w)
             return  # consumed as redirect target, not a word
         if pending_redir == "in":
@@ -256,17 +264,6 @@ def _fence_targets(prog: str, args: list) -> list:
             continue  # var=value assignment, not a path
         targets.append(a)
     return targets
-
-
-def _is_allowed_write(word: str, cwd: str) -> bool:
-    """True iff an output-redirect target resolves to a file on the write
-    allowlist. Mirrors the shell: ~ expanded, relative paths joined to cwd,
-    ../ collapsed — so `t.log`, `./t.log`, `~/blanc/t.log` and the absolute
-    path all map to the same file."""
-    base = cwd or os.getcwd()
-    w = os.path.expanduser(word)
-    p = w if os.path.isabs(w) else os.path.join(base, w)
-    return os.path.normpath(p) in ALLOWED_WRITE_FILES
 
 
 def _resolve_path(word: str, cwd: str) -> str:
@@ -411,11 +408,14 @@ def decide(command: str, cwd: str = ""):
     if not segments:
         return "ask", "no command"
 
-    # normalize segments: drop leading VAR=val assignments, keep non-empty ones
+    # normalize segments: drop leading `VAR=val` assignments and leading shell
+    # reserved words (until/while/do/done/if/then/... and !/time), so the real
+    # command each construct wraps is what gets checked. Keep non-empty ones.
     norm = []
     for seg in segments:
         w = list(seg)
-        while w and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", w[0]):
+        while w and (re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", w[0])
+                     or w[0] in SHELL_KEYWORDS):
             w.pop(0)
         if w:
             norm.append(w)
