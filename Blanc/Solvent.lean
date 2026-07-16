@@ -6056,6 +6056,13 @@ lemma prepareMessage_inv_solvent {wa : Adr}
     · simpa using h_origin_ne
     · simp
 
+private lemma if_error_eq_ok {ε α : Type} {p : Prop} [Decidable p]
+    {err : ε} {a b : α}
+    (h : (if p then Except.error err else Except.ok a) = Except.ok b) : a = b := by
+  split at h
+  · contradiction
+  · exact Except.ok.inj h
+
 -- A successfully checked transaction can afford its actual up-front gas and
 -- blob charge.  In particular, that charge is represented exactly by B256.
 lemma checkTransaction_upfront_lt_modulus {benv : Benv} {bout : BlockOutput}
@@ -6097,7 +6104,7 @@ lemma checkTransaction_upfront_lt_modulus {benv : Benv} {bout : BlockOutput}
     simp only [checkTransactionGasFee, h_type, checkTransactionLegacyGasFee] at h_fee
     split at h_fee
     · cases h_fee
-    · have h_fee' := Except.ok.inj h_fee
+    · have h_fee' := if_error_eq_ok h_fee
       simp only [Prod.mk.injEq] at h_fee'
       obtain ⟨rfl, rfl⟩ := h_fee'
       simp only [checkTransactionBlobData, h_type] at h_blob
@@ -6110,7 +6117,7 @@ lemma checkTransaction_upfront_lt_modulus {benv : Benv} {bout : BlockOutput}
     simp only [checkTransactionGasFee, h_type, checkTransactionLegacyGasFee] at h_fee
     split at h_fee
     · cases h_fee
-    · have h_fee' := Except.ok.inj h_fee
+    · have h_fee' := if_error_eq_ok h_fee
       simp only [Prod.mk.injEq] at h_fee'
       obtain ⟨rfl, rfl⟩ := h_fee'
       simp only [checkTransactionBlobData, h_type] at h_blob
@@ -6126,7 +6133,7 @@ lemma checkTransaction_upfront_lt_modulus {benv : Benv} {bout : BlockOutput}
     · split at h_fee
       · cases h_fee
       · rename_i h_priority h_base_fee
-        have h_fee' := Except.ok.inj h_fee
+        have h_fee' := if_error_eq_ok h_fee
         simp only [Prod.mk.injEq] at h_fee'
         obtain ⟨rfl, rfl⟩ := h_fee'
         simp only [checkTransactionBlobData, h_type] at h_blob
@@ -6148,7 +6155,7 @@ lemma checkTransaction_upfront_lt_modulus {benv : Benv} {bout : BlockOutput}
     · split at h_fee
       · cases h_fee
       · rename_i h_priority h_base_fee
-        have h_fee' := Except.ok.inj h_fee
+        have h_fee' := if_error_eq_ok h_fee
         simp only [Prod.mk.injEq] at h_fee'
         obtain ⟨rfl, rfl⟩ := h_fee'
         simp only [checkTransactionBlobData, h_type] at h_blob
@@ -6182,7 +6189,7 @@ lemma checkTransaction_upfront_lt_modulus {benv : Benv} {bout : BlockOutput}
     · split at h_fee
       · cases h_fee
       · rename_i h_priority h_base_fee
-        have h_fee' := Except.ok.inj h_fee
+        have h_fee' := if_error_eq_ok h_fee
         simp only [Prod.mk.injEq] at h_fee'
         obtain ⟨rfl, rfl⟩ := h_fee'
         simp only [checkTransactionBlobData, h_type] at h_blob
@@ -6210,7 +6217,8 @@ lemma validateTransaction_calldataFloorGasCost_le_gas {tx : Tx}
   · cases h_validate
   · split at h_validate
     · cases h_validate
-    · split at h_validate
+    · unfold checkInitcodeSize at h_validate
+      split at h_validate
       · cases h_validate
       · rename_i h_gas _ _
         have h_result := Except.ok.inj h_validate
@@ -6555,7 +6563,7 @@ lemma checkTransaction_fee_lt {benv : Benv} {bout : BlockOutput} {tx : Tx}
     simp only [checkTransactionGasFee, htt, checkTransactionLegacyGasFee] at hfee
     split at hfee
     · cases hfee
-    · have hfe := Except.ok.inj hfee
+    · have hfe := if_error_eq_ok hfee
       simp only [Prod.mk.injEq] at hfe
       obtain ⟨rfl, rfl⟩ := hfe
       simp only [checkTransactionBlobData, htt] at hblob
@@ -6568,7 +6576,7 @@ lemma checkTransaction_fee_lt {benv : Benv} {bout : BlockOutput} {tx : Tx}
     simp only [checkTransactionGasFee, htt, checkTransactionLegacyGasFee] at hfee
     split at hfee
     · cases hfee
-    · have hfe := Except.ok.inj hfee
+    · have hfe := if_error_eq_ok hfee
       simp only [Prod.mk.injEq] at hfe
       obtain ⟨rfl, rfl⟩ := hfe
       simp only [checkTransactionBlobData, htt] at hblob
@@ -6584,7 +6592,7 @@ lemma checkTransaction_fee_lt {benv : Benv} {bout : BlockOutput} {tx : Tx}
     · split at hfee
       · cases hfee
       · rename_i hmp hbf
-        have hfe := Except.ok.inj hfee
+        have hfe := if_error_eq_ok hfee
         simp only [Prod.mk.injEq] at hfe
         obtain ⟨rfl, rfl⟩ := hfe
         simp only [checkTransactionBlobData, htt] at hblob
@@ -6605,7 +6613,7 @@ lemma checkTransaction_fee_lt {benv : Benv} {bout : BlockOutput} {tx : Tx}
     · split at hfee
       · cases hfee
       · rename_i hmp hbf
-        have hfe := Except.ok.inj hfee
+        have hfe := if_error_eq_ok hfee
         simp only [Prod.mk.injEq] at hfe
         obtain ⟨rfl, rfl⟩ := hfe
         simp only [checkTransactionBlobData, htt] at hblob
@@ -6637,7 +6645,7 @@ lemma checkTransaction_fee_lt {benv : Benv} {bout : BlockOutput} {tx : Tx}
     · split at hfee
       · cases hfee
       · rename_i hmp hbf
-        have hfe := Except.ok.inj hfee
+        have hfe := if_error_eq_ok hfee
         simp only [Prod.mk.injEq] at hfe
         obtain ⟨rfl, rfl⟩ := hfe
         simp only [checkTransactionBlobData, htt] at hblob
@@ -6665,7 +6673,8 @@ lemma validateTransaction_floor_le {tx : Tx}
   · cases h
   · split at h
     · cases h
-    · split at h
+    · unfold checkInitcodeSize at h
+      split at h
       · cases h
       · rename_i hgas _ _
         have h' := Except.ok.inj h
