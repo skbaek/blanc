@@ -8,7 +8,7 @@ description: Actively writes, finishes, or repairs Lean 4 proofs, lemmas, and ta
 - When requested to complete or author a Lean 4 proof.
 - When tasked with eliminating a `sorry` by finding a valid tactic sequence.
 
-**Cursor positioning for `lean_goal`:** `line` is 1-indexed, `column` is 0-indexed. Query at the START of a token to see the goal state before it executes. A position past the end of a tactic silently returns an empty `goals` list — never interpret an empty list as proof completion without confirming via `lean_diagnostic_messages` and a correctly placed cursor.
+**Cursor positioning for `lean_goal`:** Both `line` and `column` are 1-indexed. Query at the START of a token to see the goal state before it executes. A position past the end of a tactic silently returns an empty `goals` list — never interpret an empty list as proof completion without confirming via `lean_diagnostic_messages` and a correctly placed cursor.
 
 ## The Read-Think-Write-Look Workflow
 You must strictly follow this closed feedback loop for every single tactic step. Do not batch multiple speculative lines together.

@@ -10,7 +10,7 @@ description: Actively writes, finishes, or repairs Lean 4 proofs, lemmas, and ta
 
 All Lean tools below come from the `lean-lsp-mcp` MCP server (full names are prefixed `mcp__lean-lsp-mcp__`, e.g. `mcp__lean-lsp-mcp__lean_goal`).
 
-**Cursor positioning for `lean_goal`:** `line` is 1-indexed, `column` is 0-indexed. Query at the START of a token to see the goal state before it executes. A position past the end of a tactic silently returns an empty `goals` list — never interpret an empty list as proof completion without confirming via `lean_diagnostic_messages` and a correctly placed cursor.
+**Cursor positioning for `lean_goal`:** Both `line` and `column` are 1-indexed. Query at the START of a token to see the goal state before it executes. A position past the end of a tactic silently returns an empty `goals` list — never interpret an empty list as proof completion without confirming via `lean_diagnostic_messages` and a correctly placed cursor.
 
 ## The Read-Think-Write-Look Workflow
 You must strictly follow this closed feedback loop for every single tactic step. Do not batch multiple speculative lines together.
