@@ -6336,6 +6336,9 @@ theorem processTransaction_inv_solvent (wa : Adr)
     (h_run : processTransaction benv bout tx i = .ok ⟨st, bout'⟩)
     (h_inv : Benv.InvSolvent wa benv) : Benv.InvSolvent wa (benv.withState st) := by
   unfold processTransaction at h_run
+  -- `beginTransaction` only refreshes `stat.origState`, which no balance here
+  -- reads; project it away so the state/fee terms stay in terms of `benv`.
+  simp only [Benv.beginTransaction] at h_run
   rcases of_bind_eq_ok h_run with ⟨bout0, hbout0, h_run⟩
   rcases of_bind_eq_ok h_run with ⟨gasInfo, hval, h_run⟩
   rcases gasInfo with ⟨intrinsicGas, calldataFloorGasCost⟩
@@ -6349,7 +6352,9 @@ theorem processTransaction_inv_solvent (wa : Adr)
   simp only at h_run
   rcases h_run with ⟨rfl, rfl⟩
   have hsender : sender ≠ wa :=
-    checkTransaction_sender_ne_of_inv_solvent hcheck h_inv
+    -- `beginTransaction` leaves `state` and `createdAccounts` alone, which is
+    -- all `InvSolvent` constrains, so the invariant transfers field-wise.
+    checkTransaction_sender_ne_of_inv_solvent hcheck ⟨h_inv.state, h_inv.ca⟩
   have hsub_some :
       (benv.state.incrNonce sender).subBal sender
         (tx.gas * effectiveGasPrice +
@@ -6445,8 +6450,12 @@ lemma processUncheckedSystemTransaction_inv_solvent_sum_le (wa : Adr)
     (h_inv : Benv.InvSolvent wa benv) :
     State.Inv wa st ∧ sum st.bal ≤ sum benv.state.bal := by
   dsimp [processUncheckedSystemTransaction, processSystemTransaction] at h_run
+  -- The system transaction opens on `benv.beginTransaction`; that only
+  -- refreshes `stat.origState`, so every field the invariant reads is defeq to
+  -- the corresponding field of `benv`.
   have h_msg : Msg.InvSolvent wa
-      (processSystemTransactionMsg benv (processSystemTransactionTenv benv)
+      (processSystemTransactionMsg benv.beginTransaction
+        (processSystemTransactionTenv benv.beginTransaction)
         target data (benv.state.getCode target)) := by
     refine ⟨h_inv.state, ?_, ?_, ?_, ?_, ?_⟩
     · refine ⟨h_inv.ca, ?_⟩
@@ -6670,6 +6679,9 @@ lemma processTransaction_sum_le {benv : Benv} {bout bout' : BlockOutput}
     (h_run : processTransaction benv bout tx i = .ok ⟨st, bout'⟩) :
     sum st.bal ≤ sum benv.state.bal := by
   unfold processTransaction at h_run
+  -- as in `processTransaction_inv_solvent`: `beginTransaction` touches only
+  -- `stat.origState`, which no balance below reads.
+  simp only [Benv.beginTransaction] at h_run
   rcases of_bind_eq_ok h_run with ⟨bout0, hbout0, h_run⟩
   rcases of_bind_eq_ok h_run with ⟨gasInfo, hval, h_run⟩
   rcases gasInfo with ⟨intrinsicGas, calldataFloorGasCost⟩
@@ -6700,6 +6712,10 @@ lemma processTransaction_sum_le {benv : Benv} {bout bout' : BlockOutput}
     | some s => simpa [Option.toExcept] using hsub
   -- the up-front debit does not wrap
   have hfee_lt := checkTransaction_fee_lt hcheck
+  -- `hcheck` carries the `beginTransaction` environment, so this arrives with an
+  -- unreduced `stat` projection; put it back in terms of `benv` (as `hsub_some`
+  -- already is) or `omega` below sees the two blob-fee terms as distinct atoms.
+  dsimp only at hfee_lt
   have hcdf := validateTransaction_floor_le hval
   -- sum bookkeeping
   have h1 := foldl_destroyAccount_sum_le txOutput.accountsToDelete.toList
