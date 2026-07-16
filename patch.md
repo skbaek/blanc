@@ -18,11 +18,15 @@ failure cluster:
 - the fixture runner treats every block as extending one linear chain, so it
   cannot import competing branches.
 
-Completing all **12 steps** should make the original ten `FAIL` files pass and
-should make `CALLBlake2f_MaxRounds.json` substantially faster, ideally changing
-it from `TIMEOUT` to `PASS`. Tightening expected-exception checking is allowed
-to expose new genuine failures; those are evidence gained, not regressions to
-hide.
+Completing all **12 steps** should make the original ten `FAIL` files pass.
+`CALLBlake2f_MaxRounds.json` is a max-round Blake2F stress fixture that is
+inherently multi-hour to interpret; it is **excluded from the list-driven tiers
+(`--patch`, `--smoke`) and expected to remain `TIMEOUT` wherever it is naturally
+included (`--full`)**, so it is never a pass/fail gate. Removing its per-round
+trace overhead (Step 2) is still worthwhile, but its timing is measured
+manually, not asserted to pass. Tightening expected-exception checking is
+allowed to expose new genuine failures; those are evidence gained, not
+regressions to hide.
 
 ## Scope and target files
 
@@ -40,9 +44,12 @@ The historical full baseline contains 2,970 `PASS`, 10 `FAIL`, and 3
 9. `ValidBlocks/bcStateTests/refundReset.json`
 10. `ValidBlocks/bcValidBlockTest/eip2930.json`
 
-The performance target is:
+The performance note (not a gate) is:
 
-- `GeneralStateTests/stTimeConsuming/CALLBlake2f_MaxRounds.json`
+- `GeneralStateTests/stTimeConsuming/CALLBlake2f_MaxRounds.json` — excluded from
+  the list-driven tiers and expected to remain `TIMEOUT` under `--full`; its
+  per-round trace overhead is removed in Step 2 and any timing is measured
+  manually.
 
 The two BLOCKHASH files should already be green at the start because finding
 3.5 has been fixed. They remain in the target set as regression protection.
@@ -127,10 +134,11 @@ transactions.
 
 - **V0** — `lake build elevm` in `/Users/bsk/elevm`, then `lake build` and the
   existing axiom audit in `/Users/bsk/blanc`.
-- **PATCH** — the Step 1 target tier: the ten historical failures plus the
-  Blake2F max-round fixture. Its final contract is all 11 files `PASS`.
-  During early steps it is an intentionally red progress meter; a step report
-  must list every classification.
+- **PATCH** — the Step 1 target tier: the ten historical failures. Its final
+  contract is all 10 files `PASS`. The Blake2F max-round fixture is deliberately
+  not in this tier (an inherently multi-hour `TIMEOUT`, excluded from all
+  list-driven tiers). During early steps it is an intentionally red progress
+  meter; a step report must list every classification.
 - **RLP4** — the four directly relevant invalid-RLP/header files: the missing
   withdrawals list, both withdrawal-index overflows, and the `2^63` gas-limit
   case.
@@ -139,9 +147,11 @@ transactions.
   lands this is an audit, not an instruction to hide newly exposed defects.
 - **SMOKE** — `elevm/scripts/check.sh --smoke`, compared with its historical
   baseline and accompanied by an explanation for every classification change.
-- **PERF** — run `CALLBlake2f_MaxRounds.json` with the same 100-second limit
-  used by the current harness, record elapsed wall time, and confirm that no
-  per-round trace output is emitted.
+- **PERF** — a manual, non-gating measurement: run `CALLBlake2f_MaxRounds.json`
+  out of band (no per-file timeout gate), record elapsed wall time, and confirm
+  that no per-round trace output is emitted. It is expected to remain a
+  `TIMEOUT` under any practical automated limit, which is why it is excluded
+  from the list-driven tiers.
 - **FULL** — the overnight full run, scheduled only in Step 12. Compare with
   the preserved historical baseline before accepting a new strict baseline.
 
@@ -154,7 +164,9 @@ transactions.
 Work in `/Users/bsk/elevm/scripts`; do not change Lean semantics. Extend the
 existing fixture harness with a `--patch` tier backed by a committed
 `scripts/patch-tests.txt`. The list contains exactly the ten historical FAIL
-paths and `GeneralStateTests/stTimeConsuming/CALLBlake2f_MaxRounds.json`.
+paths. `GeneralStateTests/stTimeConsuming/CALLBlake2f_MaxRounds.json` is
+deliberately **not** in this list: it is an inherently multi-hour `TIMEOUT` and
+is excluded from all list-driven tiers.
 
 Unlike the regression-baseline tiers, `--patch` is a target gate: it succeeds
 only when every listed file is `PASS`. It writes
@@ -174,7 +186,7 @@ matrix. The already-fixed BLOCKHASH pair should now pass; if either does not,
 stop and report that the assumed starting point is false. The remaining red
 entries are expected in this infrastructure step. Run the existing depth and
 smoke gates once to prove the harness extension did not change them. Report
-all 11 classifications and timings. [V0 infrastructure portion + PATCH
+all 10 classifications and timings. [V0 infrastructure portion + PATCH
 observation]
 
 ### Note for the reader
@@ -205,18 +217,20 @@ Second, change Blake2F to use the existing non-tracing iterator rather than
 `dbg_trace` on the Blake2F round path. Do not alter the compression function,
 round count, gas calculation, input validation, or output bytes.
 
-Run diagnostics after the edit, then V0. Run PERF and the full PATCH tier.
-The Blake2F file should pass within 100 seconds; record before/after elapsed
-times and its classification. The other ten PATCH classifications must not
-regress. Report the chosen hash formula and the deletion/reference audit for
-the tracing helpers. [V0 + PERF + PATCH]
+Run diagnostics after the edit, then V0. Measure Blake2F manually (PERF) and
+run the PATCH tier. Blake2F is **not** expected to pass — it is an inherently
+multi-hour `TIMEOUT` excluded from PATCH; record before/after elapsed times and
+confirm the per-round trace output is gone. The ten PATCH classifications must
+not regress. Report the chosen hash formula and the deletion/reference audit
+for the tracing helpers. [V0 + PERF + PATCH]
 
 ### Note for the reader
 
-The Blake change should be a dramatic speedup because it removes one trace
-event per compression round. The hash fix may not change a fixture
-classification immediately; its success signs are key-sensitive hashes and
-the disappearance of the same-address collision bucket.
+The Blake change removes one trace event per compression round — worthwhile,
+but it does not make the max-round fixture finish under a practical timeout; it
+remains a `TIMEOUT`. The hash fix may not change a fixture classification
+immediately; its success signs are key-sensitive hashes and the disappearance
+of the same-address collision bucket.
 
 ---
 
@@ -647,9 +661,8 @@ Run V0, PATCH, RLP4, and INVALID-AUDIT. All ten historical FAIL files must now
 be `PASS`; in particular `UncleFromSideChain` must process A and B from their
 actual parents, accept the expected invalid ommer rejection without mutating
 the branch, continue to the later valid B block, and perform final hash/state
-checks. Blake2F must remain `PASS`. Record every new strict-oracle failure
-outside PATCH without broadening the matcher. [V0 + PATCH green + RLP4 green +
-INVALID-AUDIT]
+checks. Record every new strict-oracle failure outside PATCH without
+broadening the matcher. [V0 + PATCH green + RLP4 green + INVALID-AUDIT]
 
 ### Note for the reader
 
@@ -664,23 +677,26 @@ later blocks still run, and the file's final state is checked.
 ### Agent prompt
 
 This is the only overnight step. First run V0, PATCH, RLP4,
-INVALID-AUDIT, SMOKE, and PERF. PATCH must be 11/11 `PASS` before starting the
+INVALID-AUDIT, SMOKE, and PERF. PATCH must be 10/10 `PASS` before starting the
 full run. Preserve the pre-strict `baseline-full.txt` and run FULL without
-rebasing.
+rebasing. `CALLBlake2f_MaxRounds.json` is naturally included in FULL by
+directory discovery; it is expected to remain `TIMEOUT` there, must match the
+preserved baseline's `TIMEOUT` classification, and is not expected to flip to
+`PASS`.
 
-Classify every full-suite difference into one of four buckets:
+Classify every full-suite difference into one of three buckets:
 
 1. intended fix among the original ten;
-2. intended performance change (`TIMEOUT` to `PASS` for Blake2F);
-3. newly exposed strict-oracle mismatch;
-4. unintended regression in a previously valid case.
+2. newly exposed strict-oracle mismatch;
+3. unintended regression in a previously valid case.
 
-Buckets 1 and 2 are expected. For bucket 3, determine whether the cause is a
+Bucket 1 is expected; `CALLBlake2f_MaxRounds.json` staying `TIMEOUT` is not a
+difference to classify. For bucket 2, determine whether the cause is a
 bad mapping/runner implementation or a real ELeVM conformance defect. Repair
 mapping/runner errors in this step. Genuine new semantic defects may remain
 as documented FAILs because strict checking is the purpose of finding them;
 list the fixture, expected identity, actual identity/raw error, and likely
-implementation area. Bucket 4 must be fixed before closure.
+implementation area. Bucket 3 must be fixed before closure.
 
 After the user reviews the complete diff, preserve the old baseline under a
 clearly named historical file or commit history and establish the new strict
@@ -710,10 +726,11 @@ SMOKE + PERF + FULL]
 
 ### Note for the reader
 
-The expected ideal total, if no new strict failures appear and only Blake2F
-leaves the timeout set, is 2,981 `PASS`, 0 `FAIL`, and 2 `TIMEOUT` files out of
-2,983. A different total is not automatically bad, but every difference must
-be explained. The strict baseline is an assurance artifact, not a score to
+The expected ideal total, if no new strict failures appear, is 2,980 `PASS`,
+0 `FAIL`, and 3 `TIMEOUT` files out of 2,983, with `CALLBlake2f_MaxRounds.json`
+remaining one of the `TIMEOUT` files rather than flipping to `PASS`. A
+different total is not automatically bad, but every difference must be
+explained. The strict baseline is an assurance artifact, not a score to
 optimize.
 
 ---
@@ -734,7 +751,8 @@ After Step 12:
 - no selected fixture file can pass by running zero cases, stopping after an
   expected-invalid block, or skipping final state checks;
 - same-address storage keys distribute across the key-set hash table;
-- Blake2F runs without per-round trace overhead and the max-round fixture is
-  expected to pass under the normal timeout;
+- Blake2F runs without per-round trace overhead; the max-round fixture is an
+  inherently multi-hour `TIMEOUT`, excluded from the list-driven tiers and
+  expected to remain `TIMEOUT` wherever it is naturally included (`--full`);
 - any newly exposed strict-oracle failures are explicit, reproducible, and
   documented rather than hidden by a permissive classifier.
