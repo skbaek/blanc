@@ -7357,17 +7357,14 @@ theorem addBlockToChain_inv_solvent (wa : Adr)
   split at h_run
   · exact absurd h_run (by simp)
   · simp only [pure_bind] at h_run
-    -- inner rlp check
+    -- case on `stateTransition ch block`
     split at h_run
-    · exact absurd h_run (by simp)
-    · -- case on `stateTransition ch block`
-      split at h_run
-      · exact absurd h_run (by simp [Pure.pure, Except.pure])
-      · rename_i chain h_st
-        obtain ⟨y, hy, h_run⟩ := of_bind_eq_ok h_run
-        obtain ⟨_, _, h_run⟩ := of_bind_eq_ok h_run
-        obtain ⟨_, _, h_run⟩ := of_bind_eq_ok h_run
-        have hyc : chain = ch' :=
-          (Except.ok.inj hy).trans (Sum.inl.inj (Except.ok.inj h_run))
-        subst hyc
-        exact stateTransition_inv_solvent wa ch _ block h_st (h_wds block hash h_rlp) h_inv
+    · simp [Pure.pure, Except.pure] at h_run
+    · rename_i chain h_st
+      obtain ⟨y, hy, h_run⟩ := of_bind_eq_ok h_run
+      obtain ⟨_, _, h_run⟩ := of_bind_eq_ok h_run
+      obtain ⟨_, _, h_run⟩ := of_bind_eq_ok h_run
+      have hyc : chain = ch' :=
+        (Except.ok.inj hy).trans (Sum.inl.inj (Except.ok.inj h_run))
+      subst hyc
+      exact stateTransition_inv_solvent wa ch _ block h_st (h_wds block hash h_rlp) h_inv
