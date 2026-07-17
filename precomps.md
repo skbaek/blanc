@@ -218,20 +218,45 @@ any evidence that contradicts this plan).
 
 ## Model allocation per step
 
-Token-efficiency guidance for which model tier to hand each step to. Names
-refer to tiers available at plan-writing time (Claude Code: Fable 5 /
-Opus 4.8 / Sonnet 5; Codex: GPT-5-Codex at medium–xhigh effort;
-Antigravity: Gemini Pro / Flash tiers); substitute the current equivalent
-tier, not the literal name.
+Token-efficiency guidance for which model tier to hand each step to.
+Options available at plan-writing time (July 2026): Claude Code with
+Fable 5 / Opus 4.8 / Sonnet 5; Codex with GPT-5.4 mini / 5.4 / 5.5 /
+5.6 Luna / 5.6 Terra / 5.6 Sol (effort light–ultra); Antigravity with
+Gemini 3.5 Flash (low–high) and Gemini 3.1 Pro (low–high). Substitute
+current equivalents as these age.
+
+Cross-vendor placement per published July-2026 comparisons (salt to taste
+— none of them measure Lean 4):
+
+- **Frontier**: Fable 5 and GPT-5.6 Sol. Sol leads the agentic-coding
+  indexes (Artificial Analysis coding-agent 80 vs Fable's 77.2); Fable
+  leads SWE-Bench Pro and FrontierMath Tier 4 (87.8 vs 83). For this plan
+  the math edge is the one that matters — the frontier steps are
+  diagnosis-of-algebra steps, not long-horizon engineering.
+- **Near-frontier**: Opus 4.8; GPT-5.6 Terra (≈ Fable-class agentic coding
+  at half Sol's price — the best price/strength point in the Codex lineup
+  for this plan); GPT-5.5 at xhigh (last cycle's flagship, still solid,
+  but Terra generally matches it cheaper).
+- **Mid**: Sonnet 5; GPT-5.6 Luna; Gemini 3.5 Flash (strongest agentic
+  model of the cheap tier — Terminal-Bench 76.2, beats 3.1 Pro on
+  coding/agentic rows — but weak on deep reasoning). Gemini 3.1 Pro also
+  lands here: its remaining edge over Flash (long-context, abstract
+  reasoning) buys nothing for this plan and it is agentically weaker, so
+  within Antigravity prefer Flash.
+- **Below the floor**: GPT-5.4 mini — do not use on any step. GPT-5.4 is
+  not below the floor but is dominated by Luna (newer, cheaper,
+  equal-or-better); no step names it.
 
 Three principles behind the assignments:
 
 1. **Lean 4 competence is the floor, independent of step difficulty.**
    Every step except parts of 1 and 9 edits Lean under this repo's
-   conventions (LSP-driven, no blind builds). Models below the
-   Sonnet 5 / Gemini Pro tier tend to thrash on elaboration errors even for
-   "easy" edits, burning more tokens than a stronger model would. Nothing
-   in this plan is worth handing to a mini/Haiku-class model.
+   conventions (LSP-driven, no blind builds), and no public benchmark
+   measures this. Mini/Haiku-class models thrash on elaboration errors
+   even for "easy" edits, burning more tokens than a stronger model would.
+   Before trusting a non-Anthropic mid-tier model (Luna, Flash) with a
+   Lean-touching step, watch its first session on a cheap step (3 or 5);
+   if it thrashes, permanently promote that vendor's Lean work one tier.
 2. **The gates make under-provisioning cheap on shallow steps and expensive
    on deep ones.** For pattern-following steps (3, 4, 5), a failed session
    costs one session — the vector gate catches everything. For Steps 6 and
@@ -242,26 +267,27 @@ Three principles behind the assignments:
 3. **Escalation rule: two focused repair attempts, then stop.** If a
    session's gate is still red after two distinct diagnosis-driven fixes
    (not retries), stop the session, write up the evidence, and re-run the
-   step one tier up. Do not let a mid-tier model iterate against a red
-   pairing gate.
+   step one tier up (or one effort setting up within the same model
+   first, if not already at max). Do not let a mid-tier model iterate
+   against a red pairing gate.
 
-| Step | Difficulty | Suggested tier | Rationale |
+| Step | Difficulty | Suggested models | Rationale |
 |---|---|---|---|
-| 1 — vector harness | ★★★ | Sonnet 5, or Codex/high | Repo-convention plumbing, zero crypto. The one subtlety is synthesizing an honest `Evm` for `precompileRun`; escalate to Opus 4.8 only if that proves gnarly. |
-| 2 — Fp, G1, G1ADD | ★★☆ | Sonnet 5 | Direct mirror of the existing BN254 idiom with a tight gate; the plan names every pitfall (padding, infinity, no subgroup check). |
-| 3 — G1 subgroup, G1MSM | ★★ | Sonnet 5 (or Gemini Pro tier) | Pure horizontal scaling of Step 2; `mulBy` already exists. Cheapest Lean-competent tier is fine. |
-| 4 — Fp2, G2, G2ADD | ★★☆ | Sonnet 5 | Instantiation work; the only trap (c0/c1 ordering) is caught immediately by the generator `#guard`s. |
-| 5 — G2MSM + 288-byte fix | ★★ | Sonnet 5 (or Gemini Pro tier) | The smallest step: replicate Steps 3–4's pattern plus a constant fix the plan spells out. |
-| 6 — Fp12, twist, Miller loop, pairing | ★★★★★ | **Fable 5** (Claude Code), or Codex/xhigh | The one genuinely deep step. Twist/tower/loop conventions fail silently until the vector gate, and debugging a wrong pairing requires actual algebra plus disciplined use of the bilinearity `#guard`s. Worth the strongest model available; a failed cheap session here costs more than the premium. |
-| 7 — SSWU, isogenies, MAP precompiles | ★★★★ | Opus 4.8/high, or Codex/high | Mechanically large, intellectually medium *given* the constant-generation script. The G2 half (Fp2 sqrt-candidate machinery, `sgn0` branches) is where diagnosis gets subtle. If splitting: G1 session can drop to Sonnet 5; keep the G2 session at Opus-tier. Escalate to Fable 5 if map vectors resist two repair rounds. |
-| 8 — compressed G1, KZG, point eval | ★★★☆ | Opus 4.8/medium | Verbatim ports with the strongest oracle in the plan (`external_vectors.json`); the flag-bit codec and sign rule are fiddly but fully specified in local py_ecc source. Sonnet 5 is a defensible economy choice; the consensus-critical sign conventions argue one tier up. |
-| 9 — EEST fixtures, baselines, closure | ★★★ | Sonnet 5, or Codex/medium | Ops and honest bookkeeping, not depth. The TIMEOUT-justification judgment is the only part needing care, and the plan constrains it explicitly (green truncated-variant evidence required). |
+| 1 — vector harness | ★★★ | Sonnet 5 · 5.6 Terra/medium · 3.5 Flash/high (scripts half only) | Repo-convention plumbing, zero crypto. The one subtlety is synthesizing an honest `Evm` for `precompileRun`; escalate to Opus 4.8 or Terra/high only if that proves gnarly. |
+| 2 — Fp, G1, G1ADD | ★★☆ | Sonnet 5 · 5.6 Luna/high | Direct mirror of the existing BN254 idiom with a tight gate; the plan names every pitfall (padding, infinity, no subgroup check). |
+| 3 — G1 subgroup, G1MSM | ★★ | Sonnet 5 · 5.6 Luna/medium · 3.5 Flash/high | Pure horizontal scaling of Step 2; `mulBy` already exists. Cheapest Lean-competent tier — and the designated probe step for Luna/Flash Lean competence (principle 1). |
+| 4 — Fp2, G2, G2ADD | ★★☆ | Sonnet 5 · 5.6 Luna/high | Instantiation work; the only trap (c0/c1 ordering) is caught immediately by the generator `#guard`s. |
+| 5 — G2MSM + 288-byte fix | ★★ | Sonnet 5 · 5.6 Luna/medium · 3.5 Flash/high | The smallest step: replicate Steps 3–4's pattern plus a constant fix the plan spells out. |
+| 6 — Fp12, twist, Miller loop, pairing | ★★★★★ | **Fable 5** · 5.6 Sol/xhigh (ultra on a red re-run) | The one genuinely deep step. Twist/tower/loop conventions fail silently until the vector gate, and debugging a wrong pairing requires actual algebra plus disciplined use of the bilinearity `#guard`s. Fable's FrontierMath edge makes it first choice; a failed cheap session here costs more than the premium. Not a Gemini step. |
+| 7 — SSWU, isogenies, MAP precompiles | ★★★★ | Opus 4.8/high · 5.6 Terra/xhigh · 5.5/xhigh | Mechanically large, intellectually medium *given* the constant-generation script. The G2 half (Fp2 sqrt-candidate machinery, `sgn0` branches) is where diagnosis gets subtle. If splitting: G1 session can drop to Sonnet 5 or Luna/high; keep the G2 session at Opus/Terra tier. Escalate to Fable 5 or Sol/xhigh if map vectors resist two repair rounds. |
+| 8 — compressed G1, KZG, point eval | ★★★☆ | Opus 4.8/medium · 5.6 Terra/high | Verbatim ports with the strongest oracle in the plan (`external_vectors.json`); the flag-bit codec and sign rule are fiddly but fully specified in local py_ecc source. Sonnet 5 is a defensible economy choice; the consensus-critical sign conventions argue one tier up. |
+| 9 — EEST fixtures, baselines, closure | ★★★ | Sonnet 5 · 3.5 Flash/high · 5.6 Terra/medium | Ops and honest bookkeeping, not depth — Flash's terminal-agent strength fits the download/run/classify loop well. The TIMEOUT-justification judgment is the only part needing care, and the plan constrains it explicitly (green truncated-variant evidence required). |
 
-A rough budget consequence: only one step strictly wants SoTA strength
-(Step 6), one wants near-SoTA (Step 7, or just its G2 half if split), and
-five of nine are comfortably mid-tier. Running everything on a top model
-would roughly double the token cost of the arc for no change in outcome on
-Steps 2–5 and 9.
+A rough budget consequence: only one step strictly wants frontier strength
+(Step 6), one wants near-frontier (Step 7, or just its G2 half if split),
+and five of nine are comfortably mid-tier. Running everything on Fable 5
+or Sol would roughly double the token cost of the arc for no change in
+outcome on Steps 2–5 and 9.
 
 ---
 
