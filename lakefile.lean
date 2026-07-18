@@ -9,9 +9,8 @@ package «blanc» where
 require mathlib from git
   "https://github.com/leanprover-community/mathlib4.git" @ "v4.23.0"
 
--- require elevm from git
---   "https://github.com/skbaek/elevm.git" @ "ninst"
-require elevm from "../elevm"
+require elevm from git
+  "https://github.com/skbaek/elevm.git" @ "main"
 
 @[default_target]
 lean_lib «Blanc» where
