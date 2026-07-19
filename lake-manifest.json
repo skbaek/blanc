@@ -8,7 +8,7 @@
    "rev": "f621e16025bc84239e11de485a69577d9ef8a4d6",
    "name": "elevm",
    "manifestFile": "lake-manifest.json",
-   "inputRev": "main",
+   "inputRev": "f621e16025bc84239e11de485a69577d9ef8a4d6",
    "inherited": false,
    "configFile": "lakefile.lean"},
   {"url": "https://github.com/leanprover-community/mathlib4.git",
