@@ -1313,13 +1313,19 @@ lemma List.toB128_pair (n : Nat) (n_lt : n < 2 ^ 16):
     rw [Nat.shiftRight_eq_zero _ _ (by omega)]; rfl
 lemma List.toB256_pair (n : Nat) (n_lt : n < 2 ^ 16):
     B8L.toB256 [(n >>> 8).toUInt8, n.toUInt8] = n.toB256 := by
-  apply @Eq.trans _ _ ⟨0, n.toB128⟩
-  · apply @Eq.trans _ _ ⟨0, B8L.toB128 [(n >>> 8).toUInt8, n.toUInt8]⟩
-    · simp [B8L.toB256, List.ekatD, B8L.pack]
-      apply congr_arg₂ _ rfl rfl
-    · apply congr_arg₂ _ rfl <| List.toB128_pair _ n_lt
-  · simp only [Nat.toB256]; apply congr_arg₂ _ _ rfl
-    rw [Nat.shiftRight_eq_zero _ _ (by omega)]; rfl
+  have hlow : ∀ a b : B8, B8.toB64 a <<< 8 ||| B8.toB64 b = B8L.toB64 [a, b] := by
+    intro a b
+    simp only [ B8L.toB64, B8L.toB32, B8L.toB16, B8L.pack, List.ekatD, List.takeD,
+      List.reverse, List.reverseAux, List.tail, List.headD, List.take, List.drop,
+      List.getElem!_cons_zero, List.getElem!_cons_succ, B8.toB16, B8.toB64,
+      B16.toB32, B32.toB64 ]
+    bv_decide
+  show B8L.toB256 [(n >>> 8).toB8, n.toB8] = n.toB256
+  rw [B8L.toB256_pair, hlow, List.toB64_pair n n_lt]
+  have h128 : n >>> 128 = 0 := Nat.shiftRight_eq_zero _ _ (by omega)
+  have h64 : n >>> 64 = 0 := Nat.shiftRight_eq_zero _ _ (by omega)
+  simp only [Nat.toB256, Nat.toB128, h128, h64]
+  rfl
 
 lemma Stack.push_cons_pop_cons
     {x y} {xs ys} {s s' s''}
@@ -6764,7 +6770,12 @@ lemma B8L.pack_sig (xs n) : B8L.pack (B8L.sig xs) n = B8L.pack xs n := by
     · rw [sig_nonzero_cons b bs h]
 
 lemma B8L.toB256_sig (bs : B8L) : B8L.toB256 (B8L.sig bs) = bs.toB256 := by
-  simp only [B8L.toB256]; rw [B8L.pack_sig]
+  induction bs with
+  | nil => rfl
+  | cons b bs ih =>
+    by_cases h : b = 0
+    · cases h; rw [sig_zero_cons, ih, B8L.toB256_zero_cons]
+    · rw [sig_nonzero_cons b bs h]
 
 def Stack.Diff (xs zs : Stack) (s s'' : Stack) : Prop :=
   ∃ s' : Stack, Stack.Pop xs s s' ∧ Stack.Push zs s' s''
