@@ -1319,7 +1319,18 @@ lemma List.toB256_pair (n : Nat) (n_lt : n < 2 ^ 16):
       List.reverse, List.reverseAux, List.tail, List.headD, List.take, List.drop,
       List.getElem!_cons_zero, List.getElem!_cons_succ, B8.toB16, B8.toB64,
       B16.toB32, B32.toB64 ]
-    bv_decide
+    simp
+    apply congrArg (fun x : B64 => x ||| b.toB64)
+    rw [← B64.toNat_inj]
+    rw [B64.toNat_mod, B64.toNat_mod, B64.toNat_shiftLeft]
+    have hw : B64.toNat (UInt8.toUInt64 a) = UInt8.toNat a := by cases a; rfl
+    have h8 : B64.toNat 8 % 64 = 8 := rfl
+    have h32 : B64.toNat 4294967296 = 4294967296 := rfl
+    have h16 : B64.toNat 65536 = 65536 := rfl
+    rw [hw, h8, h32, h16]
+    simp only [Nat.shiftLeft_eq, Nat.lo]
+    have h := UInt8.toNat_lt a
+    omega
   show B8L.toB256 [(n >>> 8).toB8, n.toB8] = n.toB256
   rw [B8L.toB256_pair, hlow, List.toB64_pair n n_lt]
   have h128 : n >>> 128 = 0 := Nat.shiftRight_eq_zero _ _ (by omega)
