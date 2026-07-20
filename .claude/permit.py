@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 """
-permit.py — sole arbiter for Bash commands under a Claude Code PreToolUse hook.
+permit.py — sole arbiter for Bash and Monitor commands under a Claude Code
+PreToolUse hook. Monitor wraps a shell command the same way Bash does (its
+`command` field); its ws mode has no command to inspect and always asks.
 
 Wire-up (in .claude/settings.json):
-    "hooks": { "PreToolUse": [ { "matcher": "Bash", "hooks": [
+    "hooks": { "PreToolUse": [ { "matcher": "^(Bash|Monitor)$", "hooks": [
         { "type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/permit.py\"" }
     ] } ] }
 
 Protocol:
-    stdin : JSON  {"tool_name":"Bash","tool_input":{"command":"..."}, ...}
+    stdin : JSON  {"tool_name":"Bash"|"Monitor","tool_input":{"command":"..."}, ...}
     stdout: JSON  {"hookSpecificOutput":{"hookEventName":"PreToolUse",
                    "permissionDecision":"allow"|"deny"|"ask",
                    "permissionDecisionReason":"..."}}
@@ -57,7 +59,10 @@ FIND_WRITE = {
 # Optional directory fence: if set, any *absolute* path argument must live under
 # one of these roots, else -> ask. Relative paths are fine (they resolve under
 # the project cwd). Set to None to disable the fence entirely.
-ALLOWED_ROOTS = ("/Users/bsk/blanc", "/Users/bsk/elevm")
+ALLOWED_ROOTS = ("/Users/bsk/blanc", "/Users/bsk/elevm",
+                 # Claude Code scratchpad (per-UID temp root); both spellings
+                 # needed since _resolve_path doesn't follow the /tmp symlink.
+                 "/private/tmp/claude-501", "/tmp/claude-501")
 
 # When True, a command substitution $(...) or `...` is allowed IFF the command
 # inside it is itself a read-only "allow" (validated recursively). When False,
@@ -673,10 +678,15 @@ def main():
     except Exception:
         return _emit("ask", "unreadable hook input")
 
-    if data.get("tool_name") != "Bash":
-        return _emit("ask", "non-Bash tool")
+    if data.get("tool_name") not in ("Bash", "Monitor"):
+        return _emit("ask", "unrecognized tool")
 
-    command = (data.get("tool_input") or {}).get("command", "")
+    tool_input = data.get("tool_input") or {}
+    if data.get("tool_name") == "Monitor" and "ws" in tool_input:
+        # WebSocket mode: no shell command to inspect, unfiltered egress
+        return _emit("ask", "Monitor ws mode (no command to inspect)")
+
+    command = tool_input.get("command", "")
     cwd = data.get("cwd") or ""
     try:
         decision, reason = decide(command, cwd)
