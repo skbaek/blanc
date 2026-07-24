@@ -1,0 +1,75 @@
+# ============================================================================
+# DRAFT — NOT ACTIVE (.yml.draft is ignored by GitHub Actions). Review-ready
+# draft of the cross-repo canary (CI plan P2 / Step 7): build blanc's proofs
+# against elevm *HEAD* instead of the pinned revision, as a daily early-warning
+# signal for how much proof-repair a future pin bump will cost.
+#
+# NON-BLOCKING BY DESIGN: never make this a required check. A red canary does
+# NOT mean blanc is broken — blanc's real CI (ci.yml) builds against the PINNED
+# elevm and stays green. Red just means elevm HEAD drifted in a way that will
+# cost effort at the next bump. Do NOT add continue-on-error (that hides the
+# signal); simply never gate merges on this workflow. Red is the signal working.
+#
+# MECHANISM — option B (workflow-only, no lakefile change): rewrite the pinned
+# elevm commit in lakefile.lean to elevm's current main HEAD in the CI checkout
+# (never committed), then `lake update elevm` + build. Option A (reintroduce an
+# ELEVM_DEV path override in lakefile.lean and check elevm out as a sibling) is
+# the alternative if you also want a reusable local-dev override — that needs a
+# Lake-DSL edit under the repo's Lean discipline.
+#
+# UNVERIFIED. Verify-on-run: (1) `lake update elevm` actually re-resolves the
+# manifest to the new pin before the build; (2) the elan install + PATH export
+# make `lake` available; (3) the summary shows the tested HEAD sha and the
+# pin-delta. Measure the clean-build time and tighten timeout-minutes.
+# ============================================================================
+name: canary (blanc vs elevm@HEAD)
+
+on:
+  schedule:
+    - cron: "0 9 * * *"   # offset from elevm's nightly (07:00 UTC)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  canary:
+    runs-on: ubuntu-24.04
+    # Basis: blanc's clean build compiles all of elevm from source (mathlib
+    # cached via `lake exe cache get`). Measure on the first run and tighten.
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Re-pin elevm to main HEAD (CI checkout only — never committed)
+        run: |
+          HEAD_SHA="$(git ls-remote https://github.com/skbaek/elevm.git refs/heads/main | cut -f1)"
+          OLD_PIN="$(grep -oE '[0-9a-f]{40}' lakefile.lean | head -1)"
+          echo "elevm main HEAD: $HEAD_SHA"
+          echo "blanc pin:       $OLD_PIN"
+          sed -i -E "s|(elevm\.git\" @ \")[0-9a-f]{40}|\1${HEAD_SHA}|" lakefile.lean
+          {
+            echo "### canary — blanc vs elevm@HEAD"
+            echo ""
+            echo "- elevm \`main\` HEAD tested: \`$HEAD_SHA\`"
+            echo "- blanc's current pin:      \`$OLD_PIN\`"
+            echo "- (pin delta = commits in elevm \`$OLD_PIN..$HEAD_SHA\`)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Toolchain only (no build yet): the build must happen AFTER `lake update`.
+      - name: Install elan (Lean toolchain manager)
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -o elan-init.sh
+          sh elan-init.sh -y --default-toolchain "$(cat lean-toolchain)"
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+      - name: Build blanc against elevm HEAD and run the axiom audit
+        run: |
+          lake update elevm          # re-resolve the manifest to the re-pinned HEAD
+          lake exe cache get || true  # mathlib olean cache (best effort)
+          scripts/check.sh            # lake build + AxiomCheck of the 4 theorems
