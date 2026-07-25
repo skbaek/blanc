@@ -1370,16 +1370,14 @@ lemma Devm.pushBurn_cons_popBurn_cons
 
 lemma Devm.burn_of_popBurn_nil {s s'} (h : Devm.PopBurn [] s s') :
     Devm.Burn s s' := by
-  simpa [Devm.PopBurn, Devm.Burn, Stack.Pop, Split] using h
+  refine ⟨?_, h.memory, h.gasLeft, h.logs, h.refundCounter, h.output, h.accountsToDelete, h.returnData, h.error, h.accessedAddresses, h.accessedStorageKeys, h.state, h.createdAccounts, h.transientStorage⟩; change s.stack = s'.stack; simpa only [Stack.Pop, Split, List.nil_append] using h.stack
 
 lemma Devm.burn_of_pushBurn_nil {s s'} (h : Devm.PushBurn [] s s') :
     Devm.Burn s s' := by
   rcases h with
     ⟨h_stack, h_mem, h_gas, h_logs, h_refund, h_out, h_del, h_ret, h_err,
       h_acc, h_keys, h_state, h_cas, h_trans⟩
-  exact ⟨by simpa [Stack.Push, Split] using h_stack.symm, h_mem, h_gas,
-    h_logs, h_refund, h_out, h_del, h_ret, h_err, h_acc, h_keys, h_state,
-    h_cas, h_trans⟩
+  refine ⟨?_, h_mem, h_gas, h_logs, h_refund, h_out, h_del, h_ret, h_err, h_acc, h_keys, h_state, h_cas, h_trans⟩; change s.stack = s'.stack; simpa only [Stack.Push, Split, List.nil_append] using h_stack.symm
 
 lemma Devm.burn_trans {x y z} (h1 : Devm.Burn x y) (h2 : Devm.Burn y z) : Devm.Burn x z := by
   rcases h1 with ⟨h1_stack, h1_mem, h1_gas, h1_logs, h1_refund, h1_out, h1_del, h1_ret, h1_err, h1_acc, h1_keys, h1_state, h1_cas, h1_trans⟩
@@ -3318,7 +3316,7 @@ lemma GenericCall.depth_lt
   dsimp [GenericCall] at run
   rcases run with ⟨evm1, _, run⟩
   split at run
-  · exact Option.noConfusion run.1
+  · cases run.1
   rename_i h_depth
   rcases run with ⟨calldata, _, run⟩
   rcases run with ⟨_, rfl, run⟩
@@ -3346,11 +3344,11 @@ lemma GenericCreate.depth_lt
   rcases run with ⟨devm3, _, run⟩
   rcases run with ⟨sender, _, run⟩
   split at run
-  · exact Option.noConfusion run.1
+  · cases run.1
   rename_i h_depth
   rcases run with ⟨devm4, _, run⟩
   split at run
-  · exact Option.noConfusion run.1
+  · cases run.1
   rename_i h_nonce
   rcases run with ⟨_, rfl, run⟩
   rcases run with ⟨ex', run_process, run_split⟩
@@ -3838,11 +3836,11 @@ lemma liftMachMeta_instructionFrame
   cases h : core d.mach d.meta with
   | error e =>
       rw [h] at hcore
-      simpa only [liftMachMeta, Footprint.liftOutcome, h] using
+      simpa only [liftMachMeta, Footprint.liftOutcome, h, Outcome.Rel] using
         Devm.instructionFrame_setMachMeta d e.2 hcore
   | ok x =>
       rw [h] at hcore
-      simpa only [liftMachMeta, Footprint.liftOutcome, h] using
+      simpa only [liftMachMeta, Footprint.liftOutcome, h, Outcome.Rel] using
         Devm.instructionFrame_setMachMeta d x.2 hcore
 
 lemma liftMachMetaPure_instructionFrame
@@ -4059,11 +4057,11 @@ lemma Outcome.Rel.bindExecution
       | error e =>
           have h := hnext x.1 x.2
           rw [hn] at h
-          simpa only [Except.bind_ok, hn] using htrans hout h
+          simpa only [Except.bind_ok, hn, Execution.Rel, Outcome.Rel] using htrans hout h
       | ok d =>
           have h := hnext x.1 x.2
           rw [hn] at h
-          simpa only [Except.bind_ok, hn, id_eq] using htrans hout h
+          simpa only [Except.bind_ok, hn, id_eq, Execution.Rel, Outcome.Rel] using htrans hout h
 
 lemma Execution.Rel.bind
     {R : Devm → Devm → Prop} (htrans : Transitive R)
@@ -4078,11 +4076,11 @@ lemma Execution.Rel.bind
       | error e =>
           have h := hnext d
           rw [hn] at h
-          simpa only [Except.bind_ok, hn] using htrans hout h
+          simpa only [Except.bind_ok, hn, Execution.Rel, Outcome.Rel] using htrans hout h
       | ok d' =>
           have h := hnext d
           rw [hn] at h
-          simpa only [Except.bind_ok, hn, id_eq] using htrans hout h
+          simpa only [Except.bind_ok, hn, id_eq, Execution.Rel, Outcome.Rel] using htrans hout h
 
 /-! ### Step 3 calibration cases -/
 
@@ -4399,10 +4397,10 @@ lemma Rinst.codecopy_runCore_instructionFrame
     (popNat3ChargePure_instructionFrame pre
       (fun memoryStart _ size d =>
         gVerylow + gasCopy * ceilDiv size 32 + d.extCost [(memoryStart, size)])
-      (fun memoryStart codeStart size d =>
-        d.withMemory (d.memory.write memoryStart
-          (sevm.code.sliceD codeStart size (Linst.toB8 .stop))))
-      (fun _ _ _ _ => Devm.instructionFrame_of_world_eq rfl rfl rfl rfl))
+      (fun memoryStart codeStart size d => d.memWrite memoryStart
+        (sevm.code.sliceD codeStart size (Linst.toB8 .stop)))
+      (fun memoryStart codeStart size d => Devm.memWrite_instructionFrame d
+        memoryStart (sevm.code.sliceD codeStart size (Linst.toB8 .stop))))
 
 lemma Rinst.mstore_runCore_instructionFrame
     (pc : Nat) (pre : Devm) (sevm : Sevm) :
@@ -4592,7 +4590,7 @@ lemma Rinst.pop_runCore_instructionFrame
   cases h : pre.pop with
   | error e =>
       rw [h] at hp
-      simpa [h] using hp
+      exact hp
   | ok x =>
       rcases x with ⟨word, d⟩
       rw [h] at hp
@@ -5154,7 +5152,7 @@ lemma Rinst.inv_getCode
     exact (hf.getCode_eq a).symm
   rcases eq_or_ne r .tstore with rfl | ht
   · have hf := Rinst.tstore_run_transientWriteFrame pc devm sevm; rw [run] at hf
-    simpa only [Devm.getCode, Devm.getAcct] using congrFun (congrArg (fun s => fun a => (s.get a).code) hf.state).symm a
+    simpa only [Devm.getCode, Devm.getAcct, id_eq] using congrFun (congrArg (fun s => fun a => (s.get a).code) hf.state).symm a
   · have hf := Rinst.run_instructionFrame pc sevm devm r hs ht; rw [run] at hf; exact (hf.getCode a).symm
 
 def Execution.getCode : Execution → Adr → ByteArray
@@ -7710,7 +7708,7 @@ lemma Rinst.inv_bal {r} : Rinst.Inv Devm.getBal r := by
   · have hf := Rinst.sstore_run_stateWriteFrame pc pre sevm; rw [hrun] at hf; exact funext hf.getBal_eq
   rcases eq_or_ne r .tstore with rfl | ht
   · have hf := Rinst.tstore_run_transientWriteFrame pc pre sevm; rw [hrun] at hf
-    simpa only [Devm.getBal] using congrArg (fun s => s.bal) hf.state
+    exact congrArg (fun s => s.bal) hf.state
   · have hf := Rinst.run_instructionFrame pc sevm pre r hs ht; rw [hrun] at hf; exact funext hf.getBal
 
 lemma memRead_getStor_eq {x n : Nat} {devm devm' : Devm} {value : B8L} (h : devm.memRead x n = ⟨value, devm'⟩) : devm'.getStor = devm.getStor := by
@@ -7725,7 +7723,7 @@ lemma Rinst.inv_stor {r} (h_not_sstore : r ≠ Rinst.sstore) : Rinst.Inv Devm.ge
   intro pc sevm pre post hrun
   rcases eq_or_ne r .tstore with rfl | ht
   · have hf := Rinst.tstore_run_transientWriteFrame pc pre sevm; rw [hrun] at hf
-    simpa only [Devm.getStor, Devm.getAcct] using congrArg (fun s => fun a => (s.get a).stor) hf.state
+    exact congrArg (fun s => fun a => (s.get a).stor) hf.state
   · have hf := Rinst.run_instructionFrame pc sevm pre r h_not_sstore ht; rw [hrun] at hf
     exact funext hf.getStor
 
@@ -7843,9 +7841,9 @@ theorem not_mem_foldl_insert {a : Adr} {l : List Adr} {m : AdrSet}
 
 theorem not_mem_union {a : Adr} {m₁ m₂ : AdrSet} (h₁ : a ∉ m₁) (h₂ : a ∉ m₂) :
     a ∉ m₁.union m₂ := by
-  unfold Std.HashSet.union
-  rw [Std.HashSet.fold_eq_foldl_toList]
-  exact not_mem_foldl_insert h₁ (fun h => h₂ (Std.HashSet.mem_toList.mp h))
+  intro h
+  have hm : a ∈ m₁ ∨ a ∈ m₂ := Std.HashSet.mem_union_iff.mp h
+  exact hm.elim h₁ h₂
 
 theorem not_mem_empty {a : Adr} {c : Nat} :
     a ∉ (Std.HashSet.emptyWithCapacity c : AdrSet) := by
@@ -7965,7 +7963,7 @@ lemma ne_wa_of_not_hasCodeOrNonce {st : State} {wa ct : Adr}
   have hb : (st.getCode ct).size = 0 := by
     unfold ByteArray.isEmpty at h_empty
     simp at h_empty
-    exact h_empty
+    simpa using congrArg ByteArray.size h_empty
   have h_empty_list : (st.getCode ct).toList = [] := by
     unfold ByteArray.toList
     unfold ByteArray.toList.loop
@@ -8241,10 +8239,10 @@ lemma Rinst.inv_delSets_err {pc : Nat} {sevm : Sevm} {devm : Devm} {r : Rinst}
     devm'.delSets = devm.delSets := by
   rcases eq_or_ne r .sstore with rfl | hs
   · have hf := Rinst.sstore_run_stateWriteFrame pc devm sevm; rw [run] at hf
-    exact (Prod.ext (by simpa only using hf.accountsToDelete) (by simpa only using hf.createdAccounts)).symm
+    exact (Prod.ext (by change devm.accountsToDelete = devm'.accountsToDelete; exact hf.accountsToDelete) (by change devm.createdAccounts = devm'.createdAccounts; exact hf.createdAccounts)).symm
   rcases eq_or_ne r .tstore with rfl | ht
   · have hf := Rinst.tstore_run_transientWriteFrame pc devm sevm; rw [run] at hf
-    exact (Prod.ext (by simpa only using hf.accountsToDelete) (by simpa only using hf.createdAccounts)).symm
+    exact (Prod.ext (by change devm.accountsToDelete = devm'.accountsToDelete; exact hf.accountsToDelete) (by change devm.createdAccounts = devm'.createdAccounts; exact hf.createdAccounts)).symm
   · have hf := Rinst.run_instructionFrame pc sevm devm r hs ht; rw [run] at hf; exact hf.delSets.symm
 
 lemma Jinst.inv_delSets {pc : Nat} {sevm : Sevm} {devm : Devm} {j : Jinst}

@@ -406,7 +406,7 @@ lemma B256.and_eq_and_prod_and (x y : B256) :
 
 lemma B128.zero_and {x : B128} : 0 &&& x = 0 := by
   simp [B128.and_eq_and_prod_and]
-  apply Prod.ext <;> simp
+  apply Prod.ext <;> change (0 : B64) &&& _ = 0 <;> apply UInt64.zero_and
 
 lemma B64.mask_and_eq_zero (x : B32) :
     (0xffffffff00000000 : B64) &&& x.toB64 = 0 := by
@@ -461,9 +461,10 @@ lemma validAdr_iff {w : B256} :
   · refine' ⟨w.toAdr, _⟩
     rcases w with ⟨⟨wz, wh⟩, wl⟩
     simp only [addressMask, B256.and_eq_and_prod_and, B128.and_eq_and_prod_and] at h
-    rw [show (0 : B256) = ((0, 0), (0, 0)) from rfl,
-      Prod.mk.injEq, Prod.mk.injEq, Prod.mk.injEq] at h
-    obtain ⟨⟨hz, hm⟩, -⟩ := h
+    have hz := congrArg (fun x : B256 => x.1.1) h
+    have hm := congrArg (fun x : B256 => x.1.2) h
+    change B64.max &&& wz = 0 at hz
+    change (0xffffffff00000000 : B64) &&& wh = 0 at hm
     have h_wz : wz = 0 := by
       simp only [B64.max] at hz
       change (-1 : B64) &&& wz = 0 at hz
@@ -3979,9 +3980,9 @@ lemma Linst.inv_postcond {wa : Adr} {sevm : Sevm} {pre post : Devm} {l : Linst}
     exact postcond_of_precond h_pc
   case ret =>
     have h_bal : pre.getBal = post.getBal :=
-      (inferInstanceAs (Linst.Hinv Devm.getBal Devm.getBal Linst.ret)).inv h_run
+      ((inferInstance : Linst.Hinv Devm.getBal Devm.getBal Linst.ret)).inv h_run
     have h_stor : pre.getStor = post.getStor :=
-      (inferInstanceAs (Linst.Hinv Devm.getStor Devm.getStor Linst.ret)).inv h_run
+      ((inferInstance : Linst.Hinv Devm.getStor Devm.getStor Linst.ret)).inv h_run
     constructor
     · rw [← h_bal]; exact h_pc.nof
     · unfold Devm.PostSolvent Stor.Solvent
@@ -6001,7 +6002,7 @@ lemma checkTransaction_sender_ne_of_inv_solvent {wa : Adr}
     · have h_empty' : (benv.state.getCode wa).toList = [] := by
         apply List.eq_nil_of_length_eq_zero
         rw [← ByteArray.size_eq_length_toList]
-        simpa [ByteArray.isEmpty] using h_empty
+        unfold ByteArray.isEmpty at h_empty; simp at h_empty; simpa [State.getCode] using congrArg ByteArray.size h_empty
       exact Prog.compile_ne_nil (p := weth) (by rw [← h_inv.state.code, h_empty'])
     · exact not_delegation_of_compile h_inv.state.code h_del
   simp [checkTransactionSenderCode, h_no] at hg
@@ -6468,9 +6469,10 @@ lemma processUncheckedSystemTransaction_inv_solvent_sum_le (wa : Adr)
     refine ⟨h_inv.state, ?_, ?_, ?_, ?_, ?_⟩
     · refine ⟨h_inv.ca, ?_⟩
       intro hnil
+      have hnil' : (benv.state.getCode wa).toList = [] := by
+        simpa only [processSystemTransactionMsg, Benv.beginTransaction] using hnil
       exact Prog.compile_ne_nil (p := weth) (by
-        rw [← h_inv.state.code]
-        simpa [processSystemTransactionMsg] using hnil)
+        rw [← h_inv.state.code, hnil'])
     · intro _ htarget
       simp only [processSystemTransactionMsg] at htarget ⊢
       subst target
@@ -6872,7 +6874,7 @@ lemma processWithdrawalsState_inv_solvent (wa : Adr)
           (st.addBal wd.recipient (wd.amount * (10 ^ 9).toB256)) wds := rfl
     rw [h_step]
     have hb : sum st.bal + (wd.amount * (10 ^ 9).toB256).toNat < 2 ^ 256 := by
-      rw [h_val]; omega
+      rw [h_val]; exact lt_of_le_of_lt (Nat.add_le_add_left (Nat.le_add_right (wd.amount.toNat * 10 ^ 9) (wdsum wds)) (sum st.bal)) h_bound
     have h_sum := sum_addBal_eq st wd.recipient _ hb
     apply ih
     · rw [h_sum, h_val]; omega
@@ -6884,11 +6886,10 @@ lemma processCheckedSystemTransaction_to_unchecked {benv : Benv} {target : Adr} 
     processUncheckedSystemTransaction benv target data = .ok ⟨st, out⟩ := by
   dsimp [processCheckedSystemTransaction, processUncheckedSystemTransaction] at h ⊢
   split at h
-  · exact (Except.noConfusion h)
-  · simp only [pure_bind] at h
-    rcases of_bind_eq_ok h with ⟨⟨st', out'⟩, h1, h2⟩
+  · cases h
+  · rcases of_bind_eq_ok h with ⟨⟨st', out'⟩, h1, h2⟩
     split at h2
-    · exact (Except.noConfusion h2)
+    · cases h2
     · obtain ⟨h3, h4⟩ := Prod.mk.inj (Except.ok.inj h2)
       subst h3; subst h4; exact h1
 
@@ -6912,8 +6913,7 @@ lemma processGeneralPurposeRequests_inv_solvent_sum_le (wa : Adr)
   rcases of_bind_eq_ok h_run with ⟨deposits, h_dep, h_run⟩
   dsimp only at h_run
   split at h_run <;>
-    (simp only [pure_bind] at h_run;
-     rcases of_bind_eq_ok h_run with ⟨⟨st1, out1⟩, h1, h_run⟩;
+    (rcases of_bind_eq_ok h_run with ⟨⟨st1, out1⟩, h1, h_run⟩;
      dsimp only at h_run;
      have hu1 := processUncheckedSystemTransaction_inv_solvent_sum_le wa benv
        withdrawalRequestPredeployAddress [] st1 out1
@@ -7037,9 +7037,8 @@ theorem addBlockToChain_inv_solvent (wa : Adr)
   obtain ⟨_, _, h_run⟩ := of_bind_eq_ok h_run
   -- outer hash check
   split at h_run
-  · exact absurd h_run (by simp)
-  · simp only [pure_bind] at h_run
-    -- case on `stateTransition ch block`
+  · cases h_run
+  · -- case on `stateTransition ch block`
     split at h_run
     · simp [Pure.pure, Except.pure] at h_run
     · rename_i chain h_st
