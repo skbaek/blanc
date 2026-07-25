@@ -1822,11 +1822,11 @@ def findSubscript (x : Lean.Expr) : Lean.Elab.Tactic.TacticM String := do
     let some nm ← ctx.findDeclM? (matchingName x) | failure
     match nm with
     | Lean.Name.str _ s =>
-      match s.data with
+      match s.toList with
       | 's' :: cs =>
         match subscript_succ cs with
         | none => failure
-        | some cs' => pure ⟨cs'⟩
+        | some cs' => pure (String.ofList cs')
       | _ => failure
     | _ => failure
 

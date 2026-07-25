@@ -1055,9 +1055,9 @@ lemma saturation (lim : Nat) : Saturation lim := by
       iterate 8 (eee_bind ne);
       split; {rfl}
       rename_i neg; rw [if_neg neg] at ne; clear neg
-      eee_bind ne; eee_bind ne; split; {rfl}
+      eee_bind ne; split; {rfl}
       rename_i neg; rw [if_neg neg] at ne; clear neg
-      eee_bind ne; eee_bind ne
+      eee_bind ne
       have ne' := Fueled.mapResult_ne_exhausted (Fueled.head_ne_exhausted_of_bind ne)
       rw [ih.processCreateMessage _ ne' lim' (by omega)]
     · intro _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ne lim' lt
@@ -1066,7 +1066,7 @@ lemma saturation (lim : Nat) : Saturation lim := by
       eee_bind ne; split at ne
       · rename_i pos; rw [if_pos pos, if_pos pos]
       · rename_i neg; rw [if_neg neg, if_neg neg]
-        iterate 3 (eee_bind ne)
+        iterate 2 (eee_bind ne)
         have ne' := Fueled.mapResult_ne_exhausted (Fueled.head_ne_exhausted_of_bind ne)
         rw [ih.processMessage _ ne' lim' (by omega)]
     · intro _ _ x ne lim' lt
@@ -1622,24 +1622,18 @@ lemma of_genericCreate
   · rename_i pos
     apply Exists.imp (λ _ (conj : _ ∧ _) => ⟨conj.1, ite_of_true pos conj.2⟩)
     refine' ⟨.none, .intro, _⟩
-    simp only [bind_pure] at eq
     exact ⟨rfl, Fueled.ofExcept_inj.mp eq⟩
   · rename_i neg
     apply Exists.imp (λ _ (conj : _ ∧ _) => ⟨conj.1, ite_of_false neg conj.2⟩)
     clear neg
-    change (Fueled.ok PUnit.unit >>= _) = _ at eq
-    rw [Fueled.ok_bind] at eq
     okStep1 eq evm'
     split at eq
     · rename_i pos
       apply Exists.imp (λ _ (conj : _ ∧ _) => ⟨conj.1, ite_of_true pos conj.2⟩)
-      simp only [bind_pure] at eq
       refine' ⟨.none, .intro, rfl, Fueled.ofExcept_inj.mp eq⟩
     · rename_i neg
       apply Exists.imp (λ _ (conj : _ ∧ _) => ⟨conj.1, ite_of_false neg conj.2⟩)
       clear neg
-      change (Fueled.ok PUnit.unit >>= _) = _ at eq
-      rw [Fueled.ok_bind] at eq
       okStep1 eq msg
       rcases Fueled.of_bind_eq' eq with ⟨ex'', hmap, eq⟩
       rcases Fueled.of_mapResult_eq hmap with ⟨ex', hrec, hlift⟩
@@ -1669,12 +1663,10 @@ lemma of_genericCall {sevm : Sevm} {devm : Devm} {gas : Nat} {value : B256}
   {cases Fueled.exhausted_ne_ofExcept eq}
   okStep1 eq _; split at eq
   { rename_i pos; refine' ⟨.none, .intro, _⟩
-    simp only [bind_pure] at eq
     simp only []; rw [if_pos pos]
     exact ⟨trivial, Fueled.ofExcept_inj.mp eq⟩ }
   rename_i neg
   apply Exists.imp (λ _ (h' : _ ∧ _) => ⟨h'.1, ite_of_false neg h'.2⟩)
-  simp only [pure_bind] at eq
   okStep1 eq _; okStep1 eq msg
   rcases Fueled.of_bind_eq' eq with ⟨ex'', hmap, eq⟩
   rcases Fueled.of_mapResult_eq hmap with ⟨ex', hrec, hlift⟩

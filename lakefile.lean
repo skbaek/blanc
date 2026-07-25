@@ -7,10 +7,10 @@ package «blanc» where
   ]
 
 require mathlib from git
-  "https://github.com/leanprover-community/mathlib4.git" @ "v4.23.0"
+  "https://github.com/leanprover-community/mathlib4.git" @ "v4.32.1"
 
 require elevm from git
-  "https://github.com/skbaek/elevm.git" @ "1facd137483c2c995ba6e9fddf6d1da4165e924d"
+  "https://github.com/skbaek/elevm.git" @ "34a42fad5015fb55027373d14b98e6e87f8e8543"
 
 @[default_target]
 lean_lib «Blanc» where
