@@ -800,7 +800,7 @@ lemma of_bind_eq_ok {ξ υ ζ} {f : Except ξ υ}
 inductive Except.IsOk {ξ υ} : Except ξ υ → Prop
   | intro {x : υ} : Except.IsOk (Except.ok x)
 
-def of_bind_eq {ξ : Type u} {υ ζ : Type v} {f : Except ξ υ} {g : υ → Except ξ ζ}
+theorem of_bind_eq {ξ : Type u} {υ ζ : Type v} {f : Except ξ υ} {g : υ → Except ξ ζ}
     {e : Except ξ ζ} (eq : f >>= g = e) :
     (∃ x, f = .error x ∧ e = .error x) ∨ (∃ y, f = .ok y ∧ g y = e) := by
   rcases f with x | y

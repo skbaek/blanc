@@ -343,7 +343,7 @@ lemma approve_inv_bal : Func.Inv Devm.getBal Devm.getBal approve := by prog_inv
 
 def ValidAdr (w : B256) : Prop := ∃ a : Adr, a.toB256 = w
 
-def validAdr_toB256 (a : Adr) : ValidAdr a.toB256 := ⟨a, rfl⟩
+theorem validAdr_toB256 (a : Adr) : ValidAdr a.toB256 := ⟨a, rfl⟩
 
 lemma toB256_toAdr {w : B256} :
     ValidAdr w → w.toAdr.toB256 = w := by
@@ -3534,7 +3534,7 @@ lemma GenericCreate.some_inv_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm
   have h_new_ne : newAddress ≠ wa := by
     intro hc
     subst hc
-    push_neg at h_coll
+    push Not at h_coll
     have h_size := h_coll.2.1
     apply @Prog.compile_ne_nil weth
     rw [← h_pc.code]
@@ -4822,7 +4822,7 @@ lemma GenericCreate.inv_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
           rcases h with ⟨childMsg, eq_childMsg, h⟩; subst eq_childMsg
           rcases h with ⟨ex', run_pcm, h_split⟩
           have h_ct : newAddress ≠ wa := by
-            push_neg at h_c2
+            push Not at h_c2
             exact ne_wa_of_code_size_zero hnd4.code h_c2.2.1
           have h_pm : MsgResult.NoDel wa ex' :=
             ProcessCreateMessage.inv_noDel inv run_pcm h_ct ⟨hnd4.ca, hnd4.code⟩
@@ -5125,7 +5125,7 @@ def Devm.NoDelCode (wa : Adr) (pre post : Devm) : Prop :=
   Devm.NoDel wa pre → Devm.NoDel wa post
 
 lemma noDelCode_refl_trans (wa : Adr) :
-    Reflexive (Devm.NoDelCode wa) ∧ Transitive (Devm.NoDelCode wa) := by
+    ReflexiveRel (Devm.NoDelCode wa) ∧ TransitiveRel (Devm.NoDelCode wa) := by
   constructor
   · exact fun _ => id
   · intro a b c hab hbc

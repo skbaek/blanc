@@ -194,7 +194,7 @@ def sumBelow (f : Adr → B256) : Nat → Nat
   | 0 => 0
   | n + 1 => sumBelow f n + (f n.toAdr).toNat
 
-def sumBelow_succ {f : Adr → B256} {n} :
+theorem sumBelow_succ {f : Adr → B256} {n} :
     sumBelow f (n + 1) = sumBelow f n + (f n.toAdr).toNat := by
   delta sumBelow; rfl
 
@@ -313,7 +313,7 @@ lemma toLinst_toB8 {o : Linst} :
 
 lemma toInstType_pushToB8 {bs : B8L} (h : bs.length ≤ 32) :
     (pushToB8 bs).toInstType = .P := by
-  rw [← Nat.lt_succ] at h
+  rw [← Nat.lt_succ_iff] at h
   simp only [pushToB8]; revert h
   generalize bs.length = n; revert n
   repeat (rw [Nat.forall_lt_succ_right']; refine' ⟨_, rfl⟩)
@@ -827,7 +827,7 @@ notation "□p" => Exec'.Fa
 def carryover (π : Exec'.Pred) : Exec'.Pred :=
 (λ pk => □p (Exec'.gt pk →p π)) →p π
 
-def Exec'.strongRec (π : Exec'.Pred) : □p (carryover π) → □p π := by
+theorem Exec'.strongRec (π : Exec'.Pred) : □p (carryover π) → □p π := by
   intro ih pk
   apply @WellFounded.induction _ Exec'.lt Exec'.lt.well_founded π pk
   clear pk; intro pk ih'
@@ -835,7 +835,7 @@ def Exec'.strongRec (π : Exec'.Pred) : □p (carryover π) → □p π := by
   intro pk' h_gt
   apply ih' _ h_gt
 
-def Ninst.of_run'_reg {pc : Nat} {sevm : Sevm} {devm : Devm}
+theorem Ninst.of_run'_reg {pc : Nat} {sevm : Sevm} {devm : Devm}
     {r : Rinst} {ex : Execution}
   (run : Ninst.Run' pc sevm devm (.reg r) .none ex) :
   (Rinst.run ⟨pc, sevm, devm⟩ r) = ex := run
@@ -1724,7 +1724,7 @@ theorem correct (sevm : Sevm) (pre : Devm) (p : Prog) (post : Devm)
   apply correct_core p.main p.aux ⟨1, sevm, inter, .ok post, exc'⟩ p.main eq h_sub
 
 def Char.toB8 (c : Char) : B8 := Nat.toUInt8 c.toNat
-def String.toB8L (s : String) : B8L := s.data.map Char.toB8
+def String.toB8L (s : String) : B8L := s.toList.map Char.toB8
 def String.keccak (s : String) : B256 := s.toB8L.keccak
 
 def isMax : Line := [not, iszero]
@@ -1773,7 +1773,7 @@ open Lean
 open Qq
 
 def String.toSyntax (s : String) : Lean.Syntax :=
-  Lean.Syntax.ident Lean.SourceInfo.none s.toSubstring
+  Lean.Syntax.ident Lean.SourceInfo.none s.toRawSubstring
     (Lean.Name.str Lean.Name.anonymous s) []
 
 def Strings.intro (ss : List String) : Lean.Elab.Tactic.TacticM Unit := do
@@ -2944,7 +2944,7 @@ lemma Xinst.prep_codeSource
         injection h_xl with h_xl_eq
         injection h_xl_eq with h_sevm_eq _
         subst h_sevm_eq
-        push_neg at h_target_nonce
+        push Not at h_target_nonce
         rcases h_target_nonce with ⟨_, h_code_size, _⟩
         have h1 : devm4.getCode newAddress = devm1.getCode newAddress := by subst hp_devm4; exact Devm.incrNonce_getCode
         have h2 : devm1.getCode newAddress = devm3.getCode newAddress := by subst eq1; rfl
@@ -3154,7 +3154,7 @@ lemma Xinst.prep_codeSource
         injection h_xl with h_xl_eq
         injection h_xl_eq with h_sevm_eq _
         subst h_sevm_eq
-        push_neg at h_target_nonce
+        push Not at h_target_nonce
         rcases h_target_nonce with ⟨_, h_code_size, _⟩
         have h1 : devm4.getCode newAddress = devm1.getCode newAddress := by subst hp_devm4; exact Devm.incrNonce_getCode
         have h2 : devm1.getCode newAddress = devm3.getCode newAddress := by subst eq1; rfl
@@ -3580,24 +3580,31 @@ lemma Devm.popToNat_getStor_eq {devm devm' n} (h : Devm.popToNat devm = .ok ⟨n
 
 /-! ## Fieldwise `Devm.Rel` infrastructure -/
 
+/-- Functional compatibility form of reflexivity, avoiding the deprecated root alias. -/
+abbrev ReflexiveRel {α : Sort*} (r : α → α → Prop) : Prop := ∀ x, r x x
+
+/-- Functional compatibility form of transitivity, avoiding the deprecated root alias. -/
+abbrev TransitiveRel {α : Sort*} (r : α → α → Prop) : Prop :=
+  ∀ ⦃x y z⦄, r x y → r y z → r x z
+
 def Devm.Rels.Refl (r : Devm.Rels) : Prop :=
-  Reflexive r.stack ∧ Reflexive r.memory ∧ Reflexive r.gasLeft ∧
-  Reflexive r.logs ∧ Reflexive r.refundCounter ∧ Reflexive r.output ∧
-  Reflexive r.accountsToDelete ∧ Reflexive r.returnData ∧ Reflexive r.error ∧
-  Reflexive r.accessedAddresses ∧ Reflexive r.accessedStorageKeys ∧
-  Reflexive r.state ∧ Reflexive r.createdAccounts ∧
-  Reflexive r.transientStorage
+  ReflexiveRel r.stack ∧ ReflexiveRel r.memory ∧ ReflexiveRel r.gasLeft ∧
+  ReflexiveRel r.logs ∧ ReflexiveRel r.refundCounter ∧ ReflexiveRel r.output ∧
+  ReflexiveRel r.accountsToDelete ∧ ReflexiveRel r.returnData ∧ ReflexiveRel r.error ∧
+  ReflexiveRel r.accessedAddresses ∧ ReflexiveRel r.accessedStorageKeys ∧
+  ReflexiveRel r.state ∧ ReflexiveRel r.createdAccounts ∧
+  ReflexiveRel r.transientStorage
 
 def Devm.Rels.Trans (r : Devm.Rels) : Prop :=
-  Transitive r.stack ∧ Transitive r.memory ∧ Transitive r.gasLeft ∧
-  Transitive r.logs ∧ Transitive r.refundCounter ∧ Transitive r.output ∧
-  Transitive r.accountsToDelete ∧ Transitive r.returnData ∧ Transitive r.error ∧
-  Transitive r.accessedAddresses ∧ Transitive r.accessedStorageKeys ∧
-  Transitive r.state ∧ Transitive r.createdAccounts ∧
-  Transitive r.transientStorage
+  TransitiveRel r.stack ∧ TransitiveRel r.memory ∧ TransitiveRel r.gasLeft ∧
+  TransitiveRel r.logs ∧ TransitiveRel r.refundCounter ∧ TransitiveRel r.output ∧
+  TransitiveRel r.accountsToDelete ∧ TransitiveRel r.returnData ∧ TransitiveRel r.error ∧
+  TransitiveRel r.accessedAddresses ∧ TransitiveRel r.accessedStorageKeys ∧
+  TransitiveRel r.state ∧ TransitiveRel r.createdAccounts ∧
+  TransitiveRel r.transientStorage
 
 lemma Devm.rel_refl {r : Devm.Rels} (hr : Devm.Rels.Refl r) :
-    Reflexive (Devm.Rel r) := by
+    ReflexiveRel (Devm.Rel r) := by
   intro d
   rcases hr with ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14⟩
   constructor
@@ -3617,7 +3624,7 @@ lemma Devm.rel_refl {r : Devm.Rels} (hr : Devm.Rels.Refl r) :
   · exact h14 _
 
 lemma Devm.rel_trans {r : Devm.Rels} (hr : Devm.Rels.Trans r) :
-    Transitive (Devm.Rel r) := by
+    TransitiveRel (Devm.Rel r) := by
   intro a b c hab hbc
   constructor
   · exact hr.1 hab.stack hbc.stack
@@ -3718,16 +3725,16 @@ def Meta.InstructionFrame (a b : Meta) : Prop :=
 
 lemma Devm.Rels.instructionFrame_refl :
     Devm.Rels.Refl Devm.Rels.instructionFrame := by
-  simp [Devm.Rels.Refl, Devm.Rels.instructionFrame, Reflexive]
+  simp [Devm.Rels.Refl, Devm.Rels.instructionFrame, ReflexiveRel]
 
 lemma Devm.Rels.instructionFrame_trans :
     Devm.Rels.Trans Devm.Rels.instructionFrame := by
-  simp [Devm.Rels.Trans, Devm.Rels.instructionFrame, Transitive]
+  simp [Devm.Rels.Trans, Devm.Rels.instructionFrame, TransitiveRel]
 
-lemma Devm.instructionFrame_refl : Reflexive Devm.InstructionFrame :=
+lemma Devm.instructionFrame_refl : ReflexiveRel Devm.InstructionFrame :=
   Devm.rel_refl Devm.Rels.instructionFrame_refl
 
-lemma Devm.instructionFrame_trans : Transitive Devm.InstructionFrame :=
+lemma Devm.instructionFrame_trans : TransitiveRel Devm.InstructionFrame :=
   Devm.rel_trans Devm.Rels.instructionFrame_trans
 
 lemma Devm.machFrame_refines_instructionFrame :
@@ -4044,7 +4051,7 @@ lemma Rinst.balanceCore_instructionFrame (d : Devm) :
 /-! ### Bind composition for frame relations -/
 
 lemma Outcome.Rel.bindExecution
-    {R : Devm → Devm → Prop} (htrans : Transitive R)
+    {R : Devm → Devm → Prop} (htrans : TransitiveRel R)
     {pre : Devm} {out : Except (String × Devm) (α × Devm)}
     {next : α → Devm → Execution}
     (hout : Outcome.Rel Prod.snd Prod.snd R pre out)
@@ -4064,7 +4071,7 @@ lemma Outcome.Rel.bindExecution
           simpa only [Except.bind_ok, hn, id_eq, Execution.Rel, Outcome.Rel] using htrans hout h
 
 lemma Execution.Rel.bind
-    {R : Devm → Devm → Prop} (htrans : Transitive R)
+    {R : Devm → Devm → Prop} (htrans : TransitiveRel R)
     {pre : Devm} {out : Execution} {next : Devm → Execution}
     (hout : Execution.Rel R pre out)
     (hnext : ∀ d, Execution.Rel R d (next d)) :
@@ -4158,33 +4165,33 @@ abbrev Devm.TransientWriteFrame : Devm → Devm → Prop :=
 lemma Devm.Rels.stateWriteFrame_refl :
     Devm.Rels.Refl Devm.Rels.stateWriteFrame := by
   simp [Devm.Rels.Refl, Devm.Rels.stateWriteFrame,
-    Devm.Rels.instructionFrame, State.BalCodeEq, Reflexive]
+    Devm.Rels.instructionFrame, State.BalCodeEq, ReflexiveRel]
 
 lemma Devm.Rels.stateWriteFrame_trans :
     Devm.Rels.Trans Devm.Rels.stateWriteFrame := by
   simp_all [Devm.Rels.Trans, Devm.Rels.stateWriteFrame,
-    Devm.Rels.instructionFrame, State.BalCodeEq, Transitive]
+    Devm.Rels.instructionFrame, State.BalCodeEq, TransitiveRel]
 
 lemma Devm.Rels.transientWriteFrame_refl :
     Devm.Rels.Refl Devm.Rels.transientWriteFrame := by
   simp [Devm.Rels.Refl, Devm.Rels.transientWriteFrame,
-    Devm.Rels.instructionFrame, Reflexive]
+    Devm.Rels.instructionFrame, ReflexiveRel]
 
 lemma Devm.Rels.transientWriteFrame_trans :
     Devm.Rels.Trans Devm.Rels.transientWriteFrame := by
   simp [Devm.Rels.Trans, Devm.Rels.transientWriteFrame,
-    Devm.Rels.instructionFrame, Transitive]
+    Devm.Rels.instructionFrame, TransitiveRel]
 
-lemma Devm.stateWriteFrame_refl : Reflexive Devm.StateWriteFrame :=
+lemma Devm.stateWriteFrame_refl : ReflexiveRel Devm.StateWriteFrame :=
   Devm.rel_refl Devm.Rels.stateWriteFrame_refl
 
-lemma Devm.stateWriteFrame_trans : Transitive Devm.StateWriteFrame :=
+lemma Devm.stateWriteFrame_trans : TransitiveRel Devm.StateWriteFrame :=
   Devm.rel_trans Devm.Rels.stateWriteFrame_trans
 
-lemma Devm.transientWriteFrame_refl : Reflexive Devm.TransientWriteFrame :=
+lemma Devm.transientWriteFrame_refl : ReflexiveRel Devm.TransientWriteFrame :=
   Devm.rel_refl Devm.Rels.transientWriteFrame_refl
 
-lemma Devm.transientWriteFrame_trans : Transitive Devm.TransientWriteFrame :=
+lemma Devm.transientWriteFrame_trans : TransitiveRel Devm.TransientWriteFrame :=
   Devm.rel_trans Devm.Rels.transientWriteFrame_trans
 
 lemma Devm.instructionFrame_refines_stateWriteFrame :
@@ -4238,7 +4245,7 @@ lemma popChargePush_instructionFrame (pre : Devm)
   exact Devm.push_instructionFrame (value x d') d'
 
 lemma Execution.Rel.trans_left {R : Devm → Devm → Prop}
-    (htrans : Transitive R) {a b : Devm} {out : Execution}
+    (htrans : TransitiveRel R) {a b : Devm} {out : Execution}
     (hab : R a b) (hout : Execution.Rel R b out) :
     Execution.Rel R a out := by
   cases out <;> exact htrans hab hout
@@ -5480,7 +5487,7 @@ lemma GenericCreate.codePreserve
             rw [eq_err]
             have h_a_ne : a ≠ newAddress := by
               intro heq
-              push_neg at h_if2
+              push Not at h_if2
               have h_code_size : (devm4.getCode newAddress).size = 0 := h_if2.2.1
               have h_empty : devm4.getCode newAddress = .empty := by
                 cases h_code' : devm4.getCode newAddress with | mk data =>
@@ -5518,7 +5525,7 @@ lemma GenericCreate.codePreserve
           · intro a ha
             have h_a_ne : a ≠ newAddress := by
               intro heq
-              push_neg at h_if2
+              push Not at h_if2
               have h_code_size : (devm4.getCode newAddress).size = 0 := h_if2.2.1
               have h_empty : devm4.getCode newAddress = .empty := by
                 cases h_code' : devm4.getCode newAddress with | mk data =>
@@ -5843,7 +5850,7 @@ lemma Ninst.effectGen_exec {R : Devm → Devm → Prop} {x : Xinst}
 /-- The load-bearing mutual-induction traversal: per-instruction canonical
 effects compose into `Execution.Rel` for a complete `Exec` run. -/
 theorem Exec.effect {R : Devm → Devm → Prop}
-    (hrefl : Reflexive R) (htrans : Transitive R)
+    (hrefl : ReflexiveRel R) (htrans : TransitiveRel R)
     (hn : ∀ n, Ninst.EffectGen R n)
     (hj : ∀ j, Jinst.Effect R j)
     (hl : ∀ l, Linst.Effect R l)
@@ -5869,7 +5876,7 @@ theorem Exec.effect {R : Devm → Devm → Prop}
   | last hAt hRun => exact hl _ hRun
 
 lemma Xlot.rel_of_filled {R : Devm → Devm → Prop}
-    (hrefl : Reflexive R) (htrans : Transitive R)
+    (hrefl : ReflexiveRel R) (htrans : TransitiveRel R)
     (hn : ∀ n, Ninst.EffectGen R n)
     (hj : ∀ j, Jinst.Effect R j)
     (hl : ∀ l, Linst.Effect R l)
@@ -5882,7 +5889,7 @@ lemma Xlot.rel_of_filled {R : Devm → Devm → Prop}
     exact Exec.effect hrefl htrans hn hj hl hrun
 
 lemma Ninst.effect_of_effectGen {R : Devm → Devm → Prop}
-    (hrefl : Reflexive R) (htrans : Transitive R)
+    (hrefl : ReflexiveRel R) (htrans : TransitiveRel R)
     (hn : ∀ n, Ninst.EffectGen R n)
     (hj : ∀ j, Jinst.Effect R j)
     (hl : ∀ l, Linst.Effect R l) :
@@ -5893,7 +5900,7 @@ lemma Ninst.effect_of_effectGen {R : Devm → Devm → Prop}
   exact hn n hrel hrun'
 
 theorem Func.effect {R : Devm → Devm → Prop}
-    (htrans : Transitive R)
+    (htrans : TransitiveRel R)
     (hpop : ∀ xs pre post, Devm.PopBurn xs pre post → R pre post)
     (hburn : ∀ pre post, Devm.Burn pre post → R pre post)
     (hn : ∀ n, Ninst.Effect R n)
@@ -5917,7 +5924,7 @@ def Devm.CodePreserve (pre post : Devm) : Prop :=
   ∀ a : Adr, (pre.getCode a).toList ≠ [] → post.getCode a = pre.getCode a
 
 lemma codePreserve_refl_trans :
-    Reflexive Devm.CodePreserve ∧ Transitive Devm.CodePreserve := by
+    ReflexiveRel Devm.CodePreserve ∧ TransitiveRel Devm.CodePreserve := by
   constructor
   · intro d a _; rfl
   · intro a b c hab hbc adr ha
@@ -8609,8 +8616,8 @@ def Devm.SumNof (d : Devm) : Prop :=
   Devm.balSum d < 2 ^ 256
 
 lemma balNoninc_refl_trans :
-    (Reflexive State.BalNoninc ∧ Transitive State.BalNoninc) ∧
-    (Reflexive Devm.BalNoninc ∧ Transitive Devm.BalNoninc) := by
+    (ReflexiveRel State.BalNoninc ∧ TransitiveRel State.BalNoninc) ∧
+    (ReflexiveRel Devm.BalNoninc ∧ TransitiveRel Devm.BalNoninc) := by
   exact ⟨⟨fun _ => Nat.le_refl _, fun _ _ _ h1 h2 => Nat.le_trans h2 h1⟩,
          ⟨fun _ => Nat.le_refl _, fun _ _ _ h1 h2 => Nat.le_trans h2 h1⟩⟩
 

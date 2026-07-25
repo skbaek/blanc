@@ -841,7 +841,7 @@ lemma mapResult_ofExcept (g : Except ε α → Except ζ β) (x : Except ε α) 
 lemma mapResult_exhausted (g : Except ε α → Except ζ β) :
     Fueled.mapResult g (Fueled.exhausted : Fueled ε α) = Fueled.exhausted := rfl
 
-def of_bind_eq {x : Fueled ε α} {f : α → Fueled ε β} {ex : Except ε β}
+theorem of_bind_eq {x : Fueled ε α} {f : α → Fueled ε β} {ex : Except ε β}
     (h : x >>= f = Fueled.ofExcept ex) :
     (∃ e, x = Fueled.ofExcept (.error e) ∧ ex = .error e) ∨
       (∃ y, x = Fueled.ofExcept (.ok y) ∧ f y = Fueled.ofExcept ex) := by
@@ -851,7 +851,7 @@ def of_bind_eq {x : Fueled ε α} {f : α → Fueled ε β} {ex : Except ε β}
   · left; exact ⟨e, Fueled.ext hx, (Option.some.inj hrun).symm⟩
   · right; exact ⟨y, Fueled.ext hx, Fueled.ext hrun⟩
 
-def of_lift_bind_eq {x : Except ε α} {f : α → Fueled ε β} {ex : Except ε β}
+theorem of_lift_bind_eq {x : Except ε α} {f : α → Fueled ε β} {ex : Except ε β}
     (h : Fueled.ofExcept x >>= f = Fueled.ofExcept ex) :
     (∃ e, x = .error e ∧ ex = .error e) ∨
       (∃ y, x = .ok y ∧ f y = Fueled.ofExcept ex) := by
@@ -859,7 +859,7 @@ def of_lift_bind_eq {x : Except ε α} {f : α → Fueled ε β} {ex : Except ε
   · exact Or.inl ⟨e, ofExcept_inj.mp hx, hex⟩
   · exact Or.inr ⟨y, ofExcept_inj.mp hx, hf⟩
 
-def of_bind_eq' {x : Fueled ε α} {f : α → Fueled ε β} {ex : Except ε β}
+theorem of_bind_eq' {x : Fueled ε α} {f : α → Fueled ε β} {ex : Except ε β}
     (h : x >>= f = Fueled.ofExcept ex) :
     ∃ ex', x = Fueled.ofExcept ex' ∧
       Fueled.ofExcept ex' >>= f = Fueled.ofExcept ex := by
@@ -867,21 +867,21 @@ def of_bind_eq' {x : Fueled ε α} {f : α → Fueled ε β} {ex : Except ε β}
   · refine ⟨.error e, hx, ?_⟩; rw [ofExcept_error_bind, hex]
   · refine ⟨.ok y, hx, ?_⟩; rw [ofExcept_ok_bind]; exact hf
 
-def of_bind_eq_ok {x : Fueled ε α} {f : α → Fueled ε β} {z : β}
+theorem of_bind_eq_ok {x : Fueled ε α} {f : α → Fueled ε β} {z : β}
     (h : x >>= f = Fueled.ok z) :
     ∃ y, x = Fueled.ok y ∧ f y = Fueled.ok z := by
   rcases of_bind_eq (ex := .ok z) h with ⟨e, _, hex⟩ | ⟨y, hx, hf⟩
   · cases hex
   · exact ⟨y, hx, hf⟩
 
-def of_lift_bind_eq_ok {x : Except ε α} {f : α → Fueled ε β} {z : β}
+theorem of_lift_bind_eq_ok {x : Except ε α} {f : α → Fueled ε β} {z : β}
     (h : Fueled.ofExcept x >>= f = Fueled.ok z) :
     ∃ y, x = .ok y ∧ f y = Fueled.ok z := by
   rcases of_lift_bind_eq (ex := .ok z) h with ⟨e, _, hex⟩ | ⟨y, hx, hf⟩
   · cases hex
   · exact ⟨y, hx, hf⟩
 
-def of_mapResult_eq {g : Except ε α → Except ζ β} {x : Fueled ε α}
+theorem of_mapResult_eq {g : Except ε α → Except ζ β} {x : Fueled ε α}
     {ex : Except ζ β} (h : Fueled.mapResult g x = Fueled.ofExcept ex) :
     ∃ ex', x = Fueled.ofExcept ex' ∧ g ex' = ex := by
   have hrun : x.run.map g = some ex := congrArg ExceptT.run h
@@ -935,7 +935,7 @@ lemma error_bind {ξ υ ζ : Type}
     {x : ξ} {f : υ → Except ξ ζ} :
     (Except.error x) >>= f = Except.error x := rfl
 
-def ok_bind {ξ : Type u} {υ ζ : Type v} {y : υ} {g : υ → Except ξ ζ} :
+theorem ok_bind {ξ : Type u} {υ ζ : Type v} {y : υ} {g : υ → Except ξ ζ} :
     (.ok y) >>= g = g y := rfl
 
 lemma forall_gt_of_forall_gt_succ_pred {p : Nat → Prop} (n : Nat) :
@@ -1767,7 +1767,8 @@ lemma Ninst.run_of_run_eq
     rcases Xinst.run_of_run_eq eq with ⟨xl, good, run⟩
     exact ⟨xl, Xlot.good_mono (Nat.le_succ _) good, run⟩
 
-def of_exec :
+set_option linter.defProp false in
+@[reducible] def of_exec :
     ∀ (lim : Nat) (pc : Nat) (sevm : Sevm) (devm : Devm) (exn : Execution),
       (exec ⟨pc, sevm, devm⟩ lim = Fueled.ofExcept exn) →
       Nonempty (Exec pc sevm devm exn) := by
