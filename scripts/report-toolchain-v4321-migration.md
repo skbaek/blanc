@@ -37,7 +37,7 @@ Exact commands and verdicts:
 | Lean LSP diagnostics on `Basic`, `Semantics`, `Common`, `Solvent` | PASS | 0 errors, 0 warnings in every touched file |
 | `cd ~/blanc && scripts/check.sh --no-build` | PASS | 4/4 protected theorem audits; no `sorryAx`, `ofReduceBool`, or `ofReduceNat`; 1.3 s with statement comparison |
 | `lean_verify` with `scan_source := true` on each protected theorem | PASS | exact axiom sets below; no source-scan warnings |
-| protected-statement extraction against pre-repair commit `ae97841` | PASS | all four headers textually unchanged |
+| protected-statement extraction against diagnostic pre-repair commit `fd07b41` | PASS | all four headers textually unchanged |
 | `git diff --check` | PASS | no whitespace errors |
 
 No Blanc long gate was deferred. ELeVM legacy FULL was already completed on
