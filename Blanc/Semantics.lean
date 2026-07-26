@@ -250,11 +250,9 @@ def GenericCreate (sevm : Sevm) (devm : Devm) (endowment : B256) (newAddress : A
         (memorySize ≤ sevm.benvStat.rules.code.maxInitCodeSize)
         ⟨"OutOfGasError", devm⟩ ).SplitXl xl ex <|
   λ _ =>
-    ExistsEq (addAccessedAddress devm newAddress) <|
-  λ devm1 =>
-    ExistsEq (except64th devm1.gasLeft) <|
+    ExistsEq (except64th devm.gasLeft) <|
   λ createMsgGas =>
-    ExistsEq (devm1.withGasLeft (devm1.gasLeft - createMsgGas)) <|
+    ExistsEq (devm.withGasLeft (devm.gasLeft - createMsgGas)) <|
   λ devm2 =>
     (assertDynamic sevm devm2).SplitXl xl ex <|
   λ _ =>
@@ -267,15 +265,17 @@ def GenericCreate (sevm : Sevm) (devm : Devm) (endowment : B256) (newAddress : A
    else
    ExistsEq (devm3.incrNonce sevm.currentTarget) <|
   λ devm4 =>
+    ExistsEq (addAccessedAddress devm4 newAddress) <|
+  λ devm5 =>
     if
-      ( let target := devm4.state.get newAddress
+      ( let target := devm5.state.get newAddress
         target.nonce ≠ (0 : B64) ∨ target.code.size ≠ 0 ∨ target.stor.size ≠ 0 ) then
-      (xl = .none ∧ devm4.push 0 = ex)
+      (xl = .none ∧ devm5.push 0 = ex)
     else
     ExistsEq
       {
-        benv := Benv.mk devm4.state devm4.createdAccounts sevm.benvStat
-        tenv := {transientStorage := devm4.transientStorage, stat := sevm.tenvStat}
+        benv := Benv.mk devm5.state devm5.createdAccounts sevm.benvStat
+        tenv := {transientStorage := devm5.transientStorage, stat := sevm.tenvStat}
         caller := sevm.currentTarget
         target := .none
         gas := createMsgGas
@@ -287,19 +287,19 @@ def GenericCreate (sevm : Sevm) (devm : Devm) (endowment : B256) (newAddress : A
         codeAddress := .none
         shouldTransferValue := true
         isStatic := false
-        accessedAddresses := devm4.accessedAddresses
-        accessedStorageKeys := devm4.accessedStorageKeys
+        accessedAddresses := devm5.accessedAddresses
+        accessedStorageKeys := devm5.accessedStorageKeys
         disablePrecompiles := false
       } <|
   λ childMsg =>
   ∃ ex',
     And (ProcessCreateMessage childMsg xl ex') <|
-    (liftToExecution devm4 ex').Split ex <|
+    (liftToExecution devm5 ex').Split ex <|
   λ child =>
     if child.error.isSome then
-      (incorporateChildOnError devm4 child child.output).push 0 = ex
+      (incorporateChildOnError devm5 child child.output).push 0 = ex
     else
-      (incorporateChildOnSuccess devm4 child []).push newAddress.toB256 = ex
+      (incorporateChildOnSuccess devm5 child []).push newAddress.toB256 = ex
 
 def GenericCall
     (sevm: Sevm)
@@ -1052,10 +1052,10 @@ lemma saturation (lim : Nat) : Saturation lim := by
     · intro _ _ _ _ _ _ ne lim' lt
       rcases lim' with _ | lim'; {cases Nat.not_lt_zero _ lt}
       simp only [genericCreate] at *
-      iterate 8 (eee_bind ne);
+      iterate 7 (eee_bind ne);
       split; {rfl}
       rename_i neg; rw [if_neg neg] at ne; clear neg
-      eee_bind ne; split; {rfl}
+      eee_bind ne; eee_bind ne; split; {rfl}
       rename_i neg; rw [if_neg neg] at ne; clear neg
       eee_bind ne
       have ne' := Fueled.mapResult_ne_exhausted (Fueled.head_ne_exhausted_of_bind ne)
@@ -1289,10 +1289,11 @@ lemma of_generic_create' {sevm : Sevm} {devm : Devm} {endowment : B256} {newAddr
   apply Exists.imp forall_gt_of_forall_gt_succ_pred
   simp only [genericCreate]
   efg_step_exists run; efg_step_splitXl run
-  iterate 3 (efg_step_exists run)
+  iterate 2 (efg_step_exists run)
   efg_step_splitXl run; iterate 2 (efg_step_exists run)
   efg_step_early run;
   {refine' ⟨0, _⟩; intro _ _; exact congrArg Fueled.ofExcept run.2}
+  efg_step_exists run
   efg_step_exists run
   efg_step_early run;
   {refine' ⟨0, _⟩; intro _ _; exact congrArg Fueled.ofExcept run.2}
@@ -1617,7 +1618,7 @@ lemma of_genericCreate
   rcases lim with _ | lim <;> simp only [genericCreate] at eq
   {cases Fueled.exhausted_ne_ofExcept eq}
   okStep1 eq _; bind_step_good eq _; okStep1 eq _; okStep1 eq _
-  okStep1 eq _; bind_step_good eq _; okStep1 eq _; okStep1 eq _
+  bind_step_good eq _; okStep1 eq _; okStep1 eq _
   split at eq
   · rename_i pos
     apply Exists.imp (λ _ (conj : _ ∧ _) => ⟨conj.1, ite_of_true pos conj.2⟩)
@@ -1627,6 +1628,7 @@ lemma of_genericCreate
     apply Exists.imp (λ _ (conj : _ ∧ _) => ⟨conj.1, ite_of_false neg conj.2⟩)
     clear neg
     okStep1 eq evm'
+    okStep1 eq _
     split at eq
     · rename_i pos
       apply Exists.imp (λ _ (conj : _ ∧ _) => ⟨conj.1, ite_of_true pos conj.2⟩)

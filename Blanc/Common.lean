@@ -2450,7 +2450,6 @@ lemma Xinst.prep_codeFrame
     dsimp [GenericCreate] at run
     rcases run with ⟨calldata, hp9, run⟩
     rcases run with ⟨_, _, _, h_contra⟩ | ⟨_, _, run⟩; contradiction
-    rcases run with ⟨devm6, hp10, run⟩
     rcases run with ⟨createMsgGas, hp11, run⟩
     rcases run with ⟨devm7, hp12, run⟩
     rcases run with ⟨_, _, _, h_contra⟩ | ⟨_, _, run⟩; contradiction
@@ -2460,10 +2459,11 @@ lemma Xinst.prep_codeFrame
     · rcases run with ⟨h_xl, h_ex⟩
       cases h_xl
     · rcases run with ⟨devm9, hp15, run⟩
+      rcases run with ⟨devm10, hp16, run⟩
       split_ifs at run with h_target
       · rcases run with ⟨h_xl, h_ex⟩
         cases h_xl
-      · rcases run with ⟨childMsg, hp16, run⟩
+      · rcases run with ⟨childMsg, hp17, run⟩
         rcases run with ⟨ex', run, _⟩
         dsimp [ProcessCreateMessage] at run
         rcases run with ⟨ex'', run, _⟩
@@ -2473,9 +2473,9 @@ lemma Xinst.prep_codeFrame
         dsimp [ExecuteCode] at run
         dsimp [initEvm] at run
         have h_devm : benv.state.getCode adr = devm.getCode adr := by
-          rw [hp16] at eq_benv
+          rw [hp17] at eq_benv
           dsimp [processCreateMessage.msg, Msg.benvAfterTransfer, Msg.withBenv, Msg.shouldTransferValue] at eq_benv
-          set benv_init := (addCreatedAccount (({ state := devm9.state, createdAccounts := devm9.createdAccounts, stat := sevm.benvStat } : Benv).setStor newAddress Stor.empty) newAddress).incrNonce newAddress
+          set benv_init := (addCreatedAccount (({ state := devm10.state, createdAccounts := devm10.createdAccounts, stat := sevm.benvStat } : Benv).setStor newAddress Stor.empty) newAddress).incrNonce newAddress
           rcases hp_sub : benv_init.subBal sevm.currentTarget endowment with _ | benv_sub
           · rw [hp_sub] at eq_benv
             simp [Option.toExcept, Bind.bind, Except.bind] at eq_benv
@@ -2484,23 +2484,23 @@ lemma Xinst.prep_codeFrame
             subst eq_benv
             have h1 := Benv.addBal_getCode (a := adr) benv_sub newAddress endowment
             have h2 := Benv.subBal_getCode (a := adr) hp_sub
-            have h_benv_init : benv_init.state.getCode adr = devm9.getCode adr := by
+            have h_benv_init : benv_init.state.getCode adr = devm10.getCode adr := by
               dsimp [benv_init]
               rw [Benv.incrNonce_getCode, addCreatedAccount_getCode, Benv.setStor_getCode]
               rfl
             rw [h_benv_init] at h2
             rw [h1, h2]
+            have h16 : devm10.getCode adr = devm9.getCode adr := by subst hp16; exact addAccessedAddress_getCode
             have h15 : devm9.getCode adr = devm8.getCode adr := by subst hp15; exact Devm.incrNonce_getCode
             have h13 : devm8.getCode adr = devm7.getCode adr := by subst hp13; rfl
-            have h12 : devm7.getCode adr = devm6.getCode adr := by subst hp12; rfl
-            have h10 : devm6.getCode adr = devm5.getCode adr := by subst hp10; exact addAccessedAddress_getCode
+            have h12 : devm7.getCode adr = devm5.getCode adr := by subst hp12; rfl
             have h7 : devm5.getCode adr = devm4.getCode adr := by subst hp7; exact Devm.memExtends_getCode
             have h6 : devm4.getCode adr = devm3.getCode adr := chargeGas_getCode eq6
             have h3 : devm3.getCode adr = devm2.getCode adr := Devm.popToNat_getCode eq3
             have h2' : devm2.getCode adr = devm1.getCode adr := Devm.popToNat_getCode eq2
             have h1' : devm1.getCode adr = devm.getCode adr := Devm.pop_getCode eq1
-            rw [h15, h13, h12, h10, h7, h6, h3, h2', h1']
-        rw [hp16] at run
+            rw [h16, h15, h13, h12, h7, h6, h3, h2', h1']
+        rw [hp17] at run
         dsimp [processCreateMessage.msg, Msg.withBenv] at run
         rcases run with ⟨ex'''', h_xl, _⟩
         injection h_xl with h_xl_eq
@@ -2735,7 +2735,6 @@ lemma Xinst.prep_codeFrame
     dsimp [GenericCreate] at run
     rcases run with ⟨calldata, hp11, run⟩
     rcases run with ⟨_, _, _, h_contra⟩ | ⟨_, _, run⟩; contradiction
-    rcases run with ⟨devm7, hp12, run⟩
     rcases run with ⟨createMsgGas, hp13, run⟩
     rcases run with ⟨devm8, hp14, run⟩
     rcases run with ⟨_, _, _, h_contra⟩ | ⟨_, _, run⟩; contradiction
@@ -2745,10 +2744,11 @@ lemma Xinst.prep_codeFrame
     · rcases run with ⟨h_xl, h_ex⟩
       cases h_xl
     · rcases run with ⟨devm10, hp17, run_inner⟩
+      rcases run_inner with ⟨devm11, hp18, run_inner⟩
       split_ifs at run_inner with h_target
       · rcases run_inner with ⟨h_xl, h_ex⟩
         cases h_xl
-      · rcases run_inner with ⟨childMsg, hp18, run_inner⟩
+      · rcases run_inner with ⟨childMsg, hp19, run_inner⟩
         rcases run_inner with ⟨ex', run_inner, _⟩
         dsimp [ProcessCreateMessage] at run_inner
         rcases run_inner with ⟨ex'', run_inner, _⟩
@@ -2758,9 +2758,9 @@ lemma Xinst.prep_codeFrame
         dsimp [ExecuteCode] at run_inner
         dsimp [initEvm] at run_inner
         have h_devm : benv.state.getCode adr = devm.getCode adr := by
-          rw [hp18] at eq_benv
+          rw [hp19] at eq_benv
           dsimp [processCreateMessage.msg, Msg.benvAfterTransfer, Msg.withBenv, Msg.shouldTransferValue] at eq_benv
-          set benv_init := (addCreatedAccount (({ state := devm10.state, createdAccounts := devm10.createdAccounts, stat := sevm.benvStat } : Benv).setStor newAddress Stor.empty) newAddress).incrNonce newAddress
+          set benv_init := (addCreatedAccount (({ state := devm11.state, createdAccounts := devm11.createdAccounts, stat := sevm.benvStat } : Benv).setStor newAddress Stor.empty) newAddress).incrNonce newAddress
           rcases hp_sub : benv_init.subBal sevm.currentTarget endowment with _ | benv_sub
           · rw [hp_sub] at eq_benv
             simp [Option.toExcept, Bind.bind, Except.bind] at eq_benv
@@ -2769,24 +2769,24 @@ lemma Xinst.prep_codeFrame
             subst eq_benv
             have h1 := Benv.addBal_getCode (a := adr) benv_sub newAddress endowment
             have h2 := Benv.subBal_getCode (a := adr) hp_sub
-            have h_benv_init : benv_init.state.getCode adr = devm10.getCode adr := by
+            have h_benv_init : benv_init.state.getCode adr = devm11.getCode adr := by
               dsimp [benv_init]
               rw [Benv.incrNonce_getCode, addCreatedAccount_getCode, Benv.setStor_getCode]
               rfl
             rw [h_benv_init] at h2
             rw [h1, h2]
+            have h18 : devm11.getCode adr = devm10.getCode adr := by subst hp18; exact addAccessedAddress_getCode
             have h17 : devm10.getCode adr = devm9.getCode adr := by subst hp17; exact Devm.incrNonce_getCode
             have h15 : devm9.getCode adr = devm8.getCode adr := by subst hp15; rfl
-            have h14 : devm8.getCode adr = devm7.getCode adr := by subst hp14; rfl
-            have h12 : devm7.getCode adr = devm6.getCode adr := by subst hp12; exact addAccessedAddress_getCode
+            have h14 : devm8.getCode adr = devm6.getCode adr := by subst hp14; rfl
             have h9 : devm6.getCode adr = devm5.getCode adr := by subst hp9; exact Devm.memExtends_getCode
             have h8 : devm5.getCode adr = devm4.getCode adr := chargeGas_getCode eq8
             have h4 : devm4.getCode adr = devm3.getCode adr := Devm.pop_getCode eq4
             have h3 : devm3.getCode adr = devm2.getCode adr := Devm.popToNat_getCode eq3
             have h2' : devm2.getCode adr = devm1.getCode adr := Devm.popToNat_getCode eq2
             have h1' : devm1.getCode adr = devm.getCode adr := Devm.pop_getCode eq1
-            rw [h17, h15, h14, h12, h9, h8, h4, h3, h2', h1']
-        rw [hp18] at run_inner
+            rw [h18, h17, h15, h14, h9, h8, h4, h3, h2', h1']
+        rw [hp19] at run_inner
         dsimp [processCreateMessage.msg, Msg.withBenv] at run_inner
         rcases run_inner with ⟨ex'''', h_xl, _⟩
         injection h_xl with h_xl_eq
@@ -2917,7 +2917,6 @@ lemma Xinst.prep_codeSource
     dsimp [GenericCreate] at run
     rcases run with ⟨_, _, run⟩
     rcases run with ⟨_, _, _, h_contra⟩ | ⟨_, eq6, run⟩; contradiction
-    rcases run with ⟨devm5, eq5, run⟩
     rcases run with ⟨_, _, run⟩
     rcases run with ⟨devm3, eq3, run⟩
     rcases run with ⟨_, _, _, h_contra⟩ | ⟨_, eq2, run⟩; contradiction
@@ -2926,6 +2925,7 @@ lemma Xinst.prep_codeSource
     split_ifs at run with h_sender_bal
     · rcases run with ⟨h_xl, _⟩; cases h_xl
     · rcases run with ⟨devm4, hp_devm4, run⟩
+      rcases run with ⟨devm5, hp_devm5, run⟩
       split_ifs at run with h_target_nonce
       · rcases run with ⟨h_xl, _⟩; cases h_xl
       · rcases run with ⟨childMsg, hp_childMsg, run⟩
@@ -2946,21 +2946,21 @@ lemma Xinst.prep_codeSource
         subst h_sevm_eq
         push Not at h_target_nonce
         rcases h_target_nonce with ⟨_, h_code_size, _⟩
-        have h1 : devm4.getCode newAddress = devm1.getCode newAddress := by subst hp_devm4; exact Devm.incrNonce_getCode
-        have h2 : devm1.getCode newAddress = devm3.getCode newAddress := by subst eq1; rfl
-        have h3 : devm3.getCode newAddress = devm5.getCode newAddress := by subst eq3; rfl
-        have h4 : devm5.getCode newAddress = devm8.getCode newAddress := by subst eq5; exact addAccessedAddress_getCode
+        have h1 : devm5.getCode newAddress = devm4.getCode newAddress := by subst hp_devm5; exact addAccessedAddress_getCode
+        have h2 : devm4.getCode newAddress = devm1.getCode newAddress := by subst hp_devm4; exact Devm.incrNonce_getCode
+        have h3 : devm1.getCode newAddress = devm3.getCode newAddress := by subst eq1; rfl
+        have h4 : devm3.getCode newAddress = devm8.getCode newAddress := by subst eq3; rfl
         have h5 : devm8.getCode newAddress = devm9.getCode newAddress := by subst eq8; exact Devm.memExtends_getCode
         have h6 : devm9.getCode newAddress = v12.2.getCode newAddress := chargeGas_getCode eq9
         have h7 : v12.2.getCode newAddress = v13.2.getCode newAddress := Devm.popToNat_getCode eq12
         have h8 : v13.2.getCode newAddress = v14.2.getCode newAddress := Devm.popToNat_getCode eq13
         have h9 : v14.2.getCode newAddress = devm.getCode newAddress := Devm.pop_getCode eq14
-        have h_devm4 : devm4.getCode newAddress = devm.getCode newAddress := by
+        have h_devm5 : devm5.getCode newAddress = devm.getCode newAddress := by
           rw [h1, h2, h3, h4, h5, h6, h7, h8, h9]
-        have h_size : (devm4.getCode newAddress).size = 0 := h_code_size
+        have h_size : (devm5.getCode newAddress).size = 0 := h_code_size
         have h_empty' : devm.getCode newAddress = .empty := by
-          rw [← h_devm4]
-          cases h_code : devm4.getCode newAddress with | mk data =>
+          rw [← h_devm5]
+          cases h_code : devm5.getCode newAddress with | mk data =>
           rw [h_code] at h_size
           cases data with | mk l =>
           cases l
@@ -3127,7 +3127,6 @@ lemma Xinst.prep_codeSource
     dsimp [GenericCreate] at run
     rcases run with ⟨_, _, run⟩
     rcases run with ⟨_, _, _, h_contra⟩ | ⟨_, eq6, run⟩; contradiction
-    rcases run with ⟨devm5, eq5, run⟩
     rcases run with ⟨_, _, run⟩
     rcases run with ⟨devm3, eq3, run⟩
     rcases run with ⟨_, _, _, h_contra⟩ | ⟨_, eq2, run⟩; contradiction
@@ -3136,6 +3135,7 @@ lemma Xinst.prep_codeSource
     split_ifs at run with h_sender_bal
     · rcases run with ⟨h_xl, _⟩; cases h_xl
     · rcases run with ⟨devm4, hp_devm4, run⟩
+      rcases run with ⟨devm5, hp_devm5, run⟩
       split_ifs at run with h_target_nonce
       · rcases run with ⟨h_xl, _⟩; cases h_xl
       · rcases run with ⟨childMsg, hp_childMsg, run⟩
@@ -3156,22 +3156,22 @@ lemma Xinst.prep_codeSource
         subst h_sevm_eq
         push Not at h_target_nonce
         rcases h_target_nonce with ⟨_, h_code_size, _⟩
-        have h1 : devm4.getCode newAddress = devm1.getCode newAddress := by subst hp_devm4; exact Devm.incrNonce_getCode
-        have h2 : devm1.getCode newAddress = devm3.getCode newAddress := by subst eq1; rfl
-        have h3 : devm3.getCode newAddress = devm5.getCode newAddress := by subst eq3; rfl
-        have h4 : devm5.getCode newAddress = devm8.getCode newAddress := by subst eq5; exact addAccessedAddress_getCode
+        have h1 : devm5.getCode newAddress = devm4.getCode newAddress := by subst hp_devm5; exact addAccessedAddress_getCode
+        have h2 : devm4.getCode newAddress = devm1.getCode newAddress := by subst hp_devm4; exact Devm.incrNonce_getCode
+        have h3 : devm1.getCode newAddress = devm3.getCode newAddress := by subst eq1; rfl
+        have h4 : devm3.getCode newAddress = devm8.getCode newAddress := by subst eq3; rfl
         have h5 : devm8.getCode newAddress = devm9.getCode newAddress := by subst eq8; exact Devm.memExtends_getCode
         have h6 : devm9.getCode newAddress = v12.2.getCode newAddress := chargeGas_getCode eq9
         have h7 : v12.2.getCode newAddress = v13.2.getCode newAddress := Devm.pop_getCode eq12
         have h8 : v13.2.getCode newAddress = v14.2.getCode newAddress := Devm.popToNat_getCode eq13
         have h9 : v14.2.getCode newAddress = v15.2.getCode newAddress := Devm.popToNat_getCode eq14
         have h10 : v15.2.getCode newAddress = devm.getCode newAddress := Devm.pop_getCode eq15
-        have h_devm4 : devm4.getCode newAddress = devm.getCode newAddress := by
+        have h_devm5 : devm5.getCode newAddress = devm.getCode newAddress := by
           rw [h1, h2, h3, h4, h5, h6, h7, h8, h9, h10]
-        have h_size : (devm4.getCode newAddress).size = 0 := h_code_size
+        have h_size : (devm5.getCode newAddress).size = 0 := h_code_size
         have h_empty' : devm.getCode newAddress = .empty := by
-          rw [← h_devm4]
-          cases h_code : devm4.getCode newAddress with | mk data =>
+          rw [← h_devm5]
+          cases h_code : devm5.getCode newAddress with | mk data =>
           rw [h_code] at h_size
           cases data with | mk l =>
           cases l
@@ -3336,7 +3336,6 @@ lemma GenericCreate.depth_lt
   rcases run with ⟨calldata, _, run⟩
   rcases run with ⟨_, _, _, h_none⟩ | ⟨_, _, run⟩
   · contradiction
-  rcases run with ⟨devm1, _, run⟩
   rcases run with ⟨createMsgGas, _, run⟩
   rcases run with ⟨devm2, _, run⟩
   rcases run with ⟨_, _, _, h_none⟩ | ⟨_, _, run⟩
@@ -3347,6 +3346,7 @@ lemma GenericCreate.depth_lt
   · cases run.1
   rename_i h_depth
   rcases run with ⟨devm4, _, run⟩
+  rcases run with ⟨devm5, _, run⟩
   split at run
   · cases run.1
   rename_i h_nonce
@@ -5452,8 +5452,7 @@ lemma GenericCreate.codePreserve
     · contradiction
     · injection h with h_eq; subst h_eq
       rfl
-  · rcases run with ⟨devm1, eq_devm1, run⟩; subst eq_devm1
-    rcases run with ⟨createMsgGas, eq_createMsgGas, run⟩; subst eq_createMsgGas
+  · rcases run with ⟨createMsgGas, eq_createMsgGas, run⟩; subst eq_createMsgGas
     rcases run with ⟨devm2, eq_devm2, run⟩; subst eq_devm2
     rcases run with ⟨x, h_err, eq_err, _⟩ | ⟨_, h_ok, run⟩
     · intro a ha
@@ -5471,6 +5470,7 @@ lemma GenericCreate.codePreserve
         rw [← eq_ok]
         exact Devm.push_getCode_gen rfl a
       · rename_i h_if1
+        rcases run with ⟨devm_nonce, eq_devm_nonce, run⟩
         rcases run with ⟨devm4, eq_devm4, run⟩
         split at run
         · rename_i h_if2
@@ -5479,7 +5479,7 @@ lemma GenericCreate.codePreserve
           rw [← eq_ok]
           have h_push : Execution.getCode (devm4.push 0) a = devm4.getCode a := Devm.push_getCode_gen rfl a
           rw [h_push]
-          subst eq_devm4
+          rw [eq_devm4, eq_devm_nonce]
           exact Devm.incrNonce_getCode
         · rename_i h_if2
           rcases run with ⟨childMsg, eq_childMsg, run⟩; subst eq_childMsg
@@ -5499,7 +5499,8 @@ lemma GenericCreate.codePreserve
                 · rfl
                 · contradiction
               have h_devm4 : devm4.getCode newAddress = devm.getCode newAddress := by
-                subst eq_devm4; exact Devm.incrNonce_getCode
+                rw [eq_devm4, eq_devm_nonce]
+                exact Devm.incrNonce_getCode
               rw [heq] at ha
               rw [← h_devm4] at ha
               rw [h_empty] at ha
@@ -5509,7 +5510,9 @@ lemma GenericCreate.codePreserve
                 rfl
               rw [h_empty_toList] at ha
               exact False.elim (ha rfl)
-            have h_devm4 : devm4.getCode a = devm.getCode a := by subst eq_devm4; exact Devm.incrNonce_getCode
+            have h_devm4 : devm4.getCode a = devm.getCode a := by
+              rw [eq_devm4, eq_devm_nonce]
+              exact Devm.incrNonce_getCode
             have h_goal : (devm4.getCode a).toList ≠ [] := by
               rw [h_devm4]
               exact ha
@@ -5537,7 +5540,8 @@ lemma GenericCreate.codePreserve
                 · rfl
                 · contradiction
               have h_devm4 : devm4.getCode newAddress = devm.getCode newAddress := by
-                subst eq_devm4; exact Devm.incrNonce_getCode
+                rw [eq_devm4, eq_devm_nonce]
+                exact Devm.incrNonce_getCode
               rw [heq] at ha
               rw [← h_devm4] at ha
               rw [h_empty] at ha
@@ -5547,7 +5551,9 @@ lemma GenericCreate.codePreserve
                 rfl
               rw [h_empty_toList] at ha
               exact False.elim (ha rfl)
-            have h_devm4 : devm4.getCode a = devm.getCode a := by subst eq_devm4; exact Devm.incrNonce_getCode
+            have h_devm4 : devm4.getCode a = devm.getCode a := by
+              rw [eq_devm4, eq_devm_nonce]
+              exact Devm.incrNonce_getCode
             have h_goal : (devm4.getCode a).toList ≠ [] := by
               rw [h_devm4]
               exact ha
@@ -9308,14 +9314,9 @@ lemma GenericCreate.balanceEffect
     apply Devm.balNoninc_of_getBal_eq
     funext a
     exact assert_getBal_err h_err a
-  rcases run with ⟨devm1, h_d1, run⟩
   rcases run with ⟨createMsgGas, _, run⟩
   rcases run with ⟨devm2, h_d2, run⟩
-  have h_frame1 : Devm.InstructionFrame pre devm1 := by
-    rw [h_d1]
-    exact addAccessedAddress_instructionFrame pre newAddress
   have h_frame2 : Devm.InstructionFrame pre devm2 := by
-    refine Devm.instructionFrame_trans h_frame1 ?_
     rw [h_d2]
     exact Devm.instructionFrame_of_world_eq rfl rfl rfl rfl
   rcases run with ⟨x, h_err, h_out, _⟩ | ⟨_, _, run⟩
@@ -9355,17 +9356,23 @@ lemma GenericCreate.balanceEffect
       refine balNoninc_refl_trans.2.2 h_bal3 ?_
       rw [h_d4]
       exact Devm.incrNonce_balance_effect devm3 sevm.currentTarget
+    rcases run with ⟨devm5, h_d5, run⟩
+    have h_bal5 : Devm.BalNoninc pre devm5 := by
+      refine balNoninc_refl_trans.2.2 h_bal4 ?_
+      rw [h_d5]
+      exact Devm.instructionFrame_refines_balNoninc
+        (addAccessedAddress_instructionFrame devm4 newAddress)
     split_ifs at run with h_c2
     · -- target account exists : create fails, state unchanged
       rcases run with ⟨_, h_push⟩
-      have h_tail := Devm.push_instructionFrame 0 devm4
+      have h_tail := Devm.push_instructionFrame 0 devm5
       rw [h_push] at h_tail
-      exact Execution.Rel.trans_left balNoninc_refl_trans.2.2 h_bal4
+      exact Execution.Rel.trans_left balNoninc_refl_trans.2.2 h_bal5
         (Outcome.Rel.mono Devm.instructionFrame_refines_balNoninc h_tail)
     · rcases run with ⟨childMsg, h_cm, run⟩
       rcases run with ⟨ex', run_pcm, h_split⟩
       have h_pcm := ProcessCreateMessage.balance_effect hxl run_pcm
-      have h_st : childMsg.benv.state = devm4.state := by rw [h_cm]
+      have h_st : childMsg.benv.state = devm5.state := by rw [h_cm]
       unfold MessageExecution.Rel at h_pcm
       rw [h_st] at h_pcm
       rcases ex' with ⟨e1, e2, e3, e4⟩ | child
@@ -9375,7 +9382,7 @@ lemma GenericCreate.balanceEffect
           subst hx
           rw [h_out]
           simp only [Execution.Rel, Outcome.Rel]
-          refine balNoninc_refl_trans.2.2 h_bal4 ?_
+          refine balNoninc_refl_trans.2.2 h_bal5 ?_
           apply Devm.balNoninc_of_state
           exact h_pcm
         · cases h_contra
@@ -9388,21 +9395,21 @@ lemma GenericCreate.balanceEffect
         by_cases h_err : child.error.isSome = true
         · rw [if_pos h_err] at h_body
           have h_bal : Devm.BalNoninc pre
-              (incorporateChildOnError devm4 child child.output) :=
-            balNoninc_refl_trans.2.2 h_bal4
+              (incorporateChildOnError devm5 child child.output) :=
+            balNoninc_refl_trans.2.2 h_bal5
               (incorporateChildOnError_balance_effect h_pcm)
           have h_tail := Devm.push_instructionFrame 0
-            (incorporateChildOnError devm4 child child.output)
+            (incorporateChildOnError devm5 child child.output)
           rw [h_body] at h_tail
           exact Execution.Rel.trans_left balNoninc_refl_trans.2.2 h_bal
             (Outcome.Rel.mono Devm.instructionFrame_refines_balNoninc h_tail)
         · rw [if_neg h_err] at h_body
           have h_bal : Devm.BalNoninc pre
-              (incorporateChildOnSuccess devm4 child []) :=
-            balNoninc_refl_trans.2.2 h_bal4
+              (incorporateChildOnSuccess devm5 child []) :=
+            balNoninc_refl_trans.2.2 h_bal5
               (incorporateChildOnSuccess_balance_effect h_pcm)
           have h_tail := Devm.push_instructionFrame newAddress.toB256
-            (incorporateChildOnSuccess devm4 child [])
+            (incorporateChildOnSuccess devm5 child [])
           rw [h_body] at h_tail
           exact Execution.Rel.trans_left balNoninc_refl_trans.2.2 h_bal
             (Outcome.Rel.mono Devm.instructionFrame_refines_balNoninc h_tail)

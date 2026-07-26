@@ -10,7 +10,7 @@ require mathlib from git
   "https://github.com/leanprover-community/mathlib4.git" @ "v4.32.1"
 
 require elevm from git
-  "https://github.com/skbaek/elevm.git" @ "1d0e060005ced92c0b04c47f5a1c64640fb3757b"
+  "https://github.com/skbaek/elevm.git" @ "6b23493b43ab9df0891f3e7354f903332a440e7f"
 
 @[default_target]
 lean_lib «Blanc» where

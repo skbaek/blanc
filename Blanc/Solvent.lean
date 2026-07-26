@@ -2885,14 +2885,13 @@ lemma GenericCreate.none_inv_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm
   dsimp only [GenericCreate] at h_run
   rcases h_run with ⟨calldata, _, h_run⟩
   rcases h_run with ⟨_, _, h_contra, _⟩ | ⟨_, _, h_run⟩; · cases h_contra
-  rcases h_run with ⟨devm1, hp1, h_run⟩
   rcases h_run with ⟨createMsgGas, _, h_run⟩
   rcases h_run with ⟨devm2, hp2, h_run⟩
   rcases h_run with ⟨_, _, h_contra, _⟩ | ⟨_, _, h_run⟩; · cases h_contra
   rcases h_run with ⟨devm3, hp3, h_run⟩
   rcases h_run with ⟨sender, _, h_run⟩
   have h_st3 : devm3.state = devm.state := by
-    rw [hp3, hp2, hp1]; rfl
+    rw [hp3, hp2]; rfl
   split_ifs at h_run with h_chk
   · rcases h_run with ⟨_, h_push⟩
     apply h_pc.state_eq
@@ -2900,10 +2899,11 @@ lemma GenericCreate.none_inv_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm
     show devm3.state = devm.state
     exact h_st3
   · rcases h_run with ⟨devm4, hp4, h_run⟩
+    rcases h_run with ⟨devm5, hp5, h_run⟩
     split_ifs at h_run with h_coll
     · rcases h_run with ⟨_, h_push⟩
       have h_state : inter.state = devm.state.incrNonce sevm.currentTarget := by
-        rw [← (Devm.push_of_push h_push).state, hp4]
+        rw [← (Devm.push_of_push h_push).state, hp5, hp4]
         show devm3.state.incrNonce sevm.currentTarget = devm.state.incrNonce sevm.currentTarget
         rw [h_st3]
       refine Precond.of_eqs h_pc ?_ ?_ ?_
@@ -3515,7 +3515,6 @@ lemma GenericCreate.some_inv_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm
   dsimp only [GenericCreate] at h_run
   rcases h_run with ⟨calldata, _, h_run⟩
   rcases of_splitXl_some h_run with ⟨_, _, h_run⟩
-  rcases h_run with ⟨devm1, hp1, h_run⟩
   rcases h_run with ⟨createMsgGas, _, h_run⟩
   rcases h_run with ⟨devm2, hp2, h_run⟩
   rcases of_splitXl_some h_run with ⟨_, _, h_run⟩
@@ -3524,14 +3523,18 @@ lemma GenericCreate.some_inv_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm
   split_ifs at h_run with h_chk
   · rcases h_run with ⟨h_contra, _⟩; cases h_contra
   rcases h_run with ⟨devm4, hp4, h_run⟩
+  rcases h_run with ⟨devm5, hp5, h_run⟩
   split_ifs at h_run with h_coll
   · rcases h_run with ⟨h_contra, _⟩; cases h_contra
   rcases h_run with ⟨childMsg, hp_cm, h_run⟩
   rcases h_run with ⟨ex', run_pcm, h_split⟩
   -- state at the point of message creation
   have h_st4 : devm4.state = devm.state.incrNonce sevm.currentTarget := by
-    rw [hp4, hp3, hp2, hp1]
+    rw [hp4, hp3, hp2]
     rfl
+  have h_st5 : devm5.state = devm4.state := by
+    rw [hp5]
+    exact addAccessedAddress_state
   -- the new address cannot be the WETH address, whose code is nonempty
   have h_new_ne : newAddress ≠ wa := by
     intro hc
@@ -3540,20 +3543,20 @@ lemma GenericCreate.some_inv_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm
     have h_size := h_coll.2.1
     apply @Prog.compile_ne_nil weth
     rw [← h_pc.code]
-    have h_code4 : (devm4.state.get newAddress).code = devm.getCode newAddress := by
-      rw [h_st4]
+    have h_code4 : (devm5.state.get newAddress).code = devm.getCode newAddress := by
+      rw [h_st5, h_st4]
       exact State.incrNonce_get_code
     rw [← h_code4]
-    have h_nil : (devm4.state.get newAddress).code.toList = [] := by
-      have h_len := ByteArray.size_eq_length_toList (devm4.state.get newAddress).code
+    have h_nil : (devm5.state.get newAddress).code.toList = [] := by
+      have h_len := ByteArray.size_eq_length_toList (devm5.state.get newAddress).code
       rw [h_size] at h_len
-      cases h_toList : (devm4.state.get newAddress).code.toList
+      cases h_toList : (devm5.state.get newAddress).code.toList
       · rfl
       · rw [h_toList] at h_len
         cases h_len
     rw [h_nil]
   -- projections of childMsg
-  have hc_state : childMsg.benv.state = devm4.state := by rw [hp_cm]
+  have hc_state : childMsg.benv.state = devm5.state := by rw [hp_cm]
   have hc_caller : childMsg.caller = sevm.currentTarget := by rw [hp_cm]
   have hc_value : childMsg.value = endowment := by rw [hp_cm]
   have hc_ct : childMsg.currentTarget = newAddress := by rw [hp_cm]
@@ -3609,18 +3612,18 @@ lemma GenericCreate.some_inv_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm
   have h_base_stor :
       (((childMsg.benv.state.setStor newAddress Stor.empty).incrNonce newAddress).get wa).stor
         = (devm.state.get wa).stor := by
-    rw [State.incrNonce_get_stor, State.setStor_get_stor_ne h_new_ne, hc_state, h_st4,
+    rw [State.incrNonce_get_stor, State.setStor_get_stor_ne h_new_ne, hc_state, h_st5, h_st4,
       State.incrNonce_get_stor]
   have h_base_code :
       (((childMsg.benv.state.setStor newAddress Stor.empty).incrNonce newAddress).get wa).code
         = (devm.state.get wa).code := by
-    rw [State.incrNonce_get_code, State.setStor_get_code, hc_state, h_st4,
+    rw [State.incrNonce_get_code, State.setStor_get_code, hc_state, h_st5, h_st4,
       State.incrNonce_get_code]
   have h_base_bal : ∀ a,
       (((childMsg.benv.state.setStor newAddress Stor.empty).incrNonce newAddress).get a).bal
         = (devm.state.get a).bal := by
     intro a
-    rw [State.incrNonce_get_bal, State.setStor_get_bal, hc_state, h_st4,
+    rw [State.incrNonce_get_bal, State.setStor_get_bal, hc_state, h_st5, h_st4,
       State.incrNonce_get_bal]
   -- part 1 : the precondition holds for the sub-execution's initial state
   have h_pre1 : Precond wa sevm' devm' := by
@@ -3640,14 +3643,14 @@ lemma GenericCreate.some_inv_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm
     intro h_cs
     refine Precond.of_eqs h_pc ?_ ?_ ?_
     · show (inter.state.get wa).code = (devm.state.get wa).code
-      rw [h_inter_state, h_cs, hc_state, h_st4]
+      rw [h_inter_state, h_cs, hc_state, h_st5, h_st4]
       exact State.incrNonce_get_code
     · funext b
       show (inter.state.get b).bal = (devm.state.get b).bal
-      rw [h_inter_state, h_cs, hc_state, h_st4]
+      rw [h_inter_state, h_cs, hc_state, h_st5, h_st4]
       exact State.incrNonce_get_bal
     · show (inter.state.get wa).stor = (devm.state.get wa).stor
-      rw [h_inter_state, h_cs, hc_state, h_st4]
+      rw [h_inter_state, h_cs, hc_state, h_st5, h_st4]
       exact State.incrNonce_get_stor
   have h_isNone_false : ∀ {dX : Devm}, dX.error.isSome = true → dX.error.isNone ≠ true := by
     intro dX h_some hc
@@ -4793,13 +4796,12 @@ lemma GenericCreate.inv_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
     split at h_err
     · contradiction
     · injection h_err with h_eq; subst h_eq; exact hnd
-  · rcases h with ⟨devm1, eq_devm1, h⟩
-    rcases h with ⟨createMsgGas, _, h⟩
+  · rcases h with ⟨createMsgGas, _, h⟩
     rcases h with ⟨devm2, eq_devm2, h⟩
     have hnd2 : Devm.NoDel wa devm2 := by
       refine Devm.NoDel.of_eqs (d := devm) ?_ ?_ hnd
-      · rw [eq_devm2, eq_devm1]; rfl
-      · rw [eq_devm2, eq_devm1]; rfl
+      · rw [eq_devm2]; rfl
+      · rw [eq_devm2]; rfl
     rcases h with ⟨x, h_err, eq_err, _⟩ | ⟨_, _, h⟩
     · rw [eq_err]
       dsimp only [assertDynamic, Except.assert] at h_err
@@ -4821,17 +4823,21 @@ lemma GenericCreate.inv_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
           refine Devm.NoDel.of_eqs (d := devm3) ?_ ?_ hnd3
           · rw [eq_devm4]; rfl
           · rw [eq_devm4]; exact Devm.incrNonce_getCode.symm
+        rcases h with ⟨devm5, eq_devm5, h⟩
+        have hnd5 : Devm.NoDel wa devm5 := by
+          rw [eq_devm5]
+          exact hnd4.addAccessedAddress
         split at h
         · rcases h with ⟨_, h_push⟩
-          exact Devm.push_noDel h_push hnd4
+          exact Devm.push_noDel h_push hnd5
         · rename_i h_c2
           rcases h with ⟨childMsg, eq_childMsg, h⟩; subst eq_childMsg
           rcases h with ⟨ex', run_pcm, h_split⟩
           have h_ct : newAddress ≠ wa := by
             push Not at h_c2
-            exact ne_wa_of_code_size_zero hnd4.code h_c2.2.1
+            exact ne_wa_of_code_size_zero hnd5.code h_c2.2.1
           have h_pm : MsgResult.NoDel wa ex' :=
-            ProcessCreateMessage.inv_noDel inv run_pcm h_ct ⟨hnd4.ca, hnd4.code⟩
+            ProcessCreateMessage.inv_noDel inv run_pcm h_ct ⟨hnd5.ca, hnd5.code⟩
           rcases h_split with ⟨y, h_lift_err, eq_exn⟩ | ⟨child, h_lift_ok, run⟩
           · rw [eq_exn]
             rcases ex' with err | c
@@ -4839,7 +4845,7 @@ lemma GenericCreate.inv_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
               dsimp only [liftToExecution] at h_lift_err
               injection h_lift_err with h_eq; subst h_eq
               rcases h_pm with ⟨h_ca, h_code⟩
-              exact ⟨hnd4.atd, h_ca, h_code⟩
+              exact ⟨hnd5.atd, h_ca, h_code⟩
             · dsimp only [liftToExecution] at h_lift_err; contradiction
           · have h_child : Devm.NoDel wa child := by
               rcases ex' with err | c
@@ -4847,8 +4853,8 @@ lemma GenericCreate.inv_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
               · dsimp only [liftToExecution] at h_lift_ok
                 injection h_lift_ok with h_eq; subst h_eq; exact h_pm
             split at run
-            · exact Devm.push_noDel run (incorporateChildOnError_noDel hnd4.atd h_child)
-            · exact Devm.push_noDel run (incorporateChildOnSuccess_noDel hnd4.atd h_child)
+            · exact Devm.push_noDel run (incorporateChildOnError_noDel hnd5.atd h_child)
+            · exact Devm.push_noDel run (incorporateChildOnSuccess_noDel hnd5.atd h_child)
 
 lemma Xinst.inv_noDel_gen {wa : Adr} {sevm : Sevm} {s : Devm} {x : Xinst}
     {xl : Xlot} {exn : Execution}
@@ -5991,6 +5997,7 @@ lemma checkTransaction_sender_ne_of_inv_solvent {wa : Adr}
   subst sender
   unfold checkTransaction at h_check
   rcases of_bind_eq_ok h_check with ⟨_, _, h_check⟩
+  rcases of_bind_eq_ok h_check with ⟨_, _, h_check⟩
   rcases of_bind_eq_ok h_check with ⟨senderAddress, _, h_check⟩
   rcases of_bind_eq_ok h_check with ⟨_, _, h_check⟩
   rcases of_bind_eq_ok h_check with ⟨_, _, h_check⟩
@@ -6085,6 +6092,7 @@ lemma checkTransaction_upfront_lt_modulus {benv : Benv} {bout : BlockOutput}
       else 0) < 2 ^ 256 := by
   unfold checkTransaction at h_check
   rcases of_bind_eq_ok h_check with ⟨txBlobGasUsed', h_limit, h_check⟩
+  rcases of_bind_eq_ok h_check with ⟨_, h_chain, h_check⟩
   rcases of_bind_eq_ok h_check with ⟨senderAddress, h_recover, h_check⟩
   rcases of_bind_eq_ok h_check with ⟨fee, h_fee, h_check⟩
   rcases fee with ⟨effectiveGasPrice', maxGasFee⟩
@@ -6546,6 +6554,7 @@ lemma checkTransaction_fee_lt {benv : Benv} {bout : BlockOutput} {tx : Tx}
       else 0) < 2 ^ 256 := by
   unfold checkTransaction at h
   rcases of_bind_eq_ok h with ⟨tbgu', hlim, h⟩
+  rcases of_bind_eq_ok h with ⟨_, hchain, h⟩
   rcases of_bind_eq_ok h with ⟨senderAddress, hrecover, h⟩
   rcases of_bind_eq_ok h with ⟨fee, hfee, h⟩
   rcases fee with ⟨egp', maxGasFee⟩
