@@ -201,7 +201,7 @@ def ExecuteCode (msg : Msg) (xl : Xlot)
   | .none =>
     ∃ ex', xl = .some ⟨evm.sta, evm.dyna, ex'⟩ ∧ executeCode.handleError ex' = ex
   | .some adr =>
-    if !msg.disablePrecompiles && adr.isPrecomp then
+    if !msg.disablePrecompiles && msg.benv.stat.rules.isPrecomp adr then
       (xl = .none ∧  executeCode.handleError (executePrecomp evm adr) = ex)
     else
       ∃ ex', xl = .some ⟨evm.sta, evm.dyna, ex'⟩ ∧ executeCode.handleError ex' = ex
@@ -226,7 +226,7 @@ def ProcessCreateMessage (msg : Msg) (xl : Xlot)
     ex'.Split ex <|
   λ evm =>
   if evm.error.isNone then
-    match processCreateMessage.chargeCodeGas evm with
+    match processCreateMessage.chargeCodeGas msg.benv.stat.rules evm with
     | .ok evm => .ok (evm.setCode msg.currentTarget ⟨⟨evm.output⟩⟩) = ex
     | .error (err, evm) =>
       if isExceptionalHalt err then
@@ -247,7 +247,7 @@ def GenericCreate (sevm : Sevm) (devm : Devm) (endowment : B256) (newAddress : A
     ExistsEq (devm.memory.data.sliceD memoryIndex memorySize 0) <|
   λ calldata =>
     ( Except.assert
-        (memorySize ≤ maxInitCodeSize)
+        (memorySize ≤ sevm.benvStat.rules.code.maxInitCodeSize)
         ⟨"OutOfGasError", devm⟩ ).SplitXl xl ex <|
   λ _ =>
     ExistsEq (addAccessedAddress devm newAddress) <|
@@ -1596,7 +1596,7 @@ lemma of_processCreateMessage (msg : Msg) (lim : Nat)
   bind_step' eq evm'
   split at eq
   · rename_i pos; rw [if_pos pos]
-    cases pcm_eq : processCreateMessage.chargeCodeGas evm'
+    cases pcm_eq : processCreateMessage.chargeCodeGas msg.benv.stat.rules evm'
     · simp only []
       rw [pcm_eq] at eq
       simp only [] at eq
