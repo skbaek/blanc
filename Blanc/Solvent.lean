@@ -1851,9 +1851,10 @@ lemma of_executeCode_someCode {msg : Msg} {adr : Adr} {xl : Xlot}
     {ex : Except (String × _root_.State × AdrSet × Tra) Devm}
     (h_ca : msg.codeAddress = some adr)
     (h : ExecuteCode msg xl ex) :
-    ((!msg.disablePrecompiles && decide adr.isPrecomp) = true ∧ xl = .none ∧
+    ((!msg.disablePrecompiles && decide (msg.benv.stat.rules.isPrecomp adr)) = true ∧
+      xl = .none ∧
       executeCode.handleError (executePrecomp (initEvm msg) adr) = ex) ∨
-    (¬ (!msg.disablePrecompiles && decide adr.isPrecomp) = true ∧
+    (¬ (!msg.disablePrecompiles && decide (msg.benv.stat.rules.isPrecomp adr)) = true ∧
       ∃ ex', xl = .some ⟨initSevm msg, initDevm msg, ex'⟩ ∧
       executeCode.handleError ex' = ex) := by
   unfold ExecuteCode at h
@@ -3366,8 +3367,9 @@ lemma Precond.of_postcond {wa : Adr} {sevm sevm' : Sevm} {child inter devm' : De
     rw [h_stor', h_bal']
     exact h_post.solvent
 
-lemma chargeCodeGas_state_ok {d d' : Devm}
-    (h : processCreateMessage.chargeCodeGas d = .ok d') : d'.state = d.state := by
+lemma chargeCodeGas_state_ok {rules : ForkRules} {d d' : Devm}
+    (h : processCreateMessage.chargeCodeGas rules d = .ok d') :
+    d'.state = d.state := by
   simp only [processCreateMessage.chargeCodeGas] at h
   split at h
   · cases h
@@ -3697,7 +3699,8 @@ lemma GenericCreate.some_inv_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm
       have h_A := Except.ok.inj h_ifB
       subst h_A
       rw [if_pos (h_isNone_true h_errC)] at h_ifA
-      rcases h_cc : processCreateMessage.chargeCodeGas child4 with ⟨errC, evmC⟩ | evmC
+      rcases h_cc : processCreateMessage.chargeCodeGas childMsg.benv.stat.rules child4
+        with ⟨errC, evmC⟩ | evmC
       · -- code-deposit gas charge failed
         simp only [h_cc] at h_ifA
         by_cases h_eh : isExceptionalHalt errC
@@ -4535,7 +4538,8 @@ theorem processMessage_inv_solvent {wa : Adr} {msg : Msg} {evm : Devm} {lim : Na
           exact State.Inv.of_exec_precond h_pc h_code' h_exec
         · rw [hca] at hec
           dsimp only at hec
-          by_cases hp : !(msg.withBenv benv).disablePrecompiles && adr.isPrecomp
+          by_cases hp : !(msg.withBenv benv).disablePrecompiles &&
+            (msg.withBenv benv).benv.stat.rules.isPrecomp adr
           · -- precompile : the state is left untouched
             rw [if_pos hp] at hec
             rw [state_of_executePrecomp_ok (Fueled.ofExcept_inj.mp hec) herr]
@@ -4601,7 +4605,8 @@ theorem processCreateMessage_inv_solvent {wa : Adr} {msg : Msg} {evm : Devm} {li
         (fun _ h => absurd h h_ct_ne) h_inv_cm
     by_cases herr : evm2.error.isNone = true
     · rw [if_pos herr] at h_rest
-      rcases hcg : processCreateMessage.chargeCodeGas evm2 with ⟨err, evm3⟩ | evm3
+      rcases hcg : processCreateMessage.chargeCodeGas msg.benv.stat.rules evm2
+        with ⟨err, evm3⟩ | evm3
       · -- code-gas charge failed
         rw [hcg] at h_rest; dsimp only at h_rest
         by_cases hex : isExceptionalHalt err
@@ -4683,7 +4688,8 @@ lemma ProcessCreateMessage.inv_noDel {wa : Adr} {msg : Msg} {xl : Xlot}
     have h_evm : Devm.NoDel wa evm := h_pm
     by_cases h_err : evm.error.isNone = true
     · rw [if_pos h_err] at h_if
-      rcases h_cg : processCreateMessage.chargeCodeGas evm with ⟨err, evm'⟩ | evm' <;>
+      rcases h_cg : processCreateMessage.chargeCodeGas msg.benv.stat.rules evm
+        with ⟨err, evm'⟩ | evm' <;>
         rw [h_cg] at h_if <;> dsimp only at h_if
       · have h_ds : evm'.delSets = evm.delSets := chargeCodeGas_delSets_err h_cg
         have h_atd_eq : evm'.accountsToDelete = evm.accountsToDelete := congrArg Prod.fst h_ds
@@ -5208,7 +5214,7 @@ theorem executeCode_inv_noDel {wa : Adr} {msg : Msg} {lim : Nat} {evm : Devm}
       exact h_res
     · rw [hca] at h_run
       dsimp only at h_run
-      by_cases hp : !msg.disablePrecompiles && adr.isPrecomp
+      by_cases hp : !msg.disablePrecompiles && msg.benv.stat.rules.isPrecomp adr
       · rw [if_pos hp] at h_run
         have h_ex := executePrecomp_noDel (evm := initEvm msg) (adr := adr) rfl (Msg.NoDel.initDevm h)
         have h_res := handleError_noDel h_ex
@@ -5263,7 +5269,8 @@ theorem processCreateMessage_inv_noDel {wa : Adr} {msg : Msg} {evm : Devm}
       processMessage_inv_noDel hpm h_inv_cm
     by_cases herr : evm2.error.isNone = true
     · rw [if_pos herr] at h_rest
-      rcases hcg : processCreateMessage.chargeCodeGas evm2 with ⟨err, evm3⟩ | evm3
+      rcases hcg : processCreateMessage.chargeCodeGas msg.benv.stat.rules evm2
+        with ⟨err, evm3⟩ | evm3
       · rw [hcg] at h_rest; dsimp only at h_rest
         by_cases hex : isExceptionalHalt err
         · rw [if_pos hex] at h_rest
@@ -6074,7 +6081,7 @@ lemma checkTransaction_upfront_lt_modulus {benv : Benv} {bout : BlockOutput}
         .ok ⟨sender, effectiveGasPrice, blobVersionedHashes, txBlobGasUsed⟩) :
     tx.gas * effectiveGasPrice +
       (if tx.isTypeThree = true then
-        calculate_data_fee benv.stat.excessBlobGas tx
+        calculate_data_fee benv.stat.rules.blob benv.stat.excessBlobGas tx
       else 0) < 2 ^ 256 := by
   unfold checkTransaction at h_check
   rcases of_bind_eq_ok h_check with ⟨txBlobGasUsed', h_limit, h_check⟩
@@ -6178,7 +6185,7 @@ lemma checkTransaction_upfront_lt_modulus {benv : Benv} {bout : BlockOutput}
                 omega
               have h_mul := Nat.mul_le_mul_left tx.gas h_effective
               have h_blob_mul :
-                  calculate_data_fee benv.stat.excessBlobGas tx ≤
+                  calculate_data_fee benv.stat.rules.blob benv.stat.excessBlobGas tx ≤
                     calculateTotalBlobGas tx * maxFeePerBlobGas := by
                 unfold calculate_data_fee
                 exact Nat.mul_le_mul_left _ (by omega)
@@ -6205,10 +6212,10 @@ lemma checkTransaction_upfront_lt_modulus {benv : Benv} {bout : BlockOutput}
         have h_mul := Nat.mul_le_mul_left tx.gas h_effective
         omega
 
-lemma validateTransaction_calldataFloorGasCost_le_gas {tx : Tx}
+lemma validateTransaction_calldataFloorGasCost_le_gas {rules : ForkRules} {tx : Tx}
     {intrinsicGas calldataFloorGasCost : Nat}
     (h_validate :
-      validateTransaction tx = .ok ⟨intrinsicGas, calldataFloorGasCost⟩) :
+      validateTransaction rules tx = .ok ⟨intrinsicGas, calldataFloorGasCost⟩) :
     calldataFloorGasCost ≤ tx.gas := by
   unfold validateTransaction at h_validate
   rcases h_cost : calculateIntrinsicCost tx with ⟨ig, floorCost⟩
@@ -6235,7 +6242,8 @@ lemma State.Inv.add_transaction_gas_credits {wa : Adr}
     {intrinsicGas calldataFloorGasCost refundCounter : Nat}
     {txOutput : MsgCallOutput}
     (h_validate :
-      validateTransaction tx = .ok ⟨intrinsicGas, calldataFloorGasCost⟩)
+      validateTransaction benv.stat.rules tx =
+        .ok ⟨intrinsicGas, calldataFloorGasCost⟩)
     (h_check :
       checkTransaction benv bout tx =
         .ok ⟨sender, effectiveGasPrice, blobVersionedHashes, txBlobGasUsed⟩)
@@ -6243,7 +6251,7 @@ lemma State.Inv.add_transaction_gas_credits {wa : Adr}
       (baseState.incrNonce sender).subBal sender
         (tx.gas * effectiveGasPrice +
           if tx.isTypeThree = true then
-            calculate_data_fee benv.stat.excessBlobGas tx
+            calculate_data_fee benv.stat.rules.blob benv.stat.excessBlobGas tx
           else
             0).toB256 =
         some debitState)
@@ -6368,13 +6376,13 @@ theorem processTransaction_inv_solvent (wa : Adr)
       (benv.state.incrNonce sender).subBal sender
         (tx.gas * effectiveGasPrice +
           if tx.isTypeThree = true then
-            calculate_data_fee benv.stat.excessBlobGas tx
+            calculate_data_fee benv.stat.rules.blob benv.stat.excessBlobGas tx
           else
             0).toB256 = some state1 := by
     generalize hopt : (benv.state.incrNonce sender).subBal sender
         (tx.gas * effectiveGasPrice +
           if tx.isTypeThree = true then
-            calculate_data_fee benv.stat.excessBlobGas tx
+            calculate_data_fee benv.stat.rules.blob benv.stat.excessBlobGas tx
           else
             0).toB256 = o at hsub ⊢
     cases o with
@@ -6534,7 +6542,7 @@ lemma checkTransaction_fee_lt {benv : Benv} {bout : BlockOutput} {tx : Tx}
     (h : checkTransaction benv bout tx = .ok ⟨sender, egp, bvh, tbgu⟩) :
     tx.gas * egp +
       (if tx.isTypeThree = true then
-        calculate_data_fee benv.stat.excessBlobGas tx
+        calculate_data_fee benv.stat.rules.blob benv.stat.excessBlobGas tx
       else 0) < 2 ^ 256 := by
   unfold checkTransaction at h
   rcases of_bind_eq_ok h with ⟨tbgu', hlim, h⟩
@@ -6635,7 +6643,7 @@ lemma checkTransaction_fee_lt {benv : Benv} {bout : BlockOutput} {tx : Tx}
               have hmul : tx.gas * (min mpf (maxFee - benv.stat.baseFeePerGas) +
                   benv.stat.baseFeePerGas) ≤ tx.gas * maxFee :=
                 Nat.mul_le_mul_left _ hegp
-              have hblobmul : calculate_data_fee benv.stat.excessBlobGas tx ≤
+              have hblobmul : calculate_data_fee benv.stat.rules.blob benv.stat.excessBlobGas tx ≤
                   calculateTotalBlobGas tx * mbf := by
                 unfold calculate_data_fee
                 exact Nat.mul_le_mul_left _ (by omega)
@@ -6663,9 +6671,9 @@ lemma checkTransaction_fee_lt {benv : Benv} {bout : BlockOutput} {tx : Tx}
         omega
 
 -- Validation bound: the calldata floor gas cost never exceeds the gas limit.
-lemma validateTransaction_floor_le {tx : Tx}
+lemma validateTransaction_floor_le {rules : ForkRules} {tx : Tx}
     {intrinsicGas calldataFloorGasCost : Nat}
-    (h : validateTransaction tx = .ok ⟨intrinsicGas, calldataFloorGasCost⟩) :
+    (h : validateTransaction rules tx = .ok ⟨intrinsicGas, calldataFloorGasCost⟩) :
     calldataFloorGasCost ≤ tx.gas := by
   unfold validateTransaction at h
   rcases hic : calculateIntrinsicCost tx with ⟨ig, cdf⟩
@@ -6709,13 +6717,13 @@ lemma processTransaction_sum_le {benv : Benv} {bout bout' : BlockOutput}
       (benv.state.incrNonce sender).subBal sender
         (tx.gas * effectiveGasPrice +
           if tx.isTypeThree = true then
-            calculate_data_fee benv.stat.excessBlobGas tx
+            calculate_data_fee benv.stat.rules.blob benv.stat.excessBlobGas tx
           else
             0).toB256 = some state1 := by
     generalize hopt : (benv.state.incrNonce sender).subBal sender
         (tx.gas * effectiveGasPrice +
           if tx.isTypeThree = true then
-            calculate_data_fee benv.stat.excessBlobGas tx
+            calculate_data_fee benv.stat.rules.blob benv.stat.excessBlobGas tx
           else
             0).toB256 = o at hsub ⊢
     cases o with
@@ -6996,8 +7004,8 @@ theorem stateTransition_inv_solvent (wa : Adr)
   dsimp only at h_run
   obtain ⟨_, _, h_run⟩ := of_bind_eq_ok h_run
   rw [← Except.ok.inj h_run]
-  exact applyBody_inv_solvent wa (initBenv ch block.header) block.txs block.wds st bout h_ab h_wds
-    ⟨h_inv, AdrSet.not_mem_empty⟩
+  exact applyBody_inv_solvent wa (initBenv pragueRules ch block.header) block.txs
+    block.wds st bout h_ab h_wds ⟨h_inv, AdrSet.not_mem_empty⟩
 
 -- `BlockChain.Reach ch ch'` : chain `ch'` is reachable from `ch` by a
 -- sequence of valid blocks, each of whose withdrawals stays within the
@@ -7035,6 +7043,9 @@ theorem addBlockToChain_inv_solvent (wa : Adr)
   dsimp only at h_run
   obtain ⟨_, _, h_run⟩ := of_bind_eq_ok h_run
   obtain ⟨_, _, h_run⟩ := of_bind_eq_ok h_run
+  -- `addBlockToChainCore` puts the post-transition tail behind a `do` join
+  -- point; zeta-reduce it so the hash check and the transition split as before.
+  dsimp only at h_run
   -- outer hash check
   split at h_run
   · cases h_run

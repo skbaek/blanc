@@ -5171,8 +5171,9 @@ lemma chargeGas_getCode_gen {cost devm exn} (h : chargeGas cost devm = exn) (a :
   | error err => exact (chargeGas_worldEq_of_error h).getCode a |>.symm
   | ok devm' => exact (chargeGas_worldEq_of_ok h).getCode a |>.symm
 
-lemma processCreateMessage.chargeCodeGas_getCode_gen {evm : Devm} {exn : Execution}
-    (h : processCreateMessage.chargeCodeGas evm = exn) (a : Adr) :
+lemma processCreateMessage.chargeCodeGas_getCode_gen {rules : ForkRules}
+    {evm : Devm} {exn : Execution}
+    (h : processCreateMessage.chargeCodeGas rules evm = exn) (a : Adr) :
     Execution.getCode exn a = evm.getCode a := by
   simp only [processCreateMessage.chargeCodeGas] at h
   split at h
@@ -5402,7 +5403,7 @@ lemma ProcessCreateMessage.codePreserve
     exact h_exec_cond
   · split at h_if
     · rename_i h_none
-      cases h_charge : processCreateMessage.chargeCodeGas evm with
+      cases h_charge : processCreateMessage.chargeCodeGas msg.benv.stat.rules evm with
       | error err =>
         rcases err with ⟨err_msg, err_evm⟩
         rw [h_charge] at h_if
@@ -5444,7 +5445,8 @@ lemma GenericCreate.codePreserve
   rcases run with ⟨x, h_err, eq_err, _⟩ | ⟨_, h_ok, run⟩
   · intro a ha
     rw [eq_err]
-    have h : Except.assert (memorySize ≤ maxInitCodeSize) ⟨"OutOfGasError", devm⟩ = Except.error x := h_err
+    have h : Except.assert (memorySize ≤ sevm.benvStat.rules.code.maxInitCodeSize)
+      ⟨"OutOfGasError", devm⟩ = Except.error x := h_err
     dsimp [Except.assert] at h
     split at h
     · contradiction
@@ -8384,8 +8386,9 @@ lemma Msg.NoDel.benvAfterTransfer_err {wa : Adr} {msg : Msg}
     rw [if_neg h_stv] at h_run
     contradiction
 
-lemma chargeCodeGas_delSets_ok {d d' : Devm}
-    (h : processCreateMessage.chargeCodeGas d = .ok d') : d'.delSets = d.delSets := by
+lemma chargeCodeGas_delSets_ok {rules : ForkRules} {d d' : Devm}
+    (h : processCreateMessage.chargeCodeGas rules d = .ok d') :
+    d'.delSets = d.delSets := by
   unfold processCreateMessage.chargeCodeGas at h
   dsimp only at h
   split at h
@@ -8395,8 +8398,8 @@ lemma chargeCodeGas_delSets_ok {d d' : Devm}
     cases h_rest
     exact chargeGas_delSets_eq h_charge
 
-lemma chargeCodeGas_delSets_err {d d' : Devm} {err : String}
-    (h : processCreateMessage.chargeCodeGas d = .error ⟨err, d'⟩) :
+lemma chargeCodeGas_delSets_err {rules : ForkRules} {d d' : Devm} {err : String}
+    (h : processCreateMessage.chargeCodeGas rules d = .error ⟨err, d'⟩) :
     d'.delSets = d.delSets := by
   unfold processCreateMessage.chargeCodeGas at h
   dsimp only at h
@@ -8969,8 +8972,8 @@ lemma Msg.benvAfterTransfer_balance_effect {msg : Msg}
     exact Nat.le_refl _
 
 lemma processCreateMessage.chargeCodeGas_balance_effect
-    {pre : Devm} {out : Execution}
-    (h : processCreateMessage.chargeCodeGas pre = out) :
+    {rules : ForkRules} {pre : Devm} {out : Execution}
+    (h : processCreateMessage.chargeCodeGas rules pre = out) :
     Execution.Rel Devm.BalNoninc pre out := by
   rcases out with ⟨err, d⟩ | d <;> simp only [Execution.Rel, Outcome.Rel]
   · simp only [processCreateMessage.chargeCodeGas] at h
@@ -9063,7 +9066,7 @@ lemma ExecuteCode.balance_effect {msg : Msg} {xl : Xlot}
     exact executeCode.handleError_balance_effect hxl hh
   · rw [hca] at hec
     dsimp only at hec
-    by_cases hpre : !msg.disablePrecompiles && adr.isPrecomp
+    by_cases hpre : !msg.disablePrecompiles && msg.benv.stat.rules.isPrecomp adr
     · rw [if_pos hpre] at hec
       rcases hec with ⟨_, hh⟩
       have hp := executePrecomp_balance_effect
@@ -9126,7 +9129,8 @@ lemma ProcessCreateMessage.balance_effect {msg : Msg} {xl : Xlot}
   · subst ex'
     by_cases h_err : evm.error.isNone = true
     · rw [if_pos h_err] at h_body
-      rcases h_cg : processCreateMessage.chargeCodeGas evm with ⟨err, evm'⟩ | evm'
+      rcases h_cg : processCreateMessage.chargeCodeGas msg.benv.stat.rules evm with
+        ⟨err, evm'⟩ | evm'
       · rw [h_cg] at h_body
         dsimp only at h_body
         by_cases h_halt : isExceptionalHalt err
