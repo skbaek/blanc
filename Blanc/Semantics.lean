@@ -32,6 +32,7 @@ def Rinst.toB8 : Rinst → B8
   | shl          => 0x1B
   | shr          => 0x1C
   | sar          => 0x1D
+  | clz          => 0x1E
   | kec          => 0x20
   | address      => 0x30
   | balance      => 0x31

@@ -47,6 +47,7 @@ abbrev Ninst.byte : Ninst := Ninst.reg Rinst.byte
 abbrev Ninst.shr : Ninst := Ninst.reg Rinst.shr
 abbrev Ninst.shl : Ninst := Ninst.reg Rinst.shl
 abbrev Ninst.sar : Ninst := Ninst.reg Rinst.sar
+abbrev Ninst.clz : Ninst := Ninst.reg Rinst.clz
 abbrev Ninst.kec : Ninst := Ninst.reg Rinst.kec
 abbrev Ninst.address : Ninst := Ninst.reg Rinst.address
 abbrev Ninst.balance : Ninst := Ninst.reg Rinst.balance
@@ -4315,6 +4316,21 @@ lemma Rinst.gas_runCore_instructionFrame
   intro d
   exact Devm.push_instructionFrame d.gasLeft.toB256 d
 
+/-- `CLZ` needs its own case because its body is fork-gated.
+
+Where EIP-7939 is in force it is an ordinary unary operation; where it is not,
+0x1E is an undefined byte and the instruction halts without touching the frame.
+Both branches preserve the frame, so the statement is the same one every other
+regular instruction satisfies and no fork hypothesis is needed. -/
+lemma Rinst.clz_runCore_instructionFrame
+    (pc : Nat) (pre : Devm) (sevm : Sevm) :
+    Execution.Rel Devm.InstructionFrame pre
+      (Rinst.runCore pc pre sevm .clz) := by
+  simp only [Rinst.runCore]
+  split
+  · exact applyUnary_instructionFrame _ _ pre
+  · exact Devm.instructionFrame_refl pre
+
 lemma Rinst.tload_runCore_instructionFrame
     (pc : Nat) (pre : Devm) (sevm : Sevm) :
     Execution.Rel Devm.InstructionFrame pre
@@ -4831,6 +4847,7 @@ theorem Rinst.runCore_instructionFrame
       | exact Rinst.tload_runCore_instructionFrame pc pre sevm
       | exact Rinst.mcopy_runCore_instructionFrame pc pre sevm
       | exact Rinst.gas_runCore_instructionFrame pc pre sevm
+      | exact Rinst.clz_runCore_instructionFrame pc pre sevm
       | exact Rinst.dup_runCore_instructionFrame pc pre sevm _
       | exact Rinst.swap_runCore_instructionFrame pc pre sevm _
       | exact Rinst.log_runCore_instructionFrame pc pre sevm _)
@@ -7792,6 +7809,7 @@ instance : Rinst.Hinv Devm.getStor Rinst.byte := by show_hinv_stor
 instance : Rinst.Hinv Devm.getStor Rinst.shr := by show_hinv_stor
 instance : Rinst.Hinv Devm.getStor Rinst.shl := by show_hinv_stor
 instance : Rinst.Hinv Devm.getStor Rinst.sar := by show_hinv_stor
+instance : Rinst.Hinv Devm.getStor Rinst.clz := by show_hinv_stor
 instance : Rinst.Hinv Devm.getStor Rinst.kec := by show_hinv_stor
 instance : Rinst.Hinv Devm.getStor Rinst.address := by show_hinv_stor
 instance : Rinst.Hinv Devm.getStor Rinst.balance := by show_hinv_stor
