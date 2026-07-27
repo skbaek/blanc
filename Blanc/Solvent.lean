@@ -7003,14 +7003,21 @@ theorem applyBody_inv_solvent (wa : Adr)
       (processWithdrawalsTrie boutTxs.withdrawalsTrie wds))
     st bout h_requests h_benv_wds).1
 
-theorem stateTransition_inv_solvent (wa : Adr)
+-- The state transition preserves WETH solvency whichever fork's rules it runs.
+-- This is the general theorem, and it is general for a reason rather than by
+-- luck: `applyBody_inv_solvent` never asks which rules it is running, because
+-- solvency is a statement about how value moves and no fork rule moves value.
+-- Everything below -- Prague, an explicitly named fork, a configured chain
+-- crossing Osaka and the BPO forks -- is an instance of this one proof.
+
+theorem stateTransitionWith_inv_solvent (wa : Adr) (rules : ForkRules)
     (ch ch' : BlockChain) (block : Block)
-    (h_run : stateTransition ch block = .ok ch')
+    (h_run : stateTransitionWith rules ch block = .ok ch')
     (h_wds : sum ch.state.bal + wdsum block.wds < 2 ^ 256)
     (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state := by
-  -- invert `stateTransition`'s do-block; the state change is `applyBody`, so this
-  -- is `applyBody_inv_solvent` (the block-check helpers don't touch state).
-  rw [stateTransition] at h_run
+  -- invert `stateTransitionWith`'s do-block; the state change is `applyBody`, so
+  -- this is `applyBody_inv_solvent` (the block-check helpers don't touch state).
+  rw [stateTransitionWith] at h_run
   obtain ⟨_, _, h_run⟩ := of_bind_eq_ok h_run
   obtain ⟨_, _, h_run⟩ := of_bind_eq_ok h_run
   dsimp only at h_run
@@ -7018,8 +7025,43 @@ theorem stateTransition_inv_solvent (wa : Adr)
   dsimp only at h_run
   obtain ⟨_, _, h_run⟩ := of_bind_eq_ok h_run
   rw [← Except.ok.inj h_run]
-  exact applyBody_inv_solvent wa (initBenv pragueRules ch block.header) block.txs
+  exact applyBody_inv_solvent wa (initBenv rules ch block.header) block.txs
     block.wds st bout h_ab h_wds ⟨h_inv, AdrSet.not_mem_empty⟩
+
+-- At an explicitly named fork: resolving the rules is the only extra step, and
+-- a fork whose rules this build does not implement never reaches the
+-- transition at all.
+theorem stateTransitionAt_inv_solvent (wa : Adr) (f : Fork)
+    (ch ch' : BlockChain) (block : Block)
+    (h_run : stateTransitionAt f ch block = .ok ch')
+    (h_wds : sum ch.state.bal + wdsum block.wds < 2 ^ 256)
+    (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state := by
+  rw [stateTransitionAt] at h_run
+  obtain ⟨rules, _, h_run⟩ := of_bind_eq_ok h_run
+  exact stateTransitionWith_inv_solvent wa rules ch ch' block h_run h_wds h_inv
+
+-- On a configured chain the block's own timestamp picks the rules. The result
+-- holds whichever ones it picks, so a chain that crosses an activation is not
+-- a new case: no fork in the schedule can break solvency, and neither can the
+-- boundary between two of them.
+theorem stateTransitionUsing_inv_solvent (wa : Adr) (cfg : ChainConfig)
+    (ch ch' : BlockChain) (block : Block)
+    (h_run : stateTransitionUsing cfg ch block = .ok ch')
+    (h_wds : sum ch.state.bal + wdsum block.wds < 2 ^ 256)
+    (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state := by
+  rw [stateTransitionUsing] at h_run
+  obtain ⟨rules, _, h_run⟩ := of_bind_eq_ok h_run
+  exact stateTransitionWith_inv_solvent wa rules ch ch' block h_run h_wds h_inv
+
+-- Prague is the `rules := pragueRules` instance. The statement is unchanged,
+-- and `stateTransition` is *definitionally* `stateTransitionWith pragueRules`,
+-- so the instance is the whole proof.
+theorem stateTransition_inv_solvent (wa : Adr)
+    (ch ch' : BlockChain) (block : Block)
+    (h_run : stateTransition ch block = .ok ch')
+    (h_wds : sum ch.state.bal + wdsum block.wds < 2 ^ 256)
+    (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state :=
+  stateTransitionWith_inv_solvent wa pragueRules ch ch' block h_run h_wds h_inv
 
 -- `BlockChain.Reach ch ch'` : chain `ch'` is reachable from `ch` by a
 -- sequence of valid blocks, each of whose withdrawals stays within the
@@ -7032,6 +7074,40 @@ inductive BlockChain.Reach : BlockChain → BlockChain → Prop
       stateTransition ch' block = .ok ch'' →
       Reach ch ch''
 
+-- `BlockChain.ReachUsing cfg ch ch'` : the same reachability on a *configured*
+-- chain. Each step imports one block through the configured transition, so the
+-- fork it runs under is whichever one `cfg` schedules at that block's
+-- timestamp. A sequence crossing Prague, Osaka, BPO1, and BPO2 is one chain of
+-- these steps, not four separate relations.
+inductive BlockChain.ReachUsing (cfg : ChainConfig) : BlockChain → BlockChain → Prop
+  | refl (ch : BlockChain) : ReachUsing cfg ch ch
+  | step {ch ch' ch'' : BlockChain} {block : Block} :
+      ReachUsing cfg ch ch' →
+      sum ch'.state.bal + wdsum block.wds < 2 ^ 256 →
+      stateTransitionUsing cfg ch' block = .ok ch'' →
+      ReachUsing cfg ch ch''
+
+-- Chain-level induction over a configured chain : no sequence of valid blocks
+-- can break WETH solvency, whatever schedule the chain follows and whichever
+-- activations that sequence crosses.
+theorem chainUsing_inv_solvent (wa : Adr) (cfg : ChainConfig) (ch ch' : BlockChain)
+    (h_reach : BlockChain.ReachUsing cfg ch ch')
+    (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state := by
+  induction h_reach with
+  | refl => exact h_inv
+  | step h_reach' h_bound h_st ih =>
+    exact stateTransitionUsing_inv_solvent wa cfg _ _ _ h_st h_bound ih
+
+-- A Prague-only schedule is the Prague chain: every `Reach` step is a
+-- `ReachUsing (ChainConfig.pragueOnly ch.chainId)` step, because
+-- `stateTransitionUsing` on that schedule reduces to `stateTransition`.
+theorem BlockChain.Reach.toReachUsing {chainId : B64} {ch ch' : BlockChain}
+    (h_reach : BlockChain.Reach ch ch') :
+    BlockChain.ReachUsing (ChainConfig.pragueOnly chainId) ch ch' := by
+  induction h_reach with
+  | refl => exact .refl _
+  | step h_reach' h_bound h_st ih => exact .step ih h_bound h_st
+
 -- Chain-level induction corollary : no sequence of valid blocks can break
 -- WETH solvency.
 theorem chain_inv_solvent (wa : Adr) (ch ch' : BlockChain)
@@ -7043,16 +7119,17 @@ theorem chain_inv_solvent (wa : Adr) (ch ch' : BlockChain)
   | refl => exact h_inv
   | step h_reach' h_bound h_st ih => exact stateTransition_inv_solvent wa _ _ _ h_st h_bound ih
 
--- Bonus level : preservation through RLP decoding and block hash checks.
-theorem addBlockToChain_inv_solvent (wa : Adr)
+-- Bonus level : preservation through RLP decoding and block hash checks,
+-- again under any fork's rules.
+theorem addBlockToChainWith_inv_solvent (wa : Adr) (rules : ForkRules)
     (ch ch' : BlockChain) (rlp : B8L)
-    (h_run : addBlockToChain ch rlp = .ok (.inl ch'))
+    (h_run : addBlockToChainWith rules ch rlp = .ok (.inl ch'))
     (h_wds : ∀ block hash, rlpToBlock rlp = .ok ⟨block, hash⟩ →
       sum ch.state.bal + wdsum block.wds < 2 ^ 256)
     (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state := by
-  -- invert `addBlockToChain` (rlpToBlock decode + hash check), then one
-  -- `stateTransition_inv_solvent` step (h_wds instantiated at the decoded block).
-  rw [addBlockToChain] at h_run
+  -- invert `addBlockToChainWith` (rlpToBlock decode + hash check), then one
+  -- `stateTransitionWith_inv_solvent` step (h_wds at the decoded block).
+  rw [addBlockToChainWith] at h_run
   obtain ⟨⟨block, hash⟩, h_rlp, h_run⟩ := of_bind_eq_ok h_run
   dsimp only at h_run
   obtain ⟨_, _, h_run⟩ := of_bind_eq_ok h_run
@@ -7063,7 +7140,7 @@ theorem addBlockToChain_inv_solvent (wa : Adr)
   -- outer hash check
   split at h_run
   · cases h_run
-  · -- case on the raw-RLP limit, then `stateTransition ch block`
+  · -- case on the raw-RLP limit, then `stateTransitionWith rules ch block`
     split at h_run
     · simp [Pure.pure, Except.pure] at h_run
     · split at h_run
@@ -7075,4 +7152,44 @@ theorem addBlockToChain_inv_solvent (wa : Adr)
         have hyc : chain = ch' :=
           (Except.ok.inj hy).trans (Sum.inl.inj (Except.ok.inj h_run))
         subst hyc
-        exact stateTransition_inv_solvent wa ch _ block h_st (h_wds block hash h_rlp) h_inv
+        exact stateTransitionWith_inv_solvent wa rules ch _ block h_st
+          (h_wds block hash h_rlp) h_inv
+
+-- Block import at an explicitly named fork.
+theorem addBlockToChainAt_inv_solvent (wa : Adr) (f : Fork)
+    (ch ch' : BlockChain) (rlp : B8L)
+    (h_run : addBlockToChainAt f ch rlp = .ok (.inl ch'))
+    (h_wds : ∀ block hash, rlpToBlock rlp = .ok ⟨block, hash⟩ →
+      sum ch.state.bal + wdsum block.wds < 2 ^ 256)
+    (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state := by
+  rw [addBlockToChainAt] at h_run
+  obtain ⟨rules, _, h_run⟩ := of_bind_eq_ok h_run
+  exact addBlockToChainWith_inv_solvent wa rules ch ch' rlp h_run h_wds h_inv
+
+-- Block import on a configured chain. It decodes the block first so that the
+-- schedule can read its timestamp, but once the decode has succeeded it is the
+-- rules-explicit import of the same bytes, so the general theorem applies
+-- rather than a second inversion of the same do-block.
+theorem addBlockToChainUsing_inv_solvent (wa : Adr) (cfg : ChainConfig)
+    (ch ch' : BlockChain) (rlp : B8L)
+    (h_run : addBlockToChainUsing cfg ch rlp = .ok (.inl ch'))
+    (h_wds : ∀ block hash, rlpToBlock rlp = .ok ⟨block, hash⟩ →
+      sum ch.state.bal + wdsum block.wds < 2 ^ 256)
+    (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state := by
+  rw [addBlockToChainUsing] at h_run
+  obtain ⟨⟨block, hash⟩, h_rlp, h_run⟩ := of_bind_eq_ok h_run
+  dsimp only at h_run
+  obtain ⟨rules, _, h_run⟩ := of_bind_eq_ok h_run
+  refine addBlockToChainWith_inv_solvent wa rules ch ch' rlp ?_ h_wds h_inv
+  rw [addBlockToChainWith, h_rlp]
+  exact h_run
+
+-- Prague is the `rules := pragueRules` instance here too; the statement is
+-- unchanged.
+theorem addBlockToChain_inv_solvent (wa : Adr)
+    (ch ch' : BlockChain) (rlp : B8L)
+    (h_run : addBlockToChain ch rlp = .ok (.inl ch'))
+    (h_wds : ∀ block hash, rlpToBlock rlp = .ok ⟨block, hash⟩ →
+      sum ch.state.bal + wdsum block.wds < 2 ^ 256)
+    (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state :=
+  addBlockToChainWith_inv_solvent wa pragueRules ch ch' rlp h_run h_wds h_inv
