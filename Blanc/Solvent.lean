@@ -6177,7 +6177,8 @@ lemma checkTransaction_upfront_lt_modulus {benv : Benv} {bout : BlockOutput}
         simp only [checkTransactionBlobData, h_type] at h_blob
         split at h_blob
         · cases h_blob
-        · split at h_blob
+        · rcases of_bind_eq_ok h_blob with ⟨_, _, h_blob⟩
+          split at h_blob
           · cases h_blob
           · split at h_blob
             · cases h_blob
@@ -6231,16 +6232,34 @@ lemma validateTransaction_calldataFloorGasCost_le_gas {rules : ForkRules} {tx : 
   dsimp only at h_validate
   split at h_validate
   · cases h_validate
-  · split at h_validate
-    · cases h_validate
-    · unfold checkInitcodeSize at h_validate
+  · rename_i h_gas
+    cases h_limit : rules.tx.maxGas with
+    | none =>
+      simp only [h_limit] at h_validate
       split at h_validate
       · cases h_validate
-      · rename_i h_gas _ _
-        have h_result := Except.ok.inj h_validate
-        simp only [Prod.mk.injEq] at h_result
-        obtain ⟨rfl, rfl⟩ := h_result
-        omega
+      · unfold checkInitcodeSize at h_validate
+        split at h_validate
+        · cases h_validate
+        · have h_result := Except.ok.inj h_validate
+          simp only [Prod.mk.injEq] at h_result
+          obtain ⟨rfl, rfl⟩ := h_result
+          omega
+    | some maxGas =>
+      simp only [h_limit] at h_validate
+      unfold checkInitcodeSize at h_validate
+      split at h_validate
+      · cases h_validate
+      · unfold checkTransactionGasCap at h_validate
+        simp only [h_limit] at h_validate
+        split at h_validate
+        · cases h_validate
+        · split at h_validate
+          · cases h_validate
+          · have h_result := Except.ok.inj h_validate
+            simp only [Prod.mk.injEq] at h_result
+            obtain ⟨rfl, rfl⟩ := h_result
+            omega
 
 lemma State.Inv.add_transaction_gas_credits {wa : Adr}
     {baseState debitState postMsgState : _root_.State}
@@ -6638,7 +6657,8 @@ lemma checkTransaction_fee_lt {benv : Benv} {bout : BlockOutput} {tx : Tx}
         simp only [checkTransactionBlobData, htt] at hblob
         split at hblob
         · cases hblob
-        · split at hblob
+        · rcases of_bind_eq_ok hblob with ⟨_, _, hblob⟩
+          split at hblob
           · cases hblob
           · split at hblob
             · cases hblob
@@ -6684,22 +6704,7 @@ lemma validateTransaction_floor_le {rules : ForkRules} {tx : Tx}
     {intrinsicGas calldataFloorGasCost : Nat}
     (h : validateTransaction rules tx = .ok ⟨intrinsicGas, calldataFloorGasCost⟩) :
     calldataFloorGasCost ≤ tx.gas := by
-  unfold validateTransaction at h
-  rcases hic : calculateIntrinsicCost tx with ⟨ig, cdf⟩
-  rw [hic] at h
-  dsimp only at h
-  split at h
-  · cases h
-  · split at h
-    · cases h
-    · unfold checkInitcodeSize at h
-      split at h
-      · cases h
-      · rename_i hgas _ _
-        have h' := Except.ok.inj h
-        simp only [Prod.mk.injEq] at h'
-        obtain ⟨rfl, rfl⟩ := h'
-        omega
+  exact validateTransaction_calldataFloorGasCost_le_gas h
 
 -- One-step wei conservation for `processTransaction`.
 lemma processTransaction_sum_le {benv : Benv} {bout bout' : BlockOutput}
@@ -7058,14 +7063,16 @@ theorem addBlockToChain_inv_solvent (wa : Adr)
   -- outer hash check
   split at h_run
   · cases h_run
-  · -- case on `stateTransition ch block`
+  · -- case on the raw-RLP limit, then `stateTransition ch block`
     split at h_run
     · simp [Pure.pure, Except.pure] at h_run
-    · rename_i chain h_st
-      obtain ⟨y, hy, h_run⟩ := of_bind_eq_ok h_run
-      obtain ⟨_, _, h_run⟩ := of_bind_eq_ok h_run
-      obtain ⟨_, _, h_run⟩ := of_bind_eq_ok h_run
-      have hyc : chain = ch' :=
-        (Except.ok.inj hy).trans (Sum.inl.inj (Except.ok.inj h_run))
-      subst hyc
-      exact stateTransition_inv_solvent wa ch _ block h_st (h_wds block hash h_rlp) h_inv
+    · split at h_run
+      · simp [Pure.pure, Except.pure] at h_run
+      · rename_i chain h_st
+        obtain ⟨y, hy, h_run⟩ := of_bind_eq_ok h_run
+        obtain ⟨_, _, h_run⟩ := of_bind_eq_ok h_run
+        obtain ⟨_, _, h_run⟩ := of_bind_eq_ok h_run
+        have hyc : chain = ch' :=
+          (Except.ok.inj hy).trans (Sum.inl.inj (Except.ok.inj h_run))
+        subst hyc
+        exact stateTransition_inv_solvent wa ch _ block h_st (h_wds block hash h_rlp) h_inv
