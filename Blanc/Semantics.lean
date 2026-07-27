@@ -271,6 +271,356 @@ def Ninst.Run' (pc : Nat) (sevm : Sevm) (devm : Devm)
     (n : Ninst) (xl : Xlot) (ex : Execution) : Prop :=
   Step.Run (Ninst.step ⟨pc, sevm, devm⟩ n) xl ex
 
+/-- A childless step outcome built from a plain `Execution` carries exactly
+that result.  This is the workhorse for the non-spawning instruction kinds. -/
+lemma Step.run_ofExecution {pc : Nat} {e ex : Execution} {xl : Xlot} :
+    Step.Run (Step.ofExecution pc e) xl ex ↔ (xl = .none ∧ ex = e) := by
+  unfold Step.ofExecution
+  split <;> simp [Step.Run]
+
+lemma Step.run_ofExecution_of_eq {pc : Nat} {e : Execution} :
+    Step.Run (Step.ofExecution pc e) .none e :=
+  Step.run_ofExecution.mpr ⟨rfl, rfl⟩
+
+lemma Step.ofExecution_ne_spawn {pc : Nat} {ex : Execution}
+    {f : Frame} {rsm : Resume} {pc' : Nat} :
+    Step.ofExecution pc ex ≠ .spawn f rsm pc' := by
+  cases ex <;> simp [Step.ofExecution]
+
+lemma Step.ofJump_ne_spawn {j : Except (String × Devm) (Nat × Devm)}
+    {f : Frame} {rsm : Resume} {pc' : Nat} :
+    Step.ofJump j ≠ .spawn f rsm pc' := by
+  cases j <;> simp [Step.ofJump]
+
+lemma XStep.toStep_spawn {pc : Nat} {s : XStep}
+    {f : Frame} {rsm : Resume} {pc' : Nat}
+    (h : XStep.toStep pc s = .spawn f rsm pc') : s = .spawn f rsm := by
+  cases s
+  · cases Step.ofExecution_ne_spawn h
+  · cases h; rfl
+
+lemma Step.ofExecution_cont {pc pc' : Nat} {e : Execution} {devm' : Devm}
+    (h : Step.ofExecution pc e = .cont pc' devm') : pc' = pc ∧ e = .ok devm' := by
+  unfold Step.ofExecution at h
+  split at h <;> cases h
+  exact ⟨rfl, rfl⟩
+
+lemma Step.ofExecution_ne_halt_ok {pc : Nat} {e : Execution} {devm' : Devm} :
+    Step.ofExecution pc e ≠ .halt (.ok devm') := by
+  unfold Step.ofExecution
+  split <;> simp
+
+lemma Step.ofJump_cont {j : Except (String × Devm) (Nat × Devm)}
+    {pc' : Nat} {devm' : Devm} (h : Step.ofJump j = .cont pc' devm') :
+    j = .ok ⟨pc', devm'⟩ := by
+  unfold Step.ofJump at h
+  split at h <;> cases h
+  rfl
+
+lemma Step.ofJump_ne_halt_ok {j : Except (String × Devm) (Nat × Devm)}
+    {devm' : Devm} : Step.ofJump j ≠ .halt (.ok devm') := by
+  unfold Step.ofJump
+  split <;> simp
+
+/-- Every step outcome of an ordinary instruction resumes at `pc + n.size`;
+the program-counter arithmetic that used to live in `exec` now lives in
+`Ninst.step`, so it is recovered here once. -/
+lemma Ninst.step_cont_pc {evm : Evm} {n : Ninst} {pc' : Nat} {devm' : Devm}
+    (h : Ninst.step evm n = .cont pc' devm') : pc' = evm.pc + n.size := by
+  unfold Ninst.step at h
+  rcases n with r | x | ⟨xs, hxs⟩ <;> simp only [] at h
+  · exact (Step.ofExecution_cont h).1
+  · unfold XStep.toStep at h
+    split at h
+    · exact (Step.ofExecution_cont h).1
+    · cases h
+  · exact (Step.ofExecution_cont h).1
+
+lemma Ninst.step_spawn_pc {evm : Evm} {n : Ninst}
+    {f : Frame} {rsm : Resume} {pc' : Nat}
+    (h : Ninst.step evm n = .spawn f rsm pc') : pc' = evm.pc + n.size := by
+  unfold Ninst.step at h
+  rcases n with r | x | ⟨xs, hxs⟩ <;> simp only [] at h
+  · cases Step.ofExecution_ne_spawn h
+  · unfold XStep.toStep at h
+    split at h
+    · cases Step.ofExecution_ne_spawn h
+    · cases h; rfl
+  · cases Step.ofExecution_ne_spawn h
+
+lemma Ninst.step_ne_halt_ok {evm : Evm} {n : Ninst} {devm' : Devm} :
+    Ninst.step evm n ≠ .halt (.ok devm') := by
+  unfold Ninst.step
+  rcases n with r | x | ⟨xs, hxs⟩ <;> simp only []
+  · exact Step.ofExecution_ne_halt_ok
+  · unfold XStep.toStep
+    split
+    · exact Step.ofExecution_ne_halt_ok
+    · simp
+  · exact Step.ofExecution_ne_halt_ok
+
+/-! ### The three branches of `Ninst.step`, made explicit. -/
+
+lemma Ninst.step_reg {evm : Evm} {r : Rinst} :
+    Ninst.step evm (.reg r) = Step.ofExecution (evm.pc + 1) (r.run evm) := rfl
+
+lemma Ninst.step_push {evm : Evm} {xs : B8L} {le : xs.length ≤ 32} :
+    Ninst.step evm (.push xs le) =
+      Step.ofExecution (evm.pc + xs.length + 1)
+        (do let d ← chargeGas (if xs = [] then gBase else gVerylow) evm.dyna
+            d.push xs.toB256) := rfl
+
+lemma Ninst.step_exec {evm : Evm} {x : Xinst} :
+    Ninst.step evm (.exec x) =
+      XStep.toStep (evm.pc + 1) (Xinst.step evm.sta evm.dyna x) := rfl
+
+/-! ### Introducing frame relations from the frame-entry equation. -/
+
+lemma RunFrame.of_done {f : Frame} {r} (h : f.enter = .done r) :
+    RunFrame f .none r := by
+  unfold RunFrame; rw [h]; exact ⟨rfl, rfl⟩
+
+lemma RunFrame.of_run {f : Frame} {cevm : Evm} {raw : Execution}
+    (h : f.enter = .run cevm) :
+    RunFrame f (.some ⟨cevm, raw⟩) (f.settle raw) := by
+  unfold RunFrame; rw [h]; exact ⟨raw, rfl, rfl⟩
+
+/-- Entering a frame preserves the frame's own depth. -/
+lemma Frame.enter_run_depth {f : Frame} {cevm : Evm}
+    (h : f.enter = .run cevm) : cevm.sta.depth = f.inner.depth := by
+  unfold Frame.enter at h
+  split at h
+  · cases h
+  · rename_i benv hbenv
+    split at h
+    · cases h
+      rename_i heq
+      unfold executeCode.enter at heq
+      simp only [] at heq
+      split at heq
+      · cases heq; rfl
+      · split at heq
+        · cases heq
+        · cases heq; rfl
+    · cases h
+
+/-- A filled slot means the frame was actually entered, and the suspended
+machine is exactly the one `Frame.enter` produced. -/
+lemma RunFrame.some_inv {f : Frame} {evm_ : Evm} {exn_ : Execution} {r}
+    (run : RunFrame f (.some ⟨evm_, exn_⟩) r) :
+    f.enter = .run evm_ ∧ r = f.settle exn_ := by
+  unfold RunFrame at run
+  rcases henter : f.enter with r' | cevm <;> rw [henter] at run
+  · cases run.1
+  · rcases run with ⟨raw, hxl, hr⟩
+    cases hxl
+    exact ⟨rfl, hr⟩
+
+/-- The depth of a suspended child frame, read off the slot. -/
+lemma RunFrame.depth_eq {f : Frame} {evm_ : Evm} {exn_ : Execution} {r}
+    (run : RunFrame f (.some ⟨evm_, exn_⟩) r) :
+    evm_.sta.depth = f.inner.depth :=
+  Frame.enter_run_depth (RunFrame.some_inv run).1
+
+/-- A filled slot on a call-type instruction means the step spawned, and the
+slot holds that spawn's child frame. -/
+lemma XStep.Run.some_inv {s : XStep} {evm_ : Evm} {exn_ : Execution} {ex : Execution}
+    (run : XStep.Run s (.some ⟨evm_, exn_⟩) ex) :
+    ∃ f rsm, s = .spawn f rsm ∧ f.enter = .run evm_ ∧ ex = rsm.run (f.settle exn_) := by
+  unfold XStep.Run at run
+  cases s with
+  | done ex' => cases run.1
+  | spawn f rsm =>
+    rcases run with ⟨r, hframe, hex⟩
+    obtain ⟨henter, hr⟩ := RunFrame.some_inv hframe
+    exact ⟨f, rsm, rfl, henter, by rw [hex, hr]⟩
+
+lemma Step.Run.some_inv {s : Step} {evm_ : Evm} {exn_ : Execution} {ex : Execution}
+    (run : Step.Run s (.some ⟨evm_, exn_⟩) ex) :
+    ∃ f rsm pc', s = .spawn f rsm pc' ∧ f.enter = .run evm_ ∧
+      ex = rsm.run (f.settle exn_) := by
+  unfold Step.Run at run
+  cases s with
+  | halt ex' => cases run.1
+  | cont pc devm => cases run.1
+  | spawn f rsm pc' =>
+    rcases run with ⟨r, hframe, hex⟩
+    obtain ⟨henter, hr⟩ := RunFrame.some_inv hframe
+    exact ⟨f, rsm, pc', rfl, henter, by rw [hex, hr]⟩
+
+/-- Only a call-type instruction spawns, and it delegates to `Xinst.step`. -/
+lemma Ninst.step_spawn_inv {evm : Evm} {n : Ninst}
+    {f : Frame} {rsm : Resume} {pc' : Nat}
+    (h : Ninst.step evm n = .spawn f rsm pc') :
+    ∃ x, n = .exec x ∧ Xinst.step evm.sta evm.dyna x = .spawn f rsm := by
+  rcases n with r | x | ⟨xs, hxs⟩
+  · rw [Ninst.step_reg] at h; cases Step.ofExecution_ne_spawn h
+  · rw [Ninst.step_exec] at h; exact ⟨x, rfl, XStep.toStep_spawn h⟩
+  · rw [Ninst.step_push] at h; cases Step.ofExecution_ne_spawn h
+
+/-- The initial machine of an entered code frame is `initEvm` of the message,
+whichever decode branch `executeCode.enter` took. -/
+lemma executeCode.enter_inl {msg : Msg} {evm : Evm}
+    (h : executeCode.enter msg = .inl evm) : evm = initEvm msg := by
+  unfold executeCode.enter at h
+  split at h
+  · cases h; rfl
+  · split at h
+    · cases h
+    · cases h; rfl
+
+lemma ExecuteCode.some_inv {msg : Msg} {evm_ : Evm} {exn_ : Execution}
+    {ex : Except (String × State × AdrSet × Tra) Devm}
+    (run : ExecuteCode msg (.some ⟨evm_, exn_⟩) ex) :
+    evm_ = initEvm msg ∧ ex = executeCode.handleError exn_ := by
+  unfold ExecuteCode at run
+  rcases henter : executeCode.enter msg with evm | raw <;> rw [henter] at run
+  · rcases run with ⟨raw, hxl, hex⟩
+    cases hxl
+    exact ⟨executeCode.enter_inl henter, hex⟩
+  · cases run.1
+
+/-- The precompile branch of frame entry runs `executePrecomp` on the initial
+machine and produces no child derivation. -/
+lemma executeCode.enter_inr {msg : Msg} {raw : Execution}
+    (h : executeCode.enter msg = .inr raw) :
+    ∃ adr, raw = executePrecomp (initEvm msg) adr := by
+  unfold executeCode.enter at h
+  split at h
+  · cases h
+  · rename_i adr _
+    split at h
+    · cases h; exact ⟨adr, rfl⟩
+    · cases h
+
+/-- The frame-independent part of a frame relation: value transfer followed by
+code execution, before the frame's own settlement is applied.  Splitting
+`RunFrame` into `FrameBody` plus `Frame.settleMsg` is what lets the former
+`ProcessMessage`/`ProcessCreateMessage` arguments be phrased once and reused
+for both frame kinds. -/
+def FrameBody (m : Msg) (xl : Xlot)
+    (r : Except (String × State × AdrSet × Tra) Devm) : Prop :=
+  match m.benvAfterTransfer with
+  | .error e => xl = .none ∧ r = .error e
+  | .ok benv => ExecuteCode (m.withBenv benv) xl r
+
+/-- Frame entry is `benvAfterTransfer` followed by `executeCode.enter`, so a
+frame relation decomposes into a transfer failure or a code-execution relation
+on the transferred message.  This is the bridge that lets every former
+`ProcessMessage`/`ProcessCreateMessage` argument be phrased once. -/
+lemma RunFrame.decompose {f : Frame} {xl : Xlot}
+    {r : Except (String × State × AdrSet × Tra) Devm}
+    (run : RunFrame f xl r) :
+    (∃ e, f.inner.benvAfterTransfer = .error e ∧ xl = .none ∧
+        r = f.settleMsg (.error e)) ∨
+    (∃ benv r', f.inner.benvAfterTransfer = .ok benv ∧
+        ExecuteCode (f.inner.withBenv benv) xl r' ∧ r = f.settleMsg r') := by
+  unfold RunFrame Frame.enter at run
+  rcases hbenv : f.inner.benvAfterTransfer with e | benv <;>
+    simp only [hbenv] at run
+  · exact Or.inl ⟨e, rfl, run.1, run.2⟩
+  · rcases henter : executeCode.enter (f.inner.withBenv benv) with evm | raw <;>
+      simp only [henter] at run
+    · rcases run with ⟨raw, hxl, hr⟩
+      exact Or.inr ⟨benv, executeCode.handleError raw, rfl,
+        by unfold ExecuteCode; rw [henter]; exact ⟨raw, hxl, rfl⟩, hr⟩
+    · exact Or.inr ⟨benv, executeCode.handleError raw, rfl,
+        by unfold ExecuteCode; rw [henter]; exact ⟨run.1, rfl⟩, run.2⟩
+
+/-- `RunFrame` is exactly `FrameBody` composed with the frame's settlement. -/
+lemma RunFrame.iff_settleMsg {f : Frame} {xl : Xlot}
+    {r : Except (String × State × AdrSet × Tra) Devm} :
+    RunFrame f xl r ↔ ∃ r0, FrameBody f.inner xl r0 ∧ r = f.settleMsg r0 := by
+  constructor
+  · intro run
+    rcases RunFrame.decompose run with ⟨e, hbenv, hxl, hr⟩ | ⟨benv, r0, hbenv, hec, hr⟩
+    · exact ⟨.error e, by unfold FrameBody; rw [hbenv]; exact ⟨hxl, rfl⟩, hr⟩
+    · exact ⟨r0, by unfold FrameBody; rw [hbenv]; exact hec, hr⟩
+  · rintro ⟨r0, hbody, rfl⟩
+    unfold FrameBody at hbody
+    unfold RunFrame Frame.enter
+    rcases hbenv : f.inner.benvAfterTransfer with e | benv <;>
+      simp only [hbenv] at hbody ⊢
+    · exact ⟨hbody.1, by rw [hbody.2]⟩
+    · unfold ExecuteCode at hbody
+      rcases henter : executeCode.enter (f.inner.withBenv benv) with evm | raw <;>
+        simp only [henter] at hbody ⊢
+      · rcases hbody with ⟨raw, hxl, hr0⟩
+        exact ⟨raw, hxl, by rw [hr0]; rfl⟩
+      · exact ⟨hbody.1, by rw [hbody.2]; rfl⟩
+
+lemma ProcessMessage.iff_body {msg : Msg} {xl : Xlot}
+    {r : Except (String × State × AdrSet × Tra) Devm} :
+    ProcessMessage msg xl r ↔
+      ∃ r0, FrameBody msg xl r0 ∧ r = processMessage.settle msg r0 :=
+  RunFrame.iff_settleMsg
+
+lemma ProcessCreateMessage.iff_processMessage {msg : Msg} {xl : Xlot}
+    {r : Except (String × State × AdrSet × Tra) Devm} :
+    ProcessCreateMessage msg xl r ↔
+      ∃ r', ProcessMessage (processCreateMessage.msg msg) xl r' ∧
+        r = processCreateMessage.settle msg r' := by
+  rw [ProcessCreateMessage, RunFrame.iff_settleMsg]
+  constructor
+  · rintro ⟨r0, hbody, rfl⟩
+    exact ⟨_, ProcessMessage.iff_body.mpr ⟨r0, hbody, rfl⟩, rfl⟩
+  · rintro ⟨r', hpm, rfl⟩
+    obtain ⟨r0, hbody, rfl⟩ := ProcessMessage.iff_body.mp hpm
+    exact ⟨r0, hbody, rfl⟩
+
+
+/-! ### Decode bridge.
+
+`Evm.step` dispatches on the instruction at the program counter, so each of the
+four `*.At` decode predicates pins the driver's step outcome.  These four
+equations are what let the former per-instruction relational reasoning survive
+against the single step function. -/
+
+lemma Evm.step_invOp {pc : Nat} {sevm : Sevm} {devm : Devm}
+    (h : sevm.code.getInst pc = none) :
+    Evm.step ⟨pc, sevm, devm⟩ = .halt (.error ⟨"InvalidOpcode", devm⟩) := by
+  unfold Evm.step
+  rw [show (Evm.getInst ⟨pc, sevm, devm⟩) = none from h]
+
+lemma Evm.step_next {pc : Nat} {sevm : Sevm} {devm : Devm} {n : Ninst}
+    (h : n.At sevm.code pc) :
+    Evm.step ⟨pc, sevm, devm⟩ = Ninst.step ⟨pc, sevm, devm⟩ n := by
+  unfold Evm.step
+  rw [show (Evm.getInst ⟨pc, sevm, devm⟩) = some (.next n) from h]
+
+lemma Evm.step_jump {pc : Nat} {sevm : Sevm} {devm : Devm} {j : Jinst}
+    (h : j.At sevm.code pc) :
+    Evm.step ⟨pc, sevm, devm⟩ = Step.ofJump (j.run ⟨pc, sevm, devm⟩) := by
+  unfold Evm.step
+  rw [show (Evm.getInst ⟨pc, sevm, devm⟩) = some (.jump j) from h]
+
+lemma Evm.step_last {pc : Nat} {sevm : Sevm} {devm : Devm} {l : Linst}
+    (h : l.At sevm.code pc) :
+    Evm.step ⟨pc, sevm, devm⟩ = .halt (l.run sevm devm) := by
+  unfold Evm.step
+  rw [show (Evm.getInst ⟨pc, sevm, devm⟩) = some (.last l) from h]
+
+/-- Only a call-type instruction spawns a child frame. -/
+lemma Evm.step_spawn_inv {pc : Nat} {sevm : Sevm} {devm : Devm}
+    {f : Frame} {rsm : Resume} {pc' : Nat}
+    (hs : Evm.step ⟨pc, sevm, devm⟩ = .spawn f rsm pc') :
+    ∃ x : Xinst, Xinst.At sevm.code pc x ∧
+      Xinst.step sevm devm x = .spawn f rsm ∧ pc' = pc + 1 := by
+  unfold Evm.step at hs
+  split at hs
+  · cases hs
+  · rename_i n hgi
+    rcases n with r | x | ⟨xs, hxs⟩ <;> simp only [Ninst.step] at hs
+    · cases Step.ofExecution_ne_spawn hs
+    · refine ⟨x, hgi, XStep.toStep_spawn hs, ?_⟩
+      unfold XStep.toStep at hs
+      split at hs
+      · cases Step.ofExecution_ne_spawn hs
+      · cases hs; rfl
+    · cases Step.ofExecution_ne_spawn hs
+  · cases Step.ofJump_ne_spawn hs
+  · cases hs
+
 /- Exec pc sevm devm ex is provable iff
     ∃ lim : Nat, exec ⟨pc, sevm, devm⟩ lim = Fueled.ofExcept ex
    holds; fuel exhaustion is excluded by the shape of the equation.  The
@@ -314,6 +664,36 @@ def Xlot.Filled : Xlot → Prop
   | .none => True
   | .some ⟨evm, exn⟩ => Nonempty (Exec evm.pc evm.sta evm.dyna exn)
 
+/-! ### Inversion against the step outcome.
+
+A derivation is determined at its root by the step outcome, so an equation
+pinning that outcome collapses the six-way case analysis.  `halt_inv` is what
+replaces the old "wrong instruction kind" branches of every `cases` on `Exec`:
+where a proof knows the instruction at `pc` halts, the derivation's result is
+that halt value. -/
+
+lemma Exec.halt_inv {pc sevm devm exn ex}
+    (cr : Exec pc sevm devm exn)
+    (h : Evm.step ⟨pc, sevm, devm⟩ = .halt ex) : exn = ex := by
+  cases cr with
+  | halt h' => cases h.symm.trans h'; rfl
+  | cont h' _ => cases h.symm.trans h'
+  | doneErr h' _ _ => cases h.symm.trans h'
+  | doneOk h' _ _ _ => cases h.symm.trans h'
+  | runErr h' _ _ _ => cases h.symm.trans h'
+  | runOk h' _ _ _ _ => cases h.symm.trans h'
+
+/-- A `Linst` at the program counter settles the whole derivation. -/
+lemma Exec.last_inv {pc sevm devm exn l}
+    (cr : Exec pc sevm devm exn) (h : Linst.At sevm.code pc l) :
+    exn = l.run sevm devm :=
+  cr.halt_inv (Evm.step_last h)
+
+/-- A decode failure at the program counter settles the whole derivation. -/
+lemma Exec.invOp_inv {pc sevm devm exn}
+    (cr : Exec pc sevm devm exn) (h : sevm.code.getInst pc = none) :
+    exn = .error ⟨"InvalidOpcode", devm⟩ :=
+  cr.halt_inv (Evm.step_invOp h)
 
 def Ninst.Run (sevm : Sevm) (devm : Devm) (n : Ninst) (devm' : Devm) : Prop :=
   ∃ xl : Xlot, xl.Filled ∧ ∃ pc, Ninst.Run' pc sevm devm n xl (.ok devm')
@@ -646,22 +1026,11 @@ lemma Xinst.step_spawn_depth {sevm : Sevm} {devm : Devm} {x : Xinst}
       | exact genericCreate.step_spawn_depth hs
       | exact genericCall.step_spawn_depth hs
 
-lemma Step.ofExecution_ne_spawn {pc : Nat} {ex : Execution}
-    {f : Frame} {rsm : Resume} {pc' : Nat} :
-    Step.ofExecution pc ex ≠ .spawn f rsm pc' := by
-  cases ex <;> simp [Step.ofExecution]
-
-lemma Step.ofJump_ne_spawn {j : Except (String × Devm) (Nat × Devm)}
-    {f : Frame} {rsm : Resume} {pc' : Nat} :
-    Step.ofJump j ≠ .spawn f rsm pc' := by
-  cases j <;> simp [Step.ofJump]
-
-lemma XStep.toStep_spawn {pc : Nat} {s : XStep}
+lemma Ninst.step_spawn_depth {evm : Evm} {n : Ninst}
     {f : Frame} {rsm : Resume} {pc' : Nat}
-    (h : XStep.toStep pc s = .spawn f rsm pc') : s = .spawn f rsm := by
-  cases s
-  · cases Step.ofExecution_ne_spawn h
-  · cases h; rfl
+    (h : Ninst.step evm n = .spawn f rsm pc') : f.inner.depth < evm.sta.depth := by
+  obtain ⟨x, _, hx⟩ := Ninst.step_spawn_inv h
+  exact Xinst.step_spawn_depth hx
 
 /-- A spawned child frame sits strictly below its parent's depth. -/
 lemma Step.spawn_depth_lt {pc : Nat} {sevm : Sevm} {devm : Devm}
@@ -678,25 +1047,6 @@ lemma Step.spawn_depth_lt {pc : Nat} {sevm : Sevm} {devm : Devm}
     · cases Step.ofExecution_ne_spawn hs
   · cases Step.ofJump_ne_spawn hs
   · cases hs
-
-/-- Entering a frame preserves the frame's own depth. -/
-lemma Frame.enter_run_depth {f : Frame} {cevm : Evm}
-    (h : f.enter = .run cevm) : cevm.sta.depth = f.inner.depth := by
-  unfold Frame.enter at h
-  split at h
-  · cases h
-  · rename_i benv hbenv
-    split at h
-    · cases h
-      rename_i heq
-      unfold executeCode.enter at heq
-      simp only [] at heq
-      split at heq
-      · cases heq; rfl
-      · split at heq
-        · cases heq
-        · cases heq; rfl
-    · cases h
 
 /-! ### Adequacy: the relational and executable semantics agree. -/
 
