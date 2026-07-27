@@ -5276,153 +5276,112 @@ lemma ProcessCreateMessage.codePreserve
     · rename_i h_some
       exact Devm.rollback_getCode evm msg.benv.state msg.tenv.transientStorage a
 
+lemma createMsg_benv_state_getCode
+    {sevm : Sevm} {devm : Devm} {createGas : Nat} {endowment : B256}
+    {newAddress : Adr} {calldata : B8L} (a : Adr) :
+    (createMsg sevm devm createGas endowment newAddress calldata).benv.state.getCode a
+      = devm.getCode a := rfl
+
+/-- The CREATE-family return path preserves code at every address other than
+the freshly created one, given the child frame preserved it. -/
+lemma Resume.create_getCode {parent : Devm} {newAddress a : Adr}
+    {r : Except (String × State × AdrSet × Tra) Devm}
+    (h : MsgResult.getCode r a = parent.getCode a) :
+    Execution.getCode ((Resume.create parent newAddress).run r) a =
+      parent.getCode a := by
+  unfold Resume.run liftToExecution
+  rcases r with ⟨err, state, ac, tra⟩ | child <;>
+    dsimp only [bind, Except.bind]
+  · dsimp only [MsgResult.getCode] at h
+    dsimp only [Execution.getCode]
+    change state.getCode a = parent.getCode a
+    exact h
+  · dsimp only [MsgResult.getCode] at h
+    split
+    · rw [Devm.push_getCode_gen rfl a]
+      dsimp only [incorporateChildOnError]
+      exact h
+    · rw [Devm.push_getCode_gen rfl a]
+      dsimp only [incorporateChildOnSuccess]
+      exact h
+
 lemma GenericCreate.codePreserve
     {sevm : Sevm} {devm : Devm} {endowment : B256} {newAddress : Adr}
     {memoryIndex memorySize : Nat} {xl : Xlot} {exn : Execution} (inv : xl.InvGetCode)
     (run : GenericCreate sevm devm endowment newAddress memoryIndex memorySize xl exn) :
     Execution.CodePreserve devm exn := by
-  dsimp [GenericCreate] at run
-  rcases run with ⟨calldata, eq_calldata, run⟩; subst eq_calldata
-  rcases run with ⟨x, h_err, eq_err, _⟩ | ⟨_, h_ok, run⟩
-  · intro a ha
-    rw [eq_err]
-    have h : Except.assert (memorySize ≤ sevm.benvStat.rules.code.maxInitCodeSize)
-      ⟨"OutOfGasError", devm⟩ = Except.error x := h_err
-    dsimp [Except.assert] at h
-    split at h
-    · contradiction
-    · injection h with h_eq; subst h_eq
-      rfl
-  · rcases run with ⟨createMsgGas, eq_createMsgGas, run⟩; subst eq_createMsgGas
-    rcases run with ⟨devm2, eq_devm2, run⟩; subst eq_devm2
-    rcases run with ⟨x, h_err, eq_err, _⟩ | ⟨_, h_ok, run⟩
-    · intro a ha
-      rw [eq_err]
-      dsimp [assertDynamic, Except.assert] at h_err
-      split at h_err
-      · contradiction
-      · injection h_err with h_eq; subst h_eq
-        rfl
-    · rcases run with ⟨devm3, eq_devm3, run⟩; subst eq_devm3
-      rcases run with ⟨sender, eq_sender, run⟩; subst eq_sender
-      split at run
-      · rcases run with ⟨h_xl, eq_ok⟩
-        intro a ha
-        rw [← eq_ok]
-        exact Devm.push_getCode_gen rfl a
-      · rename_i h_if1
-        rcases run with ⟨devm_nonce, eq_devm_nonce, run⟩
-        rcases run with ⟨devm4, eq_devm4, run⟩
-        split at run
-        · rename_i h_if2
-          rcases run with ⟨h_xl, eq_ok⟩
-          intro a ha
-          rw [← eq_ok]
-          have h_push : Execution.getCode (devm4.push 0) a = devm4.getCode a := Devm.push_getCode_gen rfl a
-          rw [h_push]
-          rw [eq_devm4, eq_devm_nonce]
-          exact Devm.incrNonce_getCode
-        · rename_i h_if2
-          rcases run with ⟨childMsg, eq_childMsg, run⟩; subst eq_childMsg
-          rcases run with ⟨ex', h_exec, h_ex'⟩
-          rcases h_ex' with ⟨x, h_err, eq_err⟩ | ⟨child, h_ok, run⟩
-          · intro a ha
-            rw [eq_err]
-            have h_a_ne : a ≠ newAddress := by
-              intro heq
-              push Not at h_if2
-              have h_code_size : (devm4.getCode newAddress).size = 0 := h_if2.2.1
-              have h_empty : devm4.getCode newAddress = .empty := by
-                cases h_code' : devm4.getCode newAddress with | mk data =>
-                rw [h_code'] at h_code_size
-                cases data with | mk l =>
-                cases l
-                · rfl
-                · contradiction
-              have h_devm4 : devm4.getCode newAddress = devm.getCode newAddress := by
-                rw [eq_devm4, eq_devm_nonce]
-                exact Devm.incrNonce_getCode
-              rw [heq] at ha
-              rw [← h_devm4] at ha
-              rw [h_empty] at ha
-              have h_empty_toList : ByteArray.empty.toList = [] := by
-                unfold ByteArray.toList
-                unfold ByteArray.toList.loop
-                rfl
-              rw [h_empty_toList] at ha
-              exact False.elim (ha rfl)
-            have h_devm4 : devm4.getCode a = devm.getCode a := by
-              rw [eq_devm4, eq_devm_nonce]
-              exact Devm.incrNonce_getCode
-            have h_goal : (devm4.getCode a).toList ≠ [] := by
-              rw [h_devm4]
-              exact ha
-            have h_exec_cond := ProcessCreateMessage.codePreserve inv h_exec a h_a_ne h_goal
-            rcases ex' with err | devm_child
-            · dsimp [liftToExecution] at h_err
-              injection h_err with h_eq
-              subst h_eq
-              dsimp [Execution.getCode]
-              change MsgResult.getCode (Except.error err) a = devm.getCode a
-              rw [h_exec_cond]
-              exact h_devm4
-            · dsimp [liftToExecution] at h_err
-              contradiction
-          · intro a ha
-            have h_a_ne : a ≠ newAddress := by
-              intro heq
-              push Not at h_if2
-              have h_code_size : (devm4.getCode newAddress).size = 0 := h_if2.2.1
-              have h_empty : devm4.getCode newAddress = .empty := by
-                cases h_code' : devm4.getCode newAddress with | mk data =>
-                rw [h_code'] at h_code_size
-                cases data with | mk l =>
-                cases l
-                · rfl
-                · contradiction
-              have h_devm4 : devm4.getCode newAddress = devm.getCode newAddress := by
-                rw [eq_devm4, eq_devm_nonce]
-                exact Devm.incrNonce_getCode
-              rw [heq] at ha
-              rw [← h_devm4] at ha
-              rw [h_empty] at ha
-              have h_empty_toList : ByteArray.empty.toList = [] := by
-                unfold ByteArray.toList
-                unfold ByteArray.toList.loop
-                rfl
-              rw [h_empty_toList] at ha
-              exact False.elim (ha rfl)
-            have h_devm4 : devm4.getCode a = devm.getCode a := by
-              rw [eq_devm4, eq_devm_nonce]
-              exact Devm.incrNonce_getCode
-            have h_goal : (devm4.getCode a).toList ≠ [] := by
-              rw [h_devm4]
-              exact ha
-            have h_exec_cond := ProcessCreateMessage.codePreserve inv h_exec a h_a_ne h_goal
-            rcases ex' with err | devm_child
-            · dsimp [liftToExecution] at h_ok
-              contradiction
-            · dsimp [liftToExecution] at h_ok
-              injection h_ok with h_eq
-              symm at h_eq
-              subst h_eq
-              split at run
-              · rename_i h_child_err
-                have h_push := Devm.push_getCode_gen run a
-                rw [h_push]
-                dsimp [incorporateChildOnError]
-                change child.getCode a = devm.getCode a
-                change child.getCode a = _ at h_exec_cond
-                rw [h_exec_cond]
-                exact h_devm4
-              · rename_i h_child_err
-                have h_push := Devm.push_getCode_gen run a
-                rw [h_push]
-                dsimp [incorporateChildOnSuccess]
-                change child.getCode a = devm.getCode a
-                change child.getCode a = _ at h_exec_cond
-                rw [h_exec_cond]
-                exact h_devm4
+  intro a ha
+  unfold GenericCreate genericCreate.step at run
+  simp only [Bind.bind, Except.bind, Except.assert, assertDynamic,
+    Pure.pure, Except.pure] at run
+  repeat' split at run
+  all_goals simp only [XStep.ofExcept, XStep.Run] at run
+  -- init-code-size assertion failed
+  · obtain ⟨-, rfl⟩ := run
+    rename_i heq
+    split at heq <;> cases heq
+    rfl
+  -- static-context assertion failed
+  · obtain ⟨-, rfl⟩ := run
+    rename_i heq
+    split at heq <;> cases heq
+    rfl
+  -- balance / max-nonce / depth-zero early exit, push failed
+  · obtain ⟨-, rfl⟩ := run
+    rename_i heq
+    rw [Devm.push_getCode_gen heq a]
+    rfl
+  -- balance / max-nonce / depth-zero early exit, push succeeded
+  · obtain ⟨-, rfl⟩ := run
+    rename_i heq
+    rw [Devm.push_getCode_gen heq a]
+    rfl
+  -- address-collision early exit, push failed
+  · obtain ⟨-, rfl⟩ := run
+    rename_i heq
+    rw [Devm.push_getCode_gen heq a]
+    rw [addAccessedAddress_getCode]
+    exact Devm.incrNonce_getCode
+  -- address-collision early exit, push succeeded
+  · obtain ⟨-, rfl⟩ := run
+    rename_i heq
+    rw [Devm.push_getCode_gen heq a]
+    rw [addAccessedAddress_getCode]
+    exact Devm.incrNonce_getCode
+  -- the child frame is entered
+  · obtain ⟨r, hframe, rfl⟩ := run
+    rename_i h_collision
+    have h_parent : ∀ b : Adr,
+        (addAccessedAddress
+          (((devm.withGasLeft (devm.gasLeft - except64th devm.gasLeft)).withReturnData
+            []).incrNonce sevm.currentTarget) newAddress).getCode b = devm.getCode b := by
+      intro b
+      rw [addAccessedAddress_getCode]
+      exact Devm.incrNonce_getCode
+    have h_a_ne : a ≠ newAddress := by
+      intro h_eq
+      push Not at h_collision
+      have h_code_size : ((addAccessedAddress
+          (((devm.withGasLeft (devm.gasLeft - except64th devm.gasLeft)).withReturnData
+            []).incrNonce sevm.currentTarget) newAddress).getCode newAddress).size = 0 :=
+        h_collision.2.1
+      have h_empty : devm.getCode newAddress = .empty := by
+        rw [← h_parent newAddress]
+        cases h_code' : (addAccessedAddress
+          (((devm.withGasLeft (devm.gasLeft - except64th devm.gasLeft)).withReturnData
+            []).incrNonce sevm.currentTarget) newAddress).getCode newAddress with
+        | mk data =>
+          rw [h_code'] at h_code_size
+          cases data with
+          | mk l =>
+            cases l
+            · rfl
+            · contradiction
+      rw [h_eq, h_empty] at ha
+      exact ha (by unfold ByteArray.toList ByteArray.toList.loop; rfl)
+    rw [Resume.create_getCode ?_, h_parent a]
+    exact ProcessCreateMessage.codePreserve inv hframe a h_a_ne
+      (by rw [createMsg_benv_state_getCode, h_parent a]; exact ha)
 
 lemma GenericCall.codePreserve
     {sevm : Sevm} {devm : Devm} {gas : Nat} {value : B256}
