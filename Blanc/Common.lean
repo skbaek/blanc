@@ -4599,6 +4599,24 @@ lemma Resume.call_getCode {parent : Devm} {a : Adr} {outputIndex outputSize : Na
         rw [hmw]
         exact hp.trans h
 
+/-- On the successful path the CREATE-family return installs the child's
+world; the status push leaves it alone. -/
+lemma Resume.create_state {parent child : Devm} {newAddress : Adr} {sf : Devm}
+    (h : (Resume.create parent newAddress).run (.ok child) = .ok sf) :
+    sf.state = child.state := by
+  have key : ∀ d : Devm, d.state = child.state → ∀ v : B256,
+      Devm.push v d = .ok sf → sf.state = child.state := by
+    intro d hd v hh
+    have hframe := Devm.push_instructionFrame v d
+    rw [hh] at hframe
+    have hframe' : Devm.InstructionFrame d sf := hframe
+    rw [← hframe'.state, hd]
+  unfold Resume.run liftToExecution at h
+  dsimp only [bind, Except.bind] at h
+  split at h
+  · exact key (incorporateChildOnError parent child child.output) rfl 0 h
+  · exact key (incorporateChildOnSuccess parent child []) rfl _ h
+
 /-- A failed child message aborts the CALL-family return path. -/
 lemma Resume.call_run_error {parent : Devm} {oi os : Nat}
     {e : String × _root_.State × AdrSet × Tra} {sf : Devm}
@@ -4683,6 +4701,8 @@ def Xinst.Shape (sevm : Sevm) (devm : Devm) (s : XStep) : Prop :=
   (∃ d d₀ gas value caller target codeAddress stv isSt ii isz oi osz code dp,
       Devm.InstructionFrame devm d ∧
       Devm.InstructionFrame devm d₀ ∧
+      ( (stv = true ∧ caller = sevm.currentTarget) ∨
+        (stv = false ∧ target = sevm.currentTarget) ) ∧
       ( target = sevm.currentTarget ∨
         ( ¬ isValidDelegation (d₀.getCode target) → code = d₀.getCode target ) ) ∧
       s = genericCall.step sevm d gas value caller target codeAddress stv isSt
@@ -4693,14 +4713,14 @@ lemma Xinst.Shape.trans_left {sevm : Sevm} {a b : Devm} {s : XStep}
     Xinst.Shape sevm a s := by
   rcases h with ⟨ex, rfl, hex⟩ | ⟨d, e, na, mi, ms, hf, rfl⟩ |
     ⟨d, d₀, g, v, c, t, cadr, stv, isSt, ii, isz, oi, osz, code, dp,
-      hf, hf₀, hsrc, rfl⟩
+      hf, hf₀, hcal, hsrc, rfl⟩
   · exact Or.inl ⟨ex, rfl,
       Execution.Rel.trans_left Devm.instructionFrame_trans hab hex⟩
   · exact Or.inr (Or.inl ⟨d, e, na, mi, ms,
       Devm.instructionFrame_trans hab hf, rfl⟩)
   · exact Or.inr (Or.inr ⟨d, d₀, g, v, c, t, cadr, stv, isSt, ii, isz, oi, osz,
       code, dp, Devm.instructionFrame_trans hab hf,
-      Devm.instructionFrame_trans hab hf₀, hsrc, rfl⟩)
+      Devm.instructionFrame_trans hab hf₀, hcal, hsrc, rfl⟩)
 
 lemma Xinst.shape_done {sevm : Sevm} {devm : Devm} {ex : Execution}
     (h : Execution.Rel Devm.InstructionFrame devm ex) :
@@ -4720,13 +4740,15 @@ lemma Xinst.shape_call {sevm : Sevm} {devm d d₀ : Devm} {gas : Nat} {value : B
     {caller target codeAddress : Adr} {stv isSt : Bool} {ii isz oi osz : Nat}
     {code : ByteArray} {dp : Bool}
     (hf : Devm.InstructionFrame devm d) (hf₀ : Devm.InstructionFrame devm d₀)
+    (hcal : (stv = true ∧ caller = sevm.currentTarget) ∨
+      (stv = false ∧ target = sevm.currentTarget))
     (hsrc : target = sevm.currentTarget ∨
       ( ¬ isValidDelegation (d₀.getCode target) → code = d₀.getCode target )) :
     Xinst.Shape sevm devm
       (genericCall.step sevm d gas value caller target codeAddress stv isSt
         ii isz oi osz code dp) :=
   Or.inr (Or.inr ⟨d, d₀, gas, value, caller, target, codeAddress, stv, isSt,
-    ii, isz, oi, osz, code, dp, hf, hf₀, hsrc, rfl⟩)
+    ii, isz, oi, osz, code, dp, hf, hf₀, hcal, hsrc, rfl⟩)
 
 lemma Xinst.shape_bind {sevm : Sevm} {devm d : Devm} {α : Type}
     {x : Except (String × Devm) (α × Devm)}
@@ -4846,7 +4868,7 @@ lemma Xinst.step_shape (sevm : Sevm) (devm : Devm) (x : Xinst) :
         (Devm.instructionFrame_trans h9 (Devm.memExtends_instructionFrame d9 _))
     · refine Xinst.shape_call
         (Devm.instructionFrame_trans h9 (Devm.memExtends_instructionFrame d9 _))
-        h7' (Or.inr fun hnd => ?_)
+        h7' (Or.inl ⟨rfl, rfl⟩) (Or.inr fun hnd => ?_)
       rw [accessDelegation_of_not_delegation hnd] at hdel
       exact (congrArg (fun t => t.2.2.1) hdel).symm
   | callcode =>
@@ -4875,7 +4897,7 @@ lemma Xinst.step_shape (sevm : Sevm) (devm : Devm) (x : Xinst) :
         (Devm.instructionFrame_trans h9 (Devm.memExtends_instructionFrame d9 _))
     · exact Xinst.shape_call
         (Devm.instructionFrame_trans h9 (Devm.memExtends_instructionFrame d9 _))
-        h7' (Or.inl rfl)
+        h7' (Or.inl ⟨rfl, rfl⟩) (Or.inl rfl)
   | delcall =>
     simp only [Xinst.step]
     refine Xinst.shape_bind (Devm.instructionFrame_refl devm)
@@ -4898,7 +4920,7 @@ lemma Xinst.step_shape (sevm : Sevm) (devm : Devm) (x : Xinst) :
     refine Xinst.shape_bindE h7 (chargeGas_instructionFrame _ d7) fun d8 h8 => ?_
     exact Xinst.shape_call
       (Devm.instructionFrame_trans h8 (Devm.memExtends_instructionFrame d8 _))
-      h6' (Or.inl rfl)
+      h6' (Or.inr ⟨rfl, rfl⟩) (Or.inl rfl)
   | statcall =>
     simp only [Xinst.step]
     refine Xinst.shape_bind (Devm.instructionFrame_refl devm)
@@ -4921,7 +4943,7 @@ lemma Xinst.step_shape (sevm : Sevm) (devm : Devm) (x : Xinst) :
     refine Xinst.shape_bindE h7 (chargeGas_instructionFrame _ d7) fun d8 h8 => ?_
     refine Xinst.shape_call
       (Devm.instructionFrame_trans h8 (Devm.memExtends_instructionFrame d8 _))
-      h6' (Or.inr fun hnd => ?_)
+      h6' (Or.inl ⟨rfl, rfl⟩) (Or.inr fun hnd => ?_)
     rw [accessDelegation_of_not_delegation hnd] at hdel
     exact (congrArg (fun t => t.2.2.1) hdel).symm
 
@@ -5014,7 +5036,7 @@ lemma Xinst.step_spawn_getCode {sevm : Sevm} {devm : Devm} {x : Xinst}
   rcases Xinst.step_shape sevm devm x with ⟨ex, hsh, -⟩ |
     ⟨d, e, na, mi, ms, hf, hsh⟩ |
     ⟨d, d₀, g, v, c, t, cadr, stv, isSt, ii, isz, oi, osz, code, dp,
-      hf, -, -, hsh⟩ <;> rw [hsh] at hs
+      hf, -, -, -, hsh⟩ <;> rw [hsh] at hs
   · cases hs
   · rw [(genericCreate.step_spawn_frame hs).1 a, hf.getCode a]
   · rw [(genericCall.step_spawn_frame hs).1 a, hf.getCode a]
@@ -5031,7 +5053,7 @@ lemma Xinst.step_spawn_source {sevm : Sevm} {devm : Devm} {x : Xinst}
   rcases Xinst.step_shape sevm devm x with ⟨ex, hsh, -⟩ |
     ⟨d, e, na, mi, ms, hf, hsh⟩ |
     ⟨d, d₀, g, v, c, t, cadr, stv, isSt, ii, isz, oi, osz, code, dp,
-      hf, hf₀, hsrc, hsh⟩ <;> rw [hsh] at hs
+      hf, hf₀, -, hsrc, hsh⟩ <;> rw [hsh] at hs
   · cases hs
   · obtain ⟨-, htgt, hempty⟩ := genericCreate.step_spawn_frame hs
     exact Or.inl (by rw [htgt, hf.getCode na]; exact hempty)
@@ -5434,7 +5456,7 @@ lemma Xinst.codePreserve_effectGen (x : Xinst) :
   rcases Xinst.step_shape sevm devm x with ⟨ex, hs, hframe⟩ |
     ⟨d, e, na, mi, ms, hf, hs⟩ |
     ⟨d, d₀, g, v, c, t, cadr, stv, isSt, ii, isz, oi, osz, code, dp,
-      hf, -, -, hs⟩ <;>
+      hf, -, -, -, hs⟩ <;>
     rw [hs] at run
   -- the whole step stayed inside the instruction frame
   · obtain ⟨-, rfl⟩ := run
@@ -8294,6 +8316,42 @@ lemma createMsg_benv_state
     (createMsg sevm devm createGas endowment newAddress calldata).benv.state
       = devm.state := rfl
 
+lemma Fueled.mapResult_mapResult {ε ζ η α β γ : Type}
+    (g : Except ζ β → Except η γ) (f : Except ε α → Except ζ β) (x : Fueled ε α) :
+    Fueled.mapResult g (Fueled.mapResult f x) = Fueled.mapResult (g ∘ f) x := by
+  apply Fueled.ext
+  show (x.run.map f).map g = x.run.map (g ∘ f)
+  cases x.run <;> rfl
+
+/-- The create driver is the call driver on the seeded message, followed by the
+create-specific settlement. -/
+lemma processCreateMessage_eq (msg : Msg) (lim : Nat) :
+    processCreateMessage msg lim =
+      Fueled.mapResult (processCreateMessage.settle msg)
+        (processMessage (processCreateMessage.msg msg) lim) := by
+  unfold processCreateMessage processMessage runFrame Frame.enter Frame.settle
+    Frame.settleMsg Frame.ofCreate Frame.ofCall
+  rcases (processCreateMessage.msg msg).benvAfterTransfer with e | benv <;>
+    simp only [reduceIte]
+  · rfl
+  · rcases executeCode.enter ((processCreateMessage.msg msg).withBenv benv) with
+      evm | raw
+    · rw [Fueled.mapResult_mapResult]
+      rfl
+    · rfl
+
+lemma processCreateMessage.settle_error {msg : Msg}
+    {e : String × _root_.State × AdrSet × Tra} :
+    processCreateMessage.settle msg (.error e) = .error e := rfl
+
+/-- A failed child message aborts the CREATE-family return path. -/
+lemma Resume.create_run_error {parent : Devm} {newAddress : Adr}
+    {e : String × _root_.State × AdrSet × Tra} {sf : Devm}
+    (h : (Resume.create parent newAddress).run (.error e) = .ok sf) : False := by
+  rcases e with ⟨err, st, ac, tra⟩
+  unfold Resume.run liftToExecution at h
+  cases h
+
 lemma processMessage.settle_error {msg : Msg}
     {e : String × _root_.State × AdrSet × Tra} :
     processMessage.settle msg (.error e) = .error e := rfl
@@ -8611,7 +8669,7 @@ lemma Xinst.balance_effectGen (x : Xinst) :
   rcases Xinst.step_shape sevm pre x with ⟨ex, hs, hframe⟩ |
     ⟨d, e, na, mi, ms, hf, hs⟩ |
     ⟨d, d₀, g, v, c, t, cadr, stv, isSt, ii, isz, oi, osz, code, dp,
-      hf, -, -, hs⟩ <;> rw [hs] at run
+      hf, -, -, -, hs⟩ <;> rw [hs] at run
   -- the whole step stayed inside the instruction frame
   · obtain ⟨-, rfl⟩ := run
     exact Outcome.Rel.mono Devm.instructionFrame_refines_balNoninc hframe
