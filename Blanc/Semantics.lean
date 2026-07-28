@@ -658,11 +658,12 @@ lemma Evm.step_spawn_inv {pc : Nat} {sevm : Sevm} {devm : Devm}
   · cases hs
 
 /- Exec pc sevm devm ex is provable iff
-    ∃ lim : Nat, exec ⟨pc, sevm, devm⟩ lim = Fueled.ofExcept ex
-   holds; fuel exhaustion is excluded by the shape of the equation.  The
-   relation is the generic derivation tree over the flattened driver's step
-   outcomes: every premise other than a sub-derivation is an equation about a
-   non-recursive function. -/
+    exec ⟨pc, sevm, devm⟩ = ex
+   holds (`exec_iff_exec_eq`): with sufficiency proved in ELeVM, the total
+   `exec` is the executable side of the adequacy bridge, and no fuel appears
+   in it.  The relation is the generic derivation tree over the flattened
+   driver's step outcomes: every premise other than a sub-derivation is an
+   equation about a non-recursive function. -/
 inductive Exec : Nat → Sevm → Devm → Execution → Type
   | halt {pc sevm devm ex} :
     Evm.step ⟨pc, sevm, devm⟩ = .halt ex →
@@ -770,14 +771,14 @@ def Prog.Run (sevm : Sevm) (devm : Devm) (p : Prog) (devm' : Devm) : Prop :=
 
 
 
-/- Machinery for reasoning about fuel-bounded (`Fueled`) computations.
-   A completed run is witnessed by an equation `f lim = Fueled.ofExcept ex`;
-   fuel exhaustion (`Fueled.exhausted`) is ruled out by the mere shape of such
-   an equation, so no `≠ "RecursionLimit"` side conditions are needed. -/
+/- The residue of the fuel-bounded (`Fueled`) reasoning layer.  With
+   sufficiency proved in ELeVM, fuel never reaches a Blanc statement: these
+   three lemmas exist only so that the adequacy bridge between `Exec` and the
+   total `exec` can be proved by induction over `execCore`. -/
 
 namespace Fueled
 
-variable {ε ζ : Type} {α β : Type}
+variable {ε : Type} {α : Type}
 
 lemma ext {x y : Fueled ε α} (h : x.run = y.run) : x = y := h
 
@@ -785,229 +786,11 @@ lemma exhausted_ne_ofExcept {x : Except ε α} :
     (Fueled.exhausted : Fueled ε α) ≠ Fueled.ofExcept x :=
   fun h => nomatch congrArg ExceptT.run h
 
-lemma ofExcept_ne_exhausted {x : Except ε α} :
-    (Fueled.ofExcept x : Fueled ε α) ≠ Fueled.exhausted :=
-  fun h => nomatch congrArg ExceptT.run h
-
-lemma ne_exhausted_of_eq_ofExcept {x : Fueled ε α} {ex : Except ε α}
-    (h : x = Fueled.ofExcept ex) : x ≠ Fueled.exhausted := by
-  rw [h]; exact ofExcept_ne_exhausted
-
 @[simp] lemma ofExcept_inj {x y : Except ε α} :
     (Fueled.ofExcept x : Fueled ε α) = Fueled.ofExcept y ↔ x = y :=
   ⟨fun h => Option.some.inj (congrArg ExceptT.run h), fun h => by rw [h]⟩
 
-@[simp] lemma ok_inj {x y : α} :
-    (Fueled.ok x : Fueled ε α) = Fueled.ok y ↔ x = y :=
-  ofExcept_inj.trans ⟨Except.ok.inj, congrArg _⟩
-
-@[simp] lemma error_inj {e e' : ε} :
-    (Fueled.error e : Fueled ε α) = Fueled.error e' ↔ e = e' :=
-  ofExcept_inj.trans ⟨Except.error.inj, congrArg _⟩
-
-@[simp] lemma ok_ne_error {x : α} {e : ε} :
-    (Fueled.ok x : Fueled ε α) = Fueled.error e ↔ False :=
-  by
-    constructor
-    · intro h
-      cases Fueled.ofExcept_inj.mp h
-    · exact False.elim
-
-@[simp] lemma error_ne_ok {x : α} {e : ε} :
-    (Fueled.error e : Fueled ε α) = Fueled.ok x ↔ False :=
-  by
-    constructor
-    · intro h
-      cases Fueled.ofExcept_inj.mp h
-    · exact False.elim
-
-@[simp] lemma exhausted_ne_ok {x : α} :
-    (Fueled.exhausted : Fueled ε α) = Fueled.ok x ↔ False :=
-  ⟨fun h => exhausted_ne_ofExcept h, False.elim⟩
-
-@[simp] lemma exhausted_ne_error {e : ε} :
-    (Fueled.exhausted : Fueled ε α) = Fueled.error e ↔ False :=
-  ⟨fun h => exhausted_ne_ofExcept h, False.elim⟩
-
-@[simp] lemma ok_ne_exhausted {x : α} :
-    (Fueled.ok x : Fueled ε α) = Fueled.exhausted ↔ False :=
-  ⟨fun h => ofExcept_ne_exhausted h, False.elim⟩
-
-@[simp] lemma error_ne_exhausted {e : ε} :
-    (Fueled.error e : Fueled ε α) = Fueled.exhausted ↔ False :=
-  ⟨fun h => ofExcept_ne_exhausted h, False.elim⟩
-
-@[simp] lemma exhausted_ne_ofExcept_iff {x : Except ε α} :
-    (Fueled.exhausted : Fueled ε α) = Fueled.ofExcept x ↔ False :=
-  ⟨fun h => exhausted_ne_ofExcept h, False.elim⟩
-
-@[simp] lemma ofExcept_eq_ok_iff {x : Except ε α} {y : α} :
-    (Fueled.ofExcept x : Fueled ε α) = Fueled.ok y ↔ x = .ok y := ofExcept_inj
-
-@[simp] lemma ofExcept_eq_error_iff {x : Except ε α} {e : ε} :
-    (Fueled.ofExcept x : Fueled ε α) = Fueled.error e ↔ x = .error e := ofExcept_inj
-
-lemma ok_bind (y : α) (f : α → Fueled ε β) :
-    (Fueled.ok y : Fueled ε α) >>= f = f y := rfl
-
-lemma error_bind (e : ε) (f : α → Fueled ε β) :
-    (Fueled.error e : Fueled ε α) >>= f = Fueled.error e := rfl
-
-lemma exhausted_bind (f : α → Fueled ε β) :
-    (Fueled.exhausted : Fueled ε α) >>= f = Fueled.exhausted := rfl
-
-lemma ofExcept_ok_bind (y : α) (f : α → Fueled ε β) :
-    Fueled.ofExcept (.ok y) >>= f = f y := rfl
-
-lemma ofExcept_error_bind (e : ε) (f : α → Fueled ε β) :
-    Fueled.ofExcept (.error e) >>= f = Fueled.ofExcept (.error e) := rfl
-
-lemma lift_bind_lift {x : Except ε α} {g : α → Except ε β} :
-    ((liftM x : Fueled ε α) >>= fun y => liftM (g y)) =
-      (liftM (x >>= g) : Fueled ε β) := by
-  cases x <;> rfl
-
-lemma assert_eq (p : Prop) [Decidable p] (e : ε) :
-    (Fueled.assert p e : Fueled ε Unit) =
-      Fueled.ofExcept (Except.assert p e) := by
-  by_cases hp : p
-  · simp only [Fueled.assert, Except.assert, if_pos hp]; rfl
-  · simp only [Fueled.assert, Except.assert, if_neg hp]; rfl
-
-lemma mapResult_ofExcept (g : Except ε α → Except ζ β) (x : Except ε α) :
-    Fueled.mapResult g (Fueled.ofExcept x) = Fueled.ofExcept (g x) := rfl
-
-lemma mapResult_exhausted (g : Except ε α → Except ζ β) :
-    Fueled.mapResult g (Fueled.exhausted : Fueled ε α) = Fueled.exhausted := rfl
-
-theorem of_bind_eq {x : Fueled ε α} {f : α → Fueled ε β} {ex : Except ε β}
-    (h : x >>= f = Fueled.ofExcept ex) :
-    (∃ e, x = Fueled.ofExcept (.error e) ∧ ex = .error e) ∨
-      (∃ y, x = Fueled.ofExcept (.ok y) ∧ f y = Fueled.ofExcept ex) := by
-  have hrun : x.run >>= ExceptT.bindCont f = some ex := congrArg ExceptT.run h
-  rcases hx : x.run with _ | ⟨e | y⟩ <;> rw [hx] at hrun
-  · cases hrun
-  · left; exact ⟨e, Fueled.ext hx, (Option.some.inj hrun).symm⟩
-  · right; exact ⟨y, Fueled.ext hx, Fueled.ext hrun⟩
-
-theorem of_lift_bind_eq {x : Except ε α} {f : α → Fueled ε β} {ex : Except ε β}
-    (h : Fueled.ofExcept x >>= f = Fueled.ofExcept ex) :
-    (∃ e, x = .error e ∧ ex = .error e) ∨
-      (∃ y, x = .ok y ∧ f y = Fueled.ofExcept ex) := by
-  rcases of_bind_eq h with ⟨e, hx, hex⟩ | ⟨y, hx, hf⟩
-  · exact Or.inl ⟨e, ofExcept_inj.mp hx, hex⟩
-  · exact Or.inr ⟨y, ofExcept_inj.mp hx, hf⟩
-
-theorem of_bind_eq' {x : Fueled ε α} {f : α → Fueled ε β} {ex : Except ε β}
-    (h : x >>= f = Fueled.ofExcept ex) :
-    ∃ ex', x = Fueled.ofExcept ex' ∧
-      Fueled.ofExcept ex' >>= f = Fueled.ofExcept ex := by
-  rcases of_bind_eq h with ⟨e, hx, hex⟩ | ⟨y, hx, hf⟩
-  · refine ⟨.error e, hx, ?_⟩; rw [ofExcept_error_bind, hex]
-  · refine ⟨.ok y, hx, ?_⟩; rw [ofExcept_ok_bind]; exact hf
-
-theorem of_bind_eq_ok {x : Fueled ε α} {f : α → Fueled ε β} {z : β}
-    (h : x >>= f = Fueled.ok z) :
-    ∃ y, x = Fueled.ok y ∧ f y = Fueled.ok z := by
-  rcases of_bind_eq (ex := .ok z) h with ⟨e, _, hex⟩ | ⟨y, hx, hf⟩
-  · cases hex
-  · exact ⟨y, hx, hf⟩
-
-theorem of_lift_bind_eq_ok {x : Except ε α} {f : α → Fueled ε β} {z : β}
-    (h : Fueled.ofExcept x >>= f = Fueled.ok z) :
-    ∃ y, x = .ok y ∧ f y = Fueled.ok z := by
-  rcases of_lift_bind_eq (ex := .ok z) h with ⟨e, _, hex⟩ | ⟨y, hx, hf⟩
-  · cases hex
-  · exact ⟨y, hx, hf⟩
-
-theorem of_mapResult_eq {g : Except ε α → Except ζ β} {x : Fueled ε α}
-    {ex : Except ζ β} (h : Fueled.mapResult g x = Fueled.ofExcept ex) :
-    ∃ ex', x = Fueled.ofExcept ex' ∧ g ex' = ex := by
-  have hrun : x.run.map g = some ex := congrArg ExceptT.run h
-  rcases hx : x.run with _ | ex' <;> rw [hx] at hrun
-  · cases hrun
-  · exact ⟨ex', Fueled.ext hx, Option.some.inj hrun⟩
-
-lemma bind_eq_bind {x : Fueled ε α} {f g : α → Fueled ε β}
-    (h : ∀ y, x = Fueled.ok y → f y = g y) : x >>= f = x >>= g := by
-  rcases hx : x.run with _ | ⟨e | y⟩
-  · apply Fueled.ext
-    show x.run >>= ExceptT.bindCont f = x.run >>= ExceptT.bindCont g
-    rw [hx]; rfl
-  · apply Fueled.ext
-    show x.run >>= ExceptT.bindCont f = x.run >>= ExceptT.bindCont g
-    rw [hx]; rfl
-  · have hxy : x = Fueled.ok y := Fueled.ext hx
-    rw [hxy, ok_bind, ok_bind]; exact h y hxy
-
-lemma ne_exhausted_of_bind {x : Fueled ε α} {f : α → Fueled ε β} {y : α}
-    (h : x >>= f ≠ Fueled.exhausted) (eq : x = Fueled.ok y) :
-    f y ≠ Fueled.exhausted := by
-  intro hex; apply h; rw [eq, ok_bind, hex]
-
-lemma head_ne_exhausted_of_bind {x : Fueled ε α} {f : α → Fueled ε β}
-    (h : x >>= f ≠ Fueled.exhausted) : x ≠ Fueled.exhausted := by
-  intro hex; apply h; rw [hex, exhausted_bind]
-
-lemma mapResult_ne_exhausted {g : Except ε α → Except ζ β} {x : Fueled ε α}
-    (h : Fueled.mapResult g x ≠ Fueled.exhausted) : x ≠ Fueled.exhausted := by
-  intro hex; apply h; rw [hex, mapResult_exhausted]
-
-lemma bind_eq_of_eq_ok_of_eq {x : Except ε α} {y : α} {z : Fueled ε β}
-    {f : α → Fueled ε β} (eq_ok : x = .ok y) (eq : f y = z) :
-    Fueled.ofExcept x >>= f = z := by
-  rw [eq_ok, ofExcept_ok_bind]; exact eq
-
 end Fueled
-
-def Saturates {ε υ} (n : Nat) (f : Nat → Fueled ε υ) : Prop :=
-  f n ≠ Fueled.exhausted → ∀ m, n < m → (f n = f m)
-
-/-- Driver-level fuel monotonicity: one induction on `lim`, quantified over the
-whole machine state so the child recursion can reuse the hypothesis at the
-same fuel.  This replaces the old eight-field `Saturation` record and its
-per-function proof. -/
-theorem exec_saturates (lim : Nat) : ∀ evm : Evm, Saturates lim (execCore evm) := by
-  induction lim with
-  | zero =>
-    intro evm ne
-    simp only [execCore] at ne
-    cases ne rfl
-  | succ lim ih =>
-    intro evm ne m gt
-    rcases m with _ | m
-    · cases Nat.not_lt_zero _ gt
-    have gt' : lim < m := Nat.lt_of_succ_lt_succ gt
-    simp only [execCore] at ne ⊢
-    rcases hstep : evm.step with ex | ⟨pc, devm⟩ | ⟨f, rsm, pc⟩
-    · rfl
-    · rw [hstep] at ne
-      exact ih _ ne m gt'
-    · rw [hstep] at ne
-      simp only [] at ne ⊢
-      rcases henter : f.enter with r | child
-      · rw [henter] at ne
-        simp only [] at ne ⊢
-        rcases hr : rsm.run r with e | devm
-        · rfl
-        · rw [hr] at ne
-          exact ih _ ne m gt'
-      · rw [henter] at ne
-        simp only [] at ne ⊢
-        rcases hrun : (execCore child lim).run with _ | raw
-        · rw [hrun] at ne
-          cases ne rfl
-        · rw [hrun] at ne
-          have child_ne : execCore child lim ≠ Fueled.exhausted := by
-            intro h
-            rw [h, Fueled.exhausted_run] at hrun
-            cases hrun
-          rw [← ih child child_ne m gt', hrun]
-          simp only [] at ne ⊢
-          rcases hr : rsm.run (f.settle raw) with e | devm
-          · rfl
-          · rw [hr] at ne
-            exact ih _ ne m gt'
 
 /-! ### Depth side conditions for the strong induction of `Common.lean`.
 
@@ -1176,18 +959,26 @@ set_option linter.defProp false in
           · rcases ih lim (Nat.lt_succ_self _) pc' sevm devm' exn exec_eq with ⟨exc⟩
             exact ⟨Exec.runOk hstep henter excChild hr exc⟩
 
+/-- **Adequacy, fuel-free.**  A closed derivation is exactly a total-`exec`
+equation.  Forward: `of_exec'` produces the driver equation at every budget
+past some threshold, and ELeVM's `exec_eq_of_run` reads it off at a budget
+that also exceeds the frame's gas.  Backward: the sufficiency bridge
+`execCore_run_sufficientLim` turns the total result into the driver equation
+`of_exec` recurses over. -/
 lemma exec_iff_exec_eq (pc : Nat) (sevm : Sevm) (devm : Devm) (exn : Execution) :
-    Nonempty (Exec pc sevm devm exn) ↔
-      ∃ lim, execCore ⟨pc, sevm, devm⟩ lim = Fueled.ofExcept exn := by
+    Nonempty (Exec pc sevm devm exn) ↔ exec ⟨pc, sevm, devm⟩ = exn := by
   constructor
   · intro ⟨exc⟩
     rcases of_exec' _ _ _ _ exc with ⟨lim, eq⟩
-    exact ⟨lim + 1, eq (lim + 1) (by omega)⟩
-  · intro ⟨lim, eq⟩; exact of_exec _ _ _ _ _ eq
-
-def Xlot.Good (lim : Nat) : Xlot → Prop
-  | .none => True
-  | .some ⟨evm, exn⟩ => ∃ lim' ≤ lim, execCore evm lim' = Fueled.ofExcept exn
+    have hlt : devm.gasLeft < max (lim + 1) (devm.gasLeft + 1) :=
+      Nat.lt_of_lt_of_le (Nat.lt_succ_self _) (Nat.le_max_right _ _)
+    refine exec_eq_of_run hlt ?_
+    rw [eq _ (Nat.lt_of_lt_of_le (Nat.lt_succ_self _) (Nat.le_max_left _ _))]
+    rfl
+  · intro heq
+    have h := execCore_run_sufficientLim ⟨pc, sevm, devm⟩
+    rw [heq] at h
+    exact of_exec _ _ _ _ _ (Fueled.ext h)
 
 /-- The driver at the child's seeded budget reaches exactly the total `exec`
 result, so every entered frame carries a closed derivation for it.  This is the

@@ -8317,13 +8317,6 @@ lemma createMsg_benv_state
     (createMsg sevm devm createGas endowment newAddress calldata).benv.state
       = devm.state := rfl
 
-lemma Fueled.mapResult_mapResult {ε ζ η α β γ : Type}
-    (g : Except ζ β → Except η γ) (f : Except ε α → Except ζ β) (x : Fueled ε α) :
-    Fueled.mapResult g (Fueled.mapResult f x) = Fueled.mapResult (g ∘ f) x := by
-  apply Fueled.ext
-  show (x.run.map f).map g = x.run.map (g ∘ f)
-  cases x.run <;> rfl
-
 /-- The create driver is the call driver on the seeded message, followed by the
 create-specific settlement. -/
 lemma processCreateMessage_eq (msg : Msg) :
@@ -8719,19 +8712,6 @@ theorem Func.balance_effect {fs : List Func} {sevm : Sevm}
     exact balNoninc_refl_trans.1.1 _
 
 /-! ## 6. Executable wrappers and the Solvent.lean endpoint -/
-
-lemma Fueled.eq_ok_of_toExcept_eq_ok {ε α : Type} {x : Fueled ε α}
-    {default : ε} {a : α} (h : x.toExcept default = .ok a) :
-    x = Fueled.ok a := by
-  apply Fueled.ext
-  unfold Fueled.toExcept at h
-  rcases hx : x.run with _ | ex
-  · rw [hx] at h
-    cases h
-  · rw [hx] at h
-    change ex = .ok a at h
-    change some ex = some (.ok a)
-    exact congrArg some h
 
 lemma Xlot.balance_rel_of_filled {xl : Xlot}
     (hfill : xl.Filled) :

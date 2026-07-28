@@ -3697,14 +3697,15 @@ structure State.Inv (wa : Adr) (w : _root_.State) : Prop where
   (nof : _root_.SumNof w.bal)
   (solvent : w.Solvent wa)
 
--- Counterpart of `weth_inv_solvent` for the raw executable `execCore`, with
--- the recursion limit quantified away.
-theorem exec_inv_solvent (wa : Adr) (lim : Nat)
+-- Counterpart of `weth_inv_solvent` for the total executable `exec`.  With
+-- sufficiency proved in ELeVM there is no fuel to quantify away: the
+-- hypothesis is a plain equation about the interpreter.
+theorem exec_inv_solvent (wa : Adr)
     (sevm : Sevm) (pre post : Devm)
-    (h_run : execCore ⟨0, sevm, pre⟩ lim = Fueled.ok post)
+    (h_run : exec ⟨0, sevm, pre⟩ = .ok post)
     (h_code : sevm.currentTarget = wa → some sevm.code.toList = Prog.compile weth)
     (h_pc : Precond wa sevm pre) : Postcond wa sevm post := by
-  obtain ⟨exc⟩ := (exec_iff_exec_eq 0 sevm pre (.ok post)).mpr ⟨lim, h_run⟩
+  obtain ⟨exc⟩ := (exec_iff_exec_eq 0 sevm pre (.ok post)).mpr h_run
   exact weth_inv_solvent wa sevm pre post exc h_code h_pc
 
 /-! ### Atomic `State.Inv`-preservation lemmas
@@ -3951,7 +3952,7 @@ lemma Precond.of_inv_transfer {wa : Adr} {sevm' : Sevm} {devm' : Devm}
 -- `exec_inv_solvent` (frame-level solvency + nof), and `code_eq_of_exec` (the
 -- WETH code at `wa` is untouched) through `State.Inv.of_postcond`.
 lemma State.Inv.of_exec_transfer {wa : Adr} {sevm : Sevm} {pre post : Devm}
-    {st st_mid : _root_.State} {caller target : Adr} {value : B256} {lim : Nat}
+    {st st_mid : _root_.State} {caller target : Adr} {value : B256}
     (h_inv : State.Inv wa st)
     (h_ne : caller ≠ wa)
     (h_sub : st.subBal caller value = some st_mid)
@@ -3959,14 +3960,14 @@ lemma State.Inv.of_exec_transfer {wa : Adr} {sevm : Sevm} {pre post : Devm}
     (h_ct : sevm.currentTarget = target)
     (h_val : sevm.currentTarget = wa → sevm.value = value)
     (h_code : sevm.currentTarget = wa → some sevm.code.toList = Prog.compile weth)
-    (h_run : execCore ⟨0, sevm, pre⟩ lim = Fueled.ok post) :
+    (h_run : exec ⟨0, sevm, pre⟩ = .ok post) :
     State.Inv wa post.state := by
   have h_pc : Precond wa sevm pre :=
     Precond.of_inv_transfer h_inv h_ne h_sub h_pre_state h_ct h_val
   have h_post : Postcond wa sevm post :=
-    exec_inv_solvent wa lim sevm pre post h_run h_code h_pc
+    exec_inv_solvent wa sevm pre post h_run h_code h_pc
   apply State.Inv.of_postcond h_post
-  obtain ⟨exc⟩ := (exec_iff_exec_eq 0 sevm pre (.ok post)).mpr ⟨lim, h_run⟩
+  obtain ⟨exc⟩ := (exec_iff_exec_eq 0 sevm pre (.ok post)).mpr h_run
   have h_ce : post.getCode wa = pre.getCode wa := code_eq_of_exec exc h_pc.code
   show some (post.state.getCode wa).toList = Prog.compile weth
   rw [show post.state.getCode wa = post.getCode wa from rfl, h_ce]
@@ -4080,7 +4081,7 @@ lemma State.Inv.of_benvAfterTransfer {wa : Adr} {msg : Msg} {benv : Benv}
 -- Deep helper: one `processMessage` run preserves `State.Inv` and never
 -- self-destructs `wa`.  This is where the frame-level `exec_inv_solvent` gets
 -- lifted: `processMessage` = `benvAfterTransfer` (value transfer) then
--- `executeCode` (→ `exec (initEvm ·) lim`) with on-error rollback.  The `nof`
+-- `executeCode` (→ `exec (initEvm ·)`) with on-error rollback.  The `nof`
 -- and `getCode` parts are already available through the relational-mirror
 -- stacks (`ProcessMessage.inv_nof`, `ProcessMessage.inv_getCode_gen`); the
 -- solvency part is the genuinely new content, obtained from `exec_inv_solvent`
@@ -4528,11 +4529,11 @@ lemma Exec.inv_noDel {wa : Adr} {pc : Nat} {sevm : Sevm} {devm : Devm}
   | error e => exact heff h
   | ok d => exact heff h
 
-theorem exec_inv_noDel {wa : Adr} (lim : Nat) (sevm : Sevm) (pre : Devm)
+theorem exec_inv_noDel {wa : Adr} (sevm : Sevm) (pre : Devm)
     (exn : Execution)
-    (h_run : execCore ⟨0, sevm, pre⟩ lim = Fueled.ofExcept exn)
+    (h_run : exec ⟨0, sevm, pre⟩ = exn)
     (h : Devm.NoDel wa pre) : Execution.NoDel wa exn := by
-  obtain ⟨exc⟩ := (exec_iff_exec_eq 0 sevm pre exn).mpr ⟨lim, h_run⟩
+  obtain ⟨exc⟩ := (exec_iff_exec_eq 0 sevm pre exn).mpr h_run
   exact Exec.inv_noDel exc h
 
 theorem executeCode_inv_noDel {wa : Adr} {msg : Msg} {evm : Devm}
