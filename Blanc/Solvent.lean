@@ -104,178 +104,141 @@ lemma Line.inv_solvent {e e' s l s' a}
 
 instance {x} : Ninst.Hinv Devm.getBal (Ninst.pushB256 x) := ⟨by
   intros e s s' h
-  rcases h with ⟨xl, h_filled, pc, run⟩
-  cases xl with
-  | some _ => cases run
-  | none =>
-    dsimp [Ninst.Run', Ninst.pushB256] at run
-    rcases hc : chargeGas (if (x.toB8L.sig) = [] then gBase else gVerylow) s with _ | s_gas
-    · rw [hc] at run; dsimp [bind, Except.bind] at run; contradiction
-    · rw [hc] at run; dsimp [bind, Except.bind] at run
-      rcases hp : Devm.push x.toB8L.sig.toB256 s_gas with _ | s''
-      · rw [hp] at run; contradiction
-      · rw [hp] at run
-        injection run with h_eq; subst h_eq
-        apply funext; intro a
-        exact (chargeGas_getBal_eq hc a).symm.trans (Devm.push_getBal_eq hp a).symm
+  have run := Ninst.run_push_eq h
+  rcases hc : chargeGas (if (x.toB8L.sig) = [] then gBase else gVerylow) s with _ | s_gas
+  · rw [hc] at run; dsimp [bind, Except.bind] at run; contradiction
+  · rw [hc] at run; dsimp [bind, Except.bind] at run
+    rcases hp : Devm.push x.toB8L.sig.toB256 s_gas with _ | s''
+    · rw [hp] at run; contradiction
+    · rw [hp] at run
+      injection run with h_eq; subst h_eq
+      apply funext; intro a
+      exact (chargeGas_getBal_eq hc a).symm.trans (Devm.push_getBal_eq hp a).symm
 ⟩
 
 instance {x} : Ninst.Hinv Devm.getStor (Ninst.pushB256 x) := ⟨by
   intros e s s' h
-  rcases h with ⟨xl, h_filled, pc, run⟩
-  cases xl with
-  | some _ => cases run
-  | none =>
-    dsimp [Ninst.Run', Ninst.pushB256] at run
-    rcases hc : chargeGas (if (x.toB8L.sig) = [] then gBase else gVerylow) s with _ | s_gas
-    · rw [hc] at run; dsimp [bind, Except.bind] at run; contradiction
-    · rw [hc] at run; dsimp [bind, Except.bind] at run
-      rcases hp : Devm.push x.toB8L.sig.toB256 s_gas with _ | s''
-      · rw [hp] at run; contradiction
-      · rw [hp] at run
-        injection run with h_eq; subst h_eq
-        exact (chargeGas_getStor_eq hc).trans (Devm.push_getStor_eq hp)
+  have run := Ninst.run_push_eq h
+  rcases hc : chargeGas (if (x.toB8L.sig) = [] then gBase else gVerylow) s with _ | s_gas
+  · rw [hc] at run; dsimp [bind, Except.bind] at run; contradiction
+  · rw [hc] at run; dsimp [bind, Except.bind] at run
+    rcases hp : Devm.push x.toB8L.sig.toB256 s_gas with _ | s''
+    · rw [hp] at run; contradiction
+    · rw [hp] at run
+      injection run with h_eq; subst h_eq
+      exact (chargeGas_getStor_eq hc).trans (Devm.push_getStor_eq hp)
 ⟩
 
 instance {x} : Ninst.Hinv Devm.getCode (Ninst.pushB256 x) := ⟨by
   intros e s s' h
-  rcases h with ⟨xl, h_filled, pc, run⟩
-  cases xl with
-  | some _ => cases run
-  | none =>
-    dsimp [Ninst.Run', Ninst.pushB256] at run
-    rcases hc : chargeGas (if (x.toB8L.sig) = [] then gBase else gVerylow) s with _ | s_gas
-    · rw [hc] at run; dsimp [bind, Except.bind] at run; contradiction
-    · rw [hc] at run; dsimp [bind, Except.bind] at run
-      rcases hp : Devm.push x.toB8L.sig.toB256 s_gas with _ | s''
-      · rw [hp] at run; contradiction
-      · rw [hp] at run
-        injection run with h_eq; subst h_eq
-        apply funext; intro a
-        exact (chargeGas_getCode_eq hc a).symm.trans (Devm.push_getCode_eq hp a).symm
+  have run := Ninst.run_push_eq h
+  rcases hc : chargeGas (if (x.toB8L.sig) = [] then gBase else gVerylow) s with _ | s_gas
+  · rw [hc] at run; dsimp [bind, Except.bind] at run; contradiction
+  · rw [hc] at run; dsimp [bind, Except.bind] at run
+    rcases hp : Devm.push x.toB8L.sig.toB256 s_gas with _ | s''
+    · rw [hp] at run; contradiction
+    · rw [hp] at run
+      injection run with h_eq; subst h_eq
+      apply funext; intro a
+      exact (chargeGas_getCode_eq hc a).symm.trans (Devm.push_getCode_eq hp a).symm
 ⟩
 
 instance {x} : Ninst.Hinv Devm.state (Ninst.pushB256 x) := ⟨by
   intros e s s' h
-  rcases h with ⟨xl, h_filled, pc, run⟩
-  cases xl with
-  | some _ => cases run
-  | none =>
-    dsimp [Ninst.Run', Ninst.pushB256] at run
-    have h_pb := Devm.pushBurn_of_run run
-    rcases h_pb with ⟨_, _, _, _, _, _, _, _, _, _, _, h_state, _⟩
-    exact h_state
+  have run := Ninst.run_push_eq h
+  have h_pb := Devm.pushBurn_of_run run
+  rcases h_pb with ⟨_, _, _, _, _, _, _, _, _, _, _, h_state, _⟩
+  exact h_state
 ⟩
 
 instance {xs} {p : xs.length ≤ 32} : Ninst.Hinv Devm.getBal (Ninst.push xs p) := ⟨by
   intros e s s' h
-  rcases h with ⟨xl, h_filled, pc, run⟩
-  cases xl with
-  | some _ => cases run
-  | none =>
-    dsimp [Ninst.Run'] at run
-    have h_pb := Devm.pushBurn_of_run run
-    funext a; simp only [Devm.getBal, Devm.getAcct]; rw [h_pb.state]
+  have run := Ninst.run_push_eq h
+  have h_pb := Devm.pushBurn_of_run run
+  funext a; simp only [Devm.getBal, Devm.getAcct]; rw [h_pb.state]
 ⟩
 
 instance {xs} {p : xs.length ≤ 32} : Ninst.Hinv Devm.getStor (Ninst.push xs p) := ⟨by
   intros e s s' h
-  rcases h with ⟨xl, h_filled, pc, run⟩
-  cases xl with
-  | some _ => cases run
-  | none =>
-    dsimp [Ninst.Run'] at run
-    have h_pb := Devm.pushBurn_of_run run
-    funext a; simp only [Devm.getStor, Devm.getAcct]; rw [h_pb.state]
+  have run := Ninst.run_push_eq h
+  have h_pb := Devm.pushBurn_of_run run
+  funext a; simp only [Devm.getStor, Devm.getAcct]; rw [h_pb.state]
 ⟩
 
 instance {xs} {p : xs.length ≤ 32} : Ninst.Hinv Devm.getCode (Ninst.push xs p) := ⟨by
   intros e s s' h
-  rcases h with ⟨xl, h_filled, pc, run⟩
-  cases xl with
-  | some _ => cases run
-  | none =>
-    dsimp [Ninst.Run'] at run
-    have h_pb := Devm.pushBurn_of_run run
-    funext a; simp only [Devm.getCode, Devm.getAcct]; rw [h_pb.state]
+  have run := Ninst.run_push_eq h
+  have h_pb := Devm.pushBurn_of_run run
+  funext a; simp only [Devm.getCode, Devm.getAcct]; rw [h_pb.state]
 ⟩
 
 instance : Ninst.Hinv Devm.state (Ninst.reg Rinst.eq) := ⟨by
   intros e s s' h
-  rcases h with ⟨xl, h_filled, pc, run⟩
-  cases xl with
-  | some _ => cases run
-  | none =>
-    dsimp [Ninst.Run', Rinst.run, Rinst.runCore] at run
-    rw [applyBinary_def] at run
-    rcases hp1 : Devm.pop s with _ | val1
-    · rw [hp1] at run; dsimp [bind, Except.bind] at run; contradiction
-    · rw [hp1] at run; dsimp [bind, Except.bind] at run
-      rcases val1 with ⟨x1, s1⟩
-      rcases hp2 : Devm.pop s1 with _ | val2
-      · rw [hp2] at run; dsimp [bind, Except.bind] at run; contradiction
-      · rw [hp2] at run; dsimp [bind, Except.bind] at run
-        rcases val2 with ⟨x2, s2⟩
-        rcases hpush : pushItem _ gVerylow s2 with _ | s''
-        · rw [hpush] at run; contradiction
-        · rw [hpush] at run
-          injection run with h_eq; subst h_eq
-          have h_pop1 := Devm.pop_of_pop hp1
-          have h_pop2 := Devm.pop_of_pop hp2
-          have h_push := Devm.pushBurn_of_pushItem hpush
-          rcases h_pop1 with ⟨_, _, _, _, _, _, _, _, _, _, _, hs1, _⟩
-          rcases h_pop2 with ⟨_, _, _, _, _, _, _, _, _, _, _, hs2, _⟩
-          rcases h_push with ⟨_, _, _, _, _, _, _, _, _, _, _, hs3, _⟩
-          exact hs1.trans (hs2.trans hs3)
+  obtain ⟨pc, run⟩ := of_run_reg h
+  dsimp [Rinst.run, Rinst.runCore] at run
+  rw [applyBinary_def] at run
+  rcases hp1 : Devm.pop s with _ | val1
+  · rw [hp1] at run; dsimp [bind, Except.bind] at run; contradiction
+  · rw [hp1] at run; dsimp [bind, Except.bind] at run
+    rcases val1 with ⟨x1, s1⟩
+    rcases hp2 : Devm.pop s1 with _ | val2
+    · rw [hp2] at run; dsimp [bind, Except.bind] at run; contradiction
+    · rw [hp2] at run; dsimp [bind, Except.bind] at run
+      rcases val2 with ⟨x2, s2⟩
+      rcases hpush : pushItem _ gVerylow s2 with _ | s''
+      · rw [hpush] at run; contradiction
+      · rw [hpush] at run
+        injection run with h_eq; subst h_eq
+        have h_pop1 := Devm.pop_of_pop hp1
+        have h_pop2 := Devm.pop_of_pop hp2
+        have h_push := Devm.pushBurn_of_pushItem hpush
+        rcases h_pop1 with ⟨_, _, _, _, _, _, _, _, _, _, _, hs1, _⟩
+        rcases h_pop2 with ⟨_, _, _, _, _, _, _, _, _, _, _, hs2, _⟩
+        rcases h_push with ⟨_, _, _, _, _, _, _, _, _, _, _, hs3, _⟩
+        exact hs1.trans (hs2.trans hs3)
 ⟩
 
 instance {n} : Ninst.Hinv Devm.state (Ninst.dup n) := ⟨by
   intros e s s' h
-  rcases h with ⟨xl, h_filled, pc, run⟩
-  cases xl with
-  | some _ => cases run
-  | none =>
-    dsimp [Ninst.Run', Rinst.run, Rinst.runCore] at run
-    rcases hc : chargeGas gVerylow s with _ | s_gas
-    · rw [hc] at run; dsimp [bind, Except.bind] at run; contradiction
-    · rw [hc] at run; dsimp [bind, Except.bind] at run
-      split at run
-      · contradiction
-      · rename_i rh word
-        have h_run_eq : (chargeGas gVerylow s >>= fun d => d.push rh) = .ok s' := by
-          dsimp [bind, Except.bind]; rw [hc]; exact run
-        have h_pb := Devm.pushBurn_of_run h_run_eq
-        rcases h_pb with ⟨_, _, _, _, _, _, _, _, _, _, _, h_state, _⟩
-        exact h_state
+  obtain ⟨pc, run⟩ := of_run_reg h
+  dsimp [Rinst.run, Rinst.runCore] at run
+  rcases hc : chargeGas gVerylow s with _ | s_gas
+  · rw [hc] at run; dsimp [bind, Except.bind] at run; contradiction
+  · rw [hc] at run; dsimp [bind, Except.bind] at run
+    split at run
+    · contradiction
+    · rename_i rh word
+      have h_run_eq : (chargeGas gVerylow s >>= fun d => d.push rh) = .ok s' := by
+        dsimp [bind, Except.bind]; rw [hc]; exact run
+      have h_pb := Devm.pushBurn_of_run h_run_eq
+      rcases h_pb with ⟨_, _, _, _, _, _, _, _, _, _, _, h_state, _⟩
+      exact h_state
 ⟩
 
 instance : Ninst.Hinv Devm.state (Ninst.reg Rinst.gt) := ⟨by
   intros e s s' h
-  rcases h with ⟨xl, h_filled, pc, run⟩
-  cases xl with
-  | some _ => cases run
-  | none =>
-    dsimp [Ninst.Run', Rinst.run, Rinst.runCore] at run
-    rw [applyBinary_def] at run
-    rcases hp1 : Devm.pop s with _ | val1
-    · rw [hp1] at run; dsimp [bind, Except.bind] at run; contradiction
-    · rw [hp1] at run; dsimp [bind, Except.bind] at run
-      rcases val1 with ⟨x1, s1⟩
-      rcases hp2 : Devm.pop s1 with _ | val2
-      · rw [hp2] at run; dsimp [bind, Except.bind] at run; contradiction
-      · rw [hp2] at run; dsimp [bind, Except.bind] at run
-        rcases val2 with ⟨x2, s2⟩
-        rcases hpush : pushItem _ gVerylow s2 with _ | s''
-        · rw [hpush] at run; contradiction
-        · rw [hpush] at run
-          injection run with h_eq; subst h_eq
-          have h_pop1 := Devm.pop_of_pop hp1
-          have h_pop2 := Devm.pop_of_pop hp2
-          have h_push := Devm.pushBurn_of_pushItem hpush
-          rcases h_pop1 with ⟨_, _, _, _, _, _, _, _, _, _, _, hs1, _⟩
-          rcases h_pop2 with ⟨_, _, _, _, _, _, _, _, _, _, _, hs2, _⟩
-          rcases h_push with ⟨_, _, _, _, _, _, _, _, _, _, _, hs3, _⟩
-          exact hs1.trans (hs2.trans hs3)
+  obtain ⟨pc, run⟩ := of_run_reg h
+  dsimp [Rinst.run, Rinst.runCore] at run
+  rw [applyBinary_def] at run
+  rcases hp1 : Devm.pop s with _ | val1
+  · rw [hp1] at run; dsimp [bind, Except.bind] at run; contradiction
+  · rw [hp1] at run; dsimp [bind, Except.bind] at run
+    rcases val1 with ⟨x1, s1⟩
+    rcases hp2 : Devm.pop s1 with _ | val2
+    · rw [hp2] at run; dsimp [bind, Except.bind] at run; contradiction
+    · rw [hp2] at run; dsimp [bind, Except.bind] at run
+      rcases val2 with ⟨x2, s2⟩
+      rcases hpush : pushItem _ gVerylow s2 with _ | s''
+      · rw [hpush] at run; contradiction
+      · rw [hpush] at run
+        injection run with h_eq; subst h_eq
+        have h_pop1 := Devm.pop_of_pop hp1
+        have h_pop2 := Devm.pop_of_pop hp2
+        have h_push := Devm.pushBurn_of_pushItem hpush
+        rcases h_pop1 with ⟨_, _, _, _, _, _, _, _, _, _, _, hs1, _⟩
+        rcases h_pop2 with ⟨_, _, _, _, _, _, _, _, _, _, _, hs2, _⟩
+        rcases h_push with ⟨_, _, _, _, _, _, _, _, _, _, _, hs3, _⟩
+        exact hs1.trans (hs2.trans hs3)
 ⟩
 
 instance : Linst.Hinv Devm.getBal Devm.getBal Linst.stop := by
@@ -1855,14 +1818,14 @@ lemma of_executeCode_someCode {msg : Msg} {adr : Adr} {xl : Xlot}
       xl = .none ∧
       executeCode.handleError (executePrecomp (initEvm msg) adr) = ex) ∨
     (¬ (!msg.disablePrecompiles && decide (msg.benv.stat.rules.isPrecomp adr)) = true ∧
-      ∃ ex', xl = .some ⟨initSevm msg, initDevm msg, ex'⟩ ∧
+      ∃ ex', xl = .some ⟨initEvm msg, ex'⟩ ∧
       executeCode.handleError ex' = ex) := by
-  unfold ExecuteCode at h
-  rw [h_ca] at h
-  dsimp only [initEvm] at h
+  unfold ExecuteCode executeCode.enter at h
+  simp only [h_ca] at h
   split_ifs at h with h_pre
-  · exact Or.inl ⟨h_pre, h⟩
-  · exact Or.inr ⟨h_pre, h⟩
+  · exact Or.inl ⟨h_pre, h.1, h.2.symm⟩
+  · rcases h with ⟨ex', hxl, hh⟩
+    exact Or.inr ⟨h_pre, ex', hxl, hh.symm⟩
 
 lemma state_of_executePrecomp_ok {evm : Evm} {adr : Adr} {child : Devm}
     (h : executeCode.handleError (executePrecomp evm adr) = .ok child)
@@ -1905,10 +1868,11 @@ lemma of_send_to_caller' {sevm : Sevm} {s sf : Devm} {wad}
   -- the call instruction
   intro h₂
   rcases of_run_singleton h₂ with ⟨xl, h_fill, pc, h_run⟩
-  dsimp only [Ninst.Run'] at h_run
-  dsimp only [Xinst.Run] at h_run
+  simp only [Ninst.Run', Ninst.step_exec, XStep.run_toStep, Xinst.step,
+    Bind.bind, Except.bind, Except.assert] at h_run
   -- pop gas
-  rcases h_run with ⟨_, _, h_contra, _⟩ | ⟨⟨gas, devm1⟩, eq1, h_run⟩; · cases h_contra
+  rcases eq1 : Devm.pop s₁ with _ | ⟨gas, devm1⟩ <;> simp only [eq1] at h_run
+  · cases XStep.run_ofExcept_error h_run
   have e1 := (Devm.pop_of_pop eq1).stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e1
   rw [e1] at hs₁
@@ -1917,7 +1881,8 @@ lemma of_send_to_caller' {sevm : Sevm} {s sf : Devm} {wad}
   subst h_gas
   have hs₂ : [sevm.caller.toB256, wad, 0, 0, 0, 0] <<+ devm1.stack := cons_pref_cons_inv hs₁
   -- pop callee
-  rcases h_run with ⟨_, _, h_contra, _⟩ | ⟨⟨callee, devm2⟩, eq2, h_run⟩; · cases h_contra
+  rcases eq2 : Devm.popToAdr devm1 with _ | ⟨callee, devm2⟩ <;> simp only [eq2] at h_run
+  · cases XStep.run_ofExcept_error h_run
   rcases Devm.pop_of_popToAdr eq2 with ⟨x, hx, h_pop2⟩
   have e2 := (Devm.pop_of_pop h_pop2).stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e2
@@ -1928,17 +1893,22 @@ lemma of_send_to_caller' {sevm : Sevm} {s sf : Devm} {wad}
   subst hx
   have hs₃ : [wad, 0, 0, 0, 0] <<+ devm2.stack := cons_pref_cons_inv hs₂
   -- pop value
-  rcases h_run with ⟨_, _, h_contra, _⟩ | ⟨⟨value, devm3⟩, eq3, h_run⟩; · cases h_contra
+  rcases eq3 : Devm.pop devm2 with _ | ⟨value, devm3⟩ <;> simp only [eq3] at h_run
+  · cases XStep.run_ofExcept_error h_run
   have e3 := (Devm.pop_of_pop eq3).stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e3
   rw [e3] at hs₃
   have h_wad : wad = value := pref_head_unique hs₃ (pref_append [value] devm3.stack)
   subst h_wad
   -- pop the four indices/sizes
-  rcases h_run with ⟨_, _, h_contra, _⟩ | ⟨⟨inputIndex, devm4⟩, eq4, h_run⟩; · cases h_contra
-  rcases h_run with ⟨_, _, h_contra, _⟩ | ⟨⟨inputSize, devm5⟩, eq5, h_run⟩; · cases h_contra
-  rcases h_run with ⟨_, _, h_contra, _⟩ | ⟨⟨outputIndex, devm6⟩, eq6, h_run⟩; · cases h_contra
-  rcases h_run with ⟨_, _, h_contra, _⟩ | ⟨⟨outputSize, devm7⟩, eq7, h_run⟩; · cases h_contra
+  rcases eq4 : Devm.popToNat devm3 with _ | ⟨inputIndex, devm4⟩ <;> simp only [eq4] at h_run
+  · cases XStep.run_ofExcept_error h_run
+  rcases eq5 : Devm.popToNat devm4 with _ | ⟨inputSize, devm5⟩ <;> simp only [eq5] at h_run
+  · cases XStep.run_ofExcept_error h_run
+  rcases eq6 : Devm.popToNat devm5 with _ | ⟨outputIndex, devm6⟩ <;> simp only [eq6] at h_run
+  · cases XStep.run_ofExcept_error h_run
+  rcases eq7 : Devm.popToNat devm6 with _ | ⟨outputSize, devm7⟩ <;> simp only [eq7] at h_run
+  · cases XStep.run_ofExcept_error h_run
   -- state is unchanged by the seven pops
   rcases Devm.pop_of_popToNat eq4 with ⟨_, h_pop4⟩
   rcases Devm.pop_of_popToNat eq5 with ⟨_, h_pop5⟩
@@ -1952,92 +1922,87 @@ lemma of_send_to_caller' {sevm : Sevm} {s sf : Devm} {wad}
             ((h_pop5.state).trans ((h_pop6.state).trans h_pop7.state)))))
   clear e1 e2 e3 hs₁ hs₂ hs₃ eq1 eq2 eq3 eq4 eq5 eq6 eq7
   clear h_pop2 h_pop4 h_pop5 h_pop6 h_pop7 h₂
-  -- gas/access bookkeeping
-  rcases h_run with ⟨extendCost, hp8, h_run⟩
-  rcases h_run with ⟨preAccessCost, hp9, h_run⟩
-  rcases h_run with ⟨devm8, hp10, h_run⟩
-  subst hp10
-  rcases h_run with ⟨⟨dp, na, code0, dagc, devm9⟩, hp11, h_run⟩
-  rcases h_run with ⟨accessCost, hp12, h_run⟩
-  rcases h_run with ⟨createCost, hp13, h_run⟩
-  rcases h_run with ⟨transferCost, hp14, h_run⟩
-  rcases h_run with ⟨⟨msgCallCost, msgCallStipend⟩, hp15, h_run⟩
-  rcases h_run with ⟨_, _, h_contra, _⟩ | ⟨devm10, eq16, h_run⟩; · cases h_contra
-  rcases h_run with ⟨_, _, h_contra, _⟩ | ⟨_, _, h_run⟩; · cases h_contra
-  rcases h_run with ⟨devm11, hp18, h_run⟩
-  subst hp18
-  rcases h_run with ⟨senderBal, hp19, h_run⟩
-  -- state facts through the bookkeeping steps
+  -- delegation resolution
+  rcases hp11 : accessDelegation (addAccessedAddress devm7 sevm.caller) sevm.caller with
+    ⟨dp, na, code0, dagc, devm9⟩
+  simp only [hp11] at h_run
+  have h_code0 :
+      code0 = (accessDelegation (addAccessedAddress devm7 sevm.caller) sevm.caller).2.2.1 := by
+    rw [hp11]
   have h_st9 : devm9.state = devm7.state := by
     have h := congrArg (fun q => (q.2.2.2.2 : Devm).state) hp11
     dsimp at h
-    rw [h, accessDelegation_state]
+    rw [← h, accessDelegation_state]
     rfl
-  have h_code0 : code0 = (accessDelegation (addAccessedAddress devm7 sevm.caller) sevm.caller).2.2.1 := by
-    have h := congrArg (fun q => (q.2.2.1 : ByteArray)) hp11
-    dsimp at h
-    exact h
+  -- charge the call gas
+  split at h_run
+  · cases XStep.run_ofExcept_error h_run
+  rename_i devm10 eq16
   have h_st10 : devm9.state = devm10.state := (Devm.burn_of_chargeGas eq16).state
-  have h_st11 : (devm10.memExtends [(inputIndex, inputSize), (outputIndex, outputSize)]).state = s₁.state := by
+  have h_st11 :
+      (devm10.memExtends [(inputIndex, inputSize), (outputIndex, outputSize)]).state
+        = s₁.state := by
     show devm10.state = s₁.state
     rw [← h_st10, h_st9, ← h_st7]
   have h_st_devm7 : devm7.state = s₁.state := h_st7.symm
-  clear hp8 hp9 hp12 hp13 hp14 hp15 eq16 h_st10 h_st9 h_st7
-  split_ifs at h_run with h_sb
+  clear h_st10 h_st9 h_st7 eq16
+  -- static-context assertion
+  split at h_run
+  case h_1 => cases XStep.run_ofExcept_error h_run
+  case h_2 =>
+  split at h_run
   · -- insufficient balance : call fails, state unchanged
-    rcases h_run with ⟨_, _, h_contra, _⟩ | ⟨devm12, eq20, h_run⟩; · cases h_contra
-    rcases h_run with ⟨h_xl, h_ex⟩
-    have h_ex := Except.ok.inj h_ex
+    split at h_run
+    case h_1 => cases XStep.run_ofExcept_error h_run
+    case h_2 =>
+    rename_i devm12 eq20
     apply solvent_of_state_eq _ h_le h_sv
-    rw [← h_ex]
+    have h_ex := Except.ok.inj h_run.2
+    rw [h_ex]
     show devm12.state = s₁.state
     rw [← (Devm.push_of_push eq20).state]
     exact h_st11
   · -- balance is sufficient : the call goes through
-    dsimp only [GenericCall] at h_run
-    rcases h_run with ⟨evm1, hp_evm1, h_run⟩
-    subst hp_evm1
-    split_ifs at h_run with h_depth
+    simp only [genericCall.step] at h_run
+    split at h_run
     · -- depth limit reached : call fails, state unchanged
-      rcases h_run with ⟨h_xl, h_push⟩
+      simp only [Bind.bind, Except.bind] at h_run
+      split at h_run
+      case h_1 => cases XStep.run_ofExcept_error h_run
+      case h_2 =>
+      rename_i devm12 h_push
       apply solvent_of_state_eq _ h_le h_sv
+      have h_ex := Except.ok.inj h_run.2
+      rw [h_ex]
+      show devm12.state = s₁.state
       rw [← (Devm.push_of_push h_push).state]
       exact h_st11
     · -- the call is executed
-      rcases h_run with ⟨calldata, hp_cd, h_run⟩
-      rcases h_run with ⟨childMsg, hp_cm, h_run⟩
-      rcases h_run with ⟨ex', run_pm, h_split⟩
-      -- extract the projections of childMsg we need, keeping childMsg abstract
-      have hc_stv : childMsg.shouldTransferValue = true := by rw [hp_cm]; rfl
-      have hc_state : childMsg.benv.state = s₁.state := by rw [hp_cm]; exact h_st11
-      have hc_caller : childMsg.caller = sevm.currentTarget := by rw [hp_cm]; rfl
-      have hc_value : childMsg.value = wad := by rw [hp_cm]; rfl
-      have hc_ct : childMsg.currentTarget = sevm.caller := by rw [hp_cm]; rfl
-      have hc_ca : childMsg.codeAddress = some sevm.caller := by rw [hp_cm]; rfl
-      have hc_code : childMsg.code = code0 := by rw [hp_cm]; rfl
-      have hc_depth : childMsg.depth = sevm.depth - 1 := by rw [hp_cm]; rfl
-      clear hp_cm hp_cd
+      simp only [XStep.Run] at h_run
+      rcases h_run with ⟨ex', run_pm₀, h_split⟩
+      -- name the child message and keep only the projections we need
+      obtain ⟨childMsg, run_pm, hc_stv, hc_state, hc_caller, hc_value, hc_ct,
+          hc_ca, hc_code, hc_depth⟩ :
+          ∃ m : Msg, ProcessMessage m xl ex' ∧
+            m.shouldTransferValue = true ∧ m.benv.state = s₁.state ∧
+            m.caller = sevm.currentTarget ∧ m.value = wad ∧
+            m.currentTarget = sevm.caller ∧ m.codeAddress = some sevm.caller ∧
+            m.code = code0 ∧ m.depth = sevm.depth - 1 :=
+        ⟨_, run_pm₀, rfl, h_st11, rfl, rfl, rfl, rfl, rfl, rfl⟩
+      clear run_pm₀
       -- resolve the outer split : the sub-message result must be ok
       rcases ex' with err' | child
-      · obtain ⟨e1, e2, e3, e4⟩ := err'
-        dsimp only [liftToExecution] at h_split
-        rcases h_split with ⟨x, _, h_contra⟩ | ⟨c, h_contra, _⟩ <;> cases h_contra
-      dsimp only [liftToExecution] at h_split
-      rcases h_split with ⟨x, h_contra, _⟩ | ⟨c, h_c, h_body⟩
-      · cases h_contra
-      cases h_c
-      have h_sf_state : sf.state = child.state := by
-        by_cases h_err : child.error.isSome = true
-        · rw [if_pos h_err] at h_body
-          have h := state_of_push_split h_body; exact h
-        · rw [if_neg h_err] at h_body
-          have h := state_of_push_split h_body; exact h
-      clear h_body
+      · cases Resume.call_run_error h_split.symm
+      have h_sf_state : sf.state = child.state :=
+        Resume.call_state h_split.symm
       -- unpack the process-message run
-      dsimp only [ProcessMessage] at run_pm
-      rcases run_pm with ⟨errv, _, h_contra, _⟩ | ⟨benv', eq_bt, run_pm⟩
-      · cases h_contra
-      rcases run_pm with ⟨ex'', run_ec, h_split2⟩
+      obtain ⟨r0, hbody, hset⟩ := ProcessMessage.iff_body.mp run_pm
+      unfold FrameBody at hbody
+      rcases eq_bt : childMsg.benvAfterTransfer with e | benv' <;>
+        rw [eq_bt] at hbody
+      · rw [hbody.2, processMessage.settle_error] at hset
+        cases hset
+      have run_ec : ExecuteCode (childMsg.withBenv benv') xl r0 := hbody
       -- the value transfer performed before the sub-message run
       rcases of_benvAfterTransfer hc_stv eq_bt with ⟨st_mid, h_sub, hB⟩
       rw [hc_state, hc_caller, hc_value] at h_sub
@@ -2047,21 +2012,23 @@ lemma of_send_to_caller' {sevm : Sevm} {s sf : Devm} {wad}
       have hBs : benv'.state = st_mid.addBal sevm.caller wad := by
         rw [hB, hc_ct, hc_value]; rfl
       -- resolve the inner split : either rollback or a clean sub-message result
-      rcases h_split2 with ⟨x, _, h_contra⟩ | ⟨evm2, h_ex'', h_if⟩
-      · cases h_contra
+      rcases r0 with x | evm2
+      · rw [processMessage.settle_error] at hset
+        cases hset
+      unfold processMessage.settle at hset
+      dsimp only [bind, Except.bind] at hset
       by_cases h_err2 : evm2.error.isSome = true
       · -- sub-message failed : state rolled back to the pre-transfer state
-        rw [if_pos h_err2] at h_if
-        have h_if := Except.ok.inj h_if
+        rw [if_pos h_err2] at hset
+        have h_if := Except.ok.inj hset.symm
         apply solvent_of_state_eq _ h_le h_sv
         rw [h_sf_state, ← h_if]
         show childMsg.benv.state = s₁.state
         exact hc_state
       -- sub-message succeeded
-      rw [if_neg h_err2] at h_if
-      have h_if := (Except.ok.inj h_if).symm
+      rw [if_neg h_err2] at hset
+      have h_if := (Except.ok.inj hset.symm).symm
       subst h_if
-      subst h_ex''
       have h_wb_ca : (childMsg.withBenv benv').codeAddress = some sevm.caller := hc_ca
       rcases of_executeCode_someCode h_wb_ca run_ec with
         ⟨h_prec, h_xl_none, h_he⟩ | ⟨h_prec, ex''', h_xl_some, h_he⟩
@@ -2526,13 +2493,14 @@ lemma of_executeCode_cases {msg : Msg} {xl : Xlot}
     {ex : Except (String × _root_.State × AdrSet × Tra) Devm}
     (h : ExecuteCode msg xl ex) :
     (∃ adr, executeCode.handleError (executePrecomp (initEvm msg) adr) = ex) ∨
-    (∃ ex', xl = .some ⟨initSevm msg, initDevm msg, ex'⟩ ∧
+    (∃ ex', xl = .some ⟨initEvm msg, ex'⟩ ∧
       executeCode.handleError ex' = ex) := by
   rcases h_ca : msg.codeAddress with _ | adr
-  · unfold ExecuteCode at h
-    rw [h_ca] at h
-    dsimp only [initEvm] at h
-    exact Or.inr h
+  · refine Or.inr ?_
+    unfold ExecuteCode executeCode.enter at h
+    simp only [h_ca] at h
+    rcases h with ⟨ex', hxl, hh⟩
+    exact ⟨ex', hxl, hh.symm⟩
   · rcases of_executeCode_someCode h_ca h with ⟨_, _, h'⟩ | ⟨_, ex', h1, h2⟩
     · exact Or.inl ⟨adr, h'⟩
     · exact Or.inr ⟨ex', h1, h2⟩
@@ -2732,11 +2700,12 @@ lemma of_executeCode_noneCode {msg : Msg} {xl : Xlot}
     {ex : Except (String × _root_.State × AdrSet × Tra) Devm}
     (h_ca : msg.codeAddress = .none)
     (h : ExecuteCode msg xl ex) :
-    ∃ ex', xl = .some ⟨initSevm msg, initDevm msg, ex'⟩ ∧
+    ∃ ex', xl = .some ⟨initEvm msg, ex'⟩ ∧
       executeCode.handleError ex' = ex := by
-  unfold ExecuteCode at h
-  rw [h_ca] at h
-  exact h
+  unfold ExecuteCode executeCode.enter at h
+  simp only [h_ca] at h
+  rcases h with ⟨ex', hxl, hh⟩
+  exact ⟨ex', hxl, hh.symm⟩
 
 lemma Precond.transfer_state {wa : Adr} {sevm : Sevm} {pre inter : Devm}
     {caller callee : Adr} {wad : B256} {st_mid : _root_.State}
@@ -3007,7 +2976,10 @@ lemma Xinst.none_inv_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm} {x : X
     rcases Devm.pop_of_popToNat eq5 with ⟨_, h_pop5⟩
     rcases Devm.pop_of_popToNat eq6 with ⟨_, h_pop6⟩
     rcases Devm.pop_of_popToNat eq7 with ⟨_, h_pop7⟩
-    have h_st9 : devm9.state = devm7.state := by
+    have h_code0 :
+      code0 = (accessDelegation (addAccessedAddress devm7 sevm.caller) sevm.caller).2.2.1 := by
+    rw [hp11]
+  have h_st9 : devm9.state = devm7.state := by
       have h := congrArg (fun q => (q.2.2.2.2 : Devm).state) hp11
       dsimp at h
       rw [h, accessDelegation_state]
@@ -3053,7 +3025,10 @@ lemma Xinst.none_inv_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm} {x : X
     rcases Devm.pop_of_popToNat eq5 with ⟨_, h_pop5⟩
     rcases Devm.pop_of_popToNat eq6 with ⟨_, h_pop6⟩
     rcases Devm.pop_of_popToNat eq7 with ⟨_, h_pop7⟩
-    have h_st9 : devm9.state = devm7.state := by
+    have h_code0 :
+      code0 = (accessDelegation (addAccessedAddress devm7 sevm.caller) sevm.caller).2.2.1 := by
+    rw [hp11]
+  have h_st9 : devm9.state = devm7.state := by
       have h := congrArg (fun q => (q.2.2.2.2 : Devm).state) hp11
       dsimp at h
       rw [h, accessDelegation_state]
@@ -3802,7 +3777,10 @@ lemma Xinst.some_inv_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm} {x : X
     rcases Devm.pop_of_popToNat eq5 with ⟨_, h_pop5⟩
     rcases Devm.pop_of_popToNat eq6 with ⟨_, h_pop6⟩
     rcases Devm.pop_of_popToNat eq7 with ⟨_, h_pop7⟩
-    have h_st9 : devm9.state = devm7.state := by
+    have h_code0 :
+      code0 = (accessDelegation (addAccessedAddress devm7 sevm.caller) sevm.caller).2.2.1 := by
+    rw [hp11]
+  have h_st9 : devm9.state = devm7.state := by
       have h := congrArg (fun q => (q.2.2.2.2 : Devm).state) hp11
       dsimp at h
       rw [h, accessDelegation_state]
@@ -3845,7 +3823,10 @@ lemma Xinst.some_inv_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm} {x : X
     rcases Devm.pop_of_popToNat eq5 with ⟨_, h_pop5⟩
     rcases Devm.pop_of_popToNat eq6 with ⟨_, h_pop6⟩
     rcases Devm.pop_of_popToNat eq7 with ⟨_, h_pop7⟩
-    have h_st9 : devm9.state = devm7.state := by
+    have h_code0 :
+      code0 = (accessDelegation (addAccessedAddress devm7 sevm.caller) sevm.caller).2.2.1 := by
+    rw [hp11]
+  have h_st9 : devm9.state = devm7.state := by
       have h := congrArg (fun q => (q.2.2.2.2 : Devm).state) hp11
       dsimp at h
       rw [h, accessDelegation_state]

@@ -299,6 +299,27 @@ lemma XStep.toStep_spawn {pc : Nat} {s : XStep}
   · cases Step.ofExecution_ne_spawn h
   · cases h; rfl
 
+/-- Wrapping a call-type step outcome for the driver does not change what it
+relates: the program counter it records is only consulted after the child
+returns. -/
+lemma XStep.run_toStep {pc : Nat} {s : XStep} {xl : Xlot} {ex : Execution} :
+    Step.Run (XStep.toStep pc s) xl ex ↔ XStep.Run s xl ex := by
+  cases s with
+  | done e => simp only [XStep.toStep, XStep.Run, Step.run_ofExecution]
+  | spawn f rsm => exact Iff.rfl
+
+/-- A jump's step outcome carries the jump's own result, whichever branch it
+took, and never suspends. -/
+lemma Step.run_ofJump {j : Except (String × Devm) (Nat × Devm)} {xl : Xlot}
+    {ex : Execution} (h : Step.Run (Step.ofJump j) xl ex) :
+    xl = .none ∧
+      ((∃ e, j = .error e ∧ ex = .error e) ∨
+        (∃ pc' d, j = .ok ⟨pc', d⟩ ∧ ex = .ok d)) := by
+  rcases j with e | ⟨pc', devm'⟩ <;> simp only [Step.ofJump, Step.Run] at h <;>
+    obtain ⟨rfl, rfl⟩ := h
+  · exact ⟨rfl, Or.inl ⟨e, rfl, rfl⟩⟩
+  · exact ⟨rfl, Or.inr ⟨pc', devm', rfl, rfl⟩⟩
+
 lemma Step.ofExecution_cont {pc pc' : Nat} {e : Execution} {devm' : Devm}
     (h : Step.ofExecution pc e = .cont pc' devm') : pc' = pc ∧ e = .ok devm' := by
   unfold Step.ofExecution at h
@@ -468,6 +489,21 @@ lemma executeCode.enter_inl {msg : Msg} {evm : Evm}
   · split at h
     · cases h
     · cases h; rfl
+
+/-- Frame entry, inverted: an entered frame transferred value successfully and
+then suspends on the initial machine of the transferred message.  This is the
+single fact every downstream "what does the child start from?" argument needs. -/
+lemma Frame.enter_run_inv {f : Frame} {cevm : Evm} (h : f.enter = .run cevm) :
+    ∃ benv, f.inner.benvAfterTransfer = .ok benv ∧
+      cevm = initEvm (f.inner.withBenv benv) := by
+  unfold Frame.enter at h
+  rcases hbenv : f.inner.benvAfterTransfer with e | benv <;> simp only [hbenv] at h
+  · cases h
+  · refine ⟨benv, rfl, ?_⟩
+    rcases henter : executeCode.enter (f.inner.withBenv benv) with evm | raw <;>
+      simp only [henter] at h
+    · cases h; exact executeCode.enter_inl henter
+    · cases h
 
 lemma ExecuteCode.some_inv {msg : Msg} {evm_ : Evm} {exn_ : Execution}
     {ex : Except (String × State × AdrSet × Tra) Devm}
