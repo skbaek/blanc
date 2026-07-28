@@ -5,6 +5,7 @@
 import Mathlib.Tactic.Have
 import Mathlib.Tactic.Clear_
 import Blanc.Semantics
+import Elevm.Transaction
 
 def Func.toString : Func → String
   | .last o => Linst.toString o ++ " ::."
@@ -8325,10 +8326,10 @@ lemma Fueled.mapResult_mapResult {ε ζ η α β γ : Type}
 
 /-- The create driver is the call driver on the seeded message, followed by the
 create-specific settlement. -/
-lemma processCreateMessage_eq (msg : Msg) (lim : Nat) :
-    processCreateMessage msg lim =
-      Fueled.mapResult (processCreateMessage.settle msg)
-        (processMessage (processCreateMessage.msg msg) lim) := by
+lemma processCreateMessage_eq (msg : Msg) :
+    processCreateMessage msg =
+      processCreateMessage.settle msg
+        (processMessage (processCreateMessage.msg msg)) := by
   unfold processCreateMessage processMessage runFrame Frame.enter Frame.settle
     Frame.settleMsg Frame.ofCreate Frame.ofCall
   rcases (processCreateMessage.msg msg).benvAfterTransfer with e | benv <;>
@@ -8336,8 +8337,7 @@ lemma processCreateMessage_eq (msg : Msg) (lim : Nat) :
   · rfl
   · rcases executeCode.enter ((processCreateMessage.msg msg).withBenv benv) with
       evm | raw
-    · rw [Fueled.mapResult_mapResult]
-      rfl
+    · rfl
     · rfl
 
 lemma processCreateMessage.settle_error {msg : Msg}
@@ -8733,29 +8733,28 @@ lemma Fueled.eq_ok_of_toExcept_eq_ok {ε α : Type} {x : Fueled ε α}
     change some ex = some (.ok a)
     exact congrArg some h
 
-lemma Xlot.balance_rel_of_good {lim : Nat} {xl : Xlot}
-    (hgood : xl.Good lim) :
+lemma Xlot.balance_rel_of_filled {xl : Xlot}
+    (hfill : xl.Filled) :
     Xlot.Rel Devm.BalNoninc xl := by
   rcases xl with _ | ⟨evm, exn⟩
   · constructor
-  · rcases hgood with ⟨lim', _, exec_eq⟩
-    rcases of_exec lim' evm.pc evm.sta evm.dyna exn exec_eq with ⟨exc⟩
+  · rcases hfill with ⟨exc⟩
     exact Exec.balance_effect exc
 
-lemma processMessage_balance_noninc {msg : Msg} {lim : Nat} {post : Devm}
-    (h : processMessage msg lim = Fueled.ok post) :
+lemma processMessage_balance_noninc {msg : Msg} {post : Devm}
+    (h : processMessage msg = .ok post) :
     State.BalNoninc msg.benv.state post.state := by
-  obtain ⟨xl, hgood, hrun⟩ := of_processMessage msg lim (.ok post) h
-  have heff := ProcessMessage.balance_effect (Xlot.balance_rel_of_good hgood) hrun
+  obtain ⟨xl, hfill, hrun⟩ := of_processMessage msg (.ok post) h
+  have heff := ProcessMessage.balance_effect (Xlot.balance_rel_of_filled hfill) hrun
   change State.BalNoninc msg.benv.state post.state at heff
   exact heff
 
 lemma processCreateMessage_balance_noninc
-    {msg : Msg} {lim : Nat} {post : Devm}
-    (h : processCreateMessage msg lim = Fueled.ok post) :
+    {msg : Msg} {post : Devm}
+    (h : processCreateMessage msg = .ok post) :
     State.BalNoninc msg.benv.state post.state := by
-  rcases of_processCreateMessage msg lim (.ok post) h with ⟨xl, hgood, hrun⟩
-  have hxl : Xlot.Rel Devm.BalNoninc xl := Xlot.balance_rel_of_good hgood
+  rcases of_processCreateMessage msg (.ok post) h with ⟨xl, hfill, hrun⟩
+  have hxl : Xlot.Rel Devm.BalNoninc xl := Xlot.balance_rel_of_filled hfill
   have heff := ProcessCreateMessage.balance_effect hxl hrun
   exact heff
 
@@ -8841,8 +8840,7 @@ lemma processMessageCall.call_balance_noninc
       · rename_i evm' h_pm
         simp only [id_eq, Except.ok.injEq] at h_evm
         subst h_evm
-        have hbal := processMessage_balance_noninc
-          (Fueled.eq_ok_of_toExcept_eq_ok h_pm)
+        have hbal := processMessage_balance_noninc h_pm
         have hpre : State.BalNoninc msg.benv.state evm'.state := by
           split at hbal <;> exact hbal
         split at h
@@ -8868,8 +8866,7 @@ lemma processMessageCall.call_balance_noninc
         · rename_i evm' h_pm
           simp only [id_eq, Except.ok.injEq] at h_evm
           subst h_evm
-          have hbal := processMessage_balance_noninc
-            (Fueled.eq_ok_of_toExcept_eq_ok h_pm)
+          have hbal := processMessage_balance_noninc h_pm
           have hpre : State.BalNoninc msg.benv.state evm'.state := by
             have hD : State.BalNoninc msgD.benv.state evm'.state := by
               split at hbal <;> exact hbal
@@ -8905,8 +8902,7 @@ lemma processMessageCall.create_balance_noninc
       · rename_i evm' h_pm
         simp only [id_eq, Except.ok.injEq] at h_evm
         subst h_evm
-        have hbal := processCreateMessage_balance_noninc
-          (Fueled.eq_ok_of_toExcept_eq_ok h_pm)
+        have hbal := processCreateMessage_balance_noninc h_pm
         split at h
         · split at h
           · injection h

@@ -2,7 +2,7 @@
 
 import Blanc.Basic
 import Elevm.Hash
-import Elevm.Execution
+import Elevm.Sufficiency
 
 
 
@@ -967,18 +967,18 @@ def Saturates {ε υ} (n : Nat) (f : Nat → Fueled ε υ) : Prop :=
 whole machine state so the child recursion can reuse the hypothesis at the
 same fuel.  This replaces the old eight-field `Saturation` record and its
 per-function proof. -/
-theorem exec_saturates (lim : Nat) : ∀ evm : Evm, Saturates lim (exec evm) := by
+theorem exec_saturates (lim : Nat) : ∀ evm : Evm, Saturates lim (execCore evm) := by
   induction lim with
   | zero =>
     intro evm ne
-    simp only [exec] at ne
+    simp only [execCore] at ne
     cases ne rfl
   | succ lim ih =>
     intro evm ne m gt
     rcases m with _ | m
     · cases Nat.not_lt_zero _ gt
     have gt' : lim < m := Nat.lt_of_succ_lt_succ gt
-    simp only [exec] at ne ⊢
+    simp only [execCore] at ne ⊢
     rcases hstep : evm.step with ex | ⟨pc, devm⟩ | ⟨f, rsm, pc⟩
     · rfl
     · rw [hstep] at ne
@@ -994,11 +994,11 @@ theorem exec_saturates (lim : Nat) : ∀ evm : Evm, Saturates lim (exec evm) := 
           exact ih _ ne m gt'
       · rw [henter] at ne
         simp only [] at ne ⊢
-        rcases hrun : (exec child lim).run with _ | raw
+        rcases hrun : (execCore child lim).run with _ | raw
         · rw [hrun] at ne
           cases ne rfl
         · rw [hrun] at ne
-          have child_ne : exec child lim ≠ Fueled.exhausted := by
+          have child_ne : execCore child lim ≠ Fueled.exhausted := by
             intro h
             rw [h, Fueled.exhausted_run] at hrun
             cases hrun
@@ -1089,39 +1089,39 @@ lemma Step.spawn_depth_lt {pc : Nat} {sevm : Sevm} {devm : Devm}
 lemma of_exec' :
     ∀ (pc : Nat) (sevm : Sevm) (devm : Devm) (exn : Execution),
       Exec pc sevm devm exn →
-      ∃ lim, ∀ lim' > lim, (exec ⟨pc, sevm, devm⟩ lim' = Fueled.ofExcept exn) := by
+      ∃ lim, ∀ lim' > lim, (execCore ⟨pc, sevm, devm⟩ lim' = Fueled.ofExcept exn) := by
   apply Exec.rec
   · intro pc sevm devm ex hstep
     refine ⟨0, fun lim' gt => ?_⟩
     rcases lim' with _ | lim'
     · cases Nat.not_lt_zero _ gt
-    simp only [exec, hstep]
+    simp only [execCore, hstep]
   · intro pc sevm devm pc' devm' ex hstep _ ih
     rcases ih with ⟨lim, ih⟩
     refine ⟨lim + 1, fun lim' gt => ?_⟩
     rcases lim' with _ | lim'
     · cases Nat.not_lt_zero _ gt
-    simp only [exec, hstep]
+    simp only [execCore, hstep]
     exact ih lim' (by omega)
   · intro pc sevm devm f rsm pc' r e hstep henter hr
     refine ⟨0, fun lim' gt => ?_⟩
     rcases lim' with _ | lim'
     · cases Nat.not_lt_zero _ gt
-    simp only [exec, hstep, henter, hr]
+    simp only [execCore, hstep, henter, hr]
   · intro pc sevm devm f rsm pc' r devm' ex hstep henter hr _ ih
     rcases ih with ⟨lim, ih⟩
     refine ⟨lim + 1, fun lim' gt => ?_⟩
     rcases lim' with _ | lim'
     · cases Nat.not_lt_zero _ gt
-    simp only [exec, hstep, henter, hr]
+    simp only [execCore, hstep, henter, hr]
     exact ih lim' (by omega)
   · intro pc sevm devm f rsm pc' cevm raw e hstep henter _ hr ihc
     rcases ihc with ⟨limc, ihc⟩
     refine ⟨limc + 1, fun lim' gt => ?_⟩
     rcases lim' with _ | lim'
     · cases Nat.not_lt_zero _ gt
-    have hc : exec cevm lim' = Fueled.ofExcept raw := ihc lim' (by omega)
-    simp only [exec, hstep, henter]
+    have hc : execCore cevm lim' = Fueled.ofExcept raw := ihc lim' (by omega)
+    simp only [execCore, hstep, henter]
     rw [hc]
     simp only [Fueled.ofExcept_run, hr]
   · intro pc sevm devm f rsm pc' cevm raw devm' ex hstep henter _ hr _ ihc ih
@@ -1130,8 +1130,8 @@ lemma of_exec' :
     refine ⟨max limc limp + 1, fun lim' gt => ?_⟩
     rcases lim' with _ | lim'
     · cases Nat.not_lt_zero _ gt
-    have hc : exec cevm lim' = Fueled.ofExcept raw := ihc lim' (by omega)
-    simp only [exec, hstep, henter]
+    have hc : execCore cevm lim' = Fueled.ofExcept raw := ihc lim' (by omega)
+    simp only [execCore, hstep, henter]
     rw [hc]
     simp only [Fueled.ofExcept_run, hr]
     exact ih lim' (by omega)
@@ -1139,16 +1139,16 @@ lemma of_exec' :
 set_option linter.defProp false in
 @[reducible] def of_exec :
     ∀ (lim : Nat) (pc : Nat) (sevm : Sevm) (devm : Devm) (exn : Execution),
-      (exec ⟨pc, sevm, devm⟩ lim = Fueled.ofExcept exn) →
+      (execCore ⟨pc, sevm, devm⟩ lim = Fueled.ofExcept exn) →
       Nonempty (Exec pc sevm devm exn) := by
   apply Nat.strongRec
   intro lim ih pc sevm devm exn exec_eq
   cases lim with
   | zero =>
-    simp only [exec] at exec_eq
+    simp only [execCore] at exec_eq
     cases Fueled.exhausted_ne_ofExcept exec_eq
   | succ lim =>
-    simp only [exec] at exec_eq
+    simp only [execCore] at exec_eq
     rcases hstep : Evm.step ⟨pc, sevm, devm⟩ with ex | ⟨pc', devm'⟩ | ⟨f, rsm, pc'⟩ <;>
       rw [hstep] at exec_eq <;> simp only [] at exec_eq
     · rw [← Fueled.ofExcept_inj.mp exec_eq]
@@ -1163,10 +1163,10 @@ set_option linter.defProp false in
           exact ⟨Exec.doneErr hstep henter hr⟩
         · rcases ih lim (Nat.lt_succ_self _) pc' sevm devm' exn exec_eq with ⟨exc⟩
           exact ⟨Exec.doneOk hstep henter hr exc⟩
-      · rcases hrun : (exec cevm lim).run with _ | raw <;>
+      · rcases hrun : (execCore cevm lim).run with _ | raw <;>
           rw [hrun] at exec_eq <;> simp only [] at exec_eq
         · cases Fueled.exhausted_ne_ofExcept exec_eq
-        · have hc : exec cevm lim = Fueled.ofExcept raw := Fueled.ext hrun
+        · have hc : execCore cevm lim = Fueled.ofExcept raw := Fueled.ext hrun
           rcases ih lim (Nat.lt_succ_self _) cevm.pc cevm.sta cevm.dyna raw hc with
             ⟨excChild⟩
           rcases hr : rsm.run (f.settle raw) with e | devm' <;>
@@ -1178,7 +1178,7 @@ set_option linter.defProp false in
 
 lemma exec_iff_exec_eq (pc : Nat) (sevm : Sevm) (devm : Devm) (exn : Execution) :
     Nonempty (Exec pc sevm devm exn) ↔
-      ∃ lim, exec ⟨pc, sevm, devm⟩ lim = Fueled.ofExcept exn := by
+      ∃ lim, execCore ⟨pc, sevm, devm⟩ lim = Fueled.ofExcept exn := by
   constructor
   · intro ⟨exc⟩
     rcases of_exec' _ _ _ _ exc with ⟨lim, eq⟩
@@ -1187,34 +1187,41 @@ lemma exec_iff_exec_eq (pc : Nat) (sevm : Sevm) (devm : Devm) (exn : Execution) 
 
 def Xlot.Good (lim : Nat) : Xlot → Prop
   | .none => True
-  | .some ⟨evm, exn⟩ => ∃ lim' ≤ lim, exec evm lim' = Fueled.ofExcept exn
+  | .some ⟨evm, exn⟩ => ∃ lim' ≤ lim, execCore evm lim' = Fueled.ofExcept exn
 
-lemma of_runFrame {f : Frame} {lim : Nat}
+/-- The driver at the child's seeded budget reaches exactly the total `exec`
+result, so every entered frame carries a closed derivation for it.  This is the
+bridge from the total wrappers to the relational layer: no threshold obligation
+survives, because sufficiency discharges it once and for all. -/
+lemma Xlot.filled_exec (evm : Evm) : Xlot.Filled (.some ⟨evm, exec evm⟩) :=
+  of_exec (sufficientLim evm.dyna.gasLeft) evm.pc evm.sta evm.dyna (exec evm)
+    (Fueled.ext (execCore_run_sufficientLim evm))
+
+lemma of_runFrame {f : Frame}
     {r : Except (String × State × AdrSet × Tra) Devm}
-    (eq : runFrame f lim = Fueled.ofExcept r) :
-    ∃ xl : Xlot, xl.Good lim ∧ RunFrame f xl r := by
+    (eq : runFrame f = r) :
+    ∃ xl : Xlot, xl.Filled ∧ RunFrame f xl r := by
   unfold runFrame at eq
   rcases henter : f.enter with r' | evm <;> rw [henter] at eq
   · refine ⟨.none, trivial, ?_⟩
     unfold RunFrame
     rw [henter]
-    exact ⟨rfl, (Fueled.ofExcept_inj.mp eq).symm⟩
-  · rcases Fueled.of_mapResult_eq eq with ⟨raw, hexec, hsettle⟩
-    refine ⟨.some ⟨evm, raw⟩, ⟨lim, le_refl _, hexec⟩, ?_⟩
+    exact ⟨rfl, eq.symm⟩
+  · refine ⟨.some ⟨evm, exec evm⟩, Xlot.filled_exec evm, ?_⟩
     unfold RunFrame
     rw [henter]
-    exact ⟨raw, rfl, hsettle.symm⟩
+    exact ⟨exec evm, rfl, eq.symm⟩
 
-lemma of_processMessage (msg : Msg) (lim : Nat)
+lemma of_processMessage (msg : Msg)
     (ex : Except (String × State × AdrSet × Tra) Devm)
-    (eq : processMessage msg lim = Fueled.ofExcept ex) :
-    ∃ xl : Xlot, xl.Good lim ∧ ProcessMessage msg xl ex :=
+    (eq : processMessage msg = ex) :
+    ∃ xl : Xlot, xl.Filled ∧ ProcessMessage msg xl ex :=
   of_runFrame eq
 
-lemma of_processCreateMessage (msg : Msg) (lim : Nat)
+lemma of_processCreateMessage (msg : Msg)
     (ex : Except (String × State × AdrSet × Tra) Devm)
-    (eq : processCreateMessage msg lim = Fueled.ofExcept ex) :
+    (eq : processCreateMessage msg = ex) :
     ∃ xl : Xlot,
-      xl.Good lim ∧
+      xl.Filled ∧
       ProcessCreateMessage msg xl ex :=
   of_runFrame eq
