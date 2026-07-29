@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 # Blanc verification gate (REFACTOR.md Phase 0, step 0.3): `lake build`,
 # then an axiom audit of the four top solvency theorems via
-# scripts/AxiomCheck.lean — failing on sorryAx / ofReduceBool / ofReduceNat.
+# scripts/AxiomCheck.lean — each theorem's axiom closure must equal exactly
+# [propext, Classical.choice, Quot.sound], order-insensitive. Any extra
+# axiom fails — sorryAx, ofReduceBool/ofReduceNat, and also bv_decide's
+# per-declaration `<decl>._native.bv_decide.ax_*` axioms, which add the
+# Lean compiler to the trusted code base — and so does any missing axiom.
 #
 # Usage: scripts/check.sh [--no-build]
 #
@@ -37,9 +41,13 @@ if ! OUT="$(cd "$ROOT" && lake env lean scripts/AxiomCheck.lean 2>&1)"; then
 fi
 
 THEOREMS="weth_inv_solvent stateTransition_inv_solvent chain_inv_solvent addBlockToChain_inv_solvent"
-FORBIDDEN='sorryAx|ofReduceBool|ofReduceNat'
+EXPECTED_DISPLAY="propext, Classical.choice, Quot.sound"
+EXPECTED_SORTED="$(printf '%s\n' propext Classical.choice Quot.sound | LC_ALL=C sort)"
+# Secondary net only: the exact-set comparison below is the primary check;
+# this pattern catches forbidden names in output the per-theorem parse missed.
+FORBIDDEN='sorryAx|ofReduceBool|ofReduceNat|_native\.'
 NTOTAL=0
-NCLEAN=0
+NEXACT=0
 
 for THM in $THEOREMS; do
   NTOTAL=$((NTOTAL + 1))
@@ -57,14 +65,25 @@ for THM in $THEOREMS; do
     }
   ')"
   if [ -z "$AXIOMS" ]; then
-    echo "FAIL — $THM: no axiom report found in Lean output"
+    if printf '%s\n' "$OUT" | grep -qF "'$THM' does not depend on any axioms"; then
+      echo "FAIL — $THM: depends on no axioms; expected exactly [$EXPECTED_DISPLAY]"
+    else
+      echo "FAIL — $THM: no axiom report found in Lean output"
+    fi
     continue
   fi
-  if printf '%s\n' "$AXIOMS" | grep -qE "$FORBIDDEN"; then
-    echo "FAIL — $THM: forbidden axiom present: $AXIOMS"
-  else
+  ACTUAL_SORTED="$(printf '%s\n' "$AXIOMS" | tr -d '[]' | tr ',' '\n' \
+    | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | grep -v '^$' | LC_ALL=C sort)"
+  if [ "$ACTUAL_SORTED" = "$EXPECTED_SORTED" ]; then
     echo "OK — $THM: $AXIOMS"
-    NCLEAN=$((NCLEAN + 1))
+    NEXACT=$((NEXACT + 1))
+  else
+    EXTRA="$(LC_ALL=C comm -23 <(printf '%s\n' "$ACTUAL_SORTED") <(printf '%s\n' "$EXPECTED_SORTED") | xargs)"
+    MISSING="$(LC_ALL=C comm -13 <(printf '%s\n' "$ACTUAL_SORTED") <(printf '%s\n' "$EXPECTED_SORTED") | xargs)"
+    LINE="FAIL — $THM: axioms $AXIOMS differ from expected [$EXPECTED_DISPLAY]"
+    [ -n "$EXTRA" ] && LINE="$LINE; extra: $EXTRA"
+    [ -n "$MISSING" ] && LINE="$LINE; missing: $MISSING"
+    echo "$LINE"
   fi
 done
 
@@ -72,13 +91,13 @@ done
 # so a forbidden name anywhere in the output is a failure even if the
 # per-line parse above missed it (e.g. an unexpectedly wrapped message).
 if printf '%s\n' "$OUT" | grep -qE "$FORBIDDEN"; then
-  echo "REGRESSION — axiom audit: forbidden axiom in Lean output ($NCLEAN/$NTOTAL theorems parsed clean)"
+  echo "REGRESSION — axiom audit: forbidden axiom in Lean output ($NEXACT/$NTOTAL theorems exact)"
   exit 1
 fi
 
-if [ "$NCLEAN" -ne "$NTOTAL" ]; then
-  echo "REGRESSION — axiom audit: only $NCLEAN/$NTOTAL top theorems clean"
+if [ "$NEXACT" -ne "$NTOTAL" ]; then
+  echo "REGRESSION — axiom audit: only $NEXACT/$NTOTAL top theorems have the exact expected axiom set"
   exit 1
 fi
-echo "OK — axiom audit: $NCLEAN/$NTOTAL top theorems clean (no sorryAx/ofReduceBool/ofReduceNat)"
+echo "OK — axiom audit: $NEXACT/$NTOTAL top theorems depend on exactly [$EXPECTED_DISPLAY]"
 exit 0
