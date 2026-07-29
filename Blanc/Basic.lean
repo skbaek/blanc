@@ -6,7 +6,7 @@ import Mathlib.Data.Nat.Basic
 import Mathlib.Data.List.Lemmas
 import Mathlib.Util.Notation3
 import Mathlib.Data.Vector.Basic
-import Elevm.Types
+import Jaune.Types
 
 
 
@@ -310,7 +310,7 @@ theorem List.append_slice_suffix {ξ : Type y} {xs ys : List ξ} :
   rw [Nat.zero_add] at h; exact h
 
 
--- B(2^n) lemmas (transfer to ELEVM later) --
+-- B(2^n) lemmas (transfer to Jaune later) --
 
 -- lemma B128.le_refl (x : B128) : x ≤ x := by
 --   right; refine ⟨rfl, UInt64.le_refl _⟩

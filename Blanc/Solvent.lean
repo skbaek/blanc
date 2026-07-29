@@ -3688,7 +3688,7 @@ theorem weth_inv_solvent (wa : Adr) :
 
 -- Solvency preservation above the frame level : the theorems below lift
 -- `weth_inv_solvent` through each layer of the executable semantics in
--- Elevm/Execution.lean, stated directly over the raw execution functions.
+-- Jaune/Execution.lean, stated directly over the raw execution functions.
 
 -- The WETH invariant on a bare world state, as it stands between
 -- transactions and blocks (no active call frame).
@@ -3698,7 +3698,7 @@ structure State.Inv (wa : Adr) (w : _root_.State) : Prop where
   (solvent : w.Solvent wa)
 
 -- Counterpart of `weth_inv_solvent` for the total executable `exec`.  With
--- sufficiency proved in ELeVM there is no fuel to quantify away: the
+-- sufficiency proved in Jaune there is no fuel to quantify away: the
 -- hypothesis is a plain equation about the interpreter.
 theorem exec_inv_solvent (wa : Adr)
     (sevm : Sevm) (pre post : Devm)
@@ -3990,7 +3990,7 @@ lemma Precond.of_inv_eqs {wa : Adr} {sevm : Sevm} {devm : Devm}
 -- Shared tail: given the precondition already holds for `pre`, a successful
 -- run's derivation preserves `State.Inv` (frame solvency + nof via
 -- `weth_inv_solvent`, code via `code_eq_of_exec`).  Stated over the closed
--- derivation itself: with sufficiency proved in ELeVM, every entered frame
+-- derivation itself: with sufficiency proved in Jaune, every entered frame
 -- carries one, so no fuel equation needs to be threaded here.
 lemma State.Inv.of_exec_precond {wa : Adr} {sevm : Sevm} {pre post : Devm}
     (h_pc : Precond wa sevm pre)

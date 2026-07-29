@@ -19,9 +19,9 @@ This repo contains the following files:
 ## Verification status
 
 Blanc builds against a **pinned revision** of
-[ELEVM](https://github.com/skbaek/elevm) — `require elevm from git … @ 1facd137…`
+[Jaune](https://github.com/skbaek/jaune) — `require jaune from git … @ b4ce1537…`
 in [`lakefile.lean`](lakefile.lean) — so a fresh clone builds reproducibly
-without a sibling checkout, and bumping ELEVM is a reviewed one-line change.
+without a sibling checkout, and bumping Jaune is a reviewed one-line change.
 
 CI ([`scripts/check.sh`](scripts/check.sh)) builds the library and then runs an
 **axiom audit** ([`scripts/AxiomCheck.lean`](scripts/AxiomCheck.lean)) of the

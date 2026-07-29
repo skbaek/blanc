@@ -5,7 +5,7 @@
 import Mathlib.Tactic.Have
 import Mathlib.Tactic.Clear_
 import Blanc.Semantics
-import Elevm.Transaction
+import Jaune.Transaction
 
 def Func.toString : Func → String
   | .last o => Linst.toString o ++ " ::."
@@ -7131,7 +7131,7 @@ structure Devm.NoDel (wa : Adr) (d : Devm) : Prop where
 
 -- The message-level invariant (a fresh frame starts with atd = ∅,
 -- ca = msg.benv.createdAccounts, state = msg.benv.state; see initDevm,
--- elevm Execution.lean:2657).
+-- jaune Execution.lean:2657).
 structure Msg.NoDel (wa : Adr) (msg : Msg) : Prop where
   (ca   : wa ∉ msg.benv.createdAccounts)
   (code : (msg.benv.state.getCode wa).toList ≠ [])
@@ -7180,7 +7180,7 @@ lemma Devm.NoDel.rollback {wa : Adr} {d : Devm} {st : State} {tra : Tra}
   ⟨h_atd, h_ca, h_code⟩
 
 -- handleError shuffles error payloads into ok results without touching
--- the sets (elevm Execution.lean:2692-2701).
+-- the sets (jaune Execution.lean:2692-2701).
 lemma handleError_noDel {wa : Adr} {exn : Execution}
     (h : Execution.NoDel wa exn) :
     MsgResult.NoDel wa (executeCode.handleError exn) := by

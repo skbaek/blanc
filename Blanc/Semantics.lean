@@ -1,8 +1,8 @@
 -- Semantics.lean : formalized semantics of the EVM and Blanc
 
 import Blanc.Basic
-import Elevm.Hash
-import Elevm.Sufficiency
+import Jaune.Hash
+import Jaune.Sufficiency
 
 
 
@@ -198,7 +198,7 @@ def Except.SplitXl {ξ υ ζ : Type}
 /-! ### The recursion-facing relational layer.
 
 Each former hand-maintained mirror is now a thin, non-recursive wrapper: an
-equation about the flattened frame/step functions of ELeVM.  `RunFrame` is the
+equation about the flattened frame/step functions of Jaune.  `RunFrame` is the
 generic frame relation; the named mirrors specialize it so that the statements
 consumed by `Common.lean` and `Solvent.lean` keep their current shape. -/
 
@@ -659,7 +659,7 @@ lemma Evm.step_spawn_inv {pc : Nat} {sevm : Sevm} {devm : Devm}
 
 /- Exec pc sevm devm ex is provable iff
     exec ⟨pc, sevm, devm⟩ = ex
-   holds (`exec_iff_exec_eq`): with sufficiency proved in ELeVM, the total
+   holds (`exec_iff_exec_eq`): with sufficiency proved in Jaune, the total
    `exec` is the executable side of the adequacy bridge, and no fuel appears
    in it.  The relation is the generic derivation tree over the flattened
    driver's step outcomes: every premise other than a sub-derivation is an
@@ -772,7 +772,7 @@ def Prog.Run (sevm : Sevm) (devm : Devm) (p : Prog) (devm' : Devm) : Prop :=
 
 
 /- The residue of the fuel-bounded (`Fueled`) reasoning layer.  With
-   sufficiency proved in ELeVM, fuel never reaches a Blanc statement: these
+   sufficiency proved in Jaune, fuel never reaches a Blanc statement: these
    three lemmas exist only so that the adequacy bridge between `Exec` and the
    total `exec` can be proved by induction over `execCore`. -/
 
@@ -961,7 +961,7 @@ set_option linter.defProp false in
 
 /-- **Adequacy, fuel-free.**  A closed derivation is exactly a total-`exec`
 equation.  Forward: `of_exec'` produces the driver equation at every budget
-past some threshold, and ELeVM's `exec_eq_of_run` reads it off at a budget
+past some threshold, and Jaune's `exec_eq_of_run` reads it off at a budget
 that also exceeds the frame's gas.  Backward: the sufficiency bridge
 `execCore_run_sufficientLim` turns the total result into the driver equation
 `of_exec` recurses over. -/

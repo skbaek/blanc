@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 # One in-flight run per ref: a newer push cancels the older run instead of
-# stacking a second build (which recompiles elevm from source) on a superseded
+# stacking a second build (which recompiles jaune from source) on a superseded
 # commit.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
