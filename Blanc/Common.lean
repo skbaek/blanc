@@ -1730,7 +1730,7 @@ def matchingName (x : Lean.Expr) (d : Lean.LocalDecl) :
   then return some d.userName -- If equal, success!
   else return none
 
-def subscript_succ_core : List Char → Option (List Char)
+def subscriptSuccAux : List Char → Option (List Char)
 | [] => ['₁']
 | '₀' :: cs => '₁' :: cs
 | '₁' :: cs => '₂' :: cs
@@ -1742,13 +1742,13 @@ def subscript_succ_core : List Char → Option (List Char)
 | '₇' :: cs => '₈' :: cs
 | '₈' :: cs => '₉' :: cs
 | '₉' :: cs =>
-  match subscript_succ_core cs with
+  match subscriptSuccAux cs with
   | some cs' => '₀' :: cs'
   | none => none
 | _ => none
 
-def subscript_succ (cs : List Char) : Option (List Char) :=
-match subscript_succ_core cs.reverse with
+def subscriptSucc (cs : List Char) : Option (List Char) :=
+match subscriptSuccAux cs.reverse with
 | none => none
 | some cs' => some cs'.reverse
 
@@ -1760,7 +1760,7 @@ def findSubscript (x : Lean.Expr) : Lean.Elab.Tactic.TacticM String := do
     | Lean.Name.str _ s =>
       match s.toList with
       | 's' :: cs =>
-        match subscript_succ cs with
+        match subscriptSucc cs with
         | none => failure
         | some cs' => pure (String.ofList cs')
       | _ => failure
@@ -1796,7 +1796,7 @@ lemma run_append_elim (φ : Prop) (l) {l'} {e} {s s''}
     (h' : Line.Run e s (l ++ l') s'') : φ := by
   rcases of_run_append _ h' with ⟨s', hs, hs'⟩; apply h s' hs hs'
 
-elab "pexec" e:term : tactic =>
+elab "func_execute_with" e:term : tactic =>
   withMainContext do
     let x ← elabTermForApply e
     let g : Q(Prop) ← getMainTarget
@@ -1816,7 +1816,7 @@ def Func.take : Nat → Q(Func) → TacticM Q(Line)
     pure q($i :: $x)
   | _ => failure
 
-elab "pexen" e:num : tactic =>
+elab "func_execute" e:num : tactic =>
   withMainContext do
     let n := Lean.TSyntax.getNat e
     let g : Q(Prop) ← getMainTarget
@@ -1836,7 +1836,7 @@ lemma Line.of_inv {ξ : Type} {e s s'} (r : Devm → ξ) {l : Line} :
   Line.Inv r l → l.Run e s s' → r s = r s' := λ h => h
 
 /-- Successful-run observation invariant for one nonterminal instruction;
-retained for the `line_inv`/`prog_inv` API built over relational masters. -/
+retained for the `line_inv`/`func_inv` API built over relational masters. -/
 def Ninst.Inv {ξ : Type} (r : Devm → ξ) (i : Ninst) : Prop :=
   ∀ {e s s'}, Ninst.Run e s i s' → r s = r s'
 
@@ -1865,26 +1865,26 @@ def instInv : Lean.Elab.Tactic.TacticM Unit :=
     Lean.Elab.Tactic.closeMainGoal `tacName x
   | _ => dbg_trace "Not a Ninst.Inv goal"
 
-def line_nil_inv : Lean.Elab.Tactic.TacticM Unit :=
+def lineNilInv : Lean.Elab.Tactic.TacticM Unit :=
   Lean.Expr.apply <|
     Lean.Expr.const (Lean.Name.str (Lean.Name.str Lean.Name.anonymous "Line") "nil_inv") []
 
-def line_cons_inv : Lean.Elab.Tactic.TacticM Unit :=
+def lineConsInv : Lean.Elab.Tactic.TacticM Unit :=
   Lean.Expr.apply <|
     Lean.Expr.const (Lean.Name.str (Lean.Name.str Lean.Name.anonymous "Line") "cons_inv") []
 
-partial def line_inv : Lean.Elab.Tactic.TacticM Unit :=
+partial def lineInv : Lean.Elab.Tactic.TacticM Unit :=
   Lean.Elab.Tactic.withMainContext do
   let t : Q(Prop) ← Lean.Elab.Tactic.getMainTarget
   match t with
   | ~q(@Line.Inv $ξx $fx $lx) =>
     let lx' : Q(Line) ← Lean.Meta.whnf lx
     match lx' with
-    | ~q([]) => line_nil_inv
-    | _ => line_cons_inv; instInv; line_inv
+    | ~q([]) => lineNilInv
+    | _ => lineConsInv; instInv; lineInv
   | _ => dbg_trace "Not a Line.Inv goal"
 
-elab "line_inv" : tactic => line_inv
+elab "line_inv" : tactic => lineInv
 
 def Strings.toName : List String → Lean.Name
   | [] => Lean.Name.anonymous
@@ -1988,25 +1988,25 @@ lemma next_inv {ξ : Type} {f : Devm → ξ} {g} {i p}
   cases h_run; rename_i hi hp
   rw [h hi, h' hp]
 
-partial def prog_inv : Lean.Elab.Tactic.TacticM Unit :=
+partial def funcInv : Lean.Elab.Tactic.TacticM Unit :=
   Lean.Elab.Tactic.withMainContext do
     let t : Q(Prop) ← Lean.Elab.Tactic.getMainTarget
     match t with
     | ~q(@Func.Inv $ξx $fx $gx $px) =>
       match px with
-      | ~q(_ +++ _) => String.apply "prepend_inv"; line_inv; prog_inv
+      | ~q(_ +++ _) => String.apply "prepend_inv"; lineInv; funcInv
       | _ =>
         let px' : Q(Func) ← Lean.Meta.whnf px
         match px' with
-        | ~q(Func.next _ _) => "next_inv".apply; instInv; prog_inv
+        | ~q(Func.next _ _) => "next_inv".apply; instInv; funcInv
         | ~q(Func.last _) =>   "last_inv".apply; hopInv
-        | ~q(Func.branch _ _) => "branch_inv".apply; prog_inv; prog_inv
+        | ~q(Func.branch _ _) => "branch_inv".apply; funcInv; funcInv
         | _ => do
           let pp ← Lean.Meta.ppExpr px'
           Lean.logInfo s!"not matching: {pp}"
     | _ => dbg_trace "not a Func.Inv goal"
 
-elab "prog_inv" : tactic => prog_inv
+elab "func_inv" : tactic => funcInv
 
 end
 
@@ -2054,13 +2054,13 @@ lemma dispatchWith_inv {c k f}
       intro e s r wp h_in; apply htt' _ (Or.inl h_in)
     have ht' : ∀ {e s r}, ∀ wp ∈ t', σ e s → Func.Run c e s wp.2 r → ρ e r := by
       intro e s r wp h_in; apply htt' _ (Or.inr h_in)
-    pexen 3; intro h₂
+    func_execute 3; intro h₂
     rcases of_run_branch h₂ with ⟨s₂, h_pop, h_run'⟩ | ⟨w, s₂, s₃, hw, h_pop, h_burn, h_run'⟩
     · apply ih' ht' e s₂ r (h1 hs h₁ h_pop) h_run'
     · apply ih ht e s₃ r (h1 hs h₁ (Devm.popBurn_of_popBurn_of_pop h_pop h_burn)) h_run'
   | leaf w p =>
     intro htt' e s r hs
-    pexen 2; intro h'
+    func_execute 2; intro h'
     rcases of_run_branch h' with ⟨s₂, h_pop, h_run'⟩ | ⟨w', s₂, s₃, hw', h_pop, h_burn, h_run'⟩
     · cases h_run' with
       | call h_eq_f h_burn' h_run_f =>
@@ -6643,42 +6643,39 @@ macro_rules
   | `(tactic| show_nth) =>
     `(tactic| first | apply Stack.Nth.head | (apply Stack.Nth.tail ; show_nth))
 
-partial def show_nth : Lean.Elab.Tactic.TacticM Unit :=
-  "Stack.Nth.head".apply <|> (do "Stack.Nth.tail".apply; show_nth)
-
-def show_nth' : Nat → Lean.Elab.Tactic.TacticM Unit
+def showNthAt : Nat → Lean.Elab.Tactic.TacticM Unit
   | 0 => "Stack.Nth.head".apply
-  | n +1 => do "Stack.Nth.tail".apply; show_nth' n
+  | n +1 => do "Stack.Nth.tail".apply; showNthAt n
 
-def show_swap' : Nat → Lean.Elab.Tactic.TacticM Unit
+def showSwapAt : Nat → Lean.Elab.Tactic.TacticM Unit
   | 0 => "Stack.swapCore_zero".apply
-  | n + 1 => do "Stack.swapCore_succ".apply; show_swap' n
+  | n + 1 => do "Stack.swapCore_succ".apply; showSwapAt n
 
 def fail {ξ} (s : String) : Lean.Elab.Tactic.TacticM ξ := do
   dbg_trace s; failure
 
-def get_swap_core (xx : Q(B256)) : Nat → Q(Stack) → Lean.Elab.Tactic.TacticM (Q(B256) × Q(Stack))
+def getSwapAux (xx : Q(B256)) : Nat → Q(Stack) → Lean.Elab.Tactic.TacticM (Q(B256) × Q(Stack))
   | 0, ~q($yx :: $lx) => pure (yx, q($xx :: $lx))
   | n + 1, ~q($yx :: $lx) => do
-    let (zx, lx') ← get_swap_core xx n lx
+    let (zx, lx') ← getSwapAux xx n lx
     pure (zx, q($yx :: $lx'))
-  | _, _ =>fail "get_swap_core : cannot decompose list"
+  | _, _ =>fail "getSwapAux : cannot decompose list"
 
-def get_swap (n : Nat) : Q(Stack) → Lean.Elab.Tactic.TacticM Q(Stack)
+def getSwap (n : Nat) : Q(Stack) → Lean.Elab.Tactic.TacticM Q(Stack)
   | ~q($xx :: $lx) => do
-    let (yx, lx') ← get_swap_core xx n lx
+    let (yx, lx') ← getSwapAux xx n lx
     pure q($yx :: $lx')
-  | _ => fail "get_swap : cannot decompose list"
+  | _ => fail "getSwap : cannot decompose list"
 
-def get_take : Nat → Q(Stack) → Lean.Elab.Tactic.TacticM Q(Stack)
+def getTake : Nat → Q(Stack) → Lean.Elab.Tactic.TacticM Q(Stack)
   | 0, _ => pure q([])
   | _ + 1, ~q([]) => fail "cannot take from empty list"
   | n + 1, ~q($xx :: $lx) => do
-    let lx' ← get_take n lx
+    let lx' ← getTake n lx
     pure q($xx :: $lx')
   | _, _ => fail "get take : cannot decompose list"
 
-partial def line_pref : Lean.Elab.Tactic.TacticM Unit :=
+partial def linePrefix : Lean.Elab.Tactic.TacticM Unit :=
   Lean.Elab.Tactic.withMainContext do
   let t : Q(Prop) ← Lean.Elab.Tactic.getMainTarget
   match t with
@@ -6690,17 +6687,17 @@ partial def line_pref : Lean.Elab.Tactic.TacticM Unit :=
       match ix with
       | ~q(Ninst.dup $nx) =>
         let n ← unsafe Lean.Meta.evalExpr (Fin 16) q(Fin 16) nx
-        "Line.spx_dup".apply; show_nth' n.val
+        "Line.spx_dup".apply; showNthAt n.val
       | ~q(Ninst.log $nx) =>
         let n ← unsafe Lean.Meta.evalExpr (Fin 5) q(Fin 5) nx
-        let x ← get_take (n.val + 2) px
+        let x ← getTake (n.val + 2) px
         Lean.Expr.apply <| Lean.mkApp "Line.spx_log".toExpr x
         Lean.Elab.Tactic.evalRefl Lean.Syntax.missing
       | ~q(Ninst.swap $nx) =>
         let n ← unsafe Lean.Meta.evalExpr (Fin 16) q(Fin 16) nx
-        let x ← get_swap n.val px
+        let x ← getSwap n.val px
         Lean.Expr.apply <| Lean.mkApp "Line.spx_swap".toExpr x
-        show_swap' n.val
+        showSwapAt n.val
       | ~q(Ninst.pushB256 _) => "Line.spx_pushB256".apply
       | ~q(Ninst.push _ _) => "Line.spx_push".apply
       | ~q(Ninst.sub) => "Line.spx_sub".apply
@@ -6720,13 +6717,13 @@ partial def line_pref : Lean.Elab.Tactic.TacticM Unit :=
       | ~q(Ninst.caller) => "Line.spx_caller".apply
       | ~q(Ninst.callvalue) => "Line.spx_callvalue".apply
       | ~q(Ninst.calldatacopy) => "Line.spx_calldatacopy".apply
-      | _ => dbg_trace "line_pref : unimplemented inst"; failure
-      line_pref
+      | _ => dbg_trace "line_prefix : unimplemented inst"; failure
+      linePrefix
   | _ =>
     dbg_trace "Not a pref goal : "
     dbg_trace t
 
-elab "line_pref" : tactic => line_pref
+elab "line_prefix" : tactic => linePrefix
 
 def findDeclWithM (f : LocalDecl → TacticM Bool) : TacticM Lean.LocalDecl := do
   let g : LocalDecl → TacticM (Option LocalDecl) := fun d => do
@@ -6746,11 +6743,11 @@ def Lean.FVarId.clear (i : Lean.FVarId) : Lean.Elab.Tactic.TacticM Unit :=
     let mvarId ← (← getMainGoal).clear i
     replaceMainGoal [mvarId]
 
-def Lean.FVarId.rvt (i : Lean.FVarId) : TacticM Unit := do
+def Lean.FVarId.revertOne (i : Lean.FVarId) : TacticM Unit := do
   let (_, mvarId) ← (← getMainGoal).revert #[i]
   replaceMainGoal [mvarId]
 
-def clear_if (i i' : FVarId) (sx : Expr) (ld : LocalDecl)  : Lean.Elab.Tactic.TacticM Unit := do
+def clearIf (i i' : FVarId) (sx : Expr) (ld : LocalDecl)  : Lean.Elab.Tactic.TacticM Unit := do
   let pre_t ← Meta.inferType ld.toExpr
   let t ← instantiateMVars pre_t
   if (¬ BEq.beq ld.fvarId i ∧ ¬ BEq.beq ld.fvarId i' ∧ Expr.occurs sx t)
@@ -6779,28 +6776,28 @@ def mkMotive : Q(Prop) → TacticM Expr
       BinderInfo.default
 | _ => failure
 
-elab "lpfx" : tactic =>
+elab "generalize_line_prefix" : tactic =>
   withMainContext do
     let rd ← findDeclWithM isLineRun
     let sx ← initDescOfRun (← Meta.inferType rd.toExpr)
     let pd ← findDeclWithM (isPref sx)
     let sd ← findDeclWithM (λ dd => Meta.isDefEq dd.toExpr sx)
     let ctx ← Lean.MonadLCtx.getLCtx -- get the local context.
-    ctx.forM (clear_if rd.fvarId pd.fvarId sx)
-    Lean.FVarId.rvt rd.fvarId
-    Lean.FVarId.rvt pd.fvarId
+    ctx.forM (clearIf rd.fvarId pd.fvarId sx)
+    Lean.FVarId.revertOne rd.fvarId
+    Lean.FVarId.revertOne pd.fvarId
     let g : Q(Prop) ← getMainTarget
     let m ← mkMotive g
     Expr.apply <| mkApp2 q(@apply_univ Devm) m sd.toExpr
-    line_pref
+    linePrefix
 
 def clearIfOcc (sx : Expr) (ld : LocalDecl) : Lean.Elab.Tactic.TacticM Unit := do
   let t' ← instantiateMVars (← Meta.inferType ld.toExpr)
   if Expr.occurs sx t' then ld.fvarId.clear
 
-syntax "cstate" (ppSpace colGt term:max) : tactic
+syntax "clear_state" (ppSpace colGt term:max) : tactic
 elab_rules : tactic
-  | `(tactic| cstate $hs) =>
+  | `(tactic| clear_state $hs) =>
     Lean.Elab.Tactic.withMainContext do
       let i ← getFVarId hs
       let d ← findDeclWithM (λ d => pure <| BEq.beq d.fvarId i)
