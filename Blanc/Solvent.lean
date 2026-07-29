@@ -92,10 +92,10 @@ lemma Line.inv_solvent {e e' s l s' a}
 instance {x} : Ninst.Hinv Devm.getBal (Ninst.pushB256 x) := ⟨by
   intros e s s' h
   have run := Ninst.run_push_eq h
-  rcases hc : chargeGas (if (x.toB8L.sig) = [] then gBase else gVerylow) s with _ | s_gas
+  rcases hc : chargeGas (if (x.toBytes.sig) = [] then gBase else gVerylow) s with _ | s_gas
   · rw [hc] at run; dsimp [bind, Except.bind] at run; contradiction
   · rw [hc] at run; dsimp [bind, Except.bind] at run
-    rcases hp : Devm.push x.toB8L.sig.toB256 s_gas with _ | s''
+    rcases hp : Devm.push x.toBytes.sig.toB256 s_gas with _ | s''
     · rw [hp] at run; contradiction
     · rw [hp] at run
       injection run with h_eq; subst h_eq
@@ -106,10 +106,10 @@ instance {x} : Ninst.Hinv Devm.getBal (Ninst.pushB256 x) := ⟨by
 instance {x} : Ninst.Hinv Devm.getStor (Ninst.pushB256 x) := ⟨by
   intros e s s' h
   have run := Ninst.run_push_eq h
-  rcases hc : chargeGas (if (x.toB8L.sig) = [] then gBase else gVerylow) s with _ | s_gas
+  rcases hc : chargeGas (if (x.toBytes.sig) = [] then gBase else gVerylow) s with _ | s_gas
   · rw [hc] at run; dsimp [bind, Except.bind] at run; contradiction
   · rw [hc] at run; dsimp [bind, Except.bind] at run
-    rcases hp : Devm.push x.toB8L.sig.toB256 s_gas with _ | s''
+    rcases hp : Devm.push x.toBytes.sig.toB256 s_gas with _ | s''
     · rw [hp] at run; contradiction
     · rw [hp] at run
       injection run with h_eq; subst h_eq
@@ -119,10 +119,10 @@ instance {x} : Ninst.Hinv Devm.getStor (Ninst.pushB256 x) := ⟨by
 instance {x} : Ninst.Hinv Devm.getCode (Ninst.pushB256 x) := ⟨by
   intros e s s' h
   have run := Ninst.run_push_eq h
-  rcases hc : chargeGas (if (x.toB8L.sig) = [] then gBase else gVerylow) s with _ | s_gas
+  rcases hc : chargeGas (if (x.toBytes.sig) = [] then gBase else gVerylow) s with _ | s_gas
   · rw [hc] at run; dsimp [bind, Except.bind] at run; contradiction
   · rw [hc] at run; dsimp [bind, Except.bind] at run
-    rcases hp : Devm.push x.toB8L.sig.toB256 s_gas with _ | s''
+    rcases hp : Devm.push x.toBytes.sig.toB256 s_gas with _ | s''
     · rw [hp] at run; contradiction
     · rw [hp] at run
       injection run with h_eq; subst h_eq
@@ -356,21 +356,19 @@ lemma B256.and_eq_and_prod_and (x y : B256) :
 
 lemma B128.zero_and {x : B128} : 0 &&& x = 0 := by
   simp [B128.and_eq_and_prod_and]
-  apply Prod.ext <;> change (0 : B64) &&& _ = 0 <;> apply UInt64.zero_and
+  apply Prod.ext <;> change (0 : UInt64) &&& _ = 0 <;> apply UInt64.zero_and
 
-lemma B64.mask_and_eq_zero (x : B32) :
-    (0xffffffff00000000 : B64) &&& x.toB64 = 0 := by
-  simp only [B32.toB64]
+lemma UInt64.mask_and_eq_zero (x : UInt32) :
+    (0xffffffff00000000 : UInt64) &&& x.toUInt64 = 0 := by
   rw [← @UInt32.and_neg_one x, UInt32.toUInt64_and]
   rw [UInt64.and_comm (UInt32.toUInt64 _), ← UInt64.and_assoc]
   apply UInt64.zero_and
 
-lemma B64.toB32_toB64_eq_of_highMask_and_eq_zero {x : B64}
-    (h : (0xffffffff00000000 : B64) &&& x = 0) :
-    x.toB32.toB64 = x := by
+lemma UInt64.toUInt32_toUInt64_eq_of_highMask_and_eq_zero {x : UInt64}
+    (h : (0xffffffff00000000 : UInt64) &&& x = 0) :
+    x.toUInt32.toUInt64 = x := by
   apply UInt64.toBitVec_inj.mp
-  simp only [B64.toB32, B32.toB64, UInt32.toBitVec_toUInt64,
-    UInt64.toBitVec_toUInt32]
+  simp only [UInt32.toBitVec_toUInt64, UInt64.toBitVec_toUInt32]
   apply BitVec.eq_of_getElem_eq_iff.mpr
   intro i hi
   rw [BitVec.getElem_setWidth]
@@ -382,8 +380,8 @@ lemma B64.toB32_toB64_eq_of_highMask_and_eq_zero {x : B64}
     rw [UInt64.toBitVec_and, UInt64.toBitVec_zero] at hb
     have hb_i := congrArg (fun v : BitVec 64 => v[i]) hb
     simp only [BitVec.getElem_and hi, BitVec.getElem_zero hi] at hb_i
-    have hmask : ((0xffffffff00000000 : B64).toBitVec)[i] = true := by
-      change (((-1 : B64) <<< 32).toBitVec)[i] = true
+    have hmask : ((0xffffffff00000000 : UInt64).toBitVec)[i] = true := by
+      change (((-1 : UInt64) <<< 32).toBitVec)[i] = true
       rw [UInt64.toBitVec_shiftLeft, BitVec.getElem_shiftLeft' hi]
       simp [hi32]
       change (BitVec.allOnes 64)[i - 32] = true
@@ -406,21 +404,21 @@ lemma validAdr_iff {w : B256} :
     apply Prod.ext
     · apply Prod.ext
       · rfl
-      · apply B64.mask_and_eq_zero
+      · apply UInt64.mask_and_eq_zero
     · rfl
   · refine' ⟨w.toAdr, _⟩
     rcases w with ⟨⟨wz, wh⟩, wl⟩
     simp only [addressMask, B256.and_eq_and_prod_and, B128.and_eq_and_prod_and] at h
     have hz := congrArg (fun x : B256 => x.1.1) h
     have hm := congrArg (fun x : B256 => x.1.2) h
-    change B64.max &&& wz = 0 at hz
-    change (0xffffffff00000000 : B64) &&& wh = 0 at hm
+    change UInt64.max &&& wz = 0 at hz
+    change (0xffffffff00000000 : UInt64) &&& wh = 0 at hm
     have h_wz : wz = 0 := by
-      simp only [B64.max] at hz
-      change (-1 : B64) &&& wz = 0 at hz
+      simp only [UInt64.max] at hz
+      change (-1 : UInt64) &&& wz = 0 at hz
       simpa using hz
-    have h_wh : wh.toB32.toB64 = wh := by
-      exact B64.toB32_toB64_eq_of_highMask_and_eq_zero hm
+    have h_wh : wh.toUInt32.toUInt64 = wh := by
+      exact UInt64.toUInt32_toUInt64_eq_of_highMask_and_eq_zero hm
     simp only [B256.toAdr, Adr.toB256, h_wz, h_wh]
 
 lemma addressMask_eq_shl :
@@ -5668,7 +5666,7 @@ theorem applyTransactions_inv_solvent (wa : Adr)
 code and otherwise does not alter the starting state.
 -/
 lemma processUncheckedSystemTransaction_inv_solvent_sum_le (wa : Adr)
-    (benv : Benv) (target : Adr) (data : B8L)
+    (benv : Benv) (target : Adr) (data : Bytes)
     (st : _root_.State) (out : MsgCallOutput)
     (h_run : processUncheckedSystemTransaction benv target data = .ok ⟨st, out⟩)
     (h_inv : Benv.InvSolvent wa benv) :
@@ -6082,7 +6080,7 @@ lemma processWithdrawalsState_inv_solvent (wa : Adr)
     · rw [h_sum, h_val]; omega
     · exact State.Inv.addBal hb h_inv
 
-lemma processCheckedSystemTransaction_to_unchecked {benv : Benv} {target : Adr} {data : B8L}
+lemma processCheckedSystemTransaction_to_unchecked {benv : Benv} {target : Adr} {data : Bytes}
     {st : _root_.State} {out : MsgCallOutput}
     (h : processCheckedSystemTransaction benv target data = .ok ⟨st, out⟩) :
     processUncheckedSystemTransaction benv target data = .ok ⟨st, out⟩ := by
@@ -6133,7 +6131,7 @@ lemma processGeneralPurposeRequests_inv_solvent_sum_le (wa : Adr)
            exact ⟨hu2.1, le_trans (by simpa [Benv.withState] using hu2.2) hu1.2⟩)))
 
 theorem applyBody_inv_solvent (wa : Adr)
-    (benv : Benv) (txs : List (B8L ⊕ Tx)) (wds : List Withdrawal)
+    (benv : Benv) (txs : List (Bytes ⊕ Tx)) (wds : List Withdrawal)
     (st : _root_.State) (bout : BlockOutput)
     (h_run : applyBody benv txs wds = .ok ⟨st, bout⟩)
     (h_wds : sum benv.state.bal + wdsum wds < 2 ^ 256)
@@ -6148,13 +6146,13 @@ theorem applyBody_inv_solvent (wa : Adr)
   dsimp only at h_history h_txs h_requests
   have h_beacon_inv :=
     processUncheckedSystemTransaction_inv_solvent_sum_le wa benv
-      beaconRootsAddress benv.stat.parentBeaconBlockRoot.toB8L
+      beaconRootsAddress benv.stat.parentBeaconBlockRoot.toBytes
       stBeacon outBeacon h_beacon h_inv
   have h_benv_beacon : Benv.InvSolvent wa (benv.withState stBeacon) :=
     ⟨h_beacon_inv.1, by simpa [Benv.withState] using h_inv.ca⟩
   have h_history_inv :=
     processUncheckedSystemTransaction_inv_solvent_sum_le wa
-      (benv.withState stBeacon) historyStorageAddress lastHash.toB8L
+      (benv.withState stBeacon) historyStorageAddress lastHash.toBytes
       stHistory outHistory h_history h_benv_beacon
   have h_benv_history :
       Benv.InvSolvent wa ((benv.withState stBeacon).withState stHistory) :=
@@ -6281,7 +6279,7 @@ theorem chain_inv_solvent (wa : Adr) (ch ch' : BlockChain)
 -- Bonus level : preservation through RLP decoding and block hash checks,
 -- again under any fork's rules.
 theorem addBlockToChainWith_inv_solvent (wa : Adr) (rules : ForkRules)
-    (ch ch' : BlockChain) (rlp : B8L)
+    (ch ch' : BlockChain) (rlp : Bytes)
     (h_run : addBlockToChainWith rules ch rlp = .ok (.inl ch'))
     (h_wds : ∀ block hash, rlpToBlock rlp = .ok ⟨block, hash⟩ →
       sum ch.state.bal + wdsum block.wds < 2 ^ 256)
@@ -6324,7 +6322,7 @@ theorem addBlockToChainWith_inv_solvent (wa : Adr) (rules : ForkRules)
 -- Prague is the `rules := pragueRules` instance here too; the statement is
 -- unchanged.
 theorem addBlockToChain_inv_solvent (wa : Adr)
-    (ch ch' : BlockChain) (rlp : B8L)
+    (ch ch' : BlockChain) (rlp : Bytes)
     (h_run : addBlockToChain ch rlp = .ok (.inl ch'))
     (h_wds : ∀ block hash, rlpToBlock rlp = .ok ⟨block, hash⟩ →
       sum ch.state.bal + wdsum block.wds < 2 ^ 256)

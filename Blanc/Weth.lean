@@ -76,7 +76,7 @@ def decimals : Func :=
 -- name() --
 
 def name : Func :=
-  pushB256 "Wrapped Ether".toB8L.toB256 :::
+  pushB256 "Wrapped Ether".toBytes.toB256 :::
   pushB256 152 ::: shl ::: -- "Wrapped Ether" ||
   pushList [13, 32] +++ -- 32 :: 13 :: "Wrapped Ether" ||
   mstoreAt 0 +++ -- 13 :: "Wrapped Ether" || 32
@@ -90,7 +90,7 @@ def name : Func :=
 
 def symbol : Func :=
   -- pushList [wethStringShift] +++ -- wethStringShift
-  pushB256 "WETH".toB8L.toB256 :::
+  pushB256 "WETH".toBytes.toB256 :::
   pushB256 224 ::: shl ::: -- "WETH""
   pushList [4, 32] +++ -- 32 :: 4 :: "WETH""
   mstoreAt 0 +++ -- 4 :: "WETH"" || 32

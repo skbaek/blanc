@@ -6,7 +6,7 @@ import Jaune.Sufficiency
 
 
 
-def Rinst.toB8 : Rinst → B8
+def Rinst.toUInt8 : Rinst → UInt8
   | add          => 0x01
   | mul          => 0x02
   | sub          => 0x03
@@ -108,9 +108,9 @@ structure Devm.Rels : Type where
   (gasLeft : Nat → Nat → Prop)
   (logs : List Log → List Log → Prop)
   (refundCounter : Int → Int → Prop)
-  (output : B8L → B8L → Prop)
+  (output : Bytes → Bytes → Prop)
   (accountsToDelete : AdrSet → AdrSet → Prop)
-  (returnData : B8L → B8L → Prop)
+  (returnData : Bytes → Bytes → Prop)
   (error : Option String → Option String → Prop)
   (accessedAddresses : AdrSet → AdrSet → Prop)
   (accessedStorageKeys : KeySet → KeySet → Prop)
@@ -368,7 +368,7 @@ lemma Ninst.step_ne_halt_ok {evm : Evm} {n : Ninst} {devm' : Devm} :
 lemma Ninst.step_reg {evm : Evm} {r : Rinst} :
     Ninst.step evm (.reg r) = Step.ofExecution (evm.pc + 1) (r.run evm) := rfl
 
-lemma Ninst.step_push {evm : Evm} {xs : B8L} {le : xs.length ≤ 32} :
+lemma Ninst.step_push {evm : Evm} {xs : Bytes} {le : xs.length ≤ 32} :
     Ninst.step evm (.push xs le) =
       Step.ofExecution (evm.pc + xs.length + 1)
         (do let d ← chargeGas (if xs = [] then gBase else gVerylow) evm.dyna

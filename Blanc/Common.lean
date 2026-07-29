@@ -20,8 +20,8 @@ def Func.rev : Func := .last .rev
 def Func.ret : Func := .last .ret
 
 def Ninst.pushB256 (w : B256) : Ninst :=
-  push w.toB8L.sig <|
-    le_of_le_of_eq (List.length_dropWhile_le _ _) (B256.length_toB8L _)
+  push w.toBytes.sig <|
+    le_of_le_of_eq (List.length_dropWhile_le _ _) (B256.length_toBytes _)
 
 abbrev Ninst.add : Ninst := Ninst.reg Rinst.add
 abbrev Ninst.mul : Ninst := Ninst.reg Rinst.mul
@@ -203,10 +203,10 @@ theorem sumBelow_succ {f : Adr → B256} {n} :
 def sum (f : Adr → B256) : Nat :=
   sumBelow f Adr.max.toNat.succ
 
-def pushToB8 (bs : B8L) : B8 := 0x5F + Nat.toUInt8 bs.length
-def pushToB8L (bs : B8L) : B8L := pushToB8 bs :: bs
+def pushToB8 (bs : Bytes) : UInt8 := 0x5F + Nat.toUInt8 bs.length
+def pushToB8L (bs : Bytes) : Bytes := pushToB8 bs :: bs
 
-def Xinst.toB8 : Xinst → B8
+def Xinst.toUInt8 : Xinst → UInt8
   | create   => 0xF0
   | call     => 0xF1
   | callcode => 0xF2
@@ -214,14 +214,14 @@ def Xinst.toB8 : Xinst → B8
   | create2  => 0xF5
   | statcall => 0xFA
 
-def Ninst.toB8L : Ninst → B8L
-  | reg o => [o.toB8]
-  | exec o => [o.toB8]
+def Ninst.toBytes : Ninst → Bytes
+  | reg o => [o.toUInt8]
+  | exec o => [o.toUInt8]
   | push bs _ => pushToB8L bs
 
 def compsize : Func → Nat
   | .last _ => 1
-  | .next i p => compsize p + i.toB8L.length
+  | .next i p => compsize p + i.toBytes.length
   | .branch p q => compsize p + compsize q + 5
   | .call _ => 4
 
@@ -229,47 +229,47 @@ def table : Nat → List Func → List (Nat × Func)
 | _, [] => []
 | k, f :: fs => ⟨k, f⟩ :: table (k + compsize f + 1) fs
 
-def Func.compile (l : List (Nat × Func)) (n : Nat) : Func → Option B8L
-  | .last o => pure [o.toB8]
+def Func.compile (l : List (Nat × Func)) (n : Nat) : Func → Option Bytes
+  | .last o => pure [o.toUInt8]
   | .next i p => do
     let p_bts ← Func.compile l (n + i.size) p
-    pure <| Ninst.toB8L i ++ p_bts
+    pure <| Ninst.toBytes i ++ p_bts
   | .branch p q => do
     let pbs ← Func.compile l (n + 4) p
     let loc := n + pbs.length + 4
     guard (loc < 2 ^ 16)
     let qbs ← Func.compile l (loc + 1) q
     pure $
-      ([0x61] : B8L) ++
+      ([0x61] : Bytes) ++
       [(loc >>> 8).toUInt8, loc.toUInt8] ++
-      [Jinst.toB8 .jumpi] ++ pbs ++
-      [Jinst.toB8 .jumpdest] ++ qbs
+      [Jinst.toUInt8 .jumpi] ++ pbs ++
+      [Jinst.toUInt8 .jumpdest] ++ qbs
   | .call k => do
     let (loc, _) ← l[k]?
     guard (loc < 2 ^ 16)
     pure $
-      ([0x61] : B8L) ++
+      ([0x61] : Bytes) ++
       [(loc >>> 8).toUInt8, loc.toUInt8] ++
-      [Jinst.toB8 Jinst.jump]
+      [Jinst.toUInt8 Jinst.jump]
 
-def Table.compile (l : List (Nat × Func)) : List (Nat × Func) → Option B8L
+def Table.compile (l : List (Nat × Func)) : List (Nat × Func) → Option Bytes
 | [] => pure []
 | (n, p) :: nps => do
   let bs ← Func.compile l (n + 1) p
   let bss ← Table.compile l nps
-  pure <| [Jinst.toB8 .jumpdest] ++ bs ++ bss
+  pure <| [Jinst.toUInt8 .jumpdest] ++ bs ++ bss
 
 lemma Table.compile_cons_eq_some {l n p l' bs}
     (h : Table.compile l ((n, p) :: l') = some bs) :
     ∃ cp cl',
       Func.compile l (n + 1) p = some cp ∧
       Table.compile l l' = some cl' ∧
-      bs = [Jinst.toB8 .jumpdest] ++ cp ++ cl' := by
+      bs = [Jinst.toUInt8 .jumpdest] ++ cp ++ cl' := by
   rcases of_bind_eq_some h with ⟨cp, h_cp, h'⟩; clear h
   rcases of_bind_eq_some h' with ⟨cl', h_cl', h_eq⟩; clear h'
   simp at h_eq; refine' ⟨cp, cl', h_cp, h_cl', h_eq.symm⟩
 
-def Prog.compile (p : Prog) : Option B8L :=
+def Prog.compile (p : Prog) : Option Bytes :=
   let t : List (Nat × Func) := table 0 (p.main :: p.aux)
   Table.compile t t
 
@@ -285,7 +285,7 @@ lemma Prog.compile_ne_nil {p} : Prog.compile p ≠ some [] := by
   rcases of_bind_eq_some h with ⟨bs, _, h'⟩; clear h
   rcases of_bind_eq_some h' with ⟨bs', _, h⟩; clear h'; simp at h
 
-def subcode (cd : B8L) (k : Nat) : Option B8L → Prop
+def subcode (cd : Bytes) (k : Nat) : Option Bytes → Prop
   | none => False
   | some bs => List.Slice cd k bs
 
@@ -306,12 +306,12 @@ lemma Linst.at_unique {e pc o o'} (h : At e pc o) (h' : At e pc o') : o = o' := 
 lemma Ninst.at_unique {e pc o o'} (h : At e pc o) (h' : At e pc o') : o = o' := by
   injection Eq.trans h.symm h' with eq; injection eq with eq
 
-lemma toJinst_toB8 {o : Jinst} :
-  B8.toJinst o.toB8 = some o := by cases o <;> rfl
-lemma toLinst_toB8 {o : Linst} :
-  B8.toLinst o.toB8 = some o := by cases o <;> rfl
+lemma toJinst_toUInt8 {o : Jinst} :
+  UInt8.toJinst o.toUInt8 = some o := by cases o <;> rfl
+lemma toLinst_toUInt8 {o : Linst} :
+  UInt8.toLinst o.toUInt8 = some o := by cases o <;> rfl
 
-lemma toInstType_pushToB8 {bs : B8L} (h : bs.length ≤ 32) :
+lemma toInstType_pushToB8 {bs : Bytes} (h : bs.length ≤ 32) :
     (pushToB8 bs).toInstType = .P := by
   rw [← Nat.lt_succ_iff] at h
   simp only [pushToB8]; revert h
@@ -319,37 +319,37 @@ lemma toInstType_pushToB8 {bs : B8L} (h : bs.length ≤ 32) :
   repeat (rw [Nat.forall_lt_succ_right']; refine' ⟨_, rfl⟩)
   simp only [Nat.not_lt_zero, Nat.toUInt8_eq, IsEmpty.forall_iff, implies_true]
 
-lemma toInstType_toB8_swap (x : Fin 16) :
-    (Rinst.swap x).toB8.toInstType = .R := by
+lemma toInstType_toUInt8_swap (x : Fin 16) :
+    (Rinst.swap x).toUInt8.toInstType = .R := by
   rcases x with ⟨n, h⟩; revert h n
   repeat (rw [Nat.forall_lt_succ_left']; refine' ⟨rfl, _⟩)
   simp
 
-lemma toInstType_toB8_dup (x : Fin 16) :
-    (Rinst.dup x).toB8.toInstType = .R := by
+lemma toInstType_toUInt8_dup (x : Fin 16) :
+    (Rinst.dup x).toUInt8.toInstType = .R := by
   rcases x with ⟨n, h⟩; revert h n
   repeat (rw [Nat.forall_lt_succ_left']; refine' ⟨rfl, _⟩)
   simp
 
-lemma toInstType_toB8_log (x : Fin 5) :
-    (Rinst.log x).toB8.toInstType = .R := by
+lemma toInstType_toUInt8_log (x : Fin 5) :
+    (Rinst.log x).toUInt8.toInstType = .R := by
   rcases x with ⟨n, h⟩; revert h n
   repeat (rw [Nat.forall_lt_succ_left']; refine' ⟨rfl, _⟩)
   simp
 
-lemma Rinst.toInstType_toB8 (r : Rinst) : r.toB8.toInstType = .R := by
+lemma Rinst.toInstType_toUInt8 (r : Rinst) : r.toUInt8.toInstType = .R := by
   cases r <;> try {rfl}
-  · apply toInstType_toB8_dup
-  · apply toInstType_toB8_swap
-  · apply toInstType_toB8_log
+  · apply toInstType_toUInt8_dup
+  · apply toInstType_toUInt8_swap
+  · apply toInstType_toUInt8_log
 
-lemma Linst.toInstType_toB8 (l : Linst) : l.toB8.toInstType = .L := by
+lemma Linst.toInstType_toUInt8 (l : Linst) : l.toUInt8.toInstType = .L := by
   cases l <;> rfl
 
-lemma Xinst.toInstType_toB8 (x : Xinst) : x.toB8.toInstType = .X := by
+lemma Xinst.toInstType_toUInt8 (x : Xinst) : x.toUInt8.toInstType = .X := by
   cases x <;> rfl
 
-lemma Jinst.toInstType_toB8 (j : Jinst) : j.toB8.toInstType = .J := by
+lemma Jinst.toInstType_toUInt8 (j : Jinst) : j.toUInt8.toInstType = .J := by
   cases j <;> rfl
 
 lemma ByteArray.toList_eq_toList_data {xs : ByteArray} :
@@ -386,32 +386,32 @@ lemma ByteArray.lt_size_of_getElem?_eq_some {xs : ByteArray} {n} {x}
   rcases List.getElem?_eq_some_iff.mp eq with ⟨lt, _⟩
   rw [ByteArray.toList_eq_toList_data] at lt; exact lt
 
-lemma Jinst.at_of_slice {code : ByteArray} {pc : Nat} {j : Jinst} {xs : B8L}
-    (slice : code.toList.Slice pc (j.toB8 :: xs)) :
+lemma Jinst.at_of_slice {code : ByteArray} {pc : Nat} {j : Jinst} {xs : Bytes}
+    (slice : code.toList.Slice pc (j.toUInt8 :: xs)) :
     j.At code pc := by
   have eq := List.get?_eq_of_slice slice
   simp only [Jinst.At, ByteArray.getInst]
   have rw := ByteArray.of_getElem?_eq_some eq
   rw [if_pos (ByteArray.lt_size_of_getElem?_eq_some eq)]
   split <;>
-  try { rename (B8.toInstType _ = _) => h
-        rw [rw, Jinst.toInstType_toB8] at h; cases h }
-  rw [rw, toJinst_toB8]; rfl
+  try { rename (UInt8.toInstType _ = _) => h
+        rw [rw, Jinst.toInstType_toUInt8] at h; cases h }
+  rw [rw, toJinst_toUInt8]; rfl
 
-lemma Linst.at_of_slice {code : ByteArray} {pc : Nat} {l : Linst} {xs : B8L}
-    (slice : code.toList.Slice pc (l.toB8 :: xs)) :
+lemma Linst.at_of_slice {code : ByteArray} {pc : Nat} {l : Linst} {xs : Bytes}
+    (slice : code.toList.Slice pc (l.toUInt8 :: xs)) :
     l.At code pc := by
   have eq := List.get?_eq_of_slice slice
   simp only [Linst.At, ByteArray.getInst]
   have rw := ByteArray.of_getElem?_eq_some eq
   rw [if_pos (ByteArray.lt_size_of_getElem?_eq_some eq)]
   split <;>
-  try { rename (B8.toInstType _ = _) => h
-        rw [rw, Linst.toInstType_toB8] at h; cases h }
-  rw [rw, toLinst_toB8]; rfl
+  try { rename (UInt8.toInstType _ = _) => h
+        rw [rw, Linst.toInstType_toUInt8] at h; cases h }
+  rw [rw, toLinst_toUInt8]; rfl
 
 lemma dup_toByte_toRinst? :
-  ∀ n, B8.toRinst (Rinst.dup n).toB8 = some (.dup n)
+  ∀ n, UInt8.toRinst (Rinst.dup n).toUInt8 = some (.dup n)
   | 0 => rfl
   | 1 => rfl
   | 2 => rfl
@@ -433,7 +433,7 @@ lemma dup_toByte_toRinst? :
     cases h (Nat.le_add_left _ _)
 
 lemma swap_toByte_toRinst?
-  : ∀ n, B8.toRinst (Rinst.swap n).toB8 = some (.swap n)
+  : ∀ n, UInt8.toRinst (Rinst.swap n).toUInt8 = some (.swap n)
   | 0 => rfl
   | 1 => rfl
   | 2 => rfl
@@ -455,7 +455,7 @@ lemma swap_toByte_toRinst?
     cases h (Nat.le_add_left _ _)
 
 lemma log_toByte_toRinst? :
-  ∀ n, B8.toRinst (Rinst.log n).toB8 = some (.log n)
+  ∀ n, UInt8.toRinst (Rinst.log n).toUInt8 = some (.log n)
   | 0 => rfl
   | 1 => rfl
   | 2 => rfl
@@ -465,7 +465,7 @@ lemma log_toByte_toRinst? :
     rw [← Nat.not_le] at h
     cases h (Nat.le_add_left _ _)
 
-lemma toB8_toRinst {i : Rinst} : B8.toRinst i.toB8 = some i := by
+lemma toUInt8_toRinst {i : Rinst} : UInt8.toRinst i.toUInt8 = some i := by
   cases i <;> try {rfl}
   · apply dup_toByte_toRinst?
   · apply swap_toByte_toRinst?
@@ -477,20 +477,20 @@ lemma Linst.run_of_at {pc sevm devm l exn}
     Linst.Run sevm devm l exn :=
   (cr.last_inv h_at).symm
 
-def PushAt (code : ByteArray) (pc : Nat) (xs : B8L) : Prop :=
+def PushAt (code : ByteArray) (pc : Nat) (xs : Bytes) : Prop :=
   ∃ le : xs.length ≤ 32, code.getInst pc = some (.next (.push xs le))
 
-lemma toB8_toXinst {o : Xinst} : B8.toXinst o.toB8 = some o := by cases o <;> rfl
+lemma toUInt8_toXinst {o : Xinst} : UInt8.toXinst o.toUInt8 = some o := by cases o <;> rfl
 
-lemma Ninst.push_ext {xs ys : B8L}
+lemma Ninst.push_ext {xs ys : Bytes}
     (le : xs.length ≤ 32) (le' : ys.length ≤ 32) (eq : xs = ys) :
     Ninst.push xs le = Ninst.push ys le' := by
   revert le le'; rw [eq]; simp
 
-lemma toNat_pushToB8_eq {xs : B8L} (le : xs.length ≤ 32) :
+lemma toNat_pushToB8_eq {xs : Bytes} (le : xs.length ≤ 32) :
     (pushToB8 xs).toNat = xs.length + 95:= by
-  simp only [pushToB8]; rw [B8.toNat_add, Nat.lo_eq_of_lt] <;>
-  {simp only [B8.toNat, UInt8.reduceToNat, UInt8.toNat_ofNat']; omega}
+  simp only [pushToB8]; rw [UInt8.toNat_add_lo, Nat.lo_eq_of_lt] <;>
+  {simp [UInt8.toNat_ofNat, UInt8.toNat_ofNat', Nat.toUInt8]; omega}
 
 lemma List.sliceD_succ {ξ} (xs : List ξ) (m n : Nat) (d : ξ) :
     xs.sliceD m (n + 1) d = xs.getD m d :: xs.sliceD (m + 1) n d := by
@@ -519,7 +519,7 @@ lemma List.getD_eq_default {ξ} {xs : List ξ} {i : Nat} {d : ξ}
     (le : xs.length ≤ i) : xs.getD i d = d := by
   rw [List.getD_eq_getElem?_getD, List.getElem?_eq_none_iff.mpr le]; rfl
 
-lemma ByteArray.sliceD_eq_replicate (xs : ByteArray) (m n : Nat) (d : B8)
+lemma ByteArray.sliceD_eq_replicate (xs : ByteArray) (m n : Nat) (d : UInt8)
     (le : xs.size ≤ m) : ByteArray.sliceD xs m n d = List.replicate n d := by
   induction n generalizing xs m
   case zero => rfl
@@ -527,7 +527,7 @@ lemma ByteArray.sliceD_eq_replicate (xs : ByteArray) (m n : Nat) (d : B8)
     simp only [ByteArray.sliceD];
     rw [if_neg]; rw [not_lt]; exact le
 
-lemma ByteArray.sliceD_eq (xs : ByteArray) (m n : Nat) (d : B8) :
+lemma ByteArray.sliceD_eq (xs : ByteArray) (m n : Nat) (d : UInt8) :
     ByteArray.sliceD xs m n d = xs.toList.sliceD m n d := by
   induction n generalizing xs m
   case zero => rfl
@@ -571,7 +571,7 @@ lemma List.sliceD_eq_of_slice?_eq_some {ξ} {xs ys : List ξ} {m n : Nat} {d} :
   intro eq; simp only [List.slice?] at eq; simp only [List.sliceD]
   rcases of_bind_eq_some eq with ⟨zs, rw, rw'⟩
   rw [drop_eq_of_drop?_eq_some rw, takeD_eq_of_take?_eq_some rw']
-lemma pushAt_of_slice {code : ByteArray} {pc} {xs : B8L} (le : xs.length ≤ 32)
+lemma pushAt_of_slice {code : ByteArray} {pc} {xs : Bytes} (le : xs.length ≤ 32)
     (slice : code.toList.Slice pc (pushToB8L xs)) : PushAt code pc xs := by
   have eq := List.get?_eq_of_slice slice
   have rw := ByteArray.of_getElem?_eq_some eq
@@ -579,39 +579,39 @@ lemma pushAt_of_slice {code : ByteArray} {pc} {xs : B8L} (le : xs.length ≤ 32)
   refine' ⟨le, _⟩
   rw [if_pos (ByteArray.lt_size_of_getElem?_eq_some eq)]
   split <;>
-  try { rename (B8.toInstType _ = _) => h
+  try { rename (UInt8.toInstType _ = _) => h
         rw [rw, toInstType_pushToB8 le] at h; cases h }
   apply congr_arg; apply congr_arg; apply Ninst.push_ext
   rcases slice with ⟨len, slice⟩
-  have rw' : B8.toNat (code.get! pc) - 95 = xs.length := by
+  have rw' : UInt8.toNat (code.get! pc) - 95 = xs.length := by
     rw [rw, toNat_pushToB8_eq le]; omega
   rw [rw', ByteArray.sliceD_eq]; simp [pushToB8L] at slice
   rw [List.length_slice? slice, List.length_cons] at slice
   apply List.sliceD_eq_of_slice?_eq_some (List.slice?_eq_cons_iff.mp slice).2
 
 lemma Ninst.at_of_slice {code : ByteArray} {pc : Nat} {n : Ninst}
-    (slice : code.toList.Slice pc n.toB8L) : n.At code pc := by
+    (slice : code.toList.Slice pc n.toBytes) : n.At code pc := by
   cases n
   case reg r =>
-    simp [Ninst.toB8L] at slice
+    simp [Ninst.toBytes] at slice
     have eq := List.get?_eq_of_slice slice
     simp only [Ninst.At, ByteArray.getInst]
     have rw := ByteArray.of_getElem?_eq_some eq
     rw [if_pos (ByteArray.lt_size_of_getElem?_eq_some eq)]
     split <;>
-    try { rename (B8.toInstType _ = _) => h
-          rw [rw, Rinst.toInstType_toB8] at h; cases h }
-    rw [rw, toB8_toRinst]; rfl
+    try { rename (UInt8.toInstType _ = _) => h
+          rw [rw, Rinst.toInstType_toUInt8] at h; cases h }
+    rw [rw, toUInt8_toRinst]; rfl
   case exec x =>
-    simp [Ninst.toB8L] at slice
+    simp [Ninst.toBytes] at slice
     have eq := List.get?_eq_of_slice slice
     simp only [Ninst.At, ByteArray.getInst]
     have rw := ByteArray.of_getElem?_eq_some eq
     rw [if_pos (ByteArray.lt_size_of_getElem?_eq_some eq)]
     split <;>
-    try { rename (B8.toInstType _ = _) => h
-          rw [rw, Xinst.toInstType_toB8] at h; cases h }
-    rw [rw, toB8_toXinst]; rfl
+    try { rename (UInt8.toInstType _ = _) => h
+          rw [rw, Xinst.toInstType_toUInt8] at h; cases h }
+    rw [rw, toUInt8_toXinst]; rfl
   case push xs le => apply (pushAt_of_slice le slice).2
 
 lemma two_le_32 : (2 : Nat) ≤ 32 := by omega
@@ -641,7 +641,7 @@ lemma subcode_compile_branch {code : ByteArray} {k l p q}
   refine' ⟨loc, h_loc, _⟩
   have pat : At code k (push [(loc >>> 8).toUInt8, loc.toUInt8] two_le_32) := by
     apply @Ninst.at_of_slice code k
-    simp only [loc, Ninst.toB8L, pushToB8L, pushToB8]
+    simp only [loc, Ninst.toBytes, pushToB8L, pushToB8]
     apply List.slice_prefix h
   refine' ⟨pat, _⟩; clear pat
   have h' := List.slice_suffix h; clear h
@@ -880,8 +880,8 @@ lemma Ninst.run_of_at {pc sevm pre n post}
     simp only [Ninst.Run', hs, Step.Run]
     exact ⟨_, RunFrame.of_run henter, hr.symm⟩
 
-lemma Ninst.size_eq_length_toB8L (n : Ninst) :
-    n.size = n.toB8L.length := by cases n <;> rfl
+lemma Ninst.size_eq_length_toBytes (n : Ninst) :
+    n.size = n.toBytes.length := by cases n <;> rfl
 
 def Devm.Pop (xs : List B256): Devm → Devm → Prop :=
   Rel {Rels.eq with stack := Stack.Pop xs}
@@ -1101,7 +1101,7 @@ lemma push_of_pushAt
     {pc sevm pre xs post} (exc : Exec pc sevm pre (.ok post))
     (h_at : PushAt sevm.code pc xs) :
     ∃ (inter : Devm) (exc' : Exec (pc + xs.length + 1) sevm inter (.ok post)),
-      Devm.PushBurn [B8L.toB256 xs] pre inter ∧
+      Devm.PushBurn [Bytes.toB256 xs] pre inter ∧
       ⟨pc + xs.length + 1, sevm, inter, .ok post, exc'⟩ ≺
         ⟨pc, sevm, pre, .ok post, exc⟩ := by
   rcases h_at with ⟨le, h_at⟩
@@ -1140,64 +1140,60 @@ lemma pair_aux (n m : Nat) :
   apply congr_arg₂  _ _ (Nat.lo_lo_of_ge (by omega)).symm
   rw [@Nat.lo_add_shr n m m, ← Nat.lo_eq _ m, Nat.lo_lo]; rfl
 
-lemma Nat.toB16_toB8 (n : Nat) : n.toB8.toB16 = (n ↾ 8).toB16 := by
-  have h0 : n.toB8.toB16 = n.toB16 % (2 ^ 8) :=
+lemma Nat.toUInt16_toUInt8 (n : Nat) : n.toUInt8.toUInt16 = (n ↾ 8).toUInt16 := by
+  have h0 : n.toUInt8.toUInt16 = n.toUInt16 % (2 ^ 8) :=
       (UInt8.toUInt16_eq_mod_256_iff n.toUInt8 n.toUInt16).mpr
         (UInt16.toUInt8_ofNat' _).symm
-  have h1: (n.toB16 % 2 ^ 8).toNat = n ↾ 8 := by
-    have rw : B16.toNat (2 ^ 8) = 2 ^ 8 := rfl
-    rw [B16.toNat_mod, rw]; clear rw
-    rw [toNat_toB16, ← Nat.lo_eq]
+  have h1: (n.toUInt16 % 2 ^ 8).toNat = n ↾ 8 := by
+    have rw : UInt16.toNat (2 ^ 8) = 2 ^ 8 := rfl
+    rw [UInt16.toNat_mod, rw]; clear rw
+    rw [toNat_toUInt16, ← Nat.lo_eq]
     apply Nat.lo_lo_of_ge (by omega)
-  have h2 : (n ↾ 8).toB16 = n.toB16 % (2 ^ 8) := by
+  have h2 : (n ↾ 8).toUInt16 = n.toUInt16 % (2 ^ 8) := by
     apply (UInt16.ofNat_eq_iff_mod_eq_toNat _ _).mpr
     apply Eq.trans (Nat.lo_lo_of_le (by omega)) h1.symm
   apply Eq.trans h0 h2.symm
 
-lemma List.toB16_pair (n : Nat) :
-    B8L.toB16 [(n >>> 8).toB8, n.toB8] = n.toB16 := by
-  have h : (n >>> 8 ↾ 8).toB16 <<< 8 ||| (n ↾ 8).toB16 = n.toB16 := by
-    rw [← B16.toNat_inj, toNat_toB16, B16.toNat_or, toNat_toB16]
-    rw [B16.toNat_shiftLeft, toNat_toB16]; apply pair_aux n 8
-  simp [B8L.toB16, B8L.pack, ekatD, takeD, reverse, reverseAux, tail, headD]
-  rw [Nat.toB16_toB8, Nat.toB16_toB8, h]
+lemma List.toUInt16_pair (n : Nat) :
+    Bytes.toUInt16 [(n >>> 8).toUInt8, n.toUInt8] = n.toUInt16 := by
+  have h : (n >>> 8 ↾ 8).toUInt16 <<< 8 ||| (n ↾ 8).toUInt16 = n.toUInt16 := by
+    rw [← UInt16.toNat_inj, toNat_toUInt16, UInt16.toNat_or, toNat_toUInt16]
+    rw [UInt16.toNat_shiftLeft, toNat_toUInt16]; apply pair_aux n 8
+  simp [Bytes.toUInt16, Bytes.pack, ekatD, takeD, reverse, reverseAux, tail, headD]
+  rw [Nat.toUInt16_toUInt8, Nat.toUInt16_toUInt8, h]
 
-def B16.concat (x y : B16) : B32 :=
-  x.toB32 <<< 16 ||| y.toB32
+def UInt16.concat (x y : UInt16) : UInt32 :=
+  x.toUInt32 <<< 16 ||| y.toUInt32
 
-lemma B32.ofNat_eq_iff_mod_eq_toNat (a : Nat) (b : B32) :
-    a.toB32 = b ↔ a ↾ 32 = b.toNat :=
-  UInt32.ofNat_eq_iff_mod_eq_toNat a b
-
-lemma Nat.toB32_toB16 (n : Nat) : n.toB16.toB32 = (n ↾ 16).toB32 := by
-  have h0 : n.toB16.toB32 = n.toB32 % (2 ^ 16) :=
+lemma Nat.toUInt32_toUInt16 (n : Nat) : n.toUInt16.toUInt32 = (n ↾ 16).toUInt32 := by
+  have h0 : n.toUInt16.toUInt32 = n.toUInt32 % (2 ^ 16) :=
       (UInt16.toUInt32_eq_mod_65536_iff n.toUInt16 n.toUInt32).mpr
         (UInt32.toUInt16_ofNat' _).symm
-  have h1: (n.toB32 % 2 ^ 16).toNat = n ↾ 16 := by
-    have rw : B32.toNat (2 ^ 16) = 2 ^ 16 := rfl
-    rw [B32.toNat_mod, rw]; clear rw
-    rw [toNat_toB32, ← Nat.lo_eq]
+  have h1: (n.toUInt32 % 2 ^ 16).toNat = n ↾ 16 := by
+    have rw : UInt32.toNat (2 ^ 16) = 2 ^ 16 := rfl
+    rw [UInt32.toNat_mod, rw]; clear rw
+    rw [toNat_toUInt32, ← Nat.lo_eq]
     apply Nat.lo_lo_of_ge (by omega)
-  have h2 : (n ↾ 16).toB32 = n.toB32 % (2 ^ 16) := by
-    apply (B32.ofNat_eq_iff_mod_eq_toNat _ _).mpr
+  have h2 : (n ↾ 16).toUInt32 = n.toUInt32 % (2 ^ 16) := by
+    apply (UInt32.ofNat_eq_iff_mod_eq_toNat _ _).mpr
     apply Eq.trans (Nat.lo_lo_of_le (by omega)) h1.symm
   apply Eq.trans h0 h2.symm
 
-lemma B32.toNat_shl (a b : B32) :
+lemma UInt32.toNat_shl (a b : UInt32) :
     (a <<< b).toNat = a.toNat <<< (b.toNat % 32) ↾ 32 :=
   UInt32.toNat_shiftLeft a b
 
-lemma B64.toNat_shl (a b : B64) :
+lemma UInt64.toNat_shl (a b : UInt64) :
     (a <<< b).toNat = (a.toNat <<< (b.toNat % 64)) ↾ 64 :=
   UInt64.toNat_shiftLeft a b
 
-lemma toB32_eq_concat (n : Nat) :
-    n.toB32 = B16.concat (n >>> 16).toB16 n.toB16 := by
-  rw [← B32.toNat_inj, toNat_toB32]
-  simp only [B16.concat, Nat.toB32_toB16]
-  rw [B32.toNat_or, B32.toNat_shl, toNat_toB32, toNat_toB32]
+lemma toUInt32_eq_concat (n : Nat) :
+    n.toUInt32 = UInt16.concat (n >>> 16).toUInt16 n.toUInt16 := by
+  rw [← UInt32.toNat_inj, toNat_toUInt32]
+  simp only [UInt16.concat, Nat.toUInt32_toUInt16]
+  rw [UInt32.toNat_or, UInt32.toNat_shl, toNat_toUInt32, toNat_toUInt32]
   rw [Nat.lo_lo_of_le (by omega), Nat.lo_lo_of_le (by omega)]
-  have rw : (B32.toNat 16 % 32) = 16 := rfl
+  have rw : (UInt32.toNat 16 % 32) = 16 := rfl
   rw [rw]; clear rw
   have rw : (n >>> 16 ↾ 16) <<< 16 ↾ 32 = (n ↾ 32) ↿ 16 := by
     rw [← Nat.lo_add_shr, ← Nat.hi_eq]
@@ -1206,40 +1202,40 @@ lemma toB32_eq_concat (n : Nat) :
   rw [rw, ← @Nat.lo_lo_of_ge n 32 16 (by omega)]
   apply (Nat.hi_or_lo _ _).symm
 
-lemma List.toB32_pair (n : Nat) (n_lt : n < 2 ^ 16) :
-    B8L.toB32 [(n >>> 8).toB8, n.toB8] = n.toB32 := by
-  simp only [ B8L.toB32, B8L.pack, ekatD, takeD,
+lemma List.toUInt32_pair (n : Nat) (n_lt : n < 2 ^ 16) :
+    Bytes.toUInt32 [(n >>> 8).toUInt8, n.toUInt8] = n.toUInt32 := by
+  simp only [ Bytes.toUInt32, Bytes.pack, ekatD, takeD,
     reverse, reverseAux, tail, headD, take, drop ]
-  apply Eq.trans _ (toB32_eq_concat _).symm
+  apply Eq.trans _ (toUInt32_eq_concat _).symm
   apply congr_arg₂ _ _ (congr_arg _ _)
-  · apply congr_arg (λ x : B32 => x <<< 16) <| congr_arg _ _
+  · apply congr_arg (λ x : UInt32 => x <<< 16) <| congr_arg _ _
     rw [Nat.shiftRight_eq_div_pow, Nat.div_eq_zero_of_lt (by omega)]; rfl
-  · apply List.toB16_pair
+  · apply List.toUInt16_pair
 
-def B32.concat (x y : B32) : B64 :=
-  x.toB64 <<< 32 ||| y.toB64
+def UInt32.concat (x y : UInt32) : UInt64 :=
+  x.toUInt64 <<< 32 ||| y.toUInt64
 
-lemma Nat.toB64_toB32 (n : Nat) : n.toB32.toB64 = (n ↾ 32).toB64 := by
-  have h0 : n.toB32.toB64 = n.toB64 % (2 ^ 32) :=
+lemma Nat.toUInt64_toUInt32 (n : Nat) : n.toUInt32.toUInt64 = (n ↾ 32).toUInt64 := by
+  have h0 : n.toUInt32.toUInt64 = n.toUInt64 % (2 ^ 32) :=
       (UInt32.toUInt64_eq_mod_4294967296_iff n.toUInt32 n.toUInt64).mpr
         (UInt64.toUInt32_ofNat' _).symm
-  have h1: (n.toB64 % 2 ^ 32).toNat = n ↾ 32 := by
-    have rw : B64.toNat (2 ^ 32) = 2 ^ 32 := rfl
-    rw [B64.toNat_mod, rw]; clear rw
-    rw [toNat_toB64, ← Nat.lo_eq]
+  have h1: (n.toUInt64 % 2 ^ 32).toNat = n ↾ 32 := by
+    have rw : UInt64.toNat (2 ^ 32) = 2 ^ 32 := rfl
+    rw [UInt64.toNat_mod, rw]; clear rw
+    rw [toNat_toUInt64, ← Nat.lo_eq]
     apply Nat.lo_lo_of_ge (by omega)
-  have h2 : (n ↾ 32).toB64 = n.toB64 % (2 ^ 32) := by
-    apply (B64.ofNat_eq_iff_mod_eq_toNat _ _).mpr
+  have h2 : (n ↾ 32).toUInt64 = n.toUInt64 % (2 ^ 32) := by
+    apply (UInt64.ofNat_eq_iff_mod_eq_toNat _ _).mpr
     apply Eq.trans (Nat.lo_lo_of_le (by omega)) h1.symm
   apply Eq.trans h0 h2.symm
 
-lemma toB64_eq_concat (n : Nat) :
-    n.toB64 = B32.concat (n >>> 32).toB32 n.toB32 := by
-  rw [← B64.toNat_inj, toNat_toB64]
-  simp only [B32.concat, Nat.toB64_toB32]
-  rw [B64.toNat_or, B64.toNat_shl, toNat_toB64, toNat_toB64]
+lemma toUInt64_eq_concat (n : Nat) :
+    n.toUInt64 = UInt32.concat (n >>> 32).toUInt32 n.toUInt32 := by
+  rw [← UInt64.toNat_inj, toNat_toUInt64]
+  simp only [UInt32.concat, Nat.toUInt64_toUInt32]
+  rw [UInt64.toNat_or, UInt64.toNat_shl, toNat_toUInt64, toNat_toUInt64]
   rw [Nat.lo_lo_of_le (by omega), Nat.lo_lo_of_le (by omega)]
-  have rw : (B64.toNat 32 % 64) = 32 := rfl
+  have rw : (UInt64.toNat 32 % 64) = 32 := rfl
   rw [rw]; clear rw
   have rw : (n >>> 32 ↾ 32) <<< 32 ↾ 64 = (n ↾ 64) ↿ 32 := by
     rw [← Nat.lo_add_shr, ← Nat.hi_eq]
@@ -1248,38 +1244,37 @@ lemma toB64_eq_concat (n : Nat) :
   rw [rw, ← @Nat.lo_lo_of_ge n 64 32 (by omega)]
   apply (Nat.hi_or_lo _ _).symm
 
-lemma List.toB64_pair (n : Nat) (n_lt : n < 2 ^ 16) :
-    B8L.toB64 [(n >>> 8).toB8, n.toB8] = n.toB64 := by
-  simp only [ B8L.toB64, B8L.pack, ekatD, takeD,
+lemma List.toUInt64_pair (n : Nat) (n_lt : n < 2 ^ 16) :
+    Bytes.toUInt64 [(n >>> 8).toUInt8, n.toUInt8] = n.toUInt64 := by
+  simp only [ Bytes.toUInt64, Bytes.pack, ekatD, takeD,
     reverse, reverseAux, tail, headD, take, drop ]
-  apply Eq.trans _ (toB64_eq_concat _).symm
+  apply Eq.trans _ (toUInt64_eq_concat _).symm
   apply congr_arg₂ _ _ (congr_arg _ _)
-  · apply congr_arg (λ x : B64 => x <<< 32) <| congr_arg _ _
+  · apply congr_arg (λ x : UInt64 => x <<< 32) <| congr_arg _ _
     rw [Nat.shiftRight_eq_div_pow, Nat.div_eq_zero_of_lt (by omega)]; rfl
-  · apply List.toB32_pair _ n_lt
+  · apply List.toUInt32_pair _ n_lt
 
 lemma List.toB256_pair (n : Nat) (n_lt : n < 2 ^ 16):
-    B8L.toB256 [(n >>> 8).toUInt8, n.toUInt8] = n.toB256 := by
-  have hlow : ∀ a b : B8, B8.toB64 a <<< 8 ||| B8.toB64 b = B8L.toB64 [a, b] := by
+    Bytes.toB256 [(n >>> 8).toUInt8, n.toUInt8] = n.toB256 := by
+  have hlow : ∀ a b : UInt8, UInt8.toUInt64 a <<< 8 ||| UInt8.toUInt64 b = Bytes.toUInt64 [a, b] := by
     intro a b
-    simp only [ B8L.toB64, B8L.toB32, B8L.toB16, B8L.pack, List.ekatD, List.takeD,
+    simp only [ Bytes.toUInt64, Bytes.toUInt32, Bytes.toUInt16, Bytes.pack, List.ekatD, List.takeD,
       List.reverse, List.reverseAux, List.tail, List.headD, List.take, List.drop,
-      List.getElem!_cons_zero, List.getElem!_cons_succ, B8.toB16, B8.toB64,
-      B16.toB32, B32.toB64 ]
+      List.getElem!_cons_zero, List.getElem!_cons_succ ]
     simp
-    apply congrArg (fun x : B64 => x ||| b.toB64)
-    rw [← B64.toNat_inj]
-    rw [B64.toNat_mod, B64.toNat_mod, B64.toNat_shiftLeft]
-    have hw : B64.toNat (UInt8.toUInt64 a) = UInt8.toNat a := by cases a; rfl
-    have h8 : B64.toNat 8 % 64 = 8 := rfl
-    have h32 : B64.toNat 4294967296 = 4294967296 := rfl
-    have h16 : B64.toNat 65536 = 65536 := rfl
+    apply congrArg (fun x : UInt64 => x ||| b.toUInt64)
+    rw [← UInt64.toNat_inj]
+    rw [UInt64.toNat_mod, UInt64.toNat_mod, UInt64.toNat_shiftLeft_lo]
+    have hw : UInt64.toNat (UInt8.toUInt64 a) = UInt8.toNat a := by cases a; rfl
+    have h8 : UInt64.toNat 8 % 64 = 8 := rfl
+    have h32 : UInt64.toNat 4294967296 = 4294967296 := rfl
+    have h16 : UInt64.toNat 65536 = 65536 := rfl
     rw [hw, h8, h32, h16]
     simp only [Nat.shiftLeft_eq, Nat.lo]
     have h := UInt8.toNat_lt a
     omega
-  show B8L.toB256 [(n >>> 8).toB8, n.toB8] = n.toB256
-  rw [B8L.toB256_pair, hlow, List.toB64_pair n n_lt]
+  show Bytes.toB256 [(n >>> 8).toUInt8, n.toUInt8] = n.toB256
+  rw [Bytes.toB256_pair, hlow, List.toUInt64_pair n n_lt]
   have h128 : n >>> 128 = 0 := Nat.shiftRight_eq_zero _ _ (by omega)
   have h64 : n >>> 64 = 0 := Nat.shiftRight_eq_zero _ _ (by omega)
   simp only [Nat.toB256, Nat.toB128, h128, h64]
@@ -1472,7 +1467,7 @@ lemma of_get?_table_eq_some {f fs} {bs} {m n : ℕ} {p : Func}
     · simp [Split]; rw [← h_rgt', h_split]
     · rcases Table.compile_cons_eq_some h_sfx.symm with
         ⟨cq, cl, h_cq, h_cl, h_sfx'⟩
-      refine' ⟨pfx ++ ([Jinst.jumpdest.toB8] ++ cq), cl, _, _, _⟩
+      refine' ⟨pfx ++ ([Jinst.jumpdest.toUInt8] ++ cq), cl, _, _, _⟩
       · have hn : n = k + compsize q + 1 := by
           rcases table_suffix h_split with
             ⟨k', _ | ⟨q', c'⟩, h⟩ <;> simp [table] at h
@@ -1516,10 +1511,10 @@ lemma subcode_compile_call {code : ByteArray} {l m n}
   rcases of_guard_eq_some h with ⟨h_lt, h_eq⟩; clear h
   refine' ⟨loc, p, h_get, h_lt, _⟩
   simp at h_eq; rw [← h_eq] at h_slice
-  have le : ([(loc >>> 8).toUInt8, loc.toUInt8] : B8L).length ≤ 32 := by simp [List.length]
-  have h_push_slice : List.Slice code.toList m (Ninst.push [(loc >>> 8).toUInt8, loc.toUInt8] le).toB8L := by
+  have le : ([(loc >>> 8).toUInt8, loc.toUInt8] : Bytes).length ≤ 32 := by simp [List.length]
+  have h_push_slice : List.Slice code.toList m (Ninst.push [(loc >>> 8).toUInt8, loc.toUInt8] le).toBytes := by
     exact List.slice_prefix h_slice
-  have h_jump_slice : List.Slice code.toList (m + 3) [Jinst.jump.toB8] := by
+  have h_jump_slice : List.Slice code.toList (m + 3) [Jinst.jump.toUInt8] := by
     have hh := @List.slice_suffix _ _ m [_, _, _] _ h_slice
     exact hh
   refine ⟨⟨le, Ninst.at_of_slice h_push_slice⟩, Jinst.at_of_slice h_jump_slice⟩
@@ -1558,7 +1553,7 @@ theorem correct_core (f : Func) (fs : List Func) :
         (Func.compile (table 0 (f :: fs)) (pc + n.size) p) := by
       rw [h_eq'']
       simp only [subcode]
-      rw [Ninst.size_eq_length_toB8L]
+      rw [Ninst.size_eq_length_toBytes]
       apply List.slice_suffix h_slice
     apply
       ih ⟨pc + n.size, sevm, inter, .ok post, exc'⟩
@@ -1667,9 +1662,8 @@ theorem correct (sevm : Sevm) (pre : Devm) (p : Prog) (post : Devm)
   apply @Func.Run.call (p.main :: p.aux) sevm pre inter 0 p.main post rfl burn
   apply correct_core p.main p.aux ⟨1, sevm, inter, .ok post, exc'⟩ p.main eq h_sub
 
-def Char.toB8 (c : Char) : B8 := Nat.toUInt8 c.toNat
-def String.toB8L (s : String) : B8L := s.toList.map Char.toB8
-def String.keccak (s : String) : B256 := s.toB8L.keccak
+def String.toBytes (s : String) : Bytes := s.toList.map Char.toUInt8
+def String.keccak (s : String) : B256 := s.toBytes.keccak
 
 def isMax : Line := [not, iszero]
 
@@ -2863,11 +2857,11 @@ lemma applyTernary_instructionFrame (f : B256 → B256 → B256 → B256)
   exact Outcome.Rel.mono Devm.machFrame_refines_instructionFrame
     (applyTernary_machFrame f cost d)
 
-lemma Devm.memWrite_machFrame (d : Devm) (idx : Nat) (val : B8L) :
+lemma Devm.memWrite_machFrame (d : Devm) (idx : Nat) (val : Bytes) :
     Devm.MachFrame d (Devm.memWrite d idx val) := by
   exact liftMachPure_machFrame (Mach.memWrite · idx val) d
 
-lemma Devm.memWrite_instructionFrame (d : Devm) (idx : Nat) (val : B8L) :
+lemma Devm.memWrite_instructionFrame (d : Devm) (idx : Nat) (val : Bytes) :
     Devm.InstructionFrame d (Devm.memWrite d idx val) := by
   exact Devm.machFrame_refines_instructionFrame
     (Devm.memWrite_machFrame d idx val)
@@ -3193,7 +3187,7 @@ lemma Rinst.calldataload_runCore_instructionFrame
       (Rinst.runCore pc pre sevm .calldataload) := by
   simpa only [Rinst.runCore] using
     (popChargePush_instructionFrame pre (fun _ _ => gVerylow)
-      (fun start _ => B8L.toB256 <| sevm.data.sliceD start.toNat 32 0))
+      (fun start _ => Bytes.toB256 <| sevm.data.sliceD start.toNat 32 0))
 
 lemma Rinst.blockhash_runCore_instructionFrame
     (pc : Nat) (pre : Devm) (sevm : Sevm) :
@@ -3325,9 +3319,9 @@ lemma Rinst.codecopy_runCore_instructionFrame
       (fun memoryStart _ size d =>
         gVerylow + gasCopy * ceilDiv size 32 + d.extCost [(memoryStart, size)])
       (fun memoryStart codeStart size d => d.memWrite memoryStart
-        (sevm.code.sliceD codeStart size (Linst.toB8 .stop)))
+        (sevm.code.sliceD codeStart size (Linst.toUInt8 .stop)))
       (fun memoryStart codeStart size d => Devm.memWrite_instructionFrame d
-        memoryStart (sevm.code.sliceD codeStart size (Linst.toB8 .stop))))
+        memoryStart (sevm.code.sliceD codeStart size (Linst.toUInt8 .stop))))
 
 lemma Rinst.mstore_runCore_instructionFrame
     (pc : Nat) (pre : Devm) (sevm : Sevm) :
@@ -3336,9 +3330,9 @@ lemma Rinst.mstore_runCore_instructionFrame
   simpa only [Rinst.runCore] using
     (popNatPopChargePure_instructionFrame pre
       (fun start _ d => gVerylow + d.extCost [(start, 32)])
-      (fun start value d => d.memWrite start value.toB8L)
+      (fun start value d => d.memWrite start value.toBytes)
       (fun start value d =>
-        Devm.memWrite_instructionFrame d start value.toB8L))
+        Devm.memWrite_instructionFrame d start value.toBytes))
 
 lemma Rinst.mstore8_runCore_instructionFrame
     (pc : Nat) (pre : Devm) (sevm : Sevm) :
@@ -3359,7 +3353,7 @@ lemma Rinst.mload_runCore_instructionFrame
   refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
     (Devm.popToNat_instructionFrame pre) (next := fun start d =>
       chargeGas (gVerylow + d.extCost [(start, 32)]) d >>= fun d =>
-        Devm.push (B8L.toB256 (d.memRead start 32).1) (d.memRead start 32).2) ?_
+        Devm.push (Bytes.toB256 (d.memRead start 32).1) (d.memRead start 32).2) ?_
   intro start d
   apply Execution.Rel.bind Devm.instructionFrame_trans
     (chargeGas_instructionFrame _ d)
@@ -3648,13 +3642,13 @@ lemma Rinst.extcodecopy_runCore_instructionFrame
       if a ∈ d.accessedAddresses then do
         let d ← chargeGas (gasWarmAccess + gasCopy * ceilDiv size 32 +
           d.extCost [(memoryStart, size)]) d
-        let value := (d.getCode a).sliceD codeStart size (Linst.toB8 .stop)
+        let value := (d.getCode a).sliceD codeStart size (Linst.toUInt8 .stop)
         .ok (d.withMemory (d.memory.write memoryStart value))
       else do
         let d ← chargeGas
           (gasColdAccountAccess + gasCopy * ceilDiv size 32 +
             d.extCost [(memoryStart, size)]) (addAccessedAddress d a)
-        let value := (d.getCode a).sliceD codeStart size (Linst.toB8 .stop)
+        let value := (d.getCode a).sliceD codeStart size (Linst.toUInt8 .stop)
         .ok (d.withMemory (d.memory.write memoryStart value))) ?_
   intro a memoryStart codeStart size d
   by_cases h : a ∈ d.accessedAddresses
@@ -4338,7 +4332,7 @@ lemma ProcessCreateMessage.codePreserve
 
 lemma createMsg_benv_state_getCode
     {sevm : Sevm} {devm : Devm} {createGas : Nat} {endowment : B256}
-    {newAddress : Adr} {calldata : B8L} (a : Adr) :
+    {newAddress : Adr} {calldata : Bytes} (a : Adr) :
     (createMsg sevm devm createGas endowment newAddress calldata).benv.state.getCode a
       = devm.getCode a := rfl
 
@@ -4446,7 +4440,7 @@ lemma GenericCreate.codePreserve
 lemma callMsg_benv_state_getCode
     {sevm : Sevm} {evm1 : Devm} {gas : Nat} {value : B256}
     {caller target codeAddress : Adr} {shouldTransferValue isStaticcall : Bool}
-    {calldata : B8L} {code : ByteArray} {disablePrecompiles : Bool} (a : Adr) :
+    {calldata : Bytes} {code : ByteArray} {disablePrecompiles : Bool} (a : Adr) :
     ( callMsg sevm evm1 gas value caller target codeAddress shouldTransferValue
         isStaticcall calldata code disablePrecompiles ).benv.state.getCode a
       = evm1.getCode a := rfl
@@ -4459,7 +4453,7 @@ lemma Resume.call_getCode {parent : Devm} {a : Adr} {outputIndex outputSize : Na
     (h : MsgResult.getCode r a = parent.getCode a) :
     Execution.getCode ((Resume.call parent outputIndex outputSize).run r) a =
       parent.getCode a := by
-  have hmw : ∀ (d : Devm) (o : B8L),
+  have hmw : ∀ (d : Devm) (o : Bytes),
       (d.memWrite outputIndex o).getCode a = d.getCode a := fun d o =>
     (liftMachPure_worldEq (Mach.memWrite · outputIndex o) d).getCode a |>.symm
   unfold Resume.run liftToExecution
@@ -5356,7 +5350,7 @@ lemma Xinst.inv_getCode_gen
   | ok d => exact fun a ha => h a ha
 
 lemma Ninst.push_instructionFrame_effectGen
-    {xs : B8L} {hxs : xs.length ≤ 32} :
+    {xs : Bytes} {hxs : xs.length ≤ 32} :
     Ninst.EffectGen Devm.InstructionFrame (.push xs hxs) := by
   intro pc sevm pre xl out hxl hRun
   simp only [Ninst.Run', Ninst.step_push, Step.run_ofExecution] at hRun
@@ -5366,7 +5360,7 @@ lemma Ninst.push_instructionFrame_effectGen
   exact Devm.push_instructionFrame xs.toB256
 
 lemma Ninst.push_effectGen_of_instructionFrame
-    {R : Devm → Devm → Prop} {xs : B8L} {hxs : xs.length ≤ 32}
+    {R : Devm → Devm → Prop} {xs : Bytes} {hxs : xs.length ≤ 32}
     (hIR : ∀ ⦃d d'⦄, Devm.InstructionFrame d d' → R d d') :
     Ninst.EffectGen R (.push xs hxs) := by
   intro pc sevm pre xl out hxl hRun
@@ -5378,7 +5372,7 @@ lemma Ninst.push_effectGen_of_instructionFrame
     (Ninst.push_instructionFrame_effectGen (hxs := hxs) (xl := .none)
       trivial hRun)
 
-lemma Ninst.push_codePreserve_effectGen {xs : B8L} {hxs : xs.length ≤ 32} :
+lemma Ninst.push_codePreserve_effectGen {xs : Bytes} {hxs : xs.length ≤ 32} :
   Ninst.EffectGen Devm.CodePreserve (.push xs hxs) := by
   exact Ninst.push_effectGen_of_instructionFrame (R := Devm.CodePreserve)
     (fun _ _ hf a _ => (hf.getCode a).symm)
@@ -5449,7 +5443,7 @@ lemma not_delegation_of_compile {p : Prog} {code : ByteArray}
   simp only [List.sliceD]
   intro h_false
   injection h_false with h_false
-  change (91 : B8) = 239 at h_false
+  change (91 : UInt8) = 239 at h_false
   contradiction
 
 /-- The "we are inside the contract" case, shared by every driver outcome:
@@ -5892,16 +5886,16 @@ infix:70 " ±<? " => B256.slt_check
 infix:70 " ±>? " => B256.sgt_check
 infix:70 " =? "  => B256.eq_check
 
-lemma B8L.sig_zero_cons (xs) : B8L.sig (0 :: xs) = B8L.sig xs := rfl
-lemma B8L.sig_nonzero_cons (x xs) (h : x ≠ 0) : B8L.sig (x :: xs) = x :: xs := by
+lemma Bytes.sig_zero_cons (xs) : Bytes.sig (0 :: xs) = Bytes.sig xs := rfl
+lemma Bytes.sig_nonzero_cons (x xs) (h : x ≠ 0) : Bytes.sig (x :: xs) = x :: xs := by
   simp only [sig]; rw [List.dropWhile_cons_of_neg]; simp [h]
 
-lemma B8L.toB256_sig (bs : B8L) : B8L.toB256 (B8L.sig bs) = bs.toB256 := by
+lemma Bytes.toB256_sig (bs : Bytes) : Bytes.toB256 (Bytes.sig bs) = bs.toB256 := by
   induction bs with
   | nil => rfl
   | cons b bs ih =>
     by_cases h : b = 0
-    · cases h; rw [sig_zero_cons, ih, B8L.toB256_zero_cons]
+    · cases h; rw [sig_zero_cons, ih, Bytes.toB256_zero_cons]
     · rw [sig_nonzero_cons b bs h]
 
 def Stack.Diff (xs zs : Stack) (s s'' : Stack) : Prop :=
@@ -6025,7 +6019,7 @@ lemma of_run_push {e s s' xs p} (h : Ninst.Run e s (push xs p) s') :
 /-- A successful `push` run, as the executable equation the `Hinv` instance
 proofs consume.  This is where the driver's step-outcome shape is unwound, once,
 for every push-shaped instance. -/
-lemma Ninst.run_push_eq {e : Sevm} {s s' : Devm} {xs : B8L} {le : xs.length ≤ 32}
+lemma Ninst.run_push_eq {e : Sevm} {s s' : Devm} {xs : Bytes} {le : xs.length ≤ 32}
     (h : Ninst.Run e s (.push xs le) s') :
     (do let d ← chargeGas (if xs = [] then gBase else gVerylow) s
         d.push xs.toB256) = .ok s' := by
@@ -6036,7 +6030,7 @@ lemma Ninst.run_push_eq {e : Sevm} {s s' : Devm} {xs : B8L} {le : xs.length ≤ 
 lemma of_run_pushB256 {e s s' x} (h : Ninst.Run e s (pushB256 x) s') :
     Devm.PushBurn [x] s s' := by
   have h' := of_run_push h
-  rwa [B8L.toB256_sig, B256.toB256_toB8L] at h'
+  rwa [Bytes.toB256_sig, B256.toB256_toBytes] at h'
 
 lemma of_run_pop {e : Sevm} {s s' : Devm} (h : Ninst.Run e s pop s') :
     ∃ x, Devm.PopBurn [x] s s' := by
@@ -6098,7 +6092,7 @@ lemma of_run_mstore {e : Sevm} {s s' : Devm} (h : Ninst.Run e s mstore s') :
   refine ⟨x, v, ?_⟩
   have hp := (Devm.pop_append p1 p2).stack
   rw [← eq]
-  rw [show (Devm.memWrite s₃ i v.toB8L).stack = s₃.stack from rfl, ← hb.stack]
+  rw [show (Devm.memWrite s₃ i v.toBytes).stack = s₃.stack from rfl, ← hb.stack]
   exact hp
 
 lemma Devm.pop_of_popN {n : Nat} {devm devm' : Devm} {l : List B256}
@@ -6816,7 +6810,7 @@ elab_rules : tactic
 
 end
 
-lemma memRead_getBal_eq {x n : Nat} {devm devm' : Devm} {value : B8L} (h : devm.memRead x n = ⟨value, devm'⟩) (a : Adr) : devm'.getBal a = devm.getBal a := by
+lemma memRead_getBal_eq {x n : Nat} {devm devm' : Devm} {value : Bytes} (h : devm.memRead x n = ⟨value, devm'⟩) (a : Adr) : devm'.getBal a = devm.getBal a := by
   simp only [Devm.memRead] at h
   rcases h_read : devm.memory.read x n with ⟨val, mem⟩
   rw [h_read] at h
@@ -6838,7 +6832,7 @@ lemma Rinst.inv_bal {r} : Rinst.Inv Devm.getBal r := by
     exact congrArg (fun s => s.bal) hf.state
   · have hf := Rinst.run_instructionFrame pc sevm pre r hs ht; rw [hrun] at hf; exact funext hf.getBal
 
-lemma memRead_getStor_eq {x n : Nat} {devm devm' : Devm} {value : B8L} (h : devm.memRead x n = ⟨value, devm'⟩) : devm'.getStor = devm.getStor := by
+lemma memRead_getStor_eq {x n : Nat} {devm devm' : Devm} {value : Bytes} (h : devm.memRead x n = ⟨value, devm'⟩) : devm'.getStor = devm.getStor := by
   simp only [Devm.memRead] at h
   rcases h_read : devm.memory.read x n with ⟨val, mem⟩
   rw [h_read] at h
@@ -7435,12 +7429,12 @@ lemma Devm.push_noDel {wa : Adr} {x : B256} {d : Devm} {exn : Execution}
     · rw [show d'.createdAccounts = d.createdAccounts from congrArg Prod.snd hd]
       exact h.ca
 
-lemma incorporateChildOnError_noDel {wa : Adr} {parent child : Devm} {rd : B8L}
+lemma incorporateChildOnError_noDel {wa : Adr} {parent child : Devm} {rd : Bytes}
     (hp_atd : wa ∉ parent.accountsToDelete) (hc : Devm.NoDel wa child) :
     Devm.NoDel wa (incorporateChildOnError parent child rd) :=
   ⟨hp_atd, hc.ca, hc.code⟩
 
-lemma incorporateChildOnSuccess_noDel {wa : Adr} {parent child : Devm} {rd : B8L}
+lemma incorporateChildOnSuccess_noDel {wa : Adr} {parent child : Devm} {rd : Bytes}
     (hp_atd : wa ∉ parent.accountsToDelete) (hc : Devm.NoDel wa child) :
     Devm.NoDel wa (incorporateChildOnSuccess parent child rd) :=
   ⟨AdrSet.not_mem_union hp_atd hc.atd, hc.ca, hc.code⟩
@@ -7780,7 +7774,7 @@ lemma Jinst.balance_effect (j : Jinst) :
   cases out <;> exact Devm.balNoninc_of_getBal_eq
     (funext fun a => (hf.getBal a).symm)
 
-lemma Ninst.push_balance_effectGen {xs : B8L} {hxs : xs.length ≤ 32} :
+lemma Ninst.push_balance_effectGen {xs : Bytes} {hxs : xs.length ≤ 32} :
     Ninst.EffectGen Devm.BalNoninc (.push xs hxs) := by
   exact Ninst.push_effectGen_of_instructionFrame (R := Devm.BalNoninc)
     (fun _ _ hf =>
@@ -8014,14 +8008,14 @@ lemma executeCode.handleError_balance_effect {pre : Devm} {raw : Execution}
 defeq is cheap to state and expensive to re-derive at every use site. -/
 lemma callMsg_benv_state
     {sevm : Sevm} {evm1 : Devm} {gas : Nat} {value : B256}
-    {caller target codeAddress : Adr} {stv isSt : Bool} {calldata : B8L}
+    {caller target codeAddress : Adr} {stv isSt : Bool} {calldata : Bytes}
     {code : ByteArray} {dp : Bool} :
     ( callMsg sevm evm1 gas value caller target codeAddress stv isSt calldata
         code dp ).benv.state = evm1.state := rfl
 
 lemma createMsg_benv_state
     {sevm : Sevm} {devm : Devm} {createGas : Nat} {endowment : B256}
-    {newAddress : Adr} {calldata : B8L} :
+    {newAddress : Adr} {calldata : Bytes} :
     (createMsg sevm devm createGas endowment newAddress calldata).benv.state
       = devm.state := rfl
 
@@ -8158,7 +8152,7 @@ lemma Devm.incrNonce_balance_effect (pre : Devm) (a : Adr) :
 /-- Child-error incorporation installs the child's already-accounted world;
 the parent fields it retains do not include balances. -/
 lemma incorporateChildOnError_balance_effect
-    {pre parent child : Devm} {returnData : B8L}
+    {pre parent child : Devm} {returnData : Bytes}
     (h : State.BalNoninc pre.state child.state) :
     Devm.BalNoninc pre
       (incorporateChildOnError parent child returnData) := by
@@ -8169,7 +8163,7 @@ lemma incorporateChildOnError_balance_effect
 /-- Child-success incorporation has the same precise balance projection as
 the error form, while differing in the non-balance fields it incorporates. -/
 lemma incorporateChildOnSuccess_balance_effect
-    {pre parent child : Devm} {returnData : B8L}
+    {pre parent child : Devm} {returnData : Bytes}
     (h : State.BalNoninc pre.state child.state) :
     Devm.BalNoninc pre
       (incorporateChildOnSuccess parent child returnData) := by
@@ -8179,7 +8173,7 @@ lemma incorporateChildOnSuccess_balance_effect
 
 /-- Pushing a status word and writing the returned output to memory are both
 frame moves, so they carry a balance bound on the incorporated machine. -/
-lemma Devm.pushMemWrite_balance {pre d : Devm} {v : B256} {oi : Nat} {o : B8L}
+lemma Devm.pushMemWrite_balance {pre d : Devm} {v : B256} {oi : Nat} {o : Bytes}
     (h : Devm.BalNoninc pre d) :
     Execution.Rel Devm.BalNoninc pre
       (d.push v >>= fun d' => .ok (d'.memWrite oi o)) := by
