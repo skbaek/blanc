@@ -9,9 +9,8 @@ package «blanc» where
 require mathlib from git
   "https://github.com/leanprover-community/mathlib4.git" @ "v4.32.1"
 
--- TEMPORARY (style arc): local path import for cross-repo rename work.
--- Restore the pinned GitHub require + 40-char rev before merge.
-require jaune from ".." / "jaune"
+require jaune from git
+  "https://github.com/skbaek/jaune.git" @ "691fb751cf57de58a10e46601d58bfb465b97f6b"
 
 @[default_target]
 lean_lib «Blanc» where
