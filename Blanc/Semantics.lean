@@ -751,7 +751,7 @@ def Prog.Run (sevm : Sevm) (devm : Devm) (p : Prog) (devm' : Devm) : Prop :=
 /- The residue of the fuel-bounded (`Fueled`) reasoning layer.  With
    sufficiency proved in Jaune, fuel never reaches a Blanc statement: these
    three lemmas exist only so that the adequacy bridge between `Exec` and the
-   total `exec` can be proved by induction over `execCore`. -/
+   total `exec` can be proved by induction over `execFueled`. -/
 
 namespace Fueled
 
@@ -849,71 +849,71 @@ lemma Step.spawn_depth_lt {pc : Nat} {sevm : Sevm} {devm : Devm}
 lemma of_exec' :
     ∀ (pc : Nat) (sevm : Sevm) (devm : Devm) (exn : Execution),
       Exec pc sevm devm exn →
-      ∃ lim, ∀ lim' > lim, (execCore ⟨pc, sevm, devm⟩ lim' = Fueled.ofExcept exn) := by
+      ∃ fuel, ∀ fuel' > fuel, (execFueled ⟨pc, sevm, devm⟩ fuel' = Fueled.ofExcept exn) := by
   apply Exec.rec
   · intro pc sevm devm ex hstep
-    refine ⟨0, fun lim' gt => ?_⟩
-    rcases lim' with _ | lim'
+    refine ⟨0, fun fuel' gt => ?_⟩
+    rcases fuel' with _ | fuel'
     · cases Nat.not_lt_zero _ gt
-    simp only [execCore, hstep]
+    simp only [execFueled, hstep]
   · intro pc sevm devm pc' devm' ex hstep _ ih
-    rcases ih with ⟨lim, ih⟩
-    refine ⟨lim + 1, fun lim' gt => ?_⟩
-    rcases lim' with _ | lim'
+    rcases ih with ⟨fuel, ih⟩
+    refine ⟨fuel + 1, fun fuel' gt => ?_⟩
+    rcases fuel' with _ | fuel'
     · cases Nat.not_lt_zero _ gt
-    simp only [execCore, hstep]
-    exact ih lim' (by omega)
+    simp only [execFueled, hstep]
+    exact ih fuel' (by omega)
   · intro pc sevm devm f rsm pc' r e hstep henter hr
-    refine ⟨0, fun lim' gt => ?_⟩
-    rcases lim' with _ | lim'
+    refine ⟨0, fun fuel' gt => ?_⟩
+    rcases fuel' with _ | fuel'
     · cases Nat.not_lt_zero _ gt
-    simp only [execCore, hstep, henter, hr]
+    simp only [execFueled, hstep, henter, hr]
   · intro pc sevm devm f rsm pc' r devm' ex hstep henter hr _ ih
-    rcases ih with ⟨lim, ih⟩
-    refine ⟨lim + 1, fun lim' gt => ?_⟩
-    rcases lim' with _ | lim'
+    rcases ih with ⟨fuel, ih⟩
+    refine ⟨fuel + 1, fun fuel' gt => ?_⟩
+    rcases fuel' with _ | fuel'
     · cases Nat.not_lt_zero _ gt
-    simp only [execCore, hstep, henter, hr]
-    exact ih lim' (by omega)
+    simp only [execFueled, hstep, henter, hr]
+    exact ih fuel' (by omega)
   · intro pc sevm devm f rsm pc' cevm raw e hstep henter _ hr ihc
-    rcases ihc with ⟨limc, ihc⟩
-    refine ⟨limc + 1, fun lim' gt => ?_⟩
-    rcases lim' with _ | lim'
+    rcases ihc with ⟨fuelc, ihc⟩
+    refine ⟨fuelc + 1, fun fuel' gt => ?_⟩
+    rcases fuel' with _ | fuel'
     · cases Nat.not_lt_zero _ gt
-    have hc : execCore cevm lim' = Fueled.ofExcept raw := ihc lim' (by omega)
-    simp only [execCore, hstep, henter]
+    have hc : execFueled cevm fuel' = Fueled.ofExcept raw := ihc fuel' (by omega)
+    simp only [execFueled, hstep, henter]
     rw [hc]
     simp only [Fueled.ofExcept_run, hr]
   · intro pc sevm devm f rsm pc' cevm raw devm' ex hstep henter _ hr _ ihc ih
-    rcases ihc with ⟨limc, ihc⟩
-    rcases ih with ⟨limp, ih⟩
-    refine ⟨max limc limp + 1, fun lim' gt => ?_⟩
-    rcases lim' with _ | lim'
+    rcases ihc with ⟨fuelc, ihc⟩
+    rcases ih with ⟨fuelp, ih⟩
+    refine ⟨max fuelc fuelp + 1, fun fuel' gt => ?_⟩
+    rcases fuel' with _ | fuel'
     · cases Nat.not_lt_zero _ gt
-    have hc : execCore cevm lim' = Fueled.ofExcept raw := ihc lim' (by omega)
-    simp only [execCore, hstep, henter]
+    have hc : execFueled cevm fuel' = Fueled.ofExcept raw := ihc fuel' (by omega)
+    simp only [execFueled, hstep, henter]
     rw [hc]
     simp only [Fueled.ofExcept_run, hr]
-    exact ih lim' (by omega)
+    exact ih fuel' (by omega)
 
 set_option linter.defProp false in
 @[reducible] def of_exec :
-    ∀ (lim : Nat) (pc : Nat) (sevm : Sevm) (devm : Devm) (exn : Execution),
-      (execCore ⟨pc, sevm, devm⟩ lim = Fueled.ofExcept exn) →
+    ∀ (fuel : Nat) (pc : Nat) (sevm : Sevm) (devm : Devm) (exn : Execution),
+      (execFueled ⟨pc, sevm, devm⟩ fuel = Fueled.ofExcept exn) →
       Nonempty (Exec pc sevm devm exn) := by
   apply Nat.strongRec
-  intro lim ih pc sevm devm exn exec_eq
-  cases lim with
+  intro fuel ih pc sevm devm exn exec_eq
+  cases fuel with
   | zero =>
-    simp only [execCore] at exec_eq
+    simp only [execFueled] at exec_eq
     cases Fueled.exhausted_ne_ofExcept exec_eq
-  | succ lim =>
-    simp only [execCore] at exec_eq
+  | succ fuel =>
+    simp only [execFueled] at exec_eq
     rcases hstep : Evm.step ⟨pc, sevm, devm⟩ with ex | ⟨pc', devm'⟩ | ⟨f, rsm, pc'⟩ <;>
       rw [hstep] at exec_eq <;> simp only [] at exec_eq
     · rw [← Fueled.ofExcept_inj.mp exec_eq]
       exact ⟨Exec.halt hstep⟩
-    · rcases ih lim (Nat.lt_succ_self _) pc' sevm devm' exn exec_eq with ⟨exc⟩
+    · rcases ih fuel (Nat.lt_succ_self _) pc' sevm devm' exn exec_eq with ⟨exc⟩
       exact ⟨Exec.cont hstep exc⟩
     · rcases henter : f.enter with r | cevm <;>
         rw [henter] at exec_eq <;> simp only [] at exec_eq
@@ -921,39 +921,39 @@ set_option linter.defProp false in
           rw [hr] at exec_eq <;> simp only [] at exec_eq
         · rw [← Fueled.ofExcept_inj.mp exec_eq]
           exact ⟨Exec.doneErr hstep henter hr⟩
-        · rcases ih lim (Nat.lt_succ_self _) pc' sevm devm' exn exec_eq with ⟨exc⟩
+        · rcases ih fuel (Nat.lt_succ_self _) pc' sevm devm' exn exec_eq with ⟨exc⟩
           exact ⟨Exec.doneOk hstep henter hr exc⟩
-      · rcases hrun : (execCore cevm lim).run with _ | raw <;>
+      · rcases hrun : (execFueled cevm fuel).run with _ | raw <;>
           rw [hrun] at exec_eq <;> simp only [] at exec_eq
         · cases Fueled.exhausted_ne_ofExcept exec_eq
-        · have hc : execCore cevm lim = Fueled.ofExcept raw := Fueled.ext hrun
-          rcases ih lim (Nat.lt_succ_self _) cevm.pc cevm.sta cevm.dyna raw hc with
+        · have hc : execFueled cevm fuel = Fueled.ofExcept raw := Fueled.ext hrun
+          rcases ih fuel (Nat.lt_succ_self _) cevm.pc cevm.sta cevm.dyna raw hc with
             ⟨excChild⟩
           rcases hr : rsm.run (f.settle raw) with e | devm' <;>
             rw [hr] at exec_eq <;> simp only [] at exec_eq
           · rw [← Fueled.ofExcept_inj.mp exec_eq]
             exact ⟨Exec.runErr hstep henter excChild hr⟩
-          · rcases ih lim (Nat.lt_succ_self _) pc' sevm devm' exn exec_eq with ⟨exc⟩
+          · rcases ih fuel (Nat.lt_succ_self _) pc' sevm devm' exn exec_eq with ⟨exc⟩
             exact ⟨Exec.runOk hstep henter excChild hr exc⟩
 
 /-- **Adequacy, fuel-free.**  A closed derivation is exactly a total-`exec`
 equation.  Forward: `of_exec'` produces the driver equation at every budget
 past some threshold, and Jaune's `exec_eq_of_run` reads it off at a budget
 that also exceeds the frame's gas.  Backward: the sufficiency bridge
-`execCore_run_sufficientLim` turns the total result into the driver equation
+`execFueled_run_sufficientFuel` turns the total result into the driver equation
 `of_exec` recurses over. -/
 lemma exec_iff_exec_eq (pc : Nat) (sevm : Sevm) (devm : Devm) (exn : Execution) :
     Nonempty (Exec pc sevm devm exn) ↔ exec ⟨pc, sevm, devm⟩ = exn := by
   constructor
   · intro ⟨exc⟩
-    rcases of_exec' _ _ _ _ exc with ⟨lim, eq⟩
-    have hlt : devm.gasLeft < max (lim + 1) (devm.gasLeft + 1) :=
+    rcases of_exec' _ _ _ _ exc with ⟨fuel, eq⟩
+    have hlt : devm.gasLeft < max (fuel + 1) (devm.gasLeft + 1) :=
       Nat.lt_of_lt_of_le (Nat.lt_succ_self _) (Nat.le_max_right _ _)
     refine exec_eq_of_run hlt ?_
     rw [eq _ (Nat.lt_of_lt_of_le (Nat.lt_succ_self _) (Nat.le_max_left _ _))]
     rfl
   · intro heq
-    have h := execCore_run_sufficientLim ⟨pc, sevm, devm⟩
+    have h := execFueled_run_sufficientFuel ⟨pc, sevm, devm⟩
     rw [heq] at h
     exact of_exec _ _ _ _ _ (Fueled.ext h)
 
@@ -962,8 +962,8 @@ result, so every entered frame carries a closed derivation for it.  This is the
 bridge from the total wrappers to the relational layer: no threshold obligation
 survives, because sufficiency discharges it once and for all. -/
 lemma Xlot.filled_exec (evm : Evm) : Xlot.Filled (.some ⟨evm, exec evm⟩) :=
-  of_exec (sufficientLim evm.dyna.gasLeft) evm.pc evm.sta evm.dyna (exec evm)
-    (Fueled.ext (execCore_run_sufficientLim evm))
+  of_exec (sufficientFuel evm.dyna.gasLeft) evm.pc evm.sta evm.dyna (exec evm)
+    (Fueled.ext (execFueled_run_sufficientFuel evm))
 
 lemma of_runFrame {f : Frame}
     {r : Except (String × State × AdrSet × Tra) Devm}

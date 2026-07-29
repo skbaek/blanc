@@ -5752,7 +5752,7 @@ lemma checkTransaction_fee_lt {benv : Benv} {bout : BlockOutput} {tx : Tx}
         calculate_data_fee benv.stat.rules.blob benv.stat.excessBlobGas tx
       else 0) < 2 ^ 256 := by
   unfold checkTransaction at h
-  rcases of_bind_eq_ok h with ⟨tbgu', hlim, h⟩
+  rcases of_bind_eq_ok h with ⟨tbgu', hfuel, h⟩
   rcases of_bind_eq_ok h with ⟨_, hchain, h⟩
   rcases of_bind_eq_ok h with ⟨senderAddress, hrecover, h⟩
   rcases of_bind_eq_ok h with ⟨fee, hfee, h⟩
@@ -6293,7 +6293,7 @@ theorem addBlockToChainWith_inv_solvent (wa : Adr) (rules : ForkRules)
   dsimp only at h_run
   obtain ⟨_, _, h_run⟩ := of_bind_eq_ok h_run
   obtain ⟨_, _, h_run⟩ := of_bind_eq_ok h_run
-  -- `addBlockToChainCore` puts the post-transition tail behind a `do` join
+  -- `addBlockToChain.go` puts the post-transition tail behind a `do` join
   -- point; zeta-reduce it so the hash check and the transition split as before.
   dsimp only at h_run
   -- outer hash check
