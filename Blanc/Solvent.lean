@@ -603,7 +603,7 @@ lemma of_withdrawLoadCheck {sevm : Sevm} {s s' : Devm}
   have hp₂ : [sevm.caller.toB256, wad, wad] <<+ s₂.stack := by lpfx
   cstate s₁
   lexen 1
-  rcases prefix_of_sload' (of_run_singleton h₃) hp₂ with ⟨cbal, hp₃, h_cbal⟩
+  rcases prefix_of_sload (of_run_singleton h₃) hp₂ with ⟨cbal, hp₃, h_cbal⟩
   have hstor3 : Devm.getStorVal s₂ sevm.currentTarget sevm.caller.toB256
               = Devm.getStorVal s₃ sevm.currentTarget sevm.caller.toB256 := by
     show (s₂.getStor _).get _ = (s₃.getStor _).get _
@@ -732,7 +732,7 @@ lemma le_sumBelow (f : Adr → B256) {k : Adr} {n} (h : k.toNat < n) :
     · apply le_trans (ih hk); rw [sumBelow_succ]; apply Nat.le_add_right
     · rw [sumBelow_succ, ← hk, toAdr_toNat]; apply Nat.le_add_left
 
-def eq_below (n : Nat) (f g : Adr → B256) : Prop :=
+def EqBelow (n : Nat) (f g : Adr → B256) : Prop :=
   ∀ k, k.toNat < n → f k = g k
 
 lemma Adr.toNat_lt_size (a : Adr) : a.toNat < 2 ^ 160 := by
@@ -740,7 +740,7 @@ lemma Adr.toNat_lt_size (a : Adr) : a.toNat < 2 ^ 160 := by
   apply Nat.mod_lt _ (Nat.two_pow_pos _)
 
 lemma sumBelow_eq_sumBelow_of_eq_below {m n} {f g : Adr → B256}
-    (hm : m < 2 ^ 160) (h_le : m ≤ n) (h_eqb : eq_below n f g) :
+    (hm : m < 2 ^ 160) (h_le : m ≤ n) (h_eqb : EqBelow n f g) :
     sumBelow f m = sumBelow g m := by
   induction m with
   | zero => rfl
@@ -752,7 +752,7 @@ lemma sumBelow_eq_sumBelow_of_eq_below {m n} {f g : Adr → B256}
     apply Nat.lt_of_succ_le h_le
 
 lemma eq_below_of_frel {k} {r} {f g : Adr → B256} (h : Frel k r f g) :
-    eq_below k.toNat f g := by
+    EqBelow k.toNat f g := by
   intro x hx; apply (h x).2
   intro h; rw [h] at hx; cases lt_irrefl _ hx
 
@@ -841,7 +841,7 @@ lemma wbsum_after_deposit {sevm : Sevm} {s r : Devm}
   have hp1 : [sevm.caller.toB256] <<+ s1.stack := prefix_of_push (of_run_caller h_caller) hp0
   have hs1 : s.getStor = s1.getStor := Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons h_caller Line.Run.nil)
 
-  rcases prefix_of_sload' h_sload hp1 with ⟨cbal, hp2, hcbal⟩
+  rcases prefix_of_sload h_sload hp1 with ⟨cbal, hp2, hcbal⟩
   have hs2 : s1.getStor = s2.getStor := Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons h_sload Line.Run.nil)
 
   have hp3 : [sevm.value, cbal] <<+ s3.stack := prefix_of_push (of_run_callvalue h_callvalue) hp2
@@ -968,7 +968,7 @@ lemma incrAt_of_incrWbal {sevm : Sevm} {s s' : Devm} {wad dst} (h_dst : ValidAdr
   subst x
   have hp1 : [dst, wad, dst] <<+ s1.stack := prefix_of_push pb_dup h_stk
   -- sload : pop dst, push its stored value
-  rcases prefix_of_sload' r_sload hp1 with ⟨dbal, hp2, h_dbal⟩
+  rcases prefix_of_sload r_sload hp1 with ⟨dbal, hp2, h_dbal⟩
   -- add : dbal + wad
   have hp3 : (dbal + wad) :: [dst] <<+ s3.stack := prefix_of_add r_add hp2
   -- swap 0 : [dst, dbal + wad]
@@ -1152,7 +1152,7 @@ lemma updateAllowance_inv_stor_rest {fs : List Func} {sevm : Sevm} {s r : Devm} 
     clear rI pbI hsH
     -- sload  ( hash wad hash -- amnt wad hash )
     rcases of_run_next h_runP with ⟨sJ, rJ, h_runP⟩
-    rcases prefix_of_sload' rJ hsI with ⟨amnt, hsJ, _⟩
+    rcases prefix_of_sload rJ hsI with ⟨amnt, hsJ, _⟩
     rw [congr_fun (Line.of_inv Devm.getStor (by line_inv)
       (Line.Run.cons rJ Line.Run.nil)) sevm.currentTarget]
     clear rJ hsI
@@ -1335,7 +1335,7 @@ lemma transfer_of_transferFrom {fs : List Func} {sevm : Sevm} {s r : Devm} :
   clear r7 pb7 hs6
   -- sload : [sbal, wad, wad, src]
   rcases of_run_next h_run with ⟨a8, r8, h_run⟩
-  rcases prefix_of_sload' r8 hs7 with ⟨sbal, hs8, h_sbal⟩
+  rcases prefix_of_sload r8 hs7 with ⟨sbal, hs8, h_sbal⟩
   have hg := hg7.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r8 Line.Run.nil))
   clear r8 hs7
   -- dup 1 : [wad, sbal, wad, wad, src]
@@ -1375,7 +1375,7 @@ lemma transfer_of_transferFrom {fs : List Func} {sevm : Sevm} {s r : Devm} :
   have h_ltflag : (sbal <? wad) = 0 := pref_head_unique hs11 (pref_append [0] a12.stack)
   have h_le : wad ≤ sbal := by
     rw [← B256.not_lt]; intro hlt
-    rw [B256.lt_check, if_pos hlt] at h_ltflag
+    rw [B256.ltCheck, if_pos hlt] at h_ltflag
     exact B256.zero_ne_one h_ltflag.symm
   rw [h_ltflag] at hs11
   have hs12 : [sbal, wad, wad, src] <<+ a12.stack := cons_pref_cons_inv hs11
@@ -1469,7 +1469,7 @@ lemma transfer_of_transferFrom {fs : List Func} {sevm : Sevm} {s r : Devm} :
       rw [h_get] at hy; injection hy with hy; exact hy.symm
     subst y
     have hb1 : [dst, wad, dst, dst, wad, src] <<+ b1.stack := prefix_of_push pb hs19
-    rcases prefix_of_sload' rsl hb1 with ⟨dbal, hb2, _⟩
+    rcases prefix_of_sload rsl hb1 with ⟨dbal, hb2, _⟩
     have hb3 : (dbal + wad) :: [dst, dst, wad, src] <<+ b3.stack := prefix_of_add radd hb2
     have h_swap : Stack.Swap (0 : Fin 16).val
         [dbal + wad, dst, dst, wad, src] [dst, dbal + wad, dst, wad, src] := Stack.swapCore_zero
@@ -1502,7 +1502,7 @@ lemma nof_of_solvent {sevm : Sevm} {s : Devm} {a}
   · have hh := h.right h'; unfold Stor.Solvent wbsum at hh
     apply le_trans (Nat.le_add_right _ _) hh
 
-lemma result_solvent_of_state_solvent' {sevm : Sevm} {s r : Devm}
+lemma result_solvent_of_wbsum_eq {sevm : Sevm} {s r : Devm}
     (h_sv : s.PreSolvent sevm.currentTarget sevm)
     (h_sum : wbsum (s.getStor sevm.currentTarget) = wbsum (r.getStor sevm.currentTarget))
     (h_bal : s.getBal sevm.currentTarget = r.getBal sevm.currentTarget) :
@@ -1521,7 +1521,7 @@ lemma transferFrom_inv_solvent {sevm : Sevm} {s r : Devm}
     (h_sv : s.PreSolvent sevm.currentTarget sevm) :
     r.PostSolvent sevm.currentTarget := by
   rcases transfer_of_transferFrom run with ⟨x, a, a', h_di⟩
-  refine result_solvent_of_state_solvent' h_sv ?_ ?_
+  refine result_solvent_of_wbsum_eq h_sv ?_ ?_
   · exact transfer_inv_sum (nof_of_solvent h_sv) h_di
   · exact congr_fun (Func.of_inv Devm.getBal Devm.getBal transferFrom_inv_bal run)
       sevm.currentTarget
@@ -1536,7 +1536,7 @@ lemma precond_of_precond {wa : Adr} {sevm : Sevm} {s s' : Devm}
   · unfold Devm.PreSolvent
     rw [← congr_fun h_stor wa, ← congr_fun h_bal wa]; exact h.solvent
 
-lemma solvent_of_withdraw_update_bal' {sevm : Sevm} {s s' : Devm} {cbal wad}
+lemma solvent_of_withdraw_update_bal {sevm : Sevm} {s s' : Devm} {cbal wad}
     (h_pc : Precond sevm.currentTarget sevm s)
     (h_stk : [cbal, wad, wad] <<+ s.stack)
     (h_cbal : cbal = Devm.getStorVal s sevm.currentTarget sevm.caller.toB256)
@@ -1797,7 +1797,7 @@ lemma state_of_executePrecomp_ok {evm : Evm} {adr : Adr} {child : Devm}
     rw [← h]
     rfl
 
-lemma of_send_to_caller' {sevm : Sevm} {s sf : Devm} {wad}
+lemma of_send_to_caller {sevm : Sevm} {s sf : Devm} {wad}
     (ih : Exec.InvDepth sevm.depth sevm.currentTarget weth
       (Precond sevm.currentTarget) (Postcond sevm.currentTarget))
     (hp : [wad] <<+ s.stack)
@@ -1822,7 +1822,7 @@ lemma of_send_to_caller' {sevm : Sevm} {s sf : Devm} {wad}
   -- the call instruction
   intro h₂
   rcases of_run_singleton h₂ with ⟨xl, h_fill, pc, h_run⟩
-  simp only [Ninst.Run', Ninst.step_exec, XStep.run_toStep, Xinst.step,
+  simp only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.step,
     Bind.bind, Except.bind, Except.assert] at h_run
   -- pop gas
   rcases eq1 : Devm.pop s₁ with _ | ⟨gas, devm1⟩ <;> simp only [eq1] at h_run
@@ -2130,7 +2130,7 @@ lemma withdraw_inv_solvent {sevm : Sevm} {s r : Devm}
   have h_ltflag : (cbal <? wad) = 0 := pref_head_unique hp₁ (pref_append [0] s₂.stack)
   have h_wad : wad ≤ cbal := by
     rw [← B256.not_lt]; intro hlt
-    rw [B256.lt_check, if_pos hlt] at h_ltflag
+    rw [B256.ltCheck, if_pos hlt] at h_ltflag
     exact B256.zero_ne_one h_ltflag.symm
   rw [h_ltflag] at hp₁
   have hp₂ : [cbal, wad, wad] <<+ s₂.stack := cons_pref_cons_inv hp₁
@@ -2145,7 +2145,7 @@ lemma withdraw_inv_solvent {sevm : Sevm} {s r : Devm}
   -- update the caller's WETH balance in storage
   revert h_run'
   pexen 3
-  rcases solvent_of_withdraw_update_bal' cond₂ hp₂ h_cbal₂ h_wad h₃ with ⟨h_le, h_sv⟩
+  rcases solvent_of_withdraw_update_bal cond₂ hp₂ h_cbal₂ h_wad h₃ with ⟨h_le, h_sv⟩
   have h_code₃ : some (s₃.getCode sevm.currentTarget).toList = Prog.compile weth := by
     rw [← congr_fun (Line.of_inv Devm.getCode (by line_inv) h₃) sevm.currentTarget]
     exact cond₂.code
@@ -2159,7 +2159,7 @@ lemma withdraw_inv_solvent {sevm : Sevm} {s r : Devm}
   unfold Devm.PostSolvent
   rw [← congr_fun (Func.of_inv Devm.getStor Devm.getStor (by prog_inv) h₅) sevm.currentTarget]
   rw [← congr_fun (Func.of_inv Devm.getBal Devm.getBal (by prog_inv) h₅) sevm.currentTarget]
-  exact of_send_to_caller' ih hp₃ h_code₃ h_nof₃ h_le h_sv h₄
+  exact of_send_to_caller ih hp₃ h_code₃ h_nof₃ h_le h_sv h₄
 
 lemma decimals_inv_solvent {sevm : Sevm} {s r : Devm}
     (run : Func.Run (weth.main :: weth.aux) sevm s decimals r)
@@ -2212,7 +2212,7 @@ lemma of_transferTestLt {sevm : Sevm} {s s' : Devm} {dst}
   clear h₂
   -- sload : [cbal, caller, wad, dst]
   lexen 1
-  rcases prefix_of_sload' (of_run_singleton h₃) hp₂ with ⟨cbal, hp₃, h_cbal⟩
+  rcases prefix_of_sload (of_run_singleton h₃) hp₂ with ⟨cbal, hp₃, h_cbal⟩
   have hstor23 : s₂.getStor = s₃.getStor := Line.of_inv Devm.getStor (by line_inv) h₃
   clear h₃
   -- swap 0, dup 2, dup 0, dup 3, sub, swap 2, lt :
@@ -2226,7 +2226,7 @@ lemma of_transferTestLt {sevm : Sevm} {s s' : Devm} {dst}
     rw [hstor23, hstor34]
   refine ⟨cbal <? wad, sevm.caller.toB256, wad, ?_, ?_, validAdr_toB256 sevm.caller⟩
   · rw [← h_cbal']; exact hp₄
-  · rw [← h_cbal', B256.lt_check, Ne.ite_eq_right_iff B256.zero_ne_one.symm, B256.not_lt]
+  · rw [← h_cbal', B256.ltCheck, Ne.ite_eq_right_iff B256.zero_ne_one.symm, B256.not_lt]
 
 lemma transfer_of_transfer {fs : List Func} {sevm : Sevm} {s r : Devm} :
     Func.Run fs sevm s transfer r →
@@ -2308,12 +2308,12 @@ lemma transfer_of_transfer {fs : List Func} {sevm : Sevm} {s r : Devm} :
       rw [Stor.get_set_ne h_key_ne, congr_fun hg4 sevm.currentTarget]
   · rw [← h_rest]; exact h_incr
 
-lemma transfer_inv_solvent' {sevm : Sevm} {s r : Devm}
+lemma transfer_inv_solvent {sevm : Sevm} {s r : Devm}
     (run : Func.Run (weth.main :: weth.aux) sevm s transfer r)
     (h_sv : s.PreSolvent sevm.currentTarget sevm) :
     r.PostSolvent sevm.currentTarget := by
   rcases transfer_of_transfer run with ⟨x, a, a', h_di⟩
-  refine result_solvent_of_state_solvent' h_sv ?_ ?_
+  refine result_solvent_of_wbsum_eq h_sv ?_ ?_
   · exact transfer_inv_sum (nof_of_solvent h_sv) h_di
   · exact congr_fun (Func.of_inv Devm.getBal Devm.getBal transfer_inv_bal run)
       sevm.currentTarget
@@ -2473,8 +2473,8 @@ lemma Xinst.inv_nof {sevm : Sevm} {s r : Devm} {x : Xinst} {xl : Xlot}
     sum r.getBal < 2 ^ 256 := by
   have hxl : Xlot.Rel Devm.BalNoninc xl :=
     Xlot.rel_of_filled balNoninc_refl_trans.2.1 balNoninc_refl_trans.2.2
-      Ninst.balance_effectGen Jinst.balance_effect Linst.balance_effect h_fill
-  exact Nat.lt_of_le_of_lt (Xinst.balance_effectGen x hxl h) h_nof
+      Ninst.balance_effectRec Jinst.balance_effect Linst.balance_effect h_fill
+  exact Nat.lt_of_le_of_lt (Xinst.balance_effectRec x hxl h) h_nof
 
 lemma Ninst.inv_nof {sevm : Sevm} {s r : Devm} {i : Ninst}
     (h : Ninst.Run sevm s i r) (h_nof : sum s.getBal < 2 ^ 256) :
@@ -2569,7 +2569,7 @@ lemma weth_inv {sevm : Sevm} {s r}
     · apply run_inv_cond decimals decimals_inv_solvent h_run cond
     · apply run_inv_cond balanceOf balanceOf_inv_solvent h_run cond
     · apply run_inv_cond symbol symbol_inv_solvent h_run cond
-    · apply run_inv_cond transfer transfer_inv_solvent' h_run cond
+    · apply run_inv_cond transfer transfer_inv_solvent h_run cond
     · apply run_inv_cond allowance allowance_inv_solvent h_run cond
 
 lemma Precond.of_eqs {wa : Adr} {sevm : Sevm} {pre inter : Devm}
@@ -3569,14 +3569,14 @@ theorem weth_inv_solvent (wa : Adr) :
   · intro pc' sevm' pre' n' inter' h_at' h_run' h_ne' h_pc'
     cases n' with
     | push xs le =>
-      simp only [Ninst.Run', Ninst.step_push, Step.run_ofExecution] at h_run'
+      simp only [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at h_run'
       rcases of_bind_eq_ok h_run'.2.symm with ⟨devm1, h_charge, h_push⟩
       exact h_pc'.state_eq
         (((Devm.burn_of_chargeGas h_charge).state).trans
           ((Devm.push_of_push h_push).state)).symm
     | reg r =>
       have h_reg : Rinst.run ⟨pc', sevm', pre'⟩ r = .ok inter' := by
-        simp only [Ninst.Run', Ninst.step_reg, Step.run_ofExecution] at h_run'
+        simp only [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at h_run'
         exact h_run'.2.symm
       by_cases h_ss : r = Rinst.sstore
       · subst h_ss
@@ -3590,18 +3590,18 @@ theorem weth_inv_solvent (wa : Adr) :
           (congr_fun (Rinst.inv_stor h_ss h_reg) wa).symm
     | exec x =>
       refine Xinst.none_inv_precond (x := x) ?_ h_ne' h_pc'
-      simpa only [Ninst.Run', Ninst.step_exec, XStep.run_toStep, Xinst.Run] using h_run'
+      simpa only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.Run] using h_run'
   · intro pc' sevm' pre' n' evm'' exn'' inter' h_at' h_run' ex_sub' h_ne' h_pc'
     cases n' with
     | push xs le =>
-      simp only [Ninst.Run', Ninst.step_push, Step.run_ofExecution] at h_run'
+      simp only [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at h_run'
       cases h_run'.1
     | reg r =>
-      simp only [Ninst.Run', Ninst.step_reg, Step.run_ofExecution] at h_run'
+      simp only [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at h_run'
       cases h_run'.1
     | exec x =>
       refine Xinst.some_inv_precond (x := x) ?_ ex_sub' h_ne' h_pc'
-      simpa only [Ninst.Run', Ninst.step_exec, XStep.run_toStep, Xinst.Run] using h_run'
+      simpa only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.Run] using h_run'
   · intro pc' sevm' pre' j' pc'' inter' h_at' h_run' h_ne' h_pc'
     exact Precond.state_eq h_pc' (Jinst.inv_state h_run')
   · intro pc' sevm' pre' l' post' h_at' h_run' h_ne' h_pc'
@@ -4342,11 +4342,11 @@ lemma Xinst.inv_noDel_gen {wa : Adr} {sevm : Sevm} {s : Devm} {x : Xinst}
 lemma Ninst.inv_noDel_gen {wa : Adr} {pc : Nat} {sevm : Sevm} {devm : Devm}
     {n : Ninst} {xl : Xlot} {exn : Execution}
     (inv : Xlot.InvNoDel wa xl)
-    (run : Ninst.Run' pc sevm devm n xl exn)
+    (run : Ninst.StepRun pc sevm devm n xl exn)
     (h : Devm.NoDel wa devm) : Execution.NoDel wa exn := by
   cases n with
   | push xs le =>
-    simp only [Ninst.Run', Ninst.step_push, Step.run_ofExecution] at run
+    simp only [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at run
     obtain ⟨-, rfl⟩ := run
     · cases h_charge : chargeGas (if xs = [] then gBase else gVerylow) devm
       case error err =>
@@ -4360,7 +4360,7 @@ lemma Ninst.inv_noDel_gen {wa : Adr} {pc : Nat} {sevm : Sevm} {devm : Devm}
         case ok d2 =>
           exact Devm.NoDel.of_eqs (Devm.push_delSets_eq h_push).symm (Devm.push_getCode_eq h_push wa).symm h1
   | reg rg =>
-    simp only [Ninst.Run', Ninst.step_reg, Step.run_ofExecution] at run
+    simp only [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at run
     obtain ⟨-, rfl⟩ := run
     · cases h_run : Rinst.run { pc := pc, sta := sevm, dyna := devm } rg
       case error err =>
@@ -4368,7 +4368,7 @@ lemma Ninst.inv_noDel_gen {wa : Adr} {pc : Nat} {sevm : Sevm} {devm : Devm}
       case ok d1 =>
         exact Devm.NoDel.of_eqs (Rinst.inv_delSets h_run) (Rinst.inv_getCode h_run wa).symm h
   | exec xinst =>
-    simp only [Ninst.Run', Ninst.step_exec, XStep.run_toStep] at run
+    simp only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep] at run
     exact Xinst.inv_noDel_gen (x := xinst) inv run h
 
 -- The composite relation carried through `Exec.effect` for the NoDel invariant.
@@ -4391,8 +4391,8 @@ lemma Xlot.invNoDel_of_rel {wa : Adr} {xl : Xlot}
     | error e => exact h hnd
     | ok d => exact h hnd
 
-lemma Ninst.noDelCode_effectGen (wa : Adr) (n : Ninst) :
-    Ninst.EffectGen (Devm.NoDelCode wa) n := by
+lemma Ninst.noDelCode_effectRec (wa : Adr) (n : Ninst) :
+    Ninst.EffectRec (Devm.NoDelCode wa) n := by
   intro pc sevm pre xl out hxl hrun
   have hnd := fun h =>
     Ninst.inv_noDel_gen (Xlot.invNoDel_of_rel hxl) hrun h
@@ -4428,7 +4428,7 @@ lemma Exec.inv_noDel {wa : Adr} {pc : Nat} {sevm : Sevm} {devm : Devm}
     (run : Exec pc sevm devm exn)
     (h : Devm.NoDel wa devm) : Execution.NoDel wa exn := by
   have heff := Exec.effect (noDelCode_refl_trans wa).1 (noDelCode_refl_trans wa).2
-    (Ninst.noDelCode_effectGen wa) (Jinst.noDelCode_effect wa)
+    (Ninst.noDelCode_effectRec wa) (Jinst.noDelCode_effect wa)
     (Linst.noDelCode_effect wa) run
   cases exn with
   | error e => exact heff h
@@ -5266,7 +5266,7 @@ lemma checkTransaction_upfront_lt_modulus {benv : Benv} {bout : BlockOutput}
         .ok ⟨sender, effectiveGasPrice, blobVersionedHashes, txBlobGasUsed⟩) :
     tx.gas * effectiveGasPrice +
       (if tx.isTypeThree = true then
-        calculate_data_fee benv.stat.rules.blob benv.stat.excessBlobGas tx
+        calculateDataFee benv.stat.rules.blob benv.stat.excessBlobGas tx
       else 0) < 2 ^ 256 := by
   unfold checkTransaction at h_check
   rcases of_bind_eq_ok h_check with ⟨txBlobGasUsed', h_limit, h_check⟩
@@ -5372,9 +5372,9 @@ lemma checkTransaction_upfront_lt_modulus {benv : Benv} {bout : BlockOutput}
                 omega
               have h_mul := Nat.mul_le_mul_left tx.gas h_effective
               have h_blob_mul :
-                  calculate_data_fee benv.stat.rules.blob benv.stat.excessBlobGas tx ≤
+                  calculateDataFee benv.stat.rules.blob benv.stat.excessBlobGas tx ≤
                     calculateTotalBlobGas tx * maxFeePerBlobGas := by
-                unfold calculate_data_fee
+                unfold calculateDataFee
                 exact Nat.mul_le_mul_left _ (by omega)
               omega
   | four chainId maxPriorityFeePerGas maxFeePerGas receiver accessList auths =>
@@ -5456,7 +5456,7 @@ lemma State.Inv.add_transaction_gas_credits {wa : Adr}
       (baseState.incrNonce sender).subBal sender
         (tx.gas * effectiveGasPrice +
           if tx.isTypeThree = true then
-            calculate_data_fee benv.stat.rules.blob benv.stat.excessBlobGas tx
+            calculateDataFee benv.stat.rules.blob benv.stat.excessBlobGas tx
           else
             0).toB256 =
         some debitState)
@@ -5581,13 +5581,13 @@ theorem processTransaction_inv_solvent (wa : Adr)
       (benv.state.incrNonce sender).subBal sender
         (tx.gas * effectiveGasPrice +
           if tx.isTypeThree = true then
-            calculate_data_fee benv.stat.rules.blob benv.stat.excessBlobGas tx
+            calculateDataFee benv.stat.rules.blob benv.stat.excessBlobGas tx
           else
             0).toB256 = some state1 := by
     generalize hopt : (benv.state.incrNonce sender).subBal sender
         (tx.gas * effectiveGasPrice +
           if tx.isTypeThree = true then
-            calculate_data_fee benv.stat.rules.blob benv.stat.excessBlobGas tx
+            calculateDataFee benv.stat.rules.blob benv.stat.excessBlobGas tx
           else
             0).toB256 = o at hsub ⊢
     cases o with
@@ -5747,7 +5747,7 @@ lemma checkTransaction_fee_lt {benv : Benv} {bout : BlockOutput} {tx : Tx}
     (h : checkTransaction benv bout tx = .ok ⟨sender, egp, bvh, tbgu⟩) :
     tx.gas * egp +
       (if tx.isTypeThree = true then
-        calculate_data_fee benv.stat.rules.blob benv.stat.excessBlobGas tx
+        calculateDataFee benv.stat.rules.blob benv.stat.excessBlobGas tx
       else 0) < 2 ^ 256 := by
   unfold checkTransaction at h
   rcases of_bind_eq_ok h with ⟨tbgu', hfuel, h⟩
@@ -5850,9 +5850,9 @@ lemma checkTransaction_fee_lt {benv : Benv} {bout : BlockOutput} {tx : Tx}
               have hmul : tx.gas * (min mpf (maxFee - benv.stat.baseFeePerGas) +
                   benv.stat.baseFeePerGas) ≤ tx.gas * maxFee :=
                 Nat.mul_le_mul_left _ hegp
-              have hblobmul : calculate_data_fee benv.stat.rules.blob benv.stat.excessBlobGas tx ≤
+              have hblobmul : calculateDataFee benv.stat.rules.blob benv.stat.excessBlobGas tx ≤
                   calculateTotalBlobGas tx * mbf := by
-                unfold calculate_data_fee
+                unfold calculateDataFee
                 exact Nat.mul_le_mul_left _ (by omega)
               omega
   | four cid mpf maxFee recv al auths =>
@@ -5909,13 +5909,13 @@ lemma processTransaction_sum_le {benv : Benv} {bout bout' : BlockOutput}
       (benv.state.incrNonce sender).subBal sender
         (tx.gas * effectiveGasPrice +
           if tx.isTypeThree = true then
-            calculate_data_fee benv.stat.rules.blob benv.stat.excessBlobGas tx
+            calculateDataFee benv.stat.rules.blob benv.stat.excessBlobGas tx
           else
             0).toB256 = some state1 := by
     generalize hopt : (benv.state.incrNonce sender).subBal sender
         (tx.gas * effectiveGasPrice +
           if tx.isTypeThree = true then
-            calculate_data_fee benv.stat.rules.blob benv.stat.excessBlobGas tx
+            calculateDataFee benv.stat.rules.blob benv.stat.excessBlobGas tx
           else
             0).toB256 = o at hsub ⊢
     cases o with

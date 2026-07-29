@@ -670,7 +670,7 @@ lemma Prog.get?_table {m n} {c : List Func} :
 
 -- alternative version of Exec which rolls all arguments into a structure.
 
-structure Exec' : Type where
+structure Exec.Deriv : Type where
   (pc : Nat)
   (sevm : Sevm)
   (devm : Devm)
@@ -681,12 +681,12 @@ structure Exec' : Type where
 premise of `Exec`: the same-frame continuation (`cont`, `doneOk`), the child
 derivation of a spawn (`runErrChild`, `runOkChild`), and the parent's
 continuation after a spawn returns (`runOkCont`). -/
-inductive Exec'.Prec : Exec' → Exec' → Prop
+inductive Exec.Deriv.Prec : Exec.Deriv → Exec.Deriv → Prop
   | cont {pc : Nat} {sevm : Sevm} {devm : Devm} {pc' : Nat}
     {devm' : Devm} {exn : Execution}
     (hstep : Evm.step ⟨pc, sevm, devm⟩ = .cont pc' devm')
     (exc : Exec pc' sevm devm' exn) :
-    Exec'.Prec
+    Exec.Deriv.Prec
       ⟨pc', sevm, devm', exn, exc⟩
       ⟨pc, sevm, devm, exn, .cont hstep exc⟩
   | doneOk {pc : Nat} {sevm : Sevm} {devm : Devm}
@@ -695,7 +695,7 @@ inductive Exec'.Prec : Exec' → Exec' → Prop
     (henter : f.enter = .done r)
     (hr : rsm.run r = .ok devm')
     (exc : Exec pc' sevm devm' exn) :
-    Exec'.Prec
+    Exec.Deriv.Prec
       ⟨pc', sevm, devm', exn, exc⟩
       ⟨pc, sevm, devm, exn, .doneOk hstep henter hr exc⟩
   | runErrChild {pc : Nat} {sevm : Sevm} {devm : Devm}
@@ -704,7 +704,7 @@ inductive Exec'.Prec : Exec' → Exec' → Prop
     (henter : f.enter = .run cevm)
     (excChild : Exec cevm.pc cevm.sta cevm.dyna raw)
     (hr : rsm.run (f.settle raw) = .error e) :
-    Exec'.Prec
+    Exec.Deriv.Prec
       ⟨cevm.pc, cevm.sta, cevm.dyna, raw, excChild⟩
       ⟨pc, sevm, devm, .error e, .runErr hstep henter excChild hr⟩
   | runOkChild {pc : Nat} {sevm : Sevm} {devm : Devm}
@@ -715,7 +715,7 @@ inductive Exec'.Prec : Exec' → Exec' → Prop
     (excChild : Exec cevm.pc cevm.sta cevm.dyna raw)
     (hr : rsm.run (f.settle raw) = .ok devm')
     (exc : Exec pc' sevm devm' exn) :
-    Exec'.Prec
+    Exec.Deriv.Prec
       ⟨cevm.pc, cevm.sta, cevm.dyna, raw, excChild⟩
       ⟨pc, sevm, devm, exn, .runOk hstep henter excChild hr exc⟩
   | runOkCont {pc : Nat} {sevm : Sevm} {devm : Devm}
@@ -726,42 +726,42 @@ inductive Exec'.Prec : Exec' → Exec' → Prop
     (excChild : Exec cevm.pc cevm.sta cevm.dyna raw)
     (hr : rsm.run (f.settle raw) = .ok devm')
     (exc : Exec pc' sevm devm' exn) :
-    Exec'.Prec
+    Exec.Deriv.Prec
       ⟨pc', sevm, devm', exn, exc⟩
       ⟨pc, sevm, devm, exn, .runOk hstep henter excChild hr exc⟩
 
-infix:70 " ≺ " => Exec'.Prec
+infix:70 " ≺ " => Exec.Deriv.Prec
 
-inductive Exec'.le : Exec' → Exec' → Prop
-  | refl : ∀ p, Exec'.le p p
-  | step : ∀ {p p' p''}, Exec'.le p p' → p' ≺ p'' → Exec'.le p p''
+inductive Exec.Deriv.le : Exec.Deriv → Exec.Deriv → Prop
+  | refl : ∀ p, Exec.Deriv.le p p
+  | step : ∀ {p p' p''}, Exec.Deriv.le p p' → p' ≺ p'' → Exec.Deriv.le p p''
 
-def Exec'.lt (pk pk'' : Exec') : Prop :=
-  ∃ pk' : Exec', Exec'.le pk pk' ∧ Exec'.Prec pk' pk''
+def Exec.Deriv.lt (pk pk'' : Exec.Deriv) : Prop :=
+  ∃ pk' : Exec.Deriv, Exec.Deriv.le pk pk' ∧ Exec.Deriv.Prec pk' pk''
 
-lemma Exec'.lt_of_prec {pk pk' : Exec'} (h : pk ≺ pk') : lt pk pk' :=
+lemma Exec.Deriv.lt_of_prec {pk pk' : Exec.Deriv} (h : pk ≺ pk') : lt pk pk' :=
   ⟨pk, .refl _, h⟩
 
-abbrev Exec'.gt (pk pk' : Exec') : Prop := Exec'.lt pk' pk
+abbrev Exec.Deriv.gt (pk pk' : Exec.Deriv) : Prop := Exec.Deriv.lt pk' pk
 
-lemma Exec'.eq_or_lt_of_le :
-  ∀ {p p'}, Exec'.le p p' → p = p' ∨ Exec'.lt p p' := by
+lemma Exec.Deriv.eq_or_lt_of_le :
+  ∀ {p p'}, Exec.Deriv.le p p' → p = p' ∨ Exec.Deriv.lt p p' := by
   intros p p'' h0; rcases h0 with _ | ⟨le, prec⟩
   · left; rfl
   · right; refine ⟨_, le, prec⟩
 
-lemma Exec'.acc_of_le {pk pk' : Exec'}
-    (h_le : Exec'.le pk pk') (h_acc : Acc Exec'.lt pk') : Acc Exec'.lt pk := by
-  cases Exec'.eq_or_lt_of_le h_le with
+lemma Exec.Deriv.acc_of_le {pk pk' : Exec.Deriv}
+    (h_le : Exec.Deriv.le pk pk') (h_acc : Acc Exec.Deriv.lt pk') : Acc Exec.Deriv.lt pk := by
+  cases Exec.Deriv.eq_or_lt_of_le h_le with
   | inl h => rw [h]; exact h_acc
   | inr h => exact Acc.inv h_acc h
 
-theorem Exec'.lt.well_founded : WellFounded Exec'.lt := by
+theorem Exec.Deriv.lt.well_founded : WellFounded Exec.Deriv.lt := by
   constructor;
   intro pk; rcases pk with ⟨_, _, _, _, _⟩
   apply
     @Exec.rec
-      (λ pc sevm devm exn exc => Acc Exec'.lt ⟨pc, sevm, devm, exn, exc⟩) <;>
+      (λ pc sevm devm exn exc => Acc Exec.Deriv.lt ⟨pc, sevm, devm, exn, exc⟩) <;>
     clear *-
   -- halt : no sub-derivation
   · intro _ _ _ _ _; constructor
@@ -792,22 +792,22 @@ theorem Exec'.lt.well_founded : WellFounded Exec'.lt := by
     · exact acc_of_le le ihc
     · exact acc_of_le le ih
 
-abbrev Exec'.Pred : Type := Exec' → Prop
+abbrev Exec.Deriv.Pred : Type := Exec.Deriv → Prop
 
-def Exec'.imp (π π' : Exec'.Pred) : Exec'.Pred := λ pk => π pk → π' pk
+def Exec.Deriv.imp (π π' : Exec.Deriv.Pred) : Exec.Deriv.Pred := λ pk => π pk → π' pk
 
-infix:70 " →p " => Exec'.imp
+infix:70 " →p " => Exec.Deriv.imp
 
-def Exec'.Fa (π : Exec'.Pred) : Prop := ∀ pk, π pk
+def Exec.Deriv.Fa (π : Exec.Deriv.Pred) : Prop := ∀ pk, π pk
 
-notation "□p" => Exec'.Fa
+notation "□p" => Exec.Deriv.Fa
 
-def carryover (π : Exec'.Pred) : Exec'.Pred :=
-(λ pk => □p (Exec'.gt pk →p π)) →p π
+def carryover (π : Exec.Deriv.Pred) : Exec.Deriv.Pred :=
+(λ pk => □p (Exec.Deriv.gt pk →p π)) →p π
 
-theorem Exec'.strongRec (π : Exec'.Pred) : □p (carryover π) → □p π := by
+theorem Exec.Deriv.strongRec (π : Exec.Deriv.Pred) : □p (carryover π) → □p π := by
   intro ih pk
-  apply @WellFounded.induction _ Exec'.lt Exec'.lt.well_founded π pk
+  apply @WellFounded.induction _ Exec.Deriv.lt Exec.Deriv.lt.well_founded π pk
   clear pk; intro pk ih'
   apply ih
   intro pk' h_gt
@@ -827,7 +827,7 @@ lemma Rinst.run_of_at {pc sevm pre r post}
   | cont h exc' =>
     obtain ⟨hpc, hrun⟩ := Step.ofExecution_cont (hstep.symm.trans h)
     cases hpc
-    exact ⟨_, exc', hrun, Exec'.Prec.cont h exc'⟩
+    exact ⟨_, exc', hrun, Exec.Deriv.Prec.cont h exc'⟩
   | doneOk h _ _ _ => cases Step.ofExecution_ne_spawn (hstep.symm.trans h)
   | runOk h _ _ _ _ => cases Step.ofExecution_ne_spawn (hstep.symm.trans h)
 
@@ -842,7 +842,7 @@ lemma Jinst.run_of_at {pc sevm pre j post}
   | halt h => cases Step.ofJump_ne_halt_ok (hstep.symm.trans h)
   | cont h exc' =>
     exact ⟨_, _, exc', Step.ofJump_cont (hstep.symm.trans h),
-      Exec'.Prec.cont h exc'⟩
+      Exec.Deriv.Prec.cont h exc'⟩
   | doneOk h _ _ _ => cases Step.ofJump_ne_spawn (hstep.symm.trans h)
   | runOk h _ _ _ _ => cases Step.ofJump_ne_spawn (hstep.symm.trans h)
 
@@ -852,7 +852,7 @@ lemma Ninst.run_of_at {pc sevm pre n post}
     ∃ (inter : Devm)
       (exc' : Exec (pc + n.size) sevm inter (.ok post)),
       Ninst.Run sevm pre n inter ∧
-      Exec'.Prec
+      Exec.Deriv.Prec
         ⟨(pc + n.size), sevm, inter, .ok post, exc'⟩
         ⟨pc, sevm, pre, .ok post, exc⟩ := by
   have hstep : Evm.step ⟨pc, sevm, pre⟩ = Ninst.step ⟨pc, sevm, pre⟩ n :=
@@ -862,22 +862,22 @@ lemma Ninst.run_of_at {pc sevm pre n post}
   | cont h exc' =>
     have hs := hstep.symm.trans h
     cases Ninst.step_cont_pc hs
-    refine ⟨_, exc', ⟨.none, trivial, pc, ?_⟩, Exec'.Prec.cont h exc'⟩
-    simp only [Ninst.Run', hs, Step.Run]
+    refine ⟨_, exc', ⟨.none, trivial, pc, ?_⟩, Exec.Deriv.Prec.cont h exc'⟩
+    simp only [Ninst.StepRun, hs, Step.Run]
     exact ⟨trivial, trivial⟩
   | doneOk h henter hr exc' =>
     have hs := hstep.symm.trans h
     cases Ninst.step_spawn_pc hs
     refine ⟨_, exc', ⟨.none, trivial, pc, ?_⟩,
-      Exec'.Prec.doneOk h henter hr exc'⟩
-    simp only [Ninst.Run', hs, Step.Run]
+      Exec.Deriv.Prec.doneOk h henter hr exc'⟩
+    simp only [Ninst.StepRun, hs, Step.Run]
     exact ⟨_, RunFrame.of_done henter, hr.symm⟩
   | runOk h henter excChild hr exc' =>
     have hs := hstep.symm.trans h
     cases Ninst.step_spawn_pc hs
     refine ⟨_, exc', ⟨.some ⟨_, _⟩, ⟨excChild⟩, pc, ?_⟩,
-      Exec'.Prec.runOkCont h henter excChild hr exc'⟩
-    simp only [Ninst.Run', hs, Step.Run]
+      Exec.Deriv.Prec.runOkCont h henter excChild hr exc'⟩
+    simp only [Ninst.StepRun, hs, Step.Run]
     exact ⟨_, RunFrame.of_run henter, hr.symm⟩
 
 lemma Ninst.size_eq_length_toBytes (n : Ninst) :
@@ -1114,7 +1114,7 @@ lemma push_of_pushAt
     rw [Ninst.step_push] at hs
     obtain ⟨hpc, hrun⟩ := Step.ofExecution_cont hs
     cases hpc
-    exact ⟨_, exc', Devm.pushBurn_of_run hrun, Exec'.Prec.cont h exc'⟩
+    exact ⟨_, exc', Devm.pushBurn_of_run hrun, Exec.Deriv.Prec.cont h exc'⟩
   | doneOk h _ _ _ =>
     have hs := hstep.symm.trans h
     rw [Ninst.step_push] at hs
@@ -1124,7 +1124,7 @@ lemma push_of_pushAt
     rw [Ninst.step_push] at hs
     cases Step.ofExecution_ne_spawn hs
 
-def Func.Run' (fs : List Func) (sevm : Sevm) (devm : Devm) (f : Func) : Execution → Prop
+def Func.RunIfOk (fs : List Func) (sevm : Sevm) (devm : Devm) (f : Func) : Execution → Prop
   | .error _ => True
   | .ok devm' => Func.Run fs sevm devm f devm'
 
@@ -1159,7 +1159,7 @@ lemma List.toUInt16_pair (n : Nat) :
   have h : (n >>> 8 ↾ 8).toUInt16 <<< 8 ||| (n ↾ 8).toUInt16 = n.toUInt16 := by
     rw [← UInt16.toNat_inj, toNat_toUInt16, UInt16.toNat_or, toNat_toUInt16]
     rw [UInt16.toNat_shiftLeft, toNat_toUInt16]; apply pair_aux n 8
-  simp [Bytes.toUInt16, Bytes.pack, ekatD, takeD, reverse, reverseAux, tail, headD]
+  simp [Bytes.toUInt16, Bytes.pack, takeRightD, takeD, reverse, reverseAux, tail, headD]
   rw [Nat.toUInt16_toUInt8, Nat.toUInt16_toUInt8, h]
 
 def UInt16.concat (x y : UInt16) : UInt32 :=
@@ -1204,7 +1204,7 @@ lemma toUInt32_eq_concat (n : Nat) :
 
 lemma List.toUInt32_pair (n : Nat) (n_lt : n < 2 ^ 16) :
     Bytes.toUInt32 [(n >>> 8).toUInt8, n.toUInt8] = n.toUInt32 := by
-  simp only [ Bytes.toUInt32, Bytes.pack, ekatD, takeD,
+  simp only [ Bytes.toUInt32, Bytes.pack, takeRightD, takeD,
     reverse, reverseAux, tail, headD, take, drop ]
   apply Eq.trans _ (toUInt32_eq_concat _).symm
   apply congr_arg₂ _ _ (congr_arg _ _)
@@ -1246,7 +1246,7 @@ lemma toUInt64_eq_concat (n : Nat) :
 
 lemma List.toUInt64_pair (n : Nat) (n_lt : n < 2 ^ 16) :
     Bytes.toUInt64 [(n >>> 8).toUInt8, n.toUInt8] = n.toUInt64 := by
-  simp only [ Bytes.toUInt64, Bytes.pack, ekatD, takeD,
+  simp only [ Bytes.toUInt64, Bytes.pack, takeRightD, takeD,
     reverse, reverseAux, tail, headD, take, drop ]
   apply Eq.trans _ (toUInt64_eq_concat _).symm
   apply congr_arg₂ _ _ (congr_arg _ _)
@@ -1258,7 +1258,7 @@ lemma List.toB256_pair (n : Nat) (n_lt : n < 2 ^ 16):
     Bytes.toB256 [(n >>> 8).toUInt8, n.toUInt8] = n.toB256 := by
   have hlow : ∀ a b : UInt8, UInt8.toUInt64 a <<< 8 ||| UInt8.toUInt64 b = Bytes.toUInt64 [a, b] := by
     intro a b
-    simp only [ Bytes.toUInt64, Bytes.toUInt32, Bytes.toUInt16, Bytes.pack, List.ekatD, List.takeD,
+    simp only [ Bytes.toUInt64, Bytes.toUInt32, Bytes.toUInt16, Bytes.pack, List.takeRightD, List.takeD,
       List.reverse, List.reverseAux, List.tail, List.headD, List.take, List.drop,
       List.getElem!_cons_zero, List.getElem!_cons_succ ]
     simp
@@ -1520,11 +1520,11 @@ lemma subcode_compile_call {code : ByteArray} {l m n}
   refine ⟨⟨le, Ninst.at_of_slice h_push_slice⟩, Jinst.at_of_slice h_jump_slice⟩
 
 theorem correct_core (f : Func) (fs : List Func) :
-    ∀ (pk : Exec') (p : Func),
+    ∀ (pk : Exec.Deriv) (p : Func),
       some pk.sevm.code.toList = Prog.compile ⟨f, fs⟩ →
       subcode pk.sevm.code.toList pk.pc (Func.compile (table 0 (f :: fs)) pk.pc p) →
-      Func.Run' (f :: fs) pk.sevm pk.devm p pk.exn := by
-  apply Exec'.strongRec; intro pk ih p h_eq sub
+      Func.RunIfOk (f :: fs) pk.sevm pk.devm p pk.exn := by
+  apply Exec.Deriv.strongRec; intro pk ih p h_eq sub
   rcases pk with ⟨pc, sevm, pre, exn, exc⟩
   simp only
   rcases exn with _ | post; {constructor}
@@ -1557,7 +1557,7 @@ theorem correct_core (f : Func) (fs : List Func) :
       apply List.slice_suffix h_slice
     apply
       ih ⟨pc + n.size, sevm, inter, .ok post, exc'⟩
-        (Exec'.lt_of_prec h_prec)
+        (Exec.Deriv.lt_of_prec h_prec)
         p
         h_eq
         quz
@@ -1584,12 +1584,12 @@ theorem correct_core (f : Func) (fs : List Func) :
         apply Devm.burn_of_pushBurn_nil pushBurn'
       apply Func.Run.zero h_pop'
       have h_lt :
-          Exec'.lt
+          Exec.Deriv.lt
             ⟨pc + 4, sevm, devm'', .ok post, exc''⟩
             ⟨pc, sevm, pre, .ok post, exc⟩ := by
         refine' ⟨_, _, h_prec⟩;
-        apply Exec'.le.step _ prec
-        apply Exec'.le.refl _
+        apply Exec.Deriv.le.step _ prec
+        apply Exec.Deriv.le.refl _
       apply ih ⟨pc + 4, sevm, devm'', .ok post, exc''⟩ h_lt p h_eq h_scp
     · clear h_scp
       have h_loc' : loc < 2 ^ 256 := by
@@ -1606,11 +1606,11 @@ theorem correct_core (f : Func) (fs : List Func) :
       rw [← hx] at h_jumpdest
       rcases jumpdest_at exc'' h_jumpdest with ⟨inter_jd, exc_jd, burn_jd, prec_jd⟩
       have run : Func.Run (f :: fs) sevm inter_jd q post := by
-        have h_lt : Exec'.lt ⟨x.toNat + 1, sevm, inter_jd, .ok post, exc_jd⟩ ⟨pc, sevm, pre, .ok post, exc⟩ := by
+        have h_lt : Exec.Deriv.lt ⟨x.toNat + 1, sevm, inter_jd, .ok post, exc_jd⟩ ⟨pc, sevm, pre, .ok post, exc⟩ := by
           refine' ⟨_, _, h_prec⟩
-          apply Exec'.le.step _ prec
-          apply Exec'.le.step _ prec_jd
-          apply Exec'.le.refl _
+          apply Exec.Deriv.le.step _ prec
+          apply Exec.Deriv.le.step _ prec_jd
+          apply Exec.Deriv.le.refl _
         rw [← hx] at h_scq
         apply ih ⟨x.toNat + 1, sevm, inter_jd, .ok post, exc_jd⟩ h_lt q h_eq h_scq
       apply Func.Run.succ ne popBurn' burn_jd run
@@ -1643,11 +1643,11 @@ theorem correct_core (f : Func) (fs : List Func) :
     rw [h_rw] at h_jd
     rcases jumpdest_at exc'' h_jd with ⟨inter_jd, exc''', burn_jd, h_prec''⟩
     rw [h_rw] at hp
-    have h_lt : Exec'.lt ⟨x.toNat + 1, sevm, inter_jd, .ok post, exc'''⟩ ⟨pc, sevm, pre, .ok post, exc⟩ := by
+    have h_lt : Exec.Deriv.lt ⟨x.toNat + 1, sevm, inter_jd, .ok post, exc'''⟩ ⟨pc, sevm, pre, .ok post, exc⟩ := by
       refine' ⟨_, _, h_prec⟩
-      apply Exec'.le.step _ h_prec'
-      apply Exec'.le.step _ h_prec''
-      apply Exec'.le.refl _
+      apply Exec.Deriv.le.step _ h_prec'
+      apply Exec.Deriv.le.step _ h_prec''
+      apply Exec.Deriv.le.refl _
     have run : Func.Run (f :: fs) sevm inter_jd p post := by
       apply ih ⟨x.toNat + 1, sevm, inter_jd, .ok post, exc'''⟩ h_lt p h_eq hp
     exact Func.Run.call h_get' (Devm.burn_trans h_burn burn_jd) run
@@ -3863,7 +3863,7 @@ lemma Rinst.sstore_runCore_stateWriteFrame
             else gas2 + (gasStorageUpdate - gasColdSload)
           else gas2 + gasWarmAccess
         let d4 ← .ok <| d3.withRefundCounter
-          (sstore_new_refund_counter value original current d3.refundCounter)
+          (sstoreNewRefundCounter value original current d3.refundCounter)
         let d5 ← chargeGas gas3 d4
         assertDynamic sevm d5
         .ok (d5.setStorVal ct key value)) ?_
@@ -3884,7 +3884,7 @@ lemma Rinst.sstore_runCore_stateWriteFrame
             else gas2 + (gasStorageUpdate - gasColdSload)
           else gas2 + gasWarmAccess
         let d4 ← .ok <| d3.withRefundCounter
-          (sstore_new_refund_counter value original current d3.refundCounter)
+          (sstoreNewRefundCounter value original current d3.refundCounter)
         let d5 ← chargeGas gas3 d4
         assertDynamic sevm d5
         .ok (d5.setStorVal ct key value)) ?_
@@ -3906,7 +3906,7 @@ lemma Rinst.sstore_runCore_stateWriteFrame
         else d3gas.2 + (gasStorageUpdate - gasColdSload)
       else d3gas.2 + gasWarmAccess
     let d4 : Devm := d3gas.1.withRefundCounter (
-      sstore_new_refund_counter value
+      sstoreNewRefundCounter value
         (getOrigStorVal sevm sevm.currentTarget key)
         (d.getStorVal sevm.currentTarget key) d3gas.1.refundCounter)
     change Execution.Rel Devm.StateWriteFrame d
@@ -5119,30 +5119,30 @@ def Linst.Effect (R : Devm → Devm → Prop) (l : Linst) : Prop :=
     Linst.Run sevm pre l out → Execution.Rel R pre out
 
 /-- Recursive-execution effect, parameterized by the relation on its child slot. -/
-def Xinst.EffectGen (R : Devm → Devm → Prop) (x : Xinst) : Prop :=
+def Xinst.EffectRec (R : Devm → Devm → Prop) (x : Xinst) : Prop :=
   ∀ {sevm pre xl out},
     Xlot.Rel R xl → Xinst.Run sevm pre x xl out → Execution.Rel R pre out
 
 /-- Nonterminal effect consumed by the mutual `Exec.effect` traversal. -/
-def Ninst.EffectGen (R : Devm → Devm → Prop) (n : Ninst) : Prop :=
+def Ninst.EffectRec (R : Devm → Devm → Prop) (n : Ninst) : Prop :=
   ∀ {pc sevm pre xl out},
-    Xlot.Rel R xl → Ninst.Run' pc sevm pre n xl out → Execution.Rel R pre out
+    Xlot.Rel R xl → Ninst.StepRun pc sevm pre n xl out → Execution.Rel R pre out
 
 /-- Successful-run relational projection used by `Func.effect`. -/
 def Ninst.Effect (R : Devm → Devm → Prop) (n : Ninst) : Prop :=
   ∀ {sevm pre post}, Ninst.Run sevm pre n post → R pre post
 
-lemma Ninst.effectGen_reg {R : Devm → Devm → Prop} {r : Rinst}
-    (hr : Rinst.Effect R r) : Ninst.EffectGen R (.reg r) := by
+lemma Ninst.effectRec_reg {R : Devm → Devm → Prop} {r : Rinst}
+    (hr : Rinst.Effect R r) : Ninst.EffectRec R (.reg r) := by
   intro pc sevm pre xl out hxl hrun
-  simp only [Ninst.Run', Ninst.step_reg, Step.run_ofExecution] at hrun
+  simp only [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at hrun
   obtain ⟨-, rfl⟩ := hrun
   exact hr rfl
 
-lemma Ninst.effectGen_exec {R : Devm → Devm → Prop} {x : Xinst}
-    (hx : Xinst.EffectGen R x) : Ninst.EffectGen R (.exec x) := by
+lemma Ninst.effectRec_exec {R : Devm → Devm → Prop} {x : Xinst}
+    (hx : Xinst.EffectRec R x) : Ninst.EffectRec R (.exec x) := by
   intro pc sevm pre xl out hxl hrun
-  simp only [Ninst.Run', Ninst.step_exec] at hrun
+  simp only [Ninst.StepRun, Ninst.step_exec] at hrun
   exact hx hxl (XStep.run_toStep.mp hrun)
 
 /-- One step of the driver, related through whichever instruction the program
@@ -5151,7 +5151,7 @@ where the four decode branches are enumerated; `Exec.effect` below then only
 has to compose steps. -/
 lemma Evm.step_effect {R : Devm → Devm → Prop}
     (hrefl : ReflexiveRel R)
-    (hn : ∀ n, Ninst.EffectGen R n)
+    (hn : ∀ n, Ninst.EffectRec R n)
     (hj : ∀ j, Jinst.Effect R j)
     (hl : ∀ l, Linst.Effect R l)
     {pc : Nat} {sevm : Sevm} {devm : Devm} {xl : Xlot} {out : Execution}
@@ -5182,7 +5182,7 @@ lemma Evm.step_effect {R : Devm → Devm → Prop}
 case per mutual-block constructor, it now has one per driver outcome. -/
 theorem Exec.effect {R : Devm → Devm → Prop}
     (hrefl : ReflexiveRel R) (htrans : TransitiveRel R)
-    (hn : ∀ n, Ninst.EffectGen R n)
+    (hn : ∀ n, Ninst.EffectRec R n)
     (hj : ∀ j, Jinst.Effect R j)
     (hl : ∀ l, Linst.Effect R l)
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
@@ -5216,7 +5216,7 @@ theorem Exec.effect {R : Devm → Devm → Prop}
 
 lemma Xlot.rel_of_filled {R : Devm → Devm → Prop}
     (hrefl : ReflexiveRel R) (htrans : TransitiveRel R)
-    (hn : ∀ n, Ninst.EffectGen R n)
+    (hn : ∀ n, Ninst.EffectRec R n)
     (hj : ∀ j, Jinst.Effect R j)
     (hl : ∀ l, Linst.Effect R l)
     {xl : Xlot} (hfilled : xl.Filled) : Xlot.Rel R xl := by
@@ -5227,9 +5227,9 @@ lemma Xlot.rel_of_filled {R : Devm → Devm → Prop}
     rcases hfilled with ⟨hrun⟩
     exact Exec.effect hrefl htrans hn hj hl hrun
 
-lemma Ninst.effect_of_effectGen {R : Devm → Devm → Prop}
+lemma Ninst.effect_of_effectRec {R : Devm → Devm → Prop}
     (hrefl : ReflexiveRel R) (htrans : TransitiveRel R)
-    (hn : ∀ n, Ninst.EffectGen R n)
+    (hn : ∀ n, Ninst.EffectRec R n)
     (hj : ∀ j, Jinst.Effect R j)
     (hl : ∀ l, Linst.Effect R l) :
     ∀ n, Ninst.Effect R n := by
@@ -5304,8 +5304,8 @@ full per-constructor case analysis, composing the world-silent primitive frames
 masters `GenericCall.codePreserve` / `GenericCreate.codePreserve`.  The legacy
 observation theorem `Xinst.inv_getCode_gen` is a projection of this master via
 the `Xlot.InvGetCode` / `Xlot.Rel Devm.CodePreserve` bridge. -/
-lemma Xinst.codePreserve_effectGen (x : Xinst) :
-    Xinst.EffectGen Devm.CodePreserve x := by
+lemma Xinst.codePreserve_effectRec (x : Xinst) :
+    Xinst.EffectRec Devm.CodePreserve x := by
   intro sevm devm xl exn hxl run
   have inv : xl.InvGetCode := Xlot.invGetCode_of_rel hxl
   have lift : ∀ {d : Devm}, Devm.InstructionFrame devm d →
@@ -5335,7 +5335,7 @@ lemma Xinst.codePreserve_effectGen (x : Xinst) :
   · exact lift hf (GenericCall.codePreserve inv run)
 
 /-- Compatibility projection: the legacy observation theorem, now derived from
-the relational master `Xinst.codePreserve_effectGen` through the
+the relational master `Xinst.codePreserve_effectRec` through the
 `Xlot.rel_of_invGetCode` bridge.  Statement unchanged. -/
 lemma Xinst.inv_getCode_gen
     {sevm devm x xl exn}
@@ -5344,48 +5344,48 @@ lemma Xinst.inv_getCode_gen
     ∀ a : Adr,
       (devm.getCode a).toList ≠ [] →
       exn.getCode a = devm.getCode a := by
-  have h := Xinst.codePreserve_effectGen x (Xlot.rel_of_invGetCode inv) run
+  have h := Xinst.codePreserve_effectRec x (Xlot.rel_of_invGetCode inv) run
   cases exn with
   | error e => exact fun a ha => h a ha
   | ok d => exact fun a ha => h a ha
 
-lemma Ninst.push_instructionFrame_effectGen
+lemma Ninst.push_instructionFrame_effectRec
     {xs : Bytes} {hxs : xs.length ≤ 32} :
-    Ninst.EffectGen Devm.InstructionFrame (.push xs hxs) := by
+    Ninst.EffectRec Devm.InstructionFrame (.push xs hxs) := by
   intro pc sevm pre xl out hxl hRun
-  simp only [Ninst.Run', Ninst.step_push, Step.run_ofExecution] at hRun
+  simp only [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at hRun
   obtain ⟨-, rfl⟩ := hRun
   apply Execution.Rel.bind Devm.instructionFrame_trans
     (chargeGas_instructionFrame (if xs = [] then gBase else gVerylow) pre)
   exact Devm.push_instructionFrame xs.toB256
 
-lemma Ninst.push_effectGen_of_instructionFrame
+lemma Ninst.push_effectRec_of_instructionFrame
     {R : Devm → Devm → Prop} {xs : Bytes} {hxs : xs.length ≤ 32}
     (hIR : ∀ ⦃d d'⦄, Devm.InstructionFrame d d' → R d d') :
-    Ninst.EffectGen R (.push xs hxs) := by
+    Ninst.EffectRec R (.push xs hxs) := by
   intro pc sevm pre xl out hxl hRun
   have h0 : xl = .none := by
-    simp only [Ninst.Run', Ninst.step_push, Step.run_ofExecution] at hRun
+    simp only [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at hRun
     exact hRun.1
   subst h0
   exact Outcome.Rel.mono hIR
-    (Ninst.push_instructionFrame_effectGen (hxs := hxs) (xl := .none)
+    (Ninst.push_instructionFrame_effectRec (hxs := hxs) (xl := .none)
       trivial hRun)
 
-lemma Ninst.push_codePreserve_effectGen {xs : Bytes} {hxs : xs.length ≤ 32} :
-  Ninst.EffectGen Devm.CodePreserve (.push xs hxs) := by
-  exact Ninst.push_effectGen_of_instructionFrame (R := Devm.CodePreserve)
+lemma Ninst.push_codePreserve_effectRec {xs : Bytes} {hxs : xs.length ≤ 32} :
+  Ninst.EffectRec Devm.CodePreserve (.push xs hxs) := by
+  exact Ninst.push_effectRec_of_instructionFrame (R := Devm.CodePreserve)
     (fun _ _ hf a _ => (hf.getCode a).symm)
 
-lemma Ninst.codePreserve_effectGen (n : Ninst) :
-    Ninst.EffectGen Devm.CodePreserve n := by
+lemma Ninst.codePreserve_effectRec (n : Ninst) :
+    Ninst.EffectRec Devm.CodePreserve n := by
   cases n with
   | reg r =>
-    exact Ninst.effectGen_reg (Rinst.codePreserve_effect r)
+    exact Ninst.effectRec_reg (Rinst.codePreserve_effect r)
   | exec x =>
-    exact Ninst.effectGen_exec (Xinst.codePreserve_effectGen x)
+    exact Ninst.effectRec_exec (Xinst.codePreserve_effectRec x)
   | push xs hxs =>
-    exact Ninst.push_codePreserve_effectGen
+    exact Ninst.push_codePreserve_effectRec
 
 lemma Jinst.codePreserve_effect (j : Jinst) :
     Jinst.Effect Devm.CodePreserve j := by
@@ -5407,7 +5407,7 @@ lemma Exec.inv_getCode {pc} {sevm} {devm} {exn}
       exn.getCode a = devm.getCode a := by
   intro a ha
   have h := Exec.effect codePreserve_refl_trans.1 codePreserve_refl_trans.2
-    Ninst.codePreserve_effectGen Jinst.codePreserve_effect
+    Ninst.codePreserve_effectRec Jinst.codePreserve_effect
     Linst.codePreserve_effect run
   cases exn with
   | error e => exact h a ha
@@ -5482,7 +5482,7 @@ private lemma lift_core.stepCode {pc : Nat} {sevm : Sevm} {devm devm' : Devm}
     (hrun : Step.Run (Evm.step ⟨pc, sevm, devm⟩) xl (.ok devm'))
     (a : Adr) (ha : (devm.getCode a).toList ≠ []) :
     devm'.getCode a = devm.getCode a :=
-  Evm.step_effect codePreserve_refl_trans.1 Ninst.codePreserve_effectGen
+  Evm.step_effect codePreserve_refl_trans.1 Ninst.codePreserve_effectRec
     Jinst.codePreserve_effect Linst.codePreserve_effect hxl hrun a ha
 
 /-- The eliminator every contract-level invariant proof runs on: strong
@@ -5513,13 +5513,13 @@ lemma lift_core
     ( nextNoneErr :
       ∀ {pc sevm devm n err devm'},
         n.At sevm.code pc →
-        Ninst.Run' pc sevm devm n .none (.error ⟨err, devm'⟩) →
+        Ninst.StepRun pc sevm devm n .none (.error ⟨err, devm'⟩) →
         sevm.currentTarget ≠ ca →
         ε pc sevm devm (.error ⟨err, devm'⟩) )
     ( nextSomeErr :
       ∀ {pc sevm devm n evm_ exn_ err devm'},
         n.At sevm.code pc →
-        Ninst.Run' pc sevm devm n (.some ⟨evm_, exn_⟩) (.error ⟨err, devm'⟩) →
+        Ninst.StepRun pc sevm devm n (.some ⟨evm_, exn_⟩) (.error ⟨err, devm'⟩) →
         Exec evm_.pc evm_.sta evm_.dyna exn_ →
         sevm.currentTarget ≠ ca →
         ε evm_.pc evm_.sta evm_.dyna exn_ →
@@ -5527,7 +5527,7 @@ lemma lift_core
     ( nextNoneRec :
       ∀ {pc sevm devm n devm' exn},
         n.At sevm.code pc →
-        Ninst.Run' pc sevm devm n .none (.ok devm') →
+        Ninst.StepRun pc sevm devm n .none (.ok devm') →
         Exec (pc + n.size) sevm devm' exn →
         sevm.currentTarget ≠ ca →
         ε (pc + n.size) sevm devm' exn →
@@ -5535,7 +5535,7 @@ lemma lift_core
     ( nextSomeRec :
       ∀ {pc sevm devm n evm_ exn_ devm' exn},
         n.At sevm.code pc →
-        Ninst.Run' pc sevm devm n (.some ⟨evm_, exn_⟩) (.ok devm') →
+        Ninst.StepRun pc sevm devm n (.some ⟨evm_, exn_⟩) (.ok devm') →
         Exec evm_.pc evm_.sta evm_.dyna exn_ →
         Exec (pc + n.size) sevm devm' exn →
         sevm.currentTarget ≠ ca →
@@ -5578,8 +5578,8 @@ lemma lift_core
         | next n =>
           have hns : Ninst.step ⟨pc, sevm, devm⟩ n = .halt ex := by
             rw [← Evm.step_next (n := n) hgi]; exact hstep
-          have hrun : Ninst.Run' pc sevm devm n .none ex := by
-            unfold Ninst.Run'; rw [hns]; exact ⟨rfl, rfl⟩
+          have hrun : Ninst.StepRun pc sevm devm n .none ex := by
+            unfold Ninst.StepRun; rw [hns]; exact ⟨rfl, rfl⟩
           cases ex with
           | error e => exact nextNoneErr hgi hrun h_ne
           | ok d => exact absurd hns Ninst.step_ne_halt_ok
@@ -5613,8 +5613,8 @@ lemma lift_core
             rw [← Evm.step_next (n := n) hgi]; exact hstep
           have hpc : pc' = pc + n.size := Ninst.step_cont_pc hns
           subst hpc
-          have hrun : Ninst.Run' pc sevm devm n .none (.ok devm') := by
-            unfold Ninst.Run'; rw [hns]; exact ⟨rfl, rfl⟩
+          have hrun : Ninst.StepRun pc sevm devm n .none (.ok devm') := by
+            unfold Ninst.StepRun; rw [hns]; exact ⟨rfl, rfl⟩
           exact nextNoneRec hgi hrun ex h_ne (ih h_fa h_at')
         | jump j =>
           rw [Evm.step_jump (j := j) hgi] at hstep
@@ -5627,8 +5627,8 @@ lemma lift_core
     · exact lift_core.atTarget analog depth_ind errAtTarget
         (.doneErr hstep henter hr) h_fa h_at_p h_eq
     · obtain ⟨x, hxat, -, -⟩ := Evm.step_spawn_inv hstep
-      have hrun : Ninst.Run' pc sevm devm (.exec x) .none (.error e) := by
-        unfold Ninst.Run'
+      have hrun : Ninst.StepRun pc sevm devm (.exec x) .none (.error e) := by
+        unfold Ninst.StepRun
         rw [← Evm.step_next (n := Ninst.exec x) hxat, hstep]
         exact ⟨r, RunFrame.of_done henter, hr.symm⟩
       exact nextNoneErr hxat hrun h_ne
@@ -5641,8 +5641,8 @@ lemma lift_core
       subst hpc'
       have h_ne_code : (devm.getCode ca).toList ≠ [] := fun hc =>
         Prog.compile_ne_nil (Eq.trans h_at_p.left.symm (congrArg some hc))
-      have hrun : Ninst.Run' pc sevm devm (.exec x) .none (.ok devm') := by
-        unfold Ninst.Run'
+      have hrun : Ninst.StepRun pc sevm devm (.exec x) .none (.ok devm') := by
+        unfold Ninst.StepRun
         rw [← Evm.step_next (n := Ninst.exec x) hxat, hstep]
         exact ⟨r, RunFrame.of_done henter, hr.symm⟩
       have hcode : devm'.getCode ca = devm.getCode ca :=
@@ -5670,8 +5670,8 @@ lemma lift_core
         rw [hcode, hct]
         exact h_at_p.left
       have hrun :
-          Ninst.Run' pc sevm devm (.exec x) (.some ⟨cevm, raw⟩) (.error e) := by
-        unfold Ninst.Run'
+          Ninst.StepRun pc sevm devm (.exec x) (.some ⟨cevm, raw⟩) (.error e) := by
+        unfold Ninst.StepRun
         rw [← Evm.step_next (n := Ninst.exec x) hxat, hstep]
         exact ⟨f.settle raw, RunFrame.of_run henter, hr.symm⟩
       exact nextSomeErr hxat hrun child h_ne
@@ -5700,11 +5700,11 @@ lemma lift_core
         exact h_at_p.left
       have hchild : Xlot.Rel Devm.CodePreserve (.some ⟨cevm, raw⟩) :=
         Exec.effect codePreserve_refl_trans.1 codePreserve_refl_trans.2
-          Ninst.codePreserve_effectGen Jinst.codePreserve_effect
+          Ninst.codePreserve_effectRec Jinst.codePreserve_effect
           Linst.codePreserve_effect child
       have hrun :
-          Ninst.Run' pc sevm devm (.exec x) (.some ⟨cevm, raw⟩) (.ok devm') := by
-        unfold Ninst.Run'
+          Ninst.StepRun pc sevm devm (.exec x) (.some ⟨cevm, raw⟩) (.ok devm') := by
+        unfold Ninst.StepRun
         rw [← Evm.step_next (n := Ninst.exec x) hxat, hstep]
         exact ⟨f.settle raw, RunFrame.of_run henter, hr.symm⟩
       have hcode : devm'.getCode ca = devm.getCode ca :=
@@ -5730,7 +5730,7 @@ lemma lift
     ( nextNone :
       ∀ {pc} {sevm} {pre} {n} {inter} {post},
         n.At sevm.code pc →
-        Ninst.Run' pc sevm pre n .none (.ok inter) →
+        Ninst.StepRun pc sevm pre n .none (.ok inter) →
         Exec (pc + n.size) sevm inter (.ok post) →
         sevm.currentTarget ≠ ca →
         R sevm inter post →
@@ -5739,7 +5739,7 @@ lemma lift
       ∀ {pc} {sevm} {pre} {n} {evm'}
         {exn' : Execution} {inter} {post},
         n.At sevm.code pc →
-        Ninst.Run' pc sevm pre n
+        Ninst.StepRun pc sevm pre n
           (.some ⟨evm', exn'⟩)
           (.ok inter) →
         Exec evm'.pc evm'.sta evm'.dyna exn' →
@@ -5814,14 +5814,14 @@ lemma lift_inv
     ( nextNone :
       ∀ {pc} {sevm} {pre} {n} {inter},
         n.At sevm.code pc →
-        Ninst.Run' pc sevm pre n .none (.ok inter) →
+        Ninst.StepRun pc sevm pre n .none (.ok inter) →
         sevm.currentTarget ≠ ca →
         σ sevm pre →
         σ sevm inter )
     ( nextSome :
       ∀ {pc} {sevm} {pre} {n} {evm'} {exn'} {inter},
         n.At sevm.code pc →
-        Ninst.Run' pc sevm pre n (.some ⟨evm', exn'⟩) (.ok inter) →
+        Ninst.StepRun pc sevm pre n (.some ⟨evm', exn'⟩) (.ok inter) →
         Exec evm'.pc evm'.sta evm'.dyna exn' →
         sevm.currentTarget ≠ ca →
         σ sevm pre →
@@ -5880,11 +5880,11 @@ macro_rules
               rcases of_cons_cons_pref_of_cons_cons_pref h1 (pref_of_split h2) with ⟨hx, hy, h⟩;
               cases hx; cases hy; clear h; apply append_pref h3 (of_append_pref h2 h1) )
 
-infix:70 " <? "  => B256.lt_check
-infix:70 " >? "  => B256.gt_check
-infix:70 " ±<? " => B256.slt_check
-infix:70 " ±>? " => B256.sgt_check
-infix:70 " =? "  => B256.eq_check
+infix:70 " <? "  => B256.ltCheck
+infix:70 " >? "  => B256.gtCheck
+infix:70 " ±<? " => B256.sltCheck
+infix:70 " ±>? " => B256.sgtCheck
+infix:70 " =? "  => B256.eqCheck
 
 lemma Bytes.sig_zero_cons (xs) : Bytes.sig (0 :: xs) = Bytes.sig xs := rfl
 lemma Bytes.sig_nonzero_cons (x xs) (h : x ≠ 0) : Bytes.sig (x :: xs) = x :: xs := by
@@ -6007,13 +6007,13 @@ lemma of_run_reg {e : Sevm} {s s' : Devm} {r : Rinst}
     (h : Ninst.Run e s (Ninst.reg r) s') :
     ∃ pc, Rinst.run ⟨pc, e, s⟩ r = .ok s' := by
   rcases h with ⟨xl, _, pc, run⟩
-  simp only [Ninst.Run', Ninst.step_reg, Step.run_ofExecution] at run
+  simp only [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at run
   exact ⟨pc, run.2.symm⟩
 
 lemma of_run_push {e s s' xs p} (h : Ninst.Run e s (push xs p) s') :
     Devm.PushBurn [xs.toB256] s s' := by
   rcases h with ⟨xl, _, pc, run⟩
-  simp only [Ninst.Run', Ninst.step_push, Step.run_ofExecution] at run
+  simp only [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at run
   exact Devm.pushBurn_of_run run.2.symm
 
 /-- A successful `push` run, as the executable equation the `Hinv` instance
@@ -6024,7 +6024,7 @@ lemma Ninst.run_push_eq {e : Sevm} {s s' : Devm} {xs : Bytes} {le : xs.length �
     (do let d ← chargeGas (if xs = [] then gBase else gVerylow) s
         d.push xs.toB256) = .ok s' := by
   rcases h with ⟨xl, -, pc, run⟩
-  simp only [Ninst.Run', Ninst.step_push, Step.run_ofExecution] at run
+  simp only [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at run
   exact run.2.symm
 
 lemma of_run_pushB256 {e s s' x} (h : Ninst.Run e s (pushB256 x) s') :
@@ -6312,7 +6312,7 @@ lemma prefix_of_iszero {e} {x xs} {s s' : Devm} :
 lemma prefix_of_eq {e} {x y xs} {s s' : Devm} :
     Ninst.Run e s eq s' → (x :: y :: xs <<+ s.stack) → ((x =? y) :: xs <<+ s'.stack) := by
   intro h0 h1
-  refine prefix_of_diffBurn_two B256.eq_check ?_ h1
+  refine prefix_of_diffBurn_two B256.eqCheck ?_ h1
   rcases of_run_reg h0 with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
   exact Devm.diffBurn_of_applyBinary run
@@ -6320,7 +6320,7 @@ lemma prefix_of_eq {e} {x y xs} {s s' : Devm} :
 lemma prefix_of_lt {e} {x y xs} {s s' : Devm} :
     Ninst.Run e s lt s' → (x :: y :: xs <<+ s.stack) → ((x <? y) :: xs <<+ s'.stack) := by
   intro h0 h1
-  refine prefix_of_diffBurn_two B256.lt_check ?_ h1
+  refine prefix_of_diffBurn_two B256.ltCheck ?_ h1
   rcases of_run_reg h0 with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
   exact Devm.diffBurn_of_applyBinary run
@@ -6328,7 +6328,7 @@ lemma prefix_of_lt {e} {x y xs} {s s' : Devm} :
 lemma prefix_of_gt {e} {x y xs} {s s' : Devm} :
     Ninst.Run e s gt s' → (x :: y :: xs <<+ s.stack) → ((x >? y) :: xs <<+ s'.stack) := by
   intro h0 h1
-  refine prefix_of_diffBurn_two B256.gt_check ?_ h1
+  refine prefix_of_diffBurn_two B256.gtCheck ?_ h1
   rcases of_run_reg h0 with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
   exact Devm.diffBurn_of_applyBinary run
@@ -6471,7 +6471,7 @@ lemma of_run_sload {e : Sevm} {s s' : Devm} (h : Ninst.Run e s sload s') :
   rw [hst, hstk, ← hval]
   exact hpush.stack
 
-lemma prefix_of_sload' {e x xs} {s s' : Devm} :
+lemma prefix_of_sload {e x xs} {s s' : Devm} :
     Ninst.Run e s sload s' → (x :: xs <<+ s.stack) →
     ∃ y, (y :: xs <<+ s'.stack) ∧ y = Devm.getStorVal s e.currentTarget x := by
   intro h0 h1
@@ -6854,7 +6854,7 @@ instance {ξ : Type} (f : Devm → ξ) (o : Rinst) [Rinst.Hinv f o] :
     Ninst.Hinv f (Ninst.reg o) := ⟨by
   intros e s s' h
   rcases h with ⟨xl, h_filled, pc, run⟩
-  simp only [Ninst.Run', Ninst.step_reg, Step.run_ofExecution] at run
+  simp only [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at run
   exact Rinst.Hinv.inv run.2.symm
 ⟩
 
@@ -7774,9 +7774,9 @@ lemma Jinst.balance_effect (j : Jinst) :
   cases out <;> exact Devm.balNoninc_of_getBal_eq
     (funext fun a => (hf.getBal a).symm)
 
-lemma Ninst.push_balance_effectGen {xs : Bytes} {hxs : xs.length ≤ 32} :
-    Ninst.EffectGen Devm.BalNoninc (.push xs hxs) := by
-  exact Ninst.push_effectGen_of_instructionFrame (R := Devm.BalNoninc)
+lemma Ninst.push_balance_effectRec {xs : Bytes} {hxs : xs.length ≤ 32} :
+    Ninst.EffectRec Devm.BalNoninc (.push xs hxs) := by
+  exact Ninst.push_effectRec_of_instructionFrame (R := Devm.BalNoninc)
     (fun _ _ hf =>
       Devm.balNoninc_of_getBal_eq (funext fun a => (hf.getBal a).symm))
 
@@ -8357,8 +8357,8 @@ lemma GenericCreate.balance_effect
     Execution.Rel Devm.BalNoninc pre out :=
   GenericCreate.balanceEffect hxl run
 
-lemma Xinst.balance_effectGen (x : Xinst) :
-    Xinst.EffectGen Devm.BalNoninc x := by
+lemma Xinst.balance_effectRec (x : Xinst) :
+    Xinst.EffectRec Devm.BalNoninc x := by
   intro sevm pre xl out hxl run
   unfold Xinst.Run at run
   rcases Xinst.step_shape sevm pre x with ⟨ex, hs, hframe⟩ |
@@ -8377,26 +8377,26 @@ lemma Xinst.balance_effectGen (x : Xinst) :
       (Devm.instructionFrame_refines_balNoninc hf)
       (GenericCall.balanceEffect hxl run)
 
-lemma Ninst.balance_effectGen (n : Ninst) :
-    Ninst.EffectGen Devm.BalNoninc n := by
+lemma Ninst.balance_effectRec (n : Ninst) :
+    Ninst.EffectRec Devm.BalNoninc n := by
   cases n
   case reg r =>
-    apply Ninst.effectGen_reg
+    apply Ninst.effectRec_reg
     apply Rinst.balance_effect
   case exec x =>
-    apply Ninst.effectGen_exec
-    apply Xinst.balance_effectGen
+    apply Ninst.effectRec_exec
+    apply Xinst.balance_effectRec
   case push xs hxs =>
-    apply Ninst.push_balance_effectGen
+    apply Ninst.push_balance_effectRec
 
 theorem Exec.balance_effect {pc : Nat} {sevm : Sevm} {pre : Devm}
     {out : Execution} (run : Exec pc sevm pre out) :
     Execution.Rel Devm.BalNoninc pre out :=
-  Exec.effect balNoninc_refl_trans.2.1 balNoninc_refl_trans.2.2 Ninst.balance_effectGen Jinst.balance_effect Linst.balance_effect run
+  Exec.effect balNoninc_refl_trans.2.1 balNoninc_refl_trans.2.2 Ninst.balance_effectRec Jinst.balance_effect Linst.balance_effect run
 
 lemma Ninst.balance_effect (n : Ninst) : Ninst.Effect Devm.BalNoninc n := by
-  apply Ninst.effect_of_effectGen balNoninc_refl_trans.2.1 balNoninc_refl_trans.2.2
-  · exact Ninst.balance_effectGen
+  apply Ninst.effect_of_effectRec balNoninc_refl_trans.2.1 balNoninc_refl_trans.2.2
+  · exact Ninst.balance_effectRec
   · exact Jinst.balance_effect
   · exact Linst.balance_effect
 

@@ -254,7 +254,7 @@ def Step.Run (s : Step) (xl : Xlot) (ex : Execution) : Prop :=
   | .cont _ devm => xl = .none ∧ ex = .ok devm
   | .spawn f rsm _ => ∃ r, RunFrame f xl r ∧ ex = rsm.run r
 
-def Ninst.Run' (pc : Nat) (sevm : Sevm) (devm : Devm)
+def Ninst.StepRun (pc : Nat) (sevm : Sevm) (devm : Devm)
     (n : Ninst) (xl : Xlot) (ex : Execution) : Prop :=
   Step.Run (Ninst.step ⟨pc, sevm, devm⟩ n) xl ex
 
@@ -710,7 +710,7 @@ lemma Exec.last_inv {pc sevm devm exn l}
   cr.halt_inv (Evm.step_last h)
 
 def Ninst.Run (sevm : Sevm) (devm : Devm) (n : Ninst) (devm' : Devm) : Prop :=
-  ∃ xl : Xlot, xl.Filled ∧ ∃ pc, Ninst.Run' pc sevm devm n xl (.ok devm')
+  ∃ xl : Xlot, xl.Filled ∧ ∃ pc, Ninst.StepRun pc sevm devm n xl (.ok devm')
 
 inductive Func.Run : List Func → Sevm → Devm → Func → Devm → Prop
   | zero :
