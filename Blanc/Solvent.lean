@@ -84,7 +84,7 @@ def Exec.InvDepth (k : Nat) (ca : Adr) (p : Prog)
   (σ : Sevm → Devm → Prop) (ρ : Sevm → Devm → Prop) : Prop :=
   ForallDeeperAt k ca p (λ _ sevm pre exn _ => σ sevm pre → ifOk (ρ sevm) exn)
 
-lemma Line.inv_solvent {e e' s l s' a}
+lemma Line.preserves_solvent {e e' s l s' a}
     (h_bal : Line.Inv Devm.getBal l) (h_stor : Line.Inv Devm.getStor l)
     (h_sv : Devm.PreSolvent s a e) (h_run : Line.Run e' s l s') : Devm.PreSolvent s' a e := by
   unfold Devm.PreSolvent; rw [← h_bal h_run, ← h_stor h_run]; exact h_sv
@@ -284,12 +284,12 @@ macro_rules
             apply solvent_of_same_stor h_sv <;>
             apply congr_fun <| Func.of_inv _ _ (by func_inv) run )
 
-lemma name_inv_solvent {sevm : Sevm} {s r : Devm}
+lemma name_preserves_solvent {sevm : Sevm} {s r : Devm}
     (run : Func.Run (weth.main :: weth.aux) sevm s name r)
     (h_sv : s.PreSolvent sevm.currentTarget sevm) :
     r.PostSolvent sevm.currentTarget := by simple_solvent
 
-lemma approve_inv_bal : Func.Inv Devm.getBal Devm.getBal approve := by func_inv
+lemma approve_preserves_bal : Func.Inv Devm.getBal Devm.getBal approve := by func_inv
 
 def ValidAdr (w : B256) : Prop := ∃ a : Adr, a.toB256 = w
 
@@ -521,7 +521,7 @@ lemma sstore_getStor_setStorVal {sevm : Sevm} {s s' : Devm} {x xs}
   refine ⟨val, ?_⟩
   rw [← eq, setStorVal_getStor_self, hkx, E]
 
-lemma sstore_inv_stor_rest {x xs} {sevm : Sevm} {s s' : Devm} :
+lemma sstore_preserves_stor_rest {x xs} {sevm : Sevm} {s s' : Devm} :
   ¬ ValidAdr x →
   (x :: xs <<+ s.stack) →
   Ninst.Run sevm s .sstore s' →
@@ -619,7 +619,7 @@ lemma of_withdrawLoadCheck {sevm : Sevm} {s s' : Devm}
   rw [hstor4] at h_cbal
   exact ⟨wad, cbal, hp₄, h_cbal⟩
 
-lemma approve_inv_wbal {sevm : Sevm} {s r : Devm}
+lemma approve_preserves_wbal {sevm : Sevm} {s r : Devm}
     (run : Func.Run (weth.main :: weth.aux) sevm s approve r) :
     (s.getStor sevm.currentTarget).rest = (r.getStor sevm.currentTarget).rest := by
   rcases of_run_prepend (arg 0 ++ checkNonAddress) _ run
@@ -661,7 +661,7 @@ lemma approve_inv_wbal {sevm : Sevm} {s r : Devm}
     (Devm.PopBurn.getStor h_pop sevm.currentTarget).symm
   rw [h_s3_stor]; clear h_s3_stor h_pop s2
   rcases of_run_next h_run with ⟨s4, h_sstore, h_run'⟩; clear h_run
-  have hh := sstore_inv_stor_rest h_iff h_s3_stk h_sstore
+  have hh := sstore_preserves_stor_rest h_iff h_s3_stk h_sstore
   have h_r_stor_eq : s4.getStor = r.getStor := by
     apply Func.of_inv Devm.getStor Devm.getStor _ h_run'
     func_inv
@@ -685,15 +685,15 @@ lemma result_solvent_of_state_solvent {sevm : Sevm} {s r : Devm}
   rw [← h_wbsum_eq]
   omega
 
-lemma approve_inv_solvent {sevm : Sevm} {s r : Devm}
+lemma approve_preserves_solvent {sevm : Sevm} {s r : Devm}
     (run : Func.Run (weth.main :: weth.aux) sevm s approve r)
     (h_sv : s.PreSolvent sevm.currentTarget sevm) :
     r.PostSolvent sevm.currentTarget := by
-  have h_bal_fun := Func.of_inv Devm.getBal Devm.getBal approve_inv_bal run
+  have h_bal_fun := Func.of_inv Devm.getBal Devm.getBal approve_preserves_bal run
   have h_bal := congr_fun h_bal_fun sevm.currentTarget
-  exact result_solvent_of_state_solvent (approve_inv_wbal run) h_bal h_sv
+  exact result_solvent_of_state_solvent (approve_preserves_wbal run) h_bal h_sv
 
-lemma totalSupply_inv_solvent {sevm : Sevm} {s r : Devm}
+lemma totalSupply_preserves_solvent {sevm : Sevm} {s r : Devm}
     (run : Func.Run (weth.main :: weth.aux) sevm s totalSupply r)
     (h_sv : s.PreSolvent sevm.currentTarget sevm) :
     r.PostSolvent sevm.currentTarget := by simple_solvent
@@ -824,7 +824,7 @@ lemma sum_add_assoc {k v} {f g : Adr → B256}
     nof
     (Nat.succ_le_of_lt <| Adr.toNat_lt_size _)
 
-lemma deposit_inv_bal : Func.Inv Devm.getBal Devm.getBal deposit := by func_inv
+lemma deposit_preserves_bal : Func.Inv Devm.getBal Devm.getBal deposit := by func_inv
 
 lemma wbsum_after_deposit {sevm : Sevm} {s r : Devm}
     (h_nof : wbsum (s.getStor sevm.currentTarget) + sevm.value.toNat < 2 ^ 256)
@@ -882,14 +882,14 @@ lemma wbsum_after_deposit {sevm : Sevm} {s r : Devm}
   rw [hs_eq, ← hs6]
   exact sum_add_assoc h_incr h_nof'
 
-lemma deposit_inv_solvent {sevm : Sevm} {s r : Devm}
+lemma deposit_preserves_solvent {sevm : Sevm} {s r : Devm}
     (run : Func.Run (weth.main :: weth.aux) sevm s deposit r)
     (h_sv : s.PreSolvent sevm.currentTarget sevm) :
     r.PostSolvent sevm.currentTarget := by
   unfold Devm.PostSolvent
   unfold Stor.Solvent
   rw [B256.toNat_zero]
-  have h_bal : s.getBal = r.getBal := Func.of_inv _ _ deposit_inv_bal run
+  have h_bal : s.getBal = r.getBal := Func.of_inv _ _ deposit_preserves_bal run
   rw [← h_bal]
   have h_sv' : wbsum (s.getStor sevm.currentTarget) + sevm.value.toNat ≤ (s.getBal sevm.currentTarget).toNat := by
     have h := h_sv.left rfl
@@ -925,7 +925,7 @@ lemma add_le_sum_of_ne (f : Adr → B256) {x y : Adr} (ne : x ≠ y) :
   · rw [Nat.add_comm]
     apply add_le_sumBelow f y_lt_x (Adr.toNat_lt_size x)
 
-lemma transfer_inv_sum {kd ki v} {b d : Adr → B256}
+lemma transfer_preserves_sum {kd ki v} {b d : Adr → B256}
     (hb : SumNof b) (h : Transfer b kd v ki d) : sum b = sum d := by
   rcases h with ⟨h, c, hd, hi⟩
   apply @Eq.trans _ _ (sum c + v.toNat)
@@ -1050,7 +1050,7 @@ lemma of_transferFromUpdateSbal {sevm : Sevm} {s₀ sₙ : Devm} {sbal wad src}
   · simp only [Stor.rest, Function.comp_apply]
     rw [toB256_toAdr h_src, ← h_sbal]; exact h_le
 
-lemma updateAllowance_inv_stor_rest {fs : List Func} {sevm : Sevm} {s r : Devm} {wad dst}
+lemma updateAllowance_preserves_stor_rest {fs : List Func} {sevm : Sevm} {s r : Devm} {wad dst}
     (hs : [wad, dst] <<+ s.stack)
     (h_run : Func.Run fs sevm s updateAllowance r) :
     (s.getStor sevm.currentTarget).rest = (r.getStor sevm.currentTarget).rest := by
@@ -1248,7 +1248,7 @@ lemma updateAllowance_inv_stor_rest {fs : List Func} {sevm : Sevm} {s r : Devm} 
       clear rQ hsP
       -- sstore  ( key `hash` is not a valid address, so `.rest` is unchanged )
       rcases of_run_next h_runP with ⟨sR, rR, h_runP⟩
-      rw [sstore_inv_stor_rest hnva hsQ rR]
+      rw [sstore_preserves_stor_rest hnva hsQ rR]
       -- returnTrue
       rw [congr_fun (Func.of_inv Devm.getStor Devm.getStor (by func_inv) h_runP)
         sevm.currentTarget]
@@ -1484,7 +1484,7 @@ lemma transfer_of_transferFrom {fs : List Func} {sevm : Sevm} {s r : Devm} :
   clear h21
   -- updateAllowance : preserves the WETH balance storage
   have h_ua : (a21.getStor sevm.currentTarget).rest = (r.getStor sevm.currentTarget).rest :=
-    updateAllowance_inv_stor_rest hs21 h_run
+    updateAllowance_preserves_stor_rest hs21 h_run
   -- assemble the Transfer
   refine ⟨wad, src.toAdr, dst.toAdr, ?_, (a13.getStor sevm.currentTarget).rest, ?_, ?_⟩
   · rw [congr_fun hg12 sevm.currentTarget]; exact h_le'
@@ -1514,16 +1514,16 @@ lemma result_solvent_of_wbsum_eq {sevm : Sevm} {s r : Devm}
   rw [← h_bal, ← h_sum]
   omega
 
-lemma transferFrom_inv_bal : Func.Inv Devm.getBal Devm.getBal transferFrom := by func_inv
+lemma transferFrom_preserves_bal : Func.Inv Devm.getBal Devm.getBal transferFrom := by func_inv
 
-lemma transferFrom_inv_solvent {sevm : Sevm} {s r : Devm}
+lemma transferFrom_preserves_solvent {sevm : Sevm} {s r : Devm}
     (run : Func.Run (weth.main :: weth.aux) sevm s transferFrom r)
     (h_sv : s.PreSolvent sevm.currentTarget sevm) :
     r.PostSolvent sevm.currentTarget := by
   rcases transfer_of_transferFrom run with ⟨x, a, a', h_di⟩
   refine result_solvent_of_wbsum_eq h_sv ?_ ?_
-  · exact transfer_inv_sum (nof_of_solvent h_sv) h_di
-  · exact congr_fun (Func.of_inv Devm.getBal Devm.getBal transferFrom_inv_bal run)
+  · exact transfer_preserves_sum (nof_of_solvent h_sv) h_di
+  · exact congr_fun (Func.of_inv Devm.getBal Devm.getBal transferFrom_preserves_bal run)
       sevm.currentTarget
 
 lemma precond_of_precond {wa : Adr} {sevm : Sevm} {s s' : Devm}
@@ -2110,7 +2110,7 @@ lemma of_send_to_caller {sevm : Sevm} {s sf : Devm} {wad}
             getBal_eq_of_state_eq h_sf_state sevm.currentTarget]
         exact hpost.solvent
 
-lemma withdraw_inv_solvent {sevm : Sevm} {s r : Devm}
+lemma withdraw_preserves_solvent {sevm : Sevm} {s r : Devm}
     (cond : Precond sevm.currentTarget sevm s)
     (ih : Exec.InvDepth sevm.depth sevm.currentTarget weth (Precond sevm.currentTarget) (Postcond sevm.currentTarget))
     (run : Func.Run (weth.main :: weth.aux) sevm s withdraw r) :
@@ -2161,22 +2161,22 @@ lemma withdraw_inv_solvent {sevm : Sevm} {s r : Devm}
   rw [← congr_fun (Func.of_inv Devm.getBal Devm.getBal (by func_inv) h₅) sevm.currentTarget]
   exact of_send_to_caller ih hp₃ h_code₃ h_nof₃ h_le h_sv h₄
 
-lemma decimals_inv_solvent {sevm : Sevm} {s r : Devm}
+lemma decimals_preserves_solvent {sevm : Sevm} {s r : Devm}
     (run : Func.Run (weth.main :: weth.aux) sevm s decimals r)
     (h_sv : s.PreSolvent sevm.currentTarget sevm) :
     r.PostSolvent sevm.currentTarget := by simple_solvent
 
-lemma balanceOf_inv_solvent {sevm : Sevm} {s r : Devm}
+lemma balanceOf_preserves_solvent {sevm : Sevm} {s r : Devm}
     (run : Func.Run (weth.main :: weth.aux) sevm s balanceOf r)
     (h_sv : s.PreSolvent sevm.currentTarget sevm) :
     r.PostSolvent sevm.currentTarget := by simple_solvent
 
-lemma symbol_inv_solvent {sevm : Sevm} {s r : Devm}
+lemma symbol_preserves_solvent {sevm : Sevm} {s r : Devm}
     (run : Func.Run (weth.main :: weth.aux) sevm s symbol r)
     (h_sv : s.PreSolvent sevm.currentTarget sevm) :
     r.PostSolvent sevm.currentTarget := by simple_solvent
 
-lemma transfer_inv_bal : Func.Inv Devm.getBal Devm.getBal transfer := by func_inv
+lemma transfer_preserves_bal : Func.Inv Devm.getBal Devm.getBal transfer := by func_inv
 
 lemma of_transferTestDst {sevm : Sevm} {s s' : Devm} :
     Line.Run sevm s transferTestDst s' →
@@ -2308,22 +2308,22 @@ lemma transfer_of_transfer {fs : List Func} {sevm : Sevm} {s r : Devm} :
       rw [Stor.get_set_ne h_key_ne, congr_fun hg4 sevm.currentTarget]
   · rw [← h_rest]; exact h_incr
 
-lemma transfer_inv_solvent {sevm : Sevm} {s r : Devm}
+lemma transfer_preserves_solvent {sevm : Sevm} {s r : Devm}
     (run : Func.Run (weth.main :: weth.aux) sevm s transfer r)
     (h_sv : s.PreSolvent sevm.currentTarget sevm) :
     r.PostSolvent sevm.currentTarget := by
   rcases transfer_of_transfer run with ⟨x, a, a', h_di⟩
   refine result_solvent_of_wbsum_eq h_sv ?_ ?_
-  · exact transfer_inv_sum (nof_of_solvent h_sv) h_di
-  · exact congr_fun (Func.of_inv Devm.getBal Devm.getBal transfer_inv_bal run)
+  · exact transfer_preserves_sum (nof_of_solvent h_sv) h_di
+  · exact congr_fun (Func.of_inv Devm.getBal Devm.getBal transfer_preserves_bal run)
       sevm.currentTarget
 
-lemma allowance_inv_solvent {sevm : Sevm} {s r : Devm}
+lemma allowance_preserves_solvent {sevm : Sevm} {s r : Devm}
     (run : Func.Run (weth.main :: weth.aux) sevm s allowance r)
     (h_sv : s.PreSolvent sevm.currentTarget sevm) :
     r.PostSolvent sevm.currentTarget := by simple_solvent
 
-lemma Jinst.inv_state
+lemma Jinst.preserves_state
     {pc sevm devm j pc' devm'}
     (run : Jinst.Run ⟨pc, sevm, devm⟩ j (.ok ⟨pc', devm'⟩)) :
     devm'.state = devm.state := by
@@ -2459,7 +2459,7 @@ lemma of_executeCode_cases {msg : Msg} {xl : Xlot}
     · exact Or.inl ⟨adr, h'⟩
     · exact Or.inr ⟨ex', h1, h2⟩
 
-lemma Exec.inv_nof {pc : Nat} {sevm : Sevm} {devm : Devm} {exn : Execution}
+lemma Exec.preserves_nof {pc : Nat} {sevm : Sevm} {devm : Devm} {exn : Execution}
     (run : Exec pc sevm devm exn) :
     ∀ r : Devm, exn = .ok r →
       sum devm.getBal < 2 ^ 256 → sum r.getBal < 2 ^ 256 := by
@@ -2467,7 +2467,7 @@ lemma Exec.inv_nof {pc : Nat} {sevm : Sevm} {devm : Devm} {exn : Execution}
   subst h_eq
   exact Nat.lt_of_le_of_lt (Exec.balance_effect run) h_nof
 
-lemma Xinst.inv_nof {sevm : Sevm} {s r : Devm} {x : Xinst} {xl : Xlot}
+lemma Xinst.preserves_nof {sevm : Sevm} {s r : Devm} {x : Xinst} {xl : Xlot}
     (h : Xinst.Run sevm s x xl (.ok r)) (h_nof : sum s.getBal < 2 ^ 256)
     (h_fill : xl.Filled) :
     sum r.getBal < 2 ^ 256 := by
@@ -2476,17 +2476,17 @@ lemma Xinst.inv_nof {sevm : Sevm} {s r : Devm} {x : Xinst} {xl : Xlot}
       Ninst.balance_effectRec Jinst.balance_effect Linst.balance_effect h_fill
   exact Nat.lt_of_le_of_lt (Xinst.balance_effectRec x hxl h) h_nof
 
-lemma Ninst.inv_nof {sevm : Sevm} {s r : Devm} {i : Ninst}
+lemma Ninst.preserves_nof {sevm : Sevm} {s r : Devm} {i : Ninst}
     (h : Ninst.Run sevm s i r) (h_nof : sum s.getBal < 2 ^ 256) :
     sum r.getBal < 2 ^ 256 :=
   Nat.lt_of_le_of_lt (Ninst.balance_effect i h) h_nof
 
-lemma Func.inv_nof {c : List Func} {sevm : Sevm} {s r : Devm} {f : Func}
+lemma Func.preserves_nof {c : List Func} {sevm : Sevm} {s r : Devm} {f : Func}
     (run : Func.Run c sevm s f r) (h_nof : sum s.getBal < 2 ^ 256) :
     sum r.getBal < 2 ^ 256 :=
   Nat.lt_of_le_of_lt (Func.balance_effect run) h_nof
 
-lemma run_inv_cond (f : Func)
+lemma run_preserves_cond (f : Func)
     ( h_solv :
       ∀ {sevm : Sevm} {s r : Devm},
         Func.Run (weth.main :: weth.aux) sevm s f r →
@@ -2498,7 +2498,7 @@ lemma run_inv_cond (f : Func)
       Postcond sevm.currentTarget sevm r := by
   intro sevm s r run cond
   constructor
-  · apply Func.inv_nof run cond.nof
+  · apply Func.preserves_nof run cond.nof
   · apply h_solv run cond.solvent
 
 lemma weth_inv {sevm : Sevm} {s r}
@@ -2525,7 +2525,7 @@ lemma weth_inv {sevm : Sevm} {s r}
     refine' ⟨_, _, _⟩
     · rw [← Line.of_inv Devm.getCode (by line_inv) h₁]; exact cond₀.code
     · rw [← Line.of_inv Devm.getBal (by line_inv) h₁]; exact cond₀.nof
-    · apply Line.inv_solvent _ _ cond₀.solvent h₁ <;> line_inv
+    · apply Line.preserves_solvent _ _ cond₀.solvent h₁ <;> line_inv
   clear cond₀
   clear h₁
   clear s₀
@@ -2554,23 +2554,23 @@ lemma weth_inv {sevm : Sevm} {s r}
   · intro e s s' r ⟨cond, ih⟩ burn run
     have cond' : Precond e.currentTarget e s' := Precond.state_eq cond burn.state.symm
     have r_cond : Postcond e.currentTarget e r :=
-      run_inv_cond deposit deposit_inv_solvent run cond'
+      run_preserves_cond deposit deposit_preserves_solvent run cond'
     exact r_cond
   · intro e s r wf h_mem ⟨cond, ih⟩ h_run
     rcases h_mem with (((h | h) | h) | (h | h)) | (((h | h) | h) | (h | h)) <;>
       (cases h)
-    · apply run_inv_cond name name_inv_solvent h_run cond
-    · apply run_inv_cond approve approve_inv_solvent h_run cond
-    · apply run_inv_cond totalSupply totalSupply_inv_solvent h_run cond
-    · apply run_inv_cond transferFrom transferFrom_inv_solvent h_run cond
+    · apply run_preserves_cond name name_preserves_solvent h_run cond
+    · apply run_preserves_cond approve approve_preserves_solvent h_run cond
+    · apply run_preserves_cond totalSupply totalSupply_preserves_solvent h_run cond
+    · apply run_preserves_cond transferFrom transferFrom_preserves_solvent h_run cond
     · constructor
-      · apply Func.inv_nof h_run cond.nof
-      · apply withdraw_inv_solvent cond ih h_run
-    · apply run_inv_cond decimals decimals_inv_solvent h_run cond
-    · apply run_inv_cond balanceOf balanceOf_inv_solvent h_run cond
-    · apply run_inv_cond symbol symbol_inv_solvent h_run cond
-    · apply run_inv_cond transfer transfer_inv_solvent h_run cond
-    · apply run_inv_cond allowance allowance_inv_solvent h_run cond
+      · apply Func.preserves_nof h_run cond.nof
+      · apply withdraw_preserves_solvent cond ih h_run
+    · apply run_preserves_cond decimals decimals_preserves_solvent h_run cond
+    · apply run_preserves_cond balanceOf balanceOf_preserves_solvent h_run cond
+    · apply run_preserves_cond symbol symbol_preserves_solvent h_run cond
+    · apply run_preserves_cond transfer transfer_preserves_solvent h_run cond
+    · apply run_preserves_cond allowance allowance_preserves_solvent h_run cond
 
 lemma Precond.of_eqs {wa : Adr} {sevm : Sevm} {pre inter : Devm}
     (h_pc : Precond wa sevm pre)
@@ -2590,7 +2590,7 @@ lemma setStorVal_getStor_ne {devm : Devm} {adr a : Adr} {key val : B256} (h : ad
     Devm.setWorld, State.setStorVal]
   simp only [Devm.state, State.get_set_ne h]
 
-lemma sstore_inv_getStor_ne {pc : Nat} {sevm : Sevm} {s s' : Devm} {a : Adr}
+lemma sstore_preserves_getStor_ne {pc : Nat} {sevm : Sevm} {s s' : Devm} {a : Adr}
     (run : Rinst.run ⟨pc, sevm, s⟩ .sstore = .ok s')
     (h_ne : sevm.currentTarget ≠ a) :
     s'.getStor a = s.getStor a := by
@@ -2721,7 +2721,7 @@ lemma Precond.transfer_state {wa : Adr} {sevm : Sevm} {pre inter : Devm}
     unfold Stor.Solvent at hs ⊢
     omega
 
-lemma GenericCall.none_inv_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm}
+lemma GenericCall.none_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm}
     {gas : Nat} {value : B256} {caller target codeAddress : Adr}
     {stv isStatic : Bool} {ii is oi os : Nat} {code : ByteArray} {dp : Bool}
     (h_run : GenericCall sevm devm gas value caller target codeAddress stv
@@ -2794,7 +2794,7 @@ lemma GenericCall.none_inv_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm}
           exact hc_state
       · cases h_xl_some
 
-lemma GenericCreate.none_inv_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm}
+lemma GenericCreate.none_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm}
     {endowment : B256} {newAddress : Adr} {memoryIndex memorySize : Nat}
     (h_run : GenericCreate sevm devm endowment newAddress memoryIndex memorySize
       .none (.ok inter))
@@ -2855,7 +2855,7 @@ lemma GenericCreate.none_inv_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm
       obtain ⟨exn, h_xl, -⟩ := of_executeCode_noneCode hca hbody
       cases h_xl
 
-lemma Xinst.none_inv_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm} {x : Xinst}
+lemma Xinst.none_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm} {x : Xinst}
     (h_run : Xinst.Run sevm devm x .none (.ok inter))
     (h_ne : sevm.currentTarget ≠ wa)
     (h_pc : Precond wa sevm devm) :
@@ -2869,8 +2869,8 @@ lemma Xinst.none_inv_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm} {x : X
     rw [← hex] at hframe
     have hif : Devm.InstructionFrame devm inter := hframe
     exact h_pc.state_eq hif.state.symm
-  · exact GenericCreate.none_inv_precond h_run (h_pc.state_eq hf.state.symm)
-  · refine GenericCall.none_inv_precond h_run ?_ (h_pc.state_eq hf.state.symm)
+  · exact GenericCreate.none_preserves_precond h_run (h_pc.state_eq hf.state.symm)
+  · refine GenericCall.none_preserves_precond h_run ?_ (h_pc.state_eq hf.state.symm)
     rintro hstv
     rcases hcal with ⟨-, rfl⟩ | ⟨hsf, -⟩
     · exact h_ne
@@ -3040,7 +3040,7 @@ lemma code_eq_of_exec {sevm' : Sevm} {devm' child : Devm} {wa : Adr}
     intro hc
     apply @Prog.compile_ne_nil weth
     rw [← h_code, hc]
-  exact Exec.inv_getCode ex_sub wa h_ne
+  exact Exec.preserves_getCode ex_sub wa h_ne
 
 -- the precondition is restored after a successful sub-execution whose final
 -- state satisfies the postcondition
@@ -3080,7 +3080,7 @@ lemma chargeCodeGas_state_ok {rules : ForkRules} {d d' : Devm}
     rw [← Except.ok.inj h_if]
     exact ((Devm.burn_of_chargeGas h_charge).state).symm
 
-lemma GenericCall.some_inv_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm}
+lemma GenericCall.some_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm}
     {gas : Nat} {value : B256} {caller target codeAddress : Adr}
     {stv isStatic : Bool} {ii is oi os : Nat} {code : ByteArray} {dp : Bool}
     {evm' : Evm} {exn' : Execution}
@@ -3191,7 +3191,7 @@ lemma GenericCall.some_inv_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm}
 lemma Devm.setCode_state {d : Devm} {adr : Adr} {c : ByteArray} :
     (d.setCode adr c).state = d.state.setCode adr c := rfl
 
-lemma GenericCreate.some_inv_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm}
+lemma GenericCreate.some_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm}
     {endowment : B256} {newAddress : Adr} {memoryIndex memorySize : Nat}
     {evm' : Evm} {exn' : Execution}
     (h_run : GenericCreate sevm devm endowment newAddress memoryIndex memorySize
@@ -3401,7 +3401,7 @@ lemma GenericCreate.some_inv_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm
             State.setCode_get_bal]
 
 
-lemma Xinst.some_inv_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm} {x : Xinst}
+lemma Xinst.some_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm} {x : Xinst}
     {evm' : Evm} {exn' : Execution}
     (h_run : Xinst.Run sevm devm x (.some ⟨evm', exn'⟩) (.ok inter))
     (ex_sub : Exec evm'.pc evm'.sta evm'.dyna exn')
@@ -3417,10 +3417,10 @@ lemma Xinst.some_inv_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm} {x : X
   -- a childless outcome cannot fill the slot
   · cases h_run.1
   -- dispatched to the CREATE family
-  · exact GenericCreate.some_inv_precond h_run ex_sub h_ne
+  · exact GenericCreate.some_preserves_precond h_run ex_sub h_ne
       (h_pc.state_eq hfr.state.symm)
   -- dispatched to the CALL family
-  · refine GenericCall.some_inv_precond h_run ex_sub h_ne ?_ ?_
+  · refine GenericCall.some_preserves_precond h_run ex_sub h_ne ?_ ?_
       (h_pc.state_eq hfr.state.symm)
     · rintro hstv
       rcases hcal with ⟨-, rfl⟩ | ⟨hsf, -⟩
@@ -3552,7 +3552,7 @@ lemma Linst.inv_postcond {wa : Adr} {sevm : Sevm} {pre post : Devm} {l : Linst}
     · rw [← Except.ok.inj h_run4]
       exact postcond_of_precond h_pc3
 
-theorem weth_inv_solvent (wa : Adr) :
+theorem weth_preserves_solvent (wa : Adr) :
     ∀ sevm pre post,
       Exec 0 sevm pre (.ok post)  →
       (sevm.currentTarget = wa → some sevm.code.toList = Prog.compile weth) →
@@ -3583,13 +3583,13 @@ theorem weth_inv_solvent (wa : Adr) :
         have h_frame := Rinst.sstore_run_stateWriteFrame pc' pre' sevm'
         rw [h_reg] at h_frame
         refine Precond.of_eqs h_pc' (h_frame.getCode_eq wa).symm ?_
-          (sstore_inv_getStor_ne h_reg h_ne')
+          (sstore_preserves_getStor_ne h_reg h_ne')
         funext b
         exact (h_frame.getBal_eq b).symm
-      · exact Precond.of_eqs h_pc' (Rinst.inv_getCode h_reg wa) (Rinst.inv_bal h_reg).symm
-          (congr_fun (Rinst.inv_stor h_ss h_reg) wa).symm
+      · exact Precond.of_eqs h_pc' (Rinst.preserves_getCode h_reg wa) (Rinst.preserves_bal h_reg).symm
+          (congr_fun (Rinst.preserves_stor h_ss h_reg) wa).symm
     | exec x =>
-      refine Xinst.none_inv_precond (x := x) ?_ h_ne' h_pc'
+      refine Xinst.none_preserves_precond (x := x) ?_ h_ne' h_pc'
       simpa only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.Run] using h_run'
   · intro pc' sevm' pre' n' evm'' exn'' inter' h_at' h_run' ex_sub' h_ne' h_pc'
     cases n' with
@@ -3600,10 +3600,10 @@ theorem weth_inv_solvent (wa : Adr) :
       simp only [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at h_run'
       cases h_run'.1
     | exec x =>
-      refine Xinst.some_inv_precond (x := x) ?_ ex_sub' h_ne' h_pc'
+      refine Xinst.some_preserves_precond (x := x) ?_ ex_sub' h_ne' h_pc'
       simpa only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.Run] using h_run'
   · intro pc' sevm' pre' j' pc'' inter' h_at' h_run' h_ne' h_pc'
-    exact Precond.state_eq h_pc' (Jinst.inv_state h_run')
+    exact Precond.state_eq h_pc' (Jinst.preserves_state h_run')
   · intro pc' sevm' pre' l' post' h_at' h_run' h_ne' h_pc'
     exact Linst.inv_postcond h_run' h_ne' h_pc'
   · exact exc
@@ -3613,7 +3613,7 @@ theorem weth_inv_solvent (wa : Adr) :
 
 
 -- Solvency preservation above the frame level : the theorems below lift
--- `weth_inv_solvent` through each layer of the executable semantics in
+-- `weth_preserves_solvent` through each layer of the executable semantics in
 -- Jaune/Execution.lean, stated directly over the raw execution functions.
 
 -- The WETH invariant on a bare world state, as it stands between
@@ -3623,16 +3623,16 @@ structure State.Inv (wa : Adr) (w : _root_.State) : Prop where
   (nof : _root_.SumNof w.bal)
   (solvent : w.Solvent wa)
 
--- Counterpart of `weth_inv_solvent` for the total executable `exec`.  With
+-- Counterpart of `weth_preserves_solvent` for the total executable `exec`.  With
 -- sufficiency proved in Jaune there is no fuel to quantify away: the
 -- hypothesis is a plain equation about the interpreter.
-theorem exec_inv_solvent (wa : Adr)
+theorem exec_preserves_solvent (wa : Adr)
     (sevm : Sevm) (pre post : Devm)
     (h_run : exec ⟨0, sevm, pre⟩ = .ok post)
     (h_code : sevm.currentTarget = wa → some sevm.code.toList = Prog.compile weth)
     (h_pc : Precond wa sevm pre) : Postcond wa sevm post := by
   obtain ⟨exc⟩ := (exec_iff_exec_eq 0 sevm pre (.ok post)).mpr h_run
-  exact weth_inv_solvent wa sevm pre post exc h_code h_pc
+  exact weth_preserves_solvent wa sevm pre post exc h_code h_pc
 
 /-! ### Atomic `State.Inv`-preservation lemmas
 
@@ -3798,9 +3798,9 @@ theorem State.Inv.foldl_destroyAccount {wa : Adr} :
 /-! ### Bridge to the frame-level invariant
 
 The substantive gap: descend from the message-call layer to the already-proven
-`exec_inv_solvent`.  This must connect `processMessageCall` — via
+`exec_preserves_solvent`.  This must connect `processMessageCall` — via
 `prepareMessage`, the interpreter loop, and `processMessageCall.{call,create}` —
-to the `Exec`/`weth_inv_solvent` machinery, discharge the WETH-code
+to the `Exec`/`weth_preserves_solvent` machinery, discharge the WETH-code
 precondition, and certify that a WETH run never self-destructs `wa`
 (so the deletion set avoids `wa`). -/
 
@@ -3875,7 +3875,7 @@ lemma Precond.of_inv_transfer {wa : Adr} {sevm' : Sevm} {devm' : Devm}
 
 -- Reusable core: a full `exec` run started after a value transfer preserves
 -- `State.Inv`.  Combines `Precond.of_inv_transfer` (build the precondition),
--- `exec_inv_solvent` (frame-level solvency + nof), and `code_eq_of_exec` (the
+-- `exec_preserves_solvent` (frame-level solvency + nof), and `code_eq_of_exec` (the
 -- WETH code at `wa` is untouched) through `State.Inv.of_postcond`.
 
 -- No-transfer counterpart of `Precond.of_inv_transfer`: when no value moves,
@@ -3894,7 +3894,7 @@ lemma Precond.of_inv_eqs {wa : Adr} {sevm : Sevm} {devm : Devm}
 
 -- Shared tail: given the precondition already holds for `pre`, a successful
 -- run's derivation preserves `State.Inv` (frame solvency + nof via
--- `weth_inv_solvent`, code via `code_eq_of_exec`).  Stated over the closed
+-- `weth_preserves_solvent`, code via `code_eq_of_exec`).  Stated over the closed
 -- derivation itself: with sufficiency proved in Jaune, every entered frame
 -- carries one, so no fuel equation needs to be threaded here.
 lemma State.Inv.of_exec_precond {wa : Adr} {sevm : Sevm} {pre post : Devm}
@@ -3903,7 +3903,7 @@ lemma State.Inv.of_exec_precond {wa : Adr} {sevm : Sevm} {pre post : Devm}
     (exc : Exec 0 sevm pre (.ok post)) :
     State.Inv wa post.state := by
   have h_post : Postcond wa sevm post :=
-    weth_inv_solvent wa sevm pre post exc h_code h_pc
+    weth_preserves_solvent wa sevm pre post exc h_code h_pc
   apply State.Inv.of_postcond h_post
   have h_ce : post.getCode wa = pre.getCode wa := code_eq_of_exec exc h_pc.code
   show some (post.state.getCode wa).toList = Prog.compile weth
@@ -3984,14 +3984,14 @@ lemma State.Inv.of_benvAfterTransfer {wa : Adr} {msg : Msg} {benv : Benv}
     rw [hbenv]; exact h_inv
 
 -- Deep helper: one `processMessage` run preserves `State.Inv` and never
--- self-destructs `wa`.  This is where the frame-level `exec_inv_solvent` gets
+-- self-destructs `wa`.  This is where the frame-level `exec_preserves_solvent` gets
 -- lifted: `processMessage` = `benvAfterTransfer` (value transfer) then
 -- `executeCode` (→ `exec (initEvm ·)`) with on-error rollback.  The `nof`
 -- and `getCode` parts are already available through the relational-mirror
--- stacks (`ProcessMessage.inv_nof`, `ProcessMessage.inv_getCode_gen`); the
--- solvency part is the genuinely new content, obtained from `exec_inv_solvent`
+-- stacks (`ProcessMessage.preserves_nof`, `ProcessMessage.preserves_getCode_gen`); the
+-- solvency part is the genuinely new content, obtained from `exec_preserves_solvent`
 -- via `Postcond` and `State.Inv.of_postcond`.  Still open.
-theorem processMessage_inv_solvent {wa : Adr} {msg : Msg} {evm : Devm}
+theorem processMessage_preserves_solvent {wa : Adr} {msg : Msg} {evm : Devm}
     (h_run : processMessage msg = .ok evm)
     (h_code : msg.currentTarget = wa → some msg.code.toList = Prog.compile weth)
     (h_ne : msg.shouldTransferValue = true → msg.caller ≠ wa)
@@ -4066,7 +4066,7 @@ lemma State.Inv.setCode_ne {wa a : Adr} {cd : ByteArray} {w : _root_.State}
 -- `h_ct_ne` (the create address is fresh, hence `≠ wa`) subsumes both the
 -- WETH-code condition and the `value = 0` condition: their premises are all
 -- `currentTarget = wa`, so `h_ct_ne` discharges them vacuously.
-theorem processCreateMessage_inv_solvent {wa : Adr} {msg : Msg} {evm : Devm}
+theorem processCreateMessage_preserves_solvent {wa : Adr} {msg : Msg} {evm : Devm}
     (h_run : processCreateMessage msg = .ok evm)
     (h_ct_ne : msg.currentTarget ≠ wa)
     (h_ne : msg.shouldTransferValue = true → msg.caller ≠ wa)
@@ -4084,7 +4084,7 @@ theorem processCreateMessage_inv_solvent {wa : Adr} {msg : Msg} {evm : Devm}
   rw [hpm] at h_run
   have h_rest := h_run
   have h_pm : State.Inv wa evm2.state :=
-    processMessage_inv_solvent hpm (fun h => absurd h h_ct_ne) h_ne
+    processMessage_preserves_solvent hpm (fun h => absurd h h_ct_ne) h_ne
       (fun _ h => absurd h h_ct_ne) h_inv_cm
   unfold processCreateMessage.settle at h_rest
   dsimp only [bind, Except.bind] at h_rest
@@ -4364,9 +4364,9 @@ lemma Ninst.inv_noDel_gen {wa : Adr} {pc : Nat} {sevm : Sevm} {devm : Devm}
     obtain ⟨-, rfl⟩ := run
     · cases h_run : Rinst.run { pc := pc, sta := sevm, dyna := devm } rg
       case error err =>
-        exact Devm.NoDel.of_eqs (Rinst.inv_delSets_err h_run).symm (Rinst.inv_getCode_err h_run wa).symm h
+        exact Devm.NoDel.of_eqs (Rinst.inv_delSets_err h_run).symm (Rinst.preserves_getCode_err h_run wa).symm h
       case ok d1 =>
-        exact Devm.NoDel.of_eqs (Rinst.inv_delSets h_run) (Rinst.inv_getCode h_run wa).symm h
+        exact Devm.NoDel.of_eqs (Rinst.inv_delSets h_run) (Rinst.preserves_getCode h_run wa).symm h
   | exec xinst =>
     simp only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep] at run
     exact Xinst.inv_noDel_gen (x := xinst) inv run h
@@ -4404,7 +4404,7 @@ lemma Jinst.noDelCode_effect (wa : Adr) (j : Jinst) :
     Jinst.Effect (Devm.NoDelCode wa) j := by
   intro evm out hrun
   rcases evm with ⟨pc, sevm, devm⟩
-  have hcode := Jinst.inv_getCode_gen hrun
+  have hcode := Jinst.preserves_getCode_gen hrun
   cases out with
   | error e =>
     rcases e with ⟨err, devm'⟩
@@ -4434,7 +4434,7 @@ lemma Exec.inv_noDel {wa : Adr} {pc : Nat} {sevm : Sevm} {devm : Devm}
   | error e => exact heff h
   | ok d => exact heff h
 
-theorem processMessage_inv_noDel {wa : Adr} {msg : Msg} {evm : Devm}
+theorem processMessage_preserves_noDel {wa : Adr} {msg : Msg} {evm : Devm}
     (h_run : processMessage msg = .ok evm)
     (h : Msg.NoDel wa msg) : Devm.NoDel wa evm := by
   obtain ⟨xl, hfill, hrel⟩ := of_processMessage msg (.ok evm) h_run
@@ -4446,7 +4446,7 @@ theorem processMessage_inv_noDel {wa : Adr} {msg : Msg} {evm : Devm}
       exact Exec.inv_noDel exc hnd
   exact ProcessMessage.inv_noDel hinv hrel h
 
-theorem processCreateMessage_inv_noDel {wa : Adr} {msg : Msg} {evm : Devm}
+theorem processCreateMessage_preserves_noDel {wa : Adr} {msg : Msg} {evm : Devm}
     (h_run : processCreateMessage msg = .ok evm)
     (h_ct : msg.currentTarget ≠ wa)
     (h : Msg.NoDel wa msg) : Devm.NoDel wa evm := by
@@ -4458,7 +4458,7 @@ theorem processCreateMessage_inv_noDel {wa : Adr} {msg : Msg} {evm : Devm}
     cases h_run
   rw [hpm0] at h_run
   have h_rest := h_run
-  have h_pm : Devm.NoDel wa evm2 := processMessage_inv_noDel hpm0 h_inv_cm
+  have h_pm : Devm.NoDel wa evm2 := processMessage_preserves_noDel hpm0 h_inv_cm
   unfold processCreateMessage.settle at h_rest
   dsimp only [bind, Except.bind] at h_rest
   · by_cases herr : evm2.error.isNone = true
@@ -4582,7 +4582,7 @@ theorem setDelegation_msg_noDel {wa : Adr} {msg msg' : Msg} {v : B256}
   · rw [h_ca]; exact h.ca
   · rw [h2]; exact h.code
 
-lemma setDelegationStep_inv_solvent {wa : Adr} {auth : Auth} {msg msg' : Msg}
+lemma setDelegationStep_preserves_solvent {wa : Adr} {auth : Auth} {msg msg' : Msg}
     {refund refund' : B256}
     (h_run : setDelegationStep auth msg refund = .ok (msg', refund'))
     (h_inv : State.Inv wa msg.benv.state) :
@@ -4632,7 +4632,7 @@ lemma setDelegationStep_inv_solvent {wa : Adr} {auth : Auth} {msg msg' : Msg}
             change State.Inv wa ((msg.benv.state.setCode authority _).incrNonce authority)
             exact State.Inv.incrNonce (State.Inv.setCode_ne h_ne h_inv)
 
-lemma setDelegationLoop_inv_solvent {wa : Adr} {auths : List Auth} {msg msg' : Msg}
+lemma setDelegationLoop_preserves_solvent {wa : Adr} {auths : List Auth} {msg msg' : Msg}
     {refund refund' : B256}
     (h_run : setDelegationLoop auths msg refund = .ok (msg', refund'))
     (h_inv : State.Inv wa msg.benv.state) :
@@ -4645,9 +4645,9 @@ lemma setDelegationLoop_inv_solvent {wa : Adr} {auths : List Auth} {msg msg' : M
   | cons auth auths_tail ih =>
     unfold setDelegationLoop at h_run
     rcases bind_eq_ok_Except h_run with ⟨⟨msg1, refund1⟩, h_step, h_tail⟩
-    exact ih h_tail (setDelegationStep_inv_solvent h_step h_inv)
+    exact ih h_tail (setDelegationStep_preserves_solvent h_step h_inv)
 
-lemma setDelegation_inv_solvent {wa : Adr} {msg msg' : Msg} {v : B256}
+lemma setDelegation_preserves_solvent {wa : Adr} {msg msg' : Msg} {v : B256}
     (h_run : setDelegation msg = .ok ⟨msg', v⟩)
     (h_inv : State.Inv wa msg.benv.state) :
     State.Inv wa msg'.benv.state := by
@@ -4661,7 +4661,7 @@ lemma setDelegation_inv_solvent {wa : Adr} {msg msg' : Msg} {v : B256}
     · contradiction
     · simpa using congrArg Msg.benv (congrArg Prod.fst (Except.ok.inj h_rest))
   rw [← h_eq_benv]
-  exact setDelegationLoop_inv_solvent h_loop h_inv
+  exact setDelegationLoop_preserves_solvent h_loop h_inv
 
 lemma setDelegationStep_fields {auth : Auth} {msg msg' : Msg}
     {refund refund' : B256}
@@ -4792,14 +4792,14 @@ lemma Msg.InvSolvent.pc {wa : Adr} {msg : Msg} {codeSrc : Adr → ByteArray}
         exact False.elim (h_not_del h_del)
       · contradiction
 
-lemma setDelegation_inv_msg_solvent {wa : Adr} {msg msg' : Msg} {v : B256}
+lemma setDelegation_preserves_msg_solvent {wa : Adr} {msg msg' : Msg} {v : B256}
     (h_run : setDelegation msg = .ok ⟨msg', v⟩)
     (h : Msg.InvSolvent wa msg) :
     Msg.InvSolvent wa msg' := by
   have h_run_orig := h_run
   have h_not_del : ¬ isValidDelegation (msg.benv.state.getCode wa) :=
     not_delegation_of_compile h.state.code
-  refine ⟨setDelegation_inv_solvent h_run h.state,
+  refine ⟨setDelegation_preserves_solvent h_run h.state,
     setDelegation_msg_noDel h_run h.nodel h_not_del, ?_, ?_, ?_, ?_⟩
   · intro h_tgt h_ct
     unfold setDelegation at h_run
@@ -4898,7 +4898,7 @@ lemma setDelegation_inv_msg_solvent {wa : Adr} {msg msg' : Msg} {v : B256}
       · change msg_mid.currentTarget = wa at h_ct
         rwa [h_mid_ct] at h_ct
 
-theorem processMessageCall_inv_noDel {wa : Adr} {msg : Msg} {st' : _root_.State}
+theorem processMessageCall_preserves_noDel {wa : Adr} {msg : Msg} {st' : _root_.State}
     {out : MsgCallOutput}
     (h_run : processMessageCall msg = .ok ⟨st', out⟩)
     (h : Msg.NoDel wa msg)
@@ -4923,7 +4923,7 @@ theorem processMessageCall_inv_noDel {wa : Adr} {msg : Msg} {st' : _root_.State}
         injection h_run
       · simp only [Except.bimap, bind, Except.bind]
         intro h_run
-        have h_nodel := processCreateMessage_inv_noDel h_evm h_ct h
+        have h_nodel := processCreateMessage_preserves_noDel h_evm h_ct h
         change (if evm.error.isNone = true then _ else _) = _ at h_run
         split at h_run
         · split at h_run
@@ -4955,7 +4955,7 @@ theorem processMessageCall_inv_noDel {wa : Adr} {msg : Msg} {st' : _root_.State}
             split
             · exact h
             · exact ⟨h.ca, h.code⟩
-          have h_nodel_evm := processMessage_inv_noDel h_pm h_pc
+          have h_nodel_evm := processMessage_preserves_noDel h_pm h_pc
           split at h_run
           · split at h_run
             · injection h_run
@@ -4984,7 +4984,7 @@ theorem processMessageCall_inv_noDel {wa : Adr} {msg : Msg} {st' : _root_.State}
               split
               · exact h_del_nodel
               · exact ⟨h_del_nodel.ca, h_del_nodel.code⟩
-            have h_nodel_evm := processMessage_inv_noDel h_pm h_pc
+            have h_nodel_evm := processMessage_preserves_noDel h_pm h_pc
             split at h_run
             · split at h_run
               · injection h_run
@@ -5003,10 +5003,10 @@ theorem processMessageCall_accountsToDelete_ne {wa : Adr} {msg : Msg}
     ∀ a ∈ out.accountsToDelete.toList, a ≠ wa := by
   intro a ha heq
   subst heq
-  exact processMessageCall_inv_noDel h_run h h_not_del
+  exact processMessageCall_preserves_noDel h_run h h_not_del
     (Std.HashSet.mem_toList.mp ha)
 
-theorem processMessageCall_inv_solvent {wa : Adr} {msg : Msg} {st' : _root_.State}
+theorem processMessageCall_preserves_solvent {wa : Adr} {msg : Msg} {st' : _root_.State}
     {out : MsgCallOutput}
     (h_run : processMessageCall msg = .ok ⟨st', out⟩)
     (h_inv : Msg.InvSolvent wa msg) :
@@ -5032,7 +5032,7 @@ theorem processMessageCall_inv_solvent {wa : Adr} {msg : Msg} {st' : _root_.Stat
         injection h_run
       · simp only [Except.bimap, bind, Except.bind]
         intro h_run
-        have h_pm := processCreateMessage_inv_solvent h_evm h_ct
+        have h_pm := processCreateMessage_preserves_solvent h_evm h_ct
           h_inv.ne h_inv.state
         change (if evm.error.isNone = true then _ else _) = _ at h_run
         split at h_run
@@ -5081,7 +5081,7 @@ theorem processMessageCall_inv_solvent {wa : Adr} {msg : Msg} {st' : _root_.Stat
                   codeAddress := some dca }).target.isNone = false := by
             split <;> simpa using h_target_false
           have h_evm_inv :=
-            processMessage_inv_solvent h_pm
+            processMessage_preserves_solvent h_pm
               (fun hct => h_pc.code h_tgt_pc hct)
               h_pc.ne h_pc.val0 h_pc.state
           split at h_run
@@ -5098,7 +5098,7 @@ theorem processMessageCall_inv_solvent {wa : Adr} {msg : Msg} {st' : _root_.Stat
       · simp only [h_del, bind, Except.bind] at h_run
         injection h_run
       · simp only [h_del, bind, Except.bind] at h_run
-        have h_del_inv := setDelegation_inv_msg_solvent h_del h_inv
+        have h_del_inv := setDelegation_preserves_msg_solvent h_del h_inv
         unfold Except.bimap at h_run
         split at h_run
         · injection h_run
@@ -5133,7 +5133,7 @@ theorem processMessageCall_inv_solvent {wa : Adr} {msg : Msg} {st' : _root_.Stat
                     codeAddress := some dca }).target.isNone = false := by
               split <;> simpa using h_msgDelegation_target_false
             have h_evm_inv :=
-              processMessage_inv_solvent h_pm
+              processMessage_preserves_solvent h_pm
                 (fun hct => h_pc.code h_tgt_pc hct)
                 h_pc.ne h_pc.val0 h_pc.state
             split at h_run
@@ -5148,7 +5148,7 @@ theorem processMessageCall_inv_solvent {wa : Adr} {msg : Msg} {st' : _root_.Stat
 
 /-! ### Transaction-level helper lemmas
 
-The proof of `processTransaction_inv_solvent` factors into three local facts.
+The proof of `processTransaction_preserves_solvent` factors into three local facts.
 They are intentionally stated at the executable-definition boundary:
 
 * a checked transaction sender cannot be the WETH account, since successful
@@ -5208,7 +5208,7 @@ lemma prepareMessage_benv {benv : Benv} {tenv : Tenv} {tx : Tx} {msg : Msg}
   injection h_prep with h
   rw [← h]
 
-lemma prepareMessage_inv_solvent {wa : Adr}
+lemma prepareMessage_preserves_solvent {wa : Adr}
     {benv : Benv} {tenv : Tenv} {tx : Tx} {msg : Msg}
     (h_prep : prepareMessage benv tenv tx = .ok msg)
     (h_state : State.Inv wa benv.state)
@@ -5553,7 +5553,7 @@ lemma State.Inv.add_transaction_gas_credits {wa : Adr}
   · omega
   · exact h_sender_inv
 
-theorem processTransaction_inv_solvent (wa : Adr)
+theorem processTransaction_preserves_solvent (wa : Adr)
     (benv : Benv) (bout bout' : BlockOutput) (tx : Tx) (i : Nat) (st : _root_.State)
     (h_run : processTransaction benv bout tx i = .ok ⟨st, bout'⟩)
     (h_inv : Benv.InvSolvent wa benv) : Benv.InvSolvent wa (benv.withState st) := by
@@ -5614,8 +5614,8 @@ theorem processTransaction_inv_solvent (wa : Adr)
             Tenv).stat.origin ≠ wa := by
     exact hsender
   have hmsg : Msg.InvSolvent wa msg :=
-    prepareMessage_inv_solvent hprep hstate1 (by simpa using h_inv.ca) horigin
-  have hpm_inv := processMessageCall_inv_solvent hpm hmsg
+    prepareMessage_preserves_solvent hprep hstate1 (by simpa using h_inv.ca) horigin
+  have hpm_inv := processMessageCall_preserves_solvent hpm hmsg
   have hmsg_benv := prepareMessage_benv hprep
   have hsum_le : sum state2.bal ≤ sum state1.bal := by
     have h := processMessageCall_sum_le hpm
@@ -5639,11 +5639,11 @@ theorem processTransaction_inv_solvent (wa : Adr)
   · exact State.Inv.foldl_destroyAccount hpm_inv.2 hcredits
   · simpa [Benv.withState] using h_inv.ca
 
-theorem applyTransactions_inv_solvent (wa : Adr)
+theorem applyTransactions_preserves_solvent (wa : Adr)
     (txis : List (Nat × Tx)) (benv benv' : Benv) (bout bout' : BlockOutput)
     (h_run : applyTransactions txis benv bout = .ok ⟨benv', bout'⟩)
     (h_inv : Benv.InvSolvent wa benv) : Benv.InvSolvent wa benv' := by
-  -- list induction over `txis`; each step is `processTransaction_inv_solvent`
+  -- list induction over `txis`; each step is `processTransaction_preserves_solvent`
   -- (note `processTransaction` threads `Benv`, so track `benv.state`).
   induction txis generalizing benv bout with
   | nil =>
@@ -5654,18 +5654,18 @@ theorem applyTransactions_inv_solvent (wa : Adr)
     obtain ⟨i, tx⟩ := hd
     rw [applyTransactions] at h_run
     obtain ⟨⟨st, bout''⟩, h1, h2⟩ := of_bind_eq_ok h_run
-    have hstep := processTransaction_inv_solvent wa benv bout bout'' tx i st h1 h_inv
+    have hstep := processTransaction_preserves_solvent wa benv bout bout'' tx i st h1 h_inv
     exact ih (benv.withState st) bout'' h2 hstep
 
 /-
 (1) Difficulty: ★★☆☆☆
 (2) Proof plan: unfold the two system-transaction wrappers, build
 `Msg.InvSolvent` for the resulting zero-value/no-transfer message from the
-`Benv.InvSolvent` hypothesis, and apply `processMessageCall_inv_solvent` and
+`Benv.InvSolvent` hypothesis, and apply `processMessageCall_preserves_solvent` and
 `processMessageCall_sum_le`.  The wrapper only chooses the target's current
 code and otherwise does not alter the starting state.
 -/
-lemma processUncheckedSystemTransaction_inv_solvent_sum_le (wa : Adr)
+lemma processUncheckedSystemTransaction_preserves_solvent_sum_le (wa : Adr)
     (benv : Benv) (target : Adr) (data : Bytes)
     (st : _root_.State) (out : MsgCallOutput)
     (h_run : processUncheckedSystemTransaction benv target data = .ok ⟨st, out⟩)
@@ -5697,7 +5697,7 @@ lemma processUncheckedSystemTransaction_inv_solvent_sum_le (wa : Adr)
     · simp [processSystemTransactionMsg]
     · simp [processSystemTransactionMsg]
   have hsum := processMessageCall_sum_le h_run
-  exact ⟨(processMessageCall_inv_solvent h_run h_msg).1, hsum⟩
+  exact ⟨(processMessageCall_preserves_solvent h_run h_msg).1, hsum⟩
 
 -- Total wei credited by a list of withdrawals, computed in ℕ. Withdrawals
 -- mint ether with wrapping addition (`State.addBal`), so the block-level
@@ -5890,7 +5890,7 @@ lemma processTransaction_sum_le {benv : Benv} {bout bout' : BlockOutput}
     (h_run : processTransaction benv bout tx i = .ok ⟨st, bout'⟩) :
     sum st.bal ≤ sum benv.state.bal := by
   unfold processTransaction at h_run
-  -- as in `processTransaction_inv_solvent`: `beginTransaction` touches only
+  -- as in `processTransaction_preserves_solvent`: `beginTransaction` touches only
   -- `stat.origState`, which no balance below reads.
   simp only [Benv.beginTransaction] at h_run
   rcases of_bind_eq_ok h_run with ⟨bout0, hbout0, h_run⟩
@@ -6004,7 +6004,7 @@ lemma processTransaction_sum_le {benv : Benv} {bout bout' : BlockOutput}
 /-
 (1) Difficulty: ★★★★☆
 (2) Proof plan: first prove the one-step statement for `processTransaction`.
-Invert its successful do-block as in `processTransaction_inv_solvent`; use
+Invert its successful do-block as in `processTransaction_preserves_solvent`; use
 `State.balSum_subBal` for the up-front debit,
 `processMessageCall_sum_le` for the call, and `State.addBal_growth` for the
 sender refund and coinbase tip.  The inequalities checked by
@@ -6054,7 +6054,7 @@ lemma sum_addBal_eq (st : _root_.State) (a : Adr) (v : B256)
   have h3 : State.balSum st = sum st.bal := rfl
   omega
 
-lemma processWithdrawalsState_inv_solvent (wa : Adr)
+lemma processWithdrawalsState_preserves_solvent (wa : Adr)
     (st : _root_.State) (wds : List Withdrawal)
     (h_bound : sum st.bal + wdsum wds < 2 ^ 256)
     (h_inv : State.Inv wa st) :
@@ -6099,11 +6099,11 @@ lemma processCheckedSystemTransaction_to_unchecked {benv : Benv} {target : Adr} 
 updating the request list do not touch state.  Each of the two checked system
 transactions reduces, on its successful branch, to the corresponding
 unchecked system transaction, so apply
-`processUncheckedSystemTransaction_inv_solvent_sum_le` twice.  Thread
+`processUncheckedSystemTransaction_preserves_solvent_sum_le` twice.  Thread
 `createdAccounts` through `Benv.withState` and compose the two sum
 inequalities.
 -/
-lemma processGeneralPurposeRequests_inv_solvent_sum_le (wa : Adr)
+lemma processGeneralPurposeRequests_preserves_solvent_sum_le (wa : Adr)
     (benv : Benv) (bout : BlockOutput)
     (st : _root_.State) (bout' : BlockOutput)
     (h_run : processGeneralPurposeRequests benv bout = .ok ⟨st, bout'⟩)
@@ -6115,14 +6115,14 @@ lemma processGeneralPurposeRequests_inv_solvent_sum_le (wa : Adr)
   split at h_run <;>
     (rcases of_bind_eq_ok h_run with ⟨⟨st1, out1⟩, h1, h_run⟩;
      dsimp only at h_run;
-     have hu1 := processUncheckedSystemTransaction_inv_solvent_sum_le wa benv
+     have hu1 := processUncheckedSystemTransaction_preserves_solvent_sum_le wa benv
        withdrawalRequestPredeployAddress [] st1 out1
        (processCheckedSystemTransaction_to_unchecked h1) h_inv;
      have h_inv1 : Benv.InvSolvent wa (benv.withState st1) :=
        ⟨hu1.1, by simpa [Benv.withState] using h_inv.ca⟩;
      split at h_run <;>
        (rcases of_bind_eq_ok h_run with ⟨⟨st2, out2⟩, h2, h_run⟩;
-        have hu2 := processUncheckedSystemTransaction_inv_solvent_sum_le wa (benv.withState st1)
+        have hu2 := processUncheckedSystemTransaction_preserves_solvent_sum_le wa (benv.withState st1)
           consolidationRequestPredeployAddress [] st2 out2
           (processCheckedSystemTransaction_to_unchecked h2) h_inv1;
         split at h_run <;>
@@ -6130,7 +6130,7 @@ lemma processGeneralPurposeRequests_inv_solvent_sum_le (wa : Adr)
            subst h3;
            exact ⟨hu2.1, le_trans (by simpa [Benv.withState] using hu2.2) hu1.2⟩)))
 
-theorem applyBody_inv_solvent (wa : Adr)
+theorem applyBody_preserves_solvent (wa : Adr)
     (benv : Benv) (txs : List (Bytes ⊕ Tx)) (wds : List Withdrawal)
     (st : _root_.State) (bout : BlockOutput)
     (h_run : applyBody benv txs wds = .ok ⟨st, bout⟩)
@@ -6145,20 +6145,20 @@ theorem applyBody_inv_solvent (wa : Adr)
   rcases of_bind_eq_ok h_run with ⟨⟨benvTxs, boutTxs⟩, h_txs, h_requests⟩
   dsimp only at h_history h_txs h_requests
   have h_beacon_inv :=
-    processUncheckedSystemTransaction_inv_solvent_sum_le wa benv
+    processUncheckedSystemTransaction_preserves_solvent_sum_le wa benv
       beaconRootsAddress benv.stat.parentBeaconBlockRoot.toBytes
       stBeacon outBeacon h_beacon h_inv
   have h_benv_beacon : Benv.InvSolvent wa (benv.withState stBeacon) :=
     ⟨h_beacon_inv.1, by simpa [Benv.withState] using h_inv.ca⟩
   have h_history_inv :=
-    processUncheckedSystemTransaction_inv_solvent_sum_le wa
+    processUncheckedSystemTransaction_preserves_solvent_sum_le wa
       (benv.withState stBeacon) historyStorageAddress lastHash.toBytes
       stHistory outHistory h_history h_benv_beacon
   have h_benv_history :
       Benv.InvSolvent wa ((benv.withState stBeacon).withState stHistory) :=
     ⟨h_history_inv.1, by simpa [Benv.withState] using h_benv_beacon.ca⟩
   have h_txs_inv : Benv.InvSolvent wa benvTxs :=
-    applyTransactions_inv_solvent wa decodedTxs.putIndex
+    applyTransactions_preserves_solvent wa decodedTxs.putIndex
       ((benv.withState stBeacon).withState stHistory) benvTxs
       BlockOutput.init boutTxs h_txs h_benv_history
   have h_txs_sum := applyTransactions_sum_le h_txs
@@ -6170,12 +6170,12 @@ theorem applyBody_inv_solvent (wa : Adr)
       simpa [Benv.withState] using h_txs_sum
     omega
   have h_wds_inv :=
-    processWithdrawalsState_inv_solvent wa benvTxs.state wds
+    processWithdrawalsState_preserves_solvent wa benvTxs.state wds
       h_txs_bound h_txs_inv.state
   have h_benv_wds : Benv.InvSolvent wa
       (benvTxs.withState (processWithdrawalsState benvTxs.state wds)) :=
     ⟨h_wds_inv, by simpa [Benv.withState] using h_txs_inv.ca⟩
-  exact (processGeneralPurposeRequests_inv_solvent_sum_le wa
+  exact (processGeneralPurposeRequests_preserves_solvent_sum_le wa
     (benvTxs.withState (processWithdrawalsState benvTxs.state wds))
     (boutTxs.withWithdrawalsTrie
       (processWithdrawalsTrie boutTxs.withdrawalsTrie wds))
@@ -6183,18 +6183,18 @@ theorem applyBody_inv_solvent (wa : Adr)
 
 -- The state transition preserves WETH solvency whichever fork's rules it runs.
 -- This is the general theorem, and it is general for a reason rather than by
--- luck: `applyBody_inv_solvent` never asks which rules it is running, because
+-- luck: `applyBody_preserves_solvent` never asks which rules it is running, because
 -- solvency is a statement about how value moves and no fork rule moves value.
 -- Everything below -- Prague, an explicitly named fork, a configured chain
 -- crossing Osaka and the BPO forks -- is an instance of this one proof.
 
-theorem stateTransitionWith_inv_solvent (wa : Adr) (rules : ForkRules)
+theorem stateTransitionWith_preserves_solvent (wa : Adr) (rules : ForkRules)
     (ch ch' : BlockChain) (block : Block)
     (h_run : stateTransitionWith rules ch block = .ok ch')
     (h_wds : sum ch.state.bal + wdsum block.wds < 2 ^ 256)
     (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state := by
   -- invert `stateTransitionWith`'s do-block; the state change is `applyBody`, so
-  -- this is `applyBody_inv_solvent` (the block-check helpers don't touch state).
+  -- this is `applyBody_preserves_solvent` (the block-check helpers don't touch state).
   rw [stateTransitionWith] at h_run
   obtain ⟨_, _, h_run⟩ := of_bind_eq_ok h_run
   obtain ⟨_, _, h_run⟩ := of_bind_eq_ok h_run
@@ -6203,7 +6203,7 @@ theorem stateTransitionWith_inv_solvent (wa : Adr) (rules : ForkRules)
   dsimp only at h_run
   obtain ⟨_, _, h_run⟩ := of_bind_eq_ok h_run
   rw [← Except.ok.inj h_run]
-  exact applyBody_inv_solvent wa (initBenv rules ch block.header) block.txs
+  exact applyBody_preserves_solvent wa (initBenv rules ch block.header) block.txs
     block.wds st bout h_ab h_wds ⟨h_inv, AdrSet.not_mem_empty⟩
 
 -- At an explicitly named fork: resolving the rules is the only extra step, and
@@ -6214,24 +6214,24 @@ theorem stateTransitionWith_inv_solvent (wa : Adr) (rules : ForkRules)
 -- holds whichever ones it picks, so a chain that crosses an activation is not
 -- a new case: no fork in the schedule can break solvency, and neither can the
 -- boundary between two of them.
-theorem stateTransitionUsing_inv_solvent (wa : Adr) (cfg : ChainConfig)
+theorem stateTransitionUsing_preserves_solvent (wa : Adr) (cfg : ChainConfig)
     (ch ch' : BlockChain) (block : Block)
     (h_run : stateTransitionUsing cfg ch block = .ok ch')
     (h_wds : sum ch.state.bal + wdsum block.wds < 2 ^ 256)
     (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state := by
   rw [stateTransitionUsing] at h_run
   obtain ⟨rules, _, h_run⟩ := of_bind_eq_ok h_run
-  exact stateTransitionWith_inv_solvent wa rules ch ch' block h_run h_wds h_inv
+  exact stateTransitionWith_preserves_solvent wa rules ch ch' block h_run h_wds h_inv
 
 -- Prague is the `rules := pragueRules` instance. The statement is unchanged,
 -- and `stateTransition` is *definitionally* `stateTransitionWith pragueRules`,
 -- so the instance is the whole proof.
-theorem stateTransition_inv_solvent (wa : Adr)
+theorem stateTransition_preserves_solvent (wa : Adr)
     (ch ch' : BlockChain) (block : Block)
     (h_run : stateTransition ch block = .ok ch')
     (h_wds : sum ch.state.bal + wdsum block.wds < 2 ^ 256)
     (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state :=
-  stateTransitionWith_inv_solvent wa pragueRules ch ch' block h_run h_wds h_inv
+  stateTransitionWith_preserves_solvent wa pragueRules ch ch' block h_run h_wds h_inv
 
 -- `BlockChain.Reach ch ch'` : chain `ch'` is reachable from `ch` by a
 -- sequence of valid blocks, each of whose withdrawals stays within the
@@ -6267,25 +6267,25 @@ inductive BlockChain.ReachUsing (cfg : ChainConfig) : BlockChain → BlockChain 
 
 -- Chain-level induction corollary : no sequence of valid blocks can break
 -- WETH solvency.
-theorem chain_inv_solvent (wa : Adr) (ch ch' : BlockChain)
+theorem chain_preserves_solvent (wa : Adr) (ch ch' : BlockChain)
     (h_reach : BlockChain.Reach ch ch')
     (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state := by
-  -- induction on `h_reach`; `refl` is `h_inv`, `step` chains `stateTransition_inv_solvent`
+  -- induction on `h_reach`; `refl` is `h_inv`, `step` chains `stateTransition_preserves_solvent`
   -- (the `sum + wdsum < 2^256` bound is carried by the `step` constructor).
   induction h_reach with
   | refl => exact h_inv
-  | step h_reach' h_bound h_st ih => exact stateTransition_inv_solvent wa _ _ _ h_st h_bound ih
+  | step h_reach' h_bound h_st ih => exact stateTransition_preserves_solvent wa _ _ _ h_st h_bound ih
 
 -- Bonus level : preservation through RLP decoding and block hash checks,
 -- again under any fork's rules.
-theorem addBlockToChainWith_inv_solvent (wa : Adr) (rules : ForkRules)
+theorem addBlockToChainWith_preserves_solvent (wa : Adr) (rules : ForkRules)
     (ch ch' : BlockChain) (rlp : Bytes)
     (h_run : addBlockToChainWith rules ch rlp = .ok (.inl ch'))
     (h_wds : ∀ block hash, rlpToBlock rlp = .ok ⟨block, hash⟩ →
       sum ch.state.bal + wdsum block.wds < 2 ^ 256)
     (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state := by
   -- invert `addBlockToChainWith` (rlpToBlock decode + hash check), then one
-  -- `stateTransitionWith_inv_solvent` step (h_wds at the decoded block).
+  -- `stateTransitionWith_preserves_solvent` step (h_wds at the decoded block).
   rw [addBlockToChainWith] at h_run
   obtain ⟨⟨block, hash⟩, h_rlp, h_run⟩ := of_bind_eq_ok h_run
   dsimp only at h_run
@@ -6309,7 +6309,7 @@ theorem addBlockToChainWith_inv_solvent (wa : Adr) (rules : ForkRules)
         have hyc : chain = ch' :=
           (Except.ok.inj hy).trans (Sum.inl.inj (Except.ok.inj h_run))
         subst hyc
-        exact stateTransitionWith_inv_solvent wa rules ch _ block h_st
+        exact stateTransitionWith_preserves_solvent wa rules ch _ block h_st
           (h_wds block hash h_rlp) h_inv
 
 -- Block import at an explicitly named fork.
@@ -6321,10 +6321,10 @@ theorem addBlockToChainWith_inv_solvent (wa : Adr) (rules : ForkRules)
 
 -- Prague is the `rules := pragueRules` instance here too; the statement is
 -- unchanged.
-theorem addBlockToChain_inv_solvent (wa : Adr)
+theorem addBlockToChain_preserves_solvent (wa : Adr)
     (ch ch' : BlockChain) (rlp : Bytes)
     (h_run : addBlockToChain ch rlp = .ok (.inl ch'))
     (h_wds : ∀ block hash, rlpToBlock rlp = .ok ⟨block, hash⟩ →
       sum ch.state.bal + wdsum block.wds < 2 ^ 256)
     (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state :=
-  addBlockToChainWith_inv_solvent wa pragueRules ch ch' rlp h_run h_wds h_inv
+  addBlockToChainWith_preserves_solvent wa pragueRules ch ch' rlp h_run h_wds h_inv

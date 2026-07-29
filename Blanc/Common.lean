@@ -1851,7 +1851,7 @@ lemma Line.cons_inv {ξ : Type} {f : Devm → ξ} {i l} :
 
 class Ninst.Hinv {ξ : Type} (f : Devm → ξ) (i : Ninst) where (inv : Ninst.Inv f i)
 
-def Ninst.inv_expr (ξx fx : Lean.Expr) (ix : Q(Ninst)) : Lean.Elab.Tactic.TacticM Lean.Expr := do
+def Ninst.invExpr (ξx fx : Lean.Expr) (ix : Q(Ninst)) : Lean.Elab.Tactic.TacticM Lean.Expr := do
   let x ← Lean.Meta.synthInstance <| Lean.mkApp3 q(@Ninst.Hinv) ξx fx ix
   pure <| Lean.mkApp4 q(@Ninst.Hinv.inv) ξx fx ix x
 
@@ -1861,7 +1861,7 @@ def instInv : Lean.Elab.Tactic.TacticM Unit :=
   have t' : Q(Prop) := t
   match t' with
   | ~q(@Ninst.Inv $ξx $fx $ix) =>
-    let x ← Ninst.inv_expr ξx fx ix
+    let x ← Ninst.invExpr ξx fx ix
     Lean.Elab.Tactic.closeMainGoal `tacName x
   | _ => dbg_trace "Not a Ninst.Inv goal"
 
@@ -1911,7 +1911,7 @@ def Linst.Inv {ξ : Type} (f : Devm → ξ) (g : Devm → ξ) (o : Linst) : Prop
 
 class Linst.Hinv {ξ : Type} (f : Devm → ξ) (g : Devm → ξ) (o : Linst) where (inv : Linst.Inv f g o)
 
-def Linst.inv_expr (ξx fx gx : Lean.Expr) (ox : Q(Linst)) :
+def Linst.invExpr (ξx fx gx : Lean.Expr) (ox : Q(Linst)) :
     Lean.Elab.Tactic.TacticM Lean.Expr := do
   let x ← Lean.Meta.synthInstance <| Lean.mkApp4 q(@Linst.Hinv) ξx fx gx ox
   pure <| Lean.mkApp5 q(@Linst.Hinv.inv) ξx fx gx ox x
@@ -1922,7 +1922,7 @@ def hopInv : Lean.Elab.Tactic.TacticM Unit :=
   have t' : Q(Prop) := t
   match t' with
   | ~q(@Linst.Inv $ξx $fx $gx $ox) =>
-    let x ← Linst.inv_expr ξx fx gx ox
+    let x ← Linst.invExpr ξx fx gx ox
     Lean.Elab.Tactic.closeMainGoal `tacName x
   | _ => dbg_trace "Not a Linst.Inv goal"
 
@@ -4065,7 +4065,7 @@ theorem Linst.run_instructionFrame
       (Devm.instructionFrame_of_world_eq rfl rfl rfl rfl)
   case dest => contradiction
 
-lemma Rinst.inv_getCode
+lemma Rinst.preserves_getCode
     {pc sevm devm r devm'}
     (run : Rinst.run ⟨pc, sevm, devm⟩ r = .ok devm') (a : Adr) :
     devm'.getCode a = devm.getCode a := by
@@ -4127,7 +4127,7 @@ lemma applyPrecompResult_getCode (evm : Evm) (res : PrecompResult) (ex : Executi
   revert h_ex
   cases res <;> (intro h_ex; subst h_ex; rfl)
 
-lemma executePrecomp_inv_getCode (evm : Evm) (adr : Adr) (ex : Execution)
+lemma executePrecomp_preserves_getCode (evm : Evm) (adr : Adr) (ex : Execution)
     (h_ex : executePrecomp evm adr = ex) (a : Adr) :
     ex.getCode a = evm.dyna.getCode a := by
   apply applyPrecompResult_getCode evm (precompileRun evm adr) ex h_ex a
@@ -4221,7 +4221,7 @@ lemma ExecuteCode.codePreserve
     rw [executeCode.handleError_getCode]
     obtain ⟨adr, hraw⟩ := executeCode.enter_inr henter
     rw [hraw]
-    exact executePrecomp_inv_getCode (initEvm msg) adr _ rfl a
+    exact executePrecomp_preserves_getCode (initEvm msg) adr _ rfl a
 
 lemma ProcessMessage.codePreserve
     {msg : Msg} {xl : Xlot} {exn : Except (String × State × AdrSet × Tra) Devm}
@@ -4258,7 +4258,7 @@ lemma ProcessMessage.codePreserve
       · exact Devm.rollback_getCode evm msg.benv.state msg.tenv.transientStorage a
       · exact h_exec_cond
 
-lemma ProcessMessage.inv_getCode_gen
+lemma ProcessMessage.preserves_getCode_gen
     {msg : Msg} {xl : Xlot} {exn : Except (String × State × AdrSet × Tra) Devm}
     (inv : xl.InvGetCode)
     (run : ProcessMessage msg xl exn) :
@@ -4978,7 +4978,7 @@ lemma Devm.push_getCode_err {v devm err} (h : Devm.push v devm = Except.error er
 lemma Devm.popToAdr_getCode_err {devm err} (h : Devm.popToAdr devm = .error err) (a : Adr) : err.2.getCode a = devm.getCode a := by
   exact (liftMach_worldEq_of_error (core := Mach.popToAdr) h).getCode a |>.symm
 
-lemma Rinst.inv_getCode_err
+lemma Rinst.preserves_getCode_err
     {pc sevm devm r err}
     (run : Rinst.run ⟨pc, sevm, devm⟩ r = Except.error err) (a : Adr) :
     err.2.getCode a = devm.getCode a := by
@@ -4990,14 +4990,14 @@ lemma Rinst.inv_getCode_err
     exact congrFun (congrArg (fun s => fun a => (s.get a).code) hf.state).symm a
   · have hf := Rinst.run_instructionFrame pc sevm devm r hs ht; rw [run] at hf; exact (Devm.InstructionFrame.getCode hf a).symm
 
-lemma Rinst.inv_getCode_gen
+lemma Rinst.preserves_getCode_gen
     {pc sevm devm r exn}
     (run : Rinst.run ⟨pc, sevm, devm⟩ r = exn) (a : Adr)
     (_ne : (devm.getCode a).toList ≠ []) :
     Execution.getCode exn a = devm.getCode a := by
-  cases exn <;> first | exact Rinst.inv_getCode_err run a | exact Rinst.inv_getCode run a
+  cases exn <;> first | exact Rinst.preserves_getCode_err run a | exact Rinst.preserves_getCode run a
 
-lemma Jinst.inv_getCode
+lemma Jinst.preserves_getCode
     {pc sevm devm j pc' devm'}
     (run : Jinst.Run ⟨pc, sevm, devm⟩ j (.ok ⟨pc', devm'⟩)) (a : Adr) :
     devm'.getCode a = devm.getCode a := by
@@ -5010,7 +5010,7 @@ def JumpResult.getCode (ex : Except (String × Devm) (Nat × Devm)) (a : Adr) : 
   | .ok ⟨_, devm⟩ => devm.getCode a
   | .error ⟨_, devm⟩ => devm.getCode a
 
-lemma Jinst.inv_getCode_gen
+lemma Jinst.preserves_getCode_gen
     {pc sevm devm j ex}
     (run : Jinst.Run ⟨pc, sevm, devm⟩ j ex) :
     ∀ a : Adr, JumpResult.getCode ex a = devm.getCode a := by
@@ -5019,7 +5019,7 @@ lemma Jinst.inv_getCode_gen
   rw [run] at hf
   cases ex <;> exact (hf.getCode a).symm
 
-lemma Linst.dest_inv_getCode {sevm : Sevm} {devm : Devm} {exn : Execution}
+lemma Linst.dest_preserves_getCode {sevm : Sevm} {devm : Devm} {exn : Execution}
     (run : Linst.Run sevm devm .dest exn) :
     ∀ adr : Adr, exn.getCode adr = devm.getCode adr := by
   intro adr
@@ -5092,7 +5092,7 @@ theorem Linst.run_codeFrame {sevm : Sevm} {devm : Devm} {l : Linst}
     {exn : Execution} (run : Linst.Run sevm devm l exn) :
     Execution.Rel Devm.CodeFrame devm exn := by
   rcases eq_or_ne l .dest with rfl | h_not_dest
-  · cases exn <;> exact Linst.dest_inv_getCode run
+  · cases exn <;> exact Linst.dest_preserves_getCode run
   · have hf := Linst.run_instructionFrame sevm devm l h_not_dest
     rw [run] at hf
     cases exn <;> exact fun a => (hf.getCode a).symm
@@ -5283,7 +5283,7 @@ lemma Xlot.invGetCode_of_rel {xl : Xlot}
 /-- Reverse bridge: the observation invariant `InvGetCode` implies the
 relational `Xlot.Rel Devm.CodePreserve`.  Together with
 `Xlot.invGetCode_of_rel` this makes the two forms interchangeable, so the
-legacy `Xinst.inv_getCode_gen` can project through the relational master. -/
+legacy `Xinst.preserves_getCode_gen` can project through the relational master. -/
 lemma Xlot.rel_of_invGetCode {xl : Xlot}
     (h : xl.InvGetCode) : Xlot.Rel Devm.CodePreserve xl := by
   rcases xl with _ | ⟨evm, exn⟩
@@ -5295,14 +5295,14 @@ lemma Xlot.rel_of_invGetCode {xl : Xlot}
 lemma Rinst.codePreserve_effect (r : Rinst) :
     Rinst.Effect Devm.CodePreserve r := by
   intro pc sevm pre out hrun
-  have h := Rinst.inv_getCode_gen hrun
+  have h := Rinst.preserves_getCode_gen hrun
   cases out <;> exact fun a ha => h a ha
 
 /-- Canonical relational code-preservation master for `Xinst`.  This carries the
 full per-constructor case analysis, composing the world-silent primitive frames
 (pops, gas, memory, access bookkeeping) with the Step 7.3 generic-operation
 masters `GenericCall.codePreserve` / `GenericCreate.codePreserve`.  The legacy
-observation theorem `Xinst.inv_getCode_gen` is a projection of this master via
+observation theorem `Xinst.preserves_getCode_gen` is a projection of this master via
 the `Xlot.InvGetCode` / `Xlot.Rel Devm.CodePreserve` bridge. -/
 lemma Xinst.codePreserve_effectRec (x : Xinst) :
     Xinst.EffectRec Devm.CodePreserve x := by
@@ -5337,7 +5337,7 @@ lemma Xinst.codePreserve_effectRec (x : Xinst) :
 /-- Compatibility projection: the legacy observation theorem, now derived from
 the relational master `Xinst.codePreserve_effectRec` through the
 `Xlot.rel_of_invGetCode` bridge.  Statement unchanged. -/
-lemma Xinst.inv_getCode_gen
+lemma Xinst.preserves_getCode_gen
     {sevm devm x xl exn}
     (inv : xl.InvGetCode)
     (run : Xinst.Run sevm devm x xl exn) :
@@ -5400,7 +5400,7 @@ lemma Linst.codePreserve_effect (l : Linst) :
   have hf := Linst.run_codeFrame hrun
   cases out <;> exact fun a _ => hf a
 
-lemma Exec.inv_getCode {pc} {sevm} {devm} {exn}
+lemma Exec.preserves_getCode {pc} {sevm} {devm} {exn}
     (run : Exec pc sevm devm exn) :
     ∀ a : Adr,
       (devm.getCode a).toList ≠ [] →
@@ -6820,7 +6820,7 @@ the canonical regular-instruction effect theorems. -/
 def Rinst.Inv {ξ : Type} (f : Devm → ξ) (r : Rinst) : Prop :=
   ∀ {pc sevm pre post}, Rinst.run ⟨pc, sevm, pre⟩ r = (.ok post) → f pre = f post
 
-lemma Rinst.inv_bal {r} : Rinst.Inv Devm.getBal r := by
+lemma Rinst.preserves_bal {r} : Rinst.Inv Devm.getBal r := by
   intro pc sevm pre post hrun
   rcases eq_or_ne r .sstore with rfl | hs
   · have hf := Rinst.sstore_run_stateWriteFrame pc pre sevm; rw [hrun] at hf; exact funext hf.getBal_eq
@@ -6837,7 +6837,7 @@ lemma memRead_getStor_eq {x n : Nat} {devm devm' : Devm} {value : Bytes} (h : de
   rw [← h_devm]
   rfl
 
-lemma Rinst.inv_stor {r} (h_not_sstore : r ≠ Rinst.sstore) : Rinst.Inv Devm.getStor r := by
+lemma Rinst.preserves_stor {r} (h_not_sstore : r ≠ Rinst.sstore) : Rinst.Inv Devm.getStor r := by
   intro pc sevm pre post hrun
   rcases eq_or_ne r .tstore with rfl | ht
   · have hf := Rinst.tstore_run_transientWriteFrame pc pre sevm; rw [hrun] at hf
@@ -6855,17 +6855,17 @@ instance {ξ : Type} (f : Devm → ξ) (o : Rinst) [Rinst.Hinv f o] :
   exact Rinst.Hinv.inv run.2.symm
 ⟩
 
-instance {o : Rinst} : Rinst.Hinv Devm.getBal o := ⟨Rinst.inv_bal⟩
+instance {o : Rinst} : Rinst.Hinv Devm.getBal o := ⟨Rinst.preserves_bal⟩
 
 instance {o : Rinst} : Rinst.Hinv Devm.getCode o := ⟨by
   intro pc sevm pre post run
   funext a
-  exact (Rinst.inv_getCode run a).symm⟩
+  exact (Rinst.preserves_getCode run a).symm⟩
 
 syntax "show_hinv_stor" : tactic
 macro_rules
   | `(tactic| show_hinv_stor) =>
-    `(tactic| exact ⟨Rinst.inv_stor (by intro; contradiction)⟩)
+    `(tactic| exact ⟨Rinst.preserves_stor (by intro; contradiction)⟩)
 
 instance : Rinst.Hinv Devm.getStor Rinst.add := by show_hinv_stor
 instance : Rinst.Hinv Devm.getStor Rinst.mul := by show_hinv_stor
@@ -7263,7 +7263,7 @@ lemma Jinst.inv_delSets_err {pc : Nat} {sevm : Sevm} {devm : Devm} {j : Jinst}
   exact hf.delSets.symm
 
 -- Halting/terminal instructions (Linst) preserve NoDel.
-lemma Linst.dest_inv_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
+lemma Linst.dest_preserves_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
     {exn : Execution} (run : Linst.Run sevm devm .dest exn)
     (h : Devm.NoDel wa devm) : Execution.NoDel wa exn := by
   dsimp [Linst.Run, Linst.run] at run
@@ -7348,7 +7348,7 @@ theorem Linst.run_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
     {l : Linst} {exn : Execution} (run : Linst.Run sevm devm l exn)
     (h : Devm.NoDel wa devm) : Execution.NoDel wa exn := by
   rcases eq_or_ne l .dest with rfl | h_not_dest
-  · exact Linst.dest_inv_noDel run h
+  · exact Linst.dest_preserves_noDel run h
   · have hf := Linst.run_instructionFrame sevm devm l h_not_dest
     rw [run] at hf
     cases exn <;> exact Devm.NoDel.of_eqs hf.delSets (hf.getCode wa) h
@@ -7760,7 +7760,7 @@ lemma Rinst.balance_effect (r : Rinst) :
     Rinst.Effect Devm.BalNoninc r := by
   intro pc sevm pre out hrun
   cases out with
-  | ok post => exact Devm.balNoninc_of_getBal_eq (Rinst.inv_bal hrun).symm
+  | ok post => exact Devm.balNoninc_of_getBal_eq (Rinst.preserves_bal hrun).symm
   | error err => exact Devm.balNoninc_of_getBal_eq (funext fun a => Rinst.inv_getBal_err hrun a)
 
 lemma Jinst.balance_effect (j : Jinst) :

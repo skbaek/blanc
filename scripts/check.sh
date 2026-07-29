@@ -40,7 +40,7 @@ if ! OUT="$(cd "$ROOT" && lake env lean scripts/AxiomCheck.lean 2>&1)"; then
   exit 1
 fi
 
-THEOREMS="weth_inv_solvent stateTransition_inv_solvent chain_inv_solvent addBlockToChain_inv_solvent"
+THEOREMS="weth_preserves_solvent stateTransition_preserves_solvent chain_preserves_solvent addBlockToChain_preserves_solvent"
 EXPECTED_DISPLAY="propext, Classical.choice, Quot.sound"
 EXPECTED_SORTED="$(printf '%s\n' propext Classical.choice Quot.sound | LC_ALL=C sort)"
 # Secondary net only: the exact-set comparison below is the primary check;
