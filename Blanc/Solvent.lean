@@ -80,19 +80,6 @@ lemma Precond.state_eq {wa sevm devm devm'}
         · intro h; rw [h_bal, h_stor wa]; exact hl h
         · intro h; rw [h_bal, h_stor wa]; exact hr h
 
-def Inv0 {ξ} (r : Devm → ξ) (f : Devm → Except (String × Devm) Devm) : Prop :=
-    ∀ {pre post}, f pre = .ok post → r pre = r post
-
-def Inv1 {ξ υ} (r : Devm → ξ) (f : Devm → Except (String × Devm) (υ × Devm)) : Prop :=
-    ∀ {pre y post}, f pre = .ok ⟨y, post⟩ → r pre = r post
-
-class Hinv0 {ξ} (r : Devm → ξ) (f : Devm → Except (String × Devm) Devm) where
-  (inv : Inv0 r f)
-
-class Hinv1 {ξ υ} (r : Devm → ξ)
-    (f : Devm → Except (String × Devm) (υ × Devm)) where
-  (inv : Inv1 r f)
-
 def Exec.InvDepth (k : Nat) (ca : Adr) (p : Prog)
   (σ : Sevm → Devm → Prop) (ρ : Sevm → Devm → Prop) : Prop :=
   ForallDeeperAt k ca p (λ _ sevm pre exn _ => σ sevm pre → ifOk (ρ sevm) exn)
@@ -956,29 +943,8 @@ lemma transfer_inv_sum {kd ki v} {b d : Adr → B256}
       apply lt_of_le_of_lt (Nat.le_trans _ <| add_le_sum_of_ne b hk) hb
       apply Nat.add_le_add_left <| B256.toNat_le_toNat h
 
-lemma of_nof_of_transfer {a b : Adr} {v : B256} {f h : Adr → B256}
-    (h_nof : SumNof f) (h_di : Transfer f a v b h) :
-    ∃ g, Decrease a v f g ∧ Increase b v g h ∧ B256.Nof (g b) v := by
-  rcases h_di with ⟨h_le, g, hd, hi⟩; refine' ⟨g, hd, hi, _⟩
-  apply lt_of_le_of_lt _ h_nof
-  by_cases h_ab : a = b
-  · rw [← (hd b).left h_ab, ← h_ab, B256.toNat_sub_eq_of_le _ _ h_le]
-    rw [Nat.sub_add_cancel (B256.toNat_le_toNat h_le)]
-    exact le_sum
-  · rw [← (hd b).right h_ab, Nat.add_comm]
-    apply _root_.le_trans (Nat.add_le_add_right _ _) <| add_le_sum_of_ne f h_ab
-    apply B256.toNat_le_toNat h_le
-
 lemma B256.le_add_right {xs ys : B256} (h : B256.Nof xs ys) : xs ≤ xs + ys := by
   rw [B256.le_iff_toNat_le_toNat, B256.toNat_add_eq_of_nof _ _ h]; simp
-
-lemma le_of_increase {k : Adr} {v : B256} {f g : Adr → B256}
-    (h : Increase k v f g) (h' : B256.Nof (f k) v) : ∀ k', f k' ≤ g k' := by
-  intro k'; by_cases h_eq : k = k'
-  · rw [← h_eq]
-    have h_rw : f k + v = g k := (h k).left rfl
-    rw [← h_rw]; apply B256.le_add_right h'
-  · rw [(h k').right h_eq]
 
 lemma incrAt_of_incrWbal {sevm : Sevm} {s s' : Devm} {wad dst} (h_dst : ValidAdr dst)
     (h_run : Line.Run sevm s incrWbal s') (h_stk : [wad, dst] <<+ s.stack) :
@@ -1772,16 +1738,6 @@ lemma solvent_of_state_eq {sf s₁ : Devm} {ct : Adr} {wad : B256}
   unfold Stor.Solvent at *
   rw [B256.toNat_sub_eq_of_le _ _ h_le] at h_sv
   omega
-
-lemma state_of_push_split {d sf : Devm} {v : B256} {idx : Nat} {out : B8L}
-    (h : (d.push v).Split (Except.ok sf)
-      (fun evm2 => (Except.ok (evm2.memWrite idx out) : Execution) = Except.ok sf)) :
-    sf.state = d.state := by
-  rcases h with ⟨x, _, h_contra⟩ | ⟨evm2, h_push, h_sf⟩
-  · cases h_contra
-  · injection h_sf with h_sf
-    rw [← h_sf]
-    exact ((Devm.push_of_push h_push).state).symm
 
 lemma of_handleError_err {err : String} {d : Devm}
     {ex : Except (String × _root_.State × AdrSet × Tra) Devm}
@@ -2599,7 +2555,6 @@ lemma weth_inv {sevm : Sevm} {s r}
     exact h_pop_state.symm.trans h_run_state.symm
   · intro e s s' r ⟨cond, ih⟩ burn run
     have cond' : Precond e.currentTarget e s' := Precond.state_eq cond burn.state.symm
-    --have cond_c : Cond e.currentTarget e s' := Cond.of_precond cond'
     have r_cond : Postcond e.currentTarget e r :=
       run_inv_cond deposit deposit_inv_solvent run cond'
     exact r_cond
@@ -2923,33 +2878,6 @@ lemma Xinst.none_inv_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm} {x : X
     · exact h_ne
     · rw [hsf] at hstv; cases hstv
 
-
-lemma of_splitXl_some {ξ υ ζ : Type} {e : Except ξ υ} {v : Evm × Execution}
-    {e' : Except ξ ζ} {q : υ → Prop}
-    (h : e.SplitXl (some v) e' q) : ∃ y, e = .ok y ∧ q y := by
-  rcases h with ⟨_, _, _, h_contra⟩ | h
-  · cases h_contra
-  · exact h
-
-lemma of_split_ok {ξ υ ζ : Type} {e : Except ξ υ} {z : ζ} {q : υ → Prop}
-    (h : e.Split (.ok z) q) : ∃ y, e = .ok y ∧ q y := by
-  rcases h with ⟨_, _, h_contra⟩ | h
-  · cases h_contra
-  · exact h
-
-lemma of_liftToExecution_split_ok {d inter : Devm}
-    {ex : Except (String × _root_.State × AdrSet × Tra) Devm} {q : Devm → Prop}
-    (h : (liftToExecution d ex).Split (Except.ok inter) q) :
-    ∃ child, ex = .ok child ∧ q child := by
-  rcases ex with err | child
-  · obtain ⟨e1, e2, e3, e4⟩ := err
-    dsimp only [liftToExecution] at h
-    rcases h with ⟨_, _, h_contra⟩ | ⟨_, h_contra, _⟩ <;> cases h_contra
-  · dsimp only [liftToExecution] at h
-    rcases h with ⟨_, h_contra, _⟩ | ⟨y, h_y, h_q⟩
-    · cases h_contra
-    · cases h_y
-      exact ⟨child, rfl, h_q⟩
 
 lemma State.setCode_get_bal {st : _root_.State} {adr a : Adr} {c : ByteArray} :
     ((st.setCode adr c).get a).bal = (st.get a).bal := by
@@ -3951,27 +3879,6 @@ lemma Precond.of_inv_transfer {wa : Adr} {sevm' : Sevm} {devm' : Devm}
 -- `State.Inv`.  Combines `Precond.of_inv_transfer` (build the precondition),
 -- `exec_inv_solvent` (frame-level solvency + nof), and `code_eq_of_exec` (the
 -- WETH code at `wa` is untouched) through `State.Inv.of_postcond`.
-lemma State.Inv.of_exec_transfer {wa : Adr} {sevm : Sevm} {pre post : Devm}
-    {st st_mid : _root_.State} {caller target : Adr} {value : B256}
-    (h_inv : State.Inv wa st)
-    (h_ne : caller ≠ wa)
-    (h_sub : st.subBal caller value = some st_mid)
-    (h_pre_state : pre.state = st_mid.addBal target value)
-    (h_ct : sevm.currentTarget = target)
-    (h_val : sevm.currentTarget = wa → sevm.value = value)
-    (h_code : sevm.currentTarget = wa → some sevm.code.toList = Prog.compile weth)
-    (h_run : exec ⟨0, sevm, pre⟩ = .ok post) :
-    State.Inv wa post.state := by
-  have h_pc : Precond wa sevm pre :=
-    Precond.of_inv_transfer h_inv h_ne h_sub h_pre_state h_ct h_val
-  have h_post : Postcond wa sevm post :=
-    exec_inv_solvent wa sevm pre post h_run h_code h_pc
-  apply State.Inv.of_postcond h_post
-  obtain ⟨exc⟩ := (exec_iff_exec_eq 0 sevm pre (.ok post)).mpr h_run
-  have h_ce : post.getCode wa = pre.getCode wa := code_eq_of_exec exc h_pc.code
-  show some (post.state.getCode wa).toList = Prog.compile weth
-  rw [show post.state.getCode wa = post.getCode wa from rfl, h_ce]
-  exact h_pc.code
 
 -- No-transfer counterpart of `Precond.of_inv_transfer`: when no value moves,
 -- the pre-state is the invariant state itself, and `PreSolvent` reduces to the
@@ -4528,35 +4435,6 @@ lemma Exec.inv_noDel {wa : Adr} {pc : Nat} {sevm : Sevm} {devm : Devm}
   cases exn with
   | error e => exact heff h
   | ok d => exact heff h
-
-theorem exec_inv_noDel {wa : Adr} (sevm : Sevm) (pre : Devm)
-    (exn : Execution)
-    (h_run : exec ⟨0, sevm, pre⟩ = exn)
-    (h : Devm.NoDel wa pre) : Execution.NoDel wa exn := by
-  obtain ⟨exc⟩ := (exec_iff_exec_eq 0 sevm pre exn).mpr h_run
-  exact Exec.inv_noDel exc h
-
-theorem executeCode_inv_noDel {wa : Adr} {msg : Msg} {evm : Devm}
-    (h_run : executeCode msg = .ok evm)
-    (h : Msg.NoDel wa msg) : Devm.NoDel wa evm := by
-  rw [executeCode] at h_run
-  rcases hen : executeCode.enter msg with evm' | raw <;> rw [hen] at h_run
-  · obtain ⟨exc⟩ := Xlot.filled_exec evm'
-    rw [executeCode.enter_inl hen] at exc h_run
-    have h_ex : Execution.NoDel wa (exec (initEvm msg)) :=
-      Exec.inv_noDel exc (Msg.NoDel.initDevm h)
-    have h_res := handleError_noDel h_ex
-    rw [show executeCode.handleError (exec (initEvm msg)) = .ok evm from h_run]
-      at h_res
-    exact h_res
-  · obtain ⟨adr, hraw⟩ := executeCode.enter_inr hen
-    have h_ex : Execution.NoDel wa raw := by
-      rw [hraw]
-      exact executePrecomp_noDel (evm := initEvm msg) (adr := adr) rfl
-        (Msg.NoDel.initDevm h)
-    have h_res := handleError_noDel h_ex
-    rw [show executeCode.handleError raw = .ok evm from h_run] at h_res
-    exact h_res
 
 theorem processMessage_inv_noDel {wa : Adr} {msg : Msg} {evm : Devm}
     (h_run : processMessage msg = .ok evm)
@@ -6333,14 +6211,6 @@ theorem stateTransitionWith_inv_solvent (wa : Adr) (rules : ForkRules)
 -- At an explicitly named fork: resolving the rules is the only extra step, and
 -- a fork whose rules this build does not implement never reaches the
 -- transition at all.
-theorem stateTransitionAt_inv_solvent (wa : Adr) (f : Fork)
-    (ch ch' : BlockChain) (block : Block)
-    (h_run : stateTransitionAt f ch block = .ok ch')
-    (h_wds : sum ch.state.bal + wdsum block.wds < 2 ^ 256)
-    (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state := by
-  rw [stateTransitionAt] at h_run
-  obtain ⟨rules, _, h_run⟩ := of_bind_eq_ok h_run
-  exact stateTransitionWith_inv_solvent wa rules ch ch' block h_run h_wds h_inv
 
 -- On a configured chain the block's own timestamp picks the rules. The result
 -- holds whichever ones it picks, so a chain that crosses an activation is not
@@ -6392,23 +6262,10 @@ inductive BlockChain.ReachUsing (cfg : ChainConfig) : BlockChain → BlockChain 
 -- Chain-level induction over a configured chain : no sequence of valid blocks
 -- can break WETH solvency, whatever schedule the chain follows and whichever
 -- activations that sequence crosses.
-theorem chainUsing_inv_solvent (wa : Adr) (cfg : ChainConfig) (ch ch' : BlockChain)
-    (h_reach : BlockChain.ReachUsing cfg ch ch')
-    (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state := by
-  induction h_reach with
-  | refl => exact h_inv
-  | step h_reach' h_bound h_st ih =>
-    exact stateTransitionUsing_inv_solvent wa cfg _ _ _ h_st h_bound ih
 
 -- A Prague-only schedule is the Prague chain: every `Reach` step is a
 -- `ReachUsing (ChainConfig.pragueOnly ch.chainId)` step, because
 -- `stateTransitionUsing` on that schedule reduces to `stateTransition`.
-theorem BlockChain.Reach.toReachUsing {chainId : B64} {ch ch' : BlockChain}
-    (h_reach : BlockChain.Reach ch ch') :
-    BlockChain.ReachUsing (ChainConfig.pragueOnly chainId) ch ch' := by
-  induction h_reach with
-  | refl => exact .refl _
-  | step h_reach' h_bound h_st ih => exact .step ih h_bound h_st
 
 -- Chain-level induction corollary : no sequence of valid blocks can break
 -- WETH solvency.
@@ -6458,33 +6315,11 @@ theorem addBlockToChainWith_inv_solvent (wa : Adr) (rules : ForkRules)
           (h_wds block hash h_rlp) h_inv
 
 -- Block import at an explicitly named fork.
-theorem addBlockToChainAt_inv_solvent (wa : Adr) (f : Fork)
-    (ch ch' : BlockChain) (rlp : B8L)
-    (h_run : addBlockToChainAt f ch rlp = .ok (.inl ch'))
-    (h_wds : ∀ block hash, rlpToBlock rlp = .ok ⟨block, hash⟩ →
-      sum ch.state.bal + wdsum block.wds < 2 ^ 256)
-    (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state := by
-  rw [addBlockToChainAt] at h_run
-  obtain ⟨rules, _, h_run⟩ := of_bind_eq_ok h_run
-  exact addBlockToChainWith_inv_solvent wa rules ch ch' rlp h_run h_wds h_inv
 
 -- Block import on a configured chain. It decodes the block first so that the
 -- schedule can read its timestamp, but once the decode has succeeded it is the
 -- rules-explicit import of the same bytes, so the general theorem applies
 -- rather than a second inversion of the same do-block.
-theorem addBlockToChainUsing_inv_solvent (wa : Adr) (cfg : ChainConfig)
-    (ch ch' : BlockChain) (rlp : B8L)
-    (h_run : addBlockToChainUsing cfg ch rlp = .ok (.inl ch'))
-    (h_wds : ∀ block hash, rlpToBlock rlp = .ok ⟨block, hash⟩ →
-      sum ch.state.bal + wdsum block.wds < 2 ^ 256)
-    (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state := by
-  rw [addBlockToChainUsing] at h_run
-  obtain ⟨⟨block, hash⟩, h_rlp, h_run⟩ := of_bind_eq_ok h_run
-  dsimp only at h_run
-  obtain ⟨rules, _, h_run⟩ := of_bind_eq_ok h_run
-  refine addBlockToChainWith_inv_solvent wa rules ch ch' rlp ?_ h_wds h_inv
-  rw [addBlockToChainWith, h_rlp]
-  exact h_run
 
 -- Prague is the `rules := pragueRules` instance here too; the statement is
 -- unchanged.

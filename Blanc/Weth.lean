@@ -76,7 +76,6 @@ def decimals : Func :=
 -- name() --
 
 def name : Func :=
-  --pushB256 wrappedEtherStringShift ::: -- wrappedEtherStringShift ||
   pushB256 "Wrapped Ether".toB8L.toB256 :::
   pushB256 152 ::: shl ::: -- "Wrapped Ether" ||
   pushList [13, 32] +++ -- 32 :: 13 :: "Wrapped Ether" ||

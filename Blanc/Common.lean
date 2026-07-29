@@ -306,8 +306,6 @@ lemma Linst.at_unique {e pc o o'} (h : At e pc o) (h' : At e pc o') : o = o' := 
 lemma Ninst.at_unique {e pc o o'} (h : At e pc o) (h' : At e pc o') : o = o' := by
   injection Eq.trans h.symm h' with eq; injection eq with eq
 
-lemma toXinst_toB8 {o : Xinst} :
-  B8.toXinst o.toB8 = some o := by cases o <;> rfl
 lemma toJinst_toB8 {o : Jinst} :
   B8.toJinst o.toB8 = some o := by cases o <;> rfl
 lemma toLinst_toB8 {o : Linst} :
@@ -483,8 +481,6 @@ def PushAt (code : ByteArray) (pc : Nat) (xs : B8L) : Prop :=
   ∃ le : xs.length ≤ 32, code.getInst pc = some (.next (.push xs le))
 
 lemma toB8_toXinst {o : Xinst} : B8.toXinst o.toB8 = some o := by cases o <;> rfl
-lemma toB8_toJinst {o : Jinst} : B8.toJinst o.toB8 = some o := by cases o <;> rfl
-lemma toB8_toLinst {o : Linst} : B8.toLinst o.toB8 = some o := by cases o <;> rfl
 
 lemma Ninst.push_ext {xs ys : B8L}
     (le : xs.length ≤ 32) (le' : ys.length ≤ 32) (eq : xs = ys) :
@@ -495,10 +491,6 @@ lemma toNat_pushToB8_eq {xs : B8L} (le : xs.length ≤ 32) :
     (pushToB8 xs).toNat = xs.length + 95:= by
   simp only [pushToB8]; rw [B8.toNat_add, Nat.lo_eq_of_lt] <;>
   {simp only [B8.toNat, UInt8.reduceToNat, UInt8.toNat_ofNat']; omega}
-
-lemma toNat_pushToB8_le {bs : B8L} (le : bs.length ≤ 32) :
-    (pushToB8 bs).toNat ≤ 127 := by
-  rw [toNat_pushToB8_eq le]; omega
 
 lemma List.sliceD_succ {ξ} (xs : List ξ) (m n : Nat) (d : ξ) :
     xs.sliceD m (n + 1) d = xs.getD m d :: xs.sliceD (m + 1) n d := by
@@ -821,18 +813,6 @@ theorem Exec'.strongRec (π : Exec'.Pred) : □p (carryover π) → □p π := b
   intro pk' h_gt
   apply ih' _ h_gt
 
-theorem Ninst.of_run'_reg {pc : Nat} {sevm : Sevm} {devm : Devm}
-    {r : Rinst} {ex : Execution}
-  (run : Ninst.Run' pc sevm devm (.reg r) .none ex) :
-  (Rinst.run ⟨pc, sevm, devm⟩ r) = ex :=
-  (Step.run_ofExecution.mp run).2.symm
-
-lemma of_withPc_eq_ok {pc : ℕ} {exn : Execution} {pc'} {devm}
-    (eq : exn.withPc pc = .ok ⟨pc', devm⟩) : exn = .ok devm ∧ pc = pc' := by
-  rcases of_bind_eq_ok eq with ⟨devm', exn_eq, eq'⟩; clear eq
-  injection eq' with eq; injection eq with eq rw
-  rw [← rw]; refine ⟨exn_eq, eq⟩
-
 lemma Rinst.run_of_at {pc sevm pre r post}
     (exc : Exec pc sevm pre (.ok post)) (rat : Rinst.At sevm.code pc r) :
     ∃ (inter : Devm) (exc' : Exec (pc + 1) sevm inter (.ok post)),
@@ -902,14 +882,6 @@ lemma Ninst.run_of_at {pc sevm pre n post}
 
 lemma Ninst.size_eq_length_toB8L (n : Ninst) :
     n.size = n.toB8L.length := by cases n <;> rfl
-
-lemma Except.bind_associative
-  {ξ υ ζ ω}
-  (x : Except ξ υ)
-  (f : υ → Except ξ ζ)
-  (g : ζ → Except ξ ω) :
-  x >>= f >>= g = x >>= fun x ↦ f x >>= g := by
-  apply bind_assoc
 
 def Devm.Pop (xs : List B256): Devm → Devm → Prop :=
   Rel {Rels.eq with stack := Stack.Pop xs}
@@ -1125,19 +1097,6 @@ lemma jumpi_at {pc sevm pre post}
   · right; cases pc_eq;
     refine' ⟨x, y, inter, exc', pb, jumpable_eq, ne_zero, prec⟩
 
-lemma Exec'.of_exn_eq_ok {pk : Exec'} {devm : Devm}
-    (eq : pk.exn = .ok devm) :
-    pk = (
-      {
-        pc := pk.pc,
-        sevm := pk.sevm,
-        devm := pk.devm,
-        exn := .ok devm,
-        exc := eq ▸ pk.exc
-      } : Exec'
-    ) := by
-  cases pk; simp at *; apply eq
-
 lemma push_of_pushAt
     {pc sevm pre xs post} (exc : Exec pc sevm pre (.ok post))
     (h_at : PushAt sevm.code pc xs) :
@@ -1299,15 +1258,6 @@ lemma List.toB64_pair (n : Nat) (n_lt : n < 2 ^ 16) :
     rw [Nat.shiftRight_eq_div_pow, Nat.div_eq_zero_of_lt (by omega)]; rfl
   · apply List.toB32_pair _ n_lt
 
-lemma List.toB128_pair (n : Nat) (n_lt : n < 2 ^ 16):
-    B8L.toB128 [(n >>> 8).toUInt8, n.toUInt8] = n.toB128 := by
-  apply @Eq.trans _ _ ⟨0, n.toB64⟩
-  · apply @Eq.trans _ _ ⟨0, B8L.toB64 [(n >>> 8).toUInt8, n.toUInt8]⟩
-    · simp [B8L.toB128, List.ekatD, B8L.pack]
-      apply congr_arg₂ _ rfl rfl
-    · apply congr_arg₂ _ rfl <| List.toB64_pair _ n_lt
-  · simp only [Nat.toB128]; apply congr_arg₂ _ _ rfl
-    rw [Nat.shiftRight_eq_zero _ _ (by omega)]; rfl
 lemma List.toB256_pair (n : Nat) (n_lt : n < 2 ^ 16):
     B8L.toB256 [(n >>> 8).toUInt8, n.toUInt8] = n.toB256 := by
   have hlow : ∀ a b : B8, B8.toB64 a <<< 8 ||| B8.toB64 b = B8L.toB64 [a, b] := by
@@ -1424,9 +1374,6 @@ lemma Devm.popBurn_of_popBurn_of_pop {devm devm' devm''} {xs}
 lemma toNat_toB256 (n : Nat) : n.toB256.toNat = n ↾ 256 := by
   simp only [Nat.toB256, B256.toNat]; rw [toNat_toB128, toNat_toB128]
   apply Nat.or_eq_lo_add
-
-lemma toNat_toB128_of_lt {n : Nat} (h : n < 2 ^ 128) : n.toB128.toNat = n := by
-  rw [toNat_toB128, Nat.lo_eq_of_lt h]
 
 lemma toNat_toB256_of_lt {n : Nat} (h : n < 2 ^ 256) : n.toB256.toNat = n := by
   rw [toNat_toB256, Nat.lo_eq_of_lt h]
@@ -2306,13 +2253,6 @@ lemma addAccessedAddress_getCode {devm : Devm} {adr a : Adr} :
     (addAccessedAddress devm adr).getCode a = devm.getCode a := by
   exact (addAccessedAddress_worldEq devm adr).getCode a |>.symm
 
-lemma accessDelegation_getCode {devm : Devm} {adr a : Adr} :
-    (accessDelegation devm adr).2.2.2.2.getCode a = devm.getCode a := by
-  dsimp [accessDelegation]
-  split_ifs
-  · exact addAccessedAddress_getCode
-  · rfl
-
 lemma chargeGas_getCode {devm devm' : Devm} {cost : ℕ} {a : Adr}
     (h : chargeGas cost devm = Except.ok devm') :
     devm'.getCode a = devm.getCode a := by
@@ -2322,10 +2262,6 @@ lemma Devm.pop_worldEq_of_ok {devm devm' : Devm} {x : B256}
     (h : devm.pop = .ok (x, devm')) : Devm.WorldEq devm devm' := by
   exact liftMach_worldEq_of_ok (core := Mach.pop) h
 
-lemma Devm.pop_worldEq_of_error {devm : Devm} {err : String × Devm}
-    (h : devm.pop = .error err) : Devm.WorldEq devm err.2 := by
-  exact liftMach_worldEq_of_error (core := Mach.pop) h
-
 lemma Devm.pop_getCode {devm devm' : Devm} {val : B256} {a : Adr}
     (h : devm.pop = Except.ok (val, devm')) : devm'.getCode a = devm.getCode a := by
   exact (Devm.pop_worldEq_of_ok h).getCode a |>.symm
@@ -2333,10 +2269,6 @@ lemma Devm.pop_getCode {devm devm' : Devm} {val : B256} {a : Adr}
 lemma Devm.popToNat_worldEq_of_ok {devm devm' : Devm} {n : Nat}
     (h : devm.popToNat = .ok (n, devm')) : Devm.WorldEq devm devm' := by
   exact liftMach_worldEq_of_ok (core := Mach.popToNat) h
-
-lemma Devm.popToNat_worldEq_of_error {devm : Devm} {err : String × Devm}
-    (h : devm.popToNat = .error err) : Devm.WorldEq devm err.2 := by
-  exact liftMach_worldEq_of_error (core := Mach.popToNat) h
 
 lemma Devm.popToNat_getCode {devm devm' : Devm} {val : ℕ} {a : Adr}
     (h : devm.popToNat = Except.ok (val, devm')) :
@@ -2465,54 +2397,17 @@ lemma Xinst.depth_lt
   rw [Frame.enter_run_depth henter]
   exact Xinst.step_spawn_depth hs
 
-lemma Ninst.depth_lt_of_run'_some
-    {pc sevm devm n evm_ exn_ res}
-    (run : Ninst.Run' pc sevm devm n (.some ⟨evm_, exn_⟩) res) :
-    evm_.sta.depth < sevm.depth := by
-  obtain ⟨f, rsm, pc', hs, henter, _⟩ := Step.Run.some_inv run
-  rw [Frame.enter_run_depth henter]
-  exact Ninst.step_spawn_depth hs
-
-lemma Devm.pop_getCode_eq {x devm devm'} (h : Devm.pop devm = .ok ⟨x, devm'⟩) (a : Adr) : devm'.getCode a = devm.getCode a := by
-  exact (Devm.pop_worldEq_of_ok h).getCode a |>.symm
-
 lemma chargeGas_getCode_eq {cost devm devm'} (h : chargeGas cost devm = .ok devm') (a : Adr) : devm'.getCode a = devm.getCode a := by
   exact (chargeGas_worldEq_of_ok h).getCode a |>.symm
 
 lemma Devm.push_getCode_eq {v devm devm'} (h : Devm.push v devm = .ok devm') (a : Adr) : devm'.getCode a = devm.getCode a := by
   exact (liftMachExecution_worldEq_of_ok (core := Mach.push v) h).getCode a |>.symm
 
-lemma Devm.popToNat_getCode_eq {devm devm' n} (h : Devm.popToNat devm = .ok ⟨n, devm'⟩) (a : Adr) : devm'.getCode a = devm.getCode a := by
-  exact (Devm.popToNat_worldEq_of_ok h).getCode a |>.symm
-
 lemma Devm.popToAdr_getCode_eq {devm devm' adr} (h : Devm.popToAdr devm = .ok ⟨adr, devm'⟩) (a : Adr) : devm'.getCode a = devm.getCode a := by
   exact (liftMach_worldEq_of_ok (core := Mach.popToAdr) h).getCode a |>.symm
 
 @[simp] lemma Except.bind_error {α β ε} (e : ε) (f : α → Except ε β) : (Except.error e >>= f) = Except.error e := rfl
 @[simp] lemma Except.bind_ok {α β ε} (x : α) (f : α → Except ε β) : (Except.ok x >>= f) = f x := rfl
-
-lemma getCode_eq_of_bind {α ε} {ma : Except ε α} {f : α → Except ε Devm}
-    {devm devm' : Devm} {a : Adr}
-    (run : (ma >>= f) = .ok devm')
-    (getDevm : α → Devm)
-    (h_first : ∀ v, ma = .ok v → (getDevm v).getCode a = devm.getCode a)
-    (h_rest : ∀ v, ma = .ok v → f v = .ok devm' → devm'.getCode a = (getDevm v).getCode a) :
-    devm'.getCode a = devm.getCode a := by
-  rcases of_bind_eq_ok run with ⟨v, hm, hf⟩
-  rw [h_rest v hm hf, h_first v hm]
-
-lemma getBal_eq_of_bind {α ε} {ma : Except ε α} {f : α → Except ε Devm}
-    {devm devm' : Devm} {a : Adr}
-    (run : (ma >>= f) = .ok devm')
-    (getDevm : α → Devm)
-    (h_first : ∀ v, ma = .ok v → (getDevm v).getBal a = devm.getBal a)
-    (h_rest : ∀ v, ma = .ok v → f v = .ok devm' → devm'.getBal a = (getDevm v).getBal a) :
-    devm'.getBal a = devm.getBal a := by
-  rcases of_bind_eq_ok run with ⟨v, hm, hf⟩
-  rw [h_rest v hm hf, h_first v hm]
-
-lemma Devm.pop_getBal_eq {x devm devm'} (h : Devm.pop devm = .ok ⟨x, devm'⟩) (a : Adr) : devm'.getBal a = devm.getBal a := by
-  exact (Devm.pop_worldEq_of_ok h).getBal a |>.symm
 
 lemma chargeGas_getBal_eq {cost devm devm'} (h : chargeGas cost devm = .ok devm') (a : Adr) : devm'.getBal a = devm.getBal a := by
   exact (chargeGas_worldEq_of_ok h).getBal a |>.symm
@@ -3001,17 +2896,6 @@ lemma accessDelegation_instructionFrame (d : Devm) (adr : Adr) :
     exact addAccessedAddress_instructionFrame d _
   · simp only [h, if_false]
     exact Devm.instructionFrame_refl d
-
-/-- A failing `assert` returns its argument state verbatim. -/
-lemma assert_instructionFrame {cond : Prop} [Decidable cond] {msg : String}
-    {devm : Devm} {err : String × Devm}
-    (h : Except.assert cond (msg, devm) = Except.error err) :
-    Devm.InstructionFrame devm err.2 := by
-  unfold Except.assert at h
-  split at h
-  · exact absurd h (by simp)
-  · rw [← Except.error.inj h]
-    exact Devm.instructionFrame_refl devm
 
 lemma addAccessedStorageKey_instructionFrame
     (d : Devm) (a : Adr) (k : B256) :
@@ -5091,22 +4975,11 @@ lemma Evm.step_spawn_child {pc : Nat} {sevm : Sevm} {devm : Devm}
     · exact absurd hsame.symm hne
     · exact hsrc hnotDel
 
-lemma Devm.pop_getCode_err {err devm} (h : Devm.pop devm = .error err) (a : Adr) : err.2.getCode a = devm.getCode a := by
-  exact (Devm.pop_worldEq_of_error h).getCode a |>.symm
-
 lemma chargeGas_getCode_err {cost devm err} (h : chargeGas cost devm = .error err) (a : Adr) : err.2.getCode a = devm.getCode a := by
   exact (chargeGas_worldEq_of_error h).getCode a |>.symm
 
 lemma Devm.push_getCode_err {v devm err} (h : Devm.push v devm = Except.error err) (a : Adr) : err.2.getCode a = devm.getCode a := by
   exact (liftMachExecution_worldEq_of_error (core := Mach.push v) h).getCode a |>.symm
-
-lemma assert_getCode_err {cond : Prop} [Decidable cond] {msg : String} {devm : Devm} {err : String × Devm} (h : Except.assert cond (msg, devm) = Except.error err) (a : Adr) : err.2.getCode a = devm.getCode a := by
-  unfold Except.assert at h
-  split_ifs at h; try contradiction
-  injection h with h1; rw [← h1]
-
-lemma Devm.popToNat_getCode_err {devm err} (h : Devm.popToNat devm = .error err) (a : Adr) : err.2.getCode a = devm.getCode a := by
-  exact (Devm.popToNat_worldEq_of_error h).getCode a |>.symm
 
 lemma Devm.popToAdr_getCode_err {devm err} (h : Devm.popToAdr devm = .error err) (a : Adr) : err.2.getCode a = devm.getCode a := by
   exact (liftMach_worldEq_of_error (core := Mach.popToAdr) h).getCode a |>.symm
@@ -6022,18 +5895,6 @@ infix:70 " =? "  => B256.eq_check
 lemma B8L.sig_zero_cons (xs) : B8L.sig (0 :: xs) = B8L.sig xs := rfl
 lemma B8L.sig_nonzero_cons (x xs) (h : x ≠ 0) : B8L.sig (x :: xs) = x :: xs := by
   simp only [sig]; rw [List.dropWhile_cons_of_neg]; simp [h]
-
-lemma B8L.pack_zero_cons (xs n) : B8L.pack (0 :: xs) n = B8L.pack xs n := by
-  simp only [pack, List.ekatD]
-  rw [List.reverse_cons', List.takeD_concat]
-
-lemma B8L.pack_sig (xs n) : B8L.pack (B8L.sig xs) n = B8L.pack xs n := by
-  induction xs with
-  | nil => simp [sig, pack]
-  | cons b bs ih =>
-    by_cases h : b = 0
-    · cases h; rw [sig_zero_cons, pack_zero_cons, ih]
-    · rw [sig_nonzero_cons b bs h]
 
 lemma B8L.toB256_sig (bs : B8L) : B8L.toB256 (B8L.sig bs) = bs.toB256 := by
   induction bs with
@@ -7093,16 +6954,6 @@ theorem not_mem_insert {a b : Adr} {s : AdrSet} (hne : a ≠ b) (hs : a ∉ s) :
   simp only [Std.HashSet.mem_insert, not_or]
   exact ⟨by simpa using Ne.symm hne, hs⟩
 
-theorem not_mem_foldl_insert {a : Adr} {l : List Adr} {m : AdrSet}
-    (hm : a ∉ m) (hl : a ∉ l) :
-    a ∉ l.foldl (fun acc x => acc.insert x) m := by
-  induction l generalizing m with
-  | nil => simpa using hm
-  | cons x xs ih =>
-    simp only [List.foldl_cons]
-    refine ih (not_mem_insert ?_ hm) (fun h => hl (List.mem_cons_of_mem _ h))
-    exact fun h => hl (h ▸ List.mem_cons_self ..)
-
 theorem not_mem_union {a : Adr} {m₁ m₂ : AdrSet} (h₁ : a ∉ m₁) (h₂ : a ∉ m₂) :
     a ∉ m₁.union m₂ := by
   intro h
@@ -7370,39 +7221,6 @@ lemma Devm.popToAdr_delSets_eq {devm devm' adr} (h : Devm.popToAdr devm = .ok �
 lemma Devm.popToNat_delSets_eq {devm devm' n} (h : Devm.popToNat devm = .ok ⟨n, devm'⟩) : devm'.delSets = devm.delSets := by
   exact liftMach_delSets_of_ok (core := Mach.popToNat) h
 
-lemma pushItem_delSets_eq {x c devm devm'} (h : pushItem x c devm = .ok devm') : devm'.delSets = devm.delSets := by
-  exact liftMachExecution_delSets_of_ok (core := Mach.pushItem x c) h
-
-lemma applyBinary_delSets_eq {f : B256 → B256 → B256} {cost devm devm'}
-    (h : applyBinary f cost devm = .ok devm') :
-    devm.delSets = devm'.delSets := by
-  exact (liftMachExecution_delSets_of_ok (core := Mach.applyBinary f cost) h).symm
-
-lemma applyUnary_delSets_eq {f : B256 → B256} {cost devm devm'}
-    (h : applyUnary f cost devm = .ok devm') :
-    devm.delSets = devm'.delSets := by
-  exact (liftMachExecution_delSets_of_ok (core := Mach.applyUnary f cost) h).symm
-
-lemma applyTernary_delSets_eq {f : B256 → B256 → B256 → B256} {cost devm devm'}
-    (h : applyTernary f cost devm = .ok devm') :
-    devm.delSets = devm'.delSets := by
-  exact (liftMachExecution_delSets_of_ok (core := Mach.applyTernary f cost) h).symm
-
-lemma memRead_delSets_eq {x n : Nat} {devm devm' : Devm} {value : B8L} (h : devm.memRead x n = ⟨value, devm'⟩) : devm'.delSets = devm.delSets := by
-  simp only [Devm.memRead] at h
-  rcases h_read : devm.memory.read x n with ⟨val, mem⟩
-  rw [h_read] at h
-  injection h with _ h_devm
-  rw [← h_devm]
-  rfl
-
-lemma memWrite_delSets_eq {idx : Nat} {val : B8L} {devm : Devm} : (devm.memWrite idx val).delSets = devm.delSets := rfl
-
-lemma Devm.popN_delSets_eq {n : Nat} {devm devm' : Devm} {l : List B256}
-    (hp : devm.popN n = Except.ok (l, devm')) :
-    devm'.delSets = devm.delSets := by
-  exact liftMach_delSets_of_ok (core := (Mach.popN · n)) hp
-
 lemma Rinst.inv_delSets {r : Rinst} : Rinst.Inv Devm.delSets r := by
   intro pc sevm pre post hrun
   rcases eq_or_ne r .sstore with rfl | hs
@@ -7413,11 +7231,6 @@ lemma Rinst.inv_delSets {r : Rinst} : Rinst.Inv Devm.delSets r := by
     exact Prod.ext hf.accountsToDelete hf.createdAccounts
   · have hf := Rinst.run_instructionFrame pc sevm pre r hs ht; rw [hrun] at hf; exact hf.delSets
 
-lemma Devm.pop_delSets_err {err devm} (h : Devm.pop devm = .error err) : err.2.delSets = devm.delSets := by
-  simp only [Devm.pop_def] at h
-  split at h <;> try contradiction
-  cases h; rfl
-
 lemma chargeGas_delSets_err {cost devm err} (h : chargeGas cost devm = .error err) : err.2.delSets = devm.delSets := by
   simp only [chargeGas_def] at h
   split at h <;> try contradiction
@@ -7426,75 +7239,8 @@ lemma chargeGas_delSets_err {cost devm err} (h : chargeGas cost devm = .error er
 lemma Devm.push_delSets_err {v devm err} (h : Devm.push v devm = Except.error err) : err.2.delSets = devm.delSets := by
   exact liftMachExecution_delSets_of_error (core := Mach.push v) h
 
-lemma assert_delSets_err {cond : Prop} [Decidable cond] {msg : String} {devm : Devm} {err : String × Devm} (h : Except.assert cond (msg, devm) = Except.error err) : err.2.delSets = devm.delSets := by
-  unfold Except.assert at h
-  split_ifs at h; try contradiction
-  injection h with h1; rw [← h1]
-
-lemma Devm.popToNat_delSets_err {devm err} (h : Devm.popToNat devm = .error err) : err.2.delSets = devm.delSets := by
-  exact liftMach_delSets_of_error (core := Mach.popToNat) h
-
 lemma Devm.popToAdr_delSets_err {devm err} (h : Devm.popToAdr devm = .error err) : err.2.delSets = devm.delSets := by
   exact liftMach_delSets_of_error (core := Mach.popToAdr) h
-
-lemma delSets_err_of_bind {α} {ma : Except (String × Devm) α} {f : α → Execution}
-    {devm : Devm} {err : String × Devm}
-    (run : (ma >>= f) = Except.error err)
-    (getDevm : α → Devm)
-    (h_first_ok : ∀ v, ma = Except.ok v → (getDevm v).delSets = devm.delSets)
-    (h_first_err : ∀ e, ma = Except.error e → e.2.delSets = devm.delSets)
-    (h_rest_err : ∀ v, ma = Except.ok v → f v = Except.error err → err.2.delSets = (getDevm v).delSets) :
-    err.2.delSets = devm.delSets := by
-  cases h_ma : ma
-  case error e =>
-    rw [h_ma, Except.bind_error] at run
-    injection run with h_eq; subst h_eq
-    exact h_first_err _ h_ma
-  case ok v =>
-    rw [h_ma, Except.bind_ok] at run
-    have h1 := h_rest_err v h_ma run
-    have h2 := h_first_ok v h_ma
-    exact h1.trans h2
-
-lemma Devm.popN_delSets_err {n : Nat} {devm : Devm} {err : String × Devm}
-    (hp : devm.popN n = Except.error err) :
-    err.2.delSets = devm.delSets := by
-  exact liftMach_delSets_of_error (core := (Mach.popN · n)) hp
-
-lemma Devm.pop_map_snd_delSets_eq {devm devm1 : Devm} (hp : (devm.pop <&> Prod.snd) = .ok devm1) : devm1.delSets = devm.delSets := by
-  dsimp [(· <&> ·), Functor.mapRev, Functor.map, Except.map] at hp
-  rcases hp2 : devm.pop with _ | ⟨x, devm2⟩
-  · simp [hp2] at hp
-  · simp [hp2] at hp
-    rcases hp with ⟨_, rfl⟩
-    exact Devm.pop_delSets_eq hp2
-
-lemma Devm.pop_map_snd_delSets_err {devm : Devm} {err : String × Devm} (hp : (devm.pop <&> Prod.snd) = .error err) : err.2.delSets = devm.delSets := by
-  dsimp [(· <&> ·), Functor.mapRev, Functor.map, Except.map] at hp
-  rcases hp2 : devm.pop with e | ⟨x, devm2⟩
-  · simp [hp2] at hp; cases hp
-    simp only [Devm.pop_def] at hp2
-    split at hp2 <;> try contradiction
-    cases hp2; rfl
-  · simp [hp2] at hp
-
-lemma pushItem_delSets_err {x c devm err} (h : pushItem x c devm = Except.error err) : err.2.delSets = devm.delSets := by
-  exact liftMachExecution_delSets_of_error (core := Mach.pushItem x c) h
-
-lemma applyUnary_delSets_err {f : B256 → B256} {cost devm err}
-    (h : applyUnary f cost devm = Except.error err) :
-    err.2.delSets = devm.delSets := by
-  exact liftMachExecution_delSets_of_error (core := Mach.applyUnary f cost) h
-
-lemma applyBinary_delSets_err {f : B256 → B256 → B256} {cost devm err}
-    (h : applyBinary f cost devm = Except.error err) :
-    err.2.delSets = devm.delSets := by
-  exact liftMachExecution_delSets_of_error (core := Mach.applyBinary f cost) h
-
-lemma applyTernary_delSets_err {f : B256 → B256 → B256 → B256} {cost devm err}
-    (h : applyTernary f cost devm = Except.error err) :
-    err.2.delSets = devm.delSets := by
-  exact liftMachExecution_delSets_of_error (core := Mach.applyTernary f cost) h
 
 -- Rinst execution preserves delSets on error results.
 lemma Rinst.inv_delSets_err {pc : Nat} {sevm : Sevm} {devm : Devm} {r : Rinst}
@@ -7699,31 +7445,12 @@ lemma incorporateChildOnSuccess_noDel {wa : Adr} {parent child : Devm} {rd : B8L
     Devm.NoDel wa (incorporateChildOnSuccess parent child rd) :=
   ⟨AdrSet.not_mem_union hp_atd hc.atd, hc.ca, hc.code⟩
 
-lemma accessDelegation_delSets {d : Devm} {adr : Adr} :
-    (accessDelegation d adr).2.2.2.2.delSets = d.delSets := by
-  simp only [accessDelegation]; split <;> rfl
-
-lemma Execution.NoDel.error_of {wa : Adr} {d : Devm} {x : String × Devm}
-    (hd : Devm.NoDel wa d) (h : x.2 = d) : Execution.NoDel wa (.error x) := by
-  obtain ⟨s, d'⟩ := x
-  dsimp only at h
-  subst h
-  exact hd
-
 lemma Devm.pop_err_snd {d : Devm} {x : String × Devm}
     (h : Devm.pop d = .error x) : x.2 = d := by
   simp only [Devm.pop_def] at h
   split at h
   · injection h with h; exact (congrArg Prod.snd h).symm
   · exact absurd h (by simp)
-
-lemma Devm.popToNat_err_snd {d : Devm} {x : String × Devm}
-    (h : Devm.popToNat d = .error x) : x.2 = d := by
-  rw [Devm.popToNat_def] at h
-  dsimp only [(· <&> ·), Functor.mapRev, Functor.map, Except.map] at h
-  rcases hp : d.pop with e | ⟨v, d0⟩
-  · rw [hp] at h; injection h with h; rw [← h]; exact Devm.pop_err_snd hp
-  · rw [hp] at h; exact absurd h (by simp)
 
 lemma Devm.popToAdr_err_snd {d : Devm} {x : String × Devm}
     (h : Devm.popToAdr d = .error x) : x.2 = d := by
@@ -7772,15 +7499,6 @@ lemma Devm.NoDel.addAccessedAddress {wa : Adr} {d : Devm} {a : Adr}
     (hd : Devm.NoDel wa d) : Devm.NoDel wa (_root_.addAccessedAddress d a) := by
   refine hd.of_eqs ?_ addAccessedAddress_getCode.symm
   rfl
-
-lemma Devm.NoDel.of_accessDelegation {wa : Adr} {d d' : Devm} {adr na : Adr}
-    {dp : Bool} {code : ByteArray} {dagc : Nat}
-    (hd : Devm.NoDel wa d)
-    (h : (dp, na, code, dagc, d') = _root_.accessDelegation d adr) : Devm.NoDel wa d' := by
-  have hd' : d' = (_root_.accessDelegation d adr).2.2.2.2 := congrArg (fun q => q.2.2.2.2) h
-  refine hd.of_eqs ?_ ?_
-  · rw [hd']; exact accessDelegation_delSets.symm
-  · rw [hd']; exact accessDelegation_getCode.symm
 
 def Benv.EquivForDelegation (b1 b2 : Benv) : Prop :=
   b2.createdAccounts = b1.createdAccounts ∧
@@ -7878,11 +7596,6 @@ lemma balNoninc_refl_trans :
     (ReflexiveRel Devm.BalNoninc ∧ TransitiveRel Devm.BalNoninc) := by
   exact ⟨⟨fun _ => Nat.le_refl _, fun _ _ _ h1 h2 => Nat.le_trans h2 h1⟩,
          ⟨fun _ => Nat.le_refl _, fun _ _ _ h1 h2 => Nat.le_trans h2 h1⟩⟩
-
-lemma State.SumNof.of_noninc {pre post : _root_.State}
-    (hrel : State.BalNoninc pre post) (hnof : State.SumNof pre) :
-    State.SumNof post :=
-  Nat.lt_of_le_of_lt hrel hnof
 
 lemma adr_toNat_lt_size_local (a : Adr) : a.toNat < 2 ^ 160 := by
   rw [← toAdr_toNat a, Nat.toNat_toAdr, Nat.lo]
@@ -8039,11 +7752,6 @@ def BenvExecution.state : Except (String × _root_.State × AdrSet × Tra) Benv 
 /-! Error-side `getBal` frame lemmas, mirroring the generated `*_getCode_err`
 family in `Blanc/Common.lean`: every regular-instruction error path leaves
 balances unchanged. -/
-
-lemma assert_getBal_err {cond : Prop} [Decidable cond] {msg : String} {devm : Devm} {err : String × Devm} (h : Except.assert cond (msg, devm) = Except.error err) (a : Adr) : err.2.getBal a = devm.getBal a := by
-  unfold Except.assert at h
-  split_ifs at h; try contradiction
-  injection h with h1; rw [← h1]
 
 lemma Rinst.inv_getBal_err
     {pc sevm devm r err}
@@ -8907,9 +8615,3 @@ lemma processMessageCall_sum_le
     (h : processMessageCall msg = .ok ⟨post, out⟩) :
     sum post.bal ≤ sum msg.benv.state.bal := by
   exact processMessageCall_balance_noninc h
-
-lemma processMessageCall_preserves_sumNof
-    {msg : Msg} {post : _root_.State} {out : MsgCallOutput}
-    (h : processMessageCall msg = .ok ⟨post, out⟩)
-    (hnof : State.SumNof msg.benv.state) : State.SumNof post := by
-  exact State.SumNof.of_noninc (processMessageCall_balance_noninc h) hnof

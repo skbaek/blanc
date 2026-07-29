@@ -15,16 +15,6 @@ import Jaune.Types
 instance : @Zero Bool := ⟨false⟩
 instance : @One Bool := ⟨true⟩
 
-def Bool.toChar : Bool → Char
-  | 0 => '0'
-  | 1 => '1'
-
-theorem Bool.zero_or_one (x : Bool) : x = 0 ∨ x = 1 := by
-  cases x
-  · left; rfl
-  · right; rfl
-
-theorem not_true_lt {b} : ¬ true < b := by simp [LT.lt]
 theorem Bool.zero : 0 = false := rfl
 theorem Bool.one : 1 = true := rfl
 
@@ -42,8 +32,6 @@ theorem pref_append {ξ} [HAppend ξ ξ ξ] (xs ys : ξ) : xs <<+ xs ++ ys := �
 
 def Frel {A B} (a : A) (r : B → B → Prop) (f g : A → B) : Prop :=
   ∀ a', (a = a' → r (f a') (g a')) ∧ (a ≠ a' → f a' = g a')
-
-def Overwrite {A B} (x : A) (y : B) : (A → B) → (A → B) → Prop := Frel x (λ _ y' => y = y')
 
 theorem List.of_cons_pref_of_cons_pref {ξ} {x y : ξ} {xs ys zs} :
     (x :: xs <<+ zs) → (y :: ys <<+ zs) →
@@ -65,32 +53,7 @@ theorem List.pref_unique {ξ} {xs ys zs : List ξ}
 
 theorem pref_of_split {X} {x xy y : List X} : (x <++ xy ++> y) → (x <<+ xy) := λ h => ⟨y, h⟩
 
-theorem List.of_cons_split_cons {X} {x y : X} {xs ys zs} :
-    ((x :: xs) <++ y :: ys ++> zs) → (x = y ∧ (xs <++ ys ++> zs)) := by
-  simp [Split]; intros h h'; simp [h, h']
-
-theorem List.of_cons_split {X} {x : X} {xs ys zs} (h : (x :: xs) <++ ys ++> zs) :
-    ∃ ys', (ys = x :: ys' ∧ (xs <++ ys' ++> zs)) := by
-  cases ys with
-  | nil => cases h
-  | cons y ys =>
-    rcases of_cons_split_cons h with ⟨⟨_⟩, h'⟩
-    refine' ⟨_, rfl, h'⟩
-
-theorem List.of_nil_split {X} {p p' : List X} : ([] <++ p ++> p') → p = p' := by simp [Split]
-
 universe u
-
-theorem Nat.forall_lt_succ_iff_forall_le {n : ℕ} {p : ℕ → Prop} :
-    (∀ m < (n + 1), p m) ↔ (∀ m ≤ n, p m) := by
-  constructor <;> intros h m h' <;> apply h
-  · rw [Nat.lt_succ_iff]; apply h'
-  · rw [← Nat.lt_succ_iff]; apply h'
-
-theorem Nat.forall_le_succ {n : ℕ} {p : ℕ → Prop} :
-    (∀ m ≤ n + 1, p m) ↔ (∀ m ≤ n, p m) ∧ p (n + 1) := by
-  rw [← Nat.forall_lt_succ_iff_forall_le, ← Nat.forall_lt_succ_iff_forall_le]
-  apply Nat.forall_lt_succ_right
 
 syntax "asm" : term
 macro_rules
@@ -159,29 +122,11 @@ def Lean.Expr.apply (x : Lean.Expr) : Lean.Elab.Tactic.TacticM Unit := do
     replaceMainGoal mvarIds'
 
 
--- abbrev Word := B256
-
 theorem Bool.lt_or_ge (x y : Bool) : x < y ∨ x ≥ y := by
   cases x <;> cases y <;> simp
 
 theorem Bool.lt_or_eq_of_le {x y : Bool} : x ≤ y → (x < y ∨ x = y) := by
   cases x <;> cases y <;> simp
-
-theorem Bool.beq_eq_true (a b : Bool) : ((a == b) = true) = (a = b) := by
-  cases a <;> cases b <;> simp
-
-theorem List.takeD_concat {ξ : Type u} (n) (xs : List ξ) (y) :
-    takeD n (xs.concat y) y = takeD n xs y := by
-  induction xs generalizing n with
-  | nil =>
-    match n with
-    | 0 => rfl
-    | n + 1 => rfl
-  | cons x xs ih =>
-    match n with
-    | 0 => rfl
-    | n + 1 =>
-      simp only [List.concat, takeD, headD, tail]; rw [ih]
 
 theorem List.drop?_add {ξ : Type u} (m n : Nat) (xs : List ξ) :
     drop? (m + n) xs = drop? n xs >>= drop? m := by
@@ -254,14 +199,6 @@ theorem List.get?_eq_of_slice {ξ : Type u} {xs : List ξ} {m : Nat} {y} {ys} :
     Slice xs m (y :: ys) → xs[m]? = some y := by
   rw [slice_cons_iff]; apply And.left
 
-theorem List.slice_iff_get?_eq {ξ : Type u} {xs : List ξ} {m : Nat} {y} :
-    Slice xs m [y] ↔ xs[m]? = some y := by
-  refine' ⟨get?_eq_of_slice, λ h => ⟨1, _⟩⟩;
-  revert h; rw [get?_eq_drop?_head?]; unfold slice?
-  cases xs.drop? m with
-  | none => simp
-  | some xs' => cases xs' <;> simp; intro h'; simp [h', take?]
-
 theorem List.of_take?_eq_append {ξ : Type u} {xs : List ξ}
     {n : Nat} {ys zs : List ξ} (h : take? n xs = some (ys ++ zs)) :
     take? ys.length xs = some ys ∧ xs.slice? ys.length zs.length = some zs := by
@@ -292,9 +229,6 @@ theorem List.slice_suffix {ξ : Type u} {xs : List ξ} {m : Nat} {ys zs}
 theorem List.get?_length_ne_some {ξ : Type y} {xs : List ξ} {y} :
     xs[xs.length]? ≠ some y := by simp
 
-theorem List.not_slice_length {xs} {y} {ys : List ξ} :
-    ¬ Slice xs xs.length (y :: ys) := by simp [slice_cons_iff]
-
 theorem List.take?_length {ξ : Type u} (xs : List ξ) :
     take? xs.length xs = some xs := by
   induction xs with
@@ -312,32 +246,8 @@ theorem List.append_slice_suffix {ξ : Type y} {xs ys : List ξ} :
 
 -- B(2^n) lemmas (transfer to Jaune later) --
 
--- lemma B128.le_refl (x : B128) : x ≤ x := by
---   right; refine ⟨rfl, UInt64.le_refl _⟩
---
--- lemma B256.le_refl (x : B256) : x ≤ x := by
---   right; refine ⟨rfl, B128.le_refl _⟩
---
--- lemma B128.sub_eq (x y : B128) :
---   x - y = ⟨(x.1 - y.1) - (if x.2 < y.2 then 1 else 0), x.2 - y.2⟩ := rfl
---
--- lemma B256.sub_eq (x y : B256) :
---   x - y = ⟨(x.1 - y.1) - (if x.2 < y.2 then 1 else 0), x.2 - y.2⟩ := rfl
---
--- def B128.add_eq (x y : B128) :
---   x + y = ⟨x.1 + y.1 + if x.2 + y.2 < x.2 then 1 else 0, x.2 + y.2⟩ := rfl
---
--- def B256.add_eq (x y : B256) :
---   x + y = ⟨x.1 + y.1 + if x.2 + y.2 < x.2 then 1 else 0, x.2 + y.2⟩ := rfl
-
 lemma B128.sub_self (a : B128) : a - a = 0 := by
   rw [B128.sub_eq]; simp; rfl
-
--- lemma B128.lt_irrefl (x : B128) : ¬ x < x := by
---   intro h; rcases h with h | h <;> simp [UInt64.lt_irrefl] at h
---
--- lemma B256.lt_irrefl (x : B256) : ¬ x < x := by
---   intro h; rcases h with h | h <;> simp [B128.lt_irrefl] at h
 
 
 
@@ -346,436 +256,28 @@ lemma B256.sub_self (a : B256) : a - a = 0 := by
 
 def Adr.max : Adr := ⟨-1, -1, -1⟩
 
--- lemma Nat.lt_of_lt_high {sz high low high' low' : Nat}
---     (h_high : high < high') (h_low : low < sz) :
---     high * sz + low < high' * sz + low' := by
---   rcases high' with _ | high'
---   · cases Nat.not_lt_zero _ h_high
---   · have h_le := Nat.le_of_lt_succ h_high
---     rw [Nat.succ_mul, Nat.add_assoc]
---     apply @Nat.add_lt_add_of_le_of_lt
---     · apply Nat.mul_le_mul_right _ h_le
---     · apply Nat.lt_add_right _ h_low
---
--- lemma B128.lt_iff (x y : B128) :
---   x < y ↔ (x.1 < y.1 ∨ (x.1 = y.1 ∧ x.2 < y.2)) := Iff.refl _
---
--- lemma B256.lt_iff (x y : B256) :
---   x < y ↔ (x.1 < y.1 ∨ (x.1 = y.1 ∧ x.2 < y.2)) := Iff.refl _
---
--- lemma B128.le_iff (x y : B128) :
---     x ≤ y ↔ (x.1 < y.1 ∨ (x.1 = y.1 ∧ x.2 ≤ y.2)) := Iff.refl _
---
--- lemma B256.le_iff (x y : B256) :
---     x ≤ y ↔ (x.1 < y.1 ∨ (x.1 = y.1 ∧ x.2 ≤ y.2)) := Iff.refl _
---
--- lemma B128.le_or_gt (a b : B128) : a ≤ b ∨ a > b := by
---   simp [GT.gt]; rw [B128.le_iff, B128.lt_iff];
---   rcases UInt64.le_or_lt a.1 b.1 with h | h
---   · rcases UInt64.lt_or_eq_of_le h with h' | h'
---     · left; left; apply h'
---     · rcases UInt64.le_or_lt a.2 b.2 with h'' | h''
---       · left; right; refine ⟨h', h''⟩
---       · right; right; refine ⟨h'.symm, h''⟩
---   · right; left; apply h
---
--- lemma B128.lt_or_ge (a b : B128) : a < b ∨ a ≥ b :=
---   Or.symm <| B128.le_or_gt _ _
-
-lemma UInt64.toNat_lt_pow (a : UInt64) : a.toNat < 2 ^ 64 :=
-  UInt64.toNat_lt_size _
-
-lemma B128.toNat_eq (x : B128) : x.toNat =
-  --(x.1.toNat * (2 ^ 64)) + x.2.toNat := rfl
-  (x.1.toNat <<< 64) ||| x.2.toNat := rfl
---
--- lemma B128.toNat_lt_toNat {a b : B128} (h : a < b) : a.toNat < b.toNat := by
---   rcases a with ⟨ah, al⟩; rcases b with ⟨bh, bl⟩
---   rcases h with h | h <;> simp at h <;> simp only [B128.toNat]
---   · rw [UInt64.lt_iff_toNat_lt] at h
---     apply Nat.lt_of_lt_high h
---     apply UInt64.toNat_lt_size
---   · rw [h.1]; apply Nat.add_lt_add_left
---     rw [← UInt64.lt_iff_toNat_lt]; apply h.2
---
-
--- lemma B128.toNat_lt_size (x : B128) : x.toNat < 2 ^ 128 := by
---   rcases x with ⟨xh, xl⟩; simp only [B128.toNat]
---   have h : 2 ^ 128 = 2 ^ 64 * 2 ^ 64 + 0 := rfl
---   rw [h]; clear h
---   apply Nat.lt_of_lt_high <;> apply UInt64.toNat_lt_size
---
--- lemma B256.toNat_lt_size (x : B256) : x.toNat < 2 ^ 256 := by
---   rcases x with ⟨xh, xl⟩; simp only [B256.toNat]
---   have h : 2 ^ 256 = 2 ^ 128 * 2 ^ 128 + 0 := rfl
---   rw [h]; clear h
---   apply Nat.lt_of_lt_high <;> apply B128.toNat_lt_size
-
--- def Adr.LT (x y : Adr) : Prop := x.1 < y.1 ∨ (x.1 = y.1 ∧ x.2 < y.2)
--- instance : @LT Adr := ⟨Adr.LT⟩
--- instance {x y : Adr} : Decidable (x < y) := instDecidableOr
---
--- lemma Adr.lt_iff (x y : Adr) :
---   x < y ↔ (x.1 < y.1 ∨ (x.1 = y.1 ∧ x.2 < y.2)) := Iff.refl _
-
--- lemma B128.lt_or_eq_of_le {n m : B128} (h : n ≤ m) : n < m ∨ n = m := by
---   rcases h with h | h
---   · left; left; apply h
---   · rcases UInt64.lt_or_eq_of_le h.2 with h' | h'
---     · left; right; refine ⟨h.1, h'⟩
---     · right; apply Prod.ext h.1 h'
---
--- lemma B256.lt_or_eq_of_le {n m : B256} (h : n ≤ m) : n < m ∨ n = m := by
---   rcases h with h | h
---   · left; left; apply h
---   · rcases B128.lt_or_eq_of_le h.2 with h' | h'
---     · left; right; refine ⟨h.1, h'⟩
---     · right; apply Prod.ext h.1 h'
---
--- lemma B128.le_of_lt_or_eq {n m : B128} (h : n < m ∨ n = m) : n ≤ m := by
---   rcases h with (h | ⟨h, h'⟩) | h
---   · left; apply h
---   · right; refine' ⟨h, UInt64.le_of_lt h'⟩
---   · rw [h]; apply le_refl
-
-
--- lemma B128.le_iff_lt_or_eq {n m : B128} : n ≤ m ↔ (n < m ∨ n = m) :=
---   ⟨B128.lt_or_eq_of_le, B128.le_of_lt_or_eq⟩
---
---
--- lemma B256.le_or_gt (a b : B256) : a ≤ b ∨ a > b := by
---   simp [GT.gt]; rw [B256.le_iff, B128.lt_iff];
---   rcases B128.le_or_gt a.1 b.1 with h | h
---   · rcases B128.lt_or_eq_of_le h with h' | h'
---     · left; left; apply h'
---     · rcases B128.le_or_gt a.2 b.2 with h'' | h''
---       · left; right; refine ⟨h', h''⟩
---       · right; right; refine ⟨h'.symm, h''⟩
---   · right; left; apply h
---
--- lemma B256.toNat_lt_toNat {a b : B256} (h : a < b) : a.toNat < b.toNat := by
---   rcases a with ⟨ah, al⟩; rcases b with ⟨bh, bl⟩
---   rcases h with h | h <;> simp at h <;> simp only [B256.toNat]
---   · apply Nat.lt_of_lt_high <| B128.toNat_lt_toNat h
---     apply B128.toNat_lt_size
---   · rw [h.1]; apply Nat.add_lt_add_left
---     apply B128.toNat_lt_toNat h.2
---
--- lemma B128.le_of_lt {a b : B128} (h : a < b) : a ≤ b := by
---   rcases h with h | h
---   · left; apply h
---   · right; refine' ⟨h.1, UInt64.le_of_lt h.2⟩
---
--- lemma B256.le_of_lt {a b : B256} (h : a < b) : a ≤ b := by
---   rcases h with h | h
---   · left; apply h
---   · right; refine' ⟨h.1, B128.le_of_lt h.2⟩
-
--- lemma B256.le_of_lt_or_eq {n m : B256} (h : n < m ∨ n = m) : n ≤ m := by
---   rcases h with (h | ⟨h, h'⟩) | h
---   · left; apply h
---   · right; refine' ⟨h, B128.le_of_lt h'⟩
---   · rw [h]; apply le_refl
---
--- lemma B256.le_iff_lt_or_eq {n m : B256} : n ≤ m ↔ (n < m ∨ n = m) :=
---   ⟨B256.lt_or_eq_of_le, B256.le_of_lt_or_eq⟩
---
--- lemma B128.toNat_le_toNat {a b : B128} (h : a ≤ b) : a.toNat ≤ b.toNat := by
---   rcases B128.lt_or_eq_of_le h with h | h
---   · apply Nat.le_of_lt <| B128.toNat_lt_toNat h
---   · rw [h]
---
--- lemma B256.toNat_le_toNat {a b : B256} (h : a ≤ b) : a.toNat ≤ b.toNat := by
---   rcases B256.lt_or_eq_of_le h with h | h
---   · apply Nat.le_of_lt <| B256.toNat_lt_toNat h
---   · rw [h]
---
--- lemma B128.lt_of_toNat_lt_toNat {a b : B128} (lt : a.toNat < b.toNat) : a < b := by
---   rcases B128.le_or_gt b a with h | h
---   · cases not_le_of_gt lt <| B128.toNat_le_toNat h
---   · apply h
---
--- lemma B256.lt_of_toNat_lt_toNat {a b : B256} (lt : a.toNat < b.toNat) : a < b := by
---   rcases B256.le_or_gt b a with h | h
---   · cases not_le_of_gt lt <| B256.toNat_le_toNat h
---   · apply h
-
--- lemma B128.lt_iff_toNat_lt_toNat {a b : B128} : a < b ↔ a.toNat < b.toNat := by
---   constructor
---   · apply B128.toNat_lt_toNat
---   · apply B128.lt_of_toNat_lt_toNat
---
--- lemma B256.lt_iff_toNat_lt_toNat {a b : B256} : a < b ↔ a.toNat < b.toNat := by
---   constructor
---   · apply B256.toNat_lt_toNat
---   · apply B256.lt_of_toNat_lt_toNat
---
--- lemma B128.not_lt {a b : B128} : ¬ a < b ↔ b ≤ a := by
---   simp [B128.lt_iff, B128.le_iff]
---   rw [@Eq.comm _ a.1 b.1, @UInt64.le_iff_lt_or_eq b.1 a.1]
---   aesop
---
--- lemma B256.not_lt {a b : B256} : ¬ a < b ↔ b ≤ a := by
---   simp [B256.lt_iff, B256.le_iff, B128.not_lt]
---   rw [@Eq.comm _ a.1 b.1, @B128.le_iff_lt_or_eq b.1 a.1]
---   by_cases h : b.1 < a.1 <;> simp [h] <;> intro h'
---   · rw [h'] at h; cases B128.lt_irrefl _ h
---   · apply Or.inl h'
---
--- lemma B128.not_le {a b : B128} : ¬ a ≤ b ↔ b < a := by
---   rw [not_iff_comm, B128.not_lt]
-
--- lemma B256.not_le {a b : B256} : ¬ a ≤ b ↔ b < a := by
---   rw [not_iff_comm, B256.not_lt]
---
--- lemma B128.le_iff_toNat_le_toNat {a b : B128} : a ≤ b ↔ a.toNat ≤ b.toNat := by
---   rw [← not_iff_not, not_le, Nat.not_le, lt_iff_toNat_lt_toNat]
---
--- lemma B256.le_iff_toNat_le_toNat {a b : B256} : a ≤ b ↔ a.toNat ≤ b.toNat := by
---   rw [← not_iff_not, not_le, Nat.not_le, lt_iff_toNat_lt_toNat]
---
--- lemma B128.le_of_toNat_le_toNat {a b : B128} : a.toNat ≤ b.toNat → a ≤ b :=
---   B128.le_iff_toNat_le_toNat.mpr
---
--- lemma B256.le_of_toNat_le_toNat {a b : B256} : a.toNat ≤ b.toNat → a ≤ b :=
---   B256.le_iff_toNat_le_toNat.mpr
-
-lemma UInt64.toNat_sub_of_lt (a b : UInt64) (h : a < b) :
-    (a - b).toNat = 2 ^ 64 + a.toNat - b.toNat := by
-  rw [UInt64.toNat_sub]
-  have h_le : b.toNat ≤ 2 ^ 64 :=
-    le_of_lt <| UInt64.toNat_lt_size _
-  have h_lt : a.toNat < b.toNat := by
-    rw [← UInt64.lt_iff_toNat_lt]; apply h
-  rw [← Nat.sub_add_comm h_le]
-  rw [Nat.mod_eq_of_lt]
-  rw [← Nat.sub_sub_right _ (le_of_lt h_lt) ]
-  apply Nat.sub_lt_self
-  · apply Nat.zero_lt_sub_of_lt h_lt
-  · apply le_trans (Nat.sub_le _ _) h_le
-
-lemma UInt64.succ_toNat_neg_one :
-  (-1 : UInt64).toNat.succ = 2 ^ 64 := rfl
-
-lemma UInt64.toNat_le_toNat_neg_one (x : UInt64) :
-    x.toNat ≤ (-1 : UInt64).toNat := by
-  rw [← Nat.lt_succ_iff]; apply UInt64.toNat_lt_size
-
-lemma UInt64.le_neg_one (x : UInt64) : x ≤ -1 := by
-  rw [UInt64.le_iff_toNat_le]; apply UInt64.toNat_le_toNat_neg_one
-
-lemma B128.high_le_of_lt {a b : B128} (h : a < b) : a.1 ≤ b.1 := by
-  rcases h with h | h
-  · apply UInt64.le_of_lt h
-  · simp [h.1]
-
-lemma UInt64.toNat_sub' (a b : UInt64) :
-    (a - b).toNat = (2 ^ 64 + a.toNat - b.toNat) % 2 ^ 64 := by
-  rw [UInt64.toNat_sub, Nat.sub_add_comm]
-  apply le_of_lt <| UInt64.toNat_lt_size _
-
--- lemma Nat.add_mod_eq_add_sub {k m n : Nat} (m_lt : m < k)
---     (n_lt : n < k) (k_le : k ≤ m + n) : (m + n) % k = m + n - k := by
---   rcases Nat.exists_eq_add_of_le k_le with ⟨d, eq⟩
---   rw [eq, Nat.add_mod_left]
---   have d_lt : d < k := by
---     rw [← @Nat.add_lt_add_iff_left k, ← eq]
---     apply Nat.add_lt_add m_lt n_lt
---   simp [Nat.mod_eq_of_lt d_lt]
 
 lemma Nat.add_sub_mod_eq_sub {k m n : Nat}
     (hm : m < k) (h : n ≤ m) : (k + m - n) % k = m - n := by
   rw [Nat.add_sub_assoc h, Nat.add_mod_left, Nat.mod_eq_of_lt]
   apply lt_of_le_of_lt (Nat.sub_le _ _) hm
 
-lemma Nat.add_sub_mod_eq_add_sub {k m n : Nat}
-    (hn : n ≤ k) (h : m < n) : (k + m - n) % k = k + m - n := by
-  rw [Nat.mod_eq_of_lt]
-  apply Nat.sub_lt_right_of_lt_add (by omega)
-  apply Nat.add_lt_add_left h
-
--- lemma B128.toNat_one : B128.toNat 1 = 1 := rfl
 lemma B128.zero_eq : (0 : B128) = ⟨0, 0⟩ := rfl
 lemma B128.sub_zero (x : B128) : x - 0 = x := by
   simp [B128.sub_eq, B128.zero_eq]
 
--- lemma B64.toNat_overflow {x y : B64} :
---     x + y < x ↔ 2 ^ 64 ≤ x.toNat + y.toNat := by
---   rw [UInt64.lt_iff_toNat_lt, UInt64.toNat_add]
---   by_cases h : x.toNat + y.toNat < 2 ^ 64
---   · rw [Nat.mod_eq_of_lt h]
---     apply iff_of_false <;> omega
---   · rw [not_lt] at h
---     rw [
---       Nat.add_mod_eq_add_sub
---         (UInt64.toNat_lt_pow _)
---         (UInt64.toNat_lt_pow _)
---         h
---     ]
---     apply iff_of_true _ h
---     rw [Nat.sub_lt_iff_lt_add h]
---     apply Nat.add_lt_add_left <| UInt64.toNat_lt_size _
-
--- lemma B128.toNat_add (x y : B128) :
---     (x + y).toNat = (x.toNat + y.toNat) % 2 ^ 128 := by
---   rw [B128.add_eq]; simp only [B128.toNat]
---   rw [
---     @Nat.concat_modadd_concat 64 64 x.1.toNat x.2.toNat y.1.toNat y.2.toNat
---       (UInt64.toNat_lt_size _)
---       (UInt64.toNat_lt_size _)
---   ]
---   apply congr_arg₂ _ (congr_arg₂ _ _ rfl) (by rw [UInt64.toNat_add])
---   by_cases h : x.2 + y.2 < x.2
---   · rw [if_pos h, if_neg (not_lt_of_ge (B64.toNat_overflow.mp h))]; clear h
---     simp only [UInt64.toNat_add, UInt64.toNat_one]
---     rcases _root_.le_or_gt (2 ^ 64) (x.1.toNat + y.1.toNat) with h | h
---     · rw [
---         Nat.add_mod_eq_add_sub
---           (UInt64.toNat_lt_pow x.1)
---           (UInt64.toNat_lt_pow y.1)
---           h,
---         ← Nat.add_mod_right
---       ]
---       apply congr_arg₂ _ (by omega) rfl
---     · rw [Nat.mod_eq_of_lt h]
---   · rw [if_neg h, if_pos (lt_of_not_ge <| mt B64.toNat_overflow.mpr h)]
---     simp only [UInt64.toNat_add, UInt64.toNat_zero, Nat.add_zero, Nat.mod_mod]
---
--- lemma B128.toNat_zero : (0 : B128).toNat = 0 := rfl
 lemma B256.toNat_zero : (0 : B256).toNat = 0 := rfl
 
--- lemma B128.toNat_overflow {x y : B128} :
---     x + y < x ↔ 2 ^ 128 ≤ x.toNat + y.toNat := by
---   rw [B128.lt_iff_toNat_lt_toNat, B128.toNat_add]
---   by_cases h : x.toNat + y.toNat < 2 ^ 128
---   · rw [Nat.mod_eq_of_lt h]
---     apply iff_of_false <;> omega
---   · rw [Nat.not_lt] at h
---     rw [
---       Nat.add_mod_eq_add_sub
---         (B128.toNat_lt_size _)
---         (B128.toNat_lt_size _)
---         h
---     ]
---     apply iff_of_true _ h
---     rw [Nat.sub_lt_iff_lt_add h]
---     apply Nat.add_lt_add_left <| B128.toNat_lt_size _
---
--- lemma B256.toNat_add (x y : B256) :
---     (x + y).toNat = (x.toNat + y.toNat) % 2 ^ 256 := by
---   rw [B256.add_eq]; simp only [B256.toNat]
---   rw [
---     @Nat.concat_modadd_concat 128 128 x.1.toNat x.2.toNat y.1.toNat y.2.toNat
---       (B128.toNat_lt_size _)
---       (B128.toNat_lt_size _)
---   ]
---   apply congr_arg₂ _ (congr_arg₂ _ _ rfl) (by rw [B128.toNat_add])
---   by_cases h : x.2 + y.2 < x.2
---   · rw [if_pos h, if_neg (not_lt_of_ge (B128.toNat_overflow.mp h))]; clear h
---     simp only [B128.toNat_add, B128.toNat_one]
---     rcases _root_.le_or_gt (2 ^ 128) (x.1.toNat + y.1.toNat) with h | h
---     · rw [
---         Nat.add_mod_eq_add_sub
---           (B128.toNat_lt_size x.1)
---           (B128.toNat_lt_size y.1)
---           h,
---         ← Nat.add_mod_right
---       ]
---       apply congr_arg₂ _ (by omega) rfl
---     · rw [Nat.mod_eq_of_lt h]
---   · rw [if_neg h, if_pos (lt_of_not_ge <| mt B128.toNat_overflow.mpr h)]
---     rw [B128.toNat_add, B128.toNat_zero, Nat.add_zero, Nat.add_zero]
---     rw [B128.toNat_add , Nat.mod_mod]
---
 def B256.Nof (xs ys : B256) : Prop := xs.toNat + ys.toNat < 2 ^ 256
 
 lemma B256.toNat_add_eq_of_nof (x y : B256) (h : B256.Nof x y) :
     (x + y).toNat = (x.toNat + y.toNat) := by
   rw [B256.toNat_add, Nat.lo_eq_of_lt h]
 
--- lemma B128.toNat_sub (a b : B128) :
---     (a - b).toNat = (2 ^ 128 + a.toNat - b.toNat) % 2 ^ 128 := by
---   rw [B128.sub_eq]; simp only [B128.toNat]
---   rw [
---     @Nat.concat_modsub_concat 64 64 a.1.toNat a.2.toNat b.1.toNat b.2.toNat
---       (UInt64.toNat_lt_size _)
---       (UInt64.toNat_lt_size _)
---       (UInt64.toNat_lt_size _)
---   ]
---   apply congr_arg₂ _ _ (by rw [UInt64.toNat_sub'])
---   apply congr_arg₂ _ _ rfl
---   by_cases h : a.2 < b.2
---   · rw [if_pos h, if_pos (UInt64.lt_iff_toNat_lt.mp h)]; clear h
---     rw [UInt64.toNat_sub', UInt64.toNat_one, UInt64.toNat_sub']
---     rcases _root_.le_or_gt b.1.toNat a.1.toNat with h | h
---     · rw [Nat.add_sub_mod_eq_sub (UInt64.toNat_lt_pow _) h]
---       rw [← Nat.add_sub_assoc h]
---     · rw [Nat.add_sub_mod_eq_add_sub (Nat.le_of_lt (UInt64.toNat_lt_pow b.1)) h]
---       have h' : 2 ^ 64 + UInt64.toNat a.1 - UInt64.toNat b.1 < 2 ^ 64 := by
---         apply Nat.sub_lt_right_of_lt_add
---         · apply Nat.le_of_lt
---           apply lt_of_lt_of_le (UInt64.toNat_lt_size _) (Nat.le_add_right _ _)
---         · apply Nat.add_lt_add_left h
---       have h'' : 1 ≤ 2 ^ 64 + UInt64.toNat a.1 - UInt64.toNat b.1 := by
---         apply Nat.succ_le_of_lt
---         apply
---           lt_of_lt_of_le
---             (Nat.zero_lt_sub_of_lt (UInt64.toNat_lt_pow b.1))
---             (by omega)
---       rw [Nat.add_sub_mod_eq_sub h' h'']
---       rw [← Nat.sub_add_eq, Nat.add_sub_mod_eq_add_sub]
---       · apply Nat.succ_le_of_lt <| UInt64.toNat_lt_pow _
---       · apply lt_trans h <| Nat.lt_succ_self _
---   · rw [if_neg h, if_neg (mt UInt64.lt_iff_toNat_lt.mpr h)]
---     rw [Nat.sub_zero, UInt64.sub_zero, UInt64.toNat_sub']
-
-lemma B128.lt_iff_toNat_lt_toNat' {x y : B128} : x < y ↔ x.toNat < y.toNat := by
-  apply Iff.intro B128.toNat_lt_toNat;
-  intro h
-  rcases B128.le_or_gt y x with h' | h'
-  · rw [← Nat.not_le] at h; cases h <| B128.toNat_le_toNat h'
-  · apply h'
-
--- lemma B256.toNat_sub (a b : B256) :
---     (a - b).toNat = (2 ^ 256 + a.toNat - b.toNat) % 2 ^ 256 := by
---   rw [B256.sub_eq]; simp only [B256.toNat]
---   rw [
---     @Nat.concat_modsub_concat 128 128 a.1.toNat a.2.toNat b.1.toNat b.2.toNat
---       (B128.toNat_lt_size _)
---       (B128.toNat_lt_size _)
---       (B128.toNat_lt_size _)
---   ]
---   apply congr_arg₂ _ _ (by rw [B128.toNat_sub])
---   apply congr_arg₂ _ _ rfl
---   by_cases h : a.2 < b.2
---   · rw [if_pos h, if_pos (B128.toNat_lt_toNat h)]; clear h
---     rw [B128.toNat_sub, B128.toNat_one, B128.toNat_sub]
---     rcases _root_.le_or_gt b.1.toNat a.1.toNat with h | h
---     · rw [Nat.add_sub_mod_eq_sub (B128.toNat_lt_size _) h]
---       rw [← Nat.add_sub_assoc h]
---     · rw [Nat.add_sub_mod_eq_add_sub (Nat.le_of_lt (B128.toNat_lt_size b.1)) h]
---       have h' : 2 ^ 128 + B128.toNat a.1 - B128.toNat b.1 < 2 ^ 128 := by
---         apply Nat.sub_lt_right_of_lt_add
---         · apply Nat.le_of_lt
---           apply lt_of_lt_of_le (B128.toNat_lt_size _) (Nat.le_add_right _ _)
---         · apply Nat.add_lt_add_left h
---       have h'' : 1 ≤ 2 ^ 128 + a.1.toNat - b.1.toNat := by
---         apply Nat.succ_le_of_lt
---         apply
---           lt_of_lt_of_le
---             (Nat.zero_lt_sub_of_lt (B128.toNat_lt_size b.1))
---             (by omega)
---       rw [Nat.add_sub_mod_eq_sub h' h'']
---       rw [← Nat.sub_add_eq, Nat.add_sub_mod_eq_add_sub]
---       · apply Nat.succ_le_of_lt <| B128.toNat_lt_size _
---       · apply lt_trans h <| Nat.lt_succ_self _
---   · rw [if_neg h, if_neg, Nat.sub_zero, B128.sub_zero, B128.toNat_sub]--, if_neg ()
---     rw [← B128.lt_iff_toNat_lt_toNat]; apply h
-
 
 theorem B256.toNat_sub_eq_of_le (xs ys : B256) (h : ys ≤ xs) :
     (xs - ys).toNat = xs.toNat - ys.toNat := by
-  rw [toNat_sub, Nat.lo, Nat.add_sub_mod_eq_sub]-- rw [← not_lt, lt_iff_lt'] at h; simp [h]
+  rw [toNat_sub, Nat.lo, Nat.add_sub_mod_eq_sub]
   · apply B256.toNat_lt
   · apply B256.toNat_le_toNat h
 
@@ -799,10 +301,3 @@ lemma of_bind_eq_ok {ξ υ ζ} {f : Except ξ υ}
 
 inductive Except.IsOk {ξ υ} : Except ξ υ → Prop
   | intro {x : υ} : Except.IsOk (Except.ok x)
-
-theorem of_bind_eq {ξ : Type u} {υ ζ : Type v} {f : Except ξ υ} {g : υ → Except ξ ζ}
-    {e : Except ξ ζ} (eq : f >>= g = e) :
-    (∃ x, f = .error x ∧ e = .error x) ∨ (∃ y, f = .ok y ∧ g y = e) := by
-  rcases f with x | y
-  · left; refine ⟨_, rfl, eq.symm⟩
-  · right; refine ⟨_, rfl, eq⟩

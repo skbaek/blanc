@@ -164,21 +164,12 @@ def Devm.Burn : Devm → Devm → Prop :=
     gasLeft := (· ≥ · )
   }
 
-lemma Nat.le_iff_exists (m n : Nat) : m ≤ n ↔ ∃ k, n = m + k := by
-  constructor
-  · intro _
-    exists n - m
-    omega
-  · rintro ⟨k, hk⟩
-    omega
-
 
 def Devm.PopBurn (xs : List B256) : Devm → Devm → Prop :=
   Rel {
     Rels.eq with
     stack := Stack.Pop xs
     gasLeft := (· ≥ ·)
-      -- λ gas gas' => ∃ diff : Nat, gas = gas' + diff
   }
 
 def Linst.At (code : ByteArray) (pc : Nat) (l : Linst) : Prop := code.getInst pc = some (.last l)
@@ -190,10 +181,6 @@ def Xinst.At (code : ByteArray) (pc : Nat) (x : Xinst) : Prop := code.getInst pc
 def Except.Split {ξ υ ζ : Type}
     (e : Except ξ υ) (e' : Except ξ ζ) (q : υ → Prop) : Prop :=
   (∃ x, e = .error x ∧ e' = .error x) ∨ (∃ y : υ, e = .ok y ∧ q y)
-
-def Except.SplitXl {ξ υ ζ : Type}
-    (e : Except ξ υ) (xl : Xlot) (e' : Except ξ ζ) (q : υ → Prop) : Prop :=
-  (∃ x, e = .error x ∧ e' = .error x ∧ xl = .none) ∨ (∃ y : υ, e = .ok y ∧ q y)
 
 /-! ### The recursion-facing relational layer.
 
@@ -277,10 +264,6 @@ lemma Step.run_ofExecution {pc : Nat} {e ex : Execution} {xl : Xlot} :
     Step.Run (Step.ofExecution pc e) xl ex ↔ (xl = .none ∧ ex = e) := by
   unfold Step.ofExecution
   split <;> simp [Step.Run]
-
-lemma Step.run_ofExecution_of_eq {pc : Nat} {e : Execution} :
-    Step.Run (Step.ofExecution pc e) .none e :=
-  Step.run_ofExecution.mpr ⟨rfl, rfl⟩
 
 lemma Step.ofExecution_ne_spawn {pc : Nat} {ex : Execution}
     {f : Frame} {rsm : Resume} {pc' : Nat} :
@@ -725,12 +708,6 @@ lemma Exec.last_inv {pc sevm devm exn l}
     (cr : Exec pc sevm devm exn) (h : Linst.At sevm.code pc l) :
     exn = l.run sevm devm :=
   cr.halt_inv (Evm.step_last h)
-
-/-- A decode failure at the program counter settles the whole derivation. -/
-lemma Exec.invOp_inv {pc sevm devm exn}
-    (cr : Exec pc sevm devm exn) (h : sevm.code.getInst pc = none) :
-    exn = .error ⟨"InvalidOpcode", devm⟩ :=
-  cr.halt_inv (Evm.step_invOp h)
 
 def Ninst.Run (sevm : Sevm) (devm : Devm) (n : Ninst) (devm' : Devm) : Prop :=
   ∃ xl : Xlot, xl.Filled ∧ ∃ pc, Ninst.Run' pc sevm devm n xl (.ok devm')
