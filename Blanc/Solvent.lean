@@ -7,11 +7,14 @@ import Std.Data.TreeMap.Lemmas
 import Mathlib.Tactic.Ring
 import Mathlib.Tactic.NormNum
 
+namespace Blanc
+
+open Jaune
 
 def Stor.rest (s : Stor) : Adr → B256 := s.get ∘ Adr.toB256
 
 -- sum of all WETH balances, provided that s is the storage of WETH contract
-def wbsum (s : Stor) : Nat := sum s.rest
+def wbsum (s : Stor) : Nat := sum (Stor.rest s)
 
 def Stor.Solvent (s : Stor) (v : B256) (b : B256) : Prop :=
   wbsum s + v.toNat ≤ b.toNat
@@ -20,11 +23,11 @@ def State.Solvent (w : State) (a : Adr) : Prop :=
   Stor.Solvent (w.getStor a) 0 (w.bal a)
 
 def Devm.PreSolvent (devm : Devm) (a : Adr) (sevm : Sevm) : Prop :=
-  (sevm.currentTarget = a → Stor.Solvent (devm.getStor a) sevm.value (devm.getBal a)) ∧
-  (sevm.currentTarget ≠ a → Stor.Solvent (devm.getStor a) 0 (devm.getBal a))
+  (sevm.currentTarget = a → Stor.Solvent (Devm.getStor devm a) sevm.value (devm.getBal a)) ∧
+  (sevm.currentTarget ≠ a → Stor.Solvent (Devm.getStor devm a) 0 (devm.getBal a))
 
 def Devm.PostSolvent (devm : Devm) (a : Adr) : Prop :=
-  Stor.Solvent (devm.getStor a) 0 (devm.getBal a)
+  Stor.Solvent (Devm.getStor devm a) 0 (devm.getBal a)
 
 lemma solvent_of_same_stor {s s' : Stor} {v : B256} {b b' : B256} :
     Stor.Solvent s v b → s = s' → b = b' → Stor.Solvent s' v b' := by
@@ -39,11 +42,11 @@ lemma solvent_zero_of_solvent {s : Stor} {v : B256} {b : B256}
 structure Precond (wa : Adr) (sevm : Sevm) (devm : Devm) : Prop where
   (code : some (devm.getCode wa).toList = Prog.compile weth)
   (nof : sum devm.getBal < 2 ^ 256)
-  (solvent : devm.PreSolvent wa sevm)
+  (solvent : Devm.PreSolvent devm wa sevm)
 
 structure Postcond (wa : Adr) (sevm : Sevm) (devm : Devm) : Prop where
   (nof : sum devm.getBal < 2 ^ 256)
-  (solvent : devm.PostSolvent wa)
+  (solvent : Devm.PostSolvent devm wa)
 
 lemma postcond_of_precond {wa : Adr} {sevm : Sevm} {devm : Devm}
     (h : Precond wa sevm devm) : Postcond wa sevm devm := by
@@ -67,7 +70,7 @@ lemma Precond.state_eq {wa sevm devm devm'}
   | mk h_code h_nof h_solv =>
     have h_bal : devm'.getBal = devm.getBal := by
       funext a; simp [Devm.getBal, Devm.getAcct]; rw [h_eq]
-    have h_stor : ∀ a, devm'.getStor a = devm.getStor a := by
+    have h_stor : ∀ a, Devm.getStor devm' a = Devm.getStor devm a := by
       intro a; simp [Devm.getStor, Devm.getAcct]; rw [h_eq]
     constructor
     · have h_gc : devm'.getCode wa = devm.getCode wa := by
@@ -264,7 +267,7 @@ instance : Linst.Hinv Devm.getStor Devm.getStor Linst.ret := by
   injection h6 with h6
   rw [← h6]
   have h_mem : s3.memRead n1 n2 = ⟨(s3.memRead n1 n2).1, (s3.memRead n1 n2).2⟩ := rfl
-  show s.getStor = (s3.memRead n1 n2).2.getStor
+  show Devm.getStor s = Devm.getStor (s3.memRead n1 n2).2
   rw [memRead_getStor_eq h_mem, ← chargeGas_getStor_eq h5, ← Devm.popToNat_getStor_eq h3, ← Devm.popToNat_getStor_eq h1]
 
 instance : Linst.Hinv Devm.getStor Devm.getStor Linst.rev := by
@@ -286,8 +289,8 @@ macro_rules
 
 lemma name_preserves_solvent {sevm : Sevm} {s r : Devm}
     (run : Func.Run (weth.main :: weth.aux) sevm s name r)
-    (h_sv : s.PreSolvent sevm.currentTarget sevm) :
-    r.PostSolvent sevm.currentTarget := by simple_solvent
+    (h_sv : Devm.PreSolvent s sevm.currentTarget sevm) :
+    Devm.PostSolvent r sevm.currentTarget := by simple_solvent
 
 lemma approve_preserves_bal : Func.Inv Devm.getBal Devm.getBal approve := by func_inv
 
@@ -310,12 +313,12 @@ open Lean.Parser.Tactic
 open Lean.Elab.Term
 open Lean
 open Qq
-open Ninst
+open Jaune.Ninst Ninst
 
 def Line.take : Nat → Q(Line) → TacticM Q(Line)
 | 0, _ => pure q([] : Line)
 | n + 1, l => do
-  let l' : Q(Line) ← Meta.whnf l
+  let l' : Q(Line) ← Lean.Meta.whnf l
   match l' with
   | ~q([]) => failure
   | ~q($i :: $is) =>
@@ -478,7 +481,7 @@ lemma of_prepApprove {sevm : Sevm} {s s' : Devm} :
 
 
 lemma setStorVal_getStor_self {devm : Devm} {adr : Adr} {key val : B256} :
-    (devm.setStorVal adr key val).getStor adr = (devm.getStor adr).set key val := by
+    Devm.getStor (devm.setStorVal adr key val) adr = (Devm.getStor devm adr).set key val := by
   simp only [Devm.getStor, Devm.getAcct, Devm.setStorVal, Devm.withState,
     Devm.setWorld, State.setStorVal]
   simp only [Devm.state, State.get_set_self]
@@ -493,8 +496,8 @@ lemma Stor.get_set_ne {s : Stor} {k k' v : B256} (h : k ≠ k') :
   · rw [Std.TreeMap.getD_insert]; simp [hc]
 
 lemma sstore_getStor_setStorVal {sevm : Sevm} {s s' : Devm} {x xs}
-    (h_run : Ninst.Run sevm s .sstore s') (hx : x :: xs <<+ s.stack) :
-    ∃ v, s'.getStor sevm.currentTarget = (s.getStor sevm.currentTarget).set x v := by
+    (h_run : Ninst.Run sevm s Blanc.Ninst.sstore s') (hx : x :: xs <<+ s.stack) :
+    ∃ v, Devm.getStor s' sevm.currentTarget = (Devm.getStor s sevm.currentTarget).set x v := by
   rcases of_run_reg h_run with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
   rcases of_bind_eq_ok run with ⟨⟨key, s₁⟩, h1, run₁⟩
@@ -507,16 +510,16 @@ lemma sstore_getStor_setStorVal {sevm : Sevm} {s s' : Devm} {x xs}
   rcases of_bind_eq_ok run₇ with ⟨_, h8, h9⟩
   have hkx : x = key :=
     (List.of_cons_pref_of_cons_pref hx (pref_of_split (Devm.pop_of_pop h1).stack)).left
-  have e1 : s.getStor = s₁.getStor := Devm.pop_getStor_eq h1
-  have e2 : s₁.getStor = s₂.getStor := Devm.pop_getStor_eq h2
-  have e4 : s₂.getStor = s₃.getStor := by
+  have e1 : Devm.getStor s = Devm.getStor s₁ := Devm.pop_getStor_eq h1
+  have e2 : Devm.getStor s₁ = Devm.getStor s₂ := Devm.pop_getStor_eq h2
+  have e4 : Devm.getStor s₂ = Devm.getStor s₃ := by
     split at h4 <;> (injection h4 with eq; injection eq with eq _; subst eq)
     · exact addAccessedStorageKey_getStor.symm
     · rfl
-  have e6 : s₃.getStor = s₄.getStor := by
+  have e6 : Devm.getStor s₃ = Devm.getStor s₄ := by
     injection h6 with eq; rw [← eq]; rfl
-  have e7 : s₄.getStor = s₅.getStor := chargeGas_getStor_eq h7
-  have E : s.getStor = s₅.getStor := e1.trans (e2.trans (e4.trans (e6.trans e7)))
+  have e7 : Devm.getStor s₄ = Devm.getStor s₅ := chargeGas_getStor_eq h7
+  have E : Devm.getStor s = Devm.getStor s₅ := e1.trans (e2.trans (e4.trans (e6.trans e7)))
   injection h9 with eq
   refine ⟨val, ?_⟩
   rw [← eq, setStorVal_getStor_self, hkx, E]
@@ -524,8 +527,8 @@ lemma sstore_getStor_setStorVal {sevm : Sevm} {s s' : Devm} {x xs}
 lemma sstore_preserves_stor_rest {x xs} {sevm : Sevm} {s s' : Devm} :
   ¬ ValidAdr x →
   (x :: xs <<+ s.stack) →
-  Ninst.Run sevm s .sstore s' →
-  (s.getStor sevm.currentTarget).rest = (s'.getStor sevm.currentTarget).rest := by
+  Ninst.Run sevm s Blanc.Ninst.sstore s' →
+  (Stor.rest (Devm.getStor s sevm.currentTarget)) = (Stor.rest (Devm.getStor s' sevm.currentTarget)) := by
   intro h_nv h_pfx h_run
   rcases sstore_getStor_setStorVal h_run h_pfx with ⟨v, h_set⟩
   rw [h_set]
@@ -542,8 +545,8 @@ lemma Stor.get_set_self {s : Stor} {k v : B256} :
   · rw [Std.TreeMap.getD_insert]; simp
 
 lemma sstore_getStor_set {sevm : Sevm} {s s' : Devm} {x y xs}
-    (h_run : Ninst.Run sevm s .sstore s') (hx : x :: y :: xs <<+ s.stack) :
-    s'.getStor sevm.currentTarget = (s.getStor sevm.currentTarget).set x y := by
+    (h_run : Ninst.Run sevm s Blanc.Ninst.sstore s') (hx : x :: y :: xs <<+ s.stack) :
+    Devm.getStor s' sevm.currentTarget = (Devm.getStor s sevm.currentTarget).set x y := by
   rcases of_run_reg h_run with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
   rcases of_bind_eq_ok run with ⟨⟨key, s₁⟩, h1, run₁⟩
@@ -562,16 +565,16 @@ lemma sstore_getStor_set {sevm : Sevm} {s s' : Devm} {x y xs}
     injection heq with hk hrest
     injection hrest with hv _
     exact ⟨hk.symm, hv.symm⟩
-  have e1 : s.getStor = s₁.getStor := Devm.pop_getStor_eq h1
-  have e2 : s₁.getStor = s₂.getStor := Devm.pop_getStor_eq h2
-  have e4 : s₂.getStor = s₃.getStor := by
+  have e1 : Devm.getStor s = Devm.getStor s₁ := Devm.pop_getStor_eq h1
+  have e2 : Devm.getStor s₁ = Devm.getStor s₂ := Devm.pop_getStor_eq h2
+  have e4 : Devm.getStor s₂ = Devm.getStor s₃ := by
     split at h4 <;> (injection h4 with eq; injection eq with eq _; subst eq)
     · exact addAccessedStorageKey_getStor.symm
     · rfl
-  have e6 : s₃.getStor = s₄.getStor := by
+  have e6 : Devm.getStor s₃ = Devm.getStor s₄ := by
     injection h6 with eq; rw [← eq]; rfl
-  have e7 : s₄.getStor = s₅.getStor := chargeGas_getStor_eq h7
-  have E : s.getStor = s₅.getStor := e1.trans (e2.trans (e4.trans (e6.trans e7)))
+  have e7 : Devm.getStor s₄ = Devm.getStor s₅ := chargeGas_getStor_eq h7
+  have E : Devm.getStor s = Devm.getStor s₅ := e1.trans (e2.trans (e4.trans (e6.trans e7)))
   injection h9 with eq
   rw [← eq, setStorVal_getStor_self, hxy.left, hxy.right, E]
 
@@ -590,7 +593,7 @@ lemma of_run_next {fs sevm devm i f devm''}
 lemma of_withdrawLoadCheck {sevm : Sevm} {s s' : Devm}
     (h : Line.Run sevm s withdrawLoadCheck s') :
     s.getBal = s'.getBal ∧
-    s.getStor = s'.getStor ∧
+    Devm.getStor s = Devm.getStor s' ∧
     s.getCode = s'.getCode ∧
     ∃ wad cbal, ([cbal <? wad, cbal, wad, wad] <<+ s'.stack) ∧
       (cbal = Devm.getStorVal s' sevm.currentTarget sevm.caller.toB256) := by
@@ -606,7 +609,7 @@ lemma of_withdrawLoadCheck {sevm : Sevm} {s s' : Devm}
   rcases prefix_of_sload (of_run_singleton h₃) hp₂ with ⟨cbal, hp₃, h_cbal⟩
   have hstor3 : Devm.getStorVal s₂ sevm.currentTarget sevm.caller.toB256
               = Devm.getStorVal s₃ sevm.currentTarget sevm.caller.toB256 := by
-    show (s₂.getStor _).get _ = (s₃.getStor _).get _
+    show (Devm.getStor s₂ _).get _ = (Devm.getStor s₃ _).get _
     rw [Line.of_inv Devm.getStor (by line_inv) h₃]
   rw [hstor3] at h_cbal
   clear_state s₂
@@ -614,30 +617,30 @@ lemma of_withdrawLoadCheck {sevm : Sevm} {s s' : Devm}
   have hp₄ : [cbal <? wad, cbal, wad, wad] <<+ s'.stack := by generalize_line_prefix
   have hstor4 : Devm.getStorVal s₃ sevm.currentTarget sevm.caller.toB256
               = Devm.getStorVal s' sevm.currentTarget sevm.caller.toB256 := by
-    show (s₃.getStor _).get _ = (s'.getStor _).get _
+    show (Devm.getStor s₃ _).get _ = (Devm.getStor s' _).get _
     rw [Line.of_inv Devm.getStor (by line_inv) h₄]
   rw [hstor4] at h_cbal
   exact ⟨wad, cbal, hp₄, h_cbal⟩
 
 lemma approve_preserves_wbal {sevm : Sevm} {s r : Devm}
     (run : Func.Run (weth.main :: weth.aux) sevm s approve r) :
-    (s.getStor sevm.currentTarget).rest = (r.getStor sevm.currentTarget).rest := by
+    (Stor.rest (Devm.getStor s sevm.currentTarget)) = (Stor.rest (Devm.getStor r sevm.currentTarget)) := by
   rcases of_run_prepend (arg 0 ++ checkNonAddress) _ run
     with ⟨s0, h_s0, h_run'⟩; clear run
-  have h_s0_stor_eq : s.getStor = s0.getStor := by invariance
-  have h_s0_stor : s.getStor sevm.currentTarget = s0.getStor sevm.currentTarget :=
+  have h_s0_stor_eq : Devm.getStor s = Devm.getStor s0 := by invariance
+  have h_s0_stor : Devm.getStor s sevm.currentTarget = Devm.getStor s0 sevm.currentTarget :=
     congr_fun h_s0_stor_eq sevm.currentTarget
   rw [h_s0_stor]; clear h_s0_stor h_s0_stor_eq h_s0 s
   rcases of_run_branch_rev h_run' with ⟨s1, h_pop, h_run⟩; clear h_run'
-  have h_s1_stor : s0.getStor sevm.currentTarget = s1.getStor sevm.currentTarget :=
+  have h_s1_stor : Devm.getStor s0 sevm.currentTarget = Devm.getStor s1 sevm.currentTarget :=
     (Devm.PopBurn.getStor h_pop sevm.currentTarget).symm
   rw [h_s1_stor]; clear h_s1_stor h_pop s0
   rcases of_run_prepend prepApprove _ h_run
     with ⟨s2, h_s2, h_run'⟩; clear h_run
   rcases of_prepApprove h_s2
     with ⟨hash_valid, hash, wad, h_s2_stk, h_iff⟩
-  have h_s2_stor_eq : s1.getStor = s2.getStor := by invariance
-  have h_s2_stor : s1.getStor sevm.currentTarget = s2.getStor sevm.currentTarget :=
+  have h_s2_stor_eq : Devm.getStor s1 = Devm.getStor s2 := by invariance
+  have h_s2_stor : Devm.getStor s1 sevm.currentTarget = Devm.getStor s2 sevm.currentTarget :=
     congr_fun h_s2_stor_eq sevm.currentTarget
   rw [h_s2_stor]; clear h_s2_stor h_s2_stor_eq h_s2 s1
   rcases of_run_branch_rev h_run' with ⟨s3, h_pop, h_run⟩; clear h_run'
@@ -657,46 +660,46 @@ lemma approve_preserves_wbal {sevm : Sevm} {s r : Devm}
     rw [h_pop_stk] at h_s2_stk
     exact cons_pref_cons_inv h_s2_stk
   clear h_s2_stk
-  have h_s3_stor : s2.getStor sevm.currentTarget = s3.getStor sevm.currentTarget :=
+  have h_s3_stor : Devm.getStor s2 sevm.currentTarget = Devm.getStor s3 sevm.currentTarget :=
     (Devm.PopBurn.getStor h_pop sevm.currentTarget).symm
   rw [h_s3_stor]; clear h_s3_stor h_pop s2
   rcases of_run_next h_run with ⟨s4, h_sstore, h_run'⟩; clear h_run
   have hh := sstore_preserves_stor_rest h_iff h_s3_stk h_sstore
-  have h_r_stor_eq : s4.getStor = r.getStor := by
+  have h_r_stor_eq : Devm.getStor s4 = Devm.getStor r := by
     apply Func.of_inv Devm.getStor Devm.getStor _ h_run'
     func_inv
-  have h_r_stor : s4.getStor sevm.currentTarget = r.getStor sevm.currentTarget :=
+  have h_r_stor : Devm.getStor s4 sevm.currentTarget = Devm.getStor r sevm.currentTarget :=
     congr_fun h_r_stor_eq sevm.currentTarget
   rw [← h_r_stor]
   apply hh
 
 lemma result_solvent_of_state_solvent {sevm : Sevm} {s r : Devm}
-    (h_wbsum : (s.getStor sevm.currentTarget).rest = (r.getStor sevm.currentTarget).rest)
+    (h_wbsum : (Stor.rest (Devm.getStor s sevm.currentTarget)) = (Stor.rest (Devm.getStor r sevm.currentTarget)))
     (h_bal : s.getBal sevm.currentTarget = r.getBal sevm.currentTarget)
-    (h_solvent : s.PreSolvent sevm.currentTarget sevm) :
-    r.PostSolvent sevm.currentTarget := by
+    (h_solvent : Devm.PreSolvent s sevm.currentTarget sevm) :
+    Devm.PostSolvent r sevm.currentTarget := by
   unfold Devm.PostSolvent Stor.Solvent
   rw [B256.toNat_zero, Nat.add_zero]
   have h_sv' := h_solvent.left rfl
   unfold Stor.Solvent at h_sv'
   rw [← h_bal]
-  have h_wbsum_eq : wbsum (s.getStor sevm.currentTarget) = wbsum (r.getStor sevm.currentTarget) := by
+  have h_wbsum_eq : wbsum (Devm.getStor s sevm.currentTarget) = wbsum (Devm.getStor r sevm.currentTarget) := by
     simp [wbsum, h_wbsum]
   rw [← h_wbsum_eq]
   omega
 
 lemma approve_preserves_solvent {sevm : Sevm} {s r : Devm}
     (run : Func.Run (weth.main :: weth.aux) sevm s approve r)
-    (h_sv : s.PreSolvent sevm.currentTarget sevm) :
-    r.PostSolvent sevm.currentTarget := by
+    (h_sv : Devm.PreSolvent s sevm.currentTarget sevm) :
+    Devm.PostSolvent r sevm.currentTarget := by
   have h_bal_fun := Func.of_inv Devm.getBal Devm.getBal approve_preserves_bal run
   have h_bal := congr_fun h_bal_fun sevm.currentTarget
   exact result_solvent_of_state_solvent (approve_preserves_wbal run) h_bal h_sv
 
 lemma totalSupply_preserves_solvent {sevm : Sevm} {s r : Devm}
     (run : Func.Run (weth.main :: weth.aux) sevm s totalSupply r)
-    (h_sv : s.PreSolvent sevm.currentTarget sevm) :
-    r.PostSolvent sevm.currentTarget := by simple_solvent
+    (h_sv : Devm.PreSolvent s sevm.currentTarget sevm) :
+    Devm.PostSolvent r sevm.currentTarget := by simple_solvent
 
 -- balance-sum & transfer infrastructure (ported from Common.lean) --
 
@@ -827,9 +830,9 @@ lemma sum_add_assoc {k v} {f g : Adr → B256}
 lemma deposit_preserves_bal : Func.Inv Devm.getBal Devm.getBal deposit := by func_inv
 
 lemma wbsum_after_deposit {sevm : Sevm} {s r : Devm}
-    (h_nof : wbsum (s.getStor sevm.currentTarget) + sevm.value.toNat < 2 ^ 256)
+    (h_nof : wbsum (Devm.getStor s sevm.currentTarget) + sevm.value.toNat < 2 ^ 256)
     (run : Func.Run (weth.main :: weth.aux) sevm s deposit r) :
-    wbsum (s.getStor sevm.currentTarget) + sevm.value.toNat = wbsum (r.getStor sevm.currentTarget) := by
+    wbsum (Devm.getStor s sevm.currentTarget) + sevm.value.toNat = wbsum (Devm.getStor r sevm.currentTarget) := by
   unfold deposit at run
   rcases of_run_next run with ⟨s1, h_caller, run1⟩
   rcases of_run_next run1 with ⟨s2, h_sload, run2⟩
@@ -839,31 +842,31 @@ lemma wbsum_after_deposit {sevm : Sevm} {s r : Devm}
   rcases of_run_next run5 with ⟨s6, h_sstore, run6⟩
   have hp0 : [] <<+ s.stack := nil_pref
   have hp1 : [sevm.caller.toB256] <<+ s1.stack := prefix_of_push (of_run_caller h_caller) hp0
-  have hs1 : s.getStor = s1.getStor := Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons h_caller Line.Run.nil)
+  have hs1 : Devm.getStor s = Devm.getStor s1 := Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons h_caller Line.Run.nil)
 
   rcases prefix_of_sload h_sload hp1 with ⟨cbal, hp2, hcbal⟩
-  have hs2 : s1.getStor = s2.getStor := Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons h_sload Line.Run.nil)
+  have hs2 : Devm.getStor s1 = Devm.getStor s2 := Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons h_sload Line.Run.nil)
 
   have hp3 : [sevm.value, cbal] <<+ s3.stack := prefix_of_push (of_run_callvalue h_callvalue) hp2
-  have hs3 : s2.getStor = s3.getStor := Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons h_callvalue Line.Run.nil)
+  have hs3 : Devm.getStor s2 = Devm.getStor s3 := Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons h_callvalue Line.Run.nil)
 
   have hp4 : [sevm.value + cbal] <<+ s4.stack := prefix_of_add h_add hp3
-  have hs4 : s3.getStor = s4.getStor := Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons h_add Line.Run.nil)
+  have hs4 : Devm.getStor s3 = Devm.getStor s4 := Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons h_add Line.Run.nil)
 
   have hp5 : [sevm.caller.toB256, sevm.value + cbal] <<+ s5.stack := prefix_of_push (of_run_caller h_caller2) hp4
-  have hs5 : s4.getStor = s5.getStor := Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons h_caller2 Line.Run.nil)
+  have hs5 : Devm.getStor s4 = Devm.getStor s5 := Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons h_caller2 Line.Run.nil)
 
-  have hs_eq : s.getStor = s5.getStor := by rw [hs1, hs2, hs3, hs4, hs5]
-  have hcbal' : cbal = (s5.getStor sevm.currentTarget).get sevm.caller.toB256 := by
-    rw [hcbal]; show (s1.getStor sevm.currentTarget).get sevm.caller.toB256 = _
+  have hs_eq : Devm.getStor s = Devm.getStor s5 := by rw [hs1, hs2, hs3, hs4, hs5]
+  have hcbal' : cbal = (Devm.getStor s5 sevm.currentTarget).get sevm.caller.toB256 := by
+    rw [hcbal]; show (Devm.getStor s1 sevm.currentTarget).get sevm.caller.toB256 = _
     rw [hs2, hs3, hs4, hs5]
 
-  have h_set : s6.getStor sevm.currentTarget = (s5.getStor sevm.currentTarget).set sevm.caller.toB256 (sevm.value + cbal) :=
+  have h_set : Devm.getStor s6 sevm.currentTarget = (Devm.getStor s5 sevm.currentTarget).set sevm.caller.toB256 (sevm.value + cbal) :=
     sstore_getStor_set h_sstore hp5
 
-  have hs6 : s6.getStor = r.getStor := by apply Func.of_inv _ _ _ run6; func_inv
+  have hs6 : Devm.getStor s6 = Devm.getStor r := by apply Func.of_inv _ _ _ run6; func_inv
 
-  have h_incr : Increase sevm.caller sevm.value (s5.getStor sevm.currentTarget).rest (s6.getStor sevm.currentTarget).rest := by
+  have h_incr : Increase sevm.caller sevm.value (Stor.rest (Devm.getStor s5 sevm.currentTarget)) (Stor.rest (Devm.getStor s6 sevm.currentTarget)) := by
     intro a
     constructor
     · intro h_eq
@@ -873,7 +876,7 @@ lemma wbsum_after_deposit {sevm : Sevm} {s r : Devm}
       simp [Stor.rest, h_set]
       exact (Stor.get_set_ne (fun hc => h_neq (Adr.toB256_inj hc).symm)).symm
 
-  have h_nof' : B256.Nof ((s5.getStor sevm.currentTarget).rest sevm.caller) sevm.value := by
+  have h_nof' : B256.Nof ((Stor.rest (Devm.getStor s5 sevm.currentTarget)) sevm.caller) sevm.value := by
     simp only [B256.Nof]
     apply lt_of_le_of_lt _ h_nof
     rw [hs_eq, Nat.add_le_add_iff_right]
@@ -884,18 +887,18 @@ lemma wbsum_after_deposit {sevm : Sevm} {s r : Devm}
 
 lemma deposit_preserves_solvent {sevm : Sevm} {s r : Devm}
     (run : Func.Run (weth.main :: weth.aux) sevm s deposit r)
-    (h_sv : s.PreSolvent sevm.currentTarget sevm) :
-    r.PostSolvent sevm.currentTarget := by
+    (h_sv : Devm.PreSolvent s sevm.currentTarget sevm) :
+    Devm.PostSolvent r sevm.currentTarget := by
   unfold Devm.PostSolvent
   unfold Stor.Solvent
   rw [B256.toNat_zero]
   have h_bal : s.getBal = r.getBal := Func.of_inv _ _ deposit_preserves_bal run
   rw [← h_bal]
-  have h_sv' : wbsum (s.getStor sevm.currentTarget) + sevm.value.toNat ≤ (s.getBal sevm.currentTarget).toNat := by
+  have h_sv' : wbsum (Devm.getStor s sevm.currentTarget) + sevm.value.toNat ≤ (s.getBal sevm.currentTarget).toNat := by
     have h := h_sv.left rfl
     unfold Stor.Solvent at h
     exact h
-  have h_lt : wbsum (s.getStor sevm.currentTarget) + sevm.value.toNat < 2 ^ 256 := by
+  have h_lt : wbsum (Devm.getStor s sevm.currentTarget) + sevm.value.toNat < 2 ^ 256 := by
     apply lt_of_le_of_lt h_sv'
     apply B256.toNat_lt
   rw [← wbsum_after_deposit h_lt run]
@@ -946,11 +949,11 @@ lemma B256.le_add_right {xs ys : B256} (h : B256.Nof xs ys) : xs ≤ xs + ys := 
 
 lemma incrAt_of_incrWbal {sevm : Sevm} {s s' : Devm} {wad dst} (h_dst : ValidAdr dst)
     (h_run : Line.Run sevm s incrWbal s') (h_stk : [wad, dst] <<+ s.stack) :
-    Increase dst.toAdr wad (s.getStor sevm.currentTarget).rest (s'.getStor sevm.currentTarget).rest := by
+    Increase dst.toAdr wad (Stor.rest (Devm.getStor s sevm.currentTarget)) (Stor.rest (Devm.getStor s' sevm.currentTarget)) := by
   simp only [incrWbal] at h_run
   rcases of_run_append [dup 1, sload, add, swap 0] h_run with ⟨sm, h_pre, h_post⟩
   clear h_run
-  have h_stor : s.getStor = sm.getStor := Line.of_inv Devm.getStor (by line_inv) h_pre
+  have h_stor : Devm.getStor s = Devm.getStor sm := Line.of_inv Devm.getStor (by line_inv) h_pre
   -- decompose the prefix line to track the stack
   rcases Line.of_run_cons h_pre with ⟨s1, r_dup, h1⟩
   rcases Line.of_run_cons h1 with ⟨s2, r_sload, h2⟩
@@ -979,14 +982,14 @@ lemma incrAt_of_incrWbal {sevm : Sevm} {s s' : Devm} {wad dst} (h_dst : ValidAdr
   -- sstore
   rcases Line.of_run_cons h_post with ⟨s5, r_sstore, h5⟩
   cases h5
-  have h_set : s'.getStor sevm.currentTarget
-      = (sm.getStor sevm.currentTarget).set dst (dbal + wad) :=
+  have h_set : Devm.getStor s' sevm.currentTarget
+      = (Devm.getStor sm sevm.currentTarget).set dst (dbal + wad) :=
     sstore_getStor_set r_sstore hp4
   -- dbal = value at dst in s's storage
-  have hs1 : s.getStor = s1.getStor :=
+  have hs1 : Devm.getStor s = Devm.getStor s1 :=
     Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r_dup Line.Run.nil)
-  have h_dbal' : dbal = (s.getStor sevm.currentTarget).get dst := by
-    rw [h_dbal]; show (s1.getStor sevm.currentTarget).get dst = _; rw [hs1]
+  have h_dbal' : dbal = (Devm.getStor s sevm.currentTarget).get dst := by
+    rw [h_dbal]; show (Devm.getStor s1 sevm.currentTarget).get dst = _; rw [hs1]
   -- assemble the Increase
   intro a
   constructor
@@ -1002,16 +1005,16 @@ lemma incrAt_of_incrWbal {sevm : Sevm} {s s' : Devm} {wad dst} (h_dst : ValidAdr
     rw [Stor.get_set_ne h_key_ne, h_stor]
 
 lemma of_transferFromUpdateSbal {sevm : Sevm} {s₀ sₙ : Devm} {sbal wad src}
-    (h_src : ValidAdr src) (h_sbal : sbal = (s₀.getStor sevm.currentTarget).get src)
+    (h_src : ValidAdr src) (h_sbal : sbal = (Devm.getStor s₀ sevm.currentTarget).get src)
     (h_le : wad ≤ sbal) (hp₀ : [sbal, wad, wad, src] <<+ s₀.stack) :
     Line.Run sevm s₀ transferFromUpdateSbal sₙ →
-    ( Decrease src.toAdr wad (s₀.getStor sevm.currentTarget).rest (sₙ.getStor sevm.currentTarget).rest ∧
-      wad ≤ (s₀.getStor sevm.currentTarget).rest src.toAdr ) := by
+    ( Decrease src.toAdr wad (Stor.rest (Devm.getStor s₀ sevm.currentTarget)) (Stor.rest (Devm.getStor sₙ sevm.currentTarget)) ∧
+      wad ≤ Stor.rest (Devm.getStor s₀ sevm.currentTarget) src.toAdr ) := by
   intro h_run
   simp only [transferFromUpdateSbal] at h_run
   rcases of_run_append [sub, dup 2] h_run with ⟨sm, h_pre, h_post⟩
   clear h_run
-  have h_stor : s₀.getStor = sm.getStor := Line.of_inv Devm.getStor (by line_inv) h_pre
+  have h_stor : Devm.getStor s₀ = Devm.getStor sm := Line.of_inv Devm.getStor (by line_inv) h_pre
   rcases Line.of_run_cons h_pre with ⟨s1, r_sub, h1⟩
   rcases Line.of_run_cons h1 with ⟨s2, r_dup, h2⟩
   cases h2
@@ -1031,8 +1034,8 @@ lemma of_transferFromUpdateSbal {sevm : Sevm} {s₀ sₙ : Devm} {sbal wad src}
   -- sstore
   rcases Line.of_run_cons h_post with ⟨s3, r_sstore, h3⟩
   cases h3
-  have h_set : sₙ.getStor sevm.currentTarget
-      = (sm.getStor sevm.currentTarget).set src (sbal - wad) :=
+  have h_set : Devm.getStor sₙ sevm.currentTarget
+      = (Devm.getStor sm sevm.currentTarget).set src (sbal - wad) :=
     sstore_getStor_set r_sstore hp2
   constructor
   · intro a
@@ -1053,7 +1056,7 @@ lemma of_transferFromUpdateSbal {sevm : Sevm} {s₀ sₙ : Devm} {sbal wad src}
 lemma updateAllowance_preserves_stor_rest {fs : List Func} {sevm : Sevm} {s r : Devm} {wad dst}
     (hs : [wad, dst] <<+ s.stack)
     (h_run : Func.Run fs sevm s updateAllowance r) :
-    (s.getStor sevm.currentTarget).rest = (r.getStor sevm.currentTarget).rest := by
+    (Stor.rest (Devm.getStor s sevm.currentTarget)) = (Stor.rest (Devm.getStor r sevm.currentTarget)) := by
   rcases of_run_prepend [caller, dup 2, eq] _ h_run with ⟨s0, h_s0, h_run0⟩
   clear h_run
   rw [congr_fun (Line.of_inv Devm.getStor (by line_inv) h_s0) sevm.currentTarget]
@@ -1258,7 +1261,7 @@ lemma updateAllowance_preserves_stor_rest {fs : List Func} {sevm : Sevm} {s r : 
           congr_fun (Func.of_inv Devm.getStor Devm.getStor (by func_inv) h_runQ2)
             sevm.currentTarget]
   · -- early return : `returnTrue` preserves storage
-    have h_eq : s0.getStor sevm.currentTarget = r.getStor sevm.currentTarget := by
+    have h_eq : Devm.getStor s0 sevm.currentTarget = Devm.getStor r sevm.currentTarget := by
       rw [← Devm.PopBurn.getStor h_pop sevm.currentTarget,
           ← Devm.Burn.getStor h_burn sevm.currentTarget,
           congr_fun (Func.of_inv Devm.getStor Devm.getStor (by func_inv) h_runQ)
@@ -1268,14 +1271,14 @@ lemma updateAllowance_preserves_stor_rest {fs : List Func} {sevm : Sevm} {s r : 
 lemma transfer_of_transferFrom {fs : List Func} {sevm : Sevm} {s r : Devm} :
     Func.Run fs sevm s transferFrom r →
     ∃ (x : B256) (a a' : Adr),
-      Transfer (s.getStor sevm.currentTarget).rest a x a'
-        (r.getStor sevm.currentTarget).rest := by
+      Transfer (Stor.rest (Devm.getStor s sevm.currentTarget)) a x a'
+        (Stor.rest (Devm.getStor r sevm.currentTarget)) := by
   intro h_run
   simp only [transferFrom] at h_run
   -- arg 0 : push src
   rcases of_run_prepend (arg 0) _ h_run with ⟨a1, h1, h_run⟩
   rcases prefix_of_cdl nil_pref h1 with ⟨src, hs1⟩
-  have hg : s.getStor = a1.getStor := Line.of_inv Devm.getStor (by line_inv) h1
+  have hg : Devm.getStor s = Devm.getStor a1 := Line.of_inv Devm.getStor (by line_inv) h1
   clear h1
   -- dup 0 : [src, src]
   rcases of_run_next h_run with ⟨a2, r2, h_run⟩
@@ -1330,7 +1333,7 @@ lemma transfer_of_transferFrom {fs : List Func} {sevm : Sevm} {s r : Devm} :
     rw [h_get] at hy7; injection hy7 with hy7; exact hy7.symm
   subst y
   have hs7 : [src, wad, wad, src] <<+ a7.stack := prefix_of_push pb7 hs6
-  have hg7 : s.getStor = a7.getStor :=
+  have hg7 : Devm.getStor s = Devm.getStor a7 :=
     hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r7 Line.Run.nil))
   clear r7 pb7 hs6
   -- sload : [sbal, wad, wad, src]
@@ -1379,14 +1382,14 @@ lemma transfer_of_transferFrom {fs : List Func} {sevm : Sevm} {s r : Devm} :
     exact B256.zero_ne_one h_ltflag.symm
   rw [h_ltflag] at hs11
   have hs12 : [sbal, wad, wad, src] <<+ a12.stack := cons_pref_cons_inv hs11
-  have hg12 : s.getStor = a12.getStor :=
+  have hg12 : Devm.getStor s = Devm.getStor a12 :=
     hg.trans (funext (fun a => (Devm.PopBurn.getStor hp12 a).symm))
   clear hs11 hp12s hp12 h_ltflag
   -- transferFromUpdateSbal : decrease source balance
   rcases of_run_prepend transferFromUpdateSbal _ h_run with ⟨a13, h13, h_run⟩
-  have h_sbal' : sbal = (a12.getStor sevm.currentTarget).get src := by
+  have h_sbal' : sbal = (Devm.getStor a12 sevm.currentTarget).get src := by
     rw [h_sbal]
-    show (a7.getStor sevm.currentTarget).get src = _
+    show (Devm.getStor a7 sevm.currentTarget).get src = _
     rw [congr_fun (hg7.symm.trans hg12) sevm.currentTarget]
   rcases of_transferFromUpdateSbal h_src h_sbal' h_le hs12 h13 with ⟨h_dec, h_le'⟩
   have hs13 : [wad, src] <<+ a13.stack := by generalize_line_prefix
@@ -1394,7 +1397,7 @@ lemma transfer_of_transferFrom {fs : List Func} {sevm : Sevm} {s r : Devm} :
   -- arg 1 : push dst
   rcases of_run_prepend (arg 1) _ h_run with ⟨a14, h14, h_run⟩
   rcases prefix_of_cdl hs13 h14 with ⟨dst, hs14⟩
-  have hg' : a13.getStor = a14.getStor := Line.of_inv Devm.getStor (by line_inv) h14
+  have hg' : Devm.getStor a13 = Devm.getStor a14 := Line.of_inv Devm.getStor (by line_inv) h14
   clear h14 hs13
   -- dup 0 : [dst, dst, wad, src]
   rcases of_run_next h_run with ⟨a15, r15, h_run⟩
@@ -1444,13 +1447,13 @@ lemma transfer_of_transferFrom {fs : List Func} {sevm : Sevm} {s r : Devm} :
     rw [h_get] at hy19; injection hy19 with hy19; exact hy19.symm
   subst y
   have hs19 : [wad, dst, dst, wad, src] <<+ a19.stack := prefix_of_push pb19 hs18
-  have hg19 : a13.getStor = a19.getStor :=
+  have hg19 : Devm.getStor a13 = Devm.getStor a19 :=
     hg'.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r19 Line.Run.nil))
   clear r19 pb19 hs18
   -- incrWbal : increase destination balance
   rcases of_run_prepend incrWbal _ h_run with ⟨a20, h20, h_run⟩
-  have h_incr : Increase dst.toAdr wad (a19.getStor sevm.currentTarget).rest
-      (a20.getStor sevm.currentTarget).rest :=
+  have h_incr : Increase dst.toAdr wad (Stor.rest (Devm.getStor a19 sevm.currentTarget))
+      (Stor.rest (Devm.getStor a20 sevm.currentTarget)) :=
     incrAt_of_incrWbal h_dst h20 (pref_trans ⟨[dst, wad, src], rfl⟩ hs19)
   have hs20 : [dst, wad, src] <<+ a20.stack := by
     rcases of_run_append [dup 1, sload, add, swap 0] h20 with ⟨am, ham, hend⟩
@@ -1480,20 +1483,20 @@ lemma transfer_of_transferFrom {fs : List Func} {sevm : Sevm} {s r : Devm} :
   -- transferFromLog : does not touch storage
   rcases of_run_prepend transferFromLog _ h_run with ⟨a21, h21, h_run⟩
   have hs21 : [wad, src] <<+ a21.stack := by generalize_line_prefix
-  have hg_log : a20.getStor = a21.getStor := Line.of_inv Devm.getStor (by line_inv) h21
+  have hg_log : Devm.getStor a20 = Devm.getStor a21 := Line.of_inv Devm.getStor (by line_inv) h21
   clear h21
   -- updateAllowance : preserves the WETH balance storage
-  have h_ua : (a21.getStor sevm.currentTarget).rest = (r.getStor sevm.currentTarget).rest :=
+  have h_ua : (Stor.rest (Devm.getStor a21 sevm.currentTarget)) = (Stor.rest (Devm.getStor r sevm.currentTarget)) :=
     updateAllowance_preserves_stor_rest hs21 h_run
   -- assemble the Transfer
-  refine ⟨wad, src.toAdr, dst.toAdr, ?_, (a13.getStor sevm.currentTarget).rest, ?_, ?_⟩
+  refine ⟨wad, src.toAdr, dst.toAdr, ?_, (Stor.rest (Devm.getStor a13 sevm.currentTarget)), ?_, ?_⟩
   · rw [congr_fun hg12 sevm.currentTarget]; exact h_le'
   · rw [congr_fun hg12 sevm.currentTarget]; exact h_dec
   · rw [congr_fun hg19 sevm.currentTarget, ← h_ua, ← congr_fun hg_log sevm.currentTarget]
     exact h_incr
 
 lemma nof_of_solvent {sevm : Sevm} {s : Devm} {a}
-    (h : s.PreSolvent a sevm) : SumNof (s.getStor a).rest := by
+    (h : Devm.PreSolvent s a sevm) : SumNof (Stor.rest (Devm.getStor s a)) := by
   apply lt_of_le_of_lt _ (B256.toNat_lt (s.getBal a))
   unfold Devm.PreSolvent at h
   by_cases h' : sevm.currentTarget = a
@@ -1503,10 +1506,10 @@ lemma nof_of_solvent {sevm : Sevm} {s : Devm} {a}
     apply le_trans (Nat.le_add_right _ _) hh
 
 lemma result_solvent_of_wbsum_eq {sevm : Sevm} {s r : Devm}
-    (h_sv : s.PreSolvent sevm.currentTarget sevm)
-    (h_sum : wbsum (s.getStor sevm.currentTarget) = wbsum (r.getStor sevm.currentTarget))
+    (h_sv : Devm.PreSolvent s sevm.currentTarget sevm)
+    (h_sum : wbsum (Devm.getStor s sevm.currentTarget) = wbsum (Devm.getStor r sevm.currentTarget))
     (h_bal : s.getBal sevm.currentTarget = r.getBal sevm.currentTarget) :
-    r.PostSolvent sevm.currentTarget := by
+    Devm.PostSolvent r sevm.currentTarget := by
   unfold Devm.PostSolvent Stor.Solvent
   rw [B256.toNat_zero, Nat.add_zero]
   have h_sv' := h_sv.left rfl
@@ -1518,8 +1521,8 @@ lemma transferFrom_preserves_bal : Func.Inv Devm.getBal Devm.getBal transferFrom
 
 lemma transferFrom_preserves_solvent {sevm : Sevm} {s r : Devm}
     (run : Func.Run (weth.main :: weth.aux) sevm s transferFrom r)
-    (h_sv : s.PreSolvent sevm.currentTarget sevm) :
-    r.PostSolvent sevm.currentTarget := by
+    (h_sv : Devm.PreSolvent s sevm.currentTarget sevm) :
+    Devm.PostSolvent r sevm.currentTarget := by
   rcases transfer_of_transferFrom run with ⟨x, a, a', h_di⟩
   refine result_solvent_of_wbsum_eq h_sv ?_ ?_
   · exact transfer_preserves_sum (nof_of_solvent h_sv) h_di
@@ -1528,7 +1531,7 @@ lemma transferFrom_preserves_solvent {sevm : Sevm} {s r : Devm}
 
 lemma precond_of_precond {wa : Adr} {sevm : Sevm} {s s' : Devm}
     (h : Precond wa sevm s) (h_bal : s.getBal = s'.getBal)
-    (h_stor : s.getStor = s'.getStor) (h_code : s.getCode = s'.getCode) :
+    (h_stor : Devm.getStor s = Devm.getStor s') (h_code : s.getCode = s'.getCode) :
     Precond wa sevm s' := by
   refine' ⟨_, _, _⟩
   · rw [← congr_fun h_code wa]; exact h.code
@@ -1541,10 +1544,10 @@ lemma solvent_of_withdraw_update_bal {sevm : Sevm} {s s' : Devm} {cbal wad}
     (h_stk : [cbal, wad, wad] <<+ s.stack)
     (h_cbal : cbal = Devm.getStorVal s sevm.currentTarget sevm.caller.toB256)
     (h_le : wad ≤ cbal)
-    (h_run : Line.Run sevm s [.sub, .caller, .sstore] s') :
+    (h_run : Line.Run sevm s [Blanc.Ninst.sub, Blanc.Ninst.caller, Blanc.Ninst.sstore] s') :
     wad ≤ s'.getBal sevm.currentTarget ∧
-    Stor.Solvent (s'.getStor sevm.currentTarget) 0 (s'.getBal sevm.currentTarget - wad) := by
-  have h_cbal' : (s.getStor sevm.currentTarget).get sevm.caller.toB256 = cbal := h_cbal.symm
+    Stor.Solvent (Devm.getStor s' sevm.currentTarget) 0 (s'.getBal sevm.currentTarget - wad) := by
+  have h_cbal' : (Devm.getStor s sevm.currentTarget).get sevm.caller.toB256 = cbal := h_cbal.symm
   have h_bal : s.getBal = s'.getBal := Line.of_inv Devm.getBal (by line_inv) h_run
   rcases Line.of_run_cons h_run with ⟨s₁, r_sub, h1⟩
   rcases Line.of_run_cons h1 with ⟨s₂, r_caller, h2⟩
@@ -1557,15 +1560,15 @@ lemma solvent_of_withdraw_update_bal {sevm : Sevm} {s s' : Devm} {cbal wad}
   have hp2 : [sevm.caller.toB256, cbal - wad, wad] <<+ s₂.stack :=
     prefix_of_push (of_run_caller r_caller) hp1
   -- sub and caller do not touch storage
-  have h_stor : s.getStor = s₂.getStor :=
+  have h_stor : Devm.getStor s = Devm.getStor s₂ :=
     Line.of_inv Devm.getStor (by line_inv)
       (Line.Run.cons r_sub (Line.Run.cons r_caller Line.Run.nil))
   -- sstore : set caller's WETH balance to cbal - wad
-  have h_set : s'.getStor sevm.currentTarget
-      = (s₂.getStor sevm.currentTarget).set sevm.caller.toB256 (cbal - wad) :=
+  have h_set : Devm.getStor s' sevm.currentTarget
+      = (Devm.getStor s₂ sevm.currentTarget).set sevm.caller.toB256 (cbal - wad) :=
     sstore_getStor_set r_sstore hp2
   have h_dec : Decrease sevm.caller wad
-      (s.getStor sevm.currentTarget).rest (s'.getStor sevm.currentTarget).rest := by
+      (Stor.rest (Devm.getStor s sevm.currentTarget)) (Stor.rest (Devm.getStor s' sevm.currentTarget)) := by
     intro a
     constructor
     · intro h_eq; subst h_eq
@@ -1578,14 +1581,14 @@ lemma solvent_of_withdraw_update_bal {sevm : Sevm} {s s' : Devm} {cbal wad}
         intro hc; apply h_ne
         rw [← toAdr_toB256 a, hc, toAdr_toB256]
       rw [Stor.get_set_ne h_key_ne, h_stor]
-  have h_le_rest : wad ≤ (s.getStor sevm.currentTarget).rest sevm.caller := by
+  have h_le_rest : wad ≤ (Stor.rest (Devm.getStor s sevm.currentTarget)) sevm.caller := by
     simp only [Stor.rest, Function.comp_apply]
     rw [h_cbal']; exact h_le
-  have h_eq : wbsum (s.getStor sevm.currentTarget) - wad.toNat
-      = wbsum (s'.getStor sevm.currentTarget) := sum_sub_assoc h_dec h_le_rest
-  have h_le' : wad.toNat ≤ wbsum (s.getStor sevm.currentTarget) := by
+  have h_eq : wbsum (Devm.getStor s sevm.currentTarget) - wad.toNat
+      = wbsum (Devm.getStor s' sevm.currentTarget) := sum_sub_assoc h_dec h_le_rest
+  have h_le' : wad.toNat ≤ wbsum (Devm.getStor s sevm.currentTarget) := by
     apply le_trans (B256.toNat_le_toNat h_le)
-    have h := @le_sum (s.getStor sevm.currentTarget).rest sevm.caller
+    have h := @le_sum (Stor.rest (Devm.getStor s sevm.currentTarget)) sevm.caller
     simp only [Stor.rest, Function.comp_apply] at h
     rw [h_cbal'] at h
     exact h
@@ -1605,25 +1608,25 @@ lemma solvent_of_withdraw_update_bal {sevm : Sevm} {s s' : Devm} {cbal wad}
 
 
 
-lemma State.setBal_get_self {st : _root_.State} {adr : Adr} {v : B256} :
+lemma State.setBal_get_self {st : Jaune.State} {adr : Adr} {v : B256} :
     (st.setBal adr v).get adr = (st.get adr).withBal v := State.get_set_self
 
-lemma State.setBal_get_ne {st : _root_.State} {adr a : Adr} {v : B256} (h : adr ≠ a) :
+lemma State.setBal_get_ne {st : Jaune.State} {adr a : Adr} {v : B256} (h : adr ≠ a) :
     (st.setBal adr v).get a = st.get a := State.get_set_ne h
 
-lemma State.setBal_get_stor {st : _root_.State} {b a : Adr} {v : B256} :
+lemma State.setBal_get_stor {st : Jaune.State} {b a : Adr} {v : B256} :
     ((st.setBal b v).get a).stor = (st.get a).stor := by
   by_cases h : b = a
   · subst h; rw [State.setBal_get_self]; rfl
   · rw [State.setBal_get_ne h]
 
-lemma State.setBal_get_code {st : _root_.State} {b a : Adr} {v : B256} :
+lemma State.setBal_get_code {st : Jaune.State} {b a : Adr} {v : B256} :
     ((st.setBal b v).get a).code = (st.get a).code := by
   by_cases h : b = a
   · subst h; rw [State.setBal_get_self]; rfl
   · rw [State.setBal_get_ne h]
 
-lemma State.of_subBal {st st' : _root_.State} {ct : Adr} {wad : B256}
+lemma State.of_subBal {st st' : Jaune.State} {ct : Adr} {wad : B256}
     (h : st.subBal ct wad = some st') :
     wad ≤ st.bal ct ∧ st' = st.setBal ct (st.bal ct - wad) := by
   unfold State.subBal at h
@@ -1631,7 +1634,7 @@ lemma State.of_subBal {st st' : _root_.State} {ct : Adr} {wad : B256}
   cases h
   exact ⟨B256.not_lt.mp h_lt, rfl⟩
 
-lemma of_state_transfer {st st' : _root_.State} {ct callee : Adr} {wad : B256}
+lemma of_state_transfer {st st' : Jaune.State} {ct callee : Adr} {wad : B256}
     (h_sub : st.subBal ct wad = some st')
     (h_nof : sum st.bal < 2 ^ 256) :
     (∀ a, ((st'.addBal callee wad).get a).stor = (st.get a).stor) ∧
@@ -1676,7 +1679,7 @@ lemma of_state_transfer {st st' : _root_.State} {ct callee : Adr} {wad : B256}
       sum_add_assoc h_inc h_nof'
     omega
   · intro h_eq; subst h_eq
-    show ((_root_.State.setBal _ callee _).get callee).bal = _
+    show ((Jaune.State.setBal _ callee _).get callee).bal = _
     rw [State.setBal_get_self]
     show (st.setBal callee (st.bal callee - wad)).bal callee + wad = _
     show ((st.setBal callee (st.bal callee - wad)).get callee).bal + wad = _
@@ -1684,7 +1687,7 @@ lemma of_state_transfer {st st' : _root_.State} {ct callee : Adr} {wad : B256}
     show st.bal callee - wad + wad = _
     rw [B256.sub_add_cancel]
   · intro h_ne
-    show ((_root_.State.setBal _ callee _).get ct).bal = _
+    show ((Jaune.State.setBal _ callee _).get ct).bal = _
     rw [State.setBal_get_ne h_ne]
     show ((st.setBal ct (st.bal ct - wad)).get ct).bal = _
     rw [State.setBal_get_self]; rfl
@@ -1714,7 +1717,7 @@ lemma accessDelegation_code_of_not {devm : Devm} {adr : Adr}
   rw [if_neg h]
 
 lemma getStor_eq_of_state_eq {d d' : Devm} (h : d.state = d'.state) (a : Adr) :
-    d.getStor a = d'.getStor a := by
+    Devm.getStor d a = Devm.getStor d' a := by
   simp only [Devm.getStor, Devm.getAcct]; rw [h]
 
 lemma getBal_eq_of_state_eq {d d' : Devm} (h : d.state = d'.state) (a : Adr) :
@@ -1730,15 +1733,15 @@ lemma getCode_eq_of_state_eq {d d' : Devm} (h : d.state = d'.state) (a : Adr) :
 lemma solvent_of_state_eq {sf s₁ : Devm} {ct : Adr} {wad : B256}
     (h_state : sf.state = s₁.state)
     (h_le : wad ≤ s₁.getBal ct)
-    (h_sv : Stor.Solvent (s₁.getStor ct) 0 (s₁.getBal ct - wad)) :
-    Stor.Solvent (sf.getStor ct) 0 (sf.getBal ct) := by
+    (h_sv : Stor.Solvent (Devm.getStor s₁ ct) 0 (s₁.getBal ct - wad)) :
+    Stor.Solvent (Devm.getStor sf ct) 0 (sf.getBal ct) := by
   rw [getStor_eq_of_state_eq h_state, getBal_eq_of_state_eq h_state]
   unfold Stor.Solvent at *
   rw [B256.toNat_sub_eq_of_le _ _ h_le] at h_sv
   omega
 
 lemma of_handleError_err {err : String} {d : Devm}
-    {ex : Except (String × _root_.State × AdrSet × Tra) Devm}
+    {ex : Except (String × Jaune.State × AdrSet × Tra) Devm}
     (h : executeCode.handleError (.error ⟨err, d⟩) = ex) :
     (∃ evm2 : Devm, ex = .ok evm2 ∧ evm2.error.isSome = true ∧ evm2.state = d.state) ∨
     (∃ e, ex = .error e) := by
@@ -1765,7 +1768,7 @@ lemma of_benvAfterTransfer {msg : Msg} {benv' : Benv}
     exact ⟨st_mid, rfl, h.symm⟩
 
 lemma of_executeCode_someCode {msg : Msg} {adr : Adr} {xl : Xlot}
-    {ex : Except (String × _root_.State × AdrSet × Tra) Devm}
+    {ex : Except (String × Jaune.State × AdrSet × Tra) Devm}
     (h_ca : msg.codeAddress = some adr)
     (h : ExecuteCode msg xl ex) :
     ((!msg.disablePrecompiles && decide (msg.benv.stat.rules.isPrecomp adr)) = true ∧
@@ -1804,15 +1807,15 @@ lemma of_send_to_caller {sevm : Sevm} {s sf : Devm} {wad}
     (h_code : some (s.getCode sevm.currentTarget).toList = Prog.compile weth)
     (h_nof : sum s.getBal < 2 ^ 256)
     (h_le : wad ≤ s.getBal sevm.currentTarget)
-    (h_sv : Stor.Solvent (s.getStor sevm.currentTarget) 0 (s.getBal sevm.currentTarget - wad)) :
+    (h_sv : Stor.Solvent (Devm.getStor s sevm.currentTarget) 0 (s.getBal sevm.currentTarget - wad)) :
     Line.Run sevm s sendToCaller sf →
-    Stor.Solvent (sf.getStor sevm.currentTarget) 0 (sf.getBal sevm.currentTarget) := by
+    Stor.Solvent (Devm.getStor sf sevm.currentTarget) 0 (sf.getBal sevm.currentTarget) := by
   line_execute 7
   have hs₁ : [0, sevm.caller.toB256, wad, 0, 0, 0, 0] <<+ s₁.stack := by
     generalize_line_prefix
   -- transport the hypotheses to s₁
   have h_bal₁ : s.getBal = s₁.getBal := Line.of_inv Devm.getBal (by line_inv) h₁
-  have h_stor₁ : s.getStor = s₁.getStor := Line.of_inv Devm.getStor (by line_inv) h₁
+  have h_stor₁ : Devm.getStor s = Devm.getStor s₁ := Line.of_inv Devm.getStor (by line_inv) h₁
   have h_code₁ : s.getCode = s₁.getCode := Line.of_inv Devm.getCode (by line_inv) h₁
   rw [h_bal₁] at h_nof
   rw [congr_fun h_bal₁ sevm.currentTarget] at h_le h_sv
@@ -1990,7 +1993,7 @@ lemma of_send_to_caller {sevm : Sevm} {s sf : Devm} {wad}
         have h_child_state : child.state = benv'.state := by
           have h := state_of_executePrecomp_ok h_he h_err2
           rw [h]; rfl
-        have h_stor_eq : sf.getStor sevm.currentTarget = s₁.getStor sevm.currentTarget := by
+        have h_stor_eq : Devm.getStor sf sevm.currentTarget = Devm.getStor s₁ sevm.currentTarget := by
           show (sf.state.get sevm.currentTarget).stor = (s₁.state.get sevm.currentTarget).stor
           rw [h_sf_state, h_child_state, hBs]
           exact h_t_stor sevm.currentTarget
@@ -2056,8 +2059,8 @@ lemma of_send_to_caller {sevm : Sevm} {s sf : Devm} {wad}
           have h_dep : (initSevm (childMsg.withBenv benv')).depth = sevm.depth - 1 := hc_depth
           rw [h_dep]; omega
         -- the precondition holds for the sub-message
-        have h_gs : (initDevm (childMsg.withBenv benv')).getStor sevm.currentTarget
-            = s₁.getStor sevm.currentTarget := by
+        have h_gs : Devm.getStor (initDevm (childMsg.withBenv benv')) sevm.currentTarget
+            = Devm.getStor s₁ sevm.currentTarget := by
           show ((initDevm (childMsg.withBenv benv')).state.get sevm.currentTarget).stor
             = (s₁.state.get sevm.currentTarget).stor
           rw [h_sd_state, hBs, h_t_stor sevm.currentTarget]
@@ -2114,7 +2117,7 @@ lemma withdraw_preserves_solvent {sevm : Sevm} {s r : Devm}
     (cond : Precond sevm.currentTarget sevm s)
     (ih : Exec.InvDepth sevm.depth sevm.currentTarget weth (Precond sevm.currentTarget) (Postcond sevm.currentTarget))
     (run : Func.Run (weth.main :: weth.aux) sevm s withdraw r) :
-    r.PostSolvent sevm.currentTarget := by
+    Devm.PostSolvent r sevm.currentTarget := by
   revert run
   func_execute_with withdrawLoadCheck
   rcases of_withdrawLoadCheck h₁ with ⟨h_bal, h_stor, h_code, wad, cbal, hp₁, h_cbal⟩
@@ -2138,8 +2141,8 @@ lemma withdraw_preserves_solvent {sevm : Sevm} {s r : Devm}
     Precond.state_eq cond₁ h_pop.state.symm
   have h_cbal₂ : cbal = Devm.getStorVal s₂ sevm.currentTarget sevm.caller.toB256 := by
     rw [h_cbal]
-    show (s₁.getStor sevm.currentTarget).get sevm.caller.toB256
-      = (s₂.getStor sevm.currentTarget).get sevm.caller.toB256
+    show (Devm.getStor s₁ sevm.currentTarget).get sevm.caller.toB256
+      = (Devm.getStor s₂ sevm.currentTarget).get sevm.caller.toB256
     rw [Devm.PopBurn.getStor h_pop sevm.currentTarget]
   clear h_cbal hp₁ hp2s h_ltflag cond₁ h_run
   -- update the caller's WETH balance in storage
@@ -2163,18 +2166,18 @@ lemma withdraw_preserves_solvent {sevm : Sevm} {s r : Devm}
 
 lemma decimals_preserves_solvent {sevm : Sevm} {s r : Devm}
     (run : Func.Run (weth.main :: weth.aux) sevm s decimals r)
-    (h_sv : s.PreSolvent sevm.currentTarget sevm) :
-    r.PostSolvent sevm.currentTarget := by simple_solvent
+    (h_sv : Devm.PreSolvent s sevm.currentTarget sevm) :
+    Devm.PostSolvent r sevm.currentTarget := by simple_solvent
 
 lemma balanceOf_preserves_solvent {sevm : Sevm} {s r : Devm}
     (run : Func.Run (weth.main :: weth.aux) sevm s balanceOf r)
-    (h_sv : s.PreSolvent sevm.currentTarget sevm) :
-    r.PostSolvent sevm.currentTarget := by simple_solvent
+    (h_sv : Devm.PreSolvent s sevm.currentTarget sevm) :
+    Devm.PostSolvent r sevm.currentTarget := by simple_solvent
 
 lemma symbol_preserves_solvent {sevm : Sevm} {s r : Devm}
     (run : Func.Run (weth.main :: weth.aux) sevm s symbol r)
-    (h_sv : s.PreSolvent sevm.currentTarget sevm) :
-    r.PostSolvent sevm.currentTarget := by simple_solvent
+    (h_sv : Devm.PreSolvent s sevm.currentTarget sevm) :
+    Devm.PostSolvent r sevm.currentTarget := by simple_solvent
 
 lemma transfer_preserves_bal : Func.Inv Devm.getBal Devm.getBal transfer := by func_inv
 
@@ -2213,16 +2216,16 @@ lemma of_transferTestLt {sevm : Sevm} {s s' : Devm} {dst}
   -- sload : [cbal, caller, wad, dst]
   line_execute 1
   rcases prefix_of_sload (of_run_singleton h₃) hp₂ with ⟨cbal, hp₃, h_cbal⟩
-  have hstor23 : s₂.getStor = s₃.getStor := Line.of_inv Devm.getStor (by line_inv) h₃
+  have hstor23 : Devm.getStor s₂ = Devm.getStor s₃ := Line.of_inv Devm.getStor (by line_inv) h₃
   clear h₃
   -- swap 0, dup 2, dup 0, dup 3, sub, swap 2, lt :
   --   [cbal <? wad, caller, cbal - wad, wad, dst]
   intro h₄
   have hp₄ : [cbal <? wad, sevm.caller.toB256, cbal - wad, wad, dst] <<+ s'.stack := by generalize_line_prefix
-  have hstor34 : s₃.getStor = s'.getStor := Line.of_inv Devm.getStor (by line_inv) h₄
+  have hstor34 : Devm.getStor s₃ = Devm.getStor s' := Line.of_inv Devm.getStor (by line_inv) h₄
   have h_cbal' : cbal = Devm.getStorVal s' sevm.currentTarget sevm.caller.toB256 := by
     rw [h_cbal]
-    show (s₂.getStor _).get _ = (s'.getStor _).get _
+    show (Devm.getStor s₂ _).get _ = (Devm.getStor s' _).get _
     rw [hstor23, hstor34]
   refine ⟨cbal <? wad, sevm.caller.toB256, wad, ?_, ?_, validAdr_toB256 sevm.caller⟩
   · rw [← h_cbal']; exact hp₄
@@ -2231,14 +2234,14 @@ lemma of_transferTestLt {sevm : Sevm} {s s' : Devm} {dst}
 lemma transfer_of_transfer {fs : List Func} {sevm : Sevm} {s r : Devm} :
     Func.Run fs sevm s transfer r →
     ∃ (x : B256) (a a' : Adr),
-      Transfer (s.getStor sevm.currentTarget).rest a x a'
-        (r.getStor sevm.currentTarget).rest := by
+      Transfer (Stor.rest (Devm.getStor s sevm.currentTarget)) a x a'
+        (Stor.rest (Devm.getStor r sevm.currentTarget)) := by
   intro h_run
   simp only [transfer] at h_run
   -- transferTestDst : [dst_invalid?, dst]
   rcases of_run_prepend transferTestDst _ h_run with ⟨s1, h1, h_run⟩
   rcases of_transferTestDst h1 with ⟨dst_invalid, dst, hp1, h_dst⟩
-  have hg1 : s.getStor = s1.getStor := Line.of_inv Devm.getStor (by line_inv) h1
+  have hg1 : Devm.getStor s = Devm.getStor s1 := Line.of_inv Devm.getStor (by line_inv) h1
   clear h1
   -- rev-branch : dst is a valid address
   rcases of_run_branch_rev h_run with ⟨s2, hp2b, h_run⟩
@@ -2248,13 +2251,13 @@ lemma transfer_of_transfer {fs : List Func} {sevm : Sevm} {s r : Devm} :
   have h_dst_valid : ValidAdr dst := h_dst.mp (pref_head_unique hp1 (pref_append [0] s2.stack))
   rw [pref_head_unique hp1 (pref_append [0] s2.stack)] at hp1
   have hp2 : [dst] <<+ s2.stack := cons_pref_cons_inv hp1
-  have hg2 : s.getStor = s2.getStor :=
+  have hg2 : Devm.getStor s = Devm.getStor s2 :=
     hg1.trans (funext (fun a => (Devm.PopBurn.getStor hp2b a).symm))
   clear hp1 hp2bs hp2b h_dst
   -- transferTestLt : [lt?, caller, cbal - wad, wad, dst]
   rcases of_run_prepend transferTestLt _ h_run with ⟨s3, h3, h_run⟩
   rcases of_transferTestLt hp2 h3 with ⟨lt?, caller, wad, hp3, h_le, h_caller⟩
-  have hg3 : s.getStor = s3.getStor :=
+  have hg3 : Devm.getStor s = Devm.getStor s3 :=
     hg2.trans (Line.of_inv Devm.getStor (by line_inv) h3)
   clear h3 hp2
   -- rev-branch : wad ≤ caller balance
@@ -2267,30 +2270,30 @@ lemma transfer_of_transfer {fs : List Func} {sevm : Sevm} {s r : Devm} :
   rw [h_lt0] at hp3
   have hp4 : [caller, Devm.getStorVal s3 sevm.currentTarget caller - wad, wad, dst] <<+ s4.stack :=
     cons_pref_cons_inv hp3
-  have hg4 : s.getStor = s4.getStor :=
+  have hg4 : Devm.getStor s = Devm.getStor s4 :=
     hg3.trans (funext (fun a => (Devm.PopBurn.getStor hp4b a).symm))
   clear hp3 hp4bs hp4b h_le h_lt0
   -- transferCore : sstore ::: incrWbal +++ logTransfer +++ returnTrue
   simp only [transferCore] at h_run
   -- sstore : set caller's WETH balance to cbal - wad
   rcases of_run_next h_run with ⟨s5, r5, h_run⟩
-  have h_set : s5.getStor sevm.currentTarget
-      = (s4.getStor sevm.currentTarget).set caller
+  have h_set : Devm.getStor s5 sevm.currentTarget
+      = (Devm.getStor s4 sevm.currentTarget).set caller
           (Devm.getStorVal s3 sevm.currentTarget caller - wad) :=
     sstore_getStor_set r5 hp4
   have hp5 : [wad, dst] <<+ s5.stack := prefix_of_sstore r5 hp4
   clear hp4
   -- incrWbal : increase destination balance
   rcases of_run_prepend incrWbal _ h_run with ⟨s6, h6, h_run⟩
-  have h_incr : Increase dst.toAdr wad (s5.getStor sevm.currentTarget).rest
-      (s6.getStor sevm.currentTarget).rest :=
+  have h_incr : Increase dst.toAdr wad (Stor.rest (Devm.getStor s5 sevm.currentTarget))
+      (Stor.rest (Devm.getStor s6 sevm.currentTarget)) :=
     incrAt_of_incrWbal h_dst_valid h6 hp5
   -- logTransfer, returnTrue : do not touch storage
-  have h_rest : s6.getStor sevm.currentTarget = r.getStor sevm.currentTarget :=
+  have h_rest : Devm.getStor s6 sevm.currentTarget = Devm.getStor r sevm.currentTarget :=
     congr_fun (Func.of_inv Devm.getStor Devm.getStor (by func_inv) h_run) sevm.currentTarget
   -- assemble the Transfer
-  refine ⟨wad, caller.toAdr, dst.toAdr, ?_, (s5.getStor sevm.currentTarget).rest, ?_, ?_⟩
-  · show wad ≤ (s.getStor sevm.currentTarget).rest caller.toAdr
+  refine ⟨wad, caller.toAdr, dst.toAdr, ?_, (Stor.rest (Devm.getStor s5 sevm.currentTarget)), ?_, ?_⟩
+  · show wad ≤ (Stor.rest (Devm.getStor s sevm.currentTarget)) caller.toAdr
     simp only [Stor.rest, Function.comp_apply]
     rw [toB256_toAdr h_caller, congr_fun hg3 sevm.currentTarget]
     exact h_le'
@@ -2310,8 +2313,8 @@ lemma transfer_of_transfer {fs : List Func} {sevm : Sevm} {s r : Devm} :
 
 lemma transfer_preserves_solvent {sevm : Sevm} {s r : Devm}
     (run : Func.Run (weth.main :: weth.aux) sevm s transfer r)
-    (h_sv : s.PreSolvent sevm.currentTarget sevm) :
-    r.PostSolvent sevm.currentTarget := by
+    (h_sv : Devm.PreSolvent s sevm.currentTarget sevm) :
+    Devm.PostSolvent r sevm.currentTarget := by
   rcases transfer_of_transfer run with ⟨x, a, a', h_di⟩
   refine result_solvent_of_wbsum_eq h_sv ?_ ?_
   · exact transfer_preserves_sum (nof_of_solvent h_sv) h_di
@@ -2320,8 +2323,8 @@ lemma transfer_preserves_solvent {sevm : Sevm} {s r : Devm}
 
 lemma allowance_preserves_solvent {sevm : Sevm} {s r : Devm}
     (run : Func.Run (weth.main :: weth.aux) sevm s allowance r)
-    (h_sv : s.PreSolvent sevm.currentTarget sevm) :
-    r.PostSolvent sevm.currentTarget := by simple_solvent
+    (h_sv : Devm.PreSolvent s sevm.currentTarget sevm) :
+    Devm.PostSolvent r sevm.currentTarget := by simple_solvent
 
 lemma Jinst.preserves_state
     {pc sevm devm j pc' devm'}
@@ -2329,25 +2332,25 @@ lemma Jinst.preserves_state
     devm'.state = devm.state := by
   cases h1 : devm.stack <;> simp only [Devm.stack] at h1
   · cases j
-    · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def,
+    · simp only [Jinst.Run, Jinst.run, Jinst.runCore, chargeGas_def, Devm.pop_def,
         Devm.setMach, Devm.stack, Devm.gasLeft, Except.assert, safeSub, bind, Except.bind] at run
       rw [h1] at run
       dsimp at run
       contradiction
-    · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def,
+    · simp only [Jinst.Run, Jinst.run, Jinst.runCore, chargeGas_def, Devm.pop_def,
         Devm.setMach, Devm.stack, Devm.gasLeft, Except.assert, safeSub, bind, Except.bind] at run
       rw [h1] at run
       dsimp at run
       contradiction
     · by_cases h_gas : gJumpdest ≤ devm.gasLeft
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.setMach,
+      · simp only [Jinst.Run, Jinst.run, Jinst.runCore, chargeGas_def, Devm.setMach,
           bind, Except.bind, safeSub] at run
         rw [h1] at run
         simp only [h_gas, if_pos, Except.ok.injEq, Prod.mk.injEq] at run
         cases run
         subst_vars
         rfl
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.setMach,
+      · simp only [Jinst.Run, Jinst.run, Jinst.runCore, chargeGas_def, Devm.setMach,
           bind, Except.bind, safeSub] at run
         rw [h1] at run
         have h_gas_not : ¬(gJumpdest ≤ devm.gasLeft) := by omega
@@ -2356,7 +2359,7 @@ lemma Jinst.preserves_state
   · rename_i x xs
     cases h2 : xs
     · cases j
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def,
+      · simp only [Jinst.Run, Jinst.run, Jinst.runCore, chargeGas_def, Devm.pop_def,
           Devm.setMach, Devm.stack, Devm.gasLeft, bind, Except.bind, safeSub] at run
         rw [h1] at run
         dsimp at run
@@ -2371,13 +2374,13 @@ lemma Jinst.preserves_state
             contradiction
         · simp only [h_gas] at run
           contradiction
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def,
+      · simp only [Jinst.Run, Jinst.run, Jinst.runCore, chargeGas_def, Devm.pop_def,
           Devm.setMach, Devm.stack, Devm.gasLeft, bind, Except.bind, safeSub] at run
         rw [h1] at run
         rw [h2] at run
         dsimp at run
         contradiction
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.setMach,
+      · simp only [Jinst.Run, Jinst.run, Jinst.runCore, chargeGas_def, Devm.setMach,
           bind, Except.bind, safeSub] at run
         rw [h1] at run
         by_cases h_gas : gJumpdest ≤ devm.gasLeft
@@ -2390,7 +2393,7 @@ lemma Jinst.preserves_state
           contradiction
     · rename_i x2 xs2
       cases j
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def,
+      · simp only [Jinst.Run, Jinst.run, Jinst.runCore, chargeGas_def, Devm.pop_def,
           Devm.setMach, Devm.stack, Devm.gasLeft, bind, Except.bind, safeSub] at run
         rw [h1] at run
         dsimp at run
@@ -2405,7 +2408,7 @@ lemma Jinst.preserves_state
             contradiction
         · simp only [h_gas] at run
           contradiction
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.pop_def,
+      · simp only [Jinst.Run, Jinst.run, Jinst.runCore, chargeGas_def, Devm.pop_def,
           Devm.setMach, Devm.stack, Devm.gasLeft, bind, Except.bind, safeSub] at run
         rw [h1] at run
         rw [h2] at run
@@ -2427,7 +2430,7 @@ lemma Jinst.preserves_state
               contradiction
         · simp only [h_gas] at run
           contradiction
-      · simp only [Jinst.Run, Jinst.run, runCore, chargeGas_def, Devm.setMach,
+      · simp only [Jinst.Run, Jinst.run, Jinst.runCore, chargeGas_def, Devm.setMach,
           bind, Except.bind, safeSub] at run
         rw [h1] at run
         by_cases h_gas : gJumpdest ≤ devm.gasLeft
@@ -2444,7 +2447,7 @@ lemma sum_getBal_state {d : Devm} : sum d.getBal = sum d.state.bal := by
   rw [h]
 
 lemma of_executeCode_cases {msg : Msg} {xl : Xlot}
-    {ex : Except (String × _root_.State × AdrSet × Tra) Devm}
+    {ex : Except (String × Jaune.State × AdrSet × Tra) Devm}
     (h : ExecuteCode msg xl ex) :
     (∃ adr, executeCode.handleError (executePrecomp (initEvm msg) adr) = ex) ∨
     (∃ ex', xl = .some ⟨initEvm msg, ex'⟩ ∧
@@ -2490,8 +2493,8 @@ lemma run_preserves_cond (f : Func)
     ( h_solv :
       ∀ {sevm : Sevm} {s r : Devm},
         Func.Run (weth.main :: weth.aux) sevm s f r →
-        s.PreSolvent sevm.currentTarget sevm →
-        r.PostSolvent sevm.currentTarget ) :
+        Devm.PreSolvent s sevm.currentTarget sevm →
+        Devm.PostSolvent r sevm.currentTarget ) :
     ∀ {sevm : Sevm} {s r : Devm},
       Func.Run (weth.main :: weth.aux) sevm s f r →
       Precond sevm.currentTarget sevm s →
@@ -2576,7 +2579,7 @@ lemma Precond.of_eqs {wa : Adr} {sevm : Sevm} {pre inter : Devm}
     (h_pc : Precond wa sevm pre)
     (h_code : inter.getCode wa = pre.getCode wa)
     (h_bal : inter.getBal = pre.getBal)
-    (h_stor : inter.getStor wa = pre.getStor wa) :
+    (h_stor : Devm.getStor inter wa = Devm.getStor pre wa) :
     Precond wa sevm inter := by
   refine ⟨?_, ?_, ?_, ?_⟩
   · rw [h_code]; exact h_pc.code
@@ -2585,7 +2588,7 @@ lemma Precond.of_eqs {wa : Adr} {sevm : Sevm} {pre inter : Devm}
   · intro h; rw [h_bal, h_stor]; exact h_pc.solvent.right h
 
 lemma setStorVal_getStor_ne {devm : Devm} {adr a : Adr} {key val : B256} (h : adr ≠ a) :
-    (devm.setStorVal adr key val).getStor a = devm.getStor a := by
+    Devm.getStor (devm.setStorVal adr key val) a = Devm.getStor devm a := by
   simp only [Devm.getStor, Devm.getAcct, Devm.setStorVal, Devm.withState,
     Devm.setWorld, State.setStorVal]
   simp only [Devm.state, State.get_set_ne h]
@@ -2593,7 +2596,7 @@ lemma setStorVal_getStor_ne {devm : Devm} {adr a : Adr} {key val : B256} (h : ad
 lemma sstore_preserves_getStor_ne {pc : Nat} {sevm : Sevm} {s s' : Devm} {a : Adr}
     (run : Rinst.run ⟨pc, sevm, s⟩ .sstore = .ok s')
     (h_ne : sevm.currentTarget ≠ a) :
-    s'.getStor a = s.getStor a := by
+    Devm.getStor s' a = Devm.getStor s a := by
   simp only [Rinst.run, Rinst.runCore] at run
   rcases of_bind_eq_ok run with ⟨⟨key, s₁⟩, h1, run₁⟩
   rcases of_bind_eq_ok run₁ with ⟨⟨val, s₂⟩, h2, run₂⟩
@@ -2603,35 +2606,35 @@ lemma sstore_preserves_getStor_ne {pc : Nat} {sevm : Sevm} {s s' : Devm} {a : Ad
   rcases of_bind_eq_ok run₅ with ⟨s₄, h6, run₆⟩
   rcases of_bind_eq_ok run₆ with ⟨s₅, h7, run₇⟩
   rcases of_bind_eq_ok run₇ with ⟨_, h8, h9⟩
-  have e1 : s.getStor = s₁.getStor := Devm.pop_getStor_eq h1
-  have e2 : s₁.getStor = s₂.getStor := Devm.pop_getStor_eq h2
-  have e4 : s₂.getStor = s₃.getStor := by
+  have e1 : Devm.getStor s = Devm.getStor s₁ := Devm.pop_getStor_eq h1
+  have e2 : Devm.getStor s₁ = Devm.getStor s₂ := Devm.pop_getStor_eq h2
+  have e4 : Devm.getStor s₂ = Devm.getStor s₃ := by
     split at h4 <;> (injection h4 with eq; injection eq with eq _; subst eq)
     · exact addAccessedStorageKey_getStor.symm
     · rfl
-  have e6 : s₃.getStor = s₄.getStor := by
+  have e6 : Devm.getStor s₃ = Devm.getStor s₄ := by
     injection h6 with eq; rw [← eq]; rfl
-  have e7 : s₄.getStor = s₅.getStor := chargeGas_getStor_eq h7
-  have E : s.getStor = s₅.getStor := e1.trans (e2.trans (e4.trans (e6.trans e7)))
+  have e7 : Devm.getStor s₄ = Devm.getStor s₅ := chargeGas_getStor_eq h7
+  have E : Devm.getStor s = Devm.getStor s₅ := e1.trans (e2.trans (e4.trans (e6.trans e7)))
   injection h9 with eq
   rw [← eq, setStorVal_getStor_ne h_ne]
   exact (congr_fun E a).symm
 
-lemma State.incrNonce_get_bal {st : _root_.State} {adr a : Adr} :
+lemma State.incrNonce_get_bal {st : Jaune.State} {adr a : Adr} :
     ((st.incrNonce adr).get a).bal = (st.get a).bal := by
   simp only [State.incrNonce]
   by_cases h : adr = a
   · subst h; rw [State.get_set_self]
   · rw [State.get_set_ne h]
 
-lemma State.incrNonce_get_stor {st : _root_.State} {adr a : Adr} :
+lemma State.incrNonce_get_stor {st : Jaune.State} {adr a : Adr} :
     ((st.incrNonce adr).get a).stor = (st.get a).stor := by
   simp only [State.incrNonce]
   by_cases h : adr = a
   · subst h; rw [State.get_set_self]
   · rw [State.get_set_ne h]
 
-lemma State.incrNonce_get_code {st : _root_.State} {adr a : Adr} :
+lemma State.incrNonce_get_code {st : Jaune.State} {adr a : Adr} :
     ((st.incrNonce adr).get a).code = (st.get a).code := by
   simp only [State.incrNonce]
   by_cases h : adr = a
@@ -2650,7 +2653,7 @@ lemma of_benvAfterTransfer_no {msg : Msg} {benv' : Benv}
   exact (Except.ok.inj h).symm
 
 lemma of_executeCode_noneCode {msg : Msg} {xl : Xlot}
-    {ex : Except (String × _root_.State × AdrSet × Tra) Devm}
+    {ex : Except (String × Jaune.State × AdrSet × Tra) Devm}
     (h_ca : msg.codeAddress = .none)
     (h : ExecuteCode msg xl ex) :
     ∃ ex', xl = .some ⟨initEvm msg, ex'⟩ ∧
@@ -2661,7 +2664,7 @@ lemma of_executeCode_noneCode {msg : Msg} {xl : Xlot}
   exact ⟨ex', hxl, hh.symm⟩
 
 lemma Precond.transfer_state {wa : Adr} {sevm : Sevm} {pre inter : Devm}
-    {caller callee : Adr} {wad : B256} {st_mid : _root_.State}
+    {caller callee : Adr} {wad : B256} {st_mid : Jaune.State}
     (h_pc : Precond wa sevm pre)
     (h_ne : caller ≠ wa)
     (h_sub : pre.state.subBal caller wad = some st_mid)
@@ -2670,7 +2673,7 @@ lemma Precond.transfer_state {wa : Adr} {sevm : Sevm} {pre inter : Devm}
   have h_nof : sum pre.state.bal < 2 ^ 256 := h_pc.nof
   rcases of_state_transfer (callee := callee) h_sub h_nof with
     ⟨h_t_stor, h_t_code, h_t_sum, h_t_le, _, _⟩
-  have h_stor_eq : inter.getStor wa = pre.getStor wa := by
+  have h_stor_eq : Devm.getStor inter wa = Devm.getStor pre wa := by
     show (inter.state.get wa).stor = (pre.state.get wa).stor
     rw [h_state]; exact h_t_stor wa
   have h_code_eq : inter.getCode wa = pre.getCode wa := by
@@ -2877,59 +2880,59 @@ lemma Xinst.none_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm} 
     · rw [hsf] at hstv; cases hstv
 
 
-lemma State.setCode_get_bal {st : _root_.State} {adr a : Adr} {c : ByteArray} :
+lemma State.setCode_get_bal {st : Jaune.State} {adr a : Adr} {c : ByteArray} :
     ((st.setCode adr c).get a).bal = (st.get a).bal := by
   unfold State.setCode
   by_cases h : adr = a
   · subst h; rw [State.get_set_self]
   · rw [State.get_set_ne h]
 
-lemma State.setCode_get_stor {st : _root_.State} {adr a : Adr} {c : ByteArray} :
+lemma State.setCode_get_stor {st : Jaune.State} {adr a : Adr} {c : ByteArray} :
     ((st.setCode adr c).get a).stor = (st.get a).stor := by
   unfold State.setCode
   by_cases h : adr = a
   · subst h; rw [State.get_set_self]
   · rw [State.get_set_ne h]
 
-lemma State.setCode_get_code_ne {st : _root_.State} {adr a : Adr} {c : ByteArray}
+lemma State.setCode_get_code_ne {st : Jaune.State} {adr a : Adr} {c : ByteArray}
     (h : adr ≠ a) : ((st.setCode adr c).get a).code = (st.get a).code := by
   unfold State.setCode
   rw [State.get_set_ne h]
 
-lemma State.setStor_get_bal {st : _root_.State} {adr a : Adr} {s : Stor} :
+lemma State.setStor_get_bal {st : Jaune.State} {adr a : Adr} {s : Stor} :
     ((st.setStor adr s).get a).bal = (st.get a).bal := by
   unfold State.setStor
   by_cases h : adr = a
   · subst h; rw [State.get_set_self]
   · rw [State.get_set_ne h]
 
-lemma State.setStor_get_code {st : _root_.State} {adr a : Adr} {s : Stor} :
+lemma State.setStor_get_code {st : Jaune.State} {adr a : Adr} {s : Stor} :
     ((st.setStor adr s).get a).code = (st.get a).code := by
   unfold State.setStor
   by_cases h : adr = a
   · subst h; rw [State.get_set_self]
   · rw [State.get_set_ne h]
 
-lemma State.setStor_get_stor_ne {st : _root_.State} {adr a : Adr} {s : Stor}
+lemma State.setStor_get_stor_ne {st : Jaune.State} {adr a : Adr} {s : Stor}
     (h : adr ≠ a) : ((st.setStor adr s).get a).stor = (st.get a).stor := by
   unfold State.setStor
   rw [State.get_set_ne h]
 
 -- balance of an uninvolved account is unchanged by a transfer
-lemma of_transfer_bal_other {st st_mid : _root_.State} {caller target a : Adr} {value : B256}
+lemma of_transfer_bal_other {st st_mid : Jaune.State} {caller target a : Adr} {value : B256}
     (h_sub : st.subBal caller value = some st_mid)
     (h_ne_c : caller ≠ a) (h_ne_t : target ≠ a) :
     (st_mid.addBal target value).bal a = st.bal a := by
   rcases State.of_subBal h_sub with ⟨_, h_mid⟩
   subst h_mid
-  show ((_root_.State.setBal _ target _).get a).bal = _
+  show ((Jaune.State.setBal _ target _).get a).bal = _
   rw [State.setBal_get_ne h_ne_t]
   show ((st.setBal caller _).get a).bal = _
   rw [State.setBal_get_ne h_ne_c]
   rfl
 
 -- balance of the recipient is increased by a transfer from a distinct sender
-lemma of_transfer_bal_target {st st_mid : _root_.State} {caller target : Adr} {value : B256}
+lemma of_transfer_bal_target {st st_mid : Jaune.State} {caller target : Adr} {value : B256}
     (h_sub : st.subBal caller value = some st_mid)
     (h_ne : caller ≠ target)
     (h_nof : sum st.bal < 2 ^ 256) :
@@ -2943,7 +2946,7 @@ lemma of_transfer_bal_target {st st_mid : _root_.State} {caller target : Adr} {v
     rfl
   have h_eq : ((st.setBal caller (st.bal caller - value)).addBal target value).bal target
       = st.bal target + value := by
-    show ((_root_.State.setBal _ target _).get target).bal = _
+    show ((Jaune.State.setBal _ target _).get target).bal = _
     rw [State.setBal_get_self]
     show (st.setBal caller (st.bal caller - value)).bal target + value = _
     rw [h_bal_t]
@@ -2957,7 +2960,7 @@ lemma of_transfer_bal_target {st st_mid : _root_.State} {caller target : Adr} {v
 -- the precondition carries over to the initial state of a sub-execution
 -- started after a balance transfer from a non-WETH sender
 lemma Precond.child_of_transfer {wa : Adr} {sevm sevm' : Sevm} {devm devm' : Devm}
-    {st st_mid : _root_.State} {caller target : Adr} {value : B256}
+    {st st_mid : Jaune.State} {caller target : Adr} {value : B256}
     (h_pc : Precond wa sevm devm)
     (h_ct_ne : sevm.currentTarget ≠ wa)
     (h_ne : caller ≠ wa)
@@ -2974,7 +2977,7 @@ lemma Precond.child_of_transfer {wa : Adr} {sevm sevm' : Sevm} {devm devm' : Dev
   have h_nof_st : sum st.bal < 2 ^ 256 := by rw [h_sum_st]; exact h_pc.nof
   rcases of_state_transfer (callee := target) h_sub h_nof_st with
     ⟨h_t_stor, h_t_code, h_t_sum, _, _, _⟩
-  have h_stor' : devm'.getStor wa = devm.getStor wa := by
+  have h_stor' : Devm.getStor devm' wa = Devm.getStor devm wa := by
     show (devm'.state.get wa).stor = (devm.state.get wa).stor
     rw [h_state, h_t_stor wa, h_stor]
   have h_code' : devm'.getCode wa = devm.getCode wa := by
@@ -3064,7 +3067,7 @@ lemma Precond.of_postcond {wa : Adr} {sevm sevm' : Sevm} {child inter devm' : De
     rw [h_bf]; exact h_post.nof
   · intro h_eq; exact absurd h_eq h_ct_ne
   · intro _
-    have h_stor' : inter.getStor wa = child.getStor wa := h_stor
+    have h_stor' : Devm.getStor inter wa = Devm.getStor child wa := h_stor
     have h_bal' : inter.getBal wa = child.getBal wa := h_bal wa
     rw [h_stor', h_bal']
     exact h_post.solvent
@@ -3448,8 +3451,8 @@ lemma Postcond.dest_delete {wa : Adr} {sevm : Sevm} {devm : Devm}
     show ((devm.state.setBal sevm.currentTarget 0).get a).bal = (devm.state.get a).bal
     rw [State.setBal_get_ne ha]
   have h_stor_eq :
-      (addAccountToDelete (devm.setBal sevm.currentTarget 0) sevm.currentTarget).getStor wa =
-        devm.getStor wa := by
+      Devm.getStor (addAccountToDelete (devm.setBal sevm.currentTarget 0) sevm.currentTarget) wa =
+        Devm.getStor devm wa := by
     show ((devm.state.setBal sevm.currentTarget 0).get wa).stor = (devm.state.get wa).stor
     apply State.setBal_get_stor
   have h_dec :
@@ -3484,13 +3487,13 @@ lemma Linst.inv_postcond {wa : Adr} {sevm : Sevm} {pre post : Devm} {l : Linst}
   case ret =>
     have h_bal : pre.getBal = post.getBal :=
       ((inferInstance : Linst.Hinv Devm.getBal Devm.getBal Linst.ret)).inv h_run
-    have h_stor : pre.getStor = post.getStor :=
+    have h_stor : Devm.getStor pre = Devm.getStor post :=
       ((inferInstance : Linst.Hinv Devm.getStor Devm.getStor Linst.ret)).inv h_run
     constructor
     · rw [← h_bal]; exact h_pc.nof
     · unfold Devm.PostSolvent Stor.Solvent
       have hb : post.getBal wa = pre.getBal wa := (congr_fun h_bal wa).symm
-      have hs : post.getStor wa = pre.getStor wa := (congr_fun h_stor wa).symm
+      have hs : Devm.getStor post wa = Devm.getStor pre wa := (congr_fun h_stor wa).symm
       rw [hb, hs]
       exact h_pc.solvent.right h_ne
   case rev =>
@@ -3537,9 +3540,9 @@ lemma Linst.inv_postcond {wa : Adr} {sevm : Sevm} {pre post : Devm} {l : Linst}
           exact h1.trans h2
         exact congr_fun h_code wa
       · exact h_bal2
-      · have h_stor : devm2.getStor = devm1.getStor := by
+      · have h_stor : Devm.getStor devm2 = Devm.getStor devm1 := by
           have h1 := (chargeGas_getStor_eq h_charge).symm
-          have h2 : (if ((dest_a, devm1).1 ∉ (dest_a, devm1).2.accessedAddresses) then (addAccessedAddress (dest_a, devm1).2 (dest_a, devm1).1, gasSelfDestruct + gasColdAccountAccess) else ((dest_a, devm1).2, gasSelfDestruct)).1.getStor = devm1.getStor := by
+          have h2 : Devm.getStor ((if ((dest_a, devm1).1 ∉ (dest_a, devm1).2.accessedAddresses) then (addAccessedAddress (dest_a, devm1).2 (dest_a, devm1).1, gasSelfDestruct + gasColdAccountAccess) else ((dest_a, devm1).2, gasSelfDestruct)).1) = Devm.getStor devm1 := by
             split <;> rfl
           exact h1.trans h2
         exact congr_fun h_stor wa
@@ -3618,10 +3621,10 @@ theorem weth_preserves_solvent (wa : Adr) :
 
 -- The WETH invariant on a bare world state, as it stands between
 -- transactions and blocks (no active call frame).
-structure State.Inv (wa : Adr) (w : _root_.State) : Prop where
+structure State.Inv (wa : Adr) (w : Jaune.State) : Prop where
   (code : some (w.getCode wa).toList = Prog.compile weth)
-  (nof : _root_.SumNof w.bal)
-  (solvent : w.Solvent wa)
+  (nof : Blanc.SumNof w.bal)
+  (solvent : State.Solvent w wa)
 
 -- Counterpart of `weth_preserves_solvent` for the total executable `exec`.  With
 -- sufficiency proved in Jaune there is no fuel to quantify away: the
@@ -3650,7 +3653,7 @@ theorem, unlike the withdrawal-carrying `applyBody`/`stateTransition`).
 -/
 
 -- Bumping a nonce leaves `code`, `bal`, and `stor` untouched.
-theorem State.Inv.incrNonce {wa a : Adr} {w : _root_.State}
+theorem State.Inv.incrNonce {wa a : Adr} {w : Jaune.State}
     (h : State.Inv wa w) : State.Inv wa (w.incrNonce a) := by
   have hbal : (w.incrNonce a).bal = w.bal := by
     funext b
@@ -3679,7 +3682,7 @@ theorem State.Inv.incrNonce {wa a : Adr} {w : _root_.State}
 -- a wrap at `wa` need the pre-sum bound `sum w.bal + val < 2 ^ 256`, supplied by
 -- the caller's wei-conservation argument (a `SumNof` on the *result* would not
 -- rule out a wrap, so it is not enough).
-theorem State.Inv.addBal {wa a : Adr} {val : B256} {w : _root_.State}
+theorem State.Inv.addBal {wa a : Adr} {val : B256} {w : Jaune.State}
     (hsum : sum w.bal + val.toNat < 2 ^ 256)
     (h : State.Inv wa w) : State.Inv wa (w.addBal a val) := by
   have hnof_a : B256.Nof (w.bal a) val := by
@@ -3705,7 +3708,7 @@ theorem State.Inv.addBal {wa a : Adr} {val : B256} {w : _root_.State}
   refine ⟨?_, ?_, ?_⟩
   · show some (((w.addBal a val).get wa).code).toList = Prog.compile weth
     unfold State.addBal; rw [State.setBal_get_code]; exact h.code
-  · unfold _root_.SumNof; omega
+  · unfold Blanc.SumNof; omega
   · show Stor.Solvent (((w.addBal a val).get wa).stor) 0 ((w.addBal a val).get wa).bal
     have hsolv := h.solvent
     unfold State.Solvent Stor.Solvent at hsolv
@@ -3719,7 +3722,7 @@ theorem State.Inv.addBal {wa a : Adr} {val : B256} {w : _root_.State}
 -- `subBal` lowers a balance, so `nof` survives; dropping `wa`'s balance could
 -- break solvency, hence `a ≠ wa`.  (In `processTransaction` the debited account
 -- is the tx `sender`, which differs from the code-carrying `wa` by EIP-3607.)
-theorem State.Inv.subBal {wa a : Adr} {val : B256} {w w' : _root_.State}
+theorem State.Inv.subBal {wa a : Adr} {val : B256} {w w' : Jaune.State}
     (hne : a ≠ wa) (h_sub : w.subBal a val = some w')
     (h : State.Inv wa w) : State.Inv wa w' := by
   rcases State.of_subBal h_sub with ⟨h_le, rfl⟩
@@ -3737,57 +3740,57 @@ theorem State.Inv.subBal {wa a : Adr} {val : B256} {w w' : _root_.State}
         show w.bal b = ((w.setBal a (w.bal a - val)).get b).bal
         rw [State.setBal_get_ne hnb]; rfl
     have hsum := sum_sub_assoc hdec h_le
-    have hnof := h.nof; unfold _root_.SumNof at hnof ⊢
+    have hnof := h.nof; unfold Blanc.SumNof at hnof ⊢
     omega
   · -- solvent: `wa`'s storage and balance are both untouched
     show Stor.Solvent (((w.setBal a (w.bal a - val)).get wa).stor) 0
       ((w.setBal a (w.bal a - val)).get wa).bal
     rw [State.setBal_get_stor, State.setBal_get_ne hne]; exact h.solvent
 
-lemma State.get_erase_ne {w : _root_.State} {a b : Adr} (h : b ≠ a) :
+lemma State.get_erase_ne {w : Jaune.State} {a b : Adr} (h : b ≠ a) :
     State.get (w.erase a) b = State.get w b := by
   unfold State.get
   have hc : compare a b ≠ Ordering.eq := fun hcc => h (compare_eq_iff_eq.mp hcc).symm
   rw [Std.TreeMap.getD_erase]; simp [hc]
 
 -- Deleting a foreign account (`a ≠ wa`) removes its balance from the sum and
--- leaves `wa`'s code/balance/storage alone.  (`_root_.destroyAccount` is used
+-- leaves `wa`'s code/balance/storage alone.  (`Jaune.destroyAccount` is used
 -- explicitly in the body: its return type is `State`, so `.get`/`.bal` resolve
 -- to `State.*` rather than the underlying `Std.TreeMap.*`, and the bare name
 -- would clash with the theorem being defined.)
-theorem State.Inv.destroyAccount {wa a : Adr} {w : _root_.State}
+theorem State.Inv.destroyAccount {wa a : Adr} {w : Jaune.State}
     (hne : a ≠ wa) (h : State.Inv wa w) : State.Inv wa (destroyAccount w a) := by
-  have hget : (_root_.destroyAccount w a).get wa = w.get wa :=
+  have hget : (Jaune.destroyAccount w a).get wa = w.get wa :=
     State.get_erase_ne (Ne.symm hne)
   refine ⟨?_, ?_, ?_⟩
-  · show some (((_root_.destroyAccount w a).get wa).code).toList = Prog.compile weth
+  · show some (((Jaune.destroyAccount w a).get wa).code).toList = Prog.compile weth
     rw [hget]; exact h.code
   · -- nof: erasing `a` removes its balance from the sum
-    have h0 : ((_root_.destroyAccount w a).get a).bal = 0 := by
+    have h0 : ((Jaune.destroyAccount w a).get a).bal = 0 := by
       show (State.get (w.erase a) a).bal = 0
       unfold State.get
       rw [Std.TreeMap.getD_erase]; simp [Acct.nil]
-    have hdec : Decrease a (w.bal a) w.bal (_root_.destroyAccount w a).bal := by
+    have hdec : Decrease a (w.bal a) w.bal (Jaune.destroyAccount w a).bal := by
       intro b; constructor
       · intro heq; subst heq
-        show w.bal a - w.bal a = ((_root_.destroyAccount w a).get a).bal
+        show w.bal a - w.bal a = ((Jaune.destroyAccount w a).get a).bal
         rw [h0, B256.sub_self]
       · intro hnb
         show w.bal b = (State.get (w.erase a) b).bal
         rw [State.get_erase_ne (Ne.symm hnb)]; rfl
     have hsum := sum_sub_assoc hdec (le_refl _)
-    have hnof := h.nof; unfold _root_.SumNof at hnof ⊢
+    have hnof := h.nof; unfold Blanc.SumNof at hnof ⊢
     omega
-  · show Stor.Solvent (((_root_.destroyAccount w a).get wa).stor) 0
-      ((_root_.destroyAccount w a).get wa).bal
+  · show Stor.Solvent (((Jaune.destroyAccount w a).get wa).stor) 0
+      ((Jaune.destroyAccount w a).get wa).bal
     rw [hget]; exact h.solvent
 
 -- Folded form for the `accountsToDelete` set (post-linearization `foldl`).
 -- This one is proved outright from the atomic lemma to exercise the pattern.
 theorem State.Inv.foldl_destroyAccount {wa : Adr} :
-    ∀ {as : List Adr} {w : _root_.State},
+    ∀ {as : List Adr} {w : Jaune.State},
       (∀ a ∈ as, a ≠ wa) → State.Inv wa w →
-        State.Inv wa (as.foldl _root_.destroyAccount w)
+        State.Inv wa (as.foldl Jaune.destroyAccount w)
   | [], _, _, h => h
   | a :: as, w, hne, h => by
     rw [List.foldl_cons]
@@ -3826,7 +3829,7 @@ lemma State.Inv.of_postcond {wa : Adr} {sevm : Sevm} {devm : Devm}
 -- exactly the three fields of `State.Inv`.  As there, `caller ≠ wa` is required
 -- so the credited value keeps `wa` over-collateralized when `target = wa`.
 lemma Precond.of_inv_transfer {wa : Adr} {sevm' : Sevm} {devm' : Devm}
-    {st st_mid : _root_.State} {caller target : Adr} {value : B256}
+    {st st_mid : Jaune.State} {caller target : Adr} {value : B256}
     (h_inv : State.Inv wa st)
     (h_ne : caller ≠ wa)
     (h_sub : st.subBal caller value = some st_mid)
@@ -3837,7 +3840,7 @@ lemma Precond.of_inv_transfer {wa : Adr} {sevm' : Sevm} {devm' : Devm}
   have h_nof_st : sum st.bal < 2 ^ 256 := h_inv.nof
   rcases of_state_transfer (callee := target) h_sub h_nof_st with
     ⟨h_t_stor, h_t_code, h_t_sum, _, _, _⟩
-  have h_stor' : devm'.getStor wa = st.getStor wa := by
+  have h_stor' : Devm.getStor devm' wa = st.getStor wa := by
     show (devm'.state.get wa).stor = (st.get wa).stor
     rw [h_state, h_t_stor wa]
   have h_code' : devm'.getCode wa = st.getCode wa := by
@@ -3934,7 +3937,7 @@ lemma Precond.of_inv_benvAfterTransfer {wa : Adr} {msg : Msg} {benv : Benv}
     (h_inv : State.Inv wa msg.benv.state) :
     Precond wa (initSevm (msg.withBenv benv)) (initDevm (msg.withBenv benv)) := by
   by_cases h_stv : msg.shouldTransferValue = true
-  · rcases of_benvAfterTransfer h_stv hb with ⟨st_mid, h_sub, hbenv⟩
+  · rcases Blanc.of_benvAfterTransfer h_stv hb with ⟨st_mid, h_sub, hbenv⟩
     have hbs : (initDevm (msg.withBenv benv)).state
         = st_mid.addBal msg.currentTarget msg.value := by
       show benv.state = _; rw [hbenv]; rfl
@@ -3957,7 +3960,7 @@ lemma State.Inv.of_benvAfterTransfer {wa : Adr} {msg : Msg} {benv : Benv}
     (h_inv : State.Inv wa msg.benv.state) :
     State.Inv wa benv.state := by
   by_cases h_stv : msg.shouldTransferValue = true
-  · rcases _root_.of_benvAfterTransfer h_stv hb with ⟨st_mid, h_sub, hbenv⟩
+  · rcases Blanc.of_benvAfterTransfer h_stv hb with ⟨st_mid, h_sub, hbenv⟩
     have hbs : benv.state = st_mid.addBal msg.currentTarget msg.value := by
       rw [hbenv]; rfl
     rw [hbs]
@@ -3978,9 +3981,9 @@ lemma State.Inv.of_benvAfterTransfer {wa : Adr} {msg : Msg} {benv : Benv}
     have hss := sum_sub_assoc hdec h_le
     have h_vle : msg.value.toNat ≤ sum msg.benv.state.bal :=
       le_trans (B256.toNat_le_toNat h_le) le_sum
-    have hnof := h_inv.nof; unfold _root_.SumNof at hnof
+    have hnof := h_inv.nof; unfold Blanc.SumNof at hnof
     exact State.Inv.addBal (by omega) h_inv_mid
-  · have hbenv : benv = msg.benv := _root_.of_benvAfterTransfer_no h_stv hb
+  · have hbenv : benv = msg.benv := Blanc.of_benvAfterTransfer_no h_stv hb
     rw [hbenv]; exact h_inv
 
 -- Deep helper: one `processMessage` run preserves `State.Inv` and never
@@ -4035,7 +4038,7 @@ theorem processMessage_preserves_solvent {wa : Adr} {msg : Msg} {evm : Devm}
 
 -- Overwriting the storage of a *foreign* account (`a ≠ wa`) preserves `State.Inv`
 -- (`wa`'s account is untouched, and `setStor` leaves every balance alone).
-lemma State.Inv.setStor_ne {wa a : Adr} {s : Stor} {w : _root_.State}
+lemma State.Inv.setStor_ne {wa a : Adr} {s : Stor} {w : Jaune.State}
     (hne : a ≠ wa) (h : State.Inv wa w) : State.Inv wa (w.setStor a s) := by
   have hget : (w.setStor a s).get wa = w.get wa := by
     unfold State.setStor; exact State.get_set_ne hne
@@ -4047,7 +4050,7 @@ lemma State.Inv.setStor_ne {wa a : Adr} {s : Stor} {w : _root_.State}
     rw [hget]; exact h.solvent
 
 -- Likewise for installing code at a foreign account.
-lemma State.Inv.setCode_ne {wa a : Adr} {cd : ByteArray} {w : _root_.State}
+lemma State.Inv.setCode_ne {wa a : Adr} {cd : ByteArray} {w : Jaune.State}
     (hne : a ≠ wa) (h : State.Inv wa w) : State.Inv wa (w.setCode a cd) := by
   have hget : (w.setCode a cd).get wa = w.get wa := by
     unfold State.setCode; exact State.get_set_ne hne
@@ -4109,7 +4112,7 @@ theorem processCreateMessage_preserves_solvent {wa : Adr} {msg : Msg} {evm : Dev
 
 
 lemma ExecuteCode.inv_noDel {wa : Adr} {msg : Msg} {xl : Xlot}
-    {ex : Except (String × _root_.State × AdrSet × Tra) Devm}
+    {ex : Except (String × Jaune.State × AdrSet × Tra) Devm}
     (inv : Xlot.InvNoDel wa xl)
     (run : ExecuteCode msg xl ex)
     (h : Msg.NoDel wa msg) : MsgResult.NoDel wa ex := by
@@ -4126,7 +4129,7 @@ lemma ExecuteCode.inv_noDel {wa : Adr} {msg : Msg} {xl : Xlot}
     exact handleError_noDel h_ex'_noDel
 
 lemma ProcessMessage.inv_noDel {wa : Adr} {msg : Msg} {xl : Xlot}
-    {ex : Except (String × _root_.State × AdrSet × Tra) Devm}
+    {ex : Except (String × Jaune.State × AdrSet × Tra) Devm}
     (inv : Xlot.InvNoDel wa xl)
     (run : ProcessMessage msg xl ex)
     (h : Msg.NoDel wa msg) : MsgResult.NoDel wa ex := by
@@ -4146,7 +4149,7 @@ lemma ProcessMessage.inv_noDel {wa : Adr} {msg : Msg} {xl : Xlot}
       · exact h_exec
 
 lemma ProcessCreateMessage.inv_noDel {wa : Adr} {msg : Msg} {xl : Xlot}
-    {ex : Except (String × _root_.State × AdrSet × Tra) Devm}
+    {ex : Except (String × Jaune.State × AdrSet × Tra) Devm}
     (inv : Xlot.InvNoDel wa xl)
     (run : ProcessCreateMessage msg xl ex)
     (h_ct : msg.currentTarget ≠ wa)
@@ -4167,7 +4170,7 @@ lemma ProcessCreateMessage.inv_noDel {wa : Adr} {msg : Msg} {xl : Xlot}
       | error e =>
         rcases e with ⟨err, evm'⟩
         dsimp only []
-        have h_ds : evm'.delSets = evm.delSets := chargeCodeGas_delSets_err h_cg
+        have h_ds : Devm.delSets evm' = Devm.delSets evm := chargeCodeGas_delSets_err h_cg
         have h_atd_eq : evm'.accountsToDelete = evm.accountsToDelete := congrArg Prod.fst h_ds
         have h_ca_eq : evm'.createdAccounts = evm.createdAccounts := congrArg Prod.snd h_ds
         have h_atd : wa ∉ evm'.accountsToDelete := by rw [h_atd_eq]; exact h_evm.atd
@@ -4183,7 +4186,7 @@ lemma ProcessCreateMessage.inv_noDel {wa : Adr} {msg : Msg} {xl : Xlot}
           exact h_evm.code
       | ok evm' =>
         dsimp only []
-        have h_ds : evm'.delSets = evm.delSets := chargeCodeGas_delSets_ok h_cg
+        have h_ds : Devm.delSets evm' = Devm.delSets evm := chargeCodeGas_delSets_ok h_cg
         have h_atd_eq : evm'.accountsToDelete = evm.accountsToDelete := congrArg Prod.fst h_ds
         have h_ca_eq : evm'.createdAccounts = evm.createdAccounts := congrArg Prod.snd h_ds
         have h_atd : wa ∉ evm'.accountsToDelete := by rw [h_atd_eq]; exact h_evm.atd
@@ -4211,7 +4214,7 @@ lemma Execution.NoDel.of_instructionFrame {wa : Adr} {d : Devm} {ex : Execution}
 
 /-- The CALL-family return path preserves the no-deletion invariant. -/
 lemma Resume.call_noDel {wa : Adr} {parent : Devm} {oi os : Nat}
-    {r : Except (String × _root_.State × AdrSet × Tra) Devm}
+    {r : Except (String × Jaune.State × AdrSet × Tra) Devm}
     (hnd : Devm.NoDel wa parent) (h : MsgResult.NoDel wa r) :
     Execution.NoDel wa ((Resume.call parent oi os).run r) := by
   unfold Resume.run liftToExecution
@@ -4233,7 +4236,7 @@ lemma Resume.call_noDel {wa : Adr} {parent : Devm} {oi os : Nat}
 
 /-- The CREATE-family return path preserves the no-deletion invariant. -/
 lemma Resume.create_noDel {wa : Adr} {parent : Devm} {newAddress : Adr}
-    {r : Except (String × _root_.State × AdrSet × Tra) Devm}
+    {r : Except (String × Jaune.State × AdrSet × Tra) Devm}
     (hnd : Devm.NoDel wa parent) (h : MsgResult.NoDel wa r) :
     Execution.NoDel wa ((Resume.create parent newAddress).run r) := by
   unfold Resume.run liftToExecution
@@ -4469,7 +4472,7 @@ theorem processCreateMessage_preserves_noDel {wa : Adr} {msg : Msg} {evm : Devm}
         by_cases hex : isExceptionalHalt err
         · rw [if_pos hex] at h_rest
           rw [← Except.ok.inj h_rest]
-          have h_ds : evm3.delSets = evm2.delSets := chargeCodeGas_delSets_err hcg
+          have h_ds : Devm.delSets evm3 = Devm.delSets evm2 := chargeCodeGas_delSets_err hcg
           have h_atd_eq : evm3.accountsToDelete = evm2.accountsToDelete := congrArg Prod.fst h_ds
           have h_ca_eq : evm3.createdAccounts = evm2.createdAccounts := congrArg Prod.snd h_ds
           have h_atd : wa ∉ evm3.accountsToDelete := by rw [h_atd_eq]; exact h_pm.atd
@@ -4480,7 +4483,7 @@ theorem processCreateMessage_preserves_noDel {wa : Adr} {msg : Msg} {evm : Devm}
           exact absurd h_rest (by simp)
       · rw [hcg] at h_rest; dsimp only at h_rest
         rw [← Except.ok.inj h_rest]
-        have h_ds : evm3.delSets = evm2.delSets := chargeCodeGas_delSets_ok hcg
+        have h_ds : Devm.delSets evm3 = Devm.delSets evm2 := chargeCodeGas_delSets_ok hcg
         have h_atd_eq : evm3.accountsToDelete = evm2.accountsToDelete := congrArg Prod.fst h_ds
         have h_ca_eq : evm3.createdAccounts = evm2.createdAccounts := congrArg Prod.snd h_ds
         have h_atd : wa ∉ evm3.accountsToDelete := by rw [h_atd_eq]; exact h_pm.atd
@@ -4898,7 +4901,7 @@ lemma setDelegation_preserves_msg_solvent {wa : Adr} {msg msg' : Msg} {v : B256}
       · change msg_mid.currentTarget = wa at h_ct
         rwa [h_mid_ct] at h_ct
 
-theorem processMessageCall_preserves_noDel {wa : Adr} {msg : Msg} {st' : _root_.State}
+theorem processMessageCall_preserves_noDel {wa : Adr} {msg : Msg} {st' : Jaune.State}
     {out : MsgCallOutput}
     (h_run : processMessageCall msg = .ok ⟨st', out⟩)
     (h : Msg.NoDel wa msg)
@@ -4996,7 +4999,7 @@ theorem processMessageCall_preserves_noDel {wa : Adr} {msg : Msg} {st' : _root_.
               exact AdrSet.not_mem_empty
 
 theorem processMessageCall_accountsToDelete_ne {wa : Adr} {msg : Msg}
-    {st' : _root_.State} {out : MsgCallOutput}
+    {st' : Jaune.State} {out : MsgCallOutput}
     (h_run : processMessageCall msg = .ok ⟨st', out⟩)
     (h : Msg.NoDel wa msg)
     (h_not_del : ¬ isValidDelegation (msg.benv.state.getCode wa)) :
@@ -5006,7 +5009,7 @@ theorem processMessageCall_accountsToDelete_ne {wa : Adr} {msg : Msg}
   exact processMessageCall_preserves_noDel h_run h h_not_del
     (Std.HashSet.mem_toList.mp ha)
 
-theorem processMessageCall_preserves_solvent {wa : Adr} {msg : Msg} {st' : _root_.State}
+theorem processMessageCall_preserves_solvent {wa : Adr} {msg : Msg} {st' : Jaune.State}
     {out : MsgCallOutput}
     (h_run : processMessageCall msg = .ok ⟨st', out⟩)
     (h_inv : Msg.InvSolvent wa msg) :
@@ -5440,7 +5443,7 @@ lemma validateTransaction_calldataFloorGasCost_le_gas {rules : ForkRules} {tx : 
             omega
 
 lemma State.Inv.add_transaction_gas_credits {wa : Adr}
-    {baseState debitState postMsgState : _root_.State}
+    {baseState debitState postMsgState : Jaune.State}
     {benv : Benv} {bout : BlockOutput} {tx : Tx}
     {sender : Adr} {effectiveGasPrice : Nat}
     {blobVersionedHashes : List B256} {txBlobGasUsed : Nat}
@@ -5483,7 +5486,7 @@ lemma State.Inv.add_transaction_gas_credits {wa : Adr}
   have h_debit_exact := toNat_toB256_of_lt h_fee_lt
   rw [h_debit_exact] at h_debit_sum
   have h_base_sum := h_base.nof
-  unfold _root_.SumNof at h_base_sum
+  unfold Blanc.SumNof at h_base_sum
   have h_used_le :
       max (tx.gas - txOutput.gasLeft -
           min ((tx.gas - txOutput.gasLeft) / 5) refundCounter)
@@ -5554,7 +5557,7 @@ lemma State.Inv.add_transaction_gas_credits {wa : Adr}
   · exact h_sender_inv
 
 theorem processTransaction_preserves_solvent (wa : Adr)
-    (benv : Benv) (bout bout' : BlockOutput) (tx : Tx) (i : Nat) (st : _root_.State)
+    (benv : Benv) (bout bout' : BlockOutput) (tx : Tx) (i : Nat) (st : Jaune.State)
     (h_run : processTransaction benv bout tx i = .ok ⟨st, bout'⟩)
     (h_inv : Benv.InvSolvent wa benv) : Benv.InvSolvent wa (benv.withState st) := by
   unfold processTransaction at h_run
@@ -5667,7 +5670,7 @@ code and otherwise does not alter the starting state.
 -/
 lemma processUncheckedSystemTransaction_preserves_solvent_sum_le (wa : Adr)
     (benv : Benv) (target : Adr) (data : Bytes)
-    (st : _root_.State) (out : MsgCallOutput)
+    (st : Jaune.State) (out : MsgCallOutput)
     (h_run : processUncheckedSystemTransaction benv target data = .ok ⟨st, out⟩)
     (h_inv : Benv.InvSolvent wa benv) :
     State.Inv wa st ∧ sum st.bal ≤ sum benv.state.bal := by
@@ -5714,16 +5717,16 @@ lemma toB256_toNat_le (n : Nat) : n.toB256.toNat ≤ n := by
   exact Nat.mod_le _ _
 
 -- Erasing an account removes its balance from the total: nonincreasing.
-lemma destroyAccount_sum_le (w : _root_.State) (a : Adr) :
-    sum (_root_.destroyAccount w a).bal ≤ sum w.bal := by
-  have h0 : ((_root_.destroyAccount w a).get a).bal = 0 := by
+lemma destroyAccount_sum_le (w : Jaune.State) (a : Adr) :
+    sum (Jaune.destroyAccount w a).bal ≤ sum w.bal := by
+  have h0 : ((Jaune.destroyAccount w a).get a).bal = 0 := by
     show (State.get (w.erase a) a).bal = 0
     unfold State.get
     rw [Std.TreeMap.getD_erase]; simp [Acct.nil]
-  have hdec : Decrease a (w.bal a) w.bal (_root_.destroyAccount w a).bal := by
+  have hdec : Decrease a (w.bal a) w.bal (Jaune.destroyAccount w a).bal := by
     intro b; constructor
     · intro heq; subst heq
-      show w.bal a - w.bal a = ((_root_.destroyAccount w a).get a).bal
+      show w.bal a - w.bal a = ((Jaune.destroyAccount w a).get a).bal
       rw [h0, B256.sub_self]
     · intro hnb
       show w.bal b = (State.get (w.erase a) b).bal
@@ -5732,8 +5735,8 @@ lemma destroyAccount_sum_le (w : _root_.State) (a : Adr) :
   omega
 
 lemma foldl_destroyAccount_sum_le :
-    ∀ (as : List Adr) (w : _root_.State),
-      sum ((as.foldl _root_.destroyAccount w).bal) ≤ sum w.bal
+    ∀ (as : List Adr) (w : Jaune.State),
+      sum ((as.foldl Jaune.destroyAccount w).bal) ≤ sum w.bal
   | [], _ => le_refl _
   | a :: as, w => by
     rw [List.foldl_cons]
@@ -5886,7 +5889,7 @@ lemma validateTransaction_floor_le {rules : ForkRules} {tx : Tx}
 
 -- One-step wei conservation for `processTransaction`.
 lemma processTransaction_sum_le {benv : Benv} {bout bout' : BlockOutput}
-    {tx : Tx} {i : Nat} {st : _root_.State}
+    {tx : Tx} {i : Nat} {st : Jaune.State}
     (h_run : processTransaction benv bout tx i = .ok ⟨st, bout'⟩) :
     sum st.bal ≤ sum benv.state.bal := by
   unfold processTransaction at h_run
@@ -6042,7 +6045,7 @@ hypothesis.
 -/
 -- ## Sum after addBal
 
-lemma sum_addBal_eq (st : _root_.State) (a : Adr) (v : B256)
+lemma sum_addBal_eq (st : Jaune.State) (a : Adr) (v : B256)
     (h : sum st.bal + v.toNat < 2 ^ 256) :
     sum (st.addBal a v).bal = sum st.bal + v.toNat := by
   have hnof : B256.Nof (st.bal a) v := by
@@ -6055,7 +6058,7 @@ lemma sum_addBal_eq (st : _root_.State) (a : Adr) (v : B256)
   omega
 
 lemma processWithdrawalsState_preserves_solvent (wa : Adr)
-    (st : _root_.State) (wds : List Withdrawal)
+    (st : Jaune.State) (wds : List Withdrawal)
     (h_bound : sum st.bal + wdsum wds < 2 ^ 256)
     (h_inv : State.Inv wa st) :
     State.Inv wa (processWithdrawalsState st wds) := by
@@ -6081,7 +6084,7 @@ lemma processWithdrawalsState_preserves_solvent (wa : Adr)
     · exact State.Inv.addBal hb h_inv
 
 lemma processCheckedSystemTransaction_to_unchecked {benv : Benv} {target : Adr} {data : Bytes}
-    {st : _root_.State} {out : MsgCallOutput}
+    {st : Jaune.State} {out : MsgCallOutput}
     (h : processCheckedSystemTransaction benv target data = .ok ⟨st, out⟩) :
     processUncheckedSystemTransaction benv target data = .ok ⟨st, out⟩ := by
   dsimp [processCheckedSystemTransaction, processUncheckedSystemTransaction] at h ⊢
@@ -6105,7 +6108,7 @@ inequalities.
 -/
 lemma processGeneralPurposeRequests_preserves_solvent_sum_le (wa : Adr)
     (benv : Benv) (bout : BlockOutput)
-    (st : _root_.State) (bout' : BlockOutput)
+    (st : Jaune.State) (bout' : BlockOutput)
     (h_run : processGeneralPurposeRequests benv bout = .ok ⟨st, bout'⟩)
     (h_inv : Benv.InvSolvent wa benv) :
     State.Inv wa st ∧ sum st.bal ≤ sum benv.state.bal := by
@@ -6132,7 +6135,7 @@ lemma processGeneralPurposeRequests_preserves_solvent_sum_le (wa : Adr)
 
 theorem applyBody_preserves_solvent (wa : Adr)
     (benv : Benv) (txs : List (Bytes ⊕ Tx)) (wds : List Withdrawal)
-    (st : _root_.State) (bout : BlockOutput)
+    (st : Jaune.State) (bout : BlockOutput)
     (h_run : applyBody benv txs wds = .ok ⟨st, bout⟩)
     (h_wds : sum benv.state.bal + wdsum wds < 2 ^ 256)
     (h_inv : Benv.InvSolvent wa benv) : State.Inv wa st := by
@@ -6321,3 +6324,5 @@ theorem addBlockToChain_preserves_solvent (wa : Adr)
       sum ch.state.bal + wdsum block.wds < 2 ^ 256)
     (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state :=
   addBlockToChainWith_preserves_solvent wa pragueRules ch ch' rlp h_run h_wds h_inv
+
+end Blanc

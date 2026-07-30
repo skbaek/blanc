@@ -2,15 +2,18 @@
 
 import Blanc.Common
 
+namespace Blanc
+
+open Jaune
 
 
-open Ninst
+open Jaune.Ninst Ninst
 
 -- deposit() --
 
 def logDeposit : Func :=
   callvalue ::: mstoreAt 0 +++ caller ::: -- caller || wad
-  pushB256 "Deposit(address,uint256)".keccak ::: -- depositEventSig :: caller || wad
+  pushB256 (Blanc.String.keccak "Deposit(address,uint256)") ::: -- depositEventSig :: caller || wad
   logWith 1 0 1 +++ -- 1 indexed topic : caller address
                     -- 1 unindexed data : deposit value
   Func.stop
@@ -29,7 +32,7 @@ def deposit : Func :=
 -- assumes : args := [wad]
 def logWithdraw : Func :=
   caller :::
-  pushB256 "Withdrawal(address,uint256)".keccak ::: -- withdrawEventSig :: caller
+  pushB256 (Blanc.String.keccak "Withdrawal(address,uint256)") ::: -- withdrawEventSig :: caller
   argCopy 0 0 1 +++ -- withdrawEventSig :: caller || wad
   logWith 1 0 1 +++ -- 1 indexed topic : caller address
                     -- 1 unindexed data : withdraw amount
@@ -76,7 +79,7 @@ def decimals : Func :=
 -- name() --
 
 def name : Func :=
-  pushB256 "Wrapped Ether".toBytes.toB256 :::
+  pushB256 (Blanc.String.toBytes "Wrapped Ether").toB256 :::
   pushB256 152 ::: shl ::: -- "Wrapped Ether" ||
   pushList [13, 32] +++ -- 32 :: 13 :: "Wrapped Ether" ||
   mstoreAt 0 +++ -- 13 :: "Wrapped Ether" || 32
@@ -90,7 +93,7 @@ def name : Func :=
 
 def symbol : Func :=
   -- pushList [wethStringShift] +++ -- wethStringShift
-  pushB256 "WETH".toBytes.toB256 :::
+  pushB256 (Blanc.String.toBytes "WETH").toB256 :::
   pushB256 224 ::: shl ::: -- "WETH""
   pushList [4, 32] +++ -- 32 :: 4 :: "WETH""
   mstoreAt 0 +++ -- 4 :: "WETH"" || 32
@@ -146,7 +149,7 @@ def prepApprove : Line :=
 def logApprove : Line :=
   argCopy 0 1 1 ++ -- || wad
   arg 0 ++ caller ::
-  pushB256 "Approval(address,address,uint256)".keccak :: -- approvalEventSig :: caller :: guy || wad
+  pushB256 (Blanc.String.keccak "Approval(address,address,uint256)") :: -- approvalEventSig :: caller :: guy || wad
   logWith 2 0 1 -- 2 indexed topics : caller address, approvee address
                 -- 1 unindexed data : approval value
 
@@ -173,7 +176,7 @@ def approve : Func :=
 def logTransfer : Line :=
   argCopy 0 1 1 ++ -- || wad
   arg 0 ++ caller ::
-  pushB256 "Transfer(address,address,uint256)".keccak :: -- transferEventSig :: src :: dst || wad
+  pushB256 (Blanc.String.keccak "Transfer(address,address,uint256)") :: -- transferEventSig :: src :: dst || wad
   logWith 2 0 1 -- 2 indexed topics : source address, destination address
                 -- 1 unindexed data : transfer value
 
@@ -233,7 +236,7 @@ def transferFromUpdateSbal : Line :=
 -- ( dst :: wad :: src -- wad :: src )
 def transferFromLog : Line :=
   dup 2 :: -- src :: dst :: wad :: src
-  pushB256 "Transfer(address,address,uint256)".keccak :: -- transferEventSig :: src :: dst :: wad :: src
+  pushB256 (Blanc.String.keccak "Transfer(address,address,uint256)") :: -- transferEventSig :: src :: dst :: wad :: src
   dup 3 :: mstoreAt 0 ++ -- transferEventSig :: src :: dst :: wad :: src || wad
   logWith 2 0 1 -- [Transfer(src,dst,wad) is logged]
                 -- wad :: src
@@ -297,7 +300,7 @@ def selectorArgs : List ArgType → String
   | t :: ts => List.foldl (λ s t' => s!"{s},{t'.toString}") t.toString ts
 
 def selector (name : String) (args : List ArgType) : B256 :=
-  (s!"{name}({selectorArgs args})").keccak.shiftRight 224
+  (Blanc.String.keccak s!"{name}({selectorArgs args})").shiftRight 224
 
 def wethTree : DispatchTree :=
   .fork
@@ -322,3 +325,5 @@ def wethTree : DispatchTree :=
       (.leaf (selector "allowance" [.address, .address]) allowance) ) )
 
 def weth : Prog := ⟨Func.mainWith 1 wethTree, [deposit]⟩
+
+end Blanc

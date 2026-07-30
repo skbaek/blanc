@@ -8,6 +8,9 @@ import Mathlib.Util.Notation3
 import Mathlib.Data.Vector.Basic
 import Jaune.Types
 
+namespace Blanc
+
+open Jaune Jaune.List Jaune.B256
 
 
 -- Boolean lemmas --
@@ -138,7 +141,7 @@ theorem List.drop?_add {ξ : Type u} (m n : Nat) (xs : List ξ) :
     · apply ih
 
 theorem List.get?_eq_drop?_head? {ξ : Type u} {xs : List ξ} {n : Nat} :
-    xs[n]? = drop? n xs >>= head? := by
+    xs[n]? = drop? n xs >>= List.head? := by
   induction n generalizing xs with
   | zero => cases xs <;> simp [drop?]
   | succ n ih =>
@@ -170,7 +173,8 @@ theorem List.slice?_eq_cons_iff {ξ : Type u} {xs : List ξ} {m n : Nat} {y} {ys
       rw [List.slice?_cons, ih]; rfl
 
 theorem List.slice_cons_iff {ξ : Type u} {xs : List ξ} {m : Nat} {y} {ys} :
-    xs.Slice m (y :: ys) ↔ (xs[m]? = some y ∧ xs.Slice (m + 1) ys) := by
+    List.Slice xs m (y :: ys) ↔
+      (xs[m]? = some y ∧ List.Slice xs (m + 1) ys) := by
   simp only [Slice]
   constructor <;> intro h
   · rcases h with ⟨_ | n, h⟩
@@ -197,7 +201,7 @@ theorem List.length_slice? {ξ : Type u} {xs} {m n : Nat} {ys : List ξ} :
 
 theorem List.get?_eq_of_slice {ξ : Type u} {xs : List ξ} {m : Nat} {y} {ys} :
     Slice xs m (y :: ys) → xs[m]? = some y := by
-  rw [slice_cons_iff]; apply And.left
+  rw [List.slice_cons_iff]; apply And.left
 
 theorem List.of_take?_eq_append {ξ : Type u} {xs : List ξ}
     {n : Nat} {ys zs : List ξ} (h : take? n xs = some (ys ++ zs)) :
@@ -208,7 +212,7 @@ theorem List.of_take?_eq_append {ξ : Type u} {xs : List ξ}
     cases n <;> simp [take?] at h
     cases xs <;> simp [take?] at h
     rcases h with ⟨h, ⟨_⟩⟩; constructor
-    · rw [length_cons]; unfold take?; rw [(ih h).left]; rfl
+    · rw [List.length_cons]; unfold take?; rw [(ih h).left]; rfl
     · apply (ih h).right
 
 theorem List.of_slice?_eq_append {ξ : Type u} {xs : List ξ}
@@ -301,3 +305,5 @@ lemma of_bind_eq_ok {ξ υ ζ} {f : Except ξ υ}
 
 inductive Except.IsOk {ξ υ} : Except ξ υ → Prop
   | intro {x : υ} : Except.IsOk (Except.ok x)
+
+end Blanc

@@ -7,6 +7,10 @@ import Mathlib.Tactic.Clear_
 import Blanc.Semantics
 import Jaune.Transaction
 
+namespace Blanc
+
+open Jaune Jaune.List Jaune.Except _root_.List _root_.Nat
+
 def Func.toString : Func → String
   | .last o => Linst.toString o ++ " ::."
   | .next o p => o.toString ++ " ::: " ++ p.toString
@@ -20,7 +24,7 @@ def Func.rev : Func := .last .rev
 def Func.ret : Func := .last .ret
 
 def Ninst.pushB256 (w : B256) : Ninst :=
-  push w.toBytes.sig <|
+  Jaune.Ninst.push w.toBytes.sig <|
     le_of_le_of_eq (List.length_dropWhile_le _ _) (B256.length_toBytes _)
 
 abbrev Ninst.add : Ninst := Ninst.reg Rinst.add
@@ -119,7 +123,7 @@ inductive Line.Run : Sevm → Devm → Line → Devm → Prop
       Line.Run e s' l s'' →
       Line.Run e s (i :: l) s''
 
-open Ninst
+open Jaune.Ninst Ninst
 
 def mstoreAt (x : B256) : Line := [pushB256 (x * 32), mstore]
 
@@ -207,21 +211,21 @@ def pushToB8 (bs : Bytes) : UInt8 := 0x5F + Nat.toUInt8 bs.length
 def pushToB8L (bs : Bytes) : Bytes := pushToB8 bs :: bs
 
 def Xinst.toUInt8 : Xinst → UInt8
-  | create   => 0xF0
-  | call     => 0xF1
-  | callcode => 0xF2
-  | delcall  => 0xF4
-  | create2  => 0xF5
-  | statcall => 0xFA
+  | .create   => 0xF0
+  | .call     => 0xF1
+  | .callcode => 0xF2
+  | .delcall  => 0xF4
+  | .create2  => 0xF5
+  | .statcall => 0xFA
 
 def Ninst.toBytes : Ninst → Bytes
-  | reg o => [o.toUInt8]
-  | exec o => [o.toUInt8]
-  | push bs _ => pushToB8L bs
+  | .reg o => [Rinst.toUInt8 o]
+  | .exec o => [Xinst.toUInt8 o]
+  | .push bs _ => pushToB8L bs
 
 def compsize : Func → Nat
   | .last _ => 1
-  | .next i p => compsize p + i.toBytes.length
+  | .next i p => compsize p + (Ninst.toBytes i).length
   | .branch p q => compsize p + compsize q + 5
   | .call _ => 4
 
@@ -320,24 +324,25 @@ lemma toInstType_pushToB8 {bs : Bytes} (h : bs.length ≤ 32) :
   simp only [Nat.not_lt_zero, Nat.toUInt8_eq, IsEmpty.forall_iff, implies_true]
 
 lemma toInstType_toUInt8_swap (x : Fin 16) :
-    (Rinst.swap x).toUInt8.toInstType = .R := by
+    (Rinst.toUInt8 (Rinst.swap x)).toInstType = .R := by
   rcases x with ⟨n, h⟩; revert h n
   repeat (rw [Nat.forall_lt_succ_left']; refine' ⟨rfl, _⟩)
   simp
 
 lemma toInstType_toUInt8_dup (x : Fin 16) :
-    (Rinst.dup x).toUInt8.toInstType = .R := by
+    (Rinst.toUInt8 (Rinst.dup x)).toInstType = .R := by
   rcases x with ⟨n, h⟩; revert h n
   repeat (rw [Nat.forall_lt_succ_left']; refine' ⟨rfl, _⟩)
   simp
 
 lemma toInstType_toUInt8_log (x : Fin 5) :
-    (Rinst.log x).toUInt8.toInstType = .R := by
+    (Rinst.toUInt8 (Rinst.log x)).toInstType = .R := by
   rcases x with ⟨n, h⟩; revert h n
   repeat (rw [Nat.forall_lt_succ_left']; refine' ⟨rfl, _⟩)
   simp
 
-lemma Rinst.toInstType_toUInt8 (r : Rinst) : r.toUInt8.toInstType = .R := by
+lemma Rinst.toInstType_toUInt8 (r : Rinst) :
+    (Rinst.toUInt8 r).toInstType = .R := by
   cases r <;> try {rfl}
   · apply toInstType_toUInt8_dup
   · apply toInstType_toUInt8_swap
@@ -346,7 +351,8 @@ lemma Rinst.toInstType_toUInt8 (r : Rinst) : r.toUInt8.toInstType = .R := by
 lemma Linst.toInstType_toUInt8 (l : Linst) : l.toUInt8.toInstType = .L := by
   cases l <;> rfl
 
-lemma Xinst.toInstType_toUInt8 (x : Xinst) : x.toUInt8.toInstType = .X := by
+lemma Xinst.toInstType_toUInt8 (x : Xinst) :
+    (Xinst.toUInt8 x).toInstType = .X := by
   cases x <;> rfl
 
 lemma Jinst.toInstType_toUInt8 (j : Jinst) : j.toUInt8.toInstType = .J := by
@@ -356,21 +362,22 @@ lemma ByteArray.toList_eq_toList_data {xs : ByteArray} :
     xs.toList = xs.data.toList := by
   have gen :
       ∀ xs ys : List UInt8,
-        toList.loop ⟨⟨xs ++ ys⟩⟩ xs.length xs.reverse = xs ++ ys := by
+        _root_.ByteArray.toList.loop
+          ⟨⟨xs ++ ys⟩⟩ xs.length xs.reverse = xs ++ ys := by
     intro xs ys;
     induction ys generalizing xs with
       | nil =>
-        unfold toList.loop
+        unfold _root_.ByteArray.toList.loop
         rw [if_neg _, List.reverse_reverse, List.append_nil]
-        simp [size]
+        simp [ByteArray.size]
       | cons y ys ih =>
-        unfold toList.loop
-        have rw : get! ⟨⟨xs ++ y :: ys⟩⟩ xs.length = y := by
-          simp [get!]
+        unfold _root_.ByteArray.toList.loop
+        have rw : ByteArray.get! ⟨⟨xs ++ y :: ys⟩⟩ xs.length = y := by
+          simp [ByteArray.get!]
         have rw' : xs.length + 1 = (xs ++ [y]).length := by simp
         have rw'' : y :: xs.reverse = (xs ++ [y]).reverse := by simp
         rw [if_pos _, rw, List.append_cons, rw', rw'', ih]
-        simp [size]
+        simp [ByteArray.size]
   rcases xs with ⟨⟨xs⟩⟩; apply gen [] xs
 
 lemma ByteArray.of_getElem?_eq_some {xs : ByteArray} {n} {x} :
@@ -387,8 +394,8 @@ lemma ByteArray.lt_size_of_getElem?_eq_some {xs : ByteArray} {n} {x}
   rw [ByteArray.toList_eq_toList_data] at lt; exact lt
 
 lemma Jinst.at_of_slice {code : ByteArray} {pc : Nat} {j : Jinst} {xs : Bytes}
-    (slice : code.toList.Slice pc (j.toUInt8 :: xs)) :
-    j.At code pc := by
+    (slice : List.Slice code.toList pc (j.toUInt8 :: xs)) :
+    Jinst.At code pc j := by
   have eq := List.get?_eq_of_slice slice
   simp only [Jinst.At, ByteArray.getInst]
   have rw := ByteArray.of_getElem?_eq_some eq
@@ -399,8 +406,8 @@ lemma Jinst.at_of_slice {code : ByteArray} {pc : Nat} {j : Jinst} {xs : Bytes}
   rw [rw, toJinst_toUInt8]; rfl
 
 lemma Linst.at_of_slice {code : ByteArray} {pc : Nat} {l : Linst} {xs : Bytes}
-    (slice : code.toList.Slice pc (l.toUInt8 :: xs)) :
-    l.At code pc := by
+    (slice : List.Slice code.toList pc (l.toUInt8 :: xs)) :
+    Linst.At code pc l := by
   have eq := List.get?_eq_of_slice slice
   simp only [Linst.At, ByteArray.getInst]
   have rw := ByteArray.of_getElem?_eq_some eq
@@ -411,7 +418,7 @@ lemma Linst.at_of_slice {code : ByteArray} {pc : Nat} {l : Linst} {xs : Bytes}
   rw [rw, toLinst_toUInt8]; rfl
 
 lemma dup_toByte_toRinst? :
-  ∀ n, UInt8.toRinst (Rinst.dup n).toUInt8 = some (.dup n)
+  ∀ n, UInt8.toRinst (Rinst.toUInt8 (Rinst.dup n)) = some (.dup n)
   | 0 => rfl
   | 1 => rfl
   | 2 => rfl
@@ -433,7 +440,7 @@ lemma dup_toByte_toRinst? :
     cases h (Nat.le_add_left _ _)
 
 lemma swap_toByte_toRinst?
-  : ∀ n, UInt8.toRinst (Rinst.swap n).toUInt8 = some (.swap n)
+  : ∀ n, UInt8.toRinst (Rinst.toUInt8 (Rinst.swap n)) = some (.swap n)
   | 0 => rfl
   | 1 => rfl
   | 2 => rfl
@@ -455,7 +462,7 @@ lemma swap_toByte_toRinst?
     cases h (Nat.le_add_left _ _)
 
 lemma log_toByte_toRinst? :
-  ∀ n, UInt8.toRinst (Rinst.log n).toUInt8 = some (.log n)
+  ∀ n, UInt8.toRinst (Rinst.toUInt8 (Rinst.log n)) = some (.log n)
   | 0 => rfl
   | 1 => rfl
   | 2 => rfl
@@ -465,7 +472,8 @@ lemma log_toByte_toRinst? :
     rw [← Nat.not_le] at h
     cases h (Nat.le_add_left _ _)
 
-lemma toUInt8_toRinst {i : Rinst} : UInt8.toRinst i.toUInt8 = some i := by
+lemma toUInt8_toRinst {i : Rinst} :
+    UInt8.toRinst (Rinst.toUInt8 i) = some i := by
   cases i <;> try {rfl}
   · apply dup_toByte_toRinst?
   · apply swap_toByte_toRinst?
@@ -480,7 +488,8 @@ lemma Linst.run_of_at {pc sevm devm l exn}
 def PushAt (code : ByteArray) (pc : Nat) (xs : Bytes) : Prop :=
   ∃ le : xs.length ≤ 32, code.getInst pc = some (.next (.push xs le))
 
-lemma toUInt8_toXinst {o : Xinst} : UInt8.toXinst o.toUInt8 = some o := by cases o <;> rfl
+lemma toUInt8_toXinst {o : Xinst} :
+    UInt8.toXinst (Xinst.toUInt8 o) = some o := by cases o <;> rfl
 
 lemma Ninst.push_ext {xs ys : Bytes}
     (le : xs.length ≤ 32) (le' : ys.length ≤ 32) (eq : xs = ys) :
@@ -572,7 +581,7 @@ lemma List.sliceD_eq_of_slice?_eq_some {ξ} {xs ys : List ξ} {m n : Nat} {d} :
   rcases of_bind_eq_some eq with ⟨zs, rw, rw'⟩
   rw [drop_eq_of_drop?_eq_some rw, takeD_eq_of_take?_eq_some rw']
 lemma pushAt_of_slice {code : ByteArray} {pc} {xs : Bytes} (le : xs.length ≤ 32)
-    (slice : code.toList.Slice pc (pushToB8L xs)) : PushAt code pc xs := by
+    (slice : List.Slice code.toList pc (pushToB8L xs)) : PushAt code pc xs := by
   have eq := List.get?_eq_of_slice slice
   have rw := ByteArray.of_getElem?_eq_some eq
   simp only [PushAt, ByteArray.getInst]
@@ -590,7 +599,8 @@ lemma pushAt_of_slice {code : ByteArray} {pc} {xs : Bytes} (le : xs.length ≤ 3
   apply List.sliceD_eq_of_slice?_eq_some (List.slice?_eq_cons_iff.mp slice).2
 
 lemma Ninst.at_of_slice {code : ByteArray} {pc : Nat} {n : Ninst}
-    (slice : code.toList.Slice pc n.toBytes) : n.At code pc := by
+    (slice : List.Slice code.toList pc (Ninst.toBytes n)) :
+    Ninst.At code pc n := by
   cases n
   case reg r =>
     simp [Ninst.toBytes] at slice
@@ -618,7 +628,7 @@ lemma two_le_32 : (2 : Nat) ≤ 32 := by omega
 
 lemma of_subcode {cd k} :
     ∀ {obs}, subcode cd k obs →
-       ∃ bs, obs = some bs ∧ cd.Slice k bs
+       ∃ bs, obs = some bs ∧ List.Slice cd k bs
   | none, h => by cases h
   | some bs, h => ⟨bs, rfl, h⟩
 
@@ -627,9 +637,9 @@ lemma subcode_compile_branch {code : ByteArray} {k l p q}
     ∃ loc : Nat,
       loc < 2 ^ 16 ∧
       Ninst.At code k (.push [(loc >>> 8).toUInt8, loc.toUInt8] two_le_32) ∧
-      Jinst.jumpi.At code (k + 3) ∧
+      Jinst.At code (k + 3) Jinst.jumpi ∧
       subcode code.toList (k + 4) (Func.compile l (k + 4) p) ∧
-      Jinst.jumpdest.At code loc ∧
+      Jinst.At code loc Jinst.jumpdest ∧
       subcode code.toList (loc + 1) (Func.compile l (loc + 1) q) := by
   rcases of_subcode h with ⟨cd, h', h_slice⟩; clear h
   rcases of_bind_eq_some h' with ⟨qcd, h_qcd, h⟩; clear h'
@@ -881,13 +891,13 @@ lemma Ninst.run_of_at {pc sevm pre n post}
     exact ⟨_, RunFrame.of_run henter, hr.symm⟩
 
 lemma Ninst.size_eq_length_toBytes (n : Ninst) :
-    n.size = n.toBytes.length := by cases n <;> rfl
+    n.size = (Ninst.toBytes n).length := by cases n <;> rfl
 
 def Devm.Pop (xs : List B256): Devm → Devm → Prop :=
   Rel {Rels.eq with stack := Stack.Pop xs}
 
 def Devm.PushBurn (xs : List B256): Devm → Devm → Prop :=
-  Rel {Devm.Rels.eq with stack := _root_.Stack.Push xs, gasLeft := (· ≥ ·)}
+  Rel {Devm.Rels.eq with stack := Stack.Push xs, gasLeft := (· ≥ ·)}
 
 lemma Devm.pushBurn_of_run {x : B256} {pre inter : Devm} {cost : Nat} :
     (chargeGas cost pre >>= fun d => d.push x) = .ok inter →
@@ -909,7 +919,7 @@ lemma Devm.pushBurn_of_run {x : B256} {pre inter : Devm} {cost : Nat} :
       split at run; {cases run}
       injection run with eq_inter; subst eq_inter
       constructor <;>
-        simp [_root_.Stack.Push, Split, Devm.Rels.eq, Devm.setMach, Devm.stack,
+        simp [Stack.Push, Split, Devm.Rels.eq, Devm.setMach, Devm.stack,
           Devm.memory, Devm.gasLeft, Devm.logs, Devm.refundCounter, Devm.output,
           Devm.accountsToDelete, Devm.returnData, Devm.error, Devm.accessedAddresses,
           Devm.accessedStorageKeys, Devm.state, Devm.createdAccounts,
@@ -1484,7 +1494,7 @@ lemma of_get?_table_eq_some {f fs} {bs} {m n : ℕ} {p : Func}
 lemma subcode_of_get?_eq_some {f fs} {code : ByteArray} {k loc : ℕ} {p : Func}
     (h_eq : some code.toList = Prog.compile ⟨f, fs⟩)
     (h_get : getElem? (table 0 (f :: fs)) k = some ⟨loc, p⟩) :
-    Jinst.jumpdest.At code loc ∧
+    Jinst.At code loc Jinst.jumpdest ∧
     subcode code.toList (loc + 1) (Func.compile (table 0 (f :: fs)) (loc + 1) p) := by
   rcases of_get?_table_eq_some h_eq h_get with
     ⟨lft, rgt, _, _, pfx, sfx, h_pfx, h_split', h_sfx⟩
@@ -1504,7 +1514,7 @@ lemma subcode_compile_call {code : ByteArray} {l m n}
       l[n]? = some (loc, p) ∧
       loc < 2 ^ 16 ∧
       PushAt code m ([(loc >>> 8).toUInt8, loc.toUInt8]) ∧
-      Jinst.jump.At code (m + 3) := by
+      Jinst.At code (m + 3) Jinst.jump := by
   rcases of_subcode h with ⟨cd, h', h_slice⟩; clear h
   rcases of_bind_eq_some h' with ⟨⟨loc, p⟩, h_get, h⟩; clear h'
   simp at h
@@ -1512,7 +1522,8 @@ lemma subcode_compile_call {code : ByteArray} {l m n}
   refine' ⟨loc, p, h_get, h_lt, _⟩
   simp at h_eq; rw [← h_eq] at h_slice
   have le : ([(loc >>> 8).toUInt8, loc.toUInt8] : Bytes).length ≤ 32 := by simp [List.length]
-  have h_push_slice : List.Slice code.toList m (Ninst.push [(loc >>> 8).toUInt8, loc.toUInt8] le).toBytes := by
+  have h_push_slice : List.Slice code.toList m
+      (Ninst.toBytes (Ninst.push [(loc >>> 8).toUInt8, loc.toUInt8] le)) := by
     exact List.slice_prefix h_slice
   have h_jump_slice : List.Slice code.toList (m + 3) [Jinst.jump.toUInt8] := by
     have hh := @List.slice_suffix _ _ m [_, _, _] _ h_slice
@@ -1663,7 +1674,7 @@ theorem correct (sevm : Sevm) (pre : Devm) (p : Prog) (post : Devm)
   apply correct_core p.main p.aux ⟨1, sevm, inter, .ok post, exc'⟩ p.main eq h_sub
 
 def String.toBytes (s : String) : Bytes := s.toList.map Char.toUInt8
-def String.keccak (s : String) : B256 := s.toBytes.keccak
+def String.keccak (s : String) : B256 := (String.toBytes s).keccak
 
 def isMax : Line := [not, iszero]
 
@@ -1780,10 +1791,12 @@ lemma run_prepend_elim (φ : Prop) (l) {p} {c e} {s r}
   rcases of_run_prepend _ _ h' with ⟨s', hs, hs'⟩; apply h s' hs hs'
 
 lemma Line.of_run_cons {e s i l s''} (h : Line.Run e s (i :: l) s'') :
-    ∃ s', i.Run e s s' ∧ Line.Run e s' l s'' := by cases h; refine' ⟨_, asm, asm⟩
+    ∃ s', Ninst.Run e s i s' ∧ Line.Run e s' l s'' := by
+  cases h
+  refine' ⟨_, asm, asm⟩
 
 lemma of_run_append  {e s} (a) {b s''} (h : Line.Run e s (a ++ b) s'') :
-    ∃ s', a.Run e s s' ∧ b.Run e s' s'' := by
+    ∃ s', Line.Run e s a s' ∧ Line.Run e s' b s'' := by
   induction a generalizing s with
   | nil => refine' ⟨s, cst, h⟩
   | cons i a ih =>
@@ -1809,7 +1822,7 @@ elab "func_execute_with" e:term : tactic =>
 def Func.take : Nat → Q(Func) → TacticM Q(Line)
 | 0, _ => pure q([] : Line)
 | n + 1, p => do
-  let p' : Q(Func) ← Meta.whnf p
+  let p' : Q(Func) ← Lean.Meta.whnf p
   match p' with
   | ~q(Func.next $i $q) =>
     let x ← Func.take n q
@@ -1830,10 +1843,10 @@ elab "func_execute" e:num : tactic =>
 /-- Public observation-preservation shape for a straight-line fragment.  It is
 the successful-run projection of the canonical relational effect idiom. -/
 def Line.Inv {ξ : Type} (f : Devm → ξ) (l : Line) : Prop :=
-  ∀ {e s s'}, l.Run e s s' → f s = f s'
+  ∀ {e s s'}, Line.Run e s l s' → f s = f s'
 
 lemma Line.of_inv {ξ : Type} {e s s'} (r : Devm → ξ) {l : Line} :
-  Line.Inv r l → l.Run e s s' → r s = r s' := λ h => h
+  Line.Inv r l → Line.Run e s l s' → r s = r s' := λ h => h
 
 /-- Successful-run observation invariant for one nonterminal instruction;
 retained for the `line_inv`/`func_inv` API built over relational masters. -/
@@ -1866,12 +1879,10 @@ def instInv : Lean.Elab.Tactic.TacticM Unit :=
   | _ => dbg_trace "Not a Ninst.Inv goal"
 
 def lineNilInv : Lean.Elab.Tactic.TacticM Unit :=
-  Lean.Expr.apply <|
-    Lean.Expr.const (Lean.Name.str (Lean.Name.str Lean.Name.anonymous "Line") "nil_inv") []
+  Lean.Expr.apply q(@Line.nil_inv)
 
 def lineConsInv : Lean.Elab.Tactic.TacticM Unit :=
-  Lean.Expr.apply <|
-    Lean.Expr.const (Lean.Name.str (Lean.Name.str Lean.Name.anonymous "Line") "cons_inv") []
+  Lean.Expr.apply q(@Line.cons_inv)
 
 partial def lineInv : Lean.Elab.Tactic.TacticM Unit :=
   Lean.Elab.Tactic.withMainContext do
@@ -1887,7 +1898,7 @@ partial def lineInv : Lean.Elab.Tactic.TacticM Unit :=
 elab "line_inv" : tactic => lineInv
 
 def Strings.toName : List String → Lean.Name
-  | [] => Lean.Name.anonymous
+  | [] => `Blanc
   | s :: ss => Lean.Name.str (Strings.toName ss) s
 
 def Strings.toExpr (l : List String) : Lean.Expr :=
@@ -1994,13 +2005,13 @@ partial def funcInv : Lean.Elab.Tactic.TacticM Unit :=
     match t with
     | ~q(@Func.Inv $ξx $fx $gx $px) =>
       match px with
-      | ~q(_ +++ _) => String.apply "prepend_inv"; lineInv; funcInv
+      | ~q(_ +++ _) => Lean.Expr.apply q(@prepend_inv); lineInv; funcInv
       | _ =>
         let px' : Q(Func) ← Lean.Meta.whnf px
         match px' with
-        | ~q(Func.next _ _) => "next_inv".apply; instInv; funcInv
-        | ~q(Func.last _) =>   "last_inv".apply; hopInv
-        | ~q(Func.branch _ _) => "branch_inv".apply; funcInv; funcInv
+        | ~q(Func.next _ _) => Lean.Expr.apply q(@next_inv); instInv; funcInv
+        | ~q(Func.last _) =>   Lean.Expr.apply q(@last_inv); hopInv
+        | ~q(Func.branch _ _) => Lean.Expr.apply q(@branch_inv); funcInv; funcInv
         | _ => do
           let pp ← Lean.Meta.ppExpr px'
           Lean.logInfo s!"not matching: {pp}"
@@ -2419,14 +2430,16 @@ def Devm.getStor (devm : Devm) (adr : Adr) : Stor :=
   (devm.getAcct adr).stor
 
 lemma Devm.WorldEq.getStor {d d' : Devm} (h : Devm.WorldEq d d') (a : Adr) :
-    d.getStor a = d'.getStor a := by
+    Devm.getStor d a = Devm.getStor d' a := by
   unfold Devm.getStor Devm.getAcct
   rw [h.1]
 
-lemma Devm.Burn.getStor {s s' : Devm} (h : Devm.Burn s s') (a : Adr) : s'.getStor a = s.getStor a := by
+lemma Devm.Burn.getStor {s s' : Devm} (h : Devm.Burn s s') (a : Adr) :
+    Devm.getStor s' a = Devm.getStor s a := by
   simp [Devm.getStor, Devm.getAcct]; rw [h.state]
 
-lemma Devm.PopBurn.getStor {xs} {s s' : Devm} (h : Devm.PopBurn xs s s') (a : Adr) : s'.getStor a = s.getStor a := by
+lemma Devm.PopBurn.getStor {xs} {s s' : Devm} (h : Devm.PopBurn xs s s') (a : Adr) :
+    Devm.getStor s' a = Devm.getStor s a := by
   simp [Devm.getStor, Devm.getAcct]; rw [h.state]
 
 instance : PopBurn.Inv Devm.getStor := ⟨by
@@ -2442,29 +2455,37 @@ instance : Burn.Inv Devm.getStor := ⟨by
 ⟩
 
 lemma addAccessedStorageKey_getStor {devm : Devm} {adr : Adr} {key : B256} :
-    (addAccessedStorageKey devm adr key).getStor = devm.getStor := by
+    Devm.getStor (addAccessedStorageKey devm adr key) = Devm.getStor devm := by
   funext a
-  exact (addAccessedStorageKey_worldEq devm adr key).getStor a |>.symm
+  exact Devm.WorldEq.getStor (addAccessedStorageKey_worldEq devm adr key) a |>.symm
 
-lemma Devm.pop_getStor_eq {x devm devm'} (h : Devm.pop devm = .ok ⟨x, devm'⟩) : devm.getStor = devm'.getStor := by
+lemma Devm.pop_getStor_eq {x devm devm'} (h : Devm.pop devm = .ok ⟨x, devm'⟩) :
+    Devm.getStor devm = Devm.getStor devm' := by
   funext a
-  exact (Devm.pop_worldEq_of_ok h).getStor a
+  exact Devm.WorldEq.getStor (Devm.pop_worldEq_of_ok h) a
 
-lemma chargeGas_getStor_eq {cost devm devm'} (h : chargeGas cost devm = .ok devm') : devm.getStor = devm'.getStor := by
+lemma chargeGas_getStor_eq {cost devm devm'} (h : chargeGas cost devm = .ok devm') :
+    Devm.getStor devm = Devm.getStor devm' := by
   funext a
-  exact (chargeGas_worldEq_of_ok h).getStor a
+  exact Devm.WorldEq.getStor (chargeGas_worldEq_of_ok h) a
 
-lemma Devm.push_getStor_eq {v devm devm'} (h : Devm.push v devm = .ok devm') : devm.getStor = devm'.getStor := by
+lemma Devm.push_getStor_eq {v devm devm'} (h : Devm.push v devm = .ok devm') :
+    Devm.getStor devm = Devm.getStor devm' := by
   funext a
-  exact (liftMachExecution_worldEq_of_ok (core := Mach.push v) h).getStor a
+  exact Devm.WorldEq.getStor
+    (liftMachExecution_worldEq_of_ok (core := Mach.push v) h) a
 
-lemma Devm.popToAdr_getStor_eq {devm devm' adr} (h : Devm.popToAdr devm = .ok ⟨adr, devm'⟩) : devm.getStor = devm'.getStor := by
+lemma Devm.popToAdr_getStor_eq {devm devm' adr}
+    (h : Devm.popToAdr devm = .ok ⟨adr, devm'⟩) :
+    Devm.getStor devm = Devm.getStor devm' := by
   funext a
-  exact (liftMach_worldEq_of_ok (core := Mach.popToAdr) h).getStor a
+  exact Devm.WorldEq.getStor (liftMach_worldEq_of_ok (core := Mach.popToAdr) h) a
 
-lemma Devm.popToNat_getStor_eq {devm devm' n} (h : Devm.popToNat devm = .ok ⟨n, devm'⟩) : devm.getStor = devm'.getStor := by
+lemma Devm.popToNat_getStor_eq {devm devm' n}
+    (h : Devm.popToNat devm = .ok ⟨n, devm'⟩) :
+    Devm.getStor devm = Devm.getStor devm' := by
   funext a
-  exact (Devm.popToNat_worldEq_of_ok h).getStor a
+  exact Devm.WorldEq.getStor (Devm.popToNat_worldEq_of_ok h) a
 
 /-! ## Fieldwise `Devm.Rel` infrastructure -/
 
@@ -2652,7 +2673,7 @@ lemma Devm.InstructionFrame.getBal {d d' : Devm}
 
 lemma Devm.InstructionFrame.getStor {d d' : Devm}
     (h : Devm.InstructionFrame d d') (a : Adr) :
-    d.getStor a = d'.getStor a := by
+    Devm.getStor d a = Devm.getStor d' a := by
   unfold Devm.getStor Devm.getAcct
   rw [h.state]
 
@@ -2663,7 +2684,8 @@ lemma Devm.InstructionFrame.getCode {d d' : Devm}
   rw [h.state]
 
 lemma Devm.InstructionFrame.delSets {d d' : Devm}
-    (h : Devm.InstructionFrame d d') : d.delSets = d'.delSets :=
+    (h : Devm.InstructionFrame d d') :
+    Devm.delSets d = Devm.delSets d' :=
   Prod.ext h.accountsToDelete h.createdAccounts
 
 lemma Devm.machFrame_setMach (d : Devm) (mach : Mach) :
@@ -3014,13 +3036,13 @@ lemma Rinst.blobhash_runCore_instructionFrame
 
 /-- Equality of the balance/code observations of two world states.  Storage is
     deliberately absent: it is the component written by `SSTORE`. -/
-def State.BalCodeEq (a b : _root_.State) : Prop :=
+def State.BalCodeEq (a b : Jaune.State) : Prop :=
   (fun adr => ((a.get adr).bal, (a.get adr).code)) =
     fun adr => ((b.get adr).bal, (b.get adr).code)
 
 /-- Canonical precise effect of the persistent-storage writer: balances and
 code are unchanged at every address. -/
-lemma State.setStorVal_balCodeEq (st : _root_.State)
+lemma State.setStorVal_balCodeEq (st : Jaune.State)
     (adr : Adr) (key value : B256) :
     State.BalCodeEq st (st.setStorVal adr key value) := by
   unfold State.BalCodeEq State.setStorVal State.get State.set
@@ -4119,17 +4141,17 @@ def Xlot.InvGetCode : Xlot → Prop
   | .some ⟨evm, exn⟩ =>
     ∀ adr,
       (evm.dyna.getCode adr).toList ≠ [] →
-      evm.dyna.getCode adr = exn.getCode adr
+      evm.dyna.getCode adr = Execution.getCode exn adr
 
 lemma applyPrecompResult_getCode (evm : Evm) (res : PrecompResult) (ex : Execution)
     (h_ex : applyPrecompResult evm res = ex) (a : Adr) :
-    ex.getCode a = evm.dyna.getCode a := by
+    Execution.getCode ex a = evm.dyna.getCode a := by
   revert h_ex
   cases res <;> (intro h_ex; subst h_ex; rfl)
 
 lemma executePrecomp_preserves_getCode (evm : Evm) (adr : Adr) (ex : Execution)
     (h_ex : executePrecomp evm adr = ex) (a : Adr) :
-    ex.getCode a = evm.dyna.getCode a := by
+    Execution.getCode ex a = evm.dyna.getCode a := by
   apply applyPrecompResult_getCode evm (precompileRun evm adr) ex h_ex a
 
 def MsgResult.getCode (exn : Except (String × State × AdrSet × Tra) Devm) (a : Adr) : ByteArray :=
@@ -4161,7 +4183,7 @@ def Execution.CodePreserve (base : Devm) (exn : Execution) : Prop :=
 /-- Writer leaf: `handleError` reshuffles error payloads into ok results and
 selects states, but never installs new code. -/
 lemma executeCode.handleError_getCode (exn : Execution) (a : Adr) :
-    MsgResult.getCode (executeCode.handleError exn) a = exn.getCode a := by
+    MsgResult.getCode (executeCode.handleError exn) a = Execution.getCode exn a := by
   cases exn with
   | ok d => rfl
   | error p =>
@@ -4498,7 +4520,7 @@ lemma Resume.create_state {parent child : Devm} {newAddress : Adr} {sf : Devm}
 
 /-- A failed child message aborts the CALL-family return path. -/
 lemma Resume.call_run_error {parent : Devm} {oi os : Nat}
-    {e : String × _root_.State × AdrSet × Tra} {sf : Devm}
+    {e : String × Jaune.State × AdrSet × Tra} {sf : Devm}
     (h : (Resume.call parent oi os).run (.error e) = .ok sf) : False := by
   rcases e with ⟨err, st, ac, tra⟩
   unfold Resume.run liftToExecution at h
@@ -5021,7 +5043,7 @@ lemma Jinst.preserves_getCode_gen
 
 lemma Linst.dest_preserves_getCode {sevm : Sevm} {devm : Devm} {exn : Execution}
     (run : Linst.Run sevm devm .dest exn) :
-    ∀ adr : Adr, exn.getCode adr = devm.getCode adr := by
+    ∀ adr : Adr, Execution.getCode exn adr = devm.getCode adr := by
   intro adr
   dsimp [Linst.Run, Linst.run] at run
   revert run
@@ -5343,7 +5365,7 @@ lemma Xinst.preserves_getCode_gen
     (run : Xinst.Run sevm devm x xl exn) :
     ∀ a : Adr,
       (devm.getCode a).toList ≠ [] →
-      exn.getCode a = devm.getCode a := by
+      Execution.getCode exn a = devm.getCode a := by
   have h := Xinst.codePreserve_effectRec x (Xlot.rel_of_invGetCode inv) run
   cases exn with
   | error e => exact fun a ha => h a ha
@@ -5404,7 +5426,7 @@ lemma Exec.preserves_getCode {pc} {sevm} {devm} {exn}
     (run : Exec pc sevm devm exn) :
     ∀ a : Adr,
       (devm.getCode a).toList ≠ [] →
-      exn.getCode a = devm.getCode a := by
+      Execution.getCode exn a = devm.getCode a := by
   intro a ha
   have h := Exec.effect codePreserve_refl_trans.1 codePreserve_refl_trans.2
     Ninst.codePreserve_effectRec Jinst.codePreserve_effect
@@ -5512,13 +5534,13 @@ lemma lift_core
         ε pc sevm devm (.error ⟨"InvalidOpcode", devm⟩) )
     ( nextNoneErr :
       ∀ {pc sevm devm n err devm'},
-        n.At sevm.code pc →
+        Ninst.At sevm.code pc n →
         Ninst.StepRun pc sevm devm n .none (.error ⟨err, devm'⟩) →
         sevm.currentTarget ≠ ca →
         ε pc sevm devm (.error ⟨err, devm'⟩) )
     ( nextSomeErr :
       ∀ {pc sevm devm n evm_ exn_ err devm'},
-        n.At sevm.code pc →
+        Ninst.At sevm.code pc n →
         Ninst.StepRun pc sevm devm n (.some ⟨evm_, exn_⟩) (.error ⟨err, devm'⟩) →
         Exec evm_.pc evm_.sta evm_.dyna exn_ →
         sevm.currentTarget ≠ ca →
@@ -5526,7 +5548,7 @@ lemma lift_core
         ε pc sevm devm (.error ⟨err, devm'⟩) )
     ( nextNoneRec :
       ∀ {pc sevm devm n devm' exn},
-        n.At sevm.code pc →
+        Ninst.At sevm.code pc n →
         Ninst.StepRun pc sevm devm n .none (.ok devm') →
         Exec (pc + n.size) sevm devm' exn →
         sevm.currentTarget ≠ ca →
@@ -5534,7 +5556,7 @@ lemma lift_core
         ε pc sevm devm exn )
     ( nextSomeRec :
       ∀ {pc sevm devm n evm_ exn_ devm' exn},
-        n.At sevm.code pc →
+        Ninst.At sevm.code pc n →
         Ninst.StepRun pc sevm devm n (.some ⟨evm_, exn_⟩) (.ok devm') →
         Exec evm_.pc evm_.sta evm_.dyna exn_ →
         Exec (pc + n.size) sevm devm' exn →
@@ -5544,13 +5566,13 @@ lemma lift_core
         ε pc sevm devm exn )
     ( jumpErr :
       ∀ {pc sevm devm j err devm'},
-        j.At sevm.code pc →
+        Jinst.At sevm.code pc j →
         Jinst.Run ⟨pc, sevm, devm⟩ j (.error ⟨err, devm'⟩) →
         sevm.currentTarget ≠ ca →
         ε pc sevm devm (.error ⟨err, devm'⟩) )
     ( jumpRec :
       ∀ {pc sevm devm j pc' devm' exn},
-        j.At sevm.code pc →
+        Jinst.At sevm.code pc j →
         Jinst.Run ⟨pc, sevm, devm⟩ j (.ok ⟨pc', devm'⟩) →
         Exec pc' sevm devm' exn →
         sevm.currentTarget ≠ ca →
@@ -5558,7 +5580,7 @@ lemma lift_core
         ε pc sevm devm exn )
     ( last :
       ∀ {pc sevm devm l exn},
-        l.At sevm.code pc →
+        Linst.At sevm.code pc l →
         Linst.Run sevm devm l exn →
         sevm.currentTarget ≠ ca →
         ε pc sevm devm exn ) :
@@ -5729,7 +5751,7 @@ lemma lift
         R sevm pre post )
     ( nextNone :
       ∀ {pc} {sevm} {pre} {n} {inter} {post},
-        n.At sevm.code pc →
+        Ninst.At sevm.code pc n →
         Ninst.StepRun pc sevm pre n .none (.ok inter) →
         Exec (pc + n.size) sevm inter (.ok post) →
         sevm.currentTarget ≠ ca →
@@ -5738,7 +5760,7 @@ lemma lift
     ( nextSome :
       ∀ {pc} {sevm} {pre} {n} {evm'}
         {exn' : Execution} {inter} {post},
-        n.At sevm.code pc →
+        Ninst.At sevm.code pc n →
         Ninst.StepRun pc sevm pre n
           (.some ⟨evm', exn'⟩)
           (.ok inter) →
@@ -5750,7 +5772,7 @@ lemma lift
         R sevm pre post )
     ( jump :
       ∀ {pc} {sevm} {pre} {j} {pc'} {inter} {post},
-        j.At sevm.code pc →
+        Jinst.At sevm.code pc j →
         Jinst.Run ⟨pc, sevm, pre⟩ j (.ok ⟨pc', inter⟩) →
         Exec pc' sevm inter (.ok post) →
         sevm.currentTarget ≠ ca →
@@ -5758,7 +5780,7 @@ lemma lift
         R sevm pre post )
     ( last :
       ∀ {pc} {sevm} {pre} {l} {post},
-        l.At sevm.code pc →
+        Linst.At sevm.code pc l →
         Linst.Run sevm pre l (.ok post) →
         sevm.currentTarget ≠ ca →
         R sevm pre post ) :
@@ -5813,14 +5835,14 @@ lemma lift_inv
         ρ sevm post )
     ( nextNone :
       ∀ {pc} {sevm} {pre} {n} {inter},
-        n.At sevm.code pc →
+        Ninst.At sevm.code pc n →
         Ninst.StepRun pc sevm pre n .none (.ok inter) →
         sevm.currentTarget ≠ ca →
         σ sevm pre →
         σ sevm inter )
     ( nextSome :
       ∀ {pc} {sevm} {pre} {n} {evm'} {exn'} {inter},
-        n.At sevm.code pc →
+        Ninst.At sevm.code pc n →
         Ninst.StepRun pc sevm pre n (.some ⟨evm', exn'⟩) (.ok inter) →
         Exec evm'.pc evm'.sta evm'.dyna exn' →
         sevm.currentTarget ≠ ca →
@@ -5828,14 +5850,14 @@ lemma lift_inv
         σ evm'.sta evm'.dyna ∧ (ifOk (ρ evm'.sta) exn' → σ sevm inter) )
     ( jump :
       ∀ {pc} {sevm} {pre} {j} {pc'} {inter},
-        j.At sevm.code pc →
+        Jinst.At sevm.code pc j →
         Jinst.Run ⟨pc, sevm, pre⟩ j (.ok ⟨pc', inter⟩) →
         sevm.currentTarget ≠ ca →
         σ sevm pre →
         σ sevm inter )
     ( last :
       ∀ {pc} {sevm} {pre} {l} {post},
-        l.At sevm.code pc →
+        Linst.At sevm.code pc l →
         Linst.Run sevm pre l (.ok post) →
         sevm.currentTarget ≠ ca →
         σ sevm pre →
@@ -5845,7 +5867,7 @@ lemma lift_inv
       Prog.At p ca pc sevm devm →
       σ sevm devm →
       ρ sevm post := by
-  apply @lift (fun sevm pre post => σ sevm pre → ρ sevm post) ca p with_depth_ind
+  apply @Blanc.lift (fun sevm pre post => σ sevm pre → ρ sevm post) ca p with_depth_ind
   · intro pc sevm pre n inter post h_at h_run _ h_ne h_ih h_pi
     exact h_ih (nextNone h_at h_run h_ne h_pi)
   · intro pc sevm pre n evm' exn' inter post h_at h_run ex_sub _ h_ne h_ifOk h_ih h_pi
@@ -5888,7 +5910,7 @@ infix:70 " =? "  => B256.eqCheck
 
 lemma Bytes.sig_zero_cons (xs) : Bytes.sig (0 :: xs) = Bytes.sig xs := rfl
 lemma Bytes.sig_nonzero_cons (x xs) (h : x ≠ 0) : Bytes.sig (x :: xs) = x :: xs := by
-  simp only [sig]; rw [List.dropWhile_cons_of_neg]; simp [h]
+  simp only [Jaune.Bytes.sig]; rw [List.dropWhile_cons_of_neg]; simp [h]
 
 lemma Bytes.toB256_sig (bs : Bytes) : Bytes.toB256 (Bytes.sig bs) = bs.toB256 := by
   induction bs with
@@ -5915,7 +5937,7 @@ inductive Stack.Nth : Nat → B256 → Stack → Prop
   | tail : ∀ m x y xs, Nth m x xs → Nth (m + 1) x (y :: xs)
 
 def Devm.Push (xs : List B256) : Devm → Devm → Prop :=
-  Rel {Rels.eq with stack := _root_.Stack.Push xs}
+  Rel {Rels.eq with stack := Stack.Push xs}
 
 def Devm.DiffBurn (xs ys : List B256) : Devm → Devm → Prop :=
   Rel {Rels.eq with stack := Stack.Diff xs ys, gasLeft := (· ≥ ·)}
@@ -5928,7 +5950,7 @@ lemma Devm.push_of_push {x : B256} {s s' : Devm} (h : Devm.push x s = .ok s') :
   · cases h
   · injection h with eq; subst eq
     constructor <;>
-      simp [Devm.Rels.eq, _root_.Stack.Push, Split, Devm.setMach]
+      simp [Devm.Rels.eq, Stack.Push, Split, Devm.setMach]
     all_goals rfl
 
 lemma Devm.pushBurn_of_burn_of_push {xs : List B256} {s s' s'' : Devm}
@@ -6079,7 +6101,7 @@ lemma of_run_callvalue {e : Sevm} {s s' : Devm} (h : Ninst.Run e s callvalue s')
   exact Devm.pushBurn_of_pushItem run
 
 lemma of_run_mstore {e : Sevm} {s s' : Devm} (h : Ninst.Run e s mstore s') :
-    ∃ x y, _root_.Stack.Pop [x, y] s.stack s'.stack := by
+    ∃ x y, Stack.Pop [x, y] s.stack s'.stack := by
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
   rcases of_bind_eq_ok run with ⟨⟨i, s₁⟩, h1, run'⟩
@@ -6105,7 +6127,7 @@ lemma Devm.pop_of_popN {n : Nat} {devm devm' : Devm} {l : List B256}
     injection eq with eq1 eq2
     subst eq1; subst eq2
     refine ⟨rfl, ?_⟩
-    constructor <;> simp [Devm.Rels.eq, _root_.Stack.Pop, Split]
+    constructor <;> simp [Devm.Rels.eq, Stack.Pop, Split]
   | succ n ih =>
     rw [Devm.popN_def] at hp
     rcases of_bind_eq_ok hp with ⟨⟨x, devm1⟩, hp1, hp2⟩
@@ -6117,7 +6139,7 @@ lemma Devm.pop_of_popN {n : Nat} {devm devm' : Devm} {l : List B256}
     refine ⟨by simp [h_len], Devm.pop_append (Devm.pop_of_pop hp1) h_pop⟩
 
 lemma of_run_sstore {e : Sevm} {s s' : Devm} (h : Ninst.Run e s sstore s') :
-    ∃ x y, _root_.Stack.Pop [x, y] s.stack s'.stack := by
+    ∃ x y, Stack.Pop [x, y] s.stack s'.stack := by
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
   rcases of_bind_eq_ok run with ⟨⟨x, s₁⟩, h1, run₁⟩
@@ -6139,12 +6161,12 @@ lemma of_run_sstore {e : Sevm} {s s' : Devm} (h : Ninst.Run e s sstore s') :
   injection h9 with eq
   refine ⟨x, y, ?_⟩
   rw [← eq]
-  show _root_.Stack.Pop [x, y] s.stack s₅.stack
+  show Stack.Pop [x, y] s.stack s₅.stack
   rw [← hb.stack, h_s₄, h_s₃]
   exact hp
 
 lemma of_run_calldatacopy {e : Sevm} {s s' : Devm} (h : Ninst.Run e s calldatacopy s') :
-    ∃ x y z, _root_.Stack.Pop [x, y, z] s.stack s'.stack := by
+    ∃ x y z, Stack.Pop [x, y, z] s.stack s'.stack := by
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
   rcases of_bind_eq_ok run with ⟨⟨mi, s₁⟩, h1, run₁⟩
@@ -6159,7 +6181,7 @@ lemma of_run_calldatacopy {e : Sevm} {s s' : Devm} (h : Ninst.Run e s calldataco
   refine ⟨x, y, z, ?_⟩
   have hp := (Devm.pop_append p1 (Devm.pop_append p2 p3)).stack
   rw [← eq]
-  show _root_.Stack.Pop [x, y, z] s.stack s₄.stack
+  show Stack.Pop [x, y, z] s.stack s₄.stack
   rw [← hb.stack]
   exact hp
 
@@ -6168,7 +6190,7 @@ lemma of_run_singleton {e s i s'} (h : Line.Run e s [i] s') : Ninst.Run e s i s'
   cases hnil; exact hrun
 
 lemma of_run_calldataload {e : Sevm} {s s' : Devm} (h : Ninst.Run e s calldataload s') :
-    ∃ x y, _root_.Stack.Diff [x] [y] s.stack s'.stack := by
+    ∃ x y, Stack.Diff [x] [y] s.stack s'.stack := by
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
   rcases of_bind_eq_ok run with ⟨⟨si, s₁⟩, h1, run₁⟩
@@ -6184,7 +6206,7 @@ lemma Devm.memRead_stack (devm : Devm) (i n : Nat) :
     (devm.memRead i n).2.stack = devm.stack := rfl
 
 lemma of_run_kec {e : Sevm} {s s' : Devm} (h : Ninst.Run e s kec s') :
-    ∃ x y z, _root_.Stack.Diff [x, y] [z] s.stack s'.stack := by
+    ∃ x y z, Stack.Diff [x, y] [z] s.stack s'.stack := by
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
   rcases of_bind_eq_ok run with ⟨⟨mi, s₁⟩, h1, run₁⟩
@@ -6200,7 +6222,7 @@ lemma of_run_kec {e : Sevm} {s s' : Devm} (h : Ninst.Run e s kec s') :
   exact hpush.stack
 
 lemma of_run_log {e : Sevm} {s s' : Devm} {n : Fin 5} (h : Ninst.Run e s (log n) s') :
-    ∃ zs, zs.length = n.val + 2 ∧ _root_.Stack.Pop zs s.stack s'.stack := by
+    ∃ zs, zs.length = n.val + 2 ∧ Stack.Pop zs s.stack s'.stack := by
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
   rcases of_bind_eq_ok run with ⟨⟨mi, s₁⟩, h1, run₁⟩
@@ -6224,7 +6246,7 @@ lemma of_run_log {e : Sevm} {s s' : Devm} {n : Fin 5} (h : Ninst.Run e s (log n)
   refine ⟨x :: y :: topics, by simp [h_len], ?_⟩
   have hp := (Devm.pop_append p1 (Devm.pop_append p2 p3)).stack
   rw [← eq]
-  show _root_.Stack.Pop (x :: y :: topics) s.stack s₅.stack
+  show Stack.Pop (x :: y :: topics) s.stack s₅.stack
   rw [h_s₅, ← hb.stack]
   exact hp
 
@@ -6445,16 +6467,17 @@ lemma prefix_of_cdl {e n xs} {s s' : Devm} :
   exact prefix_of_calldataload h_cdl h1
 
 lemma of_run_sload {e : Sevm} {s s' : Devm} (h : Ninst.Run e s sload s') :
-    ∃ x, _root_.Stack.Diff [x] [Devm.getStorVal s e.currentTarget x] s.stack s'.stack := by
+    ∃ x, Stack.Diff [x] [Devm.getStorVal s e.currentTarget x] s.stack s'.stack := by
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
   rcases of_bind_eq_ok run with ⟨⟨key, s₁⟩, h1, run₁⟩
   have hpop := Devm.pop_of_pop h1
-  have e1 : s.getStor = s₁.getStor := Devm.pop_getStor_eq h1
+  have e1 : Devm.getStor s = Devm.getStor s₁ := Devm.pop_getStor_eq h1
   refine ⟨key, s₁.stack, hpop.stack, ?_⟩
-  suffices H : ∀ (d : Devm) (c : Nat), s₁.getStor = d.getStor → s₁.stack = d.stack →
+  suffices H : ∀ (d : Devm) (c : Nat),
+      Devm.getStor s₁ = Devm.getStor d → s₁.stack = d.stack →
       (chargeGas c d >>= fun y => Devm.push (Devm.getStorVal y e.currentTarget key) y) = .ok s' →
-      _root_.Stack.Push [Devm.getStorVal s e.currentTarget key] s₁.stack s'.stack by
+      Stack.Push [Devm.getStorVal s e.currentTarget key] s₁.stack s'.stack by
     split at run₁
     · exact H s₁ gasWarmAccess rfl rfl run₁
     · exact H (addAccessedStorageKey s₁ e.currentTarget key) gasColdSload
@@ -6463,10 +6486,11 @@ lemma of_run_sload {e : Sevm} {s s' : Devm} (h : Ninst.Run e s sload s') :
   rcases of_bind_eq_ok run' with ⟨s₂, h2, run₂⟩
   have hpush := Devm.push_of_push run₂
   have hstk : d.stack = s₂.stack := (Devm.burn_of_chargeGas h2).stack
-  have e2 : d.getStor = s₂.getStor := chargeGas_getStor_eq h2
+  have e2 : Devm.getStor d = Devm.getStor s₂ := chargeGas_getStor_eq h2
   have hval : Devm.getStorVal s₂ e.currentTarget key
       = Devm.getStorVal s e.currentTarget key := by
-    show (s₂.getStor e.currentTarget).get key = (s.getStor e.currentTarget).get key
+    show (Devm.getStor s₂ e.currentTarget).get key =
+      (Devm.getStor s e.currentTarget).get key
     rw [← e2, ← hgs, ← e1]
   rw [hst, hstk, ← hval]
   exact hpush.stack
@@ -6644,12 +6668,12 @@ macro_rules
     `(tactic| first | apply Stack.Nth.head | (apply Stack.Nth.tail ; show_nth))
 
 def showNthAt : Nat → Lean.Elab.Tactic.TacticM Unit
-  | 0 => "Stack.Nth.head".apply
-  | n +1 => do "Stack.Nth.tail".apply; showNthAt n
+  | 0 => Blanc.String.apply "Stack.Nth.head"
+  | n +1 => do Blanc.String.apply "Stack.Nth.tail"; showNthAt n
 
 def showSwapAt : Nat → Lean.Elab.Tactic.TacticM Unit
-  | 0 => "Stack.swapCore_zero".apply
-  | n + 1 => do "Stack.swapCore_succ".apply; showSwapAt n
+  | 0 => Blanc.String.apply "Stack.swapCore_zero"
+  | n + 1 => do Blanc.String.apply "Stack.swapCore_succ"; showSwapAt n
 
 def fail {ξ} (s : String) : Lean.Elab.Tactic.TacticM ξ := do
   dbg_trace s; failure
@@ -6682,41 +6706,41 @@ partial def linePrefix : Lean.Elab.Tactic.TacticM Unit :=
   | ~q(∀ s : Devm, ($px <<+ s.stack) → Line.Run _ s $lx _ → _) =>
     let lx' : Q(Line) ← Lean.Meta.whnf lx
     match lx' with
-    | ~q([]) => "Line.spx_unwrap".apply
+    | ~q([]) => Blanc.String.apply "Line.spx_unwrap"
     | ~q($ix :: _) =>
       match ix with
       | ~q(Ninst.dup $nx) =>
         let n ← unsafe Lean.Meta.evalExpr (Fin 16) q(Fin 16) nx
-        "Line.spx_dup".apply; showNthAt n.val
+        Blanc.String.apply "Line.spx_dup"; showNthAt n.val
       | ~q(Ninst.log $nx) =>
         let n ← unsafe Lean.Meta.evalExpr (Fin 5) q(Fin 5) nx
         let x ← getTake (n.val + 2) px
-        Lean.Expr.apply <| Lean.mkApp "Line.spx_log".toExpr x
+        Lean.Expr.apply <| Lean.mkApp (Blanc.String.toExpr "Line.spx_log") x
         Lean.Elab.Tactic.evalRefl Lean.Syntax.missing
       | ~q(Ninst.swap $nx) =>
         let n ← unsafe Lean.Meta.evalExpr (Fin 16) q(Fin 16) nx
         let x ← getSwap n.val px
-        Lean.Expr.apply <| Lean.mkApp "Line.spx_swap".toExpr x
+        Lean.Expr.apply <| Lean.mkApp (Blanc.String.toExpr "Line.spx_swap") x
         showSwapAt n.val
-      | ~q(Ninst.pushB256 _) => "Line.spx_pushB256".apply
-      | ~q(Ninst.push _ _) => "Line.spx_push".apply
-      | ~q(Ninst.sub) => "Line.spx_sub".apply
-      | ~q(Ninst.add) => "Line.spx_add".apply
-      | ~q(Ninst.pop) => "Line.spx_pop".apply
-      | ~q(Ninst.sstore) => "Line.spx_sstore".apply
-      | ~q(Ninst.mstore) => "Line.spx_mstore".apply
-      | ~q(Ninst.lt) => "Line.spx_lt".apply
-      | ~q(Ninst.gt) => "Line.spx_gt".apply
-      | ~q(Ninst.eq) => "Line.spx_eq".apply
-      | ~q(Ninst.not) => "Line.spx_not".apply
-      | ~q(Ninst.and) => "Line.spx_and".apply
-      | ~q(Ninst.or) => "Line.spx_or".apply
-      | ~q(Ninst.shl) => "Line.spx_shl".apply
-      | ~q(Ninst.shr) => "Line.spx_shr".apply
-      | ~q(Ninst.iszero) => "Line.spx_iszero".apply
-      | ~q(Ninst.caller) => "Line.spx_caller".apply
-      | ~q(Ninst.callvalue) => "Line.spx_callvalue".apply
-      | ~q(Ninst.calldatacopy) => "Line.spx_calldatacopy".apply
+      | ~q(Ninst.pushB256 _) => Blanc.String.apply "Line.spx_pushB256"
+      | ~q(Ninst.push _ _) => Blanc.String.apply "Line.spx_push"
+      | ~q(Ninst.sub) => Blanc.String.apply "Line.spx_sub"
+      | ~q(Ninst.add) => Blanc.String.apply "Line.spx_add"
+      | ~q(Ninst.pop) => Blanc.String.apply "Line.spx_pop"
+      | ~q(Ninst.sstore) => Blanc.String.apply "Line.spx_sstore"
+      | ~q(Ninst.mstore) => Blanc.String.apply "Line.spx_mstore"
+      | ~q(Ninst.lt) => Blanc.String.apply "Line.spx_lt"
+      | ~q(Ninst.gt) => Blanc.String.apply "Line.spx_gt"
+      | ~q(Ninst.eq) => Blanc.String.apply "Line.spx_eq"
+      | ~q(Ninst.not) => Blanc.String.apply "Line.spx_not"
+      | ~q(Ninst.and) => Blanc.String.apply "Line.spx_and"
+      | ~q(Ninst.or) => Blanc.String.apply "Line.spx_or"
+      | ~q(Ninst.shl) => Blanc.String.apply "Line.spx_shl"
+      | ~q(Ninst.shr) => Blanc.String.apply "Line.spx_shr"
+      | ~q(Ninst.iszero) => Blanc.String.apply "Line.spx_iszero"
+      | ~q(Ninst.caller) => Blanc.String.apply "Line.spx_caller"
+      | ~q(Ninst.callvalue) => Blanc.String.apply "Line.spx_callvalue"
+      | ~q(Ninst.calldatacopy) => Blanc.String.apply "Line.spx_calldatacopy"
       | _ => dbg_trace "line_prefix : unimplemented inst"; failure
       linePrefix
   | _ =>
@@ -6725,15 +6749,15 @@ partial def linePrefix : Lean.Elab.Tactic.TacticM Unit :=
 
 elab "line_prefix" : tactic => linePrefix
 
-def findDeclWithM (f : LocalDecl → TacticM Bool) : TacticM Lean.LocalDecl := do
-  let g : LocalDecl → TacticM (Option LocalDecl) := fun d => do
+def findDeclWithM (f : Lean.LocalDecl → TacticM Bool) : TacticM Lean.LocalDecl := do
+  let g : Lean.LocalDecl → TacticM (Option Lean.LocalDecl) := fun d => do
     if (← f d) then pure (some d) else pure none
-  let ctx ← MonadLCtx.getLCtx
+  let ctx ← Lean.MonadLCtx.getLCtx
   let (some d) ← ctx.findDeclM? g | failure
   pure d
 
 def isLineRun (ld : Lean.LocalDecl) : TacticM Bool := do
-  let px : Q(Prop) ← Meta.inferType ld.toExpr
+  let px : Q(Prop) ← Lean.Meta.inferType ld.toExpr
   match px with
   | ~q(Line.Run _ $sx _ $sx') => pure true
   | _ => pure false
@@ -6747,53 +6771,58 @@ def Lean.FVarId.revertOne (i : Lean.FVarId) : TacticM Unit := do
   let (_, mvarId) ← (← getMainGoal).revert #[i]
   replaceMainGoal [mvarId]
 
-def clearIf (i i' : FVarId) (sx : Expr) (ld : LocalDecl)  : Lean.Elab.Tactic.TacticM Unit := do
-  let pre_t ← Meta.inferType ld.toExpr
-  let t ← instantiateMVars pre_t
-  if (¬ BEq.beq ld.fvarId i ∧ ¬ BEq.beq ld.fvarId i' ∧ Expr.occurs sx t)
-  then Lean.FVarId.clear ld.fvarId
+def clearIf (i i' : Lean.FVarId) (sx : Lean.Expr) (ld : Lean.LocalDecl) :
+    Lean.Elab.Tactic.TacticM Unit := do
+  let pre_t ← Lean.Meta.inferType ld.toExpr
+  let t ← Lean.instantiateMVars pre_t
+  if (¬ BEq.beq ld.fvarId i ∧ ¬ BEq.beq ld.fvarId i' ∧ Lean.Expr.occurs sx t)
+  then Blanc.Lean.FVarId.clear ld.fvarId
   else pure ()
 
 def isPref (x : Lean.Expr) (ld : Lean.LocalDecl) : TacticM Bool := do
-  let px : Q(Prop) ← Meta.inferType ld.toExpr
+  let px : Q(Prop) ← Lean.Meta.inferType ld.toExpr
   match px with
   | ~q(_ <<+ (Devm.stack $x')) => pure (← Lean.Meta.isDefEq x x')
   | _ => pure false
 
-def initDescOfRun : Q(Prop) → TacticM Expr
+def initDescOfRun : Q(Prop) → TacticM Lean.Expr
   | ~q(Line.Run _ $sx _ _) => pure sx
   | _ => failure
 
-def Expr.imp (x y : Expr) : Expr := Expr.forallE Name.anonymous x y BinderInfo.default
+def Expr.imp (x y : Lean.Expr) : Lean.Expr :=
+  Lean.Expr.forallE Lean.Name.anonymous x y Lean.BinderInfo.default
 
-def mkMotive : Q(Prop) → TacticM Expr
+def mkMotive : Q(Prop) → TacticM Lean.Expr
 | ~q(($p <<+ (Devm.stack $s₀)) → (Line.Run $e $s₀ $l $s₁) → $φ) => do
   pure <|
-    Expr.lam `s q(Devm)
-      ( Expr.imp
-          (Expr.app q(λ s : Devm => $p <<+ s.stack) (Expr.bvar 0))
-          (Expr.imp (Expr.app q(λ s : Devm => Line.Run $e s $l $s₁) (Expr.bvar 1)) φ) )
-      BinderInfo.default
+    Lean.Expr.lam `s q(Devm)
+      ( Blanc.Expr.imp
+          (Lean.Expr.app q(λ s : Devm => $p <<+ s.stack) (Lean.Expr.bvar 0))
+          (Blanc.Expr.imp
+            (Lean.Expr.app q(λ s : Devm => Line.Run $e s $l $s₁) (Lean.Expr.bvar 1))
+            φ) )
+      Lean.BinderInfo.default
 | _ => failure
 
 elab "generalize_line_prefix" : tactic =>
   withMainContext do
     let rd ← findDeclWithM isLineRun
-    let sx ← initDescOfRun (← Meta.inferType rd.toExpr)
+    let sx ← initDescOfRun (← Lean.Meta.inferType rd.toExpr)
     let pd ← findDeclWithM (isPref sx)
-    let sd ← findDeclWithM (λ dd => Meta.isDefEq dd.toExpr sx)
+    let sd ← findDeclWithM (λ dd => Lean.Meta.isDefEq dd.toExpr sx)
     let ctx ← Lean.MonadLCtx.getLCtx -- get the local context.
     ctx.forM (clearIf rd.fvarId pd.fvarId sx)
-    Lean.FVarId.revertOne rd.fvarId
-    Lean.FVarId.revertOne pd.fvarId
+    Blanc.Lean.FVarId.revertOne rd.fvarId
+    Blanc.Lean.FVarId.revertOne pd.fvarId
     let g : Q(Prop) ← getMainTarget
     let m ← mkMotive g
-    Expr.apply <| mkApp2 q(@apply_univ Devm) m sd.toExpr
+    Lean.Expr.apply <| Lean.mkApp2 q(@apply_univ Devm) m sd.toExpr
     linePrefix
 
-def clearIfOcc (sx : Expr) (ld : LocalDecl) : Lean.Elab.Tactic.TacticM Unit := do
-  let t' ← instantiateMVars (← Meta.inferType ld.toExpr)
-  if Expr.occurs sx t' then ld.fvarId.clear
+def clearIfOcc (sx : Lean.Expr) (ld : Lean.LocalDecl) :
+    Lean.Elab.Tactic.TacticM Unit := do
+  let t' ← Lean.instantiateMVars (← Lean.Meta.inferType ld.toExpr)
+  if Lean.Expr.occurs sx t' then Blanc.Lean.FVarId.clear ld.fvarId
 
 syntax "clear_state" (ppSpace colGt term:max) : tactic
 elab_rules : tactic
@@ -6803,7 +6832,7 @@ elab_rules : tactic
       let d ← findDeclWithM (λ d => pure <| BEq.beq d.fvarId i)
       let ctx ← Lean.MonadLCtx.getLCtx -- get the local context.
       ctx.forM (clearIfOcc d.toExpr)
-      d.fvarId.clear
+      Blanc.Lean.FVarId.clear d.fvarId
 
 end
 
@@ -6829,7 +6858,9 @@ lemma Rinst.preserves_bal {r} : Rinst.Inv Devm.getBal r := by
     exact congrArg (fun s => s.bal) hf.state
   · have hf := Rinst.run_instructionFrame pc sevm pre r hs ht; rw [hrun] at hf; exact funext hf.getBal
 
-lemma memRead_getStor_eq {x n : Nat} {devm devm' : Devm} {value : Bytes} (h : devm.memRead x n = ⟨value, devm'⟩) : devm'.getStor = devm.getStor := by
+lemma memRead_getStor_eq {x n : Nat} {devm devm' : Devm} {value : Bytes}
+    (h : devm.memRead x n = ⟨value, devm'⟩) :
+    Devm.getStor devm' = Devm.getStor devm := by
   simp only [Devm.memRead] at h
   rcases h_read : devm.memory.read x n with ⟨val, mem⟩
   rw [h_read] at h
@@ -6843,7 +6874,7 @@ lemma Rinst.preserves_stor {r} (h_not_sstore : r ≠ Rinst.sstore) : Rinst.Inv D
   · have hf := Rinst.tstore_run_transientWriteFrame pc pre sevm; rw [hrun] at hf
     exact congrArg (fun s => fun a => (s.get a).stor) hf.state
   · have hf := Rinst.run_instructionFrame pc sevm pre r h_not_sstore ht; rw [hrun] at hf
-    exact funext hf.getStor
+    exact funext (Devm.InstructionFrame.getStor hf)
 
 class Rinst.Hinv {ξ : Type} (f : Devm → ξ) (o : Rinst) where (inv : Rinst.Inv f o)
 
@@ -7003,7 +7034,7 @@ def Xlot.InvNoDel (wa : Adr) : Xlot → Prop
 
 -- Transport NoDel across a step that moves neither set nor wa's code.
 lemma Devm.NoDel.of_eqs {wa : Adr} {d d' : Devm}
-    (hs : d.delSets = d'.delSets) (hc : d.getCode wa = d'.getCode wa)
+    (hs : Devm.delSets d = Devm.delSets d') (hc : d.getCode wa = d'.getCode wa)
     (h : Devm.NoDel wa d) : Devm.NoDel wa d' := by
   have h1 : d.accountsToDelete = d'.accountsToDelete := congrArg Prod.fst hs
   have h2 : d.createdAccounts = d'.createdAccounts := congrArg Prod.snd hs
@@ -7077,14 +7108,14 @@ lemma ne_wa_of_not_hasCodeOrNonce {st : State} {wa ct : Adr}
   rw [h_empty_list] at hwa
   exact hwa rfl
 
-lemma State.get_set_self {w : _root_.State} {a : Adr} {ac : Acct} :
+lemma State.get_set_self {w : Jaune.State} {a : Adr} {ac : Acct} :
     (w.set a ac).get a = ac := by
   unfold State.set State.get
   split_ifs with h
   · rw [Std.TreeMap.getD_erase]; simp; exact h.symm
   · rw [Std.TreeMap.getD_insert]; simp
 
-lemma State.get_set_ne {w : _root_.State} {a a' : Adr} {ac : Acct} (h : a' ≠ a) :
+lemma State.get_set_ne {w : Jaune.State} {a a' : Adr} {ac : Acct} (h : a' ≠ a) :
     (w.set a' ac).get a = w.get a := by
   unfold State.set State.get
   have hc : compare a' a ≠ Ordering.eq := by
@@ -7093,7 +7124,7 @@ lemma State.get_set_ne {w : _root_.State} {a a' : Adr} {ac : Acct} (h : a' ≠ a
   · rw [Std.TreeMap.getD_erase]; simp [hc]
   · rw [Std.TreeMap.getD_insert]; simp [hc]
 
-lemma State.set_bal {st : _root_.State} {a : Adr} {ac : Acct}
+lemma State.set_bal {st : Jaune.State} {a : Adr} {ac : Acct}
     (h : ac.bal = (st.get a).bal) : (st.set a ac).bal = st.bal := by
   funext b
   by_cases hb : b = a
@@ -7104,13 +7135,13 @@ lemma State.set_bal {st : _root_.State} {a : Adr} {ac : Acct}
   · show ((st.set a ac).get b).bal = (st.get b).bal
     rw [State.get_set_ne (fun hc => hb hc.symm)]
 
-lemma State.setStor_bal {st : _root_.State} {a : Adr} {s : Stor} :
+lemma State.setStor_bal {st : Jaune.State} {a : Adr} {s : Stor} :
     (st.setStor a s).bal = st.bal := State.set_bal rfl
 
-lemma State.incrNonce_bal {st : _root_.State} {a : Adr} :
+lemma State.incrNonce_bal {st : Jaune.State} {a : Adr} :
     (st.incrNonce a).bal = st.bal := State.set_bal rfl
 
-lemma State.setCode_bal {st : _root_.State} {a : Adr} {cd : ByteArray} :
+lemma State.setCode_bal {st : Jaune.State} {a : Adr} {cd : ByteArray} :
     (st.setCode a cd).bal = st.bal := State.set_bal rfl
 
 -- The create-seeding step: wa ∉ msg.benv.createdAccounts and code is untouched.
@@ -7153,7 +7184,7 @@ lemma executePrecomp_noDel {wa : Adr} {evm : Evm} {adr : Adr} {exn : Execution}
 -- Helper lemmas for the EVM instructions delSets preservation.
 lemma liftMach_delSets_of_ok {core : Mach → Footprint.Outcome Mach α}
     {d d' : Devm} {x : α} (h : liftMach core d = .ok (x, d')) :
-    d'.delSets = d.delSets := by
+    Devm.delSets d' = Devm.delSets d := by
   unfold liftMach Footprint.liftOutcome at h
   cases hc : core d.mach with
   | error err => simp [hc] at h
@@ -7164,7 +7195,7 @@ lemma liftMach_delSets_of_ok {core : Mach → Footprint.Outcome Mach α}
 
 lemma liftMach_delSets_of_error {core : Mach → Footprint.Outcome Mach α}
     {d : Devm} {err : String × Devm} (h : liftMach core d = .error err) :
-    err.2.delSets = d.delSets := by
+    Devm.delSets err.2 = Devm.delSets d := by
   unfold liftMach Footprint.liftOutcome at h
   cases hc : core d.mach with
   | error out =>
@@ -7175,7 +7206,7 @@ lemma liftMach_delSets_of_error {core : Mach → Footprint.Outcome Mach α}
 
 lemma liftMachExecution_delSets_of_ok {core : Mach → Footprint.Outcome Mach Unit}
     {d d' : Devm} (h : liftMachExecution core d = .ok d') :
-    d'.delSets = d.delSets := by
+    Devm.delSets d' = Devm.delSets d := by
   unfold liftMachExecution Footprint.toExecution at h
   split at h
   · cases h
@@ -7185,7 +7216,7 @@ lemma liftMachExecution_delSets_of_ok {core : Mach → Footprint.Outcome Mach Un
 
 lemma liftMachExecution_delSets_of_error {core : Mach → Footprint.Outcome Mach Unit}
     {d : Devm} {err : String × Devm} (h : liftMachExecution core d = .error err) :
-    err.2.delSets = d.delSets := by
+    Devm.delSets err.2 = Devm.delSets d := by
   unfold liftMachExecution Footprint.toExecution at h
   split at h
   · rename_i e heq
@@ -7193,23 +7224,23 @@ lemma liftMachExecution_delSets_of_error {core : Mach → Footprint.Outcome Mach
     exact liftMach_delSets_of_error heq
   · cases h
 
-lemma Devm.pop_delSets_eq {x devm devm'} (h : Devm.pop devm = .ok ⟨x, devm'⟩) : devm'.delSets = devm.delSets := by
+lemma Devm.pop_delSets_eq {x devm devm'} (h : Devm.pop devm = .ok ⟨x, devm'⟩) : Devm.delSets devm' = Devm.delSets devm := by
   simp only [Devm.pop_def] at h
   split at h <;> try contradiction
   cases h; rfl
 
-lemma chargeGas_delSets_eq {cost devm devm'} (h : chargeGas cost devm = .ok devm') : devm'.delSets = devm.delSets := by
+lemma chargeGas_delSets_eq {cost devm devm'} (h : chargeGas cost devm = .ok devm') : Devm.delSets devm' = Devm.delSets devm := by
   simp only [chargeGas_def] at h
   split at h <;> try contradiction
   cases h; rfl
 
-lemma Devm.push_delSets_eq {v devm devm'} (h : Devm.push v devm = .ok devm') : devm'.delSets = devm.delSets := by
+lemma Devm.push_delSets_eq {v devm devm'} (h : Devm.push v devm = .ok devm') : Devm.delSets devm' = Devm.delSets devm := by
   exact liftMachExecution_delSets_of_ok (core := Mach.push v) h
 
-lemma Devm.popToAdr_delSets_eq {devm devm' adr} (h : Devm.popToAdr devm = .ok ⟨adr, devm'⟩) : devm'.delSets = devm.delSets := by
+lemma Devm.popToAdr_delSets_eq {devm devm' adr} (h : Devm.popToAdr devm = .ok ⟨adr, devm'⟩) : Devm.delSets devm' = Devm.delSets devm := by
   exact liftMach_delSets_of_ok (core := Mach.popToAdr) h
 
-lemma Devm.popToNat_delSets_eq {devm devm' n} (h : Devm.popToNat devm = .ok ⟨n, devm'⟩) : devm'.delSets = devm.delSets := by
+lemma Devm.popToNat_delSets_eq {devm devm' n} (h : Devm.popToNat devm = .ok ⟨n, devm'⟩) : Devm.delSets devm' = Devm.delSets devm := by
   exact liftMach_delSets_of_ok (core := Mach.popToNat) h
 
 lemma Rinst.inv_delSets {r : Rinst} : Rinst.Inv Devm.delSets r := by
@@ -7220,47 +7251,48 @@ lemma Rinst.inv_delSets {r : Rinst} : Rinst.Inv Devm.delSets r := by
   rcases eq_or_ne r .tstore with rfl | ht
   · have hf := Rinst.tstore_run_transientWriteFrame pc pre sevm; rw [hrun] at hf
     exact Prod.ext hf.accountsToDelete hf.createdAccounts
-  · have hf := Rinst.run_instructionFrame pc sevm pre r hs ht; rw [hrun] at hf; exact hf.delSets
+  · have hf := Rinst.run_instructionFrame pc sevm pre r hs ht; rw [hrun] at hf; exact Devm.InstructionFrame.delSets hf
 
-lemma chargeGas_delSets_err {cost devm err} (h : chargeGas cost devm = .error err) : err.2.delSets = devm.delSets := by
+lemma chargeGas_delSets_err {cost devm err} (h : chargeGas cost devm = .error err) : Devm.delSets err.2 = Devm.delSets devm := by
   simp only [chargeGas_def] at h
   split at h <;> try contradiction
   cases h; rfl
 
-lemma Devm.push_delSets_err {v devm err} (h : Devm.push v devm = Except.error err) : err.2.delSets = devm.delSets := by
+lemma Devm.push_delSets_err {v devm err} (h : Devm.push v devm = Except.error err) : Devm.delSets err.2 = Devm.delSets devm := by
   exact liftMachExecution_delSets_of_error (core := Mach.push v) h
 
-lemma Devm.popToAdr_delSets_err {devm err} (h : Devm.popToAdr devm = .error err) : err.2.delSets = devm.delSets := by
+lemma Devm.popToAdr_delSets_err {devm err} (h : Devm.popToAdr devm = .error err) : Devm.delSets err.2 = Devm.delSets devm := by
   exact liftMach_delSets_of_error (core := Mach.popToAdr) h
 
 -- Rinst execution preserves delSets on error results.
 lemma Rinst.inv_delSets_err {pc : Nat} {sevm : Sevm} {devm : Devm} {r : Rinst}
     {err : String} {devm' : Devm}
     (run : Rinst.run ⟨pc, sevm, devm⟩ r = .error ⟨err, devm'⟩) :
-    devm'.delSets = devm.delSets := by
+    Devm.delSets devm' = Devm.delSets devm := by
   rcases eq_or_ne r .sstore with rfl | hs
   · have hf := Rinst.sstore_run_stateWriteFrame pc devm sevm; rw [run] at hf
     exact (Prod.ext (by change devm.accountsToDelete = devm'.accountsToDelete; exact hf.accountsToDelete) (by change devm.createdAccounts = devm'.createdAccounts; exact hf.createdAccounts)).symm
   rcases eq_or_ne r .tstore with rfl | ht
   · have hf := Rinst.tstore_run_transientWriteFrame pc devm sevm; rw [run] at hf
     exact (Prod.ext (by change devm.accountsToDelete = devm'.accountsToDelete; exact hf.accountsToDelete) (by change devm.createdAccounts = devm'.createdAccounts; exact hf.createdAccounts)).symm
-  · have hf := Rinst.run_instructionFrame pc sevm devm r hs ht; rw [run] at hf; exact hf.delSets.symm
+  · have hf := Rinst.run_instructionFrame pc sevm devm r hs ht; rw [run] at hf
+    exact (Devm.InstructionFrame.delSets hf).symm
 
 lemma Jinst.inv_delSets {pc : Nat} {sevm : Sevm} {devm : Devm} {j : Jinst}
     {pc' : Nat} {devm' : Devm}
     (run : Jinst.Run ⟨pc, sevm, devm⟩ j (.ok ⟨pc', devm'⟩)) :
-    devm'.delSets = devm.delSets := by
+    Devm.delSets devm' = Devm.delSets devm := by
   have hf := Jinst.run_instructionFrame ⟨pc, sevm, devm⟩ j
   rw [run] at hf
-  exact hf.delSets.symm
+  exact (Devm.InstructionFrame.delSets hf).symm
 
 lemma Jinst.inv_delSets_err {pc : Nat} {sevm : Sevm} {devm : Devm} {j : Jinst}
     {err : String} {devm' : Devm}
     (run : Jinst.Run ⟨pc, sevm, devm⟩ j (.error ⟨err, devm'⟩)) :
-    devm'.delSets = devm.delSets := by
+    Devm.delSets devm' = Devm.delSets devm := by
   have hf := Jinst.run_instructionFrame ⟨pc, sevm, devm⟩ j
   rw [run] at hf
-  exact hf.delSets.symm
+  exact (Devm.InstructionFrame.delSets hf).symm
 
 -- Halting/terminal instructions (Linst) preserve NoDel.
 lemma Linst.dest_preserves_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
@@ -7276,7 +7308,10 @@ lemma Linst.dest_preserves_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
       split
       · exact addAccessedAddress_getCode
       · rfl
-    have h_acc_ds : (if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).1.delSets = res1.2.delSets := by
+    have h_acc_ds : Devm.delSets
+        (if res1.1 ∉ res1.2.accessedAddresses then
+          (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess)
+        else (res1.2, gasSelfDestruct)).1 = Devm.delSets res1.2 := by
       split
       · rfl
       · rfl
@@ -7308,7 +7343,7 @@ lemma Linst.dest_preserves_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
               simp only [Option.some.injEq] at h4; subst h4
               change st.getCode wa = res2.getCode wa
               exact State.subBal_getCode h_st
-          have h_sub_ds : res3.delSets = res2.delSets := by
+          have h_sub_ds : Devm.delSets res3 = Devm.delSets res2 := by
             dsimp [Devm.subBal] at h4
             cases h_st : res2.state.subBal sevm.currentTarget (res1.2.getAcct sevm.currentTarget).bal
             case none => rw [h_st] at h4; contradiction
@@ -7351,7 +7386,8 @@ theorem Linst.run_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
   · exact Linst.dest_preserves_noDel run h
   · have hf := Linst.run_instructionFrame sevm devm l h_not_dest
     rw [run] at hf
-    cases exn <;> exact Devm.NoDel.of_eqs hf.delSets (hf.getCode wa) h
+    cases exn <;>
+      exact Devm.NoDel.of_eqs (Devm.InstructionFrame.delSets hf) (hf.getCode wa) h
 
 lemma Linst.inv_noDel {wa : Adr} {sevm : Sevm} {devm : Devm} {l : Linst}
     {exn : Execution}
@@ -7380,7 +7416,7 @@ lemma Msg.NoDel.benvAfterTransfer_err {wa : Adr} {msg : Msg}
 
 lemma chargeCodeGas_delSets_ok {rules : ForkRules} {d d' : Devm}
     (h : processCreateMessage.chargeCodeGas rules d = .ok d') :
-    d'.delSets = d.delSets := by
+    Devm.delSets d' = Devm.delSets d := by
   unfold processCreateMessage.chargeCodeGas at h
   dsimp only at h
   split at h
@@ -7392,7 +7428,7 @@ lemma chargeCodeGas_delSets_ok {rules : ForkRules} {d d' : Devm}
 
 lemma chargeCodeGas_delSets_err {rules : ForkRules} {d d' : Devm} {err : String}
     (h : processCreateMessage.chargeCodeGas rules d = .error ⟨err, d'⟩) :
-    d'.delSets = d.delSets := by
+    Devm.delSets d' = Devm.delSets d := by
   unfold processCreateMessage.chargeCodeGas at h
   dsimp only at h
   split at h
@@ -7487,7 +7523,7 @@ lemma Devm.NoDel.memExtends {wa : Adr} {d : Devm} {ranges : List (Nat × Nat)}
   rfl
 
 lemma Devm.NoDel.addAccessedAddress {wa : Adr} {d : Devm} {a : Adr}
-    (hd : Devm.NoDel wa d) : Devm.NoDel wa (_root_.addAccessedAddress d a) := by
+    (hd : Devm.NoDel wa d) : Devm.NoDel wa (Jaune.addAccessedAddress d a) := by
   refine hd.of_eqs ?_ addAccessedAddress_getCode.symm
   rfl
 
@@ -7561,22 +7597,22 @@ lemma Msg.NoDel.benvAfterTransfer {wa : Adr} {msg : Msg} {benv : Benv}
 
 /-! ## 4. Balance-sum relations and primitive state updates -/
 
-def State.balSum (st : _root_.State) : Nat :=
+def State.balSum (st : Jaune.State) : Nat :=
   sum st.bal
 
 def Devm.balSum (d : Devm) : Nat :=
   State.balSum d.state
 
-def State.BalNoninc (pre post : _root_.State) : Prop :=
+def State.BalNoninc (pre post : Jaune.State) : Prop :=
   State.balSum post ≤ State.balSum pre
 
 def Devm.BalNoninc (pre post : Devm) : Prop :=
   Devm.balSum post ≤ Devm.balSum pre
 
-def State.BalGrowth (allowance : Nat) (pre post : _root_.State) : Prop :=
+def State.BalGrowth (allowance : Nat) (pre post : Jaune.State) : Prop :=
   State.balSum post ≤ State.balSum pre + allowance
 
-def State.SumNof (st : _root_.State) : Prop :=
+def State.SumNof (st : Jaune.State) : Prop :=
   State.balSum st < 2 ^ 256
 
 def Devm.SumNof (d : Devm) : Prop :=
@@ -7592,7 +7628,7 @@ lemma adr_toNat_lt_size_local (a : Adr) : a.toNat < 2 ^ 160 := by
   rw [← toAdr_toNat a, Nat.toNat_toAdr, Nat.lo]
   exact Nat.mod_lt _ (Nat.two_pow_pos _)
 
-lemma sumBelow_setBal_eq_local (st : _root_.State) (a : Adr) (v : B256)
+lemma sumBelow_setBal_eq_local (st : Jaune.State) (a : Adr) (v : B256)
     (n : Nat) (hn : n ≤ a.toNat) (hsize : n ≤ 2 ^ 160) :
     sumBelow (fun x => (st.setBal a v).bal x) n =
       sumBelow (fun x => st.bal x) n := by
@@ -7618,7 +7654,7 @@ lemma sumBelow_setBal_eq_local (st : _root_.State) (a : Adr) (v : B256)
       rw [hget']
     rw [hbal]
 
-lemma sumBelow_setBal_add_local (st : _root_.State) (a : Adr) (v : B256)
+lemma sumBelow_setBal_add_local (st : Jaune.State) (a : Adr) (v : B256)
     (n : Nat) (hsize : n ≤ 2 ^ 160) (ha : a.toNat < n) :
     sumBelow (fun x => (st.setBal a v).bal x) n + (st.bal a).toNat =
       sumBelow (fun x => st.bal x) n + v.toNat := by
@@ -7657,7 +7693,7 @@ lemma sumBelow_setBal_add_local (st : _root_.State) (a : Adr) (v : B256)
         sumBelow (fun x => st.bal x) n + (st.get a).bal.toNat + v.toNat
       omega
 
-lemma State.balSum_setBal (st : _root_.State) (a : Adr) (v : B256) :
+lemma State.balSum_setBal (st : Jaune.State) (a : Adr) (v : B256) :
     State.balSum (st.setBal a v) + (st.bal a).toNat =
       State.balSum st + v.toNat := by
   have hmax : Adr.max.toNat.succ = 2 ^ 160 := by decide
@@ -7668,7 +7704,7 @@ lemma State.balSum_setBal (st : _root_.State) (a : Adr) (v : B256) :
     (sumBelow_setBal_add_local st a v Adr.max.toNat.succ
       (by rw [hmax]) ha)
 
-lemma State.balSum_subBal {st mid : _root_.State} {a : Adr} {v : B256}
+lemma State.balSum_subBal {st mid : Jaune.State} {a : Adr} {v : B256}
     (h : st.subBal a v = some mid) :
     State.balSum mid + v.toNat = State.balSum st := by
   unfold State.subBal at h
@@ -7683,7 +7719,7 @@ lemma State.balSum_subBal {st mid : _root_.State} {a : Adr} {v : B256}
     rw [B256.toNat_sub_eq_of_le _ _ h_le] at h_set
     omega
 
-lemma State.addBal_growth (st : _root_.State) (a : Adr) (v : B256) :
+lemma State.addBal_growth (st : Jaune.State) (a : Adr) (v : B256) :
     State.BalGrowth v.toNat st (st.addBal a v) := by
   unfold State.addBal State.BalGrowth
   have h := State.balSum_setBal st a (st.bal a + v)
@@ -7694,7 +7730,7 @@ lemma State.addBal_growth (st : _root_.State) (a : Adr) (v : B256) :
 
 /- This lemma is the reusable conservation/nonincrease theorem for value transfer,
    including the recipient-overflow case.  -/
-lemma State.sub_addBal_noninc {st mid : _root_.State}
+lemma State.sub_addBal_noninc {st mid : Jaune.State}
     {src dst : Adr} {v : B256}
     (hsub : st.subBal src v = some mid) :
     State.BalNoninc st (mid.addBal dst v) := by
@@ -7704,7 +7740,7 @@ lemma State.sub_addBal_noninc {st mid : _root_.State}
   have h2 := State.balSum_subBal hsub
   omega
 
-lemma State.setBal_zero_noninc (st : _root_.State) (a : Adr) :
+lemma State.setBal_zero_noninc (st : Jaune.State) (a : Adr) :
     State.BalNoninc st (st.setBal a 0) := by
   unfold State.BalNoninc
   have h := State.balSum_setBal st a 0
@@ -7724,19 +7760,19 @@ lemma Devm.balNoninc_of_getBal_eq {pre post : Devm}
 
 /-! ## 5. Balance effects of instruction and message semantic units -/
 
-def MessageExecution := Except (String × _root_.State × AdrSet × Tra) Devm
+def MessageExecution := Except (String × Jaune.State × AdrSet × Tra) Devm
 
-def MessageExecution.state : MessageExecution → _root_.State
+def MessageExecution.state : MessageExecution → Jaune.State
   | .ok d => d.state
   | .error ⟨_, st, _, _⟩ => st
 
 def MessageExecution.Rel
-    (R : _root_.State → _root_.State → Prop)
-    (pre : _root_.State) (out : MessageExecution) : Prop :=
+    (R : Jaune.State → Jaune.State → Prop)
+    (pre : Jaune.State) (out : MessageExecution) : Prop :=
   R pre out.state
 
-def BenvExecution.state : Except (String × _root_.State × AdrSet × Tra) Benv →
-    _root_.State
+def BenvExecution.state : Except (String × Jaune.State × AdrSet × Tra) Benv →
+    Jaune.State
   | .ok benv => benv.state
   | .error ⟨_, st, _, _⟩ => st
 
@@ -7902,7 +7938,7 @@ lemma Devm.instructionFrame_refines_balNoninc :
   exact balNoninc_refl_trans.1.1 _
 
 lemma Msg.benvAfterTransfer_balance_effect {msg : Msg}
-    {out : Except (String × _root_.State × AdrSet × Tra) Benv}
+    {out : Except (String × Jaune.State × AdrSet × Tra) Benv}
     (h : msg.benvAfterTransfer = out) :
     State.BalNoninc msg.benv.state (BenvExecution.state out) := by
   by_cases h_stv : msg.shouldTransferValue = true
@@ -8033,19 +8069,19 @@ lemma processCreateMessage_eq (msg : Msg) :
     · rfl
 
 lemma processCreateMessage.settle_error {msg : Msg}
-    {e : String × _root_.State × AdrSet × Tra} :
+    {e : String × Jaune.State × AdrSet × Tra} :
     processCreateMessage.settle msg (.error e) = .error e := rfl
 
 /-- A failed child message aborts the CREATE-family return path. -/
 lemma Resume.create_run_error {parent : Devm} {newAddress : Adr}
-    {e : String × _root_.State × AdrSet × Tra} {sf : Devm}
+    {e : String × Jaune.State × AdrSet × Tra} {sf : Devm}
     (h : (Resume.create parent newAddress).run (.error e) = .ok sf) : False := by
   rcases e with ⟨err, st, ac, tra⟩
   unfold Resume.run liftToExecution at h
   cases h
 
 lemma processMessage.settle_error {msg : Msg}
-    {e : String × _root_.State × AdrSet × Tra} :
+    {e : String × Jaune.State × AdrSet × Tra} :
     processMessage.settle msg (.error e) = .error e := rfl
 
 /-- Master balance effect for the code-execution layer: running the callee's
@@ -8054,7 +8090,7 @@ total balance relative to the freshly-initialised message state. The `Xlot`
 witness carries the interpreter's own `Devm.BalNoninc` frame; the precompile
 branch supplies its frame directly. -/
 lemma ExecuteCode.balance_effect {msg : Msg} {xl : Xlot}
-    {ex : Except (String × _root_.State × AdrSet × Tra) Devm}
+    {ex : Except (String × Jaune.State × AdrSet × Tra) Devm}
     (hxl : Xlot.Rel Devm.BalNoninc xl)
     (hec : ExecuteCode msg xl ex) :
     State.BalNoninc (initEvm msg).dyna.state (MessageExecution.state ex) := by
@@ -8503,7 +8539,7 @@ lemma setDelegation_balSum_eq {msg msg' : Msg} {refund : B256}
           msgL.benv.state.bal from rfl, h_bal]
 
 lemma processMessageCall.call_balance_noninc
-    {msg : Msg} {post : _root_.State} {out : MsgCallOutput}
+    {msg : Msg} {post : Jaune.State} {out : MsgCallOutput}
     (h : processMessageCall.call msg = .ok ⟨post, out⟩) :
     State.BalNoninc msg.benv.state post := by
   unfold processMessageCall.call at h
@@ -8562,7 +8598,7 @@ lemma processMessageCall.call_balance_noninc
             exact hpre
 
 lemma processMessageCall.create_balance_noninc
-    {msg : Msg} {post : _root_.State} {out : MsgCallOutput}
+    {msg : Msg} {post : Jaune.State} {out : MsgCallOutput}
     (h : processMessageCall.create msg = .ok ⟨post, out⟩) :
     State.BalNoninc msg.benv.state post := by
   unfold processMessageCall.create at h
@@ -8593,7 +8629,7 @@ lemma processMessageCall.create_balance_noninc
           exact hbal
 
 lemma processMessageCall_balance_noninc
-    {msg : Msg} {post : _root_.State} {out : MsgCallOutput}
+    {msg : Msg} {post : Jaune.State} {out : MsgCallOutput}
     (h : processMessageCall msg = .ok ⟨post, out⟩) :
     State.BalNoninc msg.benv.state post := by
   unfold processMessageCall at h
@@ -8602,7 +8638,9 @@ lemma processMessageCall_balance_noninc
   · exact processMessageCall.call_balance_noninc h
 
 lemma processMessageCall_sum_le
-    {msg : Msg} {post : _root_.State} {out : MsgCallOutput}
+    {msg : Msg} {post : Jaune.State} {out : MsgCallOutput}
     (h : processMessageCall msg = .ok ⟨post, out⟩) :
     sum post.bal ≤ sum msg.benv.state.bal := by
   exact processMessageCall_balance_noninc h
+
+end Blanc

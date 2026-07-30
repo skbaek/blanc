@@ -4,78 +4,81 @@ import Blanc.Basic
 import Jaune.Hash
 import Jaune.Sufficiency
 
+namespace Blanc
+
+open Jaune
 
 
 def Rinst.toUInt8 : Rinst → UInt8
-  | add          => 0x01
-  | mul          => 0x02
-  | sub          => 0x03
-  | div          => 0x04
-  | sdiv         => 0x05
-  | mod          => 0x06
-  | smod         => 0x07
-  | addmod       => 0x08
-  | mulmod       => 0x09
-  | exp          => 0x0A
-  | signextend   => 0x0B
-  | lt           => 0x10
-  | gt           => 0x11
-  | slt          => 0x12
-  | sgt          => 0x13
-  | eq           => 0x14
-  | iszero       => 0x15
-  | and          => 0x16
-  | or           => 0x17
-  | xor          => 0x18
-  | not          => 0x19
-  | byte         => 0x1A
-  | shl          => 0x1B
-  | shr          => 0x1C
-  | sar          => 0x1D
-  | clz          => 0x1E
-  | kec          => 0x20
-  | address      => 0x30
-  | balance      => 0x31
-  | origin       => 0x32
-  | caller       => 0x33
-  | callvalue    => 0x34
-  | calldataload => 0x35
-  | calldatasize => 0x36
-  | calldatacopy => 0x37
-  | codesize     => 0x38
-  | codecopy     => 0x39
-  | gasprice     => 0x3A
-  | extcodesize  => 0x3B
-  | extcodecopy  => 0x3C
-  | retdatasize  => 0x3D
-  | retdatacopy  => 0x3E
-  | extcodehash  => 0x3F
-  | blockhash    => 0x40
-  | coinbase     => 0x41
-  | timestamp    => 0x42
-  | number       => 0x43
-  | prevrandao   => 0x44
-  | gaslimit     => 0x45
-  | chainid      => 0x46
-  | selfbalance  => 0x47
-  | basefee      => 0x48
-  | blobhash     => 0x49
-  | blobbasefee  => 0x4A
-  | pop          => 0x50
-  | mload        => 0x51
-  | mstore       => 0x52
-  | mstore8      => 0x53
-  | sload        => 0x54
-  | sstore       => 0x55
-  | pc           => 0x58
-  | msize        => 0x59
-  | gas          => 0x5A
-  | tload        => 0x5C
-  | tstore       => 0x5D
-  | mcopy        => 0x5E
-  | dup n        => 0x80 + n.val.toUInt8
-  | swap n       => 0x90 + n.val.toUInt8
-  | log n        => 0xA0 + n.val.toUInt8
+  | .add          => 0x01
+  | .mul          => 0x02
+  | .sub          => 0x03
+  | .div          => 0x04
+  | .sdiv         => 0x05
+  | .mod          => 0x06
+  | .smod         => 0x07
+  | .addmod       => 0x08
+  | .mulmod       => 0x09
+  | .exp          => 0x0A
+  | .signextend   => 0x0B
+  | .lt           => 0x10
+  | .gt           => 0x11
+  | .slt          => 0x12
+  | .sgt          => 0x13
+  | .eq           => 0x14
+  | .iszero       => 0x15
+  | .and          => 0x16
+  | .or           => 0x17
+  | .xor          => 0x18
+  | .not          => 0x19
+  | .byte         => 0x1A
+  | .shl          => 0x1B
+  | .shr          => 0x1C
+  | .sar          => 0x1D
+  | .clz          => 0x1E
+  | .kec          => 0x20
+  | .address      => 0x30
+  | .balance      => 0x31
+  | .origin       => 0x32
+  | .caller       => 0x33
+  | .callvalue    => 0x34
+  | .calldataload => 0x35
+  | .calldatasize => 0x36
+  | .calldatacopy => 0x37
+  | .codesize     => 0x38
+  | .codecopy     => 0x39
+  | .gasprice     => 0x3A
+  | .extcodesize  => 0x3B
+  | .extcodecopy  => 0x3C
+  | .retdatasize  => 0x3D
+  | .retdatacopy  => 0x3E
+  | .extcodehash  => 0x3F
+  | .blockhash    => 0x40
+  | .coinbase     => 0x41
+  | .timestamp    => 0x42
+  | .number       => 0x43
+  | .prevrandao   => 0x44
+  | .gaslimit     => 0x45
+  | .chainid      => 0x46
+  | .selfbalance  => 0x47
+  | .basefee      => 0x48
+  | .blobhash     => 0x49
+  | .blobbasefee  => 0x4A
+  | .pop          => 0x50
+  | .mload        => 0x51
+  | .mstore       => 0x52
+  | .mstore8      => 0x53
+  | .sload        => 0x54
+  | .sstore       => 0x55
+  | .pc           => 0x58
+  | .msize        => 0x59
+  | .gas          => 0x5A
+  | .tload        => 0x5C
+  | .tstore       => 0x5D
+  | .mcopy        => 0x5E
+  | .dup n        => 0x80 + n.val.toUInt8
+  | .swap n       => 0x90 + n.val.toUInt8
+  | .log n        => 0xA0 + n.val.toUInt8
 
 abbrev Stack : Type := List B256
 
@@ -602,19 +605,19 @@ lemma Evm.step_invOp {pc : Nat} {sevm : Sevm} {devm : Devm}
   rw [show (Evm.getInst ⟨pc, sevm, devm⟩) = none from h]
 
 lemma Evm.step_next {pc : Nat} {sevm : Sevm} {devm : Devm} {n : Ninst}
-    (h : n.At sevm.code pc) :
+    (h : Ninst.At sevm.code pc n) :
     Evm.step ⟨pc, sevm, devm⟩ = Ninst.step ⟨pc, sevm, devm⟩ n := by
   unfold Evm.step
   rw [show (Evm.getInst ⟨pc, sevm, devm⟩) = some (.next n) from h]
 
 lemma Evm.step_jump {pc : Nat} {sevm : Sevm} {devm : Devm} {j : Jinst}
-    (h : j.At sevm.code pc) :
+    (h : Jinst.At sevm.code pc j) :
     Evm.step ⟨pc, sevm, devm⟩ = Step.ofJump (j.run ⟨pc, sevm, devm⟩) := by
   unfold Evm.step
   rw [show (Evm.getInst ⟨pc, sevm, devm⟩) = some (.jump j) from h]
 
 lemma Evm.step_last {pc : Nat} {sevm : Sevm} {devm : Devm} {l : Linst}
-    (h : l.At sevm.code pc) :
+    (h : Linst.At sevm.code pc l) :
     Evm.step ⟨pc, sevm, devm⟩ = .halt (l.run sevm devm) := by
   unfold Evm.step
   rw [show (Evm.getInst ⟨pc, sevm, devm⟩) = some (.last l) from h]
@@ -993,3 +996,5 @@ lemma of_processCreateMessage (msg : Msg)
       xl.Filled ∧
       ProcessCreateMessage msg xl ex :=
   of_runFrame eq
+
+end Blanc
