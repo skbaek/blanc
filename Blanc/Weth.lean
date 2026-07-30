@@ -1,6 +1,6 @@
 -- Weth.lean : proof-of-concept implementation of the Wrapped Ether (WETH) contract
 
-import Blanc.Common
+import Blanc.CommonProofs
 
 namespace Blanc
 

@@ -1,7 +1,7 @@
 -- Solvent.lean : proof of solvency for WETH implementation
 
 
-import Blanc.Common
+import Blanc.CommonProofs
 import Blanc.Weth
 import Std.Data.TreeMap.Lemmas
 import Mathlib.Tactic.Ring
