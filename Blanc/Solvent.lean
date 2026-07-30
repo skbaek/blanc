@@ -6137,7 +6137,7 @@ theorem applyBody_preserves_solvent (wa : Adr)
     (h_wds : sum benv.state.bal + wdsum wds < 2 ^ 256)
     (h_inv : Benv.InvSolvent wa benv) : State.Inv wa st := by
   rw [applyBody] at h_run
-  simp only [cprint, verbose, Bool.false_eq_true, if_false, pure_bind] at h_run
+  simp only at h_run
   rcases of_bind_eq_ok h_run with ⟨⟨stBeacon, outBeacon⟩, h_beacon, h_run⟩
   rcases of_bind_eq_ok h_run with ⟨lastHash, h_lastHash, h_run⟩
   rcases of_bind_eq_ok h_run with ⟨⟨stHistory, outHistory⟩, h_history, h_run⟩
@@ -6289,11 +6289,7 @@ theorem addBlockToChainWith_preserves_solvent (wa : Adr) (rules : ForkRules)
   rw [addBlockToChainWith] at h_run
   obtain ⟨⟨block, hash⟩, h_rlp, h_run⟩ := of_bind_eq_ok h_run
   dsimp only at h_run
-  obtain ⟨_, _, h_run⟩ := of_bind_eq_ok h_run
-  obtain ⟨_, _, h_run⟩ := of_bind_eq_ok h_run
-  -- `addBlockToChain.go` puts the post-transition tail behind a `do` join
-  -- point; zeta-reduce it so the hash check and the transition split as before.
-  dsimp only at h_run
+  change (if (Header.toBLT block.header).toBytes.keccak ≠ hash then _ else _) = _ at h_run
   -- outer hash check
   split at h_run
   · cases h_run
@@ -6303,11 +6299,8 @@ theorem addBlockToChainWith_preserves_solvent (wa : Adr) (rules : ForkRules)
     · split at h_run
       · simp [Pure.pure, Except.pure] at h_run
       · rename_i chain h_st
-        obtain ⟨y, hy, h_run⟩ := of_bind_eq_ok h_run
-        obtain ⟨_, _, h_run⟩ := of_bind_eq_ok h_run
-        obtain ⟨_, _, h_run⟩ := of_bind_eq_ok h_run
         have hyc : chain = ch' :=
-          (Except.ok.inj hy).trans (Sum.inl.inj (Except.ok.inj h_run))
+          Sum.inl.inj (Except.ok.inj h_run)
         subst hyc
         exact stateTransitionWith_preserves_solvent wa rules ch _ block h_st
           (h_wds block hash h_rlp) h_inv
