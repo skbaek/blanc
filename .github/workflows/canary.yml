@@ -72,4 +72,4 @@ jobs:
         run: |
           lake update jaune          # re-resolve the manifest to the re-pinned HEAD
           lake exe cache get || true  # mathlib olean cache (best effort)
-          scripts/check.sh            # lake build + AxiomCheck of the 4 theorems
+          scripts/check.sh            # lake build + AxiomCheck of the 5 theorems

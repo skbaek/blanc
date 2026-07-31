@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Blanc verification gate (REFACTOR.md Phase 0, step 0.3): `lake build`,
-# then an axiom audit of the four top solvency theorems via
+# then an axiom audit of the five top solvency theorems via
 # scripts/AxiomCheck.lean — each theorem's axiom closure must equal exactly
 # [propext, Classical.choice, Quot.sound], order-insensitive. Any extra
 # axiom fails — sorryAx, ofReduceBool/ofReduceNat, and also bv_decide's
@@ -40,7 +40,7 @@ if ! OUT="$(cd "$ROOT" && lake env lean scripts/AxiomCheck.lean 2>&1)"; then
   exit 1
 fi
 
-THEOREMS="Blanc.weth_preserves_solvent Blanc.stateTransition_preserves_solvent Blanc.chain_preserves_solvent Blanc.addBlockToChain_preserves_solvent"
+THEOREMS="Blanc.weth_preserves_solvent Blanc.stateTransition_preserves_solvent Blanc.chain_preserves_solvent Blanc.addBlockToChain_preserves_solvent Blanc.stateTransitionUsing_preserves_solvent"
 EXPECTED_DISPLAY="propext, Classical.choice, Quot.sound"
 EXPECTED_SORTED="$(printf '%s\n' propext Classical.choice Quot.sound | LC_ALL=C sort)"
 # Secondary net only: the exact-set comparison below is the primary check;

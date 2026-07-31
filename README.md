@@ -25,18 +25,19 @@ opens the namespace explicitly.
 ## Verification status
 
 Blanc builds against a **pinned revision** of
-[Jaune](https://github.com/skbaek/jaune) — `require jaune from git … @ ad7f47ec…`
+[Jaune](https://github.com/skbaek/jaune) — `require jaune from git … @ 739fa42d…`
 in [`lakefile.lean`](lakefile.lean) — so a fresh clone builds reproducibly
 without a sibling checkout, and bumping Jaune is a reviewed one-line change.
 
 CI ([`scripts/check.sh`](scripts/check.sh)) builds the library and then runs an
 **axiom audit** ([`scripts/AxiomCheck.lean`](scripts/AxiomCheck.lean)) of the
-four headline solvency theorems:
+five headline solvency theorems:
 
 - `Blanc.weth_preserves_solvent`
 - `Blanc.stateTransition_preserves_solvent`
 - `Blanc.chain_preserves_solvent`
 - `Blanc.addBlockToChain_preserves_solvent`
+- `Blanc.stateTransitionUsing_preserves_solvent`
 
 The audit fails if any of them depends on `sorryAx`, `ofReduceBool`, or
 `ofReduceNat` — i.e. no `sorry` and no `native_decide`-style axiom in the

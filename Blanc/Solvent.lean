@@ -6270,8 +6270,21 @@ inductive BlockChain.Reach : BlockChain → BlockChain → Prop
 -- fork it runs under is whichever one `cfg` schedules at that block's
 -- timestamp. A sequence crossing Prague, Osaka, BPO1, and BPO2 is one chain of
 -- these steps, not four separate relations.
+--
+-- The base constructor carries the configured-chain context evidence (P0.1
+-- item 6): the schedule is validated, the starting snapshot is a valid
+-- execution context, and the configuration names the snapshot's own chain
+-- identity. A zero-step reach over a mismatched or never-validated pair no
+-- longer exists, and every `step` re-establishes the identity agreement on
+-- its own — a successful `stateTransitionUsing` is impossible across
+-- contradictory chain IDs (`stateTransitionUsing_success_chainId_eq`) and
+-- runs `cfg.validate` inside its rules lookup.
 inductive BlockChain.ReachUsing (cfg : ChainConfig) : BlockChain → BlockChain → Prop
-  | refl (ch : BlockChain) : ReachUsing cfg ch ch
+  | refl (ch : BlockChain)
+      (h_cfg : cfg.Valid)
+      (h_ctx : ch.ValidContext)
+      (h_id : cfg.chainId = ch.chainId) :
+      ReachUsing cfg ch ch
   | step {ch ch' ch'' : BlockChain} {block : Block} :
       ReachUsing cfg ch ch' →
       sum ch'.state.bal + wdsum block.wds < 2 ^ 256 →
@@ -6282,9 +6295,37 @@ inductive BlockChain.ReachUsing (cfg : ChainConfig) : BlockChain → BlockChain 
 -- can break WETH solvency, whatever schedule the chain follows and whichever
 -- activations that sequence crosses.
 
+/-- Every successful Prague step copies the snapshot's chain identity, so a
+whole Prague reachability chain does. -/
+lemma BlockChain.Reach.chainId_eq {ch ch' : BlockChain}
+    (h_reach : BlockChain.Reach ch ch') : ch'.chainId = ch.chainId := by
+  induction h_reach with
+  | refl => rfl
+  | step h_reach' h_bound h_st ih =>
+      rw [stateTransitionWith_preserves_chainId h_st, ih]
+
 -- A Prague-only schedule is the Prague chain: every `Reach` step is a
 -- `ReachUsing (ChainConfig.pragueOnly ch.chainId)` step, because
 -- `stateTransitionUsing` on that schedule reduces to `stateTransition`.
+-- The corrected `ReachUsing.refl` demands real evidence, so the conversion
+-- carries it rather than being true because the identity was ignored: the
+-- Prague-only schedule is valid for every identity
+-- (`ChainConfig.pragueOnly_valid`), it names the base snapshot's own chain ID
+-- by construction, and the base snapshot's context validity is the one fact
+-- plain `Reach` never established, so it enters as a hypothesis.
+theorem BlockChain.Reach.toReachUsing {ch ch' : BlockChain}
+    (h_ctx : ch.ValidContext)
+    (h_reach : BlockChain.Reach ch ch') :
+    BlockChain.ReachUsing (ChainConfig.pragueOnly ch.chainId) ch ch' := by
+  induction h_reach with
+  | refl => exact .refl ch (ChainConfig.pragueOnly_valid _) h_ctx rfl
+  | step h_reach' h_bound h_st ih =>
+      refine .step ih h_bound ?_
+      rw [stateTransitionUsing_eq_of_chainId_eq
+        (show (ChainConfig.pragueOnly ch.chainId).chainId = _ from
+          (Reach.chainId_eq h_reach').symm),
+        ChainConfig.pragueOnly_rulesAt]
+      exact h_st
 
 -- Chain-level induction corollary : no sequence of valid blocks can break
 -- WETH solvency.
