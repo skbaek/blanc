@@ -193,7 +193,7 @@ lemma liftMach_worldEq_of_ok {core : Mach → Footprint.Outcome Mach α}
     exact Devm.worldEq_setMach d out.2
 
 lemma liftMach_worldEq_of_error {core : Mach → Footprint.Outcome Mach α}
-    {d : Devm} {err : String × Devm} (h : liftMach core d = .error err) :
+    {d : Devm} {err : EvmError × Devm} (h : liftMach core d = .error err) :
     Devm.WorldEq d err.2 := by
   unfold liftMach Footprint.liftOutcome at h
   cases hc : core d.mach with
@@ -214,7 +214,7 @@ lemma liftMachExecution_worldEq_of_ok {core : Mach → Footprint.Outcome Mach Un
     exact liftMach_worldEq_of_ok heq
 
 lemma liftMachExecution_worldEq_of_error {core : Mach → Footprint.Outcome Mach Unit}
-    {d : Devm} {err : String × Devm} (h : liftMachExecution core d = .error err) :
+    {d : Devm} {err : EvmError × Devm} (h : liftMachExecution core d = .error err) :
     Devm.WorldEq d err.2 := by
   unfold liftMachExecution Footprint.toExecution at h
   split at h
@@ -227,7 +227,7 @@ lemma chargeGas_worldEq_of_ok {cost : Nat} {d d' : Devm}
     (h : chargeGas cost d = .ok d') : Devm.WorldEq d d' := by
   exact liftMachExecution_worldEq_of_ok (core := Mach.chargeGas cost) h
 
-lemma chargeGas_worldEq_of_error {cost : Nat} {d : Devm} {err : String × Devm}
+lemma chargeGas_worldEq_of_error {cost : Nat} {d : Devm} {err : EvmError × Devm}
     (h : chargeGas cost d = .error err) : Devm.WorldEq d err.2 := by
   exact liftMachExecution_worldEq_of_error (core := Mach.chargeGas cost) h
 
@@ -567,7 +567,7 @@ def Execution.Rel (R : Devm → Devm → Prop) (pre : Devm) (out : Execution) : 
   Outcome.Rel Prod.snd id R pre out
 
 lemma outcomeRel_toExecution {R : Devm → Devm → Prop} {pre : Devm}
-    {out : Except (String × Devm) (Unit × Devm)}
+    {out : Except (EvmError × Devm) (Unit × Devm)}
     (h : Outcome.Rel Prod.snd Prod.snd R pre out) :
     Execution.Rel R pre (Footprint.toExecution out) := by
   cases out <;> exact h
@@ -894,11 +894,9 @@ lemma addAccessedAddress_instructionFrame (d : Devm) (a : Adr) :
 lemma accessDelegation_instructionFrame (d : Devm) (adr : Adr) :
     Devm.InstructionFrame d (accessDelegation d adr).2.2.2.2 := by
   rw [accessDelegation]
-  by_cases h : isValidDelegation (d.state.getCode adr)
-  · simp only [h, if_true]
-    exact addAccessedAddress_instructionFrame d _
-  · simp only [h, if_false]
-    exact Devm.instructionFrame_refl d
+  cases getDelegatedCodeAddress (d.state.getCode adr)
+  · exact Devm.instructionFrame_refl d
+  · exact addAccessedAddress_instructionFrame d _
 
 lemma addAccessedStorageKey_instructionFrame
     (d : Devm) (a : Adr) (k : B256) :
@@ -960,7 +958,7 @@ lemma Rinst.balanceCore_instructionFrame (d : Devm) :
 
 lemma Outcome.Rel.bindExecution
     {R : Devm → Devm → Prop} (htrans : TransitiveRel R)
-    {pre : Devm} {out : Except (String × Devm) (α × Devm)}
+    {pre : Devm} {out : Except (EvmError × Devm) (α × Devm)}
     {next : α → Devm → Execution}
     (hout : Outcome.Rel Prod.snd Prod.snd R pre out)
     (hnext : ∀ x d, Execution.Rel R d (next x d)) :
@@ -1626,7 +1624,7 @@ lemma Rinst.retdatacopy_runCore_instructionFrame
       (gVerylow + gReturnDataCopy * ceilDiv size 32 +
         d.extCost [(memoryStart, size)]) d
     if d.returnData.length < returnStart + size then
-      .error ⟨"OutOfBoundsRead", d⟩
+      .error ⟨.halt (.outOfBoundsRead .none), d⟩
     let value := d.returnData.sliceD returnStart size 0
     .ok (d.withMemory (d.memory.write memoryStart value))) ?_
   intro memoryStart returnStart size d
@@ -1859,7 +1857,7 @@ lemma Rinst.sstore_runCore_stateWriteFrame
     (Outcome.Rel.mono Devm.instructionFrame_refines_stateWriteFrame
       (Devm.pop_instructionFrame pre)) (next := fun key d => do
         let ⟨value, d⟩ ← d.pop
-        .assert (gCallStipend < d.gasLeft) ⟨"OutOfGasError", d⟩
+        .assert (gCallStipend < d.gasLeft) ⟨.halt (.outOfGas .none), d⟩
         let ct := sevm.currentTarget
         let original := getOrigStorVal sevm ct key
         let current := d.getStorVal ct key
@@ -1880,7 +1878,7 @@ lemma Rinst.sstore_runCore_stateWriteFrame
   refine Outcome.Rel.bindExecution Devm.stateWriteFrame_trans
     (Outcome.Rel.mono Devm.instructionFrame_refines_stateWriteFrame
       (Devm.pop_instructionFrame d)) (next := fun value d => do
-        .assert (gCallStipend < d.gasLeft) ⟨"OutOfGasError", d⟩
+        .assert (gCallStipend < d.gasLeft) ⟨.halt (.outOfGas .none), d⟩
         let ct := sevm.currentTarget
         let original := getOrigStorVal sevm ct key
         let current := d.getStorVal ct key
@@ -2057,14 +2055,14 @@ theorem Linst.run_instructionFrame
         let ⟨size, d⟩ ← d.popToNat
         let d ← chargeGas (d.extCost [(index, size)]) d
         let ⟨output, d⟩ := d.memRead index size
-        .error ("Revert", d.withOutput output)) ?_
+        .error (.revert, d.withOutput output)) ?_
     intro index d
     refine Outcome.Rel.bindExecution Devm.instructionFrame_trans
       (Devm.popToNat_instructionFrame d)
       (next := fun size d => do
         let d ← chargeGas (d.extCost [(index, size)]) d
         let ⟨output, d⟩ := d.memRead index size
-        .error ("Revert", d.withOutput output)) ?_
+        .error (.revert, d.withOutput output)) ?_
     intro size d
     apply Execution.Rel.bind Devm.instructionFrame_trans
       (chargeGas_instructionFrame (d.extCost [(index, size)]) d)
@@ -2141,7 +2139,7 @@ lemma executePrecomp_preserves_getCode (evm : Evm) (adr : Adr) (ex : Execution)
     Execution.getCode ex a = evm.dyna.getCode a := by
   apply applyPrecompResult_getCode evm (precompileRun evm adr) ex h_ex a
 
-def MsgResult.getCode (exn : Except (String × State × AdrSet × Tra) Devm) (a : Adr) : ByteArray :=
+def MsgResult.getCode (exn : Except (EvmError × State × AdrSet × Tra) Devm) (a : Adr) : ByteArray :=
   match exn with
   | .ok d => d.getCode a
   | .error ⟨_, state, _, _⟩ => state.getCode a
@@ -2153,11 +2151,11 @@ nonempty-code address is left untouched; `CodePreserveExcept w` weakens that by
 also excluding the single write target `w` (the freshly-created contract). -/
 
 def MsgResult.CodePreserve (base : State)
-    (exn : Except (String × State × AdrSet × Tra) Devm) : Prop :=
+    (exn : Except (EvmError × State × AdrSet × Tra) Devm) : Prop :=
   ∀ a : Adr, (base.getCode a).toList ≠ [] → MsgResult.getCode exn a = base.getCode a
 
 def MsgResult.CodePreserveExcept (base : State) (w : Adr)
-    (exn : Except (String × State × AdrSet × Tra) Devm) : Prop :=
+    (exn : Except (EvmError × State × AdrSet × Tra) Devm) : Prop :=
   ∀ a : Adr, a ≠ w → (base.getCode a).toList ≠ [] →
     MsgResult.getCode exn a = base.getCode a
 
@@ -2175,10 +2173,7 @@ lemma executeCode.handleError_getCode (exn : Execution) (a : Adr) :
   | ok d => rfl
   | error p =>
     rcases p with ⟨err, evm⟩
-    dsimp only [executeCode.handleError]
-    split
-    · rfl
-    · split <;> rfl
+    cases err <;> rfl
 
 /-- Writer leaf: rollback installs the selected state, so its code map is that
 state's code map. -/
@@ -2211,7 +2206,7 @@ lemma processCreateMessage.msg_getCode (msg : Msg) (a : Adr) :
 The suspended child's oracle invariant (`inv`) supplies the interpreted-code
 case; `handleError_getCode` covers precompile and error selection. -/
 lemma ExecuteCode.codePreserve
-    {msg : Msg} {xl : Xlot} {exn : Except (String × State × AdrSet × Tra) Devm}
+    {msg : Msg} {xl : Xlot} {exn : Except (EvmError × State × AdrSet × Tra) Devm}
     (inv : xl.InvGetCode)
     (run : ExecuteCode msg xl exn) :
     MsgResult.CodePreserve msg.benv.state exn := by
@@ -2233,7 +2228,7 @@ lemma ExecuteCode.codePreserve
     exact executePrecomp_preserves_getCode (initEvm msg) adr _ rfl a
 
 lemma ProcessMessage.codePreserve
-    {msg : Msg} {xl : Xlot} {exn : Except (String × State × AdrSet × Tra) Devm}
+    {msg : Msg} {xl : Xlot} {exn : Except (EvmError × State × AdrSet × Tra) Devm}
     (inv : xl.InvGetCode)
     (run : ProcessMessage msg xl exn) :
     MsgResult.CodePreserve msg.benv.state exn := by
@@ -2268,7 +2263,7 @@ lemma ProcessMessage.codePreserve
       · exact h_exec_cond
 
 lemma ProcessMessage.preserves_getCode_gen
-    {msg : Msg} {xl : Xlot} {exn : Except (String × State × AdrSet × Tra) Devm}
+    {msg : Msg} {xl : Xlot} {exn : Except (EvmError × State × AdrSet × Tra) Devm}
     (inv : xl.InvGetCode)
     (run : ProcessMessage msg xl exn) :
     ∀ a : Adr,
@@ -2299,7 +2294,7 @@ address *other than* the create target.  Create preparation
 through `setCode` (`setCode_getCode`, excluded by `a ≠ msg.currentTarget`); the
 halt/error paths select states via rollback (`Devm.rollback_getCode`). -/
 lemma ProcessCreateMessage.codePreserve
-    {msg : Msg} {xl : Xlot} {exn : Except (String × State × AdrSet × Tra) Devm}
+    {msg : Msg} {xl : Xlot} {exn : Except (EvmError × State × AdrSet × Tra) Devm}
     (inv : xl.InvGetCode)
     (run : ProcessCreateMessage msg xl exn) :
     MsgResult.CodePreserveExcept msg.benv.state msg.currentTarget exn := by
@@ -2319,16 +2314,13 @@ lemma ProcessCreateMessage.codePreserve
       cases h_charge : processCreateMessage.chargeCodeGas msg.benv.stat.rules evm with
       | error err =>
         rcases err with ⟨err_msg, err_evm⟩
-        dsimp only []
-        split
-        · rename_i h_halt
-          dsimp [processCreateMessage.exceptionalHalt, MsgResult.getCode]
-          rfl
-        · dsimp [MsgResult.getCode]
-          have h_getCode := processCreateMessage.chargeCodeGas_getCode_gen h_charge a
-          change err_evm.state.getCode a = evm.state.getCode a at h_getCode
-          rw [h_getCode]
-          exact h_exec_cond
+        have h_getCode := processCreateMessage.chargeCodeGas_getCode_gen h_charge a
+        change err_evm.state.getCode a = evm.state.getCode a at h_getCode
+        cases err_msg <;>
+          simp only [MsgResult.getCode, processCreateMessage.exceptionalHalt] <;>
+          first
+            | rfl
+            | (rw [h_getCode]; exact h_exec_cond)
       | ok devm_charge =>
         dsimp only [MsgResult.getCode]
         have h_getCode := processCreateMessage.chargeCodeGas_getCode_gen h_charge a
@@ -2348,7 +2340,7 @@ lemma createMsg_benv_state_getCode
 /-- The CREATE-family return path preserves code at every address other than
 the freshly created one, given the child frame preserved it. -/
 lemma Resume.create_getCode {parent : Devm} {newAddress a : Adr}
-    {r : Except (String × State × AdrSet × Tra) Devm}
+    {r : Except (EvmError × State × AdrSet × Tra) Devm}
     (h : MsgResult.getCode r a = parent.getCode a) :
     Execution.getCode ((Resume.create parent newAddress).run r) a =
       parent.getCode a := by
@@ -2458,7 +2450,7 @@ lemma callMsg_benv_state_getCode
 frame preserved it: `memWrite` touches memory only, and `incorporateChild*`
 installs the child's state, whose code map the child preserved. -/
 lemma Resume.call_getCode {parent : Devm} {a : Adr} {outputIndex outputSize : Nat}
-    {r : Except (String × State × AdrSet × Tra) Devm}
+    {r : Except (EvmError × State × AdrSet × Tra) Devm}
     (h : MsgResult.getCode r a = parent.getCode a) :
     Execution.getCode ((Resume.call parent outputIndex outputSize).run r) a =
       parent.getCode a := by
@@ -2507,7 +2499,7 @@ lemma Resume.create_state {parent child : Devm} {newAddress : Adr} {sf : Devm}
 
 /-- A failed child message aborts the CALL-family return path. -/
 lemma Resume.call_run_error {parent : Devm} {oi os : Nat}
-    {e : String × Jaune.State × AdrSet × Tra} {sf : Devm}
+    {e : EvmError × Jaune.State × AdrSet × Tra} {sf : Devm}
     (h : (Resume.call parent oi os).run (.error e) = .ok sf) : False := by
   rcases e with ⟨err, st, ac, tra⟩
   unfold Resume.run liftToExecution at h
@@ -2569,7 +2561,7 @@ lemma GenericCall.codePreserve
       exact callMsg_benv_state_getCode a
 
 /-- A call-type step whose `Except` prefix failed carries that failure. -/
-lemma XStep.run_ofExcept_error {e : String × Devm} {xl : Xlot} {ex : Execution}
+lemma XStep.run_ofExcept_error {e : EvmError × Devm} {xl : Xlot} {ex : Execution}
     (h : XStep.Run (XStep.ofExcept (.error e)) xl ex) : ex = .error e := h.2
 
 /-! ### The dispatch shape of a call-type instruction
@@ -2614,7 +2606,7 @@ lemma Xinst.shape_done {sevm : Sevm} {devm : Devm} {ex : Execution}
     (h : Execution.Rel Devm.InstructionFrame devm ex) :
     Xinst.Shape sevm devm (.done ex) := Or.inl ⟨ex, rfl, h⟩
 
-lemma Xinst.shape_error {sevm : Sevm} {devm : Devm} {err : String × Devm}
+lemma Xinst.shape_error {sevm : Sevm} {devm : Devm} {err : EvmError × Devm}
     (h : Devm.InstructionFrame devm err.2) :
     Xinst.Shape sevm devm (XStep.ofExcept (.error err)) := Xinst.shape_done h
 
@@ -2639,8 +2631,8 @@ lemma Xinst.shape_call {sevm : Sevm} {devm d d₀ : Devm} {gas : Nat} {value : B
     ii, isz, oi, osz, code, dp, hf, hf₀, hcal, hsrc, rfl⟩)
 
 lemma Xinst.shape_bind {sevm : Sevm} {devm d : Devm} {α : Type}
-    {x : Except (String × Devm) (α × Devm)}
-    {f : α × Devm → Except (String × Devm) XStep}
+    {x : Except (EvmError × Devm) (α × Devm)}
+    {f : α × Devm → Except (EvmError × Devm) XStep}
     (hd : Devm.InstructionFrame devm d)
     (hx : Outcome.Rel Prod.snd Prod.snd Devm.InstructionFrame d x)
     (hf : ∀ (v : α) (d' : Devm), Devm.InstructionFrame devm d' →
@@ -2651,7 +2643,7 @@ lemma Xinst.shape_bind {sevm : Sevm} {devm d : Devm} {α : Type}
   · exact hf v d' (Devm.instructionFrame_trans hd hx)
 
 lemma Xinst.shape_bindE {sevm : Sevm} {devm d : Devm} {x : Execution}
-    {f : Devm → Except (String × Devm) XStep}
+    {f : Devm → Except (EvmError × Devm) XStep}
     (hd : Devm.InstructionFrame devm d)
     (hx : Execution.Rel Devm.InstructionFrame d x)
     (hf : ∀ d' : Devm, Devm.InstructionFrame devm d' →
@@ -2662,7 +2654,7 @@ lemma Xinst.shape_bindE {sevm : Sevm} {devm d : Devm} {x : Execution}
   · exact hf d' (Devm.instructionFrame_trans hd hx)
 
 lemma Xinst.shape_assert {sevm : Sevm} {devm : Devm} {p : Prop} [Decidable p]
-    {err : String × Devm} {f : Unit → Except (String × Devm) XStep}
+    {err : EvmError × Devm} {f : Unit → Except (EvmError × Devm) XStep}
     (herr : Devm.InstructionFrame devm err.2)
     (hf : Xinst.Shape sevm devm (XStep.ofExcept (f ()))) :
     Xinst.Shape sevm devm (XStep.ofExcept (Except.assert p err >>= f)) := by
@@ -2702,10 +2694,12 @@ EOA, so the child's code is exactly the callee's own code. -/
 lemma accessDelegation_of_not_delegation {d : Devm} {adr : Adr}
     (h : ¬ isValidDelegation (d.getCode adr)) :
     accessDelegation d adr = ⟨false, adr, d.getCode adr, 0, d⟩ := by
+  have hnone : getDelegatedCodeAddress (d.state.getCode adr) = none := by
+    dsimp only [getDelegatedCodeAddress]
+    rw [if_neg (show ¬ isValidDelegation (d.state.getCode adr) from h)]
   dsimp only [accessDelegation]
-  split_ifs with hd
-  · exact absurd hd h
-  · rfl
+  rw [hnone]
+  rfl
 
 lemma Xinst.step_shape (sevm : Sevm) (devm : Devm) (x : Xinst) :
     Xinst.Shape sevm devm (Xinst.step sevm devm x) := by
@@ -3014,7 +3008,7 @@ lemma Jinst.preserves_getCode
   rw [run] at hf
   exact (hf.getCode a).symm
 
-def JumpResult.getCode (ex : Except (String × Devm) (Nat × Devm)) (a : Adr) : ByteArray :=
+def JumpResult.getCode (ex : Except (EvmError × Devm) (Nat × Devm)) (a : Adr) : ByteArray :=
   match ex with
   | .ok ⟨_, devm⟩ => devm.getCode a
   | .error ⟨_, devm⟩ => devm.getCode a
@@ -3518,7 +3512,7 @@ lemma lift_core
       ∀ {pc sevm devm},
         sevm.code.getInst pc = none →
         sevm.currentTarget ≠ ca →
-        ε pc sevm devm (.error ⟨"InvalidOpcode", devm⟩) )
+        ε pc sevm devm (.error ⟨.halt (.invalidOpcode .none), devm⟩) )
     ( nextNoneErr :
       ∀ {pc sevm devm n err devm'},
         Ninst.At sevm.code pc n →
@@ -4821,7 +4815,7 @@ def Execution.NoDel (wa : Adr) : Execution → Prop
 -- only createdAccounts + state (no atd; consumers merge it via
 -- liftToExecution, keeping the parent's atd).
 def MsgResult.NoDel (wa : Adr) :
-    Except (String × State × AdrSet × Tra) Devm → Prop
+    Except (EvmError × State × AdrSet × Tra) Devm → Prop
   | .ok d => Devm.NoDel wa d
   | .error ⟨_, st, ca, _⟩ => wa ∉ ca ∧ (st.getCode wa).toList ≠ []
 
@@ -4864,12 +4858,10 @@ lemma handleError_noDel {wa : Adr} {exn : Execution}
   | error p =>
     rcases p with ⟨err, d⟩
     have hd : Devm.NoDel wa d := h
-    dsimp only [executeCode.handleError]
-    split
-    · exact ⟨hd.atd, hd.ca, hd.code⟩
-    · split
-      · exact ⟨hd.atd, hd.ca, hd.code⟩
-      · exact ⟨hd.ca, hd.code⟩
+    cases err <;>
+      first
+        | exact ⟨hd.atd, hd.ca, hd.code⟩
+        | exact ⟨hd.ca, hd.code⟩
 
 /-! ## §4 Plumbing -/
 
@@ -4996,7 +4988,7 @@ lemma liftMach_delSets_of_ok {core : Mach → Footprint.Outcome Mach α}
     rfl
 
 lemma liftMach_delSets_of_error {core : Mach → Footprint.Outcome Mach α}
-    {d : Devm} {err : String × Devm} (h : liftMach core d = .error err) :
+    {d : Devm} {err : EvmError × Devm} (h : liftMach core d = .error err) :
     Devm.delSets err.2 = Devm.delSets d := by
   unfold liftMach Footprint.liftOutcome at h
   cases hc : core d.mach with
@@ -5017,7 +5009,7 @@ lemma liftMachExecution_delSets_of_ok {core : Mach → Footprint.Outcome Mach Un
     exact liftMach_delSets_of_ok heq
 
 lemma liftMachExecution_delSets_of_error {core : Mach → Footprint.Outcome Mach Unit}
-    {d : Devm} {err : String × Devm} (h : liftMachExecution core d = .error err) :
+    {d : Devm} {err : EvmError × Devm} (h : liftMachExecution core d = .error err) :
     Devm.delSets err.2 = Devm.delSets d := by
   unfold liftMachExecution Footprint.toExecution at h
   split at h
@@ -5068,7 +5060,7 @@ lemma Devm.popToAdr_delSets_err {devm err} (h : Devm.popToAdr devm = .error err)
 
 -- Rinst execution preserves delSets on error results.
 lemma Rinst.inv_delSets_err {pc : Nat} {sevm : Sevm} {devm : Devm} {r : Rinst}
-    {err : String} {devm' : Devm}
+    {err : EvmError} {devm' : Devm}
     (run : Rinst.run ⟨pc, sevm, devm⟩ r = .error ⟨err, devm'⟩) :
     Devm.delSets devm' = Devm.delSets devm := by
   rcases eq_or_ne r .sstore with rfl | hs
@@ -5089,7 +5081,7 @@ lemma Jinst.inv_delSets {pc : Nat} {sevm : Sevm} {devm : Devm} {j : Jinst}
   exact (Devm.InstructionFrame.delSets hf).symm
 
 lemma Jinst.inv_delSets_err {pc : Nat} {sevm : Sevm} {devm : Devm} {j : Jinst}
-    {err : String} {devm' : Devm}
+    {err : EvmError} {devm' : Devm}
     (run : Jinst.Run ⟨pc, sevm, devm⟩ j (.error ⟨err, devm'⟩)) :
     Devm.delSets devm' = Devm.delSets devm := by
   have hf := Jinst.run_instructionFrame ⟨pc, sevm, devm⟩ j
@@ -5198,7 +5190,7 @@ lemma Linst.inv_noDel {wa : Adr} {sevm : Sevm} {devm : Devm} {l : Linst}
   exact Linst.run_noDel run h
 
 lemma Msg.NoDel.benvAfterTransfer_err {wa : Adr} {msg : Msg}
-    {x : String × State × AdrSet × Tra}
+    {x : EvmError × State × AdrSet × Tra}
     (h_run : msg.benvAfterTransfer = .error x)
     (h : Msg.NoDel wa msg) : wa ∉ x.2.2.1 ∧ (x.2.1.getCode wa).toList ≠ [] := by
   by_cases h_stv : msg.shouldTransferValue = true
@@ -5228,7 +5220,7 @@ lemma chargeCodeGas_delSets_ok {rules : ForkRules} {d d' : Devm}
     cases h_rest
     exact chargeGas_delSets_eq h_charge
 
-lemma chargeCodeGas_delSets_err {rules : ForkRules} {d d' : Devm} {err : String}
+lemma chargeCodeGas_delSets_err {rules : ForkRules} {d d' : Devm} {err : EvmError}
     (h : processCreateMessage.chargeCodeGas rules d = .error ⟨err, d'⟩) :
     Devm.delSets d' = Devm.delSets d := by
   unfold processCreateMessage.chargeCodeGas at h
@@ -5274,29 +5266,29 @@ lemma incorporateChildOnSuccess_noDel {wa : Adr} {parent child : Devm} {rd : Byt
     Devm.NoDel wa (incorporateChildOnSuccess parent child rd) :=
   ⟨AdrSet.not_mem_union hp_atd hc.atd, hc.ca, hc.code⟩
 
-lemma Devm.pop_err_snd {d : Devm} {x : String × Devm}
+lemma Devm.pop_err_snd {d : Devm} {x : EvmError × Devm}
     (h : Devm.pop d = .error x) : x.2 = d := by
   simp only [Devm.pop_def] at h
   split at h
   · injection h with h; exact (congrArg Prod.snd h).symm
   · exact absurd h (by simp)
 
-lemma Devm.popToAdr_err_snd {d : Devm} {x : String × Devm}
+lemma Devm.popToAdr_err_snd {d : Devm} {x : EvmError × Devm}
     (h : Devm.popToAdr d = .error x) : x.2 = d := by
   rw [Devm.popToAdr_def] at h
   rcases hp : d.pop with e | ⟨v, d0⟩
   · rw [hp] at h; injection h with h; rw [← h]; exact Devm.pop_err_snd hp
   · rw [hp] at h; exact absurd h (by simp)
 
-lemma chargeGas_err_snd {cost : Nat} {d : Devm} {x : String × Devm}
+lemma chargeGas_err_snd {cost : Nat} {d : Devm} {x : EvmError × Devm}
     (h : chargeGas cost d = .error x) : x.2 = d := by
   simp only [chargeGas_def] at h
   split at h
   · injection h with h; exact (congrArg Prod.snd h).symm
   · exact absurd h (by simp)
 
-lemma Except.assert_err_snd {p : Prop} [Decidable p] {d : Devm} {s : String}
-    {x : String × Devm} (h : Except.assert p (⟨s, d⟩ : String × Devm) = .error x) :
+lemma Except.assert_err_snd {p : Prop} [Decidable p] {d : Devm} {s : EvmError}
+    {x : EvmError × Devm} (h : Except.assert p (⟨s, d⟩ : EvmError × Devm) = .error x) :
     x.2 = d := by
   simp only [Except.assert] at h
   split at h
@@ -5562,7 +5554,7 @@ lemma Devm.balNoninc_of_getBal_eq {pre post : Devm}
 
 /-! ## 5. Balance effects of instruction and message semantic units -/
 
-def MessageExecution := Except (String × Jaune.State × AdrSet × Tra) Devm
+def MessageExecution := Except (EvmError × Jaune.State × AdrSet × Tra) Devm
 
 def MessageExecution.state : MessageExecution → Jaune.State
   | .ok d => d.state
@@ -5573,7 +5565,7 @@ def MessageExecution.Rel
     (pre : Jaune.State) (out : MessageExecution) : Prop :=
   R pre out.state
 
-def BenvExecution.state : Except (String × Jaune.State × AdrSet × Tra) Benv →
+def BenvExecution.state : Except (EvmError × Jaune.State × AdrSet × Tra) Benv →
     Jaune.State
   | .ok benv => benv.state
   | .error ⟨_, st, _, _⟩ => st
@@ -5740,7 +5732,7 @@ lemma Devm.instructionFrame_refines_balNoninc :
   exact balNoninc_refl_trans.1.1 _
 
 lemma Msg.benvAfterTransfer_balance_effect {msg : Msg}
-    {out : Except (String × Jaune.State × AdrSet × Tra) Benv}
+    {out : Except (EvmError × Jaune.State × AdrSet × Tra) Benv}
     (h : msg.benvAfterTransfer = out) :
     State.BalNoninc msg.benv.state (BenvExecution.state out) := by
   by_cases h_stv : msg.shouldTransferValue = true
@@ -5826,15 +5818,8 @@ lemma executeCode.handleError_balance_effect {pre : Devm} {raw : Execution}
     (hh : executeCode.handleError raw = handled) :
     State.BalNoninc pre.state (MessageExecution.state handled) := by
   rcases raw with ⟨err, d⟩ | d
-  · simp only [executeCode.handleError] at hh
-    split at hh
-    · subst handled
-      exact hb
-    · split at hh
-      · subst handled
-        exact hb
-      · subst handled
-        exact hb
+  · cases err <;>
+      (simp only [executeCode.handleError] at hh; subst handled; exact hb)
   · simp only [executeCode.handleError] at hh
     subst handled
     exact hb
@@ -5871,19 +5856,19 @@ lemma processCreateMessage_eq (msg : Msg) :
     · rfl
 
 lemma processCreateMessage.settle_error {msg : Msg}
-    {e : String × Jaune.State × AdrSet × Tra} :
+    {e : EvmError × Jaune.State × AdrSet × Tra} :
     processCreateMessage.settle msg (.error e) = .error e := rfl
 
 /-- A failed child message aborts the CREATE-family return path. -/
 lemma Resume.create_run_error {parent : Devm} {newAddress : Adr}
-    {e : String × Jaune.State × AdrSet × Tra} {sf : Devm}
+    {e : EvmError × Jaune.State × AdrSet × Tra} {sf : Devm}
     (h : (Resume.create parent newAddress).run (.error e) = .ok sf) : False := by
   rcases e with ⟨err, st, ac, tra⟩
   unfold Resume.run liftToExecution at h
   cases h
 
 lemma processMessage.settle_error {msg : Msg}
-    {e : String × Jaune.State × AdrSet × Tra} :
+    {e : EvmError × Jaune.State × AdrSet × Tra} :
     processMessage.settle msg (.error e) = .error e := rfl
 
 /-- Master balance effect for the code-execution layer: running the callee's
@@ -5892,7 +5877,7 @@ total balance relative to the freshly-initialised message state. The `Xlot`
 witness carries the interpreter's own `Devm.BalNoninc` frame; the precompile
 branch supplies its frame directly. -/
 lemma ExecuteCode.balance_effect {msg : Msg} {xl : Xlot}
-    {ex : Except (String × Jaune.State × AdrSet × Tra) Devm}
+    {ex : Except (EvmError × Jaune.State × AdrSet × Tra) Devm}
     (hxl : Xlot.Rel Devm.BalNoninc xl)
     (hec : ExecuteCode msg xl ex) :
     State.BalNoninc (initEvm msg).dyna.state (MessageExecution.state ex) := by
@@ -5955,15 +5940,14 @@ lemma ProcessCreateMessage.balance_effect {msg : Msg} {xl : Xlot}
     · cases h_cg : processCreateMessage.chargeCodeGas msg.benv.stat.rules evm with
       | error err =>
         rcases err with ⟨err_msg, err_evm⟩
-        dsimp only []
-        split
-        · exact balNoninc_refl_trans.1.1 _
-        · have h_charge := processCreateMessage.chargeCodeGas_balance_effect h_cg
-          unfold Execution.Rel Outcome.Rel Devm.BalNoninc Devm.balSum
-            State.balSum at h_charge
-          dsimp only [id] at h_charge
-          dsimp only [MessageExecution.state] at h_pm
-          exact Nat.le_trans h_charge h_pm
+        have h_charge := processCreateMessage.chargeCodeGas_balance_effect h_cg
+        unfold Execution.Rel Outcome.Rel Devm.BalNoninc Devm.balSum
+          State.balSum at h_charge
+        dsimp only [id] at h_charge
+        dsimp only [MessageExecution.state] at h_pm
+        cases err_msg
+        case halt => exact balNoninc_refl_trans.1.1 _
+        all_goals exact Nat.le_trans h_charge h_pm
       | ok devm_charge =>
         dsimp only []
         have h_charge := processCreateMessage.chargeCodeGas_balance_effect h_cg
@@ -6287,10 +6271,9 @@ lemma setDelegationStep_bal_eq {auth : Auth} {msg msg' : Msg} {rc rc' : B256}
     · simp only [Except.ok.injEq, Prod.mk.injEq] at h
       rcases h with ⟨rfl, _⟩; rfl
     · split at h
-      · split at h
-        · simp only [Except.ok.injEq, Prod.mk.injEq] at h
-          rcases h with ⟨rfl, _⟩; rfl
-        · cases h
+      · simp only [Except.ok.injEq, Prod.mk.injEq] at h
+        rcases h with ⟨rfl, _⟩; rfl
+      · cases h
       · split at h
         · simp only [Except.ok.injEq, Prod.mk.injEq] at h
           rcases h with ⟨rfl, _⟩; rfl

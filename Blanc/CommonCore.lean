@@ -393,13 +393,22 @@ lemma ByteArray.lt_size_of_getElem?_eq_some {xs : ByteArray} {n} {x}
   rcases List.getElem?_eq_some_iff.mp eq with ⟨lt, _⟩
   rw [ByteArray.toList_eq_toList_data] at lt; exact lt
 
+/-- Proof-indexed variant of `ByteArray.of_getElem?_eq_some`, matching the
+dependent reads `ByteArray.getInst` performs since the Jaune partiality
+closure (integrity Step 7). -/
+lemma ByteArray.getElem_of_getElem?_eq_some {xs : ByteArray} {n : Nat} {x : UInt8}
+    (eq : xs.toList[n]? = .some x) (h : n < xs.size) : xs[n] = x := by
+  rw [ByteArray.toList_eq_toList_data, Array.getElem?_toList] at eq
+  exact (Array.getElem?_eq_some_iff.mp eq).choose_spec
+
 lemma Jinst.at_of_slice {code : ByteArray} {pc : Nat} {j : Jinst} {xs : Bytes}
     (slice : List.Slice code.toList pc (j.toUInt8 :: xs)) :
     Jinst.At code pc j := by
   have eq := List.get?_eq_of_slice slice
   simp only [Jinst.At, ByteArray.getInst]
-  have rw := ByteArray.of_getElem?_eq_some eq
-  rw [if_pos (ByteArray.lt_size_of_getElem?_eq_some eq)]
+  rw [dif_pos (ByteArray.lt_size_of_getElem?_eq_some eq)]
+  have rw := ByteArray.getElem_of_getElem?_eq_some eq
+    (ByteArray.lt_size_of_getElem?_eq_some eq)
   split <;>
   try { rename (UInt8.toInstType _ = _) => h
         rw [rw, Jinst.toInstType_toUInt8] at h; cases h }
@@ -410,8 +419,9 @@ lemma Linst.at_of_slice {code : ByteArray} {pc : Nat} {l : Linst} {xs : Bytes}
     Linst.At code pc l := by
   have eq := List.get?_eq_of_slice slice
   simp only [Linst.At, ByteArray.getInst]
-  have rw := ByteArray.of_getElem?_eq_some eq
-  rw [if_pos (ByteArray.lt_size_of_getElem?_eq_some eq)]
+  rw [dif_pos (ByteArray.lt_size_of_getElem?_eq_some eq)]
+  have rw := ByteArray.getElem_of_getElem?_eq_some eq
+    (ByteArray.lt_size_of_getElem?_eq_some eq)
   split <;>
   try { rename (UInt8.toInstType _ = _) => h
         rw [rw, Linst.toInstType_toUInt8] at h; cases h }
@@ -534,7 +544,7 @@ lemma ByteArray.sliceD_eq_replicate (xs : ByteArray) (m n : Nat) (d : UInt8)
   case zero => rfl
   case succ n ih =>
     simp only [ByteArray.sliceD];
-    rw [if_neg]; rw [not_lt]; exact le
+    rw [dif_neg (not_lt.mpr le)]
 
 lemma ByteArray.sliceD_eq (xs : ByteArray) (m n : Nat) (d : UInt8) :
     ByteArray.sliceD xs m n d = xs.toList.sliceD m n d := by
@@ -549,8 +559,8 @@ lemma ByteArray.sliceD_eq (xs : ByteArray) (m n : Nat) (d : UInt8) :
              ← ByteArray.toList_eq_toList_data ] at lt
         apply lt
       rw [List.sliceD_succ, ih]
-      rw [ByteArray.get!_eq_getElem!_toList]
-      rw [List.getD_eq_getElem!_of_lt_length lt']
+      rw [ByteArray.getElem_of_getElem?_eq_some (List.getElem?_eq_getElem lt') lt]
+      simp [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem lt']
     · rename (¬ _ < _) => nlt
       rw [not_lt] at nlt
       simp only [List.replicate]
@@ -583,16 +593,18 @@ lemma List.sliceD_eq_of_slice?_eq_some {ξ} {xs ys : List ξ} {m n : Nat} {d} :
 lemma pushAt_of_slice {code : ByteArray} {pc} {xs : Bytes} (le : xs.length ≤ 32)
     (slice : List.Slice code.toList pc (pushToB8L xs)) : PushAt code pc xs := by
   have eq := List.get?_eq_of_slice slice
-  have rw := ByteArray.of_getElem?_eq_some eq
+  have rw := ByteArray.getElem_of_getElem?_eq_some eq
+    (ByteArray.lt_size_of_getElem?_eq_some eq)
   simp only [PushAt, ByteArray.getInst]
   refine' ⟨le, _⟩
-  rw [if_pos (ByteArray.lt_size_of_getElem?_eq_some eq)]
+  rw [dif_pos (ByteArray.lt_size_of_getElem?_eq_some eq)]
   split <;>
   try { rename (UInt8.toInstType _ = _) => h
         rw [rw, toInstType_pushToB8 le] at h; cases h }
   apply congr_arg; apply congr_arg; apply Ninst.push_ext
   rcases slice with ⟨len, slice⟩
-  have rw' : UInt8.toNat (code.get! pc) - 95 = xs.length := by
+  have rw' : UInt8.toNat (code[pc]'(ByteArray.lt_size_of_getElem?_eq_some eq)) - 95
+      = xs.length := by
     rw [rw, toNat_pushToB8_eq le]; omega
   rw [rw', ByteArray.sliceD_eq]; simp [pushToB8L] at slice
   rw [List.length_slice? slice, List.length_cons] at slice
@@ -606,8 +618,9 @@ lemma Ninst.at_of_slice {code : ByteArray} {pc : Nat} {n : Ninst}
     simp [Ninst.toBytes] at slice
     have eq := List.get?_eq_of_slice slice
     simp only [Ninst.At, ByteArray.getInst]
-    have rw := ByteArray.of_getElem?_eq_some eq
-    rw [if_pos (ByteArray.lt_size_of_getElem?_eq_some eq)]
+    rw [dif_pos (ByteArray.lt_size_of_getElem?_eq_some eq)]
+    have rw := ByteArray.getElem_of_getElem?_eq_some eq
+      (ByteArray.lt_size_of_getElem?_eq_some eq)
     split <;>
     try { rename (UInt8.toInstType _ = _) => h
           rw [rw, Rinst.toInstType_toUInt8] at h; cases h }
@@ -616,8 +629,9 @@ lemma Ninst.at_of_slice {code : ByteArray} {pc : Nat} {n : Ninst}
     simp [Ninst.toBytes] at slice
     have eq := List.get?_eq_of_slice slice
     simp only [Ninst.At, ByteArray.getInst]
-    have rw := ByteArray.of_getElem?_eq_some eq
-    rw [if_pos (ByteArray.lt_size_of_getElem?_eq_some eq)]
+    rw [dif_pos (ByteArray.lt_size_of_getElem?_eq_some eq)]
+    have rw := ByteArray.getElem_of_getElem?_eq_some eq
+      (ByteArray.lt_size_of_getElem?_eq_some eq)
     split <;>
     try { rename (UInt8.toInstType _ = _) => h
           rw [rw, Xinst.toInstType_toUInt8] at h; cases h }
@@ -1169,7 +1183,8 @@ lemma List.toUInt16_pair (n : Nat) :
   have h : (n >>> 8 ↾ 8).toUInt16 <<< 8 ||| (n ↾ 8).toUInt16 = n.toUInt16 := by
     rw [← UInt16.toNat_inj, toNat_toUInt16, UInt16.toNat_or, toNat_toUInt16]
     rw [UInt16.toNat_shiftLeft, toNat_toUInt16]; apply pair_aux n 8
-  simp [Bytes.toUInt16, Bytes.pack, takeRightD, takeD, reverse, reverseAux, tail, headD]
+  simp [Bytes.toUInt16, Bytes.getElem_packV, Bytes.pack, takeRightD, takeD,
+    reverse, reverseAux, tail, headD]
   rw [Nat.toUInt16_toUInt8, Nat.toUInt16_toUInt8, h]
 
 def UInt16.concat (x y : UInt16) : UInt32 :=
@@ -1268,9 +1283,10 @@ lemma List.toB256_pair (n : Nat) (n_lt : n < 2 ^ 16):
     Bytes.toB256 [(n >>> 8).toUInt8, n.toUInt8] = n.toB256 := by
   have hlow : ∀ a b : UInt8, UInt8.toUInt64 a <<< 8 ||| UInt8.toUInt64 b = Bytes.toUInt64 [a, b] := by
     intro a b
-    simp only [ Bytes.toUInt64, Bytes.toUInt32, Bytes.toUInt16, Bytes.pack, List.takeRightD, List.takeD,
+    simp only [ Bytes.toUInt64, Bytes.toUInt32, Bytes.toUInt16, Bytes.getElem_packV,
+      Bytes.pack, List.takeRightD, List.takeD,
       List.reverse, List.reverseAux, List.tail, List.headD, List.take, List.drop,
-      List.getElem!_cons_zero, List.getElem!_cons_succ ]
+      List.getD_cons_zero, List.getD_cons_succ ]
     simp
     apply congrArg (fun x : UInt64 => x ||| b.toUInt64)
     rw [← UInt64.toNat_inj]

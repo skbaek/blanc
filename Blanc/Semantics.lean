@@ -96,7 +96,7 @@ structure Prog : Type where
   (aux : List Func)
 
 def Jinst.Run (evm : Evm) :
-    Jinst → Except (String × Devm) (Nat × Devm) → Prop :=
+    Jinst → Except (EvmError × Devm) (Nat × Devm) → Prop :=
   λ j ex => j.run evm = ex
 
 def Linst.Run (sevm : Sevm) (devm : Devm) : Linst → Execution → Prop :=
@@ -114,7 +114,7 @@ structure Devm.Rels : Type where
   (output : Bytes → Bytes → Prop)
   (accountsToDelete : AdrSet → AdrSet → Prop)
   (returnData : Bytes → Bytes → Prop)
-  (error : Option String → Option String → Prop)
+  (error : Option SettledHalt → Option SettledHalt → Prop)
   (accessedAddresses : AdrSet → AdrSet → Prop)
   (accessedStorageKeys : KeySet → KeySet → Prop)
   (state : State → State → Prop)
@@ -193,23 +193,23 @@ generic frame relation; the named mirrors specialize it so that the statements
 consumed by `Common.lean` and `Solvent.lean` keep their current shape. -/
 
 def RunFrame (f : Frame) (xl : Xlot)
-    (r : Except (String × State × AdrSet × Tra) Devm) : Prop :=
+    (r : Except (EvmError × State × AdrSet × Tra) Devm) : Prop :=
   match f.enter with
   | .done r' => xl = .none ∧ r = r'
   | .run evm => ∃ raw, xl = .some ⟨evm, raw⟩ ∧ r = f.settle raw
 
 def ExecuteCode (msg : Msg) (xl : Xlot)
-    (ex : Except (String × State × AdrSet × Tra) Devm) : Prop :=
+    (ex : Except (EvmError × State × AdrSet × Tra) Devm) : Prop :=
   match executeCode.enter msg with
   | .inl evm => ∃ raw, xl = .some ⟨evm, raw⟩ ∧ ex = executeCode.handleError raw
   | .inr raw => xl = .none ∧ ex = executeCode.handleError raw
 
 def ProcessMessage (msg : Msg) (xl : Xlot)
-    (ex : Except (String × State × AdrSet × Tra) Devm) : Prop :=
+    (ex : Except (EvmError × State × AdrSet × Tra) Devm) : Prop :=
   RunFrame (Frame.ofCall msg) xl ex
 
 def ProcessCreateMessage (msg : Msg) (xl : Xlot)
-    (ex : Except (String × State × AdrSet × Tra) Devm) : Prop :=
+    (ex : Except (EvmError × State × AdrSet × Tra) Devm) : Prop :=
   RunFrame (Frame.ofCreate msg) xl ex
 
 def XStep.Run (s : XStep) (xl : Xlot) (ex : Execution) : Prop :=
@@ -273,7 +273,7 @@ lemma Step.ofExecution_ne_spawn {pc : Nat} {ex : Execution}
     Step.ofExecution pc ex ≠ .spawn f rsm pc' := by
   cases ex <;> simp [Step.ofExecution]
 
-lemma Step.ofJump_ne_spawn {j : Except (String × Devm) (Nat × Devm)}
+lemma Step.ofJump_ne_spawn {j : Except (EvmError × Devm) (Nat × Devm)}
     {f : Frame} {rsm : Resume} {pc' : Nat} :
     Step.ofJump j ≠ .spawn f rsm pc' := by
   cases j <;> simp [Step.ofJump]
@@ -296,7 +296,7 @@ lemma XStep.run_toStep {pc : Nat} {s : XStep} {xl : Xlot} {ex : Execution} :
 
 /-- A jump's step outcome carries the jump's own result, whichever branch it
 took, and never suspends. -/
-lemma Step.run_ofJump {j : Except (String × Devm) (Nat × Devm)} {xl : Xlot}
+lemma Step.run_ofJump {j : Except (EvmError × Devm) (Nat × Devm)} {xl : Xlot}
     {ex : Execution} (h : Step.Run (Step.ofJump j) xl ex) :
     xl = .none ∧
       ((∃ e, j = .error e ∧ ex = .error e) ∨
@@ -317,14 +317,14 @@ lemma Step.ofExecution_ne_halt_ok {pc : Nat} {e : Execution} {devm' : Devm} :
   unfold Step.ofExecution
   split <;> simp
 
-lemma Step.ofJump_cont {j : Except (String × Devm) (Nat × Devm)}
+lemma Step.ofJump_cont {j : Except (EvmError × Devm) (Nat × Devm)}
     {pc' : Nat} {devm' : Devm} (h : Step.ofJump j = .cont pc' devm') :
     j = .ok ⟨pc', devm'⟩ := by
   unfold Step.ofJump at h
   split at h <;> cases h
   rfl
 
-lemma Step.ofJump_ne_halt_ok {j : Except (String × Devm) (Nat × Devm)}
+lemma Step.ofJump_ne_halt_ok {j : Except (EvmError × Devm) (Nat × Devm)}
     {devm' : Devm} : Step.ofJump j ≠ .halt (.ok devm') := by
   unfold Step.ofJump
   split <;> simp
@@ -492,7 +492,7 @@ lemma Frame.enter_run_inv {f : Frame} {cevm : Evm} (h : f.enter = .run cevm) :
     · cases h
 
 lemma ExecuteCode.some_inv {msg : Msg} {evm_ : Evm} {exn_ : Execution}
-    {ex : Except (String × State × AdrSet × Tra) Devm}
+    {ex : Except (EvmError × State × AdrSet × Tra) Devm}
     (run : ExecuteCode msg (.some ⟨evm_, exn_⟩) ex) :
     evm_ = initEvm msg ∧ ex = executeCode.handleError exn_ := by
   unfold ExecuteCode at run
@@ -521,7 +521,7 @@ code execution, before the frame's own settlement is applied.  Splitting
 `ProcessMessage`/`ProcessCreateMessage` arguments be phrased once and reused
 for both frame kinds. -/
 def FrameBody (m : Msg) (xl : Xlot)
-    (r : Except (String × State × AdrSet × Tra) Devm) : Prop :=
+    (r : Except (EvmError × State × AdrSet × Tra) Devm) : Prop :=
   match m.benvAfterTransfer with
   | .error e => xl = .none ∧ r = .error e
   | .ok benv => ExecuteCode (m.withBenv benv) xl r
@@ -531,7 +531,7 @@ frame relation decomposes into a transfer failure or a code-execution relation
 on the transferred message.  This is the bridge that lets every former
 `ProcessMessage`/`ProcessCreateMessage` argument be phrased once. -/
 lemma RunFrame.decompose {f : Frame} {xl : Xlot}
-    {r : Except (String × State × AdrSet × Tra) Devm}
+    {r : Except (EvmError × State × AdrSet × Tra) Devm}
     (run : RunFrame f xl r) :
     (∃ e, f.inner.benvAfterTransfer = .error e ∧ xl = .none ∧
         r = f.settleMsg (.error e)) ∨
@@ -551,7 +551,7 @@ lemma RunFrame.decompose {f : Frame} {xl : Xlot}
 
 /-- `RunFrame` is exactly `FrameBody` composed with the frame's settlement. -/
 lemma RunFrame.iff_settleMsg {f : Frame} {xl : Xlot}
-    {r : Except (String × State × AdrSet × Tra) Devm} :
+    {r : Except (EvmError × State × AdrSet × Tra) Devm} :
     RunFrame f xl r ↔ ∃ r0, FrameBody f.inner xl r0 ∧ r = f.settleMsg r0 := by
   constructor
   · intro run
@@ -572,13 +572,13 @@ lemma RunFrame.iff_settleMsg {f : Frame} {xl : Xlot}
       · exact ⟨hbody.1, by rw [hbody.2]; rfl⟩
 
 lemma ProcessMessage.iff_body {msg : Msg} {xl : Xlot}
-    {r : Except (String × State × AdrSet × Tra) Devm} :
+    {r : Except (EvmError × State × AdrSet × Tra) Devm} :
     ProcessMessage msg xl r ↔
       ∃ r0, FrameBody msg xl r0 ∧ r = processMessage.settle msg r0 :=
   RunFrame.iff_settleMsg
 
 lemma ProcessCreateMessage.iff_processMessage {msg : Msg} {xl : Xlot}
-    {r : Except (String × State × AdrSet × Tra) Devm} :
+    {r : Except (EvmError × State × AdrSet × Tra) Devm} :
     ProcessCreateMessage msg xl r ↔
       ∃ r', ProcessMessage (processCreateMessage.msg msg) xl r' ∧
         r = processCreateMessage.settle msg r' := by
@@ -600,7 +600,7 @@ against the single step function. -/
 
 lemma Evm.step_invOp {pc : Nat} {sevm : Sevm} {devm : Devm}
     (h : sevm.code.getInst pc = none) :
-    Evm.step ⟨pc, sevm, devm⟩ = .halt (.error ⟨"InvalidOpcode", devm⟩) := by
+    Evm.step ⟨pc, sevm, devm⟩ = .halt (.error ⟨.halt (.invalidOpcode .none), devm⟩) := by
   unfold Evm.step
   rw [show (Evm.getInst ⟨pc, sevm, devm⟩) = none from h]
 
@@ -969,7 +969,7 @@ lemma Xlot.filled_exec (evm : Evm) : Xlot.Filled (.some ⟨evm, exec evm⟩) :=
     (Fueled.ext (execFueled_run_sufficientFuel evm))
 
 lemma of_runFrame {f : Frame}
-    {r : Except (String × State × AdrSet × Tra) Devm}
+    {r : Except (EvmError × State × AdrSet × Tra) Devm}
     (eq : runFrame f = r) :
     ∃ xl : Xlot, xl.Filled ∧ RunFrame f xl r := by
   unfold runFrame at eq
@@ -984,13 +984,13 @@ lemma of_runFrame {f : Frame}
     exact ⟨exec evm, rfl, eq.symm⟩
 
 lemma of_processMessage (msg : Msg)
-    (ex : Except (String × State × AdrSet × Tra) Devm)
+    (ex : Except (EvmError × State × AdrSet × Tra) Devm)
     (eq : processMessage msg = ex) :
     ∃ xl : Xlot, xl.Filled ∧ ProcessMessage msg xl ex :=
   of_runFrame eq
 
 lemma of_processCreateMessage (msg : Msg)
-    (ex : Except (String × State × AdrSet × Tra) Devm)
+    (ex : Except (EvmError × State × AdrSet × Tra) Devm)
     (eq : processCreateMessage msg = ex) :
     ∃ xl : Xlot,
       xl.Filled ∧

@@ -1708,13 +1708,16 @@ lemma Devm.pop_of_popToAdr {a : Adr} {devm devm' : Devm}
 lemma accessDelegation_state {devm : Devm} {adr : Adr} :
     (accessDelegation devm adr).2.2.2.2.state = devm.state := by
   dsimp only [accessDelegation]
-  split_ifs <;> rfl
+  cases getDelegatedCodeAddress (devm.state.getCode adr) <;> rfl
 
 lemma accessDelegation_code_of_not {devm : Devm} {adr : Adr}
     (h : ¬ isValidDelegation (devm.state.getCode adr)) :
     (accessDelegation devm adr).2.2.1 = devm.state.getCode adr := by
+  have hnone : getDelegatedCodeAddress (devm.state.getCode adr) = none := by
+    dsimp only [getDelegatedCodeAddress]
+    rw [if_neg h]
   dsimp only [accessDelegation]
-  rw [if_neg h]
+  rw [hnone]
 
 lemma getStor_eq_of_state_eq {d d' : Devm} (h : d.state = d'.state) (a : Adr) :
     Devm.getStor d a = Devm.getStor d' a := by
@@ -1740,16 +1743,16 @@ lemma solvent_of_state_eq {sf s₁ : Devm} {ct : Adr} {wad : B256}
   rw [B256.toNat_sub_eq_of_le _ _ h_le] at h_sv
   omega
 
-lemma of_handleError_err {err : String} {d : Devm}
-    {ex : Except (String × Jaune.State × AdrSet × Tra) Devm}
+lemma of_handleError_err {err : EvmError} {d : Devm}
+    {ex : Except (EvmError × Jaune.State × AdrSet × Tra) Devm}
     (h : executeCode.handleError (.error ⟨err, d⟩) = ex) :
     (∃ evm2 : Devm, ex = .ok evm2 ∧ evm2.error.isSome = true ∧ evm2.state = d.state) ∨
     (∃ e, ex = .error e) := by
-  simp only [executeCode.handleError] at h
-  split_ifs at h
-  · exact Or.inl ⟨_, h.symm, rfl, rfl⟩
-  · exact Or.inl ⟨_, h.symm, rfl, rfl⟩
-  · exact Or.inr ⟨_, h.symm⟩
+  cases err <;>
+    simp only [executeCode.handleError] at h <;>
+    first
+      | exact Or.inl ⟨_, h.symm, rfl, rfl⟩
+      | exact Or.inr ⟨_, h.symm⟩
 
 lemma of_benvAfterTransfer {msg : Msg} {benv' : Benv}
     (h_stv : msg.shouldTransferValue = true)
@@ -1768,7 +1771,7 @@ lemma of_benvAfterTransfer {msg : Msg} {benv' : Benv}
     exact ⟨st_mid, rfl, h.symm⟩
 
 lemma of_executeCode_someCode {msg : Msg} {adr : Adr} {xl : Xlot}
-    {ex : Except (String × Jaune.State × AdrSet × Tra) Devm}
+    {ex : Except (EvmError × Jaune.State × AdrSet × Tra) Devm}
     (h_ca : msg.codeAddress = some adr)
     (h : ExecuteCode msg xl ex) :
     ((!msg.disablePrecompiles && decide (msg.benv.stat.rules.isPrecomp adr)) = true ∧
@@ -2447,7 +2450,7 @@ lemma sum_getBal_state {d : Devm} : sum d.getBal = sum d.state.bal := by
   rw [h]
 
 lemma of_executeCode_cases {msg : Msg} {xl : Xlot}
-    {ex : Except (String × Jaune.State × AdrSet × Tra) Devm}
+    {ex : Except (EvmError × Jaune.State × AdrSet × Tra) Devm}
     (h : ExecuteCode msg xl ex) :
     (∃ adr, executeCode.handleError (executePrecomp (initEvm msg) adr) = ex) ∨
     (∃ ex', xl = .some ⟨initEvm msg, ex'⟩ ∧
@@ -2653,7 +2656,7 @@ lemma of_benvAfterTransfer_no {msg : Msg} {benv' : Benv}
   exact (Except.ok.inj h).symm
 
 lemma of_executeCode_noneCode {msg : Msg} {xl : Xlot}
-    {ex : Except (String × Jaune.State × AdrSet × Tra) Devm}
+    {ex : Except (EvmError × Jaune.State × AdrSet × Tra) Devm}
     (h_ca : msg.codeAddress = .none)
     (h : ExecuteCode msg xl ex) :
     ∃ ex', xl = .some ⟨initEvm msg, ex'⟩ ∧
@@ -3381,14 +3384,13 @@ lemma GenericCreate.some_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter 
         with ⟨errC, evmC⟩ | evmC
       · -- code-deposit gas charge failed
         simp only [h_cc] at h_ifA
-        by_cases h_eh : isExceptionalHalt errC
-        · rw [if_pos h_eh] at h_ifA
+        cases errC
+        case halt reason =>
           have h_child := Except.ok.inj h_ifA
           apply h_rb
           rw [← h_child]
           rfl
-        · rw [if_neg h_eh] at h_ifA
-          cases h_ifA
+        all_goals cases h_ifA
       · -- code deposit succeeded : reconstruct the precondition
         simp only [h_cc] at h_ifA
         have h_child := Except.ok.inj h_ifA
@@ -4096,12 +4098,12 @@ theorem processCreateMessage_preserves_solvent {wa : Adr} {msg : Msg} {evm : Dev
     rcases hcg : processCreateMessage.chargeCodeGas msg.benv.stat.rules evm2
       with ⟨err, evm3⟩ | evm3
     · -- code-gas charge failed
-      rw [hcg] at h_rest; dsimp only at h_rest
-      by_cases hex : isExceptionalHalt err
-      · -- exceptional halt : state rolled back to `msg.benv.state`
-        rw [if_pos hex] at h_rest
+      rw [hcg] at h_rest
+      cases err
+      case halt reason =>
+        -- exceptional halt : state rolled back to `msg.benv.state`
         rw [← Except.ok.inj h_rest]; exact h_inv
-      · rw [if_neg hex] at h_rest; exact absurd h_rest (by simp)
+      all_goals cases h_rest
     · -- clean success : install the returned code at `currentTarget ≠ wa`
       rw [hcg] at h_rest; dsimp only at h_rest
       rw [← Except.ok.inj h_rest, Devm.setCode_state, chargeCodeGas_state_ok hcg]
@@ -4112,7 +4114,7 @@ theorem processCreateMessage_preserves_solvent {wa : Adr} {msg : Msg} {evm : Dev
 
 
 lemma ExecuteCode.inv_noDel {wa : Adr} {msg : Msg} {xl : Xlot}
-    {ex : Except (String × Jaune.State × AdrSet × Tra) Devm}
+    {ex : Except (EvmError × Jaune.State × AdrSet × Tra) Devm}
     (inv : Xlot.InvNoDel wa xl)
     (run : ExecuteCode msg xl ex)
     (h : Msg.NoDel wa msg) : MsgResult.NoDel wa ex := by
@@ -4129,7 +4131,7 @@ lemma ExecuteCode.inv_noDel {wa : Adr} {msg : Msg} {xl : Xlot}
     exact handleError_noDel h_ex'_noDel
 
 lemma ProcessMessage.inv_noDel {wa : Adr} {msg : Msg} {xl : Xlot}
-    {ex : Except (String × Jaune.State × AdrSet × Tra) Devm}
+    {ex : Except (EvmError × Jaune.State × AdrSet × Tra) Devm}
     (inv : Xlot.InvNoDel wa xl)
     (run : ProcessMessage msg xl ex)
     (h : Msg.NoDel wa msg) : MsgResult.NoDel wa ex := by
@@ -4149,7 +4151,7 @@ lemma ProcessMessage.inv_noDel {wa : Adr} {msg : Msg} {xl : Xlot}
       · exact h_exec
 
 lemma ProcessCreateMessage.inv_noDel {wa : Adr} {msg : Msg} {xl : Xlot}
-    {ex : Except (String × Jaune.State × AdrSet × Tra) Devm}
+    {ex : Except (EvmError × Jaune.State × AdrSet × Tra) Devm}
     (inv : Xlot.InvNoDel wa xl)
     (run : ProcessCreateMessage msg xl ex)
     (h_ct : msg.currentTarget ≠ wa)
@@ -4169,7 +4171,6 @@ lemma ProcessCreateMessage.inv_noDel {wa : Adr} {msg : Msg} {xl : Xlot}
       cases h_cg : processCreateMessage.chargeCodeGas msg.benv.stat.rules evm with
       | error e =>
         rcases e with ⟨err, evm'⟩
-        dsimp only []
         have h_ds : Devm.delSets evm' = Devm.delSets evm := chargeCodeGas_delSets_err h_cg
         have h_atd_eq : evm'.accountsToDelete = evm.accountsToDelete := congrArg Prod.fst h_ds
         have h_ca_eq : evm'.createdAccounts = evm.createdAccounts := congrArg Prod.snd h_ds
@@ -4178,9 +4179,10 @@ lemma ProcessCreateMessage.inv_noDel {wa : Adr} {msg : Msg} {xl : Xlot}
         have h_gc : evm'.getCode wa = evm.getCode wa := by
           have hh := processCreateMessage.chargeCodeGas_getCode_gen h_cg wa
           simpa only [Execution.getCode] using hh
-        split_ifs with h_halt
-        · exact ⟨h_atd, h_ca, h.code⟩
-        · refine ⟨h_ca, ?_⟩
+        cases err
+        case halt reason => exact ⟨h_atd, h_ca, h.code⟩
+        all_goals
+          refine ⟨h_ca, ?_⟩
           show (evm'.state.getCode wa).toList ≠ []
           rw [← Devm.getCode_state, h_gc]
           exact h_evm.code
@@ -4214,7 +4216,7 @@ lemma Execution.NoDel.of_instructionFrame {wa : Adr} {d : Devm} {ex : Execution}
 
 /-- The CALL-family return path preserves the no-deletion invariant. -/
 lemma Resume.call_noDel {wa : Adr} {parent : Devm} {oi os : Nat}
-    {r : Except (String × Jaune.State × AdrSet × Tra) Devm}
+    {r : Except (EvmError × Jaune.State × AdrSet × Tra) Devm}
     (hnd : Devm.NoDel wa parent) (h : MsgResult.NoDel wa r) :
     Execution.NoDel wa ((Resume.call parent oi os).run r) := by
   unfold Resume.run liftToExecution
@@ -4236,7 +4238,7 @@ lemma Resume.call_noDel {wa : Adr} {parent : Devm} {oi os : Nat}
 
 /-- The CREATE-family return path preserves the no-deletion invariant. -/
 lemma Resume.create_noDel {wa : Adr} {parent : Devm} {newAddress : Adr}
-    {r : Except (String × Jaune.State × AdrSet × Tra) Devm}
+    {r : Except (EvmError × Jaune.State × AdrSet × Tra) Devm}
     (hnd : Devm.NoDel wa parent) (h : MsgResult.NoDel wa r) :
     Execution.NoDel wa ((Resume.create parent newAddress).run r) := by
   unfold Resume.run liftToExecution
@@ -4468,9 +4470,9 @@ theorem processCreateMessage_preserves_noDel {wa : Adr} {msg : Msg} {evm : Devm}
     · rw [if_pos herr] at h_rest
       rcases hcg : processCreateMessage.chargeCodeGas msg.benv.stat.rules evm2
         with ⟨err, evm3⟩ | evm3
-      · rw [hcg] at h_rest; dsimp only at h_rest
-        by_cases hex : isExceptionalHalt err
-        · rw [if_pos hex] at h_rest
+      · rw [hcg] at h_rest
+        cases err
+        case halt reason =>
           rw [← Except.ok.inj h_rest]
           have h_ds : Devm.delSets evm3 = Devm.delSets evm2 := chargeCodeGas_delSets_err hcg
           have h_atd_eq : evm3.accountsToDelete = evm2.accountsToDelete := congrArg Prod.fst h_ds
@@ -4479,8 +4481,7 @@ theorem processCreateMessage_preserves_noDel {wa : Adr} {msg : Msg} {evm : Devm}
           have h_ca : wa ∉ evm3.createdAccounts := by rw [h_ca_eq]; exact h_pm.ca
           unfold processCreateMessage.exceptionalHalt
           exact Devm.NoDel.of_eqs (d := evm3.rollback msg.benv.state msg.tenv.transientStorage) rfl rfl (Devm.NoDel.rollback h_atd h_ca h.code)
-        · rw [if_neg hex] at h_rest
-          exact absurd h_rest (by simp)
+        all_goals cases h_rest
       · rw [hcg] at h_rest; dsimp only at h_rest
         rw [← Except.ok.inj h_rest]
         have h_ds : Devm.delSets evm3 = Devm.delSets evm2 := chargeCodeGas_delSets_ok hcg
@@ -4510,10 +4511,9 @@ lemma setDelegationStep_benv_equiv {auth : Auth} {msg msg' : Msg} {refund refund
     · injection h with h1; injection h1 with h2 h3; subst h2
       exact Benv.EquivForDelegation_refl _
     · split at h
-      · split at h
-        · injection h with h1; injection h1 with h2 h3; subst h2
-          exact Benv.EquivForDelegation_refl _
-        · contradiction
+      · injection h with h1; injection h1 with h2 h3; subst h2
+        exact Benv.EquivForDelegation_refl _
+      · contradiction
       · rename_i authority heq
         dsimp only at h
         split at h
@@ -4600,11 +4600,10 @@ lemma setDelegationStep_preserves_solvent {wa : Adr} {auth : Auth} {msg msg' : M
       subst h_msg
       exact h_inv
     · split at h_run
-      · split at h_run
-        · injection h_run with h1; injection h1 with h_msg h_refund
-          subst h_msg
-          exact h_inv
-        · contradiction
+      · injection h_run with h1; injection h1 with h_msg h_refund
+        subst h_msg
+        exact h_inv
+      · contradiction
       · rename_i authority heq
         dsimp only at h_run
         split at h_run
@@ -4685,11 +4684,10 @@ lemma setDelegationStep_fields {auth : Auth} {msg msg' : Msg}
       subst h_msg
       simp
     · split at h_run
-      · split at h_run
-        · injection h_run with h1; injection h1 with h_msg h_refund
-          subst h_msg
-          simp
-        · contradiction
+      · injection h_run with h1; injection h1 with h_msg h_refund
+        subst h_msg
+        simp
+      · contradiction
       · dsimp only at h_run
         split at h_run
         · injection h_run with h1; injection h1 with h_msg h_refund
@@ -5299,6 +5297,7 @@ lemma checkTransaction_upfront_lt_modulus {benv : Benv} {bout : BlockOutput}
   cases h_type : tx.type with
   | zero gasPrice receiver =>
     simp only [checkTransactionGasFee, h_type, checkTransactionLegacyGasFee] at h_fee
+    rw [Except.mapError_eq_ok_iff] at h_fee
     split at h_fee
     · cases h_fee
     · have h_fee' := if_error_eq_ok h_fee
@@ -5312,6 +5311,7 @@ lemma checkTransaction_upfront_lt_modulus {benv : Benv} {bout : BlockOutput}
       omega
   | one chainId gasPrice receiver accessList =>
     simp only [checkTransactionGasFee, h_type, checkTransactionLegacyGasFee] at h_fee
+    rw [Except.mapError_eq_ok_iff] at h_fee
     split at h_fee
     · cases h_fee
     · have h_fee' := if_error_eq_ok h_fee
@@ -5325,6 +5325,7 @@ lemma checkTransaction_upfront_lt_modulus {benv : Benv} {bout : BlockOutput}
       omega
   | two chainId maxPriorityFeePerGas maxFeePerGas receiver accessList =>
     simp only [checkTransactionGasFee, h_type, checkTransactionDynamicGasFee] at h_fee
+    rw [Except.mapError_eq_ok_iff] at h_fee
     split at h_fee
     · cases h_fee
     · split at h_fee
@@ -5347,6 +5348,7 @@ lemma checkTransaction_upfront_lt_modulus {benv : Benv} {bout : BlockOutput}
   | three chainId maxPriorityFeePerGas maxFeePerGas receiver accessList
       maxFeePerBlobGas blobHashes =>
     simp only [checkTransactionGasFee, h_type, checkTransactionDynamicGasFee] at h_fee
+    rw [Except.mapError_eq_ok_iff] at h_fee
     split at h_fee
     · cases h_fee
     · split at h_fee
@@ -5356,6 +5358,7 @@ lemma checkTransaction_upfront_lt_modulus {benv : Benv} {bout : BlockOutput}
         simp only [Prod.mk.injEq] at h_fee'
         obtain ⟨rfl, rfl⟩ := h_fee'
         simp only [checkTransactionBlobData, h_type] at h_blob
+        rw [Except.mapError_eq_ok_iff] at h_blob
         split at h_blob
         · cases h_blob
         · rcases of_bind_eq_ok h_blob with ⟨_, _, h_blob⟩
@@ -5382,6 +5385,7 @@ lemma checkTransaction_upfront_lt_modulus {benv : Benv} {bout : BlockOutput}
               omega
   | four chainId maxPriorityFeePerGas maxFeePerGas receiver accessList auths =>
     simp only [checkTransactionGasFee, h_type, checkTransactionDynamicGasFee] at h_fee
+    rw [Except.mapError_eq_ok_iff] at h_fee
     split at h_fee
     · cases h_fee
     · split at h_fee
@@ -5573,6 +5577,7 @@ theorem processTransaction_preserves_solvent (wa : Adr)
   rcases of_bind_eq_ok h_run with ⟨msg, hprep, h_run⟩
   rcases of_bind_eq_ok h_run with ⟨pmout, hpm, h_run⟩
   rcases pmout with ⟨state2, txOutput⟩
+  rw [Except.mapError_eq_ok_iff] at hval hpm
   rcases of_bind_eq_ok h_run with ⟨refundCounter, hrefund, h_run⟩
   simp only at h_run
   rcases h_run with ⟨rfl, rfl⟩
@@ -5780,6 +5785,7 @@ lemma checkTransaction_fee_lt {benv : Benv} {bout : BlockOutput} {tx : Tx}
   cases htt : tx.type with
   | zero gasPrice recv =>
     simp only [checkTransactionGasFee, htt, checkTransactionLegacyGasFee] at hfee
+    rw [Except.mapError_eq_ok_iff] at hfee
     split at hfee
     · cases hfee
     · have hfe := if_error_eq_ok hfee
@@ -5793,6 +5799,7 @@ lemma checkTransaction_fee_lt {benv : Benv} {bout : BlockOutput} {tx : Tx}
       omega
   | one cid gasPrice recv al =>
     simp only [checkTransactionGasFee, htt, checkTransactionLegacyGasFee] at hfee
+    rw [Except.mapError_eq_ok_iff] at hfee
     split at hfee
     · cases hfee
     · have hfe := if_error_eq_ok hfee
@@ -5806,6 +5813,7 @@ lemma checkTransaction_fee_lt {benv : Benv} {bout : BlockOutput} {tx : Tx}
       omega
   | two cid mpf maxFee recv al =>
     simp only [checkTransactionGasFee, htt, checkTransactionDynamicGasFee] at hfee
+    rw [Except.mapError_eq_ok_iff] at hfee
     split at hfee
     · cases hfee
     · split at hfee
@@ -5827,6 +5835,7 @@ lemma checkTransaction_fee_lt {benv : Benv} {bout : BlockOutput} {tx : Tx}
         omega
   | three cid mpf maxFee recv al mbf bh =>
     simp only [checkTransactionGasFee, htt, checkTransactionDynamicGasFee] at hfee
+    rw [Except.mapError_eq_ok_iff] at hfee
     split at hfee
     · cases hfee
     · split at hfee
@@ -5836,6 +5845,7 @@ lemma checkTransaction_fee_lt {benv : Benv} {bout : BlockOutput} {tx : Tx}
         simp only [Prod.mk.injEq] at hfe
         obtain ⟨rfl, rfl⟩ := hfe
         simp only [checkTransactionBlobData, htt] at hblob
+        rw [Except.mapError_eq_ok_iff] at hblob
         split at hblob
         · cases hblob
         · rcases of_bind_eq_ok hblob with ⟨_, _, hblob⟩
@@ -5860,6 +5870,7 @@ lemma checkTransaction_fee_lt {benv : Benv} {bout : BlockOutput} {tx : Tx}
               omega
   | four cid mpf maxFee recv al auths =>
     simp only [checkTransactionGasFee, htt, checkTransactionDynamicGasFee] at hfee
+    rw [Except.mapError_eq_ok_iff] at hfee
     split at hfee
     · cases hfee
     · split at hfee
@@ -5905,6 +5916,7 @@ lemma processTransaction_sum_le {benv : Benv} {bout bout' : BlockOutput}
   rcases of_bind_eq_ok h_run with ⟨msg, hprep, h_run⟩
   rcases of_bind_eq_ok h_run with ⟨pmout, hpm, h_run⟩
   rcases pmout with ⟨state2, txOutput⟩
+  rw [Except.mapError_eq_ok_iff] at hval hpm
   rcases of_bind_eq_ok h_run with ⟨refundCounter, hrefund, h_run⟩
   simp only at h_run
   rcases h_run with ⟨rfl, rfl⟩
@@ -6094,6 +6106,7 @@ lemma processCheckedSystemTransaction_to_unchecked {benv : Benv} {target : Adr} 
     split at h2
     · cases h2
     · obtain ⟨h3, h4⟩ := Prod.mk.inj (Except.ok.inj h2)
+      rw [Except.mapError_eq_ok_iff] at h1
       subst h3; subst h4; exact h1
 
 /-
@@ -6147,6 +6160,7 @@ theorem applyBody_preserves_solvent (wa : Adr)
   rcases of_bind_eq_ok h_run with ⟨decodedTxs, h_decode, h_run⟩
   rcases of_bind_eq_ok h_run with ⟨⟨benvTxs, boutTxs⟩, h_txs, h_requests⟩
   dsimp only at h_history h_txs h_requests
+  rw [Except.mapError_eq_ok_iff] at h_beacon h_history
   have h_beacon_inv :=
     processUncheckedSystemTransaction_preserves_solvent_sum_le wa benv
       beaconRootsAddress benv.stat.parentBeaconBlockRoot.toBytes
@@ -6196,9 +6210,10 @@ theorem stateTransitionWith_preserves_solvent (wa : Adr) (rules : ForkRules)
     (h_run : stateTransitionWith rules ch block = .ok ch')
     (h_wds : sum ch.state.bal + wdsum block.wds < 2 ^ 256)
     (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state := by
-  -- invert `stateTransitionWith`'s do-block; the state change is `applyBody`, so
+  -- invert the typed core behind the byte-identical renderer adapter
+  -- (`stateTransitionWith_eq_ok_iff`); the state change is `applyBody`, so
   -- this is `applyBody_preserves_solvent` (the block-check helpers don't touch state).
-  rw [stateTransitionWith] at h_run
+  rw [stateTransitionWith_eq_ok_iff, stateTransitionE] at h_run
   obtain ⟨_, _, h_run⟩ := of_bind_eq_ok h_run
   obtain ⟨_, _, h_run⟩ := of_bind_eq_ok h_run
   dsimp only at h_run
@@ -6222,7 +6237,10 @@ theorem stateTransitionUsing_preserves_solvent (wa : Adr) (cfg : ChainConfig)
     (h_run : stateTransitionUsing cfg ch block = .ok ch')
     (h_wds : sum ch.state.bal + wdsum block.wds < 2 ^ 256)
     (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state := by
+  -- the configured entry point now checks the chain identity first (P0.1);
+  -- solvency needs neither that fact nor which rules the schedule picked.
   rw [stateTransitionUsing] at h_run
+  obtain ⟨_, _, h_run⟩ := of_bind_eq_ok h_run
   obtain ⟨rules, _, h_run⟩ := of_bind_eq_ok h_run
   exact stateTransitionWith_preserves_solvent wa rules ch ch' block h_run h_wds h_inv
 
@@ -6287,26 +6305,13 @@ theorem addBlockToChainWith_preserves_solvent (wa : Adr) (rules : ForkRules)
     (h_wds : ∀ block hash, rlpToBlock rlp = .ok ⟨block, hash⟩ →
       sum ch.state.bal + wdsum block.wds < 2 ^ 256)
     (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state := by
-  -- invert `addBlockToChainWith` (rlpToBlock decode + hash check), then one
-  -- `stateTransitionWith_preserves_solvent` step (h_wds at the decoded block).
-  rw [addBlockToChainWith] at h_run
-  obtain ⟨⟨block, hash⟩, h_rlp, h_run⟩ := of_bind_eq_ok h_run
-  dsimp only at h_run
-  change (if (Header.toBLT block.header).toBytes.keccak ≠ hash then _ else _) = _ at h_run
-  -- outer hash check
-  split at h_run
-  · cases h_run
-  · -- case on the raw-RLP limit, then `stateTransitionWith rules ch block`
-    split at h_run
-    · simp [Pure.pure, Except.pure] at h_run
-    · split at h_run
-      · simp [Pure.pure, Except.pure] at h_run
-      · rename_i chain h_st
-        have hyc : chain = ch' :=
-          Sum.inl.inj (Except.ok.inj h_run)
-        subst hyc
-        exact stateTransitionWith_preserves_solvent wa rules ch _ block h_st
-          (h_wds block hash h_rlp) h_inv
+  -- invert the raw import through Jaune's own bridge
+  -- (`addBlockToChainWith_eq_ok_inl`: strict decode, EIP-7934 size, then the
+  -- transition), then one `stateTransitionWith_preserves_solvent` step
+  -- (h_wds at the decoded block).
+  obtain ⟨block, hash, h_rlp, h_size, h_st⟩ := addBlockToChainWith_eq_ok_inl h_run
+  exact stateTransitionWith_preserves_solvent wa rules ch ch' block h_st
+    (h_wds block hash h_rlp) h_inv
 
 -- Block import at an explicitly named fork.
 
