@@ -27,3 +27,7 @@ jobs:
       - uses: leanprover/lean-action@v1
       - name: Audit headline theorem axioms
         run: scripts/check.sh --no-build
+      - name: Build the Jaune fixture runner
+        run: lake build jaune/jaune
+      - name: WETH fixture suite (Jaune vs frozen EELS on the witnessed bytes)
+        run: scripts/check-weth.sh --no-build
