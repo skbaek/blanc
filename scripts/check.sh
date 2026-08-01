@@ -1,16 +1,22 @@
 #!/usr/bin/env bash
 # Blanc verification gate (REFACTOR.md Phase 0, step 0.3): `lake build`,
-# then an axiom audit of the seven top solvency theorems via
-# scripts/AxiomCheck.lean — each theorem's axiom closure must equal exactly
-# [propext, Classical.choice, Quot.sound], order-insensitive. Any extra
-# axiom fails — sorryAx, ofReduceBool/ofReduceNat, and also bv_decide's
-# per-declaration `<decl>._native.bv_decide.ax_*` axioms, which add the
-# Lean compiler to the trusted code base — and so does any missing axiom.
+# then an axiom audit of the eight audited top theorems via
+# scripts/AxiomCheck.lean — the seven solvency theorems plus the compile
+# witness `wethCode_compile`, which is what keeps the solvency theorems'
+# `Prog.compile weth` hypothesis from being vacuous.
+#
+# Each row carries its OWN pinned expected axiom set (see ROWS below), and a
+# theorem's axiom closure must equal its row's set exactly, order-insensitive.
+# Any extra axiom fails — sorryAx, ofReduceBool/ofReduceNat, and also
+# bv_decide's per-declaration `<decl>._native.bv_decide.ax_*` axioms, which add
+# the Lean compiler to the trusted code base — and so does any missing axiom.
+# A row is pinned to the set its proof honestly achieves; the pin moves only
+# when the proof does, and never in order to make a red gate green.
 #
 # Usage: scripts/check.sh [--no-build]
 #
 # CLI contract: exit 0 if and only if the gate passes; output ends with one
-# verdict line per top theorem (listing the axioms found) plus a single
+# verdict line per audited theorem (listing the axioms found) plus a single
 # unambiguous summary line.
 
 set -u
@@ -40,16 +46,32 @@ if ! OUT="$(cd "$ROOT" && lake env lean scripts/AxiomCheck.lean 2>&1)"; then
   exit 1
 fi
 
-THEOREMS="Blanc.weth_preserves_solvent Blanc.stateTransition_preserves_solvent Blanc.chain_preserves_solvent Blanc.addBlockToChain_preserves_solvent Blanc.stateTransitionUsing_preserves_solvent Blanc.chainUsing_preserves_solvent Blanc.addBlockToChainUsing_preserves_solvent"
-EXPECTED_DISPLAY="propext, Classical.choice, Quot.sound"
-EXPECTED_SORTED="$(printf '%s\n' propext Classical.choice Quot.sound | LC_ALL=C sort)"
+# Audited rows: `<fully qualified theorem>|<expected axioms, comma separated>`.
+# An empty expectation (nothing after the `|`) means the theorem must depend on
+# NO axioms at all; that row then passes on Lean's "does not depend on any
+# axioms" report and fails on any axiom whatsoever.
+STANDARD="propext, Classical.choice, Quot.sound"
+ROWS="\
+Blanc.weth_preserves_solvent|$STANDARD
+Blanc.stateTransition_preserves_solvent|$STANDARD
+Blanc.chain_preserves_solvent|$STANDARD
+Blanc.addBlockToChain_preserves_solvent|$STANDARD
+Blanc.stateTransitionUsing_preserves_solvent|$STANDARD
+Blanc.chainUsing_preserves_solvent|$STANDARD
+Blanc.addBlockToChainUsing_preserves_solvent|$STANDARD
+Blanc.wethCode_compile|$STANDARD"
 # Secondary net only: the exact-set comparison below is the primary check;
 # this pattern catches forbidden names in output the per-theorem parse missed.
 FORBIDDEN='sorryAx|ofReduceBool|ofReduceNat|_native\.'
 NTOTAL=0
 NEXACT=0
 
-for THM in $THEOREMS; do
+while IFS= read -r ROW; do
+  [ -n "$ROW" ] || continue
+  THM="${ROW%%|*}"
+  EXPECTED_DISPLAY="${ROW#*|}"
+  EXPECTED_SORTED="$(printf '%s\n' "$EXPECTED_DISPLAY" | tr ',' '\n' \
+    | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | grep -v '^$' | LC_ALL=C sort)"
   NTOTAL=$((NTOTAL + 1))
   AXIOMS="$(printf '%s\n' "$OUT" | awk -v marker="'$THM' depends on axioms:" '
     index($0, marker) == 1 {
@@ -66,10 +88,19 @@ for THM in $THEOREMS; do
   ')"
   if [ -z "$AXIOMS" ]; then
     if printf '%s\n' "$OUT" | grep -qF "'$THM' does not depend on any axioms"; then
-      echo "FAIL — $THM: depends on no axioms; expected exactly [$EXPECTED_DISPLAY]"
+      if [ -z "$EXPECTED_SORTED" ]; then
+        echo "OK — $THM: depends on no axioms"
+        NEXACT=$((NEXACT + 1))
+      else
+        echo "FAIL — $THM: depends on no axioms; expected exactly [$EXPECTED_DISPLAY]"
+      fi
     else
       echo "FAIL — $THM: no axiom report found in Lean output"
     fi
+    continue
+  fi
+  if [ -z "$EXPECTED_SORTED" ]; then
+    echo "FAIL — $THM: axioms $AXIOMS; expected no axioms at all"
     continue
   fi
   ACTUAL_SORTED="$(printf '%s\n' "$AXIOMS" | tr -d '[]' | tr ',' '\n' \
@@ -85,9 +116,9 @@ for THM in $THEOREMS; do
     [ -n "$MISSING" ] && LINE="$LINE; missing: $MISSING"
     echo "$LINE"
   fi
-done
+done <<< "$ROWS"
 
-# Belt and braces: AxiomCheck.lean prints nothing but the seven axiom sets,
+# Belt and braces: AxiomCheck.lean prints nothing but the audited axiom sets,
 # so a forbidden name anywhere in the output is a failure even if the
 # per-line parse above missed it (e.g. an unexpectedly wrapped message).
 if printf '%s\n' "$OUT" | grep -qE "$FORBIDDEN"; then
@@ -96,8 +127,26 @@ if printf '%s\n' "$OUT" | grep -qE "$FORBIDDEN"; then
 fi
 
 if [ "$NEXACT" -ne "$NTOTAL" ]; then
-  echo "REGRESSION — axiom audit: only $NEXACT/$NTOTAL top theorems have the exact expected axiom set"
+  echo "REGRESSION — axiom audit: only $NEXACT/$NTOTAL audited theorems have their exact pinned axiom set"
   exit 1
 fi
-echo "OK — axiom audit: $NEXACT/$NTOTAL top theorems depend on exactly [$EXPECTED_DISPLAY]"
+
+# The audit's two halves must agree: every theorem AxiomCheck.lean prints must
+# be pinned by a row here, and every pinned row must be printed there. Deleting
+# a row from EITHER file is then a gate failure rather than a smaller green
+# count — the point of auditing the compile witness at all.
+PRINTED="$(grep -oE '^#print axioms[[:space:]]+[A-Za-z0-9_.]+' \
+  "$SCRIPT_DIR/AxiomCheck.lean" | awk '{print $3}' | LC_ALL=C sort)"
+PINNED="$(printf '%s\n' "$ROWS" | sed 's/|.*//' | grep -v '^$' | LC_ALL=C sort)"
+if [ "$PRINTED" != "$PINNED" ]; then
+  UNPINNED="$(LC_ALL=C comm -23 <(printf '%s\n' "$PRINTED") <(printf '%s\n' "$PINNED") | xargs)"
+  UNPRINTED="$(LC_ALL=C comm -13 <(printf '%s\n' "$PRINTED") <(printf '%s\n' "$PINNED") | xargs)"
+  LINE="REGRESSION — axiom audit: scripts/AxiomCheck.lean and scripts/check.sh disagree on the audited set"
+  [ -n "$UNPINNED" ] && LINE="$LINE; printed but not pinned: $UNPINNED"
+  [ -n "$UNPRINTED" ] && LINE="$LINE; pinned but not printed: $UNPRINTED"
+  echo "$LINE"
+  exit 1
+fi
+
+echo "OK — axiom audit: $NEXACT/$NTOTAL audited theorems depend on exactly their pinned axiom sets"
 exit 0

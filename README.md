@@ -16,6 +16,10 @@ This repo contains the following files:
   They import in that order.
 - [Weth.lean](Blanc/Weth.lean): proof-of-concept implementation of the Wrapped 
   Ether (WETH) contract in Blanc.
+- [WethCode.lean](Blanc/WethCode.lean): the compiled WETH runtime bytecode and
+  the witness that Blanc's compiler emits it. Generated in full by
+  [`scripts/gen-weth-code.lean`](scripts/gen-weth-code.lean) — do not edit by
+  hand.
 - [Solvent.lean](Blanc/Solvent.lean): proof of solvency for the WETH implementation.
 
 Every module is wrapped in `namespace Blanc`, and Blanc's Jaune imports are
@@ -30,8 +34,8 @@ in [`lakefile.lean`](lakefile.lean) — so a fresh clone builds reproducibly
 without a sibling checkout, and bumping Jaune is a reviewed one-line change.
 
 CI ([`scripts/check.sh`](scripts/check.sh)) builds the library and then runs an
-**axiom audit** ([`scripts/AxiomCheck.lean`](scripts/AxiomCheck.lean)) of the
-seven headline solvency theorems:
+**axiom audit** ([`scripts/AxiomCheck.lean`](scripts/AxiomCheck.lean)) of eight
+top theorems. Seven are the headline solvency theorems:
 
 - `Blanc.weth_preserves_solvent`
 - `Blanc.stateTransition_preserves_solvent`
@@ -41,7 +45,23 @@ seven headline solvency theorems:
 - `Blanc.chainUsing_preserves_solvent`
 - `Blanc.addBlockToChainUsing_preserves_solvent`
 
-The audit fails if any of them depends on `sorryAx`, `ofReduceBool`, or
-`ofReduceNat` — i.e. no `sorry` and no `native_decide`-style axiom in the
-trusted path of these results.
+The eighth is the **compile witness**:
+
+- `Blanc.wethCode_compile` — `Prog.compile weth = some wethCode`. All seven
+  theorems above are conditioned on the WETH account's code being what
+  `Prog.compile weth` returns, so without this equation they could all hold
+  vacuously; the witness states that the compiler really does emit the
+  866-byte [`wethCode`](Blanc/WethCode.lean) for `weth`. It is proved by
+  `decide +kernel` — kernel evaluation of the same reduction, no raised
+  elaboration limit and nothing added to the trusted base (in particular, not
+  `native_decide`).
+
+Each audited theorem carries its **own pinned expected axiom set** in
+`scripts/check.sh`, and the audit fails if a theorem's axiom closure differs
+from its pin in either direction — extra or missing. In particular it fails on
+`sorryAx`, `ofReduceBool`, or `ofReduceNat` — no `sorry` and no
+`native_decide`-style axiom in the trusted path of these results. It also fails
+if `AxiomCheck.lean` and `check.sh` disagree about which theorems are audited,
+so a row cannot be dropped silently from either side. All eight rows currently
+pin exactly `[propext, Classical.choice, Quot.sound]`.
 

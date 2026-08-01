@@ -1,4 +1,5 @@
 import Blanc.Solvent
+import Blanc.WethCode
 
 #print axioms Blanc.weth_preserves_solvent
 #print axioms Blanc.stateTransition_preserves_solvent
@@ -7,3 +8,4 @@ import Blanc.Solvent
 #print axioms Blanc.stateTransitionUsing_preserves_solvent
 #print axioms Blanc.chainUsing_preserves_solvent
 #print axioms Blanc.addBlockToChainUsing_preserves_solvent
+#print axioms Blanc.wethCode_compile
