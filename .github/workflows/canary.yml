@@ -1,6 +1,5 @@
 # ============================================================================
-# DRAFT — NOT ACTIVE (.yml.draft is ignored by GitHub Actions). Review-ready
-# draft of the cross-repo canary (CI plan P2 / Step 7): build blanc's proofs
+# ACTIVE — scheduled cross-repo canary (CI plan P2 / Step 7): builds blanc's proofs
 # against jaune *HEAD* instead of the pinned revision, as a daily early-warning
 # signal for how much proof-repair a future pin bump will cost.
 #

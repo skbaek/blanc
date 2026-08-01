@@ -1,0 +1,24 @@
+# Blanc WETH deviations from deployed WETH9
+
+Blanc's WETH is a proof-oriented reimplementation, not a source or bytecode
+model of the WETH9 contract deployed at
+[`0xC02a…6Cc2`](https://etherscan.io/address/0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2#code).
+This registry catalogues observable semantic differences found by comparing
+`Blanc/Weth.lean` with the canonical
+[`WETH9.sol`](https://github.com/gnosis/canonical-weth/blob/0dd1ea3e295eef916d0c6223ec63141137d22d67/contracts/WETH9.sol).
+
+| Behavior | Deployed WETH9 semantics | Blanc semantics | Observable consequence | Project stance |
+|---|---|---|---|---|
+| Address words with nonzero upper 96 bits | Solidity's address parameters are 160-bit values. The deployed Solidity 0.4.x decoder ignores dirty higher-order bits, so calls resolve the low 160-bit address ([Solidity compatibility note](https://docs.soliditylang.org/en/v0.7.6/050-breaking-changes.html#semantic-only-changes)). | Mutating paths reject such words (`approve`, `transfer`, and `transferFrom`: [`Weth.lean:158-165`](Blanc/Weth.lean#L158-L165), [`Weth.lean:220-225`](Blanc/Weth.lean#L220-L225), [`Weth.lean:268-279`](Blanc/Weth.lean#L268-L279)). The `balanceOf` and `allowance` views instead use the full calldata words as storage-key material without an address check ([`Weth.lean:108-124`](Blanc/Weth.lean#L108-L124)). | A noncanonical ABI word that WETH9 aliases to its low-160-bit address either reverts in a Blanc mutator or queries a different Blanc storage key. | No equivalence claim; callers should use canonical ABI encoding. |
+| Balance storage layout | `balanceOf` is a Solidity mapping declared first ([`WETH9.sol:28`](https://github.com/gnosis/canonical-weth/blob/0dd1ea3e295eef916d0c6223ec63141137d22d67/contracts/WETH9.sol#L28)), so balances occupy mapping-derived slots rather than slots equal to addresses. | Deposits and transfers use the raw 256-bit address word itself as the storage slot ([`Weth.lean:21-26`](Blanc/Weth.lean#L21-L26), [`Weth.lean:184-189`](Blanc/Weth.lean#L184-L189)). | Blanc storage proofs and states cannot be interpreted as WETH9's deployed storage image; the same account's balance lives at a different slot. | Deliberately simple proof-oriented representation; no storage-layout compatibility claim. |
+| Allowance storage layout and collision handling | `allowance` is a separate nested Solidity mapping ([`WETH9.sol:29`](https://github.com/gnosis/canonical-weth/blob/0dd1ea3e295eef916d0c6223ec63141137d22d67/contracts/WETH9.sol#L29)); Solidity's [mapping layout](https://docs.soliditylang.org/en/latest/internals/layout_in_storage.html#mappings-and-dynamic-arrays) domain-separates it from `balanceOf` through the declared base slots. WETH9 has no fail-on-hash-collision branch. | Blanc stores an allowance at `keccak256(src ‖ dst)`. If that 256-bit hash is also a valid raw-address balance key, `approve` and allowance-consuming `transferFrom` revert instead of writing or reading through the collision ([`Weth.lean:141-167`](Blanc/Weth.lean#L141-L167), [`Weth.lean:245-265`](Blanc/Weth.lean#L245-L265)). | The allowance key is incompatible with WETH9 storage. In the exceptional collision case, an operation WETH9 permits fails in Blanc; the `allowance` view itself does not perform this guard. | Deliberate fail-on-collision design choice, recorded in the project's hashmap design notes. |
+| Ether sent to recognized non-deposit calls | Only the fallback and `deposit()` are payable ([`WETH9.sol:31-38`](https://github.com/gnosis/canonical-weth/blob/0dd1ea3e295eef916d0c6223ec63141137d22d67/contracts/WETH9.sol#L31-L38)); the other public entry points are nonpayable ([`WETH9.sol:38-75`](https://github.com/gnosis/canonical-weth/blob/0dd1ea3e295eef916d0c6223ec63141137d22d67/contracts/WETH9.sol#L38-L75)) and reject nonzero call value. | The selector dispatcher routes directly to every recognized function without checking call value ([`Weth.lean:305-327`](Blanc/Weth.lean#L305-L327)); only the deposit implementation credits `callvalue` ([`Weth.lean:21-26`](Blanc/Weth.lean#L21-L26)). | A recognized Blanc call such as `transfer` can succeed while also sending Ether to the contract, without minting the sender the corresponding WETH balance. WETH9 rejects that call. | No equivalence claim; only deposit/fallback calls should carry value. |
+
+## Checked similarities
+
+The comparison also covered calldata truncation and trailing data,
+fallback-to-deposit routing, event topics/data, Boolean return values,
+`totalSupply`, withdrawal's stipend-limited call, and the maximum-`uint256`
+allowance exception. No observable divergence was identified in those items.
+This registry is about behavior, not a claim that the implementations share
+storage, source, or bytecode.

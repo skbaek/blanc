@@ -22,6 +22,9 @@ This repo contains the following files:
   hand.
 - [Solvent.lean](Blanc/Solvent.lean): proof of solvency for the WETH implementation.
 
+Blanc's WETH is a reimplementation; observable deviations from deployed WETH9
+are catalogued in [`WETH_DEVIATIONS.md`](WETH_DEVIATIONS.md).
+
 Every module is wrapped in `namespace Blanc`, and Blanc's Jaune imports are
 wrapped in `namespace Jaune`, so downstream code writes qualified names or
 opens the namespace explicitly.
@@ -81,4 +84,3 @@ including that the reentrancy attempt does not double-spend. It is a local
 gate (CI does not get the Jaune executable for free from the dependency
 build, so CI runs `lake build jaune/jaune` before it) and is also wired into
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
-
