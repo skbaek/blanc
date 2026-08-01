@@ -6294,6 +6294,13 @@ inductive BlockChain.ReachUsing (cfg : ChainConfig) : BlockChain → BlockChain 
 -- Chain-level induction over a configured chain : no sequence of valid blocks
 -- can break WETH solvency, whatever schedule the chain follows and whichever
 -- activations that sequence crosses.
+theorem chainUsing_preserves_solvent (wa : Adr) (cfg : ChainConfig)
+    (ch ch' : BlockChain) (h_reach : BlockChain.ReachUsing cfg ch ch')
+    (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state := by
+  induction h_reach with
+  | refl => exact h_inv
+  | step h_reach' h_bound h_st ih =>
+    exact stateTransitionUsing_preserves_solvent wa cfg _ _ _ h_st h_bound ih
 
 /-- Every successful Prague step copies the snapshot's chain identity, so a
 whole Prague reachability chain does. -/
@@ -6356,10 +6363,41 @@ theorem addBlockToChainWith_preserves_solvent (wa : Adr) (rules : ForkRules)
 
 -- Block import at an explicitly named fork.
 
--- Block import on a configured chain. It decodes the block first so that the
--- schedule can read its timestamp, but once the decode has succeeded it is the
--- rules-explicit import of the same bytes, so the general theorem applies
--- rather than a second inversion of the same do-block.
+-- Block import on a configured chain validates the schedule and chain identity
+-- before decoding. Once decoding supplies the timestamp, the configured core
+-- selects the rules and delegates to the same canonical import used above, so
+-- the general rules-explicit theorem applies whichever activation is current.
+theorem addBlockToChainUsing_preserves_solvent (wa : Adr) (cfg : ChainConfig)
+    (ch ch' : BlockChain) (rlp : Bytes)
+    (h_run : addBlockToChainUsing cfg ch rlp = .ok (.inl ch'))
+    (h_wds : ∀ block hash, rlpToBlock rlp = .ok ⟨block, hash⟩ →
+      sum ch.state.bal + wdsum block.wds < 2 ^ 256)
+    (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state := by
+  unfold addBlockToChainUsing at h_run
+  cases hE : addBlockToChainUsingE cfg ch rlp with
+  | error failure =>
+      rw [hE] at h_run
+      simp [ImportOutcome.renderLegacy] at h_run
+  | ok outcome =>
+      rw [hE] at h_run
+      cases outcome with
+      | inr rejection =>
+          simp [ImportOutcome.renderLegacy] at h_run
+      | inl chResult =>
+          simp only [ImportOutcome.renderLegacy, Except.ok.injEq,
+            Sum.inl.injEq] at h_run
+          subst chResult
+          unfold addBlockToChainUsingE at hE
+          obtain ⟨_, _, hE⟩ := Except.bind_eq_ok hE
+          obtain ⟨_, _, hE⟩ := Except.bind_eq_ok hE
+          split at hE
+          · simp at hE
+          · rename_i block hash h_decode
+            obtain ⟨rules, _, hE⟩ := Except.bind_eq_ok hE
+            obtain ⟨_, h_st⟩ := addBlockToChainCanonicalE_eq_ok_inl hE
+            exact stateTransitionWith_preserves_solvent wa rules ch ch' block
+              (stateTransitionWith_eq_ok_iff.mpr h_st)
+              (h_wds block hash (rlpToBlock_eq_ok_iff.mpr h_decode)) h_inv
 
 -- Prague is the `rules := pragueRules` instance here too; the statement is
 -- unchanged.
