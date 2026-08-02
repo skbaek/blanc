@@ -153,6 +153,21 @@ def returnMemoryRange (x y : B256) : Func := pushList [y, x] +++ Func.ret
 
 def cdl (x : B256) : Line := [pushB256 x, calldataload]
 
+-- Read the k-th argument word: skip the 4-byte selector, then k whole words.
+--
+-- Two conventions are baked in here, both inherited from WETH rather than
+-- decided on, and both worth revisiting before a second contract:
+--
+-- (1) The 32-byte stride is right for every `ArgType`, which is why that type
+--     admits only static types. A dynamic argument's word is an *offset* into
+--     a tail, so reading it with `arg` yields the offset, not the value.
+-- (2) There is no calldata-length validation anywhere — `calldatasize` is in
+--     the instruction set and unused. `calldataload` zero-pads past the end of
+--     calldata, so a call with a truncated argument list reads zeros and
+--     proceeds rather than reverting. This is not a divergence from deployed
+--     WETH9, whose solc 0.4.x decoder also zero-pads (see WETH_DEVIATIONS.md,
+--     "Checked similarities"); it is simply a convention Blanc has never had
+--     to state, because it has only ever had one contract to satisfy.
 def arg (k : B256) : Line := cdl ((32 * k) + 4)
 
 -- Push a 256-bit word used for testing address validity.
@@ -1693,13 +1708,30 @@ theorem correct (sevm : Sevm) (pre : Devm) (p : Prog) (post : Devm)
 def String.toBytes (s : String) : Bytes := s.toList.map Char.toUInt8
 def String.keccak (s : String) : B256 := (String.toBytes s).keccak
 
+-- The ABI value types that `arg` and `argCopy` can actually read: the static
+-- ones, each occupying exactly one 32-byte calldata word.
+--
+-- Dynamic types — `bytes`, `string`, arrays, and tuples containing them — are
+-- deliberately absent. Spelling one in a signature string would be easy, but
+-- admitting it here would imply `arg` can decode it, and `arg` cannot: it
+-- reads one word at a fixed offset, whereas a dynamic argument's word is an
+-- offset into a tail that has to be followed. See the note at `arg`.
 inductive ArgType
   | address
-  | uint256
+  | bool
+  | uint (bits : Nat)   -- uint8 … uint256, `bits` a multiple of 8
+  | int (bits : Nat)    -- int8 … int256
+  | bytes (size : Nat)  -- bytes1 … bytes32, the fixed-size family only
 
 def ArgType.toString : ArgType → String
   | address => "address"
-  | uint256 => "uint256"
+  | bool => "bool"
+  | uint bits => s!"uint{bits}"
+  | int bits => s!"int{bits}"
+  | bytes size => s!"bytes{size}"
+
+-- The overwhelmingly common width, so call sites can write `.uint256`.
+abbrev ArgType.uint256 : ArgType := .uint 256
 
 def selectorArgs : List ArgType → String
   | [] => ""
