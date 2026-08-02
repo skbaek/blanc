@@ -1733,6 +1733,60 @@ def leftmostFsig : DispatchTree → B256
   | (DispatchTree.leaf w _) => w
   | (DispatchTree.fork t _) => leftmostFsig t
 
+-- Ascending order on signature words, as a `Bool`.
+--
+-- This is `<` on `B256`, but it cannot be written as `x < y`. Jaune's
+-- `instDecidableLTB256` is built with `rw`, so it reduces only through
+-- `Eq.rec` and gets stuck in the kernel — and `wethCode_compile` proves
+-- `Prog.compile weth = some wethCode` by `decide +kernel`, which means the
+-- kernel evaluates everything `wethTree` is built from. Comparing the four
+-- `UInt64` limbs directly keeps that evaluation unblocked.
+def DispatchTree.sigLt (x y : B256) : Bool :=
+  if x.1.1 != y.1.1 then decide (x.1.1 < y.1.1) else
+  if x.1.2 != y.1.2 then decide (x.1.2 < y.1.2) else
+  if x.2.1 != y.2.1 then decide (x.2.1 < y.2.1) else
+  decide (x.2.2 < y.2.2)
+
+-- Is this list of (signature, function) pairs in strictly ascending signature
+-- order? This is assumption (2) of `dispatchWith` below, as a decidable check
+-- rather than a comment: `#guard` it, or state it as a theorem closed by
+-- `decide +kernel`, and a misordered entry becomes a build failure instead of
+-- a silently unreachable function.
+def DispatchTree.sorted : List (B256 × Func) → Bool
+  | [] => true
+  | [_] => true
+  | x :: y :: ys => sigLt x.fst y.fst && sorted (y :: ys)
+
+-- Build a balanced tree from a list, splitting every fork at ⌈n/2⌉ so the left
+-- subtree is never smaller than the right. The `Nat` is structural fuel;
+-- `ofSorted` passes the list's length, which always suffices. The two
+-- degenerate rows are unreachable from `ofSorted` on a nonempty list.
+--
+-- Note that this compares nothing: the shape comes from `List.take`/`drop` and
+-- `List.length` alone. That is deliberate. A version that sorted the list here
+-- reduces fine in the kernel, but forces every signature word — and so every
+-- `String.keccak` behind a `selector` call — during `whnf` in the *elaborator*,
+-- which blows `maxRecDepth` in any downstream proof that has to case on the
+-- resulting tree. Keeping the comparisons in `sorted` leaves the leaves opaque.
+def DispatchTree.build : Nat → List (B256 × Func) → DispatchTree
+  | _, [] => leaf 0 .rev
+  | _, [(w, p)] => leaf w p
+  | 0, (x :: _ :: _) => leaf x.fst x.snd
+  | n + 1, xs =>
+    fork (build n (xs.take ((xs.length + 1) / 2)))
+         (build n (xs.drop ((xs.length + 1) / 2)))
+
+-- Assemble a dispatch tree from a list of (signature, function) pairs given in
+-- ascending signature order — pair it with `sorted` to check that order.
+--
+-- Together they retire the hand-written tree shape. `dispatchWith`'s binary
+-- search needs the leaves laid out so that every fork's right subtree holds
+-- strictly larger signatures; writing that nesting out by hand means a
+-- maintainer can put a leaf in the wrong subtree, and `dispatchWith` will
+-- compile it into a program where that function is simply unreachable.
+def DispatchTree.ofSorted (xs : List (B256 × Func)) : DispatchTree :=
+  build xs.length xs
+
 -- given a dispatch tree of functions and their signatures, construct the main program.
 -- note it assumes that:
 -- (1) the calldata function selector is already at the top of the stack (i.e, it has to be preceded by 'fsig').

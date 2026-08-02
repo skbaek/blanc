@@ -300,27 +300,37 @@ def transferFrom : Func :=
 
 -- main --
 
-def wethTree : DispatchTree :=
-  .fork
-  ( .fork
-    ( .fork
-      ( .fork
-        (.leaf (selector "name" []) name)
-        (.leaf (selector "approve" [.address, .uint256]) approve) )
-      (.leaf (selector "totalSupply" []) totalSupply)
-    )
-    ( .fork
-      (.leaf (selector "transferFrom" [.address, .address, .uint256]) transferFrom)
-      (.leaf (selector "withdraw" [.uint256]) withdraw) ) )
-  ( .fork
-    ( .fork
-      ( .fork
-        (.leaf (selector "decimals" []) decimals)
-        (.leaf (selector "balanceOf" [.address]) balanceOf) )
-      (.leaf (selector "symbol" []) symbol) )
-    ( .fork
-      (.leaf (selector "transfer" [.address, .uint256]) transfer)
-      (.leaf (selector "allowance" [.address, .address]) allowance) ) )
+-- The ten functions the dispatcher routes to, in ascending selector order.
+-- `deposit` is absent on purpose: it is the fallback, reached through
+-- `Func.mainWith 1` below rather than through a selector.
+def wethFuncs : List (B256 × Func) :=
+  [ (selector "name" [], name),                                        -- 0x06fdde03
+    (selector "approve" [.address, .uint256], approve),                -- 0x095ea7b3
+    (selector "totalSupply" [], totalSupply),                          -- 0x18160ddd
+    (selector "transferFrom" [.address, .address, .uint256],
+      transferFrom),                                                   -- 0x23b872dd
+    (selector "withdraw" [.uint256], withdraw),                        -- 0x2e1a7d4d
+    (selector "decimals" [], decimals),                                -- 0x313ce567
+    (selector "balanceOf" [.address], balanceOf),                      -- 0x70a08231
+    (selector "symbol" [], symbol),                                    -- 0x95d89b41
+    (selector "transfer" [.address, .uint256], transfer),              -- 0xa9059cbb
+    (selector "allowance" [.address, .address], allowance) ]           -- 0xdd62ed3e
+
+-- `dispatchWith`'s ordering precondition, checked rather than commented. If a
+-- maintainer inserts an eleventh function in the wrong place, this fails to
+-- elaborate; before, the contract compiled cleanly and the misplaced function
+-- was simply unreachable.
+--
+-- A failure here reports as `[Error pretty printing: maximum recursion depth
+-- has been reached]` rather than as anything legible: `decide` fails, and then
+-- rendering the goal has to unfold ten `String.keccak` calls. Confirmed by
+-- swapping two adjacent entries above, which does fail the build. If you see
+-- that message, `wethFuncs` is out of ascending selector order — the trailing
+-- comment on each line is the expected value.
+theorem wethFuncs_sorted : DispatchTree.sorted wethFuncs = true := by decide +kernel
+
+-- The fork shape is now derived from the list rather than written out.
+def wethTree : DispatchTree := .ofSorted wethFuncs
 
 def weth : Prog := ⟨Func.mainWith 1 wethTree, [deposit]⟩
 
