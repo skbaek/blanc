@@ -31,6 +31,37 @@ opens the namespace explicitly.
 
 ## Verification status
 
+**What you are trusting.** Blanc's trusted base is Jaune's plus three
+additions, so the base document is Jaune's
+[`TRUSTED.md`](https://github.com/skbaek/jaune/blob/main/TRUSTED.md) — the
+kernel and pins, what is deliberately absent from the library and which gate
+enforces each absence, the known exceptions, and where the line between testing
+and proof falls. It is not duplicated here. Blanc adds exactly:
+
+1. **the pinned Jaune revision** below — trusting a Blanc theorem is trusting
+   that specific Jaune, not the sibling checkout on your disk;
+2. **the axiom audit** below, which is stricter than Jaune's own gates: it
+   pins the exact axiom set of eight named results and fails on an extra *or*
+   missing axiom;
+3. **Blanc's own source**, which carries no gate equivalent to Jaune's
+   `check-hygiene.sh`/`check-integrity.sh`; what stands behind it is the audit
+   in (2), and the audit constrains only what enters those eight theorems'
+   dependency cones. Scanning `Blanc/` finds no `@[extern]`, `axiom`,
+   `opaque`, `sorry`, `implemented_by`, or `bv_decide`, and no use of
+   `native_decide` — its one textual occurrence is the `WethCode.lean` comment
+   saying the compile witness is deliberately *not* proved that way. The three
+   `partial def`s and eight `dbg_trace`s are all in
+   [`Blanc/Tactics.lean`](Blanc/Tactics.lean), inside `TacticM`
+   proof-automation procedures rather than object-level definitions: a
+   non-terminating or chatty tactic can fail to produce a proof, but any proof
+   it does produce is still checked by the kernel, so none of them is in the
+   trusted base.
+
+As in Jaune's document, this section is about whether the proofs are sound, not
+about whether they are the right theorems. Read the statements in
+[`Blanc/Solvent.lean`](Blanc/Solvent.lean) rather than inferring them from a
+theorem's name.
+
 Blanc builds against a **pinned revision** of
 [Jaune](https://github.com/skbaek/jaune) — `require jaune from git … @ 739fa42d…`
 in [`lakefile.lean`](lakefile.lean) — so a fresh clone builds reproducibly
