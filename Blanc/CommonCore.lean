@@ -1,6 +1,7 @@
--- Common.lean : definitions and lemmas generally useful for writing and
--- verifying Blanc programs, including a correctness proof for the Blanc
--- compiler and tactics for automating Blanc program verification.
+-- CommonCore.lean : definitions and lemmas generally useful for writing and
+-- verifying Blanc programs. The Blanc compiler's correctness proof lives in
+-- CommonProofs.lean, and the tactics for automating Blanc program
+-- verification live in Tactics.lean.
 
 import Mathlib.Tactic.Have
 import Mathlib.Tactic.Clear_
@@ -1692,6 +1693,21 @@ theorem correct (sevm : Sevm) (pre : Devm) (p : Prog) (post : Devm)
 def String.toBytes (s : String) : Bytes := s.toList.map Char.toUInt8
 def String.keccak (s : String) : B256 := (String.toBytes s).keccak
 
+inductive ArgType
+  | address
+  | uint256
+
+def ArgType.toString : ArgType → String
+  | address => "address"
+  | uint256 => "uint256"
+
+def selectorArgs : List ArgType → String
+  | [] => ""
+  | t :: ts => List.foldl (λ s t' => s!"{s},{t'.toString}") t.toString ts
+
+def selector (name : String) (args : List ArgType) : B256 :=
+  (Blanc.String.keccak s!"{name}({selectorArgs args})").shiftRight 224
+
 def isMax : Line := [not, iszero]
 
 inductive DispatchTree : Type
@@ -1712,7 +1728,7 @@ def leftmostFsig : DispatchTree → B256
 
 -- given a dispatch tree of functions and their signatures, construct the main program.
 -- note it assumes that:
--- (1) the calldata function selector is already at the op of the stack (i.e, it has to be preceded by 'fsig').
+-- (1) the calldata function selector is already at the top of the stack (i.e, it has to be preceded by 'fsig').
 -- (2) the functions are ordered in ascending order of their signatures (right is higher)
 
 def dispatchWith (k : Nat) : DispatchTree → Func
@@ -1728,5 +1744,15 @@ def dispatch : DispatchTree → Func
     dup 0 :::
     pushB256 (leftmostFsig tr) ::: gt :::
     (dispatch tl <?> dispatch tr)
+
+def shiftRight (w : B256) : Line := [pushB256 w, shr]
+
+-- load the calldata function selector: the first 4 bytes of calldata,
+-- right-aligned in a word. This is what 'dispatch'/'dispatchWith' assume
+-- has already run (assumption (1) above).
+def fsig : Line := cdl 0 ++ shiftRight 224
+
+def Func.main (dt : DispatchTree) : Func := fsig +++ dispatch dt
+def Func.mainWith (k : Nat) (dt : DispatchTree) : Func := fsig +++ dispatchWith k dt
 
 end Blanc

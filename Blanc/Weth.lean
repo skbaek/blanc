@@ -287,21 +287,6 @@ def transferFrom : Func :=
 
 -- main --
 
-inductive ArgType
-  | address
-  | uint256
-
-def ArgType.toString : ArgType → String
-  | address => "address"
-  | uint256 => "uint256"
-
-def selectorArgs : List ArgType → String
-  | [] => ""
-  | t :: ts => List.foldl (λ s t' => s!"{s},{t'.toString}") t.toString ts
-
-def selector (name : String) (args : List ArgType) : B256 :=
-  (Blanc.String.keccak s!"{name}({selectorArgs args})").shiftRight 224
-
 def wethTree : DispatchTree :=
   .fork
   ( .fork

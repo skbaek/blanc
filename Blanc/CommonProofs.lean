@@ -68,13 +68,6 @@ lemma dispatchWith_inv {c k f}
         apply h3 (h0 hs h₁ h_pop) h_burn' h_run_f
     · apply htt' ⟨w, p⟩ rfl (h0 hs h₁ (Devm.popBurn_of_popBurn_of_pop h_pop h_burn)) h_run'
 
-def shiftRight (w : B256) : Line := [pushB256 w, shr]
-
-def fsig : Line := cdl 0 ++ shiftRight 224
-
-def Func.main (dt : DispatchTree) : Func := fsig +++ dispatch dt
-def Func.mainWith (k : Nat) (dt : DispatchTree) : Func := fsig +++ dispatchWith k dt
-
 def ifOk {ε α} (π : α → Prop) : Except ε α → Prop
   | .error _ => True
   | .ok a => π a
