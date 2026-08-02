@@ -1705,8 +1705,15 @@ def selectorArgs : List ArgType → String
   | [] => ""
   | t :: ts => List.foldl (λ s t' => s!"{s},{t'.toString}") t.toString ts
 
+-- The keccak of an ABI signature string, e.g. "transfer(address,uint256)".
+-- Both of the words a contract derives from a signature are projections of
+-- this one hash: an event's topic0 is the hash itself, and a function
+-- selector is its top four bytes.
+def signatureHash (name : String) (args : List ArgType) : B256 :=
+  Blanc.String.keccak s!"{name}({selectorArgs args})"
+
 def selector (name : String) (args : List ArgType) : B256 :=
-  (Blanc.String.keccak s!"{name}({selectorArgs args})").shiftRight 224
+  (signatureHash name args).shiftRight 224
 
 def isMax : Line := [not, iszero]
 

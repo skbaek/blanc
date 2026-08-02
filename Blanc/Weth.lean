@@ -9,11 +9,24 @@ open Jaune
 
 open Jaune.Ninst Ninst
 
+-- events --
+
+-- The four events WETH emits, each named once. A topic0 word is the keccak
+-- of the event's ABI signature string — the same `signatureHash` a function
+-- selector is built from, without the shift that narrows one to four bytes.
+-- Spelling these as signature strings inlined at the log sites is how the
+-- same event ends up with two spellings and, one typo later, two topics.
+
+def depositEvent : B256 := signatureHash "Deposit" [.address, .uint256]
+def withdrawalEvent : B256 := signatureHash "Withdrawal" [.address, .uint256]
+def approvalEvent : B256 := signatureHash "Approval" [.address, .address, .uint256]
+def transferEvent : B256 := signatureHash "Transfer" [.address, .address, .uint256]
+
 -- deposit() --
 
 def logDeposit : Func :=
   callvalue ::: mstoreAt 0 +++ caller ::: -- caller || wad
-  pushB256 (Blanc.String.keccak "Deposit(address,uint256)") ::: -- depositEventSig :: caller || wad
+  pushB256 depositEvent ::: -- depositEventSig :: caller || wad
   logWith 1 0 1 +++ -- 1 indexed topic : caller address
                     -- 1 unindexed data : deposit value
   Func.stop
@@ -32,7 +45,7 @@ def deposit : Func :=
 -- assumes : args := [wad]
 def logWithdraw : Func :=
   caller :::
-  pushB256 (Blanc.String.keccak "Withdrawal(address,uint256)") ::: -- withdrawEventSig :: caller
+  pushB256 withdrawalEvent ::: -- withdrawEventSig :: caller
   argCopy 0 0 1 +++ -- withdrawEventSig :: caller || wad
   logWith 1 0 1 +++ -- 1 indexed topic : caller address
                     -- 1 unindexed data : withdraw amount
@@ -149,7 +162,7 @@ def prepApprove : Line :=
 def logApprove : Line :=
   argCopy 0 1 1 ++ -- || wad
   arg 0 ++ caller ::
-  pushB256 (Blanc.String.keccak "Approval(address,address,uint256)") :: -- approvalEventSig :: caller :: guy || wad
+  pushB256 approvalEvent :: -- approvalEventSig :: caller :: guy || wad
   logWith 2 0 1 -- 2 indexed topics : caller address, approvee address
                 -- 1 unindexed data : approval value
 
@@ -176,7 +189,7 @@ def approve : Func :=
 def logTransfer : Line :=
   argCopy 0 1 1 ++ -- || wad
   arg 0 ++ caller ::
-  pushB256 (Blanc.String.keccak "Transfer(address,address,uint256)") :: -- transferEventSig :: src :: dst || wad
+  pushB256 transferEvent :: -- transferEventSig :: src :: dst || wad
   logWith 2 0 1 -- 2 indexed topics : source address, destination address
                 -- 1 unindexed data : transfer value
 
@@ -236,7 +249,7 @@ def transferFromUpdateSbal : Line :=
 -- ( dst :: wad :: src -- wad :: src )
 def transferFromLog : Line :=
   dup 2 :: -- src :: dst :: wad :: src
-  pushB256 (Blanc.String.keccak "Transfer(address,address,uint256)") :: -- transferEventSig :: src :: dst :: wad :: src
+  pushB256 transferEvent :: -- transferEventSig :: src :: dst :: wad :: src
   dup 3 :: mstoreAt 0 ++ -- transferEventSig :: src :: dst :: wad :: src || wad
   logWith 2 0 1 -- [Transfer(src,dst,wad) is logged]
                 -- wad :: src
