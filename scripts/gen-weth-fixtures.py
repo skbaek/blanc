@@ -1226,6 +1226,118 @@ def case_view_static(weth_code):
     return build_fixture("view_static", alloc, txs, expect)
 
 
+# The two strings WETH claims for itself, as they appear in `Blanc/Weth.lean`'s
+# `name` and `symbol`. They are the specification input below; the encoding is
+# derived from them and from the ABI, never from the contract's shift
+# constants and never from observed output.
+WETH_NAME = "Wrapped Ether"
+WETH_SYMBOL = "WETH"
+
+
+def abi_string_words(s):
+    """The three words the ABI specifies for a function returning a single
+    `string` of at most 32 bytes.
+
+    A function's return payload is encoded exactly like a tuple of its return
+    types. `string` is dynamic, so the head is one word holding the tail's
+    offset from the start of the payload -- with a single return value the
+    head is one word, so that offset is 0x20 -- and the tail is the byte
+    length followed by the UTF-8 bytes padded on the RIGHT to a whole number
+    of words. That is: left-aligned data, which for a short string means the
+    bytes sit in the high-order end of the word.
+
+    Derived here from that rule and from the string itself. Deliberately NOT
+    from `Weth.lean`'s hand-rolled `pushB256 (256 - 8*len) ::: shl` (152 for
+    the 13-byte name, 224 for the 4-byte symbol), and not from what the prober
+    turned out to store -- whether that hand-rolling produces the ABI's layout
+    is precisely the question this case exists to answer, so the expectation
+    must be independent of it (plan D1)."""
+    b = s.encode()
+    assert len(b) <= 32, s
+    return [0x20, len(b), int.from_bytes(b.ljust(32, b"\x00"), "big")]
+
+
+def dynamic_view_probes():
+    """`name()` and `symbol()`: the two entry points whose ABI return encoding
+    WETH does by hand, and which nothing outside Blanc has ever checked."""
+    out = []
+    for label, sig, s in (("name()", "name()", WETH_NAME),
+                          ("symbol()", "symbol()", WETH_SYMBOL)):
+        off, length, data = abi_string_words(s)
+        out.append(Probe(label, sig, [], [
+            (off,
+             f"{label}'s head word is the offset of the string's tail from "
+             f"the start of the return payload: with one return value the "
+             f"head is one word, so the offset is 0x20"),
+            (length,
+             f"the tail begins with the string's length in BYTES -- "
+             f"{length} for {s!r} -- not its length in words and not a "
+             f"character count"),
+            (data,
+             f"then the {length} UTF-8 bytes of {s!r} padded on the right to "
+             f"a whole word, i.e. left-aligned: {s!r} occupies the "
+             f"high-order {length} bytes and the remaining {32 - length} are "
+             f"zero"),
+        ]))
+    return out
+
+
+def case_view_dynamic(weth_code):
+    """`name()` and `symbol()`, through the same prober.
+
+    This is the case the step exists for. `Weth.lean` builds the ABI's
+    head/tail layout for these two strings by hand -- push the packed bytes,
+    shift them left by `256 - 8*len`, then MSTORE offset, length and data into
+    memory words 0, 1, 2 and return [0, 96). No external tool has ever seen
+    that encoding. Here the oracle executes it, the prober records all three
+    words, and the expectations -- derived from the ABI rule and the strings
+    alone -- adjudicate them."""
+    trigger_key = 8
+    trigger = derive_address(trigger_key)
+    probes = dynamic_view_probes()
+    alloc = {
+        WETH_ADDR: {"nonce": "0x1", "balance": q(0), "code": weth_code,
+                     "storage": {}},
+        PROBER_ADDR: {"nonce": "0x1", "balance": q(0),
+                       "code": "0x" + prober_bytecode(WETH_ADDR, probes).hex(),
+                       "storage": {}},
+        trigger: eoa_alloc(WAD_1_ETH),
+    }
+    txs = [{
+        "type": "0x0", "chainId": "0x1", "nonce": "0x0",
+        "gasPrice": q(GAS_PRICE), "gas": "0x2dc6c0", "to": PROBER_ADDR,
+        "value": "0x0", "input": "0x",
+        "v": "0x0", "r": "0x0", "s": "0x0", "secretKey": privkey_hex(trigger_key),
+    }]
+
+    def expect(e):
+        e.expect_tx_succeeded(
+            0, "the prober transaction runs to completion, so both probes' "
+               "calls and every SSTORE below actually executed")
+        for i, p in enumerate(probes):
+            expect_probe(e, "prober", PROBER_ADDR, i, p)
+        e.expect_storage_exact(
+            "prober", PROBER_ADDR, probe_storage(probes),
+            "the prober's storage is exactly the two probe records above and "
+            "nothing else: six words, two flags and two lengths, all "
+            "accounted for")
+        e.expect_storage_exact(
+            "WETH", WETH_ADDR, {},
+            "asking WETH its name and symbol writes nothing: it ends with no "
+            "nonzero slot at all")
+        e.expect_ether(
+            "WETH", WETH_ADDR, e.pre_ether(WETH_ADDR),
+            "and moves no ether")
+        e.expect_ether(
+            "prober", PROBER_ADDR, 0,
+            "the prober neither sends nor receives ether")
+        e.expect_ether(
+            "trigger", trigger, e.pre_ether(trigger) - e.fee(0),
+            "the triggering EOA gains nothing and only pays its fee")
+
+    return build_fixture("view_dynamic", alloc, txs, expect)
+
+
 def main():
     weth_code = get_weth_code_hex()
     cases = [
@@ -1235,6 +1347,7 @@ def main():
         ("04-approve-transferFrom.json", case_approve_transferFrom),
         ("05-reentrancy.json", case_reentrancy),
         ("06-view-static.json", case_view_static),
+        ("07-view-dynamic.json", case_view_dynamic),
     ]
 
     # Every case is built and checked before any file is written, so an

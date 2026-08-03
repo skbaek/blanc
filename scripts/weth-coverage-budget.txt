@@ -11,13 +11,17 @@
 # naming the function and the step expected to close it -- the comment is
 # documentation only, never compared.
 #
+# The budget is currently EMPTY: every one of Blanc's ten selectors, and
+# the empty-calldata deposit() fallback, is exercised by some committed
+# fixture (weth-evidence Step 3 closed the last six). With no rows left the
+# gate is at its strongest -- ANY selector that stops being exercised is a
+# regression, with nothing to absorb it.
+#
 # The budget may only SHRINK (plan Evidence and safety rules: "never weaken
 # or rebase a gate... with the single exception of the coverage budget
 # shrinking, which is the arc's goal"). Removing a row -- because a later
 # step added a case that exercises it -- is the intended way this file
 # changes; adding a row is a regression and is not a routine step.
 #
-# coverage-budget: 2
+# coverage-budget: 0
 
-0x06fdde03  ## name() -- view function, no case yet (weth-evidence Step 3)
-0x95d89b41  ## symbol() -- view function, no case yet (weth-evidence Step 3)
