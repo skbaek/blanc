@@ -1,0 +1,16 @@
+# Elaboration-time baseline for Blanc — scripts/check-elab.sh
+#
+# STATUS<TAB>TIME<TAB>path. TIME is seconds to re-elaborate that file against
+# already-built dependencies, measured sequentially with no language server
+# alive. A file fails the gate above both 2.0x its time here and that time
+# plus 1.0s. Rewrite with: scripts/check-elab.sh --rebase
+OK	1.120	Blanc.lean
+OK	1.188	Blanc/Basic.lean
+OK	2.236	Blanc/CommonCore.lean
+OK	5.366	Blanc/CommonProofs.lean
+OK	1.619	Blanc/Semantics.lean
+OK	4.621	Blanc/Solvent.lean
+OK	1.925	Blanc/Tactics.lean
+OK	2.368	Blanc/Weth.lean
+OK	3.582	Blanc/WethCode.lean
+OK	1.115	Main.lean
