@@ -3101,6 +3101,81 @@ lemma processCheckedSystemTransaction_to_unchecked {benv : Benv} {target : Adr} 
       rw [Except.mapError_eq_ok_iff] at h1
       subst h3; subst h4; exact h1
 
+/-! ## Chain-level reachability
+
+`BlockChain.Reach` and `BlockChain.ReachUsing` appear in audited statements, so
+their names and definitions are frozen; they are moved down verbatim because
+neither mentions any contract. -/
+
+-- `BlockChain.Reach ch ch'` : chain `ch'` is reachable from `ch` by a
+-- sequence of valid blocks, each of whose withdrawals stays within the
+-- no-overflow bound.
+inductive BlockChain.Reach : BlockChain → BlockChain → Prop
+  | refl (ch : BlockChain) : Reach ch ch
+  | step {ch ch' ch'' : BlockChain} {block : Block} :
+      Reach ch ch' →
+      sum ch'.state.bal + wdsum block.wds < 2 ^ 256 →
+      stateTransition ch' block = .ok ch'' →
+      Reach ch ch''
+
+-- `BlockChain.ReachUsing cfg ch ch'` : the same reachability on a *configured*
+-- chain. Each step imports one block through the configured transition, so the
+-- fork it runs under is whichever one `cfg` schedules at that block's
+-- timestamp. A sequence crossing Prague, Osaka, BPO1, and BPO2 is one chain of
+-- these steps, not four separate relations.
+--
+-- The base constructor carries the configured-chain context evidence (P0.1
+-- item 6): the schedule is validated, the starting snapshot is a valid
+-- execution context, and the configuration names the snapshot's own chain
+-- identity. A zero-step reach over a mismatched or never-validated pair no
+-- longer exists, and every `step` re-establishes the identity agreement on
+-- its own — a successful `stateTransitionUsing` is impossible across
+-- contradictory chain IDs (`stateTransitionUsing_success_chainId_eq`) and
+-- runs `cfg.validate` inside its rules lookup.
+inductive BlockChain.ReachUsing (cfg : ChainConfig) : BlockChain → BlockChain → Prop
+  | refl (ch : BlockChain)
+      (h_cfg : cfg.Valid)
+      (h_ctx : ch.ValidContext)
+      (h_id : cfg.chainId = ch.chainId) :
+      ReachUsing cfg ch ch
+  | step {ch ch' ch'' : BlockChain} {block : Block} :
+      ReachUsing cfg ch ch' →
+      sum ch'.state.bal + wdsum block.wds < 2 ^ 256 →
+      stateTransitionUsing cfg ch' block = .ok ch'' →
+      ReachUsing cfg ch ch''
+
+/-- Every successful Prague step copies the snapshot's chain identity, so a
+whole Prague reachability chain does. -/
+lemma BlockChain.Reach.chainId_eq {ch ch' : BlockChain}
+    (h_reach : BlockChain.Reach ch ch') : ch'.chainId = ch.chainId := by
+  induction h_reach with
+  | refl => rfl
+  | step h_reach' h_bound h_st ih =>
+      rw [stateTransitionWith_preserves_chainId h_st, ih]
+
+-- A Prague-only schedule is the Prague chain: every `Reach` step is a
+-- `ReachUsing (ChainConfig.pragueOnly ch.chainId)` step, because
+-- `stateTransitionUsing` on that schedule reduces to `stateTransition`.
+-- The corrected `ReachUsing.refl` demands real evidence, so the conversion
+-- carries it rather than being true because the identity was ignored: the
+-- Prague-only schedule is valid for every identity
+-- (`ChainConfig.pragueOnly_valid`), it names the base snapshot's own chain ID
+-- by construction, and the base snapshot's context validity is the one fact
+-- plain `Reach` never established, so it enters as a hypothesis.
+theorem BlockChain.Reach.toReachUsing {ch ch' : BlockChain}
+    (h_ctx : ch.ValidContext)
+    (h_reach : BlockChain.Reach ch ch') :
+    BlockChain.ReachUsing (ChainConfig.pragueOnly ch.chainId) ch ch' := by
+  induction h_reach with
+  | refl => exact .refl ch (ChainConfig.pragueOnly_valid _) h_ctx rfl
+  | step h_reach' h_bound h_st ih =>
+      refine .step ih h_bound ?_
+      rw [stateTransitionUsing_eq_of_chainId_eq
+        (show (ChainConfig.pragueOnly ch.chainId).chainId = _ from
+          (Reach.chainId_eq h_reach').symm),
+        ChainConfig.pragueOnly_rulesAt]
+      exact h_st
+
 namespace ContractSpec
 
 /-! ### The message- and block-environment forms of the invariant
@@ -4126,6 +4201,108 @@ theorem stateTransitionWith_preserves_inv (wa : Adr) (hp : c.Preserves wa)
   exact applyBody_preserves_inv wa hp (initBenv rules ch block.header) block.txs
     block.wds st bout h_ab h_wds ⟨h_inv, AdrSet.not_mem_empty⟩
 
+
+
+/-! ### The chain-level rungs -/
+
+theorem stateTransitionUsing_preserves_inv (wa : Adr) (hp : c.Preserves wa)
+    (cfg : ChainConfig) (ch ch' : BlockChain) (block : Block)
+    (h_run : stateTransitionUsing cfg ch block = .ok ch')
+    (h_wds : sum ch.state.bal + wdsum block.wds < 2 ^ 256)
+    (h_inv : c.StateInv wa ch.state) : c.StateInv wa ch'.state := by
+  -- the configured entry point checks the chain identity first; the invariant
+  -- needs neither that fact nor which rules the schedule picked.
+  rw [stateTransitionUsing] at h_run
+  obtain ⟨_, _, h_run⟩ := Except.bind_eq_ok h_run
+  obtain ⟨rules, _, h_run⟩ := Except.bind_eq_ok h_run
+  exact stateTransitionWith_preserves_inv wa hp rules ch ch' block h_run h_wds h_inv
+
+/-- Prague is the `rules := pragueRules` instance, and `stateTransition` is
+*definitionally* `stateTransitionWith pragueRules`. -/
+theorem stateTransition_preserves_inv (wa : Adr) (hp : c.Preserves wa)
+    (ch ch' : BlockChain) (block : Block)
+    (h_run : stateTransition ch block = .ok ch')
+    (h_wds : sum ch.state.bal + wdsum block.wds < 2 ^ 256)
+    (h_inv : c.StateInv wa ch.state) : c.StateInv wa ch'.state :=
+  stateTransitionWith_preserves_inv wa hp pragueRules ch ch' block h_run h_wds h_inv
+
+/-- Chain-level induction over a configured chain: no sequence of valid blocks
+can break the invariant, whatever schedule the chain follows and whichever
+activations that sequence crosses. -/
+theorem chainUsing_preserves_inv (wa : Adr) (hp : c.Preserves wa) (cfg : ChainConfig)
+    (ch ch' : BlockChain) (h_reach : BlockChain.ReachUsing cfg ch ch')
+    (h_inv : c.StateInv wa ch.state) : c.StateInv wa ch'.state := by
+  induction h_reach with
+  | refl => exact h_inv
+  | step h_reach' h_bound h_st ih =>
+    exact stateTransitionUsing_preserves_inv wa hp cfg _ _ _ h_st h_bound ih
+
+/-- The Prague corollary of the same induction. -/
+theorem chain_preserves_inv (wa : Adr) (hp : c.Preserves wa) (ch ch' : BlockChain)
+    (h_reach : BlockChain.Reach ch ch')
+    (h_inv : c.StateInv wa ch.state) : c.StateInv wa ch'.state := by
+  induction h_reach with
+  | refl => exact h_inv
+  | step h_reach' h_bound h_st ih =>
+    exact stateTransition_preserves_inv wa hp _ _ _ h_st h_bound ih
+
+/-- Preservation through RLP decoding and block-hash checks, under any fork's
+rules. -/
+theorem addBlockToChainWith_preserves_inv (wa : Adr) (hp : c.Preserves wa)
+    (rules : ForkRules) (ch ch' : BlockChain) (rlp : Bytes)
+    (h_run : addBlockToChainWith rules ch rlp = .ok (.inl ch'))
+    (h_wds : ∀ block hash, rlpToBlock rlp = .ok ⟨block, hash⟩ →
+      sum ch.state.bal + wdsum block.wds < 2 ^ 256)
+    (h_inv : c.StateInv wa ch.state) : c.StateInv wa ch'.state := by
+  -- invert the raw import through Jaune's own bridge, then one
+  -- `stateTransitionWith_preserves_inv` step at the decoded block.
+  obtain ⟨block, hash, h_rlp, h_size, h_st⟩ := addBlockToChainWith_eq_ok_inl h_run
+  exact stateTransitionWith_preserves_inv wa hp rules ch ch' block h_st
+    (h_wds block hash h_rlp) h_inv
+
+/-- Block import on a configured chain validates the schedule and chain
+identity before decoding; once decoding supplies the timestamp the configured
+core delegates to the same canonical import. -/
+theorem addBlockToChainUsing_preserves_inv (wa : Adr) (hp : c.Preserves wa)
+    (cfg : ChainConfig) (ch ch' : BlockChain) (rlp : Bytes)
+    (h_run : addBlockToChainUsing cfg ch rlp = .ok (.inl ch'))
+    (h_wds : ∀ block hash, rlpToBlock rlp = .ok ⟨block, hash⟩ →
+      sum ch.state.bal + wdsum block.wds < 2 ^ 256)
+    (h_inv : c.StateInv wa ch.state) : c.StateInv wa ch'.state := by
+  unfold addBlockToChainUsing at h_run
+  cases hE : addBlockToChainUsingE cfg ch rlp with
+  | error failure =>
+      rw [hE] at h_run
+      simp [ImportOutcome.renderLegacy] at h_run
+  | ok outcome =>
+      rw [hE] at h_run
+      cases outcome with
+      | inr rejection =>
+          simp [ImportOutcome.renderLegacy] at h_run
+      | inl chResult =>
+          simp only [ImportOutcome.renderLegacy, Except.ok.injEq,
+            Sum.inl.injEq] at h_run
+          subst chResult
+          unfold addBlockToChainUsingE at hE
+          obtain ⟨_, _, hE⟩ := Except.bind_eq_ok hE
+          obtain ⟨_, _, hE⟩ := Except.bind_eq_ok hE
+          split at hE
+          · simp at hE
+          · rename_i block hash h_decode
+            obtain ⟨rules, _, hE⟩ := Except.bind_eq_ok hE
+            obtain ⟨_, h_st⟩ := addBlockToChainCanonicalE_eq_ok_inl hE
+            exact stateTransitionWith_preserves_inv wa hp rules ch ch' block
+              (stateTransitionWith_eq_ok_iff.mpr h_st)
+              (h_wds block hash (rlpToBlock_eq_ok_iff.mpr h_decode)) h_inv
+
+/-- Prague is the `rules := pragueRules` instance here too. -/
+theorem addBlockToChain_preserves_inv (wa : Adr) (hp : c.Preserves wa)
+    (ch ch' : BlockChain) (rlp : Bytes)
+    (h_run : addBlockToChain ch rlp = .ok (.inl ch'))
+    (h_wds : ∀ block hash, rlpToBlock rlp = .ok ⟨block, hash⟩ →
+      sum ch.state.bal + wdsum block.wds < 2 ^ 256)
+    (h_inv : c.StateInv wa ch.state) : c.StateInv wa ch'.state :=
+  addBlockToChainWith_preserves_inv wa hp pragueRules ch ch' rlp h_run h_wds h_inv
 
 end ContractSpec
 
