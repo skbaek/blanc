@@ -17,10 +17,7 @@
 # step added a case that exercises it -- is the intended way this file
 # changes; adding a row is a regression and is not a routine step.
 #
-# coverage-budget: 5
+# coverage-budget: 2
 
 0x06fdde03  ## name() -- view function, no case yet (weth-evidence Step 3)
-0x18160ddd  ## totalSupply() -- view function, no case yet (weth-evidence Step 3)
-0x70a08231  ## balanceOf(address) -- view function, no case yet (weth-evidence Step 3)
 0x95d89b41  ## symbol() -- view function, no case yet (weth-evidence Step 3)
-0xdd62ed3e  ## allowance(address,address) -- view function, no case yet (weth-evidence Step 3)

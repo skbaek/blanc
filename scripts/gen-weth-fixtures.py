@@ -1138,6 +1138,30 @@ def static_view_probes():
              "right-aligned in one word: `Weth.lean`'s `decimals` pushes 0x12 "
              "and returns memory [0, 32)"),
         ]),
+        Probe("totalSupply()", "totalSupply()", [], [
+            (VIEW_SUPPLY,
+             "totalSupply() reports the ether the contract itself holds -- "
+             "`Weth.lean`'s `totalSupply` is ADDRESS then BALANCE -- which "
+             "this case's pre-state sets to 7 wad, a value no other probe "
+             "returns"),
+        ]),
+        Probe("balanceOf(address)", "balanceOf(address)", [HOLDER_ADDR], [
+            (VIEW_HELD,
+             "balanceOf(guy) reports the internal balance at guy's slot -- "
+             "the raw 256-bit address word, per WETH_DEVIATIONS.md's balance "
+             "storage layout -- which this case's pre-state sets to 5 wad for "
+             "HOLDER and to nothing for anyone else"),
+        ]),
+        Probe("allowance(address,address)", "allowance(address,address)",
+              [OWNER_ADDR, SPENDER_ADDR], [
+            (VIEW_ALLOWED,
+             "allowance(src, dst) reports the value at keccak256(src || dst) "
+             "over the two argument words -- `Weth.lean`'s `allowance` is "
+             "argCopy 0 0 2 then KECCAK over memory [0, 64) -- which this "
+             "case's pre-state sets to 3 wad. A NONZERO expectation here is "
+             "what pins the key: a wrong derivation reads an untouched slot "
+             "and returns 0"),
+        ]),
     ]
 
 

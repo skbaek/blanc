@@ -82,7 +82,7 @@ transaction at gas price 10.
 | `03-transfer.json` | `transfer(dst, wad)` | internal accounting between two accounts | the call succeeds; `src`'s slot falls and `dst`'s rises by the same wad, and those two are the only nonzero slots; WETH's ether balance is untouched; `src` pays only its fee; `dst`'s *native* balance stays zero — it is credited in WETH, not in ether |
 | `04-approve-transferFrom.json` | `approve` then `transferFrom` | the allowance path: two transactions in one block, the owner approving a spender who then moves the owner's balance to a third address | both succeed; the *owner* is debited, not the spender who called; `dst` is credited the same wad; the allowance at `keccak256(owner ‖ spender)` ends at `wad − wad = 0`, so it cannot be spent twice, and no residue survives anywhere in storage; WETH's ether is untouched; owner and spender each pay only their own fee |
 | `05-reentrancy.json` | adversarial `withdraw` re-entry | an attacker contract re-entering `withdraw` from inside `sendToCaller` (see below) | **exactly one withdrawal is paid**: WETH's ether falls by `wad`, *not* `2·wad`; the attacker ends with exactly the one wad it was entitled to; its internal balance is cleared and no nonzero slot survives in WETH; the triggering EOA gains nothing |
-| `06-view-static.json` | `decimals()` | the static-return view functions, called through a **prober** contract (see below) that stores each call's success flag, its `RETURNDATASIZE` and the word it returned | the prober transaction succeeds; each probe's call returned rather than reverting; each payload is exactly 32 bytes; `decimals()` returns 18 (`0x12`); the prober's storage is exactly those records and nothing else; WETH's storage and ether are byte-for-byte unchanged — a view call changes nothing |
+| `06-view-static.json` | `decimals()`, `totalSupply()`, `balanceOf(guy)`, `allowance(src, dst)` | the four static-return view functions, called through a **prober** contract (see below) that stores each call's success flag, its `RETURNDATASIZE` and the word it returned | the prober transaction succeeds; every probe's call returned rather than reverting; every payload is exactly 32 bytes; `decimals()` returns 18 (`0x12`), `totalSupply()` the contract's own 7 wad of ether, `balanceOf(guy)` the 5 wad at `guy`'s slot, and `allowance(src, dst)` the 3 wad at `keccak256(src ‖ dst)` — four distinct values, so no probe can accidentally agree with another's expectation; the prober's storage is exactly those records and nothing else; WETH's storage and ether are unchanged — a view call changes nothing |
 
 Balances are keyed by the **raw 256-bit address word**, not a Solidity mapping
 slot, and an allowance by `keccak256(src ‖ dst)`; both are deliberate
@@ -142,16 +142,20 @@ pass.
 
 ### Known limits of these expectations
 
-- **The allowance storage key is not pinned by `04`.** That case's allowance
-  is fully spent, so its expected residue is zero — and an assertion that a
-  slot is zero would also hold if the key were computed wrongly. What `04`
-  does enforce is that the allowance *is* consumed and that no allowance
-  residue survives at any key (via the complete-storage check). Pinning the
-  key needs a case whose allowance ends nonzero — a partial- or
-  insufficient-allowance case, added by `~/plans/weth-evidence.md` Step 4.
-- **Not every entry point is covered yet.** Five of WETH's eleven —
-  `name`, `symbol`, `balanceOf`, `allowance`, `totalSupply` — still have no
-  case here; [`scripts/weth-coverage-budget.txt`](../../weth-coverage-budget.txt)
+- **The allowance storage key is pinned on the read side only.** `04`'s
+  allowance is fully spent, so its expected residue is zero — and an assertion
+  that a slot is zero would also hold if the key were computed wrongly. What
+  `04` does enforce is that the allowance *is* consumed and that no allowance
+  residue survives at any key (via the complete-storage check). `06`'s
+  `allowance(src, dst)` probe closes half of what that leaves open: it reads a
+  **nonzero** pre-set value back through `keccak256(src ‖ dst)`, and a wrong
+  key derivation would read an untouched slot and return zero. What is still
+  unpinned is the *write* side — that `approve` and `transferFrom` store to
+  that same key — which needs a case whose allowance ends nonzero, i.e. a
+  partial- or insufficient-allowance case, added by
+  `~/plans/weth-evidence.md` Step 4.
+- **Not every entry point is covered yet.** Two of WETH's eleven —
+  `name` and `symbol` — still have no case here; [`scripts/weth-coverage-budget.txt`](../../weth-coverage-budget.txt)
   lists exactly those, and
   [`check-weth-coverage.sh`](../../check-weth-coverage.sh) fails if the
   unexercised set ever grows. Every committed case is also a happy path: a
