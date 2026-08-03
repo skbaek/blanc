@@ -1765,20 +1765,6 @@ def leftmostFsig : DispatchTree → B256
   | (DispatchTree.leaf w _) => w
   | (DispatchTree.fork t _) => leftmostFsig t
 
--- Ascending order on signature words, as a `Bool`.
---
--- This is `<` on `B256`, but it cannot be written as `x < y`. Jaune's
--- `instDecidableLTB256` is built with `rw`, so it reduces only through
--- `Eq.rec` and gets stuck in the kernel — and `wethCode_compile` proves
--- `Prog.compile weth = some wethCode` by `decide +kernel`, which means the
--- kernel evaluates everything `wethTree` is built from. Comparing the four
--- `UInt64` limbs directly keeps that evaluation unblocked.
-def DispatchTree.sigLt (x y : B256) : Bool :=
-  if x.1.1 != y.1.1 then decide (x.1.1 < y.1.1) else
-  if x.1.2 != y.1.2 then decide (x.1.2 < y.1.2) else
-  if x.2.1 != y.2.1 then decide (x.2.1 < y.2.1) else
-  decide (x.2.2 < y.2.2)
-
 -- Is this list of (signature, function) pairs in strictly ascending signature
 -- order? This is assumption (2) of `dispatchWith` below, as a decidable check
 -- rather than a comment: `#guard` it, or state it as a theorem closed by
@@ -1787,7 +1773,7 @@ def DispatchTree.sigLt (x y : B256) : Bool :=
 def DispatchTree.sorted : List (B256 × Func) → Bool
   | [] => true
   | [_] => true
-  | x :: y :: ys => sigLt x.fst y.fst && sorted (y :: ys)
+  | x :: y :: ys => decide (x.fst < y.fst) && sorted (y :: ys)
 
 -- Build a balanced tree from a list, splitting every fork at ⌈n/2⌉ so the left
 -- subtree is never smaller than the right. The `Nat` is structural fuel;
