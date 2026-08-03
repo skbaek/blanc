@@ -200,8 +200,27 @@ def attacker_bytecode(weth_addr, wad):
 # The success flag gets its own slot rather than being folded into the words:
 # it is what distinguishes "returned these words" from "reverted", and it is
 # what shows the prop ran at all -- a prop that silently did nothing leaves
-# every slot zero, which no per-word check would notice. Step 4 reuses this
-# same shape for revert cases, where the flag is the point.
+# every slot zero, which no per-word check would notice.
+#
+# A REVERT probe (weth-evidence Step 4) uses the same two leading slots with
+# one substitution:
+#
+#   base + 0      the CALL's success flag, expected 0 -- the guard fired
+#   base + 1      the constant 1: the "this probe executed" marker
+#
+# The marker exists because a failed call's slots are all zero, and so are the
+# slots of a prop that never ran. Without it, "flag = 0" would be exactly the
+# vacuous assertion this arc exists to eliminate: it would hold of a prober
+# whose transaction aborted before reaching the probe at all. The marker is
+# written unconditionally after the CALL, so `flag = 0 AND marker = 1` is
+# produced only by "the call was made, and it did not return".
+#
+# A revert probe records no returned words. Blanc's `.rev` is a bare REVERT
+# taking whatever two words the guard left on the stack, so the payload a
+# rejected call returns is not something WETH's specification determines --
+# per D1 an expectation that cannot be derived from the specification is
+# dropped, not weakened, so the emitter simply does not read RETURNDATASIZE or
+# RETURNDATACOPY on this path.
 #
 # Like `attacker_bytecode` this is straight-line hand-emitted bytecode -- no
 # jumps, no loops, one comment per line -- so a reviewer can read it top to
@@ -229,6 +248,11 @@ def _push2(x):
     return bytes([0x61]) + x.to_bytes(2, "big")
 
 
+def _push3(x):
+    assert 0 <= x <= 0xFFFFFF, x
+    return bytes([0x62]) + x.to_bytes(3, "big")
+
+
 def _push20(a):
     return bytes([0x73]) + bytes.fromhex(a[2:])
 
@@ -244,23 +268,58 @@ def probe_base(i):
     return 0x100 * (i + 1)
 
 
+# The gas a Step-4 probe forwards, instead of the whole of `GAS`. A rejected
+# call is not always a clean REVERT: Blanc's `.rev` is a bare REVERT that
+# consumes whatever two words the guard happened to leave on the stack, so a
+# guard can also fire as a stack underflow or as a memory-expansion
+# out-of-gas. Any of those is a failed call -- which is exactly what the
+# expectation states -- but the exceptional forms consume everything they were
+# given, and with `GAS` that is 63/64 of the frame, starving every later probe.
+# A fixed cap bounds the damage to one probe.
+#
+# The cap is also why every Step-4 case pairs each rejected call with a
+# SUCCEEDING call on the same selector at the SAME cap: that pairing is what
+# separates "the guard refused" from "the probe ran out of gas", which a
+# revert-only case could not distinguish.
+PROBE_GAS = 200000  # 0x030d40
+
+
 class Probe:
-    """One view-function call the prober makes, and the words the ABI says it
-    must return.
+    """One call the prober makes, and what WETH's semantics says must come
+    back -- either the words the ABI determines, or nothing at all because a
+    guard must reject the call.
 
     `words` is a list of `(expected_word, claim)` pairs. Every expected word
     is derived from the ABI specification plus WETH's semantics and the
     pre-state this script authored -- never from what the prober turned out to
     store (plan D1). The claim is the sentence the word enforces.
+
+    `reverts_because` turns the probe into a REVERT probe: `words` must then be
+    empty, the string is the sentence the zero success flag enforces, and the
+    prober records the flag plus the executed-marker described above and
+    nothing else.
+
+    `gas` caps what the probe forwards; `None` forwards `GAS`, which is what
+    the Step-3 view cases do and what keeps their bytecode byte-identical.
     """
 
-    def __init__(self, label, sig, args, words):
+    def __init__(self, label, sig, args, words=(), reverts_because=None,
+                 gas=None):
+        assert not (words and reverts_because), (
+            f"{label}: a probe that must be rejected cannot also state "
+            f"returned words -- a rejected call returns no ABI payload")
         self.label = label
         self.sig = sig
         self.args = args
-        self.words = words
+        self.words = list(words)
+        self.reverts_because = reverts_because
+        self.gas = gas
         self.calldata = calldata(sig, *args)
         assert len(self.calldata) == 4 + 32 * len(args), label
+
+    @property
+    def succeeds(self):
+        return self.reverts_because is None
 
 
 def _assert_prober_is_scannable(code):
@@ -323,10 +382,22 @@ def prober_bytecode(weth_addr, probes):
         ops += _push1(0)                             # PUSH1 0    argsOffset
         ops += _push1(0)                             # PUSH1 0    value
         ops += _push20(weth_addr)                    # PUSH20 weth
-        ops += _GAS                                  # GAS
+        if p.gas is None:
+            ops += _GAS                              # GAS       (all of it)
+        else:
+            ops += _push3(p.gas)                     # PUSH3 cap
         ops += _CALL                                 # CALL    -> success
         ops += _push2(base)                          # PUSH2 base
         ops += _SSTORE                               # SSTORE  success flag
+        if not p.succeeds:
+            # A rejected call: record the executed-marker and read nothing
+            # back. Written unconditionally right after the CALL, so it is
+            # present exactly when this probe ran -- which is what stops
+            # "flag = 0" from also holding of a prober that never got here.
+            ops += _push1(1)                         # PUSH1 1
+            ops += _push2(base + 1)                  # PUSH2 base+1
+            ops += _SSTORE                           # SSTORE  executed marker
+            continue
         ops += _RETURNDATASIZE                       # RETURNDATASIZE
         ops += _push2(base + 1)                      # PUSH2 base+1
         ops += _SSTORE                               # SSTORE  payload length
@@ -353,6 +424,11 @@ def probe_storage(probes):
     out = {}
     for i, p in enumerate(probes):
         base = probe_base(i)
+        if not p.succeeds:
+            # The flag is 0, so it is not a *nonzero* slot at all; the marker
+            # is the whole record a rejected call leaves behind.
+            out[base + 1] = 1
+            continue
         out[base] = 1
         out[base + 1] = 32 * len(p.words)
         for j, (w, _) in enumerate(p.words):
@@ -560,6 +636,21 @@ def expect_probe(e, label, prober_addr, i, p):
     and WETH's semantics determine."""
     base = probe_base(i)
     nbytes = 32 * len(p.words)
+    if not p.succeeds:
+        e.expect_slot(
+            label, prober_addr, base, f"probe {i} ({p.label}) success flag", 0,
+            f"the prober's call to {p.label} was REJECTED, not honoured: "
+            f"{p.reverts_because}",
+            fmt=_word)
+        e.expect_slot(
+            label, prober_addr, base + 1,
+            f"probe {i} ({p.label}) executed marker", 1,
+            f"...and the prober really did make that call: this marker is "
+            f"written unconditionally right after the CALL, so a zero flag "
+            f"beside a set marker cannot be explained by a prop that never "
+            f"reached the probe",
+            fmt=_word)
+        return
     e.expect_slot(
         label, prober_addr, base, f"probe {i} ({p.label}) success flag", 1,
         f"the prober's call to {p.label} returned rather than reverting -- "
@@ -1338,6 +1429,140 @@ def case_view_dynamic(weth_code):
     return build_fixture("view_dynamic", alloc, txs, expect)
 
 
+# ---- the guard-path cases (weth-evidence Step 4) --------------------------
+#
+# Every case above this line is a happy path, and a contract that never
+# refused anything would pass all of them. The cases below exercise the paths
+# where WETH is supposed to REFUSE, and the two `WETH_DEVIATIONS.md` claims
+# that are testable at all.
+#
+# Per D1 a rejected call's expectation has two halves, and the second is the
+# one that matters: no WETH-semantic state change, AND the prober's success
+# flag zero beside its executed marker. "Nothing changed" on its own is
+# precisely the vacuous assertion this arc exists to eliminate -- it holds of
+# a contract that reverted, of a contract that did nothing, and of a prober
+# whose transaction never reached the call.
+
+GUARD_DST = "0x" + "d57".rjust(40, "0")
+GUARD_GUY = "0x" + "9117".rjust(40, "0")
+GUARD_OWNER_A = "0x" + "a11a".rjust(40, "0")
+GUARD_OWNER_B = "0x" + "a11b".rjust(40, "0")
+GUARD_OWNER_C = "0x" + "a11c".rjust(40, "0")
+
+
+def case_guard_balance(weth_code):
+    """The two balance guards: `transfer` and `withdraw` must refuse an amount
+    larger than the caller's internal balance.
+
+    The pre-state is built so that neither refusal can be explained by
+    anything but the guard. WETH itself holds 5 wad of ether while the prober
+    is owed only 2 wad, so the rejected `withdraw(3 wad)` is not a contract
+    that cannot pay -- it is a contract that will not. And each rejected call
+    is paired with a call on the SAME selector at the SAME gas cap that
+    differs only in the amount and does succeed, so "the guard refused" is
+    separated from "the probe ran out of gas"."""
+    trigger_key = 9
+    trigger = derive_address(trigger_key)
+    held = 2 * WAD_1_ETH        # the prober's internal balance
+    over = 3 * WAD_1_ETH        # more than it has
+    reserve = 5 * WAD_1_ETH     # WETH's own ether: enough to pay `over`
+    probes = [
+        Probe("balanceOf(prober)", "balanceOf(address)", [PROBER_ADDR],
+              words=[(held,
+                      "the prober's internal balance really is 2 wad before "
+                      "anything else happens -- this is the precondition the "
+                      "two refusals below are refusals *against*, read out of "
+                      "the contract rather than assumed")],
+              gas=PROBE_GAS),
+        Probe("transfer(dst, 3 wad) [over balance]", "transfer(address,uint256)",
+              [GUARD_DST, over], gas=PROBE_GAS,
+              reverts_because=(
+                  "transfer moves 3 wad out of an internal balance of 2, and "
+                  "`transferTestLt` reverts when caller_bal < wad. WETH does "
+                  "not overdraw an account and does not silently transfer "
+                  "what is there instead")),
+        Probe("withdraw(3 wad) [over balance]", "withdraw(uint256)", [over],
+              gas=PROBE_GAS,
+              reverts_because=(
+                  "withdraw unwraps 3 wad against an internal balance of 2, "
+                  "and `withdrawLoadCheck` reverts when caller_bal < wad. "
+                  "WETH holds 5 wad of ether here and could have paid: the "
+                  "refusal is the accounting guard, not an empty contract")),
+        Probe("transfer(dst, 2 wad) [at balance]", "transfer(address,uint256)",
+              [GUARD_DST, held], gas=PROBE_GAS,
+              words=[(1,
+                      "the same selector at the same gas cap, differing only "
+                      "in the amount, is HONOURED and ABI-returns the boolean "
+                      "true as one right-aligned word: the guard is a "
+                      "comparison on the amount, and `lt` is strict, so "
+                      "spending the whole balance exactly is allowed")]),
+        Probe("balanceOf(dst)", "balanceOf(address)", [GUARD_DST],
+              words=[(held,
+                      "the honoured transfer put all 2 wad where it said it "
+                      "would; the two rejected calls moved nothing here")],
+              gas=PROBE_GAS),
+    ]
+    alloc = {
+        WETH_ADDR: {"nonce": "0x1", "balance": q(reserve), "code": weth_code,
+                     "storage": {addr32(PROBER_ADDR): word32(held)}},
+        PROBER_ADDR: {"nonce": "0x1", "balance": q(0),
+                       "code": "0x" + prober_bytecode(WETH_ADDR, probes).hex(),
+                       "storage": {}},
+        trigger: eoa_alloc(WAD_1_ETH),
+    }
+    txs = [{
+        "type": "0x0", "chainId": "0x1", "nonce": "0x0",
+        "gasPrice": q(GAS_PRICE), "gas": "0x2dc6c0", "to": PROBER_ADDR,
+        "value": "0x0", "input": "0x",
+        "v": "0x0", "r": "0x0", "s": "0x0", "secretKey": privkey_hex(trigger_key),
+    }]
+
+    def expect(e):
+        prober_slot = balance_slot(PROBER_ADDR)
+        dst_slot = balance_slot(GUARD_DST)
+        e.expect_tx_succeeded(
+            0, "the prober transaction runs to completion: a call WETH "
+               "rejects fails inside its own frame and does not take the "
+               "caller down with it, which is why the probes after the two "
+               "refusals still have anything to record")
+        for i, p in enumerate(probes):
+            expect_probe(e, "prober", PROBER_ADDR, i, p)
+        e.expect_storage_exact(
+            "prober", PROBER_ADDR, probe_storage(probes),
+            "the prober's storage is exactly the five probe records above: "
+            "two of them are a zero flag beside a set marker, which is what a "
+            "refusal looks like from the outside")
+        e.expect_slot(
+            "WETH", WETH_ADDR, prober_slot, "balance[prober]", 0,
+            "the prober is left with nothing: 2 wad in, the honoured transfer "
+            "spent 2 wad, and neither refused call debited it a second time")
+        e.expect_slot(
+            "WETH", WETH_ADDR, dst_slot, "balance[dst]", held,
+            "the recipient holds exactly the one honoured transfer's 2 wad -- "
+            "not 5 wad, which is what it would hold if the refused 3-wad "
+            "transfer had gone through as well")
+        e.expect_storage_exact(
+            "WETH", WETH_ADDR, {dst_slot: held},
+            "and those are the only slots WETH ends up with: a rejected call "
+            "leaves NO residue anywhere in storage, not a partial debit and "
+            "not a credit to some other key")
+        e.expect_ether(
+            "WETH", WETH_ADDR, reserve,
+            "WETH's own ether is untouched. It held 5 wad throughout and "
+            "could have paid the 3-wad withdrawal; the refusal cost it "
+            "nothing, and the honoured transfer is pure internal accounting")
+        e.expect_ether(
+            "prober", PROBER_ADDR, 0,
+            "and the prober received no ether at all -- the clearest form of "
+            "the withdrawal's refusal, since a partial or silent success "
+            "would have to show up here")
+        e.expect_ether(
+            "trigger", trigger, e.pre_ether(trigger) - e.fee(0),
+            "the triggering EOA gains nothing and only pays its fee")
+
+    return build_fixture("guard_balance", alloc, txs, expect)
+
+
 def main():
     weth_code = get_weth_code_hex()
     cases = [
@@ -1348,6 +1573,7 @@ def main():
         ("05-reentrancy.json", case_reentrancy),
         ("06-view-static.json", case_view_static),
         ("07-view-dynamic.json", case_view_dynamic),
+        ("08-guard-balance.json", case_guard_balance),
     ]
 
     # Every case is built and checked before any file is written, so an
