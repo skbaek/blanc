@@ -65,7 +65,7 @@ about whether they are the right theorems. Read the statements in
 theorem's name.
 
 Blanc builds against a **pinned revision** of
-[Jaune](https://github.com/skbaek/jaune) — `require jaune from git … @ 739fa42d…`
+[Jaune](https://github.com/skbaek/jaune) — `require jaune from git … @ 4e6a6555…`
 in [`lakefile.lean`](lakefile.lean) — so a fresh clone builds reproducibly
 without a sibling checkout, and bumping Jaune is a reviewed one-line change.
 
