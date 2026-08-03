@@ -6,8 +6,10 @@ Blanc is an EVM programming language optimized for formal verification
 with interactive theorem provers. Blanc's toolchain is implemented in Lean 4.
 This repo contains the following files:
 
-- [Basic.lean](Blanc/Basic.lean): generic definitions and lemmas (for Booleans, 
-  lists, bit vectors, bytes, etc.) useful for but not specific to Blanc.
+- [Basic.lean](Blanc/Basic.lean): Blanc's own prefix/split algebra over lists
+  (`Split`, `Pref`, `Frel`) and the small tactic helpers built on it. The
+  generic list, word and `Except`/`Option` lemmas that used to live here are
+  now upstream in Jaune, where any client of Jaune gets them.
 - [Semantics.lean](Blanc/Semantics.lean): formalized semantics of EVM and Blanc.
 - [CommonCore.lean](Blanc/CommonCore.lean), [Tactics.lean](Blanc/Tactics.lean),
   and [CommonProofs.lean](Blanc/CommonProofs.lean): definitions and lemmas for

@@ -426,7 +426,7 @@ lemma validAdr_iff {w : B256} :
 
 lemma addressMask_eq_shl :
     addressMask = (~~~ (0 : B256)) <<< (160 : Nat).toB256.toNat := by
-  rw [toNat_toB256, Nat.lo_eq_of_lt (by omega)]; rfl
+  rw [B256.toNat_toB256, Nat.lo_eq_of_lt (by omega)]; rfl
 
 lemma of_push_addressMask {e : Sevm} {s s' : Devm} {xs}
     (h_pfx : xs <<+ s.stack) (h_run : Line.Run e s pushAddressMask s') :
@@ -486,15 +486,6 @@ lemma setStorVal_getStor_self {devm : Devm} {adr : Adr} {key val : B256} :
     Devm.setWorld, State.setStorVal]
   simp only [Devm.state, State.get_set_self]
 
-lemma Stor.get_set_ne {s : Stor} {k k' v : B256} (h : k ≠ k') :
-    (s.set k' v).get k = s.get k := by
-  unfold Stor.set Stor.get
-  have hc : compare k' k ≠ Ordering.eq := by
-    intro hcc; exact h (compare_eq_iff_eq.mp hcc).symm
-  split_ifs with hv
-  · rw [Std.TreeMap.getD_erase]; simp [hc]
-  · rw [Std.TreeMap.getD_insert]; simp [hc]
-
 lemma sstore_getStor_setStorVal {sevm : Sevm} {s s' : Devm} {x xs}
     (h_run : Ninst.Run sevm s Blanc.Ninst.sstore s') (hx : x :: xs <<+ s.stack) :
     ∃ v, Devm.getStor s' sevm.currentTarget = (Devm.getStor s sevm.currentTarget).set x v := by
@@ -535,14 +526,7 @@ lemma sstore_preserves_stor_rest {x xs} {sevm : Sevm} {s s' : Devm} :
   funext a
   have hne : a.toB256 ≠ x := fun hc => h_nv ⟨a, hc⟩
   simp only [Stor.rest, Function.comp_apply]
-  rw [Stor.get_set_ne hne]
-
-lemma Stor.get_set_self {s : Stor} {k v : B256} :
-    (s.set k v).get k = v := by
-  unfold Stor.set Stor.get
-  split_ifs with hv
-  · rw [Std.TreeMap.getD_erase]; simp; exact hv.symm
-  · rw [Std.TreeMap.getD_insert]; simp
+  rw [Stor.get_set_ne _ hne.symm]
 
 lemma sstore_getStor_set {sevm : Sevm} {s s' : Devm} {x y xs}
     (h_run : Ninst.Run sevm s Blanc.Ninst.sstore s') (hx : x :: y :: xs <<+ s.stack) :
@@ -738,10 +722,6 @@ lemma le_sumBelow (f : Adr → B256) {k : Adr} {n} (h : k.toNat < n) :
 def EqBelow (n : Nat) (f g : Adr → B256) : Prop :=
   ∀ k, k.toNat < n → f k = g k
 
-lemma Adr.toNat_lt_size (a : Adr) : a.toNat < 2 ^ 160 := by
-  rw [← toAdr_toNat a, Nat.toNat_toAdr, Nat.lo]
-  apply Nat.mod_lt _ (Nat.two_pow_pos _)
-
 lemma sumBelow_eq_sumBelow_of_eq_below {m n} {f g : Adr → B256}
     (hm : m < 2 ^ 160) (h_le : m ≤ n) (h_eqb : EqBelow n f g) :
     sumBelow f m = sumBelow g m := by
@@ -874,7 +854,7 @@ lemma wbsum_after_deposit {sevm : Sevm} {s r : Devm}
       rw [← hcbal', B256.add_comm]
     · intro h_neq
       simp [Stor.rest, h_set]
-      exact (Stor.get_set_ne (fun hc => h_neq (Adr.toB256_inj hc).symm)).symm
+      exact (Stor.get_set_ne _ (fun hc => h_neq (Adr.toB256_inj hc)) _).symm
 
   have h_nof' : B256.Nof ((Stor.rest (Devm.getStor s5 sevm.currentTarget)) sevm.caller) sevm.value := by
     simp only [B256.Nof]
@@ -1002,7 +982,7 @@ lemma incrAt_of_incrWbal {sevm : Sevm} {s s' : Devm} {wad dst} (h_dst : ValidAdr
     rw [h_set]
     have h_key_ne : a.toB256 ≠ dst := by
       intro hc; apply h_ne; rw [← toAdr_toB256 a, hc]
-    rw [Stor.get_set_ne h_key_ne, h_stor]
+    rw [Stor.get_set_ne _ h_key_ne.symm, h_stor]
 
 lemma of_transferFromUpdateSbal {sevm : Sevm} {s₀ sₙ : Devm} {sbal wad src}
     (h_src : ValidAdr src) (h_sbal : sbal = (Devm.getStor s₀ sevm.currentTarget).get src)
@@ -1049,7 +1029,7 @@ lemma of_transferFromUpdateSbal {sevm : Sevm} {s₀ sₙ : Devm} {sbal wad src}
       rw [h_set]
       have h_key_ne : a.toB256 ≠ src := by
         intro hc; apply h_ne; rw [← toAdr_toB256 a, hc]
-      rw [Stor.get_set_ne h_key_ne, h_stor]
+      rw [Stor.get_set_ne _ h_key_ne.symm, h_stor]
   · simp only [Stor.rest, Function.comp_apply]
     rw [toB256_toAdr h_src, ← h_sbal]; exact h_le
 
@@ -1580,7 +1560,7 @@ lemma solvent_of_withdraw_update_bal {sevm : Sevm} {s s' : Devm} {cbal wad}
       have h_key_ne : a.toB256 ≠ sevm.caller.toB256 := by
         intro hc; apply h_ne
         rw [← toAdr_toB256 a, hc, toAdr_toB256]
-      rw [Stor.get_set_ne h_key_ne, h_stor]
+      rw [Stor.get_set_ne _ h_key_ne.symm, h_stor]
   have h_le_rest : wad ≤ (Stor.rest (Devm.getStor s sevm.currentTarget)) sevm.caller := by
     simp only [Stor.rest, Function.comp_apply]
     rw [h_cbal']; exact h_le
@@ -1609,10 +1589,10 @@ lemma solvent_of_withdraw_update_bal {sevm : Sevm} {s s' : Devm} {cbal wad}
 
 
 lemma State.setBal_get_self {st : Jaune.State} {adr : Adr} {v : B256} :
-    (st.setBal adr v).get adr = (st.get adr).withBal v := State.get_set_self
+    (st.setBal adr v).get adr = (st.get adr).withBal v := State.get_set_self _ _ _
 
 lemma State.setBal_get_ne {st : Jaune.State} {adr a : Adr} {v : B256} (h : adr ≠ a) :
-    (st.setBal adr v).get a = st.get a := State.get_set_ne h
+    (st.setBal adr v).get a = st.get a := State.get_set_ne _ h _
 
 lemma State.setBal_get_stor {st : Jaune.State} {b a : Adr} {v : B256} :
     ((st.setBal b v).get a).stor = (st.get a).stor := by
@@ -2311,7 +2291,7 @@ lemma transfer_of_transfer {fs : List Func} {sevm : Sevm} {s r : Devm} :
       rw [h_set]
       have h_key_ne : a.toB256 ≠ caller := by
         intro hc; apply h_ne; rw [← toAdr_toB256 a, hc]
-      rw [Stor.get_set_ne h_key_ne, congr_fun hg4 sevm.currentTarget]
+      rw [Stor.get_set_ne _ h_key_ne.symm, congr_fun hg4 sevm.currentTarget]
   · rw [← h_rest]; exact h_incr
 
 lemma transfer_preserves_solvent {sevm : Sevm} {s r : Devm}
@@ -2594,7 +2574,7 @@ lemma setStorVal_getStor_ne {devm : Devm} {adr a : Adr} {key val : B256} (h : ad
     Devm.getStor (devm.setStorVal adr key val) a = Devm.getStor devm a := by
   simp only [Devm.getStor, Devm.getAcct, Devm.setStorVal, Devm.withState,
     Devm.setWorld, State.setStorVal]
-  simp only [Devm.state, State.get_set_ne h]
+  simp only [Devm.state, State.get_set_ne _ h]
 
 lemma sstore_preserves_getStor_ne {pc : Nat} {sevm : Sevm} {s s' : Devm} {a : Adr}
     (run : Rinst.run ⟨pc, sevm, s⟩ .sstore = .ok s')
@@ -2628,21 +2608,21 @@ lemma State.incrNonce_get_bal {st : Jaune.State} {adr a : Adr} :
   simp only [State.incrNonce]
   by_cases h : adr = a
   · subst h; rw [State.get_set_self]
-  · rw [State.get_set_ne h]
+  · rw [State.get_set_ne _ h]
 
 lemma State.incrNonce_get_stor {st : Jaune.State} {adr a : Adr} :
     ((st.incrNonce adr).get a).stor = (st.get a).stor := by
   simp only [State.incrNonce]
   by_cases h : adr = a
   · subst h; rw [State.get_set_self]
-  · rw [State.get_set_ne h]
+  · rw [State.get_set_ne _ h]
 
 lemma State.incrNonce_get_code {st : Jaune.State} {adr a : Adr} :
     ((st.incrNonce adr).get a).code = (st.get a).code := by
   simp only [State.incrNonce]
   by_cases h : adr = a
   · subst h; rw [State.get_set_self]
-  · rw [State.get_set_ne h]
+  · rw [State.get_set_ne _ h]
 
 lemma addAccessedAddress_state {devm : Devm} {a : Adr} :
     (addAccessedAddress devm a).state = devm.state := by
@@ -2888,38 +2868,38 @@ lemma State.setCode_get_bal {st : Jaune.State} {adr a : Adr} {c : ByteArray} :
   unfold State.setCode
   by_cases h : adr = a
   · subst h; rw [State.get_set_self]
-  · rw [State.get_set_ne h]
+  · rw [State.get_set_ne _ h]
 
 lemma State.setCode_get_stor {st : Jaune.State} {adr a : Adr} {c : ByteArray} :
     ((st.setCode adr c).get a).stor = (st.get a).stor := by
   unfold State.setCode
   by_cases h : adr = a
   · subst h; rw [State.get_set_self]
-  · rw [State.get_set_ne h]
+  · rw [State.get_set_ne _ h]
 
 lemma State.setCode_get_code_ne {st : Jaune.State} {adr a : Adr} {c : ByteArray}
     (h : adr ≠ a) : ((st.setCode adr c).get a).code = (st.get a).code := by
   unfold State.setCode
-  rw [State.get_set_ne h]
+  rw [State.get_set_ne _ h]
 
 lemma State.setStor_get_bal {st : Jaune.State} {adr a : Adr} {s : Stor} :
     ((st.setStor adr s).get a).bal = (st.get a).bal := by
   unfold State.setStor
   by_cases h : adr = a
   · subst h; rw [State.get_set_self]
-  · rw [State.get_set_ne h]
+  · rw [State.get_set_ne _ h]
 
 lemma State.setStor_get_code {st : Jaune.State} {adr a : Adr} {s : Stor} :
     ((st.setStor adr s).get a).code = (st.get a).code := by
   unfold State.setStor
   by_cases h : adr = a
   · subst h; rw [State.get_set_self]
-  · rw [State.get_set_ne h]
+  · rw [State.get_set_ne _ h]
 
 lemma State.setStor_get_stor_ne {st : Jaune.State} {adr a : Adr} {s : Stor}
     (h : adr ≠ a) : ((st.setStor adr s).get a).stor = (st.get a).stor := by
   unfold State.setStor
-  rw [State.get_set_ne h]
+  rw [State.get_set_ne _ h]
 
 -- balance of an uninvolved account is unchanged by a transfer
 lemma of_transfer_bal_other {st st_mid : Jaune.State} {caller target a : Adr} {value : B256}
@@ -3662,17 +3642,17 @@ theorem State.Inv.incrNonce {wa a : Adr} {w : Jaune.State}
     show ((w.incrNonce a).get b).bal = (w.get b).bal
     by_cases hb : b = a
     · subst hb; simp only [State.incrNonce, State.get_set_self]
-    · simp only [State.incrNonce, State.get_set_ne (Ne.symm hb)]
+    · simp only [State.incrNonce, State.get_set_ne _ (Ne.symm hb)]
   have hstor : (w.incrNonce a).getStor wa = w.getStor wa := by
     show ((w.incrNonce a).get wa).stor = (w.get wa).stor
     by_cases hb : wa = a
     · subst hb; simp only [State.incrNonce, State.get_set_self]
-    · simp only [State.incrNonce, State.get_set_ne (Ne.symm hb)]
+    · simp only [State.incrNonce, State.get_set_ne _ (Ne.symm hb)]
   have hcode : (w.incrNonce a).getCode wa = w.getCode wa := by
     show ((w.incrNonce a).get wa).code = (w.get wa).code
     by_cases hb : wa = a
     · subst hb; simp only [State.incrNonce, State.get_set_self]
-    · simp only [State.incrNonce, State.get_set_ne (Ne.symm hb)]
+    · simp only [State.incrNonce, State.get_set_ne _ (Ne.symm hb)]
   refine ⟨?_, ?_, ?_⟩
   · rw [hcode]; exact h.code
   · rw [hbal]; exact h.nof
@@ -4043,7 +4023,7 @@ theorem processMessage_preserves_solvent {wa : Adr} {msg : Msg} {evm : Devm}
 lemma State.Inv.setStor_ne {wa a : Adr} {s : Stor} {w : Jaune.State}
     (hne : a ≠ wa) (h : State.Inv wa w) : State.Inv wa (w.setStor a s) := by
   have hget : (w.setStor a s).get wa = w.get wa := by
-    unfold State.setStor; exact State.get_set_ne hne
+    unfold State.setStor; exact State.get_set_ne _ hne _
   refine ⟨?_, ?_, ?_⟩
   · show some (((w.setStor a s).get wa).code).toList = Prog.compile weth
     rw [hget]; exact h.code
@@ -4055,7 +4035,7 @@ lemma State.Inv.setStor_ne {wa a : Adr} {s : Stor} {w : Jaune.State}
 lemma State.Inv.setCode_ne {wa a : Adr} {cd : ByteArray} {w : Jaune.State}
     (hne : a ≠ wa) (h : State.Inv wa w) : State.Inv wa (w.setCode a cd) := by
   have hget : (w.setCode a cd).get wa = w.get wa := by
-    unfold State.setCode; exact State.get_set_ne hne
+    unfold State.setCode; exact State.get_set_ne _ hne _
   refine ⟨?_, ?_, ?_⟩
   · show some (((w.setCode a cd).get wa).code).toList = Prog.compile weth
     rw [hget]; exact h.code
@@ -5487,7 +5467,7 @@ lemma State.Inv.add_transaction_gas_credits {wa : Adr}
   have h_debit_sum := State.balSum_subBal h_debit
   dsimp only [State.balSum] at h_debit_sum
   rw [State.incrNonce_bal] at h_debit_sum
-  have h_debit_exact := toNat_toB256_of_lt h_fee_lt
+  have h_debit_exact := B256.toNat_toB256_of_lt h_fee_lt
   rw [h_debit_exact] at h_debit_sum
   have h_base_sum := h_base.nof
   unfold Blanc.SumNof at h_base_sum
@@ -5524,7 +5504,7 @@ lemma State.Inv.add_transaction_gas_credits {wa : Adr}
             min ((tx.gas - txOutput.gasLeft) / 5) refundCounter)
             calldataFloorGasCost) *
         effectiveGasPrice := by
-    rw [toNat_toB256]
+    rw [B256.toNat_toB256]
     unfold Nat.lo
     exact Nat.mod_le _ _
   have h_tip_le :
@@ -5536,7 +5516,7 @@ lemma State.Inv.add_transaction_gas_credits {wa : Adr}
           min ((tx.gas - txOutput.gasLeft) / 5) refundCounter)
           calldataFloorGasCost *
         (effectiveGasPrice - benv.stat.baseFeePerGas) := by
-    rw [toNat_toB256]
+    rw [B256.toNat_toB256]
     unfold Nat.lo
     exact Nat.mod_le _ _
   have h_sender_sum :
@@ -5717,7 +5697,7 @@ def wdsum (wds : List Withdrawal) : Nat :=
 
 -- Helper: `toB256` truncates, so its `toNat` is at most the original Nat.
 lemma toB256_toNat_le (n : Nat) : n.toB256.toNat ≤ n := by
-  rw [toNat_toB256]
+  rw [B256.toNat_toB256]
   unfold Nat.lo
   exact Nat.mod_le _ _
 
@@ -5750,154 +5730,7 @@ lemma foldl_destroyAccount_sum_le :
 -- Affordability: a successfully checked transaction's up-front debit
 -- (gas fee plus blob fee) fits in 256 bits, because `checkTransaction`
 -- verifies the sender's (256-bit) balance covers the *max* gas fee.
-lemma checkTransaction_fee_lt {benv : Benv} {bout : BlockOutput} {tx : Tx}
-    {sender : Adr} {egp : Nat} {bvh : List B256} {tbgu : Nat}
-    (h : checkTransaction benv bout tx = .ok ⟨sender, egp, bvh, tbgu⟩) :
-    tx.gas * egp +
-      (if tx.isTypeThree = true then
-        calculateDataFee benv.stat.rules.blob benv.stat.excessBlobGas tx
-      else 0) < 2 ^ 256 := by
-  unfold checkTransaction at h
-  rcases of_bind_eq_ok h with ⟨tbgu', hfuel, h⟩
-  rcases of_bind_eq_ok h with ⟨_, hchain, h⟩
-  rcases of_bind_eq_ok h with ⟨senderAddress, hrecover, h⟩
-  rcases of_bind_eq_ok h with ⟨fee, hfee, h⟩
-  rcases fee with ⟨egp', maxGasFee⟩
-  rcases of_bind_eq_ok h with ⟨blob, hblob, h⟩
-  rcases blob with ⟨maxGasFee2, bvh'⟩
-  rcases of_bind_eq_ok h with ⟨u1, hrecv, h⟩
-  rcases of_bind_eq_ok h with ⟨u2, hauth, h⟩
-  rcases of_bind_eq_ok h with ⟨u3, hacct, h⟩
-  have h' := Except.ok.inj h
-  simp only [Prod.mk.injEq] at h'
-  obtain ⟨rfl, rfl, rfl, rfl⟩ := h'
-  -- the sender's balance covers `maxGasFee2`
-  have hbal : maxGasFee2 ≤ ((benv.state.get senderAddress).bal).toNat := by
-    unfold checkTransactionSenderAccount at hacct
-    split at hacct <;> try contradiction
-    split at hacct <;> try contradiction
-    split at hacct <;> try contradiction
-    rename_i hlt
-    omega
-  have hbal_lt : ((benv.state.get senderAddress).bal).toNat < 2 ^ 256 :=
-    B256.toNat_lt _
-  -- gas fee bound: `tx.gas * egp' ≤ maxGasFee`
-  cases htt : tx.type with
-  | zero gasPrice recv =>
-    simp only [checkTransactionGasFee, htt, checkTransactionLegacyGasFee] at hfee
-    rw [Except.mapError_eq_ok_iff] at hfee
-    split at hfee
-    · cases hfee
-    · have hfe := if_error_eq_ok hfee
-      simp only [Prod.mk.injEq] at hfe
-      obtain ⟨rfl, rfl⟩ := hfe
-      simp only [checkTransactionBlobData, htt] at hblob
-      have hbe := Except.ok.inj hblob
-      simp only [Prod.mk.injEq] at hbe
-      obtain ⟨rfl, rfl⟩ := hbe
-      simp only [Tx.isTypeThree, htt, Bool.false_eq_true, if_false]
-      omega
-  | one cid gasPrice recv al =>
-    simp only [checkTransactionGasFee, htt, checkTransactionLegacyGasFee] at hfee
-    rw [Except.mapError_eq_ok_iff] at hfee
-    split at hfee
-    · cases hfee
-    · have hfe := if_error_eq_ok hfee
-      simp only [Prod.mk.injEq] at hfe
-      obtain ⟨rfl, rfl⟩ := hfe
-      simp only [checkTransactionBlobData, htt] at hblob
-      have hbe := Except.ok.inj hblob
-      simp only [Prod.mk.injEq] at hbe
-      obtain ⟨rfl, rfl⟩ := hbe
-      simp only [Tx.isTypeThree, htt, Bool.false_eq_true, if_false]
-      omega
-  | two cid mpf maxFee recv al =>
-    simp only [checkTransactionGasFee, htt, checkTransactionDynamicGasFee] at hfee
-    rw [Except.mapError_eq_ok_iff] at hfee
-    split at hfee
-    · cases hfee
-    · split at hfee
-      · cases hfee
-      · rename_i hmp hbf
-        have hfe := if_error_eq_ok hfee
-        simp only [Prod.mk.injEq] at hfe
-        obtain ⟨rfl, rfl⟩ := hfe
-        simp only [checkTransactionBlobData, htt] at hblob
-        have hbe := Except.ok.inj hblob
-        simp only [Prod.mk.injEq] at hbe
-        obtain ⟨rfl, rfl⟩ := hbe
-        simp only [Tx.isTypeThree, htt, Bool.false_eq_true, if_false]
-        have hegp : min mpf (maxFee - benv.stat.baseFeePerGas) +
-            benv.stat.baseFeePerGas ≤ maxFee := by omega
-        have hmul : tx.gas * (min mpf (maxFee - benv.stat.baseFeePerGas) +
-            benv.stat.baseFeePerGas) ≤ tx.gas * maxFee :=
-          Nat.mul_le_mul_left _ hegp
-        omega
-  | three cid mpf maxFee recv al mbf bh =>
-    simp only [checkTransactionGasFee, htt, checkTransactionDynamicGasFee] at hfee
-    rw [Except.mapError_eq_ok_iff] at hfee
-    split at hfee
-    · cases hfee
-    · split at hfee
-      · cases hfee
-      · rename_i hmp hbf
-        have hfe := if_error_eq_ok hfee
-        simp only [Prod.mk.injEq] at hfe
-        obtain ⟨rfl, rfl⟩ := hfe
-        simp only [checkTransactionBlobData, htt] at hblob
-        rw [Except.mapError_eq_ok_iff] at hblob
-        split at hblob
-        · cases hblob
-        · rcases of_bind_eq_ok hblob with ⟨_, _, hblob⟩
-          split at hblob
-          · cases hblob
-          · split at hblob
-            · cases hblob
-            · rename_i hbfee
-              have hbe := Except.ok.inj hblob
-              simp only [Prod.mk.injEq] at hbe
-              obtain ⟨rfl, rfl⟩ := hbe
-              simp only [Tx.isTypeThree, htt, reduceIte]
-              have hegp : min mpf (maxFee - benv.stat.baseFeePerGas) +
-                  benv.stat.baseFeePerGas ≤ maxFee := by omega
-              have hmul : tx.gas * (min mpf (maxFee - benv.stat.baseFeePerGas) +
-                  benv.stat.baseFeePerGas) ≤ tx.gas * maxFee :=
-                Nat.mul_le_mul_left _ hegp
-              have hblobmul : calculateDataFee benv.stat.rules.blob benv.stat.excessBlobGas tx ≤
-                  calculateTotalBlobGas tx * mbf := by
-                unfold calculateDataFee
-                exact Nat.mul_le_mul_left _ (by omega)
-              omega
-  | four cid mpf maxFee recv al auths =>
-    simp only [checkTransactionGasFee, htt, checkTransactionDynamicGasFee] at hfee
-    rw [Except.mapError_eq_ok_iff] at hfee
-    split at hfee
-    · cases hfee
-    · split at hfee
-      · cases hfee
-      · rename_i hmp hbf
-        have hfe := if_error_eq_ok hfee
-        simp only [Prod.mk.injEq] at hfe
-        obtain ⟨rfl, rfl⟩ := hfe
-        simp only [checkTransactionBlobData, htt] at hblob
-        have hbe := Except.ok.inj hblob
-        simp only [Prod.mk.injEq] at hbe
-        obtain ⟨rfl, rfl⟩ := hbe
-        simp only [Tx.isTypeThree, htt, Bool.false_eq_true, if_false]
-        have hegp : min mpf (maxFee - benv.stat.baseFeePerGas) +
-            benv.stat.baseFeePerGas ≤ maxFee := by omega
-        have hmul : tx.gas * (min mpf (maxFee - benv.stat.baseFeePerGas) +
-            benv.stat.baseFeePerGas) ≤ tx.gas * maxFee :=
-          Nat.mul_le_mul_left _ hegp
-        omega
-
 -- Validation bound: the calldata floor gas cost never exceeds the gas limit.
-lemma validateTransaction_floor_le {rules : ForkRules} {tx : Tx}
-    {intrinsicGas calldataFloorGasCost : Nat}
-    (h : validateTransaction rules tx = .ok ⟨intrinsicGas, calldataFloorGasCost⟩) :
-    calldataFloorGasCost ≤ tx.gas := by
-  exact validateTransaction_calldataFloorGasCost_le_gas h
-
 -- One-step wei conservation for `processTransaction`.
 lemma processTransaction_sum_le {benv : Benv} {bout bout' : BlockOutput}
     {tx : Tx} {i : Nat} {st : Jaune.State}
@@ -5937,12 +5770,12 @@ lemma processTransaction_sum_le {benv : Benv} {bout bout' : BlockOutput}
     | none => simp [Option.toExcept] at hsub
     | some s => simpa [Option.toExcept] using hsub
   -- the up-front debit does not wrap
-  have hfee_lt := checkTransaction_fee_lt hcheck
+  have hfee_lt := checkTransaction_upfront_lt_modulus hcheck
   -- `hcheck` carries the `beginTransaction` environment, so this arrives with an
   -- unreduced `stat` projection; put it back in terms of `benv` (as `hsub_some`
   -- already is) or `omega` below sees the two blob-fee terms as distinct atoms.
   dsimp only at hfee_lt
-  have hcdf := validateTransaction_floor_le hval
+  have hcdf := validateTransaction_calldataFloorGasCost_le_gas hval
   -- sum bookkeeping
   have h1 := foldl_destroyAccount_sum_le txOutput.accountsToDelete.toList
     ((state2.addBal sender
@@ -5994,7 +5827,7 @@ lemma processTransaction_sum_le {benv : Benv} {bout bout' : BlockOutput}
         calldataFloorGasCost *
       (effectiveGasPrice - benv.stat.baseFeePerGas))
   -- the debit is exactly its Nat value
-  have h6 := toNat_toB256_of_lt hfee_lt
+  have h6 := B256.toNat_toB256_of_lt hfee_lt
   -- Nat arithmetic: refund + tip ≤ gas fee
   have hGle : max (tx.gas - txOutput.gasLeft -
       min ((tx.gas - txOutput.gasLeft) / 5) refundCounter)
@@ -6083,7 +5916,7 @@ lemma processWithdrawalsState_preserves_solvent (wa : Adr)
     have h_val : (wd.amount * (10 ^ 9).toB256).toNat =
         wd.amount.toNat * 10 ^ 9 := by
       have h9 : (10 : Nat) ^ 9 ↾ 256 = 10 ^ 9 := Nat.lo_eq_of_lt (by omega)
-      rw [B256.toNat_mul, toNat_toB256, h9, Nat.lo_eq_of_lt (by omega)]
+      rw [B256.toNat_mul, B256.toNat_toB256, h9, Nat.lo_eq_of_lt (by omega)]
     have h_step : processWithdrawalsState st (wd :: wds) =
         processWithdrawalsState
           (st.addBal wd.recipient (wd.amount * (10 ^ 9).toB256)) wds := rfl

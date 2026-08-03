@@ -4895,22 +4895,6 @@ lemma ne_wa_of_not_hasCodeOrNonce {st : State} {wa ct : Adr}
   rw [h_empty_list] at hwa
   exact hwa rfl
 
-lemma State.get_set_self {w : Jaune.State} {a : Adr} {ac : Acct} :
-    (w.set a ac).get a = ac := by
-  unfold State.set State.get
-  split_ifs with h
-  · rw [Std.TreeMap.getD_erase]; simp; exact h.symm
-  · rw [Std.TreeMap.getD_insert]; simp
-
-lemma State.get_set_ne {w : Jaune.State} {a a' : Adr} {ac : Acct} (h : a' ≠ a) :
-    (w.set a' ac).get a = w.get a := by
-  unfold State.set State.get
-  have hc : compare a' a ≠ Ordering.eq := by
-    intro hcc; exact h (compare_eq_iff_eq.mp hcc)
-  split_ifs with hv
-  · rw [Std.TreeMap.getD_erase]; simp [hc]
-  · rw [Std.TreeMap.getD_insert]; simp [hc]
-
 lemma State.set_bal {st : Jaune.State} {a : Adr} {ac : Acct}
     (h : ac.bal = (st.get a).bal) : (st.set a ac).bal = st.bal := by
   funext b
@@ -4920,7 +4904,7 @@ lemma State.set_bal {st : Jaune.State} {a : Adr} {ac : Acct}
     rw [State.get_set_self]
     exact h
   · show ((st.set a ac).get b).bal = (st.get b).bal
-    rw [State.get_set_ne (fun hc => hb hc.symm)]
+    rw [State.get_set_ne _ (fun hc => hb hc.symm)]
 
 lemma State.setStor_bal {st : Jaune.State} {a : Adr} {s : Stor} :
     (st.setStor a s).bal = st.bal := State.set_bal rfl
@@ -4942,7 +4926,7 @@ lemma Msg.NoDel.processCreateMessage_msg {wa : Adr} {msg : Msg}
   · show (((msg.benv.state.setStor msg.currentTarget .empty).incrNonce msg.currentTarget).getCode wa).toList ≠ []
     have h_get : ((msg.benv.state.setStor msg.currentTarget .empty).incrNonce msg.currentTarget).get wa = msg.benv.state.get wa := by
       dsimp only [State.incrNonce, State.setStor]
-      rw [State.get_set_ne h_ct, State.get_set_ne h_ct]
+      rw [State.get_set_ne _ h_ct, State.get_set_ne _ h_ct]
     show (((msg.benv.state.setStor msg.currentTarget .empty).incrNonce msg.currentTarget).get wa).code.toList ≠ []
     rw [h_get]
     exact hcode
@@ -5411,7 +5395,7 @@ lemma balNoninc_refl_trans :
   exact ⟨⟨fun _ => Nat.le_refl _, fun _ _ _ h1 h2 => Nat.le_trans h2 h1⟩,
          ⟨fun _ => Nat.le_refl _, fun _ _ _ h1 h2 => Nat.le_trans h2 h1⟩⟩
 
-lemma adr_toNat_lt_size_local (a : Adr) : a.toNat < 2 ^ 160 := by
+lemma Adr.toNat_lt_size (a : Adr) : a.toNat < 2 ^ 160 := by
   rw [← toAdr_toNat a, Nat.toNat_toAdr, Nat.lo]
   exact Nat.mod_lt _ (Nat.two_pow_pos _)
 
@@ -5432,7 +5416,7 @@ lemma sumBelow_setBal_eq_local (st : Jaune.State) (a : Adr) (v : B256)
       rw [Nat.toNat_toAdr, Nat.lo_eq_of_lt hnsize] at hnat
       omega
     have hget : (st.setBal a v).get n.toAdr = st.get n.toAdr :=
-      State.get_set_ne hne.symm
+      State.get_set_ne _ hne.symm _
     have hbal : (st.setBal a v).bal n.toAdr = st.bal n.toAdr := by
       dsimp [State.bal, State.setBal]
       have hget' : (st.set a ((st.get a).withBal v)).get n.toAdr =
@@ -5458,7 +5442,7 @@ lemma sumBelow_setBal_add_local (st : Jaune.State) (a : Adr) (v : B256)
         rw [Nat.toNat_toAdr, Nat.lo_eq_of_lt hnsize] at hnat
         omega
       have hget : (st.setBal a v).get n.toAdr = st.get n.toAdr :=
-        State.get_set_ne hne.symm
+        State.get_set_ne _ hne.symm _
       change sumBelow (fun x => (st.setBal a v).bal x) n +
           ((st.setBal a v).get n.toAdr).bal.toNat + (st.bal a).toNat =
         sumBelow (fun x => st.bal x) n + (st.get n.toAdr).bal.toNat + v.toNat
@@ -5486,7 +5470,7 @@ lemma State.balSum_setBal (st : Jaune.State) (a : Adr) (v : B256) :
   have hmax : Adr.max.toNat.succ = 2 ^ 160 := by decide
   have ha : a.toNat < Adr.max.toNat.succ := by
     rw [hmax]
-    exact adr_toNat_lt_size_local a
+    exact Adr.toNat_lt_size a
   simpa [State.balSum, sum] using
     (sumBelow_setBal_add_local st a v Adr.max.toNat.succ
       (by rw [hmax]) ha)
