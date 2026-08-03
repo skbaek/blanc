@@ -9,6 +9,30 @@ namespace Blanc
 open Jaune
 
 
+-------------------------------------------------------------------------------
+-- THE SEAM.  This module's header calls it "the formalized semantics of the
+-- EVM and Blanc", and the conjunction is literal: two layers are interleaved
+-- here.  The banners below mark where one ends and the other begins.
+--
+--   EVM-GENERIC -- statements about Jaune's own machine (`Devm`, `Evm.step`,
+--     `Frame`, `Xinst.step`, `executeCode`, `Fueled`, `exec`).  No Blanc
+--     concept appears in them.  A future arc could relocate this layer.
+--   BLANC -- the compiled-program language (`Func`, `Prog`, `Stack`,
+--     `Rinst.toUInt8`) and the relations built on it.
+--
+-- NOTHING IS MOVED BY THESE BANNERS.  They are comments only, recorded so a
+-- future `Blanc/Semantics.lean` split starts from a marked seam instead of
+-- rediscovering it.  Two facts constrain any such split, and both are stated
+-- at the point where they bite: `Exec` is frozen (see the banner at `Exec`),
+-- and `Devm.PopBurn` straddles the seam (see its banner).
+-------------------------------------------------------------------------------
+
+-------------------------------------------------------------------------------
+-- BLANC.  The compiled-program instruction encoding and the program syntax.
+-- `Stack.Push`/`Stack.Pop` are phrased with Blanc's own `Split` (`Basic.lean`),
+-- so they are Blanc's however Jaune-shaped `Stack = List B256` looks.
+-------------------------------------------------------------------------------
+
 def Rinst.toUInt8 : Rinst → UInt8
   | .add          => 0x01
   | .mul          => 0x02
@@ -95,6 +119,14 @@ structure Prog : Type where
   (main : Func)
   (aux : List Func)
 
+-------------------------------------------------------------------------------
+-- EVM-GENERIC.  Everything from here to the `Exec` banner states a fact about
+-- Jaune's machine and nothing about Blanc: the fieldwise `Devm` relations, the
+-- `*.At` decode predicates, the frame/step relational layer, and the decode
+-- bridge.  The one exception inside this run is `Devm.PopBurn`, banner-marked
+-- below.
+-------------------------------------------------------------------------------
+
 def Jinst.Run (evm : Evm) :
     Jinst → Except (EvmError × Devm) (Nat × Devm) → Prop :=
   λ j ex => j.run evm = ex
@@ -168,6 +200,12 @@ def Devm.Burn : Devm → Devm → Prop :=
   }
 
 
+-- SEAM UNCLEAR.  `Devm.PopBurn` sits in the EVM-generic run above but is
+-- phrased with `Stack.Pop`, hence with Blanc's `Split`.  Its subject is
+-- generic and its vocabulary is not, so it belongs to neither layer as written.
+-- A split would have to either relocate a `Split`-free restatement or leave
+-- this definition (and `Func.Run`, its only consumer) on the Blanc side.  Not
+-- resolved here -- recorded so the choice is made deliberately.
 def Devm.PopBurn (xs : List B256) : Devm → Devm → Prop :=
   Rel {
     Rels.eq with
@@ -181,6 +219,10 @@ def Jinst.At (code : ByteArray) (pc : Nat) (j : Jinst) : Prop := code.getInst pc
 def Rinst.At (code : ByteArray) (pc : Nat) (r : Rinst) : Prop := code.getInst pc = some (.next (.reg r))
 def Xinst.At (code : ByteArray) (pc : Nat) (x : Xinst) : Prop := code.getInst pc = some (.next (.exec x))
 
+-- Generic over core `Except` alone -- no Jaune type and no Blanc concept.
+-- Catalogued by the upstream sweep as a candidate, deferred rather than moved:
+-- it is a definition (so it would widen Jaune's public API) with a single
+-- occurrence, and the arc that marked this seam moves no definitions.
 def Except.Split {ξ υ ζ : Type}
     (e : Except ξ υ) (e' : Except ξ ζ) (q : υ → Prop) : Prop :=
   (∃ x, e = .error x ∧ e' = .error x) ∨ (∃ y : υ, e = .ok y ∧ q y)
@@ -643,6 +685,24 @@ lemma Evm.step_spawn_inv {pc : Nat} {sevm : Sevm} {devm : Devm}
   · cases Step.ofJump_ne_spawn hs
   · cases hs
 
+-------------------------------------------------------------------------------
+-- `Exec` IS FROZEN.  Its statement is EVM-generic -- a derivation tree over
+-- Jaune's step outcomes, with no Blanc concept in it -- so it reads like the
+-- clearest thing on this page to relocate.  It is not.
+--
+-- `Exec` appears in the statement of `weth_preserves_solvent`, one of the eight
+-- theorems `scripts/check.sh` audits at exactly
+-- `[propext, Classical.choice, Quot.sound]`.  Relocating it changes the
+-- constant that protected statement elaborates to, which is a change to the
+-- audited surface however byte-identical the source text stays.
+--
+-- The same freeze covers everything below that is phrased in terms of `Exec`:
+-- `Xlot.Filled`, `Exec.halt_inv`, `Exec.last_inv`, and the adequacy pair at the
+-- foot of this file.  This is the reason the `Semantics.lean` split is a
+-- successor arc and not the sweep that wrote this banner: moving `Exec` is a
+-- decision about the audited surface, not a relocation.
+-------------------------------------------------------------------------------
+
 /- Exec pc sevm devm ex is provable iff
     exec ⟨pc, sevm, devm⟩ = ex
    holds (`exec_iff_exec_eq`): with sufficiency proved in Jaune, the total
@@ -712,8 +772,17 @@ lemma Exec.last_inv {pc sevm devm exn l}
     exn = l.run sevm devm :=
   cr.halt_inv (Evm.step_last h)
 
+-- EVM-GENERIC, but frozen by association: `Ninst.Run` is a fact about Jaune's
+-- `Ninst.step` with no Blanc concept in it, and it is phrased through
+-- `Xlot.Filled`, hence through `Exec`.
 def Ninst.Run (sevm : Sevm) (devm : Devm) (n : Ninst) (devm' : Devm) : Prop :=
   ∃ xl : Xlot, xl.Filled ∧ ∃ pc, Ninst.StepRun pc sevm devm n xl (.ok devm')
+
+-------------------------------------------------------------------------------
+-- BLANC.  The run relations for the compiled-program language.  `Func.Run`
+-- recurses over Blanc's `Func` syntax and `Prog.Run` over `Prog`; both are
+-- Blanc's whatever their premises are about.
+-------------------------------------------------------------------------------
 
 inductive Func.Run : List Func → Sevm → Devm → Func → Devm → Prop
   | zero :
@@ -750,6 +819,15 @@ def Prog.Run (sevm : Sevm) (devm : Devm) (p : Prog) (devm' : Devm) : Prop :=
 -------------------------------------------------------------------------------
 
 
+
+-------------------------------------------------------------------------------
+-- EVM-GENERIC resumes, to the end of the file: the `Fueled` residue, the
+-- depth side conditions, and the adequacy pair.  Every statement here is about
+-- Jaune (`Fueled`, `Xinst.step`, `genericCall.step`, `execFueled`, `exec`).
+-- The adequacy pair mentions `Exec` and is frozen with it; the `Fueled` and
+-- depth lemmas are not, and are the part of this layer a successor arc could
+-- relocate without touching the audited surface.
+-------------------------------------------------------------------------------
 
 /- The residue of the fuel-bounded (`Fueled`) reasoning layer.  With
    sufficiency proved in Jaune, fuel never reaches a Blanc statement: these
