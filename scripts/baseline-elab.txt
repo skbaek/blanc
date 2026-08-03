@@ -8,6 +8,7 @@ OK	1.120	Blanc.lean
 OK	1.188	Blanc/Basic.lean
 OK	2.236	Blanc/CommonCore.lean
 OK	5.366	Blanc/CommonProofs.lean
+OK	1.257	Blanc/Ladder.lean
 OK	1.619	Blanc/Semantics.lean
 OK	4.621	Blanc/Solvent.lean
 OK	1.925	Blanc/Tactics.lean
