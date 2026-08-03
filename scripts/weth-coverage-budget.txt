@@ -1,0 +1,27 @@
+# scripts/weth-coverage-budget.txt
+#
+# The known-unexercised subset of Blanc's ten WETH selectors
+# (scripts/weth-selectors.json, emitted from Blanc.wethFuncs by
+# scripts/gen-weth-selectors.lean), checked by scripts/check-weth-coverage.sh
+# (~/plans/weth-evidence.md Step 2). This is a budget in the idiom of
+# Jaune's scripts/check-integrity.sh pending-budget: the gate fails if the
+# actual set of unexercised selectors is not a subset of the rows below, or
+# if that set's size exceeds the declared budget number. A row lists a
+# selector this suite is KNOWN not to exercise yet, with a trailing comment
+# naming the function and the step expected to close it -- the comment is
+# documentation only, never compared.
+#
+# The budget may only SHRINK (plan Evidence and safety rules: "never weaken
+# or rebase a gate... with the single exception of the coverage budget
+# shrinking, which is the arc's goal"). Removing a row -- because a later
+# step added a case that exercises it -- is the intended way this file
+# changes; adding a row is a regression and is not a routine step.
+#
+# coverage-budget: 6
+
+0x06fdde03  ## name() -- view function, no case yet (weth-evidence Step 3)
+0x18160ddd  ## totalSupply() -- view function, no case yet (weth-evidence Step 3)
+0x313ce567  ## decimals() -- view function, no case yet (weth-evidence Step 3)
+0x70a08231  ## balanceOf(address) -- view function, no case yet (weth-evidence Step 3)
+0x95d89b41  ## symbol() -- view function, no case yet (weth-evidence Step 3)
+0xdd62ed3e  ## allowance(address,address) -- view function, no case yet (weth-evidence Step 3)
