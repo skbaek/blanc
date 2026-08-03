@@ -65,9 +65,20 @@ SYSTEM = [
     "0x00000000219ab540356cbb839cbe05303d7705fa",
 ]
 
-# ---- WETH's own account address and the attacker contract's address -------
+# ---- WETH's own account address and the caller props' addresses -----------
 WETH_ADDR = "0x" + "5eed".rjust(40, "0")
 ATTACKER_ADDR = "0x" + "dead0001".rjust(40, "0")
+# The view-function prober (weth-evidence Step 3). A separate account from
+# WETH on purpose: WETH's own dispatcher PUSH32s all ten selectors as
+# comparison constants, so scripts/check-weth-coverage.py excludes WETH's
+# account from its caller-prop scan. A prober living at WETH's address would
+# be invisible to the coverage gate.
+PROBER_ADDR = "0x" + "b0b".rjust(40, "0")
+# Subjects the view probes ask about. Plain synthetic addresses -- they never
+# sign anything, they are only storage-key material.
+HOLDER_ADDR = "0x" + "ba1".rjust(40, "0")
+OWNER_ADDR = "0x" + "a11".rjust(40, "0")
+SPENDER_ADDR = "0x" + "5be4".rjust(40, "0")
 
 WAD_1_ETH = 0x0DE0B6B3A7640000  # 1 ether, used throughout as "the" wad
 
@@ -169,6 +180,187 @@ def attacker_bytecode(weth_addr, wad):
     return bytes(ops)
 
 
+# ---- the view-function prober (weth-evidence Step 3) ----------------------
+#
+# A view function changes no state and returns data, and return data is NOT
+# consensus data: it appears nowhere in a `blockchain_test`. A fixture that
+# merely called `balanceOf` would assert that nothing changed -- which is true
+# whether or not the return encoding is right. It would pass vacuously, and it
+# would be worse than no case at all, because the coverage budget would drop
+# while nothing was checked (plan D4). The only way to make a returned word
+# observable to the oracle, to Jaune's runner and to a reader is a caller
+# contract that invokes the function and SSTOREs what came back.
+#
+# Storage layout, per probe index i (`probe_base(i) = 0x100 * (i + 1)`):
+#
+#   base + 0      the CALL's success flag  (1 = returned, 0 = reverted)
+#   base + 1      RETURNDATASIZE           (pins the payload's total length)
+#   base + 2 + j  returned word j
+#
+# The success flag gets its own slot rather than being folded into the words:
+# it is what distinguishes "returned these words" from "reverted", and it is
+# what shows the prop ran at all -- a prop that silently did nothing leaves
+# every slot zero, which no per-word check would notice. Step 4 reuses this
+# same shape for revert cases, where the flag is the point.
+#
+# Like `attacker_bytecode` this is straight-line hand-emitted bytecode -- no
+# jumps, no loops, one comment per line -- so a reviewer can read it top to
+# bottom. It is the fixture's *input*, not an oracle-derived expectation.
+
+PROBE_SCRATCH = 0x80  # where RETURNDATACOPY lands: past any probe's calldata
+
+_MSTORE = b"\x52"
+_MLOAD = b"\x51"
+_SSTORE = b"\x55"
+_GAS = b"\x5a"
+_CALL = b"\xf1"
+_RETURNDATASIZE = b"\x3d"
+_RETURNDATACOPY = b"\x3e"
+_STOP = b"\x00"
+
+
+def _push1(x):
+    assert 0 <= x <= 0xFF, x
+    return bytes([0x60, x])
+
+
+def _push2(x):
+    assert 0 <= x <= 0xFFFF, x
+    return bytes([0x61]) + x.to_bytes(2, "big")
+
+
+def _push20(a):
+    return bytes([0x73]) + bytes.fromhex(a[2:])
+
+
+def _push32(b):
+    assert len(b) == 32, len(b)
+    return bytes([0x7F]) + b
+
+
+def probe_base(i):
+    """The prober's storage-slot block for probe `i`. Spaced far apart so the
+    blocks stay legible in a post-state dump."""
+    return 0x100 * (i + 1)
+
+
+class Probe:
+    """One view-function call the prober makes, and the words the ABI says it
+    must return.
+
+    `words` is a list of `(expected_word, claim)` pairs. Every expected word
+    is derived from the ABI specification plus WETH's semantics and the
+    pre-state this script authored -- never from what the prober turned out to
+    store (plan D1). The claim is the sentence the word enforces.
+    """
+
+    def __init__(self, label, sig, args, words):
+        self.label = label
+        self.sig = sig
+        self.args = args
+        self.words = words
+        self.calldata = calldata(sig, *args)
+        assert len(self.calldata) == 4 + 32 * len(args), label
+
+
+def _assert_prober_is_scannable(code):
+    """`scripts/check-weth-coverage.py` finds a caller prop's embedded
+    calldata by walking the prop's bytecode for `PUSH32 <selector><28 zero
+    bytes>`, skipping 33 bytes past each PUSH32 it sees. That walk stays
+    aligned only if no *other* push's immediate contains a 0x7F byte, which it
+    would misread as a PUSH32 opcode and then skip past a real selector word,
+    silently under-reporting coverage. Every immediate this emitter produces
+    is chosen here, so the condition is checkable rather than left to luck.
+    The coverage gate's own per-selector output is still the confirmation --
+    run `scripts/check-weth-coverage.sh` after regenerating."""
+    i = 0
+    while i < len(code):
+        op = code[i]
+        if op == 0x7F:
+            i += 33
+            continue
+        if 0x60 <= op < 0x7F:
+            n = op - 0x5F
+            assert 0x7F not in code[i + 1:i + 1 + n], (
+                f"prober: a PUSH{n} immediate at offset {i} contains 0x7F, "
+                f"which would desynchronise check-weth-coverage.py's PUSH32 "
+                f"scan and hide a probe from the coverage gate")
+            i += 1 + n
+            continue
+        i += 1
+
+
+def prober_bytecode(weth_addr, probes):
+    """Straight-line bytecode that runs every probe in order and records what
+    each returned. Emitted, not transcribed, so the slot layout above and the
+    expectations below cannot drift apart.
+
+    Note the RETURNDATACOPY: it asks for exactly the number of words the ABI
+    says the function returns, so a *short* payload aborts the whole frame
+    rather than zero-filling. That is deliberate -- a silent zero-fill would
+    look like a returned zero word."""
+    ops = bytearray()
+    for i, p in enumerate(probes):
+        base = probe_base(i)
+        nwords = len(p.words)
+        nargs = len(p.args)
+        argsize = 4 + 32 * nargs
+        # -- build this probe's calldata in memory [0, argsize) ----------
+        # The selector goes in as its own zero-padded word, exactly as
+        # `attacker_bytecode` does it, and exactly as the coverage gate's
+        # scan expects to find it.
+        ops += _push32(p.calldata[:4] + bytes(28))   # PUSH32 <sel><28 zeros>
+        ops += _push1(0)                             # PUSH1 0
+        ops += _MSTORE                               # MSTORE mem[0:32]
+        for k in range(nargs):
+            ops += _push32(p.calldata[4 + 32 * k:36 + 32 * k])  # PUSH32 arg k
+            ops += _push1(4 + 32 * k)                # PUSH1 4+32k
+            ops += _MSTORE                           # MSTORE arg k in place
+        # -- CALL WETH with it -------------------------------------------
+        ops += _push1(0)                             # PUSH1 0    retSize
+        ops += _push1(0)                             # PUSH1 0    retOffset
+        ops += _push1(argsize)                       # PUSH1 L    argsSize
+        ops += _push1(0)                             # PUSH1 0    argsOffset
+        ops += _push1(0)                             # PUSH1 0    value
+        ops += _push20(weth_addr)                    # PUSH20 weth
+        ops += _GAS                                  # GAS
+        ops += _CALL                                 # CALL    -> success
+        ops += _push2(base)                          # PUSH2 base
+        ops += _SSTORE                               # SSTORE  success flag
+        ops += _RETURNDATASIZE                       # RETURNDATASIZE
+        ops += _push2(base + 1)                      # PUSH2 base+1
+        ops += _SSTORE                               # SSTORE  payload length
+        # -- copy the payload out and store it word by word ---------------
+        ops += _push1(32 * nwords)                   # PUSH1 32n  size
+        ops += _push1(0)                             # PUSH1 0    offset
+        ops += _push1(PROBE_SCRATCH)                 # PUSH1 0x80 destOffset
+        ops += _RETURNDATACOPY                       # RETURNDATACOPY
+        for j in range(nwords):
+            ops += _push1(PROBE_SCRATCH + 32 * j)    # PUSH1 0x80+32j
+            ops += _MLOAD                            # MLOAD   word j
+            ops += _push2(base + 2 + j)              # PUSH2 base+2+j
+            ops += _SSTORE                           # SSTORE  word j
+    ops += _STOP                                     # STOP
+    code = bytes(ops)
+    _assert_prober_is_scannable(code)
+    return code
+
+
+def probe_storage(probes):
+    """The prober's complete expected nonzero storage after a run: the
+    comparand for `expect_storage_exact`, so that every slot the prop writes
+    is accounted for and no probe can quietly write nothing."""
+    out = {}
+    for i, p in enumerate(probes):
+        base = probe_base(i)
+        out[base] = 1
+        out[base + 1] = 32 * len(p.words)
+        for j, (w, _) in enumerate(p.words):
+            if w != 0:
+                out[base + 2 + j] = w
+    return out
+
+
 # ---- the spec-derived assertion layer -------------------------------------
 #
 # THE ANTI-CIRCULARITY RULE (~/plans/weth-evidence.md, D1). Every expectation
@@ -226,6 +418,14 @@ def allowance_slot(src, dst):
 
 def _wei(n):
     return f"0x{n:x} ({n} wei)"
+
+
+def _word(n):
+    """A returned ABI word is not always an amount of wei -- `decimals()`
+    returns 18 and `name()` returns an offset, a length and packed ASCII."""
+    b = n.to_bytes(32, "big")
+    ascii_part = "".join(chr(c) if 0x20 <= c < 0x7F else "." for c in b)
+    return f"0x{n:064x} ({n}) |{ascii_part}|"
 
 
 def _slots(m):
@@ -313,11 +513,12 @@ class Expectations:
         self._record(obs == expected, f"ether balance of {label}",
                      _wei(expected), _wei(obs), claim)
 
-    def expect_slot(self, label, addr, key, key_label, expected, claim):
+    def expect_slot(self, label, addr, key, key_label, expected, claim,
+                    fmt=_wei):
         obs = self.post_storage(addr).get(key, 0)
         self._record(obs == expected,
                      f"{label} storage slot {key_label} (0x{key:064x})",
-                     _wei(expected), _wei(obs), claim)
+                     fmt(expected), fmt(obs), claim)
 
     def expect_storage_exact(self, label, addr, expected, claim):
         """The strongest form available: the account's *entire* nonzero
@@ -351,6 +552,30 @@ class Expectations:
                 "valuable thing this suite can find."]
             raise ExpectationFailure("\n".join(out))
         return len(self.checked)
+
+
+def expect_probe(e, label, prober_addr, i, p):
+    """State what probe `i` must have recorded: that its call returned, that
+    the payload had the ABI's length, and that every word is the word the ABI
+    and WETH's semantics determine."""
+    base = probe_base(i)
+    nbytes = 32 * len(p.words)
+    e.expect_slot(
+        label, prober_addr, base, f"probe {i} ({p.label}) success flag", 1,
+        f"the prober's call to {p.label} returned rather than reverting -- "
+        f"this flag is what makes the words below evidence: a prop that "
+        f"silently did nothing would leave every slot zero",
+        fmt=_word)
+    e.expect_slot(
+        label, prober_addr, base + 1, f"probe {i} ({p.label}) RETURNDATASIZE",
+        nbytes,
+        f"{p.label} returns exactly {nbytes} bytes -- the ABI encoding's full "
+        f"length, neither truncated nor over-long",
+        fmt=_word)
+    for j, (w, claim) in enumerate(p.words):
+        e.expect_slot(label, prober_addr, base + 2 + j,
+                      f"probe {i} ({p.label}) returned word {j}", w, claim,
+                      fmt=_word)
 
 
 # ---- oracle-derived compiled WETH code, never transcribed by hand ----------
@@ -888,6 +1113,95 @@ def case_reentrancy(weth_code):
     return build_fixture("reentrancy", alloc, txs, expect)
 
 
+# ---- the view-function cases (weth-evidence Step 3) -----------------------
+#
+# The pre-state below is chosen so that the four static views must return four
+# *different* values: a probe that read the wrong slot, or that recorded
+# another probe's answer, cannot accidentally agree with its expectation.
+
+VIEW_SUPPLY = 7 * WAD_1_ETH   # WETH's own ether: what totalSupply() reports
+VIEW_HELD = 5 * WAD_1_ETH     # HOLDER's internal balance: what balanceOf reports
+VIEW_ALLOWED = 3 * WAD_1_ETH  # OWNER -> SPENDER allowance: what allowance reports
+
+
+def static_view_probes():
+    """The four view functions whose ABI return type is a single static word.
+
+    Every expected word is derived from the ABI specification (a single static
+    return value is one 32-byte big-endian word) together with WETH's
+    semantics and the pre-state this script authored just above -- not from
+    any observed output (plan D1)."""
+    return [
+        Probe("decimals()", "decimals()", [], [
+            (0x12,
+             "decimals() reports the ERC-20 fixed-point scale of 18 = 0x12, "
+             "right-aligned in one word: `Weth.lean`'s `decimals` pushes 0x12 "
+             "and returns memory [0, 32)"),
+        ]),
+    ]
+
+
+def case_view_static(weth_code):
+    """The static-return view functions, called by a prober contract that
+    records each call's success flag, its RETURNDATASIZE and the word it
+    returned.
+
+    Return data is not consensus data, so a fixture that merely called a view
+    would commit only "nothing changed" -- true whatever the encoding does,
+    and therefore vacuous (plan D4). The prober is what turns a returned word
+    into committed, oracle-adjudicated post-state."""
+    trigger_key = 7
+    trigger = derive_address(trigger_key)
+    probes = static_view_probes()
+    allow = allowance_slot(OWNER_ADDR, SPENDER_ADDR)
+    alloc = {
+        WETH_ADDR: {"nonce": "0x1", "balance": q(VIEW_SUPPLY),
+                     "code": weth_code,
+                     "storage": {addr32(HOLDER_ADDR): word32(VIEW_HELD),
+                                 word32(allow): word32(VIEW_ALLOWED)}},
+        PROBER_ADDR: {"nonce": "0x1", "balance": q(0),
+                       "code": "0x" + prober_bytecode(WETH_ADDR, probes).hex(),
+                       "storage": {}},
+        trigger: eoa_alloc(WAD_1_ETH),
+    }
+    txs = [{
+        "type": "0x0", "chainId": "0x1", "nonce": "0x0",
+        "gasPrice": q(GAS_PRICE), "gas": "0x2dc6c0", "to": PROBER_ADDR,
+        "value": "0x0", "input": "0x",
+        "v": "0x0", "r": "0x0", "s": "0x0", "secretKey": privkey_hex(trigger_key),
+    }]
+
+    def expect(e):
+        e.expect_tx_succeeded(
+            0, "the prober transaction runs to completion, so every probe's "
+               "call and every SSTORE below actually executed")
+        for i, p in enumerate(probes):
+            expect_probe(e, "prober", PROBER_ADDR, i, p)
+        e.expect_storage_exact(
+            "prober", PROBER_ADDR, probe_storage(probes),
+            "the prober's storage is exactly the probe records above and "
+            "nothing else: every slot is accounted for, so no probe wrote a "
+            "word this case does not state")
+        e.expect_storage_exact(
+            "WETH", WETH_ADDR,
+            {balance_slot(HOLDER_ADDR): VIEW_HELD, allow: VIEW_ALLOWED},
+            "a view call changes nothing: WETH's storage after the probes is "
+            "exactly the storage it started with")
+        e.expect_ether(
+            "WETH", WETH_ADDR, e.pre_ether(WETH_ADDR),
+            "and no ether moves either -- these calls carry zero value and "
+            "WETH pays nothing out")
+        e.expect_ether(
+            "prober", PROBER_ADDR, 0,
+            "the prober neither sends nor receives ether; all it gains is "
+            "storage")
+        e.expect_ether(
+            "trigger", trigger, e.pre_ether(trigger) - e.fee(0),
+            "the triggering EOA gains nothing and only pays its fee")
+
+    return build_fixture("view_static", alloc, txs, expect)
+
+
 def main():
     weth_code = get_weth_code_hex()
     cases = [
@@ -896,6 +1210,7 @@ def main():
         ("03-transfer.json", case_transfer),
         ("04-approve-transferFrom.json", case_approve_transferFrom),
         ("05-reentrancy.json", case_reentrancy),
+        ("06-view-static.json", case_view_static),
     ]
 
     # Every case is built and checked before any file is written, so an
