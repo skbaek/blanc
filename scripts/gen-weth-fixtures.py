@@ -1450,6 +1450,21 @@ GUARD_OWNER_B = "0x" + "a11b".rjust(40, "0")
 GUARD_OWNER_C = "0x" + "a11c".rjust(40, "0")
 
 
+def assert_not_a_valid_address(slot, label):
+    """`approve` and `transferFrom`'s `updateAllowance` both revert when the
+    allowance key `keccak256(src ‖ dst)` happens to be a valid address word --
+    the deliberate fail-on-collision design (`WETH_DEVIATIONS.md`, third row).
+    Every allowance-writing case below therefore carries a precondition: its
+    key is NOT such a word. Checked here rather than assumed, so a case that
+    somehow drew a colliding key aborts loudly instead of quietly becoming a
+    test of the collision branch."""
+    assert slot >> 160 != 0, (
+        f"{label}: the allowance key 0x{slot:064x} has zero upper 96 bits, so "
+        f"it IS a valid address word and Blanc's collision guard would reject "
+        f"the write. This case would then be testing the collision branch "
+        f"instead of what it says it tests.")
+
+
 def case_guard_balance(weth_code):
     """The two balance guards: `transfer` and `withdraw` must refuse an amount
     larger than the caller's internal balance.
@@ -1563,6 +1578,178 @@ def case_guard_balance(weth_code):
     return build_fixture("guard_balance", alloc, txs, expect)
 
 
+def case_guard_allowance(weth_code):
+    """The allowance guard, and the write side of the allowance key.
+
+    Three owners, all with the same 5-wad internal balance, differing only in
+    what they have allowed the prober: nothing, too little, and enough. The
+    prober is the spender in each, so the key under test is
+    `keccak256(owner ‖ prober)` and `updateAllowance`'s "if the caller is the
+    source, skip the allowance entirely" shortcut is not in play.
+
+    The rollback probe is the sharp one. `transferFrom` debits the source and
+    credits the destination BEFORE it ever looks at the allowance, so a
+    refusal on the allowance has to undo a balance move that already happened
+    inside the frame. Reading owner B's balance back afterwards is what
+    demonstrates that, and it is not something "nothing changed" would tell
+    you, because the moved-then-restored balance is only observable as the
+    absence of a change that the code demonstrably made.
+
+    Owner C's leftover is the other point. Step 1 recorded that
+    `04-approve-transferFrom`'s allowance expectation does not pin
+    `keccak256(src ‖ dst)`, because it expects the residue ZERO and a
+    zero-valued expectation holds under a wrong key too; Step 3 pinned the
+    READ side with a nonzero `allowance()` probe. Here a transferFrom of 2 wad
+    against a 5-wad allowance must leave 3 wad AT THAT KEY -- a nonzero
+    residue written by the mutating path, which is the write side, and which
+    probe 4 then reads back through the view's independent derivation of the
+    same key."""
+    trigger_key = 10
+    trigger = derive_address(trigger_key)
+    bal = 5 * WAD_1_ETH        # every owner's internal balance
+    allowed_b = 1 * WAD_1_ETH  # too little for what the prober asks of B
+    allowed_c = 5 * WAD_1_ETH  # more than the prober asks of C
+    wad = 2 * WAD_1_ETH        # what the prober asks of B and of C
+    small = 1 * WAD_1_ETH      # what the prober asks of A, which allowed none
+    residue = allowed_c - wad  # 3 wad: nonzero, which is the whole point
+    allow_a = allowance_slot(GUARD_OWNER_A, PROBER_ADDR)
+    allow_b = allowance_slot(GUARD_OWNER_B, PROBER_ADDR)
+    allow_c = allowance_slot(GUARD_OWNER_C, PROBER_ADDR)
+    for s, lbl in ((allow_a, "A"), (allow_b, "B"), (allow_c, "C")):
+        assert_not_a_valid_address(s, f"guard_allowance owner {lbl}")
+    probes = [
+        Probe("transferFrom(ownerA, dst, 1 wad) [no allowance]",
+              "transferFrom(address,address,uint256)",
+              [GUARD_OWNER_A, GUARD_DST, small], gas=PROBE_GAS,
+              reverts_because=(
+                  "owner A has approved the prober nothing at all, and "
+                  "`updateAllowance` reverts when the allowance is less than "
+                  "the amount. Owner A's balance is 5 wad, so the money is "
+                  "there: what is missing is the permission")),
+        Probe("transferFrom(ownerB, dst, 2 wad) [allowance too small]",
+              "transferFrom(address,address,uint256)",
+              [GUARD_OWNER_B, GUARD_DST, wad], gas=PROBE_GAS,
+              reverts_because=(
+                  "owner B approved the prober 1 wad and the prober asks for "
+                  "2. `updateAllowance` reverts rather than transferring the "
+                  "1 wad it may: an allowance is not a partial-fill order")),
+        Probe("balanceOf(ownerB)", "balanceOf(address)", [GUARD_OWNER_B],
+              words=[(bal,
+                      "and owner B still holds all 5 wad. `transferFrom` "
+                      "debits the source and credits the destination BEFORE "
+                      "it checks the allowance, so the refusal above had to "
+                      "roll back a debit the code had already performed in "
+                      "that frame -- this is the observation that a bare "
+                      "'nothing changed' cannot make")],
+              gas=PROBE_GAS),
+        Probe("transferFrom(ownerC, dst, 2 wad) [within allowance]",
+              "transferFrom(address,address,uint256)",
+              [GUARD_OWNER_C, GUARD_DST, wad], gas=PROBE_GAS,
+              words=[(1,
+                      "the same selector at the same gas cap, differing only "
+                      "in how much the owner allowed, is HONOURED and "
+                      "ABI-returns true: the two refusals above are the "
+                      "allowance guard, not a prober that cannot call "
+                      "transferFrom at all")]),
+        Probe("allowance(ownerC, prober)", "allowance(address,address)",
+              [GUARD_OWNER_C, PROBER_ADDR],
+              words=[(residue,
+                      "owner C allowed 5 wad, the prober spent 2, and 3 wad "
+                      "remain. A NONZERO residue is what pins the allowance "
+                      "key on the MUTATING path: a transferFrom that wrote "
+                      "the leftover to some other key would leave this read "
+                      "-- which derives keccak256(src || dst) independently, "
+                      "in the `allowance` view -- returning 0")],
+              gas=PROBE_GAS),
+        Probe("balanceOf(dst)", "balanceOf(address)", [GUARD_DST],
+              words=[(wad,
+                      "the recipient holds exactly the one honoured "
+                      "transferFrom's 2 wad, not the 3 wad it would hold if "
+                      "either refused call had also gone through")],
+              gas=PROBE_GAS),
+    ]
+    alloc = {
+        WETH_ADDR: {"nonce": "0x1", "balance": q(0), "code": weth_code,
+                     "storage": {addr32(GUARD_OWNER_A): word32(bal),
+                                 addr32(GUARD_OWNER_B): word32(bal),
+                                 addr32(GUARD_OWNER_C): word32(bal),
+                                 word32(allow_b): word32(allowed_b),
+                                 word32(allow_c): word32(allowed_c)}},
+        PROBER_ADDR: {"nonce": "0x1", "balance": q(0),
+                       "code": "0x" + prober_bytecode(WETH_ADDR, probes).hex(),
+                       "storage": {}},
+        trigger: eoa_alloc(WAD_1_ETH),
+    }
+    txs = [{
+        "type": "0x0", "chainId": "0x1", "nonce": "0x0",
+        "gasPrice": q(GAS_PRICE), "gas": "0x2dc6c0", "to": PROBER_ADDR,
+        "value": "0x0", "input": "0x",
+        "v": "0x0", "r": "0x0", "s": "0x0", "secretKey": privkey_hex(trigger_key),
+    }]
+
+    def expect(e):
+        a, b, c = (balance_slot(GUARD_OWNER_A), balance_slot(GUARD_OWNER_B),
+                   balance_slot(GUARD_OWNER_C))
+        dst_slot = balance_slot(GUARD_DST)
+        e.expect_tx_succeeded(
+            0, "the prober transaction runs to completion: a refused "
+               "transferFrom fails inside its own frame, so the probes after "
+               "it still record what they were asked to")
+        for i, p in enumerate(probes):
+            expect_probe(e, "prober", PROBER_ADDR, i, p)
+        e.expect_storage_exact(
+            "prober", PROBER_ADDR, probe_storage(probes),
+            "the prober's storage is exactly the six probe records above: two "
+            "refusals (a zero flag beside a set marker) and four answers")
+        e.expect_slot(
+            "WETH", WETH_ADDR, allow_c, "allowance[ownerC][prober]", residue,
+            "THE WRITE SIDE OF THE ALLOWANCE KEY. The honoured transferFrom "
+            "wrote the 3-wad leftover to keccak256(ownerC || prober) in the "
+            "committed post-state. Every earlier allowance expectation in "
+            "this suite expected ZERO there, which holds under a wrong key "
+            "too; a nonzero residue does not")
+        e.expect_slot(
+            "WETH", WETH_ADDR, allow_b, "allowance[ownerB][prober]", allowed_b,
+            "owner B's 1-wad allowance is still whole -- the refused call "
+            "consumed none of it, not even the part it could have covered")
+        e.expect_slot(
+            "WETH", WETH_ADDR, allow_a, "allowance[ownerA][prober]", 0,
+            "and no allowance appeared for owner A: a refused transferFrom "
+            "does not leave a permission behind")
+        e.expect_slot(
+            "WETH", WETH_ADDR, a, "balance[ownerA]", bal,
+            "owner A keeps all 5 wad")
+        e.expect_slot(
+            "WETH", WETH_ADDR, b, "balance[ownerB]", bal,
+            "owner B keeps all 5 wad -- the debit that ran before the "
+            "allowance check was rolled back in full")
+        e.expect_slot(
+            "WETH", WETH_ADDR, c, "balance[ownerC]", bal - wad,
+            "only owner C, who had approved enough, is debited, and by "
+            "exactly the 2 wad moved")
+        e.expect_storage_exact(
+            "WETH", WETH_ADDR,
+            {a: bal, b: bal, c: bal - wad, dst_slot: wad,
+             allow_b: allowed_b, allow_c: residue},
+            "and that is WETH's entire storage: three balances, the "
+            "recipient's credit, and the two surviving allowances. Neither "
+            "refusal left a partial debit, a stray credit or a residue "
+            "anywhere")
+        e.expect_ether(
+            "WETH", WETH_ADDR, 0,
+            "the allowance path moves no ether in either direction, honoured "
+            "or refused")
+        e.expect_ether(
+            "prober", PROBER_ADDR, 0,
+            "and the prober, which owns none of the balances it moved, "
+            "receives nothing")
+        e.expect_ether(
+            "trigger", trigger, e.pre_ether(trigger) - e.fee(0),
+            "the triggering EOA gains nothing and only pays its fee")
+
+    return build_fixture("guard_allowance", alloc, txs, expect)
+
+
 def main():
     weth_code = get_weth_code_hex()
     cases = [
@@ -1574,6 +1761,7 @@ def main():
         ("06-view-static.json", case_view_static),
         ("07-view-dynamic.json", case_view_dynamic),
         ("08-guard-balance.json", case_guard_balance),
+        ("09-guard-allowance.json", case_guard_allowance),
     ]
 
     # Every case is built and checked before any file is written, so an
