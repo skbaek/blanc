@@ -1750,6 +1750,317 @@ def case_guard_allowance(weth_code):
     return build_fixture("guard_allowance", alloc, txs, expect)
 
 
+# A calldata word whose low 160 bits are a real, funded address and whose
+# upper 96 bits are not zero. Deployed WETH9's Solidity 0.4.x decoder ignores
+# those upper bits, so it would resolve this word to GUARD_GUY; Blanc's
+# mutating paths reject it outright, and Blanc's views take the whole word as
+# a storage key. That divergence is the first row of `WETH_DEVIATIONS.md`, and
+# nothing has ever executed it.
+DIRTY_WORD = (0xDEADBEEF << 160) | int(GUARD_GUY, 16)
+
+
+def case_deviation_address(weth_code):
+    """`WETH_DEVIATIONS.md` claim 1: address words with nonzero upper 96 bits.
+
+    The registry makes two statements about such a word and this case tests
+    both. Mutating paths -- `approve`, `transfer`, `transferFrom` in either
+    address position -- must REJECT it. The `balanceOf` and `allowance` views
+    must instead take the full word as storage-key material, with no address
+    check and no masking.
+
+    The pre-state is what makes the second half legible: WETH holds 4 wad at
+    the dirty word's own slot and 6 wad at GUARD_GUY's slot, and the dirty
+    word's low 160 bits ARE GUARD_GUY. A view that masked to 160 bits like
+    WETH9's decoder would answer 6; a view that applied the mutating paths'
+    address check would not answer at all. It answers 4.
+
+    Each rejection is paired with the same selector, at the same gas cap, on
+    the canonical address the dirty word aliases to -- and those succeed."""
+    trigger_key = 11
+    trigger = derive_address(trigger_key)
+    dirty_held = 4 * WAD_1_ETH   # what sits at the dirty word's own slot
+    guy_held = 6 * WAD_1_ETH     # what sits at the address it aliases to
+    prober_held = 3 * WAD_1_ETH  # the prober's own balance, to transfer from
+    owner_held = 2 * WAD_1_ETH   # the transferFrom source's balance
+    allowed = 2 * WAD_1_ETH      # what that source allows the prober
+    wad = WAD_1_ETH
+    approve_key = allowance_slot(PROBER_ADDR, GUARD_GUY)
+    spend_key = allowance_slot(GUARD_OWNER_A, PROBER_ADDR)
+    assert_not_a_valid_address(approve_key, "deviation_address approve key")
+    assert_not_a_valid_address(spend_key, "deviation_address transferFrom key")
+    assert DIRTY_WORD >> 160 != 0 and DIRTY_WORD & ((1 << 160) - 1) == int(
+        GUARD_GUY, 16), "the dirty word must alias exactly to GUARD_GUY"
+    probes = [
+        Probe("balanceOf(dirty word)", "balanceOf(address)", [DIRTY_WORD],
+              words=[(dirty_held,
+                      "the balanceOf VIEW takes the whole 256-bit calldata "
+                      "word as its storage key: no address check, and no "
+                      "masking to the low 160 bits. It answers 4 wad, the "
+                      "value at the dirty word's own slot")],
+              gas=PROBE_GAS),
+        Probe("balanceOf(guy)", "balanceOf(address)", [GUARD_GUY],
+              words=[(guy_held,
+                      "while the canonical address the dirty word aliases to "
+                      "holds 6 wad at a DIFFERENT slot. WETH9's decoder would "
+                      "have answered 6 to the query above; the two answers "
+                      "differ, so the previous probe demonstrably did not "
+                      "mask")],
+              gas=PROBE_GAS),
+        Probe("transfer(dirty word, 1 wad)", "transfer(address,uint256)",
+              [DIRTY_WORD, wad], gas=PROBE_GAS,
+              reverts_because=(
+                  "DEVIATION CLAIM 1, transfer: `transferTestDst` runs "
+                  "`checkNonAddress` on the destination and reverts when any "
+                  "of the upper 96 bits is set. Deployed WETH9 would have "
+                  "credited the low-160-bit address instead")),
+        Probe("approve(dirty word, 1 wad)", "approve(address,uint256)",
+              [DIRTY_WORD, wad], gas=PROBE_GAS,
+              reverts_because=(
+                  "DEVIATION CLAIM 1, approve: the approvee is checked before "
+                  "the allowance key is even computed, so no allowance is "
+                  "created for the aliased address -- nor for the dirty word")),
+        Probe("transferFrom(dirty word, guy, 1 wad) [dirty source]",
+              "transferFrom(address,address,uint256)",
+              [DIRTY_WORD, GUARD_GUY, wad], gas=PROBE_GAS,
+              reverts_because=(
+                  "DEVIATION CLAIM 1, transferFrom's SOURCE position: the "
+                  "source is checked first of all, so a dirty word cannot be "
+                  "used to spend the aliased address's balance")),
+        Probe("transferFrom(ownerA, dirty word, 1 wad) [dirty destination]",
+              "transferFrom(address,address,uint256)",
+              [GUARD_OWNER_A, DIRTY_WORD, wad], gas=PROBE_GAS,
+              reverts_because=(
+                  "DEVIATION CLAIM 1, transferFrom's DESTINATION position, "
+                  "which is checked only AFTER the source has been debited -- "
+                  "so this rejection also has to roll that debit back, and "
+                  "owner A's balance below shows it did")),
+        Probe("transfer(guy, 1 wad) [canonical]", "transfer(address,uint256)",
+              [GUARD_GUY, wad], gas=PROBE_GAS,
+              words=[(1,
+                      "the same selector, the same gas cap, the same amount, "
+                      "and the address the dirty word aliases to: HONOURED. "
+                      "The rejection above is the address check, not the "
+                      "prober and not the gas")]),
+        Probe("approve(guy, 1 wad) [canonical]", "approve(address,uint256)",
+              [GUARD_GUY, wad], gas=PROBE_GAS,
+              words=[(1, "likewise for approve")]),
+        Probe("transferFrom(ownerA, guy, 1 wad) [canonical]",
+              "transferFrom(address,address,uint256)",
+              [GUARD_OWNER_A, GUARD_GUY, wad], gas=PROBE_GAS,
+              words=[(1, "and likewise for transferFrom, in both address "
+                         "positions at once")]),
+    ]
+    alloc = {
+        WETH_ADDR: {"nonce": "0x1", "balance": q(0), "code": weth_code,
+                     "storage": {word32(DIRTY_WORD): word32(dirty_held),
+                                 addr32(GUARD_GUY): word32(guy_held),
+                                 addr32(PROBER_ADDR): word32(prober_held),
+                                 addr32(GUARD_OWNER_A): word32(owner_held),
+                                 word32(spend_key): word32(allowed)}},
+        PROBER_ADDR: {"nonce": "0x1", "balance": q(0),
+                       "code": "0x" + prober_bytecode(WETH_ADDR, probes).hex(),
+                       "storage": {}},
+        trigger: eoa_alloc(WAD_1_ETH),
+    }
+    txs = [{
+        "type": "0x0", "chainId": "0x1", "nonce": "0x0",
+        "gasPrice": q(GAS_PRICE), "gas": "0x2dc6c0", "to": PROBER_ADDR,
+        "value": "0x0", "input": "0x",
+        "v": "0x0", "r": "0x0", "s": "0x0", "secretKey": privkey_hex(trigger_key),
+    }]
+
+    def expect(e):
+        guy_slot = balance_slot(GUARD_GUY)
+        prober_slot = balance_slot(PROBER_ADDR)
+        owner_slot = balance_slot(GUARD_OWNER_A)
+        e.expect_tx_succeeded(
+            0, "the prober transaction runs to completion; each rejected "
+               "call fails inside its own frame")
+        for i, p in enumerate(probes):
+            expect_probe(e, "prober", PROBER_ADDR, i, p)
+        e.expect_storage_exact(
+            "prober", PROBER_ADDR, probe_storage(probes),
+            "the prober's storage is exactly the nine probe records above: "
+            "four rejections and five answers")
+        e.expect_slot(
+            "WETH", WETH_ADDR, DIRTY_WORD, "balance[dirty word]", dirty_held,
+            "the dirty word's own slot is exactly as it started: none of the "
+            "four rejected calls wrote through it either")
+        e.expect_slot(
+            "WETH", WETH_ADDR, guy_slot, "balance[guy]",
+            guy_held + wad + wad,
+            "the canonical address gained exactly the two honoured transfers' "
+            "2 wad -- not the 3 wad it would hold if WETH9's masking had let "
+            "the rejected transfer through to it as well")
+        e.expect_slot(
+            "WETH", WETH_ADDR, prober_slot, "balance[prober]",
+            prober_held - wad,
+            "and the prober paid for exactly one transfer: the rejected one "
+            "cost it nothing")
+        e.expect_slot(
+            "WETH", WETH_ADDR, owner_slot, "balance[ownerA]",
+            owner_held - wad,
+            "owner A is debited once, by the honoured transferFrom. The "
+            "rejection on the dirty DESTINATION happened after owner A had "
+            "already been debited in that frame, and was rolled back")
+        e.expect_slot(
+            "WETH", WETH_ADDR, approve_key, "allowance[prober][guy]", wad,
+            "the honoured approve wrote its 1 wad to keccak256(prober || "
+            "guy); the rejected approve on the dirty word created no "
+            "allowance at all")
+        e.expect_slot(
+            "WETH", WETH_ADDR, spend_key, "allowance[ownerA][prober]",
+            allowed - wad,
+            "and the honoured transferFrom consumed 1 of owner A's 2 wad "
+            "allowance, leaving a nonzero 1 wad at that key")
+        e.expect_storage_exact(
+            "WETH", WETH_ADDR,
+            {DIRTY_WORD: dirty_held, guy_slot: guy_held + 2 * wad,
+             prober_slot: prober_held - wad, owner_slot: owner_held - wad,
+             approve_key: wad, spend_key: allowed - wad},
+            "and that is WETH's entire storage: the four rejections left no "
+            "slot behind, under the dirty word, under the address it aliases "
+            "to, or anywhere else")
+        e.expect_ether(
+            "WETH", WETH_ADDR, 0,
+            "no ether is involved on any of these paths")
+        e.expect_ether(
+            "prober", PROBER_ADDR, 0, "and the prober receives none")
+        e.expect_ether(
+            "trigger", trigger, e.pre_ether(trigger) - e.fee(0),
+            "the triggering EOA gains nothing and only pays its fee")
+
+    return build_fixture("deviation_address", alloc, txs, expect)
+
+
+def case_deviation_value(weth_code):
+    """`WETH_DEVIATIONS.md` claim 4: ether sent to a recognized non-deposit
+    call.
+
+    This is the one that asserts a SUCCESS, and it is the claim most likely to
+    surprise a reader. Every public entry point of deployed WETH9 except the
+    fallback and `deposit()` is nonpayable and rejects a call carrying value.
+    Blanc's dispatcher routes on the selector alone and never looks at
+    `callvalue`, and only the deposit implementation credits it -- so a
+    `transfer` carrying 1 wad of ether SUCCEEDS as a transfer, the contract
+    keeps the ether, and nobody is credited for it.
+
+    The pre-state starts exactly backed: WETH holds 5 wad of ether and owes
+    5 wad internally. Afterwards it holds 6 and still owes 5. That surplus is
+    the observable consequence the registry describes, and the second
+    transaction reads it back out of the contract: `totalSupply()` -- which is
+    Blanc's own ether balance -- reports 6 wad while the internal balances
+    that could ever be redeemed still sum to 5.
+
+    Note what this is not. The pre-state is solvent and stays solvent; the
+    surplus is unbacked ether, not an unbacked balance."""
+    payer_key, trigger_key = 12, 13
+    payer = derive_address(payer_key)
+    trigger = derive_address(trigger_key)
+    backing = 5 * WAD_1_ETH   # WETH's ether, and the payer's internal balance
+    sent = 1 * WAD_1_ETH      # the value the transfer call carries
+    moved = 2 * WAD_1_ETH     # the wad the transfer moves
+    probes = [
+        Probe("totalSupply()", "totalSupply()", [],
+              words=[(backing + sent,
+                      "totalSupply() is the contract's OWN ether balance, and "
+                      "it now reads 6 wad: the 1 wad the transfer call "
+                      "carried really did stay with the contract")],
+              gas=PROBE_GAS),
+        Probe("balanceOf(payer)", "balanceOf(address)", [payer],
+              words=[(backing - moved,
+                      "but the sender is credited NOTHING for it. Its "
+                      "internal balance is 5 wad minus the 2 it transferred, "
+                      "not 5 minus 2 plus the 1 it sent -- had the same ether "
+                      "arrived on the fallback, deposit would have minted it")],
+              gas=PROBE_GAS),
+        Probe("balanceOf(dst)", "balanceOf(address)", [GUARD_DST],
+              words=[(moved,
+                      "and the recipient has the 2 wad transferred, so the "
+                      "internal balances still sum to 5 while the contract "
+                      "holds 6: exactly 1 wad of the contract's ether is now "
+                      "backed by no internal balance at all, and no call can "
+                      "ever withdraw it")],
+              gas=PROBE_GAS),
+    ]
+    alloc = {
+        WETH_ADDR: {"nonce": "0x1", "balance": q(backing), "code": weth_code,
+                     "storage": {addr32(payer): word32(backing)}},
+        PROBER_ADDR: {"nonce": "0x1", "balance": q(0),
+                       "code": "0x" + prober_bytecode(WETH_ADDR, probes).hex(),
+                       "storage": {}},
+        payer: eoa_alloc(3 * WAD_1_ETH),
+        trigger: eoa_alloc(WAD_1_ETH),
+    }
+    txs = [
+        {
+            "type": "0x0", "chainId": "0x1", "nonce": "0x0",
+            "gasPrice": q(GAS_PRICE), "gas": "0x186a0", "to": WETH_ADDR,
+            "value": q(sent),
+            "input": "0x" + calldata(
+                "transfer(address,uint256)", GUARD_DST, moved).hex(),
+            "v": "0x0", "r": "0x0", "s": "0x0",
+            "secretKey": privkey_hex(payer_key),
+        },
+        {
+            "type": "0x0", "chainId": "0x1", "nonce": "0x0",
+            "gasPrice": q(GAS_PRICE), "gas": "0x1e8480", "to": PROBER_ADDR,
+            "value": "0x0", "input": "0x",
+            "v": "0x0", "r": "0x0", "s": "0x0",
+            "secretKey": privkey_hex(trigger_key),
+        },
+    ]
+
+    def expect(e):
+        payer_slot, dst_slot = balance_slot(payer), balance_slot(GUARD_DST)
+        e.expect_tx_succeeded(
+            0, "DEVIATION CLAIM 4. A `transfer` carrying 1 wad of ether "
+               "SUCCEEDS. Deployed WETH9 declares every entry point but the "
+               "fallback and deposit() nonpayable and would have rejected "
+               "this call outright; Blanc's dispatcher never looks at "
+               "callvalue")
+        e.expect_ether(
+            "WETH", WETH_ADDR, backing + sent,
+            "and the contract keeps the ether: its balance rises by exactly "
+            "the value sent, on a call that was not a deposit")
+        e.expect_slot(
+            "WETH", WETH_ADDR, payer_slot, "balance[payer]", backing - moved,
+            "while the sender is credited nothing for it -- debited the 2 wad "
+            "it transferred and not credited the 1 wad it sent. This is the "
+            "asymmetry the deviation names")
+        e.expect_slot(
+            "WETH", WETH_ADDR, dst_slot, "balance[dst]", moved,
+            "the transfer itself behaves normally: the recipient gets exactly "
+            "the wad named in the calldata")
+        e.expect_storage_exact(
+            "WETH", WETH_ADDR, {payer_slot: backing - moved, dst_slot: moved},
+            "and the sent wad is credited to NO key anywhere: the internal "
+            "balances still sum to 5 while the contract now holds 6. That "
+            "surplus wad is unredeemable -- the pre-state was exactly backed "
+            "and the post-state is over-backed, so this is unbacked ether, "
+            "not an unbacked balance")
+        e.expect_tx_succeeded(
+            1, "the prober transaction then reads the consequence back out "
+               "of the contract")
+        for i, p in enumerate(probes):
+            expect_probe(e, "prober", PROBER_ADDR, i, p)
+        e.expect_storage_exact(
+            "prober", PROBER_ADDR, probe_storage(probes),
+            "the prober's storage is exactly those three answers")
+        e.expect_ether(
+            "payer", payer, e.pre_ether(payer) - sent - e.fee(0),
+            "the payer is out the wad it sent, plus its fee, and holds no "
+            "claim to it")
+        e.expect_ether(
+            "prober", PROBER_ADDR, 0,
+            "the prober neither sends nor receives ether")
+        e.expect_ether(
+            "trigger", trigger, e.pre_ether(trigger) - e.fee(1),
+            "the triggering EOA gains nothing and only pays its fee")
+
+    return build_fixture("deviation_value", alloc, txs, expect)
+
+
 def main():
     weth_code = get_weth_code_hex()
     cases = [
@@ -1762,6 +2073,8 @@ def main():
         ("07-view-dynamic.json", case_view_dynamic),
         ("08-guard-balance.json", case_guard_balance),
         ("09-guard-allowance.json", case_guard_allowance),
+        ("10-deviation-address.json", case_deviation_address),
+        ("11-deviation-value.json", case_deviation_value),
     ]
 
     # Every case is built and checked before any file is written, so an
