@@ -188,6 +188,73 @@ theorem wethSpec_post_eq : wethSpec.Post = Postcond := by
 theorem wethSpec_stateInv_eq : wethSpec.StateInv = State.Inv := by
   funext ca w; exact propext wethSpec_stateInv_iff
 
+/-! ### WETH instances of the hoisted `State.Inv` tier
+
+Each is the corresponding `ContractSpec` lemma at `wethSpec`, transported by
+the bridges.  They exist only while the rungs above them still speak WETH; a
+later cluster of the hoist removes them along with their consumers. -/
+
+theorem State.Inv.incrNonce {wa a : Adr} {w : Jaune.State}
+    (h : State.Inv wa w) : State.Inv wa (w.incrNonce a) :=
+  wethSpec_stateInv_iff.mp ((wethSpec_stateInv_iff.mpr h).incrNonce)
+
+theorem State.Inv.addBal {wa a : Adr} {val : B256} {w : Jaune.State}
+    (hsum : sum w.bal + val.toNat < 2 ^ 256)
+    (h : State.Inv wa w) : State.Inv wa (w.addBal a val) :=
+  wethSpec_stateInv_iff.mp
+    (ContractSpec.StateInv.addBal hsum (wethSpec_stateInv_iff.mpr h))
+
+theorem State.Inv.subBal {wa a : Adr} {val : B256} {w w' : Jaune.State}
+    (hne : a ≠ wa) (h_sub : w.subBal a val = some w')
+    (h : State.Inv wa w) : State.Inv wa w' :=
+  wethSpec_stateInv_iff.mp
+    (ContractSpec.StateInv.subBal hne h_sub (wethSpec_stateInv_iff.mpr h))
+
+theorem State.Inv.destroyAccount {wa a : Adr} {w : Jaune.State}
+    (hne : a ≠ wa) (h : State.Inv wa w) : State.Inv wa (destroyAccount w a) :=
+  wethSpec_stateInv_iff.mp
+    (ContractSpec.StateInv.destroyAccount hne (wethSpec_stateInv_iff.mpr h))
+
+theorem State.Inv.foldl_destroyAccount {wa : Adr} {as : List Adr} {w : Jaune.State}
+    (hne : ∀ a ∈ as, a ≠ wa) (h : State.Inv wa w) :
+    State.Inv wa (as.foldl Jaune.destroyAccount w) :=
+  wethSpec_stateInv_iff.mp
+    (ContractSpec.StateInv.foldl_destroyAccount hne (wethSpec_stateInv_iff.mpr h))
+
+lemma State.Inv.setStor_ne {wa a : Adr} {s : Stor} {w : Jaune.State}
+    (hne : a ≠ wa) (h : State.Inv wa w) : State.Inv wa (w.setStor a s) :=
+  wethSpec_stateInv_iff.mp
+    (ContractSpec.StateInv.setStor_ne hne (wethSpec_stateInv_iff.mpr h))
+
+lemma State.Inv.setCode_ne {wa a : Adr} {cd : ByteArray} {w : Jaune.State}
+    (hne : a ≠ wa) (h : State.Inv wa w) : State.Inv wa (w.setCode a cd) :=
+  wethSpec_stateInv_iff.mp
+    (ContractSpec.StateInv.setCode_ne hne (wethSpec_stateInv_iff.mpr h))
+
+lemma State.Inv.of_postcond {wa : Adr} {sevm : Sevm} {devm : Devm}
+    (h_post : Postcond wa sevm devm)
+    (h_code : some (devm.state.getCode wa).toList = Prog.compile weth) :
+    State.Inv wa devm.state :=
+  wethSpec_stateInv_iff.mp
+    (ContractSpec.StateInv.of_postcond (wethSpec_post_iff.mpr h_post) h_code)
+
+lemma Precond.of_inv_benvAfterTransfer {wa : Adr} {msg : Msg} {benv : Benv}
+    (h_ne : msg.shouldTransferValue = true → msg.caller ≠ wa)
+    (h_val0 : msg.shouldTransferValue = false → msg.currentTarget = wa → msg.value = 0)
+    (hb : msg.benvAfterTransfer = .ok benv)
+    (h_inv : State.Inv wa msg.benv.state) :
+    Precond wa (initSevm (msg.withBenv benv)) (initDevm (msg.withBenv benv)) :=
+  wethSpec_pre_iff.mp
+    (ContractSpec.Pre.of_inv_benvAfterTransfer h_ne h_val0 hb (wethSpec_stateInv_iff.mpr h_inv))
+
+lemma State.Inv.of_benvAfterTransfer {wa : Adr} {msg : Msg} {benv : Benv}
+    (h_ne : msg.shouldTransferValue = true → msg.caller ≠ wa)
+    (hb : msg.benvAfterTransfer = .ok benv)
+    (h_inv : State.Inv wa msg.benv.state) :
+    State.Inv wa benv.state :=
+  wethSpec_stateInv_iff.mp
+    (ContractSpec.StateInv.of_benvAfterTransfer h_ne hb (wethSpec_stateInv_iff.mpr h_inv))
+
 lemma Precond.state_eq {wa sevm devm devm'}
     (h_pc : Precond wa sevm devm) (h_eq : devm'.state = devm.state) :
     Precond wa sevm devm' :=
@@ -2176,31 +2243,29 @@ lemma weth_inv {sevm : Sevm} {s r}
 
 
 
+/-- WETH's own frame-level obligation — the one input `ContractSpec.preserves_inv`
+cannot supply.  This is the original first bullet of `weth_preserves_solvent`,
+unchanged. -/
+theorem wethSpec_sound (wa : Adr) : wethSpec.Sound wa := by
+  simp only [ContractSpec.Sound, wethSpec_prog_eq, wethSpec_pre_eq, wethSpec_post_eq]
+  intro sevm pre post run eq; rw [← eq]
+  dsimp [Prog.Run] at run
+  intro ih cond; apply weth_inv cond _ run
+  intro pc' sevm' devm' exn'
+  cases exn'; {simp only [ifOk, implies_true]}
+  apply ih
+
+theorem wethSpec_preserves (wa : Adr) : wethSpec.Preserves wa :=
+  wethSpec.preserves_inv wa (wethSpec_sound wa)
+
 theorem weth_preserves_solvent (wa : Adr) :
     ∀ sevm pre post,
       Exec 0 sevm pre (.ok post)  →
       (sevm.currentTarget = wa → some sevm.code.toList = Prog.compile weth) →
       Precond wa sevm pre →
       Postcond wa sevm post := by
-  have main := wethSpec.preserves_inv wa ?body
-  case _ =>
-    simpa only [wethSpec_prog_eq, wethSpec_pre_eq, wethSpec_post_eq] using main
-  case body =>
-    simp only [wethSpec_prog_eq, wethSpec_pre_eq, wethSpec_post_eq]
-    intro sevm pre post run eq; rw [← eq]
-    dsimp [Prog.Run] at run
-    intro ih cond; apply weth_inv cond _ run
-    intro pc' sevm' devm' exn'
-    cases exn'; {simp only [ifOk, implies_true]}
-    apply ih
-
-
-
--- Solvency preservation above the frame level : the theorems below lift
--- `weth_preserves_solvent` through each layer of the executable semantics in
--- Jaune/Execution.lean, stated directly over the raw execution functions.
-
-
+  simpa only [ContractSpec.Preserves, wethSpec_prog_eq, wethSpec_pre_eq, wethSpec_post_eq]
+    using wethSpec_preserves wa
 -- Counterpart of `weth_preserves_solvent` for the total executable `exec`.  With
 -- sufficiency proved in Jaune there is no fuel to quantify away: the
 -- hypothesis is a plain equation about the interpreter.
@@ -2209,169 +2274,9 @@ theorem exec_preserves_solvent (wa : Adr)
     (h_run : exec ⟨0, sevm, pre⟩ = .ok post)
     (h_code : sevm.currentTarget = wa → some sevm.code.toList = Prog.compile weth)
     (h_pc : Precond wa sevm pre) : Postcond wa sevm post := by
-  obtain ⟨exc⟩ := (exec_iff_exec_eq 0 sevm pre (.ok post)).mpr h_run
-  exact weth_preserves_solvent wa sevm pre post exc h_code h_pc
-
-/-! ### Atomic `State.Inv`-preservation lemmas
-
-`processTransaction` mutates the world state through exactly five operations:
-`incrNonce`, `subBal`, `processMessageCall`, `addBal`, and `destroyAccount`.
-Each preserves `State.Inv wa` under the minimal side condition noted below.
-The `code` field survives every op (all of them touch only `bal`/`nonce`/erase
-a foreign account); `solvent` needs `a ≠ wa` wherever `wa`'s own balance could
-drop; `nof` (`SumNof`) survives the *decreasing* ops for free but for `addBal`
-is deferred to the caller via a hypothesis, to be discharged by the global
-wei-conservation argument (a transaction moves but never mints ether, so the
-total balance is non-increasing — hence no overflow bound is needed on the
-theorem, unlike the withdrawal-carrying `applyBody`/`stateTransition`).
-
--/
-
--- Bumping a nonce leaves `code`, `bal`, and `stor` untouched.
-theorem State.Inv.incrNonce {wa a : Adr} {w : Jaune.State}
-    (h : State.Inv wa w) : State.Inv wa (w.incrNonce a) := by
-  have hbal : (w.incrNonce a).bal = w.bal := by
-    funext b
-    show ((w.incrNonce a).get b).bal = (w.get b).bal
-    by_cases hb : b = a
-    · subst hb; simp only [State.incrNonce, State.get_set_self]
-    · simp only [State.incrNonce, State.get_set_ne _ (Ne.symm hb)]
-  have hstor : (w.incrNonce a).getStor wa = w.getStor wa := by
-    show ((w.incrNonce a).get wa).stor = (w.get wa).stor
-    by_cases hb : wa = a
-    · subst hb; simp only [State.incrNonce, State.get_set_self]
-    · simp only [State.incrNonce, State.get_set_ne _ (Ne.symm hb)]
-  have hcode : (w.incrNonce a).getCode wa = w.getCode wa := by
-    show ((w.incrNonce a).get wa).code = (w.get wa).code
-    by_cases hb : wa = a
-    · subst hb; simp only [State.incrNonce, State.get_set_self]
-    · simp only [State.incrNonce, State.get_set_ne _ (Ne.symm hb)]
-  refine ⟨?_, ?_, ?_⟩
-  · rw [hcode]; exact h.code
-  · rw [hbal]; exact h.nof
-  · show Stor.Solvent ((w.incrNonce a).getStor wa) 0 ((w.incrNonce a).bal wa)
-    rw [hstor, hbal]; exact h.solvent
-
--- `addBal` can only raise a balance: `code` (bal field only) and `solvent`
--- (`bal wa` only grows) survive.  Both `nof` of the result *and* the absence of
--- a wrap at `wa` need the pre-sum bound `sum w.bal + val < 2 ^ 256`, supplied by
--- the caller's wei-conservation argument (a `SumNof` on the *result* would not
--- rule out a wrap, so it is not enough).
-theorem State.Inv.addBal {wa a : Adr} {val : B256} {w : Jaune.State}
-    (hsum : sum w.bal + val.toNat < 2 ^ 256)
-    (h : State.Inv wa w) : State.Inv wa (w.addBal a val) := by
-  have hnof_a : B256.Nof (w.bal a) val := by
-    unfold B256.Nof; have := @le_sum w.bal a; omega
-  have hinc : Increase a val w.bal (w.addBal a val).bal := by
-    intro b; constructor
-    · intro heq; subst heq
-      show w.bal a + val = ((w.addBal a val).get a).bal
-      unfold State.addBal; rw [State.setBal_get_self]; rfl
-    · intro hnb
-      show w.bal b = ((w.addBal a val).get b).bal
-      unfold State.addBal; rw [State.setBal_get_ne hnb]; rfl
-  have hsum' := sum_add_assoc hinc hnof_a
-  have hstor_wa : ((w.addBal a val).get wa).stor = (w.get wa).stor := by
-    unfold State.addBal; rw [State.setBal_get_stor]
-  have hbal_wa : (w.bal wa).toNat ≤ ((w.addBal a val).get wa).bal.toNat := by
-    by_cases hwa : a = wa
-    · subst hwa
-      unfold State.addBal; rw [State.setBal_get_self]
-      change (w.bal a).toNat ≤ (w.bal a + val).toNat
-      rw [B256.toNat_add_eq_of_nof _ _ hnof_a]; omega
-    · unfold State.addBal; rw [State.setBal_get_ne hwa]; exact Nat.le_refl _
-  refine ⟨?_, ?_, ?_⟩
-  · show some (((w.addBal a val).get wa).code).toList = Prog.compile weth
-    unfold State.addBal; rw [State.setBal_get_code]; exact h.code
-  · unfold Blanc.SumNof; omega
-  · show Stor.Solvent (((w.addBal a val).get wa).stor) 0 ((w.addBal a val).get wa).bal
-    have hsolv := h.solvent
-    unfold State.Solvent Stor.Solvent at hsolv
-    unfold Stor.Solvent
-    rw [hstor_wa]
-    simp only [B256.toNat_zero, Nat.add_zero] at hsolv ⊢
-    change wbsum ((w.get wa).stor) ≤ _
-    have : wbsum (w.getStor wa) = wbsum ((w.get wa).stor) := rfl
-    omega
-
--- `subBal` lowers a balance, so `nof` survives; dropping `wa`'s balance could
--- break solvency, hence `a ≠ wa`.  (In `processTransaction` the debited account
--- is the tx `sender`, which differs from the code-carrying `wa` by EIP-3607.)
-theorem State.Inv.subBal {wa a : Adr} {val : B256} {w w' : Jaune.State}
-    (hne : a ≠ wa) (h_sub : w.subBal a val = some w')
-    (h : State.Inv wa w) : State.Inv wa w' := by
-  rcases State.of_subBal h_sub with ⟨h_le, rfl⟩
-  refine ⟨?_, ?_, ?_⟩
-  · -- code: `wa`'s account is untouched (`a ≠ wa`)
-    show some (((w.setBal a (w.bal a - val)).get wa).code).toList = Prog.compile weth
-    rw [State.setBal_get_code]; exact h.code
-  · -- nof: the total sum can only decrease
-    have hdec : Decrease a val w.bal (w.setBal a (w.bal a - val)).bal := by
-      intro b; constructor
-      · intro heq; subst heq
-        show w.bal a - val = ((w.setBal a (w.bal a - val)).get a).bal
-        rw [State.setBal_get_self]; rfl
-      · intro hnb
-        show w.bal b = ((w.setBal a (w.bal a - val)).get b).bal
-        rw [State.setBal_get_ne hnb]; rfl
-    have hsum := sum_sub_assoc hdec h_le
-    have hnof := h.nof; unfold Blanc.SumNof at hnof ⊢
-    omega
-  · -- solvent: `wa`'s storage and balance are both untouched
-    show Stor.Solvent (((w.setBal a (w.bal a - val)).get wa).stor) 0
-      ((w.setBal a (w.bal a - val)).get wa).bal
-    rw [State.setBal_get_stor, State.setBal_get_ne hne]; exact h.solvent
-
-lemma State.get_erase_ne {w : Jaune.State} {a b : Adr} (h : b ≠ a) :
-    State.get (w.erase a) b = State.get w b := by
-  unfold State.get
-  have hc : compare a b ≠ Ordering.eq := fun hcc => h (compare_eq_iff_eq.mp hcc).symm
-  rw [Std.TreeMap.getD_erase]; simp [hc]
-
--- Deleting a foreign account (`a ≠ wa`) removes its balance from the sum and
--- leaves `wa`'s code/balance/storage alone.  (`Jaune.destroyAccount` is used
--- explicitly in the body: its return type is `State`, so `.get`/`.bal` resolve
--- to `State.*` rather than the underlying `Std.TreeMap.*`, and the bare name
--- would clash with the theorem being defined.)
-theorem State.Inv.destroyAccount {wa a : Adr} {w : Jaune.State}
-    (hne : a ≠ wa) (h : State.Inv wa w) : State.Inv wa (destroyAccount w a) := by
-  have hget : (Jaune.destroyAccount w a).get wa = w.get wa :=
-    State.get_erase_ne (Ne.symm hne)
-  refine ⟨?_, ?_, ?_⟩
-  · show some (((Jaune.destroyAccount w a).get wa).code).toList = Prog.compile weth
-    rw [hget]; exact h.code
-  · -- nof: erasing `a` removes its balance from the sum
-    have h0 : ((Jaune.destroyAccount w a).get a).bal = 0 := by
-      show (State.get (w.erase a) a).bal = 0
-      unfold State.get
-      rw [Std.TreeMap.getD_erase]; simp [Acct.nil]
-    have hdec : Decrease a (w.bal a) w.bal (Jaune.destroyAccount w a).bal := by
-      intro b; constructor
-      · intro heq; subst heq
-        show w.bal a - w.bal a = ((Jaune.destroyAccount w a).get a).bal
-        rw [h0, B256.sub_self]
-      · intro hnb
-        show w.bal b = (State.get (w.erase a) b).bal
-        rw [State.get_erase_ne (Ne.symm hnb)]; rfl
-    have hsum := sum_sub_assoc hdec (le_refl _)
-    have hnof := h.nof; unfold Blanc.SumNof at hnof ⊢
-    omega
-  · show Stor.Solvent (((Jaune.destroyAccount w a).get wa).stor) 0
-      ((Jaune.destroyAccount w a).get wa).bal
-    rw [hget]; exact h.solvent
-
--- Folded form for the `accountsToDelete` set (post-linearization `foldl`).
--- This one is proved outright from the atomic lemma to exercise the pattern.
-theorem State.Inv.foldl_destroyAccount {wa : Adr} :
-    ∀ {as : List Adr} {w : Jaune.State},
-      (∀ a ∈ as, a ≠ wa) → State.Inv wa w →
-        State.Inv wa (as.foldl Jaune.destroyAccount w)
-  | [], _, _, h => h
-  | a :: as, w, hne, h => by
-    rw [List.foldl_cons]
-    exact State.Inv.foldl_destroyAccount
-      (fun b hb => hne b (List.mem_cons_of_mem _ hb))
-      (h.destroyAccount (hne a List.mem_cons_self))
+  exact wethSpec_post_iff.mp
+    (wethSpec.exec_preserves_inv wa (wethSpec_preserves wa) sevm pre post h_run h_code
+      (wethSpec_pre_iff.mpr h_pc))
 
 /-! ### Bridge to the frame-level invariant
 
@@ -2382,93 +2287,12 @@ to the `Exec`/`weth_preserves_solvent` machinery, discharge the WETH-code
 precondition, and certify that a WETH run never self-destructs `wa`
 (so the deletion set avoids `wa`). -/
 
--- Translation between the bare-state invariant and the frame-level
--- `Postcond`: `Devm.get{Bal,Stor,Code}` are by definition the corresponding
--- `State.*` projections of `devm.state`, so a `Postcond` plus code-preservation
--- is exactly `State.Inv` on the underlying state.
-lemma State.Inv.of_postcond {wa : Adr} {sevm : Sevm} {devm : Devm}
-    (h_post : Postcond wa sevm devm)
-    (h_code : some (devm.state.getCode wa).toList = Prog.compile weth) :
-    State.Inv wa devm.state := by
-  refine ⟨h_code, ?_, ?_⟩
-  · show sum devm.state.bal < 2 ^ 256
-    rw [← sum_getBal_state]; exact h_post.nof
-  · have hs := h_post.solvent
-    unfold Devm.PostSolvent at hs
-    exact hs
-
--- Building `Precond` for a sub-execution's initial state directly from the
--- bare-state invariant across a value transfer.  This is the `State.Inv`
--- counterpart of `Precond.child_of_transfer`: that lemma only ever consults the
--- parent's `code`/`nof`/`solvent.right` (the value-free solvency), which are
--- exactly the three fields of `State.Inv`.  As there, `caller ≠ wa` is required
--- so the credited value keeps `wa` over-collateralized when `target = wa`.
-lemma Precond.of_inv_transfer {wa : Adr} {sevm' : Sevm} {devm' : Devm}
-    {st st_mid : Jaune.State} {caller target : Adr} {value : B256}
-    (h_inv : State.Inv wa st)
-    (h_ne : caller ≠ wa)
-    (h_sub : st.subBal caller value = some st_mid)
-    (h_state : devm'.state = st_mid.addBal target value)
-    (h_ct' : sevm'.currentTarget = target)
-    (h_val : sevm'.currentTarget = wa → sevm'.value = value) :
-    Precond wa sevm' devm' := by
-  have h_nof_st : sum st.bal < 2 ^ 256 := h_inv.nof
-  rcases of_state_transfer (callee := target) h_sub h_nof_st with
-    ⟨h_t_stor, h_t_code, h_t_sum, _, _, _⟩
-  have h_stor' : Devm.getStor devm' wa = st.getStor wa := by
-    show (devm'.state.get wa).stor = (st.get wa).stor
-    rw [h_state, h_t_stor wa]
-  have h_code' : devm'.getCode wa = st.getCode wa := by
-    show (devm'.state.get wa).code = (st.get wa).code
-    rw [h_state, h_t_code wa]
-  have h_bal_fun : ∀ a, devm'.getBal a = (st_mid.addBal target value).bal a := by
-    intro a; show (devm'.state.get a).bal = _; rw [h_state]; rfl
-  have h_solv := h_inv.solvent
-  refine ⟨?_, ?_, ?_, ?_⟩
-  · show some (devm'.getCode wa).toList = Prog.compile weth
-    rw [h_code']; exact h_inv.code
-  · have h_sum' : sum devm'.getBal = sum st.bal := by
-      apply Eq.trans _ h_t_sum
-      apply congrArg; funext a; exact h_bal_fun a
-    rw [h_sum']; exact h_inv.nof
-  · intro h_eq
-    have h_v : sevm'.value = value := h_val h_eq
-    have h_t_wa : target = wa := h_ct'.symm.trans h_eq
-    subst h_t_wa
-    have h_bal_wa : (devm'.getBal target).toNat
-        = (st.bal target).toNat + value.toNat := by
-      rw [h_bal_fun target, of_transfer_bal_target h_sub h_ne h_nof_st]
-    rw [h_stor', h_v]
-    unfold State.Solvent Stor.Solvent at h_solv
-    unfold Stor.Solvent
-    rw [B256.toNat_zero] at h_solv
-    omega
-  · intro h_ne_ct
-    have h_t_ne : target ≠ wa := fun hc => h_ne_ct (h_ct'.trans hc)
-    have h_bal_wa : devm'.getBal wa = st.bal wa := by
-      rw [h_bal_fun wa, of_transfer_bal_other h_sub h_ne h_t_ne]
-    rw [h_stor', h_bal_wa]
-    show Stor.Solvent (st.getStor wa) 0 (st.bal wa)
-    exact h_solv
 
 -- Reusable core: a full `exec` run started after a value transfer preserves
 -- `State.Inv`.  Combines `Precond.of_inv_transfer` (build the precondition),
 -- `exec_preserves_solvent` (frame-level solvency + nof), and `code_eq_of_exec` (the
 -- WETH code at `wa` is untouched) through `State.Inv.of_postcond`.
 
--- No-transfer counterpart of `Precond.of_inv_transfer`: when no value moves,
--- the pre-state is the invariant state itself, and `PreSolvent` reduces to the
--- value-free solvency provided `value = 0` whenever the frame targets `wa`.
-lemma Precond.of_inv_eqs {wa : Adr} {sevm : Sevm} {devm : Devm}
-    (h_inv : State.Inv wa devm.state)
-    (h_val0 : sevm.currentTarget = wa → sevm.value = 0) :
-    Precond wa sevm devm := by
-  refine ⟨h_inv.code, ?_, ?_, ?_⟩
-  · show sum devm.getBal < 2 ^ 256
-    rw [sum_getBal_state]; exact h_inv.nof
-  · intro h_eq
-    rw [h_val0 h_eq]; exact h_inv.solvent
-  · intro _; exact h_inv.solvent
 
 -- Shared tail: given the precondition already holds for `pre`, a successful
 -- run's derivation preserves `State.Inv` (frame solvency + nof via
@@ -2488,78 +2312,7 @@ lemma State.Inv.of_exec_precond {wa : Adr} {sevm : Sevm} {pre post : Devm}
   rw [show post.state.getCode wa = post.getCode wa from rfl, h_ce]
   exact h_pc.code
 
--- `handleError` only returns a clean (`error = none`) devm when the underlying
--- execution itself returned `.ok`; the exceptional-halt / revert branches all
--- set the error flag, and the hard-error branch returns `.error`.
-lemma exec_ok_of_handleError {exn : Execution} {evm' : Devm}
-    (h : executeCode.handleError exn = .ok evm') (herr : ¬ evm'.error.isSome = true) :
-    exn = .ok evm' := by
-  cases exn with
-  | error ee =>
-    obtain ⟨err, d⟩ := ee
-    rcases of_handleError_err h with ⟨evm2, h_ok, h_some, _⟩ | ⟨e2, h_e2⟩
-    · rw [Except.ok.inj h_ok] at herr; exact absurd h_some herr
-    · exact absurd h_e2 (by simp)
-  | ok e =>
-    simp only [executeCode.handleError] at h; rw [Except.ok.inj h]
 
--- The precondition for the sub-execution's initial `evm`, built directly from
--- the bare-state invariant across `benvAfterTransfer` (transfer / no-transfer).
-lemma Precond.of_inv_benvAfterTransfer {wa : Adr} {msg : Msg} {benv : Benv}
-    (h_ne : msg.shouldTransferValue = true → msg.caller ≠ wa)
-    (h_val0 : msg.shouldTransferValue = false → msg.currentTarget = wa → msg.value = 0)
-    (hb : msg.benvAfterTransfer = .ok benv)
-    (h_inv : State.Inv wa msg.benv.state) :
-    Precond wa (initSevm (msg.withBenv benv)) (initDevm (msg.withBenv benv)) := by
-  by_cases h_stv : msg.shouldTransferValue = true
-  · rcases Blanc.of_benvAfterTransfer h_stv hb with ⟨st_mid, h_sub, hbenv⟩
-    have hbs : (initDevm (msg.withBenv benv)).state
-        = st_mid.addBal msg.currentTarget msg.value := by
-      show benv.state = _; rw [hbenv]; rfl
-    exact Precond.of_inv_transfer h_inv (h_ne h_stv) h_sub hbs rfl (fun _ => rfl)
-  · have hbenv : benv = msg.benv := of_benvAfterTransfer_no h_stv hb
-    have h_false : msg.shouldTransferValue = false := by
-      cases hh : msg.shouldTransferValue
-      · rfl
-      · exact absurd hh h_stv
-    have h_inv' : State.Inv wa (initDevm (msg.withBenv benv)).state := by
-      show State.Inv wa benv.state; rw [hbenv]; exact h_inv
-    exact Precond.of_inv_eqs h_inv' (fun he => h_val0 h_false he)
-
--- The post-transfer state itself still satisfies `State.Inv` (the transfer only
--- credits `wa` or moves value between accounts other than `wa`).  Used for the
--- precompile branch, where `executePrecomp` leaves the state untouched.
-lemma State.Inv.of_benvAfterTransfer {wa : Adr} {msg : Msg} {benv : Benv}
-    (h_ne : msg.shouldTransferValue = true → msg.caller ≠ wa)
-    (hb : msg.benvAfterTransfer = .ok benv)
-    (h_inv : State.Inv wa msg.benv.state) :
-    State.Inv wa benv.state := by
-  by_cases h_stv : msg.shouldTransferValue = true
-  · rcases Blanc.of_benvAfterTransfer h_stv hb with ⟨st_mid, h_sub, hbenv⟩
-    have hbs : benv.state = st_mid.addBal msg.currentTarget msg.value := by
-      rw [hbenv]; rfl
-    rw [hbs]
-    have h_inv_mid : State.Inv wa st_mid := State.Inv.subBal (h_ne h_stv) h_sub h_inv
-    rcases State.of_subBal h_sub with ⟨h_le, h_mid⟩
-    have hdec : Decrease msg.caller msg.value msg.benv.state.bal st_mid.bal := by
-      rw [h_mid]; intro b; constructor
-      · intro he; subst he
-        show msg.benv.state.bal msg.caller - msg.value
-          = ((msg.benv.state.setBal msg.caller
-              (msg.benv.state.bal msg.caller - msg.value)).get msg.caller).bal
-        rw [State.setBal_get_self]; rfl
-      · intro hnb
-        show msg.benv.state.bal b
-          = ((msg.benv.state.setBal msg.caller
-              (msg.benv.state.bal msg.caller - msg.value)).get b).bal
-        rw [State.setBal_get_ne hnb]; rfl
-    have hss := sum_sub_assoc hdec h_le
-    have h_vle : msg.value.toNat ≤ sum msg.benv.state.bal :=
-      le_trans (B256.toNat_le_toNat h_le) le_sum
-    have hnof := h_inv.nof; unfold Blanc.SumNof at hnof
-    exact State.Inv.addBal (by omega) h_inv_mid
-  · have hbenv : benv = msg.benv := Blanc.of_benvAfterTransfer_no h_stv hb
-    rw [hbenv]; exact h_inv
 
 -- Deep helper: one `processMessage` run preserves `State.Inv` and never
 -- self-destructs `wa`.  This is where the frame-level `exec_preserves_solvent` gets
@@ -2613,28 +2366,6 @@ theorem processMessage_preserves_solvent {wa : Adr} {msg : Msg} {evm : Devm}
 
 -- Overwriting the storage of a *foreign* account (`a ≠ wa`) preserves `State.Inv`
 -- (`wa`'s account is untouched, and `setStor` leaves every balance alone).
-lemma State.Inv.setStor_ne {wa a : Adr} {s : Stor} {w : Jaune.State}
-    (hne : a ≠ wa) (h : State.Inv wa w) : State.Inv wa (w.setStor a s) := by
-  have hget : (w.setStor a s).get wa = w.get wa := by
-    unfold State.setStor; exact State.get_set_ne _ hne _
-  refine ⟨?_, ?_, ?_⟩
-  · show some (((w.setStor a s).get wa).code).toList = Prog.compile weth
-    rw [hget]; exact h.code
-  · rw [State.setStor_bal]; exact h.nof
-  · show Stor.Solvent (((w.setStor a s).get wa).stor) 0 ((w.setStor a s).get wa).bal
-    rw [hget]; exact h.solvent
-
--- Likewise for installing code at a foreign account.
-lemma State.Inv.setCode_ne {wa a : Adr} {cd : ByteArray} {w : Jaune.State}
-    (hne : a ≠ wa) (h : State.Inv wa w) : State.Inv wa (w.setCode a cd) := by
-  have hget : (w.setCode a cd).get wa = w.get wa := by
-    unfold State.setCode; exact State.get_set_ne _ hne _
-  refine ⟨?_, ?_, ?_⟩
-  · show some (((w.setCode a cd).get wa).code).toList = Prog.compile weth
-    rw [hget]; exact h.code
-  · rw [State.setCode_bal]; exact h.nof
-  · show Stor.Solvent (((w.setCode a cd).get wa).stor) 0 ((w.setCode a cd).get wa).bal
-    rw [hget]; exact h.solvent
 
 -- Create path.  `processCreateMessage` seeds the account being created
 -- (`setStor .empty` + `incrNonce`, both at `currentTarget ≠ wa`), runs

@@ -871,6 +871,27 @@ lemma state_of_executePrecomp_ok {evm : Evm} {adr : Adr} {child : Devm}
     rw [← h]
     rfl
 
+lemma State.get_erase_ne {w : Jaune.State} {a b : Adr} (h : b ≠ a) :
+    State.get (w.erase a) b = State.get w b := by
+  unfold State.get
+  have hc : compare a b ≠ Ordering.eq := fun hcc => h (compare_eq_iff_eq.mp hcc).symm
+  rw [Std.TreeMap.getD_erase]; simp [hc]
+
+-- `handleError` only returns a clean (`error = none`) devm when the underlying
+-- execution itself returned `.ok`; the exceptional-halt / revert branches all
+-- set the error flag, and the hard-error branch returns `.error`.
+lemma exec_ok_of_handleError {exn : Execution} {evm' : Devm}
+    (h : executeCode.handleError exn = .ok evm') (herr : ¬ evm'.error.isSome = true) :
+    exn = .ok evm' := by
+  cases exn with
+  | error ee =>
+    obtain ⟨err, d⟩ := ee
+    rcases of_handleError_err h with ⟨evm2, h_ok, h_some, _⟩ | ⟨e2, h_e2⟩
+    · rw [Except.ok.inj h_ok] at herr; exact absurd h_some herr
+    · exact absurd h_e2 (by simp)
+  | ok e =>
+    simp only [executeCode.handleError] at h; rw [Except.ok.inj h]
+
 /-! ## The contract-generic ladder -/
 
 namespace ContractSpec
@@ -1666,6 +1687,33 @@ lemma Linst.inv_postcond {wa : Adr} {sevm : Sevm} {pre post : Devm} {l : Linst}
     · rw [← Except.ok.inj h_run4]
       exact post_of_pre h_pc3
 
+/-! ### The contract's obligation, and the frame-level result it yields -/
+
+/-- What a contract must prove about its own program: that a top-level run
+takes the precondition to the postcondition, given the induction hypothesis for
+deeper frames.  This is the sole input `preserves_inv` cannot supply. -/
+def Sound (c : ContractSpec) (ca : Adr) : Prop :=
+  ∀ {sevm pre post},
+    Prog.Run sevm pre c.prog post →
+    sevm.currentTarget = ca →
+    ( ∀ pc' sevm' pre' post',
+        Exec pc' sevm' pre' (.ok post') →
+        sevm'.depth < sevm.depth →
+        Prog.At c.prog ca pc' sevm' pre' →
+        c.Pre ca sevm' pre' →
+        c.Post ca sevm' post' ) →
+    c.Pre ca sevm pre →
+    c.Post ca sevm post
+
+/-- What the frame-level ladder delivers, and what every rung above it
+consumes.  `preserves_inv : c.Sound ca → c.Preserves ca`. -/
+def Preserves (c : ContractSpec) (ca : Adr) : Prop :=
+  ∀ sevm pre post,
+    Exec 0 sevm pre (.ok post) →
+    (sevm.currentTarget = ca → some sevm.code.toList = Prog.compile c.prog) →
+    c.Pre ca sevm pre →
+    c.Post ca sevm post
+
 /-! ### The frame-level ladder
 
 `lift_inv` (CommonProofs.lean) is already generic in the program and in the two
@@ -1675,24 +1723,8 @@ all, for every contract.  The fifth — that a top-level run of the contract's
 own program takes the precondition to the postcondition — is the contract's
 own work and stays a hypothesis. -/
 
-theorem preserves_inv (c : ContractSpec) (ca : Adr)
-    ( body :
-      ∀ {sevm pre post},
-        Prog.Run sevm pre c.prog post →
-        sevm.currentTarget = ca →
-        ( ∀ pc' sevm' pre' post',
-            Exec pc' sevm' pre' (.ok post') →
-            sevm'.depth < sevm.depth →
-            Prog.At c.prog ca pc' sevm' pre' →
-            c.Pre ca sevm' pre' →
-            c.Post ca sevm' post' ) →
-        c.Pre ca sevm pre →
-        c.Post ca sevm post ) :
-    ∀ sevm pre post,
-      Exec 0 sevm pre (.ok post) →
-      (sevm.currentTarget = ca → some sevm.code.toList = Prog.compile c.prog) →
-      c.Pre ca sevm pre →
-      c.Post ca sevm post := by
+theorem preserves_inv (c : ContractSpec) (ca : Adr) (body : c.Sound ca) :
+    c.Preserves ca := by
   intro sevm devm exn exc h_code h_pc
   apply lift_inv ca c.prog (c.Pre ca) (c.Post ca)
   · exact body
@@ -1739,6 +1771,242 @@ theorem preserves_inv (c : ContractSpec) (ca : Adr)
   · exact exc
   · exact ⟨h_pc.1, λ h => ⟨h_code h, rfl⟩⟩
   · exact h_pc
+
+/-- The `exec` counterpart: with sufficiency proved in Jaune there is no fuel
+to quantify away, so the hypothesis is a plain equation about the interpreter. -/
+theorem exec_preserves_inv (c : ContractSpec) (ca : Adr) (hp : c.Preserves ca)
+    (sevm : Sevm) (pre post : Devm)
+    (h_run : exec ⟨0, sevm, pre⟩ = .ok post)
+    (h_code : sevm.currentTarget = ca → some sevm.code.toList = Prog.compile c.prog)
+    (h_pc : c.Pre ca sevm pre) : c.Post ca sevm post := by
+  obtain ⟨exc⟩ := (exec_iff_exec_eq 0 sevm pre (.ok post)).mpr h_run
+  exact hp sevm pre post exc h_code h_pc
+
+
+theorem StateInv.incrNonce {wa a : Adr} {w : Jaune.State}
+    (h : c.StateInv wa w) : c.StateInv wa (w.incrNonce a) := by
+  have hbal : (w.incrNonce a).bal = w.bal := by
+    funext b
+    show ((w.incrNonce a).get b).bal = (w.get b).bal
+    by_cases hb : b = a
+    · subst hb; simp only [State.incrNonce, State.get_set_self]
+    · simp only [State.incrNonce, State.get_set_ne _ (Ne.symm hb)]
+  have hstor : (w.incrNonce a).getStor wa = w.getStor wa := by
+    show ((w.incrNonce a).get wa).stor = (w.get wa).stor
+    by_cases hb : wa = a
+    · subst hb; simp only [State.incrNonce, State.get_set_self]
+    · simp only [State.incrNonce, State.get_set_ne _ (Ne.symm hb)]
+  have hcode : (w.incrNonce a).getCode wa = w.getCode wa := by
+    show ((w.incrNonce a).get wa).code = (w.get wa).code
+    by_cases hb : wa = a
+    · subst hb; simp only [State.incrNonce, State.get_set_self]
+    · simp only [State.incrNonce, State.get_set_ne _ (Ne.symm hb)]
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hcode]; exact h.code
+  · rw [hbal]; exact h.side
+  · show c.Inv ((w.incrNonce a).getStor wa) 0 ((w.incrNonce a).bal wa)
+    rw [hstor, hbal]; exact h.inv
+
+-- `addBal` can only raise a balance: `code` (bal field only) survives, and both
+-- the side condition and the invariant are moved by the `*_addBal` slots under
+-- the pre-sum bound `sum w.bal + val < 2 ^ 256`, supplied by the caller's
+-- wei-conservation argument (a bound on the *result* would not rule out a
+-- wrap, so it is not enough).
+theorem StateInv.addBal {ca a : Adr} {val : B256} {w : Jaune.State}
+    (hsum : sum w.bal + val.toNat < 2 ^ 256)
+    (h : c.StateInv ca w) : c.StateInv ca (w.addBal a val) := by
+  refine ⟨?_, c.side_addBal hsum h.side, c.inv_addBal hsum h.side h.inv⟩
+  show some (((w.addBal a val).get ca).code).toList = Prog.compile c.prog
+  unfold State.addBal; rw [State.setBal_get_code]; exact h.code
+
+-- `subBal` lowers a balance, so the side condition survives by `side_le`;
+-- dropping `ca`'s balance could break the invariant, hence `a ≠ ca`.
+theorem StateInv.subBal {ca a : Adr} {val : B256} {w w' : Jaune.State}
+    (hne : a ≠ ca) (h_sub : w.subBal a val = some w')
+    (h : c.StateInv ca w) : c.StateInv ca w' := by
+  rcases State.of_subBal h_sub with ⟨h_le, rfl⟩
+  refine ⟨?_, ?_, ?_⟩
+  · show some (((w.setBal a (w.bal a - val)).get ca).code).toList = Prog.compile c.prog
+    rw [State.setBal_get_code]; exact h.code
+  · have hdec : Decrease a val w.bal (w.setBal a (w.bal a - val)).bal := by
+      intro b; constructor
+      · intro heq; subst heq
+        show w.bal a - val = ((w.setBal a (w.bal a - val)).get a).bal
+        rw [State.setBal_get_self]; rfl
+      · intro hnb
+        show w.bal b = ((w.setBal a (w.bal a - val)).get b).bal
+        rw [State.setBal_get_ne hnb]; rfl
+    have hsum := sum_sub_assoc hdec h_le
+    exact c.side_le h.side (by omega)
+  · show c.Inv (((w.setBal a (w.bal a - val)).get ca).stor) 0
+      ((w.setBal a (w.bal a - val)).get ca).bal
+    rw [State.setBal_get_stor, State.setBal_get_ne hne]; exact h.inv
+
+-- Deleting a foreign account (`a ≠ ca`) removes its balance from the sum and
+-- leaves `ca`'s code/balance/storage alone.
+theorem StateInv.destroyAccount {ca a : Adr} {w : Jaune.State}
+    (hne : a ≠ ca) (h : c.StateInv ca w) : c.StateInv ca (destroyAccount w a) := by
+  have hget : (Jaune.destroyAccount w a).get ca = w.get ca :=
+    State.get_erase_ne (Ne.symm hne)
+  refine ⟨?_, ?_, ?_⟩
+  · show some (((Jaune.destroyAccount w a).get ca).code).toList = Prog.compile c.prog
+    rw [hget]; exact h.code
+  · have h0 : ((Jaune.destroyAccount w a).get a).bal = 0 := by
+      show (State.get (w.erase a) a).bal = 0
+      unfold State.get
+      rw [Std.TreeMap.getD_erase]; simp [Acct.nil]
+    have hdec : Decrease a (w.bal a) w.bal (Jaune.destroyAccount w a).bal := by
+      intro b; constructor
+      · intro heq; subst heq
+        show w.bal a - w.bal a = ((Jaune.destroyAccount w a).get a).bal
+        rw [h0, B256.sub_self]
+      · intro hnb
+        show w.bal b = (State.get (w.erase a) b).bal
+        rw [State.get_erase_ne (Ne.symm hnb)]; rfl
+    have hsum := sum_sub_assoc hdec (le_refl _)
+    exact c.side_le h.side (by omega)
+  · show c.Inv (((Jaune.destroyAccount w a).get ca).stor) 0
+      ((Jaune.destroyAccount w a).get ca).bal
+    rw [hget]; exact h.inv
+
+-- Folded form for the `accountsToDelete` set (post-linearization `foldl`).
+-- This one is proved outright from the atomic lemma to exercise the pattern.
+theorem StateInv.foldl_destroyAccount {wa : Adr} :
+    ∀ {as : List Adr} {w : Jaune.State},
+      (∀ a ∈ as, a ≠ wa) → c.StateInv wa w →
+        c.StateInv wa (as.foldl Jaune.destroyAccount w)
+  | [], _, _, h => h
+  | a :: as, w, hne, h => by
+    rw [List.foldl_cons]
+    exact StateInv.foldl_destroyAccount
+      (fun b hb => hne b (List.mem_cons_of_mem _ hb))
+      (h.destroyAccount (hne a List.mem_cons_self))
+
+-- `Devm.get{Bal,Stor,Code}` are by definition the corresponding `State.*`
+-- projections of `devm.state`, so a `Post` plus code-preservation is exactly
+-- `StateInv` on the underlying state.
+lemma StateInv.of_postcond {ca : Adr} {sevm : Sevm} {devm : Devm}
+    (h_post : c.Post ca sevm devm)
+    (h_code : some (devm.state.getCode ca).toList = Prog.compile c.prog) :
+    c.StateInv ca devm.state :=
+  ⟨h_code, h_post.side, h_post.inv⟩
+
+-- The `StateInv` counterpart of `Pre.child_of_transfer`: it only ever consults
+-- the parent's `code`/`side`/value-free invariant, which are exactly the three
+-- fields of `StateInv`.  `caller ≠ ca` is required so the credited value keeps
+-- the invariant when `target = ca`.
+lemma Pre.of_inv_transfer {ca : Adr} {sevm' : Sevm} {devm' : Devm}
+    {st st_mid : Jaune.State} {caller target : Adr} {value : B256}
+    (h_inv : c.StateInv ca st)
+    (h_ne : caller ≠ ca)
+    (h_sub : st.subBal caller value = some st_mid)
+    (h_state : devm'.state = st_mid.addBal target value)
+    (h_ct' : sevm'.currentTarget = target)
+    (h_val : sevm'.currentTarget = ca → sevm'.value = value) :
+    c.Pre ca sevm' devm' := by
+  rcases of_state_transfer_fields (callee := target) h_sub with ⟨-, h_t_code, -, -, -⟩
+  have h_stor' : Devm.getStor devm' ca = (st_mid.addBal target value).getStor ca := by
+    show (devm'.state.get ca).stor = _
+    rw [h_state]; rfl
+  have h_bal' : devm'.getBal ca = (st_mid.addBal target value).bal ca := by
+    show (devm'.state.get ca).bal = _
+    rw [h_state]; rfl
+  refine ⟨?_, ?_, ?_, ?_⟩
+  · show some (devm'.state.get ca).code.toList = Prog.compile c.prog
+    rw [h_state, h_t_code ca]; exact h_inv.code
+  · show c.Side devm'.state.bal
+    rw [h_state]; exact c.side_transfer h_sub h_inv.side
+  · intro h_eq
+    have h_t_ca : target = ca := h_ct'.symm.trans h_eq
+    subst h_t_ca
+    show c.Inv (Devm.getStor devm' target) sevm'.value (devm'.getBal target)
+    rw [h_stor', h_bal', h_val h_eq]
+    exact c.inv_recv_transfer h_sub h_ne h_inv.side h_inv.inv
+  · intro _
+    show c.Inv (Devm.getStor devm' ca) 0 (devm'.getBal ca)
+    rw [h_stor', h_bal']
+    exact c.inv_transfer h_sub h_ne h_inv.side h_inv.inv
+
+-- No-transfer counterpart of `Pre.of_inv_transfer`: when no value moves,
+-- the pre-state is the invariant state itself, and `PreSolvent` reduces to the
+-- value-free solvency provided `value = 0` whenever the frame targets `wa`.
+lemma Pre.of_inv_eqs {wa : Adr} {sevm : Sevm} {devm : Devm}
+    (h_inv : c.StateInv wa devm.state)
+    (h_val0 : sevm.currentTarget = wa → sevm.value = 0) :
+    c.Pre wa sevm devm := by
+  refine ⟨h_inv.code, h_inv.side, ?_, ?_⟩
+  · intro h_eq
+    rw [h_val0 h_eq]; exact h_inv.inv
+  · intro _; exact h_inv.inv
+
+-- The precondition for the sub-execution's initial `evm`, built directly from
+-- the bare-state invariant across `benvAfterTransfer` (transfer / no-transfer).
+lemma Pre.of_inv_benvAfterTransfer {wa : Adr} {msg : Msg} {benv : Benv}
+    (h_ne : msg.shouldTransferValue = true → msg.caller ≠ wa)
+    (h_val0 : msg.shouldTransferValue = false → msg.currentTarget = wa → msg.value = 0)
+    (hb : msg.benvAfterTransfer = .ok benv)
+    (h_inv : c.StateInv wa msg.benv.state) :
+    c.Pre wa (initSevm (msg.withBenv benv)) (initDevm (msg.withBenv benv)) := by
+  by_cases h_stv : msg.shouldTransferValue = true
+  · rcases Blanc.of_benvAfterTransfer h_stv hb with ⟨st_mid, h_sub, hbenv⟩
+    have hbs : (initDevm (msg.withBenv benv)).state
+        = st_mid.addBal msg.currentTarget msg.value := by
+      show benv.state = _; rw [hbenv]; rfl
+    exact Pre.of_inv_transfer h_inv (h_ne h_stv) h_sub hbs rfl (fun _ => rfl)
+  · have hbenv : benv = msg.benv := of_benvAfterTransfer_no h_stv hb
+    have h_false : msg.shouldTransferValue = false := by
+      cases hh : msg.shouldTransferValue
+      · rfl
+      · exact absurd hh h_stv
+    have h_inv' : c.StateInv wa (initDevm (msg.withBenv benv)).state := by
+      show c.StateInv wa benv.state; rw [hbenv]; exact h_inv
+    exact Pre.of_inv_eqs h_inv' (fun he => h_val0 h_false he)
+
+-- The post-transfer state itself still satisfies `StateInv`: the transfer only
+-- credits `ca` or moves value between accounts other than `ca`, which is
+-- exactly what `side_transfer` and `inv_transfer` say.
+lemma StateInv.of_benvAfterTransfer {ca : Adr} {msg : Msg} {benv : Benv}
+    (h_ne : msg.shouldTransferValue = true → msg.caller ≠ ca)
+    (hb : msg.benvAfterTransfer = .ok benv)
+    (h_inv : c.StateInv ca msg.benv.state) :
+    c.StateInv ca benv.state := by
+  by_cases h_stv : msg.shouldTransferValue = true
+  · rcases Blanc.of_benvAfterTransfer h_stv hb with ⟨st_mid, h_sub, hbenv⟩
+    have hbs : benv.state = st_mid.addBal msg.currentTarget msg.value := by
+      rw [hbenv]; rfl
+    rcases of_state_transfer_fields (callee := msg.currentTarget) h_sub with
+      ⟨-, h_t_code, -, -, -⟩
+    rw [hbs]
+    exact ⟨by rw [show ((st_mid.addBal msg.currentTarget msg.value).getCode ca)
+                   = ((st_mid.addBal msg.currentTarget msg.value).get ca).code from rfl,
+                 h_t_code ca]; exact h_inv.code,
+           c.side_transfer h_sub h_inv.side,
+           c.inv_transfer h_sub (h_ne h_stv) h_inv.side h_inv.inv⟩
+  · have hbenv : benv = msg.benv := Blanc.of_benvAfterTransfer_no h_stv hb
+    rw [hbenv]; exact h_inv
+
+lemma StateInv.setStor_ne {wa a : Adr} {s : Stor} {w : Jaune.State}
+    (hne : a ≠ wa) (h : c.StateInv wa w) : c.StateInv wa (w.setStor a s) := by
+  have hget : (w.setStor a s).get wa = w.get wa := by
+    unfold State.setStor; exact State.get_set_ne _ hne _
+  refine ⟨?_, ?_, ?_⟩
+  · show some (((w.setStor a s).get wa).code).toList = Prog.compile c.prog
+    rw [hget]; exact h.code
+  · rw [State.setStor_bal]; exact h.side
+  · show c.Inv (((w.setStor a s).get wa).stor) 0 ((w.setStor a s).get wa).bal
+    rw [hget]; exact h.inv
+
+-- Likewise for installing code at a foreign account.
+lemma StateInv.setCode_ne {wa a : Adr} {cd : ByteArray} {w : Jaune.State}
+    (hne : a ≠ wa) (h : c.StateInv wa w) : c.StateInv wa (w.setCode a cd) := by
+  have hget : (w.setCode a cd).get wa = w.get wa := by
+    unfold State.setCode; exact State.get_set_ne _ hne _
+  refine ⟨?_, ?_, ?_⟩
+  · show some (((w.setCode a cd).get wa).code).toList = Prog.compile c.prog
+    rw [hget]; exact h.code
+  · rw [State.setCode_bal]; exact h.side
+  · show c.Inv (((w.setCode a cd).get wa).stor) 0 ((w.setCode a cd).get wa).bal
+    rw [hget]; exact h.inv
 
 end ContractSpec
 
