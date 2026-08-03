@@ -1,6 +1,7 @@
 import Blanc.Solvent
 import Blanc.WethCode
 import Blanc.Ladder
+import Blanc.Flashmint
 
 namespace Blanc
 
