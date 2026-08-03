@@ -13,9 +13,9 @@ lemma not_run_rev {c e s r} : ¬ Func.Run c e s Func.rev r := by
   cases h with
   | last h_run =>
     simp only [Linst.Run, Linst.run] at h_run
-    rcases of_bind_eq_ok h_run with ⟨v1, h1, h2⟩
-    rcases of_bind_eq_ok h2 with ⟨v2, h3, h4⟩
-    rcases of_bind_eq_ok h4 with ⟨v3, h5, h6⟩
+    rcases Except.bind_eq_ok h_run with ⟨v1, h1, h2⟩
+    rcases Except.bind_eq_ok h2 with ⟨v2, h3, h4⟩
+    rcases Except.bind_eq_ok h4 with ⟨v3, h5, h6⟩
     contradiction
 
 lemma of_run_branch_rev {c e s r} {p : Func} (h : Func.Run c e s (.rev <?> p) r) :
@@ -3970,7 +3970,7 @@ lemma Devm.diffBurn_of_applyUnary {f : B256 → B256} {cost : Nat} {s s' : Devm}
     (h : applyUnary f cost s = .ok s') :
     ∃ x, Devm.DiffBurn [x] [f x] s s' := by
   rw [applyUnary_def] at h
-  rcases of_bind_eq_ok h with ⟨⟨x, s₁⟩, h1, h2⟩
+  rcases Except.bind_eq_ok h with ⟨⟨x, s₁⟩, h1, h2⟩
   simp only at h2
   rw [pushItem_def] at h2
   refine ⟨x, Devm.diffBurn_of_pop_of_pushBurn (Devm.pop_of_pop h1) (Devm.pushBurn_of_run h2)⟩
@@ -3979,8 +3979,8 @@ lemma Devm.diffBurn_of_applyBinary {f : B256 → B256 → B256} {cost : Nat} {s 
     (h : applyBinary f cost s = .ok s') :
     ∃ x y, Devm.DiffBurn [x, y] [f x y] s s' := by
   rw [applyBinary_def] at h
-  rcases of_bind_eq_ok h with ⟨⟨x, s₁⟩, h1, h'⟩
-  rcases of_bind_eq_ok h' with ⟨⟨y, s₂⟩, h2, h3⟩
+  rcases Except.bind_eq_ok h with ⟨⟨x, s₁⟩, h1, h'⟩
+  rcases Except.bind_eq_ok h' with ⟨⟨y, s₂⟩, h2, h3⟩
   simp only at h3
   rw [pushItem_def] at h3
   refine ⟨x, y, Devm.diffBurn_of_pop_of_pushBurn
@@ -4029,7 +4029,7 @@ lemma of_run_pop {e : Sevm} {s s' : Devm} (h : Ninst.Run e s pop s') :
     ∃ x, Devm.PopBurn [x] s s' := by
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
-  rcases of_bind_eq_ok run with ⟨s₁, h1, h2⟩
+  rcases Except.bind_eq_ok run with ⟨s₁, h1, h2⟩
   simp only [Functor.mapRev, Functor.map, Except.map] at h1
   rcases hp : Devm.pop s with _ | ⟨x, s₂⟩ <;> simp [hp] at h1
   subst h1
@@ -4039,7 +4039,7 @@ lemma of_run_dup {e : Sevm} {s s' : Devm} {n : Fin 16} (h : Ninst.Run e s (dup n
     ∃ x, s.stack[n.val]? = some x ∧ Devm.PushBurn [x] s s' := by
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
-  rcases of_bind_eq_ok run with ⟨s₁, h1, h2⟩
+  rcases Except.bind_eq_ok run with ⟨s₁, h1, h2⟩
   have hb := Devm.burn_of_chargeGas h1
   split at h2
   · cases h2
@@ -4051,7 +4051,7 @@ lemma of_run_swap {e : Sevm} {s s' : Devm} {n : Fin 16} (h : Ninst.Run e s (swap
     List.swap s.stack n.val = some s'.stack := by
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
-  rcases of_bind_eq_ok run with ⟨s₁, h1, h2⟩
+  rcases Except.bind_eq_ok run with ⟨s₁, h1, h2⟩
   have hb := Devm.burn_of_chargeGas h1
   split at h2
   · cases h2
@@ -4075,9 +4075,9 @@ lemma of_run_mstore {e : Sevm} {s s' : Devm} (h : Ninst.Run e s mstore s') :
     ∃ x y, Stack.Pop [x, y] s.stack s'.stack := by
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
-  rcases of_bind_eq_ok run with ⟨⟨i, s₁⟩, h1, run'⟩
-  rcases of_bind_eq_ok run' with ⟨⟨v, s₂⟩, h2, run''⟩
-  rcases of_bind_eq_ok run'' with ⟨s₃, h3, h4⟩
+  rcases Except.bind_eq_ok run with ⟨⟨i, s₁⟩, h1, run'⟩
+  rcases Except.bind_eq_ok run' with ⟨⟨v, s₂⟩, h2, run''⟩
+  rcases Except.bind_eq_ok run'' with ⟨s₃, h3, h4⟩
   rcases Devm.pop_of_popToNat h1 with ⟨x, p1⟩
   have p2 := Devm.pop_of_pop h2
   have hb := Devm.burn_of_chargeGas h3
@@ -4101,8 +4101,8 @@ lemma Devm.pop_of_popN {n : Nat} {devm devm' : Devm} {l : List B256}
     constructor <;> simp [Devm.Rels.eq, Stack.Pop, Split]
   | succ n ih =>
     rw [Devm.popN_def] at hp
-    rcases of_bind_eq_ok hp with ⟨⟨x, devm1⟩, hp1, hp2⟩
-    rcases of_bind_eq_ok hp2 with ⟨⟨xs, devm2⟩, hp3, hp4⟩
+    rcases Except.bind_eq_ok hp with ⟨⟨x, devm1⟩, hp1, hp2⟩
+    rcases Except.bind_eq_ok hp2 with ⟨⟨xs, devm2⟩, hp3, hp4⟩
     injection hp4 with eq
     injection eq with eq1 eq2
     subst eq1; subst eq2
@@ -4113,14 +4113,14 @@ lemma of_run_sstore {e : Sevm} {s s' : Devm} (h : Ninst.Run e s sstore s') :
     ∃ x y, Stack.Pop [x, y] s.stack s'.stack := by
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
-  rcases of_bind_eq_ok run with ⟨⟨x, s₁⟩, h1, run₁⟩
-  rcases of_bind_eq_ok run₁ with ⟨⟨y, s₂⟩, h2, run₂⟩
-  rcases of_bind_eq_ok run₂ with ⟨_, h3, run₃⟩
-  rcases of_bind_eq_ok run₃ with ⟨⟨s₃, g₂⟩, h4, run₄⟩
-  rcases of_bind_eq_ok run₄ with ⟨g₃, h5, run₅⟩
-  rcases of_bind_eq_ok run₅ with ⟨s₄, h6, run₆⟩
-  rcases of_bind_eq_ok run₆ with ⟨s₅, h7, run₇⟩
-  rcases of_bind_eq_ok run₇ with ⟨_, h8, h9⟩
+  rcases Except.bind_eq_ok run with ⟨⟨x, s₁⟩, h1, run₁⟩
+  rcases Except.bind_eq_ok run₁ with ⟨⟨y, s₂⟩, h2, run₂⟩
+  rcases Except.bind_eq_ok run₂ with ⟨_, h3, run₃⟩
+  rcases Except.bind_eq_ok run₃ with ⟨⟨s₃, g₂⟩, h4, run₄⟩
+  rcases Except.bind_eq_ok run₄ with ⟨g₃, h5, run₅⟩
+  rcases Except.bind_eq_ok run₅ with ⟨s₄, h6, run₆⟩
+  rcases Except.bind_eq_ok run₆ with ⟨s₅, h7, run₇⟩
+  rcases Except.bind_eq_ok run₇ with ⟨_, h8, h9⟩
   have hp := (Devm.pop_append (Devm.pop_of_pop h1) (Devm.pop_of_pop h2)).stack
   have hb := Devm.burn_of_chargeGas h7
   have h_s₃ : s₃.stack = s₂.stack := by
@@ -4140,10 +4140,10 @@ lemma of_run_calldatacopy {e : Sevm} {s s' : Devm} (h : Ninst.Run e s calldataco
     ∃ x y z, Stack.Pop [x, y, z] s.stack s'.stack := by
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
-  rcases of_bind_eq_ok run with ⟨⟨mi, s₁⟩, h1, run₁⟩
-  rcases of_bind_eq_ok run₁ with ⟨⟨di, s₂⟩, h2, run₂⟩
-  rcases of_bind_eq_ok run₂ with ⟨⟨sz, s₃⟩, h3, run₃⟩
-  rcases of_bind_eq_ok run₃ with ⟨s₄, h4, h5⟩
+  rcases Except.bind_eq_ok run with ⟨⟨mi, s₁⟩, h1, run₁⟩
+  rcases Except.bind_eq_ok run₁ with ⟨⟨di, s₂⟩, h2, run₂⟩
+  rcases Except.bind_eq_ok run₂ with ⟨⟨sz, s₃⟩, h3, run₃⟩
+  rcases Except.bind_eq_ok run₃ with ⟨s₄, h4, h5⟩
   rcases Devm.pop_of_popToNat h1 with ⟨x, p1⟩
   rcases Devm.pop_of_popToNat h2 with ⟨y, p2⟩
   rcases Devm.pop_of_popToNat h3 with ⟨z, p3⟩
@@ -4164,8 +4164,8 @@ lemma of_run_calldataload {e : Sevm} {s s' : Devm} (h : Ninst.Run e s calldatalo
     ∃ x y, Stack.Diff [x] [y] s.stack s'.stack := by
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
-  rcases of_bind_eq_ok run with ⟨⟨si, s₁⟩, h1, run₁⟩
-  rcases of_bind_eq_ok run₁ with ⟨s₂, h2, run₂⟩
+  rcases Except.bind_eq_ok run with ⟨⟨si, s₁⟩, h1, run₁⟩
+  rcases Except.bind_eq_ok run₁ with ⟨s₂, h2, run₂⟩
   have hpop := Devm.pop_of_pop h1
   have hb := Devm.burn_of_chargeGas h2
   obtain ⟨val, hpush⟩ : ∃ val, Devm.Push [val] s₂ s' := ⟨_, Devm.push_of_push run₂⟩
@@ -4180,9 +4180,9 @@ lemma of_run_kec {e : Sevm} {s s' : Devm} (h : Ninst.Run e s kec s') :
     ∃ x y z, Stack.Diff [x, y] [z] s.stack s'.stack := by
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
-  rcases of_bind_eq_ok run with ⟨⟨mi, s₁⟩, h1, run₁⟩
-  rcases of_bind_eq_ok run₁ with ⟨⟨sz, s₂⟩, h2, run₂⟩
-  rcases of_bind_eq_ok run₂ with ⟨s₃, h3, run₃⟩
+  rcases Except.bind_eq_ok run with ⟨⟨mi, s₁⟩, h1, run₁⟩
+  rcases Except.bind_eq_ok run₁ with ⟨⟨sz, s₂⟩, h2, run₂⟩
+  rcases Except.bind_eq_ok run₂ with ⟨s₃, h3, run₃⟩
   rcases Devm.pop_of_popToNat h1 with ⟨x, p1⟩
   rcases Devm.pop_of_popToNat h2 with ⟨y, p2⟩
   have hb := Devm.burn_of_chargeGas h3
@@ -4196,11 +4196,11 @@ lemma of_run_log {e : Sevm} {s s' : Devm} {n : Fin 5} (h : Ninst.Run e s (log n)
     ∃ zs, zs.length = n.val + 2 ∧ Stack.Pop zs s.stack s'.stack := by
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
-  rcases of_bind_eq_ok run with ⟨⟨mi, s₁⟩, h1, run₁⟩
-  rcases of_bind_eq_ok run₁ with ⟨⟨sz, s₂⟩, h2, run₂⟩
-  rcases of_bind_eq_ok run₂ with ⟨⟨topics, s₃⟩, h3, run₃⟩
-  rcases of_bind_eq_ok run₃ with ⟨s₄, h4, run₄⟩
-  rcases of_bind_eq_ok run₄ with ⟨_, h5, run₅⟩
+  rcases Except.bind_eq_ok run with ⟨⟨mi, s₁⟩, h1, run₁⟩
+  rcases Except.bind_eq_ok run₁ with ⟨⟨sz, s₂⟩, h2, run₂⟩
+  rcases Except.bind_eq_ok run₂ with ⟨⟨topics, s₃⟩, h3, run₃⟩
+  rcases Except.bind_eq_ok run₃ with ⟨s₄, h4, run₄⟩
+  rcases Except.bind_eq_ok run₄ with ⟨_, h5, run₅⟩
   rcases Devm.pop_of_popToNat h1 with ⟨x, p1⟩
   rcases Devm.pop_of_popToNat h2 with ⟨y, p2⟩
   rcases Devm.pop_of_popN h3 with ⟨h_len, p3⟩
@@ -4441,7 +4441,7 @@ lemma of_run_sload {e : Sevm} {s s' : Devm} (h : Ninst.Run e s sload s') :
     ∃ x, Stack.Diff [x] [Devm.getStorVal s e.currentTarget x] s.stack s'.stack := by
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
-  rcases of_bind_eq_ok run with ⟨⟨key, s₁⟩, h1, run₁⟩
+  rcases Except.bind_eq_ok run with ⟨⟨key, s₁⟩, h1, run₁⟩
   have hpop := Devm.pop_of_pop h1
   have e1 : Devm.getStor s = Devm.getStor s₁ := Devm.pop_getStor_eq h1
   refine ⟨key, s₁.stack, hpop.stack, ?_⟩
@@ -4454,7 +4454,7 @@ lemma of_run_sload {e : Sevm} {s s' : Devm} (h : Ninst.Run e s sload s') :
     · exact H (addAccessedStorageKey s₁ e.currentTarget key) gasColdSload
         (@addAccessedStorageKey_getStor s₁ e.currentTarget key).symm rfl run₁
   intro d c hgs hst run'
-  rcases of_bind_eq_ok run' with ⟨s₂, h2, run₂⟩
+  rcases Except.bind_eq_ok run' with ⟨s₂, h2, run₂⟩
   have hpush := Devm.push_of_push run₂
   have hstk : d.stack = s₂.stack := (Devm.burn_of_chargeGas h2).stack
   have e2 : Devm.getStor d = Devm.getStor s₂ := chargeGas_getStor_eq h2
@@ -5192,7 +5192,7 @@ lemma chargeCodeGas_delSets_ok {rules : ForkRules} {d d' : Devm}
   dsimp only at h
   split at h
   · cases h
-  · rcases of_bind_eq_ok h with ⟨d1, h_charge, h_rest⟩
+  · rcases Except.bind_eq_ok h with ⟨d1, h_charge, h_rest⟩
     split_ifs at h_rest
     cases h_rest
     exact chargeGas_delSets_eq h_charge
@@ -5320,17 +5320,6 @@ lemma Benv.EquivForDelegation_trans {b1 b2 b3 : Benv} (h12 : Benv.EquivForDelega
     rw [h1]
     exact hnd
   rw [h2code a ha2' hnd2, h1]
-
-lemma bind_eq_ok_Except {α β ε : Type} {x : Except ε α} {f : α → Except ε β} {res : β} :
-    bind x f = Except.ok res → ∃ a, x = Except.ok a ∧ f a = Except.ok res := by
-  intro h
-  cases x with
-  | error e =>
-    dsimp [bind, Except.bind] at h
-    contradiction
-  | ok a =>
-    dsimp [bind, Except.bind] at h
-    exact ⟨a, rfl, h⟩
 
 lemma Msg.NoDel.benvAfterTransfer {wa : Adr} {msg : Msg} {benv : Benv}
     (h_run : msg.benvAfterTransfer = .ok benv)

@@ -989,9 +989,9 @@ lemma of_jumpi_run {pc sevm pre pc' inter}
         Devm.PopBurn [x, y] pre inter ∧
         jumpable sevm.code x.toNat = true ∧
         y ≠ 0 ) := by
-  rcases of_bind_eq_ok run with ⟨⟨x, devm1⟩, eq1, run'⟩; clear run
-  rcases of_bind_eq_ok run' with ⟨⟨y, devm2⟩, eq2, run⟩; clear run'
-  rcases of_bind_eq_ok run with ⟨devm3, eq3, run'⟩; clear run
+  rcases Except.bind_eq_ok run with ⟨⟨x, devm1⟩, eq1, run'⟩; clear run
+  rcases Except.bind_eq_ok run' with ⟨⟨y, devm2⟩, eq2, run⟩; clear run'
+  rcases Except.bind_eq_ok run with ⟨devm3, eq3, run'⟩; clear run
   split at run'
   · left;
     injection run' with eq; injection eq
@@ -1003,7 +1003,7 @@ lemma of_jumpi_run {pc sevm pre pc' inter}
     have burn := Devm.burn_of_chargeGas eq3; clear eq3
     exact Devm.popBurn_of_pop_of_burn pop burn
   · right
-    rcases of_bind_eq_ok run' with ⟨u, eq4, run⟩; clear run'
+    rcases Except.bind_eq_ok run' with ⟨u, eq4, run⟩; clear run'
     injection run with eq; injection eq
     iterate 2 (rename_i eq; cases eq)
     refine' ⟨x, y, rfl, _, Except.assert_eq_ok eq4, asm⟩
@@ -1019,7 +1019,7 @@ lemma of_jumpdest_run {pc sevm pre pc' inter}
         {pc := pc, sta := sevm, dyna := pre}
         .jumpdest (.ok ⟨pc', inter⟩) ) :
     pc' = pc + 1 ∧ Devm.Burn pre inter := by
-  rcases of_bind_eq_ok run with ⟨devm, eq_charge, eq_ok⟩
+  rcases Except.bind_eq_ok run with ⟨devm, eq_charge, eq_ok⟩
   injection eq_ok with eq
   injection eq with eq_pc eq_devm
   cases eq_pc; cases eq_devm
@@ -1046,9 +1046,9 @@ lemma of_jump_run {pc sevm pre pc' inter}
       pc' = x.toNat ∧
       Devm.PopBurn [x] pre inter ∧
       jumpable sevm.code x.toNat = true := by
-  rcases of_bind_eq_ok run with ⟨⟨x, devm1⟩, eq1, run⟩
-  rcases of_bind_eq_ok run with ⟨devm2, eq2, run⟩
-  rcases of_bind_eq_ok run with ⟨_, eq3, run⟩
+  rcases Except.bind_eq_ok run with ⟨⟨x, devm1⟩, eq1, run⟩
+  rcases Except.bind_eq_ok run with ⟨devm2, eq2, run⟩
+  rcases Except.bind_eq_ok run with ⟨_, eq3, run⟩
   injection run with eq; injection eq with eq_pc eq_devm
   cases eq_pc; cases eq_devm
   refine' ⟨x, rfl, Devm.popBurn_of_pop_of_burn (Devm.pop_of_pop eq1) (Devm.burn_of_chargeGas eq2), Except.assert_eq_ok eq3⟩

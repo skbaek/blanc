@@ -132,13 +132,4 @@ theorem Bool.lt_or_ge (x y : Bool) : x < y ∨ x ≥ y := by
 theorem Bool.lt_or_eq_of_le {x y : Bool} : x ≤ y → (x < y ∨ x = y) := by
   cases x <;> cases y <;> simp
 
-
-lemma of_bind_eq_ok {ξ υ ζ} {f : Except ξ υ}
-    {g : υ → Except ξ ζ} {z} (h : f >>= g = .ok z) :
-    ∃ x, f = .ok x ∧ g x = .ok z := by
-  cases f with
-  | error => cases h
-  | ok x => refine ⟨x, rfl, h⟩
-
-
 end Blanc

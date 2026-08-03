@@ -237,9 +237,9 @@ instance : Linst.Hinv Devm.getBal Devm.getBal Linst.stop := by
 instance : Linst.Hinv Devm.getBal Devm.getBal Linst.ret := by
   constructor; intros e s r h
   simp only [Linst.Run, Linst.run] at h
-  rcases of_bind_eq_ok h with ⟨⟨n1, s1⟩, h1, h2⟩
-  rcases of_bind_eq_ok h2 with ⟨⟨n2, s2⟩, h3, h4⟩
-  rcases of_bind_eq_ok h4 with ⟨s3, h5, h6⟩
+  rcases Except.bind_eq_ok h with ⟨⟨n1, s1⟩, h1, h2⟩
+  rcases Except.bind_eq_ok h2 with ⟨⟨n2, s2⟩, h3, h4⟩
+  rcases Except.bind_eq_ok h4 with ⟨s3, h5, h6⟩
   injection h6 with h6
   funext a
   rw [← h6]
@@ -250,9 +250,9 @@ instance : Linst.Hinv Devm.getBal Devm.getBal Linst.ret := by
 instance : Linst.Hinv Devm.getBal Devm.getBal Linst.rev := by
   constructor; intros e s r h
   simp only [Linst.Run, Linst.run] at h
-  rcases of_bind_eq_ok h with ⟨v1, h1, h2⟩
-  rcases of_bind_eq_ok h2 with ⟨v2, h3, h4⟩
-  rcases of_bind_eq_ok h4 with ⟨v3, h5, h6⟩
+  rcases Except.bind_eq_ok h with ⟨v1, h1, h2⟩
+  rcases Except.bind_eq_ok h2 with ⟨v2, h3, h4⟩
+  rcases Except.bind_eq_ok h4 with ⟨v3, h5, h6⟩
   contradiction
 
 instance : Linst.Hinv Devm.getStor Devm.getStor Linst.stop := by
@@ -261,9 +261,9 @@ instance : Linst.Hinv Devm.getStor Devm.getStor Linst.stop := by
 instance : Linst.Hinv Devm.getStor Devm.getStor Linst.ret := by
   constructor; intros e s r h
   simp only [Linst.Run, Linst.run] at h
-  rcases of_bind_eq_ok h with ⟨⟨n1, s1⟩, h1, h2⟩
-  rcases of_bind_eq_ok h2 with ⟨⟨n2, s2⟩, h3, h4⟩
-  rcases of_bind_eq_ok h4 with ⟨s3, h5, h6⟩
+  rcases Except.bind_eq_ok h with ⟨⟨n1, s1⟩, h1, h2⟩
+  rcases Except.bind_eq_ok h2 with ⟨⟨n2, s2⟩, h3, h4⟩
+  rcases Except.bind_eq_ok h4 with ⟨s3, h5, h6⟩
   injection h6 with h6
   rw [← h6]
   have h_mem : s3.memRead n1 n2 = ⟨(s3.memRead n1 n2).1, (s3.memRead n1 n2).2⟩ := rfl
@@ -273,9 +273,9 @@ instance : Linst.Hinv Devm.getStor Devm.getStor Linst.ret := by
 instance : Linst.Hinv Devm.getStor Devm.getStor Linst.rev := by
   constructor; intros e s r h
   simp only [Linst.Run, Linst.run] at h
-  rcases of_bind_eq_ok h with ⟨v1, h1, h2⟩
-  rcases of_bind_eq_ok h2 with ⟨v2, h3, h4⟩
-  rcases of_bind_eq_ok h4 with ⟨v3, h5, h6⟩
+  rcases Except.bind_eq_ok h with ⟨v1, h1, h2⟩
+  rcases Except.bind_eq_ok h2 with ⟨v2, h3, h4⟩
+  rcases Except.bind_eq_ok h4 with ⟨v3, h5, h6⟩
   contradiction
 
 syntax "simple_solvent" : tactic
@@ -491,14 +491,14 @@ lemma sstore_getStor_setStorVal {sevm : Sevm} {s s' : Devm} {x xs}
     ∃ v, Devm.getStor s' sevm.currentTarget = (Devm.getStor s sevm.currentTarget).set x v := by
   rcases of_run_reg h_run with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
-  rcases of_bind_eq_ok run with ⟨⟨key, s₁⟩, h1, run₁⟩
-  rcases of_bind_eq_ok run₁ with ⟨⟨val, s₂⟩, h2, run₂⟩
-  rcases of_bind_eq_ok run₂ with ⟨_, h3, run₃⟩
-  rcases of_bind_eq_ok run₃ with ⟨⟨s₃, g₂⟩, h4, run₄⟩
-  rcases of_bind_eq_ok run₄ with ⟨g₃, h5, run₅⟩
-  rcases of_bind_eq_ok run₅ with ⟨s₄, h6, run₆⟩
-  rcases of_bind_eq_ok run₆ with ⟨s₅, h7, run₇⟩
-  rcases of_bind_eq_ok run₇ with ⟨_, h8, h9⟩
+  rcases Except.bind_eq_ok run with ⟨⟨key, s₁⟩, h1, run₁⟩
+  rcases Except.bind_eq_ok run₁ with ⟨⟨val, s₂⟩, h2, run₂⟩
+  rcases Except.bind_eq_ok run₂ with ⟨_, h3, run₃⟩
+  rcases Except.bind_eq_ok run₃ with ⟨⟨s₃, g₂⟩, h4, run₄⟩
+  rcases Except.bind_eq_ok run₄ with ⟨g₃, h5, run₅⟩
+  rcases Except.bind_eq_ok run₅ with ⟨s₄, h6, run₆⟩
+  rcases Except.bind_eq_ok run₆ with ⟨s₅, h7, run₇⟩
+  rcases Except.bind_eq_ok run₇ with ⟨_, h8, h9⟩
   have hkx : x = key :=
     (List.of_cons_pref_of_cons_pref hx (pref_of_split (Devm.pop_of_pop h1).stack)).left
   have e1 : Devm.getStor s = Devm.getStor s₁ := Devm.pop_getStor_eq h1
@@ -533,14 +533,14 @@ lemma sstore_getStor_set {sevm : Sevm} {s s' : Devm} {x y xs}
     Devm.getStor s' sevm.currentTarget = (Devm.getStor s sevm.currentTarget).set x y := by
   rcases of_run_reg h_run with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
-  rcases of_bind_eq_ok run with ⟨⟨key, s₁⟩, h1, run₁⟩
-  rcases of_bind_eq_ok run₁ with ⟨⟨val, s₂⟩, h2, run₂⟩
-  rcases of_bind_eq_ok run₂ with ⟨_, h3, run₃⟩
-  rcases of_bind_eq_ok run₃ with ⟨⟨s₃, g₂⟩, h4, run₄⟩
-  rcases of_bind_eq_ok run₄ with ⟨g₃, h5, run₅⟩
-  rcases of_bind_eq_ok run₅ with ⟨s₄, h6, run₆⟩
-  rcases of_bind_eq_ok run₆ with ⟨s₅, h7, run₇⟩
-  rcases of_bind_eq_ok run₇ with ⟨_, h8, h9⟩
+  rcases Except.bind_eq_ok run with ⟨⟨key, s₁⟩, h1, run₁⟩
+  rcases Except.bind_eq_ok run₁ with ⟨⟨val, s₂⟩, h2, run₂⟩
+  rcases Except.bind_eq_ok run₂ with ⟨_, h3, run₃⟩
+  rcases Except.bind_eq_ok run₃ with ⟨⟨s₃, g₂⟩, h4, run₄⟩
+  rcases Except.bind_eq_ok run₄ with ⟨g₃, h5, run₅⟩
+  rcases Except.bind_eq_ok run₅ with ⟨s₄, h6, run₆⟩
+  rcases Except.bind_eq_ok run₆ with ⟨s₅, h7, run₇⟩
+  rcases Except.bind_eq_ok run₇ with ⟨_, h8, h9⟩
   have hs : s.stack = key :: s₁.stack := (Devm.pop_of_pop h1).stack
   have hs2 : s₁.stack = val :: s₂.stack := (Devm.pop_of_pop h2).stack
   have hxy : x = key ∧ y = val := by
@@ -2581,14 +2581,14 @@ lemma sstore_preserves_getStor_ne {pc : Nat} {sevm : Sevm} {s s' : Devm} {a : Ad
     (h_ne : sevm.currentTarget ≠ a) :
     Devm.getStor s' a = Devm.getStor s a := by
   simp only [Rinst.run, Rinst.runCore] at run
-  rcases of_bind_eq_ok run with ⟨⟨key, s₁⟩, h1, run₁⟩
-  rcases of_bind_eq_ok run₁ with ⟨⟨val, s₂⟩, h2, run₂⟩
-  rcases of_bind_eq_ok run₂ with ⟨_, h3, run₃⟩
-  rcases of_bind_eq_ok run₃ with ⟨⟨s₃, g₂⟩, h4, run₄⟩
-  rcases of_bind_eq_ok run₄ with ⟨g₃, h5, run₅⟩
-  rcases of_bind_eq_ok run₅ with ⟨s₄, h6, run₆⟩
-  rcases of_bind_eq_ok run₆ with ⟨s₅, h7, run₇⟩
-  rcases of_bind_eq_ok run₇ with ⟨_, h8, h9⟩
+  rcases Except.bind_eq_ok run with ⟨⟨key, s₁⟩, h1, run₁⟩
+  rcases Except.bind_eq_ok run₁ with ⟨⟨val, s₂⟩, h2, run₂⟩
+  rcases Except.bind_eq_ok run₂ with ⟨_, h3, run₃⟩
+  rcases Except.bind_eq_ok run₃ with ⟨⟨s₃, g₂⟩, h4, run₄⟩
+  rcases Except.bind_eq_ok run₄ with ⟨g₃, h5, run₅⟩
+  rcases Except.bind_eq_ok run₅ with ⟨s₄, h6, run₆⟩
+  rcases Except.bind_eq_ok run₆ with ⟨s₅, h7, run₇⟩
+  rcases Except.bind_eq_ok run₇ with ⟨_, h8, h9⟩
   have e1 : Devm.getStor s = Devm.getStor s₁ := Devm.pop_getStor_eq h1
   have e2 : Devm.getStor s₁ = Devm.getStor s₂ := Devm.pop_getStor_eq h2
   have e4 : Devm.getStor s₂ = Devm.getStor s₃ := by
@@ -3061,7 +3061,7 @@ lemma chargeCodeGas_state_ok {rules : ForkRules} {d d' : Devm}
   simp only [processCreateMessage.chargeCodeGas] at h
   split at h
   · cases h
-  · rcases of_bind_eq_ok h with ⟨dG, h_charge, h_if⟩
+  · rcases Except.bind_eq_ok h with ⟨dG, h_charge, h_if⟩
     split_ifs at h_if
     rw [← Except.ok.inj h_if]
     exact ((Devm.burn_of_chargeGas h_charge).state).symm
@@ -3480,16 +3480,16 @@ lemma Linst.inv_postcond {wa : Adr} {sevm : Sevm} {pre post : Devm} {l : Linst}
       exact h_pc.solvent.right h_ne
   case rev =>
     dsimp [Linst.Run, Linst.run] at h_run
-    rcases of_bind_eq_ok h_run with ⟨_, _, h2⟩
-    rcases of_bind_eq_ok h2 with ⟨_, _, h4⟩
-    rcases of_bind_eq_ok h4 with ⟨_, _, h6⟩
+    rcases Except.bind_eq_ok h_run with ⟨_, _, h2⟩
+    rcases Except.bind_eq_ok h2 with ⟨_, _, h4⟩
+    rcases Except.bind_eq_ok h4 with ⟨_, _, h6⟩
     contradiction
   case dest =>
     dsimp [Linst.Run, Linst.run] at h_run
-    rcases of_bind_eq_ok h_run with ⟨⟨dest_a, devm1⟩, h_pop, h_run1⟩
-    rcases of_bind_eq_ok h_run1 with ⟨devm2, h_charge, h_run2⟩
-    rcases of_bind_eq_ok h_run2 with ⟨_, h_assert, h_run3⟩
-    rcases of_bind_eq_ok h_run3 with ⟨devm3, h_sub, h_run4⟩
+    rcases Except.bind_eq_ok h_run with ⟨⟨dest_a, devm1⟩, h_pop, h_run1⟩
+    rcases Except.bind_eq_ok h_run1 with ⟨devm2, h_charge, h_run2⟩
+    rcases Except.bind_eq_ok h_run2 with ⟨_, h_assert, h_run3⟩
+    rcases Except.bind_eq_ok h_run3 with ⟨devm3, h_sub, h_run4⟩
     have h_sub_some : devm2.subBal sevm.currentTarget ((dest_a, devm1).2.getAcct sevm.currentTarget).bal = some devm3 := by
       cases eq : devm2.subBal sevm.currentTarget ((dest_a, devm1).2.getAcct sevm.currentTarget).bal
       · rw [eq] at h_sub; contradiction
@@ -3555,7 +3555,7 @@ theorem weth_preserves_solvent (wa : Adr) :
     cases n' with
     | push xs le =>
       simp only [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at h_run'
-      rcases of_bind_eq_ok h_run'.2.symm with ⟨devm1, h_charge, h_push⟩
+      rcases Except.bind_eq_ok h_run'.2.symm with ⟨devm1, h_charge, h_push⟩
       exact h_pc'.state_eq
         (((Devm.burn_of_chargeGas h_charge).state).trans
           ((Devm.push_of_push h_push).state)).symm
@@ -4532,7 +4532,7 @@ lemma setDelegationLoop_benv_equiv {auths : List Auth} {msg msg' : Msg} {refund 
     exact Benv.EquivForDelegation_refl _
   | cons auth auths_tail ih =>
     unfold setDelegationLoop at h
-    rcases bind_eq_ok_Except h with ⟨⟨msg1, refund1⟩, h_step, h_tail⟩
+    rcases Except.bind_eq_ok h with ⟨⟨msg1, refund1⟩, h_step, h_tail⟩
     have h_equiv1 := setDelegationStep_benv_equiv h_step
     have h_equiv2 := ih h_tail
     exact Benv.EquivForDelegation_trans h_equiv1 h_equiv2
@@ -4542,7 +4542,7 @@ lemma setDelegation_benv_equiv {msg msg' : Msg} {v : B256}
     Benv.EquivForDelegation msg.benv msg'.benv := by
   unfold setDelegation at h_run
   dsimp [bind, Except.bind] at h_run
-  apply bind_eq_ok_Except at h_run
+  apply Except.bind_eq_ok at h_run
   rcases h_run with ⟨⟨msg_mid, refundCounter⟩, h_loop, h_rest⟩
   have h_eq_benv : msg_mid.benv = msg'.benv := by
     dsimp only at h_rest
@@ -4626,7 +4626,7 @@ lemma setDelegationLoop_preserves_solvent {wa : Adr} {auths : List Auth} {msg ms
     exact h_inv
   | cons auth auths_tail ih =>
     unfold setDelegationLoop at h_run
-    rcases bind_eq_ok_Except h_run with ⟨⟨msg1, refund1⟩, h_step, h_tail⟩
+    rcases Except.bind_eq_ok h_run with ⟨⟨msg1, refund1⟩, h_step, h_tail⟩
     exact ih h_tail (setDelegationStep_preserves_solvent h_step h_inv)
 
 lemma setDelegation_preserves_solvent {wa : Adr} {msg msg' : Msg} {v : B256}
@@ -4635,7 +4635,7 @@ lemma setDelegation_preserves_solvent {wa : Adr} {msg msg' : Msg} {v : B256}
     State.Inv wa msg'.benv.state := by
   unfold setDelegation at h_run
   dsimp [bind, Except.bind] at h_run
-  apply bind_eq_ok_Except at h_run
+  apply Except.bind_eq_ok at h_run
   rcases h_run with ⟨⟨msg_mid, refundCounter⟩, h_loop, h_rest⟩
   have h_eq_benv : msg_mid.benv = msg'.benv := by
     dsimp only at h_rest
@@ -4697,7 +4697,7 @@ lemma setDelegationLoop_fields {auths : List Auth} {msg msg' : Msg}
     simp
   | cons auth auths_tail ih =>
     unfold setDelegationLoop at h_run
-    rcases bind_eq_ok_Except h_run with ⟨⟨msg1, refund1⟩, h_step, h_tail⟩
+    rcases Except.bind_eq_ok h_run with ⟨⟨msg1, refund1⟩, h_step, h_tail⟩
     rcases setDelegationStep_fields h_step with ⟨hc1, htgt1, ht1, hstv1, hv1, hca1⟩
     rcases ih h_tail with ⟨hc2, htgt2, ht2, hstv2, hv2, hca2⟩
     exact ⟨hc2.trans hc1, htgt2.trans htgt1, ht2.trans ht1, hstv2.trans hstv1, hv2.trans hv1, hca2.trans hca1⟩
@@ -4712,7 +4712,7 @@ lemma setDelegation_fields {msg msg' : Msg} {v : B256}
     msg'.codeAddress = msg.codeAddress := by
   unfold setDelegation at h_run
   dsimp [bind, Except.bind] at h_run
-  apply bind_eq_ok_Except at h_run
+  apply Except.bind_eq_ok at h_run
   rcases h_run with ⟨⟨msg_mid, refundCounter⟩, h_loop, h_rest⟩
   rcases setDelegationLoop_fields h_loop with ⟨hc, htgt, hct, hstv, hv, hca⟩
   dsimp only at h_rest
@@ -4785,7 +4785,7 @@ lemma setDelegation_preserves_msg_solvent {wa : Adr} {msg msg' : Msg} {v : B256}
   · intro h_tgt h_ct
     unfold setDelegation at h_run
     dsimp [bind, Except.bind] at h_run
-    apply bind_eq_ok_Except at h_run
+    apply Except.bind_eq_ok at h_run
     rcases h_run with ⟨⟨msg_mid, refundCounter⟩, h_loop, h_rest⟩
     rcases setDelegationLoop_fields h_loop with ⟨_, h_mid_tgt, h_mid_ct, _, _, h_mid_ca⟩
     have h_loop_equiv := setDelegationLoop_benv_equiv h_loop
@@ -4819,7 +4819,7 @@ lemma setDelegation_preserves_msg_solvent {wa : Adr} {msg msg' : Msg} {v : B256}
   · intro h_tgt h_ct
     unfold setDelegation at h_run_orig
     dsimp [bind, Except.bind] at h_run_orig
-    apply bind_eq_ok_Except at h_run_orig
+    apply Except.bind_eq_ok at h_run_orig
     rcases h_run_orig with ⟨⟨msg_mid, refundCounter⟩, h_loop, h_rest⟩
     rcases setDelegationLoop_fields h_loop with ⟨_, h_mid_tgt, h_mid_ct, _, _, h_mid_ca⟩
     dsimp only at h_rest
@@ -4841,7 +4841,7 @@ lemma setDelegation_preserves_msg_solvent {wa : Adr} {msg msg' : Msg} {v : B256}
   · intro h_stv
     unfold setDelegation at h_run_orig
     dsimp [bind, Except.bind] at h_run_orig
-    apply bind_eq_ok_Except at h_run_orig
+    apply Except.bind_eq_ok at h_run_orig
     rcases h_run_orig with ⟨⟨msg_mid, refundCounter⟩, h_loop, h_rest⟩
     rcases setDelegationLoop_fields h_loop with ⟨h_mid_caller, _, _, h_mid_stv, _, _⟩
     dsimp only at h_rest
@@ -4860,7 +4860,7 @@ lemma setDelegation_preserves_msg_solvent {wa : Adr} {msg msg' : Msg} {v : B256}
   · intro h_stv h_ct
     unfold setDelegation at h_run_orig
     dsimp [bind, Except.bind] at h_run_orig
-    apply bind_eq_ok_Except at h_run_orig
+    apply Except.bind_eq_ok at h_run_orig
     rcases h_run_orig with ⟨⟨msg_mid, refundCounter⟩, h_loop, h_rest⟩
     rcases setDelegationLoop_fields h_loop with ⟨_, _, h_mid_ct, h_mid_stv, h_mid_val, _⟩
     dsimp only at h_rest
@@ -5155,14 +5155,14 @@ lemma checkTransaction_sender_ne_of_inv_solvent {wa : Adr}
   intro hsender
   subst sender
   unfold checkTransaction at h_check
-  rcases of_bind_eq_ok h_check with ⟨_, _, h_check⟩
-  rcases of_bind_eq_ok h_check with ⟨_, _, h_check⟩
-  rcases of_bind_eq_ok h_check with ⟨senderAddress, _, h_check⟩
-  rcases of_bind_eq_ok h_check with ⟨_, _, h_check⟩
-  rcases of_bind_eq_ok h_check with ⟨_, _, h_check⟩
-  rcases of_bind_eq_ok h_check with ⟨_, _, h_check⟩
-  rcases of_bind_eq_ok h_check with ⟨_, _, h_check⟩
-  rcases of_bind_eq_ok h_check with ⟨_, hg, h_check⟩
+  rcases Except.bind_eq_ok h_check with ⟨_, _, h_check⟩
+  rcases Except.bind_eq_ok h_check with ⟨_, _, h_check⟩
+  rcases Except.bind_eq_ok h_check with ⟨senderAddress, _, h_check⟩
+  rcases Except.bind_eq_ok h_check with ⟨_, _, h_check⟩
+  rcases Except.bind_eq_ok h_check with ⟨_, _, h_check⟩
+  rcases Except.bind_eq_ok h_check with ⟨_, _, h_check⟩
+  rcases Except.bind_eq_ok h_check with ⟨_, _, h_check⟩
+  rcases Except.bind_eq_ok h_check with ⟨_, hg, h_check⟩
   have hs : senderAddress = wa := congrArg Prod.fst (Except.ok.inj h_check)
   subst senderAddress
   unfold checkTransactionSenderAccount at hg
@@ -5250,16 +5250,16 @@ lemma checkTransaction_upfront_lt_modulus {benv : Benv} {bout : BlockOutput}
         calculateDataFee benv.stat.rules.blob benv.stat.excessBlobGas tx
       else 0) < 2 ^ 256 := by
   unfold checkTransaction at h_check
-  rcases of_bind_eq_ok h_check with ⟨txBlobGasUsed', h_limit, h_check⟩
-  rcases of_bind_eq_ok h_check with ⟨_, h_chain, h_check⟩
-  rcases of_bind_eq_ok h_check with ⟨senderAddress, h_recover, h_check⟩
-  rcases of_bind_eq_ok h_check with ⟨fee, h_fee, h_check⟩
+  rcases Except.bind_eq_ok h_check with ⟨txBlobGasUsed', h_limit, h_check⟩
+  rcases Except.bind_eq_ok h_check with ⟨_, h_chain, h_check⟩
+  rcases Except.bind_eq_ok h_check with ⟨senderAddress, h_recover, h_check⟩
+  rcases Except.bind_eq_ok h_check with ⟨fee, h_fee, h_check⟩
   rcases fee with ⟨effectiveGasPrice', maxGasFee⟩
-  rcases of_bind_eq_ok h_check with ⟨blob, h_blob, h_check⟩
+  rcases Except.bind_eq_ok h_check with ⟨blob, h_blob, h_check⟩
   rcases blob with ⟨maxGasFee', blobVersionedHashes'⟩
-  rcases of_bind_eq_ok h_check with ⟨_, h_receiver, h_check⟩
-  rcases of_bind_eq_ok h_check with ⟨_, h_auth, h_check⟩
-  rcases of_bind_eq_ok h_check with ⟨_, h_account, h_check⟩
+  rcases Except.bind_eq_ok h_check with ⟨_, h_receiver, h_check⟩
+  rcases Except.bind_eq_ok h_check with ⟨_, h_auth, h_check⟩
+  rcases Except.bind_eq_ok h_check with ⟨_, h_account, h_check⟩
   have h_result := Except.ok.inj h_check
   simp only [Prod.mk.injEq] at h_result
   obtain ⟨rfl, rfl, rfl, rfl⟩ := h_result
@@ -5341,7 +5341,7 @@ lemma checkTransaction_upfront_lt_modulus {benv : Benv} {bout : BlockOutput}
         rw [Except.mapError_eq_ok_iff] at h_blob
         split at h_blob
         · cases h_blob
-        · rcases of_bind_eq_ok h_blob with ⟨_, _, h_blob⟩
+        · rcases Except.bind_eq_ok h_blob with ⟨_, _, h_blob⟩
           split at h_blob
           · cases h_blob
           · split at h_blob
@@ -5548,17 +5548,17 @@ theorem processTransaction_preserves_solvent (wa : Adr)
   -- `beginTransaction` only refreshes `stat.origState`, which no balance here
   -- reads; project it away so the state/fee terms stay in terms of `benv`.
   simp only [Benv.beginTransaction] at h_run
-  rcases of_bind_eq_ok h_run with ⟨bout0, hbout0, h_run⟩
-  rcases of_bind_eq_ok h_run with ⟨gasInfo, hval, h_run⟩
+  rcases Except.bind_eq_ok h_run with ⟨bout0, hbout0, h_run⟩
+  rcases Except.bind_eq_ok h_run with ⟨gasInfo, hval, h_run⟩
   rcases gasInfo with ⟨intrinsicGas, calldataFloorGasCost⟩
-  rcases of_bind_eq_ok h_run with ⟨chk, hcheck, h_run⟩
+  rcases Except.bind_eq_ok h_run with ⟨chk, hcheck, h_run⟩
   rcases chk with ⟨sender, effectiveGasPrice, blobVersionedHashes, txBlobGasUsed⟩
-  rcases of_bind_eq_ok h_run with ⟨state1, hsub, h_run⟩
-  rcases of_bind_eq_ok h_run with ⟨msg, hprep, h_run⟩
-  rcases of_bind_eq_ok h_run with ⟨pmout, hpm, h_run⟩
+  rcases Except.bind_eq_ok h_run with ⟨state1, hsub, h_run⟩
+  rcases Except.bind_eq_ok h_run with ⟨msg, hprep, h_run⟩
+  rcases Except.bind_eq_ok h_run with ⟨pmout, hpm, h_run⟩
   rcases pmout with ⟨state2, txOutput⟩
   rw [Except.mapError_eq_ok_iff] at hval hpm
-  rcases of_bind_eq_ok h_run with ⟨refundCounter, hrefund, h_run⟩
+  rcases Except.bind_eq_ok h_run with ⟨refundCounter, hrefund, h_run⟩
   simp only at h_run
   rcases h_run with ⟨rfl, rfl⟩
   have hsender : sender ≠ wa :=
@@ -5641,7 +5641,7 @@ theorem applyTransactions_preserves_solvent (wa : Adr)
   | cons hd tl ih =>
     obtain ⟨i, tx⟩ := hd
     rw [applyTransactions] at h_run
-    obtain ⟨⟨st, bout''⟩, h1, h2⟩ := of_bind_eq_ok h_run
+    obtain ⟨⟨st, bout''⟩, h1, h2⟩ := Except.bind_eq_ok h_run
     have hstep := processTransaction_preserves_solvent wa benv bout bout'' tx i st h1 h_inv
     exact ih (benv.withState st) bout'' h2 hstep
 
@@ -5740,17 +5740,17 @@ lemma processTransaction_sum_le {benv : Benv} {bout bout' : BlockOutput}
   -- as in `processTransaction_preserves_solvent`: `beginTransaction` touches only
   -- `stat.origState`, which no balance below reads.
   simp only [Benv.beginTransaction] at h_run
-  rcases of_bind_eq_ok h_run with ⟨bout0, hbout0, h_run⟩
-  rcases of_bind_eq_ok h_run with ⟨gasInfo, hval, h_run⟩
+  rcases Except.bind_eq_ok h_run with ⟨bout0, hbout0, h_run⟩
+  rcases Except.bind_eq_ok h_run with ⟨gasInfo, hval, h_run⟩
   rcases gasInfo with ⟨intrinsicGas, calldataFloorGasCost⟩
-  rcases of_bind_eq_ok h_run with ⟨chk, hcheck, h_run⟩
+  rcases Except.bind_eq_ok h_run with ⟨chk, hcheck, h_run⟩
   rcases chk with ⟨sender, effectiveGasPrice, blobVersionedHashes, txBlobGasUsed⟩
-  rcases of_bind_eq_ok h_run with ⟨state1, hsub, h_run⟩
-  rcases of_bind_eq_ok h_run with ⟨msg, hprep, h_run⟩
-  rcases of_bind_eq_ok h_run with ⟨pmout, hpm, h_run⟩
+  rcases Except.bind_eq_ok h_run with ⟨state1, hsub, h_run⟩
+  rcases Except.bind_eq_ok h_run with ⟨msg, hprep, h_run⟩
+  rcases Except.bind_eq_ok h_run with ⟨pmout, hpm, h_run⟩
   rcases pmout with ⟨state2, txOutput⟩
   rw [Except.mapError_eq_ok_iff] at hval hpm
-  rcases of_bind_eq_ok h_run with ⟨refundCounter, hrefund, h_run⟩
+  rcases Except.bind_eq_ok h_run with ⟨refundCounter, hrefund, h_run⟩
   simp only at h_run
   rcases h_run with ⟨rfl, rfl⟩
   have hsub_some :
@@ -5874,7 +5874,7 @@ lemma applyTransactions_sum_le
   | cons hd tl ih =>
     obtain ⟨i, tx⟩ := hd
     rw [applyTransactions] at h_run
-    obtain ⟨⟨st, bout''⟩, h1, h2⟩ := of_bind_eq_ok h_run
+    obtain ⟨⟨st, bout''⟩, h1, h2⟩ := Except.bind_eq_ok h_run
     exact le_trans (ih h2) (processTransaction_sum_le h1)
 
 /-
@@ -5935,7 +5935,7 @@ lemma processCheckedSystemTransaction_to_unchecked {benv : Benv} {target : Adr} 
   dsimp [processCheckedSystemTransaction, processUncheckedSystemTransaction] at h ⊢
   split at h
   · cases h
-  · rcases of_bind_eq_ok h with ⟨⟨st', out'⟩, h1, h2⟩
+  · rcases Except.bind_eq_ok h with ⟨⟨st', out'⟩, h1, h2⟩
     split at h2
     · cases h2
     · obtain ⟨h3, h4⟩ := Prod.mk.inj (Except.ok.inj h2)
@@ -5959,10 +5959,10 @@ lemma processGeneralPurposeRequests_preserves_solvent_sum_le (wa : Adr)
     (h_inv : Benv.InvSolvent wa benv) :
     State.Inv wa st ∧ sum st.bal ≤ sum benv.state.bal := by
   rw [processGeneralPurposeRequests] at h_run
-  rcases of_bind_eq_ok h_run with ⟨deposits, h_dep, h_run⟩
+  rcases Except.bind_eq_ok h_run with ⟨deposits, h_dep, h_run⟩
   dsimp only at h_run
   split at h_run <;>
-    (rcases of_bind_eq_ok h_run with ⟨⟨st1, out1⟩, h1, h_run⟩;
+    (rcases Except.bind_eq_ok h_run with ⟨⟨st1, out1⟩, h1, h_run⟩;
      dsimp only at h_run;
      have hu1 := processUncheckedSystemTransaction_preserves_solvent_sum_le wa benv
        withdrawalRequestPredeployAddress [] st1 out1
@@ -5970,7 +5970,7 @@ lemma processGeneralPurposeRequests_preserves_solvent_sum_le (wa : Adr)
      have h_inv1 : Benv.InvSolvent wa (benv.withState st1) :=
        ⟨hu1.1, by simpa [Benv.withState] using h_inv.ca⟩;
      split at h_run <;>
-       (rcases of_bind_eq_ok h_run with ⟨⟨st2, out2⟩, h2, h_run⟩;
+       (rcases Except.bind_eq_ok h_run with ⟨⟨st2, out2⟩, h2, h_run⟩;
         have hu2 := processUncheckedSystemTransaction_preserves_solvent_sum_le wa (benv.withState st1)
           consolidationRequestPredeployAddress [] st2 out2
           (processCheckedSystemTransaction_to_unchecked h2) h_inv1;
@@ -5987,11 +5987,11 @@ theorem applyBody_preserves_solvent (wa : Adr)
     (h_inv : Benv.InvSolvent wa benv) : State.Inv wa st := by
   rw [applyBody] at h_run
   simp only at h_run
-  rcases of_bind_eq_ok h_run with ⟨⟨stBeacon, outBeacon⟩, h_beacon, h_run⟩
-  rcases of_bind_eq_ok h_run with ⟨lastHash, h_lastHash, h_run⟩
-  rcases of_bind_eq_ok h_run with ⟨⟨stHistory, outHistory⟩, h_history, h_run⟩
-  rcases of_bind_eq_ok h_run with ⟨decodedTxs, h_decode, h_run⟩
-  rcases of_bind_eq_ok h_run with ⟨⟨benvTxs, boutTxs⟩, h_txs, h_requests⟩
+  rcases Except.bind_eq_ok h_run with ⟨⟨stBeacon, outBeacon⟩, h_beacon, h_run⟩
+  rcases Except.bind_eq_ok h_run with ⟨lastHash, h_lastHash, h_run⟩
+  rcases Except.bind_eq_ok h_run with ⟨⟨stHistory, outHistory⟩, h_history, h_run⟩
+  rcases Except.bind_eq_ok h_run with ⟨decodedTxs, h_decode, h_run⟩
+  rcases Except.bind_eq_ok h_run with ⟨⟨benvTxs, boutTxs⟩, h_txs, h_requests⟩
   dsimp only at h_history h_txs h_requests
   rw [Except.mapError_eq_ok_iff] at h_beacon h_history
   have h_beacon_inv :=
@@ -6047,12 +6047,12 @@ theorem stateTransitionWith_preserves_solvent (wa : Adr) (rules : ForkRules)
   -- (`stateTransitionWith_eq_ok_iff`); the state change is `applyBody`, so
   -- this is `applyBody_preserves_solvent` (the block-check helpers don't touch state).
   rw [stateTransitionWith_eq_ok_iff, stateTransitionE] at h_run
-  obtain ⟨_, _, h_run⟩ := of_bind_eq_ok h_run
-  obtain ⟨_, _, h_run⟩ := of_bind_eq_ok h_run
+  obtain ⟨_, _, h_run⟩ := Except.bind_eq_ok h_run
+  obtain ⟨_, _, h_run⟩ := Except.bind_eq_ok h_run
   dsimp only at h_run
-  obtain ⟨⟨st, bout⟩, h_ab, h_run⟩ := of_bind_eq_ok h_run
+  obtain ⟨⟨st, bout⟩, h_ab, h_run⟩ := Except.bind_eq_ok h_run
   dsimp only at h_run
-  obtain ⟨_, _, h_run⟩ := of_bind_eq_ok h_run
+  obtain ⟨_, _, h_run⟩ := Except.bind_eq_ok h_run
   rw [← Except.ok.inj h_run]
   exact applyBody_preserves_solvent wa (initBenv rules ch block.header) block.txs
     block.wds st bout h_ab h_wds ⟨h_inv, AdrSet.not_mem_empty⟩
@@ -6073,8 +6073,8 @@ theorem stateTransitionUsing_preserves_solvent (wa : Adr) (cfg : ChainConfig)
   -- the configured entry point now checks the chain identity first (P0.1);
   -- solvency needs neither that fact nor which rules the schedule picked.
   rw [stateTransitionUsing] at h_run
-  obtain ⟨_, _, h_run⟩ := of_bind_eq_ok h_run
-  obtain ⟨rules, _, h_run⟩ := of_bind_eq_ok h_run
+  obtain ⟨_, _, h_run⟩ := Except.bind_eq_ok h_run
+  obtain ⟨rules, _, h_run⟩ := Except.bind_eq_ok h_run
   exact stateTransitionWith_preserves_solvent wa rules ch ch' block h_run h_wds h_inv
 
 -- Prague is the `rules := pragueRules` instance. The statement is unchanged,
