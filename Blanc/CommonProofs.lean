@@ -4671,6 +4671,81 @@ lemma prefix_of_arg {e k xs} {s s' : Devm} :
     (Sevm.argWord e k :: xs <<+ s'.stack) :=
   prefix_of_cdl_val
 
+/-! ### Reading a described calldata layout
+
+The bridge between `Sevm.dataWord` — what the contract's `calldataload` actually
+yields — and a calldata *described* as an explicit concatenation, which is how
+`abiCallWithTail` states a canonical encoding. Without this the encoding
+definition and the reader would be two unrelated pieces of syntax and the
+decoding predicate would carry no information. -/
+
+/-- The word at `idx` of a calldata that has `pre` before it and a whole word
+`w` at it. Note `post` is unconstrained: nothing about the rest of the calldata
+is needed, which is what lets the head words be read one at a time. -/
+lemma dataWord_of_append {e : Sevm} {idx : B256} {pre post : Bytes} {w : B256}
+    (hlen : idx.toNat = pre.length)
+    (hdata : e.data = pre ++ (B256.toBytes w ++ post)) :
+    Sevm.dataWord e idx = w := by
+  simp only [Sevm.dataWord, hdata, List.sliceD]
+  rw [List.drop_length_append' hlen,
+      List.takeD_eq_take _ (by simp [List.length_append, B256.length_toBytes]),
+      List.take_length_append' (B256.length_toBytes w).symm, B256.toB256_toBytes]
+
+lemma abiSelectorBytes_length (sel : B256) : (abiSelectorBytes sel).length = 4 := by
+  simp [abiSelectorBytes, B256.length_toBytes]
+
+/-! The three head words and the offset word of a `flashLoan`-shaped call.
+
+`flashLoan(address,address,uint256,bytes)` is three static heads then one
+dynamic tail, so these four are the whole head area. Together they are what
+makes `Sevm.DecodesCallWithTail` a *specification*: they say the contract's own
+`arg 0`, `arg 1`, `arg 2` and `arg 3` recover exactly the arguments the encoding
+was built from, which is the identity fixed decision 2 demands and the falsifier
+for the encoding definition itself. -/
+
+/-- The encoding's head area, right-associated so each head word can be read off
+by `dataWord_of_append` after re-associating the prefix. -/
+lemma decodes_split {e : Sevm} {sel a b c : B256} {data : Bytes}
+    (h : Sevm.DecodesCallWithTail e sel [a, b, c] data) :
+    e.data = abiSelectorBytes sel ++ (B256.toBytes a ++ (B256.toBytes b ++
+      (B256.toBytes c ++ (B256.toBytes (Nat.toB256 128) ++ abiBytesTail data)))) := by
+  simpa [Sevm.DecodesCallWithTail, abiCallWithTail, List.append_assoc] using h
+
+lemma argWord_zero_of_decodes {e : Sevm} {sel a b c : B256} {data : Bytes}
+    (h : Sevm.DecodesCallWithTail e sel [a, b, c] data) : Sevm.argWord e 0 = a :=
+  dataWord_of_append (by rw [abiSelectorBytes_length]; rfl) (decodes_split h)
+
+lemma argWord_one_of_decodes {e : Sevm} {sel a b c : B256} {data : Bytes}
+    (h : Sevm.DecodesCallWithTail e sel [a, b, c] data) : Sevm.argWord e 1 = b := by
+  have hd : e.data = (abiSelectorBytes sel ++ B256.toBytes a) ++ (B256.toBytes b ++
+      (B256.toBytes c ++ (B256.toBytes (Nat.toB256 128) ++ abiBytesTail data))) := by
+    rw [List.append_assoc]; exact decodes_split h
+  exact dataWord_of_append
+    (by rw [List.length_append, abiSelectorBytes_length, B256.length_toBytes]; rfl) hd
+
+lemma argWord_two_of_decodes {e : Sevm} {sel a b c : B256} {data : Bytes}
+    (h : Sevm.DecodesCallWithTail e sel [a, b, c] data) : Sevm.argWord e 2 = c := by
+  have hd : e.data = (abiSelectorBytes sel ++ B256.toBytes a ++ B256.toBytes b) ++
+      (B256.toBytes c ++ (B256.toBytes (Nat.toB256 128) ++ abiBytesTail data)) := by
+    rw [List.append_assoc, List.append_assoc]; exact decodes_split h
+  exact dataWord_of_append
+    (by rw [List.length_append, List.length_append, abiSelectorBytes_length,
+        B256.length_toBytes, B256.length_toBytes]; rfl) hd
+
+/-- The offset word is `0x80`, and this is proved rather than assumed: it is the
+one head word whose value the encoding's *shape* fixes. -/
+lemma argWord_three_of_decodes {e : Sevm} {sel a b c : B256} {data : Bytes}
+    (h : Sevm.DecodesCallWithTail e sel [a, b, c] data) :
+    Sevm.argWord e 3 = Nat.toB256 128 := by
+  have hd : e.data =
+      (abiSelectorBytes sel ++ B256.toBytes a ++ B256.toBytes b ++ B256.toBytes c) ++
+      (B256.toBytes (Nat.toB256 128) ++ abiBytesTail data) := by
+    rw [List.append_assoc, List.append_assoc, List.append_assoc]; exact decodes_split h
+  exact dataWord_of_append
+    (by rw [List.length_append, List.length_append, List.length_append,
+        abiSelectorBytes_length, B256.length_toBytes, B256.length_toBytes,
+        B256.length_toBytes]; rfl) hd
+
 lemma of_run_sload {e : Sevm} {s s' : Devm} (h : Ninst.Run e s sload s') :
     ∃ x, Stack.Diff [x] [Devm.getStorVal s e.currentTarget x] s.stack s'.stack := by
   rcases of_run_reg h with ⟨pc, run⟩

@@ -257,6 +257,63 @@ def forwardArgTail (k lenWord : B256) : Line :=
   pushB256 ((lenWord + 1) * 32) ::      -- dst :: p + 32 :: len :: len
   calldatacopy :: []                    -- len
 
+/-! ### Canonical ABI call encoding
+
+What a conforming caller sends. These are written from the arguments outward and
+mention no Blanc program, which is the point: a predicate defined as "whatever
+`arg 0`, `arg 1`, `arg 2` and `forwardArgTail 3` happen to read" would be
+satisfied by every calldata and would specify nothing.
+
+**Recorded decision (arc `fmint-flashloan`, Step 1c, option (i)).** The
+predicate below *requires* a canonical, Solidity-shaped encoding rather than
+describing whatever the contract's own reads yield. The contract validates no
+offset (`FMINT_DEVIATIONS.md` row 21), so a non-canonical encoding — a tail
+offset pointing somewhere else, overlapping heads, trailing junk — is decodable
+by the contract but need not round-trip through any encoder. Specifying over
+those inputs would either weaken the statement to a tautology about the reads
+or force the encoding to be defined as the reads, which is the vacuity fixed
+decision 2 forbids. **The non-canonical case is therefore out of scope**, and a
+specification premised on this predicate says nothing about it. That is a real
+restriction on what such a theorem covers and must travel with it. -/
+
+/-- A selector's four bytes, big-endian. `B256.toBytes` is 32 bytes wide and a
+function selector occupies the low four of them. -/
+def abiSelectorBytes (sel : B256) : Bytes := (B256.toBytes sel).drop 28
+
+/-- The tail of a dynamic `bytes` argument: its length word, then the payload
+right-padded with zeros to a whole number of words.
+
+The padding is what a reference encoder produces; `forwardArgTail` reproduces it
+on the *outgoing* side by leaving zero-initialized memory above the payload. -/
+def abiBytesTail (data : Bytes) : Bytes :=
+  B256.toBytes (Nat.toB256 data.length) ++ data ++
+    List.replicate (ceil32 data.length - data.length) 0
+
+/-- Canonical encoding of a call `sel(h₀, …, hₙ₋₁, bytes)` — `n` static head
+words followed by one trailing dynamic `bytes` argument.
+
+The offset word is `32 * (heads.length + 1)`: offsets are relative to the start
+of the argument area, and the tail begins after the `n` head words plus the
+offset word itself. For `flashLoan(address,address,uint256,bytes)` that is
+`32 * 4 = 0x80`. -/
+def abiCallWithTail (sel : B256) (heads : List B256) (data : Bytes) : Bytes :=
+  abiSelectorBytes sel ++
+  (heads.map B256.toBytes).flatten ++
+  B256.toBytes (Nat.toB256 (32 * (heads.length + 1))) ++
+  abiBytesTail data
+
+/-- Our calldata *is* a canonically encoded call to `sel` with the given static
+arguments and trailing `bytes`.
+
+A function of the arguments, as fixed decision 2 requires — instantiate it, do
+not restate the contract's reads. `flashLoan`'s decoding premise is
+`Sevm.DecodesCallWithTail e flashLoanSelector [receiver, token, amount] data`,
+a function of exactly the four `flashLoan` arguments; the instantiation belongs
+with fmint rather than in this shared module. -/
+def Sevm.DecodesCallWithTail
+    (e : Sevm) (sel : B256) (heads : List B256) (data : Bytes) : Prop :=
+  e.data = abiCallWithTail sel heads data
+
 -- Is the last call's return data shorter than `n` bytes?
 --
 -- ( -- retdatasize <? n )
