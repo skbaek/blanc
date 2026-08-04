@@ -16,6 +16,10 @@ This repo contains the following files:
   writing and verifying Blanc programs, including the Blanc compiler's
   correctness proof and tactics for automating Blanc program verification.
   They import in that order.
+- [Ladder.lean](Blanc/Ladder.lean): the contract-generic verification ladder,
+  including the `ContractSpec` record each contract instantiates and the
+  dispatcher decomposition (`FuncSound`, `sound_of_dispatch`) that reduces a
+  whole-contract obligation to one obligation per dispatch target.
 - [Weth.lean](Blanc/Weth.lean): proof-of-concept implementation of the Wrapped 
   Ether (WETH) contract in Blanc.
 - [WethCode.lean](Blanc/WethCode.lean): the compiled WETH runtime bytecode and
@@ -23,13 +27,52 @@ This repo contains the following files:
   [`scripts/gen-weth-code.lean`](scripts/gen-weth-code.lean) — do not edit by
   hand.
 - [Solvent.lean](Blanc/Solvent.lean): proof of solvency for the WETH implementation.
+- [Fmint.lean](Blanc/Fmint.lean): implementation of an ERC-3156 flash-mint
+  token (FMINT) in Blanc — the second contract, and the one that makes the
+  hierarchy rule below load-bearing.
+- [FmintCode.lean](Blanc/FmintCode.lean): the compiled FMINT runtime bytecode
+  and its compile witness. Generated in full by
+  [`scripts/gen-fmint-code.lean`](scripts/gen-fmint-code.lean) — do not edit by
+  hand.
+- [Conserved.lean](Blanc/Conserved.lean): supply conservation for the FMINT
+  implementation — statements only; the invariant and the headline results are
+  stated and not yet proved.
 
 Blanc's WETH is a reimplementation; observable deviations from deployed WETH9
-are catalogued in [`WETH_DEVIATIONS.md`](WETH_DEVIATIONS.md).
+are catalogued in [`WETH_DEVIATIONS.md`](WETH_DEVIATIONS.md). FMINT's
+deviations from OpenZeppelin's `ERC20FlashMint` are catalogued in
+[`FMINT_DEVIATIONS.md`](FMINT_DEVIATIONS.md).
 
 Every module is wrapped in `namespace Blanc`, and Blanc's Jaune imports are
 wrapped in `namespace Jaune`, so downstream code writes qualified names or
 opens the namespace explicitly.
+
+## Module hierarchy: contracts are siblings
+
+Each contract occupies three modules — the program (`Weth.lean`, `Fmint.lean`),
+its compiled bytes with their compile witness (`WethCode.lean`,
+`FmintCode.lean`), and its property layer (`Solvent.lean`, `Conserved.lean`) —
+and **every contract's modules sit at the same level of the import hierarchy as
+every other's**. No contract's module imports another contract's, in either
+direction, at any layer. This binds contracts not yet written exactly as it
+binds the two here.
+
+The rule earns its keep as a diagnostic. When one contract needs something
+another already defines, that is not a licence to import across; it is evidence
+that the thing was never the property of whichever contract happened to define
+it first. Rename it if its name says otherwise, then move it upstream into a
+layer both contracts already import — `CommonCore.lean` for definitions,
+`CommonProofs.lean` for lemmas, `Ladder.lean` for generic verification
+machinery.
+
+`balSum` is the worked example. It began as `wbsum` — "weth balance sum" — in
+`Solvent.lean`, both named and placed as though summing a contract's
+address-keyed balances were a WETH notion. It is not: WETH pairs that sum with
+its ETH balance to state solvency, FMINT pairs it with its supply slot to state
+conservation, and neither use is prior to the other. So it moved to
+`CommonCore.lean`, beside the `sum` it was already built from, and lost the
+`w`. A future contract that finds itself reaching into `Weth.lean` or
+`Solvent.lean` has found the same kind of factoring defect, not a shortcut.
 
 ## Verification status
 
