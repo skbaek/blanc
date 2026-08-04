@@ -138,6 +138,18 @@ the supply slot — but that is a fact its own walk must supply. -/
 theorem Stor.Conserved.of_eq {s s' : Stor} (h : Stor.Conserved s) (h_eq : s = s') :
     Stor.Conserved s' := h_eq ▸ h
 
+/-- **No-op, in the form a guarded allowance write actually delivers.**  A write
+whose key is neither address-shaped nor the supply slot leaves both sides of the
+invariant alone, but it does *not* leave storage equal, so `of_eq` cannot see
+it.  This is the composite the third storage region needs. -/
+theorem Stor.Conserved.of_rest_eq {s s' : Stor} (h : Stor.Conserved s)
+    (h_rest : Stor.rest s = Stor.rest s')
+    (h_sup : s'.get Fmint.supplySlot = s.get Fmint.supplySlot) :
+    Stor.Conserved s' := by
+  show _ = balSum s'
+  rw [h_sup, h]
+  simp only [balSum, h_rest]
+
 /-- **Transfer**: value moves between two address-shaped keys and the supply
 slot is untouched.  `transfer_preserves_sum` wants Σ not to overflow, and the
 invariant itself supplies that (`sumNof`) — there is no side condition to
@@ -414,6 +426,157 @@ theorem transfer_preserves_conserved {sevm : Sevm} {s r : Devm}
     Stor.Conserved (Devm.getStor r sevm.currentTarget) := by
   rcases transfer_of_transfer run with ⟨⟨_, _, _, h_tr⟩, h_off⟩
   exact h.transfer h_tr (h_off _ Fmint.supplySlot_not_validAdr).symm
+
+section
+
+open Jaune.Ninst Ninst
+
+namespace Fmint
+
+/-- **The extended allowance-slot guard, at the proof layer.**  The fmint
+analogue of the hoisted `of_check_address`, and the reason fmint's third storage
+region is safe: one flag on the stack yields *both* conjuncts.
+
+`checkSlotCollides` is `checkAddress` or-ed with `isMax`, and an `or` is zero
+only when both operands are (`B256.of_or_eq_zero`), so a passing guard says the
+key is neither address-shaped nor the supply slot.  `isMax` **is** the
+`supplySlot` comparison — `supplySlot = B256.max`, so "all ones" and "the supply
+slot" are the same test — which is why the clause costs two bytes;
+`Blanc/Fmint.lean` states that identity and its two `example`s prove it. -/
+lemma of_checkSlotCollides {e : Sevm} {s s' : Devm} {x xs} :
+    (x :: xs <<+ s.stack) →
+    Line.Run e s checkSlotCollides s' →
+    ∃ y, (y :: x :: xs <<+ s'.stack) ∧
+      (y = 0 → ¬ ValidAdr x ∧ x ≠ supplySlot) := by
+  intro h_pfx h_run
+  simp only [checkSlotCollides] at h_run
+  rcases of_run_append _ h_run with ⟨s₂, hAB, hOr⟩; clear h_run
+  rcases of_run_append _ hAB with ⟨s₁, hA, hB⟩; clear hAB
+  -- (A) dup 0 :: checkAddress  ( x -- va(x) :: x )
+  rcases Line.of_run_cons hA with ⟨sd, r_dup, hCA⟩
+  rcases of_run_dup r_dup with ⟨w, hw, pb⟩
+  have hw_x : w = x := by
+    have h_get : s.stack[(0 : Fin 16).val]? = some x :=
+      Stack.nth_getElem (Stack.Nth.head x xs) h_pfx
+    rw [h_get] at hw; injection hw with hw; exact hw.symm
+  subst w
+  have hpd : x :: x :: xs <<+ sd.stack := prefix_of_push pb h_pfx
+  rcases of_check_address hpd hCA with ⟨va, hs₁, h_iff⟩
+  clear hA hCA r_dup pb hpd
+  -- (B) dup 1 :: isMax  ( va :: x -- (x =? max) :: va :: x )
+  rcases Line.of_run_cons hB with ⟨se, r_dup', hMax⟩
+  rcases of_run_dup r_dup' with ⟨w, hw', pb'⟩
+  have hw_x' : w = x := by
+    have h_get : s₁.stack[(1 : Fin 16).val]? = some x :=
+      Stack.nth_getElem (Stack.Nth.tail 0 x va (x :: xs) (Stack.Nth.head x xs)) hs₁
+    rw [h_get] at hw'; injection hw' with hw'; exact hw'.symm
+  subst w
+  have hpe : x :: va :: x :: xs <<+ se.stack := prefix_of_push pb' hs₁
+  simp only [isMax] at hMax
+  rcases Line.of_run_cons hMax with ⟨sn, r_not, hMax'⟩
+  rcases Line.of_run_cons hMax' with ⟨si, r_isz, hnil⟩
+  cases hnil
+  have hpn : (~~~ x) :: va :: x :: xs <<+ sn.stack := prefix_of_not r_not hpe
+  have hps₂ : ((~~~ x) =? 0) :: va :: x :: xs <<+ s₂.stack := prefix_of_iszero r_isz hpn
+  -- (C) or : the two clauses collapse into one flag
+  refine ⟨((~~~ x) =? 0) ||| va, prefix_of_or (of_run_singleton hOr) hps₂, ?_⟩
+  intro h_zero
+  rcases Blanc.B256.of_or_eq_zero h_zero with ⟨h_max, h_va⟩
+  refine ⟨h_iff.mp h_va, ?_⟩
+  intro h_eq
+  rw [h_eq] at h_max
+  have h_one : B256.eqCheck (~~~ supplySlot) 0 = 1 := by decide
+  rw [h_one] at h_max
+  exact B256.zero_ne_one h_max.symm
+
+/-- fmint's `prepApprove`, which is WETH's with `checkSlotCollides` in place of
+`dup 0 :: checkAddress`.  The guard already duplicates the hash, so the walk is
+one instruction shorter and the payload is one conjunct richer. -/
+lemma of_prepApprove {sevm : Sevm} {s s' : Devm} :
+    Line.Run sevm s prepApprove s' →
+    ∃ vx x y, ([vx, x, y] <<+ s'.stack) ∧
+      (vx = 0 → ¬ ValidAdr x ∧ x ≠ supplySlot) := by
+  line_execute 7
+  have hp₀ : [] <<+ s₁.stack := nil_pref
+  clear_state s
+  line_execute 2
+  rcases prefix_of_cdl hp₀ h₂ with ⟨wad, hp₁⟩
+  clear_state s₁
+  line_execute 2
+  have hp₂ : [0, 64, wad] <<+ s₃.stack := by generalize_line_prefix
+  clear_state s₂
+  line_execute 1
+  rcases prefix_of_kec (of_run_singleton h₄) hp₂ with ⟨hash, hp₃⟩
+  clear_state s₃
+  intro h
+  rcases of_checkSlotCollides hp₃ h with ⟨vx, h_vx, h_iff⟩
+  exact ⟨vx, hash, wad, h_vx, h_iff⟩
+
+/-- `approve`'s whole storage effect: one write, at a key the guard has shown to
+be neither address-shaped nor the supply slot.
+
+Stated as the `set` rather than as two invariance facts because that is what the
+walk actually establishes, and because both halves of the conservation
+invariant then read off it. -/
+lemma of_approve {sevm : Sevm} {s r : Devm}
+    (run : Func.Run (fmint.main :: fmintAux) sevm s approve r) :
+    ∃ k v, ¬ ValidAdr k ∧ k ≠ supplySlot ∧
+      Devm.getStor r sevm.currentTarget = (Devm.getStor s sevm.currentTarget).set k v := by
+  simp only [approve] at run
+  -- arg 0 ++ checkNonAddress, then the rev-branch on `guy`
+  rcases of_run_prepend (arg 0 ++ checkNonAddress) _ run with ⟨s0, h_s0, h_run'⟩; clear run
+  have hg0 : Devm.getStor s sevm.currentTarget = Devm.getStor s0 sevm.currentTarget :=
+    congr_fun (by invariance : Devm.getStor s = Devm.getStor s0) sevm.currentTarget
+  rcases of_run_branch_rev h_run' with ⟨s1, h_pop, h_run⟩; clear h_run'
+  have hg1 : Devm.getStor s0 sevm.currentTarget = Devm.getStor s1 sevm.currentTarget :=
+    (Devm.PopBurn.getStor h_pop sevm.currentTarget).symm
+  clear h_pop
+  -- prepApprove : the hash and the guard flag
+  rcases of_run_prepend prepApprove _ h_run with ⟨s2, h_s2, h_run'⟩; clear h_run
+  rcases of_prepApprove h_s2 with ⟨collides, hash, wad, h_s2_stk, h_iff⟩
+  have hg2 : Devm.getStor s1 sevm.currentTarget = Devm.getStor s2 sevm.currentTarget :=
+    congr_fun (by invariance : Devm.getStor s1 = Devm.getStor s2) sevm.currentTarget
+  clear h_s2
+  -- rev-branch : the guard passed, so the flag is 0 and both conjuncts hold
+  rcases of_run_branch_rev h_run' with ⟨s3, h_pop', h_run⟩; clear h_run'
+  have h_pop_stk := h_pop'.stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at h_pop_stk
+  rw [h_pop_stk] at h_s2_stk
+  have h_zero : collides = 0 := pref_head_unique h_s2_stk (pref_append [0] s3.stack)
+  rcases h_iff h_zero with ⟨h_nva, h_nsup⟩
+  rw [h_zero] at h_s2_stk
+  have h_s3_stk : [hash, wad] <<+ s3.stack := cons_pref_cons_inv h_s2_stk
+  have hg3 : Devm.getStor s2 sevm.currentTarget = Devm.getStor s3 sevm.currentTarget :=
+    (Devm.PopBurn.getStor h_pop' sevm.currentTarget).symm
+  clear h_pop' h_pop_stk h_s2_stk h_iff
+  -- the single sstore, then a storage-silent tail
+  rcases of_run_next h_run with ⟨s4, h_sstore, h_run'⟩; clear h_run
+  rcases sstore_getStor_setStorVal h_sstore h_s3_stk with ⟨v, h_set⟩
+  have hg4 : Devm.getStor s4 sevm.currentTarget = Devm.getStor r sevm.currentTarget :=
+    congr_fun (Func.of_inv Devm.getStor Devm.getStor (by func_inv) h_run') sevm.currentTarget
+  exact ⟨hash, v, h_nva, h_nsup, by rw [← hg4, h_set, ← hg3, ← hg2, ← hg1, ← hg0]⟩
+
+end Fmint
+
+/-- `approve` writes one allowance slot and nothing else.  WETH needed only that
+the key is not address-shaped, so that Σ cannot see the write; fmint's invariant
+is an *equality*, so it needs the second conjunct too — and that is exactly what
+the `isMax` clause of `checkSlotCollides` buys.  This is the reason the third
+storage region is safe. -/
+theorem approve_preserves_conserved {sevm : Sevm} {s r : Devm}
+    (run : Func.Run (Fmint.fmint.main :: Fmint.fmintAux) sevm s Fmint.approve r)
+    (h : Stor.Conserved (Devm.getStor s sevm.currentTarget)) :
+    Stor.Conserved (Devm.getStor r sevm.currentTarget) := by
+  rcases Fmint.of_approve run with ⟨k, v, h_nva, h_nsup, h_set⟩
+  refine h.of_rest_eq ?_ ?_
+  · rw [h_set]
+    funext a
+    simp only [Stor.rest, Function.comp_apply]
+    exact (Stor.get_set_ne _ (fun hc => h_nva ⟨a, hc.symm⟩) _).symm
+  · rw [h_set]
+    exact Stor.get_set_ne _ h_nsup _
+
+end
 
 /-- Headline 1 of `flashmint-proposal.md`, as a statement.  This is the shape
 `weth_preserves_solvent` has, with the record substituted; it is asserted of

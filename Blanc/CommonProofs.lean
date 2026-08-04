@@ -6701,6 +6701,31 @@ lemma B128.and_eq_and_prod_and (x y : B128) :
 lemma B256.and_eq_and_prod_and (x y : B256) :
     x &&& y = ⟨x.1 &&& y.1, x.2 &&& y.2⟩ := rfl
 
+/-! A bitwise `or` is zero only if both its operands are.
+
+The fact every *composite* guard needs: a guard built as `or` of two clauses
+passes exactly when both clauses pass, so the one flag the walk sees on the
+stack yields both conjuncts.  `Blanc/Fmint.lean`'s `checkSlotCollides` is the
+first such guard; `checkAddress`, being a single clause, never needed this. -/
+
+theorem UInt64.of_or_eq_zero {x y : UInt64} (h : x ||| y = 0) : x = 0 ∧ y = 0 := by
+  have hb := congrArg UInt64.toBitVec h
+  rw [UInt64.toBitVec_or, UInt64.toBitVec_zero, BitVec.or_eq_zero_iff] at hb
+  exact ⟨UInt64.toBitVec_inj.mp (by rw [hb.1]; rfl),
+         UInt64.toBitVec_inj.mp (by rw [hb.2]; rfl)⟩
+
+theorem B128.of_or_eq_zero {x y : B128} (h : x ||| y = 0) : x = 0 ∧ y = 0 := by
+  have h1 : x.1 ||| y.1 = 0 := congrArg (fun z : B128 => z.1) h
+  have h2 : x.2 ||| y.2 = 0 := congrArg (fun z : B128 => z.2) h
+  exact ⟨Prod.ext (UInt64.of_or_eq_zero h1).1 (UInt64.of_or_eq_zero h2).1,
+         Prod.ext (UInt64.of_or_eq_zero h1).2 (UInt64.of_or_eq_zero h2).2⟩
+
+theorem B256.of_or_eq_zero {x y : B256} (h : x ||| y = 0) : x = 0 ∧ y = 0 := by
+  have h1 : x.1 ||| y.1 = 0 := congrArg (fun z : B256 => z.1) h
+  have h2 : x.2 ||| y.2 = 0 := congrArg (fun z : B256 => z.2) h
+  exact ⟨Prod.ext (B128.of_or_eq_zero h1).1 (B128.of_or_eq_zero h2).1,
+         Prod.ext (B128.of_or_eq_zero h1).2 (B128.of_or_eq_zero h2).2⟩
+
 lemma B128.zero_and {x : B128} : 0 &&& x = 0 := by
   simp [B128.and_eq_and_prod_and]
   apply Prod.ext <;> change (0 : UInt64) &&& _ = 0 <;> apply UInt64.zero_and
