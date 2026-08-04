@@ -74,6 +74,13 @@ conservation, and neither use is prior to the other. So it moved to
 `w`. A future contract that finds itself reaching into `Weth.lean` or
 `Solvent.lean` has found the same kind of factoring defect, not a shortcut.
 
+The rule is enforced, not merely documented:
+[`scripts/check-layering.sh`](scripts/check-layering.sh) parses the import
+lines and fails on a cross-contract import, on a shared module importing a
+contract (the same break, other direction), and on any module missing from its
+classification — so a new contract cannot escape the rule by never being
+listed. It needs no Lean toolchain and runs ahead of the build in CI.
+
 ## Verification status
 
 **What you are trusting.** Blanc's trusted base is Jaune's plus three
