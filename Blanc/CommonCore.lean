@@ -187,6 +187,16 @@ rather than an assumption of well-formed input. -/
 def Sevm.dataWord (e : Sevm) (i : B256) : B256 :=
   Bytes.toB256 (e.data.sliceD i.toNat 32 0)
 
+/-- The function selector our calldata carries: its first four bytes,
+right-aligned in a word. This is what `fsig` computes and what a dispatcher
+compares against — `Sevm.dataWord e 0` is calldata word 0 and `>>> 224` keeps
+its top four bytes.
+
+Total, like every reader here: calldata shorter than four bytes yields the
+zero-padded word rather than failing, so an empty call has selector `0` and
+dispatches like any other. -/
+def Sevm.selector (e : Sevm) : B256 := Sevm.dataWord e 0 >>> 224
+
 /-- The value `arg k` reads: the `k`-th head word of the argument area.
 
 Head-word access, not ABI decoding — for a dynamic argument this is the offset,

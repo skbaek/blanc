@@ -4691,6 +4691,23 @@ lemma dataWord_of_append {e : Sevm} {idx : B256} {pre post : Bytes} {w : B256}
       List.takeD_eq_take _ (by simp [List.length_append, B256.length_toBytes]),
       List.take_length_append' (B256.length_toBytes w).symm, B256.toB256_toBytes]
 
+/-- `fsig` leaves the calldata's function selector on the stack.
+
+The entry route's first fact, and the one Step 2 of the arc composes with
+dispatch reachability: `dispatchWith` assumes the selector is already on top of
+the stack, and until now nothing said *which* word that was. Note that
+`prefix_of_shr` was already value-carrying — only the calldata inversions were
+not, which is why this fact was previously unavailable. -/
+lemma prefix_of_fsig {e xs} {s s' : Devm} :
+    (xs <<+ s.stack) → Line.Run e s fsig s' → (Sevm.selector e :: xs <<+ s'.stack) := by
+  intro h_pfx h_run
+  rcases of_run_append (cdl 0) h_run with ⟨s₁, h_cdl, h_shr⟩
+  have h1 : Sevm.dataWord e 0 :: xs <<+ s₁.stack := prefix_of_cdl_val h_pfx h_cdl
+  rcases Line.of_run_cons h_shr with ⟨s₂, h_push, h_rest⟩
+  rcases Line.of_run_cons h_rest with ⟨s₃, h_op, h_nil⟩
+  cases h_nil
+  exact prefix_of_shr h_op (prefix_of_push (of_run_pushB256 h_push) h1)
+
 lemma abiSelectorBytes_length (sel : B256) : (abiSelectorBytes sel).length = 4 := by
   simp [abiSelectorBytes, B256.length_toBytes]
 
