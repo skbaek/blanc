@@ -9,7 +9,8 @@ OK	1.257	Blanc/Basic.lean
 OK	2.282	Blanc/CommonCore.lean
 OK	5.442	Blanc/CommonProofs.lean
 OK	1.235	Blanc/Flashmint.lean
-OK	1.130	Blanc/Fmint.lean
+OK	3.023	Blanc/Fmint.lean
+OK	4.549	Blanc/FmintCode.lean
 OK	3.121	Blanc/Ladder.lean
 OK	1.656	Blanc/Semantics.lean
 OK	2.506	Blanc/Solvent.lean

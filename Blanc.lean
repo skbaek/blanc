@@ -2,6 +2,7 @@ import Blanc.Solvent
 import Blanc.WethCode
 import Blanc.Ladder
 import Blanc.Flashmint
+import Blanc.FmintCode
 
 namespace Blanc
 
