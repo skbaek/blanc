@@ -8,42 +8,47 @@
 -- counterweight to WETH's.
 --
 -- This module lives above `Blanc.Solvent` because `Stor.Conserved` is stated
--- with `wbsum`, which stays in `Solvent.lean`.  Nothing here is proved: the
--- contract itself does not exist yet (`flashmint-proposal.md` Arc A owns it),
--- so the program is a parameter, and the headline results appear as
+-- with `wbsum`, which stays in `Solvent.lean`, and above `Blanc.Fmint` because
+-- `supplySlot` now lives with the contract that generates it.
+--
+-- Nothing here is proved, and the program is still a parameter: the contract's
+-- dispatch targets arrive with Step 1 of `~/plans/fmint-code.md`, which
+-- replaces the parameter with `Fmint.fmint`.  The headline results appear as
 -- `Prop`-valued definitions asserted of nothing.
 
 import Blanc.Solvent
+import Blanc.Fmint
 
 namespace Blanc
 
 open Jaune
 
-/-! ## Instance 2 — `fweth` (ERC-3156 flash mint), statements only
+/-! ## Instance 2 — `fmint` (ERC-3156 flash mint), statements only
 
-From `~/plans/flashmint-proposal.md`.  The contract itself does not exist yet
-(its Arc A owns it), so the program is a parameter: everything below holds for
-whichever `Prog` that arc produces, and equally for the pure-token resolution
-of the proposal's open decision D1, whose invariant is identical.
+From `~/plans/flashmint-proposal.md`, whose open decision D1 resolved to the
+pure token: fmint is an ERC-20 with the ERC-3156 triple and no wrap/unwrap
+surface.  The contract itself does not exist yet — Arc A's Step 1 owns it — so
+the program is a parameter and everything below holds for whichever `Prog` that
+step produces.
 
 Nothing here is proved.  The headline theorem appears as a `Prop`-valued
-definition — a statement that elaborates — not as a `theorem` with a proof. -/
-
-/-- The supply slot: `B256.max`, which is never address-shaped, so `wbsum`
-(which sums over address-shaped keys only) excludes it. -/
-def supplySlot : B256 := B256.max
+definition — a statement that elaborates — not as a `theorem` with a proof.
+Conservation is unproven pending Arc B. -/
 
 /-- The conservation invariant: total supply equals the sum of balances.  A
-storage-only equality — no callvalue term, no ETH-balance term. -/
+storage-only equality — no callvalue term, no ETH-balance term.
+
+`Fmint.supplySlot` is never address-shaped and `wbsum` sums over address-shaped
+keys only, so the supply slot self-excludes from the right-hand side. -/
 def Stor.Conserved (s : Stor) : Prop :=
-  (s.get supplySlot).toNat = wbsum s
+  (s.get Fmint.supplySlot).toNat = wbsum s
 
 /-- The flash-mint instance.  `Inv` ignores both the callvalue and the ETH
 balance, and `Side` is trivial: this contract declines the `nof`-class side
 condition, which is precisely why every balance-movement slot carries `Side`
 in hypothesis position rather than demanding a concrete bound. -/
-def fwethSpec (fwethProg : Prog) : ContractSpec where
-  prog := fwethProg
+def fmintSpec (fmintProg : Prog) : ContractSpec where
+  prog := fmintProg
   Inv := fun s _ _ => Stor.Conserved s
   Side := fun _ => True
   inv_forget := id
@@ -78,35 +83,35 @@ def fwethSpec (fwethProg : Prog) : ContractSpec where
 
 /-- `PrecondC` of the proposal, as the record's frame-entry bundle.  Its
 `side` field is `True`: the `nof` hypothesis WETH carries is absent. -/
-def PrecondC (fwethProg : Prog) (fa : Adr) (sevm : Sevm) (devm : Devm) : Prop :=
-  (fwethSpec fwethProg).Pre fa sevm devm
+def PrecondC (fmintProg : Prog) (fa : Adr) (sevm : Sevm) (devm : Devm) : Prop :=
+  (fmintSpec fmintProg).Pre fa sevm devm
 
 /-- `PostcondC` of the proposal. -/
-def PostcondC (fwethProg : Prog) (fa : Adr) (sevm : Sevm) (devm : Devm) : Prop :=
-  (fwethSpec fwethProg).Post fa sevm devm
+def PostcondC (fmintProg : Prog) (fa : Adr) (sevm : Sevm) (devm : Devm) : Prop :=
+  (fmintSpec fmintProg).Post fa sevm devm
 
 /-- The `State.Inv` counterpart, for the chain-level rungs. -/
-def StateInvC (fwethProg : Prog) (fa : Adr) (w : Jaune.State) : Prop :=
-  (fwethSpec fwethProg).StateInv fa w
+def StateInvC (fmintProg : Prog) (fa : Adr) (w : Jaune.State) : Prop :=
+  (fmintSpec fmintProg).StateInv fa w
 
 /-- Headline 1 of `flashmint-proposal.md`, as a statement.  This is the shape
 `weth_preserves_solvent` has, with the record substituted; it is asserted of
 nothing and proved nowhere. -/
-def FwethPreservesConserved (fwethProg : Prog) (fa : Adr) : Prop :=
+def FmintPreservesConserved (fmintProg : Prog) (fa : Adr) : Prop :=
   ∀ sevm pre post,
     Exec 0 sevm pre (.ok post) →
-    (sevm.currentTarget = fa → some sevm.code.toList = Prog.compile fwethProg) →
-    PrecondC fwethProg fa sevm pre →
-    PostcondC fwethProg fa sevm post
+    (sevm.currentTarget = fa → some sevm.code.toList = Prog.compile fmintProg) →
+    PrecondC fmintProg fa sevm pre →
+    PostcondC fmintProg fa sevm post
 
 /-- The chain-level rung, same substitution.  The `wdsum` bound survives as a
 hypothesis about the world rather than about the contract, so it is unaffected
 by the instance. -/
-def FwethChainPreservesConserved (fwethProg : Prog) (fa : Adr) : Prop :=
+def FmintChainPreservesConserved (fmintProg : Prog) (fa : Adr) : Prop :=
   ∀ ch ch' : BlockChain,
     BlockChain.Reach ch ch' →
-    StateInvC fwethProg fa ch.state →
-    StateInvC fwethProg fa ch'.state
+    StateInvC fmintProg fa ch.state →
+    StateInvC fmintProg fa ch'.state
 
 
 end Blanc

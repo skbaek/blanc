@@ -14,7 +14,7 @@
 -- global balance side condition, and the handful of closure properties the
 -- ladder's proofs use.  Two instances exist: `wethSpec` in `Blanc/Solvent.lean`,
 -- the shipped contract, shown there to reproduce the existing `Precond` /
--- `Postcond` / `State.Inv` bundles exactly; and `fwethSpec` in
+-- `Postcond` / `State.Inv` bundles exactly; and `fmintSpec` in
 -- `Blanc/Flashmint.lean`, the ERC-3156 flash-mint contract of
 -- `~/plans/flashmint-proposal.md`, a statement-level instance only.
 
