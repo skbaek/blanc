@@ -5,9 +5,10 @@
 -- D6 events).  Behavioral adjudication against the pinned OpenZeppelin
 -- reference: `FMINT_DEVIATIONS.md`.
 --
--- At this checkpoint the module holds the design-freeze constants and the two
--- codegen spikes only; the twelve dispatch targets and the dispatcher arrive
--- with Step 1 of `~/plans/fmint-code.md`.
+-- Reading order: the storage layout and its guard, the event topics, the
+-- ERC-3156 constants, the aux table, then `flashLoan` and its fragments — the
+-- risk concentrate, written first — then the two ERC-3156 views, then the
+-- ERC-20 surface, then the dispatch list and the program.
 --
 --
 -- WHY A NAMESPACE.  `Blanc/Weth.lean` owns the bare `Blanc.name`,
@@ -91,6 +92,30 @@ is the established precedent for the trick.
 Found by disassembling the Step-0 spike, which had used `pushB256 supplySlot`
 at both burn sites and paid 66 bytes for 4. -/
 def pushSupplySlot : Line := [pushB256 0, not]
+
+/-- The extended allowance-slot guard (proposal D3).
+
+`( hash -- collides? :: hash )`
+
+An allowance key must alias neither storage region it shares the address space
+with: revert if `keccak256(owner ‖ spender)` is address-shaped — it would alias
+a balance slot, exactly as in WETH — **or** if it equals `supplySlot`, which is
+the clause the third region adds.
+
+Note `isMax` *is* the `supplySlot` comparison: `supplySlot = B256.max`, so "the
+hash is all ones" and "the hash is the supply slot" are the same test, which is
+why the new clause costs two bytes.  The witness below the aux table states that
+identity in Lean.
+
+This is a composition of `checkAddress` and `isMax`, not an extension of either:
+`checkAddress` is shared WETH surface and must not change.  Every allowance-
+*writing* path carries the guard — `approve`, `transferFrom`'s allowance update,
+and the flash-loan repayment.  The `allowance` view does not
+(`FMINT_DEVIATIONS.md` row 18). -/
+def checkSlotCollides : Line :=
+  (dup 0 :: checkAddress) ++    -- va(hash) :: hash
+  (dup 1 :: isMax) ++           -- (hash =? supplySlot) :: va(hash) :: hash
+  [Ninst.or]                    -- collides? :: hash
 
 /-! ## Event topics (proposal D6)
 
@@ -235,14 +260,8 @@ spender is `address` and not `caller`; there is no `src = caller` bypass; the
 slot guard carries the extra `supplySlot` clause; and both arms end in
 `Func.call burnSlot` instead of `returnTrue`.
 
-**The extended slot guard (proposal D3).**  Revert if `keccak256(receiver ‖
-self)` is address-shaped — it would collide with a balance slot, as in WETH —
-**or** if it equals `supplySlot`, which is the clause the third storage region
-adds.  Note `isMax` *is* the `supplySlot` comparison: `supplySlot = B256.max`,
-so "the hash is all ones" and "the hash is the supply slot" are the same test,
-which is why the clause costs two bytes.  Step 1 commits a Lean witness that
-the comparison fires on the concrete colliding word; the clause is not
-fixture-testable, needing a 2²⁵⁶ keccak preimage (`FMINT_DEVIATIONS.md` row 18).
+**The extended slot guard** is `checkSlotCollides` above; this is one of the
+three allowance-writing paths that carry it (proposal D3).
 
 **Infinite-allowance preservation** is a WETH9/OpenZeppelin convention, not an
 EIP requirement, and specifically *not* "EIP-717" — that attribution is
@@ -254,10 +273,7 @@ def spendAllowanceThenBurn : Func :=
   address ::: mstoreAt 1 +++    -- wad :: receiver || receiver :: self
   pushList [64, 0] +++          -- 0 :: 64 :: wad :: receiver || receiver :: self
   kec :::                       -- hash :: wad :: receiver
-  -- the extended slot guard: address-shaped OR equal to supplySlot
-  dup 0 ::: checkAddress +++    -- va(hash) :: hash :: wad :: receiver
-  dup 1 ::: isMax +++           -- (hash =? supplySlot) :: va(hash) :: hash :: wad :: receiver
-  or :::                        -- collides? :: hash :: wad :: receiver
+  checkSlotCollides +++         -- collides? :: hash :: wad :: receiver
   .rev <?>                      -- [the allowance slot would alias a balance slot
                                 --  or the supply slot: revert]
                                 -- hash :: wad :: receiver
@@ -336,18 +352,16 @@ def storeCallbackHead : Line :=
 
 `( -- dataLen )`, writing memory word 6 and the payload region at `0xe0`.
 
-`arg 3` reads the *head* word of `flashLoan`'s fourth argument, which for a
-dynamic type is an offset rather than a value — the distinction the `dynBytes`
-constructor is careful about.  Following it is this line's job. -/
-def forwardCallbackData : Line :=
-  arg 3 ++                        -- off              (relative to calldata byte 4)
-  pushB256 4 :: add ::            -- p := 4 + off     (absolute: the length word)
-  dup 0 :: calldataload ::        -- len :: p
-  dup 0 :: mstoreAt 6 ++          -- len :: p         || … ; dataLen
-  dup 0 :: swap 1 ::              -- p :: len :: len
-  pushB256 32 :: add ::           -- p + 32 :: len :: len   (absolute: the payload)
-  pushB256 0xe0 ::                -- 0xe0 :: p + 32 :: len :: len
-  calldatacopy :: []              -- len
+`flashLoan`'s fourth argument is the dynamic `bytes`, so its head word is an
+offset rather than a value — the distinction the `dynBytes` constructor is
+careful about.  `forwardArgTail` follows it, which is work `arg` deliberately
+does not do; the Step-0 spike wrote that out here and it now lives in
+`Blanc/CommonCore.lean`, being ABI-generic rather than fmint-specific.
+
+The single `6` fixes both destinations: the length word lands at memory word 6
+(`0xc0`) and the payload in the word after it (`0xe0`), because the ABI puts a
+dynamic argument's payload immediately after its length. -/
+def forwardCallbackData : Line := forwardArgTail 3 6
 
 /-- `( dataLen -- argsSize )` — the `CALL`'s `argsSize`, `0xc4 + ceil32(len)`.
 
@@ -357,6 +371,132 @@ def callbackArgsSize : Line :=
   pushB256 31 :: add ::               -- len + 31
   pushB256 31 :: not :: Ninst.and ::  -- ceil32(len)
   pushB256 0xc4 :: add :: []          -- 0xc4 + ceil32(len)
+
+/-! ## `flashLoan` — the ERC-3156 entry point (proposal D4) -/
+
+/-- `flashLoan(address receiver, address token, uint256 amount, bytes data)`.
+
+Mint, call, check, repay, burn — proposal D4 in its revised order, with the
+guards it names and no others.  Written before the ERC-20 surface because it is
+where all the new machinery lands; the rest of the contract is pattern work.
+
+Two idioms recur below and are worth stating once.
+
+*Guards revert in the negative direction.*  `.rev <?> …` is the shape WETH uses:
+the branch fires when the tested word is nonzero, so a guard computes the
+*failure* condition and the success path continues in a straight line.  Where
+that means testing an equality, the pair is `eq ::: iszero` rather than a single
+`xor`, which would be one byte cheaper: `iszero (if a = b then 1 else 0)` is two
+definitional steps for Arc B, whereas `a ^^^ b = 0 ↔ a = b` is a bitvector fact
+somebody would have to prove.  One byte is not worth a lemma.
+
+*The two paired writes of D5 are adjacent.*  The mint pair is complete before
+the `CALL`; the burn pair lives in `burnAndReturn`.  Nothing between the two
+`SSTORE`s of a pair transfers control out of this frame or halts successfully. -/
+def flashLoan : Func :=
+  -- (0) `token` must be this contract.  ERC-3156 mandates the revert; fmint
+  -- reaches it through one explicit guard placed *before* the bound check, so
+  -- the reason does not depend on `amount` as the reference's does
+  -- (`FMINT_DEVIATIONS.md` row 5).
+  arg 1 +++ address ::: eq ::: iszero :::
+  .rev <?>                        -- [token ≠ self: revert]
+  -- (1) the receiver word must be address-shaped.  CONSERVATION-CRITICAL, not
+  -- hygiene: a dirty word would be the mint's `SSTORE` key verbatim, while
+  -- `wbsum` sums address-shaped keys only and `CALL` truncates its target to
+  -- 160 bits — supply would rise with the minted balance outside Σ, falsifying
+  -- the invariant before the callback even runs (row 6).
+  arg 0 +++ dup 0 ::: checkNonAddress +++ -- ¬va(receiver) :: receiver
+  .rev <?>                        -- [receiver is not address-shaped: revert]
+                                  -- receiver
+  -- (2) `amount ≤ maxFlashLoan`, where `maxFlashLoan = 2^256 - 1 - supply`.
+  -- This is also the whole overflow argument for the mint below: the check
+  -- makes `supply + amount` non-overflowing by construction, and `not supply`
+  -- computes the bound in one byte.
+  arg 2 +++ dup 0 :::             -- amount :: amount :: receiver
+  pushSupplySlot +++ sload ::: not ::: -- maxLoan :: amount :: amount :: receiver
+  lt :::                          -- (maxLoan <? amount) :: amount :: receiver
+  .rev <?>                        -- [amount above the bound: revert]
+                                  -- amount :: receiver
+  -- (3) mint: both `SSTORE`s complete here, before the `CALL` (D5).
+  dup 1 ::: sload :::             -- rbal :: amount :: receiver
+  dup 1 ::: add :::               -- (rbal + amount) :: amount :: receiver
+  dup 2 ::: sstore :::            -- amount :: receiver
+                                  -- [receiver balance minted]
+  pushSupplySlot +++ sload :::    -- supply :: amount :: receiver
+  dup 1 ::: add :::               -- (supply + amount) :: amount :: receiver
+  pushSupplySlot +++ sstore :::   -- amount :: receiver
+                                  -- [supply minted; pair complete]
+  dup 0 ::: mstoreAt 0 +++        -- amount :: receiver || amount
+  dup 1 :::                       -- receiver :: amount :: receiver || amount
+  pushB256 0 :::                  -- 0 :: receiver :: amount :: receiver || amount
+  pushB256 transferEvent :::      -- transferEventSig :: 0 :: receiver :: … || amount
+  logWith 2 0 1 +++               -- 2 indexed topics : from = 0x0, to = receiver
+                                  -- 1 unindexed data : minted amount
+                                  -- [Transfer(0x0, receiver, amount) is logged]
+                                  -- amount :: receiver
+  -- (4) the callback.  Memory is laid out per the table above; the `amount` is
+  -- duplicated because `storeCallbackHead` consumes one and the repayment
+  -- needs the other.  The `CALL`'s seven operands are assembled deepest-first,
+  -- which is why the two return-window zeros are pushed before the argument
+  -- window is even measured.  All gas is forwarded (EIP-150's 63/64 rule then
+  -- applies); the return window is empty because the answer is read with
+  -- `retdatacopy` instead.
+  dup 0 ::: storeCallbackHead +++ -- amount :: receiver || selector, head words
+  pushList [0, 0] +++             -- 0 :: 0 :: amount :: receiver
+                                  --   (retSize, then retOffset)
+  forwardCallbackData +++         -- dataLen :: 0 :: 0 :: amount :: receiver
+                                  --   || … ; length word and payload
+  callbackArgsSize +++            -- argsSize :: 0 :: 0 :: amount :: receiver
+  pushB256 callbackArgsOffset ::: -- argsOffset :: argsSize :: 0 :: 0 :: amount :: receiver
+  pushB256 0 :::                  -- value = 0 :: argsOffset :: …
+  dup 6 :::                       -- receiver :: 0 :: argsOffset :: argsSize :: 0 :: 0 :: amount :: receiver
+  gas :::                         -- gas :: receiver :: …
+  call :::                        -- success? :: amount :: receiver
+  iszero :::
+  .rev <?>                        -- [the callback failed: revert]
+                                  -- amount :: receiver
+  -- (5) the return value: at least a word of it, and that word the magic
+  -- constant.  The length is branched on first because `retdatacopy` aborts
+  -- the frame rather than failing a test when the range overruns (row 10).
+  retdataShorterThan 32 +++       -- (retdatasize <? 32) :: amount :: receiver
+  .rev <?>                        -- [returndata shorter than a word: revert]
+                                  -- amount :: receiver
+  checkRetdataHead erc3156Magic 0 +++ -- (head =? magic) :: amount :: receiver
+  iszero :::
+  .rev <?>                        -- [wrong magic word: revert]
+                                  -- amount :: receiver
+  -- (6) and (7): spend the allowance `receiver → self`, then burn.  Both arms
+  -- of the allowance test converge on `burnAndReturn` in aux slot `burnSlot`,
+  -- which performs the burn pair, logs the burn `Transfer`, and returns true.
+  spendAllowanceThenBurn
+
+/-! ## The ERC-3156 views -/
+
+/-- `maxFlashLoan(address token)`.
+
+`2^256 - 1 - supply` for `token = self`, and **0** for anything else — ERC-3156
+states that as a MUST *not* to revert, so this is the one sibling of the triple
+that answers rather than fails (`FMINT_DEVIATIONS.md` row 1). -/
+def maxFlashLoan : Func :=
+  arg 0 +++ address ::: eq :::         -- (token =? self)
+  ( pushSupplySlot +++ sload ::: not ::: -- 2^256 - 1 - supply
+    mstoreAt 0 +++
+    returnMemoryRange 0 32 ) <?>
+  ( pushB256 0 :::                     -- unsupported token: 0, not a revert
+    mstoreAt 0 +++
+    returnMemoryRange 0 32 )
+
+/-- `flashFee(address token, uint256 amount)`.
+
+0 for `token = self`; **reverts** otherwise, which ERC-3156 states as a MUST and
+which is the opposite of `maxFlashLoan`'s rule for the same input
+(`FMINT_DEVIATIONS.md` row 3).  `amount` is read and ignored: the fee is
+identically zero, not a function of anything (proposal D2). -/
+def flashFee : Func :=
+  arg 0 +++ address ::: eq ::: iszero :::
+  .rev <?>                        -- [token ≠ self: revert]
+  pushB256 0 ::: mstoreAt 0 +++
+  returnMemoryRange 0 32
 
 /-- The aux table as frozen at the design freeze.  Append-only; see above. -/
 def fmintAux : List Func := [Func.rev, burnAndReturn]
