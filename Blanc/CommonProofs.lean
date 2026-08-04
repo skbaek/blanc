@@ -4643,6 +4643,54 @@ lemma prefix_of_retdatacopy {e} {x y z xs} {s s' : Devm} :
   rw [hx, hy, hz] at h1
   exact of_append_pref h2 h1
 
+/-- `mstoreAt` consumes the top of the stack and touches memory only. -/
+lemma prefix_of_mstoreAt {e : Sevm} {s s' : Devm} {k x xs}
+    (h : Line.Run e s (mstoreAt k) s') (hp : x :: xs <<+ s.stack) : xs <<+ s'.stack := by
+  rcases Line.of_run_cons h with ⟨u, qp, h'⟩
+  rcases Line.of_run_cons h' with ⟨u2, qm, hnil⟩
+  cases hnil
+  exact prefix_of_mstore qm (prefix_of_push (of_run_pushB256 qp) hp)
+
+/-- `retdataShorterThan` pushes one flag. -/
+lemma of_retdataShorterThan {e : Sevm} {s s' : Devm} {n : B256} {xs}
+    (hp : xs <<+ s.stack) (h : Line.Run e s (retdataShorterThan n) s') :
+    ∃ y, y :: xs <<+ s'.stack := by
+  simp only [retdataShorterThan] at h
+  rcases Line.of_run_cons h with ⟨u1, q1, h⟩
+  have hp1 : n :: xs <<+ u1.stack := prefix_of_push (of_run_pushB256 q1) hp
+  rcases Line.of_run_cons h with ⟨u2, q2, h⟩
+  rcases of_run_retdatasize q2 with ⟨rds, pb2⟩
+  have hp2 : rds :: n :: xs <<+ u2.stack := prefix_of_push pb2 hp1
+  rcases Line.of_run_cons h with ⟨u3, q3, hnil⟩
+  cases hnil
+  exact ⟨_, prefix_of_lt q3 hp2⟩
+
+/-- `checkRetdataHead` copies the head word into memory, reads it back, and
+pushes one comparison flag. -/
+lemma of_checkRetdataHead {e : Sevm} {s s' : Devm} {w m : B256} {xs}
+    (hp : xs <<+ s.stack) (h : Line.Run e s (checkRetdataHead w m) s') :
+    ∃ y, y :: xs <<+ s'.stack := by
+  simp only [checkRetdataHead, pushList, List.map] at h
+  rcases Line.of_run_cons h with ⟨u1, q1, h⟩
+  have hp1 : (32 : B256) :: xs <<+ u1.stack := prefix_of_push (of_run_pushB256 q1) hp
+  rcases Line.of_run_cons h with ⟨u2, q2, h⟩
+  have hp2 : (0 : B256) :: (32 : B256) :: xs <<+ u2.stack :=
+    prefix_of_push (of_run_pushB256 q2) hp1
+  rcases Line.of_run_cons h with ⟨u3, q3, h⟩
+  have hp3 : (m * 32) :: (0 : B256) :: (32 : B256) :: xs <<+ u3.stack :=
+    prefix_of_push (of_run_pushB256 q3) hp2
+  rcases Line.of_run_cons h with ⟨u4, q4, h⟩
+  have hp4 : xs <<+ u4.stack := prefix_of_retdatacopy q4 hp3
+  rcases Line.of_run_cons h with ⟨u5, q5, h⟩
+  have hp5 : (m * 32) :: xs <<+ u5.stack := prefix_of_push (of_run_pushB256 q5) hp4
+  rcases Line.of_run_cons h with ⟨u6, q6, h⟩
+  rcases prefix_of_mload q6 hp5 with ⟨head, hp6⟩
+  rcases Line.of_run_cons h with ⟨u7, q7, h⟩
+  have hp7 : w :: head :: xs <<+ u7.stack := prefix_of_push (of_run_pushB256 q7) hp6
+  rcases Line.of_run_cons h with ⟨u8, q8, hnil⟩
+  cases hnil
+  exact ⟨_, prefix_of_eq q8 hp7⟩
+
 lemma Line.spx_scheme {e s' i l xs xs' ys}
     (h : ∀ s0 s1, Ninst.Run e s0 i s1 → (xs <<+ s0.stack) → (xs' <<+ s1.stack))
     (h' : ∀ s : Devm, (xs' <<+ s.stack) → Line.Run e s l s' → (ys <<+ s'.stack)) :
@@ -4790,6 +4838,13 @@ lemma Line.spx_calldatacopy {e : Sevm} {s' l x y z xs ys} :
 lemma Line.spx_unwrap {e xs} {s' : Devm} :
     ∀ s : Devm, (xs <<+ s.stack) → Line.Run e s [] s' → (xs <<+ s'.stack) := by
   intros _ h0 h1; cases h1; apply h0
+
+
+/-- `logWith 2 0 1` pops the topic triple and the window pair. -/
+lemma of_logWith201 {e : Sevm} {s s' : Devm} {ev z w : B256} {xs}
+    (hp : ev :: z :: w :: xs <<+ s.stack) (h : Line.Run e s (logWith 2 0 1) s') :
+    xs <<+ s'.stack := by
+  generalize_line_prefix
 
 
 lemma memRead_getBal_eq {x n : Nat} {devm devm' : Devm} {value : Bytes} (h : devm.memRead x n = ⟨value, devm'⟩) (a : Adr) : devm'.getBal a = devm.getBal a := by
@@ -7077,6 +7132,16 @@ lemma of_run_next {fs sevm devm i f devm''}
     ∃ devm', Ninst.Run sevm devm i devm' ∧ Func.Run fs sevm devm' f devm'' := by
   cases h with
   | next h1 h2 => exact ⟨_, h1, h2⟩
+
+/-- Inversion for `Func.call`, as a lemma rather than a `cases` at the use
+site: `cases` on `Func.Run` inside a long walk's context generalizes the whole
+context against the indices and can diverge in `whnf`, whereas `rcases` on
+this existential is cheap. -/
+lemma of_run_call {fs : List Func} {sevm : Sevm} {s r : Devm} {k : Nat}
+    (h : Func.Run fs sevm s (.call k) r) :
+    ∃ f s', fs[k]? = some f ∧ Devm.Burn s s' ∧ Func.Run fs sevm s' f r := by
+  cases h with
+  | call h_get h_burn h_run => exact ⟨_, _, h_get, h_burn, h_run⟩
 
 /-! ### `transfer`'s fragments -/
 

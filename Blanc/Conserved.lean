@@ -1437,6 +1437,573 @@ lemma conserved_of_call {sevm : Sevm} {s sf : Devm} {g w v ii is oi os : B256} {
         rw [getStor_eq_of_state_eq h_sf_state sevm.currentTarget]
         exact h_post_cons
 
+lemma supplySlot_eq_not_zero : (~~~ (0 : B256)) = supplySlot := by decide
+
+/-- **The burn pair.**  `burnAndReturn` decreases the receiver's balance by
+`wad` and the supply by the same `wad`, with the balance check as its only
+guard; the supply-side bound comes from the invariant itself. -/
+lemma of_burnAndReturn {fs : List Func} {sevm : Sevm} {s r : Devm} {wad receiver : B256}
+    (h_va : ValidAdr receiver)
+    (hs : [wad, receiver] <<+ s.stack)
+    (h : Stor.Conserved (Devm.getStor s sevm.currentTarget))
+    (h_run : Func.Run fs sevm s burnAndReturn r) :
+    Stor.Conserved (Devm.getStor r sevm.currentTarget) := by
+  rcases h_va with ⟨a, rfl⟩
+  simp only [burnAndReturn] at h_run
+  -- dup 1 : [a.toB256, wad, a.toB256]
+  rcases of_run_next h_run with ⟨s1, r1, h_run⟩
+  rcases of_run_dup r1 with ⟨y, hy1, pb1⟩
+  have hy1' : y = a.toB256 := by
+    have h_get : s.stack[(1 : Fin 16).val]? = some a.toB256 :=
+      Stack.nth_getElem (Stack.Nth.tail 0 a.toB256 wad [a.toB256]
+        (Stack.Nth.head a.toB256 [])) hs
+    rw [h_get] at hy1; injection hy1 with hy1; exact hy1.symm
+  subst y
+  have hs1 : [a.toB256, wad, a.toB256] <<+ s1.stack := prefix_of_push pb1 hs
+  have hg : Devm.getStor s = Devm.getStor s1 :=
+    Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r1 Line.Run.nil)
+  clear r1 pb1 hs
+  -- sload : [rbal, wad, a.toB256]
+  rcases of_run_next h_run with ⟨s2, r2, h_run⟩
+  rcases prefix_of_sload r2 hs1 with ⟨rbal, hs2, h_rbal⟩
+  have h_rbal' : rbal = (Devm.getStor s sevm.currentTarget).get a.toB256 := by
+    rw [h_rbal]
+    show (Devm.getStor s1 sevm.currentTarget).get a.toB256 = _
+    rw [← congr_fun hg sevm.currentTarget]
+  clear h_rbal
+  have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r2 Line.Run.nil))
+  clear r2 hs1
+  -- dup 1 : [wad, rbal, wad, a.toB256]
+  rcases of_run_next h_run with ⟨s3, r3, h_run⟩
+  rcases of_run_dup r3 with ⟨y, hy3, pb3⟩
+  have hy3' : y = wad := by
+    have h_get : s2.stack[(1 : Fin 16).val]? = some wad :=
+      Stack.nth_getElem (Stack.Nth.tail 0 wad rbal [wad, a.toB256]
+        (Stack.Nth.head wad [a.toB256])) hs2
+    rw [h_get] at hy3; injection hy3 with hy3; exact hy3.symm
+  subst y
+  have hs3 : [wad, rbal, wad, a.toB256] <<+ s3.stack := prefix_of_push pb3 hs2
+  have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r3 Line.Run.nil))
+  clear r3 pb3
+  -- dup 1 : [rbal, wad, rbal, wad, a.toB256]
+  rcases of_run_next h_run with ⟨s4, r4, h_run⟩
+  rcases of_run_dup r4 with ⟨y, hy4, pb4⟩
+  have hy4' : y = rbal := by
+    have h_get : s3.stack[(1 : Fin 16).val]? = some rbal :=
+      Stack.nth_getElem (Stack.Nth.tail 0 rbal wad [rbal, wad, a.toB256]
+        (Stack.Nth.head rbal [wad, a.toB256])) hs3
+    rw [h_get] at hy4; injection hy4 with hy4; exact hy4.symm
+  subst y
+  have hs4 : [rbal, wad, rbal, wad, a.toB256] <<+ s4.stack := prefix_of_push pb4 hs3
+  have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r4 Line.Run.nil))
+  clear r4 pb4 hs3
+  -- lt : [(rbal <? wad), wad... wait: lt pops rbal, wad → rbal <? wad
+  rcases of_run_next h_run with ⟨s5, r5, h_run⟩
+  have hs5 : (rbal <? wad) :: [rbal, wad, a.toB256] <<+ s5.stack := prefix_of_lt r5 hs4
+  have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r5 Line.Run.nil))
+  clear r5 hs4
+  -- rev-branch : a.toB256 balance covers the burn
+  rcases of_run_branch_rev h_run with ⟨s6, hp6, h_run⟩
+  have hp6s := hp6.stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hp6s
+  rw [hp6s] at hs5
+  have h_ltflag : (rbal <? wad) = 0 := pref_head_unique hs5 (pref_append [0] s6.stack)
+  have h_le : wad ≤ rbal := by
+    rw [← B256.not_lt]; intro hlt
+    rw [B256.ltCheck, if_pos hlt] at h_ltflag
+    exact B256.zero_ne_one h_ltflag.symm
+  rw [h_ltflag] at hs5
+  have hs6 : [rbal, wad, a.toB256] <<+ s6.stack := cons_pref_cons_inv hs5
+  have hg := hg.trans (funext (fun a => (Devm.PopBurn.getStor hp6 a).symm))
+  clear hs5 hp6s hp6 h_ltflag
+  -- dup 1 : [wad, rbal, wad, a.toB256]
+  rcases of_run_next h_run with ⟨s7, r7, h_run⟩
+  rcases of_run_dup r7 with ⟨y, hy7, pb7⟩
+  have hy7' : y = wad := by
+    have h_get : s6.stack[(1 : Fin 16).val]? = some wad :=
+      Stack.nth_getElem (Stack.Nth.tail 0 wad rbal [wad, a.toB256]
+        (Stack.Nth.head wad [a.toB256])) hs6
+    rw [h_get] at hy7; injection hy7 with hy7; exact hy7.symm
+  subst y
+  have hs7 : [wad, rbal, wad, a.toB256] <<+ s7.stack := prefix_of_push pb7 hs6
+  have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r7 Line.Run.nil))
+  clear r7 pb7 hs6
+  -- swap 0 : [rbal, wad, wad, a.toB256]
+  rcases of_run_next h_run with ⟨s8, r8, h_run⟩
+  have h_swap8 : Stack.Swap (0 : Fin 16).val [wad, rbal] [rbal, wad] := Stack.swapCore_zero
+  have hs8 : [rbal, wad, wad, a.toB256] <<+ s8.stack := by
+    have h_swap8' : Stack.Swap (0 : Fin 16).val [wad, rbal, wad, a.toB256]
+        [rbal, wad, wad, a.toB256] := Stack.swapCore_zero
+    exact Stack.prefix_of_swap h_swap8' (of_run_swap r8) hs7
+  have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r8 Line.Run.nil))
+  clear r8 hs7
+  -- sub : [(rbal - wad), wad, a.toB256]
+  rcases of_run_next h_run with ⟨s9, r9, h_run⟩
+  have hs9 : (rbal - wad) :: [wad, a.toB256] <<+ s9.stack := prefix_of_sub r9 hs8
+  have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r9 Line.Run.nil))
+  clear r9 hs8
+  -- dup 2 : [a.toB256, (rbal - wad), wad, a.toB256]
+  rcases of_run_next h_run with ⟨s10, r10, h_run⟩
+  rcases of_run_dup r10 with ⟨y, hy10, pb10⟩
+  have hy10' : y = a.toB256 := by
+    have h_get : s9.stack[(2 : Fin 16).val]? = some a.toB256 :=
+      Stack.nth_getElem
+        (Stack.Nth.tail 1 a.toB256 (rbal - wad) [wad, a.toB256]
+          (Stack.Nth.tail 0 a.toB256 wad [a.toB256] (Stack.Nth.head a.toB256 []))) hs9
+    rw [h_get] at hy10; injection hy10 with hy10; exact hy10.symm
+  subst y
+  have hs10 : [a.toB256, rbal - wad, wad, a.toB256] <<+ s10.stack := prefix_of_push pb10 hs9
+  have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r10 Line.Run.nil))
+  clear r10 pb10 hs9
+  -- sstore : the balance write
+  rcases of_run_next h_run with ⟨s11, r11, h_run⟩
+  have h_set1 : Devm.getStor s11 sevm.currentTarget
+      = (Devm.getStor s10 sevm.currentTarget).set a.toB256 (rbal - wad) :=
+    sstore_getStor_set r11 hs10
+  have hs11 : [wad, a.toB256] <<+ s11.stack := prefix_of_sstore r11 hs10
+  clear r11 hs10
+  -- pushSupplySlot = [pushB256 0, not] : [supplySlot, wad, a.toB256]
+  rcases of_run_prepend pushSupplySlot _ h_run with ⟨s12, h12, h_run⟩
+  have hs12 : Fmint.supplySlot :: [wad, a.toB256] <<+ s12.stack := by
+    simp only [pushSupplySlot] at h12
+    rcases Line.of_run_cons h12 with ⟨sa, ra, h12'⟩
+    rcases Line.of_run_cons h12' with ⟨sb, rb, hnil⟩
+    cases hnil
+    have hpa : (0 : B256) :: [wad, a.toB256] <<+ sa.stack :=
+      prefix_of_push (of_run_pushB256 ra) hs11
+    have hpb := prefix_of_not rb hpa
+    rw [supplySlot_eq_not_zero] at hpb
+    exact hpb
+  have hg2 : Devm.getStor s11 = Devm.getStor s12 :=
+    Line.of_inv Devm.getStor (by line_inv) h12
+  clear h12 hs11
+  -- sload : [supply, wad, a.toB256]
+  rcases of_run_next h_run with ⟨s13, r13, h_run⟩
+  rcases prefix_of_sload r13 hs12 with ⟨supply, hs13, h_supply⟩
+  have h_supply' : supply
+      = ((Devm.getStor s sevm.currentTarget).set a.toB256 (rbal - wad)).get
+          Fmint.supplySlot := by
+    rw [h_supply]
+    show (Devm.getStor s12 sevm.currentTarget).get Fmint.supplySlot = _
+    rw [← congr_fun hg2 sevm.currentTarget, h_set1, ← congr_fun hg sevm.currentTarget]
+  clear h_supply
+  have hg2 := hg2.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r13 Line.Run.nil))
+  clear r13 hs12
+  -- dup 1 : [wad, supply, wad, a.toB256]
+  rcases of_run_next h_run with ⟨s14, r14, h_run⟩
+  rcases of_run_dup r14 with ⟨y, hy14, pb14⟩
+  have hy14' : y = wad := by
+    have h_get : s13.stack[(1 : Fin 16).val]? = some wad :=
+      Stack.nth_getElem (Stack.Nth.tail 0 wad supply [wad, a.toB256]
+        (Stack.Nth.head wad [a.toB256])) hs13
+    rw [h_get] at hy14; injection hy14 with hy14; exact hy14.symm
+  subst y
+  have hs14 : [wad, supply, wad, a.toB256] <<+ s14.stack := prefix_of_push pb14 hs13
+  have hg2 := hg2.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r14 Line.Run.nil))
+  clear r14 pb14 hs13
+  -- swap 0 : [supply, wad, wad, a.toB256]
+  rcases of_run_next h_run with ⟨s15, r15, h_run⟩
+  have hs15 : [supply, wad, wad, a.toB256] <<+ s15.stack := by
+    have h_swap15 : Stack.Swap (0 : Fin 16).val [wad, supply, wad, a.toB256]
+        [supply, wad, wad, a.toB256] := Stack.swapCore_zero
+    exact Stack.prefix_of_swap h_swap15 (of_run_swap r15) hs14
+  have hg2 := hg2.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r15 Line.Run.nil))
+  clear r15 hs14
+  -- sub : [(supply - wad), wad, a.toB256]
+  rcases of_run_next h_run with ⟨s16, r16, h_run⟩
+  have hs16 : (supply - wad) :: [wad, a.toB256] <<+ s16.stack := prefix_of_sub r16 hs15
+  have hg2 := hg2.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r16 Line.Run.nil))
+  clear r16 hs15
+  -- pushSupplySlot : [supplySlot, (supply - wad), wad, a.toB256]
+  rcases of_run_prepend pushSupplySlot _ h_run with ⟨s17, h17, h_run⟩
+  have hs17 : Fmint.supplySlot :: (supply - wad) :: [wad, a.toB256] <<+ s17.stack := by
+    simp only [pushSupplySlot] at h17
+    rcases Line.of_run_cons h17 with ⟨sa, ra, h17'⟩
+    rcases Line.of_run_cons h17' with ⟨sb, rb, hnil⟩
+    cases hnil
+    have hpa : (0 : B256) :: (supply - wad) :: [wad, a.toB256] <<+ sa.stack :=
+      prefix_of_push (of_run_pushB256 ra) hs16
+    have hpb := prefix_of_not rb hpa
+    rw [supplySlot_eq_not_zero] at hpb
+    exact hpb
+  have hg2 := hg2.trans (Line.of_inv Devm.getStor (by line_inv) h17)
+  clear h17 hs16
+  -- sstore : the supply write, completing the pair
+  rcases of_run_next h_run with ⟨s18, r18, h_run⟩
+  have h_set2 : Devm.getStor s18 sevm.currentTarget
+      = (Devm.getStor s17 sevm.currentTarget).set Fmint.supplySlot (supply - wad) :=
+    sstore_getStor_set r18 hs17
+  clear r18 hs17
+  -- the tail is storage-silent
+  have hg3 : Devm.getStor s18 sevm.currentTarget = Devm.getStor r sevm.currentTarget :=
+    congr_fun (Func.of_inv Devm.getStor Devm.getStor (by func_inv) h_run) sevm.currentTarget
+  -- assemble the burn
+  rw [← hg3, h_set2, ← congr_fun hg2 sevm.currentTarget, h_set1,
+    ← congr_fun hg sevm.currentTarget]
+  rw [h_supply', h_rbal']
+  rw [h_rbal'] at h_le
+  exact h.burn_set h_le
+
+/-- The aux table locates the burn epilogue where `Func.call burnSlot` points:
+`burnSlot = 2` in `fmint.main :: fmintAux`, skipping `main` and the reverting
+fallback.  The lookup never inspects `main`, so nothing heavy unfolds. -/
+lemma get_burnSlot :
+    (fmint.main :: fmintAux)[burnSlot]? = some burnAndReturn := by
+  show (fmint.main :: fmintAux)[(2 : Nat)]? = some burnAndReturn
+  simp only [fmintAux, List.getElem?_cons_succ, List.getElem?_cons_zero]
+
+/-- `storeCallbackHead` writes the selector and five head words to memory,
+consuming the `amount` it was handed. -/
+lemma of_storeCallbackHead {e : Sevm} {s s' : Devm} {x xs}
+    (hp : x :: xs <<+ s.stack) (h : Line.Run e s storeCallbackHead s') :
+    xs <<+ s'.stack := by
+  simp only [storeCallbackHead] at h
+  rcases Line.of_run_cons h with ⟨t1, q1, h⟩
+  have hp1 : onFlashLoanSelector :: x :: xs <<+ t1.stack :=
+    prefix_of_push (of_run_pushB256 q1) hp
+  rcases of_run_append (mstoreAt 0) h with ⟨t2, q2, h⟩
+  have hp2 : x :: xs <<+ t2.stack := prefix_of_mstoreAt q2 hp1
+  rcases Line.of_run_cons h with ⟨t3, q3, h⟩
+  have hp3 : e.caller.toB256 :: x :: xs <<+ t3.stack :=
+    prefix_of_push (of_run_caller q3) hp2
+  rcases of_run_append (mstoreAt 1) h with ⟨t4, q4, h⟩
+  have hp4 : x :: xs <<+ t4.stack := prefix_of_mstoreAt q4 hp3
+  rcases Line.of_run_cons h with ⟨t5, q5, h⟩
+  have hp5 : e.currentTarget.toB256 :: x :: xs <<+ t5.stack :=
+    prefix_of_push (of_run_address q5) hp4
+  rcases of_run_append (mstoreAt 2) h with ⟨t6, q6, h⟩
+  have hp6 : x :: xs <<+ t6.stack := prefix_of_mstoreAt q6 hp5
+  rcases of_run_append (mstoreAt 3) h with ⟨t7, q7, h⟩
+  have hp7 : xs <<+ t7.stack := prefix_of_mstoreAt q7 hp6
+  rcases Line.of_run_cons h with ⟨t8, q8, h⟩
+  have hp8 : (0 : B256) :: xs <<+ t8.stack := prefix_of_push (of_run_pushB256 q8) hp7
+  rcases of_run_append (mstoreAt 4) h with ⟨t9, q9, h⟩
+  have hp9 : xs <<+ t9.stack := prefix_of_mstoreAt q9 hp8
+  rcases Line.of_run_cons h with ⟨t10, q10, h⟩
+  have hp10 : (0xa0 : B256) :: xs <<+ t10.stack := prefix_of_push (of_run_pushB256 q10) hp9
+  exact prefix_of_mstoreAt h hp10
+
+/-- `forwardCallbackData` pushes the forwarded tail's length. -/
+lemma of_forwardCallbackData {e : Sevm} {s s' : Devm} {xs}
+    (hp : xs <<+ s.stack) (h : Line.Run e s forwardCallbackData s') :
+    ∃ len, len :: xs <<+ s'.stack := by
+  simp only [forwardCallbackData, forwardArgTail] at h
+  rcases of_run_append (arg 3) h with ⟨t1, q1, h⟩
+  rcases prefix_of_cdl hp q1 with ⟨off, hp1⟩
+  rcases Line.of_run_cons h with ⟨t2, q2, h⟩
+  have hp2 : (4 : B256) :: off :: xs <<+ t2.stack := prefix_of_push (of_run_pushB256 q2) hp1
+  rcases Line.of_run_cons h with ⟨t3, q3, h⟩
+  have hp3 := prefix_of_add q3 hp2
+  rcases Line.of_run_cons h with ⟨t4, q4, h⟩
+  rcases of_run_dup q4 with ⟨y4, hy4, pb4⟩
+  have hp4 := prefix_of_push pb4 hp3
+  rcases Line.of_run_cons h with ⟨t5, q5, h⟩
+  rcases prefix_of_calldataload q5 hp4 with ⟨len, hp5⟩
+  rcases Line.of_run_cons h with ⟨t6, q6, h⟩
+  rcases of_run_dup q6 with ⟨y6, hy6, pb6⟩
+  have hp6 := prefix_of_push pb6 hp5
+  rcases of_run_append (mstoreAt 6) h with ⟨t7, q7, h⟩
+  have hp7 : len :: (4 + off) :: xs <<+ t7.stack := prefix_of_mstoreAt q7 hp6
+  rcases Line.of_run_cons h with ⟨t8, q8, h⟩
+  rcases of_run_dup q8 with ⟨y8, hy8, pb8⟩
+  have hp8 : y8 :: len :: (4 + off) :: xs <<+ t8.stack := prefix_of_push pb8 hp7
+  rcases Line.of_run_cons h with ⟨t9, q9, h⟩
+  have hp9 : (4 + off) :: len :: y8 :: xs <<+ t9.stack := by
+    have h_swap : Stack.Swap (1 : Fin 16).val
+        (y8 :: len :: (4 + off) :: xs) ((4 + off) :: len :: y8 :: xs) := by
+      apply Stack.swapCore_succ
+      apply Stack.swapCore_zero
+    exact Stack.prefix_of_swap h_swap (of_run_swap q9) hp8
+  rcases Line.of_run_cons h with ⟨t10, q10, h⟩
+  have hp10 : (32 : B256) :: (4 + off) :: len :: y8 :: xs <<+ t10.stack :=
+    prefix_of_push (of_run_pushB256 q10) hp9
+  rcases Line.of_run_cons h with ⟨t11, q11, h⟩
+  have hp11 := prefix_of_add q11 hp10
+  rcases Line.of_run_cons h with ⟨t12, q12, h⟩
+  have hp12 : ((6 + 1) * 32 : B256) :: (32 + (4 + off)) :: len :: y8 :: xs <<+ t12.stack :=
+    prefix_of_push (of_run_pushB256 q12) hp11
+  rcases Line.of_run_cons h with ⟨t13, q13, hnil⟩
+  cases hnil
+  exact ⟨y8, prefix_of_calldatacopy q13 hp12⟩
+
+/-- `callbackArgsSize` turns the length into the `CALL`'s `argsSize`. -/
+lemma of_callbackArgsSize {e : Sevm} {s s' : Devm} {x xs}
+    (hp : x :: xs <<+ s.stack) (h : Line.Run e s callbackArgsSize s') :
+    ∃ y, y :: xs <<+ s'.stack := by
+  simp only [callbackArgsSize] at h
+  rcases Line.of_run_cons h with ⟨u1, q1, h⟩
+  have hp1 : (31 : B256) :: x :: xs <<+ u1.stack := prefix_of_push (of_run_pushB256 q1) hp
+  rcases Line.of_run_cons h with ⟨u2, q2, h⟩
+  have hp2 := prefix_of_add q2 hp1
+  rcases Line.of_run_cons h with ⟨u3, q3, h⟩
+  have hp3 : (31 : B256) :: (31 + x) :: xs <<+ u3.stack :=
+    prefix_of_push (of_run_pushB256 q3) hp2
+  rcases Line.of_run_cons h with ⟨u4, q4, h⟩
+  have hp4 := prefix_of_not q4 hp3
+  rcases Line.of_run_cons h with ⟨u5, q5, h⟩
+  have hp5 := prefix_of_and q5 hp4
+  rcases Line.of_run_cons h with ⟨u6, q6, h⟩
+  have hp6 : (0xc4 : B256) :: ((~~~ (31 : B256)) &&& (31 + x)) :: xs <<+ u6.stack :=
+    prefix_of_push (of_run_pushB256 q6) hp5
+  rcases Line.of_run_cons h with ⟨u7, q7, hnil⟩
+  cases hnil
+  exact ⟨_, prefix_of_add q7 hp6⟩
+
+/-- **The repayment.**  `spendAllowanceThenBurn` spends the allowance
+`receiver → address(this)` — writing at most one guarded slot — and both arms
+converge on `burnAndReturn`.  The infinite (`isMax`) arm writes nothing; the
+finite arm writes one slot `checkSlotCollides` has shown to be in neither
+storage region the invariant reads. -/
+lemma of_spendAllowanceThenBurn {sevm : Sevm} {s r : Devm} {wad receiver : B256}
+    (h_va : ValidAdr receiver)
+    (hs : [wad, receiver] <<+ s.stack)
+    (h : Stor.Conserved (Devm.getStor s sevm.currentTarget))
+    (h_run : Func.Run (fmint.main :: fmintAux) sevm s spendAllowanceThenBurn r) :
+    Stor.Conserved (Devm.getStor r sevm.currentTarget) := by
+  simp only [spendAllowanceThenBurn] at h_run
+  -- dup 1 : [receiver, wad, receiver]
+  rcases of_run_next h_run with ⟨s1, r1, h_run⟩
+  rcases of_run_dup r1 with ⟨y, hy1, pb1⟩
+  have hy1' : y = receiver := by
+    have h_get : s.stack[(1 : Fin 16).val]? = some receiver :=
+      Stack.nth_getElem (Stack.Nth.tail 0 receiver wad [receiver]
+        (Stack.Nth.head receiver [])) hs
+    rw [h_get] at hy1; injection hy1 with hy1; exact hy1.symm
+  subst y
+  have hs1 : [receiver, wad, receiver] <<+ s1.stack := prefix_of_push pb1 hs
+  have hg : Devm.getStor s = Devm.getStor s1 :=
+    Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r1 Line.Run.nil)
+  clear r1 pb1 hs
+  -- mstoreAt 0 : [wad, receiver]
+  rcases of_run_prepend (mstoreAt 0) _ h_run with ⟨s2, h2, h_run⟩
+  have hs2 : [wad, receiver] <<+ s2.stack := by generalize_line_prefix
+  have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) h2)
+  clear h2 hs1
+  -- address : [self, wad, receiver]
+  rcases of_run_next h_run with ⟨s3, r3, h_run⟩
+  have hs3 : sevm.currentTarget.toB256 :: [wad, receiver] <<+ s3.stack :=
+    prefix_of_push (of_run_address r3) hs2
+  have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r3 Line.Run.nil))
+  clear r3 hs2
+  -- mstoreAt 1 : [wad, receiver]
+  rcases of_run_prepend (mstoreAt 1) _ h_run with ⟨s4, h4, h_run⟩
+  have hs4 : [wad, receiver] <<+ s4.stack := by generalize_line_prefix
+  have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) h4)
+  clear h4 hs3
+  -- pushList [64, 0] : [0, 64, wad, receiver]
+  rcases of_run_prepend (pushList [64, 0]) _ h_run with ⟨s5, h5, h_run⟩
+  have hs5 : [0, 64, wad, receiver] <<+ s5.stack := by generalize_line_prefix
+  have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) h5)
+  clear h5 hs4
+  -- kec : [hash, wad, receiver]
+  rcases of_run_next h_run with ⟨s6, r6, h_run⟩
+  rcases prefix_of_kec r6 hs5 with ⟨hash, hs6⟩
+  have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r6 Line.Run.nil))
+  clear r6 hs5
+  -- checkSlotCollides : [collides?, hash, wad, receiver]
+  rcases of_run_prepend checkSlotCollides _ h_run with ⟨s7, h7, h_run⟩
+  rcases of_checkSlotCollides hs6 h7 with ⟨coll, hs7, h_guard⟩
+  have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) h7)
+  clear h7 hs6
+  -- rev-branch : the slot aliases neither region
+  rcases of_run_branch_rev h_run with ⟨s8, hp8, h_run⟩
+  have hp8s := hp8.stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hp8s
+  rw [hp8s] at hs7
+  have h_coll : coll = 0 := pref_head_unique hs7 (pref_append [0] s8.stack)
+  obtain ⟨h_nva, h_nsup⟩ := h_guard h_coll
+  rw [h_coll] at hs7
+  have hs8 : [hash, wad, receiver] <<+ s8.stack := cons_pref_cons_inv hs7
+  have hg := hg.trans (funext (fun a => (Devm.PopBurn.getStor hp8 a).symm))
+  clear hs7 hp8s hp8 h_guard h_coll
+  -- dup 0 : [hash, hash, wad, receiver]
+  rcases of_run_next h_run with ⟨s9, r9, h_run⟩
+  rcases of_run_dup r9 with ⟨y, hy9, pb9⟩
+  have hy9' : y = hash := by
+    have h_get : s8.stack[(0 : Fin 16).val]? = some hash :=
+      Stack.nth_getElem (Stack.Nth.head hash [wad, receiver]) hs8
+    rw [h_get] at hy9; injection hy9 with hy9; exact hy9.symm
+  subst y
+  have hs9 : [hash, hash, wad, receiver] <<+ s9.stack := prefix_of_push pb9 hs8
+  have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r9 Line.Run.nil))
+  clear r9 pb9 hs8
+  -- sload : [amnt, hash, wad, receiver]
+  rcases of_run_next h_run with ⟨s10, r10, h_run⟩
+  rcases prefix_of_sload r10 hs9 with ⟨amnt, hs10, -⟩
+  have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r10 Line.Run.nil))
+  clear r10 hs9
+  -- dup 0 : [amnt, amnt, hash, wad, receiver]
+  rcases of_run_next h_run with ⟨s11, r11, h_run⟩
+  rcases of_run_dup r11 with ⟨y, hy11, pb11⟩
+  have hy11' : y = amnt := by
+    have h_get : s10.stack[(0 : Fin 16).val]? = some amnt :=
+      Stack.nth_getElem (Stack.Nth.head amnt [hash, wad, receiver]) hs10
+    rw [h_get] at hy11; injection hy11 with hy11; exact hy11.symm
+  subst y
+  have hs11 : [amnt, amnt, hash, wad, receiver] <<+ s11.stack := prefix_of_push pb11 hs10
+  have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r11 Line.Run.nil))
+  clear r11 pb11 hs10
+  -- isMax = [not, iszero] : [(amnt =? max), amnt, hash, wad, receiver]
+  rcases of_run_prepend isMax _ h_run with ⟨s12, h12, h_run⟩
+  rcases Line.of_run_cons h12 with ⟨sa, rNot, h12'⟩
+  rcases Line.of_run_cons h12' with ⟨sb, rIsz, hnil⟩
+  cases hnil
+  have hsa : (~~~ amnt) :: [amnt, hash, wad, receiver] <<+ sa.stack := prefix_of_not rNot hs11
+  have hs12 : ((~~~ amnt) =? 0) :: [amnt, hash, wad, receiver] <<+ s12.stack :=
+    prefix_of_iszero rIsz hsa
+  have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) h12)
+  clear h12 rNot rIsz hsa hs11
+  -- the isMax branch : infinite arm keeps the allowance, finite arm decrements
+  rcases of_run_branch h_run with
+    ⟨s13, hp13, h_run⟩ | ⟨w13, s13, s14, h_ne13, hp13, hb13, h_run⟩
+  · -- FINITE ARM : the flag is 0
+    have hp13s := hp13.stack
+    simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hp13s
+    rw [hp13s] at hs12
+    have h_flag : ((~~~ amnt) =? 0) = 0 := pref_head_unique hs12 (pref_append [0] s13.stack)
+    rw [h_flag] at hs12
+    have hs13 : [amnt, hash, wad, receiver] <<+ s13.stack := cons_pref_cons_inv hs12
+    have hg := hg.trans (funext (fun a => (Devm.PopBurn.getStor hp13 a).symm))
+    clear hs12 hp13s hp13 h_flag
+    -- dup 2 : [wad, amnt, hash, wad, receiver]
+    rcases of_run_next h_run with ⟨s14, r14, h_run⟩
+    rcases of_run_dup r14 with ⟨y, hy14, pb14⟩
+    have hy14' : y = wad := by
+      have h_get : s13.stack[(2 : Fin 16).val]? = some wad :=
+        Stack.nth_getElem
+          (Stack.Nth.tail 1 wad amnt [hash, wad, receiver]
+            (Stack.Nth.tail 0 wad hash [wad, receiver]
+              (Stack.Nth.head wad [receiver]))) hs13
+      rw [h_get] at hy14; injection hy14 with hy14; exact hy14.symm
+    subst y
+    have hs14 : [wad, amnt, hash, wad, receiver] <<+ s14.stack := prefix_of_push pb14 hs13
+    have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r14 Line.Run.nil))
+    clear r14 pb14 hs13
+    -- dup 1 : [amnt, wad, amnt, hash, wad, receiver]
+    rcases of_run_next h_run with ⟨s15, r15, h_run⟩
+    rcases of_run_dup r15 with ⟨y, hy15, pb15⟩
+    have hy15' : y = amnt := by
+      have h_get : s14.stack[(1 : Fin 16).val]? = some amnt :=
+        Stack.nth_getElem
+          (Stack.Nth.tail 0 amnt wad [amnt, hash, wad, receiver]
+            (Stack.Nth.head amnt [hash, wad, receiver])) hs14
+      rw [h_get] at hy15; injection hy15 with hy15; exact hy15.symm
+    subst y
+    have hs15 : [amnt, wad, amnt, hash, wad, receiver] <<+ s15.stack := prefix_of_push pb15 hs14
+    have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r15 Line.Run.nil))
+    clear r15 pb15 hs14
+    -- lt : [(amnt <? wad), amnt, hash, wad, receiver]
+    rcases of_run_next h_run with ⟨s16, r16, h_run⟩
+    have hs16 : (amnt <? wad) :: [amnt, hash, wad, receiver] <<+ s16.stack :=
+      prefix_of_lt r16 hs15
+    have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r16 Line.Run.nil))
+    clear r16 hs15
+    -- rev-branch : the allowance covers the amount owed
+    rcases of_run_branch_rev h_run with ⟨s17, hp17, h_run⟩
+    have hp17s := hp17.stack
+    simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hp17s
+    rw [hp17s] at hs16
+    have h_flag17 : (amnt <? wad) = 0 := pref_head_unique hs16 (pref_append [0] s17.stack)
+    rw [h_flag17] at hs16
+    have hs17 : [amnt, hash, wad, receiver] <<+ s17.stack := cons_pref_cons_inv hs16
+    have hg := hg.trans (funext (fun a => (Devm.PopBurn.getStor hp17 a).symm))
+    clear hs16 hp17s hp17 h_flag17
+    -- dup 2 : [wad, amnt, hash, wad, receiver]
+    rcases of_run_next h_run with ⟨s18, r18, h_run⟩
+    rcases of_run_dup r18 with ⟨y, hy18, pb18⟩
+    have hy18' : y = wad := by
+      have h_get : s17.stack[(2 : Fin 16).val]? = some wad :=
+        Stack.nth_getElem
+          (Stack.Nth.tail 1 wad amnt [hash, wad, receiver]
+            (Stack.Nth.tail 0 wad hash [wad, receiver]
+              (Stack.Nth.head wad [receiver]))) hs17
+      rw [h_get] at hy18; injection hy18 with hy18; exact hy18.symm
+    subst y
+    have hs18 : [wad, amnt, hash, wad, receiver] <<+ s18.stack := prefix_of_push pb18 hs17
+    have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r18 Line.Run.nil))
+    clear r18 pb18 hs17
+    -- swap 0 : [amnt, wad, hash, wad, receiver]
+    rcases of_run_next h_run with ⟨s19, r19, h_run⟩
+    have hs19 : [amnt, wad, hash, wad, receiver] <<+ s19.stack := by
+      have h_swap : Stack.Swap (0 : Fin 16).val [wad, amnt, hash, wad, receiver]
+          [amnt, wad, hash, wad, receiver] := Stack.swapCore_zero
+      exact Stack.prefix_of_swap h_swap (of_run_swap r19) hs18
+    have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r19 Line.Run.nil))
+    clear r19 hs18
+    -- sub : [(amnt - wad), hash, wad, receiver]
+    rcases of_run_next h_run with ⟨s20, r20, h_run⟩
+    have hs20 : (amnt - wad) :: [hash, wad, receiver] <<+ s20.stack := prefix_of_sub r20 hs19
+    have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r20 Line.Run.nil))
+    clear r20 hs19
+    -- swap 0 : [hash, (amnt - wad), wad, receiver]
+    rcases of_run_next h_run with ⟨s21, r21, h_run⟩
+    have hs21 : [hash, amnt - wad, wad, receiver] <<+ s21.stack := by
+      have h_swap : Stack.Swap (0 : Fin 16).val [amnt - wad, hash, wad, receiver]
+          [hash, amnt - wad, wad, receiver] := Stack.swapCore_zero
+      exact Stack.prefix_of_swap h_swap (of_run_swap r21) hs20
+    have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r21 Line.Run.nil))
+    clear r21 hs20
+    -- sstore : the guarded allowance write
+    rcases of_run_next h_run with ⟨s22, r22, h_run⟩
+    have h_set : Devm.getStor s22 sevm.currentTarget
+        = (Devm.getStor s21 sevm.currentTarget).set hash (amnt - wad) :=
+      sstore_getStor_set r22 hs21
+    have hs22 : [wad, receiver] <<+ s22.stack := prefix_of_sstore r22 hs21
+    clear r22 hs21
+    -- the write is silent, so the invariant survives to the burn's entry
+    have h22 : Stor.Conserved (Devm.getStor s22 sevm.currentTarget) := by
+      apply Stor.Conserved.of_silent _ (h_set ▸ Stor.Silent.set h_nva h_nsup)
+      rw [← congr_fun hg sevm.currentTarget]
+      exact h
+    -- Func.call burnSlot : the shared epilogue
+    rcases of_run_call h_run with ⟨f, s23, h_get, h_burn, h_run⟩
+    rw [get_burnSlot] at h_get
+    exact of_burnAndReturn h_va
+      (by rcases hs22 with ⟨t, hsplit⟩
+          exact ⟨t, by rw [← h_burn.stack]; exact hsplit⟩)
+      (by rw [← congr_fun (funext (fun a => (Devm.Burn.getStor h_burn a).symm) :
+            Devm.getStor s22 = Devm.getStor _) sevm.currentTarget]
+          exact h22)
+      (by rw [← Option.some.inj h_get] at h_run; exact h_run)
+  · -- INFINITE ARM : the flag is nonzero, nothing is written
+    have hp13s := hp13.stack
+    simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hp13s
+    rw [hp13s] at hs12
+    have h_w13 : ((~~~ amnt) =? 0) = w13 := pref_head_unique hs12 (pref_append [w13] s13.stack)
+    rw [h_w13] at hs12
+    have hs13 : [amnt, hash, wad, receiver] <<+ s13.stack := cons_pref_cons_inv hs12
+    have hg := hg.trans (funext (fun a => (Devm.PopBurn.getStor hp13 a).symm))
+    have hg := hg.trans (funext (fun a => (Devm.Burn.getStor hb13 a).symm))
+    have hs14 : [amnt, hash, wad, receiver] <<+ s14.stack := by
+      rcases hs13 with ⟨t, hsplit⟩
+      refine ⟨t, ?_⟩
+      rw [← hb13.stack]
+      exact hsplit
+    clear hs12 hp13s hp13 hb13 h_w13 hs13
+    -- pop : [hash, wad, receiver]
+    rcases of_run_next h_run with ⟨s15, r15, h_run⟩
+    have hs15 : [hash, wad, receiver] <<+ s15.stack :=
+      prefix_of_pop (of_run_pop r15) hs14
+    have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r15 Line.Run.nil))
+    clear r15 hs14
+    -- pop : [wad, receiver]
+    rcases of_run_next h_run with ⟨s16, r16, h_run⟩
+    have hs16 : [wad, receiver] <<+ s16.stack :=
+      prefix_of_pop (of_run_pop r16) hs15
+    have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r16 Line.Run.nil))
+    clear r16 hs15
+    -- Func.call burnSlot
+    rcases of_run_call h_run with ⟨f, s17, h_get, h_burn, h_run⟩
+    rw [get_burnSlot] at h_get
+    exact of_burnAndReturn h_va
+      (by rcases hs16 with ⟨t, hsplit⟩
+          exact ⟨t, by rw [← h_burn.stack]; exact hsplit⟩)
+      (by rw [← congr_fun (funext (fun a => (Devm.Burn.getStor h_burn a).symm) :
+            Devm.getStor s16 = Devm.getStor _) sevm.currentTarget]
+          rw [← congr_fun hg sevm.currentTarget]
+          exact h)
+      (by rw [← Option.some.inj h_get] at h_run; exact h_run)
+
 end Fmint
 
 /-- `approve` writes one allowance slot and nothing else.  WETH needed only that
@@ -1461,6 +2028,450 @@ theorem transferFrom_preserves_conserved {sevm : Sevm} {s r : Devm}
     Stor.Conserved (Devm.getStor r sevm.currentTarget) := by
   rcases Fmint.of_transferFrom run with ⟨⟨_, _, _, h_tr⟩, h_sup⟩
   exact h.transfer h_tr h_sup
+
+/-- **The twelfth `FuncSound` input.**  `flashLoan` preserves conservation.
+Walked in the program's own order: the three guards, the mint pair completing
+before the `CALL`, the callback under the deeper-frame induction hypothesis,
+the returndata checks, and the repayment converging on the burn pair. -/
+theorem flashLoan_preserves_conserved {sevm : Sevm} {s r : Devm}
+    (cond : fmintSpec.Pre sevm.currentTarget sevm s)
+    (ih : Exec.InvDepth sevm.depth sevm.currentTarget Fmint.fmint
+      (fmintSpec.Pre sevm.currentTarget) (fmintSpec.Post sevm.currentTarget))
+    (h_run : Func.Run (Fmint.fmint.main :: Fmint.fmintAux) sevm s Fmint.flashLoan r) :
+    Stor.Conserved (Devm.getStor r sevm.currentTarget) := by
+  have h_code : some (s.getCode sevm.currentTarget).toList = Prog.compile Fmint.fmint :=
+    cond.code
+  have h_cons : Stor.Conserved (Devm.getStor s sevm.currentTarget) :=
+    fmintSpec_preInv_iff.mp cond.inv
+  clear cond
+  simp only [Fmint.flashLoan] at h_run
+  -- (0) `token = self` guard : storage-silent
+  rcases of_run_prepend (arg 1) _ h_run with ⟨s1, h1, h_run⟩
+  rcases prefix_of_cdl nil_pref h1 with ⟨token, hs1⟩
+  have hg : Devm.getStor s = Devm.getStor s1 := Line.of_inv Devm.getStor (by line_inv) h1
+  have hgc : Devm.getCode s = Devm.getCode s1 := Line.of_inv Devm.getCode (by line_inv) h1
+  clear h1
+  rcases of_run_next h_run with ⟨s2, r2, h_run⟩
+  have hs2 : sevm.currentTarget.toB256 :: token :: [] <<+ s2.stack :=
+    prefix_of_push (of_run_address r2) hs1
+  have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r2 Line.Run.nil))
+  have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r2 Line.Run.nil))
+  clear r2 hs1
+  rcases of_run_next h_run with ⟨s3, r3, h_run⟩
+  have hs3 := prefix_of_eq r3 hs2
+  have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r3 Line.Run.nil))
+  have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r3 Line.Run.nil))
+  clear r3 hs2
+  rcases of_run_next h_run with ⟨s4, r4, h_run⟩
+  have hs4 := prefix_of_iszero r4 hs3
+  have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r4 Line.Run.nil))
+  have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r4 Line.Run.nil))
+  clear r4 hs3
+  rcases of_run_branch_rev h_run with ⟨s5, hp5, h_run⟩
+  have hg := hg.trans (funext (fun x => (Devm.PopBurn.getStor hp5 x).symm))
+  have hgc := hgc.trans (funext (fun x => getCode_eq_of_state_eq hp5.state x))
+  clear hp5 hs4
+  -- (1) the receiver guard : conservation-critical, not hygiene
+  rcases of_run_prepend (arg 0) _ h_run with ⟨s6, h6, h_run⟩
+  rcases prefix_of_cdl nil_pref h6 with ⟨receiver, hs6⟩
+  have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) h6)
+  have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) h6)
+  clear h6
+  rcases of_run_next h_run with ⟨s7, r7, h_run⟩
+  rcases of_run_dup r7 with ⟨y, hy7, pb7⟩
+  have hy7' : y = receiver := by
+    have h_get : s6.stack[(0 : Fin 16).val]? = some receiver :=
+      Stack.nth_getElem (Stack.Nth.head receiver []) hs6
+    rw [h_get] at hy7; injection hy7 with hy7; exact hy7.symm
+  subst y
+  have hs7 : [receiver, receiver] <<+ s7.stack := prefix_of_push pb7 hs6
+  have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r7 Line.Run.nil))
+  have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r7 Line.Run.nil))
+  clear r7 pb7 hs6
+  rcases of_run_prepend checkNonAddress _ h_run with ⟨s8, h8, h_run⟩
+  rcases of_check_non_address hs7 h8 with ⟨na, hs8, h_va_iff⟩
+  have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) h8)
+  have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) h8)
+  clear h8 hs7
+  rcases of_run_branch_rev h_run with ⟨s9, hp9, h_run⟩
+  have hp9s := hp9.stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hp9s
+  rw [hp9s] at hs8
+  have h_va : ValidAdr receiver :=
+    h_va_iff.mp (pref_head_unique hs8 (pref_append [0] s9.stack))
+  rw [pref_head_unique hs8 (pref_append [0] s9.stack)] at hs8
+  have hs9 : [receiver] <<+ s9.stack := cons_pref_cons_inv hs8
+  have hg := hg.trans (funext (fun x => (Devm.PopBurn.getStor hp9 x).symm))
+  have hgc := hgc.trans (funext (fun x => getCode_eq_of_state_eq hp9.state x))
+  clear hs8 hp9s hp9 h_va_iff
+  rcases h_va with ⟨a, h_recv⟩
+  subst h_recv
+  -- (2) `amount ≤ maxFlashLoan` : the whole overflow argument for the mint
+  rcases of_run_prepend (arg 2) _ h_run with ⟨s10, h10, h_run⟩
+  rcases prefix_of_cdl hs9 h10 with ⟨amount, hs10⟩
+  have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) h10)
+  have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) h10)
+  clear h10 hs9
+  rcases of_run_next h_run with ⟨s11, r11, h_run⟩
+  rcases of_run_dup r11 with ⟨y, hy11, pb11⟩
+  have hy11' : y = amount := by
+    have h_get : s10.stack[(0 : Fin 16).val]? = some amount :=
+      Stack.nth_getElem (Stack.Nth.head amount [a.toB256]) hs10
+    rw [h_get] at hy11; injection hy11 with hy11; exact hy11.symm
+  subst y
+  have hs11 : [amount, amount, a.toB256] <<+ s11.stack := prefix_of_push pb11 hs10
+  have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r11 Line.Run.nil))
+  have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r11 Line.Run.nil))
+  clear r11 pb11 hs10
+  rcases of_run_prepend Fmint.pushSupplySlot _ h_run with ⟨s12, h12, h_run⟩
+  have hs12 : Fmint.supplySlot :: [amount, amount, a.toB256] <<+ s12.stack := by
+    simp only [Fmint.pushSupplySlot] at h12
+    rcases Line.of_run_cons h12 with ⟨sa, ra, h12'⟩
+    rcases Line.of_run_cons h12' with ⟨sb, rb, hnil⟩
+    cases hnil
+    have hpa : (0 : B256) :: [amount, amount, a.toB256] <<+ sa.stack :=
+      prefix_of_push (of_run_pushB256 ra) hs11
+    have hpb := prefix_of_not rb hpa
+    rw [Fmint.supplySlot_eq_not_zero] at hpb
+    exact hpb
+  have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) h12)
+  have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) h12)
+  clear h12 hs11
+  rcases of_run_next h_run with ⟨s13, r13, h_run⟩
+  rcases prefix_of_sload r13 hs12 with ⟨supply, hs13, h_supply⟩
+  have h_supply' : supply
+      = (Devm.getStor s sevm.currentTarget).get Fmint.supplySlot := by
+    rw [h_supply]
+    show (Devm.getStor s12 sevm.currentTarget).get Fmint.supplySlot = _
+    rw [← congr_fun hg sevm.currentTarget]
+  clear h_supply
+  have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r13 Line.Run.nil))
+  have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r13 Line.Run.nil))
+  clear r13 hs12
+  rcases of_run_next h_run with ⟨s14, r14, h_run⟩
+  have hs14 := prefix_of_not r14 hs13
+  have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r14 Line.Run.nil))
+  have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r14 Line.Run.nil))
+  clear r14 hs13
+  rcases of_run_next h_run with ⟨s15, r15, h_run⟩
+  have hs15 := prefix_of_lt r15 hs14
+  have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r15 Line.Run.nil))
+  have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r15 Line.Run.nil))
+  clear r15 hs14
+  rcases of_run_branch_rev h_run with ⟨s16, hp16, h_run⟩
+  have hp16s := hp16.stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hp16s
+  rw [hp16s] at hs15
+  have h_boundflag : ((~~~ supply) <? amount) = 0 :=
+    pref_head_unique hs15 (pref_append [0] s16.stack)
+  have h_bound : amount ≤ ~~~ supply := by
+    rw [← B256.not_lt]; intro hlt
+    rw [B256.ltCheck, if_pos hlt] at h_boundflag
+    exact B256.zero_ne_one h_boundflag.symm
+  have h_nof : B256.Nof ((Devm.getStor s sevm.currentTarget).get Fmint.supplySlot) amount := by
+    rw [← h_supply']
+    exact B256.nof_of_le_not h_bound
+  rw [h_boundflag] at hs15
+  have hs16 : [amount, a.toB256] <<+ s16.stack := cons_pref_cons_inv hs15
+  have hg := hg.trans (funext (fun x => (Devm.PopBurn.getStor hp16 x).symm))
+  have hgc := hgc.trans (funext (fun x => getCode_eq_of_state_eq hp16.state x))
+  clear hs15 hp16s hp16 h_boundflag h_bound h_supply'
+  -- (3) the mint pair : both SSTOREs complete before the CALL
+  rcases of_run_next h_run with ⟨s17, r17, h_run⟩
+  rcases of_run_dup r17 with ⟨y, hy17, pb17⟩
+  have hy17' : y = a.toB256 := by
+    have h_get : s16.stack[(1 : Fin 16).val]? = some a.toB256 :=
+      Stack.nth_getElem (Stack.Nth.tail 0 a.toB256 amount [a.toB256]
+        (Stack.Nth.head a.toB256 [])) hs16
+    rw [h_get] at hy17; injection hy17 with hy17; exact hy17.symm
+  subst y
+  have hs17 : [a.toB256, amount, a.toB256] <<+ s17.stack := prefix_of_push pb17 hs16
+  have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r17 Line.Run.nil))
+  have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r17 Line.Run.nil))
+  clear r17 pb17 hs16
+  rcases of_run_next h_run with ⟨s18, r18, h_run⟩
+  rcases prefix_of_sload r18 hs17 with ⟨rbal, hs18, h_rbal⟩
+  have h_rbal' : rbal = (Devm.getStor s sevm.currentTarget).get a.toB256 := by
+    rw [h_rbal]
+    show (Devm.getStor s17 sevm.currentTarget).get a.toB256 = _
+    rw [← congr_fun hg sevm.currentTarget]
+  clear h_rbal
+  have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r18 Line.Run.nil))
+  have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r18 Line.Run.nil))
+  clear r18 hs17
+  rcases of_run_next h_run with ⟨s19, r19, h_run⟩
+  rcases of_run_dup r19 with ⟨y, hy19, pb19⟩
+  have hy19' : y = amount := by
+    have h_get : s18.stack[(1 : Fin 16).val]? = some amount :=
+      Stack.nth_getElem (Stack.Nth.tail 0 amount rbal [amount, a.toB256]
+        (Stack.Nth.head amount [a.toB256])) hs18
+    rw [h_get] at hy19; injection hy19 with hy19; exact hy19.symm
+  subst y
+  have hs19 : [amount, rbal, amount, a.toB256] <<+ s19.stack := prefix_of_push pb19 hs18
+  have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r19 Line.Run.nil))
+  have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r19 Line.Run.nil))
+  clear r19 pb19 hs18
+  rcases of_run_next h_run with ⟨s20, r20, h_run⟩
+  have hs20 : (amount + rbal) :: [amount, a.toB256] <<+ s20.stack := prefix_of_add r20 hs19
+  have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r20 Line.Run.nil))
+  have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r20 Line.Run.nil))
+  clear r20 hs19
+  rcases of_run_next h_run with ⟨s21, r21, h_run⟩
+  rcases of_run_dup r21 with ⟨y, hy21, pb21⟩
+  have hy21' : y = a.toB256 := by
+    have h_get : s20.stack[(2 : Fin 16).val]? = some a.toB256 :=
+      Stack.nth_getElem
+        (Stack.Nth.tail 1 a.toB256 (amount + rbal) [amount, a.toB256]
+          (Stack.Nth.tail 0 a.toB256 amount [a.toB256]
+            (Stack.Nth.head a.toB256 []))) hs20
+    rw [h_get] at hy21; injection hy21 with hy21; exact hy21.symm
+  subst y
+  have hs21 : [a.toB256, amount + rbal, amount, a.toB256] <<+ s21.stack :=
+    prefix_of_push pb21 hs20
+  have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r21 Line.Run.nil))
+  have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r21 Line.Run.nil))
+  clear r21 pb21 hs20
+  -- the balance-side SSTORE
+  rcases of_run_next h_run with ⟨s22, r22, h_run⟩
+  have h_set1 : Devm.getStor s22 sevm.currentTarget
+      = (Devm.getStor s21 sevm.currentTarget).set a.toB256 (amount + rbal) :=
+    sstore_getStor_set r22 hs21
+  have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r22 Line.Run.nil))
+  have hs22 : [amount, a.toB256] <<+ s22.stack := prefix_of_sstore r22 hs21
+  clear r22 hs21
+  rcases of_run_prepend Fmint.pushSupplySlot _ h_run with ⟨s23, h23, h_run⟩
+  have hs23 : Fmint.supplySlot :: [amount, a.toB256] <<+ s23.stack := by
+    simp only [Fmint.pushSupplySlot] at h23
+    rcases Line.of_run_cons h23 with ⟨sa, ra, h23'⟩
+    rcases Line.of_run_cons h23' with ⟨sb, rb, hnil⟩
+    cases hnil
+    have hpa : (0 : B256) :: [amount, a.toB256] <<+ sa.stack :=
+      prefix_of_push (of_run_pushB256 ra) hs22
+    have hpb := prefix_of_not rb hpa
+    rw [Fmint.supplySlot_eq_not_zero] at hpb
+    exact hpb
+  have hg2 : Devm.getStor s22 = Devm.getStor s23 :=
+    Line.of_inv Devm.getStor (by line_inv) h23
+  have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) h23)
+  clear h23 hs22
+  rcases of_run_next h_run with ⟨s24, r24, h_run⟩
+  rcases prefix_of_sload r24 hs23 with ⟨supply2, hs24, h_supply2⟩
+  have h_supply2' : supply2
+      = ((Devm.getStor s sevm.currentTarget).set a.toB256
+          (amount + (Devm.getStor s sevm.currentTarget).get a.toB256)).get
+            Fmint.supplySlot := by
+    rw [h_supply2]
+    show (Devm.getStor s23 sevm.currentTarget).get Fmint.supplySlot = _
+    rw [← congr_fun hg2 sevm.currentTarget, h_set1, ← congr_fun hg sevm.currentTarget,
+      h_rbal']
+  clear h_supply2
+  have hg2 := hg2.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r24 Line.Run.nil))
+  have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r24 Line.Run.nil))
+  clear r24 hs23
+  rcases of_run_next h_run with ⟨s25, r25, h_run⟩
+  rcases of_run_dup r25 with ⟨y, hy25, pb25⟩
+  have hy25' : y = amount := by
+    have h_get : s24.stack[(1 : Fin 16).val]? = some amount :=
+      Stack.nth_getElem (Stack.Nth.tail 0 amount supply2 [amount, a.toB256]
+        (Stack.Nth.head amount [a.toB256])) hs24
+    rw [h_get] at hy25; injection hy25 with hy25; exact hy25.symm
+  subst y
+  have hs25 : [amount, supply2, amount, a.toB256] <<+ s25.stack := prefix_of_push pb25 hs24
+  have hg2 := hg2.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r25 Line.Run.nil))
+  have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r25 Line.Run.nil))
+  clear r25 pb25 hs24
+  rcases of_run_next h_run with ⟨s26, r26, h_run⟩
+  have hs26 : (amount + supply2) :: [amount, a.toB256] <<+ s26.stack := prefix_of_add r26 hs25
+  have hg2 := hg2.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r26 Line.Run.nil))
+  have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r26 Line.Run.nil))
+  clear r26 hs25
+  rcases of_run_prepend Fmint.pushSupplySlot _ h_run with ⟨s27, h27, h_run⟩
+  have hs27 : Fmint.supplySlot :: (amount + supply2) :: [amount, a.toB256] <<+ s27.stack := by
+    simp only [Fmint.pushSupplySlot] at h27
+    rcases Line.of_run_cons h27 with ⟨sa, ra, h27'⟩
+    rcases Line.of_run_cons h27' with ⟨sb, rb, hnil⟩
+    cases hnil
+    have hpa : (0 : B256) :: (amount + supply2) :: [amount, a.toB256] <<+ sa.stack :=
+      prefix_of_push (of_run_pushB256 ra) hs26
+    have hpb := prefix_of_not rb hpa
+    rw [Fmint.supplySlot_eq_not_zero] at hpb
+    exact hpb
+  have hg2 := hg2.trans (Line.of_inv Devm.getStor (by line_inv) h27)
+  have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) h27)
+  clear h27 hs26
+  -- the supply-side SSTORE : the pair is complete, conservation holds at the CALL
+  rcases of_run_next h_run with ⟨s28, r28, h_run⟩
+  have h_set2 : Devm.getStor s28 sevm.currentTarget
+      = (Devm.getStor s27 sevm.currentTarget).set Fmint.supplySlot (amount + supply2) :=
+    sstore_getStor_set r28 hs27
+  have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r28 Line.Run.nil))
+  have hs28 : [amount, a.toB256] <<+ s28.stack := prefix_of_sstore r28 hs27
+  clear r28 hs27
+  have h_cons28 : Stor.Conserved (Devm.getStor s28 sevm.currentTarget) := by
+    rw [h_set2, ← congr_fun hg2 sevm.currentTarget, h_set1,
+      ← congr_fun hg sevm.currentTarget, h_rbal', h_supply2']
+    exact h_cons.mint_set h_nof
+  clear h_set1 h_set2 h_supply2' h_rbal' h_nof hg hg2 h_cons
+  -- (4) the mint `Transfer` log : storage-silent
+  rcases of_run_next h_run with ⟨s29, r29, h_run⟩
+  rcases of_run_dup r29 with ⟨y29, hy29, pb29⟩
+  have hs29 : y29 :: [amount, a.toB256] <<+ s29.stack := prefix_of_push pb29 hs28
+  have hg3 : Devm.getStor s28 = Devm.getStor s29 :=
+    Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r29 Line.Run.nil)
+  have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r29 Line.Run.nil))
+  clear r29 pb29 hy29 hs28
+  rcases of_run_prepend (mstoreAt 0) _ h_run with ⟨s30, h30, h_run⟩
+  have hs30 : [amount, a.toB256] <<+ s30.stack := prefix_of_mstoreAt h30 hs29
+  have hg3 := hg3.trans (Line.of_inv Devm.getStor (by line_inv) h30)
+  have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) h30)
+  clear h30 hs29
+  rcases of_run_next h_run with ⟨s31, r31, h_run⟩
+  rcases of_run_dup r31 with ⟨y31, hy31, pb31⟩
+  have hs31 : y31 :: [amount, a.toB256] <<+ s31.stack := prefix_of_push pb31 hs30
+  have hg3 := hg3.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r31 Line.Run.nil))
+  have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r31 Line.Run.nil))
+  clear r31 pb31 hy31 hs30
+  rcases of_run_next h_run with ⟨s32, r32, h_run⟩
+  have hs32 : (0 : B256) :: y31 :: [amount, a.toB256] <<+ s32.stack :=
+    prefix_of_push (of_run_pushB256 r32) hs31
+  have hg3 := hg3.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r32 Line.Run.nil))
+  have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r32 Line.Run.nil))
+  clear r32 hs31
+  rcases of_run_next h_run with ⟨s33, r33, h_run⟩
+  have hs33 : transferEvent :: (0 : B256) :: y31 :: [amount, a.toB256] <<+ s33.stack :=
+    prefix_of_push (of_run_pushB256 r33) hs32
+  have hg3 := hg3.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r33 Line.Run.nil))
+  have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r33 Line.Run.nil))
+  clear r33 hs32
+  rcases of_run_prepend (logWith 2 0 1) _ h_run with ⟨s34, h34, h_run⟩
+  have hs34 : [amount, a.toB256] <<+ s34.stack := of_logWith201 hs33 h34
+  have hg3 := hg3.trans (Line.of_inv Devm.getStor (by line_inv) h34)
+  have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) h34)
+  clear h34 hs33
+  -- (5) assemble the callback frame
+  rcases of_run_next h_run with ⟨s35, r35, h_run⟩
+  rcases of_run_dup r35 with ⟨y35, hy35, pb35⟩
+  have hs35 : y35 :: [amount, a.toB256] <<+ s35.stack := prefix_of_push pb35 hs34
+  have hg3 := hg3.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r35 Line.Run.nil))
+  have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r35 Line.Run.nil))
+  clear r35 pb35 hy35 hs34
+  rcases of_run_prepend Fmint.storeCallbackHead _ h_run with ⟨s36, h36, h_run⟩
+  have hs36 : [amount, a.toB256] <<+ s36.stack := Fmint.of_storeCallbackHead hs35 h36
+  have hg3 := hg3.trans (Line.of_inv Devm.getStor (by line_inv) h36)
+  have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) h36)
+  clear h36 hs35
+  rcases of_run_prepend (pushList [0, 0]) _ h_run with ⟨s37, h37, h_run⟩
+  have hs37 : (0 : B256) :: (0 : B256) :: [amount, a.toB256] <<+ s37.stack := by
+    simp only [pushList, List.map] at h37
+    rcases Line.of_run_cons h37 with ⟨u1, q1, h37'⟩
+    rcases Line.of_run_cons h37' with ⟨u2, q2, hnil⟩
+    cases hnil
+    exact prefix_of_push (of_run_pushB256 q2)
+      (prefix_of_push (of_run_pushB256 q1) hs36)
+  have hg3 := hg3.trans (Line.of_inv Devm.getStor (by line_inv) h37)
+  have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) h37)
+  clear h37 hs36
+  rcases of_run_prepend Fmint.forwardCallbackData _ h_run with ⟨s38, h38, h_run⟩
+  rcases Fmint.of_forwardCallbackData hs37 h38 with ⟨len, hs38⟩
+  have hg3 := hg3.trans (Line.of_inv Devm.getStor (by line_inv) h38)
+  have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) h38)
+  clear h38 hs37
+  rcases of_run_prepend Fmint.callbackArgsSize _ h_run with ⟨s39, h39, h_run⟩
+  rcases Fmint.of_callbackArgsSize hs38 h39 with ⟨asz, hs39⟩
+  have hg3 := hg3.trans (Line.of_inv Devm.getStor (by line_inv) h39)
+  have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) h39)
+  clear h39 hs38
+  rcases of_run_next h_run with ⟨s40, r40, h_run⟩
+  have hs40 : Fmint.callbackArgsOffset :: asz :: (0 : B256) :: (0 : B256) ::
+      [amount, a.toB256] <<+ s40.stack := prefix_of_push (of_run_pushB256 r40) hs39
+  have hg3 := hg3.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r40 Line.Run.nil))
+  have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r40 Line.Run.nil))
+  clear r40 hs39
+  rcases of_run_next h_run with ⟨s41, r41, h_run⟩
+  have hs41 : (0 : B256) :: Fmint.callbackArgsOffset :: asz :: (0 : B256) :: (0 : B256) ::
+      [amount, a.toB256] <<+ s41.stack := prefix_of_push (of_run_pushB256 r41) hs40
+  have hg3 := hg3.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r41 Line.Run.nil))
+  have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r41 Line.Run.nil))
+  clear r41 hs40
+  rcases of_run_next h_run with ⟨s42, r42, h_run⟩
+  rcases of_run_dup r42 with ⟨y42, hy42, pb42⟩
+  have hs42 : y42 :: (0 : B256) :: Fmint.callbackArgsOffset :: asz :: (0 : B256) ::
+      (0 : B256) :: [amount, a.toB256] <<+ s42.stack := prefix_of_push pb42 hs41
+  have hg3 := hg3.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r42 Line.Run.nil))
+  have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r42 Line.Run.nil))
+  clear r42 pb42 hy42 hs41
+  rcases of_run_next h_run with ⟨s43, r43, h_run⟩
+  rcases of_run_gas r43 with ⟨g43, pb43⟩
+  have hs43 : g43 :: y42 :: (0 : B256) :: Fmint.callbackArgsOffset :: asz :: (0 : B256) ::
+      (0 : B256) :: [amount, a.toB256] <<+ s43.stack := prefix_of_push pb43 hs42
+  have hg3 := hg3.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r43 Line.Run.nil))
+  have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r43 Line.Run.nil))
+  clear r43 pb43 hs42
+  -- (6) the callback, and the induction hypothesis
+  rcases of_run_next h_run with ⟨s44, r44, h_run⟩
+  have h_code43 : some (s43.getCode sevm.currentTarget).toList = Prog.compile Fmint.fmint := by
+    rw [← congr_fun hgc sevm.currentTarget]
+    exact h_code
+  have h_cons43 : Stor.Conserved (Devm.getStor s43 sevm.currentTarget) := by
+    rw [← congr_fun hg3 sevm.currentTarget]
+    exact h_cons28
+  rcases Fmint.conserved_of_call ih hs43 h_code43 h_cons43 r44 with ⟨h_cons44, b, hs44⟩
+  clear h_cons43 h_code43 hs43 r44 hg3 hgc h_cons28 h_code
+  -- (7) the returndata checks : storage-silent
+  rcases of_run_next h_run with ⟨s45, r45, h_run⟩
+  have hs45 := prefix_of_iszero r45 hs44
+  have hg4 : Devm.getStor s44 = Devm.getStor s45 :=
+    Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r45 Line.Run.nil)
+  clear r45 hs44
+  rcases of_run_branch_rev h_run with ⟨s46, hp46, h_run⟩
+  have hp46s := hp46.stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hp46s
+  rw [hp46s] at hs45
+  rw [pref_head_unique hs45 (pref_append [0] s46.stack)] at hs45
+  have hs46 : [amount, a.toB256] <<+ s46.stack := cons_pref_cons_inv hs45
+  have hg4 := hg4.trans (funext (fun x => (Devm.PopBurn.getStor hp46 x).symm))
+  clear hs45 hp46s hp46
+  rcases of_run_prepend (retdataShorterThan 32) _ h_run with ⟨s47, h47, h_run⟩
+  rcases of_retdataShorterThan hs46 h47 with ⟨f47, hs47⟩
+  have hg4 := hg4.trans (Line.of_inv Devm.getStor (by line_inv) h47)
+  clear h47 hs46
+  rcases of_run_branch_rev h_run with ⟨s48, hp48, h_run⟩
+  have hp48s := hp48.stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hp48s
+  rw [hp48s] at hs47
+  rw [pref_head_unique hs47 (pref_append [0] s48.stack)] at hs47
+  have hs48 : [amount, a.toB256] <<+ s48.stack := cons_pref_cons_inv hs47
+  have hg4 := hg4.trans (funext (fun x => (Devm.PopBurn.getStor hp48 x).symm))
+  clear hs47 hp48s hp48
+  rcases of_run_prepend (checkRetdataHead Fmint.erc3156Magic 0) _ h_run with ⟨s49, h49, h_run⟩
+  rcases of_checkRetdataHead hs48 h49 with ⟨f49, hs49⟩
+  have hg4 := hg4.trans (Line.of_inv Devm.getStor (by line_inv) h49)
+  clear h49 hs48
+  rcases of_run_next h_run with ⟨s50, r50, h_run⟩
+  have hs50 := prefix_of_iszero r50 hs49
+  have hg4 := hg4.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r50 Line.Run.nil))
+  clear r50 hs49
+  rcases of_run_branch_rev h_run with ⟨s51, hp51, h_run⟩
+  have hp51s := hp51.stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hp51s
+  rw [hp51s] at hs50
+  rw [pref_head_unique hs50 (pref_append [0] s51.stack)] at hs50
+  have hs51 : [amount, a.toB256] <<+ s51.stack := cons_pref_cons_inv hs50
+  have hg4 := hg4.trans (funext (fun x => (Devm.PopBurn.getStor hp51 x).symm))
+  clear hs50 hp51s hp51
+  -- (8) the repayment, and the burn pair
+  apply Fmint.of_spendAllowanceThenBurn ⟨a, rfl⟩ hs51 _ h_run
+  rw [← congr_fun hg4 sevm.currentTarget]
+  exact h_cons44
+
+/-- `flashLoan` is the one target that consumes `FuncSound`'s deeper-frame
+induction hypothesis — the mirror of WETH's `wethSpec_funcSound_withdraw`. -/
+theorem fmintSpec_funcSound_flashLoan {fa : Adr} :
+    fmintSpec.FuncSound fa Fmint.fmintAux Fmint.flashLoan := by
+  intro sevm s r h_ct h_pre ih h_run
+  subst h_ct
+  refine ⟨trivial, ?_⟩
+  exact flashLoan_preserves_conserved h_pre ih h_run
 
 end
 
