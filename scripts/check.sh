@@ -1,9 +1,17 @@
 #!/usr/bin/env bash
 # Blanc verification gate (REFACTOR.md Phase 0, step 0.3): `lake build`,
-# then an axiom audit of the eight audited top theorems via
-# scripts/AxiomCheck.lean — the seven solvency theorems plus the compile
-# witness `wethCode_compile`, which is what keeps the solvency theorems'
-# `Prog.compile weth` hypothesis from being vacuous.
+# then an axiom audit of the nine audited top theorems via
+# scripts/AxiomCheck.lean — WETH's seven solvency theorems plus the two
+# compile witnesses.
+#
+# `wethCode_compile` is what keeps the solvency theorems' `Prog.compile weth`
+# hypothesis from being vacuous. `fmintCode_compile` is the same equation for
+# contract #2, audited from the moment the contract exists rather than from the
+# moment something is proved about it: `Blanc/Flashmint.lean`'s statements all
+# carry the corresponding hypothesis, and they are statements — fmint's
+# conservation invariant is unproven, pending Arc B of
+# `~/plans/flashmint-proposal.md`. Auditing the witness early is what makes the
+# eventual proofs land against a pinned, non-vacuous equation.
 #
 # Each row carries its OWN pinned expected axiom set (see ROWS below), and a
 # theorem's axiom closure must equal its row's set exactly, order-insensitive.
@@ -59,7 +67,8 @@ Blanc.addBlockToChain_preserves_solvent|$STANDARD
 Blanc.stateTransitionUsing_preserves_solvent|$STANDARD
 Blanc.chainUsing_preserves_solvent|$STANDARD
 Blanc.addBlockToChainUsing_preserves_solvent|$STANDARD
-Blanc.wethCode_compile|$STANDARD"
+Blanc.wethCode_compile|$STANDARD
+Blanc.fmintCode_compile|$STANDARD"
 # Secondary net only: the exact-set comparison below is the primary check;
 # this pattern catches forbidden names in output the per-theorem parse missed.
 FORBIDDEN='sorryAx|ofReduceBool|ofReduceNat|_native\.'
