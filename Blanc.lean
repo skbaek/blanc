@@ -3,6 +3,7 @@ import Blanc.WethCode
 import Blanc.Ladder
 import Blanc.Conserved
 import Blanc.FmintCode
+import Blanc.FlashSpec
 
 namespace Blanc
 
