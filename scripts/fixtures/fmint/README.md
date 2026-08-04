@@ -64,6 +64,13 @@ inputs, not a proof. fmint's conservation invariant (`~/plans/flashmint-
 proposal.md` headline 1) is **unproven**, pending Arc B — nothing here
 discharges it, and nothing here is a liveness result.
 
+The expectations above are written from `Blanc/Fmint.lean`'s semantics and
+[`FMINT_DEVIATIONS.md`](../../../FMINT_DEVIATIONS.md) — never read off an
+observed post-state, per the same discipline the WETH suite's README states.
+`FMINT_DEVIATIONS.md`'s `Fixture evidence` column cites specific cases in this
+directory by name; where it instead says "no case in this suite," that is a
+recorded coverage gap in that registry, not an omission here.
+
 ## Anti-vacuity acceptance criteria (evidence plan) and how each is met
 
 - **Scenario manifest, cross-checked by the harness** —
