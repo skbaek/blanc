@@ -269,7 +269,9 @@ def updateAllowance : Func :=
            -- wad :: hash
   dup 1 ::: sload ::: -- amnt :: wad :: hash
   dup 0 ::: isMax +++ -- (amnt =? max) :: amnt :: wad :: hash
-  returnTrue <?> -- if allowed amount is infinite (per EIP-717), do not update allowance
+  returnTrue <?> -- if allowed amount is infinite, do not update allowance
+                 --   (WETH9 convention: a max allowance is never decremented;
+                 --    no EIP mandates it)
                  -- amnt :: wad :: hash
   dup 1 ::: dup 1 ::: lt ::: -- amnt <? wad :: amnt :: wad :: hash
   .rev <?> -- if allowed amount < transfer amount, revert
