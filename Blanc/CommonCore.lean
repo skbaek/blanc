@@ -228,6 +228,15 @@ def checkRetdataHead (w m : B256) : Line :=
   pushB256 (m * 32) :: mload ::         -- head
   pushB256 w :: eq :: []                -- (head =? w)
 
+-- Is this 256-bit word the image of an address? Both token contracts guard on
+-- it and `Stor.rest` sums over exactly these keys, so it is neither's property.
+def ValidAdr (w : B256) : Prop := ∃ a : Adr, a.toB256 = w
+
+-- The same test as a mask: the ninety-six high bits, all set. `validAdr_iff` in
+-- `Blanc/CommonProofs.lean` is the bridge, and `addressMask_eq_shl` relates it
+-- to the six bytes `pushAddressMask` emits.
+def addressMask : B256 := ⟨⟨.max, 0xffffffff00000000⟩, 0⟩
+
 -- Push a 256-bit word used for testing address validity.
 -- NOT and SHL are used so it takes up only 6 bytes of code,
 -- whereas pushing the value directly would take up 32.

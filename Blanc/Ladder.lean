@@ -770,6 +770,211 @@ instance : Linst.Hinv Devm.getStor Devm.getStor Linst.rev := by
   rcases Except.bind_eq_ok h4 with ⟨v3, h5, h6⟩
   contradiction
 
+section
+
+open Jaune.Ninst Ninst
+
+/-! ## The shared ERC-20 writers, and their effect on `Stor.rest`
+
+Hoisted out of `Blanc/Solvent.lean` byte-identically with the rest of the
+shared ERC-20 proof layer (`Blanc/CommonProofs.lean`, *The shared ERC-20 proof
+layer*). These land here rather than there for two reasons, both about what is
+defined below `CommonProofs` and above them: `incrAt_of_incrWbal`,
+`of_transferFromUpdateSbal` and `transfer_of_transfer` are stated in terms of
+the `Increase`/`Decrease`/`Transfer` algebra at the top of this module, and all
+four need the `Linst.Hinv` instances immediately above to discharge their
+`func_inv` side goals. Nothing in them mentions a contract. -/
+
+lemma transfer_preserves_bal : Func.Inv Devm.getBal Devm.getBal transfer := by func_inv
+
+lemma incrAt_of_incrWbal {sevm : Sevm} {s s' : Devm} {wad dst} (h_dst : ValidAdr dst)
+    (h_run : Line.Run sevm s incrWbal s') (h_stk : [wad, dst] <<+ s.stack) :
+    Increase dst.toAdr wad (Stor.rest (Devm.getStor s sevm.currentTarget)) (Stor.rest (Devm.getStor s' sevm.currentTarget)) := by
+  simp only [incrWbal] at h_run
+  rcases of_run_append [dup 1, sload, add, swap 0] h_run with ⟨sm, h_pre, h_post⟩
+  clear h_run
+  have h_stor : Devm.getStor s = Devm.getStor sm := Line.of_inv Devm.getStor (by line_inv) h_pre
+  -- decompose the prefix line to track the stack
+  rcases Line.of_run_cons h_pre with ⟨s1, r_dup, h1⟩
+  rcases Line.of_run_cons h1 with ⟨s2, r_sload, h2⟩
+  rcases Line.of_run_cons h2 with ⟨s3, r_add, h3⟩
+  rcases Line.of_run_cons h3 with ⟨s4, r_swap, h4⟩
+  cases h4
+  clear h1 h2 h3 h_pre
+  -- dup 1 : push element at index 1 (= dst)
+  rcases of_run_dup r_dup with ⟨x, hx, pb_dup⟩
+  have hx_dst : x = dst := by
+    have h_nth : Stack.Nth 1 dst [wad, dst] :=
+      Stack.Nth.tail 0 dst wad [dst] (Stack.Nth.head dst [])
+    have h_get : s.stack[(1 : Fin 16).val]? = some dst := Stack.nth_getElem h_nth h_stk
+    rw [h_get] at hx; injection hx with hx; exact hx.symm
+  subst x
+  have hp1 : [dst, wad, dst] <<+ s1.stack := prefix_of_push pb_dup h_stk
+  -- sload : pop dst, push its stored value
+  rcases prefix_of_sload r_sload hp1 with ⟨dbal, hp2, h_dbal⟩
+  -- add : dbal + wad
+  have hp3 : (dbal + wad) :: [dst] <<+ s3.stack := prefix_of_add r_add hp2
+  -- swap 0 : [dst, dbal + wad]
+  have h_swap : Stack.Swap (0 : Fin 16).val [dbal + wad, dst] [dst, dbal + wad] :=
+    Stack.swapCore_zero
+  have hp4 : [dst, dbal + wad] <<+ sm.stack :=
+    Stack.prefix_of_swap h_swap (of_run_swap r_swap) hp3
+  -- sstore
+  rcases Line.of_run_cons h_post with ⟨s5, r_sstore, h5⟩
+  cases h5
+  have h_set : Devm.getStor s' sevm.currentTarget
+      = (Devm.getStor sm sevm.currentTarget).set dst (dbal + wad) :=
+    sstore_getStor_set r_sstore hp4
+  -- dbal = value at dst in s's storage
+  have hs1 : Devm.getStor s = Devm.getStor s1 :=
+    Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r_dup Line.Run.nil)
+  have h_dbal' : dbal = (Devm.getStor s sevm.currentTarget).get dst := by
+    rw [h_dbal]; show (Devm.getStor s1 sevm.currentTarget).get dst = _; rw [hs1]
+  -- assemble the Increase
+  intro a
+  constructor
+  · intro h_eq
+    subst h_eq
+    simp only [Stor.rest, Function.comp_apply]
+    rw [toB256_toAdr h_dst, h_set, Stor.get_set_self, ← h_dbal']
+  · intro h_ne
+    simp only [Stor.rest, Function.comp_apply]
+    rw [h_set]
+    have h_key_ne : a.toB256 ≠ dst := by
+      intro hc; apply h_ne; rw [← toAdr_toB256 a, hc]
+    rw [Stor.get_set_ne _ h_key_ne.symm, h_stor]
+
+lemma of_transferFromUpdateSbal {sevm : Sevm} {s₀ sₙ : Devm} {sbal wad src}
+    (h_src : ValidAdr src) (h_sbal : sbal = (Devm.getStor s₀ sevm.currentTarget).get src)
+    (h_le : wad ≤ sbal) (hp₀ : [sbal, wad, wad, src] <<+ s₀.stack) :
+    Line.Run sevm s₀ transferFromUpdateSbal sₙ →
+    ( Decrease src.toAdr wad (Stor.rest (Devm.getStor s₀ sevm.currentTarget)) (Stor.rest (Devm.getStor sₙ sevm.currentTarget)) ∧
+      wad ≤ Stor.rest (Devm.getStor s₀ sevm.currentTarget) src.toAdr ) := by
+  intro h_run
+  simp only [transferFromUpdateSbal] at h_run
+  rcases of_run_append [sub, dup 2] h_run with ⟨sm, h_pre, h_post⟩
+  clear h_run
+  have h_stor : Devm.getStor s₀ = Devm.getStor sm := Line.of_inv Devm.getStor (by line_inv) h_pre
+  rcases Line.of_run_cons h_pre with ⟨s1, r_sub, h1⟩
+  rcases Line.of_run_cons h1 with ⟨s2, r_dup, h2⟩
+  cases h2
+  clear h1 h_pre
+  -- sub : [sbal - wad, wad, src]
+  have hp1 : (sbal - wad) :: [wad, src] <<+ s1.stack := prefix_of_sub r_sub hp₀
+  -- dup 2 : push element at index 2 (= src)
+  rcases of_run_dup r_dup with ⟨x, hx, pb_dup⟩
+  have hx_src : x = src := by
+    have h_nth : Stack.Nth 2 src [sbal - wad, wad, src] :=
+      Stack.Nth.tail 1 src (sbal - wad) [wad, src]
+        (Stack.Nth.tail 0 src wad [src] (Stack.Nth.head src []))
+    have h_get : s1.stack[(2 : Fin 16).val]? = some src := Stack.nth_getElem h_nth hp1
+    rw [h_get] at hx; injection hx with hx; exact hx.symm
+  subst x
+  have hp2 : [src, sbal - wad, wad, src] <<+ sm.stack := prefix_of_push pb_dup hp1
+  -- sstore
+  rcases Line.of_run_cons h_post with ⟨s3, r_sstore, h3⟩
+  cases h3
+  have h_set : Devm.getStor sₙ sevm.currentTarget
+      = (Devm.getStor sm sevm.currentTarget).set src (sbal - wad) :=
+    sstore_getStor_set r_sstore hp2
+  constructor
+  · intro a
+    constructor
+    · intro h_eq
+      subst h_eq
+      simp only [Stor.rest, Function.comp_apply]
+      rw [toB256_toAdr h_src, h_set, Stor.get_set_self, ← h_sbal]
+    · intro h_ne
+      simp only [Stor.rest, Function.comp_apply]
+      rw [h_set]
+      have h_key_ne : a.toB256 ≠ src := by
+        intro hc; apply h_ne; rw [← toAdr_toB256 a, hc]
+      rw [Stor.get_set_ne _ h_key_ne.symm, h_stor]
+  · simp only [Stor.rest, Function.comp_apply]
+    rw [toB256_toAdr h_src, ← h_sbal]; exact h_le
+
+lemma transfer_of_transfer {fs : List Func} {sevm : Sevm} {s r : Devm} :
+    Func.Run fs sevm s transfer r →
+    ∃ (x : B256) (a a' : Adr),
+      Transfer (Stor.rest (Devm.getStor s sevm.currentTarget)) a x a'
+        (Stor.rest (Devm.getStor r sevm.currentTarget)) := by
+  intro h_run
+  simp only [transfer] at h_run
+  -- transferTestDst : [dst_invalid?, dst]
+  rcases of_run_prepend transferTestDst _ h_run with ⟨s1, h1, h_run⟩
+  rcases of_transferTestDst h1 with ⟨dst_invalid, dst, hp1, h_dst⟩
+  have hg1 : Devm.getStor s = Devm.getStor s1 := Line.of_inv Devm.getStor (by line_inv) h1
+  clear h1
+  -- rev-branch : dst is a valid address
+  rcases of_run_branch_rev h_run with ⟨s2, hp2b, h_run⟩
+  have hp2bs := hp2b.stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hp2bs
+  rw [hp2bs] at hp1
+  have h_dst_valid : ValidAdr dst := h_dst.mp (pref_head_unique hp1 (pref_append [0] s2.stack))
+  rw [pref_head_unique hp1 (pref_append [0] s2.stack)] at hp1
+  have hp2 : [dst] <<+ s2.stack := cons_pref_cons_inv hp1
+  have hg2 : Devm.getStor s = Devm.getStor s2 :=
+    hg1.trans (funext (fun a => (Devm.PopBurn.getStor hp2b a).symm))
+  clear hp1 hp2bs hp2b h_dst
+  -- transferTestLt : [lt?, caller, cbal - wad, wad, dst]
+  rcases of_run_prepend transferTestLt _ h_run with ⟨s3, h3, h_run⟩
+  rcases of_transferTestLt hp2 h3 with ⟨lt?, caller, wad, hp3, h_le, h_caller⟩
+  have hg3 : Devm.getStor s = Devm.getStor s3 :=
+    hg2.trans (Line.of_inv Devm.getStor (by line_inv) h3)
+  clear h3 hp2
+  -- rev-branch : wad ≤ caller balance
+  rcases of_run_branch_rev h_run with ⟨s4, hp4b, h_run⟩
+  have hp4bs := hp4b.stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hp4bs
+  rw [hp4bs] at hp3
+  have h_lt0 : lt? = 0 := pref_head_unique hp3 (pref_append [0] s4.stack)
+  have h_le' : wad ≤ Devm.getStorVal s3 sevm.currentTarget caller := h_le.mp h_lt0
+  rw [h_lt0] at hp3
+  have hp4 : [caller, Devm.getStorVal s3 sevm.currentTarget caller - wad, wad, dst] <<+ s4.stack :=
+    cons_pref_cons_inv hp3
+  have hg4 : Devm.getStor s = Devm.getStor s4 :=
+    hg3.trans (funext (fun a => (Devm.PopBurn.getStor hp4b a).symm))
+  clear hp3 hp4bs hp4b h_le h_lt0
+  -- transferCore : sstore ::: incrWbal +++ logTransfer +++ returnTrue
+  simp only [transferCore] at h_run
+  -- sstore : set caller's WETH balance to cbal - wad
+  rcases of_run_next h_run with ⟨s5, r5, h_run⟩
+  have h_set : Devm.getStor s5 sevm.currentTarget
+      = (Devm.getStor s4 sevm.currentTarget).set caller
+          (Devm.getStorVal s3 sevm.currentTarget caller - wad) :=
+    sstore_getStor_set r5 hp4
+  have hp5 : [wad, dst] <<+ s5.stack := prefix_of_sstore r5 hp4
+  clear hp4
+  -- incrWbal : increase destination balance
+  rcases of_run_prepend incrWbal _ h_run with ⟨s6, h6, h_run⟩
+  have h_incr : Increase dst.toAdr wad (Stor.rest (Devm.getStor s5 sevm.currentTarget))
+      (Stor.rest (Devm.getStor s6 sevm.currentTarget)) :=
+    incrAt_of_incrWbal h_dst_valid h6 hp5
+  -- logTransfer, returnTrue : do not touch storage
+  have h_rest : Devm.getStor s6 sevm.currentTarget = Devm.getStor r sevm.currentTarget :=
+    congr_fun (Func.of_inv Devm.getStor Devm.getStor (by func_inv) h_run) sevm.currentTarget
+  -- assemble the Transfer
+  refine ⟨wad, caller.toAdr, dst.toAdr, ?_, (Stor.rest (Devm.getStor s5 sevm.currentTarget)), ?_, ?_⟩
+  · show wad ≤ (Stor.rest (Devm.getStor s sevm.currentTarget)) caller.toAdr
+    simp only [Stor.rest, Function.comp_apply]
+    rw [toB256_toAdr h_caller, congr_fun hg3 sevm.currentTarget]
+    exact h_le'
+  · intro a
+    constructor
+    · intro h_eq; subst h_eq
+      simp only [Stor.rest, Function.comp_apply]
+      rw [toB256_toAdr h_caller, h_set, Stor.get_set_self, congr_fun hg3 sevm.currentTarget]
+      rfl
+    · intro h_ne
+      simp only [Stor.rest, Function.comp_apply]
+      rw [h_set]
+      have h_key_ne : a.toB256 ≠ caller := by
+        intro hc; apply h_ne; rw [← toAdr_toB256 a, hc]
+      rw [Stor.get_set_ne _ h_key_ne.symm, congr_fun hg4 sevm.currentTarget]
+  · rw [← h_rest]; exact h_incr
+
+end
+
 lemma Devm.pop_of_popToAdr {a : Adr} {devm devm' : Devm}
     (h : Devm.popToAdr devm = .ok ⟨a, devm'⟩) :
     ∃ x, x.toAdr = a ∧ Devm.pop devm = .ok ⟨x, devm'⟩ := by

@@ -16,6 +16,16 @@ open Jaune
 -- in `Blanc/CommonCore.lean`, upstream of both token contracts.  Solvency is
 -- the WETH-specific part: the booked balance plus the callvalue, bounded by
 -- the ETH the contract actually holds.
+--
+-- The shared ERC-20 proof layer left this module the same way and for the same
+-- reason: `ValidAdr` and `addressMask` are now in `Blanc/CommonCore.lean`; the
+-- address-guard, `sstore`-effect, line-walking and balance-sum-overflow lemmas
+-- in `Blanc/CommonProofs.lean` (*The shared ERC-20 proof layer*); and the four
+-- that need the `Linst.Hinv` instances or the `Increase`/`Decrease`/`Transfer`
+-- algebra — `transfer_preserves_bal`, `incrAt_of_incrWbal`,
+-- `of_transferFromUpdateSbal`, `transfer_of_transfer` — in `Blanc/Ladder.lean`.
+-- What stays here names WETH's own code, its forked ERC-20 pair, or
+-- `Stor.Solvent`.
 def Stor.Solvent (s : Stor) (v : B256) (b : B256) : Prop :=
   balSum s + v.toNat ≤ b.toNat
 
@@ -199,8 +209,6 @@ lemma Precond.state_eq {wa sevm devm devm'}
   wethSpec_pre_iff.mp ((wethSpec_pre_iff.mpr h_pc).state_eq h_eq)
 
 
-
-
 syntax "simple_solvent" : tactic
 set_option hygiene false in
 macro_rules
@@ -217,167 +225,7 @@ lemma name_preserves_solvent {sevm : Sevm} {s r : Devm}
 
 lemma approve_preserves_bal : Func.Inv Devm.getBal Devm.getBal approve := by func_inv
 
-def ValidAdr (w : B256) : Prop := ∃ a : Adr, a.toB256 = w
-
-theorem validAdr_toB256 (a : Adr) : ValidAdr a.toB256 := ⟨a, rfl⟩
-
-lemma toB256_toAdr {w : B256} :
-    ValidAdr w → w.toAdr.toB256 = w := by
-  intro h; rcases h with ⟨a, ha⟩;
-  rw [← ha, toAdr_toB256]
-
-lemma cons_pref_cons_inv {α} {x : α} {xs ys : List α} (h : (x :: xs) <<+ (x :: ys)) : xs <<+ ys := by
-  rcases h with ⟨zs, h⟩
-  injection h with _ h_tail
-  exact ⟨zs, h_tail⟩
-
-open Lean.Elab.Tactic
-open Lean.Parser.Tactic
-open Lean.Elab.Term
-open Lean
-open Qq
 open Jaune.Ninst Ninst
-
-def Line.take : Nat → Q(Line) → TacticM Q(Line)
-| 0, _ => pure q([] : Line)
-| n + 1, l => do
-  let l' : Q(Line) ← Lean.Meta.whnf l
-  match l' with
-  | ~q([]) => failure
-  | ~q($i :: $is) =>
-    let x ← Line.take n is
-    pure q($i :: $x)
-  | _ => failure
-
-elab "line_execute" e:num : tactic =>
-  withMainContext do
-    let n := Lean.TSyntax.getNat e
-    let g : Q(Prop) ← getMainTarget
-    match g with
-    | ~q(Line.Run _ $s $l _ → $c) =>
-      let ss ← findSubscript s
-      let x ← Line.take n l
-      Lean.Expr.apply (Lean.mkApp2 q(@run_append_elim) c x)
-      Strings.intro ["s" ++ ss, "h" ++ ss]
-    | _ => throwError "unexpected goal for line_execute"
-
-elab "line_execute_with" e:term : tactic =>
-  withMainContext do
-    let x ← elabTermForApply e
-    let g : Q(Prop) ← getMainTarget
-    match g with
-    | ~q(Line.Run _ $s _ _ → $c) =>
-      let ss ← findSubscript s
-      Lean.Expr.apply (Lean.mkApp2 q(@run_append_elim) c x)
-      Strings.intro ["s" ++ ss, "h" ++ ss]
-    | _ => throwError "unexpected goal for line_execute_with"
-
-def addressMask : B256 := ⟨⟨.max, 0xffffffff00000000⟩, 0⟩
-
-lemma B128.and_eq_and_prod_and (x y : B128) :
-    x &&& y = ⟨x.1 &&& y.1, x.2 &&& y.2⟩ := rfl
-
-lemma B256.and_eq_and_prod_and (x y : B256) :
-    x &&& y = ⟨x.1 &&& y.1, x.2 &&& y.2⟩ := rfl
-
-lemma B128.zero_and {x : B128} : 0 &&& x = 0 := by
-  simp [B128.and_eq_and_prod_and]
-  apply Prod.ext <;> change (0 : UInt64) &&& _ = 0 <;> apply UInt64.zero_and
-
-lemma UInt64.mask_and_eq_zero (x : UInt32) :
-    (0xffffffff00000000 : UInt64) &&& x.toUInt64 = 0 := by
-  rw [← @UInt32.and_neg_one x, UInt32.toUInt64_and]
-  rw [UInt64.and_comm (UInt32.toUInt64 _), ← UInt64.and_assoc]
-  apply UInt64.zero_and
-
-lemma UInt64.toUInt32_toUInt64_eq_of_highMask_and_eq_zero {x : UInt64}
-    (h : (0xffffffff00000000 : UInt64) &&& x = 0) :
-    x.toUInt32.toUInt64 = x := by
-  apply UInt64.toBitVec_inj.mp
-  simp only [UInt32.toBitVec_toUInt64, UInt64.toBitVec_toUInt32]
-  apply BitVec.eq_of_getElem_eq_iff.mpr
-  intro i hi
-  rw [BitVec.getElem_setWidth]
-  by_cases hi32 : i < 32
-  · rw [BitVec.getLsbD_eq_getElem hi32, BitVec.getElem_setWidth,
-      BitVec.getLsbD_eq_getElem (by omega)]
-  · rw [BitVec.getLsbD_of_ge _ _ (by omega)]
-    have hb := congrArg UInt64.toBitVec h
-    rw [UInt64.toBitVec_and, UInt64.toBitVec_zero] at hb
-    have hb_i := congrArg (fun v : BitVec 64 => v[i]) hb
-    simp only [BitVec.getElem_and hi, BitVec.getElem_zero hi] at hb_i
-    have hmask : ((0xffffffff00000000 : UInt64).toBitVec)[i] = true := by
-      change (((-1 : UInt64) <<< 32).toBitVec)[i] = true
-      rw [UInt64.toBitVec_shiftLeft, BitVec.getElem_shiftLeft' hi]
-      simp [hi32]
-      change (BitVec.allOnes 64)[i - 32] = true
-      rw [BitVec.getElem_eq_testBit_toNat _ _ (by omega), BitVec.toNat_allOnes]
-      rw [Nat.testBit_two_pow_sub_succ (x := 0) (by norm_num)]
-      have hi64 : i - 32 < 64 := by omega
-      simp [hi64]
-    rw [hmask] at hb_i
-    exact hb_i.symm
-
-lemma validAdr_iff {w : B256} :
-    ValidAdr w ↔ addressMask &&& w = 0 := by
-  constructor <;> intro h
-  · rcases h with ⟨⟨a32, a128⟩, ⟨_⟩⟩
-    simp [Adr.toB256, addressMask]
-    rw [B256.and_eq_and_prod_and]
-    simp [B128.zero_and]
-    rw [B128.and_eq_and_prod_and]
-    simp
-    apply Prod.ext
-    · apply Prod.ext
-      · rfl
-      · apply UInt64.mask_and_eq_zero
-    · rfl
-  · refine' ⟨w.toAdr, _⟩
-    rcases w with ⟨⟨wz, wh⟩, wl⟩
-    simp only [addressMask, B256.and_eq_and_prod_and, B128.and_eq_and_prod_and] at h
-    have hz := congrArg (fun x : B256 => x.1.1) h
-    have hm := congrArg (fun x : B256 => x.1.2) h
-    change UInt64.max &&& wz = 0 at hz
-    change (0xffffffff00000000 : UInt64) &&& wh = 0 at hm
-    have h_wz : wz = 0 := by
-      simp only [UInt64.max] at hz
-      change (-1 : UInt64) &&& wz = 0 at hz
-      simpa using hz
-    have h_wh : wh.toUInt32.toUInt64 = wh := by
-      exact UInt64.toUInt32_toUInt64_eq_of_highMask_and_eq_zero hm
-    simp only [B256.toAdr, Adr.toB256, h_wz, h_wh]
-
-lemma addressMask_eq_shl :
-    addressMask = (~~~ (0 : B256)) <<< (160 : Nat).toB256.toNat := by
-  rw [B256.toNat_toB256, Nat.lo_eq_of_lt (by omega)]; rfl
-
-lemma of_push_addressMask {e : Sevm} {s s' : Devm} {xs}
-    (h_pfx : xs <<+ s.stack) (h_run : Line.Run e s pushAddressMask s') :
-    (addressMask :: xs <<+ s'.stack) := by
-  rw [addressMask_eq_shl]
-  revert s; simp only [pushAddressMask]; line_prefix
-
-lemma of_check_non_address {e : Sevm} {s s' : Devm} {x xs}
-    (h_pfx : x :: xs <<+ s.stack) (h_run : Line.Run e s checkNonAddress s') :
-    ∃ y, (y :: xs <<+ s'.stack) ∧ (y = 0 ↔ ValidAdr x) := by
-  rename' s' => s''
-  rcases of_run_append _ h_run with ⟨sm, h_push, h_and⟩; clear h_run
-  have h_pfx' := of_push_addressMask h_pfx h_push; clear h_pfx h_push s
-  have h_pfx2 : (addressMask &&& x) :: xs <<+ s''.stack := by
-    revert h_and; revert sm; line_prefix
-  refine ⟨_, h_pfx2, Iff.symm validAdr_iff⟩
-
-lemma of_check_address {e : Sevm} {s s' : Devm} {x xs} :
-    (x :: xs <<+ s.stack) →
-    Line.Run e s checkAddress s' →
-    ∃ y, (y :: xs <<+ s'.stack) ∧ (y = 0 ↔ ¬ ValidAdr x) := by
-  rename' s' => s''; intros h_pfx h_run
-  rcases of_run_append _ h_run with ⟨sm, hs', h_run'⟩; clear h_run
-  rcases of_check_non_address h_pfx hs' with ⟨y, h_pfx', h_iff⟩; clear h_pfx hs' s
-  have h_pfx2 : ((y =? 0) :: xs <<+ s''.stack) := by
-    revert h_run'; revert sm; line_prefix
-  refine' ⟨_, h_pfx2, _⟩; rw [← h_iff]
-  apply Ne.ite_eq_right_iff <| Ne.symm B256.zero_ne_one
 
 lemma of_prepApprove {sevm : Sevm} {s s' : Devm} :
     Line.Run sevm s prepApprove s' →
@@ -401,101 +249,6 @@ lemma of_prepApprove {sevm : Sevm} {s s' : Devm} :
   rcases of_check_address hp₄ h with ⟨vx, h_vx, h_iff⟩
   refine ⟨vx, hash, wad, h_vx, h_iff⟩
 
-
-
-lemma setStorVal_getStor_self {devm : Devm} {adr : Adr} {key val : B256} :
-    Devm.getStor (devm.setStorVal adr key val) adr = (Devm.getStor devm adr).set key val := by
-  simp only [Devm.getStor, Devm.getAcct, Devm.setStorVal, Devm.withState,
-    Devm.setWorld, State.setStorVal]
-  simp only [Devm.state, State.get_set_self]
-
-lemma sstore_getStor_setStorVal {sevm : Sevm} {s s' : Devm} {x xs}
-    (h_run : Ninst.Run sevm s Blanc.Ninst.sstore s') (hx : x :: xs <<+ s.stack) :
-    ∃ v, Devm.getStor s' sevm.currentTarget = (Devm.getStor s sevm.currentTarget).set x v := by
-  rcases of_run_reg h_run with ⟨pc, run⟩
-  simp only [Rinst.run, Rinst.runCore] at run
-  rcases Except.bind_eq_ok run with ⟨⟨key, s₁⟩, h1, run₁⟩
-  rcases Except.bind_eq_ok run₁ with ⟨⟨val, s₂⟩, h2, run₂⟩
-  rcases Except.bind_eq_ok run₂ with ⟨_, h3, run₃⟩
-  rcases Except.bind_eq_ok run₃ with ⟨⟨s₃, g₂⟩, h4, run₄⟩
-  rcases Except.bind_eq_ok run₄ with ⟨g₃, h5, run₅⟩
-  rcases Except.bind_eq_ok run₅ with ⟨s₄, h6, run₆⟩
-  rcases Except.bind_eq_ok run₆ with ⟨s₅, h7, run₇⟩
-  rcases Except.bind_eq_ok run₇ with ⟨_, h8, h9⟩
-  have hkx : x = key :=
-    (List.of_cons_pref_of_cons_pref hx (pref_of_split (Devm.pop_of_pop h1).stack)).left
-  have e1 : Devm.getStor s = Devm.getStor s₁ := Devm.pop_getStor_eq h1
-  have e2 : Devm.getStor s₁ = Devm.getStor s₂ := Devm.pop_getStor_eq h2
-  have e4 : Devm.getStor s₂ = Devm.getStor s₃ := by
-    split at h4 <;> (injection h4 with eq; injection eq with eq _; subst eq)
-    · exact addAccessedStorageKey_getStor.symm
-    · rfl
-  have e6 : Devm.getStor s₃ = Devm.getStor s₄ := by
-    injection h6 with eq; rw [← eq]; rfl
-  have e7 : Devm.getStor s₄ = Devm.getStor s₅ := chargeGas_getStor_eq h7
-  have E : Devm.getStor s = Devm.getStor s₅ := e1.trans (e2.trans (e4.trans (e6.trans e7)))
-  injection h9 with eq
-  refine ⟨val, ?_⟩
-  rw [← eq, setStorVal_getStor_self, hkx, E]
-
-lemma sstore_preserves_stor_rest {x xs} {sevm : Sevm} {s s' : Devm} :
-  ¬ ValidAdr x →
-  (x :: xs <<+ s.stack) →
-  Ninst.Run sevm s Blanc.Ninst.sstore s' →
-  (Stor.rest (Devm.getStor s sevm.currentTarget)) = (Stor.rest (Devm.getStor s' sevm.currentTarget)) := by
-  intro h_nv h_pfx h_run
-  rcases sstore_getStor_setStorVal h_run h_pfx with ⟨v, h_set⟩
-  rw [h_set]
-  funext a
-  have hne : a.toB256 ≠ x := fun hc => h_nv ⟨a, hc⟩
-  simp only [Stor.rest, Function.comp_apply]
-  rw [Stor.get_set_ne _ hne.symm]
-
-lemma sstore_getStor_set {sevm : Sevm} {s s' : Devm} {x y xs}
-    (h_run : Ninst.Run sevm s Blanc.Ninst.sstore s') (hx : x :: y :: xs <<+ s.stack) :
-    Devm.getStor s' sevm.currentTarget = (Devm.getStor s sevm.currentTarget).set x y := by
-  rcases of_run_reg h_run with ⟨pc, run⟩
-  simp only [Rinst.run, Rinst.runCore] at run
-  rcases Except.bind_eq_ok run with ⟨⟨key, s₁⟩, h1, run₁⟩
-  rcases Except.bind_eq_ok run₁ with ⟨⟨val, s₂⟩, h2, run₂⟩
-  rcases Except.bind_eq_ok run₂ with ⟨_, h3, run₃⟩
-  rcases Except.bind_eq_ok run₃ with ⟨⟨s₃, g₂⟩, h4, run₄⟩
-  rcases Except.bind_eq_ok run₄ with ⟨g₃, h5, run₅⟩
-  rcases Except.bind_eq_ok run₅ with ⟨s₄, h6, run₆⟩
-  rcases Except.bind_eq_ok run₆ with ⟨s₅, h7, run₇⟩
-  rcases Except.bind_eq_ok run₇ with ⟨_, h8, h9⟩
-  have hs : s.stack = key :: s₁.stack := (Devm.pop_of_pop h1).stack
-  have hs2 : s₁.stack = val :: s₂.stack := (Devm.pop_of_pop h2).stack
-  have hxy : x = key ∧ y = val := by
-    rw [hs, hs2] at hx
-    rcases hx with ⟨sfx, heq⟩
-    injection heq with hk hrest
-    injection hrest with hv _
-    exact ⟨hk.symm, hv.symm⟩
-  have e1 : Devm.getStor s = Devm.getStor s₁ := Devm.pop_getStor_eq h1
-  have e2 : Devm.getStor s₁ = Devm.getStor s₂ := Devm.pop_getStor_eq h2
-  have e4 : Devm.getStor s₂ = Devm.getStor s₃ := by
-    split at h4 <;> (injection h4 with eq; injection eq with eq _; subst eq)
-    · exact addAccessedStorageKey_getStor.symm
-    · rfl
-  have e6 : Devm.getStor s₃ = Devm.getStor s₄ := by
-    injection h6 with eq; rw [← eq]; rfl
-  have e7 : Devm.getStor s₄ = Devm.getStor s₅ := chargeGas_getStor_eq h7
-  have E : Devm.getStor s = Devm.getStor s₅ := e1.trans (e2.trans (e4.trans (e6.trans e7)))
-  injection h9 with eq
-  rw [← eq, setStorVal_getStor_self, hxy.left, hxy.right, E]
-
-syntax "invariance" : tactic
-macro_rules
-| `(tactic| invariance) =>
-  `(tactic| first | apply Line.of_inv _ _ (by assumption); line_inv
-                  | apply Func.of_inv _ _ _ (by assumption); func_inv)
-
-lemma of_run_next {fs sevm devm i f devm''}
-    (h : Func.Run fs sevm devm (Func.next i f) devm'') :
-    ∃ devm', Ninst.Run sevm devm i devm' ∧ Func.Run fs sevm devm' f devm'' := by
-  cases h with
-  | next h1 h2 => exact ⟨_, h1, h2⟩
 
 lemma of_withdrawLoadCheck {sevm : Sevm} {s s' : Devm}
     (h : Line.Run sevm s withdrawLoadCheck s') :
@@ -687,112 +440,6 @@ lemma deposit_preserves_solvent {sevm : Sevm} {s r : Devm}
   rw [Nat.add_zero]
   exact h_sv'
 
-
-lemma incrAt_of_incrWbal {sevm : Sevm} {s s' : Devm} {wad dst} (h_dst : ValidAdr dst)
-    (h_run : Line.Run sevm s incrWbal s') (h_stk : [wad, dst] <<+ s.stack) :
-    Increase dst.toAdr wad (Stor.rest (Devm.getStor s sevm.currentTarget)) (Stor.rest (Devm.getStor s' sevm.currentTarget)) := by
-  simp only [incrWbal] at h_run
-  rcases of_run_append [dup 1, sload, add, swap 0] h_run with ⟨sm, h_pre, h_post⟩
-  clear h_run
-  have h_stor : Devm.getStor s = Devm.getStor sm := Line.of_inv Devm.getStor (by line_inv) h_pre
-  -- decompose the prefix line to track the stack
-  rcases Line.of_run_cons h_pre with ⟨s1, r_dup, h1⟩
-  rcases Line.of_run_cons h1 with ⟨s2, r_sload, h2⟩
-  rcases Line.of_run_cons h2 with ⟨s3, r_add, h3⟩
-  rcases Line.of_run_cons h3 with ⟨s4, r_swap, h4⟩
-  cases h4
-  clear h1 h2 h3 h_pre
-  -- dup 1 : push element at index 1 (= dst)
-  rcases of_run_dup r_dup with ⟨x, hx, pb_dup⟩
-  have hx_dst : x = dst := by
-    have h_nth : Stack.Nth 1 dst [wad, dst] :=
-      Stack.Nth.tail 0 dst wad [dst] (Stack.Nth.head dst [])
-    have h_get : s.stack[(1 : Fin 16).val]? = some dst := Stack.nth_getElem h_nth h_stk
-    rw [h_get] at hx; injection hx with hx; exact hx.symm
-  subst x
-  have hp1 : [dst, wad, dst] <<+ s1.stack := prefix_of_push pb_dup h_stk
-  -- sload : pop dst, push its stored value
-  rcases prefix_of_sload r_sload hp1 with ⟨dbal, hp2, h_dbal⟩
-  -- add : dbal + wad
-  have hp3 : (dbal + wad) :: [dst] <<+ s3.stack := prefix_of_add r_add hp2
-  -- swap 0 : [dst, dbal + wad]
-  have h_swap : Stack.Swap (0 : Fin 16).val [dbal + wad, dst] [dst, dbal + wad] :=
-    Stack.swapCore_zero
-  have hp4 : [dst, dbal + wad] <<+ sm.stack :=
-    Stack.prefix_of_swap h_swap (of_run_swap r_swap) hp3
-  -- sstore
-  rcases Line.of_run_cons h_post with ⟨s5, r_sstore, h5⟩
-  cases h5
-  have h_set : Devm.getStor s' sevm.currentTarget
-      = (Devm.getStor sm sevm.currentTarget).set dst (dbal + wad) :=
-    sstore_getStor_set r_sstore hp4
-  -- dbal = value at dst in s's storage
-  have hs1 : Devm.getStor s = Devm.getStor s1 :=
-    Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r_dup Line.Run.nil)
-  have h_dbal' : dbal = (Devm.getStor s sevm.currentTarget).get dst := by
-    rw [h_dbal]; show (Devm.getStor s1 sevm.currentTarget).get dst = _; rw [hs1]
-  -- assemble the Increase
-  intro a
-  constructor
-  · intro h_eq
-    subst h_eq
-    simp only [Stor.rest, Function.comp_apply]
-    rw [toB256_toAdr h_dst, h_set, Stor.get_set_self, ← h_dbal']
-  · intro h_ne
-    simp only [Stor.rest, Function.comp_apply]
-    rw [h_set]
-    have h_key_ne : a.toB256 ≠ dst := by
-      intro hc; apply h_ne; rw [← toAdr_toB256 a, hc]
-    rw [Stor.get_set_ne _ h_key_ne.symm, h_stor]
-
-lemma of_transferFromUpdateSbal {sevm : Sevm} {s₀ sₙ : Devm} {sbal wad src}
-    (h_src : ValidAdr src) (h_sbal : sbal = (Devm.getStor s₀ sevm.currentTarget).get src)
-    (h_le : wad ≤ sbal) (hp₀ : [sbal, wad, wad, src] <<+ s₀.stack) :
-    Line.Run sevm s₀ transferFromUpdateSbal sₙ →
-    ( Decrease src.toAdr wad (Stor.rest (Devm.getStor s₀ sevm.currentTarget)) (Stor.rest (Devm.getStor sₙ sevm.currentTarget)) ∧
-      wad ≤ Stor.rest (Devm.getStor s₀ sevm.currentTarget) src.toAdr ) := by
-  intro h_run
-  simp only [transferFromUpdateSbal] at h_run
-  rcases of_run_append [sub, dup 2] h_run with ⟨sm, h_pre, h_post⟩
-  clear h_run
-  have h_stor : Devm.getStor s₀ = Devm.getStor sm := Line.of_inv Devm.getStor (by line_inv) h_pre
-  rcases Line.of_run_cons h_pre with ⟨s1, r_sub, h1⟩
-  rcases Line.of_run_cons h1 with ⟨s2, r_dup, h2⟩
-  cases h2
-  clear h1 h_pre
-  -- sub : [sbal - wad, wad, src]
-  have hp1 : (sbal - wad) :: [wad, src] <<+ s1.stack := prefix_of_sub r_sub hp₀
-  -- dup 2 : push element at index 2 (= src)
-  rcases of_run_dup r_dup with ⟨x, hx, pb_dup⟩
-  have hx_src : x = src := by
-    have h_nth : Stack.Nth 2 src [sbal - wad, wad, src] :=
-      Stack.Nth.tail 1 src (sbal - wad) [wad, src]
-        (Stack.Nth.tail 0 src wad [src] (Stack.Nth.head src []))
-    have h_get : s1.stack[(2 : Fin 16).val]? = some src := Stack.nth_getElem h_nth hp1
-    rw [h_get] at hx; injection hx with hx; exact hx.symm
-  subst x
-  have hp2 : [src, sbal - wad, wad, src] <<+ sm.stack := prefix_of_push pb_dup hp1
-  -- sstore
-  rcases Line.of_run_cons h_post with ⟨s3, r_sstore, h3⟩
-  cases h3
-  have h_set : Devm.getStor sₙ sevm.currentTarget
-      = (Devm.getStor sm sevm.currentTarget).set src (sbal - wad) :=
-    sstore_getStor_set r_sstore hp2
-  constructor
-  · intro a
-    constructor
-    · intro h_eq
-      subst h_eq
-      simp only [Stor.rest, Function.comp_apply]
-      rw [toB256_toAdr h_src, h_set, Stor.get_set_self, ← h_sbal]
-    · intro h_ne
-      simp only [Stor.rest, Function.comp_apply]
-      rw [h_set]
-      have h_key_ne : a.toB256 ≠ src := by
-        intro hc; apply h_ne; rw [← toAdr_toB256 a, hc]
-      rw [Stor.get_set_ne _ h_key_ne.symm, h_stor]
-  · simp only [Stor.rest, Function.comp_apply]
-    rw [toB256_toAdr h_src, ← h_sbal]; exact h_le
 
 lemma updateAllowance_preserves_stor_rest {fs : List Func} {sevm : Sevm} {s r : Devm} {wad dst}
     (hs : [wad, dst] <<+ s.stack)
@@ -1737,138 +1384,6 @@ lemma symbol_preserves_solvent {sevm : Sevm} {s r : Devm}
     (h_sv : Devm.PreSolvent s sevm.currentTarget sevm) :
     Devm.PostSolvent r sevm.currentTarget := by simple_solvent
 
-lemma transfer_preserves_bal : Func.Inv Devm.getBal Devm.getBal transfer := by func_inv
-
-lemma of_transferTestDst {sevm : Sevm} {s s' : Devm} :
-    Line.Run sevm s transferTestDst s' →
-    ∃ na_dst dst,
-      ([na_dst, dst] <<+ s'.stack) ∧
-      (na_dst = 0 ↔ ValidAdr dst) := by
-  simp only [transferTestDst]
-  line_execute_with (arg 0)
-  rcases prefix_of_cdl nil_pref h₁ with ⟨dst, hp₁⟩
-  clear h₁
-  line_execute 1
-  have hp₂ : [dst, dst] <<+ s₂.stack := by generalize_line_prefix
-  clear hp₁ h₂
-  intro h
-  rcases of_check_non_address hp₂ h with ⟨na_dst, h_pfx, h_iff⟩
-  exact ⟨_, _, h_pfx, h_iff⟩
-
-lemma of_transferTestLt {sevm : Sevm} {s s' : Devm} {dst}
-    (h_stk : [dst] <<+ s.stack) :
-    Line.Run sevm s transferTestLt s' →
-    ∃ lt? caller wad,
-      ([lt?, caller, Devm.getStorVal s' sevm.currentTarget caller - wad, wad, dst] <<+ s'.stack) ∧
-      (lt? = 0 ↔ wad ≤ Devm.getStorVal s' sevm.currentTarget caller) ∧
-      ValidAdr caller := by
-  simp only [transferTestLt]
-  -- arg 1 : push wad
-  line_execute_with (arg 1)
-  rcases prefix_of_cdl h_stk h₁ with ⟨wad, hp₁⟩
-  clear h₁
-  -- caller, dup 0 : [caller, caller, wad, dst]
-  line_execute 2
-  have hp₂ : [sevm.caller.toB256, sevm.caller.toB256, wad, dst] <<+ s₂.stack := by generalize_line_prefix
-  clear h₂
-  -- sload : [cbal, caller, wad, dst]
-  line_execute 1
-  rcases prefix_of_sload (of_run_singleton h₃) hp₂ with ⟨cbal, hp₃, h_cbal⟩
-  have hstor23 : Devm.getStor s₂ = Devm.getStor s₃ := Line.of_inv Devm.getStor (by line_inv) h₃
-  clear h₃
-  -- swap 0, dup 2, dup 0, dup 3, sub, swap 2, lt :
-  --   [cbal <? wad, caller, cbal - wad, wad, dst]
-  intro h₄
-  have hp₄ : [cbal <? wad, sevm.caller.toB256, cbal - wad, wad, dst] <<+ s'.stack := by generalize_line_prefix
-  have hstor34 : Devm.getStor s₃ = Devm.getStor s' := Line.of_inv Devm.getStor (by line_inv) h₄
-  have h_cbal' : cbal = Devm.getStorVal s' sevm.currentTarget sevm.caller.toB256 := by
-    rw [h_cbal]
-    show (Devm.getStor s₂ _).get _ = (Devm.getStor s' _).get _
-    rw [hstor23, hstor34]
-  refine ⟨cbal <? wad, sevm.caller.toB256, wad, ?_, ?_, validAdr_toB256 sevm.caller⟩
-  · rw [← h_cbal']; exact hp₄
-  · rw [← h_cbal', B256.ltCheck, Ne.ite_eq_right_iff B256.zero_ne_one.symm, B256.not_lt]
-
-lemma transfer_of_transfer {fs : List Func} {sevm : Sevm} {s r : Devm} :
-    Func.Run fs sevm s transfer r →
-    ∃ (x : B256) (a a' : Adr),
-      Transfer (Stor.rest (Devm.getStor s sevm.currentTarget)) a x a'
-        (Stor.rest (Devm.getStor r sevm.currentTarget)) := by
-  intro h_run
-  simp only [transfer] at h_run
-  -- transferTestDst : [dst_invalid?, dst]
-  rcases of_run_prepend transferTestDst _ h_run with ⟨s1, h1, h_run⟩
-  rcases of_transferTestDst h1 with ⟨dst_invalid, dst, hp1, h_dst⟩
-  have hg1 : Devm.getStor s = Devm.getStor s1 := Line.of_inv Devm.getStor (by line_inv) h1
-  clear h1
-  -- rev-branch : dst is a valid address
-  rcases of_run_branch_rev h_run with ⟨s2, hp2b, h_run⟩
-  have hp2bs := hp2b.stack
-  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hp2bs
-  rw [hp2bs] at hp1
-  have h_dst_valid : ValidAdr dst := h_dst.mp (pref_head_unique hp1 (pref_append [0] s2.stack))
-  rw [pref_head_unique hp1 (pref_append [0] s2.stack)] at hp1
-  have hp2 : [dst] <<+ s2.stack := cons_pref_cons_inv hp1
-  have hg2 : Devm.getStor s = Devm.getStor s2 :=
-    hg1.trans (funext (fun a => (Devm.PopBurn.getStor hp2b a).symm))
-  clear hp1 hp2bs hp2b h_dst
-  -- transferTestLt : [lt?, caller, cbal - wad, wad, dst]
-  rcases of_run_prepend transferTestLt _ h_run with ⟨s3, h3, h_run⟩
-  rcases of_transferTestLt hp2 h3 with ⟨lt?, caller, wad, hp3, h_le, h_caller⟩
-  have hg3 : Devm.getStor s = Devm.getStor s3 :=
-    hg2.trans (Line.of_inv Devm.getStor (by line_inv) h3)
-  clear h3 hp2
-  -- rev-branch : wad ≤ caller balance
-  rcases of_run_branch_rev h_run with ⟨s4, hp4b, h_run⟩
-  have hp4bs := hp4b.stack
-  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hp4bs
-  rw [hp4bs] at hp3
-  have h_lt0 : lt? = 0 := pref_head_unique hp3 (pref_append [0] s4.stack)
-  have h_le' : wad ≤ Devm.getStorVal s3 sevm.currentTarget caller := h_le.mp h_lt0
-  rw [h_lt0] at hp3
-  have hp4 : [caller, Devm.getStorVal s3 sevm.currentTarget caller - wad, wad, dst] <<+ s4.stack :=
-    cons_pref_cons_inv hp3
-  have hg4 : Devm.getStor s = Devm.getStor s4 :=
-    hg3.trans (funext (fun a => (Devm.PopBurn.getStor hp4b a).symm))
-  clear hp3 hp4bs hp4b h_le h_lt0
-  -- transferCore : sstore ::: incrWbal +++ logTransfer +++ returnTrue
-  simp only [transferCore] at h_run
-  -- sstore : set caller's WETH balance to cbal - wad
-  rcases of_run_next h_run with ⟨s5, r5, h_run⟩
-  have h_set : Devm.getStor s5 sevm.currentTarget
-      = (Devm.getStor s4 sevm.currentTarget).set caller
-          (Devm.getStorVal s3 sevm.currentTarget caller - wad) :=
-    sstore_getStor_set r5 hp4
-  have hp5 : [wad, dst] <<+ s5.stack := prefix_of_sstore r5 hp4
-  clear hp4
-  -- incrWbal : increase destination balance
-  rcases of_run_prepend incrWbal _ h_run with ⟨s6, h6, h_run⟩
-  have h_incr : Increase dst.toAdr wad (Stor.rest (Devm.getStor s5 sevm.currentTarget))
-      (Stor.rest (Devm.getStor s6 sevm.currentTarget)) :=
-    incrAt_of_incrWbal h_dst_valid h6 hp5
-  -- logTransfer, returnTrue : do not touch storage
-  have h_rest : Devm.getStor s6 sevm.currentTarget = Devm.getStor r sevm.currentTarget :=
-    congr_fun (Func.of_inv Devm.getStor Devm.getStor (by func_inv) h_run) sevm.currentTarget
-  -- assemble the Transfer
-  refine ⟨wad, caller.toAdr, dst.toAdr, ?_, (Stor.rest (Devm.getStor s5 sevm.currentTarget)), ?_, ?_⟩
-  · show wad ≤ (Stor.rest (Devm.getStor s sevm.currentTarget)) caller.toAdr
-    simp only [Stor.rest, Function.comp_apply]
-    rw [toB256_toAdr h_caller, congr_fun hg3 sevm.currentTarget]
-    exact h_le'
-  · intro a
-    constructor
-    · intro h_eq; subst h_eq
-      simp only [Stor.rest, Function.comp_apply]
-      rw [toB256_toAdr h_caller, h_set, Stor.get_set_self, congr_fun hg3 sevm.currentTarget]
-      rfl
-    · intro h_ne
-      simp only [Stor.rest, Function.comp_apply]
-      rw [h_set]
-      have h_key_ne : a.toB256 ≠ caller := by
-        intro hc; apply h_ne; rw [← toAdr_toB256 a, hc]
-      rw [Stor.get_set_ne _ h_key_ne.symm, congr_fun hg4 sevm.currentTarget]
-  · rw [← h_rest]; exact h_incr
-
 lemma transfer_preserves_solvent {sevm : Sevm} {s r : Devm}
     (run : Func.Run (weth.main :: weth.aux) sevm s transfer r)
     (h_sv : Devm.PreSolvent s sevm.currentTarget sevm) :
@@ -1884,38 +1399,6 @@ lemma allowance_preserves_solvent {sevm : Sevm} {s r : Devm}
     (h_sv : Devm.PreSolvent s sevm.currentTarget sevm) :
     Devm.PostSolvent r sevm.currentTarget := by simple_solvent
 
-
-lemma sum_getBal_state {d : Devm} : sum d.getBal = sum d.state.bal := by
-  have h : d.getBal = d.state.bal := funext (fun _ => rfl)
-  rw [h]
-
-
-lemma Exec.preserves_nof {pc : Nat} {sevm : Sevm} {devm : Devm} {exn : Execution}
-    (run : Exec pc sevm devm exn) :
-    ∀ r : Devm, exn = .ok r →
-      sum devm.getBal < 2 ^ 256 → sum r.getBal < 2 ^ 256 := by
-  intro r h_eq h_nof
-  subst h_eq
-  exact Nat.lt_of_le_of_lt (Exec.balance_effect run) h_nof
-
-lemma Xinst.preserves_nof {sevm : Sevm} {s r : Devm} {x : Xinst} {xl : Xlot}
-    (h : Xinst.Run sevm s x xl (.ok r)) (h_nof : sum s.getBal < 2 ^ 256)
-    (h_fill : xl.Filled) :
-    sum r.getBal < 2 ^ 256 := by
-  have hxl : Xlot.Rel Devm.BalNoninc xl :=
-    Xlot.rel_of_filled balNoninc_refl_trans.2.1 balNoninc_refl_trans.2.2
-      Ninst.balance_effectRec Jinst.balance_effect Linst.balance_effect h_fill
-  exact Nat.lt_of_le_of_lt (Xinst.balance_effectRec x hxl h) h_nof
-
-lemma Ninst.preserves_nof {sevm : Sevm} {s r : Devm} {i : Ninst}
-    (h : Ninst.Run sevm s i r) (h_nof : sum s.getBal < 2 ^ 256) :
-    sum r.getBal < 2 ^ 256 :=
-  Nat.lt_of_le_of_lt (Ninst.balance_effect i h) h_nof
-
-lemma Func.preserves_nof {c : List Func} {sevm : Sevm} {s r : Devm} {f : Func}
-    (run : Func.Run c sevm s f r) (h_nof : sum s.getBal < 2 ^ 256) :
-    sum r.getBal < 2 ^ 256 :=
-  Nat.lt_of_le_of_lt (Func.balance_effect run) h_nof
 
 lemma run_preserves_cond (f : Func)
     ( h_solv :
@@ -1961,19 +1444,10 @@ lemma wethSpec_funcSound_withdraw {wa : Adr} :
   exact withdraw_preserves_solvent (wethSpec_pre_iff.mp h_pre) ih h_run
 
 
-
-
-
 -- started after a balance transfer from a non-WETH sender
 
 
 -- nonempty code is unchanged by a (sub-)execution
-
-
-
-
-
-
 
 
 /-- WETH's own frame-level obligation — the one input `ContractSpec.preserves_inv`
