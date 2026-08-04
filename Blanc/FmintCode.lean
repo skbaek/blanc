@@ -122,7 +122,7 @@ def fmintCode : Bytes :=
    0x23, 0xb3, 0xef, 0x60, 0x20, 0x5f, 0xa3, 0x60, 0x01, 0x5f, 0x52, 0x60,
    0x20, 0x5f, 0xf3, 0x5b, 0xfd]
 
-/-- **The compile witness.** Every statement in `Blanc/Flashmint.lean`
+/-- **The compile witness.** Every statement in `Blanc/Conserved.lean`
 hypothesises `some code = Prog.compile Fmint.fmint`, so without this equation
 each of them could be discharged vacuously. Those statements are still
 statements — conservation is unproven, pending Arc B of

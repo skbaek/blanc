@@ -12,13 +12,12 @@ namespace Blanc
 
 open Jaune
 
-def Stor.rest (s : Stor) : Adr → B256 := s.get ∘ Adr.toB256
-
--- sum of all WETH balances, provided that s is the storage of WETH contract
-def wbsum (s : Stor) : Nat := sum (Stor.rest s)
-
+-- `Stor.rest` and `balSum` (formerly `wbsum`) are contract-agnostic and live
+-- in `Blanc/CommonCore.lean`, upstream of both token contracts.  Solvency is
+-- the WETH-specific part: the booked balance plus the callvalue, bounded by
+-- the ETH the contract actually holds.
 def Stor.Solvent (s : Stor) (v : B256) (b : B256) : Prop :=
-  wbsum s + v.toNat ≤ b.toNat
+  balSum s + v.toNat ≤ b.toNat
 
 def State.Solvent (w : State) (a : Adr) : Prop :=
   Stor.Solvent (w.getStor a) 0 (w.bal a)
@@ -582,7 +581,7 @@ lemma approve_preserves_wbal {sevm : Sevm} {s r : Devm}
   apply hh
 
 lemma result_solvent_of_state_solvent {sevm : Sevm} {s r : Devm}
-    (h_wbsum : (Stor.rest (Devm.getStor s sevm.currentTarget)) = (Stor.rest (Devm.getStor r sevm.currentTarget)))
+    (h_balSum : (Stor.rest (Devm.getStor s sevm.currentTarget)) = (Stor.rest (Devm.getStor r sevm.currentTarget)))
     (h_bal : s.getBal sevm.currentTarget = r.getBal sevm.currentTarget)
     (h_solvent : Devm.PreSolvent s sevm.currentTarget sevm) :
     Devm.PostSolvent r sevm.currentTarget := by
@@ -591,9 +590,9 @@ lemma result_solvent_of_state_solvent {sevm : Sevm} {s r : Devm}
   have h_sv' := h_solvent.left rfl
   unfold Stor.Solvent at h_sv'
   rw [← h_bal]
-  have h_wbsum_eq : wbsum (Devm.getStor s sevm.currentTarget) = wbsum (Devm.getStor r sevm.currentTarget) := by
-    simp [wbsum, h_wbsum]
-  rw [← h_wbsum_eq]
+  have h_balSum_eq : balSum (Devm.getStor s sevm.currentTarget) = balSum (Devm.getStor r sevm.currentTarget) := by
+    simp [balSum, h_balSum]
+  rw [← h_balSum_eq]
   omega
 
 lemma approve_preserves_solvent {sevm : Sevm} {s r : Devm}
@@ -612,10 +611,10 @@ lemma totalSupply_preserves_solvent {sevm : Sevm} {s r : Devm}
 
 lemma deposit_preserves_bal : Func.Inv Devm.getBal Devm.getBal deposit := by func_inv
 
-lemma wbsum_after_deposit {sevm : Sevm} {s r : Devm}
-    (h_nof : wbsum (Devm.getStor s sevm.currentTarget) + sevm.value.toNat < 2 ^ 256)
+lemma balSum_after_deposit {sevm : Sevm} {s r : Devm}
+    (h_nof : balSum (Devm.getStor s sevm.currentTarget) + sevm.value.toNat < 2 ^ 256)
     (run : Func.Run (weth.main :: weth.aux) sevm s deposit r) :
-    wbsum (Devm.getStor s sevm.currentTarget) + sevm.value.toNat = wbsum (Devm.getStor r sevm.currentTarget) := by
+    balSum (Devm.getStor s sevm.currentTarget) + sevm.value.toNat = balSum (Devm.getStor r sevm.currentTarget) := by
   unfold deposit at run
   rcases of_run_next run with ⟨s1, h_caller, run1⟩
   rcases of_run_next run1 with ⟨s2, h_sload, run2⟩
@@ -677,14 +676,14 @@ lemma deposit_preserves_solvent {sevm : Sevm} {s r : Devm}
   rw [B256.toNat_zero]
   have h_bal : s.getBal = r.getBal := Func.of_inv _ _ deposit_preserves_bal run
   rw [← h_bal]
-  have h_sv' : wbsum (Devm.getStor s sevm.currentTarget) + sevm.value.toNat ≤ (s.getBal sevm.currentTarget).toNat := by
+  have h_sv' : balSum (Devm.getStor s sevm.currentTarget) + sevm.value.toNat ≤ (s.getBal sevm.currentTarget).toNat := by
     have h := h_sv.left rfl
     unfold Stor.Solvent at h
     exact h
-  have h_lt : wbsum (Devm.getStor s sevm.currentTarget) + sevm.value.toNat < 2 ^ 256 := by
+  have h_lt : balSum (Devm.getStor s sevm.currentTarget) + sevm.value.toNat < 2 ^ 256 := by
     apply lt_of_le_of_lt h_sv'
     apply B256.toNat_lt
-  rw [← wbsum_after_deposit h_lt run]
+  rw [← balSum_after_deposit h_lt run]
   rw [Nat.add_zero]
   exact h_sv'
 
@@ -1242,14 +1241,14 @@ lemma nof_of_solvent {sevm : Sevm} {s : Devm} {a}
   apply lt_of_le_of_lt _ (B256.toNat_lt (s.getBal a))
   unfold Devm.PreSolvent at h
   by_cases h' : sevm.currentTarget = a
-  · have hh := h.left h'; unfold Stor.Solvent wbsum at hh
+  · have hh := h.left h'; unfold Stor.Solvent balSum at hh
     apply le_trans (Nat.le_add_right _ _) hh
-  · have hh := h.right h'; unfold Stor.Solvent wbsum at hh
+  · have hh := h.right h'; unfold Stor.Solvent balSum at hh
     apply le_trans (Nat.le_add_right _ _) hh
 
-lemma result_solvent_of_wbsum_eq {sevm : Sevm} {s r : Devm}
+lemma result_solvent_of_balSum_eq {sevm : Sevm} {s r : Devm}
     (h_sv : Devm.PreSolvent s sevm.currentTarget sevm)
-    (h_sum : wbsum (Devm.getStor s sevm.currentTarget) = wbsum (Devm.getStor r sevm.currentTarget))
+    (h_sum : balSum (Devm.getStor s sevm.currentTarget) = balSum (Devm.getStor r sevm.currentTarget))
     (h_bal : s.getBal sevm.currentTarget = r.getBal sevm.currentTarget) :
     Devm.PostSolvent r sevm.currentTarget := by
   unfold Devm.PostSolvent Stor.Solvent
@@ -1266,7 +1265,7 @@ lemma transferFrom_preserves_solvent {sevm : Sevm} {s r : Devm}
     (h_sv : Devm.PreSolvent s sevm.currentTarget sevm) :
     Devm.PostSolvent r sevm.currentTarget := by
   rcases transfer_of_transferFrom run with ⟨x, a, a', h_di⟩
-  refine result_solvent_of_wbsum_eq h_sv ?_ ?_
+  refine result_solvent_of_balSum_eq h_sv ?_ ?_
   · exact transfer_preserves_sum (nof_of_solvent h_sv) h_di
   · exact congr_fun (Func.of_inv Devm.getBal Devm.getBal transferFrom_preserves_bal run)
       sevm.currentTarget
@@ -1326,9 +1325,9 @@ lemma solvent_of_withdraw_update_bal {sevm : Sevm} {s s' : Devm} {cbal wad}
   have h_le_rest : wad ≤ (Stor.rest (Devm.getStor s sevm.currentTarget)) sevm.caller := by
     simp only [Stor.rest, Function.comp_apply]
     rw [h_cbal']; exact h_le
-  have h_eq : wbsum (Devm.getStor s sevm.currentTarget) - wad.toNat
-      = wbsum (Devm.getStor s' sevm.currentTarget) := sum_sub_assoc h_dec h_le_rest
-  have h_le' : wad.toNat ≤ wbsum (Devm.getStor s sevm.currentTarget) := by
+  have h_eq : balSum (Devm.getStor s sevm.currentTarget) - wad.toNat
+      = balSum (Devm.getStor s' sevm.currentTarget) := sum_sub_assoc h_dec h_le_rest
+  have h_le' : wad.toNat ≤ balSum (Devm.getStor s sevm.currentTarget) := by
     apply le_trans (B256.toNat_le_toNat h_le)
     have h := @le_sum (Stor.rest (Devm.getStor s sevm.currentTarget)) sevm.caller
     simp only [Stor.rest, Function.comp_apply] at h
@@ -1875,7 +1874,7 @@ lemma transfer_preserves_solvent {sevm : Sevm} {s r : Devm}
     (h_sv : Devm.PreSolvent s sevm.currentTarget sevm) :
     Devm.PostSolvent r sevm.currentTarget := by
   rcases transfer_of_transfer run with ⟨x, a, a', h_di⟩
-  refine result_solvent_of_wbsum_eq h_sv ?_ ?_
+  refine result_solvent_of_balSum_eq h_sv ?_ ?_
   · exact transfer_preserves_sum (nof_of_solvent h_sv) h_di
   · exact congr_fun (Func.of_inv Devm.getBal Devm.getBal transfer_preserves_bal run)
       sevm.currentTarget

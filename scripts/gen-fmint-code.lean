@@ -59,7 +59,7 @@ private def renderModule (bs : Bytes) : String :=
     , "  [" ++ (body.drop 3) ]
   ++ "]\n\n"
   ++ String.intercalate "\n"
-    [ "/-- **The compile witness.** Every statement in `Blanc/Flashmint.lean`"
+    [ "/-- **The compile witness.** Every statement in `Blanc/Conserved.lean`"
     , "hypothesises `some code = Prog.compile Fmint.fmint`, so without this equation"
     , "each of them could be discharged vacuously. Those statements are still"
     , "statements — conservation is unproven, pending Arc B of"

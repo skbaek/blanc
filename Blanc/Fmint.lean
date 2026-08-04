@@ -68,16 +68,16 @@ Three regions, one collision discipline:
 /-- The supply slot: `B256.max`.
 
 Two properties earn it the position.  It is never address-shaped — its upper 96
-bits are all ones — so `wbsum`, which sums storage over address-shaped keys
+bits are all ones — so `balSum`, which sums storage over address-shaped keys
 only, excludes it automatically and the conservation statement can be a plain
 storage equality with no carve-out.  And it is `not 0`, so pushing it can cost
 two bytes of code rather than thirty-three — but only through `pushSupplySlot`
 below; `pushB256 supplySlot` emits a `PUSH32` and forfeits the saving.
 
-Relocated here from `Blanc/Flashmint.lean` at the design freeze: `Fmint.lean`
-needs the constant in order to *generate* the contract, while `Flashmint.lean`
-must import the contract in order to *apply* it, so the constant moves down and
-`Flashmint.lean` references it. -/
+Relocated here from the property layer at the design freeze: `Fmint.lean`
+needs the constant in order to *generate* the contract, while
+`Blanc/Conserved.lean` must import the contract in order to *apply* it, so the
+constant moves down and `Conserved.lean` references it. -/
 def supplySlot : B256 := B256.max
 
 /-- Push `supplySlot`.
@@ -435,7 +435,7 @@ def flashLoan : Func :=
   .rev <?>                        -- [token ≠ self: revert]
   -- (1) the receiver word must be address-shaped.  CONSERVATION-CRITICAL, not
   -- hygiene: a dirty word would be the mint's `SSTORE` key verbatim, while
-  -- `wbsum` sums address-shaped keys only and `CALL` truncates its target to
+  -- `balSum` sums address-shaped keys only and `CALL` truncates its target to
   -- 160 bits — supply would rise with the minted balance outside Σ, falsifying
   -- the invariant before the callback even runs (row 6).
   arg 0 +++ dup 0 ::: checkNonAddress +++ -- ¬va(receiver) :: receiver

@@ -1,5 +1,8 @@
--- Flashmint.lean : the ERC-3156 flash-mint contract as a `ContractSpec`
--- instance, statements only.
+-- Conserved.lean : the ERC-3156 flash-mint contract as a `ContractSpec`
+-- instance, statements only.  This module is to `Blanc/Fmint.lean` what
+-- `Blanc/Solvent.lean` is to `Blanc/Weth.lean` — the property layer over the
+-- program layer — and, like that pair, it is named for the property proved
+-- rather than for the contract.
 --
 -- From `~/plans/flashmint-proposal.md`, produced by `~/plans/solvent-split.md`
 -- as the second instance the `ContractSpec` record is validated against.  Its
@@ -7,9 +10,11 @@
 -- term and no `nof`-class side condition — which is what makes it the useful
 -- counterweight to WETH's.
 --
--- This module lives above `Blanc.Solvent` because `Stor.Conserved` is stated
--- with `wbsum`, which stays in `Solvent.lean`, and above `Blanc.Fmint` because
--- `supplySlot` now lives with the contract that generates it.
+-- It imports `Blanc.Ladder` (for `ContractSpec`) and `Blanc.Fmint` (for the
+-- program and `supplySlot`), and deliberately NOT `Blanc.Solvent`: fmint and
+-- WETH are siblings, so nothing on this side may depend on the other
+-- contract's property layer.  The notion both invariants are built from,
+-- `balSum`, lives upstream of both in `Blanc/CommonCore.lean`.
 --
 -- Nothing here is proved.  The program is no longer a parameter — Step 1 of
 -- `~/plans/fmint-code.md` supplied `Fmint.fmint`, so every statement below is
@@ -18,7 +23,7 @@
 -- pending Arc B of `~/plans/flashmint-proposal.md`; the `flashLoan` success
 -- specification is Arc C.
 
-import Blanc.Solvent
+import Blanc.Ladder
 import Blanc.Fmint
 
 namespace Blanc
@@ -39,10 +44,10 @@ Conservation is unproven pending Arc B. -/
 /-- The conservation invariant: total supply equals the sum of balances.  A
 storage-only equality — no callvalue term, no ETH-balance term.
 
-`Fmint.supplySlot` is never address-shaped and `wbsum` sums over address-shaped
+`Fmint.supplySlot` is never address-shaped and `balSum` sums over address-shaped
 keys only, so the supply slot self-excludes from the right-hand side. -/
 def Stor.Conserved (s : Stor) : Prop :=
-  (s.get Fmint.supplySlot).toNat = wbsum s
+  (s.get Fmint.supplySlot).toNat = balSum s
 
 /-- The flash-mint instance.  `Inv` ignores both the callvalue and the ETH
 balance, and `Side` is trivial: this contract declines the `nof`-class side

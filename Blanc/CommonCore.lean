@@ -281,6 +281,20 @@ theorem sumBelow_succ {f : Adr → B256} {n} :
 def sum (f : Adr → B256) : Nat :=
   sumBelow f Adr.max.toNat.succ
 
+/-- A contract's storage restricted to its address-shaped keys.  Both token
+contracts in this repository key balances by `Adr.toB256 holder`, so for either
+of them this is the balance map; the definition itself names no contract. -/
+def Stor.rest (s : Stor) : Adr → B256 := s.get ∘ Adr.toB256
+
+/-- The sum of the values a contract books at address-shaped keys.  Formerly
+`wbsum` in `Blanc/Solvent.lean`, where both the name ("weth balance sum") and
+the placement made a contract-agnostic notion look WETH-owned: WETH pairs it
+with the ETH balance to state solvency (`Stor.Solvent`), fmint pairs it with
+the supply slot to state conservation (`Stor.Conserved`), and neither use is
+prior to the other.  Keys that are not address-shaped — fmint's `supplySlot`
+among them — lie outside the sum by construction. -/
+def balSum (s : Stor) : Nat := sum (Stor.rest s)
+
 def pushToB8 (bs : Bytes) : UInt8 := 0x5F + Nat.toUInt8 bs.length
 def pushToB8L (bs : Bytes) : Bytes := pushToB8 bs :: bs
 

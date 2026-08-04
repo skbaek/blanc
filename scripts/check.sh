@@ -7,7 +7,7 @@
 # `wethCode_compile` is what keeps the solvency theorems' `Prog.compile weth`
 # hypothesis from being vacuous. `fmintCode_compile` is the same equation for
 # contract #2, audited from the moment the contract exists rather than from the
-# moment something is proved about it: `Blanc/Flashmint.lean`'s statements all
+# moment something is proved about it: `Blanc/Conserved.lean`'s statements all
 # carry the corresponding hypothesis, and they are statements — fmint's
 # conservation invariant is unproven, pending Arc B of
 # `~/plans/flashmint-proposal.md`. Auditing the witness early is what makes the
