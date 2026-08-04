@@ -11,16 +11,18 @@ open Jaune.Ninst Ninst
 
 -- events --
 
--- The four events WETH emits, each named once. A topic0 word is the keccak
--- of the event's ABI signature string — the same `signatureHash` a function
--- selector is built from, without the shift that narrows one to four bytes.
--- Spelling these as signature strings inlined at the log sites is how the
--- same event ends up with two spellings and, one typo later, two topics.
+-- The two events WETH emits that are its own, each named once. A topic0 word
+-- is the keccak of the event's ABI signature string — the same `signatureHash`
+-- a function selector is built from, without the shift that narrows one to four
+-- bytes. Spelling these as signature strings inlined at the log sites is how
+-- the same event ends up with two spellings and, one typo later, two topics.
+--
+-- The other two WETH emits, `Approval` and `Transfer`, are ERC-20's rather than
+-- WETH's and live in `Blanc/CommonCore.lean` beside the fragments that log
+-- them.
 
 def depositEvent : B256 := signatureHash "Deposit" [.address, .uint256]
 def withdrawalEvent : B256 := signatureHash "Withdrawal" [.address, .uint256]
-def approvalEvent : B256 := signatureHash "Approval" [.address, .address, .uint256]
-def transferEvent : B256 := signatureHash "Transfer" [.address, .address, .uint256]
 
 -- deposit() --
 
@@ -80,15 +82,6 @@ def withdraw : Func :=
 
 
 
--- decimals() --
-
-def decimals : Func :=
-  pushB256 0x12 ::: -- 0x12 ||
-  mstoreAt 0 +++ -- || 0x12
-  returnMemoryRange 0 32
-
-
-
 -- name() --
 
 def name : Func :=
@@ -116,28 +109,6 @@ def symbol : Func :=
 
 
 
--- balanceOf(address guy) --
-
-def balanceOf : Func :=
-  arg 0 +++ -- guy ||
-  sload ::: -- guy_bal ||
-  mstoreAt 0 +++ -- || guy_bal
-  returnMemoryRange 0 32
-
-
-
--- allowance(address src, address dst) --
-
-def allowance : Func :=
-  argCopy 0 0 2 +++ -- || src dst
-  pushList [64, 0] +++ -- 0 :: 64 || src dst
-  kec ::: -- hash ||
-  sload ::: -- allowAmnt ||
-  mstoreAt 0 +++ -- || allow_amnt
-  returnMemoryRange 0 32
-
-
-
 -- totalSuppply() --
 
 def totalSupply : Func :=
@@ -158,15 +129,6 @@ def prepApprove : Line :=
   kec :: dup 0 :: -- caller_guy_hash :: caller_guy_hash :: wad ||
   checkAddress  -- caller_guy_hash_valid? :: caller_guy_hash :: wad ||
 
--- assumes : args = [guy, wad]
-def logApprove : Line :=
-  argCopy 0 1 1 ++ -- || wad
-  arg 0 ++ caller ::
-  pushB256 approvalEvent :: -- approvalEventSig :: caller :: guy || wad
-  logWith 2 0 1 -- 2 indexed topics : caller address, approvee address
-                -- 1 unindexed data : approval value
-
-
 -- arguments = [guy, wad]
 def approve : Func :=
   arg 0 +++ -- guy ||
@@ -183,76 +145,12 @@ def approve : Func :=
 
 
 
--- transfer(address dst, uint wad) --
+-- transferFrom(address src, address dst, uint wad) --
 
--- assumes : args = [dst, wad]
-def logTransfer : Line :=
-  argCopy 0 1 1 ++ -- || wad
-  arg 0 ++ caller ::
-  pushB256 transferEvent :: -- transferEventSig :: src :: dst || wad
-  logWith 2 0 1 -- 2 indexed topics : source address, destination address
-                -- 1 unindexed data : transfer value
-
--- ( wad dst -- )
-def incrWbal : Line :=
-  dup 1 :: -- dst :: wad :: dst
-  sload :: -- dst_bal :: wad :: dst
-  add :: -- (dst_bal + wad) :: dst
-  swap 0 :: -- dst :: (dst_bal + wad)
-  sstore :: []
-
--- assumes : arg = [dst, wad]
--- ( -- dst_invalid :: dst )
-def transferTestDst : Line :=
-  arg 0 ++ dup 0 :: -- dst :: dst
-  checkNonAddress -- dst_invalid :: dst
-
--- assumes : arg = [_, wad]
--- ( -- caller_bal_<_wad? caller_bal wad wad )
-def transferTestLt : Line :=
-  arg 1 ++ -- wad :: dst
-  caller :: -- caller :: wad :: dst
-  dup 0 :: -- caller :: caller :: wad :: dst
-  sload :: -- caller_bal :: caller :: wad :: dst
-  swap 0 :: -- caller :: caller_bal :: wad :: dst
-  dup 2 :: -- wad :: caller :: caller_bal :: wad :: dst
-  dup 0 :: -- wad :: wad :: caller :: caller_bal :: wad :: dst
-  dup 3 :: -- caller_bal :: wad :: wad :: caller :: caller_bal :: wad :: dst
-  sub ::   -- caller_bal - wad :: wad :: caller :: caller_bal :: wad :: dst
-  swap 2 :: -- caller_bal :: wad :: caller :: caller_bal - wad :: wad :: dst
-  lt :: [] -- caller_bal_<_wad? :: caller :: caller_bal - wad :: wad :: dst
-
--- ( caller :: caller_bal - wad :: wad :: dst -- * )
-def transferCore : Func :=
-  sstore ::: -- wad :: dst [caller balance up to date]
-  incrWbal +++ -- [destination balance up todate]
-  logTransfer +++
-  returnTrue
-
--- assumes : arg = [dst, wad]
-def transfer : Func :=
-  transferTestDst +++ -- dst_invalid? :: dst
-  .rev <?> -- [if dst is not a valid address, revert]
-           -- dst
-  transferTestLt +++ -- (caller_bal < wad) :: caller :: caller_bal - wad :: wad :: dst
-  .rev <?> -- [if caller balance < transfer amount, revert]
-        -- caller :: caller_bal - wad :: wad :: dst
-  transferCore
-
--- ( sbal :: wad :: wad :: src -- wad :: src )
-def transferFromUpdateSbal : Line :=
-  sub :: -- (sbal - wad) :: wad :: src
-  dup 2 :: -- src :: (sbal - wad) :: wad :: src
-  sstore :: -- [source balance is up to date]
-  []        -- wad :: src
-
--- ( dst :: wad :: src -- wad :: src )
-def transferFromLog : Line :=
-  dup 2 :: -- src :: dst :: wad :: src
-  pushB256 transferEvent :: -- transferEventSig :: src :: dst :: wad :: src
-  dup 3 :: mstoreAt 0 ++ -- transferEventSig :: src :: dst :: wad :: src || wad
-  logWith 2 0 1 -- [Transfer(src,dst,wad) is logged]
-                -- wad :: src
+-- `transfer` itself, its four fragments, `transferFromUpdateSbal` and
+-- `transferFromLog` are ERC-20's rather than WETH's and live in
+-- `Blanc/CommonCore.lean`. What remains here is the pair that forks on fmint's
+-- extended allowance-slot guard.
 
 -- (wad src -- )
 def updateAllowance : Func :=

@@ -17,32 +17,33 @@
 -- the same names, so everything here lives in `Blanc.Fmint`.
 --
 --
--- IMPORT `Blanc.Weth` AND REFERENCE, OR COPY INTO THE NAMESPACE?  Decided at
--- the design freeze: **copy into the namespace**, and import only
--- `Blanc.CommonCore`.  Four bodies genuinely carry over verbatim — `decimals`,
--- `balanceOf`, `allowance`, `transfer` — and it is cheap to write them again,
--- so the decision turns entirely on what the import edge would cost:
+-- IMPORT `Blanc.Weth` AND REFERENCE, OR SHARE THROUGH `Blanc.CommonCore`?  It
+-- was never the first: an import edge to a sibling contract is exactly what
+-- README.md's *Module hierarchy: contracts are siblings* forbids, and it is the
+-- only mechanism by which work on fmint could perturb WETH's frozen surface.
+-- `Blanc/Weth.lean` and its audited theorems are unreachable from here by
+-- construction.
 --
---   1. An import edge is the only mechanism by which work on fmint could
---      perturb WETH's frozen surface.  Without one, `Blanc/Weth.lean` and its
---      audited theorems are unreachable from here by construction, which is
---      the constraint this arc is least willing to risk.
---   2. It would buy nothing on the proof side.  `FuncSound` obligations reach
---      the exact program through `Pre`'s code hypothesis and `Prog.At`
---      (`~/plans/flashmint-proposal.md`, the context-stability bullet), so
---      sharing a `Func` *value* between two contracts does not share a single
---      proof step between them.  Verbatim reuse across programs is an open
---      theorem, not an available fact.
---   3. Sharing the value would also silently couple the two contracts' future:
---      a later fmint-only tweak to a shared body would be a WETH edit.
---   4. `Blanc.CommonCore` (~2.3 s to elaborate) is a lighter dependency than
---      `Blanc.Weth`, which pulls in `Blanc.CommonProofs` (~5.4 s).
+-- At the design freeze the alternative taken was to copy the shared bodies into
+-- `namespace Fmint`.  That has since been resolved the way the README's rule
+-- prescribes and `balSum` demonstrated: a definition two contracts build the
+-- same way was never either contract's, so the fourteen that were `rfl`-equal
+-- moved up into `Blanc/CommonCore.lean`, and both contracts now reference one
+-- constant.  See that file's *The shared ERC-20 surface*.
 --
--- What *is* shared is `Blanc/CommonCore.lean` — `Line`/`Func` machinery,
--- `checkAddress`, `isMax`, `logWith`, `returnTrue`, `signatureHash`,
--- `DispatchTree` — which is the contract-agnostic layer and is shared surface
--- already.  Anything fmint needs that belongs there is added there, additively;
--- `checkAddress` in particular is shared WETH surface and must not change.
+-- What that leaves here is the genuinely fmint-specific half: the three storage
+-- regions and their guard, `flashLoan` and its fragments, the two ERC-3156
+-- views, and the four ERC-20 definitions that fork — `prepApprove`, `approve`,
+-- `updateAllowance`, `transferFrom` — plus `name`, `symbol` and `totalSupply`,
+-- which differ by content.  A name that exists in both namespaces with
+-- different content must never be deleted from this one: the bare name would
+-- then resolve to WETH's and still elaborate.  `Blanc.fmintCode_compile` is the
+-- tripwire.
+--
+-- The import is still only `Blanc.CommonCore` (~2.3 s to elaborate), never
+-- `Blanc.CommonProofs` (~5.4 s) or anything below it.  Anything fmint needs
+-- that belongs upstream is added there, additively; `checkAddress` in
+-- particular is shared WETH surface and must not change.
 
 import Blanc.CommonCore
 
@@ -152,13 +153,10 @@ example :
 
 /-! ## Event topics (proposal D6)
 
-A topic0 word is the keccak of the event's ABI signature string — the same
-`signatureHash` a function selector is built from, without the shift that
-narrows one to four bytes.  Naming each event once is how the same event avoids
-ending up with two spellings and, one typo later, two topics.
-
-fmint emits exactly two events, both ERC-20's.  There is no `Deposit` and no
-`Withdrawal`: fmint is the pure token of D1, with no wrap/unwrap surface.
+fmint emits exactly two events, both ERC-20's, so both topics are the shared
+`Blanc.transferEvent` and `Blanc.approvalEvent` of `Blanc/CommonCore.lean`
+rather than anything defined here.  There is no `Deposit` and no `Withdrawal`:
+fmint is the pure token of D1, with no wrap/unwrap surface.
 
 Mint and burn are `Transfer` events through the zero address —
 `Transfer(0x0 → receiver, amount)` on the mint and
@@ -167,9 +165,6 @@ OpenZeppelin reference emits through `_mint`/`_burn`, so they need no topic of
 their own.  The repayment allowance spend emits **no** `Approval`, matching both
 OpenZeppelin v5's `_spendAllowance` and WETH9's `transferFrom`.  See
 `FMINT_DEVIATIONS.md` rows 12–14. -/
-
-def transferEvent : B256 := signatureHash "Transfer" [.address, .address, .uint256]
-def approvalEvent : B256 := signatureHash "Approval" [.address, .address, .uint256]
 
 /-! ## ERC-3156 constants -/
 
@@ -533,12 +528,17 @@ def flashFee : Func :=
 
 /-! ## The ERC-20 surface
 
-Four of these are WETH's bodies written out again in this namespace —
-`decimals`, `balanceOf`, `allowance`, `transfer` — copied rather than imported,
-for the reasons in the module header.  `name`, `symbol` and `totalSupply` differ
-by content, `approve` and `transferFrom` by the extended slot guard, and
-`totalSupply` differs by more than content: WETH reads its own ETH balance,
-which fmint has no analogue for. -/
+What is left here is exactly what fmint does not share with WETH.  `name`,
+`symbol` and `totalSupply` differ by content, and `totalSupply` differs by more
+than content: WETH reads its own ETH balance, which fmint has no analogue for.
+`prepApprove`, `approve`, `updateAllowance` and `transferFrom` fork on the
+extended slot guard.
+
+The rest — `decimals`, `balanceOf`, `allowance`, `transfer` and its fragments,
+`logApprove`, `transferFromUpdateSbal`, `transferFromLog` — were the same
+definitions in both contracts, so they are now `Blanc/CommonCore.lean`'s and the
+bare names below resolve there.  Nothing about the compiled bytes changed; both
+compile witnesses re-check that at every build. -/
 
 -- name() --
 
@@ -568,14 +568,6 @@ def symbol : Func :=
   mstoreAt 2 +++ -- || 32 5 "FMINT"
   returnMemoryRange 0 96
 
--- decimals() --
-
-/-- `decimals()` — 18, as WETH and as the OpenZeppelin default. -/
-def decimals : Func :=
-  pushB256 0x12 ::: -- 0x12 ||
-  mstoreAt 0 +++ -- || 0x12
-  returnMemoryRange 0 32
-
 -- totalSupply() --
 
 /-- `totalSupply()` — the supply slot.
@@ -589,29 +581,13 @@ def totalSupply : Func :=
   mstoreAt 0 +++ -- || supply
   returnMemoryRange 0 32
 
--- balanceOf(address guy) --
-
-/-- `balanceOf(address guy)`.  A balance lives at the raw address word, so this
-is one `sload`.  Like WETH's, and unlike the mutators, it applies no address
-check to the argument (`FMINT_DEVIATIONS.md` row 19). -/
-def balanceOf : Func :=
-  arg 0 +++ -- guy ||
-  sload ::: -- guy_bal ||
-  mstoreAt 0 +++ -- || guy_bal
-  returnMemoryRange 0 32
-
--- allowance(address src, address dst) --
-
-/-- `allowance(address src, address dst)`.  A view, so no slot guard: reading a
-colliding key is harmless, and only the writers can create one
-(`FMINT_DEVIATIONS.md` row 18). -/
-def allowance : Func :=
-  argCopy 0 0 2 +++ -- || src dst
-  pushList [64, 0] +++ -- 0 :: 64 || src dst
-  kec ::: -- hash ||
-  sload ::: -- allowAmnt ||
-  mstoreAt 0 +++ -- || allow_amnt
-  returnMemoryRange 0 32
+-- `balanceOf(address guy)` is `Blanc.balanceOf`: a balance lives at the raw
+-- address word, so it is one `sload`, and like WETH's — and unlike the mutators
+-- — it applies no address check to the argument (`FMINT_DEVIATIONS.md` row 19).
+--
+-- `allowance(address src, address dst)` is `Blanc.allowance`: a view, so no slot
+-- guard.  Reading a colliding key is harmless, and only the writers can create
+-- one (`FMINT_DEVIATIONS.md` row 18).
 
 -- approve(address guy, uint wad) --
 
@@ -624,14 +600,6 @@ def prepApprove : Line :=
   argCopy 1 0 1 ++ -- || caller :: guy
   arg 1 ++ pushList [64, 0] ++ -- 0 :: 64 :: wad || caller :: guy
   kec :: checkSlotCollides -- collides? :: caller_guy_hash :: wad ||
-
-/-- assumes : `args = [guy, wad]` -/
-def logApprove : Line :=
-  argCopy 0 1 1 ++ -- || wad
-  arg 0 ++ caller ::
-  pushB256 approvalEvent :: -- approvalEventSig :: caller :: guy || wad
-  logWith 2 0 1 -- 2 indexed topics : caller address, approvee address
-                -- 1 unindexed data : approval value
 
 /-- `approve(address guy, uint256 wad)`. -/
 def approve : Func :=
@@ -648,79 +616,13 @@ def approve : Func :=
 
 -- transfer(address dst, uint wad) --
 
-/-- assumes : `args = [dst, wad]` -/
-def logTransfer : Line :=
-  argCopy 0 1 1 ++ -- || wad
-  arg 0 ++ caller ::
-  pushB256 transferEvent :: -- transferEventSig :: src :: dst || wad
-  logWith 2 0 1 -- 2 indexed topics : source address, destination address
-                -- 1 unindexed data : transfer value
-
-/-- `( wad dst -- )` -/
-def incrWbal : Line :=
-  dup 1 :: -- dst :: wad :: dst
-  sload :: -- dst_bal :: wad :: dst
-  add :: -- (dst_bal + wad) :: dst
-  swap 0 :: -- dst :: (dst_bal + wad)
-  sstore :: []
-
-/-- assumes : `args = [dst, wad]`.  `( -- dst_invalid :: dst )` -/
-def transferTestDst : Line :=
-  arg 0 ++ dup 0 :: -- dst :: dst
-  checkNonAddress -- dst_invalid :: dst
-
-/-- assumes : `args = [_, wad]`.
-`( -- caller_bal_<_wad? :: caller :: caller_bal - wad :: wad :: dst )` -/
-def transferTestLt : Line :=
-  arg 1 ++ -- wad :: dst
-  caller :: -- caller :: wad :: dst
-  dup 0 :: -- caller :: caller :: wad :: dst
-  sload :: -- caller_bal :: caller :: wad :: dst
-  swap 0 :: -- caller :: caller_bal :: wad :: dst
-  dup 2 :: -- wad :: caller :: caller_bal :: wad :: dst
-  dup 0 :: -- wad :: wad :: caller :: caller_bal :: wad :: dst
-  dup 3 :: -- caller_bal :: wad :: wad :: caller :: caller_bal :: wad :: dst
-  sub ::   -- caller_bal - wad :: wad :: caller :: caller_bal :: wad :: dst
-  swap 2 :: -- caller_bal :: wad :: caller :: caller_bal - wad :: wad :: dst
-  lt :: [] -- caller_bal_<_wad? :: caller :: caller_bal - wad :: wad :: dst
-
-/-- `( caller :: caller_bal - wad :: wad :: dst -- * )`
-
-Two balance writes with no supply write: a transfer moves value between two
-address-shaped keys, so Σ is unchanged and D5's pairing obligation is
-discharged by the second balance write rather than by a supply write. -/
-def transferCore : Func :=
-  sstore ::: -- wad :: dst [caller balance up to date]
-  incrWbal +++ -- [destination balance up to date]
-  logTransfer +++
-  returnTrue
-
-/-- `transfer(address dst, uint256 wad)`. -/
-def transfer : Func :=
-  transferTestDst +++ -- dst_invalid? :: dst
-  .rev <?> -- [if dst is not a valid address, revert]
-           -- dst
-  transferTestLt +++ -- (caller_bal < wad) :: caller :: caller_bal - wad :: wad :: dst
-  .rev <?> -- [if caller balance < transfer amount, revert]
-        -- caller :: caller_bal - wad :: wad :: dst
-  transferCore
+-- `transfer(address dst, uint256 wad)` is `Blanc.transfer`, built from
+-- `transferTestDst`, `transferTestLt` and `transferCore` there.  Its two
+-- balance writes carry no supply write: a transfer moves value between two
+-- address-shaped keys, so Σ is unchanged and D5's pairing obligation is
+-- discharged by the second balance write rather than by a supply write.
 
 -- transferFrom(address src, address dst, uint wad) --
-
-/-- `( sbal :: wad :: wad :: src -- wad :: src )` -/
-def transferFromUpdateSbal : Line :=
-  sub :: -- (sbal - wad) :: wad :: src
-  dup 2 :: -- src :: (sbal - wad) :: wad :: src
-  sstore :: -- [source balance is up to date]
-  []        -- wad :: src
-
-/-- `( dst :: wad :: src -- wad :: src )` -/
-def transferFromLog : Line :=
-  dup 2 :: -- src :: dst :: wad :: src
-  pushB256 transferEvent :: -- transferEventSig :: src :: dst :: wad :: src
-  dup 3 :: mstoreAt 0 ++ -- transferEventSig :: src :: dst :: wad :: src || wad
-  logWith 2 0 1 -- [Transfer(src,dst,wad) is logged]
-                -- wad :: src
 
 /-- `( wad src -- )` — the ERC-20 allowance spend.
 

@@ -1722,4 +1722,155 @@ def fsig : Line := cdl 0 ++ shiftRight 224
 def Func.main (dt : DispatchTree) : Func := fsig +++ dispatch dt
 def Func.mainWith (k : Nat) (dt : DispatchTree) : Func := fsig +++ dispatchWith k dt
 
+/-! ## The shared ERC-20 surface
+
+Fourteen definitions that two contracts build the same way, and that neither
+contract owns. They arrived here by the route README.md's *Module hierarchy:
+contracts are siblings* prescribes and `balSum` walked first: WETH defined them,
+fmint reproduced them verbatim inside `namespace Fmint`, and a property layer
+that needed to speak about both would have had to import across the sibling
+boundary. So they move up, to the layer both contracts already import, and both
+now reference one constant.
+
+The set is exactly the definitions that were `rfl`-equal across the two
+contracts *and* whose dependencies were too — the second clause is not
+redundant. `approve` and `transferFrom` are byte-identical in both sources and
+are **not** here, because they call `prepApprove` and `updateAllowance`, which
+fork on fmint's extended allowance-slot guard. Neither are `name`, `symbol` or
+`totalSupply`, which differ by content. Those seven stay in their contracts, and
+a name that exists in both namespaces with different content must never be
+deleted from one: inside `namespace Fmint` the bare name would then resolve here
+and still elaborate, silently re-pointing fmint at WETH's code. The compile
+witnesses `Blanc.wethCode_compile` and `Blanc.fmintCode_compile` are what catch
+that.
+
+Names are unchanged by the move. `transfer` claims no contract, so the README's
+rename clause — the one that turned `wbsum` into `balSum` — does not fire.
+
+`Blanc/CommonProofs.lean` carries the lemma half of the same hoist. -/
+
+/-! ### Event topics
+
+A topic0 word is the keccak of the event's ABI signature string — the same
+`signatureHash` a function selector is built from, without the shift that
+narrows one to four bytes. Spelling these as signature strings inlined at the
+log sites is how the same event ends up with two spellings and, one typo later,
+two topics.
+
+ERC-20's two events are here; WETH's `Deposit` and `Withdrawal` are its own and
+stay in `Blanc/Weth.lean`. -/
+
+def approvalEvent : B256 := signatureHash "Approval" [.address, .address, .uint256]
+def transferEvent : B256 := signatureHash "Transfer" [.address, .address, .uint256]
+
+/-! ### The read-only surface -/
+
+-- decimals() --
+
+def decimals : Func :=
+  pushB256 0x12 ::: -- 0x12 ||
+  mstoreAt 0 +++ -- || 0x12
+  returnMemoryRange 0 32
+
+-- balanceOf(address guy) --
+
+def balanceOf : Func :=
+  arg 0 +++ -- guy ||
+  sload ::: -- guy_bal ||
+  mstoreAt 0 +++ -- || guy_bal
+  returnMemoryRange 0 32
+
+-- allowance(address src, address dst) --
+
+def allowance : Func :=
+  argCopy 0 0 2 +++ -- || src dst
+  pushList [64, 0] +++ -- 0 :: 64 || src dst
+  kec ::: -- hash ||
+  sload ::: -- allowAmnt ||
+  mstoreAt 0 +++ -- || allow_amnt
+  returnMemoryRange 0 32
+
+/-! ### Log fragments -/
+
+-- assumes : args = [guy, wad]
+def logApprove : Line :=
+  argCopy 0 1 1 ++ -- || wad
+  arg 0 ++ caller ::
+  pushB256 approvalEvent :: -- approvalEventSig :: caller :: guy || wad
+  logWith 2 0 1 -- 2 indexed topics : caller address, approvee address
+                -- 1 unindexed data : approval value
+
+-- assumes : args = [dst, wad]
+def logTransfer : Line :=
+  argCopy 0 1 1 ++ -- || wad
+  arg 0 ++ caller ::
+  pushB256 transferEvent :: -- transferEventSig :: src :: dst || wad
+  logWith 2 0 1 -- 2 indexed topics : source address, destination address
+                -- 1 unindexed data : transfer value
+
+-- ( dst :: wad :: src -- wad :: src )
+def transferFromLog : Line :=
+  dup 2 :: -- src :: dst :: wad :: src
+  pushB256 transferEvent :: -- transferEventSig :: src :: dst :: wad :: src
+  dup 3 :: mstoreAt 0 ++ -- transferEventSig :: src :: dst :: wad :: src || wad
+  logWith 2 0 1 -- [Transfer(src,dst,wad) is logged]
+                -- wad :: src
+
+/-! ### transfer(address dst, uint wad) and its fragments -/
+
+-- ( wad dst -- )
+def incrWbal : Line :=
+  dup 1 :: -- dst :: wad :: dst
+  sload :: -- dst_bal :: wad :: dst
+  add :: -- (dst_bal + wad) :: dst
+  swap 0 :: -- dst :: (dst_bal + wad)
+  sstore :: []
+
+-- assumes : arg = [dst, wad]
+-- ( -- dst_invalid :: dst )
+def transferTestDst : Line :=
+  arg 0 ++ dup 0 :: -- dst :: dst
+  checkNonAddress -- dst_invalid :: dst
+
+-- assumes : arg = [_, wad]
+-- ( -- caller_bal_<_wad? caller_bal wad wad )
+def transferTestLt : Line :=
+  arg 1 ++ -- wad :: dst
+  caller :: -- caller :: wad :: dst
+  dup 0 :: -- caller :: caller :: wad :: dst
+  sload :: -- caller_bal :: caller :: wad :: dst
+  swap 0 :: -- caller :: caller_bal :: wad :: dst
+  dup 2 :: -- wad :: caller :: caller_bal :: wad :: dst
+  dup 0 :: -- wad :: wad :: caller :: caller_bal :: wad :: dst
+  dup 3 :: -- caller_bal :: wad :: wad :: caller :: caller_bal :: wad :: dst
+  sub ::   -- caller_bal - wad :: wad :: caller :: caller_bal :: wad :: dst
+  swap 2 :: -- caller_bal :: wad :: caller :: caller_bal - wad :: wad :: dst
+  lt :: [] -- caller_bal_<_wad? :: caller :: caller_bal - wad :: wad :: dst
+
+-- ( caller :: caller_bal - wad :: wad :: dst -- * )
+def transferCore : Func :=
+  sstore ::: -- wad :: dst [caller balance up to date]
+  incrWbal +++ -- [destination balance up todate]
+  logTransfer +++
+  returnTrue
+
+-- assumes : arg = [dst, wad]
+def transfer : Func :=
+  transferTestDst +++ -- dst_invalid? :: dst
+  .rev <?> -- [if dst is not a valid address, revert]
+           -- dst
+  transferTestLt +++ -- (caller_bal < wad) :: caller :: caller_bal - wad :: wad :: dst
+  .rev <?> -- [if caller balance < transfer amount, revert]
+        -- caller :: caller_bal - wad :: wad :: dst
+  transferCore
+
+/-! ### transferFrom's shared fragment -/
+
+-- ( sbal :: wad :: wad :: src -- wad :: src )
+def transferFromUpdateSbal : Line :=
+  sub :: -- (sbal - wad) :: wad :: src
+  dup 2 :: -- src :: (sbal - wad) :: wad :: src
+  sstore :: -- [source balance is up to date]
+  []        -- wad :: src
+
 end Blanc
