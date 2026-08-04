@@ -28,18 +28,27 @@ they are this fixture's own *input*, exactly the WETH suite's
 `attacker_bytecode`/`prober_bytecode` precedent, not something a borrower's
 semantics determines.
 
-RIG FINDING (evidence plan, "establish first how the pinned runner commits to
-logs... if logs are not committed anywhere, that is a rig finding to
-surface, not a silent skip"): Jaune's fixture runner
-(`~/jaune/Main.lean`, `Lean.Json.toHeader` / the post-state-root comparison)
-reads `receiptTrie`/`bloom` straight out of the fixture JSON into the
-reconstructed header and never independently recomputes a receipts root from
-its own execution to compare against them -- only the STATE root is checked.
-Logs are therefore not adjudicated by this suite at all, for fmint or for
-WETH (`gen-weth-fixtures.py` never asserts log content either, for the same
-reason). D6's event claims stay evidenced by source reading
-(`Blanc/Fmint.lean`'s `logWith` call sites, matching WETH's), not by a
-fixture.
+HOW THIS SUITE COMMITS TO EVENTS (evidence plan, "establish first how the
+pinned runner commits to logs... if logs are not committed anywhere, that is
+a rig finding to surface, not a silent skip"). It does commit to them.
+`Jaune/Transaction.lean`'s `stateTransitionE` recomputes the receipts root
+and the logs bloom from its own execution and compares both against the
+header in `stateTransitionChecks`; the fixture path reaches it via
+`runTestFile -> addBlockToChainChecked -> addBlockToChainCanonicalE ->
+stateTransitionE`. Verified by tampering with a committed fixture: zeroing
+one bloom byte gives INVALID_LOG_BLOOM, corrupting the root gives
+INVALID_RECEIPTS_ROOT. (Step 2 originally recorded the opposite as a "rig
+finding" -- that claim was false and is retracted here and in the suite
+README.)
+
+The receipts root commits to full log content, so the `receiptTrie`/`bloom`
+written below pin fmint's exact event behavior. But they are `run_t8n`
+output -- the frozen EELS oracle on our own bytecode -- so the check is
+differential plus a golden regression lock, NOT independent evidence that
+the D6 event set is the right one. Wrong-but-consistent `logWith` sites
+would agree in both implementations and regenerate quietly. Closing that
+gap = an expected-log assertion in the Expectations layer below, derived
+from D6 rather than from the oracle. Not done.
 
 Run from the Blanc repository root with the frozen oracle venv:
 

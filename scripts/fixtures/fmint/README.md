@@ -103,8 +103,9 @@ recorded coverage gap in that registry, not an omission here.
 - **Allowance spectrum** (exact / residual / insufficient / infinite, plus
   the separate no-approval zoo member) —
   `06-flashloan-allowance-spectrum.json`.
-- **Event assertions per D6** — **RIG FINDING, not silently skipped**: see
-  [Events are not adjudicated by this suite](#events-are-not-adjudicated-by-this-suite)
+- **Event assertions per D6** — committed through each fixture's recomputed
+  receipts root and logs bloom, with one stated provenance limit: see
+  [How this suite commits to events](#how-this-suite-commits-to-events)
   below.
 
 ## Cases
@@ -181,22 +182,45 @@ the finite-arm guard — the `.rev`-stack-garbage cost above then made the
 symptom look like a runaway gas leak rather than a wrong key, until the
 underlying value was traced back to the pre-state.)
 
-## Events are not adjudicated by this suite
+## How this suite commits to events
 
-**RIG FINDING** (evidence plan: "establish first how the pinned runner
-commits to logs... if logs are not committed anywhere, that is a rig
-finding to surface, not a silent skip"). Jaune's fixture runner
-(`~/jaune/Main.lean`'s `Lean.Json.toHeader` and the post-state-root
-comparison in the block-processing path) reads `receiptTrie`/`bloom`
-straight out of the fixture JSON into the reconstructed header and never
-independently recomputes a receipts root from its own execution to compare
-against them — **only the state root is checked**. Logs are therefore not
-adjudicated by this suite at all, for fmint or for WETH (the WETH generator
-never asserts log content either, for the identical reason — it was never
-called out before because nothing in that suite needed to). D6's event
-claims (`Transfer` on mint/burn, no `Approval` on the repayment spend) stay
-evidenced by reading `Blanc/Fmint.lean`'s `logWith` call sites directly,
-matching WETH's own topics, not by any fixture in this directory.
+The evidence plan required establishing "first how the pinned runner commits
+to logs... if logs are not committed anywhere, that is a rig finding to
+surface, not a silent skip". It does commit to them, and this section
+records how far that commitment goes.
+
+**Step 2 got this wrong and this section is its correction.** The original
+text here claimed the runner reads `receiptTrie`/`bloom` out of the fixture
+JSON without ever recomputing them, so that "only the state root is
+checked". That is false. `Jaune/Transaction.lean`'s `stateTransitionE`
+computes `getReceiptRoot bout` and `logsBloom bout.blockLogs` from its own
+execution and passes both to `stateTransitionChecks`, which fails the block
+with `.receiptsRoot` or `.logBloom` on mismatch; the fixture path reaches it
+through `runTestFile → addBlockToChainChecked → addBlockToChainCanonicalE →
+stateTransitionE`. Verified by tampering with a committed fixture rather
+than by reading: zeroing one nonzero bloom byte inside `01`'s block RLP
+yields `LogBloomError : computed logs bloom ≠ header logs bloom`
+(`BlockException.INVALID_LOG_BLOOM`); corrupting the receipts root yields
+`ReceiptsRootError` (`INVALID_RECEIPTS_ROOT`). The same holds for the WETH
+suite. The success-path fixtures here carry 17–27 nonzero bloom bytes;
+the revert-only cases carry none, as a discarded log set should.
+
+**What that buys, precisely.** The receipts root commits to full log
+content — emitting address, topics, and data, in order, per transaction —
+not merely to the lossy bloom. So each committed fixture pins fmint's exact
+event behavior, and a silent change in emission fails the suite until the
+fixture is regenerated, at which point it surfaces as a reviewable diff in
+`receiptTrie`/`bloom`.
+
+**What it does not buy.** Those golden header values come from `run_t8n` —
+the frozen EELS oracle executing *our own bytecode*. The check is therefore
+a differential one (jaune vs EELS on the same program) plus a golden
+regression lock; it is not independent evidence that the D6 event set is the
+*right* one. Were `Blanc/Fmint.lean`'s `logWith` sites wrong-but-consistent,
+both implementations would agree and regeneration would quietly update the
+golden. Closing that last gap means an expected-log assertion in
+`gen-fmint-fixtures.py`'s `Expectations` layer, derived from D6 rather than
+from the oracle — blanc-side work, not a runner change. It is not done here.
 
 ## The `supplySlot`-collision clause is not, and cannot be, a fixture
 
