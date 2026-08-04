@@ -11,10 +11,12 @@
 -- with `wbsum`, which stays in `Solvent.lean`, and above `Blanc.Fmint` because
 -- `supplySlot` now lives with the contract that generates it.
 --
--- Nothing here is proved, and the program is still a parameter: the contract's
--- dispatch targets arrive with Step 1 of `~/plans/fmint-code.md`, which
--- replaces the parameter with `Fmint.fmint`.  The headline results appear as
--- `Prop`-valued definitions asserted of nothing.
+-- Nothing here is proved.  The program is no longer a parameter — Step 1 of
+-- `~/plans/fmint-code.md` supplied `Fmint.fmint`, so every statement below is
+-- now about one concrete contract — but the headline results are still
+-- `Prop`-valued definitions asserted of nothing.  Conservation is unproven,
+-- pending Arc B of `~/plans/flashmint-proposal.md`; the `flashLoan` success
+-- specification is Arc C.
 
 import Blanc.Solvent
 import Blanc.Fmint
@@ -27,9 +29,8 @@ open Jaune
 
 From `~/plans/flashmint-proposal.md`, whose open decision D1 resolved to the
 pure token: fmint is an ERC-20 with the ERC-3156 triple and no wrap/unwrap
-surface.  The contract itself does not exist yet — Arc A's Step 1 owns it — so
-the program is a parameter and everything below holds for whichever `Prog` that
-step produces.
+surface.  The contract is `Blanc.Fmint.fmint`, and `Blanc/FmintCode.lean`
+carries the witness that Blanc's compiler really produces its bytes.
 
 Nothing here is proved.  The headline theorem appears as a `Prop`-valued
 definition — a statement that elaborates — not as a `theorem` with a proof.
@@ -47,8 +48,8 @@ def Stor.Conserved (s : Stor) : Prop :=
 balance, and `Side` is trivial: this contract declines the `nof`-class side
 condition, which is precisely why every balance-movement slot carries `Side`
 in hypothesis position rather than demanding a concrete bound. -/
-def fmintSpec (fmintProg : Prog) : ContractSpec where
-  prog := fmintProg
+def fmintSpec : ContractSpec where
+  prog := Fmint.fmint
   Inv := fun s _ _ => Stor.Conserved s
   Side := fun _ => True
   inv_forget := id
@@ -83,35 +84,35 @@ def fmintSpec (fmintProg : Prog) : ContractSpec where
 
 /-- `PrecondC` of the proposal, as the record's frame-entry bundle.  Its
 `side` field is `True`: the `nof` hypothesis WETH carries is absent. -/
-def PrecondC (fmintProg : Prog) (fa : Adr) (sevm : Sevm) (devm : Devm) : Prop :=
-  (fmintSpec fmintProg).Pre fa sevm devm
+def PrecondC (fa : Adr) (sevm : Sevm) (devm : Devm) : Prop :=
+  fmintSpec.Pre fa sevm devm
 
 /-- `PostcondC` of the proposal. -/
-def PostcondC (fmintProg : Prog) (fa : Adr) (sevm : Sevm) (devm : Devm) : Prop :=
-  (fmintSpec fmintProg).Post fa sevm devm
+def PostcondC (fa : Adr) (sevm : Sevm) (devm : Devm) : Prop :=
+  fmintSpec.Post fa sevm devm
 
 /-- The `State.Inv` counterpart, for the chain-level rungs. -/
-def StateInvC (fmintProg : Prog) (fa : Adr) (w : Jaune.State) : Prop :=
-  (fmintSpec fmintProg).StateInv fa w
+def StateInvC (fa : Adr) (w : Jaune.State) : Prop :=
+  fmintSpec.StateInv fa w
 
 /-- Headline 1 of `flashmint-proposal.md`, as a statement.  This is the shape
 `weth_preserves_solvent` has, with the record substituted; it is asserted of
 nothing and proved nowhere. -/
-def FmintPreservesConserved (fmintProg : Prog) (fa : Adr) : Prop :=
+def FmintPreservesConserved (fa : Adr) : Prop :=
   ∀ sevm pre post,
     Exec 0 sevm pre (.ok post) →
-    (sevm.currentTarget = fa → some sevm.code.toList = Prog.compile fmintProg) →
-    PrecondC fmintProg fa sevm pre →
-    PostcondC fmintProg fa sevm post
+    (sevm.currentTarget = fa → some sevm.code.toList = Prog.compile Fmint.fmint) →
+    PrecondC fa sevm pre →
+    PostcondC fa sevm post
 
 /-- The chain-level rung, same substitution.  The `wdsum` bound survives as a
 hypothesis about the world rather than about the contract, so it is unaffected
 by the instance. -/
-def FmintChainPreservesConserved (fmintProg : Prog) (fa : Adr) : Prop :=
+def FmintChainPreservesConserved (fa : Adr) : Prop :=
   ∀ ch ch' : BlockChain,
     BlockChain.Reach ch ch' →
-    StateInvC fmintProg fa ch.state →
-    StateInvC fmintProg fa ch'.state
+    StateInvC fa ch.state →
+    StateInvC fa ch'.state
 
 
 end Blanc

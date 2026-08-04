@@ -104,8 +104,8 @@ the clause the third region adds.
 
 Note `isMax` *is* the `supplySlot` comparison: `supplySlot = B256.max`, so "the
 hash is all ones" and "the hash is the supply slot" are the same test, which is
-why the new clause costs two bytes.  The witness below the aux table states that
-identity in Lean.
+why the new clause costs two bytes.  The two `example`s immediately below state
+that identity in Lean.
 
 This is a composition of `checkAddress` and `isMax`, not an extension of either:
 `checkAddress` is shared WETH surface and must not change.  Every allowance-
@@ -116,6 +116,39 @@ def checkSlotCollides : Line :=
   (dup 0 :: checkAddress) ++    -- va(hash) :: hash
   (dup 1 :: isMax) ++           -- (hash =? supplySlot) :: va(hash) :: hash
   [Ninst.or]                    -- collides? :: hash
+
+/-! ### The collision-guard witness
+
+The `supplySlot` clause of the guard above is the one branch of this contract
+that no fixture can exercise.  Reaching it needs an allowance key
+`keccak256(owner ‖ spender) = B256.max` — an expected-2²⁵⁶ preimage search, and
+strictly harder than the ~2⁹⁶ address-shaped collision the WETH suite already
+records as untestable (`scripts/fixtures/weth/README.md`, deviation claim 3).
+Its evidence is therefore here, in Lean, rather than under
+`scripts/fixtures/fmint/` (`FMINT_DEVIATIONS.md` row 18).
+
+`isMax` is `[not, iszero]`, and the machine evaluates that pair as
+`B256.eqCheck (~~~ w) 0` (`Jaune/Machine.lean`: `not` is `~~~ ·` and `iszero`
+is `.eqCheck · 0`), so the clause is 1 exactly when `w` is all ones.  The two
+statements below are the two halves of the claim, and the second is the one
+that makes the clause worth its two bytes: `supplySlot` is *not* address-shaped,
+so `checkAddress` — the clause fmint inherits from WETH — does not already catch
+it.
+
+Both are `example`s, and both are checked by `decide` rather than
+`decide +kernel`: `B256`'s comparison instances are built by tactics and stall
+in the kernel evaluator (`~/plans/kernel-decidable.md`). -/
+
+/-- The new clause fires on the concrete colliding word. -/
+example : B256.eqCheck (~~~ supplySlot) 0 = 1 := by decide
+
+/-- …and the pre-existing clause does not, so the new one is load-bearing.
+`checkAddress` masks with `(~~~ 0) <<< 160` and tests the result against zero;
+`supplySlot` has all ninety-six of those bits set. -/
+example :
+    B256.eqCheck (B256.and supplySlot ((~~~ (0 : B256)) <<< (Nat.toB256 160).toNat)) 0
+      = 0 := by
+  decide
 
 /-! ## Event topics (proposal D6)
 
