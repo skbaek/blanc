@@ -158,9 +158,11 @@ def cdl (x : B256) : Line := [pushB256 x, calldataload]
 -- Two conventions are baked in here, both inherited from WETH rather than
 -- decided on, and both worth revisiting before a second contract:
 --
--- (1) The 32-byte stride is right for every `ArgType`, which is why that type
---     admits only static types. A dynamic argument's word is an *offset* into
---     a tail, so reading it with `arg` yields the offset, not the value.
+-- (1) The 32-byte stride is right for every *head* word, which is every
+--     `ArgType` except `dynBytes`. A dynamic argument's head word is an
+--     *offset* into a tail, so `arg` on it yields the offset, not the value;
+--     a caller wanting the payload follows that offset itself. `arg` is
+--     head-word access, not an ABI decoder — see the note at `ArgType`.
 -- (2) There is no calldata-length validation anywhere — `calldatasize` is in
 --     the instruction set and unused. `calldataload` zero-pads past the end of
 --     calldata, so a call with a truncated argument list reads zeros and
@@ -1501,20 +1503,42 @@ theorem correct (sevm : Sevm) (pre : Devm) (p : Prog) (post : Devm)
 def String.toBytes (s : String) : Bytes := s.toList.map Char.toUInt8
 def String.keccak (s : String) : B256 := (String.toBytes s).keccak
 
--- The ABI value types that `arg` and `argCopy` can actually read: the static
--- ones, each occupying exactly one 32-byte calldata word.
+-- The ABI argument types this file can name in a signature string.
 --
--- Dynamic types — `bytes`, `string`, arrays, and tuples containing them — are
--- deliberately absent. Spelling one in a signature string would be easy, but
--- admitting it here would imply `arg` can decode it, and `arg` cannot: it
--- reads one word at a fixed offset, whereas a dynamic argument's word is an
--- offset into a tail that has to be followed. See the note at `arg`.
+-- All but the last are *static*: each occupies exactly one 32-byte calldata
+-- word, which is the stride `arg` and `argCopy` assume, so for those the type
+-- being nameable and the type being readable coincide.
+--
+-- `dynBytes` — the dynamic `bytes` of `flashLoan(address,address,uint256,bytes)`
+-- and `onFlashLoan(address,address,uint256,uint256,bytes)` — is the one
+-- exception, and the distinction it introduces is worth stating rather than
+-- inferring. Admitting it here says only that a signature string may contain
+-- the word `bytes`; it does NOT say `arg` can decode such an argument, and
+-- `arg` still cannot. A dynamic argument's head word is an *offset* into a
+-- tail, so `arg k` on it yields the offset, not the value: following that
+-- offset to the length word and copying the payload is separate work the
+-- contract does explicitly (`calldatacopy`). Naming the type and decoding it
+-- are two different capabilities, and only the first is added here.
+--
+-- Still absent, for the same reason as before: `string`, arrays, and tuples
+-- containing them. Nothing in Blanc needs to name one yet, and adding a
+-- constructor per unimplemented type would misrepresent this list as an ABI
+-- model.
+--
+-- Note the name. `bytes (size : Nat)` is the *fixed-size* family and keeps its
+-- `bytes1 … bytes32` rendering untouched; the dynamic type is a different ABI
+-- type that happens to be spelled with the same word, so it gets its own
+-- constructor rather than a sentinel size. Because this is a new constructor
+-- and no existing case's rendering moves, no existing signature string — and
+-- so no existing selector or event topic — can change. The WETH selector
+-- regeneration tripwire checks exactly that.
 inductive ArgType
   | address
   | bool
   | uint (bits : Nat)   -- uint8 … uint256, `bits` a multiple of 8
   | int (bits : Nat)    -- int8 … int256
   | bytes (size : Nat)  -- bytes1 … bytes32, the fixed-size family only
+  | dynBytes            -- the dynamic `bytes`; nameable, not `arg`-decodable
 
 def ArgType.toString : ArgType → String
   | address => "address"
@@ -1522,6 +1546,7 @@ def ArgType.toString : ArgType → String
   | uint bits => s!"uint{bits}"
   | int bits => s!"int{bits}"
   | bytes size => s!"bytes{size}"
+  | dynBytes => "bytes"
 
 -- The overwhelmingly common width, so call sites can write `.uint256`.
 abbrev ArgType.uint256 : ArgType := .uint 256
