@@ -4227,18 +4227,37 @@ lemma of_run_singleton {e s i s'} (h : Line.Run e s [i] s') : Ninst.Run e s i s'
   rcases Line.of_run_cons h with ⟨_, hrun, hnil⟩
   cases hnil; exact hrun
 
-lemma of_run_calldataload {e : Sevm} {s s' : Devm} (h : Ninst.Run e s calldataload s') :
-    ∃ x y, Stack.Diff [x] [y] s.stack s'.stack := by
+/-- `calldataload` pops an offset and pushes *the calldata word at it*.
+
+The value-carrying form, and the point at which Blanc stops discarding what the
+calldata says. `Rinst.runCore .calldataload` pushes
+`Bytes.toB256 (e.data.sliceD start.toNat 32 0)`, which is `Sevm.dataWord e x` by
+definition; the value-forgetting `of_run_calldataload` below is now literally
+this statement with the pushed word quantified away, which is all a safety
+invariant ever needed and all any existing consumer asks for.
+
+Because `Sevm.dataWord` zero-pads (`List.sliceD`'s default), this holds for
+calldata of every length — no well-formedness premise appears or is available. -/
+lemma of_run_calldataload_val {e : Sevm} {s s' : Devm} (h : Ninst.Run e s calldataload s') :
+    ∃ x, Stack.Diff [x] [Sevm.dataWord e x] s.stack s'.stack := by
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
   rcases Except.bind_eq_ok run with ⟨⟨si, s₁⟩, h1, run₁⟩
   rcases Except.bind_eq_ok run₁ with ⟨s₂, h2, run₂⟩
   have hpop := Devm.pop_of_pop h1
   have hb := Devm.burn_of_chargeGas h2
-  obtain ⟨val, hpush⟩ : ∃ val, Devm.Push [val] s₂ s' := ⟨_, Devm.push_of_push run₂⟩
-  refine ⟨si, val, s₁.stack, hpop.stack, ?_⟩
+  have hpush : Devm.Push [Sevm.dataWord e si] s₂ s' := Devm.push_of_push run₂
+  refine ⟨si, s₁.stack, hpop.stack, ?_⟩
   rw [show s₁.stack = s₂.stack from hb.stack]
   exact hpush.stack
+
+/-- The value-forgetting form. Statement unchanged; its ~75 consumers across
+`Solvent.lean` and `Conserved.lean` see exactly what they always did, and the
+pop/charge/push destructuring is now done once, in the strong form above. -/
+lemma of_run_calldataload {e : Sevm} {s s' : Devm} (h : Ninst.Run e s calldataload s') :
+    ∃ x y, Stack.Diff [x] [y] s.stack s'.stack := by
+  rcases of_run_calldataload_val h with ⟨x, hd⟩
+  exact ⟨x, _, hd⟩
 
 lemma Devm.memRead_stack (devm : Devm) (i n : Nat) :
     (devm.memRead i n).2.stack = devm.stack := rfl
@@ -4562,13 +4581,21 @@ lemma prefix_of_calldatacopy {e} {x y z xs} {s s' : Devm} :
   rw [hx, hy, hz] at h1
   exact of_append_pref h2 h1
 
-lemma prefix_of_calldataload {e} {x xs} {s s' : Devm} :
-    Ninst.Run e s calldataload s' → (x :: xs <<+ s.stack) → ∃ z, z :: xs <<+ s'.stack := by
+/-- Value-carrying `prefix_of_calldataload`: the word left on the stack is the
+calldata word at the offset that was there before. Modelled on
+`prefix_of_sload`, which already carries its value this way. -/
+lemma prefix_of_calldataload_val {e} {x xs} {s s' : Devm} :
+    Ninst.Run e s calldataload s' → (x :: xs <<+ s.stack) →
+    (Sevm.dataWord e x :: xs <<+ s'.stack) := by
   intro h0 h1
-  rcases of_run_calldataload h0 with ⟨x', y', stk, h2, h3⟩
+  rcases of_run_calldataload_val h0 with ⟨x', stk, h2, h3⟩
   have hx : x = x' := (List.of_cons_pref_of_cons_pref h1 (pref_of_split h2)).left
-  rw [hx] at h1
-  exact ⟨y', append_pref h3 (of_append_pref h2 h1)⟩
+  subst hx
+  exact append_pref h3 (of_append_pref h2 h1)
+
+lemma prefix_of_calldataload {e} {x xs} {s s' : Devm} :
+    Ninst.Run e s calldataload s' → (x :: xs <<+ s.stack) → ∃ z, z :: xs <<+ s'.stack :=
+  fun h0 h1 => ⟨_, prefix_of_calldataload_val h0 h1⟩
 
 lemma prefix_of_kec {e} {x y xs} {s s' : Devm} :
     Ninst.Run e s kec s' → (x :: y :: xs <<+ s.stack) → ∃ z, z :: xs <<+ s'.stack := by
@@ -4578,14 +4605,34 @@ lemma prefix_of_kec {e} {x y xs} {s s' : Devm} :
   clear h; rw [hx, hy] at h1
   exact ⟨z', append_pref h3 (of_append_pref h2 h1)⟩
 
-lemma prefix_of_cdl {e n xs} {s s' : Devm} :
-    (xs <<+ s.stack) → Line.Run e s (cdl n) s' → ∃ z, z :: xs <<+ s'.stack := by
+/-- Value-carrying `prefix_of_cdl`: `cdl n` leaves the calldata word at byte
+offset `n` on top of the stack. -/
+lemma prefix_of_cdl_val {e n xs} {s s' : Devm} :
+    (xs <<+ s.stack) → Line.Run e s (cdl n) s' →
+    (Sevm.dataWord e n :: xs <<+ s'.stack) := by
   intro h_pfx h_run
   rcases Line.of_run_cons h_run with ⟨s₁, h_push, h_rest⟩
   rcases Line.of_run_cons h_rest with ⟨s₂, h_cdl, h_nil⟩
   cases h_nil
   have h1 : n :: xs <<+ s₁.stack := prefix_of_push (of_run_pushB256 h_push) h_pfx
-  exact prefix_of_calldataload h_cdl h1
+  exact prefix_of_calldataload_val h_cdl h1
+
+lemma prefix_of_cdl {e n xs} {s s' : Devm} :
+    (xs <<+ s.stack) → Line.Run e s (cdl n) s' → ∃ z, z :: xs <<+ s'.stack :=
+  fun h_pfx h_run => ⟨_, prefix_of_cdl_val h_pfx h_run⟩
+
+/-- The `of_arg` the decoding layer reads through: running `arg k` leaves the
+`k`-th head word of the argument area on the stack.
+
+`arg k` is `cdl (32 * k + 4)` and `Sevm.argWord e k` is `Sevm.dataWord e
+(32 * k + 4)`, both by definition, so this is `prefix_of_cdl_val` at a
+definitional instance rather than a new argument. Head-word access, not ABI
+decoding: for a dynamic argument the word delivered here is the tail's offset
+(see `arg`'s note (1) and `forwardArgTail`). -/
+lemma prefix_of_arg {e k xs} {s s' : Devm} :
+    (xs <<+ s.stack) → Line.Run e s (arg k) s' →
+    (Sevm.argWord e k :: xs <<+ s'.stack) :=
+  prefix_of_cdl_val
 
 lemma of_run_sload {e : Sevm} {s s' : Devm} (h : Ninst.Run e s sload s') :
     ∃ x, Stack.Diff [x] [Devm.getStorVal s e.currentTarget x] s.stack s'.stack := by

@@ -172,6 +172,32 @@ def cdl (x : B256) : Line := [pushB256 x, calldataload]
 --     to state, because it has only ever had one contract to satisfy.
 def arg (k : B256) : Line := cdl ((32 * k) + 4)
 
+/-- The 32-byte calldata word at byte offset `i` — what `calldataload i` pushes.
+
+Defined to be exactly the expression `Rinst.runCore .calldataload` evaluates
+(`Jaune/Machine.lean`), so the value-carrying inversions below are a projection
+of the semantics rather than a new model of it.
+
+`List.sliceD` supplies the `0` default past the end of `data`, which is the
+zero-padding EVM `CALLDATALOAD` performs: a read starting at or beyond
+`data.length` yields `0` rather than failing. Every statement phrased through
+this reader therefore stays true of short and malformed calldata, which is the
+recorded Blanc-wide convention (`arg`'s note (2); `FMINT_DEVIATIONS.md` row 21)
+rather than an assumption of well-formed input. -/
+def Sevm.dataWord (e : Sevm) (i : B256) : B256 :=
+  Bytes.toB256 (e.data.sliceD i.toNat 32 0)
+
+/-- The value `arg k` reads: the `k`-th head word of the argument area.
+
+Head-word access, not ABI decoding — for a dynamic argument this is the offset,
+not the payload (see `arg`'s note (1)).
+
+Applied explicitly rather than by dot notation throughout: these live in
+`Blanc`, while `Sevm` belongs to `Jaune`, so `e.dataWord` would look for
+`Jaune.Sevm.dataWord`. That is the same convention `Devm.Pop` and friends
+already follow below. -/
+def Sevm.argWord (e : Sevm) (k : B256) : B256 := Sevm.dataWord e ((32 * k) + 4)
+
 -- Forward the payload of a dynamic `bytes` argument out of our own calldata
 -- into memory, ABI-encoded for a call we are about to make.
 --
