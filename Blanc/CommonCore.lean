@@ -172,6 +172,62 @@ def cdl (x : B256) : Line := [pushB256 x, calldataload]
 --     to state, because it has only ever had one contract to satisfy.
 def arg (k : B256) : Line := cdl ((32 * k) + 4)
 
+-- Forward the payload of a dynamic `bytes` argument out of our own calldata
+-- into memory, ABI-encoded for a call we are about to make.
+--
+-- ( -- len ), writing the length word at memory word `lenWord` and the payload
+-- immediately after it, at memory byte `(lenWord + 1) * 32`.
+--
+-- This is the decoding step `arg` deliberately does not do (see the notes at
+-- `arg` and at `ArgType`): argument `k`'s head word is an *offset*, so this
+-- follows it to the length word, republishes the length, and `calldatacopy`s
+-- the payload. Offset and length are used exactly as the caller supplied them
+-- — there is no validation that either lies inside calldata, which is the
+-- Blanc-wide convention `arg` already documents. `calldatacopy` zero-fills
+-- anything past the end of calldata rather than reading out of bounds, so a
+-- malformed tail forwards zeros; an absurd length is bounded only by
+-- memory-expansion gas.
+--
+-- One parameter covers both destinations because the ABI fixes their relation:
+-- a dynamic argument's payload always begins in the word after its length. The
+-- payload is *not* padded up to a word boundary here — the region above it is
+-- left untouched, so a caller wanting the zero padding a reference encoder
+-- produces gets it from memory being zero-initialised, and must therefore not
+-- have written above `(lenWord + 1) * 32` earlier in the frame.
+def forwardArgTail (k lenWord : B256) : Line :=
+  arg k ++                              -- off  (relative to calldata byte 4)
+  pushB256 4 :: add ::                  -- p := 4 + off  (absolute: length word)
+  dup 0 :: calldataload ::              -- len :: p
+  dup 0 :: mstoreAt lenWord ++          -- len :: p  || mem[lenWord] = len
+  dup 0 :: swap 1 ::                    -- p :: len :: len
+  pushB256 32 :: add ::                 -- p + 32 :: len :: len   (the payload)
+  pushB256 ((lenWord + 1) * 32) ::      -- dst :: p + 32 :: len :: len
+  calldatacopy :: []                    -- len
+
+-- Is the last call's return data shorter than `n` bytes?
+--
+-- ( -- retdatasize <? n )
+--
+-- The companion guard to `checkRetdataHead` below, and it must be branched on
+-- first: `retdatacopy` is an exceptional halt when the requested range runs
+-- past the return data, so reading a head word that may not be there is not a
+-- check that fails, it is a check that aborts the frame.
+def retdataShorterThan (n : B256) : Line := [pushB256 n, retdatasize, lt]
+
+-- Does the last call's return data begin with the word `w`?
+--
+-- ( -- head =? w ), clobbering memory word `m`.
+--
+-- Assumes return data of at least 32 bytes; guard with `retdataShorterThan 32`
+-- first. Return data *longer* than a word passes: this compares the head word
+-- and says nothing about the rest, which is the same boundary Solidity's
+-- `bytes32` return decoder draws.
+def checkRetdataHead (w m : B256) : Line :=
+  pushList [32, 0, m * 32] ++           -- m * 32 :: 0 :: 32
+  retdatacopy ::                        -- || mem[m] = the head word
+  pushB256 (m * 32) :: mload ::         -- head
+  pushB256 w :: eq :: []                -- (head =? w)
+
 -- Push a 256-bit word used for testing address validity.
 -- NOT and SHL are used so it takes up only 6 bytes of code,
 -- whereas pushing the value directly would take up 32.
