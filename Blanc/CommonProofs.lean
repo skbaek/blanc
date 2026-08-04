@@ -4288,6 +4288,61 @@ lemma of_run_log {e : Sevm} {s s' : Devm} {n : Fin 5} (h : Ninst.Run e s (log n)
   rw [h_s₅, ← hb.stack]
   exact hp
 
+lemma of_run_address {e : Sevm} {s s' : Devm} (h : Ninst.Run e s address s') :
+    Devm.PushBurn [e.currentTarget.toB256] s s' := by
+  rcases of_run_reg h with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  exact Devm.pushBurn_of_pushItem run
+
+lemma of_run_retdatasize {e : Sevm} {s s' : Devm} (h : Ninst.Run e s retdatasize s') :
+    ∃ x, Devm.PushBurn [x] s s' := by
+  rcases of_run_reg h with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  exact ⟨_, Devm.pushBurn_of_pushItem run⟩
+
+lemma of_run_gas {e : Sevm} {s s' : Devm} (h : Ninst.Run e s gas s') :
+    ∃ x, Devm.PushBurn [x] s s' := by
+  rcases of_run_reg h with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨s₁, h1, h2⟩
+  exact ⟨_, Devm.pushBurn_of_burn_of_push (Devm.burn_of_chargeGas h1) (Devm.push_of_push h2)⟩
+
+lemma of_run_mload {e : Sevm} {s s' : Devm} (h : Ninst.Run e s mload s') :
+    ∃ x y, Stack.Diff [x] [y] s.stack s'.stack := by
+  rcases of_run_reg h with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨⟨si, s₁⟩, h1, run₁⟩
+  rcases Except.bind_eq_ok run₁ with ⟨s₂, h2, run₂⟩
+  rcases Devm.pop_of_popToNat h1 with ⟨x, hpop⟩
+  have hb := Devm.burn_of_chargeGas h2
+  obtain ⟨val, hpush⟩ : ∃ val, Devm.Push [val] (s₂.memRead si 32).2 s' :=
+    ⟨_, Devm.push_of_push run₂⟩
+  refine ⟨x, val, s₁.stack, hpop.stack, ?_⟩
+  rw [show s₁.stack = s₂.stack from hb.stack, ← Devm.memRead_stack s₂ si 32]
+  exact hpush.stack
+
+lemma of_run_retdatacopy {e : Sevm} {s s' : Devm} (h : Ninst.Run e s retdatacopy s') :
+    ∃ x y z, Stack.Pop [x, y, z] s.stack s'.stack := by
+  rcases of_run_reg h with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨⟨mi, s₁⟩, h1, run₁⟩
+  rcases Except.bind_eq_ok run₁ with ⟨⟨di, s₂⟩, h2, run₂⟩
+  rcases Except.bind_eq_ok run₂ with ⟨⟨sz, s₃⟩, h3, run₃⟩
+  rcases Except.bind_eq_ok run₃ with ⟨s₄, h4, h5⟩
+  rcases Devm.pop_of_popToNat h1 with ⟨x, p1⟩
+  rcases Devm.pop_of_popToNat h2 with ⟨y, p2⟩
+  rcases Devm.pop_of_popToNat h3 with ⟨z, p3⟩
+  have hb := Devm.burn_of_chargeGas h4
+  refine ⟨x, y, z, ?_⟩
+  split at h5
+  · cases h5
+  · injection h5 with eq
+    have hp := (Devm.pop_append p1 (Devm.pop_append p2 p3)).stack
+    rw [← eq]
+    show Stack.Pop [x, y, z] s.stack s₄.stack
+    rw [← hb.stack]
+    exact hp
+
 lemma Stack.swapCore_of_swap {n} {xxs yys : Stack} (h : Swap n xxs yys) :
     ∃ x y xs ys, xxs = x :: xs ∧ yys = y :: ys ∧ SwapCore x y n xs ys := by
   cases xxs; cases h; cases yys; cases h; refine ⟨_, _, _, _, rfl, rfl, h⟩
@@ -4541,6 +4596,24 @@ lemma prefix_of_sload {e x xs} {s s' : Devm} :
   have hx : x = x' := (List.of_cons_pref_of_cons_pref h1 (pref_of_split h2)).left
   subst hx
   exact ⟨_, append_pref h3 (of_append_pref h2 h1), rfl⟩
+
+lemma prefix_of_mload {e x xs} {s s' : Devm} :
+    Ninst.Run e s mload s' → (x :: xs <<+ s.stack) → ∃ y, y :: xs <<+ s'.stack := by
+  intro h0 h1
+  rcases of_run_mload h0 with ⟨x', y', stk, h2, h3⟩
+  have hx : x = x' := (List.of_cons_pref_of_cons_pref h1 (pref_of_split h2)).left
+  rw [hx] at h1
+  exact ⟨y', append_pref h3 (of_append_pref h2 h1)⟩
+
+lemma prefix_of_retdatacopy {e} {x y z xs} {s s' : Devm} :
+    Ninst.Run e s retdatacopy s' → (x :: y :: z :: xs <<+ s.stack) → (xs <<+ s'.stack) := by
+  intros h0 h1
+  rcases of_run_retdatacopy h0 with ⟨x', y', z', h2⟩
+  rcases of_cons_cons_pref_of_cons_cons_pref h1 (pref_of_split h2)
+    with ⟨hx, hy, ws, h, h'⟩
+  rcases List.of_cons_pref_of_cons_pref h h' with ⟨hz, _⟩
+  rw [hx, hy, hz] at h1
+  exact of_append_pref h2 h1
 
 lemma Line.spx_scheme {e s' i l xs xs' ys}
     (h : ∀ s0 s1, Ninst.Run e s0 i s1 → (xs <<+ s0.stack) → (xs' <<+ s1.stack))
@@ -6725,6 +6798,54 @@ theorem B256.of_or_eq_zero {x y : B256} (h : x ||| y = 0) : x = 0 ∧ y = 0 := b
   have h2 : x.2 ||| y.2 = 0 := congrArg (fun z : B256 => z.2) h
   exact ⟨Prod.ext (B128.of_or_eq_zero h1).1 (B128.of_or_eq_zero h2).1,
          Prod.ext (B128.of_or_eq_zero h1).2 (B128.of_or_eq_zero h2).2⟩
+
+/-! A word and its complement sum to the all-ones value, with no carry at any
+bit — so a bound of the form `y ≤ ~~~ x` is exactly a no-overflow guarantee
+for `x + y`.  The fact a *complement-shaped* bound check needs: fmint's
+`maxFlashLoan = not supply` is the first user, and the reason its
+`amount ≤ maxFlashLoan` guard is the entire overflow argument for the mint. -/
+
+lemma UInt64.toNat_add_not (x : UInt64) : x.toNat + (~~~x).toNat = 2 ^ 64 - 1 := by
+  rw [UInt64.toNat_not]
+  have h := UInt64.toNat_lt x
+  simp only [UInt64.size] at *
+  omega
+
+/-- `B128.toNat`'s shift-or decomposition, as plain arithmetic: the low word
+sits strictly below the shifted high word, so the `|||` is an `+`. -/
+lemma B128.toNat_eq (x : B128) : x.toNat = x.1.toNat * 2 ^ 64 + x.2.toNat := by
+  simp only [B128.toNat]
+  rw [← Nat.add_eq_or (by rw [Nat.shiftLeft_eq]; exact Nat.dvd_mul_left _ _) (UInt64.toNat_lt _),
+    Nat.shiftLeft_eq]
+
+lemma B256.toNat_eq (x : B256) : x.toNat = x.1.toNat * 2 ^ 128 + x.2.toNat := by
+  simp only [B256.toNat]
+  rw [← Nat.add_eq_or (by rw [Nat.shiftLeft_eq]; exact Nat.dvd_mul_left _ _) B128.toNat_lt,
+    Nat.shiftLeft_eq]
+
+lemma B128.toNat_add_not (x : B128) : x.toNat + (~~~x).toNat = 2 ^ 128 - 1 := by
+  have h1 := UInt64.toNat_add_not x.1
+  have h2 := UInt64.toNat_add_not x.2
+  have hc : (~~~x) = ⟨~~~x.1, ~~~x.2⟩ := rfl
+  rw [B128.toNat_eq, B128.toNat_eq, hc]
+  simp only []
+  omega
+
+lemma B256.toNat_add_not (x : B256) : x.toNat + (~~~x).toNat = 2 ^ 256 - 1 := by
+  have h1 := B128.toNat_add_not x.1
+  have h2 := B128.toNat_add_not x.2
+  have hc : (~~~x) = ⟨~~~x.1, ~~~x.2⟩ := rfl
+  rw [B256.toNat_eq, B256.toNat_eq, hc]
+  simp only []
+  omega
+
+/-- The whole overflow argument for a complement-bounded add: `y ≤ ~~~ x` says
+exactly that `x + y` does not overflow. -/
+lemma B256.nof_of_le_not {x y : B256} (h : y ≤ ~~~ x) : B256.Nof x y := by
+  have h1 := B256.toNat_add_not x
+  have h2 := B256.toNat_le_toNat h
+  unfold B256.Nof
+  omega
 
 lemma B128.zero_and {x : B128} : 0 &&& x = 0 := by
   simp [B128.and_eq_and_prod_and]

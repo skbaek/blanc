@@ -75,6 +75,32 @@ theorem Stor.AgreeOffAdr.set {s : Stor} {k v : B256} (h : ValidAdr k) :
   refine (Stor.get_set_ne _ (fun hc => hk' ?_) _).symm
   exact hc ▸ h
 
+/-- A single balance write that adds `v` at an address-shaped key, seen by
+`Σ`'s domain: the `Increase` half of a mint's storage effect, in the exact
+`set` form a walked `sstore` delivers. -/
+lemma Stor.increase_set (s : Stor) (a : Adr) (v : B256) :
+    Increase a v (Stor.rest s) (Stor.rest (s.set a.toB256 (v + s.get a.toB256))) := by
+  intro b
+  constructor
+  · rintro rfl
+    show s.get a.toB256 + v = (s.set a.toB256 _).get a.toB256
+    rw [Stor.get_set_self, B256.add_comm]
+  · intro hb
+    show s.get b.toB256 = (s.set a.toB256 _).get b.toB256
+    exact (Stor.get_set_ne _ (fun hc => hb (Adr.toB256_inj hc)) _).symm
+
+/-- The `Decrease` half of a burn's storage effect, same form. -/
+lemma Stor.decrease_set (s : Stor) (a : Adr) (v : B256) :
+    Decrease a v (Stor.rest s) (Stor.rest (s.set a.toB256 (s.get a.toB256 - v))) := by
+  intro b
+  constructor
+  · rintro rfl
+    show s.get a.toB256 - v = (s.set a.toB256 _).get a.toB256
+    rw [Stor.get_set_self]
+  · intro hb
+    show s.get b.toB256 = (s.set a.toB256 _).get b.toB256
+    exact (Stor.get_set_ne _ (fun hc => hb (Adr.toB256_inj hc)) _).symm
+
 lemma frel_of_frel {ξ υ} {x : ξ} {r s : υ → υ → Prop} {f g : ξ → υ}
     (h : r (f x) (g x) → s (f x) (g x)) (h' : Frel x r f g) : Frel x s f g := by
   intro x'; constructor <;> intro hx

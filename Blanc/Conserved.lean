@@ -233,6 +233,45 @@ theorem Stor.Conserved.burn {s s' : Stor} {a : Adr} {v : B256}
   rw [h_sup, B256.toNat_sub_eq_of_le _ _ h_le_sup, h]
   exact sum_sub_assoc h_dec h_le
 
+/-- **The mint pair, in the exact `set` form the walked `SSTORE`s deliver**: a
+balance write of `v + bal` at an address-shaped key, then a supply write of
+`v + supply` read *after* the balance write.  The caller owes only the
+supply-side bound — fmint's `amount ≤ maxFlashLoan` guard — exactly as in the
+underlying combinator. -/
+theorem Stor.Conserved.mint_set {s : Stor} {a : Adr} {v : B256}
+    (h : Stor.Conserved s)
+    (h_nof : B256.Nof (s.get Fmint.supplySlot) v) :
+    Stor.Conserved
+      ((s.set a.toB256 (v + s.get a.toB256)).set Fmint.supplySlot
+        (v + (s.set a.toB256 (v + s.get a.toB256)).get Fmint.supplySlot)) := by
+  have h_va : ValidAdr a.toB256 := ⟨a, rfl⟩
+  have h_sup_mid : (s.set a.toB256 (v + s.get a.toB256)).get Fmint.supplySlot
+      = s.get Fmint.supplySlot := Stor.get_supplySlot_set h_va
+  refine h.mint (a := a) (v := v) ?_ h_nof ?_
+  · rw [Stor.rest_set_supplySlot]
+    exact Stor.increase_set s a v
+  · rw [Stor.get_set_self, h_sup_mid, B256.add_comm]
+
+/-- **The burn pair, same form**: a balance write of `bal − v` at an
+address-shaped key, then a supply write of `supply − v`.  The caller owes only
+the balance-side bound `v ≤ bal` — fmint's explicit balance check in
+`burnAndReturn` — and the invariant supplies the supply-side bound itself,
+which is why the contract carries no supply-underflow guard. -/
+theorem Stor.Conserved.burn_set {s : Stor} {a : Adr} {v : B256}
+    (h : Stor.Conserved s)
+    (h_le : v ≤ s.get a.toB256) :
+    Stor.Conserved
+      ((s.set a.toB256 (s.get a.toB256 - v)).set Fmint.supplySlot
+        ((s.set a.toB256 (s.get a.toB256 - v)).get Fmint.supplySlot - v)) := by
+  have h_va : ValidAdr a.toB256 := ⟨a, rfl⟩
+  have h_sup_mid : (s.set a.toB256 (s.get a.toB256 - v)).get Fmint.supplySlot
+      = s.get Fmint.supplySlot := Stor.get_supplySlot_set h_va
+  refine h.burn (a := a) (v := v) ?_ ?_ ?_
+  · rw [Stor.rest_set_supplySlot]
+    exact Stor.decrease_set s a v
+  · exact h_le
+  · rw [Stor.get_set_self, h_sup_mid]
+
 /-- The flash-mint instance.  `Inv` ignores both the callvalue and the ETH
 balance, and `Side` is trivial: this contract declines the `nof`-class side
 condition, which is precisely why every balance-movement slot carries `Side`
