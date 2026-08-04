@@ -4063,6 +4063,23 @@ lemma Devm.pop_of_popToNat {k : Nat} {devm devm' : Devm}
   rcases h with ⟨_, rfl⟩
   exact ⟨x, Devm.pop_of_pop hp⟩
 
+/-- `popToNat` pops a word and reports *that word's* `toNat`.
+
+A third instance of the same projection `of_run_calldataload_val` restores:
+`Devm.pop_of_popToNat` above proves `∃ x, Devm.Pop [x] devm devm'` and drops the
+only interesting fact, namely that the `Nat` handed to the rest of the
+instruction is `x.toNat`. Every memory-address and size operand in the machine
+arrives through this function, so the value-carrying form is a prerequisite for
+saying anything about *where* an instruction wrote or *how much*. -/
+lemma Devm.pop_of_popToNat_val {k : Nat} {devm devm' : Devm}
+    (h : Devm.popToNat devm = .ok ⟨k, devm'⟩) :
+    ∃ x, Devm.Pop [x] devm devm' ∧ k = x.toNat := by
+  rw [Devm.popToNat_def] at h
+  dsimp [(· <&> ·), Functor.mapRev, Functor.map, Except.map] at h
+  rcases hp : devm.pop with _ | ⟨x, devm1⟩ <;> simp [hp] at h
+  rcases h with ⟨rfl, rfl⟩
+  exact ⟨x, Devm.pop_of_pop hp, rfl⟩
+
 lemma of_run_reg {e : Sevm} {s s' : Devm} {r : Rinst}
     (h : Ninst.Run e s (Ninst.reg r) s') :
     ∃ pc, Rinst.run ⟨pc, e, s⟩ r = .ok s' := by
@@ -4203,25 +4220,45 @@ lemma of_run_sstore {e : Sevm} {s s' : Devm} (h : Ninst.Run e s sstore s') :
   rw [← hb.stack, h_s₄, h_s₃]
   exact hp
 
-lemma of_run_calldatacopy {e : Sevm} {s s' : Devm} (h : Ninst.Run e s calldatacopy s') :
-    ∃ x y z, Stack.Pop [x, y, z] s.stack s'.stack := by
+/-- `Devm.memWrite` touches memory only. -/
+lemma Devm.memWrite_stack (devm : Devm) (i : Nat) (val : Bytes) :
+    (devm.memWrite i val).stack = devm.stack := rfl
+
+/-- `calldatacopy` writes *the calldata slice named by its operands* into memory.
+
+The value-carrying form, and the piece (1b) of the arc needs: the bytes written
+are `e.data.sliceD y.toNat z.toNat 0`, a function of `e.data` and the popped
+operands alone. `d` is the state the instruction reaches after popping its three
+operands and charging, so the equation says the whole effect on `d` is this one
+write.
+
+Two things this deliberately does *not* say, because Blanc has no vocabulary for
+either yet (see the module note at `Sevm.dataWord`): that `d`'s memory agrees
+with `s`'s, and what a subsequent `mload` of the written range yields. Both need
+a `Mem.read`/`Mem.write` algebra that neither repository has. -/
+lemma of_run_calldatacopy_val {e : Sevm} {s s' : Devm} (h : Ninst.Run e s calldatacopy s') :
+    ∃ x y z d, Stack.Pop [x, y, z] s.stack (Devm.stack d) ∧
+      s' = Devm.memWrite d x.toNat (e.data.sliceD y.toNat z.toNat 0) := by
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
   rcases Except.bind_eq_ok run with ⟨⟨mi, s₁⟩, h1, run₁⟩
   rcases Except.bind_eq_ok run₁ with ⟨⟨di, s₂⟩, h2, run₂⟩
   rcases Except.bind_eq_ok run₂ with ⟨⟨sz, s₃⟩, h3, run₃⟩
   rcases Except.bind_eq_ok run₃ with ⟨s₄, h4, h5⟩
-  rcases Devm.pop_of_popToNat h1 with ⟨x, p1⟩
-  rcases Devm.pop_of_popToNat h2 with ⟨y, p2⟩
-  rcases Devm.pop_of_popToNat h3 with ⟨z, p3⟩
+  rcases Devm.pop_of_popToNat_val h1 with ⟨x, p1, rfl⟩
+  rcases Devm.pop_of_popToNat_val h2 with ⟨y, p2, rfl⟩
+  rcases Devm.pop_of_popToNat_val h3 with ⟨z, p3, rfl⟩
   have hb := Devm.burn_of_chargeGas h4
   injection h5 with eq
-  refine ⟨x, y, z, ?_⟩
+  refine ⟨x, y, z, s₄, ?_, eq.symm⟩
   have hp := (Devm.pop_append p1 (Devm.pop_append p2 p3)).stack
-  rw [← eq]
-  show Stack.Pop [x, y, z] s.stack s₄.stack
   rw [← hb.stack]
   exact hp
+
+lemma of_run_calldatacopy {e : Sevm} {s s' : Devm} (h : Ninst.Run e s calldatacopy s') :
+    ∃ x y z, Stack.Pop [x, y, z] s.stack s'.stack := by
+  rcases of_run_calldatacopy_val h with ⟨x, y, z, d, hp, rfl⟩
+  exact ⟨x, y, z, by rw [Devm.memWrite_stack]; exact hp⟩
 
 lemma of_run_singleton {e s i s'} (h : Line.Run e s [i] s') : Ninst.Run e s i s' := by
   rcases Line.of_run_cons h with ⟨_, hrun, hnil⟩

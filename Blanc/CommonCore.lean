@@ -220,6 +220,33 @@ def Sevm.argWord (e : Sevm) (k : B256) : B256 := Sevm.dataWord e ((32 * k) + 4)
 -- left untouched, so a caller wanting the zero padding a reference encoder
 -- produces gets it from memory being zero-initialised, and must therefore not
 -- have written above `(lenWord + 1) * 32` earlier in the frame.
+/-! ### What `forwardArgTail` reads
+
+The three functions below describe argument `k`'s dynamic tail as a function of
+`e.data` alone, which is what lets them serve as a specification rather than a
+restatement of the code. All three are total: `Sevm.dataWord` and `List.sliceD`
+zero-fill past the end of calldata, and the contract validates neither the
+offset nor the length (`FMINT_DEVIATIONS.md` row 21), so a truncated, absurd or
+overlapping tail is *described* here rather than excluded by a premise. -/
+
+/-- Where `forwardArgTail k` follows argument `k`'s head word to: the tail's
+length word, as an absolute calldata byte index.
+
+`arg k` yields an offset relative to the start of the argument area (calldata
+byte 4), so the absolute index is that offset plus 4. The addition is `B256`
+arithmetic and wraps exactly as the compiled `ADD` does. -/
+def Sevm.tailPtr (e : Sevm) (k : B256) : B256 := Sevm.argWord e k + 4
+
+/-- The length argument `k`'s tail declares, read from the caller's calldata
+exactly as supplied. -/
+def Sevm.tailLen (e : Sevm) (k : B256) : B256 := Sevm.dataWord e (Sevm.tailPtr e k)
+
+/-- The payload `forwardArgTail k` copies: `tailLen` bytes starting one word
+past the length word. This is the `value` that `Rinst.runCore .calldatacopy`
+writes into memory. -/
+def Sevm.tailBytes (e : Sevm) (k : B256) : Bytes :=
+  e.data.sliceD (Sevm.tailPtr e k + 32).toNat (Sevm.tailLen e k).toNat 0
+
 def forwardArgTail (k lenWord : B256) : Line :=
   arg k ++                              -- off  (relative to calldata byte 4)
   pushB256 4 :: add ::                  -- p := 4 + off  (absolute: length word)
