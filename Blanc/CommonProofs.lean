@@ -68,6 +68,73 @@ lemma dispatchWith_inv {c k f}
         apply h3 (h0 hs h₁ h_pop) h_burn' h_run_f
     · apply htt' ⟨w, p⟩ rfl (h0 hs h₁ (Devm.popBurn_of_popBurn_of_pop h_pop h_burn)) h_run'
 
+-- Tree membership implies list membership. `dispatchWith_inv` puts `wf ∈ t` in
+-- hypothesis position, so a contract built with `ofSorted` needs to discharge
+-- its per-leaf obligation over its own *list* rather than over the balanced
+-- tree shape. Only the forward direction is needed.
+--
+-- The fuel bound is the lemma's content, not decoration: `build`'s two
+-- degenerate rows (`| _, [] => leaf 0 .rev` and `| 0, (x :: _ :: _) =>
+-- leaf x.fst x.snd`) both manufacture a leaf that need not be in the list.
+-- `xs ≠ []` kills the first; `xs.length ≤ n + 1` kills the second, because at
+-- fuel `0` the list then has length at most one and rows 1-2 fire instead.
+-- The bound survives the split at `k = (xs.length + 1) / 2` in both branches,
+-- which is what makes the induction go through.
+theorem DispatchTree.mem_of_mem_build :
+    ∀ {n : Nat} {xs : List (B256 × Func)} {wp : B256 × Func},
+      xs ≠ [] → xs.length ≤ n + 1 → wp ∈ DispatchTree.build n xs → wp ∈ xs := by
+  intro n
+  induction n with
+  | zero =>
+    intro xs wp h_ne h_len h_mem
+    rcases xs with _ | ⟨⟨w, p⟩, xs'⟩
+    · exact absurd rfl h_ne
+    · rcases xs' with _ | ⟨y, ys⟩
+      · have h : wp = (w, p) := h_mem
+        simp [h]
+      · simp only [List.length_cons] at h_len; omega
+  | succ n ih =>
+    intro xs wp h_ne h_len h_mem
+    rcases xs with _ | ⟨⟨w, p⟩, xs'⟩
+    · exact absurd rfl h_ne
+    · rcases xs' with _ | ⟨y, ys⟩
+      · have h : wp = (w, p) := h_mem
+        simp [h]
+      · have h_len' : ys.length ≤ n := by
+          simp only [List.length_cons] at h_len; omega
+        have h_split :
+            wp ∈ DispatchTree.build n
+                   (((w, p) :: y :: ys).take ((((w, p) :: y :: ys).length + 1) / 2)) ∨
+            wp ∈ DispatchTree.build n
+                   (((w, p) :: y :: ys).drop ((((w, p) :: y :: ys).length + 1) / 2)) := h_mem
+        have h_take_len :
+            (((w, p) :: y :: ys).take ((((w, p) :: y :: ys).length + 1) / 2)).length ≤ n + 1 := by
+          simp only [List.length_take, List.length_cons]; omega
+        have h_drop_len :
+            (((w, p) :: y :: ys).drop ((((w, p) :: y :: ys).length + 1) / 2)).length ≤ n + 1 := by
+          simp only [List.length_drop, List.length_cons]; omega
+        have h_take_ne :
+            ((w, p) :: y :: ys).take ((((w, p) :: y :: ys).length + 1) / 2) ≠ [] := by
+          intro hc
+          have hcl := congrArg List.length hc
+          simp only [List.length_take, List.length_cons, List.length_nil] at hcl
+          omega
+        have h_drop_ne :
+            ((w, p) :: y :: ys).drop ((((w, p) :: y :: ys).length + 1) / 2) ≠ [] := by
+          intro hc
+          have hcl := congrArg List.length hc
+          simp only [List.length_drop, List.length_cons, List.length_nil] at hcl
+          omega
+        rcases h_split with h | h
+        · exact List.mem_of_mem_take (ih h_take_ne h_take_len h)
+        · exact List.mem_of_mem_drop (ih h_drop_ne h_drop_len h)
+
+-- `ofSorted` passes fuel `xs.length`, so `mem_of_mem_build`'s side condition is
+-- the trivial `xs.length ≤ xs.length + 1`.
+theorem DispatchTree.mem_of_mem_ofSorted {xs : List (B256 × Func)} {wp : B256 × Func}
+    (h_ne : xs ≠ []) (h_mem : wp ∈ DispatchTree.ofSorted xs) : wp ∈ xs :=
+  DispatchTree.mem_of_mem_build h_ne (Nat.le_succ _) h_mem
+
 def ifOk {ε α} (π : α → Prop) : Except ε α → Prop
   | .error _ => True
   | .ok a => π a

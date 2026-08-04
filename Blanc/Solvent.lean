@@ -2136,7 +2136,17 @@ lemma weth_inv {sevm : Sevm} {s r}
       run_preserves_cond deposit deposit_preserves_solvent run cond'
     exact r_cond
   · intro e s r wf h_mem ⟨cond, ih⟩ h_run
-    rcases h_mem with (((h | h) | h) | (h | h)) | (((h | h) | h) | (h | h)) <;>
+    -- Tree membership to list membership, so the ten obligations below are read
+    -- off `wethFuncs` in its own order rather than off `build 10`'s split
+    -- arithmetic (10 -> 5+5, 5 -> 3+2, 3 -> 2+1, 2 -> 1+1), which the old
+    -- nesting transcribed by hand and which breaks on an eleventh function.
+    -- `wethFuncs ≠ []` holds by delta — it is a literal list. Do not reach for
+    -- `decide` here: deciding anything about these leaves forces the
+    -- `String.keccak` behind every `selector` and blows `maxRecDepth`.
+    have h_list : wf ∈ wethFuncs :=
+      DispatchTree.mem_of_mem_ofSorted (List.cons_ne_nil _ _) h_mem
+    simp only [wethFuncs, List.mem_cons, List.not_mem_nil, or_false] at h_list
+    rcases h_list with h | h | h | h | h | h | h | h | h | h <;>
       (cases h)
     · apply run_preserves_cond name name_preserves_solvent h_run cond
     · apply run_preserves_cond approve approve_preserves_solvent h_run cond
