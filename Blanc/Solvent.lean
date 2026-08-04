@@ -201,12 +201,6 @@ lemma Precond.state_eq {wa sevm devm devm'}
 
 
 
-lemma Line.preserves_solvent {e e' s l s' a}
-    (h_bal : Line.Inv Devm.getBal l) (h_stor : Line.Inv Devm.getStor l)
-    (h_sv : Devm.PreSolvent s a e) (h_run : Line.Run e' s l s') : Devm.PreSolvent s' a e := by
-  unfold Devm.PreSolvent; rw [← h_bal h_run, ← h_stor h_run]; exact h_sv
-
-
 
 syntax "simple_solvent" : tactic
 set_option hygiene false in
@@ -1939,86 +1933,33 @@ lemma run_preserves_cond (f : Func)
   · apply Func.preserves_nof run cond.nof
   · apply h_solv run cond.solvent
 
-lemma weth_inv {sevm : Sevm} {s r}
-    (cond : Precond sevm.currentTarget sevm s)
-    ( ih :
-      Exec.InvDepth sevm.depth sevm.currentTarget weth
-        (Precond sevm.currentTarget)
-        (Postcond sevm.currentTarget) ) :
-    Func.Run (weth.main :: weth.aux) sevm s (Func.call 0) r →
-    Postcond sevm.currentTarget sevm r := by
-  -- unwrap the initial `call 0` (this part does not exist in original proof in Solvent.lean)
-  intro run; cases run
-  rename (_ = _) => eq
-  rename (Func.Run _ _ _ _ _) => run
-  rename (Devm.Burn _ _) => burn
-  rename Devm => s₀
-  cases eq
-  have cond₀ : Precond sevm.currentTarget sevm s₀ :=
-    Precond.state_eq cond burn.state.symm
-  clear cond burn s
-  revert run
-  func_execute_with fsig
-  have cond₁ : Precond sevm.currentTarget sevm s₁ := by
-    refine' ⟨_, _, _⟩
-    · rw [← Line.of_inv Devm.getCode (by line_inv) h₁]; exact cond₀.code
-    · rw [← Line.of_inv Devm.getBal (by line_inv) h₁]; exact cond₀.nof
-    · apply Line.preserves_solvent _ _ cond₀.solvent h₁ <;> line_inv
-  clear cond₀
-  clear h₁
-  clear s₀
-  intro temp
-  apply
-    ( @dispatchWith_inv
-      (weth.main :: weth.aux) 1 deposit
-      (λ e s =>
-         Precond e.currentTarget e s ∧
-         Exec.InvDepth e.depth e.currentTarget weth (Precond e.currentTarget) (Postcond e.currentTarget) )
-      (λ e r => Postcond e.currentTarget e r)
-      ?_ ?_ rfl ?_ wethTree ?_ sevm s₁ r ⟨cond₁, ih⟩ temp )
-    <;> clear temp cond₁ ih r s₁ sevm
-  · intro e s x w s' s'' ⟨h_cond, h_ih⟩ h_run h_pop
-    refine' ⟨_, h_ih⟩
-    have h_run_state : s.state = s'.state := Line.of_inv Devm.state (by line_inv) h_run
-    rcases h_pop with ⟨_, _, _, _, _, _, _, _, _, _, _, h_pop_state, _⟩
-    apply Precond.state_eq h_cond
-    exact h_pop_state.symm.trans h_run_state.symm
-  · intro e s x w s' s'' ⟨h_cond, h_ih⟩ h_run h_pop
-    refine' ⟨_, h_ih⟩
-    have h_run_state : s.state = s'.state := Line.of_inv Devm.state (by line_inv) h_run
-    rcases h_pop with ⟨_, _, _, _, _, _, _, _, _, _, _, h_pop_state, _⟩
-    apply Precond.state_eq h_cond
-    exact h_pop_state.symm.trans h_run_state.symm
-  · intro e s s' r ⟨cond, ih⟩ burn run
-    have cond' : Precond e.currentTarget e s' := Precond.state_eq cond burn.state.symm
-    have r_cond : Postcond e.currentTarget e r :=
-      run_preserves_cond deposit deposit_preserves_solvent run cond'
-    exact r_cond
-  · intro e s r wf h_mem ⟨cond, ih⟩ h_run
-    -- Tree membership to list membership, so the ten obligations below are read
-    -- off `wethFuncs` in its own order rather than off `build 10`'s split
-    -- arithmetic (10 -> 5+5, 5 -> 3+2, 3 -> 2+1, 2 -> 1+1), which the old
-    -- nesting transcribed by hand and which breaks on an eleventh function.
-    -- `wethFuncs ≠ []` holds by delta — it is a literal list. Do not reach for
-    -- `decide` here: deciding anything about these leaves forces the
-    -- `String.keccak` behind every `selector` and blows `maxRecDepth`.
-    have h_list : wf ∈ wethFuncs :=
-      DispatchTree.mem_of_mem_ofSorted (List.cons_ne_nil _ _) h_mem
-    simp only [wethFuncs, List.mem_cons, List.not_mem_nil, or_false] at h_list
-    rcases h_list with h | h | h | h | h | h | h | h | h | h <;>
-      (cases h)
-    · apply run_preserves_cond name name_preserves_solvent h_run cond
-    · apply run_preserves_cond approve approve_preserves_solvent h_run cond
-    · apply run_preserves_cond totalSupply totalSupply_preserves_solvent h_run cond
-    · apply run_preserves_cond transferFrom transferFrom_preserves_solvent h_run cond
-    · constructor
-      · apply Func.preserves_nof h_run cond.nof
-      · apply withdraw_preserves_solvent cond ih h_run
-    · apply run_preserves_cond decimals decimals_preserves_solvent h_run cond
-    · apply run_preserves_cond balanceOf balanceOf_preserves_solvent h_run cond
-    · apply run_preserves_cond symbol symbol_preserves_solvent h_run cond
-    · apply run_preserves_cond transfer transfer_preserves_solvent h_run cond
-    · apply run_preserves_cond allowance allowance_preserves_solvent h_run cond
+/-- WETH's dispatch targets, in the form `ContractSpec.sound_of_dispatch`
+consumes.  `FuncSound` at `wethSpec` is exactly `Precond → Postcond` across the
+target's own run, once the frame's target is known to be the contract — so each
+storage-only target is `run_preserves_cond` at its `*_preserves_solvent` lemma
+and nothing more.  The deeper-frame induction hypothesis is discarded here;
+`withdraw` is the only target that consumes it. -/
+lemma wethSpec_funcSound {wa : Adr} (f : Func)
+    ( h_solv :
+      ∀ {sevm : Sevm} {s r : Devm},
+        Func.Run (weth.main :: weth.aux) sevm s f r →
+        Devm.PreSolvent s sevm.currentTarget sevm →
+        Devm.PostSolvent r sevm.currentTarget ) :
+    wethSpec.FuncSound wa weth.aux f := by
+  intro sevm s r h_ct h_pre _ h_run
+  subst h_ct
+  exact wethSpec_post_iff.mpr
+    (run_preserves_cond f h_solv h_run (wethSpec_pre_iff.mp h_pre))
+
+/-- `withdraw` sends ETH out, so it re-enters the contract and is the one
+target that consumes `FuncSound`'s deeper-frame induction hypothesis. -/
+lemma wethSpec_funcSound_withdraw {wa : Adr} :
+    wethSpec.FuncSound wa weth.aux withdraw := by
+  intro sevm s r h_ct h_pre ih h_run
+  subst h_ct
+  simp only [wethSpec_prog_eq, wethSpec_pre_eq, wethSpec_post_eq] at ih
+  refine wethSpec_post_iff.mpr ⟨Func.preserves_nof h_run (wethSpec_pre_iff.mp h_pre).nof, ?_⟩
+  exact withdraw_preserves_solvent (wethSpec_pre_iff.mp h_pre) ih h_run
 
 
 
@@ -2037,16 +1978,32 @@ lemma weth_inv {sevm : Sevm} {s r}
 
 
 /-- WETH's own frame-level obligation — the one input `ContractSpec.preserves_inv`
-cannot supply.  This is the original first bullet of `weth_preserves_solvent`,
-unchanged. -/
+cannot supply.  The statement is the original first bullet of
+`weth_preserves_solvent`, unchanged; the proof is now nothing but WETH's eleven
+per-function obligations handed to `ContractSpec.sound_of_dispatch`, which owns
+the shared dispatcher reasoning.  Nothing here names the program's shape: `k`,
+the function list and the aux context are read off `wethSpec.prog` by
+unification, which is why both shape side conditions are `rfl`. -/
 theorem wethSpec_sound (wa : Adr) : wethSpec.Sound wa := by
-  simp only [ContractSpec.Sound, wethSpec_prog_eq, wethSpec_pre_eq, wethSpec_post_eq]
-  intro sevm pre post run eq; rw [← eq]
-  dsimp [Prog.Run] at run
-  intro ih cond; apply weth_inv cond _ run
-  intro pc' sevm' devm' exn'
-  cases exn'; {simp only [ifOk, implies_true]}
-  apply ih
+  refine ContractSpec.sound_of_dispatch (k := 1) (funcs := wethFuncs)
+    (aux := weth.aux) (fallback := deposit) rfl (List.cons_ne_nil _ _) rfl ?_ ?_
+  · intro wf h_mem
+    -- Drive the membership unfolding with `List.mem_cons`, never with `decide`:
+    -- deciding anything about these leaves forces the `String.keccak` behind
+    -- every `selector` and blows `maxRecDepth`.
+    simp only [wethFuncs, List.mem_cons, List.not_mem_nil, or_false] at h_mem
+    rcases h_mem with h | h | h | h | h | h | h | h | h | h <;> (cases h)
+    · exact wethSpec_funcSound name name_preserves_solvent
+    · exact wethSpec_funcSound approve approve_preserves_solvent
+    · exact wethSpec_funcSound totalSupply totalSupply_preserves_solvent
+    · exact wethSpec_funcSound transferFrom transferFrom_preserves_solvent
+    · exact wethSpec_funcSound_withdraw
+    · exact wethSpec_funcSound decimals decimals_preserves_solvent
+    · exact wethSpec_funcSound balanceOf balanceOf_preserves_solvent
+    · exact wethSpec_funcSound symbol symbol_preserves_solvent
+    · exact wethSpec_funcSound transfer transfer_preserves_solvent
+    · exact wethSpec_funcSound allowance allowance_preserves_solvent
+  · exact wethSpec_funcSound deposit deposit_preserves_solvent
 
 theorem wethSpec_preserves (wa : Adr) : wethSpec.Preserves wa :=
   wethSpec.preserves_inv wa (wethSpec_sound wa)

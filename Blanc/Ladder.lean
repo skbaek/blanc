@@ -1827,12 +1827,18 @@ dispatcher hands it and the induction hypothesis for deeper frames.  That
 induction hypothesis is part of the entry condition and is not optional — a
 target that re-enters the contract (WETH's `withdraw`) genuinely consumes it.
 
+The frame is executing the contract itself (`sevm.currentTarget = ca`); this is
+`Sound`'s own hypothesis, carried down to the targets.  It is what lets a
+contract state its per-function lemmas at `sevm.currentTarget`, as WETH's ten
+do, instead of restating them at an abstract address.
+
 Stated relative to the program's aux context rather than to `c.prog.aux`,
 because `Func.call` indices are positional: a lemma relating
 `FuncSound c ca aux f` to `FuncSound c' ca (aux ++ extra) f` is what would make
 an extension's obligations reusable, and it wants `aux` in hand. -/
 def FuncSound (c : ContractSpec) (ca : Adr) (aux : List Func) (f : Func) : Prop :=
   ∀ {sevm : Sevm} {s r : Devm},
+    sevm.currentTarget = ca →
     c.Pre ca sevm s →
     Exec.InvDepth sevm.depth ca c.prog (c.Pre ca) (c.Post ca) →
     Func.Run (c.prog.main :: aux) sevm s f r →
@@ -1886,29 +1892,32 @@ theorem sound_of_dispatch {c : ContractSpec} {ca : Adr} {k : Nat}
   apply
     ( @dispatchWith_inv
         (Func.mainWith k (DispatchTree.ofSorted funcs) :: aux) k fallback
-        (fun e s => c.Pre ca e s ∧ Exec.InvDepth e.depth ca c.prog (c.Pre ca) (c.Post ca))
+        ( fun e s =>
+            e.currentTarget = ca ∧
+            c.Pre ca e s ∧
+            Exec.InvDepth e.depth ca c.prog (c.Pre ca) (c.Post ca) )
         (fun e r => c.Post ca e r)
-        ?_ ?_ h_fb ?_ (DispatchTree.ofSorted funcs) ?_ sevm s₁ post ⟨h_pre₁, ih'⟩ run₁ )
+        ?_ ?_ h_fb ?_ (DispatchTree.ofSorted funcs) ?_ sevm s₁ post ⟨h_ca, h_pre₁, ih'⟩ run₁ )
   -- the two scratch-line obligations: the dispatcher's comparisons move the
   -- stack and nothing else, so the precondition survives unchanged.
-  · intro e s x w s' s'' ⟨hp, hih⟩ hrun hpop
-    refine ⟨?_, hih⟩
+  · intro e s x w s' s'' ⟨h_ct, hp, hih⟩ hrun hpop
+    refine ⟨h_ct, ?_, hih⟩
     have h_state : s.state = s'.state := Line.of_inv Devm.state (by line_inv) hrun
     rcases hpop with ⟨_, _, _, _, _, _, _, _, _, _, _, h_pop_state, _⟩
     exact hp.state_eq (h_pop_state.symm.trans h_state.symm)
-  · intro e s x w s' s'' ⟨hp, hih⟩ hrun hpop
-    refine ⟨?_, hih⟩
+  · intro e s x w s' s'' ⟨h_ct, hp, hih⟩ hrun hpop
+    refine ⟨h_ct, ?_, hih⟩
     have h_state : s.state = s'.state := Line.of_inv Devm.state (by line_inv) hrun
     rcases hpop with ⟨_, _, _, _, _, _, _, _, _, _, _, h_pop_state, _⟩
     exact hp.state_eq (h_pop_state.symm.trans h_state.symm)
   -- the fallback, reached through one more burn
-  · intro e s s' r ⟨hp, hih⟩ hburn hrun
+  · intro e s s' r ⟨h_ct, hp, hih⟩ hburn hrun
     rw [h_fs] at hrun
-    exact h_fall (hp.state_eq hburn.state.symm) hih hrun
+    exact h_fall h_ct (hp.state_eq hburn.state.symm) hih hrun
   -- and the dispatch targets, over the contract's list rather than its tree
-  · intro e s r wf h_mem ⟨hp, hih⟩ hrun
+  · intro e s r wf h_mem ⟨h_ct, hp, hih⟩ hrun
     rw [h_fs] at hrun
-    exact h_funcs wf (DispatchTree.mem_of_mem_ofSorted h_ne h_mem) hp hih hrun
+    exact h_funcs wf (DispatchTree.mem_of_mem_ofSorted h_ne h_mem) h_ct hp hih hrun
 
 
 
