@@ -390,6 +390,31 @@ theorem flashFee_preserves_conserved {sevm : Sevm} {s r : Devm}
     (h : Stor.Conserved (Devm.getStor s sevm.currentTarget)) :
     Stor.Conserved (Devm.getStor r sevm.currentTarget) := by simple_conserved
 
+/-! ## The three ERC-20 writers
+
+`transfer`, `approve` and `transferFrom`: everything fmint can be asked to do
+that writes storage without transferring control out of the frame.
+(`flashLoan`, which does, is the twelfth obligation and is proved separately.)
+
+Two storage regions are in play and the invariant is an *equality*, so each walk
+owes two facts rather than WETH's one: what happened to Σ, and that the supply
+slot did not move.  The second is `Stor.AgreeOffAdr` (`Blanc/Ladder.lean`) at
+`Fmint.supplySlot`, which is available because `supplySlot` is not
+address-shaped — the same bit fact the whole layer rests on. -/
+
+/-- `transfer` moves value between two address-shaped keys and touches nothing
+else, so Σ is preserved and the supply slot is untouched.
+
+This is Step 1's hoist paying for itself: `transfer` is the shared
+`Blanc.transfer`, `transfer_of_transfer` is `fs`-quantified and lives in
+`Blanc/Ladder.lean`, and nothing about fmint has to be re-walked. -/
+theorem transfer_preserves_conserved {sevm : Sevm} {s r : Devm}
+    (run : Func.Run (Fmint.fmint.main :: Fmint.fmintAux) sevm s transfer r)
+    (h : Stor.Conserved (Devm.getStor s sevm.currentTarget)) :
+    Stor.Conserved (Devm.getStor r sevm.currentTarget) := by
+  rcases transfer_of_transfer run with ⟨⟨_, _, _, h_tr⟩, h_off⟩
+  exact h.transfer h_tr (h_off _ Fmint.supplySlot_not_validAdr).symm
+
 /-- Headline 1 of `flashmint-proposal.md`, as a statement.  This is the shape
 `weth_preserves_solvent` has, with the record substituted; it is asserted of
 nothing and proved nowhere. -/

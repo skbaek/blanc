@@ -48,6 +48,33 @@ def Transfer
     Decrease kd v b c ∧
     Increase ki v c d
 
+/-- Two storage maps that agree away from the address-shaped keys.
+
+The complement of `Stor.rest`, which sees the address-shaped keys and nothing
+else.  `Increase` / `Decrease` / `Transfer` say what a balance write does to the
+keys Σ sums over; `AgreeOffAdr` is the other half of the same characterization —
+that *nothing else* moved.  A contract whose invariant mentions a fixed
+non-address slot needs both halves, and the ERC-20 writers supply both because
+every key they write is address-shaped or explicitly guarded. -/
+def Stor.AgreeOffAdr (s s' : Stor) : Prop :=
+  ∀ k : B256, ¬ ValidAdr k → s.get k = s'.get k
+
+theorem Stor.AgreeOffAdr.rfl {s : Stor} : Stor.AgreeOffAdr s s := fun _ _ => Eq.refl _
+
+theorem Stor.AgreeOffAdr.of_eq {s s' : Stor} (h : s = s') : Stor.AgreeOffAdr s s' :=
+  fun _ _ => congrFun (congrArg Stor.get h) _
+
+theorem Stor.AgreeOffAdr.trans {s s' s'' : Stor}
+    (h : Stor.AgreeOffAdr s s') (h' : Stor.AgreeOffAdr s' s'') : Stor.AgreeOffAdr s s'' :=
+  fun k hk => (h k hk).trans (h' k hk)
+
+/-- A write at an address-shaped key is invisible off the address-shaped keys. -/
+theorem Stor.AgreeOffAdr.set {s : Stor} {k v : B256} (h : ValidAdr k) :
+    Stor.AgreeOffAdr s (s.set k v) := by
+  intro k' hk'
+  refine (Stor.get_set_ne _ (fun hc => hk' ?_) _).symm
+  exact hc ▸ h
+
 lemma frel_of_frel {ξ υ} {x : ξ} {r s : υ → υ → Prop} {f g : ξ → υ}
     (h : r (f x) (g x) → s (f x) (g x)) (h' : Frel x r f g) : Frel x s f g := by
   intro x'; constructor <;> intro hx
@@ -774,7 +801,7 @@ section
 
 open Jaune.Ninst Ninst
 
-/-! ## The shared ERC-20 writers, and their effect on `Stor.rest`
+/-! ## The shared ERC-20 writers, and their effect on storage
 
 Hoisted out of `Blanc/Solvent.lean` byte-identically with the rest of the
 shared ERC-20 proof layer (`Blanc/CommonProofs.lean`, *The shared ERC-20 proof
@@ -783,13 +810,22 @@ defined below `CommonProofs` and above them: `incrAt_of_incrWbal`,
 `of_transferFromUpdateSbal` and `transfer_of_transfer` are stated in terms of
 the `Increase`/`Decrease`/`Transfer` algebra at the top of this module, and all
 four need the `Linst.Hinv` instances immediately above to discharge their
-`func_inv` side goals. Nothing in them mentions a contract. -/
+`func_inv` side goals. Nothing in them mentions a contract.
+
+Each of the three effect lemmas reports **both** halves of what its write does:
+the `Increase`/`Decrease`/`Transfer` fact about the keys `Stor.rest` sums over,
+and a `Stor.AgreeOffAdr` fact saying that nothing outside them moved.  A
+solvency-style invariant needs only the first; an invariant that mentions a
+fixed non-address slot — `Blanc/Conserved.lean`'s supply slot — needs the
+second as well, and it is free here because every key these writers touch is
+address-shaped by an already-discharged guard. -/
 
 lemma transfer_preserves_bal : Func.Inv Devm.getBal Devm.getBal transfer := by func_inv
 
 lemma incrAt_of_incrWbal {sevm : Sevm} {s s' : Devm} {wad dst} (h_dst : ValidAdr dst)
     (h_run : Line.Run sevm s incrWbal s') (h_stk : [wad, dst] <<+ s.stack) :
-    Increase dst.toAdr wad (Stor.rest (Devm.getStor s sevm.currentTarget)) (Stor.rest (Devm.getStor s' sevm.currentTarget)) := by
+    Increase dst.toAdr wad (Stor.rest (Devm.getStor s sevm.currentTarget)) (Stor.rest (Devm.getStor s' sevm.currentTarget)) ∧
+      Stor.AgreeOffAdr (Devm.getStor s sevm.currentTarget) (Devm.getStor s' sevm.currentTarget) := by
   simp only [incrWbal] at h_run
   rcases of_run_append [dup 1, sload, add, swap 0] h_run with ⟨sm, h_pre, h_post⟩
   clear h_run
@@ -831,25 +867,30 @@ lemma incrAt_of_incrWbal {sevm : Sevm} {s s' : Devm} {wad dst} (h_dst : ValidAdr
   have h_dbal' : dbal = (Devm.getStor s sevm.currentTarget).get dst := by
     rw [h_dbal]; show (Devm.getStor s1 sevm.currentTarget).get dst = _; rw [hs1]
   -- assemble the Increase
-  intro a
-  constructor
-  · intro h_eq
-    subst h_eq
-    simp only [Stor.rest, Function.comp_apply]
-    rw [toB256_toAdr h_dst, h_set, Stor.get_set_self, ← h_dbal']
-  · intro h_ne
-    simp only [Stor.rest, Function.comp_apply]
-    rw [h_set]
-    have h_key_ne : a.toB256 ≠ dst := by
-      intro hc; apply h_ne; rw [← toAdr_toB256 a, hc]
-    rw [Stor.get_set_ne _ h_key_ne.symm, h_stor]
+  refine ⟨?_, ?_⟩
+  · intro a
+    constructor
+    · intro h_eq
+      subst h_eq
+      simp only [Stor.rest, Function.comp_apply]
+      rw [toB256_toAdr h_dst, h_set, Stor.get_set_self, ← h_dbal']
+    · intro h_ne
+      simp only [Stor.rest, Function.comp_apply]
+      rw [h_set]
+      have h_key_ne : a.toB256 ≠ dst := by
+        intro hc; apply h_ne; rw [← toAdr_toB256 a, hc]
+      rw [Stor.get_set_ne _ h_key_ne.symm, h_stor]
+  -- and the half that says nothing off the address-shaped keys moved
+  · rw [h_set, congr_fun h_stor sevm.currentTarget]
+    exact Stor.AgreeOffAdr.set h_dst
 
 lemma of_transferFromUpdateSbal {sevm : Sevm} {s₀ sₙ : Devm} {sbal wad src}
     (h_src : ValidAdr src) (h_sbal : sbal = (Devm.getStor s₀ sevm.currentTarget).get src)
     (h_le : wad ≤ sbal) (hp₀ : [sbal, wad, wad, src] <<+ s₀.stack) :
     Line.Run sevm s₀ transferFromUpdateSbal sₙ →
     ( Decrease src.toAdr wad (Stor.rest (Devm.getStor s₀ sevm.currentTarget)) (Stor.rest (Devm.getStor sₙ sevm.currentTarget)) ∧
-      wad ≤ Stor.rest (Devm.getStor s₀ sevm.currentTarget) src.toAdr ) := by
+      wad ≤ Stor.rest (Devm.getStor s₀ sevm.currentTarget) src.toAdr ∧
+      Stor.AgreeOffAdr (Devm.getStor s₀ sevm.currentTarget) (Devm.getStor sₙ sevm.currentTarget) ) := by
   intro h_run
   simp only [transferFromUpdateSbal] at h_run
   rcases of_run_append [sub, dup 2] h_run with ⟨sm, h_pre, h_post⟩
@@ -877,7 +918,7 @@ lemma of_transferFromUpdateSbal {sevm : Sevm} {s₀ sₙ : Devm} {sbal wad src}
   have h_set : Devm.getStor sₙ sevm.currentTarget
       = (Devm.getStor sm sevm.currentTarget).set src (sbal - wad) :=
     sstore_getStor_set r_sstore hp2
-  constructor
+  refine ⟨?_, ?_, ?_⟩
   · intro a
     constructor
     · intro h_eq
@@ -892,12 +933,17 @@ lemma of_transferFromUpdateSbal {sevm : Sevm} {s₀ sₙ : Devm} {sbal wad src}
       rw [Stor.get_set_ne _ h_key_ne.symm, h_stor]
   · simp only [Stor.rest, Function.comp_apply]
     rw [toB256_toAdr h_src, ← h_sbal]; exact h_le
+  -- the source write lands on an address-shaped key
+  · rw [h_set, congr_fun h_stor sevm.currentTarget]
+    exact Stor.AgreeOffAdr.set h_src
 
 lemma transfer_of_transfer {fs : List Func} {sevm : Sevm} {s r : Devm} :
     Func.Run fs sevm s transfer r →
-    ∃ (x : B256) (a a' : Adr),
+    (∃ (x : B256) (a a' : Adr),
       Transfer (Stor.rest (Devm.getStor s sevm.currentTarget)) a x a'
-        (Stor.rest (Devm.getStor r sevm.currentTarget)) := by
+        (Stor.rest (Devm.getStor r sevm.currentTarget))) ∧
+    Stor.AgreeOffAdr (Devm.getStor s sevm.currentTarget)
+      (Devm.getStor r sevm.currentTarget) := by
   intro h_run
   simp only [transfer] at h_run
   -- transferTestDst : [dst_invalid?, dst]
@@ -947,14 +993,13 @@ lemma transfer_of_transfer {fs : List Func} {sevm : Sevm} {s r : Devm} :
   clear hp4
   -- incrWbal : increase destination balance
   rcases of_run_prepend incrWbal _ h_run with ⟨s6, h6, h_run⟩
-  have h_incr : Increase dst.toAdr wad (Stor.rest (Devm.getStor s5 sevm.currentTarget))
-      (Stor.rest (Devm.getStor s6 sevm.currentTarget)) :=
-    incrAt_of_incrWbal h_dst_valid h6 hp5
+  rcases incrAt_of_incrWbal h_dst_valid h6 hp5 with ⟨h_incr, h_off6⟩
   -- logTransfer, returnTrue : do not touch storage
   have h_rest : Devm.getStor s6 sevm.currentTarget = Devm.getStor r sevm.currentTarget :=
     congr_fun (Func.of_inv Devm.getStor Devm.getStor (by func_inv) h_run) sevm.currentTarget
   -- assemble the Transfer
-  refine ⟨wad, caller.toAdr, dst.toAdr, ?_, (Stor.rest (Devm.getStor s5 sevm.currentTarget)), ?_, ?_⟩
+  refine ⟨⟨wad, caller.toAdr, dst.toAdr, ?_,
+    (Stor.rest (Devm.getStor s5 sevm.currentTarget)), ?_, ?_⟩, ?_⟩
   · show wad ≤ (Stor.rest (Devm.getStor s sevm.currentTarget)) caller.toAdr
     simp only [Stor.rest, Function.comp_apply]
     rw [toB256_toAdr h_caller, congr_fun hg3 sevm.currentTarget]
@@ -972,6 +1017,13 @@ lemma transfer_of_transfer {fs : List Func} {sevm : Sevm} {s r : Devm} :
         intro hc; apply h_ne; rw [← toAdr_toB256 a, hc]
       rw [Stor.get_set_ne _ h_key_ne.symm, congr_fun hg4 sevm.currentTarget]
   · rw [← h_rest]; exact h_incr
+  -- both balance writes land on address-shaped keys, so nothing else moved
+  · refine Stor.AgreeOffAdr.trans
+      (Stor.AgreeOffAdr.of_eq (congr_fun hg4 sevm.currentTarget)) ?_
+    refine Stor.AgreeOffAdr.trans ?_
+      (h_off6.trans (Stor.AgreeOffAdr.of_eq h_rest))
+    rw [h_set]
+    exact Stor.AgreeOffAdr.set h_caller
 
 end
 

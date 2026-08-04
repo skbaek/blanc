@@ -779,7 +779,7 @@ lemma transfer_of_transferFrom {fs : List Func} {sevm : Sevm} {s r : Devm} :
     rw [h_sbal]
     show (Devm.getStor a7 sevm.currentTarget).get src = _
     rw [congr_fun (hg7.symm.trans hg12) sevm.currentTarget]
-  rcases of_transferFromUpdateSbal h_src h_sbal' h_le hs12 h13 with ⟨h_dec, h_le'⟩
+  rcases of_transferFromUpdateSbal h_src h_sbal' h_le hs12 h13 with ⟨h_dec, h_le', -⟩
   have hs13 : [wad, src] <<+ a13.stack := by generalize_line_prefix
   clear h13 hs12 h_sbal h_sbal' h_le
   -- arg 1 : push dst
@@ -842,7 +842,7 @@ lemma transfer_of_transferFrom {fs : List Func} {sevm : Sevm} {s r : Devm} :
   rcases of_run_prepend incrWbal _ h_run with ⟨a20, h20, h_run⟩
   have h_incr : Increase dst.toAdr wad (Stor.rest (Devm.getStor a19 sevm.currentTarget))
       (Stor.rest (Devm.getStor a20 sevm.currentTarget)) :=
-    incrAt_of_incrWbal h_dst h20 (pref_trans ⟨[dst, wad, src], rfl⟩ hs19)
+    (incrAt_of_incrWbal h_dst h20 (pref_trans ⟨[dst, wad, src], rfl⟩ hs19)).left
   have hs20 : [dst, wad, src] <<+ a20.stack := by
     rcases of_run_append [dup 1, sload, add, swap 0] h20 with ⟨am, ham, hend⟩
     rcases Line.of_run_cons ham with ⟨b1, rd1, ham⟩
@@ -1388,7 +1388,7 @@ lemma transfer_preserves_solvent {sevm : Sevm} {s r : Devm}
     (run : Func.Run (weth.main :: weth.aux) sevm s transfer r)
     (h_sv : Devm.PreSolvent s sevm.currentTarget sevm) :
     Devm.PostSolvent r sevm.currentTarget := by
-  rcases transfer_of_transfer run with ⟨x, a, a', h_di⟩
+  rcases transfer_of_transfer run with ⟨⟨x, a, a', h_di⟩, -⟩
   refine result_solvent_of_balSum_eq h_sv ?_ ?_
   · exact transfer_preserves_sum (nof_of_solvent h_sv) h_di
   · exact congr_fun (Func.of_inv Devm.getBal Devm.getBal transfer_preserves_bal run)
