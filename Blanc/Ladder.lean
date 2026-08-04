@@ -1071,6 +1071,11 @@ lemma accessDelegation_state {devm : Devm} {adr : Adr} :
   dsimp only [accessDelegation]
   cases getDelegatedCodeAddress (devm.state.getCode adr) <;> rfl
 
+lemma accessDelegation_stack {devm : Devm} {adr : Adr} :
+    (accessDelegation devm adr).2.2.2.2.stack = devm.stack := by
+  dsimp only [accessDelegation]
+  cases getDelegatedCodeAddress (devm.state.getCode adr) <;> rfl
+
 lemma accessDelegation_code_of_not {devm : Devm} {adr : Adr}
     (h : ¬ isValidDelegation (devm.state.getCode adr)) :
     (accessDelegation devm adr).2.2.1 = devm.state.getCode adr := by

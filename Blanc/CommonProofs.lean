@@ -4343,6 +4343,34 @@ lemma of_run_retdatacopy {e : Sevm} {s s' : Devm} (h : Ninst.Run e s retdatacopy
     rw [← hb.stack]
     exact hp
 
+/-- On the successful path the CALL-family return pushes the status flag onto
+the parent's stack; incorporating the child and the memory write leave the
+stack alone.  The stack-side companion of `Resume.call_state`, needed by a
+caller that continues executing after the call returns.  It lives here, below
+`Devm.push_of_push`, rather than beside its `state` sibling. -/
+lemma Resume.call_stack {parent child : Devm} {oi os : Nat} {sf : Devm}
+    (h : (Resume.call parent oi os).run (.ok child) = .ok sf) :
+    ∃ b, sf.stack = b :: parent.stack := by
+  have key : ∀ d : Devm, d.stack = parent.stack → ∀ v : B256,
+      (Devm.push v d >>= fun d' =>
+        (.ok (d'.memWrite oi (child.output.take os)) : Execution)) = .ok sf →
+      ∃ b, sf.stack = b :: parent.stack := by
+    intro d hd v hh
+    rcases hp : Devm.push v d with e | evm2 <;> rw [hp] at hh
+    · cases hh
+    · injection hh with hh
+      subst hh
+      refine ⟨v, ?_⟩
+      have h_push := (Devm.push_of_push hp).stack
+      show evm2.stack = _
+      rw [h_push, hd]
+      rfl
+  unfold Resume.run liftToExecution at h
+  dsimp only [bind, Except.bind] at h
+  split at h
+  · exact key (incorporateChildOnError parent child child.output) rfl 0 h
+  · exact key (incorporateChildOnSuccess parent child child.output) rfl 1 h
+
 lemma Stack.swapCore_of_swap {n} {xxs yys : Stack} (h : Swap n xxs yys) :
     ∃ x y xs ys, xxs = x :: xs ∧ yys = y :: ys ∧ SwapCore x y n xs ys := by
   cases xxs; cases h; cases yys; cases h; refine ⟨_, _, _, _, rfl, rfl, h⟩
@@ -6708,6 +6736,14 @@ lemma toB256_toAdr {w : B256} :
     ValidAdr w → w.toAdr.toB256 = w := by
   intro h; rcases h with ⟨a, ha⟩;
   rw [← ha, toAdr_toB256]
+
+lemma pref_cons {α} {x : α} {xs ys : List α}
+    (h : xs <<+ ys) : (x :: xs) <<+ (x :: ys) := by
+  rcases h with ⟨t, h⟩
+  refine ⟨t, ?_⟩
+  simp only [Split] at h ⊢
+  rw [h]
+  rfl
 
 lemma cons_pref_cons_inv {α} {x : α} {xs ys : List α} (h : (x :: xs) <<+ (x :: ys)) : xs <<+ ys := by
   rcases h with ⟨zs, h⟩
