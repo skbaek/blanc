@@ -135,6 +135,120 @@ theorem DispatchTree.mem_of_mem_ofSorted {xs : List (B256 × Func)} {wp : B256 �
     (h_ne : xs ≠ []) (h_mem : wp ∈ DispatchTree.ofSorted xs) : wp ∈ xs :=
   DispatchTree.mem_of_mem_build h_ne (Nat.le_succ _) h_mem
 
+/-! ### The `sorted` order API
+
+`DispatchTree.sorted` had no lemmas before this block: its only consumers were
+the two contract-level `decide +kernel` facts, because `sound_of_dispatch`
+deliberately dropped sortedness — it governs reachability, not safety.  The
+reachability theorem (`reach_of_dispatchWith`, further down with the
+run-level machinery it needs) is where sortedness finally becomes
+load-bearing, and these are the order facts it consumes.  Everything here is
+abstract in the signature words — nothing forces a `String.keccak`
+(fixed decision 3 of the arc that added this; see `DispatchTree.build`'s note
+on why the leaves must stay opaque). -/
+
+/-- The tail of a sorted list is sorted. -/
+lemma DispatchTree.sorted_of_sorted_cons {x : B256 × Func} {l : List (B256 × Func)}
+    (h : DispatchTree.sorted (x :: l) = true) : DispatchTree.sorted l = true := by
+  cases l with
+  | nil => rfl
+  | cons y l =>
+    simp only [DispatchTree.sorted, Bool.and_eq_true] at h
+    exact h.right
+
+/-- In a sorted list, the head's signature is strictly below every later
+entry's. -/
+lemma DispatchTree.fst_lt_of_sorted_cons {x wp : B256 × Func} {l : List (B256 × Func)}
+    (h : DispatchTree.sorted (x :: l) = true) (h_mem : wp ∈ l) : x.fst < wp.fst := by
+  induction l generalizing x with
+  | nil => cases h_mem
+  | cons y l ih =>
+    simp only [DispatchTree.sorted, Bool.and_eq_true, decide_eq_true_eq] at h
+    rcases List.mem_cons.mp h_mem with h_eq | h_mem'
+    · rw [h_eq]; exact h.left
+    · exact B256.lt_of_toNat_lt_toNat
+        (Nat.lt_trans (B256.toNat_lt_toNat h.left)
+          (B256.toNat_lt_toNat (ih h.right h_mem')))
+
+/-- Head-minimality: in a sorted list the head's signature is a lower bound. -/
+lemma DispatchTree.fst_le_of_sorted_mem {x wp : B256 × Func} {l : List (B256 × Func)}
+    (h : DispatchTree.sorted (x :: l) = true) (h_mem : wp ∈ x :: l) :
+    x.fst ≤ wp.fst := by
+  rcases List.mem_cons.mp h_mem with h_eq | h_mem'
+  · rw [h_eq]
+  · exact B256.le_of_lt (DispatchTree.fst_lt_of_sorted_cons h h_mem')
+
+/-- Sortedness restricts to a prefix. -/
+lemma DispatchTree.sorted_append_left {l₁ l₂ : List (B256 × Func)}
+    (h : DispatchTree.sorted (l₁ ++ l₂) = true) : DispatchTree.sorted l₁ = true := by
+  induction l₁ with
+  | nil => rfl
+  | cons x l₁ ih =>
+    cases l₁ with
+    | nil => rfl
+    | cons y l =>
+      simp only [List.cons_append, DispatchTree.sorted, Bool.and_eq_true,
+        decide_eq_true_eq] at h ⊢
+      exact ⟨h.left, ih h.right⟩
+
+/-- Sortedness restricts to a suffix. -/
+lemma DispatchTree.sorted_append_right {l₁ l₂ : List (B256 × Func)}
+    (h : DispatchTree.sorted (l₁ ++ l₂) = true) : DispatchTree.sorted l₂ = true := by
+  induction l₁ with
+  | nil => exact h
+  | cons x l₁ ih =>
+    exact ih (DispatchTree.sorted_of_sorted_cons
+      (show DispatchTree.sorted (x :: (l₁ ++ l₂)) = true from h))
+
+/-- The cross bound: in a sorted concatenation, every left signature is
+strictly below every right signature.  `DispatchTree.build` splits by
+`List.take`/`drop` and compares nothing, so this — through `take_append_drop` —
+is the only link between list order and the shape `dispatchWith`'s binary
+search runs on. -/
+lemma DispatchTree.fst_lt_of_sorted_append {l₁ l₂ : List (B256 × Func)}
+    {wp wq : B256 × Func} (h : DispatchTree.sorted (l₁ ++ l₂) = true)
+    (h₁ : wp ∈ l₁) (h₂ : wq ∈ l₂) : wp.fst < wq.fst := by
+  induction l₁ with
+  | nil => cases h₁
+  | cons x l₁ ih =>
+    rcases List.mem_cons.mp h₁ with h_eq | h_mem
+    · subst h_eq
+      exact DispatchTree.fst_lt_of_sorted_cons
+        (show DispatchTree.sorted (wp :: (l₁ ++ l₂)) = true from h)
+        (List.mem_append_right _ h₂)
+    · exact ih (DispatchTree.sorted_of_sorted_cons
+        (show DispatchTree.sorted (x :: (l₁ ++ l₂)) = true from h)) h_mem
+
+/-- `leftmostFsig` of a built tree is the head signature of its list: `build`
+always sends the head into the left subtree, because the split point
+`(length + 1) / 2` is at least one on a list of two or more.  This is what
+lets a fork's comparison word be named from the *list* while the proof stays
+abstract in it. -/
+lemma DispatchTree.leftmostFsig_build :
+    ∀ {n : Nat} {x : B256 × Func} {l : List (B256 × Func)},
+      leftmostFsig (DispatchTree.build n (x :: l)) = x.fst := by
+  intro n
+  induction n with
+  | zero =>
+    intro x l
+    rcases x with ⟨w, p⟩
+    cases l with
+    | nil => rfl
+    | cons y l => rfl
+  | succ n ih =>
+    intro x l
+    rcases x with ⟨w, p⟩
+    cases l with
+    | nil => rfl
+    | cons y l =>
+      show leftmostFsig
+        (DispatchTree.build n
+          (((w, p) :: y :: l).take ((((w, p) :: y :: l).length + 1) / 2))) = _
+      obtain ⟨m, h_m⟩ : ∃ m, (((w, p) :: y :: l).length + 1) / 2 = m + 1 :=
+        ⟨(l.length + 1) / 2, by simp only [List.length_cons]; omega⟩
+      rw [h_m, List.take_succ_cons]
+      exact ih
+
 def ifOk {ε α} (π : α → Prop) : Except ε α → Prop
   | .error _ => True
   | .ok a => π a
@@ -5303,6 +5417,196 @@ instance : Ninst.Hinv Devm.state (Ninst.reg Rinst.gt) := ⟨by
         rcases h_push with ⟨_, _, _, _, _, _, _, _, _, _, _, hs3, _⟩
         exact hs1.trans (hs2.trans hs3)
 ⟩
+
+
+/-! ### Dispatch reachability
+
+The converse direction of `dispatchWith_inv`.  That lemma transfers a property
+through the dispatcher precisely by never knowing which leaf ran; the theorems
+here say which leaf runs, and sortedness — consumed for the first time in the
+repository — is what supplies the selector→leaf link `dispatchWith_inv`'s
+freely-quantified comparisons are deliberately blind to.
+
+**Everything is hypothesis-position.**  A dispatcher run already in hand is
+factored through the selector's entry; nothing here asserts that any run
+exists, and no consumer may read `reach_of_dispatchWith` as "the selector is
+present, therefore its function will be called" — that is a liveness claim and
+is not available in this semantics.
+
+The proofs reason from the abstract `sorted` hypothesis and never force a
+signature word, so a concrete contract's `String.keccak` selectors stay
+unevaluated; at instantiation, sortedness is supplied by the contract's
+`decide +kernel` fact (`wethFuncs_sorted`, `fmintFuncs_sorted`). -/
+
+/-- Identify a popped word from a stack-prefix fact: popping from a stack whose
+top is known pops exactly that word, and the prefix below it survives. -/
+lemma popBurn_pref {w v : B256} {vs : Stack} {s s' : Devm}
+    (h : Devm.PopBurn [w] s s') (h_pfx : v :: vs <<+ s.stack) :
+    w = v ∧ (vs <<+ s'.stack) := by
+  have h_stk := h.stack
+  simp only [Stack.Pop, Split, List.cons_append, List.nil_append] at h_stk
+  rcases h_pfx with ⟨t, h_t⟩
+  rw [h_stk] at h_t
+  simp only [Split, List.cons_append] at h_t
+  injection h_t with h_head h_tail
+  exact ⟨h_head, ⟨t, h_tail⟩⟩
+
+/-- Reachability at a leaf: the selector equality test passes, so the run is in
+the leaf's function, not the fallback.  The `s.state = s'.state` conjunct is
+what the dispatcher's scratch instructions preserve; gas is not tracked. -/
+lemma reach_of_dispatchWith_leaf {sig w : B256} {f p : Func}
+    {c : List Func} {k : Nat} {e : Sevm} {s r : Devm} {ws : Stack}
+    (h_mem : (sig, f) ∈ [(w, p)])
+    (h_pfx : sig :: ws <<+ s.stack) :
+    Func.Run c e s (dispatchWith k (DispatchTree.leaf w p)) r →
+    ∃ s', (ws <<+ s'.stack) ∧ s.state = s'.state ∧ Func.Run c e s' f r := by
+  have h_eq : (sig, f) = (w, p) := List.mem_singleton.mp h_mem
+  injection h_eq with h_sig h_f
+  subst h_sig; subst h_f
+  func_execute 2; intro h₂
+  have h_pfx1 : (sig =? sig) :: ws <<+ s₁.stack := by generalize_line_prefix
+  rw [show (sig =? sig) = 1 from by simp [B256.eqCheck]] at h_pfx1
+  rcases of_run_branch h₂ with ⟨s₂, h_pop, h_runf⟩ | ⟨v, s₂, s₃, h_ne, h_pop, h_burn, h_runf⟩
+  · exact absurd (popBurn_pref h_pop h_pfx1).left B256.zero_ne_one
+  · rcases popBurn_pref h_pop h_pfx1 with ⟨-, h_pfx2⟩
+    refine ⟨s₃, ?_, ?_, h_runf⟩
+    · rw [← h_burn.stack]; exact h_pfx2
+    · exact (Line.of_inv Devm.state (by line_inv) h₁).trans
+        (h_pop.state.trans h_burn.state)
+
+/-- Dispatch reachability over `DispatchTree.build`: a dispatcher run whose
+selector is an entry of the (sorted) list factors through that entry's
+function.  `mem_of_mem_build`'s fuel bookkeeping recurs here — the length
+bound keeps `build`'s entry-dropping fuel row unreachable, which is exactly
+why reachability would be false without it. -/
+theorem reach_of_dispatchWith_build :
+    ∀ {n : Nat} {xs : List (B256 × Func)} {sig : B256} {f : Func}
+      {c : List Func} {k : Nat} {e : Sevm} {s r : Devm} {ws : Stack},
+      DispatchTree.sorted xs = true →
+      xs.length ≤ n + 1 →
+      (sig, f) ∈ xs →
+      (sig :: ws <<+ s.stack) →
+      Func.Run c e s (dispatchWith k (DispatchTree.build n xs)) r →
+      ∃ s', (ws <<+ s'.stack) ∧ s.state = s'.state ∧ Func.Run c e s' f r := by
+  intro n
+  induction n with
+  | zero =>
+    intro xs sig f c k e s r ws h_sorted h_len h_mem h_pfx
+    rcases xs with _ | ⟨⟨w, p⟩, _ | ⟨y, ys⟩⟩
+    · cases h_mem
+    · exact reach_of_dispatchWith_leaf h_mem h_pfx
+    · intro _; exfalso; simp only [List.length_cons] at h_len; omega
+  | succ n ih =>
+    intro xs sig f c k e s r ws h_sorted h_len h_mem h_pfx
+    rcases xs with _ | ⟨⟨w, p⟩, _ | ⟨y, ys⟩⟩
+    · cases h_mem
+    · exact reach_of_dispatchWith_leaf h_mem h_pfx
+    · -- the fork: shared bookkeeping first, then the two branch arms
+      simp only [List.length_cons] at h_len
+      have h_take_len :
+          (((w, p) :: y :: ys).take ((((w, p) :: y :: ys).length + 1) / 2)).length
+            ≤ n + 1 := by
+        simp only [List.length_take, List.length_cons]; omega
+      have h_drop_len :
+          (((w, p) :: y :: ys).drop ((((w, p) :: y :: ys).length + 1) / 2)).length
+            ≤ n + 1 := by
+        simp only [List.length_drop, List.length_cons]; omega
+      obtain ⟨z, zs, h_drop⟩ :
+          ∃ z zs, ((w, p) :: y :: ys).drop ((((w, p) :: y :: ys).length + 1) / 2)
+            = z :: zs := by
+        rcases h_d : ((w, p) :: y :: ys).drop ((((w, p) :: y :: ys).length + 1) / 2)
+          with _ | ⟨z, zs⟩
+        · exfalso
+          have h_l := congrArg List.length h_d
+          simp only [List.length_drop, List.length_cons, List.length_nil] at h_l
+          omega
+        · exact ⟨z, zs, rfl⟩
+      have h_sorted_split : DispatchTree.sorted
+          (((w, p) :: y :: ys).take ((((w, p) :: y :: ys).length + 1) / 2) ++
+           ((w, p) :: y :: ys).drop ((((w, p) :: y :: ys).length + 1) / 2)) = true := by
+        rw [List.take_append_drop]; exact h_sorted
+      have h_sorted_take := DispatchTree.sorted_append_left h_sorted_split
+      have h_sorted_drop := DispatchTree.sorted_append_right h_sorted_split
+      have h_mem_split : (sig, f) ∈
+          ((w, p) :: y :: ys).take ((((w, p) :: y :: ys).length + 1) / 2) ∨
+          (sig, f) ∈ ((w, p) :: y :: ys).drop ((((w, p) :: y :: ys).length + 1) / 2) := by
+        apply List.mem_append.mp
+        rw [List.take_append_drop]
+        exact h_mem
+      func_execute 3; intro h₂
+      have h_pfx1 :
+          (leftmostFsig (DispatchTree.build n
+            (((w, p) :: y :: ys).drop ((((w, p) :: y :: ys).length + 1) / 2))) >? sig)
+            :: sig :: ws <<+ s₁.stack := by
+        generalize_line_prefix
+      rw [h_drop, DispatchTree.leftmostFsig_build] at h_pfx1
+      rcases of_run_branch h₂ with ⟨s₂, h_pop, h_run'⟩ | ⟨v, s₂, s₃, h_ne, h_pop, h_burn, h_run'⟩
+      · -- comparison word 0 : `¬ sig < z.fst`, the run went right; so is the selector
+        rcases popBurn_pref h_pop h_pfx1 with ⟨h_flag, h_pfx2⟩
+        have h_le : z.fst ≤ sig := by
+          rw [← B256.not_lt]; intro h_lt
+          have h_gt : z.fst > sig := h_lt
+          rw [B256.gtCheck, if_pos h_gt] at h_flag
+          exact B256.zero_ne_one h_flag
+        have h_mem_drop : (sig, f) ∈
+            ((w, p) :: y :: ys).drop ((((w, p) :: y :: ys).length + 1) / 2) := by
+          rcases h_mem_split with h_in | h_in
+          · exfalso
+            have h_z : z ∈ ((w, p) :: y :: ys).drop ((((w, p) :: y :: ys).length + 1) / 2) := by
+              rw [h_drop]; exact List.mem_cons_self ..
+            have h_lt := DispatchTree.fst_lt_of_sorted_append h_sorted_split h_in h_z
+            have h1 : sig.toNat < z.fst.toNat := B256.toNat_lt_toNat h_lt
+            have h2 : z.fst.toNat ≤ sig.toNat := B256.toNat_le_toNat h_le
+            omega
+          · exact h_in
+        rcases ih h_sorted_drop h_drop_len h_mem_drop h_pfx2 h_run'
+          with ⟨s', h_s', h_st, h_rf⟩
+        refine ⟨s', h_s', ?_, h_rf⟩
+        exact (Line.of_inv Devm.state (by line_inv) h₁).trans (h_pop.state.trans h_st)
+      · -- comparison word nonzero : `sig < z.fst`, the run went left; so is the selector
+        rcases popBurn_pref h_pop h_pfx1 with ⟨h_flag, h_pfx2⟩
+        have h_lt : sig < z.fst := by
+          by_contra h_nlt
+          rw [B256.gtCheck, if_neg (fun h_gt => h_nlt h_gt)] at h_flag
+          exact h_ne h_flag
+        have h_mem_take : (sig, f) ∈
+            ((w, p) :: y :: ys).take ((((w, p) :: y :: ys).length + 1) / 2) := by
+          rcases h_mem_split with h_in | h_in
+          · exact h_in
+          · exfalso
+            rw [h_drop] at h_in
+            have h_sorted_zzs : DispatchTree.sorted (z :: zs) = true := by
+              rw [← h_drop]; exact h_sorted_drop
+            have h_le := DispatchTree.fst_le_of_sorted_mem h_sorted_zzs h_in
+            have h1 : z.fst.toNat ≤ sig.toNat := B256.toNat_le_toNat h_le
+            have h2 : sig.toNat < z.fst.toNat := B256.toNat_lt_toNat h_lt
+            omega
+        rw [h_burn.stack] at h_pfx2
+        rcases ih h_sorted_take h_take_len h_mem_take h_pfx2 h_run'
+          with ⟨s', h_s', h_st, h_rf⟩
+        refine ⟨s', h_s', ?_, h_rf⟩
+        exact (Line.of_inv Devm.state (by line_inv) h₁).trans
+          (h_pop.state.trans (h_burn.state.trans h_st))
+
+/-- **Dispatch reachability.**  A `dispatchWith` run over a sorted function
+list, with selector `sig` on top of the stack at dispatcher entry, factors
+through the function `sig` is paired with: the run reached `f`'s body in some
+state `s'` that keeps the stack below the selector and the whole world state.
+
+This is the converse of what `dispatchWith_inv` consumes and the first theorem
+for which `DispatchTree.sorted` is load-bearing: `sound_of_dispatch` dropped
+sortedness because a misordered list cannot make the dispatcher *unsound* — it
+makes an entry unreachable, which is precisely the defect this theorem rules
+out.  The run is a hypothesis: this factors an execution already in hand and
+asserts nothing about whether one exists. -/
+theorem reach_of_dispatchWith {funcs : List (B256 × Func)} {sig : B256} {f : Func}
+    {c : List Func} {k : Nat} {e : Sevm} {s r : Devm} {ws : Stack}
+    (h_sorted : DispatchTree.sorted funcs = true)
+    (h_mem : (sig, f) ∈ funcs)
+    (h_pfx : sig :: ws <<+ s.stack)
+    (h_run : Func.Run c e s (dispatchWith k (DispatchTree.ofSorted funcs)) r) :
+    ∃ s', (ws <<+ s'.stack) ∧ s.state = s'.state ∧ Func.Run c e s' f r :=
+  reach_of_dispatchWith_build h_sorted (Nat.le_succ _) h_mem h_pfx h_run
 
 
 /-! ## §1 AdrSet non-membership helpers -/
