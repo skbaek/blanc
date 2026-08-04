@@ -498,8 +498,299 @@ def flashFee : Func :=
   pushB256 0 ::: mstoreAt 0 +++
   returnMemoryRange 0 32
 
+/-! ## The ERC-20 surface
+
+Four of these are WETH's bodies written out again in this namespace —
+`decimals`, `balanceOf`, `allowance`, `transfer` — copied rather than imported,
+for the reasons in the module header.  `name`, `symbol` and `totalSupply` differ
+by content, `approve` and `transferFrom` by the extended slot guard, and
+`totalSupply` differs by more than content: WETH reads its own ETH balance,
+which fmint has no analogue for. -/
+
+-- name() --
+
+/-- `name()` — `"Flashmint"`.
+
+Returned in the ABI's dynamic-string shape: offset word, length word, then the
+content left-aligned in the third word.  Nine bytes, so the shift is
+`(32 - 9) * 8 = 184`. -/
+def name : Func :=
+  pushB256 (Blanc.String.toBytes "Flashmint").toB256 :::
+  pushB256 184 ::: shl ::: -- "Flashmint" ||
+  pushList [9, 32] +++ -- 32 :: 9 :: "Flashmint" ||
+  mstoreAt 0 +++ -- 9 :: "Flashmint" || 32
+  mstoreAt 1 +++ -- "Flashmint" || 32 9
+  mstoreAt 2 +++ -- || 32 9 "Flashmint"
+  returnMemoryRange 0 96
+
+-- symbol() --
+
+/-- `symbol()` — `"FMINT"`.  Five bytes, so the shift is `(32 - 5) * 8 = 216`. -/
+def symbol : Func :=
+  pushB256 (Blanc.String.toBytes "FMINT").toB256 :::
+  pushB256 216 ::: shl ::: -- "FMINT" ||
+  pushList [5, 32] +++ -- 32 :: 5 :: "FMINT" ||
+  mstoreAt 0 +++ -- 5 :: "FMINT" || 32
+  mstoreAt 1 +++ -- "FMINT" || 32 5
+  mstoreAt 2 +++ -- || 32 5 "FMINT"
+  returnMemoryRange 0 96
+
+-- decimals() --
+
+/-- `decimals()` — 18, as WETH and as the OpenZeppelin default. -/
+def decimals : Func :=
+  pushB256 0x12 ::: -- 0x12 ||
+  mstoreAt 0 +++ -- || 0x12
+  returnMemoryRange 0 32
+
+-- totalSupply() --
+
+/-- `totalSupply()` — the supply slot.
+
+Emphatically *not* WETH's `address; balance`: fmint's supply is a storage
+quantity with no ETH backing it, which is the whole difference between a
+conservation invariant and a solvency one.  `pushSupplySlot`, never
+`pushB256 supplySlot`. -/
+def totalSupply : Func :=
+  pushSupplySlot +++ sload ::: -- supply ||
+  mstoreAt 0 +++ -- || supply
+  returnMemoryRange 0 32
+
+-- balanceOf(address guy) --
+
+/-- `balanceOf(address guy)`.  A balance lives at the raw address word, so this
+is one `sload`.  Like WETH's, and unlike the mutators, it applies no address
+check to the argument (`FMINT_DEVIATIONS.md` row 19). -/
+def balanceOf : Func :=
+  arg 0 +++ -- guy ||
+  sload ::: -- guy_bal ||
+  mstoreAt 0 +++ -- || guy_bal
+  returnMemoryRange 0 32
+
+-- allowance(address src, address dst) --
+
+/-- `allowance(address src, address dst)`.  A view, so no slot guard: reading a
+colliding key is harmless, and only the writers can create one
+(`FMINT_DEVIATIONS.md` row 18). -/
+def allowance : Func :=
+  argCopy 0 0 2 +++ -- || src dst
+  pushList [64, 0] +++ -- 0 :: 64 || src dst
+  kec ::: -- hash ||
+  sload ::: -- allowAmnt ||
+  mstoreAt 0 +++ -- || allow_amnt
+  returnMemoryRange 0 32
+
+-- approve(address guy, uint wad) --
+
+/-- `( -- collides? :: caller_guy_hash :: wad )`, assuming `args = [guy, wad]`.
+
+WETH's `prepApprove` with `checkAddress` replaced by `checkSlotCollides`, which
+is the only difference `approve` has from WETH's. -/
+def prepApprove : Line :=
+  caller :: mstoreAt 0 ++ -- || caller
+  argCopy 1 0 1 ++ -- || caller :: guy
+  arg 1 ++ pushList [64, 0] ++ -- 0 :: 64 :: wad || caller :: guy
+  kec :: checkSlotCollides -- collides? :: caller_guy_hash :: wad ||
+
+/-- assumes : `args = [guy, wad]` -/
+def logApprove : Line :=
+  argCopy 0 1 1 ++ -- || wad
+  arg 0 ++ caller ::
+  pushB256 approvalEvent :: -- approvalEventSig :: caller :: guy || wad
+  logWith 2 0 1 -- 2 indexed topics : caller address, approvee address
+                -- 1 unindexed data : approval value
+
+/-- `approve(address guy, uint256 wad)`. -/
+def approve : Func :=
+  arg 0 +++ -- guy ||
+  checkNonAddress +++ -- guy_invalid? ||
+  .rev <?> -- [if guy is invalid, revert]
+  prepApprove +++ -- collides? :: hash :: wad ||
+  .rev <?> -- [ if the allowance slot would alias a balance slot or the
+           --   supply slot, revert ]
+           -- hash :: wad ||
+  sstore :: -- ||
+  logApprove +++
+  returnTrue
+
+-- transfer(address dst, uint wad) --
+
+/-- assumes : `args = [dst, wad]` -/
+def logTransfer : Line :=
+  argCopy 0 1 1 ++ -- || wad
+  arg 0 ++ caller ::
+  pushB256 transferEvent :: -- transferEventSig :: src :: dst || wad
+  logWith 2 0 1 -- 2 indexed topics : source address, destination address
+                -- 1 unindexed data : transfer value
+
+/-- `( wad dst -- )` -/
+def incrWbal : Line :=
+  dup 1 :: -- dst :: wad :: dst
+  sload :: -- dst_bal :: wad :: dst
+  add :: -- (dst_bal + wad) :: dst
+  swap 0 :: -- dst :: (dst_bal + wad)
+  sstore :: []
+
+/-- assumes : `args = [dst, wad]`.  `( -- dst_invalid :: dst )` -/
+def transferTestDst : Line :=
+  arg 0 ++ dup 0 :: -- dst :: dst
+  checkNonAddress -- dst_invalid :: dst
+
+/-- assumes : `args = [_, wad]`.
+`( -- caller_bal_<_wad? :: caller :: caller_bal - wad :: wad :: dst )` -/
+def transferTestLt : Line :=
+  arg 1 ++ -- wad :: dst
+  caller :: -- caller :: wad :: dst
+  dup 0 :: -- caller :: caller :: wad :: dst
+  sload :: -- caller_bal :: caller :: wad :: dst
+  swap 0 :: -- caller :: caller_bal :: wad :: dst
+  dup 2 :: -- wad :: caller :: caller_bal :: wad :: dst
+  dup 0 :: -- wad :: wad :: caller :: caller_bal :: wad :: dst
+  dup 3 :: -- caller_bal :: wad :: wad :: caller :: caller_bal :: wad :: dst
+  sub ::   -- caller_bal - wad :: wad :: caller :: caller_bal :: wad :: dst
+  swap 2 :: -- caller_bal :: wad :: caller :: caller_bal - wad :: wad :: dst
+  lt :: [] -- caller_bal_<_wad? :: caller :: caller_bal - wad :: wad :: dst
+
+/-- `( caller :: caller_bal - wad :: wad :: dst -- * )`
+
+Two balance writes with no supply write: a transfer moves value between two
+address-shaped keys, so Σ is unchanged and D5's pairing obligation is
+discharged by the second balance write rather than by a supply write. -/
+def transferCore : Func :=
+  sstore ::: -- wad :: dst [caller balance up to date]
+  incrWbal +++ -- [destination balance up to date]
+  logTransfer +++
+  returnTrue
+
+/-- `transfer(address dst, uint256 wad)`. -/
+def transfer : Func :=
+  transferTestDst +++ -- dst_invalid? :: dst
+  .rev <?> -- [if dst is not a valid address, revert]
+           -- dst
+  transferTestLt +++ -- (caller_bal < wad) :: caller :: caller_bal - wad :: wad :: dst
+  .rev <?> -- [if caller balance < transfer amount, revert]
+        -- caller :: caller_bal - wad :: wad :: dst
+  transferCore
+
+-- transferFrom(address src, address dst, uint wad) --
+
+/-- `( sbal :: wad :: wad :: src -- wad :: src )` -/
+def transferFromUpdateSbal : Line :=
+  sub :: -- (sbal - wad) :: wad :: src
+  dup 2 :: -- src :: (sbal - wad) :: wad :: src
+  sstore :: -- [source balance is up to date]
+  []        -- wad :: src
+
+/-- `( dst :: wad :: src -- wad :: src )` -/
+def transferFromLog : Line :=
+  dup 2 :: -- src :: dst :: wad :: src
+  pushB256 transferEvent :: -- transferEventSig :: src :: dst :: wad :: src
+  dup 3 :: mstoreAt 0 ++ -- transferEventSig :: src :: dst :: wad :: src || wad
+  logWith 2 0 1 -- [Transfer(src,dst,wad) is logged]
+                -- wad :: src
+
+/-- `( wad src -- )` — the ERC-20 allowance spend.
+
+Two things distinguish it from the repayment path's `spendAllowanceThenBurn`,
+and they are the reason that one is separate code rather than a call to this:
+the spender here is `caller`, and a caller spending its *own* balance skips the
+allowance entirely.  That bypass is WETH9's, not OpenZeppelin's, and is
+deliberately scoped to this function — `FMINT_DEVIATIONS.md` row 16 says so
+outright, because ERC-3156 requires the repayment to take the allowance even
+when the borrower named itself as receiver.
+
+Infinite-allowance preservation is the WETH9/OpenZeppelin convention of row 15,
+and is *not* "EIP-717"; no EIP mandates it. -/
+def updateAllowance : Func :=
+  prepend [caller, dup 2, eq] <| -- (src =? caller) :: wad :: src
+  returnTrue <?> -- if caller is source, do not update allowance
+                 -- wad :: src
+  swap 0 :: mstoreAt 0 +++ -- wad || src
+  caller ::: mstoreAt 1 +++ -- wad || src :: caller
+  pushList [64, 0] +++ -- 0 :: 64 :: wad || src :: caller
+  kec ::: -- hash :: wad
+  checkSlotCollides +++ -- collides? :: hash :: wad
+  .rev <?> -- [ if the allowance slot would alias a balance slot or the
+           --   supply slot, revert ]
+           -- hash :: wad
+  swap 0 ::: -- wad :: hash
+  dup 1 ::: sload ::: -- amnt :: wad :: hash
+  dup 0 ::: isMax +++ -- (amnt =? max) :: amnt :: wad :: hash
+  returnTrue <?> -- if the allowed amount is infinite, do not update it
+                 -- amnt :: wad :: hash
+  dup 1 ::: dup 1 ::: lt ::: -- amnt <? wad :: amnt :: wad :: hash
+  .rev <?> -- if allowed amount < transfer amount, revert
+           -- amnt :: wad :: hash
+  sub ::: swap 0 ::: -- hash :: (amnt - wad)
+  sstore ::: returnTrue -- [allowance amount is up to date]
+
+/-- `transferFrom(address src, address dst, uint256 wad)`. -/
+def transferFrom : Func :=
+  arg 0 +++ dup 0 ::: checkNonAddress +++ -- ¬ va(src) :: src
+  .rev <?> -- [if src is not a valid address, revert]
+        -- src
+  arg 2 +++ dup 0 ::: dup 2 ::: sload ::: -- sbal :: wad :: wad :: src
+  dup 1 ::: dup 1 ::: lt ::: -- (sbal <? wad) :: sbal :: wad :: wad :: src
+  .rev <?> -- if source balance < wad, then revert
+        -- sbal :: wad :: wad :: src
+  transferFromUpdateSbal +++ -- wad :: src
+  arg 1 +++ dup 0 ::: checkNonAddress +++ -- ¬ va(dst) :: dst :: wad :: src
+  .rev <?> -- [if dst is not a valid address, revert]
+        -- dst :: wad :: src
+  dup 0 ::: dup 2 ::: -- wad :: dst :: dst :: wad :: src
+  incrWbal +++ -- [destination balance is up to date]
+              -- dst :: wad :: src
+  transferFromLog +++ -- wad :: src
+  updateAllowance
+
+/-! ## The program -/
+
+/-- The twelve functions the dispatcher routes to, in ascending selector order.
+
+Unlike `wethFuncs` this list is the whole contract: WETH keeps `deposit` out of
+it because `deposit` *is* the fallback, whereas fmint's fallback reverts, so
+every fmint behaviour is reached through a selector.
+
+Arc B consumes this list — the open-contract theorem's per-function obligation
+is stated over exactly these entries — so it is deliberately exposed as a
+`List (B256 × Func)` in the `wethFuncs` mold rather than being folded into the
+tree. -/
+def fmintFuncs : List (B256 × Func) :=
+  [ (selector "name" [], name),                                        -- 0x06fdde03
+    (selector "approve" [.address, .uint256], approve),                -- 0x095ea7b3
+    (selector "totalSupply" [], totalSupply),                          -- 0x18160ddd
+    (selector "transferFrom" [.address, .address, .uint256],
+      transferFrom),                                                   -- 0x23b872dd
+    (selector "decimals" [], decimals),                                -- 0x313ce567
+    (selector "flashLoan" [.address, .address, .uint256, .dynBytes],
+      flashLoan),                                                      -- 0x5cffe9de
+    (selector "maxFlashLoan" [.address], maxFlashLoan),                -- 0x613255ab
+    (selector "balanceOf" [.address], balanceOf),                      -- 0x70a08231
+    (selector "symbol" [], symbol),                                    -- 0x95d89b41
+    (selector "transfer" [.address, .uint256], transfer),              -- 0xa9059cbb
+    (selector "flashFee" [.address, .uint256], flashFee),              -- 0xd9d98ce4
+    (selector "allowance" [.address, .address], allowance) ]           -- 0xdd62ed3e
+
+/-- `dispatchWith`'s ordering precondition, checked rather than commented, as
+`wethFuncs_sorted` is.  A misplaced entry would compile cleanly into a program
+where that function is simply unreachable.
+
+Its documented failure signature carries over: `decide` fails and then rendering
+the goal has to unfold twelve `String.keccak` calls, so what you see is
+`[Error pretty printing: maximum recursion depth has been reached]` rather than
+anything legible.  If that appears, `fmintFuncs` is out of ascending selector
+order and the trailing comment on each line is the expected value. -/
+theorem fmintFuncs_sorted : DispatchTree.sorted fmintFuncs = true := by decide +kernel
+
+def fmintTree : DispatchTree := .ofSorted fmintFuncs
+
 /-- The aux table as frozen at the design freeze.  Append-only; see above. -/
 def fmintAux : List Func := [Func.rev, burnAndReturn]
+
+/-- The contract.  `Func.mainWith fallbackSlot` routes a dispatcher miss to aux
+slot 1, which is `Func.rev`: an unrecognized selector — and a bare value
+transfer — reverts. -/
+def fmint : Prog := ⟨Func.mainWith fallbackSlot fmintTree, fmintAux⟩
 
 end Fmint
 
