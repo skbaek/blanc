@@ -2436,6 +2436,183 @@ lemma StateInv.setCode_ne {wa a : Adr} {cd : ByteArray} {w : Jaune.State}
 
 end ContractSpec
 
+/-! ## The quantified open-contract layer
+
+`~/plans/fmint-conserved.md` Step 6.  Two results sit here, both additive.
+
+**The named statement** is `ContractSpec.preserves_of_dispatch` below: the
+invariant of *any* dispatcher-shaped program all of whose targets satisfy
+`FuncSound` is preserved by arbitrary executions — `sound_of_dispatch`
+composed with `preserves_inv`, named so the quantified claim is a theorem
+rather than a proof pattern.  `Blanc/Conserved.lean`'s `fmintSpec_preserves`
+is its instantiation.
+
+**Context stability** is the rest of the section.  `FuncSound` cannot be
+weakened across a program extension directly — `Pre`'s `code` field pins
+`Prog.compile c.prog`, and an extension changes the program's bytes — so
+stability is stated over the *program-free core* (`Func.Core`) that a
+storage-only invariant's non-reentrant obligations factor through.  The
+engine is `Func.Run.mono`: the run relation consults its context only
+through the `call` constructor's lookup, so contexts that agree at every
+reachable index support the same runs.  `Func.Core.of_extended` is the
+context-weakening theorem for the generator's append-only extension shape,
+and `Func.Core.of_callFree` is the degenerate but common case — a target
+with no `Func.call` at all has the same runs in *every* context.
+`ContractSpec.funcSound_of_core` closes the loop: for a spec with trivial
+`Side` and a storage-only `Inv`, a transported core re-enters `FuncSound`
+against the *new* program with no re-walk. -/
+
+/-- The call indices a `Func` mentions: `f.CallsIn P` holds iff every
+`Func.call k` in `f`'s body has `P k`. -/
+def Func.CallsIn (P : Nat → Prop) : Func → Prop
+  | .branch f g => Func.CallsIn P f ∧ Func.CallsIn P g
+  | .last _ => True
+  | .next _ f => Func.CallsIn P f
+  | .call k => P k
+
+/-- The same, computably, for discharge at concrete programs. -/
+def Func.callsIn (p : Nat → Bool) : Func → Bool
+  | .branch f g => f.callsIn p && g.callsIn p
+  | .last _ => true
+  | .next _ f => f.callsIn p
+  | .call k => p k
+
+/-- A `Func` whose body contains no `Func.call` at all.  Every non-reentrant
+fmint dispatch target is call-free; the contract's only `Func.call`s are
+`flashLoan`'s two `burnSlot` tail jumps and the dispatcher's own. -/
+abbrev Func.callFree : Func → Bool := Func.callsIn (fun _ => false)
+
+theorem Func.CallsIn.of_callsIn {p : Nat → Bool} {P : Nat → Prop}
+    (hp : ∀ k, p k = true → P k) {f : Func} (h : f.callsIn p = true) :
+    Func.CallsIn P f := by
+  induction f with
+  | branch f g ihf ihg =>
+      simp only [Func.callsIn, Bool.and_eq_true] at h
+      exact ⟨ihf h.1, ihg h.2⟩
+  | last _ => trivial
+  | next _ f ih => exact ih h
+  | call k => exact hp k h
+
+/-- A call-free body satisfies any call-index predicate vacuously. -/
+theorem Func.CallsIn.of_callFree {P : Nat → Prop} {f : Func}
+    (h : Func.callFree f = true) : Func.CallsIn P f :=
+  Func.CallsIn.of_callsIn (fun _ h' => nomatch h') h
+
+/-- **Context transport for `Func.Run`.**  The run relation consults its
+context only through the `call` constructor's lookup `fs[k]? = some g`, so
+two contexts that agree at every index a derivation can reach support the
+same runs.  `P` delimits the reachable indices: `f`'s own call indices
+satisfy it (`h_f`), lookups at `P`-indices agree (`h_agree`), and the callee
+at a `P`-index has its call indices inside `P` again (`h_closed`). -/
+theorem Func.Run.mono {P : Nat → Prop} {fs fs' : List Func}
+    (h_agree : ∀ k, P k → fs[k]? = fs'[k]?)
+    (h_closed : ∀ k g, P k → fs[k]? = some g → Func.CallsIn P g)
+    {sevm : Sevm} {s : Devm} {f : Func} {r : Devm}
+    (h_f : Func.CallsIn P f) (h_run : Func.Run fs sevm s f r) :
+    Func.Run fs' sevm s f r := by
+  revert h_f
+  induction h_run with
+  | zero h1 _ ih => exact fun h_f => .zero h1 (ih h_f.1)
+  | succ h1 h2 h3 _ ih => exact fun h_f => .succ h1 h2 h3 (ih h_f.2)
+  | last h1 => exact fun _ => .last h1
+  | next h1 _ ih => exact fun h_f => .next h1 (ih h_f)
+  | call h_get h_burn _ ih =>
+      exact fun h_f =>
+        .call ((h_agree _ h_f).symm.trans h_get) h_burn (ih (h_closed _ _ h_f h_get))
+
+/-- A call-free `Func` runs identically in every context: its derivation
+never performs a lookup. -/
+theorem Func.Run.of_callFree {fs fs' : List Func} {sevm : Sevm} {s : Devm}
+    {f : Func} {r : Devm} (h_cf : Func.callFree f = true)
+    (h_run : Func.Run fs sevm s f r) : Func.Run fs' sevm s f r :=
+  Func.Run.mono (P := fun _ => False) (fun _ h => h.elim)
+    (fun _ _ h => h.elim) (Func.CallsIn.of_callFree h_cf) h_run
+
+/-- **Append-only extension, the generator's shape.**  An extension replaces
+`main` (index 0) and appends to `aux`, so every old in-aux index resolves
+identically; a target whose reachable call indices all point into the old
+aux therefore has the same runs under the extended program.  Index 0 — the
+dispatcher — is the one genuinely new resolution, which is why the index
+predicate excludes it. -/
+theorem Func.Run.of_extended {main main' : Func} {aux extra : List Func}
+    {sevm : Sevm} {s : Devm} {f : Func} {r : Devm}
+    (h_f : Func.CallsIn (fun k => 1 ≤ k ∧ k ≤ aux.length) f)
+    (h_aux : ∀ g ∈ aux, Func.CallsIn (fun k => 1 ≤ k ∧ k ≤ aux.length) g)
+    (h_run : Func.Run (main' :: (aux ++ extra)) sevm s f r) :
+    Func.Run (main :: aux) sevm s f r := by
+  refine Func.Run.mono (P := fun k => 1 ≤ k ∧ k ≤ aux.length) ?_ ?_ h_f h_run
+  · rintro k ⟨h1, h2⟩
+    obtain ⟨j, rfl⟩ : ∃ j, k = j + 1 := ⟨k - 1, by omega⟩
+    simp only [List.getElem?_cons_succ]
+    exact List.getElem?_append_left (by omega)
+  · rintro k g ⟨h1, h2⟩ h_get
+    obtain ⟨j, rfl⟩ : ∃ j, k = j + 1 := ⟨k - 1, by omega⟩
+    rw [List.getElem?_cons_succ, List.getElem?_append_left (by omega)] at h_get
+    exact h_aux g (List.mem_of_getElem? h_get)
+
+/-- The program-free core of a per-target obligation: `f`'s successful walk
+preserves `Q` at the frame's own target.  No `Pre`, no code equation, no
+deeper-frame hypothesis — the shape that survives program extension, and the
+shape `Blanc/Conserved.lean`'s `fmintSpec_funcSound` consumes. -/
+def Func.Core (fs : List Func) (Q : Stor → Prop) (f : Func) : Prop :=
+  ∀ {sevm : Sevm} {s r : Devm},
+    Func.Run fs sevm s f r →
+    Q (Devm.getStor s sevm.currentTarget) →
+    Q (Devm.getStor r sevm.currentTarget)
+
+/-- **The context-weakening theorem** over the program-free core, for the
+fixed generator shape: a core proved at `main :: aux` holds verbatim at any
+extension `main' :: (aux ++ extra)`. -/
+theorem Func.Core.of_extended {main main' : Func} {aux extra : List Func}
+    {Q : Stor → Prop} {f : Func}
+    (h_f : Func.CallsIn (fun k => 1 ≤ k ∧ k ≤ aux.length) f)
+    (h_aux : ∀ g ∈ aux, Func.CallsIn (fun k => 1 ≤ k ∧ k ≤ aux.length) g)
+    (h : Func.Core (main :: aux) Q f) :
+    Func.Core (main' :: (aux ++ extra)) Q f :=
+  fun {_ _ _} h_run hq => h (Func.Run.of_extended h_f h_aux h_run) hq
+
+/-- A call-free core is context-universal. -/
+theorem Func.Core.of_callFree {fs fs' : List Func} {Q : Stor → Prop}
+    {f : Func} (h_cf : Func.callFree f = true) (h : Func.Core fs Q f) :
+    Func.Core fs' Q f :=
+  fun {_ _ _} h_run hq => h (Func.Run.of_callFree h_cf h_run) hq
+
+namespace ContractSpec
+
+/-- **The quantified open-contract statement**: the invariant of any
+dispatcher-shaped program all of whose targets satisfy `FuncSound` is
+preserved by arbitrary executions — including arbitrary reentrant callback
+code, which is what `FuncSound`'s deeper-frame hypothesis carries.
+`sound_of_dispatch` composed with `preserves_inv`; fmint instantiates it
+(`Blanc/Conserved.lean`, `fmintSpec_preserves`) with twelve discharged
+obligations and a vacuous fallback. -/
+theorem preserves_of_dispatch {c : ContractSpec} {ca : Adr}
+    {k : Nat} {funcs : List (B256 × Func)} {aux : List Func} {fallback : Func}
+    (h_shape : c.prog = ⟨Func.mainWith k (DispatchTree.ofSorted funcs), aux⟩)
+    (h_ne : funcs ≠ [])
+    (h_fb : (c.prog.main :: aux)[k]? = some fallback)
+    (h_funcs : ∀ p ∈ funcs, c.FuncSound ca aux p.2)
+    (h_fall : c.FuncSound ca aux fallback) :
+    c.Preserves ca :=
+  c.preserves_inv ca (sound_of_dispatch h_shape h_ne h_fb h_funcs h_fall)
+
+/-- A storage-only invariant's per-target obligation is exactly its
+program-free core: for a spec whose `Side` is trivial and whose `Inv`
+ignores the callvalue and balance arguments, `FuncSound` follows from
+`Func.Core` alone.  This is how a transported core re-enters the extended
+contract's obligations without a re-walk. -/
+theorem funcSound_of_core {c : ContractSpec} {ca : Adr}
+    {aux : List Func} {f : Func}
+    (h_side : ∀ bal, c.Side bal)
+    (h_stor : ∀ {s : Stor} {v b v' b' : B256}, c.Inv s v b → c.Inv s v' b')
+    (h_core : Func.Core (c.prog.main :: aux) (fun st => c.Inv st 0 0) f) :
+    c.FuncSound ca aux f := by
+  intro sevm s r h_ct h_pre _ h_run
+  subst h_ct
+  exact ⟨h_side _, h_stor (h_core h_run (h_stor (h_pre.inv.1 rfl)))⟩
+
+end ContractSpec
+
 /-! ## Generic message-, transaction- and block-level plumbing
 
 Moved down from `Solvent.lean`, unchanged: the no-deletion (`NoDel`) tier, the

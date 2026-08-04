@@ -24,9 +24,14 @@
 -- the assembly through `ContractSpec.sound_of_dispatch` and
 -- `ContractSpec.preserves_inv`.  `fmint_preserves_conserved` and
 -- `chain_preserves_conserved` carry the statements this module used to hold as
--- `Prop`-valued definitions asserted of nothing.  The `flashLoan` *success*
--- specification — that a well-behaved borrower is repaid and the state
--- restored — is Arc C, and nothing here claims it.
+-- `Prop`-valued definitions asserted of nothing.  The arc's conditional Step 6
+-- added the quantified open-contract layer: `fmintSpec_preserves` is now the
+-- instantiation of `ContractSpec.preserves_of_dispatch` (`Blanc/Ladder.lean`),
+-- and context stability across program extension is settled at the foot of
+-- this module (`fmint_core_stable`, `fmint_funcSound_stable`) — eleven of the
+-- twelve obligations transport verbatim; `flashLoan` is re-discharge.  The
+-- `flashLoan` *success* specification — that a well-behaved borrower is repaid
+-- and the state restored — is Arc C, and nothing here claims it.
 --
 -- CLAIM HYGIENE.  What this module works towards is *conservation* — an
 -- equality about storage, `totalSupply = Σ balances`, at every observable
@@ -47,9 +52,9 @@ pure token: fmint is an ERC-20 with the ERC-3156 triple and no wrap/unwrap
 surface.  The contract is `Blanc.Fmint.fmint`, and `Blanc/FmintCode.lean`
 carries the witness that Blanc's compiler really produces its bytes.
 
-The two headline results at the foot of this module are still `Prop`-valued
-definitions — statements that elaborate — rather than `theorem`s; see *State of
-the proof* above for what has landed and what has not. -/
+The two headline results near the foot of this module are theorems
+(`fmint_preserves_conserved`, `chain_preserves_conserved`); see *State of the
+proof* above for what is in and out of scope. -/
 
 /-- The conservation invariant: total supply equals the sum of balances.  A
 storage-only equality — no callvalue term, no ETH-balance term.
@@ -2482,6 +2487,31 @@ whole input to the generic dispatcher argument.  Everything from here down is
 instantiation: no walk, no invariant reasoning, and nothing that names the
 program's shape beyond reading it off `fmintSpec.prog` by unification. -/
 
+/-- The twelve `FuncSound` obligations, packaged in the form both
+`ContractSpec.sound_of_dispatch` and `ContractSpec.preserves_of_dispatch`
+consume. -/
+theorem fmintSpec_funcSound_all (fa : Adr) :
+    ∀ p ∈ Fmint.fmintFuncs, fmintSpec.FuncSound fa Fmint.fmintAux p.2 := by
+  intro f h_mem
+  -- Drive the membership unfolding with `List.mem_cons`, never with `decide`:
+  -- deciding anything about these leaves forces the `String.keccak` behind
+  -- every `selector` and blows `maxRecDepth`.  Twelve entries here, ten at
+  -- WETH, and the failure mode is the same.
+  simp only [Fmint.fmintFuncs, List.mem_cons, List.not_mem_nil, or_false] at h_mem
+  rcases h_mem with h | h | h | h | h | h | h | h | h | h | h | h <;> (cases h)
+  · exact fmintSpec_funcSound Fmint.name name_preserves_conserved
+  · exact fmintSpec_funcSound Fmint.approve approve_preserves_conserved
+  · exact fmintSpec_funcSound Fmint.totalSupply totalSupply_preserves_conserved
+  · exact fmintSpec_funcSound Fmint.transferFrom transferFrom_preserves_conserved
+  · exact fmintSpec_funcSound decimals decimals_preserves_conserved
+  · exact fmintSpec_funcSound_flashLoan
+  · exact fmintSpec_funcSound Fmint.maxFlashLoan maxFlashLoan_preserves_conserved
+  · exact fmintSpec_funcSound balanceOf balanceOf_preserves_conserved
+  · exact fmintSpec_funcSound Fmint.symbol symbol_preserves_conserved
+  · exact fmintSpec_funcSound transfer transfer_preserves_conserved
+  · exact fmintSpec_funcSound Fmint.flashFee flashFee_preserves_conserved
+  · exact fmintSpec_funcSound allowance allowance_preserves_conserved
+
 /-- fmint's frame-level obligation, the one input `ContractSpec.preserves_inv`
 cannot supply.  The proof is `wethSpec_sound`'s, with twelve dispatch targets
 where WETH has ten and a *reverting* fallback where WETH has `deposit`, so the
@@ -2491,33 +2521,21 @@ Both shape side conditions are `rfl`: `k`, the function list and the aux context
 are read off `fmintSpec.prog` by unification.  The fallback lookup at index 1
 reduces — unlike `burnSlot`'s at index 2, which needs `get_burnSlot`'s explicit
 `List.getElem?` route. -/
-theorem fmintSpec_sound (fa : Adr) : fmintSpec.Sound fa := by
-  refine ContractSpec.sound_of_dispatch (k := Fmint.fallbackSlot)
+theorem fmintSpec_sound (fa : Adr) : fmintSpec.Sound fa :=
+  ContractSpec.sound_of_dispatch (k := Fmint.fallbackSlot)
     (funcs := Fmint.fmintFuncs) (aux := Fmint.fmintAux) (fallback := Func.rev)
-    rfl (List.cons_ne_nil _ _) rfl ?_ ?_
-  · intro f h_mem
-    -- Drive the membership unfolding with `List.mem_cons`, never with `decide`:
-    -- deciding anything about these leaves forces the `String.keccak` behind
-    -- every `selector` and blows `maxRecDepth`.  Twelve entries here, ten at
-    -- WETH, and the failure mode is the same.
-    simp only [Fmint.fmintFuncs, List.mem_cons, List.not_mem_nil, or_false] at h_mem
-    rcases h_mem with h | h | h | h | h | h | h | h | h | h | h | h <;> (cases h)
-    · exact fmintSpec_funcSound Fmint.name name_preserves_conserved
-    · exact fmintSpec_funcSound Fmint.approve approve_preserves_conserved
-    · exact fmintSpec_funcSound Fmint.totalSupply totalSupply_preserves_conserved
-    · exact fmintSpec_funcSound Fmint.transferFrom transferFrom_preserves_conserved
-    · exact fmintSpec_funcSound decimals decimals_preserves_conserved
-    · exact fmintSpec_funcSound_flashLoan
-    · exact fmintSpec_funcSound Fmint.maxFlashLoan maxFlashLoan_preserves_conserved
-    · exact fmintSpec_funcSound balanceOf balanceOf_preserves_conserved
-    · exact fmintSpec_funcSound Fmint.symbol symbol_preserves_conserved
-    · exact fmintSpec_funcSound transfer transfer_preserves_conserved
-    · exact fmintSpec_funcSound Fmint.flashFee flashFee_preserves_conserved
-    · exact fmintSpec_funcSound allowance allowance_preserves_conserved
-  · exact fmintSpec_funcSound_rev
+    rfl (List.cons_ne_nil _ _) rfl (fmintSpec_funcSound_all fa)
+    fmintSpec_funcSound_rev
 
+/-- fmint's own result, as the instantiation of the quantified open-contract
+statement (`ContractSpec.preserves_of_dispatch`, `Blanc/Ladder.lean`): the
+same twelve obligations and the same vacuous fallback, consumed by the named
+theorem rather than by its proof pattern. -/
 theorem fmintSpec_preserves (fa : Adr) : fmintSpec.Preserves fa :=
-  fmintSpec.preserves_inv fa (fmintSpec_sound fa)
+  ContractSpec.preserves_of_dispatch (k := Fmint.fallbackSlot)
+    (funcs := Fmint.fmintFuncs) (aux := Fmint.fmintAux) (fallback := Func.rev)
+    rfl (List.cons_ne_nil _ _) rfl (fmintSpec_funcSound_all fa)
+    fmintSpec_funcSound_rev
 
 /-- **Headline 1 of `flashmint-proposal.md`**, now a theorem: an arbitrary
 execution that starts in an fmint frame with the supply conserved ends with the
@@ -2619,5 +2637,67 @@ theorem addBlockToChainUsing_preserves_conserved (fa : Adr) (cfg : ChainConfig)
   fmintSpec_stateInv_iff.mp
     (ContractSpec.addBlockToChainUsing_preserves_inv fa (fmintSpec_preserves fa)
       cfg ch ch' rlp h_run h_wds (fmintSpec_stateInv_iff.mpr h_inv))
+
+/-! ### Context stability, demonstrated at fmint
+
+The quantified layer's second half (`~/plans/fmint-conserved.md` Step 6): the
+extent to which fmint's discharged obligations survive a program extension,
+stated over the program-free core (`Func.Core`, `Blanc/Ladder.lean`) because
+`FuncSound` itself cannot transport — its `Pre` pins the exact program bytes.
+
+Eleven of the twelve dispatch targets are call-free — their bodies contain no
+`Func.call`, so their run derivations never consult the context at all — and
+their cores are therefore *context-universal*: they hold at every `List Func`
+whatsoever, extension shapes included, with no side condition.  The proofs
+below consume the original walk lemmas (`name_preserves_conserved` …
+`transferFrom_preserves_conserved`) verbatim; nothing is re-walked.
+
+The twelfth, `flashLoan`, is the predicted exception twice over: its body
+carries the two `Func.call burnSlot` tail jumps, and its obligation is not
+core-shaped in the first place — it consumes `Pre`'s code equation and the
+program-indexed `Exec.InvDepth` through `conserved_of_call`.  Under an
+extension, `flashLoan` (and any new call-bearing target) is mechanical
+re-discharge territory, per the plan's honest fallback. -/
+
+/-- Each non-reentrant fmint target's core holds in **every** context: the
+target is call-free, so its derivation never performs a lookup. -/
+theorem fmint_core_stable (fs : List Func) :
+    ∀ p ∈ Fmint.fmintFuncs, p.2 ≠ Fmint.flashLoan →
+      Func.Core fs Stor.Conserved p.2 := by
+  intro p h_mem h_ne
+  -- `List.mem_cons`, never `decide` (see `fmintSpec_funcSound_all`).
+  simp only [Fmint.fmintFuncs, List.mem_cons, List.not_mem_nil, or_false] at h_mem
+  rcases h_mem with h | h | h | h | h | h | h | h | h | h | h | h <;> (cases h)
+  · exact Func.Core.of_callFree rfl name_preserves_conserved
+  · exact Func.Core.of_callFree rfl approve_preserves_conserved
+  · exact Func.Core.of_callFree rfl totalSupply_preserves_conserved
+  · exact Func.Core.of_callFree rfl transferFrom_preserves_conserved
+  · exact Func.Core.of_callFree rfl decimals_preserves_conserved
+  · exact absurd rfl h_ne
+  · exact Func.Core.of_callFree rfl maxFlashLoan_preserves_conserved
+  · exact Func.Core.of_callFree rfl balanceOf_preserves_conserved
+  · exact Func.Core.of_callFree rfl symbol_preserves_conserved
+  · exact Func.Core.of_callFree rfl transfer_preserves_conserved
+  · exact Func.Core.of_callFree rfl flashFee_preserves_conserved
+  · exact Func.Core.of_callFree rfl allowance_preserves_conserved
+
+/-- The reuse path an extension arc takes, closed generically: any
+storage-only spec whose invariant is `Stor.Conserved` — in particular, an
+extended fmint with a new `main`, an appended aux, and the same invariant —
+inherits fmint's eleven non-reentrant `FuncSound` obligations verbatim,
+whatever its program and aux context.  No re-walk; the original walk lemmas
+are consumed as they stand.  `flashLoan` and any new target remain that
+spec's own obligations. -/
+theorem fmint_funcSound_stable (c' : ContractSpec) (fa : Adr) (aux' : List Func)
+    (h_side : ∀ bal, c'.Side bal)
+    (h_inv : ∀ s v b, c'.Inv s v b ↔ Stor.Conserved s) :
+    ∀ p ∈ Fmint.fmintFuncs, p.2 ≠ Fmint.flashLoan →
+      c'.FuncSound fa aux' p.2 := by
+  intro p h_mem h_ne
+  apply ContractSpec.funcSound_of_core h_side
+    (fun h => (h_inv _ _ _).mpr ((h_inv _ _ _).mp h))
+  intro sevm s r h_run h
+  exact (h_inv _ _ _).mpr
+    (fmint_core_stable _ p h_mem h_ne h_run ((h_inv _ _ _).mp h))
 
 end Blanc
