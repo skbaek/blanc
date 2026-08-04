@@ -1,0 +1,1543 @@
+#!/usr/bin/env python3
+"""Generator for Blanc's fmint fixture suite (`~/plans/fmint-code.md` Step 2;
+program source of truth `~/plans/flashmint-proposal.md`): EEST
+`blockchain_tests` fixtures at network Prague whose fmint account carries
+`Blanc.fmintCode` -- the exact bytes `Blanc.fmintCode_compile` witnesses as
+`Prog.compile Fmint.fmint`'s output -- and whose expectations come from the
+pinned frozen EELS oracle's `t8n`, never hand-computed. This is the same
+external-adjudication discipline `gen-weth-fixtures.py` established
+(`~/plans/weth-evidence.md`), and this script is deliberately a SEPARATE,
+self-contained generator rather than a parameterisation of that one -- the
+same reason `gen-fmint-code.lean` is separate from `gen-weth-code.lean`: a
+regeneration of one contract's fixtures must never be able to touch the
+other's.
+
+Every case additionally states, and enforces at generation time, what it is
+supposed to demonstrate ("the spec-derived assertion layer" below, copied
+from the WETH generator almost verbatim -- it is fully generic). A case whose
+oracle post-state disagrees with fmint's semantics aborts generation and
+writes nothing.
+
+Borrowers are Blanc programs, not hand-authored bytecode: their source is
+`scripts/gen-fmint-borrowers.lean`, their compiled bytes are committed at
+`scripts/fmint-borrowers.json` (regenerate with `lake env lean
+scripts/gen-fmint-borrowers.lean`), and this script only ever reads that
+JSON -- never re-derives or transcribes a borrower's bytes. The PROBER/
+TRIGGER contracts below, in contrast, are hand-authored straight-line EVM --
+they are this fixture's own *input*, exactly the WETH suite's
+`attacker_bytecode`/`prober_bytecode` precedent, not something a borrower's
+semantics determines.
+
+RIG FINDING (evidence plan, "establish first how the pinned runner commits to
+logs... if logs are not committed anywhere, that is a rig finding to
+surface, not a silent skip"): Jaune's fixture runner
+(`~/jaune/Main.lean`, `Lean.Json.toHeader` / the post-state-root comparison)
+reads `receiptTrie`/`bloom` straight out of the fixture JSON into the
+reconstructed header and never independently recomputes a receipts root from
+its own execution to compare against them -- only the STATE root is checked.
+Logs are therefore not adjudicated by this suite at all, for fmint or for
+WETH (`gen-weth-fixtures.py` never asserts log content either, for the same
+reason). D6's event claims stay evidenced by source reading
+(`Blanc/Fmint.lean`'s `logWith` call sites, matching WETH's), not by a
+fixture.
+
+Run from the Blanc repository root with the frozen oracle venv:
+
+    PYTHONPATH="$HOME/execution-specs/src" \\
+      "$HOME/execution-specs/venv/bin/python" scripts/gen-fmint-fixtures.py
+
+Never hand-edit the JSON files this script writes -- rerun it. It also
+writes `scripts/fixtures/fmint/manifest.json` (name, outcome class,
+assertion count per case), which `scripts/check-fmint.sh` cross-checks
+against the fixture directory (the anti-vacuity acceptance criterion: a
+deleted or never-generated case can never yield "all PASS" via globbing).
+"""
+import json
+import os
+import subprocess
+import sys
+import tempfile
+
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+EELS = os.environ.get("EELS_ROOT", os.path.expanduser("~/execution-specs"))
+sys.path.insert(0, os.path.join(EELS, "src"))
+
+from ethereum_rlp import rlp                                     # noqa: E402
+from ethereum_types.bytes import Bytes, Bytes8, Bytes32, Bytes256   # noqa: E402
+from ethereum_types.numeric import U64, U256, Uint               # noqa: E402
+from ethereum.crypto.hash import keccak256                       # noqa: E402
+from ethereum.prague.blocks import Header                        # noqa: E402
+from ethereum.prague.fork_types import Account, Address          # noqa: E402
+from ethereum.prague.state import (                              # noqa: E402
+    State, set_account, set_storage, state_root,
+)
+from ethereum.utils.hexadecimal import hex_to_bytes              # noqa: E402
+
+OUT_DIR = os.path.join(REPO_ROOT, "scripts", "fixtures", "fmint")
+BORROWERS_PATH = os.path.join(REPO_ROOT, "scripts", "fmint-borrowers.json")
+MANIFEST_PATH = os.path.join(OUT_DIR, "manifest.json")
+
+TEMPLATE = os.path.expanduser(
+    "~/eest-mainnet-v20.0.1/fixtures/blockchain_tests/for_prague/"
+    "constantinople/eip1052_extcodehash/extcodehash/extcodehash_of_empty.json")
+
+COINBASE = "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba"
+
+EMPTY_OMMER_HASH = (
+    "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347")
+EMPTY_TRIE_ROOT = (
+    "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
+SYSTEM = [
+    "0x0000f90827f1c53a10cb7a02335b175320002935",
+    "0x000f3df6d732807ef1319fb7b8bb8522d0beac02",
+    "0x00000961ef480eb55e80d19ad83579a64c007002",
+    "0x0000bbddc7ce488642fb579f8b00f3a590007251",
+    "0x00000000219ab540356cbb839cbe05303d7705fa",
+]
+
+FMINT_ADDR = "0x" + "f3157".rjust(40, "0")
+PROBER_ADDR = "0x" + "b0b".rjust(40, "0")
+
+GAS_PRICE = 10
+PROBE_GAS = 200000  # 0x030d40 -- see WETH's PROBE_GAS: bounds the damage of a
+                    # guard firing as a stack underflow / memory OOG rather
+                    # than a clean REVERT, and pairs every rejected call with
+                    # a succeeding one at the same cap.
+# Blanc's `.rev` is a bare REVERT over whatever two words the guard happened
+# to leave on the stack (see `Blanc/Fmint.lean`'s guard-idiom docstring).
+# Several of fmint's guards fire with a 256-bit hash (an allowance key) or a
+# large amount sitting in one of those two slots, which REVERT then reads as
+# a memory (offset, size) pair -- an astronomical `size` triggers the
+# quadratic memory-expansion cost and can consume ALL remaining gas trying
+# to compute it, exactly the failure mode WETH's own PROBE_GAS note
+# describes ("consume everything they were given"). A guard reached only
+# after a full mint + callback round trip additionally needs enough gas to
+# get there in the first place, so this cap is larger than WETH's.
+FLASHLOAN_PROBE_GAS = 3_000_000  # 0x2dc6c0
+
+
+def q(x):
+    n = int(x, 16) if isinstance(x, str) else int(x)
+    s = format(n, "x")
+    return "0x" + ("0" + s if len(s) % 2 else s)
+
+
+h = q
+
+
+def addr32(a):
+    if isinstance(a, int):
+        a = "0x" + format(a, "040x")
+    return a[2:].rjust(64, "0")
+
+
+def word32(n):
+    return format(n, "x").rjust(64, "0")
+
+
+def derive_address(key):
+    """A small synthetic, deterministic 'EOA' address for transaction key
+    `key` -- deterministic and collision-free across the modest key range
+    this suite uses (a private key is not needed here since the oracle
+    signs the transaction from a raw private key regardless; we mirror
+    WETH's own `derive_address` exactly, including its use of coincurve, for
+    the caller EOAs that actually sign transactions)."""
+    import coincurve
+    sk = coincurve.PrivateKey(key.to_bytes(32, "big"))
+    pub = sk.public_key.format(compressed=False)
+    return "0x" + keccak256(pub[1:]).hex()[-40:]
+
+
+def privkey_hex(key):
+    return "0x" + format(key, "x").rjust(64, "0")
+
+
+def selector(sig):
+    return keccak256(sig.encode())[:4]
+
+
+# ---- general ABI encoder: fixed head words plus at most one dynamic
+# `bytes` tail, which must be the last argument -- exactly what every call
+# in this suite needs (`flashLoan`'s `data`; nothing else in the ABI here is
+# dynamic). ------------------------------------------------------------
+
+def _head_word(ty, val):
+    if ty == "address":
+        return bytes.fromhex(addr32(val))
+    if ty == "uint256":
+        return bytes.fromhex(word32(val))
+    raise ValueError(ty)
+
+
+def abi_call(sig, *args):
+    """`args`: `(type, value)` pairs, `type` one of `"address"`,
+    `"uint256"`, `"bytes"` (value a `bytes` object; at most one, last)."""
+    sel = selector(sig)
+    n = len(args)
+    heads = [b""] * n
+    tail = b""
+    tail_off = 32 * n
+    for i, (ty, val) in enumerate(args):
+        if ty == "bytes":
+            heads[i] = bytes.fromhex(word32(tail_off))
+            pad = (-len(val)) % 32
+            tail += bytes.fromhex(word32(len(val))) + val + bytes(pad)
+            tail_off += 32 + len(val) + pad
+        else:
+            heads[i] = _head_word(ty, val)
+    return sel + b"".join(heads) + tail
+
+
+# ---- the general trigger prober --------------------------------------
+#
+# Generalises WETH's `Probe`/`prober_bytecode` (weth-evidence Step 3-4) to
+# raw, precomputed calldata of arbitrary length -- needed because
+# `flashLoan`'s calldata carries a dynamic `bytes` tail, which WETH's
+# fixed-head-word-only `Probe` cannot express. Same slot idiom:
+#
+#   base + 0      the CALL's success flag  (1 = returned, 0 = reverted)
+#   base + 1      RETURNDATASIZE
+#   base + 2 + j  returned word j (only for the words this trigger records --
+#                 every function called here has a statically known ABI
+#                 return size, so `n_words` is fixed per call, not guessed)
+#
+# and the same refusal discipline: a REJECTED trigger records the flag (0)
+# plus an unconditionally-written executed marker at base+1, and nothing
+# else -- "flag = 0" alone would also hold of a trigger that never ran.
+
+def trigger_base(i):
+    return 0x100 * (i + 1)
+
+
+RET_SCRATCH = 0x1000  # far past any calldata this suite ever builds (<1KB)
+
+
+def _pushn(x: int) -> bytes:
+    """Minimal-width PUSH of a nonnegative integer -- PUSH1 for 0, otherwise
+    PUSHn for the fewest bytes that hold it. Correct regardless of width:
+    PUSHn zero-extends to the full 256-bit stack word. Also what makes an
+    embedded 4-byte selector show up as `PUSH4 <sel>` for the coverage
+    scanner, the same minimal-width discipline `Blanc.Ninst.pushB256`
+    itself uses (`~/blanc/Blanc/CommonCore.lean`)."""
+    assert x >= 0
+    if x == 0:
+        return bytes([0x60, 0x00])
+    nbytes = (x.bit_length() + 7) // 8
+    return bytes([0x5F + nbytes]) + x.to_bytes(nbytes, "big")
+
+
+_MSTORE = b"\x52"
+_MLOAD = b"\x51"
+_SSTORE = b"\x55"
+_GAS = b"\x5a"
+_CALL = b"\xf1"
+_RETURNDATASIZE = b"\x3d"
+_STOP = b"\x00"
+
+
+class Trigger:
+    """One call the prober makes. `raw_calldata` is precomputed (`abi_call`
+    or hand-built). `n_words` is the number of 32-byte return words to
+    record on success -- fixed per ABI function, never inferred from what
+    came back. `reverts_because` turns this into a rejected-call trigger."""
+
+    def __init__(self, label, target, raw_calldata, n_words=0,
+                 reverts_because=None, gas=None):
+        assert not (n_words and reverts_because), label
+        self.label = label
+        self.target = target
+        self.calldata = raw_calldata
+        self.n_words = n_words
+        self.reverts_because = reverts_because
+        self.gas = gas
+
+    @property
+    def succeeds(self):
+        return self.reverts_because is None
+
+
+def build_trigger_bytecode(triggers):
+    ops = bytearray()
+    for i, t in enumerate(triggers):
+        base = trigger_base(i)
+        cd = t.calldata
+        nwords = (len(cd) + 31) // 32
+        padded = cd + bytes((-len(cd)) % 32)
+        for w in range(nwords):
+            word_int = int.from_bytes(padded[w * 32:(w + 1) * 32], "big")
+            ops += _pushn(word_int)
+            ops += _pushn(w * 32)
+            ops += _MSTORE
+        ops += _pushn(32 * t.n_words)          # retSize
+        ops += _pushn(RET_SCRATCH)             # retOffset
+        ops += _pushn(len(cd))                 # argsSize (exact, unpadded)
+        ops += _pushn(0)                       # argsOffset
+        ops += _pushn(0)                       # value
+        ops += _pushn(int(t.target, 16))       # address
+        if t.gas is None:
+            ops += _GAS
+        else:
+            ops += _pushn(t.gas)
+        ops += _CALL
+        ops += _pushn(base)
+        ops += _SSTORE
+        if not t.succeeds:
+            ops += _pushn(1)
+            ops += _pushn(base + 1)
+            ops += _SSTORE
+            continue
+        ops += _RETURNDATASIZE
+        ops += _pushn(base + 1)
+        ops += _SSTORE
+        for j in range(t.n_words):
+            ops += _pushn(RET_SCRATCH + 32 * j)
+            ops += _MLOAD
+            ops += _pushn(base + 2 + j)
+            ops += _SSTORE
+    ops += _STOP
+    return bytes(ops)
+
+
+def trigger_storage(triggers, words_by_index=None):
+    """The prober's complete expected nonzero storage, mirroring WETH's
+    `probe_storage`. `words_by_index[i]` supplies the actual returned words
+    for trigger `i` (a list of ints) when known in advance; a succeeding
+    trigger with no supplied words still gets its flag/length slots."""
+    words_by_index = words_by_index or {}
+    out = {}
+    for i, t in enumerate(triggers):
+        base = trigger_base(i)
+        if not t.succeeds:
+            out[base + 1] = 1
+            continue
+        out[base] = 1
+        out[base + 1] = 32 * t.n_words
+        for j, w in enumerate(words_by_index.get(i, [])):
+            if w:
+                out[base + 2 + j] = w
+    return out
+
+
+def expect_trigger(e, label, prober_addr, i, t, words=()):
+    """`words`: `(expected_word, claim)` pairs for a succeeding trigger."""
+    base = trigger_base(i)
+    if not t.succeeds:
+        e.expect_slot(
+            label, prober_addr, base, f"trigger {i} ({t.label}) success flag",
+            0, f"REJECTED: {t.reverts_because}", fmt=_word)
+        e.expect_slot(
+            label, prober_addr, base + 1,
+            f"trigger {i} ({t.label}) executed marker", 1,
+            "...and the trigger really ran: written unconditionally right "
+            "after the CALL, so a zero flag beside a set marker cannot be "
+            "explained by a prop that never reached the call", fmt=_word)
+        return
+    nbytes = 32 * t.n_words
+    e.expect_slot(
+        label, prober_addr, base, f"trigger {i} ({t.label}) success flag", 1,
+        f"{t.label} was honoured, not reverted", fmt=_word)
+    e.expect_slot(
+        label, prober_addr, base + 1, f"trigger {i} ({t.label}) RETURNDATASIZE",
+        nbytes, f"{t.label} returns exactly {nbytes} bytes", fmt=_word)
+    for j, (w, claim) in enumerate(words):
+        e.expect_slot(label, prober_addr, base + 2 + j,
+                      f"trigger {i} ({t.label}) returned word {j}", w, claim,
+                      fmt=_word)
+
+
+# ---- storage-key derivations (fmint's D3 layout) -----------------------
+
+def balance_slot(addr):
+    return int(addr, 16) if isinstance(addr, str) else addr
+
+
+def allowance_slot(owner, spender):
+    material = bytes.fromhex(addr32(owner)) + bytes.fromhex(addr32(spender))
+    return int.from_bytes(keccak256(material), "big")
+
+
+SUPPLY_SLOT = (1 << 256) - 1  # B256.max, `Blanc.Fmint.supplySlot`
+
+# Borrower observation slots -- MUST match `scripts/gen-fmint-borrowers.lean`
+# (`OBS_*`/`DEPTH_SLOT`) exactly; not machine-cross-checked across the
+# Lean/Python boundary, so kept together here and there under one comment
+# each.
+OBS_SENDER, OBS_INITIATOR, OBS_TOKEN, OBS_AMOUNT, OBS_FEE = 0, 1, 2, 3, 4
+OBS_DATAHASH, OBS_BAL_SELF, OBS_SUPPLY = 5, 6, 7
+DEPTH_SLOT = 100
+
+
+def _wei(n):
+    return f"0x{n:x} ({n})"
+
+
+def _word(n):
+    b = n.to_bytes(32, "big")
+    ascii_part = "".join(chr(c) if 0x20 <= c < 0x7F else "." for c in b)
+    return f"0x{n:064x} ({n}) |{ascii_part}|"
+
+
+def _slots(m):
+    if not m:
+        return "{} (no nonzero slot)"
+    return "{" + ", ".join(f"0x{k:064x} = 0x{v:x}"
+                           for k, v in sorted(m.items())) + "}"
+
+
+class ExpectationFailure(Exception):
+    """A HALT, not something to smooth over -- see `gen-weth-fixtures.py`'s
+    identical class for the full rationale."""
+
+
+class Expectations:
+    """Spec-derived checks on one case's oracle output -- copied from
+    `gen-weth-fixtures.py` verbatim; it is fully contract-agnostic."""
+
+    def __init__(self, case, pre, post, res):
+        self.case = case
+        self.pre = pre
+        self.post = post
+        self.res = res
+        self.checked = []
+        self.failed = []
+
+    def pre_ether(self, addr):
+        return int(self._find(self.pre, addr).get("balance", "0x0"), 16)
+
+    def pre_slot(self, addr, key):
+        return self._storage(self._find(self.pre, addr)).get(key, 0)
+
+    @staticmethod
+    def _find(alloc, addr):
+        for k, v in alloc.items():
+            if int(k, 16) == int(addr, 16):
+                return v
+        return {}
+
+    @staticmethod
+    def _storage(acct):
+        return {int(k, 16): int(v, 16)
+                for k, v in acct.get("storage", {}).items() if int(v, 16) != 0}
+
+    def post_ether(self, addr):
+        return int(self._find(self.post, addr).get("balance", "0x0"), 16)
+
+    def post_storage(self, addr):
+        return self._storage(self._find(self.post, addr))
+
+    def fee(self, *tx_indices):
+        cum = [int(r["gasUsed"], 16) for r in self.res["receipts"]]
+        total = 0
+        for i in tx_indices:
+            total += (cum[i] - (cum[i - 1] if i else 0)) * GAS_PRICE
+        return total
+
+    def _record(self, ok, what, expected, observed, claim):
+        self.checked.append(claim)
+        if not ok:
+            self.failed.append((what, expected, observed, claim))
+
+    def expect_tx_succeeded(self, i, claim):
+        obs = bool(self.res["receipts"][i].get("succeeded"))
+        self._record(obs, f"transaction {i} status", "succeeded",
+                     "succeeded" if obs else "reverted/failed", claim)
+
+    def expect_ether(self, label, addr, expected, claim):
+        obs = self.post_ether(addr)
+        self._record(obs == expected, f"ether balance of {label}",
+                     _wei(expected), _wei(obs), claim)
+
+    def expect_slot(self, label, addr, key, key_label, expected, claim,
+                    fmt=_wei):
+        obs = self.post_storage(addr).get(key, 0)
+        self._record(obs == expected,
+                     f"{label} storage slot {key_label} (0x{key:064x})",
+                     fmt(expected), fmt(obs), claim)
+
+    def expect_storage_exact(self, label, addr, expected, claim):
+        obs = self.post_storage(addr)
+        self._record(obs == expected, f"complete nonzero storage of {label}",
+                     _slots(expected), _slots(obs), claim)
+
+    def finish(self):
+        if not self.checked:
+            raise ExpectationFailure(
+                f"{self.case}: no expectation was checked at all -- exactly "
+                f"the vacuous fixture this layer exists to prevent.")
+        if self.failed:
+            out = [
+                f"EXPECTATION FAILED -- {self.case}: {len(self.failed)} of "
+                f"{len(self.checked)} spec-derived expectations do not hold "
+                f"of the oracle's post-state.", ""]
+            for what, expected, observed, claim in self.failed:
+                out += [f"  {what}",
+                        f"    claim     {claim}",
+                        f"    expected  {expected}",
+                        f"    observed  {observed}", ""]
+            out += [
+                "Nothing was written. This is a HALT: either the "
+                "expectation misstates fmint's semantics, or Blanc's "
+                "bytecode does not implement them. Do not relax the "
+                "expectation to make generation pass."]
+            raise ExpectationFailure("\n".join(out))
+        return len(self.checked)
+
+
+# ---- oracle-derived compiled fmint code and borrower zoo, never
+# transcribed by hand -----------------------------------------------------
+
+def get_fmint_code_hex():
+    with tempfile.NamedTemporaryFile(
+            suffix=".lean", mode="w", delete=False) as f:
+        f.write(
+            "import Blanc.FmintCode\n"
+            "namespace Blanc\n"
+            "open Jaune\n"
+            "#eval Blanc.fmintCode.toHex\n"
+            "end Blanc\n"
+        )
+        scratch = f.name
+    try:
+        out = subprocess.run(
+            ["lake", "env", "lean", scratch],
+            cwd=REPO_ROOT, check=True, capture_output=True, text=True,
+        ).stdout
+    finally:
+        os.unlink(scratch)
+    hexstr = out.strip().strip('"')
+    assert len(hexstr) == 2434, f"unexpected fmintCode hex length {len(hexstr)}"
+    assert hexstr.startswith("5b5f3560"), hexstr[:16]
+    return "0x" + hexstr
+
+
+def get_borrowers():
+    """`scripts/fmint-borrowers.json`, committed and generated by
+    `lake env lean scripts/gen-fmint-borrowers.lean` -- never re-derived or
+    hand-copied here."""
+    if not os.path.exists(BORROWERS_PATH):
+        raise SystemExit(
+            f"{BORROWERS_PATH} not found -- regenerate with "
+            f"'lake env lean scripts/gen-fmint-borrowers.lean'")
+    with open(BORROWERS_PATH) as f:
+        return json.load(f)
+
+
+# ---- genesis / header / t8n plumbing (copied from gen-weth-fixtures.py,
+# which is itself contract-agnostic plumbing) ------------------------------
+
+def norm_alloc(alloc):
+    out = {}
+    for addr, a in alloc.items():
+        out[addr] = {
+            "nonce": q(a.get("nonce", "0x0")),
+            "balance": q(a.get("balance", "0x0")),
+            "code": a.get("code", "0x"),
+            "storage": {q(k): q(v) for k, v in a.get("storage", {}).items()
+                        if int(v, 16) != 0},
+        }
+    return out
+
+
+def alloc_state_root(alloc):
+    st = State()
+    for addr, acct in alloc.items():
+        set_account(st, Address(hex_to_bytes(addr)), Account(
+            nonce=Uint(int(acct.get("nonce", "0x0"), 16)),
+            balance=U256(int(acct.get("balance", "0x0"), 16)),
+            code=Bytes(hex_to_bytes(acct.get("code", "0x"))),
+        ))
+        for k, v in acct.get("storage", {}).items():
+            val = U256(int(v, 16))
+            if val != 0:
+                set_storage(st, Address(hex_to_bytes(addr)),
+                            Bytes32(int(k, 16).to_bytes(32, "big")), val)
+    return "0x" + state_root(st).hex()
+
+
+def header_json(hdr, hsh):
+    return {
+        "parentHash": "0x" + hdr.parent_hash.hex(),
+        "uncleHash": "0x" + hdr.ommers_hash.hex(),
+        "coinbase": "0x" + hdr.coinbase.hex(),
+        "stateRoot": "0x" + hdr.state_root.hex(),
+        "transactionsTrie": "0x" + hdr.transactions_root.hex(),
+        "receiptTrie": "0x" + hdr.receipt_root.hex(),
+        "bloom": "0x" + hdr.bloom.hex(),
+        "difficulty": h(hdr.difficulty),
+        "number": h(hdr.number),
+        "gasLimit": h(hdr.gas_limit),
+        "gasUsed": h(hdr.gas_used),
+        "timestamp": h(hdr.timestamp),
+        "extraData": "0x" + hdr.extra_data.hex(),
+        "mixHash": "0x" + hdr.prev_randao.hex(),
+        "nonce": "0x" + hdr.nonce.hex(),
+        "baseFeePerGas": h(hdr.base_fee_per_gas),
+        "withdrawalsRoot": "0x" + hdr.withdrawals_root.hex(),
+        "blobGasUsed": h(hdr.blob_gas_used),
+        "excessBlobGas": h(hdr.excess_blob_gas),
+        "parentBeaconBlockRoot": "0x" + hdr.parent_beacon_block_root.hex(),
+        "requestsHash": "0x" + hdr.requests_hash.hex(),
+        "hash": "0x" + hsh.hex(),
+    }
+
+
+def mk_header(d):
+    hdr = Header(
+        parent_hash=hex_to_bytes(d["parentHash"]),
+        ommers_hash=hex_to_bytes(d["uncleHash"]),
+        coinbase=Address(hex_to_bytes(d["coinbase"])),
+        state_root=hex_to_bytes(d["stateRoot"]),
+        transactions_root=hex_to_bytes(d["transactionsTrie"]),
+        receipt_root=hex_to_bytes(d["receiptTrie"]),
+        bloom=Bytes256(hex_to_bytes(d["bloom"])),
+        difficulty=Uint(int(d["difficulty"], 16)),
+        number=Uint(int(d["number"], 16)),
+        gas_limit=Uint(int(d["gasLimit"], 16)),
+        gas_used=Uint(int(d["gasUsed"], 16)),
+        timestamp=U256(int(d["timestamp"], 16)),
+        extra_data=Bytes(hex_to_bytes(d["extraData"])),
+        prev_randao=Bytes32(hex_to_bytes(d["mixHash"])),
+        nonce=Bytes8(hex_to_bytes(d["nonce"])),
+        base_fee_per_gas=Uint(int(d["baseFeePerGas"], 16)),
+        withdrawals_root=hex_to_bytes(d["withdrawalsRoot"]),
+        blob_gas_used=U64(int(d["blobGasUsed"], 16)),
+        excess_blob_gas=U64(int(d["excessBlobGas"], 16)),
+        parent_beacon_block_root=hex_to_bytes(d["parentBeaconBlockRoot"]),
+        requests_hash=hex_to_bytes(d["requestsHash"]),
+    )
+    return hdr, keccak256(rlp.encode(hdr))
+
+
+def run_t8n(env, alloc, txs):
+    with tempfile.TemporaryDirectory() as td:
+        p = lambda n: os.path.join(td, n)  # noqa: E731
+        json.dump(env, open(p("env.json"), "w"))
+        json.dump(alloc, open(p("alloc.json"), "w"))
+        json.dump(txs, open(p("txs.json"), "w"))
+        cmd = [sys.executable, "-m", "ethereum_spec_tools.evm_tools", "t8n",
+               "--input.env", p("env.json"), "--input.alloc", p("alloc.json"),
+               "--input.txs", p("txs.json"), "--output.basedir", td,
+               "--output.alloc", "out-alloc.json",
+               "--output.result", "out-result.json",
+               "--output.body", "out-body.txt",
+               "--state.fork", "Prague", "--state.chainid", "1",
+               "--state.reward", "0"]
+        subprocess.run(cmd, check=True, capture_output=True, text=True,
+                        env={**os.environ,
+                             "PYTHONPATH": os.path.join(EELS, "src")})
+        post = json.load(open(p("out-alloc.json")))
+        res = json.load(open(p("out-result.json")))
+        body = json.load(open(p("out-body.txt")))
+    return post, res, body
+
+
+MANIFEST = []
+
+
+def build_fixture(name, extra_alloc, txs, expect, outcome, gas_limit="0x2fefd8"):
+    """As `gen-weth-fixtures.py`'s `build_fixture`, plus recording one
+    manifest row (`name`, `outcome`, assertion count) -- the anti-vacuity
+    scenario manifest `scripts/check-fmint.sh` cross-checks against the
+    fixture directory."""
+    tmpl_all = json.load(open(TEMPLATE))
+    tmpl = tmpl_all[list(tmpl_all)[0]]
+    blob_schedule = tmpl["config"]["blobSchedule"]
+
+    alloc = {a: tmpl["pre"][a] for a in SYSTEM}
+    alloc.update(extra_alloc)
+
+    g = dict(tmpl["genesisBlockHeader"])
+    g["stateRoot"] = alloc_state_root(alloc)
+    g["extraData"] = "0x00"
+    g["gasLimit"] = gas_limit
+    ghdr, ghash = mk_header(g)
+    genesis_rlp = rlp.encode([ghdr, [], [], []])
+
+    env = {
+        "currentCoinbase": COINBASE,
+        "currentGasLimit": g["gasLimit"],
+        "currentNumber": "0x1",
+        "currentTimestamp": "0xc",
+        "currentRandom":
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "parentHash": "0x" + ghash.hex(),
+        "parentTimestamp": g["timestamp"],
+        "parentDifficulty": "0x0",
+        "parentUncleHash": EMPTY_OMMER_HASH,
+        "parentGasLimit": g["gasLimit"],
+        "parentGasUsed": "0x0",
+        "parentBaseFee": g["baseFeePerGas"],
+        "parentBlobGasUsed": "0x0",
+        "parentExcessBlobGas": "0x0",
+        "parentBeaconBlockRoot": g["parentBeaconBlockRoot"],
+        "blockHashes": {"0": "0x" + ghash.hex()},
+        "ommers": [],
+        "withdrawals": [],
+    }
+
+    post, res, body = run_t8n(env, alloc, txs)
+    assert res["rejected"] == [], (name, res["rejected"])
+
+    exp = Expectations(name, extra_alloc, post, res)
+    expect(exp)
+    n_checked = exp.finish()
+
+    txs_rlp = rlp.decode(hex_to_bytes(body))
+
+    b = {
+        "parentHash": "0x" + ghash.hex(),
+        "uncleHash": EMPTY_OMMER_HASH,
+        "coinbase": COINBASE,
+        "stateRoot": res["stateRoot"],
+        "transactionsTrie": res["txRoot"],
+        "receiptTrie": res["receiptsRoot"],
+        "bloom": res["logsBloom"],
+        "difficulty": q(0),
+        "number": q(1),
+        "gasLimit": q(g["gasLimit"]),
+        "gasUsed": q(res["gasUsed"]),
+        "timestamp": q(env["currentTimestamp"]),
+        "extraData": "0x",
+        "mixHash": env["currentRandom"],
+        "nonce": "0x0000000000000000",
+        "baseFeePerGas": q(res["currentBaseFee"]),
+        "withdrawalsRoot": res.get("withdrawalsRoot", EMPTY_TRIE_ROOT),
+        "blobGasUsed": q(0),
+        "excessBlobGas": q(res.get("currentExcessBlobGas", "0x0")),
+        "parentBeaconBlockRoot": env["parentBeaconBlockRoot"],
+        "requestsHash": res["requestsHash"],
+    }
+    bhdr, bhash = mk_header(b)
+    block_rlp = rlp.encode([bhdr, txs_rlp, [], []])
+
+    case_name = f"blanc/fmint-code/fmint::{name}[fork_Prague-blockchain_test]"
+    fixture = {case_name: {
+        "network": "Prague",
+        "genesisBlockHeader": header_json(ghdr, ghash),
+        "pre": norm_alloc(alloc),
+        "postState": norm_alloc(post),
+        "lastblockhash": "0x" + bhash.hex(),
+        "config": {"network": "Prague", "chainid": "0x1",
+                   "blobSchedule": blob_schedule},
+        "genesisRLP": "0x" + genesis_rlp.hex(),
+        "blocks": [{"rlp": "0x" + block_rlp.hex(), "blocknumber": "1"}],
+        "sealEngine": "NoProof",
+    }}
+    MANIFEST.append({"name": name, "outcome": outcome, "assertions": n_checked})
+    return fixture, res, n_checked
+
+
+def eoa_alloc(balance):
+    return {"nonce": "0x0", "balance": q(balance), "code": "0x", "storage": {}}
+
+
+def trigger_tx(trigger_key, gas="0x2dc6c0"):
+    trigger = derive_address(trigger_key)
+    tx = {
+        "type": "0x0", "chainId": "0x1", "nonce": "0x0",
+        "gasPrice": q(GAS_PRICE), "gas": gas, "to": PROBER_ADDR,
+        "value": "0x0", "input": "0x",
+        "v": "0x0", "r": "0x0", "s": "0x0", "secretKey": privkey_hex(trigger_key),
+    }
+    return trigger, tx
+
+
+def fmint_account(storage=None, supply=None):
+    st = dict(storage or {})
+    if supply is not None:
+        st[SUPPLY_SLOT] = supply
+    return {
+        "nonce": "0x1", "balance": q(0), "code": FMINT_CODE,
+        "storage": {word32(k): word32(v) for k, v in st.items()},
+    }
+
+
+def borrower_account(name, storage=None):
+    return {
+        "nonce": "0x1", "balance": q(0), "code": BORROWERS[name],
+        "storage": {word32(k): word32(v) for k, v in (storage or {}).items()},
+    }
+
+
+def prober_account(code):
+    return {"nonce": "0x1", "balance": q(0), "code": "0x" + code.hex(),
+            "storage": {}}
+
+
+ERC3156_MAGIC = keccak256(b"ERC3156FlashBorrower.onFlashLoan")
+
+
+# ---- the borrower zoo, addresses -----------------------------------------
+
+COMPLIANT_ADDR = "0x" + "c001".rjust(40, "0")
+COMPLIANT_OVERLONG_ADDR = "0x" + "c002".rjust(40, "0")
+WRONG_MAGIC_ADDR = "0x" + "d000".rjust(40, "0")
+REVERTING_ADDR = "0x" + "e000".rjust(40, "0")
+TRANSFER_AWAY_ADDR = "0x" + "1234".rjust(40, "0")
+REENTRANT_ADDR = "0x" + "7770".rjust(40, "0")
+PASSIVE_NOAPPROVE_ADDR = "0x" + "a001".rjust(40, "0")
+PASSIVE_INSUFFICIENT_ADDR = "0x" + "a002".rjust(40, "0")
+PASSIVE_EXACT_ADDR = "0x" + "a003".rjust(40, "0")
+PASSIVE_RESIDUAL_ADDR = "0x" + "a004".rjust(40, "0")
+PASSIVE_INFINITE_ADDR = "0x" + "a005".rjust(40, "0")
+EOA_RECEIVER_ADDR = "0x" + "eeee".rjust(40, "0")  # empty code -- no account
+DIRTY_RECEIVER_TOKEN_ADDR = "0x" + "9999".rjust(40, "0")  # a wrong `token`
+
+WAD = 10 ** 6  # an arbitrary fmint "token unit" scale, chosen for legible
+               # arithmetic -- fmint's `amount` has no wei semantics
+EOA_BALANCE = 10 ** 18  # real ether, for gas -- unrelated to the WAD scale
+
+
+def case_compliant():
+    """flashLoan's full success path: the compliant borrower approves inside
+    its own callback and returns the magic word. Under fee ≡ 0 the mint and
+    the burn cancel exactly, so fmint's end state equals its pre-state --
+    the mid-callback observations recorded in the borrower's OWN storage are
+    the only durable witness that the mint happened before the callback ran,
+    with the exact forwarded arguments (evidence plan, anti-vacuity
+    requirements)."""
+    trigger_key = 1
+    amount = 5 * WAD
+    data = b"hello"
+    t = Trigger("flashLoan(compliant)", FMINT_ADDR,
+                abi_call("flashLoan(address,address,uint256,bytes)",
+                         ("address", COMPLIANT_ADDR), ("address", FMINT_ADDR),
+                         ("uint256", amount), ("bytes", data)),
+                n_words=1)
+    trigger, tx = trigger_tx(trigger_key)
+    alloc = {
+        FMINT_ADDR: fmint_account(),
+        COMPLIANT_ADDR: borrower_account("compliant"),
+        PROBER_ADDR: prober_account(build_trigger_bytecode([t])),
+        trigger: eoa_alloc(EOA_BALANCE),
+    }
+
+    def expect(e):
+        e.expect_tx_succeeded(0, "the trigger transaction runs to completion")
+        expect_trigger(e, "prober", PROBER_ADDR, 0, t,
+                       words=[(1, "flashLoan returned true")])
+        e.expect_storage_exact(
+            "prober", PROBER_ADDR, trigger_storage([t], {0: [1]}),
+            "the prober's storage is exactly the one trigger's record")
+        e.expect_storage_exact(
+            "fmint", FMINT_ADDR, {},
+            "fee ≡ 0: the mint and the burn cancel exactly, so a successful "
+            "loan's end state equals its pre-state")
+        e.expect_storage_exact(
+            "compliant borrower", COMPLIANT_ADDR, {
+                OBS_SENDER: int(FMINT_ADDR, 16),
+                OBS_INITIATOR: int(PROBER_ADDR, 16),
+                OBS_TOKEN: int(FMINT_ADDR, 16),
+                OBS_AMOUNT: amount,
+                OBS_DATAHASH: int.from_bytes(keccak256(data), "big"),
+                OBS_BAL_SELF: amount,
+                OBS_SUPPLY: amount,
+            },
+            "the borrower's mid-callback observations: msg.sender is fmint, "
+            "the initiator is whoever called flashLoan (the prober), token "
+            "is fmint itself, amount/data are forwarded exactly (data by "
+            "its keccak), and both balanceOf(self) and totalSupply() "
+            "already reflect the mint -- captured DURING the callback, "
+            "which is the only way to observe that ordering under fee ≡ 0")
+
+    return build_fixture("01-flashloan-compliant", alloc, [tx], expect,
+                         outcome="success")
+
+
+
+def case_wrong_magic():
+    """The wrong-magic borrower: the callback runs (the mint happened, and
+    the borrower's own observations were recorded), but it returns a word
+    that provably is not the ERC-3156 magic, so `flashLoan`'s
+    `checkRetdataHead` guard fires and the WHOLE frame reverts -- including
+    the mint. Zoo member 2."""
+    trigger_key = 2
+    amount = 3 * WAD
+    t = Trigger("flashLoan(wrongMagic)", FMINT_ADDR,
+                abi_call("flashLoan(address,address,uint256,bytes)",
+                         ("address", WRONG_MAGIC_ADDR), ("address", FMINT_ADDR),
+                         ("uint256", amount), ("bytes", b"")),
+                reverts_because=(
+                    "the borrower returns a word that is not "
+                    "keccak256('ERC3156FlashBorrower.onFlashLoan'), so "
+                    "flashLoan's checkRetdataHead guard rejects it"),
+                gas=FLASHLOAN_PROBE_GAS)
+    trigger, tx = trigger_tx(trigger_key)
+    alloc = {
+        FMINT_ADDR: fmint_account(),
+        WRONG_MAGIC_ADDR: borrower_account("wrongMagic"),
+        PROBER_ADDR: prober_account(build_trigger_bytecode([t])),
+        trigger: eoa_alloc(EOA_BALANCE),
+    }
+
+    def expect(e):
+        e.expect_tx_succeeded(0, "the trigger transaction runs to completion "
+                                  "-- the rejected inner call does not take "
+                                  "the prober down with it")
+        expect_trigger(e, "prober", PROBER_ADDR, 0, t)
+        e.expect_storage_exact(
+            "prober", PROBER_ADDR, trigger_storage([t]),
+            "the prober's storage is exactly the rejected trigger's record")
+        e.expect_storage_exact(
+            "fmint", FMINT_ADDR, {},
+            "the whole flashLoan frame reverted, so EVEN THE MINT rolled "
+            "back -- fmint's storage is untouched, not left half-minted")
+        e.expect_storage_exact(
+            "wrongMagic borrower", WRONG_MAGIC_ADDR, {},
+            "the borrower's own SSTOREs (its observations) rolled back "
+            "along with everything else in the reverted frame -- this is "
+            "the sharp case: the callback DID run and DID write, but the "
+            "revert erased it, which a check that only looked at 'nothing "
+            "changed' could not distinguish from 'the callback never ran'")
+
+    return build_fixture("02-flashloan-wrong-magic", alloc, [tx], expect,
+                         outcome="revert")
+
+
+def case_reverting():
+    """The reverting borrower: `Func.rev` alone. `flashLoan`'s callback
+    `CALL` itself fails (not merely its return value), so the `iszero :::
+    .rev <?>` guard on the call's own success flag fires before the magic
+    check is ever reached. Zoo member 3."""
+    trigger_key = 3
+    amount = 2 * WAD
+    t = Trigger("flashLoan(reverting)", FMINT_ADDR,
+                abi_call("flashLoan(address,address,uint256,bytes)",
+                         ("address", REVERTING_ADDR), ("address", FMINT_ADDR),
+                         ("uint256", amount), ("bytes", b"")),
+                reverts_because="the borrower's callback itself reverts, so "
+                                "the CALL fails and flashLoan's own success "
+                                "guard fires",
+                gas=FLASHLOAN_PROBE_GAS)
+    trigger, tx = trigger_tx(trigger_key)
+    alloc = {
+        FMINT_ADDR: fmint_account(),
+        REVERTING_ADDR: borrower_account("reverting"),
+        PROBER_ADDR: prober_account(build_trigger_bytecode([t])),
+        trigger: eoa_alloc(EOA_BALANCE),
+    }
+
+    def expect(e):
+        e.expect_tx_succeeded(0, "the trigger transaction runs to completion")
+        expect_trigger(e, "prober", PROBER_ADDR, 0, t)
+        e.expect_storage_exact(
+            "prober", PROBER_ADDR, trigger_storage([t]),
+            "the prober's storage is exactly the rejected trigger's record")
+        e.expect_storage_exact(
+            "fmint", FMINT_ADDR, {},
+            "the mint rolled back with everything else in the frame")
+
+    return build_fixture("03-flashloan-reverting-borrower", alloc, [tx],
+                         expect, outcome="revert")
+
+
+def case_returndata_spectrum():
+    """The returndata shape spectrum (evidence plan): short (< 32 bytes --
+    the EOA receiver, empty returndata, must fail the magic check even with
+    no data at all), exactly 32 (the ordinary compliant path), and overlong
+    with a correct head (must PASS -- `checkRetdataHead` only pins the head
+    word, per `retdataShorterThan 32` branching first, row 10)."""
+    trigger_key = 4
+    amount_short = 1 * WAD
+    amount_exact = 2 * WAD
+    amount_overlong = 3 * WAD
+    t_short = Trigger(
+        "flashLoan(EOA receiver)", FMINT_ADDR,
+        abi_call("flashLoan(address,address,uint256,bytes)",
+                 ("address", EOA_RECEIVER_ADDR), ("address", FMINT_ADDR),
+                 ("uint256", amount_short), ("bytes", b"")),
+        reverts_because="an EOA receiver has no code, so the callback CALL "
+                        "'succeeds' with zero return data, which fails "
+                        "retdataShorterThan 32 before the magic word is "
+                        "ever read",
+        gas=FLASHLOAN_PROBE_GAS)
+    t_exact = Trigger(
+        "flashLoan(compliant, exactly 32)", FMINT_ADDR,
+        abi_call("flashLoan(address,address,uint256,bytes)",
+                 ("address", COMPLIANT_ADDR), ("address", FMINT_ADDR),
+                 ("uint256", amount_exact), ("bytes", b"")),
+        n_words=1)
+    t_overlong = Trigger(
+        "flashLoan(compliantOverlong, 64 bytes)", FMINT_ADDR,
+        abi_call("flashLoan(address,address,uint256,bytes)",
+                 ("address", COMPLIANT_OVERLONG_ADDR), ("address", FMINT_ADDR),
+                 ("uint256", amount_overlong), ("bytes", b"")),
+        n_words=1)
+    triggers = [t_short, t_exact, t_overlong]
+    trigger, tx = trigger_tx(trigger_key, gas="0xf42400")
+    alloc = {
+        FMINT_ADDR: fmint_account(),
+        COMPLIANT_ADDR: borrower_account("compliant"),
+        COMPLIANT_OVERLONG_ADDR: borrower_account("compliantOverlong"),
+        PROBER_ADDR: prober_account(build_trigger_bytecode(triggers)),
+        trigger: eoa_alloc(EOA_BALANCE),
+        # EOA_RECEIVER_ADDR is deliberately absent from `alloc`: an account
+        # with no entry and no code is exactly the EOA-with-no-code shape.
+    }
+
+    def expect(e):
+        e.expect_tx_succeeded(0, "the trigger transaction runs to completion")
+        for i, t in enumerate(triggers):
+            words = [(1, "flashLoan returned true")] if t.succeeds else []
+            expect_trigger(e, "prober", PROBER_ADDR, i, t, words=words)
+        e.expect_storage_exact(
+            "prober", PROBER_ADDR,
+            trigger_storage(triggers, {1: [1], 2: [1]}),
+            "the prober's storage is exactly the three triggers' records: "
+            "the short-returndata call rejected, the exact-32 and the "
+            "overlong-with-correct-head calls both honoured")
+        e.expect_storage_exact(
+            "fmint", FMINT_ADDR, {},
+            "the short-returndata loan minted nothing durable (its frame "
+            "reverted); the other two round-tripped to zero under fee ≡ 0 "
+            "-- fmint ends exactly where it started")
+
+    return build_fixture("04-flashloan-returndata-spectrum", alloc, [tx],
+                         expect, outcome="mixed", gas_limit="0x1c9c380")
+
+
+def case_data_length_spectrum():
+    """The dynamic-`data` length spectrum (evidence plan): 0, 1, 31, 32, 33,
+    and a multiword length, each forwarded to the SAME passive borrower
+    (pre-approved so every call succeeds, isolating the forwarding question
+    from the repayment question) and witnessed via `OBS_DATAHASH`, which is
+    the only durable evidence `forwardArgTail`'s offset/length/payload
+    arithmetic is exactly right at every one of these boundaries."""
+    trigger_key = 5
+    lengths = [0, 1, 31, 32, 33, 65]
+    datas = [bytes((i * 7 + 3) % 256 for i in range(n)) for n in lengths]
+    addrs = ["0x" + f"a10{i}".rjust(40, "0") for i in range(len(lengths))]
+    amount = 4 * WAD
+    triggers = []
+    for addr, data in zip(addrs, datas):
+        triggers.append(Trigger(
+            f"flashLoan(len={len(data)})", FMINT_ADDR,
+            abi_call("flashLoan(address,address,uint256,bytes)",
+                     ("address", addr), ("address", FMINT_ADDR),
+                     ("uint256", amount), ("bytes", data)),
+            n_words=1))
+    trigger, tx = trigger_tx(trigger_key, gas="0x1c9c380")
+    # The pre-approved allowance is FMINT's own storage (allowances are
+    # tracked by the token, not the borrower) -- keyed by
+    # keccak256(borrower || fmint), one entry per borrower address.
+    fmint_storage = {allowance_slot(addr, FMINT_ADDR): amount for addr in addrs}
+    alloc = {FMINT_ADDR: fmint_account(storage=fmint_storage),
+             PROBER_ADDR: prober_account(build_trigger_bytecode(triggers)),
+             trigger: eoa_alloc(EOA_BALANCE)}
+    for addr in addrs:
+        alloc[addr] = borrower_account("passive")
+
+    def expect(e):
+        e.expect_tx_succeeded(0, "the trigger transaction runs to completion")
+        for i, t in enumerate(triggers):
+            expect_trigger(e, "prober", PROBER_ADDR, i, t,
+                           words=[(1, "flashLoan returned true")])
+        e.expect_storage_exact(
+            "prober", PROBER_ADDR,
+            trigger_storage(triggers, {i: [1] for i in range(len(triggers))}),
+            "every length in the spectrum is honoured")
+        for addr, data, n in zip(addrs, datas, lengths):
+            e.expect_storage_exact(
+                f"borrower(len={n})", addr,
+                {OBS_SENDER: int(FMINT_ADDR, 16),
+                 OBS_INITIATOR: int(PROBER_ADDR, 16),
+                 OBS_TOKEN: int(FMINT_ADDR, 16),
+                 OBS_AMOUNT: amount,
+                 OBS_DATAHASH: int.from_bytes(keccak256(data), "big"),
+                 OBS_BAL_SELF: amount,
+                 OBS_SUPPLY: amount},
+                f"data of length {n} is forwarded byte-for-byte: the "
+                f"recorded keccak matches keccak(data) computed here in "
+                f"Python from the SAME bytes this script asked the oracle "
+                f"to put in calldata -- the length-{n} boundary is where "
+                f"forwardArgTail's payload-vs-pad arithmetic would show an "
+                f"off-by-one first")
+        e.expect_storage_exact(
+            "fmint", FMINT_ADDR, {},
+            "fee ≡ 0: every one of the six loans round-trips to zero")
+
+    return build_fixture("05-flashloan-data-length-spectrum", alloc, [tx],
+                         expect, outcome="success", gas_limit="0x2faf080")
+
+
+def case_allowance_spectrum():
+    """The allowance spectrum (evidence plan) plus zoo member 5
+    ("no-approval borrower"): the SAME passive borrower (never calls
+    `approve`) deployed five times, differing only in the allowance the
+    fixture's PRE-STATE sets at `keccak256(receiver ‖ fmint)` --
+    no-approval (left at its default zero), insufficient (nonzero but below
+    the amount owed), exact, residual (assert the exact leftover), and
+    infinite (`isMax`; assert preservation)."""
+    trigger_key = 6
+    amount = 2 * WAD
+    extra = WAD // 2
+    scenarios = [
+        ("no-approval", PASSIVE_NOAPPROVE_ADDR, None, False),
+        ("insufficient", PASSIVE_INSUFFICIENT_ADDR, amount // 2, False),
+        ("exact", PASSIVE_EXACT_ADDR, amount, True),
+        ("residual", PASSIVE_RESIDUAL_ADDR, amount + extra, True),
+        ("infinite", PASSIVE_INFINITE_ADDR, SUPPLY_SLOT, True),
+    ]
+    triggers = []
+    for label, addr, _, ok in scenarios:
+        kwargs = dict(n_words=1) if ok else dict(
+            reverts_because=f"{label} allowance: spendAllowanceThenBurn's "
+                             f"finite arm reverts because the allowance is "
+                             f"below the amount owed",
+            gas=FLASHLOAN_PROBE_GAS)
+        triggers.append(Trigger(
+            f"flashLoan(passive, {label})", FMINT_ADDR,
+            abi_call("flashLoan(address,address,uint256,bytes)",
+                     ("address", addr), ("address", FMINT_ADDR),
+                     ("uint256", amount), ("bytes", b"")),
+            **kwargs))
+    trigger, tx = trigger_tx(trigger_key, gas="0x1c9c380")
+    fmint_storage = {}
+    alloc = {PROBER_ADDR: prober_account(build_trigger_bytecode(triggers)),
+             trigger: eoa_alloc(EOA_BALANCE)}
+    for label, addr, pre_allow, ok in scenarios:
+        alloc[addr] = borrower_account("passive")
+        if pre_allow is not None:
+            fmint_storage[allowance_slot(addr, FMINT_ADDR)] = pre_allow
+    alloc[FMINT_ADDR] = fmint_account(storage=fmint_storage)
+
+    def expect(e):
+        e.expect_tx_succeeded(0, "the trigger transaction runs to completion")
+        words_by_index = {}
+        for i, ((label, addr, pre_allow, ok), t) in enumerate(zip(scenarios, triggers)):
+            words = [(1, f"{label}: flashLoan returned true")] if ok else []
+            expect_trigger(e, "prober", PROBER_ADDR, i, t, words=words)
+            if ok:
+                words_by_index[i] = [1]
+        e.expect_storage_exact(
+            "prober", PROBER_ADDR, trigger_storage(triggers, words_by_index),
+            "no-approval and insufficient are rejected; exact, residual and "
+            "infinite are all honoured")
+        expected_fmint = {
+            allowance_slot(PASSIVE_INSUFFICIENT_ADDR, FMINT_ADDR): amount // 2,
+            allowance_slot(PASSIVE_RESIDUAL_ADDR, FMINT_ADDR): extra,
+            allowance_slot(PASSIVE_INFINITE_ADDR, FMINT_ADDR): SUPPLY_SLOT,
+        }
+        e.expect_storage_exact(
+            "fmint", FMINT_ADDR, expected_fmint,
+            "no-approval and insufficient never minted anything durable "
+            "(rejected before repayment even runs -- no-approval's zero "
+            "allowance is not a slot at all); their PRE-SET allowances are "
+            "untouched by the revert. exact's allowance is fully spent (a "
+            "zero slot, so absent). residual's allowance ends at EXACTLY "
+            "the extra amount not owed -- the write side of the allowance "
+            "slot, mirroring WETH's guard_allowance case. infinite's "
+            "allowance is bit-for-bit unchanged at supplySlot's own value "
+            "(B256.max) -- the WETH9/OpenZeppelin isMax convention "
+            "preserved, not decremented")
+
+    return build_fixture("06-flashloan-allowance-spectrum", alloc, [tx],
+                         expect, outcome="mixed", gas_limit="0x2faf080")
+
+
+def case_transfer_then_default():
+    """Zoo member 7 -- transfer-then-default: a SUFFICIENT pre-set allowance
+    (so the allowance check is not what fails) but the borrower moves its
+    entire freshly-minted balance to `driftAddr` during the callback and
+    returns the magic anyway. `burnAndReturn`'s balance check then fails --
+    the receiver has nothing left to burn -- and the whole `flashLoan` frame
+    reverts, taking the transfer back with it."""
+    trigger_key = 7
+    amount = 3 * WAD
+    drift_addr = 0xd41f7  # must match `driftAddr` in gen-fmint-borrowers.lean
+    t = Trigger(
+        "flashLoan(transferAway)", FMINT_ADDR,
+        abi_call("flashLoan(address,address,uint256,bytes)",
+                 ("address", TRANSFER_AWAY_ADDR), ("address", FMINT_ADDR),
+                 ("uint256", amount), ("bytes", b"")),
+        reverts_because="the borrower transfers its whole minted balance "
+                        "away before returning the magic, so burnAndReturn's "
+                        "balance check fails and the frame reverts",
+        gas=FLASHLOAN_PROBE_GAS)
+    trigger, tx = trigger_tx(trigger_key, gas="0xf42400")
+    alloc = {
+        FMINT_ADDR: fmint_account(storage={
+            allowance_slot(TRANSFER_AWAY_ADDR, FMINT_ADDR): amount}),
+        TRANSFER_AWAY_ADDR: borrower_account("transferAway"),
+        PROBER_ADDR: prober_account(build_trigger_bytecode([t])),
+        trigger: eoa_alloc(EOA_BALANCE),
+    }
+
+    def expect(e):
+        e.expect_tx_succeeded(0, "the trigger transaction runs to completion")
+        expect_trigger(e, "prober", PROBER_ADDR, 0, t)
+        e.expect_storage_exact(
+            "prober", PROBER_ADDR, trigger_storage([t]),
+            "the prober's storage is exactly the rejected trigger's record")
+        e.expect_storage_exact(
+            "fmint", FMINT_ADDR,
+            {allowance_slot(TRANSFER_AWAY_ADDR, FMINT_ADDR): amount},
+            "the WHOLE frame reverted: the mint, the internal transfer-away "
+            "(itself an external CALL back into fmint, nested inside the "
+            "same reverting frame), and the burn attempt are all undone. "
+            "The pre-set allowance -- untouched by anything in this "
+            "frame -- is the only thing left standing, exactly where it "
+            "started")
+        e.expect_storage_exact(
+            "transferAway borrower", TRANSFER_AWAY_ADDR, {},
+            "the borrower's own observations were written and then rolled "
+            "back along with everything else")
+        e.expect_slot(
+            "fmint", FMINT_ADDR, drift_addr, "balance[driftAddr]", 0,
+            "the drift address ends up with nothing: the transfer that "
+            "would have credited it was inside the reverted frame too")
+
+    return build_fixture("07-flashloan-transfer-then-default", alloc, [tx],
+                         expect, outcome="revert", gas_limit="0x1c9c380")
+
+
+def case_reentrant():
+    """Zoo member 6 -- reentrant, depth 2: the reentrant borrower triggers
+    ONE nested `flashLoan` (receiver = itself) from inside its own callback
+    before completing its own repayment. Both mints -- outer, then inner --
+    are complete (D5's paired writes) before the INNER callback ever runs,
+    so `OBS_BAL_SELF`/`OBS_SUPPLY`, captured mid-INNER-callback (the last
+    write to those slots, since the inner invocation's `recordObservations`
+    runs after the outer's), read a balance/supply that already includes
+    BOTH mints -- the durable witness that mint precedes callback held
+    twice over, once at each depth. Under fee ≡ 0 both loans fully unwind:
+    fmint ends exactly where it started."""
+    trigger_key = 8
+    outer_amount = 5 * WAD
+    inner_amount = 1
+    outer_data = b"outer-loan"
+    t = Trigger(
+        "flashLoan(reentrant)", FMINT_ADDR,
+        abi_call("flashLoan(address,address,uint256,bytes)",
+                 ("address", REENTRANT_ADDR), ("address", FMINT_ADDR),
+                 ("uint256", outer_amount), ("bytes", outer_data)),
+        n_words=1)
+    trigger, tx = trigger_tx(trigger_key, gas="0xf42400")
+    alloc = {
+        FMINT_ADDR: fmint_account(),
+        REENTRANT_ADDR: borrower_account("reentrant"),
+        PROBER_ADDR: prober_account(build_trigger_bytecode([t])),
+        trigger: eoa_alloc(EOA_BALANCE),
+    }
+
+    def expect(e):
+        e.expect_tx_succeeded(0, "the trigger transaction runs to completion")
+        expect_trigger(e, "prober", PROBER_ADDR, 0, t,
+                       words=[(1, "the OUTER flashLoan returned true, which "
+                                  "it could only do after the nested INNER "
+                                  "flashLoan itself returned true -- "
+                                  "reentrantBorrower's own success guard on "
+                                  "the nested CALL")])
+        e.expect_storage_exact(
+            "prober", PROBER_ADDR, trigger_storage([t], {0: [1]}),
+            "the prober's storage is exactly the one (outer) trigger's "
+            "record -- the nested call is invisible to the prober, which "
+            "only ever called fmint once")
+        e.expect_storage_exact(
+            "fmint", FMINT_ADDR, {},
+            "both loans fully unwind under fee ≡ 0 -- the outer mint/burn "
+            "of 5 WAD and the inner mint/burn of 1 leave fmint exactly "
+            "where it started, with even the transient allowances (each "
+            "approved then immediately spent in full) leaving no residue")
+        e.expect_storage_exact(
+            "reentrant borrower", REENTRANT_ADDR, {
+                DEPTH_SLOT: 1,
+                OBS_SENDER: int(FMINT_ADDR, 16),
+                OBS_INITIATOR: int(REENTRANT_ADDR, 16),
+                OBS_TOKEN: int(FMINT_ADDR, 16),
+                OBS_AMOUNT: inner_amount,
+                OBS_DATAHASH: int.from_bytes(keccak256(b""), "big"),
+                OBS_BAL_SELF: outer_amount + inner_amount,
+                OBS_SUPPLY: outer_amount + inner_amount,
+            },
+            "DEPTH_SLOT is left set (1): the outer invocation marks it "
+            "before recursing and nothing ever clears it, an intentional "
+            "leftover. The OBS_* slots hold the INNER call's snapshot -- "
+            "it runs strictly after the outer's own recordObservations and "
+            "overwrites the same slots -- and OBS_INITIATOR is the "
+            "borrower's OWN address: the inner loan's initiator is whoever "
+            "called the NESTED flashLoan, which is reentrantBorrower "
+            "itself, not the original prober. OBS_BAL_SELF/OBS_SUPPLY are "
+            "captured DURING the inner callback and already carry BOTH "
+            "mints (5 WAD outer + 1 inner) -- the durable witness that "
+            "mint precedes callback held at depth 2, not just depth 1")
+
+    return build_fixture("08-flashloan-reentrant", alloc, [tx], expect,
+                         outcome="success", gas_limit="0x1c9c380")
+
+
+def case_guards():
+    """The guard fixtures (evidence plan zoo member 8): `flashLoan`/
+    `flashFee` reverting for `token ≠ self`; `maxFlashLoan` answering 0 for
+    `token ≠ self` -- the EIP's MUST-not-revert, the one sibling that
+    answers rather than fails; the dirty (non-address-shaped) receiver word
+    rejected before the mint (conservation-critical, D4 step 1); and
+    `amount > maxFlashLoan`. Supply is pre-set away from zero so the bound
+    is a small, legible number rather than `2^256 - 1` (which no ordinary
+    `amount` could ever exceed) -- a synthetic quiescent value exactly as
+    the WETH guard fixtures pre-set nonzero balances."""
+    trigger_key = 9
+    supply = 1000
+    bound = (1 << 256) - 1 - supply
+    not_self = 0x9999
+    dirty_word = (1 << 200) + 0xdead  # nonzero upper 96 bits: not address-shaped
+    valid_receiver = 0xbeef
+
+    t_loan_wrong_token = Trigger(
+        "flashLoan(token != self)", FMINT_ADDR,
+        abi_call("flashLoan(address,address,uint256,bytes)",
+                 ("address", valid_receiver), ("address", not_self),
+                 ("uint256", 1), ("bytes", b"")),
+        reverts_because="token != self: the very first guard, checked "
+                        "before the bound so the revert reason never "
+                        "depends on amount",
+        gas=FLASHLOAN_PROBE_GAS)
+    t_fee_wrong_token = Trigger(
+        "flashFee(token != self)", FMINT_ADDR,
+        abi_call("flashFee(address,uint256)", ("address", not_self),
+                 ("uint256", 1)),
+        reverts_because="token != self: ERC-3156 states this as a MUST",
+        gas=FLASHLOAN_PROBE_GAS)
+    t_fee_self = Trigger(
+        "flashFee(self)", FMINT_ADDR,
+        abi_call("flashFee(address,uint256)", ("address", int(FMINT_ADDR, 16)),
+                 ("uint256", 1)),
+        n_words=1)
+    t_max_wrong_token = Trigger(
+        "maxFlashLoan(token != self)", FMINT_ADDR,
+        abi_call("maxFlashLoan(address)", ("address", not_self)),
+        n_words=1)
+    t_max_self = Trigger(
+        "maxFlashLoan(self)", FMINT_ADDR,
+        abi_call("maxFlashLoan(address)", ("address", int(FMINT_ADDR, 16))),
+        n_words=1)
+    t_dirty_receiver = Trigger(
+        "flashLoan(dirty receiver)", FMINT_ADDR,
+        abi_call("flashLoan(address,address,uint256,bytes)",
+                 ("uint256", dirty_word), ("address", int(FMINT_ADDR, 16)),
+                 ("uint256", 1), ("bytes", b"")),
+        reverts_because="the receiver word has nonzero upper 96 bits: "
+                        "checkNonAddress rejects it before the mint, "
+                        "conservation-critical (D4 step 1)",
+        gas=FLASHLOAN_PROBE_GAS)
+    t_over_bound = Trigger(
+        "flashLoan(amount > maxFlashLoan)", FMINT_ADDR,
+        abi_call("flashLoan(address,address,uint256,bytes)",
+                 ("address", valid_receiver), ("address", int(FMINT_ADDR, 16)),
+                 ("uint256", bound + 1), ("bytes", b"")),
+        reverts_because="amount (bound + 1) exceeds maxFlashLoan (bound): "
+                        "the mint-overflow guard",
+        gas=FLASHLOAN_PROBE_GAS)
+    triggers = [t_loan_wrong_token, t_fee_wrong_token, t_fee_self,
+                t_max_wrong_token, t_max_self, t_dirty_receiver, t_over_bound]
+    trigger, tx = trigger_tx(trigger_key, gas="0xf42400")
+    alloc = {
+        FMINT_ADDR: fmint_account(supply=supply),
+        PROBER_ADDR: prober_account(build_trigger_bytecode(triggers)),
+        trigger: eoa_alloc(EOA_BALANCE),
+    }
+
+    def expect(e):
+        e.expect_tx_succeeded(0, "the trigger transaction runs to completion")
+        words_by_index = {
+            2: [(0, "flashFee is identically zero under D2")],
+            3: [(0, "maxFlashLoan(token != self) answers 0 rather than "
+                    "reverting -- the EIP's MUST-not-revert, the opposite "
+                    "of flashFee's rule for the same input")],
+            4: [(bound, "maxFlashLoan(self) = 2^256 - 1 - supply")],
+        }
+        for i, t in enumerate(triggers):
+            expect_trigger(e, "prober", PROBER_ADDR, i, t,
+                           words=words_by_index.get(i, []))
+        storage = trigger_storage(
+            triggers, {2: [0], 3: [0], 4: [bound]})
+        e.expect_storage_exact(
+            "prober", PROBER_ADDR, storage,
+            "flashLoan/flashFee reject token != self; flashFee(self) and "
+            "both maxFlashLoan calls answer rather than reverting; the "
+            "dirty receiver and the over-bound amount are both rejected "
+            "before any mint")
+        e.expect_storage_exact(
+            "fmint", FMINT_ADDR, {SUPPLY_SLOT: supply},
+            "not one of the seven triggers ever reaches a storage-writing "
+            "instruction: the two views read state without mutating it and "
+            "every rejected call reverts before the mint. The only nonzero "
+            "slot is the pre-set supply itself, EXACTLY at its pre-state "
+            "value -- proof that nothing wrote to it, not merely that "
+            "nothing else did")
+
+    return build_fixture("09-guards", alloc, [tx], expect, outcome="mixed",
+                         gas_limit="0x1c9c380")
+
+
+def _abi_string_words(s):
+    """The three words the ABI specifies for a function returning a single
+    `string` of at most 32 bytes -- copied from `gen-weth-fixtures.py`'s
+    `abi_string_words`, which is fully ABI-generic (it derives the encoding
+    from the rule and the string, not from either contract's hand-rolled
+    shift constants)."""
+    b = s.encode()
+    assert len(b) <= 32, s
+    return [0x20, len(b), int.from_bytes(b.ljust(32, b"\x00"), "big")]
+
+
+def case_erc20_views_and_transferFrom():
+    """Selector coverage for the four ERC-20 entries no borrower's internal
+    calls ever reach: `name()`, `symbol()`, `decimals()`, `allowance(...)`
+    (view, through the prober) and `transferFrom` (its own dispatch entry,
+    distinct from the internal repayment fragment that never calls it --
+    `spendAllowanceThenBurn` is new code, not a call to `transferFrom`).
+    `approve`/`totalSupply`/`balanceOf`/`transfer`/`flashLoan`/
+    `maxFlashLoan`/`flashFee` are all exercised elsewhere in this suite,
+    directly or via an embedded selector in some borrower's own code (the
+    coverage gate's caller-prop scan)."""
+    trigger_key = 10
+    owner_key, spender_key = 11, 12
+    owner = derive_address(owner_key)
+    spender = derive_address(spender_key)
+    dst = 0xd570
+    wad = 3 * WAD
+    view_owner, view_spender = 0xa11a, 0x5be4
+    view_allow = 7 * WAD
+
+    t_name = Trigger("name()", FMINT_ADDR, abi_call("name()"), n_words=3)
+    t_symbol = Trigger("symbol()", FMINT_ADDR, abi_call("symbol()"), n_words=3)
+    t_decimals = Trigger("decimals()", FMINT_ADDR, abi_call("decimals()"),
+                         n_words=1)
+    t_allowance = Trigger(
+        "allowance(view_owner, view_spender)", FMINT_ADDR,
+        abi_call("allowance(address,address)", ("address", view_owner),
+                 ("address", view_spender)),
+        n_words=1)
+    triggers = [t_name, t_symbol, t_decimals, t_allowance]
+    trigger, trig_tx = trigger_tx(trigger_key)
+
+    approve_tx = {
+        "type": "0x0", "chainId": "0x1", "nonce": "0x0",
+        "gasPrice": q(GAS_PRICE), "gas": "0x186a0", "to": FMINT_ADDR,
+        "value": "0x0",
+        "input": "0x" + abi_call(
+            "approve(address,uint256)", ("address", int(spender, 16)),
+            ("uint256", wad)).hex(),
+        "v": "0x0", "r": "0x0", "s": "0x0", "secretKey": privkey_hex(owner_key),
+    }
+    transferFrom_tx = {
+        "type": "0x0", "chainId": "0x1", "nonce": "0x0",
+        "gasPrice": q(GAS_PRICE), "gas": "0x186a0", "to": FMINT_ADDR,
+        "value": "0x0",
+        "input": "0x" + abi_call(
+            "transferFrom(address,address,uint256)",
+            ("address", int(owner, 16)), ("address", dst),
+            ("uint256", wad)).hex(),
+        "v": "0x0", "r": "0x0", "s": "0x0",
+        "secretKey": privkey_hex(spender_key),
+    }
+    txs = [trig_tx, approve_tx, transferFrom_tx]
+
+    fmint_storage = {
+        balance_slot(int(owner, 16)): 5 * WAD,
+        allowance_slot(view_owner, view_spender): view_allow,
+    }
+    alloc = {
+        FMINT_ADDR: fmint_account(storage=fmint_storage),
+        PROBER_ADDR: prober_account(build_trigger_bytecode(triggers)),
+        trigger: eoa_alloc(EOA_BALANCE),
+        owner: eoa_alloc(EOA_BALANCE),
+        spender: eoa_alloc(EOA_BALANCE),
+    }
+
+    name_words = _abi_string_words("Flashmint")
+    symbol_words = _abi_string_words("FMINT")
+
+    def expect(e):
+        e.expect_tx_succeeded(0, "the view-prober transaction runs to "
+                                  "completion")
+        e.expect_tx_succeeded(1, "the owner may approve a spender")
+        e.expect_tx_succeeded(
+            2, "the approved spender may then move the owner's balance "
+               "through transferFrom's OWN dispatch entry")
+        expect_trigger(e, "prober", PROBER_ADDR, 0, t_name, words=[
+            (name_words[0], "name()'s head word: offset 0x20"),
+            (name_words[1], "byte length 9, not a word count"),
+            (name_words[2], "'Flashmint' left-aligned, ABI-ruled not "
+                            "hand-rolled-shift-derived"),
+        ])
+        expect_trigger(e, "prober", PROBER_ADDR, 1, t_symbol, words=[
+            (symbol_words[0], "symbol()'s head word: offset 0x20"),
+            (symbol_words[1], "byte length 5"),
+            (symbol_words[2], "'FMINT' left-aligned"),
+        ])
+        expect_trigger(e, "prober", PROBER_ADDR, 2, t_decimals, words=[
+            (0x12, "decimals() = 18, same as WETH and the OZ default"),
+        ])
+        expect_trigger(e, "prober", PROBER_ADDR, 3, t_allowance, words=[
+            (view_allow, "allowance(view_owner, view_spender) reports the "
+                         "pre-set value at keccak256(view_owner || "
+                         "view_spender)"),
+        ])
+        e.expect_storage_exact(
+            "prober", PROBER_ADDR,
+            trigger_storage(triggers, {
+                0: name_words, 1: symbol_words, 2: [0x12], 3: [view_allow]}),
+            "the prober's storage is exactly the four probes' records")
+        owner_slot, dst_slot = balance_slot(int(owner, 16)), balance_slot(dst)
+        allow_od = allowance_slot(owner, spender)
+        e.expect_slot(
+            "fmint", FMINT_ADDR, owner_slot, "balance[owner]", 5 * WAD - wad,
+            "transferFrom debits the OWNER, not the spender who called it")
+        e.expect_slot(
+            "fmint", FMINT_ADDR, dst_slot, "balance[dst]", wad,
+            "transferFrom credits the named recipient by the same wad")
+        e.expect_slot(
+            "fmint", FMINT_ADDR, allow_od, "allowance[owner][spender]", 0,
+            "the allowance is fully spent: approve set it to wad, "
+            "transferFrom spent wad, so it ends at zero")
+
+    return build_fixture("10-erc20-views-and-transferFrom", alloc, txs,
+                         expect, outcome="mixed", gas_limit="0x7a1200")
+
+
+def main():
+    global FMINT_CODE, BORROWERS
+    FMINT_CODE = get_fmint_code_hex()
+    BORROWERS = get_borrowers()
+    os.makedirs(OUT_DIR, exist_ok=True)
+    cases = [
+        case_compliant,
+        case_wrong_magic,
+        case_reverting,
+        case_returndata_spectrum,
+        case_data_length_spectrum,
+        case_allowance_spectrum,
+        case_transfer_then_default,
+        case_reentrant,
+        case_guards,
+        case_erc20_views_and_transferFrom,
+    ]
+    written = set()
+    for fn in cases:
+        fixture, res, n_checked = fn()
+        name = list(fixture.keys())[0].split("::")[1].split("[")[0]
+        assert name not in written, f"duplicate case name {name!r}"
+        written.add(name)
+        path = os.path.join(OUT_DIR, f"{name}.json")
+        with open(path, "w") as f:
+            json.dump(fixture, f, indent=2)
+            f.write("\n")
+        print(f"wrote {path} ({n_checked} expectations checked)")
+    # Remove any stale fixture file this run no longer generates, so the
+    # directory never accumulates a case the manifest cross-check would
+    # otherwise have to explain away.
+    for f in sorted(os.listdir(OUT_DIR)):
+        if f.endswith(".json") and f[:-5] not in written and f != "manifest.json":
+            stale = os.path.join(OUT_DIR, f)
+            os.remove(stale)
+            print(f"removed stale fixture {stale}")
+    with open(MANIFEST_PATH, "w") as f:
+        json.dump(MANIFEST, f, indent=2)
+        f.write("\n")
+    print(f"wrote {MANIFEST_PATH} ({len(MANIFEST)} scenarios)")
+
+
+if __name__ == "__main__":
+    main()

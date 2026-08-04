@@ -33,3 +33,7 @@ jobs:
         run: scripts/check-weth.sh --no-build
       - name: WETH selector coverage (shrink-only budget)
         run: scripts/check-weth-coverage.sh
+      - name: fmint fixture suite (Jaune vs frozen EELS on the witnessed bytes)
+        run: scripts/check-fmint.sh --no-build
+      - name: fmint selector coverage (shrink-only budget)
+        run: scripts/check-fmint-coverage.sh

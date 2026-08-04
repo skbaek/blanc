@@ -1,0 +1,52 @@
+[
+  {
+    "name": "01-flashloan-compliant",
+    "outcome": "success",
+    "assertions": 7
+  },
+  {
+    "name": "02-flashloan-wrong-magic",
+    "outcome": "revert",
+    "assertions": 6
+  },
+  {
+    "name": "03-flashloan-reverting-borrower",
+    "outcome": "revert",
+    "assertions": 5
+  },
+  {
+    "name": "04-flashloan-returndata-spectrum",
+    "outcome": "mixed",
+    "assertions": 11
+  },
+  {
+    "name": "05-flashloan-data-length-spectrum",
+    "outcome": "success",
+    "assertions": 27
+  },
+  {
+    "name": "06-flashloan-allowance-spectrum",
+    "outcome": "mixed",
+    "assertions": 16
+  },
+  {
+    "name": "07-flashloan-transfer-then-default",
+    "outcome": "revert",
+    "assertions": 7
+  },
+  {
+    "name": "08-flashloan-reentrant",
+    "outcome": "success",
+    "assertions": 7
+  },
+  {
+    "name": "09-guards",
+    "outcome": "mixed",
+    "assertions": 20
+  },
+  {
+    "name": "10-erc20-views-and-transferFrom",
+    "outcome": "mixed",
+    "assertions": 23
+  }
+]

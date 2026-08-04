@@ -1,0 +1,29 @@
+# scripts/fmint-coverage-budget.txt
+#
+# The known-unexercised subset of fmint's twelve selectors
+# (scripts/fmint-selectors.json, emitted from Blanc.Fmint.fmintFuncs by
+# scripts/gen-fmint-selectors.lean), checked by
+# scripts/check-fmint-coverage.sh (~/plans/fmint-code.md Step 2, mirroring
+# ~/plans/weth-evidence.md Step 2). This is a budget in the idiom of
+# Jaune's scripts/check-integrity.sh pending-budget: the gate fails if the
+# actual set of unexercised selectors is not a subset of the rows below, or
+# if that set's size exceeds the declared budget number. A row lists a
+# selector this suite is KNOWN not to exercise yet, with a trailing comment
+# naming the function -- the comment is documentation only, never compared.
+#
+# The budget is currently EMPTY: every one of fmint's twelve selectors is
+# exercised by some committed fixture --
+# name/approve/totalSupply/transferFrom/decimals/allowance directly (as a
+# top-level dispatch call, 10-erc20-views-and-transferFrom.json), and
+# balanceOf/transfer/flashLoan/maxFlashLoan/flashFee/approve additionally
+# (or exclusively, for balanceOf/transfer) as an embedded selector in some
+# borrower's own compiled code (the coverage gate's caller-prop scan) -- see
+# scripts/fixtures/fmint/README.md's coverage table for the row-by-row
+# accounting. With no rows left the gate is at its strongest -- ANY selector
+# that stops being exercised is a regression, with nothing to absorb it.
+#
+# The budget may only SHRINK. Removing a row -- because a later step added a
+# case that exercises it -- is the intended way this file changes; adding a
+# row is a regression and is not a routine step.
+#
+# coverage-budget: 0
