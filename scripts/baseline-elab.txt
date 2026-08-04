@@ -6,14 +6,14 @@
 # plus 1.0s. Rewrite with: scripts/check-elab.sh --rebase
 OK	1.241	Blanc.lean
 OK	1.257	Blanc/Basic.lean
-OK	2.282	Blanc/CommonCore.lean
-OK	5.442	Blanc/CommonProofs.lean
+OK	2.454	Blanc/CommonCore.lean
+OK	6.143	Blanc/CommonProofs.lean
 OK	1.235	Blanc/Conserved.lean
-OK	3.023	Blanc/Fmint.lean
+OK	3.158	Blanc/Fmint.lean
 OK	4.549	Blanc/FmintCode.lean
 OK	3.121	Blanc/Ladder.lean
 OK	1.656	Blanc/Semantics.lean
-OK	2.506	Blanc/Solvent.lean
+OK	2.053	Blanc/Solvent.lean
 OK	2.113	Blanc/Tactics.lean
 OK	2.461	Blanc/Weth.lean
 OK	3.845	Blanc/WethCode.lean
