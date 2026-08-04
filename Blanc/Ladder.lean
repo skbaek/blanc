@@ -892,6 +892,13 @@ lemma exec_ok_of_handleError {exn : Execution} {evm' : Devm}
   | ok e =>
     simp only [executeCode.handleError] at h; rw [Except.ok.inj h]
 
+/-- The deeper-frame induction hypothesis, as the ladder's consumers use it:
+every successful sub-execution of `p` at `ca` strictly below depth `k` takes
+`σ` to `ρ`.  Generic in the program and in both predicates. -/
+def Exec.InvDepth (k : Nat) (ca : Adr) (p : Prog)
+  (σ : Sevm → Devm → Prop) (ρ : Sevm → Devm → Prop) : Prop :=
+  ForallDeeperAt k ca p (λ _ sevm pre exn _ => σ sevm pre → ifOk (ρ sevm) exn)
+
 /-! ## The contract-generic ladder -/
 
 namespace ContractSpec
@@ -1781,6 +1788,128 @@ theorem exec_preserves_inv (c : ContractSpec) (ca : Adr) (hp : c.Preserves ca)
     (h_pc : c.Pre ca sevm pre) : c.Post ca sevm post := by
   obtain ⟨exc⟩ := (exec_iff_exec_eq 0 sevm pre (.ok post)).mpr h_run
   exact hp sevm pre post exc h_code h_pc
+
+
+/-! ### The dispatcher decomposition of `Sound`
+
+Every Blanc contract written to the dispatch protocol has the same program
+shape — `⟨Func.mainWith k (DispatchTree.ofSorted funcs), aux⟩` — and the
+reasoning that carries a top-level run from the program's entry down to one of
+its dispatch targets is shared in full.  `sound_of_dispatch` does that reasoning
+once: it absorbs the `Prog.Run`/`call 0` unwrap, the `fsig` prefix,
+`dispatchWith_inv`'s two scratch-line side conditions and its tree-shaped
+membership obligation, and leaves a contract with one `FuncSound` obligation per
+entry of its own function *list*, plus one for the fallback at index `k`.
+
+Two notes on the hypotheses, both results rather than bookkeeping:
+
+* **There is no sortedness hypothesis.**  `Sound` is a safety property, and
+  sortedness governs reachability, not safety: a misordered list makes some
+  target unreachable, which cannot make the dispatcher unsound.  The one step
+  that might plausibly have consumed it — turning tree membership into list
+  membership — needs only `funcs ≠ []`, by
+  `DispatchTree.mem_of_mem_ofSorted`.  Pair `DispatchTree.sorted` with a
+  contract to get reachability; it is not needed for soundness.
+
+* **`fsig` is discharged field-wise, not through `Devm.state`.**  The three
+  dispatcher obligations below are all one argument — the world state did not
+  change, so the precondition survives — via `Line.Inv Devm.state` and
+  `Pre.state_eq`.  `fsig` is not: `line_inv` cannot prove
+  `Line.Inv Devm.state fsig`, because the `Ninst.Hinv Devm.state` family has
+  members only for the scratch instructions (`pushB256`, `eq`, `dup`, `gt`) and
+  none for `calldataload` or `shr`.  It needs no hypothesis of its own either —
+  `Pre.of_eqs` transports the precondition along the three field observables,
+  each of which `line_inv` does prove across `fsig`. -/
+
+/-- The per-function obligation left by `sound_of_dispatch`: `f`'s walk takes
+the contract's precondition to its postcondition, given the entry state the
+dispatcher hands it and the induction hypothesis for deeper frames.  That
+induction hypothesis is part of the entry condition and is not optional — a
+target that re-enters the contract (WETH's `withdraw`) genuinely consumes it.
+
+Stated relative to the program's aux context rather than to `c.prog.aux`,
+because `Func.call` indices are positional: a lemma relating
+`FuncSound c ca aux f` to `FuncSound c' ca (aux ++ extra) f` is what would make
+an extension's obligations reusable, and it wants `aux` in hand. -/
+def FuncSound (c : ContractSpec) (ca : Adr) (aux : List Func) (f : Func) : Prop :=
+  ∀ {sevm : Sevm} {s r : Devm},
+    c.Pre ca sevm s →
+    Exec.InvDepth sevm.depth ca c.prog (c.Pre ca) (c.Post ca) →
+    Func.Run (c.prog.main :: aux) sevm s f r →
+    c.Post ca sevm r
+
+/-- `Sound` for a dispatcher-shaped program, reduced to one `FuncSound` per
+dispatch target plus one for the fallback.  `h_fb` locates the fallback at the
+index the generated `Func.call k` uses; at a concrete contract it is `rfl`. -/
+theorem sound_of_dispatch {c : ContractSpec} {ca : Adr} {k : Nat}
+    {funcs : List (B256 × Func)} {aux : List Func} {fallback : Func}
+    (h_shape : c.prog = ⟨Func.mainWith k (DispatchTree.ofSorted funcs), aux⟩)
+    (h_ne : funcs ≠ [])
+    (h_fb : (c.prog.main :: aux)[k]? = some fallback)
+    (h_funcs : ∀ p ∈ funcs, FuncSound c ca aux p.2)
+    (h_fall : FuncSound c ca aux fallback) :
+    c.Sound ca := by
+  have h_aux : c.prog.aux = aux := by rw [h_shape]
+  have h_main : c.prog.main = Func.mainWith k (DispatchTree.ofSorted funcs) := by rw [h_shape]
+  have h_fs : Func.mainWith k (DispatchTree.ofSorted funcs) :: aux = c.prog.main :: aux := by
+    rw [h_main]
+  intro sevm pre post run h_ca ih h_pre
+  -- `Sound` hands the deeper-frame hypothesis in its raw form; every consumer
+  -- below wants the `ifOk`-wrapped one.
+  have ih' : Exec.InvDepth sevm.depth ca c.prog (c.Pre ca) (c.Post ca) := by
+    intro pc' sevm' devm' exn'
+    cases exn'
+    · simp only [ifOk, implies_true]
+    · apply ih
+  clear ih
+  -- unwrap the initial `call 0` into a run of the program's own `main`
+  dsimp only [Prog.Run] at run
+  rw [h_aux] at run
+  cases run
+  rename (_ = _) => h_eq
+  rename (Func.Run _ _ _ _ _) => run
+  rename (Devm.Burn _ _) => burn
+  rename Devm => s₀
+  cases h_eq
+  have h_pre₀ : c.Pre ca sevm s₀ := h_pre.state_eq burn.state.symm
+  clear h_pre burn pre
+  rw [h_main] at run h_fb
+  -- run off the `fsig` prefix of `Func.mainWith`
+  refine run_prepend_elim _ fsig ?_ run
+  intro s₁ h₁ run₁
+  have h_pre₁ : c.Pre ca sevm s₁ :=
+    h_pre₀.of_eqs
+      (congrFun (Line.of_inv Devm.getCode (by line_inv) h₁).symm ca)
+      (Line.of_inv Devm.getBal (by line_inv) h₁).symm
+      (congrFun (Line.of_inv Devm.getStor (by line_inv) h₁).symm ca)
+  clear h_pre₀ h₁ run s₀
+  apply
+    ( @dispatchWith_inv
+        (Func.mainWith k (DispatchTree.ofSorted funcs) :: aux) k fallback
+        (fun e s => c.Pre ca e s ∧ Exec.InvDepth e.depth ca c.prog (c.Pre ca) (c.Post ca))
+        (fun e r => c.Post ca e r)
+        ?_ ?_ h_fb ?_ (DispatchTree.ofSorted funcs) ?_ sevm s₁ post ⟨h_pre₁, ih'⟩ run₁ )
+  -- the two scratch-line obligations: the dispatcher's comparisons move the
+  -- stack and nothing else, so the precondition survives unchanged.
+  · intro e s x w s' s'' ⟨hp, hih⟩ hrun hpop
+    refine ⟨?_, hih⟩
+    have h_state : s.state = s'.state := Line.of_inv Devm.state (by line_inv) hrun
+    rcases hpop with ⟨_, _, _, _, _, _, _, _, _, _, _, h_pop_state, _⟩
+    exact hp.state_eq (h_pop_state.symm.trans h_state.symm)
+  · intro e s x w s' s'' ⟨hp, hih⟩ hrun hpop
+    refine ⟨?_, hih⟩
+    have h_state : s.state = s'.state := Line.of_inv Devm.state (by line_inv) hrun
+    rcases hpop with ⟨_, _, _, _, _, _, _, _, _, _, _, h_pop_state, _⟩
+    exact hp.state_eq (h_pop_state.symm.trans h_state.symm)
+  -- the fallback, reached through one more burn
+  · intro e s s' r ⟨hp, hih⟩ hburn hrun
+    rw [h_fs] at hrun
+    exact h_fall (hp.state_eq hburn.state.symm) hih hrun
+  -- and the dispatch targets, over the contract's list rather than its tree
+  · intro e s r wf h_mem ⟨hp, hih⟩ hrun
+    rw [h_fs] at hrun
+    exact h_funcs wf (DispatchTree.mem_of_mem_ofSorted h_ne h_mem) hp hih hrun
+
 
 
 theorem StateInv.incrNonce {wa a : Adr} {w : Jaune.State}

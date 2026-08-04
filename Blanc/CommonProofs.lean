@@ -4823,6 +4823,156 @@ instance {n} : Rinst.Hinv Devm.getStor (Rinst.dup n) := by show_hinv_stor
 instance {n} : Rinst.Hinv Devm.getStor (Rinst.swap n) := by show_hinv_stor
 instance {n} : Rinst.Hinv Devm.getStor (Rinst.log n) := by show_hinv_stor
 
+/-! ### `Ninst.Hinv` instances for the push and stack-scratch instructions
+
+The `Rinst.Hinv` layer above covers every register instruction; these cover
+the `Ninst` constructors that are not `reg` (`push`, `pushB256`, `dup`) plus
+the `Devm.state` observable, which has no blanket `Rinst` instance because
+`sstore` moves it.  They live here, with the rest of the `Hinv` API and the
+`Ninst.run_push_eq` equation written for them, rather than in a contract's
+own file: `line_inv` needs them wherever a dispatcher's scratch lines are
+reasoned about, which is now `Ladder.lean`. -/
+
+instance {x} : Ninst.Hinv Devm.getBal (Ninst.pushB256 x) := ⟨by
+  intros e s s' h
+  have run := Ninst.run_push_eq h
+  rcases hc : chargeGas (if (x.toBytes.sig) = [] then gBase else gVerylow) s with _ | s_gas
+  · rw [hc] at run; dsimp [bind, Except.bind] at run; contradiction
+  · rw [hc] at run; dsimp [bind, Except.bind] at run
+    rcases hp : Devm.push x.toBytes.sig.toB256 s_gas with _ | s''
+    · rw [hp] at run; contradiction
+    · rw [hp] at run
+      injection run with h_eq; subst h_eq
+      apply funext; intro a
+      exact (chargeGas_getBal_eq hc a).symm.trans (Devm.push_getBal_eq hp a).symm
+⟩
+
+instance {x} : Ninst.Hinv Devm.getStor (Ninst.pushB256 x) := ⟨by
+  intros e s s' h
+  have run := Ninst.run_push_eq h
+  rcases hc : chargeGas (if (x.toBytes.sig) = [] then gBase else gVerylow) s with _ | s_gas
+  · rw [hc] at run; dsimp [bind, Except.bind] at run; contradiction
+  · rw [hc] at run; dsimp [bind, Except.bind] at run
+    rcases hp : Devm.push x.toBytes.sig.toB256 s_gas with _ | s''
+    · rw [hp] at run; contradiction
+    · rw [hp] at run
+      injection run with h_eq; subst h_eq
+      exact (chargeGas_getStor_eq hc).trans (Devm.push_getStor_eq hp)
+⟩
+
+instance {x} : Ninst.Hinv Devm.getCode (Ninst.pushB256 x) := ⟨by
+  intros e s s' h
+  have run := Ninst.run_push_eq h
+  rcases hc : chargeGas (if (x.toBytes.sig) = [] then gBase else gVerylow) s with _ | s_gas
+  · rw [hc] at run; dsimp [bind, Except.bind] at run; contradiction
+  · rw [hc] at run; dsimp [bind, Except.bind] at run
+    rcases hp : Devm.push x.toBytes.sig.toB256 s_gas with _ | s''
+    · rw [hp] at run; contradiction
+    · rw [hp] at run
+      injection run with h_eq; subst h_eq
+      apply funext; intro a
+      exact (chargeGas_getCode_eq hc a).symm.trans (Devm.push_getCode_eq hp a).symm
+⟩
+
+instance {x} : Ninst.Hinv Devm.state (Ninst.pushB256 x) := ⟨by
+  intros e s s' h
+  have run := Ninst.run_push_eq h
+  have h_pb := Devm.pushBurn_of_run run
+  rcases h_pb with ⟨_, _, _, _, _, _, _, _, _, _, _, h_state, _⟩
+  exact h_state
+⟩
+
+instance {xs} {p : xs.length ≤ 32} : Ninst.Hinv Devm.getBal (Ninst.push xs p) := ⟨by
+  intros e s s' h
+  have run := Ninst.run_push_eq h
+  have h_pb := Devm.pushBurn_of_run run
+  funext a; simp only [Devm.getBal, Devm.getAcct]; rw [h_pb.state]
+⟩
+
+instance {xs} {p : xs.length ≤ 32} : Ninst.Hinv Devm.getStor (Ninst.push xs p) := ⟨by
+  intros e s s' h
+  have run := Ninst.run_push_eq h
+  have h_pb := Devm.pushBurn_of_run run
+  funext a; simp only [Devm.getStor, Devm.getAcct]; rw [h_pb.state]
+⟩
+
+instance {xs} {p : xs.length ≤ 32} : Ninst.Hinv Devm.getCode (Ninst.push xs p) := ⟨by
+  intros e s s' h
+  have run := Ninst.run_push_eq h
+  have h_pb := Devm.pushBurn_of_run run
+  funext a; simp only [Devm.getCode, Devm.getAcct]; rw [h_pb.state]
+⟩
+
+instance : Ninst.Hinv Devm.state (Ninst.reg Rinst.eq) := ⟨by
+  intros e s s' h
+  obtain ⟨pc, run⟩ := of_run_reg h
+  dsimp [Rinst.run, Rinst.runCore] at run
+  rw [applyBinary_def] at run
+  rcases hp1 : Devm.pop s with _ | val1
+  · rw [hp1] at run; dsimp [bind, Except.bind] at run; contradiction
+  · rw [hp1] at run; dsimp [bind, Except.bind] at run
+    rcases val1 with ⟨x1, s1⟩
+    rcases hp2 : Devm.pop s1 with _ | val2
+    · rw [hp2] at run; dsimp [bind, Except.bind] at run; contradiction
+    · rw [hp2] at run; dsimp [bind, Except.bind] at run
+      rcases val2 with ⟨x2, s2⟩
+      rcases hpush : pushItem _ gVerylow s2 with _ | s''
+      · rw [hpush] at run; contradiction
+      · rw [hpush] at run
+        injection run with h_eq; subst h_eq
+        have h_pop1 := Devm.pop_of_pop hp1
+        have h_pop2 := Devm.pop_of_pop hp2
+        have h_push := Devm.pushBurn_of_pushItem hpush
+        rcases h_pop1 with ⟨_, _, _, _, _, _, _, _, _, _, _, hs1, _⟩
+        rcases h_pop2 with ⟨_, _, _, _, _, _, _, _, _, _, _, hs2, _⟩
+        rcases h_push with ⟨_, _, _, _, _, _, _, _, _, _, _, hs3, _⟩
+        exact hs1.trans (hs2.trans hs3)
+⟩
+
+instance {n} : Ninst.Hinv Devm.state (Ninst.dup n) := ⟨by
+  intros e s s' h
+  obtain ⟨pc, run⟩ := of_run_reg h
+  dsimp [Rinst.run, Rinst.runCore] at run
+  rcases hc : chargeGas gVerylow s with _ | s_gas
+  · rw [hc] at run; dsimp [bind, Except.bind] at run; contradiction
+  · rw [hc] at run; dsimp [bind, Except.bind] at run
+    split at run
+    · contradiction
+    · rename_i rh word
+      have h_run_eq : (chargeGas gVerylow s >>= fun d => d.push rh) = .ok s' := by
+        dsimp [bind, Except.bind]; rw [hc]; exact run
+      have h_pb := Devm.pushBurn_of_run h_run_eq
+      rcases h_pb with ⟨_, _, _, _, _, _, _, _, _, _, _, h_state, _⟩
+      exact h_state
+⟩
+
+instance : Ninst.Hinv Devm.state (Ninst.reg Rinst.gt) := ⟨by
+  intros e s s' h
+  obtain ⟨pc, run⟩ := of_run_reg h
+  dsimp [Rinst.run, Rinst.runCore] at run
+  rw [applyBinary_def] at run
+  rcases hp1 : Devm.pop s with _ | val1
+  · rw [hp1] at run; dsimp [bind, Except.bind] at run; contradiction
+  · rw [hp1] at run; dsimp [bind, Except.bind] at run
+    rcases val1 with ⟨x1, s1⟩
+    rcases hp2 : Devm.pop s1 with _ | val2
+    · rw [hp2] at run; dsimp [bind, Except.bind] at run; contradiction
+    · rw [hp2] at run; dsimp [bind, Except.bind] at run
+      rcases val2 with ⟨x2, s2⟩
+      rcases hpush : pushItem _ gVerylow s2 with _ | s''
+      · rw [hpush] at run; contradiction
+      · rw [hpush] at run
+        injection run with h_eq; subst h_eq
+        have h_pop1 := Devm.pop_of_pop hp1
+        have h_pop2 := Devm.pop_of_pop hp2
+        have h_push := Devm.pushBurn_of_pushItem hpush
+        rcases h_pop1 with ⟨_, _, _, _, _, _, _, _, _, _, _, hs1, _⟩
+        rcases h_pop2 with ⟨_, _, _, _, _, _, _, _, _, _, _, hs2, _⟩
+        rcases h_push with ⟨_, _, _, _, _, _, _, _, _, _, _, hs3, _⟩
+        exact hs1.trans (hs2.trans hs3)
+⟩
+
+
 /-! ## §1 AdrSet non-membership helpers -/
 
 namespace AdrSet
