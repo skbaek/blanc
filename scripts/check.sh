@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 # Blanc verification gate (REFACTOR.md Phase 0, step 0.3): `lake build`,
-# then an axiom audit of the nine audited top theorems via
-# scripts/AxiomCheck.lean — WETH's seven solvency theorems plus the two
-# compile witnesses.
+# then an axiom audit of the sixteen audited top theorems via
+# scripts/AxiomCheck.lean — WETH's seven solvency theorems, fmint's seven
+# conservation theorems, and the two compile witnesses.
 #
 # `wethCode_compile` is what keeps the solvency theorems' `Prog.compile weth`
 # hypothesis from being vacuous. `fmintCode_compile` is the same equation for
-# contract #2, audited from the moment the contract exists rather than from the
-# moment something is proved about it: `Blanc/Conserved.lean`'s statements all
-# carry the corresponding hypothesis, and they are statements — fmint's
-# conservation invariant is unproven, pending Arc B of
-# `~/plans/flashmint-proposal.md`. Auditing the witness early is what makes the
-# eventual proofs land against a pinned, non-vacuous equation.
+# contract #2: it was audited from the moment the contract existed rather than
+# from the moment something was proved about it, and the conservation theorems
+# added by Arc B of `~/plans/flashmint-proposal.md` now land against that
+# pinned, non-vacuous equation. Note what the fmint rows do and do not say:
+# they are *conservation* — the equality `totalSupply = Σ balances` at every
+# observable point — not solvency and not liveness.
 #
 # Each row carries its OWN pinned expected axiom set (see ROWS below), and a
 # theorem's axiom closure must equal its row's set exactly, order-insensitive.
@@ -67,6 +67,13 @@ Blanc.addBlockToChain_preserves_solvent|$STANDARD
 Blanc.stateTransitionUsing_preserves_solvent|$STANDARD
 Blanc.chainUsing_preserves_solvent|$STANDARD
 Blanc.addBlockToChainUsing_preserves_solvent|$STANDARD
+Blanc.fmint_preserves_conserved|$STANDARD
+Blanc.stateTransition_preserves_conserved|$STANDARD
+Blanc.chain_preserves_conserved|$STANDARD
+Blanc.addBlockToChain_preserves_conserved|$STANDARD
+Blanc.stateTransitionUsing_preserves_conserved|$STANDARD
+Blanc.chainUsing_preserves_conserved|$STANDARD
+Blanc.addBlockToChainUsing_preserves_conserved|$STANDARD
 Blanc.wethCode_compile|$STANDARD
 Blanc.fmintCode_compile|$STANDARD"
 # Secondary net only: the exact-set comparison below is the primary check;

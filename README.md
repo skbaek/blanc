@@ -34,9 +34,13 @@ This repo contains the following files:
   and its compile witness. Generated in full by
   [`scripts/gen-fmint-code.lean`](scripts/gen-fmint-code.lean) — do not edit by
   hand.
-- [Conserved.lean](Blanc/Conserved.lean): supply conservation for the FMINT
-  implementation — statements only; the invariant and the headline results are
-  stated and not yet proved.
+- [Conserved.lean](Blanc/Conserved.lean): proof of supply conservation for the
+  FMINT implementation — `totalSupply = Σ balances` at every observable point,
+  preserved by arbitrary executions, including the reentrant borrower code a
+  flash loan hands control to. Conservation is an equality about storage: it is
+  **not** solvency and not liveness, and during a flash loan the minted supply
+  is unbacked by construction — that is the design, and the claim is that the
+  books balance at every point an observer can reach.
 
 Blanc's WETH is a reimplementation; observable deviations from deployed WETH9
 are catalogued in [`WETH_DEVIATIONS.md`](WETH_DEVIATIONS.md). FMINT's
@@ -93,11 +97,11 @@ and proof falls. It is not duplicated here. Blanc adds exactly:
 1. **the pinned Jaune revision** below — trusting a Blanc theorem is trusting
    that specific Jaune, not the sibling checkout on your disk;
 2. **the axiom audit** below, which is stricter than Jaune's own gates: it
-   pins the exact axiom set of eight named results and fails on an extra *or*
+   pins the exact axiom set of sixteen named results and fails on an extra *or*
    missing axiom;
 3. **Blanc's own source**, which carries no gate equivalent to Jaune's
    `check-hygiene.sh`/`check-integrity.sh`; what stands behind it is the audit
-   in (2), and the audit constrains only what enters those eight theorems'
+   in (2), and the audit constrains only what enters those sixteen theorems'
    dependency cones. Scanning `Blanc/` finds no `@[extern]`, `axiom`,
    `opaque`, `sorry`, `implemented_by`, or `bv_decide`, and no use of
    `native_decide` — its one textual occurrence is the `WethCode.lean` comment
@@ -111,8 +115,9 @@ and proof falls. It is not duplicated here. Blanc adds exactly:
 
 As in Jaune's document, this section is about whether the proofs are sound, not
 about whether they are the right theorems. Read the statements in
-[`Blanc/Solvent.lean`](Blanc/Solvent.lean) rather than inferring them from a
-theorem's name.
+[`Blanc/Solvent.lean`](Blanc/Solvent.lean) and
+[`Blanc/Conserved.lean`](Blanc/Conserved.lean) rather than inferring them from
+a theorem's name.
 
 Blanc builds against a **pinned revision** of
 [Jaune](https://github.com/skbaek/jaune) — `require jaune from git … @ 4e6a6555…`
@@ -120,8 +125,8 @@ in [`lakefile.lean`](lakefile.lean) — so a fresh clone builds reproducibly
 without a sibling checkout, and bumping Jaune is a reviewed one-line change.
 
 CI ([`scripts/check.sh`](scripts/check.sh)) builds the library and then runs an
-**axiom audit** ([`scripts/AxiomCheck.lean`](scripts/AxiomCheck.lean)) of eight
-top theorems. Seven are the headline solvency theorems:
+**axiom audit** ([`scripts/AxiomCheck.lean`](scripts/AxiomCheck.lean)) of
+sixteen top theorems. Seven are WETH's headline solvency theorems:
 
 - `Blanc.weth_preserves_solvent`
 - `Blanc.stateTransition_preserves_solvent`
@@ -131,13 +136,34 @@ top theorems. Seven are the headline solvency theorems:
 - `Blanc.chainUsing_preserves_solvent`
 - `Blanc.addBlockToChainUsing_preserves_solvent`
 
-The eighth is the **compile witness**:
+Seven are FMINT's headline conservation theorems, the same family at the same
+rungs:
 
-- `Blanc.wethCode_compile` — `Prog.compile weth = some wethCode`. All seven
-  theorems above are conditioned on the WETH account's code being what
-  `Prog.compile weth` returns, so without this equation they could all hold
-  vacuously; the witness states that the compiler really does emit the
-  866-byte [`wethCode`](Blanc/WethCode.lean) for `weth`. It is proved by
+- `Blanc.fmint_preserves_conserved`
+- `Blanc.stateTransition_preserves_conserved`
+- `Blanc.chain_preserves_conserved`
+- `Blanc.addBlockToChain_preserves_conserved`
+- `Blanc.stateTransitionUsing_preserves_conserved`
+- `Blanc.chainUsing_preserves_conserved`
+- `Blanc.addBlockToChainUsing_preserves_conserved`
+
+They are a different *kind* of claim, not a stronger version of the same one:
+solvency is an inequality relating a contract's bookkeeping to the ETH it
+holds, conservation is an equality internal to storage. FMINT's says that
+`totalSupply` equals the sum of the balances at every observable point, under
+arbitrary executions and arbitrary reentrant borrower code. It does not say the
+minted supply is backed — during a flash loan it is not, by construction — and
+neither family says anything about liveness.
+
+The last two are the **compile witnesses**:
+
+- `Blanc.wethCode_compile` — `Prog.compile weth = some wethCode` — and
+  `Blanc.fmintCode_compile`, the same equation for FMINT. Every theorem above
+  is conditioned on its contract's account code being what `Prog.compile`
+  returns, so without these equations they could all hold vacuously; the
+  witnesses state that the compiler really does emit the 866-byte
+  [`wethCode`](Blanc/WethCode.lean) for `weth`, and
+  [`fmintCode`](Blanc/FmintCode.lean) for `fmint`. Both are proved by
   `decide +kernel` — kernel evaluation of the same reduction, no raised
   elaboration limit and nothing added to the trusted base (in particular, not
   `native_decide`).
@@ -148,8 +174,8 @@ from its pin in either direction — extra or missing. In particular it fails on
 `sorryAx`, `ofReduceBool`, or `ofReduceNat` — no `sorry` and no
 `native_decide`-style axiom in the trusted path of these results. It also fails
 if `AxiomCheck.lean` and `check.sh` disagree about which theorems are audited,
-so a row cannot be dropped silently from either side. All eight rows currently
-pin exactly `[propext, Classical.choice, Quot.sound]`.
+so a row cannot be dropped silently from either side. All sixteen rows
+currently pin exactly `[propext, Classical.choice, Quot.sound]`.
 
 ## WETH fixture suite — execution evidence
 
@@ -179,7 +205,7 @@ ten selectors from `wethFuncs` and confirms all ten, plus the fallback, are
 exercised, against a shrink-only budget currently empty. See [the fixtures
 README](scripts/fixtures/weth/README.md#what-the-suite-establishes) for what
 this is worth and what it is not: specification-checked differential testing
-on chosen inputs, not a liveness proof — the eight audited theorems above
+on chosen inputs, not a liveness proof — the audited theorems above
 remain pure safety statements.
 
 It is a local gate (CI does not get the Jaune executable for free from the

@@ -1,5 +1,5 @@
--- Conserved.lean : the ERC-3156 flash-mint contract as a `ContractSpec`
--- instance, statements only.  This module is to `Blanc/Fmint.lean` what
+-- Conserved.lean : supply conservation for the ERC-3156 flash-mint contract,
+-- as a `ContractSpec` instance.  This module is to `Blanc/Fmint.lean` what
 -- `Blanc/Solvent.lean` is to `Blanc/Weth.lean` — the property layer over the
 -- program layer — and, like that pair, it is named for the property proved
 -- rather than for the contract.
@@ -17,16 +17,16 @@
 -- `balSum`, lives upstream of both in `Blanc/CommonCore.lean`.
 --
 -- STATE OF THE PROOF.  Arc B of `~/plans/flashmint-proposal.md`
--- (`~/plans/fmint-conserved.md`) is filling this module in.  Landed so far:
--- the `Stor.Conserved` algebra — the two invisibility lemmas, `Stor.Silent`,
--- the four preservation combinators and the `balance ≤ supply` bound corollary
--- — the `fmintSpec` bridges, and eleven of the twelve `FuncSound` inputs plus
--- the reverting fallback (the eight read-only targets and the three ERC-20
--- writers).  Still open: `flashLoan`, the twelfth (Step 4), and the
--- assembly through `ContractSpec.sound_of_dispatch` that turns
--- `FmintPreservesConserved` and `FmintChainPreservesConserved` from
--- `Prop`-valued definitions into theorems (Step 5).  Those two are still
--- asserted of nothing.  The `flashLoan` success specification is Arc C.
+-- (`~/plans/fmint-conserved.md`) is complete: the `Stor.Conserved` algebra —
+-- the two invisibility lemmas, `Stor.Silent`, the four preservation
+-- combinators and the `balance ≤ supply` bound corollary — the `fmintSpec`
+-- bridges, all twelve `FuncSound` obligations plus the reverting fallback, and
+-- the assembly through `ContractSpec.sound_of_dispatch` and
+-- `ContractSpec.preserves_inv`.  `fmint_preserves_conserved` and
+-- `chain_preserves_conserved` carry the statements this module used to hold as
+-- `Prop`-valued definitions asserted of nothing.  The `flashLoan` *success*
+-- specification — that a well-behaved borrower is repaid and the state
+-- restored — is Arc C, and nothing here claims it.
 --
 -- CLAIM HYGIENE.  What this module works towards is *conservation* — an
 -- equality about storage, `totalSupply = Σ balances`, at every observable
@@ -2475,24 +2475,149 @@ theorem fmintSpec_funcSound_flashLoan {fa : Adr} :
 
 end
 
-/-- Headline 1 of `flashmint-proposal.md`, as a statement.  This is the shape
-`weth_preserves_solvent` has, with the record substituted; it is asserted of
-nothing and proved nowhere. -/
-def FmintPreservesConserved (fa : Adr) : Prop :=
-  ∀ sevm pre post,
-    Exec 0 sevm pre (.ok post) →
-    (sevm.currentTarget = fa → some sevm.code.toList = Prog.compile Fmint.fmint) →
-    PrecondC fa sevm pre →
-    PostcondC fa sevm post
+/-! ## Assembly
 
-/-- The chain-level rung, same substitution.  The `wdsum` bound survives as a
-hypothesis about the world rather than about the contract, so it is unaffected
-by the instance. -/
-def FmintChainPreservesConserved (fa : Adr) : Prop :=
-  ∀ ch ch' : BlockChain,
-    BlockChain.Reach ch ch' →
-    StateInvC fa ch.state →
-    StateInvC fa ch'.state
+The twelve `FuncSound` obligations above, plus the reverting fallback, are the
+whole input to the generic dispatcher argument.  Everything from here down is
+instantiation: no walk, no invariant reasoning, and nothing that names the
+program's shape beyond reading it off `fmintSpec.prog` by unification. -/
 
+/-- fmint's frame-level obligation, the one input `ContractSpec.preserves_inv`
+cannot supply.  The proof is `wethSpec_sound`'s, with twelve dispatch targets
+where WETH has ten and a *reverting* fallback where WETH has `deposit`, so the
+fallback obligation is vacuous rather than a walk.
+
+Both shape side conditions are `rfl`: `k`, the function list and the aux context
+are read off `fmintSpec.prog` by unification.  The fallback lookup at index 1
+reduces — unlike `burnSlot`'s at index 2, which needs `get_burnSlot`'s explicit
+`List.getElem?` route. -/
+theorem fmintSpec_sound (fa : Adr) : fmintSpec.Sound fa := by
+  refine ContractSpec.sound_of_dispatch (k := Fmint.fallbackSlot)
+    (funcs := Fmint.fmintFuncs) (aux := Fmint.fmintAux) (fallback := Func.rev)
+    rfl (List.cons_ne_nil _ _) rfl ?_ ?_
+  · intro f h_mem
+    -- Drive the membership unfolding with `List.mem_cons`, never with `decide`:
+    -- deciding anything about these leaves forces the `String.keccak` behind
+    -- every `selector` and blows `maxRecDepth`.  Twelve entries here, ten at
+    -- WETH, and the failure mode is the same.
+    simp only [Fmint.fmintFuncs, List.mem_cons, List.not_mem_nil, or_false] at h_mem
+    rcases h_mem with h | h | h | h | h | h | h | h | h | h | h | h <;> (cases h)
+    · exact fmintSpec_funcSound Fmint.name name_preserves_conserved
+    · exact fmintSpec_funcSound Fmint.approve approve_preserves_conserved
+    · exact fmintSpec_funcSound Fmint.totalSupply totalSupply_preserves_conserved
+    · exact fmintSpec_funcSound Fmint.transferFrom transferFrom_preserves_conserved
+    · exact fmintSpec_funcSound decimals decimals_preserves_conserved
+    · exact fmintSpec_funcSound_flashLoan
+    · exact fmintSpec_funcSound Fmint.maxFlashLoan maxFlashLoan_preserves_conserved
+    · exact fmintSpec_funcSound balanceOf balanceOf_preserves_conserved
+    · exact fmintSpec_funcSound Fmint.symbol symbol_preserves_conserved
+    · exact fmintSpec_funcSound transfer transfer_preserves_conserved
+    · exact fmintSpec_funcSound Fmint.flashFee flashFee_preserves_conserved
+    · exact fmintSpec_funcSound allowance allowance_preserves_conserved
+  · exact fmintSpec_funcSound_rev
+
+theorem fmintSpec_preserves (fa : Adr) : fmintSpec.Preserves fa :=
+  fmintSpec.preserves_inv fa (fmintSpec_sound fa)
+
+/-- **Headline 1 of `flashmint-proposal.md`**, now a theorem: an arbitrary
+execution that starts in an fmint frame with the supply conserved ends with the
+supply conserved.  Arbitrary includes reentrant — `flashLoan` hands control to
+borrower code that may call back in through any entrypoint at any depth, and
+the invariant re-established on resumption is this same one.
+
+The statement is the one this module carried as a `Prop`-valued definition
+before Arc B; nothing about it was adjusted to fit the proof.  Read it as
+**conservation, an equality about storage**: `totalSupply = Σ balances` at every
+observable point.  It is not solvency and it is not liveness.  During a flash
+loan the minted supply is unbacked by construction — that is the design, and the
+claim here is precisely that the books balance at every point an observer can
+reach. -/
+theorem fmint_preserves_conserved (fa : Adr) :
+    ∀ sevm pre post,
+      Exec 0 sevm pre (.ok post) →
+      (sevm.currentTarget = fa → some sevm.code.toList = Prog.compile Fmint.fmint) →
+      PrecondC fa sevm pre →
+      PostcondC fa sevm post := by
+  simpa only [ContractSpec.Preserves, fmintSpec_prog_eq, fmintSpec_pre_eq, fmintSpec_post_eq]
+    using fmintSpec_preserves fa
+
+/-! ### The chain rungs
+
+The descent from the message-call layer to the frame is contract-generic and
+lives in `Blanc/Ladder.lean`; each rung consumes the frame-level result as a
+`c.Preserves ca` hypothesis, and `fmintSpec_preserves` is what feeds it in.  So
+every theorem below is an instantiation of its generic parent — the mirror of
+`Blanc/Solvent.lean`'s audited family, and no new proof.
+
+The `wdsum` bound on the transition rungs is a hypothesis about the world, not
+about the contract: it is what the generic ladder asks of the block, and it
+survives the instance unchanged even though fmint's invariant never mentions an
+ETH balance. -/
+
+/-- The block-level state transition, at fmint.  Prague is the
+`rules := pragueRules` instance of the generic parent, which never asks which
+rules it is running. -/
+theorem stateTransition_preserves_conserved (fa : Adr)
+    (ch ch' : BlockChain) (block : Block)
+    (h_run : stateTransition ch block = .ok ch')
+    (h_wds : sum ch.state.bal + wdsum block.wds < 2 ^ 256)
+    (h_inv : StateInvC fa ch.state) : StateInvC fa ch'.state :=
+  fmintSpec_stateInv_iff.mp
+    (ContractSpec.stateTransition_preserves_inv fa (fmintSpec_preserves fa)
+      ch ch' block h_run h_wds (fmintSpec_stateInv_iff.mpr h_inv))
+
+/-- On a configured chain the block's own timestamp picks the rules, and the
+result holds whichever ones it picks: a chain that crosses an activation is not
+a new case. -/
+theorem stateTransitionUsing_preserves_conserved (fa : Adr) (cfg : ChainConfig)
+    (ch ch' : BlockChain) (block : Block)
+    (h_run : stateTransitionUsing cfg ch block = .ok ch')
+    (h_wds : sum ch.state.bal + wdsum block.wds < 2 ^ 256)
+    (h_inv : StateInvC fa ch.state) : StateInvC fa ch'.state :=
+  fmintSpec_stateInv_iff.mp
+    (ContractSpec.stateTransitionUsing_preserves_inv fa (fmintSpec_preserves fa)
+      cfg ch ch' block h_run h_wds (fmintSpec_stateInv_iff.mpr h_inv))
+
+/-- **The chain-level rung**, the second statement this module carried as a
+`Prop`-valued definition: no sequence of valid blocks can break fmint's supply
+conservation.  Statement unchanged. -/
+theorem chain_preserves_conserved (fa : Adr) (ch ch' : BlockChain)
+    (h_reach : BlockChain.Reach ch ch')
+    (h_inv : StateInvC fa ch.state) : StateInvC fa ch'.state :=
+  fmintSpec_stateInv_iff.mp
+    (ContractSpec.chain_preserves_inv fa (fmintSpec_preserves fa)
+      ch ch' h_reach (fmintSpec_stateInv_iff.mpr h_inv))
+
+/-- Chain-level induction over a configured chain, whatever schedule it follows
+and whichever activations the sequence crosses. -/
+theorem chainUsing_preserves_conserved (fa : Adr) (cfg : ChainConfig)
+    (ch ch' : BlockChain) (h_reach : BlockChain.ReachUsing cfg ch ch')
+    (h_inv : StateInvC fa ch.state) : StateInvC fa ch'.state :=
+  fmintSpec_stateInv_iff.mp
+    (ContractSpec.chainUsing_preserves_inv fa (fmintSpec_preserves fa)
+      cfg ch ch' h_reach (fmintSpec_stateInv_iff.mpr h_inv))
+
+/-- Preservation through RLP decoding and the block-hash checks. -/
+theorem addBlockToChain_preserves_conserved (fa : Adr)
+    (ch ch' : BlockChain) (rlp : Bytes)
+    (h_run : addBlockToChain ch rlp = .ok (.inl ch'))
+    (h_wds : ∀ block hash, rlpToBlock rlp = .ok ⟨block, hash⟩ →
+      sum ch.state.bal + wdsum block.wds < 2 ^ 256)
+    (h_inv : StateInvC fa ch.state) : StateInvC fa ch'.state :=
+  fmintSpec_stateInv_iff.mp
+    (ContractSpec.addBlockToChain_preserves_inv fa (fmintSpec_preserves fa)
+      ch ch' rlp h_run h_wds (fmintSpec_stateInv_iff.mpr h_inv))
+
+/-- Block import on a configured chain: the schedule and chain identity are
+validated before decoding, and the decoded timestamp then selects the rules. -/
+theorem addBlockToChainUsing_preserves_conserved (fa : Adr) (cfg : ChainConfig)
+    (ch ch' : BlockChain) (rlp : Bytes)
+    (h_run : addBlockToChainUsing cfg ch rlp = .ok (.inl ch'))
+    (h_wds : ∀ block hash, rlpToBlock rlp = .ok ⟨block, hash⟩ →
+      sum ch.state.bal + wdsum block.wds < 2 ^ 256)
+    (h_inv : StateInvC fa ch.state) : StateInvC fa ch'.state :=
+  fmintSpec_stateInv_iff.mp
+    (ContractSpec.addBlockToChainUsing_preserves_inv fa (fmintSpec_preserves fa)
+      cfg ch ch' rlp h_run h_wds (fmintSpec_stateInv_iff.mpr h_inv))
 
 end Blanc
