@@ -19,12 +19,14 @@
 -- STATE OF THE PROOF.  Arc B of `~/plans/flashmint-proposal.md`
 -- (`~/plans/fmint-conserved.md`) is filling this module in.  Landed so far:
 -- the `Stor.Conserved` algebra — the two invisibility lemmas, the four
--- preservation combinators and the `balance ≤ supply` bound corollary.  Still
--- open: every `FuncSound` obligation, and the assembly through
--- `ContractSpec.sound_of_dispatch` that turns `FmintPreservesConserved` and
--- `FmintChainPreservesConserved` from `Prop`-valued definitions into theorems.
--- Those two are still asserted of nothing.  The `flashLoan` success
--- specification is Arc C.
+-- preservation combinators and the `balance ≤ supply` bound corollary — the
+-- `fmintSpec` bridges, and nine of the twelve-plus-one `FuncSound` inputs (the
+-- reverting fallback and the eight read-only targets).  Still open: `transfer`,
+-- `approve` and `transferFrom` (Step 3), `flashLoan` (Step 4), and the
+-- assembly through `ContractSpec.sound_of_dispatch` that turns
+-- `FmintPreservesConserved` and `FmintChainPreservesConserved` from
+-- `Prop`-valued definitions into theorems (Step 5).  Those two are still
+-- asserted of nothing.  The `flashLoan` success specification is Arc C.
 --
 -- CLAIM HYGIENE.  What this module works towards is *conservation* — an
 -- equality about storage, `totalSupply = Σ balances`, at every observable
@@ -234,6 +236,159 @@ def PostcondC (fa : Adr) (sevm : Sevm) (devm : Devm) : Prop :=
 /-- The `State.Inv` counterpart, for the chain-level rungs. -/
 def StateInvC (fa : Adr) (w : Jaune.State) : Prop :=
   fmintSpec.StateInv fa w
+
+/-! ## The `fmintSpec` bridges
+
+The counterparts of `wethSpec_pre_iff` / `post_iff` / `prog_eq` / `pre_eq` /
+`post_eq`.  They are cheaper here than at WETH for a structural reason worth
+stating once: `Precond`/`Postcond`/`State.Inv` are WETH-specific *structures*
+that predate the record and have to be shown interderivable with it field by
+field, whereas `PrecondC`/`PostcondC`/`StateInvC` were introduced by
+`solvent-split` as the record's own bundles under a local name.  So each bridge
+is `Iff.rfl` — which is the evidence that this instance adds no restatement. -/
+
+theorem fmintSpec_prog_eq : fmintSpec.prog = Fmint.fmint := rfl
+
+theorem fmintSpec_pre_iff {ca : Adr} {sevm : Sevm} {devm : Devm} :
+    fmintSpec.Pre ca sevm devm ↔ PrecondC ca sevm devm := Iff.rfl
+
+theorem fmintSpec_post_iff {ca : Adr} {sevm : Sevm} {devm : Devm} :
+    fmintSpec.Post ca sevm devm ↔ PostcondC ca sevm devm := Iff.rfl
+
+theorem fmintSpec_stateInv_iff {ca : Adr} {w : Jaune.State} :
+    fmintSpec.StateInv ca w ↔ StateInvC ca w := Iff.rfl
+
+theorem fmintSpec_pre_eq : fmintSpec.Pre = PrecondC := rfl
+
+theorem fmintSpec_post_eq : fmintSpec.Post = PostcondC := rfl
+
+theorem fmintSpec_stateInv_eq : fmintSpec.StateInv = StateInvC := rfl
+
+/-- The frame-entry bundle collapses.  `fmintSpec.Inv` ignores both the
+callvalue and the ETH balance, so `PreInv`'s two branches — target and
+non-target — are the same proposition, and the whole bundle is just
+`Conserved` at the contract's storage.  WETH cannot do this: its `Inv` carries
+the callvalue, which is exactly what makes `Devm.PreSolvent` a genuine
+conjunction. -/
+theorem fmintSpec_preInv_iff {ca : Adr} {sevm : Sevm} {devm : Devm} :
+    fmintSpec.PreInv devm ca sevm ↔ Stor.Conserved (Devm.getStor devm ca) := by
+  constructor
+  · intro h
+    by_cases h_ct : sevm.currentTarget = ca
+    · exact h.1 h_ct
+    · exact h.2 h_ct
+  · exact fun h => ⟨fun _ => h, fun _ => h⟩
+
+theorem fmintSpec_postInv_iff {ca : Adr} {devm : Devm} :
+    fmintSpec.PostInv devm ca ↔ Stor.Conserved (Devm.getStor devm ca) := Iff.rfl
+
+/-- fmint's dispatch targets, in the form `ContractSpec.sound_of_dispatch`
+consumes — the counterpart of `wethSpec_funcSound`, and simpler than it in
+exactly one way.  fmint's `Side` is `True`, so there is no `nof` conjunct to
+thread through `Func.preserves_nof`: the obligation *is* "this target preserves
+`Stor.Conserved` at the frame's own target", with nothing else attached.  That
+simplification is the whole point of the instance having declined the side
+condition.
+
+Per-function lemmas are stated at `sevm.currentTarget` (`dispatch-generic`'s
+design correction): `FuncSound` carries `sevm.currentTarget = ca` in entry
+position and this helper is where that equation is discharged.  The
+deeper-frame induction hypothesis is discarded here; `flashLoan` is the only
+target that consumes it. -/
+theorem fmintSpec_funcSound {fa : Adr} (f : Func)
+    ( h_cons :
+      ∀ {sevm : Sevm} {s r : Devm},
+        Func.Run (Fmint.fmint.main :: Fmint.fmintAux) sevm s f r →
+        Stor.Conserved (Devm.getStor s sevm.currentTarget) →
+        Stor.Conserved (Devm.getStor r sevm.currentTarget) ) :
+    fmintSpec.FuncSound fa Fmint.fmintAux f := by
+  intro sevm s r h_ct h_pre _ h_run
+  subst h_ct
+  exact ⟨trivial, h_cons h_run (fmintSpec_preInv_iff.mp h_pre.inv)⟩
+
+/-! ## The effect-free nine
+
+The fallback and the eight read-only dispatch targets: everything fmint can be
+asked to do that writes no storage.
+
+**Decision gate (`~/plans/fmint-conserved.md`, Step 2c), resolved NO-GO.**  The
+proposal offered a narrowed *syntactic* discharge lemma — a `Bool`-valued
+"no `sstore` and no `Xinst` whatsoever" predicate over `Func` plus a soundness
+theorem — as an alternative to running the existing invariance automation eight
+times.  Both routes were measured on `name` and `maxFlashLoan` before either
+was committed to.  The lemma is provable, but it costs **47 code lines against
+3** for those two targets and elaborates no faster (both routes sit inside the
+noise of the bare-import baseline, ~1.14 s on this host).  The predeclared rule
+required *strictly cheaper in both*, so it is dropped and the walks stand.  The
+measurement is recorded in `~/plans/reports/fmint-conserved-step-2.md`; do not
+re-open it without new evidence. -/
+
+/-- Discharge an effect-free target: `func_inv` shows the run leaves
+`Devm.getStor` alone, and the no-op combinator does the rest.  The counterpart
+of `Blanc/Solvent.lean`'s `simple_solvent`, and shorter than it because there
+is no callvalue to forget. -/
+syntax "simple_conserved" : tactic
+set_option hygiene false in
+macro_rules
+| `(tactic| simple_conserved) =>
+  `(tactic| exact h.of_eq
+              (congr_fun (Func.of_inv Devm.getStor Devm.getStor (by func_inv) run)
+                sevm.currentTarget))
+
+/-- The fallback, free.  fmint's fallback is `Func.rev` and `Blanc.not_run_rev`
+says no `Func.Run` witnesses it, so the obligation is vacuous — which is what
+"an unrecognized selector reverts" buys at the proof layer. -/
+theorem fmintSpec_funcSound_rev {fa : Adr} :
+    fmintSpec.FuncSound fa Fmint.fmintAux Func.rev := by
+  intro _ _ _ _ _ _ h_run
+  exact absurd h_run not_run_rev
+
+/-! ### The eight read-only targets
+
+`name`, `symbol` and `totalSupply` are fmint's own; `decimals`, `balanceOf` and
+`allowance` are the shared `Blanc.*` definitions hoisted in Step 1, so these
+three lemmas are about the same terms WETH's are about; `maxFlashLoan` and
+`flashFee` are the ERC-3156 views. -/
+
+theorem name_preserves_conserved {sevm : Sevm} {s r : Devm}
+    (run : Func.Run (Fmint.fmint.main :: Fmint.fmintAux) sevm s Fmint.name r)
+    (h : Stor.Conserved (Devm.getStor s sevm.currentTarget)) :
+    Stor.Conserved (Devm.getStor r sevm.currentTarget) := by simple_conserved
+
+theorem symbol_preserves_conserved {sevm : Sevm} {s r : Devm}
+    (run : Func.Run (Fmint.fmint.main :: Fmint.fmintAux) sevm s Fmint.symbol r)
+    (h : Stor.Conserved (Devm.getStor s sevm.currentTarget)) :
+    Stor.Conserved (Devm.getStor r sevm.currentTarget) := by simple_conserved
+
+theorem decimals_preserves_conserved {sevm : Sevm} {s r : Devm}
+    (run : Func.Run (Fmint.fmint.main :: Fmint.fmintAux) sevm s decimals r)
+    (h : Stor.Conserved (Devm.getStor s sevm.currentTarget)) :
+    Stor.Conserved (Devm.getStor r sevm.currentTarget) := by simple_conserved
+
+theorem totalSupply_preserves_conserved {sevm : Sevm} {s r : Devm}
+    (run : Func.Run (Fmint.fmint.main :: Fmint.fmintAux) sevm s Fmint.totalSupply r)
+    (h : Stor.Conserved (Devm.getStor s sevm.currentTarget)) :
+    Stor.Conserved (Devm.getStor r sevm.currentTarget) := by simple_conserved
+
+theorem balanceOf_preserves_conserved {sevm : Sevm} {s r : Devm}
+    (run : Func.Run (Fmint.fmint.main :: Fmint.fmintAux) sevm s balanceOf r)
+    (h : Stor.Conserved (Devm.getStor s sevm.currentTarget)) :
+    Stor.Conserved (Devm.getStor r sevm.currentTarget) := by simple_conserved
+
+theorem allowance_preserves_conserved {sevm : Sevm} {s r : Devm}
+    (run : Func.Run (Fmint.fmint.main :: Fmint.fmintAux) sevm s allowance r)
+    (h : Stor.Conserved (Devm.getStor s sevm.currentTarget)) :
+    Stor.Conserved (Devm.getStor r sevm.currentTarget) := by simple_conserved
+
+theorem maxFlashLoan_preserves_conserved {sevm : Sevm} {s r : Devm}
+    (run : Func.Run (Fmint.fmint.main :: Fmint.fmintAux) sevm s Fmint.maxFlashLoan r)
+    (h : Stor.Conserved (Devm.getStor s sevm.currentTarget)) :
+    Stor.Conserved (Devm.getStor r sevm.currentTarget) := by simple_conserved
+
+theorem flashFee_preserves_conserved {sevm : Sevm} {s r : Devm}
+    (run : Func.Run (Fmint.fmint.main :: Fmint.fmintAux) sevm s Fmint.flashFee r)
+    (h : Stor.Conserved (Devm.getStor s sevm.currentTarget)) :
+    Stor.Conserved (Devm.getStor r sevm.currentTarget) := by simple_conserved
 
 /-- Headline 1 of `flashmint-proposal.md`, as a statement.  This is the shape
 `weth_preserves_solvent` has, with the record substituted; it is asserted of
