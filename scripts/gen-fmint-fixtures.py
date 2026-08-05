@@ -43,12 +43,26 @@ README.)
 
 The receipts root commits to full log content, so the `receiptTrie`/`bloom`
 written below pin fmint's exact event behavior. But they are `run_t8n`
-output -- the frozen EELS oracle on our own bytecode -- so the check is
-differential plus a golden regression lock, NOT independent evidence that
-the D6 event set is the right one. Wrong-but-consistent `logWith` sites
-would agree in both implementations and regenerate quietly. Closing that
-gap = an expected-log assertion in the Expectations layer below, derived
-from D6 rather than from the oracle. Not done.
+output -- the frozen EELS oracle on our own bytecode -- so on their own they
+are differential plus a golden regression lock, NOT evidence that the D6
+event set is the right one: wrong-but-consistent `logWith` sites would agree
+in both implementations and regenerate quietly.
+
+CLOSED, by `Expectations.expect_logs` below (`~/plans/fmint-evidence.md`
+Step 2). Every case now declares the log sequence D6 says it must produce --
+per transaction, in emission order, empty sequences included -- written from
+the specification and each case's own scenario, and checked against the
+oracle's top-level `logsHash` (an exact keccak-of-RLP commitment to the
+block's ordered log content) plus each receipt's own bloom. Generation
+aborts if the two disagree, so the goldens can no longer absorb a changed
+emission quietly.
+
+What that does and does not buy is stated where the assertion lives: read
+`expect_logs`'s docstring for the content/encoding split (the content is
+spec-derived; the RLP and bloom encoders are shared with the oracle, and
+deliberately so, because they are consensus rules adjudicated elsewhere) and
+the suite README's "How this suite commits to events" for what a
+specification-derived assertion on chosen inputs is still not.
 
 Run from the Blanc repository root with the frozen oracle venv:
 

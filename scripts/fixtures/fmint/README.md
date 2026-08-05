@@ -118,10 +118,18 @@ recorded coverage gap in that registry, not an omission here.
 - **Allowance spectrum** (exact / residual / insufficient / infinite, plus
   the separate no-approval zoo member) —
   `06-flashloan-allowance-spectrum.json`.
-- **Event assertions per D6** — committed through each fixture's recomputed
-  receipts root and logs bloom, with one stated provenance limit: see
-  [How this suite commits to events](#how-this-suite-commits-to-events)
-  below.
+- **Event assertions per D6** — two mechanisms, not one. Each fixture's
+  recomputed receipts root and logs bloom pin the emissions as a golden,
+  *and* every case declares at generation time the exact log sequence D6
+  says it must produce — per transaction, in emission order, with the four
+  revert-only and view-only cases (`02`, `03`, `07`, `09`) declaring the
+  **empty** sequence, which is an assertion rather than an omission. The
+  declarations are written from the specification and each case's own
+  scenario; they are never read back from the oracle, decoded out of a
+  committed fixture, or obtained from a second `t8n` run, and a case that
+  declares nothing fails generation. See [How this suite commits to
+  events](#how-this-suite-commits-to-events) below for what each mechanism
+  is worth.
 
 ## Cases
 
@@ -364,15 +372,74 @@ event behavior, and a silent change in emission fails the suite until the
 fixture is regenerated, at which point it surfaces as a reviewable diff in
 `receiptTrie`/`bloom`.
 
-**What it does not buy.** Those golden header values come from `run_t8n` —
-the frozen EELS oracle executing *our own bytecode*. The check is therefore
-a differential one (jaune vs EELS on the same program) plus a golden
-regression lock; it is not independent evidence that the D6 event set is the
-*right* one. Were `Blanc/Fmint.lean`'s `logWith` sites wrong-but-consistent,
-both implementations would agree and regeneration would quietly update the
-golden. Closing that last gap means an expected-log assertion in
-`gen-fmint-fixtures.py`'s `Expectations` layer, derived from D6 rather than
-from the oracle — blanc-side work, not a runner change. It is not done here.
+**What the goldens alone do not buy.** Those golden header values come from
+`run_t8n` — the frozen EELS oracle executing *our own bytecode*. On their own
+they are a differential check (jaune vs EELS on the same program) plus a
+regression lock; they are not evidence that the D6 event set is the *right*
+one. Were `Blanc/Fmint.lean`'s `logWith` sites wrong-but-consistent, both
+implementations would agree and regeneration would quietly update the golden.
+
+**That gap is closed, by a spec-derived expected-log assertion.**
+`Expectations.expect_logs` in `gen-fmint-fixtures.py` takes, from every case,
+the log sequence D6 says that case must produce — per transaction, in
+emission order — and generation aborts, writing nothing, if it disagrees with
+what the oracle executed. What makes it evidence rather than a second copy of
+the golden is the **direction of derivation**: the sequences are written from
+proposal D6 as adjudicated in [`FMINT_DEVIATIONS.md`](../../../FMINT_DEVIATIONS.md)
+rows 12–14 and from each case's own scenario, never decoded out of a
+committed fixture, never read back from the `t8n` result, never obtained from
+a second oracle run. A case that declares nothing fails generation, so the
+requirement cannot be silently skipped for a case added later.
+
+Two checks implement it:
+
+- **`logsHash`.** EELS' `t8n` result exposes no per-receipt log list, but it
+  does expose, at the top level, `logsHash =
+  keccak256(rlp.encode(block_logs))` — an exact commitment to the block's
+  full ordered log content. The declared sequence is encoded and hashed here
+  and compared against it. This is what makes **order** an assertion: a burn
+  emitted before its mint balances exactly as well, and only the ordering
+  catches it.
+- **Per-receipt bloom.** `logsHash` is a *block*-level commitment over the
+  flattened sequence, so it cannot check that a log belongs to the
+  transaction the case says emitted it; the per-receipt check does. For a
+  transaction expecting no log it is **sharp** — a log always contributes its
+  emitting address to the bloom, so an empty log set is exactly a zero bloom.
+  For a transaction expecting logs it is a containment check and therefore
+  **lossy**: `data` is not in a bloom at all, and neither is order, so it can
+  never replace the first check.
+
+**The content is spec-derived; the encoding is shared with the oracle.** The
+two topic0 words are computed in the generator from the ERC-20 signature
+strings rather than borrowed from `Blanc/CommonCore.lean`'s `transferEvent` /
+`approvalEvent`, so an expectation cannot agree with a typo in the constant
+under test. The RLP log encoding and the bloom function, by contrast, are the
+oracle's own — deliberately, and this is not a weakness being glossed: they
+are consensus rules adjudicated elsewhere (jaune recomputes both and checks
+them against the header, which is the mechanism described at the top of this
+section), and they are not what D6 decides. Hand-rolling an RLP encoder here
+to make the assertion look independent would buy nothing but a second place
+to be wrong.
+
+**What the assertion still does not buy.** It is specification-derived
+testing on **chosen inputs**, not a proof: it says that on these ten
+scenarios fmint emits exactly the events D6 specifies, in exactly that order,
+and nothing else. It says nothing about scenarios not in this directory. And
+it is only as good as the reading of D6 written into the declarations —
+a misreading shared with `Blanc/Fmint.lean` would still agree. The registry
+rows those declarations cite are the place that reading is adjudicated
+against OpenZeppelin v5 and WETH9, and the citation is deliberate: this
+assertion moves the question from "do two implementations of our bytecode
+agree" to "does our bytecode match the specification we wrote down", which is
+strictly further, and is not the same as "is that specification correct".
+
+The suite's evidence, in one line: `05` and `06` assert that the repayment
+allowance spend emits **no** `Approval` (row 13) by declaring twelve and six
+logs with none in them; `08` asserts the nesting order of two mints and two
+burns that are otherwise indistinguishable; `02`, `03`, `07` and `09` assert
+that a reverted or view-only path emits **nothing**, with `07` discarding
+both the mint's `Transfer` and the ERC-20 `Transfer` its borrower emitted
+from a nested `CALL`.
 
 ## The `supplySlot`-collision clause is not, and cannot be, a fixture
 
