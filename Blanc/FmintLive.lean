@@ -31,10 +31,10 @@ theorem totalSupplyGas_eq : totalSupplyGas = 2218 := by decide
 `fmint`'s dispatcher is `DispatchTree.ofSorted fmintFuncs` over twelve
 selectors, so a call walks three forks and then a leaf.  `totalSupply()` is
 entry 2 of twelve, and `DispatchTree.build` splits at `⌈n/2⌉`, which puts it in
-the left half at every fork.  The three pivots below are `leftmostFsig` of each
-fork's right subtree, named here rather than left as tree projections so that
-the step statements read.  Each equation is structural — `build`, `take`, `drop`
-and `length` only — and forces no `String.keccak` call. -/
+the left half at every fork: the first two forks jump, and the third — whose
+pivot *is* `totalSupply()` — falls through.  Nothing below names those pivots.
+`func_run` reads the fork structure off the compiled `Func` itself and only has
+to be told what each `GT` decided, which is the middle three hints. -/
 
 /-- The selector `totalSupply()` dispatches on.  There is no
 `totalSupplySelector` in the tree and this is not one: it is local to this
@@ -42,33 +42,24 @@ module, and reaching `Blanc/FlashSpec.lean` for its neighbourhood would cost
 two seconds of elaboration for a four-byte constant. -/
 abbrev tsSel : B256 := selector "totalSupply" []
 
-/-- Fork 1's pivot: entry 6 of twelve. -/
-abbrev piv1 : B256 := selector "maxFlashLoan" [.address]
-
-/-- Fork 2's pivot: entry 3 of six. -/
-abbrev piv2 : B256 := selector "transferFrom" [.address, .address, .uint256]
-
-/-- Fork 3's pivot: entry 2 of three — `totalSupply` itself, which is why this
-fork is the one that falls through rather than jumping. -/
-abbrev piv3 : B256 := tsSel
-
-/-- Every state the derivation passes through is `pre` with a new machine:
-`Devm.setMach_setMach` collapses the chain, so no state nests. -/
-private abbrev W (pre : Devm) (S : List B256) (M : Mem) (G : Nat) : Devm :=
-  pre.setMach ⟨S, M, G⟩
-
-local macro "gas_ok" : tactic =>
-  `(tactic| (simp only [W, Devm.gasLeft_setMach]; omega))
-
-local macro "room_ok" : tactic =>
-  `(tactic| (simp only [W, Devm.stack_setMach]; simp))
-
 /-! ### The witness
 
-The construction below is the first in this repository that **produces** a
-`Func.RunCompiled` derivation instead of consuming one.  It is written out by
-hand, one `have` per instruction, so that the split between what would serve
-any target and what is specific to `totalSupply()` can be measured. -/
+`func_run` walks `fmint`'s compiled `Func` from the program entry and applies
+one `Func.RunCompiled` rule per node, naming every intermediate state and gas
+account itself.  What it has to be told, in the order it asks:
+
+* `tsSel` — what `fsig`'s `SHR` produced, which is `h_sel`'s right-hand side;
+* `1, 1, 0` — the three dispatch forks, two jumping and one falling through;
+* `1` — the leaf's `EQ`, which matches, so the selector's own body is taken
+  and the `.call fallbackSlot` miss arm is not;
+* `supplySlot` — what `NOT 0` produced;
+* `3` — `MSTORE`'s memory-expansion charge, one word into empty memory.
+
+Everything else is derived: twenty-two instruction steps, four branch decisions,
+the whole chain of states, and every gas and stack-headroom side condition along
+it.  The two obligations the walk hands back are the justification for that `3`
+and the terminal `RETURN`, which ends the frame and so has no successor for a
+walk to name. -/
 
 /-- A `totalSupply()` call on `fmint` has a gas-exact run, and it returns the
 supply slot.
@@ -87,172 +78,21 @@ theorem totalSupply_runCompiled {sevm : Sevm} {pre : Devm}
       Devm.output post =
         (Devm.getStorVal pre sevm.currentTarget supplySlot).toBytes := by
   rw [totalSupplyGas_eq] at h_gas
-  have e1 : gJumpdest = 1 := rfl
-  have e2 : gBase = 2 := rfl
-  have e3 : gVerylow = 3 := rfl
-  have e4 : gHigh = 10 := rfl
-  have e6 : gasColdSload = 2100 := rfl
-  have e7 : gMemory = 3 := rfl
   set g := pre.gasLeft with hg
-  -- The word the storage read yields, and the memory image the `MSTORE` leaves.
-  set v : B256 := Devm.getStorVal pre sevm.currentTarget supplySlot with hv
-  set M : Mem := Mem.empty.write 0 v.toBytes with hM
-  -- The state the `SLOAD` moves to: warming a key writes a `meta` field, so
-  -- from here on the base state is no longer `pre`.
-  set P : Devm := addAccessedStorageKey pre sevm.currentTarget supplySlot with hP
-  -- The two memory-expansion charges this path incurs.  `MSTORE` grows memory
-  -- from nothing to one word, which is `gMemory`; `RETURN` reads back the word
-  -- that is already there, which is free.
-  have hn0 : (0 : B256).toNat = 0 := rfl
-  have hn32 : (32 : B256).toNat = 32 := rfl
-  have hmemW : ∀ (X : Devm) (S : List B256) (N : Mem) (G : Nat),
-      (W X S N G).memory = N := fun _ _ _ _ => rfl
-  have hMsize : M.size = 32 := by
-    rw [hM]
-    rcases hb : v.toBytes with _ | ⟨b, bs⟩
-    · exact absurd (hb ▸ B256.length_toBytes v) (by simp)
-    · have hlen : (b :: bs).length = 32 := hb ▸ B256.length_toBytes v
-      simp only [Mem.write, Mem.empty, hlen, if_neg (by simp : ¬ (0 + 32 ≤ 0))]
-      rfl
-  have hextM : ∀ (S : List B256) (G : Nat),
-      (W P S Mem.empty G).extCost [⟨(0 : B256).toNat, 32⟩] = 3 :=
-    fun _ _ => by
-      simp [Devm.extCost, hmemW, hn0, memExtsSize, memExtSize,
-        calculateMemoryGasCost, ceilDiv, Mem.empty, gMemory]
-  have hextR : ∀ (S : List B256) (G : Nat),
-      (W P S M G).extCost [⟨(0 : B256).toNat, (32 : B256).toNat⟩] = 0 :=
-    fun _ _ => by
-      simp [Devm.extCost, hmemW, hn0, hn32, memExtsSize, memExtSize,
-        calculateMemoryGasCost, ceilDiv, hMsize, gMemory]
-  ---------------------------------------------------------------- fsig
-  have i1 : Ninst.RunCompiled sevm (W pre [] Mem.empty (g - 1))
-      (Ninst.pushB256 0) (W pre [0] Mem.empty (g - 3)) :=
-    Ninst.runCompiled_pushB256 pushCost_zero (by gas_ok) (by room_ok)
-  have i2 : Ninst.RunCompiled sevm (W pre [0] Mem.empty (g - 3))
-      Ninst.calldataload (W pre [Sevm.dataWord sevm 0] Mem.empty (g - 6)) :=
-    Ninst.runCompiled_calldataload rfl rfl (by gas_ok) (by simp)
-  have i3 : Ninst.RunCompiled sevm
-      (W pre [Sevm.dataWord sevm 0] Mem.empty (g - 6)) (Ninst.pushB256 224)
-      (W pre [224, Sevm.dataWord sevm 0] Mem.empty (g - 9)) :=
-    Ninst.runCompiled_pushB256 (pushCost_of_ne_zero (by decide)) (by gas_ok) (by room_ok)
-  have i4 : Ninst.RunCompiled sevm
-      (W pre [224, Sevm.dataWord sevm 0] Mem.empty (g - 9)) Ninst.shr
-      (W pre [tsSel] Mem.empty (g - 12)) :=
-    Ninst.runCompiled_binary (by rintro ⟨⟩) rfl rfl h_sel (by gas_ok) (by simp)
-  ---------------------------------------------------------------- fork 1
-  have i5 : Ninst.RunCompiled sevm (W pre [tsSel] Mem.empty (g - 12))
-      (Ninst.dup 0) (W pre [tsSel, tsSel] Mem.empty (g - 15)) :=
-    Ninst.runCompiled_dup rfl (by gas_ok) (by room_ok)
-  have i6 : Ninst.RunCompiled sevm (W pre [tsSel, tsSel] Mem.empty (g - 15))
-      (Ninst.pushB256 piv1) (W pre [piv1, tsSel, tsSel] Mem.empty (g - 18)) :=
-    Ninst.runCompiled_pushB256 (pushCost_of_ne_zero (by decide +kernel))
-      (by gas_ok) (by room_ok)
-  have i7 : Ninst.RunCompiled sevm
-      (W pre [piv1, tsSel, tsSel] Mem.empty (g - 18)) Ninst.gt
-      (W pre [1, tsSel] Mem.empty (g - 21)) :=
-    Ninst.runCompiled_binary (by rintro ⟨⟩) rfl rfl (by decide +kernel)
-      (by gas_ok) (by simp)
-  ---------------------------------------------------------------- fork 2
-  have i8 : Ninst.RunCompiled sevm (W pre [tsSel] Mem.empty (g - 35))
-      (Ninst.dup 0) (W pre [tsSel, tsSel] Mem.empty (g - 38)) :=
-    Ninst.runCompiled_dup rfl (by gas_ok) (by room_ok)
-  have i9 : Ninst.RunCompiled sevm (W pre [tsSel, tsSel] Mem.empty (g - 38))
-      (Ninst.pushB256 piv2) (W pre [piv2, tsSel, tsSel] Mem.empty (g - 41)) :=
-    Ninst.runCompiled_pushB256 (pushCost_of_ne_zero (by decide +kernel))
-      (by gas_ok) (by room_ok)
-  have i10 : Ninst.RunCompiled sevm
-      (W pre [piv2, tsSel, tsSel] Mem.empty (g - 41)) Ninst.gt
-      (W pre [1, tsSel] Mem.empty (g - 44)) :=
-    Ninst.runCompiled_binary (by rintro ⟨⟩) rfl rfl (by decide +kernel)
-      (by gas_ok) (by simp)
-  ---------------------------------------------------------------- fork 3
-  have i11 : Ninst.RunCompiled sevm (W pre [tsSel] Mem.empty (g - 58))
-      (Ninst.dup 0) (W pre [tsSel, tsSel] Mem.empty (g - 61)) :=
-    Ninst.runCompiled_dup rfl (by gas_ok) (by room_ok)
-  have i12 : Ninst.RunCompiled sevm (W pre [tsSel, tsSel] Mem.empty (g - 61))
-      (Ninst.pushB256 piv3) (W pre [piv3, tsSel, tsSel] Mem.empty (g - 64)) :=
-    Ninst.runCompiled_pushB256 (pushCost_of_ne_zero (by decide +kernel))
-      (by gas_ok) (by room_ok)
-  have i13 : Ninst.RunCompiled sevm
-      (W pre [piv3, tsSel, tsSel] Mem.empty (g - 64)) Ninst.gt
-      (W pre [0, tsSel] Mem.empty (g - 67)) :=
-    Ninst.runCompiled_binary (by rintro ⟨⟩) rfl rfl (by decide +kernel)
-      (by gas_ok) (by simp)
-  ---------------------------------------------------------------- the leaf
-  have i14 : Ninst.RunCompiled sevm (W pre [tsSel] Mem.empty (g - 80))
-      (Ninst.pushB256 tsSel) (W pre [tsSel, tsSel] Mem.empty (g - 83)) :=
-    Ninst.runCompiled_pushB256 (pushCost_of_ne_zero (by decide +kernel))
-      (by gas_ok) (by room_ok)
-  have i15 : Ninst.RunCompiled sevm (W pre [tsSel, tsSel] Mem.empty (g - 83))
-      Ninst.eq (W pre [1] Mem.empty (g - 86)) :=
-    Ninst.runCompiled_binary (by rintro ⟨⟩) rfl rfl
-      (by rw [B256.eqCheck, if_pos rfl]) (by gas_ok) (by simp)
-  ---------------------------------------------------------- totalSupply body
-  have i16 : Ninst.RunCompiled sevm (W pre [] Mem.empty (g - 100))
-      (Ninst.pushB256 0) (W pre [0] Mem.empty (g - 102)) :=
-    Ninst.runCompiled_pushB256 pushCost_zero (by gas_ok) (by room_ok)
-  have i17 : Ninst.RunCompiled sevm (W pre [0] Mem.empty (g - 102))
-      Ninst.not (W pre [supplySlot] Mem.empty (g - 105)) :=
-    Ninst.runCompiled_unary (by rintro ⟨⟩) rfl rfl (by decide) (by gas_ok) (by simp)
-  have i18 : Ninst.RunCompiled sevm (W pre [supplySlot] Mem.empty (g - 105))
-      Ninst.sload (W P [v] Mem.empty (g - 2205)) :=
-    Ninst.runCompiled_sload_cold rfl h_cold rfl (by gas_ok) (by simp)
-  have i19 : Ninst.RunCompiled sevm (W P [v] Mem.empty (g - 2205))
-      (Ninst.pushB256 0) (W P [0, v] Mem.empty (g - 2207)) :=
-    Ninst.runCompiled_pushB256 pushCost_zero (by gas_ok) (by room_ok)
-  have i20 : Ninst.RunCompiled sevm (W P [0, v] Mem.empty (g - 2207))
-      Ninst.mstore (W P [] M (g - 2213)) :=
-    Ninst.runCompiled_mstore rfl (by rw [hextM]; gas_ok) rfl
-  have i21 : Ninst.RunCompiled sevm (W P [] M (g - 2213))
-      (Ninst.pushB256 32) (W P [32] M (g - 2216)) :=
-    Ninst.runCompiled_pushB256 (pushCost_of_ne_zero (by decide)) (by gas_ok) (by room_ok)
-  have i22 : Ninst.RunCompiled sevm (W P [32] M (g - 2216))
-      (Ninst.pushB256 0) (W P [0, 32] M (g - 2218)) :=
-    Ninst.runCompiled_pushB256 pushCost_zero (by gas_ok) (by room_ok)
-  ---------------------------------------------------------------- the RETURN
-  -- What `MSTORE` left in memory is what `RETURN` reads back: `Mem.Reads`
-  -- carries the image across the write, and the read is the whole of it
-  -- because a `B256` is exactly 32 bytes.
-  have h_reads : Mem.Reads M v.toBytes := by
-    have h := Mem.Reads.write Mem.wf_empty Mem.reads_empty 0 v.toBytes
-    rw [show Bytes.writeAt [] 0 v.toBytes = v.toBytes by
-      simp [Bytes.writeAt]] at h
-    exact h
-  have h_read : (M.read 0 32).1 = v.toBytes := by
-    rw [Mem.Reads.read h_reads 0 32]
-    show List.takeD 32 (List.drop 0 v.toBytes) 0 = v.toBytes
-    rw [List.drop_zero, List.takeD_eq_self 0 (B256.length_toBytes v).symm]
-  have h_mr : ((W P [] M (g - 2218)).memRead 0 32).1 = v.toBytes := h_read
-  have i23 : Func.RunCompiled (fmint.main :: fmint.aux) sevm
-      (W P [0, 32] M (g - 2218)) (.last .ret)
-      (((W P [] M (g - 2218)).memRead 0 32).2.withOutput v.toBytes) :=
-    Func.runCompiled_ret (G := g - 2218) rfl (by rw [hextR]; gas_ok)
-      (Prod.ext h_mr rfl)
-  ---------------------------------------------------------------- composition
-  have h_run : Prog.RunCompiled sevm pre fmint
-      (((W P [] M (g - 2218)).memRead 0 32).2.withOutput v.toBytes) :=
-    Prog.runCompiled_intro (G := g - 1) (mid := W pre [] Mem.empty (g - 1))
-      (by omega) (by rw [h_stack, h_mem])
-      (.next i1 (.next i2 (.next i3 (.next i4 (.next i5 (.next i6 (.next i7
-        -- fork 1: `piv1 > totalSupply()`, so the dispatcher jumps left
-        (Func.runCompiled_branch_succ (w := 1) (G := g - 35) (by decide) rfl
-          (by room_ok) (by gas_ok)
-        (.next i8 (.next i9 (.next i10
-        -- fork 2: same again
-        (Func.runCompiled_branch_succ (w := 1) (G := g - 58) (by decide) rfl
-          (by room_ok) (by gas_ok)
-        (.next i11 (.next i12 (.next i13
-        -- fork 3: the pivot IS `totalSupply()`, so `GT` is 0 and this one
-        -- falls through to the right subtree rather than jumping
-        (Func.runCompiled_branch_zero (G := g - 80) rfl (by room_ok) (by gas_ok)
-        (.next i14 (.next i15
-        -- the leaf: `EQ` matches, so the selector's own body is taken and the
-        -- `.call fallbackSlot` miss arm is not
-        (Func.runCompiled_branch_succ (w := 1) (G := g - 100) (by decide) rfl
-          (by room_ok) (by gas_ok)
-        (.next i16 (.next i17 (.next i18 (.next i19 (.next i20
-          (.next i21 (.next i22 i23))))))))))))))))))))))))))
-  exact ⟨_, h_run, rfl⟩
+  exact
+    ⟨_,
+      Prog.runCompiled_intro (G := g - 1)
+        (mid := pre.setMach ⟨[], Mem.empty, g - 1⟩)
+        (by simp only [gJumpdest]; omega)
+        (by rw [h_stack, h_mem])
+        (by
+          func_run [tsSel, 1, 1, 0, 1, supplySlot, 3]
+          · exact Devm.extCost_empty_word
+          · exact Func.runCompiled_ret_word (G := g - 2218) (e := 0) rfl
+              (Devm.extCost_word_word Mem.size_write_word)
+              (by simp only [Devm.gasLeft_setMach]; omega)
+              (Devm.memRead_word_fst (by simp only [Devm.memory_setMach]; rfl))),
+      rfl⟩
 
 /-- **`fmint`'s `totalSupply()` call succeeds.**
 

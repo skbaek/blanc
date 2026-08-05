@@ -56,9 +56,12 @@ This repo contains the following files:
   instruction.
 - [FmintLive.lean](Blanc/FmintLive.lean): fmint's demonstration of that layer,
   and the first place in this repository where a contract call is proved to
-  **succeed**. `fmint_totalSupply_succeeds` builds the run witness for a
-  `totalSupply()` call by hand out of `Forward.lean`'s pieces and composes it
-  through `Prog.exec_of_runCompiled`. It costs 2218 gas, exactly, of which
+  **succeed**. `fmint_totalSupply_succeeds` drives `func_run` over `fmint`'s
+  compiled `Func` to build the run witness for a `totalSupply()` call, and
+  composes it through `Prog.exec_of_runCompiled`. Six of the seven hints the
+  walk takes are what the dispatch comparisons decided; everything else — the
+  twenty-two instruction steps, the state chain, and every gas and headroom side
+  condition — is derived. It costs 2218 gas, exactly, of which
   `gasColdSload`'s 2100 is the storage read. Read the scope off the docstring:
   it is one call-free entrypoint of one contract, at message-call altitude
   rather than transaction level, for one fixed selector, with an exact gas
