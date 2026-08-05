@@ -8441,35 +8441,22 @@ lemma of_forwardArgTail_val {e : Sevm} {s s' : Devm} {k lenWord xs}
   have hp3 : Sevm.tailPtr e k :: xs <<+ t3.stack := by
     rw [← hptr]; exact prefix_of_add q3 hp2
   have hm3 : s.memory = t3.memory :=
-    (hm1.trans hb2.memory).trans
-      (Line.of_inv Devm.memory (by line_inv) (Line.Run.cons q3 Line.Run.nil))
+    (hm1.trans hb2.memory).trans (Ninst.Hinv.inv (f := Devm.memory) q3)
   -- `dup 0 :: calldataload`: read the declared length, keeping the pointer.
   rcases Line.of_run_cons h with ⟨t4, q4, h⟩
-  rcases of_run_dup q4 with ⟨y4, hy4, pb4⟩
-  have hy4' : y4 = Sevm.tailPtr e k := by
-    have hg : t3.stack[(0 : Fin 16).val]? = some (Sevm.tailPtr e k) :=
-      Stack.nth_getElem (Stack.Nth.head _ _) hp3
-    rw [hg] at hy4; injection hy4 with hy4; exact hy4.symm
-  subst y4
   have hp4 : Sevm.tailPtr e k :: Sevm.tailPtr e k :: xs <<+ t4.stack :=
-    prefix_of_push pb4 hp3
-  have hm4 : s.memory = t4.memory := hm3.trans pb4.memory
+    prefix_of_dup_val q4 (Stack.Nth.head _ _) hp3
+  have hm4 : s.memory = t4.memory := hm3.trans (Ninst.Hinv.inv (f := Devm.memory) q4)
   rcases Line.of_run_cons h with ⟨t5, q5, h⟩
   have hp5 : Sevm.tailLen e k :: Sevm.tailPtr e k :: xs <<+ t5.stack :=
     prefix_of_calldataload_val q5 hp4
   have hm5 : s.memory = t5.memory :=
-    hm4.trans (Line.of_inv Devm.memory (by line_inv) (Line.Run.cons q5 Line.Run.nil))
+    hm4.trans (Ninst.Hinv.inv (f := Devm.memory) q5)
   -- `dup 0 :: mstoreAt lenWord`: republish the length into memory.
   rcases Line.of_run_cons h with ⟨t6, q6, h⟩
-  rcases of_run_dup q6 with ⟨y6, hy6, pb6⟩
-  have hy6' : y6 = Sevm.tailLen e k := by
-    have hg : t5.stack[(0 : Fin 16).val]? = some (Sevm.tailLen e k) :=
-      Stack.nth_getElem (Stack.Nth.head _ _) hp5
-    rw [hg] at hy6; injection hy6 with hy6; exact hy6.symm
-  subst y6
   have hp6 : Sevm.tailLen e k :: Sevm.tailLen e k :: Sevm.tailPtr e k :: xs <<+ t6.stack :=
-    prefix_of_push pb6 hp5
-  have hm6 : s.memory = t6.memory := hm5.trans pb6.memory
+    prefix_of_dup_val q6 (Stack.Nth.head _ _) hp5
+  have hm6 : s.memory = t6.memory := hm5.trans (Ninst.Hinv.inv (f := Devm.memory) q6)
   rcases of_run_append (mstoreAt lenWord) h with ⟨t7, q7, h⟩
   rcases of_run_mstoreAt_val q7 hp6 with ⟨hp7, hmw7⟩
   have hm7 : t7.memory =
@@ -8477,15 +8464,9 @@ lemma of_forwardArgTail_val {e : Sevm} {s s' : Devm} {k lenWord xs}
     rw [hmw7, hm6]
   -- `dup 0 :: swap 1`: the payload's source pointer back on top.
   rcases Line.of_run_cons h with ⟨t8, q8, h⟩
-  rcases of_run_dup q8 with ⟨y8, hy8, pb8⟩
-  have hy8' : y8 = Sevm.tailLen e k := by
-    have hg : t7.stack[(0 : Fin 16).val]? = some (Sevm.tailLen e k) :=
-      Stack.nth_getElem (Stack.Nth.head _ _) hp7
-    rw [hg] at hy8; injection hy8 with hy8; exact hy8.symm
-  subst y8
   have hp8 : Sevm.tailLen e k :: Sevm.tailLen e k :: Sevm.tailPtr e k :: xs <<+ t8.stack :=
-    prefix_of_push pb8 hp7
-  have hm8 := pb8.memory.symm.trans hm7
+    prefix_of_dup_val q8 (Stack.Nth.head _ _) hp7
+  have hm8 := (Ninst.Hinv.inv (f := Devm.memory) q8).symm.trans hm7
   rcases Line.of_run_cons h with ⟨t9, q9, h⟩
   have hp9 : Sevm.tailPtr e k :: Sevm.tailLen e k :: Sevm.tailLen e k :: xs
       <<+ t9.stack := by
@@ -8495,8 +8476,7 @@ lemma of_forwardArgTail_val {e : Sevm} {s s' : Devm} {k lenWord xs}
       apply Stack.swapCore_succ
       apply Stack.swapCore_zero
     exact Stack.prefix_of_swap h_swap (of_run_swap q9) hp8
-  have hm9 := (Line.of_inv Devm.memory (by line_inv)
-    (Line.Run.cons q9 Line.Run.nil)).symm.trans hm8
+  have hm9 := (Ninst.Hinv.inv (f := Devm.memory) q9).symm.trans hm8
   -- `pushB256 32 :: add`: the payload begins one word past the length word.
   rcases Line.of_run_cons h with ⟨t10, q10, h⟩
   have hb10 := of_run_pushB256 q10
@@ -8506,8 +8486,7 @@ lemma of_forwardArgTail_val {e : Sevm} {s s' : Devm} {k lenWord xs}
   rcases Line.of_run_cons h with ⟨t11, q11, h⟩
   have hp11 : (32 + Sevm.tailPtr e k) :: Sevm.tailLen e k :: Sevm.tailLen e k ::
       xs <<+ t11.stack := prefix_of_add q11 hp10
-  have hm11 := (Line.of_inv Devm.memory (by line_inv)
-    (Line.Run.cons q11 Line.Run.nil)).symm.trans hm10
+  have hm11 := (Ninst.Hinv.inv (f := Devm.memory) q11).symm.trans hm10
   rcases Line.of_run_cons h with ⟨t12, q12, h⟩
   have hb12 := of_run_pushB256 q12
   have hp12 : ((lenWord + 1) * 32 : B256) :: (32 + Sevm.tailPtr e k) ::
