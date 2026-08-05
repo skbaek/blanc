@@ -4,6 +4,7 @@ import Blanc.FlashSpec
 import Blanc.WethCode
 import Blanc.FmintCode
 import Blanc.Compiled
+import Blanc.FmintLive
 
 #print axioms Blanc.weth_preserves_solvent
 #print axioms Blanc.stateTransition_preserves_solvent
@@ -42,3 +43,5 @@ import Blanc.Compiled
 #print axioms Blanc.Fmint.rollback_of_balance_below_amount
 #print axioms Blanc.Prog.exec_of_runCompiled
 #print axioms Blanc.Prog.runCompiled_iff_exec
+#print axioms Blanc.Fmint.totalSupply_runCompiled
+#print axioms Blanc.Fmint.fmint_totalSupply_succeeds

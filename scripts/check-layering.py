@@ -54,7 +54,7 @@ SHARED = ["Basic", "Semantics", "CommonCore", "Tactics", "CommonProofs", "Ladder
 
 CONTRACTS = {
     "weth": ["Weth", "WethCode", "Solvent"],
-    "fmint": ["Fmint", "FmintCode", "Conserved", "FlashSpec"],
+    "fmint": ["Fmint", "FmintCode", "Conserved", "FlashSpec", "FmintLive"],
 }
 
 ROOTS = ["Blanc", "Main"]

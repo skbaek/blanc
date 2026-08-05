@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Blanc verification gate (REFACTOR.md Phase 0, step 0.3): `lake build`,
-# then an axiom audit of the thirty-seven audited top theorems via
+# then an axiom audit of the thirty-nine audited top theorems via
 # scripts/AxiomCheck.lean — WETH's seven solvency theorems, fmint's seven
 # conservation theorems, fmint's `flashLoan` success spec and its seven
 # no-success corollaries, the two compile witnesses, the eleven frame-level
-# restoration rows below, and the two `RunCompiled`/`exec` bridge rows.
+# restoration rows below, the two `RunCompiled`/`exec` bridge rows, and the two
+# `totalSupply()` liveness rows.
 #
 # `wethCode_compile` is what keeps the solvency theorems' `Prog.compile weth`
 # hypothesis from being vacuous. `fmintCode_compile` is the same equation for
@@ -69,7 +70,7 @@
 # premise — over EVERY boundary the call could open, never "if the receiver's
 # code returns X". `Blanc/FlashSpec.lean`'s section banner is the authority.
 #
-# The last two rows are `Blanc/Compiled.lean`'s bridge between the gas-exact
+# The two `Prog.*` rows are `Blanc/Compiled.lean`'s bridge between the gas-exact
 # relation `Prog.RunCompiled` and Jaune's `exec`. They were built by
 # `~/plans/liveness-prelude.md` and audited here by `~/plans/forward-witness.md`
 # Step 1, which closed the hole: everything that arc builds rests on them, so
@@ -78,6 +79,18 @@
 # witnesses into executions and back, and by themselves produce a witness for
 # no contract at all. They are NOT liveness, they are message-frame level and
 # not transaction level, and they are `.ok`-level only.
+#
+# The last two rows are the only ones in this file that assert a contract call
+# **succeeds**. Every row above them takes a successful execution as a
+# hypothesis and factors it; `Blanc.Fmint.totalSupply_runCompiled` constructs a
+# gas-exact run from a precondition on the frame alone, and
+# `Blanc.Fmint.fmint_totalSupply_succeeds` composes it through
+# `Prog.exec_of_runCompiled` into a successful `exec`. Read their scope off
+# `Blanc/FmintLive.lean`'s docstrings, which are the authority: one call-free
+# entrypoint of one contract, at message-call altitude and not transaction
+# level, for one fixed selector, with an exact gas figure rather than a bound.
+# No fmint entrypoint that makes an external call can have a row of this shape
+# at all — its witness would contain the callee's execution as a premise.
 #
 # Each row carries its OWN pinned expected axiom set (see ROWS below), and a
 # theorem's axiom closure must equal its row's set exactly, order-insensitive.
@@ -162,7 +175,9 @@ Blanc.Fmint.rollback_of_amount_over_maxFlashLoan|$STANDARD
 Blanc.Fmint.rollback_of_allowance_below_amount|$STANDARD
 Blanc.Fmint.rollback_of_balance_below_amount|$STANDARD
 Blanc.Prog.exec_of_runCompiled|$STANDARD
-Blanc.Prog.runCompiled_iff_exec|$STANDARD"
+Blanc.Prog.runCompiled_iff_exec|$STANDARD
+Blanc.Fmint.totalSupply_runCompiled|$STANDARD
+Blanc.Fmint.fmint_totalSupply_succeeds|$STANDARD"
 # Secondary net only: the exact-set comparison below is the primary check;
 # this pattern catches forbidden names in output the per-theorem parse missed.
 FORBIDDEN='sorryAx|ofReduceBool|ofReduceNat|_native\.'

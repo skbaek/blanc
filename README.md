@@ -48,6 +48,17 @@ This repo contains the following files:
   a successful `Exec`. Shared and contract-agnostic; a demonstration belongs in
   a contract-owned module, since a shared module importing a contract is the
   inverted import `scripts/check-layering.sh` rejects.
+- [FmintLive.lean](Blanc/FmintLive.lean): fmint's demonstration of that layer,
+  and the first place in this repository where a contract call is proved to
+  **succeed**. `fmint_totalSupply_succeeds` builds the run witness for a
+  `totalSupply()` call by hand out of `Forward.lean`'s pieces and composes it
+  through `Prog.exec_of_runCompiled`. It costs 2218 gas, exactly, of which
+  `gasColdSload`'s 2100 is the storage read. Read the scope off the docstring:
+  it is one call-free entrypoint of one contract, at message-call altitude
+  rather than transaction level, for one fixed selector, with an exact gas
+  figure rather than a bound. No entrypoint that makes an external call can
+  have a statement of this shape — its witness contains the callee's execution
+  as a premise, which is arbitrary and, for a flash loan, adversarial.
 - [Weth.lean](Blanc/Weth.lean): proof-of-concept implementation of the Wrapped 
   Ether (WETH) contract in Blanc.
 - [WethCode.lean](Blanc/WethCode.lean): the compiled WETH runtime bytecode and
