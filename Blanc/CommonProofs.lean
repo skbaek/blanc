@@ -7900,6 +7900,21 @@ lemma Bytes.getD_writeAt (bs : Bytes) (n : Nat) (xs : Bytes) (i : Nat) :
       congr 1
       omega
 
+/-- Writing at the end of the image is an append.  The shape every store in a
+frame that lays memory out once, upward and without gaps, takes. -/
+lemma Bytes.writeAt_length (bs xs : Bytes) :
+    Bytes.writeAt bs bs.length xs = bs ++ xs := by
+  rw [Bytes.writeAt, List.takeD_eq_take _ (Nat.le_refl _), List.take_length,
+    List.drop_eq_nil_of_le (Nat.le_add_right _ _), List.append_nil]
+
+/-- Writing over the whole image from `0` replaces it.  The other shape: the
+mint's `Transfer` data lands at `0`, and `storeCallbackHead`'s first store lands
+on top of it. -/
+lemma Bytes.writeAt_zero_of_le {bs xs : Bytes} (h : bs.length ≤ xs.length) :
+    Bytes.writeAt bs 0 xs = xs := by
+  rw [Bytes.writeAt, show List.takeD 0 bs 0 = [] from rfl, List.nil_append,
+    List.drop_eq_nil_of_le (by omega), List.append_nil]
+
 /-! ### `Mem.Wf` and `Mem.Reads` -/
 
 lemma Nat.le_mul_ceilDiv (n m : Nat) (hm : 0 < m) : n ≤ m * ceilDiv n m := by
@@ -8199,6 +8214,49 @@ instance : Rinst.Hinv Devm.memory Rinst.calldataload := ⟨by
   rcases Except.bind_eq_ok run₁ with ⟨s₂, h2, run₂⟩
   exact ((Devm.pop_of_pop h1).memory.trans
     (Devm.burn_of_chargeGas h2).memory).trans (Devm.push_of_push run₂).memory⟩
+
+/-- `SLOAD` reads storage and touches nothing else.  Not covered by the routine
+macros above because the cold/warm split makes it two shapes rather than one. -/
+instance : Rinst.Hinv Devm.memory Rinst.sload := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨⟨key, s₁⟩, h1, run₁⟩
+  refine (Devm.pop_of_pop h1).memory.trans ?_
+  suffices H : ∀ (d : Devm) (c : Nat), s₁.memory = d.memory →
+      (chargeGas c d >>= fun y => Devm.push (Devm.getStorVal y sevm.currentTarget key) y)
+        = .ok post → s₁.memory = post.memory by
+    split at run₁
+    · exact H s₁ gasWarmAccess rfl run₁
+    · exact H (addAccessedStorageKey s₁ sevm.currentTarget key) gasColdSload rfl run₁
+  intro d c hm run'
+  rcases Except.bind_eq_ok run' with ⟨s₂, h2, run₂⟩
+  exact (hm.trans (Devm.burn_of_chargeGas h2).memory).trans (Devm.push_of_push run₂).memory⟩
+
+/-- `SSTORE` writes storage and touches nothing else.  The longest of these
+proofs only because the instruction has the most intermediate states: the
+access-list split, the refund counter, the gas charge and the dynamic assert
+each produce one, and every one of them leaves `Devm.memory` alone. -/
+instance : Rinst.Hinv Devm.memory Rinst.sstore := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨⟨x, s₁⟩, h1, run₁⟩
+  rcases Except.bind_eq_ok run₁ with ⟨⟨y, s₂⟩, h2, run₂⟩
+  rcases Except.bind_eq_ok run₂ with ⟨_, h3, run₃⟩
+  rcases Except.bind_eq_ok run₃ with ⟨⟨s₃, g₂⟩, h4, run₄⟩
+  rcases Except.bind_eq_ok run₄ with ⟨g₃, h5, run₅⟩
+  rcases Except.bind_eq_ok run₅ with ⟨s₄, h6, run₆⟩
+  rcases Except.bind_eq_ok run₆ with ⟨s₅, h7, run₇⟩
+  rcases Except.bind_eq_ok run₇ with ⟨_, h8, h9⟩
+  have m3 : s₂.memory = s₃.memory := by
+    injection h4 with eq
+    split at eq <;> (injection eq with eq _; subst eq; rfl)
+  have m4 : s₃.memory = s₄.memory := by
+    injection h6 with eq; rw [← eq]; rfl
+  injection h9 with eq
+  rw [← eq]
+  show pre.memory = s₅.memory
+  exact ((((Devm.pop_of_pop h1).memory.trans (Devm.pop_of_pop h2).memory).trans m3).trans
+    m4).trans (Devm.burn_of_chargeGas h7).memory⟩
 
 /-! The two `Ninst` constructors that are not `reg`, so that `line_inv` carries
 a memory image across a whole `Line` rather than stopping at the first `PUSH`.

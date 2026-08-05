@@ -102,6 +102,110 @@ theorem exec_enters_flashLoan {sevm : Sevm} {pre post : Devm}
       funext a; show (pre.state.get a).code = (s₀.state.get a).code; rw [burn.state]
     rw [← h3, ← h2, ← h1]
 
+/-! ## The callback's memory image
+
+The layout `Blanc/Fmint.lean` tabulates, proved rather than assumed.  Two
+fragment lemmas first: `storeCallbackHead` and `callbackArgsSize` are fmint's,
+so their value-carrying forms live here rather than in the shared layer, and
+they are the value-carrying companions of Arc B's stack-only
+`of_storeCallbackHead` and `of_callbackArgsSize`. -/
+
+/-- **`storeCallbackHead`, with its memory effect.**
+
+The selector and the five head words land in memory words 0-5: selector at
+`0x00` (right-aligned inside the word, which is what makes the `CALL`'s window
+start four bytes short of word 1), `initiator = caller` at `0x20`,
+`token = address(this)` at `0x40`, `amount` at `0x60`, `fee = 0` at `0x80`
+(proposal D2), and the `data` offset `0xa0` at `0xa0`.
+
+Checked against the table at `Blanc/Fmint.lean` instruction by instruction; the
+byte offsets below are `(k * 32).toNat` evaluated, not restated. -/
+lemma of_storeCallbackHead_val {e : Sevm} {s s' : Devm} {x xs}
+    (hp : x :: xs <<+ s.stack) (h : Line.Run e s storeCallbackHead s') :
+    (xs <<+ s'.stack) ∧
+      s'.memory =
+        ((((((s.memory.write 0 onFlashLoanSelector.toBytes).write
+          32 e.caller.toB256.toBytes).write
+          64 e.currentTarget.toB256.toBytes).write
+          96 x.toBytes).write
+          128 (0 : B256).toBytes).write
+          160 (0xa0 : B256).toBytes) := by
+  simp only [storeCallbackHead] at h
+  rcases Line.of_run_cons h with ⟨t1, q1, h⟩
+  have hb1 := of_run_pushB256 q1
+  have hp1 : onFlashLoanSelector :: x :: xs <<+ t1.stack := prefix_of_push hb1 hp
+  rcases of_run_append (mstoreAt 0) h with ⟨t2, q2, h⟩
+  rcases of_run_mstoreAt_val q2 hp1 with ⟨hp2, hm2⟩
+  have e2 : t2.memory = s.memory.write 0 onFlashLoanSelector.toBytes := by
+    rw [hm2, ← hb1.memory]; rfl
+  rcases Line.of_run_cons h with ⟨t3, q3, h⟩
+  have hb3 := of_run_caller q3
+  have hp3 : e.caller.toB256 :: x :: xs <<+ t3.stack := prefix_of_push hb3 hp2
+  rcases of_run_append (mstoreAt 1) h with ⟨t4, q4, h⟩
+  rcases of_run_mstoreAt_val q4 hp3 with ⟨hp4, hm4⟩
+  have e4 : t4.memory =
+      (s.memory.write 0 onFlashLoanSelector.toBytes).write 32 e.caller.toB256.toBytes := by
+    rw [hm4, ← hb3.memory, e2]; rfl
+  rcases Line.of_run_cons h with ⟨t5, q5, h⟩
+  have hb5 := of_run_address q5
+  have hp5 : e.currentTarget.toB256 :: x :: xs <<+ t5.stack := prefix_of_push hb5 hp4
+  rcases of_run_append (mstoreAt 2) h with ⟨t6, q6, h⟩
+  rcases of_run_mstoreAt_val q6 hp5 with ⟨hp6, hm6⟩
+  have e6 : t6.memory =
+      ((s.memory.write 0 onFlashLoanSelector.toBytes).write
+        32 e.caller.toB256.toBytes).write 64 e.currentTarget.toB256.toBytes := by
+    rw [hm6, ← hb5.memory, e4]; rfl
+  rcases of_run_append (mstoreAt 3) h with ⟨t7, q7, h⟩
+  rcases of_run_mstoreAt_val q7 hp6 with ⟨hp7, hm7⟩
+  have e7 : t7.memory =
+      (((s.memory.write 0 onFlashLoanSelector.toBytes).write
+        32 e.caller.toB256.toBytes).write
+        64 e.currentTarget.toB256.toBytes).write 96 x.toBytes := by
+    rw [hm7, e6]; rfl
+  rcases Line.of_run_cons h with ⟨t8, q8, h⟩
+  have hb8 := of_run_pushB256 q8
+  have hp8 : (0 : B256) :: xs <<+ t8.stack := prefix_of_push hb8 hp7
+  rcases of_run_append (mstoreAt 4) h with ⟨t9, q9, h⟩
+  rcases of_run_mstoreAt_val q9 hp8 with ⟨hp9, hm9⟩
+  have e9 : t9.memory =
+      ((((s.memory.write 0 onFlashLoanSelector.toBytes).write
+        32 e.caller.toB256.toBytes).write
+        64 e.currentTarget.toB256.toBytes).write
+        96 x.toBytes).write 128 (0 : B256).toBytes := by
+    rw [hm9, ← hb8.memory, e7]; rfl
+  rcases Line.of_run_cons h with ⟨t10, q10, h⟩
+  have hb10 := of_run_pushB256 q10
+  have hp10 : (0xa0 : B256) :: xs <<+ t10.stack := prefix_of_push hb10 hp9
+  rcases of_run_mstoreAt_val h hp10 with ⟨hp11, hm11⟩
+  exact ⟨hp11, by rw [hm11, ← hb10.memory, e9]; rfl⟩
+
+/-- **`callbackArgsSize`, with its value.**
+
+`0xc4 + ceil32(len)` — four selector bytes plus six words plus the padded
+payload, which is exactly the length `abiCallWithTail` emits for four head words
+and one trailing `bytes`.  `~~~31` is pushed as `PUSH1 31; NOT`. -/
+lemma of_callbackArgsSize_val {e : Sevm} {s s' : Devm} {x xs}
+    (hp : x :: xs <<+ s.stack) (h : Line.Run e s callbackArgsSize s') :
+    (0xc4 + ((~~~ (31 : B256)) &&& (31 + x))) :: xs <<+ s'.stack := by
+  simp only [callbackArgsSize] at h
+  rcases Line.of_run_cons h with ⟨u1, q1, h⟩
+  have hp1 : (31 : B256) :: x :: xs <<+ u1.stack := prefix_of_push (of_run_pushB256 q1) hp
+  rcases Line.of_run_cons h with ⟨u2, q2, h⟩
+  have hp2 := prefix_of_add q2 hp1
+  rcases Line.of_run_cons h with ⟨u3, q3, h⟩
+  have hp3 : (31 : B256) :: (31 + x) :: xs <<+ u3.stack :=
+    prefix_of_push (of_run_pushB256 q3) hp2
+  rcases Line.of_run_cons h with ⟨u4, q4, h⟩
+  have hp4 := prefix_of_not q4 hp3
+  rcases Line.of_run_cons h with ⟨u5, q5, h⟩
+  have hp5 := prefix_of_and q5 hp4
+  rcases Line.of_run_cons h with ⟨u6, q6, h⟩
+  have hp6 : (0xc4 : B256) :: ((~~~ (31 : B256)) &&& (31 + x)) :: xs <<+ u6.stack :=
+    prefix_of_push (of_run_pushB256 q6) hp5
+  rcases Line.of_run_cons h with ⟨u7, q7, hnil⟩
+  cases hnil
+  exact prefix_of_add q7 hp6
+
 /-! ## The forward walk to the callback
 
 Arc B walked this same route while tracking `Devm.getStor`, and let every word
