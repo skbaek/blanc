@@ -97,12 +97,12 @@ and proof falls. It is not duplicated here. Blanc adds exactly:
 1. **the pinned Jaune revision** below — trusting a Blanc theorem is trusting
    that specific Jaune, not the sibling checkout on your disk;
 2. **the axiom audit** below, which is stricter than Jaune's own gates: it
-   pins the exact axiom set of sixteen named results and fails on an extra *or*
-   missing axiom;
+   pins the exact axiom set of twenty-four named results and fails on an extra
+   *or* missing axiom;
 3. **Blanc's own source**, which carries no gate equivalent to Jaune's
    `check-hygiene.sh`/`check-integrity.sh`; what stands behind it is the audit
-   in (2), and the audit constrains only what enters those sixteen theorems'
-   dependency cones. Scanning `Blanc/` finds no `@[extern]`, `axiom`,
+   in (2), and the audit constrains only what enters those twenty-four
+   theorems' dependency cones. Scanning `Blanc/` finds no `@[extern]`, `axiom`,
    `opaque`, `sorry`, `implemented_by`, or `bv_decide`, and no use of
    `native_decide` — its one textual occurrence is the `WethCode.lean` comment
    saying the compile witness is deliberately *not* proved that way. The three
@@ -126,7 +126,7 @@ without a sibling checkout, and bumping Jaune is a reviewed one-line change.
 
 CI ([`scripts/check.sh`](scripts/check.sh)) builds the library and then runs an
 **axiom audit** ([`scripts/AxiomCheck.lean`](scripts/AxiomCheck.lean)) of
-sixteen top theorems. Seven are WETH's headline solvency theorems:
+twenty-four top theorems. Seven are WETH's headline solvency theorems:
 
 - `Blanc.weth_preserves_solvent`
 - `Blanc.stateTransition_preserves_solvent`
@@ -155,6 +155,19 @@ arbitrary executions and arbitrary reentrant borrower code. It does not say the
 minted supply is backed — during a flash loan it is not, by construction — and
 neither family says anything about liveness.
 
+Eight are FMINT's `flashLoan` specification — the headline
+`Blanc.Fmint.fmint_flashLoan_spec` and its seven `no_success_of_*` corollaries
+(`callback_never_magic`, `callback_never_returns_word`, `token_ne_self`,
+`receiver_not_address`, `amount_over_maxFlashLoan`, `allowance_below_amount`,
+`balance_below_amount`), all in
+[`Blanc/FlashSpec.lean`](Blanc/FlashSpec.lean). They are **partial
+correctness, never liveness**: the headline factors a successful top-level
+execution *given as a hypothesis*, and the corollaries rule executions out.
+Nothing in them — or anywhere in this repository — says a `flashLoan` call
+ever succeeds, and none of them is a state-restoration claim. Their scope
+(canonically encoded calldata, a frame-freshness premise) is stated in that
+module's headline docstring, which is the authority on it.
+
 The last two are the **compile witnesses**:
 
 - `Blanc.wethCode_compile` — `Prog.compile weth = some wethCode` — and
@@ -174,7 +187,7 @@ from its pin in either direction — extra or missing. In particular it fails on
 `sorryAx`, `ofReduceBool`, or `ofReduceNat` — no `sorry` and no
 `native_decide`-style axiom in the trusted path of these results. It also fails
 if `AxiomCheck.lean` and `check.sh` disagree about which theorems are audited,
-so a row cannot be dropped silently from either side. All sixteen rows
+so a row cannot be dropped silently from either side. All twenty-four rows
 currently pin exactly `[propext, Classical.choice, Quot.sound]`.
 
 ## WETH fixture suite — execution evidence

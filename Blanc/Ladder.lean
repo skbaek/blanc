@@ -16,7 +16,11 @@
 -- the shipped contract, shown there to reproduce the existing `Precond` /
 -- `Postcond` / `State.Inv` bundles exactly; and `fmintSpec` in
 -- `Blanc/Conserved.lean`, the ERC-3156 flash-mint contract of
--- `~/plans/flashmint-proposal.md`, a statement-level instance only.
+-- `~/plans/flashmint-proposal.md`, whose twelve `FuncSound` obligations and
+-- reverting fallback are all discharged there and assembled through
+-- `ContractSpec.sound_of_dispatch` / `ContractSpec.preserves_inv` into
+-- `fmint_preserves_conserved`.  (It was a statement-level instance only until
+-- Arc B of that proposal closed; both instances now carry proofs.)
 
 import Blanc.CommonProofs
 

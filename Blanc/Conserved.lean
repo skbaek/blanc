@@ -30,8 +30,12 @@
 -- and context stability across program extension is settled at the foot of
 -- this module (`fmint_core_stable`, `fmint_funcSound_stable`) — eleven of the
 -- twelve obligations transport verbatim; `flashLoan` is re-discharge.  The
--- `flashLoan` *success* specification — that a well-behaved borrower is repaid
--- and the state restored — is Arc C, and nothing here claims it.
+-- `flashLoan` *success* specification is Arc C, and it landed in
+-- `Blanc/FlashSpec.lean` (`Fmint.fmint_flashLoan_spec` and its seven
+-- `no_success_of_*` corollaries), downstream of this module.  Note what it is
+-- and is not: partial correctness about a successful run given as a
+-- hypothesis, NOT a state-restoration claim and not liveness.  Nothing in
+-- *this* module claims any of it.
 --
 -- CLAIM HYGIENE.  What this module works towards is *conservation* — an
 -- equality about storage, `totalSupply = Σ balances`, at every observable

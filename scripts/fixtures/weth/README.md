@@ -166,26 +166,48 @@ A refusal is therefore recorded as two slots, not one:
 
 The marker is written unconditionally right after the `CALL`, so a zero flag
 beside a set marker is produced only by "the call was made, and it did not
-return". A refusal records no returned words: Blanc's `.rev` is a bare
-`REVERT` over whatever two words the guard left on the stack, so the payload a
-rejected call returns is not something WETH's specification determines, and an
-expectation that cannot be derived from the specification is dropped rather
-than weakened.
+return". A refusal records no returned words, and that decision was taken when
+it was the only defensible one: Blanc's `.rev` was then a bare `REVERT` over
+whatever two words the guard left on the stack, so the payload a rejected call
+returned was not something WETH's specification determined, and an expectation
+that cannot be derived from the specification is dropped rather than weakened.
 
-Two further precautions. A rejected probe forwards a fixed gas cap instead of
-`GAS`, because a guard can fire as a stack underflow or a memory-expansion
-out-of-gas as well as a clean `REVERT`, and those consume everything they are
-given — with `GAS` that would be 63/64 of the frame, starving every later
-probe. And every refused call is paired with a call on the **same selector at
-the same cap** that succeeds, which is what separates "the guard refused" from
-"the probe ran out of gas".
+**Since 2026-08-05 the payload *is* determined** — `Blanc.Func.rev` is
+`PUSH0 PUSH0 REVERT`, so every guard failure returns exactly zero bytes and
+hands back the frame's unused gas ([`WETH_DEVIATIONS.md`](../../../WETH_DEVIATIONS.md)'s
+fifth row) — **but this suite still does not assert it**, deliberately: the
+shape belongs to a definition `Blanc/CommonCore.lean` shares with fmint, and
+the discriminating assertions were added once, to the fmint suite, rather than
+duplicated here ([the clean-failure triple](../fmint/README.md#what-the-clean-failure-triple-discriminates)).
+What does bind this suite to the normalized bytes is `check-runtime-bytes.py`,
+run by `check-weth.sh`: every fixture's WETH pre-state code must be
+byte-identical to the committed 888-byte `wethCode`.
+
+Two further precautions, both retained. A rejected probe forwards a fixed gas
+cap (`PROBE_GAS`) instead of `GAS`. Its original reason was that a guard could
+fire as a stack underflow or a memory-expansion out-of-gas as well as a clean
+`REVERT`, and those consume everything they are given — with `GAS` that would
+be 63/64 of the frame, starving every later probe. That reason is now
+historical: post-normalization a WETH guard failure is a clean `REVERT(0, 0)`
+rather than an exceptional halt, so it starves nothing (a probe can still run
+out of gas if given too little, which is what the pairing below detects). The cap
+stays because removing it would move every golden in the suite for no
+evidential gain, and because the second precaution still needs it — every
+refused call is paired with a call on the **same selector at the same cap**
+that succeeds, which is what separates "the guard refused" from "the probe ran
+out of gas". (fmint's analogous cap was *not* kept: it had been raised to
+3,000,000 to survive the out-of-gas shape, and retiring it was the measurement
+that showed the shape was gone — `~/plans/fmint-hygiene.md` Step 1.)
 
 ### Known limits of these expectations
 
 Of [`WETH_DEVIATIONS.md`](../../../WETH_DEVIATIONS.md)'s four catalogued
 deviations, two are discharged by a dedicated case — claim 1 by
 `10-deviation-address.json` and claim 4 by `11-deviation-value.json`, both
-above — and two are not, for the reasons below.
+above — and two are not, for the reasons below. (That registry's fifth row is
+an *agreement*, not a fifth claim, and this suite asserts nothing about it —
+see [On refusals](#on-refusals) for why its evidence lives in the fmint
+suite instead.)
 
 - **Deviation claim 3 is untestable by construction.**
   [`WETH_DEVIATIONS.md`](../../../WETH_DEVIATIONS.md)'s third row records that

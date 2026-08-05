@@ -61,8 +61,16 @@ Two independent checks, exactly as the WETH suite's:
 
 **What this is not.** Specification-checked differential testing on chosen
 inputs, not a proof. fmint's conservation invariant (`~/plans/flashmint-
-proposal.md` headline 1) is **unproven**, pending Arc B — nothing here
-discharges it, and nothing here is a liveness result.
+proposal.md` headline 1) **is proved** — `Blanc.fmint_preserves_conserved`
+and the six ladder rungs above it in
+[`Blanc/Conserved.lean`](../../../Blanc/Conserved.lean), audited by
+`scripts/check.sh` — but nothing *here* discharges it, and that is not what
+this directory is for: a fixture is evidence about the inputs it names,
+never about all executions. The same separation holds for `flashLoan`'s
+success specification (`Blanc.Fmint.fmint_flashLoan_spec` and its seven
+`no_success_of_*` corollaries in
+[`Blanc/FlashSpec.lean`](../../../Blanc/FlashSpec.lean)), which is partial
+correctness rather than liveness. Nothing here is a liveness result.
 
 The expectations above are written from `Blanc/Fmint.lean`'s semantics and
 [`FMINT_DEVIATIONS.md`](../../../FMINT_DEVIATIONS.md) — never read off an
@@ -189,11 +197,14 @@ one word), so `n_words` is fixed per call rather than inferred from what
 came back — the same anti-circularity discipline the WETH suite's
 `Expectations` class documents.
 
-### `.rev`'s stack-garbage cost, and why several triggers carry a gas cap
+### `.rev`'s stack-garbage cost, and the gas cap it once forced
 
 **Historical — the cap was retired on 2026-08-05 and no trigger in this suite
 carries one any more.** Kept because it records a real defect and how it was
-found; `FMINT_DEVIATIONS.md` row 20 carries the contract-level history.
+found; `FMINT_DEVIATIONS.md` row 20 carries the contract-level history. (This
+heading was "…and why several triggers carry a gas cap" until 2026-08-05; it
+is renamed here rather than left describing a present tense that no longer
+holds, and row 20's link was updated in the same commit.)
 
 Blanc's `.rev` **used to be** a bare `REVERT` over whatever two words the
 guard left on the stack. For several of fmint's guards — notably

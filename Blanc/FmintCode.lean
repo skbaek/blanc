@@ -125,12 +125,14 @@ def fmintCode : Bytes :=
    0x4d, 0xf5, 0x23, 0xb3, 0xef, 0x60, 0x20, 0x5f, 0xa3, 0x60, 0x01, 0x5f,
    0x52, 0x60, 0x20, 0x5f, 0xf3, 0x5b, 0x5f, 0x5f, 0xfd]
 
-/-- **The compile witness.** Every statement in `Blanc/Conserved.lean`
-hypothesises `some code = Prog.compile Fmint.fmint`, so without this equation
-each of them could be discharged vacuously. Those statements are still
-statements — conservation is unproven, pending Arc B of
-`~/plans/flashmint-proposal.md` — so the witness lands ahead of the proofs
-that will need it rather than beside them.
+/-- **The compile witness.** Every statement in `Blanc/Conserved.lean` and
+`Blanc/FlashSpec.lean` hypothesises `some code = Prog.compile Fmint.fmint`,
+so without this equation each of them could be discharged vacuously — which
+is why the witness landed ahead of the proofs rather than beside them.
+Those proofs now exist: `Blanc.fmint_preserves_conserved` and the six ladder
+rungs above it, and `Blanc.Fmint.fmint_flashLoan_spec` with its seven
+`no_success_of_*` corollaries. This equation is what keeps all of them about
+the bytes below rather than about nothing.
 
 `decide +kernel` evaluates the compiler in the kernel — no elaboration option
 is raised, and nothing is added to the trusted base (in particular this is
