@@ -80,17 +80,22 @@
 # no contract at all. They are NOT liveness, they are message-frame level and
 # not transaction level, and they are `.ok`-level only.
 #
-# The last two rows are the only ones in this file that assert a contract call
+# The last four rows are the only ones in this file that assert a contract call
 # **succeeds**. Every row above them takes a successful execution as a
-# hypothesis and factors it; `Blanc.Fmint.totalSupply_runCompiled` constructs a
-# gas-exact run from a precondition on the frame alone, and
-# `Blanc.Fmint.fmint_totalSupply_succeeds` composes it through
+# hypothesis and factors it; `Blanc.Fmint.totalSupply_runCompiled` and
+# `Blanc.weth_balanceOf_runCompiled` construct a gas-exact run from a
+# precondition on the frame alone, and `Blanc.Fmint.fmint_totalSupply_succeeds`
+# and `Blanc.weth_balanceOf_succeeds` compose those through
 # `Prog.exec_of_runCompiled` into a successful `exec`. Read their scope off
-# `Blanc/FmintLive.lean`'s docstrings, which are the authority: one call-free
-# entrypoint of one contract, at message-call altitude and not transaction
-# level, for one fixed selector, with an exact gas figure rather than a bound.
-# No fmint entrypoint that makes an external call can have a row of this shape
-# at all — its witness would contain the callee's execution as a premise.
+# `Blanc/FmintLive.lean`'s and `Blanc/WethLive.lean`'s docstrings, which are the
+# authority: one call-free entrypoint of one contract each, at message-call
+# altitude and not transaction level, for one fixed selector, with an exact gas
+# figure rather than a bound. No entrypoint of either contract that makes an
+# external call can have a row of this shape at all — its witness would contain
+# the callee's execution as a premise. The WETH pair carries one caveat of its
+# own: `balanceOf` uses its argument word as a storage key without validating
+# it as an address, so the statement is quantified over that word and asserts
+# nothing about what a non-address key means.
 #
 # Each row carries its OWN pinned expected axiom set (see ROWS below), and a
 # theorem's axiom closure must equal its row's set exactly, order-insensitive.
@@ -177,7 +182,9 @@ Blanc.Fmint.rollback_of_balance_below_amount|$STANDARD
 Blanc.Prog.exec_of_runCompiled|$STANDARD
 Blanc.Prog.runCompiled_iff_exec|$STANDARD
 Blanc.Fmint.totalSupply_runCompiled|$STANDARD
-Blanc.Fmint.fmint_totalSupply_succeeds|$STANDARD"
+Blanc.Fmint.fmint_totalSupply_succeeds|$STANDARD
+Blanc.weth_balanceOf_runCompiled|$STANDARD
+Blanc.weth_balanceOf_succeeds|$STANDARD"
 # Secondary net only: the exact-set comparison below is the primary check;
 # this pattern catches forbidden names in output the per-theorem parse missed.
 FORBIDDEN='sorryAx|ofReduceBool|ofReduceNat|_native\.'

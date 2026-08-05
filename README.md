@@ -68,6 +68,16 @@ This repo contains the following files:
   figure rather than a bound. No entrypoint that makes an external call can
   have a statement of this shape — its witness contains the callee's execution
   as a premise, which is arbitrary and, for a flash loan, adversarial.
+- [WethLive.lean](Blanc/WethLive.lean): WETH's demonstration of the same layer,
+  and the evidence that it is not target-specific. `weth_balanceOf_succeeds`
+  drives the same `func_run` over `weth`'s compiled `Func` for a
+  `balanceOf(guy)` call, at 2241 gas exactly. It differs from fmint's
+  demonstration where it matters: the storage key is read from calldata rather
+  than being a constant, so the statement is quantified over the argument word
+  and WETH's lack of address validation is visible in it; and `wethTree` puts
+  the target four dispatch forks down instead of three. Nothing had to be added
+  to `Forward.lean` for it — the whole module is the target's own text. Its
+  scope caveats are `FmintLive.lean`'s, unchanged.
 - [Weth.lean](Blanc/Weth.lean): proof-of-concept implementation of the Wrapped 
   Ether (WETH) contract in Blanc.
 - [WethCode.lean](Blanc/WethCode.lean): the compiled WETH runtime bytecode and

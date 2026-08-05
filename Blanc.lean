@@ -7,6 +7,7 @@ import Blanc.FlashSpec
 import Blanc.Compiled
 import Blanc.Forward
 import Blanc.FmintLive
+import Blanc.WethLive
 
 namespace Blanc
 

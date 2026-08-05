@@ -116,6 +116,24 @@
 # `Blanc/Fmint.lean`'s `fmintFuncs_sorted` pays for. A tactic layer that
 # discharges those comparisons once rather than per-target is Step 2's
 # business, not a reason to hold this row open.
+#
+# Blanc/WethLive.lean's row was hand-set to a measured 5.383 (median of 5.383,
+# 5.359, 5.422) when Step 3 of that arc added it, on the same rule as every new
+# module above: a file with no row here is a REGRESSION, so the row is an
+# extension to admit new content and not a relaxation to admit a failure. It is
+# now the most expensive module in the repository, ahead of
+# Blanc/CommonProofs.lean, and the cost is NOT the proof -- the whole module is
+# two theorems whose derivations are one `func_run` call each. It is the
+# dispatch comparisons, exactly as Blanc/FmintLive.lean's note above predicts:
+# `wethTree` puts `balanceOf()` four forks down where `fmintTree` puts
+# `totalSupply()` three, so the walk settles five keccak-derived selector
+# comparisons rather than four, and each one forces a `String.keccak`. Step 2's
+# tactic discharges them uniformly but cannot avoid computing them, which is the
+# honest per-target floor for this genre and is recorded as such in
+# ~/plans/reports/forward-witness-step-3.md.
+#
+# No pre-existing row was touched by that step. `--rebase` and `--force` remain
+# prohibited for the whole of the arc.
 OK	1.241	Blanc.lean
 OK	1.257	Blanc/Basic.lean
 OK	2.454	Blanc/CommonCore.lean
@@ -134,3 +152,4 @@ OK	1.283	Main.lean
 OK	2.002	Blanc/FlashSpec.lean
 OK	4.514	Blanc/Forward.lean
 OK	4.684	Blanc/FmintLive.lean
+OK	5.383	Blanc/WethLive.lean
