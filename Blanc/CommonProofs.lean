@@ -8086,4 +8086,221 @@ lemma Mem.Reads.read {μ : Mem} {bs : Bytes} (h : Mem.Reads μ bs) (i n : Nat) :
   rw [Array.sliceD_eq_map, List.sliceD_eq_map]
   exact List.map_congr_left (fun j _ => h (i + j))
 
+/-! ### What each instruction does to memory
+
+`Devm.memory` is preserved outright by everything the `flashLoan` prefix runs
+except the three instructions that touch it, so the `line_inv` machinery carries
+a memory image across whole `Line`s once these `Hinv` instances exist.  The
+three exceptions get value-carrying inversions of their own, in the same shape
+Step 1 gave `calldataload` and `calldatacopy`: what was written, and where. -/
+
+syntax "show_hinv_mem_binary" : tactic
+macro_rules
+  | `(tactic| show_hinv_mem_binary) =>
+    `(tactic|
+        refine ⟨?_⟩ <;>
+        intro pc sevm pre post run <;>
+        simp only [Rinst.run, Rinst.runCore] at run <;>
+        exact (Devm.diffBurn_of_applyBinary run).choose_spec.choose_spec.memory)
+
+syntax "show_hinv_mem_unary" : tactic
+macro_rules
+  | `(tactic| show_hinv_mem_unary) =>
+    `(tactic|
+        refine ⟨?_⟩ <;>
+        intro pc sevm pre post run <;>
+        simp only [Rinst.run, Rinst.runCore] at run <;>
+        exact (Devm.diffBurn_of_applyUnary run).choose_spec.memory)
+
+syntax "show_hinv_mem_push" : tactic
+macro_rules
+  | `(tactic| show_hinv_mem_push) =>
+    `(tactic|
+        refine ⟨?_⟩ <;>
+        intro pc sevm pre post run <;>
+        simp only [Rinst.run, Rinst.runCore] at run <;>
+        exact (Devm.pushBurn_of_pushItem run).memory)
+
+instance : Rinst.Hinv Devm.memory Rinst.add := by show_hinv_mem_binary
+instance : Rinst.Hinv Devm.memory Rinst.sub := by show_hinv_mem_binary
+instance : Rinst.Hinv Devm.memory Rinst.lt := by show_hinv_mem_binary
+instance : Rinst.Hinv Devm.memory Rinst.gt := by show_hinv_mem_binary
+instance : Rinst.Hinv Devm.memory Rinst.eq := by show_hinv_mem_binary
+instance : Rinst.Hinv Devm.memory Rinst.and := by show_hinv_mem_binary
+instance : Rinst.Hinv Devm.memory Rinst.or := by show_hinv_mem_binary
+instance : Rinst.Hinv Devm.memory Rinst.xor := by show_hinv_mem_binary
+instance : Rinst.Hinv Devm.memory Rinst.shl := by show_hinv_mem_binary
+instance : Rinst.Hinv Devm.memory Rinst.shr := by show_hinv_mem_binary
+instance : Rinst.Hinv Devm.memory Rinst.not := by show_hinv_mem_unary
+instance : Rinst.Hinv Devm.memory Rinst.iszero := by show_hinv_mem_unary
+instance : Rinst.Hinv Devm.memory Rinst.address := by show_hinv_mem_push
+instance : Rinst.Hinv Devm.memory Rinst.caller := by show_hinv_mem_push
+instance : Rinst.Hinv Devm.memory Rinst.callvalue := by show_hinv_mem_push
+instance : Rinst.Hinv Devm.memory Rinst.retdatasize := by show_hinv_mem_push
+instance : Rinst.Hinv Devm.memory Rinst.calldatasize := by show_hinv_mem_push
+
+instance : Rinst.Hinv Devm.memory Rinst.pop := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨s₁, h1, h2⟩
+  simp only [Functor.mapRev, Functor.map, Except.map] at h1
+  rcases hp : Devm.pop pre with _ | ⟨x, s₂⟩ <;> simp [hp] at h1
+  subst h1
+  exact (Devm.popBurn_of_pop_of_burn (Devm.pop_of_pop hp)
+    (Devm.burn_of_chargeGas h2)).memory⟩
+
+instance : Rinst.Hinv Devm.memory Rinst.gas := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨s₁, h1, h2⟩
+  exact (Devm.pushBurn_of_burn_of_push (Devm.burn_of_chargeGas h1)
+    (Devm.push_of_push h2)).memory⟩
+
+instance {n} : Rinst.Hinv Devm.memory (Rinst.dup n) := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨s₁, h1, h2⟩
+  have hb := Devm.burn_of_chargeGas h1
+  split at h2
+  · cases h2
+  · exact (Devm.pushBurn_of_burn_of_push hb (Devm.push_of_push h2)).memory⟩
+
+instance {n} : Rinst.Hinv Devm.memory (Rinst.swap n) := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨s₁, h1, h2⟩
+  have hb := Devm.burn_of_chargeGas h1
+  split at h2
+  · cases h2
+  · injection h2 with eq
+    rw [hb.memory, ← eq]
+    rfl⟩
+
+instance : Rinst.Hinv Devm.memory Rinst.calldataload := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨⟨si, s₁⟩, h1, run₁⟩
+  rcases Except.bind_eq_ok run₁ with ⟨s₂, h2, run₂⟩
+  exact ((Devm.pop_of_pop h1).memory.trans
+    (Devm.burn_of_chargeGas h2).memory).trans (Devm.push_of_push run₂).memory⟩
+
+/-- `MSTORE` writes *the word it popped* at *the offset it popped*.
+
+The value-carrying companion of `of_run_mstore`, and the first Blanc lemma whose
+conclusion names `Devm.memory` at all. -/
+lemma of_run_mstore_val {e : Sevm} {s s' : Devm} (h : Ninst.Run e s mstore s') :
+    ∃ x y, Stack.Pop [x, y] s.stack s'.stack ∧
+      s'.memory = s.memory.write x.toNat y.toBytes := by
+  rcases of_run_reg h with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨⟨i, s₁⟩, h1, run'⟩
+  rcases Except.bind_eq_ok run' with ⟨⟨v, s₂⟩, h2, run''⟩
+  rcases Except.bind_eq_ok run'' with ⟨s₃, h3, h4⟩
+  rcases Devm.pop_of_popToNat_val h1 with ⟨x, p1, rfl⟩
+  have p2 := Devm.pop_of_pop h2
+  have hb := Devm.burn_of_chargeGas h3
+  injection h4 with eq
+  have hmem : s.memory = s₃.memory := (p1.memory.trans p2.memory).trans hb.memory
+  refine ⟨x, v, ?_, ?_⟩
+  · have hp := (Devm.pop_append p1 p2).stack
+    rw [← eq, show (Devm.memWrite s₃ x.toNat v.toBytes).stack = s₃.stack from rfl,
+      ← hb.stack]
+    exact hp
+  · rw [← eq, hmem]
+    rfl
+
+/-- `CALLDATACOPY` writes *the calldata slice named by its operands* at *the
+offset it popped*, and touches nothing else.
+
+Strengthens `of_run_calldatacopy_val` (Step 1), which named the bytes but could
+not relate the intermediate state's memory to the initial one — there was no
+`Mem` algebra to say it in. -/
+lemma of_run_calldatacopy_mem {e : Sevm} {s s' : Devm}
+    (h : Ninst.Run e s calldatacopy s') :
+    ∃ x y z, Stack.Pop [x, y, z] s.stack s'.stack ∧
+      s'.memory = s.memory.write x.toNat (e.data.sliceD y.toNat z.toNat 0) := by
+  rcases of_run_reg h with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨⟨mi, s₁⟩, h1, run₁⟩
+  rcases Except.bind_eq_ok run₁ with ⟨⟨di, s₂⟩, h2, run₂⟩
+  rcases Except.bind_eq_ok run₂ with ⟨⟨sz, s₃⟩, h3, run₃⟩
+  rcases Except.bind_eq_ok run₃ with ⟨s₄, h4, h5⟩
+  rcases Devm.pop_of_popToNat_val h1 with ⟨x, p1, rfl⟩
+  rcases Devm.pop_of_popToNat_val h2 with ⟨y, p2, rfl⟩
+  rcases Devm.pop_of_popToNat_val h3 with ⟨z, p3, rfl⟩
+  have hb := Devm.burn_of_chargeGas h4
+  injection h5 with eq
+  have hmem : s.memory = s₄.memory :=
+    ((p1.memory.trans p2.memory).trans p3.memory).trans hb.memory
+  refine ⟨x, y, z, ?_, ?_⟩
+  · have hp := (Devm.pop_append p1 (Devm.pop_append p2 p3)).stack
+    rw [← eq, show (Devm.memWrite s₄ x.toNat _).stack = s₄.stack from rfl, ← hb.stack]
+    exact hp
+  · rw [← eq, hmem]
+    rfl
+
+/-- `LOG` only *extends* memory: it reads a window and records it, and the
+backing array is untouched.  That is enough to carry both `Mem.Wf` and a
+`Mem.Reads` image across the mint's `Transfer` event. -/
+lemma of_run_log_mem {e : Sevm} {s s' : Devm} {n : Fin 5}
+    (h : Ninst.Run e s (log n) s') :
+    ∃ mi sz, s'.memory = s.memory.extend mi sz := by
+  rcases of_run_reg h with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨⟨mi, s₁⟩, h1, run₁⟩
+  rcases Except.bind_eq_ok run₁ with ⟨⟨sz, s₂⟩, h2, run₂⟩
+  rcases Except.bind_eq_ok run₂ with ⟨⟨topics, s₃⟩, h3, run₃⟩
+  rcases Except.bind_eq_ok run₃ with ⟨s₄, h4, run₄⟩
+  rcases Except.bind_eq_ok run₄ with ⟨_, h5, run₅⟩
+  rcases Devm.pop_of_popToNat h1 with ⟨x, p1⟩
+  rcases Devm.pop_of_popToNat h2 with ⟨y, p2⟩
+  rcases Devm.pop_of_popN h3 with ⟨_, p3⟩
+  have hb := Devm.burn_of_chargeGas h4
+  have hmem : s.memory = s₄.memory :=
+    ((p1.memory.trans p2.memory).trans p3.memory).trans hb.memory
+  refine ⟨mi, sz, ?_⟩
+  rcases h_mem : Devm.memRead s₄ mi sz with ⟨data, s₅⟩
+  rw [h_mem] at run₅
+  injection run₅ with eq
+  have h_s₅ : s₅.memory = s₄.memory.extend mi sz := by
+    simp only [Devm.memRead] at h_mem
+    rcases h_read : s₄.memory.read mi sz with ⟨val, mem⟩
+    rw [h_read] at h_mem
+    injection h_mem with _ h_devm
+    rw [← h_devm]
+    show mem = _
+    have hm2 : mem = (s₄.memory.read mi sz).2 := by rw [h_read]
+    rw [hm2]
+    rfl
+  rw [← eq]
+  show s₅.memory = _
+  rw [h_s₅, hmem]
+
+/-- `MSTORE` at a *known* stack top: the value-carrying companion of
+`prefix_of_mstore`, with the popped operands pinned to the words the walk
+already knows are there. -/
+lemma prefix_of_mstore_val {e} {x y xs} {s s' : Devm}
+    (h0 : Ninst.Run e s mstore s') (h1 : x :: y :: xs <<+ s.stack) :
+    (xs <<+ s'.stack) ∧ s'.memory = s.memory.write x.toNat y.toBytes := by
+  rcases of_run_mstore_val h0 with ⟨x', y', h2, hm⟩
+  rcases of_cons_cons_pref_of_cons_cons_pref h1 (pref_of_split h2) with ⟨hx, hy, -⟩
+  refine ⟨?_, by rw [hx, hy]; exact hm⟩
+  rw [hx, hy] at h1
+  exact of_append_pref h2 h1
+
+/-- `mstoreAt k` writes the stack top into memory word `k`.
+
+The `Line`-level form, and the one every `storeCallbackHead`-shaped fragment
+composes: `(k * 32).toNat` is the byte offset the compiled `PUSH` supplies, and
+`B256.toBytes` is the machine's own 32-byte big-endian encoding. -/
+lemma of_run_mstoreAt_val {e : Sevm} {s s' : Devm} {k x xs}
+    (h : Line.Run e s (mstoreAt k) s') (hp : x :: xs <<+ s.stack) :
+    (xs <<+ s'.stack) ∧ s'.memory = s.memory.write (k * 32).toNat x.toBytes := by
+  rcases Line.of_run_cons h with ⟨u, qp, h'⟩
+  rcases Line.of_run_cons h' with ⟨u2, qm, hnil⟩
+  cases hnil
+  have hpb := of_run_pushB256 qp
+  rcases prefix_of_mstore_val qm (prefix_of_push hpb hp) with ⟨hs, hm⟩
+  exact ⟨hs, by rw [hm, ← hpb.memory]⟩
+
 end Blanc
