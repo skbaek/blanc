@@ -165,7 +165,7 @@ initcode/`CREATE` deployment theorem exists**, and nothing here says an FMINT
 deployed by a transaction starts conserved. That gap is recorded as a successor
 item in `~/plans/flashmint-proposal.md`.
 
-Eight are FMINT's `flashLoan` specification — the headline
+The remaining eight are FMINT's `flashLoan` specification — the headline
 `Blanc.Fmint.fmint_flashLoan_spec` and its seven `no_success_of_*` corollaries
 (`callback_never_magic`, `callback_never_returns_word`, `token_ne_self`,
 `receiver_not_address`, `amount_over_maxFlashLoan`, `allowance_below_amount`,
