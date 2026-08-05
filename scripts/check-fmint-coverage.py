@@ -26,11 +26,12 @@ zoo (`scripts/gen-fmint-borrowers.lean`) instead uses `Ninst.pushB256`'s
 ordinary MINIMAL-WIDTH encoding when it builds an outgoing call's calldata
 (`storeWord`/`buildApprove`/etc.), which pushes a bare 4-byte selector as
 `PUSH4 <selector>` -- not `PUSH32`. The scan below therefore looks for ANY
-`PUSHn` (`n` = 1..32) whose immediate's trailing 4 bytes equal a known
-selector and whose LEADING `n - 4` bytes are all zero (so a wider push that
-merely happens to end in the right 4 bytes, with nonzero bytes ahead of
+`PUSHn` (`n` = 4..32) whose immediate's LEADING 4 bytes equal a known
+selector and whose TRAILING `n - 4` bytes are all zero (so a wider push that
+merely happens to begin with the right 4 bytes, with nonzero bytes after
 them, is not mistaken for one). This subsumes WETH's PUSH32-only pattern as
-one instance (`n = 32`) of the general rule.
+one instance (`n = 32`) of the general rule and reduces to `imm == sel` at
+`n = 4`; `scan_prop_selectors`'s own docstring works both instances through.
 
 fmint's own account is identified and EXCLUDED from the caller-prop scan by
 BYTE-EQUALITY against the committed `Blanc.Fmint.fmintCode` literal --

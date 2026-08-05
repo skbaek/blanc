@@ -174,9 +174,19 @@ The remaining eight are FMINT's `flashLoan` specification — the headline
 correctness, never liveness**: the headline factors a successful top-level
 execution *given as a hypothesis*, and the corollaries rule executions out.
 Nothing in them — or anywhere in this repository — says a `flashLoan` call
-ever succeeds, and none of them is a state-restoration claim. Their scope
-(canonically encoded calldata, a frame-freshness premise) is stated in that
-module's headline docstring, which is the authority on it.
+ever succeeds, and none of them is a state-restoration claim.
+
+Their scope is stated in that module's headline docstring, which is the
+authority on it, and it is narrower than the names suggest in two ways worth
+naming here. **Four premises** restrict the headline: canonically encoded
+calldata, the `196 + ceil32 data.length < 2 ^ 256` size bound, an explicit
+frame-freshness premise, and the selector premise. And the seven corollaries
+are **not one kind of theorem**: two (`callback_never_magic`,
+`callback_never_returns_word`) are contrapositives of the headline, and their
+premise quantifies over the callback **boundaries** the headline could
+produce, *not* over the receiver's code — the weaker and honest form, because
+this repository has no determinism lemma pinning that frame uniquely. The
+other five are contrapositives of `flashLoan`'s own guards.
 
 The last two are the **compile witnesses**:
 

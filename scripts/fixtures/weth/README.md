@@ -66,9 +66,14 @@ derived from the semantics, so a wrong transfer amount still fails the check.
 
 **What this is not.** It is specification-checked differential testing on
 chosen inputs, not a proof. It says nothing about inputs no case covers, and
-it is not a liveness result: Blanc's eight audited theorems remain pure safety
-statements, and "a well-formed `transfer` succeeds and moves the balance" is
-still not a theorem.
+it is not a liveness result: not one of Blanc's twenty-four audited results
+says any call ever succeeds — the twenty-two theorems about executions are
+safety statements and the two compile witnesses are equations about bytes —
+so "a well-formed `transfer` succeeds and moves the balance" is still not a
+theorem. (This sentence said "eight" until `~/plans/fmint-evidence.md` Step 4;
+it was written when WETH's seven and `wethCode_compile` were the whole audit,
+and fmint's sixteen rows — seven conservation, eight `flashLoan`, and
+`fmintCode_compile` — have landed since.)
 
 ## Cases
 

@@ -16,15 +16,22 @@ source (no Lean/lake invocation, so it costs nothing and runs identically
 locally and under CI's `--no-build`) and compares it byte-for-byte against
 every fixture's runtime account.
 
-Runtime-account identification follows the convention
-`check-fmint-coverage.py`/`check-weth-coverage.py` already use and document:
-by the account's compiled-code LENGTH, never by a hardcoded address (no
-fixture's runtime account is pinned to one address for a reason a future
-case couldn't change -- see `check-weth-coverage.py`'s header). Unlike the
-coverage checkers, which stop at length as an identifying prefix/length
-pair, this gate goes on to require full byte equality -- the length-only
-check is exactly the leg `~/plans/fmint-hygiene.md` Step 3 exists to
-upgrade.
+Runtime-account identification is by the account's compiled-code LENGTH,
+never by a hardcoded address (no fixture's runtime account is pinned to one
+address for a reason a future case couldn't change -- see
+`check-weth-coverage.py`'s header); a candidate of the expected length must
+then be byte-identical to the parsed literal, which is the leg
+`~/plans/fmint-hygiene.md` Step 3 added.
+
+That byte-equality step used to be what separated this gate from the two
+coverage checkers, which identified their contract's account by a code
+length plus a 4-byte prefix. It no longer separates them:
+`~/plans/fmint-evidence.md` Step 1 rewrote
+`check-fmint-coverage.py`/`check-weth-coverage.py` to identify that account
+by whole-runtime byte equality as well, IMPORTING `parse_lean_literal` from
+this file rather than copying it. So this module is now the single
+implementation of the committed-literal parser behind all three gates, and
+the loud-failure discipline below is theirs too.
 
 The Lean-literal parser fails LOUDLY. A `def <name> : Bytes := [ ... ]`
 literal must be a plain comma-separated list of `0xNN` byte tokens and

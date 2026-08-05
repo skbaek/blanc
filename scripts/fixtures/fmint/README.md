@@ -118,7 +118,8 @@ Two independent checks, exactly as the WETH suite's:
 
 **What this is not.** Specification-checked differential testing on chosen
 inputs, not a proof. fmint's conservation invariant (`~/plans/flashmint-
-proposal.md` headline 1) **is proved** — `Blanc.fmint_preserves_conserved`
+proposal.md` headline 1) **is proved preserved**, from a state where it
+already holds — `Blanc.fmint_preserves_conserved`
 and the six ladder rungs above it in
 [`Blanc/Conserved.lean`](../../../Blanc/Conserved.lean), audited by
 `scripts/check.sh` — but nothing *here* discharges it, and that is not what
@@ -315,9 +316,10 @@ uncapped-and-normalized:
 | `02-flashloan-wrong-magic.json` | 2,977,805 | 254,973 | −91.4% |
 | `04-flashloan-returndata-spectrum.json` | 2,824,286 | 576,937 | −79.6% |
 
-The four fixtures with no rejected probe (`01`, `05`, `08`, `10`) are
-unchanged **to the gas**, which is the other half of the evidence: the two
-extra bytes per rev site are never executed on a success path.
+The other four fixtures then present — `01`, `05`, `08`, `10`, none of which
+has a rejected probe; `11` did not exist yet — are unchanged **to the gas**,
+which is the other half of the evidence: the two extra bytes per rev site are
+never executed on a success path.
 
 Note what this table is and is not. It is the *mechanism* check — the old
 shapes consumed the allowance, the new one refunds it — and on its own it is
@@ -487,7 +489,7 @@ to make the assertion look independent would buy nothing but a second place
 to be wrong.
 
 **What the assertion still does not buy.** It is specification-derived
-testing on **chosen inputs**, not a proof: it says that on these ten
+testing on **chosen inputs**, not a proof: it says that on these eleven
 scenarios fmint emits exactly the events D6 specifies, in exactly that order,
 and nothing else. It says nothing about scenarios not in this directory. And
 it is only as good as the reading of D6 written into the declarations —
