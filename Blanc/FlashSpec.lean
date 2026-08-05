@@ -2311,6 +2311,46 @@ lemma of_burnAndReturn_bound {fs : List Func} {sevm : Sevm} {s r : Devm}
   exact ⟨h_bound, B256.toNat_sub_eq_of_le _ _ h_bound,
     of_burnAndReturn ⟨a, rfl⟩ hs h_cons h_run⟩
 
+/-- **The repayment, end to end** — the allowance spend and the burn composed,
+which is the shape Step 6's headline consumes.
+
+`st` is the contract's storage after the allowance spend, and the whole
+repayment is then: `st` is `s`'s storage with at most the one guarded
+allowance slot moved, the receiver's balance at `st` covers the amount, and
+`r`'s storage is `st` with the burn pair applied.  The frame returns
+ABI-`true`, and no code moves.
+
+That the two halves compose is what makes this lemma worth its twenty lines:
+`of_spendAllowanceThenBurn_val` hands out exactly the stack, `Mem.Wf` and
+`Mem.Reads` that `of_burnAndReturn_val` asks for. -/
+lemma of_repayment {sevm : Sevm} {s r : Devm} {wad : B256} {a : Adr} {bs : Bytes}
+    (hs : [wad, a.toB256] <<+ s.stack)
+    (h_wf : Mem.Wf s.memory) (h_reads : Mem.Reads s.memory bs)
+    (h_run : Func.Run (fmint.main :: fmintAux) sevm s spendAllowanceThenBurn r) :
+    ¬ ValidAdr (repayKey a sevm.currentTarget) ∧
+    repayKey a sevm.currentTarget ≠ supplySlot ∧
+    ∃ (st : Stor) (allow : B256),
+      allow = (Devm.getStor s sevm.currentTarget).get (repayKey a sevm.currentTarget) ∧
+      ( (allow = B256.max ∧ st = Devm.getStor s sevm.currentTarget)
+        ∨ (allow ≠ B256.max ∧ wad ≤ allow ∧
+            st = (Devm.getStor s sevm.currentTarget).set
+                  (repayKey a sevm.currentTarget) (allow - wad)) ) ∧
+      wad ≤ st.get a.toB256 ∧
+      Devm.getStor r sevm.currentTarget
+        = (st.set a.toB256 (st.get a.toB256 - wad)).set supplySlot
+            (st.get supplySlot - wad) ∧
+      Devm.getCode s = Devm.getCode r ∧
+      ReturnsTrue r := by
+  obtain ⟨h_nva, h_nsup, sb, allow, h_allow, h_arms, h_code, h_stack, h_wfb,
+    ⟨img, h_img⟩, h_burn⟩ := of_spendAllowanceThenBurn_val hs h_wf h_reads h_run
+  obtain ⟨h_le, h_stor, h_code2, h_ret⟩ :=
+    of_burnAndReturn_val h_stack h_wfb h_img h_burn
+  refine ⟨h_nva, h_nsup, Devm.getStor sb sevm.currentTarget, allow, h_allow, ?_,
+    h_le, h_stor, h_code.trans h_code2, h_ret⟩
+  rcases h_arms with ⟨hmax, heq⟩ | ⟨hne, hle, heq⟩
+  · exact Or.inl ⟨hmax, heq⟩
+  · exact Or.inr ⟨hne, hle, heq⟩
+
 end Fmint
 
 end Blanc
