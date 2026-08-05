@@ -1239,6 +1239,29 @@ lemma Resume.call_returnData {parent child : Devm} {oi os : Nat} {sf : Devm}
   · exact key (incorporateChildOnError parent child child.output) rfl 0 h
   · exact key (incorporateChildOnSuccess parent child child.output) rfl 1 h
 
+/-- The CALL-family return path leaves the parent's memory as it was, plus the
+output write at the requested window. -/
+lemma Resume.call_memory {parent child : Devm} {oi os : Nat} {sf : Devm}
+    (h : (Resume.call parent oi os).run (.ok child) = .ok sf) :
+    sf.memory = parent.memory.write oi (child.output.take os) := by
+  have key : ∀ d : Devm, d.memory = parent.memory → ∀ v : B256,
+      (Devm.push v d >>= fun d' =>
+        (.ok (d'.memWrite oi (child.output.take os)) : Execution)) = .ok sf →
+      sf.memory = parent.memory.write oi (child.output.take os) := by
+    intro d hd v hh
+    rcases hp : Devm.push v d with e | evm2 <;> rw [hp] at hh
+    · cases hh
+    · injection hh with hh
+      subst hh
+      have h_push := (Devm.push_of_push hp).memory
+      show evm2.memory.write oi (child.output.take os) = _
+      rw [← h_push, hd]
+  unfold Resume.run liftToExecution at h
+  dsimp only [bind, Except.bind] at h
+  split at h
+  · exact key (incorporateChildOnError parent child child.output) rfl 0 h
+  · exact key (incorporateChildOnSuccess parent child child.output) rfl 1 h
+
 /-- A gas charge that returned `.ok` was affordable. -/
 lemma chargeGas_le {cost : Nat} {devm devm' : Devm}
     (h : chargeGas cost devm = .ok devm') : cost ≤ devm.gasLeft := by
@@ -1318,6 +1341,7 @@ lemma of_run_call_val {sevm : Sevm} {s sf : Devm} {g c v ii is oi os : B256}
       (Resume.call parent oi.toNat os.toNat).run (.ok child) = .ok sf ∧
       sf.state = child.state ∧
       sf.returnData = child.output ∧
+      sf.memory = parent.memory.write oi.toNat (child.output.take os.toNat) ∧
       sf.stack = (1 : B256) :: parent.stack := by
   rcases h_run with ⟨xl, h_fill, pc, h_run⟩
   simp only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.step,
@@ -1570,6 +1594,7 @@ lemma of_run_call_val {sevm : Sevm} {s sf : Devm} {g c v ii is oi os : B256}
           by rw [e_stack, h_stk_par], h_st_par, h_mem_par, h_del, h_fill,
           run_pm₀, by simpa using herr, h_split.symm,
           Resume.call_state h_split.symm, Resume.call_returnData h_split.symm,
+          Resume.call_memory h_split.symm,
           by rw [Resume.call_stack_flag h_split.symm, if_neg herr]⟩
 
 /-- The deeper-frame induction hypothesis, as the ladder's consumers use it:
