@@ -30,3 +30,12 @@ import Blanc.FmintCode
 #print axioms Blanc.fmintCode_compile
 #print axioms Blanc.ProcessMessage.rollback_of_error
 #print axioms Blanc.Fmint.rollback_of_callback_failure
+#print axioms Blanc.Fmint.rollback_of_no_success
+#print axioms Blanc.Fmint.rollback_of_no_success_total
+#print axioms Blanc.Fmint.rollback_of_callback_never_magic
+#print axioms Blanc.Fmint.rollback_of_callback_never_returns_word
+#print axioms Blanc.Fmint.rollback_of_token_ne_self
+#print axioms Blanc.Fmint.rollback_of_receiver_not_address
+#print axioms Blanc.Fmint.rollback_of_amount_over_maxFlashLoan
+#print axioms Blanc.Fmint.rollback_of_allowance_below_amount
+#print axioms Blanc.Fmint.rollback_of_balance_below_amount

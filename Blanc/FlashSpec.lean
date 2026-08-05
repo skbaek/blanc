@@ -6,7 +6,10 @@
 -- of `flashLoan`'s body.  On top of it: the forward walk to the `CALL`, the
 -- callback's calldata image, `CallbackBoundary`, the repayment postcondition,
 -- and then the headline `fmint_flashLoan_spec` with its seven `no_success_of_*`
--- corollaries.
+-- corollaries.  A final section adds the frame-level restoration family
+-- (`~/plans/fmint-restoration.md`): `rollback_of_callback_failure` at the
+-- borrower's frame, and `rollback_of_no_success` with its seven instantiations
+-- at fmint's own message frame.  Those name a FRAME and never a transaction.
 --
 -- Everything here is PARTIAL CORRECTNESS and never liveness: every theorem
 -- takes a successful run as a hypothesis and reads facts off it.  Nothing in
@@ -2567,12 +2570,21 @@ and `no_success_of_callback_never_returns_word`.  Each negates a clause of
 quantifier: the premise is that **no** boundary the headline could produce
 answers with the magic word (respectively, with a full word at all).  It is
 *not* the stronger reading "if the receiver's code returns `X` then no success":
-`CallbackBoundary` pins the callback frame by equations — `parent` from `pre`,
-the message from the five arguments, `mid` from `child` — but it does not prove
-that frame *unique*, because `ProcessMessage` is a relation with no determinism
-lemma in this repository and `gw`, `avail` and the slot stay existential.  So
-the honest form quantifies over every admissible boundary, and that is the form
-stated here.
+`CallbackBoundary` pins the callback frame by equations — the message from the
+five arguments, `mid` from `child` — but it does not prove that frame *unique*.
+The 2026-08-06 audit of this question (`~/plans/fmint-restoration.md`, decision
+gate C) enumerated the seven existentials against `pre`.  Three *are* pinned:
+`gw` is `pre.stack`'s head, `receiver` follows from the next word because
+`Adr.toB256` is injective, and `dp`/`code` follow from
+`getDelegatedCodeAddress (pre.getCode receiver)`.  The other four are not, and
+one of them is decisive: **`parent` is constrained only by `parent.stack` and
+`parent.state = pre.state`**, so its memory, gas, transient storage and access
+sets are free — and `callMsg` and `Resume.call` both read them, so `child` and
+`mid` are not functions of `pre` at all.  `avail` is likewise free
+(`calculateMsgCallGas_stipend` is itself an existential over the *caller's*
+charged machine), and the slot needs a `ProcessMessage` determinism lemma that
+does not exist here.  So the honest form quantifies over every admissible
+boundary, and that is the form stated here.
 
 **Five are contrapositives of the guards**, not of the headline, and they never
 were: `token ≠ self`, a dirty `receiver` word, `amount` past the mint headroom,
@@ -2587,7 +2599,12 @@ of calldata head words.
 one.  They say a call did not succeed; they say nothing about the state coming
 back.  A restoration claim is a separate frame-level theorem — a failed inner
 call can be caught by its caller while the surrounding transaction succeeds, so
-such a claim must name its frame — and no such theorem exists here.
+such a claim must name its frame.  Those theorems are the *next* section:
+`rollback_of_no_success` and its seven instantiations take one of these seven
+premises and add the frame's own message, returning `out.error.isSome` together
+with the restored world.  They are strictly separate statements with strictly
+more premises, and reading one of the seven below as though it already said
+that is the confusion this paragraph exists to prevent.
 
 As everywhere in this module, these are **partial correctness**: they rule
 executions out, and nothing rules any execution in. -/
@@ -2748,6 +2765,378 @@ theorem no_success_of_balance_below_amount {sevm : Sevm} {pre post : Devm}
   obtain ⟨-, -, -, a, sc, mid, st, allow, -, -, -, h_cb, -, -, -, -, h_bal, -⟩ :=
     fmint_flashLoan_spec h_code h_sel h_dec h_size h_wf h_fresh exc
   exact B256.not_lt.mpr h_bal (h_low a sc mid h_cb)
+
+/-! ### Frame-level restoration under a no-success premise
+
+The family above rules executions *out*.  This one says what the frame's own
+caller is handed when one of those rulings applies: the frame settles with its
+error flag set, and the state and transient storage it comes back with are the
+ones the message entered with.  Together with
+`ProcessMessage.rollback_of_error` (the generic mechanism, `CommonProofs.lean`)
+and `rollback_of_callback_failure` (the borrower's frame, above), these are the
+restoration family of `~/plans/fmint-restoration.md`.
+
+**Every statement names its frame, and the frame is `msg`'s own** — the frame
+`processMessage` opened for this message.  It is emphatically *not* the
+transaction.  A failed inner call can be caught by its caller while the
+surrounding transaction succeeds, so "the transaction was rolled back" is a
+different claim and is frequently false; nothing here says it.  These
+statements are also silent about fmint's caller, deliberately.
+
+**No error kind is named.**  The conclusion is `out.error.isSome`, never
+*which* error.  Two independent reasons: the relational layer this is phrased
+in is `.ok`-level only, so nothing about an error *value* transfers; and
+fmint's failure shapes are artefacts of compiled bytes that the hygiene arc
+changed underneath this family, so a claim naming one would be coupled to bytes
+a restoration statement has no business knowing.
+
+**This is not liveness, and is not implied by the success spec.**  Every
+premise is in hypothesis position.  Nothing here asserts that any `flashLoan`
+call is ever made, ever fails, or ever runs at all.  As everywhere in this
+module, these are partial correctness: they say what *would* be handed back,
+not that anything happens. -/
+
+/-- **A frame that cannot succeed settles with an error, and rolled back.**
+Given a `processMessage` frame that settled `.ok out`, a filled slot, the
+frame's post-transfer environment `benv`, the exclusion of the precompile entry
+mode, and the fact that *no* successful `Exec` starts from this frame's entry
+machine, the settled result carries an error flag and its world is exactly
+`msg`'s entry world.
+
+Stated **once**, over the abstract premise `h_none`; each of the seven
+`no_success_of_*` corollaries below instantiates it in a single line.
+
+**Why `h_fill` is a premise.**  `ProcessMessage msg xl (.ok out)` leaves the raw
+execution result in the slot entirely unconstrained, so without
+`Xlot.Filled xl` there is no derivation for `h_none` to contradict, the
+clean-success branch cannot be refuted, and the statement would be false as
+written.  The premise is idiomatic rather than a patch — `CallbackBoundary`
+carries one too — and `rollback_of_no_success_total` below discharges it once
+and for all for a caller who holds the total function's equation instead.
+
+**Why `h_prec` is a premise.**  Frame entry splits into a precompile answer and
+an interpreted-code execution.  In the precompile branch there is no `Exec` at
+all for `h_none` to contradict, and the frame demonstrably *can* settle cleanly
+there, so the conclusion `out.error.isSome` is simply **false** in that branch.
+`CallbackBoundary.entry_modes` set this module's precedent of carrying the
+precompile case explicitly rather than assuming it away; carrying it is
+impossible here, so it is excluded by an honest, checkable premise instead.  A
+precompile address holding fmint's code is not the situation this theorem is
+about, and `h_prec` says so out loud.  Note its shape: it is
+`of_executeCode_someCode`'s guard, and it is demanded only of a `codeAddress`
+that is `some` — a frame with no code address has no precompile branch to
+exclude, and is asked for nothing.
+
+**Contract-agnostic.**  Nothing above `h_none` mentions fmint; this is a
+frame-level statement that happens to live in fmint's module because its seven
+consumers do.  It is the third member of the `Exec`-level `.error`-outcome
+genre recorded as an open item in `~/plans/flashmint-proposal.md`. -/
+theorem rollback_of_no_success {msg : Msg} {benv : Benv} {xl : Xlot} {out : Devm}
+    (h_pm : ProcessMessage msg xl (.ok out))
+    (h_fill : Xlot.Filled xl)
+    (h_bt : msg.benvAfterTransfer = .ok benv)
+    (h_prec : ∀ adr, msg.codeAddress = some adr →
+      ¬ (!msg.disablePrecompiles && decide (benv.stat.rules.isPrecomp adr)) = true)
+    (h_none : ∀ post, Exec 0 (initSevm (msg.withBenv benv))
+        (initDevm (msg.withBenv benv)) (.ok post) → False) :
+    out.error.isSome ∧
+      out.state = msg.benv.state ∧
+      out.transientStorage = msg.tenv.transientStorage := by
+  obtain ⟨r0, hbody, hset⟩ := ProcessMessage.iff_body.mp h_pm
+  unfold FrameBody at hbody
+  rw [h_bt] at hbody
+  rcases r0 with x | evm'
+  · rw [processMessage.settle_error] at hset
+    cases hset
+  unfold processMessage.settle at hset
+  dsimp only [bind, Except.bind] at hset
+  by_cases herr : evm'.error.isSome = true
+  · rw [if_pos herr] at hset
+    have h_err : out.error.isSome = true := by rw [Except.ok.inj hset]; exact herr
+    exact ⟨h_err, ProcessMessage.rollback_of_error h_pm h_err⟩
+  · exfalso
+    rw [if_neg herr] at hset
+    have h_eq : evm' = out := Except.ok.inj hset.symm
+    subst h_eq
+    rcases h_ca : (msg.withBenv benv).codeAddress with _ | adr
+    · obtain ⟨ex', h_xl, h_he⟩ := of_executeCode_noneCode h_ca hbody
+      subst h_xl
+      obtain ⟨exc⟩ := h_fill
+      rw [exec_ok_of_handleError h_he herr] at exc
+      exact h_none _ exc
+    · rcases of_executeCode_someCode h_ca hbody with ⟨h_pre, -, -⟩ | ⟨-, ex', h_xl, h_he⟩
+      · exact h_prec adr h_ca h_pre
+      · subst h_xl
+        obtain ⟨exc⟩ := h_fill
+        rw [exec_ok_of_handleError h_he herr] at exc
+        exact h_none _ exc
+
+/-- **The same statement off the total function.**  `of_processMessage` produces
+the slot *and* its `Filled` proof from `processMessage msg = .ok out`, so a
+caller holding the equation supplies neither.  Same frame — `msg`'s own — same
+absence of an error kind, and still not liveness: the equation is a hypothesis
+about a run that is given, not a claim that one occurs. -/
+theorem rollback_of_no_success_total {msg : Msg} {benv : Benv} {out : Devm}
+    (h_run : processMessage msg = .ok out)
+    (h_bt : msg.benvAfterTransfer = .ok benv)
+    (h_prec : ∀ adr, msg.codeAddress = some adr →
+      ¬ (!msg.disablePrecompiles && decide (benv.stat.rules.isPrecomp adr)) = true)
+    (h_none : ∀ post, Exec 0 (initSevm (msg.withBenv benv))
+        (initDevm (msg.withBenv benv)) (.ok post) → False) :
+    out.error.isSome ∧
+      out.state = msg.benv.state ∧
+      out.transientStorage = msg.tenv.transientStorage := by
+  obtain ⟨xl, h_fill, h_pm⟩ := of_processMessage msg (.ok out) h_run
+  exact rollback_of_no_success h_pm h_fill h_bt h_prec h_none
+
+/-- **Wrong magic word ⇒ the frame settled with an error, rolled back.**  The
+restoration form of `no_success_of_callback_never_magic`, at the frame
+`processMessage` opened for `msg`.
+
+Its premises are that corollary's, read at this frame's **entry machine** —
+`initSevm (msg.withBenv benv)` and `initDevm (msg.withBenv benv)`, i.e. after
+the value transfer `h_bt` names — plus the core's `h_fill` and `h_prec`.  The
+restrictions travel with it unchanged:
+
+* **canonical encoding** — `h_dec` is the canonical Solidity-shaped encoding.
+  fmint validates no tail offset (`FMINT_DEVIATIONS.md` row 21), so a
+  non-canonical encoding is decodable by the contract and is **out of scope**;
+* **the size bound** `196 + ceil32 data.length < 2 ^ 256`;
+* **frame freshness** — `h_wf`/`h_fresh` on the entry memory, stated rather
+  than smuggled in;
+* **the boundary-quantified reading of `h_never`** — the premise quantifies
+  over *every* boundary this call could open, because `ProcessMessage` is a
+  relation with no determinism lemma here and `gw`, `avail` and the slot stay
+  existential.  It is **not** "if the receiver's code returns `X`".
+
+Frame, error kind and liveness: see this section's banner. -/
+theorem rollback_of_callback_never_magic {msg : Msg} {benv : Benv} {xl : Xlot}
+    {out : Devm} {receiver token amount : B256} {data : Bytes}
+    (h_pm : ProcessMessage msg xl (.ok out))
+    (h_fill : Xlot.Filled xl)
+    (h_bt : msg.benvAfterTransfer = .ok benv)
+    (h_prec : ∀ adr, msg.codeAddress = some adr →
+      ¬ (!msg.disablePrecompiles && decide (benv.stat.rules.isPrecomp adr)) = true)
+    (h_code : some (initSevm (msg.withBenv benv)).code.toList = Prog.compile fmint)
+    (h_sel : Sevm.selector (initSevm (msg.withBenv benv)) = flashLoanSelector)
+    (h_dec : Sevm.DecodesCallWithTail (initSevm (msg.withBenv benv))
+      flashLoanSelector [receiver, token, amount] data)
+    (h_size : 196 + ceil32 data.length < 2 ^ 256)
+    (h_wf : Mem.Wf (initDevm (msg.withBenv benv)).memory)
+    (h_fresh : Mem.Reads (initDevm (msg.withBenv benv)).memory [])
+    (h_never : ∀ (a : Adr) (sc mid : Devm),
+      CallbackBoundary (initSevm (msg.withBenv benv))
+        (initSevm (msg.withBenv benv)).currentTarget a amount data sc mid →
+      Bytes.toB256 (mid.returnData.sliceD 0 32 0) ≠ erc3156Magic) :
+    out.error.isSome ∧
+      out.state = msg.benv.state ∧
+      out.transientStorage = msg.tenv.transientStorage :=
+  rollback_of_no_success h_pm h_fill h_bt h_prec
+    (fun _ exc => no_success_of_callback_never_magic h_code h_sel h_dec h_size
+      h_wf h_fresh h_never exc)
+
+/-- **Returndata shorter than a word ⇒ the frame settled with an error, rolled
+back.**  The restoration form of `no_success_of_callback_never_returns_word`,
+at `msg`'s own frame.
+
+Same inherited restrictions as its sibling above: canonical encoding
+(`FMINT_DEVIATIONS.md` row 21), the size bound, frame freshness on the entry
+memory, and the **boundary-quantified** reading of `h_short` — no boundary this
+call could open answers with a full word, not "the receiver's code returns
+short".  Premises are read at the entry machine
+`initSevm (msg.withBenv benv)` / `initDevm (msg.withBenv benv)`.
+
+Frame, error kind and liveness: see this section's banner. -/
+theorem rollback_of_callback_never_returns_word {msg : Msg} {benv : Benv}
+    {xl : Xlot} {out : Devm} {receiver token amount : B256} {data : Bytes}
+    (h_pm : ProcessMessage msg xl (.ok out))
+    (h_fill : Xlot.Filled xl)
+    (h_bt : msg.benvAfterTransfer = .ok benv)
+    (h_prec : ∀ adr, msg.codeAddress = some adr →
+      ¬ (!msg.disablePrecompiles && decide (benv.stat.rules.isPrecomp adr)) = true)
+    (h_code : some (initSevm (msg.withBenv benv)).code.toList = Prog.compile fmint)
+    (h_sel : Sevm.selector (initSevm (msg.withBenv benv)) = flashLoanSelector)
+    (h_dec : Sevm.DecodesCallWithTail (initSevm (msg.withBenv benv))
+      flashLoanSelector [receiver, token, amount] data)
+    (h_size : 196 + ceil32 data.length < 2 ^ 256)
+    (h_wf : Mem.Wf (initDevm (msg.withBenv benv)).memory)
+    (h_fresh : Mem.Reads (initDevm (msg.withBenv benv)).memory [])
+    (h_short : ∀ (a : Adr) (sc mid : Devm),
+      CallbackBoundary (initSevm (msg.withBenv benv))
+        (initSevm (msg.withBenv benv)).currentTarget a amount data sc mid →
+      mid.returnData.length < 32) :
+    out.error.isSome ∧
+      out.state = msg.benv.state ∧
+      out.transientStorage = msg.tenv.transientStorage :=
+  rollback_of_no_success h_pm h_fill h_bt h_prec
+    (fun _ exc => no_success_of_callback_never_returns_word h_code h_sel h_dec
+      h_size h_wf h_fresh h_short exc)
+
+/-- **`token ≠ self` ⇒ the frame settled with an error, rolled back.**  The
+restoration form of `no_success_of_token_ne_self`, at `msg`'s own frame.
+
+A contrapositive of guard (0), so it needs **neither the size bound nor frame
+freshness** and is not given them: a corollary must not acquire premises it
+does not use.  The one restriction it inherits is **canonical encoding**
+(`h_dec`; `FMINT_DEVIATIONS.md` row 21 — a non-canonical encoding is decodable
+by the contract and out of scope).  Premises are read at the entry machine
+`initSevm (msg.withBenv benv)`.
+
+Frame, error kind and liveness: see this section's banner. -/
+theorem rollback_of_token_ne_self {msg : Msg} {benv : Benv} {xl : Xlot}
+    {out : Devm} {receiver token amount : B256} {data : Bytes}
+    (h_pm : ProcessMessage msg xl (.ok out))
+    (h_fill : Xlot.Filled xl)
+    (h_bt : msg.benvAfterTransfer = .ok benv)
+    (h_prec : ∀ adr, msg.codeAddress = some adr →
+      ¬ (!msg.disablePrecompiles && decide (benv.stat.rules.isPrecomp adr)) = true)
+    (h_code : some (initSevm (msg.withBenv benv)).code.toList = Prog.compile fmint)
+    (h_sel : Sevm.selector (initSevm (msg.withBenv benv)) = flashLoanSelector)
+    (h_dec : Sevm.DecodesCallWithTail (initSevm (msg.withBenv benv))
+      flashLoanSelector [receiver, token, amount] data)
+    (h_ne : token ≠ (initSevm (msg.withBenv benv)).currentTarget.toB256) :
+    out.error.isSome ∧
+      out.state = msg.benv.state ∧
+      out.transientStorage = msg.tenv.transientStorage :=
+  rollback_of_no_success h_pm h_fill h_bt h_prec
+    (fun _ exc => no_success_of_token_ne_self h_code h_sel h_dec h_ne exc)
+
+/-- **A `receiver` word that is not address-shaped ⇒ the frame settled with an
+error, rolled back.**  The restoration form of
+`no_success_of_receiver_not_address`, at `msg`'s own frame.
+
+A contrapositive of guard (1): like its two neighbours it needs **neither the
+size bound nor frame freshness**, and inherits only the **canonical-encoding**
+restriction (`h_dec`; `FMINT_DEVIATIONS.md` row 21).  Premises are read at the
+entry machine `initSevm (msg.withBenv benv)`.
+
+Frame, error kind and liveness: see this section's banner. -/
+theorem rollback_of_receiver_not_address {msg : Msg} {benv : Benv} {xl : Xlot}
+    {out : Devm} {receiver token amount : B256} {data : Bytes}
+    (h_pm : ProcessMessage msg xl (.ok out))
+    (h_fill : Xlot.Filled xl)
+    (h_bt : msg.benvAfterTransfer = .ok benv)
+    (h_prec : ∀ adr, msg.codeAddress = some adr →
+      ¬ (!msg.disablePrecompiles && decide (benv.stat.rules.isPrecomp adr)) = true)
+    (h_code : some (initSevm (msg.withBenv benv)).code.toList = Prog.compile fmint)
+    (h_sel : Sevm.selector (initSevm (msg.withBenv benv)) = flashLoanSelector)
+    (h_dec : Sevm.DecodesCallWithTail (initSevm (msg.withBenv benv))
+      flashLoanSelector [receiver, token, amount] data)
+    (h_dirty : ¬ ValidAdr receiver) :
+    out.error.isSome ∧
+      out.state = msg.benv.state ∧
+      out.transientStorage = msg.tenv.transientStorage :=
+  rollback_of_no_success h_pm h_fill h_bt h_prec
+    (fun _ exc => no_success_of_receiver_not_address h_code h_sel h_dec h_dirty exc)
+
+/-- **`amount` past `maxFlashLoan` ⇒ the frame settled with an error, rolled
+back.**  The restoration form of `no_success_of_amount_over_maxFlashLoan`, at
+`msg`'s own frame.
+
+A contrapositive of guard (2), so again **no size bound and no frame
+freshness** — only the **canonical-encoding** restriction (`h_dec`;
+`FMINT_DEVIATIONS.md` row 21).  The supply named is the one in storage at the
+frame's entry, read off `initDevm (msg.withBenv benv)`, which is the right one:
+nothing before the guard writes storage.  As in the underlying corollary this
+states the bound `~~~ supply` and not `maxFlashLoan`'s answer — no theorem
+walks that view function.
+
+Frame, error kind and liveness: see this section's banner. -/
+theorem rollback_of_amount_over_maxFlashLoan {msg : Msg} {benv : Benv} {xl : Xlot}
+    {out : Devm} {receiver token amount : B256} {data : Bytes}
+    (h_pm : ProcessMessage msg xl (.ok out))
+    (h_fill : Xlot.Filled xl)
+    (h_bt : msg.benvAfterTransfer = .ok benv)
+    (h_prec : ∀ adr, msg.codeAddress = some adr →
+      ¬ (!msg.disablePrecompiles && decide (benv.stat.rules.isPrecomp adr)) = true)
+    (h_code : some (initSevm (msg.withBenv benv)).code.toList = Prog.compile fmint)
+    (h_sel : Sevm.selector (initSevm (msg.withBenv benv)) = flashLoanSelector)
+    (h_dec : Sevm.DecodesCallWithTail (initSevm (msg.withBenv benv))
+      flashLoanSelector [receiver, token, amount] data)
+    (h_over : ~~~ ((Devm.getStor (initDevm (msg.withBenv benv))
+      (initSevm (msg.withBenv benv)).currentTarget).get supplySlot) < amount) :
+    out.error.isSome ∧
+      out.state = msg.benv.state ∧
+      out.transientStorage = msg.tenv.transientStorage :=
+  rollback_of_no_success h_pm h_fill h_bt h_prec
+    (fun _ exc => no_success_of_amount_over_maxFlashLoan h_code h_sel h_dec h_over exc)
+
+/-- **An allowance below `amount` ⇒ the frame settled with an error, rolled
+back.**  The restoration form of `no_success_of_allowance_below_amount`, at
+`msg`'s own frame.
+
+Inherits the full premise set of its corollary, read at the entry machine:
+**canonical encoding** (`FMINT_DEVIATIONS.md` row 21), the **size bound**, and
+**frame freshness** on the entry memory.  `h_low` is **boundary-quantified**
+for the same reason as the two headline contrapositives — every boundary the
+call could open, not the receiver's code — and it is read at `mid`, *after* the
+callback, because that is where the contract reads it: a borrower may approve
+from inside `onFlashLoan`, so the same premise at the frame's entry would be a
+different and false claim.
+
+Frame, error kind and liveness: see this section's banner. -/
+theorem rollback_of_allowance_below_amount {msg : Msg} {benv : Benv} {xl : Xlot}
+    {out : Devm} {receiver token amount : B256} {data : Bytes}
+    (h_pm : ProcessMessage msg xl (.ok out))
+    (h_fill : Xlot.Filled xl)
+    (h_bt : msg.benvAfterTransfer = .ok benv)
+    (h_prec : ∀ adr, msg.codeAddress = some adr →
+      ¬ (!msg.disablePrecompiles && decide (benv.stat.rules.isPrecomp adr)) = true)
+    (h_code : some (initSevm (msg.withBenv benv)).code.toList = Prog.compile fmint)
+    (h_sel : Sevm.selector (initSevm (msg.withBenv benv)) = flashLoanSelector)
+    (h_dec : Sevm.DecodesCallWithTail (initSevm (msg.withBenv benv))
+      flashLoanSelector [receiver, token, amount] data)
+    (h_size : 196 + ceil32 data.length < 2 ^ 256)
+    (h_wf : Mem.Wf (initDevm (msg.withBenv benv)).memory)
+    (h_fresh : Mem.Reads (initDevm (msg.withBenv benv)).memory [])
+    (h_low : ∀ (a : Adr) (sc mid : Devm),
+      CallbackBoundary (initSevm (msg.withBenv benv))
+        (initSevm (msg.withBenv benv)).currentTarget a amount data sc mid →
+      (Devm.getStor mid (initSevm (msg.withBenv benv)).currentTarget).get
+        (repayKey a (initSevm (msg.withBenv benv)).currentTarget) < amount) :
+    out.error.isSome ∧
+      out.state = msg.benv.state ∧
+      out.transientStorage = msg.tenv.transientStorage :=
+  rollback_of_no_success h_pm h_fill h_bt h_prec
+    (fun _ exc => no_success_of_allowance_below_amount h_code h_sel h_dec h_size
+      h_wf h_fresh h_low exc)
+
+/-- **A receiver balance below `amount` ⇒ the frame settled with an error,
+rolled back.**  The restoration form of `no_success_of_balance_below_amount`, at
+`msg`'s own frame.
+
+Inherits the full premise set of its corollary, read at the entry machine:
+**canonical encoding** (`FMINT_DEVIATIONS.md` row 21), the **size bound**, and
+**frame freshness** on the entry memory.  `h_low` is **boundary-quantified**,
+and is read at `mid` for the same reason as the allowance: the borrower holds
+the principal during the callback and the check happens after it.
+
+Frame, error kind and liveness: see this section's banner. -/
+theorem rollback_of_balance_below_amount {msg : Msg} {benv : Benv} {xl : Xlot}
+    {out : Devm} {receiver token amount : B256} {data : Bytes}
+    (h_pm : ProcessMessage msg xl (.ok out))
+    (h_fill : Xlot.Filled xl)
+    (h_bt : msg.benvAfterTransfer = .ok benv)
+    (h_prec : ∀ adr, msg.codeAddress = some adr →
+      ¬ (!msg.disablePrecompiles && decide (benv.stat.rules.isPrecomp adr)) = true)
+    (h_code : some (initSevm (msg.withBenv benv)).code.toList = Prog.compile fmint)
+    (h_sel : Sevm.selector (initSevm (msg.withBenv benv)) = flashLoanSelector)
+    (h_dec : Sevm.DecodesCallWithTail (initSevm (msg.withBenv benv))
+      flashLoanSelector [receiver, token, amount] data)
+    (h_size : 196 + ceil32 data.length < 2 ^ 256)
+    (h_wf : Mem.Wf (initDevm (msg.withBenv benv)).memory)
+    (h_fresh : Mem.Reads (initDevm (msg.withBenv benv)).memory [])
+    (h_low : ∀ (a : Adr) (sc mid : Devm),
+      CallbackBoundary (initSevm (msg.withBenv benv))
+        (initSevm (msg.withBenv benv)).currentTarget a amount data sc mid →
+      (Devm.getStor mid (initSevm (msg.withBenv benv)).currentTarget).get a.toB256
+        < amount) :
+    out.error.isSome ∧
+      out.state = msg.benv.state ∧
+      out.transientStorage = msg.tenv.transientStorage :=
+  rollback_of_no_success h_pm h_fill h_bt h_prec
+    (fun _ exc => no_success_of_balance_below_amount h_code h_sel h_dec h_size
+      h_wf h_fresh h_low exc)
 
 end Fmint
 

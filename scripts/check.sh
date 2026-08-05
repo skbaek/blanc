@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Blanc verification gate (REFACTOR.md Phase 0, step 0.3): `lake build`,
-# then an axiom audit of the twenty-six audited top theorems via
+# then an axiom audit of the thirty-five audited top theorems via
 # scripts/AxiomCheck.lean — WETH's seven solvency theorems, fmint's seven
 # conservation theorems, fmint's `flashLoan` success spec and its seven
-# no-success corollaries, the two compile witnesses, and the two frame-level
+# no-success corollaries, the two compile witnesses, and the eleven frame-level
 # restoration rows below.
 #
 # `wethCode_compile` is what keeps the solvency theorems' `Prog.compile weth`
@@ -23,27 +23,51 @@
 # `Blanc/FlashSpec.lean`'s headline docstring is the authority on their scope —
 # and none of them is a state-restoration claim.
 #
-# `ProcessMessage.rollback_of_error` is the first **restoration** row, added by
-# `~/plans/fmint-restoration.md` Step 1. It is contract-agnostic and shared-layer:
-# a message frame that settles `.ok` with its error flag set has had its state
-# and transient storage rolled back to what that message entered with. Read the
-# frame it names — it is `msg`'s own, not the transaction's, and a failed inner
-# call can be caught by its caller while the surrounding transaction succeeds.
-# Like every row above it this is partial correctness, not liveness: both the
-# frame relation and the error flag are hypotheses, so nothing here says any
-# frame ever fails. It names no error kind, deliberately.
+# The last eleven rows are the **restoration** family of
+# `~/plans/fmint-restoration.md`. Three properties bind all of them and are the
+# only safe way to read any one:
 #
-# `Fmint.rollback_of_callback_failure` is the second restoration row, added by
-# that plan's Step 2. It instantiates the same idea at fmint's callback site:
-# when the `CALL` at `flashLoanFromCall` pushes the failure flag, the world
-# fmint resumes with is the world it entered the `CALL` with, so the borrower's
-# `onFlashLoan` frame wrote nothing that survives. Read its frame carefully.
-# The writes rolled back are the **child** frame's, and the equation holds at
-# the resumption point only: at that point the flash mint is still in place —
-# it is undone later by fmint's own revert, which is a different frame. It is
-# not a transaction-level claim, it names no error kind, and its `CALL` run and
-# pushed flag are both hypotheses, so it does not say any callback ever
-# reverts.
+#   * each names a FRAME, never a transaction. A failed inner call can be caught
+#     by its caller while the surrounding transaction succeeds, so "the
+#     transaction was rolled back" is a different claim and is frequently false;
+#   * none names an error kind. The conclusion is `error.isSome`, never *which*
+#     error — the relational layer is `.ok`-level only, and fmint's failure
+#     shapes are compiled-byte artefacts a restoration claim must not depend on;
+#   * none is a liveness claim. Every premise is in hypothesis position, so
+#     nothing here says any frame ever fails, any callback ever reverts, or any
+#     `flashLoan` call is ever made. Like every row above, partial correctness.
+#
+# `ProcessMessage.rollback_of_error` (Step 1) is the generic mechanism, and is
+# contract-agnostic and shared-layer: a message frame that settles `.ok` with
+# its error flag set has had its state and transient storage rolled back to what
+# that message entered with. The frame is `msg`'s own.
+#
+# `Fmint.rollback_of_callback_failure` (Step 2) instantiates that at fmint's
+# callback site: when the `CALL` at `flashLoanFromCall` pushes the failure flag,
+# the world fmint resumes with is the world it entered the `CALL` with, so the
+# borrower's `onFlashLoan` frame wrote nothing that survives. Read its frame
+# carefully. The writes rolled back are the **child** frame's, and the equation
+# holds at the resumption point only: at that point the flash mint is still in
+# place — it is undone later by fmint's own revert, which is a different frame.
+#
+# `Fmint.rollback_of_no_success` (Step 3) is the family's core and the arc's
+# headline, stated once over an abstract "no successful `Exec` starts here"
+# premise: such a frame settles with its error flag set and hands back the state
+# and transient storage the message entered with. `..._total` is the same
+# statement off `processMessage msg = .ok out`. Two premises are deliberate and
+# are argued in the source: `Xlot.Filled`, without which the raw result is
+# unconstrained and the clean-success branch cannot be refuted; and an explicit
+# exclusion of the precompile entry mode, where there is no `Exec` to contradict
+# and the conclusion is genuinely false.
+#
+# The remaining seven rows instantiate the core at each `no_success_of_*`
+# corollary, at fmint's own message frame. They inherit those corollaries'
+# restrictions unchanged: canonically encoded calldata throughout
+# (`FMINT_DEVIATIONS.md` row 21), the encoded-callback size bound and frame
+# freshness where the corollary needs them (the `token`, `receiver` and `amount`
+# rows need neither), and the boundary-quantified reading of every callback
+# premise — over EVERY boundary the call could open, never "if the receiver's
+# code returns X". `Blanc/FlashSpec.lean`'s section banner is the authority.
 #
 # Each row carries its OWN pinned expected axiom set (see ROWS below), and a
 # theorem's axiom closure must equal its row's set exactly, order-insensitive.
@@ -117,7 +141,16 @@ Blanc.Fmint.no_success_of_balance_below_amount|$STANDARD
 Blanc.wethCode_compile|$STANDARD
 Blanc.fmintCode_compile|$STANDARD
 Blanc.ProcessMessage.rollback_of_error|$STANDARD
-Blanc.Fmint.rollback_of_callback_failure|$STANDARD"
+Blanc.Fmint.rollback_of_callback_failure|$STANDARD
+Blanc.Fmint.rollback_of_no_success|$STANDARD
+Blanc.Fmint.rollback_of_no_success_total|$STANDARD
+Blanc.Fmint.rollback_of_callback_never_magic|$STANDARD
+Blanc.Fmint.rollback_of_callback_never_returns_word|$STANDARD
+Blanc.Fmint.rollback_of_token_ne_self|$STANDARD
+Blanc.Fmint.rollback_of_receiver_not_address|$STANDARD
+Blanc.Fmint.rollback_of_amount_over_maxFlashLoan|$STANDARD
+Blanc.Fmint.rollback_of_allowance_below_amount|$STANDARD
+Blanc.Fmint.rollback_of_balance_below_amount|$STANDARD"
 # Secondary net only: the exact-set comparison below is the primary check;
 # this pattern catches forbidden names in output the per-theorem parse missed.
 FORBIDDEN='sorryAx|ofReduceBool|ofReduceNat|_native\.'
