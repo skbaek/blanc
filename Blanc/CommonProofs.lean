@@ -7881,6 +7881,37 @@ lemma List.getD_takeD {ξ : Type} (d : ξ) :
         cases l <;> simp
       · rw [if_neg hi, if_neg (by omega)]
 
+lemma List.takeD_nil_eq_replicate {ξ} (d : ξ) :
+    ∀ n, List.takeD n ([] : List ξ) d = List.replicate n d := by
+  intro n
+  induction n with
+  | zero => rfl
+  | succ n ih =>
+    show ([] : List ξ).head?.getD d :: List.takeD n ([] : List ξ).tail d = _
+    rw [show ([] : List ξ).tail = [] from rfl, ih]; rfl
+
+/-- Taking *more* than there is pads with the default.
+
+The half of `List.takeD` that `List.takeD_eq_take` does not cover, and the shape
+a `CALL`'s argument window takes when it runs past the bytes the frame actually
+wrote: `Mem.Reads` compares with `getD` on both sides, so those trailing
+positions read as `0`, which is exactly `abiBytesTail`'s zero padding. -/
+lemma List.takeD_of_length_le {ξ} (d : ξ) :
+    ∀ (l : List ξ) (n : Nat), l.length ≤ n →
+      List.takeD n l d = l ++ List.replicate (n - l.length) d := by
+  intro l
+  induction l with
+  | nil => intro n _; rw [List.takeD_nil_eq_replicate]; simp
+  | cons a l ih =>
+    intro n hn
+    cases n with
+    | zero => simp at hn
+    | succ m =>
+      have hm : l.length ≤ m := by simp at hn; omega
+      show (a :: l).head?.getD d :: List.takeD m ((a :: l).tail) d = _
+      rw [show (a :: l).tail = l from rfl, ih m hm]
+      simp
+
 /-- `Bytes.writeAt` read pointwise: inside the written range it is the payload,
 outside it is the old image.  Every `Mem.Reads` step below is this equation
 paired with `Array.getD_writeD`. -/
@@ -7906,6 +7937,14 @@ lemma Bytes.writeAt_length (bs xs : Bytes) :
     Bytes.writeAt bs bs.length xs = bs ++ xs := by
   rw [Bytes.writeAt, List.takeD_eq_take _ (Nat.le_refl _), List.take_length,
     List.drop_eq_nil_of_le (Nat.le_add_right _ _), List.append_nil]
+
+/-- `Bytes.writeAt_length` with the offset given as a numeral.  A walk meets the
+append shape as `writeAt bs 96 xs`, never as `writeAt bs bs.length xs`, and
+rewriting a numeral into a `length` first is what makes those two the same
+step. -/
+lemma Bytes.writeAt_of_length_eq {bs xs : Bytes} {n : Nat} (h : bs.length = n) :
+    Bytes.writeAt bs n xs = bs ++ xs := by
+  subst h; exact Bytes.writeAt_length bs xs
 
 /-- Writing over the whole image from `0` replaces it.  The other shape: the
 mint's `Transfer` data lands at `0`, and `storeCallbackHead`'s first store lands
@@ -8566,5 +8605,82 @@ lemma tailBytes_three_of_decodes {e : Sevm} {sel a b c : B256} {data : Bytes}
     List.sliceD, List.drop_length_append' (by rw [hpre]),
     List.takeD_eq_take _ (by simp [List.length_append]),
     List.take_length_append' rfl]
+
+/-! ### `ceil32` as the EVM computes it
+
+Every Solidity-shaped contract rounds a byte length up to a whole word with
+`(len + 31) & ~31`, and a statement about the resulting `argsSize` is a
+statement about `ceil32` only once that identity is proved.  `B256` is a nested
+pair of `UInt64`s rather than a `BitVec`, so none of the usual bitvector API
+applies and there was no `toNat` lemma for `&&&` at all; the three lemmas below
+build one, and `bv_decide` is barred here (the protected cone's ban, and 256
+bits would be infeasible regardless).
+
+The bound `31 + len < 2 ^ 256` is the same kind of premise as
+`tailBytes_three_of_decodes`'s: `List.length` is an unbounded `Nat` while the
+machine word is 256 bits. -/
+
+/-- Bitwise `and` distributes over a shift-and-or split of both sides, provided
+the low halves fit below the shift.  The one bit-level fact the `B128`/`B256`
+`toNat` homomorphisms need. -/
+lemma Nat.and_or_shiftLeft {a b c d k : Nat} (hb : b < 2 ^ k) (hd : d < 2 ^ k) :
+    ((a <<< k ||| b) &&& (c <<< k ||| d)) = ((a &&& c) <<< k) ||| (b &&& d) := by
+  apply Nat.eq_of_testBit_eq
+  intro i
+  simp only [Nat.testBit_or, Nat.testBit_and, Nat.testBit_shiftLeft]
+  by_cases hi : k ≤ i
+  · have hpow : (2 : Nat) ^ k ≤ 2 ^ i := Nat.pow_le_pow_right (by omega) hi
+    rw [Nat.testBit_lt_two_pow (Nat.lt_of_lt_of_le hb hpow),
+      Nat.testBit_lt_two_pow (Nat.lt_of_lt_of_le hd hpow)]
+    simp [hi]
+  · simp [hi]
+
+lemma B128.toNat_and (x y : B128) : (x &&& y).toNat = x.toNat &&& y.toNat := by
+  show ((x.1 &&& y.1).toNat <<< 64) ||| (x.2 &&& y.2).toNat = _
+  rw [UInt64.toNat_and, UInt64.toNat_and]
+  exact (Nat.and_or_shiftLeft (UInt64.toNat_lt x.2) (UInt64.toNat_lt y.2)).symm
+
+lemma B256.toNat_and (x y : B256) : (x &&& y).toNat = x.toNat &&& y.toNat := by
+  show ((x.1 &&& y.1).toNat <<< 128) ||| (x.2 &&& y.2).toNat = _
+  rw [B128.toNat_and, B128.toNat_and]
+  exact (Nat.and_or_shiftLeft (B128.toNat_lt (x := x.2)) (B128.toNat_lt (x := y.2))).symm
+
+/-- Masking off the low five bits is division by `32`.  `2 ^ 256 - 32` is
+`(2 ^ 251 - 1) <<< 5`, so both sides agree bit by bit. -/
+lemma Nat.and_mask32 {n : Nat} (h : n < 2 ^ 256) :
+    n &&& (2 ^ 256 - 32) = 32 * (n / 32) := by
+  have hm : (2 : Nat) ^ 256 - 32 = (2 ^ 251 - 1) <<< 5 := by
+    rw [Nat.shiftLeft_eq, Nat.sub_mul, Nat.one_mul, ← Nat.pow_add]
+  have hr : 32 * (n / 32) = (n >>> 5) <<< 5 := by
+    rw [Nat.shiftLeft_eq, Nat.shiftRight_eq_div_pow, Nat.mul_comm]
+  rw [hm, hr]
+  apply Nat.eq_of_testBit_eq
+  intro i
+  rw [Nat.testBit_and, Nat.testBit_shiftLeft, Nat.testBit_shiftLeft,
+    Nat.testBit_two_pow_sub_one, Nat.testBit_shiftRight]
+  by_cases hi : 5 ≤ i
+  · rw [show 5 + (i - 5) = i from by omega]
+    simp only [ge_iff_le, hi, decide_true, Bool.true_and]
+    by_cases hi2 : i < 256
+    · rw [decide_eq_true (by omega : i - 5 < 251), Bool.and_true]
+    · rw [Nat.testBit_lt_two_pow
+        (Nat.lt_of_lt_of_le h (Nat.pow_le_pow_right (by omega) (by omega)))]
+      rw [Bool.false_and]
+  · simp only [ge_iff_le, hi, decide_false, Bool.false_and, Bool.and_false]
+
+lemma ceil32_eq_mul (len : Nat) : ceil32 len = 32 * ((31 + len) / 32) := by
+  unfold ceil32
+  rcases hm : len % 32 with _ | m
+  · show len = _; omega
+  · show len + 32 - (m + 1) = _; omega
+
+/-- **`(len + 31) & ~31` is `ceil32 len`**, as a `Nat`. -/
+lemma B256.toNat_ceil32 {len : Nat} (h : 31 + len < 2 ^ 256) :
+    ((~~~ (31 : B256)) &&& (31 + Nat.toB256 len)).toNat = ceil32 len := by
+  have hy : ((31 : B256) + Nat.toB256 len).toNat = 31 + len := by
+    rw [B256.toNat_add, B256.toNat_toB256_of_lt (by omega : len < 2 ^ 256),
+      show B256.toNat 31 = 31 from rfl, Nat.lo_eq_of_lt h]
+  rw [B256.toNat_and, show (~~~ (31 : B256)).toNat = 2 ^ 256 - 32 from rfl,
+    Nat.and_comm, hy, Nat.and_mask32 h, ceil32_eq_mul]
 
 end Blanc
