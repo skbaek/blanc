@@ -725,4 +725,104 @@ theorem Prog.runCompiled_of_exec (sevm : Sevm) (pre : Devm) (p : Prog) (post : D
   exact Func.runCompiled_of_exec_core p.main p.aux
     ⟨1, sevm, inter, .ok post, exc'⟩ p.main h_pcf eq h_sub
 
+/-! ## Jumpability of compiled jump targets -/
+
+/-- A backward-scan specification for `noPushBefore`. -/
+theorem noPushBefore_eq_true_iff (cd : ByteArray) :
+    ∀ (K M : Nat), M ≤ 32 →
+      (noPushBefore cd K M = true ↔
+        ∀ p, K ≤ p + M → p < K → ∀ (hp : p < cd.size),
+          96 ≤ cd[p].toNat → cd[p].toNat ≤ 127 →
+          K + (32 - M) ≤ p + (cd[p].toNat - 95) →
+          noPushBefore cd p 32 = false) := by
+  intro K
+  induction K with
+  | zero => intro M _; simp [noPushBefore]
+  | succ k ih =>
+    intro M hM
+    match M with
+    | 0 => simp [noPushBefore]; omega
+    | m + 1 =>
+      rw [noPushBefore]
+      have hm : m ≤ 32 := by omega
+      have harith : k + 1 + (32 - (m + 1)) = k + (32 - m) := by omega
+      rw [harith]
+      have hthr : ∀ b : UInt8, (b < 127 - m.toUInt8) ↔ (b.toNat < 127 - m) := by
+        intro b; rw [UInt8.lt_iff_toNat_lt]
+        simp [UInt8.toNat_sub, Nat.toUInt8]; omega
+      have hgt : ∀ b : UInt8, ((127 : UInt8) < b) ↔ (127 < b.toNat) := by
+        intro b; rw [UInt8.lt_iff_toNat_lt]; rfl
+      by_cases hk : k < cd.size
+      · rw [dif_pos hk]
+        by_cases hc : (decide (cd[k] < 127 - m.toUInt8) || decide (127 < cd[k])) = true
+        · rw [if_pos hc, ih m hm]
+          simp only [Bool.or_eq_true, decide_eq_true_eq, hthr, hgt] at hc
+          constructor
+          · intro h p h1 h2 hp h3 h4 h5
+            rcases Nat.lt_or_ge p k with hlt | hge
+            · exact h p (by omega) hlt hp h3 h4 h5
+            · have hpk : p = k := by omega
+              subst hpk; exfalso; omega
+          · intro h p h1 h2 hp h3 h4 h5
+            exact h p (by omega) (by omega) hp h3 h4 h5
+        · simp only [Bool.or_eq_true, decide_eq_true_eq, hthr, hgt, not_or,
+            Nat.not_lt] at hc
+          rw [if_neg (by simp [hthr, hgt]; omega)]
+          by_cases hreal : noPushBefore cd k 32 = true
+          · rw [if_pos hreal]
+            constructor
+            · intro hf; cases hf
+            · intro h
+              rw [h k (by omega) (by omega) hk (by omega) (by omega) (by omega)] at hreal
+              exact hreal
+          · rw [if_neg hreal, ih m hm]
+            constructor
+            · intro h p h1 h2 hp h3 h4 h5
+              rcases Nat.lt_or_ge p k with hlt | hge
+              · exact h p (by omega) hlt hp h3 h4 h5
+              · have hpk : p = k := by omega
+                subst hpk; simpa using hreal
+            · intro h p h1 h2 hp h3 h4 h5
+              exact h p (by omega) (by omega) hp h3 h4 h5
+      · rw [dif_neg hk, ih m hm]
+        constructor
+        · intro h p h1 h2 hp h3 h4 h5
+          rcases Nat.lt_or_ge p k with hlt | hge
+          · exact h p (by omega) hlt hp h3 h4 h5
+          · exact (hk (by omega)).elim
+        · intro h p h1 h2 hp h3 h4 h5
+          exact h p (by omega) (by omega) hp h3 h4 h5
+
+/-- **The transport lemma.**  If `k` is a position no `PUSH` immediate covers,
+and `k` opens one complete instruction of span `s`, then the position just past
+that instruction is again covered by no `PUSH` immediate.
+
+The hypothesis `hinst` is what "one complete instruction of span `s` at `k`"
+means at the byte level: either `cd[k]` is one of `PUSH1 … PUSH32` and `s` is
+its opcode plus immediate, or `cd[k]` takes no immediate and `s` is 1.  A
+position past the end of `cd` carries no constraint at all -- Jaune reads it as
+`STOP` and nothing can be pushed from there. -/
+theorem noPushBefore_add {cd : ByteArray} {k s : Nat}
+    (hinst : ∀ (hk : k < cd.size),
+      (96 ≤ cd[k].toNat ∧ cd[k].toNat ≤ 127 ∧ s = cd[k].toNat - 94) ∨
+      ((cd[k].toNat < 96 ∨ 127 < cd[k].toNat) ∧ s = 1))
+    (hb : noPushBefore cd k 32 = true) :
+    noPushBefore cd (k + s) 32 = true := by
+  rw [noPushBefore_eq_true_iff cd (k + s) 32 (le_refl 32)]
+  intro p h1 h2 hp h3 h4 h5
+  rcases Nat.lt_trichotomy p k with hlt | heq | hgt
+  · exact (noPushBefore_eq_true_iff cd k 32 (le_refl 32)).mp hb p
+      (by omega) hlt hp h3 h4 (by omega)
+  · subst heq
+    rcases hinst hp with ⟨_, _, hs⟩ | ⟨_, hs⟩ <;> exfalso <;> omega
+  · have hk : k < cd.size := by omega
+    rcases hinst hk with ⟨hlo, hhi, hs⟩ | ⟨_, hs⟩
+    · by_cases hq : noPushBefore cd p 32 = true
+      · exfalso
+        have h := (noPushBefore_eq_true_iff cd p 32 (le_refl 32)).mp hq k
+          (by omega) hgt hk hlo hhi (by omega)
+        rw [h] at hb; cases hb
+      · simpa using hq
+    · exfalso; omega
+
 end Blanc
