@@ -19,7 +19,7 @@
 #
 # --no-build skips `lake build jaune/jaune` and requires the runner binary to
 # already exist (permitted only after a successful build at the same source
-# commit, per ~/jaune/scripts/GATES.md).
+# commit, per scripts/GATES.md).
 #
 # CLI contract: exit 0 if and only if the runtime byte-equality gate passes
 # AND every fixture PASSes. Output ends with one verdict line per fixture
