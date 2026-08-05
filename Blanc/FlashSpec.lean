@@ -1124,7 +1124,7 @@ theorem of_flashLoanFromCall {sevm : Sevm} {sc r : Devm} {amount : B256}
   · -- the call pushed `0` : the success guard refutes it
     exfalso
     rcases of_run_next h_run with ⟨s1, r_iz, h_run⟩
-    have hp1 := prefix_of_iszero r_iz h_fail
+    have hp1 := prefix_of_iszero r_iz h_fail.1
     rcases of_run_branch_rev h_run with ⟨s2, hpb2, -⟩
     have hps2 := hpb2.stack
     simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hps2

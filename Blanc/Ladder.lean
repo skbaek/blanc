@@ -1075,6 +1075,17 @@ lemma accessDelegation_state {devm : Devm} {adr : Adr} :
   dsimp only [accessDelegation]
   cases getDelegatedCodeAddress (devm.state.getCode adr) <;> rfl
 
+/-- Resolving a delegation designator only records an access; it touches the
+transient store no more than it touches the persistent one.  The
+`transientStorage` companion of `accessDelegation_state`, needed by any caller
+that wants the *world*, not just the state, carried across the `CALL`
+step's delegation resolution. -/
+lemma accessDelegation_transientStorage {devm : Devm} {adr : Adr} :
+    (accessDelegation devm adr).2.2.2.2.transientStorage
+      = devm.transientStorage := by
+  dsimp only [accessDelegation]
+  cases getDelegatedCodeAddress (devm.state.getCode adr) <;> rfl
+
 lemma accessDelegation_stack {devm : Devm} {adr : Adr} :
     (accessDelegation devm adr).2.2.2.2.stack = devm.stack := by
   dsimp only [accessDelegation]
@@ -1266,6 +1277,36 @@ lemma Resume.call_memory {parent child : Devm} {oi os : Nat} {sf : Devm}
   · exact key (incorporateChildOnError parent child child.output) rfl 0 h
   · exact key (incorporateChildOnSuccess parent child child.output) rfl 1 h
 
+/-- The `transientStorage` companion of `Resume.call_state`: on both settled
+paths the CALL-family return installs the child's transient store alongside
+its state, and neither the status push nor the output write touches it.
+
+Both `incorporateChildOnError` and `incorporateChildOnSuccess` set
+`transientStorage := child.transientStorage`, so the two arms are the same
+argument, exactly as in `Resume.call_state`. -/
+lemma Resume.call_transientStorage {parent child : Devm} {oi os : Nat}
+    {sf : Devm} (h : (Resume.call parent oi os).run (.ok child) = .ok sf) :
+    sf.transientStorage = child.transientStorage := by
+  have key : ∀ d : Devm, d.transientStorage = child.transientStorage →
+      ∀ v : B256,
+      (Devm.push v d >>= fun d' =>
+        (.ok (d'.memWrite oi (child.output.take os)) : Execution)) = .ok sf →
+      sf.transientStorage = child.transientStorage := by
+    intro d hd v hh
+    rcases hp : Devm.push v d with e | evm2 <;> rw [hp] at hh
+    · cases hh
+    · injection hh with hh
+      subst hh
+      have h_push := (Devm.push_of_push hp).transientStorage
+      show (evm2.memWrite oi (child.output.take os)).transientStorage = _
+      rw [← (Devm.memWrite_instructionFrame evm2 oi
+        (child.output.take os)).transientStorage, ← h_push, hd]
+  unfold Resume.run liftToExecution at h
+  dsimp only [bind, Except.bind] at h
+  split at h
+  · exact key (incorporateChildOnError parent child child.output) rfl 0 h
+  · exact key (incorporateChildOnSuccess parent child child.output) rfl 1 h
+
 /-- A gas charge that returned `.ok` was affordable. -/
 lemma chargeGas_le {cost : Nat} {devm devm' : Devm}
     (h : chargeGas cost devm = .ok devm') : cost ≤ devm.gasLeft := by
@@ -1381,9 +1422,27 @@ lemma of_run_ret_val {fs : List Func} {sevm : Sevm} {s r : Devm} {i n : B256} {x
 
 /-- **The value-carrying `CALL` inversion.**  A successful `call` step whose
 seven operands are known either pushed the failure flag `0` — the depth guard,
-the balance guard, or a child frame that failed, rollback included — or
-spawned a child frame whose message is pinned field by field, and resumed from
-exactly that child with the flag `1`.
+the balance guard, or a child frame that failed, rollback included — **and left
+the caller's world exactly as it found it** — or spawned a child frame whose
+message is pinned field by field, and resumed from exactly that child with the
+flag `1`.
+
+**What the first disjunct pins, and whose frame it names.**  Beside the pushed
+flag it now carries `Devm.WorldEq s sf`: the *caller's* state and transient
+storage at resumption are the ones it entered the `CALL` with.  This is a
+frame-level statement about `s`, the caller, and it says nothing whatever about
+the transaction: a caller that catches this failure may go on to succeed, and a
+caller that does not may revert its own frame afterwards for its own reasons.
+It also names no error kind — the three branches that reach it are the balance
+guard, the depth guard and a child frame that settled with *some* error, and
+which one occurred is deliberately not recoverable from the conclusion.  In the
+third branch the world equation is the child frame's rollback
+(`ProcessMessage.rollback_of_error`) composed with the resumption's world
+installation; in the first two no frame ever opened, so nothing could have been
+written.
+
+Nothing here asserts that a `CALL` ever fails: the disjunct is reached only
+from a hypothesised run.
 
 What the second disjunct pins, clause by clause: `parent` is the caller's own
 frame after the seven pops, with its stack residue, state and memory image
@@ -1405,7 +1464,7 @@ lemma of_run_call_val {sevm : Sevm} {s sf : Devm} {g c v ii is oi os : B256}
     {xs : Stack}
     (hp : (g :: c :: v :: ii :: is :: oi :: os :: xs) <<+ s.stack)
     (h_run : Ninst.Run sevm s Ninst.call sf) :
-    ((0 : B256) :: xs <<+ sf.stack) ∨
+    (((0 : B256) :: xs <<+ sf.stack) ∧ Devm.WorldEq s sf) ∨
     ∃ (parent child : Devm) (xl : Xlot) (dp : Bool) (code : ByteArray)
       (avail : Nat),
       s.stack = g :: c :: v :: ii :: is :: oi :: os :: parent.stack ∧
@@ -1521,6 +1580,11 @@ lemma of_run_call_val {sevm : Sevm} {s sf : Devm} {g c v ii is oi os : B256}
   have h_mem7 : s.memory = devm7.memory :=
     (f1.memory).trans ((f2.memory).trans ((f3.memory).trans ((f4.memory).trans
       ((f5.memory).trans ((f6.memory).trans f7.memory)))))
+  have h_tra7 : s.transientStorage = devm7.transientStorage :=
+    (f1.transientStorage).trans ((f2.transientStorage).trans
+      ((f3.transientStorage).trans ((f4.transientStorage).trans
+        ((f5.transientStorage).trans
+          ((f6.transientStorage).trans f7.transientStorage)))))
   clear e1 e2 e3 e4 e5 e6 e7 f1 f2 f3 f4 f5 f6 f7
   clear eq1 eq2 eq3 eq4 eq5 eq6 eq7 h_pop2
   -- delegation resolution
@@ -1541,6 +1605,11 @@ lemma of_run_call_val {sevm : Sevm} {s sf : Devm} {g c v ii is oi os : B256}
     have h := congrArg (fun q => (q.2.2.2.2 : Devm).memory) hp11
     dsimp at h
     rw [← h, accessDelegation_memory]
+    rfl
+  have h_tra9 : devm9.transientStorage = devm7.transientStorage := by
+    have h := congrArg (fun q => (q.2.2.2.2 : Devm).transientStorage) hp11
+    dsimp at h
+    rw [← h, accessDelegation_transientStorage]
     rfl
   -- the code the child will run, and the delegation disjunction
   have h_gc7 : (addAccessedAddress devm7 c.toAdr).state.getCode c.toAdr
@@ -1573,6 +1642,8 @@ lemma of_run_call_val {sevm : Sevm} {s sf : Devm} {g c v ii is oi os : B256}
   have h_st10 : devm9.state = devm10.state := (Devm.burn_of_chargeGas eq16).state
   have h_stk10 : devm9.stack = devm10.stack := (Devm.burn_of_chargeGas eq16).stack
   have h_mem10 : devm9.memory = devm10.memory := (Devm.burn_of_chargeGas eq16).memory
+  have h_tra10 : devm9.transientStorage = devm10.transientStorage :=
+    (Devm.burn_of_chargeGas eq16).transientStorage
   -- static-context assertion
   split at h_run
   case h_1 => cases XStep.run_ofExcept_error h_run
@@ -1587,19 +1658,33 @@ lemma of_run_call_val {sevm : Sevm} {s sf : Devm} {g c v ii is oi os : B256}
     have h_ex := Except.ok.inj h_run.2
     rw [h_ex]
     have h_stk := (Devm.push_of_push eq20).stack
-    show ((0 : B256) :: xs)
-      <<+ ((devm12.withReturnData []).withGasLeft _).stack
-    show ((0 : B256) :: xs) <<+ devm12.stack
-    rw [h_stk]
-    show ((0 : B256) :: xs) <<+ (0 : B256) ::
-      (devm10.memExtends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).stack
-    have h_stk11 :
+    refine ⟨?_, ?_, ?_⟩
+    · show ((0 : B256) :: xs)
+        <<+ ((devm12.withReturnData []).withGasLeft _).stack
+      show ((0 : B256) :: xs) <<+ devm12.stack
+      rw [h_stk]
+      show ((0 : B256) :: xs) <<+ (0 : B256) ::
         (devm10.memExtends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).stack
-          = devm7.stack := by
-      show devm10.stack = devm7.stack
-      rw [← h_stk10, h_stk9]
-    rw [h_stk11]
-    exact pref_cons hp
+      have h_stk11 :
+          (devm10.memExtends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).stack
+            = devm7.stack := by
+        show devm10.stack = devm7.stack
+        rw [← h_stk10, h_stk9]
+      rw [h_stk11]
+      exact pref_cons hp
+    · -- no frame opened, so the state is the caller's own, seven pops later
+      show s.state = ((devm12.withReturnData []).withGasLeft _).state
+      show s.state = devm12.state
+      rw [← (Devm.push_of_push eq20).state]
+      show s.state = devm10.state
+      rw [← h_st10, h_st9, ← h_st7]
+    · -- and likewise the transient store
+      show s.transientStorage
+        = ((devm12.withReturnData []).withGasLeft _).transientStorage
+      show s.transientStorage = devm12.transientStorage
+      rw [← (Devm.push_of_push eq20).transientStorage]
+      show s.transientStorage = devm10.transientStorage
+      rw [← h_tra10, h_tra9, ← h_tra7]
   · -- balance is sufficient : the call goes through
     simp only [genericCall.step] at h_run
     split at h_run
@@ -1613,20 +1698,30 @@ lemma of_run_call_val {sevm : Sevm} {s sf : Devm} {g c v ii is oi os : B256}
       have h_ex := Except.ok.inj h_run.2
       rw [h_ex]
       have h_stk := (Devm.push_of_push h_push).stack
-      show ((0 : B256) :: xs) <<+ devm12.stack
-      rw [h_stk]
-      show ((0 : B256) :: xs) <<+ (0 : B256) ::
-        ((devm10.memExtends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).withReturnData
-          []).stack
-      show ((0 : B256) :: xs) <<+ (0 : B256) ::
-        (devm10.memExtends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).stack
-      have h_stk11 :
+      refine ⟨?_, ?_, ?_⟩
+      · show ((0 : B256) :: xs) <<+ devm12.stack
+        rw [h_stk]
+        show ((0 : B256) :: xs) <<+ (0 : B256) ::
+          ((devm10.memExtends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).withReturnData
+            []).stack
+        show ((0 : B256) :: xs) <<+ (0 : B256) ::
           (devm10.memExtends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).stack
-            = devm7.stack := by
-        show devm10.stack = devm7.stack
-        rw [← h_stk10, h_stk9]
-      rw [h_stk11]
-      exact pref_cons hp
+        have h_stk11 :
+            (devm10.memExtends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).stack
+              = devm7.stack := by
+          show devm10.stack = devm7.stack
+          rw [← h_stk10, h_stk9]
+        rw [h_stk11]
+        exact pref_cons hp
+      · -- the depth guard opened no frame either
+        show s.state = devm12.state
+        rw [← (Devm.push_of_push h_push).state]
+        show s.state = devm10.state
+        rw [← h_st10, h_st9, ← h_st7]
+      · show s.transientStorage = devm12.transientStorage
+        rw [← (Devm.push_of_push h_push).transientStorage]
+        show s.transientStorage = devm10.transientStorage
+        rw [← h_tra10, h_tra9, ← h_tra7]
     · -- the call is executed
       rename_i h_depth_ne
       simp only [XStep.Run] at h_run
@@ -1640,21 +1735,35 @@ lemma of_run_call_val {sevm : Sevm} {s sf : Devm} {g c v ii is oi os : B256}
             = devm7.stack := by
         show devm10.stack = devm7.stack
         rw [← h_stk10, h_stk9]
+      have h_st_par :
+          ((devm10.memExtends
+            [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).withReturnData
+            []).state = s.state := by
+        show devm10.state = s.state
+        rw [← h_st10, h_st9, ← h_st7]
+      have h_tra_par :
+          ((devm10.memExtends
+            [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).withReturnData
+            []).transientStorage = s.transientStorage := by
+        show devm10.transientStorage = s.transientStorage
+        rw [← h_tra10, h_tra9, ← h_tra7]
       by_cases herr : child.error.isSome
-      · -- the child failed : the failure flag is pushed on resumption
+      · -- the child failed : the failure flag is pushed on resumption, and the
+        -- child frame's own rollback has already undone everything it wrote
         left
-        have hsf := Resume.call_stack_flag h_split.symm
-        rw [if_pos herr] at hsf
-        rw [hsf, h_stk_par]
-        exact pref_cons hp
+        have h_roll : Devm.WorldEq child
+            ((devm10.memExtends
+              [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).withReturnData []) :=
+          ProcessMessage.rollback_of_error run_pm₀ herr
+        refine ⟨?_, ?_, ?_⟩
+        · have hsf := Resume.call_stack_flag h_split.symm
+          rw [if_pos herr] at hsf
+          rw [hsf, h_stk_par]
+          exact pref_cons hp
+        · rw [Resume.call_state h_split.symm, h_roll.1, h_st_par]
+        · rw [Resume.call_transientStorage h_split.symm, h_roll.2, h_tra_par]
       · -- the child succeeded : the boundary holds
         right
-        have h_st_par :
-            ((devm10.memExtends
-              [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).withReturnData
-              []).state = s.state := by
-          show devm10.state = s.state
-          rw [← h_st10, h_st9, ← h_st7]
         have h_mem_par :
             ((devm10.memExtends
               [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).withReturnData
