@@ -1180,12 +1180,405 @@ lemma exec_ok_of_handleError {exn : Execution} {evm' : Devm}
   | ok e =>
     simp only [executeCode.handleError] at h; rw [Except.ok.inj h]
 
+lemma accessDelegation_memory {devm : Devm} {adr : Adr} :
+    (accessDelegation devm adr).2.2.2.2.memory = devm.memory := by
+  dsimp only [accessDelegation]
+  cases getDelegatedCodeAddress (devm.state.getCode adr) <;> rfl
+
+/-- On the successful path the CALL-family return pushes `0` after a failed
+child and `1` after a clean one; incorporating the child and the output write
+leave the stack alone otherwise.  The flag-carrying refinement of
+`Resume.call_stack`, for a caller whose next instructions branch on the call's
+success. -/
+lemma Resume.call_stack_flag {parent child : Devm} {oi os : Nat} {sf : Devm}
+    (h : (Resume.call parent oi os).run (.ok child) = .ok sf) :
+    sf.stack = (if child.error.isSome then (0 : B256) else 1) :: parent.stack := by
+  have key : ∀ d : Devm, d.stack = parent.stack → ∀ v : B256,
+      (Devm.push v d >>= fun d' =>
+        (.ok (d'.memWrite oi (child.output.take os)) : Execution)) = .ok sf →
+      sf.stack = v :: parent.stack := by
+    intro d hd v hh
+    rcases hp : Devm.push v d with e | evm2 <;> rw [hp] at hh
+    · cases hh
+    · injection hh with hh
+      subst hh
+      have h_push := (Devm.push_of_push hp).stack
+      show evm2.stack = _
+      rw [h_push, hd]
+      rfl
+  unfold Resume.run liftToExecution at h
+  dsimp only [bind, Except.bind] at h
+  split at h
+  · rename_i herr
+    rw [if_pos herr]
+    exact key (incorporateChildOnError parent child child.output) rfl 0 h
+  · rename_i herr
+    rw [if_neg herr]
+    exact key (incorporateChildOnSuccess parent child child.output) rfl 1 h
+
+/-- The CALL-family return path hands the parent exactly the child's output as
+its new returndata, on the failed and the clean path alike. -/
+lemma Resume.call_returnData {parent child : Devm} {oi os : Nat} {sf : Devm}
+    (h : (Resume.call parent oi os).run (.ok child) = .ok sf) :
+    sf.returnData = child.output := by
+  have key : ∀ d : Devm, d.returnData = child.output → ∀ v : B256,
+      (Devm.push v d >>= fun d' =>
+        (.ok (d'.memWrite oi (child.output.take os)) : Execution)) = .ok sf →
+      sf.returnData = child.output := by
+    intro d hd v hh
+    rcases hp : Devm.push v d with e | evm2 <;> rw [hp] at hh
+    · cases hh
+    · injection hh with hh
+      subst hh
+      have h_push := (Devm.push_of_push hp).returnData
+      show evm2.returnData = _
+      rw [← h_push, hd]
+  unfold Resume.run liftToExecution at h
+  dsimp only [bind, Except.bind] at h
+  split at h
+  · exact key (incorporateChildOnError parent child child.output) rfl 0 h
+  · exact key (incorporateChildOnSuccess parent child child.output) rfl 1 h
+
+/-- A gas charge that returned `.ok` was affordable. -/
+lemma chargeGas_le {cost : Nat} {devm devm' : Devm}
+    (h : chargeGas cost devm = .ok devm') : cost ≤ devm.gasLeft := by
+  rw [chargeGas_def] at h
+  split at h
+  · cases h
+  · rename_i gas heq
+    unfold safeSub at heq
+    by_cases hc : cost ≤ devm.gasLeft
+    · exact hc
+    · rw [if_neg hc] at heq
+      cases heq
+
+/-- When the CALL-family gas charge went through, the stipend the child was
+granted is EIP-150's: the minimum of the request and the 63/64 remainder of
+what the caller had, plus the value stipend.  The other `calculateMsgCallGas`
+branch quotes a cost the charge cannot afford, so it never coexists with a
+successful charge. -/
+lemma calculateMsgCallGas_stipend {value gas gasLeft mem extra : Nat}
+    (h : (calculateMsgCallGas value gas gasLeft mem extra).1 + mem ≤ gasLeft) :
+    ∃ avail, (calculateMsgCallGas value gas gasLeft mem extra).2
+      = min gas (except64th avail) + (if value = 0 then 0 else gCallStipend) := by
+  unfold calculateMsgCallGas at h ⊢
+  by_cases hlow : gasLeft < extra + mem
+  · rw [if_pos hlow] at h
+    dsimp only [] at h
+    omega
+  · rw [if_neg hlow]
+    exact ⟨gasLeft - mem - extra, rfl⟩
+
+/-- **The value-carrying `CALL` inversion.**  A successful `call` step whose
+seven operands are known either pushed the failure flag `0` — the depth guard,
+the balance guard, or a child frame that failed, rollback included — or
+spawned a child frame whose message is pinned field by field, and resumed from
+exactly that child with the flag `1`.
+
+What the second disjunct pins, clause by clause: `parent` is the caller's own
+frame after the seven pops, with its stack residue, state and memory image
+intact; the callee is the popped word's 160-bit truncation; the calldata is
+the caller's memory window at the popped offsets, phrased as `Mem.read` so a
+caller holding a `Mem.Reads` image can rewrite it; the value is the popped
+word, and the gas is EIP-150's grant — `min` of the request and the 63/64
+remainder, never "all gas"; the code is the callee account's own unless that
+account is an EIP-7702 delegation designator, in which case it is the
+designated account's — the delegation case is *covered*, not excluded; the
+child ran to a settled result with no error, which excludes the in-frame
+rollback; and `sf` is the resumption from exactly that child.
+
+The statement is a disjunction rather than a postcondition because a `CALL`
+that never entered a frame also returns `.ok`: Blanc's compiled callers branch
+on the pushed flag, so a caller holding the success guard dismisses the first
+disjunct with it. -/
+lemma of_run_call_val {sevm : Sevm} {s sf : Devm} {g c v ii is oi os : B256}
+    {xs : Stack}
+    (hp : (g :: c :: v :: ii :: is :: oi :: os :: xs) <<+ s.stack)
+    (h_run : Ninst.Run sevm s Ninst.call sf) :
+    ((0 : B256) :: xs <<+ sf.stack) ∨
+    ∃ (parent child : Devm) (xl : Xlot) (dp : Bool) (code : ByteArray)
+      (avail : Nat),
+      s.stack = g :: c :: v :: ii :: is :: oi :: os :: parent.stack ∧
+      parent.state = s.state ∧
+      parent.memory
+        = s.memory.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)] ∧
+      ((getDelegatedCodeAddress (s.getCode c.toAdr) = none ∧
+          code = s.getCode c.toAdr ∧ dp = false) ∨
+        (∃ d, getDelegatedCodeAddress (s.getCode c.toAdr) = some d ∧
+          code = s.getCode d ∧ dp = true)) ∧
+      Xlot.Filled xl ∧
+      ProcessMessage
+        (callMsg sevm parent
+          (min g.toNat (except64th avail)
+            + (if v.toNat = 0 then 0 else gCallStipend))
+          v sevm.currentTarget c.toAdr c.toAdr true false
+          ((s.memory.read ii.toNat is.toNat).1) code dp)
+        xl (.ok child) ∧
+      child.error.isSome = false ∧
+      (Resume.call parent oi.toNat os.toNat).run (.ok child) = .ok sf ∧
+      sf.state = child.state ∧
+      sf.returnData = child.output ∧
+      sf.stack = (1 : B256) :: parent.stack := by
+  rcases h_run with ⟨xl, h_fill, pc, h_run⟩
+  simp only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.step,
+    Bind.bind, Except.bind, Except.assert] at h_run
+  -- pop gas
+  rcases eq1 : Devm.pop s with _ | ⟨gas1, devm1⟩ <;> simp only [eq1] at h_run
+  · cases XStep.run_ofExcept_error h_run
+  have f1 := Devm.pop_of_pop eq1
+  have e1 := f1.stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e1
+  rw [e1] at hp
+  have hv1 : g = gas1 := pref_head_unique hp (pref_append [gas1] devm1.stack)
+  subst hv1
+  replace hp := cons_pref_cons_inv hp
+  -- pop callee
+  rcases eq2 : Devm.popToAdr devm1 with _ | ⟨callee, devm2⟩ <;>
+    simp only [eq2] at h_run
+  · cases XStep.run_ofExcept_error h_run
+  rcases Devm.pop_of_popToAdr eq2 with ⟨x2, hx2, h_pop2⟩
+  have f2 := Devm.pop_of_pop h_pop2
+  have e2 := f2.stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e2
+  rw [e2] at hp
+  have hv2 : c = x2 := pref_head_unique hp (pref_append [x2] devm2.stack)
+  subst hv2
+  subst hx2
+  replace hp := cons_pref_cons_inv hp
+  -- pop value
+  rcases eq3 : Devm.pop devm2 with _ | ⟨value, devm3⟩ <;> simp only [eq3] at h_run
+  · cases XStep.run_ofExcept_error h_run
+  have f3 := Devm.pop_of_pop eq3
+  have e3 := f3.stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e3
+  rw [e3] at hp
+  have hv3 : v = value := pref_head_unique hp (pref_append [value] devm3.stack)
+  subst hv3
+  replace hp := cons_pref_cons_inv hp
+  -- pop the four indices/sizes, keeping each popped word's `toNat`
+  rcases eq4 : Devm.popToNat devm3 with _ | ⟨inputIndex, devm4⟩ <;>
+    simp only [eq4] at h_run
+  · cases XStep.run_ofExcept_error h_run
+  rcases Devm.pop_of_popToNat_val eq4 with ⟨x4, f4, hk4⟩
+  have e4 := f4.stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e4
+  rw [e4] at hp
+  have hv4 : ii = x4 := pref_head_unique hp (pref_append [x4] devm4.stack)
+  subst hv4
+  subst hk4
+  replace hp := cons_pref_cons_inv hp
+  rcases eq5 : Devm.popToNat devm4 with _ | ⟨inputSize, devm5⟩ <;>
+    simp only [eq5] at h_run
+  · cases XStep.run_ofExcept_error h_run
+  rcases Devm.pop_of_popToNat_val eq5 with ⟨x5, f5, hk5⟩
+  have e5 := f5.stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e5
+  rw [e5] at hp
+  have hv5 : is = x5 := pref_head_unique hp (pref_append [x5] devm5.stack)
+  subst hv5
+  subst hk5
+  replace hp := cons_pref_cons_inv hp
+  rcases eq6 : Devm.popToNat devm5 with _ | ⟨outputIndex, devm6⟩ <;>
+    simp only [eq6] at h_run
+  · cases XStep.run_ofExcept_error h_run
+  rcases Devm.pop_of_popToNat_val eq6 with ⟨x6, f6, hk6⟩
+  have e6 := f6.stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e6
+  rw [e6] at hp
+  have hv6 : oi = x6 := pref_head_unique hp (pref_append [x6] devm6.stack)
+  subst hv6
+  subst hk6
+  replace hp := cons_pref_cons_inv hp
+  rcases eq7 : Devm.popToNat devm6 with _ | ⟨outputSize, devm7⟩ <;>
+    simp only [eq7] at h_run
+  · cases XStep.run_ofExcept_error h_run
+  rcases Devm.pop_of_popToNat_val eq7 with ⟨x7, f7, hk7⟩
+  have e7 := f7.stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e7
+  rw [e7] at hp
+  have hv7 : os = x7 := pref_head_unique hp (pref_append [x7] devm7.stack)
+  subst hv7
+  subst hk7
+  replace hp := cons_pref_cons_inv hp
+  -- the seven pops: exact stack decomposition, state and memory carried
+  have e_stack : s.stack
+      = g :: c :: v :: ii :: is :: oi :: os :: devm7.stack := by
+    rw [e1, e2, e3, e4, e5, e6, e7]
+  have h_st7 : s.state = devm7.state :=
+    (f1.state).trans ((f2.state).trans ((f3.state).trans ((f4.state).trans
+      ((f5.state).trans ((f6.state).trans f7.state)))))
+  have h_mem7 : s.memory = devm7.memory :=
+    (f1.memory).trans ((f2.memory).trans ((f3.memory).trans ((f4.memory).trans
+      ((f5.memory).trans ((f6.memory).trans f7.memory)))))
+  clear e1 e2 e3 e4 e5 e6 e7 f1 f2 f3 f4 f5 f6 f7
+  clear eq1 eq2 eq3 eq4 eq5 eq6 eq7 h_pop2
+  -- delegation resolution
+  rcases hp11 : accessDelegation (addAccessedAddress devm7 c.toAdr) c.toAdr with
+    ⟨dp, na, code0, dagc, devm9⟩
+  simp only [hp11] at h_run
+  have h_st9 : devm9.state = devm7.state := by
+    have h := congrArg (fun q => (q.2.2.2.2 : Devm).state) hp11
+    dsimp at h
+    rw [← h, accessDelegation_state]
+    rfl
+  have h_stk9 : devm9.stack = devm7.stack := by
+    have h := congrArg (fun q => (q.2.2.2.2 : Devm).stack) hp11
+    dsimp at h
+    rw [← h, accessDelegation_stack]
+    rfl
+  have h_mem9 : devm9.memory = devm7.memory := by
+    have h := congrArg (fun q => (q.2.2.2.2 : Devm).memory) hp11
+    dsimp at h
+    rw [← h, accessDelegation_memory]
+    rfl
+  -- the code the child will run, and the delegation disjunction
+  have h_gc7 : (addAccessedAddress devm7 c.toAdr).state.getCode c.toAdr
+      = s.getCode c.toAdr := by
+    show devm7.state.getCode c.toAdr = s.getCode c.toAdr
+    rw [← h_st7]
+    rfl
+  have h_del :
+      (getDelegatedCodeAddress (s.getCode c.toAdr) = none ∧
+        code0 = s.getCode c.toAdr ∧ dp = false) ∨
+      (∃ d, getDelegatedCodeAddress (s.getCode c.toAdr) = some d ∧
+        code0 = s.getCode d ∧ dp = true) := by
+    have h_acc := hp11
+    dsimp only [accessDelegation] at h_acc
+    rw [h_gc7] at h_acc
+    rcases hdel : getDelegatedCodeAddress (s.getCode c.toAdr) with _ | d <;>
+      rw [hdel] at h_acc <;>
+      simp only [Prod.mk.injEq] at h_acc
+    · exact Or.inl ⟨rfl, h_acc.2.2.1.symm, h_acc.1.symm⟩
+    · refine Or.inr ⟨d, rfl, ?_, h_acc.1.symm⟩
+      rw [← h_acc.2.2.1]
+      show (addAccessedAddress devm7 c.toAdr).state.getCode d = s.getCode d
+      show devm7.state.getCode d = s.getCode d
+      rw [← h_st7]
+      rfl
+  -- charge the call gas
+  split at h_run
+  · cases XStep.run_ofExcept_error h_run
+  rename_i devm10 eq16
+  have h_st10 : devm9.state = devm10.state := (Devm.burn_of_chargeGas eq16).state
+  have h_stk10 : devm9.stack = devm10.stack := (Devm.burn_of_chargeGas eq16).stack
+  have h_mem10 : devm9.memory = devm10.memory := (Devm.burn_of_chargeGas eq16).memory
+  -- static-context assertion
+  split at h_run
+  case h_1 => cases XStep.run_ofExcept_error h_run
+  case h_2 =>
+  split at h_run
+  · -- insufficient balance : the failure flag is pushed, no frame opens
+    split at h_run
+    case h_1 => cases XStep.run_ofExcept_error h_run
+    case h_2 =>
+    rename_i devm12 eq20
+    left
+    have h_ex := Except.ok.inj h_run.2
+    rw [h_ex]
+    have h_stk := (Devm.push_of_push eq20).stack
+    show ((0 : B256) :: xs)
+      <<+ ((devm12.withReturnData []).withGasLeft _).stack
+    show ((0 : B256) :: xs) <<+ devm12.stack
+    rw [h_stk]
+    show ((0 : B256) :: xs) <<+ (0 : B256) ::
+      (devm10.memExtends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).stack
+    have h_stk11 :
+        (devm10.memExtends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).stack
+          = devm7.stack := by
+      show devm10.stack = devm7.stack
+      rw [← h_stk10, h_stk9]
+    rw [h_stk11]
+    exact pref_cons hp
+  · -- balance is sufficient : the call goes through
+    simp only [genericCall.step] at h_run
+    split at h_run
+    · -- depth limit reached : the failure flag is pushed, no frame opens
+      simp only [Bind.bind, Except.bind] at h_run
+      split at h_run
+      case h_1 => cases XStep.run_ofExcept_error h_run
+      case h_2 =>
+      rename_i devm12 h_push
+      left
+      have h_ex := Except.ok.inj h_run.2
+      rw [h_ex]
+      have h_stk := (Devm.push_of_push h_push).stack
+      show ((0 : B256) :: xs) <<+ devm12.stack
+      rw [h_stk]
+      show ((0 : B256) :: xs) <<+ (0 : B256) ::
+        ((devm10.memExtends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).withReturnData
+          []).stack
+      show ((0 : B256) :: xs) <<+ (0 : B256) ::
+        (devm10.memExtends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).stack
+      have h_stk11 :
+          (devm10.memExtends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).stack
+            = devm7.stack := by
+        show devm10.stack = devm7.stack
+        rw [← h_stk10, h_stk9]
+      rw [h_stk11]
+      exact pref_cons hp
+    · -- the call is executed
+      rename_i h_depth_ne
+      simp only [XStep.Run] at h_run
+      rcases h_run with ⟨ex', run_pm₀, h_split⟩
+      rcases ex' with err' | child
+      · cases Resume.call_run_error h_split.symm
+      -- the parent-side residue
+      have h_stk_par :
+          ((devm10.memExtends
+            [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).withReturnData []).stack
+            = devm7.stack := by
+        show devm10.stack = devm7.stack
+        rw [← h_stk10, h_stk9]
+      by_cases herr : child.error.isSome
+      · -- the child failed : the failure flag is pushed on resumption
+        left
+        have hsf := Resume.call_stack_flag h_split.symm
+        rw [if_pos herr] at hsf
+        rw [hsf, h_stk_par]
+        exact pref_cons hp
+      · -- the child succeeded : the boundary holds
+        right
+        have h_st_par :
+            ((devm10.memExtends
+              [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).withReturnData
+              []).state = s.state := by
+          show devm10.state = s.state
+          rw [← h_st10, h_st9, ← h_st7]
+        have h_mem_par :
+            ((devm10.memExtends
+              [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).withReturnData
+              []).memory
+              = s.memory.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)] := by
+          show (devm10.memory).extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]
+            = s.memory.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]
+          rw [← h_mem10, h_mem9, ← h_mem7]
+        -- EIP-150 : the charge went through, so the stipend took the 63/64 form
+        obtain ⟨avail, hstip⟩ := calculateMsgCallGas_stipend (chargeGas_le eq16)
+        rw [hstip] at run_pm₀
+        -- the calldata is the caller's memory window
+        have h_cd : Array.sliceD
+            ((devm10.memExtends
+              [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).withReturnData
+              []).memory.data ii.toNat is.toNat 0
+            = (s.memory.read ii.toNat is.toNat).1 := by
+          rw [h_mem_par]
+          rfl
+        rw [h_cd] at run_pm₀
+        refine ⟨(devm10.memExtends
+            [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).withReturnData [],
+          child, xl, dp, code0, avail,
+          by rw [e_stack, h_stk_par], h_st_par, h_mem_par, h_del, h_fill,
+          run_pm₀, by simpa using herr, h_split.symm,
+          Resume.call_state h_split.symm, Resume.call_returnData h_split.symm,
+          by rw [Resume.call_stack_flag h_split.symm, if_neg herr]⟩
+
 /-- The deeper-frame induction hypothesis, as the ladder's consumers use it:
 every successful sub-execution of `p` at `ca` strictly below depth `k` takes
 `σ` to `ρ`.  Generic in the program and in both predicates. -/
 def Exec.InvDepth (k : Nat) (ca : Adr) (p : Prog)
   (σ : Sevm → Devm → Prop) (ρ : Sevm → Devm → Prop) : Prop :=
   ForallDeeperAt k ca p (λ _ sevm pre exn _ => σ sevm pre → ifOk (ρ sevm) exn)
+
 
 /-! ## The contract-generic ladder -/
 
