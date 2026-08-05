@@ -1,5 +1,6 @@
 import Blanc.Solvent
 import Blanc.Conserved
+import Blanc.FlashSpec
 import Blanc.WethCode
 import Blanc.FmintCode
 
@@ -17,5 +18,13 @@ import Blanc.FmintCode
 #print axioms Blanc.stateTransitionUsing_preserves_conserved
 #print axioms Blanc.chainUsing_preserves_conserved
 #print axioms Blanc.addBlockToChainUsing_preserves_conserved
+#print axioms Blanc.Fmint.fmint_flashLoan_spec
+#print axioms Blanc.Fmint.no_success_of_callback_never_magic
+#print axioms Blanc.Fmint.no_success_of_callback_never_returns_word
+#print axioms Blanc.Fmint.no_success_of_token_ne_self
+#print axioms Blanc.Fmint.no_success_of_receiver_not_address
+#print axioms Blanc.Fmint.no_success_of_amount_over_maxFlashLoan
+#print axioms Blanc.Fmint.no_success_of_allowance_below_amount
+#print axioms Blanc.Fmint.no_success_of_balance_below_amount
 #print axioms Blanc.wethCode_compile
 #print axioms Blanc.fmintCode_compile

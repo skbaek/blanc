@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Blanc verification gate (REFACTOR.md Phase 0, step 0.3): `lake build`,
-# then an axiom audit of the sixteen audited top theorems via
+# then an axiom audit of the twenty-four audited top theorems via
 # scripts/AxiomCheck.lean — WETH's seven solvency theorems, fmint's seven
-# conservation theorems, and the two compile witnesses.
+# conservation theorems, fmint's `flashLoan` success spec and its seven
+# no-success corollaries, and the two compile witnesses.
 #
 # `wethCode_compile` is what keeps the solvency theorems' `Prog.compile weth`
 # hypothesis from being vacuous. `fmintCode_compile` is the same equation for
@@ -12,6 +13,14 @@
 # pinned, non-vacuous equation. Note what the fmint rows do and do not say:
 # they are *conservation* — the equality `totalSupply = Σ balances` at every
 # observable point — not solvency and not liveness.
+#
+# The eight `flashLoan` rows added by Arc C are **partial correctness, not
+# liveness**: `fmint_flashLoan_spec` factors a successful top-level `Exec` that
+# is given as a hypothesis, and the seven `no_success_of_*` rows rule executions
+# out. Nothing in them says a `flashLoan` call ever succeeds. They are also
+# restricted to canonically encoded calldata and premised on frame freshness —
+# `Blanc/FlashSpec.lean`'s headline docstring is the authority on their scope —
+# and none of them is a state-restoration claim.
 #
 # Each row carries its OWN pinned expected axiom set (see ROWS below), and a
 # theorem's axiom closure must equal its row's set exactly, order-insensitive.
@@ -74,6 +83,14 @@ Blanc.addBlockToChain_preserves_conserved|$STANDARD
 Blanc.stateTransitionUsing_preserves_conserved|$STANDARD
 Blanc.chainUsing_preserves_conserved|$STANDARD
 Blanc.addBlockToChainUsing_preserves_conserved|$STANDARD
+Blanc.Fmint.fmint_flashLoan_spec|$STANDARD
+Blanc.Fmint.no_success_of_callback_never_magic|$STANDARD
+Blanc.Fmint.no_success_of_callback_never_returns_word|$STANDARD
+Blanc.Fmint.no_success_of_token_ne_self|$STANDARD
+Blanc.Fmint.no_success_of_receiver_not_address|$STANDARD
+Blanc.Fmint.no_success_of_amount_over_maxFlashLoan|$STANDARD
+Blanc.Fmint.no_success_of_allowance_below_amount|$STANDARD
+Blanc.Fmint.no_success_of_balance_below_amount|$STANDARD
 Blanc.wethCode_compile|$STANDARD
 Blanc.fmintCode_compile|$STANDARD"
 # Secondary net only: the exact-set comparison below is the primary check;

@@ -5434,6 +5434,163 @@ instance : Ninst.Hinv Devm.state (Ninst.reg Rinst.gt) := ⟨by
         exact hs1.trans (hs2.trans hs3)
 ⟩
 
+/-! ### What each instruction does to memory
+
+`Devm.memory` is preserved outright by every instruction except the three that
+touch it, so the `line_inv` machinery carries a memory image across whole
+`Line`s once these `Hinv` instances exist.  The three exceptions get
+value-carrying inversions of their own, further down beside the `Mem` write
+algebra.
+
+The block sits *here*, beside the `Devm.state` / `Devm.getStor` / `Devm.getCode`
+instances rather than with the `Mem` material, because instance resolution is
+position-sensitive within a module and dispatch reachability — immediately below
+— needs a memory image carried across the dispatcher's scratch instructions. -/
+
+syntax "show_hinv_mem_binary" : tactic
+macro_rules
+  | `(tactic| show_hinv_mem_binary) =>
+    `(tactic|
+        refine ⟨?_⟩ <;>
+        intro pc sevm pre post run <;>
+        simp only [Rinst.run, Rinst.runCore] at run <;>
+        exact (Devm.diffBurn_of_applyBinary run).choose_spec.choose_spec.memory)
+
+syntax "show_hinv_mem_unary" : tactic
+macro_rules
+  | `(tactic| show_hinv_mem_unary) =>
+    `(tactic|
+        refine ⟨?_⟩ <;>
+        intro pc sevm pre post run <;>
+        simp only [Rinst.run, Rinst.runCore] at run <;>
+        exact (Devm.diffBurn_of_applyUnary run).choose_spec.memory)
+
+syntax "show_hinv_mem_push" : tactic
+macro_rules
+  | `(tactic| show_hinv_mem_push) =>
+    `(tactic|
+        refine ⟨?_⟩ <;>
+        intro pc sevm pre post run <;>
+        simp only [Rinst.run, Rinst.runCore] at run <;>
+        exact (Devm.pushBurn_of_pushItem run).memory)
+
+instance : Rinst.Hinv Devm.memory Rinst.add := by show_hinv_mem_binary
+instance : Rinst.Hinv Devm.memory Rinst.sub := by show_hinv_mem_binary
+instance : Rinst.Hinv Devm.memory Rinst.lt := by show_hinv_mem_binary
+instance : Rinst.Hinv Devm.memory Rinst.gt := by show_hinv_mem_binary
+instance : Rinst.Hinv Devm.memory Rinst.eq := by show_hinv_mem_binary
+instance : Rinst.Hinv Devm.memory Rinst.and := by show_hinv_mem_binary
+instance : Rinst.Hinv Devm.memory Rinst.or := by show_hinv_mem_binary
+instance : Rinst.Hinv Devm.memory Rinst.xor := by show_hinv_mem_binary
+instance : Rinst.Hinv Devm.memory Rinst.shl := by show_hinv_mem_binary
+instance : Rinst.Hinv Devm.memory Rinst.shr := by show_hinv_mem_binary
+instance : Rinst.Hinv Devm.memory Rinst.not := by show_hinv_mem_unary
+instance : Rinst.Hinv Devm.memory Rinst.iszero := by show_hinv_mem_unary
+instance : Rinst.Hinv Devm.memory Rinst.address := by show_hinv_mem_push
+instance : Rinst.Hinv Devm.memory Rinst.caller := by show_hinv_mem_push
+instance : Rinst.Hinv Devm.memory Rinst.callvalue := by show_hinv_mem_push
+instance : Rinst.Hinv Devm.memory Rinst.retdatasize := by show_hinv_mem_push
+instance : Rinst.Hinv Devm.memory Rinst.calldatasize := by show_hinv_mem_push
+
+instance : Rinst.Hinv Devm.memory Rinst.pop := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨s₁, h1, h2⟩
+  simp only [Functor.mapRev, Functor.map, Except.map] at h1
+  rcases hp : Devm.pop pre with _ | ⟨x, s₂⟩ <;> simp [hp] at h1
+  subst h1
+  exact (Devm.popBurn_of_pop_of_burn (Devm.pop_of_pop hp)
+    (Devm.burn_of_chargeGas h2)).memory⟩
+
+instance : Rinst.Hinv Devm.memory Rinst.gas := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨s₁, h1, h2⟩
+  exact (Devm.pushBurn_of_burn_of_push (Devm.burn_of_chargeGas h1)
+    (Devm.push_of_push h2)).memory⟩
+
+instance {n} : Rinst.Hinv Devm.memory (Rinst.dup n) := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨s₁, h1, h2⟩
+  have hb := Devm.burn_of_chargeGas h1
+  split at h2
+  · cases h2
+  · exact (Devm.pushBurn_of_burn_of_push hb (Devm.push_of_push h2)).memory⟩
+
+instance {n} : Rinst.Hinv Devm.memory (Rinst.swap n) := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨s₁, h1, h2⟩
+  have hb := Devm.burn_of_chargeGas h1
+  split at h2
+  · cases h2
+  · injection h2 with eq
+    rw [hb.memory, ← eq]
+    rfl⟩
+
+instance : Rinst.Hinv Devm.memory Rinst.calldataload := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨⟨si, s₁⟩, h1, run₁⟩
+  rcases Except.bind_eq_ok run₁ with ⟨s₂, h2, run₂⟩
+  exact ((Devm.pop_of_pop h1).memory.trans
+    (Devm.burn_of_chargeGas h2).memory).trans (Devm.push_of_push run₂).memory⟩
+
+/-- `SLOAD` reads storage and touches nothing else.  Not covered by the routine
+macros above because the cold/warm split makes it two shapes rather than one. -/
+instance : Rinst.Hinv Devm.memory Rinst.sload := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨⟨key, s₁⟩, h1, run₁⟩
+  refine (Devm.pop_of_pop h1).memory.trans ?_
+  suffices H : ∀ (d : Devm) (c : Nat), s₁.memory = d.memory →
+      (chargeGas c d >>= fun y => Devm.push (Devm.getStorVal y sevm.currentTarget key) y)
+        = .ok post → s₁.memory = post.memory by
+    split at run₁
+    · exact H s₁ gasWarmAccess rfl run₁
+    · exact H (addAccessedStorageKey s₁ sevm.currentTarget key) gasColdSload rfl run₁
+  intro d c hm run'
+  rcases Except.bind_eq_ok run' with ⟨s₂, h2, run₂⟩
+  exact (hm.trans (Devm.burn_of_chargeGas h2).memory).trans (Devm.push_of_push run₂).memory⟩
+
+/-- `SSTORE` writes storage and touches nothing else.  The longest of these
+proofs only because the instruction has the most intermediate states: the
+access-list split, the refund counter, the gas charge and the dynamic assert
+each produce one, and every one of them leaves `Devm.memory` alone. -/
+instance : Rinst.Hinv Devm.memory Rinst.sstore := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨⟨x, s₁⟩, h1, run₁⟩
+  rcases Except.bind_eq_ok run₁ with ⟨⟨y, s₂⟩, h2, run₂⟩
+  rcases Except.bind_eq_ok run₂ with ⟨_, h3, run₃⟩
+  rcases Except.bind_eq_ok run₃ with ⟨⟨s₃, g₂⟩, h4, run₄⟩
+  rcases Except.bind_eq_ok run₄ with ⟨g₃, h5, run₅⟩
+  rcases Except.bind_eq_ok run₅ with ⟨s₄, h6, run₆⟩
+  rcases Except.bind_eq_ok run₆ with ⟨s₅, h7, run₇⟩
+  rcases Except.bind_eq_ok run₇ with ⟨_, h8, h9⟩
+  have m3 : s₂.memory = s₃.memory := by
+    injection h4 with eq
+    split at eq <;> (injection eq with eq _; subst eq; rfl)
+  have m4 : s₃.memory = s₄.memory := by
+    injection h6 with eq; rw [← eq]; rfl
+  injection h9 with eq
+  rw [← eq]
+  show pre.memory = s₅.memory
+  exact ((((Devm.pop_of_pop h1).memory.trans (Devm.pop_of_pop h2).memory).trans m3).trans
+    m4).trans (Devm.burn_of_chargeGas h7).memory⟩
+
+/-! The two `Ninst` constructors that are not `reg`, so that `line_inv` carries
+a memory image across a whole `Line` rather than stopping at the first `PUSH`.
+Their `Devm.getBal` / `Devm.getStor` / `Devm.getCode` / `Devm.state` siblings
+are above, beside the rest of the `Ninst.Hinv` API. -/
+
+instance {x} : Ninst.Hinv Devm.memory (Ninst.pushB256 x) :=
+  ⟨fun h => (Devm.pushBurn_of_run (Ninst.run_push_eq h)).memory⟩
+
+instance {xs} {p : xs.length ≤ 32} : Ninst.Hinv Devm.memory (Ninst.push xs p) :=
+  ⟨fun h => (Devm.pushBurn_of_run (Ninst.run_push_eq h)).memory⟩
+
 
 /-! ### Dispatch reachability
 
@@ -5468,14 +5625,16 @@ lemma popBurn_pref {w v : B256} {vs : Stack} {s s' : Devm}
   exact ⟨h_head, ⟨t, h_tail⟩⟩
 
 /-- Reachability at a leaf: the selector equality test passes, so the run is in
-the leaf's function, not the fallback.  The `s.state = s'.state` conjunct is
-what the dispatcher's scratch instructions preserve; gas is not tracked. -/
+the leaf's function, not the fallback.  The `s.state = s'.state` and
+`s.memory = s'.memory` conjuncts are what the dispatcher's scratch instructions
+preserve; gas is not tracked. -/
 lemma reach_of_dispatchWith_leaf {sig w : B256} {f p : Func}
     {c : List Func} {k : Nat} {e : Sevm} {s r : Devm} {ws : Stack}
     (h_mem : (sig, f) ∈ [(w, p)])
     (h_pfx : sig :: ws <<+ s.stack) :
     Func.Run c e s (dispatchWith k (DispatchTree.leaf w p)) r →
-    ∃ s', (ws <<+ s'.stack) ∧ s.state = s'.state ∧ Func.Run c e s' f r := by
+    ∃ s', (ws <<+ s'.stack) ∧ s.state = s'.state ∧ s.memory = s'.memory ∧
+      Func.Run c e s' f r := by
   have h_eq : (sig, f) = (w, p) := List.mem_singleton.mp h_mem
   injection h_eq with h_sig h_f
   subst h_sig; subst h_f
@@ -5485,10 +5644,12 @@ lemma reach_of_dispatchWith_leaf {sig w : B256} {f p : Func}
   rcases of_run_branch h₂ with ⟨s₂, h_pop, h_runf⟩ | ⟨v, s₂, s₃, h_ne, h_pop, h_burn, h_runf⟩
   · exact absurd (popBurn_pref h_pop h_pfx1).left B256.zero_ne_one
   · rcases popBurn_pref h_pop h_pfx1 with ⟨-, h_pfx2⟩
-    refine ⟨s₃, ?_, ?_, h_runf⟩
+    refine ⟨s₃, ?_, ?_, ?_, h_runf⟩
     · rw [← h_burn.stack]; exact h_pfx2
     · exact (Line.of_inv Devm.state (by line_inv) h₁).trans
         (h_pop.state.trans h_burn.state)
+    · exact (Line.of_inv Devm.memory (by line_inv) h₁).trans
+        (h_pop.memory.trans h_burn.memory)
 
 /-- Dispatch reachability over `DispatchTree.build`: a dispatcher run whose
 selector is an entry of the (sorted) list factors through that entry's
@@ -5503,7 +5664,8 @@ theorem reach_of_dispatchWith_build :
       (sig, f) ∈ xs →
       (sig :: ws <<+ s.stack) →
       Func.Run c e s (dispatchWith k (DispatchTree.build n xs)) r →
-      ∃ s', (ws <<+ s'.stack) ∧ s.state = s'.state ∧ Func.Run c e s' f r := by
+      ∃ s', (ws <<+ s'.stack) ∧ s.state = s'.state ∧ s.memory = s'.memory ∧
+        Func.Run c e s' f r := by
   intro n
   induction n with
   | zero =>
@@ -5576,9 +5738,10 @@ theorem reach_of_dispatchWith_build :
             omega
           · exact h_in
         rcases ih h_sorted_drop h_drop_len h_mem_drop h_pfx2 h_run'
-          with ⟨s', h_s', h_st, h_rf⟩
-        refine ⟨s', h_s', ?_, h_rf⟩
-        exact (Line.of_inv Devm.state (by line_inv) h₁).trans (h_pop.state.trans h_st)
+          with ⟨s', h_s', h_st, h_mm, h_rf⟩
+        refine ⟨s', h_s', ?_, ?_, h_rf⟩
+        · exact (Line.of_inv Devm.state (by line_inv) h₁).trans (h_pop.state.trans h_st)
+        · exact (Line.of_inv Devm.memory (by line_inv) h₁).trans (h_pop.memory.trans h_mm)
       · -- comparison word nonzero : `sig < z.fst`, the run went left; so is the selector
         rcases popBurn_pref h_pop h_pfx1 with ⟨h_flag, h_pfx2⟩
         have h_lt : sig < z.fst := by
@@ -5599,10 +5762,12 @@ theorem reach_of_dispatchWith_build :
             omega
         rw [h_burn.stack] at h_pfx2
         rcases ih h_sorted_take h_take_len h_mem_take h_pfx2 h_run'
-          with ⟨s', h_s', h_st, h_rf⟩
-        refine ⟨s', h_s', ?_, h_rf⟩
-        exact (Line.of_inv Devm.state (by line_inv) h₁).trans
-          (h_pop.state.trans (h_burn.state.trans h_st))
+          with ⟨s', h_s', h_st, h_mm, h_rf⟩
+        refine ⟨s', h_s', ?_, ?_, h_rf⟩
+        · exact (Line.of_inv Devm.state (by line_inv) h₁).trans
+            (h_pop.state.trans (h_burn.state.trans h_st))
+        · exact (Line.of_inv Devm.memory (by line_inv) h₁).trans
+            (h_pop.memory.trans (h_burn.memory.trans h_mm))
 
 /-- **Dispatch reachability.**  A `dispatchWith` run over a sorted function
 list, with selector `sig` on top of the stack at dispatcher entry, factors
@@ -5614,14 +5779,21 @@ for which `DispatchTree.sorted` is load-bearing: `sound_of_dispatch` dropped
 sortedness because a misordered list cannot make the dispatcher *unsound* — it
 makes an entry unreachable, which is precisely the defect this theorem rules
 out.  The run is a hypothesis: this factors an execution already in hand and
-asserts nothing about whether one exists. -/
+asserts nothing about whether one exists.
+
+Memory is carried too (`s.memory = s'.memory`): the dispatcher's scratch
+instructions are memory-silent, so a caller that knows what the frame's memory
+holds on entry still knows it at the entry to the selected function.  That is
+what lets a frame-freshness premise be stated where it belongs — at the frame's
+own initial state — rather than at an intermediate state no caller can name. -/
 theorem reach_of_dispatchWith {funcs : List (B256 × Func)} {sig : B256} {f : Func}
     {c : List Func} {k : Nat} {e : Sevm} {s r : Devm} {ws : Stack}
     (h_sorted : DispatchTree.sorted funcs = true)
     (h_mem : (sig, f) ∈ funcs)
     (h_pfx : sig :: ws <<+ s.stack)
     (h_run : Func.Run c e s (dispatchWith k (DispatchTree.ofSorted funcs)) r) :
-    ∃ s', (ws <<+ s'.stack) ∧ s.state = s'.state ∧ Func.Run c e s' f r :=
+    ∃ s', (ws <<+ s'.stack) ∧ s.state = s'.state ∧ s.memory = s'.memory ∧
+      Func.Run c e s' f r :=
   reach_of_dispatchWith_build h_sorted (Nat.le_succ _) h_mem h_pfx h_run
 
 
@@ -7442,6 +7614,18 @@ lemma B256.eq_max_of_not_eq_zero {x : B256} (h : ~~~ x = 0) : x = B256.max := by
 
 lemma B256.not_max : (~~~ (B256.max : B256)) = 0 := rfl
 
+/-- Every word is at most `B256.max`.  Small, but it is what makes "the
+allowance is below the amount" already say "the allowance is not the infinite
+one": the two arms of an `isMax` allowance test cannot both be escaped. -/
+lemma B256.le_max (x : B256) : x ≤ B256.max := by
+  rcases B256.le_or_gt x B256.max with h | h
+  · exact h
+  · exfalso
+    have h1 := B256.toNat_lt_toNat h
+    have h2 := B256.toNat_lt x
+    rw [show (B256.max : B256).toNat = 2 ^ 256 - 1 from rfl] at h1
+    omega
+
 /-- The whole overflow argument for a complement-bounded add: `y ≤ ~~~ x` says
 exactly that `x + y` does not overflow. -/
 lemma B256.nof_of_le_not {x y : B256} (h : y ≤ ~~~ x) : B256.Nof x y := by
@@ -7449,6 +7633,20 @@ lemma B256.nof_of_le_not {x y : B256} (h : y ≤ ~~~ x) : B256.Nof x y := by
   have h2 := B256.toNat_le_toNat h
   unfold B256.Nof
   omega
+
+/-- The converse of `B256.nof_of_le_not`: a non-overflowing add is exactly one
+whose second operand is within the complement of the first.  Together the two
+say that "`x + y` does not overflow" and "`y ≤ 2 ^ 256 - 1 - x`" are the same
+statement — which is what lets a contract's `amount ≤ maxFlashLoan` guard be
+read off a `B256.Nof` fact and vice versa. -/
+lemma B256.le_not_of_nof {x y : B256} (h : B256.Nof x y) : y ≤ ~~~ x := by
+  rcases B256.le_or_gt y (~~~ x) with h' | h'
+  · exact h'
+  · exfalso
+    have h1 := B256.toNat_lt_toNat h'
+    have h2 := B256.toNat_add_not x
+    unfold B256.Nof at h
+    omega
 
 lemma B128.zero_and {x : B128} : 0 &&& x = 0 := by
   simp [B128.and_eq_and_prod_and]
@@ -8183,157 +8381,15 @@ lemma Mem.Reads.read {μ : Mem} {bs : Bytes} (h : Mem.Reads μ bs) (i n : Nat) :
   rw [Array.sliceD_eq_map, List.sliceD_eq_map]
   exact List.map_congr_left (fun j _ => h (i + j))
 
-/-! ### What each instruction does to memory
+/-! ### What memory a written instruction writes
 
-`Devm.memory` is preserved outright by everything the `flashLoan` prefix runs
-except the three instructions that touch it, so the `line_inv` machinery carries
-a memory image across whole `Line`s once these `Hinv` instances exist.  The
-three exceptions get value-carrying inversions of their own, in the same shape
-Step 1 gave `calldataload` and `calldatacopy`: what was written, and where. -/
-
-syntax "show_hinv_mem_binary" : tactic
-macro_rules
-  | `(tactic| show_hinv_mem_binary) =>
-    `(tactic|
-        refine ⟨?_⟩ <;>
-        intro pc sevm pre post run <;>
-        simp only [Rinst.run, Rinst.runCore] at run <;>
-        exact (Devm.diffBurn_of_applyBinary run).choose_spec.choose_spec.memory)
-
-syntax "show_hinv_mem_unary" : tactic
-macro_rules
-  | `(tactic| show_hinv_mem_unary) =>
-    `(tactic|
-        refine ⟨?_⟩ <;>
-        intro pc sevm pre post run <;>
-        simp only [Rinst.run, Rinst.runCore] at run <;>
-        exact (Devm.diffBurn_of_applyUnary run).choose_spec.memory)
-
-syntax "show_hinv_mem_push" : tactic
-macro_rules
-  | `(tactic| show_hinv_mem_push) =>
-    `(tactic|
-        refine ⟨?_⟩ <;>
-        intro pc sevm pre post run <;>
-        simp only [Rinst.run, Rinst.runCore] at run <;>
-        exact (Devm.pushBurn_of_pushItem run).memory)
-
-instance : Rinst.Hinv Devm.memory Rinst.add := by show_hinv_mem_binary
-instance : Rinst.Hinv Devm.memory Rinst.sub := by show_hinv_mem_binary
-instance : Rinst.Hinv Devm.memory Rinst.lt := by show_hinv_mem_binary
-instance : Rinst.Hinv Devm.memory Rinst.gt := by show_hinv_mem_binary
-instance : Rinst.Hinv Devm.memory Rinst.eq := by show_hinv_mem_binary
-instance : Rinst.Hinv Devm.memory Rinst.and := by show_hinv_mem_binary
-instance : Rinst.Hinv Devm.memory Rinst.or := by show_hinv_mem_binary
-instance : Rinst.Hinv Devm.memory Rinst.xor := by show_hinv_mem_binary
-instance : Rinst.Hinv Devm.memory Rinst.shl := by show_hinv_mem_binary
-instance : Rinst.Hinv Devm.memory Rinst.shr := by show_hinv_mem_binary
-instance : Rinst.Hinv Devm.memory Rinst.not := by show_hinv_mem_unary
-instance : Rinst.Hinv Devm.memory Rinst.iszero := by show_hinv_mem_unary
-instance : Rinst.Hinv Devm.memory Rinst.address := by show_hinv_mem_push
-instance : Rinst.Hinv Devm.memory Rinst.caller := by show_hinv_mem_push
-instance : Rinst.Hinv Devm.memory Rinst.callvalue := by show_hinv_mem_push
-instance : Rinst.Hinv Devm.memory Rinst.retdatasize := by show_hinv_mem_push
-instance : Rinst.Hinv Devm.memory Rinst.calldatasize := by show_hinv_mem_push
-
-instance : Rinst.Hinv Devm.memory Rinst.pop := ⟨by
-  intro pc sevm pre post run
-  simp only [Rinst.run, Rinst.runCore] at run
-  rcases Except.bind_eq_ok run with ⟨s₁, h1, h2⟩
-  simp only [Functor.mapRev, Functor.map, Except.map] at h1
-  rcases hp : Devm.pop pre with _ | ⟨x, s₂⟩ <;> simp [hp] at h1
-  subst h1
-  exact (Devm.popBurn_of_pop_of_burn (Devm.pop_of_pop hp)
-    (Devm.burn_of_chargeGas h2)).memory⟩
-
-instance : Rinst.Hinv Devm.memory Rinst.gas := ⟨by
-  intro pc sevm pre post run
-  simp only [Rinst.run, Rinst.runCore] at run
-  rcases Except.bind_eq_ok run with ⟨s₁, h1, h2⟩
-  exact (Devm.pushBurn_of_burn_of_push (Devm.burn_of_chargeGas h1)
-    (Devm.push_of_push h2)).memory⟩
-
-instance {n} : Rinst.Hinv Devm.memory (Rinst.dup n) := ⟨by
-  intro pc sevm pre post run
-  simp only [Rinst.run, Rinst.runCore] at run
-  rcases Except.bind_eq_ok run with ⟨s₁, h1, h2⟩
-  have hb := Devm.burn_of_chargeGas h1
-  split at h2
-  · cases h2
-  · exact (Devm.pushBurn_of_burn_of_push hb (Devm.push_of_push h2)).memory⟩
-
-instance {n} : Rinst.Hinv Devm.memory (Rinst.swap n) := ⟨by
-  intro pc sevm pre post run
-  simp only [Rinst.run, Rinst.runCore] at run
-  rcases Except.bind_eq_ok run with ⟨s₁, h1, h2⟩
-  have hb := Devm.burn_of_chargeGas h1
-  split at h2
-  · cases h2
-  · injection h2 with eq
-    rw [hb.memory, ← eq]
-    rfl⟩
-
-instance : Rinst.Hinv Devm.memory Rinst.calldataload := ⟨by
-  intro pc sevm pre post run
-  simp only [Rinst.run, Rinst.runCore] at run
-  rcases Except.bind_eq_ok run with ⟨⟨si, s₁⟩, h1, run₁⟩
-  rcases Except.bind_eq_ok run₁ with ⟨s₂, h2, run₂⟩
-  exact ((Devm.pop_of_pop h1).memory.trans
-    (Devm.burn_of_chargeGas h2).memory).trans (Devm.push_of_push run₂).memory⟩
-
-/-- `SLOAD` reads storage and touches nothing else.  Not covered by the routine
-macros above because the cold/warm split makes it two shapes rather than one. -/
-instance : Rinst.Hinv Devm.memory Rinst.sload := ⟨by
-  intro pc sevm pre post run
-  simp only [Rinst.run, Rinst.runCore] at run
-  rcases Except.bind_eq_ok run with ⟨⟨key, s₁⟩, h1, run₁⟩
-  refine (Devm.pop_of_pop h1).memory.trans ?_
-  suffices H : ∀ (d : Devm) (c : Nat), s₁.memory = d.memory →
-      (chargeGas c d >>= fun y => Devm.push (Devm.getStorVal y sevm.currentTarget key) y)
-        = .ok post → s₁.memory = post.memory by
-    split at run₁
-    · exact H s₁ gasWarmAccess rfl run₁
-    · exact H (addAccessedStorageKey s₁ sevm.currentTarget key) gasColdSload rfl run₁
-  intro d c hm run'
-  rcases Except.bind_eq_ok run' with ⟨s₂, h2, run₂⟩
-  exact (hm.trans (Devm.burn_of_chargeGas h2).memory).trans (Devm.push_of_push run₂).memory⟩
-
-/-- `SSTORE` writes storage and touches nothing else.  The longest of these
-proofs only because the instruction has the most intermediate states: the
-access-list split, the refund counter, the gas charge and the dynamic assert
-each produce one, and every one of them leaves `Devm.memory` alone. -/
-instance : Rinst.Hinv Devm.memory Rinst.sstore := ⟨by
-  intro pc sevm pre post run
-  simp only [Rinst.run, Rinst.runCore] at run
-  rcases Except.bind_eq_ok run with ⟨⟨x, s₁⟩, h1, run₁⟩
-  rcases Except.bind_eq_ok run₁ with ⟨⟨y, s₂⟩, h2, run₂⟩
-  rcases Except.bind_eq_ok run₂ with ⟨_, h3, run₃⟩
-  rcases Except.bind_eq_ok run₃ with ⟨⟨s₃, g₂⟩, h4, run₄⟩
-  rcases Except.bind_eq_ok run₄ with ⟨g₃, h5, run₅⟩
-  rcases Except.bind_eq_ok run₅ with ⟨s₄, h6, run₆⟩
-  rcases Except.bind_eq_ok run₆ with ⟨s₅, h7, run₇⟩
-  rcases Except.bind_eq_ok run₇ with ⟨_, h8, h9⟩
-  have m3 : s₂.memory = s₃.memory := by
-    injection h4 with eq
-    split at eq <;> (injection eq with eq _; subst eq; rfl)
-  have m4 : s₃.memory = s₄.memory := by
-    injection h6 with eq; rw [← eq]; rfl
-  injection h9 with eq
-  rw [← eq]
-  show pre.memory = s₅.memory
-  exact ((((Devm.pop_of_pop h1).memory.trans (Devm.pop_of_pop h2).memory).trans m3).trans
-    m4).trans (Devm.burn_of_chargeGas h7).memory⟩
-
-/-! The two `Ninst` constructors that are not `reg`, so that `line_inv` carries
-a memory image across a whole `Line` rather than stopping at the first `PUSH`.
-Their `Devm.getBal` / `Devm.getStor` / `Devm.getCode` / `Devm.state` siblings
-are above, beside the rest of the `Ninst.Hinv` API. -/
-
-instance {x} : Ninst.Hinv Devm.memory (Ninst.pushB256 x) :=
-  ⟨fun h => (Devm.pushBurn_of_run (Ninst.run_push_eq h)).memory⟩
-
-instance {xs} {p : xs.length ≤ 32} : Ninst.Hinv Devm.memory (Ninst.push xs p) :=
-  ⟨fun h => (Devm.pushBurn_of_run (Ninst.run_push_eq h)).memory⟩
+The `Hinv Devm.memory` instance family that carries a memory image across a
+memory-silent `Line` sits earlier in this file, beside its `Devm.state` /
+`Devm.getStor` / `Devm.getCode` siblings — dispatch reachability needs it too,
+and instance resolution is position-sensitive within a module.  What follows is
+the other half: value-carrying inversions for the three instructions that do
+touch memory, in the same shape Step 1 gave `calldataload` and `calldatacopy` —
+what was written, and where. -/
 
 /-- `MSTORE` writes *the word it popped* at *the offset it popped*.
 

@@ -1,11 +1,17 @@
 -- FlashSpec.lean : fmint's `flashLoan` success specification (Arc C of the
 -- flashmint program, `~/plans/fmint-flashloan.md`).
 --
--- Step 2 lands the entry route here: the composition of `correct` with
--- dispatch reachability that takes a successful top-level `Exec` at fmint's
--- code to a run of `flashLoan`'s body.  Steps 3-6 add the forward walk, the
--- callback boundary, the repayment postcondition, and the headline
--- `fmint_flashLoan_spec`.
+-- The entry route (`exec_enters_flashLoan`) composes `correct` with dispatch
+-- reachability, taking a successful top-level `Exec` at fmint's code to a run
+-- of `flashLoan`'s body.  On top of it: the forward walk to the `CALL`, the
+-- callback's calldata image, `CallbackBoundary`, the repayment postcondition,
+-- and then the headline `fmint_flashLoan_spec` with its seven `no_success_of_*`
+-- corollaries.
+--
+-- Everything here is PARTIAL CORRECTNESS and never liveness: every theorem
+-- takes a successful run as a hypothesis and reads facts off it.  Nothing in
+-- this module -- or anywhere in this repository -- says a `flashLoan` call ever
+-- succeeds.
 --
 -- This module is fmint-owned (`scripts/check-layering.py`, `CONTRACTS`): it
 -- may import `Blanc.Fmint` and `Blanc.Conserved`, and must not import any
@@ -40,8 +46,12 @@ lemma flashLoan_mem_fmintFuncs : (flashLoanSelector, flashLoan) ∈ fmintFuncs :
 /-- **The entry route.**  A successful top-level `Exec` at fmint's code whose
 calldata selector is `flashLoan`'s passed through `flashLoan`'s body: the run
 factors as dispatcher entry to some state `s'` — with account storage,
-balances and code images unchanged from `pre` — followed by a run of
+balances, code images *and memory* unchanged from `pre` — followed by a run of
 `Fmint.flashLoan` from `s'` to the same `post`.
+
+The memory conjunct is what lets a caller state a frame-freshness premise at
+`pre`, the frame's own initial state, instead of at an intermediate state it
+cannot name: the entry burn, `fsig` and the dispatcher are all memory-silent.
 
 This is `correct` (`Exec` to `Prog.Run`), the `call 0` unwrap, Step 1's
 `prefix_of_fsig` value fact, and `reach_of_dispatchWith` instantiated with
@@ -60,6 +70,7 @@ theorem exec_enters_flashLoan {sevm : Sevm} {pre post : Devm}
       Devm.getStor s' = Devm.getStor pre ∧
       Devm.getBal s' = Devm.getBal pre ∧
       Devm.getCode s' = Devm.getCode pre ∧
+      s'.memory = pre.memory ∧
       Func.Run (fmint.main :: fmintAux) sevm s' flashLoan post := by
   have h_run : Prog.Run sevm pre fmint post := correct sevm pre fmint post exc h_code
   dsimp only [Prog.Run] at h_run
@@ -78,8 +89,8 @@ theorem exec_enters_flashLoan {sevm : Sevm} {pre post : Devm}
   have h_pfx : Sevm.selector sevm :: [] <<+ s₁.stack := prefix_of_fsig nil_pref h₁
   rw [h_sel] at h_pfx
   rcases reach_of_dispatchWith fmintFuncs_sorted flashLoan_mem_fmintFuncs h_pfx run₁
-    with ⟨s', _, h_state, h_runf⟩
-  refine ⟨s', ?_, ?_, ?_, h_runf⟩
+    with ⟨s', _, h_state, h_smem, h_runf⟩
+  refine ⟨s', ?_, ?_, ?_, ?_, h_runf⟩
   · have h3 : Devm.getStor s₁ = Devm.getStor s' := by
       funext a; show (s₁.state.get a).stor = (s'.state.get a).stor; rw [h_state]
     have h2 : Devm.getStor s₀ = Devm.getStor s₁ :=
@@ -101,6 +112,8 @@ theorem exec_enters_flashLoan {sevm : Sevm} {pre post : Devm}
     have h1 : Devm.getCode pre = Devm.getCode s₀ := by
       funext a; show (pre.state.get a).code = (s₀.state.get a).code; rw [burn.state]
     rw [← h3, ← h2, ← h1]
+  · have h2 : s₀.memory = s₁.memory := Line.of_inv Devm.memory (by line_inv) h₁
+    rw [← h_smem, ← h2, ← burn.memory]
 
 /-! ## The callback's memory image
 
@@ -2350,6 +2363,334 @@ lemma of_repayment {sevm : Sevm} {s r : Devm} {wad : B256} {a : Adr} {bs : Bytes
   rcases h_arms with ⟨hmax, heq⟩ | ⟨hne, hle, heq⟩
   · exact Or.inl ⟨hmax, heq⟩
   · exact Or.inr ⟨hne, hle, heq⟩
+
+/-! ## The headline, and the no-success family
+
+`fmint_flashLoan_spec` composes Steps 2-5 off a single successful top-level
+`Exec` at fmint's code.  Everything below it is a consequence of that theorem
+or of the walk it is built from.
+
+**Read the headline as partial correctness, and never as liveness.**  Its
+prose form — "a successful `flashLoan` performs the callback" — sounds like a
+statement that flash loans work.  It is not.  The `Exec` is a *hypothesis*
+throughout: nothing in this module, or anywhere in this repository, says that
+any `flashLoan` call ever succeeds, and the machinery that would be needed to
+say so is separate, unstarted work (`~/plans/liveness-prelude-proposal.md`).
+
+Four premises restrict what the headline covers, and they travel with every
+description of it:
+
+* `h_dec` — the calldata is the *canonical* Solidity-shaped encoding of the
+  call.  fmint validates no tail offset (`FMINT_DEVIATIONS.md` row 21), so a
+  non-canonical encoding is decodable by the contract and is **out of scope**
+  here: the headline says nothing about it (`Sevm.DecodesCallWithTail`'s own
+  docstring records the restriction and why closing it would be vacuous);
+* `h_size` — the encoded callback fits a machine word (`196 + ceil32
+  data.length < 2 ^ 256`); it implies the `data.length < 2 ^ 256` bound the
+  tail round-trip needs, since `List.length` is an unbounded `Nat` while the
+  ABI length word is 256 bits;
+* `h_wf`/`h_fresh` — **frame freshness**, stated as an explicit premise
+  rather than smuggled in.  `Exec 0 sevm pre` quantifies `pre` freely and does
+  not know it came from Jaune's `initDevm`, which is where `memory := .empty`
+  actually comes from; the frame semantics discharge it at any real call site;
+* `h_sel` — the calldata's selector word routes to `flashLoan`.
+
+The storage postcondition is **wrap-tolerant `B256` arithmetic and carries no
+`Stor.Conserved` premise**, so the headline is *not* a statement about states
+satisfying the conservation invariant.  (That qualification attaches only to
+consumers of `of_burnAndReturn_bound`, whose docstring carries it.)  The
+reason is recorded there: conservation at `flashLoan`'s entry does not reach
+the repayment's entry state, because `CallbackBoundary` deliberately carries no
+storage relation across the borrower's frame.
+
+**`h_sel` and `h_dec` are jointly satisfiable, and not by accident.**  The
+canonical encoding *begins* with `flashLoanSelector`'s four bytes, so `h_sel` is
+a fact `h_dec`'s own bytes carry; it is a separate premise only because
+recovering it formally needs `>>>` arithmetic on `B256`, which is a nested pair
+of `UInt64`s with no bitvector API (the arc's `3-b256-has-no-bitvector-api`
+finding).  Witnesses exist concretely: `scripts/check-fmint.sh`'s `flashLoan`
+fixtures are canonically encoded calls that route to this entry point. -/
+
+/-- **The headline: a successful `flashLoan` performed the callback, and was
+repaid.**
+
+Given a successful top-level `Exec` at fmint's compiled code whose calldata is
+a canonically encoded `flashLoan(receiver, token, amount, data)`:
+
+* `token` is this contract — ERC-3156's `token = self` guard, reached before
+  the bound check;
+* `amount` does not overflow the supply — fmint's `amount ≤ maxFlashLoan`
+  bound, with `maxFlashLoan = 2 ^ 256 - 1 - supply`;
+* the frame returned ABI-`true`;
+* `receiver` is address-shaped, and naming `a` for it is what makes the
+  callback's callee equal to `receiver` on the nose;
+* the **mint** landed in `sc`, the state the callback is entered in: both
+  `SSTORE`s complete before the `CALL` (proposal D5), so this is a fact about
+  the state the borrower sees, not only about the state it is left in;
+* a **callback boundary** relates `sc` to `mid`, the same frame at resumption:
+  the borrower's `onFlashLoan(initiator, token, amount, 0, data)` frame
+  actually ran, on the canonical ABI encoding of those five arguments, and
+  answered with the ERC-3156 magic word.  `CallbackBoundary`'s own docstring is
+  the clause-by-clause reading;
+* the **repayment** then spent an allowance — either the infinite arm, which
+  writes nothing, or the finite arm, which requires `amount ≤ allow` and
+  decrements — and burned the principal from the receiver and from the supply.
+  The allowance key is `keccak256(receiver ‖ address(this))`: the spender is
+  `address(this)`, not `caller`, and there is no `src = caller` bypass.
+
+The allowance and the balance are read at `mid`, **after** the callback: a
+borrower may set both from inside `onFlashLoan`, and a statement about them at
+`pre` would be a different — and false — claim.
+
+**Partial correctness, not liveness**; see this section's banner for that and
+for the four premises' scope. -/
+theorem fmint_flashLoan_spec {sevm : Sevm} {pre post : Devm}
+    {receiver token amount : B256} {data : Bytes}
+    (h_code : some sevm.code.toList = Prog.compile fmint)
+    (h_sel : Sevm.selector sevm = flashLoanSelector)
+    (h_dec : Sevm.DecodesCallWithTail sevm flashLoanSelector
+      [receiver, token, amount] data)
+    (h_size : 196 + ceil32 data.length < 2 ^ 256)
+    (h_wf : Mem.Wf pre.memory) (h_fresh : Mem.Reads pre.memory [])
+    (exc : Exec 0 sevm pre (.ok post)) :
+    token = sevm.currentTarget.toB256 ∧
+    B256.Nof ((Devm.getStor pre sevm.currentTarget).get supplySlot) amount ∧
+    ReturnsTrue post ∧
+    ∃ (a : Adr) (sc mid : Devm) (st : Stor) (allow : B256),
+      receiver = a.toB256 ∧
+      Devm.getCode pre = Devm.getCode sc ∧
+      Devm.getStor sc sevm.currentTarget =
+        ((Devm.getStor pre sevm.currentTarget).set a.toB256
+            (amount + (Devm.getStor pre sevm.currentTarget).get a.toB256)).set
+          supplySlot
+          (amount + (Devm.getStor pre sevm.currentTarget).get supplySlot) ∧
+      CallbackBoundary sevm sevm.currentTarget a amount data sc mid ∧
+      ¬ ValidAdr (repayKey a sevm.currentTarget) ∧
+      repayKey a sevm.currentTarget ≠ supplySlot ∧
+      allow = (Devm.getStor mid sevm.currentTarget).get
+        (repayKey a sevm.currentTarget) ∧
+      ( (allow = B256.max ∧ st = Devm.getStor mid sevm.currentTarget)
+        ∨ (allow ≠ B256.max ∧ amount ≤ allow ∧
+            st = (Devm.getStor mid sevm.currentTarget).set
+              (repayKey a sevm.currentTarget) (allow - amount)) ) ∧
+      amount ≤ (Devm.getStor mid sevm.currentTarget).get a.toB256 ∧
+      Devm.getStor post sevm.currentTarget =
+        (st.set a.toB256 (st.get a.toB256 - amount)).set supplySlot
+          (st.get supplySlot - amount) ∧
+      Devm.getCode mid = Devm.getCode post := by
+  obtain ⟨s, h_gs, h_gb, h_gc, h_mem, h_run⟩ := exec_enters_flashLoan exc h_code h_sel
+  obtain ⟨h_token, h_nof, a, sc, mid, sfin, h_recv, h_code_sc, h_stor_sc, h_cb,
+    h_gs_mid, h_gc_mid, h_stack, h_wf_fin, ⟨img, h_img⟩, h_run5⟩ :=
+    flashLoan_performs_callback h_dec h_size (h_mem ▸ h_wf) (h_mem ▸ h_fresh) h_run
+  obtain ⟨h_nva, h_nsup, st, allow, h_allow, h_arms, h_bal, h_post, h_code_post,
+    h_ret⟩ := of_repayment h_stack h_wf_fin h_img h_run5
+  -- restate the walk's facts at the states a reader can name: `pre`, the
+  -- frame's own entry, and `mid`, the state the callback returns in
+  rw [h_gs] at h_nof h_stor_sc
+  rw [← h_gs_mid] at h_allow h_arms
+  have h_key_ne : repayKey a sevm.currentTarget ≠ a.toB256 :=
+    fun h => h_nva ⟨a, h.symm⟩
+  have h_bal' : amount ≤ (Devm.getStor mid sevm.currentTarget).get a.toB256 := by
+    rcases h_arms with ⟨-, heq⟩ | ⟨-, -, heq⟩
+    · rw [heq] at h_bal; exact h_bal
+    · rw [heq, Stor.get_set_ne _ h_key_ne] at h_bal; exact h_bal
+  exact ⟨h_token, h_nof, h_ret, a, sc, mid, st, allow, h_recv,
+    h_gc.symm.trans h_code_sc, h_stor_sc, h_cb, h_nva, h_nsup, h_allow, h_arms,
+    h_bal', h_post, h_gc_mid.trans h_code_post⟩
+
+/-! ### The no-success family
+
+Seven statements of the form "… ⇒ this `Exec` did not succeed".  They are
+**not all the same kind of theorem**, and the difference is the precision this
+section exists to get right.
+
+**Two are contrapositives of the headline** — `no_success_of_callback_never_magic`
+and `no_success_of_callback_never_returns_word`.  Each negates a clause of
+`CallbackBoundary`, so each is exactly as strong as the relation is.  Read the
+quantifier: the premise is that **no** boundary the headline could produce
+answers with the magic word (respectively, with a full word at all).  It is
+*not* the stronger reading "if the receiver's code returns `X` then no success":
+`CallbackBoundary` pins the callback frame by equations — `parent` from `pre`,
+the message from the five arguments, `mid` from `child` — but it does not prove
+that frame *unique*, because `ProcessMessage` is a relation with no determinism
+lemma in this repository and `gw`, `avail` and the slot stay existential.  So
+the honest form quantifies over every admissible boundary, and that is the form
+stated here.
+
+**Five are contrapositives of the guards**, not of the headline, and they never
+were: `token ≠ self`, a dirty `receiver` word, `amount` past the mint headroom,
+an allowance below `amount`, a balance below `amount`.  Each reads a fact off
+the same walk `of_flashLoan_toCall` performs, and the first three need neither
+the size premise nor frame freshness.  The guard facts themselves
+(`flashLoan_guards`) hold with **no** encoding premise at all; `h_dec` appears
+below only so the statements can name `token`, `receiver` and `amount` instead
+of calldata head words.
+
+**State restoration is not in this family**, and none of these may be read as
+one.  They say a call did not succeed; they say nothing about the state coming
+back.  A restoration claim is a separate frame-level theorem — a failed inner
+call can be caught by its caller while the surrounding transaction succeeds, so
+such a claim must name its frame — and no such theorem exists here.
+
+As everywhere in this module, these are **partial correctness**: they rule
+executions out, and nothing rules any execution in. -/
+
+/-- What the boundary says about the answer, read off the frame's own
+resumption state.  `mid.returnData` is `child.output` by the relation's own
+equation, so a consumer never has to name the child frame. -/
+lemma CallbackBoundary.answer {sevm : Sevm} {fa receiver : Adr} {amount : B256}
+    {data : Bytes} {pre mid : Devm}
+    (h : CallbackBoundary sevm fa receiver amount data pre mid) :
+    32 ≤ mid.returnData.length ∧
+      Bytes.toB256 (mid.returnData.sliceD 0 32 0) = erc3156Magic := by
+  obtain ⟨_, child, _, _, _, _, _, -, -, -, -, -, -, hlen, hmagic, -, -, hrd, -⟩ := h
+  rw [hrd]; exact ⟨hlen, hmagic⟩
+
+/-- **Wrong magic word ⇒ no success.**  A contrapositive of the headline: if no
+callback boundary this call could open answers with `erc3156Magic`, the
+top-level `Exec` cannot have succeeded.  See the section banner for why the
+premise quantifies over boundaries rather than over the receiver's code. -/
+theorem no_success_of_callback_never_magic {sevm : Sevm} {pre post : Devm}
+    {receiver token amount : B256} {data : Bytes}
+    (h_code : some sevm.code.toList = Prog.compile fmint)
+    (h_sel : Sevm.selector sevm = flashLoanSelector)
+    (h_dec : Sevm.DecodesCallWithTail sevm flashLoanSelector
+      [receiver, token, amount] data)
+    (h_size : 196 + ceil32 data.length < 2 ^ 256)
+    (h_wf : Mem.Wf pre.memory) (h_fresh : Mem.Reads pre.memory [])
+    (h_never : ∀ (a : Adr) (sc mid : Devm),
+      CallbackBoundary sevm sevm.currentTarget a amount data sc mid →
+      Bytes.toB256 (mid.returnData.sliceD 0 32 0) ≠ erc3156Magic) :
+    Exec 0 sevm pre (.ok post) → False := by
+  intro exc
+  obtain ⟨-, -, -, a, sc, mid, _, _, -, -, -, h_cb, -⟩ :=
+    fmint_flashLoan_spec h_code h_sel h_dec h_size h_wf h_fresh exc
+  exact h_never a sc mid h_cb (CallbackBoundary.answer h_cb).right
+
+/-- **Returndata shorter than a word ⇒ no success.**  The other contrapositive
+of the headline: the boundary requires at least one word of returndata before
+the magic check even reads one, so a callback that returns less cannot have
+been part of a successful call.  Same quantifier reading as its sibling. -/
+theorem no_success_of_callback_never_returns_word {sevm : Sevm} {pre post : Devm}
+    {receiver token amount : B256} {data : Bytes}
+    (h_code : some sevm.code.toList = Prog.compile fmint)
+    (h_sel : Sevm.selector sevm = flashLoanSelector)
+    (h_dec : Sevm.DecodesCallWithTail sevm flashLoanSelector
+      [receiver, token, amount] data)
+    (h_size : 196 + ceil32 data.length < 2 ^ 256)
+    (h_wf : Mem.Wf pre.memory) (h_fresh : Mem.Reads pre.memory [])
+    (h_short : ∀ (a : Adr) (sc mid : Devm),
+      CallbackBoundary sevm sevm.currentTarget a amount data sc mid →
+      mid.returnData.length < 32) :
+    Exec 0 sevm pre (.ok post) → False := by
+  intro exc
+  obtain ⟨-, -, -, a, sc, mid, _, _, -, -, -, h_cb, -⟩ :=
+    fmint_flashLoan_spec h_code h_sel h_dec h_size h_wf h_fresh exc
+  exact absurd (CallbackBoundary.answer h_cb).left
+    (Nat.not_le_of_lt (h_short a sc mid h_cb))
+
+/-- **`token ≠ self` ⇒ no success.**  A contrapositive of guard (0), not of the
+headline: ERC-3156's `token` check is one explicit guard placed *before* the
+bound check, so the revert reason does not depend on `amount`
+(`FMINT_DEVIATIONS.md` row 5). -/
+theorem no_success_of_token_ne_self {sevm : Sevm} {pre post : Devm}
+    {receiver token amount : B256} {data : Bytes}
+    (h_code : some sevm.code.toList = Prog.compile fmint)
+    (h_sel : Sevm.selector sevm = flashLoanSelector)
+    (h_dec : Sevm.DecodesCallWithTail sevm flashLoanSelector
+      [receiver, token, amount] data)
+    (h_ne : token ≠ sevm.currentTarget.toB256) :
+    Exec 0 sevm pre (.ok post) → False := by
+  intro exc
+  obtain ⟨s, -, -, -, -, h_run⟩ := exec_enters_flashLoan exc h_code h_sel
+  exact h_ne ((argWord_one_of_decodes h_dec).symm.trans (flashLoan_guards h_run).left)
+
+/-- **A `receiver` word that is not address-shaped ⇒ no success.**  A
+contrapositive of guard (1).  The guard pays twice: Arc B proved it
+conservation-critical, and it is also what makes the callback's callee equal to
+`receiver` on the nose, since `Devm.popToAdr` truncates to 160 bits and the
+guard makes that truncation the identity. -/
+theorem no_success_of_receiver_not_address {sevm : Sevm} {pre post : Devm}
+    {receiver token amount : B256} {data : Bytes}
+    (h_code : some sevm.code.toList = Prog.compile fmint)
+    (h_sel : Sevm.selector sevm = flashLoanSelector)
+    (h_dec : Sevm.DecodesCallWithTail sevm flashLoanSelector
+      [receiver, token, amount] data)
+    (h_dirty : ¬ ValidAdr receiver) :
+    Exec 0 sevm pre (.ok post) → False := by
+  intro exc
+  obtain ⟨s, -, -, -, -, h_run⟩ := exec_enters_flashLoan exc h_code h_sel
+  exact h_dirty ((argWord_zero_of_decodes h_dec) ▸ (flashLoan_guards h_run).right.left)
+
+/-- **`amount` past `maxFlashLoan` ⇒ no success.**  A contrapositive of guard
+(2).  The bound is `~~~ supply`, i.e. `2 ^ 256 - 1 - totalSupply`, which is the
+value `Fmint.maxFlashLoan`'s body computes for `token = self` — visible in that
+definition, though **no theorem in this arc walks that entry point**, so this
+states the bound and not the view function's answer.  The supply named is the
+one in storage at the frame's entry, which is the right one: nothing before the
+guard writes storage. -/
+theorem no_success_of_amount_over_maxFlashLoan {sevm : Sevm} {pre post : Devm}
+    {receiver token amount : B256} {data : Bytes}
+    (h_code : some sevm.code.toList = Prog.compile fmint)
+    (h_sel : Sevm.selector sevm = flashLoanSelector)
+    (h_dec : Sevm.DecodesCallWithTail sevm flashLoanSelector
+      [receiver, token, amount] data)
+    (h_over : ~~~ ((Devm.getStor pre sevm.currentTarget).get supplySlot) < amount) :
+    Exec 0 sevm pre (.ok post) → False := by
+  intro exc
+  obtain ⟨s, h_gs, -, -, -, h_run⟩ := exec_enters_flashLoan exc h_code h_sel
+  have h_nof := (flashLoan_guards h_run).right.right
+  rw [h_gs, argWord_two_of_decodes h_dec] at h_nof
+  exact B256.not_lt.mpr (B256.le_not_of_nof h_nof) h_over
+
+/-- **An allowance below `amount` ⇒ no success.**  A contrapositive of the
+repayment's allowance arms, read at `mid` — **after** the callback, which is
+where the contract reads it.  A borrower may approve from inside `onFlashLoan`,
+so the same statement at the frame's entry would be a different and false claim.
+The infinite arm is not an escape: `amount ≤ B256.max` always, so an allowance
+strictly below `amount` is not `B256.max`. -/
+theorem no_success_of_allowance_below_amount {sevm : Sevm} {pre post : Devm}
+    {receiver token amount : B256} {data : Bytes}
+    (h_code : some sevm.code.toList = Prog.compile fmint)
+    (h_sel : Sevm.selector sevm = flashLoanSelector)
+    (h_dec : Sevm.DecodesCallWithTail sevm flashLoanSelector
+      [receiver, token, amount] data)
+    (h_size : 196 + ceil32 data.length < 2 ^ 256)
+    (h_wf : Mem.Wf pre.memory) (h_fresh : Mem.Reads pre.memory [])
+    (h_low : ∀ (a : Adr) (sc mid : Devm),
+      CallbackBoundary sevm sevm.currentTarget a amount data sc mid →
+      (Devm.getStor mid sevm.currentTarget).get (repayKey a sevm.currentTarget)
+        < amount) :
+    Exec 0 sevm pre (.ok post) → False := by
+  intro exc
+  obtain ⟨-, -, -, a, sc, mid, st, allow, -, -, -, h_cb, -, -, h_allow, h_arms, -⟩ :=
+    fmint_flashLoan_spec h_code h_sel h_dec h_size h_wf h_fresh exc
+  have h_lt : allow < amount := h_allow ▸ h_low a sc mid h_cb
+  rcases h_arms with ⟨hmax, -⟩ | ⟨-, hle, -⟩
+  · exact B256.not_lt.mpr (B256.le_max amount) (hmax ▸ h_lt)
+  · exact B256.not_lt.mpr hle h_lt
+
+/-- **A receiver balance below `amount` ⇒ no success.**  A contrapositive of
+the burn's balance check, read at `mid` for the same reason as the allowance:
+the borrower holds the principal during the callback and the check happens
+after it.  The allowance write cannot disturb the reading — its key is guarded
+non-address-shaped, so it is a different slot from the receiver's balance. -/
+theorem no_success_of_balance_below_amount {sevm : Sevm} {pre post : Devm}
+    {receiver token amount : B256} {data : Bytes}
+    (h_code : some sevm.code.toList = Prog.compile fmint)
+    (h_sel : Sevm.selector sevm = flashLoanSelector)
+    (h_dec : Sevm.DecodesCallWithTail sevm flashLoanSelector
+      [receiver, token, amount] data)
+    (h_size : 196 + ceil32 data.length < 2 ^ 256)
+    (h_wf : Mem.Wf pre.memory) (h_fresh : Mem.Reads pre.memory [])
+    (h_low : ∀ (a : Adr) (sc mid : Devm),
+      CallbackBoundary sevm sevm.currentTarget a amount data sc mid →
+      (Devm.getStor mid sevm.currentTarget).get a.toB256 < amount) :
+    Exec 0 sevm pre (.ok post) → False := by
+  intro exc
+  obtain ⟨-, -, -, a, sc, mid, st, allow, -, -, -, h_cb, -, -, -, -, h_bal, -⟩ :=
+    fmint_flashLoan_spec h_code h_sel h_dec h_size h_wf h_fresh exc
+  exact B256.not_lt.mpr h_bal (h_low a sc mid h_cb)
 
 end Fmint
 
