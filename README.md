@@ -47,7 +47,13 @@ This repo contains the following files:
   taking one apart. Composed through `Prog.exec_of_runCompiled`, that chain is
   a successful `Exec`. Shared and contract-agnostic; a demonstration belongs in
   a contract-owned module, since a shared module importing a contract is the
-  inverted import `scripts/check-layering.sh` rejects.
+  inverted import `scripts/check-layering.sh` rejects. It also carries
+  `func_run`, the tactic that is `Tactics.lean`'s `func_inv` read backwards: it
+  walks the same `Func` structure and *applies* `Func.RunCompiled`'s rules,
+  naming every intermediate state and gas account itself and handing back only
+  the obligations no construction can compute — which comparison a dispatch
+  fork decided, what a memory expansion cost, and the frame's terminal
+  instruction.
 - [FmintLive.lean](Blanc/FmintLive.lean): fmint's demonstration of that layer,
   and the first place in this repository where a contract call is proved to
   **succeed**. `fmint_totalSupply_succeeds` builds the run witness for a

@@ -285,6 +285,67 @@ lemma Rinst.runCore_mstore_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
   simp only [Devm.setMach_setMach, Devm.memory_setMach,
     Devm.gasLeft_setMach, Devm.stack_setMach]
 
+/-! ## The one-word memory window
+
+`MSTORE` a word at offset 0 and `RETURN` it is how every Blanc view answers, and
+the two gas charges and the read-back are the same three facts every time.  They
+are stated here rather than in a contract module because nothing in them names a
+contract: the word is arbitrary and the offset is the ABI's. -/
+
+/-- Writing one word into empty memory leaves exactly one word. -/
+lemma Mem.size_write_word {w : B256} :
+    (Mem.empty.write 0 w.toBytes).size = 32 := by
+  rcases hb : w.toBytes with _ | ⟨b, bs⟩
+  · exact absurd (hb ▸ B256.length_toBytes w) (by simp)
+  · have hlen : (b :: bs).length = 32 := hb ▸ B256.length_toBytes w
+    simp only [Mem.write, Mem.empty, hlen, if_neg (by simp : ¬ (0 + 32 ≤ 0))]
+    rfl
+
+/-- And reading that word back gives it unchanged: `Mem.Reads` carries the image
+across the write, and a `B256` is exactly the window's width. -/
+lemma Mem.read_write_word {w : B256} :
+    ((Mem.empty.write 0 w.toBytes).read 0 32).1 = w.toBytes := by
+  have h_reads : Mem.Reads (Mem.empty.write 0 w.toBytes) w.toBytes := by
+    have h := Mem.Reads.write Mem.wf_empty Mem.reads_empty 0 w.toBytes
+    rw [show Bytes.writeAt [] 0 w.toBytes = w.toBytes by simp [Bytes.writeAt]] at h
+    exact h
+  rw [Mem.Reads.read h_reads 0 32]
+  show List.takeD 32 (List.drop 0 w.toBytes) 0 = w.toBytes
+  rw [List.drop_zero, List.takeD_eq_self 0 (B256.length_toBytes w).symm]
+
+/-- Expanding empty memory to one word costs `gMemory`: the quadratic term is
+`1 / 512`. -/
+lemma Devm.extCost_empty_word {devm : Devm} {S : List B256} {G : Nat} :
+    (devm.setMach ⟨S, Mem.empty, G⟩).extCost [⟨0, 32⟩] = gMemory := by
+  simp [Devm.extCost, Devm.memory_setMach, memExtsSize, memExtSize,
+    calculateMemoryGasCost, ceilDiv, Mem.empty, gMemory]
+
+/-- Reading a window memory already covers is free. -/
+lemma Devm.extCost_word_word {devm : Devm} {S : List B256} {N : Mem} {G : Nat}
+    (h : N.size = 32) :
+    (devm.setMach ⟨S, N, G⟩).extCost [⟨0, 32⟩] = 0 := by
+  simp [Devm.extCost, Devm.memory_setMach, memExtsSize, memExtSize,
+    calculateMemoryGasCost, ceilDiv, h, gMemory]
+
+/-- `Mem.read_write_word` at the `Devm` altitude, in the exact shape
+`Func.RunCompiled`'s `.last .ret` premise wants.
+
+Both the altitude and the `devm.memory` premise are load-bearing, and each cost
+a measured half-minute of elaboration to find.  `Devm.memRead` returns a
+`Bytes × Devm` where `Mem.read` returns a `Bytes × Mem`, so handing the unifier
+the `Mem`-level fact sends it looking for a way to identify the two types.  And
+writing the memory image *into* the conclusion rather than as `devm.memory`
+makes the unifier reduce `Devm.memory devm` to weak head normal form, which
+runs the whole 32-byte `Mem.write` symbolically. -/
+lemma Devm.memRead_word_fst {devm : Devm} {S : List B256} {G : Nat} {w : B256}
+    (hm : devm.memory = Mem.empty.write 0 w.toBytes) :
+    ((devm.setMach ⟨S, devm.memory, G⟩).memRead 0 32).1 = w.toBytes := by
+  show ((devm.setMach ⟨S, devm.memory, G⟩).memory.read 0 32).1 = w.toBytes
+  rw [Devm.memory_setMach]
+  show ((devm.memory).read 0 32).1 = w.toBytes
+  rw [hm]
+  exact Mem.read_write_word
+
 /-! ## The step interface: exact gas in, named successor out
 
 Everything above evaluates a Jaune function and lands on
@@ -408,6 +469,20 @@ lemma Ninst.runCompiled_mstore {sevm : Sevm} {devm : Devm} {i v : B256}
   rw [Rinst.runCore_mstore_eq_ok h_stk (by omega), h_eq]
   rfl
 
+/-- `MSTORE` with the expansion charge named.  `Ninst.runCompiled_mstore` leaves
+`Devm.extCost` inside the gas premise, which a caller can discharge but a
+*generator* cannot: to name the successor's gas account it has to know the
+charge as a number first.  This form splits the two, so the arithmetic premise
+is mechanical and only `h_ext` carries the memory reasoning. -/
+lemma Ninst.runCompiled_mstore_of {sevm : Sevm} {devm : Devm} {i v : B256}
+    {s : List B256} {G e : Nat} {M : Mem} (h_stk : devm.stack = i :: v :: s)
+    (h_ext : devm.extCost [⟨i.toNat, 32⟩] = e)
+    (h_gas : devm.gasLeft = G + (gVerylow + e))
+    (h_write : devm.memory.write i.toNat v.toBytes = M) :
+    Ninst.RunCompiled sevm devm (.reg .mstore) (devm.setMach ⟨s, M, G⟩) := by
+  subst h_ext
+  exact Ninst.runCompiled_mstore h_stk h_gas h_write
+
 /-! ## The terminal instruction
 
 `Func.RunCompiled`'s `.last` rule takes a `Linst.Run` unchanged — a `Linst`
@@ -459,6 +534,36 @@ lemma Func.runCompiled_ret {fs : List Func} {sevm : Sevm} {devm : Devm}
   show Linst.run sevm devm .ret = _
   exact Linst.run_ret_eq_ok (out := out) (d' := d') h_stk (by omega)
     (by rw [h_eq]; exact h_read)
+
+/-- `RETURN` with the read window's charge named, for the same reason
+`Ninst.runCompiled_mstore_of` exists: the successor's gas account cannot be
+written until the charge is a number. -/
+lemma Func.runCompiled_ret_of {fs : List Func} {sevm : Sevm} {devm : Devm}
+    {i sz : B256} {s : List B256} {out : Bytes} {d' : Devm} {G e : Nat}
+    (h_stk : devm.stack = i :: sz :: s)
+    (h_ext : devm.extCost [⟨i.toNat, sz.toNat⟩] = e)
+    (h_gas : devm.gasLeft = G + e)
+    (h_read : (devm.setMach ⟨s, devm.memory, G⟩).memRead i.toNat sz.toNat
+      = ⟨out, d'⟩) :
+    Func.RunCompiled fs sevm devm (.last .ret) (d'.withOutput out) := by
+  subst h_ext
+  exact Func.runCompiled_ret h_stk h_gas h_read
+
+/-- `RETURN` again, with the read-back reduced to its *first* component.  The
+pairing happens inside the lemma, where both sides are variables; done at the
+call site instead, `Prod.ext`'s second `rfl` forces the unifier through
+`Devm.memRead` on a concrete memory image. -/
+lemma Func.runCompiled_ret_word {fs : List Func} {sevm : Sevm} {devm : Devm}
+    {i sz : B256} {s : List B256} {out : Bytes} {G e : Nat}
+    (h_stk : devm.stack = i :: sz :: s)
+    (h_ext : devm.extCost [⟨i.toNat, sz.toNat⟩] = e)
+    (h_gas : devm.gasLeft = G + e)
+    (h_out : ((devm.setMach ⟨s, devm.memory, G⟩).memRead i.toNat sz.toNat).1
+      = out) :
+    Func.RunCompiled fs sevm devm (.last .ret)
+      (((devm.setMach ⟨s, devm.memory, G⟩).memRead i.toNat sz.toNat).2.withOutput
+        out) :=
+  Func.runCompiled_ret_of h_stk h_ext h_gas (Prod.ext h_out rfl)
 
 /-! ## The exact-gas frames, constructed
 
@@ -548,5 +653,509 @@ lemma Prog.runCompiled_intro {sevm : Sevm} {devm mid : Devm} {p : Prog}
     Prog.RunCompiled sevm devm p devm' := by
   subst h_mid
   exact ⟨_, Devm.burnBy_setMach_gas h_gas, h_main⟩
+
+/-! ## `func_run` — the constructor-side walk
+
+`Blanc/Tactics.lean`'s `funcInv` walks a `Func` and applies `next_inv`,
+`branch_inv`, `prepend_inv` to *destructure* a run sitting in antecedent
+position.  This is its dual: the same walk over the same `Func` structure,
+applying `Func.RunCompiled`'s constructors to a goal.
+
+The walk carries the machine state forward itself rather than reading it back
+out of each lemma's conclusion.  Every state it writes is
+`base.setMach ⟨stack, memory, gasBase - n⟩` for a single numeral `n`, so gas
+premises come out in `Devm.BurnBy`'s own additive shape and each one is a single
+`omega`.  Threading the subtractive shape instead would make the `n`-th state
+carry `pre.gasLeft - c₁ - … - cₙ`.
+
+Two things a construction cannot compute, and how the tactic gets them:
+
+* **Values.** What `SHR` produced, what `GT` decided.  These come from the
+  bracketed hint list, elaborated in the goal's context and consumed left to
+  right; where no hint is left the walk keeps the unevaluated application, which
+  is always correct but leaves a later `branch` undecidable.
+* **Memory expansion.** `MSTORE`'s `Devm.extCost` is a function of the whole
+  memory image; it takes a `Nat` hint, and the proof obligation that the hint is
+  right is handed back as a subgoal.
+
+Obligations the walk cannot discharge mechanically are returned as goals in the
+order they were met, and `Func.last` always is one: a terminal instruction ends
+the frame, and evaluating it is the caller's. -/
+
+section ForwardTactic
+
+-- `Blanc.Lean` exists (`Blanc/Tactics.lean` adds to it), so an unqualified
+-- `open Lean` inside this namespace would open that instead of the real one.
+open _root_.Lean _root_.Lean.Meta _root_.Lean.Elab _root_.Lean.Elab.Tactic
+
+namespace Forward
+
+/-- The walk's mutable state: the hints it has not spent, the obligations it
+could not close, and how many `Ninst` steps it has taken (for messages). -/
+structure Ctx where
+  hints : List Term
+  side : Array MVarId
+  step : Nat
+
+abbrev ForwardM := StateRefT Ctx TacticM
+
+/-- A `Nat` an expression is *equal to by evaluation*, or nothing.  Used only on
+fee-schedule constants and hint terms, never to decide a semantic question. -/
+def natOf? (e : Expr) : MetaM (Option Nat) := do
+  if let some n := e.nat? then return some n
+  if let some n := e.rawNatLit? then return some n
+  let e' ← whnf e
+  if let some n := e'.nat? then return some n
+  return e'.rawNatLit?
+
+/-- Apply `name` to `g`, fixing the arguments in `given` and returning the
+argument positions in `holes` as goals. -/
+def applyLemma (g : MVarId) (name : Name) (given : List (Nat × Expr))
+    (holes : List Nat) : MetaM (List MVarId) := do
+  let info ← getConstInfo name
+  let lvls ← info.levelParams.mapM fun _ => mkFreshLevelMVar
+  let f := mkConst name lvls
+  let (mvars, _, concl) ← forallMetaTelescope (← inferType f)
+  for i in holes do
+    if i ≥ mvars.size then throwError "func_run: bad hole {i} for {name}"
+    (mvars[i]!).mvarId!.setKind .syntheticOpaque
+  for (i, e) in given do
+    if i ≥ mvars.size then throwError "func_run: bad argument {i} for {name}"
+    unless ← isDefEq mvars[i]! e do
+      throwError "func_run: cannot fix argument {i} of {name} to{indentExpr e}"
+  unless ← isDefEq concl (← g.getType) do
+    throwError "func_run: {name} does not fit the goal{indentExpr (← g.getType)}"
+  g.assign (mkAppN f mvars)
+  let mut out := []
+  for i in holes.reverse do
+    let m := mvars[i]!
+    unless ← m.mvarId!.isAssigned do out := m.mvarId! :: out
+  return out
+
+/-- Run one tactic on one goal, all or nothing. -/
+def tryTacOn (g : MVarId) (stx : TSyntax `tactic) : TacticM Bool := do
+  let saved ← saveState
+  let prev ← getGoals
+  try
+    setGoals [g]
+    evalTactic stx
+    if (← getGoals).isEmpty then
+      setGoals prev
+      return true
+    else
+      saved.restore
+      return false
+  catch _ =>
+    saved.restore
+    return false
+
+/-- Close `g` with the first tactic that works, or hand it back as a subgoal. -/
+def discharge (g : MVarId) (stxs : List (TSyntax `tactic)) : ForwardM Unit := do
+  if ← g.isAssigned then return
+  for stx in stxs do
+    if ← tryTacOn g stx then return
+  modify fun c => { c with side := c.side.push g }
+
+/-- The gas obligation: always `base - n = (base - m) + c` over numerals. -/
+def gasTacs : ForwardM (List (TSyntax `tactic)) := do
+  let t ← `(tactic|
+    (simp only [Devm.gasLeft_setMach, gVerylow, gBase, gHigh, gMid, gJumpdest,
+      gasColdSload, gMemory]; omega))
+  return [t]
+
+/-- The stack-headroom obligation, on a literal stack. -/
+def roomTacs : ForwardM (List (TSyntax `tactic)) := do
+  let a ← `(tactic| (simp only [Devm.stack_setMach]; simp))
+  let b ← `(tactic| simp)
+  let c ← `(tactic| decide)
+  return [a, b, c]
+
+/-- The stack-shape obligation, true by construction. -/
+def rflTacs : ForwardM (List (TSyntax `tactic)) := do
+  let a ← `(tactic| rfl)
+  let b ← `(tactic| simp)
+  return [a, b]
+
+/-- A value obligation `f x … = v`: `rfl` when the walk kept the application,
+otherwise the hint has to be justified. -/
+def valTacs : ForwardM (List (TSyntax `tactic)) := do
+  let a ← `(tactic| rfl)
+  let b ← `(tactic| assumption)
+  let c ← `(tactic| decide)
+  let d ← `(tactic| decide +kernel)
+  let e ← `(tactic| simp)
+  return [a, b, c, d, e]
+
+/-- Elaborate the next hint at the expected type, or nothing if none is left. -/
+def nextHint (g : MVarId) (expected : Expr) : ForwardM (Option Expr) := do
+  let c ← get
+  match c.hints with
+  | [] => return none
+  | h :: rest =>
+    set { c with hints := rest }
+    g.withContext do
+      let e ← Term.elabTerm h (some expected)
+      Term.synthesizeSyntheticMVarsNoPostponing
+      return some (← instantiateMVars e)
+
+/-- Split a state into its base and the three machine fields.  Every state the
+walk writes is in this shape; the entry state is whatever the caller named. -/
+def parseState (d : Expr) : MetaM (Expr × Expr × Expr × Expr) := do
+  let d' ← whnfR d
+  match d'.getAppFnArgs with
+  | (``Jaune.Devm.setMach, #[b, m]) =>
+    let m' ← whnfR m
+    match m'.getAppFnArgs with
+    | (``Jaune.Mach.mk, #[s, mem, gas]) => return (b, s, mem, gas)
+    | _ => return (b, ← mkAppM ``Jaune.Mach.stack #[m],
+        ← mkAppM ``Jaune.Mach.memory #[m], ← mkAppM ``Jaune.Mach.gasLeft #[m])
+  | _ => return (d', ← mkAppM ``Jaune.Devm.stack #[d'],
+      ← mkAppM ``Jaune.Devm.memory #[d'], ← mkAppM ``Jaune.Devm.gasLeft #[d'])
+
+/-- Read a gas account as `base - n`.  A state whose gas is not of that shape
+starts a fresh offset, which is still correct — it only makes the numerals in
+later premises relative to it. -/
+def parseGas (gas : Expr) : MetaM (Expr × Nat) := do
+  match gas.getAppFnArgs with
+  | (``HSub.hSub, #[_, _, _, _, a, b]) =>
+    match b.nat? with
+    | some n => return (a, n)
+    | none => return (gas, 0)
+  | _ => return (gas, 0)
+
+/-- Peel `n` words off a stack expression. -/
+def popStack : Nat → Expr → MetaM (List Expr × Expr)
+  | 0, s => return ([], s)
+  | n + 1, s => do
+    let s' ← whnf s
+    match s'.getAppFnArgs with
+    | (``List.cons, #[_, x, t]) => do
+      let (xs, t') ← popStack n t
+      return (x :: xs, t')
+    | _ => throwError "func_run: the stack is too short here:{indentExpr s}"
+
+/-- Unfold until the head is one of `heads`, or until nothing unfolds.  Plain
+`whnf` is wrong here: it would run straight past `applyBinary` into the machine
+monad, and the head symbol *is* the classification the walk needs. -/
+partial def whnfUntilHead (heads : List Name) : Nat → Expr → MetaM Expr
+  | 0, e => return e
+  | fuel + 1, e => do
+    let e' ← whnfCore e
+    match e'.getAppFn.constName? with
+    | some n => if heads.contains n then return e' else
+      match ← unfoldDefinition? e' with
+      | some e'' => whnfUntilHead heads fuel e''
+      | none => return e'
+    | none =>
+      match ← unfoldDefinition? e' with
+      | some e'' => whnfUntilHead heads fuel e''
+      | none => return e'
+
+/-- Build `base.setMach ⟨stack, memory, gas⟩`. -/
+def mkState (base stack memory gas : Expr) : MetaM Expr := do
+  mkAppM ``Jaune.Devm.setMach #[base, ← mkAppM ``Jaune.Mach.mk #[stack, memory, gas]]
+
+/-- `gasBase - (n + cost)`. -/
+def mkGas (gasBase : Expr) (n cost : Nat) : MetaM Expr :=
+  mkAppM ``HSub.hSub #[gasBase, mkNatLit (n + cost)]
+
+/-- Restate a `Func.RunCompiled` goal with the state the walk wrote, instead of
+the projection chain the applied lemma's conclusion produced. -/
+def retarget (g : MVarId) (state : Expr) : MetaM MVarId := do
+  let t ← instantiateMVars (← g.getType)
+  match t.getAppFnArgs with
+  | (``Blanc.Func.RunCompiled, #[fs, sevm, _, f, post]) =>
+    g.change (mkAppN (mkConst ``Blanc.Func.RunCompiled) #[fs, sevm, state, f, post])
+  | _ => return g
+
+/-- Discharge the successor-state equation of the applied rule against the state
+the walk wrote. -/
+def fixPost (post state : Expr) : MetaM Unit := do
+  unless ← isDefEq post state do
+    throwError "func_run: cannot name the successor state{indentExpr state}"
+
+/-- One `Ninst` node: pick the wrapper the opcode calls for, name the successor,
+and hand back what the wrapper leaves. -/
+def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
+  let t ← instantiateMVars (← g.getType)
+  let (sevm, d, i, post) ← match t.getAppFnArgs with
+    | (``Blanc.Ninst.RunCompiled, #[a, b, c, e]) => pure (a, b, c, e)
+    | _ => throwError "func_run: not an instruction goal{indentExpr t}"
+  let (base, stk, mem, gas) ← parseState d
+  let (gb, goff) ← parseGas gas
+  let n := (← get).step
+  modify fun c => { c with step := c.step + 1 }
+  let i' ← whnfR i
+  match i'.getAppFnArgs with
+  | (``Blanc.Ninst.pushB256, #[w]) => do
+    -- Evaluate `pushCost` rather than testing `w` for zero.  `Bytes.sig` drops
+    -- leading zero bytes, so "is this a `PUSH0`?" is a question about the whole
+    -- word, and a `pushB256` whose immediate is written `0 * 32` is one.
+    let costE ← mkAppM ``pushCost
+      #[← mkAppM ``Jaune.Bytes.sig #[← mkAppM ``Jaune.B256.toBytes #[w]]]
+    let some cost ← natOf? costE
+      | throwError "func_run: cannot tell what this PUSH costs:{indentExpr costE}"
+    let gas' ← mkGas gb goff cost
+    let succ ← mkState base (← mkAppM ``List.cons #[w, stk]) mem gas'
+    fixPost post succ
+    let gs ← applyLemma g ``Ninst.runCompiled_pushB256
+      [(0, sevm), (1, d), (2, w), (3, mkNatLit cost), (4, gas')] [5, 6, 7]
+    -- No nested `by`: a term-level tactic block is postponed past this walk's
+    -- own `try`, so its failure would escape instead of falling through.
+    let zero ← `(tactic| rfl)
+    let ne ← `(tactic| (refine pushCost_of_ne_zero ?_; decide))
+    let nek ← `(tactic| (refine pushCost_of_ne_zero ?_; decide +kernel))
+    match gs with
+    | [hc, hg, hr] =>
+      discharge hc [zero, ne, nek]
+      discharge hg (← gasTacs)
+      discharge hr (← roomTacs)
+    | _ => throwError "func_run: PUSH left {gs.length} obligations"
+  | (``Jaune.Ninst.reg, #[r]) => do
+    let r' ← whnfR r
+    match r'.getAppFnArgs with
+    | (``Jaune.Rinst.dup, #[k]) => do
+      let some kv ← natOf? (← mkAppM ``Fin.val #[k])
+        | throwError "func_run: DUP index is not a literal{indentExpr k}"
+      let (ws, _) ← popStack (kv + 1) stk
+      let w := ws.getLast!
+      let gas' ← mkGas gb goff 3
+      let succ ← mkState base (← mkAppM ``List.cons #[w, stk]) mem gas'
+      fixPost post succ
+      let gs ← applyLemma g ``Ninst.runCompiled_dup
+        [(0, sevm), (1, d), (2, k), (3, w), (4, gas')] [5, 6, 7]
+      match gs with
+      | [hget, hg, hr] =>
+        discharge hget (← rflTacs)
+        discharge hg (← gasTacs)
+        discharge hr (← roomTacs)
+      | _ => throwError "func_run: DUP left {gs.length} obligations"
+    | (``Jaune.Rinst.calldataload, #[]) => do
+      let ([x], s) ← popStack 1 stk | throwError "func_run: CALLDATALOAD"
+      -- No hint: the value is `Sevm.dataWord` of a word already on the stack,
+      -- which is a definition applied to known arguments, not a computation.
+      let v ← mkAppM ``Blanc.Sevm.dataWord #[sevm, x]
+      let gas' ← mkGas gb goff 3
+      let succ ← mkState base (← mkAppM ``List.cons #[v, s]) mem gas'
+      fixPost post succ
+      let gs ← applyLemma g ``Ninst.runCompiled_calldataload
+        [(0, sevm), (1, d), (2, x), (3, v), (4, s), (5, gas')] [6, 7, 8, 9]
+      match gs with
+      | [hstk, hval, hg, hr] =>
+        discharge hstk (← rflTacs)
+        discharge hval (← valTacs)
+        discharge hg (← gasTacs)
+        discharge hr (← roomTacs)
+      | _ => throwError "func_run: CALLDATALOAD left {gs.length} obligations"
+    | (``Jaune.Rinst.sload, #[]) => do
+      let ([k], s) ← popStack 1 stk | throwError "func_run: SLOAD"
+      let tgt ← mkAppM ``Jaune.Sevm.currentTarget #[sevm]
+      -- No hint either: the value read is `Devm.getStorVal` at the key that is
+      -- already on the stack.
+      let v ← mkAppM ``Jaune.Devm.getStorVal #[d, tgt, k]
+      let base' ← mkAppM ``Jaune.addAccessedStorageKey #[d, tgt, k]
+      let gas' ← mkGas gb goff 2100
+      let succ ← mkState base' (← mkAppM ``List.cons #[v, s]) mem gas'
+      fixPost post succ
+      let gs ← applyLemma g ``Ninst.runCompiled_sload_cold
+        [(0, sevm), (1, d), (2, k), (3, v), (4, s), (5, gas')] [6, 7, 8, 9, 10]
+      let assum ← `(tactic| assumption)
+      match gs with
+      | [hstk, hcold, hval, hg, hr] =>
+        discharge hstk (← rflTacs)
+        discharge hcold [assum]
+        discharge hval (← valTacs)
+        discharge hg (← gasTacs)
+        discharge hr (← roomTacs)
+      | _ => throwError "func_run: SLOAD left {gs.length} obligations"
+    | (``Jaune.Rinst.mstore, #[]) => do
+      let ([idx, val], s) ← popStack 2 stk | throwError "func_run: MSTORE"
+      let some ext ← nextHint g (mkConst ``Nat)
+        | throwError m!"func_run: step {n + 1} is an MSTORE. Its memory-expansion charge is not computable from the instruction alone; supply it as the next hint."
+      let some extN ← natOf? ext
+        | throwError "func_run: the MSTORE hint{indentExpr ext}is not a numeral"
+      let gas' ← mkGas gb goff (3 + extN)
+      let img ← mkAppM ``Jaune.Mem.write
+        #[mem, ← mkAppM ``Jaune.B256.toNat #[idx], ← mkAppM ``Jaune.B256.toBytes #[val]]
+      let succ ← mkState base s img gas'
+      fixPost post succ
+      let gs ← applyLemma g ``Ninst.runCompiled_mstore_of
+        [(0, sevm), (1, d), (2, idx), (3, val), (4, s), (5, gas'), (6, ext), (7, img)]
+        [8, 9, 10, 11]
+      match gs with
+      | [hstk, hext, hg, hw] =>
+        discharge hstk (← rflTacs)
+        discharge hext []
+        discharge hg (← gasTacs)
+        discharge hw (← rflTacs)
+      | _ => throwError "func_run: MSTORE left {gs.length} obligations"
+    | _ => do
+      let core ← whnfUntilHead [``Jaune.applyBinary, ``Jaune.applyUnary] 16
+        (← mkAppM ``Jaune.Rinst.runCore #[mkNatLit 0, d, sevm, r'])
+      let ne ← `(tactic| rintro ⟨⟩)
+      let ne' ← `(tactic| exact nofun)
+      let rfl' ← `(tactic| rfl)
+      match core.getAppFnArgs with
+      | (``Jaune.applyBinary, #[f, costE, _]) => do
+        let some cost ← natOf? costE
+          | throwError "func_run: the cost{indentExpr costE}is not a numeral"
+        let ([x, y], s) ← popStack 2 stk | throwError "func_run: binary opcode"
+        let v ← (do
+          match ← nextHint g (mkConst ``Jaune.B256) with
+          | some v => pure v
+          | none => mkAppM' f #[x, y])
+        let gas' ← mkGas gb goff cost
+        let succ ← mkState base (← mkAppM ``List.cons #[v, s]) mem gas'
+        fixPost post succ
+        let gs ← applyLemma g ``Ninst.runCompiled_binary
+          [(0, sevm), (1, d), (2, r'), (3, f), (4, costE), (5, gas'), (6, x),
+            (7, y), (8, v), (9, s)] [10, 11, 12, 13, 14, 15]
+        match gs with
+        | [hne, hdef, hstk, hval, hg, hr] =>
+          discharge hne [ne, ne']
+          discharge hdef [rfl']
+          discharge hstk (← rflTacs)
+          discharge hval (← valTacs)
+          discharge hg (← gasTacs)
+          discharge hr (← roomTacs)
+        | _ => throwError "func_run: binary opcode left {gs.length} obligations"
+      | (``Jaune.applyUnary, #[f, costE, _]) => do
+        let some cost ← natOf? costE
+          | throwError "func_run: the cost{indentExpr costE}is not a numeral"
+        let ([x], s) ← popStack 1 stk | throwError "func_run: unary opcode"
+        let v ← (do
+          match ← nextHint g (mkConst ``Jaune.B256) with
+          | some v => pure v
+          | none => mkAppM' f #[x])
+        let gas' ← mkGas gb goff cost
+        let succ ← mkState base (← mkAppM ``List.cons #[v, s]) mem gas'
+        fixPost post succ
+        let gs ← applyLemma g ``Ninst.runCompiled_unary
+          [(0, sevm), (1, d), (2, r'), (3, f), (4, costE), (5, gas'), (6, x),
+            (7, v), (8, s)] [9, 10, 11, 12, 13, 14]
+        match gs with
+        | [hne, hdef, hstk, hval, hg, hr] =>
+          discharge hne [ne, ne']
+          discharge hdef [rfl']
+          discharge hstk (← rflTacs)
+          discharge hval (← valTacs)
+          discharge hg (← gasTacs)
+          discharge hr (← roomTacs)
+        | _ => throwError "func_run: unary opcode left {gs.length} obligations"
+      | _ =>
+        throwError m!"func_run: step {n + 1}: no forward rule for{indentExpr i'}" ++ m!"\nIts evaluation is{indentExpr core}"
+  | _ =>
+    throwError "func_run: step {n + 1}: cannot step{indentExpr i'}"
+
+/-- The walk itself: `Func.RunCompiled`'s five rules, applied where `funcInv`
+would have inverted them. -/
+partial def funcWalk (g : MVarId) : ForwardM Unit := g.withContext do
+  let t ← instantiateMVars (← g.getType)
+  match t.getAppFnArgs with
+  | (``Blanc.Func.RunCompiled, #[fs, sevm, d, f, post]) => do
+    let f' ← whnf f
+    let g ← g.change
+      (mkAppN (mkConst ``Blanc.Func.RunCompiled) #[fs, sevm, d, f', post])
+    let (base, stk, mem, gas) ← parseState d
+    let (gb, goff) ← parseGas gas
+    match f'.getAppFnArgs with
+    | (``Blanc.Func.next, #[i, rest]) => do
+      let gs ← applyLemma g ``Blanc.Func.RunCompiled.next
+        [(0, fs), (1, sevm), (2, d), (3, i), (5, rest)] [7, 8]
+      match gs with
+      | [gi, gr] => ninstStep gi; funcWalk gr
+      | _ => throwError "func_run: `.next` left {gs.length} obligations"
+    | (``Blanc.Func.branch, #[fArm, gArm]) => do
+      modify fun c => { c with step := c.step + 1 }
+      let ([w], s) ← popStack 1 stk | throwError "func_run: BRANCH"
+      let takesZero ←
+        if w.nat? == some 0 then pure true
+        else if (w.nat?).isSome then pure false
+        else pure false
+      if takesZero then
+        let gas' ← mkGas gb goff 13
+        let succ ← mkState base s mem gas'
+        let gs ← applyLemma g ``Func.runCompiled_branch_zero
+          [(0, fs), (1, sevm), (2, d), (3, fArm), (4, gArm), (6, s), (7, gas')]
+          [8, 9, 10, 11]
+        match gs with
+        | [hstk, hr, hg, harm] =>
+          discharge hstk (← rflTacs)
+          discharge hr (← roomTacs)
+          discharge hg (← gasTacs)
+          funcWalk (← retarget harm succ)
+        | _ => throwError "func_run: `.zero` left {gs.length} obligations"
+      else
+        let gas' ← mkGas gb goff 14
+        let succ ← mkState base s mem gas'
+        let gs ← applyLemma g ``Func.runCompiled_branch_succ
+          [(0, fs), (1, sevm), (2, d), (3, fArm), (4, gArm), (6, w), (7, s),
+            (8, gas')] [9, 10, 11, 12, 13]
+        let dec ← `(tactic| decide)
+        let deck ← `(tactic| decide +kernel)
+        match gs with
+        | [hne, hstk, hr, hg, harm] =>
+          if ← (do if ← tryTacOn hne dec then pure true else tryTacOn hne deck)
+          then pure ()
+          else
+            throwError m!"func_run: cannot tell whether the branch is taken. The JUMPI condition is{indentExpr w}" ++ m!"\nGive that value a hint."
+          discharge hstk (← rflTacs)
+          discharge hr (← roomTacs)
+          discharge hg (← gasTacs)
+          funcWalk (← retarget harm succ)
+        | _ => throwError "func_run: `.succ` left {gs.length} obligations"
+    | (``Blanc.Func.call, #[k]) => do
+      modify fun c => { c with step := c.step + 1 }
+      let gas' ← mkGas gb goff 12
+      let succ ← mkState base stk mem gas'
+      let gs ← applyLemma g ``Func.runCompiled_call'
+        [(0, fs), (1, sevm), (2, d), (3, k), (6, gas')] [7, 8, 9, 10]
+      let rfl' ← `(tactic| rfl)
+      let dec ← `(tactic| decide)
+      match gs with
+      | [hget, hr, hg, hbody] =>
+        unless (← tryTacOn hget rfl') || (← tryTacOn hget dec) do
+          throwError m!"func_run: cannot resolve the table entry that `.call` refers to:{indentExpr k}"
+        discharge hr (← roomTacs)
+        discharge hg (← gasTacs)
+        funcWalk (← retarget hbody succ)
+      | _ => throwError "func_run: `.call` left {gs.length} obligations"
+    | (``Blanc.Func.last, #[_]) =>
+      modify fun c => { c with side := c.side.push g }
+    | _ => throwError "func_run: cannot see the shape of{indentExpr f'}"
+  | _ =>
+    throwError "func_run: the goal is not a `Func.RunCompiled`{indentExpr t}"
+
+/-- Entry point. -/
+def funcRunMain (hints : List Term) : TacticM Unit := do
+  let g ← getMainGoal
+  let (_, c) ← (funcWalk g).run { hints := hints, side := #[], step := 0 }
+  if c.step == 0 then
+    throwError "func_run: applied no rule; nothing was proved"
+  unless c.hints.isEmpty do
+    throwError "func_run: {c.hints.length} hint(s) were never used"
+  replaceMainGoal c.side.toList
+
+end Forward
+
+/-- Build a `Func.RunCompiled` derivation forward from the state the goal names.
+
+`func_run [v₁, …, vₙ]` walks the goal's `Func` and applies one rule per node,
+naming every intermediate state itself.  The bracketed terms are the values the
+walk cannot compute — what a comparison decided, what a shift produced, what a
+memory expansion cost — consumed left to right; with none given, value-producing
+opcodes keep their unevaluated application.
+
+Everything it could not close comes back as a goal, in the order the walk met
+it, ending with the frame's terminal instruction. -/
+syntax (name := funcRun) "func_run" (ppSpace "[" term,* "]")? : tactic
+
+elab_rules : tactic
+  | `(tactic| func_run $[[$hs,*]]?) =>
+    Forward.funcRunMain <| match hs with
+      | some hs => hs.getElems.toList
+      | none => []
+
+end ForwardTactic
 
 end Blanc
