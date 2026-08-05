@@ -3,6 +3,7 @@ import Blanc.Conserved
 import Blanc.FlashSpec
 import Blanc.WethCode
 import Blanc.FmintCode
+import Blanc.Compiled
 
 #print axioms Blanc.weth_preserves_solvent
 #print axioms Blanc.stateTransition_preserves_solvent
@@ -39,3 +40,5 @@ import Blanc.FmintCode
 #print axioms Blanc.Fmint.rollback_of_amount_over_maxFlashLoan
 #print axioms Blanc.Fmint.rollback_of_allowance_below_amount
 #print axioms Blanc.Fmint.rollback_of_balance_below_amount
+#print axioms Blanc.Prog.exec_of_runCompiled
+#print axioms Blanc.Prog.runCompiled_iff_exec

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Blanc verification gate (REFACTOR.md Phase 0, step 0.3): `lake build`,
-# then an axiom audit of the thirty-five audited top theorems via
+# then an axiom audit of the thirty-seven audited top theorems via
 # scripts/AxiomCheck.lean — WETH's seven solvency theorems, fmint's seven
 # conservation theorems, fmint's `flashLoan` success spec and its seven
-# no-success corollaries, the two compile witnesses, and the eleven frame-level
-# restoration rows below.
+# no-success corollaries, the two compile witnesses, the eleven frame-level
+# restoration rows below, and the two `RunCompiled`/`exec` bridge rows.
 #
 # `wethCode_compile` is what keeps the solvency theorems' `Prog.compile weth`
 # hypothesis from being vacuous. `fmintCode_compile` is the same equation for
@@ -68,6 +68,16 @@
 # rows need neither), and the boundary-quantified reading of every callback
 # premise — over EVERY boundary the call could open, never "if the receiver's
 # code returns X". `Blanc/FlashSpec.lean`'s section banner is the authority.
+#
+# The last two rows are `Blanc/Compiled.lean`'s bridge between the gas-exact
+# relation `Prog.RunCompiled` and Jaune's `exec`. They were built by
+# `~/plans/liveness-prelude.md` and audited here by `~/plans/forward-witness.md`
+# Step 1, which closed the hole: everything that arc builds rests on them, so
+# they are pinned before anything is stacked on top. Read them exactly as
+# `Prog.runCompiled_iff_exec`'s own docstring states them — they convert run
+# witnesses into executions and back, and by themselves produce a witness for
+# no contract at all. They are NOT liveness, they are message-frame level and
+# not transaction level, and they are `.ok`-level only.
 #
 # Each row carries its OWN pinned expected axiom set (see ROWS below), and a
 # theorem's axiom closure must equal its row's set exactly, order-insensitive.
@@ -150,7 +160,9 @@ Blanc.Fmint.rollback_of_token_ne_self|$STANDARD
 Blanc.Fmint.rollback_of_receiver_not_address|$STANDARD
 Blanc.Fmint.rollback_of_amount_over_maxFlashLoan|$STANDARD
 Blanc.Fmint.rollback_of_allowance_below_amount|$STANDARD
-Blanc.Fmint.rollback_of_balance_below_amount|$STANDARD"
+Blanc.Fmint.rollback_of_balance_below_amount|$STANDARD
+Blanc.Prog.exec_of_runCompiled|$STANDARD
+Blanc.Prog.runCompiled_iff_exec|$STANDARD"
 # Secondary net only: the exact-set comparison below is the primary check;
 # this pattern catches forbidden names in output the per-theorem parse missed.
 FORBIDDEN='sorryAx|ofReduceBool|ofReduceNat|_native\.'
