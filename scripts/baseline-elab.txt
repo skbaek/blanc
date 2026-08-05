@@ -36,11 +36,20 @@
 # case-bashed -- the one fact needed about opcode bytes goes through the
 # existing `toInstType` lemmas -- so the growth is proportional to the text.
 # Same measurement conditions, and again by hand rather than `--rebase`.
+#
+# Step 4 of that arc (the liveness direction and the biconditional) re-set the
+# row from 1.608 to its measured 1.786. The added material constructs `Exec`
+# derivations from `RunCompiled` premises: forward evaluation of
+# `chargeGas`/`push`/`pop`, one `.cont` equation per hidden instruction, a
+# 14-projection extensionality bridge, and the derivation induction. Every
+# state identification is by projection `rfl`s plus one `omega`, so the growth
+# is again proportional to the text. Same measurement conditions, and again by
+# hand rather than `--rebase`.
 OK	1.241	Blanc.lean
 OK	1.257	Blanc/Basic.lean
 OK	2.454	Blanc/CommonCore.lean
 OK	6.143	Blanc/CommonProofs.lean
-OK	1.608	Blanc/Compiled.lean
+OK	1.786	Blanc/Compiled.lean
 OK	2.178	Blanc/Conserved.lean
 OK	3.158	Blanc/Fmint.lean
 OK	4.549	Blanc/FmintCode.lean
