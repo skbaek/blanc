@@ -33,11 +33,24 @@ them, is not mistaken for one). This subsumes WETH's PUSH32-only pattern as
 one instance (`n = 32`) of the general rule.
 
 fmint's own account is identified and EXCLUDED from the caller-prop scan by
-its compiled code's exact length and prefix (asserted by
-`gen-fmint-fixtures.py`'s `get_fmint_code_hex`) -- fmint's own dispatcher
-also embeds all twelve selectors as comparison constants (via the same
-minimal-width pushes), so scanning it would trivially "exercise" everything
-regardless of whether any transaction ever called it.
+BYTE-EQUALITY against the committed `Blanc.Fmint.fmintCode` literal --
+fmint's own dispatcher also embeds all twelve selectors as comparison
+constants (via the same minimal-width pushes), so scanning it would
+trivially "exercise" everything regardless of whether any transaction ever
+called it.
+
+Until `~/plans/fmint-evidence.md` Step 1 that identification was a code
+LENGTH plus a 4-byte prefix, and the constant's own comment conceded that
+"the LENGTH is what actually distinguishes the two accounts" -- both
+contracts' dispatchers open with the same four bytes. That was written
+before `check-runtime-bytes.py` existed. It parses the committed Lean
+literal directly, so this gate now reuses that parser (imported, never
+copied) and compares whole runtimes. The difference is not academic: under
+the old test a fixture whose fmint account had drifted to different bytes
+of the same length would still have been accepted as "the fmint account"
+and scanned as though nothing were wrong. It now fails closed with
+`CoverageError` -- the negative control recorded in
+`~/plans/reports/fmint-evidence-step-1.md`.
 
 Fail-closed throughout, per `check-weth-coverage.py`'s discipline: a
 committed budget of known-unexercised selectors
@@ -48,25 +61,28 @@ CLI contract: exit 0 iff the actual unexercised-selector set is a subset of
 the budget file's rows and does not exceed its declared count. Output ends
 with one unambiguous verdict line.
 """
+import importlib.util
 import json
 import os
 import re
 import sys
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SELECTORS_PATH = os.path.join(REPO_ROOT, "scripts", "fmint-selectors.json")
-BUDGET_PATH = os.path.join(REPO_ROOT, "scripts", "fmint-coverage-budget.txt")
-DEFAULT_FIXTURES_DIR = os.path.join(REPO_ROOT, "scripts", "fixtures", "fmint")
+SCRIPTS_DIR = os.path.join(REPO_ROOT, "scripts")
+SELECTORS_PATH = os.path.join(SCRIPTS_DIR, "fmint-selectors.json")
+BUDGET_PATH = os.path.join(SCRIPTS_DIR, "fmint-coverage-budget.txt")
+DEFAULT_FIXTURES_DIR = os.path.join(SCRIPTS_DIR, "fixtures", "fmint")
 
 SELECTOR_RE = re.compile(r"^0x[0-9a-f]{8}$")
 
-# fmint's compiled runtime code's length in hex digits and its known prefix
-# -- confirmed against `gen-fmint-fixtures.py`'s `get_fmint_code_hex`, which
-# asserts the same two facts about the oracle-compiled bytecode it fetches.
-# The prefix happens to equal WETH's own (both dispatchers open the same
-# way); the LENGTH is what actually distinguishes the two accounts.
-FMINT_CODE_HEX_LEN = 2514  # 1257 bytes; was 2434 before the `Func.rev` normalization
-FMINT_CODE_PREFIX = "5b5f3560"
+# The committed source of truth for fmint's runtime bytes. `find_fmint_address`
+# compares whole accounts against this literal; there is deliberately no
+# length or prefix constant here any more, because a hardcoded length is
+# exactly the identification this gate stopped relying on.
+FMINT_CODE_LEAN = os.path.join(REPO_ROOT, "Blanc", "FmintCode.lean")
+FMINT_CODE_DEF = "fmintCode"
+
+_RUNTIME_BYTES = None
 
 
 class CoverageError(Exception):
@@ -192,23 +208,64 @@ def load_budget(known):
 
 # ---- fixtures ---------------------------------------------------------------
 
+def _runtime_bytes_parser():
+    """`check-runtime-bytes.py`'s Lean-literal parser, imported.
+
+    Imported rather than copied, so there is exactly one implementation of
+    "read the committed `def <name> : Bytes := [...]` literal" in this
+    repository and its fail-loudly behaviour (no silent empty parse, and the
+    docstring byte count cross-checked) is inherited rather than reproduced.
+    `importlib` is what the hyphenated filename costs: the module cannot be
+    reached by a plain `import`, and renaming it would churn both
+    `check-fmint.sh` and `check-weth.sh` for nothing. Loading by path leaves
+    that already-green gate untouched."""
+    path = os.path.join(SCRIPTS_DIR, "check-runtime-bytes.py")
+    spec = importlib.util.spec_from_file_location("check_runtime_bytes", path)
+    if spec is None or spec.loader is None:
+        raise CoverageError(f"could not load the runtime-bytes parser: {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def fmint_runtime_bytes():
+    """The committed `Blanc.Fmint.fmintCode` bytes, parsed once."""
+    global _RUNTIME_BYTES
+    if _RUNTIME_BYTES is None:
+        module = _runtime_bytes_parser()
+        try:
+            _RUNTIME_BYTES = module.parse_lean_literal(
+                FMINT_CODE_LEAN, FMINT_CODE_DEF)
+        except Exception as exc:  # ParseError, or anything the loader raised
+            raise CoverageError(
+                f"could not parse the committed `{FMINT_CODE_DEF}` literal "
+                f"from {os.path.relpath(FMINT_CODE_LEAN, REPO_ROOT)}: "
+                f"{exc}") from exc
+    return _RUNTIME_BYTES
+
+
 def find_fmint_address(pre):
-    """The unique account in `pre` whose code is fmint's compiled runtime
-    code, identified by length and prefix (see the module docstring). Fails
-    closed if there isn't exactly one."""
+    """The unique account in `pre` whose code is BYTE-IDENTICAL to the
+    committed `Blanc.Fmint.fmintCode` literal (see the module docstring).
+    Fails closed if there isn't exactly one."""
+    want = fmint_runtime_bytes()
     hits = []
     for addr, acct in pre.items():
         code = acct.get("code", "0x")
         if not isinstance(code, str) or not code.startswith("0x"):
             raise CoverageError(f"account {addr}: malformed 'code' field {code!r}")
         body = code[2:].lower()
-        if len(body) == FMINT_CODE_HEX_LEN and body.startswith(FMINT_CODE_PREFIX):
+        if len(body) % 2 or re.search(r"[^0-9a-f]", body):
+            raise CoverageError(
+                f"account {addr}: 'code' is not an even-length hex string")
+        if bytes.fromhex(body) == want:
             hits.append(addr)
     if len(hits) != 1:
         raise CoverageError(
-            f"expected exactly one fmint account (code length "
-            f"{FMINT_CODE_HEX_LEN} hex digits, prefix {FMINT_CODE_PREFIX}) "
-            f"in 'pre', found {len(hits)}: {hits}")
+            f"expected exactly one fmint account (code byte-identical to the "
+            f"committed `{FMINT_CODE_DEF}`, {len(want)} bytes, in "
+            f"{os.path.relpath(FMINT_CODE_LEAN, REPO_ROOT)}) in 'pre', found "
+            f"{len(hits)}: {hits}")
     return hits[0].lower()
 
 

@@ -251,6 +251,39 @@ shapes consumed the allowance, the new one refunds it — and on its own it is
 not a fixture *assertion*: a measurement recorded in a README goes red for
 nobody. Step 2 of the same arc turned it into a tripwire, below.
 
+### The oversized transaction gas limits, and why they stay
+
+Four cases raise their trigger transaction's gas limit above the
+3,000,000 default `trigger_tx` uses — `04-flashloan-returndata-spectrum`,
+`07-flashloan-transfer-then-default`, `08-flashloan-reentrant` and
+`09-guards` all pass `gas="0xf42400"`, 16,000,000. Two more pass
+`gas="0x1c9c380"`, 30,000,000 (`05-flashloan-data-length-spectrum` and
+`06-flashloan-allowance-spectrum`). These are **transaction** gas limits, a
+different thing from the per-trigger `gas=` cap retired above: no trigger in
+this suite carries one of those any more, and `Trigger` refuses the
+combination outright on a rejected trigger.
+
+All six were sized for the pre-normalization starvation, when a single
+`.rev` over a keccak digest could consume the whole budget and cascade into
+every later trigger in the same fixture. That mechanism is gone, and the
+measured whole-block `gasUsed` figures in the table above show how far: `09`
+now spends 284,743 of the 16,000,000 its transaction requests.
+
+**They stay, deliberately.** Shrinking them would move every affected
+fixture's goldens — a regeneration of six of the ten cases — and buy no
+evidence, since a transaction limit is not asserted by anything. It would
+also *tighten* the gas-floor bit's denominator for nothing: `base+3` compares
+the gas held after a `CALL` against half the gas held before, so a smaller
+allowance narrows the very gap the bit reads, against the ~98.4% an
+exceptional halt burns. An oversized limit makes that comparison more
+robust, not less.
+
+Recorded because the alternative is that they read as an accident. (The
+inventory in `~/plans/reports/fmint-hygiene-step-1.md` finding 7 named two of
+the four 16,000,000 sites; all four were introduced together and none has
+changed since. Corrected here by
+`~/plans/reports/fmint-evidence-step-1.md`.)
+
 ### What the clean-failure triple discriminates
 
 The committed expectation for a rejected probe is flag `0`,

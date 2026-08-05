@@ -675,6 +675,27 @@ def get_fmint_code_hex():
     # 2514 = 2 x 1257 bytes. Was 2434 (1217 bytes) until the `Func.rev`
     # normalization (`~/plans/fmint-hygiene.md`) put two `PUSH0`s ahead of
     # each of fmint's twenty rev sites.
+    #
+    # WHY THIS STAYS A LENGTH ASSERT, adjudicated by `~/plans/fmint-evidence.md`
+    # Step 1 (which strengthened the *coverage checkers'* account
+    # identification from length+prefix to byte-equality, and asked whether
+    # this site should follow). It should not, for two reasons.
+    #
+    # This is not an identification of an unknown account -- it is a sanity
+    # check on a subprocess's stdout. What can actually go wrong here is
+    # `lake env lean` emitting something other than the hex string: a warning
+    # line, an empty result, a truncated pipe. Length plus prefix catches
+    # every one of those at zero cost.
+    #
+    # And byte-equality here would be circular rather than stronger. `hexstr`
+    # IS `Blanc.fmintCode`, obtained by evaluating the very definition that
+    # `check-runtime-bytes.py` parses out of `Blanc/FmintCode.lean`; comparing
+    # the two would assert that the literal equals itself, read twice. The
+    # property that actually matters -- every committed fixture's fmint
+    # account is byte-identical to that literal -- is gated end to end by
+    # `check-runtime-bytes.py`, which `check-fmint.sh` runs and CI therefore
+    # runs. That is the load-bearing check; this one is a smoke test on a
+    # pipe, and is correctly sized as one.
     assert len(hexstr) == 2514, f"unexpected fmintCode hex length {len(hexstr)}"
     assert hexstr.startswith("5b5f3560"), hexstr[:16]
     return "0x" + hexstr

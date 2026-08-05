@@ -696,6 +696,14 @@ def get_weth_code_hex():
     # 1776 = 2 x 888 bytes. Was 1732 (866 bytes) until the `Func.rev`
     # normalization (`~/plans/fmint-hygiene.md`) put two `PUSH0`s ahead of
     # each of WETH's eleven rev sites.
+    #
+    # WHY THIS STAYS A LENGTH ASSERT: same adjudication as
+    # `gen-fmint-fixtures.py`'s `get_fmint_code_hex`, recorded in full there
+    # (`~/plans/fmint-evidence.md` Step 1). In short -- this checks a
+    # subprocess's stdout, not the identity of an unknown account, and
+    # byte-equality against the committed literal would compare `Blanc.wethCode`
+    # with itself. Every fixture's WETH account IS checked byte-for-byte
+    # against that literal, by `check-runtime-bytes.py` under `check-weth.sh`.
     assert len(hexstr) == 1776, f"unexpected wethCode hex length {len(hexstr)}"
     assert hexstr.startswith("5b5f3560"), hexstr[:16]
     return "0x" + hexstr

@@ -184,20 +184,36 @@ run by `check-weth.sh`: every fixture's WETH pre-state code must be
 byte-identical to the committed 888-byte `wethCode`.
 
 Two further precautions, both retained. A rejected probe forwards a fixed gas
-cap (`PROBE_GAS`) instead of `GAS`. Its original reason was that a guard could
-fire as a stack underflow or a memory-expansion out-of-gas as well as a clean
-`REVERT`, and those consume everything they are given — with `GAS` that would
-be 63/64 of the frame, starving every later probe. That reason is now
+cap (`PROBE_GAS = 200,000`) instead of `GAS`. Its original reason was that a
+guard could fire as a stack underflow or a memory-expansion out-of-gas as well
+as a clean `REVERT`, and those consume everything they are given — with `GAS`
+that would be 63/64 of the frame, starving every later probe. That reason is now
 historical: post-normalization a WETH guard failure is a clean `REVERT(0, 0)`
 rather than an exceptional halt, so it starves nothing (a probe can still run
 out of gas if given too little, which is what the pairing below detects). The cap
 stays because removing it would move every golden in the suite for no
-evidential gain, and because the second precaution still needs it — every
+evidential gain, and because the second precaution still leans on it — a
 refused call is paired with a call on the **same selector at the same cap**
 that succeeds, which is what separates "the guard refused" from "the probe ran
-out of gas". (fmint's analogous cap was *not* kept: it had been raised to
-3,000,000 to survive the out-of-gas shape, and retiring it was the measurement
-that showed the shape was gone — `~/plans/fmint-hygiene.md` Step 1.)
+out of gas".
+
+**That pairing covers nine of this suite's ten refusals, not all ten**, and the
+exception is stated rather than papered over: `08-guard-balance`'s refused
+`withdraw(3 wad)` has no honoured `withdraw` beside it at the same cap. Its
+refusal is non-vacuous for a different, case-specific reason, which that case
+asserts directly — WETH holds 5 wad of ether against the prober's 2, so the
+refusal is demonstrably the accounting guard rather than a contract that could
+not pay, and the executed marker witnesses that the call was made at all. The
+refused `transfer` beside it *is* paired, on the same balance precondition. A
+paired honoured `withdraw` would be a new scenario, which this suite is closed
+to (`~/plans/fmint-evidence.md` non-goals); it is recorded here as the one
+place the general argument does not reach.
+
+(fmint's analogous cap was *not* kept: it had been raised to 3,000,000 to
+survive the out-of-gas shape, and retiring it was the measurement that showed
+the shape was gone — `~/plans/fmint-hygiene.md` Step 1. fmint's suite carries
+the discriminating failure-shape evidence for both contracts, which is why this
+one keeps a cap and that one has none.)
 
 ### Known limits of these expectations
 

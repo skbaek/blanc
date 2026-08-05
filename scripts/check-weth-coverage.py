@@ -22,9 +22,17 @@ guessed -- see the report.
 
 WETH's own account is identified by its code, not by a hardcoded address: no
 fixture's WETH account is at the same synthetic address for a reason a
-future case couldn't change, so this looks for the account whose code has
-the exact length and prefix `scripts/gen-weth-fixtures.py`'s
-`get_weth_code_hex` already asserts (1776 hex digits, `5b5f3560` prefix).
+future case couldn't change. Since `~/plans/fmint-evidence.md` Step 1 that
+identification is BYTE-EQUALITY against the committed `Blanc.wethCode`
+literal, parsed by `check-runtime-bytes.py`'s parser (imported, never
+copied). It was a code length plus a 4-byte prefix (1776 hex digits,
+`5b5f3560`) until then -- a test written before `check-runtime-bytes.py`
+existed, and one under which a WETH account that had drifted to different
+bytes of the same length would still have been accepted here and excluded
+from the scan as though nothing were wrong. The prefix never
+distinguished anything on its own: fmint's dispatcher opens with the same
+four bytes.
+
 This exclusion matters: WETH's OWN bytecode contains a `PUSH32` of every one
 of its ten selectors, as the dispatcher's comparison constants
 (`Blanc/CommonCore.lean`'s `dispatchWith`) -- scanning WETH's own code with
@@ -41,26 +49,28 @@ CLI contract: exit 0 iff the actual unexercised-selector set is a subset of
 the budget file's rows and does not exceed its declared count. Output ends
 with one unambiguous verdict line.
 """
+import importlib.util
 import json
 import os
 import re
 import sys
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SCRIPTS_DIR = os.path.join(REPO_ROOT, "scripts")
 SELECTORS_PATH = os.path.join(REPO_ROOT, "scripts", "weth-selectors.json")
 BUDGET_PATH = os.path.join(REPO_ROOT, "scripts", "weth-coverage-budget.txt")
 DEFAULT_FIXTURES_DIR = os.path.join(REPO_ROOT, "scripts", "fixtures", "weth")
 
 SELECTOR_RE = re.compile(r"^0x[0-9a-f]{8}$")
 
-# WETH's compiled runtime code always starts this way and has this length in
-# hex digits -- confirmed against scripts/gen-weth-fixtures.py's
-# get_weth_code_hex, which asserts the same two facts about the oracle-
-# compiled bytecode it fetches. This is how the checker tells "the WETH
-# account" apart from every other account in a fixture's pre-alloc, without
-# hardcoding any per-fixture address.
-WETH_CODE_HEX_LEN = 1776  # 888 bytes; was 1732 before the `Func.rev` normalization
-WETH_CODE_PREFIX = "5b5f3560"
+# The committed source of truth for WETH's runtime bytes. `find_weth_address`
+# compares whole accounts against this literal; there is deliberately no
+# length or prefix constant here any more, because a hardcoded length is
+# exactly the identification this gate stopped relying on.
+WETH_CODE_LEAN = os.path.join(REPO_ROOT, "Blanc", "WethCode.lean")
+WETH_CODE_DEF = "wethCode"
+
+_RUNTIME_BYTES = None
 
 
 class CoverageError(Exception):
@@ -186,23 +196,64 @@ def load_budget(known):
 
 # ---- fixtures ---------------------------------------------------------------
 
+def _runtime_bytes_parser():
+    """`check-runtime-bytes.py`'s Lean-literal parser, imported.
+
+    Imported rather than copied, so there is exactly one implementation of
+    "read the committed `def <name> : Bytes := [...]` literal" in this
+    repository and its fail-loudly behaviour (no silent empty parse, and the
+    docstring byte count cross-checked) is inherited rather than reproduced.
+    `importlib` is what the hyphenated filename costs: the module cannot be
+    reached by a plain `import`, and renaming it would churn both
+    `check-fmint.sh` and `check-weth.sh` for nothing. Loading by path leaves
+    that already-green gate untouched."""
+    path = os.path.join(SCRIPTS_DIR, "check-runtime-bytes.py")
+    spec = importlib.util.spec_from_file_location("check_runtime_bytes", path)
+    if spec is None or spec.loader is None:
+        raise CoverageError(f"could not load the runtime-bytes parser: {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def weth_runtime_bytes():
+    """The committed `Blanc.wethCode` bytes, parsed once."""
+    global _RUNTIME_BYTES
+    if _RUNTIME_BYTES is None:
+        module = _runtime_bytes_parser()
+        try:
+            _RUNTIME_BYTES = module.parse_lean_literal(
+                WETH_CODE_LEAN, WETH_CODE_DEF)
+        except Exception as exc:  # ParseError, or anything the loader raised
+            raise CoverageError(
+                f"could not parse the committed `{WETH_CODE_DEF}` literal "
+                f"from {os.path.relpath(WETH_CODE_LEAN, REPO_ROOT)}: "
+                f"{exc}") from exc
+    return _RUNTIME_BYTES
+
+
 def find_weth_address(pre):
-    """The unique account in `pre` whose code is WETH's compiled runtime
-    code, identified by length and prefix rather than by address (see the
-    module docstring). Fails closed if there isn't exactly one."""
+    """The unique account in `pre` whose code is BYTE-IDENTICAL to the
+    committed `Blanc.wethCode` literal, rather than merely of its length
+    (see the module docstring). Fails closed if there isn't exactly one."""
+    want = weth_runtime_bytes()
     hits = []
     for addr, acct in pre.items():
         code = acct.get("code", "0x")
         if not isinstance(code, str) or not code.startswith("0x"):
             raise CoverageError(f"account {addr}: malformed 'code' field {code!r}")
         body = code[2:].lower()
-        if len(body) == WETH_CODE_HEX_LEN and body.startswith(WETH_CODE_PREFIX):
+        if len(body) % 2 or re.search(r"[^0-9a-f]", body):
+            raise CoverageError(
+                f"account {addr}: 'code' is not an even-length hex string")
+        if bytes.fromhex(body) == want:
             hits.append(addr)
     if len(hits) != 1:
         raise CoverageError(
-            f"expected exactly one WETH account (code length "
-            f"{WETH_CODE_HEX_LEN} hex digits, prefix {WETH_CODE_PREFIX}) in "
-            f"'pre', found {len(hits)}: {hits}")
+            f"expected exactly one WETH account (code byte-identical to the "
+            f"committed `{WETH_CODE_DEF}`, {len(want)} bytes, in "
+            f"{os.path.relpath(WETH_CODE_LEAN, REPO_ROOT)}) in 'pre', found "
+            f"{len(hits)}: {hits}")
     return hits[0].lower()
 
 
