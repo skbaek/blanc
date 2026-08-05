@@ -754,6 +754,185 @@ theorem flashLoan_guards {sevm : Sevm} {s r : Devm}
   rcases of_flashLoan_toCall h_run with ⟨h_token, h_nof, a, _, _, h_recv, -⟩
   exact ⟨h_token, ⟨a, h_recv.symm⟩, h_nof⟩
 
+/-! ## The callback's calldata, as the ABI encoding
+
+`of_flashLoan_toCall` says what the frame's memory *is*, as a chain of writes
+over an arbitrary starting image.  This section instantiates that chain at the
+empty image and shows the window the `CALL` hands the callback equals the
+canonical encoding of `onFlashLoan(caller, this, amount, 0, data)` — the
+equation the arc's fixed decision 2 demands, with `abiCallWithTail` written from
+the five arguments in `Blanc/CommonCore.lean` and never from the contract's own
+stores. -/
+
+/-- The `argsSize` the code computes, as the length the encoding has. -/
+lemma toNat_callbackArgsSize {len : Nat} (h : 196 + ceil32 len < 2 ^ 256) :
+    ((0xc4 : B256) + ((~~~ (31 : B256)) &&& (31 + Nat.toB256 len))).toNat
+      = 196 + ceil32 len := by
+  have hlen : 31 + len < 2 ^ 256 := by
+    have := Nat.le_ceil32 len
+    omega
+  rw [B256.toNat_add, B256.toNat_ceil32 hlen,
+    show B256.toNat 0xc4 = 196 from rfl, Nat.lo_eq_of_lt h]
+
+/-- The write chain of `of_flashLoan_toCall`, at the empty starting image.
+
+The mint's `Transfer` word at `0x00` is overwritten by the selector, and every
+later store lands exactly at the end of what is there — which is what the layout
+table at `Blanc/Fmint.lean` asserts, now as an equation between byte lists. -/
+lemma callbackImage_nil (sel cal slf amt lenw : B256) (payload : Bytes) :
+    Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt
+      (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt
+        (Bytes.writeAt [] 0 amt.toBytes) 0 sel.toBytes) 32 cal.toBytes)
+        64 slf.toBytes) 96 amt.toBytes) 128 (0 : B256).toBytes)
+        160 (0xa0 : B256).toBytes) 192 lenw.toBytes) 224 payload
+      = sel.toBytes ++ cal.toBytes ++ slf.toBytes ++ amt.toBytes ++
+        (0 : B256).toBytes ++ (0xa0 : B256).toBytes ++ lenw.toBytes ++ payload := by
+  have hlen : ∀ x : B256, (B256.toBytes x).length = 32 := B256.length_toBytes
+  have e0 : Bytes.writeAt ([] : Bytes) 0 amt.toBytes = amt.toBytes :=
+    Bytes.writeAt_zero_of_le (by simp)
+  have e1 : Bytes.writeAt amt.toBytes 0 sel.toBytes = sel.toBytes :=
+    Bytes.writeAt_zero_of_le (by rw [hlen, hlen])
+  have e2 : Bytes.writeAt sel.toBytes 32 cal.toBytes = sel.toBytes ++ cal.toBytes :=
+    Bytes.writeAt_of_length_eq (hlen sel)
+  have e3 : Bytes.writeAt (sel.toBytes ++ cal.toBytes) 64 slf.toBytes
+      = sel.toBytes ++ cal.toBytes ++ slf.toBytes :=
+    Bytes.writeAt_of_length_eq (by simp [hlen])
+  have e4 : Bytes.writeAt (sel.toBytes ++ cal.toBytes ++ slf.toBytes) 96 amt.toBytes
+      = sel.toBytes ++ cal.toBytes ++ slf.toBytes ++ amt.toBytes :=
+    Bytes.writeAt_of_length_eq (by simp [hlen])
+  have e5 : Bytes.writeAt (sel.toBytes ++ cal.toBytes ++ slf.toBytes ++ amt.toBytes)
+      128 (0 : B256).toBytes
+      = sel.toBytes ++ cal.toBytes ++ slf.toBytes ++ amt.toBytes ++ (0 : B256).toBytes :=
+    Bytes.writeAt_of_length_eq (by simp [hlen])
+  have e6 : Bytes.writeAt (sel.toBytes ++ cal.toBytes ++ slf.toBytes ++ amt.toBytes ++
+      (0 : B256).toBytes) 160 (0xa0 : B256).toBytes
+      = sel.toBytes ++ cal.toBytes ++ slf.toBytes ++ amt.toBytes ++ (0 : B256).toBytes ++
+        (0xa0 : B256).toBytes :=
+    Bytes.writeAt_of_length_eq (by simp [hlen])
+  have e7 : Bytes.writeAt (sel.toBytes ++ cal.toBytes ++ slf.toBytes ++ amt.toBytes ++
+      (0 : B256).toBytes ++ (0xa0 : B256).toBytes) 192 lenw.toBytes
+      = sel.toBytes ++ cal.toBytes ++ slf.toBytes ++ amt.toBytes ++ (0 : B256).toBytes ++
+        (0xa0 : B256).toBytes ++ lenw.toBytes :=
+    Bytes.writeAt_of_length_eq (by simp [hlen])
+  have e8 : Bytes.writeAt (sel.toBytes ++ cal.toBytes ++ slf.toBytes ++ amt.toBytes ++
+      (0 : B256).toBytes ++ (0xa0 : B256).toBytes ++ lenw.toBytes) 224 payload
+      = sel.toBytes ++ cal.toBytes ++ slf.toBytes ++ amt.toBytes ++ (0 : B256).toBytes ++
+        (0xa0 : B256).toBytes ++ lenw.toBytes ++ payload :=
+    Bytes.writeAt_of_length_eq (by simp [hlen])
+  rw [e0, e1, e2, e3, e4, e5, e6, e7, e8]
+
+/-- **The window equals the encoding.**
+
+Three of the table's claims are used here and nowhere else.  The selector is
+right-aligned in word `0`, so the window starting at `0x1c` drops exactly the 28
+leading zero bytes and `List.drop 28 (B256.toBytes sel)` is `abiSelectorBytes
+sel` *by definition*.  The offset word is `0xa0` because offsets count from the
+start of the argument area, which is `32 * (4 + 1)` for four heads.  And the
+window runs `ceil32 len - len` bytes past the payload: those positions read as
+`0` because `Mem.Reads` compares with `getD` on both sides, which is exactly
+`abiBytesTail`'s padding — derived, not assumed. -/
+lemma callbackWindow (sel cal slf amt : B256) (payload : Bytes) :
+    (sel.toBytes ++ cal.toBytes ++ slf.toBytes ++ amt.toBytes ++ (0 : B256).toBytes ++
+      (0xa0 : B256).toBytes ++ (Nat.toB256 payload.length).toBytes ++ payload).sliceD
+        28 (196 + ceil32 payload.length) 0
+      = abiCallWithTail sel [cal, slf, amt, 0] payload := by
+  have hlen : ∀ x : B256, (B256.toBytes x).length = 32 := B256.length_toBytes
+  have hce : payload.length ≤ ceil32 payload.length := Nat.le_ceil32 _
+  have himg : (sel.toBytes ++ cal.toBytes ++ slf.toBytes ++ amt.toBytes ++
+      (0 : B256).toBytes ++ (0xa0 : B256).toBytes ++
+      (Nat.toB256 payload.length).toBytes ++ payload)
+      = sel.toBytes ++ (cal.toBytes ++ slf.toBytes ++ amt.toBytes ++
+        (0 : B256).toBytes ++ (0xa0 : B256).toBytes ++
+        (Nat.toB256 payload.length).toBytes ++ payload) := by
+    simp [List.append_assoc]
+  unfold List.sliceD
+  rw [himg, List.drop_append_of_le_length (by rw [hlen]; omega)]
+  rw [List.takeD_of_length_le]
+  · simp only [abiCallWithTail, abiBytesTail, abiSelectorBytes, List.map, List.flatten,
+      List.length_cons, List.length_nil, List.append_assoc, List.length_append, hlen,
+      List.length_drop]
+    rw [show 196 + ceil32 payload.length -
+        (32 - 28 + (32 + (32 + (32 + (32 + (32 + (32 + payload.length)))))))
+          = ceil32 payload.length - payload.length from by omega]
+    norm_num
+    rfl
+  · simp only [List.length_append, List.length_drop, hlen]
+    omega
+
+/-- **The callback's calldata image**, and this step's closing statement.
+
+`of_flashLoan_toCall`'s conclusion with its universally quantified memory
+conjunct discharged: the window `[0x1c, 0x1c + argsSize)` that the `CALL` hands
+the callback *is* `onFlashLoan(caller, this, amount, 0, data)`, canonically
+encoded.
+
+**Three premises, each of them real.**
+
+* `h_dec` — the calldata is a canonical encoding of
+  `flashLoan(receiver, token, amount, data)`.  Fixed decision 1c: a
+  non-canonical encoding is decodable by this contract, which validates no
+  offset, but is out of scope here and this theorem says nothing about it.
+* `h_size` — `196 + ceil32 data.length < 2 ^ 256`.  The same family as
+  `tailBytes_three_of_decodes`'s bound: `List.length` is an unbounded `Nat`
+  while the machine word is 256 bits, so a longer payload would not round-trip
+  through any encoder and its `argsSize` would not be its length.
+* `h_wf` and `h_fresh` — **frame freshness**, and it is a premise rather than a
+  fact about the walk.  `Exec 0 sevm pre` quantifies `pre` freely and does not
+  know it came from Jaune's `initDevm`, which is where `memory := .empty`
+  actually comes from; `Mem.wf_empty` and `Mem.reads_empty` discharge both at
+  the frame boundary.  Zero-*initialisation* is not assumed here — that is
+  `Mem.Reads`'s `getD`-on-both-sides shape, and it is what makes the padding a
+  theorem.  What is assumed is only that no earlier writer of *this frame* left
+  bytes above the payload.
+
+Note what is *not* premised: nothing here says a `flashLoan` call ever
+succeeds.  The run is a hypothesis and this reads facts off it. -/
+theorem flashLoan_callback_image {sevm : Sevm} {s r : Devm}
+    {receiver token amount : B256} {data : Bytes}
+    (h_dec : Sevm.DecodesCallWithTail sevm flashLoanSelector
+      [receiver, token, amount] data)
+    (h_size : 196 + ceil32 data.length < 2 ^ 256)
+    (h_wf : Mem.Wf s.memory) (h_fresh : Mem.Reads s.memory [])
+    (h_run : Func.Run (fmint.main :: fmintAux) sevm s flashLoan r) :
+    token = sevm.currentTarget.toB256 ∧
+    B256.Nof ((Devm.getStor s sevm.currentTarget).get supplySlot) amount ∧
+    ∃ (a : Adr) (sc : Devm) (g : B256),
+      receiver = a.toB256 ∧
+      Devm.getCode s = Devm.getCode sc ∧
+      Devm.getStor sc sevm.currentTarget =
+        ((Devm.getStor s sevm.currentTarget).set a.toB256
+            (amount + (Devm.getStor s sevm.currentTarget).get a.toB256)).set
+          supplySlot (amount + (Devm.getStor s sevm.currentTarget).get supplySlot) ∧
+      (g :: a.toB256 :: (0 : B256) :: callbackArgsOffset ::
+        Nat.toB256 (196 + ceil32 data.length) ::
+        (0 : B256) :: (0 : B256) :: [amount, a.toB256] <<+ sc.stack) ∧
+      (sc.memory.read callbackArgsOffset.toNat (196 + ceil32 data.length)).1
+        = abiCallWithTail onFlashLoanSelector
+            [sevm.caller.toB256, sevm.currentTarget.toB256, amount, 0] data ∧
+      Func.Run (fmint.main :: fmintAux) sevm sc flashLoanFromCall r := by
+  have hdlen : data.length < 2 ^ 256 := by
+    have := Nat.le_ceil32 data.length
+    omega
+  have h0 : Sevm.argWord sevm 0 = receiver := argWord_zero_of_decodes h_dec
+  have h1 : Sevm.argWord sevm 1 = token := argWord_one_of_decodes h_dec
+  have h2 : Sevm.argWord sevm 2 = amount := argWord_two_of_decodes h_dec
+  have htl : Sevm.tailLen sevm 3 = Nat.toB256 data.length := tailLen_three_of_decodes h_dec
+  have htb : Sevm.tailBytes sevm 3 = data := tailBytes_three_of_decodes hdlen h_dec
+  have hsize : (0xc4 : B256) + ((~~~ (31 : B256)) &&& (31 + Nat.toB256 data.length))
+      = Nat.toB256 (196 + ceil32 data.length) := by
+    rw [← toB256_toNat ((0xc4 : B256) + _), toNat_callbackArgsSize h_size]
+  obtain ⟨h_token, h_nof, a, sc, g, h_recv, h_code, h_stor, h_stack, h_mem, h_res⟩ :=
+    of_flashLoan_toCall h_run
+  rw [h0] at h_recv
+  rw [h1] at h_token
+  rw [h2] at h_nof h_stor h_stack h_mem
+  rw [htl, hsize] at h_stack
+  refine ⟨h_token, h_nof, a, sc, g, h_recv, h_code, h_stor, h_stack, ?_, h_res⟩
+  obtain ⟨-, h_reads⟩ := h_mem [] h_wf h_fresh
+  rw [htl, htb, callbackImage_nil] at h_reads
+  rw [show callbackArgsOffset.toNat = 28 from rfl, Mem.Reads.read h_reads,
+    callbackWindow]
+
 end Fmint
 
 end Blanc
