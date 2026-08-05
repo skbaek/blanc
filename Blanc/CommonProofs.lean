@@ -7954,6 +7954,17 @@ lemma Bytes.writeAt_zero_of_le {bs xs : Bytes} (h : bs.length ≤ xs.length) :
   rw [Bytes.writeAt, show List.takeD 0 bs 0 = [] from rfl, List.nil_append,
     List.drop_eq_nil_of_le (by omega), List.append_nil]
 
+/-- Reading a write back at its own offset returns the payload.  The read-back
+step of every store-then-load fragment: `checkRetdataHead` clobbers a memory
+word and immediately `MLOAD`s it. -/
+lemma Bytes.sliceD_writeAt (bs xs : Bytes) (n : Nat) :
+    (Bytes.writeAt bs n xs).sliceD n xs.length 0 = xs := by
+  unfold List.sliceD
+  rw [Bytes.writeAt, List.append_assoc,
+    List.drop_append_of_le_length (by rw [List.takeD_length]),
+    List.drop_eq_nil_of_le (by rw [List.takeD_length]), List.nil_append,
+    List.takeD_eq_take _ (by simp), List.take_left]
+
 /-! ### `Mem.Wf` and `Mem.Reads` -/
 
 lemma Nat.le_mul_ceilDiv (n m : Nat) (hm : 0 < m) : n ≤ m * ceilDiv n m := by
@@ -8538,6 +8549,252 @@ lemma of_forwardArgTail_val {e : Sevm} {s s' : Devm} {k lenWord xs}
   rcases prefix_of_calldatacopy_val q13 hp12 with ⟨hps, hmem⟩
   refine ⟨hps, ?_⟩
   rw [hmem, hm12, Sevm.tailBytes, ← hoff]
+
+/-! ### The returndata, value-carried
+
+Arc B consumed `of_retdataShorterThan` / `of_checkRetdataHead` to learn that a
+flag was pushed; the callback boundary (`~/plans/fmint-flashloan.md`, Step 4)
+needs them to say what the returndata *is*.  The same projection-restoring
+move as Step 1's calldata layer, applied to `RETURNDATASIZE`, `RETURNDATACOPY`
+and `MLOAD`, then to the two `Line` fragments built from them. -/
+
+/-- `RETURNDATASIZE` pushes the length of the last call's return data. -/
+lemma of_run_retdatasize_val {e : Sevm} {s s' : Devm}
+    (h : Ninst.Run e s retdatasize s') :
+    Devm.PushBurn [s.returnData.length.toB256] s s' := by
+  rcases of_run_reg h with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  exact Devm.pushBurn_of_pushItem run
+
+/-- `RETURNDATACOPY` writes *the returndata slice named by its operands* at
+*the offset it popped* — and it got there without overrunning the returndata,
+because an overrun is an exceptional halt, not a failed test (the reason
+`retdataShorterThan` must be branched on first). -/
+lemma of_run_retdatacopy_val {e : Sevm} {s s' : Devm}
+    (h : Ninst.Run e s retdatacopy s') :
+    ∃ x y z, Stack.Pop [x, y, z] s.stack s'.stack ∧
+      y.toNat + z.toNat ≤ s.returnData.length ∧
+      s'.memory
+        = s.memory.write x.toNat (s.returnData.sliceD y.toNat z.toNat 0) ∧
+      s'.returnData = s.returnData := by
+  rcases of_run_reg h with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨⟨mi, s₁⟩, h1, run₁⟩
+  rcases Except.bind_eq_ok run₁ with ⟨⟨di, s₂⟩, h2, run₂⟩
+  rcases Except.bind_eq_ok run₂ with ⟨⟨sz, s₃⟩, h3, run₃⟩
+  rcases Except.bind_eq_ok run₃ with ⟨s₄, h4, h5⟩
+  rcases Devm.pop_of_popToNat_val h1 with ⟨x, p1, rfl⟩
+  rcases Devm.pop_of_popToNat_val h2 with ⟨y, p2, rfl⟩
+  rcases Devm.pop_of_popToNat_val h3 with ⟨z, p3, rfl⟩
+  have hb := Devm.burn_of_chargeGas h4
+  have hrd : s.returnData = s₄.returnData :=
+    ((p1.returnData.trans p2.returnData).trans p3.returnData).trans hb.returnData
+  have hmem : s.memory = s₄.memory :=
+    ((p1.memory.trans p2.memory).trans p3.memory).trans hb.memory
+  split at h5
+  · cases h5
+  · rename_i hbound
+    injection h5 with eq
+    refine ⟨x, y, z, ?_, ?_, ?_, ?_⟩
+    · have hp := (Devm.pop_append p1 (Devm.pop_append p2 p3)).stack
+      rw [← eq, show (Devm.memWrite s₄ x.toNat _).stack = s₄.stack from rfl,
+        ← hb.stack]
+      exact hp
+    · rw [hrd]
+      omega
+    · rw [← eq, hmem, hrd]
+      rfl
+    · rw [← eq, hrd]
+      rfl
+
+/-- `RETURNDATACOPY` at a *known* stack top. -/
+lemma prefix_of_retdatacopy_val {e} {x y z xs} {s s' : Devm}
+    (h0 : Ninst.Run e s retdatacopy s') (h1 : x :: y :: z :: xs <<+ s.stack) :
+    (xs <<+ s'.stack) ∧
+      y.toNat + z.toNat ≤ s.returnData.length ∧
+      s'.memory
+        = s.memory.write x.toNat (s.returnData.sliceD y.toNat z.toNat 0) ∧
+      s'.returnData = s.returnData := by
+  rcases of_run_retdatacopy_val h0 with ⟨x', y', z', h2, hle, hm, hrd⟩
+  rcases of_cons_cons_pref_of_cons_cons_pref h1 (pref_of_split h2)
+    with ⟨hx, hy, ws, hpf, hpf'⟩
+  rcases List.of_cons_pref_of_cons_pref hpf hpf' with ⟨hz, -⟩
+  rw [hx, hy, hz] at h1 ⊢
+  exact ⟨of_append_pref h2 h1, hle, hm, hrd⟩
+
+/-- The value a `Devm`-level memory read returns is the `Mem`-level one. -/
+lemma Devm.memRead_fst (d : Devm) (i n : Nat) :
+    (d.memRead i n).1 = (d.memory.read i n).1 := by
+  unfold Devm.memRead
+  rcases d.memory.read i n with ⟨val, mem⟩
+  rfl
+
+/-- `MLOAD` pushes *the word at the offset it popped*, and only extends
+memory.  The value-carrying companion of `of_run_mload`. -/
+lemma of_run_mload_val {e : Sevm} {s s' : Devm} (h : Ninst.Run e s mload s') :
+    ∃ x, Stack.Diff [x] [Bytes.toB256 (s.memory.read x.toNat 32).1]
+        s.stack s'.stack ∧
+      s'.memory = s.memory.extend x.toNat 32 ∧
+      s'.returnData = s.returnData := by
+  rcases of_run_reg h with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨⟨si, s₁⟩, h1, run₁⟩
+  rcases Except.bind_eq_ok run₁ with ⟨s₂, h2, run₂⟩
+  rcases Devm.pop_of_popToNat_val h1 with ⟨x, p1, rfl⟩
+  have hb := Devm.burn_of_chargeGas h2
+  have hpush := Devm.push_of_push run₂
+  have hmem : s.memory = s₂.memory := p1.memory.trans hb.memory
+  have hrd : s.returnData = s₂.returnData := p1.returnData.trans hb.returnData
+  refine ⟨x, ⟨s₁.stack, p1.stack, ?_⟩, ?_, ?_⟩
+  · have hstk := hpush.stack
+    rw [show (s₂.memRead x.toNat 32).2.stack = s₂.stack from rfl,
+      ← hb.stack] at hstk
+    rw [show (s₂.memRead x.toNat 32).1 = (s.memory.read x.toNat 32).1 from by
+      rw [Devm.memRead_fst, hmem]] at hstk
+    exact hstk
+  · have hm := hpush.memory
+    rw [show (s₂.memRead x.toNat 32).2.memory = s₂.memory.extend x.toNat 32 from
+      rfl] at hm
+    rw [← hm, ← hmem]
+  · rw [← hpush.returnData]
+    show s₂.returnData = s.returnData
+    exact hrd.symm
+
+/-- `MLOAD` at a *known* stack top against a known memory image: the pushed
+word is the image's word at that offset, and the image survives the
+extension. -/
+lemma prefix_of_mload_val {e} {x : B256} {xs bs} {s s' : Devm}
+    (h0 : Ninst.Run e s mload s') (h1 : x :: xs <<+ s.stack)
+    (hr : Mem.Reads s.memory bs) :
+    (Bytes.toB256 (bs.sliceD x.toNat 32 0) :: xs <<+ s'.stack) ∧
+      s'.memory = s.memory.extend x.toNat 32 ∧
+      s'.returnData = s.returnData := by
+  rcases of_run_mload_val h0 with ⟨x', ⟨stk, h2, h3⟩, hm, hrd⟩
+  have hx : x = x' := (List.of_cons_pref_of_cons_pref h1 (pref_of_split h2)).left
+  subst hx
+  rw [Mem.Reads.read hr x.toNat 32] at h3
+  exact ⟨append_pref h3 (of_append_pref h2 h1), hm, hrd⟩
+
+/-- `retdataShorterThan n`, with its flag: the fragment pushes exactly the
+comparison `retdatasize <? n` and touches nothing else. -/
+lemma of_retdataShorterThan_val {e : Sevm} {s s' : Devm} {n : B256} {xs}
+    (hp : xs <<+ s.stack) (h : Line.Run e s (retdataShorterThan n) s') :
+    ((s.returnData.length.toB256 <? n) :: xs <<+ s'.stack) ∧
+      s'.memory = s.memory ∧ s'.returnData = s.returnData := by
+  simp only [retdataShorterThan] at h
+  rcases Line.of_run_cons h with ⟨u1, q1, h⟩
+  have hb1 := of_run_pushB256 q1
+  have hp1 : n :: xs <<+ u1.stack := prefix_of_push hb1 hp
+  rcases Line.of_run_cons h with ⟨u2, q2, h⟩
+  have hb2 := of_run_retdatasize_val q2
+  rw [← hb1.returnData] at hb2
+  have hp2 : s.returnData.length.toB256 :: n :: xs <<+ u2.stack :=
+    prefix_of_push hb2 hp1
+  rcases Line.of_run_cons h with ⟨u3, q3, hnil⟩
+  cases hnil
+  obtain ⟨a, b, hdb⟩ : ∃ a b, Devm.DiffBurn [a, b] [B256.ltCheck a b] u2 s' := by
+    rcases of_run_reg q3 with ⟨pc, run⟩
+    simp only [Rinst.run, Rinst.runCore] at run
+    exact Devm.diffBurn_of_applyBinary run
+  refine ⟨prefix_of_lt q3 hp2, ?_, ?_⟩
+  · rw [← hdb.memory, ← hb2.memory, ← hb1.memory]
+  · rw [← hdb.returnData, ← hb2.returnData, ← hb1.returnData]
+
+/-- `checkRetdataHead w m`, with its flag: the word the fragment compares
+against `w` is *the returndata's head word*, read back through the memory word
+it clobbers.  Carries the non-overrun bound the copy enforces — returndata of
+at least a word, the reason `retdataShorterThan` is branched on first — and
+the memory image after the clobber. -/
+lemma of_checkRetdataHead_val {e : Sevm} {s s' : Devm} {w m : B256} {bs : Bytes}
+    {xs}
+    (hp : xs <<+ s.stack) (hwf : Mem.Wf s.memory) (hr : Mem.Reads s.memory bs)
+    (h : Line.Run e s (checkRetdataHead w m) s') :
+    ((w =? Bytes.toB256 (s.returnData.sliceD 0 32 0)) :: xs <<+ s'.stack) ∧
+      32 ≤ s.returnData.length ∧
+      Mem.Wf s'.memory ∧
+      Mem.Reads s'.memory
+        (Bytes.writeAt bs (m * 32).toNat (s.returnData.sliceD 0 32 0)) ∧
+      s'.returnData = s.returnData := by
+  simp only [checkRetdataHead, pushList, List.map] at h
+  rcases Line.of_run_cons h with ⟨u1, q1, h⟩
+  have hb1 := of_run_pushB256 q1
+  have hp1 : (32 : B256) :: xs <<+ u1.stack := prefix_of_push hb1 hp
+  rcases Line.of_run_cons h with ⟨u2, q2, h⟩
+  have hb2 := of_run_pushB256 q2
+  have hp2 : (0 : B256) :: (32 : B256) :: xs <<+ u2.stack :=
+    prefix_of_push hb2 hp1
+  rcases Line.of_run_cons h with ⟨u3, q3, h⟩
+  have hb3 := of_run_pushB256 q3
+  have hp3 : (m * 32) :: (0 : B256) :: (32 : B256) :: xs <<+ u3.stack :=
+    prefix_of_push hb3 hp2
+  have hm3 : s.memory = u3.memory := (hb1.memory.trans hb2.memory).trans hb3.memory
+  have hrd3 : s.returnData = u3.returnData :=
+    (hb1.returnData.trans hb2.returnData).trans hb3.returnData
+  rcases Line.of_run_cons h with ⟨u4, q4, h⟩
+  rcases prefix_of_retdatacopy_val q4 hp3 with ⟨hp4, hle4, hm4, hrd4⟩
+  have hle : 32 ≤ s.returnData.length := by
+    rw [hrd3]
+    rw [show ((0 : B256)).toNat = 0 from rfl,
+      show ((32 : B256)).toNat = 32 from rfl] at hle4
+    omega
+  have hslice : u3.returnData.sliceD ((0 : B256)).toNat ((32 : B256)).toNat 0
+      = s.returnData.sliceD 0 32 0 := by
+    rw [← hrd3, show ((0 : B256)).toNat = 0 from rfl,
+      show ((32 : B256)).toNat = 32 from rfl]
+  have hwf4 : Mem.Wf u4.memory := by
+    rw [hm4, ← hm3]
+    exact hwf.write _ _
+  have hr4 : Mem.Reads u4.memory
+      (Bytes.writeAt bs (m * 32).toNat (s.returnData.sliceD 0 32 0)) := by
+    rw [hm4, ← hm3, hslice]
+    exact hr.write hwf _ _
+  rcases Line.of_run_cons h with ⟨u5, q5, h⟩
+  have hb5 := of_run_pushB256 q5
+  have hp5 : (m * 32) :: xs <<+ u5.stack := prefix_of_push hb5 hp4
+  have hwf5 : Mem.Wf u5.memory := by
+    rw [← hb5.memory]
+    exact hwf4
+  have hr5 : Mem.Reads u5.memory
+      (Bytes.writeAt bs (m * 32).toNat (s.returnData.sliceD 0 32 0)) := by
+    rw [← hb5.memory]
+    exact hr4
+  rcases Line.of_run_cons h with ⟨u6, q6, h⟩
+  rcases prefix_of_mload_val q6 hp5 hr5 with ⟨hp6, hm6, hrd6⟩
+  have hlen32 : (s.returnData.sliceD 0 32 0).length = 32 := by
+    unfold List.sliceD
+    rw [List.takeD_length]
+  have hhead : (Bytes.writeAt bs (m * 32).toNat
+      (s.returnData.sliceD 0 32 0)).sliceD ((m * 32)).toNat 32 0
+      = s.returnData.sliceD 0 32 0 := by
+    conv_lhs =>
+      rw [show (32 : Nat) = (s.returnData.sliceD 0 32 0).length from
+        hlen32.symm]
+    exact Bytes.sliceD_writeAt bs _ _
+  rw [hhead] at hp6
+  have hwf6 : Mem.Wf u6.memory := by
+    rw [hm6]
+    exact hwf5.extend _ _
+  have hr6 : Mem.Reads u6.memory
+      (Bytes.writeAt bs (m * 32).toNat (s.returnData.sliceD 0 32 0)) := by
+    rw [hm6]
+    exact hr5.extend _ _
+  rcases Line.of_run_cons h with ⟨u7, q7, h⟩
+  have hb7 := of_run_pushB256 q7
+  have hp7 : w :: Bytes.toB256 (s.returnData.sliceD 0 32 0) :: xs <<+ u7.stack :=
+    prefix_of_push hb7 hp6
+  rcases Line.of_run_cons h with ⟨u8, q8, hnil⟩
+  cases hnil
+  obtain ⟨a, b, hdb⟩ : ∃ a b, Devm.DiffBurn [a, b] [B256.eqCheck a b] u7 s' := by
+    rcases of_run_reg q8 with ⟨pc, run⟩
+    simp only [Rinst.run, Rinst.runCore] at run
+    exact Devm.diffBurn_of_applyBinary run
+  refine ⟨prefix_of_eq q8 hp7, hle, ?_, ?_, ?_⟩
+  · rw [← hdb.memory, ← hb7.memory]
+    exact hwf6
+  · rw [← hdb.memory, ← hb7.memory]
+    exact hr6
+  · rw [← hdb.returnData, ← hb7.returnData, hrd6, ← hb5.returnData, hrd4,
+      ← hrd3]
 
 /-! ### The dynamic tail of a canonically encoded call
 
