@@ -7709,4 +7709,381 @@ lemma Func.preserves_nof {c : List Func} {sevm : Sevm} {s r : Devm} {f : Func}
     sum r.getBal < 2 ^ 256 :=
   Nat.lt_of_le_of_lt (Func.balance_effect run) h_nof
 
+/-! ## Memory as a byte image
+
+The read/write algebra behind `Mem.Wf`, `Mem.Reads` and `Bytes.writeAt`
+(`CommonCore.lean`).  Jaune's `Array.writeD` and `Array.copyD` carry no lemmas
+beyond `Array.size_copyD`, so this section starts from their definitions.
+
+Everything here is EVM-generic: no Blanc program, no contract and no ABI shape
+appears.  Its consumers are the instruction-level memory images below, and
+through them any statement about the bytes a frame hands to an outgoing
+`CALL`. -/
+
+lemma Array.size_writeD {ξ : Type} :
+    ∀ (ys : List ξ) (xs : Array ξ) (n : Nat),
+      (Array.writeD xs n ys).size = xs.size := by
+  intro ys
+  induction ys with
+  | nil => intro xs n; rfl
+  | cons y ys ih =>
+    intro xs n
+    rw [Array.writeD]
+    split
+    · rw [ih]; simp
+    · rfl
+
+lemma Array.getD_set {ξ : Type} (xs : Array ξ) (n : Nat) (y : ξ) (h : n < xs.size)
+    (i : Nat) (d : ξ) :
+    (xs.set n y h).getD i d = if i = n then y else xs.getD i d := by
+  by_cases hi : i = n
+  · subst hi; simp [Array.getD, h]
+  · simp [Array.getD, Array.getElem_set, hi, Ne.symm hi]
+
+/-- Read-over-write for `Array.writeD`, the primitive behind `Mem.write`.
+
+The hypothesis is what makes the write total: `writeD` silently stops at the end
+of the array, and all three of `Mem.write`'s branches arrange for the whole
+payload to fit before calling it. -/
+lemma Array.getD_writeD {ξ : Type} (d : ξ) :
+    ∀ (ys : List ξ) (xs : Array ξ) (n i : Nat), n + ys.length ≤ xs.size →
+      (Array.writeD xs n ys).getD i d =
+        if n ≤ i ∧ i < n + ys.length then ys.getD (i - n) d else xs.getD i d := by
+  intro ys
+  induction ys with
+  | nil => intro xs n i _; simp [Array.writeD]
+  | cons y ys ih =>
+    intro xs n i h
+    simp only [List.length_cons] at h
+    have hn : n < xs.size := by omega
+    rw [Array.writeD, dif_pos hn]
+    rw [ih (xs.set n y hn) (n + 1) i (by rw [Array.size_set]; omega)]
+    rw [Array.getD_set]
+    by_cases hi : i = n
+    · subst hi
+      rw [if_neg (by omega), if_pos rfl, if_pos (by simp), Nat.sub_self]
+      rfl
+    · by_cases hlt : n ≤ i ∧ i < n + (y :: ys).length
+      · have h1 : n + 1 ≤ i ∧ i < n + 1 + ys.length := by
+          simp only [List.length_cons] at hlt; omega
+        rw [if_pos h1, if_pos hlt]
+        have : i - n = (i - (n + 1)) + 1 := by omega
+        rw [this]; rfl
+      · have h1 : ¬ (n + 1 ≤ i ∧ i < n + 1 + ys.length) := by
+          simp only [List.length_cons] at hlt; omega
+        rw [if_neg h1, if_neg hlt, if_neg hi]
+
+lemma Array.getD_setIfInBounds {ξ : Type} (a : Array ξ) (k : Nat) (x : ξ)
+    (hk : k < a.size) (i : Nat) (d : ξ) :
+    (a.setIfInBounds k x).getD i d = if i = k then x else a.getD i d := by
+  simp only [Array.setIfInBounds, dif_pos hk]
+  exact Array.getD_set a k x hk i d
+
+lemma Array.foldl_setIfInBounds_size {ξ : Type} :
+    ∀ (l : List ξ) (a : Array ξ) (k : Nat),
+      (List.foldl (fun (ysn : Array ξ × Nat) x =>
+        (ysn.fst.setIfInBounds ysn.snd x, ysn.snd + 1)) (a, k) l).fst.size = a.size := by
+  intro l
+  induction l with
+  | nil => intro a k; rfl
+  | cons x l ih => intro a k; simp [ih]
+
+lemma Array.foldl_setIfInBounds_getD {ξ : Type} (d : ξ) :
+    ∀ (l : List ξ) (a : Array ξ) (k i : Nat), k + l.length ≤ a.size →
+      (List.foldl (fun (ysn : Array ξ × Nat) x =>
+        (ysn.fst.setIfInBounds ysn.snd x, ysn.snd + 1)) (a, k) l).fst.getD i d =
+        if k ≤ i ∧ i < k + l.length then l.getD (i - k) d else a.getD i d := by
+  intro l
+  induction l with
+  | nil => intro a k i _; simp
+  | cons x l ih =>
+    intro a k i h
+    simp only [List.length_cons] at h
+    have hk : k < a.size := by omega
+    simp only [List.foldl_cons]
+    rw [ih (a.setIfInBounds k x) (k + 1) i
+      (by rw [Array.size_setIfInBounds]; omega)]
+    rw [Array.getD_setIfInBounds a k x hk]
+    by_cases hi : i = k
+    · subst hi
+      rw [if_neg (by omega), if_pos rfl, if_pos (by simp), Nat.sub_self]
+      rfl
+    · by_cases hlt : k ≤ i ∧ i < k + (x :: l).length
+      · have h1 : k + 1 ≤ i ∧ i < k + 1 + l.length := by
+          simp only [List.length_cons] at hlt; omega
+        rw [if_pos h1, if_pos hlt]
+        have hsub : i - k = (i - (k + 1)) + 1 := by omega
+        rw [hsub]; rfl
+      · have h1 : ¬ (k + 1 ≤ i ∧ i < k + 1 + l.length) := by
+          simp only [List.length_cons] at hlt; omega
+        rw [if_neg h1, if_neg hlt, if_neg hi]
+
+/-- Read-back for `Array.copyD`, whose contract is "overwrite the front of `ys`
+with `xs`, keeping `ys`'s length".  With `xs` no longer than `ys` nothing is
+dropped, which is the only case `Mem.write` ever creates. -/
+lemma Array.getD_copyD {ξ : Type} (xs ys : Array ξ) (d : ξ) (h : xs.size ≤ ys.size)
+    (i : Nat) :
+    (Array.copyD xs ys).getD i d = if i < xs.size then xs.getD i d else ys.getD i d := by
+  simp only [Array.copyD]
+  rw [← Array.foldl_toList]
+  rw [Array.foldl_setIfInBounds_getD d xs.toList ys 0 i (by simpa using h)]
+  by_cases hi : i < xs.size
+  · rw [if_pos (by simpa using hi), if_pos hi, Nat.sub_zero]
+    simp [Array.getD, hi]
+  · rw [if_neg (by simpa using hi), if_neg hi]
+
+/-! ### The list side of `Bytes.writeAt` -/
+
+lemma List.getD_append_left {ξ : Type} {l₁ l₂ : List ξ} {i : Nat} (d : ξ)
+    (h : i < l₁.length) : (l₁ ++ l₂).getD i d = l₁.getD i d := by
+  simp [List.getD_eq_getElem?_getD, List.getElem?_append_left h]
+
+lemma List.getD_append_right {ξ : Type} {l₁ l₂ : List ξ} {i : Nat} (d : ξ)
+    (h : l₁.length ≤ i) : (l₁ ++ l₂).getD i d = l₂.getD (i - l₁.length) d := by
+  simp [List.getD_eq_getElem?_getD, List.getElem?_append_right h]
+
+lemma List.getD_drop {ξ : Type} (l : List ξ) (k j : Nat) (d : ξ) :
+    (l.drop k).getD j d = l.getD (k + j) d := by
+  simp [List.getD_eq_getElem?_getD, List.getElem?_drop]
+
+lemma List.getD_takeD {ξ : Type} (d : ξ) :
+    ∀ (n : Nat) (l : List ξ) (i : Nat),
+      (List.takeD n l d).getD i d = if i < n then l.getD i d else d := by
+  intro n
+  induction n with
+  | zero => intro l i; simp
+  | succ n ih =>
+    intro l i
+    rw [List.takeD_succ]
+    cases i with
+    | zero => cases l <;> simp
+    | succ i =>
+      rw [show ((l.head?.getD d :: List.takeD n l.tail d).getD (i + 1) d)
+            = (List.takeD n l.tail d).getD i d from rfl, ih l.tail i]
+      by_cases hi : i < n
+      · rw [if_pos hi, if_pos (by omega)]
+        cases l <;> simp
+      · rw [if_neg hi, if_neg (by omega)]
+
+/-- `Bytes.writeAt` read pointwise: inside the written range it is the payload,
+outside it is the old image.  Every `Mem.Reads` step below is this equation
+paired with `Array.getD_writeD`. -/
+lemma Bytes.getD_writeAt (bs : Bytes) (n : Nat) (xs : Bytes) (i : Nat) :
+    (Bytes.writeAt bs n xs).getD i 0 =
+      if n ≤ i ∧ i < n + xs.length then xs.getD (i - n) 0 else bs.getD i 0 := by
+  simp only [Bytes.writeAt, List.append_assoc]
+  have hlen : (List.takeD n bs 0).length = n := List.takeD_length n bs 0
+  by_cases h1 : i < n
+  · rw [List.getD_append_left 0 (by omega), List.getD_takeD, if_pos h1,
+      if_neg (by omega)]
+  · rw [List.getD_append_right 0 (by omega), hlen]
+    by_cases h2 : i < n + xs.length
+    · rw [List.getD_append_left 0 (by omega), if_pos ⟨by omega, h2⟩]
+    · rw [List.getD_append_right 0 (by omega), if_neg (by omega),
+        List.getD_drop]
+      congr 1
+      omega
+
+/-! ### `Mem.Wf` and `Mem.Reads` -/
+
+lemma Nat.le_mul_ceilDiv (n m : Nat) (hm : 0 < m) : n ≤ m * ceilDiv n m := by
+  simp only [ceilDiv]
+  have hdm := Nat.div_add_mod n m
+  rcases Nat.eq_zero_or_pos (n % m) with h | h
+  · rw [if_pos h, Nat.add_zero]
+    omega
+  · rw [if_neg (by omega), Nat.mul_add, Nat.mul_one]
+    have := Nat.mod_lt n hm
+    omega
+
+lemma Mem.wf_empty : Mem.Wf Mem.empty := Nat.le_refl 0
+
+lemma Mem.reads_empty : Mem.Reads Mem.empty [] := fun _ => rfl
+
+lemma Mem.Wf.extend {μ : Mem} (h : Mem.Wf μ) (index size : Nat) :
+    Mem.Wf (μ.extend index size) := by
+  simp only [Mem.Wf, Mem.extend] at *
+  simp only [memExtSize]
+  split
+  · exact h
+  · have h1 : μ.size ≤ 32 * ceilDiv μ.size 32 :=
+      Nat.le_mul_ceilDiv μ.size 32 (by omega)
+    have hmax : 32 * ceilDiv μ.size 32
+        ≤ 32 * max (ceilDiv μ.size 32) (ceilDiv (index + size) 32) :=
+      Nat.mul_le_mul_left 32 (Nat.le_max_left _ _)
+    omega
+
+lemma Mem.Wf.extends : ∀ (pairs : List (Nat × Nat)) {μ : Mem},
+    Mem.Wf μ → Mem.Wf (μ.extends pairs) := by
+  intro pairs
+  induction pairs with
+  | nil => intro μ h; exact h
+  | cons p ps ih =>
+    rcases p with ⟨idx, sz⟩
+    intro μ h
+    exact ih (Mem.Wf.extend h idx sz)
+
+lemma Mem.Reads.extend {μ : Mem} {bs : Bytes} (h : Mem.Reads μ bs)
+    (index size : Nat) : Mem.Reads (μ.extend index size) bs := h
+
+lemma Mem.Reads.extends : ∀ (pairs : List (Nat × Nat)) {μ : Mem} {bs : Bytes},
+    Mem.Reads μ bs → Mem.Reads (μ.extends pairs) bs := by
+  intro pairs
+  induction pairs with
+  | nil => intro μ bs h; exact h
+  | cons p ps ih =>
+    rcases p with ⟨idx, sz⟩
+    intro μ bs h
+    exact ih (Mem.Reads.extend h idx sz)
+
+lemma Nat.le_ceil32 (n : Nat) : n ≤ ceil32 n := by
+  unfold ceil32
+  split
+  · exact Nat.le_refl _
+  · rename_i m hm
+    have := Nat.mod_lt n (show 0 < 32 by omega)
+    omega
+
+lemma Array.getD_replicate_zero (k i : Nat) :
+    (Array.replicate k (0 : UInt8)).getD i 0 = 0 := by
+  simp [Array.getD]
+
+lemma Array.getD_of_size_le {ξ : Type} {xs : Array ξ} {i : Nat} (d : ξ)
+    (h : xs.size ≤ i) : xs.getD i d = d := by
+  simp [Array.getD, Nat.not_lt.mpr h]
+
+/-- `Mem.write`'s three branches, factored.
+
+Whichever branch it takes, the result is `Array.writeD` over an array that reads
+exactly as the old one, is long enough to hold the whole payload, and does not
+run past the new logical size.  The `Mem.Wf` hypothesis is precisely what rules
+out the truncation `Array.copyD` would otherwise perform in the growth branch,
+where the fresh array is `ceil32 (n + ys.length)` long. -/
+lemma Mem.write_aux {μ : Mem} (hwf : Mem.Wf μ) (n : Nat) :
+    ∀ {ys : Bytes}, ys ≠ [] →
+      ∃ A : Array UInt8,
+        (μ.write n ys).data = Array.writeD A n ys ∧
+        n + ys.length ≤ A.size ∧
+        A.size ≤ (μ.write n ys).size ∧
+        ∀ i, A.getD i 0 = μ.data.getD i 0 := by
+  intro ys hne
+  cases ys with
+  | nil => exact absurd rfl hne
+  | cons y ys =>
+    simp only [Mem.Wf] at hwf
+    simp only [Mem.write]
+    by_cases h1 : n + (y :: ys).length ≤ μ.size
+    · rw [if_pos h1]
+      by_cases h2 : n + (y :: ys).length ≤ μ.data.size
+      · rw [if_pos h2]
+        exact ⟨μ.data, rfl, h2, hwf, fun _ => rfl⟩
+      · rw [if_neg h2]
+        refine ⟨Array.copyD μ.data
+          (Array.replicate (n + (y :: ys).length) 0x00), rfl, ?_, ?_, ?_⟩
+        · rw [Array.size_copyD, Array.size_replicate]
+        · rw [Array.size_copyD, Array.size_replicate]; exact h1
+        · intro i
+          rw [Array.getD_copyD _ _ _ (by rw [Array.size_replicate]; omega)]
+          by_cases hi : i < μ.data.size
+          · rw [if_pos hi]
+          · rw [if_neg hi, Array.getD_replicate_zero,
+              Array.getD_of_size_le 0 (Nat.not_lt.mp hi)]
+    · rw [if_neg h1]
+      have hle : n + (y :: ys).length ≤ ceil32 (n + (y :: ys).length) :=
+        Nat.le_ceil32 _
+      refine ⟨Array.copyD μ.data
+        (Array.replicate (ceil32 (n + (y :: ys).length)) 0x00), rfl, ?_, ?_, ?_⟩
+      · rw [Array.size_copyD, Array.size_replicate]; exact hle
+      · rw [Array.size_copyD, Array.size_replicate]
+      · intro i
+        rw [Array.getD_copyD _ _ _ (by rw [Array.size_replicate]; omega)]
+        by_cases hi : i < μ.data.size
+        · rw [if_pos hi]
+        · rw [if_neg hi, Array.getD_replicate_zero,
+            Array.getD_of_size_le 0 (Nat.not_lt.mp hi)]
+
+lemma Mem.Wf.write {μ : Mem} (h : Mem.Wf μ) (n : Nat) (ys : Bytes) :
+    Mem.Wf (μ.write n ys) := by
+  cases ys with
+  | nil => exact h
+  | cons y ys =>
+    rcases Mem.write_aux h n (ys := y :: ys) (by simp) with ⟨A, hdata, _, hsz, _⟩
+    simp only [Mem.Wf, hdata, Array.size_writeD]
+    exact hsz
+
+/-- Read-over-write for EVM memory, and the whole point of this section: the
+image after a write is the image before it with the payload laid over it, and
+everything the write did not touch — including the bytes past the payload inside
+the word the machine rounds up to — still reads as it did. -/
+lemma Mem.Reads.write {μ : Mem} {bs : Bytes} (hwf : Mem.Wf μ) (h : Mem.Reads μ bs)
+    (n : Nat) (ys : Bytes) :
+    Mem.Reads (μ.write n ys) (Bytes.writeAt bs n ys) := by
+  cases ys with
+  | nil =>
+    intro i
+    rw [Bytes.getD_writeAt]
+    simp only [List.length_nil, Nat.add_zero]
+    rw [if_neg (by omega)]
+    exact h i
+  | cons y ys =>
+    rcases Mem.write_aux hwf n (ys := y :: ys) (by simp) with
+      ⟨A, hdata, hlen, _, hreads⟩
+    intro i
+    rw [hdata, Array.getD_writeD 0 _ A n i hlen, Bytes.getD_writeAt]
+    by_cases hin : n ≤ i ∧ i < n + (y :: ys).length
+    · rw [if_pos hin, if_pos hin]
+    · rw [if_neg hin, if_neg hin, hreads i]
+      exact h i
+
+/-! ### Reading the image back
+
+`Mem.read` slices the backing array with `Array.sliceD`, which accumulates from
+the far end, while `List.sliceD` consumes from the near end.  Both are put in
+the same `List.range` normal form, after which a pointwise `Mem.Reads` transfers
+between them. -/
+
+lemma Array.sliceD_aux_eq {ξ : Type} (xs : Array ξ) (d : ξ) :
+    ∀ (n : Nat) (Acc : List ξ) (m : Nat),
+      Array.sliceD.aux xs Acc m n d
+        = (List.range n).map (fun j => xs.getD (m + j) d) ++ Acc := by
+  intro n
+  induction n with
+  | zero => intro Acc m; rfl
+  | succ n ih =>
+    intro Acc m
+    rw [show Array.sliceD.aux xs Acc m (n + 1) d
+          = Array.sliceD.aux xs (xs.getD (m + n) d :: Acc) m n d from rfl,
+      ih, List.range_succ]
+    simp
+
+lemma Array.sliceD_eq_map {ξ : Type} (xs : Array ξ) (m n : Nat) (d : ξ) :
+    Array.sliceD xs m n d = (List.range n).map (fun j => xs.getD (m + j) d) := by
+  rw [show Array.sliceD xs m n d = Array.sliceD.aux xs [] m n d from rfl,
+    Array.sliceD_aux_eq]
+  simp
+
+lemma List.sliceD_eq_map {ξ : Type} (ys : List ξ) (d : ξ) :
+    ∀ (n m : Nat), List.sliceD ys m n d
+      = (List.range n).map (fun j => ys.getD (m + j) d) := by
+  intro n
+  induction n with
+  | zero => intro m; rfl
+  | succ n ih =>
+    intro m
+    rw [List.sliceD_succ, ih (m + 1), List.range_succ_eq_map]
+    simp only [List.map_cons, List.map_map, Nat.add_zero]
+    congr 1
+    apply List.map_congr_left
+    intro j _
+    show ys.getD (m + 1 + j) d = ys.getD (m + (j + 1)) d
+    rw [show m + (j + 1) = m + 1 + j from by omega]
+
+/-- What a `CALL`, `LOG` or `MLOAD` reads out of a memory whose image is known:
+exactly the corresponding slice of the image, zero-padded past its end. -/
+lemma Mem.Reads.read {μ : Mem} {bs : Bytes} (h : Mem.Reads μ bs) (i n : Nat) :
+    (μ.read i n).1 = bs.sliceD i n 0 := by
+  show Array.sliceD μ.data i n 0 = _
+  rw [Array.sliceD_eq_map, List.sliceD_eq_map]
+  exact List.map_congr_left (fun j _ => h (i + j))
+
 end Blanc

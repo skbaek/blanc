@@ -324,6 +324,50 @@ def Sevm.DecodesCallWithTail
     (e : Sevm) (sel : B256) (heads : List B256) (data : Bytes) : Prop :=
   e.data = abiCallWithTail sel heads data
 
+/-! ### Memory as a byte image
+
+Blanc has never before said what memory *contains*: every landed memory lemma
+sets `memory := trivial`, and Jaune's `Array.writeD` / `Array.copyD` carry no
+lemmas beyond `Array.size_copyD`.  These three definitions are the vocabulary a
+statement about an outgoing call's argument window needs, and they are stated
+over Jaune's `Mem` alone, mentioning no Blanc program.
+
+`Mem.Reads` is a *reader-level* description — what `MLOAD`, `LOG` and a `CALL`'s
+argument window will see — rather than a claim about how much of the backing
+array is materialised.  `Mem.Wf` is the single structural invariant the write
+algebra needs, and it is what makes "the padding bytes are zero" a theorem
+rather than an assumption. -/
+
+/-- The materialised array never runs past the logical memory size.
+
+`Mem.write`'s growth branch reallocates to `ceil32 (n + xs.length)` and copies
+the old array into the new one, and `Array.copyD` *drops* whatever does not fit;
+this invariant is what rules that truncation out, because the new length is then
+at least the old logical size.  It holds of `Mem.empty` and is preserved by
+`Mem.write`, `Mem.extend` and `Mem.extends`, so a frame that starts fresh keeps
+it for free. -/
+def Mem.Wf (μ : Mem) : Prop := μ.data.size ≤ μ.size
+
+/-- Memory reads as `bs`: byte `i` is `bs`'s byte `i`, and zero past the end.
+
+Phrased with `getD` on both sides, which is exactly how `Mem.read` reads
+(`Array.sliceD` defaults to `0`), so nothing here depends on how much of the
+array happens to be materialised.  EVM memory is zero-initialised, so "past the
+end of `bs`" and "never written" are the same statement — which is why the zero
+padding a reference ABI encoder produces can be *derived* here rather than
+assumed. -/
+def Mem.Reads (μ : Mem) (bs : Bytes) : Prop :=
+  ∀ i, μ.data.getD i 0 = bs.getD i 0
+
+/-- The byte image after writing `xs` at offset `n` into the image `bs`.
+
+Zero-fills any gap between the end of `bs` and `n` (`List.takeD`'s default),
+which is what EVM memory does, and keeps whatever of `bs` lies past the write.
+The two shapes a walk actually meets are `n = bs.length` (append) and
+`n + xs.length ≤ bs.length` (overwrite in place); both are corollaries. -/
+def Bytes.writeAt (bs : Bytes) (n : Nat) (xs : Bytes) : Bytes :=
+  List.takeD n bs 0 ++ xs ++ bs.drop (n + xs.length)
+
 -- Is the last call's return data shorter than `n` bytes?
 --
 -- ( -- retdatasize <? n )
