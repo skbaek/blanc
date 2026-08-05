@@ -270,7 +270,7 @@ theorem of_flashLoan_toCall {sevm : Sevm} {s r : Devm}
     Sevm.argWord sevm 1 = sevm.currentTarget.toB256 ∧
     B256.Nof ((Devm.getStor s sevm.currentTarget).get supplySlot)
       (Sevm.argWord sevm 2) ∧
-    ∃ (a : Adr) (sc : Devm) (g argsSize : B256),
+    ∃ (a : Adr) (sc : Devm) (g : B256),
       Sevm.argWord sevm 0 = a.toB256 ∧
       Devm.getCode s = Devm.getCode sc ∧
       Devm.getStor sc sevm.currentTarget =
@@ -278,8 +278,23 @@ theorem of_flashLoan_toCall {sevm : Sevm} {s r : Devm}
             (Sevm.argWord sevm 2 + (Devm.getStor s sevm.currentTarget).get a.toB256)).set
           supplySlot
           (Sevm.argWord sevm 2 + (Devm.getStor s sevm.currentTarget).get supplySlot) ∧
-      (g :: a.toB256 :: (0 : B256) :: callbackArgsOffset :: argsSize ::
+      (g :: a.toB256 :: (0 : B256) :: callbackArgsOffset ::
+        (0xc4 + ((~~~ (31 : B256)) &&& (31 + Sevm.tailLen sevm 3))) ::
         (0 : B256) :: (0 : B256) :: [Sevm.argWord sevm 2, a.toB256] <<+ sc.stack) ∧
+      (∀ bs, Mem.Wf s.memory → Mem.Reads s.memory bs →
+        Mem.Wf sc.memory ∧
+          Mem.Reads sc.memory
+            (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt
+              (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt
+                (Bytes.writeAt bs 0 (Sevm.argWord sevm 2).toBytes)
+                  0 onFlashLoanSelector.toBytes)
+                  32 sevm.caller.toB256.toBytes)
+                  64 sevm.currentTarget.toB256.toBytes)
+                  96 (Sevm.argWord sevm 2).toBytes)
+                  128 (0 : B256).toBytes)
+                  160 (0xa0 : B256).toBytes)
+                  192 (Sevm.tailLen sevm 3).toBytes)
+                  224 (Sevm.tailBytes sevm 3))) ∧
       Func.Run (fmint.main :: fmintAux) sevm sc flashLoanFromCall r := by
   simp only [flashLoan] at h_run
   -- (0) `arg 1 +++ address ::: eq ::: iszero`: `token` must be this contract.
@@ -287,22 +302,26 @@ theorem of_flashLoan_toCall {sevm : Sevm} {s r : Devm}
   have hs1 : Sevm.argWord sevm 1 :: [] <<+ s1.stack := prefix_of_arg nil_pref h1
   have hg : Devm.getStor s = Devm.getStor s1 := Line.of_inv Devm.getStor (by line_inv) h1
   have hgc : Devm.getCode s = Devm.getCode s1 := Line.of_inv Devm.getCode (by line_inv) h1
+  have hm : s.memory = s1.memory := Line.of_inv Devm.memory (by line_inv) h1
   clear h1
   rcases of_run_next h_run with ⟨s2, r2, h_run⟩
   have hs2 : sevm.currentTarget.toB256 :: Sevm.argWord sevm 1 :: [] <<+ s2.stack :=
     prefix_of_push (of_run_address r2) hs1
   have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r2 Line.Run.nil))
   have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r2 Line.Run.nil))
+  have hm := hm.trans (Line.of_inv Devm.memory (by line_inv) (Line.Run.cons r2 Line.Run.nil))
   clear r2 hs1
   rcases of_run_next h_run with ⟨s3, r3, h_run⟩
   have hs3 := prefix_of_eq r3 hs2
   have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r3 Line.Run.nil))
   have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r3 Line.Run.nil))
+  have hm := hm.trans (Line.of_inv Devm.memory (by line_inv) (Line.Run.cons r3 Line.Run.nil))
   clear r3 hs2
   rcases of_run_next h_run with ⟨s4, r4, h_run⟩
   have hs4 := prefix_of_iszero r4 hs3
   have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r4 Line.Run.nil))
   have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r4 Line.Run.nil))
+  have hm := hm.trans (Line.of_inv Devm.memory (by line_inv) (Line.Run.cons r4 Line.Run.nil))
   clear r4 hs3
   rcases of_run_branch_rev h_run with ⟨s5, hp5, h_run⟩
   have hp5s := hp5.stack
@@ -321,23 +340,27 @@ theorem of_flashLoan_toCall {sevm : Sevm} {s r : Devm}
   have hs5 : ([] : List B256) <<+ s5.stack := cons_pref_cons_inv hs4
   have hg := hg.trans (funext (fun x => (Devm.PopBurn.getStor hp5 x).symm))
   have hgc := hgc.trans (funext (fun x => getCode_eq_of_state_eq hp5.state x))
+  have hm := hm.trans hp5.memory
   clear hp5 hs4 hp5s h_tokflag
   -- (1) `arg 0 +++ dup 0 ::: checkNonAddress`: the receiver word is address-shaped.
   rcases of_run_prepend (arg 0) _ h_run with ⟨s6, h6, h_run⟩
   have hs6 : Sevm.argWord sevm 0 :: [] <<+ s6.stack := prefix_of_arg hs5 h6
   have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) h6)
   have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) h6)
+  have hm := hm.trans (Line.of_inv Devm.memory (by line_inv) h6)
   clear h6 hs5
   rcases of_run_next h_run with ⟨s7, r7, h_run⟩
   have hs7 : [Sevm.argWord sevm 0, Sevm.argWord sevm 0] <<+ s7.stack :=
     prefix_of_dup_val r7 (by show_nth) hs6
   have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r7 Line.Run.nil))
   have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r7 Line.Run.nil))
+  have hm := hm.trans (Line.of_inv Devm.memory (by line_inv) (Line.Run.cons r7 Line.Run.nil))
   clear r7 hs6
   rcases of_run_prepend checkNonAddress _ h_run with ⟨s8, h8, h_run⟩
   rcases of_check_non_address hs7 h8 with ⟨na, hs8, h_va_iff⟩
   have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) h8)
   have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) h8)
+  have hm := hm.trans (Line.of_inv Devm.memory (by line_inv) h8)
   clear h8 hs7
   rcases of_run_branch_rev h_run with ⟨s9, hp9, h_run⟩
   have hp9s := hp9.stack
@@ -349,6 +372,7 @@ theorem of_flashLoan_toCall {sevm : Sevm} {s r : Devm}
   have hs9 : [Sevm.argWord sevm 0] <<+ s9.stack := cons_pref_cons_inv hs8
   have hg := hg.trans (funext (fun x => (Devm.PopBurn.getStor hp9 x).symm))
   have hgc := hgc.trans (funext (fun x => getCode_eq_of_state_eq hp9.state x))
+  have hm := hm.trans hp9.memory
   clear hs8 hp9s hp9 h_va_iff
   rcases h_va with ⟨a, h_recv⟩
   rw [← h_recv] at hs9
@@ -357,12 +381,14 @@ theorem of_flashLoan_toCall {sevm : Sevm} {s r : Devm}
   have hs10 : Sevm.argWord sevm 2 :: [a.toB256] <<+ s10.stack := prefix_of_arg hs9 h10
   have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) h10)
   have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) h10)
+  have hm := hm.trans (Line.of_inv Devm.memory (by line_inv) h10)
   clear h10 hs9
   rcases of_run_next h_run with ⟨s11, r11, h_run⟩
   have hs11 : [Sevm.argWord sevm 2, Sevm.argWord sevm 2, a.toB256] <<+ s11.stack :=
     prefix_of_dup_val r11 (by show_nth) hs10
   have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r11 Line.Run.nil))
   have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r11 Line.Run.nil))
+  have hm := hm.trans (Line.of_inv Devm.memory (by line_inv) (Line.Run.cons r11 Line.Run.nil))
   clear r11 hs10
   rcases of_run_prepend pushSupplySlot _ h_run with ⟨s12, h12, h_run⟩
   have hs12 : supplySlot ::
@@ -379,6 +405,7 @@ theorem of_flashLoan_toCall {sevm : Sevm} {s r : Devm}
     exact hpb
   have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) h12)
   have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) h12)
+  have hm := hm.trans (Line.of_inv Devm.memory (by line_inv) h12)
   clear h12 hs11
   rcases of_run_next h_run with ⟨s13, r13, h_run⟩
   rcases prefix_of_sload r13 hs12 with ⟨supply, hs13, h_supply⟩
@@ -389,16 +416,19 @@ theorem of_flashLoan_toCall {sevm : Sevm} {s r : Devm}
   clear h_supply
   have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r13 Line.Run.nil))
   have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r13 Line.Run.nil))
+  have hm := hm.trans (Line.of_inv Devm.memory (by line_inv) (Line.Run.cons r13 Line.Run.nil))
   clear r13 hs12
   rcases of_run_next h_run with ⟨s14, r14, h_run⟩
   have hs14 := prefix_of_not r14 hs13
   have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r14 Line.Run.nil))
   have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r14 Line.Run.nil))
+  have hm := hm.trans (Line.of_inv Devm.memory (by line_inv) (Line.Run.cons r14 Line.Run.nil))
   clear r14 hs13
   rcases of_run_next h_run with ⟨s15, r15, h_run⟩
   have hs15 := prefix_of_lt r15 hs14
   have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r15 Line.Run.nil))
   have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r15 Line.Run.nil))
+  have hm := hm.trans (Line.of_inv Devm.memory (by line_inv) (Line.Run.cons r15 Line.Run.nil))
   clear r15 hs14
   rcases of_run_branch_rev h_run with ⟨s16, hp16, h_run⟩
   have hp16s := hp16.stack
@@ -416,6 +446,7 @@ theorem of_flashLoan_toCall {sevm : Sevm} {s r : Devm}
   have hs16 : [Sevm.argWord sevm 2, a.toB256] <<+ s16.stack := cons_pref_cons_inv hs15
   have hg := hg.trans (funext (fun x => (Devm.PopBurn.getStor hp16 x).symm))
   have hgc := hgc.trans (funext (fun x => getCode_eq_of_state_eq hp16.state x))
+  have hm := hm.trans hp16.memory
   clear hs15 hp16s hp16 h_boundflag h_bound h_supply'
   -- (3) the mint pair.  Nothing between the two `SSTORE`s below transfers
   -- control out of this frame or halts successfully — D5's ordering discipline,
@@ -425,6 +456,7 @@ theorem of_flashLoan_toCall {sevm : Sevm} {s r : Devm}
     prefix_of_dup_val r17 (by show_nth) hs16
   have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r17 Line.Run.nil))
   have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r17 Line.Run.nil))
+  have hm := hm.trans (Line.of_inv Devm.memory (by line_inv) (Line.Run.cons r17 Line.Run.nil))
   clear r17 hs16
   rcases of_run_next h_run with ⟨s18, r18, h_run⟩
   rcases prefix_of_sload r18 hs17 with ⟨rbal, hs18, h_rbal⟩
@@ -435,18 +467,21 @@ theorem of_flashLoan_toCall {sevm : Sevm} {s r : Devm}
   clear h_rbal
   have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r18 Line.Run.nil))
   have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r18 Line.Run.nil))
+  have hm := hm.trans (Line.of_inv Devm.memory (by line_inv) (Line.Run.cons r18 Line.Run.nil))
   clear r18 hs17
   rcases of_run_next h_run with ⟨s19, r19, h_run⟩
   have hs19 : Sevm.argWord sevm 2 :: rbal :: [Sevm.argWord sevm 2, a.toB256] <<+ s19.stack :=
     prefix_of_dup_val r19 (by show_nth) hs18
   have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r19 Line.Run.nil))
   have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r19 Line.Run.nil))
+  have hm := hm.trans (Line.of_inv Devm.memory (by line_inv) (Line.Run.cons r19 Line.Run.nil))
   clear r19 hs18
   rcases of_run_next h_run with ⟨s20, r20, h_run⟩
   have hs20 : (Sevm.argWord sevm 2 + rbal) :: [Sevm.argWord sevm 2, a.toB256] <<+ s20.stack :=
     prefix_of_add r20 hs19
   have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r20 Line.Run.nil))
   have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r20 Line.Run.nil))
+  have hm := hm.trans (Line.of_inv Devm.memory (by line_inv) (Line.Run.cons r20 Line.Run.nil))
   clear r20 hs19
   rcases of_run_next h_run with ⟨s21, r21, h_run⟩
   have hs21 : a.toB256 :: (Sevm.argWord sevm 2 + rbal) ::
@@ -454,6 +489,7 @@ theorem of_flashLoan_toCall {sevm : Sevm} {s r : Devm}
     prefix_of_dup_val r21 (by show_nth) hs20
   have hg := hg.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r21 Line.Run.nil))
   have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r21 Line.Run.nil))
+  have hm := hm.trans (Line.of_inv Devm.memory (by line_inv) (Line.Run.cons r21 Line.Run.nil))
   clear r21 hs20
   -- the balance-side `SSTORE`
   rcases of_run_next h_run with ⟨s22, r22, h_run⟩
@@ -461,6 +497,7 @@ theorem of_flashLoan_toCall {sevm : Sevm} {s r : Devm}
       = (Devm.getStor s21 sevm.currentTarget).set a.toB256 (Sevm.argWord sevm 2 + rbal) :=
     sstore_getStor_set r22 hs21
   have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r22 Line.Run.nil))
+  have hm := hm.trans (Line.of_inv Devm.memory (by line_inv) (Line.Run.cons r22 Line.Run.nil))
   have hs22 : [Sevm.argWord sevm 2, a.toB256] <<+ s22.stack := prefix_of_sstore r22 hs21
   clear r22 hs21
   rcases of_run_prepend pushSupplySlot _ h_run with ⟨s23, h23, h_run⟩
@@ -477,6 +514,7 @@ theorem of_flashLoan_toCall {sevm : Sevm} {s r : Devm}
   have hg2 : Devm.getStor s22 = Devm.getStor s23 :=
     Line.of_inv Devm.getStor (by line_inv) h23
   have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) h23)
+  have hm := hm.trans (Line.of_inv Devm.memory (by line_inv) h23)
   clear h23 hs22
   rcases of_run_next h_run with ⟨s24, r24, h_run⟩
   rcases prefix_of_sload r24 hs23 with ⟨supply2, hs24, h_supply2⟩
@@ -490,18 +528,21 @@ theorem of_flashLoan_toCall {sevm : Sevm} {s r : Devm}
   clear h_supply2
   have hg2 := hg2.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r24 Line.Run.nil))
   have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r24 Line.Run.nil))
+  have hm := hm.trans (Line.of_inv Devm.memory (by line_inv) (Line.Run.cons r24 Line.Run.nil))
   clear r24 hs23
   rcases of_run_next h_run with ⟨s25, r25, h_run⟩
   have hs25 : Sevm.argWord sevm 2 :: supply2 :: [Sevm.argWord sevm 2, a.toB256]
       <<+ s25.stack := prefix_of_dup_val r25 (by show_nth) hs24
   have hg2 := hg2.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r25 Line.Run.nil))
   have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r25 Line.Run.nil))
+  have hm := hm.trans (Line.of_inv Devm.memory (by line_inv) (Line.Run.cons r25 Line.Run.nil))
   clear r25 hs24
   rcases of_run_next h_run with ⟨s26, r26, h_run⟩
   have hs26 : (Sevm.argWord sevm 2 + supply2) :: [Sevm.argWord sevm 2, a.toB256]
       <<+ s26.stack := prefix_of_add r26 hs25
   have hg2 := hg2.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r26 Line.Run.nil))
   have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r26 Line.Run.nil))
+  have hm := hm.trans (Line.of_inv Devm.memory (by line_inv) (Line.Run.cons r26 Line.Run.nil))
   clear r26 hs25
   rcases of_run_prepend pushSupplySlot _ h_run with ⟨s27, h27, h_run⟩
   have hs27 : supplySlot :: (Sevm.argWord sevm 2 + supply2) ::
@@ -518,6 +559,7 @@ theorem of_flashLoan_toCall {sevm : Sevm} {s r : Devm}
     exact hpb
   have hg2 := hg2.trans (Line.of_inv Devm.getStor (by line_inv) h27)
   have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) h27)
+  have hm := hm.trans (Line.of_inv Devm.memory (by line_inv) h27)
   clear h27 hs26
   -- the supply-side `SSTORE`: the pair is complete, and it is complete *here*,
   -- before any external control transfer.
@@ -527,6 +569,7 @@ theorem of_flashLoan_toCall {sevm : Sevm} {s r : Devm}
           (Sevm.argWord sevm 2 + supply2) :=
     sstore_getStor_set r28 hs27
   have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r28 Line.Run.nil))
+  have hm := hm.trans (Line.of_inv Devm.memory (by line_inv) (Line.Run.cons r28 Line.Run.nil))
   have hs28 : [Sevm.argWord sevm 2, a.toB256] <<+ s28.stack := prefix_of_sstore r28 hs27
   clear r28 hs27
   have h_mint : Devm.getStor s28 sevm.currentTarget =
@@ -545,9 +588,12 @@ theorem of_flashLoan_toCall {sevm : Sevm} {s r : Devm}
   have hg3 : Devm.getStor s28 = Devm.getStor s29 :=
     Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r29 Line.Run.nil)
   have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r29 Line.Run.nil))
+  have hm := hm.trans (Line.of_inv Devm.memory (by line_inv) (Line.Run.cons r29 Line.Run.nil))
   clear r29 hs28
   rcases of_run_prepend (mstoreAt 0) _ h_run with ⟨s30, h30, h_run⟩
-  have hs30 : [Sevm.argWord sevm 2, a.toB256] <<+ s30.stack := prefix_of_mstoreAt h30 hs29
+  rcases of_run_mstoreAt_val h30 hs29 with ⟨hs30, hmA⟩
+  have hmA : s30.memory = s29.memory.write 0 (Sevm.argWord sevm 2).toBytes := by
+    rw [hmA]; rfl
   have hg3 := hg3.trans (Line.of_inv Devm.getStor (by line_inv) h30)
   have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) h30)
   clear h30 hs29
@@ -556,12 +602,15 @@ theorem of_flashLoan_toCall {sevm : Sevm} {s r : Devm}
     prefix_of_dup_val r31 (by show_nth) hs30
   have hg3 := hg3.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r31 Line.Run.nil))
   have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r31 Line.Run.nil))
+  have hmB : s30.memory = s31.memory :=
+    Line.of_inv Devm.memory (by line_inv) (Line.Run.cons r31 Line.Run.nil)
   clear r31 hs30
   rcases of_run_next h_run with ⟨s32, r32, h_run⟩
   have hs32 : (0 : B256) :: a.toB256 :: [Sevm.argWord sevm 2, a.toB256] <<+ s32.stack :=
     prefix_of_push (of_run_pushB256 r32) hs31
   have hg3 := hg3.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r32 Line.Run.nil))
   have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r32 Line.Run.nil))
+  have hmB := hmB.trans (Line.of_inv Devm.memory (by line_inv) (Line.Run.cons r32 Line.Run.nil))
   clear r32 hs31
   rcases of_run_next h_run with ⟨s33, r33, h_run⟩
   have hs33 : transferEvent :: (0 : B256) :: a.toB256 ::
@@ -569,9 +618,21 @@ theorem of_flashLoan_toCall {sevm : Sevm} {s r : Devm}
     prefix_of_push (of_run_pushB256 r33) hs32
   have hg3 := hg3.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r33 Line.Run.nil))
   have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r33 Line.Run.nil))
+  have hmB := hmB.trans (Line.of_inv Devm.memory (by line_inv) (Line.Run.cons r33 Line.Run.nil))
   clear r33 hs32
   rcases of_run_prepend (logWith 2 0 1) _ h_run with ⟨s34, h34, h_run⟩
   have hs34 : [Sevm.argWord sevm 2, a.toB256] <<+ s34.stack := of_logWith201 hs33 h34
+  -- `LOG` only *extends* memory: it reads a window and records it, and the
+  -- backing array is untouched, so both `Mem.Wf` and the image cross it.
+  have hmC : ∃ mi sz, s34.memory = s33.memory.extend mi sz := by
+    simp only [logWith] at h34
+    rcases Line.of_run_cons h34 with ⟨v1, w1, h34'⟩
+    rcases Line.of_run_cons h34' with ⟨v2, w2, h34''⟩
+    rcases Line.of_run_cons h34'' with ⟨v3, w3, hnil⟩
+    cases hnil
+    rcases of_run_log_mem w3 with ⟨mi, sz, hlog⟩
+    exact ⟨mi, sz, by
+      rw [hlog, ← (of_run_pushB256 w2).memory, ← (of_run_pushB256 w1).memory]⟩
   have hg3 := hg3.trans (Line.of_inv Devm.getStor (by line_inv) h34)
   have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) h34)
   clear h34 hs33
@@ -583,9 +644,11 @@ theorem of_flashLoan_toCall {sevm : Sevm} {s r : Devm}
     prefix_of_dup_val r35 (by show_nth) hs34
   have hg3 := hg3.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r35 Line.Run.nil))
   have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r35 Line.Run.nil))
+  have hmD : s34.memory = s35.memory :=
+    Line.of_inv Devm.memory (by line_inv) (Line.Run.cons r35 Line.Run.nil)
   clear r35 hs34
   rcases of_run_prepend storeCallbackHead _ h_run with ⟨s36, h36, h_run⟩
-  have hs36 : [Sevm.argWord sevm 2, a.toB256] <<+ s36.stack := of_storeCallbackHead hs35 h36
+  rcases of_storeCallbackHead_val hs35 h36 with ⟨hs36, hmE⟩
   have hg3 := hg3.trans (Line.of_inv Devm.getStor (by line_inv) h36)
   have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) h36)
   clear h36 hs35
@@ -599,49 +662,80 @@ theorem of_flashLoan_toCall {sevm : Sevm} {s r : Devm}
       (prefix_of_push (of_run_pushB256 q1) hs36)
   have hg3 := hg3.trans (Line.of_inv Devm.getStor (by line_inv) h37)
   have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) h37)
+  have hmF : s36.memory = s37.memory := Line.of_inv Devm.memory (by line_inv) h37
   clear h37 hs36
   rcases of_run_prepend forwardCallbackData _ h_run with ⟨s38, h38, h_run⟩
-  rcases of_forwardCallbackData hs37 h38 with ⟨len, hs38⟩
   have hg3 := hg3.trans (Line.of_inv Devm.getStor (by line_inv) h38)
   have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) h38)
+  simp only [forwardCallbackData] at h38
+  rcases of_forwardArgTail_val hs37 h38 with ⟨hs38, hmG⟩
+  have hmG : s38.memory =
+      (s37.memory.write 192 (Sevm.tailLen sevm 3).toBytes).write
+        224 (Sevm.tailBytes sevm 3) := by rw [hmG]; rfl
   clear h38 hs37
   rcases of_run_prepend callbackArgsSize _ h_run with ⟨s39, h39, h_run⟩
-  rcases of_callbackArgsSize hs38 h39 with ⟨asz, hs39⟩
+  have hs39 := of_callbackArgsSize_val hs38 h39
   have hg3 := hg3.trans (Line.of_inv Devm.getStor (by line_inv) h39)
   have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) h39)
+  have hmH : s38.memory = s39.memory := Line.of_inv Devm.memory (by line_inv) h39
   clear h39 hs38
   rcases of_run_next h_run with ⟨s40, r40, h_run⟩
-  have hs40 : callbackArgsOffset :: asz :: (0 : B256) :: (0 : B256) ::
-      [Sevm.argWord sevm 2, a.toB256] <<+ s40.stack :=
-    prefix_of_push (of_run_pushB256 r40) hs39
+  have hs40 := prefix_of_push (of_run_pushB256 r40) hs39
   have hg3 := hg3.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r40 Line.Run.nil))
   have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r40 Line.Run.nil))
+  have hmH := hmH.trans (Line.of_inv Devm.memory (by line_inv) (Line.Run.cons r40 Line.Run.nil))
   clear r40 hs39
   rcases of_run_next h_run with ⟨s41, r41, h_run⟩
-  have hs41 : (0 : B256) :: callbackArgsOffset :: asz :: (0 : B256) :: (0 : B256) ::
-      [Sevm.argWord sevm 2, a.toB256] <<+ s41.stack :=
-    prefix_of_push (of_run_pushB256 r41) hs40
+  have hs41 := prefix_of_push (of_run_pushB256 r41) hs40
   have hg3 := hg3.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r41 Line.Run.nil))
   have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r41 Line.Run.nil))
+  have hmH := hmH.trans (Line.of_inv Devm.memory (by line_inv) (Line.Run.cons r41 Line.Run.nil))
   clear r41 hs40
   rcases of_run_next h_run with ⟨s42, r42, h_run⟩
-  have hs42 : a.toB256 :: (0 : B256) :: callbackArgsOffset :: asz :: (0 : B256) ::
-      (0 : B256) :: [Sevm.argWord sevm 2, a.toB256] <<+ s42.stack :=
+  have hs42 : a.toB256 :: (0 : B256) :: callbackArgsOffset ::
+      (0xc4 + ((~~~ (31 : B256)) &&& (31 + Sevm.tailLen sevm 3))) ::
+      (0 : B256) :: (0 : B256) :: [Sevm.argWord sevm 2, a.toB256] <<+ s42.stack :=
     prefix_of_dup_val r42 (by show_nth) hs41
   have hg3 := hg3.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r42 Line.Run.nil))
   have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r42 Line.Run.nil))
+  have hmH := hmH.trans (Line.of_inv Devm.memory (by line_inv) (Line.Run.cons r42 Line.Run.nil))
   clear r42 hs41
   rcases of_run_next h_run with ⟨s43, r43, h_run⟩
   rcases of_run_gas r43 with ⟨g, pb43⟩
-  have hs43 : g :: a.toB256 :: (0 : B256) :: callbackArgsOffset :: asz :: (0 : B256) ::
-      (0 : B256) :: [Sevm.argWord sevm 2, a.toB256] <<+ s43.stack :=
+  have hs43 : g :: a.toB256 :: (0 : B256) :: callbackArgsOffset ::
+      (0xc4 + ((~~~ (31 : B256)) &&& (31 + Sevm.tailLen sevm 3))) ::
+      (0 : B256) :: (0 : B256) :: [Sevm.argWord sevm 2, a.toB256] <<+ s43.stack :=
     prefix_of_push pb43 hs42
   have hg3 := hg3.trans (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r43 Line.Run.nil))
   have hgc := hgc.trans (Line.of_inv Devm.getCode (by line_inv) (Line.Run.cons r43 Line.Run.nil))
+  have hmH := hmH.trans (Line.of_inv Devm.memory (by line_inv) (Line.Run.cons r43 Line.Run.nil))
   clear r43 pb43 hs42
-  refine ⟨h_token, h_nof, a, s43, g, asz, h_recv.symm, hgc, ?_, hs43, h_run⟩
-  rw [← congr_fun hg3 sevm.currentTarget]
-  exact h_mint
+  refine ⟨h_token, h_nof, a, s43, g, h_recv.symm, hgc, ?_, hs43, ?_, h_run⟩
+  · rw [← congr_fun hg3 sevm.currentTarget]
+    exact h_mint
+  · intro bs hwf hr
+    obtain ⟨mi, sz, hmC⟩ := hmC
+    rw [← hmH, hmG, ← hmF, hmE, ← hmD, hmC, ← hmB, hmA, ← hm]
+    have w1 := hwf.write 0 (Sevm.argWord sevm 2).toBytes
+    have r1 := hr.write hwf 0 (Sevm.argWord sevm 2).toBytes
+    have w2 := w1.extend mi sz
+    have r2 := r1.extend mi sz
+    have w3 := w2.write 0 onFlashLoanSelector.toBytes
+    have r3 := r2.write w2 0 onFlashLoanSelector.toBytes
+    have w4 := w3.write 32 sevm.caller.toB256.toBytes
+    have r4 := r3.write w3 32 sevm.caller.toB256.toBytes
+    have w5 := w4.write 64 sevm.currentTarget.toB256.toBytes
+    have r5 := r4.write w4 64 sevm.currentTarget.toB256.toBytes
+    have w6 := w5.write 96 (Sevm.argWord sevm 2).toBytes
+    have r6 := r5.write w5 96 (Sevm.argWord sevm 2).toBytes
+    have w7 := w6.write 128 (0 : B256).toBytes
+    have r7 := r6.write w6 128 (0 : B256).toBytes
+    have w8 := w7.write 160 (0xa0 : B256).toBytes
+    have r8 := r7.write w7 160 (0xa0 : B256).toBytes
+    have w9 := w8.write 192 (Sevm.tailLen sevm 3).toBytes
+    have r9 := r8.write w8 192 (Sevm.tailLen sevm 3).toBytes
+    exact ⟨w9.write 224 (Sevm.tailBytes sevm 3),
+      r9.write w9 224 (Sevm.tailBytes sevm 3)⟩
 
 /-- **`flashLoan`'s three guards, on their own.**
 
@@ -657,7 +751,7 @@ theorem flashLoan_guards {sevm : Sevm} {s r : Devm}
     ValidAdr (Sevm.argWord sevm 0) ∧
     B256.Nof ((Devm.getStor s sevm.currentTarget).get supplySlot)
       (Sevm.argWord sevm 2) := by
-  rcases of_flashLoan_toCall h_run with ⟨h_token, h_nof, a, _, _, _, h_recv, -⟩
+  rcases of_flashLoan_toCall h_run with ⟨h_token, h_nof, a, _, _, h_recv, -⟩
   exact ⟨h_token, ⟨a, h_recv.symm⟩, h_nof⟩
 
 end Fmint
