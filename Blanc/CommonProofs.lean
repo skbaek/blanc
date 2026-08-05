@@ -8,9 +8,17 @@ open Jaune Jaune.List Jaune.Except _root_.List _root_.Nat
 open Jaune.Ninst Ninst
 open DispatchTree
 
+-- The statement is unchanged by the `.rev` normalization (`Func.rev` in
+-- `Blanc/CommonCore.lean`); only the walk is. `Func.rev` is now two `PUSH0`s
+-- ahead of the failing `.rev`, so the run is peeled through two `next` binds
+-- before the `Linst.Run` contradiction that has always closed this.
 lemma not_run_rev {c e s r} : ¬ Func.Run c e s Func.rev r := by
   intro h
   cases h with
+  | next _ h' =>
+  cases h' with
+  | next _ h'' =>
+  cases h'' with
   | last h_run =>
     simp only [Linst.Run, Linst.run] at h_run
     rcases Except.bind_eq_ok h_run with ⟨v1, h1, h2⟩

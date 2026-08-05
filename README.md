@@ -161,8 +161,8 @@ The last two are the **compile witnesses**:
   `Blanc.fmintCode_compile`, the same equation for FMINT. Every theorem above
   is conditioned on its contract's account code being what `Prog.compile`
   returns, so without these equations they could all hold vacuously; the
-  witnesses state that the compiler really does emit the 866-byte
-  [`wethCode`](Blanc/WethCode.lean) for `weth`, and
+  witnesses state that the compiler really does emit the 888-byte
+  [`wethCode`](Blanc/WethCode.lean) for `weth`, and the 1257-byte
   [`fmintCode`](Blanc/FmintCode.lean) for `fmint`. Both are proved by
   `decide +kernel` — kernel evaluation of the same reduction, no raised
   elaboration limit and nothing added to the trusted base (in particular, not

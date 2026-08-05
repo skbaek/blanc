@@ -20,13 +20,30 @@ def Func.toString : Func → String
 
 instance : Repr Func := ⟨λ p _ => Func.toString p⟩
 
-def Func.stop : Func := .last .stop
-def Func.rev : Func := .last .rev
-def Func.ret : Func := .last .ret
-
 def Ninst.pushB256 (w : B256) : Ninst :=
   Jaune.Ninst.push w.toBytes.sig <|
     le_of_le_of_eq (List.length_dropWhile_le _ _) (B256.length_toBytes _)
+
+def Func.stop : Func := .last .stop
+
+/-- The bare revert: `REVERT` over an empty data window.
+
+`Linst.run .rev` pops two operands and reads them as `(offset, size)`, so a
+`.last .rev` on its own reverts with *whatever two words happen to be on the
+stack* — which, depending on the site, is an arbitrary window of frame memory
+as revert data, a stack-underflow halt, or an out-of-gas halt from the memory
+expansion a garbage `size` implies. The two `PUSH0`s make every rev site a
+clean, empty-data `REVERT` that refunds the frame's remaining gas: two bytes
+per site, and invisible to every statement about `Func.rev`, since `Func.Run`
+has no derivation for it either way (`Blanc.not_run_rev`).
+
+Spelled with `Ninst.pushB256` and `.next` rather than the `pushB256 _ ::: _`
+idiom only because both that notation and the `Ninst` abbreviations are
+introduced further down this file. -/
+def Func.rev : Func :=
+  .next (Ninst.pushB256 0) (.next (Ninst.pushB256 0) (.last .rev))
+
+def Func.ret : Func := .last .ret
 
 abbrev Ninst.add : Ninst := Ninst.reg Rinst.add
 abbrev Ninst.mul : Ninst := Ninst.reg Rinst.mul
