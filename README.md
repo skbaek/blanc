@@ -20,6 +20,22 @@ This repo contains the following files:
   including the `ContractSpec` record each contract instantiates and the
   dispatcher decomposition (`FuncSound`, `sound_of_dispatch`) that reduces a
   whole-contract obligation to one obligation per dispatch target.
+- [Compiled.lean](Blanc/Compiled.lean): a gas-exact sibling of `Func.Run`/
+  `Prog.Run` — `Func.RunCompiled`, `Prog.RunCompiled` — and
+  `Prog.runCompiled_iff_exec`, the biconditional relating a gas-exact run of a
+  compiled pc-free program to a successful Jaune execution of its code at pc 0,
+  in both directions. It imports only `CommonCore.lean`, and nothing imports it
+  back, so it is a leaf: `Func.Run`, `Prog.Run`, `correct` and `correct_core`
+  are untouched by its existence. **This is not liveness.** The biconditional
+  converts run witnesses into executions and back; it does not produce a run
+  witness for any contract, and nothing here — or anywhere in this repository —
+  says any contract call ever succeeds. At every external call the witness
+  *contains* the callee's execution as a premise, so for a contract with an
+  external call every consequence stays conditional on callee behaviour. It
+  also says nothing about transaction-level execution (intrinsic gas, the
+  63/64 rule and transaction validity are a further layer) and is `.ok`-level
+  only: contraposition yields "no successful execution", never "the EVM
+  reverts with *this* error".
 - [Weth.lean](Blanc/Weth.lean): proof-of-concept implementation of the Wrapped 
   Ether (WETH) contract in Blanc.
 - [WethCode.lean](Blanc/WethCode.lean): the compiled WETH runtime bytecode and
