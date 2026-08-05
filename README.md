@@ -155,6 +155,16 @@ arbitrary executions and arbitrary reentrant borrower code. It does not say the
 minted supply is backed — during a flash loan it is not, by construction — and
 neither family says anything about liveness.
 
+Preservation needs the invariant to hold *once* before it can carry it forward,
+and for a genesis-installed FMINT it does: storage that reads zero at every key
+is conserved, because both sides of the equality are then zero
+(`Blanc.Stor.Conserved.of_get_eq_zero`, with `Blanc.Stor.Conserved.of_empty`
+for the canonical empty map). That covers the genesis case and only the genesis
+case — Blanc compiles one runtime and has no constructor, so **no
+initcode/`CREATE` deployment theorem exists**, and nothing here says an FMINT
+deployed by a transaction starts conserved. That gap is recorded as a successor
+item in `~/plans/flashmint-proposal.md`.
+
 Eight are FMINT's `flashLoan` specification — the headline
 `Blanc.Fmint.fmint_flashLoan_spec` and its seven `no_success_of_*` corollaries
 (`callback_never_magic`, `callback_never_returns_word`, `token_ne_self`,
