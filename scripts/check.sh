@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Blanc verification gate (REFACTOR.md Phase 0, step 0.3): `lake build`,
-# then an axiom audit of the twenty-five audited top theorems via
+# then an axiom audit of the twenty-six audited top theorems via
 # scripts/AxiomCheck.lean — WETH's seven solvency theorems, fmint's seven
 # conservation theorems, fmint's `flashLoan` success spec and its seven
-# no-success corollaries, the two compile witnesses, and the frame-level
-# restoration row below.
+# no-success corollaries, the two compile witnesses, and the two frame-level
+# restoration rows below.
 #
 # `wethCode_compile` is what keeps the solvency theorems' `Prog.compile weth`
 # hypothesis from being vacuous. `fmintCode_compile` is the same equation for
@@ -32,6 +32,18 @@
 # Like every row above it this is partial correctness, not liveness: both the
 # frame relation and the error flag are hypotheses, so nothing here says any
 # frame ever fails. It names no error kind, deliberately.
+#
+# `Fmint.rollback_of_callback_failure` is the second restoration row, added by
+# that plan's Step 2. It instantiates the same idea at fmint's callback site:
+# when the `CALL` at `flashLoanFromCall` pushes the failure flag, the world
+# fmint resumes with is the world it entered the `CALL` with, so the borrower's
+# `onFlashLoan` frame wrote nothing that survives. Read its frame carefully.
+# The writes rolled back are the **child** frame's, and the equation holds at
+# the resumption point only: at that point the flash mint is still in place —
+# it is undone later by fmint's own revert, which is a different frame. It is
+# not a transaction-level claim, it names no error kind, and its `CALL` run and
+# pushed flag are both hypotheses, so it does not say any callback ever
+# reverts.
 #
 # Each row carries its OWN pinned expected axiom set (see ROWS below), and a
 # theorem's axiom closure must equal its row's set exactly, order-insensitive.
@@ -104,7 +116,8 @@ Blanc.Fmint.no_success_of_allowance_below_amount|$STANDARD
 Blanc.Fmint.no_success_of_balance_below_amount|$STANDARD
 Blanc.wethCode_compile|$STANDARD
 Blanc.fmintCode_compile|$STANDARD
-Blanc.ProcessMessage.rollback_of_error|$STANDARD"
+Blanc.ProcessMessage.rollback_of_error|$STANDARD
+Blanc.Fmint.rollback_of_callback_failure|$STANDARD"
 # Secondary net only: the exact-set comparison below is the primary check;
 # this pattern catches forbidden names in output the per-theorem parse missed.
 FORBIDDEN='sorryAx|ofReduceBool|ofReduceNat|_native\.'

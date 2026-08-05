@@ -29,3 +29,4 @@ import Blanc.FmintCode
 #print axioms Blanc.wethCode_compile
 #print axioms Blanc.fmintCode_compile
 #print axioms Blanc.ProcessMessage.rollback_of_error
+#print axioms Blanc.Fmint.rollback_of_callback_failure

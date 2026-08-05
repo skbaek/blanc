@@ -1089,6 +1089,63 @@ lemma CallbackBoundary.entry_modes {sevm : Sevm} {fa receiver : Adr}
     rw [h_xl_some] at h_fill
     refine ⟨_, ex', h_fill, rfl, rfl, rfl, rfl⟩
 
+/-- **Restoration at the borrower's callback frame.**  The `CALL` at
+`flashLoanFromCall`'s callback site pushed the failure flag `0`, so whatever
+the borrower's `onFlashLoan` frame wrote is gone by the time fmint resumes:
+the world at `mid` — state and transient storage alike — is the world at `sc`.
+
+**Which frame this names, and which it does not.**  The frame whose writes are
+rolled back is the **child** frame the `CALL` opened, the borrower's.  The
+equation is stated between fmint's own machine states `sc` and `mid` because
+those are where the child's effects would have been visible had they survived,
+and it holds **at the resumption point `mid` and nowhere else**:
+
+* it is not a claim about fmint's frame at the end of `flashLoan`.  At `sc` the
+  flash mint has *already happened*, so `Devm.WorldEq sc mid` says the mint is
+  still in place at `mid`, with only the borrower's writes gone.  The mint is
+  undone by fmint's *own* subsequent revert, under its own premises — a
+  different frame, and R3's subject, not this lemma's.  "The borrower's revert
+  undoes the flash mint" is therefore **wrong**: it silently changes frames.
+* it is not a transaction-level claim.  An outer caller may catch fmint's
+  eventual failure and commit a perfectly successful transaction, and this
+  statement is silent about that.
+
+**No error kind is named.**  `h_flag` is the pushed word, which is all fmint's
+own compiled guard (`call ::: iszero ::: .rev <?> _`) observes; the three ways
+to reach it — the balance guard, the depth guard, and a child frame that
+settled with *some* error — are deliberately not distinguished, and no claim is
+made about which occurred.
+
+**Hypothesis position.**  `h_call` and `h_flag` are hypotheses.  Nothing here
+asserts that any `flashLoan` runs, that any callback reverts, or that this
+branch is ever taken.
+
+The premise set is `of_flashLoanFromCall`'s minus the run: the seven-operand
+call-site stack, and the `CALL` *instruction*'s run.  It is deliberately **not**
+`Func.Run … flashLoanFromCall …`, because `Func.Run` is success-only and on
+this branch fmint's post-`CALL` guard reverts fmint's own frame — there is no
+successful `Func.Run` to hang a hypothesis on.  The `CALL` instruction itself
+still runs to `.ok`: it pushes `0`.  The memory-image premises
+(`Mem.Wf`/`Mem.Reads`/`h_win`/`h_size`) are not carried, because identifying
+the calldata window is exactly what a restoration claim does not need. -/
+theorem rollback_of_callback_failure {sevm : Sevm} {sc mid : Devm}
+    {amount : B256} {a : Adr} {data : Bytes} {g : B256}
+    (h_stack : g :: a.toB256 :: (0 : B256) :: callbackArgsOffset ::
+        Nat.toB256 (196 + ceil32 data.length) ::
+        (0 : B256) :: (0 : B256) :: [amount, a.toB256] <<+ sc.stack)
+    (h_call : Ninst.Run sevm sc Ninst.call mid)
+    (h_flag : (0 : B256) :: [amount, a.toB256] <<+ mid.stack) :
+    Devm.WorldEq sc mid := by
+  rcases of_run_call_val h_stack h_call with h_fail | h_ok
+  · exact h_fail.2
+  · -- the clean-child branch pushes `1`, which `h_flag` refutes
+    exfalso
+    obtain ⟨parent, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -,
+      h_mid_stack⟩ := h_ok
+    rw [h_mid_stack] at h_flag
+    exact B256.zero_ne_one
+      (pref_head_unique h_flag (pref_append [(1 : B256)] parent.stack))
+
 /-- **The callback boundary, proved from the `CALL` step and the success
 guard.**  From the state `sc` entering `flashLoanFromCall` — the operand
 stack, a memory image whose window is the encoding, and the residual run —
