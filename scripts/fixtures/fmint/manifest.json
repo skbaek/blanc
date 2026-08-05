@@ -12,41 +12,41 @@
   {
     "name": "03-flashloan-reverting-borrower",
     "outcome": "revert",
-    "assertions": 7
+    "assertions": 9
   },
   {
     "name": "04-flashloan-returndata-spectrum",
     "outcome": "mixed",
-    "assertions": 13
+    "assertions": 15
   },
   {
     "name": "05-flashloan-data-length-spectrum",
     "outcome": "success",
-    "assertions": 27
+    "assertions": 29
   },
   {
     "name": "06-flashloan-allowance-spectrum",
     "outcome": "mixed",
-    "assertions": 20
+    "assertions": 22
   },
   {
     "name": "07-flashloan-transfer-then-default",
     "outcome": "revert",
-    "assertions": 9
+    "assertions": 11
   },
   {
     "name": "08-flashloan-reentrant",
     "outcome": "success",
-    "assertions": 7
+    "assertions": 9
   },
   {
     "name": "09-guards",
     "outcome": "mixed",
-    "assertions": 36
+    "assertions": 38
   },
   {
     "name": "10-erc20-views-and-transferFrom",
     "outcome": "mixed",
-    "assertions": 23
+    "assertions": 27
   }
 ]

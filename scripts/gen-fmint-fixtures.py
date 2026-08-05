@@ -831,6 +831,19 @@ class Expectations:
             raise ExpectationFailure(
                 f"{self.case}: no expectation was checked at all -- exactly "
                 f"the vacuous fixture this layer exists to prevent.")
+        if not self.declared_logs:
+            raise ExpectationFailure(
+                f"{self.case}: no expected-log sequence was declared. Every "
+                f"case must call `expect_logs`, including the revert-only "
+                f"ones -- declaring the EMPTY sequence is the assertion that "
+                f"catches a spurious emission, so silence is not an option "
+                f"here, and a case added later must not be able to opt out "
+                f"by saying nothing. (This requirement is fmint-side, and is "
+                f"where `Expectations` deliberately diverges from the "
+                f"`gen-weth-fixtures.py` original it was copied from: D6 was "
+                f"a design decision this program made and therefore needs "
+                f"independent evidence, whereas WETH's events are WETH9's "
+                f"and are adjudicated in `WETH_DEVIATIONS.md`.)")
         if self.failed:
             out = [
                 f"EXPECTATION FAILED -- {self.case}: {len(self.failed)} of "
@@ -1351,6 +1364,11 @@ def case_reverting():
         e.expect_storage_exact(
             "fmint", FMINT_ADDR, {},
             "the mint rolled back with everything else in the frame")
+        e.expect_logs([[]],
+                      "NOTHING is logged. The mint's Transfer was emitted and "
+                      "then discarded with the frame -- and unlike 02, this "
+                      "borrower's callback never ran at all, so there was "
+                      "never anything else that could have logged")
 
     return build_fixture("03-flashloan-reverting-borrower", alloc, [tx],
                          expect, outcome="revert")
@@ -1415,6 +1433,21 @@ def case_returndata_spectrum():
             "the short-returndata loan minted nothing durable (its frame "
             "reverted); the other two round-tripped to zero under fee ≡ 0 "
             "-- fmint ends exactly where it started")
+        e.expect_logs([[
+            # trigger 0 (EOA receiver) contributes NOTHING: its frame reverted.
+            log_mint(COMPLIANT_ADDR, amount_exact),
+            log_borrower_approve(COMPLIANT_ADDR, amount_exact),
+            log_burn(COMPLIANT_ADDR, amount_exact),
+            log_mint(COMPLIANT_OVERLONG_ADDR, amount_overlong),
+            log_borrower_approve(COMPLIANT_OVERLONG_ADDR, amount_overlong),
+            log_burn(COMPLIANT_OVERLONG_ADDR, amount_overlong),
+        ]], "six logs, not nine: the rejected short-returndata loan is FIRST "
+            "in execution order and contributes nothing, because its frame "
+            "reverted. The two honoured loans then each contribute D6's "
+            "mint/approve/burn triple, and the amounts (2 WAD then 3 WAD) "
+            "distinguish them -- so this sequence also pins that the "
+            "rejection landed on the first trigger and not on one of the "
+            "other two")
 
     return build_fixture("04-flashloan-returndata-spectrum", alloc, [tx],
                          expect, outcome="mixed", gas_limit="0x1c9c380")
@@ -1479,6 +1512,20 @@ def case_data_length_spectrum():
         e.expect_storage_exact(
             "fmint", FMINT_ADDR, {},
             "fee ≡ 0: every one of the six loans round-trips to zero")
+        e.expect_logs([[
+            entry
+            for addr in addrs
+            for entry in (log_mint(addr, amount), log_burn(addr, amount))
+        ]], "twelve logs: six ordered mint/burn PAIRS, one per length in the "
+            "spectrum, in trigger order and each naming its own borrower. "
+            "There is no Approval anywhere in this sequence and that is the "
+            "sharpest thing it says -- passiveBorrower never calls approve, "
+            "and the repayment spends a PRE-SET allowance down to zero "
+            "through spendAllowanceThenBurn, which by D6/row 13 emits no "
+            "Approval. A spend that logged one would show up as six extra "
+            "logs here. Within each pair the mint precedes the burn, which "
+            "is the ordering an implementation that balanced its arithmetic "
+            "the wrong way round would violate while still ending at zero")
 
     return build_fixture("05-flashloan-data-length-spectrum", alloc, [tx],
                          expect, outcome="success", gas_limit="0x2faf080")
@@ -1553,6 +1600,18 @@ def case_allowance_spectrum():
             "allowance is bit-for-bit unchanged at supplySlot's own value "
             "(B256.max) -- the WETH9/OpenZeppelin isMax convention "
             "preserved, not decremented")
+        e.expect_logs([[
+            entry
+            for label, addr, pre_allow, ok in scenarios if ok
+            for entry in (log_mint(addr, amount), log_burn(addr, amount))
+        ]], "six logs from the three honoured arms only, in scenario order: "
+            "no-approval and insufficient are rejected before the repayment "
+            "runs, so their mints are discarded with their frames and they "
+            "contribute nothing. exact, residual and infinite each "
+            "contribute a mint/burn pair and NO Approval -- this is the "
+            "case row 13 rests on, since all three spend an allowance and "
+            "the infinite arm deliberately skips the write entirely; an "
+            "Approval on either arm would appear here")
 
     return build_fixture("06-flashloan-allowance-spectrum", alloc, [tx],
                          expect, outcome="mixed", gas_limit="0x2faf080")
@@ -1608,6 +1667,13 @@ def case_transfer_then_default():
             "fmint", FMINT_ADDR, drift_addr, "balance[driftAddr]", 0,
             "the drift address ends up with nothing: the transfer that "
             "would have credited it was inside the reverted frame too")
+        e.expect_logs([[]],
+                      "NOTHING is logged, and this case has the most to "
+                      "discard: the mint's Transfer, plus the ERC-20 "
+                      "Transfer(borrower -> driftAddr) that the borrower's "
+                      "own mid-callback transfer emitted through row 14's "
+                      "logTransfer -- an event from a nested CALL, undone "
+                      "with the frame that contained it")
 
     return build_fixture("07-flashloan-transfer-then-default", alloc, [tx],
                          expect, outcome="revert", gas_limit="0x1c9c380")
@@ -1683,6 +1749,25 @@ def case_reentrant():
             "captured DURING the inner callback and already carry BOTH "
             "mints (5 WAD outer + 1 inner) -- the durable witness that "
             "mint precedes callback held at depth 2, not just depth 1")
+        e.expect_logs([[
+            log_mint(REENTRANT_ADDR, outer_amount),
+            log_mint(REENTRANT_ADDR, inner_amount),
+            log_borrower_approve(REENTRANT_ADDR, inner_amount),
+            log_burn(REENTRANT_ADDR, inner_amount),
+            log_borrower_approve(REENTRANT_ADDR, outer_amount),
+            log_burn(REENTRANT_ADDR, outer_amount),
+        ]], "the nesting written out, and this is where the ordering "
+            "assertion earns its keep. BOTH mints precede BOTH burns -- the "
+            "outer mint of 5 WAD, then the inner mint of 1 issued from "
+            "inside the outer callback -- and the burns then unwind INNERMOST "
+            "FIRST: the inner loan repays and burns its 1 before the outer "
+            "callback ever returns, so the outer's 5 WAD burn is last. Every "
+            "one of these six logs names the same address and the same two "
+            "topics; only the amounts and the ORDER distinguish the correct "
+            "sequence from a stack-discipline error, and only this assertion "
+            "reads them. An implementation that burnt the outer loan first, "
+            "or that emitted the inner mint before the outer, would leave "
+            "fmint's storage at exactly the same zero end state")
 
     return build_fixture("08-flashloan-reentrant", alloc, [tx], expect,
                          outcome="success", gas_limit="0x1c9c380")
@@ -1819,6 +1904,15 @@ def case_guards():
             "slot is the pre-set supply itself, EXACTLY at its pre-state "
             "value -- proof that nothing wrote to it, not merely that "
             "nothing else did")
+        e.expect_logs([[]],
+                      "NOTHING is logged, across all nine triggers. Six are "
+                      "rejected before any mint, and the other three are "
+                      "views -- flashFee and the two maxFlashLoan calls "
+                      "answer without touching state, so there is no path "
+                      "here that even reaches a logWith site. The empty "
+                      "declaration is what makes that a claim rather than an "
+                      "absence: a guard that logged before reverting, or a "
+                      "view that logged at all, would break it")
 
     return build_fixture("09-guards", alloc, [tx], expect, outcome="mixed",
                          gas_limit="0x1c9c380")
@@ -1946,6 +2040,24 @@ def case_erc20_views_and_transferFrom():
             "fmint", FMINT_ADDR, allow_od, "allowance[owner][spender]", 0,
             "the allowance is fully spent: approve set it to wad, "
             "transferFrom spent wad, so it ends at zero")
+        e.expect_logs(
+            [
+                [],                                  # tx 0: four views
+                [log_approval(owner, spender, wad,
+                              "approve(spender, wad), D6/row 14")],
+                [log_transfer(owner, dst, wad,
+                              "transferFrom's Transfer, credited from the "
+                              "OWNER and not from the calling spender -- "
+                              "D6/row 14")],
+            ],
+            "the ERC-20 surface's own events, declared per transaction. The "
+            "view transaction emits nothing at all -- name/symbol/decimals/"
+            "allowance are reads. approve emits exactly one Approval, with "
+            "the OWNER (the signer) as topic1 and the spender as topic2. "
+            "transferFrom emits exactly one Transfer, from the owner, and "
+            "-- the point of the row-13/row-14 pair -- NO second Approval "
+            "for the allowance it decrements from wad to zero, matching "
+            "WETH9 and OpenZeppelin's non-emitting _spendAllowance")
 
     return build_fixture("10-erc20-views-and-transferFrom", alloc, txs,
                          expect, outcome="mixed", gas_limit="0x7a1200")
