@@ -8303,4 +8303,71 @@ lemma of_run_mstoreAt_val {e : Sevm} {s s' : Devm} {k x xs}
   rcases prefix_of_mstore_val qm (prefix_of_push hpb hp) with ⟨hs, hm⟩
   exact ⟨hs, by rw [hm, ← hpb.memory]⟩
 
+/-! ### The dynamic tail of a canonically encoded call
+
+`forwardArgTail 3` follows argument 3's head word to its length word and copies
+the payload from there.  Under `Sevm.DecodesCallWithTail` those reads recover
+exactly the `data` the encoding was built from — the round-trip that keeps a
+statement about the forwarded bytes a statement about `data` rather than about
+whatever the contract happens to read, which is the vacuity the arc's fixed
+decision 2 forbids.
+
+The length premise is unavoidable rather than convenient: `List.length` is an
+unbounded `Nat` while the ABI's length word is 256 bits, so `data` longer than
+`2 ^ 256` bytes would not round-trip through the encoding at all. -/
+
+lemma tailPtr_three_of_decodes {e : Sevm} {sel a b c : B256} {data : Bytes}
+    (h : Sevm.DecodesCallWithTail e sel [a, b, c] data) :
+    Sevm.tailPtr e 3 = Nat.toB256 132 := by
+  simp only [Sevm.tailPtr, argWord_three_of_decodes h]
+  rfl
+
+/-- The encoding, split at the tail's length word. -/
+lemma decodes_split_tail {e : Sevm} {sel a b c : B256} {data : Bytes}
+    (h : Sevm.DecodesCallWithTail e sel [a, b, c] data) :
+    e.data = (abiSelectorBytes sel ++ B256.toBytes a ++ B256.toBytes b ++
+      B256.toBytes c ++ B256.toBytes (Nat.toB256 128)) ++
+      (B256.toBytes (Nat.toB256 data.length) ++
+        (data ++ List.replicate (ceil32 data.length - data.length) 0)) := by
+  simpa [Sevm.DecodesCallWithTail, abiCallWithTail, abiBytesTail,
+    List.append_assoc] using h
+
+lemma decodes_head_length (sel a b c : B256) :
+    (abiSelectorBytes sel ++ B256.toBytes a ++ B256.toBytes b ++
+      B256.toBytes c ++ B256.toBytes (Nat.toB256 128)).length = 132 := by
+  rw [List.length_append, List.length_append, List.length_append, List.length_append,
+    abiSelectorBytes_length, B256.length_toBytes, B256.length_toBytes,
+    B256.length_toBytes, B256.length_toBytes]
+
+lemma tailLen_three_of_decodes {e : Sevm} {sel a b c : B256} {data : Bytes}
+    (h : Sevm.DecodesCallWithTail e sel [a, b, c] data) :
+    Sevm.tailLen e 3 = Nat.toB256 data.length := by
+  rw [Sevm.tailLen, tailPtr_three_of_decodes h]
+  exact dataWord_of_append (by rw [decodes_head_length]; rfl) (decodes_split_tail h)
+
+lemma tailBytes_three_of_decodes {e : Sevm} {sel a b c : B256} {data : Bytes}
+    (hlen : data.length < 2 ^ 256)
+    (h : Sevm.DecodesCallWithTail e sel [a, b, c] data) :
+    Sevm.tailBytes e 3 = data := by
+  have hnat : (Nat.toB256 data.length).toNat = data.length := by
+    rw [B256.toNat_toB256]
+    exact Nat.mod_eq_of_lt hlen
+  simp only [Sevm.tailBytes, tailPtr_three_of_decodes h, tailLen_three_of_decodes h,
+    hnat]
+  have hd : e.data =
+      ((abiSelectorBytes sel ++ B256.toBytes a ++ B256.toBytes b ++
+        B256.toBytes c ++ B256.toBytes (Nat.toB256 128)) ++
+        B256.toBytes (Nat.toB256 data.length)) ++
+      (data ++ List.replicate (ceil32 data.length - data.length) 0) := by
+    rw [List.append_assoc]; exact decodes_split_tail h
+  have hpre : ((abiSelectorBytes sel ++ B256.toBytes a ++ B256.toBytes b ++
+      B256.toBytes c ++ B256.toBytes (Nat.toB256 128)) ++
+      B256.toBytes (Nat.toB256 data.length)).length = 164 := by
+    rw [List.length_append, decodes_head_length, B256.length_toBytes]
+  show List.sliceD e.data (Nat.toB256 132 + 32).toNat data.length 0 = data
+  rw [show (Nat.toB256 132 + (32 : B256)).toNat = 164 from rfl, hd,
+    List.sliceD, List.drop_length_append' (by rw [hpre]),
+    List.takeD_eq_take _ (by simp [List.length_append]),
+    List.take_length_append' rfl]
+
 end Blanc
