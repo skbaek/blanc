@@ -4698,6 +4698,22 @@ lemma prefix_of_push {xs ys} {s s' : Devm} :
     Devm.PushBurn xs s s' → (ys <<+ s.stack) → ((xs ++ ys) <<+ s'.stack) :=
   λ h0 h1 => append_pref h0.stack h1
 
+/-- `DUP n` at a stack whose top `n + 1` words are already known: the word it
+pushes is the one the walk knows sits at index `n`.
+
+The value-carrying `DUP`.  Every existing walk re-derives this inline —
+`of_run_dup`, then `Stack.nth_getElem` to pin the anonymous word, then
+`prefix_of_push` — which is three steps and a `subst` per `DUP`, and `flashLoan`
+alone has nine.  The `Stack.Nth` premise is discharged by `show_nth`. -/
+lemma prefix_of_dup_val {e : Sevm} {s s' : Devm} {n : Fin 16} {x : B256} {xs : Stack}
+    (h : Ninst.Run e s (dup n) s') (hnth : Stack.Nth n.val x xs) (hp : xs <<+ s.stack) :
+    x :: xs <<+ s'.stack := by
+  rcases of_run_dup h with ⟨y, hy, pb⟩
+  rw [Stack.nth_getElem hnth hp] at hy
+  injection hy with hy
+  subst hy
+  exact prefix_of_push pb hp
+
 lemma prefix_of_pop {y : B256} {xs} {s s' : Devm} :
     (∃ x, Devm.PopBurn [x] s s') → (y :: xs <<+ s.stack) → (xs <<+ s'.stack) := by
   intros h h'; rcases h with ⟨x, hx⟩
