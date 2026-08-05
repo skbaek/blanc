@@ -48,5 +48,10 @@
     "name": "10-erc20-views-and-transferFrom",
     "outcome": "mixed",
     "assertions": 27
+  },
+  {
+    "name": "11-flashloan-solc-borrower",
+    "outcome": "success",
+    "assertions": 9
   }
 ]

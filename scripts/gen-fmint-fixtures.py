@@ -2151,6 +2151,118 @@ def case_erc20_views_and_transferFrom():
                          expect, outcome="mixed", gas_limit="0x7a1200")
 
 
+def case_solc_borrower():
+    """The one borrower Blanc did not compile (`~/plans/fmint-evidence.md`
+    Step 3).
+
+    WHAT THIS CASE IS FOR, precisely. It is NOT a second end-state test:
+    under fee = 0 a successful loan returns fmint's storage to its pre-state,
+    so the end-state assertion here is the same near-vacuous one case 01
+    makes. It is not a second proof either. It is one thing only -- an
+    INDEPENDENT DECODER accepting the calldata `Blanc.Fmint.flashLoan` builds
+    and recovering the five arguments this suite claims are in it.
+
+    Why that needed a different compiler. Every other borrower in the zoo
+    decodes `onFlashLoan`'s arguments with the same `Func`/`Line` machinery
+    that encoded them, so a shared encoder/decoder defect would decode the
+    wrong bytes back into exactly the expected values and every assertion
+    would still pass. `Blanc.fmint_flashLoan_spec` does not close that circle
+    either: it proves the callback's CALL window equals *Blanc's definition*
+    of the canonical ABI encoding, so a definition that misstates the
+    standard leaves the theorem true and the divergence unseen. `solc`'s
+    decoder is an independent implementation of the standard, which is the
+    one thing no Lean theorem in this repository can be.
+
+    The decoder's prologue is doing real work on this input, and refuses
+    rather than misreads: it rejects calldata shorter than the five-word
+    head, an `address` argument with nonzero top 96 bits, and a `bytes`
+    offset or length running past calldatasize. `data` is deliberately 26
+    bytes -- NOT a multiple of 32 -- so the recorded `keccak256(data)`
+    separates a decoder that honoured the declared length from one that
+    hashed the whole padded word; the hash on the right-hand side is computed
+    here in Python from the same bytes handed to the oracle, exactly as case
+    05 does.
+
+    The evidence stays narrow, and the docs say so: one borrower, on chosen
+    inputs, differentially checked. Not a proof, not liveness, and not a
+    statement about borrowers in general."""
+    trigger_key = 11
+    amount = 7 * WAD
+    data = b"decoded by solc, not by us"
+    assert len(data) % 32, "data must not be word-aligned -- see the docstring"
+    t = Trigger("flashLoan(solc borrower)", FMINT_ADDR,
+                abi_call("flashLoan(address,address,uint256,bytes)",
+                         ("address", SOLC_BORROWER_ADDR),
+                         ("address", FMINT_ADDR),
+                         ("uint256", amount), ("bytes", data)),
+                n_words=1)
+    trigger, tx = trigger_tx(trigger_key)
+    alloc = {
+        FMINT_ADDR: fmint_account(),
+        SOLC_BORROWER_ADDR: solc_borrower_account(),
+        PROBER_ADDR: prober_account(build_trigger_bytecode([t])),
+        trigger: eoa_alloc(EOA_BALANCE),
+    }
+
+    def expect(e):
+        e.expect_tx_succeeded(0, "the trigger transaction runs to completion")
+        expect_trigger(e, "prober", PROBER_ADDR, 0, t,
+                       words=[(1, "flashLoan returned true -- the "
+                                  "solc-compiled borrower returned the "
+                                  "ERC-3156 magic word, which it computed "
+                                  "itself as keccak256 of the string "
+                                  "'ERC3156FlashBorrower.onFlashLoan' rather "
+                                  "than reading Blanc's constant")])
+        e.expect_storage_exact(
+            "prober", PROBER_ADDR, trigger_storage([t], {0: [1]}),
+            "the prober's storage is exactly the one trigger's record")
+        e.expect_storage_exact(
+            "fmint", FMINT_ADDR, {},
+            "fee = 0: the mint and the burn cancel exactly, so a successful "
+            "loan's end state equals its pre-state -- which is precisely why "
+            "the durable evidence in this case is the borrower's own "
+            "mid-callback record and not fmint's end state")
+        e.expect_storage_exact(
+            "solc-compiled borrower", SOLC_BORROWER_ADDR, {
+                OBS_SENDER: int(FMINT_ADDR, 16),
+                OBS_INITIATOR: int(PROBER_ADDR, 16),
+                OBS_TOKEN: int(FMINT_ADDR, 16),
+                OBS_AMOUNT: amount,
+                OBS_DATAHASH: int.from_bytes(keccak256(data), "big"),
+                OBS_BAL_SELF: amount,
+                OBS_SUPPLY: amount,
+            },
+            "THE POINT OF THE CASE: an independently compiled decoder read "
+            "the calldata flashLoan built and recovered exactly the five "
+            "arguments this suite says are in it -- msg.sender is fmint, the "
+            "initiator is the prober that called flashLoan, token is fmint "
+            "itself, amount is forwarded exactly, fee is 0 (hence absent "
+            "from the nonzero storage), and data by its keccak over the "
+            "DECLARED 26 bytes rather than the 32-byte padded word. "
+            "balanceOf(self) and totalSupply() were read back through the "
+            "token DURING the callback and already reflect the mint. The "
+            "expectations are byte-for-byte the ones case 01 makes of the "
+            "Blanc `compliantBorrower`; a disagreement between the two "
+            "borrowers on any of these words would be a divergence between "
+            "Blanc's ABI encoding and the standard, and would abort "
+            "generation here rather than be absorbed")
+        e.expect_logs([[
+            log_mint(SOLC_BORROWER_ADDR, amount),
+            log_borrower_approve(SOLC_BORROWER_ADDR, amount),
+            log_burn(SOLC_BORROWER_ADDR, amount),
+        ]], "D6's three events on the full success path, in the same order "
+            "case 01 declares them and for the same reasons: the mint's "
+            "Transfer out of 0x0 first, then the borrower's own mid-callback "
+            "approve(token, amount + fee) logged by fmint's ERC-20 approve, "
+            "then the burn's Transfer into 0x0. The borrower being a "
+            "different compiler's output changes nothing about what fmint "
+            "must emit -- D6 is a property of the token, and this case says "
+            "so by asserting the identical sequence")
+
+    return build_fixture("11-flashloan-solc-borrower", alloc, [tx], expect,
+                         outcome="success")
+
+
 def main():
     global FMINT_CODE, BORROWERS, SOLC_BORROWER, SELECTORS
     FMINT_CODE = get_fmint_code_hex()
@@ -2169,6 +2281,7 @@ def main():
         case_reentrant,
         case_guards,
         case_erc20_views_and_transferFrom,
+        case_solc_borrower,
     ]
     written = set()
     for fn in cases:
