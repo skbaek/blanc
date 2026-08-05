@@ -1342,6 +1342,39 @@ lemma prefix_of_kec_val {e} {x y xs} {s s' : Devm}
   rw [hx, hy] at hp ⊢
   exact ⟨append_pref h3 (of_append_pref h2 hp), hm⟩
 
+/-- **What a `RETURN` returns.**  `Linst.run .ret` pops the window, charges for
+it and sets `Devm.output` from *memory* — so a `Func` ending in `Func.ret` is
+specified by an equation about `Devm.output`, never about a stack word, and a
+caller holding a `Mem.Reads` image reads the returned bytes off it.
+
+Same placement note as the two inversions above. -/
+lemma of_run_ret_val {fs : List Func} {sevm : Sevm} {s r : Devm} {i n : B256} {xs}
+    (hp : i :: n :: xs <<+ s.stack) (h : Func.Run fs sevm s Func.ret r) :
+    Devm.output r = (s.memory.read i.toNat n.toNat).1 ∧
+      Devm.getCode s = Devm.getCode r := by
+  cases h with
+  | last hl =>
+    refine ⟨?_, funext (fun x => (Linst.run_codeFrame hl x).symm)⟩
+    simp only [Linst.Run, Linst.run] at hl
+    rcases Except.bind_eq_ok hl with ⟨⟨idx, s₁⟩, h1, run₁⟩
+    rcases Except.bind_eq_ok run₁ with ⟨⟨sz, s₂⟩, h2, run₂⟩
+    rcases Except.bind_eq_ok run₂ with ⟨s₃, h3, run₃⟩
+    rcases Devm.pop_of_popToNat_val h1 with ⟨x, p1, rfl⟩
+    rcases Devm.pop_of_popToNat_val h2 with ⟨y, p2, rfl⟩
+    have hb := Devm.burn_of_chargeGas h3
+    have hmem : s.memory = s₃.memory := (p1.memory.trans p2.memory).trans hb.memory
+    have hstk : s.stack = x :: y :: s₂.stack := by
+      have hpp := (Devm.pop_append p1 p2).stack
+      simpa only [Stack.Pop, Split, List.cons_append, List.nil_append] using hpp
+    rw [hstk] at hp
+    have hx : i = x := pref_head_unique hp (pref_append [x] (y :: s₂.stack))
+    subst hx
+    have hy : n = y := pref_head_unique (cons_pref_cons_inv hp) (pref_append [y] s₂.stack)
+    subst hy
+    injection run₃ with hr
+    rw [← hr, hmem]
+    rfl
+
 /-- **The value-carrying `CALL` inversion.**  A successful `call` step whose
 seven operands are known either pushed the failure flag `0` — the depth guard,
 the balance guard, or a child frame that failed, rollback included — or
