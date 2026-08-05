@@ -4,6 +4,7 @@ import Blanc.Ladder
 import Blanc.Conserved
 import Blanc.FmintCode
 import Blanc.FlashSpec
+import Blanc.Compiled
 
 namespace Blanc
 
