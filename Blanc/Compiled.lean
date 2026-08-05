@@ -825,4 +825,149 @@ theorem noPushBefore_add {cd : ByteArray} {k s : Nat}
       · simpa using hq
     · exfalso; omega
 
+lemma toInstType_eq_p_of_bounds {b : UInt8}
+    (h1 : 96 ≤ b.toNat) (h2 : b.toNat ≤ 127) : b.toInstType = .P := by
+  have hh : b.highs = 6 ∨ b.highs = 7 := by
+    have h : b.highs.toNat = 6 ∨ b.highs.toNat = 7 := by
+      simp [UInt8.highs, UInt8.toNat_shiftRight]; omega
+    rcases h with h | h
+    · left; exact UInt8.toNat_inj.mp h
+    · right; exact UInt8.toNat_inj.mp h
+  simp only [UInt8.toInstType]
+  rcases hh with h | h <;> rw [h] <;> rfl
+
+/-- One step of the boundary walk along a compiled block.  `(b :: ys) ++ zs`
+sits at `k` and `b :: ys` is the complete encoding of one instruction, so the
+"no `PUSH` immediate covers this position" property moves to `k + s`, where the
+rest of the block still sits. -/
+lemma noPushBefore_peel {code : ByteArray} {k s : Nat} {b : UInt8} {ys zs : Bytes}
+    (h : List.Slice code.toList k ((b :: ys) ++ zs))
+    (hb : noPushBefore code k 32 = true)
+    (hs : s = ys.length + 1)
+    (hinst : (96 ≤ b.toNat ∧ b.toNat ≤ 127 ∧ s = b.toNat - 94) ∨
+             ((b.toNat < 96 ∨ 127 < b.toNat) ∧ ys = [])) :
+    noPushBefore code (k + s) 32 = true ∧ List.Slice code.toList (k + s) zs := by
+  have hlen : (b :: ys).length = s := by simp [hs]
+  constructor
+  · refine noPushBefore_add (fun hk => ?_) hb
+    rw [ByteArray.getElem_of_getElem?_eq_some
+      (List.get?_eq_of_slice (List.slice_prefix h)) hk]
+    rcases hinst with hp | ⟨hnp, hnil⟩
+    · exact Or.inl hp
+    · exact Or.inr ⟨hnp, by simp [hs, hnil]⟩
+  · have hsuf := List.slice_suffix h
+    rwa [hlen] at hsuf
+
+/-- The instruction premise of `noPushBefore_peel` for a one-byte opcode: any
+byte Jaune does not decode as a `PUSH` with an immediate. -/
+lemma peel_inst_of_ne_p {b : UInt8} (hne : b.toInstType ≠ .P) :
+    (96 ≤ b.toNat ∧ b.toNat ≤ 127 ∧ (1 : Nat) = b.toNat - 94) ∨
+    ((b.toNat < 96 ∨ 127 < b.toNat) ∧ ([] : Bytes) = []) := by
+  refine Or.inr ⟨?_, rfl⟩
+  rcases Nat.lt_or_ge b.toNat 96 with h | h
+  · exact Or.inl h
+  · rcases Nat.lt_or_ge 127 b.toNat with h' | h'
+    · exact Or.inr h'
+    · exact absurd (toInstType_eq_p_of_bounds h h') hne
+
+/-- The instruction premise of `noPushBefore_peel` for a `PUSH`.  `PUSH0`
+(`bs = []`) takes the non-`PUSH` branch: `0x5F` reaches nothing. -/
+lemma peel_inst_of_push {bs : Bytes} (le : bs.length ≤ 32) :
+    (96 ≤ (pushToB8 bs).toNat ∧ (pushToB8 bs).toNat ≤ 127 ∧
+      bs.length + 1 = (pushToB8 bs).toNat - 94) ∨
+    (((pushToB8 bs).toNat < 96 ∨ 127 < (pushToB8 bs).toNat) ∧ bs = []) := by
+  rw [toNat_pushToB8_eq le]
+  match hbs : bs with
+  | [] => exact Or.inr ⟨Or.inl (by simp), rfl⟩
+  | x :: bs' => exact Or.inl ⟨by simp, by simp at le ⊢; omega, by simp⟩
+
+/-- Peel one opcode that takes no immediate. -/
+lemma noPushBefore_peel1 {code : ByteArray} {k : Nat} {b : UInt8} {zs : Bytes}
+    (h : List.Slice code.toList k (b :: zs)) (hb : noPushBefore code k 32 = true)
+    (hne : b.toInstType ≠ .P) :
+    noPushBefore code (k + 1) 32 = true ∧ List.Slice code.toList (k + 1) zs := by
+  refine noPushBefore_peel (ys := []) ?_ hb rfl (peel_inst_of_ne_p hne)
+  simpa using h
+
+/-- Peel the `PUSH2` that opens every jump `Func.compile` emits. -/
+lemma noPushBefore_peel2 {code : ByteArray} {k : Nat} {x y : UInt8} {zs : Bytes}
+    (h : List.Slice code.toList k ([(0x61 : UInt8), x, y] ++ zs))
+    (hb : noPushBefore code k 32 = true) :
+    noPushBefore code (k + 3) 32 = true ∧ List.Slice code.toList (k + 3) zs :=
+  noPushBefore_peel h hb rfl (Or.inl ⟨by decide, by decide, by decide⟩)
+
+/-- **The boundary walk.**  A compiled `Func` block whose first byte no `PUSH`
+immediate covers ends at a byte no `PUSH` immediate covers.
+
+The induction mirrors `Func.compile`'s own recursion, and the boundary property
+travels alongside `subcode` exactly as the program counter already does. -/
+lemma Func.noPushBefore_compile {code : ByteArray} {l : List (Nat × Func)} :
+    ∀ (p : Func) (k : Nat), subcode code.toList k (Func.compile l k p) →
+      noPushBefore code k 32 = true →
+      noPushBefore code (k + compsize p) 32 = true := by
+  intro p
+  induction p with
+  | last o =>
+    intro k sub hb
+    exact (noPushBefore_peel1 (zs := []) sub hb
+      (by rw [Linst.toInstType_toUInt8]; simp)).left
+  | next i p ih =>
+    intro k sub hb
+    rcases of_subcode sub with ⟨cd, h_eq, h_slice⟩
+    rcases of_bind_eq_some h_eq with ⟨pbs, h_pbs, h⟩
+    rw [← of_pure_eq_some h] at h_slice
+    have key : noPushBefore code (k + i.size) 32 = true ∧
+        List.Slice code.toList (k + i.size) pbs := by
+      cases i with
+      | reg o =>
+        exact noPushBefore_peel1 h_slice hb (by rw [Rinst.toInstType_toUInt8]; simp)
+      | exec o =>
+        exact noPushBefore_peel1 h_slice hb (by rw [Xinst.toInstType_toUInt8]; simp)
+      | push bs le =>
+        exact noPushBefore_peel h_slice hb rfl (peel_inst_of_push le)
+    have hsub : subcode code.toList (k + i.size) (Func.compile l (k + i.size) p) := by
+      rw [h_pbs]; exact key.right
+    have hend := ih (k + i.size) hsub key.left
+    have harith : k + i.size + compsize p = k + compsize (Func.next i p) := by
+      simp only [compsize, Ninst.size_eq_length_toBytes]; omega
+    rwa [harith] at hend
+  | branch p q ihp ihq =>
+    intro k sub hb
+    rcases of_subcode sub with ⟨cd, h_eq, h_slice⟩
+    rcases of_bind_eq_some h_eq with ⟨pbs, h_pbs, h⟩
+    rcases of_guard_eq_some h with ⟨h_loc, h'⟩
+    rcases of_bind_eq_some h' with ⟨qbs, h_qbs, h''⟩
+    rw [← of_pure_eq_some h''] at h_slice
+    simp only [List.append_assoc, List.cons_append, List.nil_append] at h_slice
+    have h3 := noPushBefore_peel2 h_slice hb
+    have h4 := noPushBefore_peel1 h3.right h3.left
+      (by rw [Jinst.toInstType_toUInt8]; simp)
+    have hlenp : pbs.length = compsize p := Func.length_compile h_pbs
+    have harm : noPushBefore code (k + 3 + 1 + compsize p) 32 = true := by
+      refine ihp (k + 3 + 1) ?_ h4.left
+      rw [h_pbs]; exact List.slice_prefix h4.right
+    have hjd : List.Slice code.toList (k + 3 + 1 + compsize p)
+        (Jinst.toUInt8 .jumpdest :: qbs) := by
+      have := List.slice_suffix h4.right
+      rwa [hlenp] at this
+    have h5 := noPushBefore_peel1 hjd harm (by rw [Jinst.toInstType_toUInt8]; simp)
+    have h_qbs' : Func.compile l (k + 3 + 1 + compsize p + 1) q = some qbs := by
+      have hidx : k + 3 + 1 + compsize p + 1 = k + pbs.length + 4 + 1 := by omega
+      rw [hidx]; exact h_qbs
+    have hend := ihq (k + 3 + 1 + compsize p + 1) (by rw [h_qbs']; exact h5.right) h5.left
+    have harith : k + 3 + 1 + compsize p + 1 + compsize q
+        = k + compsize (Func.branch p q) := by simp only [compsize]; omega
+    rwa [harith] at hend
+  | call n =>
+    intro k sub hb
+    rcases of_subcode sub with ⟨cd, h_eq, h_slice⟩
+    rcases of_bind_eq_some h_eq with ⟨⟨loc, r⟩, h_get, h⟩
+    rcases of_guard_eq_some h with ⟨h_lt, h'⟩
+    rw [← of_pure_eq_some h'] at h_slice
+    simp only [List.cons_append, List.nil_append] at h_slice
+    have h3 := noPushBefore_peel2 h_slice hb
+    have h4 := noPushBefore_peel1 h3.right h3.left
+      (by rw [Jinst.toInstType_toUInt8]; simp)
+    exact h4.left
+
 end Blanc
