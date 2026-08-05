@@ -72,10 +72,13 @@ EELS = os.environ.get("EELS_ROOT", os.path.expanduser("~/execution-specs"))
 sys.path.insert(0, os.path.join(EELS, "src"))
 
 from ethereum_rlp import rlp                                     # noqa: E402
-from ethereum_types.bytes import Bytes, Bytes8, Bytes32, Bytes256   # noqa: E402
+from ethereum_types.bytes import (                               # noqa: E402
+    Bytes, Bytes8, Bytes32, Bytes256,
+)
 from ethereum_types.numeric import U64, U256, Uint               # noqa: E402
-from ethereum.crypto.hash import keccak256                       # noqa: E402
-from ethereum.prague.blocks import Header                        # noqa: E402
+from ethereum.crypto.hash import Hash32, keccak256               # noqa: E402
+from ethereum.prague.blocks import Header, Log                   # noqa: E402
+from ethereum.prague.bloom import logs_bloom                     # noqa: E402
 from ethereum.prague.fork_types import Account, Address          # noqa: E402
 from ethereum.prague.state import (                              # noqa: E402
     State, set_account, set_storage, state_root,
@@ -551,6 +554,116 @@ def _slots(m):
                            for k, v in sorted(m.items())) + "}"
 
 
+# ---- D6's event set, spelled out from the specification ----------------
+#
+# THE SPEC-DERIVED EXPECTED-LOG LAYER (`~/plans/fmint-evidence.md` Step 2).
+# Everything below states what fmint is SUPPOSED to emit, read off proposal
+# D6 as adjudicated in `FMINT_DEVIATIONS.md` rows 12-14 and off each case's
+# own scenario -- never off a committed fixture, never off `res`, never off a
+# second `t8n` run. That circularity is exactly what this layer exists to
+# break, so the derivation direction is the whole content of the check.
+#
+# D6, in four rules:
+#
+#   * mint  -> `Transfer(0x0 -> receiver, amount)`      (`flashLoan`)
+#   * burn  -> `Transfer(receiver -> 0x0, amount + fee)`, fee = 0
+#                                                        (`burnAndReturn`)
+#   * ERC-20 surface -> `Transfer` on `transfer`/`transferFrom`, `Approval`
+#     on `approve`, both on the standard ERC-20 topics
+#   * the repayment allowance spend emits NO `Approval`
+#     (and neither does `transferFrom`'s own allowance decrement)
+#
+# The two topic0 words are computed here from the ERC-20 signature STRINGS,
+# not imported from `Blanc/CommonCore.lean`'s `transferEvent`/`approvalEvent`:
+# an expectation that borrowed the constant under test would agree with a typo
+# in it.
+TRANSFER_TOPIC = int.from_bytes(
+    keccak256(b"Transfer(address,address,uint256)"), "big")
+APPROVAL_TOPIC = int.from_bytes(
+    keccak256(b"Approval(address,address,uint256)"), "big")
+
+ZERO_ADDR = 0  # ERC-20's mint/burn counterparty
+
+
+def _as_word(x):
+    return int(x, 16) if isinstance(x, str) else int(x)
+
+
+class ExpectedLog:
+    """One log this suite says fmint must emit: emitting address, the ordered
+    topic list (topic0 the event signature hash, then the indexed arguments),
+    and the unindexed data. `label` is for the failure report only."""
+
+    def __init__(self, address, topics, data, label):
+        self.address = _as_word(address)
+        self.topics = [_as_word(t) for t in topics]
+        self.data = data
+        self.label = label
+
+    def to_eels(self):
+        """The oracle's own `Log` record. The CONTENT above is spec-derived;
+        only the ENCODING is shared with the oracle -- see `expect_logs`."""
+        return Log(
+            address=Address(self.address.to_bytes(20, "big")),
+            topics=tuple(Hash32(t.to_bytes(32, "big")) for t in self.topics),
+            data=Bytes(self.data),
+        )
+
+    def __str__(self):
+        return (f"{self.label}\n"
+                f"        from 0x{self.address:040x}"
+                f"  topics [{', '.join(f'0x{t:064x}' for t in self.topics)}]"
+                f"  data 0x{self.data.hex()}")
+
+
+def log_transfer(src, dst, wad, why):
+    return ExpectedLog(
+        FMINT_ADDR, [TRANSFER_TOPIC, src, dst],
+        _as_word(wad).to_bytes(32, "big"),
+        f"Transfer(0x{_as_word(src):040x} -> 0x{_as_word(dst):040x}, {wad})"
+        f" -- {why}")
+
+
+def log_approval(owner, spender, wad, why):
+    return ExpectedLog(
+        FMINT_ADDR, [APPROVAL_TOPIC, owner, spender],
+        _as_word(wad).to_bytes(32, "big"),
+        f"Approval(owner 0x{_as_word(owner):040x}, spender "
+        f"0x{_as_word(spender):040x}, {wad}) -- {why}")
+
+
+def log_mint(receiver, amount):
+    """D6: the mint's `Transfer` out of the zero address, emitted by
+    `flashLoan` after the balance/supply pair and BEFORE the callback."""
+    return log_transfer(ZERO_ADDR, receiver, amount,
+                        "flashLoan's mint, D6/registry row 12")
+
+
+def log_burn(receiver, amount, fee=0):
+    """D6: the burn's `Transfer` into the zero address, for `amount + fee`,
+    emitted by `burnAndReturn`. `fee` is identically 0 under D2, and is a
+    parameter here so the rule is stated as D6 states it rather than
+    collapsed into the constant."""
+    return log_transfer(receiver, ZERO_ADDR, amount + fee,
+                        "burnAndReturn's burn of amount + fee, D6/row 12")
+
+
+def log_borrower_approve(borrower, amount, fee=0):
+    """Not fmint's own event: the borrower calls `approve(caller, amount +
+    fee)` back into the token from inside its callback, and fmint's ERC-20
+    `approve` logs it (D6/registry row 14). Only the zoo members that
+    actually approve emit this -- `passiveBorrower` never does."""
+    return log_approval(borrower, FMINT_ADDR, amount + fee,
+                        "the borrower's mid-callback approve(token, amount + "
+                        "fee), logged by fmint's ERC-20 approve -- D6/row 14")
+
+
+def _logseq(seq):
+    if not seq:
+        return "[] -- no log at all"
+    return "\n      ".join(f"[{i}] {e}" for i, e in enumerate(seq))
+
+
 class ExpectationFailure(Exception):
     """A HALT, not something to smooth over -- see `gen-weth-fixtures.py`'s
     identical class for the full rationale."""
@@ -567,6 +680,7 @@ class Expectations:
         self.res = res
         self.checked = []
         self.failed = []
+        self.declared_logs = False
 
     def pre_ether(self, addr):
         return int(self._find(self.pre, addr).get("balance", "0x0"), 16)
@@ -625,6 +739,92 @@ class Expectations:
         obs = self.post_storage(addr)
         self._record(obs == expected, f"complete nonzero storage of {label}",
                      _slots(expected), _slots(obs), claim)
+
+    def expect_logs(self, per_tx, claim):
+        """The D6-derived expected-log assertion.
+
+        `per_tx[i]` is transaction `i`'s expected log sequence, in emission
+        order; the block's sequence is their concatenation. EVERY case
+        declares every transaction, INCLUDING the ones that expect nothing --
+        an empty declaration is an assertion (that no log was emitted), and
+        it is the one that catches a spurious emission on a path that is
+        supposed to revert.
+
+        Two checks, and they are not the same check:
+
+        (1) `logsHash`. EELS' `t8n` result exposes no per-receipt log list --
+            `json_encode_receipts` emits `transactionHash`, `succeeded`,
+            `gasUsed` and a per-receipt `bloom` only (re-verified against the
+            frozen oracle at `~/execution-specs`, 2026-08-05) -- but it does
+            expose, at the top level, `logsHash =
+            keccak256(rlp.encode(block_output.block_logs))`, an EXACT
+            commitment to the block's full ordered log content. So the
+            expected sequence is RLP-encoded and keccak'd here and compared
+            against it. Ordering is content: a burn emitted before its mint
+            balances just as well and only this catches it.
+
+        (2) Per-receipt bloom, which localises (1) to a transaction and adds
+            one thing (1) cannot see. `logsHash` is a BLOCK-level commitment
+            over the flattened sequence, so it cannot check that a given log
+            belongs to the transaction this case says emitted it. For a
+            transaction expecting NO log the check is sharp -- a log always
+            contributes its emitting address to the bloom, so "no log" is
+            exactly "bloom is zero". For a transaction expecting logs it is a
+            containment check and therefore LOSSY: `data` is not in a bloom
+            at all and order is not either, so it can never replace (1).
+
+        THE PROVENANCE SPLIT, stated because it is what the assertion is
+        worth. The CONTENT is spec-derived -- `TRANSFER_TOPIC`/
+        `APPROVAL_TOPIC` from the ERC-20 signature strings, the sequences
+        from D6 and each case's own scenario, written here and not read back
+        from the oracle or decoded out of a committed fixture. The ENCODING
+        is shared with the oracle: the same `ethereum_rlp`, the same
+        `keccak256`, the same `logs_bloom`. That is sound and deliberate.
+        RLP log encoding and the bloom function are consensus rules
+        adjudicated elsewhere (jaune recomputes both and checks them against
+        the header, which is what pins the goldens); they are not what D6
+        decides. Dressing the shared encoder up as independent would be a
+        false claim, and hand-rolling an RLP encoder here to pretend
+        otherwise would buy nothing but a second place to be wrong."""
+        n = len(self.res["receipts"])
+        if len(per_tx) != n:
+            raise ExpectationFailure(
+                f"{self.case}: expect_logs declared {len(per_tx)} "
+                f"transactions but the block has {n}. Every transaction "
+                f"must declare its expected logs, including the empty ones.")
+        self.declared_logs = True
+
+        flat = [e for tx_logs in per_tx for e in tx_logs]
+        exp_hash = "0x" + keccak256(
+            rlp.encode(tuple(e.to_eels() for e in flat))).hex()
+        self._record(
+            exp_hash == self.res["logsHash"],
+            "the block's ordered log sequence (keccak of its RLP encoding, "
+            "against the oracle's logsHash)",
+            f"{_logseq(flat)}\n      = {exp_hash}",
+            f"logsHash {self.res['logsHash']}",
+            claim)
+
+        for i, tx_logs in enumerate(per_tx):
+            obs = int(self.res["receipts"][i]["bloom"], 16)
+            if not tx_logs:
+                self._record(
+                    obs == 0, f"transaction {i} receipt logs bloom",
+                    "0x0 -- this transaction emits NO log, and a log always "
+                    "adds its emitting address to the bloom, so an empty log "
+                    "set is exactly a zero bloom",
+                    f"0x{obs:x}",
+                    f"{claim} (transaction {i} emits nothing)")
+                continue
+            exp = int.from_bytes(
+                logs_bloom(tuple(e.to_eels() for e in tx_logs)), "big")
+            self._record(
+                exp & obs == exp,
+                f"transaction {i} receipt logs bloom (containment)",
+                f"every bit of the bloom of\n      {_logseq(tx_logs)}\n"
+                f"      set in the receipt's own bloom",
+                f"0x{obs:x} is missing bits of 0x{exp:x}",
+                f"{claim} (transaction {i}'s own logs are attributed to it)")
 
     def finish(self):
         if not self.checked:
@@ -1045,6 +1245,19 @@ def case_compliant():
             "its keccak), and both balanceOf(self) and totalSupply() "
             "already reflect the mint -- captured DURING the callback, "
             "which is the only way to observe that ordering under fee ≡ 0")
+        e.expect_logs([[
+            log_mint(COMPLIANT_ADDR, amount),
+            log_borrower_approve(COMPLIANT_ADDR, amount),
+            log_burn(COMPLIANT_ADDR, amount),
+        ]], "D6's three events on the full success path, in this order: the "
+            "mint's Transfer out of 0x0 FIRST (flashLoan logs it before it "
+            "calls out), then the compliant borrower's own mid-callback "
+            "approve(token, amount + fee) logged by fmint's ERC-20 approve, "
+            "then the burn's Transfer into 0x0 for amount + fee. The "
+            "repayment allowance spend itself emits NO Approval (row 13), "
+            "which is why there are three logs here and not four -- and the "
+            "order is the whole content: a burn emitted before its mint "
+            "balances exactly as well")
 
     return build_fixture("01-flashloan-compliant", alloc, [tx], expect,
                          outcome="success")
@@ -1094,6 +1307,14 @@ def case_wrong_magic():
             "the sharp case: the callback DID run and DID write, but the "
             "revert erased it, which a check that only looked at 'nothing "
             "changed' could not distinguish from 'the callback never ran'")
+        e.expect_logs([[]],
+                      "NOTHING is logged. The mint's Transfer WAS emitted "
+                      "inside the flashLoan frame -- and the frame reverted, "
+                      "so it is discarded along with every SSTORE in it. The "
+                      "empty declaration is the assertion, not the absence of "
+                      "one: it is what catches an emission that survived a "
+                      "revert, and it is sharp here because a log always adds "
+                      "its emitting address to the receipt's bloom")
 
     return build_fixture("02-flashloan-wrong-magic", alloc, [tx], expect,
                          outcome="revert")

@@ -2,12 +2,12 @@
   {
     "name": "01-flashloan-compliant",
     "outcome": "success",
-    "assertions": 7
+    "assertions": 9
   },
   {
     "name": "02-flashloan-wrong-magic",
     "outcome": "revert",
-    "assertions": 8
+    "assertions": 10
   },
   {
     "name": "03-flashloan-reverting-borrower",
