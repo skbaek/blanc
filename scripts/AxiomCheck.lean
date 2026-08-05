@@ -28,3 +28,4 @@ import Blanc.FmintCode
 #print axioms Blanc.Fmint.no_success_of_balance_below_amount
 #print axioms Blanc.wethCode_compile
 #print axioms Blanc.fmintCode_compile
+#print axioms Blanc.ProcessMessage.rollback_of_error

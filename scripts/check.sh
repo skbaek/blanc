@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Blanc verification gate (REFACTOR.md Phase 0, step 0.3): `lake build`,
-# then an axiom audit of the twenty-four audited top theorems via
+# then an axiom audit of the twenty-five audited top theorems via
 # scripts/AxiomCheck.lean — WETH's seven solvency theorems, fmint's seven
 # conservation theorems, fmint's `flashLoan` success spec and its seven
-# no-success corollaries, and the two compile witnesses.
+# no-success corollaries, the two compile witnesses, and the frame-level
+# restoration row below.
 #
 # `wethCode_compile` is what keeps the solvency theorems' `Prog.compile weth`
 # hypothesis from being vacuous. `fmintCode_compile` is the same equation for
@@ -21,6 +22,16 @@
 # restricted to canonically encoded calldata and premised on frame freshness —
 # `Blanc/FlashSpec.lean`'s headline docstring is the authority on their scope —
 # and none of them is a state-restoration claim.
+#
+# `ProcessMessage.rollback_of_error` is the first **restoration** row, added by
+# `~/plans/fmint-restoration.md` Step 1. It is contract-agnostic and shared-layer:
+# a message frame that settles `.ok` with its error flag set has had its state
+# and transient storage rolled back to what that message entered with. Read the
+# frame it names — it is `msg`'s own, not the transaction's, and a failed inner
+# call can be caught by its caller while the surrounding transaction succeeds.
+# Like every row above it this is partial correctness, not liveness: both the
+# frame relation and the error flag are hypotheses, so nothing here says any
+# frame ever fails. It names no error kind, deliberately.
 #
 # Each row carries its OWN pinned expected axiom set (see ROWS below), and a
 # theorem's axiom closure must equal its row's set exactly, order-insensitive.
@@ -92,7 +103,8 @@ Blanc.Fmint.no_success_of_amount_over_maxFlashLoan|$STANDARD
 Blanc.Fmint.no_success_of_allowance_below_amount|$STANDARD
 Blanc.Fmint.no_success_of_balance_below_amount|$STANDARD
 Blanc.wethCode_compile|$STANDARD
-Blanc.fmintCode_compile|$STANDARD"
+Blanc.fmintCode_compile|$STANDARD
+Blanc.ProcessMessage.rollback_of_error|$STANDARD"
 # Secondary net only: the exact-set comparison below is the primary check;
 # this pattern catches forbidden names in output the per-theorem parse missed.
 FORBIDDEN='sorryAx|ofReduceBool|ofReduceNat|_native\.'

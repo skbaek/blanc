@@ -2362,6 +2362,50 @@ state's code map. -/
 lemma Devm.rollback_getCode (devm : Devm) (st : State) (tra : Tra) (a : Adr) :
     (devm.rollback st tra).getCode a = st.getCode a := rfl
 
+/-- **Frame-level state restoration.**  A message frame that settles `.ok` with
+its error flag set has had its world rolled back to the values `msg` entered
+with: `msg.benv.state` and `msg.tenv.transientStorage`.
+
+**The frame named is `msg`'s own**, and naming it is the whole content of the
+statement.  This is *not* "the transaction was rolled back", which would be a
+different and often false claim — a failed inner call can be caught by its
+caller while the surrounding transaction succeeds, and this theorem is
+deliberately silent about every frame but `msg`'s.
+
+**No error kind is named, and none can be.**  The hypothesis is
+`out.error.isSome` and nothing more.  Two reasons, and both are load-bearing:
+the settled error is `.ok`-level only, so nothing about *which* error occurred
+survives the frame boundary; and a claim naming a failure shape would be
+coupled to compiled bytes that this shared-layer lemma has no business knowing.
+
+**This is not liveness and not a claim that any frame ever fails.**  Both
+`ProcessMessage msg xl (.ok out)` and `out.error.isSome` are hypotheses.  The
+theorem rules a world-state *in* given a settled error; it says nothing about
+whether any particular message reaches one.
+
+The mechanism is `processMessage.settle`, whose rollback arm installs exactly
+these two components (`Devm.rollback` writes `world` and nothing else, so the
+error flag it is conditioned on survives it untouched).  No slot derivation is
+involved: the `out.error.isSome` hypothesis selects the rollback arm on its
+own, which is why this needs neither `Xlot.Filled` nor anything above it. -/
+theorem ProcessMessage.rollback_of_error {msg : Msg} {xl : Xlot} {out : Devm}
+    (h : ProcessMessage msg xl (.ok out)) (herr : out.error.isSome) :
+    out.state = msg.benv.state ∧
+      out.transientStorage = msg.tenv.transientStorage := by
+  obtain ⟨r0, -, hset⟩ := ProcessMessage.iff_body.mp h
+  rcases r0 with x | evm'
+  -- `processMessage.settle_error` says exactly this, but it is declared far
+  -- below in this file; the settle of an `.error` reduces on its own.
+  · cases hset
+  unfold processMessage.settle at hset
+  dsimp only [bind, Except.bind] at hset
+  by_cases herr' : evm'.error.isSome = true
+  · rw [if_pos herr'] at hset
+    rw [Except.ok.inj hset]
+    exact ⟨rfl, rfl⟩
+  · rw [if_neg herr'] at hset
+    exact absurd (Except.ok.inj hset ▸ herr) herr'
+
 /-- Writer leaf: value transfer changes balances but preserves code. -/
 lemma benvAfterTransfer_ok_getCode {msg : Msg} {benv : Benv}
     (h : msg.benvAfterTransfer = .ok benv) (a : Adr) :
