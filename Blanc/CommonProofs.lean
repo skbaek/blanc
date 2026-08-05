@@ -8184,6 +8184,17 @@ instance : Rinst.Hinv Devm.memory Rinst.calldataload := ⟨by
   exact ((Devm.pop_of_pop h1).memory.trans
     (Devm.burn_of_chargeGas h2).memory).trans (Devm.push_of_push run₂).memory⟩
 
+/-! The two `Ninst` constructors that are not `reg`, so that `line_inv` carries
+a memory image across a whole `Line` rather than stopping at the first `PUSH`.
+Their `Devm.getBal` / `Devm.getStor` / `Devm.getCode` / `Devm.state` siblings
+are above, beside the rest of the `Ninst.Hinv` API. -/
+
+instance {x} : Ninst.Hinv Devm.memory (Ninst.pushB256 x) :=
+  ⟨fun h => (Devm.pushBurn_of_run (Ninst.run_push_eq h)).memory⟩
+
+instance {xs} {p : xs.length ≤ 32} : Ninst.Hinv Devm.memory (Ninst.push xs p) :=
+  ⟨fun h => (Devm.pushBurn_of_run (Ninst.run_push_eq h)).memory⟩
+
 /-- `MSTORE` writes *the word it popped* at *the offset it popped*.
 
 The value-carrying companion of `of_run_mstore`, and the first Blanc lemma whose
@@ -8302,6 +8313,139 @@ lemma of_run_mstoreAt_val {e : Sevm} {s s' : Devm} {k x xs}
   have hpb := of_run_pushB256 qp
   rcases prefix_of_mstore_val qm (prefix_of_push hpb hp) with ⟨hs, hm⟩
   exact ⟨hs, by rw [hm, ← hpb.memory]⟩
+
+/-- `CALLDATACOPY` at a *known* stack top: the value-carrying companion of
+`prefix_of_calldatacopy`, with the three popped operands pinned to the words the
+walk already knows are there. -/
+lemma prefix_of_calldatacopy_val {e} {x y z xs} {s s' : Devm}
+    (h0 : Ninst.Run e s calldatacopy s') (h1 : x :: y :: z :: xs <<+ s.stack) :
+    (xs <<+ s'.stack) ∧
+      s'.memory = s.memory.write x.toNat (e.data.sliceD y.toNat z.toNat 0) := by
+  rcases of_run_calldatacopy_mem h0 with ⟨x', y', z', h2, hm⟩
+  rcases of_cons_cons_pref_of_cons_cons_pref h1 (pref_of_split h2)
+    with ⟨hx, hy, ws, h, h'⟩
+  rcases List.of_cons_pref_of_cons_pref h h' with ⟨hz, -⟩
+  refine ⟨?_, by rw [hx, hy, hz]; exact hm⟩
+  rw [hx, hy, hz] at h1
+  exact of_append_pref h2 h1
+
+/-- **What `forwardArgTail` does**, both effects at once: it leaves argument
+`k`'s declared tail length on the stack, writes that length into memory word
+`lenWord`, and copies the payload into the word after it.
+
+Every word named in the conclusion is a function of `e.data` alone
+(`Sevm.tailLen`, `Sevm.tailBytes`), so this is a description of the fragment
+rather than a restatement of its instructions — the discipline the arc's fixed
+decision 2 requires of anything the callback's calldata image is built from.
+
+No zero padding appears here: `forwardArgTail` writes the payload and nothing
+above it, and a caller wanting a reference encoder's padding gets it from the
+region above being untouched (see `forwardArgTail`'s own note and `Mem.Reads`). -/
+lemma of_forwardArgTail_val {e : Sevm} {s s' : Devm} {k lenWord xs}
+    (hp : xs <<+ s.stack) (h : Line.Run e s (forwardArgTail k lenWord) s') :
+    (Sevm.tailLen e k :: xs <<+ s'.stack) ∧
+      s'.memory =
+        (s.memory.write (lenWord * 32).toNat (Sevm.tailLen e k).toBytes).write
+          ((lenWord + 1) * 32).toNat (Sevm.tailBytes e k) := by
+  -- The code computes `4 + off` while `Sevm.tailPtr` is written `off + 4`, and
+  -- likewise `32 + p` against `Sevm.tailBytes`'s `tailPtr + 32`.  `B256` carries
+  -- its own `HAdd`, so the commutations are `B256.add_comm`, not `add_comm`.
+  have hptr : (4 : B256) + Sevm.argWord e k = Sevm.tailPtr e k := by
+    rw [Sevm.tailPtr, B256.add_comm]
+  have hoff : (32 : B256) + Sevm.tailPtr e k = Sevm.tailPtr e k + 32 := B256.add_comm
+  simp only [forwardArgTail] at h
+  -- `arg k`: the head word, which for a dynamic argument is an offset.
+  rcases of_run_append (arg k) h with ⟨t1, q1, h⟩
+  have hp1 : Sevm.argWord e k :: xs <<+ t1.stack := prefix_of_arg hp q1
+  have hm1 : s.memory = t1.memory := Line.of_inv Devm.memory (by line_inv) q1
+  -- `pushB256 4 :: add`: the absolute calldata index of the length word.
+  rcases Line.of_run_cons h with ⟨t2, q2, h⟩
+  have hb2 := of_run_pushB256 q2
+  have hp2 : (4 : B256) :: Sevm.argWord e k :: xs <<+ t2.stack :=
+    prefix_of_push hb2 hp1
+  rcases Line.of_run_cons h with ⟨t3, q3, h⟩
+  have hp3 : Sevm.tailPtr e k :: xs <<+ t3.stack := by
+    rw [← hptr]; exact prefix_of_add q3 hp2
+  have hm3 : s.memory = t3.memory :=
+    (hm1.trans hb2.memory).trans
+      (Line.of_inv Devm.memory (by line_inv) (Line.Run.cons q3 Line.Run.nil))
+  -- `dup 0 :: calldataload`: read the declared length, keeping the pointer.
+  rcases Line.of_run_cons h with ⟨t4, q4, h⟩
+  rcases of_run_dup q4 with ⟨y4, hy4, pb4⟩
+  have hy4' : y4 = Sevm.tailPtr e k := by
+    have hg : t3.stack[(0 : Fin 16).val]? = some (Sevm.tailPtr e k) :=
+      Stack.nth_getElem (Stack.Nth.head _ _) hp3
+    rw [hg] at hy4; injection hy4 with hy4; exact hy4.symm
+  subst y4
+  have hp4 : Sevm.tailPtr e k :: Sevm.tailPtr e k :: xs <<+ t4.stack :=
+    prefix_of_push pb4 hp3
+  have hm4 : s.memory = t4.memory := hm3.trans pb4.memory
+  rcases Line.of_run_cons h with ⟨t5, q5, h⟩
+  have hp5 : Sevm.tailLen e k :: Sevm.tailPtr e k :: xs <<+ t5.stack :=
+    prefix_of_calldataload_val q5 hp4
+  have hm5 : s.memory = t5.memory :=
+    hm4.trans (Line.of_inv Devm.memory (by line_inv) (Line.Run.cons q5 Line.Run.nil))
+  -- `dup 0 :: mstoreAt lenWord`: republish the length into memory.
+  rcases Line.of_run_cons h with ⟨t6, q6, h⟩
+  rcases of_run_dup q6 with ⟨y6, hy6, pb6⟩
+  have hy6' : y6 = Sevm.tailLen e k := by
+    have hg : t5.stack[(0 : Fin 16).val]? = some (Sevm.tailLen e k) :=
+      Stack.nth_getElem (Stack.Nth.head _ _) hp5
+    rw [hg] at hy6; injection hy6 with hy6; exact hy6.symm
+  subst y6
+  have hp6 : Sevm.tailLen e k :: Sevm.tailLen e k :: Sevm.tailPtr e k :: xs <<+ t6.stack :=
+    prefix_of_push pb6 hp5
+  have hm6 : s.memory = t6.memory := hm5.trans pb6.memory
+  rcases of_run_append (mstoreAt lenWord) h with ⟨t7, q7, h⟩
+  rcases of_run_mstoreAt_val q7 hp6 with ⟨hp7, hmw7⟩
+  have hm7 : t7.memory =
+      s.memory.write (lenWord * 32).toNat (Sevm.tailLen e k).toBytes := by
+    rw [hmw7, hm6]
+  -- `dup 0 :: swap 1`: the payload's source pointer back on top.
+  rcases Line.of_run_cons h with ⟨t8, q8, h⟩
+  rcases of_run_dup q8 with ⟨y8, hy8, pb8⟩
+  have hy8' : y8 = Sevm.tailLen e k := by
+    have hg : t7.stack[(0 : Fin 16).val]? = some (Sevm.tailLen e k) :=
+      Stack.nth_getElem (Stack.Nth.head _ _) hp7
+    rw [hg] at hy8; injection hy8 with hy8; exact hy8.symm
+  subst y8
+  have hp8 : Sevm.tailLen e k :: Sevm.tailLen e k :: Sevm.tailPtr e k :: xs <<+ t8.stack :=
+    prefix_of_push pb8 hp7
+  have hm8 := pb8.memory.symm.trans hm7
+  rcases Line.of_run_cons h with ⟨t9, q9, h⟩
+  have hp9 : Sevm.tailPtr e k :: Sevm.tailLen e k :: Sevm.tailLen e k :: xs
+      <<+ t9.stack := by
+    have h_swap : Stack.Swap (1 : Fin 16).val
+        (Sevm.tailLen e k :: Sevm.tailLen e k :: Sevm.tailPtr e k :: xs)
+        (Sevm.tailPtr e k :: Sevm.tailLen e k :: Sevm.tailLen e k :: xs) := by
+      apply Stack.swapCore_succ
+      apply Stack.swapCore_zero
+    exact Stack.prefix_of_swap h_swap (of_run_swap q9) hp8
+  have hm9 := (Line.of_inv Devm.memory (by line_inv)
+    (Line.Run.cons q9 Line.Run.nil)).symm.trans hm8
+  -- `pushB256 32 :: add`: the payload begins one word past the length word.
+  rcases Line.of_run_cons h with ⟨t10, q10, h⟩
+  have hb10 := of_run_pushB256 q10
+  have hp10 : (32 : B256) :: Sevm.tailPtr e k :: Sevm.tailLen e k ::
+      Sevm.tailLen e k :: xs <<+ t10.stack := prefix_of_push hb10 hp9
+  have hm10 := hb10.memory.symm.trans hm9
+  rcases Line.of_run_cons h with ⟨t11, q11, h⟩
+  have hp11 : (32 + Sevm.tailPtr e k) :: Sevm.tailLen e k :: Sevm.tailLen e k ::
+      xs <<+ t11.stack := prefix_of_add q11 hp10
+  have hm11 := (Line.of_inv Devm.memory (by line_inv)
+    (Line.Run.cons q11 Line.Run.nil)).symm.trans hm10
+  rcases Line.of_run_cons h with ⟨t12, q12, h⟩
+  have hb12 := of_run_pushB256 q12
+  have hp12 : ((lenWord + 1) * 32 : B256) :: (32 + Sevm.tailPtr e k) ::
+      Sevm.tailLen e k :: Sevm.tailLen e k :: xs <<+ t12.stack :=
+    prefix_of_push hb12 hp11
+  have hm12 := hb12.memory.symm.trans hm11
+  -- `calldatacopy`: the payload itself.
+  rcases Line.of_run_cons h with ⟨t13, q13, hnil⟩
+  cases hnil
+  rcases prefix_of_calldatacopy_val q13 hp12 with ⟨hps, hmem⟩
+  refine ⟨hps, ?_⟩
+  rw [hmem, hm12, Sevm.tailBytes, ← hoff]
 
 /-! ### The dynamic tail of a canonically encoded call
 
