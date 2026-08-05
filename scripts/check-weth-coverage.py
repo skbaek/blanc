@@ -24,7 +24,7 @@ WETH's own account is identified by its code, not by a hardcoded address: no
 fixture's WETH account is at the same synthetic address for a reason a
 future case couldn't change, so this looks for the account whose code has
 the exact length and prefix `scripts/gen-weth-fixtures.py`'s
-`get_weth_code_hex` already asserts (1732 hex digits, `5b5f3560` prefix).
+`get_weth_code_hex` already asserts (1776 hex digits, `5b5f3560` prefix).
 This exclusion matters: WETH's OWN bytecode contains a `PUSH32` of every one
 of its ten selectors, as the dispatcher's comparison constants
 (`Blanc/CommonCore.lean`'s `dispatchWith`) -- scanning WETH's own code with
@@ -59,7 +59,7 @@ SELECTOR_RE = re.compile(r"^0x[0-9a-f]{8}$")
 # compiled bytecode it fetches. This is how the checker tells "the WETH
 # account" apart from every other account in a fixture's pre-alloc, without
 # hardcoding any per-fixture address.
-WETH_CODE_HEX_LEN = 1732
+WETH_CODE_HEX_LEN = 1776  # 888 bytes; was 1732 before the `Func.rev` normalization
 WETH_CODE_PREFIX = "5b5f3560"
 
 

@@ -693,7 +693,10 @@ def get_weth_code_hex():
     finally:
         os.unlink(scratch)
     hexstr = out.strip().strip('"')
-    assert len(hexstr) == 1732, f"unexpected wethCode hex length {len(hexstr)}"
+    # 1776 = 2 x 888 bytes. Was 1732 (866 bytes) until the `Func.rev`
+    # normalization (`~/plans/fmint-hygiene.md`) put two `PUSH0`s ahead of
+    # each of WETH's eleven rev sites.
+    assert len(hexstr) == 1776, f"unexpected wethCode hex length {len(hexstr)}"
     assert hexstr.startswith("5b5f3560"), hexstr[:16]
     return "0x" + hexstr
 

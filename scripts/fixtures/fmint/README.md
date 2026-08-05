@@ -148,25 +148,57 @@ came back — the same anti-circularity discipline the WETH suite's
 
 ### `.rev`'s stack-garbage cost, and why several triggers carry a gas cap
 
-Blanc's `.rev` is a bare `REVERT` over whatever two words the guard left on
-the stack (`Blanc/Fmint.lean`'s guard-idiom docstring; the WETH suite's
-`PROBE_GAS` note makes the same point for WETH's guards). For several of
-fmint's guards — notably `spendAllowanceThenBurn`'s finite-arm allowance
-check and `burnAndReturn`'s balance check — one of those two leftover words
-is a 256-bit allowance-key hash or a token amount, which `REVERT` then reads
-as a memory `(offset, size)` pair. An astronomical `size` triggers the
-quadratic memory-expansion gas cost and can consume **all** gas forwarded to
-that call before the exceptional halt completes. `gen-fmint-fixtures.py`
-therefore caps every trigger expected to revert at
-`FLASHLOAN_PROBE_GAS = 3,000,000` — larger than WETH's `PROBE_GAS =
-200,000` because several of fmint's guards fire only after a full mint +
-successful callback round trip, which itself costs real gas to reach. This
-was found, not assumed: an earlier draft left these triggers uncapped and a
-`.rev` whose stack held a keccak digest as its `size` operand consumed the
-entire transaction's ~30,000,000 gas budget, cascading into every
-*subsequent* trigger in the same multi-trigger fixture failing too (the
-transaction itself ran out of gas). Capping every reverting trigger, exactly
-as WETH's suite already does, fixed it.
+**Historical — the cap was retired on 2026-08-05 and no trigger in this suite
+carries one any more.** Kept because it records a real defect and how it was
+found; `FMINT_DEVIATIONS.md` row 20 carries the contract-level history.
+
+Blanc's `.rev` **used to be** a bare `REVERT` over whatever two words the
+guard left on the stack. For several of fmint's guards — notably
+`spendAllowanceThenBurn`'s finite-arm allowance check and `burnAndReturn`'s
+balance check — one of those two leftover words is a 256-bit allowance-key
+hash or a token amount, which `REVERT` then reads as a memory
+`(offset, size)` pair. An astronomical `size` triggers the quadratic
+memory-expansion gas cost and could consume **all** gas forwarded to that
+call before the exceptional halt completed. `gen-fmint-fixtures.py` therefore
+capped every trigger expected to revert at `FLASHLOAN_PROBE_GAS = 3,000,000`
+— larger than WETH's `PROBE_GAS = 200,000` because several of fmint's guards
+fire only after a full mint + successful callback round trip, which itself
+costs real gas to reach. This was found, not assumed: an earlier draft left
+these triggers uncapped and a `.rev` whose stack held a keccak digest as its
+`size` operand consumed the entire transaction's ~30,000,000 gas budget,
+cascading into every *subsequent* trigger in the same multi-trigger fixture
+failing too (the transaction itself ran out of gas). Capping every reverting
+trigger, exactly as WETH's suite already does, bounded the damage — a harness
+accommodation for a contract defect, never a property of the contract.
+
+**What retired it.** `Blanc.Func.rev` is now `PUSH0 PUSH0 REVERT`
+(`~/plans/fmint-hygiene.md` Step 1), so every guard failure is a clean,
+empty-data `REVERT` that refunds the frame's remaining gas. Every reverting
+trigger here again forwards all available gas, exactly as the succeeding ones
+always have, and nothing starves. The retirement was measured, not assumed —
+whole-block `gasUsed`, the same fixtures, capped-and-old vs
+uncapped-and-normalized:
+
+| fixture | before | after | |
+|---|---:|---:|---:|
+| `09-guards.json` | 12,283,996 | 284,743 | −97.7% |
+| `06-flashloan-allowance-spectrum.json` | 6,784,407 | 1,202,859 | −82.3% |
+| `07-flashloan-transfer-then-default.json` | 3,048,002 | 284,740 | −90.7% |
+| `03-flashloan-reverting-borrower.json` | 2,977,805 | 97,078 | −96.7% |
+| `02-flashloan-wrong-magic.json` | 2,977,805 | 254,973 | −91.4% |
+| `04-flashloan-returndata-spectrum.json` | 2,824,286 | 576,937 | −79.6% |
+
+The four fixtures with no rejected probe (`01`, `05`, `08`, `10`) are
+unchanged **to the gas**, which is the other half of the evidence: the two
+extra bytes per rev site are never executed on a success path.
+
+Note what this table is and is not. It is the *mechanism* check — the old
+shapes consumed the allowance, the new one refunds it — not yet a fixture
+*assertion*. Nothing here fails if a future change reintroduces an
+exceptional halt at a guard, because a rejected trigger still records only
+its `CALL` success flag. Step 2 of the same arc adds the discriminating
+assertions (`RETURNDATASIZE` = 0 and an in-EVM gas-floor boolean per rejected
+probe) that turn this measurement into a tripwire.
 
 ### On the allowance spectrum's pre-state
 

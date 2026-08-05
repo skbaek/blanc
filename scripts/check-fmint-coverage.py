@@ -65,7 +65,7 @@ SELECTOR_RE = re.compile(r"^0x[0-9a-f]{8}$")
 # asserts the same two facts about the oracle-compiled bytecode it fetches.
 # The prefix happens to equal WETH's own (both dispatchers open the same
 # way); the LENGTH is what actually distinguishes the two accounts.
-FMINT_CODE_HEX_LEN = 2434
+FMINT_CODE_HEX_LEN = 2514  # 1257 bytes; was 2434 before the `Func.rev` normalization
 FMINT_CODE_PREFIX = "5b5f3560"
 
 

@@ -108,21 +108,37 @@ FMINT_ADDR = "0x" + "f3157".rjust(40, "0")
 PROBER_ADDR = "0x" + "b0b".rjust(40, "0")
 
 GAS_PRICE = 10
-PROBE_GAS = 200000  # 0x030d40 -- see WETH's PROBE_GAS: bounds the damage of a
-                    # guard firing as a stack underflow / memory OOG rather
-                    # than a clean REVERT, and pairs every rejected call with
-                    # a succeeding one at the same cap.
-# Blanc's `.rev` is a bare REVERT over whatever two words the guard happened
-# to leave on the stack (see `Blanc/Fmint.lean`'s guard-idiom docstring).
-# Several of fmint's guards fire with a 256-bit hash (an allowance key) or a
-# large amount sitting in one of those two slots, which REVERT then reads as
-# a memory (offset, size) pair -- an astronomical `size` triggers the
-# quadratic memory-expansion cost and can consume ALL remaining gas trying
-# to compute it, exactly the failure mode WETH's own PROBE_GAS note
-# describes ("consume everything they were given"). A guard reached only
-# after a full mint + callback round trip additionally needs enough gas to
-# get there in the first place, so this cap is larger than WETH's.
-FLASHLOAN_PROBE_GAS = 3_000_000  # 0x2dc6c0
+
+# RETIRED 2026-08-05 by the `Func.rev` normalization (`~/plans/fmint-hygiene.md`
+# Step 1, fixed decision 4). Two constants lived here:
+#
+#   PROBE_GAS = 200_000           -- already dead; no trigger in this file used it
+#   FLASHLOAN_PROBE_GAS = 3e6     -- passed as `gas=` at nine reverting triggers
+#
+# Both existed because Blanc's `.rev` used to be a bare `REVERT` over whatever
+# two words the guard happened to leave on the stack. Several of fmint's guards
+# fire with a 256-bit allowance-key hash or a large amount in one of those
+# slots, which `REVERT` reads as a memory `(offset, size)` pair; an astronomical
+# `size` triggers the quadratic memory-expansion cost and consumed ALL gas
+# forwarded to that call, starving every later trigger in the same fixture.
+# Capping each reverting trigger bounded the damage -- a harness accommodation
+# for a contract defect, never a property of the contract.
+#
+# `Func.rev` is now `PUSH0 PUSH0 REVERT`, so a rejected call reverts cleanly and
+# refunds its remaining gas. Every reverting trigger therefore forwards all
+# available gas again (`gas=None` -> the `GAS` opcode), exactly as the
+# succeeding ones always have. Measured at retirement, whole-block `gasUsed`,
+# same fixtures, capped-and-old vs uncapped-and-normalized:
+#
+#   09-guards.json                        12,283,996 ->   284,743  (-97.7%)
+#   06-flashloan-allowance-spectrum.json   6,784,407 -> 1,202,859  (-82.3%)
+#   07-flashloan-transfer-then-default     3,048,002 ->   284,740  (-90.7%)
+#   03-flashloan-reverting-borrower        2,977,805 ->    97,078  (-96.7%)
+#
+# and the four fixtures with no rejected probe (01, 05, 08, 10) are unchanged to
+# the gas. Uncapped regeneration starves nothing: all ten fixtures PASS, the
+# manifest cross-check is clean and all 129 assertions hold. Step 2 of the same
+# arc turns this measurement into an in-EVM gas-floor assertion per probe.
 
 
 def q(x):
@@ -514,7 +530,10 @@ def get_fmint_code_hex():
     finally:
         os.unlink(scratch)
     hexstr = out.strip().strip('"')
-    assert len(hexstr) == 2434, f"unexpected fmintCode hex length {len(hexstr)}"
+    # 2514 = 2 x 1257 bytes. Was 2434 (1217 bytes) until the `Func.rev`
+    # normalization (`~/plans/fmint-hygiene.md`) put two `PUSH0`s ahead of
+    # each of fmint's twenty rev sites.
+    assert len(hexstr) == 2514, f"unexpected fmintCode hex length {len(hexstr)}"
     assert hexstr.startswith("5b5f3560"), hexstr[:16]
     return "0x" + hexstr
 
@@ -869,8 +888,7 @@ def case_wrong_magic():
                 reverts_because=(
                     "the borrower returns a word that is not "
                     "keccak256('ERC3156FlashBorrower.onFlashLoan'), so "
-                    "flashLoan's checkRetdataHead guard rejects it"),
-                gas=FLASHLOAN_PROBE_GAS)
+                    "flashLoan's checkRetdataHead guard rejects it"))
     trigger, tx = trigger_tx(trigger_key)
     alloc = {
         FMINT_ADDR: fmint_account(),
@@ -916,8 +934,7 @@ def case_reverting():
                          ("uint256", amount), ("bytes", b"")),
                 reverts_because="the borrower's callback itself reverts, so "
                                 "the CALL fails and flashLoan's own success "
-                                "guard fires",
-                gas=FLASHLOAN_PROBE_GAS)
+                                "guard fires")
     trigger, tx = trigger_tx(trigger_key)
     alloc = {
         FMINT_ADDR: fmint_account(),
@@ -958,8 +975,7 @@ def case_returndata_spectrum():
         reverts_because="an EOA receiver has no code, so the callback CALL "
                         "'succeeds' with zero return data, which fails "
                         "retdataShorterThan 32 before the magic word is "
-                        "ever read",
-        gas=FLASHLOAN_PROBE_GAS)
+                        "ever read")
     t_exact = Trigger(
         "flashLoan(compliant, exactly 32)", FMINT_ADDR,
         abi_call("flashLoan(address,address,uint256,bytes)",
@@ -1092,8 +1108,7 @@ def case_allowance_spectrum():
         kwargs = dict(n_words=1) if ok else dict(
             reverts_because=f"{label} allowance: spendAllowanceThenBurn's "
                              f"finite arm reverts because the allowance is "
-                             f"below the amount owed",
-            gas=FLASHLOAN_PROBE_GAS)
+                             f"below the amount owed")
         triggers.append(Trigger(
             f"flashLoan(passive, {label})", FMINT_ADDR,
             abi_call("flashLoan(address,address,uint256,bytes)",
@@ -1161,8 +1176,7 @@ def case_transfer_then_default():
                  ("uint256", amount), ("bytes", b"")),
         reverts_because="the borrower transfers its whole minted balance "
                         "away before returning the magic, so burnAndReturn's "
-                        "balance check fails and the frame reverts",
-        gas=FLASHLOAN_PROBE_GAS)
+                        "balance check fails and the frame reverts")
     trigger, tx = trigger_tx(trigger_key, gas="0xf42400")
     alloc = {
         FMINT_ADDR: fmint_account(storage={
@@ -1299,14 +1313,12 @@ def case_guards():
                  ("uint256", 1), ("bytes", b"")),
         reverts_because="token != self: the very first guard, checked "
                         "before the bound so the revert reason never "
-                        "depends on amount",
-        gas=FLASHLOAN_PROBE_GAS)
+                        "depends on amount")
     t_fee_wrong_token = Trigger(
         "flashFee(token != self)", FMINT_ADDR,
         abi_call("flashFee(address,uint256)", ("address", not_self),
                  ("uint256", 1)),
-        reverts_because="token != self: ERC-3156 states this as a MUST",
-        gas=FLASHLOAN_PROBE_GAS)
+        reverts_because="token != self: ERC-3156 states this as a MUST")
     t_fee_self = Trigger(
         "flashFee(self)", FMINT_ADDR,
         abi_call("flashFee(address,uint256)", ("address", int(FMINT_ADDR, 16)),
@@ -1327,16 +1339,14 @@ def case_guards():
                  ("uint256", 1), ("bytes", b"")),
         reverts_because="the receiver word has nonzero upper 96 bits: "
                         "checkNonAddress rejects it before the mint, "
-                        "conservation-critical (D4 step 1)",
-        gas=FLASHLOAN_PROBE_GAS)
+                        "conservation-critical (D4 step 1)")
     t_over_bound = Trigger(
         "flashLoan(amount > maxFlashLoan)", FMINT_ADDR,
         abi_call("flashLoan(address,address,uint256,bytes)",
                  ("address", valid_receiver), ("address", int(FMINT_ADDR, 16)),
                  ("uint256", bound + 1), ("bytes", b"")),
         reverts_because="amount (bound + 1) exceeds maxFlashLoan (bound): "
-                        "the mint-overflow guard",
-        gas=FLASHLOAN_PROBE_GAS)
+                        "the mint-overflow guard")
     triggers = [t_loan_wrong_token, t_fee_wrong_token, t_fee_self,
                 t_max_wrong_token, t_max_self, t_dirty_receiver, t_over_bound]
     trigger, tx = trigger_tx(trigger_key, gas="0xf42400")
