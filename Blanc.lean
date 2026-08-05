@@ -5,6 +5,7 @@ import Blanc.Conserved
 import Blanc.FmintCode
 import Blanc.FlashSpec
 import Blanc.Compiled
+import Blanc.Forward
 
 namespace Blanc
 

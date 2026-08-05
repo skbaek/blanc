@@ -24,9 +24,12 @@ This repo contains the following files:
   `Prog.Run` — `Func.RunCompiled`, `Prog.RunCompiled` — and
   `Prog.runCompiled_iff_exec`, the biconditional relating a gas-exact run of a
   compiled pc-free program to a successful Jaune execution of its code at pc 0,
-  in both directions. It imports only `CommonCore.lean`, and nothing imports it
-  back, so it is a leaf: `Func.Run`, `Prog.Run`, `correct` and `correct_core`
-  are untouched by its existence. **This is not liveness.** The biconditional
+  in both directions. It imports only `CommonCore.lean`, and the one module
+  that imports it is `Forward.lean` below. It was a leaf until that module
+  arrived; what the leaf sentence existed to guarantee is unchanged, and is
+  the part to hold onto: `Func.Run`, `Prog.Run`, `correct` and `correct_core`
+  are untouched by its existence, and by `Forward.lean`'s.
+  **This is not liveness.** The biconditional
   converts run witnesses into executions and back; it does not produce a run
   witness for any contract, and nothing here — or anywhere in this repository —
   says any contract call ever succeeds. At every external call the witness
@@ -36,6 +39,15 @@ This repo contains the following files:
   63/64 rule and transaction validity are a further layer) and is `.ok`-level
   only: contraposition yields "no successful execution", never "the EVM
   reverts with *this* error".
+- [Forward.lean](Blanc/Forward.lean): the dual of `Tactics.lean`. Where that
+  file is entirely inversion — every tactic in it matches a run in *antecedent*
+  position — this one is goal-directed: given a state and the instruction that
+  runs on it, it produces `Func.RunCompiled`'s premise with the successor state
+  written out, so a chain of these **constructs** a derivation instead of
+  taking one apart. Composed through `Prog.exec_of_runCompiled`, that chain is
+  a successful `Exec`. Shared and contract-agnostic; a demonstration belongs in
+  a contract-owned module, since a shared module importing a contract is the
+  inverted import `scripts/check-layering.sh` rejects.
 - [Weth.lean](Blanc/Weth.lean): proof-of-concept implementation of the Wrapped 
   Ether (WETH) contract in Blanc.
 - [WethCode.lean](Blanc/WethCode.lean): the compiled WETH runtime bytecode and
