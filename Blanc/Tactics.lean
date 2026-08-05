@@ -294,6 +294,20 @@ lemma next_inv {ξ : Type} {f : Devm → ξ} {g} {i p}
   cases h_run; rename_i hi hp
   rw [h hi, h' hp]
 
+/-- Walk a `Func` and assemble its `Func.Inv` out of `prepend_inv`,
+`next_inv`, `branch_inv` and `last_inv`.
+
+The `Func.call` arm is a refusal, not an omission, and the refusal is the whole
+content of that case.  `Func.Inv` quantifies over the context list `c`, so
+`Func.Run c sevm s (.call k) r` runs whatever `c[k]?` happens to be: at this
+altitude the callee is arbitrary and no rule can discharge the goal.  A property
+of a `Func` that tail-jumps has to be stated with the context fixed, or factored
+through the entry it jumps to.
+
+Every shape it cannot handle raises.  It used to log the shape and return, which
+made it a tactic that reported success without applying a rule -- the enclosing
+`by func_inv` then failed on the leftover goal, so the message was noise in
+front of an unrelated-looking error rather than an answer. -/
 partial def funcInv : Lean.Elab.Tactic.TacticM Unit :=
   Lean.Elab.Tactic.withMainContext do
     let t : Q(Prop) ← Lean.Elab.Tactic.getMainTarget
@@ -307,10 +321,17 @@ partial def funcInv : Lean.Elab.Tactic.TacticM Unit :=
         | ~q(Func.next _ _) => Lean.Expr.apply q(@next_inv); instInv; funcInv
         | ~q(Func.last _) =>   Lean.Expr.apply q(@last_inv); hopInv
         | ~q(Func.branch _ _) => Lean.Expr.apply q(@branch_inv); funcInv; funcInv
+        | ~q(Func.call $kx) => do
+          let pp ← Lean.Meta.ppExpr kx
+          Lean.throwError m!"func_inv: no rule for the tail jump `Func.call \
+            {pp}`. `Func.Inv` quantifies over the context list, so the entry \
+            this jumps to is arbitrary here; state the property with the \
+            context fixed, or factor it through that entry."
         | _ => do
           let pp ← Lean.Meta.ppExpr px'
-          Lean.logInfo s!"not matching: {pp}"
-    | _ => dbg_trace "not a Func.Inv goal"
+          Lean.throwError m!"func_inv: no rule for{Lean.indentD pp}"
+    | _ =>
+      Lean.throwError m!"func_inv: the goal is not a `Func.Inv`{Lean.indentExpr t}"
 
 elab "func_inv" : tactic => funcInv
 
