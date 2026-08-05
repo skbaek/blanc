@@ -18,6 +18,15 @@
 # file with no matching manifest row, is a REGRESSION -- distinct from a
 # fixture that merely fails to PASS.
 #
+# Also beyond check-weth.sh's PASS/FAIL loop (fmint-hygiene Step 3,
+# ~/plans/fmint-hygiene.md): before running any fixture, every fixture's
+# fmint account's code is compared byte-for-byte against the committed
+# Blanc.fmintCode literal (scripts/check-runtime-bytes.py, shared with
+# check-weth.sh) -- not merely the length-based identification the
+# generator and coverage scripts use. A parse failure on the Lean literal or
+# a byte mismatch is a REGRESSION, distinct from both the manifest
+# cross-check and a fixture FAIL.
+#
 # Usage: scripts/check-fmint.sh [--no-build]
 #
 # --no-build skips `lake build jaune/jaune` and requires the runner binary to
@@ -25,9 +34,9 @@
 # commit, per ~/jaune/scripts/GATES.md).
 #
 # CLI contract: exit 0 if and only if the manifest cross-check passes AND
-# every fixture PASSes. Output ends with one verdict line per fixture plus a
-# single unambiguous summary line, after a version-and-pins line identifying
-# exactly what was checked.
+# the runtime byte-equality gate passes AND every fixture PASSes. Output
+# ends with one verdict line per fixture plus a single unambiguous summary
+# line, after a version-and-pins line identifying exactly what was checked.
 
 set -u
 
@@ -130,6 +139,21 @@ CROSS_CHECK_STATUS=$?
 printf '%s\n' "$CROSS_CHECK_OUT"
 if [ "$CROSS_CHECK_STATUS" -ne 0 ]; then
   echo "REGRESSION — fmint fixtures: manifest cross-check failed"
+  exit 1
+fi
+
+# ---- the runtime byte-equality gate ----------------------------------------
+# Every fixture's fmint account must carry code byte-identical to the
+# committed Blanc.fmintCode literal (Blanc/FmintCode.lean), not merely code
+# of the right length -- see scripts/check-runtime-bytes.py, shared with
+# check-weth.sh. Pure source/JSON comparison; no Lean/lake dependency.
+RUNTIME_CHECK_OUT="$("$PY" "$SCRIPT_DIR/check-runtime-bytes.py" \
+  --lean "$ROOT/Blanc/FmintCode.lean" --def fmintCode \
+  --fixtures-dir "$FIXTURES_DIR" --label fmint 2>&1)"
+RUNTIME_CHECK_STATUS=$?
+printf '%s\n' "$RUNTIME_CHECK_OUT"
+if [ "$RUNTIME_CHECK_STATUS" -ne 0 ]; then
+  echo "REGRESSION — fmint fixtures: runtime byte-equality gate failed"
   exit 1
 fi
 
