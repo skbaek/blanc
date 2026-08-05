@@ -1125,4 +1125,553 @@ lemma subcode_compile_branch_jumpable {code : ByteArray} {k : Nat}
   · rw [h_qbs]; rw [hidx]; exact h5.right
   · rw [hidx]; exact h5.left
 
+/-! ## The liveness direction: construction support
+
+Everything below builds `Exec` derivations *from* `RunCompiled` premises --
+the dual of the inversion layer above.  Where the forward direction took a
+step equation apart, these lemmas evaluate the step functions forward: each
+`Evm.step … = .cont …` equation is produced by running `chargeGas`, `push`
+and `pop` on states whose success conditions the relation's premises supply.
+
+The frames pin every `Devm` field, so the state the machine computes and the
+state the derivation names are identified by extensionality through the
+fourteen canonical projections. -/
+
+/-- Extensionality through the fourteen canonical projections -- exactly the
+fields a `Devm.Rel` frame relates, so an all-equal frame identifies states. -/
+lemma Devm.eq_of_proj {a b : Devm}
+    (h_stack : a.stack = b.stack) (h_memory : a.memory = b.memory)
+    (h_gasLeft : a.gasLeft = b.gasLeft) (h_logs : a.logs = b.logs)
+    (h_refund : a.refundCounter = b.refundCounter)
+    (h_output : a.output = b.output)
+    (h_del : a.accountsToDelete = b.accountsToDelete)
+    (h_ret : a.returnData = b.returnData) (h_err : a.error = b.error)
+    (h_aa : a.accessedAddresses = b.accessedAddresses)
+    (h_ask : a.accessedStorageKeys = b.accessedStorageKeys)
+    (h_state : a.state = b.state) (h_ca : a.createdAccounts = b.createdAccounts)
+    (h_ts : a.transientStorage = b.transientStorage) : a = b := by
+  rcases a with ⟨⟨s₁, m₁, g₁⟩, ⟨l₁, r₁, o₁, d₁, rd₁, e₁, aa₁, ak₁, ca₁⟩, ⟨st₁, ts₁⟩⟩
+  rcases b with ⟨⟨s₂, m₂, g₂⟩, ⟨l₂, r₂, o₂, d₂, rd₂, e₂, aa₂, ak₂, ca₂⟩, ⟨st₂, ts₂⟩⟩
+  simp only [Devm.stack, Devm.memory, Devm.gasLeft, Devm.logs,
+    Devm.refundCounter, Devm.output, Devm.accountsToDelete, Devm.returnData,
+    Devm.error, Devm.accessedAddresses, Devm.accessedStorageKeys, Devm.state,
+    Devm.createdAccounts, Devm.transientStorage] at *
+  subst_vars
+  rfl
+
+/-- Overwriting an overwritten machine keeps only the last write. -/
+lemma Devm.setMach_setMach {devm : Devm} {m m' : Mach} :
+    (devm.setMach m).setMach m' = devm.setMach m' := rfl
+
+lemma Devm.memory_setMach {devm : Devm} {m : Mach} :
+    (devm.setMach m).memory = m.memory := rfl
+
+lemma Devm.gasLeft_setMach {devm : Devm} {m : Mach} :
+    (devm.setMach m).gasLeft = m.gasLeft := rfl
+
+/-- `chargeGas`, evaluated forward: with the gas to pay, it succeeds and the
+whole account is the decrement. -/
+lemma chargeGas_eq_ok {cost : Nat} {devm : Devm} (h : cost ≤ devm.gasLeft) :
+    chargeGas cost devm =
+      .ok (devm.setMach ⟨devm.stack, devm.memory, devm.gasLeft - cost⟩) := by
+  rw [chargeGas_def]
+  have hs : safeSub devm.gasLeft cost = some (devm.gasLeft - cost) := by
+    unfold safeSub; rw [if_pos h]
+  rw [hs]
+  rfl
+
+/-- `Devm.push`, evaluated forward: with headroom, it succeeds. -/
+lemma Devm.push_eq_ok {x : B256} {devm : Devm} (h : devm.stack.length < 1024) :
+    Devm.push x devm =
+      .ok (devm.setMach ⟨x :: devm.stack, devm.memory, devm.gasLeft⟩) := by
+  rw [Devm.push_def]
+  simp only [Except.assert, bind, Except.bind, if_pos h]
+  rfl
+
+/-- `Devm.pop`, evaluated forward: on a cons-shaped stack, it succeeds. -/
+lemma Devm.pop_eq_ok {x : B256} {s : List B256} {devm : Devm}
+    (h : devm.stack = x :: s) :
+    Devm.pop devm = .ok ⟨x, devm.setMach ⟨s, devm.memory, devm.gasLeft⟩⟩ := by
+  rw [Devm.pop_def, h]
+  rfl
+
+/-- A `PUSH` with gas and headroom continues past itself with the value
+pushed. -/
+lemma Evm.push_cont {pc : Nat} {sevm : Sevm} {devm : Devm} {xs : Bytes}
+    {le : xs.length ≤ 32} (hne : xs ≠ [])
+    (h_at : Ninst.At sevm.code pc (.push xs le))
+    (h_gas : gVerylow ≤ devm.gasLeft) (h_room : devm.stack.length < 1024) :
+    Evm.step ⟨pc, sevm, devm⟩ =
+      .cont (pc + xs.length + 1)
+        (devm.setMach
+          ⟨xs.toB256 :: devm.stack, devm.memory, devm.gasLeft - gVerylow⟩) := by
+  rw [Evm.step_next h_at, Ninst.step_push, if_neg hne]
+  rw [chargeGas_eq_ok h_gas]
+  simp only [bind, Except.bind]
+  rw [Devm.push_eq_ok (devm := devm.setMach
+    ⟨devm.stack, devm.memory, devm.gasLeft - gVerylow⟩) h_room]
+  rfl
+
+/-- A `JUMPDEST` continues to the next byte, and its exact burn frame lands
+the step on the frame's own far state. -/
+lemma Evm.jumpdest_cont {pc : Nat} {sevm : Sevm} {devm tgt : Devm}
+    (h_at : Jinst.At sevm.code pc .jumpdest)
+    (h_burn : Devm.BurnBy gJumpdest devm tgt) :
+    Evm.step ⟨pc, sevm, devm⟩ = .cont (pc + 1) tgt := by
+  have h_gas : gJumpdest ≤ devm.gasLeft := by have := h_burn.gasLeft; omega
+  have h_tgt : devm.setMach ⟨devm.stack, devm.memory, devm.gasLeft - gJumpdest⟩
+      = tgt := by
+    refine Devm.eq_of_proj h_burn.stack h_burn.memory ?_ h_burn.logs
+      h_burn.refundCounter h_burn.output h_burn.accountsToDelete
+      h_burn.returnData h_burn.error h_burn.accessedAddresses
+      h_burn.accessedStorageKeys h_burn.state h_burn.createdAccounts
+      h_burn.transientStorage
+    show devm.gasLeft - gJumpdest = tgt.gasLeft
+    have := h_burn.gasLeft; omega
+  rw [Evm.step_jump h_at]
+  have hrun : Jinst.run ⟨pc, sevm, devm⟩ .jumpdest = .ok ⟨pc + 1, tgt⟩ := by
+    show Jinst.runCore pc devm sevm .jumpdest = _
+    unfold Jinst.runCore
+    rw [chargeGas_eq_ok h_gas]
+    simp only [bind, Except.bind]
+    rw [h_tgt]
+  rw [hrun]
+  rfl
+
+/-- A `JUMPI` whose condition is zero falls through, popping both operands. -/
+lemma Evm.jumpi_cont_zero {pc : Nat} {sevm : Sevm} {devm : Devm} {x : B256}
+    {s : List B256}
+    (h_at : Jinst.At sevm.code pc .jumpi)
+    (h_stk : devm.stack = x :: 0 :: s)
+    (h_gas : gHigh ≤ devm.gasLeft) :
+    Evm.step ⟨pc, sevm, devm⟩ =
+      .cont (pc + 1) (devm.setMach ⟨s, devm.memory, devm.gasLeft - gHigh⟩) := by
+  rw [Evm.step_jump h_at]
+  have hrun : Jinst.run ⟨pc, sevm, devm⟩ .jumpi =
+      .ok ⟨pc + 1, devm.setMach ⟨s, devm.memory, devm.gasLeft - gHigh⟩⟩ := by
+    show Jinst.runCore pc devm sevm .jumpi = _
+    unfold Jinst.runCore
+    rw [Devm.pop_eq_ok h_stk]
+    simp only [bind, Except.bind]
+    rw [Devm.pop_eq_ok
+      (devm := devm.setMach ⟨(0 : B256) :: s, devm.memory, devm.gasLeft⟩) rfl]
+    simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
+    rw [chargeGas_eq_ok
+      (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) h_gas]
+    simp only [if_true]
+    rfl
+  rw [hrun]
+  rfl
+
+/-- A `JUMPI` whose condition is nonzero jumps to a valid destination,
+popping both operands. -/
+lemma Evm.jumpi_cont_jump {pc : Nat} {sevm : Sevm} {devm : Devm} {x w : B256}
+    {s : List B256}
+    (h_at : Jinst.At sevm.code pc .jumpi)
+    (h_stk : devm.stack = x :: w :: s) (h_ne : w ≠ 0)
+    (h_gas : gHigh ≤ devm.gasLeft)
+    (h_jp : jumpable sevm.code x.toNat = true) :
+    Evm.step ⟨pc, sevm, devm⟩ =
+      .cont x.toNat (devm.setMach ⟨s, devm.memory, devm.gasLeft - gHigh⟩) := by
+  rw [Evm.step_jump h_at]
+  have hrun : Jinst.run ⟨pc, sevm, devm⟩ .jumpi =
+      .ok ⟨x.toNat, devm.setMach ⟨s, devm.memory, devm.gasLeft - gHigh⟩⟩ := by
+    show Jinst.runCore pc devm sevm .jumpi = _
+    unfold Jinst.runCore
+    rw [Devm.pop_eq_ok h_stk]
+    simp only [bind, Except.bind]
+    rw [Devm.pop_eq_ok
+      (devm := devm.setMach ⟨w :: s, devm.memory, devm.gasLeft⟩) rfl]
+    simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
+    rw [chargeGas_eq_ok
+      (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) h_gas]
+    simp only [if_neg h_ne, Except.assert, if_pos h_jp]
+    rfl
+  rw [hrun]
+  rfl
+
+/-- A `JUMP` to a valid destination continues there, popping its operand. -/
+lemma Evm.jump_cont {pc : Nat} {sevm : Sevm} {devm : Devm} {x : B256}
+    {s : List B256}
+    (h_at : Jinst.At sevm.code pc .jump)
+    (h_stk : devm.stack = x :: s)
+    (h_gas : gMid ≤ devm.gasLeft)
+    (h_jp : jumpable sevm.code x.toNat = true) :
+    Evm.step ⟨pc, sevm, devm⟩ =
+      .cont x.toNat (devm.setMach ⟨s, devm.memory, devm.gasLeft - gMid⟩) := by
+  rw [Evm.step_jump h_at]
+  have hrun : Jinst.run ⟨pc, sevm, devm⟩ .jump =
+      .ok ⟨x.toNat, devm.setMach ⟨s, devm.memory, devm.gasLeft - gMid⟩⟩ := by
+    show Jinst.runCore pc devm sevm .jump = _
+    unfold Jinst.runCore
+    rw [Devm.pop_eq_ok h_stk]
+    simp only [bind, Except.bind]
+    rw [chargeGas_eq_ok
+      (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) h_gas]
+    simp only [Except.assert, if_pos h_jp]
+    rfl
+  rw [hrun]
+  rfl
+
+/-! ## The generic instruction step, constructed
+
+`Func.RunCompiled`'s `.next` premise is relational: one filled child slot and
+a step outcome at every pc.  Constructing the `Exec` node from it is a case
+analysis on the instruction's step shape -- a `.cont` for the childless kinds,
+and the `doneOk` / `runOk` constructors when a call-type instruction spawns.
+The spawning case is where `xl.Filled` is consumed: the callee's derivation is
+a hypothesis and nothing here discharges it, which is the structural reason
+liveness for a contract with an external call is conditional on callee
+behaviour. -/
+
+lemma Ninst.exec_of_stepRun {pc : Nat} {sevm : Sevm} {devm devmMid : Devm}
+    {n : Ninst} {xl : Xlot} {exn : Execution}
+    (h_at : Ninst.At sevm.code pc n)
+    (h_filled : xl.Filled)
+    (h_step : Ninst.StepRun pc sevm devm n xl (.ok devmMid))
+    (h_next : Nonempty (Exec (pc + n.size) sevm devmMid exn)) :
+    Nonempty (Exec pc sevm devm exn) := by
+  obtain ⟨exc'⟩ := h_next
+  have hstep : Evm.step ⟨pc, sevm, devm⟩ = Ninst.step ⟨pc, sevm, devm⟩ n :=
+    Evm.step_next h_at
+  cases n with
+  | reg r =>
+    rw [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at h_step
+    refine ⟨Exec.cont ?_ exc'⟩
+    rw [hstep, Ninst.step_reg, ← h_step.2]
+    rfl
+  | push xs le =>
+    rw [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at h_step
+    refine ⟨Exec.cont ?_ exc'⟩
+    rw [hstep, Ninst.step_push, ← h_step.2]
+    rfl
+  | exec x =>
+    rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep] at h_step
+    cases hx : Xinst.step sevm devm x with
+    | done e =>
+      rw [hx] at h_step
+      simp only [XStep.Run] at h_step
+      refine ⟨Exec.cont ?_ exc'⟩
+      rw [hstep, Ninst.step_exec, hx, ← h_step.2]
+      rfl
+    | spawn fr rsm =>
+      rw [hx] at h_step
+      rcases h_step with ⟨r, hframe, hex⟩
+      have hstep' : Evm.step ⟨pc, sevm, devm⟩ = .spawn fr rsm (pc + 1) := by
+        rw [hstep, Ninst.step_exec, hx]
+        rfl
+      unfold RunFrame at hframe
+      rcases henter : fr.enter with r' | cevm <;> simp only [henter] at hframe
+      · exact ⟨Exec.doneOk hstep' henter (hframe.2 ▸ hex.symm) exc'⟩
+      · rcases hframe with ⟨raw, hxl, hr⟩
+        subst hxl
+        obtain ⟨excChild⟩ : Nonempty (Exec cevm.pc cevm.sta cevm.dyna raw) :=
+          h_filled
+        refine ⟨Exec.runOk hstep' henter excChild ?_ exc'⟩
+        rw [← hr]
+        exact hex.symm
+
+/-! ## The hidden instructions of each rule, as machine steps
+
+One lemma per jump-emitting rule.  Each turns the rule's premises -- the
+exact-gas frame, the stack headroom, and Step 3's jumpability -- into the
+`.cont` equations its `Exec` nodes need, with the intermediate states written
+out and the final state identified with the frame's far state by
+extensionality. -/
+
+/-- `PUSH2 loc; JUMPI` with `0` on the stack: both steps of the `.zero` arm. -/
+lemma Evm.branch_zero_steps {pc loc : Nat} {sevm : Sevm} {devm tgt : Devm}
+    {le : ([(loc >>> 8).toUInt8, loc.toUInt8] : Bytes).length ≤ 32}
+    (h_push : Ninst.At sevm.code pc (.push [(loc >>> 8).toUInt8, loc.toUInt8] le))
+    (h_jumpi : Jinst.At sevm.code (pc + 3) .jumpi)
+    (h_loc : loc < 2 ^ 16)
+    (h_room : devm.stack.length < 1024)
+    (h_pop : Devm.PopBurnBy [0] (gVerylow + gHigh) devm tgt) :
+    Evm.step ⟨pc, sevm, devm⟩ =
+      .cont (pc + 3)
+        (devm.setMach
+          ⟨loc.toB256 :: devm.stack, devm.memory, devm.gasLeft - gVerylow⟩) ∧
+    Evm.step ⟨pc + 3, sevm,
+        devm.setMach
+          ⟨loc.toB256 :: devm.stack, devm.memory, devm.gasLeft - gVerylow⟩⟩ =
+      .cont (pc + 4) tgt := by
+  have h_stk : devm.stack = (0 : B256) :: tgt.stack := h_pop.stack
+  have h_gas : devm.gasLeft = tgt.gasLeft + (gVerylow + gHigh) := h_pop.gasLeft
+  have h_v : Bytes.toB256 [(loc >>> 8).toUInt8, loc.toUInt8] = loc.toB256 :=
+    List.toB256_pair _ h_loc
+  constructor
+  · have h1 := Evm.push_cont (le := le) (by simp) h_push (by omega) h_room
+    rw [h_v] at h1
+    exact h1
+  · have h2 := Evm.jumpi_cont_zero
+      (devm := devm.setMach
+        ⟨loc.toB256 :: devm.stack, devm.memory, devm.gasLeft - gVerylow⟩)
+      (x := loc.toB256) (s := tgt.stack) h_jumpi
+      (by show loc.toB256 :: devm.stack = _; rw [h_stk])
+      (by show gHigh ≤ devm.gasLeft - gVerylow; omega)
+    simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
+      at h2
+    have h_fin : devm.setMach
+        ⟨tgt.stack, devm.memory, devm.gasLeft - gVerylow - gHigh⟩ = tgt := by
+      refine Devm.eq_of_proj rfl h_pop.memory ?_ h_pop.logs h_pop.refundCounter
+        h_pop.output h_pop.accountsToDelete h_pop.returnData h_pop.error
+        h_pop.accessedAddresses h_pop.accessedStorageKeys h_pop.state
+        h_pop.createdAccounts h_pop.transientStorage
+      show devm.gasLeft - gVerylow - gHigh = tgt.gasLeft
+      omega
+    rw [h_fin] at h2
+    exact h2
+
+/-- `PUSH2 loc; JUMPI` with nonzero `w`, landing on the `JUMPDEST` before the
+second arm: all three steps of the `.succ` arm. -/
+lemma Evm.branch_succ_steps {pc loc : Nat} {sevm : Sevm} {devm tgt : Devm}
+    {w : B256}
+    {le : ([(loc >>> 8).toUInt8, loc.toUInt8] : Bytes).length ≤ 32}
+    (h_push : Ninst.At sevm.code pc (.push [(loc >>> 8).toUInt8, loc.toUInt8] le))
+    (h_jumpi : Jinst.At sevm.code (pc + 3) .jumpi)
+    (h_jd : Jinst.At sevm.code loc .jumpdest)
+    (h_jp : jumpable sevm.code loc = true)
+    (h_loc : loc < 2 ^ 16)
+    (h_ne : w ≠ 0)
+    (h_room : devm.stack.length < 1024)
+    (h_pop : Devm.PopBurnBy [w] (gVerylow + gHigh + gJumpdest) devm tgt) :
+    Evm.step ⟨pc, sevm, devm⟩ =
+      .cont (pc + 3)
+        (devm.setMach
+          ⟨loc.toB256 :: devm.stack, devm.memory, devm.gasLeft - gVerylow⟩) ∧
+    Evm.step ⟨pc + 3, sevm,
+        devm.setMach
+          ⟨loc.toB256 :: devm.stack, devm.memory, devm.gasLeft - gVerylow⟩⟩ =
+      .cont loc
+        (devm.setMach
+          ⟨tgt.stack, devm.memory, devm.gasLeft - gVerylow - gHigh⟩) ∧
+    Evm.step ⟨loc, sevm,
+        devm.setMach
+          ⟨tgt.stack, devm.memory, devm.gasLeft - gVerylow - gHigh⟩⟩ =
+      .cont (loc + 1) tgt := by
+  have h_stk : devm.stack = w :: tgt.stack := h_pop.stack
+  have h_gas : devm.gasLeft = tgt.gasLeft + (gVerylow + gHigh + gJumpdest) :=
+    h_pop.gasLeft
+  have h_v : Bytes.toB256 [(loc >>> 8).toUInt8, loc.toUInt8] = loc.toB256 :=
+    List.toB256_pair _ h_loc
+  have h_loc' : loc < 2 ^ 256 := by
+    apply Nat.lt_trans h_loc
+    rw [Nat.pow_lt_pow_iff_right] <;> omega
+  have h_toNat : (loc.toB256).toNat = loc := B256.toNat_toB256_of_lt h_loc'
+  refine ⟨?_, ?_, ?_⟩
+  · have h1 := Evm.push_cont (le := le) (by simp) h_push (by omega) h_room
+    rw [h_v] at h1
+    exact h1
+  · have h2 := Evm.jumpi_cont_jump
+      (devm := devm.setMach
+        ⟨loc.toB256 :: devm.stack, devm.memory, devm.gasLeft - gVerylow⟩)
+      (x := loc.toB256) (w := w) (s := tgt.stack) h_jumpi
+      (by show loc.toB256 :: devm.stack = _; rw [h_stk]) h_ne
+      (by show gHigh ≤ devm.gasLeft - gVerylow; omega)
+      (by rw [h_toNat]; exact h_jp)
+    simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
+      at h2
+    rw [h_toNat] at h2
+    exact h2
+  · refine Evm.jumpdest_cont h_jd ?_
+    refine
+      { stack := rfl, memory := h_pop.memory,
+        gasLeft := ?_, logs := h_pop.logs,
+        refundCounter := h_pop.refundCounter, output := h_pop.output,
+        accountsToDelete := h_pop.accountsToDelete,
+        returnData := h_pop.returnData, error := h_pop.error,
+        accessedAddresses := h_pop.accessedAddresses,
+        accessedStorageKeys := h_pop.accessedStorageKeys,
+        state := h_pop.state, createdAccounts := h_pop.createdAccounts,
+        transientStorage := h_pop.transientStorage }
+    show devm.gasLeft - gVerylow - gHigh = tgt.gasLeft + gJumpdest
+    omega
+
+/-- `PUSH2 loc; JUMP`, landing on the table entry's `JUMPDEST`: all three
+steps of a `.call`. -/
+lemma Evm.call_steps {pc loc : Nat} {sevm : Sevm} {devm tgt : Devm}
+    {le : ([(loc >>> 8).toUInt8, loc.toUInt8] : Bytes).length ≤ 32}
+    (h_push : Ninst.At sevm.code pc (.push [(loc >>> 8).toUInt8, loc.toUInt8] le))
+    (h_jump : Jinst.At sevm.code (pc + 3) .jump)
+    (h_jd : Jinst.At sevm.code loc .jumpdest)
+    (h_jp : jumpable sevm.code loc = true)
+    (h_loc : loc < 2 ^ 16)
+    (h_room : devm.stack.length < 1024)
+    (h_burn : Devm.BurnBy (gVerylow + gMid + gJumpdest) devm tgt) :
+    Evm.step ⟨pc, sevm, devm⟩ =
+      .cont (pc + 3)
+        (devm.setMach
+          ⟨loc.toB256 :: devm.stack, devm.memory, devm.gasLeft - gVerylow⟩) ∧
+    Evm.step ⟨pc + 3, sevm,
+        devm.setMach
+          ⟨loc.toB256 :: devm.stack, devm.memory, devm.gasLeft - gVerylow⟩⟩ =
+      .cont loc
+        (devm.setMach
+          ⟨devm.stack, devm.memory, devm.gasLeft - gVerylow - gMid⟩) ∧
+    Evm.step ⟨loc, sevm,
+        devm.setMach
+          ⟨devm.stack, devm.memory, devm.gasLeft - gVerylow - gMid⟩⟩ =
+      .cont (loc + 1) tgt := by
+  have h_gas : devm.gasLeft = tgt.gasLeft + (gVerylow + gMid + gJumpdest) :=
+    h_burn.gasLeft
+  have h_v : Bytes.toB256 [(loc >>> 8).toUInt8, loc.toUInt8] = loc.toB256 :=
+    List.toB256_pair _ h_loc
+  have h_loc' : loc < 2 ^ 256 := by
+    apply Nat.lt_trans h_loc
+    rw [Nat.pow_lt_pow_iff_right] <;> omega
+  have h_toNat : (loc.toB256).toNat = loc := B256.toNat_toB256_of_lt h_loc'
+  refine ⟨?_, ?_, ?_⟩
+  · have h1 := Evm.push_cont (le := le) (by simp) h_push (by omega) h_room
+    rw [h_v] at h1
+    exact h1
+  · have h2 := Evm.jump_cont
+      (devm := devm.setMach
+        ⟨loc.toB256 :: devm.stack, devm.memory, devm.gasLeft - gVerylow⟩)
+      (x := loc.toB256) (s := devm.stack) h_jump rfl
+      (by show gMid ≤ devm.gasLeft - gVerylow; omega)
+      (by rw [h_toNat]; exact h_jp)
+    simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
+      at h2
+    rw [h_toNat] at h2
+    exact h2
+  · refine Evm.jumpdest_cont h_jd ?_
+    refine
+      { stack := h_burn.stack, memory := h_burn.memory,
+        gasLeft := ?_, logs := h_burn.logs,
+        refundCounter := h_burn.refundCounter, output := h_burn.output,
+        accountsToDelete := h_burn.accountsToDelete,
+        returnData := h_burn.returnData, error := h_burn.error,
+        accessedAddresses := h_burn.accessedAddresses,
+        accessedStorageKeys := h_burn.accessedStorageKeys,
+        state := h_burn.state, createdAccounts := h_burn.createdAccounts,
+        transientStorage := h_burn.transientStorage }
+    show devm.gasLeft - gVerylow - gMid = tgt.gasLeft + gJumpdest
+    omega
+
+/-! ## The liveness direction
+
+The induction is on the `RunCompiled` derivation itself: it is a `Prop`, the
+conclusion is a `Prop`, and at `.call` the induction hypothesis is about a
+strictly smaller *derivation*, so no termination measure and no gas induction
+appears.  The conclusion is generalised over the program counter, and the
+boundary condition `noPushBefore … pc 32` travels beside `subcode` exactly as
+in the walks above -- free at pc 0, maintained per case, consumed at the two
+node kinds that emit a jump.
+
+There is no `pcFree` hypothesis: a PC-using program has no `RunCompiled`
+witness in the first place, so nothing needs excluding. -/
+
+theorem Func.exec_of_runCompiled_core :
+    ∀ {f₀ : Func} {fs' : List Func} {sevm : Sevm} {FS : List Func}
+      {devm : Devm} {p : Func} {devm' : Devm},
+      Func.RunCompiled FS sevm devm p devm' →
+      some sevm.code.toList = Prog.compile ⟨f₀, fs'⟩ →
+      FS = f₀ :: fs' →
+      ∀ pc,
+        subcode sevm.code.toList pc (Func.compile (table 0 (f₀ :: fs')) pc p) →
+        noPushBefore sevm.code pc 32 = true →
+        Nonempty (Exec pc sevm devm (.ok devm')) := by
+  intro f₀ fs' sevm FS devm p devm' h_run
+  induction h_run with
+  | zero h_room h_pop h_f ih =>
+    intro h_eq hFS pc sub hb
+    rcases subcode_compile_branch_jumpable sub hb with
+      ⟨loc, h_loc_eq, h_loc, h_push, h_jumpi, h_subp, h_bp, h_jd, h_jp, h_subq, h_bq⟩
+    rcases Evm.branch_zero_steps h_push h_jumpi h_loc h_room h_pop with ⟨h1, h2⟩
+    obtain ⟨excf⟩ := ih h_eq hFS (pc + 4) h_subp h_bp
+    exact ⟨Exec.cont h1 (Exec.cont h2 excf)⟩
+  | succ h_ne h_room h_pop h_g ih =>
+    intro h_eq hFS pc sub hb
+    rcases subcode_compile_branch_jumpable sub hb with
+      ⟨loc, h_loc_eq, h_loc, h_push, h_jumpi, h_subp, h_bp, h_jd, h_jp, h_subq, h_bq⟩
+    rcases Evm.branch_succ_steps h_push h_jumpi h_jd h_jp h_loc h_ne h_room h_pop
+      with ⟨h1, h2, h3⟩
+    obtain ⟨excg⟩ := ih h_eq hFS (loc + 1) h_subq h_bq
+    exact ⟨Exec.cont h1 (Exec.cont h2 (Exec.cont h3 excg))⟩
+  | last h_lin =>
+    intro h_eq hFS pc sub hb
+    refine ⟨Exec.halt ?_⟩
+    rw [Evm.step_last (Linst.at_of_slice sub)]
+    exact congrArg Step.halt h_lin
+  | next h_n h_f ih =>
+    intro h_eq hFS pc sub hb
+    rcases Func.noPushBefore_next sub hb with ⟨hb', sub'⟩
+    rcases of_subcode sub with ⟨cd, h_eq', h_slice⟩
+    rcases of_bind_eq_some h_eq' with ⟨cd', h_eq'', h_rw⟩
+    simp [pure] at h_rw
+    rw [← h_rw] at h_slice
+    rcases h_n with ⟨xl, h_filled, h_step⟩
+    exact Ninst.exec_of_stepRun (Ninst.at_of_slice (List.slice_prefix h_slice))
+      h_filled (h_step pc) (ih h_eq hFS _ sub' hb')
+  | call h_get h_room h_burn h_f ih =>
+    intro h_eq hFS pc sub hb
+    subst hFS
+    rcases subcode_compile_call sub with ⟨loc, p₁, h_get_tab, h_loc, h_pushAt, h_jump⟩
+    have h_pf := (Prog.get?_table (m := 0)).symm.trans
+      (congrArg (Prod.snd <$> ·) h_get_tab)
+    rw [h_get] at h_pf
+    simp only [Option.map_eq_map, Option.map_some, Option.some.injEq] at h_pf
+    subst h_pf
+    rcases subcode_of_get?_eq_some h_eq h_get_tab with ⟨h_jd, h_subf⟩
+    have h_jpb := Prog.jumpable_of_get?_table h_eq h_get_tab
+    rcases h_pushAt with ⟨le, h_push⟩
+    rcases Evm.call_steps (le := le) h_push h_jump h_jd h_jpb.1 h_loc h_room h_burn
+      with ⟨h1, h2, h3⟩
+    obtain ⟨excf⟩ := ih h_eq rfl (loc + 1) h_subf h_jpb.2
+    exact ⟨Exec.cont h1 (Exec.cont h2 (Exec.cont h3 excf))⟩
+
+/-- The liveness direction at the program level: a gas-exact run of a
+compiled program *is* a successful execution from pc 0.  No `pcFree`
+hypothesis -- a PC-using program has no `RunCompiled` witness to begin
+with. -/
+theorem Prog.exec_of_runCompiled {sevm : Sevm} {pre : Devm} {p : Prog}
+    {post : Devm}
+    (h : Prog.RunCompiled sevm pre p post)
+    (h_eq : some sevm.code.toList = p.compile) :
+    exec ⟨0, sevm, pre⟩ = .ok post := by
+  rcases h with ⟨mid, h_burn, h_run⟩
+  have h_eq' : some sevm.code.toList = Prog.compile ⟨p.main, p.aux⟩ := h_eq
+  have h_get : (table 0 (p.main :: p.aux))[0]? = some (0, p.main) := rfl
+  rcases subcode_of_get?_eq_some h_eq' h_get with ⟨h_jd, h_sub⟩
+  have h_npb : noPushBefore sevm.code 1 32 = true :=
+    (Prog.jumpable_of_get?_table h_eq' h_get).2
+  have h1 : Evm.step ⟨0, sevm, pre⟩ = .cont 1 mid :=
+    Evm.jumpdest_cont h_jd h_burn
+  obtain ⟨exc⟩ :=
+    Func.exec_of_runCompiled_core h_run h_eq' rfl 1 h_sub h_npb
+  rw [← exec_iff_exec_eq]
+  exact ⟨Exec.cont h1 exc⟩
+
+/-- **The biconditional.**  A gas-exact Blanc-level run of a compiled pc-free
+program is *equivalent* to a successful Jaune execution of its code at pc 0.
+
+What this does **not** say, so that nothing downstream overreads it:
+
+* **It is not liveness.**  It converts run witnesses into executions and back;
+  it does not produce a run witness for any contract, and nothing in this
+  repository says any contract call ever succeeds.  In particular, at every
+  external call the witness *contains* the callee's execution as a premise
+  (`Xlot.Filled`), so for a contract with an external call every consequence
+  stays conditional on callee behaviour.
+* **It says nothing about transaction-level execution.**  Both sides live at
+  the code-frame level: intrinsic gas, the 63/64 rule and transaction
+  validity are a further layer.
+* **It is `.ok`-level only.**  Contraposition yields "no successful
+  execution", never "the EVM reverts with *this* error" -- the two sides'
+  error types differ and no error taxonomy is introduced.
+
+The `pcFree` hypothesis is consumed by the forward direction alone; the
+liveness direction holds without it. -/
+theorem Prog.runCompiled_iff_exec {sevm : Sevm} {pre : Devm} {p : Prog}
+    {post : Devm}
+    (h_pcf : Prog.pcFree p = true)
+    (h_eq : some sevm.code.toList = p.compile) :
+    Prog.RunCompiled sevm pre p post ↔ exec ⟨0, sevm, pre⟩ = .ok post := by
+  constructor
+  · intro h
+    exact Prog.exec_of_runCompiled h h_eq
+  · intro h
+    obtain ⟨exc⟩ := (exec_iff_exec_eq 0 sevm pre (.ok post)).mpr h
+    exact Prog.runCompiled_of_exec sevm pre p post h_pcf exc h_eq
+
 end Blanc
