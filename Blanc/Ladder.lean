@@ -1292,6 +1292,56 @@ lemma calculateMsgCallGas_stipend {value gas gasLeft mem extra : Nat}
   · rw [if_neg hlow]
     exact ⟨gasLeft - mem - extra, rfl⟩
 
+/-- **The value-carrying `KECCAK256` inversion.**  `kec` pushes the hash of
+*the memory window its two operands name* — the fact `of_run_kec` forgets.
+
+A caller holding a `Mem.Reads` image rewrites the `Mem.read` with
+`Mem.Reads.read` and learns which bytes the hash is taken of, which is what
+turns "some hash" into "the allowance key of this pair of addresses".
+
+Placed here rather than beside `of_run_kec` in `Blanc/CommonProofs.lean` for
+the same reason `of_run_call_val` is: the shared module is against this arc's
+predeclared elaboration falsifier with little margin, and this module has
+headroom.
+
+Like `LOG`, `KECCAK256` only *extends* memory — it reads a window and hashes
+it — so the second conjunct is what carries a `Mem.Wf`/`Mem.Reads` pair across
+it. -/
+lemma of_run_kec_val {e : Sevm} {s s' : Devm} (h : Ninst.Run e s Ninst.kec s') :
+    ∃ x y, Stack.Diff [x, y] [(s.memory.read x.toNat y.toNat).1.keccak]
+      s.stack s'.stack ∧ s'.memory = s.memory.extend x.toNat y.toNat := by
+  rcases of_run_reg h with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨⟨mi, s₁⟩, h1, run₁⟩
+  rcases Except.bind_eq_ok run₁ with ⟨⟨sz, s₂⟩, h2, run₂⟩
+  rcases Except.bind_eq_ok run₂ with ⟨s₃, h3, run₃⟩
+  rcases Devm.pop_of_popToNat_val h1 with ⟨x, p1, rfl⟩
+  rcases Devm.pop_of_popToNat_val h2 with ⟨y, p2, rfl⟩
+  have hb := Devm.burn_of_chargeGas h3
+  have hmem : s.memory = s₃.memory := (p1.memory.trans p2.memory).trans hb.memory
+  have hpush : Devm.Push [(s₃.memRead x.toNat y.toNat).1.keccak]
+      (s₃.memRead x.toNat y.toNat).2 s' := Devm.push_of_push run₃
+  have hval : (s.memory.read x.toNat y.toNat).1.keccak
+      = (s₃.memRead x.toNat y.toNat).1.keccak := by rw [hmem]; rfl
+  refine ⟨x, y, ⟨s₂.stack, (Devm.pop_append p1 p2).stack, ?_⟩, ?_⟩
+  · rw [hval, show s₂.stack = s₃.stack from hb.stack,
+      ← Devm.memRead_stack s₃ x.toNat y.toNat]
+    exact hpush.stack
+  · rw [← hpush.memory,
+      show (s₃.memRead x.toNat y.toNat).2.memory = s₃.memory.extend x.toNat y.toNat
+        from rfl, hmem]
+
+/-- `prefix_of_kec`, with the hashed window named and the memory extension
+recorded. -/
+lemma prefix_of_kec_val {e} {x y xs} {s s' : Devm}
+    (h : Ninst.Run e s Ninst.kec s') (hp : x :: y :: xs <<+ s.stack) :
+    ((s.memory.read x.toNat y.toNat).1.keccak :: xs <<+ s'.stack) ∧
+      s'.memory = s.memory.extend x.toNat y.toNat := by
+  rcases of_run_kec_val h with ⟨x', y', ⟨stk, h2, h3⟩, hm⟩
+  rcases of_cons_cons_pref_of_cons_cons_pref hp (pref_of_split h2) with ⟨hx, hy, -⟩
+  rw [hx, hy] at hp ⊢
+  exact ⟨append_pref h3 (of_append_pref h2 hp), hm⟩
+
 /-- **The value-carrying `CALL` inversion.**  A successful `call` step whose
 seven operands are known either pushed the failure flag `0` — the depth guard,
 the balance guard, or a child frame that failed, rollback included — or

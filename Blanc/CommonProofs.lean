@@ -7426,6 +7426,22 @@ lemma B256.toNat_add_not (x : B256) : x.toNat + (~~~x).toNat = 2 ^ 256 - 1 := by
   simp only []
   omega
 
+/-- A word whose complement is zero is the all-ones word — and the converse.
+
+The fact a `[not, iszero]` pair yields: fmint's `isMax`, the infinite-allowance
+test, is exactly that pair, so a walk that has read the flag learns whether the
+allowance it loaded is `type(uint256).max`.  Proved from `toNat_add_not` rather
+than by cases on the four `UInt64` limbs. -/
+lemma B256.eq_max_of_not_eq_zero {x : B256} (h : ~~~ x = 0) : x = B256.max := by
+  have h1 := B256.toNat_add_not x
+  rw [h, show (0 : B256).toNat = 0 from rfl] at h1
+  have h2 : x.toNat = B256.max.toNat := by
+    rw [show B256.max.toNat = 2 ^ 256 - 1 from rfl]
+    omega
+  rw [← toB256_toNat x, h2, toB256_toNat]
+
+lemma B256.not_max : (~~~ (B256.max : B256)) = 0 := rfl
+
 /-- The whole overflow argument for a complement-bounded add: `y ≤ ~~~ x` says
 exactly that `x + y` does not overflow. -/
 lemma B256.nof_of_le_not {x y : B256} (h : y ≤ ~~~ x) : B256.Nof x y := by
