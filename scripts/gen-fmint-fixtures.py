@@ -84,6 +84,7 @@ from ethereum.utils.hexadecimal import hex_to_bytes              # noqa: E402
 
 OUT_DIR = os.path.join(REPO_ROOT, "scripts", "fixtures", "fmint")
 BORROWERS_PATH = os.path.join(REPO_ROOT, "scripts", "fmint-borrowers.json")
+SELECTORS_PATH = os.path.join(REPO_ROOT, "scripts", "fmint-selectors.json")
 MANIFEST_PATH = os.path.join(OUT_DIR, "manifest.json")
 
 TEMPLATE = os.path.expanduser(
@@ -137,8 +138,13 @@ GAS_PRICE = 10
 #
 # and the four fixtures with no rejected probe (01, 05, 08, 10) are unchanged to
 # the gas. Uncapped regeneration starves nothing: all ten fixtures PASS, the
-# manifest cross-check is clean and all 129 assertions hold. Step 2 of the same
-# arc turns this measurement into an in-EVM gas-floor assertion per probe.
+# manifest cross-check is clean and all 129 assertions held at the time.
+#
+# Step 2 of the same arc then turned that measurement into a tripwire: every
+# rejected trigger now records the clean-failure triple (see "the general
+# trigger prober" below), and the `Trigger` constructor refuses a `gas=` cap on
+# a rejected trigger outright, because such a cap is exactly what would make
+# the gas-floor bit vacuous again.
 
 
 def q(x):
@@ -218,23 +224,100 @@ def abi_call(sig, *args):
 # Generalises WETH's `Probe`/`prober_bytecode` (weth-evidence Step 3-4) to
 # raw, precomputed calldata of arbitrary length -- needed because
 # `flashLoan`'s calldata carries a dynamic `bytes` tail, which WETH's
-# fixed-head-word-only `Probe` cannot express. Same slot idiom:
+# fixed-head-word-only `Probe` cannot express. Two slot layouts, one per
+# trigger class; they agree on base+0 and diverge from base+1 on.
 #
-#   base + 0      the CALL's success flag  (1 = returned, 0 = reverted)
+# HONOURED trigger (`reverts_because is None`):
+#
+#   base + 0      the CALL's success flag  (1)
 #   base + 1      RETURNDATASIZE
 #   base + 2 + j  returned word j (only for the words this trigger records --
 #                 every function called here has a statically known ABI
 #                 return size, so `n_words` is fixed per call, not guessed)
 #
-# and the same refusal discipline: a REJECTED trigger records the flag (0)
-# plus an unconditionally-written executed marker at base+1, and nothing
-# else -- "flag = 0" alone would also hold of a trigger that never ran.
+# REJECTED trigger (`reverts_because` set) -- the discriminating failure-shape
+# record added by `~/plans/fmint-hygiene.md` Step 2:
+#
+#   base + 0      the CALL's success flag  (0)
+#   base + 1      executed marker, written unconditionally right after the
+#                 CALL -- "flag = 0" alone would also hold of a trigger that
+#                 never ran, so the refusal discipline needs a positive
+#                 witness that this trigger really executed
+#   base + 2      RETURNDATASIZE + 1
+#   base + 3      gas-floor boolean: `(gasBefore >> GAS_FLOOR_SHIFT) < gasAfter`
+#
+# WHY base+2 AND base+3, AND WHY BOTH ARE NEEDED (fmint-hygiene fixed decision
+# 7, anti-vacuity). Before the `Func.rev` normalization, Blanc's bare `.rev`
+# was a `REVERT` over whatever two words the guard left on the stack, and it
+# exhibited exactly three failure shapes. Each is caught here, and neither slot
+# catches all three:
+#
+#   * garbage-DATA revert -- the leftover `(offset, size)` addressed a real,
+#     modest memory window, so the callee reverted with NONZERO return data.
+#     RETURNDATASIZE > 0, but the gas was still refunded. Caught by base+2
+#     (which would hold 1 + that size), NOT by base+3.
+#   * stack-UNDERFLOW halt and OOG halt (an astronomical `size` triggering the
+#     quadratic memory-expansion cost) -- both are EXCEPTIONAL halts, which
+#     consume the entire forwarded allowance and return no data at all.
+#     RETURNDATASIZE is 0 exactly as for a clean revert, so base+2 cannot see
+#     them; base+3 can, because an exceptional halt leaves the caller with
+#     ~1/64 of the gas it held (EIP-150 forwards all-but-one-64th), far under
+#     the floor.
+#
+# The clean post-normalization shape -- `PUSH0 PUSH0 REVERT` -- is the unique
+# point where base+2 = 1 AND base+3 = 1. Both are recorded as POSITIVE values
+# on the expected path, so a regression to any of the three old shapes zeroes
+# or moves a slot the fixture's committed post-state carries, turning the
+# fixture red rather than passing quietly.
+#
+# The gas floor is computed IN-EVM, not compared against a golden gas number:
+# the stored bit is a boolean about a ratio the prober measures itself, so it
+# is robust to every legitimate gas movement (a changed guard path, a new
+# opcode, a different fork's schedule) while the golden stays oracle-derived.
 
 def trigger_base(i):
     return 0x100 * (i + 1)
 
 
 RET_SCRATCH = 0x1000  # far past any calldata this suite ever builds (<1KB)
+
+# The rejected-probe gas floor, as a right-shift of the gas the prober held
+# immediately before the CALL: the callee must leave the caller MORE than
+# `gasBefore >> GAS_FLOOR_SHIFT`.
+#
+# 1 (= "more than half must survive the call") is deliberately generous, and
+# generous is the right calibration here. The thing this bit exists to catch is
+# an EXCEPTIONAL halt, which is not a slightly-more-expensive revert but a
+# categorical one: EIP-150 forwards all-but-one-64th, so a callee that consumes
+# its whole allowance leaves ~1/64, i.e. burns ~98.4% -- a factor of 32 the
+# other side of the floor.
+#
+# Measured, not estimated: the fraction of its allowance each of the suite's
+# twelve rejected probes actually consumes (raw gasBefore/gasAfter recorded by
+# an instrumented copy of this builder, 2026-08-05):
+#
+#   02 wrong-magic           7.11%   <- the widest in the suite
+#   03 reverting-borrower    1.81%
+#   07 transfer-then-default 1.51%
+#   04 EOA receiver          0.34%
+#   06 allowance x2          0.71%
+#   09 guards x6         0.02-0.03%
+#
+# `02` is widest not because its guard is expensive in absolute terms (211k
+# gas, less than `07`'s 242k) but because it runs at `trigger_tx`'s DEFAULT
+# 3,000,000 gas rather than the 16M/30M the multi-trigger fixtures set -- the
+# fraction is what this bit tests, so the denominator matters as much as the
+# numerator. That is also the argument for a ratio rather than an absolute
+# floor: it follows the allowance a case happens to grant.
+#
+# So the honest gap is ~7% (clean, worst case) against ~98.4% (exceptional),
+# and 50% is the midpoint that needs no per-case tuning and scales with
+# whatever gas the prober holds at that point in a multi-trigger sequence.
+# Tightening it would buy no discrimination the mechanism does not already
+# have -- the falsifier in the suite README's "What the clean-failure triple
+# discriminates" catches every old shape at this setting -- and would make the
+# suite brittle against legitimate guard-path cost.
+GAS_FLOOR_SHIFT = 1
 
 
 def _pushn(x: int) -> bytes:
@@ -258,6 +341,10 @@ _GAS = b"\x5a"
 _CALL = b"\xf1"
 _RETURNDATASIZE = b"\x3d"
 _STOP = b"\x00"
+_ADD = b"\x01"
+_LT = b"\x10"
+_SHR = b"\x1c"          # 0x1c, NOT 0x1b -- 0x1b is SHL
+_SWAP1 = b"\x90"
 
 
 class Trigger:
@@ -269,6 +356,18 @@ class Trigger:
     def __init__(self, label, target, raw_calldata, n_words=0,
                  reverts_because=None, gas=None):
         assert not (n_words and reverts_because), label
+        # A `gas=` cap on a REJECTED trigger would make the base+3 gas-floor
+        # bit vacuous: a callee that consumed its whole allowance would burn
+        # only the cap, and with a cap far below half of what the prober held,
+        # the bit would read 1 for an exceptional halt exactly as it does for a
+        # clean revert. The `Func.rev` normalization retired the last such cap
+        # (`FLASHLOAN_PROBE_GAS`, see the note at the top of this file), and
+        # that retirement is the precondition the assertion rests on -- so it
+        # is enforced here rather than left as a convention.
+        assert not (reverts_because and gas is not None), (
+            f"{label}: a rejected trigger must forward all available gas, "
+            f"otherwise its base+3 gas-floor assertion cannot distinguish a "
+            f"clean revert from an exceptional halt")
         self.label = label
         self.target = target
         self.calldata = raw_calldata
@@ -293,6 +392,12 @@ def build_trigger_bytecode(triggers):
             ops += _pushn(word_int)
             ops += _pushn(w * 32)
             ops += _MSTORE
+        if not t.succeeds:
+            # `gasBefore`, parked on the stack UNDER the seven CALL operands
+            # so it survives the call. Measured a handful of PUSHes early --
+            # a constant ~20 gas of slack against a floor of half the
+            # allowance, which no arithmetic here needs to be precise about.
+            ops += _GAS                        # stack: g0
         ops += _pushn(32 * t.n_words)          # retSize
         ops += _pushn(RET_SCRATCH)             # retOffset
         ops += _pushn(len(cd))                 # argsSize (exact, unpadded)
@@ -307,9 +412,22 @@ def build_trigger_bytecode(triggers):
         ops += _pushn(base)
         ops += _SSTORE
         if not t.succeeds:
-            ops += _pushn(1)
+            # stack: g0
+            ops += _pushn(1)                   # executed marker
             ops += _pushn(base + 1)
             ops += _SSTORE
+            ops += _RETURNDATASIZE             # stack: g0, rds
+            ops += _pushn(1)
+            ops += _ADD                        # stack: g0, rds + 1
+            ops += _pushn(base + 2)
+            ops += _SSTORE                     # stack: g0
+            ops += _GAS                        # stack: g0, g1
+            ops += _SWAP1                      # stack: g1, g0
+            ops += _pushn(GAS_FLOOR_SHIFT)
+            ops += _SHR                        # stack: g1, g0 >> shift
+            ops += _LT                         # (g0 >> shift) < g1
+            ops += _pushn(base + 3)
+            ops += _SSTORE                     # stack: empty
             continue
         ops += _RETURNDATASIZE
         ops += _pushn(base + 1)
@@ -333,7 +451,9 @@ def trigger_storage(triggers, words_by_index=None):
     for i, t in enumerate(triggers):
         base = trigger_base(i)
         if not t.succeeds:
-            out[base + 1] = 1
+            out[base + 1] = 1      # executed marker
+            out[base + 2] = 1      # RETURNDATASIZE (0, clean revert) + 1
+            out[base + 3] = 1      # gas floor cleared: the callee refunded
             continue
         out[base] = 1
         out[base + 1] = 32 * t.n_words
@@ -356,6 +476,28 @@ def expect_trigger(e, label, prober_addr, i, t, words=()):
             "...and the trigger really ran: written unconditionally right "
             "after the CALL, so a zero flag beside a set marker cannot be "
             "explained by a prop that never reached the call", fmt=_word)
+        e.expect_slot(
+            label, prober_addr, base + 2,
+            f"trigger {i} ({t.label}) RETURNDATASIZE + 1", 1,
+            "...and it was rejected with EMPTY return data -- the clean "
+            "`PUSH0 PUSH0 REVERT` shape. The prober records "
+            "RETURNDATASIZE + 1, so 1 means exactly zero bytes came back "
+            "while 0 would mean the slot was never written at all; the "
+            "pre-normalization garbage-data shape, a `REVERT` over whatever "
+            "two words the guard left on the stack, would record 1 + that "
+            "window's size instead", fmt=_word)
+        e.expect_slot(
+            label, prober_addr, base + 3,
+            f"trigger {i} ({t.label}) gas-floor boolean", 1,
+            "...and it REFUNDED rather than consumed its gas allowance: the "
+            "prober compares the gas it holds after the CALL against half "
+            "the gas it held before, in-EVM, so the stored bit is a "
+            "boolean about a ratio rather than a golden gas number. An "
+            "exceptional halt -- the pre-normalization stack-underflow and "
+            "memory-expansion-OOG shapes, which return no data and so are "
+            "invisible to the RETURNDATASIZE slot above -- burns the whole "
+            "forwarded allowance and leaves the caller ~1/64, which reads "
+            "0 here", fmt=_word)
         return
     nbytes = 32 * t.n_words
     e.expect_slot(
@@ -548,6 +690,21 @@ def get_borrowers():
             f"'lake env lean scripts/gen-fmint-borrowers.lean'")
     with open(BORROWERS_PATH) as f:
         return json.load(f)
+
+
+def get_selectors():
+    """`scripts/fmint-selectors.json`, emitted from `Blanc.Fmint.fmintFuncs`
+    by `lake env lean scripts/gen-fmint-selectors.lean` and consumed by the
+    coverage gate. Read here for one purpose only: to CHECK that the
+    dispatcher-miss probe's selector really is a miss, against fmint's own
+    dispatch table rather than against this script's belief about it."""
+    if not os.path.exists(SELECTORS_PATH):
+        raise SystemExit(
+            f"{SELECTORS_PATH} not found -- regenerate with "
+            f"'lake env lean scripts/gen-fmint-selectors.lean'")
+    with open(SELECTORS_PATH) as f:
+        sels = json.load(f)
+    return {int(s, 16) for s in sels}
 
 
 # ---- genesis / header / t8n plumbing (copied from gen-weth-fixtures.py,
@@ -1294,11 +1451,14 @@ def case_guards():
     `flashFee` reverting for `token ≠ self`; `maxFlashLoan` answering 0 for
     `token ≠ self` -- the EIP's MUST-not-revert, the one sibling that
     answers rather than fails; the dirty (non-address-shaped) receiver word
-    rejected before the mint (conservation-critical, D4 step 1); and
-    `amount > maxFlashLoan`. Supply is pre-set away from zero so the bound
-    is a small, legible number rather than `2^256 - 1` (which no ordinary
-    `amount` could ever exceed) -- a synthetic quiescent value exactly as
-    the WETH guard fixtures pre-set nonzero balances."""
+    rejected before the mint (conservation-critical, D4 step 1);
+    `amount > maxFlashLoan`; and the two DISPATCHER-MISS probes (an unknown
+    selector, and empty calldata), which reach the shared `Func.rev` through
+    `mainWith`'s fallback rather than through any guard at all. Supply is
+    pre-set away from zero so the bound is a small, legible number rather
+    than `2^256 - 1` (which no ordinary `amount` could ever exceed) -- a
+    synthetic quiescent value exactly as the WETH guard fixtures pre-set
+    nonzero balances."""
     trigger_key = 9
     supply = 1000
     bound = (1 << 256) - 1 - supply
@@ -1347,8 +1507,38 @@ def case_guards():
                  ("uint256", bound + 1), ("bytes", b"")),
         reverts_because="amount (bound + 1) exceeds maxFlashLoan (bound): "
                         "the mint-overflow guard")
+
+    # Dispatcher miss. `Blanc.Fmint.fmint = Prog.mk (Func.mainWith
+    # fallbackSlot fmintTree) fmintAux` with `fmintAux = [Func.rev, ...]`, so
+    # a selector matching no leaf routes to `.call fallbackSlot` and lands on
+    # the shared `Func.rev` -- the same definition every guard above reverts
+    # through, reached by the one path that is not a guard at all. This is the
+    # probe class `~/plans/fmint-hygiene.md` Step 2 names first: before the
+    # normalization it was the pure stack-UNDERFLOW shape, since a dispatcher
+    # miss leaves nothing on the stack for a bare `REVERT` to pop.
+    miss_sel = int.from_bytes(selector("blancFmintNoSuchFunction()"), "big")
+    assert miss_sel not in SELECTORS, (
+        f"0x{miss_sel:08x} is one of fmint's twelve dispatch selectors -- "
+        f"this probe would not be a dispatcher miss")
+    assert 0 not in SELECTORS, (
+        "the empty-calldata probe below assumes the zero word is not a "
+        "dispatch selector")
+    t_unknown_selector = Trigger(
+        "unknown selector (dispatcher miss)", FMINT_ADDR,
+        miss_sel.to_bytes(4, "big"),
+        reverts_because="no leaf of fmintTree carries this selector, so "
+                        "mainWith routes it to fallbackSlot -- Func.rev in "
+                        "fmintAux")
+    t_empty_calldata = Trigger(
+        "empty calldata (dispatcher miss)", FMINT_ADDR, b"",
+        reverts_because="fsig is CALLDATALOAD(0) >> 224, which zero-extends "
+                        "an empty calldata to selector 0x00000000: also a "
+                        "miss, and the extreme of the class -- the callee "
+                        "reverts having read no input at all")
+
     triggers = [t_loan_wrong_token, t_fee_wrong_token, t_fee_self,
-                t_max_wrong_token, t_max_self, t_dirty_receiver, t_over_bound]
+                t_max_wrong_token, t_max_self, t_dirty_receiver, t_over_bound,
+                t_unknown_selector, t_empty_calldata]
     trigger, tx = trigger_tx(trigger_key, gas="0xf42400")
     alloc = {
         FMINT_ADDR: fmint_account(supply=supply),
@@ -1375,10 +1565,13 @@ def case_guards():
             "flashLoan/flashFee reject token != self; flashFee(self) and "
             "both maxFlashLoan calls answer rather than reverting; the "
             "dirty receiver and the over-bound amount are both rejected "
-            "before any mint")
+            "before any mint; and both dispatcher misses land on the "
+            "fallback Func.rev. Every one of the six rejections records the "
+            "same clean-failure triple -- flag 0, RETURNDATASIZE + 1 = 1, "
+            "gas floor cleared")
         e.expect_storage_exact(
             "fmint", FMINT_ADDR, {SUPPLY_SLOT: supply},
-            "not one of the seven triggers ever reaches a storage-writing "
+            "not one of the nine triggers ever reaches a storage-writing "
             "instruction: the two views read state without mutating it and "
             "every rejected call reverts before the mint. The only nonzero "
             "slot is the pre-set supply itself, EXACTLY at its pre-state "
@@ -1517,9 +1710,10 @@ def case_erc20_views_and_transferFrom():
 
 
 def main():
-    global FMINT_CODE, BORROWERS
+    global FMINT_CODE, BORROWERS, SELECTORS
     FMINT_CODE = get_fmint_code_hex()
     BORROWERS = get_borrowers()
+    SELECTORS = get_selectors()
     os.makedirs(OUT_DIR, exist_ok=True)
     cases = [
         case_compliant,

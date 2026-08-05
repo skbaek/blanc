@@ -96,6 +96,13 @@ recorded coverage gap in that registry, not an omission here.
   arbitrary-length calldata — needed because `flashLoan`'s calldata carries
   a dynamic `bytes` tail, which WETH's fixed-head-word-only `Probe` cannot
   express).
+- **Discriminating failure-shape observation** for every *rejected* trigger —
+  the clean-failure triple (flag `0`, `RETURNDATASIZE + 1 = 1`, gas floor
+  cleared) described under [On the general trigger/prober
+  mechanism](#on-the-general-triggerprober-mechanism), asserted at twelve
+  rejected probes across `02`, `03`, `04`, `06`, `07` and `09`. Its
+  discriminating power is demonstrated, not asserted: see [What the
+  clean-failure triple discriminates](#what-the-clean-failure-triple-discriminates).
 - **Dynamic-`data` length spectrum** (0, 1, 31, 32, 33, multiword) —
   `05-flashloan-data-length-spectrum.json`.
 - **Returndata shapes** (short / exactly 32 / overlong with a correct head)
@@ -124,7 +131,7 @@ transaction is a legacy transaction at gas price 10.
 | `06-flashloan-allowance-spectrum.json` | passive borrower × 5 pre-set allowances | zoo member 5 (no-approval) plus the full spectrum | no-approval and insufficient are rejected, pre-set allowances left untouched by the revert; exact ends at zero; residual leaves the exact leftover; infinite (`isMax`) is bit-for-bit preserved, not decremented |
 | `07-flashloan-transfer-then-default.json` | transfer-away borrower, sufficient allowance | zoo member 7: the borrower moves its whole minted balance away before returning the magic | `burnAndReturn`'s balance check fails (nothing left to burn) and the WHOLE frame reverts — the internal transfer-away, itself a nested CALL, is undone with everything else |
 | `08-flashloan-reentrant.json` | reentrant borrower, depth 2 | zoo member 6: one nested `flashLoan` (receiver = self) from inside the callback | the nested loan must itself return true before the outer continues; both mints (outer then inner) are visible in the mid-INNER-callback `balanceOf`/`totalSupply` observations; under fee ≡ 0 both loans fully unwind |
-| `09-guards.json` | seven guard probes in one fixture | `flashLoan`/`flashFee` rejecting `token ≠ self`; `maxFlashLoan` answering 0 (not reverting) for `token ≠ self` — the EIP's one MUST-not-revert sibling; the dirty (non-address-shaped) receiver rejected before any mint (conservation-critical); `amount > maxFlashLoan` | all five reject/answer as specified; fmint's only nonzero slot afterward is the pre-set supply itself, unmoved |
+| `09-guards.json` | nine guard and dispatcher probes in one fixture | `flashLoan`/`flashFee` rejecting `token ≠ self`; `maxFlashLoan` answering 0 (not reverting) for `token ≠ self` — the EIP's one MUST-not-revert sibling; the dirty (non-address-shaped) receiver rejected before any mint (conservation-critical); `amount > maxFlashLoan`; and two **dispatcher misses** (an unknown selector, and empty calldata — which `fsig` zero-extends to selector `0x00000000`), which reach the shared `Func.rev` through `mainWith`'s fallback rather than through any guard | all nine reject/answer as specified, each of the six rejections recording the full clean-failure triple; fmint's only nonzero slot afterward is the pre-set supply itself, unmoved |
 | `10-erc20-views-and-transferFrom.json` | `name`/`symbol`/`decimals`/`allowance` via a prober, plus a direct `approve`+`transferFrom` pair | selector coverage for the four entries no borrower's internal calls ever reach, and `transferFrom`'s OWN dispatch entry (distinct from the repayment fragment, which never calls it) | the three ABI-derived strings/values; `transferFrom` debits the owner (not the calling spender), credits the recipient, and fully spends the allowance |
 
 ### On the general trigger/prober mechanism
@@ -134,10 +141,46 @@ WETH suite's `Probe`/`prober_bytecode` (see that suite's README, "On the
 view prober") to **precomputed, arbitrary-length raw calldata** rather than
 a fixed list of ABI head words: `flashLoan`'s `data` argument is dynamic, so
 a fixed-head-word-only prober cannot build its calldata at all. The slot
-idiom is identical (`base = 0x100·(i+1)`; `base+0` the success flag,
-`base+1` `RETURNDATASIZE`, `base+2+j` returned word `j`), and so is the
-refusal discipline (a rejected trigger's flag is 0 beside an unconditionally
--written executed marker at `base+1`, never "flag = 0" alone).
+idiom for an **honoured** trigger is identical (`base = 0x100·(i+1)`;
+`base+0` the success flag, `base+1` `RETURNDATASIZE`, `base+2+j` returned
+word `j`).
+
+A **rejected** trigger has its own layout, and since 2026-08-05 it records
+the *shape* of the failure rather than only the fact of it:
+
+| slot | records | expected |
+|---|---|---|
+| `base+0` | the CALL's success flag | `0` |
+| `base+1` | executed marker, written unconditionally right after the CALL | `1` |
+| `base+2` | `RETURNDATASIZE + 1` | `1` |
+| `base+3` | gas-floor boolean, `(gasBefore >> 1) < gasAfter` | `1` |
+
+`base+0` and `base+1` are the original refusal discipline: "flag = 0" alone
+would also hold of a trigger that never ran, so the marker is the positive
+witness that it did. `base+2` and `base+3` are `~/plans/fmint-hygiene.md` Step 2's
+**discriminating** assertions, and each catches a failure shape the other
+cannot — see [What the clean-failure triple
+discriminates](#what-the-clean-failure-triple-discriminates) below.
+
+The gas floor is computed **in-EVM**: the prober compares the gas it holds
+after the CALL against half the gas it held before, and stores the boolean.
+Half is calibrated, not guessed — the twelve rejected probes here consume
+between 0.02% and **7.11%** of their allowance (the widest being
+`02-flashloan-wrong-magic`, which runs at the default 3M transaction gas
+rather than the 16M/30M the multi-trigger fixtures set), against the ~98.4%
+an exceptional halt burns. The floor sits in that gap and needs no per-case
+tuning, because it is a ratio rather than an absolute number.
+The committed golden therefore carries a bit about a ratio the prober
+measured itself, never an exact gas number — robust to every legitimate gas
+movement (a changed guard path, a new opcode, a different fork's schedule)
+while staying, like everything else here, oracle-derived. The `1` is the
+oracle's answer, checked at generation time against the spec-derived
+expectation; it is not written by hand.
+
+A `gas=` cap on a rejected trigger would make `base+3` vacuous — a callee
+that consumed its whole allowance would burn only the cap — so `Trigger`
+now refuses the combination outright. Retiring `FLASHLOAN_PROBE_GAS`
+(Step 1) is what made the assertion expressible at all.
 
 **Every ABI function this suite calls through a trigger has a statically
 known return size** (`flashLoan`/`approve`/`transfer`/`transferFrom` all
@@ -193,12 +236,45 @@ unchanged **to the gas**, which is the other half of the evidence: the two
 extra bytes per rev site are never executed on a success path.
 
 Note what this table is and is not. It is the *mechanism* check — the old
-shapes consumed the allowance, the new one refunds it — not yet a fixture
-*assertion*. Nothing here fails if a future change reintroduces an
-exceptional halt at a guard, because a rejected trigger still records only
-its `CALL` success flag. Step 2 of the same arc adds the discriminating
-assertions (`RETURNDATASIZE` = 0 and an in-EVM gas-floor boolean per rejected
-probe) that turn this measurement into a tripwire.
+shapes consumed the allowance, the new one refunds it — and on its own it is
+not a fixture *assertion*: a measurement recorded in a README goes red for
+nobody. Step 2 of the same arc turned it into a tripwire, below.
+
+### What the clean-failure triple discriminates
+
+The committed expectation for a rejected probe is flag `0`,
+`RETURNDATASIZE + 1 = 1`, gas floor cleared. **That triple is exactly the
+clean `PUSH0 PUSH0 REVERT` shape, and each of the three shapes the old `.rev`
+exhibited breaks at least one of its legs** — which is the anti-vacuity
+requirement (`~/plans/fmint-hygiene.md` fixed decision 7): the assertions
+must be *able* to fail.
+
+Demonstrated rather than argued. Running the committed
+`build_trigger_bytecode` — unmodified — against one synthetic callee per
+shape, each in its own transaction (they starve each other in a shared
+prober, which is the historical cascade above):
+
+| callee | flag | marker | `rds+1` | gas floor | verdict |
+|---|---:|---:|---:|---:|---|
+| `PUSH0 PUSH0 REVERT` — the current `Func.rev` | 0 | 1 | 1 | 1 | **matches the committed triple** |
+| bare `REVERT`, empty stack — the underflow halt | 0 | 1 | 1 | **0** | caught |
+| `REVERT(0, 2^250)` — the memory-expansion OOG halt | 0 | 1 | 1 | **0** | caught |
+| `REVERT(0, 32)` — the garbage-**data** revert | 0 | 1 | **33** | 1 | caught |
+| `INVALID` — any other exceptional halt | 0 | 1 | 1 | **0** | caught |
+
+Read the two middle columns rather than the verdict. **Flag and marker are
+identical in every row**, so the pre-2026-08-05 record — which had only those
+two — distinguished none of these from a clean revert; that is precisely why
+fixed decision 7 rules out a probe that reads only the `CALL` flag. And
+neither new slot subsumes the other: `RETURNDATASIZE` cannot see an
+exceptional halt (which returns no data, exactly like a clean revert), and
+the gas floor cannot see a garbage-data revert (which refunds normally). Both
+are load-bearing.
+
+The falsifier is a scratch harness, deliberately not committed — it asserts
+things about deliberately broken contracts, which is not what this directory
+is for. Its output is recorded in
+`~/plans/reports/fmint-hygiene-step-2.md`.
 
 ### On the allowance spectrum's pre-state
 
