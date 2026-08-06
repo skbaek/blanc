@@ -260,6 +260,52 @@ lemma Rinst.runCore_sload_cold_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
   simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
     Devm.gasLeft_setMach]
 
+/-- `SLOAD` on a warm key, evaluated forward: the key is already in the
+accessed set, so nothing joins it and the read costs `gasWarmAccess`.
+
+**Deliberately a separate lemma from `Rinst.runCore_sload_cold_eq_ok`, not a
+parameter of it** — read that lemma's docstring for the reason, which this
+pair does not relitigate: the two charge different constants *and* end in
+different accessed-key sets, so a single statement covering both would have to
+carry an `if` into every downstream gas equation. The `if` belongs one level
+up, in the *cost function* (`Blanc/WethGas.lean`'s `wethGas`), where it is
+stated once and eliminated by `by_cases` exactly once.
+
+The warm successor is structurally *simpler* than the cold one: no
+`addAccessedStorageKey`, so the base state does not move and the result is a
+plain `setMach` over `devm`. -/
+lemma Rinst.runCore_sload_warm_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
+    {k : B256} {s : List B256} (h_stk : devm.stack = k :: s)
+    (h_warm : ⟨sevm.currentTarget, k⟩ ∈ devm.accessedStorageKeys)
+    (h_gas : gasWarmAccess ≤ devm.gasLeft) (h_room : s.length < 1024) :
+    Rinst.runCore pc devm sevm .sload =
+      .ok (devm.setMach
+        ⟨devm.getStorVal sevm.currentTarget k :: s, devm.memory,
+          devm.gasLeft - gasWarmAccess⟩) := by
+  rw [show Rinst.runCore pc devm sevm .sload = (do
+      let ⟨key, d⟩ ← devm.pop
+      let d ←
+        if ⟨sevm.currentTarget, key⟩ ∈ d.accessedStorageKeys then
+          chargeGas gasWarmAccess d
+        else
+          chargeGas gasColdSload
+            (addAccessedStorageKey d sevm.currentTarget key)
+      d.push (d.getStorVal sevm.currentTarget key)) from rfl]
+  rw [Devm.pop_eq_ok h_stk]
+  simp only [bind, Except.bind]
+  have h_keys : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedStorageKeys
+      = devm.accessedStorageKeys := rfl
+  rw [if_pos (by rw [h_keys]; exact h_warm)]
+  rw [chargeGas_eq_ok
+    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) h_gas]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach,
+    Devm.gasLeft_setMach, Devm.stack_setMach]
+  rw [Devm.push_eq_ok
+    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft - gasWarmAccess⟩) h_room]
+  rw [Devm.getStorVal_setMach]
+  simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
+    Devm.gasLeft_setMach]
+
 /-- `MSTORE`, evaluated forward.  The memory-expansion charge is
 `Devm.extCost`, left as it stands: it is a function of the pre-state's memory
 and a target that fixes that memory turns it into a numeral. -/
@@ -453,6 +499,28 @@ lemma Ninst.runCompiled_sload_cold {sevm : Sevm} {devm : Devm} {k v : B256}
   rw [← h_eq]
   exact Ninst.runCompiled_reg (by rintro ⟨⟩)
     (Rinst.runCore_sload_cold_eq_ok h_stk h_cold (by omega) h_room)
+
+/-- `SLOAD` on a warm key.  Unlike the cold case the base state does *not*
+move: nothing is added to the accessed set, so the successor is an ordinary
+`setMach` over `devm` and the rest of the chain continues over the same base.
+
+Separate from `Ninst.runCompiled_sload_cold` for the reason
+`Rinst.runCore_sload_cold_eq_ok`'s docstring gives and
+`Rinst.runCore_sload_warm_eq_ok`'s repeats.  The argument order mirrors the
+cold lemma's exactly, so `func_run`'s two arms differ only in which lemma they
+name, which charge they subtract, and whether the base moves. -/
+lemma Ninst.runCompiled_sload_warm {sevm : Sevm} {devm : Devm} {k v : B256}
+    {s : List B256} {G : Nat} (h_stk : devm.stack = k :: s)
+    (h_warm : ⟨sevm.currentTarget, k⟩ ∈ devm.accessedStorageKeys)
+    (h_val : devm.getStorVal sevm.currentTarget k = v)
+    (h_gas : devm.gasLeft = G + gasWarmAccess) (h_room : s.length < 1024) :
+    Ninst.RunCompiled sevm devm (.reg .sload)
+      (devm.setMach ⟨v :: s, devm.memory, G⟩) := by
+  subst h_val
+  have h_eq : devm.gasLeft - gasWarmAccess = G := by omega
+  rw [← h_eq]
+  exact Ninst.runCompiled_reg (by rintro ⟨⟩)
+    (Rinst.runCore_sload_warm_eq_ok h_stk h_warm (by omega) h_room)
 
 /-- `MSTORE`.  The expansion charge is `Devm.extCost`, which a target that
 fixes the pre-state's memory turns into a numeral. -/
