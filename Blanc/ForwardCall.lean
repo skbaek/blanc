@@ -392,6 +392,69 @@ lemma Mem.read_snd_eq_self {N : Mem} {i sz : Nat}
   show N.extend i sz = N
   simp only [Mem.extend, h]
 
+/-- A window inside a word-aligned image extends nothing.  The alignment
+premise is real: an access to an unaligned image is rounded up whether or not
+the window is covered. -/
+lemma memExtSize_of_le {n i sz : Nat} (h32 : n % 32 = 0) (hw : i + sz ≤ n) :
+    memExtSize n i sz = n := by
+  unfold memExtSize
+  split_ifs with h
+  · rfl
+  · have h1 : ceilDiv (i + sz) 32 ≤ ceilDiv n 32 := by
+      simp only [ceilDiv]
+      rw [if_pos h32]
+      split_ifs with h2 <;> omega
+    rw [Nat.max_eq_left h1]
+    simp only [ceilDiv]
+    rw [if_pos h32]
+    omega
+
+/-- The window charge vanishes for a window a word-aligned image covers — the
+symbolic-image sibling of `Devm.extCost_of_size`, for walks over a memory
+*variable* whose size is only bounded, never computed. -/
+lemma Devm.extCost_zero_of_le {devm : Devm} {S : List B256} {N : Mem} {G : Nat}
+    {i sz : Nat} (h32 : N.size % 32 = 0) (hw : i + sz ≤ N.size) :
+    (devm.setMach ⟨S, N, G⟩).extCost [⟨i, sz⟩] = 0 := by
+  simp only [Devm.extCost, Devm.memory_setMach, memExtsSize,
+    memExtSize_of_le h32 hw, Nat.sub_self]
+
+/-- A write inside the image leaves the size alone. -/
+lemma Mem.size_write_of_le {N : Mem} {n : Nat} {bs : Bytes}
+    (h : n + bs.length ≤ N.size) : (N.write n bs).size = N.size := by
+  rcases bs with _ | ⟨x, xs⟩
+  · rfl
+  · rw [Mem.size_write_cons,
+      if_pos (by simp only [List.length_cons] at h ⊢; omega)]
+
+/-- Reading a covered window of a word-aligned image leaves the size alone. -/
+lemma Mem.size_read_snd_of_le {N : Mem} {i sz : Nat} (h32 : N.size % 32 = 0)
+    (hw : i + sz ≤ N.size) : ((N.read i sz).2).size = N.size := by
+  rw [Mem.read_snd_eq_self (memExtSize_of_le h32 hw)]
+
+/-- `setMach` moves no return data. -/
+lemma Devm.returnData_setMach {devm : Devm} {m : Mach} :
+    (devm.setMach m).returnData = devm.returnData := rfl
+
+/-- `RETURN`, at the outcome relation's altitude — the `.ok` sibling of
+`Func.runCompiledTo_rev_of`, with the read-back reduced to its *first*
+component exactly as `Func.runCompiled_ret_word` does and for the same
+reason. -/
+lemma Func.runCompiledTo_ret_word {fs : List Func} {sevm : Sevm} {devm : Devm}
+    {i sz : B256} {s : List B256} {out : Bytes} {G e : Nat}
+    (h_stk : devm.stack = i :: sz :: s)
+    (h_ext : devm.extCost [⟨i.toNat, sz.toNat⟩] = e)
+    (h_gas : devm.gasLeft = G + e)
+    (h_out : ((devm.setMach ⟨s, devm.memory, G⟩).memRead i.toNat sz.toNat).1
+      = out) :
+    Func.RunCompiledTo fs sevm devm (.last .ret)
+      (.ok ((((devm.setMach ⟨s, devm.memory, G⟩).memRead i.toNat
+        sz.toNat).2).withOutput out)) := by
+  subst h_ext
+  have h_eq : devm.gasLeft - devm.extCost [⟨i.toNat, sz.toNat⟩] = G := by omega
+  refine Func.RunCompiledTo.last ?_
+  show Linst.run sevm devm .ret = _
+  exact Linst.run_ret_eq_ok h_stk (by omega) (by rw [h_eq]; exact Prod.ext h_out rfl)
+
 /-! ## The two remaining walk steps: `LOG` and `CALLDATACOPY`
 
 Both are in the continuation-passing form the storage steps established, and

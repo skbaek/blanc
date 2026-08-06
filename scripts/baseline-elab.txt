@@ -421,6 +421,17 @@
 # The same step's second commit adds the returndata-short leaf;
 # Blanc/FmintSettles.lean re-measured 20.575 (median of 20.321, 20.575,
 # 20.745), row re-set 20.492 -> 20.575 on the same footing.
+#
+# 2026-08-07. Step 3's second session (checkpoint 3b) adds the magic-mismatch
+# and slot-collision leaves plus the two continuation-passing transports into
+# `spendAllowanceThenBurn`/`spendFromHash`; Blanc/FmintSettles.lean re-measured
+# 21.582 (median of 21.321, 21.582, 23.273), row re-set 20.575 -> 21.582 on the
+# established footing.  Blanc/ForwardCall.lean gains the covered-window family
+# (`memExtSize_of_le`, `Devm.extCost_zero_of_le`, `Mem.size_write_of_le`,
+# `Mem.size_read_snd_of_le`) and the `.ret` outcome terminal
+# `Func.runCompiledTo_ret_word`, and measured 1.687 (median of 1.677, 1.687,
+# 1.690) — *below* its 1.743 row, so that row is left alone.
+# Blanc/Forward.lean is untouched by this checkpoint; its 4.829 row stands.
 OK	1.241	Blanc.lean
 OK	1.257	Blanc/Basic.lean
 OK	2.454	Blanc/CommonCore.lean
@@ -445,4 +456,4 @@ OK	5.383	Blanc/WethLive.lean
 OK	7.978	Blanc/WethGas.lean
 OK	7.098	Blanc/FmintGas.lean
 OK	1.743	Blanc/ForwardCall.lean
-OK	20.575	Blanc/FmintSettles.lean
+OK	21.582	Blanc/FmintSettles.lean

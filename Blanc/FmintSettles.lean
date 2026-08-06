@@ -1345,5 +1345,279 @@ lemma execSat_retdataShort_leaf {sevm : Sevm} {d : Devm}
       (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
   · exact hP _
 
+/-- The word `checkRetdataHead erc3156Magic 0` reads back: the head word of the
+returndata, through the image `retdatacopy` wrote into memory word `0`.  Named
+so the magic-mismatch premise and the assembly's case split are stated over the
+same term. -/
+def flashLoanRetdataHead (d : Devm) (M : Mem) : B256 :=
+  ((M.write ((0 * 32 : B256)).toNat
+    (List.sliceD d.returnData (B256.toNat 0) (B256.toNat 32) (0 : UInt8))).read
+      ((0 * 32 : B256)).toNat 32).1.toB256
+
+/-- **The magic-mismatch leaf.**  The callback settled clean with a full word
+of returndata, but the head word is not `erc3156Magic`: `flashLoan` reads the
+word back through `retdatacopy`/`mload` and deliberately reverts. -/
+lemma execSat_magicMismatch_leaf {sevm : Sevm} {d : Devm}
+    {amount receiver : B256} {M : Mem} {Gc : Nat} {P : Execution → Prop}
+    (h_ge : (Nat.toB256 d.returnData.length <? (32 : B256)) = 0)
+    (h_neq : (erc3156Magic =? flashLoanRetdataHead d M) = 0)
+    (h32 : M.size % 32 = 0)
+    (h_msz : 64 ≤ M.size)
+    (h_gas : 82 ≤ Gc)
+    (hP : ∀ post : Devm, P (.error (.revert, post))) :
+    Func.ExecSat (fmint.main :: fmint.aux) sevm
+      (d.setMach ⟨1 :: [amount, receiver], M, Gc⟩) flashLoanFromFlag P := by
+  have h_len : B256.toNat 0 + B256.toNat 32 ≤ d.returnData.length := by
+    have h1 : ¬ Nat.toB256 d.returnData.length < (32 : B256) := by
+      intro hc
+      rw [show (Nat.toB256 d.returnData.length <? (32 : B256))
+        = if Nat.toB256 d.returnData.length < 32 then (1 : B256) else 0 from rfl,
+        if_pos hc] at h_ge
+      exact (by decide : (1 : B256) ≠ 0) h_ge
+    rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256,
+      show ((32 : B256)).toNat = 32 from rfl, Nat.lo_eq] at h1
+    have h2 := Nat.mod_le d.returnData.length (2 ^ 256)
+    rw [show B256.toNat 0 + B256.toNat 32 = 32 from by decide]
+    omega
+  have h_neq' : (erc3156Magic =?
+      ((M.write ((0 * 32 : B256)).toNat
+        (List.sliceD d.returnData (B256.toNat 0) (B256.toNat 32)
+          (0 : UInt8))).read ((0 * 32 : B256)).toNat 32).1.toB256) = 0 := h_neq
+  apply Func.execSat_of_runCompiledTo
+  · func_run (16) [0, 0, 6, 3, 0, 1]
+    · rw [Devm.extCost_zero_of_le h32 (by
+        rw [show ((0 * 32 : B256)).toNat + B256.toNat 32 = 32 from by decide]
+        omega)]
+      decide
+    · have hs1 : (M.write ((0 * 32 : B256)).toNat
+          (List.sliceD d.returnData (B256.toNat 0) (B256.toNat 32)
+            (0 : UInt8))).size = M.size := by
+        apply Mem.size_write_of_le
+        rw [show (List.sliceD d.returnData (B256.toNat 0) (B256.toNat 32)
+            (0 : UInt8)).length = B256.toNat 32 from List.takeD_length _ _ _,
+          show ((0 * 32 : B256)).toNat + B256.toNat 32 = 32 from by decide]
+        omega
+      simp only [Devm.returnData_setMach]
+      rw [Devm.extCost_zero_of_le (by rw [hs1]; exact h32) (by
+        rw [hs1, show ((0 * 32 : B256)).toNat + 32 = 32 from by decide]
+        omega)]
+      decide
+    · exact Func.runCompiledTo_rev_func (G := Gc - 82)
+        (by simp only [Devm.gasLeft_setMach, gBase]; omega)
+        (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
+            omega)
+  · exact hP _
+
+/-- The lower bound `retdataShorterThan 32` establishes in the negative
+direction, in the shape the `retdatacopy` arm's guard wants. -/
+lemma retdata_bound_of_not_short {d : Devm}
+    (h_ge : (Nat.toB256 d.returnData.length <? (32 : B256)) = 0) :
+    B256.toNat 0 + B256.toNat 32 ≤ d.returnData.length := by
+  have h1 : ¬ Nat.toB256 d.returnData.length < (32 : B256) := by
+    intro hc
+    rw [show (Nat.toB256 d.returnData.length <? (32 : B256))
+      = if Nat.toB256 d.returnData.length < 32 then (1 : B256) else 0 from rfl,
+      if_pos hc] at h_ge
+    exact (by decide : (1 : B256) ≠ 0) h_ge
+  rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256,
+    show ((32 : B256)).toNat = 32 from rfl, Nat.lo_eq] at h1
+  have h2 := Nat.mod_le d.returnData.length (2 ^ 256)
+  rw [show B256.toNat 0 + B256.toNat 32 = 32 from by decide]
+  omega
+
+/-- The `retdatacopy` of `checkRetdataHead` keeps the size of the image it
+writes into. -/
+lemma flashLoanRetdataImage_size {d : Devm} {M : Mem} (h_msz : 64 ≤ M.size) :
+    (M.write ((0 * 32 : B256)).toNat
+      (List.sliceD d.returnData (B256.toNat 0) (B256.toNat 32)
+        (0 : UInt8))).size = M.size := by
+  apply Mem.size_write_of_le
+  rw [show (List.sliceD d.returnData (B256.toNat 0) (B256.toNat 32)
+      (0 : UInt8)).length = B256.toNat 32 from List.takeD_length _ _ _,
+    show ((0 * 32 : B256)).toNat + B256.toNat 32 = 32 from by decide]
+  omega
+
+/-- **Into the repayment.**  The flag is `1` and both returndata checks pass:
+the walk crosses `retdataShorterThan 32` and `checkRetdataHead erc3156Magic 0`
+and hands the continuation the state entering `spendAllowanceThenBurn` — the
+memory image a variable with only its size pinned (F8), the gas account
+exact. -/
+lemma execSat_spend_step {sevm : Sevm} {d : Devm}
+    {amount receiver : B256} {M : Mem} {Gc : Nat} {P : Execution → Prop}
+    (h_ge : (Nat.toB256 d.returnData.length <? (32 : B256)) = 0)
+    (h_eq : (erc3156Magic =? flashLoanRetdataHead d M) = 1)
+    (h32 : M.size % 32 = 0)
+    (h_msz : 64 ≤ M.size)
+    (h_gas : 77 ≤ Gc)
+    (h_next : ∀ M' : Mem, M'.size = M.size →
+      Func.ExecSat (fmint.main :: fmint.aux) sevm
+        (d.setMach ⟨[amount, receiver], M', Gc - 77⟩)
+          spendAllowanceThenBurn P) :
+    Func.ExecSat (fmint.main :: fmint.aux) sevm
+      (d.setMach ⟨1 :: [amount, receiver], M, Gc⟩) flashLoanFromFlag P := by
+  have h_len := retdata_bound_of_not_short h_ge
+  have h_eq' : (erc3156Magic =?
+      ((M.write ((0 * 32 : B256)).toNat
+        (List.sliceD d.returnData (B256.toNat 0) (B256.toNat 32)
+          (0 : UInt8))).read ((0 * 32 : B256)).toNat 32).1.toB256) = 1 := h_eq
+  have hs1 := flashLoanRetdataImage_size (d := d) (M := M) h_msz
+  have hs' : (((M.write ((0 * 32 : B256)).toNat
+      (List.sliceD d.returnData (B256.toNat 0) (B256.toNat 32)
+        (0 : UInt8))).read ((0 * 32 : B256)).toNat 32).2).size = M.size := by
+    rw [Mem.size_read_snd_of_le (by rw [hs1]; exact h32)
+      (by rw [hs1, show ((0 * 32 : B256)).toNat + 32 = 32 from by decide]
+          omega),
+      hs1]
+  refine Func.execSat_segment ?_ (h_next _ hs')
+  intro ex hex
+  func_run (16) [0, 0, 6, 3, 1, 0]
+  · rw [Devm.extCost_zero_of_le h32 (by
+      rw [show ((0 * 32 : B256)).toNat + B256.toNat 32 = 32 from by decide]
+      omega)]
+    decide
+  · simp only [Devm.returnData_setMach]
+    rw [Devm.extCost_zero_of_le (by rw [hs1]; exact h32) (by
+      rw [hs1, show ((0 * 32 : B256)).toNat + 32 = 32 from by decide]
+      omega)]
+    decide
+  · exact hex
+
+open Jaune.Ninst Ninst in
+/-- `spendAllowanceThenBurn`'s tail after the collision guard: the allowance
+read and the two arms of the infinite-allowance test, both converging on
+`burnAndReturn` in aux slot `burnSlot`.  The `example` below pins it as the
+sub-term it is. -/
+def spendFromHash : Func :=
+  dup 0 ::: sload :::
+  dup 0 ::: isMax +++
+  ( pop ::: pop :::
+    .call burnSlot ) <?>
+  ( dup 2 ::: dup 1 ::: lt :::
+    .rev <?>
+    dup 2 ::: swap 0 ::: sub :::
+    swap 0 ::: sstore :::
+    .call burnSlot )
+
+open Jaune.Ninst Ninst in
+example : spendAllowanceThenBurn =
+    dup 1 ::: mstoreAt 0 +++
+    address ::: mstoreAt 1 +++
+    pushList [64, 0] +++
+    kec :::
+    checkSlotCollides +++
+    .rev <?>
+    spendFromHash := rfl
+
+/-- **Through the collision guard.**  The allowance key is hashed and collides
+with neither storage region: the walk hands the continuation the state
+entering `spendFromHash`, with the hash a variable named by `h_hash`. -/
+lemma execSat_spendGuard_step {sevm : Sevm} {d : Devm}
+    {wad receiver h : B256} {M : Mem} {Gc : Nat} {P : Execution → Prop}
+    (h_hash : Bytes.keccak ((((M.write ((0 * 32 : B256)).toNat
+      receiver.toBytes).write ((1 * 32 : B256)).toNat
+        sevm.currentTarget.toB256.toBytes).read (B256.toNat 0)
+          (B256.toNat 64)).1) = h)
+    (h_nva : B256.eqCheck
+      (((~~~ (0 : B256)) <<< (Nat.toB256 160).toNat) &&& h) 0 = 0)
+    (h_nmax : B256.eqCheck (~~~ h) 0 = 0)
+    (h32 : M.size % 32 = 0)
+    (h_msz : 64 ≤ M.size)
+    (h_gas : 108 ≤ Gc)
+    (h_next : ∀ M'' : Mem, M''.size = M.size →
+      Func.ExecSat (fmint.main :: fmint.aux) sevm
+        (d.setMach ⟨[h, wad, receiver], M'', Gc - 108⟩) spendFromHash P) :
+    Func.ExecSat (fmint.main :: fmint.aux) sevm
+      (d.setMach ⟨[wad, receiver], M, Gc⟩) spendAllowanceThenBurn P := by
+  have hw1 : (M.write ((0 * 32 : B256)).toNat receiver.toBytes).size
+      = M.size := by
+    apply Mem.size_write_of_le
+    rw [B256.length_toBytes,
+      show ((0 * 32 : B256)).toNat + 32 = 32 from by decide]
+    omega
+  have hw2 : ((M.write ((0 * 32 : B256)).toNat receiver.toBytes).write
+      ((1 * 32 : B256)).toNat sevm.currentTarget.toB256.toBytes).size
+      = M.size := by
+    rw [Mem.size_write_of_le, hw1]
+    rw [hw1, B256.length_toBytes,
+      show ((1 * 32 : B256)).toNat + 32 = 64 from by decide]
+    omega
+  have hs'' : ((((M.write ((0 * 32 : B256)).toNat receiver.toBytes).write
+      ((1 * 32 : B256)).toNat sevm.currentTarget.toB256.toBytes).read
+        (B256.toNat 0) (B256.toNat 64)).2).size = M.size := by
+    rw [Mem.size_read_snd_of_le (by rw [hw2]; exact h32)
+      (by rw [hw2, show B256.toNat 0 + B256.toNat 64 = 64 from by decide]
+          omega),
+      hw2]
+  refine Func.execSat_segment ?_ (h_next _ hs'')
+  intro ex hex
+  func_run (21) [0, 0, 42, h, ~~~ (0 : B256),
+    (~~~ (0 : B256)) <<< (Nat.toB256 160).toNat,
+    ((~~~ (0 : B256)) <<< (Nat.toB256 160).toNat) &&& h, 0, ~~~ h, 0, 0]
+  · exact Devm.extCost_zero_of_le h32 (by
+      rw [show ((0 * 32 : B256)).toNat + 32 = 32 from by decide]
+      omega)
+  · exact Devm.extCost_zero_of_le (by rw [hw1]; exact h32) (by
+      rw [hw1, show ((1 * 32 : B256)).toNat + 32 = 64 from by decide]
+      omega)
+  · rw [Devm.extCost_zero_of_le (by rw [hw2]; exact h32) (by
+      rw [hw2, show B256.toNat 0 + B256.toNat 64 = 64 from by decide]
+      omega)]
+    decide
+  · exact hex
+
+/-- **The slot-collision leaf.**  The allowance key hashes into one of the two
+guarded storage regions — it is address-shaped (`va = 1`) or it is
+`supplySlot` (`mx = 1`) — and `flashLoan` deliberately reverts rather than
+write through the alias.  The two clause values are threaded as variables so
+one statement serves all three colliding combinations. -/
+lemma execSat_slotCollision_leaf {sevm : Sevm} {d : Devm}
+    {wad receiver h va mx : B256} {M : Mem} {Gc : Nat} {P : Execution → Prop}
+    (h_hash : Bytes.keccak ((((M.write ((0 * 32 : B256)).toNat
+      receiver.toBytes).write ((1 * 32 : B256)).toNat
+        sevm.currentTarget.toB256.toBytes).read (B256.toNat 0)
+          (B256.toNat 64)).1) = h)
+    (h_va : B256.eqCheck
+      (((~~~ (0 : B256)) <<< (Nat.toB256 160).toNat) &&& h) 0 = va)
+    (h_mx : B256.eqCheck (~~~ h) 0 = mx)
+    (h_col : (mx ||| va) = 1)
+    (h32 : M.size % 32 = 0)
+    (h_msz : 64 ≤ M.size)
+    (h_gas : 113 ≤ Gc)
+    (hP : ∀ post : Devm, P (.error (.revert, post))) :
+    Func.ExecSat (fmint.main :: fmint.aux) sevm
+      (d.setMach ⟨[wad, receiver], M, Gc⟩) spendAllowanceThenBurn P := by
+  have hw1 : (M.write ((0 * 32 : B256)).toNat receiver.toBytes).size
+      = M.size := by
+    apply Mem.size_write_of_le
+    rw [B256.length_toBytes,
+      show ((0 * 32 : B256)).toNat + 32 = 32 from by decide]
+    omega
+  have hw2 : ((M.write ((0 * 32 : B256)).toNat receiver.toBytes).write
+      ((1 * 32 : B256)).toNat sevm.currentTarget.toB256.toBytes).size
+      = M.size := by
+    rw [Mem.size_write_of_le, hw1]
+    rw [hw1, B256.length_toBytes,
+      show ((1 * 32 : B256)).toNat + 32 = 64 from by decide]
+    omega
+  apply Func.execSat_of_runCompiledTo
+  · func_run (21) [0, 0, 42, h, ~~~ (0 : B256),
+      (~~~ (0 : B256)) <<< (Nat.toB256 160).toNat,
+      ((~~~ (0 : B256)) <<< (Nat.toB256 160).toNat) &&& h, va, ~~~ h, mx, 1]
+    · exact Devm.extCost_zero_of_le h32 (by
+        rw [show ((0 * 32 : B256)).toNat + 32 = 32 from by decide]
+        omega)
+    · exact Devm.extCost_zero_of_le (by rw [hw1]; exact h32) (by
+        rw [hw1, show ((1 * 32 : B256)).toNat + 32 = 64 from by decide]
+        omega)
+    · rw [Devm.extCost_zero_of_le (by rw [hw2]; exact h32) (by
+        rw [hw2, show B256.toNat 0 + B256.toNat 64 = 64 from by decide]
+        omega)]
+      decide
+    · exact Func.runCompiledTo_rev_func (G := Gc - 113)
+        (by simp only [Devm.gasLeft_setMach, gBase]; omega)
+        (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
+            omega)
+  · exact hP _
+
 end Fmint
 end Blanc
