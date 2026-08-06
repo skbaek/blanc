@@ -31,8 +31,9 @@ This repo contains the following files:
   are untouched by its existence, and by `Forward.lean`'s.
   **This is not liveness.** The biconditional
   converts run witnesses into executions and back; it does not produce a run
-  witness for any contract, and nothing here — or anywhere in this repository —
-  says any contract call ever succeeds. At every external call the witness
+  witness for any contract, and nothing in this module says any contract call
+  ever succeeds — the first theorems that do are `FmintLive.lean`'s and
+  `WethLive.lean`'s below. At every external call the witness
   *contains* the callee's execution as a premise, so for a contract with an
   external call every consequence stays conditional on callee behaviour. It
   also says nothing about transaction-level execution (intrinsic gas, the
@@ -54,6 +55,18 @@ This repo contains the following files:
   the obligations no construction can compute — which comparison a dispatch
   fork decided, what a memory expansion cost, and the frame's terminal
   instruction.
+- [Reverts.lean](Blanc/Reverts.lean): the error-carrying sibling of
+  `Compiled.lean`. `Func.RunCompiledTo` generalises `Func.RunCompiled`'s
+  terminal outcome from `.ok` to an arbitrary `Execution`, with the bridge to
+  `exec` to match — the layer that lets a statement end in a *named* error
+  instead of contraposition's "no successful execution exists".
+- [ForwardCall.lean](Blanc/ForwardCall.lean): crossing a `CALL`, forward — the
+  one instruction `Forward.lean` cannot step, because its outcome spawns a
+  child frame. The child's execution comes from totality — Jaune's `exec` is
+  total and fuel-free — never from a premise about the callee, which is what
+  lets the settlement family below quantify over arbitrary borrower bytecode.
+  The module also carries the EIP-150 retained-gas lower bound and the
+  fatal/failed/successful split of child resumption.
 - [FmintLive.lean](Blanc/FmintLive.lean): fmint's demonstration of that layer,
   and the first place in this repository where a contract call is proved to
   **succeed**. `fmint_totalSupply_succeeds` drives `func_run` over `fmint`'s
@@ -78,6 +91,11 @@ This repo contains the following files:
   the target four dispatch forks down instead of three. Nothing had to be added
   to `Forward.lean` for it — the whole module is the target's own text. Its
   scope caveats are `FmintLive.lean`'s, unchanged.
+- [FmintGas.lean](Blanc/FmintGas.lean) and [WethGas.lean](Blanc/WethGas.lean):
+  what those calls *cost* — the same runs restated with exact cold and warm
+  gas as a conjunct of the statement, plus the `fmintGas`/`wethGas` closed
+  forms and their maxima. `WethGas.lean`'s module docstring carries the
+  rationale; `FmintGas.lean` mirrors it.
 - [Weth.lean](Blanc/Weth.lean): proof-of-concept implementation of the Wrapped 
   Ether (WETH) contract in Blanc.
 - [WethCode.lean](Blanc/WethCode.lean): the compiled WETH runtime bytecode and
@@ -99,6 +117,25 @@ This repo contains the following files:
   **not** solvency and not liveness, and during a flash loan the minted supply
   is unbacked by construction — that is the design, and the claim is that the
   books balance at every point an observer can reach.
+- [FlashSpec.lean](Blanc/FlashSpec.lean): fmint's `flashLoan` specification —
+  the entry route, the callback calldata image, `CallbackBoundary`, the
+  headline `fmint_flashLoan_spec` with its seven `no_success_of_*`
+  corollaries and their seven `settles_with_error_of_*` strengthenings, and
+  the frame-level restoration family. Partial correctness throughout: every
+  theorem takes a successful run as a hypothesis or rules one out, and each
+  restoration claim names a frame, never a transaction.
+- [FmintReverts.lean](Blanc/FmintReverts.lean): fmint's deliberate reverts,
+  constructed rather than ruled out — the unknown-selector and
+  `token ≠ self` executions built instruction by instruction to
+  `.error (.revert, _)` with empty returndata: statements that a call
+  *reverts*, with *this* error and *no* data, on the deployed bytes.
+- [FmintSettles.lean](Blanc/FmintSettles.lean): the walk that runs
+  `flashLoan`'s state-changing half — three guards passed, the mint written,
+  the frame handed to the callback — and, across the `CALL`, the settlement
+  trichotomy `fmint_flashLoan_settles` and its corollaries: with no premise
+  about the borrower, a non-static canonical call funded at
+  `flashLoanGas data.length` ends in a success, a deliberate revert, or the
+  non-consensus fault channel — never a consensus exceptional halt.
 
 Blanc's WETH is a reimplementation; observable deviations from deployed WETH9
 are catalogued in [`WETH_DEVIATIONS.md`](WETH_DEVIATIONS.md). FMINT's
@@ -155,11 +192,11 @@ and proof falls. It is not duplicated here. Blanc adds exactly:
 1. **the pinned Jaune revision** below — trusting a Blanc theorem is trusting
    that specific Jaune, not the sibling checkout on your disk;
 2. **the axiom audit** below, which is stricter than Jaune's own gates: it
-   pins the exact axiom set of twenty-four named results and fails on an extra
+   pins the exact axiom set of ninety-one named results and fails on an extra
    *or* missing axiom;
 3. **Blanc's own source**, which carries no gate equivalent to Jaune's
    `check-hygiene.sh`/`check-integrity.sh`; what stands behind it is the audit
-   in (2), and the audit constrains only what enters those twenty-four
+   in (2), and the audit constrains only what enters those ninety-one
    theorems' dependency cones. Scanning `Blanc/` finds no `@[extern]`, `axiom`,
    `opaque`, `sorry`, `implemented_by`, or `bv_decide`, and no use of
    `native_decide` — its one textual occurrence is the `WethCode.lean` comment
@@ -184,7 +221,9 @@ without a sibling checkout, and bumping Jaune is a reviewed one-line change.
 
 CI ([`scripts/check.sh`](scripts/check.sh)) builds the library and then runs an
 **axiom audit** ([`scripts/AxiomCheck.lean`](scripts/AxiomCheck.lean)) of
-twenty-four top theorems. Seven are WETH's headline solvency theorems:
+**ninety-one** top theorems — `scripts/check.sh`'s row list is the authority
+on membership, and the families follow. Seven are WETH's headline solvency
+theorems:
 
 - `Blanc.weth_preserves_solvent`
 - `Blanc.stateTransition_preserves_solvent`
@@ -223,7 +262,7 @@ initcode/`CREATE` deployment theorem exists**, and nothing here says an FMINT
 deployed by a transaction starts conserved. That gap is recorded as a successor
 item in `~/plans/flashmint-proposal.md`.
 
-The remaining eight are FMINT's `flashLoan` specification — the headline
+Eight are FMINT's `flashLoan` specification — the headline
 `Blanc.Fmint.fmint_flashLoan_spec` and its seven `no_success_of_*` corollaries
 (`callback_never_magic`, `callback_never_returns_word`, `token_ne_self`,
 `receiver_not_address`, `amount_over_maxFlashLoan`, `allowance_below_amount`,
@@ -232,7 +271,8 @@ The remaining eight are FMINT's `flashLoan` specification — the headline
 correctness, never liveness**: the headline factors a successful top-level
 execution *given as a hypothesis*, and the corollaries rule executions out.
 Nothing in them — or anywhere in this repository — says a `flashLoan` call
-ever succeeds, and none of them is a state-restoration claim.
+ever succeeds, and none of them is a state-restoration claim — the
+restoration family below carries those.
 
 Their scope is stated in that module's headline docstring, which is the
 authority on it, and it is narrower than the names suggest in two ways worth
@@ -246,7 +286,7 @@ produce, *not* over the receiver's code — the weaker and honest form, because
 this repository has no determinism lemma pinning that frame uniquely. The
 other five are contrapositives of `flashLoan`'s own guards.
 
-The last two are the **compile witnesses**:
+Two are the **compile witnesses**:
 
 - `Blanc.wethCode_compile` — `Prog.compile weth = some wethCode` — and
   `Blanc.fmintCode_compile`, the same equation for FMINT. Every theorem above
@@ -259,13 +299,54 @@ The last two are the **compile witnesses**:
   elaboration limit and nothing added to the trusted base (in particular, not
   `native_decide`).
 
+The remaining **sixty-seven** rows arrived with the restoration, liveness,
+gas, error-genre and settlement work, and are catalogued here by family:
+
+- **Frame-level state restoration** (eleven rows, in
+  [`Blanc/FlashSpec.lean`](Blanc/FlashSpec.lean), with the shared
+  `Blanc.ProcessMessage.rollback_of_error` in `CommonProofs.lean`):
+  `rollback_of_callback_failure` at the borrower's frame, and
+  `rollback_of_no_success` with its `_total` form and seven per-guard
+  instantiations at fmint's own message frame — a frame that cannot succeed
+  comes back with its world state restored. Every claim names a frame, never
+  a transaction.
+- **View-call liveness and exact gas** (thirty-seven rows, in
+  [`Blanc/FmintLive.lean`](Blanc/FmintLive.lean),
+  [`Blanc/WethLive.lean`](Blanc/WethLive.lean),
+  [`Blanc/FmintGas.lean`](Blanc/FmintGas.lean) and
+  [`Blanc/WethGas.lean`](Blanc/WethGas.lean), with the three
+  `Prog.runCompiled`-to-`exec` bridge rows): `fmint_totalSupply_succeeds`,
+  `fmint_decimals_succeeds`, `weth_balanceOf_succeeds` and
+  `weth_decimals_succeeds` construct successful executions — the
+  repository's only liveness statements — together with exact cold and warm
+  gas and the `fmintGas`/`wethGas` closed forms and maxima. One call-free
+  entrypoint each, at message-call altitude.
+- **Error genre** (thirteen rows: the seven `settles_with_error_of_*`
+  corollaries in `FlashSpec.lean`, and six rows in
+  [`Blanc/FmintReverts.lean`](Blanc/FmintReverts.lean)): each no-success
+  condition settles with *some* error, and the unknown-selector and
+  `token ≠ self` families are constructed all the way to
+  `.error (.revert, _)` with empty returndata — *this* error, *no* data.
+- **Settlement** (six rows, in
+  [`Blanc/FmintSettles.lean`](Blanc/FmintSettles.lean) over
+  [`Blanc/ForwardCall.lean`](Blanc/ForwardCall.lean)):
+  `fmint_flashLoan_settles` — with **no premise about the borrower**, a
+  non-static, canonically-encoded `flashLoan` frame funded at
+  `flashLoanGas data.length` ends in a success, a deliberate `.revert`, or
+  the non-consensus machine-fault channel, never a consensus exceptional
+  halt — with `fmint_flashLoan_settles_of_call` dropping the three guard
+  premises (its two further guard walks included) and
+  `fmint_flashLoan_frame_settles` restating it at `ProcessMessage`
+  altitude. A trichotomy over outcomes, not a success theorem: nothing in
+  this repository says a `flashLoan` call ever succeeds.
+
 Each audited theorem carries its **own pinned expected axiom set** in
 `scripts/check.sh`, and the audit fails if a theorem's axiom closure differs
 from its pin in either direction — extra or missing. In particular it fails on
 `sorryAx`, `ofReduceBool`, or `ofReduceNat` — no `sorry` and no
 `native_decide`-style axiom in the trusted path of these results. It also fails
 if `AxiomCheck.lean` and `check.sh` disagree about which theorems are audited,
-so a row cannot be dropped silently from either side. All twenty-four rows
+so a row cannot be dropped silently from either side. All ninety-one rows
 currently pin exactly `[propext, Classical.choice, Quot.sound]`.
 
 ## WETH fixture suite — execution evidence

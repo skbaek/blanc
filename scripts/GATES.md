@@ -30,8 +30,8 @@ Choose the gate by what you changed, cheapest falsifier first:
 | a fixture, a fixture generator, or a borrower | the matching suite's `check-*.sh --no-build` | that suite's `check-*-coverage.sh` |
 | the pinned Jaune revision (`lakefile.lean` + `lake-manifest.json`) | `lake build` | the **full set**, in the order below |
 
-**No gate here takes `--jobs`.** Blanc's gates run from sub-second to ~40 s and
-need no parallel mode, so the `--jobs` contract in Jaune's catalogue does not
+**No gate here takes `--jobs`.** Blanc's gates run from sub-second to ~2
+minutes and need no parallel mode, so the `--jobs` contract in Jaune's catalogue does not
 apply to this repository. `check-elab.sh`'s header records why it is sequential
 by construction: a gate whose only output is a timing cannot be run under
 self-inflicted contention.
@@ -55,23 +55,28 @@ runs every time.
 
 ## Catalogue
 
+Scale and time cells are measurements, last refreshed 2026-08-07 at `cde896f`.
+A gate's own summary line is always the authority; a green run whose counts
+disagree with a cell here is a staleness finding against this file, not
+against the gate.
+
 ### Cheap — run these constantly
 
 | gate | proves | scale | time |
 |---|---|---|---|
-| `scripts/check-layering.sh` | contracts are siblings in the import hierarchy: no cross-contract import, no shared module importing a contract, no unclassified module (rule and rationale in `README.md`) | 2 contracts, 15 modules, 13 non-root | sub-second |
+| `scripts/check-layering.sh` | contracts are siblings in the import hierarchy: no cross-contract import, no shared module importing a contract, no unclassified module (rule and rationale in `README.md`) | 2 contracts, 25 modules, 23 non-root | sub-second |
 | `scripts/check-fmint.sh --no-build` | fmint fixture conformance, the manifest cross-check, and byte-equality of every fixture's fmint pre-state code against the committed `Blanc.fmintCode` literal | 11 fixtures, 188 assertions, 1257 bytes | sub-second |
 | `scripts/check-weth.sh --no-build` | WETH fixture conformance and the same byte-equality check against `Blanc.wethCode`. There is no WETH manifest, so no cross-check — the asymmetry is real, not an omission | 11 fixtures, 888 bytes | sub-second |
 | `scripts/check-fmint-coverage.sh` | every fmint selector is exercised by some fixture, against a declared unexercised-selector budget | 12 selectors, budget 0 | sub-second |
 | `scripts/check-weth-coverage.sh` | the same for WETH, plus the `deposit()` fallback on empty calldata | 10 selectors + fallback, budget 0 | sub-second |
-| `lake build` | integration elaboration, including the two compile witnesses | 922 jobs | ~7 s |
-| `scripts/check.sh --no-build` | axiom audit of the audited top theorems, each against its own pinned expected axiom set | 24 theorems | ~7 s |
+| `lake build` | integration elaboration, including the two compile witnesses | 932 jobs | ~65 s from a clean Blanc build; incremental rebuilds far less |
+| `scripts/check.sh --no-build` | axiom audit of the audited top theorems, each against its own pinned expected axiom set | 91 theorems | ~7 s |
 
 ### Medium — before a commit or push candidate
 
 | gate | proves | scale | time |
 |---|---|---|---|
-| `scripts/check-elab.sh` | per-module elaboration time vs the committed `scripts/baseline-elab.txt` | 15 modules, ~39 s of elaboration | ~40 s |
+| `scripts/check-elab.sh` | per-module elaboration time vs the committed `scripts/baseline-elab.txt` | 25 files, ~117 s of elaboration | ~2 min |
 
 Nothing in this repository is long. No Blanc gate approaches the 1,000-second
 rule; every one of them runs inline.

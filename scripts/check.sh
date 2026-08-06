@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Blanc verification gate (REFACTOR.md Phase 0, step 0.3): `lake build`,
-# then an axiom audit of the thirty-nine audited top theorems via
-# scripts/AxiomCheck.lean — WETH's seven solvency theorems, fmint's seven
-# conservation theorems, fmint's `flashLoan` success spec and its seven
-# no-success corollaries, the two compile witnesses, the eleven frame-level
-# restoration rows below, the two `RunCompiled`/`exec` bridge rows, and the two
-# `totalSupply()` liveness rows.
+# then an axiom audit of the audited top theorems via scripts/AxiomCheck.lean.
+# The row list below is the authority on what is audited, grouped by family:
+# WETH solvency, fmint conservation, the `flashLoan` spec and its
+# corollaries, the compile witnesses, frame-level restoration, the
+# `RunCompiled`/`exec` bridges, view-call liveness and gas, error genre, and
+# settlement.
 #
 # `wethCode_compile` is what keeps the solvency theorems' `Prog.compile weth`
 # hypothesis from being vacuous. `fmintCode_compile` is the same equation for
