@@ -2766,6 +2766,164 @@ theorem no_success_of_balance_below_amount {sevm : Sevm} {pre post : Devm}
     fmint_flashLoan_spec h_code h_sel h_dec h_size h_wf h_fresh exc
   exact B256.not_lt.mpr h_bal (h_low a sc mid h_cb)
 
+/-! ### The error channel: the weak form of the no-success family
+
+Jaune's `exec` is a **total function** into `Except (EvmError × Devm) Devm`, so
+each `no_success_of_*` theorem above is one case away from a positive
+statement: if no `.ok` outcome exists, the total function must have returned
+`.error`.  `Blanc.exec_error_of_no_success` (`Blanc/CommonProofs.lean`) is that
+one case, contract-agnostic; the seven corollaries below apply it to the seven
+premises above, unchanged.  Named by the rule `no_success_of_X ↦
+settles_with_error_of_X`.
+
+**These name an error CHANNEL, not an error KIND.**  No `EvmError` constructor
+is pinned by any of the seven — in particular, none of them says "reverts".
+Each conclusion is exactly `∃ e post, exec ⟨0, sevm, pre⟩ = .error (e, post)`,
+with `e` existentially bound: it is whichever error the total function
+happens to return for an execution that was going to fail anyway, not a
+constructor derived from walking the machine.  Pinning `e` — in this arc's
+case, showing it is always `EvmError.revert` on these paths — is later work
+(`~/plans/error-genre.md`'s Steps 2-3).
+
+**These are still partial correctness, not liveness.**  Like their
+`no_success_of_*` sources, they rule executions *out*; nothing here rules any
+execution *in*, and nothing says any of these calls is ever made.
+
+**These are at message-call altitude — one frame, not a transaction.**  `exec`
+is Jaune's single-frame semantics; nothing here says what a caller observes,
+or whether a surrounding transaction rolls back.  `~/plans/error-genre.md`'s
+Step 4 lands the frame-level composition that connects this weak form to the
+restoration family below. -/
+
+/-- **Wrong magic word ⇒ settles with some error.**  The weak form of
+`no_success_of_callback_never_magic`.  Read the quantifier as that theorem's
+docstring and this file's no-success-family banner do: "the premise is that
+**no** boundary the headline could produce answers with the magic word
+(respectively, with a full word at all).  It is *not* the stronger reading
+'if the receiver's code returns `X` then no success': `CallbackBoundary` pins
+the callback frame by equations — the message from the five arguments, `mid`
+from `child` — but it does not prove that frame *unique*." -/
+theorem settles_with_error_of_callback_never_magic {sevm : Sevm} {pre : Devm}
+    {receiver token amount : B256} {data : Bytes}
+    (h_code : some sevm.code.toList = Prog.compile fmint)
+    (h_sel : Sevm.selector sevm = flashLoanSelector)
+    (h_dec : Sevm.DecodesCallWithTail sevm flashLoanSelector
+      [receiver, token, amount] data)
+    (h_size : 196 + ceil32 data.length < 2 ^ 256)
+    (h_wf : Mem.Wf pre.memory) (h_fresh : Mem.Reads pre.memory [])
+    (h_never : ∀ (a : Adr) (sc mid : Devm),
+      CallbackBoundary sevm sevm.currentTarget a amount data sc mid →
+      Bytes.toB256 (mid.returnData.sliceD 0 32 0) ≠ erc3156Magic) :
+    ∃ e post, exec ⟨0, sevm, pre⟩ = .error (e, post) :=
+  exec_error_of_no_success
+    (fun _post exc => no_success_of_callback_never_magic h_code h_sel h_dec
+      h_size h_wf h_fresh h_never exc)
+
+/-- **Returndata shorter than a word ⇒ settles with some error.**  The weak
+form of `no_success_of_callback_never_returns_word`.  Same quantifier reading
+as its sibling above: "the premise is that **no** boundary the headline could
+produce answers with the magic word (respectively, with a full word at all).
+It is *not* the stronger reading 'if the receiver's code returns `X` then no
+success': `CallbackBoundary` pins the callback frame by equations — the
+message from the five arguments, `mid` from `child` — but it does not prove
+that frame *unique*." -/
+theorem settles_with_error_of_callback_never_returns_word {sevm : Sevm}
+    {pre : Devm} {receiver token amount : B256} {data : Bytes}
+    (h_code : some sevm.code.toList = Prog.compile fmint)
+    (h_sel : Sevm.selector sevm = flashLoanSelector)
+    (h_dec : Sevm.DecodesCallWithTail sevm flashLoanSelector
+      [receiver, token, amount] data)
+    (h_size : 196 + ceil32 data.length < 2 ^ 256)
+    (h_wf : Mem.Wf pre.memory) (h_fresh : Mem.Reads pre.memory [])
+    (h_short : ∀ (a : Adr) (sc mid : Devm),
+      CallbackBoundary sevm sevm.currentTarget a amount data sc mid →
+      mid.returnData.length < 32) :
+    ∃ e post, exec ⟨0, sevm, pre⟩ = .error (e, post) :=
+  exec_error_of_no_success
+    (fun _post exc => no_success_of_callback_never_returns_word h_code h_sel
+      h_dec h_size h_wf h_fresh h_short exc)
+
+/-- **`token ≠ self` ⇒ settles with some error.**  The weak form of
+`no_success_of_token_ne_self`; see that theorem's docstring for why the
+revert reason does not depend on `amount`. -/
+theorem settles_with_error_of_token_ne_self {sevm : Sevm} {pre : Devm}
+    {receiver token amount : B256} {data : Bytes}
+    (h_code : some sevm.code.toList = Prog.compile fmint)
+    (h_sel : Sevm.selector sevm = flashLoanSelector)
+    (h_dec : Sevm.DecodesCallWithTail sevm flashLoanSelector
+      [receiver, token, amount] data)
+    (h_ne : token ≠ sevm.currentTarget.toB256) :
+    ∃ e post, exec ⟨0, sevm, pre⟩ = .error (e, post) :=
+  exec_error_of_no_success
+    (fun _post exc => no_success_of_token_ne_self h_code h_sel h_dec h_ne exc)
+
+/-- **A `receiver` word that is not address-shaped ⇒ settles with some
+error.**  The weak form of `no_success_of_receiver_not_address`. -/
+theorem settles_with_error_of_receiver_not_address {sevm : Sevm} {pre : Devm}
+    {receiver token amount : B256} {data : Bytes}
+    (h_code : some sevm.code.toList = Prog.compile fmint)
+    (h_sel : Sevm.selector sevm = flashLoanSelector)
+    (h_dec : Sevm.DecodesCallWithTail sevm flashLoanSelector
+      [receiver, token, amount] data)
+    (h_dirty : ¬ ValidAdr receiver) :
+    ∃ e post, exec ⟨0, sevm, pre⟩ = .error (e, post) :=
+  exec_error_of_no_success
+    (fun _post exc =>
+      no_success_of_receiver_not_address h_code h_sel h_dec h_dirty exc)
+
+/-- **`amount` past `maxFlashLoan` ⇒ settles with some error.**  The weak form
+of `no_success_of_amount_over_maxFlashLoan`. -/
+theorem settles_with_error_of_amount_over_maxFlashLoan {sevm : Sevm}
+    {pre : Devm} {receiver token amount : B256} {data : Bytes}
+    (h_code : some sevm.code.toList = Prog.compile fmint)
+    (h_sel : Sevm.selector sevm = flashLoanSelector)
+    (h_dec : Sevm.DecodesCallWithTail sevm flashLoanSelector
+      [receiver, token, amount] data)
+    (h_over : ~~~ ((Devm.getStor pre sevm.currentTarget).get supplySlot) < amount) :
+    ∃ e post, exec ⟨0, sevm, pre⟩ = .error (e, post) :=
+  exec_error_of_no_success
+    (fun _post exc =>
+      no_success_of_amount_over_maxFlashLoan h_code h_sel h_dec h_over exc)
+
+/-- **An allowance below `amount` ⇒ settles with some error.**  The weak form
+of `no_success_of_allowance_below_amount`; the allowance is read at `mid`,
+after the callback, for the reason that theorem's docstring gives. -/
+theorem settles_with_error_of_allowance_below_amount {sevm : Sevm} {pre : Devm}
+    {receiver token amount : B256} {data : Bytes}
+    (h_code : some sevm.code.toList = Prog.compile fmint)
+    (h_sel : Sevm.selector sevm = flashLoanSelector)
+    (h_dec : Sevm.DecodesCallWithTail sevm flashLoanSelector
+      [receiver, token, amount] data)
+    (h_size : 196 + ceil32 data.length < 2 ^ 256)
+    (h_wf : Mem.Wf pre.memory) (h_fresh : Mem.Reads pre.memory [])
+    (h_low : ∀ (a : Adr) (sc mid : Devm),
+      CallbackBoundary sevm sevm.currentTarget a amount data sc mid →
+      (Devm.getStor mid sevm.currentTarget).get (repayKey a sevm.currentTarget)
+        < amount) :
+    ∃ e post, exec ⟨0, sevm, pre⟩ = .error (e, post) :=
+  exec_error_of_no_success
+    (fun _post exc => no_success_of_allowance_below_amount h_code h_sel h_dec
+      h_size h_wf h_fresh h_low exc)
+
+/-- **A receiver balance below `amount` ⇒ settles with some error.**  The weak
+form of `no_success_of_balance_below_amount`; the balance is read at `mid`,
+after the callback, for the reason that theorem's docstring gives. -/
+theorem settles_with_error_of_balance_below_amount {sevm : Sevm} {pre : Devm}
+    {receiver token amount : B256} {data : Bytes}
+    (h_code : some sevm.code.toList = Prog.compile fmint)
+    (h_sel : Sevm.selector sevm = flashLoanSelector)
+    (h_dec : Sevm.DecodesCallWithTail sevm flashLoanSelector
+      [receiver, token, amount] data)
+    (h_size : 196 + ceil32 data.length < 2 ^ 256)
+    (h_wf : Mem.Wf pre.memory) (h_fresh : Mem.Reads pre.memory [])
+    (h_low : ∀ (a : Adr) (sc mid : Devm),
+      CallbackBoundary sevm sevm.currentTarget a amount data sc mid →
+      (Devm.getStor mid sevm.currentTarget).get a.toB256 < amount) :
+    ∃ e post, exec ⟨0, sevm, pre⟩ = .error (e, post) :=
+  exec_error_of_no_success
+    (fun _post exc => no_success_of_balance_below_amount h_code h_sel h_dec
+      h_size h_wf h_fresh h_low exc)
+
 /-! ### Frame-level restoration under a no-success premise
 
 The family above rules executions *out*.  This one says what the frame's own

@@ -166,6 +166,13 @@ Blanc.Fmint.no_success_of_receiver_not_address|$STANDARD
 Blanc.Fmint.no_success_of_amount_over_maxFlashLoan|$STANDARD
 Blanc.Fmint.no_success_of_allowance_below_amount|$STANDARD
 Blanc.Fmint.no_success_of_balance_below_amount|$STANDARD
+Blanc.Fmint.settles_with_error_of_callback_never_magic|$STANDARD
+Blanc.Fmint.settles_with_error_of_callback_never_returns_word|$STANDARD
+Blanc.Fmint.settles_with_error_of_token_ne_self|$STANDARD
+Blanc.Fmint.settles_with_error_of_receiver_not_address|$STANDARD
+Blanc.Fmint.settles_with_error_of_amount_over_maxFlashLoan|$STANDARD
+Blanc.Fmint.settles_with_error_of_allowance_below_amount|$STANDARD
+Blanc.Fmint.settles_with_error_of_balance_below_amount|$STANDARD
 Blanc.wethCode_compile|$STANDARD
 Blanc.fmintCode_compile|$STANDARD
 Blanc.ProcessMessage.rollback_of_error|$STANDARD

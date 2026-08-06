@@ -31,6 +31,13 @@ import Blanc.WethGas
 #print axioms Blanc.Fmint.no_success_of_amount_over_maxFlashLoan
 #print axioms Blanc.Fmint.no_success_of_allowance_below_amount
 #print axioms Blanc.Fmint.no_success_of_balance_below_amount
+#print axioms Blanc.Fmint.settles_with_error_of_callback_never_magic
+#print axioms Blanc.Fmint.settles_with_error_of_callback_never_returns_word
+#print axioms Blanc.Fmint.settles_with_error_of_token_ne_self
+#print axioms Blanc.Fmint.settles_with_error_of_receiver_not_address
+#print axioms Blanc.Fmint.settles_with_error_of_amount_over_maxFlashLoan
+#print axioms Blanc.Fmint.settles_with_error_of_allowance_below_amount
+#print axioms Blanc.Fmint.settles_with_error_of_balance_below_amount
 #print axioms Blanc.wethCode_compile
 #print axioms Blanc.fmintCode_compile
 #print axioms Blanc.ProcessMessage.rollback_of_error
