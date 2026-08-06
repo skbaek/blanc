@@ -391,6 +391,32 @@
 #
 # NO PRE-EXISTING ROW MOVED. Blanc/Forward.lean is untouched by this checkpoint
 # and its 4.829 row stands.
+#
+# 2026-08-07. Step 3 of the same arc (checkpoint 3a) crosses the `CALL`.
+#
+# Blanc/FmintSettles.lean's row is re-set 11.849 -> 20.492 (median of 20.374,
+# 20.492, 21.045, three sequential `--list --no-build` runs, no language server
+# alive). The growth is the two `ExecSat`-form trunk walks -- the mint and call
+# scripts re-run over `Func.ExecSat`, because the fixed-outcome forms cannot
+# thread the settlement trichotomy's existential (a continuation-passing walk
+# universally quantifies its successor states, so no single outcome term can be
+# named before the case analysis on the callback's settle) -- plus the crossing
+# `flashLoan_execSat_flag` and the callback-failed leaf. The fixed-outcome
+# trunks are checkpoint 2b's landed surface and stay; the ~8.5 s of deliberate
+# duplication is recorded in the step report as a closure question for the
+# user: nothing downstream consumes the fixed-outcome forms today.
+#
+# Blanc/ForwardCall.lean's row is re-set 1.576 -> 1.743 (median of 1.707,
+# 1.743, 1.768) by the same checkpoint, which adds the `Func.ExecTo` /
+# `Func.ExecSat` layer (the derivation-level transport of a walk, with the
+# fatal-`CALL` terminal `Func.RunCompiledTo` cannot express), the five
+# `execSat_*` step siblings, `NonConsensus` and the non-consensus channel
+# lemmas, and the depth-limit `CALL` arm.
+#
+# Blanc/Forward.lean's 4.829 row again did NOT move: checkpoint 3a adds only
+# the ten-line `execSpec` row to the RelSpec table (the extension the plan
+# explicitly reserves for this arc), measured 8.654 (median of 8.569, 8.654,
+# 8.718) against the unchanged threshold 9.658.
 OK	1.241	Blanc.lean
 OK	1.257	Blanc/Basic.lean
 OK	2.454	Blanc/CommonCore.lean
@@ -414,5 +440,5 @@ OK	5.574	Blanc/FmintReverts.lean
 OK	5.383	Blanc/WethLive.lean
 OK	7.978	Blanc/WethGas.lean
 OK	7.098	Blanc/FmintGas.lean
-OK	1.576	Blanc/ForwardCall.lean
-OK	11.849	Blanc/FmintSettles.lean
+OK	1.743	Blanc/ForwardCall.lean
+OK	20.492	Blanc/FmintSettles.lean

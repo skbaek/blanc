@@ -1515,8 +1515,19 @@ def toSpec : RelSpec where
   branchSucc := `Blanc.Func.runCompiledTo_branch_succ
   call := `Blanc.Func.runCompiledTo_call'
 
+/-- `Blanc/ForwardCall.lean`'s `Func.ExecTo`, the pc-quantified transport of a
+walk into `Exec`-derivation evidence.  Same four structural rules, positional
+mirrors of `toSpec`'s, and raw `Name` literals for the same reason as there:
+the constants live downstream of this module. -/
+def execSpec : RelSpec where
+  head := `Blanc.Func.ExecTo
+  next := `Blanc.Func.execTo_next
+  branchZero := `Blanc.Func.execTo_branch_zero
+  branchSucc := `Blanc.Func.execTo_branch_succ
+  call := `Blanc.Func.execTo_call'
+
 /-- Every relation `func_run` knows how to build, matched on the goal's head. -/
-def relSpecs : List RelSpec := [okSpec, toSpec]
+def relSpecs : List RelSpec := [okSpec, toSpec, execSpec]
 
 /-- The spec for a goal head, or nothing. -/
 def specOf? (head : Name) : Option RelSpec := relSpecs.find? (·.head == head)
