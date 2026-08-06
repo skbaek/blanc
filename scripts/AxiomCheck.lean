@@ -94,3 +94,5 @@ import Blanc.WethGas
 #print axioms Blanc.Fmint.fmint_unknown_selector_reverts
 #print axioms Blanc.Fmint.tokenNeSelf_runCompiledTo
 #print axioms Blanc.Fmint.fmint_token_ne_self_reverts
+#print axioms Blanc.Fmint.rollback_revert_of_exec_revert
+#print axioms Blanc.Fmint.rollback_revert_of_token_ne_self

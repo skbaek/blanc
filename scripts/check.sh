@@ -138,6 +138,26 @@
 # ONE selector — the dispatch walk decides each fork by evaluating a concrete
 # comparison, so nothing here is quantified over selectors.
 #
+# The final two rows, added by `~/plans/error-genre.md` Step 4, lift that pair
+# one altitude: from the code frame's `exec` to the frame `processMessage` opens
+# for a `Msg`. `Blanc.Fmint.rollback_revert_of_exec_revert` is the mechanism,
+# contract-agnostic and stated once — a frame whose code reverts settles with
+# `error = some .revert`, hands back the code's own output, and has had its state
+# and transient storage rolled back to what the message entered with.
+# `Blanc.Fmint.rollback_revert_of_token_ne_self` instantiates it at fmint's
+# `token ≠ self` guard, so the frame's error kind is named and the returned data
+# is `[]`.
+#
+# These are NEW rows beside `Blanc.Fmint.rollback_of_token_ne_self`, not
+# strengthenings of it, and neither theorem subsumes the other: the older row
+# holds with NO gas premise, and the newer one cannot be stated without one, for
+# the reason given two paragraphs up. Both rows stand and neither was edited.
+# Every restriction on the older row carries over verbatim — the frame is `msg`'s
+# own and NEVER the transaction, `Xlot.Filled` and the precompile-mode exclusion
+# are still premises and still argued in the source, canonical calldata encoding
+# still binds (`FMINT_DEVIATIONS.md` row 21) — and so does the non-exhaustiveness
+# note: this condition reverts the frame, never only this condition does.
+#
 # Each row carries its OWN pinned expected axiom set (see ROWS below), and a
 # theorem's axiom closure must equal its row's set exactly, order-insensitive.
 # Any extra axiom fails — sorryAx, ofReduceBool/ofReduceNat, and also
@@ -267,7 +287,9 @@ Blanc.Fmint.fmintGas_le_max|$STANDARD
 Blanc.Fmint.unknownSelector_runCompiledTo|$STANDARD
 Blanc.Fmint.fmint_unknown_selector_reverts|$STANDARD
 Blanc.Fmint.tokenNeSelf_runCompiledTo|$STANDARD
-Blanc.Fmint.fmint_token_ne_self_reverts|$STANDARD"
+Blanc.Fmint.fmint_token_ne_self_reverts|$STANDARD
+Blanc.Fmint.rollback_revert_of_exec_revert|$STANDARD
+Blanc.Fmint.rollback_revert_of_token_ne_self|$STANDARD"
 # Secondary net only: the exact-set comparison below is the primary check;
 # this pattern catches forbidden names in output the per-theorem parse missed.
 FORBIDDEN='sorryAx|ofReduceBool|ofReduceNat|_native\.'

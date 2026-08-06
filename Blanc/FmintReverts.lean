@@ -296,5 +296,131 @@ theorem fmint_token_ne_self_reverts {sevm : Sevm} {pre : Devm}
     tokenNeSelf_runCompiledTo h_sel h_dec h_ne h_stack h_gas
   exact ⟨post, Prog.exec_of_runCompiledTo h_run h_code, h_out⟩
 
+/-! ## The frame: what fmint's caller is handed
+
+Everything above is at the `exec` altitude — one code frame's execution, from
+its entry machine to its outcome.  `Blanc/FlashSpec.lean`'s restoration family
+is one altitude up, at the frame `processMessage` opened for a `Msg`: it says
+that a frame which cannot succeed settles with `out.error.isSome` and comes
+back with the world it entered with.  This section composes the two.
+
+**What the composition buys.**  `out.error.isSome` becomes `out.error = some
+.revert`, and the empty revert data travels with it.  The mechanism is
+`executeCode.handleError`, which maps `.error ⟨.revert, evm⟩` to
+`.ok (evm.withError (some .revert))`, and `exec_iff_exec_eq`, which forces the
+slot's derivation to carry the total function's value — so the frame's slot
+cannot disagree with the walk above.
+
+**No determinism lemma is needed here, and that is not an accident.**  The
+boundary-quantified premises of `rollback_of_callback_never_magic` and its
+sibling exist because `CallbackBoundary`'s `parent` is unpinned, so the
+callback's frame is not a function of anything the statement holds.  This
+frame is fmint's *own*: `initSevm (msg.withBenv benv)` and
+`initDevm (msg.withBenv benv)` are functions of `msg` and `benv`, both of which
+are named in the premises, so a single `exec` equation determines the outcome
+and nothing has to be quantified over.
+
+**Still one frame, and still not a transaction.**  A failed inner call can be
+caught by its caller while the surrounding transaction succeeds; nothing here
+says the transaction reverted, and nothing here says anything about fmint's
+caller.  And as everywhere in this module, this is not exhaustiveness: it says
+this condition reverts the frame, never that only this condition does. -/
+
+/-- **A frame whose code reverts settles with `.revert`, and rolled back.**
+
+The strong-form counterpart of `Blanc/FlashSpec.lean`'s
+`rollback_of_no_success`, stated once over the abstract premise `h_exec` so
+that a target instantiates it in two lines.  Where that theorem takes "no
+successful `Exec` starts here" and concludes `out.error.isSome`, this one takes
+the total function's own equation at the frame's entry machine and concludes
+the error *kind*, plus the output the code chose.
+
+Its three structural premises are that theorem's and are there for its reasons:
+`h_fill`, because `ProcessMessage msg xl (.ok out)` leaves the slot otherwise
+unconstrained; `h_bt`, which names the post-transfer environment the entry
+machine is built from; and `h_prec`, because the precompile entry mode has no
+`Exec` at all and the conclusion is simply false in that branch.
+
+**Contract-agnostic.**  Nothing in it mentions fmint; it lives in fmint's
+module because its consumer does, exactly as `rollback_of_no_success` does. -/
+theorem rollback_revert_of_exec_revert {msg : Msg} {benv : Benv} {xl : Xlot}
+    {out post : Devm}
+    (h_pm : ProcessMessage msg xl (.ok out))
+    (h_fill : Xlot.Filled xl)
+    (h_bt : msg.benvAfterTransfer = .ok benv)
+    (h_prec : ∀ adr, msg.codeAddress = some adr →
+      ¬ (!msg.disablePrecompiles && decide (benv.stat.rules.isPrecomp adr)) = true)
+    (h_exec : exec ⟨0, initSevm (msg.withBenv benv), initDevm (msg.withBenv benv)⟩
+      = .error (.revert, post)) :
+    out.error = some .revert ∧ out.output = post.output ∧
+      out.state = msg.benv.state ∧
+      out.transientStorage = msg.tenv.transientStorage := by
+  obtain ⟨r0, hbody, hset⟩ := ProcessMessage.iff_body.mp h_pm
+  unfold FrameBody at hbody
+  rw [h_bt] at hbody
+  have h_r0 : r0 = .ok (post.withError (some .revert)) := by
+    rcases h_ca : (msg.withBenv benv).codeAddress with _ | adr
+    · obtain ⟨ex', h_xl, h_he⟩ := of_executeCode_noneCode h_ca hbody
+      subst h_xl
+      obtain ⟨exc⟩ := h_fill
+      rw [((exec_iff_exec_eq _ _ _ _).mp ⟨exc⟩).symm.trans h_exec] at h_he
+      exact h_he.symm
+    · rcases of_executeCode_someCode h_ca hbody with ⟨h_pre, -, -⟩ | ⟨-, ex', h_xl, h_he⟩
+      · exact absurd h_pre (h_prec adr h_ca)
+      · subst h_xl
+        obtain ⟨exc⟩ := h_fill
+        rw [((exec_iff_exec_eq _ _ _ _).mp ⟨exc⟩).symm.trans h_exec] at h_he
+        exact h_he.symm
+  subst h_r0
+  unfold processMessage.settle at hset
+  dsimp only [bind, Except.bind] at hset
+  rw [if_pos (show (post.withError (some SettledHalt.revert)).error.isSome = true
+    from rfl)] at hset
+  have h_out := Except.ok.inj hset
+  have h_err : out.error = some .revert := by rw [h_out]; rfl
+  exact ⟨h_err, by rw [h_out]; rfl,
+    ProcessMessage.rollback_of_error h_pm (by rw [h_err]; rfl)⟩
+
+/-- **`token ≠ self` ⇒ fmint's frame settled with `.revert`, returned nothing,
+and rolled back.**
+
+The arc's payoff: `Blanc/FlashSpec.lean`'s `rollback_of_token_ne_self` says
+this frame's `out.error.isSome`; this says *which* error, and that the frame
+returned no data.
+
+**It is a new theorem beside that one, not a strengthening of it.**
+`rollback_of_token_ne_self` holds with **no gas premise**, because "cannot
+succeed" is not a claim that the frame reaches anything, while this one cannot
+be stated without `h_gas` — so neither theorem subsumes the other and both
+rows stand.
+
+Premises are `rollback_of_token_ne_self`'s verbatim, read at the same entry
+machine, plus the gas premise.  `h_stack` does not appear because
+`initDevm`'s stack is `[]` by construction, which is a fact about frame entry
+rather than a premise about it.
+
+Frame, altitude and exhaustiveness: see this section's banner. -/
+theorem rollback_revert_of_token_ne_self {msg : Msg} {benv : Benv} {xl : Xlot}
+    {out : Devm} {receiver token amount : B256} {data : Bytes}
+    (h_pm : ProcessMessage msg xl (.ok out))
+    (h_fill : Xlot.Filled xl)
+    (h_bt : msg.benvAfterTransfer = .ok benv)
+    (h_prec : ∀ adr, msg.codeAddress = some adr →
+      ¬ (!msg.disablePrecompiles && decide (benv.stat.rules.isPrecomp adr)) = true)
+    (h_code : some (initSevm (msg.withBenv benv)).code.toList = Prog.compile fmint)
+    (h_sel : Sevm.selector (initSevm (msg.withBenv benv)) = flashLoanSelector)
+    (h_dec : Sevm.DecodesCallWithTail (initSevm (msg.withBenv benv))
+      flashLoanSelector [receiver, token, amount] data)
+    (h_ne : token ≠ (initSevm (msg.withBenv benv)).currentTarget.toB256)
+    (h_gas : tokenNeSelfGas ≤ (initDevm (msg.withBenv benv)).gasLeft) :
+    out.error = some .revert ∧ out.output = [] ∧
+      out.state = msg.benv.state ∧
+      out.transientStorage = msg.tenv.transientStorage := by
+  obtain ⟨post, h_exec, h_out⟩ :=
+    fmint_token_ne_self_reverts h_code h_sel h_dec h_ne rfl h_gas
+  obtain ⟨h_err, h_o, h_st, h_tr⟩ :=
+    rollback_revert_of_exec_revert h_pm h_fill h_bt h_prec h_exec
+  exact ⟨h_err, h_o.trans h_out, h_st, h_tr⟩
+
 end Fmint
 end Blanc
