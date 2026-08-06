@@ -353,6 +353,462 @@ lemma Rinst.runCore_mstore_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
   simp only [Devm.setMach_setMach, Devm.memory_setMach,
     Devm.gasLeft_setMach, Devm.stack_setMach]
 
+/-! ### The state-changing and call-adjacent opcodes
+
+Everything above this point is a read: a value comes off `sevm`, off the stack
+or out of storage, and only the machine moves.  The rules below are the ones a
+mutator needs — the copies, the hash, the log, the store — plus the two stack
+shufflers and `GAS`, which a `CALL` site needs in order to say what it
+forwarded.
+
+Three shapes recur and are worth naming once.
+
+* **A copy writes memory.**  `CALLDATACOPY` and `RETURNDATACOPY` end in
+  `Devm.memWrite`, which is `Ninst.runCompiled_mstore`'s successor shape with a
+  wider payload, so their rules carry the written image the same way.
+* **A read extends memory.**  `MLOAD`, `KECCAK256` and `LOG` end in
+  `Devm.memRead`, whose second component is the *extended* memory: the window
+  the charge paid for is in the image afterwards even when nothing was written.
+  Their successors therefore name `(devm.memory.read i sz).2`, not
+  `devm.memory`.
+* **A value the tactic must not compute.**  `KECCAK256`'s hash is handed back
+  as a value obligation exactly as `applyBinary`'s is; nothing here evaluates
+  `Bytes.keccak`. -/
+
+/-- `POP`, evaluated forward.  The charge comes *after* the pop, so the gas
+premise is on the pre-state and the successor is the popped stack. -/
+lemma Rinst.runCore_pop_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
+    {x : B256} {s : List B256} (h_stk : devm.stack = x :: s)
+    (h_gas : gBase ≤ devm.gasLeft) :
+    Rinst.runCore pc devm sevm .pop =
+      .ok (devm.setMach ⟨s, devm.memory, devm.gasLeft - gBase⟩) := by
+  show ((devm.pop <&> Prod.snd) >>= chargeGas gBase) = _
+  rw [Devm.pop_eq_ok h_stk]
+  show chargeGas gBase (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) = _
+  rw [chargeGas_eq_ok
+    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) h_gas]
+  rfl
+
+/-- `SWAP n`, evaluated forward.  The charge comes *first*, and `List.swap` is
+then applied to the charged stack, which is the pre-state's; the permuted stack
+is handed in rather than computed, because `List.swap` on a literal stack is a
+`rfl` at the call site and an unfolded `Option` bind here. -/
+lemma Rinst.runCore_swap_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
+    {n : Fin 16} {S : List B256} (h_swap : List.swap devm.stack n.val = some S)
+    (h_gas : gVerylow ≤ devm.gasLeft) :
+    Rinst.runCore pc devm sevm (.swap n) =
+      .ok (devm.setMach ⟨S, devm.memory, devm.gasLeft - gVerylow⟩) := by
+  show (chargeGas gVerylow devm >>= fun d =>
+    match List.swap d.stack n.val with
+    | none => .error ⟨.halt (.stackUnderflow .none), d⟩
+    | some stack => .ok (d.withStack stack)) = _
+  rw [chargeGas_eq_ok h_gas]
+  simp only [bind, Except.bind, Devm.stack_setMach, h_swap]
+  rfl
+
+/-- `GAS`, evaluated forward.  The word pushed is the account *after* the
+`gBase` charge, which is why a frame that wants to say what it forwarded has to
+know its own gas exactly at this instruction. -/
+lemma Rinst.runCore_gas_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
+    (h_gas : gBase ≤ devm.gasLeft) (h_room : devm.stack.length < 1024) :
+    Rinst.runCore pc devm sevm .gas =
+      .ok (devm.setMach ⟨(devm.gasLeft - gBase).toB256 :: devm.stack,
+        devm.memory, devm.gasLeft - gBase⟩) := by
+  show (chargeGas gBase devm >>= fun d => d.push d.gasLeft.toB256) = _
+  rw [chargeGas_eq_ok h_gas]
+  show Devm.push
+    (devm.setMach ⟨devm.stack, devm.memory, devm.gasLeft - gBase⟩).gasLeft.toB256
+    (devm.setMach ⟨devm.stack, devm.memory, devm.gasLeft - gBase⟩) = _
+  rw [Devm.push_eq_ok
+    (devm := devm.setMach ⟨devm.stack, devm.memory, devm.gasLeft - gBase⟩)
+    (by rw [Devm.stack_setMach]; exact h_room)]
+  rfl
+
+/-- `MLOAD`, evaluated forward.  The successor's memory is the read's, not the
+pre-state's: `Mem.read` returns the window-extended image, and a target that
+already covers the window gets its own memory back. -/
+lemma Rinst.runCore_mload_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
+    {i : B256} {s : List B256} (h_stk : devm.stack = i :: s)
+    (h_gas : gVerylow + devm.extCost [⟨i.toNat, 32⟩] ≤ devm.gasLeft)
+    (h_room : s.length < 1024) :
+    Rinst.runCore pc devm sevm .mload =
+      .ok (devm.setMach
+        ⟨Bytes.toB256 (devm.memory.read i.toNat 32).1 :: s,
+          (devm.memory.read i.toNat 32).2,
+          devm.gasLeft - (gVerylow + devm.extCost [⟨i.toNat, 32⟩])⟩) := by
+  show (devm.popToNat >>= fun p =>
+    chargeGas (gVerylow + p.2.extCost [⟨p.1, 32⟩]) p.2 >>= fun d =>
+      (d.memRead p.1 32).2.push (Bytes.toB256 (d.memRead p.1 32).1)) = _
+  rw [Devm.popToNat_eq_ok h_stk]
+  simp only [bind, Except.bind]
+  have h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+      [⟨i.toNat, 32⟩] = devm.extCost [⟨i.toNat, 32⟩] := rfl
+  rw [h_ext, chargeGas_eq_ok
+    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) h_gas]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach,
+    Devm.stack_setMach]
+  rw [Devm.push_eq_ok
+    (devm := (devm.setMach ⟨s, devm.memory,
+      devm.gasLeft - (gVerylow + devm.extCost [⟨i.toNat, 32⟩])⟩).memRead
+        i.toNat 32 |>.2) h_room]
+  rfl
+
+/-- `KECCAK256`, evaluated forward.  The hash is *not* computed here: it stays
+`Bytes.keccak` applied to the read window, which the caller either names with a
+value obligation or carries symbolically. -/
+lemma Rinst.runCore_kec_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
+    {i sz : B256} {s : List B256} (h_stk : devm.stack = i :: sz :: s)
+    (h_gas : gKeccak256 + gasKeccak256Word * ceilDiv sz.toNat 32
+      + devm.extCost [⟨i.toNat, sz.toNat⟩] ≤ devm.gasLeft)
+    (h_room : s.length < 1024) :
+    Rinst.runCore pc devm sevm .kec =
+      .ok (devm.setMach
+        ⟨Bytes.keccak (devm.memory.read i.toNat sz.toNat).1 :: s,
+          (devm.memory.read i.toNat sz.toNat).2,
+          devm.gasLeft - (gKeccak256 + gasKeccak256Word * ceilDiv sz.toNat 32
+            + devm.extCost [⟨i.toNat, sz.toNat⟩])⟩) := by
+  show (devm.popToNat >>= fun p => p.2.popToNat >>= fun q =>
+    chargeGas (gKeccak256 + gasKeccak256Word * ceilDiv q.1 32
+      + q.2.extCost [⟨p.1, q.1⟩]) q.2 >>= fun d =>
+        (d.memRead p.1 q.1).2.push (Bytes.keccak (d.memRead p.1 q.1).1)) = _
+  rw [Devm.popToNat_eq_ok h_stk]
+  simp only [bind, Except.bind]
+  rw [Devm.popToNat_eq_ok
+    (devm := devm.setMach ⟨sz :: s, devm.memory, devm.gasLeft⟩) rfl]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach,
+    Devm.gasLeft_setMach]
+  have h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+      [⟨i.toNat, sz.toNat⟩] = devm.extCost [⟨i.toNat, sz.toNat⟩] := rfl
+  rw [h_ext, chargeGas_eq_ok
+    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) h_gas]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach,
+    Devm.stack_setMach]
+  rw [Devm.push_eq_ok
+    (devm := (devm.setMach ⟨s, devm.memory,
+      devm.gasLeft - (gKeccak256 + gasKeccak256Word * ceilDiv sz.toNat 32
+        + devm.extCost [⟨i.toNat, sz.toNat⟩])⟩).memRead
+          i.toNat sz.toNat |>.2) h_room]
+  rfl
+
+/-- `CALLDATACOPY`, evaluated forward.  The copied bytes are
+`sevm.data.sliceD`, the same expression `Sevm.dataWord` reads a single word
+with, so nothing here models calldata a second time. -/
+lemma Rinst.runCore_calldatacopy_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
+    {di si sz : B256} {s : List B256}
+    (h_stk : devm.stack = di :: si :: sz :: s)
+    (h_gas : gVerylow + gasCopy * ceilDiv sz.toNat 32
+      + devm.extCost [⟨di.toNat, sz.toNat⟩] ≤ devm.gasLeft) :
+    Rinst.runCore pc devm sevm .calldatacopy =
+      .ok (devm.setMach
+        ⟨s, devm.memory.write di.toNat (sevm.data.sliceD si.toNat sz.toNat 0),
+          devm.gasLeft - (gVerylow + gasCopy * ceilDiv sz.toNat 32
+            + devm.extCost [⟨di.toNat, sz.toNat⟩])⟩) := by
+  show (devm.popToNat >>= fun p => p.2.popToNat >>= fun q => q.2.popToNat >>=
+    fun r => chargeGas (gVerylow + gasCopy * ceilDiv r.1 32
+      + r.2.extCost [⟨p.1, r.1⟩]) r.2 >>= fun d =>
+        Except.ok (d.memWrite p.1 (sevm.data.sliceD q.1 r.1 0))) = _
+  rw [Devm.popToNat_eq_ok h_stk]
+  simp only [bind, Except.bind]
+  rw [Devm.popToNat_eq_ok
+    (devm := devm.setMach ⟨si :: sz :: s, devm.memory, devm.gasLeft⟩) rfl]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach,
+    Devm.gasLeft_setMach]
+  rw [Devm.popToNat_eq_ok
+    (devm := devm.setMach ⟨sz :: s, devm.memory, devm.gasLeft⟩) rfl]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach,
+    Devm.gasLeft_setMach]
+  have h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+      [⟨di.toNat, sz.toNat⟩] = devm.extCost [⟨di.toNat, sz.toNat⟩] := rfl
+  rw [h_ext, chargeGas_eq_ok
+    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) h_gas]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach,
+    Devm.stack_setMach]
+  rfl
+
+/-- `RETURNDATACOPY`, evaluated forward.  The out-of-bounds guard is a premise,
+not a case split: a frame that copies a fixed window out of a child's return
+data has already established the length it needs. -/
+lemma Rinst.runCore_retdatacopy_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
+    {di ri sz : B256} {s : List B256}
+    (h_stk : devm.stack = di :: ri :: sz :: s)
+    (h_gas : gVerylow + gReturnDataCopy * ceilDiv sz.toNat 32
+      + devm.extCost [⟨di.toNat, sz.toNat⟩] ≤ devm.gasLeft)
+    (h_bound : ri.toNat + sz.toNat ≤ devm.returnData.length) :
+    Rinst.runCore pc devm sevm .retdatacopy =
+      .ok (devm.setMach
+        ⟨s, devm.memory.write di.toNat
+              (devm.returnData.sliceD ri.toNat sz.toNat 0),
+          devm.gasLeft - (gVerylow + gReturnDataCopy * ceilDiv sz.toNat 32
+            + devm.extCost [⟨di.toNat, sz.toNat⟩])⟩) := by
+  show (devm.popToNat >>= fun p => p.2.popToNat >>= fun q => q.2.popToNat >>=
+    fun r => chargeGas (gVerylow + gReturnDataCopy * ceilDiv r.1 32
+      + r.2.extCost [⟨p.1, r.1⟩]) r.2 >>= fun d =>
+        if d.returnData.length < q.1 + r.1 then
+          .error ⟨.halt (.outOfBoundsRead .none), d⟩
+        else Except.ok (d.memWrite p.1 (d.returnData.sliceD q.1 r.1 0))) = _
+  rw [Devm.popToNat_eq_ok h_stk]
+  simp only [bind, Except.bind]
+  rw [Devm.popToNat_eq_ok
+    (devm := devm.setMach ⟨ri :: sz :: s, devm.memory, devm.gasLeft⟩) rfl]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach,
+    Devm.gasLeft_setMach]
+  rw [Devm.popToNat_eq_ok
+    (devm := devm.setMach ⟨sz :: s, devm.memory, devm.gasLeft⟩) rfl]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach,
+    Devm.gasLeft_setMach]
+  have h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+      [⟨di.toNat, sz.toNat⟩] = devm.extCost [⟨di.toNat, sz.toNat⟩] := rfl
+  rw [h_ext, chargeGas_eq_ok
+    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) h_gas]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach,
+    Devm.stack_setMach]
+  rw [if_neg (by
+    show ¬ (Devm.returnData _ ).length < ri.toNat + sz.toNat
+    show ¬ devm.returnData.length < ri.toNat + sz.toNat
+    omega)]
+  rfl
+
+/-- `Devm.popN`, evaluated forward: a stack that starts with `xs` hands them
+back in stack order, with the rest below.  `LOG n` is the only instruction that
+uses it, and it uses it for the topics. -/
+lemma Devm.popN_eq_ok {xs : List B256} : ∀ {s : List B256} {devm : Devm},
+    devm.stack = xs ++ s →
+    devm.popN xs.length =
+      .ok ⟨xs, devm.setMach ⟨s, devm.memory, devm.gasLeft⟩⟩ := by
+  induction xs with
+  | nil =>
+    intro s devm h
+    show Devm.popN devm 0 = _
+    rw [Devm.popN_def]
+    simp only [List.nil_append] at h
+    rw [← h]
+    rfl
+  | cons x xs ih =>
+    intro s devm h
+    show Devm.popN devm (xs.length + 1) = _
+    rw [Devm.popN_def]
+    simp only []
+    rw [Devm.pop_eq_ok (x := x) (s := xs ++ s) h]
+    simp only [bind, Except.bind]
+    rw [ih (s := s)
+      (devm := devm.setMach ⟨xs ++ s, devm.memory, devm.gasLeft⟩) rfl]
+    simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
+
+/-- `LOG n`, evaluated forward.  The topics come off the stack below the window
+operands, the data is the read window, and the entry is appended to
+`devm.logs` — so unlike every rule above it, the successor is not a `setMach`
+over `devm` but a `setMach` under an `addLog`.
+
+`h_static` is what a `LOG` needs and a read does not: a static frame cannot
+emit one at all. -/
+lemma Rinst.runCore_log_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
+    {n : Fin 5} {i sz : B256} {topics s : List B256}
+    (h_stk : devm.stack = i :: sz :: (topics ++ s))
+    (h_len : topics.length = n.val) (h_static : sevm.isStatic = false)
+    (h_gas : gLog + gLogdata * sz.toNat + gLogtopic * n.val
+      + devm.extCost [⟨i.toNat, sz.toNat⟩] ≤ devm.gasLeft) :
+    Rinst.runCore pc devm sevm (.log n) =
+      .ok ((devm.setMach ⟨s, (devm.memory.read i.toNat sz.toNat).2,
+          devm.gasLeft - (gLog + gLogdata * sz.toNat + gLogtopic * n.val
+            + devm.extCost [⟨i.toNat, sz.toNat⟩])⟩).addLog
+        ⟨sevm.currentTarget, topics,
+          (devm.memory.read i.toNat sz.toNat).1⟩) := by
+  show (devm.popToNat >>= fun p => p.2.popToNat >>= fun q =>
+    q.2.popN n.val >>= fun t =>
+      chargeGas (gLog + gLogdata * q.1 + gLogtopic * n.val
+        + t.2.extCost [⟨p.1, q.1⟩]) t.2 >>= fun d =>
+          assertDynamic sevm d >>= fun _ =>
+            Except.ok ((d.memRead p.1 q.1).2.addLog
+              ⟨sevm.currentTarget, t.1, (d.memRead p.1 q.1).1⟩)) = _
+  rw [Devm.popToNat_eq_ok h_stk]
+  simp only [bind, Except.bind]
+  rw [Devm.popToNat_eq_ok
+    (devm := devm.setMach ⟨sz :: (topics ++ s), devm.memory, devm.gasLeft⟩) rfl]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach,
+    Devm.gasLeft_setMach]
+  rw [← h_len, Devm.popN_eq_ok (xs := topics) (s := s)
+    (devm := devm.setMach ⟨topics ++ s, devm.memory, devm.gasLeft⟩) rfl]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach,
+    Devm.gasLeft_setMach]
+  have h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+      [⟨i.toNat, sz.toNat⟩] = devm.extCost [⟨i.toNat, sz.toNat⟩] := rfl
+  rw [h_ext, h_len, chargeGas_eq_ok
+    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) h_gas]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach,
+    Devm.stack_setMach, assertDynamic, Except.assert, h_static]
+  rfl
+
+/-! ### `SSTORE`
+
+The one instruction whose charge is not a function of the opcode: EIP-2200
+prices a store by the *original*, *current* and *new* values together, and by
+whether the key is already warm.  **A6** of `~/plans/adversarial-progress.md`
+fixes how that enters a forward rule: the warmth splits the rule, exactly as it
+splits `SLOAD`'s and for the same reason — the cold arm moves the base state and
+the warm arm does not — and the value-case arithmetic is a caller-supplied
+equation on `sstoreValueCost`, so the trunk (which charges exactly) and a
+continuation (which bounds) apply the same rule.
+
+`Rinst.runCore`'s `.sstore` arm also carries two guards no read has: the
+EIP-2200 sentry `gCallStipend < gasLeft`, checked *before* any charge, and the
+static-context check.  Both are premises. -/
+
+/-- The value-case charge of an `SSTORE`, above whatever the key's warmth adds.
+Jaune computes it inline, distributed over the branches; naming it is what makes
+the charge a caller-supplied equation rather than a case split inside the
+tactic. -/
+def sstoreValueCost (orig cur new : B256) : Nat :=
+  if orig = cur ∧ cur ≠ new then
+    if orig = 0 then gasStorageSet else gasStorageUpdate - gasColdSload
+  else gasWarmAccess
+
+/-- Jaune's distributed form, collected: whatever the key's warmth contributes,
+the value cases add `sstoreValueCost` on top of it. -/
+lemma sstoreValueCost_add {a : Nat} {orig cur new : B256} :
+    (if orig = cur ∧ cur ≠ new then
+      (if orig = 0 then a + gasStorageSet
+        else a + (gasStorageUpdate - gasColdSload))
+      else a + gasWarmAccess) = a + sstoreValueCost orig cur new := by
+  rw [sstoreValueCost]; split_ifs <;> rfl
+
+/-- `SSTORE` on a cold key, evaluated forward.  The key joins the accessed set —
+so, as with `SLOAD`, the base state moves once here — and the charge is
+`gasColdSload` plus the value case. -/
+lemma Rinst.runCore_sstore_cold_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
+    {k v : B256} {s : List B256} {c : Nat} {rc : Int}
+    (h_stk : devm.stack = k :: v :: s)
+    (h_cold : ⟨sevm.currentTarget, k⟩ ∉ devm.accessedStorageKeys)
+    (h_sentry : gCallStipend < devm.gasLeft) (h_static : sevm.isStatic = false)
+    (h_cost : sstoreValueCost (getOrigStorVal sevm sevm.currentTarget k)
+      (devm.getStorVal sevm.currentTarget k) v = c)
+    (h_refund : sstoreNewRefundCounter v
+      (getOrigStorVal sevm sevm.currentTarget k)
+      (devm.getStorVal sevm.currentTarget k) devm.refundCounter = rc)
+    (h_gas : gasColdSload + c ≤ devm.gasLeft) :
+    Rinst.runCore pc devm sevm .sstore =
+      .ok ((((addAccessedStorageKey devm sevm.currentTarget k).withRefundCounter
+        rc).setMach
+          ⟨s, devm.memory, devm.gasLeft - (gasColdSload + c)⟩).setStorVal
+            sevm.currentTarget k v) := by
+  subst h_cost; subst h_refund
+  rw [show Rinst.runCore pc devm sevm .sstore = (do
+      let ⟨key, d⟩ ← devm.pop
+      let ⟨new_value, d⟩ ← d.pop
+      .assert (gCallStipend < d.gasLeft) ⟨.halt (.outOfGas .none), d⟩
+      let ct := sevm.currentTarget
+      let original_value := getOrigStorVal sevm ct key
+      let current_value := d.getStorVal ct key
+      let ⟨d, gasCost2⟩ ← Except.ok <|
+        if ⟨ct, key⟩ ∉ d.accessedStorageKeys then
+          ( ⟨addAccessedStorageKey d ct key, gasColdSload⟩ : Devm × Nat )
+        else ⟨d, 0⟩
+      let gasCost3 ← Except.ok <|
+        if original_value = current_value ∧ current_value ≠ new_value then
+          if original_value = 0 then gasCost2 + gasStorageSet
+          else gasCost2 + (gasStorageUpdate - gasColdSload)
+        else gasCost2 + gasWarmAccess
+      let d ← Except.ok <| d.withRefundCounter
+        (sstoreNewRefundCounter new_value original_value current_value
+          d.refundCounter)
+      let d ← chargeGas gasCost3 d
+      assertDynamic sevm d
+      .ok (d.setStorVal sevm.currentTarget key new_value)) from rfl]
+  rw [Devm.pop_eq_ok h_stk]
+  simp only [bind, Except.bind]
+  rw [Devm.pop_eq_ok
+    (devm := devm.setMach ⟨v :: s, devm.memory, devm.gasLeft⟩) rfl]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach,
+    Devm.gasLeft_setMach]
+  rw [Except.assert, if_pos (show gCallStipend < devm.gasLeft from h_sentry)]
+  simp only []
+  rw [if_pos (show ⟨sevm.currentTarget, k⟩ ∉
+    (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedStorageKeys
+    from h_cold)]
+  simp only [sstoreValueCost_add]
+  -- The popped state's world projections are the pre-state's; naming them so
+  -- lets `chargeGas_eq_ok` match syntactically rather than only up to `rfl`.
+  rw [show (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).getStorVal
+        sevm.currentTarget k = devm.getStorVal sevm.currentTarget k from rfl,
+    show (addAccessedStorageKey (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+        sevm.currentTarget k).refundCounter = devm.refundCounter from rfl]
+  rw [chargeGas_eq_ok
+    (devm := ((addAccessedStorageKey
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) sevm.currentTarget
+        k).withRefundCounter
+      (sstoreNewRefundCounter v (getOrigStorVal sevm sevm.currentTarget k)
+        (devm.getStorVal sevm.currentTarget k) devm.refundCounter)))
+    (by
+      show gasColdSload + sstoreValueCost _ _ _ ≤ devm.gasLeft
+      exact h_gas)]
+  simp only [assertDynamic, Except.assert, h_static]
+  rfl
+
+/-- `SSTORE` on a warm key.  Nothing joins the accessed set, so the base state
+does not move and the charge is the value case alone. -/
+lemma Rinst.runCore_sstore_warm_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
+    {k v : B256} {s : List B256} {c : Nat} {rc : Int}
+    (h_stk : devm.stack = k :: v :: s)
+    (h_warm : ⟨sevm.currentTarget, k⟩ ∈ devm.accessedStorageKeys)
+    (h_sentry : gCallStipend < devm.gasLeft) (h_static : sevm.isStatic = false)
+    (h_cost : sstoreValueCost (getOrigStorVal sevm sevm.currentTarget k)
+      (devm.getStorVal sevm.currentTarget k) v = c)
+    (h_refund : sstoreNewRefundCounter v
+      (getOrigStorVal sevm sevm.currentTarget k)
+      (devm.getStorVal sevm.currentTarget k) devm.refundCounter = rc)
+    (h_gas : c ≤ devm.gasLeft) :
+    Rinst.runCore pc devm sevm .sstore =
+      .ok (((devm.withRefundCounter rc).setMach
+        ⟨s, devm.memory, devm.gasLeft - c⟩).setStorVal
+          sevm.currentTarget k v) := by
+  subst h_cost; subst h_refund
+  rw [show Rinst.runCore pc devm sevm .sstore = (do
+      let ⟨key, d⟩ ← devm.pop
+      let ⟨new_value, d⟩ ← d.pop
+      .assert (gCallStipend < d.gasLeft) ⟨.halt (.outOfGas .none), d⟩
+      let ct := sevm.currentTarget
+      let original_value := getOrigStorVal sevm ct key
+      let current_value := d.getStorVal ct key
+      let ⟨d, gasCost2⟩ ← Except.ok <|
+        if ⟨ct, key⟩ ∉ d.accessedStorageKeys then
+          ( ⟨addAccessedStorageKey d ct key, gasColdSload⟩ : Devm × Nat )
+        else ⟨d, 0⟩
+      let gasCost3 ← Except.ok <|
+        if original_value = current_value ∧ current_value ≠ new_value then
+          if original_value = 0 then gasCost2 + gasStorageSet
+          else gasCost2 + (gasStorageUpdate - gasColdSload)
+        else gasCost2 + gasWarmAccess
+      let d ← Except.ok <| d.withRefundCounter
+        (sstoreNewRefundCounter new_value original_value current_value
+          d.refundCounter)
+      let d ← chargeGas gasCost3 d
+      assertDynamic sevm d
+      .ok (d.setStorVal sevm.currentTarget key new_value)) from rfl]
+  rw [Devm.pop_eq_ok h_stk]
+  simp only [bind, Except.bind]
+  rw [Devm.pop_eq_ok
+    (devm := devm.setMach ⟨v :: s, devm.memory, devm.gasLeft⟩) rfl]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach,
+    Devm.gasLeft_setMach]
+  rw [Except.assert, if_pos (show gCallStipend < devm.gasLeft from h_sentry)]
+  simp only []
+  rw [if_neg (show ¬ (⟨sevm.currentTarget, k⟩ ∉
+    (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedStorageKeys)
+    from fun h => h h_warm)]
+  simp only [Nat.zero_add]
+  rw [show (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).getStorVal
+        sevm.currentTarget k = devm.getStorVal sevm.currentTarget k from rfl,
+    show (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).refundCounter
+        = devm.refundCounter from rfl]
+  rw [chargeGas_eq_ok
+    (devm := (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).withRefundCounter
+      (sstoreNewRefundCounter v (getOrigStorVal sevm sevm.currentTarget k)
+        (devm.getStorVal sevm.currentTarget k) devm.refundCounter))
+    (by
+      show sstoreValueCost _ _ _ ≤ devm.gasLeft
+      exact h_gas)]
+  simp only [assertDynamic, Except.assert, h_static]
+  rfl
+
 /-! ## The one-word memory window
 
 `MSTORE` a word at offset 0 and `RETURN` it is how every Blanc view answers, and
@@ -594,6 +1050,204 @@ lemma Ninst.runCompiled_mstore_of {sevm : Sevm} {devm : Devm} {i v : B256}
     Ninst.RunCompiled sevm devm (.reg .mstore) (devm.setMach ⟨s, M, G⟩) := by
   subst h_ext
   exact Ninst.runCompiled_mstore h_stk h_gas h_write
+
+/-! ### The mutators and the stack shufflers, in the step interface
+
+Four of the rules below charge for a memory window, and every one of them takes
+its **whole** charge as a single named `Nat` — `h_cost` — rather than naming the
+expansion term the way `Ninst.runCompiled_mstore_of` does.  `MSTORE`'s charge is
+`gVerylow` plus one expansion; a copy's or a hash's is a fee-schedule constant
+plus a per-word term plus an expansion, and splitting a three-term sum across
+three premises would give the walk three obligations where the caller has one
+number.  One hint per instruction, one obligation per instruction.
+
+Each successor is written with the `setMach` **outermost**, including the two
+whose base moves (`LOG`'s `addLog`, `SSTORE`'s accessed-set, refund-counter and
+storage writes).  That is not cosmetic either: the walk reads the state it is
+standing on with `parseState`, which recognises `base.setMach ⟨_, _, _⟩` and
+nothing else, so a successor written the other way round would break the chain
+at the next instruction.  The two orders are definitionally equal — `setMach`
+touches `mach`, the others touch `meta` or `world`. -/
+
+/-- `POP`. -/
+lemma Ninst.runCompiled_pop {sevm : Sevm} {devm : Devm} {x : B256}
+    {s : List B256} {G : Nat} (h_stk : devm.stack = x :: s)
+    (h_gas : devm.gasLeft = G + gBase) :
+    Ninst.RunCompiled sevm devm (.reg .pop)
+      (devm.setMach ⟨s, devm.memory, G⟩) := by
+  have h_eq : devm.gasLeft - gBase = G := by omega
+  rw [← h_eq]
+  exact Ninst.runCompiled_reg (by rintro ⟨⟩)
+    (Rinst.runCore_pop_eq_ok h_stk (by omega))
+
+/-- `SWAP n`.  The permuted stack is named by the caller; on a literal stack
+`h_swap` is a `rfl`. -/
+lemma Ninst.runCompiled_swap {sevm : Sevm} {devm : Devm} {n : Fin 16}
+    {S : List B256} {G : Nat} (h_swap : List.swap devm.stack n.val = some S)
+    (h_gas : devm.gasLeft = G + gVerylow) :
+    Ninst.RunCompiled sevm devm (.reg (.swap n))
+      (devm.setMach ⟨S, devm.memory, G⟩) := by
+  have h_eq : devm.gasLeft - gVerylow = G := by omega
+  rw [← h_eq]
+  exact Ninst.runCompiled_reg (by rintro ⟨⟩)
+    (Rinst.runCore_swap_eq_ok h_swap (by omega))
+
+/-- `GAS`.  **No value parameter**: the word pushed is the successor's own gas
+account, so in the additive form it is literally `G`.  That is what makes this
+instruction the one a `CALL` site can reason about — the frame learns its own
+remaining gas as a name it already has. -/
+lemma Ninst.runCompiled_gas {sevm : Sevm} {devm : Devm} {G : Nat}
+    (h_gas : devm.gasLeft = G + gBase) (h_room : devm.stack.length < 1024) :
+    Ninst.RunCompiled sevm devm (.reg .gas)
+      (devm.setMach ⟨G.toB256 :: devm.stack, devm.memory, G⟩) := by
+  have h_eq : devm.gasLeft - gBase = G := by omega
+  rw [← h_eq]
+  exact Ninst.runCompiled_reg (by rintro ⟨⟩)
+    (Rinst.runCore_gas_eq_ok (by omega) h_room)
+
+/-- `MLOAD`.  The read's own two components are named: `v` is the word and `M`
+the window-extended image. -/
+lemma Ninst.runCompiled_mload_of {sevm : Sevm} {devm : Devm} {i v : B256}
+    {s : List B256} {c G : Nat} {M : Mem} (h_stk : devm.stack = i :: s)
+    (h_cost : gVerylow + devm.extCost [⟨i.toNat, 32⟩] = c)
+    (h_val : Bytes.toB256 (devm.memory.read i.toNat 32).1 = v)
+    (h_mem : (devm.memory.read i.toNat 32).2 = M)
+    (h_gas : devm.gasLeft = G + c) (h_room : s.length < 1024) :
+    Ninst.RunCompiled sevm devm (.reg .mload)
+      (devm.setMach ⟨v :: s, M, G⟩) := by
+  subst h_cost; subst h_val; subst h_mem
+  have h_eq :
+      devm.gasLeft - (gVerylow + devm.extCost [⟨i.toNat, 32⟩]) = G := by omega
+  rw [← h_eq]
+  exact Ninst.runCompiled_reg (by rintro ⟨⟩)
+    (Rinst.runCore_mload_eq_ok h_stk (by omega) h_room)
+
+/-- `KECCAK256`.  `h_val` is the hash: it is the caller's to justify, and
+nothing in this layer evaluates `Bytes.keccak`. -/
+lemma Ninst.runCompiled_kec_of {sevm : Sevm} {devm : Devm} {i sz v : B256}
+    {s : List B256} {c G : Nat} {M : Mem} (h_stk : devm.stack = i :: sz :: s)
+    (h_cost : gKeccak256 + gasKeccak256Word * ceilDiv sz.toNat 32
+      + devm.extCost [⟨i.toNat, sz.toNat⟩] = c)
+    (h_val : Bytes.keccak (devm.memory.read i.toNat sz.toNat).1 = v)
+    (h_mem : (devm.memory.read i.toNat sz.toNat).2 = M)
+    (h_gas : devm.gasLeft = G + c) (h_room : s.length < 1024) :
+    Ninst.RunCompiled sevm devm (.reg .kec)
+      (devm.setMach ⟨v :: s, M, G⟩) := by
+  subst h_cost; subst h_val; subst h_mem
+  have h_eq : devm.gasLeft - (gKeccak256 + gasKeccak256Word * ceilDiv sz.toNat 32
+      + devm.extCost [⟨i.toNat, sz.toNat⟩]) = G := by omega
+  rw [← h_eq]
+  exact Ninst.runCompiled_reg (by rintro ⟨⟩)
+    (Rinst.runCore_kec_eq_ok h_stk (by omega) h_room)
+
+/-- `CALLDATACOPY`. -/
+lemma Ninst.runCompiled_calldatacopy_of {sevm : Sevm} {devm : Devm}
+    {di si sz : B256} {s : List B256} {c G : Nat} {M : Mem}
+    (h_stk : devm.stack = di :: si :: sz :: s)
+    (h_cost : gVerylow + gasCopy * ceilDiv sz.toNat 32
+      + devm.extCost [⟨di.toNat, sz.toNat⟩] = c)
+    (h_write : devm.memory.write di.toNat
+      (sevm.data.sliceD si.toNat sz.toNat 0) = M)
+    (h_gas : devm.gasLeft = G + c) :
+    Ninst.RunCompiled sevm devm (.reg .calldatacopy)
+      (devm.setMach ⟨s, M, G⟩) := by
+  subst h_cost; subst h_write
+  have h_eq : devm.gasLeft - (gVerylow + gasCopy * ceilDiv sz.toNat 32
+      + devm.extCost [⟨di.toNat, sz.toNat⟩]) = G := by omega
+  rw [← h_eq]
+  exact Ninst.runCompiled_reg (by rintro ⟨⟩)
+    (Rinst.runCore_calldatacopy_eq_ok h_stk (by omega))
+
+/-- `RETURNDATACOPY`.  `h_bound` is the out-of-bounds guard, as a premise. -/
+lemma Ninst.runCompiled_retdatacopy_of {sevm : Sevm} {devm : Devm}
+    {di ri sz : B256} {s : List B256} {c G : Nat} {M : Mem}
+    (h_stk : devm.stack = di :: ri :: sz :: s)
+    (h_cost : gVerylow + gReturnDataCopy * ceilDiv sz.toNat 32
+      + devm.extCost [⟨di.toNat, sz.toNat⟩] = c)
+    (h_bound : ri.toNat + sz.toNat ≤ devm.returnData.length)
+    (h_write : devm.memory.write di.toNat
+      (devm.returnData.sliceD ri.toNat sz.toNat 0) = M)
+    (h_gas : devm.gasLeft = G + c) :
+    Ninst.RunCompiled sevm devm (.reg .retdatacopy)
+      (devm.setMach ⟨s, M, G⟩) := by
+  subst h_cost; subst h_write
+  have h_eq : devm.gasLeft - (gVerylow + gReturnDataCopy * ceilDiv sz.toNat 32
+      + devm.extCost [⟨di.toNat, sz.toNat⟩]) = G := by omega
+  rw [← h_eq]
+  exact Ninst.runCompiled_reg (by rintro ⟨⟩)
+    (Rinst.runCore_retdatacopy_eq_ok h_stk (by omega) h_bound)
+
+/-- `LOG n`.  The successor's base carries the appended entry; the `setMach`
+stays outermost so the walk can go on standing on it. -/
+lemma Ninst.runCompiled_log_of {sevm : Sevm} {devm : Devm} {n : Fin 5}
+    {i sz : B256} {topics s : List B256} {c G : Nat} {M : Mem} {data : Bytes}
+    (h_stk : devm.stack = i :: sz :: (topics ++ s))
+    (h_len : topics.length = n.val) (h_static : sevm.isStatic = false)
+    (h_cost : gLog + gLogdata * sz.toNat + gLogtopic * n.val
+      + devm.extCost [⟨i.toNat, sz.toNat⟩] = c)
+    (h_data : (devm.memory.read i.toNat sz.toNat).1 = data)
+    (h_mem : (devm.memory.read i.toNat sz.toNat).2 = M)
+    (h_gas : devm.gasLeft = G + c) :
+    Ninst.RunCompiled sevm devm (.reg (.log n))
+      ((devm.addLog ⟨sevm.currentTarget, topics, data⟩).setMach
+        ⟨s, M, G⟩) := by
+  subst h_cost; subst h_data; subst h_mem
+  have h_eq : devm.gasLeft - (gLog + gLogdata * sz.toNat + gLogtopic * n.val
+      + devm.extCost [⟨i.toNat, sz.toNat⟩]) = G := by omega
+  rw [← h_eq]
+  exact Ninst.runCompiled_reg (by rintro ⟨⟩)
+    (Rinst.runCore_log_eq_ok h_stk h_len h_static (by omega))
+
+/-- `SSTORE` on a cold key.  Three premises no read has — the EIP-2200 sentry,
+the static-context check and the value-case charge — and a base state that moves
+three times.  `h_cost` is the whole charge, `gasColdSload` included. -/
+lemma Ninst.runCompiled_sstore_cold {sevm : Sevm} {devm : Devm} {k v : B256}
+    {s : List B256} {c G : Nat} {rc : Int} (h_stk : devm.stack = k :: v :: s)
+    (h_cold : ⟨sevm.currentTarget, k⟩ ∉ devm.accessedStorageKeys)
+    (h_sentry : gCallStipend < devm.gasLeft) (h_static : sevm.isStatic = false)
+    (h_cost : gasColdSload
+      + sstoreValueCost (getOrigStorVal sevm sevm.currentTarget k)
+          (devm.getStorVal sevm.currentTarget k) v = c)
+    (h_refund : sstoreNewRefundCounter v
+      (getOrigStorVal sevm sevm.currentTarget k)
+      (devm.getStorVal sevm.currentTarget k) devm.refundCounter = rc)
+    (h_gas : devm.gasLeft = G + c) :
+    Ninst.RunCompiled sevm devm (.reg .sstore)
+      ((((addAccessedStorageKey devm sevm.currentTarget k).withRefundCounter
+        rc).setStorVal sevm.currentTarget k v).setMach
+          ⟨s, devm.memory, G⟩) := by
+  subst h_cost
+  have h_eq : devm.gasLeft - (gasColdSload
+      + sstoreValueCost (getOrigStorVal sevm sevm.currentTarget k)
+        (devm.getStorVal sevm.currentTarget k) v) = G := by omega
+  rw [← h_eq]
+  exact Ninst.runCompiled_reg (by rintro ⟨⟩)
+    (Rinst.runCore_sstore_cold_eq_ok h_stk h_cold h_sentry h_static rfl h_refund
+      (by omega))
+
+/-- `SSTORE` on a warm key.  The accessed set does not move, so `h_cost` is the
+value case alone. -/
+lemma Ninst.runCompiled_sstore_warm {sevm : Sevm} {devm : Devm} {k v : B256}
+    {s : List B256} {c G : Nat} {rc : Int} (h_stk : devm.stack = k :: v :: s)
+    (h_warm : ⟨sevm.currentTarget, k⟩ ∈ devm.accessedStorageKeys)
+    (h_sentry : gCallStipend < devm.gasLeft) (h_static : sevm.isStatic = false)
+    (h_cost : sstoreValueCost (getOrigStorVal sevm sevm.currentTarget k)
+      (devm.getStorVal sevm.currentTarget k) v = c)
+    (h_refund : sstoreNewRefundCounter v
+      (getOrigStorVal sevm sevm.currentTarget k)
+      (devm.getStorVal sevm.currentTarget k) devm.refundCounter = rc)
+    (h_gas : devm.gasLeft = G + c) :
+    Ninst.RunCompiled sevm devm (.reg .sstore)
+      (((devm.withRefundCounter rc).setStorVal sevm.currentTarget k v).setMach
+        ⟨s, devm.memory, G⟩) := by
+  subst h_cost
+  have h_eq : devm.gasLeft
+      - sstoreValueCost (getOrigStorVal sevm sevm.currentTarget k)
+        (devm.getStorVal sevm.currentTarget k) v = G := by omega
+  rw [← h_eq]
+  exact Ninst.runCompiled_reg (by rintro ⟨⟩)
+    (Rinst.runCore_sstore_warm_eq_ok h_stk h_warm h_sentry h_static rfl h_refund
+      (by omega))
 
 /-! ## The terminal instruction
 
@@ -1210,6 +1864,263 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
         discharge hg (← gasTacs)
         discharge hw (← rflTacs)
       | _ => throwError "func_run: MSTORE left {gs.length} obligations"
+    | (``Jaune.Rinst.pop, #[]) => do
+      let ([_x], s) ← popStack 1 stk | throwError "func_run: POP"
+      let gas' ← mkGas gb goff 2
+      let succ ← mkState base s mem gas'
+      fixPost post succ
+      let gs ← applyLemma g ``Ninst.runCompiled_pop
+        [(0, sevm), (1, d), (2, _x), (3, s), (4, gas')] [5, 6]
+      match gs with
+      | [hstk, hg] =>
+        discharge hstk (← rflTacs)
+        discharge hg (← gasTacs)
+      | _ => throwError "func_run: POP left {gs.length} obligations"
+    | (``Jaune.Rinst.swap, #[k]) => do
+      -- `List.swap (w₀ :: rest) k` exchanges `w₀` with `rest[k]`, which is the
+      -- `(k+2)`-th word of the stack.  The walk permutes the words itself
+      -- rather than leaving `List.swap` unevaluated: a frozen `List.swap`
+      -- redex would stop the next `popStack` dead.
+      let some kv ← natOf? (← mkAppM ``Fin.val #[k])
+        | throwError "func_run: SWAP index is not a literal{indentExpr k}"
+      let (ws, t) ← popStack (kv + 2) stk
+      let top := ws[0]!
+      let deep := ws[kv + 1]!
+      let mid := (ws.drop 1).take kv
+      let S ← (deep :: (mid ++ [top])).foldrM
+        (fun x acc => mkAppM ``List.cons #[x, acc]) t
+      let gas' ← mkGas gb goff 3
+      let succ ← mkState base S mem gas'
+      fixPost post succ
+      let gs ← applyLemma g ``Ninst.runCompiled_swap
+        [(0, sevm), (1, d), (2, k), (3, S), (4, gas')] [5, 6]
+      match gs with
+      | [hswap, hg] =>
+        discharge hswap (← rflTacs)
+        discharge hg (← gasTacs)
+      | _ => throwError "func_run: SWAP left {gs.length} obligations"
+    | (``Jaune.Rinst.gas, #[]) => do
+      -- No hint and no value obligation: what `GAS` pushes is the successor's
+      -- own account, which in the additive convention is the name the walk has
+      -- just written.
+      let gas' ← mkGas gb goff 2
+      let w ← mkAppM ``Jaune.Nat.toB256 #[gas']
+      let succ ← mkState base (← mkAppM ``List.cons #[w, stk]) mem gas'
+      fixPost post succ
+      let gs ← applyLemma g ``Ninst.runCompiled_gas
+        [(0, sevm), (1, d), (2, gas')] [3, 4]
+      match gs with
+      | [hg, hr] =>
+        discharge hg (← gasTacs)
+        discharge hr (← roomTacs)
+      | _ => throwError "func_run: GAS left {gs.length} obligations"
+    | (``Jaune.Rinst.mload, #[]) => do
+      let ([i], s) ← popStack 1 stk | throwError "func_run: MLOAD"
+      let some cost ← nextHint g (mkConst ``Nat)
+        | throwError m!"func_run: step {n + 1} is an MLOAD. Its charge includes a memory expansion, which is not computable from the instruction alone; supply the whole charge as the next hint."
+      let some costN ← natOf? cost
+        | throwError "func_run: the MLOAD hint{indentExpr cost}is not a numeral"
+      let rd ← mkAppM ``Jaune.Mem.read
+        #[mem, ← mkAppM ``Jaune.B256.toNat #[i], mkNatLit 32]
+      let v ← mkAppM ``Jaune.Bytes.toB256 #[← mkAppM ``Prod.fst #[rd]]
+      let m' ← mkAppM ``Prod.snd #[rd]
+      let gas' ← mkGas gb goff costN
+      let succ ← mkState base (← mkAppM ``List.cons #[v, s]) m' gas'
+      fixPost post succ
+      let gs ← applyLemma g ``Ninst.runCompiled_mload_of
+        [(0, sevm), (1, d), (2, i), (3, v), (4, s), (5, cost), (6, gas'),
+          (7, m')] [8, 9, 10, 11, 12, 13]
+      match gs with
+      | [hstk, hcost, hval, hmem, hg, hr] =>
+        discharge hstk (← rflTacs)
+        discharge hcost []
+        discharge hval (← rflTacs)
+        discharge hmem (← rflTacs)
+        discharge hg (← gasTacs)
+        discharge hr (← roomTacs)
+      | _ => throwError "func_run: MLOAD left {gs.length} obligations"
+    | (``Jaune.Rinst.kec, #[]) => do
+      let ([i, sz], s) ← popStack 2 stk | throwError "func_run: KECCAK256"
+      let some cost ← nextHint g (mkConst ``Nat)
+        | throwError m!"func_run: step {n + 1} is a KECCAK256. Supply its whole charge as the next hint."
+      let some costN ← natOf? cost
+        | throwError "func_run: the KECCAK256 hint{indentExpr cost}is not a numeral"
+      let rd ← mkAppM ``Jaune.Mem.read
+        #[mem, ← mkAppM ``Jaune.B256.toNat #[i],
+          ← mkAppM ``Jaune.B256.toNat #[sz]]
+      let m' ← mkAppM ``Prod.snd #[rd]
+      -- The hash itself is a *value*, on the same footing as what `SHR`
+      -- produced: a second hint names it and turns `h_val` into the caller's
+      -- obligation, and with none left the walk keeps `Bytes.keccak` applied to
+      -- the window it read.  Nothing here evaluates it.
+      let v ← (do
+        match ← nextHint g (mkConst ``Jaune.B256) with
+        | some v => pure v
+        | none => mkAppM ``Bytes.keccak #[← mkAppM ``Prod.fst #[rd]])
+      let gas' ← mkGas gb goff costN
+      let succ ← mkState base (← mkAppM ``List.cons #[v, s]) m' gas'
+      fixPost post succ
+      let gs ← applyLemma g ``Ninst.runCompiled_kec_of
+        [(0, sevm), (1, d), (2, i), (3, sz), (4, v), (5, s), (6, cost),
+          (7, gas'), (8, m')] [9, 10, 11, 12, 13, 14]
+      match gs with
+      | [hstk, hcost, hval, hmem, hg, hr] =>
+        discharge hstk (← rflTacs)
+        discharge hcost []
+        discharge hval (← valTacs)
+        discharge hmem (← rflTacs)
+        discharge hg (← gasTacs)
+        discharge hr (← roomTacs)
+      | _ => throwError "func_run: KECCAK256 left {gs.length} obligations"
+    | (``Jaune.Rinst.calldatacopy, #[]) => do
+      let ([di, si, sz], s) ← popStack 3 stk
+        | throwError "func_run: CALLDATACOPY"
+      let some cost ← nextHint g (mkConst ``Nat)
+        | throwError m!"func_run: step {n + 1} is a CALLDATACOPY. Supply its whole charge as the next hint."
+      let some costN ← natOf? cost
+        | throwError "func_run: the CALLDATACOPY hint{indentExpr cost}is not a numeral"
+      -- `List.sliceD`'s default is a `UInt8`, not a `Nat`: a `Nat` literal
+      -- here elaborates but does not typecheck at the call site.
+      let u8zero ← mkAppOptM ``OfNat.ofNat
+        #[mkConst ``UInt8, mkNatLit 0, none]
+      let val ← mkAppM ``Jaune.List.sliceD
+        #[← mkAppM ``Jaune.Sevm.data #[sevm],
+          ← mkAppM ``Jaune.B256.toNat #[si],
+          ← mkAppM ``Jaune.B256.toNat #[sz], u8zero]
+      let img ← mkAppM ``Jaune.Mem.write
+        #[mem, ← mkAppM ``Jaune.B256.toNat #[di], val]
+      let gas' ← mkGas gb goff costN
+      let succ ← mkState base s img gas'
+      fixPost post succ
+      let gs ← applyLemma g ``Ninst.runCompiled_calldatacopy_of
+        [(0, sevm), (1, d), (2, di), (3, si), (4, sz), (5, s), (6, cost),
+          (7, gas'), (8, img)] [9, 10, 11, 12]
+      match gs with
+      | [hstk, hcost, hw, hg] =>
+        discharge hstk (← rflTacs)
+        discharge hcost []
+        discharge hw (← rflTacs)
+        discharge hg (← gasTacs)
+      | _ => throwError "func_run: CALLDATACOPY left {gs.length} obligations"
+    | (``Jaune.Rinst.retdatacopy, #[]) => do
+      let ([di, ri, sz], s) ← popStack 3 stk
+        | throwError "func_run: RETURNDATACOPY"
+      let some cost ← nextHint g (mkConst ``Nat)
+        | throwError m!"func_run: step {n + 1} is a RETURNDATACOPY. Supply its whole charge as the next hint."
+      let some costN ← natOf? cost
+        | throwError "func_run: the RETURNDATACOPY hint{indentExpr cost}is not a numeral"
+      let rdE ← mkAppM ``Jaune.Devm.returnData #[d]
+      let u8zero ← mkAppOptM ``OfNat.ofNat
+        #[mkConst ``UInt8, mkNatLit 0, none]
+      let val ← mkAppM ``Jaune.List.sliceD
+        #[rdE, ← mkAppM ``Jaune.B256.toNat #[ri],
+          ← mkAppM ``Jaune.B256.toNat #[sz], u8zero]
+      let img ← mkAppM ``Jaune.Mem.write
+        #[mem, ← mkAppM ``Jaune.B256.toNat #[di], val]
+      let gas' ← mkGas gb goff costN
+      let succ ← mkState base s img gas'
+      fixPost post succ
+      let gs ← applyLemma g ``Ninst.runCompiled_retdatacopy_of
+        [(0, sevm), (1, d), (2, di), (3, ri), (4, sz), (5, s), (6, cost),
+          (7, gas'), (8, img)] [9, 10, 11, 12, 13]
+      let assum ← `(tactic| assumption)
+      match gs with
+      | [hstk, hcost, hbound, hw, hg] =>
+        discharge hstk (← rflTacs)
+        discharge hcost []
+        -- The out-of-bounds guard is about the *child's* return data, which no
+        -- rule here knows anything about; it goes back to the caller unless a
+        -- hypothesis already says it.
+        discharge hbound [assum]
+        discharge hw (← rflTacs)
+        discharge hg (← gasTacs)
+      | _ => throwError "func_run: RETURNDATACOPY left {gs.length} obligations"
+    | (``Jaune.Rinst.log, #[k]) => do
+      let some kv ← natOf? (← mkAppM ``Fin.val #[k])
+        | throwError "func_run: LOG index is not a literal{indentExpr k}"
+      let (ws, s) ← popStack (2 + kv) stk
+      let i := ws[0]!
+      let sz := ws[1]!
+      let topics ← mkListLit (mkConst ``Jaune.B256) (ws.drop 2)
+      let some cost ← nextHint g (mkConst ``Nat)
+        | throwError m!"func_run: step {n + 1} is a LOG. Supply its whole charge as the next hint."
+      let some costN ← natOf? cost
+        | throwError "func_run: the LOG hint{indentExpr cost}is not a numeral"
+      let rd ← mkAppM ``Jaune.Mem.read
+        #[mem, ← mkAppM ``Jaune.B256.toNat #[i],
+          ← mkAppM ``Jaune.B256.toNat #[sz]]
+      let dat ← mkAppM ``Prod.fst #[rd]
+      let m' ← mkAppM ``Prod.snd #[rd]
+      let entry ← mkAppM ``Jaune.Log.mk
+        #[← mkAppM ``Jaune.Sevm.currentTarget #[sevm], topics, dat]
+      let base' ← mkAppM ``Jaune.Devm.addLog #[d, entry]
+      let gas' ← mkGas gb goff costN
+      let succ ← mkState base' s m' gas'
+      fixPost post succ
+      let gs ← applyLemma g ``Ninst.runCompiled_log_of
+        [(0, sevm), (1, d), (2, k), (3, i), (4, sz), (5, topics), (6, s),
+          (7, cost), (8, gas'), (9, m'), (10, dat)]
+        [11, 12, 13, 14, 15, 16, 17]
+      let assum ← `(tactic| assumption)
+      match gs with
+      | [hstk, hlen, hstatic, hcost, hdata, hmem, hg] =>
+        discharge hstk (← rflTacs)
+        discharge hlen (← rflTacs)
+        discharge hstatic [assum]
+        discharge hcost []
+        discharge hdata (← rflTacs)
+        discharge hmem (← rflTacs)
+        discharge hg (← gasTacs)
+      | _ => throwError "func_run: LOG left {gs.length} obligations"
+    | (``Jaune.Rinst.sstore, #[]) => do
+      let ([k, v], s) ← popStack 2 stk | throwError "func_run: SSTORE"
+      let tgt ← mkAppM ``Jaune.Sevm.currentTarget #[sevm]
+      let some cost ← nextHint g (mkConst ``Nat)
+        | throwError m!"func_run: step {n + 1} is an SSTORE. Its charge depends on the original, current and new values and on the key's warmth; supply the whole charge as the next hint."
+      let some costN ← natOf? cost
+        | throwError "func_run: the SSTORE hint{indentExpr cost}is not a numeral"
+      let rc ← mkAppM ``Jaune.sstoreNewRefundCounter
+        #[v, ← mkAppM ``Jaune.getOrigStorVal #[sevm, tgt, k],
+          ← mkAppM ``Jaune.Devm.getStorVal #[d, tgt, k],
+          ← mkAppM ``Jaune.Devm.refundCounter #[d]]
+      -- Warmth is read off the local context, exactly as at `SLOAD`, and for
+      -- the same reason: it is a fact about the frame, and a hint here would
+      -- let a caller assert warmth the frame does not carry.
+      let warmProp ← mkAppM ``Membership.mem
+        #[← mkAppM ``Jaune.Devm.accessedStorageKeys #[d],
+          ← mkAppM ``Prod.mk #[tgt, k]]
+      let isWarm ← g.withContext do
+        (← getLCtx).findDeclM? fun decl => do
+          if decl.isImplementationDetail then return none
+          if ← withNewMCtxDepth (isDefEq decl.type warmProp) then
+            return some decl.type
+          else return none
+      let assum ← `(tactic| assumption)
+      let sentry ← `(tactic|
+        (simp only [Devm.gasLeft_setMach, gCallStipend]; omega))
+      let gas' ← mkGas gb goff costN
+      let base' ←
+        if isWarm.isSome then pure d
+        else mkAppM ``Jaune.addAccessedStorageKey #[d, tgt, k]
+      let stored ← mkAppM ``Jaune.Devm.setStorVal
+        #[← mkAppM ``Jaune.Devm.withRefundCounter #[base', rc], tgt, k, v]
+      let succ ← mkState stored s mem gas'
+      fixPost post succ
+      let name := if isWarm.isSome then ``Ninst.runCompiled_sstore_warm
+        else ``Ninst.runCompiled_sstore_cold
+      let gs ← applyLemma g name
+        [(0, sevm), (1, d), (2, k), (3, v), (4, s), (5, cost), (6, gas'),
+          (7, rc)] [8, 9, 10, 11, 12, 13, 14]
+      match gs with
+      | [hstk, hwarmth, hsentry, hstatic, hcost, hrefund, hg] =>
+        discharge hstk (← rflTacs)
+        discharge hwarmth [assum]
+        discharge hsentry [assum, sentry]
+        discharge hstatic [assum]
+        discharge hcost []
+        discharge hrefund (← rflTacs)
+        discharge hg (← gasTacs)
+      | _ => throwError "func_run: SSTORE left {gs.length} obligations"
     | _ => do
       let core ← whnfUntilHead
         [``Jaune.applyBinary, ``Jaune.applyUnary, ``Jaune.pushItem] 16
