@@ -68,3 +68,7 @@ import Blanc.WethGas
 #print axioms Blanc.Fmint.fmintGas_eq_with
 #print axioms Blanc.Fmint.totalSupply_gas_exact_fmintGas
 #print axioms Blanc.Fmint.decimals_gas_exact_fmintGas
+#print axioms Blanc.weth_balanceOf_gas_of_runCompiled_wethGas
+#print axioms Blanc.weth_decimals_gas_of_runCompiled_wethGas
+#print axioms Blanc.Fmint.totalSupply_gas_of_runCompiled_fmintGas
+#print axioms Blanc.Fmint.decimals_gas_of_runCompiled_fmintGas

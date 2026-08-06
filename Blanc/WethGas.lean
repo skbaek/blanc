@@ -417,4 +417,46 @@ theorem weth_decimals_gas_exact_wethGas {sevm : Sevm} {pre : Devm} {cost : Nat}
   subst h_cost
   exact weth_decimals_gas_exact h_code h_sel h_stack h_mem h_gas
 
+/-- **`balanceOf(address)` costs what `wethGas` says, from an arbitrary
+`Prog.RunCompiled` witness.**
+
+The hypothesis-position altitude restated through the cost function, so that
+`wethGas` is load-bearing at *both* altitudes rather than only where the run is
+constructed. This is the shape a caller reasoning about an arbitrary run of
+this contract states over, and it is the one in which the cost function is
+most useful: the caller supplies a selector, `wethGas` supplies the number. -/
+theorem weth_balanceOf_gas_of_runCompiled_wethGas {sevm : Sevm} {pre post : Devm}
+    {cost : Nat}
+    (h_code : some sevm.code.toList = Prog.compile weth)
+    (h_sel : Sevm.selector sevm = boSel)
+    (h_stack : pre.stack = [])
+    (h_mem : pre.memory = Mem.empty)
+    (h_cold : (⟨sevm.currentTarget, Sevm.dataWord sevm 4⟩ : Adr × B256)
+      ∉ pre.accessedStorageKeys)
+    (h_cost : wethGas (Sevm.selector sevm) = some cost)
+    (h_gas : cost ≤ pre.gasLeft)
+    (h_run : Prog.RunCompiled sevm pre weth post) :
+    pre.gasLeft = post.gasLeft + cost := by
+  rw [h_sel, wethGas_boSel] at h_cost
+  injection h_cost with h_cost
+  subst h_cost
+  exact weth_balanceOf_gas_of_runCompiled h_code h_sel h_stack h_mem h_cold h_gas h_run
+
+/-- **`decimals()` costs what `wethGas` says, from an arbitrary
+`Prog.RunCompiled` witness.** The same restatement, on the second target. -/
+theorem weth_decimals_gas_of_runCompiled_wethGas {sevm : Sevm} {pre post : Devm}
+    {cost : Nat}
+    (h_code : some sevm.code.toList = Prog.compile weth)
+    (h_sel : Sevm.selector sevm = dcSel)
+    (h_stack : pre.stack = [])
+    (h_mem : pre.memory = Mem.empty)
+    (h_cost : wethGas (Sevm.selector sevm) = some cost)
+    (h_gas : cost ≤ pre.gasLeft)
+    (h_run : Prog.RunCompiled sevm pre weth post) :
+    pre.gasLeft = post.gasLeft + cost := by
+  rw [h_sel, wethGas_dcSel] at h_cost
+  injection h_cost with h_cost
+  subst h_cost
+  exact weth_decimals_gas_of_runCompiled h_code h_sel h_stack h_mem h_gas h_run
+
 end Blanc

@@ -356,5 +356,43 @@ theorem decimals_gas_exact_fmintGas {sevm : Sevm} {pre : Devm} {cost : Nat}
   subst h_cost
   exact decimals_gas_exact h_code h_sel h_stack h_mem h_gas
 
+/-- **`totalSupply()` costs what `fmintGas` says, from an arbitrary
+`Prog.RunCompiled` witness.** The hypothesis-position altitude restated through
+the cost function; see `Blanc.weth_balanceOf_gas_of_runCompiled_wethGas` for why
+both altitudes get one. -/
+theorem totalSupply_gas_of_runCompiled_fmintGas {sevm : Sevm} {pre post : Devm}
+    {cost : Nat}
+    (h_code : some sevm.code.toList = Prog.compile fmint)
+    (h_sel : Sevm.selector sevm = tsSel)
+    (h_stack : pre.stack = [])
+    (h_mem : pre.memory = Mem.empty)
+    (h_cold : (⟨sevm.currentTarget, supplySlot⟩ : Adr × B256)
+      ∉ pre.accessedStorageKeys)
+    (h_cost : fmintGas (Sevm.selector sevm) = some cost)
+    (h_gas : cost ≤ pre.gasLeft)
+    (h_run : Prog.RunCompiled sevm pre fmint post) :
+    pre.gasLeft = post.gasLeft + cost := by
+  rw [h_sel, fmintGas_tsSel] at h_cost
+  injection h_cost with h_cost
+  subst h_cost
+  exact totalSupply_gas_of_runCompiled h_code h_sel h_stack h_mem h_cold h_gas h_run
+
+/-- **`decimals()` costs what `fmintGas` says, from an arbitrary
+`Prog.RunCompiled` witness.** The same restatement, on the second target. -/
+theorem decimals_gas_of_runCompiled_fmintGas {sevm : Sevm} {pre post : Devm}
+    {cost : Nat}
+    (h_code : some sevm.code.toList = Prog.compile fmint)
+    (h_sel : Sevm.selector sevm = dcSel)
+    (h_stack : pre.stack = [])
+    (h_mem : pre.memory = Mem.empty)
+    (h_cost : fmintGas (Sevm.selector sevm) = some cost)
+    (h_gas : cost ≤ pre.gasLeft)
+    (h_run : Prog.RunCompiled sevm pre fmint post) :
+    pre.gasLeft = post.gasLeft + cost := by
+  rw [h_sel, fmintGas_dcSel] at h_cost
+  injection h_cost with h_cost
+  subst h_cost
+  exact decimals_gas_of_runCompiled h_code h_sel h_stack h_mem h_gas h_run
+
 end Fmint
 end Blanc

@@ -190,6 +190,16 @@
 # per-target budget taken from the first target in a fresh module overestimates
 # every later one in that module by roughly 4 s.
 #
+# Re-measured once more at the end of the same step, after four further
+# restatements of the hypothesis-altitude theorems through the cost functions
+# (derived theorems, one application deep): Blanc/WethGas.lean 6.794 -> 6.857
+# (median of 6.993, 6.857, 6.792) and Blanc/FmintGas.lean 6.287 -> 6.226
+# (median of 6.226, 6.127, 6.273). Both moves are INSIDE this host's
+# run-to-run noise -- one row went up and the other down while the module only
+# grew -- and neither was needed to pass: the gate thresholds were 13.588 and
+# 12.574. The rows are re-set anyway so that each equals the measured median
+# of the tip it ships with, which is the invariant every note above asserts.
+#
 # No pre-existing row was touched by this step either.
 OK	1.241	Blanc.lean
 OK	1.257	Blanc/Basic.lean
@@ -210,5 +220,5 @@ OK	2.002	Blanc/FlashSpec.lean
 OK	4.514	Blanc/Forward.lean
 OK	4.684	Blanc/FmintLive.lean
 OK	5.383	Blanc/WethLive.lean
-OK	6.794	Blanc/WethGas.lean
-OK	6.287	Blanc/FmintGas.lean
+OK	6.857	Blanc/WethGas.lean
+OK	6.226	Blanc/FmintGas.lean
