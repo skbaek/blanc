@@ -163,6 +163,28 @@ lemma applyBinary_eq_ok {f : B256 → B256 → B256} {cost : Nat} {devm : Devm}
     (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft - cost⟩) h_room]
   rfl
 
+/-- `pushItem`, evaluated forward.  `Jaune/Machine.lean`'s `pushItem_def` gives
+`pushItem x c devm = chargeGas c devm >>= Devm.push x`, which is the same two
+steps `Ninst.runCompiled_push` takes for a `PUSH`; the word is just supplied by
+the frame instead of by an immediate.
+
+Stated for the class rather than for one opcode.  `Rinst.runCore` routes
+`ADDRESS`, `CALLER`, `CALLVALUE`, `ORIGIN`, `CALLDATASIZE`, `CODESIZE`,
+`BASEFEE`, `GASPRICE` and `RETURNDATASIZE` through `pushItem` with `gBase` and a
+word read off `sevm` or `devm`, so one lemma covers all of them and the caller
+supplies only which word.  None of them reads the stack below the push, so
+unlike `applyUnary`/`applyBinary` there is no stack-shape premise at all. -/
+lemma pushItem_eq_ok {x : B256} {cost : Nat} {devm : Devm}
+    (h_gas : cost ≤ devm.gasLeft) (h_room : devm.stack.length < 1024) :
+    pushItem x cost devm =
+      .ok (devm.setMach ⟨x :: devm.stack, devm.memory,
+        devm.gasLeft - cost⟩) := by
+  rw [pushItem_def, chargeGas_eq_ok h_gas]
+  simp only [bind, Except.bind]
+  rw [Devm.push_eq_ok
+    (devm := devm.setMach ⟨devm.stack, devm.memory, devm.gasLeft - cost⟩) h_room]
+  rfl
+
 /-- `DUP n`, evaluated forward.  The duplicated word is read off the *charged*
 stack, which `chargeGas` leaves alone, so the index is into the pre-state. -/
 lemma Rinst.runCore_dup_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
@@ -483,6 +505,28 @@ lemma Ninst.runCompiled_calldataload {sevm : Sevm} {devm : Devm} {x v : B256}
   exact Ninst.runCompiled_reg (by rintro ⟨⟩)
     (Rinst.runCore_calldataload_eq_ok h_stk (by omega) h_room)
 
+/-- A register opcode that pushes a word the frame already determines:
+`ADDRESS`, `CALLER`, `CALLVALUE`, `ORIGIN`, `CALLDATASIZE`, `CODESIZE`,
+`BASEFEE`, and every other arm `Rinst.runCore` sends through `pushItem`.
+
+`h_def` is what selects the opcode, exactly as it does for
+`Ninst.runCompiled_unary` and `_binary`, and it is `rfl` at every one of them.
+
+**No `h_val` and no hint**, for `Ninst.runCompiled_calldataload`'s reason: `x`
+is not a computation the walk has to be told the answer to, it is a projection
+of `sevm` or `devm` that `h_def` already names.  A wrapper that consumed a hint
+here would silently eat the hint the *next* value-producing opcode was given. -/
+lemma Ninst.runCompiled_pushItem {sevm : Sevm} {devm : Devm} {r : Rinst}
+    {x : B256} {cost G : Nat} (h_ne : r ≠ .pc)
+    (h_def : Rinst.runCore 0 devm sevm r = pushItem x cost devm)
+    (h_gas : devm.gasLeft = G + cost) (h_room : devm.stack.length < 1024) :
+    Ninst.RunCompiled sevm devm (.reg r)
+      (devm.setMach ⟨x :: devm.stack, devm.memory, G⟩) := by
+  have h_eq : devm.gasLeft - cost = G := by omega
+  rw [← h_eq]
+  exact Ninst.runCompiled_reg h_ne
+    (h_def.trans (pushItem_eq_ok (by omega) h_room))
+
 /-- `SLOAD` on a cold key.  The successor is not a `setMach` over `devm`: the
 key joins the accessed set, which is a `meta` field, so the base state moves
 once here and stays moved for the rest of the chain. -/
@@ -748,7 +792,17 @@ Two things a construction cannot compute, and how the tactic gets them:
 
 Obligations the walk cannot discharge mechanically are returned as goals in the
 order they were met, and `Func.last` always is one: a terminal instruction ends
-the frame, and evaluating it is the caller's. -/
+the frame, and evaluating it is the caller's.
+
+**The walk is parameterised by the relation it builds** — `RelSpec` below, a
+head constant plus four rule names.  `Func.RunCompiled` and
+`Blanc/Reverts.lean`'s outcome-generalised `Func.RunCompiledTo` differ in
+nothing the walk does, only in what its rules are called, so there is one walk
+and a two-row table rather than two walks that would drift apart.  The relation
+is read off the goal once, in `funcRunMain`, and every recursive call builds
+that one.  Which relation a caller gets is therefore decided by how the caller
+stated its goal, and mixing the two inside one walk is an error rather than a
+silent switch. -/
 
 section ForwardTactic
 
@@ -758,9 +812,66 @@ open _root_.Lean _root_.Lean.Meta _root_.Lean.Elab _root_.Lean.Elab.Tactic
 
 namespace Forward
 
-/-- The walk's mutable state: the hints it has not spent, the obligations it
-could not close, and how many `Ninst` steps it has taken (for messages). -/
+/-- The relation a walk builds: the head constant its goals are stated with, and
+the four structural rules it applies **by name**.
+
+`Blanc/Reverts.lean`'s `Func.RunCompiledTo` is `Func.RunCompiled` with the
+terminal outcome generalised from `.ok devm'` to an arbitrary `Execution`, and
+its four structural rules are *positional* mirrors of the four below — same
+binder order, same premises, same costs.  That is what makes one walk serve both
+relations: everything `funcWalk` does other than naming a rule is identical, so
+the difference between the two is exactly this table and nothing else.
+
+**One walk, parameterised — never a second copy of it.**  Two `funcWalk`s would
+drift apart within a single arc, and the `.ok` one is what the repository's
+existing liveness witnesses are built from.
+
+The `To` row's names are raw `Name` literals rather than `` ``Name `` because
+`Blanc/Reverts.lean` imports *this* module: the constants do not exist yet at
+this point in the tree.  They are resolved by `applyLemma`'s `getConstInfo` the
+first time a walk actually reaches them, so a stale name fails loudly at the
+first `func_run` over that relation — which is a compile error in
+`Blanc/FmintReverts.lean`, not a silent fallback. -/
+structure RelSpec where
+  /-- The relation's head constant.  Its goals are `head fs sevm devm f out`. -/
+  head : Name
+  /-- The `.next` rule: one `Ninst.RunCompiled` and the rest of the `Func`. -/
+  next : Name
+  /-- The fall-through arm of a `branch`, condition `0`. -/
+  branchZero : Name
+  /-- The jumped arm of a `branch`, condition nonzero. -/
+  branchSucc : Name
+  /-- An internal tail call into the flat table. -/
+  call : Name
+  deriving Inhabited
+
+/-- `Blanc/Compiled.lean`'s `Func.RunCompiled`, with this module's wrappers. -/
+def okSpec : RelSpec where
+  head := ``Blanc.Func.RunCompiled
+  next := ``Blanc.Func.RunCompiled.next
+  branchZero := ``Func.runCompiled_branch_zero
+  branchSucc := ``Func.runCompiled_branch_succ
+  call := ``Func.runCompiled_call'
+
+/-- `Blanc/Reverts.lean`'s `Func.RunCompiledTo`, with that module's wrappers. -/
+def toSpec : RelSpec where
+  head := `Blanc.Func.RunCompiledTo
+  next := `Blanc.Func.RunCompiledTo.next
+  branchZero := `Blanc.Func.runCompiledTo_branch_zero
+  branchSucc := `Blanc.Func.runCompiledTo_branch_succ
+  call := `Blanc.Func.runCompiledTo_call'
+
+/-- Every relation `func_run` knows how to build, matched on the goal's head. -/
+def relSpecs : List RelSpec := [okSpec, toSpec]
+
+/-- The spec for a goal head, or nothing. -/
+def specOf? (head : Name) : Option RelSpec := relSpecs.find? (·.head == head)
+
+/-- The walk's mutable state: the relation it is building, the hints it has not
+spent, the obligations it could not close, and how many `Ninst` steps it has
+taken (for messages). -/
 structure Ctx where
+  rel : RelSpec
   hints : List Term
   side : Array MVarId
   step : Nat
@@ -927,13 +1038,16 @@ def mkState (base stack memory gas : Expr) : MetaM Expr := do
 def mkGas (gasBase : Expr) (n cost : Nat) : MetaM Expr :=
   mkAppM ``HSub.hSub #[gasBase, mkNatLit (n + cost)]
 
-/-- Restate a `Func.RunCompiled` goal with the state the walk wrote, instead of
-the projection chain the applied lemma's conclusion produced. -/
-def retarget (g : MVarId) (state : Expr) : MetaM MVarId := do
+/-- Restate a walk goal with the state the walk wrote, instead of the projection
+chain the applied lemma's conclusion produced.  `head` is the relation's, so
+this serves `Func.RunCompiled` and `Func.RunCompiledTo` alike. -/
+def retarget (head : Name) (g : MVarId) (state : Expr) : MetaM MVarId := do
   let t ← instantiateMVars (← g.getType)
   match t.getAppFnArgs with
-  | (``Blanc.Func.RunCompiled, #[fs, sevm, _, f, post]) =>
-    g.change (mkAppN (mkConst ``Blanc.Func.RunCompiled) #[fs, sevm, state, f, post])
+  | (h, #[fs, sevm, _, f, post]) =>
+    if h == head then
+      g.change (mkAppN (mkConst head) #[fs, sevm, state, f, post])
+    else return g
   | _ => return g
 
 /-- Discharge the successor-state equation of the applied rule against the state
@@ -1097,7 +1211,8 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
         discharge hw (← rflTacs)
       | _ => throwError "func_run: MSTORE left {gs.length} obligations"
     | _ => do
-      let core ← whnfUntilHead [``Jaune.applyBinary, ``Jaune.applyUnary] 16
+      let core ← whnfUntilHead
+        [``Jaune.applyBinary, ``Jaune.applyUnary, ``Jaune.pushItem] 16
         (← mkAppM ``Jaune.Rinst.runCore #[mkNatLit 0, d, sevm, r'])
       let ne ← `(tactic| rintro ⟨⟩)
       let ne' ← `(tactic| exact nofun)
@@ -1149,25 +1264,54 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
           discharge hg (← gasTacs)
           discharge hr (← roomTacs)
         | _ => throwError "func_run: unary opcode left {gs.length} obligations"
+      | (``Jaune.pushItem, #[x, costE, _]) => do
+        -- The `pushItem` class: `ADDRESS`, `CALLER`, `CALLVALUE`, `ORIGIN`,
+        -- `CALLDATASIZE`, `CODESIZE`, `BASEFEE`, … .  Written for the class,
+        -- because `Rinst.runCore` routes all of them through the same one-line
+        -- arm and the only thing that differs is the word.
+        --
+        -- **No hint is consumed**, for `CALLDATALOAD`'s reason: `x` is a
+        -- projection of `sevm` or `devm` that the evaluation already names, not
+        -- a computation the walk has to be told the answer to.  Consuming one
+        -- here would silently eat the hint the next `EQ` or `SHR` was given.
+        let some cost ← natOf? costE
+          | throwError "func_run: the cost{indentExpr costE}is not a numeral"
+        let gas' ← mkGas gb goff cost
+        let succ ← mkState base (← mkAppM ``List.cons #[x, stk]) mem gas'
+        fixPost post succ
+        let gs ← applyLemma g ``Ninst.runCompiled_pushItem
+          [(0, sevm), (1, d), (2, r'), (3, x), (4, costE), (5, gas')]
+          [6, 7, 8, 9]
+        match gs with
+        | [hne, hdef, hg, hr] =>
+          discharge hne [ne, ne']
+          discharge hdef [rfl']
+          discharge hg (← gasTacs)
+          discharge hr (← roomTacs)
+        | _ => throwError "func_run: pushItem opcode left {gs.length} obligations"
       | _ =>
         throwError m!"func_run: step {n + 1}: no forward rule for{indentExpr i'}" ++ m!"\nIts evaluation is{indentExpr core}"
   | _ =>
     throwError "func_run: step {n + 1}: cannot step{indentExpr i'}"
 
-/-- The walk itself: `Func.RunCompiled`'s five rules, applied where `funcInv`
-would have inverted them. -/
+/-- The walk itself: the relation's five rules, applied where `funcInv` would
+have inverted them.  Which relation is `Ctx.rel`, fixed once from the goal's own
+head by `funcRunMain` and never re-decided mid-walk. -/
 partial def funcWalk (g : MVarId) : ForwardM Unit := g.withContext do
+  let rel := (← get).rel
   let t ← instantiateMVars (← g.getType)
   match t.getAppFnArgs with
-  | (``Blanc.Func.RunCompiled, #[fs, sevm, d, f, post]) => do
+  | (head, #[fs, sevm, d, f, post]) => do
+    unless head == rel.head do
+      throwError "func_run: the goal is not a `{rel.head}`{indentExpr t}"
     let f' ← whnf f
     let g ← g.change
-      (mkAppN (mkConst ``Blanc.Func.RunCompiled) #[fs, sevm, d, f', post])
+      (mkAppN (mkConst rel.head) #[fs, sevm, d, f', post])
     let (base, stk, mem, gas) ← parseState d
     let (gb, goff) ← parseGas gas
     match f'.getAppFnArgs with
     | (``Blanc.Func.next, #[i, rest]) => do
-      let gs ← applyLemma g ``Blanc.Func.RunCompiled.next
+      let gs ← applyLemma g rel.next
         [(0, fs), (1, sevm), (2, d), (3, i), (5, rest)] [7, 8]
       match gs with
       | [gi, gr] => ninstStep gi; funcWalk gr
@@ -1182,7 +1326,7 @@ partial def funcWalk (g : MVarId) : ForwardM Unit := g.withContext do
       if takesZero then
         let gas' ← mkGas gb goff 13
         let succ ← mkState base s mem gas'
-        let gs ← applyLemma g ``Func.runCompiled_branch_zero
+        let gs ← applyLemma g rel.branchZero
           [(0, fs), (1, sevm), (2, d), (3, fArm), (4, gArm), (6, s), (7, gas')]
           [8, 9, 10, 11]
         match gs with
@@ -1190,12 +1334,12 @@ partial def funcWalk (g : MVarId) : ForwardM Unit := g.withContext do
           discharge hstk (← rflTacs)
           discharge hr (← roomTacs)
           discharge hg (← gasTacs)
-          funcWalk (← retarget harm succ)
+          funcWalk (← retarget rel.head harm succ)
         | _ => throwError "func_run: `.zero` left {gs.length} obligations"
       else
         let gas' ← mkGas gb goff 14
         let succ ← mkState base s mem gas'
-        let gs ← applyLemma g ``Func.runCompiled_branch_succ
+        let gs ← applyLemma g rel.branchSucc
           [(0, fs), (1, sevm), (2, d), (3, fArm), (4, gArm), (6, w), (7, s),
             (8, gas')] [9, 10, 11, 12, 13]
         let dec ← `(tactic| decide)
@@ -1209,13 +1353,13 @@ partial def funcWalk (g : MVarId) : ForwardM Unit := g.withContext do
           discharge hstk (← rflTacs)
           discharge hr (← roomTacs)
           discharge hg (← gasTacs)
-          funcWalk (← retarget harm succ)
+          funcWalk (← retarget rel.head harm succ)
         | _ => throwError "func_run: `.succ` left {gs.length} obligations"
     | (``Blanc.Func.call, #[k]) => do
       modify fun c => { c with step := c.step + 1 }
       let gas' ← mkGas gb goff 12
       let succ ← mkState base stk mem gas'
-      let gs ← applyLemma g ``Func.runCompiled_call'
+      let gs ← applyLemma g rel.call
         [(0, fs), (1, sevm), (2, d), (3, k), (6, gas')] [7, 8, 9, 10]
       let rfl' ← `(tactic| rfl)
       let dec ← `(tactic| decide)
@@ -1225,18 +1369,24 @@ partial def funcWalk (g : MVarId) : ForwardM Unit := g.withContext do
           throwError m!"func_run: cannot resolve the table entry that `.call` refers to:{indentExpr k}"
         discharge hr (← roomTacs)
         discharge hg (← gasTacs)
-        funcWalk (← retarget hbody succ)
+        funcWalk (← retarget rel.head hbody succ)
       | _ => throwError "func_run: `.call` left {gs.length} obligations"
     | (``Blanc.Func.last, #[_]) =>
       modify fun c => { c with side := c.side.push g }
     | _ => throwError "func_run: cannot see the shape of{indentExpr f'}"
   | _ =>
-    throwError "func_run: the goal is not a `Func.RunCompiled`{indentExpr t}"
+    throwError "func_run: the goal is not a `{rel.head}`{indentExpr t}"
 
-/-- Entry point. -/
+/-- Entry point.  The relation is read off the goal once, here, so that every
+recursive call builds the same one and a mixed goal is an error rather than a
+silent switch. -/
 def funcRunMain (hints : List Term) : TacticM Unit := do
   let g ← getMainGoal
-  let (_, c) ← (funcWalk g).run { hints := hints, side := #[], step := 0 }
+  let t ← instantiateMVars (← g.getType)
+  let some rel := t.getAppFn.constName?.bind specOf?
+    | throwError m!"func_run: the goal's head is not a relation this walk builds{indentExpr t}"
+        ++ m!"\nIt builds {relSpecs.map (·.head)}."
+  let (_, c) ← (funcWalk g).run { rel := rel, hints := hints, side := #[], step := 0 }
   if c.step == 0 then
     throwError "func_run: applied no rule; nothing was proved"
   unless c.hints.isEmpty do
@@ -1245,7 +1395,7 @@ def funcRunMain (hints : List Term) : TacticM Unit := do
 
 end Forward
 
-/-- Build a `Func.RunCompiled` derivation forward from the state the goal names.
+/-- Build a walk of a compiled `Func` forward from the state the goal names.
 
 `func_run [v₁, …, vₙ]` walks the goal's `Func` and applies one rule per node,
 naming every intermediate state itself.  The bracketed terms are the values the
@@ -1253,8 +1403,14 @@ walk cannot compute — what a comparison decided, what a shift produced, what a
 memory expansion cost — consumed left to right; with none given, value-producing
 opcodes keep their unevaluated application.
 
+It builds whichever relation the goal is stated with: `Func.RunCompiled`, whose
+walks end successfully, or `Blanc/Reverts.lean`'s `Func.RunCompiledTo`, whose
+walks end at an arbitrary `Execution` and so can end at an error.  One walk
+serves both (`Forward.RelSpec`); the goal decides which.
+
 Everything it could not close comes back as a goal, in the order the walk met
-it, ending with the frame's terminal instruction. -/
+it, ending with the frame's terminal instruction — which is where a
+`Func.RunCompiledTo` walk's `.rev` is evaluated. -/
 syntax (name := funcRun) "func_run" (ppSpace "[" term,* "]")? : tactic
 
 elab_rules : tactic
