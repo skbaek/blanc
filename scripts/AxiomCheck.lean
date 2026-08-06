@@ -98,3 +98,4 @@ import Blanc.FmintSettles
 #print axioms Blanc.Fmint.rollback_revert_of_exec_revert
 #print axioms Blanc.Fmint.rollback_revert_of_token_ne_self
 #print axioms Blanc.Fmint.fmint_flashLoan_settles
+#print axioms Blanc.Fmint.fmint_flashLoan_frame_settles

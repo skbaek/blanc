@@ -177,6 +177,20 @@
 # machinery inside this row's closure and are deliberately not rows
 # themselves.
 #
+# The 87th row, added by the same plan's Step 4, lifts that headline to
+# fmint's own message frame: `Blanc.Fmint.fmint_flashLoan_frame_settles` says
+# that a `processMessage` frame running `flashLoan` under those same entry
+# conditions comes back with `out.error = none` or `out.error = some .revert`
+# and nothing else — no stored exceptional halt, whatever bytecode answers the
+# callback. The non-consensus arm is quarantined here by the shape of the
+# standing `.ok out` premise (such an error never reaches a settlement at
+# all), not assumed away; `h_static` is inherited as `msg.isStatic` and is a
+# premise about fmint's CALLER, not the borrower. Every restriction on the
+# 86th row carries over verbatim, and the frame-family restrictions of
+# `rollback_revert_of_token_ne_self` carry over too: one frame and never a
+# transaction, `Xlot.Filled` and the precompile-mode exclusion still premises,
+# canonical calldata still binding, and no exhaustiveness claim anywhere.
+#
 # Each row carries its OWN pinned expected axiom set (see ROWS below), and a
 # theorem's axiom closure must equal its row's set exactly, order-insensitive.
 # Any extra axiom fails — sorryAx, ofReduceBool/ofReduceNat, and also
@@ -309,7 +323,8 @@ Blanc.Fmint.tokenNeSelf_runCompiledTo|$STANDARD
 Blanc.Fmint.fmint_token_ne_self_reverts|$STANDARD
 Blanc.Fmint.rollback_revert_of_exec_revert|$STANDARD
 Blanc.Fmint.rollback_revert_of_token_ne_self|$STANDARD
-Blanc.Fmint.fmint_flashLoan_settles|$STANDARD"
+Blanc.Fmint.fmint_flashLoan_settles|$STANDARD
+Blanc.Fmint.fmint_flashLoan_frame_settles|$STANDARD"
 # Secondary net only: the exact-set comparison below is the primary check;
 # this pattern catches forbidden names in output the per-theorem parse missed.
 FORBIDDEN='sorryAx|ofReduceBool|ofReduceNat|_native\.'

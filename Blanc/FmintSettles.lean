@@ -53,6 +53,24 @@ lemma Devm.logs_setMach {devm : Devm} {m : Mach} :
 lemma Devm.accessedStorageKeys_setMach {devm : Devm} {m : Mach} :
     (devm.setMach m).accessedStorageKeys = devm.accessedStorageKeys := rfl
 
+/-- The settled-error field through `setMach`, on the same footing.  This is
+the field the *frame* altitude reads: `processMessage.settle` decides between
+`out.error = none` and a rollback by looking at it, so a frame-level statement
+about a successful outcome needs it carried the whole way down the walk. -/
+lemma Devm.error_setMach {devm : Devm} {m : Mach} :
+    (devm.setMach m).error = devm.error := rfl
+
+/-- The same field through the two operations the `.ok` terminal performs:
+`RETURN` reads its window (which may extend memory) and installs the output. -/
+lemma Devm.error_withOutput {devm : Devm} {out : Bytes} :
+    (devm.withOutput out).error = devm.error := rfl
+
+lemma Devm.error_memRead_snd {devm : Devm} {i sz : Nat} :
+    ((devm.memRead i sz).2).error = devm.error := rfl
+
+lemma Devm.error_addLog {devm : Devm} {l : Log} :
+    (devm.addLog l).error = devm.error := rfl
+
 /-- `Sevm.argWord` at its own definition, as a rewrite in the direction the walk
 produces.  `arg k` compiles to `CALLDATALOAD (32 * k + 4)`, so a walk's stack
 carries `Sevm.dataWord` where a statement carries `Sevm.argWord`; the two are
@@ -707,6 +725,7 @@ theorem flashLoan_execSat_mint {sevm : Sevm} {pre : Devm}
       (∀ p : Adr × B256, p ∈ pre.accessedStorageKeys →
         p ∈ b.accessedStorageKeys) →
       b.logs = pre.logs →
+      b.error = pre.error →
       pre.gasLeft - flashLoanMintGas ≤ G → G ≤ pre.gasLeft →
       Func.ExecSat (fmint.main :: fmint.aux) sevm
         (b.setMach ⟨[amount, receiver], Mem.empty, G⟩) flashLoanFromMintLog P) :
@@ -741,7 +760,7 @@ theorem flashLoan_execSat_mint {sevm : Sevm} {pre : Devm}
     (v := Devm.getStorVal pre sevm.currentTarget supplySlot) rfl
     (M := Mem.empty) rfl
     (by simp only [Devm.gasLeft_setMach, gasColdSload]; omega) ?_
-  intro b₁ c₁ G₁ hw₁ hacc₁ hstor₁ hrc₁ hlog₁ hlo₁ hhi₁ hG₁
+  intro b₁ c₁ G₁ hw₁ hacc₁ hstor₁ hrc₁ hlog₁ herr₁ hlo₁ hhi₁ hG₁
   simp only [Devm.gasLeft_setMach, gasWarmAccess, gasColdSload] at hG₁ hlo₁ hhi₁
   apply Func.execSat_segment
   · intro ex hex
@@ -757,7 +776,7 @@ theorem flashLoan_execSat_mint {sevm : Sevm} {pre : Devm}
     (v := Devm.getStorVal b₁ sevm.currentTarget (Sevm.argWord sevm 0)) rfl
     (M := Mem.empty) rfl
     (by simp only [Devm.gasLeft_setMach, gasColdSload]; omega) ?_
-  intro b₂ c₂ G₂ hw₂ hacc₂ hstor₂ hrc₂ hlog₂ hlo₂ hhi₂ hG₂
+  intro b₂ c₂ G₂ hw₂ hacc₂ hstor₂ hrc₂ hlog₂ herr₂ hlo₂ hhi₂ hG₂
   simp only [Devm.gasLeft_setMach, gasWarmAccess, gasColdSload] at hG₂ hlo₂ hhi₂
   apply Func.execSat_segment
   · intro ex hex
@@ -766,7 +785,7 @@ theorem flashLoan_execSat_mint {sevm : Sevm} {pre : Devm}
   refine Func.execSat_sstore_warm_step rfl hw₂ h_static
     (M := Mem.empty) rfl
     (by simp only [Devm.gasLeft_setMach, gasStorageSet]; omega) ?_
-  intro b₃ c₃ G₃ hkey₃ hoth₃ hacc₃ hlog₃ hc₃ hG₃
+  intro b₃ c₃ G₃ hkey₃ hoth₃ hacc₃ hlog₃ herr₃ hc₃ hG₃
   simp only [Devm.gasLeft_setMach, gasStorageSet] at hG₃ hc₃
   have hws₃ : (⟨sevm.currentTarget, supplySlot⟩ : Adr × B256)
       ∈ b₃.accessedStorageKeys := by
@@ -785,7 +804,7 @@ theorem flashLoan_execSat_mint {sevm : Sevm} {pre : Devm}
   · exact hws₃
   · rfl
   · simp only [Devm.gasLeft_setMach, gasStorageSet]; omega
-  intro b₄ c₄ G₄ hkey₄ hoth₄ hacc₄ hlog₄ hc₄ hG₄
+  intro b₄ c₄ G₄ hkey₄ hoth₄ hacc₄ hlog₄ herr₄ hc₄ hG₄
   simp only [Devm.gasLeft_setMach, gasStorageSet] at hG₄ hc₄
   have h_ne_rs : ((sevm.currentTarget, Sevm.dataWord sevm (32 * 0 + 4))
       : Adr × B256) ≠ (sevm.currentTarget, supplySlot) := by
@@ -810,6 +829,7 @@ theorem flashLoan_execSat_mint {sevm : Sevm} {pre : Devm}
   refine h_cont b₄ G₄ h_rcv h_sup (fun a k h_ne_r h_ne_s => ?_) ?_ ?_
     (fun p hp => ?_)
     (by simp only [hlog₄, Devm.logs_setMach, hlog₃, hlog₂, hlog₁])
+    (by simp only [herr₄, Devm.error_setMach, herr₃, herr₂, herr₁])
     (by omega) (by omega)
   · have h_nr : (a, k) ≠ (sevm.currentTarget, Sevm.dataWord sevm (32 * 0 + 4)) := by
       rw [h_d0]; exact h_ne_r
@@ -854,6 +874,7 @@ theorem flashLoan_execSat_call {sevm : Sevm} {pre : Devm}
       (∀ p : Adr × B256, p ∈ pre.accessedStorageKeys →
         p ∈ b.accessedStorageKeys) →
       b.logs = pre.logs ++ [flashLoanMintLog sevm receiver amount] →
+      b.error = pre.error →
       pre.gasLeft - flashLoanPreCallGas data.length ≤ G → G ≤ pre.gasLeft →
       Func.ExecSat (fmint.main :: fmint.aux) sevm
         (b.setMach ⟨[Nat.toB256 G, receiver, 0, callbackArgsOffset,
@@ -868,7 +889,7 @@ theorem flashLoan_execSat_call {sevm : Sevm} {pre : Devm}
     h_stack h_mem (by
       simp only [flashLoanLogGas, flashLoanCallbackGas, flashLoanCopyGas,
         gVerylow, gBase, gMemory, gLog, gLogdata, gLogtopic] at h_pre; omega) ?_
-  intro b₀ G₀ h_rcv h_sup h_oth hw_r hw_s hw_mono h_log h_lo h_hi
+  intro b₀ G₀ h_rcv h_sup h_oth hw_r hw_s hw_mono h_log h_err h_lo h_hi
   rw [flashLoanMintGas_eq] at h_lo
   -- the mint's `Transfer`, then the callback's argument build
   have hG₀ : flashLoanLogGas + flashLoanCallbackGas data.length ≤ G₀ := by
@@ -892,7 +913,7 @@ theorem flashLoan_execSat_call {sevm : Sevm} {pre : Devm}
   · exact Devm.extCost_add_of_size Mem.size_write_word (by decide)
   · exact Mem.read_write_word
   · exact Mem.read_snd_eq_self (by rw [Mem.size_write_word]; decide)
-  intro b G hlogb hstorb haccb hGb
+  intro b G hlogb hstorb haccb herrb hGb
   simp only [Devm.gasLeft_setMach, flashLoanLogGas, gVerylow, gBase, gMemory,
     gLog, gLogdata, gLogtopic] at hGb hN
   have h_gas' : flashLoanCallbackGas data.length ≤ G := by
@@ -1033,7 +1054,7 @@ theorem flashLoan_execSat_call {sevm : Sevm} {pre : Devm}
     rw [← hM₈, ← hM₇, ← hM₆, ← hM₅, ← hM₄, ← hM₃, ← hM₂, ← hM₁]
     rfl
   rw [h_img]
-  refine h_cont b (G₈ - 31) ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
+  refine h_cont b (G₈ - 31) ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
   · rw [hstorb]; exact h_rcv
   · rw [hstorb]; exact h_sup
   · intro a k hk₁ hk₂; rw [hstorb]; exact h_oth a k hk₁ hk₂
@@ -1042,6 +1063,9 @@ theorem flashLoan_execSat_call {sevm : Sevm} {pre : Devm}
   · intro p hp; rw [haccb]; exact hw_mono p hp
   · rw [hlogb]
     simp only [Devm.logs_setMach, h_log, flashLoanMintLog]
+  · rw [herrb]
+    simp only [Devm.error_setMach]
+    exact h_err
   · simp only [flashLoanPreCallGas, flashLoanMintGas_eq, flashLoanLogGas,
       flashLoanCallbackGas, gVerylow, gBase, gMemory, gLog, gLogdata,
       gLogtopic] at *
@@ -1156,14 +1180,14 @@ theorem flashLoan_execSat_flag {sevm : Sevm} {pre : Devm}
       Func.ExecSat (fmint.main :: fmint.aux) sevm
         (d.setMach ⟨0 :: [amount, receiver],
           flashLoanCallMem sevm amount data, Gc⟩) flashLoanFromFlag P)
-    (h_flag1 : ∀ (d : Devm) (Gc : Nat), K ≤ Gc →
+    (h_flag1 : ∀ (d : Devm) (Gc : Nat), K ≤ Gc → d.error = pre.error →
       Func.ExecSat (fmint.main :: fmint.aux) sevm
         (d.setMach ⟨1 :: [amount, receiver],
           flashLoanCallMem sevm amount data, Gc⟩) flashLoanFromFlag P) :
     Prog.ExecSat sevm pre fmint P := by
   refine flashLoan_execSat_call h_sel h_dec h_size h_token h_addr h_nof h_static
     h_stack h_mem (by omega) ?_
-  intro b G h_rcv h_sup h_oth hw_r hw_s hw_mono h_log h_lo h_hi
+  intro b G h_rcv h_sup h_oth hw_r hw_s hw_mono h_log h_err h_lo h_hi
   have hKG : 2 * gasColdAccountAccess + 64 * K ≤ G := by omega
   rw [show flashLoanFromCall = Ninst.call ::: flashLoanFromFlag from rfl]
   have h_cov := flashLoanCallMem_covered (sevm := sevm) (amount := amount)
@@ -1175,6 +1199,11 @@ theorem flashLoan_execSat_flag {sevm : Sevm} {pre : Devm}
       (st.setMach ⟨[amount, receiver], st.memory, st.gasLeft⟩) receiver.toAdr)
       receiver.toAdr with ⟨dp, dadr, dcode, dgc, d1⟩
   obtain ⟨hd1s, hd1m, hd1g, hdgc⟩ := accessDelegation_inv hdel
+  have hd1e : d1.error = pre.error := by
+    rw [accessDelegation_error hdel]
+    show st.error = pre.error
+    simp only [hst, Devm.error_setMach]
+    exact h_err
   have hd1s' : d1.stack = [amount, receiver] := hd1s
   have hd1m' : d1.memory = flashLoanCallMem sevm amount data := hd1m
   have hd1g' : d1.gasLeft = G := hd1g
@@ -1261,7 +1290,10 @@ theorem flashLoan_execSat_flag {sevm : Sevm} {pre : Devm}
           exact Func.execSat_next
             (Ninst.runCompiled_exec_doneFrame h_step henter hres)
             (h_flag1 (incorporateChildOnSuccess P' child child.output)
-              (P'.gasLeft + child.gasLeft) (by omega))
+              (P'.gasLeft + child.gasLeft) (by omega)
+              (by show P'.error = pre.error
+                  simp only [hP', callSpawnParent_error]
+                  exact hd1e))
     · -- the entered frame: the child's derivation is `exec cevm`, by totality
       rcases hsettle : (Frame.ofCall msg').settle (exec cevm)
         with ⟨e, st', ca, tra⟩ | child
@@ -1300,7 +1332,10 @@ theorem flashLoan_execSat_flag {sevm : Sevm} {pre : Devm}
             (Ninst.runCompiled_call_zero_value rfl h_ext hdel hacc.symm h_split
               h_gcross hd henter hres)
             (h_flag1 (incorporateChildOnSuccess P' child child.output)
-              (P'.gasLeft + child.gasLeft) (by omega))
+              (P'.gasLeft + child.gasLeft) (by omega)
+              (by show P'.error = pre.error
+                  simp only [hP', callSpawnParent_error]
+                  exact hd1e))
 
 /-- **The callback-failed leaf.**  Whatever pushed the `0` — a reverting or
 halting borrower, a failed precompile, or the depth limit — `flashLoan` tests
@@ -1644,7 +1679,7 @@ lemma execSat_allowanceLow_leaf {sevm : Sevm} {d : Devm}
   · exact h_amnt
   · rfl
   · simp only [Devm.gasLeft_setMach, gasColdSload, gVerylow]; omega
-  · intro base c G h_in h_mono h_stor h_rc h_logs h_lo h_hi h_geq
+  · intro base c G h_in h_mono h_stor h_rc h_logs h_er h_lo h_hi h_geq
     have hG : 49 ≤ G := by
       simp only [Devm.gasLeft_setMach, gVerylow] at h_geq
       simp only [gasColdSload] at h_hi
@@ -1668,6 +1703,7 @@ lemma execSat_spendInf_step {sevm : Sevm} {d : Devm}
     (h_gas : 2142 ≤ Gc)
     (h_next : ∀ (b : Devm) (G : Nat),
       (∀ (a : Adr) (k : B256), b.getStorVal a k = d.getStorVal a k) →
+      b.error = d.error →
       Gc - 2142 ≤ G →
       Func.ExecSat (fmint.main :: fmint.aux) sevm
         (b.setMach ⟨[wad, receiver], M, G⟩) burnAndReturn P) :
@@ -1685,16 +1721,17 @@ lemma execSat_spendInf_step {sevm : Sevm} {d : Devm}
   · exact h_amnt
   · rfl
   · simp only [Devm.gasLeft_setMach, gasColdSload, gVerylow]; omega
-  · intro base c G h_in h_mono h_stor h_rc h_logs h_lo h_hi h_geq
+  · intro base c G h_in h_mono h_stor h_rc h_logs h_er h_lo h_hi h_geq
     simp only [Devm.gasLeft_setMach, gVerylow] at h_geq
     simp only [gasColdSload] at h_hi
     have hG : 39 ≤ G := by omega
-    refine Func.execSat_segment ?_ (h_next base (G - 39) ?_ (by omega))
+    refine Func.execSat_segment ?_ (h_next base (G - 39) ?_ ?_ (by omega))
     · intro ex hex
       func_run (7) [~~~ amnt, 1]
       exact hex
     · intro a k
       exact h_stor a k
+    · simpa only [Devm.error_setMach] using h_er
 
 /-- **Through the finite-allowance arm.**  The allowance covers the amount
 owed: it is decremented and written back — the one `SSTORE` of the arm, warm
@@ -1712,6 +1749,7 @@ lemma execSat_spendFin_step {sevm : Sevm} {d : Devm}
       b.getStorVal sevm.currentTarget h = amnt - wad →
       (∀ (a : Adr) (k : B256), (a, k) ≠ (sevm.currentTarget, h) →
         b.getStorVal a k = d.getStorVal a k) →
+      b.error = d.error →
       Gc - 22171 ≤ G →
       Func.ExecSat (fmint.main :: fmint.aux) sevm
         (b.setMach ⟨[wad, receiver], M, G⟩) burnAndReturn P) :
@@ -1729,7 +1767,7 @@ lemma execSat_spendFin_step {sevm : Sevm} {d : Devm}
   · exact h_amnt
   · rfl
   · simp only [Devm.gasLeft_setMach, gasColdSload, gVerylow]; omega
-  · intro base c G h_in h_mono h_stor h_rc h_logs h_lo h_hi h_geq
+  · intro base c G h_in h_mono h_stor h_rc h_logs h_er h_lo h_hi h_geq
     simp only [Devm.gasLeft_setMach, gVerylow] at h_geq
     simp only [gasColdSload] at h_hi
     have hG : 20068 ≤ G := by omega
@@ -1744,17 +1782,19 @@ lemma execSat_spendFin_step {sevm : Sevm} {d : Devm}
       · exact h_static
       · rfl
       · simp only [Devm.gasLeft_setMach, gasStorageSet]; omega
-      · intro base2 c2 G2 hkey hoth hacc hlogs2 hle2 hgeq2
+      · intro base2 c2 G2 hkey hoth hacc hlogs2 her2 hle2 hgeq2
         simp only [Devm.gasLeft_setMach] at hgeq2
         simp only [gasStorageSet] at hle2
         refine Func.execSat_segment ?_
-          (h_next base2 (G2 - 12) hkey ?_ (by omega))
+          (h_next base2 (G2 - 12) hkey ?_ ?_ (by omega))
         · intro ex hex
           func_run (1) []
           exact hex
         · intro a k hne
           rw [hoth a k hne]
           exact h_stor a k
+        · rw [her2]
+          simpa only [Devm.error_setMach] using h_er
 
 /-- **The balance-low leaf.**  The receiver's balance cannot cover the burn:
 `burnAndReturn` deliberately reverts before writing anything. -/
@@ -1778,7 +1818,7 @@ lemma execSat_burnLow_leaf {sevm : Sevm} {b : Devm}
   · exact h_rbal
   · rfl
   · simp only [Devm.gasLeft_setMach, gasColdSload, gVerylow]; omega
-  · intro base c G1 h_in h_mono h_stor h_rc h_logs h_lo h_hi h_geq
+  · intro base c G1 h_in h_mono h_stor h_rc h_logs h_er h_lo h_hi h_geq
     simp only [Devm.gasLeft_setMach, gVerylow] at h_geq
     simp only [gasColdSload] at h_hi
     have hG : 27 ≤ G1 := by omega
@@ -1802,7 +1842,7 @@ lemma execSat_burnOk_leaf {sevm : Sevm} {b : Devm}
     (h32 : M.size % 32 = 0)
     (h_msz : 64 ≤ M.size)
     (h_gas : 46046 ≤ G)
-    (hP : ∀ post : Devm, P (.ok post)) :
+    (hP : ∀ post : Devm, post.error = b.error → P (.ok post)) :
     Func.ExecSat (fmint.main :: fmint.aux) sevm
       (b.setMach ⟨[wad, receiver], M, G⟩) burnAndReturn P := by
   have hs1 : (M.write ((0 * 32 : B256)).toNat wad.toBytes).size = M.size := by
@@ -1837,7 +1877,7 @@ lemma execSat_burnOk_leaf {sevm : Sevm} {b : Devm}
   · exact h_rbal
   · rfl
   · simp only [Devm.gasLeft_setMach, gasColdSload, gVerylow]; omega
-  · intro base c G1 h_in h_mono h_stor h_rc h_logs h_lo h_hi h_geq
+  · intro base c G1 h_in h_mono h_stor h_rc h_logs h_er h_lo h_hi h_geq
     simp only [Devm.gasLeft_setMach, gVerylow] at h_geq
     simp only [gasColdSload] at h_hi
     have hG1 : 43943 ≤ G1 := by omega
@@ -1852,7 +1892,7 @@ lemma execSat_burnOk_leaf {sevm : Sevm} {b : Devm}
       · exact h_static
       · rfl
       · simp only [Devm.gasLeft_setMach, gasStorageSet]; omega
-      · intro base2 c2 G2 hkey2 hoth2 hacc2 hlogs2 hle2 hgeq2
+      · intro base2 c2 G2 hkey2 hoth2 hacc2 hlogs2 her2 hle2 hgeq2
         simp only [Devm.gasLeft_setMach] at hgeq2
         simp only [gasStorageSet] at hle2
         have hG2 : 23909 ≤ G2 := by omega
@@ -1868,8 +1908,8 @@ lemma execSat_burnOk_leaf {sevm : Sevm} {b : Devm}
           · rfl
           · rfl
           · simp only [Devm.gasLeft_setMach, gasColdSload]; omega
-          · intro base3 c3 G3 h_in3 h_mono3 h_stor3 h_rc3 h_logs3 h_lo3
-              h_hi3 h_geq3
+          · intro base3 c3 G3 h_in3 h_mono3 h_stor3 h_rc3 h_logs3 h_er3
+              h_lo3 h_hi3 h_geq3
             simp only [Devm.gasLeft_setMach] at h_geq3
             simp only [gasColdSload] at h_hi3
             have hG3 : 21804 ≤ G3 := by omega
@@ -1887,7 +1927,7 @@ lemma execSat_burnOk_leaf {sevm : Sevm} {b : Devm}
               · exact h_static
               · rfl
               · simp only [Devm.gasLeft_setMach, gasStorageSet]; omega
-              · intro base4 c4 G4 hkey4 hoth4 hacc4 hlogs4 hle4 hgeq4
+              · intro base4 c4 G4 hkey4 hoth4 hacc4 hlogs4 her4 hle4 hgeq4
                 simp only [Devm.gasLeft_setMach] at hgeq4
                 simp only [gasStorageSet] at hle4
                 have hG4 : 1790 ≤ G4 := by omega
@@ -1911,7 +1951,10 @@ lemma execSat_burnOk_leaf {sevm : Sevm} {b : Devm}
                           = 32 from by decide]
                         omega))
                       (Nat.add_zero _).symm rfl
-                · exact hP _
+                · refine hP _ ?_
+                  simp only [Devm.error_addLog, Devm.error_setMach,
+                    Devm.error_withOutput, Devm.error_memRead_snd,
+                    her4, h_er3, her2, h_er]
 
 /-! ## The continuation bound
 
@@ -2019,20 +2062,21 @@ block: the borrower may burn, bomb, or squander everything it is offered and
 the caller still cannot be starved. -/
 theorem flashLoanGas_zero : flashLoanGas 0 = 4429379 := by decide
 
-/-- **The headline: `flashLoan` cannot be griefed into an exceptional halt.**
+/-- **The trichotomy, with the settled-error field carried on the `.ok` arm.**
 
-Under fmint's own entry conditions — and with **no premise about the
-borrower**, whose code, behaviour, gas use and settlement are all quantified
-by `pre` itself — every outcome of the frame is one of: a success, a
-deliberate `revert`, or the non-consensus machine-fault channel that
-`SettledHalt` cannot even store.  In particular no borrower behaviour reaches
-an `ExceptionalHalt`: `outOfGas` is unreachable however the callback burns,
-because `h_gas` funds the worst leaf through EIP-150's retained sixty-fourth.
+This is the assembled case tree, and `fmint_flashLoan_settles` below is its
+pinned corollary.  The extra conjunct — the successful outcome's
+`Devm.error` is the one the frame started with — is what the *frame* altitude
+needs and cannot recover afterwards: `processMessage.settle` decides between
+`out.error = none` and a rollback by reading that field, and no lemma in the
+repository transports it across an arbitrary `Exec`.  So it is threaded down
+the walk instead, one handed-back equation per continuation-passing step, and
+discharged at the `.ok` terminal by `rfl` (see `Devm.error_setMach` and its
+three siblings at the head of this module).
 
-`h_static` is a premise about the *caller's* frame, not the borrower: a
-caller who `STATICCALL`s `flashLoan` halts at the mint's first `SSTORE` by
-its own doing (the F21 amendment, user-adjudicated 2026-08-07). -/
-theorem fmint_flashLoan_settles {sevm : Sevm} {pre : Devm}
+It says nothing new about the borrower: the field is untouched by
+`incorporateChildOnSuccess`/`OnError`, so a callback cannot write it. -/
+theorem flashLoan_settles_error {sevm : Sevm} {pre : Devm}
     {receiver token amount : B256} {data : Bytes}
     (h_code : some sevm.code.toList = Prog.compile fmint)
     (h_sel : Sevm.selector sevm = flashLoanSelector)
@@ -2047,11 +2091,11 @@ theorem fmint_flashLoan_settles {sevm : Sevm} {pre : Devm}
     (h_stack : pre.stack = [])
     (h_mem : pre.memory = Mem.empty)
     (h_gas : flashLoanGas data.length ≤ pre.gasLeft) :
-    (∃ post, exec ⟨0, sevm, pre⟩ = .ok post) ∨
+    (∃ post, exec ⟨0, sevm, pre⟩ = .ok post ∧ post.error = pre.error) ∨
     (∃ post, exec ⟨0, sevm, pre⟩ = .error (.revert, post)) ∨
     (∃ e post, exec ⟨0, sevm, pre⟩ = .error (e, post) ∧ NonConsensus e) := by
   refine Prog.execSat_out (P := fun ex =>
-      (∃ post, ex = .ok post) ∨
+      (∃ post, ex = .ok post ∧ post.error = pre.error) ∨
       (∃ post, ex = .error (.revert, post)) ∨
       (∃ e post, ex = .error (e, post) ∧ NonConsensus e)) ?_ h_code
   refine flashLoan_execSat_flag (K := flashLoanContGasMax) h_sel h_dec h_size
@@ -2062,7 +2106,7 @@ theorem fmint_flashLoan_settles {sevm : Sevm} {pre : Devm}
     rw [flashLoanContGasMax_eq] at hK
     exact execSat_flagZero_leaf (by omega)
       (fun post => Or.inr (Or.inl ⟨post, rfl⟩))
-  · intro dd Gc hK
+  · intro dd Gc hK hEr
     rw [flashLoanContGasMax_eq] at hK
     by_cases hLen : Nat.toB256 dd.returnData.length < (32 : B256)
     · refine execSat_retdataShort_leaf' ?_ (by omega)
@@ -2152,7 +2196,7 @@ theorem fmint_flashLoan_settles {sevm : Sevm} {pre : Devm}
                     = if ~~~ dd.getStorVal sevm.currentTarget hh = 0
                       then (1 : B256) else 0 from rfl, if_pos hMax])
                 (by omega) ?_
-              intro b G hstor hG
+              intro b G hstor hEb hG
               by_cases hBal : b.getStorVal sevm.currentTarget receiver < amount
               · exact execSat_burnLow_leaf rfl
                   (by rw [show (b.getStorVal sevm.currentTarget receiver
@@ -2166,7 +2210,7 @@ theorem fmint_flashLoan_settles {sevm : Sevm} {pre : Devm}
                     = if b.getStorVal sevm.currentTarget receiver < amount
                       then (1 : B256) else 0 from rfl, if_neg hBal])
                   h_static h32'' hmsz'' (by omega)
-                  (fun post => Or.inl ⟨post, rfl⟩)
+                  (fun post hp => Or.inl ⟨post, rfl, hp.trans (hEb.trans hEr)⟩)
             · by_cases hAlw : dd.getStorVal sevm.currentTarget hh < amount
               · exact execSat_allowanceLow_leaf rfl
                   (by rw [show B256.eqCheck
@@ -2186,7 +2230,7 @@ theorem fmint_flashLoan_settles {sevm : Sevm} {pre : Devm}
                     = if dd.getStorVal sevm.currentTarget hh < amount
                       then (1 : B256) else 0 from rfl, if_neg hAlw])
                   h_static (by omega) ?_
-                intro b G hkey hoth hG
+                intro b G hkey hoth hEb hG
                 by_cases hBal :
                     b.getStorVal sevm.currentTarget receiver < amount
                 · exact execSat_burnLow_leaf rfl
@@ -2201,7 +2245,184 @@ theorem fmint_flashLoan_settles {sevm : Sevm} {pre : Devm}
                       = if b.getStorVal sevm.currentTarget receiver < amount
                         then (1 : B256) else 0 from rfl, if_neg hBal])
                     h_static h32'' hmsz'' (by omega)
-                    (fun post => Or.inl ⟨post, rfl⟩)
+                    (fun post hp =>
+                      Or.inl ⟨post, rfl, hp.trans (hEb.trans hEr)⟩)
+
+/-- **The headline: `flashLoan` cannot be griefed into an exceptional halt.**
+
+Under fmint's own entry conditions — and with **no premise about the
+borrower**, whose code, behaviour, gas use and settlement are all quantified
+by `pre` itself — every outcome of the frame is one of: a success, a
+deliberate `revert`, or the non-consensus machine-fault channel that
+`SettledHalt` cannot even store.  In particular no borrower behaviour reaches
+an `ExceptionalHalt`: `outOfGas` is unreachable however the callback burns,
+because `h_gas` funds the worst leaf through EIP-150's retained sixty-fourth.
+
+`h_static` is a premise about the *caller's* frame, not the borrower: a
+caller who `STATICCALL`s `flashLoan` halts at the mint's first `SSTORE` by
+its own doing (the F21 amendment, user-adjudicated 2026-08-07). -/
+theorem fmint_flashLoan_settles {sevm : Sevm} {pre : Devm}
+    {receiver token amount : B256} {data : Bytes}
+    (h_code : some sevm.code.toList = Prog.compile fmint)
+    (h_sel : Sevm.selector sevm = flashLoanSelector)
+    (h_static : sevm.isStatic = false)
+    (h_dec : Sevm.DecodesCallWithTail sevm flashLoanSelector
+      [receiver, token, amount] data)
+    (h_size : 196 + ceil32 data.length < 2 ^ 256)
+    (h_token : token = sevm.currentTarget.toB256)
+    (h_addr : ValidAdr receiver)
+    (h_nof : B256.Nof ((Devm.getStor pre sevm.currentTarget).get supplySlot)
+      amount)
+    (h_stack : pre.stack = [])
+    (h_mem : pre.memory = Mem.empty)
+    (h_gas : flashLoanGas data.length ≤ pre.gasLeft) :
+    (∃ post, exec ⟨0, sevm, pre⟩ = .ok post) ∨
+    (∃ post, exec ⟨0, sevm, pre⟩ = .error (.revert, post)) ∨
+    (∃ e post, exec ⟨0, sevm, pre⟩ = .error (e, post) ∧ NonConsensus e) := by
+  rcases flashLoan_settles_error h_code h_sel h_static h_dec h_size h_token
+    h_addr h_nof h_stack h_mem h_gas with
+    ⟨post, h_ok, -⟩ | h | h
+  · exact Or.inl ⟨post, h_ok⟩
+  · exact Or.inr (Or.inl h)
+  · exact Or.inr (Or.inr h)
+
+/-! ## The frame: what fmint's caller is handed
+
+`Blanc/FmintReverts.lean`'s `rollback_revert_of_exec_revert` composes one
+`exec`-altitude *revert* into a frame settlement.  The trichotomy needs the
+same composition on all three arms at once, and the arm that is new is the
+`.ok` one: `processMessage.settle` decides between `out.error = none` and a
+rollback by reading `Devm.error`, and the successful outcome's value of that
+field is exactly what `flashLoan_settles_error` carries down the walk.
+
+**The fatal arm needs no premise of its own.**  It is excluded by the shape of
+`h_pm`: a non-consensus error propagates through `executeCode.handleError` on
+the *error* channel, `processMessage.settle` passes it through, and the frame
+never produces an `.ok out` at all.  That is what the standing `.ok out`
+premise of the whole frame family quarantines here.
+
+**Still one frame, and still not a transaction**, and still not
+exhaustiveness — `Blanc/FmintReverts.lean`'s frame banner applies verbatim. -/
+
+/-- **A frame whose code settles, settles at its frame too.**
+
+The trichotomy's generic frame composition, stated once over the abstract
+premise `h_exec` in the mold of `rollback_revert_of_exec_revert`, whose three
+structural premises (`h_fill`, `h_bt`, `h_prec`) it takes for that theorem's
+reasons.
+
+**Contract-agnostic**; it lives in fmint's module because its consumer does. -/
+theorem frame_settles_of_exec_settles {msg : Msg} {benv : Benv} {xl : Xlot}
+    {out : Devm}
+    (h_pm : ProcessMessage msg xl (.ok out))
+    (h_fill : Xlot.Filled xl)
+    (h_bt : msg.benvAfterTransfer = .ok benv)
+    (h_prec : ∀ adr, msg.codeAddress = some adr →
+      ¬ (!msg.disablePrecompiles && decide (benv.stat.rules.isPrecomp adr)) = true)
+    (h_exec :
+      (∃ post, exec ⟨0, initSevm (msg.withBenv benv),
+          initDevm (msg.withBenv benv)⟩ = .ok post ∧ post.error = none) ∨
+      (∃ post, exec ⟨0, initSevm (msg.withBenv benv),
+          initDevm (msg.withBenv benv)⟩ = .error (.revert, post)) ∨
+      (∃ e post, exec ⟨0, initSevm (msg.withBenv benv),
+          initDevm (msg.withBenv benv)⟩ = .error (e, post) ∧ NonConsensus e)) :
+    out.error = none ∨ out.error = some .revert := by
+  obtain ⟨r0, hbody, hset⟩ := ProcessMessage.iff_body.mp h_pm
+  unfold FrameBody at hbody
+  rw [h_bt] at hbody
+  have key : executeCode.handleError
+      (exec ⟨0, initSevm (msg.withBenv benv),
+        initDevm (msg.withBenv benv)⟩) = r0 := by
+    rcases h_ca : (msg.withBenv benv).codeAddress with _ | adr
+    · obtain ⟨ex', h_xl, h_he⟩ := of_executeCode_noneCode h_ca hbody
+      subst h_xl
+      obtain ⟨exc⟩ := h_fill
+      have h_eq : exec ⟨0, initSevm (msg.withBenv benv),
+          initDevm (msg.withBenv benv)⟩ = ex' :=
+        (exec_iff_exec_eq _ _ _ _).mp ⟨exc⟩
+      rw [h_eq]
+      exact h_he
+    · rcases of_executeCode_someCode h_ca hbody with
+        ⟨h_pre, -, -⟩ | ⟨-, ex', h_xl, h_he⟩
+      · exact absurd h_pre (h_prec adr h_ca)
+      · subst h_xl
+        obtain ⟨exc⟩ := h_fill
+        have h_eq : exec ⟨0, initSevm (msg.withBenv benv),
+            initDevm (msg.withBenv benv)⟩ = ex' :=
+          (exec_iff_exec_eq _ _ _ _).mp ⟨exc⟩
+        rw [h_eq]
+        exact h_he
+  rcases hr0 : r0 with p | evm
+  · rw [hr0, processMessage.settle_error] at hset; cases hset
+  · rw [hr0] at key hset
+    rcases h_exec with ⟨post, hx, herr⟩ | ⟨post, hx⟩ | ⟨e, post, hx, hnc⟩
+    · rw [hx] at key
+      have h_evm : post = evm := Except.ok.inj key
+      subst h_evm
+      unfold processMessage.settle at hset
+      dsimp only [bind, Except.bind] at hset
+      rw [if_neg (by rw [herr]; simp)] at hset
+      exact Or.inl (by rw [Except.ok.inj hset, herr])
+    · rw [hx] at key
+      have h_evm : post.withError (some .revert) = evm := Except.ok.inj key
+      subst h_evm
+      unfold processMessage.settle at hset
+      dsimp only [bind, Except.bind] at hset
+      rw [if_pos (show (post.withError (some SettledHalt.revert)).error.isSome
+        = true from rfl)] at hset
+      exact Or.inr (by rw [Except.ok.inj hset]; rfl)
+    · rcases e with r | _ | r | r
+      · exact absurd rfl (hnc (.halt r))
+      · exact absurd rfl (hnc .revert)
+      · rw [hx] at key; cases key
+      · rw [hx] at key; cases key
+
+/-- **fmint's `flashLoan` frame settles: `none` or `.revert`, never a stored
+halt.**
+
+The headline at fmint's own message frame.  `Blanc/FlashSpec.lean`'s
+restoration family says a frame that cannot succeed comes back with
+`out.error.isSome`; `Blanc/FmintReverts.lean`'s strong form names that error
+for one guard.  This says that on *this* selector, under fmint's own entry
+conditions and **with no premise about the borrower**, the only two errors the
+frame can come back with are no error at all and the deliberate `.revert` —
+whatever bytecode answers the callback.
+
+`h_stack` and `h_mem` do not appear: `initDevm`'s stack is `[]` and its memory
+is `Mem.empty` by construction, which is a fact about frame entry rather than
+a premise about it.  `h_static` is inherited as `msg.isStatic`, because
+`initSevm (msg.withBenv benv)`'s `isStatic` *is* `msg.isStatic` — a premise
+about fmint's caller, not about the borrower.
+
+Not exhaustiveness, one selector, one frame and not a transaction: see this
+section's banner. -/
+theorem fmint_flashLoan_frame_settles {msg : Msg} {benv : Benv} {xl : Xlot}
+    {out : Devm} {receiver token amount : B256} {data : Bytes}
+    (h_pm : ProcessMessage msg xl (.ok out))
+    (h_fill : Xlot.Filled xl)
+    (h_bt : msg.benvAfterTransfer = .ok benv)
+    (h_prec : ∀ adr, msg.codeAddress = some adr →
+      ¬ (!msg.disablePrecompiles && decide (benv.stat.rules.isPrecomp adr)) = true)
+    (h_code : some (initSevm (msg.withBenv benv)).code.toList = Prog.compile fmint)
+    (h_sel : Sevm.selector (initSevm (msg.withBenv benv)) = flashLoanSelector)
+    (h_static : msg.isStatic = false)
+    (h_dec : Sevm.DecodesCallWithTail (initSevm (msg.withBenv benv))
+      flashLoanSelector [receiver, token, amount] data)
+    (h_size : 196 + ceil32 data.length < 2 ^ 256)
+    (h_token : token = (initSevm (msg.withBenv benv)).currentTarget.toB256)
+    (h_addr : ValidAdr receiver)
+    (h_nof : B256.Nof ((Devm.getStor (initDevm (msg.withBenv benv))
+      (initSevm (msg.withBenv benv)).currentTarget).get supplySlot) amount)
+    (h_gas : flashLoanGas data.length
+      ≤ (initDevm (msg.withBenv benv)).gasLeft) :
+    out.error = none ∨ out.error = some .revert := by
+  refine frame_settles_of_exec_settles h_pm h_fill h_bt h_prec ?_
+  rcases flashLoan_settles_error h_code h_sel h_static h_dec h_size h_token
+    h_addr h_nof rfl rfl h_gas with
+    ⟨post, h_ok, h_err⟩ | h | h
+  · exact Or.inl ⟨post, h_ok, h_err⟩
+  · exact Or.inr (Or.inl h)
+  · exact Or.inr (Or.inr h)
 
 end Fmint
 end Blanc

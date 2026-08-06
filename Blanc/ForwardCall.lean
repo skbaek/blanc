@@ -1414,6 +1414,7 @@ lemma Func.execSat_sload_step {fs : List Func} {sevm : Sevm} {devm : Devm}
       (∀ (a : Adr) (k' : B256), base.getStorVal a k' = devm.getStorVal a k') →
       base.refundCounter = devm.refundCounter →
       base.logs = devm.logs →
+      base.error = devm.error →
       gasWarmAccess ≤ c → c ≤ gasColdSload →
       devm.gasLeft = G + c →
       Func.ExecSat fs sevm (base.setMach ⟨v :: s, M, G⟩) rest P) :
@@ -1432,6 +1433,7 @@ lemma Func.execSat_sload_step {fs : List Func} {sevm : Sevm} {devm : Devm}
       (fun _ hp => mem_accessedStorageKeys_sload_of_mem h_base.symm hp)
       (fun _ _ => getStorVal_sload_of h_base.symm)
       (refundCounter_sload_of h_base.symm) (logs_sload_of h_base.symm)
+      (by rw [h_base]; split <;> rfl)
       h_lo h_hi (by omega) with ⟨ex, hto, hp⟩
   exact ⟨ex, Func.execTo_next
     (Ninst.runCompiled_sload_of (base := base) (c := c) (G := devm.gasLeft - c)
@@ -1453,6 +1455,7 @@ lemma Func.execSat_sstore_warm_step {fs : List Func} {sevm : Sevm}
         base.getStorVal a k' = devm.getStorVal a k') →
       base.accessedStorageKeys = devm.accessedStorageKeys →
       base.logs = devm.logs →
+      base.error = devm.error →
       c ≤ gasStorageSet →
       devm.gasLeft = G + c →
       Func.ExecSat fs sevm (base.setMach ⟨s, M, G⟩) rest P) :
@@ -1497,7 +1500,7 @@ lemma Func.execSat_sstore_warm_step {fs : List Func} {sevm : Sevm}
   rcases h_next _ _ (devm.gasLeft - sstoreValueCost
       (getOrigStorVal sevm sevm.currentTarget k)
       (devm.getStorVal sevm.currentTarget k) v)
-      h_key h_oth rfl rfl h_bound (by omega) with ⟨ex, hto, hp⟩
+      h_key h_oth rfl rfl rfl h_bound (by omega) with ⟨ex, hto, hp⟩
   exact ⟨ex, Func.execTo_next
     (Ninst.runCompiled_sstore_warm (c := sstoreValueCost
         (getOrigStorVal sevm sevm.currentTarget k)
@@ -1544,12 +1547,13 @@ lemma Func.execSat_log_step {fs : List Func} {sevm : Sevm} {devm : Devm}
       base.logs = devm.logs ++ [⟨sevm.currentTarget, topics, payload⟩] →
       (∀ (a : Adr) (k : B256), base.getStorVal a k = devm.getStorVal a k) →
       base.accessedStorageKeys = devm.accessedStorageKeys →
+      base.error = devm.error →
       devm.gasLeft = G + c →
       Func.ExecSat fs sevm (base.setMach ⟨s, M', G⟩) rest P) :
     Func.ExecSat fs sevm devm (Func.next (.reg (.log n)) rest) P := by
   subst h_mem
   rcases h_next (devm.addLog ⟨sevm.currentTarget, topics, payload⟩)
-      (devm.gasLeft - c) rfl (fun _ _ => rfl) rfl (by omega)
+      (devm.gasLeft - c) rfl (fun _ _ => rfl) rfl rfl (by omega)
     with ⟨ex, hto, hp⟩
   exact ⟨ex, Func.execTo_next
     (Ninst.runCompiled_log_of (G := devm.gasLeft - c) h_stk h_len h_static
@@ -1602,6 +1606,18 @@ lemma accessDelegation_inv {devm d1 : Devm} {a dadr : Adr} {dp : Bool}
     refine ⟨rfl, rfl, rfl, ?_⟩
     unfold accessCost
     split <;> decide
+
+/-- And it leaves the settled-error field alone, which is how a frame-level
+statement carries "this frame never stored a halt" across the `CALL`. -/
+lemma accessDelegation_error {devm d1 : Devm} {a dadr : Adr} {dp : Bool}
+    {code : ByteArray} {dgc : Nat}
+    (h : accessDelegation devm a = ⟨dp, dadr, code, dgc, d1⟩) :
+    d1.error = devm.error := by
+  unfold accessDelegation at h
+  rcases hd : getDelegatedCodeAddress (devm.state.getCode a) with _ | adr <;>
+    simp only [hd] at h
+  · cases h; rfl
+  · cases h; rfl
 
 /-- The account-access charge is at most the cold price. -/
 lemma accessCost_le {x : Adr} {a : AdrSet} : accessCost x a ≤ gasColdAccountAccess := by
@@ -1673,5 +1689,10 @@ lemma callSpawnParent_memory {d1 : Devm} {c ii is oi os : Nat} :
 
 lemma callSpawnParent_gasLeft {d1 : Devm} {c ii is oi os : Nat} :
     (callSpawnParent d1 c ii is oi os).gasLeft = d1.gasLeft - c := rfl
+
+/-- And the settled-error field, which the suspension does not touch either:
+`withReturnData` writes `meta.returnData`, not `meta.error`. -/
+lemma callSpawnParent_error {d1 : Devm} {c ii is oi os : Nat} :
+    (callSpawnParent d1 c ii is oi os).error = d1.error := rfl
 
 end Blanc
