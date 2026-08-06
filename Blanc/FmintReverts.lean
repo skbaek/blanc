@@ -176,5 +176,125 @@ theorem fmint_unknown_selector_reverts {sevm : Sevm} {pre : Devm}
   obtain ⟨post, h_run, h_out⟩ := unknownSelector_runCompiledTo h_sel h_stack h_gas
   exact ⟨post, Prog.exec_of_runCompiledTo h_run h_code, h_out⟩
 
+/-! ## Target E-2 — `flashLoan` with `token ≠ self`
+
+ERC-3156 mandates a revert when the requested `token` is not the lender itself,
+and fmint reaches it through one explicit guard placed *before* the bound check,
+so the reason does not depend on `amount` (`FMINT_DEVIATIONS.md` row 5).  That
+guard is the first thing `flashLoan` does:
+
+    arg 1 +++ address ::: eq ::: iszero ::: .rev <?> …
+
+and `a <?> b = Func.branch b a`, so a *nonzero* condition takes the `.succ` arm
+into `Func.rev`.  `token ≠ self` makes the `EQ` `0` and the `ISZERO` `1`, which
+is exactly that arm.
+
+Two things make this the cleanest target in the genre.  **The path reads no
+storage**, so unlike `totalSupply()` it needs no cold/warm premise at all.  And
+it is the direct counterpart of `Blanc/FlashSpec.lean`'s
+`no_success_of_token_ne_self`: the four premises below its own are that
+theorem's verbatim, so the two can be read side by side.  They remain
+independent statements — see this module's banner. -/
+
+/-- Every gas constant the `token ≠ self` path charges, in the order it charges
+them: the entry `JUMPDEST`; `fsig`; three dispatch forks, the first jumping and
+the other two falling through; the leaf's `PUSH`/`EQ` and its taken arm; guard
+(0)'s `PUSH`/`CALLDATALOAD`/`ADDRESS`/`EQ`/`ISZERO` and its jumped arm; and
+`Func.rev`'s two `PUSH0`s. -/
+def tokenNeSelfGas : Nat :=
+  gJumpdest
+    + (gBase + gVerylow + gVerylow + gVerylow)
+    + (gVerylow + gVerylow + gVerylow + (gVerylow + gHigh + gJumpdest))
+    + (gVerylow + gVerylow + gVerylow + (gVerylow + gHigh))
+    + (gVerylow + gVerylow + gVerylow + (gVerylow + gHigh))
+    + (gVerylow + gVerylow + (gVerylow + gHigh + gJumpdest))
+    + (gVerylow + gVerylow + gBase + gVerylow + gVerylow
+        + (gVerylow + gHigh + gJumpdest))
+    + (gBase + gBase)
+
+/-- 131 gas — 18 more than the unknown-selector miss, which is the cost of
+being dispatched *to* `flashLoan` and then rejected by its first guard rather
+than never arriving. -/
+theorem tokenNeSelfGas_eq : tokenNeSelfGas = 131 := by decide
+
+/-! ### The witness
+
+The hints, in the order `func_run` asks: `flashLoanSelector` for `fsig`'s
+`SHR`; `1, 0, 0` for the three dispatch forks; `1` for the leaf's `EQ`, which
+matches, so `flashLoan`'s body is entered; then `0` for the guard's `EQ` and `1`
+for its `ISZERO`.
+
+`ADDRESS` takes no hint and neither does `CALLDATALOAD`: both push a word the
+frame already determines rather than computing one, which is why the
+`pushItem`-class rule this step added to `Blanc/Forward.lean` deliberately
+consumes nothing.
+
+Two obligations come back.  The guard's `EQ` is the interesting one — the walk
+cannot know that this comparison fails, so it hands the value obligation back
+and it is discharged from `h_dec` and `h_ne`, which is the tactic working as
+designed.  The other is the terminal `REVERT`. -/
+
+/-- A `flashLoan` call on `fmint` whose `token` is not `fmint` itself has a
+gas-exact walk that reverts, with empty revert data. -/
+theorem tokenNeSelf_runCompiledTo {sevm : Sevm} {pre : Devm}
+    {receiver token amount : B256} {data : Bytes}
+    (h_sel : Sevm.selector sevm = flashLoanSelector)
+    (h_dec : Sevm.DecodesCallWithTail sevm flashLoanSelector
+      [receiver, token, amount] data)
+    (h_ne : token ≠ sevm.currentTarget.toB256)
+    (h_stack : pre.stack = [])
+    (h_gas : tokenNeSelfGas ≤ pre.gasLeft) :
+    ∃ post, Prog.RunCompiledTo sevm pre fmint (.error (.revert, post)) ∧
+      Devm.output post = [] := by
+  rw [tokenNeSelfGas_eq] at h_gas
+  set g := pre.gasLeft with hg
+  exact
+    ⟨_,
+      Prog.runCompiledTo_intro (G := g - 1)
+        (mid := pre.setMach ⟨[], pre.memory, g - 1⟩)
+        (by simp only [gJumpdest]; omega)
+        (by rw [h_stack])
+        (by
+          func_run [flashLoanSelector, 1, 0, 0, 1, 0, 1]
+          · show B256.eqCheck sevm.currentTarget.toB256 (Sevm.argWord sevm 1) = 0
+            rw [argWord_one_of_decodes h_dec]
+            show (if sevm.currentTarget.toB256 = token then (1 : B256) else 0) = 0
+            rw [if_neg (fun h => h_ne h.symm)]
+          · exact Func.runCompiledTo_rev_of (i := 0) (sz := 0) (s := [])
+              (G := g - 131) rfl Devm.extCost_empty_window rfl
+              Devm.memRead_zero),
+      rfl⟩
+
+/-- **`fmint`'s `flashLoan` reverts when `token` is not `fmint`.**
+
+The arc's headline, and the direct counterpart of
+`Blanc/FlashSpec.lean`'s `no_success_of_token_ne_self`: same four leading
+premises, and where that one rules every successful execution out, this one
+produces the execution and names its error.
+
+Neither theorem subsumes the other.  `no_success_of_token_ne_self` needs no gas
+premise, because "does not succeed" is not a claim that the frame reaches
+anything; "reverts" is, so 131 gas is not decoration here, it is what excludes
+`outOfGas` and makes the deliberate `REVERT` the outcome.
+
+The rest of the scope is this module's banner's: not exhaustiveness, one
+selector, message-call altitude, and an exact frame gas figure rather than a
+bound.  Nothing here says a *transaction* reverts, and nothing here says the
+other six guarded conditions do — each of those is its own derivation. -/
+theorem fmint_token_ne_self_reverts {sevm : Sevm} {pre : Devm}
+    {receiver token amount : B256} {data : Bytes}
+    (h_code : some sevm.code.toList = Prog.compile fmint)
+    (h_sel : Sevm.selector sevm = flashLoanSelector)
+    (h_dec : Sevm.DecodesCallWithTail sevm flashLoanSelector
+      [receiver, token, amount] data)
+    (h_ne : token ≠ sevm.currentTarget.toB256)
+    (h_stack : pre.stack = [])
+    (h_gas : tokenNeSelfGas ≤ pre.gasLeft) :
+    ∃ post, exec ⟨0, sevm, pre⟩ = .error (.revert, post) ∧
+      Devm.output post = [] := by
+  obtain ⟨post, h_run, h_out⟩ :=
+    tokenNeSelf_runCompiledTo h_sel h_dec h_ne h_stack h_gas
+  exact ⟨post, Prog.exec_of_runCompiledTo h_run h_code, h_out⟩
+
 end Fmint
 end Blanc

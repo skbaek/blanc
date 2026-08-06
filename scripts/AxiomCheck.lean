@@ -92,3 +92,5 @@ import Blanc.WethGas
 #print axioms Blanc.Fmint.fmintGas_le_max
 #print axioms Blanc.Fmint.unknownSelector_runCompiledTo
 #print axioms Blanc.Fmint.fmint_unknown_selector_reverts
+#print axioms Blanc.Fmint.tokenNeSelf_runCompiledTo
+#print axioms Blanc.Fmint.fmint_token_ne_self_reverts

@@ -287,6 +287,20 @@
 # (1.227) despite being a fraction of the latter's length. The relation layer
 # is cheap; the walks that consume it are not, and the cost is dispatch, not
 # proof.
+#
+# The second target of that step (`flashLoan` with `token != self`) re-set the
+# row 3.863 -> 5.574 (median of 5.602, 5.574, 5.521), same conditions. +1.711 s
+# for a second walk of the same dispatcher plus one guard, which is the marginal
+# cost of a target inside this genre and is the number a successor sizing it
+# should use. **The gate was already green against 3.863** -- its 2.0x threshold
+# is 7.726 -- so this is the file's own invariant being maintained (a row equals
+# the measured median of the tip it ships with), not a row raised to rescue a
+# red gate, which would be a stop condition. It is this arc's own new module's
+# row, re-set inside the step that created it, exactly as Blanc/Reverts.lean's
+# was at Step 2's three checkpoints. No pre-existing row was touched by either
+# step: Blanc/Forward.lean, which Step 3 grows with the generalised walk and the
+# `pushItem`-class rule, measured 5.094 (median of 5.094, 5.078, 5.298) against
+# its UNCHANGED 4.829 row.
 OK	1.241	Blanc.lean
 OK	1.257	Blanc/Basic.lean
 OK	2.454	Blanc/CommonCore.lean
@@ -306,7 +320,7 @@ OK	2.002	Blanc/FlashSpec.lean
 OK	4.829	Blanc/Forward.lean
 OK	1.227	Blanc/Reverts.lean
 OK	4.684	Blanc/FmintLive.lean
-OK	3.863	Blanc/FmintReverts.lean
+OK	5.574	Blanc/FmintReverts.lean
 OK	5.383	Blanc/WethLive.lean
 OK	7.978	Blanc/WethGas.lean
 OK	7.098	Blanc/FmintGas.lean

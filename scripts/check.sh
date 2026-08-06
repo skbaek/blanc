@@ -114,15 +114,18 @@
 # it as an address, so the statement is quantified over that word and asserts
 # nothing about what a non-address key means.
 #
-# `Blanc.Fmint.unknownSelector_runCompiledTo` and
-# `Blanc.Fmint.fmint_unknown_selector_reverts` are the same pair one genre over,
-# added by `~/plans/error-genre.md` Step 3: the first constructs a gas-exact
-# walk, the second composes it through `Prog.exec_of_runCompiledTo` — and both
-# land on `.error (.revert, post)` with `Devm.output post = []` rather than on a
-# success. They are the first rows in this file asserting that a call **reverts**
-# — not that it fails to succeed (the `no_success_of_*` rows), and not that it
-# settles with some unnamed error (the `settles_with_error_of_*` rows), but that
-# the frame settles with `EvmError.revert` carrying no revert data.
+# The last four rows are two more pairs of that same shape, one genre over,
+# added by `~/plans/error-genre.md` Step 3: `..._runCompiledTo` constructs a
+# gas-exact walk and `fmint_*_reverts` composes it through
+# `Prog.exec_of_runCompiledTo` — but both land on `.error (.revert, post)` with
+# `Devm.output post = []` rather than on a success. They are the first rows in
+# this file asserting that a call **reverts** — not that it fails to succeed
+# (the `no_success_of_*` rows), and not that it settles with some unnamed error
+# (the `settles_with_error_of_*` rows), but that the frame settles with
+# `EvmError.revert` carrying no revert data. One is an unrecognised selector,
+# reaching `Func.rev` through the dispatcher's fallback slot; the other is
+# `flashLoan`'s `token ≠ self` guard, and is the direct counterpart of
+# `Blanc.Fmint.no_success_of_token_ne_self` above.
 #
 # They do NOT subsume the seven `no_success_of_*` rows and are not subsumed by
 # them, and no report may say otherwise: those hold with no gas premise, because
@@ -262,7 +265,9 @@ Blanc.Fmint.totalSupply_warm_gas_exact|$STANDARD
 Blanc.Fmint.fmintGasMax_eq_with|$STANDARD
 Blanc.Fmint.fmintGas_le_max|$STANDARD
 Blanc.Fmint.unknownSelector_runCompiledTo|$STANDARD
-Blanc.Fmint.fmint_unknown_selector_reverts|$STANDARD"
+Blanc.Fmint.fmint_unknown_selector_reverts|$STANDARD
+Blanc.Fmint.tokenNeSelf_runCompiledTo|$STANDARD
+Blanc.Fmint.fmint_token_ne_self_reverts|$STANDARD"
 # Secondary net only: the exact-set comparison below is the primary check;
 # this pattern catches forbidden names in output the per-theorem parse missed.
 FORBIDDEN='sorryAx|ofReduceBool|ofReduceNat|_native\.'
