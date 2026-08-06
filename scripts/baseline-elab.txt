@@ -157,6 +157,40 @@
 # where fmint's single walk already carries the five `decide +kernel` dispatch
 # comparisons `FmintLive.lean`'s own note above records). No pre-existing row
 # was touched.
+#
+# Step 2 of that arc re-set both rows when it added a second entrypoint to each
+# contract -- `decimals()`, on a path never walked before: Blanc/WethGas.lean
+# from 5.380 to its measured 6.794 (median of 6.786, 6.816, 6.794) and
+# Blanc/FmintGas.lean from 3.976 to its measured 6.287 (median of 6.267, 6.287,
+# 6.288). Same conditions as every row above: three sequential
+# `scripts/check-elab.sh --list --no-build` runs with no language server alive,
+# hand-set rather than `--rebase`, which stays prohibited for the whole arc.
+#
+# The interesting number is how SMALL these raises are, because they correct
+# the arc's own budgeting. ~/plans/gas-cost.md section 2 budgets "every new
+# *walk* at ~5 s". A whole new walk PLUS the selector-indexed cost function,
+# its `...With` form, the selector disequality and the restated exactness
+# theorems cost Blanc/WethGas.lean 1.414 s and Blanc/FmintGas.lean 2.311 s.
+#
+# The ~5 s figure is real, but it is a per-MODULE-FIRST-WALK floor rather than
+# a per-walk one, and the note above this one is the evidence: WethGas.lean
+# measured 5.380 for its single walk where WethLive.lean measured 5.383 for
+# its single walk of the same tree. The floor is `String.keccak` per dispatch
+# fork and the elaborator computes each keccak once per module, so a second
+# walk that descends forks the module has already forced re-forces nothing.
+# `decimals()` and `balanceOf()` take the SAME four forks of `wethTree`,
+# comparing against the same `leftmostFsig` words, which is why WETH's second
+# walk is nearly free. fmint's is dearer for the reason that account predicts:
+# its `decimals()` sits at a depth-4 leaf where its `totalSupply()` sat at a
+# depth-3 one, so the walk meets one fork comparison and one leaf comparison
+# this module had not yet forced, and pays ~0.9 s more than WETH's for them.
+#
+# Worth stating for successors: co-locating targets that share a dispatch
+# prefix in ONE module is far cheaper than one module per target, and a
+# per-target budget taken from the first target in a fresh module overestimates
+# every later one in that module by roughly 4 s.
+#
+# No pre-existing row was touched by this step either.
 OK	1.241	Blanc.lean
 OK	1.257	Blanc/Basic.lean
 OK	2.454	Blanc/CommonCore.lean
@@ -176,5 +210,5 @@ OK	2.002	Blanc/FlashSpec.lean
 OK	4.514	Blanc/Forward.lean
 OK	4.684	Blanc/FmintLive.lean
 OK	5.383	Blanc/WethLive.lean
-OK	5.380	Blanc/WethGas.lean
-OK	3.976	Blanc/FmintGas.lean
+OK	6.794	Blanc/WethGas.lean
+OK	6.287	Blanc/FmintGas.lean
