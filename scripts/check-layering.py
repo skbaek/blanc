@@ -50,7 +50,7 @@ import sys
 # ---------------------------------------------------------------------------
 
 SHARED = ["Basic", "Semantics", "CommonCore", "Tactics", "CommonProofs", "Ladder",
-          "Compiled", "Forward", "Reverts"]
+          "Compiled", "Forward", "Reverts", "ForwardCall"]
 
 CONTRACTS = {
     "weth": ["Weth", "WethCode", "Solvent", "WethLive", "WethGas"],

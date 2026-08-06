@@ -301,6 +301,36 @@
 # step: Blanc/Forward.lean, which Step 3 grows with the generalised walk and the
 # `pushItem`-class rule, measured 5.094 (median of 5.094, 5.078, 5.298) against
 # its UNCHANGED 4.829 row.
+#
+# 2026-08-06. Step 1 of ~/plans/adversarial-progress.md adds Blanc/ForwardCall
+# .lean -- the `CALL`-crossing layer -- and hand-sets its row to a measured
+# 1.511 (median of 1.511, 1.514, 1.511), by `scripts/check-elab.sh --list
+# --no-build` on a tree with no language server alive, three sequential runs.
+# `--rebase` was not run: it rewrites every row and would launder unrelated
+# drift into an arc commit. A file with no row here is a REGRESSION ("a new
+# module must state its cost"), so this is an extension to admit new content,
+# not a relaxation to admit a failure.
+#
+# 1.5 s is what a crossing layer costs when the child is an opaque term. The
+# module's expensive-looking declaration is `Xinst.step_call_zero_value`, which
+# transcribes and evaluates the whole seven-pop `.call` arm, and it is cheap for
+# the same reason the arm is tractable at all: at `value = 0` the new-account
+# charge, the transfer charge and the stipend are literals, the static assertion
+# closes on its right disjunct, and the balance short-circuit is unreachable, so
+# nothing branches. The three resume lemmas are `rfl` after one `if`.
+#
+# NO PRE-EXISTING ROW MOVED, and the one to watch is Blanc/Forward.lean's
+# 4.829, which the same step grows with ten instruction rules and their tactic
+# arms. It measured 8.449 (median of 8.446, 8.471, 8.449) under the same
+# conditions -- 1.75x the row, inside the 2.0x threshold of 9.658 with 1.21 s to
+# spare, and stable to +/- 0.02 s across the three runs, so the headroom is real
+# and not measurement luck. **A successor that wants to grow Blanc/Forward.lean
+# again should not**: A4 of that plan says to overflow into the shared crossing
+# module instead, and `Devm.popToAdr_eq_ok` -- which belongs beside
+# `Devm.popToNat_eq_ok` on every other ground -- was placed in ForwardCall.lean
+# for exactly that reason. The cost is not in the rule statements; profiling
+# attributes it to kernel type-checking of the ten evaluation lemmas' proof
+# terms and to LCNF compilation of the enlarged `ninstStep`.
 OK	1.241	Blanc.lean
 OK	1.257	Blanc/Basic.lean
 OK	2.454	Blanc/CommonCore.lean
@@ -324,3 +354,4 @@ OK	5.574	Blanc/FmintReverts.lean
 OK	5.383	Blanc/WethLive.lean
 OK	7.978	Blanc/WethGas.lean
 OK	7.098	Blanc/FmintGas.lean
+OK	1.511	Blanc/ForwardCall.lean
