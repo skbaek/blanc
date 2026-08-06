@@ -130,6 +130,66 @@ def flashLoanMintGas : Nat :=
 guards and the stack work — is 323. -/
 theorem flashLoanMintGas_eq : flashLoanMintGas = 44523 := by decide
 
+/-! ## The gas the trunk's second half can charge
+
+The mint's `Transfer` log, then the callback's argument build.  Only one charge
+here is not a constant: the `CALLDATACOPY` that forwards the caller's own
+`bytes` payload. -/
+
+/-- The mint's `Transfer(0, receiver, amount)`: the word stored at `0x00`, the
+three topics pushed, and `LOG3` over a one-word window that memory already
+covers.  1 780 gas, of which 1 756 is the log itself. -/
+def flashLoanLogGas : Nat :=
+  (gVerylow + gBase + (gVerylow + gMemory))
+    + (gVerylow + gBase + gVerylow + gVerylow + gBase)
+    + (gLog + gLogdata * 32 + gLogtopic * 3)
+
+/-- The `CALLDATACOPY` of `forwardArgTail`, the only charge on this whole path
+that depends on the caller's input.
+
+**The affine part costs `gasCopy + gMemory = 6` per 32-byte word** — three for
+the copy and three for the linear share of the expansion — on top of
+`gVerylow`; the memory term's quadratic share adds
+`(7 + dataLen / 32)² / 512 − 7² / 512` beyond that, the only superlinear term in
+the trunk.  The window's base is memory byte `224`, which is where
+`forwardCallbackData` puts the payload. -/
+def flashLoanCopyGas (dataLen : Nat) : Nat :=
+  gVerylow + gasCopy * ceilDiv dataLen 32
+    + (calculateMemoryGasCost (memExtSize 224 224 dataLen)
+        - calculateMemoryGasCost 224)
+
+/-- The callback's argument build: the six head words of the spike-2 layout, the
+forwarded tail, the `argsSize` arithmetic, and the seven `CALL` operands down to
+the `GAS` push.  145 gas plus the copy. -/
+def flashLoanCallbackGas (dataLen : Nat) : Nat :=
+  (gVerylow + gVerylow + gBase + gVerylow)
+    + (gBase + gVerylow + (gVerylow + gMemory))
+    + (gBase + gVerylow + (gVerylow + gMemory))
+    + (gVerylow + (gVerylow + gMemory))
+    + (gBase + gVerylow + (gVerylow + gMemory))
+    + (gVerylow + gVerylow + (gVerylow + gMemory))
+    + (gBase + gBase + gVerylow + gVerylow + gVerylow + gVerylow
+        + gVerylow + gVerylow + gVerylow + gVerylow)
+    + (gVerylow + gMemory)
+    + (gVerylow + gVerylow + gVerylow + gVerylow + gVerylow)
+    + flashLoanCopyGas dataLen
+    + (gVerylow + gVerylow + gVerylow + gVerylow + gVerylow + gVerylow + gVerylow)
+    + (gVerylow + gBase + gVerylow + gBase)
+
+/-- **The trunk's whole charge**, from the program entry to the instant before
+the `CALL`: the dispatcher, three guards and the mint pair
+(`flashLoanMintGas`), the `Transfer` log (`flashLoanLogGas`), and the callback
+build (`flashLoanCallbackGas`).
+
+Worst case per **A3** — cold at both reads whose warmth is open, `gasStorageSet`
+at both stores — and exact everywhere else. -/
+def flashLoanPreCallGas (dataLen : Nat) : Nat :=
+  flashLoanMintGas + flashLoanLogGas + flashLoanCallbackGas dataLen
+
+/-- 46 451 gas on an empty payload: 44 523 to the end of the mint, 1 780 for the
+log, and 148 for the argument build. -/
+theorem flashLoanPreCallGas_zero : flashLoanPreCallGas 0 = 46451 := by decide
+
 /-! ## The supply slot is not a balance slot
 
 The mint writes two keys and the statement below says what each holds
@@ -317,6 +377,291 @@ theorem flashLoan_runCompiledTo_mint {sevm : Sevm} {pre : Devm}
   · rw [hacc₄]
     simp only [Devm.accessedStorageKeys_setMach, hacc₃]
     exact hacc₂ _ (hacc₁ _ hp)
+
+/-! ## What the frame holds when the callback is about to run
+
+Three names, so that the state-at-`CALL` lemma below and everything downstream
+say the same things the same way.
+
+The memory image is written as the chain of writes it *is*, over the empty image
+the frame entered with, rather than as a `Mem.Reads` predicate: the `CALL` reads
+a window out of it and the crossing needs its `size`, and both are questions
+about the chain. `Blanc/FlashSpec.lean`'s `callbackImage_nil` already says what
+the same chain looks like as a byte list, which is the readable form; this is
+the constructive one. -/
+
+/-- **The callback's memory**, exactly as `flashLoan` builds it: the mint's
+`Transfer` word at `0x00`, then the spike-2 layout of `Blanc/Fmint.lean` —
+selector (overwriting that word), initiator, token, amount, fee `0`, the tail
+offset `0xa0`, the tail's length at `0xc0` and its payload at `0xe0`. -/
+def flashLoanCallMem (sevm : Sevm) (amount : B256) (payload : Bytes) : Mem :=
+  ((((((((Mem.empty.write 0 amount.toBytes).write 0 onFlashLoanSelector.toBytes).write
+    32 sevm.caller.toB256.toBytes).write
+    64 sevm.currentTarget.toB256.toBytes).write
+    96 amount.toBytes).write
+    128 (0 : B256).toBytes).write
+    160 (160 : B256).toBytes).write
+    192 (Nat.toB256 payload.length).toBytes).write
+    224 payload
+
+/-- The `CALL`'s `argsSize` operand: four selector bytes, six head words and the
+padded payload. `Blanc/FlashSpec.lean`'s `toNat_callbackArgsSize` reads it as
+`196 + ceil32 dataLen`. -/
+def flashLoanArgsSize (dataLen : Nat) : B256 :=
+  0xc4 + ((~~~ (31 : B256)) &&& (31 + Nat.toB256 dataLen))
+
+/-- The mint's `Transfer(0, receiver, amount)` entry. -/
+def flashLoanMintLog (sevm : Sevm) (receiver amount : B256) : Log :=
+  ⟨sevm.currentTarget, [transferEvent, 0, receiver], amount.toBytes⟩
+
+/-! ## The spawned frame, named (A5)
+
+`Blanc/ForwardCall.lean`'s `callSpawnParent`/`callSpawnMsg` name what *a*
+`value = 0` `CALL` spawns. The two below name what **fmint's callback** spawns,
+by fixing the four operands the trunk determines: `argsOffset = 0x1c`,
+`argsSize = flashLoanArgsSize dataLen`, and an empty `(0, 0)` return window.
+
+What they do **not** fix is what the crossing itself produces — the
+delegation-resolved parent `d1`, the forwarded stipend `mcs`, the callee's code
+and the delegation flag — because those are functions of the *world*, not of
+`flashLoan`'s construction. That is the honest boundary: A5 requires the success
+form's callback premises to be stated over named definitions rather than an
+existential, and these are the names; the arguments they still take are the ones
+a caller has to bind anyway. -/
+
+/-- The parent state fmint's callback `CALL` suspends on. -/
+def flashLoanSpawnParent (d1 : Devm) (charge dataLen : Nat) : Devm :=
+  callSpawnParent d1 charge callbackArgsOffset.toNat
+    (flashLoanArgsSize dataLen).toNat 0 0
+
+/-- The message fmint's callback `CALL` builds: `onFlashLoan(...)` read out of
+the parent's own memory, sent to `receiver` with no value. -/
+def flashLoanSpawnMsg (sevm : Sevm) (p : Devm) (mcs : Nat) (receiver : B256)
+    (dataLen : Nat) (code : ByteArray) (dp : Bool) : Msg :=
+  callSpawnMsg sevm p mcs receiver.toAdr callbackArgsOffset.toNat
+    (flashLoanArgsSize dataLen).toNat code dp
+
+/-! ## The trunk, all the way to the `CALL`
+
+The walk continues `flashLoan_runCompiledTo_mint` through the `Transfer` log and
+the callback's argument build, and stops on the `CALL` instruction itself.
+
+Two mechanisms carry the second half, both `Blanc/ForwardCall.lean`'s and both
+measured rather than guessed:
+
+* **every `MSTORE` names its image.** `func_run`'s own `MSTORE` arm builds the
+  image as a term, and eight of them in a row make each later state carry a
+  chain whose payloads are concrete — a `keccak`-derived selector among them —
+  so every `whnf` the walk performs runs that chain. Measured: ≈ 0.1 s per node
+  before the layout and ≈ 1.5 s per node after it, against ≈ 0.1 s throughout
+  with `Func.runCompiledTo_mstore_step`.
+* **the `CALLDATACOPY` is applied by hand.** Its charge is affine in the
+  caller's `data.length`, and `func_run` requires numeral charges (**F10**).
+
+The conclusion is the exact state the crossing starts from: the seven `CALL`
+operands with `gw` the frame's own remaining gas, the memory image as a named
+chain, the mint pair, the log, and a two-sided gas account. -/
+
+/-- **`fmint`'s `flashLoan` reaches its `CALL`**, on a call whose three guards
+pass.
+
+Everything the continuation is handed is a fact about the state the *callback*
+is entered in, which is the point: the mint pair is complete, the `Transfer` is
+emitted, and the memory window the callee will read is fully written, all before
+any of the borrower's code runs.
+
+`gw`, the first operand, is `Nat.toB256 G` — the `GAS` push is the frame's own
+account, so the amount offered to the callback is pinned by the same arithmetic
+that bounds `G`. No premise about the borrower appears anywhere. -/
+theorem flashLoan_runCompiledTo_call {sevm : Sevm} {pre : Devm}
+    {receiver token amount : B256} {data : Bytes} {out : Execution}
+    (h_sel : Sevm.selector sevm = flashLoanSelector)
+    (h_dec : Sevm.DecodesCallWithTail sevm flashLoanSelector
+      [receiver, token, amount] data)
+    (h_size : 196 + ceil32 data.length < 2 ^ 256)
+    (h_token : token = sevm.currentTarget.toB256)
+    (h_addr : ValidAdr receiver)
+    (h_nof : B256.Nof (Devm.getStorVal pre sevm.currentTarget supplySlot) amount)
+    (h_static : sevm.isStatic = false)
+    (h_stack : pre.stack = [])
+    (h_mem : pre.memory = Mem.empty)
+    (h_gas : flashLoanPreCallGas data.length ≤ pre.gasLeft)
+    (h_cont : ∀ (b : Devm) (G : Nat),
+      b.getStorVal sevm.currentTarget receiver
+        = amount + pre.getStorVal sevm.currentTarget receiver →
+      b.getStorVal sevm.currentTarget supplySlot
+        = amount + pre.getStorVal sevm.currentTarget supplySlot →
+      (∀ (a : Adr) (k : B256), (a, k) ≠ (sevm.currentTarget, receiver) →
+        (a, k) ≠ (sevm.currentTarget, supplySlot) →
+        b.getStorVal a k = pre.getStorVal a k) →
+      (⟨sevm.currentTarget, receiver⟩ : Adr × B256) ∈ b.accessedStorageKeys →
+      (⟨sevm.currentTarget, supplySlot⟩ : Adr × B256) ∈ b.accessedStorageKeys →
+      (∀ p : Adr × B256, p ∈ pre.accessedStorageKeys →
+        p ∈ b.accessedStorageKeys) →
+      b.logs = pre.logs ++ [flashLoanMintLog sevm receiver amount] →
+      pre.gasLeft - flashLoanPreCallGas data.length ≤ G → G ≤ pre.gasLeft →
+      Func.RunCompiledTo (fmint.main :: fmint.aux) sevm
+        (b.setMach ⟨[Nat.toB256 G, receiver, 0, callbackArgsOffset,
+            flashLoanArgsSize data.length, 0, 0, amount, receiver],
+          flashLoanCallMem sevm amount data, G⟩) flashLoanFromCall out) :
+    Prog.RunCompiledTo sevm pre fmint out := by
+  have h_len_lt : data.length < 2 ^ 256 := by
+    have := Nat.le_ceil32 data.length; omega
+  have h_pre : flashLoanMintGas + flashLoanLogGas + flashLoanCallbackGas data.length
+      ≤ pre.gasLeft := h_gas
+  refine flashLoan_runCompiledTo_mint h_sel h_dec h_token h_addr h_nof h_static
+    h_stack h_mem (by
+      simp only [flashLoanLogGas, flashLoanCallbackGas, flashLoanCopyGas,
+        gVerylow, gBase, gMemory, gLog, gLogdata, gLogtopic] at h_pre; omega) ?_
+  intro b₀ G₀ h_rcv h_sup h_oth hw_r hw_s hw_mono h_log h_lo h_hi
+  rw [flashLoanMintGas_eq] at h_lo
+  -- the mint's `Transfer`, then the callback's argument build
+  have hG₀ : flashLoanLogGas + flashLoanCallbackGas data.length ≤ G₀ := by
+    simp only [flashLoanMintGas_eq] at h_pre; omega
+  have hN : flashLoanLogGas + 145 ≤ G₀ := by
+    simp only [flashLoanLogGas, flashLoanCallbackGas, flashLoanCopyGas, gVerylow,
+      gBase, gMemory, gLog, gLogdata, gLogtopic] at hG₀ ⊢
+    omega
+  func_run (8) [gMemory]
+  · exact Devm.extCost_empty_word
+  refine Func.runCompiledTo_log_step (topics := [transferEvent, 0, receiver])
+    (s := [amount, receiver]) rfl rfl h_static
+    (M := Mem.empty.write 0 amount.toBytes) rfl
+    (c := 1756) (payload := amount.toBytes)
+    (M' := Mem.empty.write 0 amount.toBytes) ?_ ?_ ?_
+    (by simp only [Devm.gasLeft_setMach, flashLoanLogGas, gVerylow, gBase,
+      gMemory, gLog, gLogdata, gLogtopic] at hN ⊢; omega) ?_
+  · exact Devm.extCost_add_of_size Mem.size_write_word (by decide)
+  · exact Mem.read_write_word
+  · exact Mem.read_snd_eq_self (by rw [Mem.size_write_word]; decide)
+  intro b G hlogb hstorb haccb hGb
+  simp only [Devm.gasLeft_setMach, flashLoanLogGas, gVerylow, gBase, gMemory,
+    gLog, gLogdata, gLogtopic] at hGb hN
+  have h_gas' : flashLoanCallbackGas data.length ≤ G := by
+    simp only [flashLoanLogGas, gVerylow, gBase, gMemory, gLog, gLogdata,
+      gLogtopic] at hG₀; omega
+  have hG : 145 ≤ G := by
+    simp only [flashLoanCallbackGas, gVerylow, gBase, gMemory] at h_gas'
+    omega
+  have h_ptr : (4 : B256) + Sevm.dataWord sevm (32 * 3 + 4) = 132 := by
+    rw [show Sevm.dataWord sevm (32 * 3 + 4) = Nat.toB256 128 from
+      argWord_three_of_decodes h_dec]
+    decide
+  have h_len : Sevm.dataWord sevm 132 = Nat.toB256 data.length := by
+    rw [show (132 : B256) = Nat.toB256 132 from rfl,
+      ← tailPtr_three_of_decodes h_dec]
+    exact tailLen_three_of_decodes h_dec
+  func_run (3)
+  refine Func.runCompiledTo_mstore_step
+    (M := Mem.empty.write 0 amount.toBytes) (c := 3) rfl rfl ?_ ?_ ?_
+  · exact Devm.extCost_add_of_size Mem.size_write_word (by decide)
+  · simp only [Devm.gasLeft_setMach]; omega
+  intro M₁ G₁ hM₁ hg₁
+  simp only [Devm.gasLeft_setMach] at hg₁
+  have s₁ : M₁.size = 32 := by
+    rw [← hM₁, Mem.size_write_word_at, Mem.size_write_word]; decide
+  func_run (2)
+  refine Func.runCompiledTo_mstore_step (M := M₁) (c := 6) rfl rfl ?_ ?_ ?_
+  · exact Devm.extCost_add_of_size s₁ (by decide)
+  · simp only [Devm.gasLeft_setMach]; omega
+  intro M₂ G₂ hM₂ hg₂
+  simp only [Devm.gasLeft_setMach] at hg₂
+  have s₂ : M₂.size = 64 := by
+    rw [← hM₂, Mem.size_write_word_at, s₁]; decide
+  func_run (2)
+  refine Func.runCompiledTo_mstore_step (M := M₂) (c := 6) rfl rfl ?_ ?_ ?_
+  · exact Devm.extCost_add_of_size s₂ (by decide)
+  · simp only [Devm.gasLeft_setMach]; omega
+  intro M₃ G₃ hM₃ hg₃
+  simp only [Devm.gasLeft_setMach] at hg₃
+  have s₃ : M₃.size = 96 := by
+    rw [← hM₃, Mem.size_write_word_at, s₂]; decide
+  func_run (1)
+  refine Func.runCompiledTo_mstore_step (M := M₃) (c := 6) rfl rfl ?_ ?_ ?_
+  · exact Devm.extCost_add_of_size s₃ (by decide)
+  · simp only [Devm.gasLeft_setMach]; omega
+  intro M₄ G₄ hM₄ hg₄
+  simp only [Devm.gasLeft_setMach] at hg₄
+  have s₄ : M₄.size = 128 := by
+    rw [← hM₄, Mem.size_write_word_at, s₃]; decide
+  func_run (2)
+  refine Func.runCompiledTo_mstore_step (M := M₄) (c := 6) rfl rfl ?_ ?_ ?_
+  · exact Devm.extCost_add_of_size s₄ (by decide)
+  · simp only [Devm.gasLeft_setMach]; omega
+  intro M₅ G₅ hM₅ hg₅
+  simp only [Devm.gasLeft_setMach] at hg₅
+  have s₅ : M₅.size = 160 := by
+    rw [← hM₅, Mem.size_write_word_at, s₄]; decide
+  func_run (2)
+  refine Func.runCompiledTo_mstore_step (M := M₅) (c := 6) rfl rfl ?_ ?_ ?_
+  · exact Devm.extCost_add_of_size s₅ (by decide)
+  · simp only [Devm.gasLeft_setMach]; omega
+  intro M₆ G₆ hM₆ hg₆
+  simp only [Devm.gasLeft_setMach] at hg₆
+  have s₆ : M₆.size = 192 := by
+    rw [← hM₆, Mem.size_write_word_at, s₅]; decide
+  func_run (10) [(132 : B256)]
+  rw [h_len]
+  refine Func.runCompiledTo_mstore_step (M := M₆) (c := 6) rfl rfl ?_ ?_ ?_
+  · exact Devm.extCost_add_of_size s₆ (by decide)
+  · simp only [Devm.gasLeft_setMach]; omega
+  intro M₇ G₇ hM₇ hg₇
+  simp only [Devm.gasLeft_setMach] at hg₇
+  have s₇ : M₇.size = 224 := by
+    rw [← hM₇, Mem.size_write_word_at, s₆]; decide
+  func_run (5) [(164 : B256)]
+  have h_dl : (Nat.toB256 data.length).toNat = data.length := by
+    rw [B256.toNat_toB256]; exact Nat.mod_eq_of_lt h_len_lt
+  have h164 : (Nat.toB256 132 + 32 : B256).toNat = (164 : B256).toNat := by decide
+  have h_bytes : sevm.data.sliceD (164 : B256).toNat
+      (Nat.toB256 data.length).toNat 0 = data := by
+    have h_tb : Sevm.tailBytes sevm 3 = data :=
+      tailBytes_three_of_decodes h_len_lt h_dec
+    refine Eq.trans ?_ h_tb
+    simp only [Sevm.tailBytes, tailPtr_three_of_decodes h_dec,
+      tailLen_three_of_decodes h_dec, h164]
+  refine Func.runCompiledTo_calldatacopy_step (M := M₇)
+    (c := flashLoanCopyGas data.length) rfl rfl ?_ ?_ ?_
+  · refine Devm.extCost_add_of_size s₇ ?_
+    simp only [h_dl, flashLoanCopyGas,
+      show ((6 + 1 : B256) * 32).toNat = 224 from rfl]
+  · simp only [Devm.gasLeft_setMach, flashLoanCallbackGas, gVerylow, gBase,
+      gMemory] at h_gas' ⊢
+    omega
+  intro M₈ G₈ hM₈ hg₈
+  simp only [Devm.gasLeft_setMach, h_bytes] at hM₈ hg₈
+  have hG₈ : 31 ≤ G₈ := by
+    simp only [flashLoanCallbackGas, gVerylow, gBase, gMemory] at h_gas'
+    omega
+  func_run (11)
+  -- the state at the `CALL`, read off the eight named images
+  have i0 : ((0 : B256) * 32).toNat = 0 := rfl
+  have i1 : ((1 : B256) * 32).toNat = 32 := rfl
+  have i2 : ((2 : B256) * 32).toNat = 64 := rfl
+  have i3 : ((3 : B256) * 32).toNat = 96 := rfl
+  have i4 : ((4 : B256) * 32).toNat = 128 := rfl
+  have i5 : ((5 : B256) * 32).toNat = 160 := rfl
+  have i6 : ((6 : B256) * 32).toNat = 192 := rfl
+  have i7 : ((6 + 1 : B256) * 32).toNat = 224 := rfl
+  simp only [i0, i1, i2, i3, i4, i5, i6, i7] at hM₁ hM₂ hM₃ hM₄ hM₅ hM₆ hM₇ hM₈
+  have h_img : M₈ = flashLoanCallMem sevm amount data := by
+    rw [← hM₈, ← hM₇, ← hM₆, ← hM₅, ← hM₄, ← hM₃, ← hM₂, ← hM₁]
+    rfl
+  rw [h_img]
+  refine h_cont b (G₈ - 31) ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
+  · rw [hstorb]; exact h_rcv
+  · rw [hstorb]; exact h_sup
+  · intro a k hk₁ hk₂; rw [hstorb]; exact h_oth a k hk₁ hk₂
+  · rw [haccb]; exact hw_r
+  · rw [haccb]; exact hw_s
+  · intro p hp; rw [haccb]; exact hw_mono p hp
+  · rw [hlogb]
+    simp only [Devm.logs_setMach, h_log, flashLoanMintLog]
+  · simp only [flashLoanPreCallGas, flashLoanMintGas_eq, flashLoanLogGas,
+      flashLoanCallbackGas, gVerylow, gBase, gMemory, gLog, gLogdata,
+      gLogtopic] at *
+    omega
+  · omega
 
 end Fmint
 end Blanc

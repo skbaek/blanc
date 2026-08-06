@@ -331,6 +331,154 @@ lemma Func.runCompiledTo_sstore_warm_step {fs : List Func} {sevm : Sevm}
       rw [h_off]
       rfl
 
+/-! ## The memory window, in the shapes a walk's obligations arrive in
+
+`func_run` hands every memory-expansion charge straight back — the image is a
+chain of writes the tactic has no arithmetic for.  The three lemmas below are
+what a caller closes those obligations with: the size of an image after one
+word-write, the extension charge as a function of that size, and the fact that
+*reading* a window the image already covers leaves the image alone.
+
+The last is what keeps a `LOG` from doubling the state: `Mem.read` returns
+`⟨μ.data, memExtSize …⟩`, which is `μ` again exactly when the window fits, and
+structure eta makes that an equation the walk can rewrite with rather than a new
+image every reader has to carry. -/
+
+/-- The size of an image after writing one word: unchanged when the window
+already fits, and rounded up to the word above otherwise.
+
+`Mem.write` matches on the payload being non-empty, and `B256.toBytes` is not a
+literal, so this needs the same `rcases` that `Mem.size_write_word` does. -/
+lemma Mem.size_write_word_at {N : Mem} {i : Nat} {w : B256} :
+    (N.write i w.toBytes).size = if i + 32 ≤ N.size then N.size else ceil32 (i + 32) := by
+  rcases hb : w.toBytes with _ | ⟨b, bs⟩
+  · exact absurd (hb ▸ B256.length_toBytes w) (by simp)
+  · have hlen : (b :: bs).length = 32 := hb ▸ B256.length_toBytes w
+    simp only [Mem.write, hlen]
+    split_ifs <;> rfl
+
+/-- The extension charge for a window, as a function of the image's size alone.
+Stated with the charge as a parameter, and applied with `exact` rather than
+`rw`: a walk's window index arrives as `(k * 32 : B256).toNat` rather than a
+literal, which unifies but does not *match*. -/
+lemma Devm.extCost_of_size {devm : Devm} {S : List B256} {N : Mem} {G : Nat}
+    {i sz n e : Nat} (h : N.size = n)
+    (he : calculateMemoryGasCost (memExtSize n i sz)
+      - calculateMemoryGasCost n = e) :
+    (devm.setMach ⟨S, N, G⟩).extCost [⟨i, sz⟩] = e := by
+  simp only [Devm.extCost, Devm.memory_setMach, memExtsSize, h, he]
+
+/-- The same, summed with the instruction's fixed part — the shape every charge
+premise outside `MSTORE` arrives in. -/
+lemma Devm.extCost_add_of_size {devm : Devm} {S : List B256} {N : Mem} {G : Nat}
+    {i sz n a e : Nat} (h : N.size = n)
+    (he : a + (calculateMemoryGasCost (memExtSize n i sz)
+      - calculateMemoryGasCost n) = e) :
+    a + (devm.setMach ⟨S, N, G⟩).extCost [⟨i, sz⟩] = e := by
+  simp only [Devm.extCost, Devm.memory_setMach, memExtsSize, h, he]
+
+/-- Reading a window the image already covers returns the image unchanged. -/
+lemma Mem.read_snd_eq_self {N : Mem} {i sz : Nat}
+    (h : memExtSize N.size i sz = N.size) : (N.read i sz).2 = N := by
+  show N.extend i sz = N
+  simp only [Mem.extend, h]
+
+/-! ## The two remaining walk steps: `LOG` and `CALLDATACOPY`
+
+Both are in the continuation-passing form the storage steps established, and
+each is here for its own reason.
+
+`LOG` moves the *base* — `Devm.addLog` — and its successor's memory image is a
+projection out of the state it reads.  Handed to the walk as a term, both would
+be carried inside every later state (**F8** of `~/plans/reports/
+adversarial-progress-step2.md`); handed to a continuation, the base is a
+variable and the image is whatever the caller names.
+
+`CALLDATACOPY`'s charge is affine in the copied length, and `func_run` requires
+every charge hint to be a **numeral** (**F10**).  A trunk that forwards a
+caller-supplied `bytes` payload therefore cannot walk its copy with the tactic
+at all; it applies this between two `func_run` segments, with the charge a
+variable and one equation. -/
+
+/-- `MSTORE` as a walk step, with the written image handed to the continuation
+as a **variable**.
+
+`func_run` has an `MSTORE` arm and it is the right one for a view: two or three
+stores over `Mem.empty` and the image stays small.  It is the wrong one for a
+frame that lays out a call's arguments.  There the image is a chain of eight
+writes whose payloads are *concrete* — a selector that is a `keccak`, an
+address, a length word — so every `whnf` the walk performs on a later state runs
+that chain, and the cost per instruction grows with the number of stores before
+it (measured: ≈ 0.1 s per node before the layout, ≈ 1.5 s after it).
+
+Naming each image instead keeps every state one write deep, and the caller ends
+up with the chain as a list of equations, which is also the shape a memory-image
+characterisation wants. -/
+lemma Func.runCompiledTo_mstore_step {fs : List Func} {sevm : Sevm} {devm : Devm}
+    {i v : B256} {s : List B256} {c : Nat} {M : Mem} {rest : Func}
+    {ex : Execution}
+    (h_stk : devm.stack = i :: v :: s)
+    (h_mem : devm.memory = M)
+    (h_cost : gVerylow + devm.extCost [⟨i.toNat, 32⟩] = c)
+    (h_gas : c ≤ devm.gasLeft)
+    (h_next : ∀ (M' : Mem) (G : Nat), M.write i.toNat v.toBytes = M' →
+      devm.gasLeft = G + c →
+      Func.RunCompiledTo fs sevm (devm.setMach ⟨s, M', G⟩) rest ex) :
+    Func.RunCompiledTo fs sevm devm (Func.next Ninst.mstore rest) ex := by
+  subst h_mem
+  refine Func.RunCompiledTo.next
+    (Ninst.runCompiled_mstore_of (G := devm.gasLeft - c) (e := devm.extCost
+      [⟨i.toNat, 32⟩]) h_stk rfl (by omega) rfl) ?_
+  exact h_next _ _ rfl (by omega)
+
+/-- `LOG n` as a walk step.  The emitted entry, the untouched storage and
+accessed set, and the gas account arrive in the continuation. -/
+lemma Func.runCompiledTo_log_step {fs : List Func} {sevm : Sevm} {devm : Devm}
+    {n : Fin 5} {i sz : B256} {topics s : List B256} {c : Nat} {M M' : Mem}
+    {payload : Bytes} {rest : Func} {ex : Execution}
+    (h_stk : devm.stack = i :: sz :: (topics ++ s))
+    (h_len : topics.length = n.val) (h_static : sevm.isStatic = false)
+    (h_mem : devm.memory = M)
+    (h_cost : gLog + gLogdata * sz.toNat + gLogtopic * n.val
+      + devm.extCost [⟨i.toNat, sz.toNat⟩] = c)
+    (h_data : (M.read i.toNat sz.toNat).1 = payload)
+    (h_img : (M.read i.toNat sz.toNat).2 = M')
+    (h_gas : c ≤ devm.gasLeft)
+    (h_next : ∀ (base : Devm) (G : Nat),
+      base.logs = devm.logs ++ [⟨sevm.currentTarget, topics, payload⟩] →
+      (∀ (a : Adr) (k : B256), base.getStorVal a k = devm.getStorVal a k) →
+      base.accessedStorageKeys = devm.accessedStorageKeys →
+      devm.gasLeft = G + c →
+      Func.RunCompiledTo fs sevm (base.setMach ⟨s, M', G⟩) rest ex) :
+    Func.RunCompiledTo fs sevm devm (Func.next (.reg (.log n)) rest) ex := by
+  subst h_mem
+  refine Func.RunCompiledTo.next
+    (Ninst.runCompiled_log_of (G := devm.gasLeft - c) h_stk h_len h_static
+      h_cost h_data h_img (by omega)) ?_
+  exact h_next _ _ rfl (fun _ _ => rfl) rfl (by omega)
+
+/-- `CALLDATACOPY` as a walk step, with the charge a variable.  The copied bytes
+are `Sevm.data`'s slice — zero-filled past the end of calldata, which is why no
+premise bounds the requested window. -/
+lemma Func.runCompiledTo_calldatacopy_step {fs : List Func} {sevm : Sevm}
+    {devm : Devm} {di si sz : B256} {s : List B256} {c : Nat} {M : Mem}
+    {rest : Func} {ex : Execution}
+    (h_stk : devm.stack = di :: si :: sz :: s)
+    (h_mem : devm.memory = M)
+    (h_cost : gVerylow + gasCopy * ceilDiv sz.toNat 32
+      + devm.extCost [⟨di.toNat, sz.toNat⟩] = c)
+    (h_gas : c ≤ devm.gasLeft)
+    (h_next : ∀ (M' : Mem) (G : Nat),
+      M.write di.toNat (sevm.data.sliceD si.toNat sz.toNat 0) = M' →
+      devm.gasLeft = G + c →
+      Func.RunCompiledTo fs sevm (devm.setMach ⟨s, M', G⟩) rest ex) :
+    Func.RunCompiledTo fs sevm devm (Func.next (.reg .calldatacopy) rest) ex := by
+  subst h_mem
+  refine Func.RunCompiledTo.next
+    (Ninst.runCompiled_calldatacopy_of (G := devm.gasLeft - c) h_stk h_cost
+      rfl (by omega)) ?_
+  exact h_next _ _ rfl (by omega)
+
 /-! ## EIP-150, at `value = 0`
 
 `calculateMsgCallGas` is where the 63/64 rule lives, and P4 of

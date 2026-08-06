@@ -359,6 +359,38 @@
 # adds cost nothing measurable, and the 9.658 threshold still has 1.3 s of head
 # room. A4's instruction stands: a successor that wants to grow that file
 # should overflow into Blanc/ForwardCall.lean instead.
+#
+# 2026-08-06. Checkpoint 2b of the same arc closes the trunk -- the mint's
+# `Transfer` log, the callback's argument build, the `CALLDATACOPY` of the
+# caller's payload, and the exact state at the `CALL` -- and re-sets
+# Blanc/FmintSettles.lean's row 6.377 -> 11.849 (median of 11.820, 11.849,
+# 12.251), by `scripts/check-elab.sh --list --no-build` on a tree with no
+# language server alive, three sequential runs. `--rebase` was not run and
+# remains prohibited for the whole arc. This is the arc's OWN module, re-set by
+# the step that grows it, on exactly the footing 2a re-set Blanc/ForwardCall
+# .lean's row: the row equals the measured median of the tip it ships with.
+#
+# The old row would still have passed -- 11.849 is inside 2.0x of 6.377 (12.754)
+# -- and it is re-set anyway, because leaving it would hand Step 3 nine tenths
+# of a second of head room for the whole post-`CALL` case tree.
+#
+# What the 5.5 s bought: a second walk of ~60 nodes, eight `MSTORE`s, a `LOG`,
+# a `CALLDATACOPY` with a symbolic charge, and the memory-image equation. The
+# cost is NOT the dispatcher this time (the second walk re-uses the first
+# lemma's exit state), it is the eleven `by decide` window-charge obligations and
+# the eight named memory images. A measured trap worth recording: walking the
+# same eight `MSTORE`s through `func_run`'s own arm instead costs ~1.5 s PER
+# NODE after the sixth store, because the image is then a term whose payloads
+# are concrete -- a `keccak`-derived selector among them -- and every later
+# `whnf` runs the chain. `Func.runCompiledTo_mstore_step` names each image
+# instead and the per-node cost stays at ~0.1 s.
+#
+# Blanc/ForwardCall.lean's row is re-set 1.517 -> 1.576 (median of 1.624,
+# 1.576, 1.559) by the same step, which adds the `MSTORE`, `LOG` and
+# `CALLDATACOPY` walk steps and three memory-window lemmas to it.
+#
+# NO PRE-EXISTING ROW MOVED. Blanc/Forward.lean is untouched by this checkpoint
+# and its 4.829 row stands.
 OK	1.241	Blanc.lean
 OK	1.257	Blanc/Basic.lean
 OK	2.454	Blanc/CommonCore.lean
@@ -382,5 +414,5 @@ OK	5.574	Blanc/FmintReverts.lean
 OK	5.383	Blanc/WethLive.lean
 OK	7.978	Blanc/WethGas.lean
 OK	7.098	Blanc/FmintGas.lean
-OK	1.517	Blanc/ForwardCall.lean
-OK	6.377	Blanc/FmintSettles.lean
+OK	1.576	Blanc/ForwardCall.lean
+OK	11.849	Blanc/FmintSettles.lean
