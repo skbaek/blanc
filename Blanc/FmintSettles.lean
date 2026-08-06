@@ -1619,5 +1619,370 @@ lemma execSat_slotCollision_leaf {sevm : Sevm} {d : Devm}
             omega)
   · exact hP _
 
+/-- **The allowance-low leaf.**  The allowance `receiver → address(this)` is
+finite and below the amount owed: `flashLoan` deliberately reverts.  The
+allowance value is read through the warmth-open `SLOAD` step, so the statement
+needs no warm-set premise (F28). -/
+lemma execSat_allowanceLow_leaf {sevm : Sevm} {d : Devm}
+    {wad receiver h amnt : B256} {M : Mem} {Gc : Nat} {P : Execution → Prop}
+    (h_amnt : d.getStorVal sevm.currentTarget h = amnt)
+    (h_nmax : B256.eqCheck (~~~ amnt) 0 = 0)
+    (h_low : (amnt <? wad) = 1)
+    (h_gas : 2152 ≤ Gc)
+    (hP : ∀ post : Devm, P (.error (.revert, post))) :
+    Func.ExecSat (fmint.main :: fmint.aux) sevm
+      (d.setMach ⟨[h, wad, receiver], M, Gc⟩) spendFromHash P := by
+  refine Func.execSat_next
+    (Ninst.runCompiled_dup (n := 0) (G := Gc - gVerylow) rfl
+      (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
+      (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
+          omega)) ?_
+  apply Func.execSat_sload_step (k := h) (v := amnt)
+    (s := [h, wad, receiver]) (M := M)
+  · rfl
+  · simp only [List.length_cons, List.length_nil]; omega
+  · exact h_amnt
+  · rfl
+  · simp only [Devm.gasLeft_setMach, gasColdSload, gVerylow]; omega
+  · intro base c G h_in h_mono h_stor h_rc h_logs h_lo h_hi h_geq
+    have hG : 49 ≤ G := by
+      simp only [Devm.gasLeft_setMach, gVerylow] at h_geq
+      simp only [gasColdSload] at h_hi
+      omega
+    apply Func.execSat_of_runCompiledTo
+    · func_run (8) [~~~ amnt, 0, 1]
+      exact Func.runCompiledTo_rev_func (G := G - 49)
+        (by simp only [Devm.gasLeft_setMach, gBase]; omega)
+        (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
+            omega)
+    · exact hP _
+
+/-- **Through the infinite-allowance arm.**  The allowance is `2^256 - 1`, so
+it is preserved rather than decremented: nothing is written, and the walk
+hands the continuation the state entering `burnAndReturn` with storage exactly
+`d`'s. -/
+lemma execSat_spendInf_step {sevm : Sevm} {d : Devm}
+    {wad receiver h amnt : B256} {M : Mem} {Gc : Nat} {P : Execution → Prop}
+    (h_amnt : d.getStorVal sevm.currentTarget h = amnt)
+    (h_max : B256.eqCheck (~~~ amnt) 0 = 1)
+    (h_gas : 2142 ≤ Gc)
+    (h_next : ∀ (b : Devm) (G : Nat),
+      (∀ (a : Adr) (k : B256), b.getStorVal a k = d.getStorVal a k) →
+      Gc - 2142 ≤ G →
+      Func.ExecSat (fmint.main :: fmint.aux) sevm
+        (b.setMach ⟨[wad, receiver], M, G⟩) burnAndReturn P) :
+    Func.ExecSat (fmint.main :: fmint.aux) sevm
+      (d.setMach ⟨[h, wad, receiver], M, Gc⟩) spendFromHash P := by
+  refine Func.execSat_next
+    (Ninst.runCompiled_dup (n := 0) (G := Gc - gVerylow) rfl
+      (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
+      (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
+          omega)) ?_
+  apply Func.execSat_sload_step (k := h) (v := amnt)
+    (s := [h, wad, receiver]) (M := M)
+  · rfl
+  · simp only [List.length_cons, List.length_nil]; omega
+  · exact h_amnt
+  · rfl
+  · simp only [Devm.gasLeft_setMach, gasColdSload, gVerylow]; omega
+  · intro base c G h_in h_mono h_stor h_rc h_logs h_lo h_hi h_geq
+    simp only [Devm.gasLeft_setMach, gVerylow] at h_geq
+    simp only [gasColdSload] at h_hi
+    have hG : 39 ≤ G := by omega
+    refine Func.execSat_segment ?_ (h_next base (G - 39) ?_ (by omega))
+    · intro ex hex
+      func_run (7) [~~~ amnt, 1]
+      exact hex
+    · intro a k
+      exact h_stor a k
+
+/-- **Through the finite-allowance arm.**  The allowance covers the amount
+owed: it is decremented and written back — the one `SSTORE` of the arm, warm
+because the walk read the same key three instructions earlier (F28) — and the
+walk hands the continuation the state entering `burnAndReturn`, with exactly
+one storage cell moved against `d`. -/
+lemma execSat_spendFin_step {sevm : Sevm} {d : Devm}
+    {wad receiver h amnt : B256} {M : Mem} {Gc : Nat} {P : Execution → Prop}
+    (h_amnt : d.getStorVal sevm.currentTarget h = amnt)
+    (h_nmax : B256.eqCheck (~~~ amnt) 0 = 0)
+    (h_ge : (amnt <? wad) = 0)
+    (h_static : sevm.isStatic = false)
+    (h_gas : 22171 ≤ Gc)
+    (h_next : ∀ (b : Devm) (G : Nat),
+      b.getStorVal sevm.currentTarget h = amnt - wad →
+      (∀ (a : Adr) (k : B256), (a, k) ≠ (sevm.currentTarget, h) →
+        b.getStorVal a k = d.getStorVal a k) →
+      Gc - 22171 ≤ G →
+      Func.ExecSat (fmint.main :: fmint.aux) sevm
+        (b.setMach ⟨[wad, receiver], M, G⟩) burnAndReturn P) :
+    Func.ExecSat (fmint.main :: fmint.aux) sevm
+      (d.setMach ⟨[h, wad, receiver], M, Gc⟩) spendFromHash P := by
+  refine Func.execSat_next
+    (Ninst.runCompiled_dup (n := 0) (G := Gc - gVerylow) rfl
+      (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
+      (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
+          omega)) ?_
+  apply Func.execSat_sload_step (k := h) (v := amnt)
+    (s := [h, wad, receiver]) (M := M)
+  · rfl
+  · simp only [List.length_cons, List.length_nil]; omega
+  · exact h_amnt
+  · rfl
+  · simp only [Devm.gasLeft_setMach, gasColdSload, gVerylow]; omega
+  · intro base c G h_in h_mono h_stor h_rc h_logs h_lo h_hi h_geq
+    simp only [Devm.gasLeft_setMach, gVerylow] at h_geq
+    simp only [gasColdSload] at h_hi
+    have hG : 20068 ≤ G := by omega
+    apply Func.execSat_segment
+    · intro ex hex
+      func_run (12) [~~~ amnt, 0, 0, amnt - wad]
+      exact hex
+    · apply Func.execSat_sstore_warm_step (k := h) (v := amnt - wad)
+        (s := [wad, receiver]) (M := M)
+      · rfl
+      · exact h_in
+      · exact h_static
+      · rfl
+      · simp only [Devm.gasLeft_setMach, gasStorageSet]; omega
+      · intro base2 c2 G2 hkey hoth hacc hlogs2 hle2 hgeq2
+        simp only [Devm.gasLeft_setMach] at hgeq2
+        simp only [gasStorageSet] at hle2
+        refine Func.execSat_segment ?_
+          (h_next base2 (G2 - 12) hkey ?_ (by omega))
+        · intro ex hex
+          func_run (1) []
+          exact hex
+        · intro a k hne
+          rw [hoth a k hne]
+          exact h_stor a k
+
+/-- **The balance-low leaf.**  The receiver's balance cannot cover the burn:
+`burnAndReturn` deliberately reverts before writing anything. -/
+lemma execSat_burnLow_leaf {sevm : Sevm} {b : Devm}
+    {wad receiver rbal : B256} {M : Mem} {G : Nat} {P : Execution → Prop}
+    (h_rbal : b.getStorVal sevm.currentTarget receiver = rbal)
+    (h_low : (rbal <? wad) = 1)
+    (h_gas : 2130 ≤ G)
+    (hP : ∀ post : Devm, P (.error (.revert, post))) :
+    Func.ExecSat (fmint.main :: fmint.aux) sevm
+      (b.setMach ⟨[wad, receiver], M, G⟩) burnAndReturn P := by
+  refine Func.execSat_next
+    (Ninst.runCompiled_dup (n := 1) (G := G - gVerylow) rfl
+      (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
+      (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
+          omega)) ?_
+  apply Func.execSat_sload_step (k := receiver) (v := rbal)
+    (s := [wad, receiver]) (M := M)
+  · rfl
+  · simp only [List.length_cons, List.length_nil]; omega
+  · exact h_rbal
+  · rfl
+  · simp only [Devm.gasLeft_setMach, gasColdSload, gVerylow]; omega
+  · intro base c G1 h_in h_mono h_stor h_rc h_logs h_lo h_hi h_geq
+    simp only [Devm.gasLeft_setMach, gVerylow] at h_geq
+    simp only [gasColdSload] at h_hi
+    have hG : 27 ≤ G1 := by omega
+    apply Func.execSat_of_runCompiledTo
+    · func_run (4) [1]
+      exact Func.runCompiledTo_rev_func (G := G1 - 27)
+        (by simp only [Devm.gasLeft_setMach, gBase]; omega)
+        (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
+            omega)
+    · exact hP _
+
+/-- **The success leaf.**  The balance covers the burn: the pair is written —
+each `SSTORE` warm behind its own `SLOAD` (F28), each clearing the EIP-2200
+sentry because `gasStorageSet ≤ gasLeft` subsumes it — the burn `Transfer` is
+logged, and the frame returns `true`.  The `.ok` arm of the trichotomy. -/
+lemma execSat_burnOk_leaf {sevm : Sevm} {b : Devm}
+    {wad receiver rbal : B256} {M : Mem} {G : Nat} {P : Execution → Prop}
+    (h_rbal : b.getStorVal sevm.currentTarget receiver = rbal)
+    (h_ge : (rbal <? wad) = 0)
+    (h_static : sevm.isStatic = false)
+    (h32 : M.size % 32 = 0)
+    (h_msz : 64 ≤ M.size)
+    (h_gas : 46046 ≤ G)
+    (hP : ∀ post : Devm, P (.ok post)) :
+    Func.ExecSat (fmint.main :: fmint.aux) sevm
+      (b.setMach ⟨[wad, receiver], M, G⟩) burnAndReturn P := by
+  have hs1 : (M.write ((0 * 32 : B256)).toNat wad.toBytes).size = M.size := by
+    apply Mem.size_write_of_le
+    rw [B256.length_toBytes,
+      show ((0 * 32 : B256)).toNat + 32 = 32 from by decide]
+    omega
+  have hs2 : (((M.write ((0 * 32 : B256)).toNat wad.toBytes).read
+      ((0 * 32 : B256)).toNat ((1 * 32 : B256)).toNat).2).size = M.size := by
+    rw [Mem.size_read_snd_of_le (by rw [hs1]; exact h32)
+      (by rw [hs1,
+            show ((0 * 32 : B256)).toNat + ((1 * 32 : B256)).toNat = 32 from
+              by decide]
+          omega),
+      hs1]
+  have hs3 : ((((M.write ((0 * 32 : B256)).toNat wad.toBytes).read
+      ((0 * 32 : B256)).toNat ((1 * 32 : B256)).toNat).2).write
+        ((0 * 32 : B256)).toNat (1 : B256).toBytes).size = M.size := by
+    rw [Mem.size_write_of_le, hs2]
+    rw [hs2, B256.length_toBytes,
+      show ((0 * 32 : B256)).toNat + 32 = 32 from by decide]
+    omega
+  refine Func.execSat_next
+    (Ninst.runCompiled_dup (n := 1) (G := G - gVerylow) rfl
+      (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
+      (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
+          omega)) ?_
+  apply Func.execSat_sload_step (k := receiver) (v := rbal)
+    (s := [wad, receiver]) (M := M)
+  · rfl
+  · simp only [List.length_cons, List.length_nil]; omega
+  · exact h_rbal
+  · rfl
+  · simp only [Devm.gasLeft_setMach, gasColdSload, gVerylow]; omega
+  · intro base c G1 h_in h_mono h_stor h_rc h_logs h_lo h_hi h_geq
+    simp only [Devm.gasLeft_setMach, gVerylow] at h_geq
+    simp only [gasColdSload] at h_hi
+    have hG1 : 43943 ≤ G1 := by omega
+    apply Func.execSat_segment
+    · intro ex hex
+      func_run (8) [0, rbal - wad]
+      exact hex
+    · apply Func.execSat_sstore_warm_step (k := receiver) (v := rbal - wad)
+        (s := [wad, receiver]) (M := M)
+      · rfl
+      · exact h_in
+      · exact h_static
+      · rfl
+      · simp only [Devm.gasLeft_setMach, gasStorageSet]; omega
+      · intro base2 c2 G2 hkey2 hoth2 hacc2 hlogs2 hle2 hgeq2
+        simp only [Devm.gasLeft_setMach] at hgeq2
+        simp only [gasStorageSet] at hle2
+        have hG2 : 23909 ≤ G2 := by omega
+        apply Func.execSat_segment
+        · intro ex hex
+          func_run (2) [supplySlot]
+          exact hex
+        · apply Func.execSat_sload_step (k := supplySlot)
+            (v := base2.getStorVal sevm.currentTarget supplySlot)
+            (s := [wad, receiver]) (M := M)
+          · rfl
+          · simp only [List.length_cons, List.length_nil]; omega
+          · rfl
+          · rfl
+          · simp only [Devm.gasLeft_setMach, gasColdSload]; omega
+          · intro base3 c3 G3 h_in3 h_mono3 h_stor3 h_rc3 h_logs3 h_lo3
+              h_hi3 h_geq3
+            simp only [Devm.gasLeft_setMach] at h_geq3
+            simp only [gasColdSload] at h_hi3
+            have hG3 : 21804 ≤ G3 := by omega
+            apply Func.execSat_segment
+            · intro ex hex
+              func_run (5)
+                [base2.getStorVal sevm.currentTarget supplySlot - wad,
+                  supplySlot]
+              exact hex
+            · apply Func.execSat_sstore_warm_step (k := supplySlot)
+                (v := base2.getStorVal sevm.currentTarget supplySlot - wad)
+                (s := [wad, receiver]) (M := M)
+              · rfl
+              · exact h_in3
+              · exact h_static
+              · rfl
+              · simp only [Devm.gasLeft_setMach, gasStorageSet]; omega
+              · intro base4 c4 G4 hkey4 hoth4 hacc4 hlogs4 hle4 hgeq4
+                simp only [Devm.gasLeft_setMach] at hgeq4
+                simp only [gasStorageSet] at hle4
+                have hG4 : 1790 ≤ G4 := by omega
+                apply Func.execSat_of_runCompiledTo
+                · func_run (14) [0, 1756, 0]
+                  · exact Devm.extCost_zero_of_le h32 (by
+                      rw [show ((0 * 32 : B256)).toNat + 32 = 32 from by decide]
+                      omega)
+                  · rw [Devm.extCost_zero_of_le (by rw [hs1]; exact h32) (by
+                      rw [hs1, show ((0 * 32 : B256)).toNat
+                        + ((1 * 32 : B256)).toNat = 32 from by decide]
+                      omega)]
+                    decide
+                  · exact Devm.extCost_zero_of_le (by rw [hs2]; exact h32) (by
+                      rw [hs2,
+                        show ((0 * 32 : B256)).toNat + 32 = 32 from by decide]
+                      omega)
+                  · exact Func.runCompiledTo_ret_word rfl
+                      (Devm.extCost_zero_of_le (by rw [hs3]; exact h32) (by
+                        rw [hs3, show ((0 : B256)).toNat + ((32 : B256)).toNat
+                          = 32 from by decide]
+                        omega))
+                      (Nat.add_zero _).symm rfl
+                · exact hP _
+
+/-! ## The continuation bound
+
+`flashLoanContGasMax` bounds what *any* post-`CALL` leaf can spend, in Jaune's
+schedule symbols per **A3**: worst case at every warmth-open read (cold price)
+and every value-open store (`gasStorageSet`), exact everywhere else.  The
+worst path is flag `1` → both returndata checks pass → collision guard passes
+→ the finite-allowance arm's decrement → `burnAndReturn`'s full success
+epilogue; every other leaf stops strictly earlier and cheaper (the landed
+floors: 21, 42, 82, 113 after the guard, 2 152, 2 130).  `gasStorageSet ≤
+gasLeft` at each of the two burn-side `SSTORE`s is what the walk demands, and
+it subsumes the EIP-2200 `gCallStipend < gasLeft` sentry — `gCallStipend =
+2300 < 20000` — so clearing the sentry costs the bound nothing extra. -/
+
+/-- The flag test and both returndata checks, flag `1`, both passing: the
+`ISZERO`/branch, `retdataShorterThan 32`, and `checkRetdataHead` with its
+`RETURNDATACOPY` of one covered word.  77 gas. -/
+def flashLoanFlagCheckGas : Nat :=
+  gVerylow + (gVerylow + gHigh)
+    + (gVerylow + gBase + gVerylow + (gVerylow + gHigh))
+    + (gVerylow + gBase + gBase + (gVerylow + gasCopy) + gBase + gVerylow
+        + gVerylow + gVerylow + gVerylow + (gVerylow + gHigh))
+
+/-- The repayment key's hash and collision guard, passing: the two head-word
+stores, the two-word `KECCAK256`, `checkSlotCollides`, and the untaken revert
+branch.  108 gas. -/
+def flashLoanSpendGuardGas : Nat :=
+  (gVerylow + gBase + gVerylow)
+    + (gBase + gVerylow + gVerylow)
+    + (gVerylow + gBase)
+    + (gKeccak256 + gasKeccak256Word * 2)
+    + (gVerylow + (gBase + gVerylow + gVerylow + gVerylow) + gVerylow
+        + gVerylow + gVerylow + gVerylow + gVerylow + gVerylow)
+    + (gVerylow + gHigh)
+
+/-- The finite-allowance arm — the dearer of the two, and the only one that
+writes: the allowance read at the cold price, the `isMax` and bound tests both
+falling through, the decrement's `SSTORE` at `gasStorageSet`, and the tail
+call into `burnSlot`.  22 171 gas. -/
+def flashLoanSpendFinGas : Nat :=
+  gVerylow + gasColdSload
+    + (gVerylow + gVerylow + gVerylow + (gVerylow + gHigh))
+    + (gVerylow + gVerylow + gVerylow + (gVerylow + gHigh))
+    + (gVerylow + gVerylow + gVerylow + gVerylow + gasStorageSet)
+    + (gVerylow + gMid + gJumpdest)
+
+/-- `burnAndReturn`'s success path: the balance read (cold price) and the
+bound test falling through, the burn pair at `gasStorageSet` each with the
+supply read between them at the cold price, the burn `Transfer` log over a
+covered one-word window, and `returnTrue`.  46 046 gas. -/
+def flashLoanBurnGas : Nat :=
+  gVerylow + gasColdSload
+    + (gVerylow + gVerylow + gVerylow + (gVerylow + gHigh))
+    + (gVerylow + gVerylow + gVerylow + gVerylow + gasStorageSet)
+    + (gBase + gVerylow + gasColdSload)
+    + (gVerylow + gVerylow + gVerylow + (gBase + gVerylow) + gasStorageSet)
+    + (gVerylow + (gBase + gVerylow) + gBase + gVerylow + gVerylow)
+    + (gVerylow + gBase + (gLog + gLogdata * 32 + gLogtopic * 3))
+    + (gVerylow + (gBase + gVerylow) + gVerylow + gBase)
+
+/-- **The bound on every post-`CALL` leaf's spend** (A3's `contMax`): the
+worst path's four segments, in order.  Every leaf's landed floor premise is at
+most this, which is what the 3d assembly consumes. -/
+def flashLoanContGasMax : Nat :=
+  flashLoanFlagCheckGas + flashLoanSpendGuardGas + flashLoanSpendFinGas
+    + flashLoanBurnGas
+
+/-- 68 402 gas: 77 + 108 + 22 171 + 46 046.  Read it as the three value-open
+`SSTORE`s at 20 000 each, the three warmth-open `SLOAD`s at 2 100 each, 1 756
+of `LOG3`, 42 of `KECCAK256`, and 304 of control flow. -/
+theorem flashLoanContGasMax_eq : flashLoanContGasMax = 68402 := by decide
+
 end Fmint
 end Blanc

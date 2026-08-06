@@ -432,6 +432,12 @@
 # `Func.runCompiledTo_ret_word`, and measured 1.687 (median of 1.677, 1.687,
 # 1.690) — *below* its 1.743 row, so that row is left alone.
 # Blanc/Forward.lean is untouched by this checkpoint; its 4.829 row stands.
+#
+# Checkpoint 3c (same session) adds the allowance-low, balance-low and success
+# leaves, the two allowance-arm transports, and the flashLoanContGasMax
+# symbol constants; Blanc/FmintSettles.lean re-measured 25.043 (median of
+# 23.620, 25.139, 25.043, no language-server workers), row re-set
+# 21.582 -> 25.043 on the established footing.  No other file touched.
 OK	1.241	Blanc.lean
 OK	1.257	Blanc/Basic.lean
 OK	2.454	Blanc/CommonCore.lean
@@ -456,4 +462,4 @@ OK	5.383	Blanc/WethLive.lean
 OK	7.978	Blanc/WethGas.lean
 OK	7.098	Blanc/FmintGas.lean
 OK	1.743	Blanc/ForwardCall.lean
-OK	21.582	Blanc/FmintSettles.lean
+OK	25.043	Blanc/FmintSettles.lean
