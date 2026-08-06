@@ -132,4 +132,131 @@ theorem Prog.RunCompiledTo.of_runCompiled {sevm : Sevm} {devm : Devm} {p : Prog}
   rcases h with ⟨mid, h_burn, h_run⟩
   exact ⟨mid, h_burn, Func.RunCompiledTo.of_runCompiled h_run⟩
 
+/-! ## The bridge
+
+The mirror of `Blanc/Compiled.lean`'s `Func.exec_of_runCompiled_core`, with the
+outcome generalised.  It is a near-copy on purpose, and the copy is deliberate
+rather than reluctant: `Func.exec_of_runCompiled_core` is consumed by two
+audited theorems, and making it a corollary of this one would rewrite their
+proof terms for no gain (`~/plans/error-genre.md`, decision E5).
+
+Four of the five cases transcribe with no change at all, because none of the
+machinery they use ever mentions the outcome:
+
+* `Evm.branch_zero_steps`, `Evm.branch_succ_steps` and `Evm.call_steps` produce
+  `Evm.step … = .cont …` equations from the rule's gas frame, headroom and
+  jumpability, and a step equation says nothing about where the frame ends;
+* `Ninst.exec_of_stepRun` is *already* stated for a general `exn : Execution` —
+  it consumes `Ninst.StepRun … (.ok devmMid)` for the instruction it steps over
+  and passes the tail's outcome through untouched.
+
+The fifth case, `.last`, is the whole difference, and it is one word wide:
+`Exec.halt` takes `Evm.step ⟨pc, sevm, devm⟩ = .halt ex` for **any** `ex`, so
+the same three tactics close it against `Linst.Run sevm devm i ex` that closed
+it against `Linst.Run sevm devm i (.ok devm')`.
+
+There is no `pcFree` hypothesis and no biconditional.  This is the construction
+direction only: a PC-using program has no `RunCompiledTo` witness to begin with,
+so nothing needs excluding, and the inversion direction — which would need
+`pcFree` and an induction over the execution — is a named non-goal of the arc
+this module belongs to. -/
+
+theorem Func.exec_of_runCompiledTo_core :
+    ∀ {f₀ : Func} {fs' : List Func} {sevm : Sevm} {FS : List Func}
+      {devm : Devm} {p : Func} {ex : Execution},
+      Func.RunCompiledTo FS sevm devm p ex →
+      some sevm.code.toList = Prog.compile ⟨f₀, fs'⟩ →
+      FS = f₀ :: fs' →
+      ∀ pc,
+        subcode sevm.code.toList pc (Func.compile (table 0 (f₀ :: fs')) pc p) →
+        noPushBefore sevm.code pc 32 = true →
+        Nonempty (Exec pc sevm devm ex) := by
+  intro f₀ fs' sevm FS devm p ex h_run
+  induction h_run with
+  | zero h_room h_pop h_f ih =>
+    intro h_eq hFS pc sub hb
+    rcases subcode_compile_branch_jumpable sub hb with
+      ⟨loc, h_loc_eq, h_loc, h_push, h_jumpi, h_subp, h_bp, h_jd, h_jp, h_subq, h_bq⟩
+    rcases Evm.branch_zero_steps h_push h_jumpi h_loc h_room h_pop with ⟨h1, h2⟩
+    obtain ⟨excf⟩ := ih h_eq hFS (pc + 4) h_subp h_bp
+    exact ⟨Exec.cont h1 (Exec.cont h2 excf)⟩
+  | succ h_ne h_room h_pop h_g ih =>
+    intro h_eq hFS pc sub hb
+    rcases subcode_compile_branch_jumpable sub hb with
+      ⟨loc, h_loc_eq, h_loc, h_push, h_jumpi, h_subp, h_bp, h_jd, h_jp, h_subq, h_bq⟩
+    rcases Evm.branch_succ_steps h_push h_jumpi h_jd h_jp h_loc h_ne h_room h_pop
+      with ⟨h1, h2, h3⟩
+    obtain ⟨excg⟩ := ih h_eq hFS (loc + 1) h_subq h_bq
+    exact ⟨Exec.cont h1 (Exec.cont h2 (Exec.cont h3 excg))⟩
+  | last h_lin =>
+    intro h_eq hFS pc sub hb
+    refine ⟨Exec.halt ?_⟩
+    rw [Evm.step_last (Linst.at_of_slice sub)]
+    exact congrArg Step.halt h_lin
+  | next h_n h_f ih =>
+    intro h_eq hFS pc sub hb
+    rcases Func.noPushBefore_next sub hb with ⟨hb', sub'⟩
+    rcases of_subcode sub with ⟨cd, h_eq', h_slice⟩
+    rcases of_bind_eq_some h_eq' with ⟨cd', h_eq'', h_rw⟩
+    simp [pure] at h_rw
+    rw [← h_rw] at h_slice
+    rcases h_n with ⟨xl, h_filled, h_step⟩
+    exact Ninst.exec_of_stepRun (Ninst.at_of_slice (List.slice_prefix h_slice))
+      h_filled (h_step pc) (ih h_eq hFS _ sub' hb')
+  | call h_get h_room h_burn h_f ih =>
+    intro h_eq hFS pc sub hb
+    subst hFS
+    rcases subcode_compile_call sub with ⟨loc, p₁, h_get_tab, h_loc, h_pushAt, h_jump⟩
+    have h_pf := (Prog.get?_table (m := 0)).symm.trans
+      (congrArg (Prod.snd <$> ·) h_get_tab)
+    rw [h_get] at h_pf
+    simp only [Option.map_eq_map, Option.map_some, Option.some.injEq] at h_pf
+    subst h_pf
+    rcases subcode_of_get?_eq_some h_eq h_get_tab with ⟨h_jd, h_subf⟩
+    have h_jpb := Prog.jumpable_of_get?_table h_eq h_get_tab
+    rcases h_pushAt with ⟨le, h_push⟩
+    rcases Evm.call_steps (le := le) h_push h_jump h_jd h_jpb.1 h_loc h_room h_burn
+      with ⟨h1, h2, h3⟩
+    obtain ⟨excf⟩ := ih h_eq rfl (loc + 1) h_subf h_jpb.2
+    exact ⟨Exec.cont h1 (Exec.cont h2 (Exec.cont h3 excf))⟩
+
+/-- **The bridge.**  A gas-exact walk of a compiled program that settles at
+`ex` *is* the total `exec`'s value at pc 0.
+
+Instantiating `ex` is the whole point: at `.ok post` this is
+`Blanc/Compiled.lean`'s `Prog.exec_of_runCompiled` (which is where it stays,
+unchanged); at `.error (e, post)` it is the statement Blanc could not make
+before — *this call settles with **this** error, on these bytes, from this
+state*.
+
+What it does **not** say, so that nothing downstream overreads it:
+
+* **It is not exhaustiveness.**  A witness says these conditions produce this
+  outcome.  It says nothing about which other conditions might produce it, and
+  no consequence of it may be read as "only these conditions revert".
+* **It is not a claim about a callee.**  Any walk crossing an external call
+  carries the callee's derivation as an `Xlot.Filled` premise, exactly as the
+  `.ok` bridge does, so every consequence stays conditional on callee
+  behaviour there.
+* **It is message-call altitude.**  Both sides live at the code frame:
+  intrinsic gas, the 63/64 rule and transaction validity are a further layer.
+* **There is no converse.**  Not a biconditional, by design. -/
+theorem Prog.exec_of_runCompiledTo {sevm : Sevm} {pre : Devm} {p : Prog}
+    {ex : Execution}
+    (h : Prog.RunCompiledTo sevm pre p ex)
+    (h_eq : some sevm.code.toList = p.compile) :
+    exec ⟨0, sevm, pre⟩ = ex := by
+  rcases h with ⟨mid, h_burn, h_run⟩
+  have h_eq' : some sevm.code.toList = Prog.compile ⟨p.main, p.aux⟩ := h_eq
+  have h_get : (table 0 (p.main :: p.aux))[0]? = some (0, p.main) := rfl
+  rcases subcode_of_get?_eq_some h_eq' h_get with ⟨h_jd, h_sub⟩
+  have h_npb : noPushBefore sevm.code 1 32 = true :=
+    (Prog.jumpable_of_get?_table h_eq' h_get).2
+  have h1 : Evm.step ⟨0, sevm, pre⟩ = .cont 1 mid :=
+    Evm.jumpdest_cont h_jd h_burn
+  obtain ⟨exc⟩ :=
+    Func.exec_of_runCompiledTo_core h_run h_eq' rfl 1 h_sub h_npb
+  rw [← exec_iff_exec_eq]
+  exact ⟨Exec.cont h1 exc⟩
+
 end Blanc

@@ -80,6 +80,23 @@
 # no contract at all. They are NOT liveness, they are message-frame level and
 # not transaction level, and they are `.ok`-level only.
 #
+# `Blanc.Prog.exec_of_runCompiledTo` is `Blanc/Reverts.lean`'s outcome-generalised
+# sibling of the first of those two, added by `~/plans/error-genre.md` Step 2. It
+# is the ONE thing in the row above's list that it lifts: the relation it bridges
+# from, `Prog.RunCompiledTo`, ends at an arbitrary `Execution` rather than at
+# `.ok`, so instantiating its conclusion at `.error (e, post)` states "this call
+# settles with THIS error" — the direction the `.ok`-only note above says the
+# older pair cannot reach. Every other restriction on those two carries over
+# verbatim and is not weakened by the generalisation: it is still NOT liveness
+# (a walk crossing an external call still carries the callee's derivation as an
+# `Xlot.Filled` premise), still message-frame and not transaction level, still
+# the construction direction only with no converse and no `pcFree`, and still
+# says nothing about EXHAUSTIVENESS — a witness shows these conditions reach
+# this outcome and never that only these conditions do. `Blanc/Reverts.lean`'s
+# own docstrings are the authority. The `Func`-level core is not a row, for the
+# same reason `Func.exec_of_runCompiled_core` is not one: it is the induction
+# the `Prog` row is built from, not a headline.
+#
 # The last four rows are the only ones in this file that assert a contract call
 # **succeeds**. Every row above them takes a successful execution as a
 # hypothesis and factors it; `Blanc.Fmint.totalSupply_runCompiled` and
@@ -188,6 +205,7 @@ Blanc.Fmint.rollback_of_allowance_below_amount|$STANDARD
 Blanc.Fmint.rollback_of_balance_below_amount|$STANDARD
 Blanc.Prog.exec_of_runCompiled|$STANDARD
 Blanc.Prog.runCompiled_iff_exec|$STANDARD
+Blanc.Prog.exec_of_runCompiledTo|$STANDARD
 Blanc.Fmint.totalSupply_runCompiled|$STANDARD
 Blanc.Fmint.fmint_totalSupply_succeeds|$STANDARD
 Blanc.weth_balanceOf_runCompiled|$STANDARD

@@ -244,6 +244,20 @@
 # the module -- the `exec` bridge, then the `.rev` terminal rules -- exactly as
 # Blanc/Compiled.lean's and Blanc/Forward.lean's rows were re-set across their
 # own arcs. No pre-existing row is touched by any of them.
+#
+# The bridge checkpoint re-set the row 1.214 -> 1.209 (median of 1.223, 1.203,
+# 1.209) -- a DOWNWARD move, inside this host's noise, while the module grew by
+# ~90 lines. Worth stating plainly because it is evidence about this arc's
+# largest cost question: the mirrored induction
+# `Func.exec_of_runCompiledTo_core` is not a second elaboration of
+# `Blanc/Compiled.lean`'s `Func.exec_of_runCompiled_core`'s WORK, only of its
+# TEXT. Four of its five cases apply lemmas that are already elaborated in
+# `Blanc/Compiled.lean` (`Evm.branch_zero_steps`, `Evm.branch_succ_steps`,
+# `Evm.call_steps`, `Ninst.exec_of_stepRun`) and the fifth is three tactics, so
+# the duplication decision E5 makes costs ~90 lines of source and nothing
+# measurable in time. The row is re-set anyway so that it equals the measured
+# median of the tip it ships with, which is the invariant every note above
+# asserts.
 OK	1.241	Blanc.lean
 OK	1.257	Blanc/Basic.lean
 OK	2.454	Blanc/CommonCore.lean
@@ -261,7 +275,7 @@ OK	3.845	Blanc/WethCode.lean
 OK	1.283	Main.lean
 OK	2.002	Blanc/FlashSpec.lean
 OK	4.829	Blanc/Forward.lean
-OK	1.214	Blanc/Reverts.lean
+OK	1.209	Blanc/Reverts.lean
 OK	4.684	Blanc/FmintLive.lean
 OK	5.383	Blanc/WethLive.lean
 OK	7.978	Blanc/WethGas.lean
