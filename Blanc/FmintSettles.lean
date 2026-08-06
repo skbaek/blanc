@@ -1319,5 +1319,31 @@ lemma execSat_flagZero_leaf {sevm : Sevm} {d : Devm} {amount receiver : B256}
       (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
   · exact hP _
 
+/-- **The returndata-short leaf.**  The callback settled clean but answered
+fewer than 32 bytes: `retdataShorterThan 32` fires before any word is read —
+`retdatacopy` would abort the frame rather than fail a test — and `flashLoan`
+deliberately reverts. -/
+lemma execSat_retdataShort_leaf {sevm : Sevm} {d : Devm}
+    {amount receiver : B256} {M : Mem} {Gc : Nat} {P : Execution → Prop}
+    (h_rd : d.returnData.length < 32)
+    (h_gas : 42 ≤ Gc)
+    (hP : ∀ post : Devm, P (.error (.revert, post))) :
+    Func.ExecSat (fmint.main :: fmint.aux) sevm
+      (d.setMach ⟨1 :: [amount, receiver], M, Gc⟩) flashLoanFromFlag P := by
+  have h_lt : (Nat.toB256 d.returnData.length <? (32 : B256)) = 1 := by
+    show (if Nat.toB256 d.returnData.length < 32 then (1 : B256) else 0) = 1
+    refine if_pos ?_
+    rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256,
+      show ((32 : B256)).toNat = 32 from rfl,
+      Nat.lo_eq_of_lt (show d.returnData.length < 2 ^ 256 from
+        Nat.lt_of_lt_of_le h_rd (by norm_num))]
+    exact h_rd
+  apply Func.execSat_of_runCompiledTo
+  · func_run (6) [0, 1]
+    exact Func.runCompiledTo_rev_func (G := Gc - 42)
+      (by simp only [Devm.gasLeft_setMach, gBase]; omega)
+      (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
+  · exact hP _
+
 end Fmint
 end Blanc
