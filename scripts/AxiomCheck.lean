@@ -6,6 +6,7 @@ import Blanc.FmintCode
 import Blanc.Compiled
 import Blanc.Reverts
 import Blanc.FmintLive
+import Blanc.FmintReverts
 import Blanc.WethLive
 import Blanc.FmintGas
 import Blanc.WethGas
@@ -89,3 +90,5 @@ import Blanc.WethGas
 #print axioms Blanc.Fmint.totalSupply_warm_gas_exact
 #print axioms Blanc.Fmint.fmintGasMax_eq_with
 #print axioms Blanc.Fmint.fmintGas_le_max
+#print axioms Blanc.Fmint.unknownSelector_runCompiledTo
+#print axioms Blanc.Fmint.fmint_unknown_selector_reverts

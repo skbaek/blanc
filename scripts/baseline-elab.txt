@@ -269,6 +269,24 @@
 # notes above identify as the real per-module floor. The relation layer is
 # cheap; the dispatch walks that consume it are not, and they will be measured
 # in a contract-owned module where they belong.
+#
+# 2026-08-06. The Blanc/FmintReverts.lean row was hand-set to a measured 3.863
+# (median of 3.868, 3.863, 3.821) when Step 3 of ~/plans/error-genre.md added
+# that module, on the same rule as every new module above: a file with no row
+# here is a REGRESSION, so the row is an extension to admit new content and not
+# a relaxation to admit a failure. Three sequential
+# `scripts/check-elab.sh --list --no-build` runs, no language server alive.
+# `--rebase` and `--force` are prohibited for the whole of that arc, and no
+# pre-existing row is touched by it -- Blanc/Forward.lean's 4.829, which that
+# step also grows, measured 5.138 and stays where it is.
+#
+# The figure is the prediction the Reverts row's note above makes, arriving:
+# this module DOES contain `func_run` walks, so it pays the `String.keccak`
+# floor those walks force at every dispatch fork, and it lands in
+# Blanc/FmintLive.lean's neighbourhood (4.684) rather than Blanc/Reverts.lean's
+# (1.227) despite being a fraction of the latter's length. The relation layer
+# is cheap; the walks that consume it are not, and the cost is dispatch, not
+# proof.
 OK	1.241	Blanc.lean
 OK	1.257	Blanc/Basic.lean
 OK	2.454	Blanc/CommonCore.lean
@@ -288,6 +306,7 @@ OK	2.002	Blanc/FlashSpec.lean
 OK	4.829	Blanc/Forward.lean
 OK	1.227	Blanc/Reverts.lean
 OK	4.684	Blanc/FmintLive.lean
+OK	3.863	Blanc/FmintReverts.lean
 OK	5.383	Blanc/WethLive.lean
 OK	7.978	Blanc/WethGas.lean
 OK	7.098	Blanc/FmintGas.lean

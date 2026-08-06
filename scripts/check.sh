@@ -114,6 +114,27 @@
 # it as an address, so the statement is quantified over that word and asserts
 # nothing about what a non-address key means.
 #
+# `Blanc.Fmint.unknownSelector_runCompiledTo` and
+# `Blanc.Fmint.fmint_unknown_selector_reverts` are the same pair one genre over,
+# added by `~/plans/error-genre.md` Step 3: the first constructs a gas-exact
+# walk, the second composes it through `Prog.exec_of_runCompiledTo` — and both
+# land on `.error (.revert, post)` with `Devm.output post = []` rather than on a
+# success. They are the first rows in this file asserting that a call **reverts**
+# — not that it fails to succeed (the `no_success_of_*` rows), and not that it
+# settles with some unnamed error (the `settles_with_error_of_*` rows), but that
+# the frame settles with `EvmError.revert` carrying no revert data.
+#
+# They do NOT subsume the seven `no_success_of_*` rows and are not subsumed by
+# them, and no report may say otherwise: those hold with no gas premise, because
+# "does not succeed" is not a claim that the frame reaches anything, while
+# "reverts" is and therefore needs gas for the whole path. Their other
+# restrictions are `Blanc/FmintReverts.lean`'s own docstrings' to state, and
+# three bind every row of this shape: they are NOT exhaustiveness (this
+# condition reverts, never only this condition reverts), they are message-call
+# altitude with an exact frame gas figure and not a transaction, and each fixes
+# ONE selector — the dispatch walk decides each fork by evaluating a concrete
+# comparison, so nothing here is quantified over selectors.
+#
 # Each row carries its OWN pinned expected axiom set (see ROWS below), and a
 # theorem's axiom closure must equal its row's set exactly, order-insensitive.
 # Any extra axiom fails — sorryAx, ofReduceBool/ofReduceNat, and also
@@ -239,7 +260,9 @@ Blanc.wethGas_le_max|$STANDARD
 Blanc.Fmint.totalSupply_warm_runCompiled|$STANDARD
 Blanc.Fmint.totalSupply_warm_gas_exact|$STANDARD
 Blanc.Fmint.fmintGasMax_eq_with|$STANDARD
-Blanc.Fmint.fmintGas_le_max|$STANDARD"
+Blanc.Fmint.fmintGas_le_max|$STANDARD
+Blanc.Fmint.unknownSelector_runCompiledTo|$STANDARD
+Blanc.Fmint.fmint_unknown_selector_reverts|$STANDARD"
 # Secondary net only: the exact-set comparison below is the primary check;
 # this pattern catches forbidden names in output the per-theorem parse missed.
 FORBIDDEN='sorryAx|ofReduceBool|ofReduceNat|_native\.'
