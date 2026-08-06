@@ -9064,4 +9064,26 @@ lemma B256.toNat_ceil32 {len : Nat} (h : 31 + len < 2 ^ 256) :
   rw [B256.toNat_and, show (~~~ (31 : B256)).toNat = 2 ^ 256 - 32 from rfl,
     Nat.and_comm, hy, Nat.and_mask32 h, ceil32_eq_mul]
 
+/-! ### The weak form of a partial-correctness theorem: settles with some error
+
+`exec` is Jaune's total function into `Execution := Except (EvmError × Devm)
+Devm`, so it is defined on every `Evm`.  A statement of the form "no `.ok`
+outcome exists" therefore already implies the positive claim "this call
+settles with *some* error" — the case `exec` did not take is the only one
+left.  This is `~/plans/error-genre.md`'s E-A: the generic bridge, contract-
+agnostic and mentioning no `Func`, `Prog`, or contract of Blanc's. -/
+
+/-- **A frame with no successful outcome settles with some error.**  Cases on
+the total function's result: the `.ok` branch is excluded by `h` via
+`exec_iff_exec_eq`, which turns the excluded `Exec … (.ok post)` derivation
+into the excluded `exec` equation; the `.error` branch is the conclusion
+itself. Names no error kind — only that `exec` did not return `.ok`. -/
+lemma exec_error_of_no_success {sevm : Sevm} {pre : Devm}
+    (h : ∀ post, Exec 0 sevm pre (.ok post) → False) :
+    ∃ e post, exec ⟨0, sevm, pre⟩ = .error (e, post) := by
+  rcases hexec : exec ⟨0, sevm, pre⟩ with ⟨e, post⟩ | post
+  · exact ⟨e, post, rfl⟩
+  · exact absurd ((exec_iff_exec_eq 0 sevm pre (.ok post)).mpr hexec)
+      (fun ⟨a⟩ => h post a)
+
 end Blanc
