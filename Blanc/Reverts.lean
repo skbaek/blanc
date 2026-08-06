@@ -259,4 +259,211 @@ theorem Prog.exec_of_runCompiledTo {sevm : Sevm} {pre : Devm} {p : Prog}
   rw [← exec_iff_exec_eq]
   exact ⟨Exec.cont h1 exc⟩
 
+/-! ## The constructor side
+
+`Blanc/Forward.lean` wraps `Func.RunCompiled`'s three rules that need a frame
+(`runCompiled_branch_zero`, `runCompiled_branch_succ`, `runCompiled_call'`) and
+its program entry (`runCompiled_intro`) so that a construction applies one
+lemma per node instead of a lemma plus a fourteen-field record.  The mirrors
+are here, and they are here rather than in a later step because the relation is
+this module's: a walk parameterised by "head constant plus four rule names"
+needs those four names to exist, and they belong beside the relation they
+build.
+
+The premises, the costs and the additive gas convention are `Forward.lean`'s
+unchanged; only the relation and the terminal outcome differ. -/
+
+/-- The `.zero` arm of a `branch`: the `JUMPI` condition is `0`, the arm falls
+through, and it pays `PUSH2` and `JUMPI` only. -/
+lemma Func.runCompiledTo_branch_zero {fs : List Func} {sevm : Sevm} {devm : Devm}
+    {f g : Func} {ex : Execution} {s : List B256} {G : Nat}
+    (h_stk : devm.stack = 0 :: s) (h_room : devm.stack.length < 1024)
+    (h_gas : devm.gasLeft = G + (gVerylow + gHigh))
+    (h_arm : Func.RunCompiledTo fs sevm (devm.setMach ⟨s, devm.memory, G⟩) f ex) :
+    Func.RunCompiledTo fs sevm devm (.branch f g) ex :=
+  .zero h_room (Devm.popBurnBy_setMach h_stk h_gas) h_arm
+
+/-- The `.succ` arm of a `branch`: the condition is nonzero, so the arm is
+reached by a jump and pays the target's `JUMPDEST` on top. -/
+lemma Func.runCompiledTo_branch_succ {fs : List Func} {sevm : Sevm} {devm : Devm}
+    {f g : Func} {ex : Execution} {w : B256} {s : List B256} {G : Nat}
+    (h_ne : w ≠ 0) (h_stk : devm.stack = w :: s)
+    (h_room : devm.stack.length < 1024)
+    (h_gas : devm.gasLeft = G + (gVerylow + gHigh + gJumpdest))
+    (h_arm : Func.RunCompiledTo fs sevm (devm.setMach ⟨s, devm.memory, G⟩) g ex) :
+    Func.RunCompiledTo fs sevm devm (.branch f g) ex :=
+  .succ h_ne h_room (Devm.popBurnBy_setMach h_stk h_gas) h_arm
+
+/-- An internal `.call`: a tail jump into the flat table.  It is **not** an
+external call — it carries no `Xlot` obligation at all, only the table lookup,
+the headroom and `PUSH2; JUMP; JUMPDEST`'s gas. -/
+lemma Func.runCompiledTo_call' {fs : List Func} {sevm : Sevm} {devm : Devm}
+    {k : Nat} {f : Func} {ex : Execution} {G : Nat} (h_get : fs[k]? = some f)
+    (h_room : devm.stack.length < 1024)
+    (h_gas : devm.gasLeft = G + (gVerylow + gMid + gJumpdest))
+    (h_body : Func.RunCompiledTo fs sevm
+      (devm.setMach ⟨devm.stack, devm.memory, G⟩) f ex) :
+    Func.RunCompiledTo fs sevm devm (.call k) ex :=
+  .call h_get h_room (Devm.burnBy_setMach_gas h_gas) h_body
+
+/-- The program entry: `Table.compile`'s leading `JUMPDEST` and nothing else,
+mirroring `Prog.runCompiled_intro`.  Reusing the `.call` rule here would charge
+`gVerylow + gMid` for a `PUSH2; JUMP` the entry never emits. -/
+lemma Prog.runCompiledTo_intro {sevm : Sevm} {devm mid : Devm} {p : Prog}
+    {ex : Execution} {G : Nat} (h_gas : devm.gasLeft = G + gJumpdest)
+    (h_mid : mid = devm.setMach ⟨devm.stack, devm.memory, G⟩)
+    (h_main : Func.RunCompiledTo (p.main :: p.aux) sevm mid p.main ex) :
+    Prog.RunCompiledTo sevm devm p ex := by
+  subst h_mid
+  exact ⟨_, Devm.burnBy_setMach_gas h_gas, h_main⟩
+
+/-! ## The terminal instruction that reverts
+
+`Blanc/Forward.lean` evaluates `Linst.run` forward on `.ret` only, and says why:
+`.stop` needs nothing, and `.rev` and `.dest` do not end in `.ok`.  With the
+relation generalised, `.rev` becomes statable, and it is the terminal
+instruction this whole genre ends at.
+
+`Linst.run … .rev` and `Linst.run … .ret` are the *same five steps* — pop the
+offset, pop the size, charge the window's expansion, read it back, attach it as
+output — differing only in the constructor they wrap the result in.  So the
+lemma below is `Linst.run_ret_eq_ok`'s proof verbatim with `.error ⟨.revert, ·⟩`
+in place of `.ok`.  That symmetry is worth naming, because it is also the
+reason nothing about error *taxonomy* appears here: `EvmError.revert` is a
+nullary constructor with no `ErrorDetail`, so there is nothing to pin beyond
+the constructor itself. -/
+
+/-- `Linst.run` on a `REVERT`, evaluated forward. -/
+lemma Linst.run_rev_eq_error {sevm : Sevm} {devm : Devm} {i sz : B256}
+    {s : List B256} {out : Bytes} {d' : Devm}
+    (h_stk : devm.stack = i :: sz :: s)
+    (h_gas : devm.extCost [⟨i.toNat, sz.toNat⟩] ≤ devm.gasLeft)
+    (h_read : (devm.setMach ⟨s, devm.memory,
+        devm.gasLeft - devm.extCost [⟨i.toNat, sz.toNat⟩]⟩).memRead
+          i.toNat sz.toNat = ⟨out, d'⟩) :
+    Linst.run sevm devm .rev = .error ⟨.revert, d'.withOutput out⟩ := by
+  show (do
+    let ⟨index, d⟩ ← devm.popToNat
+    let ⟨size, d⟩ ← d.popToNat
+    let cost := d.extCost [⟨index, size⟩]
+    let d ← chargeGas cost d
+    let ⟨output, d⟩ := d.memRead index size
+    let d := d.withOutput output
+    Except.error ⟨.revert, d⟩) = _
+  rw [Devm.popToNat_eq_ok h_stk]
+  simp only [bind, Except.bind]
+  rw [Devm.popToNat_eq_ok
+    (devm := devm.setMach ⟨sz :: s, devm.memory, devm.gasLeft⟩) rfl]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
+  have h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+      [⟨i.toNat, sz.toNat⟩] = devm.extCost [⟨i.toNat, sz.toNat⟩] := rfl
+  rw [h_ext, chargeGas_eq_ok
+    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) h_gas]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach,
+    Devm.stack_setMach]
+  rw [h_read]
+
+/-- `REVERT`, at the relation's altitude.  The memory read is handed in rather
+than written out, for the reason `Func.runCompiled_ret`'s docstring gives and
+`Devm.memRead_word_fst`'s explains at length: writing a memory image into a
+conclusion makes the unifier reduce `Devm.memory devm` to weak head normal
+form. -/
+lemma Func.runCompiledTo_rev {fs : List Func} {sevm : Sevm} {devm : Devm}
+    {i sz : B256} {s : List B256} {out : Bytes} {d' : Devm} {G : Nat}
+    (h_stk : devm.stack = i :: sz :: s)
+    (h_gas : devm.gasLeft = G + devm.extCost [⟨i.toNat, sz.toNat⟩])
+    (h_read : (devm.setMach ⟨s, devm.memory, G⟩).memRead i.toNat sz.toNat
+      = ⟨out, d'⟩) :
+    Func.RunCompiledTo fs sevm devm (.last .rev)
+      (.error (.revert, d'.withOutput out)) := by
+  have h_eq : devm.gasLeft - devm.extCost [⟨i.toNat, sz.toNat⟩] = G := by omega
+  refine Func.RunCompiledTo.last ?_
+  show Linst.run sevm devm .rev = _
+  exact Linst.run_rev_eq_error (out := out) (d' := d') h_stk (by omega)
+    (by rw [h_eq]; exact h_read)
+
+/-- `REVERT` with the window's expansion charge named, for the same reason
+`Func.runCompiled_ret_of` exists: a generator cannot name the successor's gas
+account until the charge is a number. -/
+lemma Func.runCompiledTo_rev_of {fs : List Func} {sevm : Sevm} {devm : Devm}
+    {i sz : B256} {s : List B256} {out : Bytes} {d' : Devm} {G e : Nat}
+    (h_stk : devm.stack = i :: sz :: s)
+    (h_ext : devm.extCost [⟨i.toNat, sz.toNat⟩] = e)
+    (h_gas : devm.gasLeft = G + e)
+    (h_read : (devm.setMach ⟨s, devm.memory, G⟩).memRead i.toNat sz.toNat
+      = ⟨out, d'⟩) :
+    Func.RunCompiledTo fs sevm devm (.last .rev)
+      (.error (.revert, d'.withOutput out)) := by
+  subst h_ext
+  exact Func.runCompiledTo_rev h_stk h_gas h_read
+
+/-! ## The empty window, and `Func.rev`
+
+`Blanc/CommonCore.lean`'s `Func.rev` is `PUSH0; PUSH0; REVERT`, and its
+docstring says why the two `PUSH0`s are there: a bare `.last .rev` reverts with
+whatever two words happen to be on the stack, which is an arbitrary window of
+frame memory as revert data, a stack underflow, or an out-of-gas halt from the
+expansion a garbage size implies.  With `(0, 0)` all three go away.
+
+Both facts the window needs are unconditional in the offset, so neither
+constrains the frame's memory:
+
+* `memExtSize` returns the current size unchanged whenever the access size is
+  `0`, so `extCost` is a difference of a number with itself;
+* `Mem.read` at size `0` returns `[]` and `Mem.extend`'s size arithmetic is
+  again the identity.
+
+That is what makes the composite below take a gas premise of exactly
+`gBase + gBase` — the `REVERT` itself is free — and what pins the reverting
+frame's `output` to `[]`. -/
+
+/-- An empty access window costs no memory expansion, whatever the offset and
+whatever is already in memory. -/
+lemma Devm.extCost_empty_window {devm : Devm} {i : Nat} :
+    devm.extCost [⟨i, 0⟩] = 0 := by
+  simp [Devm.extCost, memExtsSize, memExtSize]
+
+/-- Reading an empty window yields no bytes and moves nothing. -/
+lemma Devm.memRead_zero {devm : Devm} {i : Nat} :
+    devm.memRead i 0 = ⟨[], devm⟩ := rfl
+
+/-- **The `Func.rev` composite.**  `PUSH0; PUSH0; REVERT` from a state with the
+gas for two `gBase` pushes, ending at `.error (.revert, …)` with the output
+pinned to `[]`.
+
+Every target in the `error-genre` arc ends here, so this is the lemma a walk
+hands its deferred `.last` goal to.
+
+Two premises, and both are tight:
+
+* **`h_gas`** is the relation's additive form, and `gBase + gBase` is the whole
+  cost — `pushCost_zero` gives each `PUSH0` `gBase`, and the `REVERT`'s empty
+  window is free by `Devm.extCost_empty_window`.  A `PUSH0` is not
+  syntactically a zero and `pushCost` is the right test; that is a
+  `forward-witness` finding and is not re-derived here.
+* **`h_room`** is `< 1023`, not `< 1024`: the *second* `PUSH0` pushes onto a
+  stack that already carries the first, and `Devm.push` guards headroom on the
+  stack it is pushing onto.  It implies the first push's `< 1024`.
+
+The post-state's gas account is `G` — the frame reverts with its remaining gas
+intact at this altitude. This says nothing about a *transaction*'s gas: refunds
+and the 63/64 rule are a further layer. -/
+lemma Func.runCompiledTo_rev_func {fs : List Func} {sevm : Sevm} {devm : Devm}
+    {G : Nat} (h_gas : devm.gasLeft = G + (gBase + gBase))
+    (h_room : devm.stack.length < 1023) :
+    Func.RunCompiledTo fs sevm devm Func.rev
+      (.error (.revert,
+        (devm.setMach ⟨devm.stack, devm.memory, G⟩).withOutput [])) := by
+  refine Func.RunCompiledTo.next
+    (Ninst.runCompiled_pushB256 pushCost_zero (G := G + gBase) (by omega)
+      (by omega)) ?_
+  refine Func.RunCompiledTo.next
+    (Ninst.runCompiled_pushB256 (devm := devm.setMach
+        ⟨(0 : B256) :: devm.stack, devm.memory, G + gBase⟩)
+      pushCost_zero (G := G) rfl
+      (by simp only [Devm.stack_setMach, List.length_cons]; omega)) ?_
+  simp only [Devm.setMach_setMach]
+  exact Func.runCompiledTo_rev_of (i := 0) (sz := 0) (s := devm.stack)
+    rfl Devm.extCost_empty_window rfl Devm.memRead_zero
+
 end Blanc

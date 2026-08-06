@@ -258,6 +258,17 @@
 # measurable in time. The row is re-set anyway so that it equals the measured
 # median of the tip it ships with, which is the invariant every note above
 # asserts.
+#
+# The terminal checkpoint re-set the row 1.209 -> 1.227 (median of 1.221,
+# 1.227, 1.227) when it added the constructor-side wrappers, the `.rev`
+# forward-evaluation family and the `Func.rev` composite. +0.018 s, again
+# inside noise. Blanc/Reverts.lean ships at 1.227 for ~470 lines, which makes
+# it the cheapest per-line module in the repository -- and the reason is worth
+# recording for successors sizing this genre: the module contains no `func_run`
+# walk and therefore forces no `String.keccak`, which the FmintLive/WethLive
+# notes above identify as the real per-module floor. The relation layer is
+# cheap; the dispatch walks that consume it are not, and they will be measured
+# in a contract-owned module where they belong.
 OK	1.241	Blanc.lean
 OK	1.257	Blanc/Basic.lean
 OK	2.454	Blanc/CommonCore.lean
@@ -275,7 +286,7 @@ OK	3.845	Blanc/WethCode.lean
 OK	1.283	Main.lean
 OK	2.002	Blanc/FlashSpec.lean
 OK	4.829	Blanc/Forward.lean
-OK	1.209	Blanc/Reverts.lean
+OK	1.227	Blanc/Reverts.lean
 OK	4.684	Blanc/FmintLive.lean
 OK	5.383	Blanc/WethLive.lean
 OK	7.978	Blanc/WethGas.lean
