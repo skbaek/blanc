@@ -206,7 +206,15 @@ Blanc.Fmint.decimals_gas_exact_fmintGas|$STANDARD
 Blanc.weth_balanceOf_gas_of_runCompiled_wethGas|$STANDARD
 Blanc.weth_decimals_gas_of_runCompiled_wethGas|$STANDARD
 Blanc.Fmint.totalSupply_gas_of_runCompiled_fmintGas|$STANDARD
-Blanc.Fmint.decimals_gas_of_runCompiled_fmintGas|$STANDARD"
+Blanc.Fmint.decimals_gas_of_runCompiled_fmintGas|$STANDARD
+Blanc.weth_balanceOf_warm_runCompiled|$STANDARD
+Blanc.weth_balanceOf_warm_gas_exact|$STANDARD
+Blanc.wethGasMax_eq_with|$STANDARD
+Blanc.wethGas_le_max|$STANDARD
+Blanc.Fmint.totalSupply_warm_runCompiled|$STANDARD
+Blanc.Fmint.totalSupply_warm_gas_exact|$STANDARD
+Blanc.Fmint.fmintGasMax_eq_with|$STANDARD
+Blanc.Fmint.fmintGas_le_max|$STANDARD"
 # Secondary net only: the exact-set comparison below is the primary check;
 # this pattern catches forbidden names in output the per-theorem parse missed.
 FORBIDDEN='sorryAx|ofReduceBool|ofReduceNat|_native\.'

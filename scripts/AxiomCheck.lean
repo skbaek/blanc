@@ -72,3 +72,11 @@ import Blanc.WethGas
 #print axioms Blanc.weth_decimals_gas_of_runCompiled_wethGas
 #print axioms Blanc.Fmint.totalSupply_gas_of_runCompiled_fmintGas
 #print axioms Blanc.Fmint.decimals_gas_of_runCompiled_fmintGas
+#print axioms Blanc.weth_balanceOf_warm_runCompiled
+#print axioms Blanc.weth_balanceOf_warm_gas_exact
+#print axioms Blanc.wethGasMax_eq_with
+#print axioms Blanc.wethGas_le_max
+#print axioms Blanc.Fmint.totalSupply_warm_runCompiled
+#print axioms Blanc.Fmint.totalSupply_warm_gas_exact
+#print axioms Blanc.Fmint.fmintGasMax_eq_with
+#print axioms Blanc.Fmint.fmintGas_le_max

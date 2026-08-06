@@ -279,6 +279,110 @@ theorem weth_balanceOf_gas_of_runCompiled {sevm : Sevm} {pre post : Devm}
   subst h_eq
   omega
 
+/-! ## Dropping the coldness assumption
+
+Every statement above assumes the storage key `balanceOf(address)` reads is
+**cold**. That is the expensive case, and it is the one a fresh top-level frame
+is in — but it is an assumption about the caller's *state*, not about the call,
+and a statement that only holds under it cannot answer "what does this cost?"
+without a footnote.
+
+This section removes it. The warm case is a **separate walk against a separate
+forward lemma pair** (`Rinst.runCore_sload_warm_eq_ok`,
+`Ninst.runCompiled_sload_warm`), not the cold one with a parameter: the two
+charge different constants *and* end in different accessed-key sets, so one
+statement covering both would carry an `if` into every gas equation between the
+`SLOAD` and the `RETURN`. `Rinst.runCore_sload_cold_eq_ok`'s docstring recorded
+that refusal before this arc existed and this arc keeps it.
+
+**The `if` goes exactly one level up, into the cost function** — `wethGas`
+below — where it is written once and eliminated once, by `by_cases` in
+`weth_balanceOf_gas_exact_wethGas`. That theorem is the point of the section:
+it prices `balanceOf(address)` with **no coldness premise at all**. -/
+
+/-- `balanceOfGas` with the storage read warm: the same path, the same charges
+in the same order, `gasWarmAccess` where the cold derivation pays
+`gasColdSload`. Nothing else moves — a warm `SLOAD` is the same instruction on
+the same stack, and the accessed-key set it ends in is the one it started in.
+
+Written out rather than derived from `balanceOfGas` so that it is, like every
+cost definition in this arc, an *independently authored* sum against the fee
+schedule and the compiled `Func` (`~/plans/gas-cost.md`, D1). The check that
+the authoring is right is `balanceOfGasWarm_eq` below. -/
+def balanceOfGasWarm : Nat :=
+  gJumpdest
+    + (gBase + gVerylow + gVerylow + gVerylow)
+    + (gVerylow + gVerylow + gVerylow + (gVerylow + gHigh))
+    + (gVerylow + gVerylow + gVerylow + (gVerylow + gHigh + gJumpdest))
+    + (gVerylow + gVerylow + gVerylow + (gVerylow + gHigh + gJumpdest))
+    + (gVerylow + gVerylow + gVerylow + (gVerylow + gHigh))
+    + (gVerylow + gVerylow + (gVerylow + gHigh + gJumpdest))
+    + (gVerylow + gVerylow + gasWarmAccess)
+    + (gBase + (gVerylow + gMemory))
+    + (gVerylow + gBase)
+
+/-- 241 gas against `balanceOfGas`' 2241 — the storage read is **93 % of a cold
+`balanceOf`, and 41 % of a warm one**. The 2000-gas gap is
+`gasColdSload - gasWarmAccess` and nothing else. -/
+theorem balanceOfGasWarm_eq : balanceOfGasWarm = 241 := by decide
+
+/-- A `balanceOf(address)` call on `weth` whose key is **already warm** has a
+gas-exact run; it costs exactly `balanceOfGasWarm` and returns the slot.
+
+The same walk as the cold derivation — same hint list, same twenty-two steps,
+same tree — differing only where `func_run` meets the `SLOAD`: the frame
+carries `∈` rather than `∉`, so the tactic selects `Ninst.runCompiled_sload_warm`,
+subtracts `gasWarmAccess`, and leaves the base state unmoved. -/
+theorem weth_balanceOf_warm_runCompiled {sevm : Sevm} {pre : Devm}
+    (h_sel : Sevm.selector sevm = boSel)
+    (h_stack : pre.stack = [])
+    (h_mem : pre.memory = Mem.empty)
+    (h_warm : (⟨sevm.currentTarget, Sevm.dataWord sevm 4⟩ : Adr × B256)
+      ∈ pre.accessedStorageKeys)
+    (h_gas : balanceOfGasWarm ≤ pre.gasLeft) :
+    ∃ post, Prog.RunCompiled sevm pre weth post ∧
+      post.gasLeft + balanceOfGasWarm = pre.gasLeft ∧
+      Devm.output post =
+        (Devm.getStorVal pre sevm.currentTarget (Sevm.dataWord sevm 4)).toBytes := by
+  rw [balanceOfGasWarm_eq] at h_gas
+  set g := pre.gasLeft with hg
+  refine
+    ⟨_,
+      Prog.runCompiled_intro (G := g - 1)
+        (mid := pre.setMach ⟨[], Mem.empty, g - 1⟩)
+        (by simp only [gJumpdest]; omega)
+        (by rw [h_stack, h_mem])
+        (by
+          func_run [boSel, 0, 1, 1, 0, 1, 3]
+          · exact Devm.extCost_empty_word
+          · exact Func.runCompiled_ret_word (G := g - 241) (e := 0) rfl
+              (Devm.extCost_word_word Mem.size_write_word)
+              (by simp only [Devm.gasLeft_setMach]; omega)
+              (Devm.memRead_word_fst (by simp only [Devm.memory_setMach]; rfl))),
+      ?_, rfl⟩
+  simp only [Devm.gasLeft_withOutput, Devm.gasLeft_memRead_snd, Devm.gasLeft_setMach,
+    balanceOfGasWarm_eq]
+  omega
+
+/-- **`weth`'s `balanceOf(address)` call on a warm key costs exactly
+`balanceOfGasWarm`.** The exec altitude, from the walk above by
+`Prog.exec_of_runCompiled`. Same four limits as `weth_balanceOf_gas_exact`. -/
+theorem weth_balanceOf_warm_gas_exact {sevm : Sevm} {pre : Devm}
+    (h_code : some sevm.code.toList = Prog.compile weth)
+    (h_sel : Sevm.selector sevm = boSel)
+    (h_stack : pre.stack = [])
+    (h_mem : pre.memory = Mem.empty)
+    (h_warm : (⟨sevm.currentTarget, Sevm.dataWord sevm 4⟩ : Adr × B256)
+      ∈ pre.accessedStorageKeys)
+    (h_gas : balanceOfGasWarm ≤ pre.gasLeft) :
+    ∃ post, exec ⟨0, sevm, pre⟩ = .ok post ∧
+      post.gasLeft + balanceOfGasWarm = pre.gasLeft ∧
+      Devm.output post =
+        (Devm.getStorVal pre sevm.currentTarget (Sevm.dataWord sevm 4)).toBytes := by
+  obtain ⟨post, h_run, h_gas_eq, h_out⟩ :=
+    weth_balanceOf_warm_runCompiled h_sel h_stack h_mem h_warm h_gas
+  exact ⟨post, Prog.exec_of_runCompiled h_run h_code, h_gas_eq, h_out⟩
+
 /-! ## The closed form
 
 Two constants are two constants. What a caller — and what
@@ -327,10 +431,13 @@ def decimalsGasWith (jd base vl hi mem : Nat) : Nat :=
     + (base + (vl + mem))
     + (vl + base)
 
-/-- `balanceOfGas` with the fee schedule abstracted. `cold` appears exactly
-once, at the `SLOAD`, and is the constant a warm/cold split makes vary — which
-is why it is already a parameter here and not a folded-in numeral. -/
-def balanceOfGasWith (jd base vl hi mem cold : Nat) : Nat :=
+/-- `balanceOfGas` with the fee schedule abstracted. `sload` appears exactly
+once, at the `SLOAD`. It is the constant the warm/cold split makes vary, which
+is why it was a parameter here before the split existed and is what
+`wethGasWith` now instantiates two ways: `balanceOfGas` is this at
+`gasColdSload` and `balanceOfGasWarm` is this at `gasWarmAccess`, both by
+`rfl`. -/
+def balanceOfGasWith (jd base vl hi mem sload : Nat) : Nat :=
   jd
     + (base + vl + vl + vl)
     + (vl + vl + vl + (vl + hi))
@@ -338,76 +445,155 @@ def balanceOfGasWith (jd base vl hi mem cold : Nat) : Nat :=
     + (vl + vl + vl + (vl + hi + jd))
     + (vl + vl + vl + (vl + hi))
     + (vl + vl + (vl + hi + jd))
-    + (vl + vl + cold)
+    + (vl + vl + sload)
     + (base + (vl + mem))
     + (vl + base)
 
-/-- **What a call to `weth` costs, by selector, under an arbitrary fee
-schedule.** `none` where this arc has not priced the selector; see the section
-header for why that is not `0`. -/
-def wethGasWith (jd base vl hi mem cold : Nat) : B256 → Option Nat := fun sel =>
-  if sel = boSel then some (balanceOfGasWith jd base vl hi mem cold)
+/-- **What a call to `weth` costs, by selector and by pre-state, under an
+arbitrary fee schedule.** `none` where this arc has not priced the selector;
+see the section header for why that is not `0`.
+
+### Why the `Sevm` and `Devm` arguments
+
+**Because `balanceOf(address)` earns them.** A cost function whose state
+argument was ignored everywhere would be exactly the unused-parameter shape
+this arc refuses on `ForkRules` (see this module's header) — a signature that
+looks state-dependent and is not. It is not one: `balanceOf`'s storage read
+costs `cold` or `warm` according to whether `⟨target, key⟩` is already in
+`pre.accessedStorageKeys`, and `sevm` is what says *which* key, since the key
+is the call's own calldata word.
+
+`decimals()` ignores both arguments, and that is correct rather than
+embarrassing: it reads no storage, so its cost genuinely is a function of the
+selector alone. The arguments are earned by the function as a whole, once,
+and `decimals()` is priced through the same function so that a caller has one
+thing to call and not two.
+
+### Where the `if` lives, and why here
+
+`Rinst.runCore_sload_cold_eq_ok`'s docstring refused a combined warm/cold
+forward lemma, because such a lemma would carry an `if` through every gas
+equation downstream of the `SLOAD`. This is the level that `if` belongs at:
+written **once**, in the cost function, and eliminated **once**, by the
+`by_cases` in `weth_balanceOf_gas_exact_wethGas`. Between those two points the
+two cases are two ordinary walks against two ordinary lemmas. -/
+def wethGasWith (jd base vl hi mem cold warm : Nat) :
+    B256 → Sevm → Devm → Option Nat := fun sel sevm pre =>
+  if sel = boSel then
+    some (balanceOfGasWith jd base vl hi mem
+      (if (⟨sevm.currentTarget, Sevm.dataWord sevm 4⟩ : Adr × B256)
+          ∈ pre.accessedStorageKeys then warm else cold))
   else if sel = dcSel then some (decimalsGasWith jd base vl hi mem)
   else none
 
-/-- **What a call to `weth` costs, by selector, under Jaune's fee schedule.**
-Message-call altitude; these two selectors only; exact under
+/-- **What a call to `weth` costs, by selector and pre-state, under Jaune's fee
+schedule.** Message-call altitude; these two selectors only; exact under
 `Blanc/Compiled.lean`'s compiler-shape assumption. -/
-def wethGas : B256 → Option Nat :=
-  wethGasWith gJumpdest gBase gVerylow gHigh gMemory gasColdSload
+def wethGas : B256 → Sevm → Devm → Option Nat :=
+  wethGasWith gJumpdest gBase gVerylow gHigh gMemory gasColdSload gasWarmAccess
 
 /-- The schedule-symbolic bridge, definitional. -/
 theorem wethGas_eq_with :
-    wethGas = wethGasWith gJumpdest gBase gVerylow gHigh gMemory gasColdSload := rfl
+    wethGas = wethGasWith gJumpdest gBase gVerylow gHigh gMemory gasColdSload
+      gasWarmAccess := rfl
 
 /-- The two entrypoints are distinct, which is what makes `wethGasWith`'s
 second branch reachable. Proved once here rather than at each use: deciding it
 forces both `String.keccak` calls behind the selectors. -/
 theorem dcSel_ne_boSel : dcSel ≠ boSel := by decide
 
-@[simp] theorem wethGas_boSel : wethGas boSel = some balanceOfGas := by
-  simp only [wethGas, wethGasWith]
-  rfl
+/-- `wethGas` at `balanceOf(address)`, with the state dependence exposed: the
+cost is `balanceOfGasWarm` or `balanceOfGas` according to the pre-state's
+accessed-key set. **This is the arc's combined cold/warm statement of the cost
+itself**; `weth_balanceOf_gas_exact_wethGas` is the combined statement of the
+run. -/
+@[simp] theorem wethGas_boSel {sevm : Sevm} {pre : Devm} :
+    wethGas boSel sevm pre =
+      some (if (⟨sevm.currentTarget, Sevm.dataWord sevm 4⟩ : Adr × B256)
+              ∈ pre.accessedStorageKeys then balanceOfGasWarm else balanceOfGas) := by
+  by_cases h : (⟨sevm.currentTarget, Sevm.dataWord sevm 4⟩ : Adr × B256)
+      ∈ pre.accessedStorageKeys
+  · rw [if_pos h]
+    simp only [wethGas, wethGasWith, if_pos h]
+    rfl
+  · rw [if_neg h]
+    simp only [wethGas, wethGasWith, if_neg h]
+    rfl
 
-@[simp] theorem wethGas_dcSel : wethGas dcSel = some decimalsGas := by
+/-- `wethGas` at `balanceOf(address)` on a cold key — the value every statement
+before this arc's Step 3 assumed. -/
+theorem wethGas_boSel_cold {sevm : Sevm} {pre : Devm}
+    (h_cold : (⟨sevm.currentTarget, Sevm.dataWord sevm 4⟩ : Adr × B256)
+      ∉ pre.accessedStorageKeys) :
+    wethGas boSel sevm pre = some balanceOfGas := by
+  rw [wethGas_boSel, if_neg h_cold]
+
+/-- `wethGas` at `balanceOf(address)` on a warm key. -/
+theorem wethGas_boSel_warm {sevm : Sevm} {pre : Devm}
+    (h_warm : (⟨sevm.currentTarget, Sevm.dataWord sevm 4⟩ : Adr × B256)
+      ∈ pre.accessedStorageKeys) :
+    wethGas boSel sevm pre = some balanceOfGasWarm := by
+  rw [wethGas_boSel, if_pos h_warm]
+
+/-- `wethGas` at `decimals()`, for every state: it reads no storage. -/
+@[simp] theorem wethGas_dcSel {sevm : Sevm} {pre : Devm} :
+    wethGas dcSel sevm pre = some decimalsGas := by
   simp only [wethGas, wethGasWith, if_neg dcSel_ne_boSel]
   rfl
 
-/-- **`balanceOf(address)` costs exactly what `wethGas` says it does.**
+/-- **`balanceOf(address)` costs exactly what `wethGas` says it does — with no
+assumption about the storage key.**
 
 `weth_balanceOf_gas_exact` restated so that the number is not written down
 beside the theorem but *produced by the cost function*: `cost` is whatever
-`wethGas` returns for the selector this frame carries, and the conclusion is
-that the frame's gas drops by exactly that. The gas precondition is stated
-through `wethGas` too, so the function is load-bearing on both sides.
+`wethGas` returns for the selector **and pre-state** this frame carries, and
+the conclusion is that the frame's gas drops by exactly that. The gas
+precondition is stated through `wethGas` too, so the function is load-bearing
+on both sides.
 
-Same limits as `weth_balanceOf_gas_exact`. -/
+**This is the arc's combined cold/warm theorem for this target**, and the
+premise list is where to see it: `h_cold` is *gone*. Every earlier statement
+about `balanceOf(address)`'s cost held only for a frame whose key had not been
+touched. This one holds for every frame. The `by_cases` below is the single
+place the `if` that `wethGasWith` writes is eliminated.
+
+Same remaining limits as `weth_balanceOf_gas_exact` — message-call altitude,
+one entrypoint of one contract, one fixed selector, exact under
+`Blanc/Compiled.lean`'s compiler-shape assumption, and Jaune's current fee
+schedule. -/
 theorem weth_balanceOf_gas_exact_wethGas {sevm : Sevm} {pre : Devm} {cost : Nat}
     (h_code : some sevm.code.toList = Prog.compile weth)
     (h_sel : Sevm.selector sevm = boSel)
     (h_stack : pre.stack = [])
     (h_mem : pre.memory = Mem.empty)
-    (h_cold : (⟨sevm.currentTarget, Sevm.dataWord sevm 4⟩ : Adr × B256)
-      ∉ pre.accessedStorageKeys)
-    (h_cost : wethGas (Sevm.selector sevm) = some cost)
+    (h_cost : wethGas (Sevm.selector sevm) sevm pre = some cost)
     (h_gas : cost ≤ pre.gasLeft) :
     ∃ post, exec ⟨0, sevm, pre⟩ = .ok post ∧
       post.gasLeft + cost = pre.gasLeft ∧
       Devm.output post =
         (Devm.getStorVal pre sevm.currentTarget (Sevm.dataWord sevm 4)).toBytes := by
   rw [h_sel, wethGas_boSel] at h_cost
-  injection h_cost with h_cost
-  subst h_cost
-  exact weth_balanceOf_gas_exact h_code h_sel h_stack h_mem h_cold h_gas
+  by_cases h : (⟨sevm.currentTarget, Sevm.dataWord sevm 4⟩ : Adr × B256)
+      ∈ pre.accessedStorageKeys
+  · rw [if_pos h] at h_cost
+    injection h_cost with h_cost
+    subst h_cost
+    exact weth_balanceOf_warm_gas_exact h_code h_sel h_stack h_mem h h_gas
+  · rw [if_neg h] at h_cost
+    injection h_cost with h_cost
+    subst h_cost
+    exact weth_balanceOf_gas_exact h_code h_sel h_stack h_mem h h_gas
 
 /-- **`decimals()` costs exactly what `wethGas` says it does.** The same
-restatement as `weth_balanceOf_gas_exact_wethGas`, on the second target. -/
+restatement as `weth_balanceOf_gas_exact_wethGas`, on the second target. The
+two new arguments are supplied and ignored, which is what "reads no storage"
+looks like at this altitude. -/
 theorem weth_decimals_gas_exact_wethGas {sevm : Sevm} {pre : Devm} {cost : Nat}
     (h_code : some sevm.code.toList = Prog.compile weth)
     (h_sel : Sevm.selector sevm = dcSel)
     (h_stack : pre.stack = [])
     (h_mem : pre.memory = Mem.empty)
-    (h_cost : wethGas (Sevm.selector sevm) = some cost)
+    (h_cost : wethGas (Sevm.selector sevm) sevm pre = some cost)
     (h_gas : cost ≤ pre.gasLeft) :
     ∃ post, exec ⟨0, sevm, pre⟩ = .ok post ∧
       post.gasLeft + cost = pre.gasLeft ∧
@@ -418,29 +604,35 @@ theorem weth_decimals_gas_exact_wethGas {sevm : Sevm} {pre : Devm} {cost : Nat}
   exact weth_decimals_gas_exact h_code h_sel h_stack h_mem h_gas
 
 /-- **`balanceOf(address)` costs what `wethGas` says, from an arbitrary
-`Prog.RunCompiled` witness.**
+`Prog.RunCompiled` witness, with no assumption about the storage key.**
 
-The hypothesis-position altitude restated through the cost function, so that
-`wethGas` is load-bearing at *both* altitudes rather than only where the run is
-constructed. This is the shape a caller reasoning about an arbitrary run of
-this contract states over, and it is the one in which the cost function is
-most useful: the caller supplies a selector, `wethGas` supplies the number. -/
+The hypothesis-position altitude restated through the widened cost function, so
+that `wethGas` is load-bearing at *both* altitudes rather than only where the
+run is constructed. This is the shape a caller reasoning about an arbitrary run
+of this contract states over, and it is the one in which the cost function is
+most useful: the caller supplies a selector and a pre-state, `wethGas` supplies
+the number.
+
+By determinism off the combined exec-altitude theorem, so the warm/cold split
+is eliminated once for both altitudes rather than twice. -/
 theorem weth_balanceOf_gas_of_runCompiled_wethGas {sevm : Sevm} {pre post : Devm}
     {cost : Nat}
     (h_code : some sevm.code.toList = Prog.compile weth)
     (h_sel : Sevm.selector sevm = boSel)
     (h_stack : pre.stack = [])
     (h_mem : pre.memory = Mem.empty)
-    (h_cold : (⟨sevm.currentTarget, Sevm.dataWord sevm 4⟩ : Adr × B256)
-      ∉ pre.accessedStorageKeys)
-    (h_cost : wethGas (Sevm.selector sevm) = some cost)
+    (h_cost : wethGas (Sevm.selector sevm) sevm pre = some cost)
     (h_gas : cost ≤ pre.gasLeft)
     (h_run : Prog.RunCompiled sevm pre weth post) :
     pre.gasLeft = post.gasLeft + cost := by
-  rw [h_sel, wethGas_boSel] at h_cost
-  injection h_cost with h_cost
-  subst h_cost
-  exact weth_balanceOf_gas_of_runCompiled h_code h_sel h_stack h_mem h_cold h_gas h_run
+  obtain ⟨post', h_exec', h_gas_eq, _⟩ :=
+    weth_balanceOf_gas_exact_wethGas h_code h_sel h_stack h_mem h_cost h_gas
+  have h_exec : exec ⟨0, sevm, pre⟩ = .ok post :=
+    Prog.exec_of_runCompiled h_run h_code
+  rw [h_exec] at h_exec'
+  injection h_exec' with h_eq
+  subst h_eq
+  omega
 
 /-- **`decimals()` costs what `wethGas` says, from an arbitrary
 `Prog.RunCompiled` witness.** The same restatement, on the second target. -/
@@ -450,7 +642,7 @@ theorem weth_decimals_gas_of_runCompiled_wethGas {sevm : Sevm} {pre post : Devm}
     (h_sel : Sevm.selector sevm = dcSel)
     (h_stack : pre.stack = [])
     (h_mem : pre.memory = Mem.empty)
-    (h_cost : wethGas (Sevm.selector sevm) = some cost)
+    (h_cost : wethGas (Sevm.selector sevm) sevm pre = some cost)
     (h_gas : cost ≤ pre.gasLeft)
     (h_run : Prog.RunCompiled sevm pre weth post) :
     pre.gasLeft = post.gasLeft + cost := by
@@ -458,5 +650,79 @@ theorem weth_decimals_gas_of_runCompiled_wethGas {sevm : Sevm} {pre post : Devm}
   injection h_cost with h_cost
   subst h_cost
   exact weth_decimals_gas_of_runCompiled h_code h_sel h_stack h_mem h_gas h_run
+
+/-! ## The bound: no state can make these calls dearer
+
+`wethGas` says what a call costs *in a given state*. The question a security
+reader asks is the other one: **is there a state that makes it cost more?**
+
+For these two selectors the answer is no, and `wethGas_le_max` is the proof.
+The maximum is not a new derivation — it is `wethGas` with the storage read
+pinned cold, which is the only place the pre-state enters at all.
+
+**Say what this does not cover, every time it is quoted.** It is these two
+selectors, not the contract: `transfer()`, `withdraw(uint256)` and the rest are
+`none` in `wethGas` and are not bounded here by anything. It is message-call
+altitude. It is Jaune's current fee schedule. And it is a bound on *this
+frame's* gas, which for a call-free entrypoint is the whole cost and for an
+entrypoint that calls out would not be. -/
+
+/-- **The cold branch of `wethGasWith`, per selector** — the most a priced
+`weth` entrypoint can cost under an arbitrary fee schedule, provided `cold` is
+the dearer of the two storage charges (which `wethGasMax` instantiates it to
+be). -/
+def wethGasMaxWith (jd base vl hi mem cold : Nat) : B256 → Option Nat := fun sel =>
+  if sel = boSel then some (balanceOfGasWith jd base vl hi mem cold)
+  else if sel = dcSel then some (decimalsGasWith jd base vl hi mem)
+  else none
+
+/-- **The most a priced `weth` entrypoint can cost**, under Jaune's fee
+schedule. -/
+def wethGasMax : B256 → Option Nat :=
+  wethGasMaxWith gJumpdest gBase gVerylow gHigh gMemory gasColdSload
+
+/-- The schedule-symbolic bridge for the bound, definitional. -/
+theorem wethGasMax_eq_with :
+    wethGasMax = wethGasMaxWith gJumpdest gBase gVerylow gHigh gMemory
+      gasColdSload := rfl
+
+/-- **No calldata and no accessed-key state can make a priced `weth` entrypoint
+cost more than `wethGasMax`.**
+
+The DoS-freedom statement, quantified over *every* selector, `Sevm` and `Devm`:
+whenever `wethGas` prices a call at all, `wethGasMax` prices it too, and the
+actual cost is at most the bound. Nothing about the frame is fixed — not the
+calldata, not the accessed-key set, not the storage contents.
+
+Stated as "`wethGas` priced it, therefore `wethGasMax` priced it and the first
+is at most the second" rather than as `wethGas … ≤ wethGasMax …`, because there
+is no order on `Option Nat` in this repository and inventing one to state a
+four-line lemma would put a definition between the reader and the claim. The
+content is the same and the `∃` is discharged by `rfl` in both live branches.
+
+**Read with the section header's limits**: these selectors, this fee schedule,
+message-call altitude, this compiler. -/
+theorem wethGas_le_max {sel : B256} {sevm : Sevm} {pre : Devm} {cost : Nat}
+    (h_cost : wethGas sel sevm pre = some cost) :
+    ∃ bound, wethGasMax sel = some bound ∧ cost ≤ bound := by
+  simp only [wethGas, wethGasWith] at h_cost
+  simp only [wethGasMax, wethGasMaxWith]
+  by_cases hb : sel = boSel
+  · subst hb
+    rw [if_pos rfl] at h_cost ⊢
+    refine ⟨_, rfl, ?_⟩
+    injection h_cost with h_cost
+    subst h_cost
+    split <;> decide
+  · rw [if_neg hb] at h_cost ⊢
+    by_cases hd : sel = dcSel
+    · subst hd
+      rw [if_pos rfl] at h_cost ⊢
+      refine ⟨_, rfl, ?_⟩
+      injection h_cost with h_cost
+      subst h_cost
+      exact Nat.le_refl _
+    · rw [if_neg hd] at h_cost
+      exact absurd h_cost (by simp)
 
 end Blanc

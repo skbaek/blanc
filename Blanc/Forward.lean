@@ -828,7 +828,7 @@ def discharge (g : MVarId) (stxs : List (TSyntax `tactic)) : ForwardM Unit := do
 def gasTacs : ForwardM (List (TSyntax `tactic)) := do
   let t ← `(tactic|
     (simp only [Devm.gasLeft_setMach, gVerylow, gBase, gHigh, gMid, gJumpdest,
-      gasColdSload, gMemory]; omega))
+      gasColdSload, gasWarmAccess, gMemory]; omega))
   return [t]
 
 /-- The stack-headroom obligation, on a literal stack. -/
@@ -1021,21 +1021,60 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
       -- No hint either: the value read is `Devm.getStorVal` at the key that is
       -- already on the stack.
       let v ← mkAppM ``Jaune.Devm.getStorVal #[d, tgt, k]
-      let base' ← mkAppM ``Jaune.addAccessedStorageKey #[d, tgt, k]
-      let gas' ← mkGas gb goff 2100
-      let succ ← mkState base' (← mkAppM ``List.cons #[v, s]) mem gas'
-      fixPost post succ
-      let gs ← applyLemma g ``Ninst.runCompiled_sload_cold
-        [(0, sevm), (1, d), (2, k), (3, v), (4, s), (5, gas')] [6, 7, 8, 9, 10]
+      -- Warm or cold is a question about the *frame*, not about the
+      -- instruction, so the arm is chosen by reading the caller's own
+      -- hypotheses rather than by consuming a hint.  A hint would have to be
+      -- supplied at every `SLOAD` of every existing walk, and it would let a
+      -- caller assert warmth the frame does not carry; the local context
+      -- cannot.  A frame carrying `⟨target, k⟩ ∈ accessedStorageKeys` takes the
+      -- warm arm.  Everything else takes the cold arm, whose coldness
+      -- obligation is discharged by `assumption` exactly as before -- so a
+      -- frame carrying neither hypothesis still fails where it always did, and
+      -- no existing walk changes.
+      let warmProp ← mkAppM ``Membership.mem
+        #[← mkAppM ``Jaune.Devm.accessedStorageKeys #[d],
+          ← mkAppM ``Prod.mk #[tgt, k]]
+      -- `withNewMCtxDepth` makes the probe read-only: every metavariable the
+      -- walk has built so far is rigid inside it, so a hypothesis can be
+      -- *recognised* but nothing can be *assigned* by recognising it.
+      let isWarm ← g.withContext do
+        (← getLCtx).findDeclM? fun decl => do
+          if decl.isImplementationDetail then return none
+          if ← withNewMCtxDepth (isDefEq decl.type warmProp) then
+            return some decl.type
+          else return none
       let assum ← `(tactic| assumption)
-      match gs with
-      | [hstk, hcold, hval, hg, hr] =>
-        discharge hstk (← rflTacs)
-        discharge hcold [assum]
-        discharge hval (← valTacs)
-        discharge hg (← gasTacs)
-        discharge hr (← roomTacs)
-      | _ => throwError "func_run: SLOAD left {gs.length} obligations"
+      if isWarm.isSome then
+        -- `gasWarmAccess`.  The successor's base is `base`, unmoved: a warm
+        -- read adds nothing to the accessed set.
+        let gas' ← mkGas gb goff 100
+        let succ ← mkState base (← mkAppM ``List.cons #[v, s]) mem gas'
+        fixPost post succ
+        let gs ← applyLemma g ``Ninst.runCompiled_sload_warm
+          [(0, sevm), (1, d), (2, k), (3, v), (4, s), (5, gas')] [6, 7, 8, 9, 10]
+        match gs with
+        | [hstk, hwarm, hval, hg, hr] =>
+          discharge hstk (← rflTacs)
+          discharge hwarm [assum]
+          discharge hval (← valTacs)
+          discharge hg (← gasTacs)
+          discharge hr (← roomTacs)
+        | _ => throwError "func_run: warm SLOAD left {gs.length} obligations"
+      else
+        let base' ← mkAppM ``Jaune.addAccessedStorageKey #[d, tgt, k]
+        let gas' ← mkGas gb goff 2100
+        let succ ← mkState base' (← mkAppM ``List.cons #[v, s]) mem gas'
+        fixPost post succ
+        let gs ← applyLemma g ``Ninst.runCompiled_sload_cold
+          [(0, sevm), (1, d), (2, k), (3, v), (4, s), (5, gas')] [6, 7, 8, 9, 10]
+        match gs with
+        | [hstk, hcold, hval, hg, hr] =>
+          discharge hstk (← rflTacs)
+          discharge hcold [assum]
+          discharge hval (← valTacs)
+          discharge hg (← gasTacs)
+          discharge hr (← roomTacs)
+        | _ => throwError "func_run: SLOAD left {gs.length} obligations"
     | (``Jaune.Rinst.mstore, #[]) => do
       let ([idx, val], s) ← popStack 2 stk | throwError "func_run: MSTORE"
       let some ext ← nextHint g (mkConst ``Nat)
