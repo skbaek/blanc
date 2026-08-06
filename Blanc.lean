@@ -8,6 +8,8 @@ import Blanc.Compiled
 import Blanc.Forward
 import Blanc.FmintLive
 import Blanc.WethLive
+import Blanc.FmintGas
+import Blanc.WethGas
 
 namespace Blanc
 

@@ -6,6 +6,8 @@ import Blanc.FmintCode
 import Blanc.Compiled
 import Blanc.FmintLive
 import Blanc.WethLive
+import Blanc.FmintGas
+import Blanc.WethGas
 
 #print axioms Blanc.weth_preserves_solvent
 #print axioms Blanc.stateTransition_preserves_solvent
@@ -48,3 +50,7 @@ import Blanc.WethLive
 #print axioms Blanc.Fmint.fmint_totalSupply_succeeds
 #print axioms Blanc.weth_balanceOf_runCompiled
 #print axioms Blanc.weth_balanceOf_succeeds
+#print axioms Blanc.weth_balanceOf_gas_exact
+#print axioms Blanc.weth_balanceOf_gas_of_runCompiled
+#print axioms Blanc.Fmint.totalSupply_gas_exact
+#print axioms Blanc.Fmint.totalSupply_gas_of_runCompiled

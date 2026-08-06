@@ -134,6 +134,29 @@
 #
 # No pre-existing row was touched by that step. `--rebase` and `--force` remain
 # prohibited for the whole of the arc.
+#
+# Blanc/WethGas.lean's row was hand-set to a measured 5.380 (median of 5.380,
+# 5.374, 5.434) and Blanc/FmintGas.lean's to a measured 3.976 (median of 3.948,
+# 3.976, 4.006) when Step 1 of ~/plans/gas-cost.md added both modules -- a file
+# with no row here is a REGRESSION, so each row is an extension to admit new
+# content, not a relaxation to admit a failure. Both measured with
+# `scripts/check-elab.sh --list --no-build` with no language server alive.
+#
+# Both rows are well above the arc's own ~2 s expectation for a module doing
+# no new `func_run` walk (`~/plans/gas-cost.md` Step 1, deliverable 5): each
+# module's exactness theorem at the `exec` altitude re-derives
+# `weth_balanceOf_runCompiled`/`totalSupply_runCompiled`'s witness rather than
+# reusing the existing theorem's existential, because that existential does
+# not expose which witness it constructed and the new theorem's extra
+# `gasLeft` conjunct needs the concrete one. That re-derivation calls
+# `func_run` a second time in the module -- the same walk, not a new *shape*
+# of walk -- so it pays the dispatch tree's keccak cost (`String.keccak` per
+# fork) twice rather than once: `WethGas.lean` walks a four-fork tree twice
+# (5.380 against `WethLive.lean`'s 5.383 for one walk) and `FmintGas.lean` a
+# three-fork tree twice (3.976 against `FmintLive.lean`'s 4.684 for one walk,
+# where fmint's single walk already carries the five `decide +kernel` dispatch
+# comparisons `FmintLive.lean`'s own note above records). No pre-existing row
+# was touched.
 OK	1.241	Blanc.lean
 OK	1.257	Blanc/Basic.lean
 OK	2.454	Blanc/CommonCore.lean
@@ -153,3 +176,5 @@ OK	2.002	Blanc/FlashSpec.lean
 OK	4.514	Blanc/Forward.lean
 OK	4.684	Blanc/FmintLive.lean
 OK	5.383	Blanc/WethLive.lean
+OK	5.380	Blanc/WethGas.lean
+OK	3.976	Blanc/FmintGas.lean

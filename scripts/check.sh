@@ -184,7 +184,11 @@ Blanc.Prog.runCompiled_iff_exec|$STANDARD
 Blanc.Fmint.totalSupply_runCompiled|$STANDARD
 Blanc.Fmint.fmint_totalSupply_succeeds|$STANDARD
 Blanc.weth_balanceOf_runCompiled|$STANDARD
-Blanc.weth_balanceOf_succeeds|$STANDARD"
+Blanc.weth_balanceOf_succeeds|$STANDARD
+Blanc.weth_balanceOf_gas_exact|$STANDARD
+Blanc.weth_balanceOf_gas_of_runCompiled|$STANDARD
+Blanc.Fmint.totalSupply_gas_exact|$STANDARD
+Blanc.Fmint.totalSupply_gas_of_runCompiled|$STANDARD"
 # Secondary net only: the exact-set comparison below is the primary check;
 # this pattern catches forbidden names in output the per-theorem parse missed.
 FORBIDDEN='sorryAx|ofReduceBool|ofReduceNat|_native\.'
