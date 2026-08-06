@@ -1522,13 +1522,19 @@ def relSpecs : List RelSpec := [okSpec, toSpec]
 def specOf? (head : Name) : Option RelSpec := relSpecs.find? (·.head == head)
 
 /-- The walk's mutable state: the relation it is building, the hints it has not
-spent, the obligations it could not close, and how many `Ninst` steps it has
-taken (for messages). -/
+spent, the obligations it could not close, how many `Ninst` steps it has taken
+(for messages), and how many it is still allowed to take.
+
+`budget` is what makes a **prefix** walk possible.  A `Func` is concrete all the
+way down, so a caller cannot abstract its tail and stop the walk that way; the
+budget is the only place a walk can be told to stop somewhere other than a
+terminal.  `none` is the original behaviour and every existing caller has it. -/
 structure Ctx where
   rel : RelSpec
   hints : List Term
   side : Array MVarId
   step : Nat
+  budget : Option Nat
 
 abbrev ForwardM := StateRefT Ctx TacticM
 
@@ -2210,7 +2216,17 @@ have inverted them.  Which relation is `Ctx.rel`, fixed once from the goal's own
 head by `funcRunMain` and never re-decided mid-walk. -/
 partial def funcWalk (g : MVarId) : ForwardM Unit := g.withContext do
   let rel := (← get).rel
-  let t ← instantiateMVars (← g.getType)
+  -- The budget, checked before anything is read: the goal handed back is
+  -- exactly the one the previous rule produced, with the state the walk wrote.
+  if let some b := (← get).budget then
+    if (← get).step ≥ b then
+      modify fun c => { c with side := c.side.push g }
+      return
+  -- `consumeMData`: a goal produced by `refine … ?_` under an expected type
+  -- carries a `noImplicitLambda` annotation, and an annotated application has
+  -- no head constant at all.  Reading through it is what lets a walk resume
+  -- from a goal a *lemma* handed back rather than from one the walk wrote.
+  let t := (← instantiateMVars (← g.getType)).consumeMData
   match t.getAppFnArgs with
   | (head, #[fs, sevm, d, f, post]) => do
     unless head == rel.head do
@@ -2222,6 +2238,14 @@ partial def funcWalk (g : MVarId) : ForwardM Unit := g.withContext do
     let (gb, goff) ← parseGas gas
     match f'.getAppFnArgs with
     | (``Blanc.Func.next, #[i, rest]) => do
+      -- A **spawning** instruction is where this layer stops by construction:
+      -- its successor is whatever `Resume.run` makes of a child the walk knows
+      -- nothing about, which is `Blanc/ForwardCall.lean`'s business and not a
+      -- rule here.  The whole node goes back to the caller rather than being
+      -- stepped, so a walk that meets a `CALL` hands over instead of failing.
+      if ((← whnfR i).getAppFn.constName? == some ``Jaune.Ninst.exec) then
+        modify fun c => { c with side := c.side.push g, step := c.step + 1 }
+        return
       let gs ← applyLemma g rel.next
         [(0, fs), (1, sevm), (2, d), (3, i), (5, rest)] [7, 8]
       match gs with
@@ -2291,13 +2315,15 @@ partial def funcWalk (g : MVarId) : ForwardM Unit := g.withContext do
 /-- Entry point.  The relation is read off the goal once, here, so that every
 recursive call builds the same one and a mixed goal is an error rather than a
 silent switch. -/
-def funcRunMain (hints : List Term) : TacticM Unit := do
+def funcRunMain (hints : List Term) (budget : Option Nat := none) :
+    TacticM Unit := do
   let g ← getMainGoal
-  let t ← instantiateMVars (← g.getType)
+  let t := (← instantiateMVars (← g.getType)).consumeMData
   let some rel := t.getAppFn.constName?.bind specOf?
     | throwError m!"func_run: the goal's head is not a relation this walk builds{indentExpr t}"
         ++ m!"\nIt builds {relSpecs.map (·.head)}."
-  let (_, c) ← (funcWalk g).run { rel := rel, hints := hints, side := #[], step := 0 }
+  let (_, c) ← (funcWalk g).run
+    { rel := rel, hints := hints, side := #[], step := 0, budget := budget }
   if c.step == 0 then
     throwError "func_run: applied no rule; nothing was proved"
   unless c.hints.isEmpty do
@@ -2321,14 +2347,24 @@ serves both (`Forward.RelSpec`); the goal decides which.
 
 Everything it could not close comes back as a goal, in the order the walk met
 it, ending with the frame's terminal instruction — which is where a
-`Func.RunCompiledTo` walk's `.rev` is evaluated. -/
-syntax (name := funcRun) "func_run" (ppSpace "[" term,* "]")? : tactic
+`Func.RunCompiledTo` walk's `.rev` is evaluated.
+
+`func_run (n) […]` walks at most `n` nodes and then hands the residual walk
+back as a goal, which is how a **prefix** of a `Func` is walked: a `Func` is
+concrete all the way down, so its tail cannot be abstracted and the walk
+stopped that way.  A walk that meets a *spawning* instruction stops on its own
+and hands the node back whether or not a budget was given — crossing a `CALL`
+is `Blanc/ForwardCall.lean`'s business, not a rule here. -/
+syntax (name := funcRun) "func_run" (ppSpace "(" num ")")?
+  (ppSpace "[" term,* "]")? : tactic
 
 elab_rules : tactic
-  | `(tactic| func_run $[[$hs,*]]?) =>
-    Forward.funcRunMain <| match hs with
-      | some hs => hs.getElems.toList
-      | none => []
+  | `(tactic| func_run $[($n)]? $[[$hs,*]]?) =>
+    Forward.funcRunMain
+      (match hs with
+        | some hs => hs.getElems.toList
+        | none => [])
+      (n.map (·.getNat))
 
 end ForwardTactic
 

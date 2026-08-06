@@ -331,6 +331,34 @@
 # for exactly that reason. The cost is not in the rule statements; profiling
 # attributes it to kernel type-checking of the ten evaluation lemmas' proof
 # terms and to LCNF compilation of the enlarged `ninstStep`.
+#
+# 2026-08-06. Step 2 of the same arc adds Blanc/FmintSettles.lean -- fmint's
+# first forward walk through state-changing code -- and hand-sets its row to a
+# measured 6.377 (median of 6.377, 6.403, 6.364), by `scripts/check-elab.sh
+# --list --no-build` on a tree with no language server alive, three sequential
+# runs. `--rebase` was not run, and remains prohibited for the whole arc. A file
+# with no row here is a REGRESSION, so this is an extension to admit new
+# content, not a relaxation to admit a failure.
+#
+# 6.4 s for one walk of ~60 nodes is the FmintReverts neighbourhood (5.574 for
+# two shorter walks of the same dispatcher), and the reason is the one every
+# note above gives: the floor is `String.keccak` per dispatch fork, not the
+# instruction steps. This module walks the same three forks once.
+#
+# Blanc/ForwardCall.lean's row is re-set 1.511 -> 1.517 (median of 1.514,
+# 1.610, 1.517) by the same step, which adds the warmth-agnostic `SLOAD` rule
+# and the two continuation-passing storage steps to it. +0.006 s is inside this
+# host's noise; the row is re-set so that it equals the measured median of the
+# tip it ships with, which is the invariant every note above asserts. It is
+# this arc's own module, grown by the step that re-sets it.
+#
+# NO PRE-EXISTING ROW MOVED. Blanc/Forward.lean, which this step also touches
+# (the walk's node budget and the `consumeMData` fix), measured 8.340 (median of
+# 8.305, 8.340, 8.381) against its UNCHANGED 4.829 row -- a hair BELOW Step 1's
+# 8.449 under the same conditions, so the ~15 lines of metaprogram this step
+# adds cost nothing measurable, and the 9.658 threshold still has 1.3 s of head
+# room. A4's instruction stands: a successor that wants to grow that file
+# should overflow into Blanc/ForwardCall.lean instead.
 OK	1.241	Blanc.lean
 OK	1.257	Blanc/Basic.lean
 OK	2.454	Blanc/CommonCore.lean
@@ -354,4 +382,5 @@ OK	5.574	Blanc/FmintReverts.lean
 OK	5.383	Blanc/WethLive.lean
 OK	7.978	Blanc/WethGas.lean
 OK	7.098	Blanc/FmintGas.lean
-OK	1.511	Blanc/ForwardCall.lean
+OK	1.517	Blanc/ForwardCall.lean
+OK	6.377	Blanc/FmintSettles.lean

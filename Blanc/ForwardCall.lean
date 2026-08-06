@@ -113,6 +113,224 @@ lemma Devm.popToAdr_eq_ok {x : B256} {s : List B256} {devm : Devm}
   rw [Devm.popToAdr_def, Devm.pop_eq_ok h]
   rfl
 
+/-! ## Reading storage without deciding warmth
+
+`Blanc/Forward.lean` splits `SLOAD` into a cold rule and a warm rule, because
+the cold one moves the base state (the key joins the accessed set) and the warm
+one does not.  A walk that has to be *correct whichever way the frame came in*
+therefore forks, and a trunk with two such reads forks four ways.
+
+The rule below is the fork, taken once and packaged.  Its successor's base is a
+**variable** pinned by an `if`, so one derivation covers both cases and the
+consumer reads what it needs off `h_base` — which for a continuation is only
+ever membership, `getStorVal`, and the machine fields the `setMach` names.
+`h_cost` is the same `if`, so the charge is symbolic and the caller bounds it.
+
+Contract-agnostic, and here rather than in `Blanc/Forward.lean` for **A4**'s
+reason: that module's elaboration row is the one this arc may not raise. -/
+
+/-- `SLOAD`, warmth left open.  The successor's base is whichever of the two
+states the frame's own accessed set selects, and the charge is the matching
+schedule constant; both are handed to the caller as equations.
+
+Neither `if` is decided here, so nothing about the frame's accessed set is
+assumed — which is what lets a single walk serve a statement with no warmth
+premise. -/
+lemma Ninst.runCompiled_sload_of {sevm : Sevm} {devm base : Devm} {k v : B256}
+    {s : List B256} {c G : Nat} (h_stk : devm.stack = k :: s)
+    (h_base : (if (⟨sevm.currentTarget, k⟩ : Adr × B256) ∈ devm.accessedStorageKeys
+      then devm else addAccessedStorageKey devm sevm.currentTarget k) = base)
+    (h_cost : (if (⟨sevm.currentTarget, k⟩ : Adr × B256) ∈ devm.accessedStorageKeys
+      then gasWarmAccess else gasColdSload) = c)
+    (h_val : devm.getStorVal sevm.currentTarget k = v)
+    (h_gas : devm.gasLeft = G + c) (h_room : s.length < 1024) :
+    Ninst.RunCompiled sevm devm (.reg .sload)
+      (base.setMach ⟨v :: s, devm.memory, G⟩) := by
+  by_cases h : (⟨sevm.currentTarget, k⟩ : Adr × B256) ∈ devm.accessedStorageKeys
+  · rw [if_pos h] at h_base h_cost
+    subst h_base; subst h_cost
+    exact Ninst.runCompiled_sload_warm h_stk h h_val h_gas h_room
+  · rw [if_neg h] at h_base h_cost
+    subst h_base; subst h_cost
+    exact Ninst.runCompiled_sload_cold h_stk h h_val h_gas h_room
+
+/-- The key an `SLOAD` read is warm afterwards, whichever arm was taken. -/
+lemma mem_accessedStorageKeys_sload_of {sevm : Sevm} {devm base : Devm}
+    {k : B256}
+    (h_base : (if (⟨sevm.currentTarget, k⟩ : Adr × B256) ∈ devm.accessedStorageKeys
+      then devm else addAccessedStorageKey devm sevm.currentTarget k) = base) :
+    (⟨sevm.currentTarget, k⟩ : Adr × B256) ∈ base.accessedStorageKeys := by
+  by_cases h : (⟨sevm.currentTarget, k⟩ : Adr × B256) ∈ devm.accessedStorageKeys
+  · rw [if_pos h] at h_base; subst h_base; exact h
+  · rw [if_neg h] at h_base; subst h_base
+    exact Std.HashSet.mem_insert_self
+
+/-- A key already warm stays warm across an unrelated `SLOAD`. -/
+lemma mem_accessedStorageKeys_sload_of_mem {sevm : Sevm} {devm base : Devm}
+    {k k' : B256} {a : Adr}
+    (h_base : (if (⟨sevm.currentTarget, k⟩ : Adr × B256) ∈ devm.accessedStorageKeys
+      then devm else addAccessedStorageKey devm sevm.currentTarget k) = base)
+    (h_mem : (⟨a, k'⟩ : Adr × B256) ∈ devm.accessedStorageKeys) :
+    (⟨a, k'⟩ : Adr × B256) ∈ base.accessedStorageKeys := by
+  by_cases h : (⟨sevm.currentTarget, k⟩ : Adr × B256) ∈ devm.accessedStorageKeys
+  · rw [if_pos h] at h_base; subst h_base; exact h_mem
+  · rw [if_neg h] at h_base; subst h_base
+    exact Std.HashSet.mem_insert.mpr (Or.inr h_mem)
+
+/-- The storage a `SLOAD` reads is the storage it leaves: the accessed set is
+`meta`, the values are `world`. -/
+lemma getStorVal_sload_of {sevm : Sevm} {devm base : Devm} {k : B256}
+    {a : Adr} {k' : B256}
+    (h_base : (if (⟨sevm.currentTarget, k⟩ : Adr × B256) ∈ devm.accessedStorageKeys
+      then devm else addAccessedStorageKey devm sevm.currentTarget k) = base) :
+    base.getStorVal a k' = devm.getStorVal a k' := by
+  by_cases h : (⟨sevm.currentTarget, k⟩ : Adr × B256) ∈ devm.accessedStorageKeys
+  · rw [if_pos h] at h_base; subst h_base; rfl
+  · rw [if_neg h] at h_base; subst h_base; rfl
+
+/-- …and so is the original storage the `SSTORE` pricing compares against. -/
+lemma refundCounter_sload_of {sevm : Sevm} {devm base : Devm} {k : B256}
+    (h_base : (if (⟨sevm.currentTarget, k⟩ : Adr × B256) ∈ devm.accessedStorageKeys
+      then devm else addAccessedStorageKey devm sevm.currentTarget k) = base) :
+    base.refundCounter = devm.refundCounter := by
+  by_cases h : (⟨sevm.currentTarget, k⟩ : Adr × B256) ∈ devm.accessedStorageKeys
+  · rw [if_pos h] at h_base; subst h_base; rfl
+  · rw [if_neg h] at h_base; subst h_base; rfl
+
+/-- A read emits no log. -/
+lemma logs_sload_of {sevm : Sevm} {devm base : Devm} {k : B256}
+    (h_base : (if (⟨sevm.currentTarget, k⟩ : Adr × B256) ∈ devm.accessedStorageKeys
+      then devm else addAccessedStorageKey devm sevm.currentTarget k) = base) :
+    base.logs = devm.logs := by
+  by_cases h : (⟨sevm.currentTarget, k⟩ : Adr × B256) ∈ devm.accessedStorageKeys
+  · rw [if_pos h] at h_base; subst h_base; rfl
+  · rw [if_neg h] at h_base; subst h_base; rfl
+
+/-- The charge is between the two schedule constants, whichever arm fires. -/
+lemma le_sload_cost_of {sevm : Sevm} {devm : Devm} {k : B256} {c : Nat}
+    (h_cost : (if (⟨sevm.currentTarget, k⟩ : Adr × B256) ∈ devm.accessedStorageKeys
+      then gasWarmAccess else gasColdSload) = c) :
+    gasWarmAccess ≤ c ∧ c ≤ gasColdSload := by
+  subst h_cost; split <;> exact ⟨by decide, by decide⟩
+
+/-! ### The two storage steps, in continuation-passing form
+
+`Ninst.runCompiled_sload_of` above and `Blanc/Forward.lean`'s
+`Ninst.runCompiled_sstore_warm` both hand the caller a successor whose base and
+whose charge are *terms*, and a walk that meets several of them accumulates
+those terms into a state nobody can write down.  The two rules below are the
+same steps stated so that the successor's base, its charge and its gas account
+arrive in the continuation as **variables with equations** — everything a later
+instruction needs to know about them, and nothing else.
+
+That is what makes a trunk with two warmth-unknown reads and two stores a
+*single* walk instead of a four-way fork over unwritable states, and it is why
+a caller never has to name a `Devm` that a rule produced.
+
+Neither is exhaustive about the charge: both bound it by the schedule's worst
+case, which is **A3**'s decision — a premise buying exactness would be a premise
+about the frame's history, and the statements this serves have none. -/
+
+/-- `SLOAD` as a walk step, with warmth, charge and successor handed to the
+continuation.  `h_gas` is the worst case, so no warmth premise is needed to know
+the frame can pay. -/
+lemma Func.runCompiledTo_sload_step {fs : List Func} {sevm : Sevm} {devm : Devm}
+    {k v : B256} {s : List B256} {M : Mem} {rest : Func} {ex : Execution}
+    (h_stk : devm.stack = k :: s) (h_room : s.length < 1024)
+    (h_val : devm.getStorVal sevm.currentTarget k = v)
+    (h_mem : devm.memory = M)
+    (h_gas : gasColdSload ≤ devm.gasLeft)
+    (h_next : ∀ (base : Devm) (c G : Nat),
+      (⟨sevm.currentTarget, k⟩ : Adr × B256) ∈ base.accessedStorageKeys →
+      (∀ p : Adr × B256, p ∈ devm.accessedStorageKeys →
+        p ∈ base.accessedStorageKeys) →
+      (∀ (a : Adr) (k' : B256), base.getStorVal a k' = devm.getStorVal a k') →
+      base.refundCounter = devm.refundCounter →
+      base.logs = devm.logs →
+      gasWarmAccess ≤ c → c ≤ gasColdSload →
+      devm.gasLeft = G + c →
+      Func.RunCompiledTo fs sevm (base.setMach ⟨v :: s, M, G⟩) rest ex) :
+    Func.RunCompiledTo fs sevm devm (Func.next Ninst.sload rest) ex := by
+  subst h_val; subst h_mem
+  set base : Devm :=
+    if (⟨sevm.currentTarget, k⟩ : Adr × B256) ∈ devm.accessedStorageKeys
+    then devm else addAccessedStorageKey devm sevm.currentTarget k with h_base
+  set c : Nat :=
+    if (⟨sevm.currentTarget, k⟩ : Adr × B256) ∈ devm.accessedStorageKeys
+    then gasWarmAccess else gasColdSload with h_c
+  have h_lo : gasWarmAccess ≤ c := (le_sload_cost_of h_c.symm).1
+  have h_hi : c ≤ gasColdSload := (le_sload_cost_of h_c.symm).2
+  refine Func.RunCompiledTo.next
+    (Ninst.runCompiled_sload_of (base := base) (c := c) (G := devm.gasLeft - c)
+      h_stk h_base.symm h_c.symm rfl (by omega) h_room) ?_
+  exact h_next base c (devm.gasLeft - c)
+    (mem_accessedStorageKeys_sload_of h_base.symm)
+    (fun _ hp => mem_accessedStorageKeys_sload_of_mem h_base.symm hp)
+    (fun _ _ => getStorVal_sload_of h_base.symm)
+    (refundCounter_sload_of h_base.symm) (logs_sload_of h_base.symm)
+    h_lo h_hi (by omega)
+
+/-- `SSTORE` on a **warm** key as a walk step.  The written value, the untouched
+keys, the unmoved accessed set, the charge's bound and the gas account arrive in
+the continuation; the base state itself never has to be named.
+
+Warm only, deliberately: every store this serves is preceded by a read of the
+same key in the same frame, so the cold arm is unreachable rather than
+unhandled. -/
+lemma Func.runCompiledTo_sstore_warm_step {fs : List Func} {sevm : Sevm}
+    {devm : Devm} {k v : B256} {s : List B256} {M : Mem} {rest : Func}
+    {ex : Execution}
+    (h_stk : devm.stack = k :: v :: s)
+    (h_warm : (⟨sevm.currentTarget, k⟩ : Adr × B256) ∈ devm.accessedStorageKeys)
+    (h_static : sevm.isStatic = false)
+    (h_mem : devm.memory = M)
+    (h_gas : gasStorageSet ≤ devm.gasLeft)
+    (h_next : ∀ (base : Devm) (c G : Nat),
+      base.getStorVal sevm.currentTarget k = v →
+      (∀ (a : Adr) (k' : B256), (a, k') ≠ (sevm.currentTarget, k) →
+        base.getStorVal a k' = devm.getStorVal a k') →
+      base.accessedStorageKeys = devm.accessedStorageKeys →
+      base.logs = devm.logs →
+      c ≤ gasStorageSet →
+      devm.gasLeft = G + c →
+      Func.RunCompiledTo fs sevm (base.setMach ⟨s, M, G⟩) rest ex) :
+    Func.RunCompiledTo fs sevm devm (Func.next Ninst.sstore rest) ex := by
+  subst h_mem
+  have h_bound : sstoreValueCost (getOrigStorVal sevm sevm.currentTarget k)
+      (devm.getStorVal sevm.currentTarget k) v ≤ gasStorageSet := by
+    rw [sstoreValueCost]; split_ifs <;> decide
+  refine Func.RunCompiledTo.next
+    (Ninst.runCompiled_sstore_warm (c := sstoreValueCost
+        (getOrigStorVal sevm sevm.currentTarget k)
+        (devm.getStorVal sevm.currentTarget k) v)
+      (G := devm.gasLeft - sstoreValueCost
+        (getOrigStorVal sevm sevm.currentTarget k)
+        (devm.getStorVal sevm.currentTarget k) v)
+      h_stk h_warm (by simp only [gCallStipend, gasStorageSet] at *; omega)
+      h_static rfl rfl (by omega)) ?_
+  refine h_next _ _ _ ?_ (fun a k' h_ne => ?_) rfl rfl h_bound (by omega)
+  · show (Devm.getStor _ sevm.currentTarget).get k = v
+    rw [setStorVal_getStor_self, Stor.get_set_self]
+  · by_cases h_adr : sevm.currentTarget = a
+    · subst h_adr
+      have h_key : k ≠ k' := fun h => h_ne (by rw [h])
+      show (Devm.getStor _ sevm.currentTarget).get k' = _
+      rw [setStorVal_getStor_self, Stor.get_set_ne _ h_key]
+      rfl
+    · show (Devm.getStor _ a).get k' = _
+      have h_off : Devm.getStor
+          ((devm.withRefundCounter (sstoreNewRefundCounter v
+            (getOrigStorVal sevm sevm.currentTarget k)
+            (devm.getStorVal sevm.currentTarget k)
+            devm.refundCounter)).setStorVal sevm.currentTarget k v) a
+            = Devm.getStor devm a := by
+        simp only [Devm.getStor, Devm.getAcct, Devm.setStorVal, Devm.withState,
+          Devm.setWorld, State.setStorVal]
+        simp only [Devm.state, State.get_set_ne _ h_adr]
+        rfl
+      rw [h_off]
+      rfl
+
 /-! ## EIP-150, at `value = 0`
 
 `calculateMsgCallGas` is where the 63/64 rule lives, and P4 of
