@@ -10,6 +10,7 @@ import Blanc.FmintReverts
 import Blanc.WethLive
 import Blanc.FmintGas
 import Blanc.WethGas
+import Blanc.FmintSettles
 
 #print axioms Blanc.weth_preserves_solvent
 #print axioms Blanc.stateTransition_preserves_solvent
@@ -96,3 +97,4 @@ import Blanc.WethGas
 #print axioms Blanc.Fmint.fmint_token_ne_self_reverts
 #print axioms Blanc.Fmint.rollback_revert_of_exec_revert
 #print axioms Blanc.Fmint.rollback_revert_of_token_ne_self
+#print axioms Blanc.Fmint.fmint_flashLoan_settles

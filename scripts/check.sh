@@ -158,6 +158,25 @@
 # still binds (`FMINT_DEVIATIONS.md` row 21) — and so does the non-exhaustiveness
 # note: this condition reverts the frame, never only this condition does.
 #
+# The 86th row, added by `~/plans/adversarial-progress.md` Step 3, is the
+# arc's pinned headline: `Blanc.Fmint.fmint_flashLoan_settles`, the guarded
+# trichotomy at `exec` altitude — under fmint's own entry conditions (frame
+# gas at the closed bound `flashLoanGas`, a non-static caller frame, canonical
+# calldata) every outcome of `flashLoan` is a success, a deliberate
+# `EvmError.revert`, or an error in the non-consensus channel (`NonConsensus`:
+# no `SettledHalt` can store it). There is NO premise about the borrower: its
+# code, behaviour, gas use and settlement are quantified by the pre-state
+# itself, the callee's derivation being discharged by totality
+# (`Xlot.filled_exec`). Three restrictions bind: this is message-call
+# altitude, one selector, and a *bound* (`flashLoanGas` is worst-case, never
+# exact — no exact post-CALL cost exists across arbitrary borrowers); the
+# trichotomy is construction, not exhaustiveness of revert causes; and
+# nothing is claimed below `h_gas` — gas starvation of the *caller's own
+# frame* is out of scope. The supporting walk lemmas (the `execSat_*` leaves
+# and transports, the crossing `flashLoan_execSat_flag`) are internal
+# machinery inside this row's closure and are deliberately not rows
+# themselves.
+#
 # Each row carries its OWN pinned expected axiom set (see ROWS below), and a
 # theorem's axiom closure must equal its row's set exactly, order-insensitive.
 # Any extra axiom fails — sorryAx, ofReduceBool/ofReduceNat, and also
@@ -289,7 +308,8 @@ Blanc.Fmint.fmint_unknown_selector_reverts|$STANDARD
 Blanc.Fmint.tokenNeSelf_runCompiledTo|$STANDARD
 Blanc.Fmint.fmint_token_ne_self_reverts|$STANDARD
 Blanc.Fmint.rollback_revert_of_exec_revert|$STANDARD
-Blanc.Fmint.rollback_revert_of_token_ne_self|$STANDARD"
+Blanc.Fmint.rollback_revert_of_token_ne_self|$STANDARD
+Blanc.Fmint.fmint_flashLoan_settles|$STANDARD"
 # Secondary net only: the exact-set comparison below is the primary check;
 # this pattern catches forbidden names in output the per-theorem parse missed.
 FORBIDDEN='sorryAx|ofReduceBool|ofReduceNat|_native\.'

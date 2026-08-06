@@ -438,6 +438,13 @@
 # symbol constants; Blanc/FmintSettles.lean re-measured 25.043 (median of
 # 23.620, 25.139, 25.043, no language-server workers), row re-set
 # 21.582 -> 25.043 on the established footing.  No other file touched.
+#
+# Checkpoint 3d (same session) adds the term-keyed returndata-short sibling,
+# flashLoanGas with its numeral lemma, and the pinned headline
+# fmint_flashLoan_settles (the 86th audited row); Blanc/FmintSettles.lean
+# re-measured 27.664 (median of 27.664, 30.563, 26.507, no language-server
+# workers; the middle run trailed a killed 1.3GB server and reads high), row
+# re-set 25.043 -> 27.664 on the established footing.  No other file touched.
 OK	1.241	Blanc.lean
 OK	1.257	Blanc/Basic.lean
 OK	2.454	Blanc/CommonCore.lean
@@ -462,4 +469,4 @@ OK	5.383	Blanc/WethLive.lean
 OK	7.978	Blanc/WethGas.lean
 OK	7.098	Blanc/FmintGas.lean
 OK	1.743	Blanc/ForwardCall.lean
-OK	25.043	Blanc/FmintSettles.lean
+OK	27.664	Blanc/FmintSettles.lean

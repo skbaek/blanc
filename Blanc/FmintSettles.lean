@@ -1984,5 +1984,224 @@ def flashLoanContGasMax : Nat :=
 of `LOG3`, 42 of `KECCAK256`, and 304 of control flow. -/
 theorem flashLoanContGasMax_eq : flashLoanContGasMax = 68402 := by decide
 
+/-- Term-keyed sibling of `execSat_retdataShort_leaf`, for the assembly's
+case split: the machine compares `Nat.toB256 d.returnData.length` — the
+*wrapped* length — against 32, so exhaustive coverage splits on that
+comparison and not on the bare `Nat` bound, which the model does not cap. -/
+lemma execSat_retdataShort_leaf' {sevm : Sevm} {d : Devm}
+    {amount receiver : B256} {M : Mem} {Gc : Nat} {P : Execution → Prop}
+    (h_lt : (Nat.toB256 d.returnData.length <? (32 : B256)) = 1)
+    (h_gas : 42 ≤ Gc)
+    (hP : ∀ post : Devm, P (.error (.revert, post))) :
+    Func.ExecSat (fmint.main :: fmint.aux) sevm
+      (d.setMach ⟨1 :: [amount, receiver], M, Gc⟩) flashLoanFromFlag P := by
+  apply Func.execSat_of_runCompiledTo
+  · func_run (6) [0, 1]
+    exact Func.runCompiledTo_rev_func (G := Gc - 42)
+      (by simp only [Devm.gasLeft_setMach, gBase]; omega)
+      (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
+          omega)
+  · exact hP _
+
+/-- **The assembled bound** (A3): the trunk's exact worst case, the `CALL`'s
+own extras — the account access and the EIP-7702 delegation resolution, at
+most `2 * gasColdAccountAccess` because the argument and return windows are
+covered by the trunk's own memory (F27) — and EIP-150's sixty-fourfold of the
+continuation bound, which is what the frame provably retains after forwarding
+everything it has. -/
+def flashLoanGas (dataLen : Nat) : Nat :=
+  flashLoanPreCallGas dataLen + 2 * gasColdAccountAccess
+    + 64 * flashLoanContGasMax
+
+/-- 4 429 379 gas on an empty payload: 46 451 for the trunk, 5 200 for the
+call's extras, and 64 × 68 402 for the retained sixty-fourth.  Well under a
+block: the borrower may burn, bomb, or squander everything it is offered and
+the caller still cannot be starved. -/
+theorem flashLoanGas_zero : flashLoanGas 0 = 4429379 := by decide
+
+/-- **The headline: `flashLoan` cannot be griefed into an exceptional halt.**
+
+Under fmint's own entry conditions — and with **no premise about the
+borrower**, whose code, behaviour, gas use and settlement are all quantified
+by `pre` itself — every outcome of the frame is one of: a success, a
+deliberate `revert`, or the non-consensus machine-fault channel that
+`SettledHalt` cannot even store.  In particular no borrower behaviour reaches
+an `ExceptionalHalt`: `outOfGas` is unreachable however the callback burns,
+because `h_gas` funds the worst leaf through EIP-150's retained sixty-fourth.
+
+`h_static` is a premise about the *caller's* frame, not the borrower: a
+caller who `STATICCALL`s `flashLoan` halts at the mint's first `SSTORE` by
+its own doing (the F21 amendment, user-adjudicated 2026-08-07). -/
+theorem fmint_flashLoan_settles {sevm : Sevm} {pre : Devm}
+    {receiver token amount : B256} {data : Bytes}
+    (h_code : some sevm.code.toList = Prog.compile fmint)
+    (h_sel : Sevm.selector sevm = flashLoanSelector)
+    (h_static : sevm.isStatic = false)
+    (h_dec : Sevm.DecodesCallWithTail sevm flashLoanSelector
+      [receiver, token, amount] data)
+    (h_size : 196 + ceil32 data.length < 2 ^ 256)
+    (h_token : token = sevm.currentTarget.toB256)
+    (h_addr : ValidAdr receiver)
+    (h_nof : B256.Nof ((Devm.getStor pre sevm.currentTarget).get supplySlot)
+      amount)
+    (h_stack : pre.stack = [])
+    (h_mem : pre.memory = Mem.empty)
+    (h_gas : flashLoanGas data.length ≤ pre.gasLeft) :
+    (∃ post, exec ⟨0, sevm, pre⟩ = .ok post) ∨
+    (∃ post, exec ⟨0, sevm, pre⟩ = .error (.revert, post)) ∨
+    (∃ e post, exec ⟨0, sevm, pre⟩ = .error (e, post) ∧ NonConsensus e) := by
+  refine Prog.execSat_out (P := fun ex =>
+      (∃ post, ex = .ok post) ∨
+      (∃ post, ex = .error (.revert, post)) ∨
+      (∃ e post, ex = .error (e, post) ∧ NonConsensus e)) ?_ h_code
+  refine flashLoan_execSat_flag (K := flashLoanContGasMax) h_sel h_dec h_size
+    h_token h_addr h_nof h_static h_stack h_mem h_gas ?_ ?_ ?_
+  · intro e dd hnc
+    exact Or.inr (Or.inr ⟨e, dd, rfl, hnc⟩)
+  · intro dd Gc hK
+    rw [flashLoanContGasMax_eq] at hK
+    exact execSat_flagZero_leaf (by omega)
+      (fun post => Or.inr (Or.inl ⟨post, rfl⟩))
+  · intro dd Gc hK
+    rw [flashLoanContGasMax_eq] at hK
+    by_cases hLen : Nat.toB256 dd.returnData.length < (32 : B256)
+    · refine execSat_retdataShort_leaf' ?_ (by omega)
+        (fun post => Or.inr (Or.inl ⟨post, rfl⟩))
+      rw [show (Nat.toB256 dd.returnData.length <? (32 : B256))
+        = if Nat.toB256 dd.returnData.length < 32 then (1 : B256) else 0
+        from rfl, if_pos hLen]
+    · have h_ge : (Nat.toB256 dd.returnData.length <? (32 : B256)) = 0 := by
+        rw [show (Nat.toB256 dd.returnData.length <? (32 : B256))
+          = if Nat.toB256 dd.returnData.length < 32 then (1 : B256) else 0
+          from rfl, if_neg hLen]
+      have h32c : (flashLoanCallMem sevm amount data).size % 32 = 0 := by
+        rw [flashLoanCallMem_size, ceil32_eq_mul]; omega
+      have hmszc : 64 ≤ (flashLoanCallMem sevm amount data).size := by
+        rw [flashLoanCallMem_size]; omega
+      by_cases hMagic : erc3156Magic
+          = flashLoanRetdataHead dd (flashLoanCallMem sevm amount data)
+      case neg =>
+        refine execSat_magicMismatch_leaf h_ge ?_ h32c hmszc (by omega)
+          (fun post => Or.inr (Or.inl ⟨post, rfl⟩))
+        rw [show (erc3156Magic =? flashLoanRetdataHead dd
+            (flashLoanCallMem sevm amount data))
+          = if erc3156Magic = flashLoanRetdataHead dd
+              (flashLoanCallMem sevm amount data) then (1 : B256) else 0
+          from rfl, if_neg hMagic]
+      case pos =>
+        have h_eq : (erc3156Magic =? flashLoanRetdataHead dd
+            (flashLoanCallMem sevm amount data)) = 1 := by
+          rw [show (erc3156Magic =? flashLoanRetdataHead dd
+              (flashLoanCallMem sevm amount data))
+            = if erc3156Magic = flashLoanRetdataHead dd
+                (flashLoanCallMem sevm amount data) then (1 : B256) else 0
+            from rfl, if_pos hMagic]
+        refine execSat_spend_step h_ge h_eq h32c hmszc (by omega) ?_
+        intro M' hsM'
+        have h32' : M'.size % 32 = 0 := by rw [hsM']; exact h32c
+        have hmsz' : 64 ≤ M'.size := by rw [hsM']; exact hmszc
+        set hh : B256 := Bytes.keccak ((((M'.write ((0 * 32 : B256)).toNat
+          receiver.toBytes).write ((1 * 32 : B256)).toNat
+            sevm.currentTarget.toB256.toBytes).read (B256.toNat 0)
+              (B256.toNat 64)).1) with hhash
+        by_cases hA : ((~~~ (0 : B256)) <<< (Nat.toB256 160).toNat) &&& hh = 0
+        · by_cases hB : ~~~ hh = 0
+          · exact execSat_slotCollision_leaf (va := 1) (mx := 1) hhash.symm
+              (by rw [show B256.eqCheck
+                    (((~~~ (0 : B256)) <<< (Nat.toB256 160).toNat) &&& hh) 0
+                  = if ((~~~ (0 : B256)) <<< (Nat.toB256 160).toNat) &&& hh = 0
+                    then (1 : B256) else 0 from rfl, if_pos hA])
+              (by rw [show B256.eqCheck (~~~ hh) 0
+                  = if ~~~ hh = 0 then (1 : B256) else 0 from rfl, if_pos hB])
+              (by decide) h32' hmsz' (by omega)
+              (fun post => Or.inr (Or.inl ⟨post, rfl⟩))
+          · exact execSat_slotCollision_leaf (va := 1) (mx := 0) hhash.symm
+              (by rw [show B256.eqCheck
+                    (((~~~ (0 : B256)) <<< (Nat.toB256 160).toNat) &&& hh) 0
+                  = if ((~~~ (0 : B256)) <<< (Nat.toB256 160).toNat) &&& hh = 0
+                    then (1 : B256) else 0 from rfl, if_pos hA])
+              (by rw [show B256.eqCheck (~~~ hh) 0
+                  = if ~~~ hh = 0 then (1 : B256) else 0 from rfl, if_neg hB])
+              (by decide) h32' hmsz' (by omega)
+              (fun post => Or.inr (Or.inl ⟨post, rfl⟩))
+        · by_cases hB : ~~~ hh = 0
+          · exact execSat_slotCollision_leaf (va := 0) (mx := 1) hhash.symm
+              (by rw [show B256.eqCheck
+                    (((~~~ (0 : B256)) <<< (Nat.toB256 160).toNat) &&& hh) 0
+                  = if ((~~~ (0 : B256)) <<< (Nat.toB256 160).toNat) &&& hh = 0
+                    then (1 : B256) else 0 from rfl, if_neg hA])
+              (by rw [show B256.eqCheck (~~~ hh) 0
+                  = if ~~~ hh = 0 then (1 : B256) else 0 from rfl, if_pos hB])
+              (by decide) h32' hmsz' (by omega)
+              (fun post => Or.inr (Or.inl ⟨post, rfl⟩))
+          · refine execSat_spendGuard_step hhash.symm
+              (by rw [show B256.eqCheck
+                    (((~~~ (0 : B256)) <<< (Nat.toB256 160).toNat) &&& hh) 0
+                  = if ((~~~ (0 : B256)) <<< (Nat.toB256 160).toNat) &&& hh = 0
+                    then (1 : B256) else 0 from rfl, if_neg hA])
+              (by rw [show B256.eqCheck (~~~ hh) 0
+                  = if ~~~ hh = 0 then (1 : B256) else 0 from rfl, if_neg hB])
+              h32' hmsz' (by omega) ?_
+            intro M'' hsM''
+            have h32'' : M''.size % 32 = 0 := by rw [hsM'']; exact h32'
+            have hmsz'' : 64 ≤ M''.size := by rw [hsM'']; exact hmsz'
+            by_cases hMax : ~~~ (dd.getStorVal sevm.currentTarget hh) = 0
+            · refine execSat_spendInf_step rfl
+                (by rw [show B256.eqCheck
+                      (~~~ dd.getStorVal sevm.currentTarget hh) 0
+                    = if ~~~ dd.getStorVal sevm.currentTarget hh = 0
+                      then (1 : B256) else 0 from rfl, if_pos hMax])
+                (by omega) ?_
+              intro b G hstor hG
+              by_cases hBal : b.getStorVal sevm.currentTarget receiver < amount
+              · exact execSat_burnLow_leaf rfl
+                  (by rw [show (b.getStorVal sevm.currentTarget receiver
+                      <? amount)
+                    = if b.getStorVal sevm.currentTarget receiver < amount
+                      then (1 : B256) else 0 from rfl, if_pos hBal])
+                  (by omega) (fun post => Or.inr (Or.inl ⟨post, rfl⟩))
+              · exact execSat_burnOk_leaf rfl
+                  (by rw [show (b.getStorVal sevm.currentTarget receiver
+                      <? amount)
+                    = if b.getStorVal sevm.currentTarget receiver < amount
+                      then (1 : B256) else 0 from rfl, if_neg hBal])
+                  h_static h32'' hmsz'' (by omega)
+                  (fun post => Or.inl ⟨post, rfl⟩)
+            · by_cases hAlw : dd.getStorVal sevm.currentTarget hh < amount
+              · exact execSat_allowanceLow_leaf rfl
+                  (by rw [show B256.eqCheck
+                        (~~~ dd.getStorVal sevm.currentTarget hh) 0
+                      = if ~~~ dd.getStorVal sevm.currentTarget hh = 0
+                        then (1 : B256) else 0 from rfl, if_neg hMax])
+                  (by rw [show (dd.getStorVal sevm.currentTarget hh <? amount)
+                    = if dd.getStorVal sevm.currentTarget hh < amount
+                      then (1 : B256) else 0 from rfl, if_pos hAlw])
+                  (by omega) (fun post => Or.inr (Or.inl ⟨post, rfl⟩))
+              · refine execSat_spendFin_step rfl
+                  (by rw [show B256.eqCheck
+                        (~~~ dd.getStorVal sevm.currentTarget hh) 0
+                      = if ~~~ dd.getStorVal sevm.currentTarget hh = 0
+                        then (1 : B256) else 0 from rfl, if_neg hMax])
+                  (by rw [show (dd.getStorVal sevm.currentTarget hh <? amount)
+                    = if dd.getStorVal sevm.currentTarget hh < amount
+                      then (1 : B256) else 0 from rfl, if_neg hAlw])
+                  h_static (by omega) ?_
+                intro b G hkey hoth hG
+                by_cases hBal :
+                    b.getStorVal sevm.currentTarget receiver < amount
+                · exact execSat_burnLow_leaf rfl
+                    (by rw [show (b.getStorVal sevm.currentTarget receiver
+                        <? amount)
+                      = if b.getStorVal sevm.currentTarget receiver < amount
+                        then (1 : B256) else 0 from rfl, if_pos hBal])
+                    (by omega) (fun post => Or.inr (Or.inl ⟨post, rfl⟩))
+                · exact execSat_burnOk_leaf rfl
+                    (by rw [show (b.getStorVal sevm.currentTarget receiver
+                        <? amount)
+                      = if b.getStorVal sevm.currentTarget receiver < amount
+                        then (1 : B256) else 0 from rfl, if_neg hBal])
+                    h_static h32'' hmsz'' (by omega)
+                    (fun post => Or.inl ⟨post, rfl⟩)
+
 end Fmint
 end Blanc
