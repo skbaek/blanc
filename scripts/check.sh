@@ -191,6 +191,23 @@
 # transaction, `Xlot.Filled` and the precompile-mode exclusion still premises,
 # canonical calldata still binding, and no exhaustiveness claim anywhere.
 #
+# Rows 88-91, added by the same plan's Step 4, drop the headline's three guard
+# premises. `Blanc.Fmint.receiverNotAddress_runCompiledTo` and
+# `Blanc.Fmint.fmint_receiver_not_address_reverts` are guard (1)'s revert walk
+# (a `receiver` word with bits above 160) in the two altitudes the error-genre
+# arc's E-1/E-2 pair established; `Blanc.Fmint.fmint_amount_over_bound_reverts`
+# is guard (2)'s (an `amount` above `2^256 - 1 - totalSupply`), stated at a
+# *bound* rather than an exact figure because its `SLOAD` of `supplySlot` is
+# warmth-open. Both are NEW rows beside `Blanc.Fmint.no_success_of_*`, not
+# strengthenings of them: those hold with no gas premise and these cannot be
+# stated without one, so neither side subsumes the other and every row stands.
+# `Blanc.Fmint.fmint_flashLoan_settles_of_call` is the 86th row with
+# `h_token`/`h_addr`/`h_nof` dropped -- a call failing any guard takes that
+# guard's deliberate revert, which is already the trichotomy's second
+# disjunct, so the conclusion is unchanged and the statement now holds of
+# every `flashLoan` call at that gas. `h_static` stays, and stays a premise
+# about fmint's CALLER. Nothing here is an exhaustiveness claim.
+#
 # Each row carries its OWN pinned expected axiom set (see ROWS below), and a
 # theorem's axiom closure must equal its row's set exactly, order-insensitive.
 # Any extra axiom fails — sorryAx, ofReduceBool/ofReduceNat, and also
@@ -324,7 +341,11 @@ Blanc.Fmint.fmint_token_ne_self_reverts|$STANDARD
 Blanc.Fmint.rollback_revert_of_exec_revert|$STANDARD
 Blanc.Fmint.rollback_revert_of_token_ne_self|$STANDARD
 Blanc.Fmint.fmint_flashLoan_settles|$STANDARD
-Blanc.Fmint.fmint_flashLoan_frame_settles|$STANDARD"
+Blanc.Fmint.fmint_flashLoan_frame_settles|$STANDARD
+Blanc.Fmint.receiverNotAddress_runCompiledTo|$STANDARD
+Blanc.Fmint.fmint_receiver_not_address_reverts|$STANDARD
+Blanc.Fmint.fmint_amount_over_bound_reverts|$STANDARD
+Blanc.Fmint.fmint_flashLoan_settles_of_call|$STANDARD"
 # Secondary net only: the exact-set comparison below is the primary check;
 # this pattern catches forbidden names in output the per-theorem parse missed.
 FORBIDDEN='sorryAx|ofReduceBool|ofReduceNat|_native\.'

@@ -99,3 +99,7 @@ import Blanc.FmintSettles
 #print axioms Blanc.Fmint.rollback_revert_of_token_ne_self
 #print axioms Blanc.Fmint.fmint_flashLoan_settles
 #print axioms Blanc.Fmint.fmint_flashLoan_frame_settles
+#print axioms Blanc.Fmint.receiverNotAddress_runCompiledTo
+#print axioms Blanc.Fmint.fmint_receiver_not_address_reverts
+#print axioms Blanc.Fmint.fmint_amount_over_bound_reverts
+#print axioms Blanc.Fmint.fmint_flashLoan_settles_of_call

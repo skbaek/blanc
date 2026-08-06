@@ -2286,6 +2286,249 @@ theorem fmint_flashLoan_settles {sevm : Sevm} {pre : Devm}
   · exact Or.inr (Or.inl h)
   · exact Or.inr (Or.inr h)
 
+/-! ## The two guard-failure walks the strengthening needs
+
+`Blanc/FmintReverts.lean` walks guard (0) — `token ≠ self` — to `Func.rev`.
+The unguarded form of the headline needs the other two pre-`CALL` guards
+walked the same way, so that a call which fails any of them is *still* inside
+the trichotomy (a deliberate revert), and the three guard premises can be
+dropped from the statement.
+
+Both walks pass every earlier guard, so each carries the earlier guards'
+conditions as premises.  Neither crosses the `CALL`. -/
+
+/-- Guard (1)'s revert path: the dispatcher, guard (0) passing, and
+`checkNonAddress` firing on a `receiver` word with bits above 160. -/
+def receiverNotAddressGas : Nat :=
+  gJumpdest
+    + (gBase + gVerylow + gVerylow + gVerylow)
+    + (gVerylow + gVerylow + gVerylow + (gVerylow + gHigh + gJumpdest))
+    + (gVerylow + gVerylow + gVerylow + (gVerylow + gHigh))
+    + (gVerylow + gVerylow + gVerylow + (gVerylow + gHigh))
+    + (gVerylow + gVerylow + (gVerylow + gHigh + gJumpdest))
+    + (gVerylow + gVerylow + gBase + gVerylow + gVerylow + (gVerylow + gHigh))
+    + (gVerylow + gVerylow + gVerylow
+        + (gBase + gVerylow + gVerylow + gVerylow + gVerylow)
+        + (gVerylow + gHigh + gJumpdest))
+    + (gBase + gBase)
+
+theorem receiverNotAddressGas_eq : receiverNotAddressGas = 167 := by decide
+
+/-- A `flashLoan` call whose `token` is fmint but whose `receiver` word is not
+address-shaped has a gas-exact walk that reverts, with empty revert data. -/
+theorem receiverNotAddress_runCompiledTo {sevm : Sevm} {pre : Devm}
+    {receiver token amount : B256} {data : Bytes} {w : B256}
+    (h_sel : Sevm.selector sevm = flashLoanSelector)
+    (h_dec : Sevm.DecodesCallWithTail sevm flashLoanSelector
+      [receiver, token, amount] data)
+    (h_token : token = sevm.currentTarget.toB256)
+    (h_bad : ((~~~ (0 : B256)) <<< (Nat.toB256 160).toNat).and
+      (Sevm.argWord sevm 0) = w)
+    (h_ne : w ≠ 0)
+    (h_stack : pre.stack = [])
+    (h_gas : receiverNotAddressGas ≤ pre.gasLeft) :
+    ∃ post, Prog.RunCompiledTo sevm pre fmint (.error (.revert, post)) ∧
+      Devm.output post = [] := by
+  rw [receiverNotAddressGas_eq] at h_gas
+  set g := pre.gasLeft with hg
+  exact
+    ⟨_,
+      Prog.runCompiledTo_intro (G := g - 1)
+        (mid := pre.setMach ⟨[], pre.memory, g - 1⟩)
+        (by simp only [gJumpdest]; omega)
+        (by rw [h_stack])
+        (by
+          func_run (33) [flashLoanSelector, 1, 0, 0, 1, 1, 0,
+            ~~~ (0 : B256), (~~~ (0 : B256)) <<< (Nat.toB256 160).toNat, w]
+          · show sevm.currentTarget.toB256 =? Sevm.argWord sevm 1 = 1
+            rw [argWord_one_of_decodes h_dec, h_token]
+            show (if sevm.currentTarget.toB256 = sevm.currentTarget.toB256
+              then (1 : B256) else 0) = 1
+            rw [if_pos rfl]
+          · refine Func.runCompiledTo_branch_succ (G := g - 163) h_ne rfl
+              (by simp only [Devm.stack_setMach, List.length_cons,
+                List.length_nil]; omega)
+              (by simp only [Devm.gasLeft_setMach, gVerylow, gHigh,
+                gJumpdest]; omega) ?_
+            exact Func.runCompiledTo_rev_func (G := g - 167)
+              (by simp only [Devm.gasLeft_setMach, gBase]; omega)
+              (by simp only [Devm.stack_setMach, List.length_cons,
+                List.length_nil]; omega)),
+      rfl⟩
+
+/-- **fmint's `flashLoan` reverts when `receiver` is not address-shaped.**
+
+The `exec`-altitude sibling of `receiverNotAddress_runCompiledTo`, in the mold
+of `Blanc/FmintReverts.lean`'s `fmint_token_ne_self_reverts`, and the strong
+counterpart of `Blanc/FlashSpec.lean`'s `no_success_of_receiver_not_address`:
+that theorem holds with **no gas premise** because "cannot succeed" is not a
+claim that the frame reaches anything, and this one cannot be stated without
+one.  Neither subsumes the other and both rows stand.
+
+The walk is strictly longer than the `token ≠ self` one because it must pass
+guard (0) first, which is why `h_token` is a premise here.  One selector,
+message-call altitude, exact frame gas, not exhaustiveness — the frame banner
+of `Blanc/FmintReverts.lean` applies verbatim. -/
+theorem fmint_receiver_not_address_reverts {sevm : Sevm} {pre : Devm}
+    {receiver token amount : B256} {data : Bytes}
+    (h_code : some sevm.code.toList = Prog.compile fmint)
+    (h_sel : Sevm.selector sevm = flashLoanSelector)
+    (h_dec : Sevm.DecodesCallWithTail sevm flashLoanSelector
+      [receiver, token, amount] data)
+    (h_token : token = sevm.currentTarget.toB256)
+    (h_addr : ¬ ValidAdr receiver)
+    (h_stack : pre.stack = [])
+    (h_gas : receiverNotAddressGas ≤ pre.gasLeft) :
+    ∃ post, exec ⟨0, sevm, pre⟩ = .error (.revert, post) ∧
+      Devm.output post = [] := by
+  have h_ne : ((~~~ (0 : B256)) <<< (Nat.toB256 160).toNat).and
+      (Sevm.argWord sevm 0) ≠ 0 := by
+    rw [argWord_zero_of_decodes h_dec, ← addressMask_eq_shl]
+    exact fun h => h_addr (validAdr_iff.mpr h)
+  obtain ⟨post, h_run, h_out⟩ :=
+    receiverNotAddress_runCompiledTo h_sel h_dec h_token rfl h_ne h_stack h_gas
+  exact ⟨post, Prog.exec_of_runCompiledTo h_run h_code, h_out⟩
+
+/-- Guard (2)'s revert path: the dispatcher, guards (0) and (1) passing, and
+the headroom check firing.  The `SLOAD` of `supplySlot` is warmth-open, so
+this is a *bound* at the cold price and not an exact figure — the only
+warmth-dependent guard walk in the family. -/
+def amountOverBoundGas : Nat :=
+  gJumpdest
+    + (gBase + gVerylow + gVerylow + gVerylow)
+    + (gVerylow + gVerylow + gVerylow + (gVerylow + gHigh + gJumpdest))
+    + (gVerylow + gVerylow + gVerylow + (gVerylow + gHigh))
+    + (gVerylow + gVerylow + gVerylow + (gVerylow + gHigh))
+    + (gVerylow + gVerylow + (gVerylow + gHigh + gJumpdest))
+    + (gVerylow + gVerylow + gBase + gVerylow + gVerylow + (gVerylow + gHigh))
+    + (gVerylow + gVerylow + gVerylow
+        + (gBase + gVerylow + gVerylow + gVerylow + gVerylow)
+        + (gVerylow + gHigh))
+    + (gVerylow + gVerylow + gVerylow + (gBase + gVerylow) + gasColdSload
+        + gVerylow + gVerylow + (gVerylow + gHigh + gJumpdest))
+    + (gBase + gBase)
+
+/-- 2 300 gas: 200 of walking and one cold `SLOAD`. -/
+theorem amountOverBoundGas_eq : amountOverBoundGas = 2300 := by decide
+
+/-- A `flashLoan` call past the first two guards whose `amount` exceeds
+`maxFlashLoan = 2^256 - 1 - totalSupply` reverts, with empty revert data. -/
+theorem fmint_amount_over_bound_reverts {sevm : Sevm} {pre : Devm}
+    {receiver token amount : B256} {data : Bytes}
+    (h_code : some sevm.code.toList = Prog.compile fmint)
+    (h_sel : Sevm.selector sevm = flashLoanSelector)
+    (h_dec : Sevm.DecodesCallWithTail sevm flashLoanSelector
+      [receiver, token, amount] data)
+    (h_token : token = sevm.currentTarget.toB256)
+    (h_addr : ValidAdr receiver)
+    (h_over : ¬ B256.Nof (Devm.getStorVal pre sevm.currentTarget supplySlot)
+      amount)
+    (h_stack : pre.stack = [])
+    (h_gas : amountOverBoundGas ≤ pre.gasLeft) :
+    ∃ post, exec ⟨0, sevm, pre⟩ = .error (.revert, post) := by
+  have h_arg0 : Sevm.argWord sevm 0 = receiver := argWord_zero_of_decodes h_dec
+  have h_arg2 : Sevm.argWord sevm 2 = amount := argWord_two_of_decodes h_dec
+  have h_lt : ~~~ (Devm.getStorVal pre sevm.currentTarget supplySlot) < amount :=
+    lt_of_not_ge fun hle => h_over (B256.nof_of_le_not hle)
+  rw [amountOverBoundGas_eq] at h_gas
+  set g := pre.gasLeft with hg
+  refine Prog.execSat_out (P := fun ex => ∃ post, ex = .error (.revert, post))
+    ?_ h_code
+  refine Prog.execSat_intro (G := g - 1)
+    (mid := pre.setMach ⟨[], pre.memory, g - 1⟩)
+    (by simp only [gJumpdest]; omega) (by rw [h_stack]) ?_
+  apply Func.execSat_segment
+  · intro ex hex
+    func_run (39) [flashLoanSelector, 1, 0, 0, 1, 1, 0,
+      ~~~ (0 : B256), (~~~ (0 : B256)) <<< (Nat.toB256 160).toNat, 0, supplySlot]
+    · show sevm.currentTarget.toB256 =? Sevm.argWord sevm 1 = 1
+      rw [argWord_one_of_decodes h_dec, h_token]
+      show (if sevm.currentTarget.toB256 = sevm.currentTarget.toB256
+        then (1 : B256) else 0) = 1
+      rw [if_pos rfl]
+    · show ((~~~ (0 : B256)) <<< (Nat.toB256 160).toNat).and
+        (Sevm.argWord sevm 0) = 0
+      rw [h_arg0, ← addressMask_eq_shl]
+      exact validAdr_iff.mp h_addr
+    exact hex
+  refine Func.execSat_sload_step
+    (v := Devm.getStorVal pre sevm.currentTarget supplySlot) rfl (by simp)
+    rfl (M := pre.memory) rfl
+    (by simp only [Devm.gasLeft_setMach, gasColdSload]; omega) ?_
+  intro base c G h_in h_mono h_stor h_rc h_logs h_er h_lo h_hi h_geq
+  simp only [Devm.gasLeft_setMach, gasColdSload] at h_geq h_hi
+  have hG : 24 ≤ G := by omega
+  apply Func.execSat_of_runCompiledTo
+  · have h_fire : (~~~ (Devm.getStorVal pre sevm.currentTarget supplySlot)
+        <? Sevm.argWord sevm 2) = 1 := by
+      rw [h_arg2]
+      show (if ~~~ (Devm.getStorVal pre sevm.currentTarget supplySlot) < amount
+        then (1 : B256) else 0) = 1
+      rw [if_pos h_lt]
+    func_run (3) [~~~ (Devm.getStorVal pre sevm.currentTarget supplySlot), 1]
+    exact Func.runCompiledTo_rev_func (G := G - 24)
+      (by simp only [Devm.gasLeft_setMach, gBase]; omega)
+      (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
+          omega)
+  · exact ⟨_, rfl⟩
+
+/-- **The unguarded headline: `flashLoan` settles on *any* call.**
+
+`fmint_flashLoan_settles`'s three guard premises — `token = self`, `receiver`
+address-shaped, `amount` within the headroom — dropped.  A call that fails a
+guard does not leave the trichotomy: it takes that guard's deliberate revert,
+which is the second disjunct, so the conclusion is unchanged and the
+statement now holds of **every** `flashLoan` call at this gas.
+
+What remains is what the trichotomy is really about: canonical calldata
+(`h_dec`, `h_size`), a non-static caller frame (`h_static`), a frame entered
+clean (`h_stack`, `h_mem`), and enough gas (`h_gas`).  There is still no
+premise about the borrower.
+
+`h_gas` is `flashLoanGas`'s worst case for all four arms: the three guard
+walks are far cheaper (131, 167 and 2 300 gas), and stating them at their own
+bounds is what `fmint_token_ne_self_reverts`,
+`receiverNotAddress_runCompiledTo` and `fmint_amount_over_bound_reverts` do.
+As everywhere in the family, this is construction and not exhaustiveness. -/
+theorem fmint_flashLoan_settles_of_call {sevm : Sevm} {pre : Devm}
+    {receiver token amount : B256} {data : Bytes}
+    (h_code : some sevm.code.toList = Prog.compile fmint)
+    (h_sel : Sevm.selector sevm = flashLoanSelector)
+    (h_static : sevm.isStatic = false)
+    (h_dec : Sevm.DecodesCallWithTail sevm flashLoanSelector
+      [receiver, token, amount] data)
+    (h_size : 196 + ceil32 data.length < 2 ^ 256)
+    (h_stack : pre.stack = [])
+    (h_mem : pre.memory = Mem.empty)
+    (h_gas : flashLoanGas data.length ≤ pre.gasLeft) :
+    (∃ post, exec ⟨0, sevm, pre⟩ = .ok post) ∨
+    (∃ post, exec ⟨0, sevm, pre⟩ = .error (.revert, post)) ∨
+    (∃ e post, exec ⟨0, sevm, pre⟩ = .error (e, post) ∧ NonConsensus e) := by
+  have h_room : 4377728 ≤ pre.gasLeft := by
+    simp only [flashLoanGas, flashLoanContGasMax_eq] at h_gas; omega
+  by_cases h_tok : token = sevm.currentTarget.toB256
+  · by_cases h_adr : ValidAdr receiver
+    · by_cases h_nof : B256.Nof
+          ((Devm.getStor pre sevm.currentTarget).get supplySlot) amount
+      · exact fmint_flashLoan_settles h_code h_sel h_static h_dec h_size h_tok
+          h_adr h_nof h_stack h_mem h_gas
+      · exact Or.inr (Or.inl (fmint_amount_over_bound_reverts h_code h_sel
+          h_dec h_tok h_adr h_nof h_stack
+          (by rw [amountOverBoundGas_eq]; omega)))
+    · refine Or.inr (Or.inl ?_)
+      have h_ne : ((~~~ (0 : B256)) <<< (Nat.toB256 160).toNat).and
+          (Sevm.argWord sevm 0) ≠ 0 := by
+        rw [argWord_zero_of_decodes h_dec, ← addressMask_eq_shl]
+        exact fun h => h_adr (validAdr_iff.mpr h)
+      obtain ⟨post, h_run, -⟩ := receiverNotAddress_runCompiledTo h_sel h_dec
+        h_tok (w := ((~~~ (0 : B256)) <<< (Nat.toB256 160).toNat).and
+          (Sevm.argWord sevm 0)) rfl h_ne h_stack
+        (by rw [receiverNotAddressGas_eq]; omega)
+      exact ⟨post, Prog.exec_of_runCompiledTo h_run h_code⟩
+  · obtain ⟨post, h_exec, -⟩ := fmint_token_ne_self_reverts h_code h_sel h_dec
+      h_tok h_stack (by rw [tokenNeSelfGas_eq]; omega)
+    exact Or.inr (Or.inl ⟨post, h_exec⟩)
+
 /-! ## The frame: what fmint's caller is handed
 
 `Blanc/FmintReverts.lean`'s `rollback_revert_of_exec_revert` composes one
