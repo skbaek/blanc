@@ -231,6 +231,19 @@
 # Step 3 budgeted "~5 s more in Blanc/WethGas.lean's row" for exactly this
 # walk. It cost 1.121 s. A per-walk budget of ~5 s overestimates a
 # same-prefix second walk by roughly 4 s, on three measurements now.
+#
+# 2026-08-06. The Blanc/Reverts.lean row was hand-set to a measured 1.214
+# (median of 1.214, 1.207, 1.225) when Step 2 of ~/plans/error-genre.md added
+# that module, on the same rule as every new module above: a file with no row
+# here is a REGRESSION, so the row is an extension to admit new content and
+# not a relaxation to admit a failure. Measured by three sequential
+# `scripts/check-elab.sh --list --no-build` runs with no language server
+# alive. `--rebase` and `--force` are prohibited for the whole of that arc.
+#
+# The row is re-set by hand at each later checkpoint of that step which grows
+# the module -- the `exec` bridge, then the `.rev` terminal rules -- exactly as
+# Blanc/Compiled.lean's and Blanc/Forward.lean's rows were re-set across their
+# own arcs. No pre-existing row is touched by any of them.
 OK	1.241	Blanc.lean
 OK	1.257	Blanc/Basic.lean
 OK	2.454	Blanc/CommonCore.lean
@@ -248,6 +261,7 @@ OK	3.845	Blanc/WethCode.lean
 OK	1.283	Main.lean
 OK	2.002	Blanc/FlashSpec.lean
 OK	4.829	Blanc/Forward.lean
+OK	1.214	Blanc/Reverts.lean
 OK	4.684	Blanc/FmintLive.lean
 OK	5.383	Blanc/WethLive.lean
 OK	7.978	Blanc/WethGas.lean

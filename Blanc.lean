@@ -6,6 +6,7 @@ import Blanc.FmintCode
 import Blanc.FlashSpec
 import Blanc.Compiled
 import Blanc.Forward
+import Blanc.Reverts
 import Blanc.FmintLive
 import Blanc.WethLive
 import Blanc.FmintGas
