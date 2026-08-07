@@ -23,6 +23,7 @@ Choose the gate by what you changed, cheapest falsifier first:
 | you changed | run this first | then, before pushing |
 |---|---|---|
 | anything at all | `scripts/check-layering.sh` + `lake build` | `scripts/check.sh --no-build` |
+| WETH10 deployed-reference inputs, lock, or checker | `scripts/check-weth10-reference.sh` | the **full set**, in the order below |
 | a module's imports, or added a contract | `scripts/check-layering.sh` | `lake build && scripts/check.sh --no-build` |
 | a proof, a theorem statement, or an axiom-relevant definition | `scripts/check.sh --no-build` | `scripts/check-elab.sh` |
 | anything that could move elaboration cost | `scripts/check-elab.sh` | — |
@@ -40,6 +41,7 @@ self-inflicted contention.
 
 ```
 scripts/check-layering.sh
+scripts/check-weth10-reference.sh
 lake build
 scripts/check.sh --no-build
 scripts/check-elab.sh                 # only if a .lean file was touched
@@ -65,6 +67,7 @@ against the gate.
 | gate | proves | scale | time |
 |---|---|---|---|
 | `scripts/check-layering.sh` | contracts are siblings in the import hierarchy: no cross-contract import, no shared module importing a contract, no unclassified module (rule and rationale in `README.md`) | 2 contracts, 25 modules, 23 non-root | sub-second |
+| `scripts/check-weth10-reference.sh` | offline reconstruction of the deployed WETH10 lock: two vendored independent RPC captures, deployment artifact/source Git identities, exact solc output/template, immutable spans, and 27 collision-free selectors plus receive | 27 selectors + receive, 9,975 runtime bytes | sub-second |
 | `scripts/check-fmint.sh --no-build` | fmint fixture conformance, the manifest cross-check, and byte-equality of every fixture's fmint pre-state code against the committed `Blanc.fmintCode` literal | 11 fixtures, 188 assertions, 1257 bytes | sub-second |
 | `scripts/check-weth.sh --no-build` | WETH fixture conformance and the same byte-equality check against `Blanc.wethCode`. There is no WETH manifest, so no cross-check — the asymmetry is real, not an omission | 11 fixtures, 888 bytes | sub-second |
 | `scripts/check-fmint-coverage.sh` | every fmint selector is exercised by some fixture, against a declared unexercised-selector budget | 12 selectors, budget 0 | sub-second |
@@ -174,6 +177,7 @@ worker that has been opening files. A `--force` run may not be rebased.
    committed artifact JSONs, `Blanc/FmintCode.lean` and `Blanc/WethCode.lean`
    from `scripts/gen-*-code.lean`.
 6. **CI runs a subset of this file**, not a different thing:
-   `.github/workflows/ci.yml` invokes `check-layering.sh`, `check.sh
+   `.github/workflows/ci.yml` invokes `check-layering.sh`,
+   `check-weth10-reference.sh`, `check.sh
    --no-build`, both suites `--no-build`, and both coverage gates. Extending one
    of those scripts extends CI directly.
