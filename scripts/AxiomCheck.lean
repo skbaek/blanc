@@ -12,6 +12,7 @@ import Blanc.FmintGas
 import Blanc.WethGas
 import Blanc.FmintSettles
 import Blanc.Weth10Backed
+import Blanc.Weth10Spec
 
 #print axioms Blanc.weth_preserves_solvent
 #print axioms Blanc.stateTransition_preserves_solvent
@@ -111,3 +112,4 @@ import Blanc.Weth10Backed
 #print axioms Blanc.Stor.Weth10Inv.flashBurn
 #print axioms Blanc.Stor.Weth10Inv.withdraw
 #print axioms Blanc.Stor.Weth10Inv.of_empty
+#print axioms Blanc.Weth10.backedSpec

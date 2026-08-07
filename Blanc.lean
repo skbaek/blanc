@@ -4,6 +4,7 @@ import Blanc.Ladder
 import Blanc.BalanceAlgebra
 import Blanc.Weth10Core
 import Blanc.Weth10Backed
+import Blanc.Weth10Spec
 import Blanc.Conserved
 import Blanc.FmintCode
 import Blanc.FlashSpec

@@ -352,7 +352,8 @@ Blanc.Stor.Weth10Inv.transfer|$STANDARD
 Blanc.Stor.Weth10Inv.flashMint|$STANDARD
 Blanc.Stor.Weth10Inv.flashBurn|$STANDARD
 Blanc.Stor.Weth10Inv.withdraw|$STANDARD
-Blanc.Stor.Weth10Inv.of_empty|$STANDARD"
+Blanc.Stor.Weth10Inv.of_empty|$STANDARD
+Blanc.Weth10.backedSpec|$STANDARD"
 # Secondary net only: the exact-set comparison below is the primary check;
 # this pattern catches forbidden names in output the per-theorem parse missed.
 FORBIDDEN='sorryAx|ofReduceBool|ofReduceNat|_native\.'
