@@ -45,7 +45,12 @@ The compatibility claim deliberately excludes:
 - raw storage equality, storage roots/proofs, code/codehash identity, source
   shape, and bytecode identity;
 - exact gas, access lists, or equality of callback-observed `gasleft()`;
-- liveness under inadequate gas or arbitrary hostile callback behavior;
+- liveness under inadequate gas and deployed-vs-Blanc liveness/gas parity;
+- guarantees that arbitrary hostile callback code returns successfully,
+  permits withdrawal, or establishes another useful postcondition. This does
+  not exclude a Blanc-only adequate-gas theorem classifying every borrower
+  outcome as success, deliberate revert, or a non-consensus error channel while
+  ruling out consensus exceptional halt;
 - source-initcode, CREATE2-address, and deployment-gas equality; and
 - adversarial cryptographic-collision states for the projected Blanc allowance
   map, under the qualification below.
