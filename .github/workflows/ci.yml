@@ -32,6 +32,8 @@ jobs:
       - name: Deployed WETH10 reference lock (offline)
         run: scripts/check-weth10-reference.sh
       - uses: leanprover/lean-action@v1
+      - name: Error(string) payload cross-derivation (offline)
+        run: scripts/check-error-data.sh
       - name: Audit headline theorem axioms
         run: scripts/check.sh --no-build
       - name: Build the Jaune fixture runner

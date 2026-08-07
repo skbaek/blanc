@@ -43,6 +43,7 @@ self-inflicted contention.
 scripts/check-layering.sh
 scripts/check-weth10-reference.sh
 lake build
+scripts/check-error-data.sh
 scripts/check.sh --no-build
 scripts/check-elab.sh                 # only if a .lean file was touched
 scripts/check-fmint.sh --no-build
@@ -68,6 +69,7 @@ against the gate.
 |---|---|---|---|
 | `scripts/check-layering.sh` | contracts are siblings in the import hierarchy: no cross-contract import, no shared module importing a contract, no unclassified module (rule and rationale in `README.md`) | 3 contracts, 30 modules, 28 non-root | sub-second |
 | `scripts/check-weth10-reference.sh` | exact-schema validation and offline reconstruction of the deployed WETH10 lock: independently pinned deployment/compiler/source/RPC identities, installed runtime hex/codehash, exact template and immutable spans/values, full canonical 27-function + two-event + receive ABI, separate constructor boundary, source-derived branch-context guard/callback/event/storage inventories, exact drift evidence, deletion/mutation, wrong-type, coherent, deployment-derivation, and coordinated-input falsifiers, plus exact generated endpoint-key synchronization for the compatibility contract | schema v2; 27 selectors + receive; 9,975 runtime bytes; 23 falsifier families; 28 compatibility endpoint keys + 12 cross-cutting keys + deployment | ~25 s |
+| `scripts/check-error-data.sh` | lock-enumerated ASCII WETH10 guard reasons produce byte-identical `Blanc.errorData` and independently recomputed Solidity `Error(string)` ABI payloads, including the Keccak-derived selector | 11 unique lock reason strings | ~1.2 s |
 | `scripts/check-fmint.sh --no-build` | fmint fixture conformance, the manifest cross-check, and byte-equality of every fixture's fmint pre-state code against the committed `Blanc.fmintCode` literal | 11 fixtures, 188 assertions, 1257 bytes | sub-second |
 | `scripts/check-weth.sh --no-build` | WETH fixture conformance and the same byte-equality check against `Blanc.wethCode`. There is no WETH manifest, so no cross-check — the asymmetry is real, not an omission | 11 fixtures, 888 bytes | sub-second |
 | `scripts/check-fmint-coverage.sh` | every fmint selector is exercised by some fixture, against a declared unexercised-selector budget | 12 selectors, budget 0 | sub-second |
@@ -86,7 +88,7 @@ rule; every one of them runs inline.
 
 ### The Python behind the shell
 
-Eight helpers do the actual work and are not gates in their own right — they are
+Nine helpers do the actual work and are not gates in their own right — they are
 invoked by the scripts above and should not be run directly in a report:
 
 | helper | used by | what it does |
@@ -95,6 +97,7 @@ invoked by the scripts above and should not be run directly in a report:
 | `scripts/weth10_reference_schema.py` | `check-weth10-reference.sh` | validates the complete generated lock against a hand-maintained exact nested schema independent of the builder |
 | `scripts/test-weth10-reference-falsifiers.py` | `check-weth10-reference.sh` | deletes and mutates every required field family, fuzzes JSON types and coherent cross-field edits, checks deployment-state derivation, and attempts coordinated input edits to prove the ordinary checker rejects them |
 | `scripts/weth10-compatibility.py` | `check-weth10-reference.sh` | generates the documentation skeleton from the lock and pins exactly one compatibility row per generated endpoint/selector, the required cross-cutting inventory, and the separate deployment row |
+| `scripts/check-error-data.py` | `check-error-data.sh` | enumerates the lock's sourceBehavior guard reasons, evaluates `Blanc.errorData`, and independently rebuilds each ABI blob from the existing Keccak implementation |
 | `scripts/check-runtime-bytes.py` | `check-fmint.sh`, `check-weth.sh` | parses the committed Lean literal and compares it byte-for-byte against every fixture's pre-state code for that contract |
 | `scripts/check-fmint-coverage.py` | `check-fmint-coverage.sh` | scans fixtures for exercised selectors; identifies the contract account by byte-equality against the committed literal |
 | `scripts/check-weth-coverage.py` | `check-weth-coverage.sh` | the same for WETH, plus the empty-calldata fallback |
@@ -182,6 +185,6 @@ worker that has been opening files. A `--force` run may not be rebased.
    from `scripts/gen-*-code.lean`.
 6. **CI runs a subset of this file**, not a different thing:
    `.github/workflows/ci.yml` invokes `check-layering.sh`,
-   `check-weth10-reference.sh`, `check.sh
+   `check-weth10-reference.sh`, `check-error-data.sh`, `check.sh
    --no-build`, both suites `--no-build`, and both coverage gates. Extending one
    of those scripts extends CI directly.
