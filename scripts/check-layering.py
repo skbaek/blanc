@@ -56,6 +56,7 @@ CONTRACTS = {
     "weth": ["Weth", "WethCode", "Solvent", "WethLive", "WethGas"],
     "fmint": ["Fmint", "FmintCode", "Conserved", "FlashSpec", "FmintLive",
               "FmintReverts", "FmintGas", "FmintSettles"],
+    "weth10": ["Weth10Core"],
 }
 
 ROOTS = ["Blanc", "Main"]

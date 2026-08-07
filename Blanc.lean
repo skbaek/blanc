@@ -2,6 +2,7 @@ import Blanc.Solvent
 import Blanc.WethCode
 import Blanc.Ladder
 import Blanc.BalanceAlgebra
+import Blanc.Weth10Core
 import Blanc.Conserved
 import Blanc.FmintCode
 import Blanc.FlashSpec
