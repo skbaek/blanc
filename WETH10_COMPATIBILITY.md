@@ -27,7 +27,10 @@ differential-fixture owners land. Owner abbreviations are:
   full endpoint behavior.
 
 All arithmetic described as unchecked is modulo `2^256`, matching Solidity
-0.7.6. Event notation lists indexed arguments before the data word.
+0.7.6. Event notation lists indexed arguments before the data word. The only
+WETH10-owned event signatures are `Approval(address,address,uint256)` (indexed
+owner/spender, value data) and `Transfer(address,address,uint256)` (indexed
+from/to, value data), with the topic hashes pinned in the generated lock.
 
 ## Runtime endpoints
 
