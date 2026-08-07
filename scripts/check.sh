@@ -140,10 +140,13 @@
 #
 # The final two rows, added by `~/plans/error-genre.md` Step 4, lift that pair
 # one altitude: from the code frame's `exec` to the frame `processMessage` opens
-# for a `Msg`. `Blanc.Fmint.rollback_revert_of_exec_revert` is the mechanism,
+# for a `Msg`. `Blanc.rollback_revert_of_exec_revert` is the mechanism,
 # contract-agnostic and stated once — a frame whose code reverts settles with
 # `error = some .revert`, hands back the code's own output, and has had its state
 # and transient storage rolled back to what the message entered with.
+# `Blanc.rollback_revert_of_runCompiledTo` fuses that mechanism with a
+# gas-exact compiled walk and carries the walk's exact output bytes directly to
+# the message result; it remains one-frame, message-call-altitude machinery.
 # `Blanc.Fmint.rollback_revert_of_token_ne_self` instantiates it at fmint's
 # `token ≠ self` guard, so the frame's error kind is named and the returned data
 # is `[]`.
@@ -338,7 +341,8 @@ Blanc.Fmint.unknownSelector_runCompiledTo|$STANDARD
 Blanc.Fmint.fmint_unknown_selector_reverts|$STANDARD
 Blanc.Fmint.tokenNeSelf_runCompiledTo|$STANDARD
 Blanc.Fmint.fmint_token_ne_self_reverts|$STANDARD
-Blanc.Fmint.rollback_revert_of_exec_revert|$STANDARD
+Blanc.rollback_revert_of_exec_revert|$STANDARD
+Blanc.rollback_revert_of_runCompiledTo|$STANDARD
 Blanc.Fmint.rollback_revert_of_token_ne_self|$STANDARD
 Blanc.Fmint.fmint_flashLoan_settles|$STANDARD
 Blanc.Fmint.fmint_flashLoan_frame_settles|$STANDARD

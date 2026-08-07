@@ -473,6 +473,12 @@
 # `scripts/check-elab.sh --list --no-build` runs: 1.187, 1.194, and 1.183.
 # No Lean language-server worker was alive for any run. `--rebase` and
 # `--force` were not used, and no pre-existing row moved.
+#
+# 2026-08-07. Step 1 of ~/plans/revert-payload.md adds the SHARED
+# Blanc/RevertPayload.lean module and hand-sets its new row to 1.630 s, the
+# median of three sequential quiescent-host measurements: 1.610, 1.640, and
+# 1.630. Lean language-server workers were stopped before all three runs;
+# `--rebase` and `--force` were not used, and no pre-existing row moved.
 OK	1.241	Blanc.lean
 OK	1.164	Blanc/BalanceAlgebra.lean
 OK	1.257	Blanc/Basic.lean
@@ -502,3 +508,4 @@ OK	7.978	Blanc/WethGas.lean
 OK	7.098	Blanc/FmintGas.lean
 OK	1.743	Blanc/ForwardCall.lean
 OK	27.664	Blanc/FmintSettles.lean
+OK	1.630	Blanc/RevertPayload.lean

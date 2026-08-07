@@ -36,7 +36,7 @@
 -- error is `EvmError.revert` and the output is empty.  Neither path crosses a
 -- `CALL`, so neither hands the error choice to a callee.
 
-import Blanc.Reverts
+import Blanc.RevertPayload
 import Blanc.FlashSpec
 
 namespace Blanc
@@ -325,61 +325,6 @@ caught by its caller while the surrounding transaction succeeds; nothing here
 says the transaction reverted, and nothing here says anything about fmint's
 caller.  And as everywhere in this module, this is not exhaustiveness: it says
 this condition reverts the frame, never that only this condition does. -/
-
-/-- **A frame whose code reverts settles with `.revert`, and rolled back.**
-
-The strong-form counterpart of `Blanc/FlashSpec.lean`'s
-`rollback_of_no_success`, stated once over the abstract premise `h_exec` so
-that a target instantiates it in two lines.  Where that theorem takes "no
-successful `Exec` starts here" and concludes `out.error.isSome`, this one takes
-the total function's own equation at the frame's entry machine and concludes
-the error *kind*, plus the output the code chose.
-
-Its three structural premises are that theorem's and are there for its reasons:
-`h_fill`, because `ProcessMessage msg xl (.ok out)` leaves the slot otherwise
-unconstrained; `h_bt`, which names the post-transfer environment the entry
-machine is built from; and `h_prec`, because the precompile entry mode has no
-`Exec` at all and the conclusion is simply false in that branch.
-
-**Contract-agnostic.**  Nothing in it mentions fmint; it lives in fmint's
-module because its consumer does, exactly as `rollback_of_no_success` does. -/
-theorem rollback_revert_of_exec_revert {msg : Msg} {benv : Benv} {xl : Xlot}
-    {out post : Devm}
-    (h_pm : ProcessMessage msg xl (.ok out))
-    (h_fill : Xlot.Filled xl)
-    (h_bt : msg.benvAfterTransfer = .ok benv)
-    (h_prec : ∀ adr, msg.codeAddress = some adr →
-      ¬ (!msg.disablePrecompiles && decide (benv.stat.rules.isPrecomp adr)) = true)
-    (h_exec : exec ⟨0, initSevm (msg.withBenv benv), initDevm (msg.withBenv benv)⟩
-      = .error (.revert, post)) :
-    out.error = some .revert ∧ out.output = post.output ∧
-      out.state = msg.benv.state ∧
-      out.transientStorage = msg.tenv.transientStorage := by
-  obtain ⟨r0, hbody, hset⟩ := ProcessMessage.iff_body.mp h_pm
-  unfold FrameBody at hbody
-  rw [h_bt] at hbody
-  have h_r0 : r0 = .ok (post.withError (some .revert)) := by
-    rcases h_ca : (msg.withBenv benv).codeAddress with _ | adr
-    · obtain ⟨ex', h_xl, h_he⟩ := of_executeCode_noneCode h_ca hbody
-      subst h_xl
-      obtain ⟨exc⟩ := h_fill
-      rw [((exec_iff_exec_eq _ _ _ _).mp ⟨exc⟩).symm.trans h_exec] at h_he
-      exact h_he.symm
-    · rcases of_executeCode_someCode h_ca hbody with ⟨h_pre, -, -⟩ | ⟨-, ex', h_xl, h_he⟩
-      · exact absurd h_pre (h_prec adr h_ca)
-      · subst h_xl
-        obtain ⟨exc⟩ := h_fill
-        rw [((exec_iff_exec_eq _ _ _ _).mp ⟨exc⟩).symm.trans h_exec] at h_he
-        exact h_he.symm
-  subst h_r0
-  unfold processMessage.settle at hset
-  dsimp only [bind, Except.bind] at hset
-  rw [if_pos (show (post.withError (some SettledHalt.revert)).error.isSome = true
-    from rfl)] at hset
-  have h_out := Except.ok.inj hset
-  have h_err : out.error = some .revert := by rw [h_out]; rfl
-  exact ⟨h_err, by rw [h_out]; rfl,
-    ProcessMessage.rollback_of_error h_pm (by rw [h_err]; rfl)⟩
 
 /-- **`token ≠ self` ⇒ fmint's frame settled with `.revert`, returned nothing,
 and rolled back.**

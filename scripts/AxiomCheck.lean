@@ -97,7 +97,8 @@ import Blanc.Weth10Spec
 #print axioms Blanc.Fmint.fmint_unknown_selector_reverts
 #print axioms Blanc.Fmint.tokenNeSelf_runCompiledTo
 #print axioms Blanc.Fmint.fmint_token_ne_self_reverts
-#print axioms Blanc.Fmint.rollback_revert_of_exec_revert
+#print axioms Blanc.rollback_revert_of_exec_revert
+#print axioms Blanc.rollback_revert_of_runCompiledTo
 #print axioms Blanc.Fmint.rollback_revert_of_token_ne_self
 #print axioms Blanc.Fmint.fmint_flashLoan_settles
 #print axioms Blanc.Fmint.fmint_flashLoan_frame_settles
