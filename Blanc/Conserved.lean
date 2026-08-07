@@ -42,7 +42,7 @@
 -- point.  It is not solvency and not liveness.  During a flash loan the minted
 -- supply is unbacked by construction; that is the design, not a gap.
 
-import Blanc.Ladder
+import Blanc.BalanceAlgebra
 import Blanc.Fmint
 
 namespace Blanc
@@ -178,12 +178,6 @@ runtime and has no constructor (`FMINT_DEVIATIONS.md` row 23), so no
 initcode/`CREATE` theorem connects this to an on-chain deployment transaction.
 It closes exactly one gap — the genesis-installed case — and leaves that one
 open. -/
-
-/-- Σ over the constant-`0` balance function is `0`.  The same induction on
-`sumBelow`'s own recursion that the rest of this algebra uses. -/
-theorem sumBelow_zero : ∀ n, sumBelow (fun _ => (0 : B256)) n = 0
-  | 0 => rfl
-  | n + 1 => by rw [sumBelow_succ, sumBelow_zero n]; rfl
 
 /-- **Genesis.**  Storage reading `0` at every key is conserved. -/
 theorem Stor.Conserved.of_get_eq_zero {s : Stor} (h : ∀ k, s.get k = 0) :

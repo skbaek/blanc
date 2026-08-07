@@ -445,7 +445,15 @@
 # re-measured 27.664 (median of 27.664, 30.563, 26.507, no language-server
 # workers; the middle run trailed a killed 1.3GB server and reads high), row
 # re-set 25.043 -> 27.664 on the established footing.  No other file touched.
+#
+# 2026-08-07. Step 3 of ~/plans/weth10-foundation.md adds the shared
+# Blanc/BalanceAlgebra.lean module and hand-sets its new row to 1.164 s, the
+# median of three sequential clean-host `scripts/check-elab.sh --list
+# --no-build` runs: 1.155, 1.164, and 1.184. No language-server worker was
+# alive for any run. `--rebase` and `--force` were not used, and no
+# pre-existing row moved.
 OK	1.241	Blanc.lean
+OK	1.164	Blanc/BalanceAlgebra.lean
 OK	1.257	Blanc/Basic.lean
 OK	2.454	Blanc/CommonCore.lean
 OK	6.143	Blanc/CommonProofs.lean
