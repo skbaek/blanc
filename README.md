@@ -196,7 +196,7 @@ and proof falls. It is not duplicated here. Blanc adds exactly:
    *or* missing axiom;
 3. **Blanc's own source**, which carries no gate equivalent to Jaune's
    `check-hygiene.sh`/`check-integrity.sh`; what stands behind it is the audit
-   in (2), and the audit constrains only what enters those ninety-one
+   in (2), and the audit constrains only what enters those ninety-eight
    theorems' dependency cones. Scanning `Blanc/` finds no `@[extern]`, `axiom`,
    `opaque`, `sorry`, `implemented_by`, or `bv_decide`, and no use of
    `native_decide` — its one textual occurrence is the `WethCode.lean` comment
