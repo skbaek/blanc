@@ -16,6 +16,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -240,6 +241,178 @@ def check_drift_inputs(deployed_source: bytes) -> None:
            "34d2712 corroboration is not the exact two-comment source diff")
 
 
+def normalise_source(text: str) -> str:
+    """Keep source facts readable while making harmless whitespace deterministic."""
+    return " ".join(text.split())
+
+
+def matching_delimiter(text: str, start: int, opening: str = "(", closing: str = ")") -> int:
+    expect(start < len(text) and text[start] == opening, f"expected {opening!r} in source inventory")
+    depth = 0
+    for index in range(start, len(text)):
+        char = text[index]
+        if char == opening:
+            depth += 1
+        elif char == closing:
+            depth -= 1
+            if depth == 0:
+                return index
+    fail(f"unclosed {opening!r} in source inventory")
+
+
+def split_top_level(text: str) -> list[str]:
+    """Split a Solidity argument list without mistaking nested calls for commas."""
+    pieces: list[str] = []
+    start = depth = 0
+    for index, char in enumerate(text):
+        if char in "([{":
+            depth += 1
+        elif char in ")]}":
+            depth -= 1
+        elif char == "," and depth == 0:
+            pieces.append(text[start:index].strip())
+            start = index + 1
+    pieces.append(text[start:].strip())
+    return pieces
+
+
+def function_bodies(source: str) -> dict[str, str]:
+    """Return the deployed source bodies for explicitly written functions.
+
+    This deliberately accepts no overloaded public function: WETH10's locked
+    ABI has none, so an overload is a source-shape change that must be reviewed.
+    """
+    bodies: dict[str, str] = {}
+    for match in re.finditer(r"\bfunction\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(", source):
+        name = match.group(1)
+        close_parameters = matching_delimiter(source, match.end() - 1)
+        body_start = source.find("{", close_parameters)
+        expect(body_start >= 0, f"source function {name} has no body")
+        body_end = matching_delimiter(source, body_start, "{", "}")
+        expect(name not in bodies, f"overloaded or duplicate source function {name}")
+        bodies[name] = source[body_start + 1:body_end]
+    return bodies
+
+
+def source_requires(body: str) -> list[dict[str, str]]:
+    guards: list[dict[str, str]] = []
+    position = 0
+    while True:
+        found = re.search(r"\brequire\s*\(", body[position:])
+        if found is None:
+            return guards
+        start = position + found.end() - 1
+        end = matching_delimiter(body, start)
+        arguments = split_top_level(body[start + 1:end])
+        expect(len(arguments) == 2, "require in deployed source has an unexpected argument shape")
+        reason = arguments[1].strip()
+        expect(len(reason) >= 2 and reason[0] == reason[-1] == '"',
+               "require in deployed source has a non-literal reason")
+        guards.append({"condition": normalise_source(arguments[0]), "reason": reason[1:-1]})
+        position = end + 1
+
+
+def callback_inventory(standard: dict[str, Any], deployed_source: str) -> list[dict[str, str]]:
+    """Derive all three external callback declarations from vendored sources."""
+    sources = standard.get("sources")
+    expect(isinstance(sources, dict), "standard input has no source inventory")
+    all_source = "\n".join(
+        item.get("content", "") for item in sources.values()
+        if isinstance(item, dict) and isinstance(item.get("content"), str))
+    callbacks = [
+        ("ITransferReceiver", "onTokenTransfer"),
+        ("IApprovalReceiver", "onTokenApproval"),
+        ("IERC3156FlashBorrower", "onFlashLoan"),
+    ]
+    rows: list[dict[str, str]] = []
+    for interface, method in callbacks:
+        interface_match = re.search(r"\binterface\s+" + re.escape(interface) + r"\s*\{(.*?)\}", all_source, re.S)
+        expect(interface_match is not None, f"callback interface {interface} is absent from standard input")
+        declaration = re.search(
+            r"\bfunction\s+" + re.escape(method) + r"\s*\((.*?)\)\s*external\s+returns\s*\((.*?)\)\s*;",
+            interface_match.group(1), re.S)
+        expect(declaration is not None, f"callback declaration {interface}.{method} has an unexpected shape")
+        parameters = normalise_source(declaration.group(1))
+        returns = normalise_source(declaration.group(2))
+        # These occurrence checks ensure the source declaration is not merely
+        # imported dead text: WETH10 actually makes each callback.
+        expect(re.search(r"\b" + re.escape(method) + r"\s*\(", deployed_source) is not None,
+               f"deployed WETH10 source does not call {interface}.{method}")
+        abi_parameters = []
+        for parameter in split_top_level(parameters):
+            tokens = [token for token in parameter.split() if token not in {"calldata", "memory", "storage", "payable"}]
+            expect(len(tokens) >= 1, f"callback parameter {parameter!r} has an unexpected shape")
+            kind = tokens[0]
+            abi_parameters.append("uint256" if kind == "uint" else kind)
+        return_kind = returns.split()[0]
+        rows.append({
+            "interface": interface,
+            "method": method,
+            "sourceSignature": f"{method}({parameters}) external returns ({returns})",
+            "abiSignature": f"{method}({','.join(abi_parameters)})",
+            "returnType": "uint256" if return_kind == "uint" else return_kind,
+        })
+    return rows
+
+
+def source_behavior_inventory(standard: dict[str, Any], output: dict[str, Any], abi: Any) -> dict[str, Any]:
+    """Generate the source-side facts Step 2 must not rediscover by prose."""
+    deployed_source = standard.get("sources", {}).get(SOURCE_PATH, {}).get("content")
+    expect(isinstance(deployed_source, str), "standard input has no deployed WETH10 source")
+    bodies = function_bodies(deployed_source)
+    functions, _ = abi_rows(abi)
+    generated_getters = {
+        "CALLBACK_SUCCESS", "PERMIT_TYPEHASH", "allowance", "balanceOf", "decimals",
+        "deploymentChainId", "flashMinted", "name", "nonces", "symbol",
+    }
+    guards: list[dict[str, Any]] = []
+    reasons: list[str] = []
+    for row in functions:
+        name = row["signature"].split("(", 1)[0]
+        if name in bodies:
+            ordered = source_requires(bodies[name])
+            source_kind = "explicitFunction"
+        else:
+            expect(name in generated_getters, f"ABI function {name} is absent from source and is not a known generated getter")
+            ordered = []
+            source_kind = "compilerGeneratedGetter"
+        guards.append({"signature": row["signature"], "sourceKind": source_kind, "guardOrder": ordered})
+        for guard in ordered:
+            if guard["reason"] not in reasons:
+                reasons.append(guard["reason"])
+    events: list[dict[str, Any]] = []
+    expect(isinstance(abi, list), "ABI is not a list")
+    for item in abi:
+        if isinstance(item, dict) and item.get("type") == "event":
+            inputs = item.get("inputs")
+            expect(isinstance(item.get("name"), str) and isinstance(inputs, list), "event ABI has an unexpected shape")
+            types = []
+            checked_inputs: list[dict[str, Any]] = []
+            for argument in inputs:
+                expect(isinstance(argument, dict) and isinstance(argument.get("name"), str)
+                       and isinstance(argument.get("type"), str) and isinstance(argument.get("indexed"), bool),
+                       "event ABI input has an unexpected shape")
+                types.append(argument["type"])
+                checked_inputs.append({"name": argument["name"], "type": argument["type"], "indexed": argument["indexed"]})
+            signature = f"{item['name']}({','.join(types)})"
+            events.append({"name": item["name"], "signature": signature,
+                           "topic0": "0x" + keccak256(signature.encode()), "anonymous": item.get("anonymous"),
+                           "inputs": checked_inputs})
+    events.sort(key=lambda row: row["signature"])
+    storage_layout = contract_output(output).get("storageLayout")
+    expect(isinstance(storage_layout, dict) and set(storage_layout) == {"storage", "types"},
+           "compiler output storage layout has an unexpected shape")
+    expect(isinstance(storage_layout["storage"], list) and isinstance(storage_layout["types"], dict),
+           "compiler output storage layout has invalid inventories")
+    return {
+        "reasonStrings": reasons,
+        "guardOrder": guards,
+        "callbacks": callback_inventory(standard, deployed_source),
+        "events": events,
+        "storageLayout": storage_layout,
+    }
+
+
 def build() -> dict[str, Any]:
     artifact_bytes = (INPUT / "deployment-artifact.json").read_bytes()
     input_bytes = (INPUT / "solc-input.json").read_bytes()
@@ -298,6 +471,7 @@ def build() -> dict[str, Any]:
     differing = [i for i in range(len(template) // 2) if template[2*i:2*i+2] != one_runtime[2*i:2*i+2]]
     expect(set(differing) <= covered, "installed runtime differs outside compiler immutable spans")
     functions, receive = abi_rows(c.get("abi"))
+    source_behavior = source_behavior_inventory(standard, output, c.get("abi"))
     methods = c.get("evm", {}).get("methodIdentifiers")
     expect(isinstance(methods, dict), "compiler output has no method identifiers")
     expect({row["signature"]: row["selector"][2:] for row in functions} == methods,
@@ -338,6 +512,7 @@ def build() -> dict[str, Any]:
                                   "_DOMAIN_SEPARATOR": "deployment-dependent immutable"}},
         "observation": {"block": one_capture["block"], "captures": [one_capture, two_capture]},
         "abi": {"functionCount": len(functions), "receiveCount": receive, "functions": functions},
+        "sourceBehavior": source_behavior,
     }
 
 

@@ -67,7 +67,7 @@ against the gate.
 | gate | proves | scale | time |
 |---|---|---|---|
 | `scripts/check-layering.sh` | contracts are siblings in the import hierarchy: no cross-contract import, no shared module importing a contract, no unclassified module (rule and rationale in `README.md`) | 2 contracts, 25 modules, 23 non-root | sub-second |
-| `scripts/check-weth10-reference.sh` | offline reconstruction of the deployed WETH10 lock: two vendored independent RPC captures, deployment artifact/source Git identities, exact solc output/template, immutable spans, and 27 collision-free selectors plus receive | 27 selectors + receive, 9,975 runtime bytes | sub-second |
+| `scripts/check-weth10-reference.sh` | offline reconstruction of the deployed WETH10 lock: two vendored independent RPC captures, deployment artifact/source Git identities, exact solc output/template, immutable spans, 27 collision-free selectors plus receive, and source-derived reason, guard-order, callback, event, and storage-layout inventories | 27 selectors + receive, 9,975 runtime bytes | sub-second |
 | `scripts/check-fmint.sh --no-build` | fmint fixture conformance, the manifest cross-check, and byte-equality of every fixture's fmint pre-state code against the committed `Blanc.fmintCode` literal | 11 fixtures, 188 assertions, 1257 bytes | sub-second |
 | `scripts/check-weth.sh --no-build` | WETH fixture conformance and the same byte-equality check against `Blanc.wethCode`. There is no WETH manifest, so no cross-check — the asymmetry is real, not an omission | 11 fixtures, 888 bytes | sub-second |
 | `scripts/check-fmint-coverage.sh` | every fmint selector is exercised by some fixture, against a declared unexercised-selector budget | 12 selectors, budget 0 | sub-second |

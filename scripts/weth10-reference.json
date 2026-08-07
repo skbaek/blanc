@@ -274,6 +274,404 @@
     "templateInstalledDifferingBytes": 195,
     "templateSha256": "4a26bad255e787129bbb44842adfa09ccaff758715a50f3979c61e6f7f61d958"
   },
+  "sourceBehavior": {
+    "callbacks": [
+      {
+        "abiSignature": "onTokenTransfer(address,uint256,bytes)",
+        "interface": "ITransferReceiver",
+        "method": "onTokenTransfer",
+        "returnType": "bool",
+        "sourceSignature": "onTokenTransfer(address, uint, bytes calldata) external returns (bool)"
+      },
+      {
+        "abiSignature": "onTokenApproval(address,uint256,bytes)",
+        "interface": "IApprovalReceiver",
+        "method": "onTokenApproval",
+        "returnType": "bool",
+        "sourceSignature": "onTokenApproval(address, uint, bytes calldata) external returns (bool)"
+      },
+      {
+        "abiSignature": "onFlashLoan(address,address,uint256,uint256,bytes)",
+        "interface": "IERC3156FlashBorrower",
+        "method": "onFlashLoan",
+        "returnType": "bytes32",
+        "sourceSignature": "onFlashLoan(address initiator, address token, uint256 amount, uint256 fee, bytes calldata data) external returns (bytes32)"
+      }
+    ],
+    "events": [
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": true,
+            "name": "owner",
+            "type": "address"
+          },
+          {
+            "indexed": true,
+            "name": "spender",
+            "type": "address"
+          },
+          {
+            "indexed": false,
+            "name": "value",
+            "type": "uint256"
+          }
+        ],
+        "name": "Approval",
+        "signature": "Approval(address,address,uint256)",
+        "topic0": "0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": true,
+            "name": "from",
+            "type": "address"
+          },
+          {
+            "indexed": true,
+            "name": "to",
+            "type": "address"
+          },
+          {
+            "indexed": false,
+            "name": "value",
+            "type": "uint256"
+          }
+        ],
+        "name": "Transfer",
+        "signature": "Transfer(address,address,uint256)",
+        "topic0": "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
+      }
+    ],
+    "guardOrder": [
+      {
+        "guardOrder": [],
+        "signature": "CALLBACK_SUCCESS()",
+        "sourceKind": "compilerGeneratedGetter"
+      },
+      {
+        "guardOrder": [],
+        "signature": "DOMAIN_SEPARATOR()",
+        "sourceKind": "explicitFunction"
+      },
+      {
+        "guardOrder": [],
+        "signature": "PERMIT_TYPEHASH()",
+        "sourceKind": "compilerGeneratedGetter"
+      },
+      {
+        "guardOrder": [],
+        "signature": "allowance(address,address)",
+        "sourceKind": "compilerGeneratedGetter"
+      },
+      {
+        "guardOrder": [],
+        "signature": "approve(address,uint256)",
+        "sourceKind": "explicitFunction"
+      },
+      {
+        "guardOrder": [],
+        "signature": "approveAndCall(address,uint256,bytes)",
+        "sourceKind": "explicitFunction"
+      },
+      {
+        "guardOrder": [],
+        "signature": "balanceOf(address)",
+        "sourceKind": "compilerGeneratedGetter"
+      },
+      {
+        "guardOrder": [],
+        "signature": "decimals()",
+        "sourceKind": "compilerGeneratedGetter"
+      },
+      {
+        "guardOrder": [],
+        "signature": "deploymentChainId()",
+        "sourceKind": "compilerGeneratedGetter"
+      },
+      {
+        "guardOrder": [],
+        "signature": "deposit()",
+        "sourceKind": "explicitFunction"
+      },
+      {
+        "guardOrder": [],
+        "signature": "depositTo(address)",
+        "sourceKind": "explicitFunction"
+      },
+      {
+        "guardOrder": [],
+        "signature": "depositToAndCall(address,bytes)",
+        "sourceKind": "explicitFunction"
+      },
+      {
+        "guardOrder": [
+          {
+            "condition": "token == address(this)",
+            "reason": "WETH: flash mint only WETH10"
+          }
+        ],
+        "signature": "flashFee(address,uint256)",
+        "sourceKind": "explicitFunction"
+      },
+      {
+        "guardOrder": [
+          {
+            "condition": "token == address(this)",
+            "reason": "WETH: flash mint only WETH10"
+          },
+          {
+            "condition": "value <= type(uint112).max",
+            "reason": "WETH: individual loan limit exceeded"
+          },
+          {
+            "condition": "flashMinted <= type(uint112).max",
+            "reason": "WETH: total loan limit exceeded"
+          },
+          {
+            "condition": "receiver.onFlashLoan(msg.sender, address(this), value, 0, data) == CALLBACK_SUCCESS",
+            "reason": "WETH: flash loan failed"
+          },
+          {
+            "condition": "allowed >= value",
+            "reason": "WETH: request exceeds allowance"
+          },
+          {
+            "condition": "balance >= value",
+            "reason": "WETH: burn amount exceeds balance"
+          }
+        ],
+        "signature": "flashLoan(address,address,uint256,bytes)",
+        "sourceKind": "explicitFunction"
+      },
+      {
+        "guardOrder": [],
+        "signature": "flashMinted()",
+        "sourceKind": "compilerGeneratedGetter"
+      },
+      {
+        "guardOrder": [],
+        "signature": "maxFlashLoan(address)",
+        "sourceKind": "explicitFunction"
+      },
+      {
+        "guardOrder": [],
+        "signature": "name()",
+        "sourceKind": "compilerGeneratedGetter"
+      },
+      {
+        "guardOrder": [],
+        "signature": "nonces(address)",
+        "sourceKind": "compilerGeneratedGetter"
+      },
+      {
+        "guardOrder": [
+          {
+            "condition": "block.timestamp <= deadline",
+            "reason": "WETH: Expired permit"
+          },
+          {
+            "condition": "signer != address(0) && signer == owner",
+            "reason": "WETH: invalid permit"
+          }
+        ],
+        "signature": "permit(address,address,uint256,uint256,uint8,bytes32,bytes32)",
+        "sourceKind": "explicitFunction"
+      },
+      {
+        "guardOrder": [],
+        "signature": "symbol()",
+        "sourceKind": "compilerGeneratedGetter"
+      },
+      {
+        "guardOrder": [],
+        "signature": "totalSupply()",
+        "sourceKind": "explicitFunction"
+      },
+      {
+        "guardOrder": [
+          {
+            "condition": "balance >= value",
+            "reason": "WETH: transfer amount exceeds balance"
+          },
+          {
+            "condition": "balance >= value",
+            "reason": "WETH: burn amount exceeds balance"
+          },
+          {
+            "condition": "success",
+            "reason": "WETH: ETH transfer failed"
+          }
+        ],
+        "signature": "transfer(address,uint256)",
+        "sourceKind": "explicitFunction"
+      },
+      {
+        "guardOrder": [
+          {
+            "condition": "balance >= value",
+            "reason": "WETH: transfer amount exceeds balance"
+          },
+          {
+            "condition": "balance >= value",
+            "reason": "WETH: burn amount exceeds balance"
+          },
+          {
+            "condition": "success",
+            "reason": "WETH: ETH transfer failed"
+          }
+        ],
+        "signature": "transferAndCall(address,uint256,bytes)",
+        "sourceKind": "explicitFunction"
+      },
+      {
+        "guardOrder": [
+          {
+            "condition": "allowed >= value",
+            "reason": "WETH: request exceeds allowance"
+          },
+          {
+            "condition": "balance >= value",
+            "reason": "WETH: transfer amount exceeds balance"
+          },
+          {
+            "condition": "balance >= value",
+            "reason": "WETH: burn amount exceeds balance"
+          },
+          {
+            "condition": "success",
+            "reason": "WETH: ETH transfer failed"
+          }
+        ],
+        "signature": "transferFrom(address,address,uint256)",
+        "sourceKind": "explicitFunction"
+      },
+      {
+        "guardOrder": [
+          {
+            "condition": "balance >= value",
+            "reason": "WETH: burn amount exceeds balance"
+          },
+          {
+            "condition": "success",
+            "reason": "WETH: ETH transfer failed"
+          }
+        ],
+        "signature": "withdraw(uint256)",
+        "sourceKind": "explicitFunction"
+      },
+      {
+        "guardOrder": [
+          {
+            "condition": "allowed >= value",
+            "reason": "WETH: request exceeds allowance"
+          },
+          {
+            "condition": "balance >= value",
+            "reason": "WETH: burn amount exceeds balance"
+          },
+          {
+            "condition": "success",
+            "reason": "WETH: Ether transfer failed"
+          }
+        ],
+        "signature": "withdrawFrom(address,address,uint256)",
+        "sourceKind": "explicitFunction"
+      },
+      {
+        "guardOrder": [
+          {
+            "condition": "balance >= value",
+            "reason": "WETH: burn amount exceeds balance"
+          },
+          {
+            "condition": "success",
+            "reason": "WETH: ETH transfer failed"
+          }
+        ],
+        "signature": "withdrawTo(address,uint256)",
+        "sourceKind": "explicitFunction"
+      }
+    ],
+    "reasonStrings": [
+      "WETH: flash mint only WETH10",
+      "WETH: individual loan limit exceeded",
+      "WETH: total loan limit exceeded",
+      "WETH: flash loan failed",
+      "WETH: request exceeds allowance",
+      "WETH: burn amount exceeds balance",
+      "WETH: Expired permit",
+      "WETH: invalid permit",
+      "WETH: transfer amount exceeds balance",
+      "WETH: ETH transfer failed",
+      "WETH: Ether transfer failed"
+    ],
+    "storageLayout": {
+      "storage": [
+        {
+          "astId": 59,
+          "contract": "contracts/WETH10.sol:WETH10",
+          "label": "balanceOf",
+          "offset": 0,
+          "slot": "0",
+          "type": "t_mapping(t_address,t_uint256)"
+        },
+        {
+          "astId": 65,
+          "contract": "contracts/WETH10.sol:WETH10",
+          "label": "nonces",
+          "offset": 0,
+          "slot": "1",
+          "type": "t_mapping(t_address,t_uint256)"
+        },
+        {
+          "astId": 73,
+          "contract": "contracts/WETH10.sol:WETH10",
+          "label": "allowance",
+          "offset": 0,
+          "slot": "2",
+          "type": "t_mapping(t_address,t_mapping(t_address,t_uint256))"
+        },
+        {
+          "astId": 77,
+          "contract": "contracts/WETH10.sol:WETH10",
+          "label": "flashMinted",
+          "offset": 0,
+          "slot": "3",
+          "type": "t_uint256"
+        }
+      ],
+      "types": {
+        "t_address": {
+          "encoding": "inplace",
+          "label": "address",
+          "numberOfBytes": "20"
+        },
+        "t_mapping(t_address,t_mapping(t_address,t_uint256))": {
+          "encoding": "mapping",
+          "key": "t_address",
+          "label": "mapping(address => mapping(address => uint256))",
+          "numberOfBytes": "32",
+          "value": "t_mapping(t_address,t_uint256)"
+        },
+        "t_mapping(t_address,t_uint256)": {
+          "encoding": "mapping",
+          "key": "t_address",
+          "label": "mapping(address => uint256)",
+          "numberOfBytes": "32",
+          "value": "t_uint256"
+        },
+        "t_uint256": {
+          "encoding": "inplace",
+          "label": "uint256",
+          "numberOfBytes": "32"
+        }
+      }
+    }
+  },
   "target": {
     "address": "0xf4BB2e28688e89fCcE3c0580D37d36A7672E8A9F",
     "chainId": "0x1",
