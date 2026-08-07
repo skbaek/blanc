@@ -345,7 +345,14 @@ Blanc.Fmint.fmint_flashLoan_frame_settles|$STANDARD
 Blanc.Fmint.receiverNotAddress_runCompiledTo|$STANDARD
 Blanc.Fmint.fmint_receiver_not_address_reverts|$STANDARD
 Blanc.Fmint.fmint_amount_over_bound_reverts|$STANDARD
-Blanc.Fmint.fmint_flashLoan_settles_of_call|$STANDARD"
+Blanc.Fmint.fmint_flashLoan_settles_of_call|$STANDARD
+Blanc.Stor.Weth10Inv.silent|$STANDARD
+Blanc.Stor.Weth10Inv.deposit|$STANDARD
+Blanc.Stor.Weth10Inv.transfer|$STANDARD
+Blanc.Stor.Weth10Inv.flashMint|$STANDARD
+Blanc.Stor.Weth10Inv.flashBurn|$STANDARD
+Blanc.Stor.Weth10Inv.withdraw|$STANDARD
+Blanc.Stor.Weth10Inv.of_empty|$STANDARD"
 # Secondary net only: the exact-set comparison below is the primary check;
 # this pattern catches forbidden names in output the per-theorem parse missed.
 FORBIDDEN='sorryAx|ofReduceBool|ofReduceNat|_native\.'

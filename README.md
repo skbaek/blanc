@@ -192,7 +192,7 @@ and proof falls. It is not duplicated here. Blanc adds exactly:
 1. **the pinned Jaune revision** below — trusting a Blanc theorem is trusting
    that specific Jaune, not the sibling checkout on your disk;
 2. **the axiom audit** below, which is stricter than Jaune's own gates: it
-   pins the exact axiom set of ninety-one named results and fails on an extra
+   pins the exact axiom set of ninety-eight named results and fails on an extra
    *or* missing axiom;
 3. **Blanc's own source**, which carries no gate equivalent to Jaune's
    `check-hygiene.sh`/`check-integrity.sh`; what stands behind it is the audit

@@ -11,6 +11,7 @@ import Blanc.WethLive
 import Blanc.FmintGas
 import Blanc.WethGas
 import Blanc.FmintSettles
+import Blanc.Weth10Backed
 
 #print axioms Blanc.weth_preserves_solvent
 #print axioms Blanc.stateTransition_preserves_solvent
@@ -103,3 +104,10 @@ import Blanc.FmintSettles
 #print axioms Blanc.Fmint.fmint_receiver_not_address_reverts
 #print axioms Blanc.Fmint.fmint_amount_over_bound_reverts
 #print axioms Blanc.Fmint.fmint_flashLoan_settles_of_call
+#print axioms Blanc.Stor.Weth10Inv.silent
+#print axioms Blanc.Stor.Weth10Inv.deposit
+#print axioms Blanc.Stor.Weth10Inv.transfer
+#print axioms Blanc.Stor.Weth10Inv.flashMint
+#print axioms Blanc.Stor.Weth10Inv.flashBurn
+#print axioms Blanc.Stor.Weth10Inv.withdraw
+#print axioms Blanc.Stor.Weth10Inv.of_empty
