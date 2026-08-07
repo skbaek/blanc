@@ -1,0 +1,13 @@
+{
+  "commentOnlySiblingCommit": "34d2712876138fb3d5f769a3965f4e330bc91169",
+  "currentMainCommit": "87ec30256dab62459a2e6d2a1741b44d345881f1",
+  "deploymentArtifactGitBlob": "28ce831b4cf9eddcaaebaa97996caf0a4d88c801",
+  "deploymentArtifactPath": "deployments/mainnet/WETH10.json",
+  "deploymentCommit": "17b9cca6bd823ad1208c1cd0df4ef5a4c1003689",
+  "deploymentSourceGitBlob": "46de31164d7ac7a9ede0ae592e86a161a58737b2",
+  "parentSourceCommit": "4e7ed4085c07be94452cf64390fee36bd4d4e46e",
+  "repository": "https://github.com/WETH10/WETH10",
+  "solcInputGitBlob": "b2415de923d26612ad093ebcba2d0d375b3369ad",
+  "solcInputPath": "deployments/mainnet/solcInputs/77ca555bcb549eca2b7b96e19962a69c.json",
+  "sourcePath": "contracts/WETH10.sol"
+}
