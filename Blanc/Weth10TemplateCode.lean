@@ -4,18 +4,19 @@
 --
 --     lake env lean scripts/gen-weth10-template.lean
 
-import Blanc.Weth10
+import Blanc.Basic
 
 namespace Blanc.Weth10
 
 open Jaune
 
 /-- The 6313-byte zero-parameter member of the runtime
-family, committed as a literal.  `Blanc/Weth10Deploy.lean` defines
-`weth10RuntimeTemplate` as this literal and re-establishes the identity with
-`weth10Code ⟨0, 0⟩` by a kernel-checked witness, so kernel-side computation
-over the template (lengths, slices, token folds) runs on a literal byte list
-instead of re-evaluating `Prog.compile` at every proof that touches it. -/
+family, committed as a literal.  `Blanc/Weth10.lean` proves the kernel-checked
+compile witness `weth10TemplateCode_compile` for it, and
+`Blanc/Weth10Deploy.lean` defines `weth10RuntimeTemplate` as this literal, so
+kernel-side computation over the template (lengths, slices, token folds) runs
+on a literal byte list instead of re-evaluating `Prog.compile` at every proof
+that touches it. -/
 def weth10TemplateCode : Bytes :=
   [0x5b, 0x36, 0x15, 0x61, 0x0f, 0x6f, 0x57, 0x5f, 0x35, 0x60, 0xe0, 0x1c,
    0x80, 0x63, 0x7e, 0xce, 0xbe, 0x00, 0x11, 0x61, 0x07, 0x00, 0x57, 0x80,

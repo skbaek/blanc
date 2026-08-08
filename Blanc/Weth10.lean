@@ -6,6 +6,7 @@
 
 import Blanc.RevertPayload
 import Blanc.Weth10Core
+import Blanc.Weth10TemplateCode
 
 namespace Blanc
 
@@ -795,9 +796,19 @@ theorem weth10_compileShape_eq_zero (dp : DeployParams) :
     (weth10 dp).compileShape = (weth10 ⟨0, 0⟩).compileShape :=
   weth10_compileShape_eq dp
 
+/-- The repository's one full kernel evaluation of the WETH10 compiler:
+the zero-parameter program compiles to exactly the committed template
+literal.  `weth10CompilesZero` below and `weth10RuntimeTemplate`'s
+identity in `Blanc/Weth10Deploy.lean` both derive from this witness
+instead of re-running the compiler in the kernel. -/
+theorem weth10TemplateCode_compile :
+    Prog.compile (weth10 ⟨0, 0⟩) = some weth10TemplateCode := by
+  decide +kernel
+
 private theorem weth10CompilesZero :
     Prog.compiles (weth10 ⟨0, 0⟩) = true := by
-  decide +kernel
+  rw [← Prog.isSome_compile, weth10TemplateCode_compile]
+  rfl
 
 /-- Fixed-width deployment words do not affect compiler success. -/
 theorem weth10_compiles (dp : DeployParams) :

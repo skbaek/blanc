@@ -91,7 +91,9 @@ def weth10RuntimeTemplate : Bytes := weth10TemplateCode
 
 private theorem weth10RuntimeTemplate_eq_code :
     weth10RuntimeTemplate = weth10Code ⟨0, 0⟩ := by
-  decide +kernel
+  unfold weth10Code
+  rw [weth10TemplateCode_compile]
+  rfl
 
 /-- Overlay one deployment word at every generated fixed-width runtime span. -/
 def patchRuntimeWords (runtime : Bytes) (word : B256)
