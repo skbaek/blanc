@@ -50,6 +50,10 @@ lemma Devm.stack_setMach {devm : Devm} {m : Mach} :
 lemma Devm.getStorVal_setMach {devm : Devm} {m : Mach} {a : Adr} {k : B256} :
     (devm.setMach m).getStorVal a k = devm.getStorVal a k := rfl
 
+/-- Account code is a world field, so a machine write cannot move it. -/
+lemma Devm.getCode_setMach {devm : Devm} {m : Mach} {a : Adr} :
+    (devm.setMach m).getCode a = devm.getCode a := rfl
+
 /-- `Devm.popToNat`, evaluated forward: `Devm.pop` with the popped word read
 as a `Nat`. -/
 lemma Devm.popToNat_eq_ok {x : B256} {s : List B256} {devm : Devm}
@@ -233,6 +237,91 @@ lemma Rinst.runCore_calldataload_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
     Devm.gasLeft_setMach, Devm.stack_setMach]
   rw [Devm.push_eq_ok
     (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft - gVerylow⟩) h_room]
+  rfl
+
+/-- `EXTCODESIZE` on a cold account.  The queried address joins the frame's
+access list, the instruction costs `gasColdAccountAccess`, and the pushed word
+is the exact size of the account code in the pre-state. -/
+lemma Rinst.runCore_extcodesize_cold_eq_ok {pc : Nat} {devm : Devm}
+    {sevm : Sevm} {x : B256} {s : List B256}
+    (h_stk : devm.stack = x :: s)
+    (h_cold : x.toAdr ∉ devm.accessedAddresses)
+    (h_gas : gasColdAccountAccess ≤ devm.gasLeft)
+    (h_room : s.length < 1024) :
+    Rinst.runCore pc devm sevm .extcodesize =
+      .ok ((addAccessedAddress
+              (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) x.toAdr).setMach
+        ⟨(devm.getCode x.toAdr).size.toB256 :: s, devm.memory,
+          devm.gasLeft - gasColdAccountAccess⟩) := by
+  rw [show Rinst.runCore pc devm sevm .extcodesize = (do
+      let ⟨adr, d⟩ ← devm.popToAdr
+      let d ←
+        if adr ∈ d.accessedAddresses then
+          chargeGas gasWarmAccess d
+        else
+          chargeGas gasColdAccountAccess (addAccessedAddress d adr)
+      d.push (d.getCode adr).size.toB256) from rfl]
+  rw [Devm.popToAdr_def, Devm.pop_eq_ok h_stk]
+  simp only [Functor.mapRev, Functor.map, Except.map, Prod.mapFst, Prod.map,
+    id, bind, Except.bind]
+  have h_addresses :
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses =
+        devm.accessedAddresses := rfl
+  rw [if_neg (by rw [h_addresses]; exact h_cold)]
+  set d0 : Devm := addAccessedAddress
+    (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) x.toAdr with hd0
+  have h_d0_gas : d0.gasLeft = devm.gasLeft := rfl
+  have h_d0_stack : d0.stack = s := rfl
+  have h_d0_mem : d0.memory = devm.memory := rfl
+  have h_d0_code : d0.getCode x.toAdr = devm.getCode x.toAdr := by
+    rw [hd0, addAccessedAddress_getCode]
+    rfl
+  rw [chargeGas_eq_ok (devm := d0) (by rw [h_d0_gas]; exact h_gas)]
+  dsimp only
+  rw [Devm.push_eq_ok
+    (devm := d0.setMach
+      ⟨d0.stack, d0.memory, d0.gasLeft - gasColdAccountAccess⟩)
+    (by rw [Devm.stack_setMach, h_d0_stack]; exact h_room)]
+  rw [Devm.getCode_setMach, h_d0_gas, h_d0_stack, h_d0_mem, h_d0_code]
+  simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
+    Devm.gasLeft_setMach]
+
+/-- `EXTCODESIZE` on a warm account.  The address is already in the access
+list, so the base state does not move and the instruction costs
+`gasWarmAccess`. -/
+lemma Rinst.runCore_extcodesize_warm_eq_ok {pc : Nat} {devm : Devm}
+    {sevm : Sevm} {x : B256} {s : List B256}
+    (h_stk : devm.stack = x :: s)
+    (h_warm : x.toAdr ∈ devm.accessedAddresses)
+    (h_gas : gasWarmAccess ≤ devm.gasLeft)
+    (h_room : s.length < 1024) :
+    Rinst.runCore pc devm sevm .extcodesize =
+      .ok (devm.setMach
+        ⟨(devm.getCode x.toAdr).size.toB256 :: s, devm.memory,
+          devm.gasLeft - gasWarmAccess⟩) := by
+  rw [show Rinst.runCore pc devm sevm .extcodesize = (do
+      let ⟨adr, d⟩ ← devm.popToAdr
+      let d ←
+        if adr ∈ d.accessedAddresses then
+          chargeGas gasWarmAccess d
+        else
+          chargeGas gasColdAccountAccess (addAccessedAddress d adr)
+      d.push (d.getCode adr).size.toB256) from rfl]
+  rw [Devm.popToAdr_def, Devm.pop_eq_ok h_stk]
+  simp only [Functor.mapRev, Functor.map, Except.map, Prod.mapFst, Prod.map,
+    id, bind, Except.bind]
+  have h_addresses :
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses =
+        devm.accessedAddresses := rfl
+  rw [if_pos (by rw [h_addresses]; exact h_warm)]
+  rw [chargeGas_eq_ok
+    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) h_gas]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach,
+    Devm.gasLeft_setMach, Devm.stack_setMach]
+  rw [Devm.push_eq_ok
+    (devm := devm.setMach
+      ⟨s, devm.memory, devm.gasLeft - gasWarmAccess⟩) h_room]
+  rw [Devm.getCode_setMach]
   rfl
 
 /-- `SLOAD` on a cold key, evaluated forward: the key joins the accessed set
@@ -507,6 +596,41 @@ lemma Rinst.runCore_calldatacopy_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
     fun r => chargeGas (gVerylow + gasCopy * ceilDiv r.1 32
       + r.2.extCost [⟨p.1, r.1⟩]) r.2 >>= fun d =>
         Except.ok (d.memWrite p.1 (sevm.data.sliceD q.1 r.1 0))) = _
+  rw [Devm.popToNat_eq_ok h_stk]
+  simp only [bind, Except.bind]
+  rw [Devm.popToNat_eq_ok
+    (devm := devm.setMach ⟨si :: sz :: s, devm.memory, devm.gasLeft⟩) rfl]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach,
+    Devm.gasLeft_setMach]
+  rw [Devm.popToNat_eq_ok
+    (devm := devm.setMach ⟨sz :: s, devm.memory, devm.gasLeft⟩) rfl]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach,
+    Devm.gasLeft_setMach]
+  have h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+      [⟨di.toNat, sz.toNat⟩] = devm.extCost [⟨di.toNat, sz.toNat⟩] := rfl
+  rw [h_ext, chargeGas_eq_ok
+    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) h_gas]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach,
+    Devm.stack_setMach]
+  rfl
+
+/-- `CODECOPY`, evaluated forward against the exact current code image. -/
+lemma Rinst.runCore_codecopy_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
+    {di si sz : B256} {s : List B256}
+    (h_stk : devm.stack = di :: si :: sz :: s)
+    (h_gas : gVerylow + gasCopy * ceilDiv sz.toNat 32
+      + devm.extCost [⟨di.toNat, sz.toNat⟩] ≤ devm.gasLeft) :
+    Rinst.runCore pc devm sevm .codecopy =
+      .ok (devm.setMach
+        ⟨s, devm.memory.write di.toNat
+            (sevm.code.sliceD si.toNat sz.toNat (Linst.toUInt8 .stop)),
+          devm.gasLeft - (gVerylow + gasCopy * ceilDiv sz.toNat 32
+            + devm.extCost [⟨di.toNat, sz.toNat⟩])⟩) := by
+  show (devm.popToNat >>= fun p => p.2.popToNat >>= fun q => q.2.popToNat >>=
+    fun r => chargeGas (gVerylow + gasCopy * ceilDiv r.1 32
+      + r.2.extCost [⟨p.1, r.1⟩]) r.2 >>= fun d =>
+        Except.ok (d.memWrite p.1
+          (sevm.code.sliceD q.1 r.1 (Linst.toUInt8 .stop)))) = _
   rw [Devm.popToNat_eq_ok h_stk]
   simp only [bind, Except.bind]
   rw [Devm.popToNat_eq_ok
@@ -906,6 +1030,41 @@ lemma Ninst.runCompiled_pushB256 {sevm : Sevm} {devm : Devm} {w : B256}
   rw [Bytes.toB256_sig, B256.toB256_toBytes] at h
   exact h
 
+/-- A fixed-width raw `PUSH`, retaining the exact immediate bytes. -/
+lemma Ninst.runCompiled_pushBytes {sevm : Sevm} {devm : Devm}
+    {xs : Bytes} {le : xs.length ≤ 32} {c G : Nat}
+    (h_cost : pushCost xs = c)
+    (h_gas : devm.gasLeft = G + c)
+    (h_room : devm.stack.length < 1024) :
+    Ninst.RunCompiled sevm devm (.push xs le)
+      (devm.setMach ⟨xs.toB256 :: devm.stack, devm.memory, G⟩) := by
+  subst c
+  have h_eq : devm.gasLeft - pushCost xs = G := by omega
+  rw [← h_eq]
+  exact Ninst.runCompiled_push (by omega) h_room
+
+/-- A full-width word immediate is nonempty, costs `gVerylow`, and pushes the
+word itself without normalizing its 32-byte image. -/
+lemma pushCost_toBytes (w : B256) : pushCost w.toBytes = gVerylow := by
+  rw [pushCost, if_neg]
+  intro h
+  have hlen := B256.length_toBytes w
+  rw [h] at hlen
+  simp at hlen
+
+/-- The fixed-width 32-byte form of a word push.  This is distinct from
+`Ninst.pushB256`: it retains leading zero bytes in the compiled immediate. -/
+lemma Ninst.runCompiled_pushB256Full {sevm : Sevm} {devm : Devm} {w : B256}
+    {le : w.toBytes.length ≤ 32} {G : Nat}
+    (h_gas : devm.gasLeft = G + gVerylow)
+    (h_room : devm.stack.length < 1024) :
+    Ninst.RunCompiled sevm devm (.push w.toBytes le)
+      (devm.setMach ⟨w :: devm.stack, devm.memory, G⟩) := by
+  have h := Ninst.runCompiled_pushBytes
+    (sevm := sevm) (devm := devm) (xs := w.toBytes) (le := le)
+    (c := gVerylow) (G := G) (pushCost_toBytes w) h_gas h_room
+  simpa only [B256.toB256_toBytes] using h
+
 /-- A binary register opcode: `EQ`, `GT`, `SHR`, `ADD`, … -/
 lemma Ninst.runCompiled_binary {sevm : Sevm} {devm : Devm} {r : Rinst}
     {f : B256 → B256 → B256} {cost G : Nat} {x y v : B256} {s : List B256}
@@ -982,6 +1141,40 @@ lemma Ninst.runCompiled_pushItem {sevm : Sevm} {devm : Devm} {r : Rinst}
   rw [← h_eq]
   exact Ninst.runCompiled_reg h_ne
     (h_def.trans (pushItem_eq_ok (by omega) h_room))
+
+/-- `EXTCODESIZE` on a cold account.  Besides the exact gas charge, the
+successor records that the queried address has become warm. -/
+lemma Ninst.runCompiled_extcodesize_cold {sevm : Sevm} {devm : Devm}
+    {x v : B256} {s : List B256} {G : Nat}
+    (h_stk : devm.stack = x :: s)
+    (h_cold : x.toAdr ∉ devm.accessedAddresses)
+    (h_val : (devm.getCode x.toAdr).size.toB256 = v)
+    (h_gas : devm.gasLeft = G + gasColdAccountAccess)
+    (h_room : s.length < 1024) :
+    Ninst.RunCompiled sevm devm (.reg .extcodesize)
+      ((addAccessedAddress devm x.toAdr).setMach
+        ⟨v :: s, devm.memory, G⟩) := by
+  subst h_val
+  have h_eq : devm.gasLeft - gasColdAccountAccess = G := by omega
+  rw [← h_eq]
+  exact Ninst.runCompiled_reg (by rintro ⟨⟩)
+    (Rinst.runCore_extcodesize_cold_eq_ok h_stk h_cold (by omega) h_room)
+
+/-- `EXTCODESIZE` on a warm account.  No access-list field moves. -/
+lemma Ninst.runCompiled_extcodesize_warm {sevm : Sevm} {devm : Devm}
+    {x v : B256} {s : List B256} {G : Nat}
+    (h_stk : devm.stack = x :: s)
+    (h_warm : x.toAdr ∈ devm.accessedAddresses)
+    (h_val : (devm.getCode x.toAdr).size.toB256 = v)
+    (h_gas : devm.gasLeft = G + gasWarmAccess)
+    (h_room : s.length < 1024) :
+    Ninst.RunCompiled sevm devm (.reg .extcodesize)
+      (devm.setMach ⟨v :: s, devm.memory, G⟩) := by
+  subst h_val
+  have h_eq : devm.gasLeft - gasWarmAccess = G := by omega
+  rw [← h_eq]
+  exact Ninst.runCompiled_reg (by rintro ⟨⟩)
+    (Rinst.runCore_extcodesize_warm_eq_ok h_stk h_warm (by omega) h_room)
 
 /-- `SLOAD` on a cold key.  The successor is not a `setMach` over `devm`: the
 key joins the accessed set, which is a `meta` field, so the base state moves
@@ -1157,6 +1350,24 @@ lemma Ninst.runCompiled_calldatacopy_of {sevm : Sevm} {devm : Devm}
   rw [← h_eq]
   exact Ninst.runCompiled_reg (by rintro ⟨⟩)
     (Rinst.runCore_calldatacopy_eq_ok h_stk (by omega))
+
+/-- `CODECOPY`. -/
+lemma Ninst.runCompiled_codecopy_of {sevm : Sevm} {devm : Devm}
+    {di si sz : B256} {s : List B256} {c G : Nat} {M : Mem}
+    (h_stk : devm.stack = di :: si :: sz :: s)
+    (h_cost : gVerylow + gasCopy * ceilDiv sz.toNat 32
+      + devm.extCost [⟨di.toNat, sz.toNat⟩] = c)
+    (h_write : devm.memory.write di.toNat
+      (sevm.code.sliceD si.toNat sz.toNat (Linst.toUInt8 .stop)) = M)
+    (h_gas : devm.gasLeft = G + c) :
+    Ninst.RunCompiled sevm devm (.reg .codecopy)
+      (devm.setMach ⟨s, M, G⟩) := by
+  subst h_cost; subst h_write
+  have h_eq : devm.gasLeft - (gVerylow + gasCopy * ceilDiv sz.toNat 32
+      + devm.extCost [⟨di.toNat, sz.toNat⟩]) = G := by omega
+  rw [← h_eq]
+  exact Ninst.runCompiled_reg (by rintro ⟨⟩)
+    (Rinst.runCore_codecopy_eq_ok h_stk (by omega))
 
 /-- `RETURNDATACOPY`.  `h_bound` is the out-of-bounds guard, as a premise. -/
 lemma Ninst.runCompiled_retdatacopy_of {sevm : Sevm} {devm : Devm}
@@ -1420,6 +1631,451 @@ lemma Prog.runCompiled_intro {sevm : Sevm} {devm mid : Devm} {p : Prog}
   subst h_mid
   exact ⟨_, Devm.burnBy_setMach_gas h_gas, h_main⟩
 
+/-! ## Inspecting a successful compiler result
+
+The compiler's `Option` binds and branch guards are useful at generation time,
+but force an eager walk over a complete program when a downstream proof only
+needs a finite byte slice.  The emitter below removes only those already-
+discharged checks.  Its equivalence theorem requires the ordinary compiler's
+successful result, so it is an inspection view of `compile`, not a second
+compiler or an additional source of bytecode truth. -/
+
+/-- Emit a function after table locations and compiler success are known.
+Branch destinations use the source function's exact byte size; compiler
+success proves this is the recursively emitted left arm's length. -/
+def Func.emitUnchecked (locations : List Nat) (n : Nat) : Func → Bytes
+  | .last o => [o.toUInt8]
+  | .next i p =>
+      Ninst.toBytes i ++ Func.emitUnchecked locations (n + i.size) p
+  | .branch p q =>
+      let pbs := Func.emitUnchecked locations (n + 4) p
+      let loc := n + compsize p + 4
+      ([0x61] : Bytes) ++ [(loc >>> 8).toUInt8, loc.toUInt8] ++
+        [Jinst.toUInt8 .jumpi] ++ pbs ++
+        [Jinst.toUInt8 .jumpdest] ++ Func.emitUnchecked locations (loc + 1) q
+  | .call k =>
+      let loc := locations.getD k 0
+      ([0x61] : Bytes) ++ [(loc >>> 8).toUInt8, loc.toUInt8] ++
+        [Jinst.toUInt8 .jump]
+
+/-- Emit a table after its compiler checks have succeeded. -/
+def Table.emitUnchecked (locations : List Nat) :
+    List (Nat × Func) → Bytes
+  | [] => []
+  | (n, p) :: rest =>
+      Jinst.toUInt8 .jumpdest ::
+        Func.emitUnchecked locations (n + 1) p ++
+          Table.emitUnchecked locations rest
+
+/-- The unchecked inspection view of a complete program's emitted bytes. -/
+def Prog.emitUnchecked (p : Prog) : Bytes :=
+  let t := table 0 (p.main :: p.aux)
+  Table.emitUnchecked (t.map Prod.fst) t
+
+/-! ### Shape-indexed inspection
+
+`emitUnchecked` is already equivalent to the compiler under a success witness.
+For interval proofs it is useful to expose the compiler shape as a separate
+argument: two programs with the same shape then share branch offsets and table
+locations syntactically, while their instruction bytes remain visible. -/
+
+/-- Exact byte size carried by a compiler shape. -/
+def Func.CompileShape.byteSize : Func.CompileShape → Nat
+  | .last => 1
+  | .next size rest => rest.byteSize + size
+  | .branch left right => left.byteSize + right.byteSize + 5
+  | .call _ => 4
+
+theorem Func.CompileShape.byteSize_compileShape (p : Func) :
+    p.compileShape.byteSize = compsize p := by
+  induction p with
+  | last => rfl
+  | next i p ih =>
+      simp [Func.compileShape, Func.CompileShape.byteSize, compsize, ih,
+        Ninst.size_eq_length_toBytes]
+  | branch p q ihp ihq =>
+      simp [Func.compileShape, Func.CompileShape.byteSize, compsize, ihp, ihq]
+  | call => rfl
+
+/-- Emit opcode contents while taking all layout decisions from an explicit
+compiler shape.  Mismatched arguments are outside the proved use case and are
+padded with zero bytes to the exact width carried by the shape. -/
+def Func.emitByShape (locations : List Nat) (n : Nat)
+    (shape : Func.CompileShape) : Func → Bytes
+  | .last o =>
+      match shape with
+      | .last => [o.toUInt8]
+      | _ => List.replicate shape.byteSize 0
+  | .next i rest =>
+      match shape with
+      | .next size restShape =>
+          List.takeD size (Ninst.toBytes i) 0 ++
+            emitByShape locations (n + size) restShape rest
+      | _ => List.replicate shape.byteSize 0
+  | .branch left right =>
+      match shape with
+      | .branch leftShape rightShape =>
+          let loc := n + leftShape.byteSize + 4
+          let header : Bytes :=
+            [0x61, (loc >>> 8).toUInt8, loc.toUInt8,
+              Jinst.toUInt8 .jumpi]
+          header ++
+            emitByShape locations (n + 4) leftShape left ++
+            [Jinst.toUInt8 .jumpdest] ++
+            emitByShape locations (loc + 1) rightShape right
+      | _ => List.replicate shape.byteSize 0
+  | .call _ =>
+      match shape with
+      | .call k =>
+          let loc := locations.getD k 0
+          ([0x61] : Bytes) ++ [(loc >>> 8).toUInt8, loc.toUInt8] ++
+            [Jinst.toUInt8 .jump]
+      | _ => List.replicate shape.byteSize 0
+
+private lemma List.length_takeD_exact {α} (n : Nat) (xs : List α) (d : α) :
+    (List.takeD n xs d).length = n := by
+  induction n generalizing xs with
+  | zero => rfl
+  | succ n ih =>
+      simp only [List.takeD_succ, List.length_cons]
+      rw [ih]
+
+/-- Shape-indexed emission always has the byte width carried by the shape.
+This is the lazy boundary interval proofs use to skip an off-slice subtree. -/
+theorem Func.length_emitByShape (locations : List Nat) (n : Nat)
+    (shape : Func.CompileShape) (p : Func) :
+    (Func.emitByShape locations n shape p).length = shape.byteSize := by
+  induction p generalizing n shape with
+  | last o =>
+      cases shape <;>
+        simp [Func.emitByShape, Func.CompileShape.byteSize]
+  | next i p ih =>
+      cases shape <;>
+        simp [Func.emitByShape, Func.CompileShape.byteSize, ih, Nat.add_comm]
+  | branch p q ihp ihq =>
+      cases shape <;>
+        simp [Func.emitByShape, Func.CompileShape.byteSize, ihp, ihq,
+          Nat.add_assoc]
+  | call k =>
+      cases shape <;>
+        simp [Func.emitByShape, Func.CompileShape.byteSize]
+
+private lemma List.getD_append_inspect {α} (xs ys : List α)
+    (i : Nat) (d : α) :
+    (xs ++ ys).getD i d =
+      if i < xs.length then xs.getD i d
+      else ys.getD (i - xs.length) d := by
+  simp [List.getD_eq_getElem?_getD, List.getElem?_append]
+  split <;> rfl
+
+/-- Read one emitted byte without constructing any off-index subtree.  The
+shape supplies exact segment widths, so evaluation follows only the branch
+containing `i`. -/
+def Func.byteAtByShape (locations : List Nat) (n : Nat)
+    (shape : Func.CompileShape) : Func → Nat → UInt8 → UInt8
+  | .last o, i, d =>
+      match shape with
+      | .last => [o.toUInt8].getD i d
+      | _ => (List.replicate shape.byteSize 0).getD i d
+  | .next inst rest, i, d =>
+      match shape with
+      | .next size restShape =>
+          if i < size then
+            (List.takeD size (Ninst.toBytes inst) 0).getD i d
+          else
+            byteAtByShape locations (n + size) restShape rest (i - size) d
+      | _ => (List.replicate shape.byteSize 0).getD i d
+  | .branch left right, i, d =>
+      match shape with
+      | .branch leftShape rightShape =>
+          let loc := n + leftShape.byteSize + 4
+          let header : Bytes :=
+            [0x61, (loc >>> 8).toUInt8, loc.toUInt8,
+              Jinst.toUInt8 .jumpi]
+          if i < header.length then header.getD i d
+          else
+            let i := i - header.length
+            if i < leftShape.byteSize then
+              byteAtByShape locations (n + 4) leftShape left i d
+            else
+              let i := i - leftShape.byteSize
+              if i < 1 then [Jinst.toUInt8 .jumpdest].getD i d
+              else
+                byteAtByShape locations (loc + 1) rightShape right (i - 1) d
+      | _ => (List.replicate shape.byteSize 0).getD i d
+  | .call _, i, d =>
+      match shape with
+      | .call k =>
+          let loc := locations.getD k 0
+          ([0x61, (loc >>> 8).toUInt8, loc.toUInt8,
+            Jinst.toUInt8 .jump] : Bytes).getD i d
+      | _ => (List.replicate shape.byteSize 0).getD i d
+
+/-- The lazy byte reader is extensionally the corresponding byte of the
+shape-indexed emitter. -/
+theorem Func.getD_emitByShape (locations : List Nat) (n : Nat)
+    (shape : Func.CompileShape) (p : Func) (i : Nat) (d : UInt8) :
+    (Func.emitByShape locations n shape p).getD i d =
+      Func.byteAtByShape locations n shape p i d := by
+  induction p generalizing n shape i with
+  | last o =>
+      cases shape <;> simp [Func.emitByShape, Func.byteAtByShape]
+  | next inst p ih =>
+      cases shape <;>
+        simp only [Func.emitByShape, Func.byteAtByShape,
+          List.getD_append_inspect, List.length_takeD_exact, ih]
+  | branch p q ihp ihq =>
+      cases shape <;>
+        simp only [Func.emitByShape, Func.byteAtByShape, List.append_assoc,
+          List.getD_append_inspect, Func.length_emitByShape,
+          List.length_singleton, ihp, ihq]
+  | call k =>
+      cases shape <;> simp [Func.emitByShape, Func.byteAtByShape]
+
+/-- A function indexed by its own compiler shape is the ordinary unchecked
+inspection view. -/
+theorem Func.emitByShape_compileShape
+    (locations : List Nat) (n : Nat) (p : Func) :
+    Func.emitByShape locations n p.compileShape p =
+      Func.emitUnchecked locations n p := by
+  induction p generalizing n with
+  | last o => rfl
+  | next i p ih =>
+      rw [Func.compileShape, Func.emitByShape, Func.emitUnchecked,
+        List.takeD_eq_self 0 (Ninst.size_eq_length_toBytes i)]
+      simp [ih]
+  | branch p q ihp ihq =>
+      simp [Func.compileShape, Func.emitByShape, Func.emitUnchecked,
+        ihp, ihq, Func.CompileShape.byteSize_compileShape]
+  | call k => simp [Func.compileShape, Func.emitByShape, Func.emitUnchecked]
+
+/-- Table entry locations computed solely from compiler shapes. -/
+def Func.CompileShape.locations : Nat → List Func.CompileShape → List Nat
+  | _, [] => []
+  | n, shape :: rest =>
+      n :: locations (n + shape.byteSize + 1) rest
+
+theorem Func.CompileShape.locations_compileShapes
+    (n : Nat) (fs : List Func) :
+    Func.CompileShape.locations n (fs.map Func.compileShape) =
+      (table n fs).map Prod.fst := by
+  induction fs generalizing n with
+  | nil => rfl
+  | cons f fs ih =>
+      simp [Func.CompileShape.locations, table,
+        Func.CompileShape.byteSize_compileShape, ih]
+
+/-- Shape-indexed emission of a flat table. -/
+def Table.emitByShape (locations : List Nat) :
+    List Nat → List Func.CompileShape → List Func → Bytes
+  | n :: ns, shape :: shapes, p :: ps =>
+      Jinst.toUInt8 .jumpdest ::
+        Func.emitByShape locations (n + 1) shape p ++
+          Table.emitByShape locations ns shapes ps
+  | _, _, _ => []
+
+theorem Table.emitByShape_compileShapes
+    (locations : List Nat) (n : Nat) (fs : List Func) :
+    Table.emitByShape locations
+        (Func.CompileShape.locations n (fs.map Func.compileShape))
+        (fs.map Func.compileShape) fs =
+      Table.emitUnchecked locations (table n fs) := by
+  induction fs generalizing n with
+  | nil => rfl
+  | cons f fs ih =>
+      simp [Func.CompileShape.locations, table, Table.emitByShape,
+        Table.emitUnchecked, Func.emitByShape_compileShape,
+        Func.CompileShape.byteSize_compileShape, ih]
+
+/-- Inspect a program's opcode contents under an explicit compiler shape. -/
+def Prog.emitByShape (shape : Prog.CompileShape) (p : Prog) : Bytes :=
+  let shapes := shape.main :: shape.aux
+  let locations := Func.CompileShape.locations 0 shapes
+  Table.emitByShape locations locations shapes (p.main :: p.aux)
+
+/-- Supplying a program's own compiler shape recovers `emitUnchecked`. -/
+theorem Prog.emitByShape_compileShape (p : Prog) :
+    Prog.emitByShape p.compileShape p = p.emitUnchecked := by
+  unfold Prog.emitByShape Prog.compileShape Prog.emitUnchecked
+  change Table.emitByShape
+      (Func.CompileShape.locations 0
+        ((p.main :: p.aux).map Func.compileShape))
+      (Func.CompileShape.locations 0
+        ((p.main :: p.aux).map Func.compileShape))
+      ((p.main :: p.aux).map Func.compileShape) (p.main :: p.aux) =
+    Table.emitUnchecked ((table 0 (p.main :: p.aux)).map Prod.fst)
+      (table 0 (p.main :: p.aux))
+  rw [Table.emitByShape_compileShapes,
+    Func.CompileShape.locations_compileShapes]
+
+/-- A successful function compilation is exactly its unchecked inspection
+view.  The success witness discharges every table lookup and branch bound. -/
+theorem Func.compile_eq_emitUnchecked
+    {l : List (Nat × Func)} {n : Nat} {p : Func} {bs : Bytes}
+    (h : Func.compile l n p = some bs) :
+    bs = Func.emitUnchecked (l.map Prod.fst) n p := by
+  induction p generalizing n bs with
+  | last o =>
+      simp [Func.compile] at h
+      exact h.symm
+  | next i p ih =>
+      rcases of_bind_eq_some h with ⟨pbs, hp, hbs⟩
+      simp at hbs
+      subst bs
+      simp [Func.emitUnchecked, ih hp]
+  | branch p q ihp ihq =>
+      rcases of_bind_eq_some h with ⟨pbs, hp, h⟩
+      rcases of_guard_eq_some h with ⟨_, h⟩
+      rcases of_bind_eq_some h with ⟨qbs, hq, hbs⟩
+      simp at hbs
+      subst bs
+      have hp' := ihp hp
+      have hq' := ihq hq
+      have hlenp := Func.length_compile hp
+      simp [Func.emitUnchecked, ← hp', hlenp, hq']
+  | call k =>
+      unfold Func.compile at h
+      generalize hk : l[k]? = entry at h
+      cases entry with
+      | none => simp at h
+      | some entry =>
+          rcases entry with ⟨loc, f⟩
+          rcases of_guard_eq_some h with ⟨_, h⟩
+          simp at h
+          subst bs
+          simp [Func.emitUnchecked, List.getElem?_map, hk]
+
+/-- A successful table compilation is exactly its unchecked inspection view. -/
+theorem Table.compile_eq_emitUnchecked
+    {l t : List (Nat × Func)} {bs : Bytes}
+    (h : Table.compile l t = some bs) :
+    bs = Table.emitUnchecked (l.map Prod.fst) t := by
+  induction t generalizing bs with
+  | nil =>
+      simp [Table.compile] at h
+      subst bs
+      rfl
+  | cons entry rest ih =>
+      rcases entry with ⟨n, p⟩
+      rcases of_bind_eq_some h with ⟨pbs, hp, h⟩
+      rcases of_bind_eq_some h with ⟨rbs, hr, hbs⟩
+      simp at hbs
+      subst bs
+      simp [Table.emitUnchecked, Func.compile_eq_emitUnchecked hp, ih hr]
+
+/-- A successful complete-program compilation is exactly its unchecked
+inspection view. -/
+theorem Prog.compile_eq_emitUnchecked {p : Prog} {bs : Bytes}
+    (h : Prog.compile p = some bs) : bs = p.emitUnchecked := by
+  unfold Prog.compile at h
+  unfold Prog.emitUnchecked
+  exact Table.compile_eq_emitUnchecked h
+
+/-! ## Executing a call-free compiled prefix
+
+`Prog.exec_of_runCompiled` connects a whole compiled program to `exec`.  A
+constructor is a different but equally standard byte layout: executable code
+comes first and the runtime it will copy follows as inert data.  The two facts
+below expose the corresponding boundary without pretending that the data tail
+is another Blanc function.
+
+The syntactic no-call premise is load-bearing.  A `Func.call` jumps through a
+compiled table, so validating one requires the complete program layout.  A
+call-free prefix needs only its own `subcode` witness and can therefore be
+followed by arbitrary bytes. -/
+
+/-- A `Func` containing no internal table jump.  External EVM instructions
+such as `CALL` remain ordinary `Ninst`s and are not excluded by this syntax
+predicate. -/
+def Func.NoCalls : Func → Prop
+  | .branch f g => f.NoCalls ∧ g.NoCalls
+  | .last _ => True
+  | .next _ f => f.NoCalls
+  | .call _ => False
+
+/-- Prepending a straight-line instruction sequence cannot introduce a Blanc
+table call. -/
+theorem Func.NoCalls.prepend (xs : Line) {f : Func} (hf : f.NoCalls) :
+    (xs +++ f).NoCalls := by
+  induction xs with
+  | nil => simpa [Blanc.prepend] using hf
+  | cons _ xs ih => simpa [Blanc.prepend, Func.NoCalls] using ih
+
+/-- A gas-exact call-free walk executes from any bytecode window containing
+the corresponding compiled function.  Unlike the whole-program bridge, this
+theorem needs no equality for bytes outside that window. -/
+theorem Func.exec_of_runCompiled_subcode
+    {l : List (Nat × Func)} {FS : List Func} {sevm : Sevm}
+    {devm : Devm} {p : Func} {devm' : Devm}
+    (h_run : Func.RunCompiled FS sevm devm p devm')
+    (h_noCalls : p.NoCalls) :
+    ∀ pc,
+      subcode sevm.code.toList pc (Func.compile l pc p) →
+      noPushBefore sevm.code pc 32 = true →
+      Nonempty (Exec pc sevm devm (.ok devm')) := by
+  induction h_run with
+  | zero h_room h_pop h_f ih =>
+    intro pc sub hb
+    rcases h_noCalls with ⟨hnf, _⟩
+    rcases subcode_compile_branch_jumpable sub hb with
+      ⟨loc, _h_loc_eq, h_loc, h_push, h_jumpi, h_subp, h_bp,
+        _h_jd, _h_jp, _h_subq, _h_bq⟩
+    rcases Evm.branch_zero_steps h_push h_jumpi h_loc h_room h_pop with
+      ⟨h1, h2⟩
+    obtain ⟨excf⟩ := ih hnf (pc + 4) h_subp h_bp
+    exact ⟨Exec.cont h1 (Exec.cont h2 excf)⟩
+  | succ h_ne h_room h_pop h_g ih =>
+    intro pc sub hb
+    rcases h_noCalls with ⟨_, hng⟩
+    rcases subcode_compile_branch_jumpable sub hb with
+      ⟨loc, _h_loc_eq, h_loc, h_push, h_jumpi, _h_subp, _h_bp,
+        h_jd, h_jp, h_subq, h_bq⟩
+    rcases Evm.branch_succ_steps h_push h_jumpi h_jd h_jp h_loc h_ne
+      h_room h_pop with ⟨h1, h2, h3⟩
+    obtain ⟨excg⟩ := ih hng (loc + 1) h_subq h_bq
+    exact ⟨Exec.cont h1 (Exec.cont h2 (Exec.cont h3 excg))⟩
+  | last h_lin =>
+    intro pc sub _hb
+    refine ⟨Exec.halt ?_⟩
+    rw [Evm.step_last (Linst.at_of_slice sub)]
+    exact congrArg Step.halt h_lin
+  | next h_n h_f ih =>
+    intro pc sub hb
+    rcases Func.noPushBefore_next sub hb with ⟨hb', sub'⟩
+    rcases of_subcode sub with ⟨cd, h_eq', h_slice⟩
+    rcases of_bind_eq_some h_eq' with ⟨cd', _h_eq'', h_rw⟩
+    simp [pure] at h_rw
+    rw [← h_rw] at h_slice
+    rcases h_n with ⟨xl, h_filled, h_step⟩
+    exact Ninst.exec_of_stepRun
+      (Ninst.at_of_slice (List.slice_prefix h_slice))
+      h_filled (h_step pc) (ih h_noCalls _ sub' hb')
+  | call _h_get _h_room _h_burn _h_f _ih =>
+    exact False.elim h_noCalls
+
+/-- The common constructor layout: `pfx` is executable and `sfx` is arbitrary
+trailing data.  A `RunCompiled` witness for the call-free function fixes the
+successful total `exec` result at pc zero. -/
+theorem Func.exec_of_runCompiled_prefix
+    {l : List (Nat × Func)} {FS : List Func} {sevm : Sevm}
+    {devm : Devm} {p : Func} {devm' : Devm} {pfx sfx : Bytes}
+    (h_run : Func.RunCompiled FS sevm devm p devm')
+    (h_noCalls : p.NoCalls)
+    (h_compile : Func.compile l 0 p = some pfx)
+    (h_code : sevm.code.toList = pfx ++ sfx) :
+    exec ⟨0, sevm, devm⟩ = .ok devm' := by
+  have h_sub : subcode sevm.code.toList 0 (Func.compile l 0 p) := by
+    rw [h_compile]
+    show List.Slice sevm.code.toList 0 pfx
+    rw [h_code]
+    exact List.slice_prefix (List.slice_refl (pfx ++ sfx))
+  have h_bound : noPushBefore sevm.code 0 32 = true := by
+    simp [noPushBefore]
+  obtain ⟨h_exec⟩ :=
+    Func.exec_of_runCompiled_subcode h_run h_noCalls 0 h_sub h_bound
+  rw [← exec_iff_exec_eq]
+  exact ⟨h_exec⟩
+
 /-! ## `func_run` — the constructor-side walk
 
 `Blanc/Tactics.lean`'s `funcInv` walks a `Func` and applies `next_inv`,
@@ -1606,11 +2262,27 @@ def discharge (g : MVarId) (stxs : List (TSyntax `tactic)) : ForwardM Unit := do
     if ← tryTacOn g stx then return
   modify fun c => { c with side := c.side.push g }
 
+/-- Value obligations often exactly repeat a caller hypothesis.  Check for that
+syntactically before invoking tactics, without paying to instantiate and scan
+the whole local context for every gas, room, and stack obligation in a walk. -/
+def dischargeValue (g : MVarId) (stxs : List (TSyntax `tactic)) : ForwardM Unit := do
+  if ← g.isAssigned then return
+  let exactLocal? ← g.withContext do
+    let target ← instantiateMVars (← g.getType)
+    (← getLCtx).findDeclM? fun decl => do
+      if decl.isImplementationDetail then return none
+      if (← instantiateMVars decl.type) == target then return some decl.toExpr
+      return none
+  if let some fvar := exactLocal? then
+    g.assign fvar
+    return
+  discharge g stxs
+
 /-- The gas obligation: always `base - n = (base - m) + c` over numerals. -/
 def gasTacs : ForwardM (List (TSyntax `tactic)) := do
   let t ← `(tactic|
     (simp only [Devm.gasLeft_setMach, gVerylow, gBase, gHigh, gMid, gJumpdest,
-      gasColdSload, gasWarmAccess, gMemory]; omega))
+      gasColdSload, gasColdAccountAccess, gasWarmAccess, gMemory]; omega))
   return [t]
 
 /-- The stack-headroom obligation, on a literal stack. -/
@@ -1764,6 +2436,40 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
       discharge hg (← gasTacs)
       discharge hr (← roomTacs)
     | _ => throwError "func_run: PUSH left {gs.length} obligations"
+  | (``Jaune.Ninst.push, #[xs, le]) => do
+    match xs.consumeMData.getAppFnArgs with
+    | (``Jaune.B256.toBytes, #[w]) => do
+      let gas' ← mkGas gb goff 3
+      let succ ← mkState base (← mkAppM ``List.cons #[w, stk]) mem gas'
+      fixPost post succ
+      let gs ← applyLemma g ``Ninst.runCompiled_pushB256Full
+        [(0, sevm), (1, d), (2, w), (3, le), (4, gas')] [5, 6]
+      match gs with
+      | [hg, hr] =>
+        discharge hg (← gasTacs)
+        discharge hr (← roomTacs)
+      | _ =>
+        throwError "func_run: full-width raw PUSH left {gs.length} obligations"
+    | _ => do
+      let costE ← mkAppM ``pushCost #[xs]
+      let some cost ← natOf? costE
+        | throwError "func_run: cannot tell what this raw PUSH costs:{indentExpr costE}"
+      let gas' ← mkGas gb goff cost
+      let w ← mkAppM ``Jaune.Bytes.toB256 #[xs]
+      let succ ← mkState base (← mkAppM ``List.cons #[w, stk]) mem gas'
+      fixPost post succ
+      let gs ← applyLemma g ``Ninst.runCompiled_pushBytes
+        [(0, sevm), (1, d), (2, xs), (3, le), (4, mkNatLit cost), (5, gas')]
+        [6, 7, 8]
+      let rfl' ← `(tactic| rfl)
+      let dec ← `(tactic| decide)
+      let deck ← `(tactic| decide +kernel)
+      match gs with
+      | [hc, hg, hr] =>
+        discharge hc [rfl', dec, deck]
+        discharge hg (← gasTacs)
+        discharge hr (← roomTacs)
+      | _ => throwError "func_run: raw PUSH left {gs.length} obligations"
   | (``Jaune.Ninst.reg, #[r]) => do
     let r' ← whnfR r
     match r'.getAppFnArgs with
@@ -1796,10 +2502,59 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
       match gs with
       | [hstk, hval, hg, hr] =>
         discharge hstk (← rflTacs)
-        discharge hval (← valTacs)
+        dischargeValue hval (← valTacs)
         discharge hg (← gasTacs)
         discharge hr (← roomTacs)
       | _ => throwError "func_run: CALLDATALOAD left {gs.length} obligations"
+    | (``Jaune.Rinst.extcodesize, #[]) => do
+      let ([x], s) ← popStack 1 stk | throwError "func_run: EXTCODESIZE"
+      let adr ← mkAppM ``Jaune.B256.toAdr #[x]
+      let code ← mkAppM ``Jaune.Devm.getCode #[d, adr]
+      let size ← mkAppM ``ByteArray.size #[code]
+      let v ← mkAppM ``Jaune.Nat.toB256 #[size]
+      -- As for SLOAD, warmth is a fact about the current frame and therefore
+      -- comes from its hypotheses rather than from an unchecked walk hint.
+      let warmProp ← mkAppM ``Membership.mem
+        #[← mkAppM ``Jaune.Devm.accessedAddresses #[d], adr]
+      let isWarm ← g.withContext do
+        (← getLCtx).findDeclM? fun decl => do
+          if decl.isImplementationDetail then return none
+          if ← withNewMCtxDepth (isDefEq decl.type warmProp) then
+            return some decl.type
+          else return none
+      let assum ← `(tactic| assumption)
+      if isWarm.isSome then
+        let gas' ← mkGas gb goff 100
+        let succ ← mkState base (← mkAppM ``List.cons #[v, s]) mem gas'
+        fixPost post succ
+        let gs ← applyLemma g ``Ninst.runCompiled_extcodesize_warm
+          [(0, sevm), (1, d), (2, x), (3, v), (4, s), (5, gas')]
+          [6, 7, 8, 9, 10]
+        match gs with
+        | [hstk, hwarm, hval, hg, hr] =>
+          discharge hstk (← rflTacs)
+          discharge hwarm [assum]
+          discharge hval (← rflTacs)
+          discharge hg (← gasTacs)
+          discharge hr (← roomTacs)
+        | _ =>
+          throwError "func_run: warm EXTCODESIZE left {gs.length} obligations"
+      else
+        let base' ← mkAppM ``Jaune.addAccessedAddress #[d, adr]
+        let gas' ← mkGas gb goff 2600
+        let succ ← mkState base' (← mkAppM ``List.cons #[v, s]) mem gas'
+        fixPost post succ
+        let gs ← applyLemma g ``Ninst.runCompiled_extcodesize_cold
+          [(0, sevm), (1, d), (2, x), (3, v), (4, s), (5, gas')]
+          [6, 7, 8, 9, 10]
+        match gs with
+        | [hstk, hcold, hval, hg, hr] =>
+          discharge hstk (← rflTacs)
+          discharge hcold [assum]
+          discharge hval (← rflTacs)
+          discharge hg (← gasTacs)
+          discharge hr (← roomTacs)
+        | _ => throwError "func_run: EXTCODESIZE left {gs.length} obligations"
     | (``Jaune.Rinst.sload, #[]) => do
       let ([k], s) ← popStack 1 stk | throwError "func_run: SLOAD"
       let tgt ← mkAppM ``Jaune.Sevm.currentTarget #[sevm]
@@ -1841,7 +2596,7 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
         | [hstk, hwarm, hval, hg, hr] =>
           discharge hstk (← rflTacs)
           discharge hwarm [assum]
-          discharge hval (← valTacs)
+          dischargeValue hval (← valTacs)
           discharge hg (← gasTacs)
           discharge hr (← roomTacs)
         | _ => throwError "func_run: warm SLOAD left {gs.length} obligations"
@@ -1856,7 +2611,7 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
         | [hstk, hcold, hval, hg, hr] =>
           discharge hstk (← rflTacs)
           discharge hcold [assum]
-          discharge hval (← valTacs)
+          dischargeValue hval (← valTacs)
           discharge hg (← gasTacs)
           discharge hr (← roomTacs)
         | _ => throwError "func_run: SLOAD left {gs.length} obligations"
@@ -1984,11 +2739,39 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
       | [hstk, hcost, hval, hmem, hg, hr] =>
         discharge hstk (← rflTacs)
         discharge hcost []
-        discharge hval (← valTacs)
+        dischargeValue hval (← valTacs)
         discharge hmem (← rflTacs)
         discharge hg (← gasTacs)
         discharge hr (← roomTacs)
       | _ => throwError "func_run: KECCAK256 left {gs.length} obligations"
+    | (``Jaune.Rinst.codecopy, #[]) => do
+      let ([di, si, sz], s) ← popStack 3 stk
+        | throwError "func_run: CODECOPY"
+      let some cost ← nextHint g (mkConst ``Nat)
+        | throwError m!"func_run: step {n + 1} is a CODECOPY. Supply its whole charge as the next hint."
+      let some costN ← natOf? cost
+        | throwError "func_run: the CODECOPY hint{indentExpr cost}is not a numeral"
+      let u8zero ← mkAppOptM ``OfNat.ofNat
+        #[mkConst ``UInt8, mkNatLit 0, none]
+      let val ← mkAppM ``Jaune.ByteArray.sliceD
+        #[← mkAppM ``Jaune.Sevm.code #[sevm],
+          ← mkAppM ``Jaune.B256.toNat #[si],
+          ← mkAppM ``Jaune.B256.toNat #[sz], u8zero]
+      let img ← mkAppM ``Jaune.Mem.write
+        #[mem, ← mkAppM ``Jaune.B256.toNat #[di], val]
+      let gas' ← mkGas gb goff costN
+      let succ ← mkState base s img gas'
+      fixPost post succ
+      let gs ← applyLemma g ``Ninst.runCompiled_codecopy_of
+        [(0, sevm), (1, d), (2, di), (3, si), (4, sz), (5, s), (6, cost),
+          (7, gas'), (8, img)] [9, 10, 11, 12]
+      match gs with
+      | [hstk, hcost, hw, hg] =>
+        discharge hstk (← rflTacs)
+        discharge hcost []
+        discharge hw (← rflTacs)
+        discharge hg (← gasTacs)
+      | _ => throwError "func_run: CODECOPY left {gs.length} obligations"
     | (``Jaune.Rinst.calldatacopy, #[]) => do
       let ([di, si, sz], s) ← popStack 3 stk
         | throwError "func_run: CALLDATACOPY"
@@ -2165,7 +2948,7 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
           discharge hne [ne, ne']
           discharge hdef [rfl']
           discharge hstk (← rflTacs)
-          discharge hval (← valTacs)
+          dischargeValue hval (← valTacs)
           discharge hg (← gasTacs)
           discharge hr (← roomTacs)
         | _ => throwError "func_run: binary opcode left {gs.length} obligations"
@@ -2188,7 +2971,7 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
           discharge hne [ne, ne']
           discharge hdef [rfl']
           discharge hstk (← rflTacs)
-          discharge hval (← valTacs)
+          dischargeValue hval (← valTacs)
           discharge hg (← gasTacs)
           discharge hr (← roomTacs)
         | _ => throwError "func_run: unary opcode left {gs.length} obligations"

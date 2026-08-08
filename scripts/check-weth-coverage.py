@@ -1,59 +1,36 @@
 #!/usr/bin/env python3
-"""Selector coverage gate for Blanc's WETH fixture suite
-(~/plans/weth-evidence.md Step 2).
+"""Honest selector-reachability gate for Blanc's WETH fixtures.
 
-Blanc's WETH dispatcher routes ten selectors, obtained from Blanc itself --
-never retyped as ABI signature strings here (Fixed design decision 5) -- by
-`scripts/gen-weth-selectors.lean`, which evaluates `Blanc.wethFuncs.map
-Prod.fst` and commits the result to `scripts/weth-selectors.json`. `deposit`
-is an eleventh, separate entry point: it is WETH's empty-calldata fallback,
-not a selector in `wethFuncs` at all.
+The ten selectors come from ``Blanc.wethFuncs`` through the committed
+generated manifest; ``deposit`` remains the separate empty-calldata fallback.
+Selectors receive credit only as direct top-level entries or as witnessed
+internal CALLs from a top-level-called, straight-line recorder.  A durable
+post-state success flag or failure-path executed marker must sit immediately
+after the exact CALL; selector-shaped PUSHes without that proof are reported
+as embedding only.
 
-This script decodes every committed fixture's block RLP -- with a small
-self-contained RLP decoder, deliberately NOT the frozen oracle's `rlp`
-module, so this gate has no dependency on `~/execution-specs` and runs the
-same way locally and in CI -- extracts every top-level transaction's `to`
-and `input`, and additionally scans any *other* account's code for the exact
-byte pattern a caller prop (e.g. the reentrancy attacker) uses to build
-calldata in memory: `PUSH32` (0x7F) whose 32-byte immediate is a known
-selector's 4 bytes right-padded with 28 zero bytes. That pattern is
-confirmed against `scripts/gen-weth-fixtures.py`'s `attacker_bytecode`, not
-guessed -- see the report.
+The shared ``selector_coverage`` recognizer checks instruction shape, target,
+calldata window and marker change, and runs corruption falsifiers on every
+invocation. WETH itself is found by byte equality against the committed
+``Blanc.wethCode`` literal and excluded from prop inventory, so dispatcher
+constants cannot create vacuous coverage.
 
-WETH's own account is identified by its code, not by a hardcoded address: no
-fixture's WETH account is at the same synthetic address for a reason a
-future case couldn't change. Since `~/plans/fmint-evidence.md` Step 1 that
-identification is BYTE-EQUALITY against the committed `Blanc.wethCode`
-literal, parsed by `check-runtime-bytes.py`'s parser (imported, never
-copied). It was a code length plus a 4-byte prefix (1776 hex digits,
-`5b5f3560`) until then -- a test written before `check-runtime-bytes.py`
-existed, and one under which a WETH account that had drifted to different
-bytes of the same length would still have been accepted here and excluded
-from the scan as though nothing were wrong. The prefix never
-distinguished anything on its own: fmint's dispatcher opens with the same
-four bytes.
-
-This exclusion matters: WETH's OWN bytecode contains a `PUSH32` of every one
-of its ten selectors, as the dispatcher's comparison constants
-(`Blanc/CommonCore.lean`'s `dispatchWith`) -- scanning WETH's own code with
-the same pattern used for caller props would trivially "exercise" all ten
-selectors whether or not anything ever called them. Excluding WETH's account
-from the caller-prop scan is what keeps the gate honest.
-
-Fail-closed throughout: an RLP or JSON structure this script cannot parse is
-a REGRESSION (exit 1), never a silently-skipped fixture. A committed budget
-of known-unexercised selectors (`scripts/weth-coverage-budget.txt`) is the
-only variance ever tolerated, and it may only shrink -- see that file.
-
-CLI contract: exit 0 iff the actual unexercised-selector set is a subset of
-the budget file's rows and does not exceed its declared count. Output ends
-with one unambiguous verdict line.
+CLI contract: exit 0 iff the actual unreached-selector set is a subset of the
+budget file's rows and does not exceed its declared count. Output ends with
+one unambiguous verdict line.
 """
 import importlib.util
 import json
 import os
 import re
 import sys
+
+from selector_coverage import (
+    CallsiteEvidenceError,
+    embedded_selectors,
+    run_callsite_falsifiers,
+    witnessed_calls,
+)
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPTS_DIR = os.path.join(REPO_ROOT, "scripts")
@@ -296,31 +273,22 @@ def decode_txs(rlp_hex: str):
 
 
 def scan_prop_selectors(code_hex: str, known):
-    """Scan one account's code for a caller-prop's embedded calldata: a
-    PUSH32 (0x7F) whose 32-byte immediate is `<selector><28 zero bytes>` for
-    one of the known ten selectors. Confirmed against `attacker_bytecode` in
-    scripts/gen-weth-fixtures.py, which builds `withdraw(uint256)`'s
-    calldata word exactly this way before CALLing WETH with it."""
-    if not code_hex.startswith("0x"):
-        raise CoverageError(f"malformed code field {code_hex!r}")
-    code = bytes.fromhex(code_hex[2:])
-    found = set()
-    i = 0
-    while i < len(code):
-        if code[i] == 0x7F and i + 33 <= len(code):
-            word = code[i + 1:i + 33]
-            if word[4:] == bytes(28):
-                sel = "0x" + word[:4].hex()
-                if sel in known:
-                    found.add(sel)
-            i += 33  # PUSH32 always consumes exactly 32 immediate bytes
-        else:
-            i += 1
-    return found
+    """Diagnostic embedding inventory; never reachability credit."""
+    try:
+        return embedded_selectors(code_hex, known)
+    except CallsiteEvidenceError as exc:
+        raise CoverageError(str(exc)) from exc
+
+
+def find_account(accounts, address):
+    """Case-insensitive account lookup for normalized transaction addresses."""
+    return accounts.get(address) or next(
+        (value for key, value in accounts.items() if key.lower() == address),
+        None)
 
 
 def check_fixture(path, known):
-    """Returns (exercised: {selector: [(source,)]}, fallback_hits: [str])."""
+    """Return direct, witnessed-internal, embedding, and fallback evidence."""
     with open(path) as f:
         doc = json.load(f)
     if not isinstance(doc, dict) or len(doc) != 1:
@@ -336,7 +304,9 @@ def check_fixture(path, known):
     weth_addr = find_weth_address(pre)
     fname = os.path.basename(path)
 
-    exercised = {}
+    direct = {}
+    internal = {}
+    embedded = {}
     fallback_hits = []
     called_addrs = set()
 
@@ -353,35 +323,49 @@ def check_fixture(path, known):
             elif len(data) >= 4:
                 sel = "0x" + data[:4].hex()
                 if sel in known:
-                    exercised.setdefault(sel, []).append(
+                    direct.setdefault(sel, []).append(
                         f"{fname} block {bi} tx {ti} (direct)")
                 # else: a well-formed call to WETH with an unrecognized
                 # 4-byte prefix. Parseable, just not one of the ten -- not
                 # counted, not a failure (see the report).
 
-    # Caller-prop scan: any account other than WETH that some transaction in
-    # THIS fixture actually called. Restricting to actually-called accounts
-    # matters: a selector's byte pattern sitting in *unreached* code would
-    # not have been exercised, only present.
+    # Only a top-level-called prop can be certified. Selector PUSHes are kept
+    # separately as diagnostics; the shared recognizer credits only exact
+    # straight-line CALL sites with changed post-state recorder slots.
     for addr in called_addrs:
         if addr == weth_addr:
             continue
-        acct = pre.get(addr) or next(
-            (v for k, v in pre.items() if k.lower() == addr), None)
+        acct = find_account(pre, addr)
         if acct is None:
             continue
         code_hex = acct.get("code", "0x")
         if code_hex in ("0x", "0x0", ""):
             continue
         for sel in scan_prop_selectors(code_hex, known):
-            exercised.setdefault(sel, []).append(f"{fname} caller prop {addr}")
+            embedded.setdefault(sel, []).append(f"{fname} account {addr}")
+        post_acct = find_account(case.get("postState", {}), addr)
+        if post_acct is None:
+            continue
+        try:
+            witnesses = witnessed_calls(
+                code_hex, known, weth_addr, acct.get("storage", {}),
+                post_acct.get("storage", {}))
+        except CallsiteEvidenceError as exc:
+            raise CoverageError(f"{fname} account {addr}: {exc}") from exc
+        for sel, pc, slot, kind in witnesses:
+            internal.setdefault(sel, []).append(
+                f"{fname} prop {addr} CALL@0x{pc:x}, {kind} slot 0x{slot:x}")
 
-    return exercised, fallback_hits
+    return direct, internal, embedded, fallback_hits
 
 
 def run(fixtures_dir):
     known = load_selectors()
     budget_max, budgeted = load_budget(known)
+    try:
+        falsifier_count = run_callsite_falsifiers()
+    except CallsiteEvidenceError as exc:
+        raise CoverageError(str(exc)) from exc
 
     if not os.path.isdir(fixtures_dir):
         raise CoverageError(f"fixtures directory not found: {fixtures_dir}")
@@ -391,52 +375,72 @@ def run(fixtures_dir):
     if not files:
         raise CoverageError(f"no fixture files found in {fixtures_dir}")
 
-    all_exercised = {}
+    all_direct = {}
+    all_internal = {}
+    all_embedded = {}
     all_fallback = []
     for path in files:
-        exercised, fallback_hits = check_fixture(path, known)
-        for sel, sources in exercised.items():
-            all_exercised.setdefault(sel, []).extend(sources)
+        direct, internal, embedded, fallback_hits = check_fixture(path, known)
+        for sel, sources in direct.items():
+            all_direct.setdefault(sel, []).extend(sources)
+        for sel, sources in internal.items():
+            all_internal.setdefault(sel, []).extend(sources)
+        for sel, sources in embedded.items():
+            all_embedded.setdefault(sel, []).extend(sources)
         all_fallback.extend(fallback_hits)
 
-    unexercised = [s for s in known if s not in all_exercised]
+    reached = set(all_direct) | set(all_internal)
+    unreached = [s for s in known if s not in reached]
 
-    print(f"weth selector coverage -- {len(files)} fixture(s) in {fixtures_dir}")
+    def sources_text(sources, limit=3):
+        shown = sources[:limit]
+        extra = len(sources) - len(shown)
+        suffix = f"; +{extra} more" if extra else ""
+        return "; ".join(shown) + suffix
+
+    print(f"weth selector reachability -- {len(files)} fixture(s) in {fixtures_dir}")
     for sel in known:
-        if sel in all_exercised:
-            print(f"  EXERCISED    {sel}  ({'; '.join(all_exercised[sel])})")
+        if sel in all_direct:
+            print(f"  DIRECT       {sel}  ({sources_text(all_direct[sel])})")
+        elif sel in all_internal:
+            print(f"  INTERNAL     {sel}  ({sources_text(all_internal[sel])})")
+        elif sel in all_embedded:
+            print(f"  EMBEDDED     {sel}  uncredited ({sources_text(all_embedded[sel])})")
         else:
-            print(f"  UNEXERCISED  {sel}")
+            print(f"  UNREACHED    {sel}")
     if all_fallback:
-        print(f"  FALLBACK     deposit() (empty calldata)  EXERCISED  "
+        print(f"  FALLBACK     deposit() (empty calldata)  DIRECT  "
               f"({'; '.join(all_fallback)})")
     else:
-        print("  FALLBACK     deposit() (empty calldata)  UNEXERCISED")
+        print("  FALLBACK     deposit() (empty calldata)  UNREACHED")
 
-    violations = sorted(set(unexercised) - budgeted)
-    stale = sorted(budgeted - set(unexercised))
+    violations = sorted(set(unreached) - budgeted)
+    stale = sorted(budgeted - set(unreached))
     for s in stale:
         print(f"WARNING — weth coverage: {s} is listed in "
-              f"{os.path.basename(BUDGET_PATH)} as unexercised but is now "
-              f"exercised -- shrink the budget file")
+              f"{os.path.basename(BUDGET_PATH)} as unreached but is now "
+              f"reached -- shrink the budget file")
 
     if violations:
         for s in violations:
-            print(f"COVERAGE — unexercised selector not in the budget: {s}")
-        print(f"REGRESSION — weth coverage: {len(violations)} unexercised "
+            print(f"COVERAGE — unreached selector not in the budget: {s}")
+        print(f"REGRESSION — weth coverage: {len(violations)} unreached "
               f"selector(s) not accounted for in "
               f"{os.path.basename(BUDGET_PATH)}")
         return 1
 
-    if len(unexercised) > budget_max:
-        print(f"REGRESSION — weth coverage: {len(unexercised)} unexercised "
+    if len(unreached) > budget_max:
+        print(f"REGRESSION — weth coverage: {len(unreached)} unreached "
               f"selector(s) exceeds the declared budget of {budget_max}")
         return 1
 
-    print(f"OK — weth coverage: {len(known) - len(unexercised)}/{len(known)} "
-          f"selectors exercised, {len(unexercised)} unexercised "
-          f"(budget {budget_max}); fallback deposit() "
-          f"{'EXERCISED' if all_fallback else 'UNEXERCISED'}")
+    direct_count = len(set(all_direct))
+    internal_only_count = len(set(all_internal) - set(all_direct))
+    print(f"OK — weth coverage: {len(reached)}/{len(known)} selectors reached "
+          f"({direct_count} direct, {internal_only_count} witnessed internal), "
+          f"{len(unreached)} unreached (budget {budget_max}); fallback "
+          f"deposit() {'DIRECT' if all_fallback else 'UNREACHED'}; "
+          f"{falsifier_count} callsite falsifiers")
     return 0
 
 

@@ -4321,6 +4321,14 @@ lemma of_run_callvalue {e : Sevm} {s s' : Devm} (h : Ninst.Run e s callvalue s')
   simp only [Rinst.run, Rinst.runCore] at run
   exact Devm.pushBurn_of_pushItem run
 
+/-- Value-carrying inversion for `CALLDATASIZE`. -/
+lemma of_run_calldatasize {e : Sevm} {s s' : Devm}
+    (h : Ninst.Run e s calldatasize s') :
+    Devm.PushBurn [e.data.length.toB256] s s' := by
+  rcases of_run_reg h with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  exact Devm.pushBurn_of_pushItem run
+
 lemma of_run_mstore {e : Sevm} {s s' : Devm} (h : Ninst.Run e s mstore s') :
     ∃ x y, Stack.Pop [x, y] s.stack s'.stack := by
   rcases of_run_reg h with ⟨pc, run⟩
@@ -4512,6 +4520,14 @@ lemma of_run_log {e : Sevm} {s s' : Devm} {n : Fin 5} (h : Ninst.Run e s (log n)
 
 lemma of_run_address {e : Sevm} {s s' : Devm} (h : Ninst.Run e s address s') :
     Devm.PushBurn [e.currentTarget.toB256] s s' := by
+  rcases of_run_reg h with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  exact Devm.pushBurn_of_pushItem run
+
+/-- Value-carrying inversion for SELFBALANCE. -/
+lemma of_run_selfbalance {e : Sevm} {s s' : Devm}
+    (h : Ninst.Run e s selfbalance s') :
+    Devm.PushBurn [s.getBal e.currentTarget] s s' := by
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
   exact Devm.pushBurn_of_pushItem run
@@ -5227,6 +5243,19 @@ lemma Rinst.preserves_bal {r} : Rinst.Inv Devm.getBal r := by
     exact congrArg (fun s => s.bal) hf.state
   · have hf := Rinst.run_instructionFrame pc sevm pre r hs ht; rw [hrun] at hf; exact funext hf.getBal
 
+/-- A regular instruction other than the two world-writing stores preserves
+the complete persistent world state.  Specific `Hinv` instances below expose
+the cases needed by WETH10's shared nonpayable entry wrapper. -/
+lemma Rinst.preserves_state {r}
+    (h_not_sstore : r ≠ Rinst.sstore)
+    (h_not_tstore : r ≠ Rinst.tstore) :
+    Rinst.Inv Devm.state r := by
+  intro pc sevm pre post hrun
+  have hf := Rinst.run_instructionFrame pc sevm pre r
+    h_not_sstore h_not_tstore
+  rw [hrun] at hf
+  exact hf.state
+
 lemma memRead_getStor_eq {x n : Nat} {devm devm' : Devm} {value : Bytes}
     (h : devm.memRead x n = ⟨value, devm'⟩) :
     Devm.getStor devm' = Devm.getStor devm := by
@@ -5256,6 +5285,12 @@ instance {ξ : Type} (f : Devm → ξ) (o : Rinst) [Rinst.Hinv f o] :
 ⟩
 
 instance {o : Rinst} : Rinst.Hinv Devm.getBal o := ⟨Rinst.preserves_bal⟩
+
+instance : Rinst.Hinv Devm.state Rinst.callvalue :=
+  ⟨Rinst.preserves_state (by intro h; cases h) (by intro h; cases h)⟩
+
+instance : Rinst.Hinv Devm.state Rinst.iszero :=
+  ⟨Rinst.preserves_state (by intro h; cases h) (by intro h; cases h)⟩
 
 instance {o : Rinst} : Rinst.Hinv Devm.getCode o := ⟨by
   intro pc sevm pre post run
@@ -5543,6 +5578,7 @@ instance : Rinst.Hinv Devm.memory Rinst.caller := by show_hinv_mem_push
 instance : Rinst.Hinv Devm.memory Rinst.callvalue := by show_hinv_mem_push
 instance : Rinst.Hinv Devm.memory Rinst.retdatasize := by show_hinv_mem_push
 instance : Rinst.Hinv Devm.memory Rinst.calldatasize := by show_hinv_mem_push
+instance : Rinst.Hinv Devm.memory Rinst.selfbalance := by show_hinv_mem_push
 
 instance : Rinst.Hinv Devm.memory Rinst.pop := ⟨by
   intro pc sevm pre post run
@@ -5642,6 +5678,446 @@ instance {x} : Ninst.Hinv Devm.memory (Ninst.pushB256 x) :=
 
 instance {xs} {p : xs.length ≤ 32} : Ninst.Hinv Devm.memory (Ninst.push xs p) :=
   ⟨fun h => (Devm.pushBurn_of_run (Ninst.run_push_eq h)).memory⟩
+
+/-! ### What the permit approval tail does to logs and output
+
+Ordinary scratch instructions preserve both fields.  `LOG` is intentionally
+absent from the log instances: its exact append effect is exposed by
+`of_run_log_val` / `of_logWith201_val` below.  These instances are the minimal
+projection seam needed to carry that value-carrying observation across the
+surrounding copy/hash/store instructions.  They live in an opt-in scope so
+unrelated `line_inv` searches do not pay for these additional candidates. -/
+
+namespace LogOutputHinv
+
+syntax "show_hinv_logs_binary" : tactic
+macro_rules
+  | `(tactic| show_hinv_logs_binary) =>
+    `(tactic|
+      refine ⟨?_⟩ <;>
+      intro pc sevm pre post run <;>
+      simp only [Rinst.run, Rinst.runCore] at run <;>
+      exact (Devm.diffBurn_of_applyBinary run).choose_spec.choose_spec.logs)
+
+syntax "show_hinv_output_binary" : tactic
+macro_rules
+  | `(tactic| show_hinv_output_binary) =>
+    `(tactic|
+      refine ⟨?_⟩ <;>
+      intro pc sevm pre post run <;>
+      simp only [Rinst.run, Rinst.runCore] at run <;>
+      exact (Devm.diffBurn_of_applyBinary run).choose_spec.choose_spec.output)
+
+syntax "show_hinv_logs_unary" : tactic
+macro_rules
+  | `(tactic| show_hinv_logs_unary) =>
+    `(tactic|
+      refine ⟨?_⟩ <;>
+      intro pc sevm pre post run <;>
+      simp only [Rinst.run, Rinst.runCore] at run <;>
+      exact (Devm.diffBurn_of_applyUnary run).choose_spec.logs)
+
+syntax "show_hinv_output_unary" : tactic
+macro_rules
+  | `(tactic| show_hinv_output_unary) =>
+    `(tactic|
+      refine ⟨?_⟩ <;>
+      intro pc sevm pre post run <;>
+      simp only [Rinst.run, Rinst.runCore] at run <;>
+      exact (Devm.diffBurn_of_applyUnary run).choose_spec.output)
+
+scoped instance : Rinst.Hinv Devm.logs Rinst.and := by show_hinv_logs_binary
+scoped instance : Rinst.Hinv Devm.logs Rinst.add := by show_hinv_logs_binary
+scoped instance : Rinst.Hinv Devm.logs Rinst.or := by show_hinv_logs_binary
+scoped instance : Rinst.Hinv Devm.logs Rinst.eq := by show_hinv_logs_binary
+scoped instance : Rinst.Hinv Devm.logs Rinst.gt := by show_hinv_logs_binary
+scoped instance : Rinst.Hinv Devm.logs Rinst.lt := by show_hinv_logs_binary
+scoped instance : Rinst.Hinv Devm.logs Rinst.shl := by show_hinv_logs_binary
+scoped instance : Rinst.Hinv Devm.logs Rinst.iszero := by show_hinv_logs_unary
+scoped instance : Rinst.Hinv Devm.logs Rinst.not := by show_hinv_logs_unary
+
+scoped instance : Rinst.Hinv Devm.output Rinst.and := by show_hinv_output_binary
+scoped instance : Rinst.Hinv Devm.output Rinst.add := by show_hinv_output_binary
+scoped instance : Rinst.Hinv Devm.output Rinst.or := by show_hinv_output_binary
+scoped instance : Rinst.Hinv Devm.output Rinst.eq := by show_hinv_output_binary
+scoped instance : Rinst.Hinv Devm.output Rinst.gt := by show_hinv_output_binary
+scoped instance : Rinst.Hinv Devm.output Rinst.lt := by show_hinv_output_binary
+scoped instance : Rinst.Hinv Devm.output Rinst.shl := by show_hinv_output_binary
+scoped instance : Rinst.Hinv Devm.output Rinst.iszero := by show_hinv_output_unary
+scoped instance : Rinst.Hinv Devm.output Rinst.not := by show_hinv_output_unary
+
+scoped instance {x} : Ninst.Hinv Devm.logs (Ninst.pushB256 x) :=
+  ⟨fun h => (Devm.pushBurn_of_run (Ninst.run_push_eq h)).logs⟩
+
+scoped instance {xs} {p : xs.length ≤ 32} : Ninst.Hinv Devm.logs (Ninst.push xs p) :=
+  ⟨fun h => (Devm.pushBurn_of_run (Ninst.run_push_eq h)).logs⟩
+
+scoped instance {n} : Ninst.Hinv Devm.logs (Ninst.dup n) := ⟨by
+  intro e s s' h
+  rcases of_run_dup h with ⟨x, hx, hpb⟩
+  exact hpb.logs⟩
+
+scoped instance {n} : Ninst.Hinv Devm.output (Ninst.dup n) := ⟨by
+  intro e s s' h
+  rcases of_run_dup h with ⟨x, hx, hpb⟩
+  exact hpb.output⟩
+
+scoped instance {x} : Ninst.Hinv Devm.output (Ninst.pushB256 x) :=
+  ⟨fun h => (Devm.pushBurn_of_run (Ninst.run_push_eq h)).output⟩
+
+scoped instance {xs} {p : xs.length ≤ 32} : Ninst.Hinv Devm.output (Ninst.push xs p) :=
+  ⟨fun h => (Devm.pushBurn_of_run (Ninst.run_push_eq h)).output⟩
+
+scoped instance : Rinst.Hinv Devm.logs Rinst.address := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  exact (Devm.pushBurn_of_pushItem run).logs⟩
+
+scoped instance : Rinst.Hinv Devm.output Rinst.address := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  exact (Devm.pushBurn_of_pushItem run).output⟩
+
+scoped instance : Rinst.Hinv Devm.logs Rinst.caller := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  exact (Devm.pushBurn_of_pushItem run).logs⟩
+
+scoped instance : Rinst.Hinv Devm.output Rinst.caller := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  exact (Devm.pushBurn_of_pushItem run).output⟩
+
+scoped instance : Rinst.Hinv Devm.logs Rinst.pop := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨s₁, h1, h2⟩
+  simp only [Functor.mapRev, Functor.map, Except.map] at h1
+  rcases hp : Devm.pop pre with _ | ⟨x, s₂⟩ <;> simp [hp] at h1
+  subst h1
+  exact (Devm.popBurn_of_pop_of_burn (Devm.pop_of_pop hp)
+    (Devm.burn_of_chargeGas h2)).logs⟩
+
+scoped instance : Rinst.Hinv Devm.output Rinst.pop := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨s₁, h1, h2⟩
+  simp only [Functor.mapRev, Functor.map, Except.map] at h1
+  rcases hp : Devm.pop pre with _ | ⟨x, s₂⟩ <;> simp [hp] at h1
+  subst h1
+  exact (Devm.popBurn_of_pop_of_burn (Devm.pop_of_pop hp)
+    (Devm.burn_of_chargeGas h2)).output⟩
+
+scoped instance : Rinst.Hinv Devm.logs Rinst.gas := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨s₁, h1, h2⟩
+  exact (Devm.burn_of_chargeGas h1).logs.trans
+    (Devm.push_of_push h2).logs⟩
+
+scoped instance : Rinst.Hinv Devm.output Rinst.gas := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨s₁, h1, h2⟩
+  exact (Devm.burn_of_chargeGas h1).output.trans
+    (Devm.push_of_push h2).output⟩
+
+scoped instance : Rinst.Hinv Devm.logs Rinst.sload := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨⟨key, s₁⟩, h1, run₁⟩
+  have hp := Devm.pop_of_pop h1
+  split at run₁
+  · rcases Except.bind_eq_ok run₁ with ⟨s₂, h2, h3⟩
+    exact hp.logs.trans
+      ((Devm.burn_of_chargeGas h2).logs.trans (Devm.push_of_push h3).logs)
+  · rcases Except.bind_eq_ok run₁ with ⟨s₂, h2, h3⟩
+    have ha : s₁.logs =
+        (addAccessedStorageKey s₁ sevm.currentTarget key).logs := rfl
+    exact hp.logs.trans (ha.trans
+      ((Devm.burn_of_chargeGas h2).logs.trans (Devm.push_of_push h3).logs))⟩
+
+scoped instance : Rinst.Hinv Devm.output Rinst.sload := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨⟨key, s₁⟩, h1, run₁⟩
+  have hp := Devm.pop_of_pop h1
+  split at run₁
+  · rcases Except.bind_eq_ok run₁ with ⟨s₂, h2, h3⟩
+    exact hp.output.trans
+      ((Devm.burn_of_chargeGas h2).output.trans (Devm.push_of_push h3).output)
+  · rcases Except.bind_eq_ok run₁ with ⟨s₂, h2, h3⟩
+    have ha : s₁.output =
+        (addAccessedStorageKey s₁ sevm.currentTarget key).output := rfl
+    exact hp.output.trans (ha.trans
+      ((Devm.burn_of_chargeGas h2).output.trans (Devm.push_of_push h3).output))⟩
+
+scoped instance : Rinst.Hinv Devm.logs Rinst.extcodesize := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨⟨adr, s₁⟩, h1, run₁⟩
+  rw [Devm.popToAdr_def] at h1
+  dsimp [(· <&> ·), Functor.mapRev, Functor.map, Except.map] at h1
+  rcases hp : Devm.pop pre with _ | ⟨word, d0⟩ <;>
+    simp [hp] at h1
+  rcases h1 with ⟨rfl, rfl⟩
+  have hpop := Devm.pop_of_pop hp
+  split at run₁
+  · rcases Except.bind_eq_ok run₁ with ⟨s₂, h2, h3⟩
+    exact hpop.logs.trans
+      ((Devm.burn_of_chargeGas h2).logs.trans (Devm.push_of_push h3).logs)
+  · rcases Except.bind_eq_ok run₁ with ⟨s₂, h2, h3⟩
+    have ha : d0.logs = (addAccessedAddress d0 word.toAdr).logs := rfl
+    exact hpop.logs.trans (ha.trans
+      ((Devm.burn_of_chargeGas h2).logs.trans (Devm.push_of_push h3).logs))⟩
+
+scoped instance : Rinst.Hinv Devm.output Rinst.extcodesize := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨⟨adr, s₁⟩, h1, run₁⟩
+  rw [Devm.popToAdr_def] at h1
+  dsimp [(· <&> ·), Functor.mapRev, Functor.map, Except.map] at h1
+  rcases hp : Devm.pop pre with _ | ⟨word, d0⟩ <;>
+    simp [hp] at h1
+  rcases h1 with ⟨rfl, rfl⟩
+  have hpop := Devm.pop_of_pop hp
+  split at run₁
+  · rcases Except.bind_eq_ok run₁ with ⟨s₂, h2, h3⟩
+    exact hpop.output.trans
+      ((Devm.burn_of_chargeGas h2).output.trans (Devm.push_of_push h3).output)
+  · rcases Except.bind_eq_ok run₁ with ⟨s₂, h2, h3⟩
+    have ha : d0.output = (addAccessedAddress d0 word.toAdr).output := rfl
+    exact hpop.output.trans (ha.trans
+      ((Devm.burn_of_chargeGas h2).output.trans (Devm.push_of_push h3).output))⟩
+
+scoped instance {n} : Rinst.Hinv Devm.logs (Rinst.swap n) := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨s₁, h1, h2⟩
+  have hb := Devm.burn_of_chargeGas h1
+  split at h2
+  · cases h2
+  · injection h2 with eq
+    rw [hb.logs, ← eq]
+    rfl⟩
+
+scoped instance {n} : Rinst.Hinv Devm.output (Rinst.swap n) := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨s₁, h1, h2⟩
+  have hb := Devm.burn_of_chargeGas h1
+  split at h2
+  · cases h2
+  · injection h2 with eq
+    rw [hb.output, ← eq]
+    rfl⟩
+
+scoped instance : Rinst.Hinv Devm.logs Rinst.calldataload := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨⟨si, s₁⟩, h1, run₁⟩
+  rcases Except.bind_eq_ok run₁ with ⟨s₂, h2, run₂⟩
+  exact ((Devm.pop_of_pop h1).logs.trans
+    (Devm.burn_of_chargeGas h2).logs).trans (Devm.push_of_push run₂).logs⟩
+
+scoped instance : Rinst.Hinv Devm.output Rinst.calldataload := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨⟨si, s₁⟩, h1, run₁⟩
+  rcases Except.bind_eq_ok run₁ with ⟨s₂, h2, run₂⟩
+  exact ((Devm.pop_of_pop h1).output.trans
+    (Devm.burn_of_chargeGas h2).output).trans (Devm.push_of_push run₂).output⟩
+
+scoped instance : Rinst.Hinv Devm.logs Rinst.calldatacopy := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨⟨mi, s₁⟩, h1, run₁⟩
+  rcases Except.bind_eq_ok run₁ with ⟨⟨di, s₂⟩, h2, run₂⟩
+  rcases Except.bind_eq_ok run₂ with ⟨⟨sz, s₃⟩, h3, run₃⟩
+  rcases Except.bind_eq_ok run₃ with ⟨s₄, h4, h5⟩
+  have hp1 := (Devm.pop_of_popToNat h1).choose_spec.logs
+  have hp2 := (Devm.pop_of_popToNat h2).choose_spec.logs
+  have hp3 := (Devm.pop_of_popToNat h3).choose_spec.logs
+  have hb := (Devm.burn_of_chargeGas h4).logs
+  injection h5 with eq
+  rw [← eq]
+  exact ((hp1.trans hp2).trans hp3).trans hb⟩
+
+scoped instance : Rinst.Hinv Devm.output Rinst.calldatacopy := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨⟨mi, s₁⟩, h1, run₁⟩
+  rcases Except.bind_eq_ok run₁ with ⟨⟨di, s₂⟩, h2, run₂⟩
+  rcases Except.bind_eq_ok run₂ with ⟨⟨sz, s₃⟩, h3, run₃⟩
+  rcases Except.bind_eq_ok run₃ with ⟨s₄, h4, h5⟩
+  have hp1 := (Devm.pop_of_popToNat h1).choose_spec.output
+  have hp2 := (Devm.pop_of_popToNat h2).choose_spec.output
+  have hp3 := (Devm.pop_of_popToNat h3).choose_spec.output
+  have hb := (Devm.burn_of_chargeGas h4).output
+  injection h5 with eq
+  rw [← eq]
+  exact ((hp1.trans hp2).trans hp3).trans hb⟩
+
+scoped instance : Rinst.Hinv Devm.logs Rinst.kec := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨⟨mi, s₁⟩, h1, run₁⟩
+  rcases Except.bind_eq_ok run₁ with ⟨⟨sz, s₂⟩, h2, run₂⟩
+  rcases Except.bind_eq_ok run₂ with ⟨s₃, h3, run₃⟩
+  have hp1 := (Devm.pop_of_popToNat h1).choose_spec.logs
+  have hp2 := (Devm.pop_of_popToNat h2).choose_spec.logs
+  have hb := (Devm.burn_of_chargeGas h3).logs
+  have hpush := (Devm.push_of_push run₃).logs
+  exact ((hp1.trans hp2).trans hb).trans hpush⟩
+
+scoped instance : Rinst.Hinv Devm.output Rinst.kec := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨⟨mi, s₁⟩, h1, run₁⟩
+  rcases Except.bind_eq_ok run₁ with ⟨⟨sz, s₂⟩, h2, run₂⟩
+  rcases Except.bind_eq_ok run₂ with ⟨s₃, h3, run₃⟩
+  have hp1 := (Devm.pop_of_popToNat h1).choose_spec.output
+  have hp2 := (Devm.pop_of_popToNat h2).choose_spec.output
+  have hb := (Devm.burn_of_chargeGas h3).output
+  have hpush := (Devm.push_of_push run₃).output
+  exact ((hp1.trans hp2).trans hb).trans hpush⟩
+
+scoped instance : Rinst.Hinv Devm.logs Rinst.mstore := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨⟨mi, s₁⟩, h1, run₁⟩
+  rcases Except.bind_eq_ok run₁ with ⟨⟨value, s₂⟩, h2, run₂⟩
+  rcases Except.bind_eq_ok run₂ with ⟨s₃, h3, h4⟩
+  have hp1 := (Devm.pop_of_popToNat h1).choose_spec.logs
+  have hp2 := (Devm.pop_of_pop h2).logs
+  have hb := (Devm.burn_of_chargeGas h3).logs
+  injection h4 with eq
+  rw [← eq]
+  exact (hp1.trans hp2).trans hb⟩
+
+scoped instance : Rinst.Hinv Devm.output Rinst.mstore := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨⟨mi, s₁⟩, h1, run₁⟩
+  rcases Except.bind_eq_ok run₁ with ⟨⟨value, s₂⟩, h2, run₂⟩
+  rcases Except.bind_eq_ok run₂ with ⟨s₃, h3, h4⟩
+  have hp1 := (Devm.pop_of_popToNat h1).choose_spec.output
+  have hp2 := (Devm.pop_of_pop h2).output
+  have hb := (Devm.burn_of_chargeGas h3).output
+  injection h4 with eq
+  rw [← eq]
+  exact (hp1.trans hp2).trans hb⟩
+
+scoped instance : Rinst.Hinv Devm.logs Rinst.sstore := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨⟨x, s₁⟩, h1, run₁⟩
+  rcases Except.bind_eq_ok run₁ with ⟨⟨y, s₂⟩, h2, run₂⟩
+  rcases Except.bind_eq_ok run₂ with ⟨_, h3, run₃⟩
+  rcases Except.bind_eq_ok run₃ with ⟨⟨s₃, g₂⟩, h4, run₄⟩
+  rcases Except.bind_eq_ok run₄ with ⟨g₃, h5, run₅⟩
+  rcases Except.bind_eq_ok run₅ with ⟨s₄, h6, run₆⟩
+  rcases Except.bind_eq_ok run₆ with ⟨s₅, h7, run₇⟩
+  rcases Except.bind_eq_ok run₇ with ⟨_, h8, h9⟩
+  have l3 : s₂.logs = s₃.logs := by
+    injection h4 with eq
+    split at eq <;> (injection eq with eq _; subst eq; rfl)
+  have l4 : s₃.logs = s₄.logs := by
+    injection h6 with eq
+    rw [← eq]
+    rfl
+  injection h9 with eq
+  rw [← eq]
+  exact ((((Devm.pop_of_pop h1).logs.trans (Devm.pop_of_pop h2).logs).trans
+    l3).trans l4).trans (Devm.burn_of_chargeGas h7).logs⟩
+
+scoped instance : Rinst.Hinv Devm.output Rinst.sstore := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨⟨x, s₁⟩, h1, run₁⟩
+  rcases Except.bind_eq_ok run₁ with ⟨⟨y, s₂⟩, h2, run₂⟩
+  rcases Except.bind_eq_ok run₂ with ⟨_, h3, run₃⟩
+  rcases Except.bind_eq_ok run₃ with ⟨⟨s₃, g₂⟩, h4, run₄⟩
+  rcases Except.bind_eq_ok run₄ with ⟨g₃, h5, run₅⟩
+  rcases Except.bind_eq_ok run₅ with ⟨s₄, h6, run₆⟩
+  rcases Except.bind_eq_ok run₆ with ⟨s₅, h7, run₇⟩
+  rcases Except.bind_eq_ok run₇ with ⟨_, h8, h9⟩
+  have o3 : s₂.output = s₃.output := by
+    injection h4 with eq
+    split at eq <;> (injection eq with eq _; subst eq; rfl)
+  have o4 : s₃.output = s₄.output := by
+    injection h6 with eq
+    rw [← eq]
+    rfl
+  injection h9 with eq
+  rw [← eq]
+  exact ((((Devm.pop_of_pop h1).output.trans (Devm.pop_of_pop h2).output).trans
+    o3).trans o4).trans (Devm.burn_of_chargeGas h7).output⟩
+
+scoped instance {n} : Rinst.Hinv Devm.output (Rinst.log n) := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨⟨mi, s₁⟩, h1, run₁⟩
+  rcases Except.bind_eq_ok run₁ with ⟨⟨sz, s₂⟩, h2, run₂⟩
+  rcases Except.bind_eq_ok run₂ with ⟨⟨topics, s₃⟩, h3, run₃⟩
+  rcases Except.bind_eq_ok run₃ with ⟨s₄, h4, run₄⟩
+  rcases Except.bind_eq_ok run₄ with ⟨_, h5, run₅⟩
+  rcases Devm.pop_of_popToNat h1 with ⟨_, p1⟩
+  rcases Devm.pop_of_popToNat h2 with ⟨_, p2⟩
+  rcases Devm.pop_of_popN h3 with ⟨_, p3⟩
+  have hb := Devm.burn_of_chargeGas h4
+  rcases hmem : Devm.memRead s₄ mi sz with ⟨data, s₅⟩
+  rw [hmem] at run₅
+  injection run₅ with eq
+  have hm : s₄.output = s₅.output := by
+    simp only [Devm.memRead] at hmem
+    rcases hread : s₄.memory.read mi sz with ⟨val, mem⟩
+    rw [hread] at hmem
+    injection hmem with _ hdevm
+    rw [← hdevm]
+    rfl
+  rw [← eq]
+  exact ((((p1.output.trans p2.output).trans p3.output).trans hb.output).trans hm)⟩
+
+scoped instance : Linst.Hinv Devm.logs Devm.logs Linst.stop := by
+  constructor
+  intro e s r h
+  injection h with h_eq
+  subst h_eq
+  rfl
+
+/-- `RETURN` changes output but leaves the accumulated event log untouched. -/
+scoped instance retLogs : Linst.Hinv Devm.logs Devm.logs Linst.ret := by
+  constructor
+  intro e s r h
+  simp only [Linst.Run, Linst.run] at h
+  rcases Except.bind_eq_ok h with ⟨⟨index, s₁⟩, h1, run₁⟩
+  rcases Except.bind_eq_ok run₁ with ⟨⟨size, s₂⟩, h2, run₂⟩
+  rcases Except.bind_eq_ok run₂ with ⟨s₃, h3, run₃⟩
+  rcases Devm.pop_of_popToNat h1 with ⟨_, p1⟩
+  rcases Devm.pop_of_popToNat h2 with ⟨_, p2⟩
+  have hb := Devm.burn_of_chargeGas h3
+  rcases hmem : Devm.memRead s₃ index size with ⟨output, s₄⟩
+  rw [hmem] at run₃
+  injection run₃ with eq
+  have hm : s₃.logs = s₄.logs := by
+    simp only [Devm.memRead] at hmem
+    rcases hread : s₃.memory.read index size with ⟨val, mem⟩
+    rw [hread] at hmem
+    injection hmem with _ hdevm
+    rw [← hdevm]
+    rfl
+  rw [← eq]
+  exact (((p1.logs.trans p2.logs).trans hb.logs).trans hm)
+
+scoped instance : Linst.Hinv Devm.output Devm.output Linst.stop := by
+  constructor
+  intro e s r h
+  injection h with h_eq
+  subst h_eq
+  rfl
+
+end LogOutputHinv
 
 
 /-! ### Dispatch reachability
@@ -5847,6 +6323,195 @@ theorem reach_of_dispatchWith {funcs : List (B256 × Func)} {sig : B256} {f : Fu
     ∃ s', (ws <<+ s'.stack) ∧ s.state = s'.state ∧ s.memory = s'.memory ∧
       Func.Run c e s' f r :=
   reach_of_dispatchWith_build h_sorted (Nat.le_succ _) h_mem h_pfx h_run
+
+/-! ### Dispatch reachability with the event-log frame
+
+Functional contract theorems need the same selected-leaf factorization as
+`reach_of_dispatchWith`, but must also relate events emitted by the selected
+body to the public frame's entry log.  These additive companions carry that
+projection through the dispatcher while preserving the original API above.
+The extra instruction instances are opt-in so unrelated invariant searches do
+not pay for them. -/
+
+section DispatchLogFrame
+
+open scoped LogOutputHinv
+
+lemma reach_of_dispatchWith_leaf_logs {sig w : B256} {f p : Func}
+    {c : List Func} {k : Nat} {e : Sevm} {s r : Devm} {ws : Stack}
+    (h_mem : (sig, f) ∈ [(w, p)])
+    (h_pfx : sig :: ws <<+ s.stack) :
+    Func.Run c e s (dispatchWith k (DispatchTree.leaf w p)) r →
+    ∃ s', (ws <<+ s'.stack) ∧ s.state = s'.state ∧ s.memory = s'.memory ∧
+      s.logs = s'.logs ∧ s.output = s'.output ∧ Func.Run c e s' f r := by
+  have h_eq : (sig, f) = (w, p) := List.mem_singleton.mp h_mem
+  injection h_eq with h_sig h_f
+  subst h_sig; subst h_f
+  func_execute 2; intro h₂
+  have h_pfx1 : (sig =? sig) :: ws <<+ s₁.stack := by generalize_line_prefix
+  rw [show (sig =? sig) = 1 from by simp [B256.eqCheck]] at h_pfx1
+  rcases of_run_branch h₂ with ⟨s₂, h_pop, h_runf⟩ |
+      ⟨v, s₂, s₃, h_ne, h_pop, h_burn, h_runf⟩
+  · exact absurd (popBurn_pref h_pop h_pfx1).left B256.zero_ne_one
+  · rcases popBurn_pref h_pop h_pfx1 with ⟨-, h_pfx2⟩
+    refine ⟨s₃, ?_, ?_, ?_, ?_, ?_, h_runf⟩
+    · rw [← h_burn.stack]; exact h_pfx2
+    · exact (Line.of_inv Devm.state (by line_inv) h₁).trans
+        (h_pop.state.trans h_burn.state)
+    · exact (Line.of_inv Devm.memory (by line_inv) h₁).trans
+        (h_pop.memory.trans h_burn.memory)
+    · exact (Line.of_inv Devm.logs (by line_inv) h₁).trans
+        (h_pop.logs.trans h_burn.logs)
+    · exact (Line.of_inv Devm.output (by line_inv) h₁).trans
+        (h_pop.output.trans h_burn.output)
+
+theorem reach_of_dispatchWith_build_logs :
+    ∀ {n : Nat} {xs : List (B256 × Func)} {sig : B256} {f : Func}
+      {c : List Func} {k : Nat} {e : Sevm} {s r : Devm} {ws : Stack},
+      DispatchTree.sorted xs = true →
+      xs.length ≤ n + 1 →
+      (sig, f) ∈ xs →
+      (sig :: ws <<+ s.stack) →
+      Func.Run c e s (dispatchWith k (DispatchTree.build n xs)) r →
+      ∃ s', (ws <<+ s'.stack) ∧ s.state = s'.state ∧ s.memory = s'.memory ∧
+        s.logs = s'.logs ∧ s.output = s'.output ∧
+          Func.Run c e s' f r := by
+  intro n
+  induction n with
+  | zero =>
+    intro xs sig f c k e s r ws h_sorted h_len h_mem h_pfx
+    rcases xs with _ | ⟨⟨w, p⟩, _ | ⟨y, ys⟩⟩
+    · cases h_mem
+    · exact reach_of_dispatchWith_leaf_logs h_mem h_pfx
+    · intro _; exfalso; simp only [List.length_cons] at h_len; omega
+  | succ n ih =>
+    intro xs sig f c k e s r ws h_sorted h_len h_mem h_pfx
+    rcases xs with _ | ⟨⟨w, p⟩, _ | ⟨y, ys⟩⟩
+    · cases h_mem
+    · exact reach_of_dispatchWith_leaf_logs h_mem h_pfx
+    · simp only [List.length_cons] at h_len
+      have h_take_len :
+          (((w, p) :: y :: ys).take
+            ((((w, p) :: y :: ys).length + 1) / 2)).length ≤ n + 1 := by
+        simp only [List.length_take, List.length_cons]; omega
+      have h_drop_len :
+          (((w, p) :: y :: ys).drop
+            ((((w, p) :: y :: ys).length + 1) / 2)).length ≤ n + 1 := by
+        simp only [List.length_drop, List.length_cons]; omega
+      obtain ⟨z, zs, h_drop⟩ :
+          ∃ z zs, ((w, p) :: y :: ys).drop
+              ((((w, p) :: y :: ys).length + 1) / 2) = z :: zs := by
+        rcases h_d : ((w, p) :: y :: ys).drop
+            ((((w, p) :: y :: ys).length + 1) / 2) with _ | ⟨z, zs⟩
+        · exfalso
+          have h_l := congrArg List.length h_d
+          simp only [List.length_drop, List.length_cons, List.length_nil] at h_l
+          omega
+        · exact ⟨z, zs, rfl⟩
+      have h_sorted_split : DispatchTree.sorted
+          (((w, p) :: y :: ys).take
+              ((((w, p) :: y :: ys).length + 1) / 2) ++
+           ((w, p) :: y :: ys).drop
+              ((((w, p) :: y :: ys).length + 1) / 2)) = true := by
+        rw [List.take_append_drop]; exact h_sorted
+      have h_sorted_take := DispatchTree.sorted_append_left h_sorted_split
+      have h_sorted_drop := DispatchTree.sorted_append_right h_sorted_split
+      have h_mem_split : (sig, f) ∈
+          ((w, p) :: y :: ys).take
+              ((((w, p) :: y :: ys).length + 1) / 2) ∨
+          (sig, f) ∈ ((w, p) :: y :: ys).drop
+              ((((w, p) :: y :: ys).length + 1) / 2) := by
+        apply List.mem_append.mp
+        rw [List.take_append_drop]
+        exact h_mem
+      func_execute 3; intro h₂
+      have h_pfx1 :
+          (leftmostFsig (DispatchTree.build n
+            (((w, p) :: y :: ys).drop
+              ((((w, p) :: y :: ys).length + 1) / 2))) >? sig) ::
+            sig :: ws <<+ s₁.stack := by
+        generalize_line_prefix
+      rw [h_drop, DispatchTree.leftmostFsig_build] at h_pfx1
+      rcases of_run_branch h₂ with ⟨s₂, h_pop, h_run'⟩ |
+          ⟨v, s₂, s₃, h_ne, h_pop, h_burn, h_run'⟩
+      · rcases popBurn_pref h_pop h_pfx1 with ⟨h_flag, h_pfx2⟩
+        have h_le : z.fst ≤ sig := by
+          rw [← B256.not_lt]; intro h_lt
+          have h_gt : z.fst > sig := h_lt
+          rw [B256.gtCheck, if_pos h_gt] at h_flag
+          exact B256.zero_ne_one h_flag
+        have h_mem_drop : (sig, f) ∈
+            ((w, p) :: y :: ys).drop
+                ((((w, p) :: y :: ys).length + 1) / 2) := by
+          rcases h_mem_split with h_in | h_in
+          · exfalso
+            have h_z : z ∈ ((w, p) :: y :: ys).drop
+                ((((w, p) :: y :: ys).length + 1) / 2) := by
+              rw [h_drop]; exact List.mem_cons_self ..
+            have h_lt := DispatchTree.fst_lt_of_sorted_append
+              h_sorted_split h_in h_z
+            have h1 : sig.toNat < z.fst.toNat := B256.toNat_lt_toNat h_lt
+            have h2 : z.fst.toNat ≤ sig.toNat := B256.toNat_le_toNat h_le
+            omega
+          · exact h_in
+        rcases ih h_sorted_drop h_drop_len h_mem_drop h_pfx2 h_run' with
+          ⟨s', h_s', h_st, h_mm, h_logs, h_output, h_rf⟩
+        refine ⟨s', h_s', ?_, ?_, ?_, ?_, h_rf⟩
+        · exact (Line.of_inv Devm.state (by line_inv) h₁).trans
+            (h_pop.state.trans h_st)
+        · exact (Line.of_inv Devm.memory (by line_inv) h₁).trans
+            (h_pop.memory.trans h_mm)
+        · exact (Line.of_inv Devm.logs (by line_inv) h₁).trans
+            (h_pop.logs.trans h_logs)
+        · exact (Line.of_inv Devm.output (by line_inv) h₁).trans
+            (h_pop.output.trans h_output)
+      · rcases popBurn_pref h_pop h_pfx1 with ⟨h_flag, h_pfx2⟩
+        have h_lt : sig < z.fst := by
+          by_contra h_nlt
+          rw [B256.gtCheck, if_neg (fun h_gt => h_nlt h_gt)] at h_flag
+          exact h_ne h_flag
+        have h_mem_take : (sig, f) ∈
+            ((w, p) :: y :: ys).take
+                ((((w, p) :: y :: ys).length + 1) / 2) := by
+          rcases h_mem_split with h_in | h_in
+          · exact h_in
+          · exfalso
+            rw [h_drop] at h_in
+            have h_sorted_zzs : DispatchTree.sorted (z :: zs) = true := by
+              rw [← h_drop]; exact h_sorted_drop
+            have h_le := DispatchTree.fst_le_of_sorted_mem h_sorted_zzs h_in
+            have h1 : z.fst.toNat ≤ sig.toNat := B256.toNat_le_toNat h_le
+            have h2 : sig.toNat < z.fst.toNat := B256.toNat_lt_toNat h_lt
+            omega
+        rw [h_burn.stack] at h_pfx2
+        rcases ih h_sorted_take h_take_len h_mem_take h_pfx2 h_run' with
+          ⟨s', h_s', h_st, h_mm, h_logs, h_output, h_rf⟩
+        refine ⟨s', h_s', ?_, ?_, ?_, ?_, h_rf⟩
+        · exact (Line.of_inv Devm.state (by line_inv) h₁).trans
+            (h_pop.state.trans (h_burn.state.trans h_st))
+        · exact (Line.of_inv Devm.memory (by line_inv) h₁).trans
+            (h_pop.memory.trans (h_burn.memory.trans h_mm))
+        · exact (Line.of_inv Devm.logs (by line_inv) h₁).trans
+            (h_pop.logs.trans (h_burn.logs.trans h_logs))
+        · exact (Line.of_inv Devm.output (by line_inv) h₁).trans
+            (h_pop.output.trans (h_burn.output.trans h_output))
+
+/-- `reach_of_dispatchWith` with the dispatcher-entry log carried to the
+selected body.  The body may append logs afterward; this theorem only states
+that dispatch itself is log-silent. -/
+theorem reach_of_dispatchWith_logs
+    {funcs : List (B256 × Func)} {sig : B256} {f : Func}
+    {c : List Func} {k : Nat} {e : Sevm} {s r : Devm} {ws : Stack}
+    (h_sorted : DispatchTree.sorted funcs = true)
+    (h_mem : (sig, f) ∈ funcs)
+    (h_pfx : sig :: ws <<+ s.stack)
+    (h_run : Func.Run c e s (dispatchWith k (DispatchTree.ofSorted funcs)) r) :
+    ∃ s', (ws <<+ s'.stack) ∧ s.state = s'.state ∧ s.memory = s'.memory ∧
+      s.logs = s'.logs ∧ s.output = s'.output ∧
+        Func.Run c e s' f r :=
+  reach_of_dispatchWith_build_logs h_sorted (Nat.le_succ _) h_mem h_pfx h_run
+
+end DispatchLogFrame
 
 
 /-! ## §1 AdrSet non-membership helpers -/
@@ -8433,6 +9098,57 @@ lemma Mem.Reads.read {μ : Mem} {bs : Bytes} (h : Mem.Reads μ bs) (i n : Nat) :
   rw [Array.sliceD_eq_map, List.sliceD_eq_map]
   exact List.map_congr_left (fun j _ => h (i + j))
 
+/-- Reading back a nonempty byte string immediately after writing it at offset
+zero returns that byte string, independently of the old memory image.  Unlike
+`Mem.Reads.write`, this self-window fact needs no well-formedness premise: each
+branch of `Mem.write` allocates enough backing array for the payload itself. -/
+lemma Mem.read_write_zero (μ : Mem) {ys : Bytes} (hne : ys ≠ []) :
+    ((μ.write 0 ys).read 0 ys.length).1 = ys := by
+  rcases ys with _ | ⟨b, bs⟩
+  · exact absurd rfl hne
+  · simp only [Mem.write]
+    split
+    · split
+      · simp only [Mem.read, Array.sliceD_eq_map]
+        apply List.ext_get
+        · simp
+        · intro n h1 h2
+          simp only [List.length_map, List.length_range] at h1
+          simp only [List.get_eq_getElem, List.getElem_map,
+            List.getElem_range, zero_add]
+          rw [Array.getD_writeD 0 (b :: bs) μ.data 0 n (by omega),
+            if_pos (by omega)]
+          simp [List.getD_eq_getElem?_getD,
+            List.getElem?_eq_getElem h2]
+      · simp only [Mem.read, Array.sliceD_eq_map]
+        apply List.ext_get
+        · simp
+        · intro n h1 h2
+          simp only [List.length_map, List.length_range] at h1
+          simp only [List.get_eq_getElem, List.getElem_map,
+            List.getElem_range, zero_add]
+          rw [Array.getD_writeD 0 (b :: bs)
+            (Array.copyD μ.data (Array.replicate (b :: bs).length 0))
+            0 n (by simp [Array.size_copyD]), if_pos (by omega)]
+          simp [List.getD_eq_getElem?_getD,
+            List.getElem?_eq_getElem h2]
+    · simp only [Mem.read, Array.sliceD_eq_map]
+      apply List.ext_get
+      · simp
+      · intro n h1 h2
+        simp only [List.length_map, List.length_range] at h1
+        simp only [List.get_eq_getElem, List.getElem_map,
+          List.getElem_range, zero_add]
+        rw [Array.getD_writeD 0 (b :: bs)
+          (Array.copyD μ.data
+            (Array.replicate (ceil32 (b :: bs).length) 0))
+          0 n (by
+            rw [Array.size_copyD, Array.size_replicate]
+            simpa using Nat.le_ceil32 (b :: bs).length),
+          if_pos (by omega)]
+        simp [List.getD_eq_getElem?_getD,
+          List.getElem?_eq_getElem h2]
+
 /-! ### What memory a written instruction writes
 
 The `Hinv Devm.memory` instance family that carries a memory image across a
@@ -8534,6 +9250,54 @@ lemma of_run_log_mem {e : Sevm} {s s' : Devm} {n : Fin 5}
   rw [← eq]
   show s₅.memory = _
   rw [h_s₅, hmem]
+
+/-- Value-carrying memory companion for `LOG`.  The popped offset/size and
+topics are shared with the stack relation, so fixed-shape fragments can pin the
+exact memory extension without reopening `Rinst.runCore`. -/
+lemma of_run_log_mem_val {e : Sevm} {s s' : Devm} {n : Fin 5}
+    (h : Ninst.Run e s (log n) s') :
+    ∃ mi sz topics,
+      topics.length = n.val ∧
+      Stack.Pop (mi :: sz :: topics) s.stack s'.stack ∧
+      s'.memory = s.memory.extend mi.toNat sz.toNat := by
+  rcases of_run_reg h with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨⟨mi, s₁⟩, h1, run₁⟩
+  rcases Except.bind_eq_ok run₁ with ⟨⟨sz, s₂⟩, h2, run₂⟩
+  rcases Except.bind_eq_ok run₂ with ⟨⟨topics, s₃⟩, h3, run₃⟩
+  rcases Except.bind_eq_ok run₃ with ⟨s₄, h4, run₄⟩
+  rcases Except.bind_eq_ok run₄ with ⟨_, h5, run₅⟩
+  rcases Devm.pop_of_popToNat_val h1 with ⟨x, p1, rfl⟩
+  rcases Devm.pop_of_popToNat_val h2 with ⟨y, p2, rfl⟩
+  rcases Devm.pop_of_popN h3 with ⟨hlen, p3⟩
+  have hb := Devm.burn_of_chargeGas h4
+  rcases hmem : Devm.memRead s₄ x.toNat y.toNat with ⟨data, s₅⟩
+  rw [hmem] at run₅
+  injection run₅ with eq
+  have hpre : s.memory = s₄.memory :=
+    ((p1.memory.trans p2.memory).trans p3.memory).trans hb.memory
+  have hstack : s₅.stack = s₄.stack := by
+    have hs := Devm.memRead_stack s₄ x.toNat y.toNat
+    rw [hmem] at hs
+    exact hs
+  have hmemory : s₅.memory = s₄.memory.extend x.toNat y.toNat := by
+    simp only [Devm.memRead] at hmem
+    rcases hread : s₄.memory.read x.toNat y.toNat with ⟨val, mem⟩
+    rw [hread] at hmem
+    injection hmem with _ hdevm
+    rw [← hdevm]
+    show mem = _
+    have hm : mem = (s₄.memory.read x.toNat y.toNat).2 := by rw [hread]
+    rw [hm]
+    rfl
+  refine ⟨x, y, topics, hlen, ?_, ?_⟩
+  · rw [← eq]
+    show Stack.Pop (x :: y :: topics) s.stack s₅.stack
+    rw [hstack, ← hb.stack]
+    exact (Devm.pop_append p1 (Devm.pop_append p2 p3)).stack
+  · rw [← eq]
+    show s₅.memory = _
+    rw [hmemory, hpre]
 
 /-- `MSTORE` at a *known* stack top: the value-carrying companion of
 `prefix_of_mstore`, with the popped operands pinned to the words the walk
@@ -8751,6 +9515,148 @@ lemma Devm.memRead_fst (d : Devm) (i n : Nat) :
     (d.memRead i n).1 = (d.memory.read i n).1 := by
   unfold Devm.memRead
   rcases d.memory.read i n with ⟨val, mem⟩
+  rfl
+
+/-- Value-carrying inversion for `LOG`: besides the popped stack words, expose
+the exact topics and the log entry appended from the pre-instruction memory.
+
+The earlier `of_run_log` is intentionally the value-forgetting stack theorem;
+this companion is the shared seam used by contract proofs that specify events
+as part of their public behavior. -/
+lemma of_run_log_val {e : Sevm} {s s' : Devm} {n : Fin 5}
+    (h : Ninst.Run e s (log n) s') :
+    ∃ mi sz topics,
+      topics.length = n.val ∧
+      Stack.Pop (mi :: sz :: topics) s.stack s'.stack ∧
+      s'.logs =
+        s.logs ++
+          [⟨e.currentTarget, topics,
+            (s.memory.read mi.toNat sz.toNat).1⟩] := by
+  rcases of_run_reg h with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨⟨mi, s₁⟩, h1, run₁⟩
+  rcases Except.bind_eq_ok run₁ with ⟨⟨sz, s₂⟩, h2, run₂⟩
+  rcases Except.bind_eq_ok run₂ with ⟨⟨topics, s₃⟩, h3, run₃⟩
+  rcases Except.bind_eq_ok run₃ with ⟨s₄, h4, run₄⟩
+  rcases Except.bind_eq_ok run₄ with ⟨_, h5, run₅⟩
+  rcases Devm.pop_of_popToNat_val h1 with ⟨x, p1, rfl⟩
+  rcases Devm.pop_of_popToNat_val h2 with ⟨y, p2, rfl⟩
+  rcases Devm.pop_of_popN h3 with ⟨h_len, p3⟩
+  have hb := Devm.burn_of_chargeGas h4
+  rcases h_mem : Devm.memRead s₄ x.toNat y.toNat with ⟨data, s₅⟩
+  rw [h_mem] at run₅
+  injection run₅ with eq
+  have h_pre_mem : s.memory = s₄.memory :=
+    ((p1.memory.trans p2.memory).trans p3.memory).trans hb.memory
+  have h_data : data = (s.memory.read x.toNat y.toNat).1 := by
+    have hd := congrArg Prod.fst h_mem
+    simp only [Devm.memRead_fst] at hd
+    rw [h_pre_mem]
+    exact hd.symm
+  have h_mem_logs : s₄.logs = s₅.logs := by
+    simp only [Devm.memRead] at h_mem
+    rcases h_read : s₄.memory.read x.toNat y.toNat with ⟨val, mem⟩
+    rw [h_read] at h_mem
+    injection h_mem with _ h_devm
+    rw [← h_devm]
+    rfl
+  have h_pre_logs : s.logs = s₅.logs :=
+    (((p1.logs.trans p2.logs).trans p3.logs).trans hb.logs).trans h_mem_logs
+  refine ⟨x, y, topics, h_len, ?_, ?_⟩
+  · have hp := (Devm.pop_append p1 (Devm.pop_append p2 p3)).stack
+    rw [← eq]
+    show Stack.Pop (x :: y :: topics) s.stack s₅.stack
+    have h_s₅_stack : s₅.stack = s₄.stack := by
+      simp only [Devm.memRead] at h_mem
+      rcases h_read : s₄.memory.read x.toNat y.toNat with ⟨val, mem⟩
+      rw [h_read] at h_mem
+      injection h_mem with _ h_devm
+      rw [← h_devm]
+      rfl
+    rw [h_s₅_stack, ← hb.stack]
+    exact hp
+  · rw [← eq]
+    show s₅.logs ++ [⟨e.currentTarget, topics, data⟩] =
+      s.logs ++
+        [⟨e.currentTarget, topics, (s.memory.read x.toNat y.toNat).1⟩]
+    rw [← h_pre_logs, h_data]
+
+/-- Exact event effect of the canonical three-topic, one-word log fragment.
+
+`logWith 2 0 1` is the common shape of ERC-20 `Transfer` and `Approval`:
+topic0 plus two indexed addresses, and one ABI word read from memory `[0, 32)`.
+The theorem keeps the existing stack-prefix API while making the appended log
+available to public functional proofs. -/
+lemma of_logWith201_val {e : Sevm} {s s' : Devm}
+    {ev a b : B256} {xs : Stack}
+    (hp : ev :: a :: b :: xs <<+ s.stack)
+    (h : Line.Run e s (logWith 2 0 1) s') :
+    xs <<+ s'.stack ∧
+      s'.logs =
+        s.logs ++ [⟨e.currentTarget, [ev, a, b], (s.memory.read 0 32).1⟩] := by
+  rcases Line.of_run_cons h with ⟨s₁, h32, hrest₁⟩
+  rcases Line.of_run_cons hrest₁ with ⟨s₂, h0, hrest₂⟩
+  rcases Line.of_run_cons hrest₂ with ⟨s₃, hlog, hnil⟩
+  cases hnil
+  have hb32 := of_run_pushB256 h32
+  have hb0 := of_run_pushB256 h0
+  have h32word : (1 * 32 : B256) = 32 := by decide +kernel
+  have h0word : (0 * 32 : B256) = 0 := by decide +kernel
+  rw [h32word] at hb32
+  rw [h0word] at hb0
+  have hp₁ : (32 : B256) :: ev :: a :: b :: xs <<+ s₁.stack := by
+    simpa using prefix_of_push hb32 hp
+  have hp₂ : (0 : B256) :: 32 :: ev :: a :: b :: xs <<+ s₂.stack := by
+    simpa using prefix_of_push hb0 hp₁
+  rcases of_run_log_val hlog with
+    ⟨mi, sz, topics, hlen, hpop, hlogs⟩
+  have hknown : ([0, 32, ev, a, b] : List B256) <<+ s₂.stack := by
+    exact @pref_trans _ [0, 32, ev, a, b]
+      ([0, 32, ev, a, b] ++ xs) _ ⟨xs, rfl⟩ (by simpa using hp₂)
+  have heq : ([0, 32, ev, a, b] : List B256) = mi :: sz :: topics :=
+    List.pref_unique (by simp [hlen]) hknown (pref_of_split hpop)
+  simp only [List.cons.injEq] at heq
+  rcases heq with ⟨rfl, rfl, rfl⟩
+  constructor
+  · exact of_append_pref hpop (by simpa using hp₂)
+  · rw [hlogs, ← hb0.logs, ← hb32.logs, ← hb0.memory, ← hb32.memory]
+    rfl
+
+/-- Exact memory-extension companion for `of_logWith201_val`.
+
+The two setup pushes preserve memory, while `LOG3` reads the single ABI word
+at `[0, 32)` and therefore leaves precisely the memory extension performed by
+that read.  This is kept separate from the event theorem so existing consumers
+of its stable stack/log interface are unaffected. -/
+lemma of_logWith201_mem {e : Sevm} {s s' : Devm}
+    {ev a b : B256} {xs : Stack}
+    (hp : ev :: a :: b :: xs <<+ s.stack)
+    (h : Line.Run e s (logWith 2 0 1) s') :
+    s'.memory = s.memory.extend 0 32 := by
+  rcases Line.of_run_cons h with ⟨s₁, h32, hrest₁⟩
+  rcases Line.of_run_cons hrest₁ with ⟨s₂, h0, hrest₂⟩
+  rcases Line.of_run_cons hrest₂ with ⟨s₃, hlog, hnil⟩
+  cases hnil
+  have hb32 := of_run_pushB256 h32
+  have hb0 := of_run_pushB256 h0
+  have h32word : (1 * 32 : B256) = 32 := by decide +kernel
+  have h0word : (0 * 32 : B256) = 0 := by decide +kernel
+  rw [h32word] at hb32
+  rw [h0word] at hb0
+  have hp₁ : (32 : B256) :: ev :: a :: b :: xs <<+ s₁.stack := by
+    simpa using prefix_of_push hb32 hp
+  have hp₂ : (0 : B256) :: 32 :: ev :: a :: b :: xs <<+ s₂.stack := by
+    simpa using prefix_of_push hb0 hp₁
+  rcases of_run_log_mem_val hlog with
+    ⟨mi, sz, topics, hlen, hpop, hmemory⟩
+  have hknown : ([0, 32, ev, a, b] : List B256) <<+ s₂.stack := by
+    exact @pref_trans _ [0, 32, ev, a, b]
+      ([0, 32, ev, a, b] ++ xs) _ ⟨xs, rfl⟩ (by simpa using hp₂)
+  have heq : ([0, 32, ev, a, b] : List B256) = mi :: sz :: topics :=
+    List.pref_unique (by simp [hlen]) hknown (pref_of_split hpop)
+  simp only [List.cons.injEq] at heq
+  rcases heq with ⟨rfl, rfl, rfl⟩
+  rw [hmemory, ← hb0.memory, ← hb32.memory]
   rfl
 
 /-- `MLOAD` pushes *the word at the offset it popped*, and only extends

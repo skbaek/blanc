@@ -479,6 +479,42 @@
 # median of three sequential quiescent-host measurements: 1.610, 1.640, and
 # 1.630. Lean language-server workers were stopped before all three runs;
 # `--rebase` and `--force` were not used, and no pre-existing row moved.
+#
+# 2026-08-08. The realistic-lender WETH10 closure adds baseline rows for the
+# 18 modules that were still absent here.  Each value is the median of three
+# sequential clean-host `scripts/check-elab.sh --list --no-build` runs after a
+# green full `lake build`; the runs covered the same 48 files and totaled
+# 470.8 s, 466.5 s, and 449.5 s.  Their unique reports are
+# `/private/tmp/weth10-elab-run1.tsv`,
+# `/private/tmp/weth10-elab-run2.tsv`, and
+# `/private/tmp/weth10-elab-run3.tsv`.
+# No language-server contention was reported, and `--rebase` and `--force`
+# were not used.  Twenty-nine pre-existing baseline rows below remain
+# byte-for-byte unchanged.  Blanc/Forward.lean is the sole targeted reset:
+# this candidate materially extends that shared module, and its old 4.829 s
+# row failed the non-rebasing gate at 10.789 s after measuring
+# 11.154/11.432/10.870 s in the three clean runs.  Its row is therefore set
+# to the 11.154 s median rather than hiding stable source-attributable drift.
+# The 18 new-module measured triples (median last) were:
+#
+#   Weth10 19.767/20.049/19.249 -> 19.767;
+#   Weth10Code 13.609/13.679/13.096 -> 13.609;
+#   Weth10Deploy 89.228/90.083/85.702 -> 89.228;
+#   Weth10DeployDomainSlices 33.248/31.545/31.729 -> 31.729;
+#   Weth10DeployExec 28.503/28.817/27.752 -> 28.503;
+#   Weth10DeployProof 65.215/62.829/62.251 -> 62.829;
+#   Weth10DeployUpperSlices 47.407/44.586/44.974 -> 44.974;
+#   Weth10Erc677Functional 1.805/1.679/1.652 -> 1.679;
+#   Weth10Errors 2.427/2.238/2.231 -> 2.238;
+#   Weth10FlashFunctional 2.503/2.346/2.350 -> 2.350;
+#   Weth10Functional 1.337/1.267/1.260 -> 1.267;
+#   Weth10Live 8.834/8.200/8.162 -> 8.200;
+#   Weth10Permit 14.325/13.471/13.548 -> 13.548;
+#   Weth10Read 1.636/1.521/1.511 -> 1.521;
+#   Weth10Sound 1.385/1.294/1.279 -> 1.294;
+#   Weth10StateFunctional 1.523/1.451/1.452 -> 1.452;
+#   Weth10StateSound 6.419/6.079/5.980 -> 6.079; and
+#   Weth10TransferFunctional 1.929/1.795/1.779 -> 1.795.
 OK	1.241	Blanc.lean
 OK	1.164	Blanc/BalanceAlgebra.lean
 OK	1.257	Blanc/Basic.lean
@@ -499,7 +535,7 @@ OK	1.187	Blanc/Weth10Spec.lean
 OK	3.845	Blanc/WethCode.lean
 OK	1.283	Main.lean
 OK	2.002	Blanc/FlashSpec.lean
-OK	4.829	Blanc/Forward.lean
+OK	11.154	Blanc/Forward.lean
 OK	1.227	Blanc/Reverts.lean
 OK	4.684	Blanc/FmintLive.lean
 OK	5.574	Blanc/FmintReverts.lean
@@ -509,3 +545,21 @@ OK	7.098	Blanc/FmintGas.lean
 OK	1.743	Blanc/ForwardCall.lean
 OK	27.664	Blanc/FmintSettles.lean
 OK	1.630	Blanc/RevertPayload.lean
+OK	19.767	Blanc/Weth10.lean
+OK	13.609	Blanc/Weth10Code.lean
+OK	89.228	Blanc/Weth10Deploy.lean
+OK	31.729	Blanc/Weth10DeployDomainSlices.lean
+OK	28.503	Blanc/Weth10DeployExec.lean
+OK	62.829	Blanc/Weth10DeployProof.lean
+OK	44.974	Blanc/Weth10DeployUpperSlices.lean
+OK	1.679	Blanc/Weth10Erc677Functional.lean
+OK	2.238	Blanc/Weth10Errors.lean
+OK	2.350	Blanc/Weth10FlashFunctional.lean
+OK	1.267	Blanc/Weth10Functional.lean
+OK	8.200	Blanc/Weth10Live.lean
+OK	13.548	Blanc/Weth10Permit.lean
+OK	1.521	Blanc/Weth10Read.lean
+OK	1.294	Blanc/Weth10Sound.lean
+OK	1.452	Blanc/Weth10StateFunctional.lean
+OK	6.079	Blanc/Weth10StateSound.lean
+OK	1.795	Blanc/Weth10TransferFunctional.lean

@@ -435,6 +435,68 @@ def Func.revData (blob : Bytes) : Func :=
 /-- `Func.revData` specialized to ABI `Error(string)` returndata. -/
 def Func.revWith (s : String) : Func := .revData (errorData s)
 
+/-- A constant `Error(string)` reverter has no successful `Func.Run`.
+`Func.Inv` makes the proof independent of the blob's computed word count: a
+hypothetical successful terminal path would identify `True` with `False`. -/
+theorem Func.not_run_revWith {fs : List Func} {sevm : Sevm} {d r : Devm}
+    {reason : String} : ¬ Func.Run fs sevm d (Func.revWith reason) r := by
+  have no_last : ∀ {s r : Devm},
+      ¬ Func.Run fs sevm s (.last .rev) r := by
+    intro s r run
+    cases run with
+    | last h_run =>
+      simp only [Linst.Run, Linst.run] at h_run
+      rcases Except.bind_eq_ok h_run with ⟨v1, h1, h2⟩
+      rcases Except.bind_eq_ok h2 with ⟨v2, h3, h4⟩
+      rcases Except.bind_eq_ok h4 with ⟨v3, h5, h6⟩
+      contradiction
+  have no_stores :
+      ∀ (iws : List (B256 × Nat)) (rest : Func),
+        (∀ {s r : Devm}, ¬ Func.Run fs sevm s rest r) →
+        ∀ {s r : Devm},
+          ¬ Func.Run fs sevm s (prependStoresRev iws rest) r := by
+    intro iws
+    induction iws with
+    | nil =>
+      intro rest h s r run
+      exact h run
+    | cons iw iws ih =>
+      intro rest h
+      simp only [prependStoresRev]
+      apply ih
+      intro s r run
+      unfold prependStore at run
+      rcases of_run_next run with ⟨s1, h1, run1⟩
+      rcases of_run_next run1 with ⟨s2, h2, run2⟩
+      rcases of_run_next run2 with ⟨s3, h3, run3⟩
+      exact h run3
+  unfold Func.revWith Func.revData
+  apply no_stores
+  intro s r run
+  rcases of_run_next run with ⟨s1, h1, run1⟩
+  rcases of_run_next run1 with ⟨s2, h2, run2⟩
+  exact no_last run2
+
+/-- Revert with the complete returndata from the immediately preceding call.
+
+The second `RETURNDATASIZE` avoids retaining a fourth live stack word across
+`RETURNDATACOPY`; this is also one gas cheaper than saving the length with
+`DUP1`.  A zero-length child revert is therefore the ordinary empty revert. -/
+def Func.revReturnData : Func :=
+  Ninst.retdatasize :::
+  Ninst.pushB256 0 :::
+  Ninst.pushB256 0 :::
+  Ninst.retdatacopy :::
+  Ninst.retdatasize :::
+  Ninst.pushB256 0 :::
+  .last .rev
+
+/-- Exact frame-local cost of `Func.revReturnData` at its entry state. -/
+def revReturnDataCost (devm : Devm) : Nat :=
+  5 * gBase + gVerylow +
+    gReturnDataCopy * ceilDiv devm.returnData.length 32 +
+    devm.extCost [⟨0, devm.returnData.length⟩]
+
 /-! ## Exact-cost store walk -/
 
 /-- The memory-expansion part of an access, exposed at `Mem` altitude. -/
@@ -764,13 +826,152 @@ lemma Func.runCompiledTo_revWith {fs : List Func} {sevm : Sevm}
   simpa only [Func.revWith] using
     Func.runCompiledTo_revData hwf hr halign h_blob h_words h_gas h_room
 
+/-- `revReturnData` copies and reverts with the preceding call's complete
+returndata, with exact gas and final memory.
+
+The length bound is exactly the `B256` round-trip needed by both
+`RETURNDATASIZE` instructions.  The memory-image hypotheses establish that the
+copied window reads back byte-for-byte; alignment makes the final `REVERT`'s
+already-covered window cost zero. -/
+lemma Func.runCompiledTo_revReturnData {fs : List Func} {sevm : Sevm}
+    {devm : Devm} {img : Bytes} {G : Nat}
+    (hwf : Mem.Wf devm.memory) (hr : Mem.Reads devm.memory img)
+    (halign : devm.memory.size % 32 = 0)
+    (h_len : devm.returnData.length < 2 ^ 256)
+    (h_gas : devm.gasLeft = G + revReturnDataCost devm)
+    (h_room : devm.stack.length < 1022) :
+    Func.RunCompiledTo fs sevm devm Func.revReturnData
+      (.error (.revert,
+        (devm.setMach ⟨devm.stack,
+          devm.memory.write 0 devm.returnData, G⟩).withOutput
+            devm.returnData)) := by
+  let n := devm.returnData.length
+  let w := Nat.toB256 n
+  let c := gVerylow + gReturnDataCopy * ceilDiv n 32 +
+    devm.extCost [⟨0, n⟩]
+  let M' := devm.memory.write 0 devm.returnData
+  have hw : w.toNat = n := B256.toNat_toB256_of_lt h_len
+  change Func.RunCompiledTo fs sevm devm
+    (Ninst.retdatasize :::
+      Ninst.pushB256 0 :::
+      Ninst.pushB256 0 :::
+      Ninst.retdatacopy :::
+      Ninst.retdatasize :::
+      Ninst.pushB256 0 :::
+      .last .rev) _
+  refine Func.RunCompiledTo.next
+    (Ninst.runCompiled_pushItem (r := .retdatasize) (x := w)
+      (cost := gBase) (G := G + (4 * gBase + c))
+      (by rintro ⟨⟩) rfl ?_ (by omega)) ?_
+  · unfold revReturnDataCost at h_gas
+    dsimp only [n, c] at h_gas ⊢
+    omega
+  · refine Func.RunCompiledTo.next
+      (Ninst.runCompiled_pushB256 (w := 0) (c := gBase)
+        (G := G + (3 * gBase + c)) pushCost_zero
+        (by simp only [Devm.gasLeft_setMach]; omega)
+        (by simp only [Devm.stack_setMach, List.length_cons]; omega)) ?_
+    simp only [Devm.setMach_setMach]
+    refine Func.RunCompiledTo.next
+      (Ninst.runCompiled_pushB256 (w := 0) (c := gBase)
+        (G := G + (2 * gBase + c)) pushCost_zero
+        (by simp only [Devm.gasLeft_setMach]; omega)
+        (by simp only [Devm.stack_setMach, List.length_cons]; omega)) ?_
+    simp only [Devm.setMach_setMach]
+    refine Func.RunCompiledTo.next
+      (Ninst.runCompiled_retdatacopy_of
+        (di := 0) (ri := 0) (sz := w) (s := devm.stack)
+        (c := c) (G := G + 2 * gBase) (M := M')
+        rfl ?_ ?_ ?_ ?_) ?_
+    · dsimp only [c]
+      simp only [Devm.extCost, Devm.memory_setMach, memExtsSize,
+        B256.toNat_zero, hw]
+    · simp only [n, Devm.returnData_setMach, B256.toNat_zero, hw,
+        Nat.zero_add]
+      exact Nat.le_refl _
+    · dsimp only [M']
+      simp only [Devm.memory_setMach, Devm.returnData_setMach,
+        B256.toNat_zero, hw]
+      rw [show n = devm.returnData.length from rfl]
+      simp only [List.sliceD, List.drop_zero]
+      rw [List.takeD_eq_self (0 : UInt8) rfl]
+    · simp only [Devm.gasLeft_setMach]
+      omega
+    · simp only [Devm.setMach_setMach]
+      refine Func.RunCompiledTo.next
+        (Ninst.runCompiled_pushItem (r := .retdatasize) (x := w)
+          (cost := gBase) (G := G + gBase)
+          (by rintro ⟨⟩) rfl
+          (by simp only [Devm.gasLeft_setMach]; omega)
+          (by simp only [Devm.stack_setMach]; omega)) ?_
+      refine Func.RunCompiledTo.next
+        (Ninst.runCompiled_pushB256 (w := 0) (c := gBase) (G := G)
+          pushCost_zero
+          (by simp only [Devm.gasLeft_setMach])
+          (by simp only [Devm.stack_setMach, List.length_cons]; omega)) ?_
+      simp only [Devm.setMach_setMach]
+      have ha : M'.size % 32 = 0 := by
+        rcases hrd : devm.returnData with _ | ⟨b, bs⟩
+        · simpa [M', hrd, Mem.write] using halign
+        · dsimp only [M']
+          rw [hrd, Mem.size_write_cons]
+          split
+          · exact halign
+          · rw [ceil32_eq_mul]
+            omega
+      have hc : n ≤ M'.size := by
+        rcases hrd : devm.returnData with _ | ⟨b, bs⟩
+        · simp [n, M', hrd]
+        · dsimp only [n, M']
+          rw [hrd, Mem.size_write_cons]
+          split
+          · omega
+          · simpa using Nat.le_ceil32 (b :: bs).length
+      have hext :
+          (devm.setMach
+            ⟨(0 : B256) :: w :: devm.stack, M', G⟩).extCost
+              [⟨0, w.toNat⟩] = 0 := by
+        rw [hw]
+        exact Devm.extCost_zero_of_le ha (by omega)
+      have hreads :
+          Mem.Reads M' (Bytes.writeAt img 0 devm.returnData) := by
+        dsimp only [M']
+        exact Mem.Reads.write hwf hr 0 devm.returnData
+      have hout : (M'.read 0 n).1 = devm.returnData := by
+        dsimp only [n]
+        calc
+          (M'.read 0 devm.returnData.length).1 =
+              (Bytes.writeAt img 0 devm.returnData).sliceD
+                0 devm.returnData.length 0 :=
+            Mem.Reads.read hreads 0 devm.returnData.length
+          _ = devm.returnData :=
+            Bytes.sliceD_writeAt img devm.returnData 0
+      have himg : (M'.read 0 n).2 = M' :=
+        Mem.read_snd_eq_self (memExtSize_of_le ha (by omega))
+      have hread :
+          (devm.setMach ⟨devm.stack, M', G⟩).memRead 0 n =
+            ⟨devm.returnData, devm.setMach ⟨devm.stack, M', G⟩⟩ := by
+        apply Prod.ext hout
+        show (devm.setMach ⟨devm.stack, M', G⟩).withMemory
+            (M'.read 0 n).2 =
+          devm.setMach ⟨devm.stack, M', G⟩
+        rw [himg]
+        apply Devm.eq_of_proj <;> rfl
+      exact Func.runCompiledTo_rev_of
+        (i := 0) (sz := w) (s := devm.stack)
+        (G := G) (e := 0) (out := devm.returnData)
+        (d' := devm.setMach ⟨devm.stack, M', G⟩)
+        rfl hext rfl
+        (by simpa only [hw, B256.toNat_zero, Devm.setMach_setMach,
+          Devm.memory_setMach] using hread)
+
 /-! ## Message-altitude transport -/
 
 /-- **A frame whose code reverts settles with `.revert`, and rolled back.**
 
-The strong-form counterpart of `Blanc/FlashSpec.lean`'s
-`rollback_of_no_success`, stated once over the abstract premise `h_exec` so
-that a target instantiates it in two lines.  Where that theorem takes "no
+The strong-form counterpart of `Blanc/Ladder.lean`'s
+`Blanc.rollback_of_no_success`, stated once over the abstract premise `h_exec`
+so that a target instantiates it in two lines.  Where that theorem takes "no
 successful `Exec` starts here" and concludes `out.error.isSome`, this one takes
 the total function's own equation at the frame's entry machine and concludes
 the error *kind*, plus the output the code chose.

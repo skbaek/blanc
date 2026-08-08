@@ -1195,8 +1195,87 @@ lemma exec_ok_of_handleError {exn : Execution} {evm' : Devm}
   | ok e =>
     simp only [executeCode.handleError] at h; rw [Except.ok.inj h]
 
+/-! ## Frame rollback when no successful execution exists
+
+These contract-neutral transport lemmas connect an `Exec`-level impossibility
+to the enclosing message frame.  They name `msg`'s own frame, not the whole
+transaction; they conclude only that an error is present, not which error; and
+they remain partial-correctness statements because the settled run is a
+hypothesis.  `h_fill` exposes the execution stored by `ProcessMessage`, while
+`h_prec` excludes the precompile entry mode, which has no `Exec` for `h_none`
+to contradict. -/
+
+/-- A filled message frame with no successful interpreted execution settles
+with an error and restores the frame's entry state and transient storage. -/
+theorem rollback_of_no_success {msg : Msg} {benv : Benv} {xl : Xlot} {out : Devm}
+    (h_pm : ProcessMessage msg xl (.ok out))
+    (h_fill : Xlot.Filled xl)
+    (h_bt : msg.benvAfterTransfer = .ok benv)
+    (h_prec : ∀ adr, msg.codeAddress = some adr →
+      ¬ (!msg.disablePrecompiles && decide (benv.stat.rules.isPrecomp adr)) = true)
+    (h_none : ∀ post, Exec 0 (initSevm (msg.withBenv benv))
+        (initDevm (msg.withBenv benv)) (.ok post) → False) :
+    out.error.isSome ∧
+      out.state = msg.benv.state ∧
+      out.transientStorage = msg.tenv.transientStorage := by
+  obtain ⟨r0, hbody, hset⟩ := ProcessMessage.iff_body.mp h_pm
+  unfold FrameBody at hbody
+  rw [h_bt] at hbody
+  rcases r0 with x | evm'
+  · rw [processMessage.settle_error] at hset
+    cases hset
+  unfold processMessage.settle at hset
+  dsimp only [bind, Except.bind] at hset
+  by_cases herr : evm'.error.isSome = true
+  · rw [if_pos herr] at hset
+    have h_err : out.error.isSome = true := by rw [Except.ok.inj hset]; exact herr
+    exact ⟨h_err, ProcessMessage.rollback_of_error h_pm h_err⟩
+  · exfalso
+    rw [if_neg herr] at hset
+    have h_eq : evm' = out := Except.ok.inj hset.symm
+    subst h_eq
+    rcases h_ca : (msg.withBenv benv).codeAddress with _ | adr
+    · obtain ⟨ex', h_xl, h_he⟩ := of_executeCode_noneCode h_ca hbody
+      subst h_xl
+      obtain ⟨exc⟩ := h_fill
+      rw [exec_ok_of_handleError h_he herr] at exc
+      exact h_none _ exc
+    · rcases of_executeCode_someCode h_ca hbody with ⟨h_pre, -, -⟩ | ⟨-, ex', h_xl, h_he⟩
+      · exact h_prec adr h_ca h_pre
+      · subst h_xl
+        obtain ⟨exc⟩ := h_fill
+        rw [exec_ok_of_handleError h_he herr] at exc
+        exact h_none _ exc
+
+/-- Total-function form of `rollback_of_no_success`; the run equation supplies
+both the execution slot and its `Xlot.Filled` witness. -/
+theorem rollback_of_no_success_total {msg : Msg} {benv : Benv} {out : Devm}
+    (h_run : processMessage msg = .ok out)
+    (h_bt : msg.benvAfterTransfer = .ok benv)
+    (h_prec : ∀ adr, msg.codeAddress = some adr →
+      ¬ (!msg.disablePrecompiles && decide (benv.stat.rules.isPrecomp adr)) = true)
+    (h_none : ∀ post, Exec 0 (initSevm (msg.withBenv benv))
+        (initDevm (msg.withBenv benv)) (.ok post) → False) :
+    out.error.isSome ∧
+      out.state = msg.benv.state ∧
+      out.transientStorage = msg.tenv.transientStorage := by
+  obtain ⟨xl, h_fill, h_pm⟩ := of_processMessage msg (.ok out) h_run
+  exact rollback_of_no_success h_pm h_fill h_bt h_prec h_none
+
 lemma accessDelegation_memory {devm : Devm} {adr : Adr} :
     (accessDelegation devm adr).2.2.2.2.memory = devm.memory := by
+  dsimp only [accessDelegation]
+  cases getDelegatedCodeAddress (devm.state.getCode adr) <;> rfl
+
+/-- Delegation resolution may warm an address, but it does not emit logs. -/
+lemma accessDelegation_logs {devm : Devm} {adr : Adr} :
+    (accessDelegation devm adr).2.2.2.2.logs = devm.logs := by
+  dsimp only [accessDelegation]
+  cases getDelegatedCodeAddress (devm.state.getCode adr) <;> rfl
+
+/-- Delegation resolution does not change the enclosing frame's output. -/
+lemma accessDelegation_output {devm : Devm} {adr : Adr} :
+    (accessDelegation devm adr).2.2.2.2.output = devm.output := by
   dsimp only [accessDelegation]
   cases getDelegatedCodeAddress (devm.state.getCode adr) <;> rfl
 
@@ -1276,6 +1355,64 @@ lemma Resume.call_memory {parent child : Devm} {oi os : Nat} {sf : Devm}
   split at h
   · exact key (incorporateChildOnError parent child child.output) rfl 0 h
   · exact key (incorporateChildOnSuccess parent child child.output) rfl 1 h
+
+/-- The CALL-family return path never changes the parent's enclosing output
+field.  Child returndata is installed in `returnData` and copied to memory;
+the outer frame's own output remains untouched. -/
+lemma Resume.call_output {parent child : Devm} {oi os : Nat} {sf : Devm}
+    (h : (Resume.call parent oi os).run (.ok child) = .ok sf) :
+    sf.output = parent.output := by
+  have key : ∀ d : Devm, d.output = parent.output → ∀ v : B256,
+      (Devm.push v d >>= fun d' =>
+        (.ok (d'.memWrite oi (child.output.take os)) : Execution)) = .ok sf →
+      sf.output = parent.output := by
+    intro d hd v hh
+    rcases hp : Devm.push v d with e | evm2 <;> rw [hp] at hh
+    · cases hh
+    · injection hh with hh
+      subst hh
+      have h_push := (Devm.push_of_push hp).output
+      change evm2.output = parent.output
+      rw [← h_push, hd]
+  unfold Resume.run liftToExecution at h
+  dsimp only [bind, Except.bind] at h
+  split at h
+  · exact key (incorporateChildOnError parent child child.output) rfl 0 h
+  · exact key (incorporateChildOnSuccess parent child child.output) rfl 1 h
+
+/-- Exact CALL-family log incorporation.  An errored child contributes no
+logs; a clean child appends its log list to the parent's. -/
+lemma Resume.call_logs {parent child : Devm} {oi os : Nat} {sf : Devm}
+    (h : (Resume.call parent oi os).run (.ok child) = .ok sf) :
+    sf.logs = if child.error.isSome then parent.logs
+      else parent.logs ++ child.logs := by
+  have key : ∀ d : Devm,
+      d.logs = (if child.error.isSome then parent.logs
+        else parent.logs ++ child.logs) → ∀ v : B256,
+      (Devm.push v d >>= fun d' =>
+        (.ok (d'.memWrite oi (child.output.take os)) : Execution)) = .ok sf →
+      sf.logs = if child.error.isSome then parent.logs
+        else parent.logs ++ child.logs := by
+    intro d hd v hh
+    rcases hp : Devm.push v d with e | evm2 <;> rw [hp] at hh
+    · cases hh
+    · injection hh with hh
+      subst hh
+      have h_push := (Devm.push_of_push hp).logs
+      change evm2.logs = if child.error.isSome then parent.logs
+        else parent.logs ++ child.logs
+      rw [← h_push, hd]
+  unfold Resume.run liftToExecution at h
+  dsimp only [bind, Except.bind] at h
+  by_cases herr : child.error.isSome
+  · rw [if_pos herr] at h ⊢
+    simpa [if_pos herr] using
+      key (incorporateChildOnError parent child child.output)
+        (by rw [if_pos herr]; rfl) 0 h
+  · rw [if_neg herr] at h ⊢
+    simpa [if_neg herr] using
+      key (incorporateChildOnSuccess parent child child.output)
+        (by rw [if_neg herr]; rfl) 1 h
 
 /-- The `transientStorage` companion of `Resume.call_state`: on both settled
 paths the CALL-family return installs the child's transient store alongside
@@ -1420,6 +1557,61 @@ lemma of_run_ret_val {fs : List Func} {sevm : Sevm} {s r : Devm} {i n : B256} {x
     rw [← hr, hmem]
     rfl
 
+/-! ### Shared ABI-true return observation -/
+
+/-- A frame returned canonical ABI `true`: one complete word containing `1`. -/
+def AbiReturnsTrue (d : Devm) : Prop :=
+  Devm.output d = (1 : B256).toBytes
+
+/-- `returnTrue` writes `1` to memory word zero and returns that complete word.
+The memory image on entry is arbitrary because the write covers the returned
+window. -/
+lemma of_returnTrue_shared {fs : List Func} {sevm : Sevm} {s r : Devm}
+    {img : Bytes} {xs}
+    (hp : xs <<+ s.stack)
+    (h_wf : Mem.Wf s.memory)
+    (h_reads : Mem.Reads s.memory img)
+    (h : Func.Run fs sevm s returnTrue r) :
+    AbiReturnsTrue r ∧ Devm.getCode s = Devm.getCode r := by
+  simp only [returnTrue] at h
+  rcases of_run_next h with ⟨s1, r1, h⟩
+  have hp1 : (1 : B256) :: xs <<+ s1.stack :=
+    prefix_of_push (of_run_pushB256 r1) hp
+  have hm1 : s.memory = s1.memory :=
+    Ninst.Hinv.inv (f := Devm.memory) r1
+  rcases of_run_prepend (mstoreAt 0) _ h with ⟨s2, h2, h⟩
+  rcases of_run_mstoreAt_val h2 hp1 with ⟨hp2, hm2⟩
+  have hwf2 : Mem.Wf s2.memory := by
+    rw [hm2, ← hm1]
+    exact h_wf.write _ _
+  have hrd2 :
+      Mem.Reads s2.memory (Bytes.writeAt img 0 (1 : B256).toBytes) := by
+    rw [hm2, ← hm1]
+    exact Mem.Reads.write h_wf h_reads 0 _
+  rcases of_run_prepend (pushList [32, 0]) _ h with ⟨s3, h3, h⟩
+  rcases Line.of_run_cons h3 with ⟨u1, q1, h3'⟩
+  rcases Line.of_run_cons h3' with ⟨u2, q2, hnil⟩
+  cases hnil
+  have hu1 : (32 : B256) :: xs <<+ u1.stack :=
+    prefix_of_push (of_run_pushB256 q1) hp2
+  have hu2 : (0 : B256) :: (32 : B256) :: xs <<+ s3.stack :=
+    prefix_of_push (of_run_pushB256 q2) hu1
+  have hm3 : s2.memory = s3.memory :=
+    Line.of_inv Devm.memory (by line_inv) h3
+  have hgc : Devm.getCode s = Devm.getCode s3 :=
+    ((Ninst.Hinv.inv (f := Devm.getCode) r1).trans
+      (Line.of_inv Devm.getCode (by line_inv) h2)).trans
+      (Line.of_inv Devm.getCode (by line_inv) h3)
+  refine ⟨?_, hgc.trans (of_run_ret_val hu2 h).2⟩
+  show Devm.output r = _
+  rw [(of_run_ret_val hu2 h).1,
+    show (0 : B256).toNat = 0 from rfl,
+    show (32 : B256).toNat = 32 from rfl,
+    Mem.Reads.read (hm3 ▸ hrd2) 0 32,
+    show (32 : Nat) = (1 : B256).toBytes.length from
+      (B256.length_toBytes 1).symm,
+    Bytes.sliceD_writeAt]
+
 /-- **The value-carrying `CALL` inversion.**  A successful `call` step whose
 seven operands are known either pushed the failure flag `0` — the depth guard,
 the balance guard, or a child frame that failed, rollback included — **and left
@@ -1460,17 +1652,21 @@ The statement is a disjunction rather than a postcondition because a `CALL`
 that never entered a frame also returns `.ok`: Blanc's compiled callers branch
 on the pushed flag, so a caller holding the success guard dismisses the first
 disjunct with it. -/
-lemma of_run_call_val {sevm : Sevm} {s sf : Devm} {g c v ii is oi os : B256}
+lemma of_run_call_val_with_depth_frame
+    {sevm : Sevm} {s sf : Devm} {g c v ii is oi os : B256}
     {xs : Stack}
     (hp : (g :: c :: v :: ii :: is :: oi :: os :: xs) <<+ s.stack)
     (h_run : Ninst.Run sevm s Ninst.call sf) :
     (((0 : B256) :: xs <<+ sf.stack) ∧ Devm.WorldEq s sf) ∨
     ∃ (parent child : Devm) (xl : Xlot) (dp : Bool) (code : ByteArray)
       (avail : Nat),
+      0 < sevm.depth ∧
       s.stack = g :: c :: v :: ii :: is :: oi :: os :: parent.stack ∧
       parent.state = s.state ∧
       parent.memory
         = s.memory.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)] ∧
+      parent.logs = s.logs ∧
+      parent.output = s.output ∧
       ((getDelegatedCodeAddress (s.getCode c.toAdr) = none ∧
           code = s.getCode c.toAdr ∧ dp = false) ∨
         (∃ d, getDelegatedCodeAddress (s.getCode c.toAdr) = some d ∧
@@ -1585,6 +1781,12 @@ lemma of_run_call_val {sevm : Sevm} {s sf : Devm} {g c v ii is oi os : B256}
       ((f3.transientStorage).trans ((f4.transientStorage).trans
         ((f5.transientStorage).trans
           ((f6.transientStorage).trans f7.transientStorage)))))
+  have h_logs7 : s.logs = devm7.logs :=
+    (f1.logs).trans ((f2.logs).trans ((f3.logs).trans
+      ((f4.logs).trans ((f5.logs).trans ((f6.logs).trans f7.logs)))))
+  have h_output7 : s.output = devm7.output :=
+    (f1.output).trans ((f2.output).trans ((f3.output).trans
+      ((f4.output).trans ((f5.output).trans ((f6.output).trans f7.output)))))
   clear e1 e2 e3 e4 e5 e6 e7 f1 f2 f3 f4 f5 f6 f7
   clear eq1 eq2 eq3 eq4 eq5 eq6 eq7 h_pop2
   -- delegation resolution
@@ -1610,6 +1812,16 @@ lemma of_run_call_val {sevm : Sevm} {s sf : Devm} {g c v ii is oi os : B256}
     have h := congrArg (fun q => (q.2.2.2.2 : Devm).transientStorage) hp11
     dsimp at h
     rw [← h, accessDelegation_transientStorage]
+    rfl
+  have h_logs9 : devm9.logs = devm7.logs := by
+    have h := congrArg (fun q => (q.2.2.2.2 : Devm).logs) hp11
+    dsimp at h
+    rw [← h, accessDelegation_logs]
+    rfl
+  have h_output9 : devm9.output = devm7.output := by
+    have h := congrArg (fun q => (q.2.2.2.2 : Devm).output) hp11
+    dsimp at h
+    rw [← h, accessDelegation_output]
     rfl
   -- the code the child will run, and the delegation disjunction
   have h_gc7 : (addAccessedAddress devm7 c.toAdr).state.getCode c.toAdr
@@ -1644,6 +1856,10 @@ lemma of_run_call_val {sevm : Sevm} {s sf : Devm} {g c v ii is oi os : B256}
   have h_mem10 : devm9.memory = devm10.memory := (Devm.burn_of_chargeGas eq16).memory
   have h_tra10 : devm9.transientStorage = devm10.transientStorage :=
     (Devm.burn_of_chargeGas eq16).transientStorage
+  have h_logs10 : devm9.logs = devm10.logs :=
+    (Devm.burn_of_chargeGas eq16).logs
+  have h_output10 : devm9.output = devm10.output :=
+    (Devm.burn_of_chargeGas eq16).output
   -- static-context assertion
   split at h_run
   case h_1 => cases XStep.run_ofExcept_error h_run
@@ -1772,6 +1988,18 @@ lemma of_run_call_val {sevm : Sevm} {s sf : Devm} {g c v ii is oi os : B256}
           show (devm10.memory).extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]
             = s.memory.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]
           rw [← h_mem10, h_mem9, ← h_mem7]
+        have h_logs_par :
+            ((devm10.memExtends
+              [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).withReturnData
+              []).logs = s.logs := by
+          show devm10.logs = s.logs
+          rw [← h_logs10, h_logs9, ← h_logs7]
+        have h_output_par :
+            ((devm10.memExtends
+              [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).withReturnData
+              []).output = s.output := by
+          show devm10.output = s.output
+          rw [← h_output10, h_output9, ← h_output7]
         -- EIP-150 : the charge went through, so the stipend took the 63/64 form
         obtain ⟨avail, hstip⟩ := calculateMsgCallGas_stipend (chargeGas_le eq16)
         rw [hstip] at run_pm₀
@@ -1787,11 +2015,507 @@ lemma of_run_call_val {sevm : Sevm} {s sf : Devm} {g c v ii is oi os : B256}
         refine ⟨(devm10.memExtends
             [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).withReturnData [],
           child, xl, dp, code0, avail,
-          by rw [e_stack, h_stk_par], h_st_par, h_mem_par, h_del, h_fill,
+          by omega, by rw [e_stack, h_stk_par], h_st_par, h_mem_par,
+          h_logs_par, h_output_par, h_del, h_fill,
           run_pm₀, by simpa using herr, h_split.symm,
           Resume.call_state h_split.symm, Resume.call_returnData h_split.symm,
           Resume.call_memory h_split.symm,
           by rw [Resume.call_stack_flag h_split.symm, if_neg herr]⟩
+
+/-- Compatibility projection of `of_run_call_val_with_depth_frame`.  Existing
+consumers retain the original CALL inversion while log/output-aware consumers
+can use the strengthened frame theorem above. -/
+lemma of_run_call_val_with_depth
+    {sevm : Sevm} {s sf : Devm} {g c v ii is oi os : B256}
+    {xs : Stack}
+    (hp : (g :: c :: v :: ii :: is :: oi :: os :: xs) <<+ s.stack)
+    (h_run : Ninst.Run sevm s Ninst.call sf) :
+    (((0 : B256) :: xs <<+ sf.stack) ∧ Devm.WorldEq s sf) ∨
+    ∃ (parent child : Devm) (xl : Xlot) (dp : Bool) (code : ByteArray)
+      (avail : Nat),
+      0 < sevm.depth ∧
+      s.stack = g :: c :: v :: ii :: is :: oi :: os :: parent.stack ∧
+      parent.state = s.state ∧
+      parent.memory
+        = s.memory.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)] ∧
+      ((getDelegatedCodeAddress (s.getCode c.toAdr) = none ∧
+          code = s.getCode c.toAdr ∧ dp = false) ∨
+        (∃ d, getDelegatedCodeAddress (s.getCode c.toAdr) = some d ∧
+          code = s.getCode d ∧ dp = true)) ∧
+      Xlot.Filled xl ∧
+      ProcessMessage
+        (callMsg sevm parent
+          (min g.toNat (except64th avail)
+            + (if v.toNat = 0 then 0 else gCallStipend))
+          v sevm.currentTarget c.toAdr c.toAdr true false
+          ((s.memory.read ii.toNat is.toNat).1) code dp)
+        xl (.ok child) ∧
+      child.error.isSome = false ∧
+      (Resume.call parent oi.toNat os.toNat).run (.ok child) = .ok sf ∧
+      sf.state = child.state ∧
+      sf.returnData = child.output ∧
+      sf.memory = parent.memory.write oi.toNat (child.output.take os.toNat) ∧
+      sf.stack = (1 : B256) :: parent.stack := by
+  rcases of_run_call_val_with_depth_frame hp h_run with hfail | hsuccess
+  · exact Or.inl hfail
+  · rcases hsuccess with
+      ⟨parent, child, xl, dp, code, avail,
+        hdepth, hstack, hstate, hmemory, hlogs, houtput, hrest⟩
+    exact Or.inr ⟨parent, child, xl, dp, code, avail,
+      hdepth, hstack, hstate, hmemory, hrest⟩
+
+/-- Compatibility projection of `of_run_call_val_with_depth`.  Existing
+consumers that do not need the entered-frame depth fact keep the original API. -/
+lemma of_run_call_val {sevm : Sevm} {s sf : Devm} {g c v ii is oi os : B256}
+    {xs : Stack}
+    (hp : (g :: c :: v :: ii :: is :: oi :: os :: xs) <<+ s.stack)
+    (h_run : Ninst.Run sevm s Ninst.call sf) :
+    (((0 : B256) :: xs <<+ sf.stack) ∧ Devm.WorldEq s sf) ∨
+    ∃ (parent child : Devm) (xl : Xlot) (dp : Bool) (code : ByteArray)
+      (avail : Nat),
+      s.stack = g :: c :: v :: ii :: is :: oi :: os :: parent.stack ∧
+      parent.state = s.state ∧
+      parent.memory
+        = s.memory.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)] ∧
+      ((getDelegatedCodeAddress (s.getCode c.toAdr) = none ∧
+          code = s.getCode c.toAdr ∧ dp = false) ∨
+        (∃ d, getDelegatedCodeAddress (s.getCode c.toAdr) = some d ∧
+          code = s.getCode d ∧ dp = true)) ∧
+      Xlot.Filled xl ∧
+      ProcessMessage
+        (callMsg sevm parent
+          (min g.toNat (except64th avail)
+            + (if v.toNat = 0 then 0 else gCallStipend))
+          v sevm.currentTarget c.toAdr c.toAdr true false
+          ((s.memory.read ii.toNat is.toNat).1) code dp)
+        xl (.ok child) ∧
+      child.error.isSome = false ∧
+      (Resume.call parent oi.toNat os.toNat).run (.ok child) = .ok sf ∧
+      sf.state = child.state ∧
+      sf.returnData = child.output ∧
+      sf.memory = parent.memory.write oi.toNat (child.output.take os.toNat) ∧
+      sf.stack = (1 : B256) :: parent.stack := by
+  rcases of_run_call_val_with_depth hp h_run with h_fail | h_enter
+  · exact Or.inl h_fail
+  · rcases h_enter with ⟨parent, child, xl, dp, code, avail, _, h_enter⟩
+    exact Or.inr ⟨parent, child, xl, dp, code, avail, h_enter⟩
+
+/-- Why a value-carrying `STATICCALL` returned its failure flag.  The depth
+case has no child and therefore empty returndata.  The other case records the
+exact errored child message, including delegation resolution and calldata. -/
+def StatcallFailureCause (sevm : Sevm) (s : Devm)
+    (g t ii is oi os : B256) (out : Bytes) : Prop :=
+  out = [] ∨
+    ∃ (parent child : Devm) (xl : Xlot) (dp : Bool) (code : ByteArray)
+      (avail : Nat),
+      0 < sevm.depth ∧
+      s.stack = g :: t :: ii :: is :: oi :: os :: parent.stack ∧
+      parent.state = s.state ∧
+      parent.memory
+        = s.memory.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)] ∧
+      ((getDelegatedCodeAddress (s.getCode t.toAdr) = none ∧
+          code = s.getCode t.toAdr ∧ dp = false) ∨
+        (∃ d, getDelegatedCodeAddress (s.getCode t.toAdr) = some d ∧
+          code = s.getCode d ∧ dp = true)) ∧
+      Xlot.Filled xl ∧
+      ProcessMessage
+        (callMsg sevm parent (min g.toNat (except64th avail)) 0
+          sevm.currentTarget t.toAdr t.toAdr true true
+          ((s.memory.read ii.toNat is.toNat).1) code dp)
+        xl (.ok child) ∧
+      child.error.isSome = true ∧
+      out = child.output
+
+/-- **The value-carrying `STATICCALL` inversion with failure cause.**  With the six operands
+known, a successful instruction either returned the failure flag `0` while
+restoring the caller's world, or entered/resolved the exact static child
+message and resumed with that child's output as returndata.
+
+The successful-child arm includes synchronous precompiles (`xl = .none`) as
+well as interpreted code.  In particular it does not assume that the target
+has code, that a precompile succeeds, or that the child returns any fixed
+number of bytes. -/
+lemma of_run_statcall_val_with_depth_cause
+    {sevm : Sevm} {s sf : Devm} {g t ii is oi os : B256} {xs : Stack}
+    (hp : (g :: t :: ii :: is :: oi :: os :: xs) <<+ s.stack)
+    (h_run : Ninst.Run sevm s Ninst.statcall sf) :
+    (((0 : B256) :: xs <<+ sf.stack) ∧ Devm.WorldEq s sf ∧
+      ∃ out : Bytes,
+        sf.returnData = out ∧
+        sf.memory = (s.memory.extends
+          [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).write
+            oi.toNat (out.take os.toNat) ∧
+        StatcallFailureCause sevm s g t ii is oi os out) ∨
+    ∃ (parent child : Devm) (xl : Xlot) (dp : Bool) (code : ByteArray)
+      (avail : Nat),
+      0 < sevm.depth ∧
+      s.stack = g :: t :: ii :: is :: oi :: os :: parent.stack ∧
+      parent.state = s.state ∧
+      parent.memory
+        = s.memory.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)] ∧
+      parent.logs = s.logs ∧
+      parent.output = s.output ∧
+      ((getDelegatedCodeAddress (s.getCode t.toAdr) = none ∧
+          code = s.getCode t.toAdr ∧ dp = false) ∨
+        (∃ d, getDelegatedCodeAddress (s.getCode t.toAdr) = some d ∧
+          code = s.getCode d ∧ dp = true)) ∧
+      Xlot.Filled xl ∧
+      ProcessMessage
+        (callMsg sevm parent (min g.toNat (except64th avail)) 0
+          sevm.currentTarget t.toAdr t.toAdr true true
+          ((s.memory.read ii.toNat is.toNat).1) code dp)
+        xl (.ok child) ∧
+      child.error.isSome = false ∧
+      (Resume.call parent oi.toNat os.toNat).run (.ok child) = .ok sf ∧
+      sf.state = child.state ∧
+      sf.returnData = child.output ∧
+      sf.memory = parent.memory.write oi.toNat (child.output.take os.toNat) ∧
+      sf.stack = (1 : B256) :: parent.stack := by
+  rcases h_run with ⟨xl, h_fill, pc, h_run⟩
+  simp only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.step,
+    Bind.bind, Except.bind] at h_run
+  -- pop gas
+  rcases eq1 : Devm.pop s with _ | ⟨gas1, devm1⟩ <;> simp only [eq1] at h_run
+  · cases XStep.run_ofExcept_error h_run
+  have f1 := Devm.pop_of_pop eq1
+  have e1 := f1.stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e1
+  rw [e1] at hp
+  have hv1 : g = gas1 := pref_head_unique hp (pref_append [gas1] devm1.stack)
+  subst hv1
+  replace hp := cons_pref_cons_inv hp
+  -- pop target
+  rcases eq2 : Devm.popToAdr devm1 with _ | ⟨target, devm2⟩ <;>
+    simp only [eq2] at h_run
+  · cases XStep.run_ofExcept_error h_run
+  rcases Devm.pop_of_popToAdr eq2 with ⟨x2, hx2, h_pop2⟩
+  have f2 := Devm.pop_of_pop h_pop2
+  have e2 := f2.stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e2
+  rw [e2] at hp
+  have hv2 : t = x2 := pref_head_unique hp (pref_append [x2] devm2.stack)
+  subst hv2
+  subst hx2
+  replace hp := cons_pref_cons_inv hp
+  -- pop the four indices/sizes
+  rcases eq3 : Devm.popToNat devm2 with _ | ⟨inputIndex, devm3⟩ <;>
+    simp only [eq3] at h_run
+  · cases XStep.run_ofExcept_error h_run
+  rcases Devm.pop_of_popToNat_val eq3 with ⟨x3, f3, hk3⟩
+  have e3 := f3.stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e3
+  rw [e3] at hp
+  have hv3 : ii = x3 := pref_head_unique hp (pref_append [x3] devm3.stack)
+  subst hv3
+  subst hk3
+  replace hp := cons_pref_cons_inv hp
+  rcases eq4 : Devm.popToNat devm3 with _ | ⟨inputSize, devm4⟩ <;>
+    simp only [eq4] at h_run
+  · cases XStep.run_ofExcept_error h_run
+  rcases Devm.pop_of_popToNat_val eq4 with ⟨x4, f4, hk4⟩
+  have e4 := f4.stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e4
+  rw [e4] at hp
+  have hv4 : is = x4 := pref_head_unique hp (pref_append [x4] devm4.stack)
+  subst hv4
+  subst hk4
+  replace hp := cons_pref_cons_inv hp
+  rcases eq5 : Devm.popToNat devm4 with _ | ⟨outputIndex, devm5⟩ <;>
+    simp only [eq5] at h_run
+  · cases XStep.run_ofExcept_error h_run
+  rcases Devm.pop_of_popToNat_val eq5 with ⟨x5, f5, hk5⟩
+  have e5 := f5.stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e5
+  rw [e5] at hp
+  have hv5 : oi = x5 := pref_head_unique hp (pref_append [x5] devm5.stack)
+  subst hv5
+  subst hk5
+  replace hp := cons_pref_cons_inv hp
+  rcases eq6 : Devm.popToNat devm5 with _ | ⟨outputSize, devm6⟩ <;>
+    simp only [eq6] at h_run
+  · cases XStep.run_ofExcept_error h_run
+  rcases Devm.pop_of_popToNat_val eq6 with ⟨x6, f6, hk6⟩
+  have e6 := f6.stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e6
+  rw [e6] at hp
+  have hv6 : os = x6 := pref_head_unique hp (pref_append [x6] devm6.stack)
+  subst hv6
+  subst hk6
+  replace hp := cons_pref_cons_inv hp
+  have e_stack : s.stack = g :: t :: ii :: is :: oi :: os :: devm6.stack := by
+    rw [e1, e2, e3, e4, e5, e6]
+  have h_st6 : s.state = devm6.state :=
+    (f1.state).trans ((f2.state).trans ((f3.state).trans
+      ((f4.state).trans ((f5.state).trans f6.state))))
+  have h_mem6 : s.memory = devm6.memory :=
+    (f1.memory).trans ((f2.memory).trans ((f3.memory).trans
+      ((f4.memory).trans ((f5.memory).trans f6.memory))))
+  have h_tra6 : s.transientStorage = devm6.transientStorage :=
+    (f1.transientStorage).trans ((f2.transientStorage).trans
+      ((f3.transientStorage).trans ((f4.transientStorage).trans
+        ((f5.transientStorage).trans f6.transientStorage))))
+  have h_logs6 : s.logs = devm6.logs :=
+    (f1.logs).trans ((f2.logs).trans ((f3.logs).trans
+      ((f4.logs).trans ((f5.logs).trans f6.logs))))
+  have h_output6 : s.output = devm6.output :=
+    (f1.output).trans ((f2.output).trans ((f3.output).trans
+      ((f4.output).trans ((f5.output).trans f6.output))))
+  clear e1 e2 e3 e4 e5 e6 f1 f2 f3 f4 f5 f6
+  clear eq1 eq2 eq3 eq4 eq5 eq6 h_pop2
+  -- delegation resolution
+  rcases hp10 : accessDelegation (addAccessedAddress devm6 t.toAdr) t.toAdr with
+    ⟨dp, na, code0, dagc, devm8⟩
+  simp only [hp10] at h_run
+  have h_st8 : devm8.state = devm6.state := by
+    have h := congrArg (fun q => (q.2.2.2.2 : Devm).state) hp10
+    dsimp at h
+    rw [← h, accessDelegation_state]
+    rfl
+  have h_stk8 : devm8.stack = devm6.stack := by
+    have h := congrArg (fun q => (q.2.2.2.2 : Devm).stack) hp10
+    dsimp at h
+    rw [← h, accessDelegation_stack]
+    rfl
+  have h_mem8 : devm8.memory = devm6.memory := by
+    have h := congrArg (fun q => (q.2.2.2.2 : Devm).memory) hp10
+    dsimp at h
+    rw [← h, accessDelegation_memory]
+    rfl
+  have h_tra8 : devm8.transientStorage = devm6.transientStorage := by
+    have h := congrArg (fun q => (q.2.2.2.2 : Devm).transientStorage) hp10
+    dsimp at h
+    rw [← h, accessDelegation_transientStorage]
+    rfl
+  have h_logs8 : devm8.logs = devm6.logs := by
+    have h := congrArg (fun q => (q.2.2.2.2 : Devm).logs) hp10
+    dsimp at h
+    rw [← h, accessDelegation_logs]
+    rfl
+  have h_output8 : devm8.output = devm6.output := by
+    have h := congrArg (fun q => (q.2.2.2.2 : Devm).output) hp10
+    dsimp at h
+    rw [← h, accessDelegation_output]
+    rfl
+  have h_gc6 : (addAccessedAddress devm6 t.toAdr).state.getCode t.toAdr
+      = s.getCode t.toAdr := by
+    show devm6.state.getCode t.toAdr = s.getCode t.toAdr
+    rw [← h_st6]
+    rfl
+  have h_del :
+      (getDelegatedCodeAddress (s.getCode t.toAdr) = none ∧
+        code0 = s.getCode t.toAdr ∧ dp = false) ∨
+      (∃ d, getDelegatedCodeAddress (s.getCode t.toAdr) = some d ∧
+        code0 = s.getCode d ∧ dp = true) := by
+    have h_acc := hp10
+    dsimp only [accessDelegation] at h_acc
+    rw [h_gc6] at h_acc
+    rcases hdel : getDelegatedCodeAddress (s.getCode t.toAdr) with _ | d <;>
+      rw [hdel] at h_acc <;>
+      simp only [Prod.mk.injEq] at h_acc
+    · exact Or.inl ⟨rfl, h_acc.2.2.1.symm, h_acc.1.symm⟩
+    · refine Or.inr ⟨d, rfl, ?_, h_acc.1.symm⟩
+      rw [← h_acc.2.2.1]
+      show (addAccessedAddress devm6 t.toAdr).state.getCode d = s.getCode d
+      show devm6.state.getCode d = s.getCode d
+      rw [← h_st6]
+      rfl
+  -- charge the parent-side overhead
+  split at h_run
+  · cases XStep.run_ofExcept_error h_run
+  rename_i devm9 eq14
+  have h_st9 : devm8.state = devm9.state := (Devm.burn_of_chargeGas eq14).state
+  have h_stk9 : devm8.stack = devm9.stack := (Devm.burn_of_chargeGas eq14).stack
+  have h_mem9 : devm8.memory = devm9.memory := (Devm.burn_of_chargeGas eq14).memory
+  have h_tra9 : devm8.transientStorage = devm9.transientStorage :=
+    (Devm.burn_of_chargeGas eq14).transientStorage
+  have h_logs9 : devm8.logs = devm9.logs :=
+    (Devm.burn_of_chargeGas eq14).logs
+  have h_output9 : devm8.output = devm9.output :=
+    (Devm.burn_of_chargeGas eq14).output
+  simp only [genericCall.step] at h_run
+  split at h_run
+  · -- depth limit: no frame opened
+    simp only [Bind.bind, Except.bind] at h_run
+    split at h_run
+    case h_1 => cases XStep.run_ofExcept_error h_run
+    case h_2 =>
+    rename_i devm11 h_push
+    left
+    have h_ex := Except.ok.inj h_run.2
+    rw [h_ex]
+    have h_stk := (Devm.push_of_push h_push).stack
+    refine ⟨?_, ⟨?_, ?_⟩, ?_⟩
+    · show ((0 : B256) :: xs) <<+ devm11.stack
+      rw [h_stk]
+      show ((0 : B256) :: xs) <<+ (0 : B256) ::
+        ((devm9.memExtends
+          [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).withReturnData []).stack
+      show ((0 : B256) :: xs) <<+ (0 : B256) ::
+        (devm9.memExtends
+          [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).stack
+      have h_stk10 :
+          (devm9.memExtends
+            [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).stack
+            = devm6.stack := by
+        show devm9.stack = devm6.stack
+        rw [← h_stk9, h_stk8]
+      rw [h_stk10]
+      exact pref_cons hp
+    · show s.state = devm11.state
+      rw [← (Devm.push_of_push h_push).state]
+      show s.state = devm9.state
+      rw [← h_st9, h_st8, ← h_st6]
+    · show s.transientStorage = devm11.transientStorage
+      rw [← (Devm.push_of_push h_push).transientStorage]
+      show s.transientStorage = devm9.transientStorage
+      rw [← h_tra9, h_tra8, ← h_tra6]
+    · refine ⟨[], ?_, ?_, Or.inl rfl⟩
+      · show devm11.returnData = []
+        exact (Devm.push_of_push h_push).returnData.symm
+      · show devm11.memory =
+          (s.memory.extends
+            [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).write
+              oi.toNat (([] : Bytes).take os.toNat)
+        simp only [List.take_nil]
+        change devm11.memory =
+          s.memory.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]
+        rw [← (Devm.push_of_push h_push).memory]
+        show devm9.memory.extends
+            [(ii.toNat, is.toNat), (oi.toNat, os.toNat)] = _
+        rw [← h_mem9, h_mem8, ← h_mem6]
+  · -- the static child is executed (synchronously for precompiles)
+    rename_i h_depth_ne
+    simp only [XStep.Run] at h_run
+    rcases h_run with ⟨ex', run_pm₀, h_split⟩
+    rcases ex' with err' | child
+    · cases Resume.call_run_error h_split.symm
+    have h_stk_par :
+        ((devm9.memExtends
+          [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).withReturnData []).stack
+          = devm6.stack := by
+      show devm9.stack = devm6.stack
+      rw [← h_stk9, h_stk8]
+    have h_st_par :
+        ((devm9.memExtends
+          [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).withReturnData []).state
+          = s.state := by
+      show devm9.state = s.state
+      rw [← h_st9, h_st8, ← h_st6]
+    have h_tra_par :
+        ((devm9.memExtends
+          [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).withReturnData
+          []).transientStorage = s.transientStorage := by
+      show devm9.transientStorage = s.transientStorage
+      rw [← h_tra9, h_tra8, ← h_tra6]
+    have h_mem_par :
+        ((devm9.memExtends
+          [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).withReturnData
+          []).memory
+          = s.memory.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)] := by
+      show devm9.memory.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]
+        = s.memory.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]
+      rw [← h_mem9, h_mem8, ← h_mem6]
+    have h_logs_par :
+        ((devm9.memExtends
+          [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).withReturnData
+          []).logs = s.logs := by
+      show devm9.logs = s.logs
+      rw [← h_logs9, h_logs8, ← h_logs6]
+    have h_output_par :
+        ((devm9.memExtends
+          [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).withReturnData
+          []).output = s.output := by
+      show devm9.output = s.output
+      rw [← h_output9, h_output8, ← h_output6]
+    obtain ⟨avail, hstip⟩ := calculateMsgCallGas_stipend (chargeGas_le eq14)
+    rw [hstip] at run_pm₀
+    have h_cd : Array.sliceD
+        ((devm9.memExtends
+          [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).withReturnData
+          []).memory.data ii.toNat is.toNat 0
+        = (s.memory.read ii.toNat is.toNat).1 := by
+      rw [h_mem_par]
+      rfl
+    rw [h_cd] at run_pm₀
+    by_cases herr : child.error.isSome
+    · left
+      have h_roll : Devm.WorldEq child
+          ((devm9.memExtends
+            [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).withReturnData []) :=
+        ProcessMessage.rollback_of_error run_pm₀ herr
+      refine ⟨?_, ⟨?_, ?_⟩, ?_⟩
+      · have hsf := Resume.call_stack_flag h_split.symm
+        rw [if_pos herr] at hsf
+        rw [hsf, h_stk_par]
+        exact pref_cons hp
+      · rw [Resume.call_state h_split.symm, h_roll.1, h_st_par]
+      · rw [Resume.call_transientStorage h_split.symm, h_roll.2, h_tra_par]
+      · refine ⟨child.output, Resume.call_returnData h_split.symm, ?_,
+          Or.inr ?_⟩
+        · rw [Resume.call_memory h_split.symm, h_mem_par]
+        · refine ⟨
+            (devm9.memExtends
+              [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).withReturnData [],
+            child, xl, dp, code0, avail,
+            by omega, by rw [e_stack, h_stk_par], h_st_par, h_mem_par,
+            h_del, h_fill, ?_, by simpa using herr, rfl⟩
+          simpa [ProcessMessage] using run_pm₀
+    · right
+      refine ⟨(devm9.memExtends
+          [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).withReturnData [],
+        child, xl, dp, code0, avail,
+        by omega, by rw [e_stack, h_stk_par], h_st_par, h_mem_par,
+        h_logs_par, h_output_par, h_del,
+        h_fill, ?_, by simpa using herr, h_split.symm,
+        Resume.call_state h_split.symm, Resume.call_returnData h_split.symm,
+        Resume.call_memory h_split.symm,
+        by rw [Resume.call_stack_flag h_split.symm, if_neg herr]⟩
+      simpa [ProcessMessage] using run_pm₀
+
+/-- The compatibility projection of `of_run_statcall_val_with_depth_cause`.
+Consumers that only need the flag/world/returndata dichotomy do not have to
+carry the failure-cause witness. -/
+lemma of_run_statcall_val_with_depth
+    {sevm : Sevm} {s sf : Devm} {g t ii is oi os : B256} {xs : Stack}
+    (hp : (g :: t :: ii :: is :: oi :: os :: xs) <<+ s.stack)
+    (h_run : Ninst.Run sevm s Ninst.statcall sf) :
+    (((0 : B256) :: xs <<+ sf.stack) ∧ Devm.WorldEq s sf ∧
+      ∃ out : Bytes,
+        sf.returnData = out ∧
+        sf.memory = (s.memory.extends
+          [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).write
+            oi.toNat (out.take os.toNat)) ∨
+    ∃ (parent child : Devm) (xl : Xlot) (dp : Bool) (code : ByteArray)
+      (avail : Nat),
+      0 < sevm.depth ∧
+      s.stack = g :: t :: ii :: is :: oi :: os :: parent.stack ∧
+      parent.state = s.state ∧
+      parent.memory
+        = s.memory.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)] ∧
+      ((getDelegatedCodeAddress (s.getCode t.toAdr) = none ∧
+          code = s.getCode t.toAdr ∧ dp = false) ∨
+        (∃ d, getDelegatedCodeAddress (s.getCode t.toAdr) = some d ∧
+          code = s.getCode d ∧ dp = true)) ∧
+      Xlot.Filled xl ∧
+      ProcessMessage
+        (callMsg sevm parent (min g.toNat (except64th avail)) 0
+          sevm.currentTarget t.toAdr t.toAdr true true
+          ((s.memory.read ii.toNat is.toNat).1) code dp)
+        xl (.ok child) ∧
+      child.error.isSome = false ∧
+      (Resume.call parent oi.toNat os.toNat).run (.ok child) = .ok sf ∧
+      sf.state = child.state ∧
+      sf.returnData = child.output ∧
+      sf.memory = parent.memory.write oi.toNat (child.output.take os.toNat) ∧
+      sf.stack = (1 : B256) :: parent.stack := by
+  rcases of_run_statcall_val_with_depth_cause hp h_run with hfail | hsuccess
+  · rcases hfail with ⟨hstack, hworld, out, hret, hmem, hcause⟩
+    exact Or.inl ⟨hstack, hworld, out, hret, hmem⟩
+  · rcases hsuccess with
+      ⟨parent, child, xl, dp, code, avail,
+        hdepth, hstack, hstate, hmemory, hlogs, houtput, hrest⟩
+    exact Or.inr ⟨parent, child, xl, dp, code, avail,
+      hdepth, hstack, hstate, hmemory, hrest⟩
 
 /-- The deeper-frame induction hypothesis, as the ladder's consumers use it:
 every successful sub-execution of `p` at `ca` strictly below depth `k` takes
@@ -2694,13 +3418,15 @@ theorem exec_preserves_inv (c : ContractSpec) (ca : Adr) (hp : c.Preserves ca)
 
 /-! ### The dispatcher decomposition of `Sound`
 
-Every Blanc contract written to the dispatch protocol has the same program
-shape — `⟨Func.mainWith k (DispatchTree.ofSorted funcs), aux⟩` — and the
-reasoning that carries a top-level run from the program's entry down to one of
-its dispatch targets is shared in full.  `sound_of_dispatch` does that reasoning
-once: it absorbs the `Prog.Run`/`call 0` unwrap, the `fsig` prefix,
+The plain Blanc dispatch protocol has program shape
+`⟨Func.mainWith k (DispatchTree.ofSorted funcs), aux⟩`; receive-aware contracts
+put one empty-calldata branch in front of that same dispatcher.  The reasoning
+that carries a run from `fsig` down to one of its dispatch targets is shared in
+full by `post_of_run_dispatch`.  `sound_of_dispatch` absorbs the plain
+`Prog.Run`/`call 0` unwrap and `fsig` prefix, while
+`sound_of_receive_dispatch` also absorbs the receive split.  Both reuse
 `dispatchWith_inv`'s two scratch-line side conditions and its tree-shaped
-membership obligation, and leaves a contract with one `FuncSound` obligation per
+membership obligation, and leave a contract with one `FuncSound` obligation per
 entry of its own function *list*, plus one for the fallback at index `k`.
 
 Two notes on the hypotheses, both results rather than bookkeeping:
@@ -2746,6 +3472,51 @@ def FuncSound (c : ContractSpec) (ca : Adr) (aux : List Func) (f : Func) : Prop 
     Func.Run (c.prog.main :: aux) sevm s f r →
     c.Post ca sevm r
 
+/-- The contract-neutral core of dispatcher soundness.  Starting immediately
+after `fsig`, a successful walk through a generated dispatch tree reaches
+either its indexed fallback or one of the listed targets.  Keeping this as a
+run-level theorem lets alternate public ingress shapes (notably a payable
+empty-calldata receive branch) share the exact selector/fallback proof. -/
+theorem post_of_run_dispatch {c : ContractSpec} {ca : Adr} {k : Nat}
+    {funcs : List (B256 × Func)} {aux : List Func} {fallback : Func}
+    (h_ne : funcs ≠ [])
+    (h_fb : (c.prog.main :: aux)[k]? = some fallback)
+    (h_funcs : ∀ p ∈ funcs, FuncSound c ca aux p.2)
+    (h_fall : FuncSound c ca aux fallback)
+    {sevm : Sevm} {s r : Devm}
+    (h_ca : sevm.currentTarget = ca)
+    (h_pre : c.Pre ca sevm s)
+    (h_ih : Exec.InvDepth sevm.depth ca c.prog (c.Pre ca) (c.Post ca))
+    (h_run :
+      Func.Run (c.prog.main :: aux) sevm s
+        (dispatchWith k (DispatchTree.ofSorted funcs)) r) :
+    c.Post ca sevm r := by
+  apply
+    ( @dispatchWith_inv
+        (c.prog.main :: aux) k fallback
+        ( fun e s =>
+            e.currentTarget = ca ∧
+            c.Pre ca e s ∧
+            Exec.InvDepth e.depth ca c.prog (c.Pre ca) (c.Post ca) )
+        (fun e r => c.Post ca e r)
+        ?_ ?_ h_fb ?_ (DispatchTree.ofSorted funcs) ?_
+        sevm s r ⟨h_ca, h_pre, h_ih⟩ h_run )
+  · intro e s x w s' s'' ⟨h_ct, hp, hih⟩ hline hpop
+    refine ⟨h_ct, ?_, hih⟩
+    have h_state : s.state = s'.state :=
+      Line.of_inv Devm.state (by line_inv) hline
+    exact hp.state_eq (hpop.state.symm.trans h_state.symm)
+  · intro e s x w s' s'' ⟨h_ct, hp, hih⟩ hline hpop
+    refine ⟨h_ct, ?_, hih⟩
+    have h_state : s.state = s'.state :=
+      Line.of_inv Devm.state (by line_inv) hline
+    exact hp.state_eq (hpop.state.symm.trans h_state.symm)
+  · intro e s s' r ⟨h_ct, hp, hih⟩ hburn hrun
+    exact h_fall h_ct (hp.state_eq hburn.state.symm) hih hrun
+  · intro e s r wf h_mem ⟨h_ct, hp, hih⟩ hrun
+    exact h_funcs wf (DispatchTree.mem_of_mem_ofSorted h_ne h_mem)
+      h_ct hp hih hrun
+
 /-- `Sound` for a dispatcher-shaped program, reduced to one `FuncSound` per
 dispatch target plus one for the fallback.  `h_fb` locates the fallback at the
 index the generated `Func.call k` uses; at a concrete contract it is `rfl`. -/
@@ -2781,7 +3552,7 @@ theorem sound_of_dispatch {c : ContractSpec} {ca : Adr} {k : Nat}
   cases h_eq
   have h_pre₀ : c.Pre ca sevm s₀ := h_pre.state_eq burn.state.symm
   clear h_pre burn pre
-  rw [h_main] at run h_fb
+  rw [h_main] at run
   -- run off the `fsig` prefix of `Func.mainWith`
   refine run_prepend_elim _ fsig ?_ run
   intro s₁ h₁ run₁
@@ -2791,35 +3562,81 @@ theorem sound_of_dispatch {c : ContractSpec} {ca : Adr} {k : Nat}
       (Line.of_inv Devm.getBal (by line_inv) h₁).symm
       (congrFun (Line.of_inv Devm.getStor (by line_inv) h₁).symm ca)
   clear h_pre₀ h₁ run s₀
-  apply
-    ( @dispatchWith_inv
-        (Func.mainWith k (DispatchTree.ofSorted funcs) :: aux) k fallback
-        ( fun e s =>
-            e.currentTarget = ca ∧
-            c.Pre ca e s ∧
-            Exec.InvDepth e.depth ca c.prog (c.Pre ca) (c.Post ca) )
-        (fun e r => c.Post ca e r)
-        ?_ ?_ h_fb ?_ (DispatchTree.ofSorted funcs) ?_ sevm s₁ post ⟨h_ca, h_pre₁, ih'⟩ run₁ )
-  -- the two scratch-line obligations: the dispatcher's comparisons move the
-  -- stack and nothing else, so the precondition survives unchanged.
-  · intro e s x w s' s'' ⟨h_ct, hp, hih⟩ hrun hpop
-    refine ⟨h_ct, ?_, hih⟩
-    have h_state : s.state = s'.state := Line.of_inv Devm.state (by line_inv) hrun
-    rcases hpop with ⟨_, _, _, _, _, _, _, _, _, _, _, h_pop_state, _⟩
-    exact hp.state_eq (h_pop_state.symm.trans h_state.symm)
-  · intro e s x w s' s'' ⟨h_ct, hp, hih⟩ hrun hpop
-    refine ⟨h_ct, ?_, hih⟩
-    have h_state : s.state = s'.state := Line.of_inv Devm.state (by line_inv) hrun
-    rcases hpop with ⟨_, _, _, _, _, _, _, _, _, _, _, h_pop_state, _⟩
-    exact hp.state_eq (h_pop_state.symm.trans h_state.symm)
-  -- the fallback, reached through one more burn
-  · intro e s s' r ⟨h_ct, hp, hih⟩ hburn hrun
-    rw [h_fs] at hrun
-    exact h_fall h_ct (hp.state_eq hburn.state.symm) hih hrun
-  -- and the dispatch targets, over the contract's list rather than its tree
-  · intro e s r wf h_mem ⟨h_ct, hp, hih⟩ hrun
-    rw [h_fs] at hrun
-    exact h_funcs wf (DispatchTree.mem_of_mem_ofSorted h_ne h_mem) h_ct hp hih hrun
+  rw [h_fs] at run₁
+  exact post_of_run_dispatch h_ne h_fb h_funcs h_fall h_ca h_pre₁ ih' run₁
+
+/-- `Sound` for the receive-aware public ingress used by wrapped-native-token
+contracts.  Empty calldata takes `receive`; nonempty calldata runs the same
+`fsig`/generated-dispatch protocol as `sound_of_dispatch`.  Successful receive,
+fallback, and selector walks are reduced uniformly to `FuncSound`. -/
+theorem sound_of_receive_dispatch {c : ContractSpec} {ca : Adr} {k : Nat}
+    {funcs : List (B256 × Func)} {aux : List Func}
+    {fallback receive : Func}
+    (h_shape : c.prog =
+      ⟨Ninst.calldatasize ::: Ninst.iszero :::
+        (receive <?>
+          (fsig +++ dispatchWith k (DispatchTree.ofSorted funcs))), aux⟩)
+    (h_ne : funcs ≠ [])
+    (h_fb : (c.prog.main :: aux)[k]? = some fallback)
+    (h_funcs : ∀ p ∈ funcs, FuncSound c ca aux p.2)
+    (h_fall : FuncSound c ca aux fallback)
+    (h_receive : FuncSound c ca aux receive) :
+    c.Sound ca := by
+  have h_aux : c.prog.aux = aux := by rw [h_shape]
+  have h_main : c.prog.main =
+      Ninst.calldatasize ::: Ninst.iszero :::
+        (receive <?>
+          (fsig +++ dispatchWith k (DispatchTree.ofSorted funcs))) := by
+    rw [h_shape]
+  have h_ctx :
+      (Ninst.calldatasize ::: Ninst.iszero :::
+        (receive <?>
+          (fsig +++ dispatchWith k (DispatchTree.ofSorted funcs)))) :: aux =
+        c.prog.main :: aux := by
+    rw [h_main]
+  intro sevm pre post run h_ca ih h_pre
+  have ih' : Exec.InvDepth sevm.depth ca c.prog (c.Pre ca) (c.Post ca) := by
+    intro pc' sevm' devm' exn'
+    cases exn'
+    · simp only [ifOk, implies_true]
+    · apply ih
+  clear ih
+  dsimp only [Prog.Run] at run
+  rw [h_aux] at run
+  cases run
+  rename (_ = _) => h_eq
+  rename (Func.Run _ _ _ _ _) => run
+  rename (Devm.Burn _ _) => burn
+  rename Devm => s₀
+  cases h_eq
+  have h_pre₀ : c.Pre ca sevm s₀ := h_pre.state_eq burn.state.symm
+  clear h_pre burn pre
+  rw [h_main] at run
+  refine run_prepend_elim _ [Ninst.calldatasize, Ninst.iszero] ?_ run
+  intro s₁ h₁ run₁
+  have h_pre₁ : c.Pre ca sevm s₁ :=
+    h_pre₀.of_eqs
+      (congrFun (Line.of_inv Devm.getCode (by line_inv) h₁).symm ca)
+      (Line.of_inv Devm.getBal (by line_inv) h₁).symm
+      (congrFun (Line.of_inv Devm.getStor (by line_inv) h₁).symm ca)
+  clear h_pre₀ h₁ run s₀
+  rcases of_run_branch run₁ with
+    ⟨s₂, h_pop, h_dispatch⟩ |
+    ⟨w, s₂, s₃, h_ne_zero, h_pop, h_burn, h_receive_run⟩
+  · rw [h_ctx] at h_dispatch
+    refine run_prepend_elim _ fsig ?_ h_dispatch
+    intro s₃ h_fsig h_dispatch'
+    have h_pre₃ : c.Pre ca sevm s₃ :=
+      (h_pre₁.state_eq h_pop.state.symm).of_eqs
+        (congrFun (Line.of_inv Devm.getCode (by line_inv) h_fsig).symm ca)
+        (Line.of_inv Devm.getBal (by line_inv) h_fsig).symm
+        (congrFun (Line.of_inv Devm.getStor (by line_inv) h_fsig).symm ca)
+    exact post_of_run_dispatch h_ne h_fb h_funcs h_fall
+      h_ca h_pre₃ ih' h_dispatch'
+  · rw [h_ctx] at h_receive_run
+    exact h_receive h_ca
+      (h_pre₁.state_eq (h_burn.state.symm.trans h_pop.state.symm))
+      ih' h_receive_run
 
 
 
@@ -3209,6 +4026,24 @@ theorem preserves_of_dispatch {c : ContractSpec} {ca : Adr}
     (h_fall : c.FuncSound ca aux fallback) :
     c.Preserves ca :=
   c.preserves_inv ca (sound_of_dispatch h_shape h_ne h_fb h_funcs h_fall)
+
+/-- The receive-aware counterpart of `preserves_of_dispatch`.  It adds exactly
+one contract obligation: `FuncSound` for the empty-calldata receive target. -/
+theorem preserves_of_receive_dispatch {c : ContractSpec} {ca : Adr}
+    {k : Nat} {funcs : List (B256 × Func)} {aux : List Func}
+    {fallback receive : Func}
+    (h_shape : c.prog =
+      ⟨Ninst.calldatasize ::: Ninst.iszero :::
+        (receive <?>
+          (fsig +++ dispatchWith k (DispatchTree.ofSorted funcs))), aux⟩)
+    (h_ne : funcs ≠ [])
+    (h_fb : (c.prog.main :: aux)[k]? = some fallback)
+    (h_funcs : ∀ p ∈ funcs, c.FuncSound ca aux p.2)
+    (h_fall : c.FuncSound ca aux fallback)
+    (h_receive : c.FuncSound ca aux receive) :
+    c.Preserves ca :=
+  c.preserves_inv ca
+    (sound_of_receive_dispatch h_shape h_ne h_fb h_funcs h_fall h_receive)
 
 /-- A storage-only invariant's per-target obligation is exactly its
 program-free core: for a spec whose `Side` is trivial and whose `Inv`

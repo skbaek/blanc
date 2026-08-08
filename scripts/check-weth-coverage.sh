@@ -3,9 +3,10 @@
 # 2, ~/plans/weth-evidence.md). Blanc's ten WETH selectors are obtained from
 # `scripts/weth-selectors.json` -- committed, emitted from `Blanc.wethFuncs`
 # by `scripts/gen-weth-selectors.lean`, never retyped here (Fixed design
-# decision 5). This gate decodes every committed fixture's transactions (and
-# any caller prop's embedded calldata) and reports each selector as
-# exercised or not, failing if the unexercised set exceeds the committed,
+# decision 5). This gate decodes every committed fixture's transactions,
+# reports direct entries separately from internal CALLs proven by a changed
+# post-state recorder slot, and labels mere selector-shaped PUSHes as
+# uncredited embedding. It fails if the unreached set exceeds the committed,
 # shrink-only budget in `scripts/weth-coverage-budget.txt`.
 #
 # This gate needs no Lean toolchain and no frozen oracle at runtime -- it
@@ -20,7 +21,7 @@
 # the Step 2 report for exactly this run).
 #
 # CLI contract: exit 0 if and only if the gate passes; output ends with one
-# unambiguous verdict line, after a per-selector exercised/unexercised
+# unambiguous verdict line, after a per-selector evidence-class
 # breakdown.
 
 set -u

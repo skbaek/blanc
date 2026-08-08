@@ -91,6 +91,22 @@ lemma Ninst.runCompiled_exec_doneFrame {sevm : Sevm} {devm : Devm} {x : Xinst}
   rw [h_step]
   exact ⟨r, RunFrame.of_done h_enter, h_res.symm⟩
 
+/-- Forward form of the precompile branch of `Frame.enter`: after a successful
+value-transfer preparation, an enabled precompile answers synchronously and
+there is no child execution slot. -/
+lemma Frame.enter_eq_done_executePrecomp {f : Frame} {benv : Benv} {adr : Adr}
+    (h_bt : f.inner.benvAfterTransfer = .ok benv)
+    (h_ca : (f.inner.withBenv benv).codeAddress = some adr)
+    (h_pre :
+      (!((f.inner.withBenv benv).disablePrecompiles) &&
+        decide ((f.inner.withBenv benv).benv.stat.rules.isPrecomp adr)) = true) :
+    f.enter = .done
+      (f.settle (executePrecomp (initEvm (f.inner.withBenv benv)) adr)) := by
+  unfold Frame.enter
+  rw [h_bt]
+  unfold executeCode.enter
+  simp only [h_ca, h_pre, if_true]
+
 /-- A call-type instruction that never spawns at all: `Xinst.step` itself
 returned `.done`.  The depth-1024 arm below is the case this exists for. -/
 lemma Ninst.runCompiled_exec_done {sevm : Sevm} {devm : Devm} {x : Xinst}
@@ -767,6 +783,84 @@ lemma Xinst.step_call_zero_value {sevm : Sevm} {devm : Devm}
     exact Nat.not_lt.mpr (Nat.zero_le _))]
   rfl
 
+/-! ## `Xinst.step`'s `.statcall` arm
+
+`STATICCALL` has the same six stack operands as the value-zero part of `CALL`,
+but fixes both the transferred value and the child value to zero and marks the
+child message static.  Naming this reduction once is enough for callers that
+resolve through interpreted code and for childless precompile answers alike. -/
+
+/-- The `.statcall` arm reduced to `genericCall.step`, with its delegation,
+access-charge, memory-extension, and EIP-150 computations named by equations. -/
+lemma Xinst.step_statcall {sevm : Sevm} {devm : Devm}
+    {gw tw iiw isw oiw osw : B256} {s : List B256}
+    {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
+    {ext acc mcc mcs : Nat}
+    (h_stk : devm.stack = gw :: tw :: iiw :: isw :: oiw :: osw :: s)
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+      [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
+    (h_del : accessDelegation
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+        tw.toAdr) tw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
+    (h_acc : accessCost tw.toAdr
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+        + dgc = acc)
+    (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc = ⟨mcc, mcs⟩)
+    (h_gas : mcc + ext ≤ d1.gasLeft) :
+    Xinst.step sevm devm .statcall =
+      genericCall.step sevm
+        ((d1.setMach ⟨d1.stack, d1.memory, d1.gasLeft - (mcc + ext)⟩).memExtends
+          [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩])
+        mcs 0 sevm.currentTarget tw.toAdr tw.toAdr true true
+        iiw.toNat isw.toNat oiw.toNat osw.toNat code dp := by
+  subst h_ext
+  subst h_acc
+  show XStep.ofExcept (do
+    let ⟨gas, d⟩ ← devm.pop
+    let ⟨target, d⟩ ← d.popToAdr
+    let ⟨inputIndex, d⟩ ← d.popToNat
+    let ⟨inputSize, d⟩ ← d.popToNat
+    let ⟨outputIndex, d⟩ ← d.popToNat
+    let ⟨outputSize, d⟩ ← d.popToNat
+    let extendCost :=
+      d.extCost [⟨inputIndex, inputSize⟩, ⟨outputIndex, outputSize⟩]
+    let preAccessCost := accessCost target d.accessedAddresses
+    let d := addAccessedAddress d target
+    let ⟨disablePrecompiles, _, code, delegatedAccessGasCost, d⟩ :=
+      accessDelegation d target
+    let accessCost := preAccessCost + delegatedAccessGasCost
+    let ⟨msgCallCost, msgCallStipend⟩ :=
+      calculateMsgCallGas 0 gas.toNat d.gasLeft extendCost accessCost
+    let d ← chargeGas (msgCallCost + extendCost) d
+    let d :=
+      d.memExtends [⟨inputIndex, inputSize⟩, ⟨outputIndex, outputSize⟩]
+    return genericCall.step
+      sevm d msgCallStipend 0 sevm.currentTarget target target true true
+      inputIndex inputSize outputIndex outputSize code disablePrecompiles) = _
+  rw [Devm.pop_eq_ok h_stk]
+  simp only [bind, Except.bind]
+  rw [Devm.popToAdr_eq_ok
+    (devm := devm.setMach ⟨tw :: iiw :: isw :: oiw :: osw :: s,
+      devm.memory, devm.gasLeft⟩) rfl]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
+  rw [Devm.popToNat_eq_ok
+    (devm := devm.setMach ⟨iiw :: isw :: oiw :: osw :: s,
+      devm.memory, devm.gasLeft⟩) rfl]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
+  rw [Devm.popToNat_eq_ok
+    (devm := devm.setMach ⟨isw :: oiw :: osw :: s,
+      devm.memory, devm.gasLeft⟩) rfl]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
+  rw [Devm.popToNat_eq_ok
+    (devm := devm.setMach ⟨oiw :: osw :: s, devm.memory, devm.gasLeft⟩) rfl]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
+  rw [Devm.popToNat_eq_ok
+    (devm := devm.setMach ⟨osw :: s, devm.memory, devm.gasLeft⟩) rfl]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
+  simp only [h_del, h_split]
+  rw [chargeGas_eq_ok (devm := d1) h_gas]
+  rfl
+
 /-! ### The spawned frame, named
 
 Step 2 of the arc has to state what the child starts from, and Step 4's success
@@ -789,6 +883,13 @@ of the parent's own memory. -/
 def callSpawnMsg (sevm : Sevm) (p : Devm) (mcs : Nat) (callee : Adr)
     (ii is : Nat) (code : ByteArray) (dp : Bool) : Msg :=
   callMsg sevm p mcs 0 sevm.currentTarget callee callee true false
+    (p.memory.data.sliceD ii is 0) code dp
+
+/-- The message a `STATICCALL` builds.  It shares `callSpawnParent` with a
+zero-value `CALL`, but the child message is static. -/
+def statcallSpawnMsg (sevm : Sevm) (p : Devm) (mcs : Nat) (target : Adr)
+    (ii is : Nat) (code : ByteArray) (dp : Bool) : Msg :=
+  callMsg sevm p mcs 0 sevm.currentTarget target target true true
     (p.memory.data.sliceD ii is 0) code dp
 
 /-- The `.call` arm all the way to its `.spawn`, at `value = 0` and nonzero
@@ -817,6 +918,34 @@ lemma Xinst.step_call_zero_value_spawn {sevm : Sevm} {devm : Devm}
         (.call (callSpawnParent d1 (mcc + ext)
           iiw.toNat isw.toNat oiw.toNat osw.toNat) oiw.toNat osw.toNat) := by
   rw [Xinst.step_call_zero_value h_stk h_ext h_del h_acc h_split h_gas,
+    genericCall.step_spawn h_depth]
+  rfl
+
+/-- The `.statcall` arm all the way to its spawned static frame. -/
+lemma Xinst.step_statcall_spawn {sevm : Sevm} {devm : Devm}
+    {gw tw iiw isw oiw osw : B256} {s : List B256}
+    {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
+    {ext acc mcc mcs : Nat}
+    (h_stk : devm.stack = gw :: tw :: iiw :: isw :: oiw :: osw :: s)
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+      [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
+    (h_del : accessDelegation
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+        tw.toAdr) tw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
+    (h_acc : accessCost tw.toAdr
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+        + dgc = acc)
+    (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc = ⟨mcc, mcs⟩)
+    (h_gas : mcc + ext ≤ d1.gasLeft) (h_depth : sevm.depth ≠ 0) :
+    Xinst.step sevm devm .statcall =
+      .spawn
+        (Frame.ofCall (statcallSpawnMsg sevm
+          (callSpawnParent d1 (mcc + ext)
+            iiw.toNat isw.toNat oiw.toNat osw.toNat)
+          mcs tw.toAdr iiw.toNat isw.toNat code dp))
+        (.call (callSpawnParent d1 (mcc + ext)
+          iiw.toNat isw.toNat oiw.toNat osw.toNat) oiw.toNat osw.toNat) := by
+  rw [Xinst.step_statcall h_stk h_ext h_del h_acc h_split h_gas,
     genericCall.step_spawn h_depth]
   rfl
 
@@ -860,6 +989,37 @@ lemma Ninst.runCompiled_call_zero_value {sevm : Sevm} {devm : Devm}
   Ninst.runCompiled_exec_run
     (Xinst.step_call_zero_value_spawn h_stk h_ext h_del h_acc h_split h_gas
       h_depth) h_enter h_res
+
+/-- A `STATICCALL` whose frame resolves without entering, packaged as one
+`Ninst.RunCompiled` premise.  Enabled precompiles are the principal consumer:
+their exact answer is already the `.done` result named by `h_enter`. -/
+lemma Ninst.runCompiled_statcall_doneFrame {sevm : Sevm} {devm : Devm}
+    {gw tw iiw isw oiw osw : B256} {s : List B256}
+    {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
+    {ext acc mcc mcs : Nat} {devm' : Devm}
+    {r : Except (EvmError × State × AdrSet × Tra) Devm}
+    (h_stk : devm.stack = gw :: tw :: iiw :: isw :: oiw :: osw :: s)
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+      [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
+    (h_del : accessDelegation
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+        tw.toAdr) tw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
+    (h_acc : accessCost tw.toAdr
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+        + dgc = acc)
+    (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc = ⟨mcc, mcs⟩)
+    (h_gas : mcc + ext ≤ d1.gasLeft) (h_depth : sevm.depth ≠ 0)
+    (h_enter : (Frame.ofCall (statcallSpawnMsg sevm
+      (callSpawnParent d1 (mcc + ext) iiw.toNat isw.toNat oiw.toNat osw.toNat)
+      mcs tw.toAdr iiw.toNat isw.toNat code dp)).enter = .done r)
+    (h_res : Resume.run
+      (.call (callSpawnParent d1 (mcc + ext)
+        iiw.toNat isw.toNat oiw.toNat osw.toNat) oiw.toNat osw.toNat)
+      r = .ok devm') :
+    Ninst.RunCompiled sevm devm (.exec .statcall) devm' :=
+  Ninst.runCompiled_exec_doneFrame
+    (Xinst.step_statcall_spawn h_stk h_ext h_del h_acc h_split h_gas h_depth)
+    h_enter h_res
 
 /-! ## The resume, characterised
 

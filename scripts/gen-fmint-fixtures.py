@@ -2023,10 +2023,10 @@ def case_erc20_views_and_transferFrom():
     (view, through the prober) and `transferFrom` (its own dispatch entry,
     distinct from the internal repayment fragment that never calls it --
     `spendAllowanceThenBurn` is new code, not a call to `transferFrom`).
-    `approve`/`totalSupply`/`balanceOf`/`transfer`/`flashLoan`/
-    `maxFlashLoan`/`flashFee` are all exercised elsewhere in this suite,
-    directly or via an embedded selector in some borrower's own code (the
-    coverage gate's caller-prop scan)."""
+    The reachability gate credits this prober's four calls through its durable
+    recorder slots. It no longer credits `totalSupply`/`balanceOf`/`transfer`
+    merely because their selectors are embedded in branching borrower code;
+    those three remain in the honest coverage budget."""
     trigger_key = 10
     owner_key, spender_key = 11, 12
     owner = derive_address(owner_key)

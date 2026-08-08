@@ -15,6 +15,12 @@
 # pinned, non-vacuous equation. Note what the fmint rows do and do not say:
 # they are *conservation* — the equality `totalSupply = Σ balances` at every
 # observable point — not solvency and not liveness.
+# `Weth10.weth10_compiles` kernel-checks compiler success for every deployment
+# parameter pair, and `Weth10.weth10Code_compile` turns that decision into the
+# universal equation `Prog.compile (weth10 dp) = some (weth10Code dp)`. Together
+# they connect every concrete differential and deployment world to its named
+# member of the runtime-byte family; neither declaration says those bytes run
+# successfully or satisfy a functional contract property.
 #
 # The eight `flashLoan` rows added by Arc C are **partial correctness, not
 # liveness**: `fmint_flashLoan_spec` factors a successful top-level `Exec` that
@@ -51,15 +57,16 @@
 # holds at the resumption point only: at that point the flash mint is still in
 # place — it is undone later by fmint's own revert, which is a different frame.
 #
-# `Fmint.rollback_of_no_success` (Step 3) is the family's core and the arc's
-# headline, stated once over an abstract "no successful `Exec` starts here"
-# premise: such a frame settles with its error flag set and hands back the state
-# and transient storage the message entered with. `..._total` is the same
-# statement off `processMessage msg = .ok out`. Two premises are deliberate and
-# are argued in the source: `Xlot.Filled`, without which the raw result is
-# unconstrained and the clean-success branch cannot be refuted; and an explicit
-# exclusion of the precompile entry mode, where there is no `Exec` to contradict
-# and the conclusion is genuinely false.
+# `rollback_of_no_success` (Step 3) is the family's shared-layer core and the
+# arc's headline, stated once over an abstract "no successful `Exec` starts
+# here" premise: such a frame settles with its error flag set and hands back the
+# state and transient storage the message entered with. `..._total` is the same
+# statement off `processMessage msg = .ok out`. The two `Fmint.*` rows preserve
+# the original API with statement-identical wrappers. Two premises are
+# deliberate and are argued in the source: `Xlot.Filled`, without which the raw
+# result is unconstrained and the clean-success branch cannot be refuted; and an
+# explicit exclusion of the precompile entry mode, where there is no `Exec` to
+# contradict and the conclusion is genuinely false.
 #
 # The remaining seven rows instantiate the core at each `no_success_of_*`
 # corollary, at fmint's own message frame. They inherit those corollaries'
@@ -97,7 +104,13 @@
 # same reason `Func.exec_of_runCompiled_core` is not one: it is the induction
 # the `Prog` row is built from, not a headline.
 #
-# The last four rows are the only ones in this file that assert a contract call
+# The checkpoint-relative row numbers and words such as "last" or "final" in
+# the historical notes below describe the arc tip at which each family landed;
+# they are not claims about the current tail of this now-larger audit. The
+# authoritative current membership and count are the EXPECTED rows themselves.
+#
+# At that checkpoint, the next four rows were the only ones in this file that
+# assert a contract call
 # **succeeds**. Every row above them takes a successful execution as a
 # hypothesis and factors it; `Blanc.Fmint.totalSupply_runCompiled` and
 # `Blanc.weth_balanceOf_runCompiled` construct a gas-exact run from a
@@ -114,7 +127,7 @@
 # it as an address, so the statement is quantified over that word and asserts
 # nothing about what a non-address key means.
 #
-# The last four rows are two more pairs of that same shape, one genre over,
+# The following four rows were two more pairs of that same shape, one genre over,
 # added by `~/plans/error-genre.md` Step 3: `..._runCompiledTo` constructs a
 # gas-exact walk and `fmint_*_reverts` composes it through
 # `Prog.exec_of_runCompiledTo` — but both land on `.error (.revert, post)` with
@@ -138,7 +151,7 @@
 # ONE selector — the dispatch walk decides each fork by evaluating a concrete
 # comparison, so nothing here is quantified over selectors.
 #
-# The final two rows, added by `~/plans/error-genre.md` Step 4, lift that pair
+# The next two rows, added by `~/plans/error-genre.md` Step 4, lift that pair
 # one altitude: from the code frame's `exec` to the frame `processMessage` opens
 # for a `Msg`. `Blanc.rollback_revert_of_exec_revert` is the mechanism,
 # contract-agnostic and stated once — a frame whose code reverts settles with
@@ -210,6 +223,13 @@
 # disjunct, so the conclusion is unchanged and the statement now holds of
 # every `flashLoan` call at that gas. `h_static` stays, and stays a premise
 # about fmint's CALLER. Nothing here is an exhaustiveness claim.
+#
+# Five WETH10 deployment rows pin the public semantic crossing: the exact
+# zero-value constructor walk, successful execution of the actual appended-data
+# initcode, nonzero-value empty rejection, direct creation-message settlement,
+# and its static companion certificate.  The settlement row is deliberately at
+# creation-message altitude; transaction/intrinsic-gas execution remains outside
+# its statement and the separately named top-level figures remain accounting.
 #
 # Each row carries its OWN pinned expected axiom set (see ROWS below), and a
 # theorem's axiom closure must equal its row's set exactly, order-insensitive.
@@ -289,8 +309,113 @@ Blanc.Fmint.settles_with_error_of_allowance_below_amount|$STANDARD
 Blanc.Fmint.settles_with_error_of_balance_below_amount|$STANDARD
 Blanc.wethCode_compile|$STANDARD
 Blanc.fmintCode_compile|$STANDARD
+Blanc.Weth10.weth10_compiles|$STANDARD
+Blanc.Weth10.weth10Code_compile|$STANDARD
+Blanc.Func.compile_eq_emitUnchecked|$STANDARD
+Blanc.Table.compile_eq_emitUnchecked|$STANDARD
+Blanc.Prog.compile_eq_emitUnchecked|$STANDARD
+Blanc.Func.CompileShape.byteSize_compileShape|propext
+Blanc.Func.length_emitByShape|propext
+Blanc.Func.getD_emitByShape|propext
+Blanc.Func.emitByShape_compileShape|propext
+Blanc.Func.CompileShape.locations_compileShapes|propext
+Blanc.Table.emitByShape_compileShapes|propext
+Blanc.Prog.emitByShape_compileShape|propext
+Blanc.Func.exec_of_runCompiled_subcode|$STANDARD
+Blanc.Func.exec_of_runCompiled_prefix|$STANDARD
+Blanc.Func.exec_of_runCompiledTo_subcode|$STANDARD
+Blanc.Func.exec_of_runCompiledTo_prefix|$STANDARD
+Blanc.Rinst.runCore_extcodesize_cold_eq_ok|$STANDARD
+Blanc.Rinst.runCore_extcodesize_warm_eq_ok|$STANDARD
+Blanc.Ninst.runCompiled_extcodesize_cold|$STANDARD
+Blanc.Ninst.runCompiled_extcodesize_warm|$STANDARD
+Blanc.Func.runCompiledTo_revReturnData|$STANDARD
+Blanc.Frame.enter_eq_done_executePrecomp|$STANDARD
+Blanc.Xinst.step_statcall|$STANDARD
+Blanc.Xinst.step_statcall_spawn|$STANDARD
+Blanc.Ninst.runCompiled_statcall_doneFrame|$STANDARD
+Blanc.of_run_call_val_with_depth|$STANDARD
+Blanc.of_run_statcall_val_with_depth_cause|$STANDARD
+Blanc.of_run_statcall_val_with_depth|$STANDARD
+Blanc.Weth10.flashFee_runCompiled|$STANDARD
+Blanc.Weth10.balanceOf_cold_runCompiled|$STANDARD
+Blanc.Weth10.balanceOf_warm_runCompiled|$STANDARD
+Blanc.Weth10.totalSupply_cold_runCompiled|$STANDARD
+Blanc.Weth10.totalSupply_warm_runCompiled|$STANDARD
+Blanc.Weth10.maxFlashLoan_cold_runCompiled|$STANDARD
+Blanc.Weth10.maxFlashLoan_warm_runCompiled|$STANDARD
+Blanc.Weth10.maxFlashLoan_other_runCompiled|$STANDARD
+Blanc.Weth10.name_exec_output|$STANDARD
+Blanc.Weth10.symbol_exec_output|$STANDARD
+Blanc.Weth10.callbackSuccess_exec_output|$STANDARD
+Blanc.Weth10.permitTypehash_exec_output|$STANDARD
+Blanc.Weth10.decimals_exec_output|$STANDARD
+Blanc.Weth10.deploymentChainId_exec_output|$STANDARD
+Blanc.Weth10.domainSeparator_output|$STANDARD
+Blanc.Weth10.domainSeparator_exec_output|$STANDARD
+Blanc.Weth10.balanceOf_exec_output|$STANDARD
+Blanc.Weth10.allowance_exec_output|$STANDARD
+Blanc.Weth10.nonces_exec_output|$STANDARD
+Blanc.Weth10.flashMinted_exec_output|$STANDARD
+Blanc.Weth10.totalSupply_exec_output|$STANDARD
+Blanc.Weth10.maxFlashLoan_exec_output|$STANDARD
+Blanc.Weth10.flashFee_exec_output|$STANDARD
+Blanc.Weth10.approve_exec_effect|$STANDARD
+Blanc.Weth10.depositTo_exec_effect|$STANDARD
+Blanc.Weth10.deposit_exec_effect|$STANDARD
+Blanc.Weth10.receive_exec_effect|$STANDARD
+Blanc.Weth10.permit_exec_success_effect|$STANDARD
+Blanc.Weth10.permit_exec_expired_no_success|$STANDARD
+Blanc.Weth10.permit_exec_invalid_no_success|$STANDARD
+Blanc.Weth10.of_flashLoanSuccessTail|$STANDARD
+Blanc.Weth10.of_flashSettle_allowance|$STANDARD
+Blanc.Weth10.flashBurn_effect|$STANDARD
+Blanc.Weth10.flashLoan_successEffect|$STANDARD
+Blanc.Weth10.weth10_flashLoan_successEffect|$STANDARD
+Blanc.Weth10.weth10_transfer_successEffect|$STANDARD
+Blanc.Weth10.weth10_withdraw_successEffect|$STANDARD
+Blanc.Weth10.weth10_withdrawTo_successEffect|$STANDARD
+Blanc.Weth10.weth10_transferFrom_successEffect|$STANDARD
+Blanc.Weth10.weth10_withdrawFrom_successEffect|$STANDARD
+Blanc.Weth10.of_spendCallerAllowanceThen_effect|$STANDARD
+Blanc.Weth10.transfer_effect_failureOrder|$STANDARD
+Blanc.Weth10.transferFrom_effect_failureOrder|$STANDARD
+Blanc.Weth10.withdrawal_effect_failureOrder|$STANDARD
+Blanc.Weth10.delegatedAllowance_effect_precedence|$STANDARD
+Blanc.Weth10.transferThen_callbackPrefix_effect|$STANDARD
+Blanc.Weth10.callBoolCallback_successEffect|$STANDARD
+Blanc.Weth10.approveAndCall_successEffect|$STANDARD
+Blanc.Weth10.weth10_approveAndCall_successEffect|$STANDARD
+Blanc.Weth10.depositToAndCall_successEffect|$STANDARD
+Blanc.Weth10.weth10_depositToAndCall_successEffect|$STANDARD
+Blanc.Weth10.transferAndCall_successEffect|$STANDARD
+Blanc.Weth10.weth10_transferAndCall_successEffect|$STANDARD
+Blanc.Weth10.erc677_codelessCallback_runCompiledTo|$STANDARD
+Blanc.Weth10.erc677_childRevert_runCompiledTo|$STANDARD
+Blanc.Weth10.erc677_shortReturn_runCompiledTo|$STANDARD
+Blanc.Weth10.lockedErrorGuard_runCompiledTo|$STANDARD
+Blanc.Weth10.codelessCallback_runCompiledTo|$STANDARD
+Blanc.Weth10.callbackBubble_runCompiledTo|$STANDARD
+Blanc.Weth10.callbackShort_runCompiledTo|$STANDARD
+Blanc.Weth10.flashCallback_wrongMagic_runCompiledTo|$STANDARD
+Blanc.Weth10.nonpayable_runCompiledTo|$STANDARD
+Blanc.Weth10.flashFee_wrongToken_runCompiledTo|$STANDARD
+Blanc.Weth10.flashLoan_lockedGuardOrder|$STANDARD
+Blanc.Weth10.permit_expiredBeforeNonceUpdate|$STANDARD
+Blanc.Weth10.transfer_lockedGuardOrder|$STANDARD
+Blanc.Weth10.transferFromCore_lockedGuardOrder|$STANDARD
+Blanc.Weth10.withdraw_lockedGuardOrder|$STANDARD
+Blanc.Weth10.spendCallerAllowanceThen_finitePrecedence|$STANDARD
+Blanc.Weth10.flashSettle_finitePrecedence|$STANDARD
+Blanc.Weth10.flashCallback_errorPrecedence|$STANDARD
+Blanc.Weth10.rollback_revert_of_weth10_runCompiledTo|$STANDARD
+Blanc.Weth10.rollback_empty_of_weth10_runCompiledTo|$STANDARD
+Blanc.Weth10.rollback_errorData_of_weth10_runCompiledTo|$STANDARD
+Blanc.Weth10.rollback_bubbledChild_of_weth10_runCompiledTo|$STANDARD
 Blanc.ProcessMessage.rollback_of_error|$STANDARD
 Blanc.Fmint.rollback_of_callback_failure|$STANDARD
+Blanc.rollback_of_no_success|$STANDARD
+Blanc.rollback_of_no_success_total|$STANDARD
 Blanc.Fmint.rollback_of_no_success|$STANDARD
 Blanc.Fmint.rollback_of_no_success_total|$STANDARD
 Blanc.Fmint.rollback_of_callback_never_magic|$STANDARD
@@ -357,7 +482,51 @@ Blanc.Stor.Weth10Inv.flashMint|$STANDARD
 Blanc.Stor.Weth10Inv.flashBurn|$STANDARD
 Blanc.Stor.Weth10Inv.withdraw|$STANDARD
 Blanc.Stor.Weth10Inv.of_empty|$STANDARD
-Blanc.Weth10.backedSpec|$STANDARD"
+Blanc.Weth10.backedSpec|$STANDARD
+Blanc.ContractSpec.post_of_run_dispatch|$STANDARD
+Blanc.ContractSpec.sound_of_receive_dispatch|$STANDARD
+Blanc.ContractSpec.preserves_of_receive_dispatch|$STANDARD
+Blanc.Weth10.mintCaller_storage|$STANDARD
+Blanc.Weth10.backedSpec_receiveEther_funcSound|$STANDARD
+Blanc.Weth10.backedSpec_deposit_funcSound|$STANDARD
+Blanc.Weth10.backedSpec_name_funcSound|$STANDARD
+Blanc.Weth10.backedSpec_totalSupply_funcSound|$STANDARD
+Blanc.Weth10.backedSpec_permitTypehash_funcSound|$STANDARD
+Blanc.Weth10.backedSpec_decimals_funcSound|$STANDARD
+Blanc.Weth10.backedSpec_domainSeparator_funcSound|$STANDARD
+Blanc.Weth10.backedSpec_maxFlashLoan_funcSound|$STANDARD
+Blanc.Weth10.backedSpec_balanceOf_funcSound|$STANDARD
+Blanc.Weth10.backedSpec_nonces_funcSound|$STANDARD
+Blanc.Weth10.backedSpec_callbackSuccess_funcSound|$STANDARD
+Blanc.Weth10.backedSpec_flashMinted_funcSound|$STANDARD
+Blanc.Weth10.backedSpec_symbol_funcSound|$STANDARD
+Blanc.Weth10.backedSpec_deploymentChainId_funcSound|$STANDARD
+Blanc.Weth10.backedSpec_allowance_funcSound|$STANDARD
+Blanc.Weth10.backedSpec_flashFee_funcSound|$STANDARD
+Blanc.Weth10.backedSpec_approve_funcSound|$STANDARD
+Blanc.Weth10.backedSpec_depositTo_funcSound|$STANDARD
+Blanc.Weth10.backedSpec_withdraw_funcSound|$STANDARD
+Blanc.Weth10.backedSpec_transfer_funcSound|$STANDARD
+Blanc.Weth10.backedSpec_withdrawTo_funcSound|$STANDARD
+Blanc.Weth10.backedSpec_transferFrom_funcSound|$STANDARD
+Blanc.Weth10.backedSpec_withdrawFrom_funcSound|$STANDARD
+Blanc.Weth10.backedSpec_depositToAndCall_funcSound|$STANDARD
+Blanc.Weth10.backedSpec_approveAndCall_funcSound|$STANDARD
+Blanc.Weth10.backedSpec_transferAndCall_funcSound|$STANDARD
+Blanc.Weth10.backedSpec_flashLoan_funcSound|$STANDARD
+Blanc.Weth10.backedSpec_permit_funcSound|$STANDARD
+Blanc.Weth10.weth10Funcs_exactRelFuncSound|$STANDARD
+Blanc.Weth10.flashExactDepth|$STANDARD
+Blanc.Weth10.weth10Funcs_backed_funcSound|$STANDARD
+Blanc.Weth10.backedSpec_sound_of_funcSound_all|$STANDARD
+Blanc.Weth10.backedSpec_preserves_of_funcSound_all|$STANDARD
+Blanc.Weth10.backedSpec_sound|$STANDARD
+Blanc.Weth10.backedSpec_preserves|$STANDARD
+Blanc.Weth10.weth10InitFunc_runCompiled_zero|$STANDARD
+Blanc.Weth10.weth10Init_exec_zero|$STANDARD
+Blanc.Weth10.weth10Init_exec_nonzero|$STANDARD
+Blanc.Weth10.processCreateMessage_weth10_success|$STANDARD
+Blanc.Weth10.freshDeployment_staticCertificate|$STANDARD"
 # Secondary net only: the exact-set comparison below is the primary check;
 # this pattern catches forbidden names in output the per-theorem parse missed.
 FORBIDDEN='sorryAx|ofReduceBool|ofReduceNat|_native\.'

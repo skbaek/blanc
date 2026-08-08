@@ -1,27 +1,26 @@
 # scripts/weth-coverage-budget.txt
 #
-# The known-unexercised subset of Blanc's ten WETH selectors
+# The known-unreached subset of Blanc's ten WETH selectors
 # (scripts/weth-selectors.json, emitted from Blanc.wethFuncs by
 # scripts/gen-weth-selectors.lean), checked by scripts/check-weth-coverage.sh
 # (~/plans/weth-evidence.md Step 2). This is a budget in the idiom of
 # Jaune's scripts/check-integrity.sh pending-budget: the gate fails if the
-# actual set of unexercised selectors is not a subset of the rows below, or
-# if that set's size exceeds the declared budget number. A row lists a
-# selector this suite is KNOWN not to exercise yet, with a trailing comment
+# actual set of unreached selectors is not a subset of the rows below, or if
+# that set's size exceeds the declared budget number. A row lists a selector
+# this suite is KNOWN not to reach yet, with a trailing comment
 # naming the function and the step expected to close it -- the comment is
 # documentation only, never compared.
 #
-# The budget is currently EMPTY: every one of Blanc's ten selectors, and
-# the empty-calldata deposit() fallback, is exercised by some committed
-# fixture (weth-evidence Step 3 closed the last six). With no rows left the
-# gate is at its strongest -- ANY selector that stops being exercised is a
-# regression, with nothing to absorb it.
+# The budget is currently EMPTY: four selectors are direct top-level entries,
+# six have exact straight-line internal CALL witnesses tied to changed
+# post-state recorder slots, and the empty-calldata deposit() fallback is
+# direct. Selector-shaped PUSHes without that evidence receive no credit.
+# With no rows left, any selector that stops being reached is a regression.
 #
 # The budget may only SHRINK (plan Evidence and safety rules: "never weaken
 # or rebase a gate... with the single exception of the coverage budget
 # shrinking, which is the arc's goal"). Removing a row -- because a later
-# step added a case that exercises it -- is the intended way this file
+# step added a case that reaches it -- is the intended way this file
 # changes; adding a row is a regression and is not a routine step.
 #
 # coverage-budget: 0
-

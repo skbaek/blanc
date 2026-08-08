@@ -1519,6 +1519,391 @@ lemma Func.length_compile {l k p bs} (h : Func.compile l k p = some bs) :
     simp at h; rw [← h];
     simp [List.length, compsize]
 
+/-- Successful table compilation emits one `JUMPDEST` followed by each
+function's `compsize` bytes. -/
+lemma Table.length_compile {l t bs} (h : Table.compile l t = some bs) :
+    bs.length = (t.map fun np => 1 + compsize np.2).sum := by
+  induction t generalizing bs with
+  | nil =>
+      simp [Table.compile] at h
+      subst h
+      rfl
+  | cons np t ih =>
+      rcases np with ⟨n, p⟩
+      rcases Table.compile_cons_eq_some h with ⟨cp, ct, hcp, hct, hbs⟩
+      subst hbs
+      simp only [List.length_append, List.length_cons, List.length_nil,
+        List.map_cons, List.sum_cons]
+      rw [Func.length_compile hcp, ih hct]
+
+private lemma Table.compsize_table (fs : List Func) (k : Nat) :
+    ((table k fs).map fun np => 1 + compsize np.2).sum =
+      (fs.map fun f => 1 + compsize f).sum := by
+  induction fs generalizing k with
+  | nil => rfl
+  | cons f fs ih =>
+      simp only [table, List.map_cons, List.sum_cons]
+      rw [ih]
+
+/-- Successful complete-program compilation has the structural length of its
+main function and auxiliary table, without re-evaluating emitted byte
+contents. -/
+lemma Prog.length_compile {p bs} (h : Prog.compile p = some bs) :
+    bs.length = ((p.main :: p.aux).map fun f => 1 + compsize f).sum := by
+  unfold Prog.compile at h
+  rw [Table.length_compile h, Table.compsize_table]
+
+/-! ## Compiler-success decisions
+
+`compile` returns the emitted byte list, so reducing its `Option.isSome` result
+for a large parameterized program also constructs that whole list.  The three
+decisions below retain only the reasons compilation can fail: a branch target
+or table target does not fit in `PUSH2`, or a `.call` names no table entry.
+Branch positions use `compsize`, whose agreement with successful compiler
+output is `Func.length_compile` above.  Instruction byte *contents* therefore
+never enter the decision.
+-/
+
+/-- Compute compiler success and compiled size together.  Carrying the size
+through the same traversal avoids the quadratic re-traversal that a nested
+branch tree would incur by separately calling `compsize` at every fork. -/
+inductive Func.CompileShape : Type
+  | last
+  | next (size : Nat) (rest : Func.CompileShape)
+  | branch (left right : Func.CompileShape)
+  | call (index : Nat)
+deriving DecidableEq
+
+/-- The part of a function that can affect compiler success: instruction
+widths, fork structure, and table-call indices. -/
+def Func.compileShape : Func → Func.CompileShape
+  | .last _ => .last
+  | .next i p => .next i.size p.compileShape
+  | .branch p q => .branch p.compileShape q.compileShape
+  | .call k => .call k
+
+private def Func.CompileShape.compsize : Func.CompileShape → Nat
+  | .last => 1
+  | .next size p => p.compsize + size
+  | .branch p q => p.compsize + q.compsize + 5
+  | .call _ => 4
+
+@[simp] private theorem Func.compsize_compileShape (p : Func) :
+    p.compileShape.compsize = compsize p := by
+  induction p with
+  | last => rfl
+  | next i p ih =>
+      simp [Func.compileShape, Func.CompileShape.compsize, compsize, ih,
+        Ninst.size_eq_length_toBytes]
+  | branch p q ihp ihq =>
+      simp [Func.compileShape, Func.CompileShape.compsize, compsize, ihp, ihq]
+  | call => rfl
+
+private theorem Func.compsize_eq_of_compileShape {p q : Func}
+    (h : p.compileShape = q.compileShape) : compsize p = compsize q := by
+  rw [← Func.compsize_compileShape p, ← Func.compsize_compileShape q, h]
+
+/-- Compiler-relevant shape of a complete program. -/
+structure Prog.CompileShape where
+  main : Func.CompileShape
+  aux : List Func.CompileShape
+deriving DecidableEq
+
+/-- Erase byte contents and terminal opcodes from a program, retaining exactly
+the structure that can affect compiler success. -/
+def Prog.compileShape (p : Prog) : Prog.CompileShape :=
+  ⟨p.main.compileShape, p.aux.map Func.compileShape⟩
+
+private def Table.locations (l : List (Nat × Func)) : List Nat :=
+  l.map Prod.fst
+
+private theorem Table.getElem?_locations (l : List (Nat × Func)) (k : Nat) :
+    (Table.locations l)[k]? = (l[k]?).map Prod.fst := by
+  induction l generalizing k with
+  | nil => simp [Table.locations]
+  | cons x xs ih => cases k <;> simp [Table.locations]
+
+private def Func.compileDecision (l : List (Nat × Func)) (n : Nat) :
+    Func → Bool × Nat
+  | .last _ => (true, 1)
+  | .next i p =>
+      let r := Func.compileDecision l (n + i.size) p
+      (r.1, r.2 + i.size)
+  | .branch p q =>
+      let rp := Func.compileDecision l (n + 4) p
+      let loc := n + rp.2 + 4
+      let rq := Func.compileDecision l (loc + 1) q
+      (rp.1 && decide (loc < 2 ^ 16) && rq.1, rp.2 + rq.2 + 5)
+  | .call k =>
+      (match (Table.locations l)[k]? with
+       | none => false
+       | some loc => decide (loc < 2 ^ 16),
+       4)
+
+/-- Decide whether a function compiles at program counter `n` against table
+`l`, without constructing its emitted bytes. -/
+def Func.compiles (l : List (Nat × Func)) (n : Nat) (p : Func) : Bool :=
+  (Func.compileDecision l n p).1
+
+@[simp] private theorem Func.compileDecision_snd
+    (l : List (Nat × Func)) (n : Nat) (p : Func) :
+    (Func.compileDecision l n p).2 = compsize p := by
+  induction p generalizing n with
+  | last => rfl
+  | next i p ih =>
+      simp [Func.compileDecision, compsize, ih,
+        Ninst.size_eq_length_toBytes]
+  | branch p q ihp ihq =>
+      simp [Func.compileDecision, compsize, ihp, ihq]
+  | call => rfl
+
+private theorem Func.compileDecision_eq_of_compileShape
+    {l l' : List (Nat × Func)}
+    (hl : Table.locations l = Table.locations l')
+    {p q : Func} (hp : p.compileShape = q.compileShape) (n : Nat) :
+    Func.compileDecision l n p = Func.compileDecision l' n q := by
+  induction p generalizing n q with
+  | last o =>
+      cases q <;> simp [Func.compileShape] at hp
+      rfl
+  | next i p ih =>
+      cases q with
+      | next j q =>
+          simp only [Func.compileShape, Func.CompileShape.next.injEq] at hp
+          rcases hp with ⟨hsize, hshape⟩
+          simp only [Func.compileDecision]
+          rw [hsize, ih hshape]
+      | last o | branch _ _ | call _ => simp [Func.compileShape] at hp
+  | branch p r ihp ihr =>
+      cases q with
+      | branch q s =>
+          simp only [Func.compileShape, Func.CompileShape.branch.injEq] at hp
+          rcases hp with ⟨hp, hr⟩
+          simp only [Func.compileDecision]
+          rw [ihp hp, ihr hr]
+      | last _ | next _ _ | call _ => simp [Func.compileShape] at hp
+  | call k =>
+      cases q with
+      | call m =>
+          simp only [Func.compileShape, Func.CompileShape.call.injEq] at hp
+          simp [Func.compileDecision, hl, hp]
+      | last _ | next _ _ | branch _ _ => simp [Func.compileShape] at hp
+
+private theorem Func.compiles_eq_of_compileShape
+    {l l' : List (Nat × Func)}
+    (hl : Table.locations l = Table.locations l')
+    {p q : Func} (hp : p.compileShape = q.compileShape) (n : Nat) :
+    Func.compiles l n p = Func.compiles l' n q := by
+  exact congrArg Prod.fst (Func.compileDecision_eq_of_compileShape hl hp n)
+
+/-- Decide whether every function in a compiler table compiles, without
+constructing the concatenated bytecode. -/
+def Table.compiles (l : List (Nat × Func)) : List (Nat × Func) → Bool
+  | [] => true
+  | (n, p) :: nps =>
+      Func.compiles l (n + 1) p && Table.compiles l nps
+
+private def Table.compileShape (l : List (Nat × Func)) :
+    List (Nat × Func.CompileShape) :=
+  l.map fun np => (np.1, np.2.compileShape)
+
+private theorem Table.compiles_eq_of_compileShape
+    {l l' : List (Nat × Func)}
+    (hl : Table.locations l = Table.locations l')
+    {t t' : List (Nat × Func)}
+    (ht : Table.compileShape t = Table.compileShape t') :
+    Table.compiles l t = Table.compiles l' t' := by
+  induction t generalizing t' with
+  | nil =>
+      cases t' <;> simp [Table.compileShape, Table.compiles] at ht ⊢
+  | cons np t ih =>
+      cases t' with
+      | nil => simp [Table.compileShape] at ht
+      | cons np' t' =>
+          rcases np with ⟨n, p⟩
+          rcases np' with ⟨n', p'⟩
+          simp only [Table.compileShape, List.map_cons,
+            List.cons.injEq, Prod.mk.injEq] at ht
+          rcases ht with ⟨⟨hn, hp⟩, ht⟩
+          subst n'
+          simp only [Table.compiles]
+          rw [Func.compiles_eq_of_compileShape hl hp, ih ht]
+
+private theorem Table.compileShape_table
+    {ps qs : List Func}
+    (h : ps.map Func.compileShape = qs.map Func.compileShape) (k : Nat) :
+    Table.compileShape (table k ps) = Table.compileShape (table k qs) := by
+  induction ps generalizing qs k with
+  | nil =>
+      cases qs <;> simp [Table.compileShape, table] at h ⊢
+  | cons p ps ih =>
+      cases qs with
+      | nil => simp at h
+      | cons q qs =>
+          simp only [List.map_cons, List.cons.injEq] at h
+          rcases h with ⟨hp, hps⟩
+          have hsize := Func.compsize_eq_of_compileShape hp
+          simp only [table, Table.compileShape, List.map_cons]
+          rw [hp, hsize]
+          congr 1
+          exact ih hps _
+
+/-- Byte-content-independent compiler-success decision for a complete
+program. -/
+def Prog.compiles (p : Prog) : Bool :=
+  let t : List (Nat × Func) := table 0 (p.main :: p.aux)
+  Table.compiles t t
+
+/-- Compiler success depends only on instruction widths, fork structure, and
+table-call indices.  In particular, equal-width embedded constants may vary
+without reopening the byte-producing compiler. -/
+theorem Prog.compiles_eq_of_compileShape {p q : Prog}
+    (h : p.compileShape = q.compileShape) : p.compiles = q.compiles := by
+  have hm : p.main.compileShape = q.main.compileShape := by
+    simpa [Prog.compileShape] using congrArg Prog.CompileShape.main h
+  have ha : p.aux.map Func.compileShape = q.aux.map Func.compileShape := by
+    simpa [Prog.compileShape] using congrArg Prog.CompileShape.aux h
+  have hfs :
+      (p.main :: p.aux).map Func.compileShape =
+        (q.main :: q.aux).map Func.compileShape := by
+    simp only [List.map_cons, List.cons.injEq]
+    exact ⟨hm, ha⟩
+  have ht := Table.compileShape_table hfs 0
+  have hl :
+      Table.locations (table 0 (p.main :: p.aux)) =
+        Table.locations (table 0 (q.main :: q.aux)) := by
+    have hloc := congrArg (List.map Prod.fst) ht
+    simpa [Table.compileShape, Table.locations, List.map_map,
+      Function.comp_def] using hloc
+  unfold Prog.compiles
+  exact Table.compiles_eq_of_compileShape hl ht
+
+/-- `Func.compiles` decides exactly whether the byte-producing compiler
+succeeds. -/
+theorem Func.isSome_compile (l : List (Nat × Func)) (n : Nat) (p : Func) :
+    (Func.compile l n p).isSome = Func.compiles l n p := by
+  induction p generalizing n with
+  | last o => rfl
+  | next i p ih =>
+      generalize h : Func.compile l (n + i.size) p = cp
+      cases cp with
+      | none =>
+          have hs := ih (n := n + i.size)
+          rw [h] at hs
+          simp only [Option.isSome_none] at hs
+          simp [Func.compile, Func.compiles, Func.compileDecision, h, hs]
+      | some pbs =>
+          have hs := ih (n := n + i.size)
+          rw [h] at hs
+          simp only [Option.isSome_some] at hs
+          simp [Func.compile, Func.compiles, Func.compileDecision, h, hs]
+  | call k =>
+      generalize h : l[k]? = entry
+      cases entry with
+      | none =>
+          simp [Func.compile, Func.compiles, Func.compileDecision,
+            Table.getElem?_locations, h]
+      | some np =>
+          rcases np with ⟨loc, p⟩
+          by_cases hg : loc < 2 ^ 16 <;> norm_num at hg
+          · simp [Func.compile, Func.compiles, Func.compileDecision,
+              Table.getElem?_locations, guard, h, hg]
+          · have hng : ¬ loc < 65536 := by omega
+            simp [Func.compile, Func.compiles, Func.compileDecision,
+              Table.getElem?_locations, guard, h, hng]
+  | branch p q ihp ihq =>
+      generalize hp : Func.compile l (n + 4) p = cp
+      cases cp with
+      | none =>
+          have hs := ihp (n := n + 4)
+          rw [hp] at hs
+          simp only [Option.isSome_none] at hs
+          have hsp : (Func.compileDecision l (n + 4) p).1 = false := by
+            simpa only [Func.compiles] using hs.symm
+          simp [Func.compile, Func.compiles, Func.compileDecision, hp, hsp]
+      | some pbs =>
+          have hlen := Func.length_compile hp
+          have hs := ihp (n := n + 4)
+          rw [hp] at hs
+          simp only [Option.isSome_some] at hs
+          have hsp : (Func.compileDecision l (n + 4) p).1 = true := by
+            simpa only [Func.compiles] using hs.symm
+          by_cases hg : n + compsize p + 4 < 2 ^ 16 <;> norm_num at hg
+          · generalize hq :
+              Func.compile l (n + compsize p + 4 + 1) q = cq
+            cases cq with
+            | none =>
+                have hsq := ihq (n := n + compsize p + 4 + 1)
+                rw [hq] at hsq
+                simp only [Option.isSome_none] at hsq
+                have hsq' :
+                    (Func.compileDecision l
+                      (n + compsize p + 4 + 1) q).1 = false := by
+                  simpa only [Func.compiles] using hsq.symm
+                simp [Func.compile, Func.compiles, Func.compileDecision,
+                  guard, hp, hlen, hg, hq, hsp, hsq']
+            | some qbs =>
+                have hsq := ihq (n := n + compsize p + 4 + 1)
+                rw [hq] at hsq
+                simp only [Option.isSome_some] at hsq
+                have hsq' :
+                    (Func.compileDecision l
+                      (n + compsize p + 4 + 1) q).1 = true := by
+                  simpa only [Func.compiles] using hsq.symm
+                simp [Func.compile, Func.compiles, Func.compileDecision,
+                  guard, hp, hlen, hg, hq, hsp, hsq']
+          · have hng : ¬ n + compsize p + 4 < 65536 := by omega
+            simp [Func.compile, Func.compiles, Func.compileDecision,
+              guard, hp, hlen, hng, hsp]
+
+/-- `Table.compiles` decides exactly whether table compilation succeeds. -/
+theorem Table.isSome_compile (l t : List (Nat × Func)) :
+    (Table.compile l t).isSome = Table.compiles l t := by
+  induction t with
+  | nil => rfl
+  | cons np t ih =>
+      rcases np with ⟨n, p⟩
+      generalize hp : Func.compile l (n + 1) p = cp
+      cases cp with
+      | none =>
+          have hs := Func.isSome_compile l (n + 1) p
+          rw [hp] at hs
+          simp only [Option.isSome_none] at hs
+          simp [Table.compile, Table.compiles, hp, ← hs]
+      | some pbs =>
+          have hs := Func.isSome_compile l (n + 1) p
+          rw [hp] at hs
+          simp only [Option.isSome_some] at hs
+          generalize ht : Table.compile l t = ct
+          cases ct with
+          | none =>
+              rw [ht] at ih
+              simp only [Option.isSome_none] at ih
+              simp [Table.compile, Table.compiles, hp, ht, ← hs, ← ih]
+          | some tbs =>
+              rw [ht] at ih
+              simp only [Option.isSome_some] at ih
+              simp [Table.compile, Table.compiles, hp, ht, ← hs, ← ih]
+
+/-- `Prog.compiles` decides exactly whether complete-program compilation
+succeeds. -/
+theorem Prog.isSome_compile (p : Prog) :
+    (Prog.compile p).isSome = Prog.compiles p := by
+  simp [Prog.compile, Prog.compiles, Table.isSome_compile]
+
+/-- Turn a successful structural decision into the canonical `getD` compile
+witness used by generated code artifacts. -/
+theorem Prog.compile_eq_some_getD_of_compiles
+    (p : Prog) (h : Prog.compiles p = true) :
+    Prog.compile p = some ((Prog.compile p).getD []) := by
+  generalize hc : Prog.compile p = c
+  cases c with
+  | none =>
+      have hs := Prog.isSome_compile p
+      rw [hc, h] at hs
+      contradiction
+  | some code => rfl
+
 lemma of_get?_table_eq_some {f fs} {bs} {m n : ℕ} {p : Func}
     (h_eq : some bs = Prog.compile ⟨f, fs⟩)
     (h_get : (table 0 (f :: fs))[m]? = some (n, p)) :

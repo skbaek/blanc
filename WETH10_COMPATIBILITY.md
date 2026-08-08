@@ -16,15 +16,20 @@ returndata byte-for-byte. “Empty revert” means zero-length returndata from t
 Solidity 0.7.6 dispatcher, code-existence check, or ABI return decoder, not a
 new WETH10 reason.
 
-Evidence remains **planned** until the later Blanc runtime, theorem, and
-differential-fixture owners land. Owner abbreviations are:
+Runtime evidence is **complete**: the exact differential families and the
+compiled-execution theorem families below have landed for all 27 selectors and
+receive. The constructor remains a separate boundary and is reported
+separately at the end of this document. Owner abbreviations are:
 
-- `DF-view`, `DF-state`, `DF-callback`, `DF-permit`, and `DF-flash`: planned
+- `DF-view`, `DF-state`, `DF-callback`, `DF-permit`, and `DF-flash`: completed
   deployed-vs-Blanc differential fixture families;
-- `TH-read`, `TH-state`, `TH-callback`, `TH-permit`, and `TH-flash`: planned
+- `TH-read`, `TH-state`, `TH-callback`, `TH-permit`, and `TH-flash`: completed
   Blanc functional theorem families; and
 - `TH-backed`: the backing-preservation family. It proves the invariant, not
-  full endpoint behavior.
+  full endpoint behavior; and
+- deployment fixtures and `TH-deploy`: fresh-constructor execution, exact
+  runtime installation, initialization, invariant, and Blanc-gas evidence.
+  Both owners are complete.
 
 All arithmetic described as unchecked is modulo `2^256`, matching Solidity
 0.7.6. Event notation lists indexed arguments before the data word. The only
@@ -42,7 +47,7 @@ from/to, value data), with the topic hashes pinned in the generated lock.
 | ABI | `view`, nonpayable; no inputs; output `bytes32`; selector `0x8237e538`. |
 | Success | Returns `0x439148f0bbc682ca079e46d6e2c2f0c1e3b820f1a291b069d8882abf8cf18dd9`, the keccak of UTF-8 `ERC3156FlashBorrower.onFlashLoan`. No state, ETH, log, or external-call effect. |
 | Guards/reverts | No source guard. Nonzero call value is rejected by the dispatcher before the getter with empty revert data. |
-| Evidence owners | `DF-view`; `TH-read`. Status: planned. |
+| Evidence owners | `DF-view`; `TH-read`. Status: complete. |
 
 <!-- WETH10-ENDPOINT {"signature":"DOMAIN_SEPARATOR()","selector":"0x3644e515"} -->
 ### `DOMAIN_SEPARATOR()`
@@ -52,7 +57,7 @@ from/to, value data), with the topic hashes pinned in the generated lock.
 | ABI | `view`, nonpayable; no inputs; output `bytes32`; selector `0x3644e515`. |
 | Success | Reads `chainid()`. When it equals `deploymentChainId`, returns the cached deployment separator. Otherwise returns `keccak256(abi.encode(domainTypeHash, nameHash, versionHash, currentChainId, address(this)))` for domain `EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)`, name `Wrapped Ether v10`, and version `1`. No state effect. |
 | Guards/reverts | No source guard or external call. Nonzero call value is an empty dispatcher revert. Contract-address correspondence and the three valid comparison worlds are frozen below. |
-| Evidence owners | `DF-view`, `DF-permit`; `TH-read`, `TH-permit`. Status: planned. |
+| Evidence owners | `DF-view`, `DF-permit`; `TH-read`, `TH-permit`. Status: complete. |
 
 <!-- WETH10-ENDPOINT {"signature":"PERMIT_TYPEHASH()","selector":"0x30adf81f"} -->
 ### `PERMIT_TYPEHASH()`
@@ -62,7 +67,7 @@ from/to, value data), with the topic hashes pinned in the generated lock.
 | ABI | `view`, nonpayable; no inputs; output `bytes32`; selector `0x30adf81f`. |
 | Success | Returns `0x6e71edae12b1b97f4d1f60370fef10105fa2faae0126114a169c64845d6126c9`, the keccak of UTF-8 `Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)`. No effects. |
 | Guards/reverts | No source guard. Nonzero call value is an empty dispatcher revert. |
-| Evidence owners | `DF-view`, `DF-permit`; `TH-read`, `TH-permit`. Status: planned. |
+| Evidence owners | `DF-view`, `DF-permit`; `TH-read`, `TH-permit`. Status: complete. |
 
 <!-- WETH10-ENDPOINT {"signature":"allowance(address,address)","selector":"0xdd62ed3e"} -->
 ### `allowance(address,address)`
@@ -72,7 +77,7 @@ from/to, value data), with the topic hashes pinned in the generated lock.
 | ABI | `view`, nonpayable; inputs `(owner: address, spender: address)`; output `uint256`; selector `0xdd62ed3e`. |
 | Success | Returns the logical allowance for the ordered pair; no effects. |
 | Guards/reverts | No source guard. Nonzero value is an empty dispatcher revert. The later tagged projection is trace-local for allowance-pair collision exclusion, as frozen below. |
-| Evidence owners | `DF-view`; `TH-read`. Status: planned. |
+| Evidence owners | `DF-view`; `TH-read`. Status: complete. |
 
 <!-- WETH10-ENDPOINT {"signature":"approve(address,uint256)","selector":"0x095ea7b3"} -->
 ### `approve(address,uint256)`
@@ -82,7 +87,7 @@ from/to, value data), with the topic hashes pinned in the generated lock.
 | ABI | `nonpayable`; inputs `(spender: address, value: uint256)`; output `bool`; selector `0x095ea7b3`. |
 | Success/effects | Sets `allowance[msg.sender][spender] = value`, emits `Approval(msg.sender, spender, value)`, and returns encoded `true`. Zero spender and any value are accepted. |
 | Guards/calls | No source guard or external call. Nonzero call value empty-reverts before the body. |
-| Evidence owners | `DF-state`; `TH-state`, `TH-backed`. Status: planned. |
+| Evidence owners | `DF-state`; `TH-state`, `TH-backed`. Status: complete. |
 
 <!-- WETH10-ENDPOINT {"signature":"approveAndCall(address,uint256,bytes)","selector":"0xcae9ca51"} -->
 ### `approveAndCall(address,uint256,bytes)`
@@ -92,8 +97,8 @@ from/to, value data), with the topic hashes pinned in the generated lock.
 | ABI | `nonpayable`; inputs `(spender: address, value: uint256, data: bytes)`; output `bool`; selector `0xcae9ca51`. |
 | Pre-call state/log | Sets the allowance and emits `Approval(msg.sender, spender, value)` before the callback. |
 | External call | Typed zero-value call to `spender` with `onTokenApproval(msg.sender, value, data)` (`0x00ba451f`). The callback observes the new allowance and emitted-log prefix. |
-| Return/reverts | Returns the callback's ABI-decoded Boolean verbatim, including successful `false`. Child reverts bubble. A zero/codeless target, short returndata, invalid Boolean word, or otherwise failed return decode empty-reverts and rolls back the approval. Nonzero entry value empty-reverts before the body. |
-| Evidence owners | `DF-callback`; `TH-callback`, `TH-backed`. Status: planned. |
+| Return/reverts | Applies the deployed Solidity-0.7 truthiness decoder to the first return word: zero returns canonical `false`, while every nonzero word returns canonical `true`; both are successful. Child reverts bubble. A zero/codeless target or returndata shorter than 32 bytes empty-reverts and rolls back the approval. Nonzero entry value empty-reverts before the body. |
+| Evidence owners | `DF-callback`; `TH-callback`, `TH-backed`. Status: complete. |
 
 <!-- WETH10-ENDPOINT {"signature":"balanceOf(address)","selector":"0x70a08231"} -->
 ### `balanceOf(address)`
@@ -103,7 +108,7 @@ from/to, value data), with the topic hashes pinned in the generated lock.
 | ABI | `view`, nonpayable; input `(account: address)`; output `uint256`; selector `0x70a08231`. |
 | Success | Returns the account's logical balance; no effects. Address zero and `address(this)` are ordinary lookup keys. |
 | Guards/reverts | No source guard. Nonzero value is an empty dispatcher revert. |
-| Evidence owners | `DF-view`; `TH-read`. Status: planned. |
+| Evidence owners | `DF-view`; `TH-read`. Status: complete. |
 
 <!-- WETH10-ENDPOINT {"signature":"decimals()","selector":"0x313ce567"} -->
 ### `decimals()`
@@ -113,7 +118,7 @@ from/to, value data), with the topic hashes pinned in the generated lock.
 | ABI | `view`, nonpayable; no inputs; output `uint8`; selector `0x313ce567`. |
 | Success | Returns `18`; no effects. |
 | Guards/reverts | No source guard. Nonzero value is an empty dispatcher revert. |
-| Evidence owners | `DF-view`; `TH-read`. Status: planned. |
+| Evidence owners | `DF-view`; `TH-read`. Status: complete. |
 
 <!-- WETH10-ENDPOINT {"signature":"deploymentChainId()","selector":"0xcd0d0096"} -->
 ### `deploymentChainId()`
@@ -123,7 +128,7 @@ from/to, value data), with the topic hashes pinned in the generated lock.
 | ABI | `view`, nonpayable; no inputs; output `uint256`; selector `0xcd0d0096`. |
 | Success | Returns the chain ID captured by the constructor. The installed mainnet instance returns `1`; a fresh Blanc deployment is parametric in its deployment chain. No effects. |
 | Guards/reverts | No source guard. Nonzero value is an empty dispatcher revert. |
-| Evidence owners | `DF-view`, deployment fixtures; `TH-read`. Status: planned. |
+| Evidence owners | `DF-view`, deployment fixtures; `TH-read`. Status: complete. |
 
 <!-- WETH10-ENDPOINT {"signature":"deposit()","selector":"0xd0e30db0"} -->
 ### `deposit()`
@@ -133,7 +138,7 @@ from/to, value data), with the topic hashes pinned in the generated lock.
 | ABI | `payable`; no inputs or outputs; selector `0xd0e30db0`. |
 | Success/effects | The contract first owns `msg.value`; then unchecked-credits `balanceOf[msg.sender] += msg.value` and emits `Transfer(address(0), msg.sender, msg.value)`. Returns empty bytes. Zero value still follows the write/log path. |
 | Guards/calls | No source guard or external call. The ETH increase and logical credit are both visible after success. |
-| Evidence owners | `DF-state`; `TH-state`, `TH-backed`. Status: planned. |
+| Evidence owners | `DF-state`; `TH-state`, `TH-backed`. Status: complete. |
 
 <!-- WETH10-ENDPOINT {"signature":"depositTo(address)","selector":"0xb760faf9"} -->
 ### `depositTo(address)`
@@ -143,7 +148,7 @@ from/to, value data), with the topic hashes pinned in the generated lock.
 | ABI | `payable`; input `(to: address)`; no outputs; selector `0xb760faf9`. |
 | Success/effects | Unchecked-credits `balanceOf[to] += msg.value`, emits `Transfer(address(0), to, msg.value)`, and returns empty bytes. Address zero and `address(this)` are accepted mint recipients. |
 | Guards/calls | No source guard or external call. Zero value still emits. |
-| Evidence owners | `DF-state`; `TH-state`, `TH-backed`. Status: planned. |
+| Evidence owners | `DF-state`; `TH-state`, `TH-backed`. Status: complete. |
 
 <!-- WETH10-ENDPOINT {"signature":"depositToAndCall(address,bytes)","selector":"0x5ddb7d7e"} -->
 ### `depositToAndCall(address,bytes)`
@@ -153,8 +158,8 @@ from/to, value data), with the topic hashes pinned in the generated lock.
 | ABI | `payable`; inputs `(to: address, data: bytes)`; output `bool`; selector `0x5ddb7d7e`. |
 | Pre-call state/log | Contract balance already includes `msg.value`; unchecked-credits `balanceOf[to]`, then emits `Transfer(address(0), to, msg.value)`. |
 | External call | Typed zero-value call to `to` with `onTokenTransfer(msg.sender, msg.value, data)` (`0xa4c0ed36`). The callback observes the credited balance, increased ETH balance, and log prefix. |
-| Return/reverts | Returns the decoded Boolean verbatim, including `false`. Child reverts bubble. Address zero/codeless targets and failed Boolean decoding empty-revert and roll back the mint, log, and incoming ETH transfer. |
-| Evidence owners | `DF-callback`; `TH-callback`, `TH-backed`. Status: planned. |
+| Return/reverts | Applies the deployed Solidity-0.7 truthiness decoder to the first return word: zero returns canonical `false`, while every nonzero word returns canonical `true`; both are successful. Child reverts bubble. Address zero/codeless targets and returndata shorter than 32 bytes empty-revert and roll back the mint, log, and incoming ETH transfer. |
+| Evidence owners | `DF-callback`; `TH-callback`, `TH-backed`. Status: complete. |
 
 <!-- WETH10-ENDPOINT {"signature":"flashFee(address,uint256)","selector":"0xd9d98ce4"} -->
 ### `flashFee(address,uint256)`
@@ -164,7 +169,7 @@ from/to, value data), with the topic hashes pinned in the generated lock.
 | ABI | `view`, nonpayable; inputs `(token: address, amount: uint256)`; output `uint256`; selector `0xd9d98ce4`. |
 | Guard order | First require `token == address(this)` or revert with exact `Error("WETH: flash mint only WETH10")`. The amount is ignored. |
 | Success | Returns `0`; no effects or calls. Nonzero entry value is rejected before the source guard with empty data. |
-| Evidence owners | `DF-view`, `DF-flash`; `TH-read`, `TH-flash`. Status: planned. |
+| Evidence owners | `DF-view`, `DF-flash`; `TH-read`, `TH-flash`. Status: complete. |
 
 <!-- WETH10-ENDPOINT {"signature":"flashLoan(address,address,uint256,bytes)","selector":"0x5cffe9de"} -->
 ### `flashLoan(address,address,uint256,bytes)`
@@ -176,7 +181,7 @@ from/to, value data), with the topic hashes pinned in the generated lock.
 | Callback | Typed zero-value call to `receiver.onFlashLoan(msg.sender, address(this), value, 0, data)` (`0x23e30c8b`). It observes incremented `flashMinted`, credited receiver balance, unchanged ETH, and the mint log. Child reverts bubble; no-code/short/malformed return decoding empty-reverts. A successfully decoded word unequal to `CALLBACK_SUCCESS` is replaced with exact `Error("WETH: flash loan failed")`. |
 | Settlement after callback | Reads the **post-callback** `allowance[receiver][address(this)]`. If it is max uint256, skips allowance checks/write/log. Otherwise requires `allowed >= value` or `WETH: request exceeds allowance`, stores `allowed-value`, and emits `Approval(receiver, address(this), reduced)`. Then reads post-callback receiver balance, requires `balance >= value` or `WETH: burn amount exceeds balance`, debits it, emits `Transfer(receiver, 0, value)`, unchecked-subtracts `flashMinted -= value`, and returns `true`. |
 | Event/rollback trace | Outer-frame WETH10 order is mint `Transfer`, arbitrary callback-log segment, optional finite-allowance `Approval`, burn `Transfer`: two or three WETH10-owned logs, plus any actual reentrant WETH10 or child logs. Any later failure rolls the entire nested transaction back. Nonzero entry value empty-reverts before guard (1). |
-| Evidence owners | `DF-flash`; `TH-flash`, `TH-backed`, later settling/liveness families. Status: planned. |
+| Evidence owners | `DF-flash`; `TH-flash`, `TH-backed`. Status: complete. |
 
 <!-- WETH10-ENDPOINT {"signature":"flashMinted()","selector":"0x8b28d32f"} -->
 ### `flashMinted()`
@@ -186,7 +191,7 @@ from/to, value data), with the topic hashes pinned in the generated lock.
 | ABI | `view`, nonpayable; no inputs; output `uint256`; selector `0x8b28d32f`. |
 | Success | Returns current flash-minted amount, including the reentrancy-visible temporary amount during a flash-loan callback. No effects. |
 | Guards/reverts | No source guard. Nonzero value is an empty dispatcher revert. |
-| Evidence owners | `DF-view`, `DF-flash`; `TH-read`, `TH-flash`. Status: planned. |
+| Evidence owners | `DF-view`, `DF-flash`; `TH-read`, `TH-flash`. Status: complete. |
 
 <!-- WETH10-ENDPOINT {"signature":"maxFlashLoan(address)","selector":"0x613255ab"} -->
 ### `maxFlashLoan(address)`
@@ -196,7 +201,7 @@ from/to, value data), with the topic hashes pinned in the generated lock.
 | ABI | `view`, nonpayable; input `(token: address)`; output `uint256`; selector `0x613255ab`. |
 | Success | If token is not `address(this)`, returns `0`. Otherwise returns unchecked `2^112-1 - flashMinted`; on reachable states the cap invariant prevents underflow. No effects. |
 | Guards/reverts | No reverting source guard. Nonzero call value is an empty dispatcher revert. |
-| Evidence owners | `DF-view`, `DF-flash`; `TH-read`, `TH-flash`. Status: planned. |
+| Evidence owners | `DF-view`, `DF-flash`; `TH-read`, `TH-flash`. Status: complete. |
 
 <!-- WETH10-ENDPOINT {"signature":"name()","selector":"0x06fdde03"} -->
 ### `name()`
@@ -206,7 +211,7 @@ from/to, value data), with the topic hashes pinned in the generated lock.
 | ABI | `view`, nonpayable; no inputs; dynamic output `string`; selector `0x06fdde03`. |
 | Success | Returns standard dynamic ABI encoding of `Wrapped Ether v10`; no effects. |
 | Guards/reverts | No source guard. Nonzero value is an empty dispatcher revert. |
-| Evidence owners | `DF-view`; `TH-read`. Status: planned. |
+| Evidence owners | `DF-view`; `TH-read`. Status: complete. |
 
 <!-- WETH10-ENDPOINT {"signature":"nonces(address)","selector":"0x7ecebe00"} -->
 ### `nonces(address)`
@@ -216,7 +221,7 @@ from/to, value data), with the topic hashes pinned in the generated lock.
 | ABI | `view`, nonpayable; input `(owner: address)`; output `uint256`; selector `0x7ecebe00`. |
 | Success | Returns the owner's current permit nonce; no effects. |
 | Guards/reverts | No source guard. Nonzero value is an empty dispatcher revert. |
-| Evidence owners | `DF-view`, `DF-permit`; `TH-read`, `TH-permit`. Status: planned. |
+| Evidence owners | `DF-view`, `DF-permit`; `TH-read`, `TH-permit`. Status: complete. |
 
 <!-- WETH10-ENDPOINT {"signature":"permit(address,address,uint256,uint256,uint8,bytes32,bytes32)","selector":"0xd505accf"} -->
 ### `permit(address,address,uint256,uint256,uint8,bytes32,bytes32)`
@@ -227,7 +232,7 @@ from/to, value data), with the topic hashes pinned in the generated lock.
 | Guard/digest order | (1) require `block.timestamp <= deadline` (equality succeeds) or exact `Error("WETH: Expired permit")`; (2) read `chainid()`; (3) form the Permit struct hash using the current `nonces[owner]` and post-increment that nonce unchecked; (4) use cached domain on the deployment chain, otherwise recompute it for current chain ID and `address(this)`; (5) call `ecrecover`; (6) require recovered signer is nonzero and equals owner or exact `Error("WETH: invalid permit")`. |
 | Success/effects | Sets `allowance[owner][spender] = value`, emits `Approval(owner, spender, value)`, and returns empty data. Zero owner cannot pass the signer guard. Zero spender is accepted. |
 | Rollback/quirks | An invalid signature tentatively increments the nonce before `ecrecover`, but the revert rolls that increment back. A valid call advances it exactly once modulo `2^256`. Forked-chain signatures use the recomputed current-chain domain. Nonzero entry value empty-reverts before the deadline guard. |
-| Evidence owners | `DF-permit`; `TH-permit`, `TH-backed`. Status: planned. |
+| Evidence owners | `DF-permit`; `TH-permit`, `TH-backed`. Status: complete. |
 
 <!-- WETH10-ENDPOINT {"signature":"symbol()","selector":"0x95d89b41"} -->
 ### `symbol()`
@@ -237,7 +242,7 @@ from/to, value data), with the topic hashes pinned in the generated lock.
 | ABI | `view`, nonpayable; no inputs; dynamic output `string`; selector `0x95d89b41`. |
 | Success | Returns standard dynamic ABI encoding of `WETH10`; no effects. |
 | Guards/reverts | No source guard. Nonzero value is an empty dispatcher revert. |
-| Evidence owners | `DF-view`; `TH-read`. Status: planned. |
+| Evidence owners | `DF-view`; `TH-read`. Status: complete. |
 
 <!-- WETH10-ENDPOINT {"signature":"totalSupply()","selector":"0x18160ddd"} -->
 ### `totalSupply()`
@@ -247,7 +252,7 @@ from/to, value data), with the topic hashes pinned in the generated lock.
 | ABI | `view`, nonpayable; no inputs; output `uint256`; selector `0x18160ddd`. |
 | Success | Returns unchecked `address(this).balance + flashMinted`, not the sum of booked balances. Force-sent ETH therefore increases the result; during flash callbacks the temporary minted amount also contributes. No effects. |
 | Guards/reverts | No source guard. Nonzero value is an empty dispatcher revert. |
-| Evidence owners | `DF-view`, force-send fixtures; `TH-read`, `TH-backed`. Status: planned. |
+| Evidence owners | `DF-view`, force-send fixtures; `TH-read`, `TH-backed`. Status: complete. |
 
 <!-- WETH10-ENDPOINT {"signature":"transfer(address,uint256)","selector":"0xa9059cbb"} -->
 ### `transfer(address,uint256)`
@@ -258,7 +263,7 @@ from/to, value data), with the topic hashes pinned in the generated lock.
 | Nonzero-recipient branch | For every `to != address(0)`, including `address(this)`, require caller balance `>= value` or exact `WETH: transfer amount exceeds balance`; debit caller, unchecked-credit `to`, emit `Transfer(msg.sender, to, value)`, return `true`. A self-transfer restores the same balance after the debit/credit but still emits. |
 | Zero-recipient branch | Require caller balance `>= value` or exact `WETH: burn amount exceeds balance`; debit and emit `Transfer(msg.sender, 0, value)`; then low-level-call `msg.sender` with value `value` and empty calldata, forwarding ordinary remaining gas. The call observes the debit/log and reduced WETH ETH balance. Child revert bytes are not bubbled: any false call result is replaced by exact `WETH: ETH transfer failed`. Success returns `true`. |
 | Rollback/entry | ETH-call failure rolls back debit and log. Nonzero entry value empty-reverts before either branch. |
-| Evidence owners | `DF-state`, callback/reentrancy fixtures; `TH-state`, `TH-callback`, `TH-backed`. Status: planned. |
+| Evidence owners | `DF-state`, callback/reentrancy fixtures; `TH-state`, `TH-callback`, `TH-backed`. Status: complete. |
 
 <!-- WETH10-ENDPOINT {"signature":"transferAndCall(address,uint256,bytes)","selector":"0x4000aea0"} -->
 ### `transferAndCall(address,uint256,bytes)`
@@ -267,9 +272,9 @@ from/to, value data), with the topic hashes pinned in the generated lock.
 |---|---|
 | ABI | `nonpayable`; inputs `(to: address, value: uint256, data: bytes)`; output `bool`; selector `0x4000aea0`. |
 | Transfer phase | Executes exactly the two `transfer` branches above, including ordinary transfer to `address(this)`, branch-specific balance reasons, and for `to == 0` the ETH call to `msg.sender` with `WETH: ETH transfer failed` replacement. |
-| Callback | After that phase succeeds, typed zero-value-call target `to` with `onTokenTransfer(msg.sender, value, data)`. It observes the completed transfer or withdrawal. Returns decoded Boolean verbatim, including `false`; child reverts bubble; codeless/zero target or bad return decoding empty-reverts and rolls back the entire preceding phase. Thus `to == 0` transiently burns and sends ETH to the caller, then the typed callback to zero empty-reverts everything. |
+| Callback | After that phase succeeds, typed zero-value-call target `to` with `onTokenTransfer(msg.sender, value, data)`. It observes the completed transfer or withdrawal. The first full return word is normalized by deployed Solidity-0.7 truthiness: zero to canonical `false`, every nonzero word to canonical `true`; both succeed. Child reverts bubble; codeless/zero targets or returndata shorter than 32 bytes empty-revert and roll back the entire preceding phase. Thus `to == 0` transiently burns and sends ETH to the caller, then the typed callback to zero empty-reverts everything. |
 | Entry | Nonzero call value empty-reverts before the body. |
-| Evidence owners | `DF-callback`; `TH-callback`, `TH-backed`. Status: planned. |
+| Evidence owners | `DF-callback`; `TH-callback`, `TH-backed`. Status: complete. |
 
 <!-- WETH10-ENDPOINT {"signature":"transferFrom(address,address,uint256)","selector":"0x23b872dd"} -->
 ### `transferFrom(address,address,uint256)`
@@ -281,7 +286,7 @@ from/to, value data), with the topic hashes pinned in the generated lock.
 | Nonzero-recipient branch | For every `to != 0`, including `address(this)`, require `balanceOf[from] >= value` or `WETH: transfer amount exceeds balance`; debit, unchecked-credit `to`, emit `Transfer(from, to, value)`, return `true`. |
 | Zero-recipient branch | Require balance or `WETH: burn amount exceeds balance`; debit and emit `Transfer(from, 0, value)`; low-level-call **`msg.sender`** (not `from` or `to`) with `value` ETH and empty calldata. False call result becomes exact `WETH: ETH transfer failed`; success returns `true`. The callback observes any finite allowance reduction and burn. |
 | Entry | Nonzero call value empty-reverts before allowance handling. |
-| Evidence owners | `DF-state`, callback/reentrancy fixtures; `TH-state`, `TH-callback`, `TH-backed`. Status: planned. |
+| Evidence owners | `DF-state`, callback/reentrancy fixtures; `TH-state`, `TH-callback`, `TH-backed`. Status: complete. |
 
 <!-- WETH10-ENDPOINT {"signature":"withdraw(uint256)","selector":"0x2e1a7d4d"} -->
 ### `withdraw(uint256)`
@@ -291,7 +296,7 @@ from/to, value data), with the topic hashes pinned in the generated lock.
 | ABI | `nonpayable`; input `(value: uint256)`; no outputs; selector `0x2e1a7d4d`. |
 | Guard/effects | Require caller balance `>= value` or exact `WETH: burn amount exceeds balance`; debit and emit `Transfer(msg.sender, 0, value)`. |
 | External call | Low-level call to `msg.sender` with `value` ETH and empty calldata after the debit/log. False result, regardless of child revert bytes, becomes exact `WETH: ETH transfer failed`; success returns empty data. Failure rolls everything back. |
-| Entry/evidence | Nonzero entry value empty-reverts. Owners: `DF-state`, reentrancy fixtures; `TH-state`, `TH-callback`, `TH-backed`. Status: planned. |
+| Entry/evidence | Nonzero entry value empty-reverts. Owners: `DF-state`, reentrancy fixtures; `TH-state`, `TH-callback`, `TH-backed`. Status: complete. |
 
 <!-- WETH10-ENDPOINT {"signature":"withdrawFrom(address,address,uint256)","selector":"0x9555a942"} -->
 ### `withdrawFrom(address,address,uint256)`
@@ -302,7 +307,7 @@ from/to, value data), with the topic hashes pinned in the generated lock.
 | Allowance phase | If `from == msg.sender`, bypass allowance. Otherwise max allowance bypasses check/write/log; a finite allowance must cover value or exact `WETH: request exceeds allowance`, then is reduced and emits `Approval(from, msg.sender, reduced)`. |
 | Burn/call | Require post-allowance `balanceOf[from] >= value` or exact `WETH: burn amount exceeds balance`; debit and emit `Transfer(from, 0, value)`; low-level-call `to` with `value` ETH and empty calldata. False result is replaced by the uniquely spelled exact reason `WETH: Ether transfer failed`. The target observes finite allowance reduction, burn, and log prefix. |
 | Rollback/entry | Any later failure rolls back allowance/balance/log/ETH effects. Nonzero entry value empty-reverts. |
-| Evidence owners | `DF-state`, reentrancy fixtures; `TH-state`, `TH-callback`, `TH-backed`. Status: planned. |
+| Evidence owners | `DF-state`, reentrancy fixtures; `TH-state`, `TH-callback`, `TH-backed`. Status: complete. |
 
 <!-- WETH10-ENDPOINT {"signature":"withdrawTo(address,uint256)","selector":"0x205c2878"} -->
 ### `withdrawTo(address,uint256)`
@@ -312,7 +317,7 @@ from/to, value data), with the topic hashes pinned in the generated lock.
 | ABI | `nonpayable`; inputs `(to: address payable, value: uint256)`; no outputs; selector `0x205c2878`. |
 | Guard/effects | Require caller balance `>= value` or exact `WETH: burn amount exceeds balance`; debit and emit `Transfer(msg.sender, 0, value)`. |
 | External call | Low-level call to `to` with `value` ETH and empty calldata. False result is replaced by exact `WETH: ETH transfer failed`; success returns empty data. The target observes the debit/log. Failure rolls everything back. Address zero can succeed as an ETH target. |
-| Entry/evidence | Nonzero entry value empty-reverts. Owners: `DF-state`, reentrancy fixtures; `TH-state`, `TH-callback`, `TH-backed`. Status: planned. |
+| Entry/evidence | Nonzero entry value empty-reverts. Owners: `DF-state`, reentrancy fixtures; `TH-state`, `TH-callback`, `TH-backed`. Status: complete. |
 
 <!-- WETH10-ENDPOINT {"signature":"receive","selector":null} -->
 ### `receive`
@@ -322,7 +327,7 @@ from/to, value data), with the topic hashes pinned in the generated lock.
 | ABI | Payable empty-calldata receive; no selector, inputs, outputs, or return data. |
 | Success/effects | Unchecked-credits `balanceOf[msg.sender] += msg.value` and emits `Transfer(0, msg.sender, msg.value)`. The contract balance already includes the incoming ETH. Zero value still follows the write/log path. |
 | Dispatch | Only empty calldata selects receive. Nonempty unknown selectors do not fall through to it. No source guard or external call. |
-| Evidence owners | `DF-state` plus dispatcher fixtures; `TH-state`, `TH-backed`. Status: planned. |
+| Evidence owners | `DF-state` plus dispatcher fixtures; `TH-state`, `TH-backed`. Status: complete. |
 
 ## Cross-cutting behavior
 
@@ -388,15 +393,18 @@ hostile callback/gas conditions.
 Adequate gas means each execution can reach the compared behavior. Low-level
 ETH calls and typed callbacks use their actual remaining-gas behavior, but
 Blanc need not match exact gas consumption, access lists, or callback-observed
-`gasleft()`. Later gas claims measure Blanc's own compiled bytes only.
+`gasleft()`. The landed exact-gas claims measure Blanc's own compiled bytes
+only.
 
 <!-- WETH10-CROSSCUT malformed-calldata-exclusion -->
 ### Malformed-calldata exclusion
 
 Malformed **input** calldata is outside equivalence as stated above. Malformed
 **callback return** data is inside: typed Boolean/bytes32 return decoding must
-match the deployed decoder, including empty revert for codeless/short/invalid
-encodings. Child revert returndata bubbles for typed callbacks, while a
+match the deployed decoder. Boolean returndata shorter than one word
+empty-reverts; a full zero word returns canonical `false`, and every full
+nonzero word—including noncanonical ABI words—returns canonical `true`.
+Child revert returndata bubbles for typed callbacks, while a
 successfully decoded wrong flash-loan magic word gets WETH10's replacement
 reason.
 
@@ -459,4 +467,15 @@ as `deploymentChainId`, and computes the cached domain separator from that
 chain ID and the new contract's own address. Compatibility requires this
 generic fresh-deployment behavior, not source initcode bytes, CREATE2 address,
 deployment gas, or literal installed-runtime transplantation. Evidence owners:
-planned deployment fixtures and the later initcode/runtime theorem family.
+completed deployment fixtures and completed `TH-deploy`.
+`weth10Init_exec_nonzero` proves that the actual appended-data initcode
+empty-reverts on nonzero endowment. Under explicit exact-initcode, zero-value,
+no-code-address, adequate-gas, and code-size premises,
+`processCreateMessage_weth10_success` proves successful creation, installation
+of `weth10Code (freshDeployParams chainId currentTarget)`, empty target storage
+satisfying `Weth10Inv`, no logs, exact returned runtime bytes, and subtraction
+of the named direct creation-message gas accounting. The companion
+`freshDeployment_staticCertificate` bundles parameter derivation, universal
+runtime compilation, constructor call-freedom, empty-state initialization, and
+the closed Blanc gas ceiling. None of these statements claims deployed-gas
+parity or source-initcode identity.

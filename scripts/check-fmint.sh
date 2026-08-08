@@ -27,16 +27,21 @@
 # a byte mismatch is a REGRESSION, distinct from both the manifest
 # cross-check and a fixture FAIL.
 #
+# The Solidity-compiled borrower has a separate provenance leg: before any
+# fixture runs, scripts/check-fmint-borrower-source.py independently recomputes
+# the pinned source's Keccak-256 and compares it with the committed compiler
+# artifact. This is intentionally not a solc recompilation claim.
+#
 # Usage: scripts/check-fmint.sh [--no-build]
 #
 # --no-build skips `lake build jaune/jaune` and requires the runner binary to
 # already exist (permitted only after a successful build at the same source
 # commit, per scripts/GATES.md).
 #
-# CLI contract: exit 0 if and only if the manifest cross-check passes AND
-# the runtime byte-equality gate passes AND every fixture PASSes. Output
-# ends with one verdict line per fixture plus a single unambiguous summary
-# line, after a version-and-pins line identifying exactly what was checked.
+# CLI contract: exit 0 if and only if the manifest cross-check, borrower source
+# hash, and runtime byte-equality gates pass AND every fixture PASSes. Output
+# ends with one verdict line per fixture plus a single unambiguous summary line,
+# after a version-and-pins line identifying exactly what was checked.
 
 set -u
 
@@ -139,6 +144,19 @@ CROSS_CHECK_STATUS=$?
 printf '%s\n' "$CROSS_CHECK_OUT"
 if [ "$CROSS_CHECK_STATUS" -ne 0 ]; then
   echo "REGRESSION — fmint fixtures: manifest cross-check failed"
+  exit 1
+fi
+
+# ---- the Solidity borrower source-hash gate -------------------------------
+# The artifact records the source digest at regeneration time. Recompute it
+# here with an implementation independent of the generator, against a
+# checker-pinned path, so source drift cannot hide behind a still-green runtime
+# fixture. Pure source/JSON comparison; no solc, Lean, or lake dependency.
+SOURCE_CHECK_OUT="$("$PY" "$SCRIPT_DIR/check-fmint-borrower-source.py" 2>&1)"
+SOURCE_CHECK_STATUS=$?
+printf '%s\n' "$SOURCE_CHECK_OUT"
+if [ "$SOURCE_CHECK_STATUS" -ne 0 ]; then
+  echo "REGRESSION — fmint fixtures: borrower source-hash gate failed"
   exit 1
 fi
 

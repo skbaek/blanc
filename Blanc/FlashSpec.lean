@@ -8,8 +8,9 @@
 -- and then the headline `fmint_flashLoan_spec` with its seven `no_success_of_*`
 -- corollaries.  A final section adds the frame-level restoration family
 -- (`~/plans/fmint-restoration.md`): `rollback_of_callback_failure` at the
--- borrower's frame, and `rollback_of_no_success` with its seven instantiations
--- at fmint's own message frame.  Those name a FRAME and never a transaction.
+-- borrower's frame, and the shared `Blanc.rollback_of_no_success` with its
+-- seven instantiations at fmint's own message frame.  Those name a FRAME and
+-- never a transaction.
 --
 -- Everything here is PARTIAL CORRECTNESS and never liveness: every theorem
 -- takes a successful run as a hypothesis and reads facts off it.  Nothing in
@@ -23,6 +24,7 @@
 import Blanc.Fmint
 import Blanc.Conserved
 import Blanc.CommonProofs
+import Blanc.Ladder
 
 namespace Blanc
 
@@ -1896,51 +1898,56 @@ lemma of_spendAllowanceThenBurn_val {sevm : Sevm} {s r : Devm} {wad : B256}
 
 /-! ### The burn pair, and what the frame returns -/
 
-/-- **The frame returned ABI-`true`.**
-
-`returnTrue` ends in `Func.ret`, and `Linst.run .ret` sets `Devm.output` from
-*memory* (`Jaune/Machine.lean`), so this is a predicate about `Devm.output`
-(`Jaune/Machine.lean`) and **not** about a stack word: at a `RETURN` there is
-no returned word on the stack to talk about.
-
-Contract-agnostic — `returnTrue` is shared surface — but stated here because
-this arc's headline is what names it; hoisting it costs nothing if a second
-contract ever wants it. -/
+/-- Fmint's historical name for the shared canonical ABI-true result. -/
 def ReturnsTrue (d : Devm) : Prop := Devm.output d = (1 : B256).toBytes
 
-/-- `returnTrue` returns ABI-`true`: it writes the word at `0x00` and returns
-`[0x00, 0x20)`, so the returned bytes are that write, read back.  The image the
-walk arrives with is irrelevant — the write covers the whole window. -/
-lemma of_returnTrue {fs : List Func} {sevm : Sevm} {s r : Devm} {img : Bytes} {xs}
-    (hp : xs <<+ s.stack) (h_wf : Mem.Wf s.memory) (h_reads : Mem.Reads s.memory img)
+/-- Compatibility endpoint for fmint's existing proof family.  The generic
+theorem is now shared upstream as `of_returnTrue_shared`; this statement and
+its proof shape remain here so already-audited fmint declarations do not move. -/
+lemma of_returnTrue {fs : List Func} {sevm : Sevm} {s r : Devm}
+    {img : Bytes} {xs}
+    (hp : xs <<+ s.stack)
+    (h_wf : Mem.Wf s.memory)
+    (h_reads : Mem.Reads s.memory img)
     (h : Func.Run fs sevm s returnTrue r) :
     ReturnsTrue r ∧ Devm.getCode s = Devm.getCode r := by
   simp only [returnTrue] at h
   rcases of_run_next h with ⟨s1, r1, h⟩
-  have hp1 : (1 : B256) :: xs <<+ s1.stack := prefix_of_push (of_run_pushB256 r1) hp
-  have hm1 : s.memory = s1.memory := Ninst.Hinv.inv (f := Devm.memory) r1
+  have hp1 : (1 : B256) :: xs <<+ s1.stack :=
+    prefix_of_push (of_run_pushB256 r1) hp
+  have hm1 : s.memory = s1.memory :=
+    Ninst.Hinv.inv (f := Devm.memory) r1
   rcases of_run_prepend (mstoreAt 0) _ h with ⟨s2, h2, h⟩
   rcases of_run_mstoreAt_val h2 hp1 with ⟨hp2, hm2⟩
-  have hwf2 : Mem.Wf s2.memory := by rw [hm2, ← hm1]; exact h_wf.write _ _
-  have hrd2 : Mem.Reads s2.memory (Bytes.writeAt img 0 (1 : B256).toBytes) := by
-    rw [hm2, ← hm1]; exact Mem.Reads.write h_wf h_reads 0 _
+  have hwf2 : Mem.Wf s2.memory := by
+    rw [hm2, ← hm1]
+    exact h_wf.write _ _
+  have hrd2 :
+      Mem.Reads s2.memory (Bytes.writeAt img 0 (1 : B256).toBytes) := by
+    rw [hm2, ← hm1]
+    exact Mem.Reads.write h_wf h_reads 0 _
   rcases of_run_prepend (pushList [32, 0]) _ h with ⟨s3, h3, h⟩
   rcases Line.of_run_cons h3 with ⟨u1, q1, h3'⟩
   rcases Line.of_run_cons h3' with ⟨u2, q2, hnil⟩
   cases hnil
-  have hu1 : (32 : B256) :: xs <<+ u1.stack := prefix_of_push (of_run_pushB256 q1) hp2
+  have hu1 : (32 : B256) :: xs <<+ u1.stack :=
+    prefix_of_push (of_run_pushB256 q1) hp2
   have hu2 : (0 : B256) :: (32 : B256) :: xs <<+ s3.stack :=
     prefix_of_push (of_run_pushB256 q2) hu1
-  have hm3 : s2.memory = s3.memory := Line.of_inv Devm.memory (by line_inv) h3
+  have hm3 : s2.memory = s3.memory :=
+    Line.of_inv Devm.memory (by line_inv) h3
   have hgc : Devm.getCode s = Devm.getCode s3 :=
     ((Ninst.Hinv.inv (f := Devm.getCode) r1).trans
       (Line.of_inv Devm.getCode (by line_inv) h2)).trans
       (Line.of_inv Devm.getCode (by line_inv) h3)
   refine ⟨?_, hgc.trans (of_run_ret_val hu2 h).2⟩
   show Devm.output r = _
-  rw [(of_run_ret_val hu2 h).1, show (0 : B256).toNat = 0 from rfl,
-    show (32 : B256).toNat = 32 from rfl, Mem.Reads.read (hm3 ▸ hrd2) 0 32,
-    show (32 : Nat) = (1 : B256).toBytes.length from (B256.length_toBytes 1).symm,
+  rw [(of_run_ret_val hu2 h).1,
+    show (0 : B256).toNat = 0 from rfl,
+    show (32 : B256).toNat = 32 from rfl,
+    Mem.Reads.read (hm3 ▸ hrd2) 0 32,
+    show (32 : Nat) = (1 : B256).toBytes.length from
+      (B256.length_toBytes 1).symm,
     Bytes.sliceD_writeAt]
 
 /-- **The burn pair, as equations, and the frame's return value.**
@@ -2961,8 +2968,8 @@ mode, and the fact that *no* successful `Exec` starts from this frame's entry
 machine, the settled result carries an error flag and its world is exactly
 `msg`'s entry world.
 
-Stated **once**, over the abstract premise `h_none`; each of the seven
-`no_success_of_*` corollaries below instantiates it in a single line.
+The shared core is stated **once**, over the abstract premise `h_none`; each of
+the seven `no_success_of_*` corollaries below instantiates it in a single line.
 
 **Why `h_fill` is a premise.**  `ProcessMessage msg xl (.ok out)` leaves the raw
 execution result in the slot entirely unconstrained, so without
@@ -2985,10 +2992,10 @@ about, and `h_prec` says so out loud.  Note its shape: it is
 that is `some` — a frame with no code address has no precompile branch to
 exclude, and is asked for nothing.
 
-**Contract-agnostic.**  Nothing above `h_none` mentions fmint; this is a
-frame-level statement that happens to live in fmint's module because its seven
-consumers do.  It is the third member of the `Exec`-level `.error`-outcome
-genre recorded as an open item in `~/plans/flashmint-proposal.md`. -/
+**Contract-agnostic.**  Nothing above `h_none` mentions fmint, so the proof
+lives in the shared `Blanc/Ladder.lean` layer.  This declaration preserves the
+original `Blanc.Fmint` API while the seven consumers below call the shared core
+directly. -/
 theorem rollback_of_no_success {msg : Msg} {benv : Benv} {xl : Xlot} {out : Devm}
     (h_pm : ProcessMessage msg xl (.ok out))
     (h_fill : Xlot.Filled xl)
@@ -3000,34 +3007,7 @@ theorem rollback_of_no_success {msg : Msg} {benv : Benv} {xl : Xlot} {out : Devm
     out.error.isSome ∧
       out.state = msg.benv.state ∧
       out.transientStorage = msg.tenv.transientStorage := by
-  obtain ⟨r0, hbody, hset⟩ := ProcessMessage.iff_body.mp h_pm
-  unfold FrameBody at hbody
-  rw [h_bt] at hbody
-  rcases r0 with x | evm'
-  · rw [processMessage.settle_error] at hset
-    cases hset
-  unfold processMessage.settle at hset
-  dsimp only [bind, Except.bind] at hset
-  by_cases herr : evm'.error.isSome = true
-  · rw [if_pos herr] at hset
-    have h_err : out.error.isSome = true := by rw [Except.ok.inj hset]; exact herr
-    exact ⟨h_err, ProcessMessage.rollback_of_error h_pm h_err⟩
-  · exfalso
-    rw [if_neg herr] at hset
-    have h_eq : evm' = out := Except.ok.inj hset.symm
-    subst h_eq
-    rcases h_ca : (msg.withBenv benv).codeAddress with _ | adr
-    · obtain ⟨ex', h_xl, h_he⟩ := of_executeCode_noneCode h_ca hbody
-      subst h_xl
-      obtain ⟨exc⟩ := h_fill
-      rw [exec_ok_of_handleError h_he herr] at exc
-      exact h_none _ exc
-    · rcases of_executeCode_someCode h_ca hbody with ⟨h_pre, -, -⟩ | ⟨-, ex', h_xl, h_he⟩
-      · exact h_prec adr h_ca h_pre
-      · subst h_xl
-        obtain ⟨exc⟩ := h_fill
-        rw [exec_ok_of_handleError h_he herr] at exc
-        exact h_none _ exc
+  exact Blanc.rollback_of_no_success h_pm h_fill h_bt h_prec h_none
 
 /-- **The same statement off the total function.**  `of_processMessage` produces
 the slot *and* its `Filled` proof from `processMessage msg = .ok out`, so a
@@ -3044,8 +3024,7 @@ theorem rollback_of_no_success_total {msg : Msg} {benv : Benv} {out : Devm}
     out.error.isSome ∧
       out.state = msg.benv.state ∧
       out.transientStorage = msg.tenv.transientStorage := by
-  obtain ⟨xl, h_fill, h_pm⟩ := of_processMessage msg (.ok out) h_run
-  exact rollback_of_no_success h_pm h_fill h_bt h_prec h_none
+  exact Blanc.rollback_of_no_success_total h_run h_bt h_prec h_none
 
 /-- **Wrong magic word ⇒ the frame settled with an error, rolled back.**  The
 restoration form of `no_success_of_callback_never_magic`, at the frame
@@ -3089,7 +3068,7 @@ theorem rollback_of_callback_never_magic {msg : Msg} {benv : Benv} {xl : Xlot}
     out.error.isSome ∧
       out.state = msg.benv.state ∧
       out.transientStorage = msg.tenv.transientStorage :=
-  rollback_of_no_success h_pm h_fill h_bt h_prec
+  Blanc.rollback_of_no_success h_pm h_fill h_bt h_prec
     (fun _ exc => no_success_of_callback_never_magic h_code h_sel h_dec h_size
       h_wf h_fresh h_never exc)
 
@@ -3126,7 +3105,7 @@ theorem rollback_of_callback_never_returns_word {msg : Msg} {benv : Benv}
     out.error.isSome ∧
       out.state = msg.benv.state ∧
       out.transientStorage = msg.tenv.transientStorage :=
-  rollback_of_no_success h_pm h_fill h_bt h_prec
+  Blanc.rollback_of_no_success h_pm h_fill h_bt h_prec
     (fun _ exc => no_success_of_callback_never_returns_word h_code h_sel h_dec
       h_size h_wf h_fresh h_short exc)
 
@@ -3156,7 +3135,7 @@ theorem rollback_of_token_ne_self {msg : Msg} {benv : Benv} {xl : Xlot}
     out.error.isSome ∧
       out.state = msg.benv.state ∧
       out.transientStorage = msg.tenv.transientStorage :=
-  rollback_of_no_success h_pm h_fill h_bt h_prec
+  Blanc.rollback_of_no_success h_pm h_fill h_bt h_prec
     (fun _ exc => no_success_of_token_ne_self h_code h_sel h_dec h_ne exc)
 
 /-- **A `receiver` word that is not address-shaped ⇒ the frame settled with an
@@ -3184,7 +3163,7 @@ theorem rollback_of_receiver_not_address {msg : Msg} {benv : Benv} {xl : Xlot}
     out.error.isSome ∧
       out.state = msg.benv.state ∧
       out.transientStorage = msg.tenv.transientStorage :=
-  rollback_of_no_success h_pm h_fill h_bt h_prec
+  Blanc.rollback_of_no_success h_pm h_fill h_bt h_prec
     (fun _ exc => no_success_of_receiver_not_address h_code h_sel h_dec h_dirty exc)
 
 /-- **`amount` past `maxFlashLoan` ⇒ the frame settled with an error, rolled
@@ -3216,7 +3195,7 @@ theorem rollback_of_amount_over_maxFlashLoan {msg : Msg} {benv : Benv} {xl : Xlo
     out.error.isSome ∧
       out.state = msg.benv.state ∧
       out.transientStorage = msg.tenv.transientStorage :=
-  rollback_of_no_success h_pm h_fill h_bt h_prec
+  Blanc.rollback_of_no_success h_pm h_fill h_bt h_prec
     (fun _ exc => no_success_of_amount_over_maxFlashLoan h_code h_sel h_dec h_over exc)
 
 /-- **An allowance below `amount` ⇒ the frame settled with an error, rolled
@@ -3255,7 +3234,7 @@ theorem rollback_of_allowance_below_amount {msg : Msg} {benv : Benv} {xl : Xlot}
     out.error.isSome ∧
       out.state = msg.benv.state ∧
       out.transientStorage = msg.tenv.transientStorage :=
-  rollback_of_no_success h_pm h_fill h_bt h_prec
+  Blanc.rollback_of_no_success h_pm h_fill h_bt h_prec
     (fun _ exc => no_success_of_allowance_below_amount h_code h_sel h_dec h_size
       h_wf h_fresh h_low exc)
 
@@ -3292,7 +3271,7 @@ theorem rollback_of_balance_below_amount {msg : Msg} {benv : Benv} {xl : Xlot}
     out.error.isSome ∧
       out.state = msg.benv.state ∧
       out.transientStorage = msg.tenv.transientStorage :=
-  rollback_of_no_success h_pm h_fill h_bt h_prec
+  Blanc.rollback_of_no_success h_pm h_fill h_bt h_prec
     (fun _ exc => no_success_of_balance_below_amount h_code h_sel h_dec h_size
       h_wf h_fresh h_low exc)
 

@@ -71,8 +71,8 @@ ATTACKER_ADDR = "0x" + "dead0001".rjust(40, "0")
 # The view-function prober (weth-evidence Step 3). A separate account from
 # WETH on purpose: WETH's own dispatcher PUSH32s all ten selectors as
 # comparison constants, so scripts/check-weth-coverage.py excludes WETH's
-# account from its caller-prop scan. A prober living at WETH's address would
-# be invisible to the coverage gate.
+# account from prop evidence. A separate prober also provides the changed
+# storage recorder slots that witness its internal CALLs.
 PROBER_ADDR = "0x" + "b0b".rjust(40, "0")
 # Subjects the view probes ask about. Plain synthetic addresses -- they never
 # sign anything, they are only storage-key material.
@@ -323,15 +323,12 @@ class Probe:
 
 
 def _assert_prober_is_scannable(code):
-    """`scripts/check-weth-coverage.py` finds a caller prop's embedded
-    calldata by walking the prop's bytecode for `PUSH32 <selector><28 zero
-    bytes>`, skipping 33 bytes past each PUSH32 it sees. That walk stays
-    aligned only if no *other* push's immediate contains a 0x7F byte, which it
-    would misread as a PUSH32 opcode and then skip past a real selector word,
-    silently under-reporting coverage. Every immediate this emitter produces
-    is chosen here, so the condition is checkable rather than left to luck.
-    The coverage gate's own per-selector output is still the confirmation --
-    run `scripts/check-weth-coverage.sh` after regenerating."""
+    """Retain the emitter's historical no-embedded-PUSH32 invariant.
+
+    The current coverage gate decodes instruction boundaries and additionally
+    requires an exact CALL plus changed recorder slot, so this condition is no
+    longer its alignment mechanism. Keeping the stronger generator invariant
+    avoids unexplained byte drift and makes selector words easy to audit."""
     i = 0
     while i < len(code):
         op = code[i]

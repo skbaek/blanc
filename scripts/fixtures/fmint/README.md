@@ -105,13 +105,25 @@ bytes rather than re-deriving or transcribing them — the same rule
 compiler moved:** bumping the pin changes committed bytes and every fixture
 that installs them, and is a reviewed act rather than maintenance.
 
+`check-fmint.sh` also recomputes the pinned source's Keccak-256 with Blanc's
+independent pure-Python implementation and requires it to match the artifact's
+`sourceKeccak256`. That closes silent source drift: CI checks the bytes that
+the provenance row names, rather than merely trusting the generator-written
+digest. It does **not** recompile Solidity or prove that the committed runtime
+came from those bytes; compiler/runtime provenance still rests on the pinned,
+reviewed regeneration record above.
+
 ## What the suite establishes
 
-Two independent checks, exactly as the WETH suite's:
+Three independent checks, the first specific to the Solidity borrower and the
+other two matching the WETH suite's evidence split:
 
-1. **`check-fmint.sh` checks Jaune against the frozen EELS oracle** — PASS
+1. **`check-fmint.sh` independently checks the Solidity source digest** — PASS
+   iff the checker-pinned source bytes hash to the artifact's committed
+   `sourceKeccak256`.
+2. **`check-fmint.sh` checks Jaune against the frozen EELS oracle** — PASS
    iff Jaune reproduces the oracle's committed post-state exactly.
-2. **The generator checks the oracle's answer against fmint's semantics**,
+3. **The generator checks the oracle's answer against fmint's semantics**,
    computing the fmint-semantic part of the expected post-state from the
    pre-state and the transaction alone and asserting the oracle's output
    matches before writing the fixture.
@@ -548,53 +560,43 @@ rule: read from the artifact, never re-derived and never transcribed (see
 ## Selector coverage
 
 `scripts/check-fmint-coverage.sh` (mirroring `check-weth-coverage.sh`)
-checks that every one of fmint's twelve selectors
+obtains fmint's twelve selectors
 (`scripts/fmint-selectors.json`, emitted from `Blanc.Fmint.fmintFuncs` by
-`scripts/gen-fmint-selectors.lean`) is exercised somewhere in this
-directory — either as a direct top-level dispatch call, or as an embedded
-selector in some OTHER account's compiled code (a generalised scan: fmint's
-borrowers embed a selector as an exact `PUSH4`, Blanc's own minimal-width
-encoding, while this suite's Python-built probers embed one as `PUSH32
-<selector><28 zero bytes>`, WETH's own convention, because a
-Python-computed calldata word with 28 trailing zero bytes has its highest
-SET bit inside the selector itself and so needs the full 32 bytes to
-represent at all). Unlike WETH's dispatcher, whose own account had to be
-excluded from a top-level-call-only scan, fmint's borrowers are reached two
-hops down (transaction → prober → fmint → borrower), so this scan covers
-**every** non-fmint contract account in a fixture's pre-state, not only
-direct transaction targets — safe here because this suite hand-authors
-every account it deploys for a reason; there are no decorative, unreferenced
-contracts to accidentally credit. fmint's own account is still excluded —
-its dispatcher embeds all twelve selectors as comparison constants
-regardless of what actually called it — and since `~/plans/fmint-evidence.md`
-Step 1 it is identified by **byte-equality against the committed
-`Blanc.Fmint.fmintCode` literal**, not by its code's length and prefix as
-this paragraph said until Step 3.
+`scripts/gen-fmint-selectors.lean`) and assigns one of four evidence classes:
 
-The budget (`scripts/fmint-coverage-budget.txt`) is currently **empty**:
-all twelve selectors are exercised.
+- `DIRECT`: a top-level transaction targets fmint with the selector. This
+  covers `approve` and `transferFrom`.
+- `INTERNAL`: a top-level-called prober has straight-line bytecode that stores
+  the selector at memory zero, CALLs the byte-identical fmint account with that
+  input window, and immediately records a success flag or failure-path
+  executed marker in a slot that changed in committed post-state. This covers
+  `name`, `symbol`, `decimals`, `allowance`, `flashLoan`, `maxFlashLoan`, and
+  `flashFee`.
+- `EMBEDDED`: a selector-shaped PUSH exists, but there is no accepted execution
+  witness. This is diagnostic only and earns no coverage credit.
+- `UNREACHED`: neither direct nor witnessed internal evidence exists.
 
-**The `solc`-compiled borrower does not perturb this**, and the reason is
-worth stating rather than assuming. The scan is a **union** over fixtures and
-accounts: a selector is unexercised iff *no* fixture credits it, so adding a
-fixture — or an account inside one — can only ever shrink the unexercised
-set. It is already empty and the budget is 0, so it stays empty at 0. The one
-thing an added account *could* have broken is the fmint-account
-identification, which fails closed unless exactly one account's code is
-byte-identical to `fmintCode`; case `11` has exactly one, like every other
-case. Measured rather than argued: the gate reports 12/12 at budget 0 with
-the new fixture present.
+fmint's dispatcher is excluded by identifying its account through byte
+equality with the committed `Blanc.Fmint.fmintCode`, so its twelve comparison
+constants cannot create vacuous coverage. Five built-in corruptions remove a
+marker, remove the CALL, change its target, make the recorder branchable, or
+overwrite calldata word zero; every one must lose internal-call credit.
 
-As it happens the new borrower is credited by the scan just like a Blanc one.
-`solc` builds an outgoing call's selector with a minimal-width `PUSH4`
-followed by `PUSH1 0xe0 SHL`, so `approve`, `balanceOf` and `totalSupply`
-appear in its code in exactly the `PUSH4 <selector>` shape
-`gen-fmint-borrowers.lean`'s `storeWord` produces. (Its own `onFlashLoan`
-dispatch constant is likewise a bare `PUSH4`, and is simply not one of
-fmint's twelve.) The plan for this step had guessed the opposite — that a
-`solc`-compiled account would embed them differently — which is why the
-invariance argument above rests on the union property rather than on the
-embedding shape.
+The honest result is **9/12 reached: 2 direct + 7 witnessed internal**.
+`totalSupply`, `balanceOf`, and `transfer` occur as PUSH4 literals in branching
+borrower code, including the Solidity borrower's `totalSupply`/`balanceOf`
+calls and the transfer-away borrower's `transfer`. Those scenarios may carry
+other semantic evidence, but this coverage checker has neither an execution
+trace nor a durable per-call marker that links those particular CALL sites to
+post-state. It therefore reports them as uncredited embedding and records an
+explicit budget of three.
+
+The budget's former value of zero rested on the now-retired rule “embedded
+means exercised.” Correcting it to three is evidence repair, not ordinary
+budget expansion; from this corrected baseline it may only shrink. The
+recognizer is intentionally limited to the generator's straight-line
+recorder. Extending credit to branching borrowers requires a new durable
+callsite witness, not another byte-pattern exception.
 
 ## Running
 

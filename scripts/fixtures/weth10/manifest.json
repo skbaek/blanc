@@ -1,0 +1,3217 @@
+{
+  "blanc": {
+    "mainnet": {
+      "byteLength": 6313,
+      "committedLiteral": "Blanc/Weth10Code.lean::weth10MainnetCode",
+      "sha256": "7e8db17e5ef02cfdc0637547e6a6054a0bfb62aa501a59ccc342f3ac83f5aefc"
+    },
+    "synthetic": {
+      "address": "0x0000000000000000000000000000000000001000",
+      "byteLength": 6313,
+      "cachedDomainSeparator": "0x1967b0678ebf880673e5717c2e034e403352644648cbf7f427c2d47faa9d4efb",
+      "chainId": 31337,
+      "sha256": "7adf0712b839be5d46bf10e24e4c860e63593fe4b67ec5ffb3892ca14635b1e8"
+    }
+  },
+  "counts": {
+    "channels": {
+      "call-shape": 24,
+      "call-trace": 61,
+      "ecrecover": 9,
+      "eth": 139,
+      "logical-state": 139,
+      "logs": 139,
+      "outcome": 139,
+      "returndata": 139
+    },
+    "endpoints": {
+      "CALLBACK_SUCCESS()": 3,
+      "DOMAIN_SEPARATOR()": 4,
+      "PERMIT_TYPEHASH()": 3,
+      "allowance(address,address)": 3,
+      "approve(address,uint256)": 3,
+      "approveAndCall(address,uint256,bytes)": 11,
+      "balanceOf(address)": 3,
+      "decimals()": 3,
+      "deploymentChainId()": 4,
+      "deposit()": 2,
+      "depositTo(address)": 1,
+      "depositToAndCall(address,bytes)": 12,
+      "flashFee(address,uint256)": 4,
+      "flashLoan(address,address,uint256,bytes)": 19,
+      "flashMinted()": 3,
+      "maxFlashLoan(address)": 3,
+      "name()": 3,
+      "nonces(address)": 3,
+      "permit(address,address,uint256,uint256,uint8,bytes32,bytes32)": 10,
+      "receive": 1,
+      "symbol()": 3,
+      "totalSupply()": 3,
+      "transfer(address,uint256)": 8,
+      "transferAndCall(address,uint256,bytes)": 11,
+      "transferFrom(address,address,uint256)": 4,
+      "unknown-selector": 2,
+      "withdraw(uint256)": 4,
+      "withdrawFrom(address,address,uint256)": 3,
+      "withdrawTo(address,uint256)": 3
+    },
+    "rows": 139,
+    "tags": {
+      "allowance-bypass": 2,
+      "allowance-guard": 1,
+      "balance-guard": 4,
+      "child-log": 6,
+      "child-revert": 4,
+      "codeless": 4,
+      "deadline": 2,
+      "deadline-equality": 1,
+      "decoder": 30,
+      "domain": 5,
+      "ecrecover-empty": 1,
+      "empty": 4,
+      "empty-revert": 27,
+      "eth-call": 6,
+      "exact-reason": 2,
+      "false": 3,
+      "finite-allowance": 2,
+      "flash": 15,
+      "fork-prefork-invalid": 1,
+      "fork-valid": 1,
+      "guard-precedence": 10,
+      "hostile-reentrancy": 1,
+      "identity": 3,
+      "individual-cap": 2,
+      "infinite-allowance": 2,
+      "invalid-signature": 2,
+      "magic-finite": 1,
+      "magic-infinite": 1,
+      "mainnet-domain": 1,
+      "noncanonical-max": 3,
+      "noncanonical-two": 3,
+      "nonpayability": 25,
+      "payable": 4,
+      "permit": 9,
+      "post-callback-balance": 1,
+      "post-callback-settlement": 1,
+      "precall-state": 3,
+      "read": 28,
+      "reason-replacement": 1,
+      "receive": 1,
+      "reentrancy-snapshot": 2,
+      "rollback": 17,
+      "selector-smoke": 27,
+      "self-address": 1,
+      "self-recipient": 1,
+      "settlement": 7,
+      "short31": 4,
+      "state": 17,
+      "state-mutating-reentrancy": 4,
+      "staticcall": 26,
+      "synthetic-world": 3,
+      "temporary-mint": 1,
+      "token-guard": 2,
+      "total-cap": 1,
+      "true": 3,
+      "typed-callback": 32,
+      "unknown-selector": 2,
+      "withdrawal-branch": 1,
+      "write-before-callback": 2,
+      "write-before-ecrecover": 1,
+      "write-before-value-call": 1,
+      "write-violation": 3,
+      "wrong-magic": 1
+    }
+  },
+  "explicitGaps": [
+    "fresh deployment/initcode and constructor execution (RL9 owner, outside this runner)",
+    "exact low-gas and callback-observed gasleft parity (normatively excluded)",
+    "the synthetic identity world currently has three parameter/address canaries rather than a duplicate of every mainnet scenario",
+    "malformed or noncanonical input calldata (normatively excluded)",
+    "adversarial allowance-key collision worlds (normatively excluded)",
+    "consensus receipt/state-root execution through Jaune; this rig executes message calls in pinned EELS"
+  ],
+  "oracle": {
+    "address": "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f",
+    "byteLength": 9975,
+    "installedCodehash": "0x50ea9957a23e0f53e98b5651d889eb768e72027663b99addf50898bb3a1fa5d2",
+    "installedSha256": "ca979fc12a175535a08add286497b8fc3a1805f7bcef7ae90d3dc4307ac1c25a"
+  },
+  "rows": [
+    {
+      "calldataSha256": "c15068a5ba0dfe6a6f778b3d816332ec49e5f8843e1bed933354dfd27a67ce05",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "CALLBACK_SUCCESS()",
+      "name": "smoke-CALLBACK_SUCCESS",
+      "owner": "DF-view",
+      "tags": [
+        "selector-smoke",
+        "read"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "c15068a5ba0dfe6a6f778b3d816332ec49e5f8843e1bed933354dfd27a67ce05",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "CALLBACK_SUCCESS()",
+      "name": "static-CALLBACK_SUCCESS",
+      "owner": "DF-view",
+      "tags": [
+        "staticcall",
+        "read"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "ca383f0359e53a7d63a2426f30de631a1e1a4184058b55980d7b53a11985bdea",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "DOMAIN_SEPARATOR()",
+      "name": "smoke-DOMAIN_SEPARATOR",
+      "owner": "DF-view",
+      "tags": [
+        "selector-smoke",
+        "read"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "ca383f0359e53a7d63a2426f30de631a1e1a4184058b55980d7b53a11985bdea",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "DOMAIN_SEPARATOR()",
+      "name": "static-DOMAIN_SEPARATOR",
+      "owner": "DF-view",
+      "tags": [
+        "staticcall",
+        "read"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "b8c950b316e7cee520daa869c6a4c71155b010aa538187a547a4db7899f4580a",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "PERMIT_TYPEHASH()",
+      "name": "smoke-PERMIT_TYPEHASH",
+      "owner": "DF-view",
+      "tags": [
+        "selector-smoke",
+        "read"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "b8c950b316e7cee520daa869c6a4c71155b010aa538187a547a4db7899f4580a",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "PERMIT_TYPEHASH()",
+      "name": "static-PERMIT_TYPEHASH",
+      "owner": "DF-view",
+      "tags": [
+        "staticcall",
+        "read"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "e87266ee366a352922b96da49f6330b4a4bc665fecaea5ca209890926562f945",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "allowance(address,address)",
+      "name": "smoke-allowance",
+      "owner": "DF-view",
+      "tags": [
+        "selector-smoke",
+        "read"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "e87266ee366a352922b96da49f6330b4a4bc665fecaea5ca209890926562f945",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "allowance(address,address)",
+      "name": "static-allowance",
+      "owner": "DF-view",
+      "tags": [
+        "staticcall",
+        "read"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "253ca8a6a34bbf477048722720882d54798af89a1687eaec40c315712c103b1d",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "balanceOf(address)",
+      "name": "smoke-balanceOf",
+      "owner": "DF-view",
+      "tags": [
+        "selector-smoke",
+        "read"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "253ca8a6a34bbf477048722720882d54798af89a1687eaec40c315712c103b1d",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "balanceOf(address)",
+      "name": "static-balanceOf",
+      "owner": "DF-view",
+      "tags": [
+        "staticcall",
+        "read"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "14c70f2432d9477dfd6d6e248a2e21da83c5bd31917f6f726e25762c6fe61689",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "decimals()",
+      "name": "smoke-decimals",
+      "owner": "DF-view",
+      "tags": [
+        "selector-smoke",
+        "read"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "14c70f2432d9477dfd6d6e248a2e21da83c5bd31917f6f726e25762c6fe61689",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "decimals()",
+      "name": "static-decimals",
+      "owner": "DF-view",
+      "tags": [
+        "staticcall",
+        "read"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "495031b2a59863ad4b88707db9b51251efc1c26c081c429cee8b2cc1f1ec5e0e",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "deploymentChainId()",
+      "name": "smoke-deploymentChainId",
+      "owner": "DF-view",
+      "tags": [
+        "selector-smoke",
+        "read"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "495031b2a59863ad4b88707db9b51251efc1c26c081c429cee8b2cc1f1ec5e0e",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "deploymentChainId()",
+      "name": "static-deploymentChainId",
+      "owner": "DF-view",
+      "tags": [
+        "staticcall",
+        "read"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "7d28ce2d5d9fbb95071ac3725fa07ffd936361dd6b76bac7cc6c0f014baa2f74",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "flashFee(address,uint256)",
+      "name": "smoke-flashFee",
+      "owner": "DF-view",
+      "tags": [
+        "selector-smoke",
+        "read"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "7d28ce2d5d9fbb95071ac3725fa07ffd936361dd6b76bac7cc6c0f014baa2f74",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "flashFee(address,uint256)",
+      "name": "static-flashFee",
+      "owner": "DF-view",
+      "tags": [
+        "staticcall",
+        "read"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "73b2e02cf12fd9cd3298ddc1a68292eb0250b905be09f51d3099cdbdc5d6abbb",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "flashMinted()",
+      "name": "smoke-flashMinted",
+      "owner": "DF-view",
+      "tags": [
+        "selector-smoke",
+        "read"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "73b2e02cf12fd9cd3298ddc1a68292eb0250b905be09f51d3099cdbdc5d6abbb",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "flashMinted()",
+      "name": "static-flashMinted",
+      "owner": "DF-view",
+      "tags": [
+        "staticcall",
+        "read"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "64002aa2adcc55c2dcadefa0c3ac6c11aaa575a8e7d75b5bf23ba390c183599a",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "maxFlashLoan(address)",
+      "name": "smoke-maxFlashLoan",
+      "owner": "DF-view",
+      "tags": [
+        "selector-smoke",
+        "read"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "64002aa2adcc55c2dcadefa0c3ac6c11aaa575a8e7d75b5bf23ba390c183599a",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "maxFlashLoan(address)",
+      "name": "static-maxFlashLoan",
+      "owner": "DF-view",
+      "tags": [
+        "staticcall",
+        "read"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "9f9f78206ba72f45aaae172cacd35c21878f2b3546ffb3d73120d9648affc80e",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "name()",
+      "name": "smoke-name",
+      "owner": "DF-view",
+      "tags": [
+        "selector-smoke",
+        "read"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "9f9f78206ba72f45aaae172cacd35c21878f2b3546ffb3d73120d9648affc80e",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "name()",
+      "name": "static-name",
+      "owner": "DF-view",
+      "tags": [
+        "staticcall",
+        "read"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "bb58d5ed4600fb82e6e78d0229e6a3bf63444ec602c4d2c5491b413cb149e3db",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "nonces(address)",
+      "name": "smoke-nonces",
+      "owner": "DF-view",
+      "tags": [
+        "selector-smoke",
+        "read"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "bb58d5ed4600fb82e6e78d0229e6a3bf63444ec602c4d2c5491b413cb149e3db",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "nonces(address)",
+      "name": "static-nonces",
+      "owner": "DF-view",
+      "tags": [
+        "staticcall",
+        "read"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "506634d469d57c73a85f1de689d55182ca800996744f42d753441e2e2139e1ad",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "symbol()",
+      "name": "smoke-symbol",
+      "owner": "DF-view",
+      "tags": [
+        "selector-smoke",
+        "read"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "506634d469d57c73a85f1de689d55182ca800996744f42d753441e2e2139e1ad",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "symbol()",
+      "name": "static-symbol",
+      "owner": "DF-view",
+      "tags": [
+        "staticcall",
+        "read"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "0f0d0c4eaf95b455297f70fae536726f2603fc3091679f6a25c02c5fe102c216",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "totalSupply()",
+      "name": "smoke-totalSupply",
+      "owner": "DF-view",
+      "tags": [
+        "selector-smoke",
+        "read"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "0f0d0c4eaf95b455297f70fae536726f2603fc3091679f6a25c02c5fe102c216",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "totalSupply()",
+      "name": "static-totalSupply",
+      "owner": "DF-view",
+      "tags": [
+        "staticcall",
+        "read"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "b9c1ebdbb0304fb2947a536b7928beb2b157c0c92581c366a6a93ad707c25fd8",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "approve(address,uint256)",
+      "name": "smoke-approve",
+      "owner": "DF-state",
+      "tags": [
+        "selector-smoke",
+        "state"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "c46337cf15d919482c8443942cb821e7169da5b6cfed46ad947274d134db76b4",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "deposit()",
+      "name": "smoke-deposit",
+      "owner": "DF-state",
+      "tags": [
+        "selector-smoke",
+        "state",
+        "payable"
+      ],
+      "value": "0x5",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "f909d7cf0ebf768e810f0eacb8b6add12a5f31174aa3032e68c314827c115f62",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "depositTo(address)",
+      "name": "smoke-depositTo",
+      "owner": "DF-state",
+      "tags": [
+        "selector-smoke",
+        "state",
+        "payable"
+      ],
+      "value": "0x5",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "receive",
+      "name": "smoke-receive",
+      "owner": "DF-state",
+      "tags": [
+        "receive",
+        "state",
+        "payable"
+      ],
+      "value": "0x5",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "8732e333d634105afcb9552003ac843a6e6fb20756e0f0edefc380b572bce23b",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "transfer(address,uint256)",
+      "name": "smoke-transfer",
+      "owner": "DF-state",
+      "tags": [
+        "selector-smoke",
+        "state"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "0a71d9fc80734e23ba550b58c1640385f8aca3dbaac2344ec9763e1081e40fb9",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "transferFrom(address,address,uint256)",
+      "name": "smoke-transferFrom",
+      "owner": "DF-state",
+      "tags": [
+        "selector-smoke",
+        "state",
+        "allowance-bypass"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "994f54d5515cfd36a701c93f25af53b6c8490c2abac922eb78c338a6599d25e5",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace"
+      ],
+      "endpoint": "withdraw(uint256)",
+      "name": "smoke-withdraw",
+      "owner": "DF-state",
+      "tags": [
+        "selector-smoke",
+        "state",
+        "eth-call"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "48c7a8714cc1fc2f7abfb818d3a48552e95c8940c2c8f771720ba849fd68219d",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace"
+      ],
+      "endpoint": "withdrawTo(address,uint256)",
+      "name": "smoke-withdrawTo",
+      "owner": "DF-state",
+      "tags": [
+        "selector-smoke",
+        "state",
+        "eth-call"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "d4e53bcb41f5c2aee07c33c024fd27ca5215fb09f98b103af7f01d9b2bad2685",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace"
+      ],
+      "endpoint": "withdrawFrom(address,address,uint256)",
+      "name": "smoke-withdrawFrom",
+      "owner": "DF-state",
+      "tags": [
+        "selector-smoke",
+        "state",
+        "allowance-bypass",
+        "eth-call"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "2126d11a7dccb9077171a6d763e9e00bd2ac0e8fd9e9c2dd51d486eeba458d60",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-shape",
+        "call-trace"
+      ],
+      "endpoint": "approveAndCall(address,uint256,bytes)",
+      "name": "smoke-approveAndCall",
+      "owner": "DF-callback",
+      "tags": [
+        "selector-smoke",
+        "typed-callback"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "eb560e9bd3b5506a9be392554621500201b04b4d33a419475ee18a007438b5df",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-shape",
+        "call-trace"
+      ],
+      "endpoint": "depositToAndCall(address,bytes)",
+      "name": "smoke-depositToAndCall",
+      "owner": "DF-callback",
+      "tags": [
+        "selector-smoke",
+        "typed-callback",
+        "payable"
+      ],
+      "value": "0x5",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "b9bf60327eb7ecd6b9ec348e056d5e5ac84b5dc814611cf4399b5fb6bd25434a",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-shape",
+        "call-trace"
+      ],
+      "endpoint": "transferAndCall(address,uint256,bytes)",
+      "name": "smoke-transferAndCall",
+      "owner": "DF-callback",
+      "tags": [
+        "selector-smoke",
+        "typed-callback"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "15ba1aa4c0fbaa0389d481d3d28caf1576e97bc90b20989401c482932f5520cc",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-shape",
+        "call-trace"
+      ],
+      "endpoint": "flashLoan(address,address,uint256,bytes)",
+      "name": "smoke-flashLoan",
+      "owner": "DF-flash",
+      "tags": [
+        "selector-smoke",
+        "flash",
+        "typed-callback",
+        "infinite-allowance"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "7cd6bd096ec3355b6ce6934d970ab1bb03793b3201b88f599bc4c5f5c8c7a28a",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-shape",
+        "call-trace"
+      ],
+      "endpoint": "depositToAndCall(address,bytes)",
+      "name": "depositToAndCall-reentrant-view-snapshot",
+      "owner": "DF-callback",
+      "tags": [
+        "typed-callback",
+        "reentrancy-snapshot",
+        "precall-state",
+        "child-log"
+      ],
+      "value": "0x5",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "b02d6e39543b78595abc53ce8517c388791e22b9bfa3fccb8a8994e1abd6d411",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-shape",
+        "call-trace"
+      ],
+      "endpoint": "flashLoan(address,address,uint256,bytes)",
+      "name": "flashLoan-reentrant-view-snapshot",
+      "owner": "DF-flash",
+      "tags": [
+        "flash",
+        "reentrancy-snapshot",
+        "temporary-mint",
+        "child-log"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "7fb291406ddc18948523ca177e84e9d277a74bbf7a61591d22c07ab5c0dd4089",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-shape",
+        "call-trace"
+      ],
+      "endpoint": "approveAndCall(address,uint256,bytes)",
+      "name": "approveAndCall-reentrant-transferFrom",
+      "owner": "DF-callback",
+      "tags": [
+        "typed-callback",
+        "state-mutating-reentrancy",
+        "finite-allowance",
+        "child-log"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "424a3aa515656a5bbf8d0ed234144feda32d1d768b47f002aff388cef0606d30",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-shape",
+        "call-trace"
+      ],
+      "endpoint": "depositToAndCall(address,bytes)",
+      "name": "depositToAndCall-reentrant-transfer",
+      "owner": "DF-callback",
+      "tags": [
+        "typed-callback",
+        "state-mutating-reentrancy",
+        "precall-state",
+        "child-log"
+      ],
+      "value": "0x5",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "3cf4a730eef7cadd8fd7b8bf7a4f1c265f16a8495cbf1ad7748954543203e783",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-shape",
+        "call-trace"
+      ],
+      "endpoint": "transferAndCall(address,uint256,bytes)",
+      "name": "transferAndCall-reentrant-transfer",
+      "owner": "DF-callback",
+      "tags": [
+        "typed-callback",
+        "state-mutating-reentrancy",
+        "precall-state",
+        "child-log"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "c884866341a2e8035ad8a1875d74a81c4bd1e7098c1fd04c3f459c65d30a5c0b",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-shape",
+        "call-trace"
+      ],
+      "endpoint": "flashLoan(address,address,uint256,bytes)",
+      "name": "flashLoan-reentrant-approve-settlement",
+      "owner": "DF-flash",
+      "tags": [
+        "flash",
+        "state-mutating-reentrancy",
+        "post-callback-settlement",
+        "child-log"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "c884866341a2e8035ad8a1875d74a81c4bd1e7098c1fd04c3f459c65d30a5c0b",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace"
+      ],
+      "endpoint": "flashLoan(address,address,uint256,bytes)",
+      "name": "flashLoan-reentrant-drain-rolls-back",
+      "owner": "DF-flash",
+      "tags": [
+        "flash",
+        "hostile-reentrancy",
+        "post-callback-balance",
+        "rollback"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "374dba0aa9c569cae37523fc88842ec3f43d3697561239820f7a1116b99a13de",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "ecrecover"
+      ],
+      "endpoint": "permit(address,address,uint256,uint256,uint8,bytes32,bytes32)",
+      "name": "smoke-permit",
+      "owner": "DF-permit",
+      "tags": [
+        "selector-smoke",
+        "permit",
+        "mainnet-domain"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "c15068a5ba0dfe6a6f778b3d816332ec49e5f8843e1bed933354dfd27a67ce05",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "CALLBACK_SUCCESS()",
+      "name": "nonpayable-CALLBACK_SUCCESS",
+      "owner": "DF-boundary",
+      "tags": [
+        "nonpayability",
+        "empty-revert"
+      ],
+      "value": "0x1",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "ca383f0359e53a7d63a2426f30de631a1e1a4184058b55980d7b53a11985bdea",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "DOMAIN_SEPARATOR()",
+      "name": "nonpayable-DOMAIN_SEPARATOR",
+      "owner": "DF-boundary",
+      "tags": [
+        "nonpayability",
+        "empty-revert"
+      ],
+      "value": "0x1",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "b8c950b316e7cee520daa869c6a4c71155b010aa538187a547a4db7899f4580a",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "PERMIT_TYPEHASH()",
+      "name": "nonpayable-PERMIT_TYPEHASH",
+      "owner": "DF-boundary",
+      "tags": [
+        "nonpayability",
+        "empty-revert"
+      ],
+      "value": "0x1",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "e87266ee366a352922b96da49f6330b4a4bc665fecaea5ca209890926562f945",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "allowance(address,address)",
+      "name": "nonpayable-allowance",
+      "owner": "DF-boundary",
+      "tags": [
+        "nonpayability",
+        "empty-revert"
+      ],
+      "value": "0x1",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "b9c1ebdbb0304fb2947a536b7928beb2b157c0c92581c366a6a93ad707c25fd8",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "approve(address,uint256)",
+      "name": "nonpayable-approve",
+      "owner": "DF-boundary",
+      "tags": [
+        "nonpayability",
+        "empty-revert"
+      ],
+      "value": "0x1",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "7fb291406ddc18948523ca177e84e9d277a74bbf7a61591d22c07ab5c0dd4089",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "approveAndCall(address,uint256,bytes)",
+      "name": "nonpayable-approveAndCall",
+      "owner": "DF-boundary",
+      "tags": [
+        "nonpayability",
+        "empty-revert"
+      ],
+      "value": "0x1",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "253ca8a6a34bbf477048722720882d54798af89a1687eaec40c315712c103b1d",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "balanceOf(address)",
+      "name": "nonpayable-balanceOf",
+      "owner": "DF-boundary",
+      "tags": [
+        "nonpayability",
+        "empty-revert"
+      ],
+      "value": "0x1",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "14c70f2432d9477dfd6d6e248a2e21da83c5bd31917f6f726e25762c6fe61689",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "decimals()",
+      "name": "nonpayable-decimals",
+      "owner": "DF-boundary",
+      "tags": [
+        "nonpayability",
+        "empty-revert"
+      ],
+      "value": "0x1",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "495031b2a59863ad4b88707db9b51251efc1c26c081c429cee8b2cc1f1ec5e0e",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "deploymentChainId()",
+      "name": "nonpayable-deploymentChainId",
+      "owner": "DF-boundary",
+      "tags": [
+        "nonpayability",
+        "empty-revert"
+      ],
+      "value": "0x1",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "7d28ce2d5d9fbb95071ac3725fa07ffd936361dd6b76bac7cc6c0f014baa2f74",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "flashFee(address,uint256)",
+      "name": "nonpayable-flashFee",
+      "owner": "DF-boundary",
+      "tags": [
+        "nonpayability",
+        "empty-revert"
+      ],
+      "value": "0x1",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "c884866341a2e8035ad8a1875d74a81c4bd1e7098c1fd04c3f459c65d30a5c0b",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "flashLoan(address,address,uint256,bytes)",
+      "name": "nonpayable-flashLoan",
+      "owner": "DF-boundary",
+      "tags": [
+        "nonpayability",
+        "empty-revert"
+      ],
+      "value": "0x1",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "73b2e02cf12fd9cd3298ddc1a68292eb0250b905be09f51d3099cdbdc5d6abbb",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "flashMinted()",
+      "name": "nonpayable-flashMinted",
+      "owner": "DF-boundary",
+      "tags": [
+        "nonpayability",
+        "empty-revert"
+      ],
+      "value": "0x1",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "64002aa2adcc55c2dcadefa0c3ac6c11aaa575a8e7d75b5bf23ba390c183599a",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "maxFlashLoan(address)",
+      "name": "nonpayable-maxFlashLoan",
+      "owner": "DF-boundary",
+      "tags": [
+        "nonpayability",
+        "empty-revert"
+      ],
+      "value": "0x1",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "9f9f78206ba72f45aaae172cacd35c21878f2b3546ffb3d73120d9648affc80e",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "name()",
+      "name": "nonpayable-name",
+      "owner": "DF-boundary",
+      "tags": [
+        "nonpayability",
+        "empty-revert"
+      ],
+      "value": "0x1",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "bb58d5ed4600fb82e6e78d0229e6a3bf63444ec602c4d2c5491b413cb149e3db",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "nonces(address)",
+      "name": "nonpayable-nonces",
+      "owner": "DF-boundary",
+      "tags": [
+        "nonpayability",
+        "empty-revert"
+      ],
+      "value": "0x1",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "374dba0aa9c569cae37523fc88842ec3f43d3697561239820f7a1116b99a13de",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "permit(address,address,uint256,uint256,uint8,bytes32,bytes32)",
+      "name": "nonpayable-permit",
+      "owner": "DF-boundary",
+      "tags": [
+        "nonpayability",
+        "empty-revert"
+      ],
+      "value": "0x1",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "506634d469d57c73a85f1de689d55182ca800996744f42d753441e2e2139e1ad",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "symbol()",
+      "name": "nonpayable-symbol",
+      "owner": "DF-boundary",
+      "tags": [
+        "nonpayability",
+        "empty-revert"
+      ],
+      "value": "0x1",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "0f0d0c4eaf95b455297f70fae536726f2603fc3091679f6a25c02c5fe102c216",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "totalSupply()",
+      "name": "nonpayable-totalSupply",
+      "owner": "DF-boundary",
+      "tags": [
+        "nonpayability",
+        "empty-revert"
+      ],
+      "value": "0x1",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "8732e333d634105afcb9552003ac843a6e6fb20756e0f0edefc380b572bce23b",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "transfer(address,uint256)",
+      "name": "nonpayable-transfer",
+      "owner": "DF-boundary",
+      "tags": [
+        "nonpayability",
+        "empty-revert"
+      ],
+      "value": "0x1",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "3cf4a730eef7cadd8fd7b8bf7a4f1c265f16a8495cbf1ad7748954543203e783",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "transferAndCall(address,uint256,bytes)",
+      "name": "nonpayable-transferAndCall",
+      "owner": "DF-boundary",
+      "tags": [
+        "nonpayability",
+        "empty-revert"
+      ],
+      "value": "0x1",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "0a71d9fc80734e23ba550b58c1640385f8aca3dbaac2344ec9763e1081e40fb9",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "transferFrom(address,address,uint256)",
+      "name": "nonpayable-transferFrom",
+      "owner": "DF-boundary",
+      "tags": [
+        "nonpayability",
+        "empty-revert"
+      ],
+      "value": "0x1",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "994f54d5515cfd36a701c93f25af53b6c8490c2abac922eb78c338a6599d25e5",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "withdraw(uint256)",
+      "name": "nonpayable-withdraw",
+      "owner": "DF-boundary",
+      "tags": [
+        "nonpayability",
+        "empty-revert"
+      ],
+      "value": "0x1",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "d4e53bcb41f5c2aee07c33c024fd27ca5215fb09f98b103af7f01d9b2bad2685",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "withdrawFrom(address,address,uint256)",
+      "name": "nonpayable-withdrawFrom",
+      "owner": "DF-boundary",
+      "tags": [
+        "nonpayability",
+        "empty-revert"
+      ],
+      "value": "0x1",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "48c7a8714cc1fc2f7abfb818d3a48552e95c8940c2c8f771720ba849fd68219d",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "withdrawTo(address,uint256)",
+      "name": "nonpayable-withdrawTo",
+      "owner": "DF-boundary",
+      "tags": [
+        "nonpayability",
+        "empty-revert"
+      ],
+      "value": "0x1",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "5f78c33274e43fa9de5659265c1d917e25c03722dcb0b8d27db8d5feaa813953",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "unknown-selector",
+      "name": "unknown-selector-zero-value",
+      "owner": "DF-boundary",
+      "tags": [
+        "unknown-selector",
+        "empty-revert"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "5f78c33274e43fa9de5659265c1d917e25c03722dcb0b8d27db8d5feaa813953",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "unknown-selector",
+      "name": "unknown-selector-with-value",
+      "owner": "DF-boundary",
+      "tags": [
+        "unknown-selector",
+        "nonpayability",
+        "empty-revert"
+      ],
+      "value": "0x5",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "a6094512023b236c82a561401d746e17a31b10f3ff0b87a6240f9e92ea13f907",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace",
+        "call-shape"
+      ],
+      "endpoint": "approveAndCall(address,uint256,bytes)",
+      "name": "approveAndCall-true",
+      "owner": "DF-callback",
+      "tags": [
+        "typed-callback",
+        "decoder",
+        "true"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "d83bb23164711f6510971aec9347f1ff14a7cb129adbd803a1d615762279023f",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace",
+        "call-shape"
+      ],
+      "endpoint": "depositToAndCall(address,bytes)",
+      "name": "depositToAndCall-true",
+      "owner": "DF-callback",
+      "tags": [
+        "typed-callback",
+        "decoder",
+        "true"
+      ],
+      "value": "0x5",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "345dc60de3aa04f67a20c2e1053749c78e526e192ab783a7153b0889242e627e",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace",
+        "call-shape"
+      ],
+      "endpoint": "transferAndCall(address,uint256,bytes)",
+      "name": "transferAndCall-true",
+      "owner": "DF-callback",
+      "tags": [
+        "typed-callback",
+        "decoder",
+        "true"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "a6094512023b236c82a561401d746e17a31b10f3ff0b87a6240f9e92ea13f907",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace",
+        "call-shape"
+      ],
+      "endpoint": "approveAndCall(address,uint256,bytes)",
+      "name": "approveAndCall-false",
+      "owner": "DF-callback",
+      "tags": [
+        "typed-callback",
+        "decoder",
+        "false"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "d83bb23164711f6510971aec9347f1ff14a7cb129adbd803a1d615762279023f",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace",
+        "call-shape"
+      ],
+      "endpoint": "depositToAndCall(address,bytes)",
+      "name": "depositToAndCall-false",
+      "owner": "DF-callback",
+      "tags": [
+        "typed-callback",
+        "decoder",
+        "false"
+      ],
+      "value": "0x5",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "345dc60de3aa04f67a20c2e1053749c78e526e192ab783a7153b0889242e627e",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace",
+        "call-shape"
+      ],
+      "endpoint": "transferAndCall(address,uint256,bytes)",
+      "name": "transferAndCall-false",
+      "owner": "DF-callback",
+      "tags": [
+        "typed-callback",
+        "decoder",
+        "false"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "a6094512023b236c82a561401d746e17a31b10f3ff0b87a6240f9e92ea13f907",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace"
+      ],
+      "endpoint": "approveAndCall(address,uint256,bytes)",
+      "name": "approveAndCall-empty",
+      "owner": "DF-callback",
+      "tags": [
+        "typed-callback",
+        "decoder",
+        "empty"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "d83bb23164711f6510971aec9347f1ff14a7cb129adbd803a1d615762279023f",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace"
+      ],
+      "endpoint": "depositToAndCall(address,bytes)",
+      "name": "depositToAndCall-empty",
+      "owner": "DF-callback",
+      "tags": [
+        "typed-callback",
+        "decoder",
+        "empty"
+      ],
+      "value": "0x5",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "345dc60de3aa04f67a20c2e1053749c78e526e192ab783a7153b0889242e627e",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace"
+      ],
+      "endpoint": "transferAndCall(address,uint256,bytes)",
+      "name": "transferAndCall-empty",
+      "owner": "DF-callback",
+      "tags": [
+        "typed-callback",
+        "decoder",
+        "empty"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "a6094512023b236c82a561401d746e17a31b10f3ff0b87a6240f9e92ea13f907",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace"
+      ],
+      "endpoint": "approveAndCall(address,uint256,bytes)",
+      "name": "approveAndCall-short31",
+      "owner": "DF-callback",
+      "tags": [
+        "typed-callback",
+        "decoder",
+        "short31"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "d83bb23164711f6510971aec9347f1ff14a7cb129adbd803a1d615762279023f",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace"
+      ],
+      "endpoint": "depositToAndCall(address,bytes)",
+      "name": "depositToAndCall-short31",
+      "owner": "DF-callback",
+      "tags": [
+        "typed-callback",
+        "decoder",
+        "short31"
+      ],
+      "value": "0x5",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "345dc60de3aa04f67a20c2e1053749c78e526e192ab783a7153b0889242e627e",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace"
+      ],
+      "endpoint": "transferAndCall(address,uint256,bytes)",
+      "name": "transferAndCall-short31",
+      "owner": "DF-callback",
+      "tags": [
+        "typed-callback",
+        "decoder",
+        "short31"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "a6094512023b236c82a561401d746e17a31b10f3ff0b87a6240f9e92ea13f907",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace",
+        "call-shape"
+      ],
+      "endpoint": "approveAndCall(address,uint256,bytes)",
+      "name": "approveAndCall-noncanonical-two",
+      "owner": "DF-callback",
+      "tags": [
+        "typed-callback",
+        "decoder",
+        "noncanonical-two"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "d83bb23164711f6510971aec9347f1ff14a7cb129adbd803a1d615762279023f",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace",
+        "call-shape"
+      ],
+      "endpoint": "depositToAndCall(address,bytes)",
+      "name": "depositToAndCall-noncanonical-two",
+      "owner": "DF-callback",
+      "tags": [
+        "typed-callback",
+        "decoder",
+        "noncanonical-two"
+      ],
+      "value": "0x5",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "345dc60de3aa04f67a20c2e1053749c78e526e192ab783a7153b0889242e627e",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace",
+        "call-shape"
+      ],
+      "endpoint": "transferAndCall(address,uint256,bytes)",
+      "name": "transferAndCall-noncanonical-two",
+      "owner": "DF-callback",
+      "tags": [
+        "typed-callback",
+        "decoder",
+        "noncanonical-two"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "a6094512023b236c82a561401d746e17a31b10f3ff0b87a6240f9e92ea13f907",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace",
+        "call-shape"
+      ],
+      "endpoint": "approveAndCall(address,uint256,bytes)",
+      "name": "approveAndCall-noncanonical-max",
+      "owner": "DF-callback",
+      "tags": [
+        "typed-callback",
+        "decoder",
+        "noncanonical-max"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "d83bb23164711f6510971aec9347f1ff14a7cb129adbd803a1d615762279023f",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace",
+        "call-shape"
+      ],
+      "endpoint": "depositToAndCall(address,bytes)",
+      "name": "depositToAndCall-noncanonical-max",
+      "owner": "DF-callback",
+      "tags": [
+        "typed-callback",
+        "decoder",
+        "noncanonical-max"
+      ],
+      "value": "0x5",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "345dc60de3aa04f67a20c2e1053749c78e526e192ab783a7153b0889242e627e",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace",
+        "call-shape"
+      ],
+      "endpoint": "transferAndCall(address,uint256,bytes)",
+      "name": "transferAndCall-noncanonical-max",
+      "owner": "DF-callback",
+      "tags": [
+        "typed-callback",
+        "decoder",
+        "noncanonical-max"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "a6094512023b236c82a561401d746e17a31b10f3ff0b87a6240f9e92ea13f907",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace"
+      ],
+      "endpoint": "approveAndCall(address,uint256,bytes)",
+      "name": "approveAndCall-child-revert",
+      "owner": "DF-callback",
+      "tags": [
+        "typed-callback",
+        "decoder",
+        "child-revert"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "d83bb23164711f6510971aec9347f1ff14a7cb129adbd803a1d615762279023f",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace"
+      ],
+      "endpoint": "depositToAndCall(address,bytes)",
+      "name": "depositToAndCall-child-revert",
+      "owner": "DF-callback",
+      "tags": [
+        "typed-callback",
+        "decoder",
+        "child-revert"
+      ],
+      "value": "0x5",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "345dc60de3aa04f67a20c2e1053749c78e526e192ab783a7153b0889242e627e",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace"
+      ],
+      "endpoint": "transferAndCall(address,uint256,bytes)",
+      "name": "transferAndCall-child-revert",
+      "owner": "DF-callback",
+      "tags": [
+        "typed-callback",
+        "decoder",
+        "child-revert"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "8254adafcf3dbf4fee0ad746d0c11f7a0e43c39e2d2915a4e02d04abc6d28ba1",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace"
+      ],
+      "endpoint": "approveAndCall(address,uint256,bytes)",
+      "name": "approveAndCall-codeless",
+      "owner": "DF-callback",
+      "tags": [
+        "typed-callback",
+        "decoder",
+        "codeless"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "c9fc091f252b21f9ff241eacbe0e2832a66553f8fda0b9d4a54d2548314c0b64",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace"
+      ],
+      "endpoint": "depositToAndCall(address,bytes)",
+      "name": "depositToAndCall-codeless",
+      "owner": "DF-callback",
+      "tags": [
+        "typed-callback",
+        "decoder",
+        "codeless"
+      ],
+      "value": "0x5",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "b3fd8a17f1f87bf4a7b4044df4ec16e94957612c261c228ba07901b7dd9e4bd7",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace"
+      ],
+      "endpoint": "transferAndCall(address,uint256,bytes)",
+      "name": "transferAndCall-codeless",
+      "owner": "DF-callback",
+      "tags": [
+        "typed-callback",
+        "decoder",
+        "codeless"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "bb6fb7bb022fbe34f137cc8eb6e3f8d695607ac850dfcfbe5e800b7f3add5d1b",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace",
+        "call-shape"
+      ],
+      "endpoint": "flashLoan(address,address,uint256,bytes)",
+      "name": "flashLoan-magic-finite",
+      "owner": "DF-flash",
+      "tags": [
+        "flash",
+        "decoder",
+        "settlement",
+        "magic-finite"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "bb6fb7bb022fbe34f137cc8eb6e3f8d695607ac850dfcfbe5e800b7f3add5d1b",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace",
+        "call-shape"
+      ],
+      "endpoint": "flashLoan(address,address,uint256,bytes)",
+      "name": "flashLoan-magic-infinite",
+      "owner": "DF-flash",
+      "tags": [
+        "flash",
+        "decoder",
+        "settlement",
+        "magic-infinite"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "bb6fb7bb022fbe34f137cc8eb6e3f8d695607ac850dfcfbe5e800b7f3add5d1b",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace"
+      ],
+      "endpoint": "flashLoan(address,address,uint256,bytes)",
+      "name": "flashLoan-wrong-magic",
+      "owner": "DF-flash",
+      "tags": [
+        "flash",
+        "decoder",
+        "settlement",
+        "wrong-magic"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "bb6fb7bb022fbe34f137cc8eb6e3f8d695607ac850dfcfbe5e800b7f3add5d1b",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace"
+      ],
+      "endpoint": "flashLoan(address,address,uint256,bytes)",
+      "name": "flashLoan-empty",
+      "owner": "DF-flash",
+      "tags": [
+        "flash",
+        "decoder",
+        "settlement",
+        "empty"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "bb6fb7bb022fbe34f137cc8eb6e3f8d695607ac850dfcfbe5e800b7f3add5d1b",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace"
+      ],
+      "endpoint": "flashLoan(address,address,uint256,bytes)",
+      "name": "flashLoan-short31",
+      "owner": "DF-flash",
+      "tags": [
+        "flash",
+        "decoder",
+        "settlement",
+        "short31"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "bb6fb7bb022fbe34f137cc8eb6e3f8d695607ac850dfcfbe5e800b7f3add5d1b",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace"
+      ],
+      "endpoint": "flashLoan(address,address,uint256,bytes)",
+      "name": "flashLoan-child-revert",
+      "owner": "DF-flash",
+      "tags": [
+        "flash",
+        "decoder",
+        "settlement",
+        "child-revert"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "44758e97ac3089dd92d03dd2343e12ac29cf111de382891344f207ec5c393c19",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace"
+      ],
+      "endpoint": "flashLoan(address,address,uint256,bytes)",
+      "name": "flashLoan-codeless",
+      "owner": "DF-flash",
+      "tags": [
+        "flash",
+        "codeless",
+        "empty-revert"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "bb6fb7bb022fbe34f137cc8eb6e3f8d695607ac850dfcfbe5e800b7f3add5d1b",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace"
+      ],
+      "endpoint": "flashLoan(address,address,uint256,bytes)",
+      "name": "flashLoan-insufficient-allowance",
+      "owner": "DF-flash",
+      "tags": [
+        "flash",
+        "settlement",
+        "allowance-guard"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "2c3b2735eae9e3c3f259d1da2b18b7242632fa1b66515f4211557b01e6d6f018",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "flashLoan(address,address,uint256,bytes)",
+      "name": "flashLoan-wrong-token",
+      "owner": "DF-flash",
+      "tags": [
+        "flash",
+        "guard-precedence",
+        "token-guard"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "88e9964b5bb6a9e55f5d5d27510924ca1ee7bb915455ef09037f3935d92ef0d7",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "flashLoan(address,address,uint256,bytes)",
+      "name": "flashLoan-individual-cap",
+      "owner": "DF-flash",
+      "tags": [
+        "flash",
+        "guard-precedence",
+        "individual-cap"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "1f6b43cd132d69ecbff3ca8ae29a32fd044b186b9f737d7665d90f3eca2bf395",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "flashLoan(address,address,uint256,bytes)",
+      "name": "flashLoan-total-cap",
+      "owner": "DF-flash",
+      "tags": [
+        "flash",
+        "guard-precedence",
+        "total-cap"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "d0c8a6ea2fc0e94e94ce353129500c3579a79025f6761e83e8119c778c6ba7c7",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "transfer(address,uint256)",
+      "name": "transfer-self",
+      "owner": "DF-state",
+      "tags": [
+        "state",
+        "self-recipient"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "f67b5f7756b2fab82a0886568b7bcb48776f86f57ab49ede06283de1a08e7a9b",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace"
+      ],
+      "endpoint": "transfer(address,uint256)",
+      "name": "transfer-zero",
+      "owner": "DF-state",
+      "tags": [
+        "state",
+        "withdrawal-branch",
+        "eth-call"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "1385a5ed92a914bf12ca0b3622dbdf8b99728e451193cb20f00dfdeedc7c725c",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "transfer(address,uint256)",
+      "name": "transfer-insufficient-nonzero",
+      "owner": "DF-state",
+      "tags": [
+        "state",
+        "balance-guard",
+        "exact-reason"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "b1896391d666abd391810498506ad51dfef6f4de44219bc00a5ef680593ab728",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "transfer(address,uint256)",
+      "name": "transfer-insufficient-zero",
+      "owner": "DF-state",
+      "tags": [
+        "state",
+        "balance-guard",
+        "exact-reason"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "a0d2528b10bd16d14350ac36b382bde11694246f88944953b4c7beed46cbda26",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace"
+      ],
+      "endpoint": "withdrawTo(address,uint256)",
+      "name": "withdrawTo-child-revert-replaced",
+      "owner": "DF-state",
+      "tags": [
+        "state",
+        "eth-call",
+        "reason-replacement",
+        "rollback"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "cfa47444e8b3e756fa924699f06382303958406f1d946b80cbf6e3f322cf6413",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace"
+      ],
+      "endpoint": "withdrawFrom(address,address,uint256)",
+      "name": "withdrawFrom-finite",
+      "owner": "DF-state",
+      "tags": [
+        "state",
+        "finite-allowance",
+        "eth-call"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "640177ad4c63f59a9116054608acae504c939f384650fdcf2d8348c99f7e635e",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "transferFrom(address,address,uint256)",
+      "name": "transferFrom-infinite",
+      "owner": "DF-state",
+      "tags": [
+        "state",
+        "infinite-allowance"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "640177ad4c63f59a9116054608acae504c939f384650fdcf2d8348c99f7e635e",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "transferFrom(address,address,uint256)",
+      "name": "transferFrom-allowance-precedes-balance",
+      "owner": "DF-state",
+      "tags": [
+        "state",
+        "guard-precedence",
+        "rollback"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "b9c1ebdbb0304fb2947a536b7928beb2b157c0c92581c366a6a93ad707c25fd8",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace"
+      ],
+      "endpoint": "approve(address,uint256)",
+      "name": "static-approve-write",
+      "owner": "DF-boundary",
+      "tags": [
+        "staticcall",
+        "write-violation",
+        "rollback"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "c46337cf15d919482c8443942cb821e7169da5b6cfed46ad947274d134db76b4",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace"
+      ],
+      "endpoint": "deposit()",
+      "name": "static-deposit-write",
+      "owner": "DF-boundary",
+      "tags": [
+        "staticcall",
+        "write-violation",
+        "rollback"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "4b1440d7b5d38dc8d629b123d8161690a77b5c91c06e46d29db297292fc8c23f",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace"
+      ],
+      "endpoint": "depositToAndCall(address,bytes)",
+      "name": "static-depositToAndCall-write",
+      "owner": "DF-boundary",
+      "tags": [
+        "staticcall",
+        "write-before-callback",
+        "rollback"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "8732e333d634105afcb9552003ac843a6e6fb20756e0f0edefc380b572bce23b",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace"
+      ],
+      "endpoint": "transfer(address,uint256)",
+      "name": "static-transfer-write",
+      "owner": "DF-boundary",
+      "tags": [
+        "staticcall",
+        "write-violation",
+        "rollback"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "1385a5ed92a914bf12ca0b3622dbdf8b99728e451193cb20f00dfdeedc7c725c",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace"
+      ],
+      "endpoint": "transfer(address,uint256)",
+      "name": "static-transfer-balance-guard",
+      "owner": "DF-boundary",
+      "tags": [
+        "staticcall",
+        "guard-precedence",
+        "balance-guard",
+        "rollback"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "994f54d5515cfd36a701c93f25af53b6c8490c2abac922eb78c338a6599d25e5",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace"
+      ],
+      "endpoint": "withdraw(uint256)",
+      "name": "static-withdraw-write",
+      "owner": "DF-boundary",
+      "tags": [
+        "staticcall",
+        "write-before-value-call",
+        "rollback"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "a46d44fda517c152191a8b44b0bcaf2bbcaa6e255f0f194388d26546f0771650",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace"
+      ],
+      "endpoint": "withdraw(uint256)",
+      "name": "static-withdraw-balance-guard",
+      "owner": "DF-boundary",
+      "tags": [
+        "staticcall",
+        "guard-precedence",
+        "balance-guard",
+        "rollback"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "2c3b2735eae9e3c3f259d1da2b18b7242632fa1b66515f4211557b01e6d6f018",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace"
+      ],
+      "endpoint": "flashLoan(address,address,uint256,bytes)",
+      "name": "static-flashLoan-token-guard",
+      "owner": "DF-boundary",
+      "tags": [
+        "staticcall",
+        "guard-precedence",
+        "token-guard",
+        "rollback"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "88e9964b5bb6a9e55f5d5d27510924ca1ee7bb915455ef09037f3935d92ef0d7",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace"
+      ],
+      "endpoint": "flashLoan(address,address,uint256,bytes)",
+      "name": "static-flashLoan-cap-guard",
+      "owner": "DF-boundary",
+      "tags": [
+        "staticcall",
+        "guard-precedence",
+        "individual-cap",
+        "rollback"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "3f225e3ed4a1e28cc9a5baed2ae79da7e65fbd14cf3ddc3edc82e7a030bf2375",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace"
+      ],
+      "endpoint": "flashLoan(address,address,uint256,bytes)",
+      "name": "static-flashLoan-write",
+      "owner": "DF-boundary",
+      "tags": [
+        "staticcall",
+        "write-before-callback",
+        "rollback"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "14ea6295a0486e01238311a0aacb1a8945e0a96a2382bbb9a463c5f221083226",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "ecrecover"
+      ],
+      "endpoint": "permit(address,address,uint256,uint256,uint8,bytes32,bytes32)",
+      "name": "permit-deadline-equality",
+      "owner": "DF-permit",
+      "tags": [
+        "permit",
+        "domain",
+        "deadline-equality"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "a2a9454fb47424156eeab94a6f3d8cdb67b353a57876fe0ecc01f15f90c74fcf",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "ecrecover"
+      ],
+      "endpoint": "permit(address,address,uint256,uint256,uint8,bytes32,bytes32)",
+      "name": "permit-invalid-signature",
+      "owner": "DF-permit",
+      "tags": [
+        "permit",
+        "domain",
+        "invalid-signature"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "a6b7c903a0559f420179dd488b5e77ad24acf1f4c8c38bdb9558ebe248bd5b99",
+      "chainId": 2,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "ecrecover"
+      ],
+      "endpoint": "permit(address,address,uint256,uint256,uint8,bytes32,bytes32)",
+      "name": "permit-fork-valid",
+      "owner": "DF-permit",
+      "tags": [
+        "permit",
+        "domain",
+        "fork-valid"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "5146cb59e56bbb2d27885e985ecbbe1f8135be6a9954b6be31b188e9b61588fd",
+      "chainId": 2,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "ecrecover"
+      ],
+      "endpoint": "permit(address,address,uint256,uint256,uint8,bytes32,bytes32)",
+      "name": "permit-fork-prefork-invalid",
+      "owner": "DF-permit",
+      "tags": [
+        "permit",
+        "domain",
+        "fork-prefork-invalid"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "000f80a75a18dfd616940375bf0710e2d207c06d3d145e80c3009e8350dd8509",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "ecrecover"
+      ],
+      "endpoint": "permit(address,address,uint256,uint256,uint8,bytes32,bytes32)",
+      "name": "permit-expired-precedence",
+      "owner": "DF-permit",
+      "tags": [
+        "permit",
+        "deadline",
+        "guard-precedence",
+        "rollback"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "87332103dc1b3e09d64a85f653521b8849b527c67caaa59ebb16dd66d117daef",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "ecrecover"
+      ],
+      "endpoint": "permit(address,address,uint256,uint256,uint8,bytes32,bytes32)",
+      "name": "permit-malformed-v-empty-ecrecover",
+      "owner": "DF-permit",
+      "tags": [
+        "permit",
+        "ecrecover-empty",
+        "invalid-signature",
+        "rollback"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "5146cb59e56bbb2d27885e985ecbbe1f8135be6a9954b6be31b188e9b61588fd",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace",
+        "ecrecover"
+      ],
+      "endpoint": "permit(address,address,uint256,uint256,uint8,bytes32,bytes32)",
+      "name": "static-permit-nonce-write",
+      "owner": "DF-boundary",
+      "tags": [
+        "staticcall",
+        "permit",
+        "write-before-ecrecover",
+        "rollback"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "4096475d2b4ed83a84f490abe1f78c31c69a0de3fdecee318e584d9eb50bb0ab",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace",
+        "ecrecover"
+      ],
+      "endpoint": "permit(address,address,uint256,uint256,uint8,bytes32,bytes32)",
+      "name": "static-permit-expired-guard",
+      "owner": "DF-boundary",
+      "tags": [
+        "staticcall",
+        "permit",
+        "guard-precedence",
+        "deadline",
+        "rollback"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "ca383f0359e53a7d63a2426f30de631a1e1a4184058b55980d7b53a11985bdea",
+      "chainId": 31337,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "DOMAIN_SEPARATOR()",
+      "name": "synthetic-domain",
+      "owner": "DF-permit",
+      "tags": [
+        "synthetic-world",
+        "domain",
+        "identity"
+      ],
+      "value": "0x0",
+      "world": "synthetic-chain31337"
+    },
+    {
+      "calldataSha256": "495031b2a59863ad4b88707db9b51251efc1c26c081c429cee8b2cc1f1ec5e0e",
+      "chainId": 31337,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "deploymentChainId()",
+      "name": "synthetic-deployment-chain",
+      "owner": "DF-view",
+      "tags": [
+        "synthetic-world",
+        "identity"
+      ],
+      "value": "0x0",
+      "world": "synthetic-chain31337"
+    },
+    {
+      "calldataSha256": "083137feac5e1288a8d1e5ff3010646de14e5635230037bbd39519a2e941ee1d",
+      "chainId": 31337,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "flashFee(address,uint256)",
+      "name": "synthetic-flash-token-self",
+      "owner": "DF-flash",
+      "tags": [
+        "synthetic-world",
+        "identity",
+        "self-address"
+      ],
+      "value": "0x0",
+      "world": "synthetic-chain31337"
+    }
+  ],
+  "runner": {
+    "eelsCommit": "4198b9c5996713b268aed602739d5aa40e277694",
+    "fork": "Prague",
+    "network": false
+  },
+  "schema": 1,
+  "selectorEndpointEquality": {
+    "blancSelectorsAscending": [
+      "0x06fdde03",
+      "0x095ea7b3",
+      "0x18160ddd",
+      "0x205c2878",
+      "0x23b872dd",
+      "0x2e1a7d4d",
+      "0x30adf81f",
+      "0x313ce567",
+      "0x3644e515",
+      "0x4000aea0",
+      "0x5cffe9de",
+      "0x5ddb7d7e",
+      "0x613255ab",
+      "0x70a08231",
+      "0x7ecebe00",
+      "0x8237e538",
+      "0x8b28d32f",
+      "0x9555a942",
+      "0x95d89b41",
+      "0xa9059cbb",
+      "0xb760faf9",
+      "0xcae9ca51",
+      "0xcd0d0096",
+      "0xd0e30db0",
+      "0xd505accf",
+      "0xd9d98ce4",
+      "0xdd62ed3e"
+    ],
+    "fixtureRowsByEndpoint": {
+      "CALLBACK_SUCCESS()": 3,
+      "DOMAIN_SEPARATOR()": 4,
+      "PERMIT_TYPEHASH()": 3,
+      "allowance(address,address)": 3,
+      "approve(address,uint256)": 3,
+      "approveAndCall(address,uint256,bytes)": 11,
+      "balanceOf(address)": 3,
+      "decimals()": 3,
+      "deploymentChainId()": 4,
+      "deposit()": 2,
+      "depositTo(address)": 1,
+      "depositToAndCall(address,bytes)": 12,
+      "flashFee(address,uint256)": 4,
+      "flashLoan(address,address,uint256,bytes)": 19,
+      "flashMinted()": 3,
+      "maxFlashLoan(address)": 3,
+      "name()": 3,
+      "nonces(address)": 3,
+      "permit(address,address,uint256,uint256,uint8,bytes32,bytes32)": 10,
+      "receive": 1,
+      "symbol()": 3,
+      "totalSupply()": 3,
+      "transfer(address,uint256)": 8,
+      "transferAndCall(address,uint256,bytes)": 11,
+      "transferFrom(address,address,uint256)": 4,
+      "withdraw(uint256)": 4,
+      "withdrawFrom(address,address,uint256)": 3,
+      "withdrawTo(address,uint256)": 3
+    },
+    "receiveCount": 1,
+    "referenceFunctionCount": 27,
+    "referenceSelectorsAscending": [
+      "0x06fdde03",
+      "0x095ea7b3",
+      "0x18160ddd",
+      "0x205c2878",
+      "0x23b872dd",
+      "0x2e1a7d4d",
+      "0x30adf81f",
+      "0x313ce567",
+      "0x3644e515",
+      "0x4000aea0",
+      "0x5cffe9de",
+      "0x5ddb7d7e",
+      "0x613255ab",
+      "0x70a08231",
+      "0x7ecebe00",
+      "0x8237e538",
+      "0x8b28d32f",
+      "0x9555a942",
+      "0x95d89b41",
+      "0xa9059cbb",
+      "0xb760faf9",
+      "0xcae9ca51",
+      "0xcd0d0096",
+      "0xd0e30db0",
+      "0xd505accf",
+      "0xd9d98ce4",
+      "0xdd62ed3e"
+    ]
+  }
+}

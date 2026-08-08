@@ -259,6 +259,85 @@ theorem Prog.exec_of_runCompiledTo {sevm : Sevm} {pre : Devm} {p : Prog}
   rw [← exec_iff_exec_eq]
   exact ⟨Exec.cont h1 exc⟩
 
+/-! ## Executing an error-carrying call-free prefix
+
+Constructors commonly append inert runtime bytes after their executable
+prefix.  The successful relation has a call-free prefix bridge in
+`Blanc.Forward`; these two facts are its outcome-generalised counterpart. -/
+
+/-- A `RunCompiledTo` walk of a call-free function executes from any bytecode
+window containing that function, independently of bytes outside the window. -/
+theorem Func.exec_of_runCompiledTo_subcode
+    {l : List (Nat × Func)} {FS : List Func} {sevm : Sevm}
+    {devm : Devm} {p : Func} {ex : Execution}
+    (h_run : Func.RunCompiledTo FS sevm devm p ex)
+    (h_noCalls : p.NoCalls) :
+    ∀ pc,
+      subcode sevm.code.toList pc (Func.compile l pc p) →
+      noPushBefore sevm.code pc 32 = true →
+      Nonempty (Exec pc sevm devm ex) := by
+  induction h_run with
+  | zero h_room h_pop h_f ih =>
+    intro pc sub hb
+    rcases h_noCalls with ⟨hnf, _⟩
+    rcases subcode_compile_branch_jumpable sub hb with
+      ⟨loc, _h_loc_eq, h_loc, h_push, h_jumpi, h_subp, h_bp,
+        _h_jd, _h_jp, _h_subq, _h_bq⟩
+    rcases Evm.branch_zero_steps h_push h_jumpi h_loc h_room h_pop with
+      ⟨h1, h2⟩
+    obtain ⟨excf⟩ := ih hnf (pc + 4) h_subp h_bp
+    exact ⟨Exec.cont h1 (Exec.cont h2 excf)⟩
+  | succ h_ne h_room h_pop h_g ih =>
+    intro pc sub hb
+    rcases h_noCalls with ⟨_, hng⟩
+    rcases subcode_compile_branch_jumpable sub hb with
+      ⟨loc, _h_loc_eq, h_loc, h_push, h_jumpi, _h_subp, _h_bp,
+        h_jd, h_jp, h_subq, h_bq⟩
+    rcases Evm.branch_succ_steps h_push h_jumpi h_jd h_jp h_loc h_ne
+      h_room h_pop with ⟨h1, h2, h3⟩
+    obtain ⟨excg⟩ := ih hng (loc + 1) h_subq h_bq
+    exact ⟨Exec.cont h1 (Exec.cont h2 (Exec.cont h3 excg))⟩
+  | last h_lin =>
+    intro pc sub _hb
+    refine ⟨Exec.halt ?_⟩
+    rw [Evm.step_last (Linst.at_of_slice sub)]
+    exact congrArg Step.halt h_lin
+  | next h_n h_f ih =>
+    intro pc sub hb
+    rcases Func.noPushBefore_next sub hb with ⟨hb', sub'⟩
+    rcases of_subcode sub with ⟨cd, h_eq', h_slice⟩
+    rcases of_bind_eq_some h_eq' with ⟨cd', _h_eq'', h_rw⟩
+    simp [pure] at h_rw
+    rw [← h_rw] at h_slice
+    rcases h_n with ⟨xl, h_filled, h_step⟩
+    exact Ninst.exec_of_stepRun
+      (Ninst.at_of_slice (List.slice_prefix h_slice))
+      h_filled (h_step pc) (ih h_noCalls _ sub' hb')
+  | call _h_get _h_room _h_burn _h_f _ih =>
+    exact False.elim h_noCalls
+
+/-- A call-free compiled prefix followed by arbitrary data has the exact
+error-or-success outcome named by its `RunCompiledTo` witness. -/
+theorem Func.exec_of_runCompiledTo_prefix
+    {l : List (Nat × Func)} {FS : List Func} {sevm : Sevm}
+    {devm : Devm} {p : Func} {ex : Execution} {pfx sfx : Bytes}
+    (h_run : Func.RunCompiledTo FS sevm devm p ex)
+    (h_noCalls : p.NoCalls)
+    (h_compile : Func.compile l 0 p = some pfx)
+    (h_code : sevm.code.toList = pfx ++ sfx) :
+    exec ⟨0, sevm, devm⟩ = ex := by
+  have h_sub : subcode sevm.code.toList 0 (Func.compile l 0 p) := by
+    rw [h_compile]
+    show List.Slice sevm.code.toList 0 pfx
+    rw [h_code]
+    exact List.slice_prefix (List.slice_refl (pfx ++ sfx))
+  have h_bound : noPushBefore sevm.code 0 32 = true := by
+    simp [noPushBefore]
+  obtain ⟨h_exec⟩ :=
+    Func.exec_of_runCompiledTo_subcode h_run h_noCalls 0 h_sub h_bound
+  rw [← exec_iff_exec_eq]
+  exact ⟨h_exec⟩
+
 /-! ## The constructor side
 
 `Blanc/Forward.lean` wraps `Func.RunCompiled`'s three rules that need a frame

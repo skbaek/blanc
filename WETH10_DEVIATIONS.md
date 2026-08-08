@@ -47,10 +47,10 @@ The compatibility claim deliberately excludes:
 - exact gas, access lists, or equality of callback-observed `gasleft()`;
 - liveness under inadequate gas and deployed-vs-Blanc liveness/gas parity;
 - guarantees that arbitrary hostile callback code returns successfully,
-  permits withdrawal, or establishes another useful postcondition. This does
-  not exclude a Blanc-only adequate-gas theorem classifying every borrower
-  outcome as success, deliberate revert, or a non-consensus error channel while
-  ruling out consensus exceptional halt;
+  permits withdrawal, or establishes another useful postcondition. The
+  present verification program also makes no no-borrower-premise gas-
+  settlement theorem: that requirement is explicitly deferred, and no
+  replacement flagship is claimed;
 - source-initcode, CREATE2-address, and deployment-gas equality; and
 - adversarial cryptographic-collision states for the projected Blanc allowance
   map, under the qualification below.
@@ -121,13 +121,14 @@ deviations.
 
 ### ERC-677-style callbacks and codeless targets
 
-- `depositToAndCall`, `approveAndCall`, and `transferAndCall` return the typed
-  callback's decoded Boolean verbatim. A successful `false` is a successful
-  outer call with `false` returndata; it is not converted to a revert.
+- `depositToAndCall`, `approveAndCall`, and `transferAndCall` use the deployed
+  Solidity-0.7 truthiness decoder. A full zero word returns canonical `false`;
+  every full nonzero word, including noncanonical ABI words such as `2`,
+  returns canonical `true`. Both outcomes are successful outer calls.
 - State writes and the WETH10 log occur before each callback, so the callback
-  observes them. Child reverts bubble exactly. A zero/codeless target, short
-  return, invalid Boolean word, or other return-decode failure empty-reverts
-  and rolls the preceding state/log/ETH effects back.
+  observes them. Child reverts bubble exactly. A zero/codeless target or return
+  shorter than 32 bytes empty-reverts and rolls the preceding state/log/ETH
+  effects back.
 - `depositTo(to = 0)` succeeds and mints to the zero mapping key because it has
   no callback. `depositToAndCall(to = 0)` transiently mints and logs, then its
   typed call to zero empty-reverts everything.

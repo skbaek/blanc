@@ -1,72 +1,42 @@
 #!/usr/bin/env python3
-"""Selector coverage gate for Blanc's fmint fixture suite (`~/plans/fmint-code.md`
-Step 2), the sibling of `check-weth-coverage.py` (`~/plans/weth-evidence.md`
-Step 2).
+"""Honest selector-reachability gate for Blanc's fmint fixtures.
 
-Blanc's fmint dispatcher routes twelve selectors, obtained from Blanc itself
--- never retyped as ABI signature strings here -- by
-`scripts/gen-fmint-selectors.lean`, which evaluates
-`Blanc.Fmint.fmintFuncs.map Prod.fst` and commits the result to
-`scripts/fmint-selectors.json`. Unlike WETH, fmint has no separate
-fallback-reached entrypoint (`deposit`): its fallback is a bare revert, so
-every fmint behaviour is one of these twelve selectors.
+The twelve selectors come from ``Blanc.Fmint.fmintFuncs`` through the
+committed generated manifest; none are retyped from ABI signatures here.
+Each fixture contributes two credited evidence classes:
 
-This script decodes every committed fixture's block RLP -- the same
-self-contained decoder `check-weth-coverage.py` uses, so this gate has no
-dependency on `~/execution-specs` -- extracts every top-level transaction's
-`to` and `input`, and additionally scans any *other* account's code for an
-embedded selector.
+* ``DIRECT`` -- a top-level transaction targets fmint with that selector;
+* ``INTERNAL`` -- a top-level-called, straight-line recorder demonstrably
+  CALLs fmint with that selector and commits a changed success flag or
+  failure-path executed marker after the CALL.
 
-GENERALISED SCAN, not a straight port of WETH's. WETH's own dispatcher
-compares incoming selectors against `PUSH32 <selector><28 zero bytes>`
-literals, so the WETH scan looks for exactly that pattern and excludes
-WETH's own account (which would otherwise trivially "exercise" all ten
-selectors by their mere presence as comparison constants). fmint's borrower
-zoo (`scripts/gen-fmint-borrowers.lean`) instead uses `Ninst.pushB256`'s
-ordinary MINIMAL-WIDTH encoding when it builds an outgoing call's calldata
-(`storeWord`/`buildApprove`/etc.), which pushes a bare 4-byte selector as
-`PUSH4 <selector>` -- not `PUSH32`. The scan below therefore looks for ANY
-`PUSHn` (`n` = 4..32) whose immediate's LEADING 4 bytes equal a known
-selector and whose TRAILING `n - 4` bytes are all zero (so a wider push that
-merely happens to begin with the right 4 bytes, with nonzero bytes after
-them, is not mistaken for one). This subsumes WETH's PUSH32-only pattern as
-one instance (`n = 32`) of the general rule and reduces to `imm == sel` at
-`n = 4`; `scan_prop_selectors`'s own docstring works both instances through.
+A selector-shaped PUSH in any other account is reported as ``EMBEDDED`` but
+does not count as reached.  In particular, the borrowers' PUSH4 literals no
+longer receive credit merely for existing in pre-state.  The shared
+``selector_coverage`` recognizer checks instruction shape, target, calldata
+window and the durable post-state witness, and runs corruption falsifiers on
+every gate invocation.
 
-fmint's own account is identified and EXCLUDED from the caller-prop scan by
-BYTE-EQUALITY against the committed `Blanc.Fmint.fmintCode` literal --
-fmint's own dispatcher also embeds all twelve selectors as comparison
-constants (via the same minimal-width pushes), so scanning it would
-trivially "exercise" everything regardless of whether any transaction ever
-called it.
+fmint itself is found by whole-runtime byte equality against the committed
+``Blanc.Fmint.fmintCode`` literal and excluded from embedding inventory, so
+its dispatcher constants cannot create vacuous coverage.
 
-Until `~/plans/fmint-evidence.md` Step 1 that identification was a code
-LENGTH plus a 4-byte prefix, and the constant's own comment conceded that
-"the LENGTH is what actually distinguishes the two accounts" -- both
-contracts' dispatchers open with the same four bytes. That was written
-before `check-runtime-bytes.py` existed. It parses the committed Lean
-literal directly, so this gate now reuses that parser (imported, never
-copied) and compares whole runtimes. The difference is not academic: under
-the old test a fixture whose fmint account had drifted to different bytes
-of the same length would still have been accepted as "the fmint account"
-and scanned as though nothing were wrong. It now fails closed with
-`CoverageError` -- the negative control recorded in
-`~/plans/reports/fmint-evidence-step-1.md`.
-
-Fail-closed throughout, per `check-weth-coverage.py`'s discipline: a
-committed budget of known-unexercised selectors
-(`scripts/fmint-coverage-budget.txt`) is the only variance ever tolerated,
-and it may only shrink.
-
-CLI contract: exit 0 iff the actual unexercised-selector set is a subset of
-the budget file's rows and does not exceed its declared count. Output ends
-with one unambiguous verdict line.
+CLI contract: exit 0 iff the actual unreached-selector set is a subset of the
+budget file's rows and does not exceed its declared count. Output ends with
+one unambiguous verdict line.
 """
 import importlib.util
 import json
 import os
 import re
 import sys
+
+from selector_coverage import (
+    CallsiteEvidenceError,
+    embedded_selectors,
+    run_callsite_falsifiers,
+    witnessed_calls,
+)
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPTS_DIR = os.path.join(REPO_ROOT, "scripts")
@@ -309,54 +279,22 @@ def decode_txs(rlp_hex: str):
 
 
 def scan_prop_selectors(code_hex: str, known: set):
-    """Scan one account's code for ANY `PUSHn` (n = 1..32) whose immediate's
-    LEADING 4 bytes equal a known selector and whose TRAILING `n - 4` bytes
-    are all zero. Generalises `check-weth-coverage.py`'s PUSH32-only scan
-    (see the module docstring) to cover both embedding conventions this
-    suite's own code actually produces:
+    """Diagnostic embedding inventory; never reachability credit."""
+    try:
+        return embedded_selectors(code_hex, known)
+    except CallsiteEvidenceError as exc:
+        raise CoverageError(str(exc)) from exc
 
-    * `scripts/gen-fmint-borrowers.lean`'s `storeWord` pushes a bare
-      selector via `Blanc.Ninst.pushB256`'s minimal-width encoding, i.e.
-      `PUSH4 <selector>` exactly -- `n = 4`, so the "trailing n-4 bytes are
-      zero" half is vacuously true and the check reduces to `imm == sel`;
-    * `gen-fmint-fixtures.py`'s `build_trigger_bytecode` builds a prober's
-      outgoing calldata word-by-word, and a selector-only word (e.g.
-      `name()`, no arguments) is `<selector><28 zero bytes>` interpreted as
-      one 256-bit big-endian integer, which `_pushn` then emits at its
-      natural minimal width -- `PUSH32` in practice, because the value's
-      highest SET bit is in the selector itself, 224 bits above zero, so
-      representing it at all requires all 32 bytes even though the low 28
-      are zero. This is WETH's OWN `PUSH32 <selector><28 zero bytes>`
-      pattern exactly (`n = 32`), the leading-4-bytes case with the maximum
-      amount of trailing padding."""
-    if not code_hex.startswith("0x"):
-        raise CoverageError(f"malformed code field {code_hex!r}")
-    code = bytes.fromhex(code_hex[2:])
-    found = set()
-    i = 0
-    while i < len(code):
-        op = code[i]
-        if 0x60 <= op <= 0x7F and i + 1 <= len(code):
-            n = op - 0x5F
-            imm = code[i + 1:i + 1 + n]
-            if len(imm) == n:
-                if n >= 4 and imm[4:] == bytes(n - 4):
-                    sel = "0x" + imm[:4].hex()
-                    if sel in known:
-                        found.add(sel)
-                i += 1 + n
-            else:
-                # A PUSH whose immediate runs off the end of the code (the
-                # implicit trailing-zero-fill EVM applies at runtime) --
-                # nothing more to scan after it.
-                break
-        else:
-            i += 1
-    return found
+
+def find_account(accounts, address):
+    """Case-insensitive account lookup for normalized transaction addresses."""
+    return accounts.get(address) or next(
+        (value for key, value in accounts.items() if key.lower() == address),
+        None)
 
 
 def check_fixture(path, known):
-    """Returns (exercised: {selector: [(source,)]}, revert_fallback_hits)."""
+    """Return direct, witnessed-internal, and embedding-only evidence."""
     with open(path) as f:
         doc = json.load(f)
     if not isinstance(doc, dict) or len(doc) != 1:
@@ -372,33 +310,28 @@ def check_fixture(path, known):
     fmint_addr = find_fmint_address(pre)
     fname = os.path.basename(path)
 
-    exercised = {}
+    direct = {}
+    internal = {}
+    embedded = {}
+    called_addrs = set()
 
     for bi, blk in enumerate(blocks):
         rlp_hex = blk.get("rlp") if isinstance(blk, dict) else None
         for ti, (to, data) in enumerate(decode_txs(rlp_hex)):
-            if to is None or to != fmint_addr:
+            if to is None:
+                continue
+            called_addrs.add(to)
+            if to != fmint_addr:
                 continue
             if len(data) >= 4:
                 sel = "0x" + data[:4].hex()
                 if sel in known:
-                    exercised.setdefault(sel, []).append(
+                    direct.setdefault(sel, []).append(
                         f"{fname} block {bi} tx {ti} (direct)")
 
-    # Caller-prop scan: every OTHER contract account in this fixture's
-    # pre-state, not only top-level transaction targets. WETH's own scan
-    # restricted this to accounts a top-level transaction directly called,
-    # because WETH's attacker/prober always WAS that direct target. fmint's
-    # borrower zoo is reached two hops down (tx -> prober -> fmint ->
-    # borrower), so a top-level-only scan would never see a borrower's
-    # embedded selectors at all -- not because nothing called it, but
-    # because the scan never looked. This suite hand-authors every account
-    # it deploys for a reason (there are no decorative, unreferenced
-    # contracts), so scanning every non-fmint contract present is exactly as
-    # tight a filter as "was actually called" would be here, without
-    # needing a full call-graph reconstruction. fmint's own account is still
-    # excluded -- it is the one account whose mere presence would trivially
-    # claim every selector, being the dispatcher itself.
+    # Keep the broad embedding inventory as a diagnostic, but never credit it.
+    # This makes the unsupported borrower literals visible without pretending
+    # their pre-state presence proves that a branch reached its CALL.
     for addr, acct in pre.items():
         addr = addr.lower()
         if addr == fmint_addr:
@@ -407,14 +340,41 @@ def check_fixture(path, known):
         if code_hex in ("0x", "0x0", ""):
             continue
         for sel in scan_prop_selectors(code_hex, known):
-            exercised.setdefault(sel, []).append(f"{fname} caller prop {addr}")
+            embedded.setdefault(sel, []).append(f"{fname} account {addr}")
 
-    return exercised
+    # Internal credit is narrower: only top-level-called props, only the
+    # generator's straight-line CALL recorder, and only a marker/flag that
+    # changed in committed post-state after the exact callsite.
+    for addr in called_addrs:
+        if addr == fmint_addr:
+            continue
+        acct = find_account(pre, addr)
+        post_acct = find_account(case.get("postState", {}), addr)
+        if acct is None or post_acct is None:
+            continue
+        code_hex = acct.get("code", "0x")
+        if code_hex in ("0x", "0x0", ""):
+            continue
+        try:
+            witnesses = witnessed_calls(
+                code_hex, known, fmint_addr, acct.get("storage", {}),
+                post_acct.get("storage", {}))
+        except CallsiteEvidenceError as exc:
+            raise CoverageError(f"{fname} account {addr}: {exc}") from exc
+        for sel, pc, slot, kind in witnesses:
+            internal.setdefault(sel, []).append(
+                f"{fname} prop {addr} CALL@0x{pc:x}, {kind} slot 0x{slot:x}")
+
+    return direct, internal, embedded
 
 
 def run(fixtures_dir):
     known = load_selectors()
     budget_max, budgeted = load_budget(known)
+    try:
+        falsifier_count = run_callsite_falsifiers()
+    except CallsiteEvidenceError as exc:
+        raise CoverageError(str(exc)) from exc
 
     if not os.path.isdir(fixtures_dir):
         raise CoverageError(f"fixtures directory not found: {fixtures_dir}")
@@ -425,44 +385,64 @@ def run(fixtures_dir):
     if not files:
         raise CoverageError(f"no fixture files found in {fixtures_dir}")
 
-    all_exercised = {}
+    all_direct = {}
+    all_internal = {}
+    all_embedded = {}
     for path in files:
-        exercised = check_fixture(path, known)
-        for sel, sources in exercised.items():
-            all_exercised.setdefault(sel, []).extend(sources)
+        direct, internal, embedded = check_fixture(path, known)
+        for sel, sources in direct.items():
+            all_direct.setdefault(sel, []).extend(sources)
+        for sel, sources in internal.items():
+            all_internal.setdefault(sel, []).extend(sources)
+        for sel, sources in embedded.items():
+            all_embedded.setdefault(sel, []).extend(sources)
 
-    unexercised = [s for s in known if s not in all_exercised]
+    reached = set(all_direct) | set(all_internal)
+    unreached = [s for s in known if s not in reached]
 
-    print(f"fmint selector coverage -- {len(files)} fixture(s) in {fixtures_dir}")
+    def sources_text(sources, limit=3):
+        shown = sources[:limit]
+        extra = len(sources) - len(shown)
+        suffix = f"; +{extra} more" if extra else ""
+        return "; ".join(shown) + suffix
+
+    print(f"fmint selector reachability -- {len(files)} fixture(s) in {fixtures_dir}")
     for sel in known:
-        if sel in all_exercised:
-            print(f"  EXERCISED    {sel}  ({'; '.join(all_exercised[sel])})")
+        if sel in all_direct:
+            print(f"  DIRECT       {sel}  ({sources_text(all_direct[sel])})")
+        elif sel in all_internal:
+            print(f"  INTERNAL     {sel}  ({sources_text(all_internal[sel])})")
+        elif sel in all_embedded:
+            print(f"  EMBEDDED     {sel}  uncredited ({sources_text(all_embedded[sel])})")
         else:
-            print(f"  UNEXERCISED  {sel}")
+            print(f"  UNREACHED    {sel}")
 
-    violations = sorted(set(unexercised) - budgeted)
-    stale = sorted(budgeted - set(unexercised))
+    violations = sorted(set(unreached) - budgeted)
+    stale = sorted(budgeted - set(unreached))
     for s in stale:
         print(f"WARNING — fmint coverage: {s} is listed in "
-              f"{os.path.basename(BUDGET_PATH)} as unexercised but is now "
-              f"exercised -- shrink the budget file")
+              f"{os.path.basename(BUDGET_PATH)} as unreached but is now "
+              f"reached -- shrink the budget file")
 
     if violations:
         for s in violations:
-            print(f"COVERAGE — unexercised selector not in the budget: {s}")
-        print(f"REGRESSION — fmint coverage: {len(violations)} unexercised "
+            print(f"COVERAGE — unreached selector not in the budget: {s}")
+        print(f"REGRESSION — fmint coverage: {len(violations)} unreached "
               f"selector(s) not accounted for in "
               f"{os.path.basename(BUDGET_PATH)}")
         return 1
 
-    if len(unexercised) > budget_max:
-        print(f"REGRESSION — fmint coverage: {len(unexercised)} unexercised "
+    if len(unreached) > budget_max:
+        print(f"REGRESSION — fmint coverage: {len(unreached)} unreached "
               f"selector(s) exceeds the declared budget of {budget_max}")
         return 1
 
-    print(f"OK — fmint coverage: {len(known) - len(unexercised)}/{len(known)} "
-          f"selectors exercised, {len(unexercised)} unexercised "
-          f"(budget {budget_max})")
+    direct_count = len(set(all_direct))
+    internal_only_count = len(set(all_internal) - set(all_direct))
+    print(f"OK — fmint coverage: {len(reached)}/{len(known)} selectors reached "
+          f"({direct_count} direct, {internal_only_count} witnessed internal), "
+          f"{len(unreached)} unreached (budget {budget_max}); "
+          f"{falsifier_count} callsite falsifiers")
     return 0
 
 

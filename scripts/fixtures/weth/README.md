@@ -251,6 +251,30 @@ suite instead.)
   rather than by one fixture; `10-deviation-address.json`'s dirty-word slot
   (a key no Solidity mapping could produce) is an especially direct instance.
 
+## Selector reachability
+
+`scripts/check-weth-coverage.sh` obtains the ten selector words from the
+generated `weth-selectors.json`; it does not retype ABI signatures. Four are
+direct top-level transaction inputs (`approve`, `transferFrom`, `withdraw`,
+and `transfer`). The other six are credited only where a top-level-called
+prober has straight-line bytecode that stores the selector at memory zero,
+CALLs the byte-identical WETH account with that input window, and immediately
+records either the CALL success flag or a failure-path executed marker in a
+slot that changed in committed post-state. The empty-calldata `deposit()`
+fallback is direct.
+
+An ABI-looking PUSH is otherwise reported only as `EMBEDDED`; it is not
+reachability evidence. The gate's five built-in corruptions remove the
+post-state marker, remove the CALL, change its target, make the recorder
+branchable, or overwrite calldata word zero, and require every corrupted
+candidate to lose credit. The result is 4 direct + 6 witnessed internal, all
+10 reached, fallback direct, budget 0.
+
+This is deliberately a recognizer for the fixture generator's small
+straight-line recorder, not a general call tracer. Branching or computed
+callers need a new durable evidence mechanism; mere code presence will not be
+accepted as a substitute.
+
 ## Provenance and shape
 
 Every case uses network Prague — the only fork both Jaune's supported lane and
