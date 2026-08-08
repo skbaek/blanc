@@ -4,6 +4,11 @@
 
 Blanc is an EVM programming language optimized for formal verification 
 with interactive theorem provers. Blanc's toolchain is implemented in Lean 4.
+
+When a Blanc contract reimplements an existing one, what that port does and
+does not claim — and the deviation-registry discipline that backs it — is
+governed by [PORTING.md](PORTING.md).
+
 This repo contains the following files:
 
 - [Basic.lean](Blanc/Basic.lean): Blanc's own prefix/split algebra over lists
