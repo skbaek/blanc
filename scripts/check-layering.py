@@ -57,7 +57,7 @@ CONTRACTS = {
     "weth": ["Weth", "WethCode", "Solvent", "WethLive", "WethGas"],
     "fmint": ["Fmint", "FmintCode", "Conserved", "FlashSpec", "FmintLive",
               "FmintReverts", "FmintGas", "FmintSettles"],
-    "weth10": ["Weth10Core", "Weth10Backed", "Weth10Spec", "Weth10",
+    "weth10": ["Weth10TemplateCode", "Weth10Core", "Weth10Backed", "Weth10Spec", "Weth10",
                "Weth10Sound", "Weth10StateSound", "Weth10Code",
                "Weth10DeployDomainSlices", "Weth10DeployUpperSlices",
                "Weth10Deploy", "Weth10DeployExec",

@@ -515,6 +515,38 @@
 #   Weth10StateFunctional 1.523/1.451/1.452 -> 1.452;
 #   Weth10StateSound 6.419/6.079/5.980 -> 6.079; and
 #   Weth10TransferFunctional 1.929/1.795/1.779 -> 1.795.
+#
+# 2026-08-09. The WETH10 elaboration-time optimization (blanc branch
+# codex/weth10-elab) re-set EIGHT rows and added ONE, from medians of three
+# sequential clean-host `scripts/check-elab.sh --list --no-build` runs
+# (271.3/271.5/270.1 s across all 49 files; no language-server worker above
+# the contention limits).  `--rebase` was NOT run: it rewrites every row and
+# would launder unrelated drift (Blanc/CommonProofs.lean measured ~7.6
+# against its documented-stale 6.143 row, threshold 12.286; Blanc/Ladder.lean
+# ~3.76 against 3.121, threshold 6.242; both deliberately LEFT ALONE, as
+# before).  The work is proof-internal only — no theorem statement moved —
+# plus one definition repoint (weth10RuntimeTemplate now unfolds to the
+# generated literal in the new Blanc/Weth10TemplateCode.lean, with the
+# identity to `weth10Code ⟨0, 0⟩` kernel-checked once).  The mechanism notes
+# live in the commits; the headline: the kernel eagerly literal-folds closed
+# Nat arithmetic and walks the whole compiled program each time a proof
+# term exposes it, so the family paid the same ~7-10 s AST walk dozens of
+# times.  Sizes are now composed from per-leaf decides, and the two
+# remaining full-program kernel evaluations are weth10TemplateCode_compile
+# (Blanc/Weth10.lean) and the mainnet artifact witness (Blanc/Weth10Code.lean).
+#
+#   Weth10 (19.767) 20.879/21.757/20.717 -> 20.879;
+#   Weth10Deploy (89.228) 44.833/45.126/46.094 -> 45.126;
+#   Weth10DeployDomainSlices (31.729) 17.471/17.062/17.160 -> 17.160;
+#   Weth10DeployExec (28.503) 1.953/1.973/1.992 -> 1.973;
+#   Weth10DeployProof (62.829) 2.757/2.780/2.782 -> 2.780;
+#   Weth10DeployUpperSlices (44.974) 12.032/12.082/12.084 -> 12.082;
+#   Weth10Permit (13.548) 4.471/4.654/4.589 -> 4.589;
+#   Weth10TemplateCode (new module) 2.373/2.445/2.479 -> 2.445; and
+#   the totals fell 453.4 -> 270.1 s.
+# Blanc/Weth10Code.lean measured 12.896 against its 13.609 row (source
+# untouched; the small drop rides the import change) and is LEFT ALONE on
+# the same no-laundering rule.
 OK	1.241	Blanc.lean
 OK	1.164	Blanc/BalanceAlgebra.lean
 OK	1.257	Blanc/Basic.lean
@@ -545,21 +577,22 @@ OK	7.098	Blanc/FmintGas.lean
 OK	1.743	Blanc/ForwardCall.lean
 OK	27.664	Blanc/FmintSettles.lean
 OK	1.630	Blanc/RevertPayload.lean
-OK	19.767	Blanc/Weth10.lean
+OK	20.879	Blanc/Weth10.lean
 OK	13.609	Blanc/Weth10Code.lean
-OK	89.228	Blanc/Weth10Deploy.lean
-OK	31.729	Blanc/Weth10DeployDomainSlices.lean
-OK	28.503	Blanc/Weth10DeployExec.lean
-OK	62.829	Blanc/Weth10DeployProof.lean
-OK	44.974	Blanc/Weth10DeployUpperSlices.lean
+OK	45.126	Blanc/Weth10Deploy.lean
+OK	17.160	Blanc/Weth10DeployDomainSlices.lean
+OK	1.973	Blanc/Weth10DeployExec.lean
+OK	2.780	Blanc/Weth10DeployProof.lean
+OK	12.082	Blanc/Weth10DeployUpperSlices.lean
 OK	1.679	Blanc/Weth10Erc677Functional.lean
 OK	2.238	Blanc/Weth10Errors.lean
 OK	2.350	Blanc/Weth10FlashFunctional.lean
 OK	1.267	Blanc/Weth10Functional.lean
 OK	8.200	Blanc/Weth10Live.lean
-OK	13.548	Blanc/Weth10Permit.lean
+OK	4.589	Blanc/Weth10Permit.lean
 OK	1.521	Blanc/Weth10Read.lean
 OK	1.294	Blanc/Weth10Sound.lean
 OK	1.452	Blanc/Weth10StateFunctional.lean
 OK	6.079	Blanc/Weth10StateSound.lean
 OK	1.795	Blanc/Weth10TransferFunctional.lean
+OK	2.445	Blanc/Weth10TemplateCode.lean
