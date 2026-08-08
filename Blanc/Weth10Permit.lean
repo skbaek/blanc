@@ -675,25 +675,25 @@ private lemma toB256_sliceD_word {idx : Nat} {pre post : Bytes} {w : B256}
     List.take_length_append' (B256.length_toBytes w).symm,
     B256.toB256_toBytes]
 
+private lemma toB256_sliceD_word₀ {post : Bytes} {w : B256} :
+    Bytes.toB256 ((w.toBytes ++ post).sliceD 0 32 0) = w := by
+  simpa using toB256_sliceD_word (idx := 0) (pre := []) (w := w)
+    (post := post) rfl
+
 lemma permitEcrecoverImage_word_zero (digest : B256) (v : UInt8)
     (r s : B256) :
     Bytes.toB256 ((permitEcrecoverImage digest v r s).sliceD 0 32 0) =
       digest := by
   unfold permitEcrecoverImage
-  change Bytes.toB256
-    ((([] : Bytes) ++ (digest.toBytes ++
-      ((Nat.toB256 v.toNat).toBytes ++ r.toBytes ++ s.toBytes))).sliceD
-        0 32 0) = digest
-  exact toB256_sliceD_word (idx := 0) (pre := []) (w := digest) rfl
+  rw [List.append_assoc, List.append_assoc]
+  exact toB256_sliceD_word₀
 
 lemma permitEcrecoverImage_word_one (digest : B256) (v : UInt8)
     (r s : B256) :
     Bytes.toB256 ((permitEcrecoverImage digest v r s).sliceD 32 32 0) =
       Nat.toB256 v.toNat := by
   unfold permitEcrecoverImage
-  change Bytes.toB256
-    ((digest.toBytes ++ ((Nat.toB256 v.toNat).toBytes ++
-      (r.toBytes ++ s.toBytes))).sliceD 32 32 0) = Nat.toB256 v.toNat
+  rw [List.append_assoc, List.append_assoc]
   exact toB256_sliceD_word (idx := 32) (pre := digest.toBytes)
     (w := Nat.toB256 v.toNat) (post := r.toBytes ++ s.toBytes)
     (by rw [B256.length_toBytes])
@@ -702,9 +702,7 @@ lemma permitEcrecoverImage_word_two (digest : B256) (v : UInt8)
     (r s : B256) :
     Bytes.toB256 ((permitEcrecoverImage digest v r s).sliceD 64 32 0) = r := by
   unfold permitEcrecoverImage
-  change Bytes.toB256
-    (((digest.toBytes ++ (Nat.toB256 v.toNat).toBytes) ++
-      (r.toBytes ++ s.toBytes)).sliceD 64 32 0) = r
+  rw [List.append_assoc (digest.toBytes ++ (Nat.toB256 v.toNat).toBytes)]
   exact toB256_sliceD_word (idx := 64)
     (pre := digest.toBytes ++ (Nat.toB256 v.toNat).toBytes)
     (w := r) (post := s.toBytes)
@@ -714,9 +712,8 @@ lemma permitEcrecoverImage_word_three (digest : B256) (v : UInt8)
     (r s : B256) :
     Bytes.toB256 ((permitEcrecoverImage digest v r s).sliceD 96 32 0) = s := by
   unfold permitEcrecoverImage
-  change Bytes.toB256
-    ((((digest.toBytes ++ (Nat.toB256 v.toNat).toBytes) ++ r.toBytes) ++
-      (s.toBytes ++ ([] : Bytes))).sliceD 96 32 0) = s
+  rw [show s.toBytes = s.toBytes ++ ([] : Bytes) from
+    (List.append_nil _).symm]
   exact toB256_sliceD_word (idx := 96)
     (pre := (digest.toBytes ++ (Nat.toB256 v.toNat).toBytes) ++ r.toBytes)
     (w := s) (post := []) (by

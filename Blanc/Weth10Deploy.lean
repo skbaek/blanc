@@ -925,24 +925,42 @@ private theorem weth10MainByteAt_to_dispatch
             (fsig +++ dispatchWith fallbackSlot (weth10Tree dp)))) i d = _
   exact byteAt_main_to_dispatch locations n _ _ i d hlo hinside
 
+private theorem prepend4_size (i1 i2 i3 i4 : Ninst) (p : Func) :
+    (i1 ::: i2 ::: i3 ::: i4 ::: p).compileShape.byteSize =
+      p.compileShape.byteSize + i4.size + i3.size + i2.size + i1.size := by
+  simp only [Func.compileShape, Func.CompileShape.byteSize]
+
+private theorem branch2_size (i1 i2 : Ninst) (p q : Func) :
+    (i1 ::: i2 ::: Func.branch p q).compileShape.byteSize =
+      p.compileShape.byteSize + q.compileShape.byteSize + 5 +
+        i2.size + i1.size := by
+  simp only [Func.compileShape, Func.CompileShape.byteSize]
+
 private theorem fsigFullDispatch_size :
     (fsig +++ dispatchWith fallbackSlot
       (weth10Tree (⟨0, 0⟩ : DeployParams))).compileShape.byteSize = 3944 := by
-  have hdispatch := fullDispatch_size
-  rw [Func.CompileShape.byteSize_compileShape] at hdispatch ⊢
-  simp only [fsig, cdl, shiftRight, List.cons_append, List.nil_append,
-    prepend, compsize, hdispatch]
+  have hshape : fsig +++ dispatchWith fallbackSlot
+      (weth10Tree (⟨0, 0⟩ : DeployParams)) =
+      Ninst.pushB256 0 ::: Ninst.calldataload :::
+        Ninst.pushB256 (Nat.toB256 224) ::: Ninst.shr :::
+        dispatchWith fallbackSlot (weth10Tree (⟨0, 0⟩ : DeployParams)) := rfl
+  rw [hshape, prepend4_size, fullDispatch_size]
   decide
 
 private theorem weth10ZeroMain_size_lower :
     3950 ≤
       (weth10Main
         (⟨0, 0⟩ : DeployParams)).compileShape.byteSize := by
-  have hfsig := fsigFullDispatch_size
-  rw [Func.CompileShape.byteSize_compileShape] at hfsig ⊢
-  have hcd : (Ninst.toBytes Ninst.calldatasize).length = 1 := rfl
-  have hiz : (Ninst.toBytes Ninst.iszero).length = 1 := rfl
-  simp only [weth10Main, compsize, hfsig, hcd, hiz]
+  have hshape : weth10Main (⟨0, 0⟩ : DeployParams) =
+      Ninst.calldatasize ::: Ninst.iszero :::
+        Func.branch
+          (fsig +++ dispatchWith fallbackSlot
+            (weth10Tree (⟨0, 0⟩ : DeployParams)))
+          receiveEther := rfl
+  rw [hshape, branch2_size, fsigFullDispatch_size]
+  have hcd : Ninst.calldatasize.size = 1 := by decide
+  have hiz : Ninst.iszero.size = 1 := by decide
+  rw [hcd, hiz]
   omega
 
 private theorem weth10MainByteAt_to_dispatch_inside

@@ -1024,11 +1024,13 @@ theorem weth10InitPost_preserves_frame {sevm : Sevm} {base : Devm} {g : Nat} :
     (weth10InitPost sevm base g).state = base.state ∧
     (weth10InitPost sevm base g).logs = base.logs ∧
     (weth10InitPost sevm base g).error = base.error := by
-  rw [weth10InitPost_eq]
-  simp only [withOutput_state_eq, withOutput_logs_eq, withOutput_error_eq]
-  exact ⟨weth10InitReturnRead_state base (weth10InitMemory sevm) g,
-    weth10InitReturnRead_logs base (weth10InitMemory sevm) g,
-    weth10InitReturnRead_error base (weth10InitMemory sevm) g⟩
+  refine ⟨?_, ?_, ?_⟩
+  · rw [weth10InitPost_eq, withOutput_state_eq]
+    exact weth10InitReturnRead_state base (weth10InitMemory sevm) g
+  · rw [weth10InitPost_eq, withOutput_logs_eq]
+    exact weth10InitReturnRead_logs base (weth10InitMemory sevm) g
+  · rw [weth10InitPost_eq, withOutput_error_eq]
+    exact weth10InitReturnRead_error base (weth10InitMemory sevm) g
 
 /-- The actual hand-emitted initcode, including its inert runtime-data suffix,
 executes the gas-exact successful constructor walk at pc zero. -/
