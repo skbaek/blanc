@@ -6,6 +6,7 @@
 
 import Blanc.Weth10DeployDomainSlices
 import Blanc.Weth10DeployUpperSlices
+import Blanc.Weth10TemplateCode
 import Mathlib.Tactic.IntervalCases
 
 namespace Blanc
@@ -83,8 +84,14 @@ private def deploymentPrefix
   initPush2 runtimeLength ++ [0x5f, 0xf3]
 
 /-- Stable zero-parameter template whose generated word spans are patched by
-the constructor. -/
-def weth10RuntimeTemplate : Bytes := weth10Code ⟨0, 0⟩
+the constructor.  The body is the generated literal so that kernel-side
+computation over the template runs on a literal byte list; the witness below
+keeps the identity with the compiled family kernel-checked. -/
+def weth10RuntimeTemplate : Bytes := weth10TemplateCode
+
+private theorem weth10RuntimeTemplate_eq_code :
+    weth10RuntimeTemplate = weth10Code ⟨0, 0⟩ := by
+  decide +kernel
 
 /-- Overlay one deployment word at every generated fixed-width runtime span. -/
 def patchRuntimeWords (runtime : Bytes) (word : B256)
@@ -174,7 +181,8 @@ theorem weth10Code_length (dp : DeployParams) :
     _ = (weth10Code ⟨0, 0⟩).length :=
       ((Prog.length_compile (weth10Code_compile ⟨0, 0⟩)).trans
         (programShapeByteSize_eq (weth10 ⟨0, 0⟩)).symm).symm
-    _ = weth10RuntimeTemplate.length := rfl
+    _ = weth10RuntimeTemplate.length :=
+      (congrArg List.length weth10RuntimeTemplate_eq_code).symm
     _ = 6313 := weth10RuntimeTemplate_length
 
 private theorem weth10Code_eq_emitUnchecked (dp : DeployParams) :
@@ -727,6 +735,114 @@ private theorem dispatch24_21_3_eq_deploymentDispatch (dp : DeployParams) :
     dispatchNode, dispatchWith, prepend,
     leftmostFsig]
 
+/-! ## Composed dispatch sizes
+
+Kernel-evaluating `compileShape.byteSize` over a dispatch subtree re-walks
+every leaf below it, so the walk lemmas' former per-site `decide +kernel`
+size facts repeated the same traversal at every level.  The lemmas below
+pay one small `decide` per leaf and derive every internal node's size
+arithmetically through `dispatchNode_size`. -/
+
+private theorem dispatchNode_size (s : B256) (off on : Func)
+    (hpush : (Ninst.pushB256 s).size = 5) :
+    (dispatchNode s off on).compileShape.byteSize =
+      12 + on.compileShape.byteSize + off.compileShape.byteSize := by
+  have hpushBytes : (Ninst.toBytes (Ninst.pushB256 s)).length = 5 := by
+    rw [← Ninst.size_eq_length_toBytes]
+    exact hpush
+  have hdup : (Ninst.toBytes (Ninst.dup 0)).length = 1 := rfl
+  have hgt : (Ninst.toBytes Ninst.gt).length = 1 := rfl
+  simp only [Func.CompileShape.byteSize_compileShape, dispatchNode, compsize,
+    hpushBytes, hdup, hgt]
+  omega
+
+private theorem flashFeeLeaf_size :
+    flashFeeLeaf.compileShape.byteSize = 47 := by
+  decide +kernel
+
+private theorem depositLeaf_size :
+    depositLeaf.compileShape.byteSize = 64 := by
+  decide +kernel
+
+private theorem deploymentChainIdLeaf_size :
+    (deploymentChainIdLeaf
+      (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 64 := by
+  decide +kernel
+
+private theorem approveAndCallLeaf_size :
+    approveAndCallLeaf.compileShape.byteSize = 239 := by
+  decide +kernel
+
+private theorem dispatch22_24_1_size :
+    (dispatch22_24_1 (⟨0, 0⟩ : DeployParams)).compileShape.byteSize =
+      351 := by
+  decide +kernel
+
+private theorem dispatch23_26_1_size :
+    (dispatch23_26_1 (⟨0, 0⟩ : DeployParams)).compileShape.byteSize =
+      110 := by
+  decide +kernel
+
+private theorem dispatch25_14_7_size :
+    (dispatch25_14_7 (⟨0, 0⟩ : DeployParams)).compileShape.byteSize =
+      822 := by
+  decide +kernel
+
+private theorem dispatchD9_size :
+    (dispatchD9 (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 410 := by
+  unfold dispatchD9
+  rw [dispatchNode_size _ _ _ (by decide +kernel),
+    flashFeeLeaf_size, dispatch22_24_1_size]
+
+private theorem dispatchDd_size :
+    (dispatchDd (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 532 := by
+  unfold dispatchDd
+  rw [dispatchNode_size _ _ _ (by decide +kernel),
+    dispatch23_26_1_size, dispatchD9_size]
+
+private theorem deploymentPairDispatch_size :
+    (deploymentPairDispatch
+      (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 315 := by
+  unfold deploymentPairDispatch
+  rw [dispatchNode_size _ _ _ (by decide +kernel),
+    deploymentChainIdLeaf_size, approveAndCallLeaf_size]
+
+
+private theorem deploymentDispatch_size :
+    (deploymentDispatch
+      (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 391 := by
+  unfold deploymentDispatch
+  rw [dispatchNode_size _ _ _ (by decide +kernel),
+    depositLeaf_size, deploymentPairDispatch_size]
+
+private theorem dispatch24_21_3_size :
+    (dispatch24_21_3 (⟨0, 0⟩ : DeployParams)).compileShape.byteSize =
+      391 := by
+  rw [dispatch24_21_3_eq_deploymentDispatch]
+  exact deploymentDispatch_size
+
+private theorem dispatchD505_size :
+    (dispatchD505 (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 935 := by
+  unfold dispatchD505
+  rw [dispatchNode_size _ _ _ (by decide +kernel),
+    dispatchDd_size, dispatch24_21_3_size]
+
+private theorem dispatchCae9_size :
+    (dispatchCae9 (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 1769 := by
+  unfold dispatchCae9
+  rw [dispatchNode_size _ _ _ (by decide +kernel),
+    dispatchD505_size, dispatch25_14_7_size]
+
+private theorem dispatch26_0_14_size :
+    (dispatch26_0_14 (⟨0, 0⟩ : DeployParams)).compileShape.byteSize =
+      2158 := by
+  have hfull := fullDispatch_size
+  rw [flashFeeDispatch_eq (⟨0, 0⟩ : DeployParams)] at hfull
+  unfold flashFeeDispatch at hfull
+  rw [dispatchNode_size _ _ _ (by decide +kernel), dispatchCae9_size]
+    at hfull
+  omega
+
 private lemma byteAt_main_to_dispatch
     (locations : List Nat) (n : Nat) (p q : Func) (i : Nat) (d : UInt8)
     (hlo : 11 ≤ i)
@@ -810,13 +926,22 @@ private theorem weth10MainByteAt_to_dispatch
 private theorem fsigFullDispatch_size :
     (fsig +++ dispatchWith fallbackSlot
       (weth10Tree (⟨0, 0⟩ : DeployParams))).compileShape.byteSize = 3944 := by
-  decide +kernel
+  have hdispatch := fullDispatch_size
+  rw [Func.CompileShape.byteSize_compileShape] at hdispatch ⊢
+  simp only [fsig, cdl, shiftRight, List.cons_append, List.nil_append,
+    prepend, compsize, hdispatch]
+  decide
 
 private theorem weth10ZeroMain_size_lower :
     3950 ≤
       (weth10Main
         (⟨0, 0⟩ : DeployParams)).compileShape.byteSize := by
-  decide +kernel
+  have hfsig := fsigFullDispatch_size
+  rw [Func.CompileShape.byteSize_compileShape] at hfsig ⊢
+  have hcd : (Ninst.toBytes Ninst.calldatasize).length = 1 := rfl
+  have hiz : (Ninst.toBytes Ninst.iszero).length = 1 := rfl
+  simp only [weth10Main, compsize, hfsig, hcd, hiz]
+  omega
 
 private theorem weth10MainByteAt_to_dispatch_inside
     (locations : List Nat) (n : Nat) (dp : DeployParams)
@@ -1317,8 +1442,8 @@ private theorem dispatchD9ByteAt_eq_zero_0_205
   unfold dispatchD9
   have hpush : (Ninst.pushB256 (0xd9d98ce4 : B256)).size = 5 := by
     decide +kernel
-  have hflash : flashFeeLeaf.compileShape.byteSize = 47 := by
-    decide +kernel
+  have hflash : flashFeeLeaf.compileShape.byteSize = 47 :=
+    flashFeeLeaf_size
   by_cases hheader : i < 11
   · exact dispatchNodeByteAt_eq_prefix locations n 0xd9d98ce4
       (dispatch22_24_1 (⟨0, 0⟩ : DeployParams)) flashFeeLeaf
@@ -1368,8 +1493,8 @@ private theorem dispatchDdByteAt_eq_zero_0_327
     decide +kernel
   have hallowance :
       (dispatch23_26_1
-        (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 110 := by
-    decide +kernel
+        (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 110 :=
+    dispatch23_26_1_size
   by_cases hheader : i < 11
   · exact dispatchNodeByteAt_eq_prefix locations n 0xdd62ed3e
       (dispatchD9 (⟨0, 0⟩ : DeployParams))
@@ -1704,27 +1829,10 @@ private theorem weth10CodeGetD_to_dispatch
         (weth10Tree (⟨0, 0⟩ : DeployParams))).compileShape.byteSize =
         3939 := by
     exact fullDispatch_size
-  let left := fsig +++ dispatchWith fallbackSlot
-    (weth10Tree (⟨0, 0⟩ : DeployParams))
-  have hshape :
-      (weth10Main
-        (⟨0, 0⟩ : DeployParams)).compileShape =
-      .next Ninst.calldatasize.size
-        (.next Ninst.iszero.size
-          (.branch left.compileShape receiveEther.compileShape)) := by
-    rfl
-  have hleft : left.compileShape.byteSize = 3944 := by
-    exact fsigFullDispatch_size
-  have hcd : Ninst.calldatasize.size = 1 := by decide +kernel
-  have hiz : Ninst.iszero.size = 1 := by decide +kernel
   have hmain :
       3950 ≤ (weth10Main
-        (⟨0, 0⟩ : DeployParams)).compileShape.byteSize := by
-    rw [hshape]
-    simp only [Func.CompileShape.byteSize]
-    rw [hleft, hiz, hcd]
-    generalize receiveEther.compileShape.byteSize = receiveSize
-    omega
+        (⟨0, 0⟩ : DeployParams)).compileShape.byteSize :=
+    weth10ZeroMain_size_lower
   rw [weth10CodeGetD_to_main dp i (by omega) (by omega)]
   have hroute := weth10MainByteAt_to_dispatch_inside
     weth10RuntimeLocations 1 dp (i - 1) 0 (by omega) (by omega)
@@ -1750,7 +1858,7 @@ private theorem weth10CodeGetD_eq_zero_of_dispatch
             (weth10Tree (⟨0, 0⟩ : DeployParams))) (i - 12) 0) :
     (weth10Code dp).getD i 0 = weth10RuntimeTemplate.getD i 0 := by
   rw [weth10CodeGetD_to_dispatch dp i hlo hinside]
-  change _ = (weth10Code (⟨0, 0⟩ : DeployParams)).getD i 0
+  rw [weth10RuntimeTemplate_eq_code]
   rw [weth10CodeGetD_to_dispatch (⟨0, 0⟩ : DeployParams) i hlo hinside]
   exact hbyte
 
@@ -1909,8 +2017,8 @@ private theorem deploymentDispatchByteAt_word
   unfold deploymentDispatch
   have hpush : (Ninst.pushB256 (selector "deposit" [])).size = 5 := by
     decide +kernel
-  have honSize : depositLeaf.compileShape.byteSize = 64 := by
-    decide +kernel
+  have honSize : depositLeaf.compileShape.byteSize = 64 :=
+    depositLeaf_size
   conv_lhs => rw [dispatchNodeByteAt_to_offPath
       (locations := locations) (n := n)
       (selector := selector "deposit" [])
@@ -1948,8 +2056,8 @@ private theorem dispatchD505ByteAt_deploymentChainWord
     decide +kernel
   have honSize :
       (dispatchDd
-        (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 532 := by
-    decide +kernel
+        (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 532 :=
+    dispatchDd_size
   conv_lhs => rw [dispatchNodeByteAt_to_offPath
       (locations := locations) (n := n) (selector := 0xd505accf)
       (off0 := dispatch24_21_3 (⟨0, 0⟩ : DeployParams))
@@ -2174,8 +2282,8 @@ private theorem deploymentDispatchByteAt_eq_zero_145_391
   have hdepositPush :
       (Ninst.pushB256 (selector "deposit" [])).size = 5 := by
     decide +kernel
-  have hdeposit : depositLeaf.compileShape.byteSize = 64 := by
-    decide +kernel
+  have hdeposit : depositLeaf.compileShape.byteSize = 64 :=
+    depositLeaf_size
   rw [dispatchNodeByteAt_to_offPath locations n (selector "deposit" [])
       (deploymentPairDispatch (⟨0, 0⟩ : DeployParams)) depositLeaf
       (deploymentPairDispatch dp) depositLeaf i 0 hdepositPush (by
@@ -2192,24 +2300,8 @@ private theorem deploymentDispatchByteAt_eq_zero_145_391
     decide +kernel
   have hdeployment :
       (deploymentChainIdLeaf
-        (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 64 := by
-    have hnonpayable :
-        (nonpayable (deploymentChainId
-          (⟨0, 0⟩ : DeployParams))).compileShape.byteSize = 49 := by
-      decide +kernel
-    have hprefix : prefixByteSize deploymentChainIdLeafPrefix = 6 := by
-      decide +kernel
-    have hpushBytes :
-        (Ninst.toBytes (Ninst.pushB256
-          (selector "deploymentChainId" []))).length = 5 := by
-      rw [← Ninst.size_eq_length_toBytes]
-      exact hdeploymentPush
-    unfold deploymentChainIdLeaf
-    rw [Func.CompileShape.byteSize_compileShape]
-    simp only [Func.CompileShape.byteSize_compileShape] at hnonpayable
-    simp only [deploymentChainIdLeafPrefix, prepend, compsize, hnonpayable]
-    rw [hpushBytes]
-    rfl
+        (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 64 :=
+    deploymentChainIdLeaf_size
   by_cases hon : i < 151
   · rw [dispatchNodeByteAt_to_onPath locations (n + 76)
         (selector "deploymentChainId" []) approveAndCallLeaf
@@ -2263,8 +2355,8 @@ private theorem dispatchD505ByteAt_eq_zero_689_935
     decide +kernel
   have hdd :
       (dispatchDd
-        (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 532 := by
-    decide +kernel
+        (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 532 :=
+    dispatchDd_size
   rw [dispatchNodeByteAt_to_offPath locations n 0xd505accf
       (dispatch24_21_3 (⟨0, 0⟩ : DeployParams))
       (dispatchDd (⟨0, 0⟩ : DeployParams))
@@ -2300,8 +2392,8 @@ private theorem dispatchCae9ByteAt_eq_zero_700_1769
     decide +kernel
   have hd505 :
       (dispatchD505
-        (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 935 := by
-    decide +kernel
+        (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 935 :=
+    dispatchD505_size
   by_cases hon : i < 946
   · rw [dispatchNodeByteAt_to_onPath locations n 0xcae9ca51
         (dispatch25_14_7 (⟨0, 0⟩ : DeployParams))
@@ -2362,8 +2454,8 @@ private theorem weth10DispatchByteAt_eq_zero_711_1780
     decide +kernel
   have hcae9 :
       (dispatchCae9
-        (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 1769 := by
-    decide +kernel
+        (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 1769 :=
+    dispatchCae9_size
   rw [dispatchNodeByteAt_to_onPath locations n 0x7ecebe00
       (dispatch26_0_14 (⟨0, 0⟩ : DeployParams))
       (dispatchCae9 (⟨0, 0⟩ : DeployParams))
@@ -2397,8 +2489,8 @@ private theorem weth10DispatchByteAt_eq_zero_1780
     decide +kernel
   have hcae9 :
       (dispatchCae9
-        (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 1769 := by
-    decide +kernel
+        (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 1769 :=
+    dispatchCae9_size
   have hindex : 1780 = 11 +
       (dispatchCae9
         (⟨0, 0⟩ : DeployParams)).compileShape.byteSize := by
@@ -2761,8 +2853,8 @@ private theorem weth10Code_slice_0_372
     omega)]
   have hdp := weth10Code_eq_emitByShape ⟨chainId, domainSeparator⟩
   have hzero : weth10RuntimeTemplate =
-      Prog.emitByShape (weth10 ⟨0, 0⟩).compileShape (weth10 ⟨0, 0⟩) := by
-    simpa [weth10RuntimeTemplate] using weth10Code_eq_emitByShape ⟨0, 0⟩
+      Prog.emitByShape (weth10 ⟨0, 0⟩).compileShape (weth10 ⟨0, 0⟩) :=
+    weth10RuntimeTemplate_eq_code.trans (weth10Code_eq_emitByShape ⟨0, 0⟩)
   rw [hdp, hzero]
   rw [weth10_compileShape_eq_zero ⟨chainId, domainSeparator⟩]
   simp only [Prog.emitByShape, Prog.compileShape, Table.emitByShape,
@@ -2872,8 +2964,7 @@ private theorem weth10MainEmit_drop_3950
 
 private theorem weth10Code_drop_3951 (dp : DeployParams) :
     (weth10Code dp).drop 3951 = weth10RuntimeTemplate.drop 3951 := by
-  change (weth10Code dp).drop 3951 =
-    (weth10Code (⟨0, 0⟩ : DeployParams)).drop 3951
+  rw [weth10RuntimeTemplate_eq_code]
   rw [weth10Code_eq_emitByZeroShape,
     weth10Code_eq_emitByZeroShape]
   let zeroMainShape :=
