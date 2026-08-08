@@ -625,39 +625,28 @@ private theorem fullDispatch_eq_root (dp : DeployParams) :
     dispatch26_14_13, treeSlice, weth10Funcs, DispatchTree.build,
     dispatchNode, dispatchWith, leftmostFsig]
 
-private theorem dispatch26_0_14_size :
-    (dispatch26_0_14 (⟨0, 0⟩ : DeployParams)).compileShape.byteSize =
-      2158 := by
-  decide +kernel
+/- Subtree sizes are composed bottom-up through `dispatchNode_size` from a
+few leaf-level `decide`s: kernel-evaluating `byteSize` over a subtree
+re-walks every leaf below it, so deciding each level independently repeated
+the same traversal per lemma.  The block is ordered children-first; every
+statement is unchanged. -/
 
-private theorem dispatch26_14_13_size :
-    (dispatch26_14_13 (⟨0, 0⟩ : DeployParams)).compileShape.byteSize =
-      1769 := by
-  decide +kernel
+private theorem dispatchNode_size (s : B256) (off on : Func)
+    (hpush : (Ninst.pushB256 s).size = 5) :
+    (dispatchNode s off on).compileShape.byteSize =
+      12 + on.compileShape.byteSize + off.compileShape.byteSize := by
+  have hpushBytes : (Ninst.toBytes (Ninst.pushB256 s)).length = 5 := by
+    rw [← Ninst.size_eq_length_toBytes]
+    exact hpush
+  have hdup : (Ninst.toBytes (Ninst.dup 0)).length = 1 := rfl
+  have hgt : (Ninst.toBytes Ninst.gt).length = 1 := rfl
+  simp only [Func.CompileShape.byteSize_compileShape, dispatchNode, compsize,
+    hpushBytes, hdup, hgt]
+  omega
 
-private theorem dispatch25_7_7_size :
-    (dispatch25_7_7 (⟨0, 0⟩ : DeployParams)).compileShape.byteSize =
-      1307 := by
-  decide +kernel
-
-private theorem dispatch24_7_4_size :
-    (dispatch24_7_4 (⟨0, 0⟩ : DeployParams)).compileShape.byteSize =
-      1000 := by
-  decide +kernel
-
-private theorem dispatch24_11_3_size :
-    (dispatch24_11_3 (⟨0, 0⟩ : DeployParams)).compileShape.byteSize =
-      295 := by
-  decide +kernel
-
-private theorem dispatch23_7_2_size :
-    (dispatch23_7_2 (⟨0, 0⟩ : DeployParams)).compileShape.byteSize =
-      275 := by
-  decide +kernel
-
-private theorem dispatch23_9_2_size :
-    (dispatch23_9_2 (⟨0, 0⟩ : DeployParams)).compileShape.byteSize =
-      713 := by
+private theorem dispatch22_7_1_size :
+    (dispatch22_7_1 (⟨0, 0⟩ : DeployParams)).compileShape.byteSize =
+      33 := by
   decide +kernel
 
 private theorem dispatch22_8_1_size :
@@ -665,10 +654,60 @@ private theorem dispatch22_8_1_size :
       230 := by
   decide +kernel
 
+private theorem dispatch23_9_2_size :
+    (dispatch23_9_2 (⟨0, 0⟩ : DeployParams)).compileShape.byteSize =
+      713 := by
+  decide +kernel
+
+private theorem dispatch24_11_3_size :
+    (dispatch24_11_3 (⟨0, 0⟩ : DeployParams)).compileShape.byteSize =
+      295 := by
+  decide +kernel
+
+private theorem dispatch25_0_7_size :
+    (dispatch25_0_7 (⟨0, 0⟩ : DeployParams)).compileShape.byteSize =
+      839 := by
+  decide +kernel
+
+private theorem dispatch26_14_13_size :
+    (dispatch26_14_13 (⟨0, 0⟩ : DeployParams)).compileShape.byteSize =
+      1769 := by
+  decide +kernel
+
+private theorem dispatch23_7_2_size :
+    (dispatch23_7_2 (⟨0, 0⟩ : DeployParams)).compileShape.byteSize =
+      275 := by
+  rw [dispatch23_7_2_eq_node]
+  rw [dispatchNode_size _ _ _ (by decide +kernel)]
+  rw [dispatch22_8_1_size, dispatch22_7_1_size]
+
+private theorem dispatch24_7_4_size :
+    (dispatch24_7_4 (⟨0, 0⟩ : DeployParams)).compileShape.byteSize =
+      1000 := by
+  rw [dispatch24_7_4_eq_node]
+  rw [dispatchNode_size _ _ _ (by decide +kernel)]
+  rw [dispatch23_9_2_size, dispatch23_7_2_size]
+
+private theorem dispatch25_7_7_size :
+    (dispatch25_7_7 (⟨0, 0⟩ : DeployParams)).compileShape.byteSize =
+      1307 := by
+  rw [dispatch25_7_7_eq_node]
+  rw [dispatchNode_size _ _ _ (by decide +kernel)]
+  rw [dispatch24_11_3_size, dispatch24_7_4_size]
+
+private theorem dispatch26_0_14_size :
+    (dispatch26_0_14 (⟨0, 0⟩ : DeployParams)).compileShape.byteSize =
+      2158 := by
+  rw [dispatch26_0_14_eq_node]
+  rw [dispatchNode_size _ _ _ (by decide +kernel)]
+  rw [dispatch25_7_7_size, dispatch25_0_7_size]
+
 theorem fullDispatch_size :
     (dispatchWith fallbackSlot
       (weth10Tree (⟨0, 0⟩ : DeployParams))).compileShape.byteSize = 3939 := by
-  decide +kernel
+  rw [fullDispatch_eq_root]
+  rw [dispatchNode_size _ _ _ (by decide +kernel)]
+  rw [dispatch26_14_13_size, dispatch26_0_14_size]
 
 private lemma dispatchNodeByteAt_to_onPath
     (locations : List Nat) (n : Nat) (selector : B256)

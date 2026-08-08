@@ -260,6 +260,26 @@ private theorem permitCachedPath_eq (dp : DeployParams) :
           .call permitRecoverSlot) := by
   rfl
 
+/- Permit-path sizes, decided once here and shared by every walk lemma
+below instead of re-deciding the same kernel walk per site. -/
+
+private theorem permit_size :
+    (permit (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 326 := by
+  decide +kernel
+
+private theorem permitDynamicPath_size :
+    permitDynamicPath.compileShape.byteSize = 123 := by
+  decide +kernel
+
+private theorem permitCoreTail_size :
+    (permitCoreTail (⟨0, 0⟩ : DeployParams)).compileShape.byteSize =
+      201 := by
+  decide +kernel
+
+private theorem permitCoreX_size :
+    (permitCoreX (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 312 := by
+  decide +kernel
+
 private theorem permitCachedPathByteAt_eq_zero_0_3
     (locations : List Nat) (n : Nat) (dp : DeployParams)
     (i : Nat) (hi : i < 3) :
@@ -335,13 +355,13 @@ private theorem permitByteAt_to_coreTail
       (i := i - 5) (d := d) (by omega) (by
         have hcoreSize :
             (permitCoreX
-              (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 312 := by
-          decide +kernel
+              (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 312 :=
+        permitCoreX_size
         rw [hcoreSize]
         have htailSize :
             (permitCoreTail
-              (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 201 := by
-          decide +kernel
+              (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 201 :=
+        permitCoreTail_size
         rw [htailSize] at hinside
         omega)]
   unfold permitCoreX
@@ -409,8 +429,8 @@ private theorem permitCoreTailByteAt_eq_zero_33_165
         (i := i - 33) (d := 0) (by rw [heqSize]; omega)]
     simp only [heqSize]
     have hdynamic :
-        permitDynamicPath.compileShape.byteSize = 123 := by
-      decide +kernel
+        permitDynamicPath.compileShape.byteSize = 123 :=
+        permitDynamicPath_size
     change
       Func.byteAtByShape locations (n + 33 + 1)
           (.branch permitDynamicPath.compileShape
@@ -461,8 +481,8 @@ private theorem permitByteAt_eq_zero_153_285
         (permit (⟨0, 0⟩ : DeployParams)) i 0 := by
   have htailSize :
       (permitCoreTail
-        (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 201 := by
-    decide +kernel
+        (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 201 :=
+        permitCoreTail_size
   rw [permitByteAt_to_coreTail locations n dp i 0 (by omega) (by
         rw [htailSize]
         omega),
@@ -638,6 +658,70 @@ private def permitLeafPrefix : Line :=
 private def nonpayablePrefix : Line :=
   [Ninst.callvalue, Ninst.iszero]
 
+/- Dispatch-chain sizes: one small decide per leaf subtree, every internal
+node composed through `dispatchNode_size`. -/
+
+private theorem dispatchNode_size (s : B256) (off on : Func)
+    (hpush : (Ninst.pushB256 s).size = 5) :
+    (dispatchNode s off on).compileShape.byteSize =
+      12 + on.compileShape.byteSize + off.compileShape.byteSize := by
+  have hpushBytes : (Ninst.toBytes (Ninst.pushB256 s)).length = 5 := by
+    rw [← Ninst.size_eq_length_toBytes]
+    exact hpush
+  have hdup : (Ninst.toBytes (Ninst.dup 0)).length = 1 := rfl
+  have hgt : (Ninst.toBytes Ninst.gt).length = 1 := rfl
+  simp only [Func.CompileShape.byteSize_compileShape, dispatchNode, compsize,
+    hpushBytes, hdup, hgt]
+  omega
+
+private theorem flashFeeLeaf_size :
+    flashFeeLeaf.compileShape.byteSize = 47 := by
+  decide +kernel
+
+private theorem dispatch23_26_1_size :
+    (dispatch23_26_1 (⟨0, 0⟩ : DeployParams)).compileShape.byteSize =
+      110 := by
+  decide +kernel
+
+private theorem dispatch22_24_1_size :
+    (dispatch22_24_1 (⟨0, 0⟩ : DeployParams)).compileShape.byteSize =
+      351 := by
+  decide +kernel
+
+private theorem dispatch25_14_7_size :
+    (dispatch25_14_7 (⟨0, 0⟩ : DeployParams)).compileShape.byteSize =
+      822 := by
+  decide +kernel
+
+private theorem dispatch24_21_3_size :
+    (dispatch24_21_3 (⟨0, 0⟩ : DeployParams)).compileShape.byteSize =
+      391 := by
+  decide +kernel
+
+private theorem dispatchD9_size :
+    (dispatchD9 (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 410 := by
+  unfold dispatchD9
+  rw [dispatchNode_size _ _ _ (by decide +kernel),
+    flashFeeLeaf_size, dispatch22_24_1_size]
+
+private theorem dispatchDd_size :
+    (dispatchDd (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 532 := by
+  unfold dispatchDd
+  rw [dispatchNode_size _ _ _ (by decide +kernel),
+    dispatch23_26_1_size, dispatchD9_size]
+
+private theorem dispatchD505_size :
+    (dispatchD505 (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 935 := by
+  unfold dispatchD505
+  rw [dispatchNode_size _ _ _ (by decide +kernel),
+    dispatchDd_size, dispatch24_21_3_size]
+
+private theorem dispatchCae9_size :
+    (dispatchCae9 (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 1769 := by
+  unfold dispatchCae9
+  rw [dispatchNode_size _ _ _ (by decide +kernel),
+    dispatchD505_size, dispatch25_14_7_size]
+
 private theorem dispatch22_24_1ByteAt_to_permit
     (locations : List Nat) (n : Nat) (dp : DeployParams)
     (i : Nat) (d : UInt8) (hlo : 25 ≤ i)
@@ -738,8 +822,8 @@ private theorem dispatchD9ByteAt_to_permit
   unfold dispatchD9
   have hpush : (Ninst.pushB256 (0xd9d98ce4 : B256)).size = 5 := by
     decide +kernel
-  have honSize : flashFeeLeaf.compileShape.byteSize = 47 := by
-    decide +kernel
+  have honSize : flashFeeLeaf.compileShape.byteSize = 47 :=
+        flashFeeLeaf_size
   rw [dispatchNodeByteAt_to_offPath
       (locations := locations) (n := n) (selector := 0xd9d98ce4)
       (off0 := dispatch22_24_1 (⟨0, 0⟩ : DeployParams))
@@ -769,8 +853,8 @@ private theorem dispatchDdByteAt_to_permit
     decide +kernel
   have honSize :
       (dispatch23_26_1
-        (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 110 := by
-    decide +kernel
+        (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 110 :=
+        dispatch23_26_1_size
   rw [dispatchNodeByteAt_to_offPath
       (locations := locations) (n := n) (selector := 0xdd62ed3e)
       (off0 := dispatchD9 (⟨0, 0⟩ : DeployParams))
@@ -799,11 +883,11 @@ private theorem dispatchD505ByteAt_to_permit
     decide +kernel
   have honSize :
       (dispatchDd
-        (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 532 := by
-    decide +kernel
+        (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 532 :=
+        dispatchDd_size
   have hpermitSize :
-      (permit (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 326 := by
-    decide +kernel
+      (permit (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 326 :=
+        permit_size
   rw [dispatchNodeByteAt_to_onPath
       (locations := locations) (n := n) (selector := 0xd505accf)
       (off0 := dispatch24_21_3 (⟨0, 0⟩ : DeployParams))
@@ -834,11 +918,11 @@ private theorem dispatchCae9ByteAt_to_permit
     decide +kernel
   have honSize :
       (dispatchD505
-        (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 935 := by
-    decide +kernel
+        (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 935 :=
+        dispatchD505_size
   have hpermitSize :
-      (permit (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 326 := by
-    decide +kernel
+      (permit (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 326 :=
+        permit_size
   rw [dispatchNodeByteAt_to_onPath
       (locations := locations) (n := n) (selector := 0xcae9ca51)
       (off0 := dispatch25_14_7 (⟨0, 0⟩ : DeployParams))
@@ -869,11 +953,11 @@ private theorem flashFeeDispatchByteAt_to_permit
     decide +kernel
   have honSize :
       (dispatchCae9
-        (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 1769 := by
-    decide +kernel
+        (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 1769 :=
+        dispatchCae9_size
   have hpermitSize :
-      (permit (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 326 := by
-    decide +kernel
+      (permit (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 326 :=
+        permit_size
   rw [dispatchNodeByteAt_to_onPath
       (locations := locations) (n := n) (selector := 0x7ecebe00)
       (off0 := dispatch26_0_14 (⟨0, 0⟩ : DeployParams))
@@ -918,8 +1002,8 @@ theorem weth10DispatchByteAt_eq_zero_392_524
         (dispatchWith fallbackSlot
           (weth10Tree (⟨0, 0⟩ : DeployParams))) i 0 := by
   have hpermit :
-      (permit (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 326 := by
-    decide +kernel
+      (permit (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 326 :=
+        permit_size
   rw [weth10DispatchByteAt_to_permit locations n dp i 0
         (by omega) (by rw [hpermit]; omega),
     weth10DispatchByteAt_to_permit locations n
@@ -986,8 +1070,8 @@ private theorem permitCoreTailByteAt_cachedWord
             (⟨0, 0⟩ : DeployParams)).compileShape)
         (.branch permitDynamicPath (permitCachedPath dp))
         (165 + j - 33 - 1) 0 = _
-  have hdynamic : permitDynamicPath.compileShape.byteSize = 123 := by
-    decide +kernel
+  have hdynamic : permitDynamicPath.compileShape.byteSize = 123 :=
+        permitDynamicPath_size
   conv_lhs => rw [byteAt_branch_to_right
       (locations := locations) (n := n + 33 + 1)
       (left0 := permitDynamicPath)
@@ -1012,8 +1096,8 @@ private theorem permitByteAt_cachedWord
       dp.cachedDomainSeparator.toBytes.getD j 0 := by
   have htailSize :
       (permitCoreTail
-        (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 201 := by
-    decide +kernel
+        (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 201 :=
+        permitCoreTail_size
   rw [permitByteAt_to_coreTail locations n dp (285 + j) 0
       (by omega) (by rw [htailSize]; omega)]
   have hi : 285 + j - 120 = 165 + j := by omega
@@ -1030,8 +1114,8 @@ theorem weth10DispatchByteAt_cachedWord
         (dispatchWith fallbackSlot (weth10Tree dp)) (524 + j) 0 =
       dp.cachedDomainSeparator.toBytes.getD j 0 := by
   have hpermit :
-      (permit (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 326 := by
-    decide +kernel
+      (permit (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 326 :=
+        permit_size
   rw [weth10DispatchByteAt_to_permit locations n dp (524 + j) 0
       (by omega) (by rw [hpermit]; omega)]
   have hi : 524 + j - 239 = 285 + j := by omega
@@ -1101,8 +1185,8 @@ private theorem permitCoreTailByteAt_eq_zero_197_201
         (.branch permitDynamicPath
           (permitCachedPath (⟨0, 0⟩ : DeployParams)))
         (i - 33 - 1) 0
-  have hdynamic : permitDynamicPath.compileShape.byteSize = 123 := by
-    decide +kernel
+  have hdynamic : permitDynamicPath.compileShape.byteSize = 123 :=
+        permitDynamicPath_size
   conv_lhs => rw [byteAt_branch_to_right
       (locations := locations) (n := n + 33 + 1)
       (left0 := permitDynamicPath)
@@ -1170,8 +1254,8 @@ private theorem permitByteAt_eq_zero_317_326
   by_cases hcore : i < 321
   · have htailSize :
         (permitCoreTail
-          (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 201 := by
-      decide +kernel
+          (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 201 :=
+        permitCoreTail_size
     rw [permitByteAt_to_coreTail locations n dp i 0
           (by omega) (by rw [htailSize]; omega),
       permitByteAt_to_coreTail locations n
@@ -1216,8 +1300,8 @@ private theorem permitByteAt_eq_zero_317_326
             (.call expiredPermitErrorSlot)) (i - 5) 0
     have hcoreSize :
         (permitCoreX
-          (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 312 := by
-      decide +kernel
+          (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 312 :=
+        permitCoreX_size
     by_cases hjump : i = 321
     · have hiEq : i - 5 = 4 +
           (permitCoreX
@@ -1361,6 +1445,15 @@ private theorem dispatchLeaf_eq (selector : B256) (body : Func) :
       dispatchLeafPrefix selector +++
         Func.branch (.call fallbackSlot) body := by
   rfl
+
+private theorem depositDispatchLeaf_size :
+    (dispatchLeaf 0xd0e30db0 deposit).compileShape.byteSize = 64 := by
+  decide +kernel
+
+private theorem deploymentChainIdDispatchLeaf_size :
+    (dispatchLeaf 0xcd0d0096 (nonpayable (deploymentChainId
+      (⟨0, 0⟩ : DeployParams)))).compileShape.byteSize = 64 := by
+  decide +kernel
 
 private theorem dispatchLeafByteAt_eq_before_body
     (locations : List Nat) (n : Nat) (selector : B256)
@@ -1610,8 +1703,8 @@ private theorem dispatch24_21_3ByteAt_eq_zero_0_113
       (Ninst.pushB256 (0xcd0d0096 : B256)).size = 5 := by
     decide +kernel
   have hdepositLeaf :
-      (dispatchLeaf 0xd0e30db0 deposit).compileShape.byteSize = 64 := by
-    decide +kernel
+      (dispatchLeaf 0xd0e30db0 deposit).compileShape.byteSize = 64 :=
+        depositDispatchLeaf_size
   by_cases hroot : i < 11
   · exact dispatchNodeByteAt_eq_prefix locations n 0xd0e30db0
       (dispatchNode 0xcd0d0096
@@ -1787,8 +1880,8 @@ private theorem dispatch24_21_3ByteAt_chainWord
       (Ninst.pushB256 (0xcd0d0096 : B256)).size = 5 := by
     decide +kernel
   have hdepositLeaf :
-      (dispatchLeaf 0xd0e30db0 deposit).compileShape.byteSize = 64 := by
-    decide +kernel
+      (dispatchLeaf 0xd0e30db0 deposit).compileShape.byteSize = 64 :=
+        depositDispatchLeaf_size
   rw [dispatchNodeByteAt_to_offPath
       (locations := locations) (n := n) (selector := 0xd0e30db0)
       (off0 := dispatchNode 0xcd0d0096
@@ -1810,8 +1903,8 @@ private theorem dispatch24_21_3ByteAt_chainWord
       (dispatchLeaf 0xcd0d0096
         (nonpayable
           (deploymentChainId
-            (⟨0, 0⟩ : DeployParams)))).compileShape.byteSize = 64 := by
-    decide +kernel
+            (⟨0, 0⟩ : DeployParams)))).compileShape.byteSize = 64 :=
+        deploymentChainIdDispatchLeaf_size
   rw [dispatchNodeByteAt_to_onPath
       (locations := locations) (n := n + 76)
       (selector := 0xcd0d0096)
@@ -1848,12 +1941,12 @@ private theorem flashFeeDispatchByteAt_to_dispatch24_21_3
     decide +kernel
   have hcae9Size :
       (dispatchCae9
-        (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 1769 := by
-    decide +kernel
+        (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 1769 :=
+        dispatchCae9_size
   have hdispatch24Size :
       (dispatch24_21_3
-        (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 391 := by
-    decide +kernel
+        (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 391 :=
+        dispatch24_21_3_size
   conv_lhs => rw [dispatchNodeByteAt_to_onPath
       (locations := locations) (n := n) (selector := 0x7ecebe00)
       (off0 := dispatch26_0_14 (⟨0, 0⟩ : DeployParams))
@@ -1869,8 +1962,8 @@ private theorem flashFeeDispatchByteAt_to_dispatch24_21_3
     decide +kernel
   have hd505Size :
       (dispatchD505
-        (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 935 := by
-    decide +kernel
+        (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 935 :=
+        dispatchD505_size
   conv_lhs => rw [dispatchNodeByteAt_to_onPath
       (locations := locations) (n := n + 11)
       (selector := 0xcae9ca51)
@@ -1887,8 +1980,8 @@ private theorem flashFeeDispatchByteAt_to_dispatch24_21_3
     decide +kernel
   have hddSize :
       (dispatchDd
-        (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 532 := by
-    decide +kernel
+        (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 532 :=
+        dispatchDd_size
   conv_lhs => rw [dispatchNodeByteAt_to_offPath
       (locations := locations) (n := n + 11 + 11)
       (selector := 0xd505accf)
@@ -1941,8 +2034,8 @@ private theorem weth10DispatchByteAt_eq_zero_565
     decide +kernel
   have hcae9Size :
       (dispatchCae9
-        (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 1769 := by
-    decide +kernel
+        (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 1769 :=
+        dispatchCae9_size
   rw [dispatchNodeByteAt_to_onPath
         (locations := locations) (n := n) (selector := 0x7ecebe00)
         (off0 := dispatch26_0_14 (⟨0, 0⟩ : DeployParams))
@@ -1966,8 +2059,8 @@ private theorem weth10DispatchByteAt_eq_zero_565
     decide +kernel
   have hd505Size :
       (dispatchD505
-        (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 935 := by
-    decide +kernel
+        (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 935 :=
+        dispatchD505_size
   rw [dispatchNodeByteAt_to_onPath
         (locations := locations) (n := n + 11)
         (selector := 0xcae9ca51)
@@ -1993,8 +2086,8 @@ private theorem weth10DispatchByteAt_eq_zero_565
     decide +kernel
   have hddSize :
       (dispatchDd
-        (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 532 := by
-    decide +kernel
+        (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 532 :=
+        dispatchDd_size
   have hi : 565 - 11 - 11 = 11 +
       (dispatchDd
         (⟨0, 0⟩ : DeployParams)).compileShape.byteSize := by
@@ -2020,8 +2113,8 @@ theorem weth10DispatchByteAt_eq_zero_556_679
           (weth10Tree (⟨0, 0⟩ : DeployParams))) i 0 := by
   by_cases hpermit : i < 565
   · have hpermitSize :
-        (permit (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 326 := by
-      decide +kernel
+        (permit (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 326 :=
+        permit_size
     have hloPermit : 239 ≤ i := by omega
     have hinsidePermit : i - 239 < 326 := by omega
     rw [weth10DispatchByteAt_to_permit locations n dp i 0
@@ -2037,8 +2130,8 @@ theorem weth10DispatchByteAt_eq_zero_556_679
       exact weth10DispatchByteAt_eq_zero_565 locations n dp
     · have hdispatch24Size :
         (dispatch24_21_3
-          (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 391 := by
-        decide +kernel
+          (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 391 :=
+        dispatch24_21_3_size
       rw [weth10DispatchByteAt_to_dispatch24_21_3 locations n dp i 0
             (by omega) (by rw [hdispatch24Size]; omega),
         weth10DispatchByteAt_to_dispatch24_21_3 locations n
@@ -2057,8 +2150,8 @@ theorem weth10DispatchByteAt_chainWord_691
       dp.deploymentChainId.toBytes.getD j 0 := by
   have hdispatch24Size :
       (dispatch24_21_3
-        (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 391 := by
-    decide +kernel
+        (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 391 :=
+        dispatch24_21_3_size
   rw [weth10DispatchByteAt_to_dispatch24_21_3
       locations n dp (679 + j) 0 (by omega) (by
         rw [hdispatch24Size]
