@@ -34,7 +34,7 @@ Choose the gate by what you changed, cheapest falsifier first:
 | the pinned Jaune revision (`lakefile.lean` + `lake-manifest.json`) | `lake build` | the **full set**, in the order below |
 
 **No gate here takes `--jobs`.** Blanc's gates run from sub-second to roughly
-7.5 minutes and need no parallel mode, so the `--jobs` contract in Jaune's catalogue does not
+five minutes and need no parallel mode, so the `--jobs` contract in Jaune's catalogue does not
 apply to this repository. `check-elab.sh`'s header records why it is sequential
 by construction: a gate whose only output is a timing cannot be run under
 self-inflicted contention.
@@ -90,10 +90,10 @@ against the gate.
 
 | gate | proves | scale | time |
 |---|---|---|---|
-| `scripts/check-elab.sh` | per-module elaboration time vs the committed `scripts/baseline-elab.txt` | 48 files, 453.4 s baseline | ~7.5 min |
+| `scripts/check-elab.sh` | per-module elaboration time vs the committed `scripts/baseline-elab.txt` | 49 files, 269.9 s baseline | ~4.6 min |
 
 No Blanc gate approaches the 1,000-second rule. The sequential elaboration
-gate is the longest at roughly 7.5 minutes; every gate still runs inline.
+gate is the longest at roughly five minutes; every gate still runs inline.
 
 ### The Python behind the shell
 
