@@ -301,19 +301,28 @@ class Probe:
 
     `gas` caps what the probe forwards; `None` forwards `GAS`, which is what
     the Step-3 view cases do and what keeps their bytecode byte-identical.
+
+    `value` is the wei the probe's CALL carries, default 0. Nonzero value is
+    what the nonpayable-agreement case sends at a recognized selector to
+    watch the guard fire; the prober's alloc must fund it, and a refused
+    value-carrying CALL hands the wei back to the prober.
     """
 
     def __init__(self, label, sig, args, words=(), reverts_because=None,
-                 gas=None):
+                 gas=None, value=0):
         assert not (words and reverts_because), (
             f"{label}: a probe that must be rejected cannot also state "
             f"returned words -- a rejected call returns no ABI payload")
+        assert 0 <= value <= 0xFF, (
+            f"{label}: probe value {value} does not fit the PUSH1 the "
+            f"emitter uses for the CALL's value operand")
         self.label = label
         self.sig = sig
         self.args = args
         self.words = list(words)
         self.reverts_because = reverts_because
         self.gas = gas
+        self.value = value
         self.calldata = calldata(sig, *args)
         assert len(self.calldata) == 4 + 32 * len(args), label
 
@@ -377,7 +386,7 @@ def prober_bytecode(weth_addr, probes):
         ops += _push1(0)                             # PUSH1 0    retOffset
         ops += _push1(argsize)                       # PUSH1 L    argsSize
         ops += _push1(0)                             # PUSH1 0    argsOffset
-        ops += _push1(0)                             # PUSH1 0    value
+        ops += _push1(p.value)                       # PUSH1 v    value
         ops += _push20(weth_addr)                    # PUSH20 weth
         if p.gas is None:
             ops += _GAS                              # GAS       (all of it)
@@ -581,6 +590,11 @@ class Expectations:
         self._record(obs, f"transaction {i} status", "succeeded",
                      "succeeded" if obs else "reverted/failed", claim)
 
+    def expect_tx_failed(self, i, claim):
+        obs = bool(self.res["receipts"][i].get("succeeded"))
+        self._record(not obs, f"transaction {i} status", "reverted/failed",
+                     "succeeded" if obs else "reverted/failed", claim)
+
     def expect_ether(self, label, addr, expected, claim):
         obs = self.post_ether(addr)
         self._record(obs == expected, f"ether balance of {label}",
@@ -690,9 +704,11 @@ def get_weth_code_hex():
     finally:
         os.unlink(scratch)
     hexstr = out.strip().strip('"')
-    # 1776 = 2 x 888 bytes. Was 1732 (866 bytes) until the `Func.rev`
+    # 1976 = 2 x 988 bytes. Was 1732 (866 bytes) until the `Func.rev`
     # normalization (`~/plans/fmint-hygiene.md`) put two `PUSH0`s ahead of
-    # each of WETH's eleven rev sites.
+    # each of WETH's eleven rev sites, then 1776 (888 bytes) until the
+    # `nonpayable` wrap of `wethFuncs` (`~/plans/weth-nonpayable-goal.md`)
+    # put a ten-byte value guard ahead of each of the ten dispatched bodies.
     #
     # WHY THIS STAYS A LENGTH ASSERT: same adjudication as
     # `gen-fmint-fixtures.py`'s `get_fmint_code_hex`, recorded in full there
@@ -701,7 +717,7 @@ def get_weth_code_hex():
     # byte-equality against the committed literal would compare `Blanc.wethCode`
     # with itself. Every fixture's WETH account IS checked byte-for-byte
     # against that literal, by `check-runtime-bytes.py` under `check-weth.sh`.
-    assert len(hexstr) == 1776, f"unexpected wethCode hex length {len(hexstr)}"
+    assert len(hexstr) == 1976, f"unexpected wethCode hex length {len(hexstr)}"
     assert hexstr.startswith("5b5f3560"), hexstr[:16]
     return "0x" + hexstr
 
@@ -1941,64 +1957,83 @@ def case_deviation_address(weth_code):
     return build_fixture("deviation_address", alloc, txs, expect)
 
 
-def case_deviation_value(weth_code):
-    """`WETH_DEVIATIONS.md` claim 4: ether sent to a recognized non-deposit
-    call.
+def case_agreement_value(weth_code):
+    """`WETH_DEVIATIONS.md` row 4: ether sent to a recognized non-deposit
+    call -- an AGREEMENT since the nonpayable conformance change, and a
+    deviation before it.
 
-    This is the one that asserts a SUCCESS, and it is the claim most likely to
-    surprise a reader. Every public entry point of deployed WETH9 except the
-    fallback and `deposit()` is nonpayable and rejects a call carrying value.
-    Blanc's dispatcher routes on the selector alone and never looks at
-    `callvalue`, and only the deposit implementation credits it -- so a
-    `transfer` carrying 1 wad of ether SUCCEEDS as a transfer, the contract
-    keeps the ether, and nobody is credited for it.
+    Every public entry point of deployed WETH9 except the fallback and
+    `deposit()` is nonpayable and rejects a call carrying value. Since the
+    `nonpayable` wrap of `wethFuncs` (`Blanc/Weth.lean`), Blanc agrees: each
+    recognized selector checks CALLVALUE after dispatch, before its body,
+    and reverts with empty data on nonzero value. The payable surface is
+    exactly the fallback/deposit path. Until that change this file was
+    `11-deviation-value.json` and asserted the opposite outcome on the same
+    pre-state: the value-carrying `transfer` SUCCEEDED, the contract kept
+    the ether with nobody credited, and `totalSupply()` read one unbacked
+    wad. That history is what makes this case non-vacuous: run against the
+    pre-change 888-byte artifact, its refusals and totals all fail.
 
-    The pre-state starts exactly backed: WETH holds 5 wad of ether and owes
-    5 wad internally. Afterwards it holds 6 and still owes 5. That surplus is
-    the observable consequence the registry describes, and the second
-    transaction reads it back out of the contract: `totalSupply()` -- which is
-    Blanc's own ether balance -- reports 6 wad while the internal balances
-    that could ever be redeemed still sum to 5.
+    Four transactions, each side of the boundary witnessed twice:
 
-    Note what this is not. The pre-state is solvent and stays solvent; the
-    surplus is unbacked ether, not an unbacked balance."""
+      0. `transfer(dst, 2 wad)` carrying 1 wad of ether -- REFUSED: the
+         transaction reverts, the value returns to the sender, no slot
+         moves.
+      1. The same `transfer(dst, 2 wad)`, same sender, same gas cap, no
+         value -- honoured. The only input that changed is the value, so
+         transaction 0's failure is the guard, not gas or a malformed call.
+      2. Calldata carrying `deposit()`'s own selector plus 1 wad of ether
+         -- honoured AS A DEPOSIT. `deposit()` is deliberately dispatched
+         nowhere (`wethFuncs`, `Blanc/Weth.lean`), so the call falls
+         through to the payable fallback and the sender is credited: value
+         reaches the contract through the fallback and only through it.
+      3. The prober: `balanceOf(payer)` carrying 1 wei is REFUSED (zero
+         flag beside a set executed marker) -- the guard is per-selector,
+         views included, not a mutator-only check; the same
+         `balanceOf(payer)` with no value at the same cap is honoured; and
+         `totalSupply()` reads 6 wad against internal balances 3 + 2 + 1,
+         so the contract ends EXACTLY backed where the pre-change contract
+         ended over-backed."""
     payer_key, trigger_key = 12, 13
     payer = derive_address(payer_key)
     trigger = derive_address(trigger_key)
     backing = 5 * WAD_1_ETH   # WETH's ether, and the payer's internal balance
-    sent = 1 * WAD_1_ETH      # the value the transfer call carries
-    moved = 2 * WAD_1_ETH     # the wad the transfer moves
+    sent = 1 * WAD_1_ETH      # the value the refused transfer carries
+    moved = 2 * WAD_1_ETH     # the wad both transfer attempts name
+    dep = 1 * WAD_1_ETH       # the value the unmatched-selector deposit carries
     probes = [
-        Probe("totalSupply()", "totalSupply()", [],
-              words=[(backing + sent,
-                      "totalSupply() is the contract's OWN ether balance, and "
-                      "it now reads 6 wad: the 1 wad the transfer call "
-                      "carried really did stay with the contract")],
-              gas=PROBE_GAS),
+        Probe("balanceOf(payer) + 1 wei", "balanceOf(address)", [payer],
+              reverts_because=(
+                  "the nonpayable guard rejects value on a VIEW selector "
+                  "too -- one wei is enough, and the refusal is the guard "
+                  "because the identical call below at the same cap with no "
+                  "value is honoured"),
+              gas=PROBE_GAS, value=1),
         Probe("balanceOf(payer)", "balanceOf(address)", [payer],
               words=[(backing - moved,
-                      "but the sender is credited NOTHING for it. Its "
-                      "internal balance is 5 wad minus the 2 it transferred, "
-                      "not 5 minus 2 plus the 1 it sent -- had the same ether "
-                      "arrived on the fallback, deposit would have minted it")],
+                      "the honoured half of the pair: same selector, same "
+                      "cap, zero value, and the answer is the payer's 5 wad "
+                      "minus the 2 the honoured transfer moved")],
               gas=PROBE_GAS),
-        Probe("balanceOf(dst)", "balanceOf(address)", [GUARD_DST],
-              words=[(moved,
-                      "and the recipient has the 2 wad transferred, so the "
-                      "internal balances still sum to 5 while the contract "
-                      "holds 6: exactly 1 wad of the contract's ether is now "
-                      "backed by no internal balance at all, and no call can "
-                      "ever withdraw it")],
+        Probe("totalSupply()", "totalSupply()", [],
+              words=[(backing + dep,
+                      "totalSupply() is the contract's OWN ether balance: "
+                      "6 wad -- the 5 backing the pre-state plus the 1 the "
+                      "fallback deposit credited -- against internal "
+                      "balances 3 + 2 + 1. Exactly backed: the refused "
+                      "transfer left no unbacked ether behind, where the "
+                      "pre-change contract kept the wad with nobody "
+                      "credited")],
               gas=PROBE_GAS),
     ]
     alloc = {
         WETH_ADDR: {"nonce": "0x1", "balance": q(backing), "code": weth_code,
                      "storage": {addr32(payer): word32(backing)}},
-        PROBER_ADDR: {"nonce": "0x1", "balance": q(0),
+        PROBER_ADDR: {"nonce": "0x1", "balance": q(1),
                        "code": "0x" + prober_bytecode(WETH_ADDR, probes).hex(),
                        "storage": {}},
         payer: eoa_alloc(3 * WAD_1_ETH),
-        trigger: eoa_alloc(WAD_1_ETH),
+        trigger: eoa_alloc(2 * WAD_1_ETH),
     }
     txs = [
         {
@@ -2011,7 +2046,24 @@ def case_deviation_value(weth_code):
             "secretKey": privkey_hex(payer_key),
         },
         {
+            "type": "0x0", "chainId": "0x1", "nonce": "0x1",
+            "gasPrice": q(GAS_PRICE), "gas": "0x186a0", "to": WETH_ADDR,
+            "value": "0x0",
+            "input": "0x" + calldata(
+                "transfer(address,uint256)", GUARD_DST, moved).hex(),
+            "v": "0x0", "r": "0x0", "s": "0x0",
+            "secretKey": privkey_hex(payer_key),
+        },
+        {
             "type": "0x0", "chainId": "0x1", "nonce": "0x0",
+            "gasPrice": q(GAS_PRICE), "gas": "0x186a0", "to": WETH_ADDR,
+            "value": q(dep),
+            "input": "0x" + selector("deposit()").hex(),
+            "v": "0x0", "r": "0x0", "s": "0x0",
+            "secretKey": privkey_hex(trigger_key),
+        },
+        {
+            "type": "0x0", "chainId": "0x1", "nonce": "0x1",
             "gasPrice": q(GAS_PRICE), "gas": "0x1e8480", "to": PROBER_ADDR,
             "value": "0x0", "input": "0x",
             "v": "0x0", "r": "0x0", "s": "0x0",
@@ -2021,52 +2073,69 @@ def case_deviation_value(weth_code):
 
     def expect(e):
         payer_slot, dst_slot = balance_slot(payer), balance_slot(GUARD_DST)
+        trigger_slot = balance_slot(trigger)
+        e.expect_tx_failed(
+            0, "ROW 4 AGREEMENT. A `transfer` carrying 1 wad of ether is "
+               "REFUSED, exactly as deployed WETH9 refuses it: every "
+               "recognized non-deposit entry point is nonpayable since the "
+               "`nonpayable` wrap of `wethFuncs`. Before that change this "
+               "same transaction SUCCEEDED and stranded the wad")
         e.expect_tx_succeeded(
-            0, "DEVIATION CLAIM 4. A `transfer` carrying 1 wad of ether "
-               "SUCCEEDS. Deployed WETH9 declares every entry point but the "
-               "fallback and deposit() nonpayable and would have rejected "
-               "this call outright; Blanc's dispatcher never looks at "
-               "callvalue")
+            1, "the same `transfer` from the same sender at the same gas "
+               "cap, differing only in carrying no value, is honoured -- "
+               "so the refusal above is the value guard, not gas or a "
+               "malformed call")
+        e.expect_tx_succeeded(
+            2, "calldata carrying `deposit()`'s own selector plus 1 wad is "
+               "honoured as a DEPOSIT: the selector is dispatched nowhere "
+               "and falls through to the payable fallback, which credits "
+               "the sender -- the payable surface is exactly the fallback")
         e.expect_ether(
-            "WETH", WETH_ADDR, backing + sent,
-            "and the contract keeps the ether: its balance rises by exactly "
-            "the value sent, on a call that was not a deposit")
+            "WETH", WETH_ADDR, backing + dep,
+            "the contract's ether rises by exactly the deposited wad and "
+            "by nothing else: the refused transfer's wad went back to its "
+            "sender")
         e.expect_slot(
             "WETH", WETH_ADDR, payer_slot, "balance[payer]", backing - moved,
-            "while the sender is credited nothing for it -- debited the 2 wad "
-            "it transferred and not credited the 1 wad it sent. This is the "
-            "asymmetry the deviation names")
+            "the payer's internal balance shows only the honoured "
+            "transfer's debit -- the refused transaction moved nothing")
         e.expect_slot(
             "WETH", WETH_ADDR, dst_slot, "balance[dst]", moved,
-            "the transfer itself behaves normally: the recipient gets exactly "
-            "the wad named in the calldata")
+            "the recipient has exactly the honoured transfer's wad")
+        e.expect_slot(
+            "WETH", WETH_ADDR, trigger_slot, "balance[trigger]", dep,
+            "and the fallback deposit credited its sender in full -- value "
+            "that arrives through the fallback is minted, value that "
+            "arrives at a recognized selector is refused")
         e.expect_storage_exact(
-            "WETH", WETH_ADDR, {payer_slot: backing - moved, dst_slot: moved},
-            "and the sent wad is credited to NO key anywhere: the internal "
-            "balances still sum to 5 while the contract now holds 6. That "
-            "surplus wad is unredeemable -- the pre-state was exactly backed "
-            "and the post-state is over-backed, so this is unbacked ether, "
-            "not an unbacked balance")
+            "WETH", WETH_ADDR,
+            {payer_slot: backing - moved, dst_slot: moved, trigger_slot: dep},
+            "no other slot anywhere: internal balances sum to 3 + 2 + 1 = "
+            "6 wad against 6 wad of ether. Exactly backed -- the pre-change "
+            "contract ended this same scenario holding an unbacked wad")
         e.expect_tx_succeeded(
-            1, "the prober transaction then reads the consequence back out "
-               "of the contract")
+            3, "the prober transaction then watches the guard fire at a "
+               "view selector and reads the totals back")
         for i, p in enumerate(probes):
             expect_probe(e, "prober", PROBER_ADDR, i, p)
         e.expect_storage_exact(
             "prober", PROBER_ADDR, probe_storage(probes),
-            "the prober's storage is exactly those three answers")
+            "the prober's storage is exactly those three records: one "
+            "refusal (flag 0, marker 1) and two honoured reads")
         e.expect_ether(
-            "payer", payer, e.pre_ether(payer) - sent - e.fee(0),
-            "the payer is out the wad it sent, plus its fee, and holds no "
-            "claim to it")
+            "payer", payer, e.pre_ether(payer) - e.fee(0, 1),
+            "the payer is out only its two fees: the refused transaction's "
+            "1 wad came back with the revert")
         e.expect_ether(
-            "prober", PROBER_ADDR, 0,
-            "the prober neither sends nor receives ether")
+            "trigger", trigger, e.pre_ether(trigger) - dep - e.fee(2, 3),
+            "the depositor is out the deposited wad plus its fees, and "
+            "holds the internal balance for it")
         e.expect_ether(
-            "trigger", trigger, e.pre_ether(trigger) - e.fee(1),
-            "the triggering EOA gains nothing and only pays its fee")
+            "prober", PROBER_ADDR, 1,
+            "the prober still holds its one funding wei: the refused "
+            "value-carrying probe's wei came back with the revert")
 
-    return build_fixture("deviation_value", alloc, txs, expect)
+    return build_fixture("agreement_value", alloc, txs, expect)
 
 
 def main():
@@ -2082,7 +2151,7 @@ def main():
         ("08-guard-balance.json", case_guard_balance),
         ("09-guard-allowance.json", case_guard_allowance),
         ("10-deviation-address.json", case_deviation_address),
-        ("11-deviation-value.json", case_deviation_value),
+        ("11-agreement-value.json", case_agreement_value),
     ]
 
     # Every case is built and checked before any file is written, so an

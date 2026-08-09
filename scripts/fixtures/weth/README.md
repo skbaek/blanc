@@ -92,7 +92,7 @@ transaction at gas price 10.
 | `08-guard-balance.json` | `transfer` and `withdraw` over the caller's balance | the two balance guards refusing, through the same prober (see [On refusals](#on-refusals)) | both calls are **refused** — a zero success flag beside a set executed-marker, so the refusal is *observed*, not inferred from "nothing changed"; WETH holds 5 wad of ether against the prober's 2, so the refused `withdraw(3 wad)` is a contract that will not pay rather than one that cannot; a `transfer` of the whole 2 wad, same selector and same gas cap, is honoured and ABI-returns `true`; WETH ends with only the recipient's credit, its ether untouched, and the prober with no ether at all |
 | `09-guard-allowance.json` | `transferFrom` with no / too little / enough allowance | the allowance guard, and the **write** side of `keccak256(src ‖ dst)` | three owners with identical 5-wad balances differing only in what they approved the prober: the first two `transferFrom`s are refused, the third honoured; owner B's balance reads back whole afterwards, and `transferFrom` debits the source *before* it checks the allowance — so the refusal rolled back a debit already made in that frame; owner C's 5-wad allowance minus the 2 wad spent leaves a **nonzero 3 wad at that key** in the committed post-state, which the `allowance` view then reads back through its own independent derivation of the same key |
 | `10-deviation-address.json` | dirty address words — [`WETH_DEVIATIONS.md`](../../../WETH_DEVIATIONS.md) **claim 1** | mutating paths rejecting a word with nonzero upper 96 bits, and views *not* rejecting it | `transfer`, `approve`, and `transferFrom` in **both** address positions all refuse the dirty word, while the same calls on the canonical address it aliases to, at the same gas cap, are honoured; `balanceOf` of the dirty word answers 4 wad — the value at the dirty word's *own* slot — while `balanceOf` of the address it aliases to answers 6, so the view demonstrably neither masks to 160 bits nor applies the mutators' check; the four refusals leave no slot anywhere, under either key |
-| `11-deviation-value.json` | a payable `transfer` — [`WETH_DEVIATIONS.md`](../../../WETH_DEVIATIONS.md) **claim 4** | a recognized non-`deposit` call carrying ether | the call **succeeds**, where deployed WETH9 declares it nonpayable and rejects it; WETH's ether rises by exactly the value sent, and the sender is credited *nothing* for it; a second transaction reads the consequence back through the prober — `totalSupply()` reports 6 wad while the internal balances still sum to 5, so exactly 1 wad of the contract's ether is backed by no internal balance and no call can ever withdraw it. The pre-state was exactly backed and stays over-backed: this is unbacked *ether*, not an unbacked balance |
+| `11-agreement-value.json` | value at recognized selectors vs the fallback — [`WETH_DEVIATIONS.md`](../../../WETH_DEVIATIONS.md) **row 4, an agreement since the `nonpayable` wrap** | the per-selector value guard refusing, on a mutator and on a view, and the fallback staying payable | a `transfer` carrying 1 wad is **refused** — the transaction reverts, the value returns, no slot moves — while the same `transfer` from the same sender at the same gas cap with no value is honoured, so the refusal is the guard and nothing else; calldata carrying `deposit()`'s own selector plus 1 wad is honoured *as a deposit* through the payable fallback, crediting its sender; the prober's `balanceOf` carrying a single wei is refused (flag `0`, marker `1`) while the identical zero-value probe at the same cap is honoured; `totalSupply()` then reads 6 wad against internal balances `3 + 2 + 1` — **exactly backed**, where this same scenario against the pre-change artifact ended with an unbacked wad (this file was `11-deviation-value.json` then, and asserted that outcome) |
 
 Balances are keyed by the **raw 256-bit address word**, not a Solidity mapping
 slot, and an allowance by `keccak256(src ‖ dst)`; both are deliberate
@@ -186,7 +186,7 @@ the discriminating assertions were added once, to the fmint suite, rather than
 duplicated here ([the clean-failure triple](../fmint/README.md#what-the-clean-failure-triple-discriminates)).
 What does bind this suite to the normalized bytes is `check-runtime-bytes.py`,
 run by `check-weth.sh`: every fixture's WETH pre-state code must be
-byte-identical to the committed 888-byte `wethCode`.
+byte-identical to the committed 988-byte `wethCode`.
 
 Two further precautions, both retained. A rejected probe forwards a fixed gas
 cap (`PROBE_GAS = 200,000`) instead of `GAS`. Its original reason was that a
@@ -202,8 +202,15 @@ refused call is paired with a call on the **same selector at the same cap**
 that succeeds, which is what separates "the guard refused" from "the probe ran
 out of gas".
 
-**That pairing covers nine of this suite's ten refusals, not all ten**, and the
-exception is stated rather than papered over: `08-guard-balance`'s refused
+Case `11-agreement-value` adds two refusals of its own and a third shape of
+refusal evidence: its value-carrying `transfer` is refused at the *top level*,
+witnessed by the transaction's receipt status rather than by prober slots, and
+paired with an identical same-cap zero-value transaction that succeeds; its
+value-carrying `balanceOf` probe is the ordinary two-slot refusal, paired the
+ordinary way.
+
+**That pairing covers eleven of this suite's twelve refusals, not all twelve**,
+and the exception is stated rather than papered over: `08-guard-balance`'s refused
 `withdraw(3 wad)` has no honoured `withdraw` beside it at the same cap. Its
 refusal is non-vacuous for a different, case-specific reason, which that case
 asserts directly — WETH holds 5 wad of ether against the prober's 2, so the
@@ -222,13 +229,13 @@ one keeps a cap and that one has none.)
 
 ### Known limits of these expectations
 
-Of [`WETH_DEVIATIONS.md`](../../../WETH_DEVIATIONS.md)'s four catalogued
-deviations, two are discharged by a dedicated case — claim 1 by
-`10-deviation-address.json` and claim 4 by `11-deviation-value.json`, both
-above — and two are not, for the reasons below. (That registry's fifth row is
-an *agreement*, not a fifth claim, and this suite asserts nothing about it —
-see [On refusals](#on-refusals) for why its evidence lives in the fmint
-suite instead.)
+Of [`WETH_DEVIATIONS.md`](../../../WETH_DEVIATIONS.md)'s three remaining
+catalogued deviations, one is discharged by a dedicated case — claim 1 by
+`10-deviation-address.json` — and two are not, for the reasons below. (That
+registry's rows 4 and 5 are *agreements*, not claims: row 4 became one with
+the `nonpayable` wrap and carries `11-agreement-value.json` above as its
+agreement witness, and row 5's evidence lives in the fmint suite — see [On
+refusals](#on-refusals).)
 
 - **Deviation claim 3 is untestable by construction.**
   [`WETH_DEVIATIONS.md`](../../../WETH_DEVIATIONS.md)'s third row records that
