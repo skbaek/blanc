@@ -590,6 +590,7 @@ OK	17.160	Blanc/Weth10DeployDomainSlices.lean
 OK	1.973	Blanc/Weth10DeployExec.lean
 OK	2.780	Blanc/Weth10DeployProof.lean
 OK	12.082	Blanc/Weth10DeployUpperSlices.lean
+OK	1.703	Blanc/Weth10DeploymentRoot.lean
 OK	1.679	Blanc/Weth10Erc677Functional.lean
 OK	2.238	Blanc/Weth10Errors.lean
 OK	2.350	Blanc/Weth10FlashFunctional.lean

@@ -1,4 +1,5 @@
 import Blanc.Weth10Redeemable
+import Blanc.Weth10DeploymentRoot
 
 /-!
 Lean-checked statement pins for the WETH10 flagship declarations.  Each
@@ -390,6 +391,370 @@ example {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     TransactionRedemptionEnabled
       dp ca owner recipient q benv bout tx index :=
   hstable.transactionRedemption_enabled_of_le hq henv
+
+/-! Deployment constructor pins make the pre-execution/result boundary fail
+closed on record-field additions, removals, or type changes. -/
+
+example {chainId : UInt64} {base : BlockChain} {sender ca : Adr}
+    (chainId_eq : chainId = base.chainId)
+    (validContext : base.ValidContext)
+    (sumNof : SumNof base.state.bal)
+    (target_eq : ca = computeContractAddress sender (base.state.getNonce sender))
+    (target_ne_zero : ca ≠ 0)
+    (target_not_precompile : ¬ pragueRules.isPrecomp ca)
+    (sender_ne_target : sender ≠ ca)
+    (withdrawalRequest_ne_target : withdrawalRequestPredeployAddress ≠ ca)
+    (consolidationRequest_ne_target : consolidationRequestPredeployAddress ≠ ca)
+    (target_noCodeOrNonce : accountHasCodeOrNonce base.state ca = false)
+    (target_noStorage : accountHasStorage base.state ca = false)
+    (lastBlockHash : ∃ lastHash,
+      List.getLast? (getLast256BlockHashes base) = some lastHash)
+    (beaconCode : some (base.state.getCode beaconRootsAddress).toList =
+      Prog.compile deploymentSystemProgram)
+    (historyCode : some (base.state.getCode historyStorageAddress).toList =
+      Prog.compile deploymentSystemProgram)
+    (withdrawalRequestCode :
+      some (base.state.getCode withdrawalRequestPredeployAddress).toList =
+        Prog.compile deploymentSystemProgram)
+    (consolidationRequestCode :
+      some (base.state.getCode consolidationRequestPredeployAddress).toList =
+        Prog.compile deploymentSystemProgram) :
+    CanonicalDeploymentBase chainId base sender ca :=
+  { chainId_eq := chainId_eq
+    validContext := validContext
+    sumNof := sumNof
+    target_eq := target_eq
+    target_ne_zero := target_ne_zero
+    target_not_precompile := target_not_precompile
+    sender_ne_target := sender_ne_target
+    withdrawalRequest_ne_target := withdrawalRequest_ne_target
+    consolidationRequest_ne_target := consolidationRequest_ne_target
+    target_noCodeOrNonce := target_noCodeOrNonce
+    target_noStorage := target_noStorage
+    lastBlockHash := lastBlockHash
+    beaconCode := beaconCode
+    historyCode := historyCode
+    withdrawalRequestCode := withdrawalRequestCode
+    consolidationRequestCode := consolidationRequestCode }
+
+example {chainId : UInt64} {base : BlockChain} {cb : CanonicalBlock}
+    {deploymentTxBytes : Bytes} {deploymentTx : Tx} {sender ca : Adr}
+    (txs_eq : cb.block.txs = [.inl deploymentTxBytes])
+    (decode_eq : decodeTx (.inl deploymentTxBytes) = .ok deploymentTx)
+    (ommers_eq : cb.block.ommers = [])
+    (withdrawals_eq : cb.block.wds = [])
+    (type_eq : ∃ maxPriorityFee maxFee,
+      deploymentTx.type = .two chainId maxPriorityFee maxFee none [])
+    (value_eq : deploymentTx.value = 0)
+    (data_eq : deploymentTx.data = weth10InitCode)
+    (nonce_eq : deploymentTx.nonce = base.state.getNonce sender)
+    (nonce_not_max : deploymentTx.nonce ≠ UInt64.max)
+    (recoveredSender : recoverSender chainId deploymentTx = .ok sender)
+    (validated : validateTransaction pragueRules deploymentTx =
+      .ok (calculateIntrinsicCost deploymentTx))
+    (checked :
+      let benv := initBenv pragueRules base cb.block.header
+      checkTransaction benv.beginTransaction
+        (deploymentTxPreludeBout .init deploymentTx 0) deploymentTx =
+        .ok (sender, deploymentEffectiveGasPrice benv deploymentTx, [], 0))
+    (base_fee_le_effective : cb.block.header.baseFeePerGas ≤
+      deploymentEffectiveGasPrice
+        (initBenv pragueRules base cb.block.header) deploymentTx)
+    (upfront_funded :
+      deploymentTx.gas * deploymentEffectiveGasPrice
+        (initBenv pragueRules base cb.block.header) deploymentTx ≤
+      (base.state.bal sender).toNat)
+    (gas_bound : deploymentTransactionGasBound deploymentTx ≤ deploymentTx.gas)
+    (block_gas_room : deploymentTx.gas ≤ cb.block.header.gasLimit)
+    (target_eq : ca = computeContractAddress sender deploymentTx.nonce) :
+    CanonicalWeth10DeploymentBlock chainId base cb deploymentTxBytes
+      deploymentTx sender ca :=
+  { txs_eq := txs_eq
+    decode_eq := decode_eq
+    ommers_eq := ommers_eq
+    withdrawals_eq := withdrawals_eq
+    type_eq := type_eq
+    value_eq := value_eq
+    data_eq := data_eq
+    nonce_eq := nonce_eq
+    nonce_not_max := nonce_not_max
+    recoveredSender := recoveredSender
+    validated := validated
+    checked := checked
+    base_fee_le_effective := base_fee_le_effective
+    upfront_funded := upfront_funded
+    gas_bound := gas_bound
+    block_gas_room := block_gas_room
+    target_eq := target_eq }
+
+example {chainId : UInt64} {base : BlockChain} {cb : CanonicalBlock}
+    {deploymentTx : Tx} {sender ca : Adr}
+    (txInput : Benv) (begun : Benv) (debit : State) (tenv : Tenv) (msg : Msg)
+    (systemPrefix : DeploymentSystemPrefix base cb.block txInput)
+    (begun_eq : begun = txInput.beginTransaction)
+    (debit_eq :
+      (begun.state.incrNonce sender).subBal sender
+        (deploymentTx.gas *
+          deploymentEffectiveGasPrice txInput deploymentTx).toB256 = some debit)
+    (tenv_eq : tenv = deploymentTenv txInput deploymentTx sender 0)
+    (prepare_eq : prepareMessage {begun with state := debit} tenv deploymentTx =
+      .ok msg)
+    (msg_benv_eq : msg.benv = {begun with state := debit})
+    (msg_caller_eq : msg.caller = sender)
+    (msg_target_eq : msg.target = none)
+    (msg_gas_eq : msg.gas = deploymentTx.gas - deploymentIntrinsicGas deploymentTx)
+    (msg_value_eq : msg.value = 0)
+    (msg_data_eq : msg.data = [])
+    (msg_code_eq : msg.code.toList = weth10InitCode)
+    (msg_codeAddress_eq : msg.codeAddress = none)
+    (msg_shouldTransferValue_eq : msg.shouldTransferValue = true)
+    (msg_auths_eq : msg.tenv.stat.auths = [])
+    (msg_rules_eq : msg.benv.stat.rules = pragueRules)
+    (msg_chainId_eq : msg.benv.stat.chainId = chainId)
+    (target_eq : msg.currentTarget = ca)
+    (params_eq :
+      freshDeployParams msg.benv.stat.chainId.toB256 msg.currentTarget =
+        freshDeployParams chainId.toB256 ca)
+    (noCodeOrNonce : accountHasCodeOrNonce msg.benv.state ca = false)
+    (noStorage : accountHasStorage msg.benv.state ca = false) :
+    PreparedDeploymentContext chainId base cb deploymentTx sender ca :=
+  { txInput := txInput
+    begun := begun
+    debit := debit
+    tenv := tenv
+    msg := msg
+    systemPrefix := systemPrefix
+    begun_eq := begun_eq
+    debit_eq := debit_eq
+    tenv_eq := tenv_eq
+    prepare_eq := prepare_eq
+    msg_benv_eq := msg_benv_eq
+    msg_caller_eq := msg_caller_eq
+    msg_target_eq := msg_target_eq
+    msg_gas_eq := msg_gas_eq
+    msg_value_eq := msg_value_eq
+    msg_data_eq := msg_data_eq
+    msg_code_eq := msg_code_eq
+    msg_codeAddress_eq := msg_codeAddress_eq
+    msg_shouldTransferValue_eq := msg_shouldTransferValue_eq
+    msg_auths_eq := msg_auths_eq
+    msg_rules_eq := msg_rules_eq
+    msg_chainId_eq := msg_chainId_eq
+    target_eq := target_eq
+    params_eq := params_eq
+    noCodeOrNonce := noCodeOrNonce
+    noStorage := noStorage }
+
+example {chainId : UInt64} {ca : Adr}
+    {ctx : PreparedDeploymentContext chainId base cb deploymentTx sender ca}
+    {post : State} {out : MsgCallOutput}
+    (run : processMessageCall ctx.msg = .ok (post, out))
+    (stable : Stable (freshDeployParams chainId.toB256 ca) ca post)
+    (installed : some (post.getCode ca).toList =
+      Prog.compile (weth10 (freshDeployParams chainId.toB256 ca)))
+    (emptyStorage : post.getStor ca = Stor.empty)
+    (storageInv : Stor.Weth10Inv (post.getStor ca) 0 0)
+    (logs : out.logs = [])
+    (returnData : out.returnData =
+      weth10Code (freshDeployParams chainId.toB256 ca))
+    (gasLeft : out.gasLeft = ctx.msg.gas - weth10CreateMessageGasAccounting)
+    (error : out.error = none)
+    (refundCounter : out.refundCounter = 0)
+    (accountsToDelete : out.accountsToDelete = .emptyWithCapacity)
+    (withdrawalRequestCode :
+      some (post.getCode withdrawalRequestPredeployAddress).toList =
+        Prog.compile deploymentSystemProgram)
+    (consolidationRequestCode :
+      some (post.getCode consolidationRequestPredeployAddress).toList =
+        Prog.compile deploymentSystemProgram) :
+    CanonicalDeploymentMessageResult chainId ca ctx post out :=
+  { run := run
+    stable := stable
+    installed := installed
+    emptyStorage := emptyStorage
+    storageInv := storageInv
+    logs := logs
+    returnData := returnData
+    gasLeft := gasLeft
+    error := error
+    refundCounter := refundCounter
+    accountsToDelete := accountsToDelete
+    withdrawalRequestCode := withdrawalRequestCode
+    consolidationRequestCode := consolidationRequestCode }
+
+example {chainId : UInt64} {ca : Adr}
+    {ctx : PreparedDeploymentContext chainId base cb deploymentTx sender ca}
+    {post : State} {bout : BlockOutput}
+    (run : processTransaction ctx.txInput .init deploymentTx 0 = .ok (post, bout))
+    (stable : Stable (freshDeployParams chainId.toB256 ca) ca post)
+    (installed : some (post.getCode ca).toList =
+      Prog.compile (weth10 (freshDeployParams chainId.toB256 ca)))
+    (emptyStorage : post.getStor ca = Stor.empty)
+    (blockLogs : bout.blockLogs = [])
+    (requests : bout.requests = [])
+    (depositRequests : parseDepositRequests bout = .ok [])
+    (withdrawalRequestCode :
+      some (post.getCode withdrawalRequestPredeployAddress).toList =
+        Prog.compile deploymentSystemProgram)
+    (consolidationRequestCode :
+      some (post.getCode consolidationRequestPredeployAddress).toList =
+        Prog.compile deploymentSystemProgram)
+    (receiptSucceeded :
+      (Std.TreeMap.get? bout.receiptsTrie (deploymentReceiptKey 0)).map
+        (fun entry => entry.2.succeeded) = some true) :
+    CanonicalDeploymentTransactionResult chainId ca ctx post bout :=
+  { run := run
+    stable := stable
+    installed := installed
+    emptyStorage := emptyStorage
+    blockLogs := blockLogs
+    requests := requests
+    depositRequests := depositRequests
+    withdrawalRequestCode := withdrawalRequestCode
+    consolidationRequestCode := consolidationRequestCode
+    receiptSucceeded := receiptSucceeded }
+
+example {chainId : UInt64} {ca : Adr}
+    {ctx : PreparedDeploymentContext chainId base cb deploymentTx sender ca}
+    {post : State} {bout : BlockOutput}
+    (withdrawalOut : MsgCallOutput) (consolidationOut : MsgCallOutput)
+    (withdrawalRun :
+      processCheckedSystemTransaction (ctx.txInput.withState post)
+        withdrawalRequestPredeployAddress [] = .ok (post, withdrawalOut))
+    (withdrawalReturnData : withdrawalOut.returnData = [])
+    (consolidationRun :
+      processCheckedSystemTransaction
+        ((ctx.txInput.withState post).withState post)
+        consolidationRequestPredeployAddress [] = .ok (post, consolidationOut))
+    (consolidationReturnData : consolidationOut.returnData = [])
+    (run : processGeneralPurposeRequests (ctx.txInput.withState post) bout =
+      .ok (post, bout))
+    (backedStateInv :
+      (backedSpec weth10
+        (freshDeployParams chainId.toB256 ca)).StateInv ca post)
+    (flashStateInv :
+      (flashExactSpec
+        (freshDeployParams chainId.toB256 ca) 0).StateInv ca post)
+    (stable : Stable (freshDeployParams chainId.toB256 ca) ca post) :
+    CanonicalDeploymentSuffixResult chainId ca ctx post bout :=
+  { withdrawalOut := withdrawalOut
+    consolidationOut := consolidationOut
+    withdrawalRun := withdrawalRun
+    withdrawalReturnData := withdrawalReturnData
+    consolidationRun := consolidationRun
+    consolidationReturnData := consolidationReturnData
+    run := run
+    backedStateInv := backedStateInv
+    flashStateInv := flashStateInv
+    stable := stable }
+
+example {chainId : UInt64} {base deployed : BlockChain}
+    {dp : DeployParams} {ca : Adr}
+    (execution : ∃ (cb : CanonicalBlock) (deploymentTxBytes : Bytes)
+        (deploymentTx : Tx) (sender : Adr)
+        (ctx : PreparedDeploymentContext chainId base cb deploymentTx sender ca)
+        (post : State) (bout : BlockOutput),
+      CanonicalDeploymentBase chainId base sender ca ∧
+      CanonicalWeth10DeploymentBlock chainId base cb deploymentTxBytes
+        deploymentTx sender ca ∧
+      CanonicalDeploymentTransactionResult chainId ca ctx post bout ∧
+      Nonempty (CanonicalDeploymentSuffixResult chainId ca ctx post bout) ∧
+      stateTransitionUsing (ChainConfig.pragueOnly chainId)
+          base cb.block = .ok deployed ∧
+      applyBody (initBenv pragueRules base cb.block.header)
+          cb.block.txs cb.block.wds = .ok (post, bout) ∧
+      post = deployed.state ∧
+      (Std.TreeMap.get? bout.receiptsTrie (deploymentReceiptKey 0)).map
+          (fun entry => entry.2.succeeded) = some true)
+    (params_eq : dp = freshDeployParams chainId.toB256 ca)
+    (target_ne_zero : ca ≠ 0)
+    (target_not_precompile : ¬ pragueRules.isPrecomp ca)
+    (emptyStorage : deployed.state.getStor ca = Stor.empty)
+    (stable : Stable dp ca deployed.state)
+    (deployed_validContext : deployed.ValidContext)
+    (deployed_chainId : chainId = deployed.chainId) :
+    DeploymentRoot chainId base deployed dp ca :=
+  { execution := execution
+    params_eq := params_eq
+    target_ne_zero := target_ne_zero
+    target_not_precompile := target_not_precompile
+    emptyStorage := emptyStorage
+    stable := stable
+    deployed_validContext := deployed_validContext
+    deployed_chainId := deployed_chainId }
+
+example (chainId : UInt64) (base : BlockChain) (cb : CanonicalBlock)
+    (deploymentTxBytes : Bytes) (deploymentTx : Tx) (sender ca : Adr)
+    (hbase : CanonicalDeploymentBase chainId base sender ca)
+    (henv : CanonicalWeth10DeploymentBlock chainId base cb
+      deploymentTxBytes deploymentTx sender ca) :
+    Nonempty
+      (PreparedDeploymentContext chainId base cb deploymentTx sender ca) :=
+  prepareCanonicalDeploymentContext chainId base cb deploymentTx sender ca
+    hbase henv
+
+example (chainId : UInt64) (base : BlockChain) (cb : CanonicalBlock)
+    (deploymentTxBytes : Bytes) (deploymentTx : Tx) (sender ca : Adr)
+    (hbase : CanonicalDeploymentBase chainId base sender ca)
+    (henv : CanonicalWeth10DeploymentBlock chainId base cb
+      deploymentTxBytes deploymentTx sender ca)
+    (ctx : PreparedDeploymentContext chainId base cb deploymentTx sender ca) :
+    ∃ post out, CanonicalDeploymentMessageResult chainId ca ctx post out :=
+  canonicalDeploymentMessage_succeeds chainId base cb deploymentTx sender ca
+    hbase henv ctx
+
+example (chainId : UInt64) (base : BlockChain) (cb : CanonicalBlock)
+    (deploymentTxBytes : Bytes) (deploymentTx : Tx) (sender ca : Adr)
+    (hbase : CanonicalDeploymentBase chainId base sender ca)
+    (henv : CanonicalWeth10DeploymentBlock chainId base cb
+      deploymentTxBytes deploymentTx sender ca)
+    (ctx : PreparedDeploymentContext chainId base cb deploymentTx sender ca) :
+    ∃ post bout,
+      CanonicalDeploymentTransactionResult chainId ca ctx post bout :=
+  canonicalDeploymentTransaction_succeeds chainId base cb deploymentTx
+    sender ca hbase henv ctx
+
+example (chainId : UInt64) (base deployed : BlockChain)
+    (cb : CanonicalBlock) (deploymentTxBytes : Bytes)
+    (deploymentTx : Tx) (sender ca : Adr)
+    (hbase : CanonicalDeploymentBase chainId base sender ca)
+    (henv : CanonicalWeth10DeploymentBlock chainId base cb
+      deploymentTxBytes deploymentTx sender ca)
+    (hstep : stateTransitionUsing (ChainConfig.pragueOnly chainId)
+      base cb.block = .ok deployed) :
+    DeploymentRoot chainId base deployed
+      (freshDeployParams chainId.toB256 ca) ca :=
+  canonicalDeploymentStep_establishes_root chainId base deployed cb
+    deploymentTxBytes deploymentTx sender ca hbase henv hstep
+
+example (hroot : DeploymentRoot chainId base deployed dp ca) :
+    BlockChain.ReachUsing (ChainConfig.pragueOnly chainId)
+      deployed deployed :=
+  hroot.reflReach
+
+example (hroot : DeploymentRoot chainId base deployed dp ca)
+    (hreach : BlockChain.ReachUsing (ChainConfig.pragueOnly chainId)
+      deployed future) :
+    Stable dp ca future.state :=
+  hroot.reachable_stable hreach
+
+example (hroot : DeploymentRoot chainId base deployed dp ca)
+    (hreach : BlockChain.ReachUsing (ChainConfig.pragueOnly chainId)
+      deployed future) :
+    some (future.state.getCode ca).toList = Prog.compile (weth10 dp) :=
+  hroot.reachable_code hreach
+
+example (hroot : DeploymentRoot chainId base deployed dp ca)
+    (hreach : BlockChain.ReachUsing (ChainConfig.pragueOnly chainId)
+      deployed future) :
+    (future.state.getStor ca).get flashMintedSlot = 0 :=
+  hroot.reachable_flashZero hreach
+
+example (hroot : DeploymentRoot chainId base deployed dp ca)
+    (hreach : BlockChain.ReachUsing (ChainConfig.pragueOnly chainId)
+      deployed future) :
+    balSum (future.state.getStor ca) ≤ (future.state.bal ca).toNat :=
+  hroot.reachable_solvent hreach
 
 end Weth10
 

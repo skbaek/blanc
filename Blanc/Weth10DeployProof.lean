@@ -307,6 +307,15 @@ private theorem setMach_state_eq (d : Devm) (m : Mach) :
 private theorem setMach_logs_eq (d : Devm) (m : Mach) :
     (d.setMach m).logs = d.logs := rfl
 
+private theorem setMach_error_eq (d : Devm) (m : Mach) :
+    (d.setMach m).error = d.error := rfl
+
+private theorem setMach_refundCounter_eq (d : Devm) (m : Mach) :
+    (d.setMach m).refundCounter = d.refundCounter := rfl
+
+private theorem setMach_accountsToDelete_eq (d : Devm) (m : Mach) :
+    (d.setMach m).accountsToDelete = d.accountsToDelete := rfl
+
 private theorem setMach_gasLeft_eq (d : Devm) (m : Mach) :
     (d.setMach m).gasLeft = m.gasLeft := rfl
 
@@ -346,6 +355,30 @@ private theorem chargeCodeGas_ok_logs
     charged.logs = d.logs := by
   rw [chargeCodeGas_ok_eq_setMach hc hm]
   exact setMach_logs_eq d m
+
+private theorem chargeCodeGas_ok_error
+    {rules : ForkRules} {d charged : Devm} {m : Mach}
+    (hc : processCreateMessage.chargeCodeGas rules d = .ok charged)
+    (hm : processCreateMessage.chargeCodeGas rules d = .ok (d.setMach m)) :
+    charged.error = d.error := by
+  rw [chargeCodeGas_ok_eq_setMach hc hm]
+  exact setMach_error_eq d m
+
+private theorem chargeCodeGas_ok_refundCounter
+    {rules : ForkRules} {d charged : Devm} {m : Mach}
+    (hc : processCreateMessage.chargeCodeGas rules d = .ok charged)
+    (hm : processCreateMessage.chargeCodeGas rules d = .ok (d.setMach m)) :
+    charged.refundCounter = d.refundCounter := by
+  rw [chargeCodeGas_ok_eq_setMach hc hm]
+  exact setMach_refundCounter_eq d m
+
+private theorem chargeCodeGas_ok_accountsToDelete
+    {rules : ForkRules} {d charged : Devm} {m : Mach}
+    (hc : processCreateMessage.chargeCodeGas rules d = .ok charged)
+    (hm : processCreateMessage.chargeCodeGas rules d = .ok (d.setMach m)) :
+    charged.accountsToDelete = d.accountsToDelete := by
+  rw [chargeCodeGas_ok_eq_setMach hc hm]
+  exact setMach_accountsToDelete_eq d m
 
 private theorem chargeCodeGas_ok_gasLeft
     {rules : ForkRules} {d charged : Devm} {m : Mach}
@@ -454,6 +487,9 @@ private structure Weth10CodeGasCheckpoint
   output : charged.output = weth10Code dp
   state : charged.state = d.state
   logs : charged.logs = d.logs
+  error : charged.error = d.error
+  refundCounter : charged.refundCounter = d.refundCounter
+  accountsToDelete : charged.accountsToDelete = d.accountsToDelete
   gas : charged.gasLeft = d.gasLeft - 1262600
 
 private theorem chargeCodeGas_weth10_checkpoint
@@ -473,10 +509,16 @@ private theorem chargeCodeGas_weth10_checkpoint
     output := ?_
     state := ?_
     logs := ?_
+    error := ?_
+    refundCounter := ?_
+    accountsToDelete := ?_
     gas := ?_ }⟩
   · exact (chargeCodeGas_ok_output hc hm).trans h_output
   · exact chargeCodeGas_ok_state hc hm
   · exact chargeCodeGas_ok_logs hc hm
+  · exact chargeCodeGas_ok_error hc hm
+  · exact chargeCodeGas_ok_refundCounter hc hm
+  · exact chargeCodeGas_ok_accountsToDelete hc hm
   · exact (chargeCodeGas_ok_gasLeft hc hm).trans (by rfl)
 
 private structure Weth10InitCheckpoint
@@ -490,6 +532,8 @@ private structure Weth10InitCheckpoint
   stor : initPost.state.getStor msg.currentTarget = Stor.empty
   logs : initPost.logs = []
   error : initPost.error = .none
+  refundCounter : initPost.refundCounter = 0
+  accountsToDelete : initPost.accountsToDelete = .emptyWithCapacity
   gas : initPost.gasLeft = msg.gas - 1471
 
 private theorem processMessage_weth10_checkpoint
@@ -524,6 +568,8 @@ private theorem processMessage_weth10_checkpoint
       (sevm := initSevm seeded) (base := initDevm seeded) (g := msg.gas)
   have h_init_error : initPost.error = .none := by
     exact h_frame.2.2.trans (by rfl)
+  have h_meta := weth10InitPost_preserves_transaction_meta
+    (sevm := initSevm seeded) (base := initDevm seeded) (g := msg.gas)
   have h_pm : processMessage prepared = .ok initPost := by
     apply processMessage_ok_of_exec h_transfer h_seed_ca h_exec
       h_init_error
@@ -549,6 +595,8 @@ private theorem processMessage_weth10_checkpoint
     stor := ?_
     logs := ?_
     error := h_init_error
+    refundCounter := h_meta.1.trans (by rfl)
+    accountsToDelete := h_meta.2.1.trans (by rfl)
     gas := ?_ }⟩
   · rw [show initPost.state = (initDevm seeded).state from h_frame.1]
     exact h_benv_stor
@@ -579,6 +627,9 @@ private structure Weth10ChargeCheckpoint
   output : charged.output = weth10Code dp
   stor : charged.state.getStor msg.currentTarget = Stor.empty
   logs : charged.logs = []
+  error : charged.error = .none
+  refundCounter : charged.refundCounter = 0
+  accountsToDelete : charged.accountsToDelete = .emptyWithCapacity
   gas : charged.gasLeft = msg.gas - 1264071
 
 private theorem processCreateMessage_weth10_charge_checkpoint
@@ -605,11 +656,20 @@ private theorem processCreateMessage_weth10_charge_checkpoint
     output := checkpoint.output
     stor := ?_
     logs := ?_
+    error := ?_
+    refundCounter := ?_
+    accountsToDelete := ?_
     gas := ?_ }⟩
   · rw [checkpoint.state]
     exact init.stor
   · rw [checkpoint.logs]
     exact init.logs
+  · rw [checkpoint.error]
+    exact init.error
+  · rw [checkpoint.refundCounter]
+    exact init.refundCounter
+  · rw [checkpoint.accountsToDelete]
+    exact init.accountsToDelete
   · rw [checkpoint.gas, init.gas]
     exact h_gas_after_deposit
 
@@ -621,6 +681,9 @@ private theorem weth10InstalledPost_certificate
     (h_output : charged.output = weth10Code dp)
     (h_stor : charged.state.getStor msg.currentTarget = Stor.empty)
     (h_logs : charged.logs = [])
+    (h_error : charged.error = .none)
+    (h_refund : charged.refundCounter = 0)
+    (h_delete : charged.accountsToDelete = .emptyWithCapacity)
     (h_gas : charged.gasLeft = msg.gas - 1264071) :
     ∃ post,
       processCreateMessage msg = .ok post ∧
@@ -629,9 +692,12 @@ private theorem weth10InstalledPost_certificate
       Stor.Weth10Inv (post.state.getStor msg.currentTarget) 0 0 ∧
       post.logs = [] ∧
       post.output = weth10Code dp ∧
-      post.gasLeft = msg.gas - 1264071 := by
+      post.gasLeft = msg.gas - 1264071 ∧
+      post.error = .none ∧
+      post.refundCounter = 0 ∧
+      post.accountsToDelete = .emptyWithCapacity := by
   refine ⟨charged.setCode msg.currentTarget ⟨⟨charged.output⟩⟩,
-    h_process, ?_, ?_, ?_, ?_, ?_, ?_⟩
+    h_process, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · unfold Devm.getCode Devm.getAcct
     rw [Devm.setCode_state]
     unfold State.setCode
@@ -655,6 +721,9 @@ private theorem weth10InstalledPost_certificate
   · exact h_logs
   · exact h_output
   · exact h_gas
+  · exact h_error
+  · exact h_refund
+  · exact h_delete
 
 private theorem processCreateMessage_weth10_success_raw
     (msg : Msg)
@@ -674,7 +743,10 @@ private theorem processCreateMessage_weth10_success_raw
       post.output =
         weth10Code (freshDeployParams
           msg.benv.stat.chainId.toB256 msg.currentTarget) ∧
-      post.gasLeft = msg.gas - 1264071 := by
+      post.gasLeft = msg.gas - 1264071 ∧
+      post.error = .none ∧
+      post.refundCounter = 0 ∧
+      post.accountsToDelete = .emptyWithCapacity := by
   let dp :=
     freshDeployParams msg.benv.stat.chainId.toB256 msg.currentTarget
   obtain ⟨initPost, init⟩ :=
@@ -684,7 +756,8 @@ private theorem processCreateMessage_weth10_success_raw
     processCreateMessage_weth10_charge_checkpoint msg init h_gas h_max
   exact weth10InstalledPost_certificate
     (charged := chargedPost) msg dp charged.process
-    charged.output charged.stor charged.logs charged.gas
+    charged.output charged.stor charged.logs charged.error
+    charged.refundCounter charged.accountsToDelete charged.gas
 
 
 
@@ -711,6 +784,40 @@ theorem processCreateMessage_weth10_success
         weth10Code (freshDeployParams
           msg.benv.stat.chainId.toB256 msg.currentTarget) ∧
       post.gasLeft = msg.gas - weth10CreateMessageGasAccounting := by
+  have h_gas' : 1264071 ≤ msg.gas := by
+    rw [← weth10CreateMessageGasAccounting_eq]
+    exact h_gas
+  obtain ⟨post, h_process, h_installed, h_stor, h_inv, h_logs,
+      h_output, h_left, _, _, _⟩ :=
+    processCreateMessage_weth10_success_raw msg h_value h_codeAddress
+      h_code h_gas' h_max
+  exact ⟨post, h_process, h_installed, h_stor, h_inv, h_logs, h_output,
+    by simpa only [weth10CreateMessageGasAccounting_eq] using h_left⟩
+
+/-- The successful constructor result with the transaction-settlement metadata
+needed by the top-level creation bridge. -/
+theorem processCreateMessage_weth10_success_full
+    (msg : Msg)
+    (h_value : msg.value = 0)
+    (h_codeAddress : msg.codeAddress = .none)
+    (h_code : msg.code.toList = weth10InitCode)
+    (h_gas : weth10CreateMessageGasAccounting ≤ msg.gas)
+    (h_max : 6313 ≤ msg.benv.stat.rules.code.maxCodeSize) :
+    ∃ post,
+      processCreateMessage msg = .ok post ∧
+      post.getCode msg.currentTarget =
+        ⟨⟨weth10Code (freshDeployParams
+          msg.benv.stat.chainId.toB256 msg.currentTarget)⟩⟩ ∧
+      post.state.getStor msg.currentTarget = Stor.empty ∧
+      Stor.Weth10Inv (post.state.getStor msg.currentTarget) 0 0 ∧
+      post.logs = [] ∧
+      post.output =
+        weth10Code (freshDeployParams
+          msg.benv.stat.chainId.toB256 msg.currentTarget) ∧
+      post.gasLeft = msg.gas - weth10CreateMessageGasAccounting ∧
+      post.error = .none ∧
+      post.refundCounter = 0 ∧
+      post.accountsToDelete = .emptyWithCapacity := by
   have h_gas' : 1264071 ≤ msg.gas := by
     rw [← weth10CreateMessageGasAccounting_eq]
     exact h_gas

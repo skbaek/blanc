@@ -366,6 +366,15 @@ private theorem withOutput_logs_eq (d : Devm) (out : Bytes) :
 private theorem withOutput_error_eq (d : Devm) (out : Bytes) :
     (d.withOutput out).error = d.error := rfl
 
+private theorem withOutput_refundCounter_eq (d : Devm) (out : Bytes) :
+    (d.withOutput out).refundCounter = d.refundCounter := rfl
+
+private theorem withOutput_accountsToDelete_eq (d : Devm) (out : Bytes) :
+    (d.withOutput out).accountsToDelete = d.accountsToDelete := rfl
+
+private theorem withOutput_createdAccounts_eq (d : Devm) (out : Bytes) :
+    (d.withOutput out).createdAccounts = d.createdAccounts := rfl
+
 private theorem memRead_fst_eq (d : Devm) (index size : Nat) :
     (d.memRead index size).1 = (d.memory.read index size).1 := rfl
 
@@ -423,6 +432,20 @@ private theorem weth10InitReturnRead_logs
 private theorem weth10InitReturnRead_error
     (base : Devm) (M : Mem) (g : Nat) :
     (weth10InitReturnRead base M g).2.error = base.error := rfl
+
+private theorem weth10InitReturnRead_refundCounter
+    (base : Devm) (M : Mem) (g : Nat) :
+    (weth10InitReturnRead base M g).2.refundCounter = base.refundCounter := rfl
+
+private theorem weth10InitReturnRead_accountsToDelete
+    (base : Devm) (M : Mem) (g : Nat) :
+    (weth10InitReturnRead base M g).2.accountsToDelete =
+      base.accountsToDelete := rfl
+
+private theorem weth10InitReturnRead_createdAccounts
+    (base : Devm) (M : Mem) (g : Nat) :
+    (weth10InitReturnRead base M g).2.createdAccounts =
+      base.createdAccounts := rfl
 
 /-- The exact successful constructor post-state before creation settlement
 charges code-deposit gas. -/
@@ -1031,6 +1054,21 @@ theorem weth10InitPost_preserves_frame {sevm : Sevm} {base : Devm} {g : Nat} :
     exact weth10InitReturnRead_logs base (weth10InitMemory sevm) g
   · rw [weth10InitPost_eq, withOutput_error_eq]
     exact weth10InitReturnRead_error base (weth10InitMemory sevm) g
+
+/-- Constructor execution also preserves the transaction-settlement metadata
+that a top-level creation bridge must expose explicitly. -/
+theorem weth10InitPost_preserves_transaction_meta
+    {sevm : Sevm} {base : Devm} {g : Nat} :
+    (weth10InitPost sevm base g).refundCounter = base.refundCounter ∧
+    (weth10InitPost sevm base g).accountsToDelete = base.accountsToDelete ∧
+    (weth10InitPost sevm base g).createdAccounts = base.createdAccounts := by
+  refine ⟨?_, ?_, ?_⟩
+  · rw [weth10InitPost_eq, withOutput_refundCounter_eq]
+    exact weth10InitReturnRead_refundCounter base (weth10InitMemory sevm) g
+  · rw [weth10InitPost_eq, withOutput_accountsToDelete_eq]
+    exact weth10InitReturnRead_accountsToDelete base (weth10InitMemory sevm) g
+  · rw [weth10InitPost_eq, withOutput_createdAccounts_eq]
+    exact weth10InitReturnRead_createdAccounts base (weth10InitMemory sevm) g
 
 /-- The actual hand-emitted initcode, including its inert runtime-data suffix,
 executes the gas-exact successful constructor walk at pc zero. -/

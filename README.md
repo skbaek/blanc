@@ -171,6 +171,14 @@ This repo contains the following files:
   span proofs, the separate generic constructor, exact runtime-parameter
   patching, phase-composed constructor execution, fresh-state invariant,
   creation-message settlement, and Blanc deployment-gas evidence.
+- [Weth10Stable.lean](Blanc/Weth10Stable.lean) and
+  [Weth10DeploymentRoot.lean](Blanc/Weth10DeploymentRoot.lean): the packaged
+  code/backing/zero-flash stable predicate, its configured-chain preservation,
+  and the strict canonical singleton Prague deployment bridge. The latter
+  crosses Jaune's system prefix, transaction preparation and collision check,
+  successful receipt insertion, empty withdrawals, both checked request-system
+  suffix calls, and deployed-context reconstruction before exporting future
+  configured-chain stability and its literal code/flash/solvency projections.
 
 Blanc's WETH is a reimplementation; observable deviations from deployed WETH9
 are catalogued in [`WETH_DEVIATIONS.md`](WETH_DEVIATIONS.md). FMINT's
@@ -230,9 +238,9 @@ and proof falls. It is not duplicated here. Blanc adds exactly:
 1. **the pinned Jaune revision** below — trusting a Blanc theorem is trusting
    that specific Jaune, not the sibling checkout on your disk;
 2. **the axiom audit** below, which is stricter than Jaune's own gates: its
-   current source inventory pins the exact axiom set of 275 named results—149
-   in the WETH10/`Weth10Inv` family—and fails on an extra *or* missing axiom.
-   Run `scripts/check.sh --no-build`; its `275/275` summary belongs to the
+   current source inventory pins the exact axiom set of 284 named results and
+   fails on an extra *or* missing axiom.
+   Run `scripts/check.sh --no-build`; its `284/284` summary belongs to the
    source identity printed by `git rev-parse HEAD`;
 3. **Blanc's own source**, guarded by
    [`scripts/check-trust-surface.sh`](scripts/check-trust-surface.sh). The gate
@@ -260,9 +268,9 @@ without a sibling checkout, and bumping Jaune is a reviewed one-line change.
 
 CI builds the library and runs an
 **axiom audit** ([`scripts/AxiomCheck.lean`](scripts/AxiomCheck.lean)) whose
-current source inventory contains **275** top theorems, including **149**
-WETH10/`Weth10Inv` rows. `scripts/check.sh`'s row list is the authority on
-membership; run `scripts/check.sh --no-build` and bind its exact-set verdict to
+current source inventory contains **284** top theorems. `scripts/check.sh`'s
+row list is the authority on membership; run `scripts/check.sh --no-build` and
+bind its exact-set verdict to
 `git rev-parse HEAD`. The separate `scripts/check-claims.sh` Lean-checks the
 exact statements of the WETH10 flagship set; the axiom audit itself pins
 dependency closures, not theorem statements. The families follow. Seven are
@@ -564,9 +572,9 @@ the synthetic chain-31337/address-`0x1000` member has SHA-256
 
 | Assurance class | What is established | Artifact boundary |
 |---|---|---|
-| Formally proved | Compilation to each named Blanc runtime; compiled endpoint effects; backing preservation; exact flash-counter restoration; transaction/block/chain preservation of `Weth10.Stable`; a direct creation-message seed on the actual post-state; and constructive canonical `withdraw`/`withdrawTo` redemption at ordinary-message and Prague type-2 transaction altitude. `chain_reachable_backed_and_flash_zero` literally concludes `flashMinted = 0` and `balSum ≤ ETH balance`; `Stable.messageRedemption_enabled_of_le` and `Stable.transactionRedemption_enabled_of_le` construct success for each natural amount within one holder's booked balance under explicit code-free-recipient, access/storage, funding, and sufficient-gas envelopes. | The theorems are about the Blanc program and its generated runtime under their stated Jaune premises. They compose existing `ContractSpec` results; they do not verify the deployed oracle, construct keys, promise inclusion, or cover arbitrary receiver code. |
-| Executably tested | `scripts/check-weth10-differential.sh` executes 145 generated canonical-call rows against both the literal deployed runtime and the exact named Blanc family members, covering all 27 selectors plus receive in two identity worlds with zero mismatches. `scripts/check-weth10-redemption.sh --no-build` separately replays two committed Prague blockchain fixtures: a type-2 zero/nonzero/failed-redemption sequence with receipt statuses `[true, true, false]`, and a valid type-4 authorization that changes the recipient's code and nonce. | Finite differential rows and transaction fixtures on chosen inputs, not semantic equivalence or a proof. |
-| Not established | Verification of the deployed runtime; deployed-vs-Blanc semantic equivalence; establishment from a top-level creation transaction or deployment block; malformed/noncanonical input-calldata closure; arbitrary receiver/borrower liveness or settlement; exact gas, storage, codehash, or CREATE2 parity. | These are non-claims, not assumptions supplied by the proof or test suites. See `WETH10_COMPATIBILITY.md` and `WETH10_DEVIATIONS.md`. |
+| Formally proved | Compilation to each named Blanc runtime; compiled endpoint effects; backing preservation; exact flash-counter restoration; transaction/block/chain preservation of `Weth10.Stable`; a direct creation-message seed; and a strict canonical singleton type-2 deployment through Jaune's actual configured Prague block pipeline into a `DeploymentRoot` with successful receipt, exact installed runtime, empty storage/logs/requests, deployed `ValidContext`, and stable future reachability. Constructive canonical `withdraw`/`withdrawTo` redemption is also proved at ordinary-message and Prague type-2 transaction altitude. The root projections literally conclude exact code, `flashMinted = 0`, and `balSum ≤ ETH balance` at every reachable configured-chain boundary. | The theorems are about the Blanc program and generated runtime under explicit valid-base, strict-block, collision-free, funding, gas, system-predeploy, arithmetic, and successful configured-transition premises. They do not verify the deployed oracle, construct keys, promise inclusion, generalize to arbitrary deployment shapes, or cover arbitrary receiver code. |
+| Executably tested | `scripts/check-weth10-differential.sh` executes 145 generated canonical-call rows against both the literal deployed runtime and the exact named Blanc family members, covering all 27 selectors plus receive in two identity worlds with zero mismatches. `scripts/check-weth10-redemption.sh --no-build` separately replays two committed Prague blockchain fixtures: a type-2 zero/nonzero/failed-redemption sequence with receipt statuses `[true, true, false]`, and a valid type-4 authorization that changes the recipient's code and nonce. `scripts/check-weth10-deployment.sh` additionally generates one fresh singleton type-2 creation block in memory, checks 16 semantic assertions including its successful receipt and exact installed runtime, and replays it through Jaune at Prague. | Finite differential rows and transaction fixtures on chosen inputs, not semantic equivalence or a proof. The generated deployment fixture is temporary evidence and does not claim a signing-key or inclusion construction in Lean. |
+| Not established | Verification of the deployed runtime; deployed-vs-Blanc semantic equivalence; arbitrary co-block/factory/CREATE2 deployment shapes; key custody, propagation, or inclusion; malformed/noncanonical input-calldata closure; arbitrary receiver/borrower liveness or settlement; exact deployed gas, storage, or codehash parity. | These are non-claims, not assumptions supplied by the proof or test suites. See `WETH10_COMPATIBILITY.md` and `WETH10_DEVIATIONS.md`. |
 
 The generated differential gate's 145 rows include 65 live
 CALL/STATICCALL traces, five state-mutating or hostile reentrancy rows, 26
@@ -579,10 +587,12 @@ cold/warm gas for the required views.
 
 The separate constructor is 6,490 bytes: a 177-byte prefix copies and patches
 the 6,313-byte zero-parameter template. The deployment gate executes it in two
-fresh identity worlds under the pinned Prague EELS and checks nonpayability,
-independently derived chain and
-domain words, exact installed family members, empty initial storage, no
-constructor calls/logs/storage instructions, and six falsifiers. Blanc's
+fresh identity worlds under the pinned Prague EELS and also generates a strict
+singleton type-2 creation block whose successful receipt, exact installed
+family member, empty storage/logs, fee accounting, and state-neutral system
+predeploys are checked before Jaune replays the block. It checks nonpayability,
+independently derived chain and domain words, no constructor
+calls/logs/storage instructions, and six falsifiers. Blanc's
 closed accounting is 1,471 init-execution gas, 1,262,600 code-deposit gas,
 1,264,071 for the direct creation message, 406 for EIP-3860 initcode metering,
 and a 1,421,317 top-level arithmetic ceiling. These are Blanc/Jaune modeled
@@ -594,6 +604,16 @@ premises, `processCreateMessage_weth10_success` proves that Jaune creation
 succeeds, installs the exact freshly parameterized runtime, leaves target
 storage empty satisfying `Weth10Inv`, emits no logs, returns the runtime bytes,
 and subtracts the named direct creation-message cost.
+
+`canonicalDeploymentStep_establishes_root` is the transaction/block crossing:
+from a valid configured base, strict `CanonicalBlock` evidence, the closed
+type-2 envelope, and an actual `stateTransitionUsing` success, it reconstructs
+the post-system prepared message rather than assuming it, proves the collision
+branch and receipt success, preserves backing and zero flash debt across both
+checked request-predeploy suffix calls, and derives the deployed valid context.
+`DeploymentRoot.reachable_stable` then composes that root with the existing
+configured-chain preservation theorem. The result is deliberately specific to
+the named Prague-only anchor and does not turn the finite fixture into a proof.
 
 Both the Blanc runtime and initcode contain `PUSH0`, so Shanghai is the minimum
 execution fork. The executable evidence is specifically under the pinned

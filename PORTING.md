@@ -197,6 +197,16 @@ it, the public boundary itself is frozen in a compatibility contract with
 differential evidence
 ([WETH10_COMPATIBILITY.md](WETH10_COMPATIBILITY.md)).
 
+WETH10's deployment root follows the same boundary. Its theorem establishes
+the freshly generated Blanc runtime and `Weth10.Stable` after one strict,
+collision-free singleton type-2 deployment through the configured Prague
+transition, under its explicit valid-context, funding, gas, arithmetic, and
+system-predeploy premises. It does not establish the deployed Solidity
+artifact, construct or custody a signing key, guarantee propagation or block
+inclusion, or cover arbitrary co-block, factory, CREATE2, endowment, or fork
+shapes. The executable deployment fixture witnesses one concrete transaction
+and receipt; it does not enlarge the theorem or the port-conformance claim.
+
 Two registers are available for what a port has not established, and only
 one of them is honest. Declaring a non-claim in advance — this boundary is
 not covered, this property is not attempted — bounds the claim and asserts

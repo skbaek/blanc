@@ -9,11 +9,17 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(dirname "$SCRIPT_DIR")"
 EELS_ROOT="${EELS_ROOT:-$HOME/execution-specs}"
 EELS_PY="$EELS_ROOT/venv/bin/python"
+JAUNE_BIN="$ROOT/.lake/packages/jaune/.lake/build/bin/jaune"
 ARTIFACTS="$(mktemp)"
 trap 'rm -f "$ARTIFACTS"' EXIT
 
 if [ ! -x "$EELS_PY" ]; then
   echo "REGRESSION — WETH10 deployment: pinned EELS python not found at $EELS_PY" >&2
+  exit 1
+fi
+
+if [ ! -x "$JAUNE_BIN" ]; then
+  echo "REGRESSION — WETH10 deployment: Jaune runner not found at $JAUNE_BIN" >&2
   exit 1
 fi
 
@@ -25,4 +31,4 @@ if ! (cd "$ROOT" && lake env lean scripts/eval-weth10-deployment-code.lean \
 fi
 
 PYTHONPATH="$EELS_ROOT/src" "$EELS_PY" "$SCRIPT_DIR/check-weth10-deployment.py" \
-  --eels-root "$EELS_ROOT" --artifacts "$ARTIFACTS"
+  --eels-root "$EELS_ROOT" --artifacts "$ARTIFACTS" --jaune-bin "$JAUNE_BIN"

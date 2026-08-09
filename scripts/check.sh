@@ -540,6 +540,15 @@ Blanc.Weth10.addBlockToChain_preserves_stable|$STANDARD
 Blanc.Weth10.Stable.solvent|$STANDARD
 Blanc.Weth10.chain_reachable_backed_and_flash_zero|$STANDARD
 Blanc.Weth10.processCreateMessage_establishes_stable|$STANDARD
+Blanc.Weth10.prepareCanonicalDeploymentContext|$STANDARD
+Blanc.Weth10.canonicalDeploymentMessage_succeeds|$STANDARD
+Blanc.Weth10.canonicalDeploymentTransaction_succeeds|$STANDARD
+Blanc.Weth10.canonicalDeploymentStep_establishes_root|$STANDARD
+Blanc.Weth10.DeploymentRoot.reflReach|$STANDARD
+Blanc.Weth10.DeploymentRoot.reachable_stable|$STANDARD
+Blanc.Weth10.DeploymentRoot.reachable_code|$STANDARD
+Blanc.Weth10.DeploymentRoot.reachable_flashZero|$STANDARD
+Blanc.Weth10.DeploymentRoot.reachable_solvent|$STANDARD
 Blanc.Xinst.step_call_nonzero_insufficient|$STANDARD
 Blanc.Xinst.step_call_nonzero_spawn|$STANDARD
 Blanc.Ninst.runCompiled_call_nonzero_codeFree|$STANDARD

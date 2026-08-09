@@ -26,6 +26,7 @@ import Blanc.Weth10Permit
 import Blanc.Weth10Errors
 import Blanc.Weth10DeployProof
 import Blanc.Weth10Stable
+import Blanc.Weth10DeploymentRoot
 import Blanc.Weth10Redeemable
 
 #print axioms Blanc.weth_preserves_solvent
@@ -290,6 +291,15 @@ import Blanc.Weth10Redeemable
 #print axioms Blanc.Weth10.Stable.solvent
 #print axioms Blanc.Weth10.chain_reachable_backed_and_flash_zero
 #print axioms Blanc.Weth10.processCreateMessage_establishes_stable
+#print axioms Blanc.Weth10.prepareCanonicalDeploymentContext
+#print axioms Blanc.Weth10.canonicalDeploymentMessage_succeeds
+#print axioms Blanc.Weth10.canonicalDeploymentTransaction_succeeds
+#print axioms Blanc.Weth10.canonicalDeploymentStep_establishes_root
+#print axioms Blanc.Weth10.DeploymentRoot.reflReach
+#print axioms Blanc.Weth10.DeploymentRoot.reachable_stable
+#print axioms Blanc.Weth10.DeploymentRoot.reachable_code
+#print axioms Blanc.Weth10.DeploymentRoot.reachable_flashZero
+#print axioms Blanc.Weth10.DeploymentRoot.reachable_solvent
 #print axioms Blanc.Xinst.step_call_nonzero_insufficient
 #print axioms Blanc.Xinst.step_call_nonzero_spawn
 #print axioms Blanc.Ninst.runCompiled_call_nonzero_codeFree

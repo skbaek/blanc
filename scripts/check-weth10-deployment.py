@@ -11,7 +11,11 @@ No network access or fixture rewrite occurs.
 from __future__ import annotations
 
 import argparse
+import importlib.util
+import json
 import subprocess
+import sys
+import tempfile
 from pathlib import Path
 from typing import Dict, Iterable, List, Tuple
 
@@ -19,15 +23,18 @@ from typing import Dict, Iterable, List, Tuple
 EELS_PIN = "4198b9c5996713b268aed602739d5aa40e277694"
 MAINNET = "f4bb2e28688e89fcce3c0580d37d36a7672e8a9f"
 SYNTHETIC = "0000000000000000000000000000000000001000"
+TRANSACTION_TARGET = "cf024a39b81692e3c25b9ceb8474dc6203d584d7"
+TRANSACTION_KEY = 29
 CALLER = "1111111111111111111111111111111111111111"
 COINBASE = "6666666666666666666666666666666666666666"
 CHAIN_OFFSETS = (372, 691, 2875)
 DOMAIN_OFFSETS = (536, 3039)
 
 
-def parse_artifacts(path: Path) -> Tuple[bytes, int, Dict[str, bytes]]:
+def parse_artifacts(path: Path) -> Tuple[bytes, int, Dict[str, bytes], bytes]:
     initcode = None
     prefix_length = None
+    system_code = None
     runtimes: Dict[str, bytes] = {}
     for raw in path.read_text().splitlines():
         parts = raw.split()
@@ -35,19 +42,25 @@ def parse_artifacts(path: Path) -> Tuple[bytes, int, Dict[str, bytes]]:
             continue
         if parts[0] == "prefix-length" and len(parts) == 2:
             prefix_length = int(parts[1])
-        elif parts[0] in ("initcode", "mainnet-runtime", "synthetic-runtime") \
+        elif parts[0] in (
+                "initcode", "mainnet-runtime", "synthetic-runtime",
+                "transaction-runtime", "system-code") \
                 and len(parts) == 3:
             code = bytes.fromhex(parts[2])
             if len(code) != int(parts[1]):
                 raise RuntimeError(f"{parts[0]}: declared length mismatch")
             if parts[0] == "initcode":
                 initcode = code
+            elif parts[0] == "system-code":
+                system_code = code
             else:
                 runtimes[parts[0]] = code
         else:
             raise RuntimeError(f"unrecognized evaluator output: {raw!r}")
-    if initcode is None or prefix_length is None or set(runtimes) != {
-            "mainnet-runtime", "synthetic-runtime"}:
+    if initcode is None or prefix_length is None or system_code is None or \
+            set(runtimes) != {
+                "mainnet-runtime", "synthetic-runtime", "transaction-runtime"
+            }:
         raise RuntimeError("deployment evaluator output is incomplete")
     runtime_lengths = {len(code) for code in runtimes.values()}
     if len(runtime_lengths) != 1:
@@ -55,7 +68,165 @@ def parse_artifacts(path: Path) -> Tuple[bytes, int, Dict[str, bytes]]:
     if not 0 <= prefix_length <= len(initcode) or \
             len(initcode) - prefix_length != next(iter(runtime_lengths)):
         raise RuntimeError("initcode runtime-tail length mismatch")
-    return initcode, prefix_length, runtimes
+    if not system_code:
+        raise RuntimeError("deployment system program must be nonempty")
+    return initcode, prefix_length, runtimes, system_code
+
+
+def load_script(name: str, path: Path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"cannot load deployment fixture support {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def validate_transaction_fixture(
+        initcode: bytes, expected_runtime: bytes, system_code: bytes,
+        jaune_bin: Path) -> Tuple[int, int]:
+    """Generate and replay one strict singleton type-2 creation block."""
+    repo = Path(__file__).resolve().parents[1]
+    fixtures = load_script(
+        "weth10_deployment_transaction_support",
+        repo / "scripts" / "gen-weth10-redemption-fixtures.py",
+    )
+    from ethereum.crypto.hash import keccak256
+    from ethereum_rlp import rlp
+    from ethereum_types.numeric import Uint
+
+    sender = fixtures.derive_address(TRANSACTION_KEY)
+    computed_target = keccak256(
+        rlp.encode((fixtures.address_bytes(sender), Uint(0)))
+    )[-20:]
+    if computed_target.hex() != TRANSACTION_TARGET:
+        raise RuntimeError(
+            "transaction fixture CREATE address no longer matches the "
+            "independently named Lean runtime member"
+        )
+    target = "0x" + TRANSACTION_TARGET
+    gas_limit = 2_000_000
+    tx = {
+        "type": "0x2",
+        "chainId": "0x1",
+        "nonce": "0x0",
+        "maxPriorityFeePerGas": fixtures.q(fixtures.GAS_PRICE),
+        "maxFeePerGas": fixtures.q(fixtures.GAS_PRICE),
+        "gas": fixtures.q(gas_limit),
+        "to": "",
+        "value": "0x0",
+        "input": "0x" + initcode.hex(),
+        "accessList": [],
+        "v": "0x0",
+        "r": "0x0",
+        "s": "0x0",
+        "secretKey": fixtures.private_key_hex(TRANSACTION_KEY),
+    }
+    system_hex = "0x" + system_code.hex()
+    system_addresses = fixtures.support.SYSTEM[:4]
+    alloc = {
+        sender: fixtures.eoa(10**18),
+        **{
+            address: fixtures.contract(system_hex, nonce=1)
+            for address in system_addresses
+        },
+    }
+
+    def expect(e):
+        profile = (
+            tx["type"] == "0x2"
+            and tx["to"] == ""
+            and tx["value"] == "0x0"
+            and tx["input"] == "0x" + initcode.hex()
+            and tx["accessList"] == []
+            and "authorizationList" not in tx
+            and int(tx["gas"], 16) >= 1_421_317
+        )
+        e._record(
+            profile,
+            "canonical singleton creation profile",
+            True,
+            profile,
+            "the block body contains one funded EIP-1559 type-2 CREATE with "
+            "zero value, exact Blanc initcode, empty access list, no blobs, "
+            "no authorizations, and gas above the proved top-level bound",
+        )
+        e._record(
+            target.lower() not in {key.lower() for key in alloc},
+            "fresh computed target",
+            "absent",
+            "present" if target.lower() in {
+                key.lower() for key in alloc
+            } else "absent",
+            "the independently derived CREATE address has no pre-state code, "
+            "nonce, balance, or storage entry",
+        )
+        e.expect_tx_succeeded(
+            0,
+            "the singleton top-level creation transaction has a successful "
+            "receipt rather than merely a successful outer transition",
+        )
+        e.expect_nonce(
+            "deployment sender", sender, 1,
+            "the accepted creation transaction increments its recovered "
+            "sender nonce exactly once",
+        )
+        e.expect_nonce(
+            "computed deployment target", target, 1,
+            "successful CREATE installs the canonical fresh-account nonce",
+        )
+        e.expect_code(
+            "computed deployment target", target,
+            "0x" + expected_runtime.hex(),
+            "the transaction installs the exact chain/address-parameterized "
+            "Blanc runtime named by Lean",
+        )
+        e.expect_storage_exact(
+            "computed deployment target", target, {},
+            "the constructor leaves the complete persistent storage empty",
+        )
+        e.expect_ether(
+            "computed deployment target", target, 0,
+            "the canonical zero-endowment deployment leaves zero contract ETH",
+        )
+        for address in system_addresses:
+            e.expect_code(
+                f"request/prefix system address {address}", address, system_hex,
+                "the beacon/history prefix and withdrawal/consolidation suffix "
+                "execute the exact nonempty state-neutral program",
+            )
+        e.expect_fee_accounting([(sender, [0])])
+        e.expect_logs(
+            [[]],
+            "the constructor receipt and block log sequence are exactly empty, "
+            "so deposit-request parsing observes no constructor deposit log",
+        )
+
+    fixture, result, assertion_count = fixtures.build_fixture(
+        "01-canonical-type2-deployment", alloc, [tx], expect
+    )
+    old_name = next(iter(fixture))
+    case = fixture.pop(old_name)
+    fixture = {
+        old_name.replace("weth10-redemption", "weth10-deployment"): case
+    }
+    if len(result["receipts"]) != 1 or not result["receipts"][0]["succeeded"]:
+        raise RuntimeError("transaction fixture did not retain one successful receipt")
+    with tempfile.TemporaryDirectory() as tmp:
+        fixture_path = Path(tmp) / "canonical-type2-deployment.json"
+        fixture_path.write_text(json.dumps(fixture, indent=2) + "\n")
+        replay = subprocess.run(
+            [str(jaune_bin), str(fixture_path), "--network", "Prague"],
+            text=True,
+            capture_output=True,
+        )
+        if replay.returncode != 0:
+            detail = (replay.stdout + replay.stderr).strip()
+            raise RuntimeError(
+                f"Jaune strict checked deployment fixture replay failed: {detail}"
+            )
+    return assertion_count, int(result["gasUsed"], 16)
 
 
 def verify_eels_pin(root: Path) -> None:
@@ -203,10 +374,13 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--eels-root", required=True)
     parser.add_argument("--artifacts", required=True)
+    parser.add_argument("--jaune-bin", required=True)
     args = parser.parse_args()
     eels_root = Path(args.eels_root).resolve()
     verify_eels_pin(eels_root)
-    initcode, prefix_length, runtimes = parse_artifacts(Path(args.artifacts))
+    initcode, prefix_length, runtimes, system_code = parse_artifacts(
+        Path(args.artifacts)
+    )
 
     if len(initcode) > 49_152:
         raise RuntimeError("initcode exceeds Prague EIP-3860 limit")
@@ -288,12 +462,19 @@ def main() -> int:
     expect_falsifier("runtime-tail", bytes(mutated),
                      runtimes["mainnet-runtime"], 1, bytes.fromhex(MAINNET))
 
+    transaction_assertions, transaction_gas = validate_transaction_fixture(
+        initcode, runtimes["transaction-runtime"], system_code,
+        Path(args.jaune_bin).resolve(),
+    )
+
     print(
-        "OK — WETH10 deployment: 2 fresh identity worlds; exact derived "
+        "OK — WETH10 deployment: 2 fresh identity worlds and 1 singleton "
+        "type-2 strict checked Prague block; exact successful receipt; exact "
         f"runtime {len(runtimes['mainnet-runtime'])} bytes; initcode "
         f"{len(initcode)} bytes; nonpayable boundary; no calls/logs/storage "
-        f"opcodes; empty initial storage; 6 falsifiers; observed creation gas "
-        f"{gas_values[0]}")
+        f"opcodes; empty initial storage; {transaction_assertions} transaction "
+        f"assertions; 6 falsifiers; observed direct/transaction creation gas "
+        f"{gas_values[0]}/{transaction_gas}")
     return 0
 
 
