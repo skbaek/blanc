@@ -133,6 +133,224 @@ example : DeployParams → Adr → Adr → Adr → Nat →
     Benv → BlockOutput → Tx → Nat → Prop :=
   TransactionRedemptionEnabled
 
+/-! Constructor pins make the frozen record obligations fail closed.  Merely
+checking each record's outer function type would not detect a field-level
+weakening or a hidden success premise. -/
+
+example {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
+    {w : State} {msg : Msg}
+    (state_eq : msg.benv.state = w)
+    (rules_eq : msg.benv.stat.rules = pragueRules)
+    (target_eq : msg.target = some ca)
+    (currentTarget_eq : msg.currentTarget = ca)
+    (codeAddress_eq : msg.codeAddress = some ca)
+    (code_eq : some msg.code.toList = Prog.compile (weth10 dp))
+    (installedCode_eq : msg.code = w.getCode ca)
+    (caller_eq : msg.caller = owner)
+    (value_eq : msg.value = 0)
+    (depth_eq : msg.depth = 1024)
+    (shouldTransferValue_eq : msg.shouldTransferValue = true)
+    (isStatic_eq : msg.isStatic = false)
+    (auths_eq : msg.tenv.stat.auths = [])
+    (disablePrecompiles_eq : msg.disablePrecompiles = false)
+    (target_not_precompile : pragueRules.isPrecomp ca = false)
+    (recipient_ne_zero : recipient ≠ 0)
+    (recipient_not_precompile : pragueRules.isPrecomp recipient = false)
+    (recipient_code_free : (w.getCode recipient).toList = [])
+    (original_storage_eq : msg.benv.stat.origState.getStor ca = w.getStor ca)
+    (target_access : AddressAccessCase msg.accessedAddresses ca)
+    (recipient_access : AddressAccessCase msg.accessedAddresses recipient)
+    (owner_storage_access :
+      StorageAccessCase msg.accessedStorageKeys ca owner.toB256)
+    (recipient_account : RecipientAccountCase w recipient)
+    (gas_bound : redemptionRuntimeCeiling q ≤ msg.gas) :
+    AdmissibleRedemptionMessageCore dp ca owner recipient q w msg :=
+  { state_eq := state_eq
+    rules_eq := rules_eq
+    target_eq := target_eq
+    currentTarget_eq := currentTarget_eq
+    codeAddress_eq := codeAddress_eq
+    code_eq := code_eq
+    installedCode_eq := installedCode_eq
+    caller_eq := caller_eq
+    value_eq := value_eq
+    depth_eq := depth_eq
+    shouldTransferValue_eq := shouldTransferValue_eq
+    isStatic_eq := isStatic_eq
+    auths_eq := auths_eq
+    disablePrecompiles_eq := disablePrecompiles_eq
+    target_not_precompile := target_not_precompile
+    recipient_ne_zero := recipient_ne_zero
+    recipient_not_precompile := recipient_not_precompile
+    recipient_code_free := recipient_code_free
+    original_storage_eq := original_storage_eq
+    target_access := target_access
+    recipient_access := recipient_access
+    owner_storage_access := owner_storage_access
+    recipient_account := recipient_account
+    gas_bound := gas_bound }
+
+example {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
+    {w : State} {msg : Msg}
+    (core : AdmissibleRedemptionMessageCore
+      dp ca owner recipient q w msg)
+    (data_eq : msg.data = withdrawToCalldata recipient q)
+    (selector_eq : Sevm.selector (initSevm msg) = withdrawToSelector) :
+    AdmissibleRedemptionMessage dp ca owner recipient q w msg :=
+  { toAdmissibleRedemptionMessageCore := core
+    data_eq := data_eq
+    selector_eq := selector_eq }
+
+example {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
+    {w post : State} {out : MsgCallOutput}
+    (outError : out.error = none)
+    (ownerDebit : bookedBalanceNat post ca owner + q =
+      bookedBalanceNat w ca owner)
+    (otherBookedUnchanged : ∀ a, a ≠ owner →
+      bookedBalanceNat post ca a = bookedBalanceNat w ca a)
+    (contractEthDebit : (post.bal ca).toNat + q = (w.bal ca).toNat)
+    (recipientEthCredit :
+      (post.bal recipient).toNat = (w.bal recipient).toNat + q)
+    (otherEthUnchanged : ∀ a, a ≠ ca → a ≠ recipient →
+      post.bal a = w.bal a)
+    (sumPreserved : sum post.bal = sum w.bal)
+    (burnLog : out.logs = [redemptionBurnLog ca owner q])
+    (returnData : out.returnData = [])
+    (codePreserved : ∀ a, post.getCode a = w.getCode a)
+    (flashZero : (post.getStor ca).get flashMintedSlot = 0)
+    (postStable : Stable dp ca post) :
+    MessageRedemptionExactEffect dp ca owner recipient q w post out :=
+  { outError := outError
+    ownerDebit := ownerDebit
+    otherBookedUnchanged := otherBookedUnchanged
+    contractEthDebit := contractEthDebit
+    recipientEthCredit := recipientEthCredit
+    otherEthUnchanged := otherEthUnchanged
+    sumPreserved := sumPreserved
+    burnLog := burnLog
+    returnData := returnData
+    codePreserved := codePreserved
+    flashZero := flashZero
+    postStable := postStable }
+
+example {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    (rules_eq : benv.stat.rules = pragueRules)
+    (type_eq : ∃ maxPriorityFee maxFee,
+      tx.type = .two benv.stat.chainId maxPriorityFee maxFee (some ca) [])
+    (data_eq : tx.data = withdrawToCalldata recipient q)
+    (selector_eq : ∀ e : Sevm, e.data = tx.data →
+      Sevm.selector e = withdrawToSelector)
+    (value_eq : tx.value = 0)
+    (nonce_eq : tx.nonce = benv.state.getNonce owner)
+    (nonce_not_max : tx.nonce ≠ UInt64.max)
+    (recoveredSender : recoverSender benv.stat.chainId tx = .ok owner)
+    (owner_ne_zero : owner ≠ 0)
+    (owner_code_free : (benv.state.getCode owner).toList = [])
+    (validated :
+      validateTransaction pragueRules tx = .ok (calculateIntrinsicCost tx))
+    (checked :
+      checkTransaction benv.beginTransaction
+        (redemptionTxPreludeBout bout tx index) tx =
+        .ok (owner, redemptionEffectiveGasPrice benv tx, [], 0))
+    (base_fee_le_effective :
+      benv.stat.baseFeePerGas ≤ redemptionEffectiveGasPrice benv tx)
+    (upfront_funded : tx.gas * redemptionEffectiveGasPrice benv tx ≤
+      (benv.state.bal owner).toNat)
+    (gas_bound : redemptionTransactionGasBound q tx ≤ tx.gas)
+    (block_gas_room : tx.gas ≤ benv.stat.blockGasLimit - bout.blockGasUsed)
+    (target_code :
+      some (benv.state.getCode ca).toList = Prog.compile (weth10 dp))
+    (target_not_precompile : pragueRules.isPrecomp ca = false)
+    (target_not_created : ca ∉ benv.createdAccounts)
+    (recipient_ne_zero : recipient ≠ 0)
+    (recipient_not_precompile : pragueRules.isPrecomp recipient = false)
+    (recipient_code_free : (benv.state.getCode recipient).toList = [])
+    (recipient_account : RecipientAccountCase benv.state recipient) :
+    AdmissibleRedemptionTx
+      dp ca owner recipient q benv bout tx index :=
+  { rules_eq := rules_eq
+    type_eq := type_eq
+    data_eq := data_eq
+    selector_eq := selector_eq
+    value_eq := value_eq
+    nonce_eq := nonce_eq
+    nonce_not_max := nonce_not_max
+    recoveredSender := recoveredSender
+    owner_ne_zero := owner_ne_zero
+    owner_code_free := owner_code_free
+    validated := validated
+    checked := checked
+    base_fee_le_effective := base_fee_le_effective
+    upfront_funded := upfront_funded
+    gas_bound := gas_bound
+    block_gas_room := block_gas_room
+    target_code := target_code
+    target_not_precompile := target_not_precompile
+    target_not_created := target_not_created
+    recipient_ne_zero := recipient_ne_zero
+    recipient_not_precompile := recipient_not_precompile
+    recipient_code_free := recipient_code_free
+    recipient_account := recipient_account }
+
+example {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {post : State} {bout' : BlockOutput}
+    (perAddress : ∀ a,
+      (post.bal a).toNat +
+          (if a = owner then
+            tx.gas * redemptionEffectiveGasPrice benv tx else 0) +
+          (if a = ca then q else 0) =
+        (benv.state.bal a).toNat +
+          (if a = recipient then q else 0) +
+          (if a = owner then redemptionGasRefund benv bout bout' tx else 0) +
+          (if a = benv.stat.coinbase then
+            redemptionPriorityFee benv bout bout' tx else 0))
+    (totalAfterBaseFeeBurn :
+      sum post.bal + redemptionBaseFeeBurn benv bout bout' =
+        sum benv.state.bal) :
+    TransactionEthAccounting
+      dp ca owner recipient q benv bout tx index post bout' :=
+  { perAddress := perAddress
+    totalAfterBaseFeeBurn := totalAfterBaseFeeBurn }
+
+example {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {post : State} {bout' : BlockOutput}
+    (trace : TransactionRedemptionTrace
+      dp ca owner recipient q benv bout tx index)
+    (receiptAt : ∃ receipt,
+      Std.TreeMap.get? bout'.receiptsTrie (redemptionReceiptKey index) =
+        some ((2 : Fin 5), receipt))
+    (receiptSucceeded :
+      (Std.TreeMap.get? bout'.receiptsTrie (redemptionReceiptKey index)).map
+        (fun entry => entry.2.succeeded) = some true)
+    (receiptLogs :
+      (Std.TreeMap.get? bout'.receiptsTrie (redemptionReceiptKey index)).map
+        (fun entry => entry.2.logs) =
+          some [redemptionBurnLog ca owner q])
+    (ownerDebit : bookedBalanceNat post ca owner + q =
+      bookedBalanceNat benv.state ca owner)
+    (otherBookedUnchanged : ∀ a, a ≠ owner →
+      bookedBalanceNat post ca a = bookedBalanceNat benv.state ca a)
+    (codePreserved : ∀ a, post.getCode a = benv.state.getCode a)
+    (flashZero : (post.getStor ca).get flashMintedSlot = 0)
+    (postStable : Stable dp ca post)
+    (ethAccounting : TransactionEthAccounting
+      dp ca owner recipient q benv bout tx index post bout') :
+    TransactionRedemptionExactEffect
+      dp ca owner recipient q benv bout tx index post bout' :=
+  { trace := trace
+    receiptAt := receiptAt
+    receiptSucceeded := receiptSucceeded
+    receiptLogs := receiptLogs
+    ownerDebit := ownerDebit
+    otherBookedUnchanged := otherBookedUnchanged
+    codePreserved := codePreserved
+    flashZero := flashZero
+    postStable := postStable
+    ethAccounting := ethAccounting }
+
 example {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     {w : State} {msg : Msg}
     (hstable : Stable dp ca w)

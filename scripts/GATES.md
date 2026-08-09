@@ -90,7 +90,7 @@ against the gate.
 | `scripts/check-weth-coverage.sh` | the same honest reachability split for WETH, plus direct empty-calldata `deposit()` fallback and the same five callsite falsifiers | 10 selectors: 4 direct + 6 witnessed internal + fallback, budget 0 | sub-second |
 | `lake build` | integration elaboration, including the audited compile-witness, WETH10 deployment declarations, stable-state packaging, and constructive redemption certificates | 959 jobs | incremental builds are a few seconds; clean rebuilds are substantially longer |
 | `scripts/check.sh --no-build` | axiom audit of the audited top theorems, each against its own pinned expected axiom set | 275 theorems | ~4 s |
-| `scripts/check-claims.sh` | Lean-checked exact statement pins for the WETH10 compile, flash-depth, backing, creation, static-certificate, stable-chain, creation-seed, and constructive redemption flagships; `Stor.Weth10Inv` is pinned by `rfl` unfolding | 20 definitions/statements | ~2 s |
+| `scripts/check-claims.sh` | Lean-checked exact statement pins for the WETH10 compile, flash-depth, backing, creation, static-certificate, stable-chain, creation-seed, and constructive redemption flagships; constructor pins fail closed on redemption record-field changes or hidden success premises; `Stor.Weth10Inv` is pinned by `rfl` unfolding | 26 definitions/statements and constructors | ~2 s |
 
 ### Medium — before a commit or push candidate
 
