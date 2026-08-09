@@ -597,6 +597,7 @@ OK	1.267	Blanc/Weth10Functional.lean
 OK	8.200	Blanc/Weth10Live.lean
 OK	4.589	Blanc/Weth10Permit.lean
 OK	1.521	Blanc/Weth10Read.lean
+OK	8.252	Blanc/Weth10Redeemable.lean
 OK	1.294	Blanc/Weth10Sound.lean
 OK	1.203	Blanc/Weth10Stable.lean
 OK	1.452	Blanc/Weth10StateFunctional.lean
