@@ -51,7 +51,7 @@ import sys
 
 SHARED = ["Basic", "Semantics", "CommonCore", "Tactics", "CommonProofs", "Ladder",
           "BalanceAlgebra", "Compiled", "Forward", "Reverts", "ForwardCall",
-          "RevertPayload"]
+          "RevertPayload", "ExecDeterminism"]
 
 CONTRACTS = {
     "weth": ["Weth", "WethCode", "Solvent", "WethLive", "WethGas"],
@@ -66,7 +66,10 @@ CONTRACTS = {
                "Weth10FlashFunctional", "Weth10Live",
                "Weth10Permit", "Weth10Read", "Weth10StateFunctional",
                "Weth10TransferFunctional", "Weth10Erc677Functional",
-               "Weth10Redeemable"],
+               "Weth10Redeemable", "Weth10HolderFlowAlgebra",
+               "Weth10HolderFlow", "Weth10HolderFlowAuthenticity",
+               "Weth10HolderFlowCompiled", "Weth10HolderFlowConservation",
+               "Weth10HolderFlowDeterminism", "Weth10HolderFlowLocal"],
 }
 
 ROOTS = ["Blanc", "Main"]

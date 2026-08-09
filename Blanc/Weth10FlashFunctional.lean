@@ -232,6 +232,59 @@ lemma flashCallbackWindow (sel cal slf amt : B256) (payload : Bytes) :
 
 /-! ## Callback boundary -/
 
+/-- The successful borrower boundary before imposing any ABI-canonicality
+assumption on the dynamic tail.  `inputSize` is the runtime word produced by
+`flashCallbackArgsSize`; `callbackInput` is the byte string actually read from
+memory with its modular `toNat` length. -/
+def RawFlashCallbackBoundary (sevm : Sevm) (self receiver : Adr)
+    (amount inputSize : B256) (callbackInput : Bytes)
+    (pre mid : Devm) : Prop :=
+  ∃ (parent child : Devm) (xl : Xlot) (delegated : Bool)
+    (code : ByteArray) (gasWord : B256) (avail : Nat),
+    0 < sevm.depth ∧
+    pre.stack =
+      gasWord :: receiver.toB256 :: (0 : B256) :: callbackArgsOffset ::
+        inputSize :: (0 : B256) :: (0 : B256) :: parent.stack ∧
+    [amount, receiver.toB256] <<+ parent.stack ∧
+    parent.state = pre.state ∧
+    parent.memory = pre.memory.extends
+      [(callbackArgsOffset.toNat, inputSize.toNat), (0, 0)] ∧
+    parent.logs = pre.logs ∧
+    parent.output = pre.output ∧
+    ((getDelegatedCodeAddress (pre.getCode receiver) = none ∧
+        code = pre.getCode receiver ∧ delegated = false) ∨
+      (∃ target,
+        getDelegatedCodeAddress (pre.getCode receiver) = some target ∧
+        code = pre.getCode target ∧ delegated = true)) ∧
+    Xlot.Filled xl ∧
+    ProcessMessage
+      (callMsg sevm parent (min gasWord.toNat (except64th avail)) 0
+        self receiver receiver true false callbackInput code delegated)
+      xl (.ok child) ∧
+    child.error.isSome = false ∧
+    32 ≤ child.output.length ∧
+    Bytes.toB256 (child.output.sliceD 0 32 0) = CALLBACK_SUCCESS ∧
+    (Resume.call parent 0 0).run (.ok child) = .ok mid ∧
+    mid.state = child.state ∧
+    mid.returnData = child.output ∧
+    mid.stack = (1 : B256) :: parent.stack ∧
+    mid.logs = pre.logs ++ child.logs ∧
+    mid.output = pre.output
+
+/-- The raw callback boundary contributes the successful child's exact log
+segment to the enclosing frame. -/
+lemma RawFlashCallbackBoundary.exists_log_segment
+    {sevm : Sevm} {self receiver : Adr} {amount inputSize : B256}
+    {callbackInput : Bytes} {pre mid : Devm}
+    (h : RawFlashCallbackBoundary sevm self receiver amount inputSize
+      callbackInput pre mid) :
+    ∃ callbackLogs : List Log, mid.logs = pre.logs ++ callbackLogs := by
+  rcases h with ⟨parent, child, xl, delegated, code, gasWord, avail,
+    hdepth, hstack, hpref, hstate, hmemory, hparentLogs, hparentOutput,
+    hdelegation, hfilled, hprocess, hclean, hlength, hmagic, hresume,
+    hmidState, hreturndata, hmidStack, hmidLogs, hmidOutput⟩
+  exact ⟨child.logs, hmidLogs⟩
+
 /-- The exact successful suffix of `flashLoan` beginning at its borrower
 `CALL`.  It is named locally so the functional layer remains independent of
 the state-soundness proof's internal factoring. -/
@@ -450,32 +503,30 @@ private theorem of_checkRetdataHead_frame
     ((((((hb1.state.trans hb2.state).trans hb3.state).trans hf4.2.2).trans
       hb5.state).trans hf6.2.2).trans hb7.state).trans hdb.state⟩
 
-/-- A successful callback suffix opened the exact ERC-3156 child frame,
-accepted its magic word, and reached the unique repayment continuation.  The
-decoder between resumption and `flashSettle` is silent for world state,
-memory, logs, and the enclosing frame's output. -/
-theorem of_flashLoanSuccessTail
+/-- A successful callback suffix opens the exact child frame for the modular
+runtime size and actual memory bytes, accepts its magic word, and reaches the
+unique repayment continuation.  No calldata-canonicality or no-wrap size
+assumption is used. -/
+theorem of_rawFlashLoanSuccessTail
     (dp : DeployParams)
     {sevm : Sevm} {sc r : Devm} {amount : B256}
-    {receiver : Adr} {data : Bytes} {gasWord : B256} {img : Bytes}
+    {receiver : Adr} {inputSize : B256} {callbackInput : Bytes}
+    {gasWord : B256} {img : Bytes}
     (h_stack :
       gasWord :: receiver.toB256 :: (0 : B256) :: callbackArgsOffset ::
-      Nat.toB256 (196 + ceil32 data.length) :: (0 : B256) :: (0 : B256) ::
+      inputSize :: (0 : B256) :: (0 : B256) ::
       [amount, receiver.toB256] <<+ sc.stack)
     (h_wf : Mem.Wf sc.memory)
     (h_reads : Mem.Reads sc.memory img)
     (h_win :
-      img.sliceD callbackArgsOffset.toNat
-        (196 + ceil32 data.length) 0 =
-      abiCallWithTail onFlashLoanSelector
-        [sevm.caller.toB256, sevm.currentTarget.toB256, amount, 0] data)
-    (h_size : 196 + ceil32 data.length < 2 ^ 256)
+      img.sliceD callbackArgsOffset.toNat inputSize.toNat 0 =
+        callbackInput)
     (h_run :
       Func.Run ((weth10 dp).main :: weth10Aux) sevm sc
         flashLoanSuccessTail r) :
     ∃ mid settle,
-      FlashCallbackBoundary sevm sevm.currentTarget receiver
-        amount data sc mid ∧
+      RawFlashCallbackBoundary sevm sevm.currentTarget receiver
+        amount inputSize callbackInput sc mid ∧
       Devm.getStor mid = Devm.getStor settle ∧
       Devm.getBal mid = Devm.getBal settle ∧
       Devm.getCode mid = Devm.getCode settle ∧
@@ -511,10 +562,8 @@ theorem of_flashLoanSuccessTail
         h_mid_mem, h_mid_stack⟩
     rw [toAdr_toB256] at h_del run_pm
     have h_cd : (sc.memory.read callbackArgsOffset.toNat
-        (Nat.toB256 (196 + ceil32 data.length)).toNat).1 =
-        abiCallWithTail onFlashLoanSelector
-          [sevm.caller.toB256, sevm.currentTarget.toB256, amount, 0] data := by
-      rw [B256.toNat_toB256_of_lt h_size, Mem.Reads.read h_reads, h_win]
+        inputSize.toNat).1 = callbackInput := by
+      rw [Mem.Reads.read h_reads, h_win]
     rw [h_cd] at run_pm
     have hp_par : [amount, receiver.toB256] <<+ parent.stack := by
       rw [hstk_eq] at h_stack
@@ -672,13 +721,69 @@ theorem of_flashLoanSuccessTail
     refine ⟨mid, settle, ?_, hstor, hbal, hcode, hlogs.symm,
       houtput.symm, hwfSettle, hreadsSettle, hsettle⟩
     refine ⟨parent, child, xl, delegated, code, gasWord, avail,
-      hdepth, hstk_eq, hst_par, ?_, hlogs_par, houtput_par, h_del, h_fill,
+      hdepth, hstk_eq, hp_par, hst_par, ?_, hlogs_par, houtput_par, h_del, h_fill,
       ?_, hclean, hlen, hmagicChild, h_resume, h_mid_state, h_mid_rd,
       h_mid_stack, h_mid_logs, h_mid_output⟩
-    · simpa only [B256.toNat_toB256_of_lt h_size,
-        show (0 : B256).toNat = 0 from rfl] using hmem_par
+    · simpa only [show (0 : B256).toNat = 0 from rfl] using hmem_par
     · simpa only [show (0 : B256).toNat = 0 from rfl, if_true,
         Nat.add_zero] using run_pm
+
+/-- Canonical ERC-3156 compatibility projection of
+`of_rawFlashLoanSuccessTail`. -/
+theorem of_flashLoanSuccessTail
+    (dp : DeployParams)
+    {sevm : Sevm} {sc r : Devm} {amount : B256}
+    {receiver : Adr} {data : Bytes} {gasWord : B256} {img : Bytes}
+    (h_stack :
+      gasWord :: receiver.toB256 :: (0 : B256) :: callbackArgsOffset ::
+      Nat.toB256 (196 + ceil32 data.length) :: (0 : B256) :: (0 : B256) ::
+      [amount, receiver.toB256] <<+ sc.stack)
+    (h_wf : Mem.Wf sc.memory)
+    (h_reads : Mem.Reads sc.memory img)
+    (h_win :
+      img.sliceD callbackArgsOffset.toNat
+        (196 + ceil32 data.length) 0 =
+      abiCallWithTail onFlashLoanSelector
+        [sevm.caller.toB256, sevm.currentTarget.toB256, amount, 0] data)
+    (h_size : 196 + ceil32 data.length < 2 ^ 256)
+    (h_run :
+      Func.Run ((weth10 dp).main :: weth10Aux) sevm sc
+        flashLoanSuccessTail r) :
+    ∃ mid settle,
+      FlashCallbackBoundary sevm sevm.currentTarget receiver
+        amount data sc mid ∧
+      Devm.getStor mid = Devm.getStor settle ∧
+      Devm.getBal mid = Devm.getBal settle ∧
+      Devm.getCode mid = Devm.getCode settle ∧
+      settle.logs = mid.logs ∧
+      settle.output = mid.output ∧
+      Mem.Wf settle.memory ∧
+      (∃ settleImg, Mem.Reads settle.memory settleImg) ∧
+      Func.Run ((weth10 dp).main :: weth10Aux) sevm settle
+        flashSettle r := by
+  have h_win' :
+      img.sliceD callbackArgsOffset.toNat
+          (Nat.toB256 (196 + ceil32 data.length)).toNat 0 =
+        abiCallWithTail onFlashLoanSelector
+          [sevm.caller.toB256, sevm.currentTarget.toB256, amount, 0] data := by
+    rw [B256.toNat_toB256_of_lt h_size]
+    exact h_win
+  obtain ⟨mid, settle, hraw, hstor, hbal, hcode, hlogs, houtput,
+      hwf, hreads, hsettle⟩ :=
+    of_rawFlashLoanSuccessTail dp h_stack h_wf h_reads h_win' h_run
+  refine ⟨mid, settle, ?_, hstor, hbal, hcode, hlogs, houtput,
+    hwf, hreads, hsettle⟩
+  unfold RawFlashCallbackBoundary at hraw
+  unfold FlashCallbackBoundary
+  rcases hraw with ⟨parent, child, xl, delegated, code, gasWord', avail,
+    hdepth, hstack, -, hstate, hmemory, hlogs', houtput', hdelegated,
+    hfilled, hprocess, hclean, hlength, hmagic, hresume, hmidState,
+    hreturndata, hmidStack, hmidLogs, hmidOutput⟩
+  refine ⟨parent, child, xl, delegated, code, gasWord', avail,
+    hdepth, hstack, hstate, ?_, hlogs', houtput', hdelegated, hfilled,
+    hprocess, hclean, hlength, hmagic, hresume, hmidState,
+    hreturndata, hmidStack, hmidLogs, hmidOutput⟩
+  simpa only [B256.toNat_toB256_of_lt h_size] using hmemory
 
 /-! ## Exact repayment frame -/
 
@@ -1726,6 +1831,118 @@ theorem flashBurn_effect
 
 /-! ## End-to-end successful flash-loan observation -/
 
+/-- The callback input-size word computed by the deployed program.  Addition
+and alignment are deliberately left in `B256`, so this definition also covers
+wrapped dynamic-tail lengths. -/
+def flashCallbackRuntimeSize (e : Sevm) : B256 :=
+  0xc4 + ((~~~ (31 : B256)) &&& (31 + Sevm.tailLen e 3))
+
+/-- The exact callback-memory image produced from a readable source image.
+Unlike `abiCallWithTail`, this retains the raw dynamic length word, the raw
+tail bytes available to the machine, and all overwrite behavior. -/
+def flashCallbackRuntimeImage (e : Sevm) (source : Bytes) : Bytes :=
+  Bytes.writeAt
+    (Bytes.writeAt
+      (Bytes.writeAt
+        (Bytes.writeAt
+          (Bytes.writeAt
+            (Bytes.writeAt
+              (Bytes.writeAt
+                (Bytes.writeAt
+                  (Bytes.writeAt source 0 (Sevm.argWord e 2).toBytes)
+                  0 onFlashLoanSelector.toBytes)
+                32 e.caller.toB256.toBytes)
+              64 e.currentTarget.toB256.toBytes)
+            96 (Sevm.argWord e 2).toBytes)
+          128 (0 : B256).toBytes)
+        160 (0xa0 : B256).toBytes)
+      192 (Sevm.tailLen e 3).toBytes)
+    224 (Sevm.tailBytes e 3)
+
+/-- The byte string actually offered to the callback when the public frame
+starts with fresh memory.  Its length is the `toNat` interpretation of the
+modular runtime size, not an assumed canonical ABI length. -/
+def flashCallbackRuntimeInput (e : Sevm) : Bytes :=
+  (flashCallbackRuntimeImage e []).sliceD callbackArgsOffset.toNat
+    (flashCallbackRuntimeSize e).toNat 0
+
+/-- Execution-level bridge from the raw borrower `CALL` to the repayment
+entry.  This is the exact projection supplied by `of_run_flashLoanFromCall`:
+the callback result and settlement entry agree on storage and balances. -/
+def RawFlashSettlementContinuation (dp : DeployParams) (e : Sevm)
+    (sc post : Devm) : Prop :=
+  ∃ callbackPost settle,
+    Ninst.Run e sc call callbackPost ∧
+    Func.Run ((weth10 dp).main :: weth10Aux) e settle flashSettle post ∧
+    Devm.getStor callbackPost = Devm.getStor settle ∧
+    Devm.getBal callbackPost = Devm.getBal settle
+
+/-- Successful raw `flashLoan` effect.  The three named words are exactly the
+machine's receiver, token, and principal arguments.  The callback boundary
+retains the modular input size and exact memory bytes, while the state clauses
+retain the matching credit/debit, allowance fork, logs, and restored flash
+counter. -/
+def RawFlashLoanSuccessEffect (dp : DeployParams) (e : Sevm)
+    (pre post : Devm)
+    (receiver token amount : B256) : Prop :=
+  Sevm.argWord e 0 = receiver ∧
+  Sevm.argWord e 1 = token ∧
+  Sevm.argWord e 2 = amount ∧
+  token = e.currentTarget.toB256 ∧
+  ∃ (recipient : Adr) (sc mid settle burn : Devm)
+      (callbackLogs : List Log) (base : B256),
+    recipient.toB256 = ((~~~ addressMask) &&& receiver) ∧
+    base = (Devm.getStor pre e.currentTarget).get flashMintedSlot ∧
+    amount ≤ maxUint112 ∧
+    base + amount ≤ maxUint112 ∧
+    Increase recipient amount
+      (Stor.rest (Devm.getStor pre e.currentTarget))
+      (Stor.rest (Devm.getStor sc e.currentTarget)) ∧
+    (Devm.getStor sc e.currentTarget).get flashMintedSlot =
+      base + amount ∧
+    Devm.getCode pre = Devm.getCode sc ∧
+    Devm.getBal pre = Devm.getBal sc ∧
+    (sc.memory.read callbackArgsOffset.toNat
+        (flashCallbackRuntimeSize e).toNat).1 =
+      flashCallbackRuntimeInput e ∧
+    sc.logs = pre.logs ++ [flashMintTransferLog e recipient] ∧
+    sc.output = pre.output ∧
+    RawFlashSettlementContinuation dp e sc post ∧
+    RawFlashCallbackBoundary e e.currentTarget recipient amount
+      (flashCallbackRuntimeSize e) (flashCallbackRuntimeInput e) sc mid ∧
+    mid.logs = sc.logs ++ callbackLogs ∧
+    Devm.getStor mid = Devm.getStor settle ∧
+    Devm.getBal mid = Devm.getBal settle ∧
+    Devm.getCode mid = Devm.getCode settle ∧
+    settle.logs = mid.logs ∧
+    settle.output = mid.output ∧
+    Func.Run ((weth10 dp).main :: weth10Aux) e settle
+      flashSettle post ∧
+    Func.Run ((weth10 dp).main :: weth10Aux) e burn
+      flashBurn post ∧
+    FlashAllowanceOutcome e settle burn ∧
+    Decrease recipient amount
+      (Stor.rest (Devm.getStor burn e.currentTarget))
+      (Stor.rest (Devm.getStor post e.currentTarget)) ∧
+    amount ≤ Stor.rest (Devm.getStor burn e.currentTarget) recipient ∧
+    (Devm.getStor post e.currentTarget).get flashMintedSlot = base ∧
+    (((Devm.getStor settle e.currentTarget).get
+          (flashAllowanceRuntimeKey e) = B256.max ∧
+        post.logs = pre.logs ++ [flashMintTransferLog e recipient] ++
+          callbackLogs ++ [flashBurnTransferLog e]) ∨
+      (∃ allowance : B256,
+        allowance ≠ B256.max ∧
+        amount ≤ allowance ∧
+        (Devm.getStor settle e.currentTarget).get
+          (flashAllowanceRuntimeKey e) = allowance ∧
+        post.logs = pre.logs ++ [flashMintTransferLog e recipient] ++
+          callbackLogs ++
+            [flashApprovalLog e (allowance - amount),
+              flashBurnTransferLog e])) ∧
+    AbiReturnsTrue post ∧
+    Devm.getBal post = Devm.getBal mid ∧
+    Devm.getCode post = Devm.getCode mid
+
 /-- Exact partial-correctness observation for one successful WETH10
 `flashLoan` body.  It exposes the temporary mint at callback entry, the
 canonical child frame and arbitrary child-log segment, the two repayment
@@ -1787,6 +2004,91 @@ def FlashLoanSuccessEffect (e : Sevm) (pre post : Devm)
     AbiReturnsTrue post ∧
     Devm.getBal post = Devm.getBal mid ∧
     Devm.getCode post = Devm.getCode mid
+
+/-- A successful `flashLoan` body has a complete raw effect without assuming
+that its calldata tail is canonically encoded or that the callback-size
+arithmetic does not wrap. -/
+theorem flashLoan_rawSuccessEffect
+    (dp : DeployParams) {e : Sevm} {pre post : Devm}
+    (h_wf : Mem.Wf pre.memory)
+    (h_fresh : Mem.Reads pre.memory [])
+    (h_code : some (pre.getCode e.currentTarget).toList =
+      Prog.compile (weth10 dp))
+    (run : Func.Run ((weth10 dp).main :: weth10Aux) e pre
+      flashLoan post) :
+    RawFlashLoanSuccessEffect dp e pre post
+      (Sevm.argWord e 0) (Sevm.argWord e 1) (Sevm.argWord e 2) := by
+  obtain ⟨recipient, sc, g, inputSize, base,
+      hbase, hrecipient, htoken, hamount, htotal, hinc, hflash,
+      hcodeSc, hbalSc, hinputSize, hstack, hmemory, hmintLogs,
+      hsetupOutput, htail⟩ := of_flashLoan_toCall_frame dp run
+  have hinputSize' : inputSize = flashCallbackRuntimeSize e := by
+    simpa only [flashCallbackRuntimeSize] using hinputSize
+  have hstack' := hstack
+  rw [hinputSize'] at hstack'
+  obtain ⟨hwfSc, hreadsSc⟩ := hmemory [] h_wf h_fresh
+  have hreadsRuntime :
+      Mem.Reads sc.memory (flashCallbackRuntimeImage e []) := by
+    simpa only [flashCallbackRuntimeImage] using hreadsSc
+  have hwindow :
+      (sc.memory.read callbackArgsOffset.toNat
+          (flashCallbackRuntimeSize e).toNat).1 =
+        flashCallbackRuntimeInput e := by
+    rw [Mem.Reads.read hreadsRuntime]
+    rfl
+  have htail' : Func.Run ((weth10 dp).main :: weth10Aux) e sc
+      flashLoanSuccessTail post := by
+    simpa only [flashLoanSuccessTail, flashLoanFromCall] using htail
+  have hcontinuation : RawFlashSettlementContinuation dp e sc post := by
+    unfold RawFlashSettlementContinuation
+    exact of_run_flashLoanFromCall dp htail
+  obtain ⟨mid, settle, hcallback, hstorMid, hbalMid, hcodeMid,
+      hsettleLogs, hsettleOutput, hwfSettle, hreadsSettleEx,
+      hsettle⟩ :=
+    of_rawFlashLoanSuccessTail dp hstack' hwfSc hreadsRuntime
+      (by rfl) htail'
+  obtain ⟨settleImg, hreadsSettle⟩ := hreadsSettleEx
+  obtain ⟨callbackLogs, hcallbackLogs⟩ :=
+    RawFlashCallbackBoundary.exists_log_segment hcallback
+  obtain ⟨burn, hburn, hallowance, hwfBurn, burnImg, hreadsBurn⟩ :=
+    of_flashSettle_allowance dp hwfSettle hreadsSettle hsettle
+  obtain ⟨hdecrease, hcover, hflashBurn, hburnLogs, htrue,
+      hbalBurn, hcodeBurn⟩ :=
+    flashBurn_effect dp hwfBurn hreadsBurn hburn
+  have hrecipient' :
+      recipient.toB256 = normalizedAddressArg e 0 := by
+    simpa only [normalizedAddressArg] using hrecipient
+  have hrecipientAdr : (normalizedAddressArg e 0).toAdr = recipient := by
+    rw [← hrecipient', toAdr_toB256]
+  have hdecrease' : Decrease recipient (Sevm.argWord e 2)
+      (Stor.rest (Devm.getStor burn e.currentTarget))
+      (Stor.rest (Devm.getStor post e.currentTarget)) := by
+    simpa only [hrecipientAdr] using hdecrease
+  have hcover' : Sevm.argWord e 2 ≤
+      Stor.rest (Devm.getStor burn e.currentTarget) recipient := by
+    simpa only [hrecipientAdr] using hcover
+  have hmintLogs' :
+      sc.logs = pre.logs ++ [flashMintTransferLog e recipient] := by
+    simpa only [flashMintTransferLog] using hmintLogs
+  have hlogFork := repayment_log_fork (amount := Sevm.argWord e 2)
+    rfl hmintLogs' hcallbackLogs hsettleLogs hallowance hburnLogs
+  have hexact := flashLoan_exactRelFuncSound dp e.currentTarget
+    rfl h_code (flashExactDepth dp e.currentTarget e.depth) run
+  have hcounter :
+      (Devm.getStor post e.currentTarget).get flashMintedSlot = base := by
+    unfold FlashExactRel at hexact
+    exact hexact.trans hbase.symm
+  have hbalFinal : Devm.getBal post = Devm.getBal mid :=
+    hbalBurn.trans (hallowance.2.2.1.trans hbalMid.symm)
+  have hcodeFinal : Devm.getCode post = Devm.getCode mid :=
+    hcodeBurn.trans (hallowance.2.2.2.trans hcodeMid.symm)
+  refine ⟨rfl, rfl, rfl, htoken,
+    recipient, sc, mid, settle, burn, callbackLogs, base,
+    hrecipient, hbase, hamount, htotal, hinc, hflash, hcodeSc,
+    hbalSc, hwindow, hmintLogs', hsetupOutput, hcontinuation, hcallback,
+    hcallbackLogs, hstorMid, hbalMid, hcodeMid, hsettleLogs,
+    hsettleOutput, hsettle, hburn, hallowance, hdecrease', hcover', hcounter,
+    hlogFork, htrue, hbalFinal, hcodeFinal⟩
 
 /-- A successful selected `flashLoan` body has the exact callback, repayment,
 counter-restoration, return, and log effect described above. -/
@@ -1910,6 +2212,40 @@ theorem flashLoan_successEffect
     hcallbackLogs, hstorMid, hbalMid, hcodeMid, hsettleLogs,
     hsettleOutput, hallowance, hdecrease', hcover', hcounter,
     hlogFork, htrue, hbalFinal, hcodeFinal⟩
+
+/-- Compiled public-selector form of `flashLoan_rawSuccessEffect`.  It imposes
+no decoded-tail witness and no callback-size no-wrap premise. -/
+theorem weth10_flashLoan_rawSuccessEffect
+    (dp : DeployParams) {e : Sevm} {pre post : Devm}
+    (h_code : some e.code.toList = Prog.compile (weth10 dp))
+    (h_state_code : pre.getCode e.currentTarget = e.code)
+    (h_sel : Sevm.selector e = flashLoanSelector)
+    (h_nonempty : e.data.length.toB256 ≠ 0)
+    (h_wf : Mem.Wf pre.memory)
+    (h_fresh : Mem.Reads pre.memory [])
+    (exc : Exec 0 e pre (.ok post)) :
+    e.value = 0 ∧
+      RawFlashLoanSuccessEffect dp e pre post
+        (Sevm.argWord e 0) (Sevm.argWord e 1) (Sevm.argWord e 2) := by
+  rcases exec_enters_weth10Nonpayable_logs exc h_code h_sel h_nonempty
+      (flashLoan_mem_weth10Funcs dp) with
+    ⟨bodyPre, hvalue, hstor, hbal, hcodeFrame, hmemory,
+      hlogs, houtput, hbody⟩
+  have hbodyCode : some (bodyPre.getCode e.currentTarget).toList =
+      Prog.compile (weth10 dp) := by
+    rw [hcodeFrame, h_state_code]
+    exact h_code
+  have hwfBody : Mem.Wf bodyPre.memory := by
+    rw [hmemory]
+    exact h_wf
+  have hfreshBody : Mem.Reads bodyPre.memory [] := by
+    rw [hmemory]
+    exact h_fresh
+  have heffect := flashLoan_rawSuccessEffect dp hwfBody hfreshBody
+    hbodyCode hbody
+  refine ⟨hvalue, ?_⟩
+  unfold RawFlashLoanSuccessEffect at heffect ⊢
+  simpa only [hstor, hbal, hcodeFrame, hlogs, houtput] using heffect
 
 /-- Compiled public-selector form of `flashLoan_successEffect`.  The
 state-code equality is the direct-call linkage needed to identify any nested

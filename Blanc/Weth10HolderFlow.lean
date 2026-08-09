@@ -41,6 +41,23 @@ def HolderFlow.add {u : Adr} (x y : HolderFlow u) : HolderFlow u :=
     x.flashCredit + y.flashCredit,
     x.flashRepayment + y.flashRepayment⟩
 
+@[simp] theorem HolderFlow.zero_add {u : Adr} (x : HolderFlow u) :
+    (HolderFlow.zero u).add x = x := by
+  cases x
+  simp [HolderFlow.zero, HolderFlow.add]
+
+@[simp] theorem HolderFlow.add_zero {u : Adr} (x : HolderFlow u) :
+    x.add (HolderFlow.zero u) = x := by
+  cases x
+  simp [HolderFlow.zero, HolderFlow.add]
+
+theorem HolderFlow.add_assoc {u : Adr} (x y z : HolderFlow u) :
+    (x.add y).add z = x.add (y.add z) := by
+  cases x
+  cases y
+  cases z
+  simp [HolderFlow.add, Nat.add_assoc]
+
 /-- The exact runtime arm accepted before a delegated debit.  Raw keys and
 before/after allowance words are retained for the successor provenance goal;
 this goal attributes no human intent to them. -/
@@ -67,6 +84,71 @@ structure DebitProvenance where
   branch : DebitBranch
 deriving DecidableEq
 
+/-- Data-level tag for the caller allowance arm selected by the runtime.  The
+full state/log effect remains in `CallerAllowanceOutcome`; this tag makes the
+accepted branch and its raw key/value data extractable. -/
+def CallerAllowanceTag (e : Sevm) (pre : Devm) (amountArg : B256) :
+    AllowanceBranch → Prop
+  | .selfBypass => Sevm.argWord e 0 = e.caller.toB256
+  | .maximum key =>
+      Sevm.argWord e 0 ≠ e.caller.toB256 ∧
+      key = callerAllowanceRuntimeKey e ∧
+      (Devm.getStor pre e.currentTarget).get key = B256.max
+  | .finite key before after =>
+      Sevm.argWord e 0 ≠ e.caller.toB256 ∧
+      key = callerAllowanceRuntimeKey e ∧
+      (Devm.getStor pre e.currentTarget).get key = before ∧
+      before ≠ B256.max ∧
+      Sevm.argWord e amountArg ≤ before ∧
+      after = before - Sevm.argWord e amountArg
+
+def CallerAllowanceAccepted (e : Sevm) (pre core : Devm)
+    (amountArg : B256) (branch : AllowanceBranch) : Prop :=
+  CallerAllowanceOutcome e pre core amountArg ∧
+    CallerAllowanceTag e pre amountArg branch
+
+theorem exists_callerAllowanceAccepted
+    {e : Sevm} {pre core : Devm} {amountArg : B256}
+    (h : CallerAllowanceOutcome e pre core amountArg) :
+    ∃ branch, CallerAllowanceAccepted e pre core amountArg branch := by
+  rcases h.1 with hself | ⟨hne, hmax | hfinite⟩
+  · exact ⟨.selfBypass, h, hself.1⟩
+  · exact ⟨.maximum (callerAllowanceRuntimeKey e), h,
+      hne, rfl, hmax.1⟩
+  · rcases hfinite with ⟨allowance, hnotmax, hle, hget, _⟩
+    exact ⟨.finite (callerAllowanceRuntimeKey e) allowance
+      (allowance - Sevm.argWord e amountArg), h,
+      hne, rfl, hget, hnotmax, hle, rfl⟩
+
+/-- Data-level tag for flash settlement's max/finite allowance arm. -/
+def FlashAllowanceTag (e : Sevm) (settle : Devm) :
+    AllowanceBranch → Prop
+  | .selfBypass => False
+  | .maximum key =>
+      key = flashAllowanceRuntimeKey e ∧
+      (Devm.getStor settle e.currentTarget).get key = B256.max
+  | .finite key before after =>
+      key = flashAllowanceRuntimeKey e ∧
+      (Devm.getStor settle e.currentTarget).get key = before ∧
+      before ≠ B256.max ∧
+      Sevm.argWord e 2 ≤ before ∧
+      after = before - Sevm.argWord e 2
+
+def FlashAllowanceAccepted (e : Sevm) (settle burn : Devm)
+    (branch : AllowanceBranch) : Prop :=
+  FlashAllowanceOutcome e settle burn ∧ FlashAllowanceTag e settle branch
+
+theorem exists_flashAllowanceAccepted
+    {e : Sevm} {settle burn : Devm}
+    (h : FlashAllowanceOutcome e settle burn) :
+    ∃ branch, FlashAllowanceAccepted e settle burn branch := by
+  rcases h.1 with hmax | hfinite
+  · exact ⟨.maximum (flashAllowanceRuntimeKey e), h, rfl, hmax.1⟩
+  · rcases hfinite with ⟨allowance, hnotmax, hle, hget, _⟩
+    exact ⟨.finite (flashAllowanceRuntimeKey e) allowance
+      (allowance - Sevm.argWord e 2), h,
+      rfl, hget, hnotmax, hle, rfl⟩
+
 /-- One committed WETH10 invocation's balance-flow category.  A successful
 flash invocation is one paired atom, so its exact receiver/principal pairing
 is retained rather than reconstructed by matching lookalike burn logs. -/
@@ -79,17 +161,60 @@ inductive FlowAtom
   | flashPair (rawReceiver : B256) (receiver : Adr) (amount : Nat)
 deriving DecidableEq
 
+/-- The exact modular addition site underlying one credited balance write.
+`before` is the recipient word immediately before that addition (after the
+source debit for a self-transfer), so `creditLoss before amountWord` measures
+precisely whether this individual write wrapped. -/
+structure CreditOccurrence where
+  recipient : Adr
+  before : B256
+  amountWord : B256
+deriving DecidableEq
+
+def CreditOccurrence.loss (credit : CreditOccurrence) : Nat :=
+  creditLoss credit.before credit.amountWord
+
+def CreditOccurrence.Nof (credit : CreditOccurrence) : Prop :=
+  B256.Nof credit.before credit.amountWord
+
+theorem CreditOccurrence.loss_eq_zero_iff (credit : CreditOccurrence) :
+    credit.loss = 0 ↔ credit.Nof :=
+  creditLoss_eq_zero_iff credit.before credit.amountWord
+
 /-- Flow data plus the actual invocation context.  Authenticity proofs later
 pin `currentTarget`, `codeAddress`, code, storage writes, and the associated
 WETH-emitter log to the retained execution. -/
 structure FlowAction where
   atom : FlowAtom
+  credit : Option CreditOccurrence
   debit : Option DebitProvenance
   actualCaller : Adr
   currentTarget : Adr
   codeAddress : Option Adr
   depth : Nat
 deriving DecidableEq
+
+def FlowAtom.creditOccurrence (pre : Devm) (ca : Adr) :
+    FlowAtom → Option CreditOccurrence
+  | .ordinaryMint _ recipient amount =>
+      some
+        { recipient
+          before := Stor.rest (Devm.getStor pre ca) recipient
+          amountWord := Nat.toB256 amount }
+  | .transfer _ _ source recipient amount =>
+      let amountWord := Nat.toB256 amount
+      let before :=
+        if source = recipient then
+          Stor.rest (Devm.getStor pre ca) source - amountWord
+        else
+          Stor.rest (Devm.getStor pre ca) recipient
+      some { recipient, before, amountWord }
+  | .redemption .. => none
+  | .flashPair _ receiver amount =>
+      some
+        { recipient := receiver
+          before := Stor.rest (Devm.getStor pre ca) receiver
+          amountWord := Nat.toB256 amount }
 
 /-- Executable contribution of one classified atom to a holder's totals.
 Dirty address words branch in `primaryFlowAtom` before their low-160-bit
@@ -120,10 +245,77 @@ def FlowAtom.holderFlow (atom : FlowAtom) (u : Adr) : HolderFlow u :=
           flashRepayment := amount }
       else HolderFlow.zero u
 
+theorem FlowAtom.holderFlow_flash_eq (atom : FlowAtom) (u : Adr) :
+    (atom.holderFlow u).flashCredit =
+      (atom.holderFlow u).flashRepayment := by
+  cases atom <;> simp only [FlowAtom.holderFlow] <;> aesop
+
 /-- The public numeric fold used by `AccountedHistory.weth10Flow`. -/
 def holderFlowOfActions (actions : List FlowAction) (u : Adr) : HolderFlow u :=
   actions.foldl (fun total action =>
     total.add (action.atom.holderFlow u)) (HolderFlow.zero u)
+
+private theorem holderFlowOfActions_from_eq_add
+    (actions : List FlowAction) (u : Adr) (initial : HolderFlow u) :
+    actions.foldl (fun total action =>
+      total.add (action.atom.holderFlow u)) initial =
+    initial.add (holderFlowOfActions actions u) := by
+  unfold holderFlowOfActions
+  induction actions generalizing initial with
+  | nil => simp
+  | cons action actions ih =>
+      simp only [List.foldl_cons]
+      rw [ih]
+      rw [ih (initial := (HolderFlow.zero u).add
+        (action.atom.holderFlow u))]
+      rw [HolderFlow.zero_add, HolderFlow.add_assoc]
+
+theorem holderFlowOfActions_append
+    (left right : List FlowAction) (u : Adr) :
+    holderFlowOfActions (left ++ right) u =
+      (holderFlowOfActions left u).add
+        (holderFlowOfActions right u) := by
+  unfold holderFlowOfActions
+  rw [List.foldl_append]
+  exact holderFlowOfActions_from_eq_add right u _
+
+private theorem holderFlowOfActions_flash_eq_from
+    (actions : List FlowAction) (u : Adr) (initial : HolderFlow u)
+    (hinitial : initial.flashCredit = initial.flashRepayment) :
+    (actions.foldl (fun total action =>
+      total.add (action.atom.holderFlow u)) initial).flashCredit =
+    (actions.foldl (fun total action =>
+      total.add (action.atom.holderFlow u)) initial).flashRepayment := by
+  induction actions generalizing initial with
+  | nil => exact hinitial
+  | cons action actions ih =>
+      simp only [List.foldl_cons]
+      apply ih
+      simp only [HolderFlow.add]
+      rw [hinitial, action.atom.holderFlow_flash_eq]
+
+theorem holderFlowOfActions_flash_eq (actions : List FlowAction) (u : Adr) :
+    (holderFlowOfActions actions u).flashCredit =
+      (holderFlowOfActions actions u).flashRepayment := by
+  apply holderFlowOfActions_flash_eq_from
+  rfl
+
+/-- Wrap loss attributed to a holder's credited balance writes. -/
+def FlowAction.holderCreditLoss (action : FlowAction) (u : Adr) : Nat :=
+  match action.credit with
+  | some credit => if credit.recipient = u then credit.loss else 0
+  | none => 0
+
+def holderCreditLossOfActions (actions : List FlowAction) (u : Adr) : Nat :=
+  (actions.map (fun action => action.holderCreditLoss u)).sum
+
+/-- Every credited write retained by an action is an ordinary, non-wrapping
+`B256` addition. -/
+def FlowAction.CreditNof (action : FlowAction) : Prop :=
+  ∀ credit, action.credit = some credit → credit.Nof
+
+def FlowActionsCreditNof (actions : List FlowAction) : Prop :=
+  ∀ action ∈ actions, action.CreditNof
 
 /-- The deterministic, provenance-neutral part of a retained action.  Debit
 provenance is stored alongside these observations by the authenticity layer;
@@ -136,10 +328,88 @@ structure FlowObservation where
   depth : Nat
 deriving DecidableEq
 
+def FlowAction.observation (action : FlowAction) : FlowObservation :=
+  { atom := action.atom
+    actualCaller := action.actualCaller
+    currentTarget := action.currentTarget
+    codeAddress := action.codeAddress
+    depth := action.depth }
+
 def holderFlowOfObservations (observations : List FlowObservation)
     (u : Adr) : HolderFlow u :=
   observations.foldl (fun total observation =>
     total.add (observation.atom.holderFlow u)) (HolderFlow.zero u)
+
+private theorem holderFlowOfObservations_from_eq_add
+    (observations : List FlowObservation) (u : Adr)
+    (initial : HolderFlow u) :
+    observations.foldl (fun total observation =>
+      total.add (observation.atom.holderFlow u)) initial =
+    initial.add (holderFlowOfObservations observations u) := by
+  unfold holderFlowOfObservations
+  induction observations generalizing initial with
+  | nil => simp
+  | cons observation observations ih =>
+      simp only [List.foldl_cons]
+      rw [ih]
+      rw [ih (initial := (HolderFlow.zero u).add
+        (observation.atom.holderFlow u))]
+      rw [HolderFlow.zero_add, HolderFlow.add_assoc]
+
+theorem holderFlowOfObservations_append
+    (left right : List FlowObservation) (u : Adr) :
+    holderFlowOfObservations (left ++ right) u =
+      (holderFlowOfObservations left u).add
+        (holderFlowOfObservations right u) := by
+  unfold holderFlowOfObservations
+  rw [List.foldl_append]
+  exact holderFlowOfObservations_from_eq_add right u _
+
+theorem holderFlowOfObservations_map_observation
+    (actions : List FlowAction) (u : Adr) :
+    holderFlowOfObservations (actions.map FlowAction.observation) u =
+      holderFlowOfActions actions u := by
+  unfold holderFlowOfObservations holderFlowOfActions
+  have go : ∀ (xs : List FlowAction) (initial : HolderFlow u),
+      List.foldl
+        (fun total observation =>
+          total.add (observation.atom.holderFlow u))
+        initial (xs.map FlowAction.observation) =
+      List.foldl
+        (fun total action => total.add (action.atom.holderFlow u))
+        initial xs := by
+    intro xs
+    induction xs with
+    | nil => intro initial; rfl
+    | cons action xs ih =>
+        intro initial
+        simp only [List.map_cons, List.foldl_cons,
+          FlowAction.observation]
+        exact ih _
+  exact go actions _
+
+private theorem holderFlowOfObservations_flash_eq_from
+    (observations : List FlowObservation) (u : Adr)
+    (initial : HolderFlow u)
+    (hinitial : initial.flashCredit = initial.flashRepayment) :
+    (observations.foldl (fun total observation =>
+      total.add (observation.atom.holderFlow u)) initial).flashCredit =
+    (observations.foldl (fun total observation =>
+      total.add (observation.atom.holderFlow u)) initial).flashRepayment := by
+  induction observations generalizing initial with
+  | nil => exact hinitial
+  | cons observation observations ih =>
+      simp only [List.foldl_cons]
+      apply ih
+      simp only [HolderFlow.add]
+      rw [hinitial, observation.atom.holderFlow_flash_eq]
+
+theorem holderFlowOfObservations_flash_eq
+    (observations : List FlowObservation) (u : Adr) :
+    (holderFlowOfObservations observations u).flashCredit =
+      (holderFlowOfObservations observations u).flashRepayment := by
+  apply holderFlowOfObservations_flash_eq_from
+  rfl
 
 /-- Exact direct WETH10-at-`ca` invocation context.  `currentTarget` pins the
 storage/log owner; `codeAddress` excludes CALLCODE, DELEGATECALL, and EIP-7702
@@ -214,6 +484,68 @@ def primaryFlowAtom (e : Sevm) : Option FlowAtom :=
       (Sevm.argWord e 2).toNat)
   else none
 
+/-- The exact caller-allowance arm selected from the invocation's entry
+state.  This is data, not an authorization claim: a finite or maximum branch
+records only what the runtime inspected and accepted. -/
+def callerAllowanceBranch (e : Sevm) (pre : Devm)
+    (amountArg : B256) : AllowanceBranch :=
+  if Sevm.argWord e 0 = e.caller.toB256 then
+    .selfBypass
+  else
+    let key := callerAllowanceRuntimeKey e
+    let before := (Devm.getStor pre e.currentTarget).get key
+    if before = B256.max then
+      .maximum key
+    else
+      .finite key before (before - Sevm.argWord e amountArg)
+
+/-- Flash settlement performs its allowance test after the callback.  The
+committed post-state retains the selected arm: a maximum allowance is
+unchanged, while a finite arm's pre-debit value is the exact natural
+reconstruction `after + amount` proved by the flash effect theorem. -/
+def flashAllowanceBranchFromPost (e : Sevm) (post : Devm) : AllowanceBranch :=
+  let key := flashAllowanceRuntimeKey e
+  let after := (Devm.getStor post e.currentTarget).get key
+  if after = B256.max then
+    .maximum key
+  else
+    .finite key (after + Sevm.argWord e 2) after
+
+/-- Deterministic per-debit provenance candidate for a successful exact
+invocation.  Later authenticity theorems connect each branch to the
+corresponding functional effect and accepted runtime test. -/
+def primaryDebitProvenance (e : Sevm) (pre post : Devm) :
+    Option DebitProvenance :=
+  let direct (rawSource : B256) (source : Adr) : DebitProvenance :=
+    { actualCaller := e.caller
+      rawSource
+      source
+      branch := .direct }
+  let delegated (rawSource : B256) (amountArg : B256) : DebitProvenance :=
+    { actualCaller := e.caller
+      rawSource
+      source := rawSource.toAdr
+      branch := .delegated (callerAllowanceBranch e pre amountArg) }
+  if e.data.length.toB256 = 0 then
+    none
+  else if Sevm.selector e = transferSelector ||
+      Sevm.selector e = transferAndCallSelector ||
+      Sevm.selector e = withdrawSelector ||
+      Sevm.selector e = withdrawToSelector then
+    some (direct e.caller.toB256 e.caller)
+  else if Sevm.selector e = transferFromSelector then
+    some (delegated (Sevm.argWord e 0) 2)
+  else if Sevm.selector e = withdrawFromSelector then
+    some (delegated (Sevm.argWord e 0) 2)
+  else if Sevm.selector e = flashLoanSelector then
+    let rawReceiver := Sevm.argWord e 0
+    some
+      { actualCaller := e.caller
+        rawSource := rawReceiver
+        source := rawReceiver.toAdr
+        branch := .flash (flashAllowanceBranchFromPost e post) }
+  else none
+
 /-- Whether an execution outcome commits its frame state. -/
 def Execution.commits : Execution → Bool
   | .error _ => false
@@ -233,6 +565,16 @@ structure Exec.Frame where
   out : Execution
   run : Exec pc sevm pre out
   committed : Execution.commits out = true
+
+/-- The committed post-machine indexed by a retained frame. -/
+def Execution.committedPost (out : Execution)
+    (h : Execution.commits out = true) : Devm :=
+  match out with
+  | .ok post => post
+  | .error _ => by simp [Execution.commits] at h
+
+def Exec.Frame.post (frame : Exec.Frame) : Devm :=
+  Execution.committedPost frame.out frame.committed
 
 def Exec.Frame.ofRun {pc : Nat} {sevm : Sevm} {pre : Devm}
     {out : Execution} (run : Exec pc sevm pre out)
@@ -279,16 +621,28 @@ instance (dp : DeployParams) (ca : Adr) (frame : Exec.Frame) :
   unfold Exec.Frame.exactInvocation
   infer_instance
 
-def Exec.Frame.flowObservation? (dp : DeployParams) (ca : Adr)
-    (frame : Exec.Frame) : Option FlowObservation :=
+def Exec.Frame.flowAction? (dp : DeployParams) (ca : Adr)
+    (frame : Exec.Frame) : Option FlowAction :=
   if frame.exactInvocation dp ca then
     (primaryFlowAtom frame.sevm).map fun atom =>
       { atom
+        credit := atom.creditOccurrence frame.pre ca
+        debit := primaryDebitProvenance frame.sevm frame.pre frame.post
         actualCaller := frame.sevm.caller
         currentTarget := frame.sevm.currentTarget
         codeAddress := frame.sevm.codeAddress
         depth := frame.sevm.depth }
   else none
+
+def Exec.Frame.flowObservation? (dp : DeployParams) (ca : Adr)
+    (frame : Exec.Frame) : Option FlowObservation :=
+  (frame.flowAction? dp ca).map FlowAction.observation
+
+def Exec.flowActions (dp : DeployParams) (ca : Adr)
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) : List FlowAction :=
+  (Exec.committedFrames run).filterMap
+    (Exec.Frame.flowAction? dp ca)
 
 /-- Executable observations for one root derivation, in enclosing-frame then
 depth-first child order.  Classification proofs later show that this includes
@@ -296,8 +650,7 @@ every and only committed balance-writing WETH10 invocation. -/
 def Exec.flowObservations (dp : DeployParams) (ca : Adr)
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out) : List FlowObservation :=
-  (Exec.committedFrames run).filterMap
-    (Exec.Frame.flowObservation? dp ca)
+  (Exec.flowActions dp ca run).map FlowAction.observation
 
 /-- A Type-valued version of a filled recursive execution slot.  Unlike
 `Xlot.Filled`, this retains the concrete `Exec` value that the accounting fold
@@ -321,10 +674,14 @@ theorem exists_retainedXlot_of_filled {xl : Xlot}
       rcases h with ⟨run⟩
       exact ⟨.some run⟩
 
+def RetainedXlot.flowActions (dp : DeployParams) (ca : Adr)
+    {xl : Xlot} : RetainedXlot xl → List FlowAction
+  | .none => []
+  | .some run => Blanc.Weth10.Exec.flowActions dp ca run
+
 def RetainedXlot.flowObservations (dp : DeployParams) (ca : Adr)
     {xl : Xlot} : RetainedXlot xl → List FlowObservation
-  | .none => []
-  | .some run => Blanc.Weth10.Exec.flowObservations dp ca run
+  | retained => (retained.flowActions dp ca).map FlowAction.observation
 
 /-- An exact retained execution of Jaune's raw call-message core. -/
 structure ProcessMessageTrace (msg : Msg)
@@ -410,14 +767,19 @@ inductive MessageCallTrace (msg : Msg) (state : State)
       (h_result : processMessageCall msg = .ok ⟨state, out⟩) :
       MessageCallTrace msg state out
 
+def MessageCallTrace.flowActions (dp : DeployParams) (ca : Adr)
+    {msg : Msg} {state : State} {out : MsgCallOutput} :
+    MessageCallTrace msg state out → List FlowAction
+  | .createCollision .. => []
+  | .createRun _ _ _ _ trace _ =>
+      trace.retained.flowActions dp ca
+  | .callRun _ _ _ _ _ _ _ _ trace _ =>
+      trace.retained.flowActions dp ca
+
 def MessageCallTrace.flowObservations (dp : DeployParams) (ca : Adr)
     {msg : Msg} {state : State} {out : MsgCallOutput} :
     MessageCallTrace msg state out → List FlowObservation
-  | .createCollision .. => []
-  | .createRun _ _ _ _ trace _ =>
-      trace.retained.flowObservations dp ca
-  | .callRun _ _ _ _ _ _ _ _ trace _ =>
-      trace.retained.flowObservations dp ca
+  | trace => (trace.flowActions dp ca).map FlowAction.observation
 
 /-- Every successful settled message-call wrapper admits a retained trace of
 the exact raw execution core it ran. -/
@@ -563,12 +925,19 @@ structure TransactionTrace (benv : Benv) (bout : BlockOutput)
   message : MessageCallTrace msg messageState messageOut
   result : processTransaction benv bout tx index = .ok (state, bout')
 
+def TransactionTrace.flowActions (dp : DeployParams) (ca : Adr)
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout') :
+    List FlowAction :=
+  trace.message.flowActions dp ca
+
 def TransactionTrace.flowObservations (dp : DeployParams) (ca : Adr)
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     {state : State} {bout' : BlockOutput}
     (trace : TransactionTrace benv bout tx index state bout') :
     List FlowObservation :=
-  trace.message.flowObservations dp ca
+  (trace.flowActions dp ca).map FlowAction.observation
 
 /-- Every successful transaction admits an exact retained message trace. -/
 theorem exists_transactionTrace
@@ -618,14 +987,22 @@ inductive ApplyTransactionsTrace :
       ApplyTransactionsTrace ((index, tx) :: txs) benv bout
         finalBenv finalBout
 
+def ApplyTransactionsTrace.flowActions (dp : DeployParams) (ca : Adr) :
+    {txs : List (Nat × Tx)} → {benv : Benv} → {bout : BlockOutput} →
+    {finalBenv : Benv} → {finalBout : BlockOutput} →
+    ApplyTransactionsTrace txs benv bout finalBenv finalBout →
+      List FlowAction
+  | _, _, _, _, _, .nil _ _ => []
+  | _, _, _, _, _, .cons head tail =>
+      head.flowActions dp ca ++ tail.flowActions dp ca
+
 def ApplyTransactionsTrace.flowObservations (dp : DeployParams) (ca : Adr) :
     {txs : List (Nat × Tx)} → {benv : Benv} → {bout : BlockOutput} →
     {finalBenv : Benv} → {finalBout : BlockOutput} →
     ApplyTransactionsTrace txs benv bout finalBenv finalBout →
       List FlowObservation
-  | _, _, _, _, _, .nil _ _ => []
-  | _, _, _, _, _, .cons head tail =>
-      head.flowObservations dp ca ++ tail.flowObservations dp ca
+  | _, _, _, _, _, trace =>
+      (trace.flowActions dp ca).map FlowAction.observation
 
 theorem exists_applyTransactionsTrace
     {txs : List (Nat × Tx)} {benv finalBenv : Benv}
@@ -661,12 +1038,19 @@ structure SystemMessageTrace (benv : Benv) (target : Adr) (data : Bytes)
     (systemTransactionMessage benv target data) state out
   run : processUncheckedSystemTransaction benv target data = .ok (state, out)
 
+def SystemMessageTrace.flowActions (dp : DeployParams) (ca : Adr)
+    {benv : Benv} {target : Adr} {data : Bytes}
+    {state : State} {out : MsgCallOutput}
+    (trace : SystemMessageTrace benv target data state out) :
+    List FlowAction :=
+  trace.message.flowActions dp ca
+
 def SystemMessageTrace.flowObservations (dp : DeployParams) (ca : Adr)
     {benv : Benv} {target : Adr} {data : Bytes}
     {state : State} {out : MsgCallOutput}
     (trace : SystemMessageTrace benv target data state out) :
     List FlowObservation :=
-  trace.message.flowObservations dp ca
+  (trace.flowActions dp ca).map FlowAction.observation
 
 theorem exists_systemMessageTrace
     {benv : Benv} {target : Adr} {data : Bytes}
@@ -705,11 +1089,16 @@ structure RequestsTrace (benv : Benv) (bout : BlockOutput)
     consolidationState consolidationOut
   run : processGeneralPurposeRequests benv bout = .ok (state, bout')
 
+def RequestsTrace.flowActions (dp : DeployParams) (ca : Adr)
+    {benv : Benv} {bout : BlockOutput} {state : State} {bout' : BlockOutput}
+    (trace : RequestsTrace benv bout state bout') : List FlowAction :=
+  trace.withdrawal.flowActions dp ca ++
+    trace.consolidation.flowActions dp ca
+
 def RequestsTrace.flowObservations (dp : DeployParams) (ca : Adr)
     {benv : Benv} {bout : BlockOutput} {state : State} {bout' : BlockOutput}
     (trace : RequestsTrace benv bout state bout') : List FlowObservation :=
-  trace.withdrawal.flowObservations dp ca ++
-    trace.consolidation.flowObservations dp ca
+  (trace.flowActions dp ca).map FlowAction.observation
 
 theorem exists_requestsTrace
     {benv : Benv} {bout : BlockOutput} {state : State} {bout' : BlockOutput}
@@ -771,15 +1160,22 @@ structure AppliedBodyTrace (benv : Benv) (txs : List (Bytes ⊕ Tx))
       (processWithdrawalsTrie transactionBout.withdrawalsTrie wds))
     state bout
 
+def AppliedBodyTrace.flowActions (dp : DeployParams) (ca : Adr)
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs wds state bout) :
+    List FlowAction :=
+  trace.beacon.flowActions dp ca ++
+    trace.history.flowActions dp ca ++
+    trace.transactions.flowActions dp ca ++
+    trace.requests.flowActions dp ca
+
 def AppliedBodyTrace.flowObservations (dp : DeployParams) (ca : Adr)
     {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
     (trace : AppliedBodyTrace benv txs wds state bout) :
     List FlowObservation :=
-  trace.beacon.flowObservations dp ca ++
-    trace.history.flowObservations dp ca ++
-    trace.transactions.flowObservations dp ca ++
-    trace.requests.flowObservations dp ca
+  (trace.flowActions dp ca).map FlowAction.observation
 
 theorem exists_appliedBodyTrace
     {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
@@ -828,6 +1224,8 @@ structure AccountedBlock
   bodyTrace : AppliedBodyTrace
     (initBenv pragueRules pre block.header)
     block.txs block.wds bodyState blockOutput
+  actions : List FlowAction
+  actions_eq : actions = bodyTrace.flowActions dp ca
   observations : List FlowObservation
   observations_eq : observations = bodyTrace.flowObservations dp ca
   postEq : post = ⟨appendBlock pre.blocks block, bodyState, pre.chainId⟩
@@ -862,6 +1260,8 @@ theorem AccountedBlock.exists_of_transition
     blockOutput := blockOutput
     bodyRun := hBody
     bodyTrace := bodyTrace
+    actions := bodyTrace.flowActions dp ca
+    actions_eq := rfl
     observations := bodyTrace.flowObservations dp ca
     observations_eq := rfl
     postEq := (Except.ok.inj hFinal).symm
@@ -896,12 +1296,34 @@ def AccountedHistory.flowObservations
   | .step prior accounted =>
       prior.flowObservations ++ accounted.observations
 
+/-- The provenance-rich committed action ledger retained for successor
+analyses.  The public numeric fold deliberately uses its deterministic
+observation projection only. -/
+def AccountedHistory.flowActions
+    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {checkpoint future : BlockChain} :
+    AccountedHistory chainId dp ca checkpoint future → List FlowAction
+  | .refl _ _ _ => []
+  | .step prior accounted =>
+      prior.flowActions ++ accounted.actions
+
 def AccountedHistory.weth10Flow
     {chainId : UInt64} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
     (history : AccountedHistory chainId dp ca checkpoint future)
     (u : Adr) : HolderFlow u :=
   holderFlowOfObservations history.flowObservations u
+
+/-- Every retained flash atom carries its receiver credit and exact same-word
+repayment as one pair, so successful committed pairs cancel numerically before
+any conservation reasoning. -/
+theorem AccountedHistory.flash_pair_totals_eq
+    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {checkpoint future : BlockChain}
+    (history : AccountedHistory chainId dp ca checkpoint future) :
+    (history.weth10Flow u).flashCredit =
+      (history.weth10Flow u).flashRepayment :=
+  holderFlowOfObservations_flash_eq history.flowObservations u
 
 theorem AccountedHistory.toReachUsing
     {chainId : UInt64} {dp : DeployParams} {ca : Adr}
