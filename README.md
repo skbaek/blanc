@@ -89,7 +89,10 @@ This repo contains the following files:
 - [WethLive.lean](Blanc/WethLive.lean): WETH's demonstration of the same layer,
   and the evidence that it is not target-specific. `weth_balanceOf_succeeds`
   drives the same `func_run` over `weth`'s compiled `Func` for a
-  `balanceOf(guy)` call, at 2241 gas exactly. It differs from fmint's
+  `balanceOf(guy)` call, at 2260 gas exactly — 19 of them the shared
+  `nonpayable` entry guard every recognized WETH selector now sits behind,
+  which is also why the statement carries a zero-call-value hypothesis. It
+  differs from fmint's
   demonstration where it matters: the storage key is read from calldata rather
   than being a constant, so the statement is quantified over the argument word
   and WETH's lack of address validation is visible in it; and `wethTree` puts
@@ -330,7 +333,7 @@ Four are the **compile-witness declarations**:
   `Blanc.fmintCode_compile`, the same equation for FMINT. Every theorem above
   is conditioned on its contract's account code being what `Prog.compile`
   returns, so without these equations they could all hold vacuously; the
-  witnesses state that the compiler really does emit the 888-byte
+  witnesses state that the compiler really does emit the 988-byte
   [`wethCode`](Blanc/WethCode.lean) for `weth`, and the 1257-byte
   [`fmintCode`](Blanc/FmintCode.lean) for `fmint`. These two fixed-program
   witnesses are proved by `decide +kernel` — kernel evaluation of the same
@@ -473,7 +476,7 @@ Four things this harness has that the WETH one does not:
   the committed Lean literal straight from source and requires every fixture's
   lender account to be byte-identical to it — 1257 bytes here. It was written
   for this suite and is now run by **both** suite gates, `check-weth.sh`
-  included at 888, so neither suite's evidence can drift from the contract it
+  included at 988, so neither suite's evidence can drift from the contract it
   is about.
 - **An independently checked Solidity-source digest.**
   [`scripts/check-fmint-borrower-source.py`](scripts/check-fmint-borrower-source.py)
