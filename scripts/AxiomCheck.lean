@@ -25,6 +25,7 @@ import Blanc.Weth10Erc677Functional
 import Blanc.Weth10Permit
 import Blanc.Weth10Errors
 import Blanc.Weth10DeployProof
+import Blanc.Weth10Stable
 
 #print axioms Blanc.weth_preserves_solvent
 #print axioms Blanc.stateTransition_preserves_solvent
@@ -275,3 +276,16 @@ import Blanc.Weth10DeployProof
 #print axioms Blanc.Weth10.weth10Init_exec_nonzero
 #print axioms Blanc.Weth10.processCreateMessage_weth10_success
 #print axioms Blanc.Weth10.freshDeployment_staticCertificate
+#print axioms Blanc.Weth10.flashExactSpec_preserves
+#print axioms Blanc.Weth10.processTransaction_preserves_stable
+#print axioms Blanc.Weth10.stateTransitionWith_preserves_stable
+#print axioms Blanc.Weth10.stateTransitionUsing_preserves_stable
+#print axioms Blanc.Weth10.stateTransition_preserves_stable
+#print axioms Blanc.Weth10.chainUsing_preserves_stable
+#print axioms Blanc.Weth10.chain_preserves_stable
+#print axioms Blanc.Weth10.addBlockToChainWith_preserves_stable
+#print axioms Blanc.Weth10.addBlockToChainUsing_preserves_stable
+#print axioms Blanc.Weth10.addBlockToChain_preserves_stable
+#print axioms Blanc.Weth10.Stable.solvent
+#print axioms Blanc.Weth10.chain_reachable_backed_and_flash_zero
+#print axioms Blanc.Weth10.processCreateMessage_establishes_stable

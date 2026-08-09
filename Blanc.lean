@@ -11,6 +11,7 @@ import Blanc.Weth10StateSound
 import Blanc.Weth10Code
 import Blanc.Weth10Deploy
 import Blanc.Weth10DeployProof
+import Blanc.Weth10Stable
 import Blanc.Weth10Functional
 import Blanc.Weth10FlashFunctional
 import Blanc.Weth10StateFunctional

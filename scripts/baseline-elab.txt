@@ -547,6 +547,12 @@
 # Blanc/Weth10Code.lean measured 12.896 against its 13.609 row (source
 # untouched; the small drop rides the import change) and is LEFT ALONE on
 # the same no-laundering rule.
+#
+# 2026-08-09. Blanc/Weth10Stable.lean was added for the public invariant and
+# chain-preservation package. Its 1.203 s row is the result of a sequential
+# clean-host `scripts/check-elab.sh --list --no-build` run over all 50 files
+# (271.0 s total), with no Lean language server alive. Only this new row was
+# added; every existing reference time remains unchanged.
 OK	1.241	Blanc.lean
 OK	1.164	Blanc/BalanceAlgebra.lean
 OK	1.257	Blanc/Basic.lean
@@ -592,6 +598,7 @@ OK	8.200	Blanc/Weth10Live.lean
 OK	4.589	Blanc/Weth10Permit.lean
 OK	1.521	Blanc/Weth10Read.lean
 OK	1.294	Blanc/Weth10Sound.lean
+OK	1.203	Blanc/Weth10Stable.lean
 OK	1.452	Blanc/Weth10StateFunctional.lean
 OK	6.079	Blanc/Weth10StateSound.lean
 OK	1.795	Blanc/Weth10TransferFunctional.lean

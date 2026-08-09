@@ -526,7 +526,20 @@ Blanc.Weth10.weth10InitFunc_runCompiled_zero|$STANDARD
 Blanc.Weth10.weth10Init_exec_zero|$STANDARD
 Blanc.Weth10.weth10Init_exec_nonzero|$STANDARD
 Blanc.Weth10.processCreateMessage_weth10_success|$STANDARD
-Blanc.Weth10.freshDeployment_staticCertificate|$STANDARD"
+Blanc.Weth10.freshDeployment_staticCertificate|$STANDARD
+Blanc.Weth10.flashExactSpec_preserves|$STANDARD
+Blanc.Weth10.processTransaction_preserves_stable|$STANDARD
+Blanc.Weth10.stateTransitionWith_preserves_stable|$STANDARD
+Blanc.Weth10.stateTransitionUsing_preserves_stable|$STANDARD
+Blanc.Weth10.stateTransition_preserves_stable|$STANDARD
+Blanc.Weth10.chainUsing_preserves_stable|$STANDARD
+Blanc.Weth10.chain_preserves_stable|$STANDARD
+Blanc.Weth10.addBlockToChainWith_preserves_stable|$STANDARD
+Blanc.Weth10.addBlockToChainUsing_preserves_stable|$STANDARD
+Blanc.Weth10.addBlockToChain_preserves_stable|$STANDARD
+Blanc.Weth10.Stable.solvent|$STANDARD
+Blanc.Weth10.chain_reachable_backed_and_flash_zero|$STANDARD
+Blanc.Weth10.processCreateMessage_establishes_stable|$STANDARD"
 # Secondary net only: the exact-set comparison below is the primary check;
 # this pattern catches forbidden names in output the per-theorem parse missed.
 FORBIDDEN='sorryAx|ofReduceBool|ofReduceNat|_native\.'
