@@ -18,11 +18,11 @@
       "call-shape": 24,
       "call-trace": 61,
       "ecrecover": 9,
-      "eth": 139,
-      "logical-state": 139,
-      "logs": 139,
-      "outcome": 139,
-      "returndata": 139
+      "eth": 141,
+      "logical-state": 141,
+      "logs": 141,
+      "outcome": 141,
+      "returndata": 141
     },
     "endpoints": {
       "CALLBACK_SUCCESS()": 3,
@@ -47,15 +47,15 @@
       "receive": 1,
       "symbol()": 3,
       "totalSupply()": 3,
-      "transfer(address,uint256)": 8,
+      "transfer(address,uint256)": 9,
       "transferAndCall(address,uint256,bytes)": 11,
-      "transferFrom(address,address,uint256)": 4,
+      "transferFrom(address,address,uint256)": 5,
       "unknown-selector": 2,
       "withdraw(uint256)": 4,
       "withdrawFrom(address,address,uint256)": 3,
       "withdrawTo(address,uint256)": 3
     },
-    "rows": 139,
+    "rows": 141,
     "tags": {
       "allowance-bypass": 2,
       "allowance-guard": 1,
@@ -73,13 +73,13 @@
       "eth-call": 6,
       "exact-reason": 2,
       "false": 3,
-      "finite-allowance": 2,
+      "finite-allowance": 3,
       "flash": 15,
       "fork-prefork-invalid": 1,
       "fork-valid": 1,
       "guard-precedence": 10,
       "hostile-reentrancy": 1,
-      "identity": 3,
+      "identity": 5,
       "individual-cap": 2,
       "infinite-allowance": 2,
       "invalid-signature": 2,
@@ -101,13 +101,13 @@
       "rollback": 17,
       "selector-smoke": 27,
       "self-address": 1,
-      "self-recipient": 1,
+      "self-recipient": 3,
       "settlement": 7,
       "short31": 4,
-      "state": 17,
+      "state": 19,
       "state-mutating-reentrancy": 4,
       "staticcall": 26,
-      "synthetic-world": 3,
+      "synthetic-world": 4,
       "temporary-mint": 1,
       "token-guard": 2,
       "total-cap": 1,
@@ -123,9 +123,9 @@
     }
   },
   "explicitGaps": [
-    "fresh deployment/initcode and constructor execution (RL9 owner, outside this runner)",
+    "fresh deployment/initcode and constructor execution (owned by the separate deployment gate)",
     "exact low-gas and callback-observed gasleft parity (normatively excluded)",
-    "the synthetic identity world currently has three parameter/address canaries rather than a duplicate of every mainnet scenario",
+    "the synthetic identity world has four targeted identity canaries, including a state-mutating self-recipient row, rather than a duplicate of every mainnet scenario",
     "malformed or noncanonical input calldata (normatively excluded)",
     "adversarial allowance-key collision worlds (normatively excluded)",
     "consensus receipt/state-root execution through Jaune; this rig executes message calls in pinned EELS"
@@ -2626,6 +2626,28 @@
       "world": "mainnet-chain1"
     },
     {
+      "calldataSha256": "057a3b6795cedf1ab9bf4e6457c50277dd1e2fa2bea8c583bbbd8d2c83c7b311",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "transferFrom(address,address,uint256)",
+      "name": "transferFrom-self-finite",
+      "owner": "DF-state",
+      "tags": [
+        "state",
+        "finite-allowance",
+        "self-recipient",
+        "identity"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
       "calldataSha256": "640177ad4c63f59a9116054608acae504c939f384650fdcf2d8348c99f7e635e",
       "chainId": 1,
       "channels": [
@@ -3114,6 +3136,28 @@
       ],
       "value": "0x0",
       "world": "synthetic-chain31337"
+    },
+    {
+      "calldataSha256": "eaf386296b18db4173f6e88553ab6f86f80c039d446ecab3eeb2e4c61ca3cf05",
+      "chainId": 31337,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs"
+      ],
+      "endpoint": "transfer(address,uint256)",
+      "name": "synthetic-transfer-self",
+      "owner": "DF-state",
+      "tags": [
+        "synthetic-world",
+        "identity",
+        "state",
+        "self-recipient"
+      ],
+      "value": "0x0",
+      "world": "synthetic-chain31337"
     }
   ],
   "runner": {
@@ -3175,9 +3219,9 @@
       "receive": 1,
       "symbol()": 3,
       "totalSupply()": 3,
-      "transfer(address,uint256)": 8,
+      "transfer(address,uint256)": 9,
       "transferAndCall(address,uint256,bytes)": 11,
-      "transferFrom(address,address,uint256)": 4,
+      "transferFrom(address,address,uint256)": 5,
       "withdraw(uint256)": 4,
       "withdrawFrom(address,address,uint256)": 3,
       "withdrawTo(address,uint256)": 3

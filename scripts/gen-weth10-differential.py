@@ -663,6 +663,12 @@ def build_scenarios(lock: Mapping) -> List[Scenario]:
                  balances={BOB: 10}, allowances={(BOB, ALICE): UINT256_MAX}, weth_eth=10,
                  observe_addresses=[BOB, CAROL], observe_pairs=[(BOB, ALICE)],
                  tags=("state", "infinite-allowance")),
+        scenario("transferFrom-self-finite", "transferFrom(address,address,uint256)", "DF-state",
+                 call("transferFrom(address,address,uint256)", ("address", BOB),
+                      ("address", WETH_MAINNET), ("uint256", 3)), caller=ALICE,
+                 balances={BOB: 10}, allowances={(BOB, ALICE): 7}, weth_eth=10,
+                 observe_addresses=[BOB, WETH_MAINNET], observe_pairs=[(BOB, ALICE)],
+                 tags=("state", "finite-allowance", "self-recipient", "identity")),
         scenario("transferFrom-allowance-precedes-balance", "transferFrom(address,address,uint256)",
                  "DF-state", call("transferFrom(address,address,uint256)", ("address", BOB),
                  ("address", CAROL), ("uint256", 3)), caller=ALICE, balances={BOB: 0},
@@ -812,6 +818,13 @@ def build_scenarios(lock: Mapping) -> List[Scenario]:
                  syn_call("flashFee(address,uint256)", ("address", WETH_SYNTHETIC), ("uint256", 3)),
                  world="synthetic-chain31337", chain_id=31337,
                  tags=("synthetic-world", "identity", "self-address")),
+        scenario("synthetic-transfer-self", "transfer(address,uint256)", "DF-state",
+                 syn_call("transfer(address,uint256)",
+                          ("address", WETH_SYNTHETIC), ("uint256", 3)),
+                 world="synthetic-chain31337", chain_id=31337,
+                 balances={ALICE: 10}, weth_eth=10,
+                 observe_addresses=[WETH_SYNTHETIC],
+                 tags=("synthetic-world", "identity", "state", "self-recipient")),
     ]
 
     names = [s.name for s in out]
@@ -1202,9 +1215,9 @@ def manifest(scenarios: Sequence[Scenario], runtimes: Mapping, lock: Mapping) ->
             for s in scenarios
         ],
         "explicitGaps": [
-            "fresh deployment/initcode and constructor execution (RL9 owner, outside this runner)",
+            "fresh deployment/initcode and constructor execution (owned by the separate deployment gate)",
             "exact low-gas and callback-observed gasleft parity (normatively excluded)",
-            "the synthetic identity world currently has three parameter/address canaries rather than a duplicate of every mainnet scenario",
+            "the synthetic identity world has four targeted identity canaries, including a state-mutating self-recipient row, rather than a duplicate of every mainnet scenario",
             "malformed or noncanonical input calldata (normatively excluded)",
             "adversarial allowance-key collision worlds (normatively excluded)",
             "consensus receipt/state-root execution through Jaune; this rig executes message calls in pinned EELS",
