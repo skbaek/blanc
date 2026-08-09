@@ -435,6 +435,11 @@ def returnTrue : Func :=
   pushList [32, 0] +++ -- 0 :: 32 || 1
   Func.ret
 
+/-- Solidity's nonpayable entry guard: it runs after selector dispatch and
+before the endpoint body, and reverts with empty data. -/
+def nonpayable (body : Func) : Func :=
+  callvalue ::: iszero ::: (body <?> Func.rev)
+
 abbrev Exec.Pred : Type :=
   ∀ pc sevm devm exc, Exec pc sevm devm exc → Prop
 

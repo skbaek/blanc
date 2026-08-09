@@ -70,11 +70,6 @@ def returnWord (w : B256) : Func :=
 def returnDeployWord (w : B256) : Func :=
   pushDeployWord w ::: mstoreAt 0 +++ returnMemoryRange 0 32
 
-/-- Solidity's nonpayable entry guard: it runs after selector dispatch and
-before the endpoint body, and reverts with empty data. -/
-def nonpayable (body : Func) : Func :=
-  callvalue ::: iszero ::: (body <?> Func.rev)
-
 /-! ## Stable auxiliary-table coordinates -/
 
 -- `Func.call` indexes `main :: aux`.  This prefix is append-only: proofs and

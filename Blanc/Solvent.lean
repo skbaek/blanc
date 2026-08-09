@@ -1443,6 +1443,18 @@ lemma wethSpec_funcSound_withdraw {wa : Adr} :
   refine wethSpec_post_iff.mpr ⟨Func.preserves_nof h_run (wethSpec_pre_iff.mp h_pre).nof, ?_⟩
   exact withdraw_preserves_solvent (wethSpec_pre_iff.mp h_pre) ih h_run
 
+/-- `FuncSound` transports through the shared `nonpayable` wrapper
+(`Blanc/CommonCore.lean`): a successful run of the guarded endpoint factors
+through the body from an entry state with the same world state
+(`run_body_of_run_nonpayable`, `Blanc/CommonProofs.lean`), and the
+precondition rides across that state equality. -/
+lemma wethSpec_funcSound_nonpayable {wa : Adr} {f : Func}
+    (h : wethSpec.FuncSound wa weth.aux f) :
+    wethSpec.FuncSound wa weth.aux (nonpayable f) := by
+  intro sevm s r h_ct h_pre ih h_run
+  rcases run_body_of_run_nonpayable h_run with ⟨mid, -, hstate, hbody⟩
+  exact h h_ct (h_pre.state_eq hstate.symm) ih hbody
+
 
 -- started after a balance transfer from a non-WETH sender
 
@@ -1466,16 +1478,16 @@ theorem wethSpec_sound (wa : Adr) : wethSpec.Sound wa := by
     -- every `selector` and blows `maxRecDepth`.
     simp only [wethFuncs, List.mem_cons, List.not_mem_nil, or_false] at h_mem
     rcases h_mem with h | h | h | h | h | h | h | h | h | h <;> (cases h)
-    · exact wethSpec_funcSound name name_preserves_solvent
-    · exact wethSpec_funcSound approve approve_preserves_solvent
-    · exact wethSpec_funcSound totalSupply totalSupply_preserves_solvent
-    · exact wethSpec_funcSound transferFrom transferFrom_preserves_solvent
-    · exact wethSpec_funcSound_withdraw
-    · exact wethSpec_funcSound decimals decimals_preserves_solvent
-    · exact wethSpec_funcSound balanceOf balanceOf_preserves_solvent
-    · exact wethSpec_funcSound symbol symbol_preserves_solvent
-    · exact wethSpec_funcSound transfer transfer_preserves_solvent
-    · exact wethSpec_funcSound allowance allowance_preserves_solvent
+    · exact wethSpec_funcSound_nonpayable (wethSpec_funcSound name name_preserves_solvent)
+    · exact wethSpec_funcSound_nonpayable (wethSpec_funcSound approve approve_preserves_solvent)
+    · exact wethSpec_funcSound_nonpayable (wethSpec_funcSound totalSupply totalSupply_preserves_solvent)
+    · exact wethSpec_funcSound_nonpayable (wethSpec_funcSound transferFrom transferFrom_preserves_solvent)
+    · exact wethSpec_funcSound_nonpayable wethSpec_funcSound_withdraw
+    · exact wethSpec_funcSound_nonpayable (wethSpec_funcSound decimals decimals_preserves_solvent)
+    · exact wethSpec_funcSound_nonpayable (wethSpec_funcSound balanceOf balanceOf_preserves_solvent)
+    · exact wethSpec_funcSound_nonpayable (wethSpec_funcSound symbol symbol_preserves_solvent)
+    · exact wethSpec_funcSound_nonpayable (wethSpec_funcSound transfer transfer_preserves_solvent)
+    · exact wethSpec_funcSound_nonpayable (wethSpec_funcSound allowance allowance_preserves_solvent)
   · exact wethSpec_funcSound deposit deposit_preserves_solvent
 
 theorem wethSpec_preserves (wa : Adr) : wethSpec.Preserves wa :=

@@ -11,66 +11,12 @@ open Jaune.Ninst Ninst
 
 namespace Weth10
 
-/-! ## Nonpayable entry seam -/
+/-! ## Nonpayable entry seam
 
-/-- A successful WETH10 nonpayable wrapper factors through the endpoint body
-at a world-state- and memory-equivalent machine state, and only with zero
-callvalue. The memory equation lets functional observations cross the wrapper
-without assuming a pristine scratch area. -/
-theorem run_body_of_run_nonpayable_frame
-    {fs : List Func} {sevm : Sevm} {s r : Devm} {body : Func}
-    (run : Func.Run fs sevm s (nonpayable body) r) :
-    ∃ mid, sevm.value = 0 ∧ s.state = mid.state ∧
-      s.memory = mid.memory ∧ Func.Run fs sevm mid body r := by
-  unfold nonpayable at run
-  refine run_prepend_elim _ [callvalue, iszero] ?_ run
-  intro s1 hline hbranch
-  rcases Line.of_run_cons hline with ⟨s0, hcv, hline'⟩
-  rcases Line.of_run_cons hline' with ⟨s1', hiz, hnil⟩
-  cases hnil
-  have hpv : [sevm.value] <<+ s0.stack :=
-    prefix_of_push (of_run_callvalue hcv) nil_pref
-  have hpflag : [sevm.value =? 0] <<+ s1.stack :=
-    prefix_of_iszero hiz hpv
-  rcases of_run_branch hbranch with
-    ⟨s2, hpop, hrev⟩ | ⟨w, s2, s3, hnz, hpop, hburn, hbody⟩
-  · exact absurd hrev not_run_rev
-  · have hpop' := hpop.stack
-    simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hpop'
-    rw [hpop'] at hpflag
-    have hw : (sevm.value =? 0) = w :=
-      pref_head_unique hpflag (pref_append [w] s2.stack)
-    have hflag : (sevm.value =? 0) ≠ 0 := by
-      rw [hw]
-      exact hnz
-    have hv : sevm.value = 0 := by
-      by_cases hv : sevm.value = 0
-      · exact hv
-      · simp [B256.eqCheck, hv] at hflag
-    refine ⟨s3, hv, ?_, ?_, hbody⟩
-    · exact (Line.of_inv Devm.state (by line_inv) hline).trans
-        (hpop.state.trans hburn.state)
-    · exact (Line.of_inv Devm.memory (by line_inv) hline).trans
-        (hpop.memory.trans hburn.memory)
-
-/-- Compatibility projection of `run_body_of_run_nonpayable_frame` retaining
-the original state-level API used by backing proofs. -/
-theorem run_body_of_run_nonpayable
-    {fs : List Func} {sevm : Sevm} {s r : Devm} {body : Func}
-    (run : Func.Run fs sevm s (nonpayable body) r) :
-    ∃ mid, sevm.value = 0 ∧ s.state = mid.state ∧
-      Func.Run fs sevm mid body r := by
-  rcases run_body_of_run_nonpayable_frame run with
-    ⟨mid, hv, hstate, _, hbody⟩
-  exact ⟨mid, hv, hstate, hbody⟩
-
-/-- A successful run through WETH10's shared nonpayable wrapper can only take
-the endpoint arm, so the frame value is zero. -/
-theorem value_eq_zero_of_run_nonpayable
-    {fs : List Func} {sevm : Sevm} {s r : Devm} {body : Func}
-    (run : Func.Run fs sevm s (nonpayable body) r) :
-    sevm.value = 0 :=
-  (run_body_of_run_nonpayable run).choose_spec.1
+The wrapper-peeling lemmas (`run_body_of_run_nonpayable_frame` and its
+projections) moved to `Blanc/CommonProofs.lean` when `nonpayable` itself moved
+to `Blanc/CommonCore.lean`: both are consumed by more than one contract, so
+they belong upstream of every contract module. -/
 
 /-- A state-silent nonpayable endpoint preserves WETH10 backing.  The two
 `Func.Inv` premises are deliberately over the wrapped endpoint: callers can

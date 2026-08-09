@@ -203,18 +203,25 @@ def transferFrom : Func :=
 -- The ten functions the dispatcher routes to, in ascending selector order.
 -- `deposit` is absent on purpose: it is the fallback, reached through
 -- `Func.mainWith 1` below rather than through a selector.
+--
+-- Every entry is wrapped in the shared `nonpayable` guard
+-- (`Blanc/CommonCore.lean`): deployed WETH9's recognized entry points all
+-- reject nonzero call value with an empty revert, and the payable surface is
+-- exactly the fallback/deposit path. The wrapping happens here, at the
+-- dispatch entries, and never inside the shared `CommonCore` bodies — that
+-- placement is what keeps fmint's compiled artifact unchanged.
 def wethFuncs : List (B256 × Func) :=
-  [ (selector "name" [], name),                                        -- 0x06fdde03
-    (selector "approve" [.address, .uint256], approve),                -- 0x095ea7b3
-    (selector "totalSupply" [], totalSupply),                          -- 0x18160ddd
+  [ (selector "name" [], nonpayable name),                             -- 0x06fdde03
+    (selector "approve" [.address, .uint256], nonpayable approve),     -- 0x095ea7b3
+    (selector "totalSupply" [], nonpayable totalSupply),               -- 0x18160ddd
     (selector "transferFrom" [.address, .address, .uint256],
-      transferFrom),                                                   -- 0x23b872dd
-    (selector "withdraw" [.uint256], withdraw),                        -- 0x2e1a7d4d
-    (selector "decimals" [], decimals),                                -- 0x313ce567
-    (selector "balanceOf" [.address], balanceOf),                      -- 0x70a08231
-    (selector "symbol" [], symbol),                                    -- 0x95d89b41
-    (selector "transfer" [.address, .uint256], transfer),              -- 0xa9059cbb
-    (selector "allowance" [.address, .address], allowance) ]           -- 0xdd62ed3e
+      nonpayable transferFrom),                                        -- 0x23b872dd
+    (selector "withdraw" [.uint256], nonpayable withdraw),             -- 0x2e1a7d4d
+    (selector "decimals" [], nonpayable decimals),                     -- 0x313ce567
+    (selector "balanceOf" [.address], nonpayable balanceOf),           -- 0x70a08231
+    (selector "symbol" [], nonpayable symbol),                         -- 0x95d89b41
+    (selector "transfer" [.address, .uint256], nonpayable transfer),   -- 0xa9059cbb
+    (selector "allowance" [.address, .address], nonpayable allowance) ] -- 0xdd62ed3e
 
 -- `dispatchWith`'s ordering precondition, checked rather than commented. If a
 -- maintainer inserts an eleventh function in the wrong place, this fails to

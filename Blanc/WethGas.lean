@@ -10,7 +10,7 @@ set_option maxRecDepth 8000
 
 `Blanc/WethLive.lean` proves that the call succeeds and what it returns, but
 never states its gas as a *conjunct* of the run: the post-state's `gasLeft` is
-pinned inside the construction (`G := g - 2241`) and never surfaces in either
+pinned inside the construction (`G := g - 2260`) and never surfaces in either
 `weth_balanceOf_runCompiled` or `weth_balanceOf_succeeds`. This module supplies
 the theorem that says what the call costs, at two altitudes: `exec` (the
 executed frame's gas is exactly `balanceOfGas`) and `Prog.RunCompiled`-in-
@@ -53,7 +53,7 @@ lemma Devm.gasLeft_memRead_snd {devm : Devm} {i sz : Nat} :
 /-! ## A second entrypoint: `decimals()`
 
 `balanceOf(address)` is the *expensive* end of the view genre — a storage read
-dominates it, 2100 of its 2241. `decimals()` is the cheap end: it pushes a
+dominates it, 2100 of its 2260. `decimals()` is the cheap end: it pushes a
 constant, writes it to memory and returns it. No `SLOAD`, no calldata read, so
 no cold-key premise and no quantification over an argument word.
 
@@ -72,8 +72,9 @@ abbrev dcSel : B256 := selector "decimals" []
 /-- Every gas constant the `decimals()` derivation charges, in the order it
 charges them: the program's entry `JUMPDEST`; `fsig`'s four instructions; four
 dispatch forks, the first falling through and the last three taken by the
-`.succ` arm; the leaf's `PUSH`/`EQ` and its taken arm; then `decimals`' own
-body — one `PUSH1 0x12`, `mstoreAt 0`, and `returnMemoryRange 0 32`.
+`.succ` arm; the leaf's `PUSH`/`EQ` and its taken arm; the `nonpayable` guard's
+`CALLVALUE`/`ISZERO` and its taken arm; then `decimals`' own body — one
+`PUSH1 0x12`, `mstoreAt 0`, and `returnMemoryRange 0 32`.
 
 The fork *count* is `balanceOfGas`'s; the fork *arms* are not. `decimals()` is
 entry 5 of ten and `balanceOf()` entry 6, and `DispatchTree.build` splits at
@@ -93,13 +94,14 @@ def decimalsGas : Nat :=
     + (gVerylow + gVerylow + gVerylow + (gVerylow + gHigh + gJumpdest))
     + (gVerylow + gVerylow + gVerylow + (gVerylow + gHigh + gJumpdest))
     + (gVerylow + gVerylow + (gVerylow + gHigh + gJumpdest))
+    + (gBase + gVerylow + (gVerylow + gHigh + gJumpdest))
     + gVerylow
     + (gBase + (gVerylow + gMemory))
     + (gVerylow + gBase)
 
-/-- 139 gas, of which 123 is the dispatcher and 16 the body. Sixteen times
+/-- 158 gas: 123 dispatcher, 19 `nonpayable` guard, 16 body. Fourteen times
 cheaper than `balanceOfGas`, and the ratio is the storage read. -/
-theorem decimalsGas_eq : decimalsGas = 139 := by decide
+theorem decimalsGas_eq : decimalsGas = 158 := by decide
 
 /-- A `decimals()` call on `weth` has a gas-exact run; it costs exactly
 `decimalsGas` and returns `0x12`.
@@ -113,6 +115,7 @@ re-derivation Step 1 of `~/plans/gas-cost.md` had to perform, because
 built, pays this module's dispatch keccak cost a second time. A target whose
 walk is written *inside* this module pays it once. -/
 theorem weth_decimals_runCompiled {sevm : Sevm} {pre : Devm}
+    (h_value : sevm.value = 0)
     (h_sel : Sevm.selector sevm = dcSel)
     (h_stack : pre.stack = [])
     (h_mem : pre.memory = Mem.empty)
@@ -129,9 +132,11 @@ theorem weth_decimals_runCompiled {sevm : Sevm} {pre : Devm}
         (by simp only [gJumpdest]; omega)
         (by rw [h_stack, h_mem])
         (by
-          func_run [dcSel, 0, 1, 1, 1, 1, 3]
+          have h_value_zero : B256.eqCheck sevm.value 0 = 1 := by
+            simp [B256.eqCheck, h_value]
+          func_run [dcSel, 0, 1, 1, 1, 1, 1, 3]
           · exact Devm.extCost_empty_word
-          · exact Func.runCompiled_ret_word (G := g - 139) (e := 0) rfl
+          · exact Func.runCompiled_ret_word (G := g - 158) (e := 0) rfl
               (Devm.extCost_word_word Mem.size_write_word)
               (by simp only [Devm.gasLeft_setMach]; omega)
               (Devm.memRead_word_fst (by simp only [Devm.memory_setMach]; rfl))),
@@ -152,6 +157,7 @@ message-call altitude, one fixed selector, exact under `Blanc/Compiled.lean`'s
 compiler-shape assumption — plus this module's schedule limit. -/
 theorem weth_decimals_gas_exact {sevm : Sevm} {pre : Devm}
     (h_code : some sevm.code.toList = Prog.compile weth)
+    (h_value : sevm.value = 0)
     (h_sel : Sevm.selector sevm = dcSel)
     (h_stack : pre.stack = [])
     (h_mem : pre.memory = Mem.empty)
@@ -160,7 +166,7 @@ theorem weth_decimals_gas_exact {sevm : Sevm} {pre : Devm}
       post.gasLeft + decimalsGas = pre.gasLeft ∧
       Devm.output post = (0x12 : B256).toBytes := by
   obtain ⟨post, h_run, h_gas_eq, h_out⟩ :=
-    weth_decimals_runCompiled h_sel h_stack h_mem h_gas
+    weth_decimals_runCompiled h_value h_sel h_stack h_mem h_gas
   exact ⟨post, Prog.exec_of_runCompiled h_run h_code, h_gas_eq, h_out⟩
 
 /-- **`weth`'s `decimals()` call succeeds**, and returns `0x12`.
@@ -170,6 +176,7 @@ conjunct dropped, so that a caller who only wants liveness and the return value
 does not have to carry the cost equation. -/
 theorem weth_decimals_succeeds {sevm : Sevm} {pre : Devm}
     (h_code : some sevm.code.toList = Prog.compile weth)
+    (h_value : sevm.value = 0)
     (h_sel : Sevm.selector sevm = dcSel)
     (h_stack : pre.stack = [])
     (h_mem : pre.memory = Mem.empty)
@@ -177,7 +184,7 @@ theorem weth_decimals_succeeds {sevm : Sevm} {pre : Devm}
     ∃ post, exec ⟨0, sevm, pre⟩ = .ok post ∧
       Devm.output post = (0x12 : B256).toBytes := by
   obtain ⟨post, h_exec, _, h_out⟩ :=
-    weth_decimals_gas_exact h_code h_sel h_stack h_mem h_gas
+    weth_decimals_gas_exact h_code h_value h_sel h_stack h_mem h_gas
   exact ⟨post, h_exec, h_out⟩
 
 /-- **`weth`'s `decimals()` call costs exactly `decimalsGas`, from an arbitrary
@@ -187,6 +194,7 @@ By determinism, exactly as `weth_balanceOf_gas_of_runCompiled`; see that
 theorem's docstring for why this is not an inversion. -/
 theorem weth_decimals_gas_of_runCompiled {sevm : Sevm} {pre post : Devm}
     (h_code : some sevm.code.toList = Prog.compile weth)
+    (h_value : sevm.value = 0)
     (h_sel : Sevm.selector sevm = dcSel)
     (h_stack : pre.stack = [])
     (h_mem : pre.memory = Mem.empty)
@@ -194,7 +202,7 @@ theorem weth_decimals_gas_of_runCompiled {sevm : Sevm} {pre post : Devm}
     (h_run : Prog.RunCompiled sevm pre weth post) :
     pre.gasLeft = post.gasLeft + decimalsGas := by
   obtain ⟨post', h_exec', h_gas_eq, _⟩ :=
-    weth_decimals_gas_exact h_code h_sel h_stack h_mem h_gas
+    weth_decimals_gas_exact h_code h_value h_sel h_stack h_mem h_gas
   have h_exec : exec ⟨0, sevm, pre⟩ = .ok post :=
     Prog.exec_of_runCompiled h_run h_code
   rw [h_exec] at h_exec'
@@ -218,6 +226,7 @@ the `mach.gasLeft` field they leave untouched, so the post-state's `gasLeft` is
 Same four limits as `weth_balanceOf_succeeds`; see that theorem's docstring. -/
 theorem weth_balanceOf_gas_exact {sevm : Sevm} {pre : Devm}
     (h_code : some sevm.code.toList = Prog.compile weth)
+    (h_value : sevm.value = 0)
     (h_sel : Sevm.selector sevm = boSel)
     (h_stack : pre.stack = [])
     (h_mem : pre.memory = Mem.empty)
@@ -238,9 +247,11 @@ theorem weth_balanceOf_gas_exact {sevm : Sevm} {pre : Devm}
           (by simp only [gJumpdest]; omega)
           (by rw [h_stack, h_mem])
           (by
-            func_run [boSel, 0, 1, 1, 0, 1, 3]
+            have h_value_zero : B256.eqCheck sevm.value 0 = 1 := by
+              simp [B256.eqCheck, h_value]
+            func_run [boSel, 0, 1, 1, 0, 1, 1, 3]
             · exact Devm.extCost_empty_word
-            · exact Func.runCompiled_ret_word (G := g - 2241) (e := 0) rfl
+            · exact Func.runCompiled_ret_word (G := g - 2260) (e := 0) rfl
                 (Devm.extCost_word_word Mem.size_write_word)
                 (by simp only [Devm.gasLeft_setMach]; omega)
                 (Devm.memRead_word_fst (by simp only [Devm.memory_setMach]; rfl))))
@@ -262,6 +273,7 @@ theorem's hypothesised one both come from `exec ⟨0, sevm, pre⟩`, hence are
 equal, and the gas equation transports across `injection`. -/
 theorem weth_balanceOf_gas_of_runCompiled {sevm : Sevm} {pre post : Devm}
     (h_code : some sevm.code.toList = Prog.compile weth)
+    (h_value : sevm.value = 0)
     (h_sel : Sevm.selector sevm = boSel)
     (h_stack : pre.stack = [])
     (h_mem : pre.memory = Mem.empty)
@@ -271,7 +283,7 @@ theorem weth_balanceOf_gas_of_runCompiled {sevm : Sevm} {pre post : Devm}
     (h_run : Prog.RunCompiled sevm pre weth post) :
     pre.gasLeft = post.gasLeft + balanceOfGas := by
   obtain ⟨post', h_exec', h_gas_eq, _⟩ :=
-    weth_balanceOf_gas_exact h_code h_sel h_stack h_mem h_cold h_gas
+    weth_balanceOf_gas_exact h_code h_value h_sel h_stack h_mem h_cold h_gas
   have h_exec : exec ⟨0, sevm, pre⟩ = .ok post :=
     Prog.exec_of_runCompiled h_run h_code
   rw [h_exec] at h_exec'
@@ -317,14 +329,15 @@ def balanceOfGasWarm : Nat :=
     + (gVerylow + gVerylow + gVerylow + (gVerylow + gHigh + gJumpdest))
     + (gVerylow + gVerylow + gVerylow + (gVerylow + gHigh))
     + (gVerylow + gVerylow + (gVerylow + gHigh + gJumpdest))
+    + (gBase + gVerylow + (gVerylow + gHigh + gJumpdest))
     + (gVerylow + gVerylow + gasWarmAccess)
     + (gBase + (gVerylow + gMemory))
     + (gVerylow + gBase)
 
-/-- 241 gas against `balanceOfGas`' 2241 — the storage read is **93 % of a cold
-`balanceOf`, and 41 % of a warm one**. The 2000-gas gap is
+/-- 260 gas against `balanceOfGas`' 2260 — the storage read is **93 % of a cold
+`balanceOf`, and 38 % of a warm one**. The 2000-gas gap is
 `gasColdSload - gasWarmAccess` and nothing else. -/
-theorem balanceOfGasWarm_eq : balanceOfGasWarm = 241 := by decide
+theorem balanceOfGasWarm_eq : balanceOfGasWarm = 260 := by decide
 
 /-- A `balanceOf(address)` call on `weth` whose key is **already warm** has a
 gas-exact run; it costs exactly `balanceOfGasWarm` and returns the slot.
@@ -334,6 +347,7 @@ same tree — differing only where `func_run` meets the `SLOAD`: the frame
 carries `∈` rather than `∉`, so the tactic selects `Ninst.runCompiled_sload_warm`,
 subtracts `gasWarmAccess`, and leaves the base state unmoved. -/
 theorem weth_balanceOf_warm_runCompiled {sevm : Sevm} {pre : Devm}
+    (h_value : sevm.value = 0)
     (h_sel : Sevm.selector sevm = boSel)
     (h_stack : pre.stack = [])
     (h_mem : pre.memory = Mem.empty)
@@ -353,9 +367,11 @@ theorem weth_balanceOf_warm_runCompiled {sevm : Sevm} {pre : Devm}
         (by simp only [gJumpdest]; omega)
         (by rw [h_stack, h_mem])
         (by
-          func_run [boSel, 0, 1, 1, 0, 1, 3]
+          have h_value_zero : B256.eqCheck sevm.value 0 = 1 := by
+            simp [B256.eqCheck, h_value]
+          func_run [boSel, 0, 1, 1, 0, 1, 1, 3]
           · exact Devm.extCost_empty_word
-          · exact Func.runCompiled_ret_word (G := g - 241) (e := 0) rfl
+          · exact Func.runCompiled_ret_word (G := g - 260) (e := 0) rfl
               (Devm.extCost_word_word Mem.size_write_word)
               (by simp only [Devm.gasLeft_setMach]; omega)
               (Devm.memRead_word_fst (by simp only [Devm.memory_setMach]; rfl))),
@@ -369,6 +385,7 @@ theorem weth_balanceOf_warm_runCompiled {sevm : Sevm} {pre : Devm}
 `Prog.exec_of_runCompiled`. Same four limits as `weth_balanceOf_gas_exact`. -/
 theorem weth_balanceOf_warm_gas_exact {sevm : Sevm} {pre : Devm}
     (h_code : some sevm.code.toList = Prog.compile weth)
+    (h_value : sevm.value = 0)
     (h_sel : Sevm.selector sevm = boSel)
     (h_stack : pre.stack = [])
     (h_mem : pre.memory = Mem.empty)
@@ -380,7 +397,7 @@ theorem weth_balanceOf_warm_gas_exact {sevm : Sevm} {pre : Devm}
       Devm.output post =
         (Devm.getStorVal pre sevm.currentTarget (Sevm.dataWord sevm 4)).toBytes := by
   obtain ⟨post, h_run, h_gas_eq, h_out⟩ :=
-    weth_balanceOf_warm_runCompiled h_sel h_stack h_mem h_warm h_gas
+    weth_balanceOf_warm_runCompiled h_value h_sel h_stack h_mem h_warm h_gas
   exact ⟨post, Prog.exec_of_runCompiled h_run h_code, h_gas_eq, h_out⟩
 
 /-! ## The closed form
@@ -427,6 +444,7 @@ def decimalsGasWith (jd base vl hi mem : Nat) : Nat :=
     + (vl + vl + vl + (vl + hi + jd))
     + (vl + vl + vl + (vl + hi + jd))
     + (vl + vl + (vl + hi + jd))
+    + (base + vl + (vl + hi + jd))
     + vl
     + (base + (vl + mem))
     + (vl + base)
@@ -445,6 +463,7 @@ def balanceOfGasWith (jd base vl hi mem sload : Nat) : Nat :=
     + (vl + vl + vl + (vl + hi + jd))
     + (vl + vl + vl + (vl + hi))
     + (vl + vl + (vl + hi + jd))
+    + (base + vl + (vl + hi + jd))
     + (vl + vl + sload)
     + (base + (vl + mem))
     + (vl + base)
@@ -563,6 +582,7 @@ one entrypoint of one contract, one fixed selector, exact under
 schedule. -/
 theorem weth_balanceOf_gas_exact_wethGas {sevm : Sevm} {pre : Devm} {cost : Nat}
     (h_code : some sevm.code.toList = Prog.compile weth)
+    (h_value : sevm.value = 0)
     (h_sel : Sevm.selector sevm = boSel)
     (h_stack : pre.stack = [])
     (h_mem : pre.memory = Mem.empty)
@@ -578,11 +598,11 @@ theorem weth_balanceOf_gas_exact_wethGas {sevm : Sevm} {pre : Devm} {cost : Nat}
   · rw [if_pos h] at h_cost
     injection h_cost with h_cost
     subst h_cost
-    exact weth_balanceOf_warm_gas_exact h_code h_sel h_stack h_mem h h_gas
+    exact weth_balanceOf_warm_gas_exact h_code h_value h_sel h_stack h_mem h h_gas
   · rw [if_neg h] at h_cost
     injection h_cost with h_cost
     subst h_cost
-    exact weth_balanceOf_gas_exact h_code h_sel h_stack h_mem h h_gas
+    exact weth_balanceOf_gas_exact h_code h_value h_sel h_stack h_mem h h_gas
 
 /-- **`decimals()` costs exactly what `wethGas` says it does.** The same
 restatement as `weth_balanceOf_gas_exact_wethGas`, on the second target. The
@@ -590,6 +610,7 @@ two new arguments are supplied and ignored, which is what "reads no storage"
 looks like at this altitude. -/
 theorem weth_decimals_gas_exact_wethGas {sevm : Sevm} {pre : Devm} {cost : Nat}
     (h_code : some sevm.code.toList = Prog.compile weth)
+    (h_value : sevm.value = 0)
     (h_sel : Sevm.selector sevm = dcSel)
     (h_stack : pre.stack = [])
     (h_mem : pre.memory = Mem.empty)
@@ -601,7 +622,7 @@ theorem weth_decimals_gas_exact_wethGas {sevm : Sevm} {pre : Devm} {cost : Nat}
   rw [h_sel, wethGas_dcSel] at h_cost
   injection h_cost with h_cost
   subst h_cost
-  exact weth_decimals_gas_exact h_code h_sel h_stack h_mem h_gas
+  exact weth_decimals_gas_exact h_code h_value h_sel h_stack h_mem h_gas
 
 /-- **`balanceOf(address)` costs what `wethGas` says, from an arbitrary
 `Prog.RunCompiled` witness, with no assumption about the storage key.**
@@ -618,6 +639,7 @@ is eliminated once for both altitudes rather than twice. -/
 theorem weth_balanceOf_gas_of_runCompiled_wethGas {sevm : Sevm} {pre post : Devm}
     {cost : Nat}
     (h_code : some sevm.code.toList = Prog.compile weth)
+    (h_value : sevm.value = 0)
     (h_sel : Sevm.selector sevm = boSel)
     (h_stack : pre.stack = [])
     (h_mem : pre.memory = Mem.empty)
@@ -626,7 +648,7 @@ theorem weth_balanceOf_gas_of_runCompiled_wethGas {sevm : Sevm} {pre post : Devm
     (h_run : Prog.RunCompiled sevm pre weth post) :
     pre.gasLeft = post.gasLeft + cost := by
   obtain ⟨post', h_exec', h_gas_eq, _⟩ :=
-    weth_balanceOf_gas_exact_wethGas h_code h_sel h_stack h_mem h_cost h_gas
+    weth_balanceOf_gas_exact_wethGas h_code h_value h_sel h_stack h_mem h_cost h_gas
   have h_exec : exec ⟨0, sevm, pre⟩ = .ok post :=
     Prog.exec_of_runCompiled h_run h_code
   rw [h_exec] at h_exec'
@@ -639,6 +661,7 @@ theorem weth_balanceOf_gas_of_runCompiled_wethGas {sevm : Sevm} {pre post : Devm
 theorem weth_decimals_gas_of_runCompiled_wethGas {sevm : Sevm} {pre post : Devm}
     {cost : Nat}
     (h_code : some sevm.code.toList = Prog.compile weth)
+    (h_value : sevm.value = 0)
     (h_sel : Sevm.selector sevm = dcSel)
     (h_stack : pre.stack = [])
     (h_mem : pre.memory = Mem.empty)
@@ -649,7 +672,7 @@ theorem weth_decimals_gas_of_runCompiled_wethGas {sevm : Sevm} {pre post : Devm}
   rw [h_sel, wethGas_dcSel] at h_cost
   injection h_cost with h_cost
   subst h_cost
-  exact weth_decimals_gas_of_runCompiled h_code h_sel h_stack h_mem h_gas h_run
+  exact weth_decimals_gas_of_runCompiled h_code h_value h_sel h_stack h_mem h_gas h_run
 
 /-! ## The bound: no state can make these calls dearer
 
