@@ -4,7 +4,7 @@ Blanc contracts often have a preexisting reference — WETH9, WETH10, a
 Solidity original. The same questions recur in every such project and every
 review of one: how closely must the Blanc artifact track the reference, and
 which differences are defects? This document is the standing answer.
-Principles 1–2 apply to all Blanc development; 3–6 apply whenever a
+Principles 1–2 apply to all Blanc development; 3–5 apply whenever a
 reference exists.
 
 ## 1. Byte-identity is a non-goal, permanently
@@ -17,7 +17,9 @@ discipline, its bugs — and can justify nothing beyond "same as before."
 Reading deployed artifacts as *evidence* is a different matter and is
 routine (see the disassembly provenance note in
 [WETH_DEVIATIONS.md](WETH_DEVIATIONS.md)); what is excluded is making their
-bytes the compilation target.
+bytes the compilation target. Directly verifying a reference artifact is a
+third thing again — worth doing, and a project someone should undertake, but
+not one a Blanc port undertakes or claims (principle 5).
 
 ## 2. What Blanc optimizes instead
 
@@ -33,7 +35,7 @@ bytecode. Better, concretely:
   objective wins where they exist: smaller code, cheaper execution.
 
 When fidelity to a reference conflicts with any of these, fidelity loses,
-and the conflict is recorded (principle 5).
+and the conflict is recorded (principle 4).
 
 ## 3. What "contract X, implemented in Blanc" claims
 
@@ -44,17 +46,13 @@ it.** The claim is exactly the conjunction of three parts, and nothing more:
 
 - it retains every functionality that matters — a claim made precise
   below as a standing wager, not as a completed enumeration;
-- its deviations from the reference are all documented (principle 5), and
+- its deviations from the reference are all documented (principle 4), and
   each is one an informed deployer shipping X today could sign off on:
   unremarkable had it been the behavior from day one, or an accepted cost
   of a design that wins elsewhere — with the registry's stance column
   saying which;
 - and some deviations are strict improvements: smaller code, cheaper
   calls, an operation refused rather than a balance silently overwritten.
-
-What the claim deliberately does not include is continuity with reliance
-on the deployed artifact's accidents — its code hash, its storage image,
-its exact gas. Principle 4 draws that line.
 
 ### The functionality claim is a standing wager
 
@@ -71,60 +69,78 @@ specification that
    *feature* — what the contract should do — not merely a behavior the
    contract is known to have,
 
-and the wager is that the specification holds of the Blanc implementation,
-provably. The burden of proof is the project's, and difficulty is no
-defense: a specification meeting both conditions that fails on the Blanc
-port is a defect of the port, and one that holds but resists proof
-falsifies the verifiability claim (principle 2). Neither may be answered
-with "that was never claimed."
+and the wager is that the specification either holds of the Blanc
+implementation, provably, or is already covered by a registry row that
+priced the trade (principle 4). The burden is the project's, and it may
+never be discharged with "that was never claimed."
+
+The second branch carries a timestamp requirement: the row must predate the
+challenge. A stance invented to answer one is silence caught late, which
+principle 4 prohibits outright. What the wager demands is therefore that
+the project know and publish its own trade-offs before anyone asks for
+them.
+
+A specification that holds of the Blanc port but resists proof is a
+different failure, and there difficulty is no defense: verifiability is
+itself a claim (principle 2), and a true property the artifact puts beyond
+practical reach falsifies it.
 
 Condition 2 asks for endorsement, not expectation, deliberately: an expert
 who knows a contract's internals can fully expect a flaw or a pointless
 idiosyncrasy while agreeing it is no feature, so familiarity with a
 behavior earns it nothing here.
 
-The deviation registries are the wager's priced-in exceptions. Each stance
-(principle 5) is in substance an argument that condition 2 fails for that
-behavior — that an informed author or user would not count it a feature of
-the contract. Disagreement goes through the stance, never
-through silence: a failing intent-level specification covered by no
-registry row is the wager lost. The "shown what it entails" clause is
-load-bearing: "approve succeeds for every address pair" is true of WETH9
-and sounds like pure intent, but it quantifies over the hash collisions
-where a flat keyspace must choose between refusing the call and writing
-through a third party's balance slot — and an informed user, shown that
-entailment, prefers the refusal recorded in
+Condition 2 also does constructive duty, and it is the same test either
+way. Asked in advance — would an informed author or user demand this of X?
+— it is how a port decides what it owes before anyone challenges anything;
+the answers that recur are collected below. Asked after the fact, it is how
+a challenge is adjudicated. Nothing else adjudicates what a port owes: not
+resemblance to the reference, and not a category a behavior appears to fall
+into.
+
+The deviation registries are the wager's priced-in exceptions, and a stance
+(principle 4) answers the wager in one of two ways: by arguing that
+condition 2 fails for the behavior — an informed author or user would not
+count it a feature of the contract — or by conceding that it holds and
+stating what the trade bought. The stance column says which. Disagreement
+goes through the stance, never through silence: a failing intent-level
+specification covered by no registry row is the wager lost. The "shown what
+it entails" clause is load-bearing: "approve succeeds for every address
+pair" is true of WETH9 and sounds like pure intent, but it quantifies over
+the hash collisions where a flat keyspace must choose between refusing the
+call and writing through a third party's balance slot — and an informed
+user, shown that entailment, prefers the refusal recorded in
 [WETH_DEVIATIONS.md](WETH_DEVIATIONS.md).
 
-## 4. The standard a port must meet
+### Interface and accident
 
-Follow the spirit of the law, not the letter. The reference is authoritative
-about what the contract is *for*; it is not authoritative about how the job
-must be done. The bar is **drop-in usability**: if the Blanc bytecode
-replaced the deployed original, every normal use would keep working, and an
-informed user or integrator inspecting the result would conclude "that is
-contract X, doing its job in a different way."
+Some answers recur often enough to state once. They are not a second
+criterion; each is the feature test already applied. The reference is
+authoritative about what the contract is *for*; it is not authoritative
+about how the job must be done.
 
-A use is *normal* when it relies on what X is, not on how the deployed
-artifact happens to be built — when it would work against any faithful
-implementation of X. The ABI surface, the event shapes indexers consume,
-and the semantics ordinary callers depend on are owed by any
-implementation: interface. Code size, code hash, exact gas consumed, and
-storage layout are properties of one implementation: accidents. A caller
-bound to an accident — a code-hash pin, a storage proof against WETH9's
-slot scheme — has bound itself to the artifact rather than the contract,
-and no reimplementation can or should satisfy it. (Precedent: the Blanc
-WETH's balance slots are deliberately not WETH9's;
-[WETH_DEVIATIONS.md](WETH_DEVIATIONS.md) records the choice and declines
-any storage-layout compatibility claim.)
+The ABI surface, the event shapes indexers consume, and the semantics
+ordinary callers depend on are demanded of any implementation of X:
+interface. Code size, code hash, exact gas consumed, and storage layout are
+demanded of nothing — no author or user asks X to hash to a particular value
+or to keep balances in a particular slot: accidents. What the claim
+deliberately does not include, then, is continuity with reliance on those
+accidents. A caller bound to one — a code-hash pin, a storage proof against
+WETH9's slot scheme — has bound itself to the artifact rather than the
+contract, and no reimplementation can or should satisfy it. (Precedent: the
+Blanc WETH's balance slots are deliberately not WETH9's;
+[WETH_DEVIATIONS.md](WETH_DEVIATIONS.md) records the choice and declines any
+storage-layout compatibility claim.)
 
-One commitment goes beyond what the counterfactual strictly owes: gas
-*ceilings*. Contracts that forward fixed gas exist, so while making a
-public path cheaper is always safe, making one costlier can break real
-callers — a gas increase on an externally callable path is therefore
-treated as a deviation to defend like any other.
+The labels are presumptions, not verdicts: they settle the routine cases
+without a fresh survey. Where one is contested, or where a behavior fits
+neither — how malformed calldata is handled, what a callee may hand back —
+the label is not the argument. Run the test for the contract at hand.
+Whether a reference decoder's behavior on a truncated dynamic tail is
+demanded of X is a question about X, and two contracts may answer it
+differently.
 
-## 5. Deviations are governed, not forbidden
+## 4. Deviations are governed, not forbidden
 
 A port may diverge from its reference, and should where divergence is an
 improvement. The freedom is paid for in bookkeeping:
@@ -143,25 +159,61 @@ improvement. The freedom is paid for in bookkeeping:
   shipping X today would accept the behavior — as unremarkable from day
   one, or as a stated cost of a design that wins elsewhere. Not every
   recorded deviation is an improvement, and the stance column says which
-  are. A stance is thereby also the row's answer to the standing wager: a
-  public argument that its condition 2 fails for the behavior in question.
+  are. A stance is thereby also the row's answer to principle 3's standing
+  wager: a public argument that condition 2 fails for the behavior, or a
+  public concession that it holds, with the compensating win named.
 - Improvement claims are measured, not asserted: bytes are counted, gas is
   measured on named paths. A behavioral change is never filed under
   "optimization"; it enters the registry with its own defense.
+- A gas increase on an externally callable path is a deviation like any
+  other, recorded and defended. This is the feature test, not an exception
+  to it: nobody demands that X cost exactly what it costs today, but
+  cheapness on public paths is demanded, and contracts that forward fixed
+  gas exist, so a costlier path can break real callers. Whether a *decrease*
+  is equally observable is argued per contract — one that forwards its
+  remaining gas to callbacks forwards more when its own path gets cheaper,
+  while a stipend-limited send forwards the same either way.
 - A registry row is not a verdict; it is where the argument stands to be
   examined.
 
-## 6. Claims end where evidence ends
+## 5. Claims end where evidence ends
 
-A port's conformance claim is exactly this: agreement with the reference on
-the properties proved and the behaviors tested, plus the recorded
-deviations. It is never a claim of bit-identity, gas-identity, or code-hash
-identity, and fixture agreement is specification-checked differential
-testing on chosen inputs, not a liveness proof. State what was checked;
-stop there. (Principle 3's wager is a commitment of burden, not a claim of
-completed evidence; it creates obligations, never evidence.) Where the stakes warrant it, the public boundary itself is
-frozen in a compatibility contract with differential evidence
+Two instruments produce a port's evidence, and they establish different
+things. The Lean theorems are about Blanc: unless a theorem says otherwise,
+it applies to the named Blanc program and, where a compiler witness is
+provided, to that program's exact generated runtime, under the pinned Jaune
+semantics and the theorem's own hypotheses. It proves nothing about the
+reference deployment, which no Blanc port undertakes to verify (principle
+1). Agreement with the reference comes from the fixtures instead, and
+fixture agreement is specification-checked differential testing on chosen
+inputs — not a proof, and not a liveness result.
+
+A port's conformance claim is therefore exactly this: the properties proved
+of the Blanc artifact, the behaviors differentially tested against the
+reference, and the recorded deviations. State what was checked; stop there.
+(Principle 3's wager is a commitment of burden, not a claim of completed
+evidence; it creates obligations, never evidence.) Where the stakes warrant
+it, the public boundary itself is frozen in a compatibility contract with
+differential evidence
 ([WETH10_COMPATIBILITY.md](WETH10_COMPATIBILITY.md)).
+
+Two registers are available for what a port has not established, and only
+one of them is honest. Declaring a non-claim in advance — this boundary is
+not covered, this property is not attempted — bounds the claim and asserts
+nothing; the registries' exclusion sections are made of it. Asserting a
+property the port has not proved is the other register, and it is never
+available: it is what every unverified contract already offers, and
+admitting it here would concede the thing that makes the work worth doing.
+When a property resists proof, claim less rather than assert more.
+
+Where such a property is nonetheless believed to hold and matters enough to
+say so, it is recorded as a verification debt against principle 2, with
+whatever informal argument supports it. The record discharges nothing. It is
+not a stance and may never be cited as one: a deviation row settles a
+question, while a debt only makes an absence public, and the sole way to end
+one is to prove the property and delete the record. Debts are therefore
+counted — a lengthening list of them is a fact about the project, where a
+lengthening deviation registry is not.
 
 ## Precedent: WETH9
 
