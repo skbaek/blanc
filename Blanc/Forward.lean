@@ -2182,8 +2182,18 @@ def execSpec : RelSpec where
   branchSucc := `Blanc.Func.execTo_branch_succ
   call := `Blanc.Func.execTo_call'
 
+/-- `Blanc/ForwardCall.lean`'s outcome-aware witness relation.  Its structural
+rules dispatch to `RunCompiled` on success and `ExecTo` on fatal error while
+letting the shared walk elaborate the instruction prefix only once. -/
+def witnessSpec : RelSpec where
+  head := `Blanc.Func.ExecWitness
+  next := `Blanc.Func.ExecWitness.next
+  branchZero := `Blanc.Func.execWitness_branch_zero
+  branchSucc := `Blanc.Func.execWitness_branch_succ
+  call := `Blanc.Func.execWitness_call'
+
 /-- Every relation `func_run` knows how to build, matched on the goal's head. -/
-def relSpecs : List RelSpec := [okSpec, toSpec, execSpec]
+def relSpecs : List RelSpec := [okSpec, toSpec, execSpec, witnessSpec]
 
 /-- The spec for a goal head, or nothing. -/
 def specOf? (head : Name) : Option RelSpec := relSpecs.find? (·.head == head)
@@ -3134,10 +3144,11 @@ walk cannot compute — what a comparison decided, what a shift produced, what a
 memory expansion cost — consumed left to right; with none given, value-producing
 opcodes keep their unevaluated application.
 
-It builds whichever relation the goal is stated with: `Func.RunCompiled`, whose
-walks end successfully, or `Blanc/Reverts.lean`'s `Func.RunCompiledTo`, whose
-walks end at an arbitrary `Execution` and so can end at an error.  One walk
-serves both (`Forward.RelSpec`); the goal decides which.
+It builds whichever registered relation the goal is stated with:
+`Func.RunCompiled`, `Blanc/Reverts.lean`'s `Func.RunCompiledTo`,
+`Blanc/ForwardCall.lean`'s `Func.ExecTo`, or its outcome-aware
+`Func.ExecWitness`.  One walk serves all four (`Forward.RelSpec`); the goal
+decides which.
 
 Everything it could not close comes back as a goal, in the order the walk met
 it, ending with the frame's terminal instruction — which is where a

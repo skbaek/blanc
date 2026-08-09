@@ -47,6 +47,7 @@ CAROL = "0x3333333333333333333333333333333333333333"
 RECORDER = "0x4444444444444444444444444444444444444444"
 RELAYER = "0x5555555555555555555555555555555555555555"
 COINBASE = "0x6666666666666666666666666666666666666666"
+BLAKE2F_PRECOMPILE = "0x" + "00" * 19 + "09"
 ZERO = "0x" + "00" * 20
 UINT256_MAX = (1 << 256) - 1
 UINT112_MAX = (1 << 112) - 1
@@ -199,6 +200,17 @@ def mutating_callback_code(return_data: bytes, weth: str,
 def rejecting_eth_code(payload: bytes = b"\xde\xad\xbe\xef") -> bytes:
     word = payload.ljust(32, b"\x00")
     return push(word) + push(0) + b"\x52" + push(len(payload)) + push(0) + b"\xfd"
+
+
+def solidity_error_data(reason: str) -> bytes:
+    raw = reason.encode()
+    return (
+        keccak(b"Error(string)")[:4]
+        + h256(32)
+        + h256(len(raw))
+        + raw
+        + bytes((-len(raw)) % 32)
+    )
 
 
 def abi_call(signature: str, *args: Tuple[str, object], selector_hex: str | None = None) -> bytes:
@@ -382,6 +394,32 @@ def build_scenarios(lock: Mapping) -> List[Scenario]:
                  balances={ALICE: 10}, weth_eth=10, observe_addresses=[BOB],
                  channels=("outcome", "returndata", "logical-state", "eth", "logs", "call-trace"),
                  tags=("selector-smoke", "state", "eth-call")),
+        scenario("withdraw-zero", "withdraw(uint256)", "DF-redemption",
+                 call("withdraw(uint256)", ("uint256", 0)),
+                 balances={ALICE: 10}, weth_eth=10,
+                 channels=("outcome", "returndata", "logical-state", "eth", "logs", "call-trace"),
+                 tags=("state", "eth-call", "redemption-zero", "withdraw-zero")),
+        scenario("withdrawTo-zero", "withdrawTo(address,uint256)", "DF-redemption",
+                 call("withdrawTo(address,uint256)", ("address", BOB), ("uint256", 0)),
+                 balances={ALICE: 10}, weth_eth=10, observe_addresses=[BOB],
+                 channels=("outcome", "returndata", "logical-state", "eth", "logs", "call-trace"),
+                 tags=("state", "eth-call", "redemption-zero", "withdrawTo-zero")),
+        scenario("withdrawTo-sender-balance-short-circuit",
+                 "withdrawTo(address,uint256)", "DF-redemption-boundary",
+                 call("withdrawTo(address,uint256)", ("address", BOB), ("uint256", 3)),
+                 balances={ALICE: 10}, weth_eth=0, observe_addresses=[BOB],
+                 channels=("outcome", "returndata", "logical-state", "eth", "logs", "call-trace"),
+                 tags=("state", "eth-call", "rollback", "nonstable",
+                       "sender-balance-short-circuit")),
+        scenario("withdrawTo-blake2f-precompile-rejected",
+                 "withdrawTo(address,uint256)", "DF-redemption-boundary",
+                 call("withdrawTo(address,uint256)",
+                      ("address", BLAKE2F_PRECOMPILE), ("uint256", 3)),
+                 balances={ALICE: 10}, weth_eth=10,
+                 observe_addresses=[BLAKE2F_PRECOMPILE],
+                 channels=("outcome", "returndata", "logical-state", "eth", "logs", "call-trace"),
+                 tags=("state", "eth-call", "rollback", "precompile-recipient",
+                       "excluded-generalization")),
         scenario("smoke-withdrawFrom", "withdrawFrom(address,address,uint256)", "DF-state",
                  call("withdrawFrom(address,address,uint256)", ("address", ALICE),
                       ("address", BOB), ("uint256", 3)), balances={ALICE: 10}, weth_eth=10,
@@ -1128,6 +1166,58 @@ def assert_trace_evidence(s: Scenario, result: Mapping, side: str) -> None:
     """Reject a trace-bearing row whose instrumentation is vacuous."""
     calls = result["callTrace"]
     static_calls = result["staticCall"]
+
+    def one_call(target: str, value: int, success: int) -> None:
+        expected = (canonical_address(target), hex(value), hex(success))
+        observed = [
+            (row["target"], row["value"], row.get("success")) for row in calls
+        ]
+        if observed != [expected]:
+            die(f"{s.name}/{side}: expected exact CALL {expected}, got {observed}")
+
+    def exact_burn(amount: int) -> Mapping:
+        return {
+            "address": canonical_address(s.weth),
+            "topics": [
+                "0x" + keccak(b"Transfer(address,address,uint256)").hex(),
+                "0x" + address_word(s.caller).hex(),
+                "0x" + h256(0).hex(),
+            ],
+            "data": "0x" + h256(amount).hex(),
+        }
+
+    if "redemption-zero" in s.tags:
+        target = s.caller if "withdraw-zero" in s.tags else BOB
+        one_call(target, 0, 1)
+        if result["outcome"] != "success" or result["returndata"] != "0x":
+            die(f"{s.name}/{side}: zero redemption did not return successfully")
+        if result["logs"] != [exact_burn(0)]:
+            die(f"{s.name}/{side}: zero redemption did not emit the exact zero burn")
+        balances = result["logicalState"]["balances"]
+        if balances[canonical_address(s.caller)] != hex(10):
+            die(f"{s.name}/{side}: zero redemption changed the booked balance")
+        if result["eth"][canonical_address(s.weth)] != hex(10):
+            die(f"{s.name}/{side}: zero redemption changed WETH10 ETH")
+
+    if "sender-balance-short-circuit" in s.tags:
+        one_call(BOB, 3, 0)
+        expected_error = "0x" + solidity_error_data("WETH: ETH transfer failed").hex()
+        if result["outcome"] != "revert" or result["returndata"] != expected_error:
+            die(f"{s.name}/{side}: sender-balance short circuit did not reach exact outer revert")
+        if result["logs"] or result["eth"][canonical_address(s.weth)] != hex(0):
+            die(f"{s.name}/{side}: nonstable sender-insufficient case did not roll back")
+        if result["logicalState"]["balances"][canonical_address(s.caller)] != hex(10):
+            die(f"{s.name}/{side}: nonstable sender-insufficient case changed booking")
+
+    if "precompile-recipient" in s.tags:
+        one_call(BLAKE2F_PRECOMPILE, 3, 0)
+        expected_error = "0x" + solidity_error_data("WETH: ETH transfer failed").hex()
+        if result["outcome"] != "revert" or result["returndata"] != expected_error:
+            die(f"{s.name}/{side}: invalid-input BLAKE2F recipient did not reject value call")
+        if result["logs"] or result["eth"][canonical_address(s.weth)] != hex(10):
+            die(f"{s.name}/{side}: precompile-recipient rejection did not roll back")
+        if result["logicalState"]["balances"][canonical_address(s.caller)] != hex(10):
+            die(f"{s.name}/{side}: precompile-recipient rejection changed booking")
     if "state-mutating-reentrancy" in s.tags or "hostile-reentrancy" in s.tags:
         targets = [row["target"] for row in calls]
         if canonical_address(s.weth) not in targets:
@@ -1220,7 +1310,7 @@ def manifest(scenarios: Sequence[Scenario], runtimes: Mapping, lock: Mapping) ->
             "the synthetic identity world has four targeted identity canaries, including a state-mutating self-recipient row, rather than a duplicate of every mainnet scenario",
             "malformed or noncanonical input calldata (normatively excluded)",
             "adversarial allowance-key collision worlds (normatively excluded)",
-            "consensus receipt/state-root execution through Jaune; this rig executes message calls in pinned EELS",
+            "full transaction/receipt execution is owned by the separate WETH10 redemption fixture gate",
         ],
     }
 

@@ -26,6 +26,7 @@ Choose the gate by what you changed, cheapest falsifier first:
 | imported source or an import | `scripts/check-trust-surface.sh` | `lake build && scripts/check.sh --no-build` |
 | WETH10 deployed-reference inputs, lock, or checker | `scripts/check-weth10-reference.sh` | the **full set**, in the order below |
 | WETH10 runtime, concrete parameters, differential scenarios, or endpoint manifest | `lake build` then `scripts/check-weth10-differential.sh` | the **full set**, in the order below |
+| WETH10 redemption transaction fixtures, generator, or manifest | `scripts/check-weth10-redemption.sh --no-build` | the **full set**, in the order below |
 | WETH10 constructor, initcode, or deployment fixtures | `scripts/check-weth10-deployment.sh` | the **full set**, in the order below |
 | a module's imports, or added a contract | `scripts/check-layering.sh` | `lake build && scripts/check.sh --no-build` |
 | a proof, a theorem statement, or an axiom-relevant definition | `scripts/check.sh --no-build` | `scripts/check-elab.sh` |
@@ -49,6 +50,7 @@ scripts/check-trust-surface.sh
 scripts/check-weth10-reference.sh
 lake build
 scripts/check-weth10-differential.sh
+scripts/check-weth10-redemption.sh --no-build
 scripts/check-weth10-deployment.sh
 scripts/check-error-data.sh
 scripts/check.sh --no-build
@@ -81,7 +83,8 @@ against the gate.
 | `scripts/check-layering.sh` | contracts are siblings in the import hierarchy: no cross-contract import, no shared module importing a contract, no unclassified module (rule and rationale in `README.md`) | 3 contracts, 51 modules, 49 non-root | sub-second |
 | `scripts/check-trust-surface.sh` | exact transitive local import closure of `Blanc.lean` contains no new or stale source occurrence of `sorry`, bespoke `axiom`, `opaque`, `@[extern]`, `implemented_by`, `native_decide`, object-level `partial def`, or `dbg_trace`; exact reviewed comment/TacticM/MetaM rows are fail-closed allowlisted; unimported helpers are outside scope until imported | 50 closure modules; 21 exact allowlisted occurrences | sub-second |
 | `scripts/check-weth10-reference.sh` | exact-schema validation and offline reconstruction of the deployed WETH10 lock: independently pinned deployment/compiler/source/RPC identities, installed runtime hex/codehash, exact template and immutable spans/values, full canonical 27-function + two-event + receive ABI, separate constructor boundary, source-derived branch-context guard/callback/event/storage inventories, exact drift evidence, deletion/mutation, wrong-type, coherent, deployment-derivation, and coordinated-input falsifiers, plus exact generated endpoint-key synchronization for the compatibility contract | schema v2; 27 selectors + receive; 9,975 runtime bytes; 23 falsifier families; 28 compatibility endpoint keys + 12 cross-cutting keys + deployment | ~25 s |
-| `scripts/check-weth10-differential.sh` | executes the locked installed oracle and the exact compiled Blanc mainnet/synthetic parameter instances in a clean pinned EELS Prague interpreter; checks generated 27-selector/receive endpoint equality, success/revert and exact returndata, logical projected state, ETH, ordered outer/child logs, callback-visible calldata, live CALL/STATICCALL traces even across outer rollback, Solidity-0.7 Boolean truthiness including noncanonical word `2` and max-word normalization, hostile state-mutating reentrancy, flash settlement, independent permit signatures/ecrecover/domain forks, static-context guard precedence, nonpayability, unknown dispatch, and bounded channel falsifiers | 141 declared rows; 27 selectors + receive; 2 identity worlds; 5 state-mutating reentrancy rows; 26 static-context rows; 8 channel falsifiers | ~3 s |
+| `scripts/check-weth10-differential.sh` | executes the locked installed oracle and the exact compiled Blanc mainnet/synthetic parameter instances in a clean pinned EELS Prague interpreter; checks generated 27-selector/receive endpoint equality, success/revert and exact returndata, logical projected state, ETH, ordered outer/child logs, callback-visible calldata, live CALL/STATICCALL traces even across outer rollback, zero redemption through both selectors, the distinct nonstable CALL sender-balance short circuit, invalid-input BLAKE2F-recipient rollback, Solidity-0.7 Boolean truthiness including noncanonical word `2` and max-word normalization, hostile state-mutating reentrancy, flash settlement, independent permit signatures/ecrecover/domain forks, static-context guard precedence, nonpayability, unknown dispatch, and bounded channel falsifiers | 145 declared rows; 27 selectors + receive; 2 identity worlds; 5 state-mutating reentrancy rows; 26 static-context rows; 65 traced oracle calls; 8 channel falsifiers | ~3 s |
+| `scripts/check-weth10-redemption.sh --no-build` | reruns the pinned EELS generator's 29 semantic assertions without writing; byte-compares the regenerated two-fixture set and exact transaction/receipt/authorization manifest; checks both embedded runtimes against `weth10MainnetCode`; and replays the committed Prague blocks through Jaune's full transaction/receipt path | 2 fixtures; 29 semantic assertions; type-2 receipts 2 success + 1 failed; 1 successful type-4 authorization changing recipient code+nonce | ~2 s |
 | `scripts/check-weth10-deployment.sh` | executes Blanc's generic creation bytecode in the pinned EELS Prague interpreter for mainnet and synthetic identities; checks nonpayability, independently derived chain/domain words, exact installation of the named parameterized runtime, empty initial persistent state, no constructor calls/logs/storage instructions, EIP-170/EIP-3860 size limits, and bounded falsifiers | 2 fresh identity worlds; 6 constructor/channel falsifiers | ~2 s |
 | `scripts/check-error-data.sh` | lock-enumerated ASCII WETH10 guard reasons produce byte-identical `Blanc.errorData` and independently recomputed Solidity `Error(string)` ABI payloads, including the Keccak-derived selector | 11 unique lock reason strings | ~1.2 s |
 | `scripts/check-fmint.sh --no-build` | fmint fixture conformance, the manifest cross-check, independent source-hash verification for the Solidity borrower, and byte-equality of every fixture's fmint pre-state code against the committed `Blanc.fmintCode` literal | 11 fixtures, 188 assertions, 4617 source bytes, 1257 runtime bytes | sub-second |
@@ -90,7 +93,7 @@ against the gate.
 | `scripts/check-weth-coverage.sh` | the same honest reachability split for WETH, plus direct empty-calldata `deposit()` fallback and the same five callsite falsifiers | 10 selectors: 4 direct + 6 witnessed internal + fallback, budget 0 | sub-second |
 | `lake build` | integration elaboration, including the audited compile-witness, WETH10 deployment declarations, stable-state packaging, and constructive redemption certificates | 959 jobs | incremental builds are a few seconds; clean rebuilds are substantially longer |
 | `scripts/check.sh --no-build` | axiom audit of the audited top theorems, each against its own pinned expected axiom set | 275 theorems | ~4 s |
-| `scripts/check-claims.sh` | Lean-checked exact statement pins for the WETH10 compile, flash-depth, backing, creation, static-certificate, stable-chain, creation-seed, and constructive redemption flagships; constructor pins fail closed on redemption record-field changes or hidden success premises; `Stor.Weth10Inv` is pinned by `rfl` unfolding | 26 definitions/statements and constructors | ~2 s |
+| `scripts/check-claims.sh` | Lean-checked exact statement pins for the WETH10 compile, flash-depth, backing, creation, static-certificate, stable-chain, creation-seed, and constructive redemption flagships; constructor pins fail closed on redemption record-field changes or hidden success premises; `Stor.Weth10Inv` is pinned by `rfl` unfolding | 29 definitions/statements and constructors | ~2 s |
 
 ### Medium — before a commit or push candidate
 
@@ -103,7 +106,7 @@ gate is the longest at roughly five minutes; every gate still runs inline.
 
 ### The Python behind the shell
 
-Sixteen helpers do the actual work and are not gates in their own right — they are
+Seventeen helpers do the actual work and are not gates in their own right — they are
 invoked by the scripts above and should not be run directly in a report:
 
 | helper | used by | what it does |
@@ -115,11 +118,12 @@ invoked by the scripts above and should not be run directly in a report:
 | `scripts/weth10-compatibility.py` | `check-weth10-reference.sh` | generates the documentation skeleton from the lock and pins exactly one compatibility row per generated endpoint/selector, the required cross-cutting inventory, and the separate deployment row |
 | `scripts/gen-weth10-differential.py` | `check-weth10-differential.sh` | constructs the declared scenario matrix, independently projects Solidity and tagged Blanc storage, executes both bytecodes in pinned EELS, compares each credited channel, validates the committed manifest, and runs bounded channel corruptions |
 | `scripts/eval-weth10-differential-code.lean` | `check-weth10-differential.sh` | emits exact mainnet and synthetic members of the parameterized Blanc runtime plus the dispatcher-owned selector list; it owns no runtime literal or proof |
+| `scripts/gen-weth10-redemption-fixtures.py` | `check-weth10-redemption.sh` | constructs the exact type-2 success/failed-receipt and type-4 authorization-mutation blocks, checks 29 semantic claims against pinned EELS, emits EEST fixtures, and in `--check` mode byte-compares regenerated artifacts without writing |
 | `scripts/check-weth10-deployment.py` | `check-weth10-deployment.sh` | executes generic WETH10 initcode in two fresh identity worlds and independently checks parameter derivation, exact deposited code, empty state, constructor effects, size boundaries, and falsifiers |
 | `scripts/eval-weth10-deployment-code.lean` | `check-weth10-deployment.sh` | emits the generic initcode and exact expected runtime-family members for the two deployment worlds; it owns no hand-written runtime golden |
 | `scripts/check-error-data.py` | `check-error-data.sh` | enumerates the lock's sourceBehavior guard reasons, evaluates `Blanc.errorData`, and independently rebuilds each ABI blob from the existing Keccak implementation |
 | `scripts/check-fmint-borrower-source.py` | `check-fmint.sh` | recomputes the checker-pinned Solidity borrower source's Keccak-256 independently of the fixture generator and compares it with the committed compiler artifact's provenance |
-| `scripts/check-runtime-bytes.py` | `check-fmint.sh`, `check-weth.sh` | parses the committed Lean literal and compares it byte-for-byte against every fixture's pre-state code for that contract |
+| `scripts/check-runtime-bytes.py` | `check-fmint.sh`, `check-weth.sh`, `check-weth10-redemption.sh` | parses the committed Lean literal and compares it byte-for-byte against every fixture's pre-state code for that contract |
 | `scripts/selector_coverage.py` | both coverage gates | conservatively recognizes straight-line internal CALL sites tied to changed post-state recorder slots, inventories uncredited selector embeddings, and runs five corruption falsifiers |
 | `scripts/check-fmint-coverage.py` | `check-fmint-coverage.sh` | accounts for direct, witnessed-internal, embedded-only, and unreached selectors; identifies fmint by byte-equality against the committed literal |
 | `scripts/check-weth-coverage.py` | `check-weth-coverage.sh` | the same accounting for WETH, plus the direct empty-calldata fallback |
@@ -140,14 +144,14 @@ Every gate prints exactly one summary line and exits nonzero on anything else.
 - **`REFUSED`** from `check-elab.sh` means another run holds the lock. It is the
   guard working. Stop the other run; never `--force` past it.
 
-The two WETH10 execution gates additionally require the clean EELS checkout
+The three WETH10 execution gates additionally require the clean EELS checkout
 at commit `4198b9c5996713b268aed602739d5aa40e277694` under
 `$EELS_ROOT` (default `~/execution-specs`). They never fetch or refresh that
 checkout. A missing, dirty, or differently pinned checkout is a regression,
 not a skip. The initial 6163-byte candidate's three unallowlisted word-`2`
 mismatches are retained as history in the fixture README. The user adjudicated
 in favor of deployed Solidity-0.7 truthiness; the normalized 6313-byte runtime
-must pass the expanded 141-row matrix with no mismatch allowlist.
+must pass the expanded 145-row matrix with no mismatch allowlist.
 
 **Counts are part of the criterion, not decoration.** A green `check.sh`
 exact-set summary is meaningful only together with "no row added, removed, or
@@ -220,7 +224,9 @@ worker that has been opening files. A `--force` run may not be rebased.
    fixtures from `scripts/gen-*-fixtures.py`, borrower bytes from their
    committed artifact JSONs, `Blanc/FmintCode.lean` and `Blanc/WethCode.lean`
    from `scripts/gen-*-code.lean`, and the WETH10 differential manifest from
-   `scripts/check-weth10-differential.sh --write-manifest --manifest-only`.
+   `scripts/check-weth10-differential.sh --write-manifest --manifest-only`;
+   WETH10 redemption fixtures and their manifest come only from
+   `scripts/gen-weth10-redemption-fixtures.py`.
 6. **CI runs a subset of this file**, not a different thing:
    `.github/workflows/ci.yml` invokes `check-layering.sh`,
    `check-trust-surface.sh`, `check-weth10-reference.sh`, `check-error-data.sh`,

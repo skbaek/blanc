@@ -1195,8 +1195,8 @@ theorem withdrawTo_execSat {fs : List Func} {e : Sevm} {pre : Devm}
   simp only [withdrawTo]
   apply Func.execSat_segment
   · intro ex hex
-    func_run (2)
-    exact hex
+    cases ex <;> simp only [Func.ExecWitness] at hex ⊢ <;>
+      func_run (2) <;> exact hex
   refine Func.execSat_sload_step rfl (by simp)
     (v := pre.getStorVal e.currentTarget e.caller.toB256) rfl
     (M := Mem.empty) ?_ ?_ ?_
@@ -1209,11 +1209,12 @@ theorem withdrawTo_execSat {fs : List Func} {e : Sevm} {pre : Devm}
       at hG₁ hlo₁ hhi₁
     apply Func.execSat_segment
     · intro ex hex
-      func_run (9) [0]
-      · show (if pre.getStorVal e.currentTarget e.caller.toB256 <
-            Sevm.argWord e 1 then (1 : B256) else 0) = 0
-        rw [if_neg (not_lt_of_ge h_amount)]
-      exact hex
+      cases ex <;> simp only [Func.ExecWitness] at hex ⊢ <;>
+        func_run (9) [0] <;> first
+        | exact hex
+        | show (if pre.getStorVal e.currentTarget e.caller.toB256 <
+              Sevm.argWord e 1 then (1 : B256) else 0) = 0
+          rw [if_neg (not_lt_of_ge h_amount)]
     refine Func.execSat_sstore_warm_step rfl hw₁ h_static
       (M := Mem.empty) rfl
       (by simp only [Devm.gasLeft_setMach, gasStorageSet]; omega) ?_
@@ -1222,9 +1223,10 @@ theorem withdrawTo_execSat {fs : List Func} {e : Sevm} {pre : Devm}
     simp only [Devm.gasLeft_setMach, gasStorageSet] at hG₂ hc₂
     apply Func.execSat_segment
     · intro ex hex
-      func_run (11) [gMemory]
-      · exact Devm.extCost_empty_word
-      exact hex
+      cases ex <;> simp only [Func.ExecWitness] at hex ⊢ <;>
+        func_run (11) [gMemory] <;> first
+        | exact hex
+        | exact Devm.extCost_empty_word
     refine Func.execSat_log_step
       (topics := [transferEvent, e.caller.toB256, 0])
       (s := [Sevm.argWord e 1, e.caller.toB256]) rfl rfl h_static
@@ -1240,10 +1242,10 @@ theorem withdrawTo_execSat {fs : List Func} {e : Sevm} {pre : Devm}
       simp only [Devm.gasLeft_setMach] at hG₃
       apply Func.execSat_segment
       · intro ex hex
-        func_run (20)
-        rw [← Sevm.argWord_eq_dataWord]
-        simp only [prepend]
-        exact hex
+        cases ex <;> simp only [Func.ExecWitness] at hex ⊢ <;>
+          func_run (20) <;>
+          rw [← Sevm.argWord_eq_dataWord] <;>
+          simp only [prepend] <;> exact hex
       have hbal : ∀ a : Adr, b₃.getBal a = pre.getBal a := fun a =>
         (hbal₃ a).trans ((hbal₂ a).trans (hbal₁ a))
       have hcode : ∀ a : Adr, b₃.getCode a = pre.getCode a := fun a =>
@@ -1394,8 +1396,8 @@ theorem withdraw_execSat {fs : List Func} {e : Sevm} {pre : Devm}
   simp only [withdraw]
   apply Func.execSat_segment
   · intro ex hex
-    func_run (2)
-    exact hex
+    cases ex <;> simp only [Func.ExecWitness] at hex ⊢ <;>
+      func_run (2) <;> exact hex
   refine Func.execSat_sload_step rfl (by simp)
     (v := pre.getStorVal e.currentTarget e.caller.toB256) rfl
     (M := Mem.empty) ?_ ?_ ?_
@@ -1408,11 +1410,12 @@ theorem withdraw_execSat {fs : List Func} {e : Sevm} {pre : Devm}
       at hG₁ hlo₁ hhi₁
     apply Func.execSat_segment
     · intro ex hex
-      func_run (9) [0]
-      · show (if pre.getStorVal e.currentTarget e.caller.toB256 <
-            Sevm.argWord e 0 then (1 : B256) else 0) = 0
-        rw [if_neg (not_lt_of_ge h_amount)]
-      exact hex
+      cases ex <;> simp only [Func.ExecWitness] at hex ⊢ <;>
+        func_run (9) [0] <;> first
+        | exact hex
+        | show (if pre.getStorVal e.currentTarget e.caller.toB256 <
+              Sevm.argWord e 0 then (1 : B256) else 0) = 0
+          rw [if_neg (not_lt_of_ge h_amount)]
     refine Func.execSat_sstore_warm_step rfl hw₁ h_static
       (M := Mem.empty) rfl
       (by simp only [Devm.gasLeft_setMach, gasStorageSet]; omega) ?_
@@ -1421,9 +1424,10 @@ theorem withdraw_execSat {fs : List Func} {e : Sevm} {pre : Devm}
     simp only [Devm.gasLeft_setMach, gasStorageSet] at hG₂ hc₂
     apply Func.execSat_segment
     · intro ex hex
-      func_run (11) [gMemory]
-      · exact Devm.extCost_empty_word
-      exact hex
+      cases ex <;> simp only [Func.ExecWitness] at hex ⊢ <;>
+        func_run (11) [gMemory] <;> first
+        | exact hex
+        | exact Devm.extCost_empty_word
     refine Func.execSat_log_step
       (topics := [transferEvent, e.caller.toB256, 0])
       (s := [Sevm.argWord e 0, e.caller.toB256]) rfl rfl h_static
@@ -1439,8 +1443,8 @@ theorem withdraw_execSat {fs : List Func} {e : Sevm} {pre : Devm}
       simp only [Devm.gasLeft_setMach] at hG₃
       apply Func.execSat_segment
       · intro ex hex
-        func_run (20)
-        exact hex
+        cases ex <;> simp only [Func.ExecWitness] at hex ⊢ <;>
+          func_run (20) <;> exact hex
       have hbal : ∀ a : Adr, b₃.getBal a = pre.getBal a := fun a =>
         (hbal₃ a).trans ((hbal₂ a).trans (hbal₁ a))
       have hcode : ∀ a : Adr, b₃.getCode a = pre.getCode a := fun a =>
@@ -1727,8 +1731,9 @@ theorem withdrawTo_progExecSat (dp : DeployParams)
     have h_leaf :
         B256.eqCheck (0x205c2878 : B256) 0x205c2878 = 1 := by decide
     rw [weth10Main_eq_withdrawTo]
-    func_run (33) [0, (0x205c2878 : B256), 1, 1, 1, 0, 0, 1, 1]
-    simpa only [weth10Main_eq_withdrawTo] using hex
+    cases ex <;> simp only [Func.ExecWitness] at hex ⊢ <;>
+      func_run (33) [0, (0x205c2878 : B256), 1, 1, 1, 0, 0, 1, 1] <;>
+      simpa only [weth10Main_eq_withdrawTo] using hex
   have hbody := withdrawTo_execSat
     (fs := withdrawToMain dp :: (weth10 dp).aux) (e := e)
     (pre := pre.setMach ⟨[], Mem.empty, g - 182⟩)
@@ -1797,8 +1802,9 @@ theorem withdraw_progExecSat (dp : DeployParams)
     have h_leaf :
         B256.eqCheck (0x2e1a7d4d : B256) 0x2e1a7d4d = 1 := by decide
     rw [weth10Main_eq_withdraw]
-    func_run (33) [0, (0x2e1a7d4d : B256), 1, 1, 0, 1, 0, 1, 1]
-    simpa only [weth10Main_eq_withdraw] using hex
+    cases ex <;> simp only [Func.ExecWitness] at hex ⊢ <;>
+      func_run (33) [0, (0x2e1a7d4d : B256), 1, 1, 0, 1, 0, 1, 1] <;>
+      simpa only [weth10Main_eq_withdraw] using hex
   have hbody := withdraw_execSat
     (fs := withdrawMain dp :: (weth10 dp).aux) (e := e)
     (pre := pre.setMach ⟨[], Mem.empty, g - 182⟩) (P := P)
@@ -1841,13 +1847,14 @@ theorem withdrawTo_exec (dp : DeployParams)
       exec ⟨0, e, pre⟩ = .ok post ∧
       RedemptionCodeOutcome e pre post e.caller recipient
         (Sevm.argWord e 1) := by
-  refine Prog.execSat_out (P := fun ex => ∃ post,
-    ex = .ok post ∧
-      RedemptionCodeOutcome e pre post e.caller recipient
-        (Sevm.argWord e 1)) ?_ h_compile
-  exact withdrawTo_progExecSat dp h_data h_value h_sel h_recipient h_amount
+  have hsat := withdrawTo_progExecSat dp (P := fun ex => ∃ post,
+    ex = .ok post ∧ RedemptionCodeOutcome e pre post e.caller recipient
+      (Sevm.argWord e 1)) h_data h_value h_sel h_recipient h_amount
     h_static h_depth h_nonprecompile h_code h_sender h_original h_refund
     h_stack h_mem h_gas (fun post hpost => ⟨post, rfl, hpost⟩)
+  rcases hsat with ⟨ex, hw, post, hex, hpost⟩
+  subst ex
+  exact ⟨post, Prog.exec_of_runCompiled hw h_compile, hpost⟩
 
 theorem withdraw_exec (dp : DeployParams)
     {e : Sevm} {pre : Devm}
@@ -1872,13 +1879,14 @@ theorem withdraw_exec (dp : DeployParams)
       exec ⟨0, e, pre⟩ = .ok post ∧
       RedemptionCodeOutcome e pre post e.caller e.caller
         (Sevm.argWord e 0) := by
-  refine Prog.execSat_out (P := fun ex => ∃ post,
-    ex = .ok post ∧
-      RedemptionCodeOutcome e pre post e.caller e.caller
-        (Sevm.argWord e 0)) ?_ h_compile
-  exact withdraw_progExecSat dp h_data h_value h_sel h_amount h_static h_depth
+  have hsat := withdraw_progExecSat dp (P := fun ex => ∃ post,
+    ex = .ok post ∧ RedemptionCodeOutcome e pre post e.caller e.caller
+      (Sevm.argWord e 0)) h_data h_value h_sel h_amount h_static h_depth
     h_nonprecompile h_code h_sender h_original h_refund h_stack h_mem h_gas
     (fun post hpost => ⟨post, rfl, hpost⟩)
+  rcases hsat with ⟨ex, hw, post, hex, hpost⟩
+  subst ex
+  exact ⟨post, Prog.exec_of_runCompiled hw h_compile, hpost⟩
 
 /-! ## Ordinary message-frame packaging -/
 

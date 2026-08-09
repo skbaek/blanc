@@ -16,13 +16,13 @@
   "counts": {
     "channels": {
       "call-shape": 24,
-      "call-trace": 61,
+      "call-trace": 65,
       "ecrecover": 9,
-      "eth": 141,
-      "logical-state": 141,
-      "logs": 141,
-      "outcome": 141,
-      "returndata": 141
+      "eth": 145,
+      "logical-state": 145,
+      "logs": 145,
+      "outcome": 145,
+      "returndata": 145
     },
     "endpoints": {
       "CALLBACK_SUCCESS()": 3,
@@ -51,11 +51,11 @@
       "transferAndCall(address,uint256,bytes)": 11,
       "transferFrom(address,address,uint256)": 5,
       "unknown-selector": 2,
-      "withdraw(uint256)": 4,
+      "withdraw(uint256)": 5,
       "withdrawFrom(address,address,uint256)": 3,
-      "withdrawTo(address,uint256)": 3
+      "withdrawTo(address,uint256)": 6
     },
-    "rows": 141,
+    "rows": 145,
     "tags": {
       "allowance-bypass": 2,
       "allowance-guard": 1,
@@ -70,8 +70,9 @@
       "ecrecover-empty": 1,
       "empty": 4,
       "empty-revert": 27,
-      "eth-call": 6,
+      "eth-call": 10,
       "exact-reason": 2,
+      "excluded-generalization": 1,
       "false": 3,
       "finite-allowance": 3,
       "flash": 15,
@@ -89,22 +90,26 @@
       "noncanonical-max": 3,
       "noncanonical-two": 3,
       "nonpayability": 25,
+      "nonstable": 1,
       "payable": 4,
       "permit": 9,
       "post-callback-balance": 1,
       "post-callback-settlement": 1,
       "precall-state": 3,
+      "precompile-recipient": 1,
       "read": 28,
       "reason-replacement": 1,
       "receive": 1,
+      "redemption-zero": 2,
       "reentrancy-snapshot": 2,
-      "rollback": 17,
+      "rollback": 19,
       "selector-smoke": 27,
       "self-address": 1,
       "self-recipient": 3,
+      "sender-balance-short-circuit": 1,
       "settlement": 7,
       "short31": 4,
-      "state": 19,
+      "state": 23,
       "state-mutating-reentrancy": 4,
       "staticcall": 26,
       "synthetic-world": 4,
@@ -114,6 +119,8 @@
       "true": 3,
       "typed-callback": 32,
       "unknown-selector": 2,
+      "withdraw-zero": 1,
+      "withdrawTo-zero": 1,
       "withdrawal-branch": 1,
       "write-before-callback": 2,
       "write-before-ecrecover": 1,
@@ -128,7 +135,7 @@
     "the synthetic identity world has four targeted identity canaries, including a state-mutating self-recipient row, rather than a duplicate of every mainnet scenario",
     "malformed or noncanonical input calldata (normatively excluded)",
     "adversarial allowance-key collision worlds (normatively excluded)",
-    "consensus receipt/state-root execution through Jaune; this rig executes message calls in pinned EELS"
+    "full transaction/receipt execution is owned by the separate WETH10 redemption fixture gate"
   ],
   "oracle": {
     "address": "0xf4bb2e28688e89fcce3c0580d37d36a7672e8a9f",
@@ -866,6 +873,100 @@
       "world": "mainnet-chain1"
     },
     {
+      "calldataSha256": "48e7260f2b9b04a9a955fa40ba90bf664c7f5aec0b57908a8fe2760053fee2ac",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace"
+      ],
+      "endpoint": "withdraw(uint256)",
+      "name": "withdraw-zero",
+      "owner": "DF-redemption",
+      "tags": [
+        "state",
+        "eth-call",
+        "redemption-zero",
+        "withdraw-zero"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "666e9021ccd88063f53f71527baa9e5770f5abff5989a03615a1e9cd4f68fac2",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace"
+      ],
+      "endpoint": "withdrawTo(address,uint256)",
+      "name": "withdrawTo-zero",
+      "owner": "DF-redemption",
+      "tags": [
+        "state",
+        "eth-call",
+        "redemption-zero",
+        "withdrawTo-zero"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "48c7a8714cc1fc2f7abfb818d3a48552e95c8940c2c8f771720ba849fd68219d",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace"
+      ],
+      "endpoint": "withdrawTo(address,uint256)",
+      "name": "withdrawTo-sender-balance-short-circuit",
+      "owner": "DF-redemption-boundary",
+      "tags": [
+        "state",
+        "eth-call",
+        "rollback",
+        "nonstable",
+        "sender-balance-short-circuit"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
+      "calldataSha256": "b63c65468d96ddaeef764e74ea0f7b28e58de59ab6de6b2f90af10c8ad2d60c5",
+      "chainId": 1,
+      "channels": [
+        "outcome",
+        "returndata",
+        "logical-state",
+        "eth",
+        "logs",
+        "call-trace"
+      ],
+      "endpoint": "withdrawTo(address,uint256)",
+      "name": "withdrawTo-blake2f-precompile-rejected",
+      "owner": "DF-redemption-boundary",
+      "tags": [
+        "state",
+        "eth-call",
+        "rollback",
+        "precompile-recipient",
+        "excluded-generalization"
+      ],
+      "value": "0x0",
+      "world": "mainnet-chain1"
+    },
+    {
       "calldataSha256": "d4e53bcb41f5c2aee07c33c024fd27ca5215fb09f98b103af7f01d9b2bad2685",
       "chainId": 1,
       "channels": [
@@ -1589,7 +1690,7 @@
       "world": "mainnet-chain1"
     },
     {
-      "calldataSha256": "994f54d5515cfd36a701c93f25af53b6c8490c2abac922eb78c338a6599d25e5",
+      "calldataSha256": "48e7260f2b9b04a9a955fa40ba90bf664c7f5aec0b57908a8fe2760053fee2ac",
       "chainId": 1,
       "channels": [
         "outcome",
@@ -1629,7 +1730,7 @@
       "world": "mainnet-chain1"
     },
     {
-      "calldataSha256": "48c7a8714cc1fc2f7abfb818d3a48552e95c8940c2c8f771720ba849fd68219d",
+      "calldataSha256": "b63c65468d96ddaeef764e74ea0f7b28e58de59ab6de6b2f90af10c8ad2d60c5",
       "chainId": 1,
       "channels": [
         "outcome",
@@ -3222,9 +3323,9 @@
       "transfer(address,uint256)": 9,
       "transferAndCall(address,uint256,bytes)": 11,
       "transferFrom(address,address,uint256)": 5,
-      "withdraw(uint256)": 4,
+      "withdraw(uint256)": 5,
       "withdrawFrom(address,address,uint256)": 3,
-      "withdrawTo(address,uint256)": 3
+      "withdrawTo(address,uint256)": 6
     },
     "receiveCount": 1,
     "referenceFunctionCount": 27,

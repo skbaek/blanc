@@ -1924,7 +1924,7 @@ theorem Prog.exec_of_execTo {sevm : Sevm} {pre : Devm} {p : Prog}
   rw [← exec_iff_exec_eq]
   exact ⟨Exec.cont h1 exc⟩
 
-/-! ## `ExecSat` — the same evidence, existential in the outcome
+/-! ## `ExecSat` — success carries the compiled walk
 
 A statement like a settlement trichotomy does not know its outcome up front:
 which disjunct holds is decided by a case analysis *inside* the walk, on facts
@@ -1932,18 +1932,34 @@ about states the walk itself introduces.  A relation whose outcome is a fixed
 parameter cannot carry that — the continuation-passing steps universally
 quantify their successor states, so no single outcome term can be named before
 the case split.  `ExecSat` is the fix: the outcome is existential, constrained
-only by a predicate, and every walk step threads the pair through. -/
+only by a predicate, and every walk step threads the pair through.  Its witness
+is deliberately asymmetric: a successful outcome retains the actual
+`RunCompiled` walk required by the public code bridge; only a fatal outcome,
+which `RunCompiled` cannot express, falls back to `ExecTo`. -/
+
+/-- Evidence appropriate to an outcome: a real compiled walk on success, and
+execution evidence only for the fatal terminal that the walk relation cannot
+represent. -/
+def Func.ExecWitness (fs : List Func) (sevm : Sevm) (devm : Devm) (f : Func) :
+    Execution → Prop
+  | .ok post => Func.RunCompiled fs sevm devm f post
+  | .error err => Func.ExecTo fs sevm devm f (.error err)
+
+/-- The program-altitude form of `Func.ExecWitness`. -/
+def Prog.ExecWitness (sevm : Sevm) (devm : Devm) (p : Prog) : Execution → Prop
+  | .ok post => Prog.RunCompiled sevm devm p post
+  | .error err => Prog.ExecTo sevm devm p (.error err)
 
 /-- Some outcome satisfying `P` is reachable: the existential the case tree
 under a `CALL` needs. -/
 def Func.ExecSat (fs : List Func) (sevm : Sevm) (devm : Devm) (f : Func)
     (P : Execution → Prop) : Prop :=
-  ∃ ex, Func.ExecTo fs sevm devm f ex ∧ P ex
+  ∃ ex, Func.ExecWitness fs sevm devm f ex ∧ P ex
 
 /-- The program altitude of `Func.ExecSat`. -/
 def Prog.ExecSat (sevm : Sevm) (devm : Devm) (p : Prog)
     (P : Execution → Prop) : Prop :=
-  ∃ ex, Prog.ExecTo sevm devm p ex ∧ P ex
+  ∃ ex, Prog.ExecWitness sevm devm p ex ∧ P ex
 
 /-- What `ExecSat` is for: the predicate holds of the total `exec`'s value. -/
 theorem Prog.execSat_out {sevm : Sevm} {pre : Devm} {p : Prog}
@@ -1951,9 +1967,14 @@ theorem Prog.execSat_out {sevm : Sevm} {pre : Devm} {p : Prog}
     (h : Prog.ExecSat sevm pre p P)
     (h_eq : some sevm.code.toList = p.compile) :
     P (exec ⟨0, sevm, pre⟩) := by
-  rcases h with ⟨ex, hto, hp⟩
-  rw [Prog.exec_of_execTo hto h_eq]
-  exact hp
+  rcases h with ⟨ex, hw, hp⟩
+  cases ex with
+  | ok post =>
+      rw [Prog.exec_of_runCompiled hw h_eq]
+      exact hp
+  | error err =>
+      rw [Prog.exec_of_execTo hw h_eq]
+      exact hp
 
 /-- The program entry, mirroring `Prog.runCompiledTo_intro`. -/
 lemma Prog.execSat_intro {sevm : Sevm} {devm mid : Devm} {p : Prog}
@@ -1962,21 +1983,71 @@ lemma Prog.execSat_intro {sevm : Sevm} {devm mid : Devm} {p : Prog}
     (h_mid : mid = devm.setMach ⟨devm.stack, devm.memory, G⟩)
     (h_main : Func.ExecSat (p.main :: p.aux) sevm mid p.main P) :
     Prog.ExecSat sevm devm p P := by
-  rcases h_main with ⟨ex, hto, hp⟩
+  rcases h_main with ⟨ex, hw, hp⟩
   subst h_mid
-  exact ⟨ex, ⟨_, Devm.burnBy_setMach_gas h_gas, hto⟩, hp⟩
+  refine ⟨ex, ?_, hp⟩
+  cases ex <;> exact ⟨_, Devm.burnBy_setMach_gas h_gas, hw⟩
 
 /-- A segment of ordinary instructions, threaded through the existential: the
-transformer premise is a fixed-outcome `ExecTo` implication, which is exactly
-the shape `func_run` proves — walk the goal, close the residue with the
-hypothesis. -/
+transformer premise is a fixed-outcome witness implication, which is exactly
+the shape the registered `ExecWitness` relation lets `func_run` prove directly:
+walk the goal once, then close the residue with the hypothesis. -/
 lemma Func.execSat_segment {fs : List Func} {sevm : Sevm} {devm devm' : Devm}
     {f f' : Func} {P : Execution → Prop}
-    (h_seg : ∀ ex, Func.ExecTo fs sevm devm' f' ex →
-      Func.ExecTo fs sevm devm f ex)
+    (h_seg : ∀ ex, Func.ExecWitness fs sevm devm' f' ex →
+      Func.ExecWitness fs sevm devm f ex)
     (h : Func.ExecSat fs sevm devm' f' P) : Func.ExecSat fs sevm devm f P := by
-  rcases h with ⟨ex, hto, hp⟩
-  exact ⟨ex, h_seg ex hto, hp⟩
+  rcases h with ⟨ex, hw, hp⟩
+  exact ⟨ex, h_seg ex hw, hp⟩
+
+/-- One successful instruction preserves the outcome-appropriate witness. -/
+lemma Func.ExecWitness.next {fs : List Func} {sevm : Sevm} {devm : Devm}
+    {i : Ninst} {devm' : Devm} {f : Func} {ex : Execution}
+    (h_n : Ninst.RunCompiled sevm devm i devm')
+    (h_f : Func.ExecWitness fs sevm devm' f ex) :
+    Func.ExecWitness fs sevm devm (.next i f) ex := by
+  cases ex with
+  | ok post => exact Func.RunCompiled.next h_n h_f
+  | error err => exact Func.execTo_next h_n h_f
+
+/-- The zero branch preserves the outcome-aware witness.  These structural
+rules register `ExecWitness` with the shared `func_run` walk without splitting
+and re-elaborating every instruction prefix at each use site. -/
+lemma Func.execWitness_branch_zero {fs : List Func} {sevm : Sevm}
+    {devm : Devm} {f g : Func} {ex : Execution} {s : List B256} {G : Nat}
+    (h_stk : devm.stack = 0 :: s) (h_room : devm.stack.length < 1024)
+    (h_gas : devm.gasLeft = G + (gVerylow + gHigh))
+    (h_arm : Func.ExecWitness fs sevm
+      (devm.setMach ⟨s, devm.memory, G⟩) f ex) :
+    Func.ExecWitness fs sevm devm (.branch f g) ex := by
+  cases ex with
+  | ok post => exact Func.runCompiled_branch_zero h_stk h_room h_gas h_arm
+  | error err => exact Func.execTo_branch_zero h_stk h_room h_gas h_arm
+
+/-- The nonzero branch preserves the outcome-aware witness. -/
+lemma Func.execWitness_branch_succ {fs : List Func} {sevm : Sevm}
+    {devm : Devm} {f g : Func} {ex : Execution} {w : B256} {s : List B256}
+    {G : Nat} (h_ne : w ≠ 0) (h_stk : devm.stack = w :: s)
+    (h_room : devm.stack.length < 1024)
+    (h_gas : devm.gasLeft = G + (gVerylow + gHigh + gJumpdest))
+    (h_arm : Func.ExecWitness fs sevm
+      (devm.setMach ⟨s, devm.memory, G⟩) g ex) :
+    Func.ExecWitness fs sevm devm (.branch f g) ex := by
+  cases ex with
+  | ok post => exact Func.runCompiled_branch_succ h_ne h_stk h_room h_gas h_arm
+  | error err => exact Func.execTo_branch_succ h_ne h_stk h_room h_gas h_arm
+
+/-- An internal tail call preserves the outcome-aware witness. -/
+lemma Func.execWitness_call' {fs : List Func} {sevm : Sevm} {devm : Devm}
+    {k : Nat} {f : Func} {ex : Execution} {G : Nat} (h_get : fs[k]? = some f)
+    (h_room : devm.stack.length < 1024)
+    (h_gas : devm.gasLeft = G + (gVerylow + gMid + gJumpdest))
+    (h_body : Func.ExecWitness fs sevm
+      (devm.setMach ⟨devm.stack, devm.memory, G⟩) f ex) :
+    Func.ExecWitness fs sevm devm (.call k) ex := by
+  cases ex with
+  | ok post => exact Func.runCompiled_call' h_get h_room h_gas h_body
+  | error err => exact Func.execTo_call' h_get h_room h_gas h_body
 
 /-- One successful instruction, threaded through the existential. -/
 lemma Func.execSat_next {fs : List Func} {sevm : Sevm} {devm devm' : Devm}
@@ -1984,15 +2055,18 @@ lemma Func.execSat_next {fs : List Func} {sevm : Sevm} {devm devm' : Devm}
     (h_n : Ninst.RunCompiled sevm devm i devm')
     (h_f : Func.ExecSat fs sevm devm' f P) :
     Func.ExecSat fs sevm devm (.next i f) P := by
-  rcases h_f with ⟨ex, hto, hp⟩
-  exact ⟨ex, Func.execTo_next h_n hto, hp⟩
+  rcases h_f with ⟨ex, hw, hp⟩
+  exact ⟨ex, Func.ExecWitness.next h_n hw, hp⟩
 
 /-- A complete residual walk closes an `ExecSat` goal: the leaf terminal. -/
 lemma Func.execSat_of_runCompiledTo {fs : List Func} {sevm : Sevm} {devm : Devm}
     {f : Func} {ex : Execution} {P : Execution → Prop}
     (h : Func.RunCompiledTo fs sevm devm f ex) (hp : P ex) :
-    Func.ExecSat fs sevm devm f P :=
-  ⟨ex, Func.ExecTo.of_runCompiledTo h, hp⟩
+    Func.ExecSat fs sevm devm f P := by
+  refine ⟨ex, ?_, hp⟩
+  cases ex with
+  | ok post => exact Func.RunCompiled.of_runCompiledTo_ok h
+  | error err => exact Func.ExecTo.of_runCompiledTo h
 
 /-- The fatal terminal: a spawning instruction fails, the frame settles at the
 error right there, and the predicate is met on the error side. -/
@@ -2055,7 +2129,7 @@ lemma Func.execSat_sload_step {fs : List Func} {sevm : Sevm} {devm : Devm}
       (by rw [h_base]; split <;> rfl)
       (by rw [h_base]; split <;> rfl)
       h_lo h_hi (by omega) with ⟨ex, hto, hp⟩
-  exact ⟨ex, Func.execTo_next
+  exact ⟨ex, Func.ExecWitness.next
     (Ninst.runCompiled_sload_of (base := base) (c := c) (G := devm.gasLeft - c)
       h_stk h_base.symm h_c.symm rfl (by omega) h_room) hto, hp⟩
 
@@ -2135,7 +2209,7 @@ lemma Func.execSat_sstore_warm_step {fs : List Func} {sevm : Sevm}
         have hbc := State.setStorVal_balCodeEq devm.state sevm.currentTarget k v
         exact (congrArg Prod.snd (congrFun hbc a)).symm)
       rfl rfl rfl rfl rfl rfl h_bound (by omega) with ⟨ex, hto, hp⟩
-  exact ⟨ex, Func.execTo_next
+  exact ⟨ex, Func.ExecWitness.next
     (Ninst.runCompiled_sstore_warm (c := sstoreValueCost
         (getOrigStorVal sevm sevm.currentTarget k)
         (devm.getStorVal sevm.currentTarget k) v)
@@ -2160,7 +2234,7 @@ lemma Func.execSat_mstore_step {fs : List Func} {sevm : Sevm} {devm : Devm}
     Func.ExecSat fs sevm devm (Func.next Ninst.mstore rest) P := by
   subst h_mem
   rcases h_next _ (devm.gasLeft - c) rfl (by omega) with ⟨ex, hto, hp⟩
-  exact ⟨ex, Func.execTo_next
+  exact ⟨ex, Func.ExecWitness.next
     (Ninst.runCompiled_mstore_of (G := devm.gasLeft - c) (e := devm.extCost
       [⟨i.toNat, 32⟩]) h_stk rfl (by omega) rfl) hto, hp⟩
 
@@ -2195,7 +2269,7 @@ lemma Func.execSat_log_step {fs : List Func} {sevm : Sevm} {devm : Devm}
       (devm.gasLeft - c) rfl (fun _ _ => rfl) (fun _ => rfl) (fun _ => rfl)
       rfl rfl rfl rfl rfl (by omega)
     with ⟨ex, hto, hp⟩
-  exact ⟨ex, Func.execTo_next
+  exact ⟨ex, Func.ExecWitness.next
     (Ninst.runCompiled_log_of (G := devm.gasLeft - c) h_stk h_len h_static
       h_cost h_data h_img (by omega)) hto, hp⟩
 
@@ -2216,7 +2290,7 @@ lemma Func.execSat_calldatacopy_step {fs : List Func} {sevm : Sevm}
     Func.ExecSat fs sevm devm (Func.next (.reg .calldatacopy) rest) P := by
   subst h_mem
   rcases h_next _ (devm.gasLeft - c) rfl (by omega) with ⟨ex, hto, hp⟩
-  exact ⟨ex, Func.execTo_next
+  exact ⟨ex, Func.ExecWitness.next
     (Ninst.runCompiled_calldatacopy_of (G := devm.gasLeft - c) h_stk h_cost
       rfl (by omega)) hto, hp⟩
 

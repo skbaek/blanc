@@ -230,9 +230,9 @@ and proof falls. It is not duplicated here. Blanc adds exactly:
 1. **the pinned Jaune revision** below — trusting a Blanc theorem is trusting
    that specific Jaune, not the sibling checkout on your disk;
 2. **the axiom audit** below, which is stricter than Jaune's own gates: its
-   current source inventory pins the exact axiom set of 262 named results—139
+   current source inventory pins the exact axiom set of 275 named results—149
    in the WETH10/`Weth10Inv` family—and fails on an extra *or* missing axiom.
-   Run `scripts/check.sh --no-build`; its `262/262` summary belongs to the
+   Run `scripts/check.sh --no-build`; its `275/275` summary belongs to the
    source identity printed by `git rev-parse HEAD`;
 3. **Blanc's own source**, guarded by
    [`scripts/check-trust-surface.sh`](scripts/check-trust-surface.sh). The gate
@@ -260,7 +260,7 @@ without a sibling checkout, and bumping Jaune is a reviewed one-line change.
 
 CI builds the library and runs an
 **axiom audit** ([`scripts/AxiomCheck.lean`](scripts/AxiomCheck.lean)) whose
-current source inventory contains **262** top theorems, including **139**
+current source inventory contains **275** top theorems, including **149**
 WETH10/`Weth10Inv` rows. `scripts/check.sh`'s row list is the authority on
 membership; run `scripts/check.sh --no-build` and bind its exact-set verdict to
 `git rev-parse HEAD`. The separate `scripts/check-claims.sh` Lean-checks the
@@ -565,10 +565,10 @@ the synthetic chain-31337/address-`0x1000` member has SHA-256
 | Assurance class | What is established | Artifact boundary |
 |---|---|---|
 | Formally proved | Compilation to each named Blanc runtime; compiled endpoint effects; backing preservation; exact flash-counter restoration; transaction/block/chain preservation of `Weth10.Stable`; a direct creation-message seed on the actual post-state; and constructive canonical `withdraw`/`withdrawTo` redemption at ordinary-message and Prague type-2 transaction altitude. `chain_reachable_backed_and_flash_zero` literally concludes `flashMinted = 0` and `balSum ≤ ETH balance`; `Stable.messageRedemption_enabled_of_le` and `Stable.transactionRedemption_enabled_of_le` construct success for each natural amount within one holder's booked balance under explicit code-free-recipient, access/storage, funding, and sufficient-gas envelopes. | The theorems are about the Blanc program and its generated runtime under their stated Jaune premises. They compose existing `ContractSpec` results; they do not verify the deployed oracle, construct keys, promise inclusion, or cover arbitrary receiver code. |
-| Differentially tested | `scripts/check-weth10-differential.sh` executes 141 generated canonical-call rows against both the literal deployed runtime and the exact named Blanc family members, covering all 27 selectors plus receive in two identity worlds with zero mismatches. | Finite tests against the deployed oracle on chosen inputs, not semantic equivalence or a proof. |
+| Executably tested | `scripts/check-weth10-differential.sh` executes 145 generated canonical-call rows against both the literal deployed runtime and the exact named Blanc family members, covering all 27 selectors plus receive in two identity worlds with zero mismatches. `scripts/check-weth10-redemption.sh --no-build` separately replays two committed Prague blockchain fixtures: a type-2 zero/nonzero/failed-redemption sequence with receipt statuses `[true, true, false]`, and a valid type-4 authorization that changes the recipient's code and nonce. | Finite differential rows and transaction fixtures on chosen inputs, not semantic equivalence or a proof. |
 | Not established | Verification of the deployed runtime; deployed-vs-Blanc semantic equivalence; establishment from a top-level creation transaction or deployment block; malformed/noncanonical input-calldata closure; arbitrary receiver/borrower liveness or settlement; exact gas, storage, codehash, or CREATE2 parity. | These are non-claims, not assumptions supplied by the proof or test suites. See `WETH10_COMPATIBILITY.md` and `WETH10_DEVIATIONS.md`. |
 
-The generated differential gate's 141 rows include 61 live
+The generated differential gate's 145 rows include 65 live
 CALL/STATICCALL traces, five state-mutating or hostile reentrancy rows, 26
 static-context rows, and eight channel falsifiers. Public compiled-effect
 theorems separately cover 28/28 runtime entries, including transfer/withdraw,

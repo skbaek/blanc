@@ -1,0 +1,30 @@
+[
+  {
+    "assertions": 16,
+    "authorizationMutation": "none",
+    "name": "01-type2-redemption",
+    "outcome": "receipts=true,true,false",
+    "receiptSucceeded": [
+      true,
+      true,
+      false
+    ],
+    "transactionTypes": [
+      2,
+      2,
+      2
+    ]
+  },
+  {
+    "assertions": 13,
+    "authorizationMutation": "recipient code+nonce",
+    "name": "02-authorization-mutation",
+    "outcome": "receipts=true",
+    "receiptSucceeded": [
+      true
+    ],
+    "transactionTypes": [
+      4
+    ]
+  }
+]

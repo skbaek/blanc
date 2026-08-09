@@ -110,6 +110,9 @@ example : Adr → Adr → Nat → Log :=
 example : DeployParams → Adr → Adr → Adr → Nat → State → Msg → Prop :=
   AdmissibleRedemptionMessage
 
+example : DeployParams → Adr → Adr → Nat → State → Msg → Prop :=
+  AdmissibleSelfRedemptionMessage
+
 example : DeployParams → Adr → Adr → Adr → Nat →
     State → State → MsgCallOutput → Prop :=
   MessageRedemptionExactEffect
@@ -197,6 +200,16 @@ example {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     (data_eq : msg.data = withdrawToCalldata recipient q)
     (selector_eq : Sevm.selector (initSevm msg) = withdrawToSelector) :
     AdmissibleRedemptionMessage dp ca owner recipient q w msg :=
+  { toAdmissibleRedemptionMessageCore := core
+    data_eq := data_eq
+    selector_eq := selector_eq }
+
+example {dp : DeployParams} {ca owner : Adr} {q : Nat}
+    {w : State} {msg : Msg}
+    (core : AdmissibleRedemptionMessageCore dp ca owner owner q w msg)
+    (data_eq : msg.data = withdrawCalldata q)
+    (selector_eq : Sevm.selector (initSevm msg) = withdrawSelector) :
+    AdmissibleSelfRedemptionMessage dp ca owner q w msg :=
   { toAdmissibleRedemptionMessageCore := core
     data_eq := data_eq
     selector_eq := selector_eq }
@@ -359,6 +372,14 @@ example {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
       dp ca owner recipient q w msg) :
     MessageRedemptionEnabled dp ca owner recipient q w msg :=
   hstable.messageRedemption_enabled_of_le hq henv
+
+example {dp : DeployParams} {ca owner : Adr} {q : Nat}
+    {w : State} {msg : Msg}
+    (hstable : Stable dp ca w)
+    (hq : q ≤ bookedBalanceNat w ca owner)
+    (henv : AdmissibleSelfRedemptionMessage dp ca owner q w msg) :
+    MessageRedemptionEnabled dp ca owner owner q w msg :=
+  hstable.selfRedemption_enabled_of_le hq henv
 
 example {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
