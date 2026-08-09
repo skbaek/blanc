@@ -296,7 +296,7 @@ from/to, value data), with the topic hashes pinned in the generated lock.
 | ABI | `nonpayable`; input `(value: uint256)`; no outputs; selector `0x2e1a7d4d`. |
 | Guard/effects | Require caller balance `>= value` or exact `WETH: burn amount exceeds balance`; debit and emit `Transfer(msg.sender, 0, value)`. |
 | External call | Low-level call to `msg.sender` with `value` ETH and empty calldata after the debit/log. False result, regardless of child revert bytes, becomes exact `WETH: ETH transfer failed`; success returns empty data. Failure rolls everything back. |
-| Entry/evidence | Nonzero entry value empty-reverts. Owners: `DF-state`, reentrancy fixtures; `TH-state`, `TH-callback`, `TH-backed`. Status: complete. |
+| Entry/evidence | Nonzero entry value empty-reverts. Owners: `DF-state`, reentrancy fixtures; `TH-state`, `TH-callback`, `TH-backed`, `TH-redeem`. For the exact compiled Blanc runtime, `Stable.selfRedemption_enabled_of_le` constructively proves the canonical authorization-free call succeeds for every natural amount within the caller's booked balance when the nonzero owner is code-free, Prague-nonprecompile, transaction-capable, and adequately funded/gassed. This theorem is not about the deployed Solidity runtime. Status: complete. |
 
 <!-- WETH10-ENDPOINT {"signature":"withdrawFrom(address,address,uint256)","selector":"0x9555a942"} -->
 ### `withdrawFrom(address,address,uint256)`
@@ -317,7 +317,7 @@ from/to, value data), with the topic hashes pinned in the generated lock.
 | ABI | `nonpayable`; inputs `(to: address payable, value: uint256)`; no outputs; selector `0x205c2878`. |
 | Guard/effects | Require caller balance `>= value` or exact `WETH: burn amount exceeds balance`; debit and emit `Transfer(msg.sender, 0, value)`. |
 | External call | Low-level call to `to` with `value` ETH and empty calldata. False result is replaced by exact `WETH: ETH transfer failed`; success returns empty data. The target observes the debit/log. Failure rolls everything back. Address zero can succeed as an ETH target. |
-| Entry/evidence | Nonzero entry value empty-reverts. Owners: `DF-state`, reentrancy fixtures; `TH-state`, `TH-callback`, `TH-backed`. Status: complete. |
+| Entry/evidence | Nonzero entry value empty-reverts. Owners: `DF-state`, reentrancy fixtures; `TH-state`, `TH-callback`, `TH-backed`, `TH-redeem`. For the exact compiled Blanc runtime, `Stable.messageRedemption_enabled_of_le` and `Stable.transactionRedemption_enabled_of_le` construct successful canonical Prague message and type-2 transaction executions for every natural amount within the caller's booked balance, under their explicit code-free nonzero nonprecompile-recipient, original/current-storage, access, fee-funding, and gas envelopes. These theorems are not claims about arbitrary receiver code, inclusion, or the deployed Solidity runtime. Status: complete. |
 
 <!-- WETH10-ENDPOINT {"signature":"receive","selector":null} -->
 ### `receive`
@@ -385,7 +385,10 @@ ETH can arrive without receive/deposit and without a token credit. That surplus
 is retained. `totalSupply` observes the contract ETH balance plus
 `flashMinted`; the backing invariant is therefore an inequality, not equality.
 No liveness promise says every booked balance is withdrawable under arbitrary
-hostile callback/gas conditions.
+hostile callback/gas conditions. Within the narrower `TH-redeem` envelope,
+however, `Stable` proves every natural amount up to one holder's booked balance
+is executable through canonical `withdrawTo`, and canonical `withdraw` gives
+the corresponding direct-holder capability.
 
 <!-- WETH10-CROSSCUT gas-sensitive-callbacks -->
 ### Gas-sensitive callbacks
@@ -394,7 +397,10 @@ Adequate gas means each execution can reach the compared behavior. Low-level
 ETH calls and typed callbacks use their actual remaining-gas behavior, but
 Blanc need not match exact gas consumption, access lists, or callback-observed
 `gasleft()`. The landed exact-gas claims measure Blanc's own compiled bytes
-only.
+only. `TH-redeem` fixes Prague and proves the conservative Blanc runtime ceiling
+`100182`; the mandatory canonical type-2 envelope separately covers the maximum
+of calldata-floor gas and intrinsic gas plus that runtime ceiling. This is a
+sufficient bound, not deployed-artifact gas equality or a tight threshold.
 
 <!-- WETH10-CROSSCUT malformed-calldata-exclusion -->
 ### Malformed-calldata exclusion

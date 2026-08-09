@@ -1,4 +1,4 @@
-import Blanc.Weth10Stable
+import Blanc.Weth10Redeemable
 
 /-!
 Lean-checked statement pins for the WETH10 flagship declarations.  Each
@@ -98,6 +98,59 @@ example (s : Stor) (v b : B256) :
       balSum s + v.toNat ≤ b.toNat + (s.get flashMintedSlot).toNat ∧
       (s.get flashMintedSlot).toNat ≤ maxFlashMinted := by
   rfl
+
+example (w : State) (ca owner : Adr) :
+    bookedBalanceNat w ca owner =
+      (Stor.rest (w.getStor ca) owner).toNat :=
+  rfl
+
+example : Adr → Adr → Nat → Log :=
+  redemptionBurnLog
+
+example : DeployParams → Adr → Adr → Adr → Nat → State → Msg → Prop :=
+  AdmissibleRedemptionMessage
+
+example : DeployParams → Adr → Adr → Adr → Nat →
+    State → State → MsgCallOutput → Prop :=
+  MessageRedemptionExactEffect
+
+example : DeployParams → Adr → Adr → Adr → Nat → State → Msg → Prop :=
+  MessageRedemptionEnabled
+
+example : DeployParams → Adr → Adr → Adr → Nat →
+    Benv → BlockOutput → Tx → Nat → Prop :=
+  AdmissibleRedemptionTx
+
+example : DeployParams → Adr → Adr → Adr → Nat →
+    Benv → BlockOutput → Tx → Nat → State → BlockOutput → Prop :=
+  TransactionEthAccounting
+
+example : DeployParams → Adr → Adr → Adr → Nat →
+    Benv → BlockOutput → Tx → Nat → State → BlockOutput → Prop :=
+  TransactionRedemptionExactEffect
+
+example : DeployParams → Adr → Adr → Adr → Nat →
+    Benv → BlockOutput → Tx → Nat → Prop :=
+  TransactionRedemptionEnabled
+
+example {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
+    {w : State} {msg : Msg}
+    (hstable : Stable dp ca w)
+    (hq : q ≤ bookedBalanceNat w ca owner)
+    (henv : AdmissibleRedemptionMessage
+      dp ca owner recipient q w msg) :
+    MessageRedemptionEnabled dp ca owner recipient q w msg :=
+  hstable.messageRedemption_enabled_of_le hq henv
+
+example {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    (hstable : Stable dp ca benv.state)
+    (hq : q ≤ bookedBalanceNat benv.state ca owner)
+    (henv : AdmissibleRedemptionTx
+      dp ca owner recipient q benv bout tx index) :
+    TransactionRedemptionEnabled
+      dp ca owner recipient q benv bout tx index :=
+  hstable.transactionRedemption_enabled_of_le hq henv
 
 end Weth10
 

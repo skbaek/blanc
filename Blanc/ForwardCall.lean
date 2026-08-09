@@ -48,6 +48,21 @@ namespace Blanc
 
 open Jaune
 
+/-- A successful outcome-generalized walk is the ordinary successful walk.
+This is the inverse needed by constructive callers after a prefix was phrased
+uniformly over success and revert outcomes. -/
+theorem Func.RunCompiled.of_runCompiledTo_ok {fs : List Func} {sevm : Sevm}
+    {devm devm' : Devm} {f : Func}
+    (h : Func.RunCompiledTo fs sevm devm f (.ok devm')) :
+    Func.RunCompiled fs sevm devm f devm' := by
+  generalize hx : Except.ok devm' = ex at h
+  induction h with
+  | zero h_room h_pop _ ih => exact .zero h_room h_pop (ih hx)
+  | succ h_ne h_room h_pop _ ih => exact .succ h_ne h_room h_pop (ih hx)
+  | last h_lin => cases hx; exact .last h_lin
+  | next h_n _ ih => exact .next h_n (ih hx)
+  | call h_get h_room h_burn _ ih => exact .call h_get h_room h_burn (ih hx)
+
 /-! ## The spawn premise, discharged by totality
 
 `Ninst.RunCompiled sevm devm (.exec x) devm'` unfolds to
@@ -261,6 +276,8 @@ lemma Func.runCompiledTo_sload_step {fs : List Func} {sevm : Sevm} {devm : Devm}
       (∀ p : Adr × B256, p ∈ devm.accessedStorageKeys →
         p ∈ base.accessedStorageKeys) →
       (∀ (a : Adr) (k' : B256), base.getStorVal a k' = devm.getStorVal a k') →
+      (∀ a : Adr, base.getBal a = devm.getBal a) →
+      (∀ a : Adr, base.getCode a = devm.getCode a) →
       base.refundCounter = devm.refundCounter →
       base.logs = devm.logs →
       gasWarmAccess ≤ c → c ≤ gasColdSload →
@@ -283,6 +300,8 @@ lemma Func.runCompiledTo_sload_step {fs : List Func} {sevm : Sevm} {devm : Devm}
     (mem_accessedStorageKeys_sload_of h_base.symm)
     (fun _ hp => mem_accessedStorageKeys_sload_of_mem h_base.symm hp)
     (fun _ _ => getStorVal_sload_of h_base.symm)
+    (fun _ => by rw [h_base]; split <;> rfl)
+    (fun _ => by rw [h_base]; split <;> rfl)
     (refundCounter_sload_of h_base.symm) (logs_sload_of h_base.symm)
     h_lo h_hi (by omega)
 
@@ -305,6 +324,8 @@ lemma Func.runCompiledTo_sstore_warm_step {fs : List Func} {sevm : Sevm}
       base.getStorVal sevm.currentTarget k = v →
       (∀ (a : Adr) (k' : B256), (a, k') ≠ (sevm.currentTarget, k) →
         base.getStorVal a k' = devm.getStorVal a k') →
+      (∀ a : Adr, base.getBal a = devm.getBal a) →
+      (∀ a : Adr, base.getCode a = devm.getCode a) →
       base.accessedStorageKeys = devm.accessedStorageKeys →
       base.logs = devm.logs →
       c ≤ gasStorageSet →
@@ -324,7 +345,8 @@ lemma Func.runCompiledTo_sstore_warm_step {fs : List Func} {sevm : Sevm}
         (devm.getStorVal sevm.currentTarget k) v)
       h_stk h_warm (by simp only [gCallStipend, gasStorageSet] at *; omega)
       h_static rfl rfl (by omega)) ?_
-  refine h_next _ _ _ ?_ (fun a k' h_ne => ?_) rfl rfl h_bound (by omega)
+  refine h_next _ _ _ ?_ (fun a k' h_ne => ?_) (fun a => ?_)
+    (fun a => ?_) rfl rfl h_bound (by omega)
   · show (Devm.getStor _ sevm.currentTarget).get k = v
     rw [setStorVal_getStor_self, Stor.get_set_self]
   · by_cases h_adr : sevm.currentTarget = a
@@ -346,6 +368,10 @@ lemma Func.runCompiledTo_sstore_warm_step {fs : List Func} {sevm : Sevm}
         rfl
       rw [h_off]
       rfl
+  · have hbc := State.setStorVal_balCodeEq devm.state sevm.currentTarget k v
+    exact (congrArg Prod.fst (congrFun hbc a)).symm
+  · have hbc := State.setStorVal_balCodeEq devm.state sevm.currentTarget k v
+    exact (congrArg Prod.snd (congrFun hbc a)).symm
 
 /-! ## The memory window, in the shapes a walk's obligations arrive in
 
@@ -535,6 +561,8 @@ lemma Func.runCompiledTo_log_step {fs : List Func} {sevm : Sevm} {devm : Devm}
     (h_next : ∀ (base : Devm) (G : Nat),
       base.logs = devm.logs ++ [⟨sevm.currentTarget, topics, payload⟩] →
       (∀ (a : Adr) (k : B256), base.getStorVal a k = devm.getStorVal a k) →
+      (∀ a : Adr, base.getBal a = devm.getBal a) →
+      (∀ a : Adr, base.getCode a = devm.getCode a) →
       base.accessedStorageKeys = devm.accessedStorageKeys →
       devm.gasLeft = G + c →
       Func.RunCompiledTo fs sevm (base.setMach ⟨s, M', G⟩) rest ex) :
@@ -543,7 +571,8 @@ lemma Func.runCompiledTo_log_step {fs : List Func} {sevm : Sevm} {devm : Devm}
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_log_of (G := devm.gasLeft - c) h_stk h_len h_static
       h_cost h_data h_img (by omega)) ?_
-  exact h_next _ _ rfl (fun _ _ => rfl) rfl (by omega)
+  exact h_next _ _ rfl (fun _ _ => rfl) (fun _ => rfl) (fun _ => rfl)
+    rfl (by omega)
 
 /-- `CALLDATACOPY` as a walk step, with the charge a variable.  The copied bytes
 are `Sevm.data`'s slice — zero-filled past the end of calldata, which is why no
@@ -783,6 +812,286 @@ lemma Xinst.step_call_zero_value {sevm : Sevm} {devm : Devm}
     exact Nat.not_lt.mpr (Nat.zero_le _))]
   rfl
 
+/-! ## `Xinst.step`'s `.call` arm, at nonzero value -/
+
+/-- The nonzero-value `.call` arm reduced to `genericCall.step` after the
+caller has paid the account/value overhead and the sender-affordability branch
+has been discharged explicitly.  The account-creation charge remains a named
+branch input so callers can cover empty and existing recipients separately. -/
+lemma Xinst.step_call_nonzero {sevm : Sevm} {devm : Devm}
+    {gw cw vw iiw isw oiw osw : B256} {s : List B256}
+    {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
+    {ext acc create mcc mcs : Nat}
+    (h_stk : devm.stack = gw :: cw :: vw :: iiw :: isw :: oiw :: osw :: s)
+    (h_value : vw ≠ 0)
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+      [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
+    (h_del : accessDelegation
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+        cw.toAdr) cw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
+    (h_acc : accessCost cw.toAdr
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+        + dgc = acc)
+    (h_create :
+      (if ¬ (d1.getAcct cw.toAdr).Empty then 0 else gNewAccount) = create)
+    (h_split :
+      calculateMsgCallGas vw.toNat gw.toNat d1.gasLeft ext
+        (acc + create + gasCallValue) = ⟨mcc, mcs⟩)
+    (h_gas : mcc + ext ≤ d1.gasLeft)
+    (h_dynamic : sevm.isStatic = false)
+    (h_sender : ¬ (d1.getAcct sevm.currentTarget).bal < vw) :
+    Xinst.step sevm devm .call =
+      genericCall.step sevm
+        ((d1.setMach ⟨d1.stack, d1.memory, d1.gasLeft - (mcc + ext)⟩).memExtends
+          [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩])
+        mcs vw sevm.currentTarget cw.toAdr cw.toAdr true false
+        iiw.toNat isw.toNat oiw.toNat osw.toNat code dp := by
+  subst h_ext
+  subst h_acc
+  show XStep.ofExcept (do
+    let ⟨gas, d⟩ ← devm.pop
+    let ⟨callee, d⟩ ← d.popToAdr
+    let ⟨value, d⟩ ← d.pop
+    let ⟨inputIndex, d⟩ ← d.popToNat
+    let ⟨inputSize, d⟩ ← d.popToNat
+    let ⟨outputIndex, d⟩ ← d.popToNat
+    let ⟨outputSize, d⟩ ← d.popToNat
+    let extendCost :=
+      d.extCost [⟨inputIndex, inputSize⟩, ⟨outputIndex, outputSize⟩]
+    let preAccessCost := accessCost callee d.accessedAddresses
+    let d := addAccessedAddress d callee
+    let ⟨disablePrecompiles, _, code, delegatedAccessGasCost, d⟩ :=
+      accessDelegation d callee
+    let accessCost := preAccessCost + delegatedAccessGasCost
+    let createCost :=
+      if (¬ (d.getAcct callee).Empty) ∨ value = 0 then 0 else gNewAccount
+    let transferCost := if value = 0 then 0 else gasCallValue
+    let ⟨msgCallCost, msgCallStipend⟩ :=
+      calculateMsgCallGas value.toNat gas.toNat d.gasLeft extendCost
+        (accessCost + createCost + transferCost)
+    let d ← chargeGas (msgCallCost + extendCost) d
+    Except.assert (!sevm.isStatic ∨ value = 0)
+      ⟨.halt (.writeInStaticContext .none), d⟩
+    let d := d.memExtends
+      [⟨inputIndex, inputSize⟩, ⟨outputIndex, outputSize⟩]
+    let senderBal := (d.getAcct sevm.currentTarget).bal
+    if senderBal < value then
+      let d ← d.push 0
+      return .done
+        (.ok ((d.withReturnData []).withGasLeft
+          (d.gasLeft + msgCallStipend)))
+    else
+      return genericCall.step
+        sevm d msgCallStipend value sevm.currentTarget callee callee
+        true false inputIndex inputSize outputIndex outputSize
+        code disablePrecompiles) = _
+  rw [Devm.pop_eq_ok h_stk]
+  simp only [bind, Except.bind]
+  rw [Devm.popToAdr_eq_ok
+    (devm := devm.setMach
+      ⟨cw :: vw :: iiw :: isw :: oiw :: osw :: s,
+        devm.memory, devm.gasLeft⟩) rfl]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach,
+    Devm.gasLeft_setMach]
+  rw [Devm.pop_eq_ok
+    (devm := devm.setMach
+      ⟨vw :: iiw :: isw :: oiw :: osw :: s, devm.memory, devm.gasLeft⟩)
+      rfl]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach,
+    Devm.gasLeft_setMach]
+  rw [Devm.popToNat_eq_ok
+    (devm := devm.setMach
+      ⟨iiw :: isw :: oiw :: osw :: s, devm.memory, devm.gasLeft⟩) rfl]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
+  rw [Devm.popToNat_eq_ok
+    (devm := devm.setMach
+      ⟨isw :: oiw :: osw :: s, devm.memory, devm.gasLeft⟩) rfl]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
+  rw [Devm.popToNat_eq_ok
+    (devm := devm.setMach
+      ⟨oiw :: osw :: s, devm.memory, devm.gasLeft⟩) rfl]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
+  rw [Devm.popToNat_eq_ok
+    (devm := devm.setMach
+      ⟨osw :: s, devm.memory, devm.gasLeft⟩) rfl]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
+  simp only [h_del, h_value, or_false, if_false, h_create, h_split]
+  rw [chargeGas_eq_ok (devm := d1) h_gas]
+  simp only [Except.assert, h_dynamic, Bool.not_false, if_true]
+  have h_sender' :
+      ¬ (((d1.setMach
+          ⟨d1.stack, d1.memory,
+            d1.gasLeft -
+              (mcc +
+                (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+                  [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩])⟩).memExtends
+            [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩]).getAcct
+          sevm.currentTarget).bal < vw := by
+    change ¬ (d1.getAcct sevm.currentTarget).bal < vw
+    exact h_sender
+  rw [if_neg h_sender']
+  rfl
+
+private lemma accessDelegation_stack_state {devm d1 : Devm}
+    {a dadr : Adr} {dp : Bool} {code : ByteArray} {dgc : Nat}
+    (h : accessDelegation devm a = ⟨dp, dadr, code, dgc, d1⟩) :
+    d1.stack = devm.stack ∧ d1.state = devm.state := by
+  unfold accessDelegation at h
+  rcases hd : getDelegatedCodeAddress (devm.state.getCode a) with _ | adr <;>
+    simp only [hd] at h
+  · cases h
+    exact ⟨rfl, rfl⟩
+  · cases h
+    exact ⟨rfl, rfl⟩
+
+/-- The distinct nonzero-value affordability short circuit.  The instruction
+does not spawn a child: it pushes failure flag `0`, preserves the world, clears
+return data, and refunds the calculated child stipend. -/
+lemma Xinst.step_call_nonzero_insufficient {sevm : Sevm} {devm : Devm}
+    {gw cw vw iiw isw oiw osw : B256} {s : List B256}
+    {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
+    {ext acc create mcc mcs : Nat}
+    (h_stk : devm.stack = gw :: cw :: vw :: iiw :: isw :: oiw :: osw :: s)
+    (h_value : vw ≠ 0)
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+      [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
+    (h_del : accessDelegation
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+        cw.toAdr) cw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
+    (h_acc : accessCost cw.toAdr
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+        + dgc = acc)
+    (h_create :
+      (if ¬ (d1.getAcct cw.toAdr).Empty then 0 else gNewAccount) = create)
+    (h_split :
+      calculateMsgCallGas vw.toNat gw.toNat d1.gasLeft ext
+        (acc + create + gasCallValue) = ⟨mcc, mcs⟩)
+    (h_gas : mcc + ext ≤ d1.gasLeft)
+    (h_dynamic : sevm.isStatic = false)
+    (h_sender : (d1.getAcct sevm.currentTarget).bal < vw)
+    (h_room : s.length < 1024) :
+    ∃ post,
+      Xinst.step sevm devm .call = .done (.ok post) ∧
+      post.stack = 0 :: s ∧
+      post.state = devm.state ∧
+      post.returnData = [] ∧
+      post.gasLeft = d1.gasLeft - (mcc + ext) + mcs := by
+  subst h_ext
+  subst h_acc
+  change ∃ post, XStep.ofExcept (do
+    let ⟨gas, d⟩ ← devm.pop
+    let ⟨callee, d⟩ ← d.popToAdr
+    let ⟨value, d⟩ ← d.pop
+    let ⟨inputIndex, d⟩ ← d.popToNat
+    let ⟨inputSize, d⟩ ← d.popToNat
+    let ⟨outputIndex, d⟩ ← d.popToNat
+    let ⟨outputSize, d⟩ ← d.popToNat
+    let extendCost :=
+      d.extCost [⟨inputIndex, inputSize⟩, ⟨outputIndex, outputSize⟩]
+    let preAccessCost := accessCost callee d.accessedAddresses
+    let d := addAccessedAddress d callee
+    let ⟨disablePrecompiles, _, code, delegatedAccessGasCost, d⟩ :=
+      accessDelegation d callee
+    let accessCost := preAccessCost + delegatedAccessGasCost
+    let createCost :=
+      if (¬ (d.getAcct callee).Empty) ∨ value = 0 then 0 else gNewAccount
+    let transferCost := if value = 0 then 0 else gasCallValue
+    let ⟨msgCallCost, msgCallStipend⟩ :=
+      calculateMsgCallGas value.toNat gas.toNat d.gasLeft extendCost
+        (accessCost + createCost + transferCost)
+    let d ← chargeGas (msgCallCost + extendCost) d
+    Except.assert (!sevm.isStatic ∨ value = 0)
+      ⟨.halt (.writeInStaticContext .none), d⟩
+    let d := d.memExtends
+      [⟨inputIndex, inputSize⟩, ⟨outputIndex, outputSize⟩]
+    let senderBal := (d.getAcct sevm.currentTarget).bal
+    if senderBal < value then
+      let d ← d.push 0
+      return .done
+        (.ok ((d.withReturnData []).withGasLeft
+          (d.gasLeft + msgCallStipend)))
+    else
+      return genericCall.step
+        sevm d msgCallStipend value sevm.currentTarget callee callee
+        true false inputIndex inputSize outputIndex outputSize
+        code disablePrecompiles) = .done (.ok post) ∧
+      post.stack = 0 :: s ∧
+      post.state = devm.state ∧
+      post.returnData = [] ∧
+      post.gasLeft = d1.gasLeft -
+        (mcc +
+          (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+            [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩]) + mcs
+  rw [Devm.pop_eq_ok h_stk]
+  simp only [bind, Except.bind]
+  rw [Devm.popToAdr_eq_ok
+    (devm := devm.setMach
+      ⟨cw :: vw :: iiw :: isw :: oiw :: osw :: s,
+        devm.memory, devm.gasLeft⟩) rfl]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach,
+    Devm.gasLeft_setMach]
+  rw [Devm.pop_eq_ok
+    (devm := devm.setMach
+      ⟨vw :: iiw :: isw :: oiw :: osw :: s, devm.memory, devm.gasLeft⟩)
+      rfl]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach,
+    Devm.gasLeft_setMach]
+  rw [Devm.popToNat_eq_ok
+    (devm := devm.setMach
+      ⟨iiw :: isw :: oiw :: osw :: s, devm.memory, devm.gasLeft⟩) rfl]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach,
+    Devm.gasLeft_setMach]
+  rw [Devm.popToNat_eq_ok
+    (devm := devm.setMach
+      ⟨isw :: oiw :: osw :: s, devm.memory, devm.gasLeft⟩) rfl]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach,
+    Devm.gasLeft_setMach]
+  rw [Devm.popToNat_eq_ok
+    (devm := devm.setMach
+      ⟨oiw :: osw :: s, devm.memory, devm.gasLeft⟩) rfl]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach,
+    Devm.gasLeft_setMach]
+  rw [Devm.popToNat_eq_ok
+    (devm := devm.setMach
+      ⟨osw :: s, devm.memory, devm.gasLeft⟩) rfl]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach,
+    Devm.gasLeft_setMach]
+  simp only [h_del, h_value, or_false, if_false, h_create, h_split]
+  rw [chargeGas_eq_ok (devm := d1) h_gas]
+  simp only [Except.assert, h_dynamic, Bool.not_false, if_true]
+  have h_sender' :
+      (((d1.setMach
+          ⟨d1.stack, d1.memory,
+            d1.gasLeft -
+              (mcc +
+                (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+                  [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩])⟩).memExtends
+            [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩]).getAcct
+          sevm.currentTarget).bal < vw := by
+    change (d1.getAcct sevm.currentTarget).bal < vw
+    exact h_sender
+  rw [if_pos h_sender']
+  have hframe := accessDelegation_stack_state h_del
+  have hd1stack : d1.stack = s := by
+    have h := hframe.1
+    change d1.stack = s at h
+    exact h
+  have hd1state : d1.state = devm.state := by
+    have h := hframe.2
+    change d1.state = devm.state at h
+    exact h
+  rw [Devm.push_eq_ok (by
+    change d1.stack.length < 1024
+    rw [hd1stack]
+    exact h_room)]
+  refine ⟨_, rfl, ?_, ?_, ?_, ?_⟩
+  · change 0 :: d1.stack = 0 :: s
+    rw [hd1stack]
+  · change d1.state = devm.state
+    exact hd1state
+  · rfl
+  · rfl
+
 /-! ## `Xinst.step`'s `.statcall` arm
 
 `STATICCALL` has the same six stack operands as the value-zero part of `CALL`,
@@ -871,8 +1180,8 @@ they are the spawn's two components, written as functions of the parent's own
 state, so a statement about the callee is a statement about a term the caller
 can build. -/
 
-/-- The parent state a `value = 0` `CALL` suspends on: charged, window-extended
-and with its return data cleared. -/
+/-- The parent state a `CALL` suspends on: charged, window-extended and with
+its return data cleared.  The term is shared by zero- and nonzero-value calls. -/
 def callSpawnParent (d1 : Devm) (charge ii is oi os : Nat) : Devm :=
   ((d1.setMach ⟨d1.stack, d1.memory, d1.gasLeft - charge⟩).memExtends
     [⟨ii, is⟩, ⟨oi, os⟩]).withReturnData []
@@ -885,12 +1194,60 @@ def callSpawnMsg (sevm : Sevm) (p : Devm) (mcs : Nat) (callee : Adr)
   callMsg sevm p mcs 0 sevm.currentTarget callee callee true false
     (p.memory.data.sliceD ii is 0) code dp
 
+/-- The message built by a nonzero-value `CALL`.  The stipend-bearing child gas
+is the `mcs` produced by `calculateMsgCallGas`; it is not charged a second time
+to the parent. -/
+def valueCallSpawnMsg (sevm : Sevm) (p : Devm) (mcs : Nat)
+    (value : B256) (callee : Adr) (ii is : Nat)
+    (code : ByteArray) (dp : Bool) : Msg :=
+  callMsg sevm p mcs value sevm.currentTarget callee callee true false
+    (p.memory.data.sliceD ii is 0) code dp
+
 /-- The message a `STATICCALL` builds.  It shares `callSpawnParent` with a
 zero-value `CALL`, but the child message is static. -/
 def statcallSpawnMsg (sevm : Sevm) (p : Devm) (mcs : Nat) (target : Adr)
     (ii is : Nat) (code : ByteArray) (dp : Bool) : Msg :=
   callMsg sevm p mcs 0 sevm.currentTarget target target true true
     (p.memory.data.sliceD ii is 0) code dp
+
+/-- The affordable nonzero-value `.call` arm all the way to its spawned child
+frame.  Sender affordability remains an explicit hypothesis at this reusable
+boundary. -/
+lemma Xinst.step_call_nonzero_spawn {sevm : Sevm} {devm : Devm}
+    {gw cw vw iiw isw oiw osw : B256} {s : List B256}
+    {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
+    {ext acc create mcc mcs : Nat}
+    (h_stk : devm.stack = gw :: cw :: vw :: iiw :: isw :: oiw :: osw :: s)
+    (h_value : vw ≠ 0)
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+      [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
+    (h_del : accessDelegation
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+        cw.toAdr) cw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
+    (h_acc : accessCost cw.toAdr
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+        + dgc = acc)
+    (h_create :
+      (if ¬ (d1.getAcct cw.toAdr).Empty then 0 else gNewAccount) = create)
+    (h_split :
+      calculateMsgCallGas vw.toNat gw.toNat d1.gasLeft ext
+        (acc + create + gasCallValue) = ⟨mcc, mcs⟩)
+    (h_gas : mcc + ext ≤ d1.gasLeft)
+    (h_dynamic : sevm.isStatic = false)
+    (h_sender : ¬ (d1.getAcct sevm.currentTarget).bal < vw)
+    (h_depth : sevm.depth ≠ 0) :
+    Xinst.step sevm devm .call =
+      .spawn
+        (Frame.ofCall (valueCallSpawnMsg sevm
+          (callSpawnParent d1 (mcc + ext)
+            iiw.toNat isw.toNat oiw.toNat osw.toNat)
+          mcs vw cw.toAdr iiw.toNat isw.toNat code dp))
+        (.call (callSpawnParent d1 (mcc + ext)
+          iiw.toNat isw.toNat oiw.toNat osw.toNat)
+          oiw.toNat osw.toNat) := by
+  rw [Xinst.step_call_nonzero h_stk h_value h_ext h_del h_acc h_create
+    h_split h_gas h_dynamic h_sender, genericCall.step_spawn h_depth]
+  rfl
 
 /-- The `.call` arm all the way to its `.spawn`, at `value = 0` and nonzero
 depth. -/
@@ -989,6 +1346,101 @@ lemma Ninst.runCompiled_call_zero_value {sevm : Sevm} {devm : Devm}
   Ninst.runCompiled_exec_run
     (Xinst.step_call_zero_value_spawn h_stk h_ext h_del h_acc h_split h_gas
       h_depth) h_enter h_res
+
+/-- The corresponding compiled-instruction crossing for an affordable
+nonzero-value `CALL`.  No successful child execution is a premise: the child
+result is the total semantic term `exec cevm`, which the caller specializes by
+proving frame entry and settlement for its admitted recipient class. -/
+lemma Ninst.runCompiled_call_nonzero {sevm : Sevm} {devm : Devm}
+    {gw cw vw iiw isw oiw osw : B256} {s : List B256}
+    {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
+    {ext acc create mcc mcs : Nat} {cevm : Evm} {devm' : Devm}
+    (h_stk : devm.stack = gw :: cw :: vw :: iiw :: isw :: oiw :: osw :: s)
+    (h_value : vw ≠ 0)
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+      [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
+    (h_del : accessDelegation
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+        cw.toAdr) cw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
+    (h_acc : accessCost cw.toAdr
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+        + dgc = acc)
+    (h_create :
+      (if ¬ (d1.getAcct cw.toAdr).Empty then 0 else gNewAccount) = create)
+    (h_split :
+      calculateMsgCallGas vw.toNat gw.toNat d1.gasLeft ext
+        (acc + create + gasCallValue) = ⟨mcc, mcs⟩)
+    (h_gas : mcc + ext ≤ d1.gasLeft)
+    (h_dynamic : sevm.isStatic = false)
+    (h_sender : ¬ (d1.getAcct sevm.currentTarget).bal < vw)
+    (h_depth : sevm.depth ≠ 0)
+    (h_enter : (Frame.ofCall (valueCallSpawnMsg sevm
+      (callSpawnParent d1 (mcc + ext)
+        iiw.toNat isw.toNat oiw.toNat osw.toNat)
+      mcs vw cw.toAdr iiw.toNat isw.toNat code dp)).enter = .run cevm)
+    (h_res : Resume.run
+      (.call (callSpawnParent d1 (mcc + ext)
+        iiw.toNat isw.toNat oiw.toNat osw.toNat) oiw.toNat osw.toNat)
+      ((Frame.ofCall (valueCallSpawnMsg sevm
+        (callSpawnParent d1 (mcc + ext)
+          iiw.toNat isw.toNat oiw.toNat osw.toNat)
+        mcs vw cw.toAdr iiw.toNat isw.toNat code dp)).settle (exec cevm)) =
+          .ok devm') :
+    Ninst.RunCompiled sevm devm (.exec .call) devm' :=
+  Ninst.runCompiled_exec_run
+    (Xinst.step_call_nonzero_spawn h_stk h_value h_ext h_del h_acc h_create
+      h_split h_gas h_dynamic h_sender h_depth) h_enter h_res
+
+/-- A code-free child halts successfully immediately: fetching beyond the
+empty byte array produces the EVM's implicit `STOP`.  This is the reusable
+callee-totality fact used by value transfers to admitted externally-owned
+accounts; it contains no premise about child execution. -/
+lemma exec_empty_code (evm : Evm) (h : evm.sta.code.size = 0) :
+    exec evm = .ok evm.dyna := by
+  rw [← exec_iff_exec_eq]
+  refine ⟨Exec.halt ?_⟩
+  simp [Evm.step, Evm.getInst, ByteArray.getInst, h, Linst.run]
+
+/-- A value-transfer message whose sender can afford the value prepares the
+debit/credit world successfully.  The intermediate debit state is produced by
+the semantics rather than supplied as an envelope premise. -/
+lemma Msg.benvAfterTransfer_of_affordable (msg : Msg)
+    (h_transfer : msg.shouldTransferValue = true)
+    (h_affordable : ¬ msg.benv.state.bal msg.caller < msg.value) :
+    ∃ stmid,
+      msg.benv.state.subBal msg.caller msg.value = some stmid ∧
+      msg.benvAfterTransfer =
+        .ok ((msg.benv.withState stmid).addBal msg.currentTarget msg.value) := by
+  have hsub : msg.benv.state.subBal msg.caller msg.value =
+      some (msg.benv.state.setBal msg.caller
+        (msg.benv.state.bal msg.caller - msg.value)) := by
+    simp [State.subBal, h_affordable]
+  refine ⟨_, hsub, ?_⟩
+  unfold Msg.benvAfterTransfer
+  rw [h_transfer]
+  simp only [if_true, Benv.subBal, hsub]
+  rfl
+
+/-- After transfer preparation, a non-precompile call enters the ordinary EVM
+child.  The callee code is intentionally unconstrained here; the code-free
+specialization composes this with `exec_empty_code`. -/
+lemma Frame.enter_run_of_nonprecompile {f : Frame} {benv : Benv} {adr : Adr}
+    (h_bt : f.inner.benvAfterTransfer = .ok benv)
+    (h_ca : (f.inner.withBenv benv).codeAddress = some adr)
+    (h_nonprecompile :
+      (f.inner.withBenv benv).benv.stat.rules.isPrecomp adr = false) :
+    f.enter = .run (initEvm (f.inner.withBenv benv)) := by
+  unfold Frame.enter
+  rw [h_bt]
+  unfold executeCode.enter
+  simp only [h_ca]
+  rw [if_neg]
+  intro h
+  have hn : ¬ (f.inner.withBenv benv).benv.stat.rules.isPrecomp adr := by
+    rw [h_nonprecompile]
+    simp
+  simp only [Bool.and_eq_true, decide_eq_true_eq] at h
+  exact (hn h.2).elim
 
 /-- A `STATICCALL` whose frame resolves without entering, packaged as one
 `Ninst.RunCompiled` premise.  Enabled precompiles are the principal consumer:
@@ -1572,9 +2024,13 @@ lemma Func.execSat_sload_step {fs : List Func} {sevm : Sevm} {devm : Devm}
       (∀ p : Adr × B256, p ∈ devm.accessedStorageKeys →
         p ∈ base.accessedStorageKeys) →
       (∀ (a : Adr) (k' : B256), base.getStorVal a k' = devm.getStorVal a k') →
+      (∀ a : Adr, base.getBal a = devm.getBal a) →
+      (∀ a : Adr, base.getCode a = devm.getCode a) →
       base.refundCounter = devm.refundCounter →
       base.logs = devm.logs →
+      base.output = devm.output →
       base.error = devm.error →
+      base.accountsToDelete = devm.accountsToDelete →
       gasWarmAccess ≤ c → c ≤ gasColdSload →
       devm.gasLeft = G + c →
       Func.ExecSat fs sevm (base.setMach ⟨v :: s, M, G⟩) rest P) :
@@ -1592,7 +2048,11 @@ lemma Func.execSat_sload_step {fs : List Func} {sevm : Sevm} {devm : Devm}
       (mem_accessedStorageKeys_sload_of h_base.symm)
       (fun _ hp => mem_accessedStorageKeys_sload_of_mem h_base.symm hp)
       (fun _ _ => getStorVal_sload_of h_base.symm)
+      (fun _ => by rw [h_base]; split <;> rfl)
+      (fun _ => by rw [h_base]; split <;> rfl)
       (refundCounter_sload_of h_base.symm) (logs_sload_of h_base.symm)
+      (by rw [h_base]; split <;> rfl)
+      (by rw [h_base]; split <;> rfl)
       (by rw [h_base]; split <;> rfl)
       h_lo h_hi (by omega) with ⟨ex, hto, hp⟩
   exact ⟨ex, Func.execTo_next
@@ -1612,10 +2072,17 @@ lemma Func.execSat_sstore_warm_step {fs : List Func} {sevm : Sevm}
     (h_next : ∀ (base : Devm) (c G : Nat),
       base.getStorVal sevm.currentTarget k = v →
       (∀ (a : Adr) (k' : B256), (a, k') ≠ (sevm.currentTarget, k) →
-        base.getStorVal a k' = devm.getStorVal a k') →
+      base.getStorVal a k' = devm.getStorVal a k') →
+      (∀ a : Adr, base.getBal a = devm.getBal a) →
+      (∀ a : Adr, base.getCode a = devm.getCode a) →
       base.accessedStorageKeys = devm.accessedStorageKeys →
       base.logs = devm.logs →
+      base.output = devm.output →
       base.error = devm.error →
+      base.accountsToDelete = devm.accountsToDelete →
+      base.refundCounter = sstoreNewRefundCounter v
+        (getOrigStorVal sevm sevm.currentTarget k)
+        (devm.getStorVal sevm.currentTarget k) devm.refundCounter →
       c ≤ gasStorageSet →
       devm.gasLeft = G + c →
       Func.ExecSat fs sevm (base.setMach ⟨s, M, G⟩) rest P) :
@@ -1660,7 +2127,14 @@ lemma Func.execSat_sstore_warm_step {fs : List Func} {sevm : Sevm}
   rcases h_next _ _ (devm.gasLeft - sstoreValueCost
       (getOrigStorVal sevm sevm.currentTarget k)
       (devm.getStorVal sevm.currentTarget k) v)
-      h_key h_oth rfl rfl rfl h_bound (by omega) with ⟨ex, hto, hp⟩
+      h_key h_oth
+      (fun a => by
+        have hbc := State.setStorVal_balCodeEq devm.state sevm.currentTarget k v
+        exact (congrArg Prod.fst (congrFun hbc a)).symm)
+      (fun a => by
+        have hbc := State.setStorVal_balCodeEq devm.state sevm.currentTarget k v
+        exact (congrArg Prod.snd (congrFun hbc a)).symm)
+      rfl rfl rfl rfl rfl rfl h_bound (by omega) with ⟨ex, hto, hp⟩
   exact ⟨ex, Func.execTo_next
     (Ninst.runCompiled_sstore_warm (c := sstoreValueCost
         (getOrigStorVal sevm sevm.currentTarget k)
@@ -1706,14 +2180,20 @@ lemma Func.execSat_log_step {fs : List Func} {sevm : Sevm} {devm : Devm}
     (h_next : ∀ (base : Devm) (G : Nat),
       base.logs = devm.logs ++ [⟨sevm.currentTarget, topics, payload⟩] →
       (∀ (a : Adr) (k : B256), base.getStorVal a k = devm.getStorVal a k) →
+      (∀ a : Adr, base.getBal a = devm.getBal a) →
+      (∀ a : Adr, base.getCode a = devm.getCode a) →
       base.accessedStorageKeys = devm.accessedStorageKeys →
+      base.refundCounter = devm.refundCounter →
+      base.output = devm.output →
       base.error = devm.error →
+      base.accountsToDelete = devm.accountsToDelete →
       devm.gasLeft = G + c →
       Func.ExecSat fs sevm (base.setMach ⟨s, M', G⟩) rest P) :
     Func.ExecSat fs sevm devm (Func.next (.reg (.log n)) rest) P := by
   subst h_mem
   rcases h_next (devm.addLog ⟨sevm.currentTarget, topics, payload⟩)
-      (devm.gasLeft - c) rfl (fun _ _ => rfl) rfl rfl (by omega)
+      (devm.gasLeft - c) rfl (fun _ _ => rfl) (fun _ => rfl) (fun _ => rfl)
+      rfl rfl rfl rfl rfl (by omega)
     with ⟨ex, hto, hp⟩
   exact ⟨ex, Func.execTo_next
     (Ninst.runCompiled_log_of (G := devm.gasLeft - c) h_stk h_len h_static
@@ -1779,10 +2259,356 @@ lemma accessDelegation_error {devm d1 : Devm} {a dadr : Adr} {dp : Bool}
   · cases h; rfl
   · cases h; rfl
 
+/-- Delegation resolution changes only access metadata; the world and the
+frame-local result fields used by an enclosing successful call are unchanged. -/
+lemma accessDelegation_frame {devm d1 : Devm} {a dadr : Adr} {dp : Bool}
+    {code : ByteArray} {dgc : Nat}
+    (h : accessDelegation devm a = ⟨dp, dadr, code, dgc, d1⟩) :
+    d1.state = devm.state ∧ d1.logs = devm.logs ∧
+      d1.refundCounter = devm.refundCounter ∧
+      d1.accountsToDelete = devm.accountsToDelete ∧
+      d1.output = devm.output := by
+  unfold accessDelegation at h
+  rcases hd : getDelegatedCodeAddress (devm.state.getCode a) with _ | adr <;>
+    simp only [hd] at h
+  · cases h; exact ⟨rfl, rfl, rfl, rfl, rfl⟩
+  · cases h; exact ⟨rfl, rfl, rfl, rfl, rfl⟩
+
 /-- The account-access charge is at most the cold price. -/
 lemma accessCost_le {x : Adr} {a : AdrSet} : accessCost x a ≤ gasColdAccountAccess := by
   unfold accessCost
   split <;> decide
+
+/-- Once the caller can pay the fixed call overhead and memory expansion,
+`calculateMsgCallGas`'s charged component is affordable.  The EIP-150 `min`
+can only reduce the forwarded part. -/
+lemma calculateMsgCallGas_cost_le {value gas gasLeft mem extra : Nat}
+    (h : extra + mem ≤ gasLeft) :
+    (calculateMsgCallGas value gas gasLeft mem extra).1 + mem ≤ gasLeft := by
+  unfold calculateMsgCallGas
+  rw [if_neg (not_lt_of_ge h)]
+  dsimp only []
+  have hmin : min gas (except64th (gasLeft - mem - extra)) ≤
+      except64th (gasLeft - mem - extra) := Nat.min_le_right _ _
+  have hexcept : except64th (gasLeft - mem - extra) ≤
+      gasLeft - mem - extra := Nat.sub_le _ _
+  omega
+
+/-- An affordable value-bearing `CALL` to a code-free non-precompile account
+constructs a clean child and resumes with success flag `1`.  Child success is
+derived from the empty code here; it is not a premise.  The exposed machine
+projections are exactly the facts a caller's post-`CALL` guard consumes. -/
+lemma Ninst.runCompiled_call_nonzero_codeFree {sevm : Sevm} {devm : Devm}
+    {gw cw vw iiw isw oiw osw : B256} {s : List B256}
+    {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
+    {ext acc create mcc mcs : Nat}
+    (h_stk : devm.stack = gw :: cw :: vw :: iiw :: isw :: oiw :: osw :: s)
+    (h_value : vw ≠ 0)
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+      [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
+    (h_del : accessDelegation
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+        cw.toAdr) cw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
+    (h_acc : accessCost cw.toAdr
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+        + dgc = acc)
+    (h_create :
+      (if ¬ (d1.getAcct cw.toAdr).Empty then 0 else gNewAccount) = create)
+    (h_split :
+      calculateMsgCallGas vw.toNat gw.toNat d1.gasLeft ext
+        (acc + create + gasCallValue) = ⟨mcc, mcs⟩)
+    (h_gas : mcc + ext ≤ d1.gasLeft)
+    (h_dynamic : sevm.isStatic = false)
+    (h_sender : ¬ (d1.getAcct sevm.currentTarget).bal < vw)
+    (h_depth : sevm.depth ≠ 0)
+    (h_nonprecompile : sevm.benvStat.rules.isPrecomp cw.toAdr = false)
+    (h_code : code.size = 0) (h_room : s.length < 1024) :
+    ∃ post,
+      Ninst.RunCompiled sevm devm (.exec .call) post ∧
+      post.stack = 1 :: s ∧
+      post.memory = devm.memory.extends
+        [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] ∧
+      post.gasLeft = d1.gasLeft - (mcc + ext) + mcs ∧
+      post.error = devm.error ∧ post.output = devm.output ∧
+      post.returnData = [] ∧ post.logs = devm.logs ∧
+      post.refundCounter = devm.refundCounter ∧
+      post.accountsToDelete.isEmpty = devm.accountsToDelete.isEmpty ∧
+      ∃ stmid,
+        devm.state.subBal sevm.currentTarget vw = some stmid ∧
+        post.state = stmid.addBal cw.toAdr vw := by
+  let p := callSpawnParent d1 (mcc + ext)
+    iiw.toNat isw.toNat oiw.toNat osw.toNat
+  let msg := valueCallSpawnMsg sevm p mcs vw cw.toAdr
+    iiw.toNat isw.toNat code dp
+  have h_afford : ¬ msg.benv.state.bal msg.caller < msg.value := by
+    change ¬ (d1.getAcct sevm.currentTarget).bal < vw
+    exact h_sender
+  obtain ⟨stmid, hsub, hbt⟩ :=
+    Msg.benvAfterTransfer_of_affordable msg rfl h_afford
+  let benv' := (msg.benv.withState stmid).addBal msg.currentTarget msg.value
+  let child := initEvm (msg.withBenv benv')
+  have henter : (Frame.ofCall msg).enter = .run child := by
+    apply Frame.enter_run_of_nonprecompile hbt
+    · rfl
+    · change sevm.benvStat.rules.isPrecomp cw.toAdr = false
+      exact h_nonprecompile
+  have h_child_code : child.sta.code.size = 0 := by
+    change code.size = 0
+    exact h_code
+  have hexec : exec child = .ok child.dyna :=
+    exec_empty_code child h_child_code
+  have hsettle : (Frame.ofCall msg).settle (exec child) = .ok child.dyna := by
+    rw [hexec]
+    rfl
+  have hdi := accessDelegation_inv h_del
+  have hd1stack : d1.stack = s := by
+    have h := hdi.1
+    change d1.stack = s at h
+    exact h
+  have hd1mem : d1.memory = devm.memory := by
+    have h := hdi.2.1
+    change d1.memory = devm.memory at h
+    exact h
+  have hd1frame := accessDelegation_frame h_del
+  have hd1error := accessDelegation_error h_del
+  have hd1state : d1.state = devm.state := hd1frame.1
+  have hd1logs : d1.logs = devm.logs := hd1frame.2.1
+  have hd1refund : d1.refundCounter = devm.refundCounter := hd1frame.2.2.1
+  have hd1delete : d1.accountsToDelete = devm.accountsToDelete :=
+    hd1frame.2.2.2.1
+  have hd1output : d1.output = devm.output := hd1frame.2.2.2.2
+  have hd1error' : d1.error = devm.error := hd1error
+  have hpstack : p.stack.length < 1024 := by
+    change d1.stack.length < 1024
+    rw [hd1stack]
+    exact h_room
+  let post := (((incorporateChildOnSuccess p child.dyna child.dyna.output).setMach
+    ⟨1 :: p.stack, p.memory, p.gasLeft + child.dyna.gasLeft⟩).memWrite
+      oiw.toNat (child.dyna.output.take osw.toNat))
+  have hres : Resume.run (.call p oiw.toNat osw.toNat)
+      ((Frame.ofCall msg).settle (exec child)) = .ok post := by
+    rw [hsettle, Resume.run_call_ok (by rfl) hpstack]
+  have hrun : Ninst.RunCompiled sevm devm (.exec .call) post :=
+    Ninst.runCompiled_call_nonzero h_stk h_value h_ext h_del h_acc h_create
+      h_split h_gas h_dynamic h_sender h_depth
+        (by simpa [p, msg]) (by simpa [p, msg] using hres)
+  have hout : child.dyna.output = [] := rfl
+  have hpostError : post.error = p.error := by
+    dsimp only [post]
+    rw [hout, List.take_nil, Devm.memWrite_nil]
+    rfl
+  have hpostOutput : post.output = p.output := by
+    dsimp only [post]
+    rw [hout, List.take_nil, Devm.memWrite_nil]
+    rfl
+  have hpostReturnData : post.returnData = [] := by
+    dsimp only [post]
+    rw [hout, List.take_nil, Devm.memWrite_nil]
+    rfl
+  have hpostLogs : post.logs = p.logs := by
+    dsimp only [post]
+    rw [hout, List.take_nil, Devm.memWrite_nil]
+    exact List.append_nil _
+  have hpostRefund : post.refundCounter = p.refundCounter := by
+    dsimp only [post, child, initEvm, initDevm]
+    change p.refundCounter + 0 = p.refundCounter
+    omega
+  have hpostDelete :
+      post.accountsToDelete.isEmpty = p.accountsToDelete.isEmpty := by
+    dsimp only [post, child, initEvm, initDevm]
+    change (p.accountsToDelete.union
+      Std.HashSet.emptyWithCapacity).isEmpty = p.accountsToDelete.isEmpty
+    simp
+  have hpostState : post.state = stmid.addBal cw.toAdr vw := by
+    dsimp only [post, child, benv', initEvm, initDevm]
+    rfl
+  have hfields :
+      post.stack = 1 :: p.stack ∧ post.memory = p.memory ∧
+        post.gasLeft = p.gasLeft + mcs := by
+    dsimp only [post]
+    have hchildgas : child.dyna.gasLeft = mcs := rfl
+    simp only [hout, List.take_nil, Devm.memWrite_nil, Devm.stack_setMach,
+      Devm.memory_setMach, Devm.gasLeft_setMach, hchildgas]
+    exact ⟨trivial, trivial, trivial⟩
+  refine ⟨post, hrun, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, stmid, ?_, ?_⟩
+  · rw [hfields.1]
+    exact congrArg (1 :: ·) hd1stack
+  · rw [hfields.2.1]
+    change d1.memory.extends [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = _
+    rw [hd1mem]
+  · simpa [p, callSpawnParent] using hfields.2.2
+  · rw [hpostError]
+    exact (show p.error = d1.error from rfl).trans hd1error'
+  · rw [hpostOutput]
+    exact (show p.output = d1.output from rfl).trans hd1output
+  · exact hpostReturnData
+  · rw [hpostLogs]
+    exact (show p.logs = d1.logs from rfl).trans hd1logs
+  · rw [hpostRefund]
+    exact (show p.refundCounter = d1.refundCounter from rfl).trans hd1refund
+  · rw [hpostDelete]
+    change d1.accountsToDelete.isEmpty = devm.accountsToDelete.isEmpty
+    rw [hd1delete]
+  · rw [← hd1state]
+    have hsub' : p.state.subBal sevm.currentTarget vw = some stmid := by
+      simpa [msg, valueCallSpawnMsg, callMsg] using hsub
+    rw [show p.state = d1.state from rfl] at hsub'
+    exact hsub'
+  · exact hpostState
+
+/-- A zero-value `CALL` to a code-free non-precompile account likewise enters
+an empty child and resumes with success flag `1`.  This packages the existing
+zero-value crossing without assuming anything about a child result. -/
+lemma Ninst.runCompiled_call_zero_value_codeFree {sevm : Sevm} {devm : Devm}
+    {gw cw iiw isw oiw osw : B256} {s : List B256}
+    {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
+    {ext acc mcc mcs : Nat}
+    (h_stk : devm.stack = gw :: cw :: 0 :: iiw :: isw :: oiw :: osw :: s)
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+      [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
+    (h_del : accessDelegation
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+        cw.toAdr) cw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
+    (h_acc : accessCost cw.toAdr
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+        + dgc = acc)
+    (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc = ⟨mcc, mcs⟩)
+    (h_gas : mcc + ext ≤ d1.gasLeft)
+    (h_depth : sevm.depth ≠ 0)
+    (h_nonprecompile : sevm.benvStat.rules.isPrecomp cw.toAdr = false)
+    (h_code : code.size = 0) (h_room : s.length < 1024) :
+    ∃ post,
+      Ninst.RunCompiled sevm devm (.exec .call) post ∧
+      post.stack = 1 :: s ∧
+      post.memory = devm.memory.extends
+        [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] ∧
+      post.gasLeft = d1.gasLeft - (mcc + ext) + mcs ∧
+      post.error = devm.error ∧ post.output = devm.output ∧
+      post.returnData = [] ∧ post.logs = devm.logs ∧
+      post.refundCounter = devm.refundCounter ∧
+      post.accountsToDelete.isEmpty = devm.accountsToDelete.isEmpty ∧
+      ∃ stmid,
+        devm.state.subBal sevm.currentTarget 0 = some stmid ∧
+        post.state = stmid.addBal cw.toAdr 0 := by
+  let p := callSpawnParent d1 (mcc + ext)
+    iiw.toNat isw.toNat oiw.toNat osw.toNat
+  let msg := callSpawnMsg sevm p mcs cw.toAdr
+    iiw.toNat isw.toNat code dp
+  have h_afford : ¬ msg.benv.state.bal msg.caller < msg.value := by
+    change ¬ (d1.getAcct sevm.currentTarget).bal < 0
+    rw [B256.lt_iff_toNat_lt_toNat]
+    exact Nat.not_lt.mpr (Nat.zero_le _)
+  obtain ⟨stmid, hsub, hbt⟩ :=
+    Msg.benvAfterTransfer_of_affordable msg rfl h_afford
+  let benv' := (msg.benv.withState stmid).addBal msg.currentTarget msg.value
+  let child := initEvm (msg.withBenv benv')
+  have henter : (Frame.ofCall msg).enter = .run child := by
+    apply Frame.enter_run_of_nonprecompile hbt
+    · rfl
+    · change sevm.benvStat.rules.isPrecomp cw.toAdr = false
+      exact h_nonprecompile
+  have h_child_code : child.sta.code.size = 0 := by
+    change code.size = 0
+    exact h_code
+  have hexec : exec child = .ok child.dyna :=
+    exec_empty_code child h_child_code
+  have hsettle : (Frame.ofCall msg).settle (exec child) = .ok child.dyna := by
+    rw [hexec]
+    rfl
+  have hdi := accessDelegation_inv h_del
+  have hd1stack : d1.stack = s := by
+    have h := hdi.1
+    change d1.stack = s at h
+    exact h
+  have hd1mem : d1.memory = devm.memory := by
+    have h := hdi.2.1
+    change d1.memory = devm.memory at h
+    exact h
+  have hd1frame := accessDelegation_frame h_del
+  have hd1error := accessDelegation_error h_del
+  have hd1state : d1.state = devm.state := hd1frame.1
+  have hd1logs : d1.logs = devm.logs := hd1frame.2.1
+  have hd1refund : d1.refundCounter = devm.refundCounter := hd1frame.2.2.1
+  have hd1delete : d1.accountsToDelete = devm.accountsToDelete :=
+    hd1frame.2.2.2.1
+  have hd1output : d1.output = devm.output := hd1frame.2.2.2.2
+  have hd1error' : d1.error = devm.error := hd1error
+  have hpstack : p.stack.length < 1024 := by
+    change d1.stack.length < 1024
+    rw [hd1stack]
+    exact h_room
+  let post := (((incorporateChildOnSuccess p child.dyna child.dyna.output).setMach
+    ⟨1 :: p.stack, p.memory, p.gasLeft + child.dyna.gasLeft⟩).memWrite
+      oiw.toNat (child.dyna.output.take osw.toNat))
+  have hres : Resume.run (.call p oiw.toNat osw.toNat)
+      ((Frame.ofCall msg).settle (exec child)) = .ok post := by
+    rw [hsettle, Resume.run_call_ok (by rfl) hpstack]
+  have hrun : Ninst.RunCompiled sevm devm (.exec .call) post :=
+    Ninst.runCompiled_call_zero_value h_stk h_ext h_del h_acc h_split h_gas
+      h_depth (by simpa [p, msg]) (by simpa [p, msg] using hres)
+  have hout : child.dyna.output = [] := rfl
+  have hpostError : post.error = p.error := by
+    dsimp only [post]
+    rw [hout, List.take_nil, Devm.memWrite_nil]
+    rfl
+  have hpostOutput : post.output = p.output := by
+    dsimp only [post]
+    rw [hout, List.take_nil, Devm.memWrite_nil]
+    rfl
+  have hpostReturnData : post.returnData = [] := by
+    dsimp only [post]
+    rw [hout, List.take_nil, Devm.memWrite_nil]
+    rfl
+  have hpostLogs : post.logs = p.logs := by
+    dsimp only [post]
+    rw [hout, List.take_nil, Devm.memWrite_nil]
+    exact List.append_nil _
+  have hpostRefund : post.refundCounter = p.refundCounter := by
+    dsimp only [post, child, initEvm, initDevm]
+    change p.refundCounter + 0 = p.refundCounter
+    omega
+  have hpostDelete :
+      post.accountsToDelete.isEmpty = p.accountsToDelete.isEmpty := by
+    dsimp only [post, child, initEvm, initDevm]
+    change (p.accountsToDelete.union
+      Std.HashSet.emptyWithCapacity).isEmpty = p.accountsToDelete.isEmpty
+    simp
+  have hpostState : post.state = stmid.addBal cw.toAdr 0 := by
+    dsimp only [post, child, benv', initEvm, initDevm]
+    rfl
+  have hfields :
+      post.stack = 1 :: p.stack ∧ post.memory = p.memory ∧
+        post.gasLeft = p.gasLeft + mcs := by
+    dsimp only [post]
+    have hchildgas : child.dyna.gasLeft = mcs := rfl
+    simp only [hout, List.take_nil, Devm.memWrite_nil, Devm.stack_setMach,
+      Devm.memory_setMach, Devm.gasLeft_setMach, hchildgas]
+    exact ⟨trivial, trivial, trivial⟩
+  refine ⟨post, hrun, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, stmid, ?_, ?_⟩
+  · rw [hfields.1]
+    exact congrArg (1 :: ·) hd1stack
+  · rw [hfields.2.1]
+    change d1.memory.extends [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = _
+    rw [hd1mem]
+  · simpa [p, callSpawnParent] using hfields.2.2
+  · rw [hpostError]
+    exact (show p.error = d1.error from rfl).trans hd1error'
+  · rw [hpostOutput]
+    exact (show p.output = d1.output from rfl).trans hd1output
+  · exact hpostReturnData
+  · rw [hpostLogs]
+    exact (show p.logs = d1.logs from rfl).trans hd1logs
+  · rw [hpostRefund]
+    exact (show p.refundCounter = d1.refundCounter from rfl).trans hd1refund
+  · rw [hpostDelete]
+    change d1.accountsToDelete.isEmpty = devm.accountsToDelete.isEmpty
+    rw [hd1delete]
+  · rw [← hd1state]
+    have hsub' : p.state.subBal sevm.currentTarget 0 = some stmid := by
+      simpa [msg, callSpawnMsg, callMsg] using hsub
+    rw [show p.state = d1.state from rfl] at hsub'
+    exact hsub'
+  · exact hpostState
 
 /-- The depth-limit arm, packaged as the step interface: at `sevm.depth = 0`
 the `CALL` charges, extends, pushes `0`, and hands the forwarded gas straight

@@ -64,7 +64,8 @@ CONTRACTS = {
                "Weth10DeployProof", "Weth10Stable", "Weth10Errors", "Weth10Functional",
                "Weth10FlashFunctional", "Weth10Live",
                "Weth10Permit", "Weth10Read", "Weth10StateFunctional",
-               "Weth10TransferFunctional", "Weth10Erc677Functional"],
+               "Weth10TransferFunctional", "Weth10Erc677Functional",
+               "Weth10Redeemable"],
 }
 
 ROOTS = ["Blanc", "Main"]

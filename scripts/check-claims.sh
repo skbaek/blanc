@@ -11,4 +11,4 @@ if ! (cd "$ROOT" && lake env lean scripts/ClaimCheck.lean); then
   exit 1
 fi
 
-echo "OK — WETH10 claim statements: 9 flagship definitions/statements pinned by Lean"
+echo "OK — WETH10 claim statements: 20 flagship definitions/statements pinned by Lean"

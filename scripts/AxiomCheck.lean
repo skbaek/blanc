@@ -26,6 +26,7 @@ import Blanc.Weth10Permit
 import Blanc.Weth10Errors
 import Blanc.Weth10DeployProof
 import Blanc.Weth10Stable
+import Blanc.Weth10Redeemable
 
 #print axioms Blanc.weth_preserves_solvent
 #print axioms Blanc.stateTransition_preserves_solvent
@@ -289,3 +290,16 @@ import Blanc.Weth10Stable
 #print axioms Blanc.Weth10.Stable.solvent
 #print axioms Blanc.Weth10.chain_reachable_backed_and_flash_zero
 #print axioms Blanc.Weth10.processCreateMessage_establishes_stable
+#print axioms Blanc.Xinst.step_call_nonzero_insufficient
+#print axioms Blanc.Xinst.step_call_nonzero_spawn
+#print axioms Blanc.Ninst.runCompiled_call_nonzero_codeFree
+#print axioms Blanc.Weth10.redemptionRuntimeCeiling_eq
+#print axioms Blanc.Weth10.Stable.bookedBalanceNat_le_contractEth
+#print axioms Blanc.Weth10.withdrawTo_exec
+#print axioms Blanc.Weth10.withdraw_exec
+#print axioms Blanc.Weth10.processMessageCall_eq_of_exec
+#print axioms Blanc.Weth10.Stable.messageRedemption_enabled_of_le
+#print axioms Blanc.Weth10.Stable.selfRedemption_enabled_of_le
+#print axioms Blanc.Weth10.AdmissibleRedemptionTx.processTransaction_eq_of_message
+#print axioms Blanc.Weth10.Stable.transactionRedemption_enabled_of_le
+#print axioms Blanc.Weth10.outerOkWithFailedReceipt_not_redemptionEnabled

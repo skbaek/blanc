@@ -318,7 +318,7 @@ theorem flashLoan_runCompiledTo_mint {sevm : Sevm} {pre : Devm}
     (v := Devm.getStorVal pre sevm.currentTarget supplySlot) rfl
     (M := Mem.empty) rfl
     (by simp only [Devm.gasLeft_setMach, gasColdSload]; omega) ?_
-  intro b₁ c₁ G₁ hw₁ hacc₁ hstor₁ hrc₁ hlog₁ hlo₁ hhi₁ hG₁
+  intro b₁ c₁ G₁ hw₁ hacc₁ hstor₁ _hbal₁ _hcode₁ hrc₁ hlog₁ hlo₁ hhi₁ hG₁
   simp only [Devm.gasLeft_setMach, gasWarmAccess, gasColdSload] at hG₁ hlo₁ hhi₁
   func_run (4) [~~~ (Devm.getStorVal pre sevm.currentTarget supplySlot), 0]
   · show ~~~ (Devm.getStorVal pre sevm.currentTarget supplySlot) <?
@@ -332,13 +332,13 @@ theorem flashLoan_runCompiledTo_mint {sevm : Sevm} {pre : Devm}
     (v := Devm.getStorVal b₁ sevm.currentTarget (Sevm.argWord sevm 0)) rfl
     (M := Mem.empty) rfl
     (by simp only [Devm.gasLeft_setMach, gasColdSload]; omega) ?_
-  intro b₂ c₂ G₂ hw₂ hacc₂ hstor₂ hrc₂ hlog₂ hlo₂ hhi₂ hG₂
+  intro b₂ c₂ G₂ hw₂ hacc₂ hstor₂ _hbal₂ _hcode₂ hrc₂ hlog₂ hlo₂ hhi₂ hG₂
   simp only [Devm.gasLeft_setMach, gasWarmAccess, gasColdSload] at hG₂ hlo₂ hhi₂
   func_run (3)
   refine Func.runCompiledTo_sstore_warm_step rfl hw₂ h_static
     (M := Mem.empty) rfl
     (by simp only [Devm.gasLeft_setMach, gasStorageSet]; omega) ?_
-  intro b₃ c₃ G₃ hkey₃ hoth₃ hacc₃ hlog₃ hc₃ hG₃
+  intro b₃ c₃ G₃ hkey₃ hoth₃ _hbal₃ _hcode₃ hacc₃ hlog₃ hc₃ hG₃
   simp only [Devm.gasLeft_setMach, gasStorageSet] at hG₃ hc₃
   have hws₃ : (⟨sevm.currentTarget, supplySlot⟩ : Adr × B256)
       ∈ b₃.accessedStorageKeys := by
@@ -355,7 +355,7 @@ theorem flashLoan_runCompiledTo_mint {sevm : Sevm} {pre : Devm}
   · exact hws₃
   · rfl
   · simp only [Devm.gasLeft_setMach, gasStorageSet]; omega
-  intro b₄ c₄ G₄ hkey₄ hoth₄ hacc₄ hlog₄ hc₄ hG₄
+  intro b₄ c₄ G₄ hkey₄ hoth₄ _hbal₄ _hcode₄ hacc₄ hlog₄ hc₄ hG₄
   simp only [Devm.gasLeft_setMach, gasStorageSet] at hG₄ hc₄
   -- the state the mint leaves, read off the four steps
   have h_ne_rs : ((sevm.currentTarget, Sevm.dataWord sevm (32 * 0 + 4))
@@ -552,7 +552,7 @@ theorem flashLoan_runCompiledTo_call {sevm : Sevm} {pre : Devm}
   · exact Devm.extCost_add_of_size Mem.size_write_word (by decide)
   · exact Mem.read_write_word
   · exact Mem.read_snd_eq_self (by rw [Mem.size_write_word]; decide)
-  intro b G hlogb hstorb haccb hGb
+  intro b G hlogb hstorb _hbalb _hcodeb haccb hGb
   simp only [Devm.gasLeft_setMach, flashLoanLogGas, gVerylow, gBase, gMemory,
     gLog, gLogdata, gLogtopic] at hGb hN
   have h_gas' : flashLoanCallbackGas data.length ≤ G := by
@@ -760,7 +760,8 @@ theorem flashLoan_execSat_mint {sevm : Sevm} {pre : Devm}
     (v := Devm.getStorVal pre sevm.currentTarget supplySlot) rfl
     (M := Mem.empty) rfl
     (by simp only [Devm.gasLeft_setMach, gasColdSload]; omega) ?_
-  intro b₁ c₁ G₁ hw₁ hacc₁ hstor₁ hrc₁ hlog₁ herr₁ hlo₁ hhi₁ hG₁
+  intro b₁ c₁ G₁ hw₁ hacc₁ hstor₁ _hbal₁ _hcode₁ hrc₁ hlog₁ _hout₁ herr₁
+    _hdelete₁ hlo₁ hhi₁ hG₁
   simp only [Devm.gasLeft_setMach, gasWarmAccess, gasColdSload] at hG₁ hlo₁ hhi₁
   apply Func.execSat_segment
   · intro ex hex
@@ -776,7 +777,8 @@ theorem flashLoan_execSat_mint {sevm : Sevm} {pre : Devm}
     (v := Devm.getStorVal b₁ sevm.currentTarget (Sevm.argWord sevm 0)) rfl
     (M := Mem.empty) rfl
     (by simp only [Devm.gasLeft_setMach, gasColdSload]; omega) ?_
-  intro b₂ c₂ G₂ hw₂ hacc₂ hstor₂ hrc₂ hlog₂ herr₂ hlo₂ hhi₂ hG₂
+  intro b₂ c₂ G₂ hw₂ hacc₂ hstor₂ _hbal₂ _hcode₂ hrc₂ hlog₂ _hout₂ herr₂
+    _hdelete₂ hlo₂ hhi₂ hG₂
   simp only [Devm.gasLeft_setMach, gasWarmAccess, gasColdSload] at hG₂ hlo₂ hhi₂
   apply Func.execSat_segment
   · intro ex hex
@@ -785,7 +787,8 @@ theorem flashLoan_execSat_mint {sevm : Sevm} {pre : Devm}
   refine Func.execSat_sstore_warm_step rfl hw₂ h_static
     (M := Mem.empty) rfl
     (by simp only [Devm.gasLeft_setMach, gasStorageSet]; omega) ?_
-  intro b₃ c₃ G₃ hkey₃ hoth₃ hacc₃ hlog₃ herr₃ hc₃ hG₃
+  intro b₃ c₃ G₃ hkey₃ hoth₃ _hbal₃ _hcode₃ hacc₃ hlog₃ _hout₃ herr₃
+    _hdelete₃ _hrefund₃ hc₃ hG₃
   simp only [Devm.gasLeft_setMach, gasStorageSet] at hG₃ hc₃
   have hws₃ : (⟨sevm.currentTarget, supplySlot⟩ : Adr × B256)
       ∈ b₃.accessedStorageKeys := by
@@ -804,7 +807,8 @@ theorem flashLoan_execSat_mint {sevm : Sevm} {pre : Devm}
   · exact hws₃
   · rfl
   · simp only [Devm.gasLeft_setMach, gasStorageSet]; omega
-  intro b₄ c₄ G₄ hkey₄ hoth₄ hacc₄ hlog₄ herr₄ hc₄ hG₄
+  intro b₄ c₄ G₄ hkey₄ hoth₄ _hbal₄ _hcode₄ hacc₄ hlog₄ _hout₄ herr₄
+    _hdelete₄ _hrefund₄ hc₄ hG₄
   simp only [Devm.gasLeft_setMach, gasStorageSet] at hG₄ hc₄
   have h_ne_rs : ((sevm.currentTarget, Sevm.dataWord sevm (32 * 0 + 4))
       : Adr × B256) ≠ (sevm.currentTarget, supplySlot) := by
@@ -913,7 +917,8 @@ theorem flashLoan_execSat_call {sevm : Sevm} {pre : Devm}
   · exact Devm.extCost_add_of_size Mem.size_write_word (by decide)
   · exact Mem.read_write_word
   · exact Mem.read_snd_eq_self (by rw [Mem.size_write_word]; decide)
-  intro b G hlogb hstorb haccb herrb hGb
+  intro b G hlogb hstorb _hbalb _hcodeb haccb _hrefundb _houtb herrb
+    _hdeleteb hGb
   simp only [Devm.gasLeft_setMach, flashLoanLogGas, gVerylow, gBase, gMemory,
     gLog, gLogdata, gLogtopic] at hGb hN
   have h_gas' : flashLoanCallbackGas data.length ≤ G := by
@@ -1679,7 +1684,8 @@ lemma execSat_allowanceLow_leaf {sevm : Sevm} {d : Devm}
   · exact h_amnt
   · rfl
   · simp only [Devm.gasLeft_setMach, gasColdSload, gVerylow]; omega
-  · intro base c G h_in h_mono h_stor h_rc h_logs h_er h_lo h_hi h_geq
+  · intro base c G h_in h_mono h_stor _h_bal _h_code h_rc h_logs _h_output h_er
+      _h_delete h_lo h_hi h_geq
     have hG : 49 ≤ G := by
       simp only [Devm.gasLeft_setMach, gVerylow] at h_geq
       simp only [gasColdSload] at h_hi
@@ -1721,7 +1727,8 @@ lemma execSat_spendInf_step {sevm : Sevm} {d : Devm}
   · exact h_amnt
   · rfl
   · simp only [Devm.gasLeft_setMach, gasColdSload, gVerylow]; omega
-  · intro base c G h_in h_mono h_stor h_rc h_logs h_er h_lo h_hi h_geq
+  · intro base c G h_in h_mono h_stor _h_bal _h_code h_rc h_logs _h_output h_er
+      _h_delete h_lo h_hi h_geq
     simp only [Devm.gasLeft_setMach, gVerylow] at h_geq
     simp only [gasColdSload] at h_hi
     have hG : 39 ≤ G := by omega
@@ -1767,7 +1774,8 @@ lemma execSat_spendFin_step {sevm : Sevm} {d : Devm}
   · exact h_amnt
   · rfl
   · simp only [Devm.gasLeft_setMach, gasColdSload, gVerylow]; omega
-  · intro base c G h_in h_mono h_stor h_rc h_logs h_er h_lo h_hi h_geq
+  · intro base c G h_in h_mono h_stor _h_bal _h_code h_rc h_logs _h_output h_er
+      _h_delete h_lo h_hi h_geq
     simp only [Devm.gasLeft_setMach, gVerylow] at h_geq
     simp only [gasColdSload] at h_hi
     have hG : 20068 ≤ G := by omega
@@ -1782,7 +1790,8 @@ lemma execSat_spendFin_step {sevm : Sevm} {d : Devm}
       · exact h_static
       · rfl
       · simp only [Devm.gasLeft_setMach, gasStorageSet]; omega
-      · intro base2 c2 G2 hkey hoth hacc hlogs2 her2 hle2 hgeq2
+      · intro base2 c2 G2 hkey hoth _h_bal2 _h_code2 hacc hlogs2 _hout2
+          her2 _h_delete2 _hrefund2 hle2 hgeq2
         simp only [Devm.gasLeft_setMach] at hgeq2
         simp only [gasStorageSet] at hle2
         refine Func.execSat_segment ?_
@@ -1818,7 +1827,8 @@ lemma execSat_burnLow_leaf {sevm : Sevm} {b : Devm}
   · exact h_rbal
   · rfl
   · simp only [Devm.gasLeft_setMach, gasColdSload, gVerylow]; omega
-  · intro base c G1 h_in h_mono h_stor h_rc h_logs h_er h_lo h_hi h_geq
+  · intro base c G1 h_in h_mono h_stor _h_bal _h_code h_rc h_logs _h_output h_er
+      _h_delete h_lo h_hi h_geq
     simp only [Devm.gasLeft_setMach, gVerylow] at h_geq
     simp only [gasColdSload] at h_hi
     have hG : 27 ≤ G1 := by omega
@@ -1877,7 +1887,8 @@ lemma execSat_burnOk_leaf {sevm : Sevm} {b : Devm}
   · exact h_rbal
   · rfl
   · simp only [Devm.gasLeft_setMach, gasColdSload, gVerylow]; omega
-  · intro base c G1 h_in h_mono h_stor h_rc h_logs h_er h_lo h_hi h_geq
+  · intro base c G1 h_in h_mono h_stor _h_bal _h_code h_rc h_logs _h_output h_er
+      _h_delete h_lo h_hi h_geq
     simp only [Devm.gasLeft_setMach, gVerylow] at h_geq
     simp only [gasColdSload] at h_hi
     have hG1 : 43943 ≤ G1 := by omega
@@ -1892,7 +1903,8 @@ lemma execSat_burnOk_leaf {sevm : Sevm} {b : Devm}
       · exact h_static
       · rfl
       · simp only [Devm.gasLeft_setMach, gasStorageSet]; omega
-      · intro base2 c2 G2 hkey2 hoth2 hacc2 hlogs2 her2 hle2 hgeq2
+      · intro base2 c2 G2 hkey2 hoth2 _h_bal2 _h_code2 hacc2 hlogs2 _hout2
+          her2 _h_delete2 _hrefund2 hle2 hgeq2
         simp only [Devm.gasLeft_setMach] at hgeq2
         simp only [gasStorageSet] at hle2
         have hG2 : 23909 ≤ G2 := by omega
@@ -1908,8 +1920,8 @@ lemma execSat_burnOk_leaf {sevm : Sevm} {b : Devm}
           · rfl
           · rfl
           · simp only [Devm.gasLeft_setMach, gasColdSload]; omega
-          · intro base3 c3 G3 h_in3 h_mono3 h_stor3 h_rc3 h_logs3 h_er3
-              h_lo3 h_hi3 h_geq3
+          · intro base3 c3 G3 h_in3 h_mono3 h_stor3 _h_bal3 _h_code3 h_rc3 h_logs3 _hout3 h_er3
+              _h_delete3 h_lo3 h_hi3 h_geq3
             simp only [Devm.gasLeft_setMach] at h_geq3
             simp only [gasColdSload] at h_hi3
             have hG3 : 21804 ≤ G3 := by omega
@@ -1927,7 +1939,8 @@ lemma execSat_burnOk_leaf {sevm : Sevm} {b : Devm}
               · exact h_static
               · rfl
               · simp only [Devm.gasLeft_setMach, gasStorageSet]; omega
-              · intro base4 c4 G4 hkey4 hoth4 hacc4 hlogs4 her4 hle4 hgeq4
+              · intro base4 c4 G4 hkey4 hoth4 _h_bal4 _h_code4 hacc4 hlogs4
+                  _hout4 her4 _h_delete4 _hrefund4 hle4 hgeq4
                 simp only [Devm.gasLeft_setMach] at hgeq4
                 simp only [gasStorageSet] at hle4
                 have hG4 : 1790 ≤ G4 := by omega
@@ -2455,7 +2468,8 @@ theorem fmint_amount_over_bound_reverts {sevm : Sevm} {pre : Devm}
     (v := Devm.getStorVal pre sevm.currentTarget supplySlot) rfl (by simp)
     rfl (M := pre.memory) rfl
     (by simp only [Devm.gasLeft_setMach, gasColdSload]; omega) ?_
-  intro base c G h_in h_mono h_stor h_rc h_logs h_er h_lo h_hi h_geq
+  intro base c G h_in h_mono h_stor _h_bal _h_code h_rc h_logs _h_output h_er
+    _h_delete h_lo h_hi h_geq
   simp only [Devm.gasLeft_setMach, gasColdSload] at h_geq h_hi
   have hG : 24 ≤ G := by omega
   apply Func.execSat_of_runCompiledTo

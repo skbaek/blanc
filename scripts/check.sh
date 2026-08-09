@@ -539,7 +539,20 @@ Blanc.Weth10.addBlockToChainUsing_preserves_stable|$STANDARD
 Blanc.Weth10.addBlockToChain_preserves_stable|$STANDARD
 Blanc.Weth10.Stable.solvent|$STANDARD
 Blanc.Weth10.chain_reachable_backed_and_flash_zero|$STANDARD
-Blanc.Weth10.processCreateMessage_establishes_stable|$STANDARD"
+Blanc.Weth10.processCreateMessage_establishes_stable|$STANDARD
+Blanc.Xinst.step_call_nonzero_insufficient|$STANDARD
+Blanc.Xinst.step_call_nonzero_spawn|$STANDARD
+Blanc.Ninst.runCompiled_call_nonzero_codeFree|$STANDARD
+Blanc.Weth10.redemptionRuntimeCeiling_eq|propext
+Blanc.Weth10.Stable.bookedBalanceNat_le_contractEth|$STANDARD
+Blanc.Weth10.withdrawTo_exec|$STANDARD
+Blanc.Weth10.withdraw_exec|$STANDARD
+Blanc.Weth10.processMessageCall_eq_of_exec|$STANDARD
+Blanc.Weth10.Stable.messageRedemption_enabled_of_le|$STANDARD
+Blanc.Weth10.Stable.selfRedemption_enabled_of_le|$STANDARD
+Blanc.Weth10.AdmissibleRedemptionTx.processTransaction_eq_of_message|$STANDARD
+Blanc.Weth10.Stable.transactionRedemption_enabled_of_le|$STANDARD
+Blanc.Weth10.outerOkWithFailedReceipt_not_redemptionEnabled|$STANDARD"
 # Secondary net only: the exact-set comparison below is the primary check;
 # this pattern catches forbidden names in output the per-theorem parse missed.
 FORBIDDEN='sorryAx|ofReduceBool|ofReduceNat|_native\.'

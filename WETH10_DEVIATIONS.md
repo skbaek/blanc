@@ -47,11 +47,15 @@ The compatibility claim deliberately excludes:
 - raw storage equality, storage roots/proofs, code/codehash identity, source
   shape, and bytecode identity;
 - exact gas, access lists, or equality of callback-observed `gasleft()`;
-- liveness under inadequate gas and deployed-vs-Blanc liveness/gas parity;
+- liveness under inadequate gas and deployed-vs-Blanc liveness/gas parity. The
+  Blanc-only `TH-redeem` result instead uses a named conservative Prague bound;
 - guarantees that arbitrary hostile callback code returns successfully,
   permits withdrawal, or establishes another useful postcondition. The
-  present verification program also makes no no-borrower-premise gas-
-  settlement theorem; no such theorem is claimed;
+  Blanc-only constructive redemption theorem is deliberately narrower:
+  canonical `withdraw`/`withdrawTo`, `Stable`, and a nonzero code-free
+  Prague-nonprecompile recipient under an explicit fresh execution envelope.
+  The present verification program also makes no no-borrower-premise gas-
+  settlement theorem for arbitrary receiver code; no such theorem is claimed;
 - source-initcode, CREATE2-address, and deployment-gas equality; and
 - adversarial cryptographic-collision states for the projected Blanc allowance
   map, under the qualification below.
