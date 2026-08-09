@@ -275,8 +275,8 @@ theorem callbackBubble_runCompiledTo {dp : DeployParams} {sevm : Sevm}
       simp only [Devm.stack_setMach]
       omega)
 
-/-- Boolean callback failure uses the common byte-for-byte bubble
-continuation in the deployed `boolReturn` auxiliary. -/
+/-- Boolean callback failure uses the common byte-for-byte bubble continuation
+in Blanc's `boolReturn` auxiliary, matching the deployed oracle. -/
 theorem boolReturn_childRevert_runCompiledTo {dp : DeployParams}
     {sevm : Sevm} {base : Devm} {G : Nat} {stack : List B256} {img : Bytes}
     (hwf : Mem.Wf base.memory) (hr : Mem.Reads base.memory img)

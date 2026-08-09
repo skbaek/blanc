@@ -9,10 +9,12 @@ replacement target.
 
 ## True behavioral deviations
 
-None are accepted or currently known. Blanc WETH10 must match every in-scope
-ordinary-call behavior in `WETH10_COMPATIBILITY.md`. A future mismatch in that
-surface is a defect or a new explicit conformance decision; it may not be
-silently moved into this section.
+None are accepted. No in-scope mismatch is currently known from the finite
+differential suite; agreement on its chosen inputs is evidence, not a proof
+that no mismatch exists. Blanc WETH10 must match every in-scope ordinary-call
+behavior in `WETH10_COMPATIBILITY.md`. A future mismatch in that surface is a
+defect or a new explicit conformance decision; it may not be silently moved
+into this section.
 
 ## Accepted low-level implementation differences
 
@@ -49,8 +51,7 @@ The compatibility claim deliberately excludes:
 - guarantees that arbitrary hostile callback code returns successfully,
   permits withdrawal, or establishes another useful postcondition. The
   present verification program also makes no no-borrower-premise gas-
-  settlement theorem: that requirement is explicitly deferred, and no
-  replacement flagship is claimed;
+  settlement theorem; no such theorem is claimed;
 - source-initcode, CREATE2-address, and deployment-gas equality; and
 - adversarial cryptographic-collision states for the projected Blanc allowance
   map, under the qualification below.

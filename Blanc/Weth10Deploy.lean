@@ -3413,7 +3413,7 @@ def weth10InitSuccess
     (runtimeLength codeOffset : Nat) : Func :=
   deploymentSuccessLine runtimeLength codeOffset +++ Func.ret
 
-/-- The deployed constructor's successful arm exposed as its six independently
+/-- The Blanc constructor's successful arm exposed as its six independently
 checkable straight-line phases. -/
 theorem weth10InitSuccess_eq_phases :
     weth10InitSuccess 6313 177 =

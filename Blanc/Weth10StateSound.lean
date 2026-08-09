@@ -8764,7 +8764,7 @@ theorem permit_exactRelFuncSound
   exact h_exact.trans (congrArg
     (fun st => (st.get ca).stor.get flashMintedSlot) h_state.symm)
 
-/-- The deployed nonpayable `permit` selector preserves the frozen backing
+/-- Blanc's nonpayable `permit` selector preserves the frozen backing
 invariant, including arbitrary delegated/static recovery subtrees. -/
 theorem backedSpec_permit_funcSound
     (dp : DeployParams) (ca : Adr) :
@@ -9813,7 +9813,7 @@ private theorem flashFee_flashStable (dp : DeployParams) :
   have hs := (run_flashFee_observations_eq dp run).1
   rw [← congrFun hs sevm.currentTarget]
 
-/-- The exact relation is discharged for every one of the 27 deployed
+/-- The exact relation is discharged for every one of the 27 Blanc
 selector leaves. -/
 theorem weth10Funcs_exactRelFuncSound
     (dp : DeployParams) (ca : Adr) :
@@ -10075,7 +10075,7 @@ theorem backedPost_of_flashSettle
   rw [← hbalSsR]
   exact h_side
 
-/-- The deployed nonpayable `flashLoan` selector preserves the frozen backing
+/-- Blanc's nonpayable `flashLoan` selector preserves the frozen backing
 invariant. -/
 theorem backedSpec_flashLoan_funcSound
     (dp : DeployParams) (ca : Adr) :
@@ -10104,7 +10104,7 @@ theorem backedSpec_flashLoan_funcSound
   exact backedPost_of_flashSettle dp sevm.currentTarget
     rfl h_value h_nof h_inv_ss h_side_ss h_flash_ss hsettle
 
-/-- Every one of the 27 deployed selector leaves preserves the frozen backing
+/-- Every one of the 27 Blanc selector leaves preserves the frozen backing
 invariant. -/
 theorem weth10Funcs_backed_funcSound
     (dp : DeployParams) (ca : Adr) :
@@ -10145,8 +10145,8 @@ theorem weth10Funcs_backed_funcSound
   · exact backedSpec_allowance_funcSound dp ca
   · simp at hnil
 
-/-- Premise-free receive-aware soundness of the exact deployed WETH10
-program for the frozen backing invariant. -/
+/-- Premise-free receive-aware soundness of the compiled Blanc WETH10 program
+for the frozen backing invariant. -/
 theorem backedSpec_sound (dp : DeployParams) (ca : Adr) :
     (backedSpec weth10 dp).Sound ca :=
   backedSpec_sound_of_funcSound_all dp ca

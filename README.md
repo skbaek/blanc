@@ -230,23 +230,22 @@ and proof falls. It is not duplicated here. Blanc adds exactly:
 1. **the pinned Jaune revision** below — trusting a Blanc theorem is trusting
    that specific Jaune, not the sibling checkout on your disk;
 2. **the axiom audit** below, which is stricter than Jaune's own gates: its
-   current source inventory pins the exact axiom set of 249 named results—126
+   current source inventory pins the exact axiom set of 262 named results—139
    in the WETH10/`Weth10Inv` family—and fails on an extra *or* missing axiom.
-   The row count is static inventory; the external closure receipt records the
-   authoritative 249/249 gate verdict;
-3. **Blanc's own source**, which carries no gate equivalent to Jaune's
-   `check-hygiene.sh`/`check-integrity.sh`; what stands behind it is the audit
-   in (2), and the audit constrains only what enters those audited
-   declarations' dependency cones. Scanning `Blanc/` finds no object-level use
-   of `@[extern]`, `axiom`, `opaque`, `sorry`, `implemented_by`, `bv_decide`,
-   or `native_decide`. The only two textual `native_decide` occurrences are
-   comments in `WethCode.lean` and `FmintCode.lean` explaining that their
-   witnesses do not use it. The five `partial def`s are proof-automation
-   procedures—three in `Tactics.lean` and two in `Forward.lean`—and the seven
-   `dbg_trace`s are in `Tactics.lean`; all live in `TacticM`/`MetaM` rather
-   than object-level definitions. A non-terminating or chatty tactic can fail
-   to produce a proof, but any proof it does produce is still checked by the
-   kernel, so none of them is in the trusted base.
+   Run `scripts/check.sh --no-build`; its `262/262` summary belongs to the
+   source identity printed by `git rev-parse HEAD`;
+3. **Blanc's own source**, guarded by
+   [`scripts/check-trust-surface.sh`](scripts/check-trust-surface.sh). The gate
+   traverses the exact transitive local import closure of `Blanc.lean` and
+   fail-closed checks `sorry`, bespoke `axiom`, `opaque`, `@[extern]`,
+   `implemented_by`, `native_decide`, object-level `partial def`, and
+   `dbg_trace`. Its 21 current occurrences are exact reviewed rows: nine are
+   comment-only explanations, five are `TacticM`/`MetaM` partial procedures,
+   and seven are tactic diagnostics. Unimported Lean helpers and generators are
+   outside this library-root gate; importing one immediately brings it into
+   scope. A non-terminating or chatty tactic can fail to produce a proof, but
+   any proof it does produce is still checked by the kernel, so none of these
+   proof-automation rows enlarges the trusted base.
 
 As in Jaune's document, this section is about whether the proofs are sound, not
 about whether they are the right theorems. Read the statements in
@@ -259,12 +258,15 @@ Blanc builds against a **pinned revision** of
 in [`lakefile.lean`](lakefile.lean) — so a fresh clone builds reproducibly
 without a sibling checkout, and bumping Jaune is a reviewed one-line change.
 
-CI ([`scripts/check.sh`](scripts/check.sh)) builds the library and then runs an
+CI builds the library and runs an
 **axiom audit** ([`scripts/AxiomCheck.lean`](scripts/AxiomCheck.lean)) whose
-current source inventory contains **249** top theorems, including **126**
+current source inventory contains **262** top theorems, including **139**
 WETH10/`Weth10Inv` rows. `scripts/check.sh`'s row list is the authority on
-membership, and the external closure receipt records the final 249/249 gate
-verdict. The families follow. Seven are WETH's headline solvency theorems:
+membership; run `scripts/check.sh --no-build` and bind its exact-set verdict to
+`git rev-parse HEAD`. The separate `scripts/check-claims.sh` Lean-checks the
+exact statements of the WETH10 flagship set; the axiom audit itself pins
+dependency closures, not theorem statements. The families follow. Seven are
+WETH's headline solvency theorems:
 
 - `Blanc.weth_preserves_solvent`
 - `Blanc.stateTransition_preserves_solvent`
@@ -300,8 +302,9 @@ is conserved, because both sides of the equality are then zero
 for the canonical empty map). That covers the genesis case and only the genesis
 case — FMINT compiles one runtime and has no constructor, so **no
 initcode/`CREATE` deployment theorem exists**, and nothing here says an FMINT
-deployed by a transaction starts conserved. That gap is recorded as a successor
-item in `~/plans/flashmint-proposal.md`.
+deployed by a transaction starts conserved. That remains a declared non-claim;
+`rg -n 'processCreateMessage|createTransaction' Blanc/Fmint*.lean` is the
+runnable source check for the absent deployment layer.
 
 Eight are FMINT's `flashLoan` specification — the headline
 `Blanc.Fmint.fmint_flashLoan_spec` and its seven `no_success_of_*` corollaries
@@ -544,32 +547,40 @@ this directory discharges either — and it is not a liveness result. See [the
 fixtures README](scripts/fixtures/fmint/README.md#what-the-suite-establishes)
 for the case-by-case account and for what each mechanism is separately worth.
 
-## WETH10 public verification — parameterized runtime and full boundary
+## WETH10 assurance boundary — Blanc proofs and deployed-oracle tests
 
-WETH10 is a drop-in, high-level reimplementation of the ordinary public
-boundary of the deployed WETH10 at
-`0xf4BB2e28688e89fCcE3c0580D37d36A7672E8A9F`; it does not reproduce the
-Solidity bytecode. Its 6,313-byte Blanc runtime is parameterized by deployment
-chain ID and cached domain separator. `Blanc.Weth10.weth10Code_compile` proves
+WETH10 is a high-level Blanc implementation of WETH10's ordinary public
+functionality; it is not bytecode-identical to, or a proof of, the deployed
+9,975-byte Solidity runtime at
+`0xf4BB2e28688e89fCcE3c0580D37d36A7672E8A9F`. The standing semantics of that
+port claim are in [`PORTING.md`](PORTING.md). Its 6,313-byte Blanc runtime is
+parameterized by deployment chain ID and cached domain separator.
+`Blanc.Weth10.weth10Code_compile` proves
 `Prog.compile (weth10 dp) = some (weth10Code dp)` for every `DeployParams`.
 The named mainnet member has SHA-256
 `7e8db17e5ef02cfdc0637547e6a6054a0bfb62aa501a59ccc342f3ac83f5aefc`;
 the synthetic chain-31337/address-`0x1000` member has SHA-256
 `7adf0712b839be5d46bf10e24e4c860e63593fe4b67ec5ffb3892ca14635b1e8`.
 
-The generated differential gate executes the literal 9,975-byte deployed
-oracle against those exact Blanc family members: 139 declared rows cover all
-27 selectors plus payable receive, with 61 live CALL/STATICCALL traces, five
-state-mutating or hostile reentrancy rows, 26 static-context rows, and eight
-channel falsifiers. Public compiled-effect theorems separately cover 28/28
-runtime entries, including transfer/withdraw, all three ERC-677-style typed
-callbacks, permit, flash-loan callback/repayment/log ordering, exact rollback
-and error genres, and backing preservation through recursive calls.
-`Weth10Live.lean` gives exact Blanc cold/warm gas for the required views.
+| Assurance class | What is established | Artifact boundary |
+|---|---|---|
+| Formally proved | Compilation to each named Blanc runtime; compiled endpoint effects; backing preservation; exact flash-counter restoration; transaction/block/chain preservation of `Weth10.Stable`; and a direct creation-message seed on the actual post-state. `chain_reachable_backed_and_flash_zero` literally concludes `flashMinted = 0` and `balSum ≤ ETH balance`. | The theorems are about the Blanc program and its generated runtime under their stated Jaune premises. They compose existing `ContractSpec` results; they do not verify the deployed oracle. |
+| Differentially tested | `scripts/check-weth10-differential.sh` executes 141 generated canonical-call rows against both the literal deployed runtime and the exact named Blanc family members, covering all 27 selectors plus receive in two identity worlds with zero mismatches. | Finite tests against the deployed oracle on chosen inputs, not semantic equivalence or a proof. |
+| Not established | Verification of the deployed runtime; deployed-vs-Blanc semantic equivalence; establishment from a top-level creation transaction or deployment block; malformed/noncanonical input-calldata closure; arbitrary-borrower liveness or settlement; exact gas, storage, codehash, or CREATE2 parity. | These are non-claims, not assumptions supplied by the proof or test suites. See `WETH10_COMPATIBILITY.md` and `WETH10_DEVIATIONS.md`. |
+
+The generated differential gate's 141 rows include 61 live
+CALL/STATICCALL traces, five state-mutating or hostile reentrancy rows, 26
+static-context rows, and eight channel falsifiers. Public compiled-effect
+theorems separately cover 28/28 runtime entries, including transfer/withdraw,
+all three ERC-677-style typed callbacks, permit, flash-loan
+callback/repayment/log ordering, exact rollback and error genres, and backing
+preservation through recursive calls. `Weth10Live.lean` gives exact Blanc
+cold/warm gas for the required views.
 
 The separate constructor is 6,490 bytes: a 177-byte prefix copies and patches
 the 6,313-byte zero-parameter template. The deployment gate executes it in two
-fresh identity worlds and checks nonpayability, independently derived chain and
+fresh identity worlds under the pinned Prague EELS and checks nonpayability,
+independently derived chain and
 domain words, exact installed family members, empty initial storage, no
 constructor calls/logs/storage instructions, and six falsifiers. Blanc's
 closed accounting is 1,471 init-execution gas, 1,262,600 code-deposit gas,
@@ -584,17 +595,22 @@ succeeds, installs the exact freshly parameterized runtime, leaves target
 storage empty satisfying `Weth10Inv`, emits no logs, returns the runtime bytes,
 and subtracts the named direct creation-message cost.
 
+Both the Blanc runtime and initcode contain `PUSH0`, so Shanghai is the minimum
+execution fork. The executable evidence is specifically under the pinned
+Prague EELS; neither fact implies deployability on pre-Shanghai forks or a
+broader fork-parametric claim.
+
 The execution proof is deliberately compositional: copy, chain-word patches,
 five prehash writes, hash, separator patches, and return are proved separately
 and then joined. This replaced an all-at-once elaboration that ran beyond
 1,000 seconds and drove anomalous aggregate memory use. With no resource limit
-raised, targeted builds completed `Weth10DeployExec` at 917/917 in 28.48 seconds
-and `Weth10DeployProof` at 920/920 in 132 seconds. Those are proof-engineering
-receipts, not runtime-gas measurements or an industry deployment-verification
-standard.
+raised, historical targeted snapshots completed `lake build
+Blanc.Weth10DeployExec` at 917/917 in 28.48 seconds and `lake build
+Blanc.Weth10DeployProof` at 920/920 in 132 seconds. Those commands regenerate
+current receipts; the recorded figures are proof-engineering snapshots, not
+runtime-gas measurements or an industry deployment-verification standard.
 
 The precise behavior contract, evidence ownership, and non-claims are in
 [`WETH10_COMPATIBILITY.md`](WETH10_COMPATIBILITY.md) and
-[`WETH10_DEVIATIONS.md`](WETH10_DEVIATIONS.md). RL8's proposed
-arbitrary-borrower settlement theorem is explicitly omitted by user direction
-and has no replacement; no such claim is implied here.
+[`WETH10_DEVIATIONS.md`](WETH10_DEVIATIONS.md). No arbitrary-borrower
+settlement theorem is established, and no such claim is implied here.

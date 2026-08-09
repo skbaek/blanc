@@ -23,11 +23,13 @@ Choose the gate by what you changed, cheapest falsifier first:
 | you changed | run this first | then, before pushing |
 |---|---|---|
 | anything at all | `scripts/check-layering.sh` + `lake build` | `scripts/check.sh --no-build` |
+| imported source or an import | `scripts/check-trust-surface.sh` | `lake build && scripts/check.sh --no-build` |
 | WETH10 deployed-reference inputs, lock, or checker | `scripts/check-weth10-reference.sh` | the **full set**, in the order below |
 | WETH10 runtime, concrete parameters, differential scenarios, or endpoint manifest | `lake build` then `scripts/check-weth10-differential.sh` | the **full set**, in the order below |
 | WETH10 constructor, initcode, or deployment fixtures | `scripts/check-weth10-deployment.sh` | the **full set**, in the order below |
 | a module's imports, or added a contract | `scripts/check-layering.sh` | `lake build && scripts/check.sh --no-build` |
 | a proof, a theorem statement, or an axiom-relevant definition | `scripts/check.sh --no-build` | `scripts/check-elab.sh` |
+| a WETH10 flagship statement | `scripts/check-claims.sh` | `scripts/check.sh --no-build` |
 | anything that could move elaboration cost | `scripts/check-elab.sh` | — |
 | a contract's compiled bytes | `scripts/check-fmint.sh --no-build` + `scripts/check-weth.sh --no-build` | both `scripts/check-*-coverage.sh` |
 | a fixture, a fixture generator, or a borrower | the matching suite's `check-*.sh --no-build` | that suite's `check-*-coverage.sh` |
@@ -43,12 +45,14 @@ self-inflicted contention.
 
 ```
 scripts/check-layering.sh
+scripts/check-trust-surface.sh
 scripts/check-weth10-reference.sh
 lake build
 scripts/check-weth10-differential.sh
 scripts/check-weth10-deployment.sh
 scripts/check-error-data.sh
 scripts/check.sh --no-build
+scripts/check-claims.sh
 scripts/check-elab.sh                 # only if a .lean file was touched
 scripts/check-fmint.sh --no-build
 scripts/check-weth.sh --no-build
@@ -63,9 +67,9 @@ runs every time.
 ## Catalogue
 
 Scale and time cells record the most recent completed measurement represented
-by each row. The closure candidate's final serial receipt is recorded in the
-external closure report; the cells here describe the exact gate scale and the
-latest candidate measurement available before that replay.
+by each row. The cells describe the exact gate scale; reproduce the completion
+candidate directly by running the full ordered command list above and recording
+each gate's terminal summary.
 A gate's own summary line is always the authority; a green run whose counts
 disagree with a cell here is a staleness finding against this file, not
 against the gate.
@@ -74,34 +78,37 @@ against the gate.
 
 | gate | proves | scale | time |
 |---|---|---|---|
-| `scripts/check-layering.sh` | contracts are siblings in the import hierarchy: no cross-contract import, no shared module importing a contract, no unclassified module (rule and rationale in `README.md`) | 3 contracts, 49 modules, 47 non-root | sub-second |
+| `scripts/check-layering.sh` | contracts are siblings in the import hierarchy: no cross-contract import, no shared module importing a contract, no unclassified module (rule and rationale in `README.md`) | 3 contracts, 50 modules, 48 non-root | sub-second |
+| `scripts/check-trust-surface.sh` | exact transitive local import closure of `Blanc.lean` contains no new or stale source occurrence of `sorry`, bespoke `axiom`, `opaque`, `@[extern]`, `implemented_by`, `native_decide`, object-level `partial def`, or `dbg_trace`; exact reviewed comment/TacticM/MetaM rows are fail-closed allowlisted; unimported helpers are outside scope until imported | 49 closure modules; 21 exact allowlisted occurrences | sub-second |
 | `scripts/check-weth10-reference.sh` | exact-schema validation and offline reconstruction of the deployed WETH10 lock: independently pinned deployment/compiler/source/RPC identities, installed runtime hex/codehash, exact template and immutable spans/values, full canonical 27-function + two-event + receive ABI, separate constructor boundary, source-derived branch-context guard/callback/event/storage inventories, exact drift evidence, deletion/mutation, wrong-type, coherent, deployment-derivation, and coordinated-input falsifiers, plus exact generated endpoint-key synchronization for the compatibility contract | schema v2; 27 selectors + receive; 9,975 runtime bytes; 23 falsifier families; 28 compatibility endpoint keys + 12 cross-cutting keys + deployment | ~25 s |
-| `scripts/check-weth10-differential.sh` | executes the locked installed oracle and the exact compiled Blanc mainnet/synthetic parameter instances in a clean pinned EELS Prague interpreter; checks generated 27-selector/receive endpoint equality, success/revert and exact returndata, logical projected state, ETH, ordered outer/child logs, callback-visible calldata, live CALL/STATICCALL traces even across outer rollback, Solidity-0.7 Boolean truthiness including noncanonical word `2` and max-word normalization, hostile state-mutating reentrancy, flash settlement, independent permit signatures/ecrecover/domain forks, static-context guard precedence, nonpayability, unknown dispatch, and bounded channel falsifiers | 139 declared rows; 27 selectors + receive; 2 identity worlds; 5 state-mutating reentrancy rows; 26 static-context rows; 8 channel falsifiers | ~3 s |
+| `scripts/check-weth10-differential.sh` | executes the locked installed oracle and the exact compiled Blanc mainnet/synthetic parameter instances in a clean pinned EELS Prague interpreter; checks generated 27-selector/receive endpoint equality, success/revert and exact returndata, logical projected state, ETH, ordered outer/child logs, callback-visible calldata, live CALL/STATICCALL traces even across outer rollback, Solidity-0.7 Boolean truthiness including noncanonical word `2` and max-word normalization, hostile state-mutating reentrancy, flash settlement, independent permit signatures/ecrecover/domain forks, static-context guard precedence, nonpayability, unknown dispatch, and bounded channel falsifiers | 141 declared rows; 27 selectors + receive; 2 identity worlds; 5 state-mutating reentrancy rows; 26 static-context rows; 8 channel falsifiers | ~3 s |
 | `scripts/check-weth10-deployment.sh` | executes Blanc's generic creation bytecode in the pinned EELS Prague interpreter for mainnet and synthetic identities; checks nonpayability, independently derived chain/domain words, exact installation of the named parameterized runtime, empty initial persistent state, no constructor calls/logs/storage instructions, EIP-170/EIP-3860 size limits, and bounded falsifiers | 2 fresh identity worlds; 6 constructor/channel falsifiers | ~2 s |
 | `scripts/check-error-data.sh` | lock-enumerated ASCII WETH10 guard reasons produce byte-identical `Blanc.errorData` and independently recomputed Solidity `Error(string)` ABI payloads, including the Keccak-derived selector | 11 unique lock reason strings | ~1.2 s |
 | `scripts/check-fmint.sh --no-build` | fmint fixture conformance, the manifest cross-check, independent source-hash verification for the Solidity borrower, and byte-equality of every fixture's fmint pre-state code against the committed `Blanc.fmintCode` literal | 11 fixtures, 188 assertions, 4617 source bytes, 1257 runtime bytes | sub-second |
 | `scripts/check-weth.sh --no-build` | WETH fixture conformance and the same byte-equality check against `Blanc.wethCode`. There is no WETH manifest, so no cross-check — the asymmetry is real, not an omission | 11 fixtures, 988 bytes | sub-second |
 | `scripts/check-fmint-coverage.sh` | selector reachability split into direct top-level entry, post-state-witnessed internal CALL, and uncredited embedding; five built-in callsite corruptions prove the evidence channel is live | 12 selectors: 2 direct + 7 witnessed internal, budget 3 | sub-second |
 | `scripts/check-weth-coverage.sh` | the same honest reachability split for WETH, plus direct empty-calldata `deposit()` fallback and the same five callsite falsifiers | 10 selectors: 4 direct + 6 witnessed internal + fallback, budget 0 | sub-second |
-| `lake build` | integration elaboration, including the audited compile-witness and WETH10 deployment declarations | 957 jobs | 1.46 s on the fully built closure candidate; clean rebuilds are substantially longer |
-| `scripts/check.sh --no-build` | axiom audit of the audited top theorems, each against its own pinned expected axiom set | 249 theorems | ~4 s |
+| `lake build` | integration elaboration, including the audited compile-witness, WETH10 deployment declarations, and stable-state packaging | 958 jobs | incremental builds are a few seconds; clean rebuilds are substantially longer |
+| `scripts/check.sh --no-build` | axiom audit of the audited top theorems, each against its own pinned expected axiom set | 262 theorems | ~4 s |
+| `scripts/check-claims.sh` | Lean-checked exact statement pins for the WETH10 compile, flash-depth, backing, creation, static-certificate, stable-chain headline, and creation-seed flagships; `Stor.Weth10Inv` is pinned by `rfl` unfolding | 9 definitions/statements | ~2 s |
 
 ### Medium — before a commit or push candidate
 
 | gate | proves | scale | time |
 |---|---|---|---|
-| `scripts/check-elab.sh` | per-module elaboration time vs the committed `scripts/baseline-elab.txt` | 49 files, 269.9 s baseline | ~4.6 min |
+| `scripts/check-elab.sh` | per-module elaboration time vs the committed `scripts/baseline-elab.txt` | 50 files, 271.1 s baseline | ~4.6 min |
 
 No Blanc gate approaches the 1,000-second rule. The sequential elaboration
 gate is the longest at roughly five minutes; every gate still runs inline.
 
 ### The Python behind the shell
 
-Fifteen helpers do the actual work and are not gates in their own right — they are
+Sixteen helpers do the actual work and are not gates in their own right — they are
 invoked by the scripts above and should not be run directly in a report:
 
 | helper | used by | what it does |
 |---|---|---|
+| `scripts/check-trust-surface.py` | `check-trust-surface.sh` | traverses `Blanc.lean`'s transitive local import closure and compares every normalized forbidden-token occurrence against the exact fail-closed allowlist |
 | `scripts/weth10-reference.py` | `check-weth10-reference.sh` | derives the schema-v2 target from vendored inputs, checks independent identity pins, and provides the explicit networked refresh |
 | `scripts/weth10_reference_schema.py` | `check-weth10-reference.sh` | validates the complete generated lock against a hand-maintained exact nested schema independent of the builder |
 | `scripts/test-weth10-reference-falsifiers.py` | `check-weth10-reference.sh` | deletes and mutates every required field family, fuzzes JSON types and coherent cross-field edits, checks deployment-state derivation, and attempts coordinated input edits to prove the ordinary checker rejects them |
@@ -140,7 +147,7 @@ checkout. A missing, dirty, or differently pinned checkout is a regression,
 not a skip. The initial 6163-byte candidate's three unallowlisted word-`2`
 mismatches are retained as history in the fixture README. The user adjudicated
 in favor of deployed Solidity-0.7 truthiness; the normalized 6313-byte runtime
-must pass the expanded 139-row matrix with no mismatch allowlist.
+must pass the expanded 141-row matrix with no mismatch allowlist.
 
 **Counts are part of the criterion, not decoration.** A green `check.sh`
 exact-set summary is meaningful only together with "no row added, removed, or
@@ -216,6 +223,6 @@ worker that has been opening files. A `--force` run may not be rebased.
    `scripts/check-weth10-differential.sh --write-manifest --manifest-only`.
 6. **CI runs a subset of this file**, not a different thing:
    `.github/workflows/ci.yml` invokes `check-layering.sh`,
-   `check-weth10-reference.sh`, `check-error-data.sh`, `check.sh
-   --no-build`, both suites `--no-build`, and both coverage gates. Extending one
-   of those scripts extends CI directly.
+   `check-trust-surface.sh`, `check-weth10-reference.sh`, `check-error-data.sh`,
+   `check.sh --no-build`, `check-claims.sh`, both suites `--no-build`, and both
+   coverage gates. Extending one of those scripts extends CI directly.

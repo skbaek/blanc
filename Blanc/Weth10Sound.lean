@@ -290,7 +290,7 @@ theorem backedSpec_flashFee_funcSound (dp : DeployParams) (ca : Adr) :
 /-! ## Receive-aware dispatcher assembly -/
 
 /-- With receive and the reverting fallback discharged here, the exact WETH10
-runtime has one remaining RL4 premise: `FuncSound` for every member of its
+runtime has one remaining program-soundness premise: `FuncSound` for every member of its
 27-entry selector list. -/
 theorem backedSpec_sound_of_funcSound_all
     (dp : DeployParams) (ca : Adr)
@@ -305,7 +305,7 @@ theorem backedSpec_sound_of_funcSound_all
   intro sevm s r h_target h_pre h_ih run
   exact absurd run not_run_rev
 
-/-- The frame-level RL4 result has the same sole remaining selector-family
+/-- The frame-level soundness result has the same sole remaining selector-family
 premise; all receive-aware dispatcher and ladder plumbing is discharged. -/
 theorem backedSpec_preserves_of_funcSound_all
     (dp : DeployParams) (ca : Adr)

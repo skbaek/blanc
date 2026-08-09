@@ -719,7 +719,7 @@ theorem processCreateMessage_weth10_success
       h_code h_gas' h_max
 
 
-/-! ## One honest RL9 bundle -/
+/-! ## Static deployment certificate -/
 
 /-- Static companion to `processCreateMessage_weth10_success`.  It bundles
 parameter derivation, universal runtime compilation, the exact initcode tail,
