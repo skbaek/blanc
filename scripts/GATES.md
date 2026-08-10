@@ -99,10 +99,10 @@ against the gate.
 
 | gate | proves | scale | time |
 |---|---|---|---|
-| `scripts/check-elab.sh` | per-module elaboration time vs the committed `scripts/baseline-elab.txt` | 52 files, 281.1 s baseline | ~4.9 min |
+| `scripts/check-elab.sh` | per-module elaboration time vs the committed `scripts/baseline-elab.txt` | 69 files, 455.1 s baseline | ~7.8 min |
 
 No Blanc gate approaches the 1,000-second rule. The sequential elaboration
-gate is the longest at roughly five minutes; every gate still runs inline.
+gate is the longest at roughly eight minutes; every gate still runs inline.
 
 ### The Python behind the shell
 

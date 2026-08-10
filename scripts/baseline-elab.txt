@@ -605,3 +605,30 @@ OK	1.452	Blanc/Weth10StateFunctional.lean
 OK	6.079	Blanc/Weth10StateSound.lean
 OK	1.795	Blanc/Weth10TransferFunctional.lean
 OK	2.445	Blanc/Weth10TemplateCode.lean
+
+# 2026-08-11. The execution-authentic WETH10 holder-flow conservation work
+# added the following 17 modules. These rows are the exact sequential
+# `scripts/check-elab.sh` measurements of the optimized 69-file candidate
+# (451.4 s total), with no Lean language server or competing build alive.
+# Before admitting them, the closed-program pcFree/SSTORE inventory walks and
+# repeated selector-hash comparisons were factored into symbolic composition;
+# all three proof-budget overrides introduced during development were removed.
+# Only these new rows were appended. Every pre-existing reference time above
+# remains byte-for-byte unchanged; `--rebase` was not run.
+OK	2.184	Blanc/ExecDeterminism.lean
+OK	1.975	Blanc/Weth10HolderFlow.lean
+OK	1.173	Blanc/Weth10HolderFlowAlgebra.lean
+OK	1.187	Blanc/Weth10HolderFlowAuthenticity.lean
+OK	45.717	Blanc/Weth10HolderFlowCompiled.lean
+OK	1.282	Blanc/Weth10HolderFlowConservation.lean
+OK	1.415	Blanc/Weth10HolderFlowDeterminism.lean
+OK	2.480	Blanc/Weth10HolderFlowEth.lean
+OK	20.273	Blanc/Weth10HolderFlowEthExec.lean
+OK	65.650	Blanc/Weth10HolderFlowExecAccounting.lean
+OK	3.659	Blanc/Weth10HolderFlowFlashChronology.lean
+OK	1.334	Blanc/Weth10HolderFlowLocal.lean
+OK	1.813	Blanc/Weth10HolderFlowPermitChronology.lean
+OK	4.070	Blanc/Weth10HolderFlowResult.lean
+OK	1.279	Blanc/Weth10HolderFlowStorage.lean
+OK	1.577	Blanc/Weth10HolderFlowTransferAndCallChronology.lean
+OK	16.981	Blanc/Weth10HolderFlowWriteCompleteness.lean
