@@ -207,6 +207,40 @@ inclusion, or cover arbitrary co-block, factory, CREATE2, endowment, or fork
 shapes. The executable deployment fixture witnesses one concrete transaction
 and receipt; it does not enlarge the theorem or the port-conformance claim.
 
+WETH10's committed holder-flow family has an equally exact Blanc-only
+boundary. From a stable checkpoint, its proof-carrying Prague-only
+`AccountedHistory` retains every applied block, the configured transition and
+`applyBody` result, `BlockOutput`, ordinary transaction roots, and all four
+system-message roots (beacon, history, withdrawal request, and consolidation
+request). Its public fold discards failed or reverted effects at their actual
+settlement boundary, including failed nested, outer, and top-level execution;
+only committed effects enter the ledger. Every ordinary Prague-only reach from
+the checkpoint admits such a history, and the history projects back to that
+ordinary reach.
+
+For natural-number checkpoint and later booked balances `B0` and `Bt`, that
+family first proves that committed balance credits do not wrap, then proves
+the gross equation
+`B0 + ordinaryIn + selfTransfer + flashCredit = Bt + redeemed +
+externalTransferredOut + selfTransfer + flashRepayment`. Exact same-receiver,
+same-principal flash pairing and cancellation of the matched flash and
+self-transfer terms then give
+`B0 + ordinaryIn = Bt + redeemed + externalTransferredOut`, and therefore the
+residual floor `B0 ≤ Bt + redeemed + externalTransferredOut` (together with
+its truncated-subtraction and no-external-transfer forms). Here a debit is
+only **runtime-authorized**: the ledger records the actual caller and the
+direct, accepted allowance, or flash-settlement branch. It retains the raw
+branch words separately from their normalized balance addresses, and exact
+invocation evidence excludes `DELEGATECALL`/`CALLCODE` execution against
+another storage owner and foreign lookalike slots or logs.
+
+This holder-flow result assumes no `NoCollision` condition and says nothing
+about holder consent or intent, allowance-value provenance, future
+enabledness/liveness, or the successor's any-order claim. It does not verify
+the deployed Solidity runtime. Concrete redemption fixtures are finite checks
+of chosen histories; they neither construct a Lean `AccountedHistory` nor
+widen the theorem's scope.
+
 Two registers are available for what a port has not established, and only
 one of them is honest. Declaring a non-claim in advance — this boundary is
 not covered, this property is not attempted — bounds the claim and asserts

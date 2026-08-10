@@ -32,6 +32,14 @@ placement), success, and returndata.  Unobservable caller-memory scratch
 offsets remain an implementation freedom.  The permit rows therefore observe the exact precompile-1 input
 and result rather than inferring `ecrecover` from the eventual allowance.
 
+Two reentrant rows pin settlement altitude directly.  One typed callback
+intentionally makes an insufficient-balance WETH10 transfer, records its exact
+failed `CALL` and guard returndata, then returns true; the parent commits and
+the ordered logs contain no failed-child flow.  One flash callback commits an
+ordinary WETH10 transfer before returning the required magic; the runner pins
+the mint, nested transfer, child log, and settlement burn in that order, the
+final holder balances, and `flashMinted = 0`.
+
 At the initial 6163-byte Blanc candidate the gate reported 101/104 agreement.
 The three red rows were the same focused finding:
 `approveAndCall`, `depositToAndCall`, and `transferAndCall` receive the exact

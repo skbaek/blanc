@@ -854,6 +854,22 @@ theorem flowActionsEthRedemption_eq_supplyFlowRedeemed
         simp [supplyFlowOfActions, FlowAtom.supplyFlow,
           FlowAtom.ethRedemption, SupplyFlow.zero, SupplyFlow.add]
 
+/-! ## Premise-free recursive soundness -/
+
+/-- Complete committed storage accounting for the installed WETH10 program. -/
+theorem committedExecStorageSound
+    (dp : DeployParams) (ca : Adr) :
+    CommittedExecStorageSound dp ca :=
+  CompiledBodyStorageHandler.committedExecStorageSound
+    (compiledBodyStorageHandler dp ca)
+
+/-- Complete committed ETH accounting for the installed WETH10 program. -/
+theorem committedExecEthSound
+    (dp : DeployParams) (ca : Adr) :
+    CommittedExecEthSound dp ca :=
+  CompiledBodyEthHandler.committedExecEthSound
+    (compiledBodyEthHandler dp ca)
+
 /-! ## Public equations, conditional only on the two recursive cores -/
 
 /-- Every credit occurrence retained by an authentic stable-root history is a
@@ -999,6 +1015,115 @@ theorem holderFlow_withdrawal_floor_of_sounds
   exact holderFlow_withdrawal_floor_of_residual (history.weth10Flow u)
     (holderFlow_residual_floor_of_sounds hstorageSound hethSound
       hstable history) noExternalTransfer
+
+/-! ## Frozen premise-free public surface -/
+
+/-- Every committed protected-holder credit in an authentic stable-root
+history is a non-wrapping `B256` addition. -/
+theorem AccountedHistory.noCommittedCreditWrap
+    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {checkpoint future : BlockChain}
+    (hstable : Stable dp ca checkpoint.state)
+    (history : AccountedHistory chainId dp ca checkpoint future) :
+    FlowActionsCreditNof history.flowActions :=
+  history.noCommittedCreditWrap_of_sounds
+    (committedExecStorageSound dp ca) (committedExecEthSound dp ca)
+    hstable
+
+/-- The committed no-wrap theorem eliminates the holder's aggregate modular
+credit-loss term. -/
+theorem AccountedHistory.holderCreditLoss_eq_zero
+    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {checkpoint future : BlockChain}
+    (hstable : Stable dp ca checkpoint.state)
+    (history : AccountedHistory chainId dp ca checkpoint future) :
+    holderCreditLossOfActions history.flowActions u = 0 :=
+  history.holderCreditLoss_eq_zero_of_sounds
+    (committedExecStorageSound dp ca) (committedExecEthSound dp ca)
+    hstable
+
+/-- Gross natural-number conservation, retaining the exact self-transfer and
+flash-pair terms on both sides. -/
+theorem holderFlow_conserved
+    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {checkpoint future : BlockChain}
+    (hstable : Stable dp ca checkpoint.state)
+    (history : AccountedHistory chainId dp ca checkpoint future) :
+    bookedBalanceNat checkpoint.state ca u +
+        (history.weth10Flow u).ordinaryIn +
+        (history.weth10Flow u).selfTransfer +
+        (history.weth10Flow u).flashCredit =
+      bookedBalanceNat future.state ca u +
+        (history.weth10Flow u).redeemed +
+        (history.weth10Flow u).externalTransferredOut +
+        (history.weth10Flow u).selfTransfer +
+        (history.weth10Flow u).flashRepayment :=
+  holderFlow_conserved_of_sounds
+    (committedExecStorageSound dp ca) (committedExecEthSound dp ca)
+    hstable history
+
+/-- Exact flash pairing and cancellation reduce the gross equation to the
+public permanent-flow equation. -/
+theorem holderFlow_flash_cancelled
+    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {checkpoint future : BlockChain}
+    (hstable : Stable dp ca checkpoint.state)
+    (history : AccountedHistory chainId dp ca checkpoint future) :
+    (history.weth10Flow u).flashCredit =
+        (history.weth10Flow u).flashRepayment ∧
+    bookedBalanceNat checkpoint.state ca u +
+        (history.weth10Flow u).ordinaryIn =
+      bookedBalanceNat future.state ca u +
+        (history.weth10Flow u).redeemed +
+        (history.weth10Flow u).externalTransferredOut :=
+  holderFlow_flash_cancelled_of_sounds
+    (committedExecStorageSound dp ca) (committedExecEthSound dp ca)
+    hstable history
+
+/-- A holder's initial booked balance remains covered by its final booked
+balance plus runtime-authorized redemption and external transfer out. -/
+theorem holderFlow_residual_floor
+    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {checkpoint future : BlockChain}
+    (hstable : Stable dp ca checkpoint.state)
+    (history : AccountedHistory chainId dp ca checkpoint future) :
+    bookedBalanceNat checkpoint.state ca u ≤
+      bookedBalanceNat future.state ca u +
+        ((history.weth10Flow u).redeemed +
+          (history.weth10Flow u).externalTransferredOut) :=
+  holderFlow_residual_floor_of_sounds
+    (committedExecStorageSound dp ca) (committedExecEthSound dp ca)
+    hstable history
+
+/-- Equivalent truncated form of the residual floor. -/
+theorem holderFlow_truncated_floor
+    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {checkpoint future : BlockChain}
+    (hstable : Stable dp ca checkpoint.state)
+    (history : AccountedHistory chainId dp ca checkpoint future) :
+    bookedBalanceNat checkpoint.state ca u -
+        ((history.weth10Flow u).redeemed +
+          (history.weth10Flow u).externalTransferredOut) ≤
+      bookedBalanceNat future.state ca u :=
+  holderFlow_truncated_floor_of_sounds
+    (committedExecStorageSound dp ca) (committedExecEthSound dp ca)
+    hstable history
+
+/-- When no external transfer leaves the holder, redeemed ETH plus the final
+booked balance covers the initial booked balance. -/
+theorem holderFlow_withdrawal_floor
+    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {checkpoint future : BlockChain}
+    (hstable : Stable dp ca checkpoint.state)
+    (history : AccountedHistory chainId dp ca checkpoint future)
+    (noExternalTransfer :
+      (history.weth10Flow u).externalTransferredOut = 0) :
+    bookedBalanceNat checkpoint.state ca u ≤
+      (history.weth10Flow u).redeemed +
+        bookedBalanceNat future.state ca u :=
+  holderFlow_withdrawal_floor_of_sounds
+    (committedExecStorageSound dp ca) (committedExecEthSound dp ca)
+    hstable history noExternalTransfer
 
 /-! ## Adversarial taxonomy pins -/
 

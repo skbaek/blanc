@@ -71,8 +71,10 @@ CONTRACTS = {
                "Weth10HolderFlowCompiled", "Weth10HolderFlowConservation",
                "Weth10HolderFlowDeterminism", "Weth10HolderFlowEth",
                "Weth10HolderFlowEthExec", "Weth10HolderFlowExecAccounting",
-               "Weth10HolderFlowLocal",
+               "Weth10HolderFlowFlashChronology",
+               "Weth10HolderFlowLocal", "Weth10HolderFlowPermitChronology",
                "Weth10HolderFlowResult", "Weth10HolderFlowStorage",
+               "Weth10HolderFlowTransferAndCallChronology",
                "Weth10HolderFlowWriteCompleteness"],
 }
 

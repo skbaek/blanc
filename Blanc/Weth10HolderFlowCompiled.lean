@@ -2781,6 +2781,1348 @@ theorem Exec.Frame.compiledApproveAndCallChronology
     houtput.trans hbodySilent.output.symm, ?_⟩
   simpa only [hcallbackActionsNil] using hchron
 
+/-! ## Exact compiled value-redemption chronology -/
+
+/-- The two concrete sources from which WETH10 redemption bodies obtain the
+booked-balance owner.  Keeping this source symbolic lets one cursor proof cover
+caller withdrawals and normalized-owner allowance withdrawals alike. -/
+private inductive RedemptionOwnerSource where
+  | caller
+  | arg (k : B256)
+
+private def RedemptionOwnerSource.line : RedemptionOwnerSource → Line
+  | .caller => [Ninst.caller]
+  | .arg k => addressArg k
+
+private def RedemptionOwnerSource.word (source : RedemptionOwnerSource)
+    (e : Sevm) : B256 :=
+  match source with
+  | .caller => e.caller.toB256
+  | .arg k => normalizedAddressArg e k
+
+private theorem RedemptionOwnerSource.valid
+    (source : RedemptionOwnerSource) (e : Sevm) :
+    ValidAdr (source.word e) := by
+  cases source with
+  | caller => exact validAdr_toB256 e.caller
+  | arg k => exact normalizedAddress_valid (Sevm.argWord e k)
+
+private theorem RedemptionOwnerSource.childless
+    (source : RedemptionOwnerSource) :
+    ∀ n ∈ source.line, NinstIsChildless n := by
+  cases source with
+  | caller => simp [RedemptionOwnerSource.line, NinstIsChildless]
+  | arg k =>
+      simp [RedemptionOwnerSource.line, addressArg, Blanc.arg, cdl,
+        normalizeAddress, pushAddressMask, NinstIsChildless,
+        Ninst.pushB256]
+
+private theorem RedemptionOwnerSource.prefix_of_line
+    (source : RedemptionOwnerSource)
+    {e : Sevm} {pre post : Devm} {tail : Stack}
+    (hstack : tail <<+ pre.stack)
+    (run : Line.Run e pre source.line post) :
+    source.word e :: tail <<+ post.stack := by
+  cases source with
+  | caller =>
+      simp only [RedemptionOwnerSource.line] at run
+      rcases Line.of_run_cons run with ⟨last, hcaller, hnil⟩
+      cases hnil
+      exact prefix_of_push (of_run_caller hcaller) hstack
+  | arg k =>
+      simpa only [RedemptionOwnerSource.line,
+        RedemptionOwnerSource.word, normalizedAddressArg] using
+        prefix_of_addressArg hstack run
+
+private def redemptionLoadBalanceAmount
+    (source : RedemptionOwnerSource) (amountArg : B256) : Line :=
+  source.line ++ [Ninst.dup 0, Ninst.sload] ++ arg amountArg ++
+    [Ninst.swap 0]
+
+private def valueRedemptionCheckLine (source : RedemptionOwnerSource)
+    (amountArg : B256) : Line :=
+  redemptionLoadBalanceAmount source amountArg ++ balanceTooSmall
+
+private theorem prefix_of_redemptionLoadBalanceAmount
+    (source : RedemptionOwnerSource) (amountArg : B256)
+    {e : Sevm} {pre post : Devm} {tail : Stack}
+    (hstack : tail <<+ pre.stack)
+    (run : Line.Run e pre
+      (redemptionLoadBalanceAmount source amountArg) post) :
+    ∃ balance,
+      balance = (Devm.getStor pre e.currentTarget).get (source.word e) ∧
+      (balance :: Sevm.argWord e amountArg :: source.word e :: tail) <<+
+        post.stack := by
+  cases source with
+  | caller =>
+      simpa only [redemptionLoadBalanceAmount,
+        RedemptionOwnerSource.line, RedemptionOwnerSource.word,
+        loadCallerBalanceAmount] using
+        prefix_of_loadCallerBalanceAmount hstack run
+  | arg k =>
+      rcases prefix_of_loadArgBalanceAmount k amountArg hstack run with
+        ⟨balance, key, hkey, hbalance, hp⟩
+      refine ⟨balance, ?_, ?_⟩
+      · simpa only [RedemptionOwnerSource.word, normalizedAddressArg,
+          hkey] using hbalance
+      · simpa only [RedemptionOwnerSource.word, normalizedAddressArg,
+          hkey] using hp
+
+private theorem valueRedemptionCheckLine_childless
+    (source : RedemptionOwnerSource) (amountArg : B256) :
+    ∀ n ∈ valueRedemptionCheckLine source amountArg,
+      NinstIsChildless n := by
+  cases source with
+  | caller =>
+      simp [valueRedemptionCheckLine, redemptionLoadBalanceAmount,
+        RedemptionOwnerSource.line, balanceTooSmall, Blanc.arg, cdl,
+        NinstIsChildless, Ninst.pushB256]
+  | arg k =>
+      simp [valueRedemptionCheckLine, redemptionLoadBalanceAmount,
+        RedemptionOwnerSource.line, addressArg, normalizeAddress,
+        pushAddressMask, balanceTooSmall, Blanc.arg, cdl,
+        NinstIsChildless, Ninst.pushB256]
+
+private structure RedemptionLineObservations (pre post : Devm) : Prop where
+  storage : Devm.getStor pre = Devm.getStor post
+  balance : Devm.getBal pre = Devm.getBal post
+  code : Devm.getCode pre = Devm.getCode post
+  memory : pre.memory = post.memory
+  logs : pre.logs = post.logs
+  output : pre.output = post.output
+
+private theorem RedemptionOwnerSource.line_observations
+    (source : RedemptionOwnerSource)
+    {e : Sevm} {pre post : Devm}
+    (run : Line.Run e pre source.line post) :
+    RedemptionLineObservations pre post := by
+  cases source with
+  | caller =>
+      simp only [RedemptionOwnerSource.line] at run
+      exact ⟨Line.of_inv Devm.getStor (by line_inv) run,
+        Line.of_inv Devm.getBal (by line_inv) run,
+        Line.of_inv Devm.getCode (by line_inv) run,
+        Line.of_inv Devm.memory (by line_inv) run,
+        Line.of_inv Devm.logs (by line_inv) run,
+        Line.of_inv Devm.output (by line_inv) run⟩
+  | arg k =>
+      simp only [RedemptionOwnerSource.line] at run
+      exact ⟨Line.of_inv Devm.getStor (by line_inv) run,
+        Line.of_inv Devm.getBal (by line_inv) run,
+        Line.of_inv Devm.getCode (by line_inv) run,
+        Line.of_inv Devm.memory (by line_inv) run,
+        Line.of_inv Devm.logs (by line_inv) run,
+        Line.of_inv Devm.output (by line_inv) run⟩
+
+private theorem valueRedemptionCheckLine_observations
+    (source : RedemptionOwnerSource) (amountArg : B256)
+    {e : Sevm} {pre post : Devm}
+    (run : Line.Run e pre (valueRedemptionCheckLine source amountArg) post) :
+    RedemptionLineObservations pre post := by
+  cases source with
+  | caller =>
+      unfold valueRedemptionCheckLine redemptionLoadBalanceAmount
+        RedemptionOwnerSource.line at run
+      exact ⟨Line.of_inv Devm.getStor (by line_inv) run,
+        Line.of_inv Devm.getBal (by line_inv) run,
+        Line.of_inv Devm.getCode (by line_inv) run,
+        Line.of_inv Devm.memory (by line_inv) run,
+        Line.of_inv Devm.logs (by line_inv) run,
+        Line.of_inv Devm.output (by line_inv) run⟩
+  | arg k =>
+      unfold valueRedemptionCheckLine redemptionLoadBalanceAmount
+        RedemptionOwnerSource.line at run
+      exact ⟨Line.of_inv Devm.getStor (by line_inv) run,
+        Line.of_inv Devm.getBal (by line_inv) run,
+        Line.of_inv Devm.getCode (by line_inv) run,
+        Line.of_inv Devm.memory (by line_inv) run,
+        Line.of_inv Devm.logs (by line_inv) run,
+        Line.of_inv Devm.output (by line_inv) run⟩
+
+/-- The childless source prefix immediately before a value `CALL` has placed
+the seven operands on the exact call-boundary stack and has preserved every
+parent observation relevant to holder-flow accounting. -/
+structure ValueCallOperandPrefix (e : Sevm) (pre callPre : Devm)
+    (value target : B256) (tail : Stack) : Prop where
+  stack : ∃ gasWord : B256,
+    (gasWord :: target :: value :: 0 :: 0 :: 0 :: 0 :: tail) <<+
+      callPre.stack
+  storage : Devm.getStor pre = Devm.getStor callPre
+  balance : Devm.getBal pre = Devm.getBal callPre
+  code : Devm.getCode pre = Devm.getCode callPre
+  memory : pre.memory = callPre.memory
+  logs : pre.logs = callPre.logs
+  output : pre.output = callPre.output
+
+private def sendValueToCallerPrefix : Line :=
+  pushList [0, 0, 0, 0] ++ [Ninst.swap 3, Ninst.caller, Ninst.gas]
+
+private def sendValueToArgPrefix (k : B256) : Line :=
+  pushList [0, 0, 0, 0] ++ [Ninst.swap 3] ++ arg k ++ [Ninst.gas]
+
+private theorem sendValueToCallerPrefix_effect
+    {e : Sevm} {pre callPre : Devm} {value : B256} {tail : Stack}
+    (hstack : value :: tail <<+ pre.stack)
+    (run : Line.Run e pre sendValueToCallerPrefix callPre) :
+    ValueCallOperandPrefix e pre callPre value e.caller.toB256 tail := by
+  unfold sendValueToCallerPrefix pushList at run
+  simp only [List.map] at run
+  rcases Line.of_run_cons run with ⟨s₁, hpush₁, run₁⟩
+  have hp₁ : (0 : B256) :: value :: tail <<+ s₁.stack :=
+    prefix_of_push (of_run_pushB256 hpush₁) hstack
+  rcases Line.of_run_cons run₁ with ⟨s₂, hpush₂, run₂⟩
+  have hp₂ : (0 : B256) :: 0 :: value :: tail <<+ s₂.stack :=
+    prefix_of_push (of_run_pushB256 hpush₂) hp₁
+  rcases Line.of_run_cons run₂ with ⟨s₃, hpush₃, run₃⟩
+  have hp₃ : (0 : B256) :: 0 :: 0 :: value :: tail <<+ s₃.stack :=
+    prefix_of_push (of_run_pushB256 hpush₃) hp₂
+  rcases Line.of_run_cons run₃ with ⟨s₄, hpush₄, run₄⟩
+  have hp₄ : (0 : B256) :: 0 :: 0 :: 0 :: value :: tail <<+
+      s₄.stack :=
+    prefix_of_push (of_run_pushB256 hpush₄) hp₃
+  rcases Line.of_run_cons run₄ with ⟨s₅, hswap, run₅⟩
+  have hswapCore : Stack.Swap (3 : Fin 16).val
+      ((0 : B256) :: 0 :: 0 :: 0 :: value :: tail)
+      (value :: 0 :: 0 :: 0 :: 0 :: tail) :=
+    Stack.swapCore_succ (Stack.swapCore_succ
+      (Stack.swapCore_succ Stack.swapCore_zero))
+  have hp₅ : value :: 0 :: 0 :: 0 :: 0 :: tail <<+ s₅.stack :=
+    Stack.prefix_of_swap hswapCore (of_run_swap hswap) hp₄
+  rcases Line.of_run_cons run₅ with ⟨s₆, hcaller, run₆⟩
+  have hp₆ : e.caller.toB256 :: value :: 0 :: 0 :: 0 :: 0 :: tail <<+
+      s₆.stack := prefix_of_push (of_run_caller hcaller) hp₅
+  rcases Line.of_run_cons run₆ with ⟨last, hgas, hnil⟩
+  cases hnil
+  rcases of_run_gas hgas with ⟨gasWord, hpushGas⟩
+  exact ⟨⟨gasWord, prefix_of_push hpushGas hp₆⟩,
+    Line.of_inv Devm.getStor (by line_inv) run,
+    Line.of_inv Devm.getBal (by line_inv) run,
+    Line.of_inv Devm.getCode (by line_inv) run,
+    Line.of_inv Devm.memory (by line_inv) run,
+    Line.of_inv Devm.logs (by line_inv) run,
+    Line.of_inv Devm.output (by line_inv) run⟩
+
+private theorem sendValueToArgPrefix_effect (k : B256)
+    {e : Sevm} {pre callPre : Devm} {value : B256} {tail : Stack}
+    (hstack : value :: tail <<+ pre.stack)
+    (run : Line.Run e pre (sendValueToArgPrefix k) callPre) :
+    ValueCallOperandPrefix e pre callPre value (Sevm.argWord e k) tail := by
+  unfold sendValueToArgPrefix pushList at run
+  simp only [List.map] at run
+  rcases Line.of_run_cons run with ⟨s₁, hpush₁, run₁⟩
+  have hp₁ : (0 : B256) :: value :: tail <<+ s₁.stack :=
+    prefix_of_push (of_run_pushB256 hpush₁) hstack
+  rcases Line.of_run_cons run₁ with ⟨s₂, hpush₂, run₂⟩
+  have hp₂ : (0 : B256) :: 0 :: value :: tail <<+ s₂.stack :=
+    prefix_of_push (of_run_pushB256 hpush₂) hp₁
+  rcases Line.of_run_cons run₂ with ⟨s₃, hpush₃, run₃⟩
+  have hp₃ : (0 : B256) :: 0 :: 0 :: value :: tail <<+ s₃.stack :=
+    prefix_of_push (of_run_pushB256 hpush₃) hp₂
+  rcases Line.of_run_cons run₃ with ⟨s₄, hpush₄, run₄⟩
+  have hp₄ : (0 : B256) :: 0 :: 0 :: 0 :: value :: tail <<+
+      s₄.stack :=
+    prefix_of_push (of_run_pushB256 hpush₄) hp₃
+  rcases Line.of_run_cons run₄ with ⟨s₅, hswap, run₅⟩
+  have hswapCore : Stack.Swap (3 : Fin 16).val
+      ((0 : B256) :: 0 :: 0 :: 0 :: value :: tail)
+      (value :: 0 :: 0 :: 0 :: 0 :: tail) :=
+    Stack.swapCore_succ (Stack.swapCore_succ
+      (Stack.swapCore_succ Stack.swapCore_zero))
+  have hp₅ : value :: 0 :: 0 :: 0 :: 0 :: tail <<+ s₅.stack :=
+    Stack.prefix_of_swap hswapCore (of_run_swap hswap) hp₄
+  rcases of_run_append (arg k) run₅ with ⟨s₆, harg, run₆⟩
+  have hp₆ : Sevm.argWord e k :: value :: 0 :: 0 :: 0 :: 0 :: tail <<+
+      s₆.stack := prefix_of_arg hp₅ harg
+  rcases Line.of_run_cons run₆ with ⟨last, hgas, hnil⟩
+  cases hnil
+  rcases of_run_gas hgas with ⟨gasWord, hpushGas⟩
+  exact ⟨⟨gasWord, prefix_of_push hpushGas hp₆⟩,
+    Line.of_inv Devm.getStor (by line_inv) run,
+    Line.of_inv Devm.getBal (by line_inv) run,
+    Line.of_inv Devm.getCode (by line_inv) run,
+    Line.of_inv Devm.memory (by line_inv) run,
+    Line.of_inv Devm.logs (by line_inv) run,
+    Line.of_inv Devm.output (by line_inv) run⟩
+
+/-- Exact proof-indexed chronology for one caller-owned burn followed by an
+accepted value `CALL`.  The accepted trace and source occurrence share the
+same retained slot; the five post-call observations explicitly delimit the
+otherwise arbitrary committed child/reentrant segment. -/
+def Exec.Frame.CompiledValueRedemptionChronology
+    (dp : DeployParams) (ca : Adr) (frame : Exec.Frame)
+    (pre : Devm) (owner : Adr) (amount target : B256)
+    (prefixActions : List FlowAction) : Prop :=
+  ∃ (callPre guardPost : Devm)
+      (trace : AcceptedValueCallTrace frame.sevm target amount
+        callPre guardPost),
+    BurnCallPrefix frame.sevm pre callPre guardPost owner amount target ∧
+    trace.slot = trace.retained.slot ∧
+    trace.retained.retained.RawCommits ∧
+    frame.NinstOccurrence dp ca Ninst.call callPre trace.callPost
+      trace.retained.slot ∧
+    Devm.getStor guardPost = Devm.getStor frame.post ∧
+    Devm.getBal guardPost = Devm.getBal frame.post ∧
+    Devm.getCode guardPost = Devm.getCode frame.post ∧
+    guardPost.logs = frame.post.logs ∧
+    frame.descendantFlowActions dp ca =
+      prefixActions ++ trace.retained.retained.flowActions dp ca
+
+/-- Rebase only the call-free entry observations of an exact redemption
+chronology.  The accepted child, source occurrence, and chronological ledger
+remain literally unchanged. -/
+theorem Exec.Frame.CompiledValueRedemptionChronology.of_entry_eq
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    {pre pre' : Devm} {owner : Adr} {amount target : B256}
+    {prefixActions : List FlowAction}
+    (chronology : frame.CompiledValueRedemptionChronology dp ca pre owner
+      amount target prefixActions)
+    (hstor : Devm.getStor pre' = Devm.getStor pre)
+    (hbal : Devm.getBal pre' = Devm.getBal pre)
+    (hcode : Devm.getCode pre' = Devm.getCode pre)
+    (hlogs : pre'.logs = pre.logs)
+    (houtput : pre'.output = pre.output) :
+    frame.CompiledValueRedemptionChronology dp ca pre' owner amount target
+      prefixActions := by
+  rcases chronology with ⟨callPre, guardPost, trace, burn, rest⟩
+  exact ⟨callPre, guardPost, trace,
+    burn.of_entry_eq hstor hbal hcode hlogs houtput, rest⟩
+
+private def valueRedemptionEventLine (amountArg : B256) : Line :=
+  arg amountArg ++ [Ninst.pushB256 0] ++ emitTransfer ++
+    [Ninst.swap 0, Ninst.pop]
+
+private def valueRedemptionBody (source : RedemptionOwnerSource)
+    (amountArg : B256) (sendPrefix : Line) (sendErrorSlot : Nat)
+    (success : Func) : Func :=
+  valueRedemptionCheckLine source amountArg +++
+  ((.call burnBalanceErrorSlot) <?>
+    (debitLoadedBalance +++
+      source.line +++
+      valueRedemptionEventLine amountArg +++
+      sendPrefix +++
+      Ninst.call ::: Ninst.iszero :::
+      ((.call sendErrorSlot) <?> success)))
+
+private theorem withdraw_eq_valueRedemptionBody :
+    withdraw = valueRedemptionBody .caller 0 sendValueToCallerPrefix
+      ethTransferErrorSlot Func.stop := by
+  rfl
+
+private theorem withdrawTo_eq_valueRedemptionBody :
+    withdrawTo = valueRedemptionBody .caller 1 (sendValueToArgPrefix 0)
+      ethTransferErrorSlot Func.stop := by
+  rfl
+
+private theorem transferZeroThen_eq_valueRedemptionBody (success : Func) :
+    transferZeroThen success =
+      valueRedemptionBody .caller 1 sendValueToCallerPrefix
+        ethTransferErrorSlot success := by
+  rfl
+
+private theorem transferZero_eq_valueRedemptionBody :
+    transferZeroThen returnTrue =
+      valueRedemptionBody .caller 1 sendValueToCallerPrefix
+        ethTransferErrorSlot returnTrue := by
+  rfl
+
+private theorem transferFromZero_eq_valueRedemptionBody :
+    transferFromZero =
+      valueRedemptionBody (.arg 0) 2 sendValueToCallerPrefix
+        ethTransferErrorSlot returnTrue := by
+  rfl
+
+private theorem withdrawFromCore_eq_valueRedemptionBody :
+    withdrawFromCore =
+      valueRedemptionBody (.arg 0) 2 (sendValueToArgPrefix 1)
+        etherTransferErrorSlot Func.stop := by
+  rfl
+
+private theorem not_run_call_revWith
+    {fs : List Func} {e : Sevm} {k : Nat} {reason : String}
+    {final : Devm}
+    (hget : fs[k]? = some (Func.revWith reason)) :
+    ∀ pre, ¬ Func.Run fs e pre (.call k) final := by
+  intro pre run
+  rcases of_run_call run with ⟨body, bodyPre, hbody, _hburn, hrun⟩
+  rw [hget] at hbody
+  have heq : body = Func.revWith reason := Option.some.inj hbody.symm
+  subst body
+  exact Func.not_run_revWith hrun
+
+private theorem ProcessMessageTrace.rawCommits_of_clean
+    {msg : Msg} {child : Devm}
+    (trace : ProcessMessageTrace msg (.ok child))
+    (hclean : child.error.isSome = false) :
+    trace.retained.RawCommits := by
+  rcases trace with ⟨slot, retained, hprocess⟩
+  cases retained with
+  | none => trivial
+  | some retainedRun =>
+      exact Frame.raw_commits_of_settlementCommits
+        (ProcessMessage.settlementCommits_of_some_ok_clean
+          hprocess hclean)
+
+/-- Strengthen the accepted-value trace constructor with the slot identity
+that its two raw witnesses share by construction. -/
+private theorem exists_acceptedValueCallTrace_same_slot
+    {e : Sevm} {target value : B256} {callPre guardPost : Devm}
+    {img : Bytes}
+    (accepted : AcceptedValueCall e target value callPre guardPost)
+    (hwf : Mem.Wf callPre.memory)
+    (hreads : Mem.Reads callPre.memory img) :
+    ∃ trace : AcceptedValueCallTrace e target value callPre guardPost,
+      trace.slot = trace.retained.slot ∧
+      Mem.Wf guardPost.memory ∧ Mem.Reads guardPost.memory img := by
+  rcases accepted with
+    ⟨g, callPost, testPost, hstack, hcall, hiszero, hpop⟩
+  rcases of_run_call_val_with_depth_frame hstack hcall with
+      hfailed | hsuccess
+  · exfalso
+    have htest := prefix_of_iszero hiszero hfailed.1
+    have hpopStack := hpop.stack
+    simp only [Stack.Pop, Split, List.nil_append,
+      List.cons_append] at hpopStack
+    rw [hpopStack] at htest
+    have hzero : ((0 : B256) =? 0) = 0 :=
+      pref_head_unique htest (pref_append [(0 : B256)] guardPost.stack)
+    rw [show ((0 : B256) =? 0) = 1 from by
+      simp [B256.eqCheck]] at hzero
+    exact B256.zero_ne_one hzero.symm
+  · rcases hsuccess with
+      ⟨parent, child, slot, delegated, code, availableGas, pc, hstep,
+        hdepth, _hcallStack, hparentState, hparentMemory,
+        _hparentLogs, _hparentOutput, hdelegation, hfilled, hmessage,
+        hclean, _hresume, hcallPostState, _hreturnData, hcallPostMemory,
+        _hcallPostStack⟩
+    rcases exists_retainedXlot_of_filled hfilled with ⟨retained⟩
+    let childMessage :=
+      callMsg e parent
+        (min g.toNat (except64th availableGas) +
+          (if value.toNat = 0 then 0 else gCallStipend))
+        value e.currentTarget target.toAdr target.toAdr true false
+        ((callPre.memory.read (0 : B256).toNat (0 : B256).toNat).1)
+        code delegated
+    let childTrace : ProcessMessageTrace childMessage (.ok child) :=
+      ⟨slot, retained, by simpa only [childMessage] using hmessage⟩
+    have hguardState : guardPost.state = child.state := by
+      calc
+        guardPost.state = testPost.state := hpop.state.symm
+        _ = callPost.state :=
+          (Ninst.Hinv.inv (f := Devm.state) hiszero).symm
+        _ = child.state := hcallPostState
+    let trace : AcceptedValueCallTrace e target value callPre guardPost :=
+      ⟨g, callPost, parent, child, slot, pc, hstep, hdepth,
+        delegated, code, availableGas, hparentState, hdelegation,
+        childMessage, rfl, childTrace, hclean, hguardState⟩
+    have hcallPostMemory' : callPost.memory = parent.memory := by
+      simpa only [show (0 : B256).toNat = 0 from rfl, List.take_zero,
+        Mem.write] using hcallPostMemory
+    have hwfCallPost : Mem.Wf callPost.memory := by
+      rw [hcallPostMemory', hparentMemory]
+      exact Mem.Wf.extends _ hwf
+    have hreadsCallPost : Mem.Reads callPost.memory img := by
+      rw [hcallPostMemory', hparentMemory]
+      exact Mem.Reads.extends _ hreads
+    have hmemory : callPost.memory = guardPost.memory :=
+      (Ninst.Hinv.inv (f := Devm.memory) hiszero).trans hpop.memory
+    exact ⟨trace, rfl, by rw [← hmemory]; exact hwfCallPost,
+      by rw [← hmemory]; exact hreadsCallPost⟩
+
+private theorem debitLoadedBalance_logOutput_compiled
+    {e : Sevm} {pre post : Devm}
+    (run : Line.Run e pre debitLoadedBalance post) :
+    pre.logs = post.logs ∧ pre.output = post.output := by
+  unfold debitLoadedBalance at run
+  rcases Line.of_run_cons run with ⟨afterSub, hsub, run⟩
+  rcases Line.of_run_cons run with ⟨afterSwap, hswap, run⟩
+  rcases Line.of_run_cons run with ⟨last, hstore, hnil⟩
+  cases hnil
+  have hsubLogs : pre.logs = afterSub.logs := by
+    rcases of_run_reg hsub with ⟨pc, hrun⟩
+    simp only [Rinst.run, Rinst.runCore] at hrun
+    exact (Devm.diffBurn_of_applyBinary hrun).choose_spec.choose_spec.logs
+  have hsubOutput : pre.output = afterSub.output := by
+    rcases of_run_reg hsub with ⟨pc, hrun⟩
+    simp only [Rinst.run, Rinst.runCore] at hrun
+    exact (Devm.diffBurn_of_applyBinary hrun).choose_spec.choose_spec.output
+  exact ⟨hsubLogs.trans
+      ((Ninst.Hinv.inv (f := Devm.logs) hswap).trans
+        (Ninst.Hinv.inv (f := Devm.logs) hstore)),
+    hsubOutput.trans
+      ((Ninst.Hinv.inv (f := Devm.output) hswap).trans
+        (Ninst.Hinv.inv (f := Devm.output) hstore))⟩
+
+private theorem stop_getCode_inv :
+    Func.Inv Devm.getCode Devm.getCode Func.stop := by
+  intro fs e pre post run
+  cases run with
+  | last h =>
+      simp only [Linst.Run, Linst.run] at h
+      exact congrArg Devm.getCode (Except.ok.inj h)
+
+/-- Walk a successful value-redemption body on the original compiled
+execution up to its literal continuation cursor.  Both fixed reverter arms
+are excluded from that same cursor, and the selected external `CALL` is tied
+to the retained child before control is returned to `success`. -/
+private theorem Exec.Frame.CompiledCursor.compiledValueRedemptionContinuation
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    {source : RedemptionOwnerSource} {amountArg : B256}
+    {sendPrefix : Line} {success : Func} {final : Devm}
+    {sendErrorSlot : Nat} {sendErrorReason : String}
+    {target : B256} {img : Bytes}
+    (cursor : frame.CompiledCursor dp ca
+      ((weth10 dp).main :: weth10Aux)
+      (table 0 ((weth10 dp).main :: weth10Aux))
+      (valueRedemptionBody source amountArg sendPrefix sendErrorSlot
+        success) final)
+    (hstack : [] <<+ cursor.pre.stack)
+    (hwf : Mem.Wf cursor.pre.memory)
+    (hreads : Mem.Reads cursor.pre.memory img)
+    (hsendChildless : ∀ n ∈ sendPrefix, NinstIsChildless n)
+    (hsend : ∀ {pre callPre : Devm} {value : B256} {tail : Stack},
+      value :: tail <<+ pre.stack →
+      Line.Run frame.sevm pre sendPrefix callPre →
+      ValueCallOperandPrefix frame.sevm pre callPre value target tail)
+    (hburnError :
+      (((weth10 dp).main :: weth10Aux)[burnBalanceErrorSlot]? =
+        some (Func.revWith "WETH: burn amount exceeds balance")))
+    (hsendError :
+      (((weth10 dp).main :: weth10Aux)[sendErrorSlot]? =
+        some (Func.revWith sendErrorReason))) :
+    ∃ (callPre : Devm)
+        (successCursor : frame.CompiledCursor dp ca
+          ((weth10 dp).main :: weth10Aux)
+          (table 0 ((weth10 dp).main :: weth10Aux)) success final)
+        (trace : AcceptedValueCallTrace frame.sevm target
+          (Sevm.argWord frame.sevm amountArg) callPre successCursor.pre),
+      BurnCallPrefix frame.sevm cursor.pre callPre successCursor.pre
+        (source.word frame.sevm).toAdr
+        (Sevm.argWord frame.sevm amountArg) target ∧
+      trace.slot = trace.retained.slot ∧
+      trace.retained.retained.RawCommits ∧
+      frame.NinstOccurrence dp ca Ninst.call callPre trace.callPost
+        trace.retained.slot ∧
+      successCursor.actions = cursor.actions ++
+        trace.retained.retained.flowActions dp ca ∧
+      Mem.Wf successCursor.pre.memory ∧
+      Mem.Reads successCursor.pre.memory
+        (Bytes.writeAt img 0 (Sevm.argWord frame.sevm amountArg).toBytes) := by
+  unfold valueRedemptionBody at cursor
+  rcases cursor.peelChildlessLine
+      (line := valueRedemptionCheckLine source amountArg)
+      (valueRedemptionCheckLine_childless source amountArg) with
+    ⟨balanceBranchCursor, hcheck, hcheckActions⟩
+  rcases balanceBranchCursor.selectBranchLeftWithBurn
+      (not_run_call_revWith hburnError) with
+    ⟨successCursor, hbalancePopBy, hsuccessActions⟩
+  have hbalancePop := Devm.PopBurn.of_popBurnBy hbalancePopBy
+  unfold valueRedemptionCheckLine at hcheck
+  rcases of_run_append (redemptionLoadBalanceAmount source amountArg)
+      hcheck with
+    ⟨afterLoad, hload, hguard⟩
+  rcases prefix_of_redemptionLoadBalanceAmount source amountArg hstack
+      hload with
+    ⟨balance, hbalance, hloadStack⟩
+  have hguardStack :
+      (balance <? Sevm.argWord frame.sevm amountArg) :: balance ::
+        Sevm.argWord frame.sevm amountArg :: source.word frame.sevm :: []
+        <<+ balanceBranchCursor.pre.stack :=
+    prefix_of_balanceTooSmall hloadStack hguard
+  have hpopStack := hbalancePop.stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hpopStack
+  rw [hpopStack] at hguardStack
+  have hflag : (balance <? Sevm.argWord frame.sevm amountArg) = 0 :=
+    pref_head_unique hguardStack (pref_append [0] successCursor.pre.stack)
+  have hcovered : Sevm.argWord frame.sevm amountArg ≤ balance := by
+    rw [← B256.not_lt]
+    intro hlt
+    rw [B256.ltCheck, if_pos hlt] at hflag
+    exact B256.zero_ne_one hflag.symm
+  rw [hflag] at hguardStack
+  have hsuccessStack :
+      balance :: Sevm.argWord frame.sevm amountArg ::
+        source.word frame.sevm :: [] <<+ successCursor.pre.stack :=
+    cons_pref_cons_inv hguardStack
+  rcases successCursor.peelChildlessLine
+      (line := debitLoadedBalance)
+      (by simp [debitLoadedBalance, NinstIsChildless]) with
+    ⟨afterDebitCursor, hdebit, hdebitActions⟩
+  have hcheckObs :=
+    valueRedemptionCheckLine_observations source amountArg hcheck
+  have hstorPreSuccess : Devm.getStor cursor.pre =
+      Devm.getStor successCursor.pre :=
+    hcheckObs.storage.trans (PopBurn.Inv.inv hbalancePop)
+  have hbalanceSuccess : balance =
+      (Devm.getStor successCursor.pre frame.sevm.currentTarget).get
+        (source.word frame.sevm) := by
+    rw [← congrFun hstorPreSuccess frame.sevm.currentTarget]
+    exact hbalance
+  obtain ⟨hdecrease, hcovered', hflash⟩ :=
+    debitLoadedBalance_storage (source.valid frame.sevm)
+      hbalanceSuccess hcovered hsuccessStack hdebit
+  rcases afterDebitCursor.peelChildlessLine
+      (line := source.line) source.childless with
+    ⟨eventCursor, howner, hownerActions⟩
+  have hownerObs := source.line_observations howner
+  have hownerStack : source.word frame.sevm :: [] <<+
+      eventCursor.pre.stack := source.prefix_of_line nil_pref howner
+  rcases eventCursor.peelChildlessLine
+      (line := valueRedemptionEventLine amountArg)
+      (by simp [valueRedemptionEventLine, arg, cdl, emitTransfer,
+        Blanc.transferFromLog, mstoreAt, logWith, NinstIsChildless,
+        Ninst.pushB256]) with
+    ⟨sendCursor, hevent, heventActions⟩
+  have hmemoryPreEvent : cursor.pre.memory = eventCursor.pre.memory := by
+    calc
+      cursor.pre.memory = balanceBranchCursor.pre.memory :=
+        hcheckObs.memory
+      _ = successCursor.pre.memory := hbalancePop.memory
+      _ = afterDebitCursor.pre.memory :=
+        Line.of_inv Devm.memory (by line_inv) hdebit
+      _ = eventCursor.pre.memory :=
+        hownerObs.memory
+  have hwfEvent : Mem.Wf eventCursor.pre.memory := by
+    rw [← hmemoryPreEvent]
+    exact hwf
+  have hreadsEvent : Mem.Reads eventCursor.pre.memory img := by
+    rw [← hmemoryPreEvent]
+    exact hreads
+  rcases burnEventTail_effect_frame hownerStack hwfEvent hreadsEvent
+      (by simpa only [valueRedemptionEventLine] using hevent) with
+    ⟨hsendStack, heventLogs, heventStor, heventBal, heventCode,
+      heventOutput, hwfSend, hreadsSend⟩
+  rcases sendCursor.peelChildlessLine
+      (line := sendPrefix) hsendChildless with
+    ⟨callCursor, hsendRun, hsendActions⟩
+  have sendEvidence := hsend hsendStack hsendRun
+  rcases callCursor.selectNextWithActions with
+    ⟨testCursor, actualSlot, actualSelected, actualOccurrence,
+      _actualEdge, htestActions⟩
+  have actualOccurrenceData := actualOccurrence
+  rcases actualOccurrenceData with
+    ⟨actualPc, _actualCurrent, _actualContinuation, _actualBefore,
+      _actualSelected', _actualPrefix, _actualAt, actualFilled,
+      actualStep, _actualPrec, _actualEdge'⟩
+  have hcall : Ninst.Run frame.sevm callCursor.pre Ninst.call
+      testCursor.pre := ⟨actualSlot, actualFilled, actualPc, actualStep⟩
+  rcases testCursor.selectNextChildless (by
+      simp [NinstIsChildless]) with
+    ⟨guardBranchCursor, _testSlot, hiszero, _testOccurrence,
+      htestGuardActions⟩
+  rcases guardBranchCursor.selectBranchLeftWithBurn
+      (not_run_call_revWith hsendError) with
+    ⟨terminalCursor, hguardPopBy, hterminalActions⟩
+  have hguardPop := Devm.PopBurn.of_popBurnBy hguardPopBy
+  rcases sendEvidence.stack with ⟨gasWord, hcallStack⟩
+  let accepted : AcceptedValueCall frame.sevm target
+      (Sevm.argWord frame.sevm amountArg) callCursor.pre
+        terminalCursor.pre :=
+    ⟨gasWord, testCursor.pre, guardBranchCursor.pre, hcallStack,
+      hcall, hiszero, hguardPop⟩
+  have hwfCall : Mem.Wf callCursor.pre.memory := by
+    rw [← sendEvidence.memory]
+    exact hwfSend
+  have hreadsCall : Mem.Reads callCursor.pre.memory
+      (Bytes.writeAt img 0 (Sevm.argWord frame.sevm amountArg).toBytes) := by
+    rw [← sendEvidence.memory]
+    exact hreadsSend
+  rcases exists_acceptedValueCallTrace_same_slot accepted
+      hwfCall hreadsCall with
+    ⟨trace, htraceSlot, hwfTerminal, hreadsTerminal⟩
+  have hcommits : trace.retained.retained.RawCommits :=
+    trace.retained.rawCommits_of_clean trace.child_clean
+  have traceStep : Ninst.StepRun trace.pc frame.sevm callCursor.pre
+      Ninst.call trace.retained.slot (.ok trace.callPost) := by
+    simpa only [htraceSlot] using trace.step
+  have halign := Ninst.StepRun.unique_exec_of_filled
+    trace.retained.retained.toFilled actualFilled traceStep actualStep
+  have hslot : trace.retained.slot = actualSlot := halign.1
+  have hpost : trace.callPost = testCursor.pre :=
+    Except.ok.inj halign.2
+  subst actualSlot
+  have traceOccurrence : frame.NinstOccurrence dp ca Ninst.call
+      callCursor.pre trace.callPost trace.retained.slot := by
+    simpa only [← hpost] using actualOccurrence
+  have hcallAt : Ninst.At frame.sevm.code callCursor.pc Ninst.call :=
+    ninstAt_of_subcode_next callCursor.codeSlice
+  have actualStepAt : Ninst.StepRun callCursor.pc frame.sevm
+      callCursor.pre Ninst.call trace.retained.slot (.ok testCursor.pre) :=
+    Ninst.stepRun_pc_irrel (pc' := callCursor.pc)
+      (by simp [Ninst.pcFree]) actualStep
+  have hselected : actualSelected =
+      trace.retained.retained.flowActions dp ca :=
+    _actualEdge.selected_eq_retained_of_call hcallAt actualFilled
+      actualStepAt trace.retained.retained hcommits
+  have hstorAfterDebitCall : Devm.getStor afterDebitCursor.pre =
+      Devm.getStor callCursor.pre :=
+    hownerObs.storage.trans
+      (heventStor.symm.trans sendEvidence.storage)
+  have hlogsPreAfterDebit : cursor.pre.logs = afterDebitCursor.pre.logs :=
+    hcheckObs.logs.trans
+      (hbalancePop.logs.trans
+        (debitLoadedBalance_logOutput_compiled hdebit).1)
+  have hownerLogs : afterDebitCursor.pre.logs = eventCursor.pre.logs :=
+    hownerObs.logs
+  have houtputPreAfterDebit : cursor.pre.output =
+      afterDebitCursor.pre.output :=
+    hcheckObs.output.trans
+      (hbalancePop.output.trans
+        (debitLoadedBalance_logOutput_compiled hdebit).2)
+  have hownerOutput : afterDebitCursor.pre.output = eventCursor.pre.output :=
+    hownerObs.output
+  have hbalPreCall : Devm.getBal cursor.pre =
+      Devm.getBal callCursor.pre :=
+    hcheckObs.balance.trans
+      ((PopBurn.Inv.inv hbalancePop).trans
+        ((Line.of_inv Devm.getBal (by line_inv) hdebit).trans
+          (hownerObs.balance.trans
+            (heventBal.symm.trans sendEvidence.balance))))
+  have hcodePreCall : Devm.getCode cursor.pre =
+      Devm.getCode callCursor.pre :=
+    hcheckObs.code.trans
+      ((funext (getCode_eq_of_state_eq hbalancePop.state)).trans
+        ((Line.of_inv Devm.getCode (by line_inv) hdebit).trans
+          (hownerObs.code.trans
+            (heventCode.symm.trans sendEvidence.code))))
+  have burn : BurnCallPrefix frame.sevm cursor.pre callCursor.pre
+      terminalCursor.pre (source.word frame.sevm).toAdr
+      (Sevm.argWord frame.sevm amountArg) target := by
+    unfold BurnCallPrefix
+    refine ⟨?_, ?_, ?_, ?_, hbalPreCall.symm, hcodePreCall.symm, ?_,
+      accepted⟩
+    · simpa only [toB256_toAdr (source.valid frame.sevm),
+          ← congrFun hstorPreSuccess frame.sevm.currentTarget,
+          congrFun hstorAfterDebitCall frame.sevm.currentTarget] using
+        hdecrease
+    · simpa only [toB256_toAdr (source.valid frame.sevm),
+          ← congrFun hstorPreSuccess frame.sevm.currentTarget] using
+        hcovered'
+    · rw [← congrFun hstorAfterDebitCall frame.sevm.currentTarget,
+          hflash,
+          ← congrFun hstorPreSuccess frame.sevm.currentTarget]
+    · rw [toB256_toAdr (source.valid frame.sevm),
+          ← sendEvidence.logs, heventLogs, ← hownerLogs,
+          ← hlogsPreAfterDebit]
+    · exact sendEvidence.output.symm.trans
+        (heventOutput.trans
+          (hownerOutput.symm.trans houtputPreAfterDebit.symm))
+  have hcallPrefixActions : callCursor.actions = cursor.actions :=
+    hsendActions.trans (heventActions.trans
+      (hownerActions.trans (hdebitActions.trans
+        (hsuccessActions.trans hcheckActions))))
+  have hsuccessActionsExact : terminalCursor.actions =
+      cursor.actions ++ trace.retained.retained.flowActions dp ca := by
+    calc
+      terminalCursor.actions = guardBranchCursor.actions := hterminalActions
+      _ = testCursor.actions := htestGuardActions
+      _ = callCursor.actions ++ actualSelected := htestActions
+      _ = callCursor.actions ++
+          trace.retained.retained.flowActions dp ca := by rw [hselected]
+      _ = cursor.actions ++
+          trace.retained.retained.flowActions dp ca := by
+        rw [hcallPrefixActions]
+  exact ⟨callCursor.pre, terminalCursor, trace, burn, htraceSlot,
+    hcommits, traceOccurrence, hsuccessActionsExact,
+    hwfTerminal, hreadsTerminal⟩
+
+/-- Walk a successful value-redemption body on the original compiled
+execution.  Both fixed reverter arms are excluded from that same cursor; the
+selected external `CALL` is tied to the retained accepted-value trace before
+a childless terminal suffix is closed. -/
+theorem Exec.Frame.CompiledCursor.compiledValueRedemptionChronology
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    {source : RedemptionOwnerSource} {amountArg : B256}
+    {sendPrefix successLine : Line} {successLast : Linst}
+    {sendErrorSlot : Nat} {sendErrorReason : String}
+    {target : B256} {img : Bytes}
+    (cursor : frame.CompiledCursor dp ca
+      ((weth10 dp).main :: weth10Aux)
+      (table 0 ((weth10 dp).main :: weth10Aux))
+      (valueRedemptionBody source amountArg sendPrefix sendErrorSlot
+        (successLine +++ Func.last successLast))
+      frame.post)
+    (hstack : [] <<+ cursor.pre.stack)
+    (hwf : Mem.Wf cursor.pre.memory)
+    (hreads : Mem.Reads cursor.pre.memory img)
+    (hsendChildless : ∀ n ∈ sendPrefix, NinstIsChildless n)
+    (hsuccessChildless : ∀ n ∈ successLine, NinstIsChildless n)
+    (hsuccessStor : Func.Inv Devm.getStor Devm.getStor
+      (successLine +++ Func.last successLast))
+    (hsuccessBal : Func.Inv Devm.getBal Devm.getBal
+      (successLine +++ Func.last successLast))
+    (hsuccessCode : Func.Inv Devm.getCode Devm.getCode
+      (successLine +++ Func.last successLast))
+    (hsuccessLogs : Func.Inv Devm.logs Devm.logs
+      (successLine +++ Func.last successLast))
+    (hsend : ∀ {pre callPre : Devm} {value : B256} {tail : Stack},
+      value :: tail <<+ pre.stack →
+      Line.Run frame.sevm pre sendPrefix callPre →
+      ValueCallOperandPrefix frame.sevm pre callPre value target tail)
+    (hburnError :
+      (((weth10 dp).main :: weth10Aux)[burnBalanceErrorSlot]? =
+        some (Func.revWith "WETH: burn amount exceeds balance")))
+    (hsendError :
+      (((weth10 dp).main :: weth10Aux)[sendErrorSlot]? =
+        some (Func.revWith sendErrorReason))) :
+    frame.CompiledValueRedemptionChronology dp ca cursor.pre
+      (source.word frame.sevm).toAdr
+      (Sevm.argWord frame.sevm amountArg) target
+      cursor.actions := by
+  rcases cursor.compiledValueRedemptionContinuation hstack hwf hreads
+      hsendChildless hsend hburnError hsendError with
+    ⟨callPre, successCursor, trace, burn, htraceSlot, hcommits,
+      occurrence, hsuccessActions, _hwfSuccess, _hreadsSuccess⟩
+  have hsuccessRun : Func.Run
+      ((weth10 dp).main :: weth10Aux) frame.sevm successCursor.pre
+      (successLine +++ Func.last successLast) frame.post :=
+    Func.Run.of_runCompiled successCursor.run
+  have hpostStor : Devm.getStor successCursor.pre =
+      Devm.getStor frame.post := hsuccessStor hsuccessRun
+  have hpostBal : Devm.getBal successCursor.pre =
+      Devm.getBal frame.post := hsuccessBal hsuccessRun
+  have hpostCode : Devm.getCode successCursor.pre =
+      Devm.getCode frame.post := hsuccessCode hsuccessRun
+  have hpostLogs : successCursor.pre.logs = frame.post.logs :=
+    hsuccessLogs hsuccessRun
+  have hdesc := successCursor.finishTerminalChildlessLine
+    hsuccessChildless
+  have hdescExact : frame.descendantFlowActions dp ca =
+      cursor.actions ++ trace.retained.retained.flowActions dp ca :=
+    hdesc.trans hsuccessActions
+  exact ⟨callPre, successCursor.pre, trace, burn, htraceSlot,
+    hcommits, occurrence, hpostStor, hpostBal, hpostCode, hpostLogs,
+    hdescExact⟩
+
+/-- Enter the successful continuation of `transferZeroThen` on the original
+compiled cursor.  The returned cursor is the literal post-guard boundary,
+with the accepted value child's retained actions already appended and the
+event-word memory image preserved for a following callback. -/
+theorem Exec.Frame.CompiledCursor.enterTransferZeroThen
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    {success : Func} {final : Devm} {img : Bytes}
+    (cursor : frame.CompiledCursor dp ca
+      ((weth10 dp).main :: weth10Aux)
+      (table 0 ((weth10 dp).main :: weth10Aux))
+      (transferZeroThen success) final)
+    (hstack : [] <<+ cursor.pre.stack)
+    (hwf : Mem.Wf cursor.pre.memory)
+    (hreads : Mem.Reads cursor.pre.memory img) :
+    ∃ (callPre guardPost : Devm)
+        (trace : AcceptedValueCallTrace frame.sevm
+          frame.sevm.caller.toB256 (Sevm.argWord frame.sevm 1)
+          callPre guardPost)
+        (successCursor : frame.CompiledCursor dp ca
+          ((weth10 dp).main :: weth10Aux)
+          (table 0 ((weth10 dp).main :: weth10Aux)) success final),
+      BurnCallPrefix frame.sevm cursor.pre callPre guardPost
+        frame.sevm.caller (Sevm.argWord frame.sevm 1)
+        frame.sevm.caller.toB256 ∧
+      trace.slot = trace.retained.slot ∧
+      trace.retained.retained.RawCommits ∧
+      frame.NinstOccurrence dp ca Ninst.call callPre trace.callPost
+        trace.retained.slot ∧
+      successCursor.pre = guardPost ∧
+      successCursor.actions = cursor.actions ++
+        trace.retained.retained.flowActions dp ca ∧
+      Mem.Wf successCursor.pre.memory ∧
+      Mem.Reads successCursor.pre.memory
+        (Bytes.writeAt img 0 (Sevm.argWord frame.sevm 1).toBytes) := by
+  change frame.CompiledCursor dp ca
+    ((weth10 dp).main :: weth10Aux)
+    (table 0 ((weth10 dp).main :: weth10Aux))
+    (valueRedemptionBody .caller 1 sendValueToCallerPrefix
+      ethTransferErrorSlot success) final at cursor
+  rcases cursor.compiledValueRedemptionContinuation
+      (sendErrorReason := "WETH: ETH transfer failed")
+      hstack hwf hreads
+      (by simp [sendValueToCallerPrefix, pushList, NinstIsChildless,
+        Ninst.pushB256])
+      (by
+        intro pre callPre value tail hp hrun
+        exact sendValueToCallerPrefix_effect hp hrun)
+      (by simp [weth10, weth10Aux, burnBalanceErrorSlot,
+        burnBalanceError])
+      (by simp [weth10, weth10Aux, ethTransferErrorSlot,
+        ethTransferError]) with
+    ⟨callPre, successCursor, trace, burn, htraceSlot, hcommits,
+      occurrence, hactions, hwfSuccess, hreadsSuccess⟩
+  refine ⟨callPre, successCursor.pre, trace, successCursor, ?_,
+    htraceSlot, hcommits, occurrence, rfl, hactions,
+    hwfSuccess, hreadsSuccess⟩
+  simpa only [RedemptionOwnerSource.word, toAdr_toB256] using burn
+
+/-- Exact original-execution redemption chronology for `withdraw(uint256)`.
+The public entry/dispatch/nonpayable prefix is rebased only through its proved
+observation equalities. -/
+theorem Exec.Frame.compiledWithdrawChronology
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    (context : frame.AuthenticContext dp ca)
+    (hselector : Sevm.selector frame.sevm = withdrawSelector)
+    (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
+    frame.CompiledValueRedemptionChronology dp ca frame.pre
+      frame.sevm.caller (Sevm.argWord frame.sevm 0)
+      frame.sevm.caller.toB256 [] := by
+  have hmem :
+      (Sevm.selector frame.sevm, nonpayable withdraw) ∈ weth10Funcs dp := by
+    rw [hselector]
+    simp [withdrawSelector, weth10Funcs]
+  rcases frame.compiledSelectorBodyCursorSilent context hnonempty hmem with
+    ⟨wrapperCursor, _hwrapperStack, hwrapperActions, hentrySilent⟩
+  rcases wrapperCursor.enterNonpayableSilent with
+    ⟨bodyCursor, hbodyStack, hbodyActions, hnonpayableSilent⟩
+  have hbodySilent : Devm.DispatchSilent frame.pre bodyCursor.pre :=
+    hentrySilent.trans hnonpayableSilent
+  change frame.CompiledCursor dp ca
+    ((weth10 dp).main :: weth10Aux)
+    (table 0 ((weth10 dp).main :: weth10Aux))
+    (valueRedemptionBody .caller 0 sendValueToCallerPrefix
+      ethTransferErrorSlot Func.stop) frame.post at bodyCursor
+  have hwfBody : Mem.Wf bodyCursor.pre.memory := by
+    rw [← hbodySilent.memory]
+    exact context.memory_wf
+  have hreadsBody : Mem.Reads bodyCursor.pre.memory [] := by
+    rw [← hbodySilent.memory]
+    exact context.memory_reads_empty
+  have chronology := bodyCursor.compiledValueRedemptionChronology
+    (successLine := []) (successLast := .stop)
+    (sendErrorReason := "WETH: ETH transfer failed")
+    hbodyStack hwfBody hreadsBody
+    (by simp [sendValueToCallerPrefix, pushList, NinstIsChildless,
+      Ninst.pushB256])
+    (by simp)
+    (by func_inv)
+    (by func_inv)
+    stop_getCode_inv
+    (by func_inv)
+    (by
+      intro pre callPre value tail hp hrun
+      exact sendValueToCallerPrefix_effect hp hrun)
+    (by simp [weth10, weth10Aux, burnBalanceErrorSlot,
+      burnBalanceError])
+    (by simp [weth10, weth10Aux, ethTransferErrorSlot,
+      ethTransferError])
+  have rebased := chronology.of_entry_eq
+    (funext (getStor_eq_of_state_eq hbodySilent.state))
+    (funext (getBal_eq_of_state_eq hbodySilent.state))
+    (funext (getCode_eq_of_state_eq hbodySilent.state))
+    hbodySilent.logs hbodySilent.output
+  have hactions : bodyCursor.actions = [] :=
+    hbodyActions.trans hwrapperActions
+  simpa only [hactions, RedemptionOwnerSource.word, toAdr_toB256] using
+    rebased
+
+/-- Exact original-execution redemption chronology for
+`withdrawTo(address,uint256)`, retaining the raw ABI target word used by the
+actual value `CALL`. -/
+theorem Exec.Frame.compiledWithdrawToChronology
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    (context : frame.AuthenticContext dp ca)
+    (hselector : Sevm.selector frame.sevm = withdrawToSelector)
+    (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
+    frame.CompiledValueRedemptionChronology dp ca frame.pre
+      frame.sevm.caller (Sevm.argWord frame.sevm 1)
+      (Sevm.argWord frame.sevm 0) [] := by
+  have hmem :
+      (Sevm.selector frame.sevm, nonpayable withdrawTo) ∈ weth10Funcs dp := by
+    rw [hselector]
+    simp [withdrawToSelector, weth10Funcs]
+  rcases frame.compiledSelectorBodyCursorSilent context hnonempty hmem with
+    ⟨wrapperCursor, _hwrapperStack, hwrapperActions, hentrySilent⟩
+  rcases wrapperCursor.enterNonpayableSilent with
+    ⟨bodyCursor, hbodyStack, hbodyActions, hnonpayableSilent⟩
+  have hbodySilent : Devm.DispatchSilent frame.pre bodyCursor.pre :=
+    hentrySilent.trans hnonpayableSilent
+  change frame.CompiledCursor dp ca
+    ((weth10 dp).main :: weth10Aux)
+    (table 0 ((weth10 dp).main :: weth10Aux))
+    (valueRedemptionBody .caller 1 (sendValueToArgPrefix 0)
+      ethTransferErrorSlot Func.stop) frame.post at bodyCursor
+  have hwfBody : Mem.Wf bodyCursor.pre.memory := by
+    rw [← hbodySilent.memory]
+    exact context.memory_wf
+  have hreadsBody : Mem.Reads bodyCursor.pre.memory [] := by
+    rw [← hbodySilent.memory]
+    exact context.memory_reads_empty
+  have chronology := bodyCursor.compiledValueRedemptionChronology
+    (successLine := []) (successLast := .stop)
+    (sendErrorReason := "WETH: ETH transfer failed")
+    hbodyStack hwfBody hreadsBody
+    (by simp [sendValueToArgPrefix, pushList, arg, cdl,
+      NinstIsChildless, Ninst.pushB256])
+    (by simp)
+    (by func_inv)
+    (by func_inv)
+    stop_getCode_inv
+    (by func_inv)
+    (by
+      intro pre callPre value tail hp hrun
+      exact sendValueToArgPrefix_effect 0 hp hrun)
+    (by simp [weth10, weth10Aux, burnBalanceErrorSlot,
+      burnBalanceError])
+    (by simp [weth10, weth10Aux, ethTransferErrorSlot,
+      ethTransferError])
+  have rebased := chronology.of_entry_eq
+    (funext (getStor_eq_of_state_eq hbodySilent.state))
+    (funext (getBal_eq_of_state_eq hbodySilent.state))
+    (funext (getCode_eq_of_state_eq hbodySilent.state))
+    hbodySilent.logs hbodySilent.output
+  have hactions : bodyCursor.actions = [] :=
+    hbodyActions.trans hwrapperActions
+  simpa only [hactions, RedemptionOwnerSource.word, toAdr_toB256] using
+    rebased
+
+private def returnTruePrefixCompiled : Line :=
+  [Ninst.pushB256 1] ++ mstoreAt 0 ++ pushList [32, 0]
+
+private theorem returnTrue_eq_prefixCompiled :
+    returnTrue = returnTruePrefixCompiled +++ Func.ret := by
+  rfl
+
+private theorem returnTrue_getCode_inv :
+    Func.Inv Devm.getCode Devm.getCode
+      (returnTruePrefixCompiled +++ Func.ret) := by
+  intro fs e pre post run
+  exact (of_returnTrue_exact nil_pref (by
+    simpa only [returnTrue_eq_prefixCompiled] using run)).2
+
+private def transferZeroSelectLine : Line := arg 0 ++ [Ninst.iszero]
+
+/-- Exact selector-level chronology for `transfer(address,uint256)` when the
+raw recipient word is zero.  The Boolean `RETURN` suffix is retained only
+through the observations it actually preserves. -/
+theorem Exec.Frame.compiledTransferZeroChronology
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    (context : frame.AuthenticContext dp ca)
+    (hselector : Sevm.selector frame.sevm = transferSelector)
+    (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
+    (hto : Sevm.argWord frame.sevm 0 = 0) :
+    frame.CompiledValueRedemptionChronology dp ca frame.pre
+      frame.sevm.caller (Sevm.argWord frame.sevm 1)
+      frame.sevm.caller.toB256 [] := by
+  have hmem :
+      (Sevm.selector frame.sevm, nonpayable transfer) ∈ weth10Funcs dp := by
+    rw [hselector]
+    simp [transferSelector, weth10Funcs]
+  rcases frame.compiledSelectorBodyCursorSilent context hnonempty hmem with
+    ⟨wrapperCursor, _hwrapperStack, hwrapperActions, hentrySilent⟩
+  rcases wrapperCursor.enterNonpayableSilent with
+    ⟨bodyCursor, _hbodyStack, hbodyActions, hnonpayableSilent⟩
+  have hbodySilent : Devm.DispatchSilent frame.pre bodyCursor.pre :=
+    hentrySilent.trans hnonpayableSilent
+  change frame.CompiledCursor dp ca
+    ((weth10 dp).main :: weth10Aux)
+    (table 0 ((weth10 dp).main :: weth10Aux))
+    (transferZeroSelectLine +++
+      (transferZeroThen returnTrue <?> transferNonzeroThen returnTrue))
+    frame.post at bodyCursor
+  rcases bodyCursor.peelChildlessLine
+      (by simp [transferZeroSelectLine, arg, cdl, NinstIsChildless,
+        Ninst.pushB256]) with
+    ⟨targetBranchCursor, htargetLine, htargetActions⟩
+  have htargetPrefix :
+      [Sevm.argWord frame.sevm 0 =? 0] <<+
+        targetBranchCursor.pre.stack := by
+    unfold transferZeroSelectLine at htargetLine
+    rcases of_run_append (arg 0) htargetLine with
+      ⟨afterArg, harg, hzeroLine⟩
+    rcases Line.of_run_cons hzeroLine with
+      ⟨afterZero, hzero, hnil⟩
+    cases hnil
+    exact prefix_of_iszero hzero (prefix_of_arg nil_pref harg)
+  rw [hto] at htargetPrefix
+  have hone : ((0 : B256) =? 0) = 1 := by simp [B256.eqCheck]
+  rw [hone] at htargetPrefix
+  rcases targetBranchCursor.selectBranchSuccSilent (flag := (1 : B256))
+      (by decide) htargetPrefix with
+    ⟨zeroCursor, _hzeroStack, hzeroActions, hbranchSilent⟩
+  have hownStor : Devm.getStor frame.pre =
+      Devm.getStor zeroCursor.pre :=
+    (funext (getStor_eq_of_state_eq hbodySilent.state)).trans
+      ((Line.of_inv Devm.getStor (by line_inv) htargetLine).trans
+        (funext (getStor_eq_of_state_eq hbranchSilent.state)))
+  have hownBal : Devm.getBal frame.pre = Devm.getBal zeroCursor.pre :=
+    (funext (getBal_eq_of_state_eq hbodySilent.state)).trans
+      ((Line.of_inv Devm.getBal (by line_inv) htargetLine).trans
+        (funext (getBal_eq_of_state_eq hbranchSilent.state)))
+  have hownCode : Devm.getCode frame.pre = Devm.getCode zeroCursor.pre :=
+    (funext (getCode_eq_of_state_eq hbodySilent.state)).trans
+      ((Line.of_inv Devm.getCode (by line_inv) htargetLine).trans
+        (funext (getCode_eq_of_state_eq hbranchSilent.state)))
+  have hownMemory : frame.pre.memory = zeroCursor.pre.memory :=
+    hbodySilent.memory.trans
+      ((Line.of_inv Devm.memory (by line_inv) htargetLine).trans
+        hbranchSilent.memory)
+  have hownLogs : frame.pre.logs = zeroCursor.pre.logs :=
+    hbodySilent.logs.trans
+      ((Line.of_inv Devm.logs (by line_inv) htargetLine).trans
+        hbranchSilent.logs)
+  have hownOutput : frame.pre.output = zeroCursor.pre.output :=
+    hbodySilent.output.trans
+      ((Line.of_inv Devm.output (by line_inv) htargetLine).trans
+        hbranchSilent.output)
+  change frame.CompiledCursor dp ca
+    ((weth10 dp).main :: weth10Aux)
+    (table 0 ((weth10 dp).main :: weth10Aux))
+    (valueRedemptionBody .caller 1 sendValueToCallerPrefix
+      ethTransferErrorSlot
+      (returnTruePrefixCompiled +++ Func.ret)) frame.post at zeroCursor
+  have hwfZero : Mem.Wf zeroCursor.pre.memory := by
+    rw [← hownMemory]
+    exact context.memory_wf
+  have hreadsZero : Mem.Reads zeroCursor.pre.memory [] := by
+    rw [← hownMemory]
+    exact context.memory_reads_empty
+  have chronology := zeroCursor.compiledValueRedemptionChronology
+    (successLine := returnTruePrefixCompiled) (successLast := .ret)
+    (sendErrorReason := "WETH: ETH transfer failed")
+    nil_pref hwfZero hreadsZero
+    (by simp [sendValueToCallerPrefix, pushList, NinstIsChildless,
+      Ninst.pushB256])
+    (by simp [returnTruePrefixCompiled, mstoreAt, pushList,
+      NinstIsChildless, Ninst.pushB256])
+    (by unfold returnTruePrefixCompiled; func_inv)
+    (by unfold returnTruePrefixCompiled; func_inv)
+    returnTrue_getCode_inv
+    (by unfold returnTruePrefixCompiled; func_inv)
+    (by
+      intro pre callPre value tail hp hrun
+      exact sendValueToCallerPrefix_effect hp hrun)
+    (by simp [weth10, weth10Aux, burnBalanceErrorSlot,
+      burnBalanceError])
+    (by simp [weth10, weth10Aux, ethTransferErrorSlot,
+      ethTransferError])
+  have rebased := chronology.of_entry_eq
+    hownStor hownBal hownCode hownLogs hownOutput
+  have hactions : zeroCursor.actions = [] :=
+    hzeroActions.trans (htargetActions.trans
+      (hbodyActions.trans hwrapperActions))
+  simpa only [hactions, RedemptionOwnerSource.word, toAdr_toB256] using
+    rebased
+
+/-- The exact observations needed to connect an allowance wrapper's entry to
+the internal balance core.  Approval logs and tagged allowance storage may
+change, but booked balances, the flash slot, ETH balances, and code do not. -/
+structure AllowancePrefixObservations (e : Sevm) (pre post : Devm) : Prop where
+  storage : Stor.Weth10Silent
+    (Devm.getStor pre e.currentTarget) (Devm.getStor post e.currentTarget)
+  balance : Devm.getBal pre = Devm.getBal post
+  code : Devm.getCode pre = Devm.getCode post
+  memory : ∀ {img : Bytes},
+    Mem.Wf pre.memory → Mem.Reads pre.memory img →
+    Mem.Wf post.memory ∧ ∃ out, Mem.Reads post.memory out
+
+private theorem AllowancePrefixObservations.of_dispatchSilent
+    {e : Sevm} {pre post : Devm}
+    (silent : Devm.DispatchSilent pre post) :
+    AllowancePrefixObservations e pre post :=
+  ⟨Stor.Weth10Silent.of_eq
+      (congrArg (fun state : State => state.getStor e.currentTarget)
+        silent.state),
+    funext (getBal_eq_of_state_eq silent.state),
+    funext (getCode_eq_of_state_eq silent.state), by
+      intro img hwf hreads
+      rw [← silent.memory]
+      exact ⟨hwf, img, hreads⟩⟩
+
+private theorem AllowancePrefixObservations.of_line
+    {e : Sevm} {pre post : Devm} {line : Line}
+    (hstor : Line.Inv Devm.getStor line)
+    (hbal : Line.Inv Devm.getBal line)
+    (hcode : Line.Inv Devm.getCode line)
+    (hmemory : Line.Inv Devm.memory line)
+    (run : Line.Run e pre line post) :
+    AllowancePrefixObservations e pre post := by
+  have stor := Line.of_inv Devm.getStor hstor run
+  exact ⟨Stor.Weth10Silent.of_eq
+      (congrFun stor e.currentTarget),
+    Line.of_inv Devm.getBal hbal run,
+    Line.of_inv Devm.getCode hcode run, by
+      intro img hwf hreads
+      rw [← Line.of_inv Devm.memory hmemory run]
+      exact ⟨hwf, img, hreads⟩⟩
+
+private theorem AllowancePrefixObservations.trans
+    {e : Sevm} {pre mid post : Devm}
+    (h₁ : AllowancePrefixObservations e pre mid)
+    (h₂ : AllowancePrefixObservations e mid post) :
+    AllowancePrefixObservations e pre post :=
+  ⟨h₁.storage.trans h₂.storage,
+    h₁.balance.trans h₂.balance,
+    h₁.code.trans h₂.code, by
+      intro img hwf hreads
+      rcases h₁.memory hwf hreads with ⟨hwfMid, out, hreadsMid⟩
+      exact h₂.memory hwfMid hreadsMid⟩
+
+/-- Internal source calls are generated from push/jump/jumpdest only, hence
+reaching the called body preserves the allowance-prefix observations. -/
+private theorem Exec.Frame.CompiledCursor.enterCallSilent
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    {f₀ : Func} {aux : List Func} {k : Nat} {final : Devm}
+    (cursor : frame.CompiledCursor dp ca (f₀ :: aux)
+      (table 0 (f₀ :: aux)) (.call k) final)
+    (hcode : some frame.sevm.code.toList = Prog.compile ⟨f₀, aux⟩) :
+    ∃ body,
+      (f₀ :: aux)[k]? = some body ∧
+      ∃ bodyCursor : frame.CompiledCursor dp ca (f₀ :: aux)
+          (table 0 (f₀ :: aux)) body final,
+        bodyCursor.actions = cursor.actions ∧
+        Devm.DispatchSilent cursor.pre bodyCursor.pre := by
+  cases hrun : cursor.run with
+  | call hget hroom hburn hbody =>
+      rcases subcode_compile_call cursor.codeSlice with
+        ⟨loc, p, hgetTable, hloc, hpushAt, hjump⟩
+      have hpf := (Prog.get?_table (m := 0)).symm.trans
+        (congrArg (Prod.snd <$> ·) hgetTable)
+      rw [hget] at hpf
+      simp only [Option.map_eq_map, Option.map_some,
+        Option.some.injEq] at hpf
+      subst p
+      rcases subcode_of_get?_eq_some hcode hgetTable with
+        ⟨hjumpdest, hsub⟩
+      have hjumpable := Prog.jumpable_of_get?_table hcode hgetTable
+      rcases hpushAt with ⟨le, hpush⟩
+      rcases Evm.call_steps (le := le) hpush hjump hjumpdest
+          hjumpable.1 hloc hroom hburn with
+        ⟨hstepPush, hstepJump, hstepJumpdest⟩
+      rcases frame.advance_cont cursor.current cursor.parentPrefix
+          hstepPush with
+        ⟨afterPush, hprefixPush⟩
+      rcases frame.advance_cont afterPush hprefixPush hstepJump with
+        ⟨afterJump, hprefixJump⟩
+      rcases frame.advance_cont afterJump hprefixJump hstepJumpdest with
+        ⟨bodyExec, hprefixBody⟩
+      let bodyCursor : frame.CompiledCursor dp ca (f₀ :: aux)
+          (table 0 (f₀ :: aux)) _ final :=
+        ⟨loc + 1, _, bodyExec, cursor.actions, hprefixBody,
+          hbody, hsub, hjumpable.2⟩
+      exact ⟨_, hget, bodyCursor, rfl,
+        Devm.DispatchSilent.of_burnBy hburn⟩
+
+private def spendOwnerEqLineCompiled : Line :=
+  arg 0 ++ [Ninst.caller, Ninst.eq]
+
+private def spendAllowanceLoadLineCompiled : Line :=
+  arg 0 ++ mstoreAt 0 ++ [Ninst.caller] ++ mstoreAt 1 ++
+    allowanceKeyFromMemory ++
+    [Ninst.dup 0, Ninst.sload, Ninst.dup 0] ++ isMax
+
+private def spendAllowanceCheckLineCompiled (amount : B256) : Line :=
+  arg amount ++ [Ninst.swap 0] ++ balanceTooSmall
+
+private def spendAllowanceBeforeStoreCompiled : Line :=
+  [Ninst.sub, Ninst.dup 0, Ninst.swap 1]
+
+private def spendAllowanceAfterStoreCompiled : Line :=
+  arg 0 ++ [Ninst.swap 0, Ninst.caller] ++ emitApproval ++
+    [Ninst.pop, Ninst.pop]
+
+private theorem allowanceKeyPrefix_memory
+    {e : Sevm} {pre post : Devm} {img : Bytes}
+    (hwf : Mem.Wf pre.memory)
+    (hreads : Mem.Reads pre.memory img)
+    (run : Line.Run e pre
+      (arg 0 ++ mstoreAt 0 ++ [Ninst.caller] ++ mstoreAt 1 ++
+        allowanceKeyFromMemory) post) :
+    Mem.Wf post.memory ∧ ∃ out, Mem.Reads post.memory out := by
+  rcases of_run_append (arg 0) run with ⟨s₁, howner, run⟩
+  have hp₁ : Sevm.argWord e 0 :: [] <<+ s₁.stack :=
+    prefix_of_arg nil_pref howner
+  rcases of_run_append (mstoreAt 0) run with ⟨s₂, hstoreOwner, run⟩
+  rcases of_run_mstoreAt_val hstoreOwner hp₁ with ⟨hp₂, hmem₂⟩
+  have hmem₂' : s₂.memory =
+      s₁.memory.write 0 (Sevm.argWord e 0).toBytes := by
+    simpa only [show (0 * 32 : B256).toNat = 0 by decide +kernel]
+      using hmem₂
+  have hmemOwner : pre.memory = s₁.memory :=
+    Line.of_inv Devm.memory (by unfold arg cdl; line_inv) howner
+  rcases Line.of_run_cons run with ⟨s₃, hcaller, run⟩
+  have hcallerPush := of_run_caller hcaller
+  have hp₃ : e.caller.toB256 :: [] <<+ s₃.stack :=
+    prefix_of_push hcallerPush hp₂
+  rcases of_run_append (mstoreAt 1) run with ⟨s₄, hstoreCaller, hkey⟩
+  rcases of_run_mstoreAt_val hstoreCaller hp₃ with ⟨hp₄, hmem₄⟩
+  have hmem₄' : s₄.memory =
+      s₃.memory.write 32 e.caller.toB256.toBytes := by
+    simpa only [show (1 * 32 : B256).toNat = 32 by decide +kernel]
+      using hmem₄
+  let img₁ := Bytes.writeAt img 0 (Sevm.argWord e 0).toBytes
+  let img₂ := Bytes.writeAt img₁ 32 e.caller.toB256.toBytes
+  have hwf₄ : Mem.Wf s₄.memory := by
+    rw [hmem₄', ← hcallerPush.memory, hmem₂', ← hmemOwner]
+    exact (hwf.write 0 (Sevm.argWord e 0).toBytes).write
+      32 e.caller.toB256.toBytes
+  have hreads₄ : Mem.Reads s₄.memory img₂ := by
+    rw [hmem₄', ← hcallerPush.memory, hmem₂', ← hmemOwner]
+    exact Mem.Reads.write
+      (hwf.write 0 (Sevm.argWord e 0).toBytes)
+      (Mem.Reads.write hwf hreads 0 (Sevm.argWord e 0).toBytes)
+      32 e.caller.toB256.toBytes
+  rcases prefix_of_allowanceKeyFromMemory_image hp₄ hwf₄ hreads₄ hkey with
+    ⟨_hp, hwfPost, hreadsPost⟩
+  exact ⟨hwfPost, img₂, hreadsPost⟩
+
+private theorem spendAllowanceLoadLine_memory
+    {e : Sevm} {pre post : Devm} {img : Bytes}
+    (hwf : Mem.Wf pre.memory)
+    (hreads : Mem.Reads pre.memory img)
+    (run : Line.Run e pre spendAllowanceLoadLineCompiled post) :
+    Mem.Wf post.memory ∧ ∃ out, Mem.Reads post.memory out := by
+  let keyLine : Line :=
+    arg 0 ++ mstoreAt 0 ++ [Ninst.caller] ++ mstoreAt 1 ++
+      allowanceKeyFromMemory
+  unfold spendAllowanceLoadLineCompiled at run
+  rcases of_run_append keyLine run with ⟨afterKey, hkey, htail⟩
+  obtain ⟨hwfKey, out, hreadsKey⟩ :=
+    allowanceKeyPrefix_memory hwf hreads (by
+      simpa only [keyLine] using hkey)
+  have hmemory : afterKey.memory = post.memory :=
+    Line.of_inv Devm.memory (by line_inv) htail
+  rw [← hmemory]
+  exact ⟨hwfKey, out, hreadsKey⟩
+
+private theorem spendAllowanceAfterStoreLine_memory
+    {e : Sevm} {pre post : Devm} {reduced : B256} {img : Bytes}
+    (hp : reduced :: [] <<+ pre.stack)
+    (hwf : Mem.Wf pre.memory)
+    (hreads : Mem.Reads pre.memory img)
+    (run : Line.Run e pre spendAllowanceAfterStoreCompiled post) :
+    Mem.Wf post.memory ∧ ∃ out, Mem.Reads post.memory out := by
+  unfold spendAllowanceAfterStoreCompiled at run
+  rcases of_run_append (arg 0) run with ⟨s₁, howner, run⟩
+  have hp₁ : Sevm.argWord e 0 :: reduced :: [] <<+ s₁.stack :=
+    prefix_of_arg hp howner
+  rcases Line.of_run_cons run with ⟨s₂, hswap, run⟩
+  have hswapCore : Stack.Swap (0 : Fin 16).val
+      [Sevm.argWord e 0, reduced] [reduced, Sevm.argWord e 0] :=
+    Stack.swapCore_zero
+  have hp₂ : reduced :: Sevm.argWord e 0 :: [] <<+ s₂.stack :=
+    Stack.prefix_of_swap hswapCore (of_run_swap hswap) hp₁
+  rcases Line.of_run_cons run with ⟨s₃, hcaller, run⟩
+  have hp₃ : e.caller.toB256 :: reduced :: Sevm.argWord e 0 :: [] <<+
+      s₃.stack := prefix_of_push (of_run_caller hcaller) hp₂
+  rcases of_run_append emitApproval run with ⟨s₄, hemit, run⟩
+  have hmemory : pre.memory = s₃.memory :=
+    (Line.of_inv Devm.memory (by line_inv) howner).trans
+      ((Ninst.Hinv.inv (f := Devm.memory) hswap).trans
+        (of_run_caller hcaller).memory)
+  have hwf₃ : Mem.Wf s₃.memory := by
+    rw [← hmemory]
+    exact hwf
+  have hreads₃ : Mem.Reads s₃.memory img := by
+    rw [← hmemory]
+    exact hreads
+  obtain ⟨_hp, _hlogs, _hstor, _hbal, _hcode, _houtput,
+      hwf₄, out, hreads₄⟩ :=
+    emitApproval_effect hp₃ hwf₃ hreads₃ hemit
+  rcases Line.of_run_cons run with ⟨s₅, hpop₁, run⟩
+  rcases Line.of_run_cons run with ⟨s₆, hpop₂, hnil⟩
+  cases hnil
+  have hmemoryPost : s₄.memory = post.memory :=
+    (Ninst.Hinv.inv (f := Devm.memory) hpop₁).trans
+      (Ninst.Hinv.inv (f := Devm.memory) hpop₂)
+  rw [← hmemoryPost]
+  exact ⟨hwf₄, out, hreads₄⟩
+
 /-- Follow the actual successful allowance wrapper to its internal core.
 Every source instruction in the wrapper is childless; the only alternate
 internal call is the fixed allowance reverter, which cannot lead to the
@@ -2867,7 +4209,482 @@ theorem Exec.Frame.CompiledCursor.enterSpendCallerAllowanceThen
     exact ⟨body, hget, bodyCursor, hbodyActions.trans
       (hdirectActions.trans hcallerActions)⟩
 
+/-- Follow the same exact allowance wrapper while also retaining the
+balance/flash-slot, ETH-balance, and code observations needed to start a
+delegated redemption at the reached core cursor. -/
+theorem Exec.Frame.CompiledCursor.enterSpendCallerAllowanceThenWithObservations
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    {f₀ : Func} {aux : List Func} {amount : B256} {nextSlot : Nat}
+    {final : Devm}
+    (cursor : frame.CompiledCursor dp ca (f₀ :: aux)
+      (table 0 (f₀ :: aux))
+      (spendCallerAllowanceThen amount nextSlot) final)
+    (hcode : some frame.sevm.code.toList = Prog.compile ⟨f₀, aux⟩)
+    (hallowanceError :
+      (f₀ :: aux)[allowanceErrorSlot]? = some allowanceError) :
+    ∃ body,
+      (f₀ :: aux)[nextSlot]? = some body ∧
+      ∃ bodyCursor : frame.CompiledCursor dp ca (f₀ :: aux)
+          (table 0 (f₀ :: aux)) body final,
+        bodyCursor.actions = cursor.actions ∧
+        AllowancePrefixObservations frame.sevm cursor.pre
+          bodyCursor.pre := by
+  unfold spendCallerAllowanceThen at cursor
+  rcases cursor.peelChildlessLine
+      (line := spendOwnerEqLineCompiled)
+      (by simp [spendOwnerEqLineCompiled, arg, cdl,
+        NinstIsChildless, Ninst.pushB256]) with
+    ⟨callerBranchCursor, hcallerLine, hcallerActions⟩
+  have hcallerPrefix :
+      [frame.sevm.caller.toB256 =? Sevm.argWord frame.sevm 0] <<+
+        callerBranchCursor.pre.stack := by
+    unfold spendOwnerEqLineCompiled at hcallerLine
+    rcases of_run_append (arg 0) hcallerLine with
+      ⟨afterArg, harg, hcallerEq⟩
+    rcases Line.of_run_cons hcallerEq with
+      ⟨afterCaller, hcaller, heqLine⟩
+    rcases Line.of_run_cons heqLine with ⟨afterEq, heq, hnil⟩
+    cases hnil
+    exact prefix_of_eq heq
+      (prefix_of_push (of_run_caller hcaller)
+        (prefix_of_arg nil_pref harg))
+  have hcallerObs : AllowancePrefixObservations frame.sevm
+      cursor.pre callerBranchCursor.pre :=
+    AllowancePrefixObservations.of_line (by
+      unfold spendOwnerEqLineCompiled
+      line_inv) (by
+      unfold spendOwnerEqLineCompiled
+      line_inv) (by
+      unfold spendOwnerEqLineCompiled
+      line_inv) (by
+      unfold spendOwnerEqLineCompiled
+      line_inv) hcallerLine
+  by_cases hselfFlag :
+      (frame.sevm.caller.toB256 =? Sevm.argWord frame.sevm 0) = 0
+  · rw [hselfFlag] at hcallerPrefix
+    rcases callerBranchCursor.selectBranchZeroSilent hcallerPrefix with
+      ⟨allowanceCursor, _hallowanceStack, hallowanceActions,
+        hallowanceBranchSilent⟩
+    rcases allowanceCursor.peelChildlessLine
+        (line := spendAllowanceLoadLineCompiled)
+        (by simp [spendAllowanceLoadLineCompiled, arg, cdl, mstoreAt,
+          allowanceKeyFromMemory, pushList, isMax, NinstIsChildless,
+          Ninst.pushB256]) with
+      ⟨maxBranchCursor, hloadLine, hloadActions⟩
+    rcases prefix_of_callerAllowanceIsMax 0 nil_pref hloadLine with
+      ⟨hash, allowance, _hallowance, hloadPrefix⟩
+    have hloadObs : AllowancePrefixObservations frame.sevm
+        allowanceCursor.pre maxBranchCursor.pre :=
+      ⟨Stor.Weth10Silent.of_eq (congrFun
+          (Line.of_inv Devm.getStor (by
+            unfold spendAllowanceLoadLineCompiled
+            line_inv) hloadLine) frame.sevm.currentTarget),
+        Line.of_inv Devm.getBal (by
+          unfold spendAllowanceLoadLineCompiled
+          line_inv) hloadLine,
+        Line.of_inv Devm.getCode (by
+          unfold spendAllowanceLoadLineCompiled
+          line_inv) hloadLine, by
+        intro img hwf hreads
+        exact spendAllowanceLoadLine_memory hwf hreads hloadLine⟩
+    by_cases hmaxFlag : ((~~~ allowance) =? 0) = 0
+    · rw [hmaxFlag] at hloadPrefix
+      rcases maxBranchCursor.selectBranchZeroSilent hloadPrefix with
+        ⟨finiteCursor, hfinitePrefix, hfiniteActions,
+          hfiniteBranchSilent⟩
+      rcases finiteCursor.peelChildlessLine
+          (line := spendAllowanceCheckLineCompiled amount)
+          (by simp [spendAllowanceCheckLineCompiled, arg, cdl,
+            balanceTooSmall, NinstIsChildless, Ninst.pushB256]) with
+        ⟨spendBranchCursor, hcheckLine, hcheckActions⟩
+      have hguardPrefix :
+          (allowance <? Sevm.argWord frame.sevm amount) :: allowance ::
+            Sevm.argWord frame.sevm amount ::
+            (allowanceTagWord ||| (allowancePayloadMask &&& hash)) :: []
+              <<+ spendBranchCursor.pre.stack := by
+        unfold spendAllowanceCheckLineCompiled at hcheckLine
+        rcases of_run_append (arg amount) hcheckLine with
+          ⟨afterAmount, hamount, hafterAmount⟩
+        rcases Line.of_run_cons hafterAmount with
+          ⟨afterSwap, hswap, hguard⟩
+        have hpAmount : Sevm.argWord frame.sevm amount :: allowance ::
+            (allowanceTagWord ||| (allowancePayloadMask &&& hash)) :: []
+              <<+ afterAmount.stack :=
+          prefix_of_arg hfinitePrefix hamount
+        have hswapCore : Stack.Swap (0 : Fin 16).val
+            (Sevm.argWord frame.sevm amount :: allowance ::
+              (allowanceTagWord ||| (allowancePayloadMask &&& hash)) :: [])
+            (allowance :: Sevm.argWord frame.sevm amount ::
+              (allowanceTagWord ||| (allowancePayloadMask &&& hash)) :: []) :=
+          Stack.swapCore_zero
+        exact prefix_of_balanceTooSmall
+          (Stack.prefix_of_swap hswapCore (of_run_swap hswap) hpAmount)
+          hguard
+      rcases spendBranchCursor.selectBranchLeftWithBurn
+          (not_run_call_revWith (by
+            simpa only [allowanceError] using hallowanceError)) with
+        ⟨successCursor, hsuccessPopBy, hsuccessActions⟩
+      have hsuccessPrefix : allowance ::
+          Sevm.argWord frame.sevm amount ::
+          (allowanceTagWord ||| (allowancePayloadMask &&& hash)) :: []
+            <<+ successCursor.pre.stack :=
+        prefix_of_pop
+          ⟨0, Devm.PopBurn.of_popBurnBy hsuccessPopBy⟩ hguardPrefix
+      rcases successCursor.peelChildlessLine
+          (line := spendAllowanceBeforeStoreCompiled)
+          (by simp [spendAllowanceBeforeStoreCompiled,
+            NinstIsChildless]) with
+        ⟨storeCursor, hbeforeStore, hbeforeActions⟩
+      rcases Line.of_run_cons hbeforeStore with
+        ⟨afterSub, hsub, hbeforeStore⟩
+      rcases Line.of_run_cons hbeforeStore with
+        ⟨afterDup, hdup, hbeforeStore⟩
+      rcases Line.of_run_cons hbeforeStore with
+        ⟨afterSwap, hswap, hnil⟩
+      cases hnil
+      have hsubPrefix :
+          (allowance - Sevm.argWord frame.sevm amount) ::
+            (allowanceTagWord ||| (allowancePayloadMask &&& hash)) :: []
+              <<+ afterSub.stack := prefix_of_sub hsub hsuccessPrefix
+      have hdupPrefix :
+          (allowance - Sevm.argWord frame.sevm amount) ::
+            (allowance - Sevm.argWord frame.sevm amount) ::
+            (allowanceTagWord ||| (allowancePayloadMask &&& hash)) :: []
+              <<+ afterDup.stack :=
+        prefix_of_dup_val hdup (by show_nth) hsubPrefix
+      have hstoreSwap : Stack.Swap (1 : Fin 16).val
+          ((allowance - Sevm.argWord frame.sevm amount) ::
+            (allowance - Sevm.argWord frame.sevm amount) ::
+            (allowanceTagWord ||| (allowancePayloadMask &&& hash)) :: [])
+          ((allowanceTagWord ||| (allowancePayloadMask &&& hash)) ::
+            (allowance - Sevm.argWord frame.sevm amount) ::
+            (allowance - Sevm.argWord frame.sevm amount) :: []) :=
+        Stack.swapCore_succ Stack.swapCore_zero
+      have hstorePrefix :
+          (allowanceTagWord ||| (allowancePayloadMask &&& hash)) ::
+            (allowance - Sevm.argWord frame.sevm amount) ::
+            (allowance - Sevm.argWord frame.sevm amount) :: []
+              <<+ storeCursor.pre.stack :=
+        Stack.prefix_of_swap hstoreSwap (of_run_swap hswap) hdupPrefix
+      rcases storeCursor.selectNextChildless (by
+          simp [NinstIsChildless]) with
+        ⟨afterStoreCursor, _storeSlot, hstore, _storeOccurrence,
+          hstoreActions⟩
+      rcases afterStoreCursor.peelChildlessLine
+          (line := spendAllowanceAfterStoreCompiled)
+          (by simp [spendAllowanceAfterStoreCompiled, arg, cdl,
+            emitApproval, mstoreAt, logWith, NinstIsChildless,
+            Ninst.pushB256]) with
+        ⟨coreCallCursor, hafterStore, hafterActions⟩
+      have hset : Devm.getStor afterStoreCursor.pre
+          frame.sevm.currentTarget =
+          (Devm.getStor storeCursor.pre frame.sevm.currentTarget).set
+            (allowanceTagWord ||| (allowancePayloadMask &&& hash))
+            (allowance - Sevm.argWord frame.sevm amount) :=
+        sstore_getStor_set hstore hstorePrefix
+      have hstoreSilent : Stor.Weth10Silent
+          (Devm.getStor storeCursor.pre frame.sevm.currentTarget)
+          (Devm.getStor afterStoreCursor.pre frame.sevm.currentTarget) := by
+        rw [hset]
+        exact Stor.Weth10Silent.set
+          (runtimeAllowanceKey_not_valid hash)
+          (runtimeAllowanceKey_ne_flash hash)
+      have hmutationObs : AllowancePrefixObservations frame.sevm
+          successCursor.pre coreCallCursor.pre := by
+        refine ⟨?_, ?_, ?_, ?_⟩
+        · exact (Stor.Weth10Silent.of_eq (congrFun
+              (Line.of_inv Devm.getStor (by
+                line_inv) (Line.Run.cons hsub
+                  (Line.Run.cons hdup
+                    (Line.Run.cons hswap Line.Run.nil))))
+              frame.sevm.currentTarget)).trans
+            (hstoreSilent.trans
+              (Stor.Weth10Silent.of_eq (congrFun
+                (Line.of_inv Devm.getStor (by
+                  unfold spendAllowanceAfterStoreCompiled
+                  line_inv) hafterStore)
+                frame.sevm.currentTarget)))
+        · exact (Line.of_inv Devm.getBal (by
+              line_inv) (Line.Run.cons hsub
+                (Line.Run.cons hdup (Line.Run.cons hswap Line.Run.nil)))).trans
+            ((Ninst.Hinv.inv (f := Devm.getBal) hstore).trans
+              (Line.of_inv Devm.getBal (by
+                unfold spendAllowanceAfterStoreCompiled
+                line_inv) hafterStore))
+        · exact (Line.of_inv Devm.getCode (by
+              line_inv) (Line.Run.cons hsub
+                (Line.Run.cons hdup (Line.Run.cons hswap Line.Run.nil)))).trans
+            ((Ninst.Hinv.inv (f := Devm.getCode) hstore).trans
+              (Line.of_inv Devm.getCode (by
+                unfold spendAllowanceAfterStoreCompiled
+                line_inv) hafterStore))
+        · intro img hwf hreads
+          have hbeforeMemory : successCursor.pre.memory =
+              storeCursor.pre.memory :=
+            Line.of_inv Devm.memory (by line_inv)
+              (Line.Run.cons hsub
+                (Line.Run.cons hdup (Line.Run.cons hswap Line.Run.nil)))
+          have hstoreMemory : storeCursor.pre.memory =
+              afterStoreCursor.pre.memory :=
+            Ninst.Hinv.inv (f := Devm.memory) hstore
+          have hafterPrefix :
+              (allowance - Sevm.argWord frame.sevm amount) :: [] <<+
+                afterStoreCursor.pre.stack :=
+            prefix_of_sstore hstore hstorePrefix
+          have hwfAfter : Mem.Wf afterStoreCursor.pre.memory := by
+            rw [← hstoreMemory, ← hbeforeMemory]
+            exact hwf
+          have hreadsAfter : Mem.Reads afterStoreCursor.pre.memory img := by
+            rw [← hstoreMemory, ← hbeforeMemory]
+            exact hreads
+          exact spendAllowanceAfterStoreLine_memory hafterPrefix
+            hwfAfter hreadsAfter hafterStore
+      rcases coreCallCursor.enterCallSilent hcode with
+        ⟨body, hget, bodyCursor, hbodyActions, hcallSilent⟩
+      have hp₁ := hcallerObs.trans
+        (AllowancePrefixObservations.of_dispatchSilent
+          hallowanceBranchSilent)
+      have hp₂ := hp₁.trans hloadObs
+      have hp₃ := hp₂.trans
+        (AllowancePrefixObservations.of_dispatchSilent
+          hfiniteBranchSilent)
+      have hp₄ := hp₃.trans
+        (AllowancePrefixObservations.of_line (by
+          unfold spendAllowanceCheckLineCompiled
+          line_inv) (by
+          unfold spendAllowanceCheckLineCompiled
+          line_inv) (by
+          unfold spendAllowanceCheckLineCompiled
+          line_inv) (by
+          unfold spendAllowanceCheckLineCompiled
+          line_inv) hcheckLine)
+      have hp₅ := hp₄.trans
+        (AllowancePrefixObservations.of_dispatchSilent
+          (Devm.DispatchSilent.of_popBurnBy hsuccessPopBy))
+      have hp₆ := hp₅.trans hmutationObs
+      have hp := hp₆.trans
+        (AllowancePrefixObservations.of_dispatchSilent hcallSilent)
+      exact ⟨body, hget, bodyCursor,
+        hbodyActions.trans (hafterActions.trans
+          (hstoreActions.trans (hbeforeActions.trans
+            (hsuccessActions.trans (hcheckActions.trans
+              (hfiniteActions.trans (hloadActions.trans
+                (hallowanceActions.trans hcallerActions)))))))), hp⟩
+    · rcases maxBranchCursor.selectBranchSuccSilent hmaxFlag
+          hloadPrefix with
+        ⟨maxCursor, _hmaxStack, hmaxActions, hmaxBranchSilent⟩
+      rcases maxCursor.peelChildlessLine
+          (line := [Ninst.pop, Ninst.pop])
+          (by simp [NinstIsChildless]) with
+        ⟨coreCallCursor, hpopLine, hpopActions⟩
+      rcases coreCallCursor.enterCallSilent hcode with
+        ⟨body, hget, bodyCursor, hbodyActions, hcallSilent⟩
+      have hp₁ := hcallerObs.trans
+        (AllowancePrefixObservations.of_dispatchSilent
+          hallowanceBranchSilent)
+      have hp₂ := hp₁.trans hloadObs
+      have hp₃ := hp₂.trans
+        (AllowancePrefixObservations.of_dispatchSilent hmaxBranchSilent)
+      have hp₄ := hp₃.trans
+        (AllowancePrefixObservations.of_line (by line_inv)
+          (by line_inv) (by line_inv) (by line_inv) hpopLine)
+      have hp := hp₄.trans
+        (AllowancePrefixObservations.of_dispatchSilent hcallSilent)
+      exact ⟨body, hget, bodyCursor,
+        hbodyActions.trans (hpopActions.trans
+          (hmaxActions.trans (hloadActions.trans
+            (hallowanceActions.trans hcallerActions)))), hp⟩
+  · rcases callerBranchCursor.selectBranchSuccSilent hselfFlag
+        hcallerPrefix with
+      ⟨directCursor, _hdirectStack, hdirectActions, hdirectBranchSilent⟩
+    rcases directCursor.enterCallSilent hcode with
+      ⟨body, hget, bodyCursor, hbodyActions, hcallSilent⟩
+    exact ⟨body, hget, bodyCursor,
+      hbodyActions.trans (hdirectActions.trans hcallerActions),
+      hcallerObs.trans
+        ((AllowancePrefixObservations.of_dispatchSilent
+          hdirectBranchSilent).trans
+          (AllowancePrefixObservations.of_dispatchSilent hcallSilent))⟩
+
 private def transferFromSelectLine : Line := arg 1 ++ [Ninst.iszero]
+
+/-- Exact selector-level chronology for delegated `transferFrom` when the raw
+recipient word is zero.  The allowance prefix retains its literal reached
+owner cursor, including a possible finite allowance write and `Approval` log;
+the redemption chronology therefore starts at that cursor rather than being
+rebased across the allowance mutation. -/
+theorem Exec.Frame.compiledTransferFromZeroChronology
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    (context : frame.AuthenticContext dp ca)
+    (hselector : Sevm.selector frame.sevm = transferFromSelector)
+    (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
+    (hto : Sevm.argWord frame.sevm 1 = 0) :
+    ∃ ownPre,
+      AllowancePrefixObservations frame.sevm frame.pre ownPre ∧
+      frame.CompiledValueRedemptionChronology dp ca ownPre
+        (normalizedAddressArg frame.sevm 0).toAdr
+        (Sevm.argWord frame.sevm 2) frame.sevm.caller.toB256 [] := by
+  have hmem :
+      (Sevm.selector frame.sevm, nonpayable transferFrom) ∈
+        weth10Funcs dp := by
+    rw [hselector]
+    simp [transferFromSelector, weth10Funcs]
+  rcases frame.compiledSelectorBodyCursorSilent context hnonempty hmem with
+    ⟨wrapperCursor, _hwrapperStack, hwrapperActions, hentrySilent⟩
+  rcases wrapperCursor.enterNonpayableSilent with
+    ⟨transferCursor, _htransferStack, htransferActions,
+      hnonpayableSilent⟩
+  have hentryObs : AllowancePrefixObservations frame.sevm frame.pre
+      transferCursor.pre :=
+    AllowancePrefixObservations.of_dispatchSilent
+      (hentrySilent.trans hnonpayableSilent)
+  change frame.CompiledCursor dp ca
+    ((weth10 dp).main :: weth10Aux)
+    (table 0 ((weth10 dp).main :: weth10Aux))
+    (spendCallerAllowanceThen 2 transferFromCoreSlot) frame.post at transferCursor
+  rcases transferCursor.enterSpendCallerAllowanceThenWithObservations
+      context.invocation.2.2.2 (by
+        simp [weth10, weth10Aux, allowanceErrorSlot]) with
+    ⟨body, hget, coreCursor, hcoreActions, hallowanceObs⟩
+  have hbody : body = transferFromCore := by
+    simpa [weth10, weth10Aux, transferFromCoreSlot] using hget.symm
+  subst body
+  change frame.CompiledCursor dp ca
+    ((weth10 dp).main :: weth10Aux)
+    (table 0 ((weth10 dp).main :: weth10Aux))
+    (transferFromSelectLine +++
+      (transferFromZero <?> transferFromNonzero)) frame.post at coreCursor
+  rcases coreCursor.peelChildlessLine
+      (by simp [transferFromSelectLine, arg, cdl, NinstIsChildless,
+        Ninst.pushB256]) with
+    ⟨targetBranchCursor, htargetLine, htargetActions⟩
+  have htargetPrefix :
+      [Sevm.argWord frame.sevm 1 =? 0] <<+
+        targetBranchCursor.pre.stack := by
+    unfold transferFromSelectLine at htargetLine
+    rcases of_run_append (arg 1) htargetLine with
+      ⟨afterArg, harg, hzeroLine⟩
+    rcases Line.of_run_cons hzeroLine with
+      ⟨afterZero, hzero, hnil⟩
+    cases hnil
+    exact prefix_of_iszero hzero (prefix_of_arg nil_pref harg)
+  rw [hto] at htargetPrefix
+  have hone : ((0 : B256) =? 0) = 1 := by simp [B256.eqCheck]
+  rw [hone] at htargetPrefix
+  rcases targetBranchCursor.selectBranchSuccSilent (flag := (1 : B256))
+      (by decide) htargetPrefix with
+    ⟨zeroCursor, _hzeroStack, hzeroActions, hbranchSilent⟩
+  have hselectObs : AllowancePrefixObservations frame.sevm
+      coreCursor.pre zeroCursor.pre :=
+    (AllowancePrefixObservations.of_line (by line_inv) (by line_inv)
+      (by line_inv) (by line_inv) htargetLine).trans
+      (AllowancePrefixObservations.of_dispatchSilent hbranchSilent)
+  have hownObs : AllowancePrefixObservations frame.sevm frame.pre
+      zeroCursor.pre :=
+    hentryObs.trans (hallowanceObs.trans hselectObs)
+  obtain ⟨hwfZero, img, hreadsZero⟩ :=
+    hownObs.memory context.memory_wf context.memory_reads_empty
+  change frame.CompiledCursor dp ca
+    ((weth10 dp).main :: weth10Aux)
+    (table 0 ((weth10 dp).main :: weth10Aux))
+    (valueRedemptionBody (.arg 0) 2 sendValueToCallerPrefix
+      ethTransferErrorSlot
+      (returnTruePrefixCompiled +++ Func.ret)) frame.post at zeroCursor
+  have chronology := zeroCursor.compiledValueRedemptionChronology
+    (successLine := returnTruePrefixCompiled) (successLast := .ret)
+    (sendErrorReason := "WETH: ETH transfer failed")
+    nil_pref hwfZero hreadsZero
+    (by simp [sendValueToCallerPrefix, pushList, NinstIsChildless,
+      Ninst.pushB256])
+    (by simp [returnTruePrefixCompiled, mstoreAt, pushList,
+      NinstIsChildless, Ninst.pushB256])
+    (by unfold returnTruePrefixCompiled; func_inv)
+    (by unfold returnTruePrefixCompiled; func_inv)
+    returnTrue_getCode_inv
+    (by unfold returnTruePrefixCompiled; func_inv)
+    (by
+      intro pre callPre value tail hp hrun
+      exact sendValueToCallerPrefix_effect hp hrun)
+    (by simp [weth10, weth10Aux, burnBalanceErrorSlot,
+      burnBalanceError])
+    (by simp [weth10, weth10Aux, ethTransferErrorSlot,
+      ethTransferError])
+  have hactions : zeroCursor.actions = [] :=
+    hzeroActions.trans (htargetActions.trans
+      (hcoreActions.trans (htransferActions.trans hwrapperActions)))
+  refine ⟨zeroCursor.pre, hownObs, ?_⟩
+  simpa only [hactions, RedemptionOwnerSource.word] using chronology
+
+/-- Exact selector-level chronology for `withdrawFrom`.  The returned
+allowance observations connect frame entry to the literal post-allowance
+owner cursor, while the accepted value child and descendant ledger remain
+owned by the redemption chronology starting there. -/
+theorem Exec.Frame.compiledWithdrawFromChronology
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    (context : frame.AuthenticContext dp ca)
+    (hselector : Sevm.selector frame.sevm = withdrawFromSelector)
+    (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
+    ∃ ownPre,
+      AllowancePrefixObservations frame.sevm frame.pre ownPre ∧
+      frame.CompiledValueRedemptionChronology dp ca ownPre
+        (normalizedAddressArg frame.sevm 0).toAdr
+        (Sevm.argWord frame.sevm 2) (Sevm.argWord frame.sevm 1) [] := by
+  have hmem :
+      (Sevm.selector frame.sevm, nonpayable withdrawFrom) ∈
+        weth10Funcs dp := by
+    rw [hselector]
+    simp [withdrawFromSelector, weth10Funcs]
+  rcases frame.compiledSelectorBodyCursorSilent context hnonempty hmem with
+    ⟨wrapperCursor, _hwrapperStack, hwrapperActions, hentrySilent⟩
+  rcases wrapperCursor.enterNonpayableSilent with
+    ⟨withdrawCursor, _hwithdrawStack, hwithdrawActions,
+      hnonpayableSilent⟩
+  have hentryObs : AllowancePrefixObservations frame.sevm frame.pre
+      withdrawCursor.pre :=
+    AllowancePrefixObservations.of_dispatchSilent
+      (hentrySilent.trans hnonpayableSilent)
+  change frame.CompiledCursor dp ca
+    ((weth10 dp).main :: weth10Aux)
+    (table 0 ((weth10 dp).main :: weth10Aux))
+    (spendCallerAllowanceThen 2 withdrawFromCoreSlot) frame.post at withdrawCursor
+  rcases withdrawCursor.enterSpendCallerAllowanceThenWithObservations
+      context.invocation.2.2.2 (by
+        simp [weth10, weth10Aux, allowanceErrorSlot]) with
+    ⟨body, hget, ownCursor, hownActions, hallowanceObs⟩
+  have hbody : body = withdrawFromCore := by
+    simpa [weth10, weth10Aux, withdrawFromCoreSlot] using hget.symm
+  subst body
+  have hownObs : AllowancePrefixObservations frame.sevm frame.pre
+      ownCursor.pre := hentryObs.trans hallowanceObs
+  obtain ⟨hwfOwn, img, hreadsOwn⟩ :=
+    hownObs.memory context.memory_wf context.memory_reads_empty
+  change frame.CompiledCursor dp ca
+    ((weth10 dp).main :: weth10Aux)
+    (table 0 ((weth10 dp).main :: weth10Aux))
+    (valueRedemptionBody (.arg 0) 2 (sendValueToArgPrefix 1)
+      etherTransferErrorSlot Func.stop) frame.post at ownCursor
+  have chronology := ownCursor.compiledValueRedemptionChronology
+    (successLine := []) (successLast := .stop)
+    (sendErrorReason := "WETH: Ether transfer failed")
+    nil_pref hwfOwn hreadsOwn
+    (by simp [sendValueToArgPrefix, pushList, arg, cdl,
+      NinstIsChildless, Ninst.pushB256])
+    (by simp)
+    (by func_inv)
+    (by func_inv)
+    stop_getCode_inv
+    (by func_inv)
+    (by
+      intro pre callPre value tail hp hrun
+      exact sendValueToArgPrefix_effect 1 hp hrun)
+    (by simp [weth10, weth10Aux, burnBalanceErrorSlot,
+      burnBalanceError])
+    (by simp [weth10, weth10Aux, etherTransferErrorSlot,
+      etherTransferError])
+  have hactions : ownCursor.actions = [] :=
+    hownActions.trans (hwithdrawActions.trans hwrapperActions)
+  refine ⟨ownCursor.pre, hownObs, ?_⟩
+  simpa only [hactions, RedemptionOwnerSource.word] using chronology
 
 private def transferFromBalanceCheckLine : Line :=
   loadArgBalanceAmount 0 2 ++ balanceTooSmall

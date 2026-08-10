@@ -24,9 +24,12 @@ separately at the end of this document. Owner abbreviations are:
 - `DF-view`, `DF-state`, `DF-callback`, `DF-permit`, and `DF-flash`: completed
   deployed-vs-Blanc differential fixture families;
 - `TH-read`, `TH-state`, `TH-callback`, `TH-permit`, and `TH-flash`: completed
-  Blanc functional theorem families; and
+  Blanc functional theorem families;
+- `TH-holder-flow`: completed exact-Blanc-runtime committed holder-flow,
+  rollback-pruned history, no-wrap, conservation, and residual-floor theorem
+  families;
 - `TH-backed`: the backing-preservation family. It proves the invariant, not
-  full endpoint behavior; and
+  full endpoint behavior;
 - deployment fixtures and `TH-deploy`: fresh-constructor execution, exact
   runtime installation, initialization, invariant, and Blanc-gas evidence.
   Both owners are complete.
@@ -377,6 +380,72 @@ ETH recipient callbacks occur after debit and burn log (and, where relevant,
 after finite allowance reduction). Reentrant WETH10 calls are allowed; their
 state and logs interleave at the actual call boundary. An outer revert rolls
 back the full nested transaction.
+
+### `TH-holder-flow`: committed holder-flow conservation
+
+This Blanc-only cross-cut accounts for one holder over the exact compiled
+WETH10 runtime. Let `B0` and `Bt` be the natural-number `bookedBalanceNat`
+values at a stable checkpoint and later settled state, and let the remaining
+names denote the fields of the history's public `weth10Flow` fold. The exact
+runtime proof rules out wrap at every committed balance credit, so the exact
+gross equation is in `Nat`, not merely modulo `2^256`:
+
+```text
+B0 + ordinaryIn + selfTransfer + flashCredit
+  = Bt + redeemed + externalTransferredOut
+      + selfTransfer + flashRepayment
+```
+
+Every committed flash atom carries its exact receiver and principal for both
+the credit and repayment, so `flashCredit = flashRepayment`. Cancelling that
+pair and the identical self-transfer terms gives
+
+```text
+B0 + ordinaryIn = Bt + redeemed + externalTransferredOut
+```
+
+Consequently the runtime-authorized permanent-outflow floor is
+
+```text
+B0 <= Bt + redeemed + externalTransferredOut
+B0 - (redeemed + externalTransferredOut) <= Bt
+```
+
+and when `externalTransferredOut = 0`, `B0 <= redeemed + Bt`. Incoming credits
+can make the floor strict. Zero transfers contribute zero, while a transfer
+whose normalized source and recipient are the same holder is recorded as a
+self-transfer and is not public permanent outflow.
+
+The premise is a proof-carrying Prague-only `AccountedHistory`, not an endpoint
+balance comparison or supplied event list. It retains the entire applied block
+sequence even beyond the endpoint's 255-block window, each configured
+transition and `applyBody` result, `BlockOutput`, every ordinary transaction
+root, and all four Prague system-message roots: beacon, history, withdrawal
+request, and consolidation request. The fold follows actual settlement:
+failed, reverted, or exceptional child, outer, and top-level effects are
+pruned, including failures caught by a committing caller. Every ordinary
+Prague-only reachable endpoint from a stable checkpoint admits such a history;
+the history projects back to ordinary reach, and equal applied block sequences
+produce equal holder-flow totals.
+
+`Runtime-authorized` means only that the exact WETH10 runtime accepted the
+committed debit. The retained data records the actual caller and the direct,
+delegated self-bypass/finite/maximum-allowance, or flash-settlement branch. It
+does not establish holder consent or human intent, or the provenance of an
+allowance value. Raw words and normalized addresses remain distinct: the raw
+zero destination selects redemption, while a raw nonzero dirty word that
+normalizes to address zero is an ordinary transfer to balance key zero, and a
+dirty alias that normalizes to the protected holder is a self-transfer.
+
+Exact invocation requires the WETH10 account as both current storage target
+and code address together with the compiled-runtime witness. WETH bytes run by
+`DELEGATECALL`/`CALLCODE` against another account's storage, and foreign
+lookalike balance slots or logs, cannot enter this ledger. `TH-holder-flow`
+assumes no `NoCollision` condition and does not verify the deployed Solidity
+runtime, prove future enabledness or liveness, or establish the successor's
+any-order claim. The committed redemption fixtures exercise chosen concrete
+histories only; they are not proof-carrying `AccountedHistory` values and do
+not enlarge these theorems.
 
 <!-- WETH10-CROSSCUT force-sent-eth -->
 ### Force-sent ETH

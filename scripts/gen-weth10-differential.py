@@ -486,8 +486,10 @@ def build_scenarios(lock: Mapping) -> List[Scenario]:
     ]
 
     # State-mutating reentrancy.  These rows deliberately use the state/log
-    # image committed before each callback, and the final flash row forces a
-    # later burn failure so the nested successful transfer must roll back.
+    # image committed before each callback.  One catches a failed nested call
+    # while the parent commits; one commits a nested transfer and flash
+    # settlement; and the final flash row forces a later burn failure so a
+    # nested successful transfer must roll back with its parent.
     approve_reentrant = mutating_callback_code(
         h256(1), WETH_MAINNET,
         call("transferFrom(address,address,uint256)", ("address", ALICE),
@@ -509,6 +511,14 @@ def build_scenarios(lock: Mapping) -> List[Scenario]:
         CALLBACK_SUCCESS, WETH_MAINNET,
         call("transfer(address,uint256)", ("address", BOB), ("uint256", 3)),
     )
+    caught_failed_transfer = mutating_callback_code(
+        h256(1), WETH_MAINNET,
+        call("transfer(address,uint256)", ("address", BOB), ("uint256", 4)),
+    )
+    flash_transfer_reentrant = mutating_callback_code(
+        CALLBACK_SUCCESS, WETH_MAINNET,
+        call("transfer(address,uint256)", ("address", BOB), ("uint256", 2)),
+    )
     reentrant_channels = (
         "outcome", "returndata", "logical-state", "eth", "logs",
         "call-shape", "call-trace",
@@ -529,6 +539,15 @@ def build_scenarios(lock: Mapping) -> List[Scenario]:
                  code={RECORDER: deposit_reentrant}, observe_addresses=[RECORDER, BOB],
                  channels=reentrant_channels,
                  tags=("typed-callback", "state-mutating-reentrancy", "precall-state", "child-log")),
+        scenario("transferAndCall-reentrant-failed-transfer-caught",
+                 "transferAndCall(address,uint256,bytes)", "DF-callback",
+                 call("transferAndCall(address,uint256,bytes)", ("address", RECORDER),
+                      ("uint256", 3), ("bytes", b"catch-failed-child")),
+                 balances={ALICE: 10}, weth_eth=10,
+                 code={RECORDER: caught_failed_transfer},
+                 observe_addresses=[RECORDER, BOB], channels=reentrant_channels,
+                 tags=("typed-callback", "state-mutating-reentrancy", "child-log",
+                       "caught-child-failure", "outer-commit", "child-flow-absent")),
         scenario("transferAndCall-reentrant-transfer",
                  "transferAndCall(address,uint256,bytes)", "DF-callback",
                  call("transferAndCall(address,uint256,bytes)", ("address", RECORDER),
@@ -543,6 +562,19 @@ def build_scenarios(lock: Mapping) -> List[Scenario]:
                  code={RECORDER: flash_approve_reentrant}, observe_addresses=[RECORDER],
                  observe_pairs=[(RECORDER, WETH_MAINNET)], channels=reentrant_channels,
                  tags=("flash", "state-mutating-reentrancy", "post-callback-settlement", "child-log")),
+        scenario("flashLoan-reentrant-transfer-settlement",
+                 "flashLoan(address,address,uint256,bytes)", "DF-flash",
+                 call("flashLoan(address,address,uint256,bytes)", ("address", RECORDER),
+                      ("address", WETH_MAINNET), ("uint256", 3),
+                      ("bytes", b"commit-transfer")),
+                 balances={RECORDER: 2}, weth_eth=2,
+                 code={RECORDER: flash_transfer_reentrant},
+                 allowances={(RECORDER, WETH_MAINNET): UINT256_MAX},
+                 observe_addresses=[RECORDER, BOB],
+                 observe_pairs=[(RECORDER, WETH_MAINNET)], channels=reentrant_channels,
+                 tags=("flash", "state-mutating-reentrancy", "post-callback-settlement",
+                       "child-log", "nested-transfer", "outer-commit",
+                       "flash-transfer-commit", "flash-pairing")),
         scenario("flashLoan-reentrant-drain-rolls-back",
                  "flashLoan(address,address,uint256,bytes)", "DF-flash",
                  call("flashLoan(address,address,uint256,bytes)", ("address", RECORDER),
@@ -1176,15 +1208,40 @@ def assert_trace_evidence(s: Scenario, result: Mapping, side: str) -> None:
             die(f"{s.name}/{side}: expected exact CALL {expected}, got {observed}")
 
     def exact_burn(amount: int) -> Mapping:
+        return exact_transfer(s.caller, ZERO, amount)
+
+    def exact_transfer(source: str, target: str, amount: int) -> Mapping:
         return {
             "address": canonical_address(s.weth),
             "topics": [
                 "0x" + keccak(b"Transfer(address,address,uint256)").hex(),
-                "0x" + address_word(s.caller).hex(),
-                "0x" + h256(0).hex(),
+                "0x" + address_word(source).hex(),
+                "0x" + address_word(target).hex(),
             ],
             "data": "0x" + h256(amount).hex(),
         }
+
+    def exact_child_log() -> Mapping:
+        return {
+            "address": canonical_address(RECORDER),
+            "topics": [
+                "0x" + keccak(b"WETH10DifferentialChild(bytes32)").hex(),
+            ],
+            "data": "0x" + h256(0xC0FFEE).hex(),
+        }
+
+    def exact_callback_then_nested(nested_success: int) -> Tuple[Mapping, Mapping]:
+        expected = [
+            ("CALL", canonical_address(RECORDER), "0x0", "0x1"),
+            ("CALL", canonical_address(s.weth), "0x0", hex(nested_success)),
+        ]
+        observed = [
+            (row["opcode"], row["target"], row["value"], row.get("success"))
+            for row in calls
+        ]
+        if observed != expected:
+            die(f"{s.name}/{side}: expected callback+nested CALLs {expected}, got {observed}")
+        return calls[0], calls[1]
 
     if "redemption-zero" in s.tags:
         target = s.caller if "withdraw-zero" in s.tags else BOB
@@ -1224,6 +1281,67 @@ def assert_trace_evidence(s: Scenario, result: Mapping, side: str) -> None:
             die(f"{s.name}/{side}: reentrant callback did not trace a call back to WETH10")
         if not any(row["target"] == canonical_address(RECORDER) for row in calls):
             die(f"{s.name}/{side}: reentrant row did not trace the outer callback")
+    if "caught-child-failure" in s.tags:
+        outer, nested = exact_callback_then_nested(0)
+        nested_input = abi_call(
+            "transfer(address,uint256)", ("address", BOB), ("uint256", 4)
+        )
+        nested_error = solidity_error_data("WETH: transfer amount exceeds balance")
+        if nested["input"] != "0x" + nested_input.hex():
+            die(f"{s.name}/{side}: failed nested CALL input is not transfer(BOB,4)")
+        if nested["returndata"] != "0x" + nested_error.hex():
+            die(f"{s.name}/{side}: failed nested transfer did not return its exact guard data")
+        if outer["returndata"] != "0x" + h256(1).hex():
+            die(f"{s.name}/{side}: callback did not catch the failure and return true")
+        if result["outcome"] != "success" or result["returndata"] != "0x" + h256(1).hex():
+            die(f"{s.name}/{side}: parent transferAndCall did not commit successfully")
+        balances = result["logicalState"]["balances"]
+        expected_balances = {ALICE: 7, RECORDER: 3, BOB: 0}
+        for address, amount in expected_balances.items():
+            if balances[canonical_address(address)] != hex(amount):
+                die(f"{s.name}/{side}: wrong committed balance for {address}")
+        if result["logicalState"]["flashMinted"] != "0x0":
+            die(f"{s.name}/{side}: caught failed child changed flashMinted")
+        if result["logs"] != [
+            exact_transfer(ALICE, RECORDER, 3), exact_child_log()
+        ]:
+            die(f"{s.name}/{side}: failed child contributed flow or parent log order moved")
+        recorder = result["callShape"][canonical_address(RECORDER)]
+        if recorder["0x14"] != "0x0" or recorder["0x16"] != hex(len(nested_error)):
+            die(f"{s.name}/{side}: callback did not record the failed child outcome")
+    if "flash-transfer-commit" in s.tags:
+        outer, nested = exact_callback_then_nested(1)
+        nested_input = abi_call(
+            "transfer(address,uint256)", ("address", BOB), ("uint256", 2)
+        )
+        if nested["input"] != "0x" + nested_input.hex():
+            die(f"{s.name}/{side}: committed nested CALL input is not transfer(BOB,2)")
+        if nested["returndata"] != "0x" + h256(1).hex():
+            die(f"{s.name}/{side}: nested transfer did not return encoded true")
+        if outer["returndata"] != "0x" + CALLBACK_SUCCESS.hex():
+            die(f"{s.name}/{side}: flash callback did not return the required magic")
+        if result["outcome"] != "success" or result["returndata"] != "0x" + h256(1).hex():
+            die(f"{s.name}/{side}: flash parent did not commit successfully")
+        balances = result["logicalState"]["balances"]
+        expected_balances = {RECORDER: 0, BOB: 2}
+        for address, amount in expected_balances.items():
+            if balances[canonical_address(address)] != hex(amount):
+                die(f"{s.name}/{side}: wrong post-settlement balance for {address}")
+        if result["logicalState"]["flashMinted"] != "0x0":
+            die(f"{s.name}/{side}: flashMinted did not cancel to zero")
+        if result["eth"][canonical_address(s.weth)] != "0x2":
+            die(f"{s.name}/{side}: committed nested transfer changed WETH10 ETH")
+        if result["logs"] != [
+            exact_transfer(ZERO, RECORDER, 3),
+            exact_transfer(RECORDER, BOB, 2),
+            exact_child_log(),
+            exact_transfer(RECORDER, ZERO, 3),
+        ]:
+            die(f"{s.name}/{side}: mint/transfer/child/burn log order moved")
+        recorder = result["callShape"][canonical_address(RECORDER)]
+        if (recorder["0x14"] != "0x1" or recorder["0x15"] != "0x1"
+                or recorder["0x16"] != "0x20"):
+            die(f"{s.name}/{side}: callback did not record the committed nested transfer")
     if "typed-callback" in s.tags and "codeless" not in s.tags and "call-trace" in s.channels:
         if not calls:
             die(f"{s.name}/{side}: executable callback row has an empty call trace")

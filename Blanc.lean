@@ -31,6 +31,7 @@ import Blanc.RevertPayload
 import Blanc.ForwardCall
 import Blanc.Weth10Redeemable
 import Blanc.Weth10HolderFlowResult
+import Blanc.Weth10HolderFlowWriteCompleteness
 import Blanc.FmintLive
 import Blanc.FmintReverts
 import Blanc.FmintSettles

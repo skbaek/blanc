@@ -1,5 +1,8 @@
+import Blanc.Weth10HolderFlowFlashChronology
+import Blanc.Weth10HolderFlowPermitChronology
 import Blanc.Weth10HolderFlowStorage
 import Blanc.Weth10HolderFlowConservation
+import Blanc.Weth10HolderFlowTransferAndCallChronology
 
 /-!
 Execution-level storage accounting for the retained WETH10 action ledger.
@@ -2732,6 +2735,61 @@ theorem RawFlashCallbackStepBoundary.storageSegmentEffect
   exact ⟨pc, xl, retained, hstep, ⟨by
     simpa only [List.append_nil, trace] using combined⟩⟩
 
+/-- Indexed flash-callback storage accounting using the exact retained child
+selected by the enclosing compiled chronology. -/
+theorem RawFlashCallbackIndexedStepBoundary.storageSegmentEffect
+    {dp : DeployParams} {ca : Adr} {e : Sevm}
+    {self receiver : Adr} {amount inputSize : B256}
+    {callbackInput : Bytes} {pre mid parent child : Devm}
+    {xl : Xlot} {pc : Nat}
+    (callback : RawFlashCallbackIndexedStepBoundary e self receiver amount
+      inputSize callbackInput pre mid parent child xl pc)
+    (retained : RetainedXlot xl)
+    (_hself : e.currentTarget = ca)
+    (installed : some (pre.getCode ca).toList =
+      Prog.compile (weth10 dp))
+    (hdeeper : ForallDeeperAt e.depth ca (weth10 dp)
+      (fun pc sevm childPre out _ =>
+        Exec.CoreStorageSound dp ca pc sevm childPre out)) :
+    Nonempty (StorageSegmentEffect ca pre mid
+      (retained.flowActions dp ca)) := by
+  rcases callback with
+    ⟨delegated, code, gasWord, avail, _hstep, hdepth, _hstack, _hpref,
+      hparentState, _hparentMemory, _hparentLogs, _hparentOutput,
+      hdelegation, _hfilled, hprocess, _hclean, _hlength, _hmagic,
+      _hresume, hmidState, _hreturnData, _hmidStack, _hmidLogs,
+      _hmidOutput⟩
+  let msg := callMsg e parent (min gasWord.toNat (except64th avail)) 0
+    self receiver receiver true false callbackInput code delegated
+  let trace : ProcessMessageTrace msg (.ok child) :=
+    ⟨xl, retained, by simpa only [msg] using hprocess⟩
+  have hparent : pre.state = msg.benv.state := by
+    simpa only [msg, callMsg] using hparentState.symm
+  have hmsgDepth : msg.depth < e.depth := by
+    dsimp only [msg, callMsg]
+    omega
+  have htargetCode : msg.currentTarget = ca →
+      some msg.code.toList = Prog.compile (weth10 dp) := by
+    intro htarget
+    have hreceiver : receiver = ca := by
+      simpa only [msg, callMsg] using htarget
+    exact callbackCode_eq_compiled_of_target_eq installed hreceiver
+      hdelegation
+  have htargetDirect : msg.currentTarget = ca →
+      msg.codeAddress = some ca := by
+    intro htarget
+    have hreceiver : receiver = ca := by
+      simpa only [msg, callMsg] using htarget
+    simp [msg, callMsg, hreceiver]
+  rcases trace.storageSegmentDelta_of_forallDeeperAt hparent hmsgDepth
+      installed htargetCode htargetDirect hdeeper with ⟨childEffect⟩
+  have hchildToMid := StorageSegmentEffect.of_getStorCode_eq
+    (congrArg (fun state : State => state.getStor ca) hmidState.symm)
+    (congrArg (fun state : State => state.getCode ca) hmidState.symm)
+  exact ⟨by
+    simpa only [List.append_nil, trace] using
+      childEffect.append hchildToMid⟩
+
 /-- Exact storage effect of the accepted value-CALL inside a redemption
 prefix, including the `iszero` success guard and final stack burn. -/
 theorem BurnCallPrefix.storageSegmentEffect
@@ -2814,6 +2872,55 @@ theorem BurnCallPrefix.storageSegmentEffect
     have combined := childEffect.append hchildToGuard
     exact ⟨pc, callPost, xl, retained, hstep, ⟨by
       simpa only [List.append_nil, trace] using combined⟩⟩
+
+/-- Exact storage accounting for the particular retained child named by an
+accepted value-call trace.  Unlike the existential burn-prefix adapter, this
+form preserves the trace's retained index definitionally for selector
+chronology consumers. -/
+theorem AcceptedValueCallTrace.storageSegmentEffect
+    {dp : DeployParams} {ca : Adr} {e : Sevm}
+    {target value : B256} {callPre guardPost : Devm}
+    (trace : AcceptedValueCallTrace e target value callPre guardPost)
+    (_hself : e.currentTarget = ca)
+    (installed : some (callPre.getCode ca).toList =
+      Prog.compile (weth10 dp))
+    (hdeeper : ForallDeeperAt e.depth ca (weth10 dp)
+      (fun pc sevm childPre out _ =>
+        Exec.CoreStorageSound dp ca pc sevm childPre out)) :
+    Nonempty (StorageSegmentEffect ca callPre guardPost
+      (trace.retained.retained.flowActions dp ca)) := by
+  have hparent : callPre.state = trace.childMessage.benv.state := by
+    rw [trace.childMessage_eq]
+    simpa only [callMsg] using trace.parent_state.symm
+  have hmsgDepth : trace.childMessage.depth < e.depth := by
+    rw [trace.childMessage_eq]
+    simp only [callMsg]
+    exact Nat.sub_lt trace.depth_pos (by decide)
+  have htargetCode : trace.childMessage.currentTarget = ca →
+      some trace.childMessage.code.toList = Prog.compile (weth10 dp) := by
+    intro htarget
+    rw [trace.childMessage_eq] at htarget ⊢
+    have htarget' : target.toAdr = ca := by
+      simpa only [callMsg] using htarget
+    exact callbackCode_eq_compiled_of_target_eq installed htarget'
+      trace.delegation_resolution
+  have htargetDirect : trace.childMessage.currentTarget = ca →
+      trace.childMessage.codeAddress = some ca := by
+    intro htarget
+    rw [trace.childMessage_eq] at htarget ⊢
+    have htarget' : target.toAdr = ca := by
+      simpa only [callMsg] using htarget
+    simp only [callMsg, htarget']
+  rcases trace.retained.storageSegmentDelta_of_forallDeeperAt hparent
+      hmsgDepth installed htargetCode htargetDirect hdeeper with
+    ⟨childEffect⟩
+  have hchildToGuard := StorageSegmentEffect.of_getStorCode_eq
+    (congrArg (fun state : State => state.getStor ca)
+      trace.guard_state.symm)
+    (congrArg (fun state : State => state.getCode ca)
+      trace.guard_state.symm)
+  exact ⟨by
+    simpa only [List.append_nil] using childEffect.append hchildToGuard⟩
 
 /-- The exact childless instruction line underlying both `receiveEther` and
 the payable `deposit` selector.  Naming it makes the terminal cursor shape
@@ -4226,6 +4333,758 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_approveAndCall
   exact NoFlowStorageAccounting.callback hsilent callbackEffect.delta (by
     simpa only [List.nil_append] using chronology)
 
+/-- Premise-free exact proof-indexed storage accounting for `flashLoan`.
+The credit, indexed retained callback, allowance bridge, and repayment all
+come from one selector-level compiled chronology. -/
+theorem Exec.Frame.hasProofIndexedStorageAccounting_of_flashLoan
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    (context : frame.AuthenticContext dp ca)
+    (hselector : Sevm.selector frame.sevm = flashLoanSelector)
+    (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
+    (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
+      (fun pc sevm pre out _ =>
+        Exec.CoreStorageSound dp ca pc sevm pre out)) :
+    frame.HasProofIndexedStorageAccounting dp ca := by
+  rcases frame.compiledFlashLoanChronology context hselector hnonempty with
+    ⟨callbackPre, callbackPost, settlePre, burnPre, parent, child, xl, pc,
+      retained, callback, _rawCommits, _occurrence, hcredit, _hprefixBal,
+      hprefixCode, hcallbackStor, _hcallbackBal, _hcallbackCode,
+      _hcallbackLogs, _hcallbackOutput, _hwfSettle, _hreadsSettle,
+      _hsettle, hsettleSilent, hcover, hdecrease, _hsettlePostBal,
+      _hsettlePostCode, _hburn, chronology⟩
+  have installedCallback : some (callbackPre.getCode ca).toList =
+      Prog.compile (weth10 dp) := by
+    rw [← congrFun hprefixCode ca]
+    exact context.installed.1
+  rcases callback.storageSegmentEffect retained context.invocation.2.1
+      installedCallback hdeeper with ⟨callbackEffect⟩
+  have hreceiverNorm : (normalizedAddressArg frame.sevm 0).toAdr =
+      (Sevm.argWord frame.sevm 0).toAdr := by
+    rw [normalizedAddressArg_eq_toAdr_toB256_local, toAdr_toB256]
+  rw [hreceiverNorm] at hcredit hcover hdecrease
+  have hsDeposit : flashLoanSelector ≠ depositSelector := by
+    decide +kernel
+  have hsDepositTo : flashLoanSelector ≠ depositToSelector := by
+    decide +kernel
+  have hsDepositCall :
+      flashLoanSelector ≠ depositToAndCallSelector := by
+    decide +kernel
+  have hsTransfer : flashLoanSelector ≠ transferSelector := by
+    decide +kernel
+  have hsTransferCall :
+      flashLoanSelector ≠ transferAndCallSelector := by
+    decide +kernel
+  have hsTransferFrom : flashLoanSelector ≠ transferFromSelector := by
+    decide +kernel
+  have hsWithdraw : flashLoanSelector ≠ withdrawSelector := by
+    decide +kernel
+  have hsWithdrawTo : flashLoanSelector ≠ withdrawToSelector := by
+    decide +kernel
+  have hsWithdrawFrom : flashLoanSelector ≠ withdrawFromSelector := by
+    decide +kernel
+  have hprimary : primaryFlowAtom frame.sevm = some
+      (.flashPair (Sevm.argWord frame.sevm 0)
+        (Sevm.argWord frame.sevm 0).toAdr
+        (Sevm.argWord frame.sevm 2).toNat) := by
+    simp [primaryFlowAtom, hnonempty, hselector, hsDeposit, hsDepositTo,
+      hsDepositCall, hsTransfer, hsTransferCall, hsTransferFrom,
+      hsWithdraw, hsWithdrawTo, hsWithdrawFrom]
+  cases haction : frame.flowAction? dp ca with
+  | none =>
+      unfold Exec.Frame.flowAction? at haction
+      rw [if_pos context.invocation, hprimary] at haction
+      simp at haction
+  | some action =>
+      have ledger :=
+        frame.hasClassifiedActionLedger_of_flowAction_eq_some
+          context haction
+      have actionEq := action_eq_of_primaryFlowAtom context hprimary haction
+      subst action
+      apply Exec.Frame.HasProofIndexedStorageAccounting.flow ledger
+      apply RichStorageAccounting.flash
+      · exact LocalActionSegment.flashCredit
+          (Sevm.argWord frame.sevm 0)
+          (Sevm.argWord frame.sevm 0).toAdr
+          (Sevm.argWord frame.sevm 2) rfl
+          (by
+            unfold FlowAction.ExactCredit
+            simp only [FlowAtom.creditOccurrence]
+            rw [toB256_toNat])
+          (by
+            unfold FlowAction.HasFlashDebitSource
+            simp [primaryDebitProvenance, hnonempty, hselector,
+              hsTransfer, hsTransferCall, hsTransferFrom, hsWithdraw,
+              hsWithdrawTo, hsWithdrawFrom])
+          hcredit
+      · exact callbackEffect.delta
+      · exact hcallbackStor
+      · exact hsettleSilent
+      · exact LocalActionSegment.flashRepayment
+          (Sevm.argWord frame.sevm 0)
+          (Sevm.argWord frame.sevm 0).toAdr
+          (Sevm.argWord frame.sevm 2)
+          (Stor.rest (Devm.getStor frame.pre ca)
+            (Sevm.argWord frame.sevm 0).toAdr)
+          rfl
+          (by
+            unfold FlowAction.ExactCredit
+            simp only [FlowAtom.creditOccurrence]
+            rw [toB256_toNat])
+          (by
+            unfold FlowAction.HasFlashDebitSource
+            simp [primaryDebitProvenance, hnonempty, hselector,
+              hsTransfer, hsTransferCall, hsTransferFrom, hsWithdraw,
+              hsWithdrawTo, hsWithdrawFrom])
+          hcover hdecrease
+      · simpa only [List.nil_append] using chronology
+
+/-- Internal adapter from one exact retained value-redemption chronology to
+the proof-indexed storage package.  Public selector theorems below supply all
+of these witnesses from the original compiled frame. -/
+private theorem Exec.Frame.hasProofIndexedStorageAccounting_of_valueRedemption
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    {action : FlowAction} {rawSource : B256} {source ethRecipient : Adr}
+    {amount target : B256} {callPre guardPost : Devm}
+    (context : frame.AuthenticContext dp ca)
+    (classified : frame.flowAction? dp ca = some action)
+    (hatom : action.atom =
+      .redemption rawSource source ethRecipient amount.toNat)
+    (hcredit : action.credit = none)
+    (hdebit : action.HasDebitSource rawSource source)
+    (trace : AcceptedValueCallTrace frame.sevm target amount
+      callPre guardPost)
+    (burn : BurnCallPrefix frame.sevm frame.pre callPre guardPost
+      source amount target)
+    (hguardStor : Devm.getStor guardPost = Devm.getStor frame.post)
+    (chronology : frame.descendantFlowActions dp ca =
+      trace.retained.retained.flowActions dp ca)
+    (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
+      (fun pc sevm pre out _ =>
+        Exec.CoreStorageSound dp ca pc sevm pre out)) :
+    frame.HasProofIndexedStorageAccounting dp ca := by
+  have installedCall : some (callPre.getCode ca).toList =
+      Prog.compile (weth10 dp) := by
+    rw [burn.2.2.2.2.2.1]
+    exact context.installed.1
+  rcases trace.storageSegmentEffect context.invocation.2.1 installedCall
+      hdeeper with ⟨childEffect⟩
+  have hdecrease := burn.1
+  have hamountLe := burn.2.1
+  rw [context.invocation.2.1] at hdecrease hamountLe
+  have segment : LocalActionSegment .redemption action
+      (Stor.rest (Devm.getStor frame.pre ca))
+      (Stor.rest (Devm.getStor callPre ca)) := by
+    exact .redemption rawSource source ethRecipient amount hatom hcredit
+      hdebit hamountLe hdecrease
+  have ledger := frame.hasClassifiedActionLedger_of_flowAction_eq_some
+    context classified
+  apply Exec.Frame.HasProofIndexedStorageAccounting.flow ledger
+  exact RichStorageAccounting.redemption segment childEffect.delta
+    (Stor.Weth10Silent.of_eq (congrFun hguardStor ca)) chronology
+
+/-- Internal adapter for a delegated redemption whose allowance wrapper may
+write tagged allowance storage before the balance core.  Only the wrapper's
+booked-balance and code observations are transported to the original frame
+entry; the burn and accepted child remain rooted at their literal `ownPre`. -/
+private theorem Exec.Frame.hasProofIndexedStorageAccounting_of_allowanceValueRedemption
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    {action : FlowAction} {rawSource : B256} {source ethRecipient : Adr}
+    {amount target : B256} {ownPre callPre guardPost : Devm}
+    (context : frame.AuthenticContext dp ca)
+    (classified : frame.flowAction? dp ca = some action)
+    (hatom : action.atom =
+      .redemption rawSource source ethRecipient amount.toNat)
+    (hcredit : action.credit = none)
+    (hdebit : action.HasDebitSource rawSource source)
+    (entry : AllowancePrefixObservations frame.sevm frame.pre ownPre)
+    (trace : AcceptedValueCallTrace frame.sevm target amount
+      callPre guardPost)
+    (burn : BurnCallPrefix frame.sevm ownPre callPre guardPost
+      source amount target)
+    (hguardStor : Devm.getStor guardPost = Devm.getStor frame.post)
+    (chronology : frame.descendantFlowActions dp ca =
+      trace.retained.retained.flowActions dp ca)
+    (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
+      (fun pc sevm pre out _ =>
+        Exec.CoreStorageSound dp ca pc sevm pre out)) :
+    frame.HasProofIndexedStorageAccounting dp ca := by
+  have installedCall : some (callPre.getCode ca).toList =
+      Prog.compile (weth10 dp) := by
+    rw [burn.2.2.2.2.2.1, ← entry.code]
+    exact context.installed.1
+  rcases trace.storageSegmentEffect context.invocation.2.1 installedCall
+      hdeeper with ⟨childEffect⟩
+  have hdecrease := burn.1
+  have hamountLe := burn.2.1
+  have hentryRest := entry.storage.1
+  rw [context.invocation.2.1] at hdecrease hamountLe hentryRest
+  rw [← hentryRest] at hdecrease hamountLe
+  have segment : LocalActionSegment .redemption action
+      (Stor.rest (Devm.getStor frame.pre ca))
+      (Stor.rest (Devm.getStor callPre ca)) := by
+    exact .redemption rawSource source ethRecipient amount hatom hcredit
+      hdebit hamountLe hdecrease
+  have ledger := frame.hasClassifiedActionLedger_of_flowAction_eq_some
+    context classified
+  apply Exec.Frame.HasProofIndexedStorageAccounting.flow ledger
+  exact RichStorageAccounting.redemption segment childEffect.delta
+    (Stor.Weth10Silent.of_eq (congrFun hguardStor ca)) chronology
+
+/-- Premise-free exact proof-indexed storage accounting for
+`withdraw(uint256)`. -/
+theorem Exec.Frame.hasProofIndexedStorageAccounting_of_withdraw
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    (context : frame.AuthenticContext dp ca)
+    (hselector : Sevm.selector frame.sevm = withdrawSelector)
+    (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
+    (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
+      (fun pc sevm pre out _ =>
+        Exec.CoreStorageSound dp ca pc sevm pre out)) :
+    frame.HasProofIndexedStorageAccounting dp ca := by
+  have hsDeposit : withdrawSelector ≠ depositSelector := by
+    decide +kernel
+  have hsDepositTo : withdrawSelector ≠ depositToSelector := by
+    decide +kernel
+  have hsDepositCall :
+      withdrawSelector ≠ depositToAndCallSelector := by
+    decide +kernel
+  have hsTransfer : withdrawSelector ≠ transferSelector := by
+    decide +kernel
+  have hsTransferCall : withdrawSelector ≠ transferAndCallSelector := by
+    decide +kernel
+  have hsTransferFrom : withdrawSelector ≠ transferFromSelector := by
+    decide +kernel
+  have hprimary : primaryFlowAtom frame.sevm = some
+      (.redemption frame.sevm.caller.toB256 frame.sevm.caller
+        frame.sevm.caller (Sevm.argWord frame.sevm 0).toNat) := by
+    simp [primaryFlowAtom, hnonempty, hselector, hsDeposit, hsDepositTo,
+      hsDepositCall, hsTransfer, hsTransferCall, hsTransferFrom]
+  cases haction : frame.flowAction? dp ca with
+  | none =>
+      unfold Exec.Frame.flowAction? at haction
+      rw [if_pos context.invocation, hprimary] at haction
+      simp at haction
+  | some action =>
+      have actionEq := action_eq_of_primaryFlowAtom context hprimary haction
+      subst action
+      rcases frame.compiledWithdrawChronology context hselector hnonempty with
+        ⟨callPre, guardPost, trace, burn, _hslot, _hcommits,
+          _hoccurrence, hguardStor, _hguardBalance, _hguardCode,
+          _hguardLogs, chronology⟩
+      refine frame.hasProofIndexedStorageAccounting_of_valueRedemption
+        (rawSource := frame.sevm.caller.toB256)
+        (source := frame.sevm.caller)
+        (ethRecipient := frame.sevm.caller)
+        (amount := Sevm.argWord frame.sevm 0)
+        (target := frame.sevm.caller.toB256)
+        (callPre := callPre) (guardPost := guardPost)
+        context haction rfl rfl ?_ trace burn hguardStor ?_ hdeeper
+      · unfold FlowAction.HasDebitSource
+        simp [primaryDebitProvenance, hnonempty, hselector]
+      · simpa only [List.nil_append] using chronology
+
+/-- Premise-free exact proof-indexed storage accounting for
+`withdrawTo(address,uint256)`. -/
+theorem Exec.Frame.hasProofIndexedStorageAccounting_of_withdrawTo
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    (context : frame.AuthenticContext dp ca)
+    (hselector : Sevm.selector frame.sevm = withdrawToSelector)
+    (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
+    (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
+      (fun pc sevm pre out _ =>
+        Exec.CoreStorageSound dp ca pc sevm pre out)) :
+    frame.HasProofIndexedStorageAccounting dp ca := by
+  have hsDeposit : withdrawToSelector ≠ depositSelector := by
+    decide +kernel
+  have hsDepositTo : withdrawToSelector ≠ depositToSelector := by
+    decide +kernel
+  have hsDepositCall :
+      withdrawToSelector ≠ depositToAndCallSelector := by
+    decide +kernel
+  have hsTransfer : withdrawToSelector ≠ transferSelector := by
+    decide +kernel
+  have hsTransferCall :
+      withdrawToSelector ≠ transferAndCallSelector := by
+    decide +kernel
+  have hsTransferFrom : withdrawToSelector ≠ transferFromSelector := by
+    decide +kernel
+  have hsWithdraw : withdrawToSelector ≠ withdrawSelector := by
+    decide +kernel
+  have hprimary : primaryFlowAtom frame.sevm = some
+      (.redemption frame.sevm.caller.toB256 frame.sevm.caller
+        (Sevm.argWord frame.sevm 0).toAdr
+        (Sevm.argWord frame.sevm 1).toNat) := by
+    simp [primaryFlowAtom, hnonempty, hselector, hsDeposit, hsDepositTo,
+      hsDepositCall, hsTransfer, hsTransferCall, hsTransferFrom,
+      hsWithdraw]
+  cases haction : frame.flowAction? dp ca with
+  | none =>
+      unfold Exec.Frame.flowAction? at haction
+      rw [if_pos context.invocation, hprimary] at haction
+      simp at haction
+  | some action =>
+      have actionEq := action_eq_of_primaryFlowAtom context hprimary haction
+      subst action
+      rcases frame.compiledWithdrawToChronology context hselector
+          hnonempty with
+        ⟨callPre, guardPost, trace, burn, _hslot, _hcommits,
+          _hoccurrence, hguardStor, _hguardBalance, _hguardCode,
+          _hguardLogs, chronology⟩
+      refine frame.hasProofIndexedStorageAccounting_of_valueRedemption
+        (rawSource := frame.sevm.caller.toB256)
+        (source := frame.sevm.caller)
+        (ethRecipient := (Sevm.argWord frame.sevm 0).toAdr)
+        (amount := Sevm.argWord frame.sevm 1)
+        (target := Sevm.argWord frame.sevm 0)
+        (callPre := callPre) (guardPost := guardPost)
+        context haction rfl rfl ?_ trace burn hguardStor ?_ hdeeper
+      · unfold FlowAction.HasDebitSource
+        simp [primaryDebitProvenance, hnonempty, hselector]
+      · simpa only [List.nil_append] using chronology
+
+/-- Premise-free exact proof-indexed storage accounting for the zero-recipient
+`transfer(address,uint256)` redemption arm. -/
+theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferZero
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    (context : frame.AuthenticContext dp ca)
+    (hselector : Sevm.selector frame.sevm = transferSelector)
+    (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
+    (hto : Sevm.argWord frame.sevm 0 = 0)
+    (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
+      (fun pc sevm pre out _ =>
+        Exec.CoreStorageSound dp ca pc sevm pre out)) :
+    frame.HasProofIndexedStorageAccounting dp ca := by
+  have hsDeposit : transferSelector ≠ depositSelector := by
+    decide +kernel
+  have hsDepositTo : transferSelector ≠ depositToSelector := by
+    decide +kernel
+  have hsDepositCall :
+      transferSelector ≠ depositToAndCallSelector := by
+    decide +kernel
+  have hprimary : primaryFlowAtom frame.sevm = some
+      (.redemption frame.sevm.caller.toB256 frame.sevm.caller
+        frame.sevm.caller (Sevm.argWord frame.sevm 1).toNat) := by
+    simp [primaryFlowAtom, hnonempty, hselector, hsDeposit, hsDepositTo,
+      hsDepositCall, hto]
+  cases haction : frame.flowAction? dp ca with
+  | none =>
+      unfold Exec.Frame.flowAction? at haction
+      rw [if_pos context.invocation, hprimary] at haction
+      simp at haction
+  | some action =>
+      have actionEq := action_eq_of_primaryFlowAtom context hprimary haction
+      subst action
+      rcases frame.compiledTransferZeroChronology context hselector
+          hnonempty hto with
+        ⟨callPre, guardPost, trace, burn, _hslot, _hcommits,
+          _hoccurrence, hguardStor, _hguardBalance, _hguardCode,
+          _hguardLogs, chronology⟩
+      refine frame.hasProofIndexedStorageAccounting_of_valueRedemption
+        (rawSource := frame.sevm.caller.toB256)
+        (source := frame.sevm.caller)
+        (ethRecipient := frame.sevm.caller)
+        (amount := Sevm.argWord frame.sevm 1)
+        (target := frame.sevm.caller.toB256)
+        (callPre := callPre) (guardPost := guardPost)
+        context haction rfl rfl ?_ trace burn hguardStor ?_ hdeeper
+      · unfold FlowAction.HasDebitSource
+        simp [primaryDebitProvenance, hnonempty, hselector]
+      · simpa only [List.nil_append] using chronology
+
+/-- Premise-free exact proof-indexed storage accounting for the zero-recipient
+delegated `transferFrom` redemption arm. -/
+theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferFromZero
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    (context : frame.AuthenticContext dp ca)
+    (hselector : Sevm.selector frame.sevm = transferFromSelector)
+    (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
+    (hto : Sevm.argWord frame.sevm 1 = 0)
+    (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
+      (fun pc sevm pre out _ =>
+        Exec.CoreStorageSound dp ca pc sevm pre out)) :
+    frame.HasProofIndexedStorageAccounting dp ca := by
+  have hsDeposit : transferFromSelector ≠ depositSelector := by
+    decide +kernel
+  have hsDepositTo : transferFromSelector ≠ depositToSelector := by
+    decide +kernel
+  have hsDepositCall :
+      transferFromSelector ≠ depositToAndCallSelector := by
+    decide +kernel
+  have hsTransfer : transferFromSelector ≠ transferSelector := by
+    decide +kernel
+  have hsTransferCall :
+      transferFromSelector ≠ transferAndCallSelector := by
+    decide +kernel
+  have hsWithdraw : transferFromSelector ≠ withdrawSelector := by
+    decide +kernel
+  have hsWithdrawTo : transferFromSelector ≠ withdrawToSelector := by
+    decide +kernel
+  have hprimary : primaryFlowAtom frame.sevm = some
+      (.redemption (Sevm.argWord frame.sevm 0)
+        (Sevm.argWord frame.sevm 0).toAdr frame.sevm.caller
+        (Sevm.argWord frame.sevm 2).toNat) := by
+    simp [primaryFlowAtom, hnonempty, hselector, hsDeposit, hsDepositTo,
+      hsDepositCall, hsTransfer, hsTransferCall, hto]
+  cases haction : frame.flowAction? dp ca with
+  | none =>
+      unfold Exec.Frame.flowAction? at haction
+      rw [if_pos context.invocation, hprimary] at haction
+      simp at haction
+  | some action =>
+      have actionEq := action_eq_of_primaryFlowAtom context hprimary haction
+      subst action
+      rcases frame.compiledTransferFromZeroChronology context hselector
+          hnonempty hto with
+        ⟨ownPre, entry, callPre, guardPost, trace, burn, _hslot,
+          _hcommits, _hoccurrence, hguardStor, _hguardBalance,
+          _hguardCode, _hguardLogs, chronology⟩
+      have hsource : (normalizedAddressArg frame.sevm 0).toAdr =
+          (Sevm.argWord frame.sevm 0).toAdr := by
+        rw [normalizedAddressArg_eq_toAdr_toB256_local, toAdr_toB256]
+      have burn' : BurnCallPrefix frame.sevm ownPre callPre guardPost
+          (Sevm.argWord frame.sevm 0).toAdr
+          (Sevm.argWord frame.sevm 2) frame.sevm.caller.toB256 := by
+        simpa only [hsource] using burn
+      refine frame.hasProofIndexedStorageAccounting_of_allowanceValueRedemption
+        (rawSource := Sevm.argWord frame.sevm 0)
+        (source := (Sevm.argWord frame.sevm 0).toAdr)
+        (ethRecipient := frame.sevm.caller)
+        (amount := Sevm.argWord frame.sevm 2)
+        (target := frame.sevm.caller.toB256)
+        (ownPre := ownPre) (callPre := callPre) (guardPost := guardPost)
+        context haction rfl rfl ?_ entry trace burn' hguardStor ?_ hdeeper
+      · unfold FlowAction.HasDebitSource
+        simp [primaryDebitProvenance, hnonempty, hselector, hsTransfer,
+          hsTransferCall, hsWithdraw, hsWithdrawTo]
+      · simpa only [List.nil_append] using chronology
+
+/-- Premise-free exact proof-indexed storage accounting for delegated
+`withdrawFrom(address,address,uint256)`. -/
+theorem Exec.Frame.hasProofIndexedStorageAccounting_of_withdrawFrom
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    (context : frame.AuthenticContext dp ca)
+    (hselector : Sevm.selector frame.sevm = withdrawFromSelector)
+    (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
+    (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
+      (fun pc sevm pre out _ =>
+        Exec.CoreStorageSound dp ca pc sevm pre out)) :
+    frame.HasProofIndexedStorageAccounting dp ca := by
+  have hsDeposit : withdrawFromSelector ≠ depositSelector := by
+    decide +kernel
+  have hsDepositTo : withdrawFromSelector ≠ depositToSelector := by
+    decide +kernel
+  have hsDepositCall :
+      withdrawFromSelector ≠ depositToAndCallSelector := by
+    decide +kernel
+  have hsTransfer : withdrawFromSelector ≠ transferSelector := by
+    decide +kernel
+  have hsTransferCall :
+      withdrawFromSelector ≠ transferAndCallSelector := by
+    decide +kernel
+  have hsTransferFrom :
+      withdrawFromSelector ≠ transferFromSelector := by
+    decide +kernel
+  have hsWithdraw : withdrawFromSelector ≠ withdrawSelector := by
+    decide +kernel
+  have hsWithdrawTo : withdrawFromSelector ≠ withdrawToSelector := by
+    decide +kernel
+  have hprimary : primaryFlowAtom frame.sevm = some
+      (.redemption (Sevm.argWord frame.sevm 0)
+        (Sevm.argWord frame.sevm 0).toAdr
+        (Sevm.argWord frame.sevm 1).toAdr
+        (Sevm.argWord frame.sevm 2).toNat) := by
+    simp [primaryFlowAtom, hnonempty, hselector, hsDeposit, hsDepositTo,
+      hsDepositCall, hsTransfer, hsTransferCall, hsTransferFrom,
+      hsWithdraw, hsWithdrawTo]
+  cases haction : frame.flowAction? dp ca with
+  | none =>
+      unfold Exec.Frame.flowAction? at haction
+      rw [if_pos context.invocation, hprimary] at haction
+      simp at haction
+  | some action =>
+      have actionEq := action_eq_of_primaryFlowAtom context hprimary haction
+      subst action
+      rcases frame.compiledWithdrawFromChronology context hselector
+          hnonempty with
+        ⟨ownPre, entry, callPre, guardPost, trace, burn, _hslot,
+          _hcommits, _hoccurrence, hguardStor, _hguardBalance,
+          _hguardCode, _hguardLogs, chronology⟩
+      have hsource : (normalizedAddressArg frame.sevm 0).toAdr =
+          (Sevm.argWord frame.sevm 0).toAdr := by
+        rw [normalizedAddressArg_eq_toAdr_toB256_local, toAdr_toB256]
+      have burn' : BurnCallPrefix frame.sevm ownPre callPre guardPost
+          (Sevm.argWord frame.sevm 0).toAdr
+          (Sevm.argWord frame.sevm 2) (Sevm.argWord frame.sevm 1) := by
+        simpa only [hsource] using burn
+      refine frame.hasProofIndexedStorageAccounting_of_allowanceValueRedemption
+        (rawSource := Sevm.argWord frame.sevm 0)
+        (source := (Sevm.argWord frame.sevm 0).toAdr)
+        (ethRecipient := (Sevm.argWord frame.sevm 1).toAdr)
+        (amount := Sevm.argWord frame.sevm 2)
+        (target := Sevm.argWord frame.sevm 1)
+        (ownPre := ownPre) (callPre := callPre) (guardPost := guardPost)
+        context haction rfl rfl ?_ entry trace burn' hguardStor ?_ hdeeper
+      · unfold FlowAction.HasDebitSource
+        simp [primaryDebitProvenance, hnonempty, hselector, hsTransfer,
+          hsTransferCall, hsTransferFrom, hsWithdraw, hsWithdrawTo]
+      · simpa only [List.nil_append] using chronology
+
+/-- Premise-free exact proof-indexed storage accounting for both raw-recipient
+arms of `transferAndCall`.  The zero arm retains the accepted value child
+before the later ERC-677 callback; the nonzero arm retains only the callback
+after the ordinary booked-balance transfer. -/
+theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferAndCall
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    (context : frame.AuthenticContext dp ca)
+    (hselector : Sevm.selector frame.sevm = transferAndCallSelector)
+    (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
+    (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
+      (fun pc sevm pre out _ =>
+        Exec.CoreStorageSound dp ca pc sevm pre out)) :
+    frame.HasProofIndexedStorageAccounting dp ca := by
+  have hsDeposit : transferAndCallSelector ≠ depositSelector := by
+    decide +kernel
+  have hsDepositTo : transferAndCallSelector ≠ depositToSelector := by
+    decide +kernel
+  have hsDepositCall :
+      transferAndCallSelector ≠ depositToAndCallSelector := by
+    decide +kernel
+  rcases frame.compiledTransferAndCallChronology context hselector
+      hnonempty with hzero | hnonzero
+  · rcases hzero with
+      ⟨hraw, callPre, callbackPre, trace, burn, _hslot, _hcommits,
+        _hoccurrence, tokenChronology⟩
+    rcases tokenChronology with
+      ⟨_inputSize, _input, callbackCallPre, callbackCallPost,
+        _parent, _child, _xl, _pc, retained, callback, _callbackCommits,
+        _callbackOccurrence, chronology⟩
+    have installedCall : some (callPre.getCode ca).toList =
+        Prog.compile (weth10 dp) := by
+      rw [burn.2.2.2.2.2.1]
+      exact context.installed.1
+    rcases trace.storageSegmentEffect context.invocation.2.1 installedCall
+        hdeeper with ⟨valueEffect⟩
+    have installedCallback : some (callbackPre.getCode ca).toList =
+        Prog.compile (weth10 dp) := by
+      rw [← valueEffect.codeEq]
+      exact installedCall
+    rcases callback.storageSegmentEffect retained context.invocation.2.1
+        installedCallback hdeeper with ⟨callbackEffect⟩
+    have hprimary : primaryFlowAtom frame.sevm = some
+        (.redemption frame.sevm.caller.toB256 frame.sevm.caller
+          frame.sevm.caller (Sevm.argWord frame.sevm 1).toNat) := by
+      simp [primaryFlowAtom, hnonempty, hselector, hsDeposit, hsDepositTo,
+        hsDepositCall, hraw]
+    cases haction : frame.flowAction? dp ca with
+    | none =>
+        unfold Exec.Frame.flowAction? at haction
+        rw [if_pos context.invocation, hprimary] at haction
+        simp at haction
+    | some action =>
+        have actionEq :=
+          action_eq_of_primaryFlowAtom context hprimary haction
+        subst action
+        have hdecrease := burn.1
+        have hamountLe := burn.2.1
+        rw [context.invocation.2.1] at hdecrease hamountLe
+        have segment : LocalActionSegment .redemption
+            { atom := .redemption frame.sevm.caller.toB256
+                frame.sevm.caller frame.sevm.caller
+                (Sevm.argWord frame.sevm 1).toNat
+              credit := FlowAtom.creditOccurrence frame.pre ca
+                (.redemption frame.sevm.caller.toB256 frame.sevm.caller
+                  frame.sevm.caller (Sevm.argWord frame.sevm 1).toNat)
+              debit := primaryDebitProvenance frame.sevm frame.pre
+                frame.post
+              actualCaller := frame.sevm.caller
+              currentTarget := frame.sevm.currentTarget
+              codeAddress := frame.sevm.codeAddress
+              depth := frame.sevm.depth }
+            (Stor.rest (Devm.getStor frame.pre ca))
+            (Stor.rest (Devm.getStor callPre ca)) := by
+          apply LocalActionSegment.redemption
+            frame.sevm.caller.toB256 frame.sevm.caller
+            frame.sevm.caller (Sevm.argWord frame.sevm 1)
+          · rfl
+          · rfl
+          · unfold FlowAction.HasDebitSource
+            simp [primaryDebitProvenance, hnonempty, hselector]
+          · exact hamountLe
+          · exact hdecrease
+        have ledger :=
+          frame.hasClassifiedActionLedger_of_flowAction_eq_some
+            context haction
+        apply Exec.Frame.HasProofIndexedStorageAccounting.flow ledger
+        exact RichStorageAccounting.redemptionThenTokenCallback segment
+          valueEffect.delta callbackEffect.delta chronology
+  · rcases hnonzero with
+      ⟨hraw, recipient, callbackPre, hrecipient, htransfer,
+        _hflash, _hlogs, _hbalance, hcode, _houtput, tokenChronology⟩
+    rcases tokenChronology with
+      ⟨_inputSize, _input, _callbackCallPre, _callbackCallPost,
+        _parent, _child, _xl, _pc, retained, callback, _callbackCommits,
+        _callbackOccurrence, chronology⟩
+    have installedCallback : some (callbackPre.getCode ca).toList =
+        Prog.compile (weth10 dp) := by
+      rw [hcode]
+      exact context.installed.1
+    rcases callback.storageSegmentEffect retained context.invocation.2.1
+        installedCallback hdeeper with ⟨callbackEffect⟩
+    have htarget : frame.sevm.currentTarget = ca :=
+      context.invocation.2.1
+    rw [htarget] at htransfer
+    have hrecipient' : recipient =
+        (Sevm.argWord frame.sevm 0).toAdr := by
+      apply Adr.toB256_inj
+      rw [hrecipient]
+      exact normalizedAddressArg_eq_toAdr_toB256_local frame.sevm 0
+    subst recipient
+    have hprimary : primaryFlowAtom frame.sevm = some
+        (.transfer frame.sevm.caller.toB256
+          (Sevm.argWord frame.sevm 0) frame.sevm.caller
+          (Sevm.argWord frame.sevm 0).toAdr
+          (Sevm.argWord frame.sevm 1).toNat) := by
+      simp [primaryFlowAtom, hnonempty, hselector, hsDeposit, hsDepositTo,
+        hsDepositCall, hraw]
+    cases haction : frame.flowAction? dp ca with
+    | none =>
+        unfold Exec.Frame.flowAction? at haction
+        rw [if_pos context.invocation, hprimary] at haction
+        simp at haction
+    | some action =>
+        have actionEq :=
+          action_eq_of_primaryFlowAtom context hprimary haction
+        subst action
+        have ledger :=
+          frame.hasClassifiedActionLedger_of_flowAction_eq_some
+            context haction
+        apply Exec.Frame.HasProofIndexedStorageAccounting.flow ledger
+        apply RichStorageAccounting.tokenCallback
+        · apply StorageSegmentDelta.ofOrdinaryTransfer
+          rcases htransfer with
+            ⟨hle, intermediate, hdecrease, hincrease⟩
+          have hbefore :
+              intermediate (Sevm.argWord frame.sevm 0).toAdr =
+                (if frame.sevm.caller =
+                    (Sevm.argWord frame.sevm 0).toAdr then
+                  (Stor.rest (Devm.getStor frame.pre ca))
+                      frame.sevm.caller - Sevm.argWord frame.sevm 1
+                 else
+                  (Stor.rest (Devm.getStor frame.pre ca))
+                    (Sevm.argWord frame.sevm 0).toAdr) := by
+            by_cases hself : frame.sevm.caller =
+                (Sevm.argWord frame.sevm 0).toAdr
+            · rw [if_pos hself, hself]
+              exact ((hdecrease
+                (Sevm.argWord frame.sevm 0).toAdr).1 hself).symm
+            · simpa [hself] using
+                ((hdecrease
+                  (Sevm.argWord frame.sevm 0).toAdr).2 hself).symm
+          apply LocalActionSegment.ordinaryTransfer
+            frame.sevm.caller.toB256 (Sevm.argWord frame.sevm 0)
+            frame.sevm.caller (Sevm.argWord frame.sevm 0).toAdr
+            (Sevm.argWord frame.sevm 1) rfl
+            { amount_le := hle
+              intermediate := intermediate
+              decrease := hdecrease
+              increase := hincrease }
+          · unfold FlowAction.ExactCredit
+            simp only [FlowAtom.creditOccurrence, hbefore]
+            rw [toB256_toNat]
+          · unfold FlowAction.HasDebitSource
+            simp [primaryDebitProvenance, hnonempty, hselector]
+        · exact callbackEffect.delta
+        · simpa only [List.nil_append] using chronology
+
+/-- Premise-free exact proof-indexed storage accounting for `permit`.  Empty
+and rolled-back STATICCALL outcomes are WETH-silent; the committing outcome
+uses the exact retained child and the same call boundary selected by compiled
+chronology. -/
+theorem Exec.Frame.hasProofIndexedStorageAccounting_of_permit
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    (context : frame.AuthenticContext dp ca)
+    (hselector : Sevm.selector frame.sevm = permitSelector)
+    (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
+    (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
+      (fun pc sevm pre out _ =>
+        Exec.CoreStorageSound dp ca pc sevm pre out)) :
+    frame.HasProofIndexedStorageAccounting dp ca := by
+  rcases frame.compiledPermitChronology context hselector hnonempty with
+    ⟨callPre, callPost, slot, selected, _occurrence, _operands,
+      outcome, ownPrefix, ownSuffix, chronology⟩
+  have htarget : frame.sevm.currentTarget = ca :=
+    context.invocation.2.1
+  have prefixSilent : Stor.Weth10Silent
+      (Devm.getStor frame.pre ca) (Devm.getStor callPre ca) := by
+    simpa only [htarget] using ownPrefix.storage
+  have suffixSilent : Stor.Weth10Silent
+      (Devm.getStor callPost ca) (Devm.getStor frame.post ca) := by
+    simpa only [htarget] using ownSuffix.storage
+  have hnoPrimary : SelectsNoPrimaryFlow frame.sevm := by
+    constructor <;> rw [hselector] <;> decide +kernel
+  have classified := frame.flowAction_eq_none_of_selectsNoPrimaryFlow
+    context hnoPrimary hnonempty
+  have ownRoot := frame.hasNoWethBalanceOwnEffect_of_recognized
+    context classified
+    ⟨nonpayable (Weth10.permit dp), by
+      rw [hselector]
+      simp [permitSelector, weth10Funcs]⟩
+  apply Exec.Frame.HasProofIndexedStorageAccounting.noFlow ownRoot
+  cases outcome with
+  | none own =>
+      have callSilent : Stor.Weth10Silent
+          (Devm.getStor callPre ca) (Devm.getStor callPost ca) := by
+        simpa only [htarget] using own.storage
+      exact NoFlowStorageAccounting.silent
+        (prefixSilent.trans (callSilent.trans suffixSilent)) chronology
+  | rolledBack child trace rollsBack own =>
+      have callSilent : Stor.Weth10Silent
+          (Devm.getStor callPre ca) (Devm.getStor callPost ca) := by
+        simpa only [htarget] using own.storage
+      exact NoFlowStorageAccounting.silent
+        (prefixSilent.trans (callSilent.trans suffixSilent)) chronology
+  | committed child trace commits =>
+      have installedCall : some (callPre.getCode ca).toList =
+          Prog.compile (weth10 dp) := by
+        rw [← ownPrefix.code]
+        exact context.installed.1
+      let childTrace : ProcessMessageTrace trace.msg (.ok trace.childPost) :=
+        ⟨_, .some child, trace.process⟩
+      have hparent : callPre.state = trace.msg.benv.state :=
+        trace.parentState.symm.trans trace.benvState.symm
+      have htargetCode : trace.msg.currentTarget = ca →
+          some trace.msg.code.toList = Prog.compile (weth10 dp) := by
+        intro hmsgTarget
+        have htargetCa : (1 : B256).toAdr = ca :=
+          trace.target.symm.trans hmsgTarget
+        exact callbackCode_eq_compiled_of_target_eq installedCall
+          htargetCa trace.delegationResolution
+      have htargetDirect : trace.msg.currentTarget = ca →
+          trace.msg.codeAddress = some ca := by
+        intro hmsgTarget
+        have htargetCa : (1 : B256).toAdr = ca :=
+          trace.target.symm.trans hmsgTarget
+        exact trace.codeAddress.trans (congrArg some htargetCa)
+      rcases childTrace.storageSegmentDelta_of_forallDeeperAt hparent
+          trace.depth installedCall htargetCode htargetDirect hdeeper with
+        ⟨childEffect⟩
+      have hresumeState : callPost.state = trace.childPost.state :=
+        Resume.call_state trace.resume
+      have resumeEffect : StorageSegmentEffect ca trace.childPost
+          callPost [] :=
+        StorageSegmentEffect.of_getStorCode_eq
+          (congrArg (fun state : State => state.getStor ca)
+            hresumeState.symm)
+          (congrArg (fun state : State => state.getCode ca)
+            hresumeState.symm)
+      have callEffect : StorageSegmentEffect ca callPre callPost
+          (Exec.flowActions dp ca child) := by
+        simpa only [childTrace, RetainedXlot.flowActions,
+          List.append_nil] using
+          childEffect.append resumeEffect
+      exact NoFlowStorageAccounting.silentAround prefixSilent
+        callEffect.delta suffixSilent chronology
+
 /-- Exact proof-indexed accounting for the ordinary nonzero-recipient
 `transfer` branch. -/
 theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferNonzero
@@ -4874,84 +5733,10 @@ theorem Exec.Frame.callFreeStorageBranch_or_remaining
   · exact Or.inl (.noFlow (.flashFee hnonempty hflashFee))
   · exact Or.inl (.noFlow (.allowance hnonempty hallowance))
 
-/-- Exact unresolved storage obligations after all call-free cases have been
-discharged.  Each field is one executable branch, so future proofs cannot
-smuggle endpoint equations through one undifferentiated provider premise. -/
-structure CompiledFrameStorageRemainingCases
-    (dp : DeployParams) (ca : Adr) : Prop where
-  transferZero : ∀ {frame : Exec.Frame},
-    frame.AuthenticContext dp ca →
-    ForallDeeperAt frame.sevm.depth ca (weth10 dp)
-      (fun pc sevm pre out _ =>
-        Exec.CoreStorageSound dp ca pc sevm pre out) →
-    frame.sevm.data.length.toB256 ≠ 0 →
-    Sevm.selector frame.sevm = transferSelector →
-    Sevm.argWord frame.sevm 0 = 0 →
-    frame.HasProofIndexedStorageAccounting dp ca
-  transferAndCall : ∀ {frame : Exec.Frame},
-    frame.AuthenticContext dp ca →
-    ForallDeeperAt frame.sevm.depth ca (weth10 dp)
-      (fun pc sevm pre out _ =>
-        Exec.CoreStorageSound dp ca pc sevm pre out) →
-    frame.sevm.data.length.toB256 ≠ 0 →
-    Sevm.selector frame.sevm = transferAndCallSelector →
-    frame.HasProofIndexedStorageAccounting dp ca
-  transferFromZero : ∀ {frame : Exec.Frame},
-    frame.AuthenticContext dp ca →
-    ForallDeeperAt frame.sevm.depth ca (weth10 dp)
-      (fun pc sevm pre out _ =>
-        Exec.CoreStorageSound dp ca pc sevm pre out) →
-    frame.sevm.data.length.toB256 ≠ 0 →
-    Sevm.selector frame.sevm = transferFromSelector →
-    Sevm.argWord frame.sevm 1 = 0 →
-    frame.HasProofIndexedStorageAccounting dp ca
-  withdraw : ∀ {frame : Exec.Frame},
-    frame.AuthenticContext dp ca →
-    ForallDeeperAt frame.sevm.depth ca (weth10 dp)
-      (fun pc sevm pre out _ =>
-        Exec.CoreStorageSound dp ca pc sevm pre out) →
-    frame.sevm.data.length.toB256 ≠ 0 →
-    Sevm.selector frame.sevm = withdrawSelector →
-    frame.HasProofIndexedStorageAccounting dp ca
-  withdrawTo : ∀ {frame : Exec.Frame},
-    frame.AuthenticContext dp ca →
-    ForallDeeperAt frame.sevm.depth ca (weth10 dp)
-      (fun pc sevm pre out _ =>
-        Exec.CoreStorageSound dp ca pc sevm pre out) →
-    frame.sevm.data.length.toB256 ≠ 0 →
-    Sevm.selector frame.sevm = withdrawToSelector →
-    frame.HasProofIndexedStorageAccounting dp ca
-  withdrawFrom : ∀ {frame : Exec.Frame},
-    frame.AuthenticContext dp ca →
-    ForallDeeperAt frame.sevm.depth ca (weth10 dp)
-      (fun pc sevm pre out _ =>
-        Exec.CoreStorageSound dp ca pc sevm pre out) →
-    frame.sevm.data.length.toB256 ≠ 0 →
-    Sevm.selector frame.sevm = withdrawFromSelector →
-    frame.HasProofIndexedStorageAccounting dp ca
-  flashLoan : ∀ {frame : Exec.Frame},
-    frame.AuthenticContext dp ca →
-    ForallDeeperAt frame.sevm.depth ca (weth10 dp)
-      (fun pc sevm pre out _ =>
-        Exec.CoreStorageSound dp ca pc sevm pre out) →
-    frame.sevm.data.length.toB256 ≠ 0 →
-    Sevm.selector frame.sevm = flashLoanSelector →
-    frame.HasProofIndexedStorageAccounting dp ca
-  permit : ∀ {frame : Exec.Frame},
-    frame.AuthenticContext dp ca →
-    ForallDeeperAt frame.sevm.depth ca (weth10 dp)
-      (fun pc sevm pre out _ =>
-        Exec.CoreStorageSound dp ca pc sevm pre out) →
-    frame.sevm.data.length.toB256 ≠ 0 →
-    Sevm.selector frame.sevm = permitSelector →
-    frame.HasProofIndexedStorageAccounting dp ca
-
-/-- The exhaustive branch split reduces the final storage handler to the eight
-still-open recursive cases above; `depositToAndCall`, `approveAndCall`, and all
-twenty call-free cases are discharged by concrete compiled proofs here. -/
-theorem CompiledFrameStorageRemainingCases.compiledFrameStorageHandler
-    {dp : DeployParams} {ca : Adr}
-    (remaining : CompiledFrameStorageRemainingCases dp ca) :
+/-- Premise-free exact storage handler for every authentic compiled WETH10
+frame.  Every selector arm is discharged by its concrete chronology. -/
+theorem compiledFrameStorageHandler
+    (dp : DeployParams) (ca : Adr) :
     CompiledFrameStorageHandler dp ca := by
   intro frame context hdeeper
   rcases frame.callFreeStorageBranch_or_remaining context with
@@ -4963,32 +5748,38 @@ theorem CompiledFrameStorageRemainingCases.compiledFrameStorageHandler
         exact (frame.hasProofIndexedStorageAccounting_of_depositToAndCall
           context selected nonempty hdeeper).storageSegmentEffect
     | transferZero nonempty selected recipient =>
-        exact (remaining.transferZero context hdeeper nonempty selected
-          recipient).storageSegmentEffect
+        exact (frame.hasProofIndexedStorageAccounting_of_transferZero
+          context selected nonempty recipient hdeeper).storageSegmentEffect
     | transferAndCall nonempty selected =>
-        exact (remaining.transferAndCall context hdeeper nonempty
-          selected).storageSegmentEffect
+        exact (frame.hasProofIndexedStorageAccounting_of_transferAndCall
+          context selected nonempty hdeeper).storageSegmentEffect
     | transferFromZero nonempty selected recipient =>
-        exact (remaining.transferFromZero context hdeeper nonempty
-          selected recipient).storageSegmentEffect
+        exact (frame.hasProofIndexedStorageAccounting_of_transferFromZero
+          context selected nonempty recipient hdeeper).storageSegmentEffect
     | withdraw nonempty selected =>
-        exact (remaining.withdraw context hdeeper nonempty
-          selected).storageSegmentEffect
+        exact (frame.hasProofIndexedStorageAccounting_of_withdraw
+          context selected nonempty hdeeper).storageSegmentEffect
     | withdrawTo nonempty selected =>
-        exact (remaining.withdrawTo context hdeeper nonempty
-          selected).storageSegmentEffect
+        exact (frame.hasProofIndexedStorageAccounting_of_withdrawTo
+          context selected nonempty hdeeper).storageSegmentEffect
     | withdrawFrom nonempty selected =>
-        exact (remaining.withdrawFrom context hdeeper nonempty
-          selected).storageSegmentEffect
+        exact (frame.hasProofIndexedStorageAccounting_of_withdrawFrom
+          context selected nonempty hdeeper).storageSegmentEffect
     | flashLoan nonempty selected =>
-        exact (remaining.flashLoan context hdeeper nonempty
-          selected).storageSegmentEffect
+        exact (frame.hasProofIndexedStorageAccounting_of_flashLoan
+          context selected nonempty hdeeper).storageSegmentEffect
     | approveAndCall nonempty selected =>
         exact (frame.hasProofIndexedStorageAccounting_of_approveAndCall
           context selected nonempty hdeeper).storageSegmentEffect
     | permit nonempty selected =>
-        exact (remaining.permit context hdeeper nonempty
-          selected).storageSegmentEffect
+        exact (frame.hasProofIndexedStorageAccounting_of_permit
+          context selected nonempty hdeeper).storageSegmentEffect
+
+/-- Premise-free compiled-program storage handler consumed by recursion. -/
+theorem compiledBodyStorageHandler
+    (dp : DeployParams) (ca : Adr) :
+    CompiledBodyStorageHandler dp ca :=
+  (compiledFrameStorageHandler dp ca).compiledBodyStorageHandler
 
 /-- Failed raw executions cannot satisfy the committed premise. -/
 theorem Exec.CoreStorageSound.error

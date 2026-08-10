@@ -1,6 +1,8 @@
 import Blanc.Weth10Redeemable
 import Blanc.Weth10DeploymentRoot
+import Blanc.Weth10HolderFlowDeterminism
 import Blanc.Weth10HolderFlowResult
+import Blanc.Weth10HolderFlowWriteCompleteness
 
 /-!
 Lean-checked statement pins for the WETH10 flagship declarations.  Each
@@ -762,6 +764,64 @@ the complete applied-block sequence.  These examples make weakening the
 history to an endpoint-only summary, or dropping ordinary-reach coverage,
 fail closed in the claims gate. -/
 
+example {u : Adr}
+    (ordinaryIn redeemed externalTransferredOut selfTransfer
+      flashCredit flashRepayment : Nat) :
+    HolderFlow u :=
+  ⟨ordinaryIn, redeemed, externalTransferredOut, selfTransfer,
+    flashCredit, flashRepayment⟩
+
+example {u : Adr}
+    (ordinaryIn redeemed externalTransferredOut selfTransfer
+      flashCredit flashRepayment : Nat) :
+    let flow : HolderFlow u :=
+      ⟨ordinaryIn, redeemed, externalTransferredOut, selfTransfer,
+        flashCredit, flashRepayment⟩
+    flow.ordinaryIn = ordinaryIn ∧
+      flow.redeemed = redeemed ∧
+      flow.externalTransferredOut = externalTransferredOut ∧
+      flow.selfTransfer = selfTransfer ∧
+      flow.flashCredit = flashCredit ∧
+      flow.flashRepayment = flashRepayment := by
+  rfl
+
+example {benv : Benv} {txs : List (Bytes ⊕ Tx)}
+    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs wds state bout) :
+    SystemMessageTrace benv beaconRootsAddress
+      benv.stat.parentBeaconBlockRoot.toBytes
+      trace.beaconState trace.beaconOut :=
+  trace.beacon
+
+example {benv : Benv} {txs : List (Bytes ⊕ Tx)}
+    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs wds state bout) :
+    SystemMessageTrace (benv.withState trace.beaconState)
+      historyStorageAddress trace.lastHash.toBytes
+      trace.historyState trace.historyOut :=
+  trace.history
+
+example {benv : Benv} {txs : List (Bytes ⊕ Tx)}
+    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs wds state bout) :
+    SystemMessageTrace
+      (trace.transactionBenv.withState
+        (processWithdrawalsState trace.transactionBenv.state wds))
+      withdrawalRequestPredeployAddress []
+      trace.requests.withdrawalState trace.requests.withdrawalOut :=
+  trace.requests.withdrawal
+
+example {benv : Benv} {txs : List (Bytes ⊕ Tx)}
+    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs wds state bout) :
+    SystemMessageTrace
+      ((trace.transactionBenv.withState
+        (processWithdrawalsState trace.transactionBenv.state wds)).withState
+          trace.requests.withdrawalState)
+      consolidationRequestPredeployAddress []
+      trace.requests.consolidationState trace.requests.consolidationOut :=
+  trace.requests.consolidation
+
 example : UInt64 → DeployParams → Adr → BlockChain → BlockChain → Type :=
   AccountedHistory
 
@@ -769,6 +829,28 @@ example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain} :
     AccountedHistory chainId dp ca checkpoint future → List Block :=
   AccountedHistory.appliedBlocks
+
+example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {checkpoint : BlockChain}
+    (hcfg : (ChainConfig.pragueOnly chainId).Valid)
+    (hctx : checkpoint.ValidContext)
+    (hid : chainId = checkpoint.chainId) :
+    (AccountedHistory.refl (dp := dp) (ca := ca)
+      hcfg hctx hid).appliedBlocks = [] := by
+  rfl
+
+example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {checkpoint current future : BlockChain}
+    (prior : AccountedHistory chainId dp ca checkpoint current)
+    (accounted : AccountedBlock chainId dp ca current future) :
+    (AccountedHistory.step prior accounted).appliedBlocks =
+      prior.appliedBlocks ++ [accounted.block] := by
+  rfl
+
+example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {checkpoint future : BlockChain} :
+    AccountedHistory chainId dp ca checkpoint future → List FlowAction :=
+  AccountedHistory.flowActions
 
 example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain} :
@@ -797,6 +879,24 @@ example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
     (hblocks : history₁.appliedBlocks = history₂.appliedBlocks) :
     history₁.weth10Flow u = history₂.weth10Flow u :=
   history₁.weth10Flow_eq_of_appliedBlocks_eq history₂ hblocks
+
+example {dp : DeployParams} {ca : Adr}
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out)
+    (installed : some (pre.getCode ca).toList = Prog.compile (weth10 dp))
+    (rootPc : pc = 0) (rootMemory : pre.memory = Mem.empty)
+    {frame : Exec.Frame}
+    (retained : frame ∈ Exec.committedFrames run)
+    (invocation : frame.exactInvocation dp ca)
+    {stepPre stepPost : Devm} {slot : Xlot}
+    {key value : B256} {holder : Adr}
+    (occurrence : frame.BalanceSstoreOccurrence dp ca stepPre stepPost slot
+      key value holder) :
+    ∃ action : FlowAction,
+      frame.BalanceSstoreClassification dp ca stepPre stepPost slot
+        key value holder action :=
+  Exec.weth10BalanceSstoreClassification_of_mem_committedFrames
+    run installed rootPc rootMemory retained invocation occurrence
 
 end Weth10
 
