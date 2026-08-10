@@ -52,6 +52,21 @@ theorem flashAllowanceRuntimeKey_eq_projected (e : Sevm) :
       projectedAllowanceKey (normalizedAddressArg e 0)
         e.currentTarget.toB256 := rfl
 
+/-- Every projected key is in the tagged allowance region. -/
+theorem projectedAllowanceKey_region (owner spender : B256) :
+    InRegion .allowance (projectedAllowanceKey owner spender) :=
+  runtimeAllowanceKey_region _
+
+/-- A projected allowance key is never an address-shaped balance key. -/
+theorem projectedAllowanceKey_not_valid (owner spender : B256) :
+    ¬ ValidAdr (projectedAllowanceKey owner spender) :=
+  runtimeAllowanceKey_not_valid _
+
+/-- A projected allowance key is never the flash counter slot. -/
+theorem projectedAllowanceKey_ne_flash (owner spender : B256) :
+    projectedAllowanceKey owner spender ≠ flashMintedSlot :=
+  runtimeAllowanceKey_ne_flash _
+
 /-! ## Allowance-region visits -/
 
 /-- The exact site and data of one committed visit to the tagged allowance
