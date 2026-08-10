@@ -523,6 +523,527 @@ theorem CountedFrame.hardenedContribution_le
           by_cases h : debit.hardenedFor recent u <;>
             simp [CountedFrame.hardenedContribution, hframe, hdebit, h]
 
+/-! ## Executable boundary fixtures
+
+These values exercise only the attribution-root walk, the hardened-outflow
+fold, and the dormancy predicate defined above.  They are deliberately not
+presented as authentic executions: execution authenticity is supplied by the
+compiled/history theorems of the surrounding modules, while these fixtures
+independently pin the list-level semantics of `attributionRootAt`,
+`DebitProvenance.hardenedFor`, `CountedFrame.hardenedContribution`, and
+`CountedFrame.authorizes` against concrete multi-frame ledgers. -/
+
+/-- Build one counted frame from just its caller, allowance visit, and flow
+action; `depth` and `sel?` are irrelevant to every fold exercised below. -/
+private def fixtureFrame (caller : Adr) (allowance : Option AllowanceEvent)
+    (action : Option FlowAction) : CountedFrame :=
+  { caller, depth := 1, sel? := none, allowance, action }
+
+/-! ### Approve-rooted decrement chain
+
+Holder `u` approves spender `sp`, who spends 40 then 60 of a 100 allowance.
+Both spends' governing chain roots back at the single `approve`, and the sum
+of hardened contributions matches the sum of permanent outflow exactly. -/
+
+private def approveFrame1 (u : Adr) (ow sp : B256) : CountedFrame :=
+  fixtureFrame u
+    (some
+      { owner := ow
+        spender := sp
+        caller := u
+        depth := 1
+        visit := .approveStore 100 })
+    none
+
+private def spend40Debit (u : Adr) (ow sp : B256) : DebitProvenance :=
+  { actualCaller := sp.toAdr
+    rawSource := u.toB256
+    source := u
+    branch := .delegated (.finite (projectedAllowanceKey ow sp) 100 60) }
+
+private def spendFrame40 (u w : Adr) (ow sp : B256) : CountedFrame :=
+  fixtureFrame sp.toAdr
+    (some
+      { owner := ow
+        spender := sp
+        caller := sp.toAdr
+        depth := 1
+        visit := .spendFinite 100 60 })
+    (some
+      { atom := .transfer u.toB256 w.toB256 u w 40
+        credit := none
+        debit := some (spend40Debit u ow sp)
+        actualCaller := sp.toAdr
+        currentTarget := 0
+        codeAddress := some 0
+        depth := 1 })
+
+private def spend60Debit (u : Adr) (ow sp : B256) : DebitProvenance :=
+  { actualCaller := sp.toAdr
+    rawSource := u.toB256
+    source := u
+    branch := .delegated (.finite (projectedAllowanceKey ow sp) 60 0) }
+
+private def spendFrame60 (u w : Adr) (ow sp : B256) : CountedFrame :=
+  fixtureFrame sp.toAdr
+    (some
+      { owner := ow
+        spender := sp
+        caller := sp.toAdr
+        depth := 1
+        visit := .spendFinite 60 0 })
+    (some
+      { atom := .transfer u.toB256 w.toB256 u w 60
+        credit := none
+        debit := some (spend60Debit u ow sp)
+        actualCaller := sp.toAdr
+        currentTarget := 0
+        codeAddress := some 0
+        depth := 1 })
+
+private def approveDecrementLedger (u w : Adr) (ow sp : B256) : List CountedFrame :=
+  [approveFrame1 u ow sp, spendFrame40 u w ow sp, spendFrame60 u w ow sp]
+
+theorem approveDecrementLedger_root_before_spend40 (u : Adr) (ow sp : B256) :
+    attributionRootAt [approveFrame1 u ow sp] (projectedAllowanceKey ow sp) =
+      .approve u := by
+  simp [approveFrame1, fixtureFrame, attributionRootAt, AllowanceEvent.key]
+
+theorem approveDecrementLedger_root_before_spend60 (u w : Adr) (ow sp : B256) :
+    attributionRootAt [spendFrame40 u w ow sp, approveFrame1 u ow sp]
+        (projectedAllowanceKey ow sp) =
+      .approve u := by
+  simp [spendFrame40, approveFrame1, fixtureFrame, attributionRootAt, AllowanceEvent.key]
+
+theorem spend40Debit_hardenedFor (u : Adr) (ow sp : B256) :
+    (spend40Debit u ow sp).hardenedFor [approveFrame1 u ow sp] u = true := by
+  simp [spend40Debit, DebitProvenance.hardenedFor, approveFrame1, fixtureFrame,
+    attributionRootAt, AllowanceEvent.key, AttributionRoot.attributedTo]
+
+theorem spend60Debit_hardenedFor (u w : Adr) (ow sp : B256) :
+    (spend60Debit u ow sp).hardenedFor [spendFrame40 u w ow sp, approveFrame1 u ow sp] u =
+      true := by
+  simp [spend60Debit, DebitProvenance.hardenedFor, spendFrame40, approveFrame1, fixtureFrame,
+    attributionRootAt, AllowanceEvent.key, AttributionRoot.attributedTo]
+
+theorem approveDecrementLedger_hardenedOutflow_eq_permanentOutflow
+    (u w : Adr) (ow sp : B256) (hne : u ≠ w) :
+    hardenedOutflowGo u [] (approveDecrementLedger u w ow sp) = 100 ∧
+    (approveFrame1 u ow sp).permanentOutflow u +
+        (spendFrame40 u w ow sp).permanentOutflow u +
+        (spendFrame60 u w ow sp).permanentOutflow u =
+      100 := by
+  constructor
+  · simp [approveDecrementLedger, hardenedOutflowGo, approveFrame1, spendFrame40,
+      spendFrame60, CountedFrame.hardenedContribution, CountedFrame.permanentOutflow,
+      FlowAtom.holderFlow, HolderFlow.zero, fixtureFrame, spend40Debit, spend60Debit,
+      DebitProvenance.hardenedFor, attributionRootAt, AllowanceEvent.key,
+      AttributionRoot.attributedTo, hne.symm]
+  · simp [approveFrame1, spendFrame40, spendFrame60, fixtureFrame,
+      CountedFrame.permanentOutflow, FlowAtom.holderFlow, HolderFlow.zero, hne.symm]
+
+/-! ### Permit-rooted third-party spend
+
+A relayer submits a `permit` whose owner word normalizes to `u`; a later
+spend at the same key by a third party still roots at that `permit`, and
+carries a hardened witness for `u` even though `u` acted nowhere in the
+ledger. -/
+
+private def permitFrame1 (relayer : Adr) (ow sp : B256) : CountedFrame :=
+  fixtureFrame relayer
+    (some
+      { owner := ow
+        spender := sp
+        caller := relayer
+        depth := 1
+        visit := .permitStore 1 })
+    none
+
+private def permitSpendDebit (u : Adr) (ow sp : B256) : DebitProvenance :=
+  { actualCaller := sp.toAdr
+    rawSource := u.toB256
+    source := u
+    branch := .delegated (.finite (projectedAllowanceKey ow sp) 50 20) }
+
+private def permitSpendFrame (u w : Adr) (ow sp : B256) : CountedFrame :=
+  fixtureFrame sp.toAdr
+    (some
+      { owner := ow
+        spender := sp
+        caller := sp.toAdr
+        depth := 1
+        visit := .spendFinite 50 20 })
+    (some
+      { atom := .transfer u.toB256 w.toB256 u w 30
+        credit := none
+        debit := some (permitSpendDebit u ow sp)
+        actualCaller := sp.toAdr
+        currentTarget := 0
+        codeAddress := some 0
+        depth := 1 })
+
+theorem permitFrame1_root (relayer : Adr) (ow sp : B256) :
+    attributionRootAt [permitFrame1 relayer ow sp] (projectedAllowanceKey ow sp) =
+      .permit ow := by
+  simp [permitFrame1, fixtureFrame, attributionRootAt, AllowanceEvent.key]
+
+theorem permitSpendDebit_hardenedFor (relayer u : Adr) (ow sp : B256) (how : ow.toAdr = u) :
+    (permitSpendDebit u ow sp).hardenedFor [permitFrame1 relayer ow sp] u = true := by
+  simp [permitSpendDebit, DebitProvenance.hardenedFor, permitFrame1, fixtureFrame,
+    attributionRootAt, AllowanceEvent.key, AttributionRoot.attributedTo, how]
+
+/-! ### Checkpoint root
+
+A spend at a key with no preceding counted write in the ledger roots at the
+checkpoint, and still carries a hardened witness: the checkpoint-preexisting
+allowance is exactly as attributable as a committed `approve`. -/
+
+private def checkpointSpendDebit (u : Adr) (ow sp : B256) : DebitProvenance :=
+  { actualCaller := sp.toAdr
+    rawSource := u.toB256
+    source := u
+    branch := .delegated (.finite (projectedAllowanceKey ow sp) 80 50) }
+
+private def checkpointSpendFrame (u w : Adr) (ow sp : B256) : CountedFrame :=
+  fixtureFrame sp.toAdr
+    (some
+      { owner := ow
+        spender := sp
+        caller := sp.toAdr
+        depth := 1
+        visit := .spendFinite 80 50 })
+    (some
+      { atom := .transfer u.toB256 w.toB256 u w 30
+        credit := none
+        debit := some (checkpointSpendDebit u ow sp)
+        actualCaller := sp.toAdr
+        currentTarget := 0
+        codeAddress := some 0
+        depth := 1 })
+
+theorem checkpointSpendDebit_root_at_empty (ow sp : B256) :
+    attributionRootAt [] (projectedAllowanceKey ow sp) = .checkpoint := by
+  simp [attributionRootAt]
+
+theorem checkpointSpendDebit_hardenedFor (u : Adr) (ow sp : B256) :
+    (checkpointSpendDebit u ow sp).hardenedFor [] u = true := by
+  simp [checkpointSpendDebit, DebitProvenance.hardenedFor, attributionRootAt,
+    AttributionRoot.attributedTo]
+
+/-! ### Max-allowance transparency
+
+A `transferFrom` against an infinite allowance reads but never writes; the
+attribution chain passes straight through the `.spendMax` visit to the
+preceding `approve`. -/
+
+private def maxApproveFrame (u : Adr) (ow sp : B256) : CountedFrame :=
+  fixtureFrame u
+    (some
+      { owner := ow
+        spender := sp
+        caller := u
+        depth := 1
+        visit := .approveStore B256.max })
+    none
+
+private def maxSpendDebit (u : Adr) (ow sp : B256) : DebitProvenance :=
+  { actualCaller := sp.toAdr
+    rawSource := u.toB256
+    source := u
+    branch := .delegated (.maximum (projectedAllowanceKey ow sp)) }
+
+private def maxSpendFrame (u w : Adr) (ow sp : B256) : CountedFrame :=
+  fixtureFrame sp.toAdr
+    (some
+      { owner := ow
+        spender := sp
+        caller := sp.toAdr
+        depth := 1
+        visit := .spendMax })
+    (some
+      { atom := .transfer u.toB256 w.toB256 u w 15
+        credit := none
+        debit := some (maxSpendDebit u ow sp)
+        actualCaller := sp.toAdr
+        currentTarget := 0
+        codeAddress := some 0
+        depth := 1 })
+
+theorem maxApproveFrame_root (u : Adr) (ow sp : B256) :
+    attributionRootAt [maxApproveFrame u ow sp] (projectedAllowanceKey ow sp) =
+      .approve u := by
+  simp [maxApproveFrame, fixtureFrame, attributionRootAt, AllowanceEvent.key]
+
+theorem maxSpendDebit_hardenedFor (u : Adr) (ow sp : B256) :
+    (maxSpendDebit u ow sp).hardenedFor [maxApproveFrame u ow sp] u = true := by
+  simp [maxSpendDebit, DebitProvenance.hardenedFor, maxApproveFrame, fixtureFrame,
+    attributionRootAt, AllowanceEvent.key, AttributionRoot.attributedTo]
+
+/-! ### Flash decrement link
+
+A flash invocation's post-callback settlement decrement sits between an
+`approve` and a later ordinary spend; the ordinary spend's chain walks
+through the `.flashFinite` decrement to the same `approve`, while the flash
+frame's own permanent outflow is zero since a flash pair cancels. -/
+
+private def flashApproveFrame (u : Adr) (ow sp : B256) : CountedFrame :=
+  fixtureFrame u
+    (some
+      { owner := ow
+        spender := sp
+        caller := u
+        depth := 1
+        visit := .approveStore 10 })
+    none
+
+private def flashFrame (u : Adr) (ow sp : B256) : CountedFrame :=
+  fixtureFrame sp.toAdr
+    (some
+      { owner := ow
+        spender := sp
+        caller := sp.toAdr
+        depth := 1
+        visit := .flashFinite 10 3 })
+    (some
+      { atom := .flashPair u.toB256 u 7
+        credit := none
+        debit := some
+          { actualCaller := sp.toAdr
+            rawSource := u.toB256
+            source := u
+            branch := .flash (.finite (projectedAllowanceKey ow sp) 10 3) }
+        actualCaller := sp.toAdr
+        currentTarget := 0
+        codeAddress := some 0
+        depth := 1 })
+
+private def flashSpendDebit (u : Adr) (ow sp : B256) : DebitProvenance :=
+  { actualCaller := sp.toAdr
+    rawSource := u.toB256
+    source := u
+    branch := .delegated (.finite (projectedAllowanceKey ow sp) 3 0) }
+
+theorem flashSpendDebit_root (u : Adr) (ow sp : B256) :
+    attributionRootAt [flashFrame u ow sp, flashApproveFrame u ow sp]
+        (projectedAllowanceKey ow sp) =
+      .approve u := by
+  simp [flashFrame, flashApproveFrame, fixtureFrame, attributionRootAt, AllowanceEvent.key]
+
+theorem flashFrame_permanentOutflow_zero (u : Adr) (ow sp : B256) :
+    (flashFrame u ow sp).permanentOutflow u = 0 := by
+  simp [flashFrame, fixtureFrame, CountedFrame.permanentOutflow, FlowAtom.holderFlow,
+    HolderFlow.zero]
+
+/-! ### Dirty-pair separation
+
+An `approve` written at one projected key never governs a spend at a
+distinct projected key: `attributionRootAt` falls straight through to the
+checkpoint. -/
+
+private def dirtyApproveFrame (u : Adr) (ow1 sp1 : B256) : CountedFrame :=
+  fixtureFrame u
+    (some
+      { owner := ow1
+        spender := sp1
+        caller := u
+        depth := 1
+        visit := .approveStore 25 })
+    none
+
+private def dirtySpendDebit (u : Adr) (ow2 sp2 : B256) : DebitProvenance :=
+  { actualCaller := sp2.toAdr
+    rawSource := u.toB256
+    source := u
+    branch := .delegated (.finite (projectedAllowanceKey ow2 sp2) 0 0) }
+
+theorem dirtySpendDebit_root_checkpoint (u : Adr) (ow1 sp1 ow2 sp2 : B256)
+    (hk : projectedAllowanceKey ow1 sp1 ≠ projectedAllowanceKey ow2 sp2) :
+    attributionRootAt [dirtyApproveFrame u ow1 sp1] (projectedAllowanceKey ow2 sp2) =
+      .checkpoint := by
+  simp [dirtyApproveFrame, fixtureFrame, attributionRootAt, AllowanceEvent.key, hk]
+
+/-! ### Dormant vs. non-dormant
+
+Ledger A never has `u` act and never has a committed `permit` naming `u`:
+every frame's `authorizes u` is false and `u`'s permanent outflow across the
+ledger is zero.  Ledger B is identical except `u` additionally approves
+somewhere in the middle; that one frame now authorizes `u`, so the
+`NoAuthorizingActBy`-shaped premise fails for ledger B, while the unrelated
+holder `w`'s own spend still roots exactly as it did in ledger A. -/
+
+private def dormantMintFrame (other u : Adr) : CountedFrame :=
+  fixtureFrame other none
+    (some
+      { atom := .ordinaryMint u.toB256 u 5
+        credit := none
+        debit := none
+        actualCaller := other
+        currentTarget := 0
+        codeAddress := some 0
+        depth := 1 })
+
+private def dormantApproveFrame (w : Adr) (spW : B256) : CountedFrame :=
+  fixtureFrame w
+    (some
+      { owner := w.toB256
+        spender := spW
+        caller := w
+        depth := 1
+        visit := .approveStore 40 })
+    none
+
+private def dormantSpendFrame (w : Adr) (spW : B256) : CountedFrame :=
+  fixtureFrame spW.toAdr
+    (some
+      { owner := w.toB256
+        spender := spW
+        caller := spW.toAdr
+        depth := 1
+        visit := .spendFinite 40 10 })
+    (some
+      { atom := .transfer w.toB256 spW w spW.toAdr 30
+        credit := none
+        debit := some
+          { actualCaller := spW.toAdr
+            rawSource := w.toB256
+            source := w
+            branch := .delegated (.finite (projectedAllowanceKey w.toB256 spW) 40 10) }
+        actualCaller := spW.toAdr
+        currentTarget := 0
+        codeAddress := some 0
+        depth := 1 })
+
+private def dormantLedger (other u w : Adr) (spW : B256) : List CountedFrame :=
+  [dormantMintFrame other u, dormantApproveFrame w spW, dormantSpendFrame w spW]
+
+theorem dormantLedger_authorizes_false (other u w : Adr) (spW : B256)
+    (hother : other ≠ u) (hw : w ≠ u) (hsp : spW.toAdr ≠ u) :
+    ∀ frame ∈ dormantLedger other u w spW, frame.authorizes u = false := by
+  intro frame hframe
+  simp [dormantLedger] at hframe
+  rcases hframe with rfl | rfl | rfl
+  · simp [dormantMintFrame, fixtureFrame, CountedFrame.authorizes, hother]
+  · simp [dormantApproveFrame, fixtureFrame, CountedFrame.authorizes, hw]
+  · simp [dormantSpendFrame, fixtureFrame, CountedFrame.authorizes, hsp]
+
+theorem dormantLedger_permanentOutflow_zero (other u w : Adr) (spW : B256) (hw : w ≠ u) :
+    (dormantMintFrame other u).permanentOutflow u = 0 ∧
+    (dormantApproveFrame w spW).permanentOutflow u = 0 ∧
+    (dormantSpendFrame w spW).permanentOutflow u = 0 := by
+  refine ⟨?_, ?_, ?_⟩
+  · simp [dormantMintFrame, fixtureFrame, CountedFrame.permanentOutflow, FlowAtom.holderFlow,
+      HolderFlow.zero]
+  · simp [dormantApproveFrame, fixtureFrame, CountedFrame.permanentOutflow]
+  · by_cases h : spW.toAdr = u <;>
+      simp [dormantSpendFrame, fixtureFrame, CountedFrame.permanentOutflow, FlowAtom.holderFlow,
+        HolderFlow.zero, hw, h]
+
+private def nonDormantApproveFrameByU (u : Adr) (owU spU : B256) : CountedFrame :=
+  fixtureFrame u
+    (some
+      { owner := owU
+        spender := spU
+        caller := u
+        depth := 1
+        visit := .approveStore 15 })
+    none
+
+theorem nonDormantApproveFrameByU_authorizes (u : Adr) (owU spU : B256) :
+    (nonDormantApproveFrameByU u owU spU).authorizes u = true := by
+  simp [nonDormantApproveFrameByU, fixtureFrame, CountedFrame.authorizes]
+
+theorem dormantSpendFrame_root_dormant (other u w : Adr) (spW : B256) :
+    attributionRootAt [dormantApproveFrame w spW, dormantMintFrame other u]
+        (projectedAllowanceKey w.toB256 spW) =
+      .approve w := by
+  simp [dormantApproveFrame, fixtureFrame, attributionRootAt, AllowanceEvent.key]
+
+theorem dormantSpendFrame_root_nonDormant (other u w : Adr) (spW owU spU : B256)
+    (hk : projectedAllowanceKey owU spU ≠ projectedAllowanceKey w.toB256 spW) :
+    attributionRootAt
+        [nonDormantApproveFrameByU u owU spU, dormantApproveFrame w spW,
+          dormantMintFrame other u]
+        (projectedAllowanceKey w.toB256 spW) =
+      .approve w := by
+  simp [nonDormantApproveFrameByU, dormantApproveFrame, fixtureFrame,
+    attributionRootAt, AllowanceEvent.key, hk]
+
+/-! ### Self-bypass and direct debits
+
+A direct-caller redemption and a raw-word self-bypass transfer both carry a
+hardened witness unconditionally, and each one's hardened contribution
+equals its own permanent outflow. -/
+
+private def directRedeemDebit (u : Adr) : DebitProvenance :=
+  { actualCaller := u
+    rawSource := u.toB256
+    source := u
+    branch := .direct }
+
+private def directRedeemFrame (u : Adr) : CountedFrame :=
+  fixtureFrame u none
+    (some
+      { atom := .redemption u.toB256 u u 4
+        credit := none
+        debit := some (directRedeemDebit u)
+        actualCaller := u
+        currentTarget := 0
+        codeAddress := some 0
+        depth := 1 })
+
+private def selfBypassDebit (u : Adr) : DebitProvenance :=
+  { actualCaller := u
+    rawSource := u.toB256
+    source := u
+    branch := .delegated .selfBypass }
+
+private def selfBypassTransferFrame (u w : Adr) : CountedFrame :=
+  fixtureFrame u none
+    (some
+      { atom := .transfer u.toB256 w.toB256 u w 2
+        credit := none
+        debit := some (selfBypassDebit u)
+        actualCaller := u
+        currentTarget := 0
+        codeAddress := some 0
+        depth := 1 })
+
+theorem directRedeemDebit_hardenedFor (u : Adr) :
+    (directRedeemDebit u).hardenedFor [] u = true := by
+  simp [directRedeemDebit, DebitProvenance.hardenedFor]
+
+theorem selfBypassDebit_hardenedFor (u : Adr) :
+    (selfBypassDebit u).hardenedFor [] u = true := by
+  simp [selfBypassDebit, DebitProvenance.hardenedFor]
+
+theorem directRedeemFrame_hardenedContribution_eq_outflow (u : Adr) :
+    (directRedeemFrame u).hardenedContribution [] u =
+        (directRedeemFrame u).permanentOutflow u ∧
+      (directRedeemFrame u).permanentOutflow u = 4 := by
+  simp [directRedeemFrame, fixtureFrame, CountedFrame.hardenedContribution,
+    CountedFrame.permanentOutflow, FlowAtom.holderFlow, HolderFlow.zero, directRedeemDebit,
+    DebitProvenance.hardenedFor]
+
+theorem selfBypassTransferFrame_hardenedContribution_eq_outflow (u w : Adr) (hne : u ≠ w) :
+    (selfBypassTransferFrame u w).hardenedContribution [] u =
+        (selfBypassTransferFrame u w).permanentOutflow u ∧
+      (selfBypassTransferFrame u w).permanentOutflow u = 2 := by
+  simp [selfBypassTransferFrame, fixtureFrame, CountedFrame.hardenedContribution,
+    CountedFrame.permanentOutflow, FlowAtom.holderFlow, HolderFlow.zero, selfBypassDebit,
+    DebitProvenance.hardenedFor, hne.symm]
+
+/-! ### Duplicate-pair `Pairwise` shape -/
+
+/-- Two identical touched pairs trivially satisfy the pairwise
+non-collision shape: the antecedent `p ≠ q` is refutable by `rfl` since both
+list elements are literally the same pair, so no keccak evaluation is
+needed.  Computed distinct-key evidence for genuinely different touched
+pairs lives in the script-altitude fixtures, not here. -/
+theorem duplicatePair_pairwise (ow sp : B256) :
+    [(ow, sp), (ow, sp)].Pairwise
+      (fun p q => p ≠ q → projectedAllowanceKey p.1 p.2 ≠ projectedAllowanceKey q.1 q.2) :=
+  List.pairwise_pair.mpr fun h => absurd rfl h
+
 end Weth10
 
 end Blanc
