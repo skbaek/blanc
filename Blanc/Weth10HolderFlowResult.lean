@@ -151,8 +151,8 @@ def CommittedExecStorageSound (dp : DeployParams) (ca : Adr) : Prop :=
   ∀ {msg : Msg} {benv : Benv} {pc : Nat} {sevm : Sevm}
     {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out)
-    (htransfer : msg.benvAfterTransfer = .ok benv)
-    (hinit : (⟨pc, sevm, pre⟩ : Evm) =
+    (_htransfer : msg.benvAfterTransfer = .ok benv)
+    (_hinit : (⟨pc, sevm, pre⟩ : Evm) =
       initEvm (msg.withBenv benv))
     (hcommit : Execution.commits out = true),
     MessageRunReady dp ca msg →
@@ -290,7 +290,7 @@ theorem ProcessCreateMessage.ok_getStor_eq_inner_of_no_error
     {msg : Msg} {slot : Xlot} {post : Devm} {ca : Adr}
     (hprocess : ProcessCreateMessage msg slot (.ok post))
     (herror : post.error.isSome = false)
-    (htargetNe : msg.currentTarget ≠ ca) :
+    (_htargetNe : msg.currentTarget ≠ ca) :
     ∃ inner : Devm,
       ProcessMessage (processCreateMessage.msg msg) slot (.ok inner) ∧
       post.state.getStor ca = inner.state.getStor ca := by
@@ -356,11 +356,11 @@ theorem ProcessCreateMessageTrace.storageAccounting_of_committedExecSound
        else trace.retained.flowActions dp ca) := by
   cases herror : post.error.isSome with
   | true =>
-      simp only [herror, Bool.true_eq, ↓reduceIte]
+      simp only [↓reduceIte]
       rw [ProcessCreateMessage.rollback_of_error trace.run herror]
       exact StateStorageFlowAccounting.refl ca msg.benv.state
   | false =>
-      simp only [herror, Bool.false_eq, ↓reduceIte]
+      simp
       rcases ProcessCreateMessage.ok_getStor_eq_inner_of_no_error
         trace.run herror htargetNe with ⟨inner, hinner, hpost⟩
       let innerTrace : ProcessMessageTrace
@@ -445,7 +445,7 @@ lemma setDelegation_getStor_eq
   cases hcode : loopMsg.codeAddress with
   | none => simp [hcode] at hrest
   | some address =>
-      simp only [hcode, Except.ok.injEq, Prod.mk.injEq] at hrest
+      simp [hcode] at hrest
       rcases hrest with ⟨rfl, rfl⟩
       exact hstor
 

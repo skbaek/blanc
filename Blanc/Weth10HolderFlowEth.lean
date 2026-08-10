@@ -481,7 +481,7 @@ theorem Exec.entryEthBound
       omega
     · have hbal := of_transfer_bal_other hsub (hcaller hstv) htarget
       have hentry : Exec.entryEthActions dp ca run hcommit = [] := by
-        simp [Exec.entryEthActions, root, Exec.Frame.flowAction?,
+        simp [Exec.entryEthActions, Exec.Frame.flowAction?,
           Exec.Frame.exactInvocation, Exec.Frame.ofRun, exactInvocation,
           flowActionEntryEthActions, initSevm, Msg.withBenv, htarget]
       have hbenvState :
@@ -521,7 +521,7 @@ theorem Exec.entryEthBound
       rw [hmintZero]
       simp
     · have hentry : Exec.entryEthActions dp ca run hcommit = [] := by
-        simp [Exec.entryEthActions, root, Exec.Frame.flowAction?,
+        simp [Exec.entryEthActions, Exec.Frame.flowAction?,
           Exec.Frame.exactInvocation, Exec.Frame.ofRun, exactInvocation,
           flowActionEntryEthActions, initSevm, Msg.withBenv, htarget]
       rw [hentry]
@@ -594,7 +594,7 @@ theorem Exec.redemptionEntryEthBound
     rw [hbenvBal, hredeem]
     omega
   · have hentry : Exec.entryEthActions dp ca run hcommit = [] := by
-      simp [Exec.entryEthActions, root, Exec.Frame.flowAction?,
+      simp [Exec.entryEthActions, Exec.Frame.flowAction?,
         Exec.Frame.exactInvocation, Exec.Frame.ofRun, exactInvocation,
         flowActionEntryEthActions, initSevm, Msg.withBenv, htarget]
     rw [hentry]
@@ -1060,8 +1060,8 @@ def CommittedExecEthSound (dp : DeployParams) (ca : Adr) : Prop :=
   ∀ {msg : Msg} {benv : Benv} {pc : Nat} {sevm : Sevm}
     {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out)
-    (htransfer : msg.benvAfterTransfer = .ok benv)
-    (hinit : (⟨pc, sevm, pre⟩ : Evm) =
+    (_htransfer : msg.benvAfterTransfer = .ok benv)
+    (_hinit : (⟨pc, sevm, pre⟩ : Evm) =
       initEvm (msg.withBenv benv))
     (hcommit : Execution.commits out = true),
     MessageRunReady dp ca msg →
@@ -1480,11 +1480,11 @@ theorem MessageReady.processCreateMessage_msg
       · exact fun hempty => Prog.compile_ne_nil
           (hstate.code.symm.trans (congrArg some hempty))
     · intro htarget
-      simpa [processCreateMessage.msg, Msg.withBenv,
-        htargetNone] using htarget
+      simp [processCreateMessage.msg, Msg.withBenv,
+        htargetNone] at htarget
     · intro htarget
-      simpa [processCreateMessage.msg, Msg.withBenv,
-        htargetNone] using htarget
+      simp [processCreateMessage.msg, Msg.withBenv,
+        htargetNone] at htarget
     · simpa [processCreateMessage.msg, Msg.withBenv] using hinv.ne
     · intro _ hcurrent
       exact False.elim (htargetNe (by
@@ -1693,11 +1693,11 @@ theorem ProcessCreateMessageTrace.ethBound_of_committedExecSound
        else trace.retained.flowActions dp ca) := by
   cases herror : post.error.isSome with
   | true =>
-      simp only [herror, Bool.true_eq, ↓reduceIte]
+      simp only [↓reduceIte]
       rw [ProcessCreateMessage.rollback_of_error trace.run herror]
       exact EthBound.refl ca msg.benv.state
   | false =>
-      simp only [herror, Bool.false_eq, ↓reduceIte]
+      simp
       rcases ProcessCreateMessage.ok_state_eq_inner_of_no_error
         trace.run herror with ⟨inner, hinner, hpost⟩
       let innerTrace : ProcessMessageTrace
@@ -1749,7 +1749,7 @@ theorem setDelegation_bal_eq
   cases hcode : loopMsg.codeAddress with
   | none => simp [hcode] at hrest
   | some address =>
-    simp only [hcode, Except.ok.injEq, Prod.mk.injEq] at hrest
+    simp [hcode] at hrest
     rcases hrest with ⟨rfl, rfl⟩
     exact hbal
 
@@ -1801,7 +1801,7 @@ theorem processMessageCall_createCollision_state_eq
     (hresult : processMessageCall msg = .ok ⟨state, out⟩) :
     state = msg.benv.state := by
   unfold processMessageCall at hresult
-  simp only [htarget, Bool.true_eq, ↓reduceIte] at hresult
+  simp only [htarget, ↓reduceIte] at hresult
   unfold processMessageCall.create at hresult
   unfold messageCreateCollision at hcollision
   simp only [hcollision, ↓reduceIte, pure] at hresult
@@ -1872,11 +1872,11 @@ theorem processMessageCall_callRun_state_eq
       · exact (Prod.mk.inj (Except.ok.inj htail)).1.symm
   | true =>
       unfold messageCallDelegation at hdelegation
-      simp only [hauth, Bool.true_eq, ↓reduceIte,
+      simp only [hauth, ↓reduceIte,
         Except.ok.injEq, Prod.mk.injEq] at hdelegation
       rcases hdelegation with ⟨rfl, rfl⟩
       unfold processMessageCall.call at hresult
-      simp only [hauth, Bool.true_eq, ↓reduceIte,
+      simp only [hauth, ↓reduceIte,
         bind, Except.bind] at hresult
       have hcoreExec :
           processMessage (messageCallExecutionMessage msg) = .ok evm :=
