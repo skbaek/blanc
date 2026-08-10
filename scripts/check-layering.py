@@ -69,7 +69,10 @@ CONTRACTS = {
                "Weth10Redeemable", "Weth10HolderFlowAlgebra",
                "Weth10HolderFlow", "Weth10HolderFlowAuthenticity",
                "Weth10HolderFlowCompiled", "Weth10HolderFlowConservation",
-               "Weth10HolderFlowDeterminism", "Weth10HolderFlowLocal"],
+               "Weth10HolderFlowDeterminism", "Weth10HolderFlowEth",
+               "Weth10HolderFlowEthExec", "Weth10HolderFlowExecAccounting",
+               "Weth10HolderFlowLocal",
+               "Weth10HolderFlowResult", "Weth10HolderFlowStorage"],
 }
 
 ROOTS = ["Blanc", "Main"]

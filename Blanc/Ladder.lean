@@ -1659,7 +1659,8 @@ lemma of_run_call_val_with_depth_frame
     (h_run : Ninst.Run sevm s Ninst.call sf) :
     (((0 : B256) :: xs <<+ sf.stack) ∧ Devm.WorldEq s sf) ∨
     ∃ (parent child : Devm) (xl : Xlot) (dp : Bool) (code : ByteArray)
-      (avail : Nat),
+      (avail pc : Nat),
+      Ninst.StepRun pc sevm s Ninst.call xl (.ok sf) ∧
       0 < sevm.depth ∧
       s.stack = g :: c :: v :: ii :: is :: oi :: os :: parent.stack ∧
       parent.state = s.state ∧
@@ -1686,6 +1687,7 @@ lemma of_run_call_val_with_depth_frame
       sf.memory = parent.memory.write oi.toNat (child.output.take os.toNat) ∧
       sf.stack = (1 : B256) :: parent.stack := by
   rcases h_run with ⟨xl, h_fill, pc, h_run⟩
+  have h_step : Ninst.StepRun pc sevm s Ninst.call xl (.ok sf) := h_run
   simp only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.step,
     Bind.bind, Except.bind, Except.assert] at h_run
   -- pop gas
@@ -2014,7 +2016,7 @@ lemma of_run_call_val_with_depth_frame
         rw [h_cd] at run_pm₀
         refine ⟨(devm10.memExtends
             [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).withReturnData [],
-          child, xl, dp, code0, avail,
+          child, xl, dp, code0, avail, pc, h_step,
           by omega, by rw [e_stack, h_stk_par], h_st_par, h_mem_par,
           h_logs_par, h_output_par, h_del, h_fill,
           run_pm₀, by simpa using herr, h_split.symm,
@@ -2059,7 +2061,7 @@ lemma of_run_call_val_with_depth
   rcases of_run_call_val_with_depth_frame hp h_run with hfail | hsuccess
   · exact Or.inl hfail
   · rcases hsuccess with
-      ⟨parent, child, xl, dp, code, avail,
+      ⟨parent, child, xl, dp, code, avail, _pc, _hstep,
         hdepth, hstack, hstate, hmemory, hlogs, houtput, hrest⟩
     exact Or.inr ⟨parent, child, xl, dp, code, avail,
       hdepth, hstack, hstate, hmemory, hrest⟩

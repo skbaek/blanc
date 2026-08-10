@@ -551,6 +551,98 @@ def Execution.commits : Execution → Bool
   | .error _ => false
   | .ok post => post.error.isNone
 
+/-- Whether the child world survives the complete message-frame settlement.
+For CREATE this is strictly stronger than raw execution success: code-deposit
+failure rolls the constructor world back before the parent resumes. -/
+def Frame.settlementCommits (frame : Frame) (raw : Execution) : Bool :=
+  match frame.settle raw with
+  | .error _ => false
+  | .ok post => post.error.isNone
+
+private theorem execution_commits_of_handleError_clean
+    {raw : Execution} {post : Devm}
+    (hresult : executeCode.handleError raw = .ok post)
+    (hclean : post.error.isNone = true) :
+    Execution.commits raw = true := by
+  cases raw with
+  | ok rawPost =>
+      simp only [executeCode.handleError, Except.ok.injEq] at hresult
+      subst post
+      exact hclean
+  | error error =>
+      rcases error with ⟨error, rawPost⟩
+      cases error <;>
+        simp [executeCode.handleError, Devm.withError,
+          Devm.setMeta] at hresult
+      all_goals subst post
+      all_goals change (some _).isNone = true at hclean
+      all_goals simp at hclean
+
+private theorem processMessage_clean_input
+    {msg : Msg}
+    {input : Except (EvmError × State × AdrSet × Tra) Devm}
+    {post : Devm}
+    (hresult : processMessage.settle msg input = .ok post)
+    (hclean : post.error.isNone = true) :
+    ∃ pre : Devm, input = .ok pre ∧ pre.error.isNone = true := by
+  cases input with
+  | error error => simp [processMessage.settle] at hresult
+  | ok pre =>
+      cases herror : pre.error with
+      | none => exact ⟨pre, rfl, by simp [herror]⟩
+      | some error =>
+          simp [processMessage.settle, herror] at hresult
+          rw [← hresult] at hclean
+          change pre.error.isNone = true at hclean
+          rw [herror] at hclean
+          simp at hclean
+
+private theorem processCreateMessage_clean_input
+    {msg : Msg}
+    {input : Except (EvmError × State × AdrSet × Tra) Devm}
+    {post : Devm}
+    (hresult : processCreateMessage.settle msg input = .ok post)
+    (hclean : post.error.isNone = true) :
+    ∃ pre : Devm, input = .ok pre ∧ pre.error.isNone = true := by
+  cases input with
+  | error error => simp [processCreateMessage.settle] at hresult
+  | ok pre =>
+      cases herror : pre.error with
+      | none => exact ⟨pre, rfl, by simp [herror]⟩
+      | some error =>
+          simp [processCreateMessage.settle, herror] at hresult
+          rw [← hresult] at hclean
+          change pre.error.isNone = true at hclean
+          rw [herror] at hclean
+          simp at hclean
+
+/-- Complete frame settlement can be clean only when the underlying code
+execution itself was clean. -/
+theorem Frame.raw_commits_of_settlementCommits
+    {frame : Frame} {raw : Execution}
+    (h : Blanc.Weth10.Frame.settlementCommits frame raw = true) :
+    Execution.commits raw = true := by
+  unfold Frame.settlementCommits at h
+  cases hsettled : frame.settle raw with
+  | error error => simp [hsettled] at h
+  | ok settled =>
+      have hclean : settled.error.isNone = true := by
+        simpa only [hsettled] using h
+      unfold Frame.settle Frame.settleMsg at hsettled
+      cases hcreate : frame.isCreate with
+      | false =>
+          simp only [hcreate, Bool.false_eq_true, ↓reduceIte] at hsettled
+          rcases processMessage_clean_input hsettled hclean with
+            ⟨handled, hhandled, hhandledClean⟩
+          exact execution_commits_of_handleError_clean hhandled hhandledClean
+      | true =>
+          simp only [hcreate, ↓reduceIte] at hsettled
+          rcases processCreateMessage_clean_input hsettled hclean with
+            ⟨inner, hinner, hinnerClean⟩
+          rcases processMessage_clean_input hinner hinnerClean with
+            ⟨handled, hhandled, hhandledClean⟩
+          exact execution_commits_of_handleError_clean hhandled hhandledClean
+
 /-- The concrete outcome indexed by an `Exec` derivation. -/
 def Exec.outcome {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (_ : Exec pc sevm pre out) : Execution := out
@@ -592,13 +684,64 @@ def Exec.descendantFrames {pc : Nat} {sevm : Sevm} {pre : Devm}
   | .doneErr _ _ _ => []
   | .doneOk _ _ _ next => Exec.descendantFrames next
   | .runErr _ _ _ _ => []
-  | .runOk _ _ child _ next =>
+  | .runOk (f := frame) (raw := raw) _ _ child _ next =>
       let childFrames :=
-        if h : Execution.commits (Blanc.Weth10.Exec.outcome child) = true then
-          Exec.Frame.ofRun child h :: Exec.descendantFrames child
+        if h : Blanc.Weth10.Frame.settlementCommits frame raw = true then
+          let hraw : Execution.commits raw = true :=
+            Blanc.Weth10.Frame.raw_commits_of_settlementCommits h
+          Exec.Frame.ofRun child hraw :: Exec.descendantFrames child
         else []
       childFrames ++ Exec.descendantFrames next
 termination_by sizeOf run
+
+/-- A spawned child whose complete frame settlement does not commit contributes
+no retained frame, even if its raw execution itself committed. -/
+@[simp] theorem Exec.descendantFrames_runOk_of_not_settlementCommits
+    {pc pc' : Nat} {sevm : Sevm} {pre devm' : Devm}
+    {f : Jaune.Frame} {rsm : Resume}
+    {cevm : Evm} {raw out : Execution}
+    (hstep : Jaune.Evm.step ⟨pc, sevm, pre⟩ = .spawn f rsm pc')
+    (henter : f.enter = .run cevm)
+    (child : Exec cevm.pc cevm.sta cevm.dyna raw)
+    (hr : rsm.run (f.settle raw) = .ok devm')
+    (next : Exec pc' sevm devm' out)
+    (hnot : Blanc.Weth10.Frame.settlementCommits f raw ≠ true) :
+    Exec.descendantFrames (Exec.runOk hstep henter child hr next) =
+      Exec.descendantFrames next := by
+  simp only [Exec.descendantFrames, dif_neg hnot, List.nil_append]
+
+/-- In particular, a CREATE child whose raw execution commits but whose
+code-deposit settlement rolls back contributes no descendant frame.  The raw
+commit premise records the semantic counterexample to pruning by raw outcome
+alone. -/
+theorem Exec.descendantFrames_runOk_create_codeDepositRollback
+    {pc pc' : Nat} {sevm : Sevm} {pre devm' settled : Devm}
+    {f : Jaune.Frame} {rsm : Resume}
+    {cevm : Evm} {raw out : Execution}
+    (hstep : Jaune.Evm.step ⟨pc, sevm, pre⟩ = .spawn f rsm pc')
+    (henter : f.enter = .run cevm)
+    (child : Exec cevm.pc cevm.sta cevm.dyna raw)
+    (hr : rsm.run (f.settle raw) = .ok devm')
+    (next : Exec pc' sevm devm' out)
+    (_rawCommits : Execution.commits raw = true)
+    (hcreate : f.isCreate = true)
+    (hsettled : processCreateMessage.settle f.outer
+      (processMessage.settle f.inner (executeCode.handleError raw)) =
+        .ok settled)
+    (herror : settled.error.isSome = true) :
+    Exec.descendantFrames (Exec.runOk hstep henter child hr next) =
+      Exec.descendantFrames next := by
+  apply Exec.descendantFrames_runOk_of_not_settlementCommits
+    hstep henter child hr next
+  intro hcommit
+  have hframeSettle : f.settle raw = .ok settled := by
+    unfold Frame.settle Frame.settleMsg
+    simpa only [hcreate, ↓reduceIte] using hsettled
+  unfold Blanc.Weth10.Frame.settlementCommits at hcommit
+  rw [hframeSettle] at hcommit
+  cases hoption : settled.error with
+  | none => simp [hoption] at herror
+  | some error => simp [hoption] at hcommit
 
 /-- All and only committed frames in a successful root execution.  An errored
 root contributes no frames, so a later enclosing rollback cannot leak actions
@@ -643,6 +786,36 @@ def Exec.flowActions (dp : DeployParams) (ca : Adr)
     (run : Exec pc sevm pre out) : List FlowAction :=
   (Exec.committedFrames run).filterMap
     (Exec.Frame.flowAction? dp ca)
+
+/-- The action contribution of a raw-committing CREATE child is nevertheless
+empty when code-deposit settlement rolls the child world back.  This is the
+observable ledger falsifier for using `Execution.commits raw` as the retention
+test. -/
+theorem Exec.retainedChildActions_eq_nil_of_create_codeDepositRollback
+    {dp : DeployParams} {ca : Adr} {f : Jaune.Frame}
+    {raw : Execution} {settled : Devm}
+    {pc : Nat} {sevm : Sevm} {pre : Devm}
+    (child : Exec pc sevm pre raw)
+    (_rawCommits : Execution.commits raw = true)
+    (hcreate : f.isCreate = true)
+    (hsettled : processCreateMessage.settle f.outer
+      (processMessage.settle f.inner (executeCode.handleError raw)) =
+        .ok settled)
+    (herror : settled.error.isSome = true) :
+    (if Blanc.Weth10.Frame.settlementCommits f raw = true then
+      Exec.flowActions dp ca child
+     else []) = [] := by
+  have hframeSettle : f.settle raw = .ok settled := by
+    unfold Frame.settle Frame.settleMsg
+    simpa only [hcreate, ↓reduceIte] using hsettled
+  have hnot : Blanc.Weth10.Frame.settlementCommits f raw ≠ true := by
+    intro hcommit
+    unfold Blanc.Weth10.Frame.settlementCommits at hcommit
+    rw [hframeSettle] at hcommit
+    cases hoption : settled.error with
+    | none => simp [hoption] at herror
+    | some error => simp [hoption] at hcommit
+  simp only [if_neg hnot]
 
 /-- Executable observations for one root derivation, in enclosing-frame then
 depth-first child order.  Classification proofs later show that this includes
@@ -771,8 +944,9 @@ def MessageCallTrace.flowActions (dp : DeployParams) (ca : Adr)
     {msg : Msg} {state : State} {out : MsgCallOutput} :
     MessageCallTrace msg state out → List FlowAction
   | .createCollision .. => []
-  | .createRun _ _ _ _ trace _ =>
-      trace.retained.flowActions dp ca
+  | .createRun _ _ evm _ trace _ =>
+      if evm.error.isSome then []
+      else trace.retained.flowActions dp ca
   | .callRun _ _ _ _ _ _ _ _ trace _ =>
       trace.retained.flowActions dp ca
 

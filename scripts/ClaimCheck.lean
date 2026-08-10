@@ -1,5 +1,6 @@
 import Blanc.Weth10Redeemable
 import Blanc.Weth10DeploymentRoot
+import Blanc.Weth10HolderFlowResult
 
 /-!
 Lean-checked statement pins for the WETH10 flagship declarations.  Each
@@ -755,6 +756,47 @@ example (hroot : DeploymentRoot chainId base deployed dp ca)
       deployed future) :
     balSum (future.state.getStor ca) ≤ (future.state.bal ca).toNat :=
   hroot.reachable_solvent hreach
+
+/-! The holder-flow history pins are intentionally proof-carrying and retain
+the complete applied-block sequence.  These examples make weakening the
+history to an endpoint-only summary, or dropping ordinary-reach coverage,
+fail closed in the claims gate. -/
+
+example : UInt64 → DeployParams → Adr → BlockChain → BlockChain → Type :=
+  AccountedHistory
+
+example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {checkpoint future : BlockChain} :
+    AccountedHistory chainId dp ca checkpoint future → List Block :=
+  AccountedHistory.appliedBlocks
+
+example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {checkpoint future : BlockChain} :
+    AccountedHistory chainId dp ca checkpoint future →
+      (u : Adr) → HolderFlow u :=
+  AccountedHistory.weth10Flow
+
+example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {checkpoint future : BlockChain}
+    (history : AccountedHistory chainId dp ca checkpoint future) :
+    BlockChain.ReachUsing (ChainConfig.pragueOnly chainId)
+      checkpoint future :=
+  history.toReachUsing
+
+example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {checkpoint future : BlockChain}
+    (hstable : Stable dp ca checkpoint.state)
+    (hreach : BlockChain.ReachUsing (ChainConfig.pragueOnly chainId)
+      checkpoint future) :
+    Nonempty (AccountedHistory chainId dp ca checkpoint future) :=
+  exists_accountedHistory_of_reachUsing hstable hreach
+
+example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {checkpoint future : BlockChain}
+    (history₁ history₂ : AccountedHistory chainId dp ca checkpoint future)
+    (hblocks : history₁.appliedBlocks = history₂.appliedBlocks) :
+    history₁.weth10Flow u = history₂.weth10Flow u :=
+  history₁.weth10Flow_eq_of_appliedBlocks_eq history₂ hblocks
 
 end Weth10
 

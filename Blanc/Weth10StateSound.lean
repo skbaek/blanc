@@ -5021,6 +5021,39 @@ theorem rest_set_flashMintedSlot (s : Stor) (v : B256) :
   exact Stor.get_set_ne _ (fun h =>
     flashMintedSlot_not_valid ⟨a, h.symm⟩) _
 
+/-- The exact balance-debit fragment changes only its address-shaped owner
+key.  Any distinct storage key is therefore preserved. -/
+theorem debitLoadedBalance_storage_get_ne
+    {e : Sevm} {s r : Devm} {balance value owner key : B256}
+    (hkey : key ≠ owner)
+    (hp : [balance, value, owner] <<+ s.stack)
+    (run : Line.Run e s debitLoadedBalance r) :
+    (Devm.getStor r e.currentTarget).get key =
+      (Devm.getStor s e.currentTarget).get key := by
+  unfold debitLoadedBalance at run
+  rcases Line.of_run_cons run with ⟨s1, hsub, run1⟩
+  have hp1 : (balance - value) :: owner :: [] <<+ s1.stack :=
+    prefix_of_sub hsub hp
+  rcases Line.of_run_cons run1 with ⟨s2, hswap, run2⟩
+  have hswapCore : Stack.Swap (0 : Fin 16).val
+      [balance - value, owner] [owner, balance - value] :=
+    Stack.swapCore_zero
+  have hp2 : owner :: (balance - value) :: [] <<+ s2.stack :=
+    Stack.prefix_of_swap hswapCore (of_run_swap hswap) hp1
+  rcases Line.of_run_cons run2 with ⟨s3, hstore, hnil⟩
+  cases hnil
+  have hset : Devm.getStor r e.currentTarget =
+      (Devm.getStor s2 e.currentTarget).set owner
+        (balance - value) :=
+    sstore_getStor_set hstore hp2
+  have hstor : Devm.getStor s = Devm.getStor s2 := by
+    rw [Line.of_inv Devm.getStor (by line_inv)
+          (Line.Run.cons hsub Line.Run.nil),
+      Line.of_inv Devm.getStor (by line_inv)
+        (Line.Run.cons hswap Line.Run.nil)]
+  rw [hset, Stor.get_set_ne _ hkey.symm,
+    ← congrFun hstor e.currentTarget]
+
 /-- Exact successful `flashBurn`: debit the normalized receiver by argument 2
 and subtract that same word from the flash counter. -/
 theorem flashBurn_storage_at_receiver
@@ -5172,6 +5205,120 @@ theorem flashBurn_storage_at_receiver
           (PopBurn.Inv.inv hpopGuard))
     exact h_bal_s_s3.trans
       (Func.of_inv Devm.getBal Devm.getBal (by func_inv) run3)
+
+/-- `flashBurn` changes the normalized receiver balance and the flash counter,
+but preserves every key outside both the balance region and flash slot. -/
+theorem flashBurn_storage_get_of_not_valid
+    (dp : DeployParams) (key : B256)
+    (hkeyNotValid : ¬ ValidAdr key)
+    (hkeyFlash : key ≠ flashMintedSlot)
+    {sevm : Sevm} {s r : Devm}
+    (run : Func.Run ((weth10 dp).main :: weth10Aux) sevm s
+      flashBurn r) :
+    (Devm.getStor r sevm.currentTarget).get key =
+      (Devm.getStor s sevm.currentTarget).get key := by
+  simp only [flashBurn] at run
+  rcases of_run_prepend (loadArgBalanceAmount 0 2) _ run with
+    ⟨s1, hload, run1⟩
+  rcases prefix_of_loadArgBalanceAmount 0 2 nil_pref hload with
+    ⟨balance, ownerWord, howner, hbalance, hp1⟩
+  rcases of_run_prepend balanceTooSmall _ run1 with
+    ⟨s2, hguard, run2⟩
+  have hp2 :
+      (balance <? Sevm.argWord sevm 2) :: balance ::
+        Sevm.argWord sevm 2 :: ownerWord :: [] <<+ s2.stack :=
+    prefix_of_balanceTooSmall hp1 hguard
+  have hlookup :
+      ((weth10 dp).main :: weth10Aux)[burnBalanceErrorSlot]? =
+        some (Func.revWith "WETH: burn amount exceeds balance") := by
+    simp [weth10, weth10Aux, burnBalanceErrorSlot, burnBalanceError]
+  rcases of_run_branch_call_revWith hlookup run2 with
+    ⟨s3, hpopGuard, run3⟩
+  have hpopStack := hpopGuard.stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hpopStack
+  rw [hpopStack] at hp2
+  have hflag : (balance <? Sevm.argWord sevm 2) = 0 :=
+    pref_head_unique hp2 (pref_append [0] s3.stack)
+  rw [hflag] at hp2
+  have hp3 : [balance, Sevm.argWord sevm 2, ownerWord] <<+ s3.stack :=
+    cons_pref_cons_inv hp2
+  have hstor_s_s3 : Devm.getStor s = Devm.getStor s3 :=
+    (Line.of_inv Devm.getStor (by line_inv) hload).trans
+      ((Line.of_inv Devm.getStor (by line_inv) hguard).trans
+        (PopBurn.Inv.inv hpopGuard))
+  have hownerValid : ValidAdr ownerWord := by
+    rw [howner]
+    exact normalizedAddress_valid (Sevm.argWord sevm 0)
+  have hkeyOwner : key ≠ ownerWord := by
+    intro heq
+    apply hkeyNotValid
+    rw [heq]
+    exact hownerValid
+  rcases of_run_prepend debitLoadedBalance _ run3 with
+    ⟨s4, hdebit, run4⟩
+  have hdebitKey := debitLoadedBalance_storage_get_ne hkeyOwner hp3
+    hdebit
+  let eventLine : Line :=
+    addressArg 0 ++ arg 2 ++ [pushB256 0] ++ emitTransfer ++ [pop, pop]
+  rcases of_run_prepend eventLine _ run4 with
+    ⟨s5, hevent, run5⟩
+  have hstor_s4_s5 : Devm.getStor s4 = Devm.getStor s5 :=
+    Line.of_inv Devm.getStor (by line_inv) hevent
+  rcases of_run_prepend pushFlashMintedSlot _ run5 with
+    ⟨s6, hpush1, run6⟩
+  have hp6 : flashMintedSlot :: [] <<+ s6.stack :=
+    prefix_of_pushFlashMintedSlot nil_pref hpush1
+  rcases of_run_next run6 with ⟨s7, hloadFlash, run7⟩
+  rcases prefix_of_sload hloadFlash hp6 with
+    ⟨flash, hp7, hflashRead⟩
+  rcases of_run_prepend (arg 2) _ run7 with
+    ⟨s8, harg2, run8⟩
+  have hp8 : Sevm.argWord sevm 2 :: flash :: [] <<+ s8.stack :=
+    prefix_of_arg hp7 harg2
+  rcases of_run_next run8 with ⟨s9, hswap, run9⟩
+  have hp9 : flash :: Sevm.argWord sevm 2 :: [] <<+ s9.stack := by
+    have hswapCore : Stack.Swap (0 : Fin 16).val
+        [Sevm.argWord sevm 2, flash]
+        [flash, Sevm.argWord sevm 2] := Stack.swapCore_zero
+    exact Stack.prefix_of_swap hswapCore (of_run_swap hswap) hp8
+  rcases of_run_next run9 with ⟨s10, hsub, run10⟩
+  have hp10 : (flash - Sevm.argWord sevm 2) :: [] <<+ s10.stack :=
+    prefix_of_sub hsub hp9
+  rcases of_run_prepend pushFlashMintedSlot _ run10 with
+    ⟨s11, hpush2, run11⟩
+  have hp11 : flashMintedSlot ::
+      (flash - Sevm.argWord sevm 2) :: [] <<+ s11.stack :=
+    prefix_of_pushFlashMintedSlot hp10 hpush2
+  rcases of_run_next run11 with ⟨s12, hstoreFlash, hreturn⟩
+  have hset : Devm.getStor s12 sevm.currentTarget =
+      (Devm.getStor s11 sevm.currentTarget).set flashMintedSlot
+        (flash - Sevm.argWord sevm 2) :=
+    sstore_getStor_set hstoreFlash hp11
+  have hstor_s12_r : Devm.getStor s12 = Devm.getStor r :=
+    Func.of_inv Devm.getStor Devm.getStor (by func_inv) hreturn
+  have hstor_s5_s11 : Devm.getStor s5 = Devm.getStor s11 := by
+    rw [Line.of_inv Devm.getStor (by line_inv) hpush1,
+      Line.of_inv Devm.getStor (by line_inv)
+        (Line.Run.cons hloadFlash Line.Run.nil),
+      Line.of_inv Devm.getStor (by line_inv) harg2,
+      Line.of_inv Devm.getStor (by line_inv)
+        (Line.Run.cons hswap Line.Run.nil),
+      Line.of_inv Devm.getStor (by line_inv)
+        (Line.Run.cons hsub Line.Run.nil),
+      Line.of_inv Devm.getStor (by line_inv) hpush2]
+  calc
+    (Devm.getStor r sevm.currentTarget).get key =
+        (Devm.getStor s12 sevm.currentTarget).get key := by
+            rw [congrFun hstor_s12_r sevm.currentTarget]
+    _ = (Devm.getStor s11 sevm.currentTarget).get key := by
+            rw [hset, Stor.get_set_ne _ hkeyFlash.symm]
+    _ = (Devm.getStor s5 sevm.currentTarget).get key := by
+            rw [congrFun hstor_s5_s11 sevm.currentTarget]
+    _ = (Devm.getStor s4 sevm.currentTarget).get key := by
+            rw [congrFun hstor_s4_s5 sevm.currentTarget]
+    _ = (Devm.getStor s3 sevm.currentTarget).get key := hdebitKey
+    _ = (Devm.getStor s sevm.currentTarget).get key := by
+            rw [congrFun hstor_s_s3 sevm.currentTarget]
 
 /-- Existential-owner projection of `flashBurn_storage_at_receiver`, retained
 for the original backing-preservation consumers. -/
@@ -7665,6 +7812,47 @@ theorem flashExactRel_of_static_call
 
 /-! ### Exact permit-slot transport -/
 
+/-- Exact boundary for permit's only recursive machine step.  The generated
+permit body is WETH10-silent on both sides of this retained `STATICCALL`;
+the child itself stays explicit, so this relation makes no endpoint claim
+across arbitrary code at the recovery address. -/
+inductive PermitBalanceOwnSilent (sevm : Sevm) (pre post : Devm) : Prop
+  | intro (callPre callPost : Devm) (pc : Nat) (slot : Xlot)
+      (prefixSilent : Stor.Weth10Silent
+        (Devm.getStor pre sevm.currentTarget)
+        (Devm.getStor callPre sevm.currentTarget))
+      (filled : Xlot.Filled slot)
+      (step : Ninst.StepRun pc sevm callPre statcall slot (.ok callPost))
+      (suffixSilent : Stor.Weth10Silent
+        (Devm.getStor callPost sevm.currentTarget)
+        (Devm.getStor post sevm.currentTarget))
+
+theorem PermitBalanceOwnSilent.prepend
+    {sevm : Sevm} {first pre post : Devm}
+    (silent : Stor.Weth10Silent
+      (Devm.getStor first sevm.currentTarget)
+      (Devm.getStor pre sevm.currentTarget))
+    (effect : PermitBalanceOwnSilent sevm pre post) :
+    PermitBalanceOwnSilent sevm first post := by
+  rcases effect with
+    ⟨callPre, callPost, pc, slot, hprefixSilent, filled, step,
+      hsuffixSilent⟩
+  exact .intro callPre callPost pc slot
+    (silent.trans hprefixSilent) filled step hsuffixSilent
+
+theorem PermitBalanceOwnSilent.append
+    {sevm : Sevm} {pre post last : Devm}
+    (effect : PermitBalanceOwnSilent sevm pre post)
+    (silent : Stor.Weth10Silent
+      (Devm.getStor post sevm.currentTarget)
+      (Devm.getStor last sevm.currentTarget)) :
+    PermitBalanceOwnSilent sevm pre last := by
+  rcases effect with
+    ⟨callPre, callPost, pc, slot, hprefixSilent, filled, step,
+      hsuffixSilent⟩
+  exact .intro callPre callPost pc slot hprefixSilent filled step
+    (hsuffixSilent.trans silent)
+
 private lemma permit_prefix_of_chainid
     {e : Sevm} {s s' : Devm} {xs : Stack}
     (hp : xs <<+ s.stack) (run : Ninst.Run e s chainid s') :
@@ -7932,6 +8120,32 @@ private theorem permitRecoverFlashPrepare_frame
   · exact hcodeWrites.trans (funext fun a =>
       getCode_eq_of_state_eq hpush.state a)
 
+/-- The recovery line's own instructions are balance-silent on both sides of
+its exact `STATICCALL` instruction. -/
+private theorem recoverPermitSigner_balanceOwnSilent
+    {sevm : Sevm} {s r : Devm}
+    (run : Line.Run sevm s recoverPermitSigner r) :
+    PermitBalanceOwnSilent sevm s r := by
+  change Line.Run sevm s
+    (permitRecoverFlashPrepare ++ [statcall, pop, pushB256 128, mload]) r
+    at run
+  rcases of_run_append permitRecoverFlashPrepare run with
+    ⟨callPre, hprepare, run⟩
+  rcases Line.of_run_cons run with ⟨callPost, hcall, htail⟩
+  rcases hcall with ⟨slot, hfilled, pc, hstep⟩
+  have hstorPrepare : Devm.getStor s = Devm.getStor callPre :=
+    Line.of_inv Devm.getStor (by
+      unfold permitRecoverFlashPrepare permitRecoverFlashWrites pushList
+      line_inv) hprepare
+  have hstorTail : Devm.getStor callPost = Devm.getStor r :=
+    Line.of_inv Devm.getStor (by line_inv) htail
+  exact .intro callPre callPost pc slot
+    (Stor.Weth10Silent.of_eq
+      (congrFun hstorPrepare sevm.currentTarget))
+    hfilled hstep
+    (Stor.Weth10Silent.of_eq
+      (congrFun hstorTail sevm.currentTarget))
+
 /-- Permit recovery is exact-counter preserving even when address `1` is not
 the canonical precompile: the arbitrary static subtree is discharged by the
 deeper-frame relation. -/
@@ -8070,6 +8284,79 @@ private def permitSignerFlashGuards : Func :=
   (arg 0 +++ eq ::: iszero :::
     (.call invalidPermitErrorSlot) <?>
     approvePermit)
+
+/-- The signer guards themselves are world-silent, and their only successful
+continuation is the tagged allowance write proved silent above. -/
+private theorem permitSignerFlashGuards_balanceSilent
+    (dp : DeployParams) {sevm : Sevm} {s r : Devm}
+    (run : Func.Run ((weth10 dp).main :: weth10Aux) sevm s
+      permitSignerFlashGuards r) :
+    Stor.Weth10Silent
+      (Devm.getStor s sevm.currentTarget)
+      (Devm.getStor r sevm.currentTarget) := by
+  unfold permitSignerFlashGuards at run
+  rcases of_run_next run with ⟨s1, hdup, run⟩
+  rcases of_run_next run with ⟨s2, hzero, run⟩
+  rcases of_run_branch run with
+      ⟨s3, hpop1, run⟩ |
+      ⟨w1, s3, s4, hnz1, hpop1, hburn1, hinvalid1⟩
+  · rcases of_run_prepend (arg 0) _ run with ⟨s4, harg0, run⟩
+    rcases of_run_next run with ⟨s5, heq, run⟩
+    rcases of_run_next run with ⟨s6, hzero2, run⟩
+    rcases of_run_branch run with
+        ⟨t, hpop2, happrove⟩ |
+        ⟨w2, t0, t, hnz2, hpop2, hburn2, hinvalid2⟩
+    · have hstor : Devm.getStor s = Devm.getStor t := by
+        calc
+          Devm.getStor s = Devm.getStor s1 :=
+            Ninst.Hinv.inv (f := Devm.getStor) hdup
+          _ = Devm.getStor s2 :=
+            Ninst.Hinv.inv (f := Devm.getStor) hzero
+          _ = Devm.getStor s3 := PopBurn.Inv.inv hpop1
+          _ = Devm.getStor s4 :=
+            Line.of_inv Devm.getStor (by line_inv) harg0
+          _ = Devm.getStor s5 :=
+            Ninst.Hinv.inv (f := Devm.getStor) heq
+          _ = Devm.getStor s6 :=
+            Ninst.Hinv.inv (f := Devm.getStor) hzero2
+          _ = Devm.getStor t := PopBurn.Inv.inv hpop2
+      exact (Stor.Weth10Silent.of_eq
+        (congrFun hstor sevm.currentTarget)).trans
+          (approvePermit_storage_silent dp happrove)
+    · rcases of_run_call hinvalid2 with
+        ⟨f, u, hget, hcallBurn, hrev⟩
+      have hf : f = invalidPermitError := by
+        simpa [weth10Aux, invalidPermitErrorSlot] using hget.symm
+      subst f
+      exact absurd hrev Func.not_run_revWith
+  · rcases of_run_call hinvalid1 with ⟨f, u, hget, hcallBurn, hrev⟩
+    have hf : f = invalidPermitError := by
+      simpa [weth10Aux, invalidPermitErrorSlot] using hget.symm
+    subst f
+    exact absurd hrev Func.not_run_revWith
+
+/-- The complete recovery auxiliary has the same retained static boundary;
+digest preparation is silent before it and the signer/allowance tail is
+silent after it. -/
+private theorem permitRecover_balanceOwnSilent
+    (dp : DeployParams) {sevm : Sevm} {s r : Devm}
+    (run : Func.Run ((weth10 dp).main :: weth10Aux) sevm s
+      permitRecover r) :
+    PermitBalanceOwnSilent sevm s r := by
+  change Func.Run ((weth10 dp).main :: weth10Aux) sevm s
+    (permitDigest +++ recoverPermitSigner +++ permitSignerFlashGuards) r
+    at run
+  rcases of_run_prepend permitDigest _ run with ⟨digestPre, hdigest, run⟩
+  rcases of_run_prepend recoverPermitSigner _ run with
+    ⟨guardsPre, hrecover, hguards⟩
+  have hstorDigest : Devm.getStor s = Devm.getStor digestPre :=
+    Line.of_inv Devm.getStor (by
+      unfold permitDigest pushList
+      line_inv) hdigest
+  exact ((recoverPermitSigner_balanceOwnSilent hrecover).prepend
+      (Stor.Weth10Silent.of_eq
+        (congrFun hstorDigest sevm.currentTarget))).append
+    (permitSignerFlashGuards_balanceSilent dp hguards)
 
 /-- Both signer guards are storage-silent; a successful path must reach the
 tagged approval tail because the two deliberate-error functions cannot return
@@ -8286,6 +8573,76 @@ private def permitDomainFlashDispatch (dp : DeployParams) : Func :=
   (swap 0 ::: pop ::: pushDeployWord dp.cachedDomainSeparator :::
     .call permitRecoverSlot) <?>
   (swap 0 ::: calculateDomainSeparator +++ .call permitRecoverSlot)
+
+/-- Both domain-separator branches reach the same recovery auxiliary after a
+storage-silent generated prefix. -/
+private theorem permitDomainFlashDispatch_balanceOwnSilent
+    (dp : DeployParams) {sevm : Sevm} {s r : Devm}
+    (run : Func.Run ((weth10 dp).main :: weth10Aux) sevm s
+      (permitDomainFlashDispatch dp) r) :
+    PermitBalanceOwnSilent sevm s r := by
+  unfold permitDomainFlashDispatch at run
+  rcases of_run_next run with ⟨s1, q1, run⟩
+  rcases of_run_next run with ⟨s2, q2, run⟩
+  rcases of_run_next run with ⟨s3, q3, run⟩
+  have hstor3 : Devm.getStor s = Devm.getStor s3 := by
+    calc
+      Devm.getStor s = Devm.getStor s1 :=
+        Ninst.Hinv.inv (f := Devm.getStor) q1
+      _ = Devm.getStor s2 := by
+        unfold pushDeployWord at q2
+        exact Ninst.Hinv.inv (f := Devm.getStor) q2
+      _ = Devm.getStor s3 :=
+        Ninst.Hinv.inv (f := Devm.getStor) q3
+  rcases of_run_branch run with
+      ⟨branchPre, hpop, hfork⟩ |
+      ⟨w, branchPre, branchBurn, hnz, hpop, hburn, hcached⟩
+  · rcases of_run_next hfork with ⟨s4, q4, hfork⟩
+    rcases of_run_prepend calculateDomainSeparator _ hfork with
+      ⟨s5, hdomain, hcall⟩
+    rcases of_run_call hcall with
+      ⟨f, recoverPre, hget, hcallBurn, hrecover⟩
+    have hf : f = permitRecover := by
+      simpa [weth10Aux, permitRecoverSlot] using hget.symm
+    subst f
+    have hstor : Devm.getStor s = Devm.getStor recoverPre := by
+      calc
+        Devm.getStor s = Devm.getStor s3 := hstor3
+        _ = Devm.getStor branchPre := PopBurn.Inv.inv hpop
+        _ = Devm.getStor s4 :=
+          Ninst.Hinv.inv (f := Devm.getStor) q4
+        _ = Devm.getStor s5 :=
+          Line.of_inv Devm.getStor (by
+            unfold calculateDomainSeparator pushList
+            line_inv) hdomain
+        _ = Devm.getStor recoverPre := Burn.Inv.inv hcallBurn
+    exact (permitRecover_balanceOwnSilent dp hrecover).prepend
+      (Stor.Weth10Silent.of_eq
+        (congrFun hstor sevm.currentTarget))
+  · rcases of_run_next hcached with ⟨s4, q4, hcached⟩
+    rcases of_run_next hcached with ⟨s5, q5, hcached⟩
+    rcases of_run_next hcached with ⟨s6, q6, hcall⟩
+    rcases of_run_call hcall with
+      ⟨f, recoverPre, hget, hcallBurn, hrecover⟩
+    have hf : f = permitRecover := by
+      simpa [weth10Aux, permitRecoverSlot] using hget.symm
+    subst f
+    have hstor : Devm.getStor s = Devm.getStor recoverPre := by
+      calc
+        Devm.getStor s = Devm.getStor s3 := hstor3
+        _ = Devm.getStor branchPre := PopBurn.Inv.inv hpop
+        _ = Devm.getStor branchBurn := Burn.Inv.inv hburn
+        _ = Devm.getStor s4 :=
+          Ninst.Hinv.inv (f := Devm.getStor) q4
+        _ = Devm.getStor s5 :=
+          Ninst.Hinv.inv (f := Devm.getStor) q5
+        _ = Devm.getStor s6 := by
+          unfold pushDeployWord at q6
+          exact Ninst.Hinv.inv (f := Devm.getStor) q6
+        _ = Devm.getStor recoverPre := Burn.Inv.inv hcallBurn
+    exact (permitRecover_balanceOwnSilent dp hrecover).prepend
+      (Stor.Weth10Silent.of_eq
+        (congrFun hstor sevm.currentTarget))
 
 /-- Cached and recomputed EIP-712 domain selection are storage-silent before
 the fixed recovery auxiliary call. -/
@@ -8568,6 +8925,27 @@ private def permitAfterDeadlineFlash (dp : DeployParams) : Func :=
   permitNonceFlashPrefix +++ permitStructFlashPrepare +++
     permitDomainFlashDispatch dp
 
+/-- The live permit prefix performs only the normalized tagged nonce write
+before the retained recovery boundary. -/
+private theorem permitAfterDeadline_balanceOwnSilent
+    (dp : DeployParams) {sevm : Sevm} {s r : Devm}
+    (run : Func.Run ((weth10 dp).main :: weth10Aux) sevm s
+      (permitAfterDeadlineFlash dp) r) :
+    PermitBalanceOwnSilent sevm s r := by
+  unfold permitAfterDeadlineFlash at run
+  rcases of_run_prepend permitNonceFlashPrefix _ run with
+    ⟨noncePost, hnonce, run⟩
+  rcases of_run_prepend permitStructFlashPrepare _ run with
+    ⟨domainPre, hstruct, hdomain⟩
+  have hstorStruct : Devm.getStor noncePost = Devm.getStor domainPre :=
+    Line.of_inv Devm.getStor (by
+      unfold permitStructFlashPrepare argCopy cdc pushList
+      line_inv) hstruct
+  exact ((permitDomainFlashDispatch_balanceOwnSilent dp hdomain).prepend
+      (Stor.Weth10Silent.of_eq
+        (congrFun hstorStruct sevm.currentTarget))).prepend
+    (permitNonceFlashPrefix_silent hnonce)
+
 private theorem permitAfterDeadline_exactRel
     (dp : DeployParams) (ca : Adr)
     {sevm : Sevm} {s r : Devm}
@@ -8659,6 +9037,36 @@ private theorem permitAfterDeadline_backed
   exact permitDomainFlashDispatch_backed dp ca h_target h_value hpreSs ih
     hdomain
 
+/-- Successful permit execution must take the live deadline arm; its guard is
+storage-silent before the exact generated own-balance boundary. -/
+private theorem permitBody_balanceOwnSilent
+    (dp : DeployParams) {sevm : Sevm} {s r : Devm}
+    (run : Func.Run ((weth10 dp).main :: weth10Aux) sevm s
+      (permit dp) r) :
+    PermitBalanceOwnSilent sevm s r := by
+  change Func.Run ((weth10 dp).main :: weth10Aux) sevm s
+    (arg 3 +++ [timestamp, gt] +++
+      ((.call expiredPermitErrorSlot) <?>
+        permitAfterDeadlineFlash dp)) r at run
+  rcases of_run_prepend (arg 3 ++ [timestamp, gt]) _ run with
+    ⟨guardPost, hguard, hbranch⟩
+  have hstorGuard : Devm.getStor s = Devm.getStor guardPost :=
+    Line.of_inv Devm.getStor (by line_inv) hguard
+  rcases of_run_branch hbranch with
+      ⟨livePre, hpop, hlive⟩ |
+      ⟨w, errorPre, errorCallPre, hnz, hpop, hburn, hexpired⟩
+  · have hstorLive : Devm.getStor s = Devm.getStor livePre :=
+      hstorGuard.trans (PopBurn.Inv.inv hpop)
+    exact (permitAfterDeadline_balanceOwnSilent dp hlive).prepend
+      (Stor.Weth10Silent.of_eq
+        (congrFun hstorLive sevm.currentTarget))
+  · rcases of_run_call hexpired with
+      ⟨f, u, hget, hcallBurn, hrev⟩
+    have hf : f = expiredPermitError := by
+      simpa [weth10Aux, expiredPermitErrorSlot] using hget.symm
+    subst f
+    exact absurd hrev Func.not_run_revWith
+
 private theorem permitBody_exactRelFuncSound
     (dp : DeployParams) (ca : Adr) :
     ExactRelFuncSound dp ca (permit dp) := by
@@ -8744,6 +9152,28 @@ private theorem permitBody_backed
       simpa [weth10Aux, expiredPermitErrorSlot] using hget.symm
     subst f
     exact absurd hrev Func.not_run_revWith
+
+/-- Exact generated-program proof that public `permit` has no own
+balance-region write.  The only recursive machine step remains the concrete
+retained `STATICCALL` gap of `PermitBalanceOwnSilent`. -/
+theorem permit_balanceOwnSilent
+    (dp : DeployParams) {sevm : Sevm} {s r : Devm}
+    (run : Func.Run ((weth10 dp).main :: weth10Aux) sevm s
+      (nonpayable (permit dp)) r) :
+    PermitBalanceOwnSilent sevm s r := by
+  rcases run_body_of_run_nonpayable run with
+    ⟨bodyPre, _, hstate, hbody⟩
+  exact (permitBody_balanceOwnSilent dp hbody).prepend
+    (Stor.Weth10Silent.of_eq
+      (getStor_eq_of_state_eq hstate sevm.currentTarget))
+
+/-- Short public spelling for the generated permit own-write theorem. -/
+theorem permit_balanceSilent
+    (dp : DeployParams) {sevm : Sevm} {s r : Devm}
+    (run : Func.Run ((weth10 dp).main :: weth10Aux) sevm s
+      (nonpayable (permit dp)) r) :
+    PermitBalanceOwnSilent sevm s r :=
+  permit_balanceOwnSilent dp run
 
 /-- Unconditional exact flash-counter preservation for the normalized public
 `permit` selector, including arbitrary delegated/static recovery subtrees. -/

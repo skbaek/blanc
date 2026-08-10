@@ -949,6 +949,82 @@ def RawTokenCallbackBoundary (dp : DeployParams) (e : Sevm)
     Func.Run ((weth10 dp).main :: weth10Aux) e
       callPost (.call boolReturnSlot) post
 
+/-- `RawTokenCallbackBoundary` with the exact parent instruction step that
+spawned its recursive slot.  Keeping `pc` and `Ninst.StepRun` prevents the
+callback child from being detached from the enclosing execution proof when a
+later accounting theorem unfolds `Exec.committedFrames`. -/
+def RawTokenCallbackStepBoundary (dp : DeployParams) (e : Sevm)
+    (self target : Adr)
+    (rawTarget sel value tailLen inputSize : B256) (tail input : Bytes)
+    (pre post : Devm) : Prop :=
+  target = rawTarget.toAdr ∧
+  inputSize =
+    0x84 + ((~~~ (31 : B256)) &&& (31 + tailLen)) ∧
+  ∃ (callPre callPost parent child : Devm) (xl : Xlot)
+      (delegated : Bool) (code : ByteArray) (gasWord : B256)
+      (avail pc : Nat),
+    Ninst.StepRun pc e callPre call xl (.ok callPost) ∧
+    0 < e.depth ∧
+    callPre.stack =
+      gasWord :: rawTarget :: (0 : B256) :: callbackArgsOffset ::
+        inputSize :: (0 : B256) :: (0 : B256) :: parent.stack ∧
+    (callPre.memory.read callbackArgsOffset.toNat inputSize.toNat).1 =
+      input ∧
+    (∃ img, Mem.Reads callPre.memory
+      (tokenCallbackImage img sel e.caller.toB256 value tailLen tail)) ∧
+    Devm.getStor pre = Devm.getStor callPre ∧
+    Devm.getBal pre = Devm.getBal callPre ∧
+    Devm.getCode pre = Devm.getCode callPre ∧
+    pre.logs = callPre.logs ∧
+    pre.output = callPre.output ∧
+    parent.state = callPre.state ∧
+    parent.memory = callPre.memory.extends
+      [(callbackArgsOffset.toNat, inputSize.toNat), (0, 0)] ∧
+    parent.logs = callPre.logs ∧
+    parent.output = callPre.output ∧
+    ((getDelegatedCodeAddress (callPre.getCode target) = none ∧
+        code = callPre.getCode target ∧ delegated = false) ∨
+      (∃ delegatedTarget,
+        getDelegatedCodeAddress (callPre.getCode target) =
+          some delegatedTarget ∧
+        code = callPre.getCode delegatedTarget ∧ delegated = true)) ∧
+    Xlot.Filled xl ∧
+    ProcessMessage
+      (callMsg e parent (min gasWord.toNat (except64th avail)) 0
+        self target target true false input code delegated)
+      xl (.ok child) ∧
+    child.error.isSome = false ∧
+    (Resume.call parent 0 0).run (.ok child) = .ok callPost ∧
+    callPost.state = child.state ∧
+    callPost.returnData = child.output ∧
+    callPost.memory = parent.memory.write 0 (child.output.take 0) ∧
+    callPost.stack = (1 : B256) :: parent.stack ∧
+    Func.Run ((weth10 dp).main :: weth10Aux) e
+      callPost (.call boolReturnSlot) post
+
+/-- Forgetting only the parent `StepRun` recovers the established raw
+callback API. -/
+theorem RawTokenCallbackStepBoundary.toRaw
+    {dp : DeployParams} {e : Sevm} {self target : Adr}
+    {rawTarget sel value tailLen inputSize : B256} {tail input : Bytes}
+    {pre post : Devm}
+    (h : RawTokenCallbackStepBoundary dp e self target rawTarget sel value
+      tailLen inputSize tail input pre post) :
+    RawTokenCallbackBoundary dp e self target rawTarget sel value tailLen
+      inputSize tail input pre post := by
+  rcases h with
+    ⟨htarget, hsize, callPre, callPost, parent, child, xl, delegated,
+      code, gasWord, avail, pc, _hstep, hdepth, hstack, hinput,
+      hreads, hstor, hbal, hcode, hlogs, houtput, hparentState,
+      hparentMemory, hparentLogs, hparentOutput, hdelegation, hfilled,
+      hmessage, hclean, hresume, hcallPostState, hreturnData, hmemory,
+      hcallPostStack, hbool⟩
+  exact ⟨htarget, hsize, callPre, callPost, parent, child, xl,
+    delegated, code, gasWord, avail, hdepth, hstack, hinput, hreads,
+    hstor, hbal, hcode, hlogs, houtput, hparentState, hparentMemory,
+    hparentLogs, hparentOutput, hdelegation, hfilled, hmessage, hclean,
+    hresume, hcallPostState, hreturnData, hmemory, hcallPostStack, hbool⟩
+
 /-- The exact ABI-size word passed to the ERC-677 callback `CALL`. -/
 def tokenCallbackSizeWord (data : Bytes) : B256 :=
   0x84 + ((~~~ (31 : B256)) &&& (31 + Nat.toB256 data.length))
@@ -1048,6 +1124,64 @@ private theorem not_run_call_boolReturn_of_zero
     exact absurd hbubble not_run_bubbleRevert
 
 /-- Every successful `callBoolCallback` run exposes its exact raw callback
+frame together with the concrete recursive slot used by the parent `CALL`. -/
+theorem callBoolCallback_rawStepBoundary
+    (dp : DeployParams) (sel targetArg dataArg valueWord : B256)
+    (valueLine : Line) {e : Sevm} {pre post : Devm} {img : Bytes}
+    (h_value_stack : ∀ {a b : Devm} {xs : Stack},
+      xs <<+ a.stack → Line.Run e a valueLine b →
+        valueWord :: xs <<+ b.stack)
+    (h_value_stor : Line.Inv Devm.getStor valueLine)
+    (h_value_bal : Line.Inv Devm.getBal valueLine)
+    (h_value_code : Line.Inv Devm.getCode valueLine)
+    (h_value_mem : Line.Inv Devm.memory valueLine)
+    (h_value_logs : Line.Inv Devm.logs valueLine)
+    (h_value_output : Line.Inv Devm.output valueLine)
+    (h_wf : Mem.Wf pre.memory)
+    (h_reads : Mem.Reads pre.memory img)
+    (run : Func.Run ((weth10 dp).main :: weth10Aux) e pre
+      (callBoolCallback sel targetArg dataArg valueLine) post) :
+    ∃ inputSize input,
+      RawTokenCallbackStepBoundary dp e e.currentTarget
+        (Sevm.argWord e targetArg).toAdr (Sevm.argWord e targetArg)
+        sel valueWord (Sevm.tailLen e dataArg) inputSize
+        (Sevm.tailBytes e dataArg) input pre post := by
+  rcases of_run_callBoolCallback_frame dp sel targetArg dataArg valueWord
+      valueLine h_value_stack h_value_stor h_value_bal h_value_code
+      h_value_mem h_value_logs h_value_output h_wf h_reads run with
+    ⟨callPre, callPost, gasWord, inputSize, h_input_size, h_stack,
+      h_call, h_bool_call, h_stor_pre, h_bal_pre, h_code_pre,
+      h_logs_pre, h_output_pre, _h_wf_call, h_reads_call⟩
+  let input :=
+    (callPre.memory.read callbackArgsOffset.toNat inputSize.toNat).1
+  refine ⟨inputSize, input, ?_⟩
+  unfold RawTokenCallbackStepBoundary
+  refine ⟨rfl, h_input_size, ?_⟩
+  rcases of_run_call_val_with_depth_frame h_stack h_call with
+      h_failed | h_success
+  · exact absurd h_bool_call
+      (not_run_call_boolReturn_of_zero dp h_failed.1)
+  · rcases h_success with
+      ⟨parent, child, xl, delegated, code, avail, pc, hstep,
+        h_depth, h_stack_eq, h_parent_state, h_parent_memory,
+        h_parent_logs, h_parent_output, h_delegated, h_filled,
+        h_message, h_child_clean, h_resume, h_post_state,
+        h_post_returnData, h_post_memory, h_post_stack⟩
+    refine ⟨callPre, callPost, parent, child, xl, delegated, code,
+      gasWord, avail, pc, hstep, h_depth, h_stack_eq, rfl,
+      ⟨img, h_reads_call⟩, h_stor_pre, h_bal_pre, h_code_pre,
+      h_logs_pre, h_output_pre, h_parent_state, ?_, h_parent_logs,
+      h_parent_output, h_delegated, h_filled, ?_, h_child_clean,
+      h_resume, h_post_state, h_post_returnData, ?_, h_post_stack,
+      h_bool_call⟩
+    · simpa only [show (0 : B256).toNat = 0 from rfl] using
+        h_parent_memory
+    · simpa only [input, show (0 : B256).toNat = 0 from rfl,
+        if_true, Nat.add_zero] using h_message
+    · simpa only [show (0 : B256).toNat = 0 from rfl] using
+        h_post_memory
+
+/-- Every successful `callBoolCallback` run exposes its exact raw callback
 frame, even when the enclosing dynamic-tail pointer or length is malformed.
 The existential `inputSize` is the modular EVM word computed by the program;
 `input` is the exact memory slice passed to the child rather than a canonical
@@ -1089,7 +1223,7 @@ theorem callBoolCallback_rawBoundary
   · exact absurd h_bool_call
       (not_run_call_boolReturn_of_zero dp h_failed.1)
   · rcases h_success with
-      ⟨parent, child, xl, delegated, code, avail,
+      ⟨parent, child, xl, delegated, code, avail, _pc, _hstep,
         h_depth, h_stack_eq, h_parent_state, h_parent_memory,
         h_parent_logs, h_parent_output, h_delegated, h_filled,
         h_message, h_child_clean, h_resume, h_post_state,
@@ -1171,7 +1305,7 @@ theorem callBoolCallback_successEffect
   · exact absurd h_bool_call
       (not_run_call_boolReturn_of_zero dp h_failed.1)
   · rcases h_success with
-      ⟨parent, child, xl, delegated, code, avail,
+      ⟨parent, child, xl, delegated, code, avail, _pc, _hstep,
         h_depth, h_stack_eq, h_parent_state, h_parent_memory,
         h_parent_logs, h_parent_output, h_delegated, h_filled,
         h_message, h_child_clean, h_resume, h_post_state,
@@ -1705,6 +1839,72 @@ def DepositToAndCallRawSuccessEffect (dp : DeployParams) (e : Sevm)
       onTokenTransferSelector e.value (Sevm.tailLen e 1) inputSize
       (Sevm.tailBytes e 1) input callbackPre post
 
+/-- Raw `depositToAndCall` effect retaining the callback parent `StepRun`. -/
+def DepositToAndCallRawStepSuccessEffect (dp : DeployParams) (e : Sevm)
+    (pre post : Devm) : Prop :=
+  ∃ callbackPre inputSize input,
+    Devm.getStor callbackPre e.currentTarget =
+        (Devm.getStor pre e.currentTarget).set
+          (normalizedAddressArg e 0)
+          (e.value + (Devm.getStor pre e.currentTarget).get
+            (normalizedAddressArg e 0)) ∧
+    callbackPre.logs = pre.logs ++ [mintToTransferLog e] ∧
+    Devm.getBal callbackPre = Devm.getBal pre ∧
+    Devm.getCode callbackPre = Devm.getCode pre ∧
+    callbackPre.output = pre.output ∧
+    RawTokenCallbackStepBoundary dp e e.currentTarget
+      (Sevm.argWord e 0).toAdr (Sevm.argWord e 0)
+      onTokenTransferSelector e.value (Sevm.tailLen e 1) inputSize
+      (Sevm.tailBytes e 1) input callbackPre post
+
+theorem DepositToAndCallRawStepSuccessEffect.toRaw
+    {dp : DeployParams} {e : Sevm} {pre post : Devm}
+    (h : DepositToAndCallRawStepSuccessEffect dp e pre post) :
+    DepositToAndCallRawSuccessEffect dp e pre post := by
+  rcases h with
+    ⟨callbackPre, inputSize, input, hstor, hlogs, hbal, hcode,
+      houtput, hboundary⟩
+  exact ⟨callbackPre, inputSize, input, hstor, hlogs, hbal, hcode,
+    houtput, hboundary.toRaw⟩
+
+/-- Selected-body raw `depositToAndCall` effect with exact callback step. -/
+theorem depositToAndCall_rawStepSuccessEffect (dp : DeployParams)
+    {e : Sevm} {pre post : Devm}
+    (h_wf : Mem.Wf pre.memory)
+    (h_fresh : Mem.Reads pre.memory [])
+    (run : Func.Run ((weth10 dp).main :: weth10Aux) e pre
+      depositToAndCall post) :
+    DepositToAndCallRawStepSuccessEffect dp e pre post := by
+  simp only [depositToAndCall] at run
+  rcases of_run_prepend mintToPrefix _ run with
+    ⟨callbackPre, hprefix, hcallback⟩
+  rcases mintToPrefix_effect h_wf h_fresh hprefix with
+    ⟨hstor, hlogs, hbal, hcode, houtput⟩
+  rcases mintToPrefix_memory_frame h_wf h_fresh hprefix with
+    ⟨hwfCallback, hreadsCallback⟩
+  rcases callBoolCallback_rawStepBoundary dp onTokenTransferSelector 0 1
+      e.value [callvalue]
+      (by
+        intro a b xs hp hline
+        rcases Line.of_run_cons hline with ⟨c, hcv, hnil⟩
+        cases hnil
+        exact prefix_of_push (of_run_callvalue hcv) hp)
+      (by line_inv) (by line_inv) (by line_inv) (by line_inv)
+      (by
+        intro e' a b hline
+        rcases Line.of_run_cons hline with ⟨c, hcv, hnil⟩
+        cases hnil
+        exact (of_run_callvalue hcv).logs)
+      (by
+        intro e' a b hline
+        rcases Line.of_run_cons hline with ⟨c, hcv, hnil⟩
+        cases hnil
+        exact (of_run_callvalue hcv).output)
+      hwfCallback hreadsCallback hcallback with
+    ⟨inputSize, input, hboundary⟩
+  exact ⟨callbackPre, inputSize, input, hstor, hlogs, hbal, hcode,
+    houtput, hboundary⟩
+
 /-- Selected-body raw `depositToAndCall`: exact normalized mint prefix and
 the actual modular callback input, with no canonical ABI-tail premise. -/
 theorem depositToAndCall_rawSuccessEffect (dp : DeployParams)
@@ -1770,6 +1970,33 @@ theorem weth10_depositToAndCall_rawSuccessEffect (dp : DeployParams)
   have heffect := depositToAndCall_rawSuccessEffect dp
     hwfBody hfreshBody hbody
   unfold DepositToAndCallRawSuccessEffect at heffect ⊢
+  simpa only [hstor, hbal, hcodeFrame, hlogs, houtput] using heffect
+
+/-- Compiled public-selector form retaining the callback parent step. -/
+theorem weth10_depositToAndCall_rawStepSuccessEffect (dp : DeployParams)
+    {e : Sevm} {pre post : Devm}
+    (h_code : some e.code.toList = Prog.compile (weth10 dp))
+    (h_sel : Sevm.selector e = depositToAndCallSelector)
+    (h_nonempty : e.data.length.toB256 ≠ 0)
+    (h_wf : Mem.Wf pre.memory)
+    (h_fresh : Mem.Reads pre.memory [])
+    (exc : Exec 0 e pre (.ok post)) :
+    DepositToAndCallRawStepSuccessEffect dp e pre post := by
+  have h_mem :
+      (depositToAndCallSelector, depositToAndCall) ∈ weth10Funcs dp := by
+    simp [depositToAndCallSelector, weth10Funcs]
+  rcases exec_enters_weth10Selector_logs exc h_code h_sel h_nonempty
+      h_mem with
+    ⟨bodyPre, hstor, hbal, hcodeFrame, hmemory, hlogs, houtput, hbody⟩
+  have hwfBody : Mem.Wf bodyPre.memory := by
+    rw [hmemory]
+    exact h_wf
+  have hfreshBody : Mem.Reads bodyPre.memory [] := by
+    rw [hmemory]
+    exact h_fresh
+  have heffect := depositToAndCall_rawStepSuccessEffect dp
+    hwfBody hfreshBody hbody
+  unfold DepositToAndCallRawStepSuccessEffect at heffect ⊢
   simpa only [hstor, hbal, hcodeFrame, hlogs, houtput] using heffect
 
 /-- Exact successful `depositToAndCall` effect.  The credited balance and mint
@@ -1916,6 +2143,104 @@ def TransferAndCallRawSuccessEffect (dp : DeployParams) (e : Sevm)
         (Sevm.tailLen e 2) inputSize (Sevm.tailBytes e 2) input
         callbackPre post)
 
+/-- Raw `transferAndCall` effect retaining the callback parent `StepRun` in
+both the redemption and storage-transfer arms. -/
+def TransferAndCallRawStepSuccessEffect (dp : DeployParams) (e : Sevm)
+    (pre post : Devm) : Prop :=
+  (Sevm.argWord e 0 = 0 ∧
+    ∃ callPre callbackPre inputSize input,
+      BurnCallPrefix e pre callPre callbackPre e.caller
+        (Sevm.argWord e 1) e.caller.toB256 ∧
+      RawTokenCallbackStepBoundary dp e e.currentTarget
+        (Sevm.argWord e 0).toAdr (Sevm.argWord e 0)
+        onTokenTransferSelector (Sevm.argWord e 1)
+        (Sevm.tailLen e 2) inputSize (Sevm.tailBytes e 2) input
+        callbackPre post) ∨
+  (Sevm.argWord e 0 ≠ 0 ∧
+    ∃ recipient callbackPre inputSize input,
+      recipient.toB256 = normalizedAddressArg e 0 ∧
+      Transfer (Stor.rest (Devm.getStor pre e.currentTarget))
+        e.caller (Sevm.argWord e 1) recipient
+        (Stor.rest (Devm.getStor callbackPre e.currentTarget)) ∧
+      (Devm.getStor callbackPre e.currentTarget).get flashMintedSlot =
+        (Devm.getStor pre e.currentTarget).get flashMintedSlot ∧
+      callbackPre.logs = pre.logs ++
+        [ordinaryTransferLog e e.caller.toB256
+          (normalizedAddressArg e 0) (Sevm.argWord e 1)] ∧
+      Devm.getBal callbackPre = Devm.getBal pre ∧
+      Devm.getCode callbackPre = Devm.getCode pre ∧
+      callbackPre.output = pre.output ∧
+      RawTokenCallbackStepBoundary dp e e.currentTarget
+        (Sevm.argWord e 0).toAdr (Sevm.argWord e 0)
+        onTokenTransferSelector (Sevm.argWord e 1)
+        (Sevm.tailLen e 2) inputSize (Sevm.tailBytes e 2) input
+        callbackPre post)
+
+theorem TransferAndCallRawStepSuccessEffect.toRaw
+    {dp : DeployParams} {e : Sevm} {pre post : Devm}
+    (h : TransferAndCallRawStepSuccessEffect dp e pre post) :
+    TransferAndCallRawSuccessEffect dp e pre post := by
+  rcases h with hzero | hnonzero
+  · rcases hzero with
+      ⟨harg, callPre, callbackPre, inputSize, input, hburn, hcallback⟩
+    exact Or.inl ⟨harg, callPre, callbackPre, inputSize, input, hburn,
+      hcallback.toRaw⟩
+  · rcases hnonzero with
+      ⟨harg, recipient, callbackPre, inputSize, input, hrecipient,
+        htransfer, hflash, hlogs, hbal, hcode, houtput, hcallback⟩
+    exact Or.inr ⟨harg, recipient, callbackPre, inputSize, input,
+      hrecipient, htransfer, hflash, hlogs, hbal, hcode, houtput,
+      hcallback.toRaw⟩
+
+theorem transferAndCall_rawStepSuccessEffect (dp : DeployParams)
+    {e : Sevm} {pre post : Devm}
+    (h_wf : Mem.Wf pre.memory)
+    (h_fresh : Mem.Reads pre.memory [])
+    (run : Func.Run ((weth10 dp).main :: weth10Aux) e pre
+      transferAndCall post) :
+    TransferAndCallRawStepSuccessEffect dp e pre post := by
+  simp only [transferAndCall] at run
+  rcases transferThen_callbackPrefix_effect dp h_wf h_fresh run with
+      hzero | hnonzero
+  · rcases hzero with
+      ⟨hargZero, callPre, callbackPre, img, hprefix, _hlen,
+        hwfCallback, hreadsCallback, hcallback⟩
+    rcases callBoolCallback_rawStepBoundary dp onTokenTransferSelector 0 2
+        (Sevm.argWord e 1) (arg 1)
+        (by
+          intro a b xs hp hline
+          exact prefix_of_arg hp hline)
+        (by unfold arg cdl; line_inv)
+        (by unfold arg cdl; line_inv)
+        (by unfold arg cdl; line_inv)
+        (by unfold arg cdl; line_inv)
+        (by unfold arg cdl; line_inv)
+        (by unfold arg cdl; line_inv)
+        hwfCallback hreadsCallback hcallback with
+      ⟨inputSize, input, hboundary⟩
+    exact Or.inl ⟨hargZero, callPre, callbackPre, inputSize, input,
+      hprefix, hboundary⟩
+  · rcases hnonzero with
+      ⟨hargNonzero, recipient, callbackPre, img,
+        hrecipient, htransfer, hflash, hlogs, hbal, hcode,
+        houtput, _hlen, hwfCallback, hreadsCallback, hcallback⟩
+    rcases callBoolCallback_rawStepBoundary dp onTokenTransferSelector 0 2
+        (Sevm.argWord e 1) (arg 1)
+        (by
+          intro a b xs hp hline
+          exact prefix_of_arg hp hline)
+        (by unfold arg cdl; line_inv)
+        (by unfold arg cdl; line_inv)
+        (by unfold arg cdl; line_inv)
+        (by unfold arg cdl; line_inv)
+        (by unfold arg cdl; line_inv)
+        (by unfold arg cdl; line_inv)
+        hwfCallback hreadsCallback hcallback with
+      ⟨inputSize, input, hboundary⟩
+    exact Or.inr ⟨hargNonzero, recipient, callbackPre, inputSize,
+      input, hrecipient, htransfer, hflash, hlogs, hbal, hcode,
+      houtput, hboundary⟩
+
 /-- Selected-body raw `transferAndCall`: exact raw-zero redemption or
 raw-nonzero normalized transfer prefix, followed by the actual modular
 callback input. -/
@@ -1994,6 +2319,45 @@ theorem weth10_transferAndCall_rawSuccessEffect (dp : DeployParams)
     rw [hmemory]
     exact h_fresh
   have heffect := transferAndCall_rawSuccessEffect dp
+    hwfBody hfreshBody hbody
+  refine ⟨hvalue, ?_⟩
+  rcases heffect with hzero | hnonzero
+  · rcases hzero with
+      ⟨hargZero, callPre, callbackPre, inputSize, input,
+        hprefix, hboundary⟩
+    exact Or.inl ⟨hargZero, callPre, callbackPre, inputSize, input,
+      hprefix.of_entry_eq hstor.symm hbal.symm hcodeFrame.symm
+        hlogs.symm houtput.symm,
+      hboundary⟩
+  · exact Or.inr (by
+      simpa only [hstor, hbal, hcodeFrame, hlogs, houtput] using
+        hnonzero)
+
+/-- Compiled public-selector form retaining the callback parent step. -/
+theorem weth10_transferAndCall_rawStepSuccessEffect (dp : DeployParams)
+    {e : Sevm} {pre post : Devm}
+    (h_code : some e.code.toList = Prog.compile (weth10 dp))
+    (h_sel : Sevm.selector e = transferAndCallSelector)
+    (h_nonempty : e.data.length.toB256 ≠ 0)
+    (h_wf : Mem.Wf pre.memory)
+    (h_fresh : Mem.Reads pre.memory [])
+    (exc : Exec 0 e pre (.ok post)) :
+    e.value = 0 ∧ TransferAndCallRawStepSuccessEffect dp e pre post := by
+  have h_mem :
+      (transferAndCallSelector, nonpayable transferAndCall) ∈
+        weth10Funcs dp := by
+    simp [transferAndCallSelector, weth10Funcs]
+  rcases exec_enters_weth10Nonpayable_logs exc h_code h_sel h_nonempty
+      h_mem with
+    ⟨bodyPre, hvalue, hstor, hbal, hcodeFrame, hmemory,
+      hlogs, houtput, hbody⟩
+  have hwfBody : Mem.Wf bodyPre.memory := by
+    rw [hmemory]
+    exact h_wf
+  have hfreshBody : Mem.Reads bodyPre.memory [] := by
+    rw [hmemory]
+    exact h_fresh
+  have heffect := transferAndCall_rawStepSuccessEffect dp
     hwfBody hfreshBody hbody
   refine ⟨hvalue, ?_⟩
   rcases heffect with hzero | hnonzero

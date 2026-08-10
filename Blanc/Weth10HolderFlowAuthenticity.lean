@@ -65,6 +65,100 @@ theorem Exec.Frame.AuthenticContext.stateCode_eq
   apply byteArray_eq_of_toList_eq
   exact Option.some.inj (h.installed.1.trans h.invocation.2.2.2.symm)
 
+private theorem step_ok_getCode_eq
+    {dp : DeployParams} {ca : Adr}
+    {pc : Nat} {sevm : Sevm} {pre post : Devm} {xl : Xlot}
+    (hxl : Xlot.Rel Devm.CodePreserve xl)
+    (hrun : Step.Run (Evm.step ⟨pc, sevm, pre⟩) xl (.ok post))
+    (hcode : some (pre.getCode ca).toList = Prog.compile (weth10 dp)) :
+    post.getCode ca = pre.getCode ca := by
+  have hne : (pre.getCode ca).toList ≠ [] := fun hempty =>
+    Prog.compile_ne_nil (hcode.symm.trans (congrArg some hempty))
+  exact Evm.step_effect codePreserve_refl_trans.1
+    Ninst.codePreserve_effectRec Jinst.codePreserve_effect
+    Linst.codePreserve_effect hxl hrun ca hne
+
+/-- Every successful descendant sees the same installed WETH10 code in the
+world state, even when the descendant itself executes foreign callback code. -/
+theorem Exec.mem_descendantFrames_installedCode
+    {dp : DeployParams} {ca : Adr}
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out)
+    (hcode : some (pre.getCode ca).toList = Prog.compile (weth10 dp))
+    {frame : Exec.Frame}
+    (hmem : frame ∈ Blanc.Weth10.Exec.descendantFrames run) :
+    some (frame.pre.getCode ca).toList = Prog.compile (weth10 dp) := by
+  revert hcode frame
+  induction run with
+  | halt hstep =>
+      intro hcode frame hmem
+      simp [Blanc.Weth10.Exec.descendantFrames] at hmem
+  | cont hstep next ih =>
+      intro hcode frame hmem
+      apply ih
+      · rw [step_ok_getCode_eq (dp := dp) (ca := ca) (xl := .none) trivial
+          (by rw [hstep]; exact ⟨rfl, rfl⟩) hcode]
+        exact hcode
+      · simpa only [Blanc.Weth10.Exec.descendantFrames] using hmem
+  | doneErr hstep henter hresume =>
+      intro hcode frame hmem
+      simp [Blanc.Weth10.Exec.descendantFrames] at hmem
+  | doneOk hstep henter hresume next ih =>
+      intro hcode frame hmem
+      apply ih
+      · rw [step_ok_getCode_eq (dp := dp) (ca := ca) (xl := .none) trivial
+          (by
+            rw [hstep]
+            exact ⟨_, RunFrame.of_done henter, hresume.symm⟩) hcode]
+        exact hcode
+      · simpa only [Blanc.Weth10.Exec.descendantFrames] using hmem
+  | runErr hstep henter child hresume ihChild =>
+      intro hcode frame hmem
+      simp [Blanc.Weth10.Exec.descendantFrames] at hmem
+  | @runOk pc sevm pre f rsm pc' cevm raw nextPre out hstep henter child
+      hresume next ihChild ihNext =>
+      intro hcode frame hmem
+      have hchildCode :
+          some (cevm.dyna.getCode ca).toList = Prog.compile (weth10 dp) := by
+        rw [(Evm.step_spawn_child hstep henter).2.1 ca]
+        exact hcode
+      have hchildRel :
+          Xlot.Rel Devm.CodePreserve (.some ⟨cevm, raw⟩) :=
+        Exec.effect codePreserve_refl_trans.1 codePreserve_refl_trans.2
+          Ninst.codePreserve_effectRec Jinst.codePreserve_effect
+          Linst.codePreserve_effect child
+      have hnextCode :
+          some (nextPre.getCode ca).toList = Prog.compile (weth10 dp) := by
+        rw [step_ok_getCode_eq (dp := dp) (ca := ca) hchildRel
+          (by
+            rw [hstep]
+            exact ⟨_, RunFrame.of_run henter, hresume.symm⟩) hcode]
+        exact hcode
+      simp only [Blanc.Weth10.Exec.descendantFrames] at hmem
+      split at hmem
+      · simp only [List.mem_append, List.mem_cons] at hmem
+        rcases hmem with (rfl | hchild) | hnext
+        · exact hchildCode
+        · exact ihChild hchildCode hchild
+        · exact ihNext hnextCode hnext
+      · exact ihNext hnextCode hmem
+
+theorem Exec.committedFrames_installedCode
+    {dp : DeployParams} {ca : Adr}
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out)
+    (hcode : some (pre.getCode ca).toList = Prog.compile (weth10 dp)) :
+    ∀ frame ∈ Blanc.Weth10.Exec.committedFrames run,
+      some (frame.pre.getCode ca).toList = Prog.compile (weth10 dp) := by
+  intro frame hframe
+  unfold Blanc.Weth10.Exec.committedFrames at hframe
+  split at hframe
+  · simp only [List.mem_cons] at hframe
+    rcases hframe with rfl | hdesc
+    · exact hcode
+    · exact Exec.mem_descendantFrames_installedCode run hcode hdesc
+  · cases hframe
+
 /-- Every descendant retained by `Exec.descendantFrames` is the initial
 machine of an actually entered child frame. -/
 theorem Exec.mem_descendantFrames_isRoot
@@ -111,6 +205,56 @@ theorem Exec.committedFrames_isRoot
     · exact ⟨hpc, hmemory⟩
     · exact Exec.mem_descendantFrames_isRoot run hdesc
   · cases hframe
+
+/-- A retained numeric action can only come from the exact direct WETH10
+invocation arm of the executable classifier. -/
+theorem Exec.Frame.exactInvocation_of_flowAction?_eq_some
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    {action : FlowAction}
+    (haction : frame.flowAction? dp ca = some action) :
+    frame.exactInvocation dp ca := by
+  unfold Exec.Frame.flowAction? at haction
+  split at haction
+  · assumption
+  · simp at haction
+
+/-- Any retained frame whose executable context already pins an exact direct
+WETH10 invocation has the full compiled-functional context.  Unlike the
+action-oriented adapter below, this form does not assume that the frame has
+already been classified; it is the program-level entry point for reverse
+balance-write completeness. -/
+theorem Exec.Frame.authenticContext_of_mem_committedFrames_exactInvocation
+    {dp : DeployParams} {ca : Adr}
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out)
+    (hcode : some (pre.getCode ca).toList = Prog.compile (weth10 dp))
+    (hpc : pc = 0) (hmemory : pre.memory = Mem.empty)
+    {frame : Exec.Frame}
+    (hframe : frame ∈ Blanc.Weth10.Exec.committedFrames run)
+    (hinvocation : frame.exactInvocation dp ca) :
+    frame.AuthenticContext dp ca := by
+  refine ⟨Exec.committedFrames_isRoot run hpc hmemory frame hframe,
+    hinvocation, ?_⟩
+  refine ⟨Exec.committedFrames_installedCode run hcode frame hframe, ?_⟩
+  intro _
+  exact ⟨hinvocation.2.2.2, hinvocation.1⟩
+
+/-- Every action selected from a committed execution frame has the complete
+whole-program context needed by the compiled WETH10 functional theorems. -/
+theorem Exec.Frame.authenticContext_of_mem_committedFrames
+    {dp : DeployParams} {ca : Adr}
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out)
+    (hcode : some (pre.getCode ca).toList = Prog.compile (weth10 dp))
+    (hpc : pc = 0) (hmemory : pre.memory = Mem.empty)
+    {frame : Exec.Frame} {action : FlowAction}
+    (hframe : frame ∈ Blanc.Weth10.Exec.committedFrames run)
+    (haction : frame.flowAction? dp ca = some action) :
+    frame.AuthenticContext dp ca := by
+  have hinvocation :=
+    Exec.Frame.exactInvocation_of_flowAction?_eq_some haction
+  exact frame.authenticContext_of_mem_committedFrames_exactInvocation
+    run hcode hpc hmemory hframe hinvocation
 
 /-- All committed frames retained by one raw execution slot start at whole
 frame altitude. -/

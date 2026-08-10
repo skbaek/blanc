@@ -1039,7 +1039,7 @@ theorem of_callerBurnThen_callback_effect
       simp [B256.eqCheck]] at h01
     exact B256.zero_ne_one h01.symm
   rcases hcallSuccess with
-    ⟨parent, child, xl, delegated, code, avail,
+    ⟨parent, child, xl, delegated, code, avail, _pc, _hstep,
       hdepth, hstackEq, hparentState, hparentMemory,
       hparentLogs, hparentOutput, hdelegated, hfilled,
       hmessage, hclean, hresume, hpostState, hpostReturnData,

@@ -131,6 +131,38 @@ theorem holderFlow_withdrawal_floor_of_residual
     initial ≤ flow.redeemed + final := by
   omega
 
+/-- With no permanent outflow, ordinary committed credits can only increase
+the still-booked holder balance from its checkpoint value. -/
+theorem holderFlow_zero_outflow_floor_of_cancelled
+    {u : Adr} {initial final : Nat} (flow : HolderFlow u)
+    (cancelled : initial + flow.ordinaryIn =
+      final + flow.redeemed + flow.externalTransferredOut)
+    (noRedemption : flow.redeemed = 0)
+    (noExternalTransfer : flow.externalTransferredOut = 0) :
+    initial ≤ final := by
+  omega
+
+/-- A positive ordinary credit makes the lower bound strict when the holder
+has no permanent outflow over the accounted interval. -/
+theorem holderFlow_credited_strict_of_cancelled
+    {u : Adr} {initial final : Nat} (flow : HolderFlow u)
+    (cancelled : initial + flow.ordinaryIn =
+      final + flow.redeemed + flow.externalTransferredOut)
+    (credited : 0 < flow.ordinaryIn)
+    (noRedemption : flow.redeemed = 0)
+    (noExternalTransfer : flow.externalTransferredOut = 0) :
+    initial < final := by
+  omega
+
+/-- Natural subtraction truncates exactly to zero when recorded permanent
+outflow is at least the checkpoint balance. -/
+theorem holderFlow_over_total_outflow_truncates
+    {u : Adr} {initial : Nat} (flow : HolderFlow u)
+    (covered : initial ≤
+      flow.redeemed + flow.externalTransferredOut) :
+    initial - (flow.redeemed + flow.externalTransferredOut) = 0 := by
+  omega
+
 /-! ## Aggregate supply and wrap loss -/
 
 /-- Aggregate quantities needed only for the no-wrap argument.  Ordinary
@@ -194,6 +226,16 @@ def FlowAction.creditLossTotal (action : FlowAction) : Nat :=
 
 def creditLossOfActions (actions : List FlowAction) : Nat :=
   (actions.map FlowAction.creditLossTotal).sum
+
+/-- Boundary falsifier for treating modular addition as natural conservation:
+crediting one word to the maximum balance loses exactly one full modulus. -/
+theorem creditLoss_max_one_eq_modulus :
+    creditLoss B256.max 1 = 2 ^ 256 := by
+  apply creditLoss_eq_two_pow_of_not_nof
+  unfold B256.Nof
+  rw [show (B256.max : B256).toNat = 2 ^ 256 - 1 from rfl]
+  rw [show (1 : B256).toNat = 1 from rfl]
+  norm_num
 
 theorem CreditOccurrence.nof_of_loss_lt_modulus
     (credit : CreditOccurrence) (h : credit.loss < 2 ^ 256) :
@@ -261,6 +303,57 @@ theorem FlowActionsCreditNof.of_supply_eth
   exact creditLoss_lt_modulus_of_supply_eth
     (supplyFlowOfActions actions) supplyEquation
     (supplyFlowOfActions_flash_eq actions) initialBacked ethMovement finalEthLt
+
+def AccountedHistory.supplyFlow
+    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {checkpoint future : BlockChain}
+    (history : AccountedHistory chainId dp ca checkpoint future) : SupplyFlow :=
+  supplyFlowOfActions history.flowActions
+
+def AccountedHistory.creditLoss
+    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {checkpoint future : BlockChain}
+    (history : AccountedHistory chainId dp ca checkpoint future) : Nat :=
+  creditLossOfActions history.flowActions
+
+/-- Once the two execution-derived equations are available, stable-root
+backing and the word bound force every retained credit to be non-wrapping. -/
+theorem AccountedHistory.flowActionsCreditNof_of_supply_eth_equations
+    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {checkpoint future : BlockChain}
+    (history : AccountedHistory chainId dp ca checkpoint future)
+    (hstable : Stable dp ca checkpoint.state)
+    (supplyEquation :
+      balSum (checkpoint.state.getStor ca) + history.supplyFlow.ordinaryIn +
+          history.supplyFlow.flashCredit =
+        balSum (future.state.getStor ca) + history.supplyFlow.redeemed +
+          history.supplyFlow.flashRepayment + history.creditLoss)
+    (ethMovement :
+      (checkpoint.state.bal ca).toNat + history.supplyFlow.ordinaryIn ≤
+        (future.state.bal ca).toNat + history.supplyFlow.redeemed) :
+    FlowActionsCreditNof history.flowActions := by
+  apply FlowActionsCreditNof.of_supply_eth supplyEquation hstable.solvent
+    ethMovement
+  exact B256.toNat_lt _
+
+theorem AccountedHistory.holderCreditLoss_eq_zero_of_supply_eth_equations
+    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {checkpoint future : BlockChain}
+    (history : AccountedHistory chainId dp ca checkpoint future)
+    (hstable : Stable dp ca checkpoint.state)
+    (supplyEquation :
+      balSum (checkpoint.state.getStor ca) + history.supplyFlow.ordinaryIn +
+          history.supplyFlow.flashCredit =
+        balSum (future.state.getStor ca) + history.supplyFlow.redeemed +
+          history.supplyFlow.flashRepayment + history.creditLoss)
+    (ethMovement :
+      (checkpoint.state.bal ca).toNat + history.supplyFlow.ordinaryIn ≤
+        (future.state.bal ca).toNat + history.supplyFlow.redeemed) :
+    history.holderCreditLoss u = 0 := by
+  unfold AccountedHistory.holderCreditLoss
+  exact holderCreditLossOfActions_eq_zero_of_creditNof
+    (history.flowActionsCreditNof_of_supply_eth_equations hstable
+      supplyEquation ethMovement) u
 
 end Weth10
 
