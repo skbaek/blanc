@@ -78,7 +78,7 @@ CONTRACTS = {
                "Weth10HolderFlowWriteCompleteness",
                "Weth10Attribution", "Weth10AllowanceCompleteness",
                "Weth10AllowanceSweep", "Weth10AttributionChronology",
-               "Weth10AllowanceAccounting", "Weth10AllowanceArms", "Weth10AllowanceArmsViews", "Weth10AllowanceArmsBalance", "Weth10AllowanceArmsSpend", "Weth10AllowanceArmsPermit", "Weth10AllowanceArmsRedeem", "Weth10AllowanceRecursion", "Weth10AllowanceHistory", "Weth10AllowanceArmsCallback", "Weth10AllowanceArmsSpendRedeem"],
+               "Weth10AllowanceAccounting", "Weth10AllowanceArms", "Weth10AllowanceArmsViews", "Weth10AllowanceArmsBalance", "Weth10AllowanceArmsSpend", "Weth10AllowanceArmsPermit", "Weth10AllowanceArmsRedeem", "Weth10AllowanceRecursion", "Weth10AllowanceHistory", "Weth10AllowanceArmsCallback", "Weth10AllowanceArmsSpendRedeem", "Weth10AllowanceArmsFlash"],
 }
 
 ROOTS = ["Blanc", "Main"]
