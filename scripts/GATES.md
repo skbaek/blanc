@@ -37,7 +37,7 @@ Choose the gate by what you changed, cheapest falsifier first:
 | the pinned Jaune revision (`lakefile.lean` + `lake-manifest.json`) | `lake build` | the **full set**, in the order below |
 
 **No gate here takes `--jobs`.** Blanc's gates run from sub-second to roughly
-five minutes and need no parallel mode, so the `--jobs` contract in Jaune's catalogue does not
+eight minutes and need no parallel mode, so the `--jobs` contract in Jaune's catalogue does not
 apply to this repository. `check-elab.sh`'s header records why it is sequential
 by construction: a gate whose only output is a timing cannot be run under
 self-inflicted contention.
