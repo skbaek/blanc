@@ -401,6 +401,21 @@ def attributionRootAt : List CountedFrame → B256 → AttributionRoot
           else attributionRootAt rest key
       | none => attributionRootAt rest key
 
+/-- Walk a most-recent-first event stream back to the last committed write
+to `key`, if any: reads and infinite-allowance arms are transparent, and
+every writing visit — store or decrement — supplies its written word. -/
+def lastAllowanceWriteAt : List CountedFrame → B256 → Option B256
+  | [], _ => none
+  | frame :: rest, key =>
+      match frame.allowance with
+      | some event =>
+          if event.key = key then
+            match event.visit.written? with
+            | some value => some value
+            | none => lastAllowanceWriteAt rest key
+          else lastAllowanceWriteAt rest key
+      | none => lastAllowanceWriteAt rest key
+
 /-- Whether a root is a committed authorizing act of holder `u` or a
 checkpoint-preexisting allowance.  Both `approve`'s owner word (the `CALLER`
 opcode's clean word) and a committed successful `permit`'s owner word (checked
@@ -1043,6 +1058,45 @@ theorem duplicatePair_pairwise (ow sp : B256) :
     [(ow, sp), (ow, sp)].Pairwise
       (fun p q => p ≠ q → projectedAllowanceKey p.1 p.2 ≠ projectedAllowanceKey q.1 q.2) :=
   List.pairwise_pair.mpr fun h => absurd rfl h
+
+/-! ### Last-committed-write walk -/
+
+theorem approveDecrementLedger_lastWrite_after_approve (u : Adr) (ow sp : B256) :
+    lastAllowanceWriteAt [approveFrame1 u ow sp] (projectedAllowanceKey ow sp) =
+      some 100 := by
+  simp [approveFrame1, fixtureFrame, lastAllowanceWriteAt, AllowanceEvent.key,
+    AllowanceVisit.written?]
+
+theorem approveDecrementLedger_lastWrite_after_spend40 (u w : Adr) (ow sp : B256) :
+    lastAllowanceWriteAt [spendFrame40 u w ow sp, approveFrame1 u ow sp]
+        (projectedAllowanceKey ow sp) =
+      some 60 := by
+  simp [spendFrame40, fixtureFrame, lastAllowanceWriteAt, AllowanceEvent.key,
+    AllowanceVisit.written?]
+
+theorem maxSpend_lastWrite_transparent (u w : Adr) (ow sp : B256) :
+    lastAllowanceWriteAt [maxSpendFrame u w ow sp, maxApproveFrame u ow sp]
+        (projectedAllowanceKey ow sp) =
+      some B256.max := by
+  simp [maxSpendFrame, maxApproveFrame, fixtureFrame, lastAllowanceWriteAt, AllowanceEvent.key,
+    AllowanceVisit.written?]
+
+theorem flashFrame_lastWrite (u : Adr) (ow sp : B256) :
+    lastAllowanceWriteAt [flashFrame u ow sp, flashApproveFrame u ow sp]
+        (projectedAllowanceKey ow sp) =
+      some 3 := by
+  simp [flashFrame, fixtureFrame, lastAllowanceWriteAt, AllowanceEvent.key,
+    AllowanceVisit.written?]
+
+theorem emptyLedger_lastWrite_none (k : B256) :
+    lastAllowanceWriteAt [] k = none := by
+  simp [lastAllowanceWriteAt]
+
+theorem dirtyPair_lastWrite_none (u : Adr) (ow1 sp1 ow2 sp2 : B256)
+    (hk : projectedAllowanceKey ow1 sp1 ≠ projectedAllowanceKey ow2 sp2) :
+    lastAllowanceWriteAt [dirtyApproveFrame u ow1 sp1] (projectedAllowanceKey ow2 sp2) =
+      none := by
+  simp [dirtyApproveFrame, fixtureFrame, lastAllowanceWriteAt, AllowanceEvent.key, hk]
 
 end Weth10
 
