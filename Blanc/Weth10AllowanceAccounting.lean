@@ -72,6 +72,70 @@ theorem applyAllowanceLedger_append
   | some value => simp
   | none => simpa [applyAllowanceLedger] using hmid.symm
 
+/-- Replaying a single counted frame: its allowance visit's written word at
+a matching key, otherwise the entry value. -/
+theorem applyAllowanceLedger_singleton (pre : Stor) (frame : CountedFrame)
+    (key : B256) :
+    applyAllowanceLedger pre [frame] key =
+      match frame.allowance with
+      | some event =>
+          if event.key = key then
+            match event.visit.written? with
+            | some value => value
+            | none => pre.get key
+          else pre.get key
+      | none => pre.get key := by
+  unfold applyAllowanceLedger lastAllowanceWriteAt
+  cases hallow : frame.allowance with
+  | none => simp [lastAllowanceWriteAt, hallow]
+  | some event =>
+      by_cases hkey : event.key = key
+      · cases hwrite : event.visit.written? with
+        | some value => simp [hallow, hkey, hwrite]
+        | none => simp [lastAllowanceWriteAt, hallow, hkey, hwrite]
+      · simp [lastAllowanceWriteAt, hallow, hkey]
+
+/-! ## Stream unfolding -/
+
+theorem Exec.attributionStream_eq_frameContribution
+    (dp : DeployParams) (ca : Adr)
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out)
+    (h : Execution.commits out = true) :
+    Exec.attributionStream dp ca run =
+      Exec.frameContribution dp ca (Exec.Frame.ofRun run h)
+        (Exec.attributionInner dp ca run) := by
+  unfold Exec.attributionStream
+  rw [dif_pos h]
+
+theorem Exec.frameContribution_eq_cons
+    (dp : DeployParams) (ca : Adr) (frame : Exec.Frame)
+    (inner : List CountedFrame)
+    (hexact : frame.exactInvocation dp ca)
+    (hnotflash : isFlashInvocation frame.sevm = false) :
+    Exec.frameContribution dp ca frame inner =
+      CountedFrame.ofFrame dp ca frame :: inner := by
+  unfold Exec.frameContribution
+  rw [if_pos hexact, if_neg (by simp [hnotflash])]
+
+theorem Exec.frameContribution_eq_append
+    (dp : DeployParams) (ca : Adr) (frame : Exec.Frame)
+    (inner : List CountedFrame)
+    (hexact : frame.exactInvocation dp ca)
+    (hflash : isFlashInvocation frame.sevm = true) :
+    Exec.frameContribution dp ca frame inner =
+      inner ++ [CountedFrame.ofFrame dp ca frame] := by
+  unfold Exec.frameContribution
+  rw [if_pos hexact, if_pos hflash]
+
+theorem Exec.frameContribution_eq_inner
+    (dp : DeployParams) (ca : Adr) (frame : Exec.Frame)
+    (inner : List CountedFrame)
+    (hnotexact : ¬ frame.exactInvocation dp ca) :
+    Exec.frameContribution dp ca frame inner = inner := by
+  unfold Exec.frameContribution
+  rw [if_neg hnotexact]
+
 /-! ## The region carrier -/
 
 /-- The allowance-region transport carrier: after the execution, every
