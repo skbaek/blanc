@@ -379,6 +379,71 @@ class Expectations(support.Expectations):
             "base-fee component is burned",
         )
 
+    def expect_holder_flow_totals(
+        self, txs: list[dict], booked_before: int, booked_after: int
+    ) -> dict[str, int]:
+        """Independently fold the holder-flow totals exercised by this fixture.
+
+        These fixtures contain only direct ``withdrawTo`` calls.  Decode each
+        authored call and count its amount exactly when the corresponding
+        execution receipt committed.  The surrounding scenario assertions
+        separately pin the WETH storage endpoints and exact burn logs, so this
+        calculation is corroborating multi-step evidence rather than a
+        substitute for the Lean ``AccountedHistory`` semantics.
+        """
+
+        receipts = self.res["receipts"]
+        selector = calldata(ZERO, 0)[:4]
+        valid = len(txs) == len(receipts)
+        redeemed = 0
+        for tx, receipt in zip(txs, receipts):
+            raw = bytes.fromhex(tx.get("input", "0x").removeprefix("0x"))
+            row_valid = (
+                tx.get("to", "").lower() == WETH10
+                and tx.get("value") == "0x0"
+                and len(raw) == 68
+                and raw[:4] == selector
+            )
+            valid = valid and row_valid
+            if row_valid and bool(receipt["succeeded"]):
+                redeemed += int.from_bytes(raw[36:68], "big")
+
+        observed = {
+            "bookedBalanceBefore": booked_before,
+            "bookedBalanceAfter": booked_after,
+            "ordinaryIn": 0,
+            "redeemed": redeemed,
+            "externalTransferredOut": 0,
+            "selfTransfer": 0,
+            "flashCredit": 0,
+            "flashRepayment": 0,
+        }
+        expected = dict(observed)
+        expected["redeemed"] = booked_before - booked_after
+        self._record(
+            valid and observed == expected,
+            "independently folded holder-flow totals",
+            expected,
+            observed,
+            "only successful withdrawTo receipts contribute redemption; zero "
+            "amount contributes zero and a failed receipt contributes nothing",
+        )
+        conserved = (
+            observed["bookedBalanceBefore"] + observed["ordinaryIn"]
+            == observed["bookedBalanceAfter"]
+            + observed["redeemed"]
+            + observed["externalTransferredOut"]
+        )
+        self._record(
+            conserved,
+            "fixture holder-flow conservation equation",
+            True,
+            conserved,
+            "the independently folded totals satisfy B0 + ordinaryIn = "
+            "Bt + redeemed + externalTransferredOut",
+        )
+        return observed
+
     def finish(self):
         if not self.logs_declared:
             raise support.ExpectationFailure(
@@ -430,7 +495,7 @@ def build_fixture(name: str, alloc: dict, txs: list[dict], expect):
             f"{name}: t8n rejected transaction(s): {result['rejected']}"
         )
     checks = Expectations(name, alloc, post, result)
-    expect(checks)
+    metadata = expect(checks)
     assertion_count = checks.finish()
 
     decoded_transactions = rlp.decode(hex_to_bytes(body))
@@ -496,7 +561,7 @@ def build_fixture(name: str, alloc: dict, txs: list[dict], expect):
             "sealEngine": "NoProof",
         }
     }
-    return fixture, result, assertion_count
+    return fixture, result, assertion_count, metadata
 
 
 def case_type2(runtime: str):
@@ -567,6 +632,7 @@ def case_type2(runtime: str):
             "the two successful receipts own the exact zero/nonzero burn logs "
             "and the failed receipt owns no log after rollback",
         )
+        return e.expect_holder_flow_totals(txs, 10, 7)
 
     return build_fixture("01-type2-redemption", alloc, txs, expect), txs
 
@@ -647,6 +713,7 @@ def case_authorization(runtime: str):
             [[ExpectedLog(owner, 3)]],
             "the successful excluded-profile example still emits the exact burn log",
         )
+        return e.expect_holder_flow_totals([tx], 3, 0)
 
     return build_fixture("02-authorization-mutation", alloc, [tx], expect), [tx]
 
@@ -688,7 +755,7 @@ def main(argv=None) -> int:
     manifest = []
     expected_files = set()
     rendered_fixtures = {}
-    for name, fixture, result, assertions, txs in built:
+    for name, fixture, result, assertions, flow_totals, txs in built:
         filename = name + ".json"
         expected_files.add(filename)
         path = OUT_DIR / filename
@@ -705,6 +772,7 @@ def main(argv=None) -> int:
                 "authorizationMutation": (
                     "recipient code+nonce" if name == "02-authorization-mutation" else "none"
                 ),
+                "holderFlowTotals": flow_totals,
             }
         )
         action = "checked" if args.check else "wrote"

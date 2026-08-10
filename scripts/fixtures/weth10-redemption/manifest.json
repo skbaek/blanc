@@ -1,7 +1,17 @@
 [
   {
-    "assertions": 16,
+    "assertions": 18,
     "authorizationMutation": "none",
+    "holderFlowTotals": {
+      "bookedBalanceAfter": 7,
+      "bookedBalanceBefore": 10,
+      "externalTransferredOut": 0,
+      "flashCredit": 0,
+      "flashRepayment": 0,
+      "ordinaryIn": 0,
+      "redeemed": 3,
+      "selfTransfer": 0
+    },
     "name": "01-type2-redemption",
     "outcome": "receipts=true,true,false",
     "receiptSucceeded": [
@@ -16,8 +26,18 @@
     ]
   },
   {
-    "assertions": 13,
+    "assertions": 15,
     "authorizationMutation": "recipient code+nonce",
+    "holderFlowTotals": {
+      "bookedBalanceAfter": 0,
+      "bookedBalanceBefore": 3,
+      "externalTransferredOut": 0,
+      "flashCredit": 0,
+      "flashRepayment": 0,
+      "ordinaryIn": 0,
+      "redeemed": 3,
+      "selfTransfer": 0
+    },
     "name": "02-authorization-mutation",
     "outcome": "receipts=true",
     "receiptSucceeded": [

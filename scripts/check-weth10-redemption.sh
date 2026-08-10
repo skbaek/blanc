@@ -71,15 +71,35 @@ expected = {
         "types": [2, 2, 2],
         "receipts": [True, True, False],
         "mutation": "none",
-        "assertions": 16,
+        "assertions": 18,
         "outcome": "receipts=true,true,false",
+        "flow": {
+            "bookedBalanceBefore": 10,
+            "bookedBalanceAfter": 7,
+            "ordinaryIn": 0,
+            "redeemed": 3,
+            "externalTransferredOut": 0,
+            "selfTransfer": 0,
+            "flashCredit": 0,
+            "flashRepayment": 0,
+        },
     },
     "02-authorization-mutation": {
         "types": [4],
         "receipts": [True],
         "mutation": "recipient code+nonce",
-        "assertions": 13,
+        "assertions": 15,
         "outcome": "receipts=true",
+        "flow": {
+            "bookedBalanceBefore": 3,
+            "bookedBalanceAfter": 0,
+            "ordinaryIn": 0,
+            "redeemed": 3,
+            "externalTransferredOut": 0,
+            "selfTransfer": 0,
+            "flashCredit": 0,
+            "flashRepayment": 0,
+        },
     },
 }
 names = []
@@ -87,6 +107,7 @@ for row in manifest:
     required = {
         "name", "outcome", "assertions", "transactionTypes",
         "receiptSucceeded", "authorizationMutation",
+        "holderFlowTotals",
     }
     if not isinstance(row, dict) or set(row) != required:
         print(f"MANIFEST-ERROR malformed/flexible row: {row!r}")
@@ -111,6 +132,9 @@ for row in manifest:
     if row["authorizationMutation"] != pin["mutation"]:
         print(f"MANIFEST-ERROR authorization evidence drift for {name!r}")
         sys.exit(1)
+    if row["holderFlowTotals"] != pin["flow"]:
+        print(f"MANIFEST-ERROR holder-flow totals drift for {name!r}")
+        sys.exit(1)
     names.append(name)
 
 if len(set(names)) != len(names):
@@ -125,7 +149,7 @@ if sorted(names) != disk:
     sys.exit(1)
 print(
     f"MANIFEST-OK 2 scenarios, {sum(row['assertions'] for row in manifest)} "
-    "generator assertions, exact type/receipt/authorization profiles"
+    "generator assertions, exact type/receipt/authorization/holder-flow profiles"
 )
 PYEOF
 )"
@@ -168,7 +192,7 @@ if [ "$TOTAL" -ne 2 ]; then
   exit 1
 fi
 if [ "$FAIL" -eq 0 ]; then
-  echo "OK — WETH10 redemption fixtures: 2/2 PASS; type-2 receipts 2 success + 1 failed; type-4 recipient code/nonce mutation pinned"
+  echo "OK — WETH10 redemption fixtures: 2/2 PASS; type-2 receipts 2 success + 1 failed; type-4 recipient code/nonce mutation and independently folded holder-flow totals pinned"
   exit 0
 fi
 echo "REGRESSION — WETH10 redemption fixtures: $((TOTAL - FAIL))/$TOTAL PASS, $FAIL FAIL"
