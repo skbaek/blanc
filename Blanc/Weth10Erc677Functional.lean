@@ -891,6 +891,267 @@ private theorem of_run_callBoolCallback_frame
     h_stor_s_sc, h_bal_s_sc, h_code_s_sc, h_logs_s_sc,
     h_output_s_sc, hwfSc, hreadsSc⟩
 
+/-- The exact source prefix of a successful ERC-677 callback, indexed by the
+actual state immediately before `CALL`.  This relation deliberately stops at
+the instruction boundary: the recursive slot and its resume state are added
+by `RawTokenCallbackIndexedStepBoundary` below. -/
+def RawTokenCallbackCallPrefix
+    (e : Sevm) (sel targetArg dataArg valueWord : B256) (img : Bytes)
+    (pre callPre : Devm) : Prop :=
+  ∃ gasWord inputSize,
+    inputSize =
+      0x84 + ((~~~ (31 : B256)) &&&
+        (31 + Sevm.tailLen e dataArg)) ∧
+    (gasWord :: Sevm.argWord e targetArg :: 0 :: callbackArgsOffset ::
+      inputSize :: 0 :: 0 :: []) <<+ callPre.stack ∧
+    Devm.getStor pre = Devm.getStor callPre ∧
+    Devm.getBal pre = Devm.getBal callPre ∧
+    Devm.getCode pre = Devm.getCode callPre ∧
+    pre.logs = callPre.logs ∧
+    pre.output = callPre.output ∧
+    Mem.Wf callPre.memory ∧
+    Mem.Reads callPre.memory
+      (tokenCallbackImage img sel e.caller.toB256 valueWord
+        (Sevm.tailLen e dataArg) (Sevm.tailBytes e dataArg))
+
+/-- Build `RawTokenCallbackCallPrefix` from the literal successful-path
+source runs.  All states in this theorem are explicit, so a compiled-program
+cursor can supply its own `callPre` without a hidden-intermediate-state
+equality argument. -/
+theorem rawTokenCallbackCallPrefix_of_runs
+    (sel targetArg dataArg valueWord : B256) (value : Line)
+    {e : Sevm} {s s1 s2 s3 s4 s5 s6 s7 s8 s9 s10 sc : Devm}
+    {img : Bytes}
+    (h_value_stack : ∀ {a b : Devm} {xs : Stack},
+      xs <<+ a.stack → Line.Run e a value b →
+        valueWord :: xs <<+ b.stack)
+    (h_value_stor : Line.Inv Devm.getStor value)
+    (h_value_bal : Line.Inv Devm.getBal value)
+    (h_value_code : Line.Inv Devm.getCode value)
+    (h_value_mem : Line.Inv Devm.memory value)
+    (h_value_logs : Line.Inv Devm.logs value)
+    (h_value_output : Line.Inv Devm.output value)
+    (h_wf : Mem.Wf s.memory)
+    (h_reads : Mem.Reads s.memory img)
+    (hcheck : Line.Run e s
+      (arg targetArg ++ [dup 0, extcodesize, iszero]) s1)
+    (hpopCheck : Devm.PopBurn [0] s1 s2)
+    (hpopTarget : Ninst.Run e s2 pop s3)
+    (hvalueLine : Line.Run e s3 value s4)
+    (hhead : Line.Run e s4 (storeTokenCallbackHead sel) s5)
+    (hzeros : Line.Run e s5 (pushList [0, 0]) s6)
+    (htail : Line.Run e s6 (forwardArgTail dataArg 4) s7)
+    (hsize : Line.Run e s7 tokenCallbackArgsSize s8)
+    (hoffsets : Line.Run e s8
+      [pushB256 callbackArgsOffset, pushB256 0] s9)
+    (htarget : Line.Run e s9 (arg targetArg) s10)
+    (hgas : Ninst.Run e s10 gas sc) :
+    RawTokenCallbackCallPrefix e sel targetArg dataArg valueWord img s sc := by
+  have hp4 : valueWord :: [] <<+ s4.stack :=
+    h_value_stack nil_pref hvalueLine
+  rcases of_storeTokenCallbackHead_val hp4 hhead with
+    ⟨hp5, hmemHead⟩
+  have hp6 : (0 : B256) :: 0 :: [] <<+ s6.stack := by
+    unfold pushList at hzeros
+    simp only [List.map] at hzeros
+    rcases Line.of_run_cons hzeros with ⟨z1, hz1, hzeros1⟩
+    have hpz1 : (0 : B256) :: [] <<+ z1.stack :=
+      prefix_of_push (of_run_pushB256 hz1) hp5
+    rcases Line.of_run_cons hzeros1 with ⟨z2, hz2, hnil⟩
+    cases hnil
+    exact prefix_of_push (of_run_pushB256 hz2) hpz1
+  rcases of_forwardArgTail_val hp6 htail with
+    ⟨hp7, hmemTail⟩
+  have hp8 := of_tokenCallbackArgsSize_val hp7 hsize
+  let inputSize : B256 :=
+    0x84 + ((~~~ (31 : B256)) &&&
+      (31 + Sevm.tailLen e dataArg))
+  change inputSize :: 0 :: 0 :: [] <<+ s8.stack at hp8
+  have hp9 :
+      (0 : B256) :: callbackArgsOffset :: inputSize :: 0 :: 0 :: [] <<+
+        s9.stack := by
+    rcases Line.of_run_cons hoffsets with ⟨o1, ho1, hoffsets1⟩
+    have hpo1 : callbackArgsOffset :: inputSize :: 0 :: 0 :: [] <<+
+        o1.stack := prefix_of_push (of_run_pushB256 ho1) hp8
+    rcases Line.of_run_cons hoffsets1 with ⟨o2, ho2, hnil⟩
+    cases hnil
+    exact prefix_of_push (of_run_pushB256 ho2) hpo1
+  have hp10 :
+      Sevm.argWord e targetArg :: 0 :: callbackArgsOffset :: inputSize ::
+        0 :: 0 :: [] <<+ s10.stack :=
+    prefix_of_arg hp9 htarget
+  rcases of_run_gas hgas with ⟨g, hpushGas⟩
+  have hpCall :
+      g :: Sevm.argWord e targetArg :: 0 :: callbackArgsOffset ::
+        inputSize :: 0 :: 0 :: [] <<+ sc.stack :=
+    prefix_of_push hpushGas hp10
+
+  have hmem_s_s4 : s.memory = s4.memory := by
+    rcases of_run_append (arg targetArg) hcheck with
+      ⟨c0, hargCheck, hcheck0⟩
+    rcases Line.of_run_cons hcheck0 with
+      ⟨c1, hdupCheck, hcheck1⟩
+    rcases Line.of_run_cons hcheck1 with
+      ⟨c2, hextCheck, hcheck2⟩
+    rcases Line.of_run_cons hcheck2 with
+      ⟨c3, hiszeroCheck, hnil⟩
+    cases hnil
+    have hpArg : Sevm.argWord e targetArg :: [] <<+ c0.stack :=
+      prefix_of_arg nil_pref hargCheck
+    have hpDup :
+        Sevm.argWord e targetArg :: Sevm.argWord e targetArg :: [] <<+
+          c1.stack :=
+      prefix_of_dup_val hdupCheck (by show_nth) hpArg
+    rcases of_extcodesize_frame hpDup hextCheck with
+      ⟨_, _, hmemExt⟩
+    have hmemArg : s.memory = c0.memory :=
+      Line.of_inv Devm.memory (by
+        unfold arg cdl
+        line_inv) hargCheck
+    have hmemDup : c0.memory = c1.memory :=
+      Line.of_inv Devm.memory (by line_inv)
+        (Line.Run.cons hdupCheck Line.Run.nil)
+    have hmemIszero : c2.memory = s1.memory :=
+      Line.of_inv Devm.memory (by line_inv)
+        (Line.Run.cons hiszeroCheck Line.Run.nil)
+    have hmemPop : s2.memory = s3.memory :=
+      Line.of_inv Devm.memory (by line_inv)
+        (Line.Run.cons hpopTarget Line.Run.nil)
+    exact hmemArg.trans (hmemDup.trans (hmemExt.trans
+      (hmemIszero.trans (hpopCheck.memory.trans
+        (hmemPop.trans (h_value_mem hvalueLine))))))
+  have hwf4 : Mem.Wf s4.memory := hmem_s_s4 ▸ h_wf
+  have hreads4 : Mem.Reads s4.memory img := hmem_s_s4 ▸ h_reads
+  let headImg := Bytes.writeAt (Bytes.writeAt (Bytes.writeAt
+    (Bytes.writeAt img 0 sel.toBytes) 32 e.caller.toB256.toBytes)
+      64 valueWord.toBytes) 96 (0x60 : B256).toBytes
+  have hwf5 : Mem.Wf s5.memory := by
+    rw [hmemHead]
+    exact (((hwf4.write _ _).write _ _).write _ _).write _ _
+  have hreads5 : Mem.Reads s5.memory headImg := by
+    rw [hmemHead]
+    exact Mem.Reads.write
+      (((hwf4.write _ _).write _ _).write _ _)
+      (Mem.Reads.write ((hwf4.write _ _).write _ _)
+        (Mem.Reads.write (hwf4.write _ _)
+          (Mem.Reads.write hwf4 hreads4 0 _) 32 _) 64 _) 96 _
+  have hmem5_6 : s5.memory = s6.memory :=
+    Line.of_inv Devm.memory (by
+      unfold pushList
+      line_inv) hzeros
+  have hwf6 : Mem.Wf s6.memory := hmem5_6 ▸ hwf5
+  have hreads6 : Mem.Reads s6.memory headImg := hmem5_6 ▸ hreads5
+  have hwf7 : Mem.Wf s7.memory := by
+    rw [hmemTail]
+    exact (hwf6.write _ _).write _ _
+  have hreads7 : Mem.Reads s7.memory
+      (tokenCallbackImage img sel e.caller.toB256 valueWord
+        (Sevm.tailLen e dataArg) (Sevm.tailBytes e dataArg)) := by
+    rw [hmemTail]
+    exact Mem.Reads.write (hwf6.write _ _)
+      (Mem.Reads.write hwf6 hreads6 128 _) 160 _
+  have hmem7_sc : s7.memory = sc.memory :=
+    (Line.of_inv Devm.memory (by line_inv) hsize).trans
+      ((Line.of_inv Devm.memory (by line_inv) hoffsets).trans
+        ((Line.of_inv Devm.memory (by
+          unfold arg cdl
+          line_inv) htarget).trans
+            (Line.of_inv Devm.memory (by line_inv)
+              (Line.Run.cons hgas Line.Run.nil))))
+  have hwfSc : Mem.Wf sc.memory := hmem7_sc ▸ hwf7
+  have hreadsSc : Mem.Reads sc.memory
+      (tokenCallbackImage img sel e.caller.toB256 valueWord
+        (Sevm.tailLen e dataArg) (Sevm.tailBytes e dataArg)) :=
+    hmem7_sc ▸ hreads7
+
+  have h_stor_s3_sc : Devm.getStor s3 = Devm.getStor sc :=
+    (h_value_stor hvalueLine).trans
+      ((Line.of_inv Devm.getStor (by line_inv) hhead).trans
+        ((Line.of_inv Devm.getStor (by line_inv) hzeros).trans
+          ((Line.of_inv Devm.getStor (by line_inv) htail).trans
+            ((Line.of_inv Devm.getStor (by line_inv) hsize).trans
+              ((Line.of_inv Devm.getStor (by line_inv) hoffsets).trans
+                ((Line.of_inv Devm.getStor (by line_inv) htarget).trans
+                  (Line.of_inv Devm.getStor (by line_inv)
+                    (Line.Run.cons hgas Line.Run.nil))))))))
+  have h_bal_s3_sc : Devm.getBal s3 = Devm.getBal sc :=
+    (h_value_bal hvalueLine).trans
+      ((Line.of_inv Devm.getBal (by line_inv) hhead).trans
+        ((Line.of_inv Devm.getBal (by line_inv) hzeros).trans
+          ((Line.of_inv Devm.getBal (by line_inv) htail).trans
+            ((Line.of_inv Devm.getBal (by line_inv) hsize).trans
+              ((Line.of_inv Devm.getBal (by line_inv) hoffsets).trans
+                ((Line.of_inv Devm.getBal (by line_inv) htarget).trans
+                  (Line.of_inv Devm.getBal (by line_inv)
+                    (Line.Run.cons hgas Line.Run.nil))))))))
+  have h_code_s3_sc : Devm.getCode s3 = Devm.getCode sc :=
+    (h_value_code hvalueLine).trans
+      ((Line.of_inv Devm.getCode (by line_inv) hhead).trans
+        ((Line.of_inv Devm.getCode (by line_inv) hzeros).trans
+          ((Line.of_inv Devm.getCode (by line_inv) htail).trans
+            ((Line.of_inv Devm.getCode (by line_inv) hsize).trans
+              ((Line.of_inv Devm.getCode (by line_inv) hoffsets).trans
+                ((Line.of_inv Devm.getCode (by line_inv) htarget).trans
+                  (Line.of_inv Devm.getCode (by line_inv)
+                    (Line.Run.cons hgas Line.Run.nil))))))))
+  have h_stor_s_sc : Devm.getStor s = Devm.getStor sc :=
+    (Line.of_inv Devm.getStor (by
+      unfold arg cdl
+      line_inv) hcheck).trans
+      ((PopBurn.Inv.inv hpopCheck).trans
+        ((Line.of_inv Devm.getStor (by line_inv)
+          (Line.Run.cons hpopTarget Line.Run.nil)).trans h_stor_s3_sc))
+  have h_bal_s_sc : Devm.getBal s = Devm.getBal sc :=
+    (Line.of_inv Devm.getBal (by
+      unfold arg cdl
+      line_inv) hcheck).trans
+      ((PopBurn.Inv.inv hpopCheck).trans
+        ((Line.of_inv Devm.getBal (by line_inv)
+          (Line.Run.cons hpopTarget Line.Run.nil)).trans h_bal_s3_sc))
+  have h_code_s_sc : Devm.getCode s = Devm.getCode sc :=
+    (Line.of_inv Devm.getCode (by
+      unfold arg cdl
+      line_inv) hcheck).trans
+      ((funext fun a => getCode_eq_of_state_eq hpopCheck.state a).trans
+        ((Line.of_inv Devm.getCode (by line_inv)
+          (Line.Run.cons hpopTarget Line.Run.nil)).trans h_code_s3_sc))
+  have h_logs_s3_sc : s3.logs = sc.logs :=
+    (h_value_logs hvalueLine).trans
+      ((Line.of_inv Devm.logs (by line_inv) hhead).trans
+        ((Line.of_inv Devm.logs (by line_inv) hzeros).trans
+          ((Line.of_inv Devm.logs (by line_inv) htail).trans
+            ((Line.of_inv Devm.logs (by line_inv) hsize).trans
+              ((Line.of_inv Devm.logs (by line_inv) hoffsets).trans
+                ((Line.of_inv Devm.logs (by line_inv) htarget).trans
+                  (Line.of_inv Devm.logs (by line_inv)
+                    (Line.Run.cons hgas Line.Run.nil))))))))
+  have h_logs_s_sc : s.logs = sc.logs :=
+    (Line.of_inv Devm.logs (by
+      unfold arg cdl
+      line_inv) hcheck).trans
+      (hpopCheck.logs.trans
+        ((Line.of_inv Devm.logs (by line_inv)
+          (Line.Run.cons hpopTarget Line.Run.nil)).trans h_logs_s3_sc))
+  have h_output_s3_sc : s3.output = sc.output :=
+    (h_value_output hvalueLine).trans
+      ((Line.of_inv Devm.output (by line_inv) hhead).trans
+        ((Line.of_inv Devm.output (by line_inv) hzeros).trans
+          ((Line.of_inv Devm.output (by line_inv) htail).trans
+            ((Line.of_inv Devm.output (by line_inv) hsize).trans
+              ((Line.of_inv Devm.output (by line_inv) hoffsets).trans
+                ((Line.of_inv Devm.output (by line_inv) htarget).trans
+                  (Line.of_inv Devm.output (by line_inv)
+                    (Line.Run.cons hgas Line.Run.nil))))))))
+  have h_output_s_sc : s.output = sc.output :=
+    (Line.of_inv Devm.output (by
+      unfold arg cdl
+      line_inv) hcheck).trans
+      (hpopCheck.output.trans
+        ((Line.of_inv Devm.output (by line_inv)
+          (Line.Run.cons hpopTarget Line.Run.nil)).trans h_output_s3_sc))
+  exact ⟨g, inputSize, rfl, hpCall, h_stor_s_sc, h_bal_s_sc,
+    h_code_s_sc, h_logs_s_sc, h_output_s_sc, hwfSc, hreadsSc⟩
+
 /-! The remaining sections construct the exact callback frame and compose
 the three endpoint prefixes around it. -/
 
@@ -1001,6 +1262,83 @@ def RawTokenCallbackStepBoundary (dp : DeployParams) (e : Sevm)
     callPost.stack = (1 : B256) :: parent.stack ∧
     Func.Run ((weth10 dp).main :: weth10Aux) e
       callPost (.call boolReturnSlot) post
+
+/-- The proof-indexed form of `RawTokenCallbackStepBoundary`: the call states,
+recursive slot, child, and parent `pc` are outer indices rather than hidden
+existentials.  This is the form consumed by compiled-execution chronology. -/
+def RawTokenCallbackIndexedStepBoundary (dp : DeployParams) (e : Sevm)
+    (self target : Adr)
+    (rawTarget sel value tailLen inputSize : B256) (tail input : Bytes)
+    (pre post callPre callPost parent child : Devm) (xl : Xlot)
+    (pc : Nat) : Prop :=
+  target = rawTarget.toAdr ∧
+  inputSize =
+    0x84 + ((~~~ (31 : B256)) &&& (31 + tailLen)) ∧
+  ∃ (delegated : Bool) (code : ByteArray) (gasWord : B256)
+      (avail : Nat),
+    Ninst.StepRun pc e callPre call xl (.ok callPost) ∧
+    0 < e.depth ∧
+    callPre.stack =
+      gasWord :: rawTarget :: (0 : B256) :: callbackArgsOffset ::
+        inputSize :: (0 : B256) :: (0 : B256) :: parent.stack ∧
+    (callPre.memory.read callbackArgsOffset.toNat inputSize.toNat).1 =
+      input ∧
+    (∃ img, Mem.Reads callPre.memory
+      (tokenCallbackImage img sel e.caller.toB256 value tailLen tail)) ∧
+    Devm.getStor pre = Devm.getStor callPre ∧
+    Devm.getBal pre = Devm.getBal callPre ∧
+    Devm.getCode pre = Devm.getCode callPre ∧
+    pre.logs = callPre.logs ∧
+    pre.output = callPre.output ∧
+    parent.state = callPre.state ∧
+    parent.memory = callPre.memory.extends
+      [(callbackArgsOffset.toNat, inputSize.toNat), (0, 0)] ∧
+    parent.logs = callPre.logs ∧
+    parent.output = callPre.output ∧
+    ((getDelegatedCodeAddress (callPre.getCode target) = none ∧
+        code = callPre.getCode target ∧ delegated = false) ∨
+      (∃ delegatedTarget,
+        getDelegatedCodeAddress (callPre.getCode target) =
+          some delegatedTarget ∧
+        code = callPre.getCode delegatedTarget ∧ delegated = true)) ∧
+    Xlot.Filled xl ∧
+    ProcessMessage
+      (callMsg e parent (min gasWord.toNat (except64th avail)) 0
+        self target target true false input code delegated)
+      xl (.ok child) ∧
+    child.error.isSome = false ∧
+    (Resume.call parent 0 0).run (.ok child) = .ok callPost ∧
+    callPost.state = child.state ∧
+    callPost.returnData = child.output ∧
+    callPost.memory = parent.memory.write 0 (child.output.take 0) ∧
+    callPost.stack = (1 : B256) :: parent.stack ∧
+    Func.Run ((weth10 dp).main :: weth10Aux) e
+      callPost (.call boolReturnSlot) post
+
+/-- Forget the explicit indices while preserving the exact same callback
+states and recursive slot. -/
+theorem RawTokenCallbackIndexedStepBoundary.toStepBoundary
+    {dp : DeployParams} {e : Sevm} {self target : Adr}
+    {rawTarget sel value tailLen inputSize : B256} {tail input : Bytes}
+    {pre post callPre callPost parent child : Devm} {xl : Xlot}
+    {pc : Nat}
+    (h : RawTokenCallbackIndexedStepBoundary dp e self target rawTarget sel
+      value tailLen inputSize tail input pre post callPre callPost parent
+      child xl pc) :
+    RawTokenCallbackStepBoundary dp e self target rawTarget sel value
+      tailLen inputSize tail input pre post := by
+  rcases h with
+    ⟨htarget, hsize, delegated, code, gasWord, avail, hstep, hdepth,
+      hstack, hinput, hreads, hstor, hbal, hcode, hlogs, houtput,
+      hparentState, hparentMemory, hparentLogs, hparentOutput,
+      hdelegation, hfilled, hmessage, hclean, hresume, hcallPostState,
+      hreturnData, hmemory, hcallPostStack, hbool⟩
+  exact ⟨htarget, hsize, callPre, callPost, parent, child, xl,
+    delegated, code, gasWord, avail, pc, hstep, hdepth, hstack, hinput,
+    hreads, hstor, hbal, hcode, hlogs, houtput, hparentState,
+    hparentMemory, hparentLogs, hparentOutput, hdelegation, hfilled,
+    hmessage, hclean, hresume, hcallPostState, hreturnData, hmemory,
+    hcallPostStack, hbool⟩
 
 /-- Forgetting only the parent `StepRun` recovers the established raw
 callback API. -/
@@ -1122,6 +1460,52 @@ private theorem not_run_call_boolReturn_of_zero
       exact Option.some.inj hgetb.symm
     subst fb
     exact absurd hbubble not_run_bubbleRevert
+
+/-- Complete an exact callback prefix with the literal `CALL` run and Boolean
+decoder continuation.  The returned boundary is indexed by the supplied
+`callPre` and `callPost`; no intermediate callback state is re-extracted from
+a previously packaged `Func.Run`. -/
+theorem rawTokenCallbackIndexedStepBoundary_of_prefix
+    (dp : DeployParams) (sel targetArg dataArg valueWord : B256)
+    {e : Sevm} {pre post callPre callPost : Devm} {img : Bytes}
+    (hprefix : RawTokenCallbackCallPrefix e sel targetArg dataArg valueWord
+      img pre callPre)
+    (hcall : Ninst.Run e callPre call callPost)
+    (hbool : Func.Run ((weth10 dp).main :: weth10Aux) e
+      callPost (.call boolReturnSlot) post) :
+    ∃ inputSize input parent child xl pc,
+      RawTokenCallbackIndexedStepBoundary dp e e.currentTarget
+        (Sevm.argWord e targetArg).toAdr (Sevm.argWord e targetArg)
+        sel valueWord (Sevm.tailLen e dataArg) inputSize
+        (Sevm.tailBytes e dataArg) input pre post callPre callPost parent
+        child xl pc := by
+  rcases hprefix with
+    ⟨gasWord, inputSize, hsize, hstack, hstor, hbal, hcode, hlogs,
+      houtput, _hwf, hreads⟩
+  let input :=
+    (callPre.memory.read callbackArgsOffset.toNat inputSize.toNat).1
+  rcases of_run_call_val_with_depth_frame hstack hcall with
+      hfailed | hsuccess
+  · exact absurd hbool
+      (not_run_call_boolReturn_of_zero dp hfailed.1)
+  · rcases hsuccess with
+      ⟨parent, child, xl, delegated, code, avail, pc, hstep,
+        hdepth, hstackEq, hparentState, hparentMemory, hparentLogs,
+        hparentOutput, hdelegated, hfilled, hmessage, hclean, hresume,
+        hpostState, hpostReturnData, hpostMemory, hpostStack⟩
+    refine ⟨inputSize, input, parent, child, xl, pc, ?_⟩
+    unfold RawTokenCallbackIndexedStepBoundary
+    refine ⟨rfl, hsize, delegated, code, gasWord, avail, hstep,
+      hdepth, hstackEq, rfl, ⟨img, hreads⟩, hstor, hbal, hcode,
+      hlogs, houtput, hparentState, ?_, hparentLogs, hparentOutput,
+      hdelegated, hfilled, ?_, hclean, hresume, hpostState,
+      hpostReturnData, ?_, hpostStack, hbool⟩
+    · simpa only [show (0 : B256).toNat = 0 from rfl] using
+        hparentMemory
+    · simpa only [input, show (0 : B256).toNat = 0 from rfl,
+        if_true, Nat.add_zero] using hmessage
+    · simpa only [show (0 : B256).toNat = 0 from rfl] using
+        hpostMemory
 
 /-- Every successful `callBoolCallback` run exposes its exact raw callback
 frame together with the concrete recursive slot used by the parent `CALL`. -/
@@ -1636,6 +2020,28 @@ private theorem approvePrefix_effect
   · simpa only [approvePrefixImage, img1, img2, img3, spenderBytes,
       valueBytes] using hreadsr
 
+/-- Public exact-state projection of the approval prefix for proof-indexed
+callback cursors.  The concrete internal memory image remains encapsulated;
+its readable witness is sufficient for the following callback encoder. -/
+theorem approvePrefix_callbackFrame
+    {e : Sevm} {s r : Devm} {xs : Stack} {img : Bytes}
+    (hp : xs <<+ s.stack)
+    (h_wf : Mem.Wf s.memory)
+    (h_reads : Mem.Reads s.memory img)
+    (run : Line.Run e s approvePrefix r) :
+    Devm.getStor r e.currentTarget =
+        (Devm.getStor s e.currentTarget).set
+          (approveRuntimeKey e) (Sevm.argWord e 1) ∧
+      r.logs = s.logs ++ [approveApprovalLog e] ∧
+      Devm.getBal r = Devm.getBal s ∧
+      Devm.getCode r = Devm.getCode s ∧
+      r.output = s.output ∧
+      Mem.Wf r.memory ∧
+      ∃ callbackImg, Mem.Reads r.memory callbackImg := by
+  rcases approvePrefix_effect hp h_wf h_reads run with
+    ⟨hstor, hlogs, hbal, hcode, houtput, hwf, hcallbackReads⟩
+  exact ⟨hstor, hlogs, hbal, hcode, houtput, hwf, _, hcallbackReads⟩
+
 /-- Exact successful `approveAndCall` effect.  The witness is the state at
 the callback boundary, after the allowance write and `Approval` log and before
 the child can observe or reenter WETH10. -/
@@ -1818,6 +2224,17 @@ private theorem mintToPrefix_memory_frame
     exact hwf8.extend _ _
   · rw [hlogMem, ← hmem8to11, ← himg]
     exact Mem.Reads.extend hreads8 _ _
+
+/-- The callback-memory frame produced by the exact `mintToPrefix` run.
+This public projection lets proof-indexed compiled cursors retain their
+literal post-prefix state while constructing the callback boundary. -/
+theorem mintToPrefix_callbackMemoryFrame
+    {e : Sevm} {s r : Devm}
+    (h_wf : Mem.Wf s.memory)
+    (h_fresh : Mem.Reads s.memory [])
+    (run : Line.Run e s mintToPrefix r) :
+    Mem.Wf r.memory ∧ Mem.Reads r.memory e.value.toBytes :=
+  mintToPrefix_memory_frame h_wf h_fresh run
 
 /-- Raw successful `depositToAndCall` effect.  The mint prefix is exact, while
 the callback keeps the dirty target word and the dynamic-tail interpretation
