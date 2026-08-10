@@ -203,7 +203,7 @@ def validate_transaction_fixture(
             "so deposit-request parsing observes no constructor deposit log",
         )
 
-    fixture, result, assertion_count = fixtures.build_fixture(
+    fixture, result, assertion_count, _metadata = fixtures.build_fixture(
         "01-canonical-type2-deployment", alloc, [tx], expect
     )
     old_name = next(iter(fixture))
