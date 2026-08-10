@@ -4188,6 +4188,44 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_depositToAndCall
       · exact callbackEffect.delta
       · simpa only [List.nil_append] using chronology
 
+/-- Exact proof-indexed accounting for `approveAndCall`.  The approval
+prefix is WETH-balance silent, while the indexed callback supplies the exact
+rollback-pruned descendant storage delta. -/
+theorem Exec.Frame.hasProofIndexedStorageAccounting_of_approveAndCall
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    (context : frame.AuthenticContext dp ca)
+    (hselector : Sevm.selector frame.sevm = approveAndCallSelector)
+    (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
+    (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
+      (fun pc sevm pre out _ =>
+        Exec.CoreStorageSound dp ca pc sevm pre out)) :
+    frame.HasProofIndexedStorageAccounting dp ca := by
+  rcases frame.compiledApproveAndCallChronology context hselector
+      hnonempty with
+    ⟨callbackPre, hsilent, _hlogs, _hbalance, hcode, _houtput,
+      inputSize, input, callPre, callPost, parent, child, xl, pc,
+      retained, callback, _rawCommits, _occurrence, chronology⟩
+  have installedCallback : some (callbackPre.getCode ca).toList =
+      Prog.compile (weth10 dp) := by
+    rw [hcode]
+    exact context.installed.1
+  rcases callback.storageSegmentEffect retained context.invocation.2.1
+      installedCallback hdeeper with ⟨callbackEffect⟩
+  have htarget : frame.sevm.currentTarget = ca :=
+    context.invocation.2.1
+  rw [htarget] at hsilent
+  have hnoPrimary : SelectsNoPrimaryFlow frame.sevm := by
+    constructor <;> rw [hselector] <;> decide +kernel
+  have hnone := frame.flowAction_eq_none_of_selectsNoPrimaryFlow context
+    hnoPrimary hnonempty
+  have own := frame.hasNoWethBalanceOwnEffect_of_recognized context hnone
+    ⟨nonpayable Weth10.approveAndCall, by
+      rw [hselector]
+      simp [approveAndCallSelector, weth10Funcs]⟩
+  apply Exec.Frame.HasProofIndexedStorageAccounting.noFlow own
+  exact NoFlowStorageAccounting.callback hsilent callbackEffect.delta (by
+    simpa only [List.nil_append] using chronology)
+
 /-- Exact proof-indexed accounting for the ordinary nonzero-recipient
 `transfer` branch. -/
 theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferNonzero
@@ -4899,14 +4937,6 @@ structure CompiledFrameStorageRemainingCases
     frame.sevm.data.length.toB256 ≠ 0 →
     Sevm.selector frame.sevm = flashLoanSelector →
     frame.HasProofIndexedStorageAccounting dp ca
-  approveAndCall : ∀ {frame : Exec.Frame},
-    frame.AuthenticContext dp ca →
-    ForallDeeperAt frame.sevm.depth ca (weth10 dp)
-      (fun pc sevm pre out _ =>
-        Exec.CoreStorageSound dp ca pc sevm pre out) →
-    frame.sevm.data.length.toB256 ≠ 0 →
-    Sevm.selector frame.sevm = approveAndCallSelector →
-    frame.HasProofIndexedStorageAccounting dp ca
   permit : ∀ {frame : Exec.Frame},
     frame.AuthenticContext dp ca →
     ForallDeeperAt frame.sevm.depth ca (weth10 dp)
@@ -4916,9 +4946,9 @@ structure CompiledFrameStorageRemainingCases
     Sevm.selector frame.sevm = permitSelector →
     frame.HasProofIndexedStorageAccounting dp ca
 
-/-- The exhaustive branch split reduces the final storage handler to the nine
-still-open recursive cases above; `depositToAndCall` and all twenty call-free
-cases are discharged by concrete compiled proofs in this module. -/
+/-- The exhaustive branch split reduces the final storage handler to the eight
+still-open recursive cases above; `depositToAndCall`, `approveAndCall`, and all
+twenty call-free cases are discharged by concrete compiled proofs here. -/
 theorem CompiledFrameStorageRemainingCases.compiledFrameStorageHandler
     {dp : DeployParams} {ca : Adr}
     (remaining : CompiledFrameStorageRemainingCases dp ca) :
@@ -4954,8 +4984,8 @@ theorem CompiledFrameStorageRemainingCases.compiledFrameStorageHandler
         exact (remaining.flashLoan context hdeeper nonempty
           selected).storageSegmentEffect
     | approveAndCall nonempty selected =>
-        exact (remaining.approveAndCall context hdeeper nonempty
-          selected).storageSegmentEffect
+        exact (frame.hasProofIndexedStorageAccounting_of_approveAndCall
+          context selected nonempty hdeeper).storageSegmentEffect
     | permit nonempty selected =>
         exact (remaining.permit context hdeeper nonempty
           selected).storageSegmentEffect

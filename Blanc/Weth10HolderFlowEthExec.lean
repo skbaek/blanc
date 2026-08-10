@@ -2943,6 +2943,54 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_depositToAndCall
         _ = callbackForFrame.call.trace.retained.flowActions dp ca := by
           simpa only [callbackForFrame] using retainedFlowEq.symm
 
+/-- Exact no-root-flow ETH accounting for `approveAndCall`.  The approval
+prefix is balance-silent, and the indexed retained callback contributes its
+exact zero-value child ledger. -/
+theorem Exec.Frame.compiledBodyEthAccounting_of_approveAndCall
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    (context : frame.AuthenticContext dp ca)
+    (hselector : Sevm.selector frame.sevm = approveAndCallSelector)
+    (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
+    (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
+      (fun pc sevm pre out _ =>
+        Exec.CoreEthSound dp ca pc sevm pre out))
+    (hsum : sum frame.pre.state.bal < 2 ^ 256) :
+    frame.CompiledBodyEthAccounting dp ca := by
+  rcases frame.compiledApproveAndCallChronology context hselector
+      hnonempty with
+    ⟨callbackPre, _hstorage, _hlogs, hbalance, hcode, _houtput,
+      inputSize, input, callPre, callPost, parent, child, xl, pc,
+      retained, callback, _rawCommits, _occurrence, chronology⟩
+  have installedCallback : some (callbackPre.getCode ca).toList =
+      Prog.compile (weth10 dp) := by
+    rw [hcode]
+    exact context.installed.1
+  have hsumCallback : sum callbackPre.state.bal < 2 ^ 256 := by
+    change sum (Devm.getBal callbackPre) < 2 ^ 256
+    rw [hbalance]
+    exact hsum
+  rcases callback.zeroValueCallbackEthSegment retained installedCallback
+      hdeeper hsumCallback with ⟨callbackSegment, retainedFlowEq⟩
+  rcases callbackSegment with
+    ⟨innerCallPre, innerCallPost, call, hcallbackPreBalance,
+      hpostBalance⟩
+  let callbackForFrame : ZeroValueCallbackEthSegment dp ca frame.sevm
+      frame.pre frame.post :=
+    ⟨innerCallPre, innerCallPost, call,
+      hbalance.symm.trans hcallbackPreBalance, hpostBalance⟩
+  have hnoPrimary : SelectsNoPrimaryFlow frame.sevm := by
+    constructor <;> rw [hselector] <;> decide +kernel
+  have classified := frame.flowAction_eq_none_of_selectsNoPrimaryFlow context
+    hnoPrimary hnonempty
+  apply Exec.Frame.CompiledBodyEthAccounting.noFlow classified
+  apply NoFlowBodyEthAccounting.callback callbackForFrame
+  calc
+    frame.descendantFlowActions dp ca =
+        retained.flowActions dp ca := by
+      simpa only [List.nil_append] using chronology
+    _ = callbackForFrame.call.trace.retained.flowActions dp ca := by
+      simpa only [callbackForFrame] using retainedFlowEq.symm
+
 /-- Exact ETH dispatcher for all fifteen closed non-flow selectors.  The root
 classification is derived from the selector inventory rather than accepted
 as an extra branch premise. -/
@@ -3119,15 +3167,6 @@ structure CompiledFrameBodyEthRemainingCases
     frame.sevm.data.length.toB256 ≠ 0 →
     Sevm.selector frame.sevm = flashLoanSelector →
     frame.CompiledBodyEthAccounting dp ca
-  approveAndCall : ∀ {frame : Exec.Frame},
-    frame.AuthenticContext dp ca →
-    ForallDeeperAt frame.sevm.depth ca (weth10 dp)
-      (fun pc sevm pre out _ =>
-        Exec.CoreEthSound dp ca pc sevm pre out) →
-    sum frame.pre.state.bal < 2 ^ 256 →
-    frame.sevm.data.length.toB256 ≠ 0 →
-    Sevm.selector frame.sevm = approveAndCallSelector →
-    frame.CompiledBodyEthAccounting dp ca
   permit : ∀ {frame : Exec.Frame},
     frame.AuthenticContext dp ca →
     ForallDeeperAt frame.sevm.depth ca (weth10 dp)
@@ -3166,8 +3205,8 @@ def CompiledFrameBodyEthAccountingHandler
     frame.CompiledBodyEthAccounting dp ca
 
 /-- The exhaustive compiled selector split reduces the final frame-level ETH
-handler to the nine still-open recursive cases above; `depositToAndCall` is
-closed directly by its indexed callback chronology. -/
+handler to the eight still-open recursive cases above; `depositToAndCall` and
+`approveAndCall` are closed directly by indexed callback chronology. -/
 theorem CompiledFrameBodyEthRemainingCases.compiledFrameBodyEthAccountingHandler
     {dp : DeployParams} {ca : Adr}
     (remaining : CompiledFrameBodyEthRemainingCases dp ca) :
@@ -3199,7 +3238,8 @@ theorem CompiledFrameBodyEthRemainingCases.compiledFrameBodyEthAccountingHandler
     | flashLoan nonempty selected =>
         exact remaining.flashLoan context hdeeper hsum nonempty selected
     | approveAndCall nonempty selected =>
-        exact remaining.approveAndCall context hdeeper hsum nonempty selected
+        exact frame.compiledBodyEthAccounting_of_approveAndCall
+          context selected nonempty hdeeper hsum
     | permit nonempty selected =>
         exact remaining.permit context hdeeper hsum nonempty selected
 
