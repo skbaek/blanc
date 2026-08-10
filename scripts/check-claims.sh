@@ -11,4 +11,4 @@ if ! (cd "$ROOT" && lake env lean scripts/ClaimCheck.lean); then
   exit 1
 fi
 
-echo "OK — WETH10 claim statements: 51 definitions/statements and exact record constructors pinned by Lean"
+echo "OK — WETH10 claim statements: 118 definitions/statements and exact record constructors pinned by Lean"

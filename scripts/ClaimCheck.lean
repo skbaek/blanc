@@ -779,11 +779,11 @@ example {u : Adr}
         flashCredit, flashRepayment⟩
     flow.ordinaryIn = ordinaryIn ∧
       flow.redeemed = redeemed ∧
-      flow.externalTransferredOut = externalTransferredOut ∧
+    flow.externalTransferredOut = externalTransferredOut ∧
       flow.selfTransfer = selfTransfer ∧
       flow.flashCredit = flashCredit ∧
       flow.flashRepayment = flashRepayment := by
-  rfl
+  exact ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩
 
 example {benv : Benv} {txs : List (Bytes ⊕ Tx)}
     {wds : List Withdrawal} {state : State} {bout : BlockOutput}
@@ -880,6 +880,183 @@ example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
     history₁.weth10Flow u = history₂.weth10Flow u :=
   history₁.weth10Flow_eq_of_appliedBlocks_eq history₂ hblocks
 
+/-! C1's taxonomy and provenance remain data, while executable authenticity
+is supplied separately by the accepted-debit and emitter witnesses. -/
+
+example : B256 → Adr → Nat → FlowAtom :=
+  FlowAtom.ordinaryMint
+
+example : B256 → B256 → Adr → Adr → Nat → FlowAtom :=
+  FlowAtom.transfer
+
+example : B256 → Adr → Adr → Nat → FlowAtom :=
+  FlowAtom.redemption
+
+example : B256 → Adr → Nat → FlowAtom :=
+  FlowAtom.flashPair
+
+example : AllowanceBranch :=
+  AllowanceBranch.selfBypass
+
+example : B256 → B256 → B256 → AllowanceBranch :=
+  AllowanceBranch.finite
+
+example : B256 → AllowanceBranch :=
+  AllowanceBranch.maximum
+
+example : DebitBranch :=
+  DebitBranch.direct
+
+example : AllowanceBranch → DebitBranch :=
+  DebitBranch.delegated
+
+example : AllowanceBranch → DebitBranch :=
+  DebitBranch.flash
+
+example (actualCaller : Adr) (rawSource : B256) (source : Adr)
+    (branch : DebitBranch) : DebitProvenance :=
+  { actualCaller := actualCaller
+    rawSource := rawSource
+    source := source
+    branch := branch }
+
+example : Adr → B256 → Adr → DebitBranch → DebitProvenance :=
+  DebitProvenance.mk
+
+example (atom : FlowAtom) (credit : Option CreditOccurrence)
+    (debit : Option DebitProvenance) (actualCaller currentTarget : Adr)
+    (codeAddress : Option Adr) (depth : Nat) : FlowAction :=
+  { atom := atom
+    credit := credit
+    debit := debit
+    actualCaller := actualCaller
+    currentTarget := currentTarget
+    codeAddress := codeAddress
+    depth := depth }
+
+example : FlowAtom → Option CreditOccurrence → Option DebitProvenance →
+    Adr → Adr → Option Adr → Nat → FlowAction :=
+  FlowAction.mk
+
+example : Sevm → Devm → Devm → B256 → AllowanceBranch → Prop :=
+  CallerAllowanceAccepted
+
+example : Sevm → Devm → Devm → AllowanceBranch → Prop :=
+  FlashAllowanceAccepted
+
+example {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    {action : FlowAction}
+    (authentic : frame.AuthenticContext dp ca)
+    (classified : frame.flowAction? dp ca = some action)
+    (accepted : action.AcceptedDebit dp frame.sevm frame.pre frame.post) :
+    frame.HasAcceptedDebit dp ca action :=
+  { authentic := authentic
+    classified := classified
+    accepted := accepted }
+
+example {dp : DeployParams} {action : FlowAction}
+    {e : Sevm} {pre post corePre : Devm}
+    (rawSource : B256) (source : Adr) (branch : AllowanceBranch)
+    (hdebit : action.debit = some
+      { actualCaller := e.caller
+        rawSource := rawSource
+        source := source
+        branch := .delegated branch })
+    (accepted : CallerAllowanceAccepted e pre corePre 2 branch) :
+    action.AcceptedDebit dp e pre post :=
+  FlowAction.AcceptedDebit.delegated rawSource source corePre branch
+    hdebit accepted
+
+example {dp : DeployParams} {action : FlowAction}
+    {e : Sevm} {pre post settle burn : Devm}
+    (rawReceiver : B256) (receiver : Adr) (branch : AllowanceBranch)
+    (hdebit : action.debit = some
+      { actualCaller := e.caller
+        rawSource := rawReceiver
+        source := receiver
+        branch := .flash branch })
+    (accepted : FlashAllowanceAccepted e settle burn branch)
+    (burnRun : Func.Run ((weth10 dp).main :: weth10Aux) e burn
+      flashBurn post) :
+    action.AcceptedDebit dp e pre post :=
+  FlowAction.AcceptedDebit.flash rawReceiver receiver settle burn branch
+    hdebit accepted burnRun
+
+example {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    {action : FlowAction}
+    (context : frame.AuthenticContext dp ca)
+    (haction : frame.flowAction? dp ca = some action) :
+    frame.HasAcceptedDebit dp ca action :=
+  frame.hasAcceptedDebit_of_flowAction?_eq_some context haction
+
+example {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    {action : FlowAction}
+    (authentic : frame.AuthenticContext dp ca)
+    (classified : frame.flowAction? dp ca = some action)
+    (effect : GenuineWethEmitterEffect dp frame.sevm frame.pre frame.post) :
+    frame.HasGenuineWethEmitterEffect dp ca action :=
+  { authentic := authentic
+    classified := classified
+    effect := effect }
+
+example {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    {action : FlowAction}
+    (context : frame.AuthenticContext dp ca)
+    (haction : frame.flowAction? dp ca = some action) :
+    frame.HasGenuineWethEmitterEffect dp ca action :=
+  frame.hasGenuineWethEmitterEffect_of_flowAction?_eq_some context haction
+
+/-! CREATE children are retained only through complete code-deposit
+settlement, not merely because their raw interpreter result committed. -/
+
+example : Jaune.Frame → Execution → Bool :=
+  Blanc.Weth10.Frame.settlementCommits
+
+example {dp : DeployParams} {ca : Adr} {f : Jaune.Frame}
+    {raw : Execution} {settled : Devm}
+    {pc : Nat} {sevm : Sevm} {pre : Devm}
+    (child : Exec pc sevm pre raw)
+    (rawCommits : Execution.commits raw = true)
+    (hcreate : f.isCreate = true)
+    (hsettled : processCreateMessage.settle f.outer
+      (processMessage.settle f.inner (executeCode.handleError raw)) =
+        .ok settled)
+    (herror : settled.error.isSome = true) :
+    (if Blanc.Weth10.Frame.settlementCommits f raw = true then
+      Exec.flowActions dp ca child
+     else []) = [] :=
+  Exec.retainedChildActions_eq_nil_of_create_codeDepositRollback child
+    rawCommits hcreate hsettled herror
+
+/-! C2's local reverse theorem and classification record pin the same action
+across the executed write, rich storage effect, WETH emitter, and accepted
+debit evidence. -/
+
+example (dp : DeployParams) (ca : Adr) :
+    CompiledBalanceSstoreReverseComplete dp ca :=
+  compiledBalanceSstoreReverseComplete dp ca
+
+example {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    {stepPre stepPost : Devm} {slot : Xlot}
+    {key value : B256} {holder : Adr} {action : FlowAction}
+    (occurrence : frame.BalanceSstoreOccurrence dp ca stepPre stepPost slot
+      key value holder)
+    (authentic : frame.AuthenticContext dp ca)
+    (classified : frame.flowAction? dp ca = some action)
+    (role : BalanceSstoreRole ca stepPre action.atom holder value)
+    (rich : frame.HasRichLocalStorageEffect dp ca action)
+    (emitter : frame.HasGenuineWethEmitterEffect dp ca action)
+    (acceptedDebit : frame.HasAcceptedDebit dp ca action) :
+    frame.BalanceSstoreClassification dp ca stepPre stepPost slot
+      key value holder action :=
+  { occurrence := occurrence
+    authentic := authentic
+    classified := classified
+    role := role
+    rich := rich
+    emitter := emitter
+    acceptedDebit := acceptedDebit }
+
 example {dp : DeployParams} {ca : Adr}
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out)
@@ -897,6 +1074,288 @@ example {dp : DeployParams} {ca : Adr}
         key value holder action :=
   Exec.weth10BalanceSstoreClassification_of_mem_committedFrames
     run installed rootPc rootMemory retained invocation occurrence
+
+/-! C3-C6 public theorem pins.  The committed interpreter cores are concrete;
+the frozen equations carry only the stable checkpoint and authentic retained
+history premises. -/
+
+example (dp : DeployParams) (ca : Adr) :
+    CommittedExecStorageSound dp ca :=
+  committedExecStorageSound dp ca
+
+example (dp : DeployParams) (ca : Adr) :
+    CommittedExecEthSound dp ca :=
+  committedExecEthSound dp ca
+
+example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {checkpoint future : BlockChain}
+    (history : AccountedHistory chainId dp ca checkpoint future) :
+    (history.weth10Flow u).flashCredit =
+      (history.weth10Flow u).flashRepayment :=
+  history.flash_pair_totals_eq
+
+example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {checkpoint future : BlockChain}
+    (hstable : Stable dp ca checkpoint.state)
+    (history : AccountedHistory chainId dp ca checkpoint future) :
+    FlowActionsCreditNof history.flowActions :=
+  history.noCommittedCreditWrap hstable
+
+example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {checkpoint future : BlockChain}
+    (hstable : Stable dp ca checkpoint.state)
+    (history : AccountedHistory chainId dp ca checkpoint future) :
+    holderCreditLossOfActions history.flowActions u = 0 :=
+  history.holderCreditLoss_eq_zero hstable
+
+example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {checkpoint future : BlockChain}
+    (hstable : Stable dp ca checkpoint.state)
+    (history : AccountedHistory chainId dp ca checkpoint future) :
+    bookedBalanceNat checkpoint.state ca u +
+        (history.weth10Flow u).ordinaryIn +
+        (history.weth10Flow u).selfTransfer +
+        (history.weth10Flow u).flashCredit =
+      bookedBalanceNat future.state ca u +
+        (history.weth10Flow u).redeemed +
+        (history.weth10Flow u).externalTransferredOut +
+        (history.weth10Flow u).selfTransfer +
+        (history.weth10Flow u).flashRepayment :=
+  holderFlow_conserved hstable history
+
+example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {checkpoint future : BlockChain}
+    (hstable : Stable dp ca checkpoint.state)
+    (history : AccountedHistory chainId dp ca checkpoint future) :
+    (history.weth10Flow u).flashCredit =
+        (history.weth10Flow u).flashRepayment ∧
+    bookedBalanceNat checkpoint.state ca u +
+        (history.weth10Flow u).ordinaryIn =
+      bookedBalanceNat future.state ca u +
+        (history.weth10Flow u).redeemed +
+        (history.weth10Flow u).externalTransferredOut :=
+  holderFlow_flash_cancelled hstable history
+
+example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {checkpoint future : BlockChain}
+    (hstable : Stable dp ca checkpoint.state)
+    (history : AccountedHistory chainId dp ca checkpoint future) :
+    bookedBalanceNat checkpoint.state ca u ≤
+      bookedBalanceNat future.state ca u +
+        ((history.weth10Flow u).redeemed +
+          (history.weth10Flow u).externalTransferredOut) :=
+  holderFlow_residual_floor hstable history
+
+example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {checkpoint future : BlockChain}
+    (hstable : Stable dp ca checkpoint.state)
+    (history : AccountedHistory chainId dp ca checkpoint future) :
+    bookedBalanceNat checkpoint.state ca u -
+        ((history.weth10Flow u).redeemed +
+          (history.weth10Flow u).externalTransferredOut) ≤
+      bookedBalanceNat future.state ca u :=
+  holderFlow_truncated_floor hstable history
+
+example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {checkpoint future : BlockChain}
+    (hstable : Stable dp ca checkpoint.state)
+    (history : AccountedHistory chainId dp ca checkpoint future)
+    (noExternalTransfer :
+      (history.weth10Flow u).externalTransferredOut = 0) :
+    bookedBalanceNat checkpoint.state ca u ≤
+      (history.weth10Flow u).redeemed +
+        bookedBalanceNat future.state ca u :=
+  holderFlow_withdrawal_floor hstable history noExternalTransfer
+
+/-! Goal-specific boundary falsifiers and arithmetic deductions. -/
+
+example {u : Adr} {initial final : Nat} (flow : HolderFlow u)
+    (cancelled : initial + flow.ordinaryIn =
+      final + flow.redeemed + flow.externalTransferredOut)
+    (noRedemption : flow.redeemed = 0)
+    (noExternalTransfer : flow.externalTransferredOut = 0) :
+    initial ≤ final :=
+  holderFlow_zero_outflow_floor_of_cancelled flow cancelled
+    noRedemption noExternalTransfer
+
+example {u : Adr} {initial final : Nat} (flow : HolderFlow u)
+    (cancelled : initial + flow.ordinaryIn =
+      final + flow.redeemed + flow.externalTransferredOut)
+    (credited : 0 < flow.ordinaryIn)
+    (noRedemption : flow.redeemed = 0)
+    (noExternalTransfer : flow.externalTransferredOut = 0) :
+    initial < final :=
+  holderFlow_credited_strict_of_cancelled flow cancelled credited
+    noRedemption noExternalTransfer
+
+example {u : Adr} {initial : Nat} (flow : HolderFlow u)
+    (covered : initial ≤
+      flow.redeemed + flow.externalTransferredOut) :
+    initial - (flow.redeemed + flow.externalTransferredOut) = 0 :=
+  holderFlow_over_total_outflow_truncates flow covered
+
+example (rawSource rawRecipient : B256) (u : Adr) (amount : Nat)
+    (hsource : rawSource.toAdr = u)
+    (hrecipient : rawRecipient.toAdr = u) :
+    (FlowAtom.transfer rawSource rawRecipient rawSource.toAdr
+        rawRecipient.toAdr amount).holderFlow u =
+      { HolderFlow.zero u with selfTransfer := amount } :=
+  holderFlow_dirty_alias_is_self_transfer rawSource rawRecipient u amount
+    hsource hrecipient
+
+example (rawSource rawRecipient : B256) (source recipient u : Adr) :
+    (FlowAtom.transfer rawSource rawRecipient source recipient 0).holderFlow u =
+      HolderFlow.zero u :=
+  holderFlow_zero_transfer_eq_zero rawSource rawRecipient source recipient u
+
+example (e : Sevm) (hsize : e.data.length.toB256 = 0) :
+    primaryFlowAtom e =
+      some (.ordinaryMint e.caller.toB256 e.caller e.value.toNat) :=
+  primaryFlowAtom_wordZero_length_is_receive e hsize
+
+example (e : Sevm)
+    (hnonempty : e.data.length.toB256 ≠ 0)
+    (hselector : Sevm.selector e = transferSelector)
+    (hraw : Sevm.argWord e 0 ≠ 0)
+    (hnormalized : (Sevm.argWord e 0).toAdr = 0) :
+    primaryFlowAtom e =
+      some (.transfer e.caller.toB256 (Sevm.argWord e 0)
+        e.caller 0 (Sevm.argWord e 1).toNat) :=
+  primaryFlowAtom_dirty_zero_is_transfer e hnonempty hselector hraw
+    hnormalized
+
+example (e : Sevm)
+    (hnonempty : e.data.length.toB256 ≠ 0)
+    (hselector : Sevm.selector e = transferAndCallSelector)
+    (hraw : Sevm.argWord e 0 ≠ 0)
+    (hnormalized : (Sevm.argWord e 0).toAdr = 0) :
+    primaryFlowAtom e =
+      some (.transfer e.caller.toB256 (Sevm.argWord e 0)
+        e.caller 0 (Sevm.argWord e 1).toNat) :=
+  primaryFlowAtom_dirty_zero_transferAndCall_is_transfer e hnonempty
+    hselector hraw hnormalized
+
+example (e : Sevm)
+    (hnonempty : e.data.length.toB256 ≠ 0)
+    (hselector : Sevm.selector e = transferFromSelector)
+    (hrawTo : Sevm.argWord e 1 ≠ 0)
+    (hnormalized : (Sevm.argWord e 1).toAdr = 0) :
+    primaryFlowAtom e =
+      some (.transfer (Sevm.argWord e 0) (Sevm.argWord e 1)
+        (Sevm.argWord e 0).toAdr 0 (Sevm.argWord e 2).toNat) :=
+  primaryFlowAtom_dirty_zero_transferFrom_is_transfer e hnonempty
+    hselector hrawTo hnormalized
+
+example {dp : DeployParams} {ca : Adr} {e : Sevm}
+    (hcodeAddress : e.codeAddress ≠ some ca) :
+    ¬ exactInvocation dp ca e :=
+  not_exactInvocation_of_codeAddress_ne hcodeAddress
+
+example {dp : DeployParams} {ca : Adr} {e : Sevm}
+    (htarget : e.currentTarget ≠ ca) :
+    ¬ exactInvocation dp ca e :=
+  not_exactInvocation_of_currentTarget_ne htarget
+
+example {dp : DeployParams} {ca : Adr} {e : Sevm}
+    (hcode : some e.code.toList ≠ Prog.compile (weth10 dp)) :
+    ¬ exactInvocation dp ca e :=
+  not_exactInvocation_of_code_ne hcode
+
+example {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    (htarget : frame.sevm.currentTarget ≠ ca) :
+    frame.flowAction? dp ca = none :=
+  frame.flowAction_eq_none_of_currentTarget_ne htarget
+
+example {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    (hcodeAddress : frame.sevm.codeAddress ≠ some ca) :
+    frame.flowAction? dp ca = none :=
+  frame.flowAction_eq_none_of_codeAddress_ne hcodeAddress
+
+example {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    (hcode : some frame.sevm.code.toList ≠ Prog.compile (weth10 dp)) :
+    frame.flowAction? dp ca = none :=
+  frame.flowAction_eq_none_of_code_ne hcode
+
+example {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    (hpc : frame.pc ≠ 0) :
+    frame.flowAction? dp ca = none :=
+  frame.flowAction_eq_none_of_pc_ne hpc
+
+/-! The executable numeric fixtures pin the category fold independently of
+the proof-carrying history constructors. -/
+
+example (u v : Adr) (hne : u ≠ v) :
+    let observation := fun atom : FlowAtom =>
+      ({ atom := atom
+         actualCaller := 0
+         currentTarget := 0
+         codeAddress := some 0
+         depth := 0 } : FlowObservation)
+    let flow := holderFlowOfObservations
+      [ observation (.ordinaryMint u.toB256 u 10)
+      , observation (.transfer v.toB256 u.toB256 v u 3)
+      , observation (.transfer u.toB256 u.toB256 u u 5)
+      , observation (.flashPair u.toB256 u 7)
+      , observation (.redemption u.toB256 u u 4)
+      , observation (.transfer u.toB256 v.toB256 u v 2) ] u
+    flow.ordinaryIn = 13 ∧
+      flow.redeemed = 4 ∧
+      flow.externalTransferredOut = 2 ∧
+      flow.selfTransfer = 5 ∧
+      flow.flashCredit = 7 ∧
+      flow.flashRepayment = 7 :=
+  holderFlow_multiStep_fixture_totals u v hne
+
+example (u : Adr) :
+    let observation := fun atom : FlowAtom =>
+      ({ atom := atom
+         actualCaller := 0
+         currentTarget := 0
+         codeAddress := some 0
+         depth := 0 } : FlowObservation)
+    let flow := holderFlowOfObservations
+      [ observation (.flashPair u.toB256 u 2)
+      , observation (.flashPair u.toB256 u 3) ] u
+    flow.flashCredit = 5 ∧ flow.flashRepayment = 5 :=
+  holderFlow_nestedFlash_fixture_totals u
+
+example (u : Adr) :
+    let observation :=
+      ({ atom := FlowAtom.flashPair u.toB256 u maxFlashMinted
+         actualCaller := 0
+         currentTarget := 0
+         codeAddress := some 0
+         depth := 0 } : FlowObservation)
+    let flow := holderFlowOfObservations [observation] u
+    flow.flashCredit = maxFlashMinted ∧
+      flow.flashRepayment = maxFlashMinted :=
+  holderFlow_maximumFlash_fixture_totals u
+
+example (ca u : Adr) :
+    ({ atom := .ordinaryMint u.toB256 u 1
+       credit := some
+        { recipient := u, before := B256.max, amountWord := 1 }
+       debit := none
+       actualCaller := u
+       currentTarget := ca
+       codeAddress := some ca
+       depth := 0 } : FlowAction).creditLossTotal = 2 ^ 256 :=
+  maxOneMintCandidate_creditLoss ca u
+
+example (ca source recipient : Adr) :
+    ({ atom := .transfer source.toB256 recipient.toB256 source recipient 1
+       credit := some
+        { recipient := recipient, before := B256.max, amountWord := 1 }
+       debit := some
+        { actualCaller := source
+          rawSource := source.toB256
+          source := source
+          branch := .direct }
+       actualCaller := source
+       currentTarget := ca
+       codeAddress := some ca
+       depth := 0 } : FlowAction).creditLossTotal = 2 ^ 256 :=
+  maxOneTransferCandidate_creditLoss ca source recipient
 
 end Weth10
 

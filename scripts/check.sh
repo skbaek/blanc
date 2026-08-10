@@ -561,7 +561,22 @@ Blanc.Weth10.Stable.messageRedemption_enabled_of_le|$STANDARD
 Blanc.Weth10.Stable.selfRedemption_enabled_of_le|$STANDARD
 Blanc.Weth10.AdmissibleRedemptionTx.processTransaction_eq_of_message|$STANDARD
 Blanc.Weth10.Stable.transactionRedemption_enabled_of_le|$STANDARD
-Blanc.Weth10.outerOkWithFailedReceipt_not_redemptionEnabled|$STANDARD"
+Blanc.Weth10.outerOkWithFailedReceipt_not_redemptionEnabled|$STANDARD
+Blanc.Weth10.compiledBalanceSstoreReverseComplete|$STANDARD
+Blanc.Weth10.Exec.weth10BalanceSstoreClassification_of_mem_committedFrames|$STANDARD
+Blanc.Weth10.AccountedHistory.flash_pair_totals_eq|$STANDARD
+Blanc.Weth10.AccountedHistory.toReachUsing|$STANDARD
+Blanc.Weth10.exists_accountedHistory_of_reachUsing|$STANDARD
+Blanc.Weth10.AccountedHistory.weth10Flow_eq_of_appliedBlocks_eq|$STANDARD
+Blanc.Weth10.committedExecStorageSound|$STANDARD
+Blanc.Weth10.committedExecEthSound|$STANDARD
+Blanc.Weth10.AccountedHistory.noCommittedCreditWrap|$STANDARD
+Blanc.Weth10.AccountedHistory.holderCreditLoss_eq_zero|$STANDARD
+Blanc.Weth10.holderFlow_conserved|$STANDARD
+Blanc.Weth10.holderFlow_flash_cancelled|$STANDARD
+Blanc.Weth10.holderFlow_residual_floor|$STANDARD
+Blanc.Weth10.holderFlow_truncated_floor|$STANDARD
+Blanc.Weth10.holderFlow_withdrawal_floor|$STANDARD"
 # Secondary net only: the exact-set comparison below is the primary check;
 # this pattern catches forbidden names in output the per-theorem parse missed.
 FORBIDDEN='sorryAx|ofReduceBool|ofReduceNat|_native\.'

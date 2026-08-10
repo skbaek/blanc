@@ -1476,18 +1476,137 @@ private theorem compiledDispatchWith_pcFree
       simp [dispatchWith, Func.pcFreeBody, Ninst.pcFree,
         Ninst.pushB256, ihLeft hleft, ihRight hright]
 
-set_option maxHeartbeats 800000 in
-set_option maxRecDepth 100000 in
+/-! The pc-freedom proof below deliberately never reduces the complete closed
+WETH10 syntax tree.  Each source-shape equality unfolds one small constructor
+boundary, while the recursive facts are proved over symbolic lists and trees. -/
+
+private theorem pcFreeBody_prepend (line : Line) (rest : Func) :
+    (line +++ rest).pcFreeBody =
+      (line.all Ninst.pcFree && rest.pcFreeBody) := by
+  induction line with
+  | nil => rfl
+  | cons n line ih =>
+      simp only [prepend, Func.pcFreeBody, List.all_cons, ih, Bool.and_assoc]
+
+private theorem prependStore_pcFreeBody
+    (w : B256) (i : Nat) (rest : Func)
+    (hrest : rest.pcFreeBody = true) :
+    (prependStore w i rest).pcFreeBody = true := by
+  simp [prependStore, Func.pcFreeBody, Ninst.pcFree, Ninst.pushB256, hrest]
+
+private theorem prependStoresRev_pcFreeBody
+    (stores : List (B256 × Nat)) (rest : Func)
+    (hrest : rest.pcFreeBody = true) :
+    (prependStoresRev stores rest).pcFreeBody = true := by
+  induction stores generalizing rest with
+  | nil => exact hrest
+  | cons iw stores ih =>
+      simp only [prependStoresRev]
+      exact ih _ (prependStore_pcFreeBody iw.1 iw.2 rest hrest)
+
+private theorem revWith_pcFreeBody (reason : String) :
+    (Func.revWith reason).pcFreeBody = true := by
+  unfold Func.revWith Func.revData
+  apply prependStoresRev_pcFreeBody
+  rfl
+
+private theorem weth10Funcs_shape (dp : DeployParams) :
+    weth10Funcs dp =
+      [ (selector "name" [], nonpayable name),
+        (selector "approve" [.address, .uint256], nonpayable approve),
+        (selector "totalSupply" [], nonpayable totalSupply),
+        (selector "withdrawTo" [.address, .uint256], nonpayable withdrawTo),
+        (selector "transferFrom" [.address, .address, .uint256],
+          nonpayable transferFrom),
+        (selector "withdraw" [.uint256], nonpayable withdraw),
+        (selector "PERMIT_TYPEHASH" [], nonpayable permitTypehash),
+        (selector "decimals" [], nonpayable decimals),
+        (selector "DOMAIN_SEPARATOR" [], nonpayable (domainSeparator dp)),
+        (selector "transferAndCall" [.address, .uint256, .dynBytes],
+          nonpayable transferAndCall),
+        (selector "flashLoan" [.address, .address, .uint256, .dynBytes],
+          nonpayable flashLoan),
+        (selector "depositToAndCall" [.address, .dynBytes], depositToAndCall),
+        (selector "maxFlashLoan" [.address], nonpayable maxFlashLoan),
+        (selector "balanceOf" [.address], nonpayable balanceOfEndpoint),
+        (selector "nonces" [.address], nonpayable nonces),
+        (selector "CALLBACK_SUCCESS" [], nonpayable callbackSuccess),
+        (selector "flashMinted" [], nonpayable flashMinted),
+        (selector "withdrawFrom" [.address, .address, .uint256],
+          nonpayable withdrawFrom),
+        (selector "symbol" [], nonpayable symbol),
+        (selector "transfer" [.address, .uint256], nonpayable transfer),
+        (selector "depositTo" [.address], depositTo),
+        (selector "approveAndCall" [.address, .uint256, .dynBytes],
+          nonpayable approveAndCall),
+        (selector "deploymentChainId" [],
+          nonpayable (deploymentChainId dp)),
+        (selector "deposit" [], deposit),
+        (selector "permit"
+          [.address, .address, .uint256, .uint256, .uint 8, .bytes 32,
+            .bytes 32],
+          nonpayable (permit dp)),
+        (selector "flashFee" [.address, .uint256], nonpayable flashFee),
+        (selector "allowance" [.address, .address], nonpayable allowance) ] := by
+  rfl
+
+private theorem weth10Funcs_pcFreeBody (dp : DeployParams) :
+    ∀ entry ∈ weth10Funcs dp, entry.2.pcFreeBody = true := by
+  intro entry member
+  rw [weth10Funcs_shape] at member
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at member
+  rcases member with h | h | h | h | h | h | h | h | h | h | h | h | h |
+      h | h | h | h | h | h | h | h | h | h | h | h | h | h
+  all_goals cases h
+  all_goals rfl
+
+private theorem weth10Aux_shape :
+    weth10Aux =
+      [ Func.rev,
+        flashTokenError,
+        individualLimitError,
+        totalLimitError,
+        flashFailedError,
+        allowanceError,
+        burnBalanceError,
+        expiredPermitError,
+        invalidPermitError,
+        transferBalanceError,
+        ethTransferError,
+        etherTransferError,
+        bubbleRevert,
+        boolReturn,
+        flashSettle,
+        transferFromCore,
+        withdrawFromCore,
+        flashBurn,
+        permitRecover ] := by
+  rfl
+
+private theorem weth10Aux_pcFreeBody :
+    ∀ body ∈ weth10Aux, body.pcFreeBody = true := by
+  intro body member
+  rw [weth10Aux_shape] at member
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at member
+  rcases member with h | h | h | h | h | h | h | h | h | h | h | h | h |
+      h | h | h | h | h | h
+  all_goals cases h
+  all_goals first | rfl | exact revWith_pcFreeBody _
+
+private theorem weth10Main_shape (dp : DeployParams) :
+    weth10Main dp =
+      [Ninst.calldatasize, Ninst.iszero] +++
+        (receiveEther <?>
+          (fsig +++ dispatchWith fallbackSlot (weth10Tree dp))) := by
+  rfl
+
+private theorem weth10_shape (dp : DeployParams) :
+    weth10 dp = ⟨weth10Main dp, weth10Aux⟩ := by
+  rfl
+
 theorem weth10_pcFree (dp : DeployParams) :
     Prog.pcFree (weth10 dp) = true := by
-  have hentries : ∀ entry ∈ weth10Funcs dp,
-      entry.2.pcFreeBody = true := by
-    have hall : (weth10Funcs dp).all
-        (fun entry => entry.2.pcFreeBody) = true := by
-      change (weth10Funcs (⟨0, 0⟩ : DeployParams)).all
-        (fun entry => entry.2.pcFreeBody) = true
-      decide +kernel
-    simpa only [List.all_eq_true] using hall
+  have hentries := weth10Funcs_pcFreeBody dp
   have htree : CompiledDispatchPcFree (weth10Tree dp) :=
     compiledDispatchPcFree_build (weth10Funcs dp).length
       (weth10Funcs dp) hentries
@@ -1495,12 +1614,18 @@ theorem weth10_pcFree (dp : DeployParams) :
   have hprefix :
       (fsig +++
         dispatchWith fallbackSlot (weth10Tree dp)).pcFreeBody = true := by
-    simp [fsig, cdl, shiftRight, prepend, Func.pcFreeBody, Ninst.pcFree,
-      Ninst.pushB256, hdispatch]
-  have hmint : mintCaller.pcFreeBody = true := by decide +kernel
-  have haux : weth10Aux.all Func.pcFreeBody = true := by decide +kernel
-  simp [Prog.pcFree, Func.pcFree, weth10, weth10Main, receiveEther,
-    Func.pcFreeBody, Ninst.pcFree, hprefix, hmint, haux]
+    rw [pcFreeBody_prepend, hdispatch]
+    rfl
+  have hreceive : receiveEther.pcFreeBody = true := by rfl
+  have hmain : (weth10Main dp).pcFreeBody = true := by
+    rw [weth10Main_shape, pcFreeBody_prepend]
+    simp only [Func.pcFreeBody, hreceive, hprefix]
+    decide
+  have haux : weth10Aux.all Func.pcFreeBody = true := by
+    simpa only [List.all_eq_true] using weth10Aux_pcFreeBody
+  rw [weth10_shape]
+  simp only [Prog.pcFree, Func.pcFree, hmain, List.all_cons, haux]
+  rfl
 
 /-- Exact gas burns from the same source state have the same target state. -/
 private theorem Devm.eq_of_burnBy
@@ -7889,22 +8014,202 @@ private theorem weth10Tree_sourceSstoreSiteCount (dp : DeployParams) :
   · simp [weth10Funcs]
   · omega
 
+/-! Named leaf facts keep the literal inventory local to each generated body.
+The vector proofs below only rewrite an explicit list shape and compose these
+facts; they never ask the kernel to normalize the closed dispatcher program. -/
+
+private theorem name_public_sourceSstoreSiteCount :
+    sourceSstoreSiteCount (nonpayable name) = 0 := by rfl
+private theorem approve_public_sourceSstoreSiteCount :
+    sourceSstoreSiteCount (nonpayable approve) = 1 := by rfl
+private theorem totalSupply_public_sourceSstoreSiteCount :
+    sourceSstoreSiteCount (nonpayable totalSupply) = 0 := by rfl
+private theorem withdrawTo_public_sourceSstoreSiteCount :
+    sourceSstoreSiteCount (nonpayable withdrawTo) = 1 := by rfl
+private theorem transferFrom_public_sourceSstoreSiteCount :
+    sourceSstoreSiteCount (nonpayable transferFrom) = 1 := by rfl
+private theorem withdraw_public_sourceSstoreSiteCount :
+    sourceSstoreSiteCount (nonpayable withdraw) = 1 := by rfl
+private theorem permitTypehash_public_sourceSstoreSiteCount :
+    sourceSstoreSiteCount (nonpayable permitTypehash) = 0 := by rfl
+private theorem decimals_public_sourceSstoreSiteCount :
+    sourceSstoreSiteCount (nonpayable decimals) = 0 := by rfl
+private theorem domainSeparator_public_sourceSstoreSiteCount
+    (dp : DeployParams) :
+    sourceSstoreSiteCount (nonpayable (domainSeparator dp)) = 0 := by rfl
+private theorem transferAndCall_public_sourceSstoreSiteCount :
+    sourceSstoreSiteCount (nonpayable transferAndCall) = 3 := by rfl
+private theorem flashLoan_public_sourceSstoreSiteCount :
+    sourceSstoreSiteCount (nonpayable flashLoan) = 2 := by rfl
+private theorem depositToAndCall_public_sourceSstoreSiteCount :
+    sourceSstoreSiteCount depositToAndCall = 1 := by rfl
+private theorem maxFlashLoan_public_sourceSstoreSiteCount :
+    sourceSstoreSiteCount (nonpayable maxFlashLoan) = 0 := by rfl
+private theorem balanceOf_public_sourceSstoreSiteCount :
+    sourceSstoreSiteCount (nonpayable balanceOfEndpoint) = 0 := by rfl
+private theorem nonces_public_sourceSstoreSiteCount :
+    sourceSstoreSiteCount (nonpayable nonces) = 0 := by rfl
+private theorem callbackSuccess_public_sourceSstoreSiteCount :
+    sourceSstoreSiteCount (nonpayable callbackSuccess) = 0 := by rfl
+private theorem flashMinted_public_sourceSstoreSiteCount :
+    sourceSstoreSiteCount (nonpayable flashMinted) = 0 := by rfl
+private theorem withdrawFrom_public_sourceSstoreSiteCount :
+    sourceSstoreSiteCount (nonpayable withdrawFrom) = 1 := by rfl
+private theorem symbol_public_sourceSstoreSiteCount :
+    sourceSstoreSiteCount (nonpayable symbol) = 0 := by rfl
+private theorem transfer_public_sourceSstoreSiteCount :
+    sourceSstoreSiteCount (nonpayable transfer) = 3 := by rfl
+private theorem depositTo_public_sourceSstoreSiteCount :
+    sourceSstoreSiteCount depositTo = 1 := by rfl
+private theorem approveAndCall_public_sourceSstoreSiteCount :
+    sourceSstoreSiteCount (nonpayable approveAndCall) = 1 := by rfl
+private theorem deploymentChainId_public_sourceSstoreSiteCount
+    (dp : DeployParams) :
+    sourceSstoreSiteCount (nonpayable (deploymentChainId dp)) = 0 := by rfl
+private theorem deposit_public_sourceSstoreSiteCount :
+    sourceSstoreSiteCount deposit = 1 := by rfl
+private theorem permit_public_sourceSstoreSiteCount (dp : DeployParams) :
+    sourceSstoreSiteCount (nonpayable (permit dp)) = 1 := by rfl
+private theorem flashFee_public_sourceSstoreSiteCount :
+    sourceSstoreSiteCount (nonpayable flashFee) = 0 := by rfl
+private theorem allowance_public_sourceSstoreSiteCount :
+    sourceSstoreSiteCount (nonpayable allowance) = 0 := by rfl
+
+private theorem prependStore_sourceSstoreSiteCount
+    (w : B256) (i : Nat) (rest : Func) :
+    sourceSstoreSiteCount (prependStore w i rest) =
+      sourceSstoreSiteCount rest := by
+  rfl
+
+private theorem prependStoresRev_sourceSstoreSiteCount
+    (stores : List (B256 × Nat)) (rest : Func) :
+    sourceSstoreSiteCount (prependStoresRev stores rest) =
+      sourceSstoreSiteCount rest := by
+  induction stores generalizing rest with
+  | nil => rfl
+  | cons iw stores ih =>
+      rw [show prependStoresRev (iw :: stores) rest =
+        prependStoresRev stores (prependStore iw.1 iw.2 rest) from rfl,
+        ih, prependStore_sourceSstoreSiteCount]
+
+private theorem revWith_sourceSstoreSiteCount (reason : String) :
+    sourceSstoreSiteCount (Func.revWith reason) = 0 := by
+  unfold Func.revWith Func.revData
+  rw [prependStoresRev_sourceSstoreSiteCount]
+  rfl
+
+private theorem rev_aux_sourceSstoreSiteCount :
+    sourceSstoreSiteCount Func.rev = 0 := by rfl
+private theorem flashTokenError_aux_sourceSstoreSiteCount :
+    sourceSstoreSiteCount flashTokenError = 0 := by
+  exact revWith_sourceSstoreSiteCount _
+private theorem individualLimitError_aux_sourceSstoreSiteCount :
+    sourceSstoreSiteCount individualLimitError = 0 := by
+  exact revWith_sourceSstoreSiteCount _
+private theorem totalLimitError_aux_sourceSstoreSiteCount :
+    sourceSstoreSiteCount totalLimitError = 0 := by
+  exact revWith_sourceSstoreSiteCount _
+private theorem flashFailedError_aux_sourceSstoreSiteCount :
+    sourceSstoreSiteCount flashFailedError = 0 := by
+  exact revWith_sourceSstoreSiteCount _
+private theorem allowanceError_aux_sourceSstoreSiteCount :
+    sourceSstoreSiteCount allowanceError = 0 := by
+  exact revWith_sourceSstoreSiteCount _
+private theorem burnBalanceError_aux_sourceSstoreSiteCount :
+    sourceSstoreSiteCount burnBalanceError = 0 := by
+  exact revWith_sourceSstoreSiteCount _
+private theorem expiredPermitError_aux_sourceSstoreSiteCount :
+    sourceSstoreSiteCount expiredPermitError = 0 := by
+  exact revWith_sourceSstoreSiteCount _
+private theorem invalidPermitError_aux_sourceSstoreSiteCount :
+    sourceSstoreSiteCount invalidPermitError = 0 := by
+  exact revWith_sourceSstoreSiteCount _
+private theorem transferBalanceError_aux_sourceSstoreSiteCount :
+    sourceSstoreSiteCount transferBalanceError = 0 := by
+  exact revWith_sourceSstoreSiteCount _
+private theorem ethTransferError_aux_sourceSstoreSiteCount :
+    sourceSstoreSiteCount ethTransferError = 0 := by
+  exact revWith_sourceSstoreSiteCount _
+private theorem etherTransferError_aux_sourceSstoreSiteCount :
+    sourceSstoreSiteCount etherTransferError = 0 := by
+  exact revWith_sourceSstoreSiteCount _
+private theorem bubbleRevert_aux_sourceSstoreSiteCount :
+    sourceSstoreSiteCount bubbleRevert = 0 := by rfl
+private theorem boolReturn_aux_sourceSstoreSiteCount :
+    sourceSstoreSiteCount boolReturn = 0 := by rfl
+private theorem flashSettle_aux_sourceSstoreSiteCount :
+    sourceSstoreSiteCount flashSettle = 1 := by rfl
+private theorem transferFromCore_aux_sourceSstoreSiteCount :
+    sourceSstoreSiteCount transferFromCore = 3 := by rfl
+private theorem withdrawFromCore_aux_sourceSstoreSiteCount :
+    sourceSstoreSiteCount withdrawFromCore = 1 := by rfl
+private theorem flashBurn_aux_sourceSstoreSiteCount :
+    sourceSstoreSiteCount flashBurn = 2 := by rfl
+private theorem permitRecover_aux_sourceSstoreSiteCount :
+    sourceSstoreSiteCount permitRecover = 1 := by rfl
+
 /-- Literal SSTORE-node counts for the 27 public bodies, in the exact order of
 `weth10Funcs`.  Shared called continuations are inventoried separately below. -/
 theorem weth10Funcs_sourceSstoreSiteCounts (dp : DeployParams) :
     (weth10Funcs dp).map (fun entry => sourceSstoreSiteCount entry.2) =
       [0, 1, 0, 1, 1, 1, 0, 0, 0, 3, 2, 1, 0, 0, 0, 0, 0, 1,
         0, 3, 1, 1, 0, 1, 1, 0, 0] := by
-  change (weth10Funcs (⟨0, 0⟩ : DeployParams)).map
-    (fun entry => sourceSstoreSiteCount entry.2) = _
-  decide +kernel
+  rw [weth10Funcs_shape]
+  simp only [List.map_cons, List.map_nil,
+    name_public_sourceSstoreSiteCount,
+    approve_public_sourceSstoreSiteCount,
+    totalSupply_public_sourceSstoreSiteCount,
+    withdrawTo_public_sourceSstoreSiteCount,
+    transferFrom_public_sourceSstoreSiteCount,
+    withdraw_public_sourceSstoreSiteCount,
+    permitTypehash_public_sourceSstoreSiteCount,
+    decimals_public_sourceSstoreSiteCount,
+    domainSeparator_public_sourceSstoreSiteCount,
+    transferAndCall_public_sourceSstoreSiteCount,
+    flashLoan_public_sourceSstoreSiteCount,
+    depositToAndCall_public_sourceSstoreSiteCount,
+    maxFlashLoan_public_sourceSstoreSiteCount,
+    balanceOf_public_sourceSstoreSiteCount,
+    nonces_public_sourceSstoreSiteCount,
+    callbackSuccess_public_sourceSstoreSiteCount,
+    flashMinted_public_sourceSstoreSiteCount,
+    withdrawFrom_public_sourceSstoreSiteCount,
+    symbol_public_sourceSstoreSiteCount,
+    transfer_public_sourceSstoreSiteCount,
+    depositTo_public_sourceSstoreSiteCount,
+    approveAndCall_public_sourceSstoreSiteCount,
+    deploymentChainId_public_sourceSstoreSiteCount,
+    deposit_public_sourceSstoreSiteCount,
+    permit_public_sourceSstoreSiteCount,
+    flashFee_public_sourceSstoreSiteCount,
+    allowance_public_sourceSstoreSiteCount]
 
 /-- Literal SSTORE-node counts for all 19 auxiliary bodies, in `weth10Aux`
 order. -/
 theorem weth10Aux_sourceSstoreSiteCounts :
     weth10Aux.map sourceSstoreSiteCount =
       [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 3, 1, 2, 1] := by
-  decide +kernel
+  rw [weth10Aux_shape]
+  simp only [List.map_cons, List.map_nil,
+    rev_aux_sourceSstoreSiteCount,
+    flashTokenError_aux_sourceSstoreSiteCount,
+    individualLimitError_aux_sourceSstoreSiteCount,
+    totalLimitError_aux_sourceSstoreSiteCount,
+    flashFailedError_aux_sourceSstoreSiteCount,
+    allowanceError_aux_sourceSstoreSiteCount,
+    burnBalanceError_aux_sourceSstoreSiteCount,
+    expiredPermitError_aux_sourceSstoreSiteCount,
+    invalidPermitError_aux_sourceSstoreSiteCount,
+    transferBalanceError_aux_sourceSstoreSiteCount,
+    ethTransferError_aux_sourceSstoreSiteCount,
+    etherTransferError_aux_sourceSstoreSiteCount,
+    bubbleRevert_aux_sourceSstoreSiteCount,
+    boolReturn_aux_sourceSstoreSiteCount,
+    flashSettle_aux_sourceSstoreSiteCount,
+    transferFromCore_aux_sourceSstoreSiteCount,
+    withdrawFromCore_aux_sourceSstoreSiteCount,
+    flashBurn_aux_sourceSstoreSiteCount,
+    permitRecover_aux_sourceSstoreSiteCount]
 
 theorem receiveEther_sourceSstoreSiteCount :
     sourceSstoreSiteCount receiveEther = 1 := by
@@ -7912,11 +8217,15 @@ theorem receiveEther_sourceSstoreSiteCount :
 
 private theorem weth10Main_sourceSstoreSiteCount (dp : DeployParams) :
     sourceSstoreSiteCount (weth10Main dp) = 19 := by
-  unfold weth10Main
-  simp only [sourceSstoreSiteCount, sourceSstoreSiteCount_prepend,
-    dispatchWith_sourceSstoreSiteCount, weth10Tree_sourceSstoreSiteCount,
-    weth10Funcs_sourceSstoreSiteCounts, receiveEther_sourceSstoreSiteCount]
-  decide +kernel
+  rw [weth10Main_shape, sourceSstoreSiteCount_prepend]
+  have hentry : lineSourceSstoreSiteCount
+      [Ninst.calldatasize, Ninst.iszero] = 0 := by rfl
+  rw [hentry]
+  simp only [sourceSstoreSiteCount, Nat.zero_add,
+    sourceSstoreSiteCount_prepend, dispatchWith_sourceSstoreSiteCount,
+    weth10Tree_sourceSstoreSiteCount, weth10Funcs_sourceSstoreSiteCounts,
+    receiveEther_sourceSstoreSiteCount]
+  decide
 
 /-- Literal total number of source `SSTORE` nodes in the generated WETH10
 runtime: the dispatched main body and every auxiliary body, with shared

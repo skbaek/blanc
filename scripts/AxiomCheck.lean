@@ -28,6 +28,9 @@ import Blanc.Weth10DeployProof
 import Blanc.Weth10Stable
 import Blanc.Weth10DeploymentRoot
 import Blanc.Weth10Redeemable
+import Blanc.Weth10HolderFlowDeterminism
+import Blanc.Weth10HolderFlowResult
+import Blanc.Weth10HolderFlowWriteCompleteness
 
 #print axioms Blanc.weth_preserves_solvent
 #print axioms Blanc.stateTransition_preserves_solvent
@@ -313,3 +316,18 @@ import Blanc.Weth10Redeemable
 #print axioms Blanc.Weth10.AdmissibleRedemptionTx.processTransaction_eq_of_message
 #print axioms Blanc.Weth10.Stable.transactionRedemption_enabled_of_le
 #print axioms Blanc.Weth10.outerOkWithFailedReceipt_not_redemptionEnabled
+#print axioms Blanc.Weth10.compiledBalanceSstoreReverseComplete
+#print axioms Blanc.Weth10.Exec.weth10BalanceSstoreClassification_of_mem_committedFrames
+#print axioms Blanc.Weth10.AccountedHistory.flash_pair_totals_eq
+#print axioms Blanc.Weth10.AccountedHistory.toReachUsing
+#print axioms Blanc.Weth10.exists_accountedHistory_of_reachUsing
+#print axioms Blanc.Weth10.AccountedHistory.weth10Flow_eq_of_appliedBlocks_eq
+#print axioms Blanc.Weth10.committedExecStorageSound
+#print axioms Blanc.Weth10.committedExecEthSound
+#print axioms Blanc.Weth10.AccountedHistory.noCommittedCreditWrap
+#print axioms Blanc.Weth10.AccountedHistory.holderCreditLoss_eq_zero
+#print axioms Blanc.Weth10.holderFlow_conserved
+#print axioms Blanc.Weth10.holderFlow_flash_cancelled
+#print axioms Blanc.Weth10.holderFlow_residual_floor
+#print axioms Blanc.Weth10.holderFlow_truncated_floor
+#print axioms Blanc.Weth10.holderFlow_withdrawal_floor

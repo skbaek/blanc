@@ -2931,6 +2931,41 @@ private def mintCallerLine : Line :=
   [caller, pushB256 0, pushB256 Blanc.transferEvent] ++
   logWith 2 0 1
 
+private theorem weth10Main_entry_sourceShape (dp : DeployParams) :
+    (weth10 dp).main =
+      [Ninst.calldatasize, Ninst.iszero] +++
+        (receiveEther <?>
+          (fsig +++ dispatchWith fallbackSlot (weth10Tree dp))) := by
+  rfl
+
+private theorem receiveEther_sourceShape :
+    receiveEther = mintCallerLine +++ Func.stop := by
+  rfl
+
+private theorem deposit_sourceShape :
+    deposit = mintCallerLine +++ Func.stop := by
+  rfl
+
+private theorem depositTo_sourceShape :
+    depositTo = mintToPrefix +++ Func.stop := by
+  rfl
+
+/-- Transport a cursor across a small source-shape equality before peeling a
+childless prefix.  Keeping the equality symbolic avoids changing the cursor's
+proof-indexed action field in downstream equations. -/
+private theorem Exec.Frame.CompiledCursor.peelChildlessLine_of_sourceShape
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    {fs : List Func} {table : List (Nat × Func)}
+    {body : Func} {line : Line} {tail : Func} {final : Devm}
+    (cursor : frame.CompiledCursor dp ca fs table body final)
+    (shape : body = line +++ tail)
+    (hchildless : ∀ n ∈ line, NinstIsChildless n) :
+    ∃ tailCursor : frame.CompiledCursor dp ca fs table tail final,
+      Line.Run frame.sevm cursor.pre line tailCursor.pre ∧
+      tailCursor.actions = cursor.actions := by
+  subst body
+  exact cursor.peelChildlessLine hchildless
+
 /-- A proof-indexed cursor over a childless line ending in a terminal
 instruction has crossed every proper descendant of its retained frame.
 This is the reusable chronology close for receive/deposit and the call-free
@@ -2946,6 +2981,19 @@ theorem Exec.Frame.CompiledCursor.finishChildlessLine
   rcases cursor.peelChildlessLine hchildless with
     ⟨lastCursor, _hline, hactions⟩
   exact lastCursor.finishLast.trans hactions
+
+/-- Finish a childless terminal line after exposing a concrete body through a
+small named source-shape equality. -/
+private theorem Exec.Frame.CompiledCursor.finishChildlessLine_of_sourceShape
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    {fs : List Func} {table : List (Nat × Func)}
+    {body : Func} {line : Line} {i : Linst} {final : Devm}
+    (cursor : frame.CompiledCursor dp ca fs table body final)
+    (shape : body = line +++ Func.last i)
+    (hchildless : ∀ n ∈ line, NinstIsChildless n) :
+    frame.descendantFlowActions dp ca = cursor.actions := by
+  subst body
+  exact cursor.finishChildlessLine hchildless
 
 /-- A childless prefix followed by a binary choice of childless terminal
 lines also crosses no descendant action, independently of which concrete arm
@@ -2973,6 +3021,25 @@ theorem Exec.Frame.CompiledCursor.finishChildlessBranch
     exact (arm.finishChildlessLine hleft).trans
       (harmActions.trans hbranchActions)
 
+/-- Finish a two-arm childless terminal body after one symbolic source-shape
+rewrite. -/
+private theorem Exec.Frame.CompiledCursor.finishChildlessBranch_of_sourceShape
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    {fs : List Func} {table : List (Nat × Func)}
+    {body : Func} {linePrefix left right : Line}
+    {leftLast rightLast : Linst} {final : Devm}
+    (cursor : frame.CompiledCursor dp ca fs table body final)
+    (shape : body =
+      linePrefix +++
+        ((left +++ Func.last leftLast) <?>
+          (right +++ Func.last rightLast)))
+    (hprefix : ∀ n ∈ linePrefix, NinstIsChildless n)
+    (hleft : ∀ n ∈ left, NinstIsChildless n)
+    (hright : ∀ n ∈ right, NinstIsChildless n) :
+    frame.descendantFlowActions dp ca = cursor.actions := by
+  subst body
+  exact cursor.finishChildlessBranch hprefix hleft hright
+
 /-- The empty-calldata receive arm contains no recursive instruction, so its
 original retained execution has no proper-descendant flow actions. -/
 theorem Exec.Frame.descendantFlowActions_eq_nil_of_receive
@@ -2982,14 +3049,8 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_receive
     frame.descendantFlowActions dp ca = [] := by
   rcases frame.compiledMainCursor context with
     ⟨mainCursor, hmainActions⟩
-  change frame.CompiledCursor dp ca
-    ((weth10 dp).main :: weth10Aux)
-    (table 0 ((weth10 dp).main :: weth10Aux))
-    ([Ninst.calldatasize, Ninst.iszero] +++
-      (receiveEther <?>
-        (fsig +++ dispatchWith fallbackSlot (weth10Tree dp))))
-    frame.post at mainCursor
-  rcases mainCursor.peelChildlessLine
+  rcases mainCursor.peelChildlessLine_of_sourceShape
+      (weth10Main_entry_sourceShape dp)
       (by simp [NinstIsChildless]) with
     ⟨entryBranchCursor, hentryLine, hentryActions⟩
   have hflagPrefix :
@@ -3010,11 +3071,8 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_receive
   rcases entryBranchCursor.selectBranchSucc (flag := (1 : B256))
       (by decide) hflagPrefix with
     ⟨receiveCursor, _hstack, hreceiveActions⟩
-  change frame.CompiledCursor dp ca
-    ((weth10 dp).main :: weth10Aux)
-    (table 0 ((weth10 dp).main :: weth10Aux))
-    (mintCallerLine +++ Func.stop) frame.post at receiveCursor
-  have hdesc := receiveCursor.finishChildlessLine
+  have hdesc := receiveCursor.finishChildlessLine_of_sourceShape
+    receiveEther_sourceShape
     (by simp [mintCallerLine, NinstIsChildless, Ninst.pushB256,
       mstoreAt, logWith])
   exact hdesc.trans (hreceiveActions.trans
@@ -3033,11 +3091,8 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_deposit
     simp [depositSelector, weth10Funcs]
   rcases frame.compiledSelectorBodyCursor context hnonempty hmem with
     ⟨bodyCursor, _hstack, hbodyActions⟩
-  change frame.CompiledCursor dp ca
-    ((weth10 dp).main :: weth10Aux)
-    (table 0 ((weth10 dp).main :: weth10Aux))
-    (mintCallerLine +++ Func.stop) frame.post at bodyCursor
-  have hdesc := bodyCursor.finishChildlessLine
+  have hdesc := bodyCursor.finishChildlessLine_of_sourceShape
+    deposit_sourceShape
     (by simp [mintCallerLine, NinstIsChildless, Ninst.pushB256,
       mstoreAt, logWith])
   exact hdesc.trans hbodyActions
@@ -3055,8 +3110,8 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_depositTo
     simp [depositToSelector, weth10Funcs]
   rcases frame.compiledSelectorBodyCursor context hnonempty hmem with
     ⟨bodyCursor, _hstack, hbodyActions⟩
-  unfold depositTo at bodyCursor
-  have hdesc := bodyCursor.finishChildlessLine
+  have hdesc := bodyCursor.finishChildlessLine_of_sourceShape
+    depositTo_sourceShape
     (by simp [mintToPrefix, addressArg, arg, cdl,
       normalizeAddress, pushAddressMask, NinstIsChildless,
       Ninst.pushB256, mstoreAt, logWith])
@@ -3092,6 +3147,20 @@ private def transferNonzeroSuccessLine : Line :=
   emitTransfer ++
   [pushB256 1] ++ mstoreAt 0 ++ pushList [32, 0]
 
+private theorem transfer_sourceShape :
+    transfer =
+      transferSelectLine +++
+        (transferZeroThen returnTrue <?>
+          transferNonzeroThen returnTrue) := by
+  rfl
+
+private theorem transferNonzeroThen_returnTrue_sourceShape :
+    transferNonzeroThen returnTrue =
+      transferBalanceCheckLine +++
+        ((.call transferBalanceErrorSlot) <?>
+          (transferNonzeroSuccessLine +++ Func.ret)) := by
+  rfl
+
 /-- A successful ordinary `transfer` takes the nonzero-recipient branch.
 Both that branch and its terminal return are childless; the only other inner
 branch tail-calls a fixed reverter and therefore cannot be the cursor of this
@@ -3111,13 +3180,8 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_transferNonzero
     ⟨wrapperCursor, _hwrapperStack, hwrapperActions⟩
   rcases wrapperCursor.enterNonpayable with
     ⟨transferCursor, _htransferStack, htransferActions⟩
-  change frame.CompiledCursor dp ca
-    ((weth10 dp).main :: weth10Aux)
-    (table 0 ((weth10 dp).main :: weth10Aux))
-    (transferSelectLine +++
-      (transferZeroThen returnTrue <?>
-        transferNonzeroThen returnTrue)) frame.post at transferCursor
-  rcases transferCursor.peelChildlessLine
+  rcases transferCursor.peelChildlessLine_of_sourceShape
+      transfer_sourceShape
       (by simp [transferSelectLine, arg, cdl, NinstIsChildless,
         Ninst.pushB256]) with
     ⟨targetBranchCursor, htargetLine, htargetActions⟩
@@ -3136,14 +3200,8 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_transferNonzero
   rw [htargetCheck] at htargetPrefix
   rcases targetBranchCursor.selectBranchZero htargetPrefix with
     ⟨nonzeroCursor, _hnonzeroStack, hnonzeroActions⟩
-  change frame.CompiledCursor dp ca
-    ((weth10 dp).main :: weth10Aux)
-    (table 0 ((weth10 dp).main :: weth10Aux))
-    (transferBalanceCheckLine +++
-      ((.call transferBalanceErrorSlot) <?>
-        (transferNonzeroSuccessLine +++ Func.ret)))
-    frame.post at nonzeroCursor
-  rcases nonzeroCursor.peelChildlessLine
+  rcases nonzeroCursor.peelChildlessLine_of_sourceShape
+      transferNonzeroThen_returnTrue_sourceShape
       (by simp [transferBalanceCheckLine, loadCallerBalanceAmount,
         balanceTooSmall, arg, cdl, NinstIsChildless,
         Ninst.pushB256]) with
@@ -3800,6 +3858,13 @@ private def domainCachedLine (dp : DeployParams) : Line :=
 private def domainFreshLine : Line :=
   calculateDomainSeparator ++ mstoreAt 0 ++ pushList [32, 0]
 
+private theorem domainSeparator_sourceShape (dp : DeployParams) :
+    domainSeparator dp =
+      domainSelectLine dp +++
+        ((domainCachedLine dp +++ Func.ret) <?>
+          (domainFreshLine +++ Func.ret)) := by
+  rfl
+
 /-- Both executable arms of `DOMAIN_SEPARATOR` are childless, so its exact
 original-frame descendant action ledger is empty. -/
 theorem Exec.Frame.descendantFlowActions_eq_nil_of_domainSeparator
@@ -3818,13 +3883,8 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_domainSeparator
     ⟨wrapperCursor, _hstack, hwrapperActions⟩
   rcases wrapperCursor.enterNonpayable with
     ⟨bodyCursor, _hbodyStack, hbodyActions⟩
-  change frame.CompiledCursor dp ca
-    ((weth10 dp).main :: weth10Aux)
-    (table 0 ((weth10 dp).main :: weth10Aux))
-    (domainSelectLine dp +++
-      ((domainCachedLine dp +++ Func.ret) <?>
-        (domainFreshLine +++ Func.ret))) frame.post at bodyCursor
-  have hdesc := bodyCursor.finishChildlessBranch
+  have hdesc := bodyCursor.finishChildlessBranch_of_sourceShape
+    (domainSeparator_sourceShape dp)
     (by simp [domainSelectLine, pushDeployWord, NinstIsChildless])
     (by simp [domainCachedLine, pushDeployWord, NinstIsChildless,
       Ninst.pushB256, mstoreAt, pushList])
@@ -3862,6 +3922,13 @@ private def maxFlashLoanAvailableLine : Line :=
   [sload, pushB256 (Nat.toB256 maxFlashMinted), sub] ++
   mstoreAt 0 ++ pushList [32, 0]
 
+private theorem maxFlashLoan_sourceShape :
+    maxFlashLoan =
+      maxFlashLoanSelectLine +++
+        ((maxFlashLoanAvailableLine +++ Func.ret) <?>
+          (returnWordLine 0 +++ Func.ret)) := by
+  rfl
+
 /-- Both successful `maxFlashLoan` result arms are childless. -/
 theorem Exec.Frame.descendantFlowActions_eq_nil_of_maxFlashLoan
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
@@ -3879,13 +3946,8 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_maxFlashLoan
     ⟨wrapperCursor, _hstack, hwrapperActions⟩
   rcases wrapperCursor.enterNonpayable with
     ⟨bodyCursor, _hbodyStack, hbodyActions⟩
-  change frame.CompiledCursor dp ca
-    ((weth10 dp).main :: weth10Aux)
-    (table 0 ((weth10 dp).main :: weth10Aux))
-    (maxFlashLoanSelectLine +++
-      ((maxFlashLoanAvailableLine +++ Func.ret) <?>
-        (returnWordLine 0 +++ Func.ret))) frame.post at bodyCursor
-  have hdesc := bodyCursor.finishChildlessBranch
+  have hdesc := bodyCursor.finishChildlessBranch_of_sourceShape
+    maxFlashLoan_sourceShape
     (by simp [maxFlashLoanSelectLine, arg, cdl,
       NinstIsChildless, Ninst.pushB256])
     (by simp [maxFlashLoanAvailableLine, pushFlashMintedSlot,
@@ -3920,6 +3982,13 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_maxFlashLoan
 private def flashFeeSelectLine : Line :=
   arg 0 ++ [address, eq, iszero]
 
+private theorem flashFee_sourceShape :
+    flashFee =
+      flashFeeSelectLine +++
+        ((.call flashTokenErrorSlot) <?>
+          (returnWordLine 0 +++ Func.ret)) := by
+  rfl
+
 /-- The successful `flashFee` arm is childless.  The other source arm enters
 the fixed `flashTokenError` reverter and therefore cannot be the successful
 cursor of this retained frame. -/
@@ -3939,13 +4008,8 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_flashFee
     ⟨wrapperCursor, _hstack, hwrapperActions⟩
   rcases wrapperCursor.enterNonpayable with
     ⟨bodyCursor, _hbodyStack, hbodyActions⟩
-  change frame.CompiledCursor dp ca
-    ((weth10 dp).main :: weth10Aux)
-    (table 0 ((weth10 dp).main :: weth10Aux))
-    (flashFeeSelectLine +++
-      ((.call flashTokenErrorSlot) <?>
-        (returnWordLine 0 +++ Func.ret))) frame.post at bodyCursor
-  rcases bodyCursor.peelChildlessLine
+  rcases bodyCursor.peelChildlessLine_of_sourceShape
+      flashFee_sourceShape
       (by simp [flashFeeSelectLine, arg, cdl,
         NinstIsChildless, Ninst.pushB256]) with
     ⟨branchCursor, _hline, hbranchActions⟩
@@ -5483,7 +5547,199 @@ theorem Exec.Frame.CallFreeNoFlowStorageBranch.nonempty
     frame.sevm.data.length.toB256 ≠ 0 := by
   cases branch <;> assumption
 
-set_option maxHeartbeats 1000000 in
+/-!
+The selector dispatcher below used to ask the kernel to reduce both Keccak
+calls in each of fifteen-by-ten selector inequalities.  Freeze each selector
+word once, then keep the quadratic disjointness table entirely literal.  This
+is the same small-shape boundary used by the deployment proofs: the expensive
+source computation occurs once per named selector, while the structural
+dispatcher only transports already-normalized facts.
+-/
+
+private theorem primaryDepositSelector_word_eq :
+    depositSelector = (0xd0e30db0 : B256) := by decide +kernel
+
+private theorem primaryDepositToSelector_word_eq :
+    depositToSelector = (0xb760faf9 : B256) := by decide +kernel
+
+private theorem primaryDepositToAndCallSelector_word_eq :
+    depositToAndCallSelector = (0x5ddb7d7e : B256) := by decide +kernel
+
+private theorem primaryTransferSelector_word_eq :
+    transferSelector = (0xa9059cbb : B256) := by decide +kernel
+
+private theorem primaryTransferAndCallSelector_word_eq :
+    transferAndCallSelector = (0x4000aea0 : B256) := by decide +kernel
+
+private theorem primaryTransferFromSelector_word_eq :
+    transferFromSelector = (0x23b872dd : B256) := by decide +kernel
+
+private theorem primaryWithdrawSelector_word_eq :
+    withdrawSelector = (0x2e1a7d4d : B256) := by decide +kernel
+
+private theorem primaryWithdrawToSelector_word_eq :
+    withdrawToSelector = (0x205c2878 : B256) := by decide +kernel
+
+private theorem primaryWithdrawFromSelector_word_eq :
+    withdrawFromSelector = (0x9555a942 : B256) := by decide +kernel
+
+private theorem primaryFlashLoanSelector_word_eq :
+    flashLoanSelector = (0x5cffe9de : B256) := by decide +kernel
+
+private structure SelectorWordNoPrimaryFlow (word : B256) : Prop where
+  deposit : word ≠ 0xd0e30db0
+  depositTo : word ≠ 0xb760faf9
+  depositToAndCall : word ≠ 0x5ddb7d7e
+  transfer : word ≠ 0xa9059cbb
+  transferAndCall : word ≠ 0x4000aea0
+  transferFrom : word ≠ 0x23b872dd
+  withdraw : word ≠ 0x2e1a7d4d
+  withdrawTo : word ≠ 0x205c2878
+  withdrawFrom : word ≠ 0x9555a942
+  flashLoan : word ≠ 0x5cffe9de
+
+private theorem SelectorWordNoPrimaryFlow.selectsNoPrimaryFlow
+    {e : Sevm} {word : B256}
+    (literal : SelectorWordNoPrimaryFlow word)
+    (selected : Sevm.selector e = word) :
+    SelectsNoPrimaryFlow e := by
+  constructor
+  · rw [selected, primaryDepositSelector_word_eq]
+    exact literal.deposit
+  · rw [selected, primaryDepositToSelector_word_eq]
+    exact literal.depositTo
+  · rw [selected, primaryDepositToAndCallSelector_word_eq]
+    exact literal.depositToAndCall
+  · rw [selected, primaryTransferSelector_word_eq]
+    exact literal.transfer
+  · rw [selected, primaryTransferAndCallSelector_word_eq]
+    exact literal.transferAndCall
+  · rw [selected, primaryTransferFromSelector_word_eq]
+    exact literal.transferFrom
+  · rw [selected, primaryWithdrawSelector_word_eq]
+    exact literal.withdraw
+  · rw [selected, primaryWithdrawToSelector_word_eq]
+    exact literal.withdrawTo
+  · rw [selected, primaryWithdrawFromSelector_word_eq]
+    exact literal.withdrawFrom
+  · rw [selected, primaryFlashLoanSelector_word_eq]
+    exact literal.flashLoan
+
+private theorem nameSelector_word_eq :
+    selector "name" [] = (0x06fdde03 : B256) := by decide +kernel
+
+private theorem approveSelector_word_eq :
+    selector "approve" [.address, .uint256] =
+      (0x095ea7b3 : B256) := by decide +kernel
+
+private theorem totalSupplySelector_word_eq :
+    selector "totalSupply" [] = (0x18160ddd : B256) := by decide +kernel
+
+private theorem permitTypehashSelector_word_eq_local :
+    selector "PERMIT_TYPEHASH" [] =
+      (0x30adf81f : B256) := by decide +kernel
+
+private theorem decimalsSelector_word_eq_local :
+    selector "decimals" [] = (0x313ce567 : B256) := by decide +kernel
+
+private theorem domainSeparatorSelector_word_eq :
+    selector "DOMAIN_SEPARATOR" [] =
+      (0x3644e515 : B256) := by decide +kernel
+
+private theorem maxFlashLoanSelector_word_eq :
+    selector "maxFlashLoan" [.address] =
+      (0x613255ab : B256) := by decide +kernel
+
+private theorem balanceOfSelector_word_eq :
+    selector "balanceOf" [.address] =
+      (0x70a08231 : B256) := by decide +kernel
+
+private theorem noncesSelector_word_eq_local :
+    selector "nonces" [.address] =
+      (0x7ecebe00 : B256) := by decide +kernel
+
+private theorem callbackSuccessSelector_word_eq :
+    selector "CALLBACK_SUCCESS" [] =
+      (0x8237e538 : B256) := by decide +kernel
+
+private theorem flashMintedSelector_word_eq :
+    selector "flashMinted" [] = (0x8b28d32f : B256) := by decide +kernel
+
+private theorem symbolSelector_word_eq :
+    selector "symbol" [] = (0x95d89b41 : B256) := by decide +kernel
+
+private theorem deploymentChainIdSelector_word_eq :
+    selector "deploymentChainId" [] =
+      (0xcd0d0096 : B256) := by decide +kernel
+
+private theorem flashFeeSelector_word_eq_local :
+    selector "flashFee" [.address, .uint256] =
+      (0xd9d98ce4 : B256) := by decide +kernel
+
+private theorem allowanceSelector_word_eq_local :
+    selector "allowance" [.address, .address] =
+      (0xdd62ed3e : B256) := by decide +kernel
+
+private theorem nameSelector_noPrimaryFlow :
+    SelectorWordNoPrimaryFlow 0x06fdde03 := by
+  constructor <;> decide +kernel
+
+private theorem approveSelector_noPrimaryFlow :
+    SelectorWordNoPrimaryFlow 0x095ea7b3 := by
+  constructor <;> decide +kernel
+
+private theorem totalSupplySelector_noPrimaryFlow :
+    SelectorWordNoPrimaryFlow 0x18160ddd := by
+  constructor <;> decide +kernel
+
+private theorem permitTypehashSelector_noPrimaryFlow :
+    SelectorWordNoPrimaryFlow 0x30adf81f := by
+  constructor <;> decide +kernel
+
+private theorem decimalsSelector_noPrimaryFlow :
+    SelectorWordNoPrimaryFlow 0x313ce567 := by
+  constructor <;> decide +kernel
+
+private theorem domainSeparatorSelector_noPrimaryFlow :
+    SelectorWordNoPrimaryFlow 0x3644e515 := by
+  constructor <;> decide +kernel
+
+private theorem maxFlashLoanSelector_noPrimaryFlow :
+    SelectorWordNoPrimaryFlow 0x613255ab := by
+  constructor <;> decide +kernel
+
+private theorem balanceOfSelector_noPrimaryFlow :
+    SelectorWordNoPrimaryFlow 0x70a08231 := by
+  constructor <;> decide +kernel
+
+private theorem noncesSelector_noPrimaryFlow :
+    SelectorWordNoPrimaryFlow 0x7ecebe00 := by
+  constructor <;> decide +kernel
+
+private theorem callbackSuccessSelector_noPrimaryFlow :
+    SelectorWordNoPrimaryFlow 0x8237e538 := by
+  constructor <;> decide +kernel
+
+private theorem flashMintedSelector_noPrimaryFlow :
+    SelectorWordNoPrimaryFlow 0x8b28d32f := by
+  constructor <;> decide +kernel
+
+private theorem symbolSelector_noPrimaryFlow :
+    SelectorWordNoPrimaryFlow 0x95d89b41 := by
+  constructor <;> decide +kernel
+
+private theorem deploymentChainIdSelector_noPrimaryFlow :
+    SelectorWordNoPrimaryFlow 0xcd0d0096 := by
+  constructor <;> decide +kernel
+
+private theorem flashFeeSelector_noPrimaryFlow :
+    SelectorWordNoPrimaryFlow 0xd9d98ce4 := by
+  constructor <;> decide +kernel
+
+private theorem allowanceSelector_noPrimaryFlow :
+    SelectorWordNoPrimaryFlow 0xdd62ed3e := by
+  constructor <;> decide +kernel
+
 /-- Every closed non-flow selector is disjoint from all ten primary-flow
 selector families. -/
 theorem Exec.Frame.CallFreeNoFlowStorageBranch.selectsNoPrimaryFlow
@@ -5492,35 +5748,50 @@ theorem Exec.Frame.CallFreeNoFlowStorageBranch.selectsNoPrimaryFlow
     SelectsNoPrimaryFlow frame.sevm := by
   cases branch with
   | name _ selected =>
-      constructor <;> rw [selected] <;> decide +kernel
+      exact nameSelector_noPrimaryFlow.selectsNoPrimaryFlow
+        (selected.trans nameSelector_word_eq)
   | approve _ selected =>
-      constructor <;> rw [selected] <;> decide +kernel
+      exact approveSelector_noPrimaryFlow.selectsNoPrimaryFlow
+        (selected.trans approveSelector_word_eq)
   | totalSupply _ selected =>
-      constructor <;> rw [selected] <;> decide +kernel
+      exact totalSupplySelector_noPrimaryFlow.selectsNoPrimaryFlow
+        (selected.trans totalSupplySelector_word_eq)
   | permitTypehash _ selected =>
-      constructor <;> rw [selected] <;> decide +kernel
+      exact permitTypehashSelector_noPrimaryFlow.selectsNoPrimaryFlow
+        (selected.trans permitTypehashSelector_word_eq_local)
   | decimals _ selected =>
-      constructor <;> rw [selected] <;> decide +kernel
+      exact decimalsSelector_noPrimaryFlow.selectsNoPrimaryFlow
+        (selected.trans decimalsSelector_word_eq_local)
   | domainSeparator _ selected =>
-      constructor <;> rw [selected] <;> decide +kernel
+      exact domainSeparatorSelector_noPrimaryFlow.selectsNoPrimaryFlow
+        (selected.trans domainSeparatorSelector_word_eq)
   | maxFlashLoan _ selected =>
-      constructor <;> rw [selected] <;> decide +kernel
+      exact maxFlashLoanSelector_noPrimaryFlow.selectsNoPrimaryFlow
+        (selected.trans maxFlashLoanSelector_word_eq)
   | balanceOf _ selected =>
-      constructor <;> rw [selected] <;> decide +kernel
+      exact balanceOfSelector_noPrimaryFlow.selectsNoPrimaryFlow
+        (selected.trans balanceOfSelector_word_eq)
   | nonces _ selected =>
-      constructor <;> rw [selected] <;> decide +kernel
+      exact noncesSelector_noPrimaryFlow.selectsNoPrimaryFlow
+        (selected.trans noncesSelector_word_eq_local)
   | callbackSuccess _ selected =>
-      constructor <;> rw [selected] <;> decide +kernel
+      exact callbackSuccessSelector_noPrimaryFlow.selectsNoPrimaryFlow
+        (selected.trans callbackSuccessSelector_word_eq)
   | flashMinted _ selected =>
-      constructor <;> rw [selected] <;> decide +kernel
+      exact flashMintedSelector_noPrimaryFlow.selectsNoPrimaryFlow
+        (selected.trans flashMintedSelector_word_eq)
   | symbol _ selected =>
-      constructor <;> rw [selected] <;> decide +kernel
+      exact symbolSelector_noPrimaryFlow.selectsNoPrimaryFlow
+        (selected.trans symbolSelector_word_eq)
   | deploymentChainId _ selected =>
-      constructor <;> rw [selected] <;> decide +kernel
+      exact deploymentChainIdSelector_noPrimaryFlow.selectsNoPrimaryFlow
+        (selected.trans deploymentChainIdSelector_word_eq)
   | flashFee _ selected =>
-      constructor <;> rw [selected] <;> decide +kernel
+      exact flashFeeSelector_noPrimaryFlow.selectsNoPrimaryFlow
+        (selected.trans flashFeeSelector_word_eq_local)
   | allowance _ selected =>
-      constructor <;> rw [selected] <;> decide +kernel
+      exact allowanceSelector_noPrimaryFlow.selectsNoPrimaryFlow
+        (selected.trans allowanceSelector_word_eq_local)
 
 /-- Exact storage dispatcher for all fifteen already-closed non-flow leaves. -/
 theorem Exec.Frame.hasProofIndexedStorageAccounting_of_callFreeNoFlowBranch
