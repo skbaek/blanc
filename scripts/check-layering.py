@@ -75,7 +75,8 @@ CONTRACTS = {
                "Weth10HolderFlowLocal", "Weth10HolderFlowPermitChronology",
                "Weth10HolderFlowResult", "Weth10HolderFlowStorage",
                "Weth10HolderFlowTransferAndCallChronology",
-               "Weth10HolderFlowWriteCompleteness"],
+               "Weth10HolderFlowWriteCompleteness",
+               "Weth10Attribution", "Weth10AllowanceCompleteness"],
 }
 
 ROOTS = ["Blanc", "Main"]

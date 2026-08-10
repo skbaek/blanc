@@ -1,4 +1,5 @@
 import Blanc.Weth10HolderFlow
+import Blanc.Weth10Permit
 
 /-!
 Hardened authorization provenance for the exact Blanc WETH10 runtime.
@@ -107,13 +108,29 @@ deriving DecidableEq
 def AllowanceEvent.key (event : AllowanceEvent) : B256 :=
   projectedAllowanceKey event.owner event.spender
 
+/-- The exact word this visit read from the projected key, if it reads. -/
+def AllowanceVisit.read? : AllowanceVisit → Option B256
+  | .viewRead value => some value
+  | .approveStore _ => none
+  | .permitStore _ => none
+  | .spendMax => some B256.max
+  | .spendFinite before _ => some before
+  | .flashMax => some B256.max
+  | .flashFinite before _ => some before
+
+/-- The exact word this visit wrote to the projected key, if it writes. -/
+def AllowanceVisit.written? : AllowanceVisit → Option B256
+  | .viewRead _ => none
+  | .approveStore value => some value
+  | .permitStore value => some value
+  | .spendMax => none
+  | .spendFinite _ after => some after
+  | .flashMax => none
+  | .flashFinite _ after => some after
+
 /-! ## Per-frame extraction -/
 
 def approveSelector : B256 := selector "approve" [.address, .uint256]
-
-def permitSelector : B256 :=
-  selector "permit"
-    [.address, .address, .uint256, .uint256, .uint 8, .bytes 32, .bytes 32]
 
 def allowanceSelector : B256 := selector "allowance" [.address, .address]
 
