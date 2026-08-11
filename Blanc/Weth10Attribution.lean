@@ -1195,7 +1195,7 @@ private def dormantFlashFrame (fl : Adr) (caWord : B256) : CountedFrame :=
         codeAddress := some 0
         depth := 1 })
 
-private def dormantLedger (other u w fl : Adr) (spW caWord : B256) : List CountedFrame :=
+def dormantLedger (other u w fl : Adr) (spW caWord : B256) : List CountedFrame :=
   [dormantMintFrame other u, dormantIncomingTransferFrame other u,
     dormantApproveFrame w spW, dormantSpendFrame w spW, dormantFlashFrame fl caWord]
 
@@ -1232,7 +1232,7 @@ theorem dormantLedger_permanentOutflow_zero (other u w fl : Adr) (spW caWord : B
       simp [dormantFlashFrame, fixtureFrame, CountedFrame.permanentOutflow, FlowAtom.holderFlow,
         HolderFlow.zero, h]
 
-private def nonDormantApproveFrameByU (u : Adr) (owU spU : B256) : CountedFrame :=
+def nonDormantApproveFrameByU (u : Adr) (owU spU : B256) : CountedFrame :=
   fixtureFrame u
     (some
       { owner := owU

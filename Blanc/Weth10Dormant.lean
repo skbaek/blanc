@@ -962,6 +962,60 @@ theorem dormant_holder_balance_monotone
   dormant_holder_balance_monotone_of_zeroReads hstable history hnc hdormant
     (history.zeroReads_of_dormant hstable hnc hquiet hdormant)
 
+/-! ## The dormant fixture, consumed
+
+`Blanc.Weth10Attribution`'s multi-step dormant scenario is a concrete counted
+ledger: third-party mints and an incoming transfer to `u`, an unrelated
+holder's approve and the spend that allowance authorizes, and a third party's
+flash settlement.  Its dormancy lemma closes the corollary's ledger-side
+premise, so the corollary applies to that ledger by plain application, with no
+tactic in between.  The contrasting ledger — the same scenario with `u`'s own
+approve inserted — refutes the very same premise. -/
+
+/-- **The dormant fixture, run through the corollary.**  A history whose
+counted ledger is the dormant scenario satisfies `NoAuthorizingActBy`, and
+`dormant_holder_balance_monotone` then delivers the bare balance inequality
+for `u`.
+
+Read the scope exactly.  The two hypotheses that remain, `hstable` and
+`hquiet`, are facts about the checkpoint *state*, and no ledger fixture can
+supply either.  `history` is universally quantified here rather than
+constructed: no synthetic ledger yields a real `AccountedHistory`, since that
+record is inhabited only by a genuine execution.  What this statement does
+show is that the fixture's ledger shape discharges the corollary's
+ledger-side premise, and that the corollary then delivers monotonicity of `u`'s
+booked balance from the checkpoint to the future. -/
+theorem dormantFixture_balance_monotone
+    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {checkpoint future : BlockChain} {u other w fl : Adr} {spW caWord : B256}
+    (hstable : Weth10.Stable dp ca checkpoint.state)
+    (history : AccountedHistory chainId dp ca checkpoint future)
+    (hnc : NoAllowanceKeyCollision history)
+    (hquiet : AllowanceQuiescent ca u checkpoint.state)
+    (hledger : history.attributionLedger = dormantLedger other u w fl spW caWord)
+    (hother : other ≠ u) (hw : w ≠ u) (hsp : spW.toAdr ≠ u) (hfl : fl ≠ u) :
+    bookedBalanceNat checkpoint.state ca u ≤
+      bookedBalanceNat future.state ca u :=
+  dormant_holder_balance_monotone hstable history hnc hquiet
+    (dormantLedger_noAuthorizingActBy other u w fl spW caWord history hledger
+      hother hw hsp hfl)
+
+/-- The contrast, at the corollary's own altitude.  Insert `u`'s own approve
+into the same scenario and `dormant_holder_balance_monotone`'s dormancy
+premise is *refuted*, not merely unproved, so the corollary is inapplicable to
+that history.  Nothing is claimed about the balances there: a refuted premise
+leaves the conclusion open, and it would be dishonest to record it either
+way. -/
+theorem nonDormantFixture_no_dormancy_premise
+    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {checkpoint future : BlockChain} {u other w fl : Adr}
+    {spW caWord owU spU : B256}
+    (history : AccountedHistory chainId dp ca checkpoint future)
+    (hledger : history.attributionLedger =
+      nonDormantApproveFrameByU u owU spU :: dormantLedger other u w fl spW caWord) :
+    ¬ NoAuthorizingActBy u history :=
+  nonDormantLedger_not_noAuthorizingActBy other u w fl spW caWord owU spU history hledger
+
 end Weth10
 
 end Blanc
