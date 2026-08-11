@@ -17,24 +17,31 @@ excluded by `NoAuthorizingActBy`, the pair identification being the same
 collision step the attribution equality consumes.
 
 That surviving shape is the corollary's residual.  Excluding it needs the
-value the runtime actually read at the debited key, and the landed transport
-`AccountedHistory.allowanceTransported_of_compiled` relates only the
-checkpoint and the future endpoints, never a counted record's own entry
-state.  Until an entry-state form of that transport exists, the residual
-travels as an explicit hypothesis of
+value the runtime actually read at the debited key, which the endpoint
+transport `AccountedHistory.allowanceTransported_of_compiled` never exposes:
+that statement relates the checkpoint and the future only.  Measured against
+it alone the residual travels as an explicit hypothesis of
 `dormant_holder_balance_monotone_of_checkpointRooted`; nothing below assumes
 it away.
 
-The residual is then sharpened, not discharged.  Reading a record's own
-allowance word back out of the executed program needs the producing frame's
-root context, which `CountedFrame.HasFrameOrigin` drops; the rooted-origin
-tower of `Blanc.Weth10Hardened` supplies it, and
+The residual is then sharpened.  Reading a record's own allowance word back
+out of the executed program needs the producing frame's root context, which
+`CountedFrame.HasFrameOrigin` drops; the rooted-origin tower of
+`Blanc.Weth10Hardened` supplies it, and
 `CountedFrame.permanentOutflow_eq_zero_of_read_zero` then shows that a
 delegated debit which read a zero word spends nothing.  That retires the
 `attributionRootAt` residual in favour of a single read statement about the
 counted ledger, carried by `dormant_holder_balance_monotone_of_zeroReads`.
-Both forms stand; the entry-state transport is still the missing ingredient.
--/
+
+The final part of the module discharges that read statement outright, so the
+corollary stands with no residual hypothesis at all.  The read-sound transport
+`AccountedHistory.allowanceTransportedSound_of_compiled` identifies each
+record's recorded read with the replay of the ledger prefix strictly before
+it, and an induction along the ledger keeps that replay at zero on every one
+of the holder's own touched keys.  `AllowanceQuiescent` is the base; each of
+the four writing visits either is an authorizing act of the holder — excluded
+by `NoAuthorizingActBy` — or is a decrement the runtime bounded by the very
+word it read. -/
 
 namespace Blanc
 
@@ -490,8 +497,9 @@ collision-free history.
 
 `_hquiet` is the premise the residual hypothesis consumes — a
 checkpoint-governed allowance debit reads the checkpoint value, which
-`AllowanceQuiescent` forces to zero — and is unused until the entry-state form
-of `AccountedHistory.allowanceTransported_of_compiled` lands. -/
+`AllowanceQuiescent` forces to zero — and so is unused in this reduction
+itself.  The residual-free `dormant_holder_balance_monotone` below consumes
+it for real. -/
 theorem dormant_holder_balance_monotone_of_checkpointRooted
     {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
     {checkpoint future : BlockChain}
@@ -551,12 +559,13 @@ keys.
 
 This is the same statement as `dormant_holder_balance_monotone_of_checkpointRooted`
 with a different residual.  The residual here is a *read* statement about the
-counted ledger, so it is discharged by exactly one missing ingredient: an
-entry-state form of `AccountedHistory.allowanceTransported_of_compiled`, which
-would replay a record's own ledger prefix onto that record's entry storage.
-The landed transport relates only the checkpoint and future endpoints, so no
-counted record's entry state is exposed by it.  `AllowanceQuiescent` is the
-base case of that replay and no longer has to be carried here. -/
+counted ledger, which is what the read-sound transport
+`AccountedHistory.allowanceTransportedSound_of_compiled` speaks about: it
+replays each record's own ledger prefix onto the state the reads were taken
+from.  `AccountedHistory.zeroReads_of_dormant` below discharges the residual
+from that transport, so this form is a waypoint rather than an endpoint.
+`AllowanceQuiescent` is the base case of that replay and is carried there
+rather than here. -/
 theorem dormant_holder_balance_monotone_of_zeroReads
     {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
     {checkpoint future : BlockChain}
@@ -573,6 +582,385 @@ theorem dormant_holder_balance_monotone_of_zeroReads
     history.permanentOutflow_eq_zero_of_zeroReads hnc hdormant hreads
   have hfloor := holderFlow_residual_floor (u := u) hstable history
   omega
+
+/-! ## Writing visits at a dormant holder's own key -/
+
+/-- Inversion of the recorded finite spend: only the two delegated selectors
+record one, the raw source word left the self-bypass arm, and both recorded
+words are the runtime's own. -/
+private theorem frameAllowanceEvent_spendFinite_inv
+    {e : Sevm} {pre post : Devm} {event : AllowanceEvent}
+    {before after : B256}
+    (hevent : frameAllowanceEvent e pre post = some event)
+    (hvisit : event.visit = .spendFinite before after) :
+    e.data.length.toB256 ≠ 0 ∧
+      (Sevm.selector e = transferFromSelector ∨
+        Sevm.selector e = withdrawFromSelector) ∧
+      Sevm.argWord e 0 ≠ e.caller.toB256 ∧
+      before = (Devm.getStor pre e.currentTarget).get
+        (callerAllowanceRuntimeKey e) ∧
+      after = before - Sevm.argWord e 2 := by
+  unfold frameAllowanceEvent at hevent
+  split at hevent
+  · exact absurd hevent (by simp)
+  · rename_i hne0
+    split at hevent
+    · cases hevent; exact absurd hvisit (by simp)
+    · split at hevent
+      · cases hevent; exact absurd hvisit (by simp)
+      · split at hevent
+        · rename_i hsel
+          split at hevent
+          · exact absurd hevent (by simp)
+          · rename_i hnotself
+            cases hevent
+            refine ⟨hne0, by simpa using hsel, hnotself, ?_⟩
+            split at hvisit
+            · exact absurd hvisit (by simp)
+            · cases hvisit
+              exact ⟨rfl, rfl⟩
+        · split at hevent
+          · cases hevent
+            split at hvisit <;> exact absurd hvisit (by simp)
+          · split at hevent
+            · cases hevent; exact absurd hvisit (by simp)
+            · exact absurd hevent (by simp)
+
+/-- Inversion of the recorded flash settlement: only `flashLoan` records one,
+its written word is the committed post-state word at the repayment cell, and
+its recorded read is that word plus the loan amount. -/
+private theorem frameAllowanceEvent_flashFinite_inv
+    {e : Sevm} {pre post : Devm} {event : AllowanceEvent}
+    {before after : B256}
+    (hevent : frameAllowanceEvent e pre post = some event)
+    (hvisit : event.visit = .flashFinite before after) :
+    e.data.length.toB256 ≠ 0 ∧
+      Sevm.selector e = flashLoanSelector ∧
+      after = (Devm.getStor post e.currentTarget).get
+        (flashAllowanceRuntimeKey e) ∧
+      before = after + Sevm.argWord e 2 ∧
+      after ≠ B256.max := by
+  unfold frameAllowanceEvent at hevent
+  split at hevent
+  · exact absurd hevent (by simp)
+  · rename_i hne0
+    split at hevent
+    · cases hevent; exact absurd hvisit (by simp)
+    · split at hevent
+      · cases hevent; exact absurd hvisit (by simp)
+      · split at hevent
+        · split at hevent
+          · exact absurd hevent (by simp)
+          · cases hevent
+            split at hvisit <;> exact absurd hvisit (by simp)
+        · split at hevent
+          · rename_i hsel
+            cases hevent
+            refine ⟨hne0, hsel, ?_⟩
+            split at hvisit
+            · exact absurd hvisit (by simp)
+            · rename_i hmax
+              cases hvisit
+              exact ⟨rfl, rfl, hmax⟩
+          · split at hevent
+            · cases hevent; exact absurd hvisit (by simp)
+            · exact absurd hevent (by simp)
+
+/-- A rooted exact `flashLoan` invocation exposes its post-callback allowance
+fork and the shared burn continuation.  This is the allowance-only slice of
+`flashLoan_rawSuccessEffect`: the settlement decomposition never consults the
+world state's installed code, which the rooted-origin tower deliberately does
+not carry — only the flash-counter restoration does, and that is discarded
+here. -/
+private theorem exists_flashAllowanceOutcome
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    (hroot : frame.IsRoot) (hexact : frame.exactInvocation dp ca)
+    (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
+    (hsel : Sevm.selector frame.sevm = flashLoanSelector) :
+    ∃ settle burn : Devm,
+      FlashAllowanceOutcome frame.sevm settle burn ∧
+      Func.Run ((weth10 dp).main :: weth10Aux) frame.sevm burn flashBurn
+        frame.post := by
+  rcases frame with ⟨pc, e, pre, out, run, committed⟩
+  cases out with
+  | error err => simp [Execution.commits] at committed
+  | ok post =>
+      have hpc : pc = 0 := hroot.1
+      subst pc
+      have hwf : Mem.Wf pre.memory := by rw [hroot.2]; exact Mem.wf_empty
+      have hreads : Mem.Reads pre.memory [] := by
+        rw [hroot.2]; exact Mem.reads_empty
+      obtain ⟨bodyPre, -, -, -, -, hmemory, -, -, hbody⟩ :=
+        exec_enters_weth10Nonpayable_logs run hexact.2.2.2 hsel hnonempty
+          (flashLoan_mem_weth10Funcs dp)
+      have hwfBody : Mem.Wf bodyPre.memory := by rw [hmemory]; exact hwf
+      have hfreshBody : Mem.Reads bodyPre.memory [] := by
+        rw [hmemory]; exact hreads
+      obtain ⟨recipient, sc, g, inputSize, base, -, -, -, -, -, -, -, -, -, -,
+        hstack, hmem, -, -, htail⟩ := of_flashLoan_toCall_frame dp hbody
+      obtain ⟨hwfSc, hreadsSc⟩ := hmem [] hwfBody hfreshBody
+      have htail' : Func.Run ((weth10 dp).main :: weth10Aux) e sc
+          flashLoanSuccessTail post := by
+        simpa only [flashLoanSuccessTail, flashLoanFromCall] using htail
+      obtain ⟨mid, settle, -, -, -, -, -, -, hwfSettle,
+        ⟨settleImg, hreadsSettle⟩, hsettle⟩ :=
+        of_rawFlashLoanSuccessTail dp hstack hwfSc hreadsSc rfl htail'
+      obtain ⟨burn, hburn, hallowance, -, -⟩ :=
+        of_flashSettle_allowance dp hwfSettle hreadsSettle hsettle
+      exact ⟨settle, burn, hallowance, hburn⟩
+
+/-- **The write step.**  A counted record of a dormant holder writes zero at
+that holder's own allowance key, provided its own recorded read there was
+zero.  Exactly four visits write, and each is excluded or forced:
+
+* `approveStore` records the clean `CALLER` word as owner, so an approve at
+  `u`'s key is `u`'s own act, excluded by dormancy;
+* `permitStore` is a committed successful `permit` for owner `u`, excluded by
+  dormancy directly;
+* `spendFinite` writes `before - amount`, and a delegated invocation that read
+  a zero word requested a zero amount;
+* `flashFinite` writes `before - amount` too, guarded by the settlement's own
+  `amount ≤ before`, so a zero read forces a zero amount and a zero write.
+
+The remaining three visits record no write at all. -/
+private theorem written_eq_zero_of_read_zero
+    {dp : DeployParams} {ca u : Adr} {record : CountedFrame}
+    {event : AllowanceEvent} {value : B256}
+    (horigin : record.HasRootedOrigin dp ca)
+    (hself : record.authorizes u = false)
+    (hevent : record.allowance = some event)
+    (howner : event.owner.toAdr = u)
+    (hread : ∀ v, event.visit.read? = some v → v = 0)
+    (hwritten : event.visit.written? = some value) :
+    value = 0 := by
+  obtain ⟨frame, rfl, hroot, hexact⟩ := horigin
+  have hev : frameAllowanceEvent frame.sevm frame.pre frame.post =
+    some event := hevent
+  cases hvisit : event.visit with
+  | viewRead v =>
+      rw [hvisit] at hwritten
+      exact absurd hwritten (by simp [AllowanceVisit.written?])
+  | approveStore v =>
+      exfalso
+      have hclean : event.owner = event.caller.toB256 :=
+        frameAllowanceEvent_approveStore_owner hev hvisit
+      have hcaller : event.caller = u := by
+        rw [← toAdr_toB256 event.caller, ← hclean, howner]
+      have hrecordCaller : (CountedFrame.ofFrame dp ca frame).caller = u := by
+        show frame.sevm.caller = u
+        rw [← frameAllowanceEvent_caller hev]
+        exact hcaller
+      simp [CountedFrame.authorizes, hrecordCaller] at hself
+  | permitStore v =>
+      exfalso
+      simp [CountedFrame.authorizes, hevent, hvisit, howner] at hself
+  | spendMax =>
+      rw [hvisit] at hwritten
+      exact absurd hwritten (by simp [AllowanceVisit.written?])
+  | spendFinite before after =>
+      obtain ⟨hne0, hsel, hnotself, hbefore, hafter⟩ :=
+        frameAllowanceEvent_spendFinite_inv hev hvisit
+      rw [hvisit] at hwritten hread
+      simp only [AllowanceVisit.written?, Option.some.injEq] at hwritten
+      have hzero : before = 0 := hread before rfl
+      have hnat := argWord_two_toNat_eq_zero_of_read_zero hroot hexact hne0
+        hsel hnotself (by rw [← hbefore]; exact hzero)
+      have hamt : Sevm.argWord frame.sevm 2 = 0 :=
+        B256.toNat_inj _ _ (by rw [hnat]; rfl)
+      rw [← hwritten, hafter, hzero, hamt]
+      exact B256.sub_self 0
+  | flashMax =>
+      rw [hvisit] at hwritten
+      exact absurd hwritten (by simp [AllowanceVisit.written?])
+  | flashFinite before after =>
+      obtain ⟨hne0, hsel, hafterEq, hbefore, hmax⟩ :=
+        frameAllowanceEvent_flashFinite_inv hev hvisit
+      rw [hvisit] at hwritten hread
+      simp only [AllowanceVisit.written?, Option.some.injEq] at hwritten
+      have hzero : before = 0 := hread before rfl
+      obtain ⟨settle, burn, houtcome, hburn⟩ :=
+        exists_flashAllowanceOutcome hroot hexact hne0 hsel
+      have hbranch : flashAllowanceBranchFromPost frame.sevm frame.post =
+          .finite (flashAllowanceRuntimeKey frame.sevm)
+            (after + Sevm.argWord frame.sevm 2) after := by
+        simp [flashAllowanceBranchFromPost, ← hafterEq, hmax]
+      have haccept := flashSettlement_reconstruction houtcome hburn
+      rw [hbranch] at haccept
+      obtain ⟨-, -, -, hle, hsub⟩ := haccept.2
+      rw [← hbefore, hzero] at hle hsub
+      have hnat := B256.toNat_le_toNat hle
+      have hzeroNat : B256.toNat 0 = 0 := rfl
+      rw [hzeroNat] at hnat
+      have hamt : Sevm.argWord frame.sevm 2 = 0 :=
+        B256.toNat_inj _ _ (by rw [Nat.le_zero.mp hnat]; rfl)
+      rw [hamt, B256.sub_self] at hsub
+      rw [← hwritten, hsub]
+
+/-! ## The ledger invariant
+
+The replay of every ledger prefix leaves a dormant holder's own touched
+allowance keys at zero.  The base case is `AllowanceQuiescent`; each step
+consumes the record's own recorded read, which the read-sound transport
+identifies with the replay of the prefix strictly before it. -/
+
+/-- Extending a replayed prefix by one record. -/
+private theorem applyAllowanceLedger_append_singleton
+    (pre : Stor) (left : List CountedFrame) (record : CountedFrame)
+    (key : B256) :
+    applyAllowanceLedger pre (left ++ [record]) key =
+      match record.allowance with
+      | some event =>
+          if event.key = key then
+            match event.visit.written? with
+            | some value => value
+            | none => applyAllowanceLedger pre left key
+          else applyAllowanceLedger pre left key
+      | none => applyAllowanceLedger pre left key := by
+  unfold applyAllowanceLedger
+  rw [List.reverse_append]
+  cases hallow : record.allowance with
+  | none => simp [lastAllowanceWriteAt, hallow]
+  | some event =>
+      by_cases hkey : event.key = key
+      · cases hwrite : event.visit.written? with
+        | some value => simp [lastAllowanceWriteAt, hallow, hkey, hwrite]
+        | none => simp [lastAllowanceWriteAt, hallow, hkey, hwrite]
+      · simp [lastAllowanceWriteAt, hallow, hkey]
+
+/-- Trace-local collision freedom read as injectivity on touched pairs: two
+touched pairs hashing to the same tagged key are the same pair. -/
+private theorem eq_of_projectedAllowanceKey_eq :
+    ∀ pairs : List (B256 × B256), pairs.Pairwise NoCollisionRel →
+      ∀ p ∈ pairs, ∀ q ∈ pairs,
+        projectedAllowanceKey p.1 p.2 = projectedAllowanceKey q.1 q.2 →
+        p = q := by
+  intro pairs
+  induction pairs with
+  | nil => intro _ p hp; cases hp
+  | cons head tail ih =>
+      intro hpairs p hp q hq hkey
+      obtain ⟨hhead, htail⟩ := List.pairwise_cons.mp hpairs
+      rcases List.mem_cons.mp hp with rfl | hp'
+      · rcases List.mem_cons.mp hq with rfl | hq'
+        · rfl
+        · by_contra hne
+          exact hhead q hq' hne hkey
+      · rcases List.mem_cons.mp hq with rfl | hq'
+        · by_contra hne
+          exact hhead p hp' (fun h => hne h.symm) hkey.symm
+        · exact ih htail p hp' q hq' hkey
+
+/-- Chronological form of the dormancy invariant.  Carried along the ledger
+with the same bookkeeping the attribution equality uses, the invariant "the
+replay of the consumed prefix is zero at every one of the holder's touched
+keys" both discharges each record's own recorded read and survives that
+record's own write. -/
+private theorem zeroReads_go
+    {dp : DeployParams} {ca u : Adr} (pre : Stor) (whole : List CountedFrame)
+    (hrooted : ∀ record ∈ whole, record.HasRootedOrigin dp ca)
+    (hdormant : ∀ record ∈ whole, record.authorizes u = false)
+    (hpairs : (touchedPairs whole).Pairwise NoCollisionRel)
+    (hsound : AllowanceEntryReadSound pre whole) :
+    ∀ rest earlier : List CountedFrame, earlier ++ rest = whole →
+      (∀ owner spender : B256, owner.toAdr = u →
+        (owner, spender) ∈ touchedPairs whole →
+        applyAllowanceLedger pre earlier
+          (projectedAllowanceKey owner spender) = 0) →
+      ∀ record ∈ rest, ∀ event, record.allowance = some event →
+        event.owner.toAdr = u →
+          ∀ value, event.visit.read? = some value → value = 0 := by
+  intro rest
+  induction rest with
+  | nil => intro _ _ _ record hrecord; cases hrecord
+  | cons head tail ih =>
+      intro earlier hchain hinv record hrecord event hevent howner value hread
+      have hsplit : whole = earlier ++ head :: tail := hchain.symm
+      have hheadWhole : head ∈ whole := by
+        rw [hsplit]
+        exact List.mem_append_right _ List.mem_cons_self
+      have hheadRead : ∀ ev, head.allowance = some ev → ev.owner.toAdr = u →
+          ∀ v, ev.visit.read? = some v → v = 0 := by
+        intro ev hev howner' v hv
+        rw [hsound earlier head tail hsplit ev hev v hv]
+        exact hinv ev.owner ev.spender howner'
+          (mem_touchedPairs.mpr ⟨head, hheadWhole, ev, hev, rfl⟩)
+      rcases List.mem_cons.mp hrecord with rfl | hrest
+      · exact hheadRead event hevent howner value hread
+      · refine ih (earlier ++ [head]) (by simpa using hchain) ?_ record hrest
+          event hevent howner value hread
+        intro owner spender howner' hmem
+        rw [applyAllowanceLedger_append_singleton]
+        cases hallow : head.allowance with
+        | none => exact hinv owner spender howner' hmem
+        | some ev =>
+            dsimp only
+            by_cases hkey : ev.key = projectedAllowanceKey owner spender
+            · rw [if_pos hkey]
+              have hpair : (ev.owner, ev.spender) = (owner, spender) :=
+                eq_of_projectedAllowanceKey_eq _ hpairs _
+                  (mem_touchedPairs.mpr ⟨head, hheadWhole, ev, hallow, rfl⟩) _
+                  hmem hkey
+              have hownerEq : ev.owner = owner := congrArg Prod.fst hpair
+              have hevOwner : ev.owner.toAdr = u := by
+                rw [hownerEq]
+                exact howner'
+              cases hwrite : ev.visit.written? with
+              | none => exact hinv owner spender howner' hmem
+              | some w =>
+                  exact written_eq_zero_of_read_zero
+                    (hrooted head hheadWhole) (hdormant head hheadWhole)
+                    hallow hevOwner (hheadRead ev hallow hevOwner) hwrite
+            · rw [if_neg hkey]
+              exact hinv owner spender howner' hmem
+
+/-! ## The residual, discharged
+
+The read-sound transport turns every counted record's recorded allowance read
+into the replay of the ledger prefix strictly before it, which the invariant
+above pins at zero on a dormant holder's own touched keys.  That is exactly
+the residual hypothesis of `dormant_holder_balance_monotone_of_zeroReads`. -/
+
+/-- Every allowance visit at a dormant holder's own key read a zero word.
+`AllowanceQuiescent` is the base of the replay and trace-local collision
+freedom is what identifies a visited key with the holder's own raw pair. -/
+theorem AccountedHistory.zeroReads_of_dormant
+    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {checkpoint future : BlockChain}
+    (hstable : Weth10.Stable dp ca checkpoint.state)
+    (history : AccountedHistory chainId dp ca checkpoint future)
+    (hnc : NoAllowanceKeyCollision history)
+    (hquiet : AllowanceQuiescent ca u checkpoint.state)
+    (hdormant : NoAuthorizingActBy u history) :
+    ∀ record ∈ history.attributionLedger, ∀ event,
+      record.allowance = some event → event.owner.toAdr = u →
+        ∀ value, event.visit.read? = some value → value = 0 := by
+  have hpairs :
+      (touchedPairs history.attributionLedger).Pairwise NoCollisionRel := by
+    rw [← touchedAllowancePairs_eq_touchedPairs history]
+    exact hnc
+  refine zeroReads_go (checkpoint.state.getStor ca)
+    history.attributionLedger history.rootedLedger hdormant hpairs
+    (history.allowanceTransportedSound_of_compiled hstable).2
+    history.attributionLedger [] (by simp) ?_
+  intro owner spender howner _
+  rw [applyAllowanceLedger_nil]
+  exact hquiet owner spender howner
+
+/-- **The dormant-holder corollary.**  A holder who performed no authorizing
+act and held no allowance at the checkpoint cannot have lost a wei across an
+authentic collision-free history. -/
+theorem dormant_holder_balance_monotone
+    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {checkpoint future : BlockChain}
+    (hstable : Weth10.Stable dp ca checkpoint.state)
+    (history : AccountedHistory chainId dp ca checkpoint future)
+    (hnc : NoAllowanceKeyCollision history)
+    (hquiet : AllowanceQuiescent ca u checkpoint.state)
+    (hdormant : NoAuthorizingActBy u history) :
+    bookedBalanceNat checkpoint.state ca u <=
+      bookedBalanceNat future.state ca u :=
+  dormant_holder_balance_monotone_of_zeroReads hstable history hnc hdormant
+    (history.zeroReads_of_dormant hstable hnc hquiet hdormant)
 
 end Weth10
 
