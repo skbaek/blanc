@@ -570,6 +570,20 @@
 # every balance-affecting event, so the audit-only remainder was dropped.
 # The paragraph below describes the original 25-row admission; 23 remain.
 #
+# 2026-08-12 (weth10-redeem-future-v2 close-out): FIVE rows this goal moved
+# are refreshed to their measured values, and only those. Four had gone
+# stale-HIGH after the goal's selector-separation hoist, and a stale-high
+# baseline WEAKENS this gate rather than being conservative: the threshold is
+# 2.0x, so Weth10HolderFlowCompiled at a 45.717 baseline would have silently
+# tolerated 91.4 s against a real cost of 4.4 s -- a twentyfold regression,
+# unnoticed. Refreshing them restores the gate's power to detect. The fifth,
+# Weth10Attribution 1.686 -> 1.919, is this goal's computed dirty-pair keccak.
+# `--rebase` was still NOT run: it rewrites every row and would absorb drift
+# this goal did not cause -- Blanc/CommonProofs.lean, for one, has drifted
+# 6.143 -> 7.804 across several measurements and is deliberately left alone.
+# Measured on a quiesced host (language servers stopped first, load 2.65),
+# 92 files, 415.7 s total.
+#
 # They total 45.6 s and none exceeds 3.1 s. The suite nevertheless FELL from
 # 455.1 s over 69 files to 423.4 s over 94: the selector-separation hoist in
 # the same goal (each kernel-decided disequality had been recomputing two
@@ -649,20 +663,20 @@ OK	2.184	Blanc/ExecDeterminism.lean
 OK	1.975	Blanc/Weth10HolderFlow.lean
 OK	1.173	Blanc/Weth10HolderFlowAlgebra.lean
 OK	1.187	Blanc/Weth10HolderFlowAuthenticity.lean
-OK	45.717	Blanc/Weth10HolderFlowCompiled.lean
+OK	4.424	Blanc/Weth10HolderFlowCompiled.lean
 OK	1.282	Blanc/Weth10HolderFlowConservation.lean
 OK	1.415	Blanc/Weth10HolderFlowDeterminism.lean
 OK	2.480	Blanc/Weth10HolderFlowEth.lean
-OK	20.273	Blanc/Weth10HolderFlowEthExec.lean
+OK	8.517	Blanc/Weth10HolderFlowEthExec.lean
 OK	65.650	Blanc/Weth10HolderFlowExecAccounting.lean
 OK	3.659	Blanc/Weth10HolderFlowFlashChronology.lean
 OK	1.334	Blanc/Weth10HolderFlowLocal.lean
 OK	1.813	Blanc/Weth10HolderFlowPermitChronology.lean
-OK	4.070	Blanc/Weth10HolderFlowResult.lean
+OK	1.480	Blanc/Weth10HolderFlowResult.lean
 OK	1.279	Blanc/Weth10HolderFlowStorage.lean
 OK	1.577	Blanc/Weth10HolderFlowTransferAndCallChronology.lean
-OK	16.981	Blanc/Weth10HolderFlowWriteCompleteness.lean
-OK	1.686	Blanc/Weth10Attribution.lean
+OK	7.603	Blanc/Weth10HolderFlowWriteCompleteness.lean
+OK	1.919	Blanc/Weth10Attribution.lean
 OK	1.514	Blanc/Weth10AttributionChronology.lean
 OK	3.003	Blanc/Weth10SelectorFacts.lean
 OK	2.325	Blanc/Weth10HolderFlowSelectorFacts.lean
