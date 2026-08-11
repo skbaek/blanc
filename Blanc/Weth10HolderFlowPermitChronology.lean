@@ -839,15 +839,6 @@ private theorem permitNoncePrepare_observations
         pushAddressMask tagNonceKey mstoreAt
       line_inv) originalRun
 
-/-- The successful approval tail writes only a tagged allowance key and is
-otherwise ETH-balance/code silent. -/
-private theorem prepend_append_permit
-    (left right : Line) (tail : Func) :
-    (left ++ right) +++ tail = left +++ (right +++ tail) := by
-  induction left with
-  | nil => rfl
-  | cons head left ih => simp [prepend, ih]
-
 private def approvePermitLine : Line :=
   argCopy 0 0 2 ++ allowanceKeyFromMemory ++
   Blanc.arg 2 ++ [Ninst.swap 0, Ninst.sstore] ++
@@ -856,7 +847,7 @@ private def approvePermitLine : Line :=
 
 private theorem approvePermit_shape :
     approvePermit = approvePermitLine +++ Func.stop := by
-  simp only [approvePermit, approvePermitLine, prepend_append_permit,
+  simp only [approvePermit, approvePermitLine, prepend_append,
     List.append_assoc, prepend]
 
 private theorem stop_getCode_inv_permit :
@@ -867,6 +858,8 @@ private theorem stop_getCode_inv_permit :
       simp only [Linst.Run, Linst.run] at h
       exact congrArg Devm.getCode (Except.ok.inj h)
 
+/-- The successful approval tail writes only a tagged allowance key and is
+otherwise ETH-balance/code silent. -/
 private theorem approvePermit_observations
     (dp : DeployParams) {sevm : Sevm} {pre post : Devm}
     (run : Func.Run ((weth10 dp).main :: weth10Aux) sevm pre

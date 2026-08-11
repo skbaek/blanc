@@ -1007,12 +1007,6 @@ private theorem compileShapeByteSize_prepend (l : Line) (p : Func) :
       rw [ih]
       omega
 
-private theorem prepend_appendX (a b : Line) (p : Func) :
-    (a ++ b) +++ p = a +++ (b +++ p) := by
-  induction a with
-  | nil => rfl
-  | cons x xs ih => simp [prepend, ih]
-
 private theorem byteAt_prepend_eq_prefix
     (locations : List Nat) (n : Nat) (l : Line) (p0 p : Func)
     (i : Nat) (d : UInt8) (hi : i < prefixByteSize l) :
@@ -1221,7 +1215,7 @@ private theorem permit_eq_factored (dp : DeployParams) :
     permit dp = permitFactored dp := by
   unfold permit permitFactored permitCoreX permitCoreTail
   simp only [permitGuardPrefix, permitCorePrefix, permitDynamicPath,
-    permitCachedPath, prepend_appendX,
+    permitCachedPath, prepend_append,
     List.cons_append, List.nil_append, prepend]
 
 private theorem permitByteAt_eq_zero_0_121

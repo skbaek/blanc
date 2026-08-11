@@ -45,13 +45,6 @@ namespace Weth10
 `Weth10HolderFlowPermitChronology` keeps its permit line decompositions
 private, so this module re-declares the ones it needs, byte for byte. -/
 
-private theorem prepend_append_local
-    (left right : Line) (tail : Func) :
-    (left ++ right) +++ tail = left +++ (right +++ tail) := by
-  induction left with
-  | nil => rfl
-  | cons head left ih => simp [prepend, ih]
-
 private def permitDeadlineLine : Line := arg 3 ++ [Ninst.timestamp, Ninst.gt]
 
 private def permitFirstSignerGuardLine : Line :=
@@ -68,7 +61,7 @@ private def approvePermitLine : Line :=
 
 private theorem approvePermit_shape :
     approvePermit = approvePermitLine +++ Func.stop := by
-  simp only [approvePermit, approvePermitLine, prepend_append_local,
+  simp only [approvePermit, approvePermitLine, prepend_append,
     List.append_assoc, prepend]
 
 private def permitAfterStaticcall : Func :=

@@ -8,6 +8,16 @@ open Jaune Jaune.List Jaune.Except _root_.List _root_.Nat
 open Jaune.Ninst Ninst
 open DispatchTree
 
+-- Splitting a body's line at any point and prepending the pieces in order is
+-- the same as prepending the whole line. Every module that decomposes a
+-- compiled body into named line segments needs this, so it is stated once here
+-- rather than re-derived beside each decomposition.
+lemma prepend_append (left right : Line) (tail : Func) :
+    (left ++ right) +++ tail = left +++ (right +++ tail) := by
+  induction left with
+  | nil => rfl
+  | cons head left ih => simp [prepend, ih]
+
 -- The statement is unchanged by the `.rev` normalization (`Func.rev` in
 -- `Blanc/CommonCore.lean`); only the walk is. `Func.rev` is now two `PUSH0`s
 -- ahead of the failing `.rev`, so the run is peeled through two `next` binds

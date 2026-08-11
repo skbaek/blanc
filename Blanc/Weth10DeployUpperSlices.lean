@@ -17,12 +17,6 @@ private def prefixByteSize : Line → Nat
   | [] => 0
   | inst :: rest => inst.size + prefixByteSize rest
 
-private theorem prepend_appendX (a b : Line) (p : Func) :
-    (a ++ b) +++ p = a +++ (b +++ p) := by
-  induction a with
-  | nil => rfl
-  | cons x xs ih => simp [prepend, ih]
-
 private theorem byteAt_prepend_eq_prefix
     (locations : List Nat) (n : Nat) (l : Line) (p0 p : Func)
     (i : Nat) (d : UInt8) (hi : i < prefixByteSize l) :
@@ -247,7 +241,7 @@ private theorem permit_eq_factored (dp : DeployParams) :
     permit dp = permitFactored dp := by
   unfold permit permitFactored permitCoreX permitCoreTail
   simp only [permitGuardPrefix, permitCorePrefix, permitDynamicPath,
-    permitCachedPath, prepend_appendX, List.cons_append, List.nil_append,
+    permitCachedPath, prepend_append, List.cons_append, List.nil_append,
     prepend]
 
 private def permitCachedPrefix : Line :=

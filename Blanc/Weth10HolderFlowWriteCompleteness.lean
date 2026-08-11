@@ -1586,13 +1586,6 @@ private def mintToAfterSstoreLine : Line :=
 private def mintToAfterSstore (continuation : Func) : Func :=
   mintToAfterSstoreLine +++ continuation
 
-private theorem prepend_append_writeCompleteness
-    (left right : Line) (tail : Func) :
-    (left ++ right) +++ tail = left +++ (right +++ tail) := by
-  induction left with
-  | nil => rfl
-  | cons head left ih => simp [prepend, ih]
-
 private theorem mintToPrefix_eq_lineSplit :
     mintToPrefix =
       mintToBeforeSstore ++ [Ninst.sstore] ++ mintToAfterSstoreLine := by
@@ -1604,8 +1597,8 @@ private theorem mintToPrefix_append_eq_sstoreSplit (continuation : Func) :
       mintToBeforeSstore +++
         (.next (.reg .sstore) (mintToAfterSstore continuation)) := by
   rw [mintToPrefix_eq_lineSplit,
-    prepend_append_writeCompleteness,
-    prepend_append_writeCompleteness]
+    prepend_append,
+    prepend_append]
   rfl
 
 private theorem normalizedAddressArg_eq_toAdr_toB256_writeCompleteness
@@ -2340,7 +2333,7 @@ private theorem withdrawAfterDebit_eq_stopOrError :
 private theorem withdraw_eq_callerDebitSource :
     withdraw = callerDebitSource 0 burnBalanceErrorSlot withdrawAfterDebit := by
   simp [withdraw, callerDebitSource, callerDebitGuardLine,
-    withdrawAfterDebit, prepend_append_writeCompleteness]
+    withdrawAfterDebit, prepend_append]
 
 private theorem Exec.Frame.CompiledCursor.balanceSstorePrimaryRole_withdraw
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
@@ -2431,7 +2424,7 @@ private theorem withdrawTo_eq_callerDebitSource :
     withdrawTo =
       callerDebitSource 1 burnBalanceErrorSlot withdrawToAfterDebit := by
   simp [withdrawTo, callerDebitSource, callerDebitGuardLine,
-    withdrawToAfterDebit, prepend_append_writeCompleteness]
+    withdrawToAfterDebit, prepend_append]
 
 private theorem Exec.Frame.CompiledCursor.balanceSstorePrimaryRole_withdrawTo
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
@@ -3403,7 +3396,7 @@ private theorem transferFromZeroAfterDebit_eq_successOrError :
       transferFromZeroAfterDebitPrefix +++
         (.branch returnTrue (.call ethTransferErrorSlot)) := by
   simp only [transferFromZeroAfterDebit, transferFromZeroAfterDebitPrefix,
-    prepend_append_writeCompleteness, List.append_assoc, prepend]
+    prepend_append, List.append_assoc, prepend]
 
 private theorem transferFromZero_eq_argDebitSource :
     transferFromZero =
@@ -3693,7 +3686,7 @@ private theorem withdrawFromAfterDebit_eq_stopOrError :
       withdrawFromAfterDebitPrefix +++
         (.branch Func.stop (.call etherTransferErrorSlot)) := by
   simp only [withdrawFromAfterDebit, withdrawFromAfterDebitPrefix,
-    prepend_append_writeCompleteness, List.append_assoc, prepend]
+    prepend_append, List.append_assoc, prepend]
 
 private theorem withdrawFromCore_eq_argDebitSource :
     withdrawFromCore =
@@ -3823,7 +3816,7 @@ private theorem flashBurn_eq_argDebitSource :
       argDebitSource 0 2 burnBalanceErrorSlot flashBurnAfterDebit := by
   simp only [flashBurn, argDebitSource, argDebitGuardLine,
     flashBurnAfterDebit, flashBurnAfterDebitBeforeStore,
-    flashBurnAfterDebitBeforeSlot, prepend_append_writeCompleteness,
+    flashBurnAfterDebitBeforeSlot, prepend_append,
     List.append_assoc, prepend]
 
 /-- Every address-shaped write in the flash burn continuation is the receiver
@@ -4175,7 +4168,7 @@ private theorem flashLoan_eq_source : flashLoan = flashLoanSource := by
     flashLoanTokenGuardLine, flashLoanIndividualLimitLine,
     flashLoanCounterBeforeStore, flashLoanCounterBeforeSlot,
     flashLoanCapLine, flashLoanCreditBeforeStore, flashLoanAfterCredit,
-    prepend_append_writeCompleteness, List.append_assoc, prepend]
+    prepend_append, List.append_assoc, prepend]
 
 /-- Reverse every address-shaped write in the complete flash-loan source.  The
 two flash-counter stores are excluded by their all-ones key, the receiver
@@ -4606,7 +4599,7 @@ private theorem approvePrefix_append_eq_storeSplit (continuation : Func) :
       approveEntryBeforeStore +++
         (.next (.reg .sstore) (approveEntryAfterStore continuation)) := by
   simp only [approvePrefix, approveEntryBeforeStore, approveEntryBeforeKey,
-    approveEntryAfterStore, prepend_append_writeCompleteness,
+    approveEntryAfterStore, prepend_append,
     List.append_assoc, prepend]
 
 /-- The shared approve prefix writes only the runtime tagged allowance key;
@@ -4689,7 +4682,7 @@ private theorem approvePermit_eq_storeSplit :
       approvePermitBeforeStore +++
         (.next (.reg .sstore) approvePermitAfterStore) := by
   simp only [approvePermit, approvePermitBeforeStore,
-    approvePermitAfterStore, prepend_append_writeCompleteness,
+    approvePermitAfterStore, prepend_append,
     List.append_assoc, prepend]
 
 /-- The successful permit tail's sole store is its tagged allowance update. -/
@@ -4771,7 +4764,7 @@ private theorem permitRecover_eq_source :
     permitRecover = permitRecoverSource := by
   simp only [permitRecover, permitRecoverSource,
     permitRecoverFirstGuardLine, permitRecoverSecondGuardLine,
-    prepend_append_writeCompleteness, List.append_assoc, prepend]
+    prepend_append, List.append_assoc, prepend]
 
 /-- Every persistent write in the permit recovery helper is the tagged
 allowance write in `approvePermit`; both rejecting arms are locally
@@ -4879,7 +4872,7 @@ private theorem permit_eq_source (dp : DeployParams) :
     permit dp = permitSource dp := by
   simp only [permit, permitSource, permitAfterDeadlineSource,
     permitAfterNonceStore, permitNonceBeforeStore,
-    permitDeadlineGuardLine, prepend_append_writeCompleteness,
+    permitDeadlineGuardLine, prepend_append,
     List.append_assoc, prepend]
 
 private theorem permitAfterNonceStore_routedToRecover
