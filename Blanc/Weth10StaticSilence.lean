@@ -740,11 +740,11 @@ theorem AllowanceEntryReadSound.congr {pre pre' : Stor}
     (hagree : ∀ key, InRegion .allowance key → pre.get key = pre'.get key)
     (hsound : AllowanceEntryReadSound pre ledger) :
     AllowanceEntryReadSound pre' ledger := by
-  intro earlier record later hsplit hnotflash event hevent v hread
+  intro earlier record later hsplit event hevent v hread
   have hkey : InRegion .allowance event.key :=
     projectedAllowanceKey_region event.owner event.spender
   rw [← applyAllowanceLedger_congr (ledger := earlier) (hagree event.key hkey)]
-  exact hsound earlier record later hsplit hnotflash event hevent v hread
+  exact hsound earlier record later hsplit event hevent v hread
 
 /-- A write-free segment placed ahead of a record that reads nothing leaves
 the composite ledger's entry-read clause exactly the segment's own: the only

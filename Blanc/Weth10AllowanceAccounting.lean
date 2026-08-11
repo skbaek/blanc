@@ -228,24 +228,6 @@ recorded *read* to any state.  The strengthening below adds exactly that
 missing clause, as an additive extension so every existing consumer keeps
 working through `toAllowanceRegionEffect`. -/
 
-/-- Whether a counted record's frame dispatched to `flashLoan` — the one
-selector whose *read* is reconstructed from the committed post state rather
-than observed at frame entry.  Its own record is also one of the two
-`Exec.frameContribution` places after its subtree rather than before it, but
-that is the placement predicate's business, not this one's. -/
-def CountedFrame.IsFlash (record : CountedFrame) : Prop :=
-  record.sel? = some flashLoanSelector
-
-/-- A record whose recorded selector is not `flashLoan` is not a flash
-record. -/
-theorem CountedFrame.not_isFlash_of_sel
-    {record : CountedFrame} {sel : B256}
-    (hsel : record.sel? = some sel) (hne : sel ≠ flashLoanSelector) :
-    ¬ record.IsFlash := by
-  unfold CountedFrame.IsFlash
-  rw [hsel]
-  simpa using hne
-
 /-- Every non-flash allowance event records exactly the word its own frame's
 *entry* storage holds at the event's key.  This is a property of the
 extractor, not of the runtime walk: `frameAllowanceEvent` computes the
@@ -285,27 +267,28 @@ theorem frameAllowanceEvent_read_eq_pre
               exact (Option.some.inj hread).symm
             · exact absurd hevent (by simp)
 
-/-- Entry-read soundness for one ledger: every non-flash record's allowance
-read observed exactly the word the ledger prefix strictly before that record
-prescribes over the entry storage.
+/-- Entry-read soundness for one ledger: every record's allowance read
+observed exactly the word the ledger prefix strictly before that record
+prescribes over the entry storage.  No record is exempt.
 
-The non-flash restriction is forced rather than cosmetic.
-`Exec.frameContribution` places a flash frame's own record *after* its
-subtree, so for a flash record the prefix `earlier` is not "what ran before
-that frame entered" and the clause below would be false.  Delegated debits
-arise only from `transferFrom`/`withdrawFrom`, so the restriction costs
-nothing where entry-read soundness is actually consumed (the dormant-holder
-residual).
+The clause is about the *ledger's* order, not about frame entry, and the two
+own-record-last selectors are exactly why that distinction earns its keep.
+`Exec.frameContribution` places a `flashLoan` or `permit` frame's own record
+after its subtree, so for those records the prefix `earlier` is the frame's
+whole inner stream — which is precisely the point at which the runtime
+performs the visit, because both selectors act only once their spawned child
+has returned.
 
-`permit`'s record is placed after its subtree for the same chronological
-reason, but needs no exemption here: a `.permitStore` visit records no read
-at all, so the clause is vacuous on it.  What the placement does buy is that
-a read recorded *inside* a `permit`'s `STATICCALL` subtree now sees a prefix
-that excludes the permit's own store — which is exactly the order in which
-the runtime performs them. -/
+For `permit` the clause is vacuous anyway: a `.permitStore` visit records no
+read.  For `flashLoan` it is not, and it is not the frame's entry word
+either: `frameAllowanceEvent` reconstructs a flash read from the committed
+post state.  `flashSettlement_allowanceEntryRead` pins it against the
+post-callback settlement entry, and the placement makes that the state the
+prefix replays to, so the two agree.  What the placement buys elsewhere is
+that a read recorded *inside* a `permit`'s `STATICCALL` subtree sees a prefix
+excluding the permit's own store — again the runtime's own order. -/
 def AllowanceEntryReadSound (pre : Stor) (ledger : List CountedFrame) : Prop :=
   ∀ earlier record later, ledger = earlier ++ record :: later →
-    ¬ record.IsFlash →
     ∀ event, record.allowance = some event →
       ∀ v, event.visit.read? = some v →
         v = applyAllowanceLedger pre earlier event.key
@@ -323,30 +306,13 @@ theorem AllowanceEntryReadSound.singleton
     (h : ∀ event, own.allowance = some event →
       ∀ v, event.visit.read? = some v → v = pre.get event.key) :
     AllowanceEntryReadSound pre [own] := by
-  intro earlier record later hsplit _ event hevent v hread
+  intro earlier record later hsplit event hevent v hread
   cases earlier with
   | nil =>
       rw [List.nil_append] at hsplit
       obtain ⟨hrec, -⟩ := List.cons.injEq .. ▸ hsplit
       subst hrec
       exact h event hevent v hread
-  | cons head tail => exact absurd hsplit (by simp)
-
-/-- A one-record ledger whose record *is* the flash record is entry-read
-sound for free: the clause exempts flash records, and the only admissible
-split puts this record in the clause's position.  This is what lets a
-`flashLoan` frame's own trailing segment compose, even though its recorded
-read is reconstructed from the post state. -/
-theorem AllowanceEntryReadSound.singleton_flash
-    {pre : Stor} {own : CountedFrame} (hflash : own.IsFlash) :
-    AllowanceEntryReadSound pre [own] := by
-  intro earlier record later hsplit hnotflash
-  cases earlier with
-  | nil =>
-      rw [List.nil_append] at hsplit
-      obtain ⟨hrec, -⟩ := List.cons.injEq .. ▸ hsplit
-      subst hrec
-      exact absurd hflash hnotflash
   | cons head tail => exact absurd hsplit (by simp)
 
 /-- The counted record of a non-flash frame is entry-read sound on its own:
@@ -372,7 +338,7 @@ theorem AllowanceEntryReadSound.append
     (hleft : AllowanceEntryReadSound pre left)
     (hright : AllowanceEntryReadSound mid right) :
     AllowanceEntryReadSound pre (left ++ right) := by
-  intro earlier record later hsplit hnotflash event hevent v hread
+  intro earlier record later hsplit event hevent v hread
   have hkey : InRegion .allowance event.key :=
     projectedAllowanceKey_region event.owner event.spender
   rcases List.append_eq_append_iff.1 hsplit with
@@ -380,18 +346,17 @@ theorem AllowanceEntryReadSound.append
   · subst hearlier
     rw [applyAllowanceLedger_append pre mid left tail event.key
       (hstorage event.key hkey)]
-    exact hright tail record later hrightSplit hnotflash event hevent v hread
+    exact hright tail record later hrightSplit event hevent v hread
   · cases tail with
     | nil =>
         rw [List.append_nil] at hleftSplit
         subst hleftSplit
         exact (hright [] record later (by simpa using hconsSplit.symm)
-          hnotflash event hevent v hread).trans (hstorage event.key hkey)
+          event hevent v hread).trans (hstorage event.key hkey)
     | cons head rest =>
         rw [List.cons_append] at hconsSplit
         cases hconsSplit
-        exact hleft earlier record rest hleftSplit hnotflash event hevent v
-          hread
+        exact hleft earlier record rest hleftSplit event hevent v hread
 
 /-- The read-sound allowance-region carrier: the last-committed-write
 transport of `AllowanceRegionEffect`, plus entry-read soundness of the same

@@ -838,14 +838,106 @@ theorem Exec.Frame.allowanceRegionEffect_of_flashLoan
 
 `flashLoan` composes four segments: a silent dispatch prefix, the borrower
 subtree, a silent settlement handoff, and the frame's own trailing record.
-The three silent segments record nothing, and the subtree is read-sound by
-the strengthened recursion hypothesis.  The trailing own record is exempted
-by `AllowanceEntryReadSound.singleton_flash`: `frameAllowanceEvent`
-reconstructs a flash frame's recorded read from the committed post state
-rather than observing it at frame entry, and `Exec.frameContribution` places
-that record after its subtree, so the entry-read clause is not the
-statement one would want here anyway. -/
+The three silent segments record nothing, the subtree is read-sound by the
+strengthened recursion hypothesis, and the trailing own record is pinned by
+`flashSettlement_allowanceEntryRead`.
 
+That last segment is the one place where the recorded read is *not* the
+frame's entry word: `frameAllowanceEvent` reconstructs a flash frame's read
+from the committed post state rather than observing it at frame entry.  The
+placement is what makes that honest.  `Exec.frameContribution` puts a flash
+frame's own record after its subtree, so the prefix the entry-read clause
+measures that record against is the whole inner stream — and the state that
+prefix replays to is exactly the post-callback settlement entry, which is
+where the runtime performed the read. -/
+
+/-- Entry-read soundness of the settlement segment: measured against the
+post-callback settlement entry storage, the frame's own counted record
+records exactly the word that storage holds at the record's projected key.
+
+This is the flash counterpart of `AllowanceEntryReadSound.ofFrame`, stated at
+the settlement entry rather than at frame entry because that is where the
+record sits in the ledger: `Exec.frameContribution` places it after the
+subtree, so `AllowanceEntryReadSound.append` re-bases this segment's clause
+over the whole inner stream, whose replay the inner transport identifies with
+this very state.
+
+Both settlement arms are pinned by the same post-state reconstruction that
+pins the write.  `.flashMax` records `B256.max`, which is exactly what the
+infinite arm observed; `.flashFinite (after + amount) after` records
+`after + amount`, which `flashSettlement_reconstruction` proves is the exact
+word the finite arm read before decrementing — exact because that arm is
+guarded by `amount ≤ allowance`. -/
+theorem flashSettlement_allowanceEntryRead
+    {dp : DeployParams} {ca : Adr} {e : Sevm}
+    {pre settlePre burnPre post : Devm}
+    (htarget : e.currentTarget = ca)
+    (hne0 : e.data.length.toB256 ≠ 0)
+    (hsel : Sevm.selector e = flashLoanSelector)
+    (houtcome : FlashAllowanceOutcome e settlePre burnPre)
+    (hburn : Func.Run ((weth10 dp).main :: weth10Aux) e burnPre
+      flashBurn post)
+    {record : CountedFrame}
+    (hrecord : record.allowance = frameAllowanceEvent e pre post) :
+    AllowanceEntryReadSound (Devm.getStor settlePre ca) [record] := by
+  subst htarget
+  have haccept := flashSettlement_reconstruction houtcome hburn
+  refine .singleton (fun event hevent v hread => ?_)
+  rw [hrecord] at hevent
+  by_cases hafter : (Devm.getStor post e.currentTarget).get
+      (flashAllowanceRuntimeKey e) = B256.max
+  · have hbranch : flashAllowanceBranchFromPost e post =
+        .maximum (flashAllowanceRuntimeKey e) := by
+      simp [flashAllowanceBranchFromPost, hafter]
+    rw [hbranch] at haccept
+    obtain ⟨-, hsettleMax⟩ := haccept.2
+    have hextract : frameAllowanceEvent e pre post =
+        some { owner := normalizedAddressArg e 0
+               spender := e.currentTarget.toB256
+               caller := e.caller
+               depth := e.depth
+               visit := .flashMax } := by
+      simp [frameAllowanceEvent, hne0, hsel,
+        flashLoanSelector_ne_approveSelector,
+        flashLoanSelector_ne_approveAndCallSelector,
+        flashLoanSelector_ne_permitSelector,
+        flashLoanSelector_ne_transferFromSelector,
+        flashLoanSelector_ne_withdrawFromSelector, hafter]
+    obtain rfl := Option.some.inj (hextract.symm.trans hevent)
+    simp only [AllowanceVisit.read?, Option.some.injEq] at hread
+    simp only [AllowanceEvent.key, ← hread,
+      ← flashAllowanceRuntimeKey_eq_projected]
+    exact hsettleMax.symm
+  · have hbranch : flashAllowanceBranchFromPost e post =
+        .finite (flashAllowanceRuntimeKey e)
+          ((Devm.getStor post e.currentTarget).get
+            (flashAllowanceRuntimeKey e) + Sevm.argWord e 2)
+          ((Devm.getStor post e.currentTarget).get
+            (flashAllowanceRuntimeKey e)) := by
+      simp [flashAllowanceBranchFromPost, hafter]
+    rw [hbranch] at haccept
+    obtain ⟨-, hsettleRead, -, -, -⟩ := haccept.2
+    have hextract : frameAllowanceEvent e pre post =
+        some { owner := normalizedAddressArg e 0
+               spender := e.currentTarget.toB256
+               caller := e.caller
+               depth := e.depth
+               visit := .flashFinite
+                 ((Devm.getStor post e.currentTarget).get
+                   (flashAllowanceRuntimeKey e) + Sevm.argWord e 2)
+                 ((Devm.getStor post e.currentTarget).get
+                   (flashAllowanceRuntimeKey e)) } := by
+      simp [frameAllowanceEvent, hne0, hsel,
+        flashLoanSelector_ne_approveSelector,
+        flashLoanSelector_ne_approveAndCallSelector,
+        flashLoanSelector_ne_permitSelector,
+        flashLoanSelector_ne_transferFromSelector,
+        flashLoanSelector_ne_withdrawFromSelector, hafter]
+    obtain rfl := Option.some.inj (hextract.symm.trans hevent)
+    simp only [AllowanceVisit.read?, Option.some.injEq] at hread
+    simp only [AllowanceEvent.key, ← hread,
+      ← flashAllowanceRuntimeKey_eq_projected]
+    exact hsettleRead.symm
 
 /-- The borrower callback transports the tagged allowance region by exactly
 its own retained attribution stream, and its resume writes no storage. -/
@@ -1031,10 +1123,9 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_flashLoan
       AllowanceRegionEffectSound ca settlePre frame.post
         [CountedFrame.ofFrame dp ca frame] :=
     { hsegmentOwn with
-      entryRead := .singleton_flash
-        (show (CountedFrame.ofFrame dp ca frame).sel? =
-            some flashLoanSelector by
-          simp [CountedFrame.ofFrame, hnonempty, hselector]) }
+      entryRead :=
+        flashSettlement_allowanceEntryRead htarget hnonempty hselector
+          houtcome hburn hown }
   exact hsegmentInner.append hsegmentOwnSound
 
 end Weth10
