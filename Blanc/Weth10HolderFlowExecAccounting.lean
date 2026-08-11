@@ -928,7 +928,7 @@ theorem benvAfterTransfer_getStor_eq
     exact (of_state_transfer_fields hsub).1 a
   · rw [of_benvAfterTransfer_no hstv htransfer]
 
-private theorem installedWeth10Code_size_ne_zero
+theorem installedWeth10Code_size_ne_zero
     {dp : DeployParams} {ca : Adr} {pre : Devm}
     (hcode : some (pre.getCode ca).toList =
       Prog.compile (weth10 dp)) :
@@ -944,7 +944,7 @@ private theorem installedWeth10Code_size_ne_zero
       _ = 6313 := weth10Code_length dp
   omega
 
-private theorem GenericCreate.newAddress_ne_of_installed
+theorem GenericCreate.newAddress_ne_of_installed
     {dp : DeployParams} {ca : Adr}
     {sevm : Sevm} {pre : Devm}
     {endowment : B256} {newAddress : Adr} {mi ms : Nat}
@@ -963,7 +963,7 @@ private theorem GenericCreate.newAddress_ne_of_installed
   rw [hempty]
   rfl
 
-private theorem processCreateMessage_msg_getStor_eq_execAccounting
+theorem processCreateMessage_msg_getStor_eq
     {msg : Msg} {ca : Adr} (htargetNe : msg.currentTarget ≠ ca) :
     (processCreateMessage.msg msg).benv.state.getStor ca =
       msg.benv.state.getStor ca := by
@@ -972,7 +972,7 @@ private theorem processCreateMessage_msg_getStor_eq_execAccounting
   rw [State.incrNonce_get_stor,
     State.setStor_get_stor_ne htargetNe]
 
-private theorem ProcessCreateMessage.ok_getStorCode_eq_inner_of_clean
+theorem ProcessCreateMessage.ok_getStorCode_eq_inner_of_clean
     {msg : Msg} {slot : Xlot} {post : Devm} {ca : Adr}
     (hprocess : ProcessCreateMessage msg slot (.ok post))
     (herror : post.error.isSome = false)
@@ -1375,7 +1375,7 @@ theorem ProcessCreateMessageTrace.storageSegmentDelta
         change parent.state.getStor ca =
           (processCreateMessage.msg msg).benv.state.getStor ca
         rw [hparent,
-          processCreateMessage_msg_getStor_eq_execAccounting htargetNe]
+          processCreateMessage_msg_getStor_eq htargetNe]
       have hprefixCode : parent.getCode ca = prepared.getCode ca := by
         change parent.state.getCode ca =
           (processCreateMessage.msg msg).benv.state.getCode ca
@@ -1471,7 +1471,7 @@ theorem ProcessCreateMessage.storageSegmentEffect_of_bodyEffect
       change parent.state.getStor ca =
         (processCreateMessage.msg msg).benv.state.getStor ca
       rw [hparent,
-        processCreateMessage_msg_getStor_eq_execAccounting htargetNe]
+        processCreateMessage_msg_getStor_eq htargetNe]
     have hprefixCode : parent.getCode ca = prepared.getCode ca := by
       change parent.state.getCode ca =
         (processCreateMessage.msg msg).benv.state.getCode ca
@@ -1989,28 +1989,8 @@ theorem GenericCreate.storageSegmentEffect_none
         of_executeCode_noneCode hcodeAddress hbody
       cases hslot
 
-private theorem genericCall_step_spawn_exact_execAccounting
-    {sevm : Sevm} {devm : Devm} {gas : Nat} {value : B256}
-    {caller target codeAddress : Adr} {stv isStatic : Bool}
-    {ii isz oi osz : Nat} {code : ByteArray} {disablePrecompiles : Bool}
-    {frame : Frame} {resume : Resume}
-    (hspawn : genericCall.step sevm devm gas value caller target codeAddress
-      stv isStatic ii isz oi osz code disablePrecompiles =
-        .spawn frame resume) :
-    frame = Frame.ofCall
-      (callMsg sevm (devm.withReturnData []) gas value caller target
-        codeAddress stv isStatic ((devm.memory.read ii isz).1) code
-        disablePrecompiles) ∧
-    resume = .call (devm.withReturnData []) oi osz := by
-  simp only [genericCall.step, Bind.bind, Except.bind, Pure.pure,
-    Except.pure] at hspawn
-  repeat' split at hspawn
-  all_goals
-    simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hspawn
-  all_goals obtain ⟨rfl, rfl⟩ := hspawn
-  all_goals exact ⟨rfl, rfl⟩
-
-private theorem genericCreate_step_spawn_exact_execAccounting
+/-- Exact CREATE frame and resumption selected by a successful spawn. -/
+theorem genericCreate_step_spawn_exact
     {sevm : Sevm} {devm : Devm} {endowment : B256}
     {newAddress : Adr} {mi ms : Nat}
     {frame : Frame} {resume : Resume}
@@ -2038,7 +2018,7 @@ private theorem genericCreate_step_spawn_exact_execAccounting
   all_goals obtain ⟨rfl, rfl⟩ := hspawn
   all_goals exact ⟨rfl, rfl⟩
 
-private theorem xinst_spawn_direct_execAccounting
+theorem xinst_spawn_direct
     {sevm : Sevm} {devm : Devm} {x : Xinst}
     {frame : Frame} {resume : Resume}
     (hspawn : Xinst.step sevm devm x = .spawn frame resume)
@@ -2083,7 +2063,7 @@ private theorem xinst_spawn_direct_execAccounting
       all_goals simp only [XStep.ofExcept, reduceCtorEq] at hspawn
       all_goals first
         | cases hspawn
-        | rcases genericCall_step_spawn_exact_execAccounting hspawn with
+        | rcases genericCall_step_spawn_exact hspawn with
             ⟨rfl, rfl⟩
           rfl
   | callcode =>
@@ -2108,7 +2088,7 @@ private theorem xinst_spawn_direct_execAccounting
       all_goals simp only [XStep.ofExcept, reduceCtorEq] at hspawn
       all_goals first
         | cases hspawn
-        | rcases genericCall_step_spawn_exact_execAccounting hspawn with
+        | rcases genericCall_step_spawn_exact hspawn with
             ⟨rfl, rfl⟩
           rfl
 
@@ -2141,7 +2121,7 @@ theorem Xinst.storageSegmentEffect_some
       ii, isz, oi, osz, code, disablePrecompiles, hprefix, _, _, _, hs⟩ <;>
     rw [hs] at hspawn
   · cases hspawn
-  · rcases genericCreate_step_spawn_exact_execAccounting hspawn with
+  · rcases genericCreate_step_spawn_exact hspawn with
       ⟨rfl, rfl⟩
     have grun : GenericCreate sevm d endowment newAddress mi ms
         (.some ⟨cevm, raw⟩) (.ok post) := by
@@ -2158,7 +2138,7 @@ theorem Xinst.storageSegmentEffect_some
       simpa only [List.nil_append] using
         (StorageSegmentEffect.of_getStorCode_eq
           (hprefix.getStor ca) (hprefix.getCode ca)).append effect⟩
-  · rcases genericCall_step_spawn_exact_execAccounting hspawn with
+  · rcases genericCall_step_spawn_exact hspawn with
       ⟨rfl, rfl⟩
     have grun : GenericCall sevm d gas value caller target codeAddress
         stv isStatic ii isz oi osz code disablePrecompiles
@@ -2207,7 +2187,7 @@ theorem Xinst.storageSegmentEffect_some_of_bodyEffect
       ii, isz, oi, osz, code, disablePrecompiles, hprefix, _, _, _, hs⟩ <;>
     rw [hs] at hspawn
   · cases hspawn
-  · rcases genericCreate_step_spawn_exact_execAccounting hspawn with
+  · rcases genericCreate_step_spawn_exact hspawn with
       ⟨rfl, rfl⟩
     have grun : GenericCreate sevm d endowment newAddress mi ms
         (.some ⟨cevm, raw⟩) (.ok post) := by
@@ -2224,7 +2204,7 @@ theorem Xinst.storageSegmentEffect_some_of_bodyEffect
       simpa only [List.nil_append] using
         (StorageSegmentEffect.of_getStorCode_eq
           (hprefix.getStor ca) (hprefix.getCode ca)).append effect⟩
-  · rcases genericCall_step_spawn_exact_execAccounting hspawn with
+  · rcases genericCall_step_spawn_exact hspawn with
       ⟨rfl, rfl⟩
     have grun : GenericCall sevm d gas value caller target codeAddress
         stv isStatic ii isz oi osz code disablePrecompiles
@@ -6365,7 +6345,7 @@ theorem Exec.CoreStorageSound.nextSome
                   rw [hinnerTarget]
                   exact not_empty_of_compile hatp.1
                 have hcodeAddress :=
-                  xinst_spawn_direct_execAccounting
+                  xinst_spawn_direct
                     hs hparentNe hnonempty
                 have hcodeAddressInit :=
                   congrArg (fun evm : Evm => evm.sta.codeAddress) hinit

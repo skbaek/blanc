@@ -128,57 +128,6 @@ def Exec.CoreEthSound (dp : DeployParams) (ca : Adr)
       (Execution.committedPost out hcommit).state
       (Exec.bodyEthActions dp ca run hcommit)
 
-/-- Exact CALL frame and resumption selected by a successful spawn. -/
-theorem genericCall_step_spawn_exact
-    {sevm : Sevm} {devm : Devm} {gas : Nat} {value : B256}
-    {caller target codeAddress : Adr} {stv isSt : Bool}
-    {ii isz oi osz : Nat} {code : ByteArray} {dp : Bool}
-    {frame : Frame} {resume : Resume}
-    (hspawn : genericCall.step sevm devm gas value caller target codeAddress
-      stv isSt ii isz oi osz code dp = .spawn frame resume) :
-    frame = Frame.ofCall
-      (callMsg sevm (devm.withReturnData [])
-        gas
-        value caller target codeAddress stv isSt
-        ((devm.memory.read ii isz).1) code dp) ∧
-    resume = .call (devm.withReturnData []) oi osz := by
-  simp only [genericCall.step, Bind.bind, Except.bind, Pure.pure,
-    Except.pure] at hspawn
-  repeat' split at hspawn
-  all_goals
-    simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hspawn
-  all_goals obtain ⟨rfl, rfl⟩ := hspawn
-  all_goals exact ⟨rfl, rfl⟩
-
-/-- Exact CREATE frame and resumption selected by a successful spawn. -/
-theorem genericCreate_step_spawn_exact
-    {sevm : Sevm} {devm : Devm} {endowment : B256}
-    {newAddress : Adr} {mi ms : Nat}
-    {frame : Frame} {resume : Resume}
-    (hspawn : genericCreate.step sevm devm endowment newAddress mi ms =
-      .spawn frame resume) :
-    frame = Frame.ofCreate
-      (createMsg sevm
-        (addAccessedAddress
-          (((devm.withGasLeft
-              (devm.gasLeft - except64th devm.gasLeft)).withReturnData
-            []).incrNonce sevm.currentTarget) newAddress)
-        (except64th devm.gasLeft) endowment newAddress
-        ((devm.memory.read mi ms).1)) ∧
-    resume = .create
-      (addAccessedAddress
-        (((devm.withGasLeft
-            (devm.gasLeft - except64th devm.gasLeft)).withReturnData
-          []).incrNonce sevm.currentTarget) newAddress)
-      newAddress := by
-  simp only [genericCreate.step, Bind.bind, Except.bind, Except.assert,
-    assertDynamic, Pure.pure, Except.pure] at hspawn
-  repeat' split at hspawn
-  all_goals
-    simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hspawn
-  all_goals obtain ⟨rfl, rfl⟩ := hspawn
-  all_goals exact ⟨rfl, rfl⟩
-
 /-- CREATE's nonce/access-list preparation leaves the world balance map
 unchanged. -/
 theorem genericCreate_prepared_bal

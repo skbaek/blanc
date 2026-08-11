@@ -68,7 +68,7 @@ def CallerAllowanceOutcome (e : Sevm) (pre corePre : Devm)
   Devm.getBal corePre = Devm.getBal pre ∧
   Devm.getCode corePre = Devm.getCode pre
 
-private theorem of_callerAllowanceKeyPrefix
+theorem of_callerAllowanceKeyPrefix
     {e : Sevm} {s r : Devm} {img : Bytes}
     (h_wf : Mem.Wf s.memory)
     (h_reads : Mem.Reads s.memory img)

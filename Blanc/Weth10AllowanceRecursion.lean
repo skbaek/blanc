@@ -13,9 +13,7 @@ development's `Exec.coreStorageSound_of_compiledBodyStorageHandler`, with the
 The mirror is simpler in one respect: every foreign or neutral step is a full
 `Devm.getStor … ca` equality, so no segment monoid, permutation or `balSum`
 bookkeeping is needed — `AllowanceRegionEffect.of_getStorCode_eq` and
-`AllowanceRegionEffect.append` are the only carrier constructors used.  Because
-several helpers of the balance development are `private`, their statements are
-reproved here at the allowance altitude rather than reused.
+`AllowanceRegionEffect.append` are the only carrier constructors used.
 -/
 
 namespace Blanc
@@ -174,126 +172,6 @@ theorem ProcessMessage.allowanceRegionEffect_of_bodyEffect
         (hparent.trans hpostState.symm)
     exact AllowanceRegionEffect.of_getStorCode_eq hstorage hcodeEq
 
-/-! ## CREATE settlement helpers
-
-The balance development keeps these three facts `private`, so they are reproved
-here rather than reused. -/
-
-private theorem installedWeth10Code_size_ne_zero_allowance
-    {dp : DeployParams} {ca : Adr} {pre : Devm}
-    (hcode : some (pre.getCode ca).toList =
-      Prog.compile (weth10 dp)) :
-    (pre.getCode ca).size ≠ 0 := by
-  rw [weth10Code_compile] at hcode
-  have hlist : (pre.getCode ca).toList = weth10Code dp :=
-    Option.some.inj hcode
-  have hsize : (pre.getCode ca).size = 6313 := by
-    calc
-      (pre.getCode ca).size = (pre.getCode ca).toList.length := by
-        exact ByteArray.size_eq_length_toList _
-      _ = (weth10Code dp).length := congrArg List.length hlist
-      _ = 6313 := weth10Code_length dp
-  omega
-
-private theorem GenericCreate.newAddress_ne_of_installed_allowance
-    {dp : DeployParams} {ca : Adr}
-    {sevm : Sevm} {pre : Devm}
-    {endowment : B256} {newAddress : Adr} {mi ms : Nat}
-    {cevm : Evm} {raw out : Execution}
-    (hrun : GenericCreate sevm pre endowment newAddress mi ms
-      (.some ⟨cevm, raw⟩) out)
-    (hcode : some (pre.getCode ca).toList =
-      Prog.compile (weth10 dp)) :
-    newAddress ≠ ca := by
-  obtain ⟨frame, resume, hspawn, -, -⟩ := XStep.Run.some_inv hrun
-  have hempty : pre.getCode newAddress = .empty :=
-    (genericCreate.step_spawn_frame hspawn).2.2
-  intro heq
-  subst newAddress
-  apply installedWeth10Code_size_ne_zero_allowance hcode
-  rw [hempty]
-  rfl
-
-private theorem processCreateMessage_msg_getStor_eq_allowance
-    {msg : Msg} {ca : Adr} (htargetNe : msg.currentTarget ≠ ca) :
-    (processCreateMessage.msg msg).benv.state.getStor ca =
-      msg.benv.state.getStor ca := by
-  dsimp [processCreateMessage.msg, Msg.withBenv,
-    addCreatedAccount, Benv.setStor, Benv.incrNonce, State.getStor]
-  rw [State.incrNonce_get_stor,
-    State.setStor_get_stor_ne htargetNe]
-
-private theorem ProcessCreateMessage.ok_getStorCode_eq_inner_of_clean_allowance
-    {msg : Msg} {slot : Xlot} {post : Devm} {ca : Adr}
-    (hprocess : ProcessCreateMessage msg slot (.ok post))
-    (herror : post.error.isSome = false)
-    (htargetNe : msg.currentTarget ≠ ca) :
-    ∃ inner : Devm,
-      ProcessMessage (processCreateMessage.msg msg) slot (.ok inner) ∧
-      post.state.getStor ca = inner.state.getStor ca ∧
-      post.state.getCode ca = inner.state.getCode ca := by
-  rcases ProcessCreateMessage.iff_processMessage.mp hprocess with
-    ⟨result, hinner, hsettle⟩
-  cases result with
-  | error error =>
-      simp [processCreateMessage.settle] at hsettle
-  | ok inner =>
-      unfold processCreateMessage.settle at hsettle
-      simp only [bind, Except.bind] at hsettle
-      by_cases hinnerNone : inner.error.isNone = true
-      · rw [if_pos hinnerNone] at hsettle
-        cases hcharge :
-          processCreateMessage.chargeCodeGas
-            msg.benv.stat.rules inner with
-        | error error =>
-            rw [hcharge] at hsettle
-            rcases error with ⟨error, charged⟩
-            cases error with
-            | halt reason =>
-                have heq := Except.ok.inj hsettle
-                rw [heq] at herror
-                simp [processCreateMessage.exceptionalHalt,
-                  Devm.error, Devm.setMeta] at herror
-            | revert => cases hsettle
-            | crypto reason => cases hsettle
-            | internal reason => cases hsettle
-        | ok charged =>
-            rw [hcharge] at hsettle
-            have heq := Except.ok.inj hsettle
-            refine ⟨inner, hinner, ?_, ?_⟩
-            · calc
-                post.state.getStor ca =
-                    (charged.setCode msg.currentTarget
-                      ⟨⟨charged.output⟩⟩).state.getStor ca :=
-                  congrArg (fun d : Devm => d.state.getStor ca) heq
-                _ = charged.state.getStor ca := by
-                  change
-                    ((charged.state.setCode msg.currentTarget
-                      ⟨⟨charged.output⟩⟩).get ca).stor = _
-                  exact State.setCode_get_stor
-                _ = inner.state.getStor ca := by
-                  rw [chargeCodeGas_state_ok hcharge]
-            · calc
-                post.state.getCode ca =
-                    (charged.setCode msg.currentTarget
-                      ⟨⟨charged.output⟩⟩).state.getCode ca :=
-                  congrArg (fun d : Devm => d.state.getCode ca) heq
-                _ = charged.state.getCode ca := by
-                  change
-                    ((charged.state.setCode msg.currentTarget
-                      ⟨⟨charged.output⟩⟩).get ca).code = _
-                  exact State.setCode_get_code_ne htargetNe
-                _ = inner.state.getCode ca := by
-                  rw [chargeCodeGas_state_ok hcharge]
-      · rw [if_neg hinnerNone] at hsettle
-        have heq := Except.ok.inj hsettle
-        rw [heq] at herror
-        simp [Devm.rollback, Devm.setWorld, Devm.error] at herror
-        apply False.elim
-        apply hinnerNone
-        rw [show inner.error = none from herror]
-        rfl
-
 /-- Proof-indexed CREATE counterpart of
 `ProcessMessage.allowanceRegionEffect_of_bodyEffect`. -/
 theorem ProcessCreateMessage.allowanceRegionEffect_of_bodyEffect
@@ -326,7 +204,7 @@ theorem ProcessCreateMessage.allowanceRegionEffect_of_bodyEffect
       exact hsettle
     have herr : post.error.isSome = false := by
       cases he : post.error <;> simp_all
-    rcases ProcessCreateMessage.ok_getStorCode_eq_inner_of_clean_allowance
+    rcases ProcessCreateMessage.ok_getStorCode_eq_inner_of_clean
       hprocess herr htargetNe with
         ⟨inner, hinner, hpostStorage, hpostCode⟩
     have henter : (Frame.ofCall (processCreateMessage.msg msg)).enter =
@@ -345,7 +223,7 @@ theorem ProcessCreateMessage.allowanceRegionEffect_of_bodyEffect
         Devm.getStor prepared ca := by
       change parent.state.getStor ca =
         (processCreateMessage.msg msg).benv.state.getStor ca
-      rw [hparent, processCreateMessage_msg_getStor_eq_allowance htargetNe]
+      rw [hparent, processCreateMessage_msg_getStor_eq htargetNe]
     have hprefixCode : parent.getCode ca = prepared.getCode ca := by
       change parent.state.getCode ca =
         (processCreateMessage.msg msg).benv.state.getCode ca
@@ -546,7 +424,7 @@ theorem GenericCreate.allowanceRegionEffect_some_of_bodyEffect
               ((pre.memory.read mi ms).1))) raw = true
        then Exec.attributionStream dp ca childRun else []) := by
   have hnewNe : newAddress ≠ ca :=
-    GenericCreate.newAddress_ne_of_installed_allowance hrun hcode
+    GenericCreate.newAddress_ne_of_installed hrun hcode
   unfold GenericCreate genericCreate.step at hrun
   simp only [Bind.bind, Except.bind, Except.assert, assertDynamic,
     Pure.pure, Except.pure] at hrun
@@ -672,133 +550,7 @@ theorem GenericCreate.allowanceRegionEffect_none
         of_executeCode_noneCode hcodeAddress hbody
       cases hslot
 
-/-! ## Interpreter-slot allowance transport
-
-The balance development keeps its spawn-shape helpers `private`, so they are
-reproved here. -/
-
-private theorem genericCall_step_spawn_exact_allowance
-    {sevm : Sevm} {devm : Devm} {gas : Nat} {value : B256}
-    {caller target codeAddress : Adr} {stv isStatic : Bool}
-    {ii isz oi osz : Nat} {code : ByteArray} {disablePrecompiles : Bool}
-    {frame : Frame} {resume : Resume}
-    (hspawn : genericCall.step sevm devm gas value caller target codeAddress
-      stv isStatic ii isz oi osz code disablePrecompiles =
-        .spawn frame resume) :
-    frame = Frame.ofCall
-      (callMsg sevm (devm.withReturnData []) gas value caller target
-        codeAddress stv isStatic ((devm.memory.read ii isz).1) code
-        disablePrecompiles) ∧
-    resume = .call (devm.withReturnData []) oi osz := by
-  simp only [genericCall.step, Bind.bind, Except.bind, Pure.pure,
-    Except.pure] at hspawn
-  repeat' split at hspawn
-  all_goals
-    simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hspawn
-  all_goals obtain ⟨rfl, rfl⟩ := hspawn
-  all_goals exact ⟨rfl, rfl⟩
-
-private theorem genericCreate_step_spawn_exact_allowance
-    {sevm : Sevm} {devm : Devm} {endowment : B256}
-    {newAddress : Adr} {mi ms : Nat}
-    {frame : Frame} {resume : Resume}
-    (hspawn : genericCreate.step sevm devm endowment newAddress mi ms =
-      .spawn frame resume) :
-    frame = Frame.ofCreate
-      (createMsg sevm
-        (addAccessedAddress
-          (((devm.withGasLeft
-              (devm.gasLeft - except64th devm.gasLeft)).withReturnData
-            []).incrNonce sevm.currentTarget) newAddress)
-        (except64th devm.gasLeft) endowment newAddress
-        ((devm.memory.read mi ms).1)) ∧
-    resume = .create
-      (addAccessedAddress
-        (((devm.withGasLeft
-            (devm.gasLeft - except64th devm.gasLeft)).withReturnData
-          []).incrNonce sevm.currentTarget) newAddress)
-      newAddress := by
-  simp only [genericCreate.step, Bind.bind, Except.bind, Except.assert,
-    assertDynamic, Pure.pure, Except.pure] at hspawn
-  repeat' split at hspawn
-  all_goals
-    simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hspawn
-  all_goals obtain ⟨rfl, rfl⟩ := hspawn
-  all_goals exact ⟨rfl, rfl⟩
-
-private theorem xinst_spawn_direct_allowance
-    {sevm : Sevm} {devm : Devm} {x : Xinst}
-    {frame : Frame} {resume : Resume}
-    (hspawn : Xinst.step sevm devm x = .spawn frame resume)
-    (hforeign : sevm.currentTarget ≠ frame.inner.currentTarget)
-    (hcode : devm.getCode frame.inner.currentTarget ≠ .empty) :
-    frame.inner.codeAddress = some frame.inner.currentTarget := by
-  have horiginal := hspawn
-  cases x with
-  | create =>
-      simp only [Xinst.step, Bind.bind, Except.bind] at hspawn
-      repeat' split at hspawn
-      all_goals simp only [XStep.ofExcept, reduceCtorEq] at hspawn
-      all_goals first
-        | cases hspawn
-        | have hfresh := genericCreate.step_spawn_frame hspawn
-          apply False.elim
-          apply hcode
-          calc
-            devm.getCode frame.inner.currentTarget =
-                frame.inner.benv.state.getCode frame.inner.currentTarget :=
-              (Xinst.step_spawn_getCode horiginal _).symm
-            _ = _ := hfresh.1 _
-            _ = .empty := by rw [hfresh.2.1, hfresh.2.2]
-  | create2 =>
-      simp only [Xinst.step, Bind.bind, Except.bind] at hspawn
-      repeat' split at hspawn
-      all_goals simp only [XStep.ofExcept, reduceCtorEq] at hspawn
-      all_goals first
-        | cases hspawn
-        | have hfresh := genericCreate.step_spawn_frame hspawn
-          apply False.elim
-          apply hcode
-          calc
-            devm.getCode frame.inner.currentTarget =
-                frame.inner.benv.state.getCode frame.inner.currentTarget :=
-              (Xinst.step_spawn_getCode horiginal _).symm
-            _ = _ := hfresh.1 _
-            _ = .empty := by rw [hfresh.2.1, hfresh.2.2]
-  | call =>
-      simp only [Xinst.step, Bind.bind, Except.bind, Except.assert] at hspawn
-      repeat' split at hspawn
-      all_goals simp only [XStep.ofExcept, reduceCtorEq] at hspawn
-      all_goals first
-        | cases hspawn
-        | rcases genericCall_step_spawn_exact_allowance hspawn with
-            ⟨rfl, rfl⟩
-          rfl
-  | callcode =>
-      simp only [Xinst.step, Bind.bind, Except.bind] at hspawn
-      repeat' split at hspawn
-      all_goals simp only [XStep.ofExcept, reduceCtorEq] at hspawn
-      all_goals first
-        | cases hspawn
-        | have htarget := (genericCall.step_spawn_frame hspawn).2.1
-          exact False.elim (hforeign htarget.symm)
-  | delcall =>
-      simp only [Xinst.step, Bind.bind, Except.bind] at hspawn
-      repeat' split at hspawn
-      all_goals simp only [XStep.ofExcept, reduceCtorEq] at hspawn
-      all_goals first
-        | cases hspawn
-        | have htarget := (genericCall.step_spawn_frame hspawn).2.1
-          exact False.elim (hforeign htarget.symm)
-  | statcall =>
-      simp only [Xinst.step, Bind.bind, Except.bind] at hspawn
-      repeat' split at hspawn
-      all_goals simp only [XStep.ofExcept, reduceCtorEq] at hspawn
-      all_goals first
-        | cases hspawn
-        | rcases genericCall_step_spawn_exact_allowance hspawn with
-            ⟨rfl, rfl⟩
-          rfl
+/-! ## Interpreter-slot allowance transport -/
 
 /-- Proof-indexed contract-neutral recursive transport.  The exact child
 allowance effect is threaded through the concrete filled interpreter slot. -/
@@ -827,7 +579,7 @@ theorem Xinst.allowanceRegionEffect_some_of_bodyEffect
       ii, isz, oi, osz, code, disablePrecompiles, hprefix, _, _, _, hs⟩ <;>
     rw [hs] at hspawn
   · cases hspawn
-  · rcases genericCreate_step_spawn_exact_allowance hspawn with
+  · rcases genericCreate_step_spawn_exact hspawn with
       ⟨rfl, rfl⟩
     have grun : GenericCreate sevm d endowment newAddress mi ms
         (.some ⟨cevm, raw⟩) (.ok post) := by
@@ -843,7 +595,7 @@ theorem Xinst.allowanceRegionEffect_some_of_bodyEffect
     simpa only [List.nil_append] using
       (AllowanceRegionEffect.of_getStorCode_eq
         (hprefix.getStor ca) (hprefix.getCode ca)).append effect
-  · rcases genericCall_step_spawn_exact_allowance hspawn with
+  · rcases genericCall_step_spawn_exact hspawn with
       ⟨rfl, rfl⟩
     have grun : GenericCall sevm d gas value caller target codeAddress
         stv isStatic ii isz oi osz code disablePrecompiles
@@ -1196,7 +948,7 @@ theorem Exec.CoreAllowanceSound.nextSome
                   rw [hinnerTarget]
                   exact not_empty_of_compile hatp.1
                 have hcodeAddress :=
-                  xinst_spawn_direct_allowance
+                  xinst_spawn_direct
                     hs hparentNe hnonempty
                 have hcodeAddressInit :=
                   congrArg (fun evm : Evm => evm.sta.codeAddress) hinit

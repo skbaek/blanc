@@ -143,27 +143,6 @@ inductive PermitStaticcallOutcome
       PermitStaticcallOutcome dp ca sevm callPre callPost
         (.some ⟨⟨pc, childSevm, childPre⟩, raw⟩) []
 
-private theorem genericCall_step_spawn_exact_permit
-    {sevm : Sevm} {devm : Devm} {gas : Nat} {value : B256}
-    {caller target codeAddress : Adr} {stv isStatic : Bool}
-    {ii isz oi osz : Nat} {code : ByteArray} {disablePrecompiles : Bool}
-    {frame : Frame} {resume : Resume}
-    (hspawn : genericCall.step sevm devm gas value caller target codeAddress
-      stv isStatic ii isz oi osz code disablePrecompiles =
-        .spawn frame resume) :
-    frame = Frame.ofCall
-      (callMsg sevm (devm.withReturnData []) gas value caller target
-        codeAddress stv isStatic ((devm.memory.read ii isz).1) code
-        disablePrecompiles) ∧
-    resume = .call (devm.withReturnData []) oi osz := by
-  simp only [genericCall.step, Bind.bind, Except.bind, Pure.pure,
-    Except.pure] at hspawn
-  repeat' split at hspawn
-  all_goals
-    simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hspawn
-  all_goals obtain ⟨rfl, rfl⟩ := hspawn
-  all_goals exact ⟨rfl, rfl⟩
-
 private def StaticcallSpawnData
     (sevm : Sevm) (pre : Devm) (frame : Frame)
     (resume : Resume) : Prop :=
@@ -283,7 +262,7 @@ private theorem Xinst.step_statcall_spawn_data
   · cases hspawn
   rename_i d9 hcharge
   have f9 : Devm.WorldEq d8 d9 := chargeGas_worldEq_of_ok hcharge
-  rcases genericCall_step_spawn_exact_permit hspawn with
+  rcases genericCall_step_spawn_exact hspawn with
     ⟨hframe, hresume⟩
   subst frame
   subst resume
@@ -519,36 +498,6 @@ private theorem PermitStaticcallMessageTrace.own_of_not_commits
     _ = trace.childPost.state := hchild.symm
     _ = callPost.state := hpost.symm
 
-private theorem Ninst.StepRun.unique_exec_of_filled_permit
-    {pc₁ pc₂ : Nat} {sevm : Sevm} {pre : Devm} {x : Xinst}
-    {left right : Xlot} {out₁ out₂ : Execution}
-    (leftFilled : Xlot.Filled left)
-    (rightFilled : Xlot.Filled right)
-    (leftRun : Ninst.StepRun pc₁ sevm pre (.exec x) left out₁)
-    (rightRun : Ninst.StepRun pc₂ sevm pre (.exec x) right out₂) :
-    left = right ∧ out₁ = out₂ := by
-  have rightRun' : Ninst.StepRun pc₁ sevm pre (.exec x) right out₂ :=
-    Ninst.stepRun_pc_irrel (by simp [Ninst.pcFree]) rightRun
-  unfold Ninst.StepRun at leftRun rightRun'
-  exact Blanc.Step.Run.unique_of_filled
-    leftFilled rightFilled leftRun rightRun'
-
-private theorem Frame.settlementCommits_ofCall_of_raw_commits_permit
-    {msg : Msg} {raw : Execution}
-    (rawCommits : Execution.commits raw = true) :
-    Frame.settlementCommits (Frame.ofCall msg) raw = true := by
-  cases raw with
-  | error err =>
-      simp [Execution.commits] at rawCommits
-  | ok post =>
-      cases herror : post.error with
-      | none =>
-          simp [Frame.settlementCommits, Frame.settle, Frame.settleMsg,
-            Frame.ofCall, executeCode.handleError,
-            processMessage.settle, herror]
-      | some error =>
-          simp [Execution.commits, herror] at rawCommits
-
 /-- The label selected by the original parent edge is exactly the retained
 slot classification used by the two recursive accounting handlers. -/
 theorem Exec.Deriv.ParentStepActions.permitStaticcallOutcome
@@ -575,7 +524,7 @@ theorem Exec.Deriv.ParentStepActions.permitStaticcallOutcome
           (.ok post) := by
         simp only [Ninst.StepRun, hs, Step.Run]
         exact ⟨trivial, trivial⟩
-      have hslot := (Ninst.StepRun.unique_exec_of_filled_permit
+      have hslot := (Ninst.StepRun.unique_exec_of_filled
         filled (show Xlot.Filled .none from trivial) step actual).1
       subst slot
       cases hxs : Xinst.step sevm pre .statcall with
@@ -598,7 +547,7 @@ theorem Exec.Deriv.ParentStepActions.permitStaticcallOutcome
           (.ok post) := by
         simp only [Ninst.StepRun, hs, Step.Run]
         exact ⟨_, RunFrame.of_done henter, hresume.symm⟩
-      have hslot := (Ninst.StepRun.unique_exec_of_filled_permit
+      have hslot := (Ninst.StepRun.unique_exec_of_filled
         filled (show Xlot.Filled .none from trivial) step actual).1
       subst slot
       rcases Ninst.step_statcall_spawn_data gasWord tail operands hs with
@@ -626,7 +575,7 @@ theorem Exec.Deriv.ParentStepActions.permitStaticcallOutcome
       have actualFilled : Xlot.Filled
           (.some ⟨⟨childPc, childSevm, childPre⟩, raw⟩) :=
         ⟨child⟩
-      have hslot := (Ninst.StepRun.unique_exec_of_filled_permit
+      have hslot := (Ninst.StepRun.unique_exec_of_filled
         filled actualFilled step actual).1
       subst slot
       rcases Ninst.step_statcall_spawn_data gasWord tail operands hs with
@@ -655,7 +604,7 @@ theorem Exec.Deriv.ParentStepActions.permitStaticcallOutcome
           by_cases hcommits : Execution.commits raw = true
           · have hsettles : Frame.settlementCommits
                 (Frame.ofCall msg) raw = true :=
-              Frame.settlementCommits_ofCall_of_raw_commits_permit hcommits
+              Frame.settlementCommits_ofCall_of_raw_commits hcommits
             simpa only [hsettles, if_true] using
               (PermitStaticcallOutcome.committed child trace hcommits)
           · have hnotSettles : Frame.settlementCommits
@@ -1071,18 +1020,6 @@ private theorem permitRecoverPrepare_observations
     hbalWrites.trans (funext (getBal_eq_of_state_eq hpush.state)),
     hcode⟩
 
-private theorem not_run_call_revWith_permit
-    {fs : List Func} {e : Sevm} {k : Nat} {reason : String}
-    {final : Devm}
-    (hget : fs[k]? = some (Func.revWith reason)) :
-    ∀ pre, ¬ Func.Run fs e pre (.call k) final := by
-  intro pre run
-  rcases of_run_call run with ⟨body, bodyPre, hbody, _hburn, hrun⟩
-  rw [hget] at hbody
-  have heq : body = Func.revWith reason := Option.some.inj hbody.symm
-  subst body
-  exact Func.not_run_revWith hrun
-
 private def permitFirstSignerGuardLine : Line :=
   [Ninst.pop, Ninst.pushB256 128, Ninst.mload, Ninst.dup 0, Ninst.iszero]
 
@@ -1132,7 +1069,7 @@ private theorem Exec.Frame.CompiledCursor.finishPermitAfterStaticcall
         Ninst.pushB256]) with
     ⟨firstBranchCursor, hfirstLine, hfirstActions⟩
   rcases firstBranchCursor.selectBranchLeftWithBurn
-      (not_run_call_revWith_permit (reason := "WETH: invalid permit") (by
+      (not_run_call_revWith (reason := "WETH: invalid permit") (by
         simp [weth10, weth10Aux, invalidPermitErrorSlot,
           invalidPermitError])) with
     ⟨secondGuardCursor, hfirstPop, hfirstBranchActions⟩
@@ -1142,7 +1079,7 @@ private theorem Exec.Frame.CompiledCursor.finishPermitAfterStaticcall
           NinstIsChildless, Ninst.pushB256]) with
     ⟨secondBranchCursor, hsecondLine, hsecondActions⟩
   rcases secondBranchCursor.selectBranchLeftWithBurn
-      (not_run_call_revWith_permit (reason := "WETH: invalid permit") (by
+      (not_run_call_revWith (reason := "WETH: invalid permit") (by
         simp [weth10, weth10Aux, invalidPermitErrorSlot,
           invalidPermitError])) with
     ⟨approveCursor, hsecondPop, hsecondBranchActions⟩
@@ -1371,7 +1308,7 @@ private theorem Exec.Frame.reachCompiledPermitRecover
         Ninst.pushB256]) with
     ⟨deadlineBranchCursor, hdeadline, hdeadlineActions⟩
   rcases deadlineBranchCursor.selectBranchLeftWithBurn
-      (not_run_call_revWith_permit (reason := "WETH: Expired permit") (by
+      (not_run_call_revWith (reason := "WETH: Expired permit") (by
         simp [weth10, weth10Aux, expiredPermitErrorSlot,
           expiredPermitError])) with
     ⟨liveCursor, hdeadlinePop, hliveActions⟩
@@ -1408,18 +1345,6 @@ private theorem Exec.Frame.CompiledCursor.headNinstRun
   | next hcompiled htail =>
       exact ⟨_, Ninst.Run.of_runCompiled hcompiled⟩
 
-private theorem ninstAt_of_subcode_next_permit
-    {code : ByteArray} {sourceTable : List (Nat × Func)} {pc : Nat}
-    {n : Ninst} {tail : Func}
-    (sub : subcode code.toList pc
-      (Func.compile sourceTable pc (.next n tail))) :
-    Ninst.At code pc n := by
-  rcases of_subcode sub with ⟨compiled, compiledEq, slice⟩
-  rcases of_bind_eq_some compiledEq with ⟨rest, restEq, headEq⟩
-  simp [pure] at headEq
-  rw [← headEq] at slice
-  exact Ninst.at_of_slice (List.slice_prefix slice)
-
 private theorem Exec.Frame.CompiledCursor.headNinstAt_permit
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {sourceTable : List (Nat × Func)}
@@ -1427,7 +1352,7 @@ private theorem Exec.Frame.CompiledCursor.headNinstAt_permit
     (cursor : frame.CompiledCursor dp ca fs sourceTable
       (.next n tail) final) :
     Ninst.At frame.sevm.code cursor.pc n :=
-  ninstAt_of_subcode_next_permit cursor.codeSlice
+  ninstAt_of_subcode_next cursor.codeSlice
 
 /-- Exact selector-level permit chronology.  The occurrence, recursive slot,
 and settlement-selected action list all come from one original compiled

@@ -216,6 +216,38 @@ theorem allowanceKey_ne_flashMintedSlot (owner spender : Adr) :
   exact regions_disjoint (x := .allowance) (y := .flash) (by decide)
     _ (allowanceKey_region owner spender) (h ▸ flashMintedSlot_region)
 
+/-! ### Region-shape projections
+
+The allowance-region transport arms all need the same three consequences of a
+key carrying the allowance tag: it is not an address-shaped balance key, it is
+not address-shaped at all, and it is not the flash counter slot.  They live
+here beside `regions_disjoint`, the theorem they are all immediate corollaries
+of. -/
+
+/-- A tagged allowance key is never an address-shaped balance key. -/
+theorem allowanceRegion_ne_validAdr {key k : B256}
+    (hkey : InRegion .allowance key) (hvalid : ValidAdr k) : key ≠ k := by
+  intro h
+  rcases hvalid with ⟨a, ha⟩
+  apply regions_disjoint (x := .allowance) (y := .balance) (by decide)
+    key hkey
+  rw [h, ← ha]
+  simpa only [balanceKey] using balanceKey_region a
+
+/-- A tagged allowance key is never itself address-shaped. -/
+theorem allowanceRegion_not_valid {key : B256}
+    (hkey : InRegion .allowance key) : ¬ ValidAdr key := fun hvalid =>
+  allowanceRegion_ne_validAdr hkey hvalid rfl
+
+/-- A tagged allowance key is never the flash counter slot. -/
+theorem allowanceRegion_ne_flashSlot {key : B256}
+    (hkey : InRegion .allowance key) : key ≠ flashMintedSlot := by
+  intro h
+  refine regions_disjoint (x := .allowance) (y := .flash) (by decide)
+    key hkey ?_
+  rw [h]
+  exact flashMintedSlot_region
+
 private theorem rest_set_of_not_valid {s : Stor} {k v : B256}
     (h : ¬ ValidAdr k) : Stor.rest (s.set k v) = Stor.rest s := by
   funext a

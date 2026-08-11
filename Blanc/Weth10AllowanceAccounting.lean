@@ -95,6 +95,27 @@ theorem applyAllowanceLedger_singleton (pre : Stor) (frame : CountedFrame)
         | none => simp [lastAllowanceWriteAt, hallow, hkey, hwrite]
       · simp [lastAllowanceWriteAt, hallow, hkey]
 
+/-- A leading eventless record is transparent to the ledger replay. -/
+theorem applyAllowanceLedger_cons_none
+    {pre : Stor} {record : CountedFrame} {rest : List CountedFrame}
+    {key : B256} (hnone : record.allowance = none) :
+    applyAllowanceLedger pre (record :: rest) key =
+      applyAllowanceLedger pre rest key := by
+  have h := applyAllowanceLedger_append pre pre [record] rest key
+    (by rw [applyAllowanceLedger_singleton, hnone])
+  simpa using h
+
+/-- The ledger replay reads its entry storage only at the replayed key. -/
+theorem applyAllowanceLedger_congr
+    {pre pre' : Stor} {ledger : List CountedFrame} {key : B256}
+    (h : pre.get key = pre'.get key) :
+    applyAllowanceLedger pre ledger key =
+      applyAllowanceLedger pre' ledger key := by
+  unfold applyAllowanceLedger
+  cases lastAllowanceWriteAt ledger.reverse key with
+  | none => exact h
+  | some value => rfl
+
 /-! ## Stream unfolding -/
 
 theorem Exec.attributionStream_eq_frameContribution

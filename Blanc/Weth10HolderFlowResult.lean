@@ -112,13 +112,6 @@ private theorem state_setCode_getStor_eq
     rw [State.get_set_self]
   · exact congrArg Acct.stor (State.get_set_ne state h _)
 
-private theorem state_setStor_getStor_eq_of_ne
-    (state : State) (address target : Adr) (stor : Stor)
-    (h : address ≠ target) :
-    (state.setStor address stor).getStor target = state.getStor target := by
-  unfold State.setStor State.getStor
-  exact congrArg Acct.stor (State.get_set_ne state h _)
-
 private theorem state_addBal_getStor_eq
     (state : State) (address : Adr) (value : B256) :
     (state.addBal address value).getStor = state.getStor := by
@@ -276,15 +269,6 @@ theorem ProcessMessageTrace.storageAccounting_of_committedExecSound
   | some run =>
       exact ProcessMessage.storageAccounting_of_committedExecSound
         run hprocess hsound runReady
-
-theorem processCreateMessage_msg_getStor_eq
-    {msg : Msg} {ca : Adr} (htargetNe : msg.currentTarget ≠ ca) :
-    (processCreateMessage.msg msg).benv.state.getStor ca =
-      msg.benv.state.getStor ca := by
-  simp only [processCreateMessage.msg, Msg.withBenv,
-    addCreatedAccount, Benv.setStor, Benv.incrNonce]
-  rw [congrFun (state_incrNonce_getStor_eq _ _) ca]
-  exact state_setStor_getStor_eq_of_ne _ _ _ _ htargetNe
 
 theorem ProcessCreateMessage.ok_getStor_eq_inner_of_no_error
     {msg : Msg} {slot : Xlot} {post : Devm} {ca : Adr}

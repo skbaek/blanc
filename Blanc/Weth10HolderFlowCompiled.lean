@@ -390,7 +390,7 @@ theorem Exec.Frame.exists_ninstOccurrence_of_parentPrefix
 
 /-- Slot and outcome uniqueness for a pc-free external instruction, allowing
 the two witnesses to name different program counters. -/
-private theorem Ninst.StepRun.unique_exec_of_filled
+theorem Ninst.StepRun.unique_exec_of_filled
     {pc₁ pc₂ : Nat} {sevm : Sevm} {pre : Devm} {x : Xinst}
     {left right : Xlot} {out₁ out₂ : Execution}
     (hleftFilled : Xlot.Filled left)
@@ -518,7 +518,7 @@ theorem Exec.Frame.advance_runCompiled_next
 
 /-- The first instruction of a compiled `.next` block is installed at the
 block's starting program counter. -/
-private theorem ninstAt_of_subcode_next
+theorem ninstAt_of_subcode_next
     {code : ByteArray} {table : List (Nat × Func)} {pc : Nat}
     {n : Ninst} {tail : Func}
     (sub : subcode code.toList pc
@@ -704,11 +704,11 @@ structure Devm.DispatchSilent (pre post : Devm) : Prop where
   logs : pre.logs = post.logs
   output : pre.output = post.output
 
-private theorem Devm.DispatchSilent.refl (pre : Devm) :
+theorem Devm.DispatchSilent.refl (pre : Devm) :
     Devm.DispatchSilent pre pre :=
   ⟨rfl, rfl, rfl, rfl⟩
 
-private theorem Devm.DispatchSilent.trans
+theorem Devm.DispatchSilent.trans
     {pre mid post : Devm}
     (h₁ : Devm.DispatchSilent pre mid)
     (h₂ : Devm.DispatchSilent mid post) :
@@ -716,18 +716,18 @@ private theorem Devm.DispatchSilent.trans
   ⟨h₁.state.trans h₂.state, h₁.memory.trans h₂.memory,
     h₁.logs.trans h₂.logs, h₁.output.trans h₂.output⟩
 
-private theorem Devm.DispatchSilent.of_popBurnBy
+theorem Devm.DispatchSilent.of_popBurnBy
     {words : List B256} {cost : Nat} {pre post : Devm}
     (h : Devm.PopBurnBy words cost pre post) :
     Devm.DispatchSilent pre post :=
   ⟨h.state, h.memory, h.logs, h.output⟩
 
-private theorem Devm.DispatchSilent.of_burnBy
+theorem Devm.DispatchSilent.of_burnBy
     {cost : Nat} {pre post : Devm}
     (h : Devm.BurnBy cost pre post) : Devm.DispatchSilent pre post :=
   ⟨h.state, h.memory, h.logs, h.output⟩
 
-private theorem Devm.DispatchSilent.of_line
+theorem Devm.DispatchSilent.of_line
     {e : Sevm} {pre post : Devm} {line : Line}
     (hstate : Line.Inv Devm.state line)
     (hmemory : Line.Inv Devm.memory line)
@@ -739,7 +739,7 @@ private theorem Devm.DispatchSilent.of_line
     Line.of_inv Devm.logs hlogs run,
     Line.of_inv Devm.output houtput run⟩
 
-private theorem Devm.DispatchSilent.of_pushEq
+theorem Devm.DispatchSilent.of_pushEq
     {e : Sevm} {pre post : Devm} {word : B256}
     (run : Line.Run e pre [Ninst.pushB256 word, Ninst.eq] post) :
     Devm.DispatchSilent pre post := by
@@ -756,7 +756,7 @@ private theorem Devm.DispatchSilent.of_pushEq
     hburn.logs.trans heqBurn.logs,
     hburn.output.trans heqBurn.output⟩
 
-private theorem Devm.DispatchSilent.of_dupPushGt
+theorem Devm.DispatchSilent.of_dupPushGt
     {e : Sevm} {pre post : Devm} {word : B256}
     (run : Line.Run e pre
       [Ninst.dup 0, Ninst.pushB256 word, Ninst.gt] post) :
@@ -776,7 +776,7 @@ private theorem Devm.DispatchSilent.of_dupPushGt
     hdupBurn.logs.trans (hpushBurn.logs.trans hgtBurn.logs),
     hdupBurn.output.trans (hpushBurn.output.trans hgtBurn.output)⟩
 
-private theorem Devm.DispatchSilent.of_entryFlag
+theorem Devm.DispatchSilent.of_entryFlag
     {e : Sevm} {pre post : Devm}
     (run : Line.Run e pre [Ninst.calldatasize, Ninst.iszero] post) :
     Devm.DispatchSilent pre post := by
@@ -791,7 +791,7 @@ private theorem Devm.DispatchSilent.of_entryFlag
     (of_run_calldatasize hsize).output.trans
       (Ninst.Hinv.inv (f := Devm.output) hzero)⟩
 
-private theorem Devm.DispatchSilent.of_callvalueFlag
+theorem Devm.DispatchSilent.of_callvalueFlag
     {e : Sevm} {pre post : Devm}
     (run : Line.Run e pre [Ninst.callvalue, Ninst.iszero] post) :
     Devm.DispatchSilent pre post := by
@@ -806,7 +806,7 @@ private theorem Devm.DispatchSilent.of_callvalueFlag
     (of_run_callvalue hvalue).output.trans
       (Ninst.Hinv.inv (f := Devm.output) hzero)⟩
 
-private theorem Devm.DispatchSilent.of_fsig
+theorem Devm.DispatchSilent.of_fsig
     {e : Sevm} {pre post : Devm}
     (run : Line.Run e pre fsig post) : Devm.DispatchSilent pre post := by
   unfold fsig cdl shiftRight at run
@@ -1186,18 +1186,19 @@ theorem ProcessMessage.settlementCommits_of_some_ok_clean
   rw [← hsettle]
   exact hclean'
 
-private theorem genericCall_step_spawn_exact_compiled
+/-- Exact CALL frame and resumption selected by a successful spawn. -/
+theorem genericCall_step_spawn_exact
     {sevm : Sevm} {devm : Devm} {gas : Nat} {value : B256}
-    {caller target codeAddress : Adr} {stv isStatic : Bool}
-    {ii isz oi osz : Nat} {code : ByteArray} {disablePrecompiles : Bool}
+    {caller target codeAddress : Adr} {stv isSt : Bool}
+    {ii isz oi osz : Nat} {code : ByteArray} {dp : Bool}
     {frame : Frame} {resume : Resume}
     (hspawn : genericCall.step sevm devm gas value caller target codeAddress
-      stv isStatic ii isz oi osz code disablePrecompiles =
-        .spawn frame resume) :
+      stv isSt ii isz oi osz code dp = .spawn frame resume) :
     frame = Frame.ofCall
-      (callMsg sevm (devm.withReturnData []) gas value caller target
-        codeAddress stv isStatic ((devm.memory.read ii isz).1) code
-        disablePrecompiles) ∧
+      (callMsg sevm (devm.withReturnData [])
+        gas
+        value caller target codeAddress stv isSt
+        ((devm.memory.read ii isz).1) code dp) ∧
     resume = .call (devm.withReturnData []) oi osz := by
   simp only [genericCall.step, Bind.bind, Except.bind, Pure.pure,
     Except.pure] at hspawn
@@ -1207,7 +1208,7 @@ private theorem genericCall_step_spawn_exact_compiled
   all_goals obtain ⟨rfl, rfl⟩ := hspawn
   all_goals exact ⟨rfl, rfl⟩
 
-private theorem Xinst.step_call_spawn_ofCall
+theorem Xinst.step_call_spawn_ofCall
     {sevm : Sevm} {devm : Devm} {frame : Frame} {resume : Resume}
     (hspawn : Xinst.step sevm devm .call = .spawn frame resume) :
     ∃ msg, frame = Frame.ofCall msg := by
@@ -1216,9 +1217,9 @@ private theorem Xinst.step_call_spawn_ofCall
   all_goals simp only [XStep.ofExcept, reduceCtorEq] at hspawn
   all_goals first
     | cases hspawn
-    | exact ⟨_, (genericCall_step_spawn_exact_compiled hspawn).1⟩
+    | exact ⟨_, (genericCall_step_spawn_exact hspawn).1⟩
 
-private theorem Ninst.step_call_spawn_ofCall
+theorem Ninst.step_call_spawn_ofCall
     {pc pc' : Nat} {sevm : Sevm} {pre : Devm}
     {frame : Frame} {resume : Resume}
     (hspawn : Ninst.step ⟨pc, sevm, pre⟩ Ninst.call =
@@ -1229,7 +1230,7 @@ private theorem Ninst.step_call_spawn_ofCall
       simpa only [Ninst.call, Ninst.step_exec] using hspawn)
   exact Xinst.step_call_spawn_ofCall hx
 
-private theorem Frame.settlementCommits_ofCall_of_raw_commits
+theorem Frame.settlementCommits_ofCall_of_raw_commits
     {msg : Msg} {raw : Execution}
     (hraw : Execution.commits raw = true) :
     Frame.settlementCommits (Frame.ofCall msg) raw = true := by
@@ -1628,7 +1629,7 @@ theorem weth10_pcFree (dp : DeployParams) :
   rfl
 
 /-- Exact gas burns from the same source state have the same target state. -/
-private theorem Devm.eq_of_burnBy
+theorem Devm.eq_of_burnBy
     {cost : Nat} {pre left right : Devm}
     (hleft : Devm.BurnBy cost pre left)
     (hright : Devm.BurnBy cost pre right) : left = right := by
@@ -3262,7 +3263,7 @@ private theorem withdrawFromCore_eq_valueRedemptionBody :
         etherTransferErrorSlot Func.stop := by
   rfl
 
-private theorem not_run_call_revWith
+theorem not_run_call_revWith
     {fs : List Func} {e : Sevm} {k : Nat} {reason : String}
     {final : Devm}
     (hget : fs[k]? = some (Func.revWith reason)) :
@@ -5380,23 +5381,29 @@ private theorem callerAllowanceBranch_accepted
       simp [hget, hnotmax, CallerAllowanceAccepted, CallerAllowanceTag,
         h, hnotself, hle]
 
-private theorem flashAllowanceBranch_accepted_from_post
-    {dp : DeployParams} {e : Sevm} {settle burn post : Devm}
-    (h : FlashAllowanceOutcome e settle burn)
-    (hburn : Func.Run ((weth10 dp).main :: weth10Aux) e burn
+/-- Post-state reconstruction of the flash repayment visit.  The burn
+continuation never touches the tagged repayment cell, so the word the
+committed post state holds there is exactly the word settlement wrote, and it
+alone decides the fork: `B256.max` is the infinite-allowance arm, which wrote
+nothing, and any other word `after` is the finite arm reducing an entry
+allowance of exactly `after + amount`. -/
+theorem flashSettlement_reconstruction
+    {dp : DeployParams} {e : Sevm} {settlePre burnPre post : Devm}
+    (houtcome : FlashAllowanceOutcome e settlePre burnPre)
+    (hburn : Func.Run ((weth10 dp).main :: weth10Aux) e burnPre
       flashBurn post) :
-    FlashAllowanceAccepted e settle burn
+    FlashAllowanceAccepted e settlePre burnPre
       (flashAllowanceBranchFromPost e post) := by
   have hkey := flashBurn_storage_at_allowanceKey dp hburn
   unfold flashAllowanceBranchFromPost
-  rcases h.1 with hmax | hfinite
+  rcases houtcome.1 with hmax | hfinite
   · have hpostmax : (Devm.getStor post e.currentTarget).get
         (flashAllowanceRuntimeKey e) = B256.max := by
       rw [hkey, hmax.2.1, hmax.1]
     rw [if_pos hpostmax]
-    exact ⟨h, rfl, hmax.1⟩
+    exact ⟨houtcome, rfl, hmax.1⟩
   · rcases hfinite with
-      ⟨allowance, hnotmax, hle, hread, hwrite, hlogs⟩
+      ⟨allowance, hnotmax, hle, hread, hwrite, _hlogs⟩
     have hpostafter : (Devm.getStor post e.currentTarget).get
         (flashAllowanceRuntimeKey e) =
           allowance - Sevm.argWord e 2 := by
@@ -5405,11 +5412,7 @@ private theorem flashAllowanceBranch_accepted_from_post
       apply B256.le_of_toNat_le_toNat
       rw [B256.toNat_sub_eq_of_le _ _ hle]
       omega
-    have hallowlemax : allowance ≤ B256.max := by
-      apply B256.le_of_toNat_le_toNat
-      have hlt := B256.toNat_lt allowance
-      change allowance.toNat ≤ 2 ^ 256 - 1
-      omega
+    have hallowlemax : allowance ≤ B256.max := B256.le_max allowance
     have hafternotmax :
         allowance - Sevm.argWord e 2 ≠ B256.max := by
       intro heq
@@ -5425,7 +5428,7 @@ private theorem flashAllowanceBranch_accepted_from_post
           (flashAllowanceRuntimeKey e) + Sevm.argWord e 2 = allowance := by
       rw [hpostafter]
       exact B256.sub_add_cancel
-    refine ⟨h, rfl, ?_, ?_, ?_, ?_⟩
+    refine ⟨houtcome, rfl, ?_, ?_, ?_, ?_⟩
     · rw [hbefore]
       exact hread
     · rw [hbefore]
@@ -6417,7 +6420,7 @@ theorem Exec.Frame.hasAcceptedDebit_of_flowAction?_eq_some
           simp [primaryDebitProvenance, hnonempty, hflash,
             h₁, h₂, h₃, h₄, h₅, h₆,
             Exec.Frame.post, Execution.committedPost]
-        · exact flashAllowanceBranch_accepted_from_post hallowance hburnRun
+        · exact flashSettlement_reconstruction hallowance hburnRun
         · simpa [Exec.Frame.post, Execution.committedPost] using hburnRun
       · apply FlowAction.AcceptedDebit.none
         rw [hdebit]

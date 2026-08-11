@@ -159,22 +159,6 @@ theorem Exec.Frame.NinstOccurrence.fromCursor_or_before
       hat, filled, step, prec, edge⟩
   · exact Or.inr ⟨pc, current, beforeActions, hat, before⟩
 
-/-- Local copy of the compiler slice fact needed by the reverse traversal;
-unlike byte-wise PC enumeration, it recognizes only a genuine source-node
-boundary and therefore cannot mistake `0x55` inside PUSH payload data for an
-executed `SSTORE` source site. -/
-private theorem ninstAt_of_subcode_next_writeCompleteness
-    {code : ByteArray} {sourceTable : List (Nat × Func)} {pc : Nat}
-    {n : Ninst} {tail : Func}
-    (sub : subcode code.toList pc
-      (Func.compile sourceTable pc (.next n tail))) :
-    Ninst.At code pc n := by
-  rcases of_subcode sub with ⟨compiled, compiledEq, slice⟩
-  rcases of_bind_eq_some compiledEq with ⟨rest, restEq, headEq⟩
-  simp [pure] at headEq
-  rw [← headEq] at slice
-  exact Ninst.at_of_slice (List.slice_prefix slice)
-
 /-- Generic source-membership step for a `.next` node.  An arbitrary actual
 occurrence in the cursor suffix is either the cursor's exact source head or
 belongs to the tail cursor after that head. -/
@@ -200,7 +184,7 @@ theorem Exec.Frame.CompiledCursor.ninstOccurrenceFromCursor_head_or_tail
   cases hpath with
   | refl =>
       have sourceAt : Ninst.At frame.sevm.code cursor.pc source :=
-        ninstAt_of_subcode_next_writeCompleteness cursor.codeSlice
+        ninstAt_of_subcode_next cursor.codeSlice
       have same : source = n := by
         simpa only [Ninst.At, Option.some.injEq, Inst.next.injEq] using
           sourceAt.symm.trans hat
@@ -714,28 +698,6 @@ private theorem Exec.Frame.CompiledCursor.no_balanceSstoreOccurrence_last
       | step head rest =>
           exact head.false_of_halt terminalStep
 
-private theorem Devm.eq_of_burnBy_writeCompleteness
-    {cost : Nat} {pre left right : Devm}
-    (hleft : Devm.BurnBy cost pre left)
-    (hright : Devm.BurnBy cost pre right) : left = right := by
-  apply Devm.eq_of_proj
-  · exact hleft.stack.symm.trans hright.stack
-  · exact hleft.memory.symm.trans hright.memory
-  · have hl := hleft.gasLeft
-    have hr := hright.gasLeft
-    omega
-  · exact hleft.logs.symm.trans hright.logs
-  · exact hleft.refundCounter.symm.trans hright.refundCounter
-  · exact hleft.output.symm.trans hright.output
-  · exact hleft.accountsToDelete.symm.trans hright.accountsToDelete
-  · exact hleft.returnData.symm.trans hright.returnData
-  · exact hleft.error.symm.trans hright.error
-  · exact hleft.accessedAddresses.symm.trans hright.accessedAddresses
-  · exact hleft.accessedStorageKeys.symm.trans hright.accessedStorageKeys
-  · exact hleft.state.symm.trans hright.state
-  · exact hleft.createdAccounts.symm.trans hright.createdAccounts
-  · exact hleft.transientStorage.symm.trans hright.transientStorage
-
 private def ninstSstoreFree : Ninst → Bool
   | .reg .sstore => false
   | _ => true
@@ -935,7 +897,7 @@ private theorem Exec.Frame.compiledMainCursorWithSourcePrefix
       rcases jumpdest_at_exact run jumpdestAt with
         ⟨actualMid, continuation, hburn, hgas, _prec⟩
       have midEq : actualMid = compiledMid :=
-        Devm.eq_of_burnBy_writeCompleteness
+        Devm.eq_of_burnBy
           (Devm.BurnBy.of_burn hburn hgas)
           hcompiledBurn
       subst compiledMid

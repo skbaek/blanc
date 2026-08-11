@@ -264,6 +264,16 @@ def Exec.attributionStream (dp : DeployParams) (ca : Adr)
       (Exec.attributionInner dp ca run)
   else []
 
+/-- An uncommitted execution contributes no attribution stream. -/
+theorem Exec.attributionStream_eq_nil_of_not_commits
+    {dp : DeployParams} {ca : Adr}
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out)
+    (hnot : Execution.commits out ≠ true) :
+    Exec.attributionStream dp ca run = [] := by
+  unfold Exec.attributionStream
+  rw [dif_neg hnot]
+
 def RetainedXlot.attributionStream (dp : DeployParams) (ca : Adr)
     {xl : Xlot} : RetainedXlot xl → List CountedFrame
   | .none => []

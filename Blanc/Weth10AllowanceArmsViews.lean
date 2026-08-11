@@ -90,50 +90,6 @@ branch flags; the branchy views need whichever arm actually ran, exactly as
 `Exec.Frame.CompiledCursor.selectBranchWithActions` provides on the
 action-labelled walk. -/
 
-/-- Select the actual branch arm while preserving the empty counted prefix;
-the counted mirror of
-`Exec.Frame.CompiledCursor.selectBranchWithActions`. -/
-private theorem Exec.Frame.CountedCursor.selectBranchEither
-    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    {fs : List Func} {table : List (Nat × Func)}
-    {left right : Func} {final : Devm}
-    (cursor : frame.CountedCursor dp ca fs table
-      (.branch left right) final) :
-    Nonempty (frame.CountedCursor dp ca fs table left final) ∨
-      Nonempty (frame.CountedCursor dp ca fs table right final) := by
-  rcases subcode_compile_branch_jumpable cursor.codeSlice
-      cursor.codeBoundary with
-    ⟨loc, _hlocEq, hloc, hpush, hjumpi, hsubLeft, hboundLeft,
-      hjumpdest, hjumpable, hsubRight, hboundRight⟩
-  have compiled := cursor.run
-  cases compiled with
-  | zero hroom hpop hleft =>
-      rcases Evm.branch_zero_steps hpush hjumpi hloc hroom hpop with
-        ⟨hstepPush, hstepJumpi⟩
-      rcases frame.advance_cont_counted cursor.current cursor.parentPrefix
-          cursor.countedPrefix hstepPush with
-        ⟨afterPush, hpPush, hcPush⟩
-      rcases frame.advance_cont_counted afterPush hpPush hcPush
-          hstepJumpi with
-        ⟨armExec, hpArm, hcArm⟩
-      exact Or.inl ⟨⟨cursor.pc + 4, _, armExec, hpArm, hcArm, hleft,
-        hsubLeft, hboundLeft⟩⟩
-  | succ hne hroom hpop hright =>
-      rcases Evm.branch_succ_steps hpush hjumpi hjumpdest hjumpable
-          hloc hne hroom hpop with
-        ⟨hstepPush, hstepJumpi, hstepJumpdest⟩
-      rcases frame.advance_cont_counted cursor.current cursor.parentPrefix
-          cursor.countedPrefix hstepPush with
-        ⟨afterPush, hpPush, hcPush⟩
-      rcases frame.advance_cont_counted afterPush hpPush hcPush
-          hstepJumpi with
-        ⟨afterJump, hpJump, hcJump⟩
-      rcases frame.advance_cont_counted afterJump hpJump hcJump
-          hstepJumpdest with
-        ⟨armExec, hpArm, hcArm⟩
-      exact Or.inr ⟨⟨loc + 1, _, armExec, hpArm, hcArm, hright,
-        hsubRight, hboundRight⟩⟩
-
 /-! ## Shared transport for storage-invariant views -/
 
 /-- Shared transport tail for every childless view whose committed storage
@@ -750,7 +706,7 @@ theorem Exec.Frame.attributionInner_eq_nil_of_domainSeparator
   rcases bodyCursor.peelChildlessLine
       (by simp [domainSelectLine, pushDeployWord, NinstIsChildless]) with
     ⟨branchCursor, -⟩
-  rcases branchCursor.selectBranchEither with
+  rcases branchCursor.selectBranchSplit with
     ⟨⟨freshCursor⟩⟩ | ⟨⟨cachedCursor⟩⟩
   · rcases freshCursor.peelChildlessLine
         (by simp [domainFreshLine, calculateDomainSeparator,
@@ -825,7 +781,7 @@ theorem Exec.Frame.attributionInner_eq_nil_of_maxFlashLoan
       (by simp [maxFlashLoanSelectLine, arg, cdl, NinstIsChildless,
         Ninst.pushB256]) with
     ⟨branchCursor, -⟩
-  rcases branchCursor.selectBranchEither with
+  rcases branchCursor.selectBranchSplit with
     ⟨⟨zeroCursor⟩⟩ | ⟨⟨availCursor⟩⟩
   · rcases zeroCursor.peelChildlessLine
         (by simp [returnWordLine, NinstIsChildless, Ninst.pushB256,
@@ -899,7 +855,7 @@ theorem Exec.Frame.attributionInner_eq_nil_of_flashFee
       (by simp [flashFeeSelectLine, arg, cdl, NinstIsChildless,
         Ninst.pushB256]) with
     ⟨branchCursor, -⟩
-  rcases branchCursor.selectBranchEither with
+  rcases branchCursor.selectBranchSplit with
     ⟨⟨successCursor⟩⟩ | ⟨⟨errorCursor⟩⟩
   · rcases successCursor.peelChildlessLine
         (by simp [returnWordLine, NinstIsChildless, Ninst.pushB256,

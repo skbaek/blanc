@@ -45,18 +45,6 @@ private def transferNonzeroSuccessLine : Line :=
   emitTransfer ++
   [pushB256 1] ++ mstoreAt 0 ++ pushList [32, 0]
 
-/-! ## Key shape -/
-
-/-- A tagged allowance key is never an address-shaped balance key. -/
-private theorem allowanceRegion_ne_validAdr {key k : B256}
-    (hkey : InRegion .allowance key) (hvalid : ValidAdr k) : key ≠ k := by
-  intro h
-  rcases hvalid with ⟨a, ha⟩
-  apply regions_disjoint (x := .allowance) (y := .balance) (by decide)
-    key hkey
-  rw [h, ← ha]
-  simpa only [balanceKey] using balanceKey_region a
-
 /-! ## The shared `mintCaller` storage walk
 
 `receiveEther` and `deposit` are definitionally this body; its single
