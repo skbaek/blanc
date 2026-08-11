@@ -403,6 +403,243 @@ theorem AccountedHistory.ledgerMirrors
   | refl hcfg hctx hid => exact .nil dp ca
   | step prior accounted ih => exact ih.append accounted.ledgerMirrors
 
+/-! ## Rooted origins through the retained trace tower
+
+`LedgerMirrors.origins` records only that a counted record was produced by
+*some* frame.  Every compiled functional theorem additionally needs the
+producing frame to have entered at whole-frame altitude — `pc = 0` with fresh
+memory — which `HasFrameOrigin` drops, so a record alone cannot be replayed
+against the executed program.
+
+The parallel tower below carries that fact.  It needs no stability premise and
+no installed-code premise: entry freshness is structural in the derivation,
+and the exact-invocation filter that admits a record at all already pins the
+frame's own compiled code word.  What it does *not* carry is
+`Prog.At (weth10 dp) ca`, whose state-side code witness is available only
+after a stable checkpoint has been threaded down to the message boundary; the
+delegated-debit consumer below does not need it. -/
+
+/-- A counted record together with the whole-frame altitude of the committed
+frame that produced it: `HasFrameOrigin` strengthened by the producing frame's
+root context (`pc = 0`, fresh entry memory) and its exact-invocation
+witness. -/
+def CountedFrame.HasRootedOrigin (dp : DeployParams) (ca : Adr)
+    (record : CountedFrame) : Prop :=
+  ∃ frame : Exec.Frame, record = CountedFrame.ofFrame dp ca frame ∧
+    frame.IsRoot ∧ frame.exactInvocation dp ca
+
+theorem CountedFrame.HasRootedOrigin.hasFrameOrigin
+    {dp : DeployParams} {ca : Adr} {record : CountedFrame}
+    (h : record.HasRootedOrigin dp ca) : record.HasFrameOrigin dp ca := by
+  obtain ⟨frame, hrecord, -, -⟩ := h
+  exact ⟨frame, hrecord⟩
+
+/-- Every record of a counted ledger carries its producing frame's root
+context. -/
+def RootedLedger (dp : DeployParams) (ca : Adr)
+    (ledger : List CountedFrame) : Prop :=
+  ∀ record ∈ ledger, record.HasRootedOrigin dp ca
+
+theorem RootedLedger.nil (dp : DeployParams) (ca : Adr) :
+    RootedLedger dp ca [] := by
+  intro record hrecord
+  cases hrecord
+
+theorem RootedLedger.append {dp : DeployParams} {ca : Adr}
+    {left right : List CountedFrame}
+    (hleft : RootedLedger dp ca left) (hright : RootedLedger dp ca right) :
+    RootedLedger dp ca (left ++ right) := by
+  intro record hrecord
+  rcases List.mem_append.mp hrecord with h | h
+  · exact hleft record h
+  · exact hright record h
+
+/-- A record placed by one frame's contribution is either that frame's own
+record — in which case the frame passed the exact-invocation filter — or a
+record of the inner stream. -/
+theorem Exec.mem_frameContribution {dp : DeployParams} {ca : Adr}
+    {frame : Exec.Frame} {inner : List CountedFrame} {record : CountedFrame}
+    (hmem : record ∈ Exec.frameContribution dp ca frame inner) :
+    (record = CountedFrame.ofFrame dp ca frame ∧
+        frame.exactInvocation dp ca) ∨ record ∈ inner := by
+  unfold Exec.frameContribution at hmem
+  split at hmem
+  · rename_i hexact
+    split at hmem
+    · rcases List.mem_append.mp hmem with h | h
+      · exact Or.inr h
+      · exact Or.inl ⟨List.mem_singleton.mp h, hexact⟩
+    · rcases List.mem_cons.mp hmem with rfl | h
+      · exact Or.inl ⟨rfl, hexact⟩
+      · exact Or.inr h
+  · exact Or.inr hmem
+
+/-- Every record of a derivation's descendant stream is the record of one of
+its committed descendant frames. -/
+theorem Exec.exists_descendantFrame_of_mem_attributionInner
+    (dp : DeployParams) (ca : Adr)
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) :
+    ∀ record ∈ Exec.attributionInner dp ca run,
+      ∃ frame ∈ Blanc.Weth10.Exec.descendantFrames run,
+        record = CountedFrame.ofFrame dp ca frame ∧
+          frame.exactInvocation dp ca := by
+  induction run with
+  | halt hstep =>
+      intro record hmem
+      simp only [Exec.attributionInner] at hmem
+      cases hmem
+  | cont hstep next ih =>
+      intro record hmem
+      simp only [Exec.attributionInner] at hmem
+      simpa only [Blanc.Weth10.Exec.descendantFrames] using ih record hmem
+  | doneErr hstep henter hresume =>
+      intro record hmem
+      simp only [Exec.attributionInner] at hmem
+      cases hmem
+  | doneOk hstep henter hresume next ih =>
+      intro record hmem
+      simp only [Exec.attributionInner] at hmem
+      simpa only [Blanc.Weth10.Exec.descendantFrames] using ih record hmem
+  | runErr hstep henter child hresume ihChild =>
+      intro record hmem
+      simp only [Exec.attributionInner] at hmem
+      cases hmem
+  | runOk hstep henter child hresume next ihChild ihNext =>
+      intro record hmem
+      simp only [Exec.attributionInner] at hmem
+      simp only [Blanc.Weth10.Exec.descendantFrames]
+      rcases List.mem_append.mp hmem with hhere | hnext
+      · split at hhere
+        · rename_i hsettles
+          rcases Exec.mem_frameContribution hhere with
+            ⟨hrecord, hexact⟩ | hinner
+          · exact ⟨_, List.mem_append_left _
+              (by rw [dif_pos hsettles]; exact List.mem_cons_self),
+              hrecord, hexact⟩
+          · obtain ⟨frame, hframe, hrecord, hexact⟩ := ihChild record hinner
+            exact ⟨frame, List.mem_append_left _
+              (by rw [dif_pos hsettles]; exact List.mem_cons_of_mem _ hframe),
+              hrecord, hexact⟩
+        · cases hhere
+      · obtain ⟨frame, hframe, hrecord, hexact⟩ := ihNext record hnext
+        exact ⟨frame, List.mem_append_right _ hframe, hrecord, hexact⟩
+
+/-- Every record of a derivation's whole stream is the record of one of its
+committed frames. -/
+theorem Exec.exists_committedFrame_of_mem_attributionStream
+    (dp : DeployParams) (ca : Adr)
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) :
+    ∀ record ∈ Exec.attributionStream dp ca run,
+      ∃ frame ∈ Blanc.Weth10.Exec.committedFrames run,
+        record = CountedFrame.ofFrame dp ca frame ∧
+          frame.exactInvocation dp ca := by
+  intro record hmem
+  unfold Exec.attributionStream at hmem
+  split at hmem
+  · rename_i hcommits
+    have hframes : Blanc.Weth10.Exec.committedFrames run =
+        Exec.Frame.ofRun run hcommits ::
+          Blanc.Weth10.Exec.descendantFrames run := by
+      unfold Blanc.Weth10.Exec.committedFrames
+      rw [dif_pos hcommits]
+    rcases Exec.mem_frameContribution hmem with ⟨hrecord, hexact⟩ | hinner
+    · exact ⟨_, by rw [hframes]; exact List.mem_cons_self, hrecord, hexact⟩
+    · obtain ⟨frame, hframe, hrecord, hexact⟩ :=
+        Exec.exists_descendantFrame_of_mem_attributionInner dp ca run
+          record hinner
+      exact ⟨frame, by rw [hframes]; exact List.mem_cons_of_mem _ hframe,
+        hrecord, hexact⟩
+  · cases hmem
+
+theorem RetainedXlot.rootedLedger (dp : DeployParams) (ca : Adr)
+    {xl : Xlot} (retained : RetainedXlot xl)
+    (roots : retained.AllFramesRoot) :
+    RootedLedger dp ca (retained.attributionStream dp ca) := by
+  cases retained with
+  | none => exact .nil dp ca
+  | some run =>
+      intro record hmem
+      obtain ⟨frame, hframe, hrecord, hexact⟩ :=
+        Exec.exists_committedFrame_of_mem_attributionStream dp ca run
+          record hmem
+      exact ⟨frame, hrecord, roots frame hframe, hexact⟩
+
+theorem MessageCallTrace.rootedLedger (dp : DeployParams) (ca : Adr)
+    {msg : Msg} {state : State} {out : MsgCallOutput}
+    (trace : MessageCallTrace msg state out) :
+    RootedLedger dp ca (trace.attributionStream dp ca) := by
+  cases trace with
+  | createCollision htarget hcollision hresult => exact .nil dp ca
+  | createRun htarget hcollision evm hcore trace hresult =>
+      simp only [MessageCallTrace.attributionStream]
+      split
+      · exact .nil dp ca
+      · exact trace.retained.rootedLedger dp ca trace.allFramesRoot
+  | callRun htarget delegated refund hdelegation execMsg hexecMsg evm
+      hcore trace hresult =>
+      exact trace.retained.rootedLedger dp ca trace.allFramesRoot
+
+theorem TransactionTrace.rootedLedger (dp : DeployParams) (ca : Adr)
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout') :
+    RootedLedger dp ca (trace.attributionStream dp ca) :=
+  trace.message.rootedLedger dp ca
+
+theorem ApplyTransactionsTrace.rootedLedger (dp : DeployParams) (ca : Adr) :
+    {txs : List (Nat × Tx)} → {benv : Benv} → {bout : BlockOutput} →
+    {finalBenv : Benv} → {finalBout : BlockOutput} →
+    (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout) →
+    RootedLedger dp ca (trace.attributionStream dp ca)
+  | _, _, _, _, _, .nil _ _ => .nil dp ca
+  | _, _, _, _, _, .cons head tail =>
+      (head.rootedLedger dp ca).append
+        (ApplyTransactionsTrace.rootedLedger dp ca tail)
+
+theorem SystemMessageTrace.rootedLedger (dp : DeployParams) (ca : Adr)
+    {benv : Benv} {target : Adr} {data : Bytes}
+    {state : State} {out : MsgCallOutput}
+    (trace : SystemMessageTrace benv target data state out) :
+    RootedLedger dp ca (trace.attributionStream dp ca) :=
+  trace.message.rootedLedger dp ca
+
+theorem RequestsTrace.rootedLedger (dp : DeployParams) (ca : Adr)
+    {benv : Benv} {bout : BlockOutput} {state : State} {bout' : BlockOutput}
+    (trace : RequestsTrace benv bout state bout') :
+    RootedLedger dp ca (trace.attributionStream dp ca) :=
+  (trace.withdrawal.rootedLedger dp ca).append
+    (trace.consolidation.rootedLedger dp ca)
+
+theorem AppliedBodyTrace.rootedLedger (dp : DeployParams) (ca : Adr)
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs wds state bout) :
+    RootedLedger dp ca (trace.attributionStream dp ca) :=
+  (((trace.beacon.rootedLedger dp ca).append
+    (trace.history.rootedLedger dp ca)).append
+      (trace.transactions.rootedLedger dp ca)).append
+        (trace.requests.rootedLedger dp ca)
+
+theorem AccountedBlock.rootedLedger
+    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {pre post : BlockChain}
+    (accounted : AccountedBlock chainId dp ca pre post) :
+    RootedLedger dp ca (accounted.attributionStream dp ca) :=
+  accounted.bodyTrace.rootedLedger dp ca
+
+/-- Every record of a history's chronological attribution ledger carries the
+root context of the committed frame that produced it. -/
+theorem AccountedHistory.rootedLedger
+    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {checkpoint future : BlockChain}
+    (history : AccountedHistory chainId dp ca checkpoint future) :
+    RootedLedger dp ca history.attributionLedger := by
+  induction history with
+  | refl hcfg hctx hid => exact .nil dp ca
+  | step prior accounted ih => exact ih.append accounted.rootedLedger
+
 /-! ## Reconciliation with the public holder-flow totals -/
 
 /-- The public observation ledger is the deterministic projection of the

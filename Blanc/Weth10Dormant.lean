@@ -24,6 +24,16 @@ state.  Until an entry-state form of that transport exists, the residual
 travels as an explicit hypothesis of
 `dormant_holder_balance_monotone_of_checkpointRooted`; nothing below assumes
 it away.
+
+The residual is then sharpened, not discharged.  Reading a record's own
+allowance word back out of the executed program needs the producing frame's
+root context, which `CountedFrame.HasFrameOrigin` drops; the rooted-origin
+tower of `Blanc.Weth10Hardened` supplies it, and
+`CountedFrame.permanentOutflow_eq_zero_of_read_zero` then shows that a
+delegated debit which read a zero word spends nothing.  That retires the
+`attributionRootAt` residual in favour of a single read statement about the
+counted ledger, carried by `dormant_holder_balance_monotone_of_zeroReads`.
+Both forms stand; the entry-state transport is still the missing ingredient.
 -/
 
 namespace Blanc
@@ -67,6 +77,266 @@ theorem frameAllowanceEvent_caller {e : Sevm} {pre post : Devm}
     event.caller = e.caller := by
   simp only [frameAllowanceEvent] at hevent
   split_ifs at hevent <;> (cases hevent; rfl)
+
+/-! ## The entry read behind a delegated debit
+
+A record's rooted origin is what turns the ledger's recorded allowance word
+back into a fact about the executed program: the compiled
+`transferFrom`/`withdrawFrom` theorems need the producing frame's fresh entry
+memory and its compiled code word, both of which `HasFrameOrigin` drops and
+`HasRootedOrigin` retains.  The consequence below is purely frame-local: the
+runtime's accepted finite arm bounds the requested amount by the word it read,
+so a delegated debit that read zero spends zero and moves no balance. -/
+
+theorem transferFromSelector_ne_depositSelector :
+    transferFromSelector ≠ depositSelector := by decide +kernel
+
+theorem transferFromSelector_ne_depositToSelector :
+    transferFromSelector ≠ depositToSelector := by decide +kernel
+
+theorem transferFromSelector_ne_depositToAndCallSelector :
+    transferFromSelector ≠ depositToAndCallSelector := by decide +kernel
+
+theorem withdrawFromSelector_ne_depositSelector :
+    withdrawFromSelector ≠ depositSelector := by decide +kernel
+
+theorem withdrawFromSelector_ne_depositToSelector :
+    withdrawFromSelector ≠ depositToSelector := by decide +kernel
+
+theorem withdrawFromSelector_ne_depositToAndCallSelector :
+    withdrawFromSelector ≠ depositToAndCallSelector := by decide +kernel
+
+/-- A retained delegated debit pins its invocation: only the two delegated
+selectors record one, only a raw source word distinct from the caller's word
+leaves the self-bypass arm, and the inspected key is the runtime's own. -/
+private theorem delegatedKey_inv {e : Sevm} {pre post : Devm}
+    {debit : DebitProvenance} {key : B256}
+    (hdebit : primaryDebitProvenance e pre post = some debit)
+    (hkey : delegatedKey? debit.branch = some key) :
+    e.data.length.toB256 ≠ 0 ∧
+      (Sevm.selector e = transferFromSelector ∨
+        Sevm.selector e = withdrawFromSelector) ∧
+      Sevm.argWord e 0 ≠ e.caller.toB256 ∧
+      key = callerAllowanceRuntimeKey e := by
+  have hdelegated : debit.branch = .delegated (callerAllowanceBranch e pre 2) →
+      Sevm.argWord e 0 ≠ e.caller.toB256 ∧
+        key = callerAllowanceRuntimeKey e := by
+    intro hbranch
+    rw [hbranch] at hkey
+    by_cases hself : Sevm.argWord e 0 = e.caller.toB256
+    · rw [show callerAllowanceBranch e pre 2 = .selfBypass by
+        simp [callerAllowanceBranch, hself]] at hkey
+      simp [delegatedKey?] at hkey
+    · refine ⟨hself, ?_⟩
+      simp only [callerAllowanceBranch, if_neg hself] at hkey
+      split at hkey <;> simpa [delegatedKey?] using hkey.symm
+  simp only [primaryDebitProvenance] at hdebit
+  split_ifs at hdebit with h1 h2 h3 h4 h5
+  all_goals (try cases hdebit)
+  all_goals
+    first
+      | exact ⟨h1, Or.inl h3, hdelegated rfl⟩
+      | exact ⟨h1, Or.inr h4, hdelegated rfl⟩
+      | simp [delegatedKey?] at hkey
+
+/-- The allowance event of a delegated invocation reports the exact word the
+runtime read at its own entry state. -/
+private theorem frameAllowanceEvent_spend_read
+    {e : Sevm} {pre post : Devm} {event : AllowanceEvent}
+    (hnonempty : e.data.length.toB256 ≠ 0)
+    (hsel : Sevm.selector e = transferFromSelector ∨
+      Sevm.selector e = withdrawFromSelector)
+    (hnotself : Sevm.argWord e 0 ≠ e.caller.toB256)
+    (hevent : frameAllowanceEvent e pre post = some event) :
+    event.visit.read? =
+      some ((Devm.getStor pre e.currentTarget).get
+        (callerAllowanceRuntimeKey e)) := by
+  have hshape : frameAllowanceEvent e pre post = some
+      { owner := Sevm.argWord e 0
+        spender := e.caller.toB256
+        caller := e.caller
+        depth := e.depth
+        visit :=
+          let before :=
+            (Devm.getStor pre e.currentTarget).get
+              (callerAllowanceRuntimeKey e)
+          if before = B256.max then .spendMax
+          else .spendFinite before (before - Sevm.argWord e 2) } := by
+    rcases hsel with h | h
+    · simp [frameAllowanceEvent, hnonempty, h, hnotself,
+        transferFromSelector_ne_approveSelector,
+        transferFromSelector_ne_approveAndCallSelector,
+        transferFromSelector_ne_permitSelector]
+    · simp [frameAllowanceEvent, hnonempty, h, hnotself,
+        withdrawFromSelector_ne_approveSelector,
+        withdrawFromSelector_ne_approveAndCallSelector,
+        withdrawFromSelector_ne_permitSelector,
+        withdrawFromSelector_ne_transferFromSelector]
+  rw [hshape] at hevent
+  cases hevent
+  by_cases hmax : (Devm.getStor pre e.currentTarget).get
+      (callerAllowanceRuntimeKey e) = B256.max
+  · simp [AllowanceVisit.read?, hmax]
+  · simp [AllowanceVisit.read?, hmax]
+
+/-- A rooted delegated invocation that read a zero allowance word requested a
+zero amount: the accepted finite arm bounds the request by the word read, and
+the maximum arm is impossible at a zero word. -/
+private theorem argWord_two_toNat_eq_zero_of_read_zero
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    (hroot : frame.IsRoot) (hexact : frame.exactInvocation dp ca)
+    (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
+    (hsel : Sevm.selector frame.sevm = transferFromSelector ∨
+      Sevm.selector frame.sevm = withdrawFromSelector)
+    (hnotself : Sevm.argWord frame.sevm 0 ≠ frame.sevm.caller.toB256)
+    (hzero : (Devm.getStor frame.pre frame.sevm.currentTarget).get
+      (callerAllowanceRuntimeKey frame.sevm) = 0) :
+    (Sevm.argWord frame.sevm 2).toNat = 0 := by
+  rcases frame with ⟨pc, e, pre, out, run, committed⟩
+  cases out with
+  | error err => simp [Execution.commits] at committed
+  | ok post =>
+      have hpc : pc = 0 := hroot.1
+      subst pc
+      have hwf : Mem.Wf pre.memory := by rw [hroot.2]; exact Mem.wf_empty
+      have hreads : Mem.Reads pre.memory [] := by
+        rw [hroot.2]; exact Mem.reads_empty
+      obtain ⟨corePre, houtcome⟩ :
+          ∃ corePre, CallerAllowanceOutcome e pre corePre 2 := by
+        rcases hsel with h | h
+        · obtain ⟨corePre, houtcome, -⟩ :=
+            (weth10_transferFrom_successEffect dp hwf hreads run
+              hexact.2.2.2
+              (by simpa only [transferFromSelector] using h) hnonempty).2
+          exact ⟨corePre, houtcome⟩
+        · obtain ⟨corePre, houtcome, -⟩ :=
+            (weth10_withdrawFrom_successEffect dp hwf hreads run
+              hexact.2.2.2
+              (by simpa only [withdrawFromSelector] using h) hnonempty).2
+          exact ⟨corePre, houtcome⟩
+      obtain ⟨branch, haccepted⟩ := exists_callerAllowanceAccepted houtcome
+      cases branch with
+      | selfBypass => exact absurd haccepted.2 hnotself
+      | maximum key =>
+          obtain ⟨-, hkey, hmax⟩ := haccepted.2
+          rw [hkey, hzero] at hmax
+          exact absurd hmax (by decide)
+      | finite key before after =>
+          obtain ⟨-, hkey, hget, -, hle, -⟩ := haccepted.2
+          rw [hkey, hzero] at hget
+          rw [← hget] at hle
+          have hnat := B256.toNat_le_toNat hle
+          have hzeroNat : B256.toNat 0 = 0 := rfl
+          rw [hzeroNat] at hnat
+          exact Nat.le_zero.mp hnat
+
+/-- Both delegated selectors record the requested word as their atom's
+amount, so a zero request carries no permanent outflow. -/
+private theorem outflow_eq_zero_of_argWord_two_toNat_zero
+    {e : Sevm} {atom : FlowAtom} {u : Adr}
+    (hnonempty : e.data.length.toB256 ≠ 0)
+    (hsel : Sevm.selector e = transferFromSelector ∨
+      Sevm.selector e = withdrawFromSelector)
+    (hprimary : primaryFlowAtom e = some atom)
+    (hamount : (Sevm.argWord e 2).toNat = 0) :
+    atom.outflow u = 0 := by
+  have hzeroAtom : ∀ atom : FlowAtom,
+      ((∃ raw src eth, atom = .redemption raw src eth 0) ∨
+        ∃ rs rr s r, atom = .transfer rs rr s r 0) → atom.outflow u = 0 := by
+    rintro _ (⟨raw, src, eth, rfl⟩ | ⟨rs, rr, s, r, rfl⟩)
+    · by_cases hsrc : src = u <;>
+        simp [FlowAtom.outflow, FlowAtom.holderFlow, HolderFlow.zero, hsrc]
+    · by_cases hs : s = u <;> by_cases hr : r = u <;>
+        simp [FlowAtom.outflow, FlowAtom.holderFlow, HolderFlow.zero, hs, hr]
+  refine hzeroAtom atom ?_
+  rw [← hamount]
+  rcases hsel with h | h
+  · have hchain : primaryFlowAtom e =
+        (if Sevm.argWord e 1 = 0 then
+          some (FlowAtom.redemption (Sevm.argWord e 0)
+            (Sevm.argWord e 0).toAdr e.caller (Sevm.argWord e 2).toNat)
+        else
+          some (FlowAtom.transfer (Sevm.argWord e 0) (Sevm.argWord e 1)
+            (Sevm.argWord e 0).toAdr (Sevm.argWord e 1).toAdr
+            (Sevm.argWord e 2).toNat)) := by
+      simp [primaryFlowAtom, hnonempty, h,
+        transferFromSelector_ne_depositSelector,
+        transferFromSelector_ne_depositToSelector,
+        transferFromSelector_ne_depositToAndCallSelector,
+        transferFromSelector_ne_transferSelector,
+        transferFromSelector_ne_transferAndCallSelector]
+    rw [hchain] at hprimary
+    by_cases hto : Sevm.argWord e 1 = 0
+    · rw [if_pos hto] at hprimary
+      cases hprimary
+      exact Or.inl ⟨_, _, _, rfl⟩
+    · rw [if_neg hto] at hprimary
+      cases hprimary
+      exact Or.inr ⟨_, _, _, _, rfl⟩
+  · have hchain : primaryFlowAtom e =
+        some (FlowAtom.redemption (Sevm.argWord e 0) (Sevm.argWord e 0).toAdr
+          (Sevm.argWord e 1).toAdr (Sevm.argWord e 2).toNat) := by
+      simp [primaryFlowAtom, hnonempty, h,
+        withdrawFromSelector_ne_depositSelector,
+        withdrawFromSelector_ne_depositToSelector,
+        withdrawFromSelector_ne_depositToAndCallSelector,
+        withdrawFromSelector_ne_transferSelector,
+        withdrawFromSelector_ne_transferAndCallSelector,
+        withdrawFromSelector_ne_transferFromSelector,
+        withdrawFromSelector_ne_withdrawSelector,
+        withdrawFromSelector_ne_withdrawToSelector]
+    rw [hchain] at hprimary
+    cases hprimary
+    exact Or.inl ⟨_, _, _, rfl⟩
+
+/-- **The entry-read reduction.**  A rooted counted record whose own allowance
+event reports a zero read carries no permanent outflow for a holder who takes
+no direct act: the debit is either that holder's own act — excluded — or the
+delegated arm, whose requested amount the runtime bounded by the zero word it
+read. -/
+theorem CountedFrame.permanentOutflow_eq_zero_of_read_zero
+    {dp : DeployParams} {ca u : Adr} {record : CountedFrame}
+    {event : AllowanceEvent}
+    (horigin : record.HasRootedOrigin dp ca)
+    (hself : record.authorizes u = false)
+    (hevent : record.allowance = some event)
+    (hread : ∀ value, event.visit.read? = some value → value = 0) :
+    record.permanentOutflow u = 0 := by
+  by_contra hout
+  obtain ⟨frame, rfl, hroot, hexact⟩ := horigin
+  obtain ⟨action, haction⟩ :
+      ∃ action, (CountedFrame.ofFrame dp ca frame).action = some action := by
+    cases haction : (CountedFrame.ofFrame dp ca frame).action with
+    | none =>
+        exact absurd
+          (by rw [CountedFrame.permanentOutflow_eq, haction]) hout
+    | some action => exact ⟨action, rfl⟩
+  have hatomout : action.atom.outflow u ≠ 0 := by
+    rw [CountedFrame.permanentOutflow_eq, haction] at hout
+    exact hout
+  obtain ⟨hprimary, -⟩ :=
+    Exec.Frame.flowAction?_inv (dp := dp) (ca := ca) haction
+  obtain ⟨debit, hdebit, hwitness⟩ :=
+    primaryDebit_witness (pre := frame.pre) (post := frame.post)
+      hprimary hatomout
+  rcases hwitness with ⟨-, hcaller⟩ | ⟨ev, hev, -, hkey⟩
+  · have hrecordCaller : (CountedFrame.ofFrame dp ca frame).caller = u := by
+      show frame.sevm.caller = u
+      rw [← primaryDebitProvenance_actualCaller hdebit]
+      exact hcaller
+    simp [CountedFrame.authorizes, hrecordCaller] at hself
+  · have hevEq : ev = event := by
+      have hrec : frameAllowanceEvent frame.sevm frame.pre frame.post =
+          some event := hevent
+      rw [hev] at hrec
+      exact Option.some.inj hrec
+    subst hevEq
+    obtain ⟨hnonempty, hsel, hnotself, -⟩ := delegatedKey_inv hdebit hkey
+    have hentry := frameAllowanceEvent_spend_read hnonempty hsel hnotself hev
+    exact hatomout
+      (outflow_eq_zero_of_argWord_two_toNat_zero hnonempty hsel hprimary
+        (argWord_two_toNat_eq_zero_of_read_zero hroot hexact hnonempty hsel
+          hnotself (hread _ hentry)))
 
 /-! ## The dormant reduction
 
@@ -257,6 +527,68 @@ theorem dormant_holder_balance_monotone_of_checkpointRooted
       bookedBalanceNat future.state ca u := by
   have hzero :=
     history.permanentOutflow_eq_zero_of_dormant hnc hdormant hcheckpoint
+  have hfloor := holderFlow_residual_floor (u := u) hstable history
+  omega
+
+/-! ## The reduction to counted entry reads
+
+`CountedFrame.permanentOutflow_eq_zero_of_read_zero` retires the
+`attributionRootAt` residual entirely: the surviving shape of
+`CountedFrame.checkpointRooted_of_dormant` is an allowance-branch debit at one
+of the holder's own keys, and such a debit spends nothing as soon as the word
+the runtime actually read there is known to be zero.  What remains is a single
+statement about the counted ledger — every counted read at one of the holder's
+own keys is zero — with no reference to attribution roots at all. -/
+
+/-- A dormant holder's public permanent outflow is zero, provided every
+counted allowance visit at one of that holder's own keys read a zero word. -/
+theorem AccountedHistory.permanentOutflow_eq_zero_of_zeroReads
+    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {checkpoint future : BlockChain}
+    (history : AccountedHistory chainId dp ca checkpoint future)
+    (hnc : NoAllowanceKeyCollision history)
+    (hdormant : NoAuthorizingActBy u history)
+    (hreads : ∀ record ∈ history.attributionLedger, ∀ event,
+      record.allowance = some event → event.owner.toAdr = u →
+        ∀ value, event.visit.read? = some value → value = 0) :
+    (history.weth10Flow u).redeemed +
+        (history.weth10Flow u).externalTransferredOut = 0 := by
+  refine history.permanentOutflow_eq_zero_of_dormant hnc hdormant
+    (fun earlier record later hsplit event hevent howner _ => ?_)
+  have hmem : record ∈ history.attributionLedger := by
+    rw [hsplit]
+    exact List.mem_append_right _ List.mem_cons_self
+  exact CountedFrame.permanentOutflow_eq_zero_of_read_zero
+    (history.rootedLedger record hmem) (hdormant record hmem) hevent
+    (hreads record hmem event hevent howner)
+
+/-- The dormant-holder corollary reduced to counted entry reads: a dormant
+holder's booked balance never decreases across an authentic collision-free
+history whose counted allowance visits all read zero at that holder's own
+keys.
+
+This is the same statement as `dormant_holder_balance_monotone_of_checkpointRooted`
+with a different residual.  The residual here is a *read* statement about the
+counted ledger, so it is discharged by exactly one missing ingredient: an
+entry-state form of `AccountedHistory.allowanceTransported_of_compiled`, which
+would replay a record's own ledger prefix onto that record's entry storage.
+The landed transport relates only the checkpoint and future endpoints, so no
+counted record's entry state is exposed by it.  `AllowanceQuiescent` is the
+base case of that replay and no longer has to be carried here. -/
+theorem dormant_holder_balance_monotone_of_zeroReads
+    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {checkpoint future : BlockChain}
+    (hstable : Weth10.Stable dp ca checkpoint.state)
+    (history : AccountedHistory chainId dp ca checkpoint future)
+    (hnc : NoAllowanceKeyCollision history)
+    (hdormant : NoAuthorizingActBy u history)
+    (hreads : ∀ record ∈ history.attributionLedger, ∀ event,
+      record.allowance = some event → event.owner.toAdr = u →
+        ∀ value, event.visit.read? = some value → value = 0) :
+    bookedBalanceNat checkpoint.state ca u <=
+      bookedBalanceNat future.state ca u := by
+  have hzero :=
+    history.permanentOutflow_eq_zero_of_zeroReads hnc hdormant hreads
   have hfloor := holderFlow_residual_floor (u := u) hstable history
   omega
 
