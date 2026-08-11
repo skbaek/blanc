@@ -541,6 +541,66 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferFromNonzero
             rw [if_neg hpk, Stor.get_set_ne _ hne _,
               congrFun hstor0 e.currentTarget]
 
+/-! ## The read-sound variant
+
+The strengthened carrier adds entry-read soundness of the same ledger.  For
+this arm the ledger is the frame's own record alone, so the whole new
+obligation is `AllowanceEntryReadSound.ofFrame`: `frameAllowanceEvent`
+computes a `transferFrom` spend's read from the frame's entry state, and the
+attribution stream places a non-flash record before — here, instead of — its
+subtree.  The storage side is reused verbatim from the existing arm. -/
+
+/-- The nonzero-recipient `transferFrom` attribution stream is the frame's
+own record alone.  Stated separately from
+`Exec.Frame.allowanceRegionEffect_of_transferFromNonzero`, which computes it
+inline, so the read-sound variant can name the ledger. -/
+private theorem Exec.Frame.attributionStream_of_transferFromNonzero
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    (context : frame.AuthenticContext dp ca)
+    (hselector : Sevm.selector frame.sevm =
+      selector "transferFrom" [.address, .address, .uint256])
+    (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
+    (hto : Sevm.argWord frame.sevm 1 ≠ 0)
+    (hnotflash : isFlashInvocation frame.sevm = false) :
+    Exec.attributionStream dp ca frame.run =
+      [CountedFrame.ofFrame dp ca frame] := by
+  have hinner : Exec.attributionInner dp ca frame.run = [] :=
+    frame.attributionInner_eq_nil_of_transferFromNonzero context hselector
+      hnonempty hto
+  have hframe : Exec.Frame.ofRun frame.run frame.committed = frame := by
+    cases frame
+    rfl
+  rw [Exec.attributionStream_eq_frameContribution dp ca frame.run
+      frame.committed, hframe, hinner,
+    Exec.frameContribution_eq_cons dp ca frame []
+      context.invocation hnotflash]
+
+/-- Nonzero-recipient `transferFrom` transports the allowance region
+read-soundly: the storage side is the existing arm, and the frame's recorded
+spend read the entry word at its own key, which is what the empty ledger
+prefix before its record prescribes. -/
+theorem Exec.Frame.allowanceRegionEffectSound_of_transferFromNonzero
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    (context : frame.AuthenticContext dp ca)
+    (hselector : Sevm.selector frame.sevm =
+      selector "transferFrom" [.address, .address, .uint256])
+    (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
+    (hto : Sevm.argWord frame.sevm 1 ≠ 0) :
+    AllowanceRegionEffectSound ca frame.pre frame.post
+      (Exec.attributionStream dp ca frame.run) := by
+  have hneFlash : transferFromSelector ≠ flashLoanSelector := by
+    decide +kernel
+  have hsel : Sevm.selector frame.sevm = transferFromSelector := hselector
+  have hnotflash : isFlashInvocation frame.sevm = false := by
+    simp [isFlashInvocation, hsel, hneFlash]
+  refine
+    { frame.allowanceRegionEffect_of_transferFromNonzero context hselector
+        hnonempty hto with
+      entryRead := ?_ }
+  rw [frame.attributionStream_of_transferFromNonzero context hselector
+    hnonempty hto hnotflash]
+  exact AllowanceEntryReadSound.ofFrame context.invocation.2.1 hnotflash
+
 end Weth10
 
 end Blanc

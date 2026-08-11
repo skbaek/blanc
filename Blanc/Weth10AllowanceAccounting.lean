@@ -193,6 +193,202 @@ theorem AllowanceRegionEffect.append
     applyAllowanceLedger_append (Devm.getStor pre ca) (Devm.getStor mid ca)
       left right key (hleft.storage key hregion)]
 
+/-! ## The read-sound region carrier
+
+`AllowanceRegionEffect` relates an entry state to a committed post state and
+exposes no intermediate, so it can replay recorded *writes* but never ties a
+recorded *read* to any state.  The strengthening below adds exactly that
+missing clause, as an additive extension so every existing consumer keeps
+working through `toAllowanceRegionEffect`. -/
+
+/-- Whether a counted record's frame dispatched to `flashLoan` — the one
+selector whose allowance activity chronologically *follows* its spawned
+callback, and whose own record `Exec.frameContribution` therefore places
+after its subtree rather than before it. -/
+def CountedFrame.IsFlash (record : CountedFrame) : Prop :=
+  record.sel? = some flashLoanSelector
+
+/-- A record whose recorded selector is not `flashLoan` is not a flash
+record. -/
+theorem CountedFrame.not_isFlash_of_sel
+    {record : CountedFrame} {sel : B256}
+    (hsel : record.sel? = some sel) (hne : sel ≠ flashLoanSelector) :
+    ¬ record.IsFlash := by
+  unfold CountedFrame.IsFlash
+  rw [hsel]
+  simpa using hne
+
+/-- Every non-flash allowance event records exactly the word its own frame's
+*entry* storage holds at the event's key.  This is a property of the
+extractor, not of the runtime walk: `frameAllowanceEvent` computes the
+approve, permit, spend and view sites from `pre`, and only the flash site
+reconstructs its read from `post`. -/
+theorem frameAllowanceEvent_read_eq_pre
+    {e : Sevm} {pre post : Devm} {event : AllowanceEvent} {v : B256}
+    (hnotflash : isFlashInvocation e = false)
+    (hevent : frameAllowanceEvent e pre post = some event)
+    (hread : event.visit.read? = some v) :
+    v = (Devm.getStor pre e.currentTarget).get event.key := by
+  unfold frameAllowanceEvent at hevent
+  split at hevent
+  · exact absurd hevent (by simp)
+  · rename_i hne0
+    split at hevent
+    · cases hevent; exact absurd hread (by simp [AllowanceVisit.read?])
+    · split at hevent
+      · cases hevent; exact absurd hread (by simp [AllowanceVisit.read?])
+      · split at hevent
+        · split at hevent
+          · exact absurd hevent (by simp)
+          · cases hevent
+            simp only [AllowanceEvent.key,
+              ← callerAllowanceRuntimeKey_eq_projected]
+            split at hread
+            · rename_i hmax
+              rw [hmax]
+              exact (Option.some.inj hread).symm
+            · exact (Option.some.inj hread).symm
+        · split at hevent
+          · rename_i hflash
+            exact absurd hnotflash
+              (by simp [isFlashInvocation, hne0, hflash])
+          · split at hevent
+            · cases hevent
+              exact (Option.some.inj hread).symm
+            · exact absurd hevent (by simp)
+
+/-- Entry-read soundness for one ledger: every non-flash record's allowance
+read observed exactly the word the ledger prefix strictly before that record
+prescribes over the entry storage.
+
+The non-flash restriction is forced rather than cosmetic.
+`Exec.frameContribution` places a flash frame's own record *after* its
+subtree, so for a flash record the prefix `earlier` is not "what ran before
+that frame entered" and the clause below would be false.  Delegated debits
+arise only from `transferFrom`/`withdrawFrom`, so the restriction costs
+nothing where entry-read soundness is actually consumed (the dormant-holder
+residual). -/
+def AllowanceEntryReadSound (pre : Stor) (ledger : List CountedFrame) : Prop :=
+  ∀ earlier record later, ledger = earlier ++ record :: later →
+    ¬ record.IsFlash →
+    ∀ event, record.allowance = some event →
+      ∀ v, event.visit.read? = some v →
+        v = applyAllowanceLedger pre earlier event.key
+
+theorem AllowanceEntryReadSound.nil (pre : Stor) :
+    AllowanceEntryReadSound pre [] := by
+  intro earlier record later hsplit
+  exact absurd hsplit.symm (by simp)
+
+/-- A one-record ledger is entry-read sound exactly when its own record's
+read is the entry word at its key: the only admissible split has an empty
+prefix. -/
+theorem AllowanceEntryReadSound.singleton
+    {pre : Stor} {own : CountedFrame}
+    (h : ∀ event, own.allowance = some event →
+      ∀ v, event.visit.read? = some v → v = pre.get event.key) :
+    AllowanceEntryReadSound pre [own] := by
+  intro earlier record later hsplit _ event hevent v hread
+  cases earlier with
+  | nil =>
+      rw [List.nil_append] at hsplit
+      obtain ⟨hrec, -⟩ := List.cons.injEq .. ▸ hsplit
+      subst hrec
+      exact h event hevent v hread
+  | cons head tail => exact absurd hsplit (by simp)
+
+/-- A one-record ledger whose record *is* the flash record is entry-read
+sound for free: the clause exempts flash records, and the only admissible
+split puts this record in the clause's position.  This is what lets a
+`flashLoan` frame's own trailing segment compose, even though its recorded
+read is reconstructed from the post state. -/
+theorem AllowanceEntryReadSound.singleton_flash
+    {pre : Stor} {own : CountedFrame} (hflash : own.IsFlash) :
+    AllowanceEntryReadSound pre [own] := by
+  intro earlier record later hsplit hnotflash
+  cases earlier with
+  | nil =>
+      rw [List.nil_append] at hsplit
+      obtain ⟨hrec, -⟩ := List.cons.injEq .. ▸ hsplit
+      subst hrec
+      exact absurd hflash hnotflash
+  | cons head tail => exact absurd hsplit (by simp)
+
+/-- The counted record of a non-flash frame is entry-read sound on its own:
+its event, if any, reads the frame's entry storage. -/
+theorem AllowanceEntryReadSound.ofFrame
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    (htarget : frame.sevm.currentTarget = ca)
+    (hnotflash : isFlashInvocation frame.sevm = false) :
+    AllowanceEntryReadSound (Devm.getStor frame.pre ca)
+      [CountedFrame.ofFrame dp ca frame] := by
+  refine .singleton (fun event hevent v hread => ?_)
+  rw [← htarget]
+  exact frameAllowanceEvent_read_eq_pre hnotflash hevent hread
+
+/-- Chronological composition of entry-read soundness.  The right segment's
+prefixes are re-based from `mid` to `pre` by `applyAllowanceLedger_append`,
+which applies because every event key is a projected allowance key and the
+left segment transports the whole allowance region. -/
+theorem AllowanceEntryReadSound.append
+    {pre mid : Stor} {left right : List CountedFrame}
+    (hstorage : ∀ key, InRegion .allowance key →
+      mid.get key = applyAllowanceLedger pre left key)
+    (hleft : AllowanceEntryReadSound pre left)
+    (hright : AllowanceEntryReadSound mid right) :
+    AllowanceEntryReadSound pre (left ++ right) := by
+  intro earlier record later hsplit hnotflash event hevent v hread
+  have hkey : InRegion .allowance event.key :=
+    projectedAllowanceKey_region event.owner event.spender
+  rcases List.append_eq_append_iff.1 hsplit with
+    ⟨tail, hearlier, hrightSplit⟩ | ⟨tail, hleftSplit, hconsSplit⟩
+  · subst hearlier
+    rw [applyAllowanceLedger_append pre mid left tail event.key
+      (hstorage event.key hkey)]
+    exact hright tail record later hrightSplit hnotflash event hevent v hread
+  · cases tail with
+    | nil =>
+        rw [List.append_nil] at hleftSplit
+        subst hleftSplit
+        exact (hright [] record later (by simpa using hconsSplit.symm)
+          hnotflash event hevent v hread).trans (hstorage event.key hkey)
+    | cons head rest =>
+        rw [List.cons_append] at hconsSplit
+        cases hconsSplit
+        exact hleft earlier record rest hleftSplit hnotflash event hevent v
+          hread
+
+/-- The read-sound allowance-region carrier: the last-committed-write
+transport of `AllowanceRegionEffect`, plus entry-read soundness of the same
+ledger against the same entry state. -/
+structure AllowanceRegionEffectSound (ca : Adr) (pre post : Devm)
+    (ledger : List CountedFrame) : Prop extends
+    AllowanceRegionEffect ca pre post ledger where
+  entryRead : AllowanceEntryReadSound (Devm.getStor pre ca) ledger
+
+theorem AllowanceRegionEffectSound.of_getStorCode_eq
+    {ca : Adr} {pre post : Devm}
+    (hstor : Devm.getStor pre ca = Devm.getStor post ca)
+    (hcode : pre.getCode ca = post.getCode ca) :
+    AllowanceRegionEffectSound ca pre post [] :=
+  { AllowanceRegionEffect.of_getStorCode_eq hstor hcode with
+    entryRead := .nil _ }
+
+theorem AllowanceRegionEffectSound.refl {ca : Adr} {pre : Devm} :
+    AllowanceRegionEffectSound ca pre pre [] :=
+  .of_getStorCode_eq rfl rfl
+
+/-- Chronological composition of two read-sound transported segments. -/
+theorem AllowanceRegionEffectSound.append
+    {ca : Adr} {pre mid post : Devm}
+    {left right : List CountedFrame}
+    (hleft : AllowanceRegionEffectSound ca pre mid left)
+    (hright : AllowanceRegionEffectSound ca mid post right) :
+    AllowanceRegionEffectSound ca pre post (left ++ right) :=
+  { hleft.toAllowanceRegionEffect.append hright.toAllowanceRegionEffect with
+    entryRead :=
+      .append hleft.storage hleft.entryRead hright.entryRead }
+
 /-! ## The recursion interface -/
 
 /-- Proof-indexed allowance transport consumed by the generic interpreter
