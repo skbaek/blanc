@@ -986,6 +986,202 @@ theorem permit_exec_raw_effect (dp : DeployParams)
   exact ⟨hvalue,
     by simpa only [congrFun hstorEntry sevm.currentTarget] using heffect⟩
 
+/-! ## The allowance-region-restricted raw permit effect
+
+The full-map chain above pays for its `STATICCALL` crossing with the two
+precompile-routing premises, because only a synchronous precompile child is
+known to leave *every* account's storage alone.  The allowance transport
+needs far less: it reads the resulting image at allowance-region keys of the
+frame's own account only.  The variants below therefore take the crossing as
+an assumption *supplied by the caller* — this frame's `STATICCALL` leaves the
+current target's allowance region where it found it — which a caller holding
+its own recursion hypothesis can discharge for an interpreted child as well
+as for a precompile one.  Every key image is unchanged: the two writes still
+land at `permitRuntimeNonceKey` and `permitRuntimeAllowanceKey`. -/
+
+/-- The caller-supplied `STATICCALL` crossing assumption: every `STATICCALL`
+this frame executes from a state carrying the given code map, on permit's six
+ECRECOVER operands, leaves the current target's allowance region unchanged.
+The code map is an explicit parameter so that the assumption transports along
+the childless prefixes the chain walks through. -/
+def PermitStatcallRegionSilent (sevm : Sevm) (code : Adr → ByteArray) : Prop :=
+  ∀ {u v : Devm} {gasWord : B256} {tail : Stack},
+    Devm.getCode u = code →
+    gasWord :: (1 : B256) :: (0 : B256) :: (128 : B256) ::
+      (128 : B256) :: (32 : B256) :: tail <<+ u.stack →
+    Ninst.Run sevm u Ninst.statcall v →
+    ∀ key, InRegion .allowance key →
+      (Devm.getStor v sevm.currentTarget).get key =
+        (Devm.getStor u sevm.currentTarget).get key
+
+/-- Transport the crossing assumption along a code-map equality. -/
+theorem PermitStatcallRegionSilent.mono {sevm : Sevm}
+    {code code' : Adr → ByteArray}
+    (h : PermitStatcallRegionSilent sevm code) (heq : code' = code) :
+    PermitStatcallRegionSilent sevm code' := by
+  intro u v gasWord tail hcode hstack run
+  exact h (hcode.trans heq) hstack run
+
+/-- Allowance-region form of the raw recovery-line frame.  The crossing is
+discharged from the caller's assumption, so no precompile-routing premise
+occurs; the recovered word stays existential exactly as above. -/
+theorem of_recoverPermitSigner_raw_region
+    {sevm : Sevm} {s t : Devm} {digest : B256} {xs : Stack}
+    (hsilent : PermitStatcallRegionSilent sevm (Devm.getCode s))
+    (hp : digest :: xs <<+ s.stack)
+    (run : Line.Run sevm s recoverPermitSigner t) :
+    (∃ signer : B256, signer :: xs <<+ t.stack) ∧
+      ∀ key, InRegion .allowance key →
+        (Devm.getStor t sevm.currentTarget).get key =
+          (Devm.getStor s sevm.currentTarget).get key := by
+  rw [recoverPermitSigner_eq_prepare] at run
+  rcases of_run_append permitRecoverPrepare run with ⟨q, hprep, run⟩
+  rcases of_permitRecoverPrepare_raw_stack hp hprep with ⟨g, hpq⟩
+  rcases permitRecoverPrepare_frame hprep with
+    ⟨hstorPrep, _, _, hcodePrep⟩
+  rcases Line.of_run_cons run with ⟨u, qstat, htail⟩
+  have hstorU : ∀ key, InRegion .allowance key →
+      (Devm.getStor u sevm.currentTarget).get key =
+        (Devm.getStor q sevm.currentTarget).get key :=
+    hsilent hcodePrep.symm hpq qstat
+  have hpU : ∃ w : B256, w :: xs <<+ u.stack := by
+    rcases of_run_statcall_val_with_depth hpq qstat with hfail | hsuccess
+    · exact ⟨0, hfail.1⟩
+    · rcases hsuccess with
+        ⟨parent, _child, _xl, _dpFlag, _code, _avail,
+          _, hstack, _, _, _, _, _, _, _, _, _, _, hstackU⟩
+      refine ⟨1, ?_⟩
+      rw [hstackU]
+      rw [hstack] at hpq
+      exact cons_pref_cons rfl (cons_pref_cons_inv (cons_pref_cons_inv
+        (cons_pref_cons_inv (cons_pref_cons_inv (cons_pref_cons_inv
+          (cons_pref_cons_inv hpq))))))
+  rcases hpU with ⟨w, hpU⟩
+  rcases Line.of_run_cons htail with ⟨u1, qpop, htail⟩
+  rcases of_run_pop qpop with ⟨w1, hpop⟩
+  have hp1 : xs <<+ u1.stack := (popBurn_pref hpop hpU).2
+  rcases Line.of_run_cons htail with ⟨u2, qpush, htail⟩
+  have hp2 : (128 : B256) :: xs <<+ u2.stack :=
+    prefix_of_push (of_run_pushB256 qpush) hp1
+  rcases Line.of_run_cons htail with ⟨u3, qload, hnil⟩
+  cases hnil
+  rcases prefix_of_mload qload hp2 with ⟨signer, hp3⟩
+  refine ⟨⟨signer, hp3⟩, fun key hkey => ?_⟩
+  have hsuffix : Devm.getStor t = Devm.getStor u :=
+    calc
+      Devm.getStor t = Devm.getStor u2 :=
+        (Ninst.Hinv.inv (f := Devm.getStor) qload).symm
+      _ = Devm.getStor u1 := (Ninst.Hinv.inv (f := Devm.getStor) qpush).symm
+      _ = Devm.getStor u := (PopBurn.Inv.inv hpop).symm
+  rw [congrFun hsuffix sevm.currentTarget, hstorU key hkey,
+    congrFun hstorPrep.symm sevm.currentTarget]
+
+/-- **Region-restricted raw selected-body permit effect.**  The allowance-key
+image of `permit_selected_raw_effect`, with the `STATICCALL` crossing taken
+from the caller instead of from the two precompile-routing premises.  The
+nonce write is still the tentative increment at `permitRuntimeNonceKey`, and
+the allowance write is still the raw third argument word at
+`permitRuntimeAllowanceKey`. -/
+theorem permit_selected_raw_effect_region (dp : DeployParams)
+    {sevm : Sevm} {s r : Devm} {xs : Stack}
+    (hsilent : PermitStatcallRegionSilent sevm (Devm.getCode s))
+    (hp : xs <<+ s.stack) (hwf : Mem.Wf s.memory)
+    (run : Func.Run ((weth10 dp).main :: weth10Aux) sevm s (permit dp) r) :
+    let nonce :=
+      Devm.getStorVal s sevm.currentTarget (permitRuntimeNonceKey sevm)
+    ∀ key, InRegion .allowance key →
+      (Devm.getStor r sevm.currentTarget).get key =
+        (((Devm.getStor s sevm.currentTarget).set
+          (permitRuntimeNonceKey sevm) (nonce + 1)).set
+            (permitRuntimeAllowanceKey sevm) (Sevm.argWord sevm 2)).get key := by
+  dsimp only
+  intro key hkey
+  rcases of_permitToRecover_raw dp hp hwf run with
+    ⟨mid, domain, structHash, hpMid, hstorMid, hcodeMid, hwfMid, recoverRun⟩
+  rw [permitRecover_eq] at recoverRun
+  rcases of_run_prepend permitDigest _ recoverRun with
+    ⟨digestState, digestRun, recoverRun⟩
+  rcases of_permitDigest hpMid hwfMid (mem_reads_self mid.memory) digestRun with
+    ⟨hpDigest, _, _, hcodeDigest⟩
+  have hstorDigest : Devm.getStor mid = Devm.getStor digestState :=
+    Line.of_inv Devm.getStor (by
+      unfold permitDigest pushList
+      line_inv) digestRun
+  rcases of_run_prepend recoverPermitSigner _ recoverRun with
+    ⟨signerState, signerRun, guardsRun⟩
+  rcases of_recoverPermitSigner_raw_region
+      (hsilent.mono (hcodeDigest.trans hcodeMid)) hpDigest signerRun with
+    ⟨⟨signer, hpSigner⟩, hstorSigner⟩
+  rcases of_permitSignerGuards_raw_frame dp hpSigner guardsRun with
+    ⟨_, _, approveState, hpApprove, hstorGuards, _, _, _, approveRun⟩
+  calc
+    (Devm.getStor r sevm.currentTarget).get key
+        = ((Devm.getStor approveState sevm.currentTarget).set
+            (permitRuntimeAllowanceKey sevm) (Sevm.argWord sevm 2)).get key := by
+          rw [approvePermit_raw_storage hpApprove approveRun]
+    _ = ((Devm.getStor signerState sevm.currentTarget).set
+          (permitRuntimeAllowanceKey sevm) (Sevm.argWord sevm 2)).get key := by
+        rw [congrFun hstorGuards sevm.currentTarget]
+    _ = ((Devm.getStor digestState sevm.currentTarget).set
+          (permitRuntimeAllowanceKey sevm) (Sevm.argWord sevm 2)).get key := by
+        by_cases hcase : permitRuntimeAllowanceKey sevm = key
+        · rw [← hcase, Stor.get_set_self, Stor.get_set_self]
+        · rw [Stor.get_set_ne _ hcase, Stor.get_set_ne _ hcase,
+            hstorSigner key hkey]
+    _ = ((Devm.getStor mid sevm.currentTarget).set
+          (permitRuntimeAllowanceKey sevm) (Sevm.argWord sevm 2)).get key := by
+        rw [congrFun hstorDigest.symm sevm.currentTarget]
+    _ = (((Devm.getStor s sevm.currentTarget).set
+          (permitRuntimeNonceKey sevm)
+            (Devm.getStorVal s sevm.currentTarget
+              (permitRuntimeNonceKey sevm) + 1)).set
+          (permitRuntimeAllowanceKey sevm) (Sevm.argWord sevm 2)).get key := by
+        rw [hstorMid]
+
+/-- **Region-restricted raw compiled-selector permit effect.**  A committed
+exact WETH10 `permit` frame moves the contract's own allowance region by
+exactly the write at `permitRuntimeAllowanceKey`, whatever its `STATICCALL`
+child turns out to be: the crossing is the caller's assumption, and the
+tentative nonce write lands in the nonce region, disjoint from every tagged
+allowance key.  There is deliberately no `DecodesPermit` premise, exactly as
+in the full-map form. -/
+theorem permit_exec_raw_effect_region (dp : DeployParams)
+    {sevm : Sevm} {pre post : Devm}
+    (hsilent : PermitStatcallRegionSilent sevm (Devm.getCode pre))
+    (hwf : Mem.Wf pre.memory)
+    (exc : Exec 0 sevm pre (.ok post))
+    (hcode : some sevm.code.toList = Prog.compile (weth10 dp))
+    (hsel : Sevm.selector sevm = permitSelector)
+    (hnonempty : sevm.data.length.toB256 ≠ 0) :
+    let nonce :=
+      Devm.getStorVal pre sevm.currentTarget (permitRuntimeNonceKey sevm)
+    sevm.value = 0 ∧
+      ∀ key, InRegion .allowance key →
+        (Devm.getStor post sevm.currentTarget).get key =
+          (((Devm.getStor pre sevm.currentTarget).set
+            (permitRuntimeNonceKey sevm) (nonce + 1)).set
+              (permitRuntimeAllowanceKey sevm)
+                (Sevm.argWord sevm 2)).get key := by
+  dsimp only
+  rcases exec_enters_weth10Nonpayable_logs exc hcode hsel hnonempty
+      (permit_mem_weth10Funcs dp) with
+    ⟨mid, hvalue, hstorEntry, _, hcodeEntry, hmemoryEntry, _, _, run⟩
+  have hwfMid : Mem.Wf mid.memory := by
+    rw [hmemoryEntry]
+    exact hwf
+  have heffect := permit_selected_raw_effect_region dp (hsilent.mono hcodeEntry)
+    nil_pref hwfMid run
+  dsimp only at heffect
+  have hnonce :
+      Devm.getStorVal mid sevm.currentTarget (permitRuntimeNonceKey sevm) =
+        Devm.getStorVal pre sevm.currentTarget (permitRuntimeNonceKey sevm) := by
+    change (Devm.getStor mid sevm.currentTarget).get _ =
+      (Devm.getStor pre sevm.currentTarget).get _
+    rw [hstorEntry]
+  rw [hnonce] at heffect
+  refine ⟨hvalue, fun key hkey => ?_⟩
+  simpa only [congrFun hstorEntry sevm.currentTarget] using heffect key hkey
+
 end Weth10
 
 end Blanc
