@@ -1,4 +1,5 @@
 import Blanc.Weth10AllowanceArmsBalance
+import Blanc.Weth10PermitRawEffect
 
 /-!
 The ERC-2612 `permit` arm of the allowance-region transport.
@@ -787,16 +788,17 @@ theorem Exec.Frame.attributionInner_eq_nil_of_permit
   rw [one_toAdr_local, ← congrFun hcodeEntry (1 : Adr)]
   exact hnodeleg
 
-/-- `permit` transports the allowance region on canonical calldata: the
-attribution stream is the frame's own record alone, and its event stores
-the raw third argument word at the projected owner/spender key, which the
-canonical decode identifies with the tagged `allowanceKey`.  The tentative
-nonce increment writes a nonce-region key, disjoint from every tagged
-allowance key. -/
+/-- `permit` transports the allowance region: the attribution stream is the
+frame's own record alone, and its event stores the raw third argument word
+at the projected owner/spender key, which is exactly the runtime key the
+compiled body writes.  The tentative nonce increment writes a nonce-region
+key, disjoint from every tagged allowance key.
+
+No calldata decoding hypothesis occurs: `permit_exec_raw_effect` names the
+runtime keys the body actually computes, so short and dirty calldata are
+covered on the same footing as a canonical ABI encoding. -/
 theorem Exec.Frame.allowanceRegionEffect_of_permit
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    {owner spender : Adr} {value deadline : B256}
-    {v : UInt8} {sigR sigS : B256}
     (context : frame.AuthenticContext dp ca)
     (hselector : Sevm.selector frame.sevm =
       selector "permit" [.address, .address, .uint256, .uint256,
@@ -805,9 +807,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_permit
     (hprecomp :
       decide (frame.sevm.benvStat.rules.isPrecomp 1) = true)
     (hnodeleg :
-      getDelegatedCodeAddress (frame.pre.getCode 1) = none)
-    (hdec : DecodesPermit frame.sevm owner spender value deadline
-      v sigR sigS) :
+      getDelegatedCodeAddress (frame.pre.getCode 1) = none) :
     AllowanceRegionEffect ca frame.pre frame.post
       (Exec.attributionStream dp ca frame.run) := by
   have hinner : Exec.attributionInner dp ca frame.run = [] :=
@@ -827,6 +827,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_permit
       Exec.frameContribution_eq_cons dp ca frame []
         context.invocation hnotflash]
   rw [hstream]
+  have hwfPre : Mem.Wf frame.pre.memory := context.memory_wf
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
   | error _ => simp [Execution.commits] at committed
@@ -839,23 +840,10 @@ theorem Exec.Frame.allowanceRegionEffect_of_permit
         Exec.installedCodeEq run context.installed
       have hselE : Sevm.selector e = permitSelector := hselector
       have hne0 : e.data.length.toB256 ≠ 0 := hnonempty
-      rcases exec_enters_weth10Nonpayable_logs run hcode hselE hne0
-          (permit_mem_weth10Funcs dp) with
-        ⟨mid, _hvalue, hstorEntry, _hbalEntry, hcodeEntry, hmemoryEntry,
-          _hlogsEntry, _houtputEntry, hbody⟩
-      have hnodelegMid : getDelegatedCodeAddress (mid.getCode 1) = none := by
-        rw [congrFun hcodeEntry 1]
-        exact hnodeleg
-      have hwfMid : Mem.Wf mid.memory := by
-        rw [hmemoryEntry]
-        exact context.memory_wf
-      have hrMid : Mem.Reads mid.memory [] := by
-        rw [hmemoryEntry]
-        exact context.memory_reads_empty
-      have hsuccess := permit_selected_success_effect dp hprecomp
-        hnodelegMid hdec nil_pref hwfMid hrMid hbody
-      dsimp only at hsuccess
-      rcases hsuccess with ⟨_, _, hstorMid, _, _⟩
+      have hraw := permit_exec_raw_effect dp hprecomp hnodeleg hwfPre run
+        hcode hselE hne0
+      dsimp only at hraw
+      rcases hraw with ⟨_, hstor⟩
       have hneApprove : permitSelector ≠ approveSelector := by
         decide +kernel
       have hneApproveCall : permitSelector ≠ approveAndCallSelector := by
@@ -874,16 +862,6 @@ theorem Exec.Frame.allowanceRegionEffect_of_permit
                  depth := e.depth
                  visit := .permitStore (Sevm.argWord e 2) }
         simp [frameAllowanceEvent, hne0, hselE, hneApprove, hneApproveCall]
-      have hargs := argWords_of_decodesPermit hdec
-      have hkeyEq : projectedAllowanceKey (Sevm.argWord e 0)
-          (Sevm.argWord e 1) = allowanceKey owner spender := by
-        rw [hargs.1, hargs.2.1]
-        exact permitAllowanceRuntimeKey_eq owner spender
-      have hnonceNe : ∀ key, InRegion .allowance key →
-          nonceKey owner ≠ key := by
-        intro key hkey h
-        exact regions_disjoint (x := .nonce) (y := .allowance) (by decide)
-          key (h ▸ nonceKey_region owner) hkey
       refine ⟨fun key hkey => ?_, hcodeEq⟩
       show (Devm.getStor post ca).get key =
         applyAllowanceLedger (Devm.getStor pre ca)
@@ -893,13 +871,12 @@ theorem Exec.Frame.allowanceRegionEffect_of_permit
       simp only [AllowanceEvent.key, AllowanceVisit.written?]
       rw [← htarget]
       show (Devm.getStor post e.currentTarget).get key = _
-      rw [hstorMid, hkeyEq]
-      by_cases hkeyCase : allowanceKey owner spender = key
-      · rw [if_pos hkeyCase, ← hkeyCase, Stor.get_set_self,
-          hargs.2.2.1]
+      rw [hstor, show projectedAllowanceKey (Sevm.argWord e 0)
+        (Sevm.argWord e 1) = permitRuntimeAllowanceKey e from rfl]
+      by_cases hkeyCase : permitRuntimeAllowanceKey e = key
+      · rw [if_pos hkeyCase, ← hkeyCase, Stor.get_set_self]
       · rw [if_neg hkeyCase, Stor.get_set_ne _ hkeyCase _,
-          Stor.get_set_ne _ (hnonceNe key hkey) _,
-          congrFun hstorEntry e.currentTarget]
+          Stor.get_set_ne _ (permitRuntimeNonceKey_ne_allowance e hkey) _]
 
 end Weth10
 
