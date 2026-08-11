@@ -696,6 +696,76 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferNonzero
           exact hnz hflag.symm
         exact absurd hargZero hto'
 
+/-! ## Read-sound variants
+
+Every arm here contributes exactly one counted record whose allowance event
+is `none`, so entry-read soundness is vacuous on the only admissible split.
+`receive` runs on empty calldata, so its placement witness comes from the
+calldata length rather than a selector separation. -/
+
+/-- `receive` transports the allowance region read-soundly: its ledger is
+the frame's own eventless record alone. -/
+theorem Exec.Frame.allowanceRegionEffectSound_of_receive
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    (context : frame.AuthenticContext dp ca)
+    (hempty : frame.sevm.data.length.toB256 = 0) :
+    AllowanceRegionEffectSound ca frame.pre frame.post
+      (Exec.attributionStream dp ca frame.run) :=
+  .of_singletonArm context
+    (frame.allowanceRegionEffect_of_receive context hempty)
+    (frame.attributionInner_eq_nil_of_receive context hempty)
+    (ownRecordLast_eq_false_of_data_empty hempty)
+
+/-- `deposit` transports the allowance region read-soundly: its ledger is
+the frame's own eventless record alone. -/
+theorem Exec.Frame.allowanceRegionEffectSound_of_deposit
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    (context : frame.AuthenticContext dp ca)
+    (hselector : Sevm.selector frame.sevm = selector "deposit" [])
+    (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
+    AllowanceRegionEffectSound ca frame.pre frame.post
+      (Exec.attributionStream dp ca frame.run) :=
+  .of_singletonArm context
+    (frame.allowanceRegionEffect_of_deposit context hselector hnonempty)
+    (frame.attributionInner_eq_nil_of_deposit context hselector hnonempty)
+    (ownRecordLast_eq_false_of_selector hselector
+      depositSelector_ne_flashLoanSelector depositSelector_ne_permitSelector)
+
+/-- `depositTo` transports the allowance region read-soundly: its ledger is
+the frame's own eventless record alone. -/
+theorem Exec.Frame.allowanceRegionEffectSound_of_depositTo
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    (context : frame.AuthenticContext dp ca)
+    (hselector : Sevm.selector frame.sevm = selector "depositTo" [.address])
+    (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
+    AllowanceRegionEffectSound ca frame.pre frame.post
+      (Exec.attributionStream dp ca frame.run) :=
+  .of_singletonArm context
+    (frame.allowanceRegionEffect_of_depositTo context hselector hnonempty)
+    (frame.attributionInner_eq_nil_of_depositTo context hselector hnonempty)
+    (ownRecordLast_eq_false_of_selector hselector
+      depositToSelector_ne_flashLoanSelector
+      depositToSelector_ne_permitSelector)
+
+/-- Nonzero-recipient `transfer` transports the allowance region
+read-soundly: its ledger is the frame's own eventless record alone. -/
+theorem Exec.Frame.allowanceRegionEffectSound_of_transferNonzero
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    (context : frame.AuthenticContext dp ca)
+    (hselector : Sevm.selector frame.sevm =
+      selector "transfer" [.address, .uint256])
+    (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
+    (hto : Sevm.argWord frame.sevm 0 ≠ 0) :
+    AllowanceRegionEffectSound ca frame.pre frame.post
+      (Exec.attributionStream dp ca frame.run) :=
+  .of_singletonArm context
+    (frame.allowanceRegionEffect_of_transferNonzero context hselector
+      hnonempty hto)
+    (frame.attributionInner_eq_nil_of_transferNonzero context hselector
+      hnonempty hto)
+    (ownRecordLast_eq_false_of_selector hselector
+      transferSelector_ne_flashLoanSelector transferSelector_ne_permitSelector)
+
 end Weth10
 
 end Blanc

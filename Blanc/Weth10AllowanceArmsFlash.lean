@@ -834,6 +834,209 @@ theorem Exec.Frame.allowanceRegionEffect_of_flashLoan
   rw [hstream]
   exact hsegmentInner.append hsegmentOwn
 
+/-! ## Read-sound variants
+
+`flashLoan` composes four segments: a silent dispatch prefix, the borrower
+subtree, a silent settlement handoff, and the frame's own trailing record.
+The three silent segments record nothing, and the subtree is read-sound by
+the strengthened recursion hypothesis.  The trailing own record is exempted
+by `AllowanceEntryReadSound.singleton_flash`: `frameAllowanceEvent`
+reconstructs a flash frame's recorded read from the committed post state
+rather than observing it at frame entry, and `Exec.frameContribution` places
+that record after its subtree, so the entry-read clause is not the
+statement one would want here anyway. -/
+
+
+/-- The borrower callback transports the tagged allowance region by exactly
+its own retained attribution stream, and its resume writes no storage. -/
+private theorem RawFlashCallbackStepBoundary.allowanceRegionEffectSound
+    {dp : DeployParams} {ca : Adr} {sevm : Sevm} {receiver : Adr}
+    {amount inputSize : B256} {callbackInput : Bytes} {pre mid : Devm}
+    {xl : Xlot} {pc : Nat}
+    (boundary : RawFlashCallbackStepBoundary sevm sevm.currentTarget
+      receiver amount inputSize callbackInput pre mid)
+    (retained : RetainedXlot xl)
+    (hfilled : Xlot.Filled xl)
+    (hstep : Ninst.StepRun pc sevm pre Ninst.call xl (.ok mid))
+    (installed : some (pre.getCode ca).toList = Prog.compile (weth10 dp))
+    (hdeeper : ForallDeeperAt sevm.depth ca (weth10 dp)
+      (fun p s d out _ => Exec.CoreAllowanceReadSound dp ca p s d out)) :
+    AllowanceRegionEffectSound ca pre mid
+      (retained.attributionStream dp ca) := by
+  rcases boundary with
+    ⟨parent, child, xlRaw, delegated, code, gasWord, avail, pcRaw, hrawStep,
+      hdepth, _hstack, _hpref, hparentState, _hparentMemory, _hparentLogs,
+      _hparentOutput, hdelegation, hrawFilled, hprocess, _hclean, _hlength,
+      _hmagic, _hresume, hmidState, _hreturnData, _hmidStack, _hmidLogs,
+      _hmidOutput⟩
+  have halign := Ninst.StepRun.unique_exec_of_filled hfilled hrawFilled
+    hstep hrawStep
+  cases halign.1
+  let msg : Msg :=
+    callMsg sevm parent (min gasWord.toNat (except64th avail)) 0
+      sevm.currentTarget receiver receiver true false callbackInput code
+      delegated
+  have hparent : pre.state = msg.benv.state := by
+    simpa only [msg, callMsg] using hparentState.symm
+  have hmsgDepth : msg.depth < sevm.depth := by
+    dsimp only [msg, callMsg]
+    omega
+  have htargetCode : msg.currentTarget = ca →
+      some msg.code.toList = Prog.compile (weth10 dp) := by
+    intro hct
+    have htargetCa : receiver = ca := by
+      simpa only [msg, callMsg] using hct
+    exact callbackCode_eq_compiled_of_target_eq installed htargetCa
+      hdelegation
+  have htargetDirect :
+      msg.currentTarget = ca → msg.codeAddress = some ca := by
+    intro hct
+    have htargetCa : receiver = ca := by
+      simpa only [msg, callMsg] using hct
+    simp only [msg, callMsg, htargetCa]
+  have hchild :=
+    ProcessMessageTrace.allowanceRegionDeltaSound_of_forallDeeperAt
+      (dp := dp) (ca := ca) (depth := sevm.depth) (parent := pre)
+      ⟨xl, retained, by simpa only [msg] using hprocess⟩
+      hparent hmsgDepth installed htargetCode htargetDirect hdeeper
+  have hresumeEffect : AllowanceRegionEffectSound ca child mid [] :=
+    AllowanceRegionEffectSound.of_getStorCode_eq
+      (congrArg (fun state : State => state.getStor ca) hmidState).symm
+      (congrArg (fun state : State => state.getCode ca) hmidState).symm
+  simpa only [List.append_nil] using hchild.append hresumeEffect
+
+/-- `flashLoan` transports the allowance region.  Its committed prefix mints
+at one normalized address-shaped balance key and bumps the flash counter, so
+every tagged allowance key still holds its entry value when the borrower
+callback starts; the callback's subtree carries the whole descendant ledger;
+and the post-callback settlement replays the frame's own record, which
+follows that subtree precisely because the runtime settles the repayment
+allowance only once the borrower has returned. -/
+theorem Exec.Frame.allowanceRegionEffectSound_of_flashLoan
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    (context : frame.AuthenticContext dp ca)
+    (hselector : Sevm.selector frame.sevm = flashLoanSelector)
+    (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
+    (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
+      (fun pc sevm pre out _ => Exec.CoreAllowanceReadSound dp ca pc sevm pre out)) :
+    AllowanceRegionEffectSound ca frame.pre frame.post
+      (Exec.attributionStream dp ca frame.run) := by
+  have hmember :
+      (Sevm.selector frame.sevm, nonpayable flashLoan) ∈ weth10Funcs dp := by
+    rw [hselector]
+    simp [flashLoanSelector, weth10Funcs]
+  have hcode : some frame.sevm.code.toList = Prog.compile (weth10 dp) :=
+    context.invocation.2.2.2
+  have htarget : frame.sevm.currentTarget = ca := context.invocation.2.1
+  -- reach the borrower callback with all four witnesses
+  rcases frame.compiledSelectorBodyCursorCountedSilent context hnonempty
+      hmember with ⟨wrapperCursor, hwrapperSilent⟩
+  rcases wrapperCursor.enterNonpayableSilent with
+    ⟨bodyCursor, hbodySilent⟩
+  have hentrySilent : Devm.DispatchSilent frame.pre bodyCursor.pre :=
+    hwrapperSilent.trans hbodySilent
+  have hwfBody : Mem.Wf bodyCursor.pre.memory := by
+    rw [← hentrySilent.memory]
+    exact context.memory_wf
+  have hreadsBody : Mem.Reads bodyCursor.pre.memory [] := by
+    rw [← hentrySilent.memory]
+    exact context.memory_reads_empty
+  obtain ⟨_gasWord, callCursor, hstack, hwfCall, hreadsCall, hcodePrefix,
+      hlocalPrefix⟩ :=
+    bodyCursor.reachFlashCallbackWitnessed hwfBody hreadsBody
+  have hcallRun : Func.Run ((weth10 dp).main :: weth10Aux) frame.sevm
+      callCursor.pre flashLoanSuccessTail frame.post :=
+    Func.Run.of_runCompiled callCursor.run
+  obtain ⟨callPost, settlePre, hboundary, hstorSettle, _hbalSettle,
+      hcodeSettle, _hlogsSettle, _houtputSettle, hwfSettle,
+      hreadsSettleEx, hsettle⟩ :=
+    of_rawFlashLoanSuccessTail_step dp hstack hwfCall hreadsCall rfl
+      hcallRun
+  -- the counted crossing at the same callback cursor
+  obtain ⟨callPost', pcCross, xl, retained, _hat, hfilled, hstep, hinner⟩ :=
+    callCursor.crossFlashCallback hcode
+  obtain ⟨xlRaw, pcRaw, hrawFilled, hrawStep⟩ := hboundary.exists_step
+  have halign := Ninst.StepRun.unique_exec_of_filled hfilled hrawFilled
+    hstep hrawStep
+  have hpostEq : callPost = callPost' := (Except.ok.inj halign.2).symm
+  subst hpostEq
+  -- entry-observation transport of the dispatch prefix
+  have hentryStor : Devm.getStor frame.pre = Devm.getStor bodyCursor.pre :=
+    funext (getStor_eq_of_state_eq hentrySilent.state)
+  have hentryCode : Devm.getCode frame.pre = Devm.getCode bodyCursor.pre :=
+    funext (getCode_eq_of_state_eq hentrySilent.state)
+  have hcodeCall : Devm.getCode frame.pre ca =
+      Devm.getCode callCursor.pre ca :=
+    (congrFun hentryCode ca).trans (congrFun hcodePrefix ca)
+  have hcallCodeAt : some (callCursor.pre.getCode ca).toList =
+      Prog.compile (weth10 dp) := by
+    rw [← hcodeCall]
+    exact context.installed.1
+  have hprefixEffect :
+      AllowanceRegionEffect ca frame.pre callCursor.pre [] := by
+    refine ⟨fun key hkey => ?_, hcodeCall⟩
+    rw [applyAllowanceLedger_nil]
+    have hlocal := hlocalPrefix key (allowanceRegion_not_valid hkey)
+      (allowanceRegion_ne_flashSlot hkey)
+    rw [htarget] at hlocal
+    rw [hlocal, ← congrFun hentryStor ca]
+  -- the borrower subtree and the settlement handoff
+  have hchildEffect :
+      AllowanceRegionEffectSound ca callCursor.pre callPost
+        (retained.attributionStream dp ca) :=
+    hboundary.allowanceRegionEffectSound retained hfilled hstep hcallCodeAt
+      hdeeper
+  have hhandoff : AllowanceRegionEffect ca callPost settlePre [] :=
+    AllowanceRegionEffect.of_getStorCode_eq (congrFun hstorSettle ca)
+      (congrFun hcodeSettle ca)
+  have hsegmentInner :
+      AllowanceRegionEffectSound ca frame.pre settlePre
+        (Exec.attributionInner dp ca frame.run) := by
+    rw [hinner]
+    simpa only [List.nil_append, List.append_nil] using
+      (AllowanceRegionEffectSound.of_nilLedger hprefixEffect).append
+        (hchildEffect.append
+          (AllowanceRegionEffectSound.of_nilLedger hhandoff))
+  -- the settlement segment carries the frame's own record
+  obtain ⟨settleImg, hreadsSettle⟩ := hreadsSettleEx
+  obtain ⟨burnPre, hburn, houtcome, hwfBurn, burnImg, hreadsBurn⟩ :=
+    of_flashSettle_allowance dp hwfSettle hreadsSettle hsettle
+  obtain ⟨_hdecrease, _hcover, _hflashSlot, _hburnLogs, _htrue, _hbalBurn,
+      hcodeBurn⟩ :=
+    flashBurn_effect dp hwfBurn hreadsBurn hburn
+  have hcodeSettlePost : Devm.getCode settlePre = Devm.getCode frame.post :=
+    houtcome.2.2.2.symm.trans hcodeBurn.symm
+  have hown : (CountedFrame.ofFrame dp ca frame).allowance =
+      frameAllowanceEvent frame.sevm frame.pre frame.post := rfl
+  have hsegmentOwn :
+      AllowanceRegionEffect ca settlePre frame.post
+        [CountedFrame.ofFrame dp ca frame] :=
+    flashSettlement_allowanceRegionEffect htarget hnonempty hselector
+      houtcome hburn hcodeSettlePost hown
+  -- the frame's own record follows its borrower subtree
+  have hflash : isFlashInvocation frame.sevm = true := by
+    simp [isFlashInvocation, hselector, hnonempty]
+  have hframeEq : Exec.Frame.ofRun frame.run frame.committed = frame := by
+    cases frame
+    rfl
+  have hstream : Exec.attributionStream dp ca frame.run =
+      Exec.attributionInner dp ca frame.run ++
+        [CountedFrame.ofFrame dp ca frame] := by
+    rw [Exec.attributionStream_eq_frameContribution dp ca frame.run
+        frame.committed, hframeEq,
+      Exec.frameContribution_eq_append_of_flash dp ca frame _
+        context.invocation hflash]
+  rw [hstream]
+  have hsegmentOwnSound :
+      AllowanceRegionEffectSound ca settlePre frame.post
+        [CountedFrame.ofFrame dp ca frame] :=
+    { hsegmentOwn with
+      entryRead := .singleton_flash
+        (show (CountedFrame.ofFrame dp ca frame).sel? =
+            some flashLoanSelector by
+          simp [CountedFrame.ofFrame, hnonempty, hselector]) }
+  exact hsegmentInner.append hsegmentOwnSound
+
 end Weth10
 
 end Blanc

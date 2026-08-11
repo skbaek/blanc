@@ -1214,6 +1214,527 @@ theorem Exec.Frame.allowanceRegionEffect_of_approveAndCall
       exact hkeyEq
   exact hprefixEffect.append childEffect
 
+/-! ## Read-sound variants
+
+The three callback arms above compose a singleton prefix segment — the
+frame's own record — with the retained callback child's stream.  Only the
+prefix needs new content: the record is the frame's own, and a non-flash
+frame's recorded read is its entry word, so
+`AllowanceEntryReadSound.ofFrame` discharges it.  The child's segment is
+read-sound by the strengthened recursion hypothesis. -/
+
+
+
+/-- Exact allowance-region effect of a retained ERC-677 callback boundary;
+the allowance mirror of
+`RawTokenCallbackIndexedStepBoundary.storageSegmentEffect`.  The supplied
+retained witness is the one selected by the enclosing counted execution, so
+the resulting ledger is definitionally that exact slot's stream. -/
+private theorem RawTokenCallbackIndexedStepBoundary.allowanceRegionEffectSound
+    {dp : DeployParams} {ca : Adr} {e : Sevm}
+    {self target : Adr}
+    {rawTarget sel value tailLen inputSize : B256} {tail input : Bytes}
+    {pre post callPre callPost parent child : Devm} {xl : Xlot}
+    {pc : Nat}
+    (callback : RawTokenCallbackIndexedStepBoundary dp e self target
+      rawTarget sel value tailLen inputSize tail input pre post callPre
+      callPost parent child xl pc)
+    (retained : RetainedXlot xl)
+    (hself : e.currentTarget = ca)
+    (installed : some (pre.getCode ca).toList = Prog.compile (weth10 dp))
+    (hdeeper : ForallDeeperAt e.depth ca (weth10 dp)
+      (fun pc sevm childPre out _ =>
+        Exec.CoreAllowanceReadSound dp ca pc sevm childPre out)) :
+    AllowanceRegionEffectSound ca pre post
+      (retained.attributionStream dp ca) := by
+  rcases callback with
+    ⟨_targetEq, _inputSizeEq, delegated, code, gasWord, avail, _hstep,
+      hdepth, _hstack, _hinput, _himage, hstorPre, _hbalPre, hcodePre,
+      _hlogsPre, _houtputPre, hparentState, _hparentMemory, _hparentLogs,
+      _hparentOutput, hdelegation, _hfilled, hprocess, _hclean, _hresume,
+      hcallPostState, _hreturnData, _hcallPostMemory, _hcallPostStack,
+      hcontinuation⟩
+  let msg := callMsg e parent (min gasWord.toNat (except64th avail)) 0
+    self target target true false input code delegated
+  let trace : ProcessMessageTrace msg (.ok child) :=
+    ⟨xl, retained, by simpa only [msg] using hprocess⟩
+  have hcallPreCode : some (callPre.getCode ca).toList =
+      Prog.compile (weth10 dp) := by
+    rw [← congrFun hcodePre ca]
+    exact installed
+  have hparent : callPre.state = msg.benv.state := by
+    simpa only [msg, callMsg] using hparentState.symm
+  have hmsgDepth : msg.depth < e.depth := by
+    dsimp only [msg, callMsg]
+    omega
+  have htargetCode : msg.currentTarget = ca →
+      some msg.code.toList = Prog.compile (weth10 dp) := by
+    intro htarget
+    have htargetCa : target = ca := by
+      simpa only [msg, callMsg] using htarget
+    exact callbackCode_eq_compiled_of_target_eq hcallPreCode htargetCa
+      hdelegation
+  have htargetDirect : msg.currentTarget = ca →
+      msg.codeAddress = some ca := by
+    intro htarget
+    have htargetCa : target = ca := by
+      simpa only [msg, callMsg] using htarget
+    simp [msg, callMsg, htargetCa]
+  have childEffect := trace.allowanceRegionDeltaSound_of_forallDeeperAt hparent
+    hmsgDepth hcallPreCode htargetCode htargetDirect hdeeper
+  have hprefix := AllowanceRegionEffectSound.of_getStorCode_eq
+    (congrFun hstorPre ca) (congrFun hcodePre ca)
+  have hchildToCallPost := AllowanceRegionEffectSound.of_getStorCode_eq
+    (congrArg (fun state : State => state.getStor ca) hcallPostState.symm)
+    (congrArg (fun state : State => state.getCode ca) hcallPostState.symm)
+  obtain ⟨htailStor, _, htailCode⟩ :=
+    of_run_call_boolReturn_preserves_fields dp hcontinuation
+  have hsuffix := AllowanceRegionEffectSound.of_getStorCode_eq
+    (congrFun htailStor ca) (by simpa only [hself] using htailCode)
+  have combined := hprefix.append
+    (childEffect.append (hchildToCallPost.append hsuffix))
+  simpa only [List.nil_append, List.append_nil, trace] using combined
+
+/-- `depositToAndCall` transports the allowance region.  Its committed
+prefix mints at one normalized address-shaped balance key and its own
+record carries no allowance event, so that record replays transparently
+ahead of the retained callback child's attribution stream. -/
+theorem Exec.Frame.allowanceRegionEffectSound_of_depositToAndCall
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    (context : frame.AuthenticContext dp ca)
+    (hselector : Sevm.selector frame.sevm = depositToAndCallSelector)
+    (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
+    (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
+      (fun pc sevm pre out _ =>
+        Exec.CoreAllowanceReadSound dp ca pc sevm pre out)) :
+    AllowanceRegionEffectSound ca frame.pre frame.post
+      (Exec.attributionStream dp ca frame.run) := by
+  have hmem : (Sevm.selector frame.sevm, depositToAndCall) ∈
+      weth10Funcs dp := by
+    rw [hselector]
+    simp [depositToAndCallSelector, weth10Funcs]
+  rcases frame.compiledSelectorBodyCursorCountedSilent context hnonempty
+      hmem with
+    ⟨bodyCursor, hentrySilent⟩
+  unfold depositToAndCall at bodyCursor
+  rcases bodyCursor.peelChildlessLine
+      (line := mintToPrefix)
+      (by simp [mintToPrefix, addressArg, arg, cdl, normalizeAddress,
+        pushAddressMask, mstoreAt, logWith, NinstIsChildless,
+        Ninst.pushB256]) with
+    ⟨callbackCursor, hmint⟩
+  have hwfBody : Mem.Wf bodyCursor.pre.memory := by
+    rw [← hentrySilent.memory]
+    exact context.memory_wf
+  have hreadsBody : Mem.Reads bodyCursor.pre.memory [] := by
+    rw [← hentrySilent.memory]
+    exact context.memory_reads_empty
+  rcases mintToPrefix_effect hwfBody hreadsBody hmint with
+    ⟨hstor, _hlogs, _hbal, hcodeMint, _houtput⟩
+  rcases mintToPrefix_callbackMemoryFrame hwfBody hreadsBody hmint with
+    ⟨hwfCallback, hreadsCallback⟩
+  rcases callbackCursor.countedTokenCallbackChronology
+      (sel := onTokenTransferSelector) (targetArg := 0) (dataArg := 1)
+      (valueWord := frame.sevm.value) (value := [Ninst.callvalue])
+      (img := frame.sevm.value.toBytes)
+      (by simp [NinstIsChildless])
+      (by
+        intro a b xs hp hline
+        rcases Line.of_run_cons hline with ⟨c, hcv, hnil⟩
+        cases hnil
+        exact prefix_of_push (of_run_callvalue hcv) hp)
+      (by line_inv) (by line_inv) (by line_inv) (by line_inv)
+      (by
+        intro e' a b hline
+        rcases Line.of_run_cons hline with ⟨c, hcv, hnil⟩
+        cases hnil
+        exact (of_run_callvalue hcv).logs)
+      (by
+        intro e' a b hline
+        rcases Line.of_run_cons hline with ⟨c, hcv, hnil⟩
+        cases hnil
+        exact (of_run_callvalue hcv).output)
+      hwfCallback hreadsCallback context.invocation.2.2.2 with
+    ⟨_inputSize, _input, _callPre, _callPost, _parent, _child, _xl, _pc,
+      retained, callback, hinner⟩
+  have htarget : frame.sevm.currentTarget = ca := context.invocation.2.1
+  have hstorEntry : Devm.getStor frame.pre = Devm.getStor bodyCursor.pre :=
+    funext (getStor_eq_of_state_eq hentrySilent.state)
+  have hcodeEntry : Devm.getCode frame.pre = Devm.getCode bodyCursor.pre :=
+    funext (getCode_eq_of_state_eq hentrySilent.state)
+  have hcodeCallback : Devm.getCode frame.pre ca =
+      Devm.getCode callbackCursor.pre ca :=
+    (congrFun hcodeEntry ca).trans (congrFun hcodeMint ca).symm
+  have installedCallback : some (callbackCursor.pre.getCode ca).toList =
+      Prog.compile (weth10 dp) := by
+    rw [← hcodeCallback]
+    exact context.installed.1
+  have childEffect := callback.allowanceRegionEffectSound retained htarget
+    installedCallback hdeeper
+  have hsel : Sevm.selector frame.sevm = depositToAndCallSelector :=
+    hselector
+  have hnotlast : ownRecordLast frame.sevm = false := by
+    simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hsel,
+      depositToAndCallSelector_ne_flashLoanSelector,
+      depositToAndCallSelector_ne_permitSelector]
+  have hframeEq : Exec.Frame.ofRun frame.run frame.committed = frame := by
+    cases frame
+    rfl
+  have hstream : Exec.attributionStream dp ca frame.run =
+      CountedFrame.ofFrame dp ca frame ::
+        retained.attributionStream dp ca := by
+    rw [Exec.attributionStream_eq_frameContribution dp ca frame.run
+        frame.committed, hframeEq, hinner,
+      Exec.frameContribution_eq_cons dp ca frame _
+        context.invocation hnotlast]
+  rw [hstream]
+  have hown : (CountedFrame.ofFrame dp ca frame).allowance = none := by
+    show frameAllowanceEvent frame.sevm frame.pre frame.post = none
+    simp [frameAllowanceEvent, hnonempty, hsel,
+      depositToAndCallSelector_ne_approveSelector,
+      depositToAndCallSelector_ne_approveAndCallSelector,
+      depositToAndCallSelector_ne_permitSelector,
+      depositToAndCallSelector_ne_transferFromSelector,
+      depositToAndCallSelector_ne_withdrawFromSelector,
+      depositToAndCallSelector_ne_flashLoanSelector,
+      depositToAndCallSelector_ne_allowanceSelector]
+  have hvalid : ValidAdr (normalizedAddressArg frame.sevm 0) :=
+    normalizedAddress_valid (Sevm.argWord frame.sevm 0)
+  have hstorCa := hstor
+  rw [htarget] at hstorCa
+  have hprefixEffect : AllowanceRegionEffect ca frame.pre
+      callbackCursor.pre [CountedFrame.ofFrame dp ca frame] := by
+    refine ⟨fun key hkey => ?_, hcodeCallback⟩
+    rw [applyAllowanceLedger_singleton, hown]
+    show (Devm.getStor callbackCursor.pre ca).get key =
+      (Devm.getStor frame.pre ca).get key
+    rw [hstorCa,
+      Stor.get_set_ne _ ((allowanceRegion_ne_validAdr hkey hvalid).symm) _,
+      ← congrFun hstorEntry ca]
+  have hprefixSound : AllowanceRegionEffectSound ca frame.pre
+      callbackCursor.pre [CountedFrame.ofFrame dp ca frame] :=
+    { hprefixEffect with
+      entryRead := AllowanceEntryReadSound.ofFrame htarget
+        (isFlashInvocation_eq_false_of_ownRecordLast hnotlast) }
+  exact hprefixSound.append childEffect
+
+/-- Nonzero-recipient `transferAndCall` transports the allowance region: the
+frame's own record carries no allowance event and replays transparently,
+and the retained callback child supplies the rest of the ledger. -/
+theorem Exec.Frame.allowanceRegionEffectSound_of_transferAndCall
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    (context : frame.AuthenticContext dp ca)
+    (hselector : Sevm.selector frame.sevm = transferAndCallSelector)
+    (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
+    (hto : Sevm.argWord frame.sevm 0 ≠ 0)
+    (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
+      (fun pc sevm pre out _ =>
+        Exec.CoreAllowanceReadSound dp ca pc sevm pre out)) :
+    AllowanceRegionEffectSound ca frame.pre frame.post
+      (Exec.attributionStream dp ca frame.run) := by
+  have hmem : (Sevm.selector frame.sevm, nonpayable transferAndCall) ∈
+      weth10Funcs dp := by
+    rw [hselector]
+    simp [transferAndCallSelector, weth10Funcs]
+  rcases frame.compiledSelectorBodyCursorCountedSilent context hnonempty
+      hmem with
+    ⟨wrapperCursor, hentrySilent⟩
+  rcases wrapperCursor.enterNonpayableSilent with
+    ⟨bodyCursor, hnonpayableSilent⟩
+  have hbodySilent : Devm.DispatchSilent frame.pre bodyCursor.pre :=
+    hentrySilent.trans hnonpayableSilent
+  unfold transferAndCall transferThen at bodyCursor
+  rcases bodyCursor.peelChildlessLine
+      (line := arg 0 ++ [Ninst.iszero])
+      (by simp [arg, cdl, NinstIsChildless, Ninst.pushB256]) with
+    ⟨targetBranchCursor, htargetLine⟩
+  have htargetPrefix :
+      [Sevm.argWord frame.sevm 0 =? 0] <<+ targetBranchCursor.pre.stack := by
+    rcases of_run_append (arg 0) htargetLine with
+      ⟨afterArg, harg, hzeroLine⟩
+    rcases Line.of_run_cons hzeroLine with ⟨afterZero, hzero, hnil⟩
+    cases hnil
+    exact prefix_of_iszero hzero (prefix_of_arg nil_pref harg)
+  have htargetCheck : (Sevm.argWord frame.sevm 0 =? 0) = 0 := by
+    simp [B256.eqCheck, hto]
+  rw [htargetCheck] at htargetPrefix
+  rcases targetBranchCursor.selectBranchZeroSilent htargetPrefix with
+    ⟨nonzeroCursor, _hnonzeroStack, hselectSilent⟩
+  rcases nonzeroCursor.peelChildlessLine
+      (line := loadCallerBalanceAmount 1 ++ balanceTooSmall)
+      (by simp [loadCallerBalanceAmount, balanceTooSmall, arg, cdl,
+        NinstIsChildless, Ninst.pushB256]) with
+    ⟨guardBranchCursor, hguardLine⟩
+  rcases guardBranchCursor.selectBranchLeftWithBurn
+      (not_run_call_revWith (transferBalanceError_lookup dp)) with
+    ⟨successCursor, hsuccessPop⟩
+  rcases of_run_append (loadCallerBalanceAmount 1) hguardLine with
+    ⟨afterLoad, hload, hsmall⟩
+  rcases prefix_of_loadCallerBalanceAmount nil_pref hload with
+    ⟨balance, _hbalance, hpLoad⟩
+  have hpFlag := prefix_of_balanceTooSmall hpLoad hsmall
+  have hsuccessStack := popBurn_pref
+    (Devm.PopBurn.of_popBurnBy hsuccessPop) hpFlag
+  rcases successCursor.peelChildlessLine
+      (line := debitLoadedBalance)
+      (by simp [debitLoadedBalance, NinstIsChildless]) with
+    ⟨creditCursor, hdebit⟩
+  rcases creditCursor.peelChildlessLine
+      (line := addressArg 0 ++ [Ninst.dup 0, Ninst.sload] ++ arg 1 ++
+        [Ninst.add, Ninst.swap 0, Ninst.sstore])
+      (by simp [addressArg, normalizeAddress, pushAddressMask, arg, cdl,
+        NinstIsChildless, Ninst.pushB256]) with
+    ⟨eventCursor, hcredit⟩
+  rcases eventCursor.peelChildlessLine
+      (line := [Ninst.caller] ++ arg 1 ++ addressArg 0)
+      (by simp [addressArg, normalizeAddress, pushAddressMask, arg, cdl,
+        NinstIsChildless, Ninst.pushB256]) with
+    ⟨emitCursor, hevent⟩
+  rcases emitCursor.peelChildlessLine
+      (line := emitTransfer)
+      (by simp [emitTransfer, Blanc.transferFromLog, mstoreAt, logWith,
+        NinstIsChildless, Ninst.pushB256]) with
+    ⟨callbackCursor, hemit⟩
+  have hmemSuccess : frame.pre.memory = successCursor.pre.memory := by
+    calc
+      frame.pre.memory = bodyCursor.pre.memory := hbodySilent.memory
+      _ = targetBranchCursor.pre.memory :=
+        Line.of_inv Devm.memory (by line_inv) htargetLine
+      _ = nonzeroCursor.pre.memory := hselectSilent.memory
+      _ = guardBranchCursor.pre.memory :=
+        Line.of_inv Devm.memory (by line_inv) hguardLine
+      _ = successCursor.pre.memory := hsuccessPop.memory
+  have hwfSuccess : Mem.Wf successCursor.pre.memory := by
+    rw [← hmemSuccess]
+    exact context.memory_wf
+  have hreadsSuccess : Mem.Reads successCursor.pre.memory [] := by
+    rw [← hmemSuccess]
+    exact context.memory_reads_empty
+  obtain ⟨hprefixKey, hprefixCode, hwfCallback, hreadsCallback⟩ :=
+    transferAndCallPrefix_frame hsuccessStack.2 hwfSuccess hreadsSuccess
+      hdebit hcredit hevent hemit
+  rcases callbackCursor.countedTokenCallbackChronology
+      (sel := onTokenTransferSelector) (targetArg := 0) (dataArg := 2)
+      (valueWord := Sevm.argWord frame.sevm 1) (value := arg 1)
+      (img := (Sevm.argWord frame.sevm 1).toBytes)
+      (by simp [arg, cdl, NinstIsChildless, Ninst.pushB256])
+      (by
+        intro a b xs hp hline
+        exact prefix_of_arg hp hline)
+      (by unfold arg cdl; line_inv)
+      (by unfold arg cdl; line_inv)
+      (by unfold arg cdl; line_inv)
+      (by unfold arg cdl; line_inv)
+      (by unfold arg cdl; line_inv)
+      (by unfold arg cdl; line_inv)
+      hwfCallback hreadsCallback context.invocation.2.2.2 with
+    ⟨_inputSize, _input, _callPre, _callPost, _parent, _child, _xl, _pc,
+      retained, callback, hinner⟩
+  have htarget : frame.sevm.currentTarget = ca := context.invocation.2.1
+  have hstorSuccess : Devm.getStor frame.pre = Devm.getStor
+      successCursor.pre := by
+    calc
+      Devm.getStor frame.pre = Devm.getStor bodyCursor.pre :=
+        funext (getStor_eq_of_state_eq hbodySilent.state)
+      _ = Devm.getStor targetBranchCursor.pre :=
+        Line.of_inv Devm.getStor (by line_inv) htargetLine
+      _ = Devm.getStor nonzeroCursor.pre :=
+        funext (getStor_eq_of_state_eq hselectSilent.state)
+      _ = Devm.getStor guardBranchCursor.pre :=
+        Line.of_inv Devm.getStor (by line_inv) hguardLine
+      _ = Devm.getStor successCursor.pre :=
+        funext (getStor_eq_of_state_eq hsuccessPop.state)
+  have hcodeSuccess : Devm.getCode frame.pre = Devm.getCode
+      successCursor.pre := by
+    calc
+      Devm.getCode frame.pre = Devm.getCode bodyCursor.pre :=
+        funext (getCode_eq_of_state_eq hbodySilent.state)
+      _ = Devm.getCode targetBranchCursor.pre :=
+        Line.of_inv Devm.getCode (by line_inv) htargetLine
+      _ = Devm.getCode nonzeroCursor.pre :=
+        funext (getCode_eq_of_state_eq hselectSilent.state)
+      _ = Devm.getCode guardBranchCursor.pre :=
+        Line.of_inv Devm.getCode (by line_inv) hguardLine
+      _ = Devm.getCode successCursor.pre :=
+        funext (getCode_eq_of_state_eq hsuccessPop.state)
+  have hcodeCallback : Devm.getCode frame.pre ca =
+      Devm.getCode callbackCursor.pre ca :=
+    (congrFun hcodeSuccess ca).trans (congrFun hprefixCode ca).symm
+  have installedCallback : some (callbackCursor.pre.getCode ca).toList =
+      Prog.compile (weth10 dp) := by
+    rw [← hcodeCallback]
+    exact context.installed.1
+  have childEffect := callback.allowanceRegionEffectSound retained htarget
+    installedCallback hdeeper
+  have hsel : Sevm.selector frame.sevm = transferAndCallSelector := hselector
+  have hnotlast : ownRecordLast frame.sevm = false := by
+    simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hsel,
+      transferAndCallSelector_ne_flashLoanSelector,
+      transferAndCallSelector_ne_permitSelector]
+  have hframeEq : Exec.Frame.ofRun frame.run frame.committed = frame := by
+    cases frame
+    rfl
+  have hstream : Exec.attributionStream dp ca frame.run =
+      CountedFrame.ofFrame dp ca frame ::
+        retained.attributionStream dp ca := by
+    rw [Exec.attributionStream_eq_frameContribution dp ca frame.run
+        frame.committed, hframeEq, hinner,
+      Exec.frameContribution_eq_cons dp ca frame _
+        context.invocation hnotlast]
+  rw [hstream]
+  have hown : (CountedFrame.ofFrame dp ca frame).allowance = none := by
+    show frameAllowanceEvent frame.sevm frame.pre frame.post = none
+    simp [frameAllowanceEvent, hnonempty, hsel,
+      transferAndCallSelector_ne_approveSelector,
+      transferAndCallSelector_ne_approveAndCallSelector,
+      transferAndCallSelector_ne_permitSelector,
+      transferAndCallSelector_ne_transferFromSelector,
+      transferAndCallSelector_ne_withdrawFromSelector,
+      transferAndCallSelector_ne_flashLoanSelector,
+      transferAndCallSelector_ne_allowanceSelector]
+  have hprefixKeyCa := hprefixKey
+  rw [htarget] at hprefixKeyCa
+  have hprefixEffect : AllowanceRegionEffect ca frame.pre
+      callbackCursor.pre [CountedFrame.ofFrame dp ca frame] := by
+    refine ⟨fun key hkey => ?_, hcodeCallback⟩
+    rw [applyAllowanceLedger_singleton, hown]
+    show (Devm.getStor callbackCursor.pre ca).get key =
+      (Devm.getStor frame.pre ca).get key
+    rw [hprefixKeyCa key hkey, ← congrFun hstorSuccess ca]
+  have hprefixSound : AllowanceRegionEffectSound ca frame.pre
+      callbackCursor.pre [CountedFrame.ofFrame dp ca frame] :=
+    { hprefixEffect with
+      entryRead := AllowanceEntryReadSound.ofFrame htarget
+        (isFlashInvocation_eq_false_of_ownRecordLast hnotlast) }
+  exact hprefixSound.append childEffect
+
+/-- `approveAndCall` transports the allowance region.  Unlike the other two
+callback arms its own record does carry an allowance event — the same
+`.approveStore` branch `approve` takes — and the committed prefix stores
+exactly at that event's projected key before the callback child is
+spawned, so the record replays ahead of the child's stream. -/
+theorem Exec.Frame.allowanceRegionEffectSound_of_approveAndCall
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    (context : frame.AuthenticContext dp ca)
+    (hselector : Sevm.selector frame.sevm = approveAndCallSelector)
+    (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
+    (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
+      (fun pc sevm pre out _ =>
+        Exec.CoreAllowanceReadSound dp ca pc sevm pre out)) :
+    AllowanceRegionEffectSound ca frame.pre frame.post
+      (Exec.attributionStream dp ca frame.run) := by
+  have hmem : (Sevm.selector frame.sevm, nonpayable approveAndCall) ∈
+      weth10Funcs dp := by
+    rw [hselector]
+    simp [approveAndCallSelector, weth10Funcs]
+  rcases frame.compiledSelectorBodyCursorCountedSilent context hnonempty
+      hmem with
+    ⟨wrapperCursor, hentrySilent⟩
+  rcases wrapperCursor.enterNonpayableSilent with
+    ⟨bodyCursor, hnonpayableSilent⟩
+  have hbodySilent : Devm.DispatchSilent frame.pre bodyCursor.pre :=
+    hentrySilent.trans hnonpayableSilent
+  unfold approveAndCall at bodyCursor
+  rcases bodyCursor.peelChildlessLine
+      (line := approvePrefix)
+      (by simp [approvePrefix, allowanceKeyFromMemory, Blanc.logApprove,
+        argCopy, cdc, arg, cdl, mstoreAt, logWith, pushList,
+        NinstIsChildless, Ninst.pushB256]) with
+    ⟨callbackCursor, hprefix⟩
+  have hwfBody : Mem.Wf bodyCursor.pre.memory := by
+    rw [← hbodySilent.memory]
+    exact context.memory_wf
+  have hreadsBody : Mem.Reads bodyCursor.pre.memory [] := by
+    rw [← hbodySilent.memory]
+    exact context.memory_reads_empty
+  rcases approvePrefix_callbackFrame nil_pref hwfBody hreadsBody
+      hprefix with
+    ⟨hstor, _hlogs, _hbal, hcodeApprove, _houtput, hwfCallback,
+      callbackImg, hreadsCallback⟩
+  rcases callbackCursor.countedTokenCallbackChronology
+      (sel := onTokenApprovalSelector) (targetArg := 0) (dataArg := 2)
+      (valueWord := Sevm.argWord frame.sevm 1) (value := arg 1)
+      (img := callbackImg)
+      (by simp [arg, cdl, NinstIsChildless, Ninst.pushB256])
+      (by
+        intro a b xs hp hline
+        exact prefix_of_arg hp hline)
+      (by unfold arg cdl; line_inv)
+      (by unfold arg cdl; line_inv)
+      (by unfold arg cdl; line_inv)
+      (by unfold arg cdl; line_inv)
+      (by unfold arg cdl; line_inv)
+      (by unfold arg cdl; line_inv)
+      hwfCallback hreadsCallback context.invocation.2.2.2 with
+    ⟨_inputSize, _input, _callPre, _callPost, _parent, _child, _xl, _pc,
+      retained, callback, hinner⟩
+  have htarget : frame.sevm.currentTarget = ca := context.invocation.2.1
+  have hstorEntry : Devm.getStor frame.pre = Devm.getStor bodyCursor.pre :=
+    funext (getStor_eq_of_state_eq hbodySilent.state)
+  have hcodeEntry : Devm.getCode frame.pre = Devm.getCode bodyCursor.pre :=
+    funext (getCode_eq_of_state_eq hbodySilent.state)
+  have hcodeCallback : Devm.getCode frame.pre ca =
+      Devm.getCode callbackCursor.pre ca :=
+    (congrFun hcodeEntry ca).trans (congrFun hcodeApprove ca).symm
+  have installedCallback : some (callbackCursor.pre.getCode ca).toList =
+      Prog.compile (weth10 dp) := by
+    rw [← hcodeCallback]
+    exact context.installed.1
+  have childEffect := callback.allowanceRegionEffectSound retained htarget
+    installedCallback hdeeper
+  have hsel : Sevm.selector frame.sevm = approveAndCallSelector := hselector
+  have hnotlast : ownRecordLast frame.sevm = false := by
+    simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hsel,
+      approveAndCallSelector_ne_flashLoanSelector,
+      approveAndCallSelector_ne_permitSelector]
+  have hframeEq : Exec.Frame.ofRun frame.run frame.committed = frame := by
+    cases frame
+    rfl
+  have hstream : Exec.attributionStream dp ca frame.run =
+      CountedFrame.ofFrame dp ca frame ::
+        retained.attributionStream dp ca := by
+    rw [Exec.attributionStream_eq_frameContribution dp ca frame.run
+        frame.committed, hframeEq, hinner,
+      Exec.frameContribution_eq_cons dp ca frame _
+        context.invocation hnotlast]
+  rw [hstream]
+  have hown : (CountedFrame.ofFrame dp ca frame).allowance =
+      some { owner := frame.sevm.caller.toB256
+             spender := Sevm.argWord frame.sevm 0
+             caller := frame.sevm.caller
+             depth := frame.sevm.depth
+             visit := .approveStore (Sevm.argWord frame.sevm 1) } := by
+    show frameAllowanceEvent frame.sevm frame.pre frame.post =
+      some { owner := frame.sevm.caller.toB256
+             spender := Sevm.argWord frame.sevm 0
+             caller := frame.sevm.caller
+             depth := frame.sevm.depth
+             visit := .approveStore (Sevm.argWord frame.sevm 1) }
+    simp [frameAllowanceEvent, hnonempty, hsel]
+  have hstorCa := hstor
+  rw [htarget] at hstorCa
+  have hprefixEffect : AllowanceRegionEffect ca frame.pre
+      callbackCursor.pre [CountedFrame.ofFrame dp ca frame] := by
+    refine ⟨fun key hkey => ?_, hcodeCallback⟩
+    rw [congrFun hstorEntry ca, applyAllowanceLedger_singleton, hown]
+    simp only [AllowanceEvent.key, AllowanceVisit.written?]
+    show (Devm.getStor callbackCursor.pre ca).get key = _
+    rw [hstorCa]
+    by_cases hkeyEq : projectedAllowanceKey frame.sevm.caller.toB256
+        (Sevm.argWord frame.sevm 0) = key
+    · rw [if_pos hkeyEq, ← hkeyEq, ← approveRuntimeKey_eq_projected]
+      exact Stor.get_set_self _ _ _
+    · rw [if_neg hkeyEq]
+      apply Stor.get_set_ne
+      rw [approveRuntimeKey_eq_projected]
+      exact hkeyEq
+  have hprefixSound : AllowanceRegionEffectSound ca frame.pre
+      callbackCursor.pre [CountedFrame.ofFrame dp ca frame] :=
+    { hprefixEffect with
+      entryRead := AllowanceEntryReadSound.ofFrame htarget
+        (isFlashInvocation_eq_false_of_ownRecordLast hnotlast) }
+  exact hprefixSound.append childEffect
+
 end Weth10
 
 end Blanc

@@ -413,6 +413,15 @@ theorem AllowanceRegionEffectSound.refl {ca : Adr} {pre : Devm} :
     AllowanceRegionEffectSound ca pre pre [] :=
   .of_getStorCode_eq rfl rfl
 
+/-- A segment that records nothing is read-sound for free: the empty ledger
+admits no split, so the clause is vacuous.  Every contract-neutral step of
+the generic recursion lands here. -/
+theorem AllowanceRegionEffectSound.of_nilLedger
+    {ca : Adr} {pre post : Devm}
+    (heffect : AllowanceRegionEffect ca pre post []) :
+    AllowanceRegionEffectSound ca pre post [] :=
+  { heffect with entryRead := .nil _ }
+
 /-- Chronological composition of two read-sound transported segments. -/
 theorem AllowanceRegionEffectSound.append
     {ca : Adr} {pre mid post : Devm}
@@ -423,6 +432,66 @@ theorem AllowanceRegionEffectSound.append
   { hleft.toAllowanceRegionEffect.append hright.toAllowanceRegionEffect with
     entryRead :=
       .append hleft.storage hleft.entryRead hright.entryRead }
+
+/-! ## Single-record arms
+
+Most selectors contribute exactly one counted record: their compiled body
+spawns nothing counted, and their allowance activity precedes their (absent)
+descendants, so `Exec.frameContribution` places their own record first.  The
+three lemmas below package that shape once, so each such arm supplies only
+its childlessness witness, its placement witness, and its already-proved
+storage transport. -/
+
+/-- A frame dispatching to neither `flashLoan` nor `permit` records its own
+contribution ahead of its descendant stream. -/
+theorem ownRecordLast_eq_false_of_selector {e : Sevm} {sig : B256}
+    (hselector : Sevm.selector e = sig)
+    (hneFlash : sig ≠ flashLoanSelector)
+    (hnePermit : sig ≠ permitSelector) :
+    ownRecordLast e = false := by
+  simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hselector,
+    hneFlash, hnePermit]
+
+/-- A frame entered with empty calldata dispatches to neither `flashLoan`
+nor `permit`, so it too records its own contribution first. -/
+theorem ownRecordLast_eq_false_of_data_empty {e : Sevm}
+    (hempty : e.data.length.toB256 = 0) : ownRecordLast e = false := by
+  simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hempty]
+
+/-- The attribution stream of an own-record-first exact invocation with no
+counted descendants is that frame's own record alone. -/
+theorem Exec.attributionStream_eq_singleton
+    (dp : DeployParams) (ca : Adr) (frame : Exec.Frame)
+    (hexact : frame.exactInvocation dp ca)
+    (hinner : Exec.attributionInner dp ca frame.run = [])
+    (hnotlast : ownRecordLast frame.sevm = false) :
+    Exec.attributionStream dp ca frame.run =
+      [CountedFrame.ofFrame dp ca frame] := by
+  have hframe : Exec.Frame.ofRun frame.run frame.committed = frame := by
+    cases frame
+    rfl
+  rw [Exec.attributionStream_eq_frameContribution dp ca frame.run
+      frame.committed, hframe, hinner,
+    Exec.frameContribution_eq_cons dp ca frame [] hexact hnotlast]
+
+/-- Read-sound upgrade for a single-record arm.  The ledger is the frame's
+own record alone, so the only admissible split has an empty prefix, and a
+non-flash frame's recorded read is by construction its entry word.  The
+storage side is reused verbatim from the arm's existing transport. -/
+theorem AllowanceRegionEffectSound.of_singletonArm
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    (context : frame.AuthenticContext dp ca)
+    (heffect : AllowanceRegionEffect ca frame.pre frame.post
+      (Exec.attributionStream dp ca frame.run))
+    (hinner : Exec.attributionInner dp ca frame.run = [])
+    (hnotlast : ownRecordLast frame.sevm = false) :
+    AllowanceRegionEffectSound ca frame.pre frame.post
+      (Exec.attributionStream dp ca frame.run) := by
+  refine { heffect with entryRead := ?_ }
+  rw [Exec.attributionStream_eq_singleton dp ca frame context.invocation
+    hinner hnotlast]
+  exact AllowanceEntryReadSound.ofFrame context.invocation.2.1
+    (isFlashInvocation_eq_false_of_ownRecordLast hnotlast)
 
 /-! ## The recursion interface -/
 
@@ -476,6 +545,77 @@ theorem CompiledFrameAllowanceHandler.compiledBodyAllowanceHandler
     {dp : DeployParams} {ca : Adr}
     (handler : CompiledFrameAllowanceHandler dp ca) :
     CompiledBodyAllowanceHandler dp ca := by
+  intro sevm pre post hrun htarget hdeeper run committed installed rootDirect
+  let frame := Exec.Frame.ofRun run committed
+  have hrootDirect := rootDirect htarget
+  have context : frame.AuthenticContext dp ca := by
+    refine ⟨hrootDirect.1, ?_, installed⟩
+    refine ⟨rfl, htarget, hrootDirect.2, ?_⟩
+    exact (installed.2 htarget).1
+  exact handler frame context hdeeper
+
+/-! ## The read-sound recursion interface
+
+Exact siblings of the three interfaces above, carrying
+`AllowanceRegionEffectSound` in place of `AllowanceRegionEffect`.  They are
+declared as siblings rather than strengthenings in place so that every
+existing consumer — and every published claim pinned by type — keeps
+asserting exactly what it asserted before. -/
+
+/-- Read-sound sibling of `Exec.CoreAllowanceSound`. -/
+def Exec.CoreAllowanceReadSound (dp : DeployParams) (ca : Adr)
+    (pc : Nat) (sevm : Sevm) (pre : Devm) (out : Execution) : Prop :=
+  ∀ (run : Exec pc sevm pre out)
+    (committed : Execution.commits out = true),
+    Prog.At (weth10 dp) ca pc sevm pre →
+    (sevm.currentTarget = ca →
+      Exec.Frame.IsRoot (Exec.Frame.ofRun run committed) ∧
+        sevm.codeAddress = some ca) →
+    AllowanceRegionEffectSound ca pre
+      (Execution.committedPost out committed)
+      (Exec.attributionStream dp ca run)
+
+/-- The read-sound core downgrades to the landed one. -/
+theorem Exec.CoreAllowanceReadSound.coreAllowanceSound
+    {dp : DeployParams} {ca : Adr}
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (h : Exec.CoreAllowanceReadSound dp ca pc sevm pre out) :
+    Exec.CoreAllowanceSound dp ca pc sevm pre out :=
+  fun run committed installed rootDirect =>
+    (h run committed installed rootDirect).toAllowanceRegionEffect
+
+/-- Read-sound sibling of `CompiledBodyAllowanceHandler`. -/
+def CompiledBodyAllowanceReadHandler (dp : DeployParams) (ca : Adr) : Prop :=
+  ∀ {sevm : Sevm} {pre post : Devm},
+    Prog.Run sevm pre (weth10 dp) post →
+    sevm.currentTarget = ca →
+    ForallDeeperAt sevm.depth ca (weth10 dp)
+      (fun pc s d out _ => Exec.CoreAllowanceReadSound dp ca pc s d out) →
+    ∀ (run : Exec 0 sevm pre (.ok post))
+      (committed : Execution.commits (.ok post) = true),
+      Prog.At (weth10 dp) ca 0 sevm pre →
+      (sevm.currentTarget = ca →
+        Exec.Frame.IsRoot (Exec.Frame.ofRun run committed) ∧
+          sevm.codeAddress = some ca) →
+      AllowanceRegionEffectSound ca pre post
+        (Exec.attributionStream dp ca run)
+
+/-- Read-sound sibling of `CompiledFrameAllowanceHandler`. -/
+def CompiledFrameAllowanceReadHandler (dp : DeployParams) (ca : Adr) : Prop :=
+  ∀ (frame : Exec.Frame),
+    frame.AuthenticContext dp ca →
+    ForallDeeperAt frame.sevm.depth ca (weth10 dp)
+      (fun pc sevm pre out _ =>
+        Exec.CoreAllowanceReadSound dp ca pc sevm pre out) →
+    AllowanceRegionEffectSound ca frame.pre frame.post
+      (Exec.attributionStream dp ca frame.run)
+
+/-- Root/direct hypotheses reconstruct the authentic frame context, exactly
+as in the landed handler. -/
+theorem CompiledFrameAllowanceReadHandler.compiledBodyAllowanceReadHandler
+    {dp : DeployParams} {ca : Adr}
+    (handler : CompiledFrameAllowanceReadHandler dp ca) :
+    CompiledBodyAllowanceReadHandler dp ca := by
   intro sevm pre post hrun htarget hdeeper run committed installed rootDirect
   let frame := Exec.Frame.ofRun run committed
   have hrootDirect := rootDirect htarget

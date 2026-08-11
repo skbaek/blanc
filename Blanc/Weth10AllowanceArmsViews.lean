@@ -949,6 +949,227 @@ theorem Exec.Frame.allowanceRegionEffect_of_flashFee
     selector_flashFee_ne_flashLoanSelector
     selector_flashFee_ne_allowanceSelector hstor hcode
 
+/-! ## Read-sound variants
+
+Every view above contributes exactly one counted record, and that record's
+allowance event is `none` or a pure read of the frame's entry storage, so
+entry-read soundness holds on the only admissible split.
+`AllowanceRegionEffectSound.of_singletonArm` packages that argument; each arm
+below supplies its already-proved storage transport, its childlessness
+witness, and the two selector separations that place its own record ahead of
+its (absent) descendants. -/
+
+/-- The `name` view transports the allowance region read-soundly: its ledger
+is the frame's own record alone. -/
+theorem Exec.Frame.allowanceRegionEffectSound_of_name
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    (context : frame.AuthenticContext dp ca)
+    (hselector : Sevm.selector frame.sevm = selector "name" [])
+    (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
+    AllowanceRegionEffectSound ca frame.pre frame.post
+      (Exec.attributionStream dp ca frame.run) :=
+  .of_singletonArm context
+    (frame.allowanceRegionEffect_of_name context hselector hnonempty)
+    (frame.attributionInner_eq_nil_of_name context hselector hnonempty)
+    (ownRecordLast_eq_false_of_selector hselector
+      selector_name_ne_flashLoanSelector selector_name_ne_permitSelector)
+
+/-- The `symbol` view transports the allowance region read-soundly: its
+ledger is the frame's own record alone. -/
+theorem Exec.Frame.allowanceRegionEffectSound_of_symbol
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    (context : frame.AuthenticContext dp ca)
+    (hselector : Sevm.selector frame.sevm = selector "symbol" [])
+    (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
+    AllowanceRegionEffectSound ca frame.pre frame.post
+      (Exec.attributionStream dp ca frame.run) :=
+  .of_singletonArm context
+    (frame.allowanceRegionEffect_of_symbol context hselector hnonempty)
+    (frame.attributionInner_eq_nil_of_symbol context hselector hnonempty)
+    (ownRecordLast_eq_false_of_selector hselector
+      selector_symbol_ne_flashLoanSelector selector_symbol_ne_permitSelector)
+
+/-- The `decimals` view transports the allowance region read-soundly: its
+ledger is the frame's own record alone. -/
+theorem Exec.Frame.allowanceRegionEffectSound_of_decimals
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    (context : frame.AuthenticContext dp ca)
+    (hselector : Sevm.selector frame.sevm = selector "decimals" [])
+    (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
+    AllowanceRegionEffectSound ca frame.pre frame.post
+      (Exec.attributionStream dp ca frame.run) :=
+  .of_singletonArm context
+    (frame.allowanceRegionEffect_of_decimals context hselector hnonempty)
+    (frame.attributionInner_eq_nil_of_decimals context hselector hnonempty)
+    (ownRecordLast_eq_false_of_selector hselector
+      selector_decimals_ne_flashLoanSelector
+      selector_decimals_ne_permitSelector)
+
+/-- The `PERMIT_TYPEHASH` view transports the allowance region read-soundly:
+its ledger is the frame's own record alone. -/
+theorem Exec.Frame.allowanceRegionEffectSound_of_permitTypehash
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    (context : frame.AuthenticContext dp ca)
+    (hselector : Sevm.selector frame.sevm = selector "PERMIT_TYPEHASH" [])
+    (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
+    AllowanceRegionEffectSound ca frame.pre frame.post
+      (Exec.attributionStream dp ca frame.run) :=
+  .of_singletonArm context
+    (frame.allowanceRegionEffect_of_permitTypehash context hselector hnonempty)
+    (frame.attributionInner_eq_nil_of_permitTypehash context hselector
+      hnonempty)
+    (ownRecordLast_eq_false_of_selector hselector
+      selector_PERMIT_TYPEHASH_ne_flashLoanSelector
+      selector_PERMIT_TYPEHASH_ne_permitSelector)
+
+/-- The `CALLBACK_SUCCESS` view transports the allowance region read-
+soundly: its ledger is the frame's own record alone. -/
+theorem Exec.Frame.allowanceRegionEffectSound_of_callbackSuccess
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    (context : frame.AuthenticContext dp ca)
+    (hselector : Sevm.selector frame.sevm = selector "CALLBACK_SUCCESS" [])
+    (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
+    AllowanceRegionEffectSound ca frame.pre frame.post
+      (Exec.attributionStream dp ca frame.run) :=
+  .of_singletonArm context
+    (frame.allowanceRegionEffect_of_callbackSuccess context hselector hnonempty)
+    (frame.attributionInner_eq_nil_of_callbackSuccess context hselector
+      hnonempty)
+    (ownRecordLast_eq_false_of_selector hselector
+      selector_CALLBACK_SUCCESS_ne_flashLoanSelector
+      selector_CALLBACK_SUCCESS_ne_permitSelector)
+
+/-- The `totalSupply` view transports the allowance region read-soundly: its
+ledger is the frame's own record alone. -/
+theorem Exec.Frame.allowanceRegionEffectSound_of_totalSupply
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    (context : frame.AuthenticContext dp ca)
+    (hselector : Sevm.selector frame.sevm = selector "totalSupply" [])
+    (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
+    AllowanceRegionEffectSound ca frame.pre frame.post
+      (Exec.attributionStream dp ca frame.run) :=
+  .of_singletonArm context
+    (frame.allowanceRegionEffect_of_totalSupply context hselector hnonempty)
+    (frame.attributionInner_eq_nil_of_totalSupply context hselector hnonempty)
+    (ownRecordLast_eq_false_of_selector hselector
+      selector_totalSupply_ne_flashLoanSelector
+      selector_totalSupply_ne_permitSelector)
+
+/-- The `balanceOf` view transports the allowance region read-soundly: its
+ledger is the frame's own record alone. -/
+theorem Exec.Frame.allowanceRegionEffectSound_of_balanceOf
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    (context : frame.AuthenticContext dp ca)
+    (hselector : Sevm.selector frame.sevm = selector "balanceOf" [.address])
+    (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
+    AllowanceRegionEffectSound ca frame.pre frame.post
+      (Exec.attributionStream dp ca frame.run) :=
+  .of_singletonArm context
+    (frame.allowanceRegionEffect_of_balanceOf context hselector hnonempty)
+    (frame.attributionInner_eq_nil_of_balanceOf context hselector hnonempty)
+    (ownRecordLast_eq_false_of_selector hselector
+      selector_balanceOf_ne_flashLoanSelector
+      selector_balanceOf_ne_permitSelector)
+
+/-- The `nonces` view transports the allowance region read-soundly: its
+ledger is the frame's own record alone. -/
+theorem Exec.Frame.allowanceRegionEffectSound_of_nonces
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    (context : frame.AuthenticContext dp ca)
+    (hselector : Sevm.selector frame.sevm = selector "nonces" [.address])
+    (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
+    AllowanceRegionEffectSound ca frame.pre frame.post
+      (Exec.attributionStream dp ca frame.run) :=
+  .of_singletonArm context
+    (frame.allowanceRegionEffect_of_nonces context hselector hnonempty)
+    (frame.attributionInner_eq_nil_of_nonces context hselector hnonempty)
+    (ownRecordLast_eq_false_of_selector hselector
+      selector_nonces_ne_flashLoanSelector selector_nonces_ne_permitSelector)
+
+/-- The `flashMinted` view transports the allowance region read-soundly: its
+ledger is the frame's own record alone. -/
+theorem Exec.Frame.allowanceRegionEffectSound_of_flashMinted
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    (context : frame.AuthenticContext dp ca)
+    (hselector : Sevm.selector frame.sevm = selector "flashMinted" [])
+    (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
+    AllowanceRegionEffectSound ca frame.pre frame.post
+      (Exec.attributionStream dp ca frame.run) :=
+  .of_singletonArm context
+    (frame.allowanceRegionEffect_of_flashMinted context hselector hnonempty)
+    (frame.attributionInner_eq_nil_of_flashMinted context hselector hnonempty)
+    (ownRecordLast_eq_false_of_selector hselector
+      selector_flashMinted_ne_flashLoanSelector
+      selector_flashMinted_ne_permitSelector)
+
+/-- The `deploymentChainId` view transports the allowance region read-
+soundly: its ledger is the frame's own record alone. -/
+theorem Exec.Frame.allowanceRegionEffectSound_of_deploymentChainId
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    (context : frame.AuthenticContext dp ca)
+    (hselector : Sevm.selector frame.sevm = selector "deploymentChainId" [])
+    (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
+    AllowanceRegionEffectSound ca frame.pre frame.post
+      (Exec.attributionStream dp ca frame.run) :=
+  .of_singletonArm context
+    (frame.allowanceRegionEffect_of_deploymentChainId context hselector
+      hnonempty)
+    (frame.attributionInner_eq_nil_of_deploymentChainId context hselector
+      hnonempty)
+    (ownRecordLast_eq_false_of_selector hselector
+      selector_deploymentChainId_ne_flashLoanSelector
+      selector_deploymentChainId_ne_permitSelector)
+
+/-- The `DOMAIN_SEPARATOR` view transports the allowance region read-
+soundly: its ledger is the frame's own record alone. -/
+theorem Exec.Frame.allowanceRegionEffectSound_of_domainSeparator
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    (context : frame.AuthenticContext dp ca)
+    (hselector : Sevm.selector frame.sevm = selector "DOMAIN_SEPARATOR" [])
+    (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
+    AllowanceRegionEffectSound ca frame.pre frame.post
+      (Exec.attributionStream dp ca frame.run) :=
+  .of_singletonArm context
+    (frame.allowanceRegionEffect_of_domainSeparator context hselector hnonempty)
+    (frame.attributionInner_eq_nil_of_domainSeparator context hselector
+      hnonempty)
+    (ownRecordLast_eq_false_of_selector hselector
+      selector_DOMAIN_SEPARATOR_ne_flashLoanSelector
+      selector_DOMAIN_SEPARATOR_ne_permitSelector)
+
+/-- The `maxFlashLoan` view transports the allowance region read-soundly:
+its ledger is the frame's own record alone. -/
+theorem Exec.Frame.allowanceRegionEffectSound_of_maxFlashLoan
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    (context : frame.AuthenticContext dp ca)
+    (hselector : Sevm.selector frame.sevm = selector "maxFlashLoan" [.address])
+    (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
+    AllowanceRegionEffectSound ca frame.pre frame.post
+      (Exec.attributionStream dp ca frame.run) :=
+  .of_singletonArm context
+    (frame.allowanceRegionEffect_of_maxFlashLoan context hselector hnonempty)
+    (frame.attributionInner_eq_nil_of_maxFlashLoan context hselector hnonempty)
+    (ownRecordLast_eq_false_of_selector hselector
+      selector_maxFlashLoan_ne_flashLoanSelector
+      selector_maxFlashLoan_ne_permitSelector)
+
+/-- The `flashFee` view transports the allowance region read-soundly: its
+ledger is the frame's own record alone. -/
+theorem Exec.Frame.allowanceRegionEffectSound_of_flashFee
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    (context : frame.AuthenticContext dp ca)
+    (hselector : Sevm.selector frame.sevm =
+      selector "flashFee" [.address, .uint256])
+    (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
+    AllowanceRegionEffectSound ca frame.pre frame.post
+      (Exec.attributionStream dp ca frame.run) :=
+  .of_singletonArm context
+    (frame.allowanceRegionEffect_of_flashFee context hselector hnonempty)
+    (frame.attributionInner_eq_nil_of_flashFee context hselector hnonempty)
+    (ownRecordLast_eq_false_of_selector hselector
+      selector_flashFee_ne_flashLoanSelector
+      selector_flashFee_ne_permitSelector)
+
 end Weth10
 
 end Blanc

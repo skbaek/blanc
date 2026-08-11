@@ -1203,6 +1203,162 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferZero
   exact applyAllowanceLedger_congr
     (congrArg (fun s : Stor => s.get key) hbodyStor.symm)
 
+/-! ## Read-sound transport across one retained child message
+
+The same walk against the strengthened carrier: the retained child's stream
+is entry-read sound against the child's entry storage, and the surrounding
+message-entry and settlement segments record nothing, so composing them
+re-bases it onto the parent's. -/
+
+/-- Read-sound sibling of
+`ProcessMessageTrace.allowanceRegionDelta_of_forallDeeperAt`. -/
+theorem ProcessMessageTrace.allowanceRegionDeltaSound_of_forallDeeperAt
+    {dp : DeployParams} {ca : Adr} {depth : Nat}
+    {msg : Msg} {post parent : Devm}
+    (trace : ProcessMessageTrace msg (.ok post))
+    (hparent : parent.state = msg.benv.state)
+    (hdepth : msg.depth < depth)
+    (hcode : some (parent.getCode ca).toList =
+      Prog.compile (weth10 dp))
+    (htargetCode : msg.currentTarget = ca →
+      some msg.code.toList = Prog.compile (weth10 dp))
+    (htargetDirect : msg.currentTarget = ca →
+      msg.codeAddress = some ca)
+    (hdeeper : ForallDeeperAt depth ca (weth10 dp)
+      (fun pc sevm pre out _ =>
+        Exec.CoreAllowanceReadSound dp ca pc sevm pre out)) :
+    AllowanceRegionEffectSound ca parent post
+      (trace.retained.attributionStream dp ca) := by
+  rcases trace with ⟨slot, retained, hprocess⟩
+  cases retained with
+  | none =>
+      have hstorage : Devm.getStor parent ca = Devm.getStor post ca := by
+        rcases ProcessMessage.none_ok_state_cases hprocess with
+          hrollback | ⟨benv, htransfer, hpost⟩
+        · exact congrArg (fun state : State => state.getStor ca)
+            (hparent.trans hrollback.symm)
+        · change msg.benvAfterTransfer = .ok benv at htransfer
+          exact (congrArg (fun state : State => state.getStor ca)
+              hparent).trans <|
+            (benvAfterTransfer_getStor_eq htransfer ca).symm.trans <|
+              (congrArg (fun state : State => state.getStor ca) hpost).symm
+      have hcodeEq : parent.getCode ca = post.getCode ca := by
+        rcases ProcessMessage.none_ok_state_cases hprocess with
+          hrollback | ⟨benv, htransfer, hpost⟩
+        · exact congrArg (fun state : State => state.getCode ca)
+            (hparent.trans hrollback.symm)
+        · change msg.benvAfterTransfer = .ok benv at htransfer
+          exact (congrArg (fun state : State => state.getCode ca)
+              hparent).trans <|
+            (benvAfterTransfer_ok_getCode htransfer ca).symm.trans <|
+              (congrArg (fun state : State => state.getCode ca) hpost).symm
+      exact AllowanceRegionEffectSound.of_getStorCode_eq hstorage hcodeEq
+  | @some pc sevm pre out run =>
+      have henter : (Frame.ofCall msg).enter =
+          .run ⟨pc, sevm, pre⟩ :=
+        (RunFrame.some_inv hprocess).1
+      rcases Frame.enter_run_inv henter with ⟨benv, htransfer, hevm⟩
+      simp only [Frame.ofCall] at htransfer hevm
+      have hpreState : pre.state = benv.state := by
+        have component := congrArg (fun evm : Evm => evm.dyna.state) hevm
+        change pre.state = (initEvm (msg.withBenv benv)).dyna.state
+        exact component
+      have hsevm : sevm = initSevm (msg.withBenv benv) :=
+        congrArg (fun evm : Evm => evm.sta) hevm
+      have hpc : pc = 0 := by
+        simpa [initEvm] using congrArg (fun evm : Evm => evm.pc) hevm
+      have hmemory : pre.memory = Mem.empty := by
+        have component := congrArg (fun evm : Evm => evm.dyna.memory) hevm
+        change pre.memory = (initEvm (msg.withBenv benv)).dyna.memory
+        simpa [initEvm, initDevm, Msg.withBenv] using component
+      have hentryStorage : Devm.getStor parent ca =
+          Devm.getStor pre ca := by
+        exact (congrArg (fun state : State => state.getStor ca)
+            hparent).trans <|
+          (benvAfterTransfer_getStor_eq htransfer ca).symm.trans <|
+            (congrArg (fun state : State => state.getStor ca)
+              hpreState).symm
+      have hentryCodeEq : parent.getCode ca = pre.getCode ca := by
+        exact (congrArg (fun state : State => state.getCode ca)
+            hparent).trans <|
+          (benvAfterTransfer_ok_getCode htransfer ca).symm.trans <|
+            (congrArg (fun state : State => state.getCode ca)
+              hpreState).symm
+      have hentryCode : some (pre.getCode ca).toList =
+          Prog.compile (weth10 dp) := by
+        calc
+          some (pre.getCode ca).toList =
+              some (benv.state.getCode ca).toList := by
+            change some (pre.state.getCode ca).toList = _
+            rw [hpreState]
+          _ = some (msg.benv.state.getCode ca).toList := by
+            rw [benvAfterTransfer_ok_getCode htransfer ca]
+          _ = some (parent.getCode ca).toList := by
+            change some (msg.benv.state.getCode ca).toList =
+              some (parent.state.getCode ca).toList
+            rw [hparent]
+          _ = _ := hcode
+      have hat : Prog.At (weth10 dp) ca pc sevm pre := by
+        refine ⟨hentryCode, ?_⟩
+        intro htarget
+        have hmsgTarget : msg.currentTarget = ca := by
+          rw [hsevm] at htarget
+          simpa [initSevm, Msg.withBenv] using htarget
+        refine ⟨?_, hpc⟩
+        rw [hsevm]
+        simpa [initSevm, Msg.withBenv] using htargetCode hmsgTarget
+      have hdirect : sevm.currentTarget = ca →
+          sevm.codeAddress = some ca := by
+        intro htarget
+        have hmsgTarget : msg.currentTarget = ca := by
+          rw [hsevm] at htarget
+          simpa [initSevm, Msg.withBenv] using htarget
+        rw [hsevm]
+        simpa [initSevm, Msg.withBenv] using htargetDirect hmsgTarget
+      by_cases hcommit : Execution.commits out = true
+      · cases out with
+        | error error => simp [Execution.commits] at hcommit
+        | ok raw =>
+            have hchildDepth : sevm.depth < depth := by
+              rw [hsevm]
+              simpa [initSevm, Msg.withBenv] using hdepth
+            have hcore := hdeeper pc sevm pre (.ok raw) run
+              hchildDepth hat
+            have childEffect := hcore run hcommit hat
+              (fun htarget => ⟨⟨hpc, hmemory⟩, hdirect htarget⟩)
+            have hpostState : post.state = raw.state :=
+              ProcessMessage.ok_state_eq_committedPost hprocess hcommit
+            have hpostStorage : Devm.getStor raw ca =
+                Devm.getStor post ca :=
+              congrArg (fun state : State => state.getStor ca)
+                hpostState.symm
+            have hpostCode : raw.getCode ca = post.getCode ca :=
+              congrArg (fun state : State => state.getCode ca)
+                hpostState.symm
+            exact (by
+              simpa only [List.nil_append, List.append_nil,
+                RetainedXlot.attributionStream] using
+                (AllowanceRegionEffectSound.of_getStorCode_eq
+                    hentryStorage hentryCodeEq).append
+                  (childEffect.append
+                    (AllowanceRegionEffectSound.of_getStorCode_eq
+                      hpostStorage hpostCode)))
+      · have hactions : Exec.attributionStream dp ca run = [] :=
+          Exec.attributionStream_eq_nil_of_not_commits run hcommit
+        have hpostState : post.state = msg.benv.state :=
+          ProcessMessage.ok_state_eq_of_not_commits hprocess hcommit
+        have hstorage : Devm.getStor parent ca = Devm.getStor post ca :=
+          congrArg (fun state : State => state.getStor ca)
+            (hparent.trans hpostState.symm)
+        have hcodeEq : parent.getCode ca = post.getCode ca :=
+          congrArg (fun state : State => state.getCode ca)
+            (hparent.trans hpostState.symm)
+        have hstream : RetainedXlot.attributionStream dp ca
+            (RetainedXlot.some run) = [] := by
+          simpa only [RetainedXlot.attributionStream] using hactions
+        rw [hstream]
+        exact AllowanceRegionEffectSound.of_getStorCode_eq hstorage hcodeEq
+
 end Weth10
 
 end Blanc
