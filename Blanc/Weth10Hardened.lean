@@ -121,54 +121,9 @@ theorem actionOutflow_append (u : Adr) (left right : List FlowAction) :
 
 The classified atom, the debit provenance and the allowance visit of one
 invocation are computed by three if-chains that test the dispatched selector
-in different orders.  Reconciling them needs exactly the separations below;
-every other branch of every chain is decided by a test the atom chain has
-already passed. -/
-
-theorem transferFromSelector_ne_transferSelector :
-    transferFromSelector ≠ transferSelector := by decide +kernel
-
-theorem transferFromSelector_ne_transferAndCallSelector :
-    transferFromSelector ≠ transferAndCallSelector := by decide +kernel
-
-theorem transferFromSelector_ne_withdrawSelector :
-    transferFromSelector ≠ withdrawSelector := by decide +kernel
-
-theorem transferFromSelector_ne_withdrawToSelector :
-    transferFromSelector ≠ withdrawToSelector := by decide +kernel
-
-theorem transferFromSelector_ne_approveSelector :
-    transferFromSelector ≠ approveSelector := by decide +kernel
-
-theorem transferFromSelector_ne_approveAndCallSelector :
-    transferFromSelector ≠ approveAndCallSelector := by decide +kernel
-
-theorem transferFromSelector_ne_permitSelector :
-    transferFromSelector ≠ permitSelector := by decide +kernel
-
-theorem withdrawFromSelector_ne_transferSelector :
-    withdrawFromSelector ≠ transferSelector := by decide +kernel
-
-theorem withdrawFromSelector_ne_transferAndCallSelector :
-    withdrawFromSelector ≠ transferAndCallSelector := by decide +kernel
-
-theorem withdrawFromSelector_ne_withdrawSelector :
-    withdrawFromSelector ≠ withdrawSelector := by decide +kernel
-
-theorem withdrawFromSelector_ne_withdrawToSelector :
-    withdrawFromSelector ≠ withdrawToSelector := by decide +kernel
-
-theorem withdrawFromSelector_ne_transferFromSelector :
-    withdrawFromSelector ≠ transferFromSelector := by decide +kernel
-
-theorem withdrawFromSelector_ne_approveSelector :
-    withdrawFromSelector ≠ approveSelector := by decide +kernel
-
-theorem withdrawFromSelector_ne_approveAndCallSelector :
-    withdrawFromSelector ≠ approveAndCallSelector := by decide +kernel
-
-theorem withdrawFromSelector_ne_permitSelector :
-    withdrawFromSelector ≠ permitSelector := by decide +kernel
+in different orders.  Reconciling them needs exactly the `transferFrom` and
+`withdrawFrom` separations of `Weth10SelectorFacts`; every other branch of
+every chain is decided by a test the atom chain has already passed. -/
 
 /-! ## The ledger/action mirror -/
 

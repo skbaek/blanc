@@ -454,14 +454,6 @@ theorem flashSettlement_allowanceLedger
     (Devm.getStor post e.currentTarget).get key =
       applyAllowanceLedger (Devm.getStor settlePre e.currentTarget)
         [record] key := by
-  have hneApprove : flashLoanSelector ≠ approveSelector := by decide +kernel
-  have hneApproveCall : flashLoanSelector ≠ approveAndCallSelector := by
-    decide +kernel
-  have hnePermit : flashLoanSelector ≠ permitSelector := by decide +kernel
-  have hneTransferFrom : flashLoanSelector ≠ transferFromSelector := by
-    decide +kernel
-  have hneWithdrawFrom : flashLoanSelector ≠ withdrawFromSelector := by
-    decide +kernel
   have haccept := flashSettlement_reconstruction houtcome hburn
   rw [applyAllowanceLedger_singleton, hrecord]
   by_cases hafter : (Devm.getStor post e.currentTarget).get
@@ -477,8 +469,12 @@ theorem flashSettlement_allowanceLedger
                caller := e.caller
                depth := e.depth
                visit := .flashMax } := by
-      simp [frameAllowanceEvent, hne0, hsel, hneApprove, hneApproveCall,
-        hnePermit, hneTransferFrom, hneWithdrawFrom, hafter]
+      simp [frameAllowanceEvent, hne0, hsel,
+        flashLoanSelector_ne_approveSelector,
+        flashLoanSelector_ne_approveAndCallSelector,
+        flashLoanSelector_ne_permitSelector,
+        flashLoanSelector_ne_transferFromSelector,
+        flashLoanSelector_ne_withdrawFromSelector, hafter]
     rw [hevent]
     simp only [AllowanceVisit.written?, ite_self]
     by_cases hkeyEq : flashAllowanceRuntimeKey e = key
@@ -494,8 +490,12 @@ theorem flashSettlement_allowanceLedger
                    (flashAllowanceRuntimeKey e) + Sevm.argWord e 2)
                  ((Devm.getStor post e.currentTarget).get
                    (flashAllowanceRuntimeKey e)) } := by
-      simp [frameAllowanceEvent, hne0, hsel, hneApprove, hneApproveCall,
-        hnePermit, hneTransferFrom, hneWithdrawFrom, hafter]
+      simp [frameAllowanceEvent, hne0, hsel,
+        flashLoanSelector_ne_approveSelector,
+        flashLoanSelector_ne_approveAndCallSelector,
+        flashLoanSelector_ne_permitSelector,
+        flashLoanSelector_ne_transferFromSelector,
+        flashLoanSelector_ne_withdrawFromSelector, hafter]
     rw [hevent]
     simp only [AllowanceEvent.key, AllowanceVisit.written?]
     by_cases hkeyEq :

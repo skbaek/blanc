@@ -530,12 +530,11 @@ theorem Exec.Frame.allowanceRegionEffect_of_depositToAndCall
     exact context.installed.1
   have childEffect := callback.allowanceRegionEffect retained htarget
     installedCallback hdeeper
-  have hneFlash : depositToAndCallSelector ≠ flashLoanSelector := by
-    decide +kernel
   have hsel : Sevm.selector frame.sevm = depositToAndCallSelector :=
     hselector
   have hnotflash : isFlashInvocation frame.sevm = false := by
-    simp [isFlashInvocation, hsel, hneFlash]
+    simp [isFlashInvocation, hsel,
+      depositToAndCallSelector_ne_flashLoanSelector]
   have hframeEq : Exec.Frame.ofRun frame.run frame.committed = frame := by
     cases frame
     rfl
@@ -547,25 +546,16 @@ theorem Exec.Frame.allowanceRegionEffect_of_depositToAndCall
       Exec.frameContribution_eq_cons dp ca frame _
         context.invocation hnotflash]
   rw [hstream]
-  have hneApprove : depositToAndCallSelector ≠ approveSelector := by
-    decide +kernel
-  have hneApproveCall :
-      depositToAndCallSelector ≠ approveAndCallSelector := by
-    decide +kernel
-  have hnePermit : depositToAndCallSelector ≠ permitSelector := by
-    decide +kernel
-  have hneTransferFrom :
-      depositToAndCallSelector ≠ transferFromSelector := by
-    decide +kernel
-  have hneWithdrawFrom :
-      depositToAndCallSelector ≠ withdrawFromSelector := by
-    decide +kernel
-  have hneAllowance : depositToAndCallSelector ≠ allowanceSelector := by
-    decide +kernel
   have hown : (CountedFrame.ofFrame dp ca frame).allowance = none := by
     show frameAllowanceEvent frame.sevm frame.pre frame.post = none
-    simp [frameAllowanceEvent, hnonempty, hsel, hneApprove, hneApproveCall,
-      hnePermit, hneTransferFrom, hneWithdrawFrom, hneFlash, hneAllowance]
+    simp [frameAllowanceEvent, hnonempty, hsel,
+      depositToAndCallSelector_ne_approveSelector,
+      depositToAndCallSelector_ne_approveAndCallSelector,
+      depositToAndCallSelector_ne_permitSelector,
+      depositToAndCallSelector_ne_transferFromSelector,
+      depositToAndCallSelector_ne_withdrawFromSelector,
+      depositToAndCallSelector_ne_flashLoanSelector,
+      depositToAndCallSelector_ne_allowanceSelector]
   have hvalid : ValidAdr (normalizedAddressArg frame.sevm 0) :=
     normalizedAddress_valid (Sevm.argWord frame.sevm 0)
   have hstorCa := hstor
@@ -879,11 +869,10 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferAndCall
     exact context.installed.1
   have childEffect := callback.allowanceRegionEffect retained htarget
     installedCallback hdeeper
-  have hneFlash : transferAndCallSelector ≠ flashLoanSelector := by
-    decide +kernel
   have hsel : Sevm.selector frame.sevm = transferAndCallSelector := hselector
   have hnotflash : isFlashInvocation frame.sevm = false := by
-    simp [isFlashInvocation, hsel, hneFlash]
+    simp [isFlashInvocation, hsel,
+      transferAndCallSelector_ne_flashLoanSelector]
   have hframeEq : Exec.Frame.ofRun frame.run frame.committed = frame := by
     cases frame
     rfl
@@ -895,25 +884,16 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferAndCall
       Exec.frameContribution_eq_cons dp ca frame _
         context.invocation hnotflash]
   rw [hstream]
-  have hneApprove : transferAndCallSelector ≠ approveSelector := by
-    decide +kernel
-  have hneApproveCall :
-      transferAndCallSelector ≠ approveAndCallSelector := by
-    decide +kernel
-  have hnePermit : transferAndCallSelector ≠ permitSelector := by
-    decide +kernel
-  have hneTransferFrom :
-      transferAndCallSelector ≠ transferFromSelector := by
-    decide +kernel
-  have hneWithdrawFrom :
-      transferAndCallSelector ≠ withdrawFromSelector := by
-    decide +kernel
-  have hneAllowance : transferAndCallSelector ≠ allowanceSelector := by
-    decide +kernel
   have hown : (CountedFrame.ofFrame dp ca frame).allowance = none := by
     show frameAllowanceEvent frame.sevm frame.pre frame.post = none
-    simp [frameAllowanceEvent, hnonempty, hsel, hneApprove, hneApproveCall,
-      hnePermit, hneTransferFrom, hneWithdrawFrom, hneFlash, hneAllowance]
+    simp [frameAllowanceEvent, hnonempty, hsel,
+      transferAndCallSelector_ne_approveSelector,
+      transferAndCallSelector_ne_approveAndCallSelector,
+      transferAndCallSelector_ne_permitSelector,
+      transferAndCallSelector_ne_transferFromSelector,
+      transferAndCallSelector_ne_withdrawFromSelector,
+      transferAndCallSelector_ne_flashLoanSelector,
+      transferAndCallSelector_ne_allowanceSelector]
   have hprefixKeyCa := hprefixKey
   rw [htarget] at hprefixKeyCa
   have hprefixEffect : AllowanceRegionEffect ca frame.pre
@@ -1075,33 +1055,22 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferAndCallZero
       exact frame.tokenCallbackSuccessAllowanceCloser context.invocation.2.1
         context.invocation.2.2.2 hdeeper)
     hdeeper
-  have hneFlash : transferAndCallSelector ≠ flashLoanSelector := by
-    decide +kernel
-  have hneApprove : transferAndCallSelector ≠ approveSelector := by
-    decide +kernel
-  have hneApproveCall :
-      transferAndCallSelector ≠ approveAndCallSelector := by
-    decide +kernel
-  have hnePermit : transferAndCallSelector ≠ permitSelector := by
-    decide +kernel
-  have hneTransferFrom :
-      transferAndCallSelector ≠ transferFromSelector := by
-    decide +kernel
-  have hneWithdrawFrom :
-      transferAndCallSelector ≠ withdrawFromSelector := by
-    decide +kernel
-  have hneAllowance : transferAndCallSelector ≠ allowanceSelector := by
-    decide +kernel
   have hnotflash : isFlashInvocation frame.sevm = false := by
-    simp [isFlashInvocation, hselector, hneFlash]
+    simp [isFlashInvocation, hselector,
+      transferAndCallSelector_ne_flashLoanSelector]
   have hframe : Exec.Frame.ofRun frame.run frame.committed = frame := by
     cases frame
     rfl
   have hown : (CountedFrame.ofFrame dp ca frame).allowance = none := by
     show frameAllowanceEvent frame.sevm frame.pre frame.post = none
-    simp [frameAllowanceEvent, hnonempty, hselector, hneApprove,
-      hneApproveCall, hnePermit, hneTransferFrom, hneWithdrawFrom,
-      hneFlash, hneAllowance]
+    simp [frameAllowanceEvent, hnonempty, hselector,
+      transferAndCallSelector_ne_approveSelector,
+      transferAndCallSelector_ne_approveAndCallSelector,
+      transferAndCallSelector_ne_permitSelector,
+      transferAndCallSelector_ne_transferFromSelector,
+      transferAndCallSelector_ne_withdrawFromSelector,
+      transferAndCallSelector_ne_flashLoanSelector,
+      transferAndCallSelector_ne_allowanceSelector]
   have hstream : Exec.attributionStream dp ca frame.run =
       CountedFrame.ofFrame dp ca frame ::
         Exec.attributionInner dp ca frame.run := by
@@ -1194,11 +1163,10 @@ theorem Exec.Frame.allowanceRegionEffect_of_approveAndCall
     exact context.installed.1
   have childEffect := callback.allowanceRegionEffect retained htarget
     installedCallback hdeeper
-  have hneFlash : approveAndCallSelector ≠ flashLoanSelector := by
-    decide +kernel
   have hsel : Sevm.selector frame.sevm = approveAndCallSelector := hselector
   have hnotflash : isFlashInvocation frame.sevm = false := by
-    simp [isFlashInvocation, hsel, hneFlash]
+    simp [isFlashInvocation, hsel,
+      approveAndCallSelector_ne_flashLoanSelector]
   have hframeEq : Exec.Frame.ofRun frame.run frame.committed = frame := by
     cases frame
     rfl

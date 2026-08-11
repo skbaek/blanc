@@ -1,4 +1,5 @@
 import Blanc.Weth10AllowanceAccounting
+import Blanc.Weth10SelectorFacts
 
 /-!
 Per-selector arms of the allowance-region transport.
@@ -92,10 +93,9 @@ theorem Exec.Frame.allowanceRegionEffect_of_approve
       (Exec.attributionStream dp ca frame.run) := by
   have hinner : Exec.attributionInner dp ca frame.run = [] :=
     frame.attributionInner_eq_nil_of_approve context hselector hnonempty
-  have hneFlash : approveSelector ≠ flashLoanSelector := by decide +kernel
   have hsel : Sevm.selector frame.sevm = approveSelector := hselector
   have hnotflash : isFlashInvocation frame.sevm = false := by
-    simp [isFlashInvocation, hsel, hneFlash]
+    simp [isFlashInvocation, hsel, approveSelector_ne_flashLoanSelector]
   have hframe : Exec.Frame.ofRun frame.run frame.committed = frame := by
     cases frame
     rfl
@@ -194,10 +194,9 @@ theorem Exec.Frame.allowanceRegionEffect_of_allowance
       (Exec.attributionStream dp ca frame.run) := by
   have hinner : Exec.attributionInner dp ca frame.run = [] :=
     frame.attributionInner_eq_nil_of_allowance context hselector hnonempty
-  have hneFlash : allowanceSelector ≠ flashLoanSelector := by decide +kernel
   have hsel : Sevm.selector frame.sevm = allowanceSelector := hselector
   have hnotflash : isFlashInvocation frame.sevm = false := by
-    simp [isFlashInvocation, hsel, hneFlash]
+    simp [isFlashInvocation, hsel, allowanceSelector_ne_flashLoanSelector]
   have hframe : Exec.Frame.ofRun frame.run frame.committed = frame := by
     cases frame
     rfl
@@ -222,16 +221,6 @@ theorem Exec.Frame.allowanceRegionEffect_of_allowance
         (congrFun heffect.2.2.2.2 ca).symm
       have hne0 : e.data.length.toB256 ≠ 0 := hnonempty
       have hselE : Sevm.selector e = allowanceSelector := hselector
-      have hneApprove : allowanceSelector ≠ approveSelector := by
-        decide +kernel
-      have hneApproveCall : allowanceSelector ≠ approveAndCallSelector := by
-        decide +kernel
-      have hnePermit : allowanceSelector ≠ permitSelector := by
-        decide +kernel
-      have hneTransferFrom : allowanceSelector ≠ transferFromSelector := by
-        decide +kernel
-      have hneWithdrawFrom : allowanceSelector ≠ withdrawFromSelector := by
-        decide +kernel
       have hown : (CountedFrame.ofFrame dp ca
           (⟨0, e, pre, .ok post, run, committed⟩ : Exec.Frame)).allowance =
           some { owner := Sevm.argWord e 0
@@ -249,8 +238,13 @@ theorem Exec.Frame.allowanceRegionEffect_of_allowance
                  visit := .viewRead ((Devm.getStor pre e.currentTarget).get
                    (projectedAllowanceKey (Sevm.argWord e 0)
                      (Sevm.argWord e 1))) }
-        simp [frameAllowanceEvent, hne0, hselE, hneApprove, hneApproveCall,
-          hnePermit, hneTransferFrom, hneWithdrawFrom, hneFlash]
+        simp [frameAllowanceEvent, hne0, hselE,
+          allowanceSelector_ne_approveSelector,
+          allowanceSelector_ne_approveAndCallSelector,
+          allowanceSelector_ne_permitSelector,
+          allowanceSelector_ne_transferFromSelector,
+          allowanceSelector_ne_withdrawFromSelector,
+          allowanceSelector_ne_flashLoanSelector]
       refine ⟨fun key _ => ?_, hcode⟩
       show (Devm.getStor post ca).get key =
         applyAllowanceLedger (Devm.getStor pre ca)

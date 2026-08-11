@@ -1016,10 +1016,9 @@ theorem Exec.Frame.allowanceRegionEffect_of_permit
       (Exec.attributionStream dp ca frame.run) := by
   have hinner : WriteFreeLedger (Exec.attributionInner dp ca frame.run) :=
     frame.attributionInner_writeFree_of_permit context hselector hnonempty
-  have hneFlash : permitSelector ≠ flashLoanSelector := by decide +kernel
   have hsel : Sevm.selector frame.sevm = permitSelector := hselector
   have hnotflash : isFlashInvocation frame.sevm = false := by
-    simp [isFlashInvocation, hsel, hneFlash]
+    simp [isFlashInvocation, hsel, permitSelector_ne_flashLoanSelector]
   have hframe : Exec.Frame.ofRun frame.run frame.committed = frame := by
     cases frame
     rfl
@@ -1053,10 +1052,6 @@ theorem Exec.Frame.allowanceRegionEffect_of_permit
         hcode hselE hne0
       dsimp only at hraw
       rcases hraw with ⟨_, hstor⟩
-      have hneApprove : permitSelector ≠ approveSelector := by
-        decide +kernel
-      have hneApproveCall : permitSelector ≠ approveAndCallSelector := by
-        decide +kernel
       have hown : (CountedFrame.ofFrame dp ca
           (⟨0, e, pre, .ok post, run, committed⟩ : Exec.Frame)).allowance =
           some { owner := Sevm.argWord e 0
@@ -1070,7 +1065,9 @@ theorem Exec.Frame.allowanceRegionEffect_of_permit
                  caller := e.caller
                  depth := e.depth
                  visit := .permitStore (Sevm.argWord e 2) }
-        simp [frameAllowanceEvent, hne0, hselE, hneApprove, hneApproveCall]
+        simp [frameAllowanceEvent, hne0, hselE,
+          permitSelector_ne_approveSelector,
+          permitSelector_ne_approveAndCallSelector]
       refine ⟨fun key hkey => ?_, hcodeEq⟩
       show (Devm.getStor post ca).get key =
         applyAllowanceLedger (Devm.getStor pre ca)

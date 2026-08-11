@@ -936,15 +936,9 @@ theorem Exec.Frame.allowanceRegionEffect_of_withdrawFrom
     (by simp)
     (by func_inv)
     hdeeper
-  have hneFlash : withdrawFromSelector ≠ flashLoanSelector := by
-    decide +kernel
-  have hneApprove : withdrawFromSelector ≠ approveSelector := by
-    decide +kernel
-  have hneApproveCall :
-      withdrawFromSelector ≠ approveAndCallSelector := by decide +kernel
-  have hnePermit : withdrawFromSelector ≠ permitSelector := by decide +kernel
   have hnotflash : isFlashInvocation frame.sevm = false := by
-    simp [isFlashInvocation, hselector, hneFlash]
+    simp [isFlashInvocation, hselector,
+      withdrawFromSelector_ne_flashLoanSelector]
   have hframe : Exec.Frame.ofRun frame.run frame.committed = frame := by
     cases frame
     rfl
@@ -968,8 +962,10 @@ theorem Exec.Frame.allowanceRegionEffect_of_withdrawFrom
     rcases hfork with ⟨hself, hstorEq⟩ | ⟨hnself, hmaxOrFinite⟩
     · have hown : (CountedFrame.ofFrame dp ca frame).allowance = none := by
         show frameAllowanceEvent frame.sevm frame.pre frame.post = none
-        simp [frameAllowanceEvent, hnonempty, hselector, hneApprove,
-          hneApproveCall, hnePermit, hself]
+        simp [frameAllowanceEvent, hnonempty, hselector,
+          withdrawFromSelector_ne_approveSelector,
+          withdrawFromSelector_ne_approveAndCallSelector,
+          withdrawFromSelector_ne_permitSelector, hself]
       rw [htarget] at hstorEq
       rw [hown, hstorEq, ← congrFun hpreStor ca]
     · rcases hmaxOrFinite with
@@ -987,8 +983,10 @@ theorem Exec.Frame.allowanceRegionEffect_of_withdrawFrom
                    depth := frame.sevm.depth
                    visit := .spendMax } := by
           show frameAllowanceEvent frame.sevm frame.pre frame.post = _
-          simp [frameAllowanceEvent, hnonempty, hselector, hneApprove,
-            hneApproveCall, hnePermit, hnself, hbefore]
+          simp [frameAllowanceEvent, hnonempty, hselector,
+            withdrawFromSelector_ne_approveSelector,
+            withdrawFromSelector_ne_approveAndCallSelector,
+            withdrawFromSelector_ne_permitSelector, hnself, hbefore]
         rw [htarget] at hstorEq
         rw [hown]
         simp only [AllowanceVisit.written?, ite_self]
@@ -1006,8 +1004,10 @@ theorem Exec.Frame.allowanceRegionEffect_of_withdrawFrom
                    visit := .spendFinite allowance
                      (allowance - Sevm.argWord frame.sevm 2) } := by
           show frameAllowanceEvent frame.sevm frame.pre frame.post = _
-          simp [frameAllowanceEvent, hnonempty, hselector, hneApprove,
-            hneApproveCall, hnePermit, hnself, hbefore, hneMax]
+          simp [frameAllowanceEvent, hnonempty, hselector,
+            withdrawFromSelector_ne_approveSelector,
+            withdrawFromSelector_ne_approveAndCallSelector,
+            withdrawFromSelector_ne_permitSelector, hnself, hbefore, hneMax]
         rw [htarget] at hstorSet
         rw [hown]
         simp only [AllowanceEvent.key, AllowanceVisit.written?]
@@ -1125,15 +1125,9 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferFromZero
       Ninst.pushB256])
     (by func_inv)
     hdeeper
-  have hneFlash : transferFromSelector ≠ flashLoanSelector := by
-    decide +kernel
-  have hneApprove : transferFromSelector ≠ approveSelector := by
-    decide +kernel
-  have hneApproveCall :
-      transferFromSelector ≠ approveAndCallSelector := by decide +kernel
-  have hnePermit : transferFromSelector ≠ permitSelector := by decide +kernel
   have hnotflash : isFlashInvocation frame.sevm = false := by
-    simp [isFlashInvocation, hselector, hneFlash]
+    simp [isFlashInvocation, hselector,
+      transferFromSelector_ne_flashLoanSelector]
   have hframe : Exec.Frame.ofRun frame.run frame.committed = frame := by
     cases frame
     rfl
@@ -1157,8 +1151,10 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferFromZero
     rcases hfork with ⟨hself, hstorEq⟩ | ⟨hnself, hmaxOrFinite⟩
     · have hown : (CountedFrame.ofFrame dp ca frame).allowance = none := by
         show frameAllowanceEvent frame.sevm frame.pre frame.post = none
-        simp [frameAllowanceEvent, hnonempty, hselector, hneApprove,
-          hneApproveCall, hnePermit, hself]
+        simp [frameAllowanceEvent, hnonempty, hselector,
+          transferFromSelector_ne_approveSelector,
+          transferFromSelector_ne_approveAndCallSelector,
+          transferFromSelector_ne_permitSelector, hself]
       rw [htarget] at hstorEq
       rw [hown, hstorEq, ← congrFun hpreStor ca]
     · rcases hmaxOrFinite with
@@ -1176,8 +1172,10 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferFromZero
                    depth := frame.sevm.depth
                    visit := .spendMax } := by
           show frameAllowanceEvent frame.sevm frame.pre frame.post = _
-          simp [frameAllowanceEvent, hnonempty, hselector, hneApprove,
-            hneApproveCall, hnePermit, hnself, hbefore]
+          simp [frameAllowanceEvent, hnonempty, hselector,
+            transferFromSelector_ne_approveSelector,
+            transferFromSelector_ne_approveAndCallSelector,
+            transferFromSelector_ne_permitSelector, hnself, hbefore]
         rw [htarget] at hstorEq
         rw [hown]
         simp only [AllowanceVisit.written?, ite_self]
@@ -1195,8 +1193,10 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferFromZero
                    visit := .spendFinite allowance
                      (allowance - Sevm.argWord frame.sevm 2) } := by
           show frameAllowanceEvent frame.sevm frame.pre frame.post = _
-          simp [frameAllowanceEvent, hnonempty, hselector, hneApprove,
-            hneApproveCall, hnePermit, hnself, hbefore, hneMax]
+          simp [frameAllowanceEvent, hnonempty, hselector,
+            transferFromSelector_ne_approveSelector,
+            transferFromSelector_ne_approveAndCallSelector,
+            transferFromSelector_ne_permitSelector, hnself, hbefore, hneMax]
         rw [htarget] at hstorSet
         rw [hown]
         simp only [AllowanceEvent.key, AllowanceVisit.written?]

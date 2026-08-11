@@ -239,10 +239,9 @@ theorem Exec.Frame.allowanceRegionEffect_of_deposit
       (Exec.attributionStream dp ca frame.run) := by
   have hinner : Exec.attributionInner dp ca frame.run = [] :=
     frame.attributionInner_eq_nil_of_deposit context hselector hnonempty
-  have hneFlash : depositSelector ≠ flashLoanSelector := by decide +kernel
   have hsel : Sevm.selector frame.sevm = depositSelector := hselector
   have hnotflash : isFlashInvocation frame.sevm = false := by
-    simp [isFlashInvocation, hsel, hneFlash]
+    simp [isFlashInvocation, hsel, depositSelector_ne_flashLoanSelector]
   have hframe : Exec.Frame.ofRun frame.run frame.committed = frame := by
     cases frame
     rfl
@@ -272,25 +271,18 @@ theorem Exec.Frame.allowanceRegionEffect_of_deposit
       have hmint : Func.Run ((weth10 dp).main :: weth10Aux) e mid
           mintCaller post := by
         simpa only [deposit] using hbody
-      have hneApprove : depositSelector ≠ approveSelector := by
-        decide +kernel
-      have hneApproveCall : depositSelector ≠ approveAndCallSelector := by
-        decide +kernel
-      have hnePermit : depositSelector ≠ permitSelector := by
-        decide +kernel
-      have hneTransferFrom : depositSelector ≠ transferFromSelector := by
-        decide +kernel
-      have hneWithdrawFrom : depositSelector ≠ withdrawFromSelector := by
-        decide +kernel
-      have hneAllowance : depositSelector ≠ allowanceSelector := by
-        decide +kernel
       have hown : (CountedFrame.ofFrame dp ca
           (⟨0, e, pre, .ok post, run, committed⟩ : Exec.Frame)).allowance =
           none := by
         show frameAllowanceEvent e pre post = none
-        simp [frameAllowanceEvent, hne0, hselE, hneApprove, hneApproveCall,
-          hnePermit, hneTransferFrom, hneWithdrawFrom, hneFlash,
-          hneAllowance]
+        simp [frameAllowanceEvent, hne0, hselE,
+          depositSelector_ne_approveSelector,
+          depositSelector_ne_approveAndCallSelector,
+          depositSelector_ne_permitSelector,
+          depositSelector_ne_transferFromSelector,
+          depositSelector_ne_withdrawFromSelector,
+          depositSelector_ne_flashLoanSelector,
+          depositSelector_ne_allowanceSelector]
       refine ⟨fun key hkey => ?_, hcode⟩
       show (Devm.getStor post ca).get key =
         applyAllowanceLedger (Devm.getStor pre ca)
@@ -342,10 +334,9 @@ theorem Exec.Frame.allowanceRegionEffect_of_depositTo
       (Exec.attributionStream dp ca frame.run) := by
   have hinner : Exec.attributionInner dp ca frame.run = [] :=
     frame.attributionInner_eq_nil_of_depositTo context hselector hnonempty
-  have hneFlash : depositToSelector ≠ flashLoanSelector := by decide +kernel
   have hsel : Sevm.selector frame.sevm = depositToSelector := hselector
   have hnotflash : isFlashInvocation frame.sevm = false := by
-    simp [isFlashInvocation, hsel, hneFlash]
+    simp [isFlashInvocation, hsel, depositToSelector_ne_flashLoanSelector]
   have hframe : Exec.Frame.ofRun frame.run frame.committed = frame := by
     cases frame
     rfl
@@ -373,25 +364,18 @@ theorem Exec.Frame.allowanceRegionEffect_of_depositTo
       have hstor := heffect.1
       have hvalid : ValidAdr (normalizedAddressArg e 0) :=
         normalizedAddress_valid (Sevm.argWord e 0)
-      have hneApprove : depositToSelector ≠ approveSelector := by
-        decide +kernel
-      have hneApproveCall : depositToSelector ≠ approveAndCallSelector := by
-        decide +kernel
-      have hnePermit : depositToSelector ≠ permitSelector := by
-        decide +kernel
-      have hneTransferFrom : depositToSelector ≠ transferFromSelector := by
-        decide +kernel
-      have hneWithdrawFrom : depositToSelector ≠ withdrawFromSelector := by
-        decide +kernel
-      have hneAllowance : depositToSelector ≠ allowanceSelector := by
-        decide +kernel
       have hown : (CountedFrame.ofFrame dp ca
           (⟨0, e, pre, .ok post, run, committed⟩ : Exec.Frame)).allowance =
           none := by
         show frameAllowanceEvent e pre post = none
-        simp [frameAllowanceEvent, hne0, hselE, hneApprove, hneApproveCall,
-          hnePermit, hneTransferFrom, hneWithdrawFrom, hneFlash,
-          hneAllowance]
+        simp [frameAllowanceEvent, hne0, hselE,
+          depositToSelector_ne_approveSelector,
+          depositToSelector_ne_approveAndCallSelector,
+          depositToSelector_ne_permitSelector,
+          depositToSelector_ne_transferFromSelector,
+          depositToSelector_ne_withdrawFromSelector,
+          depositToSelector_ne_flashLoanSelector,
+          depositToSelector_ne_allowanceSelector]
       refine ⟨fun key hkey => ?_, hcode⟩
       show (Devm.getStor post ca).get key =
         applyAllowanceLedger (Devm.getStor pre ca)
@@ -625,10 +609,9 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferNonzero
   have hinner : Exec.attributionInner dp ca frame.run = [] :=
     frame.attributionInner_eq_nil_of_transferNonzero context hselector
       hnonempty hto
-  have hneFlash : transferSelector ≠ flashLoanSelector := by decide +kernel
   have hsel : Sevm.selector frame.sevm = transferSelector := hselector
   have hnotflash : isFlashInvocation frame.sevm = false := by
-    simp [isFlashInvocation, hsel, hneFlash]
+    simp [isFlashInvocation, hsel, transferSelector_ne_flashLoanSelector]
   have hframe : Exec.Frame.ofRun frame.run frame.committed = frame := by
     cases frame
     rfl
@@ -672,28 +655,18 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferNonzero
             ((Line.of_inv Devm.getStor (by line_inv)
               (Line.Run.cons hiszero Line.Run.nil)).trans
               (PopBurn.Inv.inv hpop))
-        have hneApprove : transferSelector ≠ approveSelector := by
-          decide +kernel
-        have hneApproveCall :
-            transferSelector ≠ approveAndCallSelector := by
-          decide +kernel
-        have hnePermit : transferSelector ≠ permitSelector := by
-          decide +kernel
-        have hneTransferFrom :
-            transferSelector ≠ transferFromSelector := by
-          decide +kernel
-        have hneWithdrawFrom :
-            transferSelector ≠ withdrawFromSelector := by
-          decide +kernel
-        have hneAllowance : transferSelector ≠ allowanceSelector := by
-          decide +kernel
         have hown : (CountedFrame.ofFrame dp ca
             (⟨0, e, pre, .ok post, run, committed⟩ :
               Exec.Frame)).allowance = none := by
           show frameAllowanceEvent e pre post = none
-          simp [frameAllowanceEvent, hne0, hselE, hneApprove,
-            hneApproveCall, hnePermit, hneTransferFrom, hneWithdrawFrom,
-            hneFlash, hneAllowance]
+          simp [frameAllowanceEvent, hne0, hselE,
+            transferSelector_ne_approveSelector,
+            transferSelector_ne_approveAndCallSelector,
+            transferSelector_ne_permitSelector,
+            transferSelector_ne_transferFromSelector,
+            transferSelector_ne_withdrawFromSelector,
+            transferSelector_ne_flashLoanSelector,
+            transferSelector_ne_allowanceSelector]
         refine ⟨fun key hkey => ?_, hcode⟩
         show (Devm.getStor post ca).get key =
           applyAllowanceLedger (Devm.getStor pre ca)

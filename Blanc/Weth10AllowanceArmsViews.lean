@@ -182,9 +182,10 @@ theorem Exec.Frame.allowanceRegionEffect_of_name
   exact frame.allowanceRegionEffect_of_storageInvariantView context
     hselector hnonempty
     (frame.attributionInner_eq_nil_of_name context hselector hnonempty)
-    (by decide +kernel) (by decide +kernel) (by decide +kernel)
-    (by decide +kernel) (by decide +kernel) (by decide +kernel)
-    (by decide +kernel) hstor hcode
+    selector_name_ne_approveSelector selector_name_ne_approveAndCallSelector
+    selector_name_ne_permitSelector selector_name_ne_transferFromSelector
+    selector_name_ne_withdrawFromSelector selector_name_ne_flashLoanSelector
+    selector_name_ne_allowanceSelector hstor hcode
 
 /-! ## The `symbol` view arm -/
 
@@ -233,9 +234,12 @@ theorem Exec.Frame.allowanceRegionEffect_of_symbol
   exact frame.allowanceRegionEffect_of_storageInvariantView context
     hselector hnonempty
     (frame.attributionInner_eq_nil_of_symbol context hselector hnonempty)
-    (by decide +kernel) (by decide +kernel) (by decide +kernel)
-    (by decide +kernel) (by decide +kernel) (by decide +kernel)
-    (by decide +kernel) hstor hcode
+    selector_symbol_ne_approveSelector
+    selector_symbol_ne_approveAndCallSelector
+    selector_symbol_ne_permitSelector selector_symbol_ne_transferFromSelector
+    selector_symbol_ne_withdrawFromSelector
+    selector_symbol_ne_flashLoanSelector selector_symbol_ne_allowanceSelector
+    hstor hcode
 
 /-! ## The `decimals` view arm -/
 
@@ -286,9 +290,13 @@ theorem Exec.Frame.allowanceRegionEffect_of_decimals
   exact frame.allowanceRegionEffect_of_storageInvariantView context
     hselector hnonempty
     (frame.attributionInner_eq_nil_of_decimals context hselector hnonempty)
-    (by decide +kernel) (by decide +kernel) (by decide +kernel)
-    (by decide +kernel) (by decide +kernel) (by decide +kernel)
-    (by decide +kernel) hstor hcode
+    selector_decimals_ne_approveSelector
+    selector_decimals_ne_approveAndCallSelector
+    selector_decimals_ne_permitSelector
+    selector_decimals_ne_transferFromSelector
+    selector_decimals_ne_withdrawFromSelector
+    selector_decimals_ne_flashLoanSelector
+    selector_decimals_ne_allowanceSelector hstor hcode
 
 /-! ## The `PERMIT_TYPEHASH` view arm -/
 
@@ -344,9 +352,13 @@ theorem Exec.Frame.allowanceRegionEffect_of_permitTypehash
     hselector hnonempty
     (frame.attributionInner_eq_nil_of_permitTypehash context hselector
       hnonempty)
-    (by decide +kernel) (by decide +kernel) (by decide +kernel)
-    (by decide +kernel) (by decide +kernel) (by decide +kernel)
-    (by decide +kernel) hstor hcode
+    selector_PERMIT_TYPEHASH_ne_approveSelector
+    selector_PERMIT_TYPEHASH_ne_approveAndCallSelector
+    selector_PERMIT_TYPEHASH_ne_permitSelector
+    selector_PERMIT_TYPEHASH_ne_transferFromSelector
+    selector_PERMIT_TYPEHASH_ne_withdrawFromSelector
+    selector_PERMIT_TYPEHASH_ne_flashLoanSelector
+    selector_PERMIT_TYPEHASH_ne_allowanceSelector hstor hcode
 
 /-! ## The `CALLBACK_SUCCESS` view arm -/
 
@@ -402,9 +414,13 @@ theorem Exec.Frame.allowanceRegionEffect_of_callbackSuccess
     hselector hnonempty
     (frame.attributionInner_eq_nil_of_callbackSuccess context hselector
       hnonempty)
-    (by decide +kernel) (by decide +kernel) (by decide +kernel)
-    (by decide +kernel) (by decide +kernel) (by decide +kernel)
-    (by decide +kernel) hstor hcode
+    selector_CALLBACK_SUCCESS_ne_approveSelector
+    selector_CALLBACK_SUCCESS_ne_approveAndCallSelector
+    selector_CALLBACK_SUCCESS_ne_permitSelector
+    selector_CALLBACK_SUCCESS_ne_transferFromSelector
+    selector_CALLBACK_SUCCESS_ne_withdrawFromSelector
+    selector_CALLBACK_SUCCESS_ne_flashLoanSelector
+    selector_CALLBACK_SUCCESS_ne_allowanceSelector hstor hcode
 
 /-! ## The `totalSupply` view arm -/
 
@@ -455,9 +471,13 @@ theorem Exec.Frame.allowanceRegionEffect_of_totalSupply
     hselector hnonempty
     (frame.attributionInner_eq_nil_of_totalSupply context hselector
       hnonempty)
-    (by decide +kernel) (by decide +kernel) (by decide +kernel)
-    (by decide +kernel) (by decide +kernel) (by decide +kernel)
-    (by decide +kernel) hstor hcode
+    selector_totalSupply_ne_approveSelector
+    selector_totalSupply_ne_approveAndCallSelector
+    selector_totalSupply_ne_permitSelector
+    selector_totalSupply_ne_transferFromSelector
+    selector_totalSupply_ne_withdrawFromSelector
+    selector_totalSupply_ne_flashLoanSelector
+    selector_totalSupply_ne_allowanceSelector hstor hcode
 
 /-! ## The `balanceOf` view arm -/
 
@@ -510,9 +530,13 @@ theorem Exec.Frame.allowanceRegionEffect_of_balanceOf
     hselector hnonempty
     (frame.attributionInner_eq_nil_of_balanceOf context hselector
       hnonempty)
-    (by decide +kernel) (by decide +kernel) (by decide +kernel)
-    (by decide +kernel) (by decide +kernel) (by decide +kernel)
-    (by decide +kernel) hstor hcode
+    selector_balanceOf_ne_approveSelector
+    selector_balanceOf_ne_approveAndCallSelector
+    selector_balanceOf_ne_permitSelector
+    selector_balanceOf_ne_transferFromSelector
+    selector_balanceOf_ne_withdrawFromSelector
+    selector_balanceOf_ne_flashLoanSelector
+    selector_balanceOf_ne_allowanceSelector hstor hcode
 
 /-! ## The `nonces` view arm -/
 
@@ -562,9 +586,12 @@ theorem Exec.Frame.allowanceRegionEffect_of_nonces
   exact frame.allowanceRegionEffect_of_storageInvariantView context
     hselector hnonempty
     (frame.attributionInner_eq_nil_of_nonces context hselector hnonempty)
-    (by decide +kernel) (by decide +kernel) (by decide +kernel)
-    (by decide +kernel) (by decide +kernel) (by decide +kernel)
-    (by decide +kernel) hstor hcode
+    selector_nonces_ne_approveSelector
+    selector_nonces_ne_approveAndCallSelector
+    selector_nonces_ne_permitSelector selector_nonces_ne_transferFromSelector
+    selector_nonces_ne_withdrawFromSelector
+    selector_nonces_ne_flashLoanSelector selector_nonces_ne_allowanceSelector
+    hstor hcode
 
 /-! ## The `flashMinted` view arm -/
 
@@ -615,9 +642,13 @@ theorem Exec.Frame.allowanceRegionEffect_of_flashMinted
     hselector hnonempty
     (frame.attributionInner_eq_nil_of_flashMinted context hselector
       hnonempty)
-    (by decide +kernel) (by decide +kernel) (by decide +kernel)
-    (by decide +kernel) (by decide +kernel) (by decide +kernel)
-    (by decide +kernel) hstor hcode
+    selector_flashMinted_ne_approveSelector
+    selector_flashMinted_ne_approveAndCallSelector
+    selector_flashMinted_ne_permitSelector
+    selector_flashMinted_ne_transferFromSelector
+    selector_flashMinted_ne_withdrawFromSelector
+    selector_flashMinted_ne_flashLoanSelector
+    selector_flashMinted_ne_allowanceSelector hstor hcode
 
 /-! ## The `deploymentChainId` view arm -/
 
@@ -672,9 +703,13 @@ theorem Exec.Frame.allowanceRegionEffect_of_deploymentChainId
     hselector hnonempty
     (frame.attributionInner_eq_nil_of_deploymentChainId context hselector
       hnonempty)
-    (by decide +kernel) (by decide +kernel) (by decide +kernel)
-    (by decide +kernel) (by decide +kernel) (by decide +kernel)
-    (by decide +kernel) hstor hcode
+    selector_deploymentChainId_ne_approveSelector
+    selector_deploymentChainId_ne_approveAndCallSelector
+    selector_deploymentChainId_ne_permitSelector
+    selector_deploymentChainId_ne_transferFromSelector
+    selector_deploymentChainId_ne_withdrawFromSelector
+    selector_deploymentChainId_ne_flashLoanSelector
+    selector_deploymentChainId_ne_allowanceSelector hstor hcode
 
 /-! ## The `DOMAIN_SEPARATOR` view arm -/
 
@@ -745,9 +780,13 @@ theorem Exec.Frame.allowanceRegionEffect_of_domainSeparator
     hselector hnonempty
     (frame.attributionInner_eq_nil_of_domainSeparator context hselector
       hnonempty)
-    (by decide +kernel) (by decide +kernel) (by decide +kernel)
-    (by decide +kernel) (by decide +kernel) (by decide +kernel)
-    (by decide +kernel) hstor hcode
+    selector_DOMAIN_SEPARATOR_ne_approveSelector
+    selector_DOMAIN_SEPARATOR_ne_approveAndCallSelector
+    selector_DOMAIN_SEPARATOR_ne_permitSelector
+    selector_DOMAIN_SEPARATOR_ne_transferFromSelector
+    selector_DOMAIN_SEPARATOR_ne_withdrawFromSelector
+    selector_DOMAIN_SEPARATOR_ne_flashLoanSelector
+    selector_DOMAIN_SEPARATOR_ne_allowanceSelector hstor hcode
 
 /-! ## The `maxFlashLoan` view arm -/
 
@@ -820,9 +859,13 @@ theorem Exec.Frame.allowanceRegionEffect_of_maxFlashLoan
     hselector hnonempty
     (frame.attributionInner_eq_nil_of_maxFlashLoan context hselector
       hnonempty)
-    (by decide +kernel) (by decide +kernel) (by decide +kernel)
-    (by decide +kernel) (by decide +kernel) (by decide +kernel)
-    (by decide +kernel) hstor hcode
+    selector_maxFlashLoan_ne_approveSelector
+    selector_maxFlashLoan_ne_approveAndCallSelector
+    selector_maxFlashLoan_ne_permitSelector
+    selector_maxFlashLoan_ne_transferFromSelector
+    selector_maxFlashLoan_ne_withdrawFromSelector
+    selector_maxFlashLoan_ne_flashLoanSelector
+    selector_maxFlashLoan_ne_allowanceSelector hstor hcode
 
 /-! ## The `flashFee` view arm -/
 
@@ -897,9 +940,13 @@ theorem Exec.Frame.allowanceRegionEffect_of_flashFee
     hselector hnonempty
     (frame.attributionInner_eq_nil_of_flashFee context hselector
       hnonempty)
-    (by decide +kernel) (by decide +kernel) (by decide +kernel)
-    (by decide +kernel) (by decide +kernel) (by decide +kernel)
-    (by decide +kernel) hstor hcode
+    selector_flashFee_ne_approveSelector
+    selector_flashFee_ne_approveAndCallSelector
+    selector_flashFee_ne_permitSelector
+    selector_flashFee_ne_transferFromSelector
+    selector_flashFee_ne_withdrawFromSelector
+    selector_flashFee_ne_flashLoanSelector
+    selector_flashFee_ne_allowanceSelector hstor hcode
 
 end Weth10
 

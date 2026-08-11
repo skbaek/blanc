@@ -968,26 +968,21 @@ theorem Exec.Frame.allowanceRegionEffect_of_withdraw
     (by simp)
     (by func_inv)
     hdeeper
-  have hneFlash : withdrawSelector ≠ flashLoanSelector := by decide +kernel
-  have hneApprove : withdrawSelector ≠ approveSelector := by decide +kernel
-  have hneApproveCall : withdrawSelector ≠ approveAndCallSelector := by
-    decide +kernel
-  have hnePermit : withdrawSelector ≠ permitSelector := by decide +kernel
-  have hneTransferFrom : withdrawSelector ≠ transferFromSelector := by
-    decide +kernel
-  have hneWithdrawFrom : withdrawSelector ≠ withdrawFromSelector := by
-    decide +kernel
-  have hneAllowance : withdrawSelector ≠ allowanceSelector := by decide +kernel
   have hnotflash : isFlashInvocation frame.sevm = false := by
-    simp [isFlashInvocation, hselector, hneFlash]
+    simp [isFlashInvocation, hselector, withdrawSelector_ne_flashLoanSelector]
   have hframe : Exec.Frame.ofRun frame.run frame.committed = frame := by
     cases frame
     rfl
   have hown : (CountedFrame.ofFrame dp ca frame).allowance = none := by
     show frameAllowanceEvent frame.sevm frame.pre frame.post = none
-    simp [frameAllowanceEvent, hnonempty, hselector, hneApprove,
-      hneApproveCall, hnePermit, hneTransferFrom, hneWithdrawFrom,
-      hneFlash, hneAllowance]
+    simp [frameAllowanceEvent, hnonempty, hselector,
+      withdrawSelector_ne_approveSelector,
+      withdrawSelector_ne_approveAndCallSelector,
+      withdrawSelector_ne_permitSelector,
+      withdrawSelector_ne_transferFromSelector,
+      withdrawSelector_ne_withdrawFromSelector,
+      withdrawSelector_ne_flashLoanSelector,
+      withdrawSelector_ne_allowanceSelector]
   have hstream : Exec.attributionStream dp ca frame.run =
       CountedFrame.ofFrame dp ca frame ::
         Exec.attributionInner dp ca frame.run := by
@@ -1049,27 +1044,22 @@ theorem Exec.Frame.allowanceRegionEffect_of_withdrawTo
     (by simp)
     (by func_inv)
     hdeeper
-  have hneFlash : withdrawToSelector ≠ flashLoanSelector := by decide +kernel
-  have hneApprove : withdrawToSelector ≠ approveSelector := by decide +kernel
-  have hneApproveCall : withdrawToSelector ≠ approveAndCallSelector := by
-    decide +kernel
-  have hnePermit : withdrawToSelector ≠ permitSelector := by decide +kernel
-  have hneTransferFrom : withdrawToSelector ≠ transferFromSelector := by
-    decide +kernel
-  have hneWithdrawFrom : withdrawToSelector ≠ withdrawFromSelector := by
-    decide +kernel
-  have hneAllowance : withdrawToSelector ≠ allowanceSelector := by
-    decide +kernel
   have hnotflash : isFlashInvocation frame.sevm = false := by
-    simp [isFlashInvocation, hselector, hneFlash]
+    simp [isFlashInvocation, hselector,
+      withdrawToSelector_ne_flashLoanSelector]
   have hframe : Exec.Frame.ofRun frame.run frame.committed = frame := by
     cases frame
     rfl
   have hown : (CountedFrame.ofFrame dp ca frame).allowance = none := by
     show frameAllowanceEvent frame.sevm frame.pre frame.post = none
-    simp [frameAllowanceEvent, hnonempty, hselector, hneApprove,
-      hneApproveCall, hnePermit, hneTransferFrom, hneWithdrawFrom,
-      hneFlash, hneAllowance]
+    simp [frameAllowanceEvent, hnonempty, hselector,
+      withdrawToSelector_ne_approveSelector,
+      withdrawToSelector_ne_approveAndCallSelector,
+      withdrawToSelector_ne_permitSelector,
+      withdrawToSelector_ne_transferFromSelector,
+      withdrawToSelector_ne_withdrawFromSelector,
+      withdrawToSelector_ne_flashLoanSelector,
+      withdrawToSelector_ne_allowanceSelector]
   have hstream : Exec.attributionStream dp ca frame.run =
       CountedFrame.ofFrame dp ca frame ::
         Exec.attributionInner dp ca frame.run := by
@@ -1177,26 +1167,21 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferZero
       Ninst.pushB256])
     (by func_inv)
     hdeeper
-  have hneFlash : transferSelector ≠ flashLoanSelector := by decide +kernel
-  have hneApprove : transferSelector ≠ approveSelector := by decide +kernel
-  have hneApproveCall : transferSelector ≠ approveAndCallSelector := by
-    decide +kernel
-  have hnePermit : transferSelector ≠ permitSelector := by decide +kernel
-  have hneTransferFrom : transferSelector ≠ transferFromSelector := by
-    decide +kernel
-  have hneWithdrawFrom : transferSelector ≠ withdrawFromSelector := by
-    decide +kernel
-  have hneAllowance : transferSelector ≠ allowanceSelector := by decide +kernel
   have hnotflash : isFlashInvocation frame.sevm = false := by
-    simp [isFlashInvocation, hselector, hneFlash]
+    simp [isFlashInvocation, hselector, transferSelector_ne_flashLoanSelector]
   have hframe : Exec.Frame.ofRun frame.run frame.committed = frame := by
     cases frame
     rfl
   have hown : (CountedFrame.ofFrame dp ca frame).allowance = none := by
     show frameAllowanceEvent frame.sevm frame.pre frame.post = none
-    simp [frameAllowanceEvent, hnonempty, hselector, hneApprove,
-      hneApproveCall, hnePermit, hneTransferFrom, hneWithdrawFrom,
-      hneFlash, hneAllowance]
+    simp [frameAllowanceEvent, hnonempty, hselector,
+      transferSelector_ne_approveSelector,
+      transferSelector_ne_approveAndCallSelector,
+      transferSelector_ne_permitSelector,
+      transferSelector_ne_transferFromSelector,
+      transferSelector_ne_withdrawFromSelector,
+      transferSelector_ne_flashLoanSelector,
+      transferSelector_ne_allowanceSelector]
   have hstream : Exec.attributionStream dp ca frame.run =
       CountedFrame.ofFrame dp ca frame ::
         Exec.attributionInner dp ca frame.run := by

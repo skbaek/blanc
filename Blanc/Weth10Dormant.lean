@@ -88,24 +88,6 @@ memory and its compiled code word, both of which `HasFrameOrigin` drops and
 runtime's accepted finite arm bounds the requested amount by the word it read,
 so a delegated debit that read zero spends zero and moves no balance. -/
 
-theorem transferFromSelector_ne_depositSelector :
-    transferFromSelector ≠ depositSelector := by decide +kernel
-
-theorem transferFromSelector_ne_depositToSelector :
-    transferFromSelector ≠ depositToSelector := by decide +kernel
-
-theorem transferFromSelector_ne_depositToAndCallSelector :
-    transferFromSelector ≠ depositToAndCallSelector := by decide +kernel
-
-theorem withdrawFromSelector_ne_depositSelector :
-    withdrawFromSelector ≠ depositSelector := by decide +kernel
-
-theorem withdrawFromSelector_ne_depositToSelector :
-    withdrawFromSelector ≠ depositToSelector := by decide +kernel
-
-theorem withdrawFromSelector_ne_depositToAndCallSelector :
-    withdrawFromSelector ≠ depositToAndCallSelector := by decide +kernel
-
 /-- A retained delegated debit pins its invocation: only the two delegated
 selectors record one, only a raw source word distinct from the caller's word
 leaves the self-bypass arm, and the inspected key is the runtime's own. -/

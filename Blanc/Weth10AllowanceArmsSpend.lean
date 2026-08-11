@@ -385,11 +385,9 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferFromNonzero
   have hinner : Exec.attributionInner dp ca frame.run = [] :=
     frame.attributionInner_eq_nil_of_transferFromNonzero context hselector
       hnonempty hto
-  have hneFlash : transferFromSelector ≠ flashLoanSelector := by
-    decide +kernel
   have hsel : Sevm.selector frame.sevm = transferFromSelector := hselector
   have hnotflash : isFlashInvocation frame.sevm = false := by
-    simp [isFlashInvocation, hsel, hneFlash]
+    simp [isFlashInvocation, hsel, transferFromSelector_ne_flashLoanSelector]
   have hframe : Exec.Frame.ofRun frame.run frame.committed = frame := by
     cases frame
     rfl
@@ -433,13 +431,6 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferFromNonzero
         of_spendCallerAllowanceThen_effect dp 2 transferFromCoreSlot
           transferFromCore hlookup hwfMid hreadsMid
           (by simpa only [transferFrom] using hbody)
-      have hneApprove : transferFromSelector ≠ approveSelector := by
-        decide +kernel
-      have hneApproveCall :
-          transferFromSelector ≠ approveAndCallSelector := by
-        decide +kernel
-      have hnePermit : transferFromSelector ≠ permitSelector := by
-        decide +kernel
       rcases hallowance.1 with
           ⟨hself, hstorEq, _hlogsEq⟩ |
           ⟨hnself, hmaxOrFinite⟩
@@ -448,8 +439,10 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferFromNonzero
             (⟨0, e, pre, .ok post, run, committed⟩ :
               Exec.Frame)).allowance = none := by
           show frameAllowanceEvent e pre post = none
-          simp [frameAllowanceEvent, hne0, hselE, hneApprove,
-            hneApproveCall, hnePermit, hself]
+          simp [frameAllowanceEvent, hne0, hselE,
+            transferFromSelector_ne_approveSelector,
+            transferFromSelector_ne_approveAndCallSelector,
+            transferFromSelector_ne_permitSelector, hself]
         refine ⟨fun key hkey => ?_, hcode⟩
         show (Devm.getStor post ca).get key =
           applyAllowanceLedger (Devm.getStor pre ca)
@@ -484,8 +477,10 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferFromNonzero
                      caller := e.caller
                      depth := e.depth
                      visit := .spendMax }
-            simp [frameAllowanceEvent, hne0, hselE, hneApprove,
-              hneApproveCall, hnePermit, hnself, hbeforeMax]
+            simp [frameAllowanceEvent, hne0, hselE,
+              transferFromSelector_ne_approveSelector,
+              transferFromSelector_ne_approveAndCallSelector,
+              transferFromSelector_ne_permitSelector, hnself, hbeforeMax]
           refine ⟨fun key hkey => ?_, hcode⟩
           show (Devm.getStor post ca).get key =
             applyAllowanceLedger (Devm.getStor pre ca)
@@ -518,8 +513,10 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferFromNonzero
                      depth := e.depth
                      visit := .spendFinite allowance
                        (allowance - Sevm.argWord e 2) }
-            simp [frameAllowanceEvent, hne0, hselE, hneApprove,
-              hneApproveCall, hnePermit, hnself, hbefore, hneMax]
+            simp [frameAllowanceEvent, hne0, hselE,
+              transferFromSelector_ne_approveSelector,
+              transferFromSelector_ne_approveAndCallSelector,
+              transferFromSelector_ne_permitSelector, hnself, hbefore, hneMax]
           refine ⟨fun key hkey => ?_, hcode⟩
           show (Devm.getStor post ca).get key =
             applyAllowanceLedger (Devm.getStor pre ca)
@@ -588,11 +585,9 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_transferFromNonzero
     (hto : Sevm.argWord frame.sevm 1 ≠ 0) :
     AllowanceRegionEffectSound ca frame.pre frame.post
       (Exec.attributionStream dp ca frame.run) := by
-  have hneFlash : transferFromSelector ≠ flashLoanSelector := by
-    decide +kernel
   have hsel : Sevm.selector frame.sevm = transferFromSelector := hselector
   have hnotflash : isFlashInvocation frame.sevm = false := by
-    simp [isFlashInvocation, hsel, hneFlash]
+    simp [isFlashInvocation, hsel, transferFromSelector_ne_flashLoanSelector]
   refine
     { frame.allowanceRegionEffect_of_transferFromNonzero context hselector
         hnonempty hto with
