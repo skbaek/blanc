@@ -91,15 +91,15 @@ against the gate.
 | `scripts/check-weth.sh --no-build` | WETH fixture conformance and the same byte-equality check against `Blanc.wethCode`. There is no WETH manifest, so no cross-check — the asymmetry is real, not an omission | 11 fixtures, 988 bytes | sub-second |
 | `scripts/check-fmint-coverage.sh` | selector reachability split into direct top-level entry, post-state-witnessed internal CALL, and uncredited embedding; five built-in callsite corruptions prove the evidence channel is live | 12 selectors: 2 direct + 7 witnessed internal, budget 3 | sub-second |
 | `scripts/check-weth-coverage.sh` | the same honest reachability split for WETH, plus direct empty-calldata `deposit()` fallback and the same five callsite falsifiers | 10 selectors: 4 direct + 6 witnessed internal + fallback, budget 0 | sub-second |
-| `lake build` | integration elaboration, including the audited compile-witness, WETH10 deployment declarations and configured deployment root, stable-state packaging, constructive redemption certificates, and committed holder-flow conservation | 977 jobs | incremental builds are a few seconds; clean rebuilds are substantially longer |
-| `scripts/check.sh --no-build` | axiom audit of the audited top theorems, each against its own pinned expected axiom set | 299 theorems | ~4 s |
-| `scripts/check-claims.sh` | Lean-checked exact statement pins for the WETH10 compile, flash-depth, backing, creation, static-certificate, stable-chain, configured deployment root/projections, creation-seed, constructive redemption, full accounted history, dynamic balance-write completeness, committed no-wrap, conservation, and residual-floor flagships; constructor pins fail closed on record-field changes or hidden success premises; `Stor.Weth10Inv` is pinned by `rfl` unfolding | 118 definitions/statements and constructors | ~2 s |
+| `lake build` | integration elaboration, including the audited compile-witness, WETH10 deployment declarations and configured deployment root, stable-state packaging, constructive redemption certificates, and committed holder-flow conservation | 1002 jobs | incremental builds are a few seconds; clean rebuilds are substantially longer |
+| `scripts/check.sh --no-build` | axiom audit of the audited top theorems, each against its own pinned expected axiom set | 315 theorems | ~4 s |
+| `scripts/check-claims.sh` | Lean-checked exact statement pins for the WETH10 compile, flash-depth, backing, creation, static-certificate, stable-chain, configured deployment root/projections, creation-seed, constructive redemption, full accounted history, dynamic balance-write completeness, committed no-wrap, conservation, residual-floor, and hardened attribution/future-redeemability flagships; constructor pins fail closed on record-field changes or hidden success premises; `Stor.Weth10Inv` is pinned by `rfl` unfolding | 155 definitions/statements and constructors | ~2 s |
 
 ### Medium — before a commit or push candidate
 
 | gate | proves | scale | time |
 |---|---|---|---|
-| `scripts/check-elab.sh` | per-module elaboration time vs the committed `scripts/baseline-elab.txt` | 69 files, 455.1 s baseline | ~7.8 min |
+| `scripts/check-elab.sh` | per-module elaboration time vs the committed `scripts/baseline-elab.txt` | 94 files, 500.7 s baseline | ~7.3 min |
 
 No Blanc gate approaches the 1,000-second rule. The sequential elaboration
 gate is the longest at roughly eight minutes; every gate still runs inline.
