@@ -31,6 +31,12 @@ import Blanc.Weth10Redeemable
 import Blanc.Weth10HolderFlowDeterminism
 import Blanc.Weth10HolderFlowResult
 import Blanc.Weth10HolderFlowWriteCompleteness
+import Blanc.Weth10Attribution
+import Blanc.Weth10AllowanceDispatch
+import Blanc.Weth10Hardened
+import Blanc.Weth10Dormant
+import Blanc.Weth10FutureRedeemable
+import Blanc.Weth10AnyOrder
 
 #print axioms Blanc.weth_preserves_solvent
 #print axioms Blanc.stateTransition_preserves_solvent
@@ -331,3 +337,15 @@ import Blanc.Weth10HolderFlowWriteCompleteness
 #print axioms Blanc.Weth10.holderFlow_residual_floor
 #print axioms Blanc.Weth10.holderFlow_truncated_floor
 #print axioms Blanc.Weth10.holderFlow_withdrawal_floor
+#print axioms Blanc.Weth10.committedExecAllowanceSound
+#print axioms Blanc.Weth10.AccountedHistory.allowanceTransported_of_compiled
+#print axioms Blanc.Weth10.hardenedOutflow_le_permanentOutflow
+#print axioms Blanc.Weth10.permanentOutflow_eq_hardenedOutflow_of_noCollision
+#print axioms Blanc.Weth10.holderFlow_hardened_floor
+#print axioms Blanc.Weth10.deployment_reachable_residual_messageRedemption_enabled
+#print axioms Blanc.Weth10.deployment_reachable_residual_transactionRedemption_enabled
+#print axioms Blanc.Weth10.deployment_reachable_future_redeemable
+#print axioms Blanc.Weth10.deploymentRoot_allowanceQuiescent
+#print axioms Blanc.Weth10.deployment_fullWindow_future_redeemable
+#print axioms Blanc.Weth10.redeemClaims_anyOrder
+#print axioms Blanc.Weth10.deployment_reachable_redeemClaims_anyOrder

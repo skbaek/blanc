@@ -3,6 +3,12 @@ import Blanc.Weth10DeploymentRoot
 import Blanc.Weth10HolderFlowDeterminism
 import Blanc.Weth10HolderFlowResult
 import Blanc.Weth10HolderFlowWriteCompleteness
+import Blanc.Weth10Attribution
+import Blanc.Weth10AllowanceDispatch
+import Blanc.Weth10Hardened
+import Blanc.Weth10Dormant
+import Blanc.Weth10FutureRedeemable
+import Blanc.Weth10AnyOrder
 
 /-!
 Lean-checked statement pins for the WETH10 flagship declarations.  Each
@@ -1356,6 +1362,297 @@ example (ca source recipient : Adr) :
        codeAddress := some ca
        depth := 0 } : FlowAction).creditLossTotal = 2 ^ 256 :=
   maxOneTransferCandidate_creditLoss ca source recipient
+
+/-! ## `weth10-redeem-future-v2`
+
+The attribution definitions below are pinned twice over. A type pin alone
+would not notice a *strengthening* of `NoAllowanceKeyCollision` or
+`AllowanceQuiescent` — replacing either with `False` or `True` respectively
+leaves its type untouched while making `hardenedDescription`,
+`deploymentRoot_allowanceQuiescent` and the full-window corollary vacuous —
+so each carries a definitional `Iff.rfl` pin as well. Decidability of the two
+history-local predicates is frozen surface (they are properties of an explicit
+history's finitely many entries, never global assumptions) and is pinned by
+`inferInstance`. -/
+
+example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {checkpoint future : BlockChain}
+    (history : AccountedHistory chainId dp ca checkpoint future) :
+    List (B256 × B256) :=
+  touchedAllowancePairs history
+
+example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {checkpoint future : BlockChain}
+    (history : AccountedHistory chainId dp ca checkpoint future) : Prop :=
+  NoAllowanceKeyCollision history
+
+example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {checkpoint future : BlockChain}
+    (history : AccountedHistory chainId dp ca checkpoint future) :
+    NoAllowanceKeyCollision history ↔
+      (touchedAllowancePairs history).Pairwise fun p q =>
+        p ≠ q →
+          projectedAllowanceKey p.1 p.2 ≠ projectedAllowanceKey q.1 q.2 :=
+  Iff.rfl
+
+example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {checkpoint future : BlockChain}
+    (history : AccountedHistory chainId dp ca checkpoint future) :
+    Decidable (NoAllowanceKeyCollision history) :=
+  inferInstance
+
+example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {checkpoint future : BlockChain}
+    (history : AccountedHistory chainId dp ca checkpoint future) (u : Adr) :
+    Nat :=
+  hardenedOutflow history u
+
+example : Adr → Adr → State → Prop :=
+  AllowanceQuiescent
+
+example (ca u : Adr) (w : State) :
+    AllowanceQuiescent ca u w ↔
+      ∀ owner spender : B256, owner.toAdr = u →
+        (w.getStor ca).get (projectedAllowanceKey owner spender) = 0 :=
+  Iff.rfl
+
+example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {checkpoint future : BlockChain} (u : Adr)
+    (history : AccountedHistory chainId dp ca checkpoint future) : Prop :=
+  NoAuthorizingActBy u history
+
+example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {checkpoint future : BlockChain} (u : Adr)
+    (history : AccountedHistory chainId dp ca checkpoint future) :
+    NoAuthorizingActBy u history ↔
+      ∀ frame ∈ history.attributionLedger, frame.authorizes u = false :=
+  Iff.rfl
+
+example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {checkpoint future : BlockChain} (u : Adr)
+    (history : AccountedHistory chainId dp ca checkpoint future) :
+    Decidable (NoAuthorizingActBy u history) :=
+  inferInstance
+
+/-! The allowance-dispatch transport endpoints the attribution layer runs on:
+the compiled program's committed allowance obligation, and the history-level
+statement that every tagged allowance key holds exactly the ledger's last
+committed write. -/
+
+example (dp : DeployParams) (ca : Adr) :
+    CommittedExecAllowanceSound dp ca :=
+  committedExecAllowanceSound dp ca
+
+example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {checkpoint future : BlockChain}
+    (history : AccountedHistory chainId dp ca checkpoint future)
+    (hstable : Stable dp ca checkpoint.state) :
+    AllowanceTransported ca checkpoint.state future.state
+      history.attributionLedger :=
+  history.allowanceTransported_of_compiled hstable
+
+/-! The hardened outflow is a sub-sum of the permanent outflow unconditionally,
+and equals it under trace-local collision-freedom. The collision hypothesis
+appears on the equality and nowhere else. -/
+
+example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {checkpoint future : BlockChain}
+    (history : AccountedHistory chainId dp ca checkpoint future) :
+    hardenedOutflow history u ≤
+      (history.weth10Flow u).redeemed +
+        (history.weth10Flow u).externalTransferredOut :=
+  hardenedOutflow_le_permanentOutflow history
+
+example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {checkpoint future : BlockChain}
+    (hstable : Weth10.Stable dp ca checkpoint.state)
+    (history : AccountedHistory chainId dp ca checkpoint future)
+    (hnc : NoAllowanceKeyCollision history) :
+    (history.weth10Flow u).redeemed +
+        (history.weth10Flow u).externalTransferredOut =
+      hardenedOutflow history u :=
+  permanentOutflow_eq_hardenedOutflow_of_noCollision hstable history hnc
+
+example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {checkpoint future : BlockChain}
+    (hstable : Weth10.Stable dp ca checkpoint.state)
+    (history : AccountedHistory chainId dp ca checkpoint future)
+    (hnc : NoAllowanceKeyCollision history) :
+    bookedBalanceNat checkpoint.state ca u ≤
+      bookedBalanceNat future.state ca u + hardenedOutflow history u :=
+  holderFlow_hardened_floor hstable history hnc
+
+/-! The two enabledness capstones state their residual bound at the checkpoint
+and discharge redemption at the future snapshot. Neither takes a collision
+hypothesis; a holder's ability to redeem never rests on an assumption about
+hash keys. -/
+
+example {chainId : UInt64} {dp : DeployParams} {ca u recipient : Adr}
+    {q : Nat} {base deployed checkpoint future : BlockChain}
+    {history : AccountedHistory chainId dp ca checkpoint future} {msg : Msg}
+    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
+    (hcheckpoint : BlockChain.ReachUsing
+      (ChainConfig.pragueOnly chainId) deployed checkpoint)
+    (hq : q ≤ bookedBalanceNat checkpoint.state ca u -
+      ((history.weth10Flow u).redeemed +
+        (history.weth10Flow u).externalTransferredOut))
+    (henv : AdmissibleRedemptionMessage
+      dp ca u recipient q future.state msg) :
+    MessageRedemptionEnabled dp ca u recipient q future.state msg :=
+  deployment_reachable_residual_messageRedemption_enabled
+    hroot hcheckpoint hq henv
+
+example {chainId : UInt64} {dp : DeployParams} {ca u recipient : Adr}
+    {q : Nat} {base deployed checkpoint future : BlockChain}
+    {history : AccountedHistory chainId dp ca checkpoint future}
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
+    (hcheckpoint : BlockChain.ReachUsing
+      (ChainConfig.pragueOnly chainId) deployed checkpoint)
+    (hq : q ≤ bookedBalanceNat checkpoint.state ca u -
+      ((history.weth10Flow u).redeemed +
+        (history.weth10Flow u).externalTransferredOut))
+    (hentry : benv.state = future.state)
+    (henv : AdmissibleRedemptionTx
+      dp ca u recipient q benv bout tx index) :
+    TransactionRedemptionEnabled dp ca u recipient q benv bout tx index :=
+  deployment_reachable_residual_transactionRedemption_enabled
+    hroot hcheckpoint hq hentry henv
+
+/-! The flagship record, pinned field by field. This is the pin that protects
+the goal's central invariant: `hardenedDescription` carries
+`NoAllowanceKeyCollision` as its OWN hypothesis, while `messageEnabled` and
+`transactionEnabled` carry no collision hypothesis at all. Field assignment is
+checked up to definitional equality, so moving the collision hypothesis onto
+an enabledness field — or off `hardenedDescription` — breaks this example. -/
+
+example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {checkpoint future : BlockChain}
+    {history : AccountedHistory chainId dp ca checkpoint future}
+    (futureStable : Weth10.Stable dp ca future.state)
+    (reachable : BlockChain.ReachUsing
+      (ChainConfig.pragueOnly chainId) checkpoint future)
+    (conserved :
+      bookedBalanceNat checkpoint.state ca u +
+          (history.weth10Flow u).ordinaryIn =
+        bookedBalanceNat future.state ca u +
+          (history.weth10Flow u).redeemed +
+          (history.weth10Flow u).externalTransferredOut)
+    (residualFloor :
+      bookedBalanceNat checkpoint.state ca u ≤
+        bookedBalanceNat future.state ca u +
+          (history.weth10Flow u).redeemed +
+          (history.weth10Flow u).externalTransferredOut)
+    (hardenedDescription :
+      NoAllowanceKeyCollision history →
+        (history.weth10Flow u).redeemed +
+            (history.weth10Flow u).externalTransferredOut =
+          hardenedOutflow history u)
+    (messageEnabled : ∀ (q : Nat) (recipient : Adr) (msg : Msg),
+      q ≤ bookedBalanceNat checkpoint.state ca u -
+        ((history.weth10Flow u).redeemed +
+          (history.weth10Flow u).externalTransferredOut) →
+      AdmissibleRedemptionMessage dp ca u recipient q future.state msg →
+      MessageRedemptionEnabled dp ca u recipient q future.state msg)
+    (transactionEnabled : ∀ (q : Nat) (recipient : Adr)
+        (benv : Benv) (bout : BlockOutput) (tx : Tx) (index : Nat),
+      benv.state = future.state →
+      q ≤ bookedBalanceNat checkpoint.state ca u -
+        ((history.weth10Flow u).redeemed +
+          (history.weth10Flow u).externalTransferredOut) →
+      AdmissibleRedemptionTx dp ca u recipient q benv bout tx index →
+      TransactionRedemptionEnabled dp ca u recipient q benv bout tx index) :
+    FutureRedemptionGuarantee chainId dp ca u checkpoint future history :=
+  { futureStable := futureStable
+    reachable := reachable
+    conserved := conserved
+    residualFloor := residualFloor
+    hardenedDescription := hardenedDescription
+    messageEnabled := messageEnabled
+    transactionEnabled := transactionEnabled }
+
+example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {base deployed checkpoint future : BlockChain}
+    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
+    (hcheckpoint : BlockChain.ReachUsing
+      (ChainConfig.pragueOnly chainId) deployed checkpoint)
+    (hfuture : BlockChain.ReachUsing
+      (ChainConfig.pragueOnly chainId) checkpoint future) :
+    ∃ history, FutureRedemptionGuarantee
+      chainId dp ca u checkpoint future history :=
+  deployment_reachable_future_redeemable hroot hcheckpoint hfuture
+
+example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {base deployed : BlockChain}
+    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca) :
+    AllowanceQuiescent ca u deployed.state :=
+  deploymentRoot_allowanceQuiescent hroot
+
+example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {base deployed future : BlockChain}
+    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
+    (hfuture : BlockChain.ReachUsing
+      (ChainConfig.pragueOnly chainId) deployed future) :
+    AllowanceQuiescent ca u deployed.state ∧
+      ∃ history, FutureRedemptionGuarantee
+        chainId dp ca u deployed future history :=
+  deployment_fullWindow_future_redeemable hroot hfuture
+
+/-! The any-order records are constructor-pinned for the same reason. A
+`budget` field weakened from the per-owner **aggregate** to a per-claim bound
+would silently permit overbooking by splitting one owner's claim in two, and a
+`remaining` field weakened to anything less than "every extension admissible
+before is admissible after" would gut the any-order induction. -/
+
+example {ca : Adr} {w : State} {cs : List RedemptionClaim}
+    (recipients : ∀ c ∈ cs, ClaimAdmissible ca w c)
+    (budget : ∀ u : Adr, ownerClaimTotal cs u ≤ bookedBalanceNat w ca u) :
+    ClaimsAdmissible ca w cs :=
+  { recipients := recipients
+    budget := budget }
+
+example {dp : DeployParams} {ca : Adr} {cs : List RedemptionClaim}
+    {w post : State}
+    (run : RedemptionRun dp ca cs w post)
+    (stable : Stable dp ca post)
+    (booked : ∀ v : Adr,
+      bookedBalanceNat post ca v + ownerClaimTotal cs v =
+        bookedBalanceNat w ca v)
+    (contractEth : (post.bal ca).toNat + claimTotal cs = (w.bal ca).toNat)
+    (otherEth : ∀ a : Adr, a ≠ ca →
+      (post.bal a).toNat = (w.bal a).toNat + recipientClaimTotal cs a)
+    (sumPreserved : sum post.bal = sum w.bal)
+    (codePreserved : ∀ a : Adr, post.getCode a = w.getCode a)
+    (remaining : ∀ es : List RedemptionClaim,
+      ClaimsAdmissible ca w (cs ++ es) → ClaimsAdmissible ca post es) :
+    RedemptionOutcome dp ca cs w post :=
+  { run := run
+    stable := stable
+    booked := booked
+    contractEth := contractEth
+    otherEth := otherEth
+    sumPreserved := sumPreserved
+    codePreserved := codePreserved
+    remaining := remaining }
+
+example {dp : DeployParams} {ca : Adr} {w : State}
+    {cs ds : List RedemptionClaim}
+    (hca : ¬ pragueRules.isPrecomp ca)
+    (hstable : Stable dp ca w)
+    (hadm : ClaimsAdmissible ca w cs)
+    (hperm : cs.Perm ds) :
+    ∃ post, RedemptionOutcome dp ca ds w post :=
+  redeemClaims_anyOrder hca hstable hadm hperm
+
+example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {base deployed future : BlockChain} {cs ds : List RedemptionClaim}
+    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
+    (hfuture : BlockChain.ReachUsing
+      (ChainConfig.pragueOnly chainId) deployed future)
+    (hadm : ClaimsAdmissible ca future.state cs)
+    (hperm : cs.Perm ds) :
+    ∃ post, RedemptionOutcome dp ca ds future.state post :=
+  deployment_reachable_redeemClaims_anyOrder hroot hfuture hadm hperm
 
 end Weth10
 

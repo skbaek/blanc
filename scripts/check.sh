@@ -231,6 +231,22 @@
 # creation-message altitude; transaction/intrinsic-gas execution remains outside
 # its statement and the separately named top-level figures remain accounting.
 #
+# The last twelve rows are the `weth10-redeem-future-v2` family. Read them with
+# three restrictions in mind. `AccountedHistory.allowanceTransported_of_compiled`
+# and `committedExecAllowanceSound` are the allowance-transport endpoints the
+# attribution layer runs on; `hardenedOutflow_le_permanentOutflow` and
+# `permanentOutflow_eq_hardenedOutflow_of_noCollision` are a bound and an
+# equality, and only the equality takes `NoAllowanceKeyCollision` — a
+# trace-local, decidable property of one explicit history's finitely many
+# touched pairs, never a global injectivity assumption. The enabledness rows
+# (`deployment_reachable_residual_*`, and the `messageEnabled`/
+# `transactionEnabled` fields of `FutureRedemptionGuarantee` inside
+# `deployment_reachable_future_redeemable`) take no collision hypothesis at all:
+# redeemability never rests on an assumption about hash keys, only attribution
+# does. The `redeemClaims_anyOrder` pair is message/state-level: it says each
+# permutation of an admissible claim list has a successful redemption sequence,
+# NOT that any of those messages was included in a block or mined.
+#
 # Each row carries its OWN pinned expected axiom set (see ROWS below), and a
 # theorem's axiom closure must equal its row's set exactly, order-insensitive.
 # Any extra axiom fails — sorryAx, ofReduceBool/ofReduceNat, and also
@@ -576,7 +592,19 @@ Blanc.Weth10.holderFlow_conserved|$STANDARD
 Blanc.Weth10.holderFlow_flash_cancelled|$STANDARD
 Blanc.Weth10.holderFlow_residual_floor|$STANDARD
 Blanc.Weth10.holderFlow_truncated_floor|$STANDARD
-Blanc.Weth10.holderFlow_withdrawal_floor|$STANDARD"
+Blanc.Weth10.holderFlow_withdrawal_floor|$STANDARD
+Blanc.Weth10.committedExecAllowanceSound|$STANDARD
+Blanc.Weth10.AccountedHistory.allowanceTransported_of_compiled|$STANDARD
+Blanc.Weth10.hardenedOutflow_le_permanentOutflow|$STANDARD
+Blanc.Weth10.permanentOutflow_eq_hardenedOutflow_of_noCollision|$STANDARD
+Blanc.Weth10.holderFlow_hardened_floor|$STANDARD
+Blanc.Weth10.deployment_reachable_residual_messageRedemption_enabled|$STANDARD
+Blanc.Weth10.deployment_reachable_residual_transactionRedemption_enabled|$STANDARD
+Blanc.Weth10.deployment_reachable_future_redeemable|$STANDARD
+Blanc.Weth10.deploymentRoot_allowanceQuiescent|$STANDARD
+Blanc.Weth10.deployment_fullWindow_future_redeemable|$STANDARD
+Blanc.Weth10.redeemClaims_anyOrder|$STANDARD
+Blanc.Weth10.deployment_reachable_redeemClaims_anyOrder|$STANDARD"
 # Secondary net only: the exact-set comparison below is the primary check;
 # this pattern catches forbidden names in output the per-theorem parse missed.
 FORBIDDEN='sorryAx|ofReduceBool|ofReduceNat|_native\.'
