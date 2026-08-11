@@ -1451,6 +1451,109 @@ example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
       history.attributionLedger :=
   history.allowanceTransported_of_compiled hstable
 
+/-! ## The read-sound strengthening
+
+The two pins above are deliberately left exactly as they were. The transport
+they state was *not* strengthened in place; instead a `Sound` sibling was
+proved beside each, adding entry-read soundness of the same ledger against the
+same entry storage. The carriers are pinned by definitional unfolding, so the
+added conjunct cannot quietly become vacuous, and the downgrade witnesses at
+the end of this section recover both original endpoints from their siblings —
+the strengthening therefore cannot have been bought by weakening the published
+statements. -/
+
+example : Stor → List CountedFrame → Prop :=
+  AllowanceEntryReadSound
+
+example (pre : Stor) (ledger : List CountedFrame) :
+    AllowanceEntryReadSound pre ledger ↔
+      ∀ earlier record later, ledger = earlier ++ record :: later →
+        ∀ event, record.allowance = some event →
+          ∀ v, event.visit.read? = some v →
+            v = applyAllowanceLedger pre earlier event.key :=
+  Iff.rfl
+
+example : Adr → State → State → List CountedFrame → Prop :=
+  AllowanceTransportedSound
+
+example (ca : Adr) (pre post : State) (ledger : List CountedFrame) :
+    AllowanceTransportedSound ca pre post ledger ↔
+      (AllowanceTransported ca pre post ledger ∧
+        AllowanceEntryReadSound (pre.getStor ca) ledger) :=
+  Iff.rfl
+
+example : DeployParams → Adr → Prop :=
+  CommittedExecAllowanceReadSound
+
+example (dp : DeployParams) (ca : Adr) :
+    CommittedExecAllowanceReadSound dp ca ↔
+      ∀ {msg : Msg} {benv : Benv} {pc : Nat} {sevm : Sevm}
+        {pre : Devm} {out : Execution}
+        (run : Exec pc sevm pre out)
+        (_htransfer : msg.benvAfterTransfer = .ok benv)
+        (_hinit : (⟨pc, sevm, pre⟩ : Evm) = initEvm (msg.withBenv benv))
+        (hcommit : Execution.commits out = true),
+        MessageRunReady dp ca msg →
+        AllowanceTransportedSound ca msg.benv.state
+          (Execution.committedPost out hcommit).state
+          (Exec.attributionStream dp ca run) :=
+  Iff.rfl
+
+/-! The flash-loan record carries no exemption from the entry-read clause. It
+is the one record whose read is reconstructed from the committed post state
+rather than observed at frame entry, and the pin below is what makes that
+honest: the record is measured at the **post-callback settlement entry**,
+which is where the runtime performed the read, and `Exec.frameContribution`
+places the record after its subtree precisely so that the prefix the clause
+measures it against replays to that state. Weakening this back to an
+exemption is a semantic change, so it is pinned in full. -/
+
+example {dp : DeployParams} {ca : Adr} {e : Sevm}
+    {pre settlePre burnPre post : Devm}
+    (htarget : e.currentTarget = ca)
+    (hne0 : e.data.length.toB256 ≠ 0)
+    (hsel : Sevm.selector e = flashLoanSelector)
+    (houtcome : FlashAllowanceOutcome e settlePre burnPre)
+    (hburn : Func.Run ((weth10 dp).main :: weth10Aux) e burnPre
+      flashBurn post)
+    {record : CountedFrame}
+    (hrecord : record.allowance = frameAllowanceEvent e pre post) :
+    AllowanceEntryReadSound (Devm.getStor settlePre ca) [record] :=
+  flashSettlement_allowanceEntryRead htarget hne0 hsel houtcome hburn hrecord
+
+/-! The read-sound endpoints themselves: the compiled program's read-sound
+committed obligation, and the history-level read-sound transport that the
+dormant-holder theorem consumes. -/
+
+example (dp : DeployParams) (ca : Adr) :
+    CommittedExecAllowanceReadSound dp ca :=
+  committedExecAllowanceReadSound dp ca
+
+example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {checkpoint future : BlockChain}
+    (history : AccountedHistory chainId dp ca checkpoint future)
+    (hstable : Stable dp ca checkpoint.state) :
+    AllowanceTransportedSound ca checkpoint.state future.state
+      history.attributionLedger :=
+  history.allowanceTransportedSound_of_compiled hstable
+
+/-! The downgrade witnesses. Each pinned original is recovered from its `Sound`
+sibling by the generic downgrade, so the sibling asserts everything the pinned
+statement asserts. -/
+
+example (dp : DeployParams) (ca : Adr) :
+    CommittedExecAllowanceSound dp ca :=
+  CommittedExecAllowanceReadSound.committedExecAllowanceSound
+    (committedExecAllowanceReadSound dp ca)
+
+example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {checkpoint future : BlockChain}
+    (history : AccountedHistory chainId dp ca checkpoint future)
+    (hstable : Stable dp ca checkpoint.state) :
+    AllowanceTransported ca checkpoint.state future.state
+      history.attributionLedger :=
+  (history.allowanceTransportedSound_of_compiled hstable).toAllowanceTransported
+
 /-! The hardened outflow is a sub-sum of the permanent outflow unconditionally,
 and equals it under trace-local collision-freedom. The collision hypothesis
 appears on the equality and nowhere else. -/
@@ -1481,6 +1584,25 @@ example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
     bookedBalanceNat checkpoint.state ca u ≤
       bookedBalanceNat future.state ca u + hardenedOutflow history u :=
   holderFlow_hardened_floor hstable history hnc
+
+/-! The dormant-holder theorem, the family's most human-legible claim: a holder
+who performed no authorizing act and held no allowance at the checkpoint cannot
+have lost a wei. Its five hypotheses are the whole content of "did nothing" —
+`hquiet` is the checkpoint-side allowance quiescence and `hdormant` the
+ledger-side absence of any authorizing act by `u`, and the conclusion is a bare
+inequality on booked balances with no outflow term at all. Adding a hypothesis,
+or weakening the conclusion to mention an outflow, breaks this pin. -/
+
+example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {checkpoint future : BlockChain}
+    (hstable : Weth10.Stable dp ca checkpoint.state)
+    (history : AccountedHistory chainId dp ca checkpoint future)
+    (hnc : NoAllowanceKeyCollision history)
+    (hquiet : AllowanceQuiescent ca u checkpoint.state)
+    (hdormant : NoAuthorizingActBy u history) :
+    bookedBalanceNat checkpoint.state ca u ≤
+      bookedBalanceNat future.state ca u :=
+  dormant_holder_balance_monotone hstable history hnc hquiet hdormant
 
 /-! The two enabledness capstones state their residual bound at the checkpoint
 and discharge redemption at the future snapshot. Neither takes a collision

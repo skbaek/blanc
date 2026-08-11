@@ -231,10 +231,26 @@
 # creation-message altitude; transaction/intrinsic-gas execution remains outside
 # its statement and the separately named top-level figures remain accounting.
 #
-# The last twelve rows are the `weth10-redeem-future-v2` family. Read them with
+# The last sixteen rows are the `weth10-redeem-future-v2` family. Read them with
 # three restrictions in mind. `AccountedHistory.allowanceTransported_of_compiled`
 # and `committedExecAllowanceSound` are the allowance-transport endpoints the
-# attribution layer runs on; `hardenedOutflow_le_permanentOutflow` and
+# attribution layer runs on. Their `...Sound` siblings
+# (`AccountedHistory.allowanceTransportedSound_of_compiled`,
+# `committedExecAllowanceReadSound`) are a strengthening proved beside them, not
+# an amendment to them: each adds entry-read soundness of the same ledger
+# against the same entry storage, and scripts/ClaimCheck.lean witnesses that the
+# two originals are recovered from the siblings by downgrade, so the published
+# statements above are unchanged. `flashSettlement_allowanceEntryRead` is the
+# arm-level pin that removes the flash record's exemption from that entry-read
+# clause — the flash record is the one whose read is reconstructed from the
+# committed post state, and this row pins it at the post-callback settlement
+# entry, which is where the runtime performed the read.
+# `dormant_holder_balance_monotone` is the family's most legible claim: given
+# collision-freedom, checkpoint allowance quiescence for `u`, and no authorizing
+# act by `u`, that holder's booked balance cannot fall. It is a monotonicity
+# statement about booked balances only — it asserts nothing about the holder's
+# ether, and says nothing about holders who did act.
+# `hardenedOutflow_le_permanentOutflow` and
 # `permanentOutflow_eq_hardenedOutflow_of_noCollision` are a bound and an
 # equality, and only the equality takes `NoAllowanceKeyCollision` — a
 # trace-local, decidable property of one explicit history's finitely many
@@ -595,9 +611,13 @@ Blanc.Weth10.holderFlow_truncated_floor|$STANDARD
 Blanc.Weth10.holderFlow_withdrawal_floor|$STANDARD
 Blanc.Weth10.committedExecAllowanceSound|$STANDARD
 Blanc.Weth10.AccountedHistory.allowanceTransported_of_compiled|$STANDARD
+Blanc.Weth10.flashSettlement_allowanceEntryRead|$STANDARD
+Blanc.Weth10.committedExecAllowanceReadSound|$STANDARD
+Blanc.Weth10.AccountedHistory.allowanceTransportedSound_of_compiled|$STANDARD
 Blanc.Weth10.hardenedOutflow_le_permanentOutflow|$STANDARD
 Blanc.Weth10.permanentOutflow_eq_hardenedOutflow_of_noCollision|$STANDARD
 Blanc.Weth10.holderFlow_hardened_floor|$STANDARD
+Blanc.Weth10.dormant_holder_balance_monotone|$STANDARD
 Blanc.Weth10.deployment_reachable_residual_messageRedemption_enabled|$STANDARD
 Blanc.Weth10.deployment_reachable_residual_transactionRedemption_enabled|$STANDARD
 Blanc.Weth10.deployment_reachable_future_redeemable|$STANDARD

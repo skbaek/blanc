@@ -339,9 +339,13 @@ import Blanc.Weth10AnyOrder
 #print axioms Blanc.Weth10.holderFlow_withdrawal_floor
 #print axioms Blanc.Weth10.committedExecAllowanceSound
 #print axioms Blanc.Weth10.AccountedHistory.allowanceTransported_of_compiled
+#print axioms Blanc.Weth10.flashSettlement_allowanceEntryRead
+#print axioms Blanc.Weth10.committedExecAllowanceReadSound
+#print axioms Blanc.Weth10.AccountedHistory.allowanceTransportedSound_of_compiled
 #print axioms Blanc.Weth10.hardenedOutflow_le_permanentOutflow
 #print axioms Blanc.Weth10.permanentOutflow_eq_hardenedOutflow_of_noCollision
 #print axioms Blanc.Weth10.holderFlow_hardened_floor
+#print axioms Blanc.Weth10.dormant_holder_balance_monotone
 #print axioms Blanc.Weth10.deployment_reachable_residual_messageRedemption_enabled
 #print axioms Blanc.Weth10.deployment_reachable_residual_transactionRedemption_enabled
 #print axioms Blanc.Weth10.deployment_reachable_future_redeemable
