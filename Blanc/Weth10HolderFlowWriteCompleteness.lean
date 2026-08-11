@@ -1,5 +1,6 @@
 import Blanc.Weth10HolderFlowAuthenticity
 import Blanc.Weth10HolderFlowCompiled
+import Blanc.Weth10HolderFlowSelectorFacts
 
 /-!
 Proof-indexed balance-write occurrences for the compiled WETH10 runtime.
@@ -1931,9 +1932,8 @@ private theorem Exec.Frame.CompiledCursor.balanceSstorePrimaryRole_depositTo
     rfl
   refine ⟨?_, cursor.balanceSstoreRole_mintTo
     fromCursor occurrence context freeTail⟩
-  have notDeposit : depositToSelector ≠ depositSelector := by
-    decide +kernel
-  simp [primaryFlowAtom, nonempty, selectorEq, notDeposit]
+  simp [primaryFlowAtom, nonempty, selectorEq,
+    depositToSelector_ne_depositSelector]
 
 private theorem Exec.Frame.CompiledCursor.balanceSstorePrimaryRole_depositToAndCall
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
@@ -1965,9 +1965,8 @@ private theorem Exec.Frame.CompiledCursor.balanceSstorePrimaryRole_depositToAndC
     rfl
   refine ⟨?_, cursor.balanceSstoreRole_mintTo
     fromCursor occurrence context freeTail⟩
-  have notDeposit : depositToAndCallSelector ≠ depositSelector := by
-    decide +kernel
-  simp [primaryFlowAtom, nonempty, selectorEq, notDeposit]
+  simp [primaryFlowAtom, nonempty, selectorEq,
+    depositToAndCallSelector_ne_depositSelector]
 
 private theorem debitLoadedBalance_append_eq_sstoreSplit
     (continuation : Func) :
@@ -2364,24 +2363,16 @@ private theorem Exec.Frame.CompiledCursor.balanceSstorePrimaryRole_withdraw
         (.redemption frame.sevm.caller.toB256 frame.sevm.caller
           frame.sevm.caller (Sevm.argWord frame.sevm 0).toNat)
         holder value := by
-  have notDeposit : withdrawSelector ≠ depositSelector := by
-    decide +kernel
-  have notDepositTo : withdrawSelector ≠ depositToSelector := by
-    decide +kernel
-  have notDepositCall : withdrawSelector ≠ depositToAndCallSelector := by
-    decide +kernel
-  have notTransfer : withdrawSelector ≠ transferSelector := by
-    decide +kernel
-  have notTransferCall : withdrawSelector ≠ transferAndCallSelector := by
-    decide +kernel
-  have notTransferFrom : withdrawSelector ≠ transferFromSelector := by
-    decide +kernel
   have primary : primaryFlowAtom frame.sevm = some
       (.redemption frame.sevm.caller.toB256 frame.sevm.caller
         frame.sevm.caller (Sevm.argWord frame.sevm 0).toNat) := by
-    simp [primaryFlowAtom, nonempty, selectorEq, notDeposit,
-      notDepositTo, notDepositCall, notTransfer, notTransferCall,
-      notTransferFrom]
+    simp [primaryFlowAtom, nonempty, selectorEq,
+      withdrawSelector_ne_depositSelector,
+      withdrawSelector_ne_depositToSelector,
+      withdrawSelector_ne_depositToAndCallSelector,
+      withdrawSelector_ne_transferSelector,
+      withdrawSelector_ne_transferAndCallSelector,
+      withdrawSelector_ne_transferFromSelector]
   rcases cursor.castSourceWithOccurrence withdraw_eq_callerDebitSource
       fromCursor with
     ⟨sourceCursor, _sourcePre, fromSource⟩
@@ -2464,27 +2455,18 @@ private theorem Exec.Frame.CompiledCursor.balanceSstorePrimaryRole_withdrawTo
         (.redemption frame.sevm.caller.toB256 frame.sevm.caller
           (Sevm.argWord frame.sevm 0).toAdr
           (Sevm.argWord frame.sevm 1).toNat) holder value := by
-  have notDeposit : withdrawToSelector ≠ depositSelector := by
-    decide +kernel +revert
-  have notDepositTo : withdrawToSelector ≠ depositToSelector := by
-    decide +kernel
-  have notDepositCall : withdrawToSelector ≠ depositToAndCallSelector := by
-    decide +kernel
-  have notTransfer : withdrawToSelector ≠ transferSelector := by
-    decide +kernel
-  have notTransferCall : withdrawToSelector ≠ transferAndCallSelector := by
-    decide +kernel
-  have notTransferFrom : withdrawToSelector ≠ transferFromSelector := by
-    decide +kernel
-  have notWithdraw : withdrawToSelector ≠ withdrawSelector := by
-    decide +kernel
   have primary : primaryFlowAtom frame.sevm = some
       (.redemption frame.sevm.caller.toB256 frame.sevm.caller
         (Sevm.argWord frame.sevm 0).toAdr
         (Sevm.argWord frame.sevm 1).toNat) := by
-    simp [primaryFlowAtom, nonempty, selectorEq, notDeposit,
-      notDepositTo, notDepositCall, notTransfer, notTransferCall,
-      notTransferFrom, notWithdraw]
+    simp [primaryFlowAtom, nonempty, selectorEq,
+      withdrawToSelector_ne_depositSelector,
+      withdrawToSelector_ne_depositToSelector,
+      withdrawToSelector_ne_depositToAndCallSelector,
+      withdrawToSelector_ne_transferSelector,
+      withdrawToSelector_ne_transferAndCallSelector,
+      withdrawToSelector_ne_transferFromSelector,
+      withdrawToSelector_ne_withdrawSelector]
   rcases cursor.castSourceWithOccurrence withdrawTo_eq_callerDebitSource
       fromCursor with
     ⟨sourceCursor, _sourcePre, fromSource⟩
@@ -3012,32 +2994,22 @@ private theorem Exec.Frame.CompiledCursor.classifyBalanceSstore_transfer
   rcases cursor.balanceSstoreRole_transferThen fromCursor occurrence context
       nonzeroFree zeroFree with
     ⟨rawNonzero, role⟩ | ⟨rawZero, role⟩
-  · have notDeposit : transferSelector ≠ depositSelector := by
-      decide +kernel
-    have notDepositTo : transferSelector ≠ depositToSelector := by
-      decide +kernel
-    have notDepositCall :
-        transferSelector ≠ depositToAndCallSelector := by
-      decide +kernel
-    have primary : primaryFlowAtom frame.sevm = some
+  · have primary : primaryFlowAtom frame.sevm = some
         (.transfer frame.sevm.caller.toB256 (Sevm.argWord frame.sevm 0)
           frame.sevm.caller (Sevm.argWord frame.sevm 0).toAdr
           (Sevm.argWord frame.sevm 1).toNat) := by
-      simp [primaryFlowAtom, nonempty, selectorEq, notDeposit,
-        notDepositTo, notDepositCall, rawNonzero]
+      simp [primaryFlowAtom, nonempty, selectorEq,
+        transferSelector_ne_depositSelector,
+        transferSelector_ne_depositToSelector,
+        transferSelector_ne_depositToAndCallSelector, rawNonzero]
     exact occurrence.classify_of_primary_role context primary role
-  · have notDeposit : transferSelector ≠ depositSelector := by
-      decide +kernel
-    have notDepositTo : transferSelector ≠ depositToSelector := by
-      decide +kernel
-    have notDepositCall :
-        transferSelector ≠ depositToAndCallSelector := by
-      decide +kernel
-    have primary : primaryFlowAtom frame.sevm = some
+  · have primary : primaryFlowAtom frame.sevm = some
         (.redemption frame.sevm.caller.toB256 frame.sevm.caller
           frame.sevm.caller (Sevm.argWord frame.sevm 1).toNat) := by
-      simp [primaryFlowAtom, nonempty, selectorEq, notDeposit,
-        notDepositTo, notDepositCall, rawZero]
+      simp [primaryFlowAtom, nonempty, selectorEq,
+        transferSelector_ne_depositSelector,
+        transferSelector_ne_depositToSelector,
+        transferSelector_ne_depositToAndCallSelector, rawZero]
     exact occurrence.classify_of_primary_role context primary role
 
 /-- Package the same two exact transfer roles when the committed source suffix
@@ -3076,40 +3048,24 @@ private theorem Exec.Frame.CompiledCursor.classifyBalanceSstore_transferAndCall
   rcases cursor.balanceSstoreRole_transferThen fromCursor occurrence context
       nonzeroFree callbackFree with
     ⟨rawNonzero, role⟩ | ⟨rawZero, role⟩
-  · have notDeposit : transferAndCallSelector ≠ depositSelector := by
-      decide +kernel
-    have notDepositTo :
-        transferAndCallSelector ≠ depositToSelector := by
-      decide +kernel
-    have notDepositCall :
-        transferAndCallSelector ≠ depositToAndCallSelector := by
-      decide +kernel
-    have notTransfer :
-        transferAndCallSelector ≠ transferSelector := by
-      decide +kernel
-    have primary : primaryFlowAtom frame.sevm = some
+  · have primary : primaryFlowAtom frame.sevm = some
         (.transfer frame.sevm.caller.toB256 (Sevm.argWord frame.sevm 0)
           frame.sevm.caller (Sevm.argWord frame.sevm 0).toAdr
           (Sevm.argWord frame.sevm 1).toNat) := by
-      simp [primaryFlowAtom, nonempty, selectorEq, notDeposit,
-        notDepositTo, notDepositCall, notTransfer, rawNonzero]
+      simp [primaryFlowAtom, nonempty, selectorEq,
+        transferAndCallSelector_ne_depositSelector,
+        transferAndCallSelector_ne_depositToSelector,
+        transferAndCallSelector_ne_depositToAndCallSelector,
+        transferAndCallSelector_ne_transferSelector, rawNonzero]
     exact occurrence.classify_of_primary_role context primary role
-  · have notDeposit : transferAndCallSelector ≠ depositSelector := by
-      decide +kernel
-    have notDepositTo :
-        transferAndCallSelector ≠ depositToSelector := by
-      decide +kernel
-    have notDepositCall :
-        transferAndCallSelector ≠ depositToAndCallSelector := by
-      decide +kernel
-    have notTransfer :
-        transferAndCallSelector ≠ transferSelector := by
-      decide +kernel
-    have primary : primaryFlowAtom frame.sevm = some
+  · have primary : primaryFlowAtom frame.sevm = some
         (.redemption frame.sevm.caller.toB256 frame.sevm.caller
           frame.sevm.caller (Sevm.argWord frame.sevm 1).toNat) := by
-      simp [primaryFlowAtom, nonempty, selectorEq, notDeposit,
-        notDepositTo, notDepositCall, notTransfer, rawZero]
+      simp [primaryFlowAtom, nonempty, selectorEq,
+        transferAndCallSelector_ne_depositSelector,
+        transferAndCallSelector_ne_depositToSelector,
+        transferAndCallSelector_ne_depositToAndCallSelector,
+        transferAndCallSelector_ne_transferSelector, rawZero]
     exact occurrence.classify_of_primary_role context primary role
 
 private def argDebitGuardLine (ownerArg amountArg : B256) : Line :=
@@ -3694,47 +3650,31 @@ private theorem Exec.Frame.CompiledCursor.classifyBalanceSstore_transferFrom
       ⟨rawZero, armCursor, insideArm⟩
   · have role := armCursor.balanceSstoreRole_transferFromNonzero
       insideArm occurrence context
-    have notDeposit : transferFromSelector ≠ depositSelector := by
-      decide +kernel
-    have notDepositTo : transferFromSelector ≠ depositToSelector := by
-      decide +kernel
-    have notDepositCall :
-        transferFromSelector ≠ depositToAndCallSelector := by
-      decide +kernel
-    have notTransfer : transferFromSelector ≠ transferSelector := by
-      decide +kernel
-    have notTransferCall :
-        transferFromSelector ≠ transferAndCallSelector := by
-      decide +kernel
     have primary : primaryFlowAtom frame.sevm = some
         (.transfer (Sevm.argWord frame.sevm 0) (Sevm.argWord frame.sevm 1)
           (Sevm.argWord frame.sevm 0).toAdr
           (Sevm.argWord frame.sevm 1).toAdr
           (Sevm.argWord frame.sevm 2).toNat) := by
-      simp [primaryFlowAtom, nonempty, selectorEq, notDeposit,
-        notDepositTo, notDepositCall, notTransfer, notTransferCall,
+      simp [primaryFlowAtom, nonempty, selectorEq,
+        transferFromSelector_ne_depositSelector,
+        transferFromSelector_ne_depositToSelector,
+        transferFromSelector_ne_depositToAndCallSelector,
+        transferFromSelector_ne_transferSelector,
+        transferFromSelector_ne_transferAndCallSelector,
         rawNonzero]
     exact occurrence.classify_of_primary_role context primary role
   · have role := armCursor.balanceSstoreRole_transferFromZero
       insideArm occurrence context
-    have notDeposit : transferFromSelector ≠ depositSelector := by
-      decide +kernel
-    have notDepositTo : transferFromSelector ≠ depositToSelector := by
-      decide +kernel
-    have notDepositCall :
-        transferFromSelector ≠ depositToAndCallSelector := by
-      decide +kernel
-    have notTransfer : transferFromSelector ≠ transferSelector := by
-      decide +kernel
-    have notTransferCall :
-        transferFromSelector ≠ transferAndCallSelector := by
-      decide +kernel
     have primary : primaryFlowAtom frame.sevm = some
         (.redemption (Sevm.argWord frame.sevm 0)
           (Sevm.argWord frame.sevm 0).toAdr frame.sevm.caller
           (Sevm.argWord frame.sevm 2).toNat) := by
-      simp [primaryFlowAtom, nonempty, selectorEq, notDeposit,
-        notDepositTo, notDepositCall, notTransfer, notTransferCall,
+      simp [primaryFlowAtom, nonempty, selectorEq,
+        transferFromSelector_ne_depositSelector,
+        transferFromSelector_ne_depositToSelector,
+        transferFromSelector_ne_depositToAndCallSelector,
+        transferFromSelector_ne_transferSelector,
+        transferFromSelector_ne_transferAndCallSelector,
         rawZero]
     exact occurrence.classify_of_primary_role context primary role
 
@@ -3850,33 +3790,20 @@ private theorem Exec.Frame.CompiledCursor.classifyBalanceSstore_withdrawFrom
   subst body
   have role := coreCursor.balanceSstoreRole_withdrawFromCore
     insideCore occurrence context
-  have notDeposit : withdrawFromSelector ≠ depositSelector := by
-    decide +kernel
-  have notDepositTo : withdrawFromSelector ≠ depositToSelector := by
-    decide +kernel
-  have notDepositCall :
-      withdrawFromSelector ≠ depositToAndCallSelector := by
-    decide +kernel
-  have notTransfer : withdrawFromSelector ≠ transferSelector := by
-    decide +kernel
-  have notTransferCall :
-      withdrawFromSelector ≠ transferAndCallSelector := by
-    decide +kernel
-  have notTransferFrom :
-      withdrawFromSelector ≠ transferFromSelector := by
-    decide +kernel
-  have notWithdraw : withdrawFromSelector ≠ withdrawSelector := by
-    decide +kernel
-  have notWithdrawTo : withdrawFromSelector ≠ withdrawToSelector := by
-    decide +kernel
   have primary : primaryFlowAtom frame.sevm = some
       (.redemption (Sevm.argWord frame.sevm 0)
         (Sevm.argWord frame.sevm 0).toAdr
         (Sevm.argWord frame.sevm 1).toAdr
         (Sevm.argWord frame.sevm 2).toNat) := by
-    simp [primaryFlowAtom, nonempty, selectorEq, notDeposit,
-      notDepositTo, notDepositCall, notTransfer, notTransferCall,
-      notTransferFrom, notWithdraw, notWithdrawTo]
+    simp [primaryFlowAtom, nonempty, selectorEq,
+      withdrawFromSelector_ne_depositSelector,
+      withdrawFromSelector_ne_depositToSelector,
+      withdrawFromSelector_ne_depositToAndCallSelector,
+      withdrawFromSelector_ne_transferSelector,
+      withdrawFromSelector_ne_transferAndCallSelector,
+      withdrawFromSelector_ne_transferFromSelector,
+      withdrawFromSelector_ne_withdrawSelector,
+      withdrawFromSelector_ne_withdrawToSelector]
   exact occurrence.classify_of_primary_role context primary role
 
 private def flashBurnAfterDebitBeforeSlot : Line :=
@@ -4648,33 +4575,20 @@ private theorem Exec.Frame.CompiledCursor.classifyBalanceSstore_flashLoan
         key value holder action := by
   have role := cursor.balanceSstoreRole_flashLoan
     fromCursor occurrence context
-  have notDeposit : flashLoanSelector ≠ depositSelector := by
-    decide +kernel
-  have notDepositTo : flashLoanSelector ≠ depositToSelector := by
-    decide +kernel
-  have notDepositCall :
-      flashLoanSelector ≠ depositToAndCallSelector := by
-    decide +kernel
-  have notTransfer : flashLoanSelector ≠ transferSelector := by
-    decide +kernel
-  have notTransferCall :
-      flashLoanSelector ≠ transferAndCallSelector := by
-    decide +kernel
-  have notTransferFrom : flashLoanSelector ≠ transferFromSelector := by
-    decide +kernel
-  have notWithdraw : flashLoanSelector ≠ withdrawSelector := by
-    decide +kernel
-  have notWithdrawTo : flashLoanSelector ≠ withdrawToSelector := by
-    decide +kernel
-  have notWithdrawFrom : flashLoanSelector ≠ withdrawFromSelector := by
-    decide +kernel
   have primary : primaryFlowAtom frame.sevm = some
       (.flashPair (Sevm.argWord frame.sevm 0)
         (Sevm.argWord frame.sevm 0).toAdr
         (Sevm.argWord frame.sevm 2).toNat) := by
-    simp [primaryFlowAtom, nonempty, selectorEq, notDeposit,
-      notDepositTo, notDepositCall, notTransfer, notTransferCall,
-      notTransferFrom, notWithdraw, notWithdrawTo, notWithdrawFrom]
+    simp [primaryFlowAtom, nonempty, selectorEq,
+      flashLoanSelector_ne_depositSelector,
+      flashLoanSelector_ne_depositToSelector,
+      flashLoanSelector_ne_depositToAndCallSelector,
+      flashLoanSelector_ne_transferSelector,
+      flashLoanSelector_ne_transferAndCallSelector,
+      flashLoanSelector_ne_transferFromSelector,
+      flashLoanSelector_ne_withdrawSelector,
+      flashLoanSelector_ne_withdrawToSelector,
+      flashLoanSelector_ne_withdrawFromSelector]
   exact occurrence.classify_of_primary_role context primary role
 
 private def approveEntryBeforeKey : Line :=

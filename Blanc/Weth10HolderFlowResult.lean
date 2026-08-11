@@ -1,5 +1,6 @@
 import Blanc.Weth10HolderFlowEthExec
 import Blanc.Weth10HolderFlowExecAccounting
+import Blanc.Weth10HolderFlowSelectorFacts
 
 /-!
 History-level storage accounting and the public WETH10 holder-conservation
@@ -1150,12 +1151,9 @@ theorem primaryFlowAtom_dirty_zero_is_transfer
     primaryFlowAtom e =
       some (.transfer e.caller.toB256 (Sevm.argWord e 0)
         e.caller 0 (Sevm.argWord e 1).toNat) := by
-  have hdeposit : transferSelector ≠ depositSelector := by decide +kernel
-  have hdepositTo : transferSelector ≠ depositToSelector := by decide +kernel
-  have hdepositCall :
-      transferSelector ≠ depositToAndCallSelector := by decide +kernel
   simp [primaryFlowAtom, hnonempty, hselector, hraw, hnormalized,
-    hdeposit, hdepositTo, hdepositCall]
+    transferSelector_ne_depositSelector, transferSelector_ne_depositToSelector,
+    transferSelector_ne_depositToAndCallSelector]
 
 /-- The callback-bearing transfer uses the same raw-word branch: a dirty
 nonzero destination normalizing to address zero is still an ordinary transfer
@@ -1169,17 +1167,11 @@ theorem primaryFlowAtom_dirty_zero_transferAndCall_is_transfer
     primaryFlowAtom e =
       some (.transfer e.caller.toB256 (Sevm.argWord e 0)
         e.caller 0 (Sevm.argWord e 1).toNat) := by
-  have hdeposit : transferAndCallSelector ≠ depositSelector := by
-    decide +kernel
-  have hdepositTo : transferAndCallSelector ≠ depositToSelector := by
-    decide +kernel
-  have hdepositCall :
-      transferAndCallSelector ≠ depositToAndCallSelector := by
-    decide +kernel
-  have htransfer : transferAndCallSelector ≠ transferSelector := by
-    decide +kernel
   simp [primaryFlowAtom, hnonempty, hselector, hraw, hnormalized,
-    hdeposit, hdepositTo, hdepositCall, htransfer]
+    transferAndCallSelector_ne_depositSelector,
+    transferAndCallSelector_ne_depositToSelector,
+    transferAndCallSelector_ne_depositToAndCallSelector,
+    transferAndCallSelector_ne_transferSelector]
 
 /-- Delegated transfers likewise branch on the untouched raw recipient word;
 normalization to address zero does not retrospectively make the action an ETH
@@ -1193,19 +1185,12 @@ theorem primaryFlowAtom_dirty_zero_transferFrom_is_transfer
     primaryFlowAtom e =
       some (.transfer (Sevm.argWord e 0) (Sevm.argWord e 1)
         (Sevm.argWord e 0).toAdr 0 (Sevm.argWord e 2).toNat) := by
-  have hdeposit : transferFromSelector ≠ depositSelector := by
-    decide +kernel
-  have hdepositTo : transferFromSelector ≠ depositToSelector := by
-    decide +kernel
-  have hdepositCall :
-      transferFromSelector ≠ depositToAndCallSelector := by
-    decide +kernel
-  have htransfer : transferFromSelector ≠ transferSelector := by
-    decide +kernel
-  have htransferCall : transferFromSelector ≠ transferAndCallSelector := by
-    decide +kernel
   simp [primaryFlowAtom, hnonempty, hselector, hrawTo, hnormalized,
-    hdeposit, hdepositTo, hdepositCall, htransfer, htransferCall]
+    transferFromSelector_ne_depositSelector,
+    transferFromSelector_ne_depositToSelector,
+    transferFromSelector_ne_depositToAndCallSelector,
+    transferFromSelector_ne_transferSelector,
+    transferFromSelector_ne_transferAndCallSelector]
 
 /-- Library-style or delegated execution cannot satisfy the exact direct
 WETH10 invocation boundary, even when the code bytes look identical. -/

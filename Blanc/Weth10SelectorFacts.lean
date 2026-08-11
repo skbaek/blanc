@@ -1,4 +1,5 @@
 import Blanc.Weth10Attribution
+import Blanc.Weth10HolderFlowSelectorFacts
 
 /-!
 Selector separations for the exact Blanc WETH10 runtime.
@@ -11,13 +12,21 @@ between them need a couple of hundred such separations, drawn from a
 handful of selectors, so deciding them one pair at a time paid for the
 same hash over and over.
 
-This module pays once per selector instead.  A private numeral fact per
-selector runs the keccak in the kernel exactly once; every separation
-below then rewrites both sides to their numerals and compares words, and
-a pair needed in both directions derives its reverse with `Ne.symm`
-rather than deciding again.  Nothing here is a claim about the runtime:
-these are arithmetic facts about the ABI signature hashes, stated so the
-modules that consume them state no local copies.
+This module pays once per selector instead.  A numeral fact per selector
+runs the keccak in the kernel exactly once; every separation below then
+rewrites both sides to their numerals and compares words, and a pair
+needed in both directions derives its reverse with `Ne.symm` rather than
+deciding again.  Nothing here is a claim about the runtime: these are
+arithmetic facts about the ABI signature hashes, stated so the modules
+that consume them state no local copies.
+
+The facility has two halves, because the holder-flow layer needs the same
+separations and sits below `Blanc.Weth10Attribution`, which this module
+imports for `approve` and `allowance`.
+`Blanc.Weth10HolderFlowSelectorFacts` is the lower half: it owns the ten
+deposit, transfer, withdrawal and `flashLoan` selectors, their words and
+all ninety of their ordered separations.  This module imports it and adds
+what needs a selector that only appears higher up.
 -/
 
 namespace Blanc
@@ -28,9 +37,10 @@ namespace Weth10
 
 /-! ## The selector words
 
-One kernel keccak per selector.  These are private: the separations
-below are the module's interface, and a consumer that wanted a selector's
-literal word would be reaching past them. -/
+One kernel keccak per selector this half adds; the other ten words come
+from the lower half.  These are private: the separations below are the
+module's interface, and a consumer that wanted a selector's literal word
+would be reaching past them. -/
 
 private theorem selector_name_val :
     selector "name" [] = (0x06fdde03 : B256) := by decide +kernel
@@ -84,36 +94,6 @@ private theorem approveAndCallSelector_val :
 
 private theorem permitSelector_val :
     permitSelector = (0xd505accf : B256) := by decide +kernel
-
-private theorem transferFromSelector_val :
-    transferFromSelector = (0x23b872dd : B256) := by decide +kernel
-
-private theorem withdrawFromSelector_val :
-    withdrawFromSelector = (0x9555a942 : B256) := by decide +kernel
-
-private theorem flashLoanSelector_val :
-    flashLoanSelector = (0x5cffe9de : B256) := by decide +kernel
-
-private theorem transferSelector_val :
-    transferSelector = (0xa9059cbb : B256) := by decide +kernel
-
-private theorem transferAndCallSelector_val :
-    transferAndCallSelector = (0x4000aea0 : B256) := by decide +kernel
-
-private theorem withdrawSelector_val :
-    withdrawSelector = (0x2e1a7d4d : B256) := by decide +kernel
-
-private theorem withdrawToSelector_val :
-    withdrawToSelector = (0x205c2878 : B256) := by decide +kernel
-
-private theorem depositSelector_val :
-    depositSelector = (0xd0e30db0 : B256) := by decide +kernel
-
-private theorem depositToSelector_val :
-    depositToSelector = (0xb760faf9 : B256) := by decide +kernel
-
-private theorem depositToAndCallSelector_val :
-    depositToAndCallSelector = (0x5ddb7d7e : B256) := by decide +kernel
 
 /-! ## The childless views
 
@@ -526,18 +506,6 @@ theorem depositSelector_ne_permitSelector :
     depositSelector ≠ permitSelector := by
   rw [depositSelector_val, permitSelector_val]; decide
 
-theorem depositSelector_ne_transferFromSelector :
-    depositSelector ≠ transferFromSelector := by
-  rw [depositSelector_val, transferFromSelector_val]; decide
-
-theorem depositSelector_ne_withdrawFromSelector :
-    depositSelector ≠ withdrawFromSelector := by
-  rw [depositSelector_val, withdrawFromSelector_val]; decide
-
-theorem depositSelector_ne_flashLoanSelector :
-    depositSelector ≠ flashLoanSelector := by
-  rw [depositSelector_val, flashLoanSelector_val]; decide
-
 theorem depositSelector_ne_allowanceSelector :
     depositSelector ≠ allowanceSelector := by
   rw [depositSelector_val, allowanceSelector_val]; decide
@@ -555,18 +523,6 @@ theorem depositToSelector_ne_approveAndCallSelector :
 theorem depositToSelector_ne_permitSelector :
     depositToSelector ≠ permitSelector := by
   rw [depositToSelector_val, permitSelector_val]; decide
-
-theorem depositToSelector_ne_transferFromSelector :
-    depositToSelector ≠ transferFromSelector := by
-  rw [depositToSelector_val, transferFromSelector_val]; decide
-
-theorem depositToSelector_ne_withdrawFromSelector :
-    depositToSelector ≠ withdrawFromSelector := by
-  rw [depositToSelector_val, withdrawFromSelector_val]; decide
-
-theorem depositToSelector_ne_flashLoanSelector :
-    depositToSelector ≠ flashLoanSelector := by
-  rw [depositToSelector_val, flashLoanSelector_val]; decide
 
 theorem depositToSelector_ne_allowanceSelector :
     depositToSelector ≠ allowanceSelector := by
@@ -586,18 +542,6 @@ theorem depositToAndCallSelector_ne_permitSelector :
     depositToAndCallSelector ≠ permitSelector := by
   rw [depositToAndCallSelector_val, permitSelector_val]; decide
 
-theorem depositToAndCallSelector_ne_transferFromSelector :
-    depositToAndCallSelector ≠ transferFromSelector := by
-  rw [depositToAndCallSelector_val, transferFromSelector_val]; decide
-
-theorem depositToAndCallSelector_ne_withdrawFromSelector :
-    depositToAndCallSelector ≠ withdrawFromSelector := by
-  rw [depositToAndCallSelector_val, withdrawFromSelector_val]; decide
-
-theorem depositToAndCallSelector_ne_flashLoanSelector :
-    depositToAndCallSelector ≠ flashLoanSelector := by
-  rw [depositToAndCallSelector_val, flashLoanSelector_val]; decide
-
 theorem depositToAndCallSelector_ne_allowanceSelector :
     depositToAndCallSelector ≠ allowanceSelector := by
   rw [depositToAndCallSelector_val, allowanceSelector_val]; decide
@@ -615,18 +559,6 @@ theorem transferSelector_ne_approveAndCallSelector :
 theorem transferSelector_ne_permitSelector :
     transferSelector ≠ permitSelector := by
   rw [transferSelector_val, permitSelector_val]; decide
-
-theorem transferSelector_ne_transferFromSelector :
-    transferSelector ≠ transferFromSelector := by
-  rw [transferSelector_val, transferFromSelector_val]; decide
-
-theorem transferSelector_ne_withdrawFromSelector :
-    transferSelector ≠ withdrawFromSelector := by
-  rw [transferSelector_val, withdrawFromSelector_val]; decide
-
-theorem transferSelector_ne_flashLoanSelector :
-    transferSelector ≠ flashLoanSelector := by
-  rw [transferSelector_val, flashLoanSelector_val]; decide
 
 theorem transferSelector_ne_allowanceSelector :
     transferSelector ≠ allowanceSelector := by
@@ -646,18 +578,6 @@ theorem transferAndCallSelector_ne_permitSelector :
     transferAndCallSelector ≠ permitSelector := by
   rw [transferAndCallSelector_val, permitSelector_val]; decide
 
-theorem transferAndCallSelector_ne_transferFromSelector :
-    transferAndCallSelector ≠ transferFromSelector := by
-  rw [transferAndCallSelector_val, transferFromSelector_val]; decide
-
-theorem transferAndCallSelector_ne_withdrawFromSelector :
-    transferAndCallSelector ≠ withdrawFromSelector := by
-  rw [transferAndCallSelector_val, withdrawFromSelector_val]; decide
-
-theorem transferAndCallSelector_ne_flashLoanSelector :
-    transferAndCallSelector ≠ flashLoanSelector := by
-  rw [transferAndCallSelector_val, flashLoanSelector_val]; decide
-
 theorem transferAndCallSelector_ne_allowanceSelector :
     transferAndCallSelector ≠ allowanceSelector := by
   rw [transferAndCallSelector_val, allowanceSelector_val]; decide
@@ -676,18 +596,6 @@ theorem withdrawSelector_ne_permitSelector :
     withdrawSelector ≠ permitSelector := by
   rw [withdrawSelector_val, permitSelector_val]; decide
 
-theorem withdrawSelector_ne_transferFromSelector :
-    withdrawSelector ≠ transferFromSelector := by
-  rw [withdrawSelector_val, transferFromSelector_val]; decide
-
-theorem withdrawSelector_ne_withdrawFromSelector :
-    withdrawSelector ≠ withdrawFromSelector := by
-  rw [withdrawSelector_val, withdrawFromSelector_val]; decide
-
-theorem withdrawSelector_ne_flashLoanSelector :
-    withdrawSelector ≠ flashLoanSelector := by
-  rw [withdrawSelector_val, flashLoanSelector_val]; decide
-
 theorem withdrawSelector_ne_allowanceSelector :
     withdrawSelector ≠ allowanceSelector := by
   rw [withdrawSelector_val, allowanceSelector_val]; decide
@@ -705,18 +613,6 @@ theorem withdrawToSelector_ne_approveAndCallSelector :
 theorem withdrawToSelector_ne_permitSelector :
     withdrawToSelector ≠ permitSelector := by
   rw [withdrawToSelector_val, permitSelector_val]; decide
-
-theorem withdrawToSelector_ne_transferFromSelector :
-    withdrawToSelector ≠ transferFromSelector := by
-  rw [withdrawToSelector_val, transferFromSelector_val]; decide
-
-theorem withdrawToSelector_ne_withdrawFromSelector :
-    withdrawToSelector ≠ withdrawFromSelector := by
-  rw [withdrawToSelector_val, withdrawFromSelector_val]; decide
-
-theorem withdrawToSelector_ne_flashLoanSelector :
-    withdrawToSelector ≠ flashLoanSelector := by
-  rw [withdrawToSelector_val, flashLoanSelector_val]; decide
 
 theorem withdrawToSelector_ne_allowanceSelector :
     withdrawToSelector ≠ allowanceSelector := by
@@ -796,14 +692,6 @@ theorem flashLoanSelector_ne_permitSelector :
     flashLoanSelector ≠ permitSelector :=
   permitSelector_ne_flashLoanSelector.symm
 
-theorem flashLoanSelector_ne_transferFromSelector :
-    flashLoanSelector ≠ transferFromSelector := by
-  rw [flashLoanSelector_val, transferFromSelector_val]; decide
-
-theorem flashLoanSelector_ne_withdrawFromSelector :
-    flashLoanSelector ≠ withdrawFromSelector := by
-  rw [flashLoanSelector_val, withdrawFromSelector_val]; decide
-
 /-! ### `transferFromSelector` -/
 
 theorem transferFromSelector_ne_approveSelector :
@@ -818,38 +706,6 @@ theorem transferFromSelector_ne_permitSelector :
     transferFromSelector ≠ permitSelector := by
   rw [transferFromSelector_val, permitSelector_val]; decide
 
-theorem transferFromSelector_ne_flashLoanSelector :
-    transferFromSelector ≠ flashLoanSelector :=
-  flashLoanSelector_ne_transferFromSelector.symm
-
-theorem transferFromSelector_ne_transferSelector :
-    transferFromSelector ≠ transferSelector :=
-  transferSelector_ne_transferFromSelector.symm
-
-theorem transferFromSelector_ne_transferAndCallSelector :
-    transferFromSelector ≠ transferAndCallSelector :=
-  transferAndCallSelector_ne_transferFromSelector.symm
-
-theorem transferFromSelector_ne_withdrawSelector :
-    transferFromSelector ≠ withdrawSelector :=
-  withdrawSelector_ne_transferFromSelector.symm
-
-theorem transferFromSelector_ne_withdrawToSelector :
-    transferFromSelector ≠ withdrawToSelector :=
-  withdrawToSelector_ne_transferFromSelector.symm
-
-theorem transferFromSelector_ne_depositSelector :
-    transferFromSelector ≠ depositSelector :=
-  depositSelector_ne_transferFromSelector.symm
-
-theorem transferFromSelector_ne_depositToSelector :
-    transferFromSelector ≠ depositToSelector :=
-  depositToSelector_ne_transferFromSelector.symm
-
-theorem transferFromSelector_ne_depositToAndCallSelector :
-    transferFromSelector ≠ depositToAndCallSelector :=
-  depositToAndCallSelector_ne_transferFromSelector.symm
-
 /-! ### `withdrawFromSelector` -/
 
 theorem withdrawFromSelector_ne_approveSelector :
@@ -863,42 +719,6 @@ theorem withdrawFromSelector_ne_approveAndCallSelector :
 theorem withdrawFromSelector_ne_permitSelector :
     withdrawFromSelector ≠ permitSelector := by
   rw [withdrawFromSelector_val, permitSelector_val]; decide
-
-theorem withdrawFromSelector_ne_flashLoanSelector :
-    withdrawFromSelector ≠ flashLoanSelector :=
-  flashLoanSelector_ne_withdrawFromSelector.symm
-
-theorem withdrawFromSelector_ne_transferSelector :
-    withdrawFromSelector ≠ transferSelector :=
-  transferSelector_ne_withdrawFromSelector.symm
-
-theorem withdrawFromSelector_ne_transferAndCallSelector :
-    withdrawFromSelector ≠ transferAndCallSelector :=
-  transferAndCallSelector_ne_withdrawFromSelector.symm
-
-theorem withdrawFromSelector_ne_withdrawSelector :
-    withdrawFromSelector ≠ withdrawSelector :=
-  withdrawSelector_ne_withdrawFromSelector.symm
-
-theorem withdrawFromSelector_ne_withdrawToSelector :
-    withdrawFromSelector ≠ withdrawToSelector :=
-  withdrawToSelector_ne_withdrawFromSelector.symm
-
-theorem withdrawFromSelector_ne_transferFromSelector :
-    withdrawFromSelector ≠ transferFromSelector := by
-  rw [withdrawFromSelector_val, transferFromSelector_val]; decide
-
-theorem withdrawFromSelector_ne_depositSelector :
-    withdrawFromSelector ≠ depositSelector :=
-  depositSelector_ne_withdrawFromSelector.symm
-
-theorem withdrawFromSelector_ne_depositToSelector :
-    withdrawFromSelector ≠ depositToSelector :=
-  depositToSelector_ne_withdrawFromSelector.symm
-
-theorem withdrawFromSelector_ne_depositToAndCallSelector :
-    withdrawFromSelector ≠ depositToAndCallSelector :=
-  depositToAndCallSelector_ne_withdrawFromSelector.symm
 
 end Weth10
 

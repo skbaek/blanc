@@ -2,6 +2,7 @@ import Blanc.ExecDeterminism
 import Blanc.Weth10HolderFlowAuthenticity
 import Blanc.Weth10HolderFlowEth
 import Blanc.Weth10HolderFlowLocal
+import Blanc.Weth10HolderFlowSelectorFacts
 import Blanc.Weth10Read
 
 /-!
@@ -5633,25 +5634,16 @@ theorem Exec.Frame.hasLocalOwnEffect_of_deposit
       have hinc := heffect.1
       have htarget : e.currentTarget = ca := context.invocation.2.1
       rw [htarget] at hinc
-      have hdTransfer : depositSelector ≠ transferSelector := by
-        decide +kernel
-      have hdTransferCall : depositSelector ≠ transferAndCallSelector := by
-        decide +kernel
-      have hdWithdraw : depositSelector ≠ withdrawSelector := by
-        decide +kernel
-      have hdWithdrawTo : depositSelector ≠ withdrawToSelector := by
-        decide +kernel
-      have hdTransferFrom : depositSelector ≠ transferFromSelector := by
-        decide +kernel
-      have hdWithdrawFrom : depositSelector ≠ withdrawFromSelector := by
-        decide +kernel
-      have hdFlash : depositSelector ≠ flashLoanSelector := by
-        decide +kernel
       have haction' := haction
       simp [Exec.Frame.flowAction?, context.invocation, primaryFlowAtom,
-        primaryDebitProvenance, hnonempty, hselector, hdTransfer,
-        hdTransferCall, hdWithdraw, hdWithdrawTo, hdTransferFrom,
-        hdWithdrawFrom, hdFlash] at haction'
+        primaryDebitProvenance, hnonempty, hselector,
+        depositSelector_ne_transferSelector,
+        depositSelector_ne_transferAndCallSelector,
+        depositSelector_ne_withdrawSelector,
+        depositSelector_ne_withdrawToSelector,
+        depositSelector_ne_transferFromSelector,
+        depositSelector_ne_withdrawFromSelector,
+        depositSelector_ne_flashLoanSelector] at haction'
       symm at haction'
       subst action
       unfold Exec.Frame.HasLocalOwnEffect
@@ -5687,18 +5679,13 @@ theorem Exec.Frame.hasLocalOwnEffect_of_transfer
       · rcases hzero with ⟨hraw, callPre, guardPost, hprefix, _⟩
         unfold BurnCallPrefix at hprefix
         rw [htarget] at hprefix
-        have hsDeposit : transferSelector ≠ depositSelector := by
-          decide +kernel
-        have hsDepositTo : transferSelector ≠ depositToSelector := by
-          decide +kernel
-        have hsDepositCall :
-            transferSelector ≠ depositToAndCallSelector := by
-          decide +kernel
         have hatom : primaryFlowAtom e = some
             (.redemption e.caller.toB256 e.caller e.caller
               (Sevm.argWord e 1).toNat) := by
-          simp [primaryFlowAtom, hnonempty, hselector, hsDeposit,
-            hsDepositTo, hsDepositCall, hraw]
+          simp [primaryFlowAtom, hnonempty, hselector,
+            transferSelector_ne_depositSelector,
+            transferSelector_ne_depositToSelector,
+            transferSelector_ne_depositToAndCallSelector, hraw]
         have heq := action_eq_of_flowAction_eq context hatom haction
         subst action
         unfold Exec.Frame.HasLocalOwnEffect
@@ -5718,19 +5705,14 @@ theorem Exec.Frame.hasLocalOwnEffect_of_transfer
           rw [hrecipient]
           exact normalizedAddressArg_eq_toAdr_toB256 e 0
         subst recipient
-        have hsDeposit : transferSelector ≠ depositSelector := by
-          decide +kernel
-        have hsDepositTo : transferSelector ≠ depositToSelector := by
-          decide +kernel
-        have hsDepositCall :
-            transferSelector ≠ depositToAndCallSelector := by
-          decide +kernel
         have hatom : primaryFlowAtom e = some
             (.transfer e.caller.toB256 (Sevm.argWord e 0) e.caller
               (Sevm.argWord e 0).toAdr
               (Sevm.argWord e 1).toNat) := by
-          simp [primaryFlowAtom, hnonempty, hselector, hsDeposit,
-            hsDepositTo, hsDepositCall, hraw]
+          simp [primaryFlowAtom, hnonempty, hselector,
+            transferSelector_ne_depositSelector,
+            transferSelector_ne_depositToSelector,
+            transferSelector_ne_depositToAndCallSelector, hraw]
         have heq := action_eq_of_flowAction_eq context hatom haction
         subst action
         unfold Exec.Frame.HasLocalOwnEffect
@@ -5769,27 +5751,11 @@ theorem Exec.Frame.hasLocalOwnEffect_of_depositTo
           (Stor.rest (Devm.getStor post ca)) := by
         rw [hstor]
         exact Stor.increase_set _ _ _
-      have hsDeposit : depositToSelector ≠ depositSelector := by
-        decide +kernel
-      have hsTransfer : depositToSelector ≠ transferSelector := by
-        decide +kernel
-      have hsTransferCall :
-          depositToSelector ≠ transferAndCallSelector := by
-        decide +kernel
-      have hsTransferFrom : depositToSelector ≠ transferFromSelector := by
-        decide +kernel
-      have hsWithdraw : depositToSelector ≠ withdrawSelector := by
-        decide +kernel
-      have hsWithdrawTo : depositToSelector ≠ withdrawToSelector := by
-        decide +kernel
-      have hsWithdrawFrom : depositToSelector ≠ withdrawFromSelector := by
-        decide +kernel
-      have hsFlash : depositToSelector ≠ flashLoanSelector := by
-        decide +kernel
       have hatom : primaryFlowAtom e = some
           (.ordinaryMint (Sevm.argWord e 0) (Sevm.argWord e 0).toAdr
             e.value.toNat) := by
-        simp [primaryFlowAtom, hnonempty, hselector, hsDeposit]
+        simp [primaryFlowAtom, hnonempty, hselector,
+          depositToSelector_ne_depositSelector]
       have heq := action_eq_of_flowAction_eq context hatom haction
       subst action
       unfold Exec.Frame.HasLocalOwnEffect
@@ -5799,9 +5765,14 @@ theorem Exec.Frame.hasLocalOwnEffect_of_depositTo
       · unfold FlowAction.ExactCredit
         simp only [FlowAtom.creditOccurrence]
         rw [toB256_toNat]
-      · simp [primaryDebitProvenance, hnonempty, hselector, hsTransfer,
-          hsTransferCall, hsTransferFrom, hsWithdraw, hsWithdrawTo,
-          hsWithdrawFrom, hsFlash]
+      · simp [primaryDebitProvenance, hnonempty, hselector,
+        depositToSelector_ne_transferSelector,
+          depositToSelector_ne_transferAndCallSelector,
+          depositToSelector_ne_transferFromSelector,
+          depositToSelector_ne_withdrawSelector,
+          depositToSelector_ne_withdrawToSelector,
+          depositToSelector_ne_withdrawFromSelector,
+          depositToSelector_ne_flashLoanSelector]
       · exact hincrease
 
 theorem Exec.Frame.hasLocalOwnEffect_of_depositToAndCall
@@ -5833,32 +5804,11 @@ theorem Exec.Frame.hasLocalOwnEffect_of_depositToAndCall
           (Stor.rest (Devm.getStor callbackPre ca)) := by
         rw [hstor]
         exact Stor.increase_set _ _ _
-      have hsDeposit : depositToAndCallSelector ≠ depositSelector := by
-        decide +kernel
-      have hsTransfer :
-          depositToAndCallSelector ≠ transferSelector := by
-        decide +kernel
-      have hsTransferCall :
-          depositToAndCallSelector ≠ transferAndCallSelector := by
-        decide +kernel
-      have hsTransferFrom :
-          depositToAndCallSelector ≠ transferFromSelector := by
-        decide +kernel
-      have hsWithdraw :
-          depositToAndCallSelector ≠ withdrawSelector := by
-        decide +kernel
-      have hsWithdrawTo :
-          depositToAndCallSelector ≠ withdrawToSelector := by
-        decide +kernel
-      have hsWithdrawFrom :
-          depositToAndCallSelector ≠ withdrawFromSelector := by
-        decide +kernel
-      have hsFlash : depositToAndCallSelector ≠ flashLoanSelector := by
-        decide +kernel
       have hatom : primaryFlowAtom e = some
           (.ordinaryMint (Sevm.argWord e 0) (Sevm.argWord e 0).toAdr
             e.value.toNat) := by
-        simp [primaryFlowAtom, hnonempty, hselector, hsDeposit]
+        simp [primaryFlowAtom, hnonempty, hselector,
+          depositToAndCallSelector_ne_depositSelector]
       have heq := action_eq_of_flowAction_eq context hatom haction
       subst action
       unfold Exec.Frame.HasLocalOwnEffect
@@ -5868,9 +5818,14 @@ theorem Exec.Frame.hasLocalOwnEffect_of_depositToAndCall
       · unfold FlowAction.ExactCredit
         simp only [FlowAtom.creditOccurrence]
         rw [toB256_toNat]
-      · simp [primaryDebitProvenance, hnonempty, hselector, hsTransfer,
-          hsTransferCall, hsTransferFrom, hsWithdraw, hsWithdrawTo,
-          hsWithdrawFrom, hsFlash]
+      · simp [primaryDebitProvenance, hnonempty, hselector,
+        depositToAndCallSelector_ne_transferSelector,
+          depositToAndCallSelector_ne_transferAndCallSelector,
+          depositToAndCallSelector_ne_transferFromSelector,
+          depositToAndCallSelector_ne_withdrawSelector,
+          depositToAndCallSelector_ne_withdrawToSelector,
+          depositToAndCallSelector_ne_withdrawFromSelector,
+          depositToAndCallSelector_ne_flashLoanSelector]
       · exact hincrease
 
 theorem Exec.Frame.hasLocalOwnEffect_of_transferAndCall
@@ -5891,13 +5846,6 @@ theorem Exec.Frame.hasLocalOwnEffect_of_transferAndCall
         context.invocation.2.2.2 hselector hnonempty context.memory_wf
         context.memory_reads_empty run).2
       have htarget : e.currentTarget = ca := context.invocation.2.1
-      have hsDeposit : transferAndCallSelector ≠ depositSelector := by
-        decide +kernel
-      have hsDepositTo : transferAndCallSelector ≠ depositToSelector := by
-        decide +kernel
-      have hsDepositCall :
-          transferAndCallSelector ≠ depositToAndCallSelector := by
-        decide +kernel
       rcases heffect with hzero | hnonzero
       · rcases hzero with
           ⟨hraw, callPre, callbackPre, inputSize, input, hprefix,
@@ -5907,8 +5855,10 @@ theorem Exec.Frame.hasLocalOwnEffect_of_transferAndCall
         have hatom : primaryFlowAtom e = some
             (.redemption e.caller.toB256 e.caller e.caller
               (Sevm.argWord e 1).toNat) := by
-          simp [primaryFlowAtom, hnonempty, hselector, hsDeposit,
-            hsDepositTo, hsDepositCall, hraw]
+          simp [primaryFlowAtom, hnonempty, hselector,
+            transferAndCallSelector_ne_depositSelector,
+            transferAndCallSelector_ne_depositToSelector,
+            transferAndCallSelector_ne_depositToAndCallSelector, hraw]
         have heq := action_eq_of_flowAction_eq context hatom haction
         subst action
         unfold Exec.Frame.HasLocalOwnEffect
@@ -5933,8 +5883,10 @@ theorem Exec.Frame.hasLocalOwnEffect_of_transferAndCall
             (.transfer e.caller.toB256 (Sevm.argWord e 0) e.caller
               (Sevm.argWord e 0).toAdr
               (Sevm.argWord e 1).toNat) := by
-          simp [primaryFlowAtom, hnonempty, hselector, hsDeposit,
-            hsDepositTo, hsDepositCall, hraw]
+          simp [primaryFlowAtom, hnonempty, hselector,
+            transferAndCallSelector_ne_depositSelector,
+            transferAndCallSelector_ne_depositToSelector,
+            transferAndCallSelector_ne_depositToAndCallSelector, hraw]
         have heq := action_eq_of_flowAction_eq context hatom haction
         subst action
         unfold Exec.Frame.HasLocalOwnEffect
@@ -5974,22 +5926,6 @@ theorem Exec.Frame.hasLocalOwnEffect_of_transferFrom
       have hsource : (normalizedAddressArg e 0).toAdr =
           (Sevm.argWord e 0).toAdr := by
         rw [normalizedAddressArg_eq_toAdr_toB256, toAdr_toB256]
-      have hsDeposit : transferFromSelector ≠ depositSelector := by
-        decide +kernel
-      have hsDepositTo : transferFromSelector ≠ depositToSelector := by
-        decide +kernel
-      have hsDepositCall :
-          transferFromSelector ≠ depositToAndCallSelector := by
-        decide +kernel
-      have hsTransfer : transferFromSelector ≠ transferSelector := by
-        decide +kernel
-      have hsTransferCall :
-          transferFromSelector ≠ transferAndCallSelector := by
-        decide +kernel
-      have hsWithdraw : transferFromSelector ≠ withdrawSelector := by
-        decide +kernel
-      have hsWithdrawTo : transferFromSelector ≠ withdrawToSelector := by
-        decide +kernel
       rcases hcore with hzero | hnonzero
       · rcases hzero with ⟨hraw, hburn⟩
         unfold BurnReturnTrueEffect at hburn
@@ -6001,8 +5937,12 @@ theorem Exec.Frame.hasLocalOwnEffect_of_transferFrom
         have hatom : primaryFlowAtom e = some
             (.redemption (Sevm.argWord e 0) (Sevm.argWord e 0).toAdr
               e.caller (Sevm.argWord e 2).toNat) := by
-          simp [primaryFlowAtom, hnonempty, hselector, hsDeposit,
-            hsDepositTo, hsDepositCall, hsTransfer, hsTransferCall, hraw]
+          simp [primaryFlowAtom, hnonempty, hselector,
+            transferFromSelector_ne_depositSelector,
+            transferFromSelector_ne_depositToSelector,
+            transferFromSelector_ne_depositToAndCallSelector,
+            transferFromSelector_ne_transferSelector,
+            transferFromSelector_ne_transferAndCallSelector, hraw]
         have heq := action_eq_of_flowAction_eq context hatom haction
         subst action
         unfold Exec.Frame.HasLocalOwnEffect
@@ -6011,8 +5951,11 @@ theorem Exec.Frame.hasLocalOwnEffect_of_transferFrom
         · rfl
         · rfl
         · unfold FlowAction.HasDebitSource
-          simp [primaryDebitProvenance, hnonempty, hselector, hsTransfer,
-            hsTransferCall, hsWithdraw, hsWithdrawTo]
+          simp [primaryDebitProvenance, hnonempty, hselector,
+            transferFromSelector_ne_transferSelector,
+            transferFromSelector_ne_transferAndCallSelector,
+            transferFromSelector_ne_withdrawSelector,
+            transferFromSelector_ne_withdrawToSelector]
         · exact hprefix.2.1
         · exact hprefix.1
       · rcases hnonzero with
@@ -6028,8 +5971,12 @@ theorem Exec.Frame.hasLocalOwnEffect_of_transferFrom
             (.transfer (Sevm.argWord e 0) (Sevm.argWord e 1)
               (Sevm.argWord e 0).toAdr (Sevm.argWord e 1).toAdr
               (Sevm.argWord e 2).toNat) := by
-          simp [primaryFlowAtom, hnonempty, hselector, hsDeposit,
-            hsDepositTo, hsDepositCall, hsTransfer, hsTransferCall, hraw]
+          simp [primaryFlowAtom, hnonempty, hselector,
+            transferFromSelector_ne_depositSelector,
+            transferFromSelector_ne_depositToSelector,
+            transferFromSelector_ne_depositToAndCallSelector,
+            transferFromSelector_ne_transferSelector,
+            transferFromSelector_ne_transferAndCallSelector, hraw]
         have heq := action_eq_of_flowAction_eq context hatom haction
         subst action
         unfold Exec.Frame.HasLocalOwnEffect
@@ -6040,8 +5987,11 @@ theorem Exec.Frame.hasLocalOwnEffect_of_transferFrom
           simp only [FlowAtom.creditOccurrence]
           rw [toB256_toNat]
         · unfold FlowAction.HasDebitSource
-          simp [primaryDebitProvenance, hnonempty, hselector, hsTransfer,
-            hsTransferCall, hsWithdraw, hsWithdrawTo]
+          simp [primaryDebitProvenance, hnonempty, hselector,
+            transferFromSelector_ne_transferSelector,
+            transferFromSelector_ne_transferAndCallSelector,
+            transferFromSelector_ne_withdrawSelector,
+            transferFromSelector_ne_withdrawToSelector]
         · exact htransfer
 
 theorem Exec.Frame.hasLocalOwnEffect_of_withdraw
@@ -6066,26 +6016,16 @@ theorem Exec.Frame.hasLocalOwnEffect_of_withdraw
       unfold BurnCallPrefix at hprefix
       have htarget : e.currentTarget = ca := context.invocation.2.1
       rw [htarget] at hprefix
-      have hsDeposit : withdrawSelector ≠ depositSelector := by
-        decide +kernel
-      have hsDepositTo : withdrawSelector ≠ depositToSelector := by
-        decide +kernel
-      have hsDepositCall :
-          withdrawSelector ≠ depositToAndCallSelector := by
-        decide +kernel
-      have hsTransfer : withdrawSelector ≠ transferSelector := by
-        decide +kernel
-      have hsTransferCall :
-          withdrawSelector ≠ transferAndCallSelector := by
-        decide +kernel
-      have hsTransferFrom : withdrawSelector ≠ transferFromSelector := by
-        decide +kernel
       have hatom : primaryFlowAtom e = some
           (.redemption e.caller.toB256 e.caller e.caller
             (Sevm.argWord e 0).toNat) := by
-        simp [primaryFlowAtom, hnonempty, hselector, hsDeposit,
-          hsDepositTo, hsDepositCall, hsTransfer, hsTransferCall,
-          hsTransferFrom]
+        simp [primaryFlowAtom, hnonempty, hselector,
+          withdrawSelector_ne_depositSelector,
+          withdrawSelector_ne_depositToSelector,
+          withdrawSelector_ne_depositToAndCallSelector,
+          withdrawSelector_ne_transferSelector,
+          withdrawSelector_ne_transferAndCallSelector,
+          withdrawSelector_ne_transferFromSelector]
       have heq := action_eq_of_flowAction_eq context hatom haction
       subst action
       unfold Exec.Frame.HasLocalOwnEffect
@@ -6120,28 +6060,17 @@ theorem Exec.Frame.hasLocalOwnEffect_of_withdrawTo
       unfold BurnCallPrefix at hprefix
       have htarget : e.currentTarget = ca := context.invocation.2.1
       rw [htarget] at hprefix
-      have hsDeposit : withdrawToSelector ≠ depositSelector := by
-        decide +kernel
-      have hsDepositTo : withdrawToSelector ≠ depositToSelector := by
-        decide +kernel
-      have hsDepositCall :
-          withdrawToSelector ≠ depositToAndCallSelector := by
-        decide +kernel
-      have hsTransfer : withdrawToSelector ≠ transferSelector := by
-        decide +kernel
-      have hsTransferCall :
-          withdrawToSelector ≠ transferAndCallSelector := by
-        decide +kernel
-      have hsTransferFrom : withdrawToSelector ≠ transferFromSelector := by
-        decide +kernel
-      have hsWithdraw : withdrawToSelector ≠ withdrawSelector := by
-        decide +kernel
       have hatom : primaryFlowAtom e = some
           (.redemption e.caller.toB256 e.caller
             (Sevm.argWord e 0).toAdr (Sevm.argWord e 1).toNat) := by
-        simp [primaryFlowAtom, hnonempty, hselector, hsDeposit,
-          hsDepositTo, hsDepositCall, hsTransfer, hsTransferCall,
-          hsTransferFrom, hsWithdraw]
+        simp [primaryFlowAtom, hnonempty, hselector,
+          withdrawToSelector_ne_depositSelector,
+          withdrawToSelector_ne_depositToSelector,
+          withdrawToSelector_ne_depositToAndCallSelector,
+          withdrawToSelector_ne_transferSelector,
+          withdrawToSelector_ne_transferAndCallSelector,
+          withdrawToSelector_ne_transferFromSelector,
+          withdrawToSelector_ne_withdrawSelector]
       have heq := action_eq_of_flowAction_eq context hatom haction
       subst action
       unfold Exec.Frame.HasLocalOwnEffect
@@ -6182,30 +6111,18 @@ theorem Exec.Frame.hasLocalOwnEffect_of_withdrawFrom
           (Sevm.argWord e 0).toAdr := by
         rw [normalizedAddressArg_eq_toAdr_toB256, toAdr_toB256]
       rw [htarget, hrest, hsource] at hprefix
-      have hsDeposit : withdrawFromSelector ≠ depositSelector := by
-        decide +kernel
-      have hsDepositTo : withdrawFromSelector ≠ depositToSelector := by
-        decide +kernel
-      have hsDepositCall :
-          withdrawFromSelector ≠ depositToAndCallSelector := by
-        decide +kernel
-      have hsTransfer : withdrawFromSelector ≠ transferSelector := by
-        decide +kernel
-      have hsTransferCall :
-          withdrawFromSelector ≠ transferAndCallSelector := by
-        decide +kernel
-      have hsTransferFrom : withdrawFromSelector ≠ transferFromSelector := by
-        decide +kernel
-      have hsWithdraw : withdrawFromSelector ≠ withdrawSelector := by
-        decide +kernel
-      have hsWithdrawTo : withdrawFromSelector ≠ withdrawToSelector := by
-        decide +kernel
       have hatom : primaryFlowAtom e = some
           (.redemption (Sevm.argWord e 0) (Sevm.argWord e 0).toAdr
             (Sevm.argWord e 1).toAdr (Sevm.argWord e 2).toNat) := by
-        simp [primaryFlowAtom, hnonempty, hselector, hsDeposit,
-          hsDepositTo, hsDepositCall, hsTransfer, hsTransferCall,
-          hsTransferFrom, hsWithdraw, hsWithdrawTo]
+        simp [primaryFlowAtom, hnonempty, hselector,
+          withdrawFromSelector_ne_depositSelector,
+          withdrawFromSelector_ne_depositToSelector,
+          withdrawFromSelector_ne_depositToAndCallSelector,
+          withdrawFromSelector_ne_transferSelector,
+          withdrawFromSelector_ne_transferAndCallSelector,
+          withdrawFromSelector_ne_transferFromSelector,
+          withdrawFromSelector_ne_withdrawSelector,
+          withdrawFromSelector_ne_withdrawToSelector]
       have heq := action_eq_of_flowAction_eq context hatom haction
       subst action
       unfold Exec.Frame.HasLocalOwnEffect
@@ -6214,8 +6131,12 @@ theorem Exec.Frame.hasLocalOwnEffect_of_withdrawFrom
       · rfl
       · rfl
       · unfold FlowAction.HasDebitSource
-        simp [primaryDebitProvenance, hnonempty, hselector, hsTransfer,
-          hsTransferCall, hsTransferFrom, hsWithdraw, hsWithdrawTo]
+        simp [primaryDebitProvenance, hnonempty, hselector,
+          withdrawFromSelector_ne_transferSelector,
+          withdrawFromSelector_ne_transferAndCallSelector,
+          withdrawFromSelector_ne_transferFromSelector,
+          withdrawFromSelector_ne_withdrawSelector,
+          withdrawFromSelector_ne_withdrawToSelector]
       · exact hprefix.2.1
       · exact hprefix.1
 
@@ -6255,32 +6176,19 @@ theorem Exec.Frame.hasLocalOwnEffect_of_flashLoan
         rw [hrecipient]
         exact normalizedAddressArg_eq_toAdr_toB256 e 0
       subst recipient
-      have hsDeposit : flashLoanSelector ≠ depositSelector := by
-        decide +kernel
-      have hsDepositTo : flashLoanSelector ≠ depositToSelector := by
-        decide +kernel
-      have hsDepositCall :
-          flashLoanSelector ≠ depositToAndCallSelector := by
-        decide +kernel
-      have hsTransfer : flashLoanSelector ≠ transferSelector := by
-        decide +kernel
-      have hsTransferCall :
-          flashLoanSelector ≠ transferAndCallSelector := by
-        decide +kernel
-      have hsTransferFrom : flashLoanSelector ≠ transferFromSelector := by
-        decide +kernel
-      have hsWithdraw : flashLoanSelector ≠ withdrawSelector := by
-        decide +kernel
-      have hsWithdrawTo : flashLoanSelector ≠ withdrawToSelector := by
-        decide +kernel
-      have hsWithdrawFrom : flashLoanSelector ≠ withdrawFromSelector := by
-        decide +kernel
       have hatom : primaryFlowAtom e = some
           (.flashPair (Sevm.argWord e 0) (Sevm.argWord e 0).toAdr
             (Sevm.argWord e 2).toNat) := by
-        simp [primaryFlowAtom, hnonempty, hselector, hsDeposit,
-          hsDepositTo, hsDepositCall, hsTransfer, hsTransferCall,
-          hsTransferFrom, hsWithdraw, hsWithdrawTo, hsWithdrawFrom]
+        simp [primaryFlowAtom, hnonempty, hselector,
+          flashLoanSelector_ne_depositSelector,
+          flashLoanSelector_ne_depositToSelector,
+          flashLoanSelector_ne_depositToAndCallSelector,
+          flashLoanSelector_ne_transferSelector,
+          flashLoanSelector_ne_transferAndCallSelector,
+          flashLoanSelector_ne_transferFromSelector,
+          flashLoanSelector_ne_withdrawSelector,
+          flashLoanSelector_ne_withdrawToSelector,
+          flashLoanSelector_ne_withdrawFromSelector]
       have heq := action_eq_of_flowAction_eq context hatom haction
       subst action
       unfold Exec.Frame.HasLocalOwnEffect
@@ -6291,9 +6199,13 @@ theorem Exec.Frame.hasLocalOwnEffect_of_flashLoan
         simp only [FlowAtom.creditOccurrence]
         rw [toB256_toNat]
       · unfold FlowAction.HasFlashDebitSource
-        simp [primaryDebitProvenance, hnonempty, hselector, hsTransfer,
-          hsTransferCall, hsTransferFrom, hsWithdraw, hsWithdrawTo,
-          hsWithdrawFrom]
+        simp [primaryDebitProvenance, hnonempty, hselector,
+          flashLoanSelector_ne_transferSelector,
+          flashLoanSelector_ne_transferAndCallSelector,
+          flashLoanSelector_ne_transferFromSelector,
+          flashLoanSelector_ne_withdrawSelector,
+          flashLoanSelector_ne_withdrawToSelector,
+          flashLoanSelector_ne_withdrawFromSelector]
       · exact hincrease
       · exact hle
       · exact hdecrease
@@ -6349,16 +6261,11 @@ theorem Exec.Frame.hasAcceptedDebit_of_flowAction?_eq_some
           (Sevm.argWord e 0) (Sevm.argWord e 0).toAdr corePre
           (callerAllowanceBranch e pre 2)
         · rw [hdebit]
-          have h₁ : transferFromSelector ≠ transferSelector := by
-            decide +kernel
-          have h₂ : transferFromSelector ≠ transferAndCallSelector := by
-            decide +kernel
-          have h₃ : transferFromSelector ≠ withdrawSelector := by
-            decide +kernel
-          have h₄ : transferFromSelector ≠ withdrawToSelector := by
-            decide +kernel
           simp [primaryDebitProvenance, hnonempty, htransferFrom,
-            h₁, h₂, h₃, h₄]
+            transferFromSelector_ne_transferSelector,
+            transferFromSelector_ne_transferAndCallSelector,
+            transferFromSelector_ne_withdrawSelector,
+            transferFromSelector_ne_withdrawToSelector]
         · exact callerAllowanceBranch_accepted hallowance
       by_cases hwithdrawFrom : Sevm.selector e = withdrawFromSelector
       · have heffect := (weth10_withdrawFrom_successEffect dp
@@ -6371,18 +6278,12 @@ theorem Exec.Frame.hasAcceptedDebit_of_flowAction?_eq_some
           (Sevm.argWord e 0) (Sevm.argWord e 0).toAdr corePre
           (callerAllowanceBranch e pre 2)
         · rw [hdebit]
-          have h₁ : withdrawFromSelector ≠ transferSelector := by
-            decide +kernel
-          have h₂ : withdrawFromSelector ≠ transferAndCallSelector := by
-            decide +kernel
-          have h₃ : withdrawFromSelector ≠ withdrawSelector := by
-            decide +kernel
-          have h₄ : withdrawFromSelector ≠ withdrawToSelector := by
-            decide +kernel
-          have h₅ : withdrawFromSelector ≠ transferFromSelector := by
-            decide +kernel
           simp [primaryDebitProvenance, hnonempty, hwithdrawFrom,
-            h₁, h₂, h₃, h₄, h₅]
+            withdrawFromSelector_ne_transferSelector,
+            withdrawFromSelector_ne_transferAndCallSelector,
+            withdrawFromSelector_ne_withdrawSelector,
+            withdrawFromSelector_ne_withdrawToSelector,
+            withdrawFromSelector_ne_transferFromSelector]
         · exact callerAllowanceBranch_accepted hallowance
       by_cases hflash : Sevm.selector e = flashLoanSelector
       · have htarget : e.currentTarget = ca := context.invocation.2.1
@@ -6405,20 +6306,13 @@ theorem Exec.Frame.hasAcceptedDebit_of_flowAction?_eq_some
           (Sevm.argWord e 0) (Sevm.argWord e 0).toAdr settle burn
           (flashAllowanceBranchFromPost e post)
         · rw [hdebit]
-          have h₁ : flashLoanSelector ≠ transferSelector := by
-            decide +kernel
-          have h₂ : flashLoanSelector ≠ transferAndCallSelector := by
-            decide +kernel
-          have h₃ : flashLoanSelector ≠ withdrawSelector := by
-            decide +kernel
-          have h₄ : flashLoanSelector ≠ withdrawToSelector := by
-            decide +kernel
-          have h₅ : flashLoanSelector ≠ transferFromSelector := by
-            decide +kernel
-          have h₆ : flashLoanSelector ≠ withdrawFromSelector := by
-            decide +kernel
           simp [primaryDebitProvenance, hnonempty, hflash,
-            h₁, h₂, h₃, h₄, h₅, h₆,
+            flashLoanSelector_ne_transferSelector,
+            flashLoanSelector_ne_transferAndCallSelector,
+            flashLoanSelector_ne_withdrawSelector,
+            flashLoanSelector_ne_withdrawToSelector,
+            flashLoanSelector_ne_transferFromSelector,
+            flashLoanSelector_ne_withdrawFromSelector,
             Exec.Frame.post, Execution.committedPost]
         · exact flashSettlement_reconstruction hallowance hburnRun
         · simpa [Exec.Frame.post, Execution.committedPost] using hburnRun
@@ -6575,155 +6469,82 @@ theorem Exec.Frame.hasNoWethBalanceOwnEffect_of_recognized
         simp [primaryFlowAtom, hnonempty, h] at hprimary
       have hnotDepositTo : Sevm.selector e ≠ depositToSelector := by
         intro h
-        have hne : depositToSelector ≠ depositSelector := by
-          decide +kernel
-        simp [primaryFlowAtom, hnonempty, h, hne] at hprimary
+        simp [primaryFlowAtom, hnonempty, h,
+          depositToSelector_ne_depositSelector] at hprimary
       have hnotDepositCall :
           Sevm.selector e ≠ depositToAndCallSelector := by
         intro h
-        have hne : depositToAndCallSelector ≠ depositSelector := by
-          decide +kernel
-        simp [primaryFlowAtom, hnonempty, h, hne] at hprimary
+        simp [primaryFlowAtom, hnonempty, h,
+          depositToAndCallSelector_ne_depositSelector] at hprimary
       have hnotTransfer : Sevm.selector e ≠ transferSelector := by
         intro h
-        have hneDeposit : transferSelector ≠ depositSelector := by
-          decide +kernel
-        have hneDepositTo : transferSelector ≠ depositToSelector := by
-          decide +kernel
-        have hneDepositCall :
-            transferSelector ≠ depositToAndCallSelector := by
-          decide +kernel
-        simp [primaryFlowAtom, hnonempty, h, hneDeposit, hneDepositTo,
-          hneDepositCall] at hprimary
+        simp [primaryFlowAtom, hnonempty, h,
+          transferSelector_ne_depositSelector,
+          transferSelector_ne_depositToSelector,
+          transferSelector_ne_depositToAndCallSelector] at hprimary
         split at hprimary <;> simp_all
       have hnotTransferCall :
           Sevm.selector e ≠ transferAndCallSelector := by
         intro h
-        have hneDeposit : transferAndCallSelector ≠ depositSelector := by
-          decide +kernel
-        have hneDepositTo :
-            transferAndCallSelector ≠ depositToSelector := by
-          decide +kernel
-        have hneDepositCall :
-            transferAndCallSelector ≠ depositToAndCallSelector := by
-          decide +kernel
-        simp [primaryFlowAtom, hnonempty, h, hneDeposit, hneDepositTo,
-          hneDepositCall] at hprimary
+        simp [primaryFlowAtom, hnonempty, h,
+          transferAndCallSelector_ne_depositSelector,
+          transferAndCallSelector_ne_depositToSelector,
+          transferAndCallSelector_ne_depositToAndCallSelector] at hprimary
         split at hprimary <;> simp_all
       have hnotTransferFrom :
           Sevm.selector e ≠ transferFromSelector := by
         intro h
-        have hneDeposit : transferFromSelector ≠ depositSelector := by
-          decide +kernel
-        have hneDepositTo : transferFromSelector ≠ depositToSelector := by
-          decide +kernel
-        have hneDepositCall :
-            transferFromSelector ≠ depositToAndCallSelector := by
-          decide +kernel
-        have hneTransfer : transferFromSelector ≠ transferSelector := by
-          decide +kernel
-        have hneTransferCall :
-            transferFromSelector ≠ transferAndCallSelector := by
-          decide +kernel
-        simp [primaryFlowAtom, hnonempty, h, hneDeposit, hneDepositTo,
-          hneDepositCall, hneTransfer, hneTransferCall] at hprimary
+        simp [primaryFlowAtom, hnonempty, h,
+          transferFromSelector_ne_depositSelector,
+          transferFromSelector_ne_depositToSelector,
+          transferFromSelector_ne_depositToAndCallSelector,
+          transferFromSelector_ne_transferSelector,
+          transferFromSelector_ne_transferAndCallSelector] at hprimary
         split at hprimary <;> simp_all
       have hnotWithdraw : Sevm.selector e ≠ withdrawSelector := by
         intro h
-        have hneDeposit : withdrawSelector ≠ depositSelector := by
-          decide +kernel
-        have hneDepositTo : withdrawSelector ≠ depositToSelector := by
-          decide +kernel
-        have hneDepositCall :
-            withdrawSelector ≠ depositToAndCallSelector := by
-          decide +kernel
-        have hneTransfer : withdrawSelector ≠ transferSelector := by
-          decide +kernel
-        have hneTransferCall :
-            withdrawSelector ≠ transferAndCallSelector := by
-          decide +kernel
-        have hneTransferFrom :
-            withdrawSelector ≠ transferFromSelector := by
-          decide +kernel
-        simp [primaryFlowAtom, hnonempty, h, hneDeposit, hneDepositTo,
-          hneDepositCall, hneTransfer, hneTransferCall, hneTransferFrom]
+        simp [primaryFlowAtom, hnonempty, h,
+          withdrawSelector_ne_depositSelector,
+          withdrawSelector_ne_depositToSelector,
+          withdrawSelector_ne_depositToAndCallSelector,
+          withdrawSelector_ne_transferSelector,
+          withdrawSelector_ne_transferAndCallSelector,
+          withdrawSelector_ne_transferFromSelector]
           at hprimary
       have hnotWithdrawTo : Sevm.selector e ≠ withdrawToSelector := by
         intro h
-        have hneDeposit : withdrawToSelector ≠ depositSelector := by
-          decide +kernel
-        have hneDepositTo : withdrawToSelector ≠ depositToSelector := by
-          decide +kernel
-        have hneDepositCall :
-            withdrawToSelector ≠ depositToAndCallSelector := by
-          decide +kernel
-        have hneTransfer : withdrawToSelector ≠ transferSelector := by
-          decide +kernel
-        have hneTransferCall :
-            withdrawToSelector ≠ transferAndCallSelector := by
-          decide +kernel
-        have hneTransferFrom :
-            withdrawToSelector ≠ transferFromSelector := by
-          decide +kernel
-        have hneWithdraw : withdrawToSelector ≠ withdrawSelector := by
-          decide +kernel
-        simp [primaryFlowAtom, hnonempty, h, hneDeposit, hneDepositTo,
-          hneDepositCall, hneTransfer, hneTransferCall, hneTransferFrom,
-          hneWithdraw] at hprimary
+        simp [primaryFlowAtom, hnonempty, h,
+          withdrawToSelector_ne_depositSelector,
+          withdrawToSelector_ne_depositToSelector,
+          withdrawToSelector_ne_depositToAndCallSelector,
+          withdrawToSelector_ne_transferSelector,
+          withdrawToSelector_ne_transferAndCallSelector,
+          withdrawToSelector_ne_transferFromSelector,
+          withdrawToSelector_ne_withdrawSelector] at hprimary
       have hnotWithdrawFrom :
           Sevm.selector e ≠ withdrawFromSelector := by
         intro h
-        have hneDeposit : withdrawFromSelector ≠ depositSelector := by
-          decide +kernel
-        have hneDepositTo :
-            withdrawFromSelector ≠ depositToSelector := by
-          decide +kernel
-        have hneDepositCall :
-            withdrawFromSelector ≠ depositToAndCallSelector := by
-          decide +kernel
-        have hneTransfer : withdrawFromSelector ≠ transferSelector := by
-          decide +kernel
-        have hneTransferCall :
-            withdrawFromSelector ≠ transferAndCallSelector := by
-          decide +kernel
-        have hneTransferFrom :
-            withdrawFromSelector ≠ transferFromSelector := by
-          decide +kernel
-        have hneWithdraw : withdrawFromSelector ≠ withdrawSelector := by
-          decide +kernel
-        have hneWithdrawTo :
-            withdrawFromSelector ≠ withdrawToSelector := by
-          decide +kernel
-        simp [primaryFlowAtom, hnonempty, h, hneDeposit, hneDepositTo,
-          hneDepositCall, hneTransfer, hneTransferCall, hneTransferFrom,
-          hneWithdraw, hneWithdrawTo] at hprimary
+        simp [primaryFlowAtom, hnonempty, h,
+          withdrawFromSelector_ne_depositSelector,
+          withdrawFromSelector_ne_depositToSelector,
+          withdrawFromSelector_ne_depositToAndCallSelector,
+          withdrawFromSelector_ne_transferSelector,
+          withdrawFromSelector_ne_transferAndCallSelector,
+          withdrawFromSelector_ne_transferFromSelector,
+          withdrawFromSelector_ne_withdrawSelector,
+          withdrawFromSelector_ne_withdrawToSelector] at hprimary
       have hnotFlash : Sevm.selector e ≠ flashLoanSelector := by
         intro h
-        have hneDeposit : flashLoanSelector ≠ depositSelector := by
-          decide +kernel
-        have hneDepositTo : flashLoanSelector ≠ depositToSelector := by
-          decide +kernel
-        have hneDepositCall :
-            flashLoanSelector ≠ depositToAndCallSelector := by
-          decide +kernel
-        have hneTransfer : flashLoanSelector ≠ transferSelector := by
-          decide +kernel
-        have hneTransferCall :
-            flashLoanSelector ≠ transferAndCallSelector := by
-          decide +kernel
-        have hneTransferFrom :
-            flashLoanSelector ≠ transferFromSelector := by
-          decide +kernel
-        have hneWithdraw : flashLoanSelector ≠ withdrawSelector := by
-          decide +kernel
-        have hneWithdrawTo : flashLoanSelector ≠ withdrawToSelector := by
-          decide +kernel
-        have hneWithdrawFrom :
-            flashLoanSelector ≠ withdrawFromSelector := by
-          decide +kernel
-        simp [primaryFlowAtom, hnonempty, h, hneDeposit, hneDepositTo,
-          hneDepositCall, hneTransfer, hneTransferCall, hneTransferFrom,
-          hneWithdraw, hneWithdrawTo, hneWithdrawFrom] at hprimary
+        simp [primaryFlowAtom, hnonempty, h,
+          flashLoanSelector_ne_depositSelector,
+          flashLoanSelector_ne_depositToSelector,
+          flashLoanSelector_ne_depositToAndCallSelector,
+          flashLoanSelector_ne_transferSelector,
+          flashLoanSelector_ne_transferAndCallSelector,
+          flashLoanSelector_ne_transferFromSelector,
+          flashLoanSelector_ne_withdrawSelector,
+          flashLoanSelector_ne_withdrawToSelector,
+          flashLoanSelector_ne_withdrawFromSelector] at hprimary
       rcases hrecognized with ⟨body, hbody⟩
       have hselmem : Sevm.selector e ∈
           (weth10Funcs dp).map Prod.fst := by
@@ -6934,25 +6755,16 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_deposit
       have hinc := heffect.1
       have htarget : e.currentTarget = ca := context.invocation.2.1
       rw [htarget] at hinc
-      have hdTransfer : depositSelector ≠ transferSelector := by
-        decide +kernel
-      have hdTransferCall : depositSelector ≠ transferAndCallSelector := by
-        decide +kernel
-      have hdWithdraw : depositSelector ≠ withdrawSelector := by
-        decide +kernel
-      have hdWithdrawTo : depositSelector ≠ withdrawToSelector := by
-        decide +kernel
-      have hdTransferFrom : depositSelector ≠ transferFromSelector := by
-        decide +kernel
-      have hdWithdrawFrom : depositSelector ≠ withdrawFromSelector := by
-        decide +kernel
-      have hdFlash : depositSelector ≠ flashLoanSelector := by
-        decide +kernel
       have haction' := haction
       simp [Exec.Frame.flowAction?, context.invocation, primaryFlowAtom,
-        primaryDebitProvenance, hnonempty, hselector, hdTransfer,
-        hdTransferCall, hdWithdraw, hdWithdrawTo, hdTransferFrom,
-        hdWithdrawFrom, hdFlash] at haction'
+        primaryDebitProvenance, hnonempty, hselector,
+        depositSelector_ne_transferSelector,
+        depositSelector_ne_transferAndCallSelector,
+        depositSelector_ne_withdrawSelector,
+        depositSelector_ne_withdrawToSelector,
+        depositSelector_ne_transferFromSelector,
+        depositSelector_ne_withdrawFromSelector,
+        depositSelector_ne_flashLoanSelector] at haction'
       symm at haction'
       subst action
       refine ⟨context, haction, .ordinaryMint ?_⟩
@@ -6989,27 +6801,11 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_depositTo
           (Stor.rest (Devm.getStor post ca)) := by
         rw [hstor]
         exact Stor.increase_set _ _ _
-      have hsDeposit : depositToSelector ≠ depositSelector := by
-        decide +kernel
-      have hsTransfer : depositToSelector ≠ transferSelector := by
-        decide +kernel
-      have hsTransferCall :
-          depositToSelector ≠ transferAndCallSelector := by
-        decide +kernel
-      have hsTransferFrom : depositToSelector ≠ transferFromSelector := by
-        decide +kernel
-      have hsWithdraw : depositToSelector ≠ withdrawSelector := by
-        decide +kernel
-      have hsWithdrawTo : depositToSelector ≠ withdrawToSelector := by
-        decide +kernel
-      have hsWithdrawFrom : depositToSelector ≠ withdrawFromSelector := by
-        decide +kernel
-      have hsFlash : depositToSelector ≠ flashLoanSelector := by
-        decide +kernel
       have hatom : primaryFlowAtom e = some
           (.ordinaryMint (Sevm.argWord e 0) (Sevm.argWord e 0).toAdr
             e.value.toNat) := by
-        simp [primaryFlowAtom, hnonempty, hselector, hsDeposit]
+        simp [primaryFlowAtom, hnonempty, hselector,
+          depositToSelector_ne_depositSelector]
       have heq := action_eq_of_flowAction_eq context hatom haction
       subst action
       refine ⟨context, haction, .ordinaryMint ?_⟩
@@ -7018,9 +6814,14 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_depositTo
       · unfold FlowAction.ExactCredit
         simp only [FlowAtom.creditOccurrence]
         rw [toB256_toNat]
-      · simp [primaryDebitProvenance, hnonempty, hselector, hsTransfer,
-          hsTransferCall, hsTransferFrom, hsWithdraw, hsWithdrawTo,
-          hsWithdrawFrom, hsFlash]
+      · simp [primaryDebitProvenance, hnonempty, hselector,
+        depositToSelector_ne_transferSelector,
+          depositToSelector_ne_transferAndCallSelector,
+          depositToSelector_ne_transferFromSelector,
+          depositToSelector_ne_withdrawSelector,
+          depositToSelector_ne_withdrawToSelector,
+          depositToSelector_ne_withdrawFromSelector,
+          depositToSelector_ne_flashLoanSelector]
       · exact hincrease
 
 theorem Exec.Frame.hasRichLocalStorageEffect_of_depositToAndCall
@@ -7050,32 +6851,11 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_depositToAndCall
           (Stor.rest (Devm.getStor callbackPre ca)) := by
         rw [hstor]
         exact Stor.increase_set _ _ _
-      have hsDeposit : depositToAndCallSelector ≠ depositSelector := by
-        decide +kernel
-      have hsTransfer :
-          depositToAndCallSelector ≠ transferSelector := by
-        decide +kernel
-      have hsTransferCall :
-          depositToAndCallSelector ≠ transferAndCallSelector := by
-        decide +kernel
-      have hsTransferFrom :
-          depositToAndCallSelector ≠ transferFromSelector := by
-        decide +kernel
-      have hsWithdraw :
-          depositToAndCallSelector ≠ withdrawSelector := by
-        decide +kernel
-      have hsWithdrawTo :
-          depositToAndCallSelector ≠ withdrawToSelector := by
-        decide +kernel
-      have hsWithdrawFrom :
-          depositToAndCallSelector ≠ withdrawFromSelector := by
-        decide +kernel
-      have hsFlash : depositToAndCallSelector ≠ flashLoanSelector := by
-        decide +kernel
       have hatom : primaryFlowAtom e = some
           (.ordinaryMint (Sevm.argWord e 0) (Sevm.argWord e 0).toAdr
             e.value.toNat) := by
-        simp [primaryFlowAtom, hnonempty, hselector, hsDeposit]
+        simp [primaryFlowAtom, hnonempty, hselector,
+          depositToAndCallSelector_ne_depositSelector]
       have heq := action_eq_of_flowAction_eq context hatom haction
       subst action
       refine ⟨context, haction, ?_⟩
@@ -7088,9 +6868,14 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_depositToAndCall
         · unfold FlowAction.ExactCredit
           simp only [FlowAtom.creditOccurrence]
           rw [toB256_toNat]
-        · simp [primaryDebitProvenance, hnonempty, hselector, hsTransfer,
-            hsTransferCall, hsTransferFrom, hsWithdraw, hsWithdrawTo,
-            hsWithdrawFrom, hsFlash]
+        · simp [primaryDebitProvenance, hnonempty, hselector,
+          depositToAndCallSelector_ne_transferSelector,
+            depositToAndCallSelector_ne_transferAndCallSelector,
+            depositToAndCallSelector_ne_transferFromSelector,
+            depositToAndCallSelector_ne_withdrawSelector,
+            depositToAndCallSelector_ne_withdrawToSelector,
+            depositToAndCallSelector_ne_withdrawFromSelector,
+            depositToAndCallSelector_ne_flashLoanSelector]
         · exact hincrease
       · exact congrFun hcode ca
       · exact hboundary
@@ -7122,18 +6907,13 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_transfer
         have hprefix' := hprefix
         unfold BurnCallPrefix at hprefix'
         rw [htarget] at hprefix'
-        have hsDeposit : transferSelector ≠ depositSelector := by
-          decide +kernel
-        have hsDepositTo : transferSelector ≠ depositToSelector := by
-          decide +kernel
-        have hsDepositCall :
-            transferSelector ≠ depositToAndCallSelector := by
-          decide +kernel
         have hatom : primaryFlowAtom e = some
             (.redemption e.caller.toB256 e.caller e.caller
               (Sevm.argWord e 1).toNat) := by
-          simp [primaryFlowAtom, hnonempty, hselector, hsDeposit,
-            hsDepositTo, hsDepositCall, hraw]
+          simp [primaryFlowAtom, hnonempty, hselector,
+            transferSelector_ne_depositSelector,
+            transferSelector_ne_depositToSelector,
+            transferSelector_ne_depositToAndCallSelector, hraw]
         have heq := action_eq_of_flowAction_eq context hatom haction
         subst action
         refine ⟨context, haction, ?_⟩
@@ -7159,19 +6939,14 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_transfer
           rw [hrecipient]
           exact normalizedAddressArg_eq_toAdr_toB256 e 0
         subst recipient
-        have hsDeposit : transferSelector ≠ depositSelector := by
-          decide +kernel
-        have hsDepositTo : transferSelector ≠ depositToSelector := by
-          decide +kernel
-        have hsDepositCall :
-            transferSelector ≠ depositToAndCallSelector := by
-          decide +kernel
         have hatom : primaryFlowAtom e = some
             (.transfer e.caller.toB256 (Sevm.argWord e 0) e.caller
               (Sevm.argWord e 0).toAdr
               (Sevm.argWord e 1).toNat) := by
-          simp [primaryFlowAtom, hnonempty, hselector, hsDeposit,
-            hsDepositTo, hsDepositCall, hraw]
+          simp [primaryFlowAtom, hnonempty, hselector,
+            transferSelector_ne_depositSelector,
+            transferSelector_ne_depositToSelector,
+            transferSelector_ne_depositToAndCallSelector, hraw]
         have heq := action_eq_of_flowAction_eq context hatom haction
         subst action
         refine ⟨context, haction, .ordinaryTransfer ?_⟩
@@ -7202,13 +6977,6 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_transferAndCall
         context.invocation.2.2.2 hselector hnonempty context.memory_wf
         context.memory_reads_empty run).2
       have htarget : e.currentTarget = ca := context.invocation.2.1
-      have hsDeposit : transferAndCallSelector ≠ depositSelector := by
-        decide +kernel
-      have hsDepositTo : transferAndCallSelector ≠ depositToSelector := by
-        decide +kernel
-      have hsDepositCall :
-          transferAndCallSelector ≠ depositToAndCallSelector := by
-        decide +kernel
       rcases heffect with hzero | hnonzero
       · rcases hzero with
           ⟨hraw, callPre, callbackPre, inputSize, input, hprefix,
@@ -7220,8 +6988,10 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_transferAndCall
         have hatom : primaryFlowAtom e = some
             (.redemption e.caller.toB256 e.caller e.caller
               (Sevm.argWord e 1).toNat) := by
-          simp [primaryFlowAtom, hnonempty, hselector, hsDeposit,
-            hsDepositTo, hsDepositCall, hraw]
+          simp [primaryFlowAtom, hnonempty, hselector,
+            transferAndCallSelector_ne_depositSelector,
+            transferAndCallSelector_ne_depositToSelector,
+            transferAndCallSelector_ne_depositToAndCallSelector, hraw]
         have heq := action_eq_of_flowAction_eq context hatom haction
         subst action
         refine ⟨context, haction, ?_⟩
@@ -7254,8 +7024,10 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_transferAndCall
             (.transfer e.caller.toB256 (Sevm.argWord e 0) e.caller
               (Sevm.argWord e 0).toAdr
               (Sevm.argWord e 1).toNat) := by
-          simp [primaryFlowAtom, hnonempty, hselector, hsDeposit,
-            hsDepositTo, hsDepositCall, hraw]
+          simp [primaryFlowAtom, hnonempty, hselector,
+            transferAndCallSelector_ne_depositSelector,
+            transferAndCallSelector_ne_depositToSelector,
+            transferAndCallSelector_ne_depositToAndCallSelector, hraw]
         have heq := action_eq_of_flowAction_eq context hatom haction
         subst action
         refine ⟨context, haction, ?_⟩
@@ -7301,22 +7073,6 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_transferFrom
       have hsource : (normalizedAddressArg e 0).toAdr =
           (Sevm.argWord e 0).toAdr := by
         rw [normalizedAddressArg_eq_toAdr_toB256, toAdr_toB256]
-      have hsDeposit : transferFromSelector ≠ depositSelector := by
-        decide +kernel
-      have hsDepositTo : transferFromSelector ≠ depositToSelector := by
-        decide +kernel
-      have hsDepositCall :
-          transferFromSelector ≠ depositToAndCallSelector := by
-        decide +kernel
-      have hsTransfer : transferFromSelector ≠ transferSelector := by
-        decide +kernel
-      have hsTransferCall :
-          transferFromSelector ≠ transferAndCallSelector := by
-        decide +kernel
-      have hsWithdraw : transferFromSelector ≠ withdrawSelector := by
-        decide +kernel
-      have hsWithdrawTo : transferFromSelector ≠ withdrawToSelector := by
-        decide +kernel
       rcases hcore with hzero | hnonzero
       · rcases hzero with ⟨hraw, hburn⟩
         rcases hburn with
@@ -7329,8 +7085,12 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_transferFrom
         have hatom : primaryFlowAtom e = some
             (.redemption (Sevm.argWord e 0) (Sevm.argWord e 0).toAdr
               e.caller (Sevm.argWord e 2).toNat) := by
-          simp [primaryFlowAtom, hnonempty, hselector, hsDeposit,
-            hsDepositTo, hsDepositCall, hsTransfer, hsTransferCall, hraw]
+          simp [primaryFlowAtom, hnonempty, hselector,
+            transferFromSelector_ne_depositSelector,
+            transferFromSelector_ne_depositToSelector,
+            transferFromSelector_ne_depositToAndCallSelector,
+            transferFromSelector_ne_transferSelector,
+            transferFromSelector_ne_transferAndCallSelector, hraw]
         have heq := action_eq_of_flowAction_eq context hatom haction
         subst action
         refine ⟨context, haction, ?_⟩
@@ -7342,8 +7102,11 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_transferFrom
           · rfl
           · rfl
           · unfold FlowAction.HasDebitSource
-            simp [primaryDebitProvenance, hnonempty, hselector, hsTransfer,
-              hsTransferCall, hsWithdraw, hsWithdrawTo]
+            simp [primaryDebitProvenance, hnonempty, hselector,
+              transferFromSelector_ne_transferSelector,
+              transferFromSelector_ne_transferAndCallSelector,
+              transferFromSelector_ne_withdrawSelector,
+              transferFromSelector_ne_withdrawToSelector]
           · exact hprefix'.2.1
           · exact hprefix'.1
         · simpa only [hsource] using hprefix
@@ -7362,8 +7125,12 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_transferFrom
             (.transfer (Sevm.argWord e 0) (Sevm.argWord e 1)
               (Sevm.argWord e 0).toAdr (Sevm.argWord e 1).toAdr
               (Sevm.argWord e 2).toNat) := by
-          simp [primaryFlowAtom, hnonempty, hselector, hsDeposit,
-            hsDepositTo, hsDepositCall, hsTransfer, hsTransferCall, hraw]
+          simp [primaryFlowAtom, hnonempty, hselector,
+            transferFromSelector_ne_depositSelector,
+            transferFromSelector_ne_depositToSelector,
+            transferFromSelector_ne_depositToAndCallSelector,
+            transferFromSelector_ne_transferSelector,
+            transferFromSelector_ne_transferAndCallSelector, hraw]
         have heq := action_eq_of_flowAction_eq context hatom haction
         subst action
         refine ⟨context, haction, .ordinaryTransfer ?_⟩
@@ -7373,8 +7140,11 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_transferFrom
           simp only [FlowAtom.creditOccurrence]
           rw [toB256_toNat]
         · unfold FlowAction.HasDebitSource
-          simp [primaryDebitProvenance, hnonempty, hselector, hsTransfer,
-            hsTransferCall, hsWithdraw, hsWithdrawTo]
+          simp [primaryDebitProvenance, hnonempty, hselector,
+            transferFromSelector_ne_transferSelector,
+            transferFromSelector_ne_transferAndCallSelector,
+            transferFromSelector_ne_withdrawSelector,
+            transferFromSelector_ne_withdrawToSelector]
         · exact htransfer
 
 theorem Exec.Frame.hasRichLocalStorageEffect_of_withdraw
@@ -7401,26 +7171,16 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_withdraw
       unfold BurnCallPrefix at hprefix'
       have htarget : e.currentTarget = ca := context.invocation.2.1
       rw [htarget] at hprefix'
-      have hsDeposit : withdrawSelector ≠ depositSelector := by
-        decide +kernel
-      have hsDepositTo : withdrawSelector ≠ depositToSelector := by
-        decide +kernel
-      have hsDepositCall :
-          withdrawSelector ≠ depositToAndCallSelector := by
-        decide +kernel
-      have hsTransfer : withdrawSelector ≠ transferSelector := by
-        decide +kernel
-      have hsTransferCall :
-          withdrawSelector ≠ transferAndCallSelector := by
-        decide +kernel
-      have hsTransferFrom : withdrawSelector ≠ transferFromSelector := by
-        decide +kernel
       have hatom : primaryFlowAtom e = some
           (.redemption e.caller.toB256 e.caller e.caller
             (Sevm.argWord e 0).toNat) := by
-        simp [primaryFlowAtom, hnonempty, hselector, hsDeposit,
-          hsDepositTo, hsDepositCall, hsTransfer, hsTransferCall,
-          hsTransferFrom]
+        simp [primaryFlowAtom, hnonempty, hselector,
+          withdrawSelector_ne_depositSelector,
+          withdrawSelector_ne_depositToSelector,
+          withdrawSelector_ne_depositToAndCallSelector,
+          withdrawSelector_ne_transferSelector,
+          withdrawSelector_ne_transferAndCallSelector,
+          withdrawSelector_ne_transferFromSelector]
       have heq := action_eq_of_flowAction_eq context hatom haction
       subst action
       refine ⟨context, haction, ?_⟩
@@ -7464,28 +7224,17 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_withdrawTo
       unfold BurnCallPrefix at hprefix'
       have htarget : e.currentTarget = ca := context.invocation.2.1
       rw [htarget] at hprefix'
-      have hsDeposit : withdrawToSelector ≠ depositSelector := by
-        decide +kernel
-      have hsDepositTo : withdrawToSelector ≠ depositToSelector := by
-        decide +kernel
-      have hsDepositCall :
-          withdrawToSelector ≠ depositToAndCallSelector := by
-        decide +kernel
-      have hsTransfer : withdrawToSelector ≠ transferSelector := by
-        decide +kernel
-      have hsTransferCall :
-          withdrawToSelector ≠ transferAndCallSelector := by
-        decide +kernel
-      have hsTransferFrom : withdrawToSelector ≠ transferFromSelector := by
-        decide +kernel
-      have hsWithdraw : withdrawToSelector ≠ withdrawSelector := by
-        decide +kernel
       have hatom : primaryFlowAtom e = some
           (.redemption e.caller.toB256 e.caller
             (Sevm.argWord e 0).toAdr (Sevm.argWord e 1).toNat) := by
-        simp [primaryFlowAtom, hnonempty, hselector, hsDeposit,
-          hsDepositTo, hsDepositCall, hsTransfer, hsTransferCall,
-          hsTransferFrom, hsWithdraw]
+        simp [primaryFlowAtom, hnonempty, hselector,
+          withdrawToSelector_ne_depositSelector,
+          withdrawToSelector_ne_depositToSelector,
+          withdrawToSelector_ne_depositToAndCallSelector,
+          withdrawToSelector_ne_transferSelector,
+          withdrawToSelector_ne_transferAndCallSelector,
+          withdrawToSelector_ne_transferFromSelector,
+          withdrawToSelector_ne_withdrawSelector]
       have heq := action_eq_of_flowAction_eq context hatom haction
       subst action
       refine ⟨context, haction, ?_⟩
@@ -7535,30 +7284,18 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_withdrawFrom
       have hprefix' := hprefix
       unfold BurnCallPrefix at hprefix'
       rw [htarget, hrest, hsource] at hprefix'
-      have hsDeposit : withdrawFromSelector ≠ depositSelector := by
-        decide +kernel
-      have hsDepositTo : withdrawFromSelector ≠ depositToSelector := by
-        decide +kernel
-      have hsDepositCall :
-          withdrawFromSelector ≠ depositToAndCallSelector := by
-        decide +kernel
-      have hsTransfer : withdrawFromSelector ≠ transferSelector := by
-        decide +kernel
-      have hsTransferCall :
-          withdrawFromSelector ≠ transferAndCallSelector := by
-        decide +kernel
-      have hsTransferFrom : withdrawFromSelector ≠ transferFromSelector := by
-        decide +kernel
-      have hsWithdraw : withdrawFromSelector ≠ withdrawSelector := by
-        decide +kernel
-      have hsWithdrawTo : withdrawFromSelector ≠ withdrawToSelector := by
-        decide +kernel
       have hatom : primaryFlowAtom e = some
           (.redemption (Sevm.argWord e 0) (Sevm.argWord e 0).toAdr
             (Sevm.argWord e 1).toAdr (Sevm.argWord e 2).toNat) := by
-        simp [primaryFlowAtom, hnonempty, hselector, hsDeposit,
-          hsDepositTo, hsDepositCall, hsTransfer, hsTransferCall,
-          hsTransferFrom, hsWithdraw, hsWithdrawTo]
+        simp [primaryFlowAtom, hnonempty, hselector,
+          withdrawFromSelector_ne_depositSelector,
+          withdrawFromSelector_ne_depositToSelector,
+          withdrawFromSelector_ne_depositToAndCallSelector,
+          withdrawFromSelector_ne_transferSelector,
+          withdrawFromSelector_ne_transferAndCallSelector,
+          withdrawFromSelector_ne_transferFromSelector,
+          withdrawFromSelector_ne_withdrawSelector,
+          withdrawFromSelector_ne_withdrawToSelector]
       have heq := action_eq_of_flowAction_eq context hatom haction
       subst action
       refine ⟨context, haction, ?_⟩
@@ -7571,8 +7308,12 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_withdrawFrom
         · rfl
         · rfl
         · unfold FlowAction.HasDebitSource
-          simp [primaryDebitProvenance, hnonempty, hselector, hsTransfer,
-            hsTransferCall, hsTransferFrom, hsWithdraw, hsWithdrawTo]
+          simp [primaryDebitProvenance, hnonempty, hselector,
+            withdrawFromSelector_ne_transferSelector,
+            withdrawFromSelector_ne_transferAndCallSelector,
+            withdrawFromSelector_ne_transferFromSelector,
+            withdrawFromSelector_ne_withdrawSelector,
+            withdrawFromSelector_ne_withdrawToSelector]
         · exact hprefix'.2.1
         · exact hprefix'.1
       · simpa only [hsource] using hprefix
@@ -7648,32 +7389,19 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_flashLoan
       rw [htarget, hreceiverNorm] at hdecrease hcover
       have hsilentAllowance := flashAllowanceOutcome_weth10Silent hallowance
       rw [htarget] at hsilentAllowance
-      have hsDeposit : flashLoanSelector ≠ depositSelector := by
-        decide +kernel
-      have hsDepositTo : flashLoanSelector ≠ depositToSelector := by
-        decide +kernel
-      have hsDepositCall :
-          flashLoanSelector ≠ depositToAndCallSelector := by
-        decide +kernel
-      have hsTransfer : flashLoanSelector ≠ transferSelector := by
-        decide +kernel
-      have hsTransferCall :
-          flashLoanSelector ≠ transferAndCallSelector := by
-        decide +kernel
-      have hsTransferFrom : flashLoanSelector ≠ transferFromSelector := by
-        decide +kernel
-      have hsWithdraw : flashLoanSelector ≠ withdrawSelector := by
-        decide +kernel
-      have hsWithdrawTo : flashLoanSelector ≠ withdrawToSelector := by
-        decide +kernel
-      have hsWithdrawFrom : flashLoanSelector ≠ withdrawFromSelector := by
-        decide +kernel
       have hatom : primaryFlowAtom e = some
           (.flashPair (Sevm.argWord e 0) (Sevm.argWord e 0).toAdr
             (Sevm.argWord e 2).toNat) := by
-        simp [primaryFlowAtom, hnonempty, hselector, hsDeposit,
-          hsDepositTo, hsDepositCall, hsTransfer, hsTransferCall,
-          hsTransferFrom, hsWithdraw, hsWithdrawTo, hsWithdrawFrom]
+        simp [primaryFlowAtom, hnonempty, hselector,
+          flashLoanSelector_ne_depositSelector,
+          flashLoanSelector_ne_depositToSelector,
+          flashLoanSelector_ne_depositToAndCallSelector,
+          flashLoanSelector_ne_transferSelector,
+          flashLoanSelector_ne_transferAndCallSelector,
+          flashLoanSelector_ne_transferFromSelector,
+          flashLoanSelector_ne_withdrawSelector,
+          flashLoanSelector_ne_withdrawToSelector,
+          flashLoanSelector_ne_withdrawFromSelector]
       have heq := action_eq_of_flowAction_eq context hatom haction
       subst action
       have hsegments := localSegments_flashPair
@@ -7703,9 +7431,13 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_flashLoan
           rw [toB256_toNat])
         (by
           unfold FlowAction.HasFlashDebitSource
-          simp [primaryDebitProvenance, hnonempty, hselector, hsTransfer,
-            hsTransferCall, hsTransferFrom, hsWithdraw, hsWithdrawTo,
-            hsWithdrawFrom])
+          simp [primaryDebitProvenance, hnonempty, hselector,
+            flashLoanSelector_ne_transferSelector,
+            flashLoanSelector_ne_transferAndCallSelector,
+            flashLoanSelector_ne_transferFromSelector,
+            flashLoanSelector_ne_withdrawSelector,
+            flashLoanSelector_ne_withdrawToSelector,
+            flashLoanSelector_ne_withdrawFromSelector])
         hincrease hcover hdecrease
       refine ⟨context, haction, ?_⟩
       apply RichLocalStorageEffect.flash sc mid settle burn

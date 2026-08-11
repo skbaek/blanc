@@ -1,5 +1,6 @@
 import Blanc.Weth10HolderFlowFlashChronology
 import Blanc.Weth10HolderFlowExecAccounting
+import Blanc.Weth10HolderFlowSelectorFacts
 
 /-!
 Proof-indexed recursive ETH accounting for installed WETH10 execution.
@@ -2733,18 +2734,13 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_transferNonzero
       have hpc : pc = 0 := context.root.1
       subst pc
       apply Exec.Frame.CompiledBodyEthAccounting.flow action classified
-      have hsDeposit : transferSelector ≠ depositSelector := by
-        decide +kernel
-      have hsDepositTo : transferSelector ≠ depositToSelector := by
-        decide +kernel
-      have hsDepositCall :
-          transferSelector ≠ depositToAndCallSelector := by
-        decide +kernel
       have hatom : primaryFlowAtom e = some
           (.transfer e.caller.toB256 (Sevm.argWord e 0) e.caller
             (Sevm.argWord e 0).toAdr (Sevm.argWord e 1).toNat) := by
-        simp [primaryFlowAtom, hnonempty, hselector, hsDeposit,
-          hsDepositTo, hsDepositCall, hto]
+        simp [primaryFlowAtom, hnonempty, hselector,
+          transferSelector_ne_depositSelector,
+          transferSelector_ne_depositToSelector,
+          transferSelector_ne_depositToAndCallSelector, hto]
       have hactionAtom : action.atom =
           .transfer e.caller.toB256 (Sevm.argWord e 0) e.caller
             (Sevm.argWord e 0).toAdr (Sevm.argWord e 1).toNat := by
@@ -2782,26 +2778,18 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_transferFromNonzero
     frame.CompiledBodyEthAccounting dp ca := by
   cases haction : frame.flowAction? dp ca with
   | none =>
-      have hsDeposit : transferFromSelector ≠ depositSelector := by
-        decide +kernel
-      have hsDepositTo : transferFromSelector ≠ depositToSelector := by
-        decide +kernel
-      have hsDepositCall :
-          transferFromSelector ≠ depositToAndCallSelector := by
-        decide +kernel
-      have hsTransfer : transferFromSelector ≠ transferSelector := by
-        decide +kernel
-      have hsTransferCall :
-          transferFromSelector ≠ transferAndCallSelector := by
-        decide +kernel
       have hprimary : primaryFlowAtom frame.sevm = some
           (.transfer (Sevm.argWord frame.sevm 0)
             (Sevm.argWord frame.sevm 1)
             (Sevm.argWord frame.sevm 0).toAdr
             (Sevm.argWord frame.sevm 1).toAdr
             (Sevm.argWord frame.sevm 2).toNat) := by
-        simp [primaryFlowAtom, hnonempty, hselector, hsDeposit,
-          hsDepositTo, hsDepositCall, hsTransfer, hsTransferCall, hto]
+        simp [primaryFlowAtom, hnonempty, hselector,
+          transferFromSelector_ne_depositSelector,
+          transferFromSelector_ne_depositToSelector,
+          transferFromSelector_ne_depositToAndCallSelector,
+          transferFromSelector_ne_transferSelector,
+          transferFromSelector_ne_transferAndCallSelector, hto]
       unfold Exec.Frame.flowAction? at haction
       rw [if_pos context.invocation, hprimary] at haction
       simp at haction
@@ -2813,25 +2801,16 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_transferFromNonzero
           have hpc : pc = 0 := context.root.1
           subst pc
           apply Exec.Frame.CompiledBodyEthAccounting.flow action haction
-          have hsDeposit : transferFromSelector ≠ depositSelector := by
-            decide +kernel
-          have hsDepositTo :
-              transferFromSelector ≠ depositToSelector := by
-            decide +kernel
-          have hsDepositCall :
-              transferFromSelector ≠ depositToAndCallSelector := by
-            decide +kernel
-          have hsTransfer : transferFromSelector ≠ transferSelector := by
-            decide +kernel
-          have hsTransferCall :
-              transferFromSelector ≠ transferAndCallSelector := by
-            decide +kernel
           have hatom : primaryFlowAtom e = some
               (.transfer (Sevm.argWord e 0) (Sevm.argWord e 1)
                 (Sevm.argWord e 0).toAdr (Sevm.argWord e 1).toAdr
                 (Sevm.argWord e 2).toNat) := by
-            simp [primaryFlowAtom, hnonempty, hselector, hsDeposit,
-              hsDepositTo, hsDepositCall, hsTransfer, hsTransferCall,
+            simp [primaryFlowAtom, hnonempty, hselector,
+              transferFromSelector_ne_depositSelector,
+              transferFromSelector_ne_depositToSelector,
+              transferFromSelector_ne_depositToAndCallSelector,
+              transferFromSelector_ne_transferSelector,
+              transferFromSelector_ne_transferAndCallSelector,
               hto]
           have hactionAtom : action.atom =
               .transfer (Sevm.argWord e 0) (Sevm.argWord e 1)
@@ -2966,14 +2945,13 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_depositTo
             (Exec.Frame.mk 0 e pre (.ok post) run committed) = [] :=
         Exec.Frame.descendantFlowActions_eq_nil_of_depositTo
           context hselector hnonempty
-      have hnotDeposit : depositToSelector ≠ depositSelector := by
-        decide +kernel
       cases haction :
           Exec.Frame.flowAction? dp ca
             (Exec.Frame.mk 0 e pre (.ok post) run committed) with
       | none =>
           have hprimary : primaryFlowAtom e ≠ none := by
-            simp [primaryFlowAtom, hnonempty, hselector, hnotDeposit]
+            simp [primaryFlowAtom, hnonempty, hselector,
+              depositToSelector_ne_depositSelector]
           unfold Exec.Frame.flowAction? at haction
           rw [if_pos context.invocation] at haction
           cases hp : primaryFlowAtom e with
@@ -2984,7 +2962,8 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_depositTo
           have hprimary : primaryFlowAtom e = some
               (.ordinaryMint (Sevm.argWord e 0) (Sevm.argWord e 0).toAdr
                 e.value.toNat) := by
-            simp [primaryFlowAtom, hnonempty, hselector, hnotDeposit]
+            simp [primaryFlowAtom, hnonempty, hselector,
+              depositToSelector_ne_depositSelector]
           have hatom : action.atom =
               .ordinaryMint (Sevm.argWord e 0) (Sevm.argWord e 0).toAdr
                 e.value.toNat := by
@@ -3032,15 +3011,12 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_depositToAndCall
       frame.pre frame.post :=
     ⟨innerCallPre, innerCallPost, call,
       hbalance.symm.trans hcallbackPreBalance, hpostBalance⟩
-  have hsDeposit : depositToAndCallSelector ≠ depositSelector := by
-    decide +kernel
-  have hsDepositTo :
-      depositToAndCallSelector ≠ depositToSelector := by
-    decide +kernel
   have hprimary : primaryFlowAtom frame.sevm = some
       (.ordinaryMint (Sevm.argWord frame.sevm 0)
         (Sevm.argWord frame.sevm 0).toAdr frame.sevm.value.toNat) := by
-    simp [primaryFlowAtom, hnonempty, hselector, hsDeposit, hsDepositTo]
+    simp [primaryFlowAtom, hnonempty, hselector,
+      depositToAndCallSelector_ne_depositSelector,
+      depositToAndCallSelector_ne_depositToSelector]
   cases haction : frame.flowAction? dp ca with
   | none =>
       unfold Exec.Frame.flowAction? at haction
@@ -3149,33 +3125,20 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_flashLoan
       hprefixBal.trans hcallbackPreBalance,
       (hcallbackBal.trans hsettlePostBal).symm.trans
         hcallbackPostBalance⟩
-  have hsDeposit : flashLoanSelector ≠ depositSelector := by
-    decide +kernel
-  have hsDepositTo : flashLoanSelector ≠ depositToSelector := by
-    decide +kernel
-  have hsDepositCall :
-      flashLoanSelector ≠ depositToAndCallSelector := by
-    decide +kernel
-  have hsTransfer : flashLoanSelector ≠ transferSelector := by
-    decide +kernel
-  have hsTransferCall :
-      flashLoanSelector ≠ transferAndCallSelector := by
-    decide +kernel
-  have hsTransferFrom : flashLoanSelector ≠ transferFromSelector := by
-    decide +kernel
-  have hsWithdraw : flashLoanSelector ≠ withdrawSelector := by
-    decide +kernel
-  have hsWithdrawTo : flashLoanSelector ≠ withdrawToSelector := by
-    decide +kernel
-  have hsWithdrawFrom : flashLoanSelector ≠ withdrawFromSelector := by
-    decide +kernel
   have hprimary : primaryFlowAtom frame.sevm = some
       (.flashPair (Sevm.argWord frame.sevm 0)
         (Sevm.argWord frame.sevm 0).toAdr
         (Sevm.argWord frame.sevm 2).toNat) := by
-    simp [primaryFlowAtom, hnonempty, hselector, hsDeposit, hsDepositTo,
-      hsDepositCall, hsTransfer, hsTransferCall, hsTransferFrom,
-      hsWithdraw, hsWithdrawTo, hsWithdrawFrom]
+    simp [primaryFlowAtom, hnonempty, hselector,
+      flashLoanSelector_ne_depositSelector,
+      flashLoanSelector_ne_depositToSelector,
+      flashLoanSelector_ne_depositToAndCallSelector,
+      flashLoanSelector_ne_transferSelector,
+      flashLoanSelector_ne_transferAndCallSelector,
+      flashLoanSelector_ne_transferFromSelector,
+      flashLoanSelector_ne_withdrawSelector,
+      flashLoanSelector_ne_withdrawToSelector,
+      flashLoanSelector_ne_withdrawFromSelector]
   cases haction : frame.flowAction? dp ca with
   | none =>
       unfold Exec.Frame.flowAction? at haction
@@ -3305,24 +3268,16 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_withdraw
         Exec.CoreEthSound dp ca pc sevm pre out))
     (hsum : sum frame.pre.state.bal < 2 ^ 256) :
     frame.CompiledBodyEthAccounting dp ca := by
-  have hsDeposit : withdrawSelector ≠ depositSelector := by
-    decide +kernel
-  have hsDepositTo : withdrawSelector ≠ depositToSelector := by
-    decide +kernel
-  have hsDepositCall :
-      withdrawSelector ≠ depositToAndCallSelector := by
-    decide +kernel
-  have hsTransfer : withdrawSelector ≠ transferSelector := by
-    decide +kernel
-  have hsTransferCall : withdrawSelector ≠ transferAndCallSelector := by
-    decide +kernel
-  have hsTransferFrom : withdrawSelector ≠ transferFromSelector := by
-    decide +kernel
   have hprimary : primaryFlowAtom frame.sevm = some
       (.redemption frame.sevm.caller.toB256 frame.sevm.caller
         frame.sevm.caller (Sevm.argWord frame.sevm 0).toNat) := by
-    simp [primaryFlowAtom, hnonempty, hselector, hsDeposit, hsDepositTo,
-      hsDepositCall, hsTransfer, hsTransferCall, hsTransferFrom]
+    simp [primaryFlowAtom, hnonempty, hselector,
+      withdrawSelector_ne_depositSelector,
+      withdrawSelector_ne_depositToSelector,
+      withdrawSelector_ne_depositToAndCallSelector,
+      withdrawSelector_ne_transferSelector,
+      withdrawSelector_ne_transferAndCallSelector,
+      withdrawSelector_ne_transferFromSelector]
   cases haction : frame.flowAction? dp ca with
   | none =>
       unfold Exec.Frame.flowAction? at haction
@@ -3361,29 +3316,18 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_withdrawTo
         Exec.CoreEthSound dp ca pc sevm pre out))
     (hsum : sum frame.pre.state.bal < 2 ^ 256) :
     frame.CompiledBodyEthAccounting dp ca := by
-  have hsDeposit : withdrawToSelector ≠ depositSelector := by
-    decide +kernel
-  have hsDepositTo : withdrawToSelector ≠ depositToSelector := by
-    decide +kernel
-  have hsDepositCall :
-      withdrawToSelector ≠ depositToAndCallSelector := by
-    decide +kernel
-  have hsTransfer : withdrawToSelector ≠ transferSelector := by
-    decide +kernel
-  have hsTransferCall :
-      withdrawToSelector ≠ transferAndCallSelector := by
-    decide +kernel
-  have hsTransferFrom : withdrawToSelector ≠ transferFromSelector := by
-    decide +kernel
-  have hsWithdraw : withdrawToSelector ≠ withdrawSelector := by
-    decide +kernel
   have hprimary : primaryFlowAtom frame.sevm = some
       (.redemption frame.sevm.caller.toB256 frame.sevm.caller
         (Sevm.argWord frame.sevm 0).toAdr
         (Sevm.argWord frame.sevm 1).toNat) := by
-    simp [primaryFlowAtom, hnonempty, hselector, hsDeposit, hsDepositTo,
-      hsDepositCall, hsTransfer, hsTransferCall, hsTransferFrom,
-      hsWithdraw]
+    simp [primaryFlowAtom, hnonempty, hselector,
+      withdrawToSelector_ne_depositSelector,
+      withdrawToSelector_ne_depositToSelector,
+      withdrawToSelector_ne_depositToAndCallSelector,
+      withdrawToSelector_ne_transferSelector,
+      withdrawToSelector_ne_transferAndCallSelector,
+      withdrawToSelector_ne_transferFromSelector,
+      withdrawToSelector_ne_withdrawSelector]
   cases haction : frame.flowAction? dp ca with
   | none =>
       unfold Exec.Frame.flowAction? at haction
@@ -3425,18 +3369,13 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_transferZero
         Exec.CoreEthSound dp ca pc sevm pre out))
     (hsum : sum frame.pre.state.bal < 2 ^ 256) :
     frame.CompiledBodyEthAccounting dp ca := by
-  have hsDeposit : transferSelector ≠ depositSelector := by
-    decide +kernel
-  have hsDepositTo : transferSelector ≠ depositToSelector := by
-    decide +kernel
-  have hsDepositCall :
-      transferSelector ≠ depositToAndCallSelector := by
-    decide +kernel
   have hprimary : primaryFlowAtom frame.sevm = some
       (.redemption frame.sevm.caller.toB256 frame.sevm.caller
         frame.sevm.caller (Sevm.argWord frame.sevm 1).toNat) := by
-    simp [primaryFlowAtom, hnonempty, hselector, hsDeposit, hsDepositTo,
-      hsDepositCall, hto]
+    simp [primaryFlowAtom, hnonempty, hselector,
+      transferSelector_ne_depositSelector,
+      transferSelector_ne_depositToSelector,
+      transferSelector_ne_depositToAndCallSelector, hto]
   cases haction : frame.flowAction? dp ca with
   | none =>
       unfold Exec.Frame.flowAction? at haction
@@ -3477,24 +3416,16 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_transferFromZero
         Exec.CoreEthSound dp ca pc sevm pre out))
     (hsum : sum frame.pre.state.bal < 2 ^ 256) :
     frame.CompiledBodyEthAccounting dp ca := by
-  have hsDeposit : transferFromSelector ≠ depositSelector := by
-    decide +kernel
-  have hsDepositTo : transferFromSelector ≠ depositToSelector := by
-    decide +kernel
-  have hsDepositCall :
-      transferFromSelector ≠ depositToAndCallSelector := by
-    decide +kernel
-  have hsTransfer : transferFromSelector ≠ transferSelector := by
-    decide +kernel
-  have hsTransferCall :
-      transferFromSelector ≠ transferAndCallSelector := by
-    decide +kernel
   have hprimary : primaryFlowAtom frame.sevm = some
       (.redemption (Sevm.argWord frame.sevm 0)
         (Sevm.argWord frame.sevm 0).toAdr frame.sevm.caller
         (Sevm.argWord frame.sevm 2).toNat) := by
-    simp [primaryFlowAtom, hnonempty, hselector, hsDeposit, hsDepositTo,
-      hsDepositCall, hsTransfer, hsTransferCall, hto]
+    simp [primaryFlowAtom, hnonempty, hselector,
+      transferFromSelector_ne_depositSelector,
+      transferFromSelector_ne_depositToSelector,
+      transferFromSelector_ne_depositToAndCallSelector,
+      transferFromSelector_ne_transferSelector,
+      transferFromSelector_ne_transferAndCallSelector, hto]
   cases haction : frame.flowAction? dp ca with
   | none =>
       unfold Exec.Frame.flowAction? at haction
@@ -3543,33 +3474,20 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_withdrawFrom
         Exec.CoreEthSound dp ca pc sevm pre out))
     (hsum : sum frame.pre.state.bal < 2 ^ 256) :
     frame.CompiledBodyEthAccounting dp ca := by
-  have hsDeposit : withdrawFromSelector ≠ depositSelector := by
-    decide +kernel
-  have hsDepositTo : withdrawFromSelector ≠ depositToSelector := by
-    decide +kernel
-  have hsDepositCall :
-      withdrawFromSelector ≠ depositToAndCallSelector := by
-    decide +kernel
-  have hsTransfer : withdrawFromSelector ≠ transferSelector := by
-    decide +kernel
-  have hsTransferCall :
-      withdrawFromSelector ≠ transferAndCallSelector := by
-    decide +kernel
-  have hsTransferFrom :
-      withdrawFromSelector ≠ transferFromSelector := by
-    decide +kernel
-  have hsWithdraw : withdrawFromSelector ≠ withdrawSelector := by
-    decide +kernel
-  have hsWithdrawTo : withdrawFromSelector ≠ withdrawToSelector := by
-    decide +kernel
   have hprimary : primaryFlowAtom frame.sevm = some
       (.redemption (Sevm.argWord frame.sevm 0)
         (Sevm.argWord frame.sevm 0).toAdr
         (Sevm.argWord frame.sevm 1).toAdr
         (Sevm.argWord frame.sevm 2).toNat) := by
-    simp [primaryFlowAtom, hnonempty, hselector, hsDeposit, hsDepositTo,
-      hsDepositCall, hsTransfer, hsTransferCall, hsTransferFrom,
-      hsWithdraw, hsWithdrawTo]
+    simp [primaryFlowAtom, hnonempty, hselector,
+      withdrawFromSelector_ne_depositSelector,
+      withdrawFromSelector_ne_depositToSelector,
+      withdrawFromSelector_ne_depositToAndCallSelector,
+      withdrawFromSelector_ne_transferSelector,
+      withdrawFromSelector_ne_transferAndCallSelector,
+      withdrawFromSelector_ne_transferFromSelector,
+      withdrawFromSelector_ne_withdrawSelector,
+      withdrawFromSelector_ne_withdrawToSelector]
   cases haction : frame.flowAction? dp ca with
   | none =>
       unfold Exec.Frame.flowAction? at haction
@@ -3620,13 +3538,6 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_transferAndCall
         Exec.CoreEthSound dp ca pc sevm pre out))
     (hsum : sum frame.pre.state.bal < 2 ^ 256) :
     frame.CompiledBodyEthAccounting dp ca := by
-  have hsDeposit : transferAndCallSelector ≠ depositSelector := by
-    decide +kernel
-  have hsDepositTo : transferAndCallSelector ≠ depositToSelector := by
-    decide +kernel
-  have hsDepositCall :
-      transferAndCallSelector ≠ depositToAndCallSelector := by
-    decide +kernel
   rcases frame.compiledTransferAndCallChronology context hselector
       hnonempty with hzero | hnonzero
   · rcases hzero with
@@ -3647,8 +3558,10 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_transferAndCall
     have hprimary : primaryFlowAtom frame.sevm = some
         (.redemption frame.sevm.caller.toB256 frame.sevm.caller
           frame.sevm.caller (Sevm.argWord frame.sevm 1).toNat) := by
-      simp [primaryFlowAtom, hnonempty, hselector, hsDeposit, hsDepositTo,
-        hsDepositCall, hraw]
+      simp [primaryFlowAtom, hnonempty, hselector,
+        transferAndCallSelector_ne_depositSelector,
+        transferAndCallSelector_ne_depositToSelector,
+        transferAndCallSelector_ne_depositToAndCallSelector, hraw]
     cases haction : frame.flowAction? dp ca with
     | none =>
         unfold Exec.Frame.flowAction? at haction
@@ -3723,8 +3636,10 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_transferAndCall
           (Sevm.argWord frame.sevm 0) frame.sevm.caller
           (Sevm.argWord frame.sevm 0).toAdr
           (Sevm.argWord frame.sevm 1).toNat) := by
-      simp [primaryFlowAtom, hnonempty, hselector, hsDeposit, hsDepositTo,
-        hsDepositCall, hraw]
+      simp [primaryFlowAtom, hnonempty, hselector,
+        transferAndCallSelector_ne_depositSelector,
+        transferAndCallSelector_ne_depositToSelector,
+        transferAndCallSelector_ne_depositToAndCallSelector, hraw]
     cases haction : frame.flowAction? dp ca with
     | none =>
         unfold Exec.Frame.flowAction? at haction
@@ -3901,20 +3816,15 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_callFreeBranch
       exact frame.compiledBodyEthAccounting_of_depositTo
         context selected nonempty
   | transferNonzero nonempty selected recipient =>
-      have hsDeposit : transferSelector ≠ depositSelector := by
-        decide +kernel
-      have hsDepositTo : transferSelector ≠ depositToSelector := by
-        decide +kernel
-      have hsDepositCall :
-          transferSelector ≠ depositToAndCallSelector := by
-        decide +kernel
       have hprimary : primaryFlowAtom frame.sevm = some
           (.transfer frame.sevm.caller.toB256
             (Sevm.argWord frame.sevm 0) frame.sevm.caller
             (Sevm.argWord frame.sevm 0).toAdr
             (Sevm.argWord frame.sevm 1).toNat) := by
-        simp [primaryFlowAtom, nonempty, selected, hsDeposit,
-          hsDepositTo, hsDepositCall, recipient]
+        simp [primaryFlowAtom, nonempty, selected,
+          transferSelector_ne_depositSelector,
+          transferSelector_ne_depositToSelector,
+          transferSelector_ne_depositToAndCallSelector, recipient]
       cases classified : frame.flowAction? dp ca with
       | none =>
           unfold Exec.Frame.flowAction? at classified
