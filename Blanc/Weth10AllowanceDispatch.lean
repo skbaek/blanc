@@ -24,45 +24,21 @@ open Jaune
 
 namespace Weth10
 
-/-! ## Residual arm
+/-! ## Thirty-way selector dispatch
 
 The balance partition classifies `transfer` by its recipient argument
 (`CallFreeStorageBranch.transferNonzero` versus
 `RemainingStorageBranch.transferZero`) but classifies `transferAndCall` by
 selector alone: its `RemainingStorageBranch.transferAndCall` leaf carries no
 recipient datum.  The balance arm needs none, because
-`hasProofIndexedStorageAccounting_of_transferAndCall` covers both recipients.
-The allowance arm `Exec.Frame.allowanceRegionEffect_of_transferAndCall` is
-stated only for a nonzero recipient, so the zero-recipient invocation —
-`transferThen`'s redeem branch followed by the ERC-677 callback — is the one
-leaf of the thirty with no arm.  It is quantified here rather than assumed
-inside any statement below, so that discharging it in the arm modules turns
-every export in this file premise-free by deleting one argument. -/
-
-/-- The one per-selector allowance arm still missing: `transferAndCall`
-invoked with a zero recipient, which runs `transferZeroThen`'s redemption
-prefix and then the ERC-677 token callback. -/
-def ZeroRecipientTransferAndCallAllowanceArm
-    (dp : DeployParams) (ca : Adr) : Prop :=
-  ∀ frame : Exec.Frame,
-    frame.AuthenticContext dp ca →
-    Sevm.selector frame.sevm = transferAndCallSelector →
-    frame.sevm.data.length.toB256 ≠ 0 →
-    Sevm.argWord frame.sevm 0 = 0 →
-    ForallDeeperAt frame.sevm.depth ca (weth10 dp)
-      (fun pc sevm pre out _ =>
-        Exec.CoreAllowanceSound dp ca pc sevm pre out) →
-    AllowanceRegionEffect ca frame.pre frame.post
-      (Exec.attributionStream dp ca frame.run)
-
-/-! ## Thirty-way selector dispatch -/
+`hasProofIndexedStorageAccounting_of_transferAndCall` covers both recipients;
+the allowance development instead supplies two arms for that leaf, one per
+recipient, and splits on the recipient word here. -/
 
 /-- Exact allowance-region handler for every authentic compiled WETH10 frame.
 Every selector arm is discharged by its concrete chronology; the selector case
 split is the balance development's already-proved partition. -/
-theorem compiledFrameAllowanceHandler
-    (dp : DeployParams) (ca : Adr)
-    (zeroArm : ZeroRecipientTransferAndCallAllowanceArm dp ca) :
+theorem compiledFrameAllowanceHandler (dp : DeployParams) (ca : Adr) :
     CompiledFrameAllowanceHandler dp ca := by
   intro frame context hdeeper
   rcases frame.callFreeStorageBranch_or_remaining context with
@@ -136,7 +112,8 @@ theorem compiledFrameAllowanceHandler
           context selected nonempty recipient hdeeper
     | transferAndCall nonempty selected =>
         by_cases hzero : Sevm.argWord frame.sevm 0 = 0
-        · exact zeroArm frame context selected nonempty hzero hdeeper
+        · exact frame.allowanceRegionEffect_of_transferAndCallZero
+            context selected nonempty hzero hdeeper
         · exact frame.allowanceRegionEffect_of_transferAndCall
             context selected nonempty hzero hdeeper
     | transferFromZero nonempty selected recipient =>
@@ -164,20 +141,16 @@ theorem compiledFrameAllowanceHandler
 /-! ## Lift to the history level -/
 
 /-- Compiled-program allowance handler consumed by the generic recursion. -/
-theorem compiledBodyAllowanceHandler
-    (dp : DeployParams) (ca : Adr)
-    (zeroArm : ZeroRecipientTransferAndCallAllowanceArm dp ca) :
+theorem compiledBodyAllowanceHandler (dp : DeployParams) (ca : Adr) :
     CompiledBodyAllowanceHandler dp ca :=
-  (compiledFrameAllowanceHandler dp ca zeroArm).compiledBodyAllowanceHandler
+  (compiledFrameAllowanceHandler dp ca).compiledBodyAllowanceHandler
 
 /-- Complete committed allowance accounting for the installed WETH10
 program. -/
-theorem committedExecAllowanceSound
-    (dp : DeployParams) (ca : Adr)
-    (zeroArm : ZeroRecipientTransferAndCallAllowanceArm dp ca) :
+theorem committedExecAllowanceSound (dp : DeployParams) (ca : Adr) :
     CommittedExecAllowanceSound dp ca :=
   CompiledBodyAllowanceHandler.committedExecAllowanceSound
-    (compiledBodyAllowanceHandler dp ca zeroArm)
+    (compiledBodyAllowanceHandler dp ca)
 
 /-- Every tagged allowance key of an authentic stable-root history holds
 exactly the last committed write recorded by the history's chronological
@@ -186,13 +159,12 @@ Downstream consumers supply only the history and its stable checkpoint. -/
 theorem AccountedHistory.allowanceTransported_of_compiled
     {chainId : UInt64} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
-    (zeroArm : ZeroRecipientTransferAndCallAllowanceArm dp ca)
     (history : AccountedHistory chainId dp ca checkpoint future)
     (hstable : Stable dp ca checkpoint.state) :
     AllowanceTransported ca checkpoint.state future.state
       history.attributionLedger :=
   AccountedHistory.allowanceTransported
-    (committedExecAllowanceSound dp ca zeroArm) history hstable
+    (committedExecAllowanceSound dp ca) history hstable
 
 end Weth10
 

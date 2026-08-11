@@ -250,6 +250,134 @@ theorem Exec.tailGuard_attributionInner_storage
         funext (getStor_eq_of_state_eq hbranchSilent.state)
     _ = Devm.getStor final := hstorSuccess
 
+/-! ## The success continuation's own allowance closer
+
+The redemption walk is also run with a *child-calling* success continuation —
+the zero-recipient `transferAndCall` runs the ERC-677 callback behind the
+redemption send — so the continuation cannot be closed as a childless suffix.
+It is instead closed by the caller, at the continuation re-rooted as its own
+frame.  A `CountedCursor` is data and cannot be quantified existentially
+inside a `Prop`, so the closer receives the raw counted data — program
+counter, entry machine, retained derivation, compiled run and code-slice
+witnesses — and rebuilds its own cursor.  The three side conditions are the
+memory frame and installed-code witness a child-calling continuation needs;
+a childless continuation ignores them. -/
+
+/-- What a redemption walk demands of its success continuation: whatever the
+continuation's own proper-descendant counted stream turns out to be,
+replaying it over the continuation's entry storage reproduces the frame's
+committed post state on every tagged allowance key. -/
+def SuccessAllowanceCloser (dp : DeployParams) (ca : Adr)
+    (frame : Exec.Frame) (img : Bytes) (success : Func) : Prop :=
+  ∀ (entryPc : Nat) (entry : Devm)
+    (continuation : Exec entryPc frame.sevm entry frame.out),
+    Func.RunCompiled ((weth10 dp).main :: weth10Aux) frame.sevm entry
+      success frame.post →
+    subcode frame.sevm.code.toList entryPc
+      (Func.compile (table 0 ((weth10 dp).main :: weth10Aux)) entryPc
+        success) →
+    noPushBefore frame.sevm.code entryPc 32 = true →
+    Mem.Wf entry.memory →
+    Mem.Reads entry.memory img →
+    some (entry.getCode ca).toList = Prog.compile (weth10 dp) →
+    ∀ key, InRegion .allowance key →
+      (Devm.getStor frame.post ca).get key =
+        applyAllowanceLedger (Devm.getStor entry ca)
+          (Exec.attributionInner dp ca continuation) key
+
+/-- A childless success continuation ending in a terminal instruction closes
+the walk from its storage invariance alone: it retains no counted record, so
+the replayed ledger is empty. -/
+theorem successAllowanceCloser_of_childless
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame} {img : Bytes}
+    {successLine : Line} {successLast : Linst}
+    (hchildless : ∀ n ∈ successLine, NinstIsChildless n)
+    (hstor : Func.Inv Devm.getStor Devm.getStor
+      (successLine +++ Func.last successLast)) :
+    SuccessAllowanceCloser dp ca frame img
+      (successLine +++ Func.last successLast) := by
+  intro entryPc entry continuation hrun hsub hbound _hwf _hreads _hcode
+    key _hkey
+  let suffixCursor :
+      (⟨entryPc, frame.sevm, entry, frame.out, continuation,
+          frame.committed⟩ : Exec.Frame).CountedCursor dp ca
+        ((weth10 dp).main :: weth10Aux)
+        (table 0 ((weth10 dp).main :: weth10Aux))
+        (successLine +++ Func.last successLast) frame.post :=
+    ⟨entryPc, entry, continuation,
+      ⟨[], Exec.Deriv.ParentPrefixActions.refl _⟩,
+      Exec.Deriv.ParentPrefixCounted.refl _, hrun, hsub, hbound⟩
+  rcases suffixCursor.peelChildlessLine hchildless with ⟨lastCursor, -⟩
+  have hnil : Exec.attributionInner dp ca continuation = [] :=
+    lastCursor.finishAttributionInner
+  have hstorEq : Devm.getStor entry = Devm.getStor frame.post :=
+    Func.of_inv Devm.getStor Devm.getStor hstor
+      (Func.Run.of_runCompiled hrun)
+  rw [hnil, applyAllowanceLedger_nil, ← congrFun hstorEq ca]
+
+/-- The generalized closer for the redemption success guard: the post-`CALL`
+`ISZERO` test and the send-error branch are childless scaffolding that
+neither retains a counted record nor moves storage, so the whole guard
+suffix's allowance effect is the success continuation's own. -/
+theorem Exec.tailGuardAllowanceStorage
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    {pcT : Nat} {midD : Devm} {success : Func}
+    {errSlot : Nat} {rest : Stack} {img : Bytes}
+    (next : Exec pcT frame.sevm midD frame.out)
+    (htail : Func.RunCompiled ((weth10 dp).main :: weth10Aux) frame.sevm midD
+      (Ninst.iszero ::: ((.call errSlot) <?> success)) frame.post)
+    (hsub : subcode frame.sevm.code.toList pcT
+      (Func.compile (table 0 ((weth10 dp).main :: weth10Aux)) pcT
+        (Ninst.iszero ::: ((.call errSlot) <?> success))))
+    (hbound : noPushBefore frame.sevm.code pcT 32 = true)
+    (hstackOne : midD.stack = (1 : B256) :: rest)
+    (hwf : Mem.Wf midD.memory)
+    (hreads : Mem.Reads midD.memory img)
+    (hcode : some (midD.getCode ca).toList = Prog.compile (weth10 dp))
+    (hcloser : SuccessAllowanceCloser dp ca frame img success) :
+    ∀ key, InRegion .allowance key →
+      (Devm.getStor frame.post ca).get key =
+        applyAllowanceLedger (Devm.getStor midD ca)
+          (Exec.attributionInner dp ca next) key := by
+  let tailCursor :
+      (⟨pcT, frame.sevm, midD, frame.out, next,
+          frame.committed⟩ : Exec.Frame).CountedCursor dp ca
+        ((weth10 dp).main :: weth10Aux)
+        (table 0 ((weth10 dp).main :: weth10Aux))
+        (Ninst.iszero ::: ((.call errSlot) <?> success)) frame.post :=
+    ⟨pcT, midD, next, ⟨[], Exec.Deriv.ParentPrefixActions.refl _⟩,
+      Exec.Deriv.ParentPrefixCounted.refl _, htail, hsub, hbound⟩
+  rcases tailCursor.selectNextChildless (by simp [NinstIsChildless]) with
+    ⟨branchCursor, hiszeroRun⟩
+  have hp0 : [(1 : B256)] <<+ midD.stack := by
+    rw [hstackOne]
+    exact pref_append [(1 : B256)] rest
+  have hpIso : ((1 : B256) =? 0) :: [] <<+ branchCursor.pre.stack :=
+    prefix_of_iszero hiszeroRun hp0
+  have hne10 : (1 : B256) ≠ 0 := fun h => B256.zero_ne_one h.symm
+  rw [show ((1 : B256) =? 0) = 0 from by simp [B256.eqCheck, hne10]]
+    at hpIso
+  rcases branchCursor.selectBranchZeroSilent hpIso with
+    ⟨successCursor, _hsuccStack, hbranchSilent⟩
+  have hstate : midD.state = successCursor.pre.state :=
+    (Ninst.Hinv.inv (f := Devm.state) hiszeroRun).trans hbranchSilent.state
+  have hmemory : midD.memory = successCursor.pre.memory :=
+    (Ninst.Hinv.inv (f := Devm.memory) hiszeroRun).trans hbranchSilent.memory
+  have hclosed := hcloser successCursor.pc successCursor.pre
+    successCursor.current successCursor.run successCursor.codeSlice
+    successCursor.codeBoundary (by rw [← hmemory]; exact hwf)
+    (by rw [← hmemory]; exact hreads)
+    (by rw [← getCode_eq_of_state_eq hstate ca]; exact hcode)
+  have hsplit := successCursor.countedPrefix.descendantCounted_eq
+  change Exec.attributionInner dp ca next =
+    [] ++ Exec.attributionInner dp ca successCursor.current at hsplit
+  intro key hkey
+  rw [hsplit, List.nil_append,
+    applyAllowanceLedger_congr
+      (congrArg (fun s : Stor => s.get key)
+        (getStor_eq_of_state_eq hstate ca))]
+  exact hclosed key hkey
+
 /-! ## Local copies of the compiled redemption body
 
 `Weth10HolderFlowCompiled` keeps its redemption-body decomposition private,
@@ -270,7 +398,7 @@ def redeemSendToArgPrefix (k : B256) : Line :=
 
 /-- The shared caller-owned redemption body: balance guard, debit, burn
 event, send-operand prefix, external value `CALL`, success guard. -/
-private def redeemBody (amountArg : B256) (sendPrefix : Line)
+def redeemBody (amountArg : B256) (sendPrefix : Line)
     (success : Func) : Func :=
   redeemCheckLine amountArg +++
   ((.call burnBalanceErrorSlot) <?>
@@ -379,23 +507,24 @@ theorem redeemSendToArgPrefix_effect (k : B256)
 
 /-! ## The shared caller-owned redemption walk
 
-The three redemption selectors differ only in their amount argument, their
-send-operand prefix, and their terminal success continuation.  This walk
-crosses the shared body once: the guarded debit writes a single
-address-shaped balance key, the external value `CALL` is identified with a
-retained child message whose allowance-region delta is supplied by the
-recursion hypothesis, and the trailing success guard contributes neither
-counted records nor storage writes. -/
+The redemption selectors differ only in their amount argument, their
+send-operand prefix, and their success continuation.  This walk crosses the
+shared body once: the guarded debit writes a single address-shaped balance
+key, the external value `CALL` is identified with a retained child message
+whose allowance-region delta is supplied by the recursion hypothesis, and
+the trailing success guard is handed to the caller's continuation closer.
+The continuation is an arbitrary `Func`: `withdraw`, `withdrawTo` and the
+zero-recipient `transfer` end in a childless terminal suffix, while the
+zero-recipient `transferAndCall` runs the ERC-677 callback there. -/
 
-private theorem Exec.Frame.CountedCursor.redeemAllowanceStorage
+theorem Exec.Frame.CountedCursor.redeemAllowanceRegionStorage
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    {amountArg target : B256} {sendPrefix successLine : Line}
-    {successLast : Linst} {img : Bytes}
+    {amountArg target : B256} {sendPrefix : Line}
+    {success : Func} {img : Bytes}
     (cursor : frame.CountedCursor dp ca
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
-      (redeemBody amountArg sendPrefix
-        (successLine +++ Func.last successLast)) frame.post)
+      (redeemBody amountArg sendPrefix success) frame.post)
     (htarget : frame.sevm.currentTarget = ca)
     (hstack : [] <<+ cursor.pre.stack)
     (hwf : Mem.Wf cursor.pre.memory)
@@ -407,9 +536,9 @@ private theorem Exec.Frame.CountedCursor.redeemAllowanceStorage
       value :: tail <<+ sendPre.stack →
       Line.Run frame.sevm sendPre sendPrefix callPre →
       ValueCallOperandPrefix frame.sevm sendPre callPre value target tail)
-    (hsuccessChildless : ∀ n ∈ successLine, NinstIsChildless n)
-    (hsuccessStor : Func.Inv Devm.getStor Devm.getStor
-      (successLine +++ Func.last successLast))
+    (hcloser : SuccessAllowanceCloser dp ca frame
+      (Bytes.writeAt img 0 (Sevm.argWord frame.sevm amountArg).toBytes)
+      success)
     (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
       (fun pc sevm pre out _ =>
         Exec.CoreAllowanceSound dp ca pc sevm pre out)) :
@@ -532,13 +661,20 @@ private theorem Exec.Frame.CountedCursor.redeemAllowanceStorage
         rw [← hcallerMem, ← hdebitMem, ← hcheckMem]
         exact hreads
       obtain ⟨hsendStack, _heventLogs, heventStor, _heventBal, heventCode,
-          _heventOutput, _hwfSend, _hreadsSend⟩ :=
+          _heventOutput, hwfSend, hreadsSend⟩ :=
         burnEventTail_effect_frame hownerStack hwfEvent hreadsEvent
           (by simpa only [redeemEventTail] using htailRun)
       rcases sendCursor.peelChildlessLine (line := sendPrefix)
           hsendChildless with
         ⟨callCursor, hsendRun⟩
       have sendEvidence := hsend hsendStack hsendRun
+      have hwfCall : Mem.Wf callCursor.pre.memory := by
+        rw [← sendEvidence.memory]
+        exact hwfSend
+      have hreadsCall : Mem.Reads callCursor.pre.memory
+          (Bytes.writeAt img 0 (Sevm.argWord e amountArg).toBytes) := by
+        rw [← sendEvidence.memory]
+        exact hreadsSend
       have hcallStor : Devm.getStor afterDebitCursor.pre =
           Devm.getStor callCursor.pre :=
         hcallerStor.trans (heventStor.symm.trans sendEvidence.storage)
@@ -585,8 +721,8 @@ private theorem Exec.Frame.CountedCursor.redeemAllowanceStorage
               (by simp [Ninst.pcFree]) ostep
           -- the trailing guard excludes the reverter arm
           have htailPlain : Func.Run ((weth10 dp).main :: weth10Aux) e midD
-              (Ninst.iszero ::: ((.call ethTransferErrorSlot) <?>
-                (successLine +++ Func.last successLast))) fpost :=
+              (Ninst.iszero ::: ((.call ethTransferErrorSlot) <?> success))
+              fpost :=
             Func.Run.of_runCompiled htailCompiled
           rcases of_run_next htailPlain with
             ⟨afterIszero, hiszeroRun, hbranchPlain⟩
@@ -612,9 +748,9 @@ private theorem Exec.Frame.CountedCursor.redeemAllowanceStorage
           · rcases hsuccess with
               ⟨callParent, child, xlRaw, hasDelegation, code, availableGas,
                 rawPc, hrawStep, hdepthPos, _hcallStackEq, hparentState,
-                _hparentMemory, _hparentLogs, _hparentOutput, hdelegation,
+                hparentMemory, _hparentLogs, _hparentOutput, hdelegation,
                 hrawFilled, hprocess, hclean, _hresume, hmidState,
-                _hreturnData, _hmidMemory, hmidStack⟩
+                _hreturnData, hmidMemory, hmidStack⟩
             have halign := Ninst.StepRun.unique_exec_of_filled ofilled
               hrawFilled hstepAt hrawStep
             cases halign.1
@@ -676,14 +812,29 @@ private theorem Exec.Frame.CountedCursor.redeemAllowanceStorage
                     simpa only [callMsg] using hct
                   simp only [callMsg, htargetCa])
                 hdeeper
-            -- the trailing guard is childless and storage neutral
-            obtain ⟨htailNil, htailStor⟩ :=
-              Exec.tailGuard_attributionInner_storage
-                (dp := dp) (ca := ca) (_errReason := "")
+            -- the zero-length return window leaves the memory frame intact
+            have hmidMemory' : midD.memory = callParent.memory := by
+              simpa only [show (0 : B256).toNat = 0 from rfl, List.take_zero,
+                Mem.write] using hmidMemory
+            have hwfMid : Mem.Wf midD.memory := by
+              rw [hmidMemory', hparentMemory]
+              exact Mem.Wf.extends _ hwfCall
+            have hreadsMid : Mem.Reads midD.memory
+                (Bytes.writeAt img 0 (Sevm.argWord e amountArg).toBytes) := by
+              rw [hmidMemory', hparentMemory]
+              exact Mem.Reads.extends _ hreadsCall
+            have hcodeMid : some (midD.getCode ca).toList =
+                Prog.compile (weth10 dp) := by
+              rw [getCode_eq_of_state_eq hmidState ca, ← childEffect.codeEq]
+              exact hcallCodeAt
+            -- the trailing guard is closed by the success continuation
+            have htailStorage :=
+              Exec.tailGuardAllowanceStorage
+                (frame := ⟨fpc, e, fpre, .ok fpost, frun, fcommitted⟩)
                 (rest := callParent.stack)
-                continuation fcommitted htailCompiled nextSub nextBoundary
-                hmidStack hsuccessChildless hsuccessStor
-            -- the counted stream of the frame is exactly the child's
+                continuation htailCompiled nextSub nextBoundary
+                hmidStack hwfMid hreadsMid hcodeMid hcloser
+            -- the counted stream of the frame splits at the send child
             have hprefixSplit := callCursor.countedPrefix.descendantCounted_eq
             change Exec.attributionInner dp ca frun =
               [] ++ Exec.attributionInner dp ca callCursor.current
@@ -696,24 +847,71 @@ private theorem Exec.Frame.CountedCursor.redeemAllowanceStorage
               Exec.Deriv.ParentStepCounted.selected_eq_retained_of_call
                 hat ofilled hstepAt retained hcountedEdge
             have hinnerEq : Exec.attributionInner dp ca frun =
-                retained.attributionStream dp ca := by
-              rw [hprefixSplit, List.nil_append, hedgeSplit, hcountedEq,
-                htailNil, List.append_nil]
+                retained.attributionStream dp ca ++
+                  Exec.attributionInner dp ca continuation := by
+              rw [hprefixSplit, List.nil_append, hedgeSplit, hcountedEq]
+            have hmid : (Devm.getStor midD ca).get key =
+                applyAllowanceLedger (Devm.getStor cursor.pre ca)
+                  (retained.attributionStream dp ca) key := by
+              calc (Devm.getStor midD ca).get key
+                  = (Devm.getStor child ca).get key :=
+                    congrArg (fun state : State => (state.getStor ca).get key)
+                      hmidState
+                _ = applyAllowanceLedger (Devm.getStor callCursor.pre ca)
+                      (retained.attributionStream dp ca) key :=
+                    childEffect.storage key hkey
+                _ = applyAllowanceLedger (Devm.getStor cursor.pre ca)
+                      (retained.attributionStream dp ca) key :=
+                    applyAllowanceLedger_congr hpreCallCa
             calc (Devm.getStor fpost ca).get key
-                = (Devm.getStor midD ca).get key := by
-                  rw [congrFun htailStor ca]
-              _ = (Devm.getStor child ca).get key :=
-                  congrArg (fun state : State => (state.getStor ca).get key)
-                    hmidState
-              _ = applyAllowanceLedger (Devm.getStor callCursor.pre ca)
-                    (retained.attributionStream dp ca) key :=
-                  childEffect.storage key hkey
+                = applyAllowanceLedger (Devm.getStor midD ca)
+                    (Exec.attributionInner dp ca continuation) key :=
+                  htailStorage key hkey
               _ = applyAllowanceLedger (Devm.getStor cursor.pre ca)
-                    (retained.attributionStream dp ca) key :=
-                  applyAllowanceLedger_congr hpreCallCa
+                    (retained.attributionStream dp ca ++
+                      Exec.attributionInner dp ca continuation) key :=
+                  (applyAllowanceLedger_append _ _ _ _ key hmid).symm
               _ = applyAllowanceLedger (Devm.getStor cursor.pre ca)
                     (Exec.attributionInner dp ca frun) key := by
                   rw [hinnerEq]
+
+/-- The redemption walk specialized to a childless terminal success
+continuation, as `withdraw`, `withdrawTo` and the zero-recipient `transfer`
+use it. -/
+private theorem Exec.Frame.CountedCursor.redeemAllowanceStorage
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    {amountArg target : B256} {sendPrefix successLine : Line}
+    {successLast : Linst} {img : Bytes}
+    (cursor : frame.CountedCursor dp ca
+      ((weth10 dp).main :: weth10Aux)
+      (table 0 ((weth10 dp).main :: weth10Aux))
+      (redeemBody amountArg sendPrefix
+        (successLine +++ Func.last successLast)) frame.post)
+    (htarget : frame.sevm.currentTarget = ca)
+    (hstack : [] <<+ cursor.pre.stack)
+    (hwf : Mem.Wf cursor.pre.memory)
+    (hreads : Mem.Reads cursor.pre.memory img)
+    (hcursorCode : some (cursor.pre.getCode ca).toList =
+      Prog.compile (weth10 dp))
+    (hsendChildless : ∀ n ∈ sendPrefix, NinstIsChildless n)
+    (hsend : ∀ {sendPre callPre : Devm} {value : B256} {tail : Stack},
+      value :: tail <<+ sendPre.stack →
+      Line.Run frame.sevm sendPre sendPrefix callPre →
+      ValueCallOperandPrefix frame.sevm sendPre callPre value target tail)
+    (hsuccessChildless : ∀ n ∈ successLine, NinstIsChildless n)
+    (hsuccessStor : Func.Inv Devm.getStor Devm.getStor
+      (successLine +++ Func.last successLast))
+    (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
+      (fun pc sevm pre out _ =>
+        Exec.CoreAllowanceSound dp ca pc sevm pre out)) :
+    ∀ key, InRegion .allowance key →
+      (Devm.getStor frame.post ca).get key =
+        applyAllowanceLedger (Devm.getStor cursor.pre ca)
+          (Exec.attributionInner dp ca frame.run) key :=
+  cursor.redeemAllowanceRegionStorage htarget hstack hwf hreads hcursorCode
+    hsendChildless hsend
+    (successAllowanceCloser_of_childless hsuccessChildless hsuccessStor)
+    hdeeper
 
 /-! ## The three public redemption arms -/
 

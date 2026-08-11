@@ -925,6 +925,199 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferAndCall
     rw [hprefixKeyCa key hkey, ← congrFun hstorSuccess ca]
   exact hprefixEffect.append childEffect
 
+/-! ## The zero-recipient `transferAndCall` arm
+
+`transferAndCall` is `transferThen` applied to the ERC-677 callback, so a
+zero recipient word routes it into `transferZeroThen`: the frame burns the
+caller's balance and redeems it with an external value `CALL`, and only then
+runs the callback.  This leaf therefore composes the redemption walk of
+`Weth10AllowanceArmsRedeem` with the callback chronology above, the
+redemption walk's generic success continuation being exactly the callback.
+Both retained children are transported by the recursion hypothesis, and the
+frame's own record — a `transferAndCall` selector — carries no allowance
+event. -/
+
+/-- The ERC-677 callback closes a redemption walk: whatever counted stream
+the callback continuation retains is precisely its own child's attribution
+stream, transported across the tagged allowance region by the recursion
+hypothesis. -/
+private theorem Exec.Frame.tokenCallbackSuccessAllowanceCloser
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame} {dataArg : B256}
+    (htarget : frame.sevm.currentTarget = ca)
+    (hcode : some frame.sevm.code.toList = Prog.compile (weth10 dp))
+    (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
+      (fun pc sevm pre out _ =>
+        Exec.CoreAllowanceSound dp ca pc sevm pre out)) :
+    SuccessAllowanceCloser dp ca frame
+      (Sevm.argWord frame.sevm 1).toBytes
+      (callBoolCallback onTokenTransferSelector 0 dataArg (arg 1)) := by
+  intro entryPc entry continuation hrun hsub hbound hwfEntry hreadsEntry
+    hcodeEntry key hkey
+  let suffixCursor :
+      (⟨entryPc, frame.sevm, entry, frame.out, continuation,
+          frame.committed⟩ : Exec.Frame).CountedCursor dp ca
+        ((weth10 dp).main :: weth10Aux)
+        (table 0 ((weth10 dp).main :: weth10Aux))
+        (callBoolCallback onTokenTransferSelector 0 dataArg (arg 1))
+        frame.post :=
+    ⟨entryPc, entry, continuation,
+      ⟨[], Exec.Deriv.ParentPrefixActions.refl _⟩,
+      Exec.Deriv.ParentPrefixCounted.refl _, hrun, hsub, hbound⟩
+  rcases suffixCursor.countedTokenCallbackChronology
+      (sel := onTokenTransferSelector) (targetArg := 0) (dataArg := dataArg)
+      (valueWord := Sevm.argWord frame.sevm 1) (value := arg 1)
+      (img := (Sevm.argWord frame.sevm 1).toBytes)
+      (by simp [arg, cdl, NinstIsChildless, Ninst.pushB256])
+      (by
+        intro a b xs hp hline
+        exact prefix_of_arg hp hline)
+      (by unfold arg cdl; line_inv)
+      (by unfold arg cdl; line_inv)
+      (by unfold arg cdl; line_inv)
+      (by unfold arg cdl; line_inv)
+      (by unfold arg cdl; line_inv)
+      (by unfold arg cdl; line_inv)
+      hwfEntry hreadsEntry hcode with
+    ⟨_inputSize, _input, _callPre, _callPost, _parent, _child, _xl, _pc,
+      retained, callback, hinner⟩
+  have childEffect := callback.allowanceRegionEffect retained htarget
+    hcodeEntry hdeeper
+  rw [show Exec.attributionInner dp ca continuation =
+      retained.attributionStream dp ca from hinner]
+  exact childEffect.storage key hkey
+
+/-- Zero-recipient `transferAndCall` transports the allowance region.  The
+zero word selects `transferThen`'s redemption branch, so the frame debits the
+caller's balance key, sends the redeemed ether, and only then spawns the
+ERC-677 callback; neither retained child is the frame's own record, which
+carries no allowance event and replays transparently ahead of them. -/
+theorem Exec.Frame.allowanceRegionEffect_of_transferAndCallZero
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    (context : frame.AuthenticContext dp ca)
+    (hselector : Sevm.selector frame.sevm = transferAndCallSelector)
+    (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
+    (hzero : Sevm.argWord frame.sevm 0 = 0)
+    (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
+      (fun pc sevm pre out _ =>
+        Exec.CoreAllowanceSound dp ca pc sevm pre out)) :
+    AllowanceRegionEffect ca frame.pre frame.post
+      (Exec.attributionStream dp ca frame.run) := by
+  have hmem : (Sevm.selector frame.sevm, nonpayable transferAndCall) ∈
+      weth10Funcs dp := by
+    rw [hselector]
+    simp [transferAndCallSelector, weth10Funcs]
+  rcases frame.compiledSelectorBodyCursorCountedSilent context hnonempty
+      hmem with
+    ⟨wrapperCursor, hentrySilent⟩
+  rcases wrapperCursor.enterNonpayableSilent with
+    ⟨transferCursor, hnonpayableSilent⟩
+  have hbodySilent : Devm.DispatchSilent frame.pre transferCursor.pre :=
+    hentrySilent.trans hnonpayableSilent
+  unfold transferAndCall transferThen at transferCursor
+  rcases transferCursor.peelChildlessLine
+      (line := arg 0 ++ [Ninst.iszero])
+      (by simp [arg, cdl, NinstIsChildless, Ninst.pushB256]) with
+    ⟨targetBranchCursor, htargetLine⟩
+  have htargetPrefix :
+      [Sevm.argWord frame.sevm 0 =? 0] <<+ targetBranchCursor.pre.stack := by
+    rcases of_run_append (arg 0) htargetLine with
+      ⟨afterArg, harg, hzeroLine⟩
+    rcases Line.of_run_cons hzeroLine with ⟨afterZero, hzeroRun, hnil⟩
+    cases hnil
+    exact prefix_of_iszero hzeroRun (prefix_of_arg nil_pref harg)
+  have htargetCheck : (Sevm.argWord frame.sevm 0 =? 0) = 1 := by
+    simp [B256.eqCheck, hzero]
+  rw [htargetCheck] at htargetPrefix
+  rcases targetBranchCursor.selectBranchSuccSilent (flag := (1 : B256))
+      (by decide) htargetPrefix with
+    ⟨bodyCursor, _hbodyStack, hbranchSilent⟩
+  have hlineStor : Devm.getStor transferCursor.pre =
+      Devm.getStor targetBranchCursor.pre :=
+    Line.of_inv Devm.getStor (by line_inv) htargetLine
+  have hlineCode : Devm.getCode transferCursor.pre =
+      Devm.getCode targetBranchCursor.pre :=
+    Line.of_inv Devm.getCode (by line_inv) htargetLine
+  have hlineMem : transferCursor.pre.memory = targetBranchCursor.pre.memory :=
+    Line.of_inv Devm.memory (by line_inv) htargetLine
+  have hbodyStor : Devm.getStor frame.pre ca =
+      Devm.getStor bodyCursor.pre ca :=
+    (getStor_eq_of_state_eq hbodySilent.state ca).trans
+      ((congrFun hlineStor ca).trans
+        (getStor_eq_of_state_eq hbranchSilent.state ca))
+  have hbodyCode : Devm.getCode frame.pre ca =
+      Devm.getCode bodyCursor.pre ca :=
+    (getCode_eq_of_state_eq hbodySilent.state ca).trans
+      ((congrFun hlineCode ca).trans
+        (getCode_eq_of_state_eq hbranchSilent.state ca))
+  have hbodyMem : frame.pre.memory = bodyCursor.pre.memory :=
+    hbodySilent.memory.trans (hlineMem.trans hbranchSilent.memory)
+  change frame.CountedCursor dp ca
+    ((weth10 dp).main :: weth10Aux)
+    (table 0 ((weth10 dp).main :: weth10Aux))
+    (redeemBody 1 redeemSendToCallerPrefix
+      (callBoolCallback onTokenTransferSelector 0 2 (arg 1)))
+    frame.post at bodyCursor
+  have hstorage := bodyCursor.redeemAllowanceRegionStorage
+    (target := frame.sevm.caller.toB256)
+    context.invocation.2.1 nil_pref
+    (by rw [← hbodyMem]; exact context.memory_wf)
+    (by rw [← hbodyMem]; exact context.memory_reads_empty)
+    (by
+      rw [← hbodyCode]
+      exact context.installed.1)
+    (by simp [redeemSendToCallerPrefix, pushList, NinstIsChildless,
+      Ninst.pushB256])
+    (by
+      intro sendPre callPre value tail hp hrun
+      exact redeemSendToCallerPrefix_effect hp hrun)
+    (by
+      rw [Bytes.writeAt_zero_of_le (Nat.zero_le _)]
+      exact frame.tokenCallbackSuccessAllowanceCloser context.invocation.2.1
+        context.invocation.2.2.2 hdeeper)
+    hdeeper
+  have hneFlash : transferAndCallSelector ≠ flashLoanSelector := by
+    decide +kernel
+  have hneApprove : transferAndCallSelector ≠ approveSelector := by
+    decide +kernel
+  have hneApproveCall :
+      transferAndCallSelector ≠ approveAndCallSelector := by
+    decide +kernel
+  have hnePermit : transferAndCallSelector ≠ permitSelector := by
+    decide +kernel
+  have hneTransferFrom :
+      transferAndCallSelector ≠ transferFromSelector := by
+    decide +kernel
+  have hneWithdrawFrom :
+      transferAndCallSelector ≠ withdrawFromSelector := by
+    decide +kernel
+  have hneAllowance : transferAndCallSelector ≠ allowanceSelector := by
+    decide +kernel
+  have hnotflash : isFlashInvocation frame.sevm = false := by
+    simp [isFlashInvocation, hselector, hneFlash]
+  have hframe : Exec.Frame.ofRun frame.run frame.committed = frame := by
+    cases frame
+    rfl
+  have hown : (CountedFrame.ofFrame dp ca frame).allowance = none := by
+    show frameAllowanceEvent frame.sevm frame.pre frame.post = none
+    simp [frameAllowanceEvent, hnonempty, hselector, hneApprove,
+      hneApproveCall, hnePermit, hneTransferFrom, hneWithdrawFrom,
+      hneFlash, hneAllowance]
+  have hstream : Exec.attributionStream dp ca frame.run =
+      CountedFrame.ofFrame dp ca frame ::
+        Exec.attributionInner dp ca frame.run := by
+    rw [Exec.attributionStream_eq_frameContribution dp ca frame.run
+        frame.committed, hframe,
+      Exec.frameContribution_eq_cons dp ca frame
+        (Exec.attributionInner dp ca frame.run) context.invocation hnotflash]
+  rw [hstream]
+  refine ⟨fun key hkey => ?_,
+    Exec.installedCodeEq_committed frame.run frame.committed
+      context.installed⟩
+  rw [applyAllowanceLedger_cons_none hown]
+  rw [hstorage key hkey]
+  exact applyAllowanceLedger_congr
+    (congrArg (fun s : Stor => s.get key) hbodyStor.symm)
+
 /-! ## The `approveAndCall` arm -/
 
 /-- `approveAndCall` transports the allowance region.  Unlike the other two
