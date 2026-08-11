@@ -20,10 +20,72 @@ open Jaune
 
 namespace Weth10
 
+/-! ## Executable instruction-absence certificates
+
+The write and the read certificate differ only in which source heads they
+reject, and the traversal that consumes one never inspects the swept
+instruction beyond that rejection.  Both are therefore instances of a single
+predicate-indexed certificate, which additionally supports rejecting *several*
+instructions at once — the shape the allowance obligation needs, where one
+walk of an arm has to serve its write and its read side together. -/
+
+/-- Executable finite certificate that a source body, and every table body it
+can call within `fuel`, contains no source head rejected by `p`.  A zero fuel
+is deliberately false, so a successful certificate can never hide a recursive
+call cycle. -/
+def Func.ninstFreeWithin (p : Ninst → Bool) : Nat → List Func → Func → Bool
+  | 0, _, _ => false
+  | fuel + 1, fs, .branch left right =>
+      ninstFreeWithin p fuel fs left && ninstFreeWithin p fuel fs right
+  | _fuel + 1, _, .last _ => true
+  | fuel + 1, fs, .next source tail =>
+      p source && ninstFreeWithin p fuel fs tail
+  | fuel + 1, fs, .call k =>
+      match fs[k]? with
+      | none => false
+      | some body => ninstFreeWithin p fuel fs body
+
+/-- A call-free source certificate is independent of the installed function
+table.  This lets fixed local error bodies be computed against `[]` without
+reducing the parameterized WETH program. -/
+theorem Func.ninstFreeWithin_eq_of_noCalls
+    {p : Ninst → Bool} {fuel : Nat} {body : Func} (noCalls : body.NoCalls)
+    (left right : List Func) :
+    Func.ninstFreeWithin p fuel left body =
+      Func.ninstFreeWithin p fuel right body := by
+  induction fuel generalizing body with
+  | zero => rfl
+  | succ fuel ih =>
+      cases body with
+      | branch first second =>
+          simp only [Func.NoCalls] at noCalls
+          simp only [Func.ninstFreeWithin]
+          rw [ih noCalls.1, ih noCalls.2]
+      | last terminal => rfl
+      | next source tail =>
+          simp only [Func.NoCalls] at noCalls
+          simp only [Func.ninstFreeWithin]
+          rw [ih noCalls]
+      | call k => simp [Func.NoCalls] at noCalls
+
 /-- `false` exactly on `SLOAD`; the head test of the read-side certificate. -/
 def ninstSloadFree : Ninst → Bool
   | .reg .sload => false
   | _ => true
+
+/-- `false` on both storage instructions.  A body certified against this
+predicate hosts neither an `SSTORE` nor an `SLOAD` occurrence, so a single
+certificate closes both halves of an allowance-region obligation. -/
+def ninstStorageFree : Ninst → Bool
+  | .reg .sload => false
+  | .reg .sstore => false
+  | _ => true
+
+theorem ninstStorageFree_sstore : ninstStorageFree (.reg .sstore) = false :=
+  rfl
+
+theorem ninstStorageFree_sload : ninstStorageFree (.reg .sload) = false :=
+  rfl
 
 theorem ninst_ne_sload_of_free {source : Ninst}
     (free : ninstSloadFree source = true) :
@@ -35,42 +97,16 @@ theorem ninst_ne_sload_of_free {source : Ninst}
   | push bytes size => simp
 
 /-- Executable finite certificate that a source body and every table body it
-can call within `fuel` contain no `SLOAD`.  A zero fuel is deliberately
-false, so a successful certificate can never hide a recursive call cycle. -/
-def Func.sloadFreeWithin : Nat → List Func → Func → Bool
-  | 0, _, _ => false
-  | fuel + 1, fs, .branch left right =>
-      sloadFreeWithin fuel fs left && sloadFreeWithin fuel fs right
-  | _fuel + 1, _, .last _ => true
-  | fuel + 1, fs, .next source tail =>
-      ninstSloadFree source && sloadFreeWithin fuel fs tail
-  | fuel + 1, fs, .call k =>
-      match fs[k]? with
-      | none => false
-      | some body => sloadFreeWithin fuel fs body
+can call within `fuel` contain no `SLOAD`. -/
+def Func.sloadFreeWithin : Nat → List Func → Func → Bool :=
+  Func.ninstFreeWithin ninstSloadFree
 
-/-- A call-free source certificate is independent of the installed function
-table.  This lets fixed local error bodies be computed against `[]` without
-reducing the parameterized WETH program. -/
 theorem Func.sloadFreeWithin_eq_of_noCalls
     {fuel : Nat} {body : Func} (noCalls : body.NoCalls)
     (left right : List Func) :
     Func.sloadFreeWithin fuel left body =
-      Func.sloadFreeWithin fuel right body := by
-  induction fuel generalizing body with
-  | zero => rfl
-  | succ fuel ih =>
-      cases body with
-      | branch first second =>
-          simp only [Func.NoCalls] at noCalls
-          simp only [Func.sloadFreeWithin]
-          rw [ih noCalls.1, ih noCalls.2]
-      | last terminal => rfl
-      | next source tail =>
-          simp only [Func.NoCalls] at noCalls
-          simp only [Func.sloadFreeWithin]
-          rw [ih noCalls]
-      | call k => simp [Func.NoCalls] at noCalls
+      Func.sloadFreeWithin fuel right body :=
+  Func.ninstFreeWithin_eq_of_noCalls noCalls left right
 
 /-! ## Generic glue traversal
 
@@ -120,7 +156,7 @@ private theorem Exec.Deriv.ParentStepActions.false_of_halt
 
 /-- A same-frame compiler prefix all of whose current instruction boundaries
 are known not to be the swept instruction `n`. -/
-private inductive Exec.Deriv.ParentNonNinstPrefix
+inductive Exec.Deriv.ParentNonNinstPrefix
     (dp : DeployParams) (ca : Adr) (n : Ninst) :
     Exec.Deriv → Exec.Deriv → Prop
   | refl (root : Exec.Deriv) : ParentNonNinstPrefix dp ca n root root
@@ -133,7 +169,7 @@ private inductive Exec.Deriv.ParentNonNinstPrefix
 /-- Remove a compiler-only prefix free of the swept instruction from an
 arbitrary occurrence of that instruction, retaining its exact machine states,
 recursive slot, and same-frame continuation proof. -/
-private theorem Exec.Deriv.ParentNonNinstPrefix.trim_ninstOccurrence
+theorem Exec.Deriv.ParentNonNinstPrefix.trim_ninstOccurrence
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {start tail : Exec.Deriv} {n : Ninst}
     (compilerPrefix : Exec.Deriv.ParentNonNinstPrefix dp ca n start tail)
@@ -160,8 +196,14 @@ private theorem Exec.Deriv.ParentNonNinstPrefix.trim_ninstOccurrence
 
 /-- Generic reverse source traversal through a compiled branch: an actual
 `.reg` occurrence in the branch suffix belongs to the one source arm selected
-by the original execution, never to the compiler's branch glue. -/
-private theorem Exec.Frame.CompiledCursor.regOccurrence_branch
+by the original execution, never to the compiler's branch glue.
+
+The retained flag pop is what later steps use to identify which arm the
+original execution actually selected, and it doubles as the branch's silence
+certificate through `Devm.DispatchSilent.of_popBurnBy`.  It is returned
+rather than discarded because the dispatch spine, the main-entry step and the
+selector-dispatch step all need it. -/
+theorem Exec.Frame.CompiledCursor.regOccurrence_branch
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {sourceTable : List (Nat × Func)}
     {left right : Func} {final : Devm}
@@ -171,9 +213,13 @@ private theorem Exec.Frame.CompiledCursor.regOccurrence_branch
     (occurrence : frame.NinstOccurrenceFromCursor cursor
       (.reg r) stepPre stepPost slot) :
     (∃ arm : frame.CompiledCursor dp ca fs sourceTable left final,
+      Devm.PopBurnBy [0] (gVerylow + gHigh) cursor.pre arm.pre ∧
       frame.NinstOccurrenceFromCursor arm (.reg r)
         stepPre stepPost slot) ∨
-    (∃ arm : frame.CompiledCursor dp ca fs sourceTable right final,
+    (∃ flag : B256, flag ≠ 0 ∧
+      ∃ arm : frame.CompiledCursor dp ca fs sourceTable right final,
+      Devm.PopBurnBy [flag] (gVerylow + gHigh + gJumpdest)
+        cursor.pre arm.pre ∧
       frame.NinstOccurrenceFromCursor arm (.reg r)
         stepPre stepPost slot) := by
   rcases subcode_compile_branch_jumpable cursor.codeSlice
@@ -221,7 +267,7 @@ private theorem Exec.Frame.CompiledCursor.regOccurrence_branch
           ⟨arm.pc, frame.sevm, arm.pre, frame.out, arm.current⟩ :=
         .step pushEdge pushNotReg
           (.step jumpiEdge jumpiNotReg (.refl _))
-      exact Or.inl ⟨arm, compilerPrefix.trim_ninstOccurrence occurrence⟩
+      exact Or.inl ⟨arm, pop, compilerPrefix.trim_ninstOccurrence occurrence⟩
   | succ nonzero room pop rightRun =>
       rcases Evm.branch_succ_steps pushAt jumpiAt jumpdestAt jumpable
           locBound nonzero room pop with
@@ -277,7 +323,8 @@ private theorem Exec.Frame.CompiledCursor.regOccurrence_branch
         .step pushEdge pushNotReg
           (.step jumpiEdge jumpiNotReg
             (.step jumpdestEdge jumpdestNotReg (.refl _)))
-      exact Or.inr ⟨arm, compilerPrefix.trim_ninstOccurrence occurrence⟩
+      exact Or.inr ⟨_, nonzero, arm, pop,
+        compilerPrefix.trim_ninstOccurrence occurrence⟩
 
 /-- Generic reverse source traversal through a compiled internal call.  An
 actual `.reg` occurrence in the call suffix belongs to the selected table
@@ -373,7 +420,7 @@ private theorem Exec.Frame.CompiledCursor.regOccurrence_call
 
 /-- A terminal source node hosts no `Ninst` occurrence at all: its cursor
 position holds a `Linst`, and the frame halts there. -/
-private theorem Exec.Frame.CompiledCursor.no_ninstOccurrence_last
+theorem Exec.Frame.CompiledCursor.no_ninstOccurrence_last
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {sourceTable : List (Nat × Func)}
     {i : Linst} {final : Devm}
@@ -398,10 +445,65 @@ private theorem Exec.Frame.CompiledCursor.no_ninstOccurrence_last
       | step head rest =>
           exact head.false_of_halt terminalStep
 
+/-- Soundness of an executable absence certificate against an arbitrary actual
+occurrence of any instruction that certificate rejects, with no key-shape
+constraint.  The proof follows the executed cursor branch/call; the Boolean is
+only the finite source certificate used to close that path.
+
+This is the whole sweep: the swept instruction is a parameter, so one
+traversal serves the write side, the read side, and a certificate rejecting
+both at once.  The parameter is a register instruction because the compiler's
+branch and call glue is `PUSH`/`JUMPI`/`JUMP`/`JUMPDEST`: a `.push`
+occurrence genuinely can live inside that glue, and `.reg` is the widest
+class the glue traversal rules out. -/
+theorem Exec.Frame.CompiledCursor.no_ninstOccurrence_of_free
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    {f₀ : Func} {aux : List Func} {body : Func} {final : Devm}
+    {p : Ninst → Bool} {r : Rinst}
+    {stepPre stepPost : Devm} {slot : Xlot} {fuel : Nat}
+    (cursor : frame.CompiledCursor dp ca (f₀ :: aux)
+      (table 0 (f₀ :: aux)) body final)
+    (hcode : some frame.sevm.code.toList = Prog.compile ⟨f₀, aux⟩)
+    (swept : p (.reg r) = false)
+    (free : Func.ninstFreeWithin p fuel (f₀ :: aux) body = true)
+    (occurrence : frame.NinstOccurrenceFromCursor cursor (.reg r)
+      stepPre stepPost slot) : False := by
+  induction fuel generalizing body with
+  | zero => simp [Func.ninstFreeWithin] at free
+  | succ fuel ih =>
+      cases body with
+      | branch left right =>
+          simp only [Func.ninstFreeWithin, Bool.and_eq_true] at free
+          rcases cursor.regOccurrence_branch occurrence with
+            ⟨leftCursor, _pop, inside⟩ |
+              ⟨_flag, _nonzero, rightCursor, _pop, inside⟩
+          · exact ih leftCursor free.1 inside
+          · exact ih rightCursor free.2 inside
+      | last i =>
+          exact cursor.no_ninstOccurrence_last occurrence
+      | next source tail =>
+          simp only [Func.ninstFreeWithin, Bool.and_eq_true] at free
+          rcases cursor.ninstOccurrenceFromCursor_head_or_tail
+              occurrence with
+            ⟨sourceEq, _preEq⟩ |
+              ⟨tailCursor, _sourceSlot, _sourceOccurrence, inside⟩
+          · rw [← sourceEq, swept] at free
+            simp at free
+          · exact ih tailCursor free.2 inside
+      | call k =>
+          cases hlookup : (f₀ :: aux)[k]? with
+          | none => simp [Func.ninstFreeWithin, hlookup] at free
+          | some called =>
+            simp only [Func.ninstFreeWithin, hlookup] at free
+            rcases cursor.regOccurrence_call hcode occurrence with
+              ⟨actualBody, actualLookup, bodyCursor, inside⟩
+            have bodyEq : actualBody = called :=
+              Option.some.inj (actualLookup.symm.trans hlookup)
+            subst actualBody
+            exact ih bodyCursor free inside
+
 /-- Soundness of the executable no-SLOAD certificate against an arbitrary
-actual occurrence, with no key-shape constraint.  The proof still follows the
-executed cursor branch/call; the Boolean is only the finite source
-certificate used to close that path. -/
+actual occurrence, with no key-shape constraint. -/
 theorem Exec.Frame.CompiledCursor.no_sloadOccurrence_of_free
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {f₀ : Func} {aux : List Func} {body : Func} {final : Devm}
@@ -411,39 +513,28 @@ theorem Exec.Frame.CompiledCursor.no_sloadOccurrence_of_free
     (hcode : some frame.sevm.code.toList = Prog.compile ⟨f₀, aux⟩)
     (free : Func.sloadFreeWithin fuel (f₀ :: aux) body = true)
     (occurrence : frame.NinstOccurrenceFromCursor cursor
-      (.reg .sload) stepPre stepPost slot) : False := by
-  induction fuel generalizing body with
-  | zero => simp [Func.sloadFreeWithin] at free
-  | succ fuel ih =>
-      cases body with
-      | branch left right =>
-          simp [Func.sloadFreeWithin] at free
-          rcases cursor.regOccurrence_branch occurrence with
-            ⟨leftCursor, inside⟩ | ⟨rightCursor, inside⟩
-          · exact ih leftCursor free.1 inside
-          · exact ih rightCursor free.2 inside
-      | last i =>
-          exact cursor.no_ninstOccurrence_last occurrence
-      | next source tail =>
-          simp [Func.sloadFreeWithin] at free
-          have notLoad := ninst_ne_sload_of_free free.1
-          rcases cursor.ninstOccurrenceFromCursor_head_or_tail
-              occurrence with
-            ⟨sourceEq, _preEq⟩ |
-              ⟨tailCursor, _sourceSlot, _sourceOccurrence, inside⟩
-          · exact (notLoad sourceEq.symm).elim
-          · exact ih tailCursor free.2 inside
-      | call k =>
-          cases hlookup : (f₀ :: aux)[k]? with
-          | none => simp [Func.sloadFreeWithin, hlookup] at free
-          | some called =>
-            simp [Func.sloadFreeWithin, hlookup] at free
-            rcases cursor.regOccurrence_call hcode occurrence with
-              ⟨actualBody, actualLookup, bodyCursor, inside⟩
-            have bodyEq : actualBody = called :=
-              Option.some.inj (actualLookup.symm.trans hlookup)
-            subst actualBody
-            exact ih bodyCursor free inside
+      (.reg .sload) stepPre stepPost slot) : False :=
+  cursor.no_ninstOccurrence_of_free hcode rfl free occurrence
+
+/-- Soundness of the executable no-storage certificate: a body rejecting both
+storage instructions hosts neither an `SSTORE` nor an `SLOAD` occurrence, so
+one certificate closes both halves of an allowance-region obligation. -/
+theorem Exec.Frame.CompiledCursor.no_storageOccurrence_of_free
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    {f₀ : Func} {aux : List Func} {body : Func} {final : Devm}
+    {r : Rinst} {stepPre stepPost : Devm} {slot : Xlot} {fuel : Nat}
+    (cursor : frame.CompiledCursor dp ca (f₀ :: aux)
+      (table 0 (f₀ :: aux)) body final)
+    (hcode : some frame.sevm.code.toList = Prog.compile ⟨f₀, aux⟩)
+    (storage : r = .sstore ∨ r = .sload)
+    (free : Func.ninstFreeWithin ninstStorageFree fuel (f₀ :: aux) body = true)
+    (occurrence : frame.NinstOccurrenceFromCursor cursor
+      (.reg r) stepPre stepPost slot) : False := by
+  rcases storage with rfl | rfl
+  · exact cursor.no_ninstOccurrence_of_free hcode ninstStorageFree_sstore
+      free occurrence
+  · exact cursor.no_ninstOccurrence_of_free hcode ninstStorageFree_sload
+      free occurrence
 
 /-- Generic soundness of the executable no-SSTORE certificate: a
 certified-free region hosts no `SSTORE` occurrence at all, with no balance
@@ -465,7 +556,8 @@ theorem Exec.Frame.CompiledCursor.no_sstoreOccurrence_of_free
       | branch left right =>
           simp [Func.sstoreFreeWithin] at free
           rcases cursor.regOccurrence_branch occurrence with
-            ⟨leftCursor, inside⟩ | ⟨rightCursor, inside⟩
+            ⟨leftCursor, _pop, inside⟩ |
+              ⟨_flag, _nonzero, rightCursor, _pop, inside⟩
           · exact ih leftCursor free.1 inside
           · exact ih rightCursor free.2 inside
       | last i =>
