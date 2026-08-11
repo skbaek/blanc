@@ -724,6 +724,61 @@ theorem AllowanceRegionEffect.snoc_writeFree
     AllowanceRegionEffect ca pre post (rest ++ [own]) :=
   h.writeFree_append hfree
 
+/-! ## Read-side transparency of a write-free segment
+
+`WriteFreeLedger` makes a segment invisible to the ledger *replay*.  The
+three lemmas below make it invisible to the *entry-read clause* as well,
+which is what an own-record-last arm needs once its carrier is strengthened
+to `AllowanceRegionEffectSound`: a descendant stream placed ahead of the own
+record neither moves the region nor shifts the prefix that any later record
+replays over. -/
+
+/-- Entry-read soundness inspects its entry storage only at projected
+allowance keys, so two entry states agreeing there are interchangeable. -/
+theorem AllowanceEntryReadSound.congr {pre pre' : Stor}
+    {ledger : List CountedFrame}
+    (hagree : ∀ key, InRegion .allowance key → pre.get key = pre'.get key)
+    (hsound : AllowanceEntryReadSound pre ledger) :
+    AllowanceEntryReadSound pre' ledger := by
+  intro earlier record later hsplit hnotflash event hevent v hread
+  have hkey : InRegion .allowance event.key :=
+    projectedAllowanceKey_region event.owner event.spender
+  rw [← applyAllowanceLedger_congr (ledger := earlier) (hagree event.key hkey)]
+  exact hsound earlier record later hsplit hnotflash event hevent v hread
+
+/-- A write-free segment placed ahead of a record that reads nothing leaves
+the composite ledger's entry-read clause exactly the segment's own: the only
+split putting the trailing record in the clause's position is vacuous, and
+every split inside the segment replays over a transparent prefix. -/
+theorem AllowanceEntryReadSound.snoc_writeFree {pre : Stor}
+    {rest : List CountedFrame} {own : CountedFrame}
+    (hfree : WriteFreeLedger rest)
+    (hrest : AllowanceEntryReadSound pre rest)
+    (hown : ∀ event, own.allowance = some event → event.visit.read? = none) :
+    AllowanceEntryReadSound pre (rest ++ [own]) := by
+  refine AllowanceEntryReadSound.append (mid := pre)
+    (fun key _ => (applyAllowanceLedger_writeFree pre key hfree).symm) hrest ?_
+  refine .singleton (fun event hevent v hread => ?_)
+  rw [hown event hevent] at hread
+  exact absurd hread (by simp)
+
+/-- Read-sound snoc form: a frame whose own record already transports the
+region and records no read keeps transporting it read-soundly once a
+write-free, entry-read-sound descendant stream is placed *ahead* of it.  This
+is what `permit` consumes in place of `AllowanceRegionEffect.snoc_writeFree`.
+`flashLoan` cannot use it — its own record does record a read, reconstructed
+from the committed post state — and takes the flash exemption instead. -/
+theorem AllowanceRegionEffectSound.snoc_writeFree
+    {ca : Adr} {pre post : Devm} {own : CountedFrame}
+    {rest : List CountedFrame}
+    (heffect : AllowanceRegionEffect ca pre post [own])
+    (hfree : WriteFreeLedger rest)
+    (hrest : AllowanceEntryReadSound (Devm.getStor pre ca) rest)
+    (hown : ∀ event, own.allowance = some event → event.visit.read? = none) :
+    AllowanceRegionEffectSound ca pre post (rest ++ [own]) :=
+  { heffect.writeFree_append hfree with
+    entryRead := .snoc_writeFree hfree hrest hown }
+
 /-- The lemma the `permit` arm consumes in place of its two precompile
 hypotheses: whatever the EIP-7702 delegation designator at address `1`
 installs, the `STATICCALL` child's whole counted contribution is write-free,
