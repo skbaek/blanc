@@ -11,10 +11,11 @@ permanent outflow, which is the public `redeemed + externalTransferredOut`
 total of the holder-flow fold.  Reaching that public total is itself work,
 because the two structures are parallel recursions over the same trace with
 different carriers — the chronological `CountedFrame` ledger and the
-`FlowObservation` list — and a flash invocation's counted record follows its
-callback subtree while its action precedes it.  `LedgerMirrors` carries the
-reconciliation through the whole retained trace tower, claiming only that the
-sums agree, which the flash swap leaves untouched.
+`FlowObservation` list — and an own-record-last invocation's counted record
+(`flashLoan`, `permit`) follows its subtree while its action precedes it.
+`LedgerMirrors` carries the reconciliation through the whole retained trace
+tower, claiming only that the sums agree, which the placement swap leaves
+untouched.
 
 The second is the collision-free equality: with the trace-local
 `NoAllowanceKeyCollision` hypothesis, every counted debit of the holder's
@@ -137,8 +138,9 @@ def CountedFrame.HasFrameOrigin (dp : DeployParams) (ca : Adr)
 
 /-- A counted ledger mirrors an action list: every record is retained, and the
 two carry the same permanent outflow for every holder.  The two structures are
-built by parallel recursions that differ in the placement of a flash
-invocation's own record, so only the sums are claimed equal. -/
+built by parallel recursions that differ in the placement of an
+own-record-last invocation's own record, so only the sums are claimed
+equal. -/
 structure LedgerMirrors (dp : DeployParams) (ca : Adr)
     (ledger : List CountedFrame) (actions : List FlowAction) : Prop where
   origins : ∀ record ∈ ledger, record.HasFrameOrigin dp ca
@@ -162,8 +164,8 @@ theorem LedgerMirrors.append {dp : DeployParams} {ca : Adr}
   · rw [ledgerOutflow_append, actionOutflow_append, left.outflow u,
       right.outflow u]
 
-/-- The flash placement swap: the counted record follows its subtree while the
-action precedes it, and the sums are unaffected. -/
+/-- The own-record-last placement swap: the counted record follows its
+subtree while the action precedes it, and the sums are unaffected. -/
 theorem LedgerMirrors.append_comm {dp : DeployParams} {ca : Adr}
     {leftLedger rightLedger : List CountedFrame}
     {leftActions rightActions : List FlowAction}
@@ -200,11 +202,11 @@ theorem LedgerMirrors.frameContribution {dp : DeployParams} {ca : Adr}
     LedgerMirrors dp ca (Exec.frameContribution dp ca frame inner)
       ((frame.flowAction? dp ca).toList ++ innerActions) := by
   by_cases hexact : frame.exactInvocation dp ca
-  · by_cases hflash : isFlashInvocation frame.sevm = true
-    · rw [Exec.frameContribution_eq_append dp ca frame inner hexact hflash]
+  · by_cases hlast : ownRecordLast frame.sevm = true
+    · rw [Exec.frameContribution_eq_append dp ca frame inner hexact hlast]
       exact h.append_comm (LedgerMirrors.ofFrame dp ca frame)
     · rw [Exec.frameContribution_eq_cons dp ca frame inner hexact
-        (by simpa using hflash)]
+        (by simpa using hlast)]
       exact (LedgerMirrors.ofFrame dp ca frame).append h
   · rw [Exec.frameContribution_eq_inner dp ca frame inner hexact]
     have hnone : frame.flowAction? dp ca = none := by

@@ -21,11 +21,13 @@ explicit history.
 
 Chronology matters here, unlike for the commutative balance-flow totals: an
 attribution chain follows the *last committed write* to a key.  The stream
-below therefore places a flash invocation's contribution after its callback
-subtree — the runtime performs its allowance settlement only after the
-borrower's callback returns, and the canonical repayment pattern grants the
-allowance inside that callback — while every other selector's allowance
-activity is a state prefix that precedes any spawned child.
+below therefore places a frame's own contribution after its descendant
+subtree for exactly the two selectors whose allowance activity runs *after*
+the frame's spawn — `flashLoan`, whose settlement the runtime performs only
+once the borrower's callback returns, and `permit`, whose `approvePermit`
+store follows the `STATICCALL` to the recovery precompile.  Every other
+selector's allowance activity is a state prefix that precedes any spawned
+child, so its record precedes its subtree.
 -/
 
 namespace Blanc
@@ -216,10 +218,55 @@ def CountedFrame.ofFrame (dp : DeployParams) (ca : Adr)
     allowance := frameAllowanceEvent frame.sevm frame.pre frame.post
     action := frame.flowAction? dp ca }
 
-/-- Whether an entry context dispatches to `flashLoan`, the one selector
-whose allowance activity chronologically follows its spawned callback. -/
+/-- Whether an entry context dispatches to `flashLoan`, whose allowance
+settlement chronologically follows its spawned borrower callback. -/
 def isFlashInvocation (e : Sevm) : Bool :=
   e.data.length.toB256 ≠ 0 && Sevm.selector e = flashLoanSelector
+
+/-- Whether an entry context dispatches to `permit`, whose `approvePermit`
+store chronologically follows its spawned recovery `STATICCALL`. -/
+def isPermitInvocation (e : Sevm) : Bool :=
+  e.data.length.toB256 ≠ 0 && Sevm.selector e = permitSelector
+
+/-- Whether an entry context's allowance activity runs *after* the frame's
+spawn, so that its own counted record belongs after its descendant stream
+rather than before it.  Exactly two selectors qualify: `flashLoan` settles
+the repayment allowance only once the borrower's callback returns, and
+`permit` performs its `approvePermit` store only once the `STATICCALL` to
+the signer-recovery precompile returns.  Every other selector's allowance
+visit is a state prefix of its frame. -/
+def ownRecordLast (e : Sevm) : Bool :=
+  isFlashInvocation e || isPermitInvocation e
+
+/-- A `flashLoan` entry context records its own contribution last. -/
+theorem ownRecordLast_of_isFlashInvocation {e : Sevm}
+    (h : isFlashInvocation e = true) : ownRecordLast e = true := by
+  simp [ownRecordLast, h]
+
+/-- A `permit` entry context records its own contribution last. -/
+theorem ownRecordLast_of_isPermitInvocation {e : Sevm}
+    (h : isPermitInvocation e = true) : ownRecordLast e = true := by
+  simp [ownRecordLast, h]
+
+/-- A frame that records its own contribution first is not a `flashLoan`
+invocation. -/
+theorem isFlashInvocation_eq_false_of_ownRecordLast {e : Sevm}
+    (h : ownRecordLast e = false) : isFlashInvocation e = false := by
+  cases hflash : isFlashInvocation e with
+  | false => rfl
+  | true =>
+      rw [ownRecordLast, hflash, Bool.true_or] at h
+      exact Bool.noConfusion h
+
+/-- A frame that records its own contribution first is not a `permit`
+invocation. -/
+theorem isPermitInvocation_eq_false_of_ownRecordLast {e : Sevm}
+    (h : ownRecordLast e = false) : isPermitInvocation e = false := by
+  cases hpermit : isPermitInvocation e with
+  | false => rfl
+  | true =>
+      rw [ownRecordLast, hpermit, Bool.or_true] at h
+      exact Bool.noConfusion h
 
 /-! ## Chronological attribution stream -/
 
@@ -229,7 +276,7 @@ def Exec.frameContribution (dp : DeployParams) (ca : Adr)
     (frame : Exec.Frame) (inner : List CountedFrame) : List CountedFrame :=
   if frame.exactInvocation dp ca then
     let own := CountedFrame.ofFrame dp ca frame
-    if isFlashInvocation frame.sevm then inner ++ [own] else own :: inner
+    if ownRecordLast frame.sevm then inner ++ [own] else own :: inner
   else inner
 
 /-- Chronological counted-frame stream contributed by the committed spawned

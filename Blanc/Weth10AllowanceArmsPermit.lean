@@ -992,9 +992,16 @@ private theorem permitStatcallRegionSilent_of_forallDeeperAt
 /-- `permit` transports the allowance region: its own record stores the raw
 third argument word at the projected owner/spender key, which is exactly the
 runtime key the compiled body writes, and every counted record its
-`STATICCALL` child can contribute is non-writing, so the record replays ahead
-of a transparent suffix.  The tentative nonce increment writes a nonce-region
-key, disjoint from every tagged allowance key.
+`STATICCALL` child can contribute is non-writing, so the record replays
+behind a transparent prefix.  The tentative nonce increment writes a
+nonce-region key, disjoint from every tagged allowance key.
+
+The record trails its subtree rather than leading it because `permitRecover`
+performs the recovery `STATICCALL` before the `approvePermit` store, so the
+ledger order matches the runtime order: `Exec.frameContribution` classifies
+`permit` alongside `flashLoan` through `ownRecordLast`.  Both placements
+transport the same storage here — the child stream is write-free — but only
+this one is chronological, and chronology is what the attribution roots read.
 
 No calldata decoding hypothesis occurs: `permit_exec_raw_effect_region` names
 the runtime keys the body actually computes, so short and dirty calldata are
@@ -1017,20 +1024,20 @@ theorem Exec.Frame.allowanceRegionEffect_of_permit
   have hinner : WriteFreeLedger (Exec.attributionInner dp ca frame.run) :=
     frame.attributionInner_writeFree_of_permit context hselector hnonempty
   have hsel : Sevm.selector frame.sevm = permitSelector := hselector
-  have hnotflash : isFlashInvocation frame.sevm = false := by
-    simp [isFlashInvocation, hsel, permitSelector_ne_flashLoanSelector]
+  have hpermit : isPermitInvocation frame.sevm = true := by
+    simp [isPermitInvocation, hsel, hnonempty]
   have hframe : Exec.Frame.ofRun frame.run frame.committed = frame := by
     cases frame
     rfl
   have hstream : Exec.attributionStream dp ca frame.run =
-      CountedFrame.ofFrame dp ca frame ::
-        Exec.attributionInner dp ca frame.run := by
+      Exec.attributionInner dp ca frame.run ++
+        [CountedFrame.ofFrame dp ca frame] := by
     rw [Exec.attributionStream_eq_frameContribution dp ca frame.run
         frame.committed, hframe,
-      Exec.frameContribution_eq_cons dp ca frame _
-        context.invocation hnotflash]
+      Exec.frameContribution_eq_append_of_permit dp ca frame _
+        context.invocation hpermit]
   rw [hstream]
-  refine AllowanceRegionEffect.cons_writeFree ?_ hinner
+  refine AllowanceRegionEffect.snoc_writeFree ?_ hinner
   have hwfPre : Mem.Wf frame.pre.memory := context.memory_wf
   have hsilent : PermitStatcallRegionSilent frame.sevm
       (Devm.getCode frame.pre) :=

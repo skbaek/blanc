@@ -728,11 +728,19 @@ theorem approveSelector_ne_flashLoanSelector :
     approveSelector ≠ flashLoanSelector := by
   rw [approveSelector_val, flashLoanSelector_val]; decide
 
+theorem approveSelector_ne_permitSelector :
+    approveSelector ≠ permitSelector := by
+  rw [approveSelector_val, permitSelector_val]; decide
+
 /-! ### `approveAndCallSelector` -/
 
 theorem approveAndCallSelector_ne_flashLoanSelector :
     approveAndCallSelector ≠ flashLoanSelector := by
   rw [approveAndCallSelector_val, flashLoanSelector_val]; decide
+
+theorem approveAndCallSelector_ne_permitSelector :
+    approveAndCallSelector ≠ permitSelector := by
+  rw [approveAndCallSelector_val, permitSelector_val]; decide
 
 /-! ### `allowanceSelector` -/
 

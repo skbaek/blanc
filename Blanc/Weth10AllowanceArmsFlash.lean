@@ -829,8 +829,8 @@ theorem Exec.Frame.allowanceRegionEffect_of_flashLoan
         [CountedFrame.ofFrame dp ca frame] := by
     rw [Exec.attributionStream_eq_frameContribution dp ca frame.run
         frame.committed, hframeEq,
-      Exec.frameContribution_eq_append dp ca frame _ context.invocation
-        hflash]
+      Exec.frameContribution_eq_append_of_flash dp ca frame _
+        context.invocation hflash]
   rw [hstream]
   exact hsegmentInner.append hsegmentOwn
 

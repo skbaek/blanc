@@ -156,8 +156,8 @@ theorem Exec.Frame.allowanceRegionEffect_of_receive
       (Exec.attributionStream dp ca frame.run) := by
   have hinner : Exec.attributionInner dp ca frame.run = [] :=
     frame.attributionInner_eq_nil_of_receive context hempty
-  have hnotflash : isFlashInvocation frame.sevm = false := by
-    simp [isFlashInvocation, hempty]
+  have hnotlast : ownRecordLast frame.sevm = false := by
+    simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hempty]
   have hframe : Exec.Frame.ofRun frame.run frame.committed = frame := by
     cases frame
     rfl
@@ -166,7 +166,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_receive
     rw [Exec.attributionStream_eq_frameContribution dp ca frame.run
         frame.committed, hframe, hinner,
       Exec.frameContribution_eq_cons dp ca frame []
-        context.invocation hnotflash]
+        context.invocation hnotlast]
   rw [hstream]
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
@@ -240,8 +240,9 @@ theorem Exec.Frame.allowanceRegionEffect_of_deposit
   have hinner : Exec.attributionInner dp ca frame.run = [] :=
     frame.attributionInner_eq_nil_of_deposit context hselector hnonempty
   have hsel : Sevm.selector frame.sevm = depositSelector := hselector
-  have hnotflash : isFlashInvocation frame.sevm = false := by
-    simp [isFlashInvocation, hsel, depositSelector_ne_flashLoanSelector]
+  have hnotlast : ownRecordLast frame.sevm = false := by
+    simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hsel,
+      depositSelector_ne_flashLoanSelector, depositSelector_ne_permitSelector]
   have hframe : Exec.Frame.ofRun frame.run frame.committed = frame := by
     cases frame
     rfl
@@ -250,7 +251,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_deposit
     rw [Exec.attributionStream_eq_frameContribution dp ca frame.run
         frame.committed, hframe, hinner,
       Exec.frameContribution_eq_cons dp ca frame []
-        context.invocation hnotflash]
+        context.invocation hnotlast]
   rw [hstream]
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
@@ -335,8 +336,10 @@ theorem Exec.Frame.allowanceRegionEffect_of_depositTo
   have hinner : Exec.attributionInner dp ca frame.run = [] :=
     frame.attributionInner_eq_nil_of_depositTo context hselector hnonempty
   have hsel : Sevm.selector frame.sevm = depositToSelector := hselector
-  have hnotflash : isFlashInvocation frame.sevm = false := by
-    simp [isFlashInvocation, hsel, depositToSelector_ne_flashLoanSelector]
+  have hnotlast : ownRecordLast frame.sevm = false := by
+    simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hsel,
+      depositToSelector_ne_flashLoanSelector,
+      depositToSelector_ne_permitSelector]
   have hframe : Exec.Frame.ofRun frame.run frame.committed = frame := by
     cases frame
     rfl
@@ -345,7 +348,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_depositTo
     rw [Exec.attributionStream_eq_frameContribution dp ca frame.run
         frame.committed, hframe, hinner,
       Exec.frameContribution_eq_cons dp ca frame []
-        context.invocation hnotflash]
+        context.invocation hnotlast]
   rw [hstream]
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
@@ -610,8 +613,10 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferNonzero
     frame.attributionInner_eq_nil_of_transferNonzero context hselector
       hnonempty hto
   have hsel : Sevm.selector frame.sevm = transferSelector := hselector
-  have hnotflash : isFlashInvocation frame.sevm = false := by
-    simp [isFlashInvocation, hsel, transferSelector_ne_flashLoanSelector]
+  have hnotlast : ownRecordLast frame.sevm = false := by
+    simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hsel,
+      transferSelector_ne_flashLoanSelector,
+      transferSelector_ne_permitSelector]
   have hframe : Exec.Frame.ofRun frame.run frame.committed = frame := by
     cases frame
     rfl
@@ -620,7 +625,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferNonzero
     rw [Exec.attributionStream_eq_frameContribution dp ca frame.run
         frame.committed, hframe, hinner,
       Exec.frameContribution_eq_cons dp ca frame []
-        context.invocation hnotflash]
+        context.invocation hnotlast]
   rw [hstream]
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with

@@ -532,9 +532,10 @@ theorem Exec.Frame.allowanceRegionEffect_of_depositToAndCall
     installedCallback hdeeper
   have hsel : Sevm.selector frame.sevm = depositToAndCallSelector :=
     hselector
-  have hnotflash : isFlashInvocation frame.sevm = false := by
-    simp [isFlashInvocation, hsel,
-      depositToAndCallSelector_ne_flashLoanSelector]
+  have hnotlast : ownRecordLast frame.sevm = false := by
+    simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hsel,
+      depositToAndCallSelector_ne_flashLoanSelector,
+      depositToAndCallSelector_ne_permitSelector]
   have hframeEq : Exec.Frame.ofRun frame.run frame.committed = frame := by
     cases frame
     rfl
@@ -544,7 +545,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_depositToAndCall
     rw [Exec.attributionStream_eq_frameContribution dp ca frame.run
         frame.committed, hframeEq, hinner,
       Exec.frameContribution_eq_cons dp ca frame _
-        context.invocation hnotflash]
+        context.invocation hnotlast]
   rw [hstream]
   have hown : (CountedFrame.ofFrame dp ca frame).allowance = none := by
     show frameAllowanceEvent frame.sevm frame.pre frame.post = none
@@ -870,9 +871,10 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferAndCall
   have childEffect := callback.allowanceRegionEffect retained htarget
     installedCallback hdeeper
   have hsel : Sevm.selector frame.sevm = transferAndCallSelector := hselector
-  have hnotflash : isFlashInvocation frame.sevm = false := by
-    simp [isFlashInvocation, hsel,
-      transferAndCallSelector_ne_flashLoanSelector]
+  have hnotlast : ownRecordLast frame.sevm = false := by
+    simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hsel,
+      transferAndCallSelector_ne_flashLoanSelector,
+      transferAndCallSelector_ne_permitSelector]
   have hframeEq : Exec.Frame.ofRun frame.run frame.committed = frame := by
     cases frame
     rfl
@@ -882,7 +884,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferAndCall
     rw [Exec.attributionStream_eq_frameContribution dp ca frame.run
         frame.committed, hframeEq, hinner,
       Exec.frameContribution_eq_cons dp ca frame _
-        context.invocation hnotflash]
+        context.invocation hnotlast]
   rw [hstream]
   have hown : (CountedFrame.ofFrame dp ca frame).allowance = none := by
     show frameAllowanceEvent frame.sevm frame.pre frame.post = none
@@ -1055,9 +1057,10 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferAndCallZero
       exact frame.tokenCallbackSuccessAllowanceCloser context.invocation.2.1
         context.invocation.2.2.2 hdeeper)
     hdeeper
-  have hnotflash : isFlashInvocation frame.sevm = false := by
-    simp [isFlashInvocation, hselector,
-      transferAndCallSelector_ne_flashLoanSelector]
+  have hnotlast : ownRecordLast frame.sevm = false := by
+    simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hselector,
+      transferAndCallSelector_ne_flashLoanSelector,
+      transferAndCallSelector_ne_permitSelector]
   have hframe : Exec.Frame.ofRun frame.run frame.committed = frame := by
     cases frame
     rfl
@@ -1077,7 +1080,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferAndCallZero
     rw [Exec.attributionStream_eq_frameContribution dp ca frame.run
         frame.committed, hframe,
       Exec.frameContribution_eq_cons dp ca frame
-        (Exec.attributionInner dp ca frame.run) context.invocation hnotflash]
+        (Exec.attributionInner dp ca frame.run) context.invocation hnotlast]
   rw [hstream]
   refine ⟨fun key hkey => ?_,
     Exec.installedCodeEq_committed frame.run frame.committed
@@ -1164,9 +1167,10 @@ theorem Exec.Frame.allowanceRegionEffect_of_approveAndCall
   have childEffect := callback.allowanceRegionEffect retained htarget
     installedCallback hdeeper
   have hsel : Sevm.selector frame.sevm = approveAndCallSelector := hselector
-  have hnotflash : isFlashInvocation frame.sevm = false := by
-    simp [isFlashInvocation, hsel,
-      approveAndCallSelector_ne_flashLoanSelector]
+  have hnotlast : ownRecordLast frame.sevm = false := by
+    simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hsel,
+      approveAndCallSelector_ne_flashLoanSelector,
+      approveAndCallSelector_ne_permitSelector]
   have hframeEq : Exec.Frame.ofRun frame.run frame.committed = frame := by
     cases frame
     rfl
@@ -1176,7 +1180,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_approveAndCall
     rw [Exec.attributionStream_eq_frameContribution dp ca frame.run
         frame.committed, hframeEq, hinner,
       Exec.frameContribution_eq_cons dp ca frame _
-        context.invocation hnotflash]
+        context.invocation hnotlast]
   rw [hstream]
   have hown : (CountedFrame.ofFrame dp ca frame).allowance =
       some { owner := frame.sevm.caller.toB256

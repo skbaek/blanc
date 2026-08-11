@@ -32,8 +32,11 @@ This module shows the world is harmless instead, in four steps.
 * Hence the whole attribution stream of a static subtree is write-free.
 
 `Blanc.Weth10.writeFreeLedger_statcallCrossing` and
-`Blanc.Weth10.AllowanceRegionEffect.cons_writeFree` are the two lemmas the
-`permit` arm consumes in place of its precompile hypotheses.
+`Blanc.Weth10.AllowanceRegionEffect.snoc_writeFree` are the two lemmas the
+`permit` arm consumes in place of its precompile hypotheses.  The `snoc`
+form, rather than the `cons` form, is what the arm needs: `permit`'s
+`approvePermit` store runs *after* the recovery `STATICCALL` returns, so
+`Exec.frameContribution` places its own record behind that subtree.
 -/
 
 namespace Blanc
@@ -120,6 +123,19 @@ theorem applyAllowanceLedger_append_writeFree
   unfold applyAllowanceLedger
   rw [List.reverse_append, lastAllowanceWriteAt_append,
     lastAllowanceWriteAt_eq_none_of_writeFree hfree.reverse key]
+
+/-- A write-free *prefix* is transparent to the ledger replay: the mirror
+bridging form consumed by the arms whose own record follows a write-free
+descendant stream. -/
+theorem applyAllowanceLedger_writeFree_append
+    (pre : Stor) {left : List CountedFrame} (right : List CountedFrame)
+    (key : B256) (hfree : WriteFreeLedger left) :
+    applyAllowanceLedger pre (left ++ right) key =
+      applyAllowanceLedger pre right key := by
+  unfold applyAllowanceLedger
+  rw [List.reverse_append, lastAllowanceWriteAt_append,
+    lastAllowanceWriteAt_eq_none_of_writeFree hfree.reverse key]
+  cases lastAllowanceWriteAt right.reverse key <;> rfl
 
 /-! ## Static propagation across a spawned frame -/
 
@@ -684,6 +700,29 @@ theorem AllowanceRegionEffect.cons_writeFree
     (hfree : WriteFreeLedger rest) :
     AllowanceRegionEffect ca pre post (own :: rest) := by
   simpa using h.append_writeFree hfree
+
+/-- Prepending a write-free segment leaves an allowance-region transport
+unchanged. -/
+theorem AllowanceRegionEffect.writeFree_append
+    {ca : Adr} {pre post : Devm} {left right : List CountedFrame}
+    (hfree : WriteFreeLedger left)
+    (h : AllowanceRegionEffect ca pre post right) :
+    AllowanceRegionEffect ca pre post (left ++ right) := by
+  refine ⟨fun key hregion => ?_, h.codeEq⟩
+  rw [applyAllowanceLedger_writeFree_append _ right key hfree]
+  exact h.storage key hregion
+
+/-- Snoc form: a frame whose own record already transports the region keeps
+transporting it once a write-free descendant stream is placed *ahead* of it.
+This is what `permit` and any other own-record-last selector consume in place
+of `AllowanceRegionEffect.cons_writeFree`. -/
+theorem AllowanceRegionEffect.snoc_writeFree
+    {ca : Adr} {pre post : Devm} {own : CountedFrame}
+    {rest : List CountedFrame}
+    (h : AllowanceRegionEffect ca pre post [own])
+    (hfree : WriteFreeLedger rest) :
+    AllowanceRegionEffect ca pre post (rest ++ [own]) :=
+  h.writeFree_append hfree
 
 /-- The lemma the `permit` arm consumes in place of its two precompile
 hypotheses: whatever the EIP-7702 delegation designator at address `1`

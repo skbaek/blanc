@@ -936,9 +936,10 @@ theorem Exec.Frame.allowanceRegionEffect_of_withdrawFrom
     (by simp)
     (by func_inv)
     hdeeper
-  have hnotflash : isFlashInvocation frame.sevm = false := by
-    simp [isFlashInvocation, hselector,
-      withdrawFromSelector_ne_flashLoanSelector]
+  have hnotlast : ownRecordLast frame.sevm = false := by
+    simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hselector,
+      withdrawFromSelector_ne_flashLoanSelector,
+      withdrawFromSelector_ne_permitSelector]
   have hframe : Exec.Frame.ofRun frame.run frame.committed = frame := by
     cases frame
     rfl
@@ -948,7 +949,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_withdrawFrom
     rw [Exec.attributionStream_eq_frameContribution dp ca frame.run
         frame.committed, hframe,
       Exec.frameContribution_eq_cons dp ca frame
-        (Exec.attributionInner dp ca frame.run) context.invocation hnotflash]
+        (Exec.attributionInner dp ca frame.run) context.invocation hnotlast]
   have hpreStor : Devm.getStor frame.pre = Devm.getStor spendCursor.pre :=
     funext (getStor_eq_of_state_eq hspendSilent.state)
   rw [hstream]
@@ -1125,9 +1126,10 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferFromZero
       Ninst.pushB256])
     (by func_inv)
     hdeeper
-  have hnotflash : isFlashInvocation frame.sevm = false := by
-    simp [isFlashInvocation, hselector,
-      transferFromSelector_ne_flashLoanSelector]
+  have hnotlast : ownRecordLast frame.sevm = false := by
+    simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hselector,
+      transferFromSelector_ne_flashLoanSelector,
+      transferFromSelector_ne_permitSelector]
   have hframe : Exec.Frame.ofRun frame.run frame.committed = frame := by
     cases frame
     rfl
@@ -1137,7 +1139,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferFromZero
     rw [Exec.attributionStream_eq_frameContribution dp ca frame.run
         frame.committed, hframe,
       Exec.frameContribution_eq_cons dp ca frame
-        (Exec.attributionInner dp ca frame.run) context.invocation hnotflash]
+        (Exec.attributionInner dp ca frame.run) context.invocation hnotlast]
   have hpreStor : Devm.getStor frame.pre = Devm.getStor spendCursor.pre :=
     funext (getStor_eq_of_state_eq hspendSilent.state)
   rw [hstream]

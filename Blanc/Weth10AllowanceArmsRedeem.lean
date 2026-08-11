@@ -968,8 +968,10 @@ theorem Exec.Frame.allowanceRegionEffect_of_withdraw
     (by simp)
     (by func_inv)
     hdeeper
-  have hnotflash : isFlashInvocation frame.sevm = false := by
-    simp [isFlashInvocation, hselector, withdrawSelector_ne_flashLoanSelector]
+  have hnotlast : ownRecordLast frame.sevm = false := by
+    simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hselector,
+      withdrawSelector_ne_flashLoanSelector,
+      withdrawSelector_ne_permitSelector]
   have hframe : Exec.Frame.ofRun frame.run frame.committed = frame := by
     cases frame
     rfl
@@ -989,7 +991,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_withdraw
     rw [Exec.attributionStream_eq_frameContribution dp ca frame.run
         frame.committed, hframe,
       Exec.frameContribution_eq_cons dp ca frame
-        (Exec.attributionInner dp ca frame.run) context.invocation hnotflash]
+        (Exec.attributionInner dp ca frame.run) context.invocation hnotlast]
   rw [hstream]
   refine ⟨fun key hkey => ?_,
     Exec.installedCodeEq_committed frame.run frame.committed
@@ -1044,9 +1046,10 @@ theorem Exec.Frame.allowanceRegionEffect_of_withdrawTo
     (by simp)
     (by func_inv)
     hdeeper
-  have hnotflash : isFlashInvocation frame.sevm = false := by
-    simp [isFlashInvocation, hselector,
-      withdrawToSelector_ne_flashLoanSelector]
+  have hnotlast : ownRecordLast frame.sevm = false := by
+    simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hselector,
+      withdrawToSelector_ne_flashLoanSelector,
+      withdrawToSelector_ne_permitSelector]
   have hframe : Exec.Frame.ofRun frame.run frame.committed = frame := by
     cases frame
     rfl
@@ -1066,7 +1069,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_withdrawTo
     rw [Exec.attributionStream_eq_frameContribution dp ca frame.run
         frame.committed, hframe,
       Exec.frameContribution_eq_cons dp ca frame
-        (Exec.attributionInner dp ca frame.run) context.invocation hnotflash]
+        (Exec.attributionInner dp ca frame.run) context.invocation hnotlast]
   rw [hstream]
   refine ⟨fun key hkey => ?_,
     Exec.installedCodeEq_committed frame.run frame.committed
@@ -1167,8 +1170,10 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferZero
       Ninst.pushB256])
     (by func_inv)
     hdeeper
-  have hnotflash : isFlashInvocation frame.sevm = false := by
-    simp [isFlashInvocation, hselector, transferSelector_ne_flashLoanSelector]
+  have hnotlast : ownRecordLast frame.sevm = false := by
+    simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hselector,
+      transferSelector_ne_flashLoanSelector,
+      transferSelector_ne_permitSelector]
   have hframe : Exec.Frame.ofRun frame.run frame.committed = frame := by
     cases frame
     rfl
@@ -1188,7 +1193,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferZero
     rw [Exec.attributionStream_eq_frameContribution dp ca frame.run
         frame.committed, hframe,
       Exec.frameContribution_eq_cons dp ca frame
-        (Exec.attributionInner dp ca frame.run) context.invocation hnotflash]
+        (Exec.attributionInner dp ca frame.run) context.invocation hnotlast]
   rw [hstream]
   refine ⟨fun key hkey => ?_,
     Exec.installedCodeEq_committed frame.run frame.committed

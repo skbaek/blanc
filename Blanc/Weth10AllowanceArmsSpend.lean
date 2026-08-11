@@ -386,8 +386,10 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferFromNonzero
     frame.attributionInner_eq_nil_of_transferFromNonzero context hselector
       hnonempty hto
   have hsel : Sevm.selector frame.sevm = transferFromSelector := hselector
-  have hnotflash : isFlashInvocation frame.sevm = false := by
-    simp [isFlashInvocation, hsel, transferFromSelector_ne_flashLoanSelector]
+  have hnotlast : ownRecordLast frame.sevm = false := by
+    simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hsel,
+      transferFromSelector_ne_flashLoanSelector,
+      transferFromSelector_ne_permitSelector]
   have hframe : Exec.Frame.ofRun frame.run frame.committed = frame := by
     cases frame
     rfl
@@ -396,7 +398,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferFromNonzero
     rw [Exec.attributionStream_eq_frameContribution dp ca frame.run
         frame.committed, hframe, hinner,
       Exec.frameContribution_eq_cons dp ca frame []
-        context.invocation hnotflash]
+        context.invocation hnotlast]
   rw [hstream]
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
@@ -544,8 +546,9 @@ The strengthened carrier adds entry-read soundness of the same ledger.  For
 this arm the ledger is the frame's own record alone, so the whole new
 obligation is `AllowanceEntryReadSound.ofFrame`: `frameAllowanceEvent`
 computes a `transferFrom` spend's read from the frame's entry state, and the
-attribution stream places a non-flash record before — here, instead of — its
-subtree.  The storage side is reused verbatim from the existing arm. -/
+attribution stream places an own-record-first frame's record before — here,
+instead of — its subtree.  The storage side is reused verbatim from the
+existing arm. -/
 
 /-- The nonzero-recipient `transferFrom` attribution stream is the frame's
 own record alone.  Stated separately from
@@ -558,7 +561,7 @@ private theorem Exec.Frame.attributionStream_of_transferFromNonzero
       selector "transferFrom" [.address, .address, .uint256])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hto : Sevm.argWord frame.sevm 1 ≠ 0)
-    (hnotflash : isFlashInvocation frame.sevm = false) :
+    (hnotlast : ownRecordLast frame.sevm = false) :
     Exec.attributionStream dp ca frame.run =
       [CountedFrame.ofFrame dp ca frame] := by
   have hinner : Exec.attributionInner dp ca frame.run = [] :=
@@ -570,7 +573,7 @@ private theorem Exec.Frame.attributionStream_of_transferFromNonzero
   rw [Exec.attributionStream_eq_frameContribution dp ca frame.run
       frame.committed, hframe, hinner,
     Exec.frameContribution_eq_cons dp ca frame []
-      context.invocation hnotflash]
+      context.invocation hnotlast]
 
 /-- Nonzero-recipient `transferFrom` transports the allowance region
 read-soundly: the storage side is the existing arm, and the frame's recorded
@@ -586,14 +589,18 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_transferFromNonzero
     AllowanceRegionEffectSound ca frame.pre frame.post
       (Exec.attributionStream dp ca frame.run) := by
   have hsel : Sevm.selector frame.sevm = transferFromSelector := hselector
-  have hnotflash : isFlashInvocation frame.sevm = false := by
-    simp [isFlashInvocation, hsel, transferFromSelector_ne_flashLoanSelector]
+  have hnotlast : ownRecordLast frame.sevm = false := by
+    simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hsel,
+      transferFromSelector_ne_flashLoanSelector,
+      transferFromSelector_ne_permitSelector]
+  have hnotflash : isFlashInvocation frame.sevm = false :=
+    isFlashInvocation_eq_false_of_ownRecordLast hnotlast
   refine
     { frame.allowanceRegionEffect_of_transferFromNonzero context hselector
         hnonempty hto with
       entryRead := ?_ }
   rw [frame.attributionStream_of_transferFromNonzero context hselector
-    hnonempty hto hnotflash]
+    hnonempty hto hnotlast]
   exact AllowanceEntryReadSound.ofFrame context.invocation.2.1 hnotflash
 
 end Weth10

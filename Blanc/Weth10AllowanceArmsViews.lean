@@ -113,8 +113,9 @@ private theorem Exec.Frame.allowanceRegionEffect_of_storageInvariantView
     (hcode : Devm.getCode frame.pre ca = Devm.getCode frame.post ca) :
     AllowanceRegionEffect ca frame.pre frame.post
       (Exec.attributionStream dp ca frame.run) := by
-  have hnotflash : isFlashInvocation frame.sevm = false := by
-    simp [isFlashInvocation, hselector, hneFlash]
+  have hnotlast : ownRecordLast frame.sevm = false := by
+    simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hselector,
+      hneFlash, hnePermit]
   have hframe : Exec.Frame.ofRun frame.run frame.committed = frame := by
     cases frame
     rfl
@@ -123,7 +124,7 @@ private theorem Exec.Frame.allowanceRegionEffect_of_storageInvariantView
     rw [Exec.attributionStream_eq_frameContribution dp ca frame.run
         frame.committed, hframe, hinner,
       Exec.frameContribution_eq_cons dp ca frame []
-        context.invocation hnotflash]
+        context.invocation hnotlast]
   rw [hstream]
   have hown : (CountedFrame.ofFrame dp ca frame).allowance = none := by
     show frameAllowanceEvent frame.sevm frame.pre frame.post = none

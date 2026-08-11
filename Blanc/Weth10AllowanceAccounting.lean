@@ -129,25 +129,52 @@ theorem Exec.attributionStream_eq_frameContribution
   unfold Exec.attributionStream
   rw [dif_pos h]
 
+/-- A frame whose allowance activity precedes its spawns contributes its own
+record ahead of its descendant stream. -/
 theorem Exec.frameContribution_eq_cons
     (dp : DeployParams) (ca : Adr) (frame : Exec.Frame)
     (inner : List CountedFrame)
     (hexact : frame.exactInvocation dp ca)
-    (hnotflash : isFlashInvocation frame.sevm = false) :
+    (hnotlast : ownRecordLast frame.sevm = false) :
     Exec.frameContribution dp ca frame inner =
       CountedFrame.ofFrame dp ca frame :: inner := by
   unfold Exec.frameContribution
-  rw [if_pos hexact, if_neg (by simp [hnotflash])]
+  rw [if_pos hexact, if_neg (by simp [hnotlast])]
 
+/-- A frame whose allowance activity follows its spawns — `flashLoan`'s
+post-callback settlement, `permit`'s post-`STATICCALL` store — contributes
+its own record behind its descendant stream. -/
 theorem Exec.frameContribution_eq_append
+    (dp : DeployParams) (ca : Adr) (frame : Exec.Frame)
+    (inner : List CountedFrame)
+    (hexact : frame.exactInvocation dp ca)
+    (hlast : ownRecordLast frame.sevm = true) :
+    Exec.frameContribution dp ca frame inner =
+      inner ++ [CountedFrame.ofFrame dp ca frame] := by
+  unfold Exec.frameContribution
+  rw [if_pos hexact, if_pos hlast]
+
+/-- Flash-specific form of `Exec.frameContribution_eq_append`. -/
+theorem Exec.frameContribution_eq_append_of_flash
     (dp : DeployParams) (ca : Adr) (frame : Exec.Frame)
     (inner : List CountedFrame)
     (hexact : frame.exactInvocation dp ca)
     (hflash : isFlashInvocation frame.sevm = true) :
     Exec.frameContribution dp ca frame inner =
-      inner ++ [CountedFrame.ofFrame dp ca frame] := by
-  unfold Exec.frameContribution
-  rw [if_pos hexact, if_pos hflash]
+      inner ++ [CountedFrame.ofFrame dp ca frame] :=
+  Exec.frameContribution_eq_append dp ca frame inner hexact
+    (ownRecordLast_of_isFlashInvocation hflash)
+
+/-- Permit-specific form of `Exec.frameContribution_eq_append`. -/
+theorem Exec.frameContribution_eq_append_of_permit
+    (dp : DeployParams) (ca : Adr) (frame : Exec.Frame)
+    (inner : List CountedFrame)
+    (hexact : frame.exactInvocation dp ca)
+    (hpermit : isPermitInvocation frame.sevm = true) :
+    Exec.frameContribution dp ca frame inner =
+      inner ++ [CountedFrame.ofFrame dp ca frame] :=
+  Exec.frameContribution_eq_append dp ca frame inner hexact
+    (ownRecordLast_of_isPermitInvocation hpermit)
 
 theorem Exec.frameContribution_eq_inner
     (dp : DeployParams) (ca : Adr) (frame : Exec.Frame)
@@ -202,9 +229,10 @@ missing clause, as an additive extension so every existing consumer keeps
 working through `toAllowanceRegionEffect`. -/
 
 /-- Whether a counted record's frame dispatched to `flashLoan` — the one
-selector whose allowance activity chronologically *follows* its spawned
-callback, and whose own record `Exec.frameContribution` therefore places
-after its subtree rather than before it. -/
+selector whose *read* is reconstructed from the committed post state rather
+than observed at frame entry.  Its own record is also one of the two
+`Exec.frameContribution` places after its subtree rather than before it, but
+that is the placement predicate's business, not this one's. -/
 def CountedFrame.IsFlash (record : CountedFrame) : Prop :=
   record.sel? = some flashLoanSelector
 
@@ -267,7 +295,14 @@ subtree, so for a flash record the prefix `earlier` is not "what ran before
 that frame entered" and the clause below would be false.  Delegated debits
 arise only from `transferFrom`/`withdrawFrom`, so the restriction costs
 nothing where entry-read soundness is actually consumed (the dormant-holder
-residual). -/
+residual).
+
+`permit`'s record is placed after its subtree for the same chronological
+reason, but needs no exemption here: a `.permitStore` visit records no read
+at all, so the clause is vacuous on it.  What the placement does buy is that
+a read recorded *inside* a `permit`'s `STATICCALL` subtree now sees a prefix
+that excludes the permit's own store — which is exactly the order in which
+the runtime performs them. -/
 def AllowanceEntryReadSound (pre : Stor) (ledger : List CountedFrame) : Prop :=
   ∀ earlier record later, ledger = earlier ++ record :: later →
     ¬ record.IsFlash →
