@@ -1373,13 +1373,60 @@ leaves its type untouched while making `hardenedDescription`,
 so each carries a definitional `Iff.rfl` pin as well. Decidability of the two
 history-local predicates is frozen surface (they are properties of an explicit
 history's finitely many entries, never global assumptions) and is pinned by
-`inferInstance`. -/
+`inferInstance`.
+
+The mirror image of that risk is a *weakening of a conclusion term*, and it
+hollows out the identical set of claims. `hardenedOutflow` redefined as the
+plain ledger outflow leaves every pinned type intact while
+`hardenedOutflow_le_permanentOutflow` degenerates into `n ≤ n`,
+`permanentOutflow_eq_hardenedOutflow_of_noCollision` and the flagship's
+`hardenedDescription` field become content-free with `hnc` unused, and
+`holderFlow_hardened_floor` restates the residual floor it was meant to
+strengthen. No axiom moves under that rewrite, because the vacuous route
+carries the same axioms. The computation is therefore pinned as well as the
+type: the chronological fold, the per-frame contribution it sums, and the
+per-debit witness that contribution tests. `touchedAllowancePairs` is pinned
+the same way for the same reason in the opposite direction — it is the last
+unpinned term inside `NoAllowanceKeyCollision`, and *adding* pairs to it
+strengthens the hypothesis until every claim carrying it is vacuous.
+
+`projectedAllowanceKey` is the term both pinned hypothesis predicates are
+stated through, so its derivation and the two identities that make it the key
+the compiled runtime computes are pinned first. Were those to drift together
+the predicates would go on type-checking while describing a slot the runtime
+never visits. -/
+
+example (owner spender : B256) :
+    projectedAllowanceKey owner spender =
+      allowanceTagWord |||
+        (allowancePayloadMask &&&
+          Bytes.keccak (owner.toBytes ++ spender.toBytes)) :=
+  rfl
+
+example (e : Sevm) :
+    callerAllowanceRuntimeKey e =
+      projectedAllowanceKey (Sevm.argWord e 0) e.caller.toB256 :=
+  callerAllowanceRuntimeKey_eq_projected e
+
+example (e : Sevm) :
+    flashAllowanceRuntimeKey e =
+      projectedAllowanceKey (normalizedAddressArg e 0)
+        e.currentTarget.toB256 :=
+  flashAllowanceRuntimeKey_eq_projected e
 
 example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
     (history : AccountedHistory chainId dp ca checkpoint future) :
     List (B256 × B256) :=
   touchedAllowancePairs history
+
+example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {checkpoint future : BlockChain}
+    (history : AccountedHistory chainId dp ca checkpoint future) :
+    touchedAllowancePairs history =
+      history.attributionLedger.filterMap fun frame =>
+        frame.allowance.map fun event => (event.owner, event.spender) :=
+  rfl
 
 example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
@@ -1406,6 +1453,48 @@ example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
     (history : AccountedHistory chainId dp ca checkpoint future) (u : Adr) :
     Nat :=
   hardenedOutflow history u
+
+/-! The hardened outflow's computation, not merely its type: the chronological
+fold over the attribution ledger, the per-frame contribution the fold sums, and
+the per-debit witness that contribution tests. The fold itself is private to
+its own module, so it is named here through `open private`; a pin that stops
+resolving because the fold was renamed or exposed fails closed, exactly as a
+rewritten body does. -/
+
+open private hardenedOutflowGo from Blanc.Weth10Attribution in
+example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {checkpoint future : BlockChain}
+    (history : AccountedHistory chainId dp ca checkpoint future) (u : Adr) :
+    hardenedOutflow history u =
+      hardenedOutflowGo u [] history.attributionLedger :=
+  rfl
+
+example (frame : CountedFrame) (recent : List CountedFrame) (u : Adr) :
+    frame.hardenedContribution recent u =
+      match frame.action with
+      | some action =>
+          match action.debit with
+          | some debit =>
+              if debit.hardenedFor recent u then frame.permanentOutflow u else 0
+          | none => 0
+      | none => 0 :=
+  rfl
+
+example (debit : DebitProvenance) (recent : List CountedFrame) (u : Adr) :
+    debit.hardenedFor recent u =
+      match debit.branch with
+      | .direct => debit.actualCaller = u
+      | .delegated .selfBypass => debit.actualCaller = u
+      | .delegated (.finite key _ _) =>
+          (attributionRootAt recent key).attributedTo u
+      | .delegated (.maximum key) =>
+          (attributionRootAt recent key).attributedTo u
+      | .flash .selfBypass => false
+      | .flash (.finite key _ _) =>
+          (attributionRootAt recent key).attributedTo u
+      | .flash (.maximum key) =>
+          (attributionRootAt recent key).attributedTo u :=
+  rfl
 
 example : Adr → Adr → State → Prop :=
   AllowanceQuiescent
