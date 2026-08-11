@@ -906,6 +906,112 @@ theorem flashFrame_permanentOutflow_zero (u : Adr) (ow sp : B256) :
   simp [flashFrame, fixtureFrame, CountedFrame.permanentOutflow, FlowAtom.holderFlow,
     HolderFlow.zero]
 
+/-! ### Read-only and infinite-allowance flash visits
+
+The two remaining `AllowanceVisit` constructors.  `.viewRead` is the
+`allowance(owner,spender)` view's read — the only touched-pair source that
+writes nothing at all — and `.flashMax` is flash settlement's infinite arm,
+which reads `B256.max` and likewise writes nothing.  Both are transparent to
+the root walk and to the last-committed-write walk, and the max flash arm's
+own debit is hardened for the approving holder exactly as the finite arm's
+is. -/
+
+private def viewReadFrame (viewer : Adr) (ow sp value : B256) : CountedFrame :=
+  fixtureFrame viewer
+    (some
+      { owner := ow
+        spender := sp
+        caller := viewer
+        depth := 1
+        visit := .viewRead value })
+    none
+
+/-- The view visit records the exact word it read and records no write. -/
+theorem viewReadVisit_reads_without_writing (value : B256) :
+    (AllowanceVisit.viewRead value).read? = some value ∧
+      (AllowanceVisit.viewRead value).written? = none :=
+  ⟨rfl, rfl⟩
+
+theorem viewReadFrame_root_transparent (u viewer : Adr) (ow sp value : B256) :
+    attributionRootAt [viewReadFrame viewer ow sp value, approveFrame1 u ow sp]
+        (projectedAllowanceKey ow sp) =
+      .approve u := by
+  simp [viewReadFrame, approveFrame1, fixtureFrame, attributionRootAt, AllowanceEvent.key]
+
+theorem viewReadFrame_lastWrite_transparent (u viewer : Adr) (ow sp value : B256) :
+    lastAllowanceWriteAt [viewReadFrame viewer ow sp value, approveFrame1 u ow sp]
+        (projectedAllowanceKey ow sp) =
+      some 100 := by
+  simp [viewReadFrame, approveFrame1, fixtureFrame, lastAllowanceWriteAt, AllowanceEvent.key,
+    AllowanceVisit.written?]
+
+/-- A view read moves nothing and authorizes nobody but its own caller: it
+touches a pair without ever entering the hardened fold. -/
+theorem viewReadFrame_inert (u viewer : Adr) (ow sp value : B256) (hv : viewer ≠ u) :
+    (viewReadFrame viewer ow sp value).permanentOutflow u = 0 ∧
+      (viewReadFrame viewer ow sp value).hardenedContribution [] u = 0 ∧
+      (viewReadFrame viewer ow sp value).authorizes u = false := by
+  refine ⟨?_, ?_, ?_⟩ <;>
+    simp [viewReadFrame, fixtureFrame, CountedFrame.permanentOutflow,
+      CountedFrame.hardenedContribution, CountedFrame.authorizes, hv]
+
+private def flashMaxDebit (borrower : Adr) (ow sp : B256) : DebitProvenance :=
+  { actualCaller := borrower
+    rawSource := ow
+    source := ow.toAdr
+    branch := .flash (.maximum (projectedAllowanceKey ow sp)) }
+
+private def flashMaxFrame (borrower : Adr) (ow sp : B256) : CountedFrame :=
+  fixtureFrame borrower
+    (some
+      { owner := ow
+        spender := sp
+        caller := borrower
+        depth := 1
+        visit := .flashMax })
+    (some
+      { atom := .flashPair ow ow.toAdr 9
+        credit := none
+        debit := some (flashMaxDebit borrower ow sp)
+        actualCaller := borrower
+        currentTarget := 0
+        codeAddress := some 0
+        depth := 1 })
+
+/-- The infinite flash arm records the max word it read and records no
+write. -/
+theorem flashMaxVisit_reads_without_writing :
+    AllowanceVisit.flashMax.read? = some B256.max ∧
+      AllowanceVisit.flashMax.written? = none :=
+  ⟨rfl, rfl⟩
+
+theorem flashMaxFrame_root_transparent (u borrower : Adr) (ow sp : B256) :
+    attributionRootAt [flashMaxFrame borrower ow sp, maxApproveFrame u ow sp]
+        (projectedAllowanceKey ow sp) =
+      .approve u := by
+  simp [flashMaxFrame, maxApproveFrame, fixtureFrame, attributionRootAt, AllowanceEvent.key]
+
+theorem flashMaxFrame_lastWrite_transparent (u borrower : Adr) (ow sp : B256) :
+    lastAllowanceWriteAt [flashMaxFrame borrower ow sp, maxApproveFrame u ow sp]
+        (projectedAllowanceKey ow sp) =
+      some B256.max := by
+  simp [flashMaxFrame, maxApproveFrame, fixtureFrame, lastAllowanceWriteAt, AllowanceEvent.key,
+    AllowanceVisit.written?]
+
+theorem flashMaxDebit_hardenedFor (u borrower : Adr) (ow sp : B256) :
+    (flashMaxDebit borrower ow sp).hardenedFor [maxApproveFrame u ow sp] u = true := by
+  simp [flashMaxDebit, DebitProvenance.hardenedFor, maxApproveFrame, fixtureFrame,
+    attributionRootAt, AllowanceEvent.key, AttributionRoot.attributedTo]
+
+/-- The max flash arm's pair cancels just as the finite arm's does, so its
+hardened contribution is zero however the chain roots. -/
+theorem flashMaxFrame_permanentOutflow_zero (u borrower : Adr) (ow sp : B256) :
+    (flashMaxFrame borrower ow sp).permanentOutflow u = 0 ∧
+      (flashMaxFrame borrower ow sp).hardenedContribution [maxApproveFrame u ow sp] u = 0 := by
+  constructor <;> by_cases h : ow.toAdr = u <;>
+    simp [flashMaxFrame, fixtureFrame, CountedFrame.permanentOutflow,
+      CountedFrame.hardenedContribution, FlowAtom.holderFlow, HolderFlow.zero, h]
+
 /-! ### Dirty-pair separation
 
 An `approve` written at one projected key never governs a spend at a
@@ -934,10 +1040,71 @@ theorem dirtySpendDebit_root_checkpoint (u : Adr) (ow1 sp1 ow2 sp2 : B256)
       .checkpoint := by
   simp [dirtyApproveFrame, fixtureFrame, attributionRootAt, AllowanceEvent.key, hk]
 
+/-! ### One computed dirty-alias pair
+
+The separation above travels as a hypothesis, so the family needs at least one
+closed instance.  The two raw owner words below normalize to the same address
+and differ only above the low 160 bits — exactly the shape the
+`transferFrom`/`withdrawFrom` path admits, since `callerAllowanceRuntimeKey`
+hashes the raw owner argument rather than a normalized one.  Their projected
+keys are separated here by kernel evaluation of the two 64-byte keccaks: no
+hypothesis carries the separation, and no compiler-trusted evaluation
+contributes to it. -/
+
+/-- A raw owner word whose high-order bytes are clean. -/
+private def cleanOwnerWord : B256 :=
+  0x0000000000000000000000005b38da6a701c568545dcfcb03fcb875f56beddc4
+
+/-- The very same address carried in a raw word with dirty high-order bytes. -/
+private def dirtyOwnerWord : B256 :=
+  0xfeedface0000000000000ba55b38da6a701c568545dcfcb03fcb875f56beddc4
+
+/-- The raw spender word both fixture pairs share, so that the separation
+below is owner-word separation alone. -/
+private def fixtureSpenderWord : B256 :=
+  0x000000000000000000000000ab8483f64d9c6d1ecf9b849ae677dd3315835cb2
+
+/-- The two owner words are genuinely different words that normalize to one
+and the same address.  What the next theorem separates is therefore a dirty
+alias from its clean form, not one holder from another. -/
+theorem dirtyOwnerWord_dirty_alias_of_cleanOwnerWord :
+    dirtyOwnerWord ≠ cleanOwnerWord ∧
+      dirtyOwnerWord.toAdr = cleanOwnerWord.toAdr := by
+  constructor <;> decide +kernel
+
+/-- **Computed** distinct projected keys for two genuinely different touched
+pairs: both 64-byte keccaks are evaluated by the kernel. -/
+theorem dirtyPair_projectedAllowanceKey_ne :
+    projectedAllowanceKey dirtyOwnerWord fixtureSpenderWord ≠
+      projectedAllowanceKey cleanOwnerWord fixtureSpenderWord := by
+  decide +kernel
+
+/-- The pairwise non-collision shape at two genuinely different touched pairs,
+discharged by the computed separation rather than by a refutable antecedent.
+This is the closed counterpart of `duplicatePair_pairwise`. -/
+theorem dirtyPair_pairwise :
+    [(dirtyOwnerWord, fixtureSpenderWord),
+      (cleanOwnerWord, fixtureSpenderWord)].Pairwise
+      (fun p q => p ≠ q → projectedAllowanceKey p.1 p.2 ≠ projectedAllowanceKey q.1 q.2) :=
+  List.pairwise_pair.mpr fun _ => dirtyPair_projectedAllowanceKey_ne
+
+/-- `dirtySpendDebit_root_checkpoint` with its separation hypothesis
+discharged by computation: an `approve` stored at the dirty alias governs
+nothing at the clean pair's key. -/
+theorem dirtySpendDebit_root_checkpoint_computed (u : Adr) :
+    attributionRootAt [dirtyApproveFrame u dirtyOwnerWord fixtureSpenderWord]
+        (projectedAllowanceKey cleanOwnerWord fixtureSpenderWord) =
+      .checkpoint :=
+  dirtySpendDebit_root_checkpoint u _ _ _ _ dirtyPair_projectedAllowanceKey_ne
+
 /-! ### Dormant vs. non-dormant
 
-Ledger A never has `u` act and never has a committed `permit` naming `u`:
-every frame's `authorizes u` is false and `u`'s permanent outflow across the
+Ledger A never has `u` act and never has a committed `permit` naming `u`,
+while everything else on the contract carries on around `u`: `u` is minted to
+and transferred to by third parties, an unrelated holder `w` approves and has
+that allowance spent, and a third party `fl` runs a `flashLoan` whose
+post-callback settlement decrements its own repayment allowance.  Every
+frame's `authorizes u` is false and `u`'s permanent outflow across the whole
 ledger is zero.  Ledger B is identical except `u` additionally approves
 somewhere in the middle; that one frame now authorizes `u`, so the
 `NoAuthorizingActBy`-shaped premise fails for ledger B, while the unrelated
@@ -949,6 +1116,24 @@ private def dormantMintFrame (other u : Adr) : CountedFrame :=
       { atom := .ordinaryMint u.toB256 u 5
         credit := none
         debit := none
+        actualCaller := other
+        currentTarget := 0
+        codeAddress := some 0
+        depth := 1 })
+
+/-- A third party transfers tokens *to* `u`.  Incoming value is exactly what
+dormancy permits: `u` neither calls nor signs, and the frame moves nothing out
+of `u`. -/
+private def dormantIncomingTransferFrame (other u : Adr) : CountedFrame :=
+  fixtureFrame other none
+    (some
+      { atom := .transfer other.toB256 u.toB256 other u 12
+        credit := none
+        debit := some
+          { actualCaller := other
+            rawSource := other.toB256
+            source := other
+            branch := .direct }
         actualCaller := other
         currentTarget := 0
         codeAddress := some 0
@@ -985,30 +1170,67 @@ private def dormantSpendFrame (w : Adr) (spW : B256) : CountedFrame :=
         codeAddress := some 0
         depth := 1 })
 
-private def dormantLedger (other u w : Adr) (spW : B256) : List CountedFrame :=
-  [dormantMintFrame other u, dormantApproveFrame w spW, dormantSpendFrame w spW]
+/-- Flash activity by a third party `fl`: a `flashLoan` whose post-callback
+settlement decrements `fl`'s own repayment allowance, held against the
+deployment word `caWord`.  The borrowed pair cancels, so the frame carries no
+permanent outflow for anyone. -/
+private def dormantFlashFrame (fl : Adr) (caWord : B256) : CountedFrame :=
+  fixtureFrame fl
+    (some
+      { owner := fl.toB256
+        spender := caWord
+        caller := fl
+        depth := 1
+        visit := .flashFinite 60 45 })
+    (some
+      { atom := .flashPair fl.toB256 fl 15
+        credit := none
+        debit := some
+          { actualCaller := fl
+            rawSource := fl.toB256
+            source := fl
+            branch := .flash (.finite (projectedAllowanceKey fl.toB256 caWord) 60 45) }
+        actualCaller := fl
+        currentTarget := 0
+        codeAddress := some 0
+        depth := 1 })
 
-theorem dormantLedger_authorizes_false (other u w : Adr) (spW : B256)
-    (hother : other ≠ u) (hw : w ≠ u) (hsp : spW.toAdr ≠ u) :
-    ∀ frame ∈ dormantLedger other u w spW, frame.authorizes u = false := by
+private def dormantLedger (other u w fl : Adr) (spW caWord : B256) : List CountedFrame :=
+  [dormantMintFrame other u, dormantIncomingTransferFrame other u,
+    dormantApproveFrame w spW, dormantSpendFrame w spW, dormantFlashFrame fl caWord]
+
+theorem dormantLedger_authorizes_false (other u w fl : Adr) (spW caWord : B256)
+    (hother : other ≠ u) (hw : w ≠ u) (hsp : spW.toAdr ≠ u) (hfl : fl ≠ u) :
+    ∀ frame ∈ dormantLedger other u w fl spW caWord, frame.authorizes u = false := by
   intro frame hframe
   simp [dormantLedger] at hframe
-  rcases hframe with rfl | rfl | rfl
+  rcases hframe with rfl | rfl | rfl | rfl | rfl
   · simp [dormantMintFrame, fixtureFrame, CountedFrame.authorizes, hother]
+  · simp [dormantIncomingTransferFrame, fixtureFrame, CountedFrame.authorizes, hother]
   · simp [dormantApproveFrame, fixtureFrame, CountedFrame.authorizes, hw]
   · simp [dormantSpendFrame, fixtureFrame, CountedFrame.authorizes, hsp]
+  · simp [dormantFlashFrame, fixtureFrame, CountedFrame.authorizes, hfl]
 
-theorem dormantLedger_permanentOutflow_zero (other u w : Adr) (spW : B256) (hw : w ≠ u) :
+theorem dormantLedger_permanentOutflow_zero (other u w fl : Adr) (spW caWord : B256)
+    (hw : w ≠ u) :
     (dormantMintFrame other u).permanentOutflow u = 0 ∧
+    (dormantIncomingTransferFrame other u).permanentOutflow u = 0 ∧
     (dormantApproveFrame w spW).permanentOutflow u = 0 ∧
-    (dormantSpendFrame w spW).permanentOutflow u = 0 := by
-  refine ⟨?_, ?_, ?_⟩
+    (dormantSpendFrame w spW).permanentOutflow u = 0 ∧
+    (dormantFlashFrame fl caWord).permanentOutflow u = 0 := by
+  refine ⟨?_, ?_, ?_, ?_, ?_⟩
   · simp [dormantMintFrame, fixtureFrame, CountedFrame.permanentOutflow, FlowAtom.holderFlow,
       HolderFlow.zero]
+  · by_cases h : other = u <;>
+      simp [dormantIncomingTransferFrame, fixtureFrame, CountedFrame.permanentOutflow,
+        FlowAtom.holderFlow, HolderFlow.zero, h]
   · simp [dormantApproveFrame, fixtureFrame, CountedFrame.permanentOutflow]
   · by_cases h : spW.toAdr = u <;>
       simp [dormantSpendFrame, fixtureFrame, CountedFrame.permanentOutflow, FlowAtom.holderFlow,
         HolderFlow.zero, hw, h]
+  · by_cases h : fl = u <;>
+      simp [dormantFlashFrame, fixtureFrame, CountedFrame.permanentOutflow, FlowAtom.holderFlow,
+        HolderFlow.zero, h]
 
 private def nonDormantApproveFrameByU (u : Adr) (owU spU : B256) : CountedFrame :=
   fixtureFrame u
@@ -1109,8 +1331,10 @@ theorem selfBypassTransferFrame_hardenedContribution_eq_outflow (u w : Adr) (hne
 /-- Two identical touched pairs trivially satisfy the pairwise
 non-collision shape: the antecedent `p ≠ q` is refutable by `rfl` since both
 list elements are literally the same pair, so no keccak evaluation is
-needed.  Computed distinct-key evidence for genuinely different touched
-pairs lives in the script-altitude fixtures, not here. -/
+needed.  This fixture therefore pins the duplicate-pair shape only; the
+computed distinct-key evidence for genuinely *different* touched pairs is
+`dirtyPair_pairwise` above, which discharges the same shape through the
+kernel-evaluated separation `dirtyPair_projectedAllowanceKey_ne`. -/
 theorem duplicatePair_pairwise (ow sp : B256) :
     [(ow, sp), (ow, sp)].Pairwise
       (fun p q => p ≠ q → projectedAllowanceKey p.1 p.2 ≠ projectedAllowanceKey q.1 q.2) :=
@@ -1154,6 +1378,81 @@ theorem dirtyPair_lastWrite_none (u : Adr) (ow1 sp1 ow2 sp2 : B256)
     lastAllowanceWriteAt [dirtyApproveFrame u ow1 sp1] (projectedAllowanceKey ow2 sp2) =
       none := by
   simp [dirtyApproveFrame, fixtureFrame, lastAllowanceWriteAt, AllowanceEvent.key, hk]
+
+/-- The same walk with the separation hypothesis discharged by computation:
+the dirty alias's stored word is invisible at the clean pair's key. -/
+theorem dirtyPair_lastWrite_none_computed (u : Adr) :
+    lastAllowanceWriteAt [dirtyApproveFrame u dirtyOwnerWord fixtureSpenderWord]
+        (projectedAllowanceKey cleanOwnerWord fixtureSpenderWord) =
+      none :=
+  dirtyPair_lastWrite_none u _ _ _ _ dirtyPair_projectedAllowanceKey_ne
+
+/-! ## Fixtures lifted to the history-altitude premise shapes
+
+Everything above is list-level.  `NoAllowanceKeyCollision` and
+`NoAuthorizingActBy` are not: both quantify over an `AccountedHistory`'s
+attribution ledger, so a ledger fixture reaches them only through a history
+that produces that ledger.  Each theorem below therefore carries the producing
+history and its ledger identity as hypotheses and discharges the premise
+outright from the fixture facts — nothing about the premise itself is
+assumed.
+
+What a fixture cannot reach is the *conclusion* of the dormant-holder
+corollary.  That statement lives several import layers above this module, and
+its two remaining premises — checkpoint stability and `AllowanceQuiescent` —
+are facts about the checkpoint state, which no ledger fixture speaks to.  The
+ledger-shaped half of the corollary's hypotheses is exactly what is closed
+here. -/
+
+/-- The computed dirty-alias separation lifted to the trace-local collision
+hypothesis itself: a history that touches the two fixture pairs and nothing
+else satisfies `NoAllowanceKeyCollision` by keccak evaluation, with no
+appeal to global key injectivity. -/
+theorem dirtyPair_noAllowanceKeyCollision
+    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {checkpoint future : BlockChain} (u : Adr)
+    (history : AccountedHistory chainId dp ca checkpoint future)
+    (hledger : history.attributionLedger =
+      [dirtyApproveFrame u dirtyOwnerWord fixtureSpenderWord,
+        dirtyApproveFrame u cleanOwnerWord fixtureSpenderWord]) :
+    NoAllowanceKeyCollision history := by
+  unfold NoAllowanceKeyCollision touchedAllowancePairs
+  rw [hledger]
+  simpa [dirtyApproveFrame, fixtureFrame] using dirtyPair_pairwise
+
+/-- The dormant fixture lifted to the corollary's dormancy premise: for a
+history whose ledger is the dormant scenario, `NoAuthorizingActBy` holds
+outright.  Mints to `u`, transfers to `u`, another holder's approve and spend,
+and a third party's flash settlement are all consistent with `u` never having
+authorized anything. -/
+theorem dormantLedger_noAuthorizingActBy
+    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {checkpoint future : BlockChain} (other u w fl : Adr) (spW caWord : B256)
+    (history : AccountedHistory chainId dp ca checkpoint future)
+    (hledger : history.attributionLedger = dormantLedger other u w fl spW caWord)
+    (hother : other ≠ u) (hw : w ≠ u) (hsp : spW.toAdr ≠ u) (hfl : fl ≠ u) :
+    NoAuthorizingActBy u history := by
+  intro frame hframe
+  rw [hledger] at hframe
+  exact dormantLedger_authorizes_false other u w fl spW caWord hother hw hsp hfl frame hframe
+
+/-- The contrast, at the same altitude: insert `u`'s own approve anywhere in
+the same scenario and the corollary's dormancy premise is *refuted*, not
+merely unproved. -/
+theorem nonDormantLedger_not_noAuthorizingActBy
+    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {checkpoint future : BlockChain} (other u w fl : Adr) (spW caWord owU spU : B256)
+    (history : AccountedHistory chainId dp ca checkpoint future)
+    (hledger : history.attributionLedger =
+      nonDormantApproveFrameByU u owU spU :: dormantLedger other u w fl spW caWord) :
+    ¬ NoAuthorizingActBy u history := by
+  intro hdormant
+  have hmem : nonDormantApproveFrameByU u owU spU ∈ history.attributionLedger := by
+    rw [hledger]
+    exact List.mem_cons_self
+  have hfalse := hdormant _ hmem
+  rw [nonDormantApproveFrameByU_authorizes] at hfalse
+  exact Bool.noConfusion hfalse
 
 end Weth10
 
