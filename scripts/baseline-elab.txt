@@ -553,6 +553,29 @@
 # clean-host `scripts/check-elab.sh --list --no-build` run over all 50 files
 # (271.0 s total), with no Lean language server alive. Only this new row was
 # added; every existing reference time remains unchanged.
+#
+# The twenty-five weth10-redeem-future-v2 rows below were hand-set to their
+# measured costs when that goal's hardened-provenance development was
+# root-imported: attribution semantics, the allowance-region transport and its
+# thirty-one selector arms, the recursion and history lifts, the dispatcher,
+# and the hardened, dormancy, future-redeemability and any-order results. A
+# file with no row here is a REGRESSION ("a new module must state its cost"),
+# so these rows admit new content rather than relaxing a failure, and the user
+# authorized the admission against the measured list.
+#
+# They total 45.6 s and none exceeds 3.1 s. The suite nevertheless FELL from
+# 455.1 s over 69 files to 423.4 s over 94: the selector-separation hoist in
+# the same goal (each kernel-decided disequality had been recomputing two
+# keccaks) freed more time than the whole development costs. Measured
+# sequentially on a quiesced host — three language servers at 38 MB against
+# the gate's 250 MB guard — and `--force` was not used.
+#
+# `--rebase` was deliberately NOT run. It rewrites every row, which would
+# absorb the four IMPROVED rows this goal produced (Weth10HolderFlowCompiled
+# 45.717 -> 4.426, EthExec 20.273 -> 8.916, WriteCompleteness 16.981 -> 7.502,
+# Result 4.070 -> 1.502) and any unrelated drift into this goal's commit.
+# Those four rows are left at their old values, which is the conservative
+# reading: an improvement is a note, never a failure.
 OK	1.241	Blanc.lean
 OK	1.164	Blanc/BalanceAlgebra.lean
 OK	1.257	Blanc/Basic.lean
@@ -632,3 +655,28 @@ OK	4.070	Blanc/Weth10HolderFlowResult.lean
 OK	1.279	Blanc/Weth10HolderFlowStorage.lean
 OK	1.577	Blanc/Weth10HolderFlowTransferAndCallChronology.lean
 OK	16.981	Blanc/Weth10HolderFlowWriteCompleteness.lean
+OK	1.686	Blanc/Weth10Attribution.lean
+OK	1.514	Blanc/Weth10AttributionChronology.lean
+OK	3.003	Blanc/Weth10SelectorFacts.lean
+OK	2.325	Blanc/Weth10HolderFlowSelectorFacts.lean
+OK	1.776	Blanc/Weth10AllowanceAccounting.lean
+OK	1.171	Blanc/Weth10AllowanceCompleteness.lean
+OK	1.334	Blanc/Weth10AllowanceSweep.lean
+OK	2.144	Blanc/Weth10AllowanceRecursion.lean
+OK	1.386	Blanc/Weth10AllowanceHistory.lean
+OK	1.510	Blanc/Weth10AllowanceArms.lean
+OK	1.629	Blanc/Weth10AllowanceArmsViews.lean
+OK	1.804	Blanc/Weth10AllowanceArmsBalance.lean
+OK	1.867	Blanc/Weth10AllowanceArmsSpend.lean
+OK	2.000	Blanc/Weth10AllowanceArmsSpendRedeem.lean
+OK	1.741	Blanc/Weth10AllowanceArmsRedeem.lean
+OK	2.090	Blanc/Weth10AllowanceArmsCallback.lean
+OK	2.117	Blanc/Weth10AllowanceArmsPermit.lean
+OK	2.387	Blanc/Weth10AllowanceArmsFlash.lean
+OK	1.218	Blanc/Weth10AllowanceDispatch.lean
+OK	2.098	Blanc/Weth10StaticSilence.lean
+OK	1.366	Blanc/Weth10PermitRawEffect.lean
+OK	2.708	Blanc/Weth10Hardened.lean
+OK	2.213	Blanc/Weth10Dormant.lean
+OK	1.195	Blanc/Weth10FutureRedeemable.lean
+OK	1.350	Blanc/Weth10AnyOrder.lean
