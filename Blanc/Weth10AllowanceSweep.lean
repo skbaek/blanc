@@ -124,7 +124,7 @@ private theorem Ninst.At.eq_of_at
   simpa only [Option.some.injEq, Inst.next.injEq] using
     leftAt.symm.trans rightAt
 
-private theorem Ninst.At.false_of_jinstAt
+theorem Ninst.At.false_of_jinstAt
     {code : ByteArray} {pc : Nat} {n : Ninst} {j : Jinst}
     (nextAt : Ninst.At code pc n) (jumpAt : Jinst.At code pc j) : False := by
   unfold Ninst.At at nextAt
@@ -329,7 +329,7 @@ theorem Exec.Frame.CompiledCursor.regOccurrence_branch
 /-- Generic reverse source traversal through a compiled internal call.  An
 actual `.reg` occurrence in the call suffix belongs to the selected table
 body, not to the call's compiler-generated transfer of control. -/
-private theorem Exec.Frame.CompiledCursor.regOccurrence_call
+theorem Exec.Frame.CompiledCursor.regOccurrence_call
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {f₀ : Func} {aux : List Func} {k : Nat} {final : Devm}
     {r : Rinst} {stepPre stepPost : Devm} {slot : Xlot}

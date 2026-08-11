@@ -30,6 +30,11 @@ does live inside it.  `.reg r` is the widest instruction class the glue
 traversal can carry, and it covers both storage instructions.  The two steps
 that never meet the glue — the source-line skip and the frame-entry
 `JUMPDEST` — are stated for an arbitrary `Ninst`.
+
+The glue traversal itself is `Blanc/Weth10AllowanceSweep.lean`'s
+`Exec.Frame.CompiledCursor.regOccurrence_branch` and `.regOccurrence_call`,
+reused here rather than restated: the branch step already retains the flag
+this spine needs.
 -/
 
 namespace Blanc
@@ -37,286 +42,6 @@ namespace Blanc
 open Jaune
 
 namespace Weth10
-
-/-! ## Glue traversal
-
-`Blanc/Weth10AllowanceSweep.lean` proves this traversal already, but privately
-and without retaining the branch flag.  Both the flag and cross-module
-visibility are needed here, so the traversal is restated rather than the
-sweep's visibility changed. -/
-
-private theorem Ninst.At.eq_of_at
-    {code : ByteArray} {pc : Nat} {left right : Ninst}
-    (leftAt : Ninst.At code pc left) (rightAt : Ninst.At code pc right) :
-    left = right := by
-  unfold Ninst.At at leftAt rightAt
-  simpa only [Option.some.injEq, Inst.next.injEq] using
-    leftAt.symm.trans rightAt
-
-private theorem Ninst.At.false_of_jinstAt
-    {code : ByteArray} {pc : Nat} {n : Ninst} {j : Jinst}
-    (nextAt : Ninst.At code pc n) (jumpAt : Jinst.At code pc j) : False := by
-  unfold Ninst.At at nextAt
-  unfold Jinst.At at jumpAt
-  rw [nextAt] at jumpAt
-  cases jumpAt
-
-/-- A same-frame compiler prefix all of whose current instruction boundaries
-are known not to be the swept instruction `n`. -/
-private inductive Exec.Deriv.ParentNonSweptPrefix
-    (dp : DeployParams) (ca : Adr) (n : Ninst) :
-    Exec.Deriv → Exec.Deriv → Prop
-  | refl (root : Exec.Deriv) : ParentNonSweptPrefix dp ca n root root
-  | step {root next tail : Exec.Deriv}
-      (edge : Exec.Deriv.ParentStepActions dp ca next root [])
-      (notAt : ¬ Ninst.At root.sevm.code root.pc n)
-      (rest : ParentNonSweptPrefix dp ca n next tail) :
-      ParentNonSweptPrefix dp ca n root tail
-
-/-- Remove a compiler-only prefix free of the swept instruction from an
-arbitrary occurrence of that instruction, retaining its exact machine states,
-recursive slot, and same-frame continuation proof. -/
-private theorem Exec.Deriv.ParentNonSweptPrefix.trim
-    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    {start tail : Exec.Deriv} {n : Ninst}
-    (compilerPrefix : Exec.Deriv.ParentNonSweptPrefix dp ca n start tail)
-    {stepPre stepPost : Devm} {slot : Xlot}
-    (occurrence : frame.NinstOccurrenceFromDeriv dp ca start
-      n stepPre stepPost slot) :
-    frame.NinstOccurrenceFromDeriv dp ca tail
-      n stepPre stepPost slot := by
-  induction compilerPrefix with
-  | refl => exact occurrence
-  | @step root next tail edge notAt rest ih =>
-      rcases occurrence with
-        ⟨pc, current, continuation, crossed, selected, hpath, hat,
-          filled, stepRun, prec, occurrenceEdge⟩
-      cases hpath with
-      | refl => exact (notAt hat).elim
-      | @step _ occurrenceNext _ headActions tailActions head suffix =>
-          have unique := edge.unique head
-          cases unique.1
-          cases unique.2
-          apply ih
-          exact ⟨pc, current, continuation, tailActions, selected, suffix,
-            hat, filled, stepRun, prec, occurrenceEdge⟩
-
-/-- Flag-retaining reverse traversal through a compiled branch, generic in the
-swept register instruction.  The retained flag pop is what later steps use to
-identify which source arm the original execution actually selected, and it
-doubles as the branch's silence certificate. -/
-theorem Exec.Frame.CompiledCursor.regOccurrence_branchWithFlag
-    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    {fs : List Func} {sourceTable : List (Nat × Func)}
-    {left right : Func} {final : Devm}
-    {r : Rinst} {stepPre stepPost : Devm} {slot : Xlot}
-    (cursor : frame.CompiledCursor dp ca fs sourceTable
-      (.branch left right) final)
-    (occurrence : frame.NinstOccurrenceFromCursor cursor
-      (.reg r) stepPre stepPost slot) :
-    (∃ arm : frame.CompiledCursor dp ca fs sourceTable left final,
-      Devm.PopBurnBy [0] (gVerylow + gHigh) cursor.pre arm.pre ∧
-      frame.NinstOccurrenceFromCursor arm (.reg r)
-        stepPre stepPost slot) ∨
-    (∃ flag : B256, flag ≠ 0 ∧
-      ∃ arm : frame.CompiledCursor dp ca fs sourceTable right final,
-      Devm.PopBurnBy [flag] (gVerylow + gHigh + gJumpdest)
-        cursor.pre arm.pre ∧
-      frame.NinstOccurrenceFromCursor arm (.reg r)
-        stepPre stepPost slot) := by
-  rcases subcode_compile_branch_jumpable cursor.codeSlice
-      cursor.codeBoundary with
-    ⟨loc, _locEq, locBound, pushAt, jumpiAt, leftSub, leftBoundary,
-      jumpdestAt, jumpable, rightSub, rightBoundary⟩
-  cases cursor.run with
-  | zero room pop leftRun =>
-      rcases Evm.branch_zero_steps pushAt jumpiAt locBound room pop with
-        ⟨pushStep, jumpiStep⟩
-      rcases frame.advance_cont cursor.current cursor.parentPrefix
-          pushStep with
-        ⟨afterPush, afterPushPrefix⟩
-      rcases frame.advance_cont afterPush afterPushPrefix jumpiStep with
-        ⟨armExec, armPrefix⟩
-      have currentEq : cursor.current = .cont pushStep afterPush :=
-        Exec.unique _ _
-      have afterPushEq : afterPush = .cont jumpiStep armExec :=
-        Exec.unique _ _
-      let arm : frame.CompiledCursor dp ca fs sourceTable left final :=
-        ⟨cursor.pc + 4, _, armExec, cursor.actions, armPrefix,
-          leftRun, leftSub, leftBoundary⟩
-      have pushEdge : Exec.Deriv.ParentStepActions dp ca
-          ⟨cursor.pc + 3, frame.sevm, _, frame.out, afterPush⟩
-          ⟨cursor.pc, frame.sevm, cursor.pre, frame.out, cursor.current⟩ [] :=
-        by
-          rw [currentEq]
-          exact .cont pushStep afterPush
-      have jumpiEdge : Exec.Deriv.ParentStepActions dp ca
-          ⟨cursor.pc + 4, frame.sevm, arm.pre, frame.out, arm.current⟩
-          ⟨cursor.pc + 3, frame.sevm, _, frame.out, afterPush⟩ [] :=
-        by
-          rw [afterPushEq]
-          exact .cont jumpiStep arm.current
-      have pushNotSwept : ¬ Ninst.At frame.sevm.code cursor.pc
-          (.reg r) := by
-        intro regAt
-        have impossible := Ninst.At.eq_of_at regAt pushAt
-        cases impossible
-      have jumpiNotSwept : ¬ Ninst.At frame.sevm.code (cursor.pc + 3)
-          (.reg r) := fun regAt =>
-        Ninst.At.false_of_jinstAt regAt jumpiAt
-      have compilerPrefix : Exec.Deriv.ParentNonSweptPrefix dp ca (.reg r)
-          ⟨cursor.pc, frame.sevm, cursor.pre, frame.out, cursor.current⟩
-          ⟨arm.pc, frame.sevm, arm.pre, frame.out, arm.current⟩ :=
-        .step pushEdge pushNotSwept
-          (.step jumpiEdge jumpiNotSwept (.refl _))
-      exact Or.inl ⟨arm, pop, compilerPrefix.trim occurrence⟩
-  | succ nonzero room pop rightRun =>
-      rcases Evm.branch_succ_steps pushAt jumpiAt jumpdestAt jumpable
-          locBound nonzero room pop with
-        ⟨pushStep, jumpiStep, jumpdestStep⟩
-      rcases frame.advance_cont cursor.current cursor.parentPrefix
-          pushStep with
-        ⟨afterPush, afterPushPrefix⟩
-      rcases frame.advance_cont afterPush afterPushPrefix jumpiStep with
-        ⟨afterJump, afterJumpPrefix⟩
-      rcases frame.advance_cont afterJump afterJumpPrefix jumpdestStep with
-        ⟨armExec, armPrefix⟩
-      have currentEq : cursor.current = .cont pushStep afterPush :=
-        Exec.unique _ _
-      have afterPushEq : afterPush = .cont jumpiStep afterJump :=
-        Exec.unique _ _
-      have afterJumpEq : afterJump = .cont jumpdestStep armExec :=
-        Exec.unique _ _
-      let arm : frame.CompiledCursor dp ca fs sourceTable right final :=
-        ⟨loc + 1, _, armExec, cursor.actions, armPrefix,
-          rightRun, rightSub, rightBoundary⟩
-      have pushEdge : Exec.Deriv.ParentStepActions dp ca
-          ⟨cursor.pc + 3, frame.sevm, _, frame.out, afterPush⟩
-          ⟨cursor.pc, frame.sevm, cursor.pre, frame.out, cursor.current⟩ [] :=
-        by
-          rw [currentEq]
-          exact .cont pushStep afterPush
-      have jumpiEdge : Exec.Deriv.ParentStepActions dp ca
-          ⟨loc, frame.sevm, _, frame.out, afterJump⟩
-          ⟨cursor.pc + 3, frame.sevm, _, frame.out, afterPush⟩ [] :=
-        by
-          rw [afterPushEq]
-          exact .cont jumpiStep afterJump
-      have jumpdestEdge : Exec.Deriv.ParentStepActions dp ca
-          ⟨loc + 1, frame.sevm, arm.pre, frame.out, arm.current⟩
-          ⟨loc, frame.sevm, _, frame.out, afterJump⟩ [] :=
-        by
-          rw [afterJumpEq]
-          exact .cont jumpdestStep arm.current
-      have pushNotSwept : ¬ Ninst.At frame.sevm.code cursor.pc
-          (.reg r) := by
-        intro regAt
-        have impossible := Ninst.At.eq_of_at regAt pushAt
-        cases impossible
-      have jumpiNotSwept : ¬ Ninst.At frame.sevm.code (cursor.pc + 3)
-          (.reg r) := fun regAt =>
-        Ninst.At.false_of_jinstAt regAt jumpiAt
-      have jumpdestNotSwept : ¬ Ninst.At frame.sevm.code loc
-          (.reg r) := fun regAt =>
-        Ninst.At.false_of_jinstAt regAt jumpdestAt
-      have compilerPrefix : Exec.Deriv.ParentNonSweptPrefix dp ca (.reg r)
-          ⟨cursor.pc, frame.sevm, cursor.pre, frame.out, cursor.current⟩
-          ⟨arm.pc, frame.sevm, arm.pre, frame.out, arm.current⟩ :=
-        .step pushEdge pushNotSwept
-          (.step jumpiEdge jumpiNotSwept
-            (.step jumpdestEdge jumpdestNotSwept (.refl _)))
-      exact Or.inr ⟨_, nonzero, arm, pop, compilerPrefix.trim occurrence⟩
-
-/-- Reverse source traversal through a compiled internal call, generic in the
-swept register instruction.  An actual occurrence in the call suffix belongs
-to the selected table body, never to the call's transfer of control. -/
-theorem Exec.Frame.CompiledCursor.regOccurrence_call
-    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    {f₀ : Func} {aux : List Func} {k : Nat} {final : Devm}
-    {r : Rinst} {stepPre stepPost : Devm} {slot : Xlot}
-    (cursor : frame.CompiledCursor dp ca (f₀ :: aux)
-      (table 0 (f₀ :: aux)) (.call k) final)
-    (hcode : some frame.sevm.code.toList = Prog.compile ⟨f₀, aux⟩)
-    (occurrence : frame.NinstOccurrenceFromCursor cursor
-      (.reg r) stepPre stepPost slot) :
-    ∃ body,
-      (f₀ :: aux)[k]? = some body ∧
-      ∃ bodyCursor : frame.CompiledCursor dp ca (f₀ :: aux)
-          (table 0 (f₀ :: aux)) body final,
-        frame.NinstOccurrenceFromCursor bodyCursor (.reg r)
-          stepPre stepPost slot := by
-  cases hrun : cursor.run with
-  | call hget hroom hburn hbody =>
-      rcases subcode_compile_call cursor.codeSlice with
-        ⟨loc, p, hgetTable, hloc, hpushAt, hjump⟩
-      have hpf := (Prog.get?_table (m := 0)).symm.trans
-        (congrArg (Prod.snd <$> ·) hgetTable)
-      rw [hget] at hpf
-      simp only [Option.map_eq_map, Option.map_some,
-        Option.some.injEq] at hpf
-      subst p
-      rcases subcode_of_get?_eq_some hcode hgetTable with
-        ⟨hjumpdest, hsub⟩
-      have hjumpable := Prog.jumpable_of_get?_table hcode hgetTable
-      rcases hpushAt with ⟨le, hpush⟩
-      rcases Evm.call_steps (le := le) hpush hjump hjumpdest
-          hjumpable.1 hloc hroom hburn with
-        ⟨hstepPush, hstepJump, hstepJumpdest⟩
-      rcases frame.advance_cont cursor.current cursor.parentPrefix
-          hstepPush with
-        ⟨afterPush, hprefixPush⟩
-      rcases frame.advance_cont afterPush hprefixPush hstepJump with
-        ⟨afterJump, hprefixJump⟩
-      rcases frame.advance_cont afterJump hprefixJump hstepJumpdest with
-        ⟨bodyExec, hprefixBody⟩
-      have currentEq : cursor.current = .cont hstepPush afterPush :=
-        Exec.unique _ _
-      have afterPushEq : afterPush = .cont hstepJump afterJump :=
-        Exec.unique _ _
-      have afterJumpEq : afterJump = .cont hstepJumpdest bodyExec :=
-        Exec.unique _ _
-      let bodyCursor : frame.CompiledCursor dp ca (f₀ :: aux)
-          (table 0 (f₀ :: aux)) _ final :=
-        ⟨loc + 1, _, bodyExec, cursor.actions, hprefixBody,
-          hbody, hsub, hjumpable.2⟩
-      have pushEdge : Exec.Deriv.ParentStepActions dp ca
-          ⟨cursor.pc + 3, frame.sevm, _, frame.out, afterPush⟩
-          ⟨cursor.pc, frame.sevm, cursor.pre, frame.out, cursor.current⟩ [] :=
-        by
-          rw [currentEq]
-          exact .cont hstepPush afterPush
-      have jumpEdge : Exec.Deriv.ParentStepActions dp ca
-          ⟨loc, frame.sevm, _, frame.out, afterJump⟩
-          ⟨cursor.pc + 3, frame.sevm, _, frame.out, afterPush⟩ [] :=
-        by
-          rw [afterPushEq]
-          exact .cont hstepJump afterJump
-      have jumpdestEdge : Exec.Deriv.ParentStepActions dp ca
-          ⟨loc + 1, frame.sevm, bodyCursor.pre, frame.out,
-            bodyCursor.current⟩
-          ⟨loc, frame.sevm, _, frame.out, afterJump⟩ [] :=
-        by
-          rw [afterJumpEq]
-          exact .cont hstepJumpdest bodyCursor.current
-      have pushNotSwept : ¬ Ninst.At frame.sevm.code cursor.pc
-          (.reg r) := by
-        intro regAt
-        have impossible := Ninst.At.eq_of_at regAt hpush
-        cases impossible
-      have jumpNotSwept : ¬ Ninst.At frame.sevm.code (cursor.pc + 3)
-          (.reg r) := fun regAt =>
-        Ninst.At.false_of_jinstAt regAt hjump
-      have jumpdestNotSwept : ¬ Ninst.At frame.sevm.code loc
-          (.reg r) := fun regAt =>
-        Ninst.At.false_of_jinstAt regAt hjumpdest
-      have compilerPrefix : Exec.Deriv.ParentNonSweptPrefix dp ca (.reg r)
-          ⟨cursor.pc, frame.sevm, cursor.pre, frame.out, cursor.current⟩
-          ⟨bodyCursor.pc, frame.sevm, bodyCursor.pre, frame.out,
-            bodyCursor.current⟩ :=
-        .step pushEdge pushNotSwept
-          (.step jumpEdge jumpNotSwept
-            (.step jumpdestEdge jumpdestNotSwept (.refl _)))
-      exact ⟨_, hget, bodyCursor, compilerPrefix.trim occurrence⟩
 
 /-! ## Source-line traversal
 
@@ -394,7 +119,7 @@ private theorem Exec.Frame.compiledMainCursorWithNonSweptPrefix
         (table 0 ((weth10 dp).main :: weth10Aux))
         (weth10 dp).main frame.post,
       Devm.DispatchSilent frame.pre cursor.pre ∧
-      Exec.Deriv.ParentNonSweptPrefix dp ca n
+      Exec.Deriv.ParentNonNinstPrefix dp ca n
         ⟨frame.pc, frame.sevm, frame.pre, frame.out, frame.run⟩
         ⟨cursor.pc, frame.sevm, cursor.pre, frame.out, cursor.current⟩ := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
@@ -467,7 +192,7 @@ theorem Exec.Frame.ninstOccurrence_fromMainCursor
   have fromRoot : frame.NinstOccurrenceFromDeriv dp ca
       ⟨frame.pc, frame.sevm, frame.pre, frame.out, frame.run⟩
       n stepPre stepPost slot := occurrence
-  exact ⟨mainCursor, silent, entryPrefix.trim fromRoot⟩
+  exact ⟨mainCursor, silent, entryPrefix.trim_ninstOccurrence fromRoot⟩
 
 /-! ## Dispatch spine -/
 
@@ -526,7 +251,7 @@ theorem Exec.Frame.CompiledCursor.regOccurrence_main
         afterSize.stack :=
       prefix_of_push (of_run_calldatasize sizeStep) nil_pref
     exact prefix_of_iszero zeroStep sizePrefix
-  rcases branchCursor.regOccurrence_branchWithFlag atBranch with
+  rcases branchCursor.regOccurrence_branch atBranch with
     ⟨dispatchCursor, pop, inside⟩ |
       ⟨flag, nonzero, receiveCursor, pop, inside⟩
   · have zeroPrefix : [(0 : B256)] <<+ branchCursor.pre.stack :=
@@ -617,7 +342,7 @@ theorem Exec.Frame.CompiledCursor.regOccurrence_dispatchWith :
           simpa using prefix_of_push
             (of_run_pushB256 pushStep) selectorPrefix
         exact prefix_of_eq eqStep pushed
-      rcases branchCursor.regOccurrence_branchWithFlag atBranch with
+      rcases branchCursor.regOccurrence_branch atBranch with
         ⟨fallbackCursor, pop, insideFallback⟩ |
           ⟨flag, nonzero, bodyCursor, pop, insideBody⟩
       · rcases fallbackCursor.regOccurrence_call hcode insideFallback with
@@ -682,7 +407,7 @@ theorem Exec.Frame.CompiledCursor.regOccurrence_dispatchWith :
           simpa using prefix_of_push
             (of_run_pushB256 pushStep) duplicated
         exact prefix_of_gt gtStep pushed
-      rcases branchCursor.regOccurrence_branchWithFlag atBranch with
+      rcases branchCursor.regOccurrence_branch atBranch with
         ⟨rightCursor, pop, insideRight⟩ |
           ⟨flag, nonzero, leftCursor, pop, insideLeft⟩
       · have rightStack : sig :: stack <<+ rightCursor.pre.stack :=
@@ -794,7 +519,7 @@ theorem Exec.Frame.CompiledCursor.regOccurrence_nonpayable
       guardFree fromCursor with
     ⟨branchCursor, guardRun, atBranch⟩
   have guardSilent := Devm.DispatchSilent.of_callvalueFlag guardRun
-  rcases branchCursor.regOccurrence_branchWithFlag atBranch with
+  rcases branchCursor.regOccurrence_branch atBranch with
     ⟨revertCursor, pop, insideRevert⟩ |
       ⟨flag, _nonzero, bodyCursor, pop, insideBody⟩
   · exact (revertFree revertCursor insideRevert).elim
