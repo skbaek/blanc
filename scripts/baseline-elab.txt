@@ -563,6 +563,13 @@
 # so these rows admit new content rather than relaxing a failure, and the user
 # authorized the admission against the measured list.
 #
+# 2026-08-12: two of the admitted rows (Weth10AllowanceCompleteness 1.171,
+# Weth10AllowanceSweep 1.334) were REMOVED together with their modules when
+# the goal's owner adjudicated the H2 occurrence-level completeness row out
+# of scope: the flagship's own provability already forces completeness for
+# every balance-affecting event, so the audit-only remainder was dropped.
+# The paragraph below describes the original 25-row admission; 23 remain.
+#
 # They total 45.6 s and none exceeds 3.1 s. The suite nevertheless FELL from
 # 455.1 s over 69 files to 423.4 s over 94: the selector-separation hoist in
 # the same goal (each kernel-decided disequality had been recomputing two
@@ -660,8 +667,6 @@ OK	1.514	Blanc/Weth10AttributionChronology.lean
 OK	3.003	Blanc/Weth10SelectorFacts.lean
 OK	2.325	Blanc/Weth10HolderFlowSelectorFacts.lean
 OK	1.776	Blanc/Weth10AllowanceAccounting.lean
-OK	1.171	Blanc/Weth10AllowanceCompleteness.lean
-OK	1.334	Blanc/Weth10AllowanceSweep.lean
 OK	2.144	Blanc/Weth10AllowanceRecursion.lean
 OK	1.386	Blanc/Weth10AllowanceHistory.lean
 OK	1.510	Blanc/Weth10AllowanceArms.lean
