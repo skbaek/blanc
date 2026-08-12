@@ -303,17 +303,14 @@ theorem CountedFrame.permanentOutflow_eq_zero_of_read_zero
   have hatomout : action.atom.outflow u ≠ 0 := by
     rw [CountedFrame.permanentOutflow_eq, haction] at hout
     exact hout
-  obtain ⟨hprimary, -⟩ :=
+  obtain ⟨hprimary, hactionDebit⟩ :=
     Exec.Frame.flowAction?_inv (dp := dp) (ca := ca) haction
   obtain ⟨debit, hdebit, hwitness⟩ :=
     primaryDebit_witness (pre := frame.pre) (post := frame.post)
       hprimary hatomout
   rcases hwitness with ⟨-, hcaller⟩ | ⟨ev, hev, -, hkey⟩
-  · have hrecordCaller : (CountedFrame.ofFrame dp ca frame).caller = u := by
-      show frame.sevm.caller = u
-      rw [← primaryDebitProvenance_actualCaller hdebit]
-      exact hcaller
-    simp [CountedFrame.authorizes, hrecordCaller] at hself
+  · simp [CountedFrame.authorizes, haction, hactionDebit, hdebit, hcaller]
+      at hself
   · have hevEq : ev = event := by
       have hrec : frameAllowanceEvent frame.sevm frame.pre frame.post =
           some event := hevent
@@ -366,18 +363,15 @@ theorem CountedFrame.checkpointRooted_of_dormant
   have hatomout : action.atom.outflow u ≠ 0 := by
     rw [CountedFrame.permanentOutflow_eq, haction] at hout
     exact hout
-  obtain ⟨hprimary, -⟩ :=
+  obtain ⟨hprimary, hactionDebit⟩ :=
     Exec.Frame.flowAction?_inv (dp := dp) (ca := ca) haction
   obtain ⟨debit, hdebit, hwitness⟩ :=
     primaryDebit_witness (pre := frame.pre) (post := frame.post)
       hprimary hatomout
   rcases hwitness with ⟨-, hcaller⟩ | ⟨event, hevent, howner, hkey⟩
   · exfalso
-    have hrecordCaller : (CountedFrame.ofFrame dp ca frame).caller = u := by
-      show frame.sevm.caller = u
-      rw [← primaryDebitProvenance_actualCaller hdebit]
-      exact hcaller
-    simp [CountedFrame.authorizes, hrecordCaller] at hself
+    simp [CountedFrame.authorizes, haction, hactionDebit, hdebit, hcaller]
+      at hself
   · refine ⟨event, hevent, howner, ?_⟩
     rcases attributionRootAt_cases recent event.key with
       hroot | ⟨other, hother, ev, hev, hevkey, hcase⟩
@@ -401,13 +395,16 @@ theorem CountedFrame.checkpointRooted_of_dormant
           frameAllowanceEvent_approveStore_owner hev hvisit
         have hevCaller : ev.caller = u := by
           rw [← toAdr_toB256 ev.caller, ← hclean, hevOwner]
-        have hotherCaller :
-            (CountedFrame.ofFrame dp ca otherFrame).caller = u := by
-          show otherFrame.sevm.caller = u
-          rw [← frameAllowanceEvent_caller hev]
-          exact hevCaller
-        simp [CountedFrame.authorizes, hotherCaller] at hotherDormant
-      · simp [CountedFrame.authorizes, hev, hvisit, hevOwner] at hotherDormant
+        unfold CountedFrame.authorizes at hotherDormant
+        rw [Bool.or_eq_false_iff] at hotherDormant
+        have hfalse := hotherDormant.2
+        rw [hev] at hfalse
+        simp [hvisit, hevCaller] at hfalse
+      · unfold CountedFrame.authorizes at hotherDormant
+        rw [Bool.or_eq_false_iff] at hotherDormant
+        have hfalse := hotherDormant.2
+        rw [hev] at hfalse
+        simp [hvisit, hevOwner] at hfalse
 
 /-! ## The ledger fold
 
@@ -746,14 +743,89 @@ private theorem written_eq_zero_of_read_zero
         frameAllowanceEvent_approveStore_owner hev hvisit
       have hcaller : event.caller = u := by
         rw [← toAdr_toB256 event.caller, ← hclean, howner]
-      have hrecordCaller : (CountedFrame.ofFrame dp ca frame).caller = u := by
-        show frame.sevm.caller = u
-        rw [← frameAllowanceEvent_caller hev]
-        exact hcaller
-      simp [CountedFrame.authorizes, hrecordCaller] at hself
+      unfold CountedFrame.authorizes at hself
+      rw [Bool.or_eq_false_iff] at hself
+      have hfalse := hself.2
+      rw [hevent] at hfalse
+      simp [hvisit, hcaller] at hfalse
   | permitStore v =>
       exfalso
-      simp [CountedFrame.authorizes, hevent, hvisit, howner] at hself
+      unfold CountedFrame.authorizes at hself
+      rw [Bool.or_eq_false_iff] at hself
+      have hfalse := hself.2
+      rw [hevent] at hfalse
+      simp [hvisit, howner] at hfalse
+  | spendMax =>
+      rw [hvisit] at hwritten
+      exact absurd hwritten (by simp [AllowanceVisit.written?])
+  | spendFinite before after =>
+      obtain ⟨hne0, hsel, hnotself, hbefore, hafter⟩ :=
+        frameAllowanceEvent_spendFinite_inv hev hvisit
+      rw [hvisit] at hwritten hread
+      simp only [AllowanceVisit.written?, Option.some.injEq] at hwritten
+      have hzero : before = 0 := hread before rfl
+      have hnat := argWord_two_toNat_eq_zero_of_read_zero hroot hexact hne0
+        hsel hnotself (by rw [← hbefore]; exact hzero)
+      have hamt : Sevm.argWord frame.sevm 2 = 0 :=
+        B256.toNat_inj _ _ (by rw [hnat]; rfl)
+      rw [← hwritten, hafter, hzero, hamt]
+      exact B256.sub_self 0
+  | flashMax =>
+      rw [hvisit] at hwritten
+      exact absurd hwritten (by simp [AllowanceVisit.written?])
+  | flashFinite before after =>
+      obtain ⟨hne0, hsel, hafterEq, hbefore, hmax⟩ :=
+        frameAllowanceEvent_flashFinite_inv hev hvisit
+      rw [hvisit] at hwritten hread
+      simp only [AllowanceVisit.written?, Option.some.injEq] at hwritten
+      have hzero : before = 0 := hread before rfl
+      obtain ⟨settle, burn, houtcome, hburn⟩ :=
+        exists_flashAllowanceOutcome hroot hexact hne0 hsel
+      have hbranch : flashAllowanceBranchFromPost frame.sevm frame.post =
+          .finite (flashAllowanceRuntimeKey frame.sevm)
+            (after + Sevm.argWord frame.sevm 2) after := by
+        simp [flashAllowanceBranchFromPost, ← hafterEq, hmax]
+      have haccept := flashSettlement_reconstruction houtcome hburn
+      rw [hbranch] at haccept
+      obtain ⟨-, -, -, hle, hsub⟩ := haccept.2
+      rw [← hbefore, hzero] at hle hsub
+      have hnat := B256.toNat_le_toNat hle
+      have hzeroNat : B256.toNat 0 = 0 := rfl
+      rw [hzeroNat] at hnat
+      have hamt : Sevm.argWord frame.sevm 2 = 0 :=
+        B256.toNat_inj _ _ (by rw [Nat.le_zero.mp hnat]; rfl)
+      rw [hamt, B256.sub_self] at hsub
+      rw [← hwritten, hsub]
+
+/-! ## Empty-checkpoint root elimination
+
+When the checkpoint storage is empty, replaying any prefix whose governing
+chain still reaches the checkpoint yields zero.  A nonzero delegated outflow
+cannot read that zero word, so every such outflow has an in-window root. -/
+
+private theorem written_eq_zero_of_checkpointRoot
+    {dp : DeployParams} {ca : Adr} {record : CountedFrame}
+    {recent : List CountedFrame} {event : AllowanceEvent} {value : B256}
+    (horigin : record.HasRootedOrigin dp ca)
+    (hevent : record.allowance = some event)
+    (hcheckpoint :
+      attributionRootAt (record :: recent) event.key = .checkpoint)
+    (hread : ∀ v, event.visit.read? = some v → v = 0)
+    (hwritten : event.visit.written? = some value) :
+    value = 0 := by
+  obtain ⟨frame, rfl, hroot, hexact⟩ := horigin
+  have hev : frameAllowanceEvent frame.sevm frame.pre frame.post =
+      some event := hevent
+  cases hvisit : event.visit with
+  | viewRead v =>
+      rw [hvisit] at hwritten
+      exact absurd hwritten (by simp [AllowanceVisit.written?])
+  | approveStore v =>
+      exfalso
+      simp [attributionRootAt, hevent, hvisit] at hcheckpoint
+  | permitStore v =>
+      exfalso
+      simp [attributionRootAt, hevent, hvisit] at hcheckpoint
   | spendMax =>
       rw [hvisit] at hwritten
       exact absurd hwritten (by simp [AllowanceVisit.written?])
@@ -826,6 +898,238 @@ private theorem applyAllowanceLedger_append_singleton
         | some value => simp [lastAllowanceWriteAt, hallow, hkey, hwrite]
         | none => simp [lastAllowanceWriteAt, hallow, hkey, hwrite]
       · simp [lastAllowanceWriteAt, hallow, hkey]
+
+private theorem applyAllowanceLedger_eq_zero_of_checkpointRoot
+    {dp : DeployParams} {ca : Adr}
+    (pre : Stor) (whole : List CountedFrame)
+    (hzero : ∀ key, pre.get key = 0)
+    (hrooted : RootedLedger dp ca whole)
+    (hsound : AllowanceEntryReadSound pre whole) :
+    ∀ earlier rest, whole = earlier ++ rest →
+      ∀ key, attributionRootAt earlier.reverse key = .checkpoint →
+        applyAllowanceLedger pre earlier key = 0 := by
+  intro earlier
+  induction earlier using List.reverseRecOn with
+  | nil =>
+      intro rest hsplit key hroot
+      rw [applyAllowanceLedger_nil]
+      exact hzero key
+  | append_singleton init record ih =>
+      intro rest hsplit key hroot
+      have hsplit' : whole = init ++ record :: rest := by
+        simpa using hsplit
+      have hrecordWhole : record ∈ whole := by
+        rw [hsplit']
+        exact List.mem_append_right _ List.mem_cons_self
+      rw [applyAllowanceLedger_append_singleton]
+      cases hallow : record.allowance with
+      | none =>
+          apply ih (record :: rest) hsplit' key
+          simpa [List.reverse_append, attributionRootAt, hallow] using hroot
+      | some event =>
+          dsimp only
+          by_cases hkey : event.key = key
+          · rw [if_pos hkey]
+            cases hwrite : event.visit.written? with
+            | none =>
+                apply ih (record :: rest) hsplit' key
+                cases hvisit : event.visit <;>
+                  simp [List.reverse_append, attributionRootAt, hallow,
+                    hkey, hvisit, AllowanceVisit.written?]
+                    at hroot hwrite ⊢ <;> assumption
+            | some value =>
+                have hprior :
+                    attributionRootAt init.reverse event.key = .checkpoint := by
+                  cases hvisit : event.visit <;>
+                    simp [List.reverse_append, attributionRootAt, hallow,
+                      hkey, hvisit, AllowanceVisit.written?]
+                      at hroot hwrite ⊢ <;> assumption
+                apply written_eq_zero_of_checkpointRoot
+                  (hrooted record hrecordWhole) hallow
+                  (by simpa [List.reverse_append, hkey] using hroot) ?_ hwrite
+                intro v hv
+                rw [hsound init record rest hsplit' event hallow v hv]
+                exact ih (record :: rest) hsplit' event.key hprior
+          · rw [if_neg hkey]
+            apply ih (record :: rest) hsplit' key
+            simpa [List.reverse_append, attributionRootAt, hallow, hkey]
+              using hroot
+
+private theorem CountedFrame.permanentOutflow_eq_zero_of_delegated_read_zero
+    {dp : DeployParams} {ca u : Adr} {record : CountedFrame}
+    {action : FlowAction} {debit : DebitProvenance}
+    {event : AllowanceEvent}
+    (horigin : record.HasRootedOrigin dp ca)
+    (haction : record.action = some action)
+    (hdebit : action.debit = some debit)
+    (hkey : delegatedKey? debit.branch = some event.key)
+    (hevent : record.allowance = some event)
+    (hread : ∀ value, event.visit.read? = some value → value = 0) :
+    record.permanentOutflow u = 0 := by
+  obtain ⟨frame, rfl, hroot, hexact⟩ := horigin
+  have hev : frameAllowanceEvent frame.sevm frame.pre frame.post =
+      some event := hevent
+  obtain ⟨hprimary, hdebitEq⟩ :=
+    Exec.Frame.flowAction?_inv (dp := dp) (ca := ca) haction
+  have hprimaryDebit :
+      primaryDebitProvenance frame.sevm frame.pre frame.post = some debit := by
+    rw [← hdebitEq]
+    exact hdebit
+  obtain ⟨hnonempty, hsel, hnotself, -⟩ :=
+    delegatedKey_inv hprimaryDebit hkey
+  have hentry :=
+    frameAllowanceEvent_spend_read hnonempty hsel hnotself hev
+  rw [CountedFrame.permanentOutflow_eq, haction]
+  exact outflow_eq_zero_of_argWord_two_toNat_zero hnonempty hsel hprimary
+    (argWord_two_toNat_eq_zero_of_read_zero hroot hexact hnonempty hsel
+      hnotself (hread _ hentry))
+
+/-- Empty-checkpoint histories cannot carry a nonzero permanent-outflow debit
+whose governing allowance chain still roots at the checkpoint. -/
+theorem AccountedHistory.attributionRootAt_ne_checkpoint_of_emptyStorage
+    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {checkpoint future : BlockChain}
+    (hstable : Stable dp ca checkpoint.state)
+    (history : AccountedHistory chainId dp ca checkpoint future)
+    (hempty : checkpoint.state.getStor ca = Stor.empty)
+    {earlier later : List CountedFrame} {record : CountedFrame}
+    {action : FlowAction} {debit : DebitProvenance}
+    {event : AllowanceEvent}
+    (hsplit : history.attributionLedger = earlier ++ record :: later)
+    (hout : record.permanentOutflow u ≠ 0)
+    (haction : record.action = some action)
+    (hdebit : action.debit = some debit)
+    (hevent : record.allowance = some event)
+    (hkey : delegatedKey? debit.branch = some event.key) :
+    attributionRootAt earlier.reverse event.key ≠ .checkpoint := by
+  intro hcheckpoint
+  have hzero : ∀ key, (checkpoint.state.getStor ca).get key = 0 := by
+    intro key
+    rw [hempty]
+    rfl
+  have hsound :=
+    (history.allowanceTransportedSound_of_compiled hstable).2
+  have hreplay :
+      applyAllowanceLedger (checkpoint.state.getStor ca) earlier event.key =
+        0 :=
+    applyAllowanceLedger_eq_zero_of_checkpointRoot
+      (checkpoint.state.getStor ca) history.attributionLedger
+      hzero history.rootedLedger hsound earlier (record :: later)
+      hsplit event.key hcheckpoint
+  have hread : ∀ value, event.visit.read? = some value → value = 0 := by
+    intro value hvalue
+    rw [hsound earlier record later hsplit event hevent value hvalue]
+    exact hreplay
+  exact hout
+    (CountedFrame.permanentOutflow_eq_zero_of_delegated_read_zero
+      (history.rootedLedger record (by
+        rw [hsplit]
+        exact List.mem_append_right _ List.mem_cons_self))
+      haction hdebit hkey hevent hread)
+
+/-- The honest authorization categories for one nonzero permanent-outflow
+record.  Direct includes the raw-word self-bypass because both are actual
+calls by the holder; delegated branches retain the exact governing event and
+its in-window `approve` or `permit` root. -/
+inductive PermanentOutflowAuthorization
+    (record : CountedFrame) (recent : List CountedFrame) (u : Adr) : Prop
+  | direct (caller_eq : record.caller = u)
+  | approve (event : AllowanceEvent) (caller : Adr)
+      (allowance_eq : record.allowance = some event)
+      (owner_eq : event.owner.toAdr = u)
+      (root_eq : attributionRootAt recent event.key = .approve caller)
+      (caller_eq : caller = u)
+  | permit (event : AllowanceEvent) (owner : B256)
+      (allowance_eq : record.allowance = some event)
+      (event_owner_eq : event.owner.toAdr = u)
+      (root_eq : attributionRootAt recent event.key = .permit owner)
+      (owner_eq : owner.toAdr = u)
+
+/-- Under collision freedom, every nonzero permanent-outflow record in an
+empty-checkpoint history is an actual holder call or is governed by an
+in-window `approve`/`permit` authorization of that holder. -/
+theorem AccountedHistory.permanentOutflowAuthorization_of_emptyStorage
+    {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {checkpoint future : BlockChain}
+    (hstable : Stable dp ca checkpoint.state)
+    (history : AccountedHistory chainId dp ca checkpoint future)
+    (hempty : checkpoint.state.getStor ca = Stor.empty)
+    (hnc : NoAllowanceKeyCollision history)
+    {earlier later : List CountedFrame} {record : CountedFrame}
+    (hsplit : history.attributionLedger = earlier ++ record :: later)
+    (hout : record.permanentOutflow u ≠ 0) :
+    PermanentOutflowAuthorization record earlier.reverse u := by
+  obtain ⟨frame, rfl, hrooted, hexact⟩ :=
+    history.rootedLedger record (by
+      rw [hsplit]
+      exact List.mem_append_right _ List.mem_cons_self)
+  obtain ⟨action, haction⟩ :
+      ∃ action, (CountedFrame.ofFrame dp ca frame).action = some action := by
+    cases haction : (CountedFrame.ofFrame dp ca frame).action with
+    | none =>
+        exact absurd
+          (by rw [CountedFrame.permanentOutflow_eq, haction]) hout
+    | some action => exact ⟨action, rfl⟩
+  have hatomout : action.atom.outflow u ≠ 0 := by
+    rw [CountedFrame.permanentOutflow_eq, haction] at hout
+    exact hout
+  obtain ⟨hprimary, -⟩ :=
+    Exec.Frame.flowAction?_inv (dp := dp) (ca := ca) haction
+  obtain ⟨debit, hdebit, hwitness⟩ :=
+    primaryDebit_witness (pre := frame.pre) (post := frame.post)
+      hprimary hatomout
+  rcases hwitness with ⟨-, hcaller⟩ | ⟨event, hevent, howner, hkey⟩
+  · apply PermanentOutflowAuthorization.direct
+    show frame.sevm.caller = u
+    rw [← primaryDebitProvenance_actualCaller hdebit]
+    exact hcaller
+  · have hrootNe :
+        attributionRootAt earlier.reverse event.key ≠ .checkpoint :=
+      history.attributionRootAt_ne_checkpoint_of_emptyStorage hstable hempty
+        hsplit hout haction
+        (by
+          obtain ⟨-, hdebitEq⟩ :=
+            Exec.Frame.flowAction?_inv (dp := dp) (ca := ca) haction
+          rw [hdebitEq, hdebit])
+        hevent hkey
+    rcases attributionRootAt_cases earlier.reverse event.key with
+      hcheckpoint | ⟨other, hother, ev, hev, hevkey, hcase⟩
+    · exact absurd hcheckpoint hrootNe
+    · have hpairs :
+          (touchedPairs history.attributionLedger).Pairwise NoCollisionRel := by
+        rw [← touchedAllowancePairs_eq_touchedPairs history]
+        exact hnc
+      have hsplitPairs :
+          (touchedPairs earlier ++
+            touchedPairs (CountedFrame.ofFrame dp ca frame :: later)).Pairwise
+            NoCollisionRel := by
+        rw [← touchedPairs_append, ← hsplit]
+        exact hpairs
+      obtain ⟨-, -, hcross⟩ := List.pairwise_append.mp hsplitPairs
+      have hpair : (ev.owner, ev.spender) = (event.owner, event.spender) := by
+        by_contra hne
+        exact hcross (ev.owner, ev.spender)
+          (mem_touchedPairs_reverse.mp
+            (mem_touchedPairs.mpr ⟨other, hother, ev, hev, rfl⟩))
+          (event.owner, event.spender)
+          (mem_touchedPairs.mpr
+            ⟨CountedFrame.ofFrame dp ca frame, List.mem_cons_self,
+              event, hevent, rfl⟩)
+          hne hevkey
+      have hownerEq : ev.owner = event.owner := congrArg Prod.fst hpair
+      have hevOwner : ev.owner.toAdr = u := by rw [hownerEq]; exact howner
+      rcases hcase with ⟨⟨_, hvisit⟩, hroot⟩ | ⟨⟨_, hvisit⟩, hroot⟩
+      · have hotherWhole : other ∈ history.attributionLedger := by
+          rw [hsplit]
+          exact List.mem_append_left _ (List.mem_reverse.mp hother)
+        obtain ⟨otherFrame, rfl, -, -⟩ :=
+          history.rootedLedger other hotherWhole
+        have hclean : ev.owner = ev.caller.toB256 :=
+          frameAllowanceEvent_approveStore_owner hev hvisit
+        have hcallerEq : ev.caller = u := by
+          rw [← toAdr_toB256 ev.caller, ← hclean, hevOwner]
+        exact .approve event ev.caller hevent howner hroot hcallerEq
+      · exact .permit event ev.owner hevent howner hroot hevOwner
 
 /-- Trace-local collision freedom read as injectivity on touched pairs: two
 touched pairs hashing to the same tagged key are the same pair. -/

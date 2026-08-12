@@ -134,6 +134,19 @@ example : DeployParams → Adr → Adr → Adr → Nat →
     Benv → BlockOutput → Tx → Nat → Prop :=
   AdmissibleRedemptionTx
 
+example : DeployParams → Adr → Adr → Nat →
+    Benv → BlockOutput → Tx → Nat → Prop :=
+  AdmissibleSelfRedemptionTx
+
+example : DeployParams → Adr → Adr → Adr → Nat →
+    Benv → BlockOutput → Tx → Nat → Nat → Nat → Prop :=
+  NonSignatureRedemptionTxEnvelope
+
+example (w : State) (owner : Adr) :
+    TransactionSenderAdmissible w owner ↔
+      (w.getCode owner).isEmpty ∨ isValidDelegation (w.getCode owner) := by
+  rfl
+
 example : DeployParams → Adr → Adr → Adr → Nat →
     Benv → BlockOutput → Tx → Nat → State → BlockOutput → Prop :=
   TransactionEthAccounting
@@ -269,7 +282,7 @@ example {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     (nonce_not_max : tx.nonce ≠ UInt64.max)
     (recoveredSender : recoverSender benv.stat.chainId tx = .ok owner)
     (owner_ne_zero : owner ≠ 0)
-    (owner_code_free : (benv.state.getCode owner).toList = [])
+    (owner_sender_admissible : TransactionSenderAdmissible benv.state owner)
     (validated :
       validateTransaction pragueRules tx = .ok (calculateIntrinsicCost tx))
     (checked :
@@ -301,11 +314,116 @@ example {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     nonce_not_max := nonce_not_max
     recoveredSender := recoveredSender
     owner_ne_zero := owner_ne_zero
+    owner_sender_admissible := owner_sender_admissible
+    validated := validated
+    checked := checked
+    base_fee_le_effective := base_fee_le_effective
+    upfront_funded := upfront_funded
+    gas_bound := gas_bound
+    block_gas_room := block_gas_room
+    target_code := target_code
+    target_not_precompile := target_not_precompile
+    target_not_created := target_not_created
+    recipient_ne_zero := recipient_ne_zero
+    recipient_not_precompile := recipient_not_precompile
+    recipient_code_free := recipient_code_free
+    recipient_account := recipient_account }
+
+example {dp : DeployParams} {ca owner : Adr} {q : Nat}
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    (rules_eq : benv.stat.rules = pragueRules)
+    (type_eq : ∃ maxPriorityFee maxFee,
+      tx.type = .two benv.stat.chainId maxPriorityFee maxFee (some ca) [])
+    (data_eq : tx.data = withdrawCalldata q)
+    (selector_eq : ∀ e : Sevm, e.data = tx.data →
+      Sevm.selector e = withdrawSelector)
+    (value_eq : tx.value = 0)
+    (nonce_eq : tx.nonce = benv.state.getNonce owner)
+    (nonce_not_max : tx.nonce ≠ UInt64.max)
+    (recoveredSender : recoverSender benv.stat.chainId tx = .ok owner)
+    (owner_ne_zero : owner ≠ 0)
+    (owner_not_precompile : pragueRules.isPrecomp owner = false)
+    (owner_code_free : (benv.state.getCode owner).toList = [])
+    (validated :
+      validateTransaction pragueRules tx = .ok (calculateIntrinsicCost tx))
+    (checked :
+      checkTransaction benv.beginTransaction
+        (redemptionTxPreludeBout bout tx index) tx =
+        .ok (owner, redemptionEffectiveGasPrice benv tx, [], 0))
+    (base_fee_le_effective :
+      benv.stat.baseFeePerGas ≤ redemptionEffectiveGasPrice benv tx)
+    (upfront_funded : tx.gas * redemptionEffectiveGasPrice benv tx ≤
+      (benv.state.bal owner).toNat)
+    (gas_bound : redemptionTransactionGasBound q tx ≤ tx.gas)
+    (block_gas_room : tx.gas ≤ benv.stat.blockGasLimit - bout.blockGasUsed)
+    (target_code :
+      some (benv.state.getCode ca).toList = Prog.compile (weth10 dp))
+    (target_not_precompile : pragueRules.isPrecomp ca = false)
+    (target_not_created : ca ∉ benv.createdAccounts)
+    (owner_account : RecipientAccountCase benv.state owner) :
+    AdmissibleSelfRedemptionTx dp ca owner q benv bout tx index :=
+  { rules_eq := rules_eq
+    type_eq := type_eq
+    data_eq := data_eq
+    selector_eq := selector_eq
+    value_eq := value_eq
+    nonce_eq := nonce_eq
+    nonce_not_max := nonce_not_max
+    recoveredSender := recoveredSender
+    owner_ne_zero := owner_ne_zero
+    owner_not_precompile := owner_not_precompile
     owner_code_free := owner_code_free
     validated := validated
     checked := checked
     base_fee_le_effective := base_fee_le_effective
     upfront_funded := upfront_funded
+    gas_bound := gas_bound
+    block_gas_room := block_gas_room
+    target_code := target_code
+    target_not_precompile := target_not_precompile
+    target_not_created := target_not_created
+    owner_account := owner_account }
+
+example {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {maxPriorityFee maxFee : Nat}
+    (rules_eq : benv.stat.rules = pragueRules)
+    (type_eq : tx.type =
+      .two benv.stat.chainId maxPriorityFee maxFee (some ca) [])
+    (data_eq : tx.data = withdrawToCalldata recipient q)
+    (value_eq : tx.value = 0)
+    (nonce_eq : tx.nonce = benv.state.getNonce owner)
+    (nonce_not_max : tx.nonce ≠ UInt64.max)
+    (owner_ne_zero : owner ≠ 0)
+    (owner_sender_admissible : TransactionSenderAdmissible benv.state owner)
+    (priority_fee_le_max : maxPriorityFee ≤ maxFee)
+    (base_fee_le_max : benv.stat.baseFeePerGas ≤ maxFee)
+    (max_fee_fits : tx.gas * maxFee ≤ B256.max.toNat)
+    (max_fee_funded : tx.gas * maxFee ≤ (benv.state.bal owner).toNat)
+    (gas_bound : redemptionTransactionGasBound q tx ≤ tx.gas)
+    (block_gas_room : tx.gas ≤ benv.stat.blockGasLimit - bout.blockGasUsed)
+    (target_code :
+      some (benv.state.getCode ca).toList = Prog.compile (weth10 dp))
+    (target_not_precompile : pragueRules.isPrecomp ca = false)
+    (target_not_created : ca ∉ benv.createdAccounts)
+    (recipient_ne_zero : recipient ≠ 0)
+    (recipient_not_precompile : pragueRules.isPrecomp recipient = false)
+    (recipient_code_free : (benv.state.getCode recipient).toList = [])
+    (recipient_account : RecipientAccountCase benv.state recipient) :
+    NonSignatureRedemptionTxEnvelope dp ca owner recipient q benv bout tx
+      index maxPriorityFee maxFee :=
+  { rules_eq := rules_eq
+    type_eq := type_eq
+    data_eq := data_eq
+    value_eq := value_eq
+    nonce_eq := nonce_eq
+    nonce_not_max := nonce_not_max
+    owner_ne_zero := owner_ne_zero
+    owner_sender_admissible := owner_sender_admissible
+    priority_fee_le_max := priority_fee_le_max
+    base_fee_le_max := base_fee_le_max
+    max_fee_fits := max_fee_fits
+    max_fee_funded := max_fee_funded
     gas_bound := gas_bound
     block_gas_room := block_gas_room
     target_code := target_code
@@ -400,6 +518,42 @@ example {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     TransactionRedemptionEnabled
       dp ca owner recipient q benv bout tx index :=
   hstable.transactionRedemption_enabled_of_le hq henv
+
+example {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {maxPriorityFee maxFee : Nat}
+    (henv : NonSignatureRedemptionTxEnvelope
+      dp ca owner recipient q benv bout tx index maxPriorityFee maxFee)
+    (hrecovered : recoverSender benv.stat.chainId tx = .ok owner) :
+    AdmissibleRedemptionTx dp ca owner recipient q benv bout tx index :=
+  henv.admissible_of_recoveredSender hrecovered
+
+example {dp : DeployParams} {ca owner : Adr} {q : Nat}
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    (hstable : Stable dp ca benv.state)
+    (hq : q ≤ bookedBalanceNat benv.state ca owner)
+    (henv : AdmissibleSelfRedemptionTx dp ca owner q benv bout tx index) :
+    TransactionRedemptionEnabled dp ca owner owner q benv bout tx index :=
+  hstable.selfTransactionRedemption_enabled_of_le hq henv
+
+example {dp : DeployParams} {ca owner : Adr} {q : Nat}
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    (henv : AdmissibleSelfRedemptionTx dp ca owner q benv bout tx index)
+    {debit : State} {msg : Msg} {entry messagePost : Devm}
+    {messageOut : MsgCallOutput}
+    (hdebit : TransactionDebitOutcome owner
+      (tx.gas * redemptionEffectiveGasPrice benv tx) benv.state debit)
+    (hprepare :
+      prepareMessage {benv.beginTransaction with state := debit}
+        (redemptionTenv benv tx owner index) tx = .ok msg)
+    (hframe : MessageFrameRedemptionOutcome
+      dp ca owner owner q debit msg entry messagePost messageOut) :
+    let usedGas := redemptionUsedGasFromMessage tx messageOut
+      messagePost.refundCounter.toNat
+    processTransaction benv bout tx index = .ok
+      (redemptionFinalState benv tx owner messagePost.state usedGas,
+        redemptionFinalBout bout tx index messageOut usedGas) :=
+  henv.processTransaction_eq_of_message hdebit hprepare hframe
 
 /-! Deployment constructor pins make the pre-execution/result boundary fail
 closed on record-field additions, removals, or type changes. -/
@@ -1505,6 +1659,23 @@ example (ca u : Adr) (w : State) :
         (w.getStor ca).get (projectedAllowanceKey owner spender) = 0 :=
   Iff.rfl
 
+example (frame : CountedFrame) (u : Adr) :
+    frame.authorizes u =
+      ((match frame.action with
+        | some action =>
+            match action.debit with
+            | some debit => debit.actualCaller = u
+            | none => false
+        | none => false) ||
+      match frame.allowance with
+      | some event =>
+          match event.visit with
+          | .approveStore _ => event.caller = u
+          | .permitStore _ => event.owner.toAdr = u
+          | _ => false
+      | none => false) :=
+  rfl
+
 example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain} (u : Adr)
     (history : AccountedHistory chainId dp ca checkpoint future) : Prop :=
@@ -1730,6 +1901,36 @@ example {chainId : UInt64} {dp : DeployParams} {ca u recipient : Adr}
   deployment_reachable_residual_transactionRedemption_enabled
     hroot hcheckpoint hq hentry henv
 
+example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {q : Nat} {base deployed checkpoint future : BlockChain}
+    {history : AccountedHistory chainId dp ca checkpoint future} {msg : Msg}
+    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
+    (hcheckpoint : BlockChain.ReachUsing
+      (ChainConfig.pragueOnly chainId) deployed checkpoint)
+    (hq : q ≤ bookedBalanceNat checkpoint.state ca u -
+      ((history.weth10Flow u).redeemed +
+        (history.weth10Flow u).externalTransferredOut))
+    (henv : AdmissibleSelfRedemptionMessage dp ca u q future.state msg) :
+    MessageRedemptionEnabled dp ca u u q future.state msg :=
+  deployment_reachable_residual_selfMessageRedemption_enabled
+    hroot hcheckpoint hq henv
+
+example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {q : Nat} {base deployed checkpoint future : BlockChain}
+    {history : AccountedHistory chainId dp ca checkpoint future}
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
+    (hcheckpoint : BlockChain.ReachUsing
+      (ChainConfig.pragueOnly chainId) deployed checkpoint)
+    (hq : q ≤ bookedBalanceNat checkpoint.state ca u -
+      ((history.weth10Flow u).redeemed +
+        (history.weth10Flow u).externalTransferredOut))
+    (hentry : benv.state = future.state)
+    (henv : AdmissibleSelfRedemptionTx dp ca u q benv bout tx index) :
+    TransactionRedemptionEnabled dp ca u u q benv bout tx index :=
+  deployment_reachable_residual_selfTransactionRedemption_enabled
+    hroot hcheckpoint hq hentry henv
+
 /-! The rebased pair states its bound against the *full booked balance at the
 future snapshot itself*: rebasing the window at the future collapses the
 outflow terms, so no residual subtraction appears in either statement. -/
@@ -1756,6 +1957,35 @@ example {chainId : UInt64} {dp : DeployParams} {ca u recipient : Adr}
     TransactionRedemptionEnabled dp ca u recipient q benv bout tx index :=
   deployment_reachable_booked_transactionRedemption_enabled
     hroot hfuture hentry hq henv
+
+example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {q : Nat} {base deployed future : BlockChain}
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
+    (hfuture : BlockChain.ReachUsing
+      (ChainConfig.pragueOnly chainId) deployed future)
+    (hentry : benv.state = future.state)
+    (hq : q ≤ bookedBalanceNat future.state ca u)
+    (henv : AdmissibleSelfRedemptionTx dp ca u q benv bout tx index) :
+    TransactionRedemptionEnabled dp ca u u q benv bout tx index :=
+  deployment_reachable_booked_selfTransactionRedemption_enabled
+    hroot hfuture hentry hq henv
+
+example {chainId : UInt64} {dp : DeployParams} {ca u recipient : Adr}
+    {q : Nat} {base deployed future : BlockChain}
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {maxPriorityFee maxFee : Nat}
+    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
+    (hfuture : BlockChain.ReachUsing
+      (ChainConfig.pragueOnly chainId) deployed future)
+    (hentry : benv.state = future.state)
+    (hq : q ≤ bookedBalanceNat future.state ca u)
+    (henv : NonSignatureRedemptionTxEnvelope
+      dp ca u recipient q benv bout tx index maxPriorityFee maxFee)
+    (hrecovered : recoverSender benv.stat.chainId tx = .ok u) :
+    TransactionRedemptionEnabled dp ca u recipient q benv bout tx index :=
+  deployment_reachable_booked_transactionRedemption_enabled_of_recoveredSender
+    hroot hfuture hentry hq henv hrecovered
 
 /-! The flagship record, pinned field by field. This is the pin that protects
 the goal's central invariant: `hardenedDescription` carries
@@ -1810,6 +2040,31 @@ example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
     transactionEnabled := transactionEnabled }
 
 example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {checkpoint future : BlockChain}
+    {history : AccountedHistory chainId dp ca checkpoint future}
+    (base : FutureRedemptionGuarantee
+      chainId dp ca u checkpoint future history)
+    (selfMessageEnabled : ∀ (q : Nat) (msg : Msg),
+      q ≤ bookedBalanceNat checkpoint.state ca u -
+        ((history.weth10Flow u).redeemed +
+          (history.weth10Flow u).externalTransferredOut) →
+      AdmissibleSelfRedemptionMessage dp ca u q future.state msg →
+      MessageRedemptionEnabled dp ca u u q future.state msg)
+    (selfTransactionEnabled : ∀ (q : Nat) (benv : Benv)
+        (bout : BlockOutput) (tx : Tx) (index : Nat),
+      benv.state = future.state →
+      q ≤ bookedBalanceNat checkpoint.state ca u -
+        ((history.weth10Flow u).redeemed +
+          (history.weth10Flow u).externalTransferredOut) →
+      AdmissibleSelfRedemptionTx dp ca u q benv bout tx index →
+      TransactionRedemptionEnabled dp ca u u q benv bout tx index) :
+    FutureDualSelectorRedemptionGuarantee
+      chainId dp ca u checkpoint future history :=
+  { toFutureRedemptionGuarantee := base
+    selfMessageEnabled := selfMessageEnabled
+    selfTransactionEnabled := selfTransactionEnabled }
+
+example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
     {base deployed checkpoint future : BlockChain}
     (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
     (hcheckpoint : BlockChain.ReachUsing
@@ -1819,6 +2074,18 @@ example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
     ∃ history, FutureRedemptionGuarantee
       chainId dp ca u checkpoint future history :=
   deployment_reachable_future_redeemable hroot hcheckpoint hfuture
+
+example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {base deployed checkpoint future : BlockChain}
+    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
+    (hcheckpoint : BlockChain.ReachUsing
+      (ChainConfig.pragueOnly chainId) deployed checkpoint)
+    (hfuture : BlockChain.ReachUsing
+      (ChainConfig.pragueOnly chainId) checkpoint future) :
+    ∃ history, FutureDualSelectorRedemptionGuarantee
+      chainId dp ca u checkpoint future history :=
+  deployment_reachable_future_dualSelector_redeemable
+    hroot hcheckpoint hfuture
 
 example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
     {base deployed checkpoint future : BlockChain}
@@ -1847,6 +2114,53 @@ example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
         chainId dp ca u deployed future history :=
   deployment_fullWindow_future_redeemable hroot hfuture
 
+example : CountedFrame → List CountedFrame → Adr → Prop :=
+  PermanentOutflowAuthorization
+
+example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {base deployed future : BlockChain}
+    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
+    (history : AccountedHistory chainId dp ca deployed future)
+    {earlier later : List CountedFrame} {record : CountedFrame}
+    {action : FlowAction} {debit : DebitProvenance}
+    {event : AllowanceEvent}
+    (hsplit : history.attributionLedger = earlier ++ record :: later)
+    (hout : record.permanentOutflow u ≠ 0)
+    (haction : record.action = some action)
+    (hdebit : action.debit = some debit)
+    (hevent : record.allowance = some event)
+    (hkey : delegatedKey? debit.branch = some event.key) :
+    attributionRootAt earlier.reverse event.key ≠ .checkpoint :=
+  deployment_fullWindow_attributionRootAt_ne_checkpoint
+    hroot history hsplit hout haction hdebit hevent hkey
+
+example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {base deployed future : BlockChain}
+    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
+    (history : AccountedHistory chainId dp ca deployed future)
+    (hnc : NoAllowanceKeyCollision history) :
+    ((history.weth10Flow u).redeemed +
+        (history.weth10Flow u).externalTransferredOut =
+      hardenedOutflow history u) ∧
+      ∀ earlier record later,
+        history.attributionLedger = earlier ++ record :: later →
+        record.permanentOutflow u ≠ 0 →
+        PermanentOutflowAuthorization record earlier.reverse u :=
+  deployment_fullWindow_hardenedOutflow_only_authorizingRoots
+    hroot history hnc
+
+example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
+    {base deployed future : BlockChain}
+    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
+    (hfuture : BlockChain.ReachUsing
+      (ChainConfig.pragueOnly chainId) deployed future) :
+    ∃ history : AccountedHistory chainId dp ca deployed future,
+      NoAllowanceKeyCollision history →
+      NoAuthorizingActBy u history →
+      bookedBalanceNat deployed.state ca u ≤
+        bookedBalanceNat future.state ca u :=
+  deployment_reachable_dormant_holder_balance_monotone hroot hfuture
+
 /-! The any-order records are constructor-pinned for the same reason. A
 `budget` field weakened from the per-owner **aggregate** to a per-claim bound
 would silently permit overbooking by splitting one owner's claim in two, and a
@@ -1859,6 +2173,26 @@ example {ca : Adr} {w : State} {cs : List RedemptionClaim}
     ClaimsAdmissible ca w cs :=
   { recipients := recipients
     budget := budget }
+
+example {dp : DeployParams} {ca : Adr}
+    {c : RedemptionClaim} {cs : List RedemptionClaim}
+    {w mid post : State} {msg : Msg} {out : MsgCallOutput}
+    (henv : AdmissibleRedemptionMessage
+      dp ca c.owner c.recipient c.amount w msg)
+    (message_eq : msg = canonicalRedemptionMessage ca c w)
+    (hrun : processMessageCall msg = .ok (mid, out))
+    (heffect : MessageRedemptionExactEffect
+      dp ca c.owner c.recipient c.amount w mid out)
+    (htail : RedemptionRun dp ca cs mid post) :
+    RedemptionRun dp ca (c :: cs) w post :=
+  .cons henv message_eq hrun heffect htail
+
+example (ca : Adr) (w : State) (holders : List Adr)
+    (recipient : Adr → Adr) :
+    fullBalanceClaims ca w holders recipient =
+      holders.map fun u =>
+        ⟨u, bookedBalanceNat w ca u, recipient u⟩ :=
+  rfl
 
 example {dp : DeployParams} {ca : Adr} {cs : List RedemptionClaim}
     {w post : State}
@@ -1893,6 +2227,19 @@ example {dp : DeployParams} {ca : Adr} {w : State}
     ∃ post, RedemptionOutcome dp ca ds w post :=
   redeemClaims_anyOrder hca hstable hadm hperm
 
+example {dp : DeployParams} {ca : Adr} {w : State}
+    {holders : List Adr} {recipient : Adr → Adr}
+    {claims : List RedemptionClaim}
+    (hca : ¬ pragueRules.isPrecomp ca)
+    (hstable : Stable dp ca w)
+    (hnodup : holders.Nodup)
+    (hrecipients : ∀ u ∈ holders,
+      ClaimAdmissible ca w
+        ⟨u, bookedBalanceNat w ca u, recipient u⟩)
+    (hperm : (fullBalanceClaims ca w holders recipient).Perm claims) :
+    ∃ post, RedemptionOutcome dp ca claims w post :=
+  redeemEveryoneList_anyOrder hca hstable hnodup hrecipients hperm
+
 example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
     {base deployed future : BlockChain} {cs ds : List RedemptionClaim}
     (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
@@ -1902,6 +2249,22 @@ example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
     (hperm : cs.Perm ds) :
     ∃ post, RedemptionOutcome dp ca ds future.state post :=
   deployment_reachable_redeemClaims_anyOrder hroot hfuture hadm hperm
+
+example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {base deployed future : BlockChain} {holders : List Adr}
+    {recipient : Adr → Adr} {claims : List RedemptionClaim}
+    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
+    (hfuture : BlockChain.ReachUsing
+      (ChainConfig.pragueOnly chainId) deployed future)
+    (hnodup : holders.Nodup)
+    (hrecipients : ∀ u ∈ holders,
+      ClaimAdmissible ca future.state
+        ⟨u, bookedBalanceNat future.state ca u, recipient u⟩)
+    (hperm :
+      (fullBalanceClaims ca future.state holders recipient).Perm claims) :
+    ∃ post, RedemptionOutcome dp ca claims future.state post :=
+  deployment_reachable_redeemEveryoneList_anyOrder
+    hroot hfuture hnodup hrecipients hperm
 
 end Weth10
 

@@ -585,6 +585,7 @@ Blanc.Xinst.step_call_nonzero_insufficient|$STANDARD
 Blanc.Xinst.step_call_nonzero_spawn|$STANDARD
 Blanc.Ninst.runCompiled_call_nonzero_codeFree|$STANDARD
 Blanc.Weth10.redemptionRuntimeCeiling_eq|propext
+Blanc.Weth10.NonSignatureRedemptionTxEnvelope.admissible_of_recoveredSender|$STANDARD
 Blanc.Weth10.Stable.bookedBalanceNat_le_contractEth|$STANDARD
 Blanc.Weth10.withdrawTo_exec|$STANDARD
 Blanc.Weth10.withdraw_exec|$STANDARD
@@ -592,7 +593,9 @@ Blanc.Weth10.processMessageCall_eq_of_exec|$STANDARD
 Blanc.Weth10.Stable.messageRedemption_enabled_of_le|$STANDARD
 Blanc.Weth10.Stable.selfRedemption_enabled_of_le|$STANDARD
 Blanc.Weth10.AdmissibleRedemptionTx.processTransaction_eq_of_message|$STANDARD
+Blanc.Weth10.AdmissibleSelfRedemptionTx.processTransaction_eq_of_message|$STANDARD
 Blanc.Weth10.Stable.transactionRedemption_enabled_of_le|$STANDARD
+Blanc.Weth10.Stable.selfTransactionRedemption_enabled_of_le|$STANDARD
 Blanc.Weth10.outerOkWithFailedReceipt_not_redemptionEnabled|$STANDARD
 Blanc.Weth10.compiledBalanceSstoreReverseComplete|$STANDARD
 Blanc.Weth10.Exec.weth10BalanceSstoreClassification_of_mem_committedFrames|$STANDARD
@@ -614,20 +617,32 @@ Blanc.Weth10.AccountedHistory.allowanceTransported_of_compiled|$STANDARD
 Blanc.Weth10.flashSettlement_allowanceEntryRead|$STANDARD
 Blanc.Weth10.committedExecAllowanceReadSound|$STANDARD
 Blanc.Weth10.AccountedHistory.allowanceTransportedSound_of_compiled|$STANDARD
+Blanc.Weth10.viewReadFrame_sameCaller_not_authorizing|propext
 Blanc.Weth10.hardenedOutflow_le_permanentOutflow|$STANDARD
 Blanc.Weth10.permanentOutflow_eq_hardenedOutflow_of_noCollision|$STANDARD
 Blanc.Weth10.holderFlow_hardened_floor|$STANDARD
 Blanc.Weth10.dormant_holder_balance_monotone|$STANDARD
 Blanc.Weth10.deployment_reachable_residual_messageRedemption_enabled|$STANDARD
 Blanc.Weth10.deployment_reachable_residual_transactionRedemption_enabled|$STANDARD
+Blanc.Weth10.deployment_reachable_residual_selfMessageRedemption_enabled|$STANDARD
+Blanc.Weth10.deployment_reachable_residual_selfTransactionRedemption_enabled|$STANDARD
 Blanc.Weth10.deployment_reachable_booked_messageRedemption_enabled|$STANDARD
 Blanc.Weth10.deployment_reachable_booked_transactionRedemption_enabled|$STANDARD
+Blanc.Weth10.deployment_reachable_booked_selfTransactionRedemption_enabled|$STANDARD
+Blanc.Weth10.deployment_reachable_booked_transactionRedemption_enabled_of_recoveredSender|$STANDARD
 Blanc.Weth10.deployment_reachable_future_redeemable|$STANDARD
+Blanc.Weth10.deployment_reachable_future_dualSelector_redeemable|$STANDARD
 Blanc.Weth10.deployment_reachable_future_redeemable_allHolders|$STANDARD
 Blanc.Weth10.deploymentRoot_allowanceQuiescent|$STANDARD
 Blanc.Weth10.deployment_fullWindow_future_redeemable|$STANDARD
+Blanc.Weth10.deployment_fullWindow_attributionRootAt_ne_checkpoint|$STANDARD
+Blanc.Weth10.deployment_fullWindow_permanentOutflowAuthorization|$STANDARD
+Blanc.Weth10.deployment_fullWindow_hardenedOutflow_only_authorizingRoots|$STANDARD
+Blanc.Weth10.deployment_reachable_dormant_holder_balance_monotone|$STANDARD
 Blanc.Weth10.redeemClaims_anyOrder|$STANDARD
-Blanc.Weth10.deployment_reachable_redeemClaims_anyOrder|$STANDARD"
+Blanc.Weth10.redeemEveryoneList_anyOrder|$STANDARD
+Blanc.Weth10.deployment_reachable_redeemClaims_anyOrder|$STANDARD
+Blanc.Weth10.deployment_reachable_redeemEveryoneList_anyOrder|$STANDARD"
 # Secondary net only: the exact-set comparison below is the primary check;
 # this pattern catches forbidden names in output the per-theorem parse missed.
 FORBIDDEN='sorryAx|ofReduceBool|ofReduceNat|_native\.'

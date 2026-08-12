@@ -379,7 +379,7 @@ footer a:hover{color:var(--ink)}
       <div>
         <div class="term" id="heroterm"><span class="p">$</span> lake build
 <span class="p">$</span> scripts/check.sh --no-build
-<span class="ok">OK — axiom audit: 318/318 audited theorems depend on exactly their pinned axiom sets</span>
+<span class="ok">OK — axiom audit: 333/333 audited theorems depend on exactly their pinned axiom sets</span>
 <span class="p">$</span> scripts/check-weth10-differential.sh
 <span class="ok">OK — WETH10 differential: 147/147 rows agree; 28 runtime entries (27 selectors + receive), 2 identity worlds …</span></div>
         <p class="cap"><b>Fig. 1</b> — two of the repository’s gates, verbatim (run 2026-08-12): the
@@ -389,7 +389,7 @@ footer a:hover{color:var(--ink)}
         <div class="pills">
           <span class="pill"><span class="d"></span>0 sorry — CI-enforced</span>
           <span class="pill"><span class="d"></span>axioms: propext · choice · quot</span>
-          <span class="pill"><span class="d"></span>318-theorem audit in CI</span>
+          <span class="pill"><span class="d"></span>333-theorem audit in CI</span>
           <span class="pill">Jaune pinned by commit</span>
         </div>
       </div>
@@ -408,10 +408,14 @@ footer a:hover{color:var(--ink)}
       met — in under twenty-four hours of wall clock, by one developer with one laptop and under
       thirty dollars of model tokens. Its flagship theorem is of a kind rarely purchasable at any
       price: from a proved deployment onward, every holder’s booked balance stays exactly conserved
-      at every reachable future, and every wei of it is redemption-enabled — any admissible
-      withdrawal message or signed type-2 withdrawal transaction the holder supplies is proved to
-      succeed — with every permanent outflow traced to its governing root under one stated hash
-      hypothesis. Blanc does not verify contracts already deployed, and does not pretend
+      at every reachable future, and every wei of it is redemption-enabled through canonical
+      <span class="mono">withdraw</span> and <span class="mono">withdrawTo</span> at both message and
+      Prague type-2 transaction altitude. For a funded code-free external holder with the canonical
+      transaction fields, only recovery of its own signature remains to admit the transaction; no
+      theorem manufactures that signature. Under one stated hash hypothesis, every nonzero
+      permanent outflow in the full deployment window traces exactly to the holder’s own call, its
+      in-window <span class="mono">approve</span>, or its in-window <span class="mono">permit</span>.
+      Blanc does not verify contracts already deployed, and does not pretend
       the switch is cheap: it is a new, deliberately bare language, and the mature toolchains stay
       behind. The bet is that what it buys exists at no other counter. MIT-licensed.</p>
     </div>
@@ -419,7 +423,7 @@ footer a:hover{color:var(--ink)}
     <div class="factbar">
       <div class="fact"><span class="n">4</span>
         <span class="l">constructors in the whole language — branch, last, next, call. The name is the syntax</span></div>
-      <div class="fact"><span class="n">318<span class="dimmer" style="font-size:1.05rem">/318</span></span>
+      <div class="fact"><span class="n">333<span class="dimmer" style="font-size:1.05rem">/333</span></span>
         <span class="l">audited theorems, each pinned to its exact axiom set — checked in CI, on every commit</span></div>
       <div class="fact"><span class="n">21 h 07 m</span>
         <span class="l">WETH10: zero contract code to closed verification goal — one dev, one laptop, &lt; $30 in tokens</span></div>
@@ -744,22 +748,25 @@ footer a:hover{color:var(--ink)}
 
     <div class="thm" style="margin-top:34px">
       <span class="stamp">machine-checked</span>
-      <div class="head">Theorem (<span class="mono">deployment_reachable_future_redeemable</span>, Blanc/Weth10FutureRedeemable.lean).</div>
+      <div class="head">Theorem (<span class="mono">deployment_reachable_future_dualSelector_redeemable</span>, Blanc/Weth10FutureRedeemable.lean).</div>
       <p class="stmt">From a proved deployment of the exact compiled WETH10 runtime, any leg of valid
         Prague blocks to a checkpoint, and any further leg to an arbitrary future snapshot, there is
-        an accounted history of the window carrying, for every holder, the full redemption
-        guarantee below.</p>
-<pre><span class="k">theorem</span> <span class="d">deployment_reachable_future_redeemable</span>
+        an accounted history of the window carrying the dual-selector redemption guarantee below
+        for an arbitrary holder <span class="mono">u</span>.</p>
+<pre><span class="k">theorem</span> <span class="d">deployment_reachable_future_dualSelector_redeemable</span>
     {chainId : <span class="t">UInt64</span>} {dp : <span class="t">DeployParams</span>} {ca u : <span class="t">Adr</span>}
     {base deployed checkpoint future : <span class="t">BlockChain</span>}
     (hroot : <span class="t">Weth10.DeploymentRoot</span> chainId base deployed dp ca)
     (hcheckpoint : <span class="t">BlockChain.ReachUsing</span> (<span class="t">ChainConfig</span>.pragueOnly chainId) deployed checkpoint)
     (hfuture : <span class="t">BlockChain.ReachUsing</span> (<span class="t">ChainConfig</span>.pragueOnly chainId) checkpoint future) :
-    ∃ history, <span class="t">FutureRedemptionGuarantee</span> chainId dp ca u checkpoint future history</pre>
+    ∃ history, <span class="t">FutureDualSelectorRedemptionGuarantee</span>
+      chainId dp ca u checkpoint future history</pre>
     </div>
     <p class="cap"><b>Read the quantifiers</b> — <span class="mono">u</span> is <em>every</em> holder, not a
-      chosen one, and the sibling <span class="mono">deployment_reachable_future_redeemable_allHolders</span>
-      packages one history carrying the guarantee for all holders at once.
+      specially chosen one. This dual-selector theorem is pointwise. Its sibling
+      <span class="mono">deployment_reachable_future_redeemable_allHolders</span> packages one history
+      carrying the inherited <span class="mono">FutureRedemptionGuarantee</span> for all holders at once;
+      it does not claim a dual-selector all-holders package.
       <span class="mono">ReachUsing</span> is Jaune’s configured-chain reachability: whole
       valid blocks, every transaction anyone sent, arbitrary contracts doing arbitrary things —
       under the model’s one global side condition, that total ETH plus pending withdrawals stays
@@ -790,33 +797,36 @@ footer a:hover{color:var(--ink)}
       </div>
       <div class="rung">
         <div class="left"><div class="layer">the exit — message</div><div class="thmname">messageEnabled</div></div>
-        <div class="right"><p><strong>Every residual wei is withdrawable.</strong> For every amount
-          within the residual, every admissible <span class="mono">withdrawTo</span>
-          message at the future snapshot <em>succeeds</em> — constructed execution, not absence of
-          counterexample, under a named conservative Prague gas bound. The direct
-          <span class="mono">withdraw</span> selector carries its own message-altitude theorems
-          outside the flagship record.</p></div>
+        <div class="right"><p><strong>Every residual wei is withdrawable through either selector.</strong>
+          For every amount within the residual, every admissible canonical
+          <span class="mono">withdraw</span> or <span class="mono">withdrawTo</span> message at the future
+          snapshot <em>succeeds</em> — constructed execution, not absence of counterexample, under a
+          named conservative Prague gas bound. Both live inside the dual-selector package.</p></div>
       </div>
       <div class="rung">
         <div class="left"><div class="layer">the exit — transaction</div><div class="thmname">transactionEnabled</div></div>
-        <div class="right"><p><strong>And at whole-transaction altitude.</strong> The same enabledness for a
-          complete admissible signed type-2 <span class="mono">withdrawTo</span> transaction whose
-          entry state is the future snapshot — intrinsic gas, validity, and settlement included, not
-          abstracted. The transaction is the holder’s input: no theorem here conjures a signature,
-          and admissible senders are code-free accounts — strictly inside what Ethereum’s own
-          sender rule admits.</p></div>
+        <div class="right"><p><strong>And at whole-transaction altitude.</strong> The same enabledness for
+          complete admissible signed type-2 <span class="mono">withdraw</span> and
+          <span class="mono">withdrawTo</span> transactions whose entry state is the future snapshot —
+          intrinsic gas, validity, and settlement included, not abstracted. Admissible senders are
+          exactly the senders Ethereum’s modeled rules admit: code-free or valid EIP-7702-delegated
+          accounts. Direct <span class="mono">withdraw</span> also makes the sender the recipient, so its
+          receiver premise remains code-free. For a funded code-free external holder with canonical
+          nonce, fees, gas, and payload, the non-signature envelope discharges every other admission
+          premise: recovery of its own signature is the sole unproved input.</p></div>
       </div>
       <div class="rung">
         <div class="left"><div class="layer">the attribution</div><div class="thmname">hardenedDescription</div></div>
-        <div class="right"><p><strong>Every permanent outflow traces to its governing root.</strong> Under one stated
-          hypothesis — distinct touched allowance pairs hash to distinct keys — the window’s
-          permanent outflow (redemptions and external transfers out; flash pairs and self-transfers
-          cancel exactly) equals the hardened outflow. Each debit is the holder’s own direct call,
-          or roots at an in-window <span class="mono">approve</span> by the holder’s account, an
-          in-window <span class="mono">permit</span> signature recovering to it, or an allowance
-          value already in place at the checkpoint — that last category inherited from before the
-          window, not itself an in-window act. Only this field takes the
-          hypothesis; redeemability never does.</p></div>
+        <div class="right"><p><strong>Every permanent-outflow wei in the deployment window has one of
+          three governing roots.</strong> Under one stated hypothesis — distinct touched allowance
+          pairs hash to distinct keys — redemptions plus external transfers out equal the hardened
+          outflow; flash pairs and self-transfers cancel exactly. Every nonzero contributing record
+          is the holder’s own direct call, or roots at an in-window
+          <span class="mono">approve</span> by the holder or an in-window
+          <span class="mono">permit</span> recovering to it. Empty deployment storage and rooted-ledger
+          replay eliminate the inherited-checkpoint case for nonzero outflow. That fourth root remains
+          part of the more general theorem for histories beginning at an arbitrary checkpoint. Only
+          attribution takes the collision hypothesis; redeemability never does.</p></div>
       </div>
       <div class="rung base">
         <div class="left"><div class="layer">the ground</div><div class="thmname">Jaune · ReachUsing · exec</div></div>
@@ -829,31 +839,33 @@ footer a:hover{color:var(--ink)}
     <div class="grid2" style="margin-top:34px;align-items:start">
       <div class="thm">
         <span class="stamp">corollary</span>
-        <div class="head">The dormant holder (<span class="mono">dormant_holder_balance_monotone</span>).</div>
-        <p class="stmt">A holder whose account made no committed call into the contract during the
-          window, with no <span class="mono">permit</span> recovering to it and every allowance
-          slot — over all raw aliases — zero at the checkpoint, cannot have lost a wei.</p>
-<pre>bookedBalanceNat checkpoint.state ca u
+        <div class="head">The dormant holder (<span class="mono">deployment_reachable_dormant_holder_balance_monotone</span>).</div>
+        <p class="stmt">Across a deployment-rooted history, a holder with no effectful authorizing act —
+          no debit as actual caller, <span class="mono">approve</span> write as caller, or
+          <span class="mono">permit</span> recovering to it — cannot have lost a wei. Empty deployment
+          storage supplies allowance quiescence over every raw alias.</p>
+<pre>bookedBalanceNat deployed.state ca u
     ≤ bookedBalanceNat future.state ca u</pre>
         <p class="dim" style="font-size:.9rem;margin:12px 0 0">
           “Did nothing, lost nothing” — stated over an authentic collision-free history, and
-          “nothing” is strict: any committed call by the account, even a read, exits the theorem’s
-          premise. The theorem most token holders believe they already have, and almost none do.
+          “nothing” is effectful: a same-caller view read or another inert visit does not void the
+          premise. The raw-alias allowance condition is still real; the deployment root, not an
+          extra user assumption, discharges it here.
         </p>
       </div>
       <div class="thm">
         <span class="stamp">corollary</span>
-        <div class="head">Any order, every claim out (<span class="mono">deployment_reachable_redeemClaims_anyOrder</span>).</div>
-        <p class="stmt">Every permutation of a finite list of per-owner-bounded redemption claims —
-          each paying a nonzero, non-precompile, code-free recipient — pays out, one admissible
-          message at a time, with exact aggregate effect on balances and ETH.</p>
+        <div class="head">Any order, supplied everyone-list out (<span class="mono">deployment_reachable_redeemEveryoneList_anyOrder</span>).</div>
+        <p class="stmt">For any supplied duplicate-free holder list and admissible recipient map,
+          every permutation of one full-booked-balance claim per listed holder pays out, one canonical
+          message at a time, with stable boundaries and the exact aggregate effect on balances and ETH.</p>
         <p class="dim" style="font-size:.9rem;margin:0 0 0">
-          A bank-run theorem over the supplied list: claims run in <em>any</em> order, including
-          lists booking every listed holder’s full balance; repeated claimants are aggregated
-          rather than forbidden, and the admission record is re-established after every step — nothing
-          about later success is assumed, each exit is constructed. (Messages, deliberately, are not
+          This is a bank-run theorem over the list it is given; no holder enumeration is derived from
+          state. Its sibling <span class="mono">deployment_reachable_redeemClaims_anyOrder</span> handles
+          arbitrary bounded and repeated claimants. In both, the admission record is re-established
+          after every step — nothing about later success is assumed. Messages are deliberately not
           mined, and callers are not authenticated at this altitude: inclusion, fees, and signatures
-          live at the transaction layer.)
+          live at the transaction layer.
         </p>
       </div>
     </div>
@@ -868,11 +880,13 @@ footer a:hover{color:var(--ink)}
         phished <span class="mono">approve</span> and a relayed <span class="mono">permit</span> both
         attribute to the signing account. Collision-freedom is a stated hypothesis consumed only by
         attribution, scoped to the pairs the trace actually touched. Redemption theorems consume the
-        holder’s message or signed transaction as an input — none constructs a signature, and none
-        makes a code-bearing holder able to act: a contract that cannot call WETH10 — including
-        WETH10 itself, which can legally be sent its own token — keeps a balance that is conserved
-        but has no exit path of its own. Inclusion, propagation, key
-        custody, and fee markets are out of frame. The full boundary lives in
+        holder’s message or signed transaction as an input. For the funded code-free external-owner
+        envelope, the holder’s recovered signature is the sole unproved input; no theorem forges it.
+        Valid EIP-7702-delegated senders are admitted, but a holder with non-delegation contract code
+        that cannot call WETH10 — including WETH10 itself, which can legally be sent its own token —
+        keeps a conserved balance with no transaction-altitude exit of its own. Recipients remain
+        nonzero, non-precompile, and code-free where stated. The supplied everyone-list is not a state
+        enumeration. Inclusion, propagation, key custody, and fee markets are out of frame. The full boundary lives in
         <a href="https://github.com/skbaek/blanc/blob/main/PORTING.md" style="text-decoration:underline;text-underline-offset:3px">PORTING.md</a>
         and the WETH10 registries — declared non-claims, in the honest register.
       </p>
@@ -1072,7 +1086,7 @@ footer a:hover{color:var(--ink)}
         <div class="term" style="margin-top:16px"><span class="p">$</span> scripts/check-layering.sh
 <span class="ok">OK — layering: 3 contract(s) are siblings; 92 module(s) classified …</span>
 <span class="p">$</span> scripts/check-claims.sh
-<span class="ok">OK — WETH10 claim statements: 162 definitions/statements and exact
+<span class="ok">OK — WETH10 claim statements: 188 definitions/statements and exact
      record constructors pinned by Lean</span>
 <span class="p">$</span> scripts/check-weth.sh --no-build &amp;&amp; scripts/check-fmint.sh --no-build
 <span class="ok">OK — weth fixtures: 11/11 PASS</span>
@@ -1199,7 +1213,7 @@ footer a:hover{color:var(--ink)}
 <span class="p">$</span> scripts/check.sh --no-build
 <span class="p">$</span> scripts/check-claims.sh</div>
         <p class="dim" style="font-size:.88rem;margin:14px 0 0">
-          <span class="mono">check.sh</span> audits all 318 theorems against their pinned axiom
+          <span class="mono">check.sh</span> audits all 333 theorems against their pinned axiom
           sets — failing on an extra <em>or missing</em> axiom, on <span class="mono">sorryAx</span>,
           and on any <span class="mono">native_decide</span>-style escape.
           <span class="mono">check-claims.sh</span> then Lean-checks the exact <em>statements</em> of

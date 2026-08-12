@@ -551,20 +551,29 @@ def AllowanceQuiescent (ca u : Adr) (w : Jaune.State) : Prop :=
   ∀ owner spender : B256, owner.toAdr = u →
     (w.getStor ca).get (projectedAllowanceKey owner spender) = 0
 
-/-- Whether one counted frame is a committed authorizing act of `u`: a
-counted committed WETH10-at-`ca` execution with actual caller `u`, or a
-committed successful `permit` whose owner argument normalizes to `u`. -/
+/-- Whether one counted frame is an effectful authorizing act of `u`: a debit
+whose retained provenance names `u` as actual caller, an `approve` store by
+`u`, or a successful `permit` store whose recovered owner normalizes to `u`.
+Pure reads and calls with no debit or allowance write are deliberately not
+authorizing acts, even when their caller is `u`. -/
 def CountedFrame.authorizes (frame : CountedFrame) (u : Adr) : Bool :=
-  frame.caller = u ||
+  (match frame.action with
+    | some action =>
+        match action.debit with
+        | some debit => debit.actualCaller = u
+        | none => false
+    | none => false) ||
     match frame.allowance with
     | some event =>
         match event.visit with
+        | .approveStore _ => event.caller = u
         | .permitStore _ => event.owner.toAdr = u
         | _ => false
     | none => false
 
-/-- No counted committed WETH10-at-`ca` execution with caller `u`, and no
-committed successful `permit` whose owner argument normalizes to `u`. -/
+/-- No effectful authorizing act by `u` occurs in the counted ledger: no debit
+by `u`, no allowance write by `u`, and no successful `permit` recovering to
+`u`. -/
 def NoAuthorizingActBy
     {chainId : UInt64} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
@@ -945,15 +954,22 @@ theorem viewReadFrame_lastWrite_transparent (u viewer : Adr) (ow sp value : B256
   simp [viewReadFrame, approveFrame1, fixtureFrame, lastAllowanceWriteAt, AllowanceEvent.key,
     AllowanceVisit.written?]
 
-/-- A view read moves nothing and authorizes nobody but its own caller: it
+/-- A view read moves nothing and is not an effectful authorization; it
 touches a pair without ever entering the hardened fold. -/
-theorem viewReadFrame_inert (u viewer : Adr) (ow sp value : B256) (hv : viewer ≠ u) :
+theorem viewReadFrame_inert (u viewer : Adr) (ow sp value : B256)
+    (_hv : viewer ≠ u) :
     (viewReadFrame viewer ow sp value).permanentOutflow u = 0 ∧
       (viewReadFrame viewer ow sp value).hardenedContribution [] u = 0 ∧
       (viewReadFrame viewer ow sp value).authorizes u = false := by
   refine ⟨?_, ?_, ?_⟩ <;>
     simp [viewReadFrame, fixtureFrame, CountedFrame.permanentOutflow,
-      CountedFrame.hardenedContribution, CountedFrame.authorizes, hv]
+      CountedFrame.hardenedContribution, CountedFrame.authorizes]
+
+/-- Even the holder's own allowance view is not an effectful authorizing act. -/
+theorem viewReadFrame_sameCaller_not_authorizing
+    (u : Adr) (ow sp value : B256) :
+    (viewReadFrame u ow sp value).authorizes u = false := by
+  simp [viewReadFrame, fixtureFrame, CountedFrame.authorizes]
 
 private def flashMaxDebit (borrower : Adr) (ow sp : B256) : DebitProvenance :=
   { actualCaller := borrower
@@ -1205,7 +1221,7 @@ theorem dormantLedger_authorizes_false (other u w fl : Adr) (spW caWord : B256)
   intro frame hframe
   simp [dormantLedger] at hframe
   rcases hframe with rfl | rfl | rfl | rfl | rfl
-  · simp [dormantMintFrame, fixtureFrame, CountedFrame.authorizes, hother]
+  · simp [dormantMintFrame, fixtureFrame, CountedFrame.authorizes]
   · simp [dormantIncomingTransferFrame, fixtureFrame, CountedFrame.authorizes, hother]
   · simp [dormantApproveFrame, fixtureFrame, CountedFrame.authorizes, hw]
   · simp [dormantSpendFrame, fixtureFrame, CountedFrame.authorizes, hsp]

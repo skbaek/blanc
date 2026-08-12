@@ -249,28 +249,6 @@ def canonicalRedemptionMessage
     accessedStorageKeys := .ofList []
     disablePrecompiles := false }
 
-/-- Canonical `withdrawTo` calldata really does dispatch on `withdrawTo`.  The
-four selector bytes sit above the recipient word's twelve zero bytes, so the
-top word of the calldata shifts down to exactly the selector. -/
-theorem withdrawToCalldata_selector (e : Sevm) (recipient : Adr) (q : Nat)
-    (hdata : e.data = withdrawToCalldata recipient q) :
-    Sevm.selector e = withdrawToSelector := by
-  have hlen : e.data.length = 68 := by
-    rw [hdata]
-    simp [withdrawToCalldata, abiSelectorBytes_length, B256.length_toBytes]
-  simp only [Sevm.selector, Sevm.dataWord, List.sliceD]
-  rw [show B256.toNat 0 = 0 from rfl, List.drop_zero,
-    List.takeD_eq_take _ (by omega)]
-  rw [hdata, withdrawToCalldata]
-  simp only [withdrawToSelector, withdrawToSelector_eq]
-  rw [show abiSelectorBytes (542910584 : B256) = [0x20, 0x5c, 0x28, 0x78]
-    from rfl]
-  simp only [Adr.toB256, B256.toBytes, B128.toBytes, UInt64.toBytes,
-    UInt32.toBytes, UInt16.toBytes, List.cons_append, List.nil_append,
-    List.take_succ_cons, List.take_zero]
-  simp only [Bytes.toB256, Bytes.toB256_go_eight_cons]
-  rfl
-
 /-- The constructed envelope is admissible.  Every field is discharged either
 by the definition above, by the boundary's stability, or by the claim's own
 recipient facts and the independently supplied non-precompile fact about the
@@ -338,6 +316,7 @@ inductive RedemptionRun (dp : DeployParams) (ca : Adr) :
       {w mid post : State} {msg : Msg} {out : MsgCallOutput}
       (henv : AdmissibleRedemptionMessage
         dp ca c.owner c.recipient c.amount w msg)
+      (message_eq : msg = canonicalRedemptionMessage ca c w)
       (hrun : processMessageCall msg = .ok (mid, out))
       (heffect : MessageRedemptionExactEffect
         dp ca c.owner c.recipient c.amount w mid out)
@@ -439,7 +418,7 @@ theorem redeemClaims_run
         hstable.messageRedemption_enabled_of_le hq henv
       obtain ⟨post, hout⟩ :=
         ih mid heffect.postStable (hadm.step heffect)
-      refine ⟨post, .cons henv hrun heffect hout.run, hout.stable, ?_, ?_, ?_,
+      refine ⟨post, .cons henv rfl hrun heffect hout.run, hout.stable, ?_, ?_, ?_,
         hout.sumPreserved.trans heffect.sumPreserved,
         fun a => (hout.codePreserved a).trans (heffect.codePreserved a), ?_⟩
       · intro v
@@ -577,6 +556,66 @@ theorem repeatedOwner_admissible
       simpa [ownerClaimTotal] using hbudget
     · simp [ownerClaimTotal, hv]
 
+/-! ## A supplied everyone-list instance -/
+
+/-- One full-balance self-contained claim per supplied holder.  The recipient
+map is explicit because receiver admissibility is real theorem content. -/
+def fullBalanceClaims (ca : Adr) (w : State)
+    (holders : List Adr) (recipient : Adr → Adr) : List RedemptionClaim :=
+  holders.map fun u => ⟨u, bookedBalanceNat w ca u, recipient u⟩
+
+/-- With no duplicate holder, the aggregate claim for a listed owner is
+exactly that owner's full booked balance; unlisted owners have zero claim. -/
+theorem ownerClaimTotal_fullBalanceClaims
+    {ca : Adr} {w : State} {holders : List Adr} {recipient : Adr → Adr}
+    (hnodup : holders.Nodup) (u : Adr) :
+    ownerClaimTotal (fullBalanceClaims ca w holders recipient) u =
+      if u ∈ holders then bookedBalanceNat w ca u else 0 := by
+  induction holders with
+  | nil => simp [fullBalanceClaims, ownerClaimTotal]
+  | cons v holders ih =>
+      have hv : v ∉ holders := (List.nodup_cons.mp hnodup).1
+      have htail : holders.Nodup := (List.nodup_cons.mp hnodup).2
+      rw [fullBalanceClaims]
+      simp only [List.map_cons, ownerClaimTotal_cons]
+      change (if v = u then bookedBalanceNat w ca v else 0) +
+          ownerClaimTotal (fullBalanceClaims ca w holders recipient) u =
+        if u ∈ v :: holders then bookedBalanceNat w ca u else 0
+      rw [ih htail]
+      by_cases hvu : v = u
+      · subst v
+        simp [hv]
+      · have huv : u ≠ v := fun h => hvu h.symm
+        simp [hvu, huv]
+
+/-- Any permutation of a duplicate-free supplied holder list's full-balance
+claims runs successfully, provided its explicitly chosen recipients are
+admissible.  This is the precise finite-list “everyone out” instance. -/
+theorem redeemEveryoneList_anyOrder
+    {dp : DeployParams} {ca : Adr} {w : State}
+    {holders : List Adr} {recipient : Adr → Adr}
+    {claims : List RedemptionClaim}
+    (hca : ¬ pragueRules.isPrecomp ca)
+    (hstable : Stable dp ca w)
+    (hnodup : holders.Nodup)
+    (hrecipients : ∀ u ∈ holders,
+      ClaimAdmissible ca w
+        ⟨u, bookedBalanceNat w ca u, recipient u⟩)
+    (hperm : (fullBalanceClaims ca w holders recipient).Perm claims) :
+    ∃ post, RedemptionOutcome dp ca claims w post := by
+  have hadm : ClaimsAdmissible ca w
+      (fullBalanceClaims ca w holders recipient) := by
+    refine ⟨?_, ?_⟩
+    · intro c hc
+      rcases List.mem_map.mp hc with ⟨u, hu, rfl⟩
+      exact hrecipients u hu
+    · intro u
+      rw [ownerClaimTotal_fullBalanceClaims hnodup u]
+      by_cases hu : u ∈ holders
+      · simp [hu]
+      · simp [hu]
+  exact redeemClaims_anyOrder hca hstable hadm hperm
+
 /-! ## The deployment-rooted instance -/
 
 /-- A holder redeeming to itself: the recipient is the equally qualified
@@ -612,6 +651,25 @@ theorem deployment_reachable_redeemClaims_anyOrder
     ∃ post, RedemptionOutcome dp ca ds future.state post :=
   redeemClaims_anyOrder hroot.target_not_precompile
     (hroot.reachable_stable hfuture) hadm hperm
+
+/-- The deployment-rooted full-balance instance for any supplied
+duplicate-free holder list and admissible recipient map. -/
+theorem deployment_reachable_redeemEveryoneList_anyOrder
+    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {base deployed future : BlockChain} {holders : List Adr}
+    {recipient : Adr → Adr} {claims : List RedemptionClaim}
+    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
+    (hfuture : BlockChain.ReachUsing
+      (ChainConfig.pragueOnly chainId) deployed future)
+    (hnodup : holders.Nodup)
+    (hrecipients : ∀ u ∈ holders,
+      ClaimAdmissible ca future.state
+        ⟨u, bookedBalanceNat future.state ca u, recipient u⟩)
+    (hperm :
+      (fullBalanceClaims ca future.state holders recipient).Perm claims) :
+    ∃ post, RedemptionOutcome dp ca claims future.state post :=
+  redeemEveryoneList_anyOrder hroot.target_not_precompile
+    (hroot.reachable_stable hfuture) hnodup hrecipients hperm
 
 end Weth10
 
