@@ -360,7 +360,7 @@ def registerPauser (dp : DeployParams) : Func :=
 def registerAfterSet : Func :=
   loadWord previousPauserWord +++ iszero :::
   (loadWord newPauserWord +++ iszero :::
-      (Func.stop <?>
+    (Func.stop <?>
       (checkedHeartbeatExpiry <|
         dup 0 ::: mstoreAt 0 +++
         loadWord newPauserWord +++ tagTop expiryRegion +++ sstore :::
@@ -419,16 +419,19 @@ def decodePausedResult : Func :=
           (pauseSuccess <?> (.call emptyRevertSlot))))))
 
 def pauseAfterSet : Func :=
-  pushB256 pauseForSelector ::: mstoreAt 8 +++
-  loadWord durationWord +++ mstoreAt 9 +++
-  pushList [0, 0, 36, 0x11c, 0] +++ loadWord targetWord +++ gas ::: call :::
-  iszero :::
-  ((.call bubbleRevertSlot) <?>
-    (pushB256 isPausedSelector ::: mstoreAt 8 +++
-      pushList [0, 0, 4, 0x11c] +++ loadWord targetWord +++ gas ::: statcall :::
+  loadWord targetWord +++ dup 0 ::: extcodesize ::: iszero :::
+  ((.call emptyRevertSlot) <?>
+    (pop :::
+      pushB256 pauseForSelector ::: mstoreAt 8 +++
+      loadWord durationWord +++ mstoreAt 9 +++
+      pushList [0, 0, 36, 0x11c, 0] +++ loadWord targetWord +++ gas ::: call :::
       iszero :::
       ((.call bubbleRevertSlot) <?>
-        decodePausedResult)))
+        (pushB256 isPausedSelector ::: mstoreAt 8 +++
+          pushList [0, 0, 4, 0x11c] +++ loadWord targetWord +++ gas ::: statcall :::
+          iszero :::
+          ((.call bubbleRevertSlot) <?>
+            decodePausedResult)))))
 
 def pause : Func :=
   requireStaticArgs 1 <| canonicalAddressArg 0 <|
@@ -561,10 +564,8 @@ def initcodeSizeEstimate : Nat :=
   constructorPrefixBudget + (spikeCode officialParams).length + constructorArgsBytes
 
 theorem official_initcode_size_estimate :
-    initcodeSizeEstimate =
-      constructorPrefixBudget + (spikeCode officialParams).length +
-        constructorArgsBytes := by
-  rfl
+    initcodeSizeEstimate = 9214 := by
+  decide +kernel
 
 theorem official_initcode_estimate_below_eip3860 :
     initcodeSizeEstimate < 49152 := by
