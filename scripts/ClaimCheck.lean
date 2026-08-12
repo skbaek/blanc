@@ -1730,6 +1730,33 @@ example {chainId : UInt64} {dp : DeployParams} {ca u recipient : Adr}
   deployment_reachable_residual_transactionRedemption_enabled
     hroot hcheckpoint hq hentry henv
 
+/-! The rebased pair states its bound against the *full booked balance at the
+future snapshot itself*: rebasing the window at the future collapses the
+outflow terms, so no residual subtraction appears in either statement. -/
+
+example {chainId : UInt64} {dp : DeployParams} {ca u recipient : Adr}
+    {q : Nat} {base deployed future : BlockChain} {msg : Msg}
+    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
+    (hfuture : BlockChain.ReachUsing
+      (ChainConfig.pragueOnly chainId) deployed future)
+    (hq : q ≤ bookedBalanceNat future.state ca u)
+    (henv : AdmissibleRedemptionMessage dp ca u recipient q future.state msg) :
+    MessageRedemptionEnabled dp ca u recipient q future.state msg :=
+  deployment_reachable_booked_messageRedemption_enabled hroot hfuture hq henv
+
+example {chainId : UInt64} {dp : DeployParams} {ca u recipient : Adr}
+    {q : Nat} {base deployed future : BlockChain}
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
+    (hfuture : BlockChain.ReachUsing
+      (ChainConfig.pragueOnly chainId) deployed future)
+    (hentry : benv.state = future.state)
+    (hq : q ≤ bookedBalanceNat future.state ca u)
+    (henv : AdmissibleRedemptionTx dp ca u recipient q benv bout tx index) :
+    TransactionRedemptionEnabled dp ca u recipient q benv bout tx index :=
+  deployment_reachable_booked_transactionRedemption_enabled
+    hroot hfuture hentry hq henv
+
 /-! The flagship record, pinned field by field. This is the pin that protects
 the goal's central invariant: `hardenedDescription` carries
 `NoAllowanceKeyCollision` as its OWN hypothesis, while `messageEnabled` and
@@ -1792,6 +1819,17 @@ example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
     ∃ history, FutureRedemptionGuarantee
       chainId dp ca u checkpoint future history :=
   deployment_reachable_future_redeemable hroot hcheckpoint hfuture
+
+example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {base deployed checkpoint future : BlockChain}
+    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
+    (hcheckpoint : BlockChain.ReachUsing
+      (ChainConfig.pragueOnly chainId) deployed checkpoint)
+    (hfuture : BlockChain.ReachUsing
+      (ChainConfig.pragueOnly chainId) checkpoint future) :
+    ∃ history, ∀ u : Adr, FutureRedemptionGuarantee
+      chainId dp ca u checkpoint future history :=
+  deployment_reachable_future_redeemable_allHolders hroot hcheckpoint hfuture
 
 example {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
     {base deployed : BlockChain}

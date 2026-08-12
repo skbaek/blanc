@@ -112,6 +112,41 @@ theorem deployment_reachable_residual_transactionRedemption_enabled
   rw [hentry]
   exact Nat.le_trans hq hfloor
 
+/-- Rebasing the window at the future itself collapses the outflow terms, so
+the *entire booked balance* at any reachable snapshot — not merely a
+checkpoint residual — is message-redemption enabled there. -/
+theorem deployment_reachable_booked_messageRedemption_enabled
+    {chainId : UInt64} {dp : DeployParams} {ca u recipient : Adr}
+    {q : Nat} {base deployed future : BlockChain} {msg : Msg}
+    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
+    (hfuture : BlockChain.ReachUsing
+      (ChainConfig.pragueOnly chainId) deployed future)
+    (hq : q <= bookedBalanceNat future.state ca u)
+    (henv : AdmissibleRedemptionMessage dp ca u recipient q future.state msg) :
+    MessageRedemptionEnabled dp ca u recipient q future.state msg :=
+  (hroot.reachable_stable hfuture).messageRedemption_enabled_of_le hq henv
+
+/-- The transaction-level counterpart of the rebased bound: the full booked
+balance at any reachable snapshot is transaction-redemption enabled from that
+snapshot as the entry state. -/
+theorem deployment_reachable_booked_transactionRedemption_enabled
+    {chainId : UInt64} {dp : DeployParams} {ca u recipient : Adr}
+    {q : Nat} {base deployed future : BlockChain}
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
+    (hfuture : BlockChain.ReachUsing
+      (ChainConfig.pragueOnly chainId) deployed future)
+    (hentry : benv.state = future.state)
+    (hq : q <= bookedBalanceNat future.state ca u)
+    (henv : AdmissibleRedemptionTx dp ca u recipient q benv bout tx index) :
+    TransactionRedemptionEnabled dp ca u recipient q benv bout tx index := by
+  have hstable : Stable dp ca benv.state := by
+    rw [hentry]
+    exact hroot.reachable_stable hfuture
+  refine hstable.transactionRedemption_enabled_of_le ?_ henv
+  rw [hentry]
+  exact hq
+
 /-! ## The flagship guarantee -/
 
 /-- Everything a checkpoint holder is promised about an arbitrary reachable
@@ -186,6 +221,43 @@ theorem deployment_reachable_future_redeemable
     exists_accountedHistory_of_reachUsing (dp := dp) (ca := ca)
       hcheckpointStable hfuture
   refine ⟨history, hfutureStable, hfuture, ?_, ?_, ?_, ?_, ?_⟩
+  · exact (holderFlow_flash_cancelled hcheckpointStable history).2
+  · have hfloor := holderFlow_residual_floor hcheckpointStable history (u := u)
+    omega
+  · exact fun hnc =>
+      permanentOutflow_eq_hardenedOutflow_of_noCollision
+        hcheckpointStable history hnc
+  · exact fun _ _ _ hq henv =>
+      deployment_reachable_residual_messageRedemption_enabled
+        hroot hcheckpoint hq henv
+  · exact fun _ _ _ _ _ _ hentry hq henv =>
+      deployment_reachable_residual_transactionRedemption_enabled
+        hroot hcheckpoint hq hentry henv
+
+/-- The simultaneous form of the flagship: because the accounted history is
+recovered from the reachability derivation alone, one history carries the
+whole guarantee for *every* holder at once — `∃ history, ∀ u`, not merely
+`∀ u, ∃ history`. -/
+theorem deployment_reachable_future_redeemable_allHolders
+    {chainId : UInt64} {dp : DeployParams} {ca : Adr}
+    {base deployed checkpoint future : BlockChain}
+    (hroot : Weth10.DeploymentRoot chainId base deployed dp ca)
+    (hcheckpoint : BlockChain.ReachUsing
+      (ChainConfig.pragueOnly chainId) deployed checkpoint)
+    (hfuture : BlockChain.ReachUsing
+      (ChainConfig.pragueOnly chainId) checkpoint future) :
+    ∃ history, ∀ u : Adr, FutureRedemptionGuarantee
+      chainId dp ca u checkpoint future history := by
+  have hcheckpointStable : Stable dp ca checkpoint.state :=
+    hroot.reachable_stable hcheckpoint
+  have hfutureStable : Stable dp ca future.state :=
+    hroot.reachable_stable (reachUsing_trans hcheckpoint hfuture)
+  obtain ⟨history⟩ :=
+    exists_accountedHistory_of_reachUsing (dp := dp) (ca := ca)
+      hcheckpointStable hfuture
+  refine ⟨history, ?_⟩
+  intro u
+  refine ⟨hfutureStable, hfuture, ?_, ?_, ?_, ?_, ?_⟩
   · exact (holderFlow_flash_cancelled hcheckpointStable history).2
   · have hfloor := holderFlow_residual_floor hcheckpointStable history (u := u)
     omega

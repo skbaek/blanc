@@ -620,7 +620,10 @@ Blanc.Weth10.holderFlow_hardened_floor|$STANDARD
 Blanc.Weth10.dormant_holder_balance_monotone|$STANDARD
 Blanc.Weth10.deployment_reachable_residual_messageRedemption_enabled|$STANDARD
 Blanc.Weth10.deployment_reachable_residual_transactionRedemption_enabled|$STANDARD
+Blanc.Weth10.deployment_reachable_booked_messageRedemption_enabled|$STANDARD
+Blanc.Weth10.deployment_reachable_booked_transactionRedemption_enabled|$STANDARD
 Blanc.Weth10.deployment_reachable_future_redeemable|$STANDARD
+Blanc.Weth10.deployment_reachable_future_redeemable_allHolders|$STANDARD
 Blanc.Weth10.deploymentRoot_allowanceQuiescent|$STANDARD
 Blanc.Weth10.deployment_fullWindow_future_redeemable|$STANDARD
 Blanc.Weth10.redeemClaims_anyOrder|$STANDARD

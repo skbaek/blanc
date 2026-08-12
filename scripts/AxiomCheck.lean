@@ -348,7 +348,10 @@ import Blanc.Weth10AnyOrder
 #print axioms Blanc.Weth10.dormant_holder_balance_monotone
 #print axioms Blanc.Weth10.deployment_reachable_residual_messageRedemption_enabled
 #print axioms Blanc.Weth10.deployment_reachable_residual_transactionRedemption_enabled
+#print axioms Blanc.Weth10.deployment_reachable_booked_messageRedemption_enabled
+#print axioms Blanc.Weth10.deployment_reachable_booked_transactionRedemption_enabled
 #print axioms Blanc.Weth10.deployment_reachable_future_redeemable
+#print axioms Blanc.Weth10.deployment_reachable_future_redeemable_allHolders
 #print axioms Blanc.Weth10.deploymentRoot_allowanceQuiescent
 #print axioms Blanc.Weth10.deployment_fullWindow_future_redeemable
 #print axioms Blanc.Weth10.redeemClaims_anyOrder
