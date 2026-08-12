@@ -48,6 +48,7 @@ def officialConstructorArgs : ConstructorArgs :=
     initialHeartbeatInterval := 31536000 }
 
 def ConstructorArgs.Valid (args : ConstructorArgs) : Prop :=
+  args.admin.toNat < 2 ^ 160 ∧
   args.admin.toNat ≠ 0 ∧
   args.minPauseDuration.toNat ≠ 0 ∧
   args.minPauseDuration.toNat ≤ args.maxPauseDuration.toNat ∧
@@ -147,6 +148,9 @@ def heartbeatUpdatedEvent : B256 :=
   signatureHash "HeartbeatUpdated" [.address, .uint256]
 def pauseTriggeredEvent : B256 :=
   signatureHash "PauseTriggered" [.address, .address, .uint256]
+def circuitBreakerInitializedEvent : B256 :=
+  signatureHash "CircuitBreakerInitialized"
+    [.address, .uint256, .uint256, .uint256, .uint256]
 
 def pauseForSelector : B256 := selector "pauseFor" [.uint256]
 def isPausedSelector : B256 := selector "isPaused" []
@@ -174,6 +178,7 @@ def finishSetPauserSlot : Nat := 18
 def registerAfterSetSlot : Nat := 19
 def pauseAfterSetSlot : Nat := 20
 def enumLoopSlot : Nat := 21
+def arithmeticPanicSlot : Nat := 22
 
 /-! ## Small endpoint helpers -/
 
@@ -189,6 +194,21 @@ def onlyAdmin (dp : DeployParams) (body : Func) : Func :=
 def canonicalAddressArg (k : B256) (body : Func) : Func :=
   arg k +++ checkNonAddress +++
   ((.call emptyRevertSlot) <?> body)
+
+/-- Modern Solidity's static-argument decoder rejects selector-matched short
+calldata instead of letting CALLDATALOAD zero-padding synthesize arguments.
+Trailing bytes remain accepted. -/
+def requireStaticArgs (words : Nat) (body : Func) : Func :=
+  pushB256 (Nat.toB256 (4 + 32 * words)) ::: calldatasize ::: lt :::
+  (Func.rev <?> body)
+
+/-- Compute `block.timestamp + heartbeatInterval` with Solidity 0.8 checked
+addition.  On overflow this emits `Panic(0x11)`; otherwise `body` receives the
+sum on top of the stack. -/
+def checkedHeartbeatExpiry (body : Func) : Func :=
+  timestamp ::: pushB256 heartbeatIntervalSlot ::: sload ::: add :::
+  dup 0 ::: timestamp ::: swap 0 ::: lt :::
+  ((.call arithmeticPanicSlot) <?> body)
 
 def storeHeartbeatExpiryFromStack : Line :=
   dup 0 :: mstoreAt 0 ++
@@ -214,19 +234,19 @@ def heartbeatInterval : Func :=
   pushB256 heartbeatIntervalSlot ::: sload ::: returnWord
 
 def heartbeatExpiry : Func :=
-  canonicalAddressArg 0 <|
+  requireStaticArgs 1 <| canonicalAddressArg 0 <|
     arg 0 +++ tagTop expiryRegion +++ sload ::: returnWord
 
 def getPauser : Func :=
-  canonicalAddressArg 0 <|
+  requireStaticArgs 1 <| canonicalAddressArg 0 <|
     arg 0 +++ tagTop assignmentRegion +++ sload ::: returnWord
 
 def getPausableCount : Func :=
-  canonicalAddressArg 0 <|
+  requireStaticArgs 1 <| canonicalAddressArg 0 <|
     arg 0 +++ tagTop countRegion +++ sload ::: returnWord
 
 def isPauserLive : Func :=
-  canonicalAddressArg 0 <|
+  requireStaticArgs 1 <| canonicalAddressArg 0 <|
     arg 0 +++ tagTop expiryRegion +++ sload ::: timestamp ::: lt ::: returnWord
 
 /-- Loop state is one stack word, `i`; the ABI length `n` remains at memory
@@ -253,7 +273,7 @@ def getPausables : Func :=
 /-! ## Admin configuration writes -/
 
 def setPauseDuration (dp : DeployParams) : Func :=
-  onlyAdmin dp <|
+  requireStaticArgs 1 <| onlyAdmin dp <|
     pushDeployWord dp.minPauseDuration ::: arg 0 +++ lt :::
     ((.call pauseBelowMinErrorSlot) <?>
       (pushDeployWord dp.maxPauseDuration ::: arg 0 +++ gt :::
@@ -264,7 +284,7 @@ def setPauseDuration (dp : DeployParams) : Func :=
             arg 0 +++ pushB256 pauseDurationSlot ::: sstore ::: Func.stop))))
 
 def setHeartbeatInterval (dp : DeployParams) : Func :=
-  onlyAdmin dp <|
+  requireStaticArgs 1 <| onlyAdmin dp <|
     pushDeployWord dp.minHeartbeatInterval ::: arg 0 +++ lt :::
     ((.call heartbeatBelowMinErrorSlot) <?>
       (pushDeployWord dp.maxHeartbeatInterval ::: arg 0 +++ gt :::
@@ -329,7 +349,7 @@ def finishSetPauser : Func :=
   ((.call registerAfterSetSlot) <?> (.call pauseAfterSetSlot))
 
 def registerPauser (dp : DeployParams) : Func :=
-  canonicalAddressArg 0 <| canonicalAddressArg 1 <|
+  requireStaticArgs 2 <| canonicalAddressArg 0 <| canonicalAddressArg 1 <|
     onlyAdmin dp <|
       arg 0 +++ mstoreAt targetWord +++
       arg 1 +++ mstoreAt newPauserWord +++
@@ -340,8 +360,8 @@ def registerPauser (dp : DeployParams) : Func :=
 def registerAfterSet : Func :=
   loadWord previousPauserWord +++ iszero :::
   (loadWord newPauserWord +++ iszero :::
-    (Func.stop <?>
-      (timestamp ::: pushB256 heartbeatIntervalSlot ::: sload ::: add :::
+      (Func.stop <?>
+      (checkedHeartbeatExpiry <|
         dup 0 ::: mstoreAt 0 +++
         loadWord newPauserWord +++ tagTop expiryRegion +++ sstore :::
         loadWord newPauserWord +++ pushB256 heartbeatUpdatedEvent :::
@@ -353,14 +373,14 @@ def registerAfterSet : Func :=
       logWith 1 0 1 +++
       loadWord newPauserWord +++ iszero :::
       (Func.stop <?>
-        (timestamp ::: pushB256 heartbeatIntervalSlot ::: sload ::: add :::
+        (checkedHeartbeatExpiry <|
           dup 0 ::: mstoreAt 0 +++
           loadWord newPauserWord +++ tagTop expiryRegion +++ sstore :::
           loadWord newPauserWord +++ pushB256 heartbeatUpdatedEvent :::
           logWith 1 0 1 +++ Func.stop))) <?>
     (loadWord newPauserWord +++ iszero :::
       (Func.stop <?>
-        (timestamp ::: pushB256 heartbeatIntervalSlot ::: sload ::: add :::
+        (checkedHeartbeatExpiry <|
           dup 0 ::: mstoreAt 0 +++
           loadWord newPauserWord +++ tagTop expiryRegion +++ sstore :::
           loadWord newPauserWord +++ pushB256 heartbeatUpdatedEvent :::
@@ -372,7 +392,7 @@ def heartbeat : Func :=
   caller ::: tagTop countRegion +++ sload ::: iszero :::
   ((.call senderNotPauserErrorSlot) <?>
     (caller ::: tagTop expiryRegion +++ sload ::: timestamp ::: lt :::
-      ((timestamp ::: pushB256 heartbeatIntervalSlot ::: sload ::: add :::
+      ((checkedHeartbeatExpiry <|
         storeHeartbeatExpiryFromStack +++ Func.stop) <?>
         (.call heartbeatExpiredErrorSlot))))
 
@@ -386,7 +406,7 @@ def pauseSuccess : Func :=
   pushB256 pauseTriggeredEvent ::: logWith 2 0 1 +++
   caller ::: tagTop countRegion +++ sload ::: iszero :::
   ((pushB256 0 ::: pauseExpiryFinish) <?>
-    (timestamp ::: pushB256 heartbeatIntervalSlot ::: sload ::: add :::
+    (checkedHeartbeatExpiry <|
       pauseExpiryFinish))
 
 def decodePausedResult : Func :=
@@ -411,7 +431,7 @@ def pauseAfterSet : Func :=
         decodePausedResult)))
 
 def pause : Func :=
-  canonicalAddressArg 0 <|
+  requireStaticArgs 1 <| canonicalAddressArg 0 <|
     pushB256 lockKey ::: tload ::: iszero :::
     ((pushB256 1 ::: pushB256 lockKey ::: tstore :::
       arg 0 +++ tagTop assignmentRegion +++ sload ::: caller ::: eq :::
@@ -474,7 +494,10 @@ def aux : List Func :=
     finishSetPauser,
     registerAfterSet,
     pauseAfterSet,
-    enumLoop ]
+    enumLoop,
+    Func.revData
+      ((signatureHash "Panic" [.uint256]).toBytes.take 4 ++
+        (Nat.toB256 0x11).toBytes) ]
 
 def spike (dp : DeployParams) : Prog :=
   ⟨Func.mainWith fallbackSlot (tree dp), aux⟩
@@ -525,13 +548,23 @@ def ConstructorArgs.initialWrites (args : ConstructorArgs) :
   [ (pauseDurationSlot, args.initialPauseDuration),
     (heartbeatIntervalSlot, args.initialHeartbeatInterval) ]
 
+/-- Constructor log identities in exact source order.  The full prefix must
+also establish their indexed topics and ABI data words. -/
+def ConstructorArgs.initialLogTopics (_args : ConstructorArgs) : List B256 :=
+  [ circuitBreakerInitializedEvent,
+    pauseDurationUpdatedEvent,
+    heartbeatIntervalUpdatedEvent ]
+
 def constructorPrefixBudget : Nat := 4096
 def constructorArgsBytes : Nat := 7 * 32
 def initcodeSizeEstimate : Nat :=
   constructorPrefixBudget + (spikeCode officialParams).length + constructorArgsBytes
 
-theorem official_initcode_size_estimate : initcodeSizeEstimate = 8963 := by
-  decide +kernel
+theorem official_initcode_size_estimate :
+    initcodeSizeEstimate =
+      constructorPrefixBudget + (spikeCode officialParams).length +
+        constructorArgsBytes := by
+  rfl
 
 theorem official_initcode_estimate_below_eip3860 :
     initcodeSizeEstimate < 49152 := by
@@ -642,6 +675,7 @@ example : setPauserModel [] 0 9 = none := by decide
 example : setPauserModel [] 7 9 = some [(7, 9)] := by decide
 example : setPauserModel [] 7 0 = some [] := by decide
 example : setPauserModel [(7, 9)] 7 9 = some [(7, 9)] := by decide
+example : setPauserModel [(7, 9)] 7 10 = some [(7, 10)] := by decide
 example : setPauserModel [(7, 9)] 7 0 = some [] := by decide
 example : setPauserModel [(7, 9), (8, 10)] 7 0 = some [(8, 10)] := by decide
 example : setPauserModel [(7, 9), (8, 10)] 8 0 = some [(7, 9)] := by decide
