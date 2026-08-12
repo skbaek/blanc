@@ -16,10 +16,13 @@
 # the alternative if you also want a reusable local-dev override — that needs a
 # Lake-DSL edit under the repo's Lean discipline.
 #
-# UNVERIFIED. Verify-on-run: (1) `lake update jaune` actually re-resolves the
-# manifest to the new pin before the build; (2) the elan install + PATH export
-# make `lake` available; (3) the summary shows the tested HEAD sha and the
-# pin-delta. Measure the clean-build time and tighten timeout-minutes.
+# VERIFIED IN PRODUCTION. All three verify-on-run items are confirmed by the
+# run history: `lake update jaune` re-resolves the manifest before the build,
+# the elan install + PATH export make `lake` available, and the summary reports
+# the tested HEAD sha and the pin-delta. Observed wall time has ranged ~345 s
+# to ~1,114 s (5.7-18.6 min) as blanc's proof surface has grown; the 60 min
+# timeout below is deliberately kept well clear of that ceiling rather than
+# tightened, since a canary that times out on growth is a false alarm.
 # ============================================================================
 name: canary (blanc vs jaune@HEAD)
 

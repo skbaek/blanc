@@ -2,8 +2,20 @@
 
 [![CI](https://github.com/skbaek/blanc/actions/workflows/ci.yml/badge.svg)](https://github.com/skbaek/blanc/actions/workflows/ci.yml)
 
+**[skbaek.github.io/blanc](https://skbaek.github.io/blanc/)** — the guided
+tour: the language, what each contract is promised, and what none of it claims.
+**[Jaune](https://github.com/skbaek/jaune)**
+([site](https://skbaek.github.io/jaune/)) — the EVM semantics every theorem
+here is stated against.
+
 Blanc is an EVM programming language optimized for formal verification 
 with interactive theorem provers. Blanc's toolchain is implemented in Lean 4.
+
+Blanc compiles to deployable EVM bytecode, and several contracts here
+reimplement contracts that exist on mainnet. **A Blanc theorem is a statement
+about Jaune's modeled semantics, not a deployment audit** — see
+[`SECURITY.md`](SECURITY.md) before treating any result here as a safety claim
+about anything on chain.
 
 When a Blanc contract reimplements an existing one, what that port does and
 does not claim — and the deviation-registry discipline that backs it — is
@@ -637,3 +649,26 @@ The precise behavior contract, evidence ownership, and non-claims are in
 [`WETH10_COMPATIBILITY.md`](WETH10_COMPATIBILITY.md) and
 [`WETH10_DEVIATIONS.md`](WETH10_DEVIATIONS.md). No arbitrary-borrower
 settlement theorem is established, and no such claim is implied here.
+
+## Contact
+
+Blanc is maintained by one person, [skbaek](https://github.com/skbaek)
+(<seulkeebaek@gmail.com>). There is no team behind it and no service-level
+promise; expect a reply within about a week.
+
+The most useful thing you can send is **a claim on this page, in a module
+docstring, or on [the site](https://skbaek.github.io/blanc/) that outruns the
+theorem behind it.** This repository is built around the discipline of never
+saying more than has been proved, and an outside reader finding a place where
+it slipped is the strongest available evidence that the discipline is real.
+Open an issue; it will be treated as a defect, not a disagreement.
+
+After that: a divergence from a deployed original that is missing from the
+relevant `*_DEVIATIONS.md` registry, a gate that passes when it should fail, or
+a source program whose compiled bytecode does not do what the source semantics
+say. [`SECURITY.md`](SECURITY.md) has the full list and the private-report
+address.
+
+If you have a contract with an invariant worth proving and are wondering
+whether this stack could reach it, that conversation is welcome — including
+the answer "not yet, and here is what would have to exist first."

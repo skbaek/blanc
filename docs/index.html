@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Blanc — barely a language, fully proved</title>
-<meta name="description" content="Blanc is a four-constructor contract language for the EVM, implemented and verified in Lean 4 over the Jaune semantics: a machine-checked compiler, contracts proved at chain altitude, and WETH10 reimplemented — every landed verification goal met — in under 24 hours for under $30 in tokens. The penultimate form of smart contract development.">
+<meta name="description" content="Blanc is a four-constructor contract language for the EVM, implemented and verified in Lean 4 over the Jaune semantics: a machine-checked compiler, contracts proved at chain altitude, and WETH10 reimplemented — every landed verification goal met — in under 24 hours of wall clock. The penultimate form of smart contract development.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='9' fill='%23fdfcf8'/%3E%3Crect x='3' y='3' width='58' height='58' rx='7' fill='none' stroke='%23211f1a' stroke-width='4'/%3E%3Ctext x='32' y='46' font-family='Georgia,serif' font-size='40' text-anchor='middle' fill='%23211f1a'%3EB%3C/text%3E%3C/svg%3E">
 <style>
 /* ────────────────────────────────────────────────────────────────
@@ -405,8 +405,8 @@ footer a:hover{color:var(--ink)}
       proved over every reachable state of a configured chain; an ERC-3156 flash-mint token whose
       supply conservation survives arbitrary reentrant borrower code; and a full 27-selector WETH10,
       taken from zero contract code to a verified drop-in — every verification goal in its charter
-      met — in under twenty-four hours of wall clock, by one developer with one laptop and under
-      thirty dollars of model tokens. Its flagship theorem is of a kind rarely purchasable at any
+      met — in under twenty-four hours of wall clock, by one developer with one laptop and an
+      agent in the loop. Its flagship theorem is of a kind rarely purchasable at any
       price: from a proved deployment onward, every holder’s booked balance stays exactly conserved
       at every reachable future, and every wei of it is redemption-enabled through canonical
       <span class="mono">withdraw</span> and <span class="mono">withdrawTo</span> at both message and
@@ -426,7 +426,7 @@ footer a:hover{color:var(--ink)}
       <div class="fact"><span class="n">333<span class="dimmer" style="font-size:1.05rem">/333</span></span>
         <span class="l">audited theorems, each pinned to its exact axiom set — checked in CI, on every commit</span></div>
       <div class="fact"><span class="n">21 h 07 m</span>
-        <span class="l">WETH10: zero contract code to closed verification goal — one dev, one laptop, &lt; $30 in tokens</span></div>
+        <span class="l">WETH10: zero contract code to closed verification goal — one dev, one laptop, an agent in the loop</span></div>
       <div class="fact"><span class="n">147<span class="dimmer" style="font-size:1.05rem">/147</span></span>
         <span class="l">differential rows agreeing with the deployed WETH10 — all 27 selectors + receive, zero mismatches</span></div>
     </div>
@@ -1054,7 +1054,6 @@ footer a:hover{color:var(--ink)}
             <div class="kv"><dt>start</dt><dd>2026-08-08, 02:53 — not one opcode of contract code written</dd></div>
             <div class="kv"><dt>close</dt><dd>2026-08-09, 00:00 — implementation, functional theorem families for every endpoint, deployment proof, differential suite: <b>21 h 07 m</b> wall clock<sup class="fn"><a href="#fn2">2</a></sup></dd></div>
             <div class="kv"><dt>crew</dt><dd>one developer, one laptop, an agent in the loop</dd></div>
-            <div class="kv"><dt>tokens</dt><dd>under $30</dd></div>
             <div class="kv"><dt>estimate</dt><dd>the planning forecast said 10–15 days; it was wrong by an order of magnitude, in the buyer’s favour</dd></div>
           </dl>
         </div>
@@ -1281,6 +1280,8 @@ footer a:hover{color:var(--ink)}
       <a href="https://skbaek.github.io/jaune/">jaune, the sibling →</a>
       <a href="https://github.com/skbaek/blanc/blob/main/PORTING.md" target="_blank" rel="noopener">porting policy →</a>
       <a href="https://lean-lang.org" target="_blank" rel="noopener">lean 4 →</a>
+      <a href="https://github.com/skbaek/blanc/issues" target="_blank" rel="noopener">found an overclaim? →</a>
+      <a href="mailto:seulkeebaek@gmail.com">seulkeebaek@gmail.com →</a>
     </div>
   </div>
 </footer>
