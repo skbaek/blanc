@@ -699,3 +699,11 @@ OK	2.708	Blanc/Weth10Hardened.lean
 OK	2.213	Blanc/Weth10Dormant.lean
 OK	1.195	Blanc/Weth10FutureRedeemable.lean
 OK	1.350	Blanc/Weth10AnyOrder.lean
+#
+# 2026-08-13 (lido-circuit-breaker-spike-v1): the new durable feasibility
+# module measured 23.195 s in a sequential, non-forced
+# `scripts/check-elab.sh --list --no-build` run. The catalogue's host guard
+# accepted the run; 93 files measured 456.6 s total. The user explicitly
+# authorized this one new-module admission. Every pre-existing baseline row
+# above remains byte-for-byte unchanged; `--rebase` was not run.
+OK	23.195	Blanc/LidoCircuitBreakerSpike.lean
