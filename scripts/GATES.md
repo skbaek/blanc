@@ -22,7 +22,7 @@ Choose the gate by what you changed, cheapest falsifier first:
 
 | you changed | run this first | then, before pushing |
 |---|---|---|
-| anything at all | `scripts/check-layering.sh` + `lake build` | `scripts/check.sh --no-build` |
+| anything at all | `scripts/check-doc-counts.sh` + `scripts/check-layering.sh` + `lake build` | `scripts/check.sh --no-build` |
 | imported source or an import | `scripts/check-trust-surface.sh` | `lake build && scripts/check.sh --no-build` |
 | WETH10 deployed-reference inputs, lock, or checker | `scripts/check-weth10-reference.sh` | the **full set**, in the order below |
 | WETH10 runtime, concrete parameters, differential scenarios, or endpoint manifest | `lake build` then `scripts/check-weth10-differential.sh` | the **full set**, in the order below |
@@ -45,6 +45,7 @@ self-inflicted contention.
 **The full set, in order.** This is what a checkpoint or merge candidate runs:
 
 ```
+scripts/check-doc-counts.sh
 scripts/check-layering.sh
 scripts/check-trust-surface.sh
 scripts/check-weth10-reference.sh
@@ -107,11 +108,12 @@ gate is the longest at roughly eight minutes; every gate still runs inline.
 
 ### The Python behind the shell
 
-Seventeen helpers do the actual work and are not gates in their own right — they are
+Eighteen helpers do the actual work and are not gates in their own right — they are
 invoked by the scripts above and should not be run directly in a report:
 
 | helper | used by | what it does |
 |---|---|---|
+| `scripts/check-doc-counts.py` | `check-doc-counts.sh` | derives the audited-theorem count from `scripts/AxiomCheck.lean` and fail-closed checks every registered quotation in the README, gate catalogue and site |
 | `scripts/check-trust-surface.py` | `check-trust-surface.sh` | traverses `Blanc.lean`'s transitive local import closure and compares every normalized forbidden-token occurrence against the exact fail-closed allowlist |
 | `scripts/weth10-reference.py` | `check-weth10-reference.sh` | derives the schema-v2 target from vendored inputs, checks independent identity pins, and provides the explicit networked refresh |
 | `scripts/weth10_reference_schema.py` | `check-weth10-reference.sh` | validates the complete generated lock against a hand-maintained exact nested schema independent of the builder |
