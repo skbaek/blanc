@@ -105,6 +105,18 @@ def qualify(namespace: list[str], name: str) -> str:
     return ".".join([*namespace, name]) if namespace else name
 
 
+def resolve_name(namespace: list[str], name: str) -> list[str]:
+    """Return every Lean lexical candidate for an identifier spelling."""
+    if name.startswith("_root_."):
+        return [name.removeprefix("_root_.")]
+    if name.startswith("Blanc.") or name == "Blanc":
+        return [name]
+    return [
+        qualify(namespace[:depth], name)
+        for depth in range(len(namespace), -1, -1)
+    ]
+
+
 def declarations(path: Path) -> dict[str, tuple[str, int]]:
     """Return actual Lean declaration headers, qualified under namespaces."""
     scopes: list[tuple[str, list[str]]] = []
@@ -169,31 +181,32 @@ def donor_aliases_or_exports(path: Path, donors: set[str]) -> list[tuple[str, in
         namespace = [part for kind, parts in scopes if kind == "namespace" for part in parts]
         if match := EXPORT_RE.match(line):
             exported_namespace, exported_items = match.groups()
-            root_qualified = exported_namespace.startswith("_root_.")
-            exported_namespace = exported_namespace.removeprefix("_root_.")
-            if root_qualified or exported_namespace.startswith("Blanc.") or exported_namespace == "Blanc":
-                owners = [exported_namespace.split(".")]
-            else:
-                # Lean resolves a relative namespace first locally and then
-                # through every lexical namespace ancestor. Audit every such
-                # owner so `namespace Blanc.Weth10; export ProcessMessage ...`
-                # cannot hide a re-export of `Blanc.ProcessMessage`.
-                owners = [
-                    [*namespace[:depth], *exported_namespace.split(".")]
-                    for depth in range(len(namespace), -1, -1)
-                ]
+            # Lean resolves a relative namespace first locally and then
+            # through every lexical namespace ancestor. Audit every such
+            # owner so `namespace Blanc.Weth10; export ProcessMessage ...`
+            # cannot hide a re-export of `Blanc.ProcessMessage`.
+            owners = [
+                owner.split(".")
+                for owner in resolve_name(namespace, exported_namespace)
+            ]
             for item in re.findall(IDENT, exported_items):
                 for owner in owners:
                     fqn = qualify(owner, item)
                     if fqn in donors:
                         hits.append((fqn, number, "export"))
         if match := ALIAS_RE.match(line):
-            # Lean's alias forms name the newly introduced declaration after
-            # either `=>` or `↔`; check every such target on this line.
-            for target in re.findall(rf"(?:=>|↔)\s*({IDENT})", match.group(1)):
-                fqn = qualify(namespace, target)
-                if fqn in donors:
-                    hits.append((fqn, number, "alias"))
+            # `alias newName := target` can recreate a removed donor name or
+            # introduce a differently named compatibility shim for a moved
+            # common declaration. Audit both sides with Lean's lexical rules.
+            alias_match = re.match(
+                rf"\s*({IDENT})\s*:=\s*({IDENT})", match.group(1)
+            )
+            if alias_match:
+                introduced, target = alias_match.groups()
+                for spelling in (introduced, target):
+                    for fqn in resolve_name(namespace, spelling):
+                        if fqn in donors:
+                            hits.append((fqn, number, "alias"))
     if scopes:
         raise ValueError(f"{path}: unclosed scope")
     return hits
@@ -272,7 +285,11 @@ def audit(root: Path) -> list[str]:
 def mutate_donor_alias(root: Path) -> None:
     path = root / "Blanc/Weth10HolderFlow.lean"
     with path.open("a", encoding="utf-8") as handle:
-        handle.write("\nnamespace Blanc.Weth10.Execution\nalias Blanc.Execution.commits => commits\nend Blanc.Weth10.Execution\n")
+        handle.write(
+            "\nnamespace Blanc.Weth10.Execution\n"
+            "alias commits := Blanc.Execution.commits\n"
+            "end Blanc.Weth10.Execution\n"
+        )
 
 
 def mutate_common_missing(root: Path) -> None:

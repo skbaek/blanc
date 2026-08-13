@@ -199,13 +199,16 @@ def main() -> int:
     # source search.
     first = mappings[0]
     first_fqn = f'Blanc.{first["declaration"]}'
+    export_namespace, export_item = first_fqn.rsplit(".", 1)
+    ancestor = export_namespace.split(".")[0]
+    relative_owner = ".".join(export_namespace.split(".")[1:])
     with tempfile.TemporaryDirectory(prefix="occurrence-ownership-controls-") as temp:
         temp_root = pathlib.Path(temp)
         alias_path = temp_root / "DonorAlias.lean"
         alias_path.write_text(
-            "namespace Blanc\n"
-            f"alias {first_fqn} => {first['declaration']}\n"
-            "end Blanc\n",
+            "namespace Blanc.Weth10\n"
+            f"alias occurrenceLegacy := {first_fqn}\n"
+            "end Blanc.Weth10\n",
             encoding="utf-8",
         )
         alias_control = ownership.donor_aliases_or_exports(
@@ -214,8 +217,38 @@ def main() -> int:
         if not alias_control or alias_control[0][0] != first_fqn:
             return fail("ownership parser donor-alias negative control failed")
 
+        relative_alias_path = temp_root / "DonorRelativeAlias.lean"
+        relative_alias_path.write_text(
+            "namespace Blanc\n"
+            "namespace Weth10\n"
+            f"alias occurrenceRelativeLegacy := {relative_owner}.{export_item}\n"
+            "end Weth10\n"
+            "end Blanc\n",
+            encoding="utf-8",
+        )
+        relative_alias_control = ownership.donor_aliases_or_exports(
+            relative_alias_path, {first_fqn}
+        )
+        if (not relative_alias_control or
+                relative_alias_control[0][0] != first_fqn):
+            return fail(
+                "ownership parser donor-relative-alias negative control failed"
+            )
+
+        root_alias_path = temp_root / "DonorRootAlias.lean"
+        root_alias_path.write_text(
+            "namespace Blanc.Weth10\n"
+            f"alias occurrenceRootLegacy := _root_.{first_fqn}\n"
+            "end Blanc.Weth10\n",
+            encoding="utf-8",
+        )
+        root_alias_control = ownership.donor_aliases_or_exports(
+            root_alias_path, {first_fqn}
+        )
+        if not root_alias_control or root_alias_control[0][0] != first_fqn:
+            return fail("ownership parser donor-root-alias negative control failed")
+
         export_path = temp_root / "DonorExport.lean"
-        export_namespace, export_item = first_fqn.rsplit(".", 1)
         export_path.write_text(
             "namespace Blanc.Weth10\n"
             f"export {export_namespace} ({export_item})\n"
@@ -229,8 +262,6 @@ def main() -> int:
             return fail("ownership parser donor-export negative control failed")
 
         relative_export_path = temp_root / "DonorRelativeExport.lean"
-        ancestor = export_namespace.split(".")[0]
-        relative_owner = ".".join(export_namespace.split(".")[1:])
         relative_export_path.write_text(
             f"namespace {ancestor}\n"
             "namespace Weth10\n"
@@ -293,7 +324,7 @@ def main() -> int:
 
     print(
         "OK — execution occurrence: 13 concrete controls; 6 Lean mutants; "
-        "WETH bridge-removal mutant; 9 moved-owner + 6 ownership-parser controls; "
+        "WETH bridge-removal mutant; 9 moved-owner + 8 ownership-parser controls; "
         "CREATE raw-commit mutant"
     )
     return 0
