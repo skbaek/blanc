@@ -14,8 +14,21 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 MANIFEST = ROOT / "scripts" / "execution-raw-attribution-owner-manifest.json"
-EXPECTED_OWNERS = 26
+EXPECTED_OWNERS = 24
 SHADOW_POLICIES = {"owner-only", "forbid-contract-basename"}
+SOURCE_SITE_DECLARATION = "Blanc.Exec.NinstOccurrence.sourceSite_of_rawFrameRoot"
+SOURCE_SITE_SIGNATURE = """theorem Exec.NinstOccurrence.sourceSite_of_rawFrameRoot
+    {globalRoot frameRoot : Exec.Deriv} {program : Prog}
+    {storageTarget codeAddress : Adr}
+    (occurrence : Exec.NinstOccurrence globalRoot)
+    (instructionEq : occurrence.instruction = .reg .sstore)
+    (_selected : frameRoot ∈ Exec.rawFrameRoots globalRoot.exc)
+    (invocation : frameRoot.exactInvocation program storageTarget codeAddress)
+    (sameFrame : Exec.Deriv.ParentPrefix frameRoot occurrence.node) :
+    ∃ site : Prog.SourceSite,
+      site ∈ program.sourceSites ∧
+      site.pc = occurrence.node.pc ∧
+      site.instruction = .reg .sstore := by"""
 
 
 @dataclass(frozen=True)
@@ -128,14 +141,42 @@ def shadow_errors(
     return errors
 
 
+def source_site_signature_errors(source: str, strip_comments) -> list[str]:
+    clean = strip_comments(source)
+    marker = "theorem Exec.NinstOccurrence.sourceSite_of_rawFrameRoot"
+    if clean.count(marker) != 1:
+        return [
+            f"SIGNATURE-MISMATCH — {SOURCE_SITE_DECLARATION}: "
+            "declaration header is absent or duplicated"
+        ]
+    suffix = clean.split(marker, 1)[1]
+    if ":= by" not in suffix:
+        return [
+            f"SIGNATURE-MISMATCH — {SOURCE_SITE_DECLARATION}: "
+            "theorem body delimiter is absent"
+        ]
+    actual = marker + suffix.split(":= by", 1)[0] + ":= by"
+    normalize = lambda text: " ".join(text.split())
+    if normalize(actual) != normalize(SOURCE_SITE_SIGNATURE):
+        return [
+            f"SIGNATURE-MISMATCH — {SOURCE_SITE_DECLARATION}: "
+            "exact selected-root/ParentPrefix signature drifted"
+        ]
+    return []
+
+
 def audit() -> list[str]:
     try:
         parser = load_lean_parser()
         common_path, globs, owners = read_manifest()
         if not common_path.is_file():
             return [f"COMMON-MISSING — common module is absent: {common_path}"]
+        common_source = common_path.read_text(encoding="utf-8")
         common = parser.declarations(common_path)
         errors = owner_errors(common, owners)
+        errors.extend(
+            source_site_signature_errors(common_source, parser.strip_comments)
+        )
         files = contract_files(globs)
         if not files:
             errors.append("SETUP — no contract module matched the manifest globs")
@@ -151,6 +192,7 @@ def audit() -> list[str]:
 def negative_controls() -> list[str]:
     parser = load_lean_parser()
     common_path, _globs, owners = read_manifest()
+    common_source = common_path.read_text(encoding="utf-8")
     common = parser.declarations(common_path)
     first = owners[0]
     missing = dict(common)
@@ -170,11 +212,35 @@ def negative_controls() -> list[str]:
             {synthetic: ("theorem", 1)}, owners, "synthetic.lean"
         )
     )
+    selected_mutant = common_source.replace(
+        "(_selected : frameRoot ∈ Exec.rawFrameRoots globalRoot.exc)",
+        "(_selected : True)",
+        1,
+    )
+    selected_live = any(
+        error.startswith("SIGNATURE-MISMATCH —")
+        for error in source_site_signature_errors(
+            selected_mutant, parser.strip_comments
+        )
+    )
+    prefix_mutant = common_source.replace(
+        "(sameFrame : Exec.Deriv.ParentPrefix frameRoot occurrence.node)",
+        "(sameFrame : True)",
+        1,
+    )
+    prefix_live = any(
+        error.startswith("SIGNATURE-MISMATCH —")
+        for error in source_site_signature_errors(prefix_mutant, parser.strip_comments)
+    )
     errors: list[str] = []
     if not missing_live:
         errors.append("CONTROL — common-owner removal was not detected")
     if not shadow_live:
         errors.append("CONTROL — contract-basename shadow was not detected")
+    if not selected_live:
+        errors.append("CONTROL — selected-root signature weakening was not detected")
+    if not prefix_live:
+        errors.append("CONTROL — ParentPrefix signature weakening was not detected")
     return errors
 
 
@@ -192,10 +258,11 @@ def main() -> int:
         print(error, file=sys.stderr)
     if errors:
         return 1
-    controls = "; 2/2 controls live" if args.negative_controls else ""
+    controls = "; 4/4 controls live" if args.negative_controls else ""
     print(
         f"OK — raw attribution ownership: {EXPECTED_OWNERS}/{EXPECTED_OWNERS} "
-        f"common owners; no contract basename shadows{controls}"
+        f"common owners; no contract basename shadows; exact selected-root "
+        f"signature{controls}"
     )
     return 0
 

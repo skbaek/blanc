@@ -15,6 +15,9 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 FIXTURE = ROOT / "scripts" / "ExecutionOccurrenceRegression.lean"
 WETH = ROOT / "Blanc" / "Weth10HolderFlowCompiled.lean"
 MOVE_MANIFEST = ROOT / "scripts" / "execution-occurrence-lift-manifest.json"
+RAW_ATTRIBUTION_OWNERSHIP = (
+    ROOT / "scripts" / "check-execution-raw-attribution-ownership.py"
+)
 EXPECTED = "[true, true, true, true, true, true, true, true, true, true, true, true, true]"
 
 MUTANTS = {
@@ -356,6 +359,14 @@ def main() -> int:
         )[0] != "abbrev":
             return fail("ownership parser wrong-kind negative control failed")
 
+    raw_ownership = run(
+        [sys.executable, str(RAW_ATTRIBUTION_OWNERSHIP), "--negative-controls"]
+    )
+    if raw_ownership.returncode != 0:
+        return fail("raw-attribution owner/shadow control failed", raw_ownership)
+    if not raw_ownership.stdout.startswith("OK — raw attribution ownership:"):
+        return fail("raw-attribution owner/shadow verdict drifted", raw_ownership)
+
     settlement = run([sys.executable, "scripts/check-execution-settlement.py"])
     if settlement.returncode != 0:
         return fail("CREATE settlement/raw-commit control failed", settlement)
@@ -365,6 +376,7 @@ def main() -> int:
     print(
         "OK — execution occurrence: 13 concrete controls; 6 Lean mutants; "
         "WETH bridge-removal mutant; 9 moved-owner + 9 ownership-parser controls; "
+        "24 raw-attribution owners + exact signature + 4 controls; "
         "CREATE raw-commit mutant"
     )
     return 0
