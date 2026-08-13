@@ -96,8 +96,12 @@ def strip_comments(text: str) -> str:
 
 
 def qualify(namespace: list[str], name: str) -> str:
+    if name.startswith("_root_."):
+        return name.removeprefix("_root_.")
     if name.startswith("Blanc.") or name == "Blanc":
         return name
+    if "_root_" in namespace:
+        namespace = namespace[namespace.index("_root_") + 1:]
     return ".".join([*namespace, name]) if namespace else name
 
 
@@ -165,7 +169,9 @@ def donor_aliases_or_exports(path: Path, donors: set[str]) -> list[tuple[str, in
         namespace = [part for kind, parts in scopes if kind == "namespace" for part in parts]
         if match := EXPORT_RE.match(line):
             exported_namespace, exported_items = match.groups()
-            if exported_namespace.startswith("Blanc.") or exported_namespace == "Blanc":
+            root_qualified = exported_namespace.startswith("_root_.")
+            exported_namespace = exported_namespace.removeprefix("_root_.")
+            if root_qualified or exported_namespace.startswith("Blanc.") or exported_namespace == "Blanc":
                 owners = [exported_namespace.split(".")]
             else:
                 # Lean resolves a relative namespace first locally and then

@@ -248,6 +248,23 @@ def main() -> int:
                 "ownership parser donor-relative-export negative control failed"
             )
 
+        root_export_path = temp_root / "DonorRootExport.lean"
+        root_export_path.write_text(
+            "namespace Blanc\n"
+            "namespace Weth10\n"
+            f"export _root_.{export_namespace} ({export_item})\n"
+            "end Weth10\n"
+            "end Blanc\n",
+            encoding="utf-8",
+        )
+        root_export_control = ownership.donor_aliases_or_exports(
+            root_export_path, {first_fqn}
+        )
+        if not root_export_control or root_export_control[0][0] != first_fqn:
+            return fail(
+                "ownership parser donor-root-export negative control failed"
+            )
+
         common_path = ROOT / first["commonModule"]
         common_source = common_path.read_text(encoding="utf-8")
         token = f'{first["kind"]} {first["declaration"]}'
@@ -276,7 +293,7 @@ def main() -> int:
 
     print(
         "OK — execution occurrence: 13 concrete controls; 6 Lean mutants; "
-        "WETH bridge-removal mutant; 9 moved-owner + 5 ownership-parser controls; "
+        "WETH bridge-removal mutant; 9 moved-owner + 6 ownership-parser controls; "
         "CREATE raw-commit mutant"
     )
     return 0
