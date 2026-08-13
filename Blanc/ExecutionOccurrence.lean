@@ -2,6 +2,7 @@ import Blanc.ExecutionSettlement
 import Blanc.Compiled
 import Blanc.CommonProofs
 import Blanc.ExecDeterminism
+import Blanc.Ladder
 
 /-!
 Contract-neutral instruction occurrences over finite execution derivations.
@@ -36,6 +37,13 @@ def Exec.rawNodes {pc : Nat} {sevm : Sevm} {pre : Devm}
   | .runOk _ _ child _ next =>
       root :: (Exec.rawNodes child ++ Exec.rawNodes next)
 termination_by sizeOf run
+
+/-- The execution proof itself heads its raw chronology. -/
+theorem Exec.mem_rawNodes_self
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) :
+    (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv) ∈ Exec.rawNodes run := by
+  cases run <;> simp [Exec.rawNodes]
 
 /-! ## Settlement-retained chronology -/
 
@@ -393,6 +401,571 @@ def Exec.SuccessfulSstoreOccurrence.Retained
     (write : Exec.SuccessfulSstoreOccurrence root) : Prop :=
   write.occurrence.Retained
 
+/-! ## Retained storage replay -/
+
+/-- Proof-free data projected from one successful SSTORE.  The exact proof
+node is retained so soundness can reconstruct the public occurrence witness. -/
+structure Exec.StorageWrite where
+  node : Exec.Deriv
+  owner : Adr
+  key : B256
+  value : B256
+
+@[ext] theorem Exec.StorageWrite.ext
+    {left right : Exec.StorageWrite}
+    (node : left.node = right.node)
+    (owner : left.owner = right.owner)
+    (key : left.key = right.key)
+    (value : left.value = right.value) : left = right := by
+  cases left
+  cases right
+  simp_all
+
+/-- Executably recognize a successful SSTORE driver node and project its raw
+stack key/value.  Terminal and spawning nodes cannot be successful SSTOREs. -/
+def Exec.Deriv.successfulSstore? (node : Exec.Deriv) : Option Exec.StorageWrite :=
+  match node.exc with
+  | .cont _ _ =>
+      match Evm.getInst ⟨node.pc, node.sevm, node.devm⟩, node.devm.stack with
+      | some (.next (.reg .sstore)), key :: value :: _ =>
+          some { node, owner := node.sevm.currentTarget, key, value }
+      | _, _ => none
+  | _ => none
+
+/-- Successful retained SSTORE events in the canonical global chronology. -/
+def Exec.retainedStorageWrites
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) : List Exec.StorageWrite :=
+  (Exec.retainedNodes run).filterMap Exec.Deriv.successfulSstore?
+
+/-- Project the data fields of an exact successful SSTORE occurrence. -/
+def Exec.SuccessfulSstoreOccurrence.storageWrite
+    {root : Exec.Deriv}
+    (write : Exec.SuccessfulSstoreOccurrence root) : Exec.StorageWrite :=
+  { node := write.occurrence.node
+    owner := write.occurrence.node.sevm.currentTarget
+    key := write.key
+    value := write.value }
+
+/-- Whether an event writes the selected persistent cell. -/
+def Exec.StorageWrite.matches
+    (write : Exec.StorageWrite) (owner : Adr) (key : B256) : Bool :=
+  write.owner == owner && write.key == key
+
+@[simp] theorem Exec.StorageWrite.matches_eq_true
+    {write : Exec.StorageWrite} {owner : Adr} {key : B256} :
+    write.matches owner key = true ↔
+      write.owner = owner ∧ write.key = key := by
+  simp [Exec.StorageWrite.matches]
+
+/-- Replay the selected storage word through chronological successful writes. -/
+def Exec.StorageWrite.replayCell
+    (owner : Adr) (key : B256) (initial : B256) :
+    List Exec.StorageWrite → B256 :=
+  fun writes => writes.foldl (fun current write =>
+    if write.matches owner key then write.value else current) initial
+
+private theorem Exec.StorageWrite.foldlCell_append
+    {owner : Adr} {key : B256} (initial : B256)
+    (left right : List Exec.StorageWrite) :
+    (left ++ right).foldl
+        (fun current write =>
+          if write.matches owner key then write.value else current) initial =
+      right.foldl
+        (fun current write =>
+          if write.matches owner key then write.value else current)
+        (left.foldl
+          (fun current write =>
+            if write.matches owner key then write.value else current) initial) := by
+  simp [List.foldl_append]
+
+private theorem Exec.StorageWrite.foldlCell_eq_of_none
+    {owner : Adr} {key : B256} {writes : List Exec.StorageWrite}
+    (initial : B256)
+    (none : ∀ write ∈ writes, write.matches owner key ≠ true) :
+    writes.foldl
+        (fun current write =>
+          if write.matches owner key then write.value else current) initial =
+      initial := by
+  induction writes generalizing initial with
+  | nil => rfl
+  | cons head tail ih =>
+      simp only [List.foldl_cons]
+      rw [if_neg (none head (by simp))]
+      exact ih initial (by
+        intro write member
+        exact none write (by simp [member]))
+
+private theorem Exec.StorageWrite.exists_last_matching
+    {owner : Adr} {key : B256} {writes : List Exec.StorageWrite}
+    (existsMatch : ∃ write ∈ writes, write.matches owner key = true) :
+    ∃ before write after,
+      writes = before ++ write :: after ∧
+      write.matches owner key = true ∧
+      ∀ later ∈ after, later.matches owner key ≠ true := by
+  induction writes with
+  | nil => simp at existsMatch
+  | cons head tail ih =>
+      by_cases tailMatch : ∃ write ∈ tail,
+          write.matches owner key = true
+      · rcases ih tailMatch with ⟨before, write, after, hsplit,
+          hmatch, hlast⟩
+        exact ⟨head :: before, write, after, by simp [hsplit], hmatch, hlast⟩
+      · have headMatch : head.matches owner key = true := by
+          rcases existsMatch with ⟨write, member, hmatch⟩
+          simp only [List.mem_cons] at member
+          rcases member with rfl | member
+          · exact hmatch
+          · exact (tailMatch ⟨write, member, hmatch⟩).elim
+        exact ⟨[], head, tail, rfl, headMatch, by
+          intro later member hmatch
+          exact tailMatch ⟨later, member, hmatch⟩⟩
+
+private theorem Exec.StorageWrite.last_value_eq_foldlCell
+    {owner : Adr} {key : B256} {writes : List Exec.StorageWrite}
+    {before after : List Exec.StorageWrite} {write : Exec.StorageWrite}
+    (split : writes = before ++ write :: after)
+    (matchWrite : write.matches owner key = true)
+    (last : ∀ later ∈ after, later.matches owner key ≠ true)
+    (initial : B256) :
+    writes.foldl
+        (fun current event =>
+          if event.matches owner key then event.value else current) initial =
+      write.value := by
+  subst writes
+  rw [Exec.StorageWrite.foldlCell_append]
+  simp only [List.foldl_cons, matchWrite, if_true]
+  exact Exec.StorageWrite.foldlCell_eq_of_none write.value last
+
+/-- Pointwise storage effect of a chronological successful-write list. -/
+def Exec.StorageReplay
+    (pre post : Devm) (writes : List Exec.StorageWrite) : Prop :=
+  ∀ owner key,
+    (Devm.getStor post owner).get key =
+      Exec.StorageWrite.replayCell owner key
+        ((Devm.getStor pre owner).get key) writes
+
+theorem Exec.StorageReplay.refl (state : Devm) :
+    Exec.StorageReplay state state [] := by
+  intro owner key
+  rfl
+
+theorem Exec.StorageReplay.of_getStor_eq
+    {pre post : Devm} (equal : Devm.getStor post = Devm.getStor pre) :
+    Exec.StorageReplay pre post [] := by
+  intro owner key
+  simpa [Exec.StorageWrite.replayCell] using
+    congrArg (fun storage : Stor => storage.get key) (congrFun equal owner)
+
+theorem Exec.StorageReplay.append
+    {pre middle post : Devm}
+    {left right : List Exec.StorageWrite}
+    (head : Exec.StorageReplay pre middle left)
+    (tail : Exec.StorageReplay middle post right) :
+    Exec.StorageReplay pre post (left ++ right) := by
+  intro owner key
+  rw [tail owner key, head owner key]
+  unfold Exec.StorageWrite.replayCell
+  exact (Exec.StorageWrite.foldlCell_append _ left right).symm
+
+/-- Message-entry value transfer changes balances but not persistent storage. -/
+theorem benvAfterTransfer_getStor_eq
+    {msg : Msg} {benv : Benv}
+    (transfer : msg.benvAfterTransfer = .ok benv) :
+    benv.state.getStor = msg.benv.state.getStor := by
+  funext owner
+  by_cases enabled : msg.shouldTransferValue = true
+  · rcases of_benvAfterTransfer enabled transfer with
+      ⟨middle, sub, rfl⟩
+    exact (of_state_transfer_fields sub).1 owner
+  · rw [of_benvAfterTransfer_no enabled transfer]
+
+/-- Settlement-aware replay transport for a concrete CALL message body. -/
+theorem ProcessMessage.storageReplay_of_body
+    {msg : Msg} {post parent : Devm}
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    {writes : List Exec.StorageWrite}
+    (process : ProcessMessage msg
+      (.some ⟨⟨pc, sevm, pre⟩, out⟩) (.ok post))
+    (parentState : parent.state = msg.benv.state)
+    (body : ∀ committed : Execution.commits out = true,
+      Exec.StorageReplay pre (Execution.committedPost out committed) writes) :
+    Exec.StorageReplay parent post
+      (if Frame.settlementCommits (Frame.ofCall msg) out = true
+       then writes else []) := by
+  by_cases settles : Frame.settlementCommits (Frame.ofCall msg) out = true
+  · rw [if_pos settles]
+    have committed := Frame.raw_commits_of_settlementCommits settles
+    have enter : (Frame.ofCall msg).enter = .run ⟨pc, sevm, pre⟩ :=
+      (RunFrame.some_inv process).1
+    rcases Frame.enter_run_inv enter with ⟨benv, transfer, evmEq⟩
+    simp only [Frame.ofCall] at transfer evmEq
+    have preState : pre.state = benv.state := by
+      exact congrArg (fun evm : Evm => evm.dyna.state) evmEq
+    have prefixEq : Devm.getStor pre = Devm.getStor parent := by
+      funext owner
+      change pre.state.getStor owner = parent.state.getStor owner
+      rw [preState, parentState, benvAfterTransfer_getStor_eq transfer]
+    have postState : post.state =
+        (Execution.committedPost out committed).state :=
+      ProcessMessage.ok_state_eq_committedPost process committed
+    have suffixEq : Devm.getStor post =
+        Devm.getStor (Execution.committedPost out committed) := by
+      funext owner
+      exact congrArg (fun state : State => state.getStor owner) postState
+    simpa only [List.nil_append, List.append_nil] using
+      (Exec.StorageReplay.of_getStor_eq prefixEq).append
+        ((body committed).append (Exec.StorageReplay.of_getStor_eq suffixEq))
+  · rw [if_neg settles]
+    have settledEq := (RunFrame.some_inv process).2
+    have postError : post.error.isSome = true := by
+      have notNone : post.error.isNone ≠ true := by
+        intro clean
+        apply settles
+        unfold Frame.settlementCommits
+        rw [← settledEq]
+        exact clean
+      cases errorEq : post.error <;> simp_all
+    have rollback := (ProcessMessage.rollback_of_error process postError).1
+    apply Exec.StorageReplay.of_getStor_eq
+    funext owner
+    change post.state.getStor owner = parent.state.getStor owner
+    rw [rollback, parentState]
+
+/-- Clean CREATE code-deposit settlement preserves the constructor body's
+persistent storage at every address. -/
+theorem ProcessCreateMessage.ok_getStor_eq_inner_of_clean
+    {msg : Msg} {slot : Xlot} {post : Devm}
+    (process : ProcessCreateMessage msg slot (.ok post))
+    (clean : post.error.isSome = false) :
+    ∃ inner : Devm,
+      ProcessMessage (processCreateMessage.msg msg) slot (.ok inner) ∧
+      Devm.getStor post = Devm.getStor inner ∧
+      inner.error.isSome = false := by
+  rcases ProcessCreateMessage.iff_processMessage.mp process with
+    ⟨result, innerProcess, settled⟩
+  cases result with
+  | error error => simp [processCreateMessage.settle] at settled
+  | ok inner =>
+      unfold processCreateMessage.settle at settled
+      simp only [bind, Except.bind] at settled
+      by_cases innerClean : inner.error.isNone = true
+      · rw [if_pos innerClean] at settled
+        cases charge : processCreateMessage.chargeCodeGas
+            msg.benv.stat.rules inner with
+        | error error =>
+            rw [charge] at settled
+            rcases error with ⟨error, charged⟩
+            cases error with
+            | halt reason =>
+                have eq := Except.ok.inj settled
+                rw [eq] at clean
+                simp [processCreateMessage.exceptionalHalt,
+                  Devm.error, Devm.setMeta] at clean
+            | revert => cases settled
+            | crypto reason => cases settled
+            | internal reason => cases settled
+        | ok charged =>
+            rw [charge] at settled
+            have eq := Except.ok.inj settled
+            refine ⟨inner, innerProcess, ?_, ?_⟩
+            · funext owner
+              calc
+                Devm.getStor post owner =
+                    Devm.getStor
+                      (charged.setCode msg.currentTarget
+                        ⟨⟨charged.output⟩⟩) owner := by rw [eq]
+                _ = Devm.getStor charged owner := by
+                  change ((charged.state.setCode msg.currentTarget
+                    ⟨⟨charged.output⟩⟩).get owner).stor = _
+                  exact State.setCode_get_stor
+                _ = Devm.getStor inner owner := by
+                  exact congrArg (fun state : State => state.getStor owner)
+                    (chargeCodeGas_state_ok charge)
+            · cases errorEq : inner.error <;> simp_all
+      · rw [if_neg innerClean] at settled
+        have eq := Except.ok.inj settled
+        rw [eq] at clean
+        change (inner.rollback msg.benv.state
+          msg.tenv.transientStorage).error.isSome = false at clean
+        change inner.error.isSome = false at clean
+        have innerNone : inner.error.isNone = true := by
+          cases errorEq : inner.error <;> simp_all
+        exact (innerClean innerNone).elim
+
+/-- CREATE's fresh-account preparation is storage-silent when the target was
+already storage-empty, including at the target address itself. -/
+theorem processCreateMessage_msg_getStor_eq_of_empty
+    {msg : Msg}
+    (empty : msg.benv.state.getStor msg.currentTarget = .empty) :
+    (processCreateMessage.msg msg).benv.state.getStor =
+      msg.benv.state.getStor := by
+  funext owner
+  by_cases target : msg.currentTarget = owner
+  · subst owner
+    dsimp [processCreateMessage.msg, Msg.withBenv, addCreatedAccount,
+      Benv.setStor, Benv.incrNonce, State.getStor]
+    rw [State.incrNonce_get_stor]
+    unfold State.setStor
+    rw [State.get_set_self]
+    exact empty.symm
+  · dsimp [processCreateMessage.msg, Msg.withBenv, addCreatedAccount,
+      Benv.setStor, Benv.incrNonce, State.getStor]
+    rw [State.incrNonce_get_stor, State.setStor_get_stor_ne target]
+
+/-- Settlement-aware replay transport for a concrete CREATE constructor.  The
+full CREATE settlement bit, rather than raw constructor success, decides
+whether constructor writes survive code deposit. -/
+theorem ProcessCreateMessage.storageReplay_of_body
+    {msg : Msg} {post parent : Devm}
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    {writes : List Exec.StorageWrite}
+    (process : ProcessCreateMessage msg
+      (.some ⟨⟨pc, sevm, pre⟩, out⟩) (.ok post))
+    (parentState : parent.state = msg.benv.state)
+    (fresh : Devm.getStor parent msg.currentTarget = .empty)
+    (body : ∀ committed : Execution.commits out = true,
+      Exec.StorageReplay pre (Execution.committedPost out committed) writes) :
+    Exec.StorageReplay parent post
+      (if Frame.settlementCommits (Frame.ofCreate msg) out = true
+       then writes else []) := by
+  by_cases settles : Frame.settlementCommits (Frame.ofCreate msg) out = true
+  · rw [if_pos settles]
+    have clean : post.error.isSome = false := by
+      have settledEq := (RunFrame.some_inv process).2
+      unfold Frame.settlementCommits at settles
+      rw [← settledEq] at settles
+      cases errorEq : post.error <;> simp_all
+    rcases ProcessCreateMessage.ok_getStor_eq_inner_of_clean process clean with
+      ⟨inner, innerProcess, postEq, innerClean⟩
+    let prepared : Devm :=
+      parent.withState (processCreateMessage.msg msg).benv.state
+    have preparedEq : Devm.getStor prepared = Devm.getStor parent := by
+      rw [show Devm.getStor prepared =
+          (processCreateMessage.msg msg).benv.state.getStor from rfl]
+      rw [processCreateMessage_msg_getStor_eq_of_empty (by
+        rw [← parentState]
+        exact fresh)]
+      funext owner
+      change msg.benv.state.getStor owner = parent.state.getStor owner
+      rw [← parentState]
+    have innerSettles :
+        Frame.settlementCommits
+          (Frame.ofCall (processCreateMessage.msg msg)) out = true := by
+      have innerEq := (RunFrame.some_inv innerProcess).2
+      unfold Frame.settlementCommits
+      rw [← innerEq]
+      cases errorEq : inner.error <;> simp_all
+    have innerReplay := ProcessMessage.storageReplay_of_body
+      innerProcess (parent := prepared) rfl body
+    rw [if_pos innerSettles] at innerReplay
+    simpa only [List.nil_append, List.append_nil] using
+      (Exec.StorageReplay.of_getStor_eq preparedEq).append
+        (innerReplay.append (Exec.StorageReplay.of_getStor_eq postEq))
+  · rw [if_neg settles]
+    have settledEq := (RunFrame.some_inv process).2
+    have postError : post.error.isSome = true := by
+      have notClean : post.error.isSome ≠ false := by
+        intro clean
+        apply settles
+        unfold Frame.settlementCommits
+        rw [← settledEq]
+        cases errorEq : post.error <;> simp_all
+      cases errorEq : post.error <;> simp_all
+    have rollback := ProcessCreateMessage.rollback_of_error process postError
+    apply Exec.StorageReplay.of_getStor_eq
+    funext owner
+    change post.state.getStor owner = parent.state.getStor owner
+    rw [rollback, parentState]
+
+/-- Replay transport through the concrete recursive slot of a generic CALL. -/
+theorem GenericCall.storageReplay_some_of_body
+    {sevm : Sevm} {pre post : Devm}
+    {gas : Nat} {value : B256} {caller target codeAddress : Adr}
+    {stv isStatic : Bool} {ii is oi os : Nat} {code : ByteArray}
+    {disablePrecompiles : Bool}
+    {pc : Nat} {childSevm : Sevm} {childPre : Devm}
+    {out : Execution} {writes : List Exec.StorageWrite}
+    (run : GenericCall sevm pre gas value caller target codeAddress stv
+      isStatic ii is oi os code disablePrecompiles
+      (.some ⟨⟨pc, childSevm, childPre⟩, out⟩) (.ok post))
+    (body : ∀ committed : Execution.commits out = true,
+      Exec.StorageReplay childPre
+        (Execution.committedPost out committed) writes) :
+    Exec.StorageReplay pre post
+      (if Frame.settlementCommits
+          (Frame.ofCall
+            (callMsg sevm (pre.withReturnData []) gas value caller target
+              codeAddress stv isStatic ((pre.memory.read ii is).1) code
+              disablePrecompiles)) out = true
+       then writes else []) := by
+  unfold GenericCall genericCall.step at run
+  simp only [Bind.bind, Except.bind, Pure.pure, Except.pure] at run
+  repeat' split at run
+  all_goals simp only [XStep.ofExcept, XStep.Run] at run
+  · cases run.1
+  · cases run.1
+  · obtain ⟨result, process, resume⟩ := run
+    rcases result with error | child
+    · cases Resume.call_run_error resume.symm
+    have childState : post.state = child.state :=
+      Resume.call_state resume.symm
+    let callPre := pre.withReturnData []
+    let msg := callMsg sevm callPre gas value caller target codeAddress stv
+      isStatic ((callPre.memory.read ii is).1) code disablePrecompiles
+    have process' : ProcessMessage msg
+        (.some ⟨⟨pc, childSevm, childPre⟩, out⟩) (.ok child) := by
+      simpa only [ProcessMessage, msg, callPre, Mem.read] using process
+    have replay := ProcessMessage.storageReplay_of_body
+      process' (parent := callPre) rfl body
+    have prefixEq : Devm.getStor callPre = Devm.getStor pre := rfl
+    have suffixEq : Devm.getStor post = Devm.getStor child := by
+      funext owner
+      exact congrArg (fun state : State => state.getStor owner) childState
+    have memoryEq : callPre.memory = pre.memory := rfl
+    dsimp only [msg] at replay
+    rw [memoryEq] at replay
+    dsimp only [callPre] at replay
+    convert
+      (Exec.StorageReplay.of_getStor_eq prefixEq).append
+        (replay.append (Exec.StorageReplay.of_getStor_eq suffixEq)) using 1
+    by_cases retain : Frame.settlementCommits
+        (Frame.ofCall
+          (callMsg sevm (pre.withReturnData []) gas value caller target
+            codeAddress stv isStatic ((pre.memory.read ii is).1) code
+            disablePrecompiles)) out = true <;>
+      simp [retain]
+
+/-- Replay transport through the concrete recursive slot of a generic CREATE,
+including pruning on failed code deposit. -/
+theorem GenericCreate.storageReplay_some_of_body
+    {sevm : Sevm} {pre post : Devm}
+    {endowment : B256} {newAddress : Adr} {mi ms : Nat}
+    {pc : Nat} {childSevm : Sevm} {childPre : Devm}
+    {out : Execution} {writes : List Exec.StorageWrite}
+    (run : GenericCreate sevm pre endowment newAddress mi ms
+      (.some ⟨⟨pc, childSevm, childPre⟩, out⟩) (.ok post))
+    (body : ∀ committed : Execution.commits out = true,
+      Exec.StorageReplay childPre
+        (Execution.committedPost out committed) writes) :
+    Exec.StorageReplay pre post
+      (if Frame.settlementCommits
+          (Frame.ofCreate
+            (createMsg sevm
+              (addAccessedAddress
+                (((pre.withGasLeft
+                    (pre.gasLeft - except64th pre.gasLeft)).withReturnData
+                  []).incrNonce sevm.currentTarget) newAddress)
+              (except64th pre.gasLeft) endowment newAddress
+              ((pre.memory.read mi ms).1))) out = true
+       then writes else []) := by
+  obtain ⟨frame, resume, spawn, -, -⟩ := XStep.Run.some_inv run
+  have targetEmpty : Devm.getStor pre newAddress = .empty :=
+    genericCreate_step_spawn_getStor_empty spawn
+  unfold GenericCreate genericCreate.step at run
+  simp only [Bind.bind, Except.bind, Except.assert, assertDynamic,
+    Pure.pure, Except.pure] at run
+  repeat' split at run
+  all_goals simp only [XStep.ofExcept, XStep.Run] at run
+  all_goals try
+    (have slotEq : (some ⟨⟨pc, childSevm, childPre⟩, out⟩ : Xlot) = none :=
+      run.1
+     cases slotEq)
+  obtain ⟨result, process, resumeRun⟩ := run
+  cases result with
+  | error error =>
+      simp [Resume.run, liftToExecution] at resumeRun
+  | ok settled =>
+      let createPre :=
+        addAccessedAddress
+          (((pre.withGasLeft
+              (pre.gasLeft - except64th pre.gasLeft)).withReturnData
+            []).incrNonce sevm.currentTarget) newAddress
+      let msg := createMsg sevm createPre (except64th pre.gasLeft)
+        endowment newAddress ((pre.memory.read mi ms).1)
+      have process' : ProcessCreateMessage msg
+          (.some ⟨⟨pc, childSevm, childPre⟩, out⟩) (.ok settled) := by
+        simpa only [ProcessCreateMessage, msg, createPre, Mem.read] using
+          process
+      have prefixEq : Devm.getStor createPre = Devm.getStor pre := by
+        funext owner
+        have stateEq : createPre.state =
+            pre.state.incrNonce sevm.currentTarget := by
+          rfl
+        change createPre.state.getStor owner = pre.state.getStor owner
+        rw [stateEq]
+        exact State.incrNonce_get_stor
+      have replay := ProcessCreateMessage.storageReplay_of_body
+        process' (parent := createPre) rfl (by
+          rw [prefixEq]
+          exact targetEmpty) body
+      have settledState : post.state = settled.state :=
+        Resume.create_state resumeRun.symm
+      have suffixEq : Devm.getStor post = Devm.getStor settled := by
+        funext owner
+        exact congrArg (fun state : State => state.getStor owner) settledState
+      dsimp only [msg] at replay
+      dsimp only [createPre] at replay
+      convert
+        (Exec.StorageReplay.of_getStor_eq prefixEq).append
+          (replay.append (Exec.StorageReplay.of_getStor_eq suffixEq)) using 1
+      by_cases retain : Frame.settlementCommits
+          (Frame.ofCreate
+            (createMsg sevm
+              (addAccessedAddress
+                (((pre.withGasLeft
+                    (pre.gasLeft - except64th pre.gasLeft)).withReturnData
+                  []).incrNonce sevm.currentTarget) newAddress)
+              (except64th pre.gasLeft) endowment newAddress
+              ((pre.memory.read mi ms).1))) out = true <;>
+        simp [retain]
+
+/-- Contract-neutral recursive executable-instruction transport. -/
+theorem Xinst.storageReplay_some_of_body
+    {sevm : Sevm} {pre post : Devm} {x : Xinst}
+    {frame : Jaune.Frame} {resume : Resume}
+    {pc : Nat} {childSevm : Sevm} {childPre : Devm}
+    {out : Execution}
+    {result : Except (EvmError × State × AdrSet × Tra) Devm}
+    {writes : List Exec.StorageWrite}
+    (spawn : Xinst.step sevm pre x = .spawn frame resume)
+    (frameRun : RunFrame frame
+      (.some ⟨⟨pc, childSevm, childPre⟩, out⟩) result)
+    (resumeRun : resume.run result = .ok post)
+    (body : ∀ committed : Execution.commits out = true,
+      Exec.StorageReplay childPre
+        (Execution.committedPost out committed) writes) :
+    Exec.StorageReplay pre post
+      (if Frame.settlementCommits frame out = true then writes else []) := by
+  rcases Xinst.step_shape sevm pre x with
+    ⟨execution, shape, hprefix⟩ |
+    ⟨d, endowment, newAddress, mi, ms, hprefix, shape⟩ |
+    ⟨d, d₀, gas, value, caller, target, codeAddress, stv, isStatic,
+      ii, isz, oi, osz, code, disablePrecompiles, hprefix, _, _, _, shape⟩ <;>
+    rw [shape] at spawn
+  · cases spawn
+  · rcases genericCreate_step_spawn_exact spawn with ⟨rfl, rfl⟩
+    have run : GenericCreate sevm d endowment newAddress mi ms
+        (.some ⟨⟨pc, childSevm, childPre⟩, out⟩) (.ok post) := by
+      unfold GenericCreate XStep.Run
+      rw [spawn]
+      exact ⟨result, frameRun, resumeRun.symm⟩
+    have replay := GenericCreate.storageReplay_some_of_body run body
+    simpa only [List.nil_append] using
+      (Exec.StorageReplay.of_getStor_eq
+        (funext hprefix.getStor).symm).append replay
+  · rcases genericCall_step_spawn_exact spawn with ⟨rfl, rfl⟩
+    have run : GenericCall sevm d gas value caller target codeAddress stv
+        isStatic ii isz oi osz code disablePrecompiles
+        (.some ⟨⟨pc, childSevm, childPre⟩, out⟩) (.ok post) := by
+      unfold GenericCall XStep.Run
+      rw [spawn]
+      exact ⟨result, frameRun, resumeRun.symm⟩
+    have replay := GenericCall.storageReplay_some_of_body run body
+    simpa only [List.nil_append] using
+      (Exec.StorageReplay.of_getStor_eq
+        (funext hprefix.getStor).symm).append replay
+
 /-- The storage owner is the executing frame's current target. -/
 def Exec.SuccessfulSstoreOccurrence.storageOwner
     {root : Exec.Deriv} (write : Exec.SuccessfulSstoreOccurrence root) : Adr :=
@@ -425,6 +998,418 @@ theorem Exec.SuccessfulSstoreOccurrence.storage_update
     simpa only [write.instruction_eq, write.stepSuccess] using
       write.occurrence.stepRun
   exact sstore_getStor_set hrun (pref_of_split write.popped)
+
+/-- The executable event projection is sound for every retained node. -/
+theorem Exec.Deriv.successfulSstore?_sound
+    {root node : Exec.Deriv} {event : Exec.StorageWrite}
+    (retained : node ∈ Exec.retainedNodes root.exc)
+    (found : node.successfulSstore? = some event) :
+    ∃ write : Exec.SuccessfulSstoreOccurrence root,
+      write.Retained ∧ write.storageWrite = event := by
+  have raw : node ∈ Exec.rawNodes root.exc :=
+    (Exec.retainedNodes_sublist_rawNodes root.exc).subset retained
+  rcases node with ⟨pc, sevm, pre, out, run⟩
+  cases run with
+  | halt hstep => simp [Exec.Deriv.successfulSstore?] at found
+  | doneErr hstep henter hresume =>
+      simp [Exec.Deriv.successfulSstore?] at found
+  | doneOk hstep henter hresume next =>
+      simp [Exec.Deriv.successfulSstore?] at found
+  | runErr hstep henter child hresume =>
+      simp [Exec.Deriv.successfulSstore?] at found
+  | runOk hstep henter child hresume next =>
+      simp [Exec.Deriv.successfulSstore?] at found
+  | cont hstep next =>
+      cases hget : Evm.getInst ⟨pc, sevm, pre⟩ with
+      | none => simp [Exec.Deriv.successfulSstore?, hget] at found
+      | some instruction =>
+          cases instruction with
+          | jump jumpInst => simp [Exec.Deriv.successfulSstore?, hget] at found
+          | last last => simp [Exec.Deriv.successfulSstore?, hget] at found
+          | next instruction =>
+              cases instruction with
+              | exec exec =>
+                  simp [Exec.Deriv.successfulSstore?, hget] at found
+              | push bytes size =>
+                  simp [Exec.Deriv.successfulSstore?, hget] at found
+              | reg regular =>
+                  cases regular <;>
+                    try simp [Exec.Deriv.successfulSstore?, hget] at found
+                  cases hstack : pre.stack with
+                  | nil =>
+                      simp [hstack] at found
+                  | cons key rest =>
+                      cases rest with
+                      | nil =>
+                          simp [hstack] at found
+                      | cons value tail =>
+                          simp [hstack] at found
+                          subst event
+                          let occurrence : Exec.NinstOccurrence root :=
+                            { node := ⟨pc, sevm, pre, out, .cont hstep next⟩
+                              instruction := .reg .sstore
+                              slot := .none
+                              stepResult := .ok _
+                              reached := raw
+                              decoded := hget
+                              filled := trivial
+                              stepRun := by
+                                unfold Ninst.StepRun
+                                rw [← Evm.step_next hget, hstep]
+                                exact ⟨rfl, rfl⟩ }
+                          rcases occurrence.toSuccessfulSstore rfl rfl with
+                            ⟨write, hwrite⟩
+                          refine ⟨write, ?_, ?_⟩
+                          · unfold Exec.SuccessfulSstoreOccurrence.Retained Exec.NinstOccurrence.Retained
+                            rw [hwrite]
+                            exact retained
+                          · have known : [key, value] <<+ pre.stack := by
+                              rw [hstack]
+                              exact ⟨tail, rfl⟩
+                            have popped := write.popped
+                            rw [hwrite] at popped
+                            rcases of_cons_cons_pref_of_cons_cons_pref known
+                                (pref_of_split popped) with
+                              ⟨hkey, hvalue, remainder⟩
+                            ext
+                            · unfold Exec.SuccessfulSstoreOccurrence.storageWrite
+                              rw [hwrite]
+                            · unfold Exec.SuccessfulSstoreOccurrence.storageWrite
+                              rw [hwrite]
+                            · simpa [Exec.SuccessfulSstoreOccurrence.storageWrite]
+                                using hkey.symm
+                            · simpa [Exec.SuccessfulSstoreOccurrence.storageWrite]
+                                using hvalue.symm
+
+/-- Every retained projected event has an exact retained SSTORE occurrence. -/
+theorem Exec.exists_successfulSstore_of_mem_retainedStorageWrites
+    {root : Exec.Deriv} {event : Exec.StorageWrite}
+    (member : event ∈ Exec.retainedStorageWrites root.exc) :
+    ∃ write : Exec.SuccessfulSstoreOccurrence root,
+      write.Retained ∧ write.storageWrite = event := by
+  simp only [Exec.retainedStorageWrites, List.mem_filterMap] at member
+  rcases member with ⟨node, nodeMember, found⟩
+  exact Exec.Deriv.successfulSstore?_sound (root := root) (node := node)
+    nodeMember found
+
+/-- The selected write is the last retained successful SSTORE to its exact
+storage owner and raw key.  A later no-op write therefore supersedes an
+earlier value-changing write. -/
+def Exec.SuccessfulSstoreOccurrence.IsLastRetained
+    {root : Exec.Deriv}
+    (write : Exec.SuccessfulSstoreOccurrence root) : Prop :=
+  ∃ before after,
+    Exec.retainedStorageWrites root.exc =
+      before ++ write.storageWrite :: after ∧
+    ∀ later ∈ after,
+      ¬ (later.owner = write.storageOwner ∧ later.key = write.key)
+
+private theorem Exec.StorageWrite.exists_match_of_foldl_ne
+    {owner : Adr} {key initial : B256}
+    {writes : List Exec.StorageWrite}
+    (changed : writes.foldl
+        (fun current write =>
+          if write.matches owner key then write.value else current) initial ≠
+      initial) :
+    ∃ write ∈ writes, write.matches owner key = true := by
+  by_contra none
+  push Not at none
+  exact changed (Exec.StorageWrite.foldlCell_eq_of_none initial none)
+
+/-- Pure chronological last-writer selection from a replay equation. -/
+private theorem Exec.exists_lastRetainedSstore_of_replay
+    {root : Exec.Deriv} {owner : Adr} {key initial final : B256}
+    (replay : final = Exec.StorageWrite.replayCell owner key initial
+      (Exec.retainedStorageWrites root.exc))
+    (changed : initial ≠ final) :
+    ∃ write : Exec.SuccessfulSstoreOccurrence root,
+      write.Retained ∧
+      write.storageOwner = owner ∧
+      write.key = key ∧
+      write.value = final ∧
+      write.IsLastRetained := by
+  have foldChanged :
+      (Exec.retainedStorageWrites root.exc).foldl
+          (fun current write =>
+            if write.matches owner key then write.value else current) initial ≠
+        initial := by
+    intro equal
+    apply changed
+    rw [replay]
+    exact equal.symm
+  rcases Exec.StorageWrite.exists_match_of_foldl_ne foldChanged with
+    ⟨event, member, matchEvent⟩
+  rcases Exec.StorageWrite.exists_last_matching
+      (writes := Exec.retainedStorageWrites root.exc)
+      ⟨event, member, matchEvent⟩ with
+    ⟨before, lastEvent, after, split, lastMatch, maximal⟩
+  rcases Exec.exists_successfulSstore_of_mem_retainedStorageWrites
+      (event := lastEvent) (by rw [split]; simp) with
+    ⟨write, retained, eventEq⟩
+  have identities := Exec.StorageWrite.matches_eq_true.mp lastMatch
+  have valueEq : write.value = final := by
+    rw [replay]
+    unfold Exec.StorageWrite.replayCell
+    rw [Exec.StorageWrite.last_value_eq_foldlCell split lastMatch maximal]
+    simpa [Exec.SuccessfulSstoreOccurrence.storageWrite] using
+      congrArg Exec.StorageWrite.value eventEq
+  refine ⟨write, retained, ?_, ?_, valueEq, ?_⟩
+  · change write.occurrence.node.sevm.currentTarget = owner
+    exact (congrArg Exec.StorageWrite.owner eventEq).trans identities.1
+  · simpa [Exec.SuccessfulSstoreOccurrence.storageWrite] using
+      (congrArg Exec.StorageWrite.key eventEq).trans identities.2
+  · refine ⟨before, after, ?_, ?_⟩
+    · rw [eventEq]
+      exact split
+    · intro later laterMember same
+      apply maximal later laterMember
+      apply Exec.StorageWrite.matches_eq_true.mpr
+      change later.owner = write.occurrence.node.sevm.currentTarget ∧
+        later.key = write.key at same
+      exact ⟨same.1.trans
+        ((congrArg Exec.StorageWrite.owner eventEq).trans identities.1),
+        same.2.trans
+          ((congrArg Exec.StorageWrite.key eventEq).trans identities.2)⟩
+
+/-! ## Semantic replay through execution -/
+
+/-- One successful nonterminal driver step has exactly the storage effect
+recognized by `successfulSstore?`: either one raw SSTORE event or none. -/
+private theorem Exec.storageReplay_cont_head
+    {pc pc' : Nat} {sevm : Sevm} {pre post : Devm} {out : Execution}
+    (step : Evm.step ⟨pc, sevm, pre⟩ = .cont pc' post)
+    (next : Exec pc' sevm post out) :
+    Exec.StorageReplay pre post
+      ([⟨pc, sevm, pre, out, Exec.cont step next⟩].filterMap
+        Exec.Deriv.successfulSstore?) := by
+  cases decoded : Evm.getInst ⟨pc, sevm, pre⟩ with
+  | none =>
+      unfold Evm.step at step
+      rw [decoded] at step
+      cases step
+  | some instruction =>
+      cases instruction with
+      | jump jumpInst =>
+          rw [Evm.step_jump decoded] at step
+          cases jumpEq : Jinst.run ⟨pc, sevm, pre⟩ jumpInst with
+          | error error =>
+              rw [jumpEq] at step
+              cases step
+          | ok pair =>
+              rcases pair with ⟨actualPc, actualPost⟩
+              rw [jumpEq] at step
+              cases step
+              have frame :=
+                Jinst.run_instructionFrame ⟨pc, sevm, pre⟩ jumpInst
+              rw [jumpEq] at frame
+              simpa [Exec.Deriv.successfulSstore?, decoded] using
+                Exec.StorageReplay.of_getStor_eq (funext frame.getStor).symm
+      | last last =>
+          rw [Evm.step_last decoded] at step
+          cases step
+      | next instruction =>
+          have nstep : Ninst.step ⟨pc, sevm, pre⟩ instruction =
+              .cont pc' post := by
+            rw [← Evm.step_next decoded]
+            exact step
+          have pcEq : pc' = pc + instruction.size :=
+            Ninst.step_cont_pc nstep
+          subst pc'
+          have nrun : Ninst.StepRun pc sevm pre instruction .none (.ok post) := by
+            unfold Ninst.StepRun
+            rw [nstep]
+            exact ⟨rfl, rfl⟩
+          cases instruction with
+          | push bytes bound =>
+              have equal : Devm.getStor pre = Devm.getStor post :=
+                Ninst.Hinv.inv (f := Devm.getStor)
+                  (show Ninst.Run sevm pre (.push bytes bound) post from
+                    ⟨.none, trivial, pc, nrun⟩)
+              simpa [Exec.Deriv.successfulSstore?, decoded] using
+                Exec.StorageReplay.of_getStor_eq equal.symm
+          | exec executable =>
+              have xrun : Xinst.Run sevm pre executable .none (.ok post) :=
+                XStep.run_toStep.mp nrun
+              simpa [Exec.Deriv.successfulSstore?, decoded] using
+                Exec.StorageReplay.of_getStor_eq
+                  (Xinst.none_getStor_eq xrun)
+          | reg regular =>
+              have rrun : Rinst.run ⟨pc, sevm, pre⟩ regular = .ok post := by
+                have equal : (.ok post : Execution) =
+                    Rinst.run ⟨pc, sevm, pre⟩ regular := by
+                  simpa [Ninst.StepRun, Ninst.step_reg,
+                    Step.run_ofExecution] using nrun
+                exact equal.symm
+              by_cases store : regular = .sstore
+              · subst regular
+                have sstoreRun : Ninst.Run sevm pre Ninst.sstore post :=
+                  ⟨.none, trivial, pc, nrun⟩
+                cases stackEq : pre.stack with
+                | nil =>
+                    rcases of_run_sstore sstoreRun with ⟨key, value, popped⟩
+                    have pref := pref_of_split popped
+                    rcases pref with ⟨suffix, impossible⟩
+                    simp [Split, stackEq] at impossible
+                | cons key rest =>
+                    cases rest with
+                    | nil =>
+                        rcases of_run_sstore sstoreRun with
+                          ⟨actualKey, value, popped⟩
+                        have pref := pref_of_split popped
+                        rcases pref with ⟨suffix, impossible⟩
+                        simp [Split, stackEq] at impossible
+                    | cons value tail =>
+                        intro owner storageKey
+                        by_cases ownerEq : sevm.currentTarget = owner
+                        · subst owner
+                          have updated := sstore_getStor_set sstoreRun
+                            (show [key, value] <<+ pre.stack by
+                              rw [stackEq]
+                              exact ⟨tail, rfl⟩)
+                          rw [updated]
+                          by_cases keyEq : key = storageKey
+                          · subst storageKey
+                            simp [Exec.Deriv.successfulSstore?, decoded,
+                              stackEq, Exec.StorageWrite.replayCell,
+                              Exec.StorageWrite.matches, Stor.get_set_self]
+                          · simp [Exec.Deriv.successfulSstore?, decoded,
+                              stackEq, Exec.StorageWrite.replayCell,
+                              Exec.StorageWrite.matches, keyEq,
+                              Stor.get_set_ne _ keyEq]
+                        · have unchanged :=
+                            sstore_preserves_getStor_ne rrun ownerEq
+                          rw [unchanged]
+                          simp [Exec.Deriv.successfulSstore?, decoded,
+                            stackEq, Exec.StorageWrite.replayCell,
+                            Exec.StorageWrite.matches, ownerEq]
+              · have equal : Devm.getStor pre = Devm.getStor post :=
+                  Rinst.preserves_stor store rrun
+                simpa [Exec.Deriv.successfulSstore?, decoded, store] using
+                  Exec.StorageReplay.of_getStor_eq equal.symm
+
+/-- A childless successful executable spawn is persistent-storage silent. -/
+private theorem Exec.doneOk_getStor_eq
+    {pc pc' : Nat} {sevm : Sevm} {pre post : Devm}
+    {frame : Jaune.Frame} {resume : Resume}
+    {settled : Except (EvmError × State × AdrSet × Tra) Devm}
+    (step : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume pc')
+    (enter : frame.enter = .done settled)
+    (resumeRun : resume.run settled = .ok post) :
+    Devm.getStor post = Devm.getStor pre := by
+  rcases Evm.step_spawn_inv step with ⟨x, _, spawn, _⟩
+  have run : Xinst.Run sevm pre x .none (.ok post) := by
+    unfold Xinst.Run XStep.Run
+    rw [spawn]
+    exact ⟨settled, RunFrame.of_done enter, resumeRun.symm⟩
+  exact Xinst.none_getStor_eq run
+
+/-- A committing halted driver node is a successful last instruction, hence
+is persistent-storage silent. -/
+private theorem Exec.halt_getStor_eq
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (step : Evm.step ⟨pc, sevm, pre⟩ = .halt out)
+    (committed : Execution.commits out = true) :
+    Devm.getStor (Execution.committedPost out committed) =
+      Devm.getStor pre := by
+  cases out with
+  | error error => simp [Execution.commits] at committed
+  | ok post =>
+      cases decoded : Evm.getInst ⟨pc, sevm, pre⟩ with
+      | none =>
+          unfold Evm.step at step
+          rw [decoded] at step
+          cases step
+      | some instruction =>
+          cases instruction with
+          | last last =>
+              rw [Evm.step_last decoded] at step
+              have run : Linst.Run sevm pre last (.ok post) := by
+                exact Step.halt.inj step
+              exact Linst.getStor_eq run
+          | next next =>
+              rw [Evm.step_next decoded] at step
+              exact (Ninst.step_ne_halt_ok step).elim
+          | jump jumpInst =>
+              rw [Evm.step_jump decoded] at step
+              cases jumpEq : Jinst.run ⟨pc, sevm, pre⟩ jumpInst with
+              | error error =>
+                  rw [jumpEq] at step
+                  cases step
+              | ok result =>
+                  rw [jumpEq] at step
+                  cases step
+
+/-- The committed persistent-storage endpoint is exactly chronological replay
+of the settlement-retained successful SSTORE events. -/
+theorem Exec.storageReplay_committedPost
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out)
+    (committed : Execution.commits out = true) :
+    Exec.StorageReplay pre (Execution.committedPost out committed)
+      (Exec.retainedStorageWrites run) := by
+  induction run with
+  | halt step =>
+      simpa [Exec.retainedStorageWrites, Exec.retainedNodes, committed,
+        Exec.retainedNodesOfCommits, Exec.Deriv.successfulSstore?] using
+        Exec.StorageReplay.of_getStor_eq
+          (Exec.halt_getStor_eq step committed)
+  | cont step next ih =>
+      have head := Exec.storageReplay_cont_head step next
+      have tail := ih committed
+      convert head.append tail using 1
+      simp [Exec.retainedStorageWrites, Exec.retainedNodes, committed,
+        Exec.retainedNodesOfCommits, List.filterMap_cons]
+      split <;> simp_all
+  | doneErr step enter resume =>
+      simp [Execution.commits] at committed
+  | doneOk step enter resume next ih =>
+      have head := Exec.StorageReplay.of_getStor_eq
+        (Exec.doneOk_getStor_eq step enter resume)
+      have tail := ih committed
+      simpa [Exec.retainedStorageWrites, Exec.retainedNodes, committed,
+        Exec.retainedNodesOfCommits, Exec.Deriv.successfulSstore?] using
+        head.append tail
+  | runErr step enter child resume ih =>
+      simp [Execution.commits] at committed
+  | runOk step enter child resume next childIH nextIH =>
+      rcases Evm.step_spawn_inv step with ⟨x, _, spawn, _⟩
+      have throughChild := Xinst.storageReplay_some_of_body
+        spawn (RunFrame.of_run enter) resume childIH
+      have throughTail := nextIH committed
+      convert throughChild.append throughTail using 1
+      split
+      · rename_i settles
+        have rawCommits := Frame.raw_commits_of_settlementCommits settles
+        simp [Exec.retainedStorageWrites, Exec.retainedNodes, committed,
+          settles, rawCommits,
+          Exec.retainedNodesOfCommits, List.filterMap_append,
+          Exec.Deriv.successfulSstore?]
+      · rename_i settles
+        simp_all [Exec.retainedStorageWrites, Exec.retainedNodes,
+          Exec.retainedNodesOfCommits,
+          Exec.Deriv.successfulSstore?]
+
+/-- Any committed persistent-storage change has an exact last retained
+successful SSTORE witness at the same owner and raw key, recording the final
+word.  Later no-op writes are included and therefore supersede earlier writes. -/
+theorem Exec.exists_lastRetainedSstore_of_getStor_ne
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out)
+    (committed : Execution.commits out = true)
+    {owner : Adr} {key : B256}
+    (changed :
+      (Devm.getStor pre owner).get key ≠
+        (Devm.getStor (Execution.committedPost out committed) owner).get key) :
+    ∃ write : Exec.SuccessfulSstoreOccurrence
+        (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv),
+      write.Retained ∧
+      write.storageOwner = owner ∧
+      write.key = key ∧
+      write.value =
+        (Devm.getStor (Execution.committedPost out committed) owner).get key ∧
+      write.IsLastRetained := by
+  exact Exec.exists_lastRetainedSstore_of_replay
+    (Exec.storageReplay_committedPost run committed owner key) changed
 
 /-- The unique same-frame continuation edge.  Entered child proofs are not
 edges here: they are the chronological segment crossed by `runOk` before its

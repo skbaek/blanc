@@ -206,9 +206,9 @@ same-frame prefix. -/
 theorem Exec.Deriv.ParentPrefixActions.toParentPrefix
     {dp : DeployParams} {ca : Adr}
     {root tail : Exec.Deriv} {actions : List FlowAction}
-    (prefix : Exec.Deriv.ParentPrefixActions dp ca root tail actions) :
+    (path : Exec.Deriv.ParentPrefixActions dp ca root tail actions) :
     Blanc.Exec.Deriv.ParentPrefix root tail := by
-  induction prefix with
+  induction path with
   | refl => exact .refl _
   | step head rest ih => exact .step head.toParentStep ih
 
@@ -313,14 +313,15 @@ theorem Exec.Frame.NinstOccurrence.toCommon
     {n : Ninst} {stepPre stepPost : Devm} {xl : Xlot}
     (occurrence : Blanc.Weth10.Exec.Frame.NinstOccurrence
       dp ca frame n stepPre stepPost xl) :
-    Blanc.Exec.NinstOccurrence (Blanc.Exec.Frame.rootDeriv frame) := by
+    Nonempty
+      (Blanc.Exec.NinstOccurrence (Blanc.Exec.Frame.rootDeriv frame)) := by
   rcases occurrence with
-    ⟨pc, current, continuation, before, selected, prefix, decoded,
+    ⟨pc, current, continuation, before, selected, path, decoded,
       filled, stepRun, prec, edge⟩
-  have neutralPrefix := prefix.toParentPrefix
+  have neutralPrefix := path.toParentPrefix
   rcases neutralPrefix.rawNodes_decomposition with
     ⟨earlier, decomposition⟩
-  refine
+  refine ⟨
     { node := ⟨pc, frame.sevm, stepPre, frame.out, current⟩
       instruction := n
       slot := xl
@@ -328,9 +329,13 @@ theorem Exec.Frame.NinstOccurrence.toCommon
       reached := ?_
       decoded := decoded
       filled := filled
-      stepRun := stepRun }
+      stepRun := stepRun }⟩
+  change
+    (⟨pc, frame.sevm, stepPre, frame.out, current⟩ : Blanc.Exec.Deriv) ∈
+      (⟨frame.pc, frame.sevm, frame.pre, frame.out, frame.run⟩ :
+        Blanc.Exec.Deriv).exc.rawNodes
   rw [decomposition]
-  simp [Blanc.Exec.rawNodes]
+  exact List.mem_append.mpr (Or.inr (Blanc.Exec.mem_rawNodes_self current))
 
 /-- An instruction occurrence exposes the exact chronological split of the
 enclosing frame's proper-descendant ledger: all earlier settled children,
@@ -1222,28 +1227,6 @@ theorem Exec.Frame.CompiledCursor.alignExecStep
   subst actualSlot
   subst rawPost
   exact ⟨tailCursor, selected, rfl, occurrence, edge, hactions⟩
-
-/-- Exact CALL frame and resumption selected by a successful spawn. -/
-theorem genericCall_step_spawn_exact
-    {sevm : Sevm} {devm : Devm} {gas : Nat} {value : B256}
-    {caller target codeAddress : Adr} {stv isSt : Bool}
-    {ii isz oi osz : Nat} {code : ByteArray} {dp : Bool}
-    {frame : Frame} {resume : Resume}
-    (hspawn : genericCall.step sevm devm gas value caller target codeAddress
-      stv isSt ii isz oi osz code dp = .spawn frame resume) :
-    frame = Frame.ofCall
-      (callMsg sevm (devm.withReturnData [])
-        gas
-        value caller target codeAddress stv isSt
-        ((devm.memory.read ii isz).1) code dp) ∧
-    resume = .call (devm.withReturnData []) oi osz := by
-  simp only [genericCall.step, Bind.bind, Except.bind, Pure.pure,
-    Except.pure] at hspawn
-  repeat' split at hspawn
-  all_goals
-    simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hspawn
-  all_goals obtain ⟨rfl, rfl⟩ := hspawn
-  all_goals exact ⟨rfl, rfl⟩
 
 theorem Xinst.step_call_spawn_ofCall
     {sevm : Sevm} {devm : Devm} {frame : Frame} {resume : Resume}

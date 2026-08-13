@@ -1990,35 +1990,6 @@ theorem GenericCreate.storageSegmentEffect_none
         of_executeCode_noneCode hcodeAddress hbody
       cases hslot
 
-/-- Exact CREATE frame and resumption selected by a successful spawn. -/
-theorem genericCreate_step_spawn_exact
-    {sevm : Sevm} {devm : Devm} {endowment : B256}
-    {newAddress : Adr} {mi ms : Nat}
-    {frame : Frame} {resume : Resume}
-    (hspawn : genericCreate.step sevm devm endowment newAddress mi ms =
-      .spawn frame resume) :
-    frame = Frame.ofCreate
-      (createMsg sevm
-        (addAccessedAddress
-          (((devm.withGasLeft
-              (devm.gasLeft - except64th devm.gasLeft)).withReturnData
-            []).incrNonce sevm.currentTarget) newAddress)
-        (except64th devm.gasLeft) endowment newAddress
-        ((devm.memory.read mi ms).1)) ∧
-    resume = .create
-      (addAccessedAddress
-        (((devm.withGasLeft
-            (devm.gasLeft - except64th devm.gasLeft)).withReturnData
-          []).incrNonce sevm.currentTarget) newAddress)
-      newAddress := by
-  simp only [genericCreate.step, Bind.bind, Except.bind, Except.assert,
-    assertDynamic, Pure.pure, Except.pure] at hspawn
-  repeat' split at hspawn
-  all_goals
-    simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hspawn
-  all_goals obtain ⟨rfl, rfl⟩ := hspawn
-  all_goals exact ⟨rfl, rfl⟩
-
 theorem xinst_spawn_direct
     {sevm : Sevm} {devm : Devm} {x : Xinst}
     {frame : Frame} {resume : Resume}

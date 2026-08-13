@@ -2680,6 +2680,178 @@ lemma Xinst.none_getStor_eq {sevm : Sevm} {devm inter : Devm} {x : Xinst}
   · exact GenericCall.none_getStor_eq h_run |>.trans
       (funext hf.getStor).symm
 
+/-- Every successfully terminating last instruction preserves persistent
+storage at every address; `SELFDESTRUCT` changes balances and deletion marks
+only. -/
+theorem Linst.getStor_eq
+    {sevm : Sevm} {pre post : Devm} {l : Linst}
+    (run : Linst.Run sevm pre l (.ok post)) :
+    Devm.getStor post = Devm.getStor pre := by
+  funext owner
+  cases l with
+  | stop =>
+      simp [Linst.Run, Linst.run] at run
+      subst post
+      rfl
+  | ret =>
+      have hframe := Linst.run_instructionFrame sevm pre .ret (by decide)
+      rw [run] at hframe
+      exact (hframe.getStor owner).symm
+  | rev =>
+      dsimp [Linst.Run, Linst.run] at run
+      rcases Except.bind_eq_ok run with ⟨first, hfirst, rest⟩
+      rcases Except.bind_eq_ok rest with ⟨second, hsecond, rest⟩
+      rcases Except.bind_eq_ok rest with ⟨third, hthird, rest⟩
+      contradiction
+  | dest =>
+      dsimp [Linst.Run, Linst.run] at run
+      rcases Except.bind_eq_ok run with
+        ⟨⟨donee, devm1⟩, pop, rest⟩
+      rcases Except.bind_eq_ok rest with
+        ⟨devm2, charge, rest⟩
+      rcases Except.bind_eq_ok rest with
+        ⟨_, asserted, rest⟩
+      rcases Except.bind_eq_ok rest with
+        ⟨devm3, sub, final⟩
+      have subSome : devm2.subBal sevm.currentTarget
+          (devm1.getAcct sevm.currentTarget).bal = some devm3 := by
+        cases eq : devm2.subBal sevm.currentTarget
+            (devm1.getAcct sevm.currentTarget).bal
+        · rw [eq] at sub
+          contradiction
+        · rw [eq] at sub
+          injection sub with equal
+          subst equal
+          rfl
+      have subState : devm2.state.subBal sevm.currentTarget
+          (devm1.getAcct sevm.currentTarget).bal = some devm3.state := by
+        dsimp [Devm.subBal, Option.bind] at subSome
+        cases eq : devm2.state.subBal sevm.currentTarget
+            (devm1.getAcct sevm.currentTarget).bal
+        · rw [eq] at subSome
+          contradiction
+        · rw [eq] at subSome
+          injection subSome with equal
+          subst equal
+          rfl
+      let transferred := devm3.addBal donee
+        (devm1.getAcct sevm.currentTarget).bal
+      have preToOne : Devm.getStor pre owner = Devm.getStor devm1 owner :=
+        congrFun (Devm.popToAdr_getStor_eq pop) owner
+      have charged : Devm.getStor devm1 owner =
+          Devm.getStor devm2 owner := by
+        have chargedEq := chargeGas_getStor_eq charge
+        have head : Devm.getStor
+            (if donee ∉ devm1.accessedAddresses then
+              (addAccessedAddress devm1 donee,
+                gasSelfDestruct + gasColdAccountAccess)
+            else (devm1, gasSelfDestruct)).1 owner =
+              Devm.getStor devm1 owner := by
+          split <;> rfl
+        exact head.symm.trans (congrFun chargedEq owner)
+      have transferredEq : Devm.getStor devm2 owner =
+          Devm.getStor transferred owner :=
+        (of_state_transfer_fields subState).1 owner |>.symm
+      have postEq : Devm.getStor transferred owner =
+          Devm.getStor post owner := by
+        dsimp only [transferred] at final ⊢
+        split at final
+        · have equal := Except.ok.inj final
+          rw [← equal]
+          exact State.setBal_get_stor.symm
+        · have equal := Except.ok.inj final
+          rw [← equal]
+      exact (preToOne.trans (charged.trans
+        (transferredEq.trans postEq))).symm
+
+/-- Exact CALL frame and resumption selected by a successful generic spawn. -/
+theorem genericCall_step_spawn_exact
+    {sevm : Sevm} {devm : Devm} {gas : Nat} {value : B256}
+    {caller target codeAddress : Adr} {stv isSt : Bool}
+    {ii isz oi osz : Nat} {code : ByteArray} {dp : Bool}
+    {frame : Frame} {resume : Resume}
+    (hspawn : genericCall.step sevm devm gas value caller target codeAddress
+      stv isSt ii isz oi osz code dp = .spawn frame resume) :
+    frame = Frame.ofCall
+      (callMsg sevm (devm.withReturnData []) gas value caller target
+        codeAddress stv isSt ((devm.memory.read ii isz).1) code dp) ∧
+    resume = .call (devm.withReturnData []) oi osz := by
+  simp only [genericCall.step, Bind.bind, Except.bind, Pure.pure,
+    Except.pure] at hspawn
+  repeat' split at hspawn
+  all_goals
+    simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hspawn
+  all_goals obtain ⟨rfl, rfl⟩ := hspawn
+  all_goals exact ⟨rfl, rfl⟩
+
+/-- Exact CREATE frame and resumption selected by a successful generic spawn. -/
+theorem genericCreate_step_spawn_exact
+    {sevm : Sevm} {devm : Devm} {endowment : B256}
+    {newAddress : Adr} {mi ms : Nat}
+    {frame : Frame} {resume : Resume}
+    (hspawn : genericCreate.step sevm devm endowment newAddress mi ms =
+      .spawn frame resume) :
+    frame = Frame.ofCreate
+      (createMsg sevm
+        (addAccessedAddress
+          (((devm.withGasLeft
+              (devm.gasLeft - except64th devm.gasLeft)).withReturnData
+            []).incrNonce sevm.currentTarget) newAddress)
+        (except64th devm.gasLeft) endowment newAddress
+        ((devm.memory.read mi ms).1)) ∧
+    resume = .create
+      (addAccessedAddress
+        (((devm.withGasLeft
+            (devm.gasLeft - except64th devm.gasLeft)).withReturnData
+          []).incrNonce sevm.currentTarget) newAddress)
+      newAddress := by
+  simp only [genericCreate.step, Bind.bind, Except.bind, Except.assert,
+    assertDynamic, Pure.pure, Except.pure] at hspawn
+  repeat' split at hspawn
+  all_goals
+    simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hspawn
+  all_goals obtain ⟨rfl, rfl⟩ := hspawn
+  all_goals exact ⟨rfl, rfl⟩
+
+/-- A recursive CREATE spawn passed the collision check, so the target's
+persistent storage was empty before fresh-account preparation. -/
+theorem genericCreate_step_spawn_getStor_empty
+    {sevm : Sevm} {devm : Devm} {endowment : B256}
+    {newAddress : Adr} {mi ms : Nat}
+    {frame : Frame} {resume : Resume}
+    (hspawn : genericCreate.step sevm devm endowment newAddress mi ms =
+      .spawn frame resume) :
+    Devm.getStor devm newAddress = .empty := by
+  simp only [genericCreate.step, Bind.bind, Except.bind, Except.assert,
+    assertDynamic, Pure.pure, Except.pure] at hspawn
+  repeat' split at hspawn
+  all_goals
+    simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hspawn
+  all_goals obtain ⟨rfl, -⟩ := hspawn
+  rename_i collision
+  push Not at collision
+  let createPre :=
+    addAccessedAddress
+      (((devm.withGasLeft
+          (devm.gasLeft - except64th devm.gasLeft)).withReturnData
+        []).incrNonce sevm.currentTarget) newAddress
+  have storageEq : Devm.getStor createPre = Devm.getStor devm := by
+    funext owner
+    have stateEq : createPre.state =
+        devm.state.incrNonce sevm.currentTarget := by
+      rfl
+    change createPre.state.getStor owner = devm.state.getStor owner
+    rw [stateEq]
+    exact State.incrNonce_get_stor
+  have sizeZero : (Devm.getStor devm newAddress).size = 0 := by
+    have atCreate : (Devm.getStor createPre newAddress).size = 0 := by
+      exact collision.2.2
+    rw [storageEq] at atCreate
+    exact atCreate
+  apply Jaune.Std.TreeMap.eq_empty_iff_isEmpty.mpr
+  rw [Std.TreeMap.isEmpty_eq_size_eq_zero]
+  simp [sizeZero]
+
 namespace ContractSpec
 
 variable {c : ContractSpec}
