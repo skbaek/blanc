@@ -40,6 +40,8 @@ jobs:
       - uses: leanprover/lean-action@v1
       - name: Execution-settlement CREATE rollback regression
         run: scripts/check-execution-settlement.sh
+      - name: Execution-occurrence semantic regression
+        run: scripts/check-execution-occurrence.sh
       - name: Error(string) payload cross-derivation (offline)
         run: scripts/check-error-data.sh
       - name: Audit headline theorem axioms

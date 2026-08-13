@@ -700,3 +700,12 @@ OK	2.708	Blanc/Weth10Hardened.lean
 OK	2.213	Blanc/Weth10Dormant.lean
 OK	1.195	Blanc/Weth10FutureRedeemable.lean
 OK	1.350	Blanc/Weth10AnyOrder.lean
+
+# 2026-08-13. The execution-occurrence foundation added exactly one module,
+# Blanc/ExecutionOccurrence.lean. Its 6.587 s row is from a sequential
+# `scripts/check-elab.sh --list --no-build` run over all 94 files (449.7 s
+# total) after the exact source revision was built; the gate accepted the
+# connected Lean server as idle and below its contention limits. Only this new
+# row is admitted. Every pre-existing reference time above remains byte-for-byte
+# unchanged, and `--rebase` and `--force` were not used.
+OK	6.587	Blanc/ExecutionOccurrence.lean

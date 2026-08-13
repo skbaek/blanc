@@ -3,8 +3,9 @@ import Blanc.ExecutionSettlement
 /-!
 Concrete execution-level regression for CREATE code-deposit rollback.
 
-The init code returns one byte beginning with `0xef`.  Its raw constructor
-execution succeeds, but complete CREATE settlement rejects the deployed code.
+The init code first writes storage, then returns one byte beginning with
+`0xef`.  Its raw constructor execution succeeds, but complete CREATE
+settlement rejects the deployed code and rolls that write back.
 The dependent fixture packages an actual `Exec.runOk` only along the concrete
 machine branch where every required semantic observation holds.
 -/
@@ -52,6 +53,9 @@ private structure Fixture where
   hresume : resume.run (frame.settle raw) = .ok resumed
   next : Exec nextPc sevm resumed out
   rawCommits : Execution.commits raw = true
+  rawChildWrite :
+    ((Execution.committedPost raw rawCommits).state.get
+      childEvm.sta.currentTarget).stor.get 0 = 1
   isCreate : frame.isCreate = true
   settleResult : frame.settle raw = .ok settled
   settleError : settled.error.isSome = true
@@ -74,13 +78,14 @@ private theorem Fixture.rawTraversal_retains (w : Fixture) :
   simp [Fixture.run, rawCommittedDescendantFrames, hchild]
 
 private def initCode : Bytes :=
-  [0x60, 0xef, 0x60, 0x00, 0x53, 0x60, 0x01, 0x60, 0x00, 0xf3]
+  [0x60, 0x01, 0x60, 0x00, 0x55,
+   0x60, 0xef, 0x60, 0x00, 0x53, 0x60, 0x01, 0x60, 0x00, 0xf3]
 
 private def parentSevm : Sevm :=
   { (default : Sevm) with code := ByteArray.mk #[0xf0, 0x00] }
 
 private def parentDevm : Devm :=
-  (((default : Devm).withGasLeft 100000).withStack [0, 0, 10]).withMemory
+  (((default : Devm).withGasLeft 100000).withStack [0, 0, 15]).withMemory
     (Mem.empty.write 0 initCode)
 
 private def parentEvm : Evm := ⟨0, parentSevm, parentDevm⟩
@@ -92,7 +97,12 @@ private def fixtureAvailable : Bool :=
       match frame.enter with
       | .run childEvm =>
           let raw := exec childEvm
-          Execution.commits raw && frame.isCreate &&
+          Execution.commits raw &&
+            (match raw with
+            | .ok rawPost =>
+                (rawPost.state.get childEvm.sta.currentTarget).stor.get 0 == 1
+            | .error _ => false) &&
+            frame.isCreate &&
             match frame.settle raw with
             | .ok settled =>
                 settled.error.isSome &&
@@ -112,45 +122,50 @@ private def fixture? : Option Fixture :=
       | .run childEvm =>
           let raw := exec childEvm
           if hraw : Execution.commits raw = true then
-            if hcreate : frame.isCreate = true then
-              match hsettled : frame.settle raw with
-              | .ok settled =>
-                  if herror : settled.error.isSome = true then
-                    if hnot : Frame.settlementCommits frame raw ≠ true then
-                      match hresume : resume.run (frame.settle raw) with
-                      | .ok resumed =>
-                          let out := exec ⟨nextPc, parentSevm, resumed⟩
-                          let child := Classical.choice
-                            ((exec_iff_exec_eq _ _ _ _).2 rfl)
-                          let next := Classical.choice
-                            ((exec_iff_exec_eq _ _ _ _).2 rfl)
-                          some {
-                            pc := 0
-                            nextPc := nextPc
-                            sevm := parentSevm
-                            pre := parentDevm
-                            resumed := resumed
-                            settled := settled
-                            frame := frame
-                            resume := resume
-                            childEvm := childEvm
-                            raw := raw
-                            out := out
-                            hstep := hstep
-                            henter := henter
-                            child := child
-                            hresume := hresume
-                            next := next
-                            rawCommits := hraw
-                            isCreate := hcreate
-                            settleResult := hsettled
-                            settleError := herror
-                            settlementDoesNotCommit := hnot
-                          }
-                      | .error _ => none
+            if hwrite :
+                ((Execution.committedPost raw hraw).state.get
+                  childEvm.sta.currentTarget).stor.get 0 = 1 then
+              if hcreate : frame.isCreate = true then
+                match hsettled : frame.settle raw with
+                | .ok settled =>
+                    if herror : settled.error.isSome = true then
+                      if hnot : Frame.settlementCommits frame raw ≠ true then
+                        match hresume : resume.run (frame.settle raw) with
+                        | .ok resumed =>
+                            let out := exec ⟨nextPc, parentSevm, resumed⟩
+                            let child := Classical.choice
+                              ((exec_iff_exec_eq _ _ _ _).2 rfl)
+                            let next := Classical.choice
+                              ((exec_iff_exec_eq _ _ _ _).2 rfl)
+                            some {
+                              pc := 0
+                              nextPc := nextPc
+                              sevm := parentSevm
+                              pre := parentDevm
+                              resumed := resumed
+                              settled := settled
+                              frame := frame
+                              resume := resume
+                              childEvm := childEvm
+                              raw := raw
+                              out := out
+                              hstep := hstep
+                              henter := henter
+                              child := child
+                              hresume := hresume
+                              next := next
+                              rawCommits := hraw
+                              rawChildWrite := hwrite
+                              isCreate := hcreate
+                              settleResult := hsettled
+                              settleError := herror
+                              settlementDoesNotCommit := hnot
+                            }
+                        | .error _ => none
+                      else none
                     else none
-                  else none
-              | .error _ => none
+                | .error _ => none
+              else none
             else none
           else none
       | .done _ => none

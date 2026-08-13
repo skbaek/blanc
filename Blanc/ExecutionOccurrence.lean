@@ -1531,6 +1531,107 @@ theorem Exec.Deriv.ParentPrefix.linear
           cases head.unique rightHead
           exact ih rightRest
 
+/-- Following a known same-frame edge characterizes every prefix from its
+source as either the source itself or a prefix from the unique continuation. -/
+private theorem Exec.Deriv.ParentStep.parentPrefix_iff
+    {root next tail : Exec.Deriv}
+    (edge : Exec.Deriv.ParentStep next root) :
+    Exec.Deriv.ParentPrefix root tail ↔
+      tail = root ∨ Exec.Deriv.ParentPrefix next tail := by
+  constructor
+  · intro hprefix
+    cases hprefix with
+    | refl => exact Or.inl rfl
+    | step head rest =>
+        cases edge.unique head
+        exact Or.inr rest
+  · rintro (rfl | rest)
+    · exact .refl _
+    · exact .step edge rest
+
+/-- Under a committing root, retained-node membership is exactly membership in
+the root frame's same-frame prefix or in one of its landed descendant frames. -/
+private theorem Exec.mem_retainedNodesOfCommits_iff_parentPrefix
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) (committed : Execution.commits out = true)
+    (node : Exec.Deriv) :
+    node ∈ Exec.retainedNodesOfCommits run committed ↔
+      Exec.Deriv.ParentPrefix
+          (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv) node ∨
+        ∃ frame ∈ Exec.descendantFrames run,
+          Exec.Deriv.ParentPrefix frame.rootDeriv node := by
+  induction run with
+  | halt hstep =>
+      constructor
+      · intro member
+        simp only [Exec.retainedNodesOfCommits, List.mem_singleton] at member
+        subst node
+        exact Or.inl (.refl _)
+      · rintro (hprefix | ⟨frame, member, _⟩)
+        · cases hprefix with
+          | refl => simp [Exec.retainedNodesOfCommits]
+          | step edge _ => cases edge
+        · simp [Exec.descendantFrames] at member
+  | cont hstep next ih =>
+      let edge : Exec.Deriv.ParentStep
+          (⟨_, _, _, _, next⟩ : Exec.Deriv)
+          (⟨_, _, _, _, Exec.cont hstep next⟩ : Exec.Deriv) :=
+        .cont hstep next
+      simp only [Exec.retainedNodesOfCommits, Exec.descendantFrames,
+        List.mem_cons, ih committed]
+      rw [edge.parentPrefix_iff]
+      aesop
+  | doneErr hstep henter hresume => simp [Execution.commits] at committed
+  | doneOk hstep henter hresume next ih =>
+      let edge : Exec.Deriv.ParentStep
+          (⟨_, _, _, _, next⟩ : Exec.Deriv)
+          (⟨_, _, _, _, Exec.doneOk hstep henter hresume next⟩ : Exec.Deriv) :=
+        .doneOk hstep henter hresume next
+      simp only [Exec.retainedNodesOfCommits, Exec.descendantFrames,
+        List.mem_cons, ih committed]
+      rw [edge.parentPrefix_iff]
+      aesop
+  | runErr hstep henter child hresume =>
+      simp [Execution.commits] at committed
+  | runOk hstep henter child hresume next childIh nextIh =>
+      let edge : Exec.Deriv.ParentStep
+          (⟨_, _, _, _, next⟩ : Exec.Deriv)
+          (⟨_, _, _, _, Exec.runOk hstep henter child hresume next⟩ :
+            Exec.Deriv) :=
+        .runOk hstep henter child hresume next
+      simp only [Exec.retainedNodesOfCommits, Exec.descendantFrames,
+        List.mem_cons, List.mem_append]
+      split
+      next childSettles =>
+        have childCommits :=
+          Frame.raw_commits_of_settlementCommits childSettles
+        simp only [childIh childCommits, nextIh committed, List.mem_cons]
+        rw [edge.parentPrefix_iff]
+        simp only [Exec.Frame.rootDeriv, Exec.Frame.ofRun]
+        aesop
+      next childDoesNotSettle =>
+        simp only [List.not_mem_nil, false_or, nextIh committed]
+        rw [edge.parentPrefix_iff]
+        aesop
+
+/-- A node survives settlement exactly when it is owned by the same-frame
+prefix of one of `committedFrames`.  This is the membership counterpart of
+`committedFrameRoots_sublist_retainedNodes`; together they link the retained
+instruction chronology to the existing full-settlement frame substrate. -/
+theorem Exec.mem_retainedNodes_iff_committedFrame_parentPrefix
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) (node : Exec.Deriv) :
+    node ∈ Exec.retainedNodes run ↔
+      ∃ frame ∈ Exec.committedFrames run,
+        Exec.Deriv.ParentPrefix frame.rootDeriv node := by
+  unfold Exec.retainedNodes Exec.committedFrames
+  split
+  next committed =>
+    rw [Exec.mem_retainedNodesOfCommits_iff_parentPrefix run committed node]
+    simp only [List.mem_cons, Exec.Frame.rootDeriv, Exec.Frame.ofRun]
+    aesop
+  next notCommitted => simp
+
 /-- One same-frame edge splits the global chronology.  A successful entered
 child belongs to the nonempty crossed prefix before the parent resumes. -/
 theorem Exec.Deriv.ParentStep.rawNodes_decomposition

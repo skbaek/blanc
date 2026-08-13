@@ -1,0 +1,59 @@
+{
+  "schema": 1,
+  "mappings": [
+    {
+      "declaration": "ProcessMessage.ok_state_eq_committedPost",
+      "kind": "theorem",
+      "donorModule": "Blanc/Weth10HolderFlowEth.lean",
+      "commonModule": "Blanc/CommonProofs.lean"
+    },
+    {
+      "declaration": "ProcessMessage.ok_state_eq_of_not_commits",
+      "kind": "theorem",
+      "donorModule": "Blanc/Weth10HolderFlowEth.lean",
+      "commonModule": "Blanc/CommonProofs.lean"
+    },
+    {
+      "declaration": "executeCode.handle_precompile_ok_state",
+      "kind": "theorem",
+      "donorModule": "Blanc/Weth10HolderFlowEth.lean",
+      "commonModule": "Blanc/CommonProofs.lean"
+    },
+    {
+      "declaration": "processCreateMessage.chargeCodeGas_error_eq",
+      "kind": "theorem",
+      "donorModule": "Blanc/Weth10HolderFlowEth.lean",
+      "commonModule": "Blanc/CommonProofs.lean"
+    },
+    {
+      "declaration": "ProcessCreateMessage.rollback_of_error",
+      "kind": "theorem",
+      "donorModule": "Blanc/Weth10HolderFlowEth.lean",
+      "commonModule": "Blanc/CommonProofs.lean"
+    },
+    {
+      "declaration": "processMessage_settle_ok_state_cases",
+      "kind": "theorem",
+      "donorModule": "Blanc/Weth10HolderFlowEth.lean",
+      "commonModule": "Blanc/CommonProofs.lean"
+    },
+    {
+      "declaration": "ProcessMessage.none_ok_state_cases",
+      "kind": "theorem",
+      "donorModule": "Blanc/Weth10HolderFlowEth.lean",
+      "commonModule": "Blanc/CommonProofs.lean"
+    },
+    {
+      "declaration": "genericCall_step_spawn_exact",
+      "kind": "theorem",
+      "donorModule": "Blanc/Weth10HolderFlowCompiled.lean",
+      "commonModule": "Blanc/Ladder.lean"
+    },
+    {
+      "declaration": "genericCreate_step_spawn_exact",
+      "kind": "theorem",
+      "donorModule": "Blanc/Weth10HolderFlowExecAccounting.lean",
+      "commonModule": "Blanc/Ladder.lean"
+    }
+  ]
+}

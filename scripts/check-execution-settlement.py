@@ -42,6 +42,8 @@ def main() -> int:
     source = FIXTURE.read_text(encoding="utf-8")
     if source.count(MARKER) != 1:
         return fail("fixture must contain exactly one raw-mutant marker")
+    if source.count("rawChildWrite") != 2:
+        return fail("fixture must retain its dependent child-SSTORE witness")
 
     positive = run_lean(FIXTURE)
     if positive.returncode != 0:
@@ -62,7 +64,8 @@ def main() -> int:
 
     print(
         "OK — execution settlement: concrete Exec.runOk CREATE rollback fixture "
-        "is live; settlement traversal prunes; raw-commit mutant retains the child"
+        "is live; settlement traversal prunes; raw-commit mutant retains the "
+        "storage-writing child"
     )
     return 0
 

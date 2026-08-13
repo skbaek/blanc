@@ -313,8 +313,12 @@ theorem Exec.Frame.NinstOccurrence.toCommon
     {n : Ninst} {stepPre stepPost : Devm} {xl : Xlot}
     (occurrence : Blanc.Weth10.Exec.Frame.NinstOccurrence
       dp ca frame n stepPre stepPost xl) :
-    Nonempty
-      (Blanc.Exec.NinstOccurrence (Blanc.Exec.Frame.rootDeriv frame)) := by
+    ∃ common : Blanc.Exec.NinstOccurrence
+        (Blanc.Exec.Frame.rootDeriv frame),
+      common.node.devm = stepPre ∧
+      common.instruction = n ∧
+      common.slot = xl ∧
+      common.stepResult = .ok stepPost := by
   rcases occurrence with
     ⟨pc, current, continuation, before, selected, path, decoded,
       filled, stepRun, prec, edge⟩
@@ -329,7 +333,7 @@ theorem Exec.Frame.NinstOccurrence.toCommon
       reached := ?_
       decoded := decoded
       filled := filled
-      stepRun := stepRun }⟩
+      stepRun := stepRun }, rfl, rfl, rfl, rfl⟩
   change
     (⟨pc, frame.sevm, stepPre, frame.out, current⟩ : Blanc.Exec.Deriv) ∈
       (⟨frame.pc, frame.sevm, frame.pre, frame.out, frame.run⟩ :

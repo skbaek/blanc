@@ -6,6 +6,7 @@ import Blanc.FmintCode
 import Blanc.Weth10Code
 import Blanc.Compiled
 import Blanc.ExecutionSettlement
+import Blanc.ExecutionOccurrence
 import Blanc.Reverts
 import Blanc.FmintLive
 import Blanc.FmintReverts
@@ -82,6 +83,21 @@ import Blanc.Weth10AnyOrder
 #print axioms Blanc.Exec.committedFrames_eq_nil_of_not_commits
 #print axioms Blanc.ProcessMessage.settlementCommits_of_some_ok_clean
 #print axioms Blanc.Frame.settlementCommits_ofCall_of_raw_commits
+#print axioms Blanc.Exec.ninstOccurrence_iff_mem_rawNodes
+#print axioms Blanc.Exec.SuccessfulSstoreOccurrence.storage_update
+#print axioms Blanc.Exec.Deriv.ParentPrefix.linear
+#print axioms Blanc.Prog.sourceSiteAt_sound
+#print axioms Blanc.Exec.Frame.successfulSstore_sourceSite
+#print axioms Blanc.Exec.retainedNodes_sublist_rawNodes
+#print axioms Blanc.Exec.committedFrameRoots_sublist_retainedNodes
+#print axioms Blanc.Exec.mem_retainedNodes_iff_committedFrame_parentPrefix
+#print axioms Blanc.Exec.retainedNodes_runOk_of_settlementCommits
+#print axioms Blanc.Exec.retainedNodes_runOk_of_not_settlementCommits
+#print axioms Blanc.Exec.storageReplay_committedPost
+#print axioms Blanc.Exec.exists_lastRetainedSstore_of_getStor_ne
+#print axioms Blanc.Prog.acceptsSstoreSite_sound
+#print axioms Blanc.Exec.Frame.successfulSstore_acceptsSource
+#print axioms Blanc.Weth10.Exec.Frame.NinstOccurrence.toCommon
 #print axioms Blanc.Func.CompileShape.byteSize_compileShape
 #print axioms Blanc.Func.length_emitByShape
 #print axioms Blanc.Func.getD_emitByShape
