@@ -52,7 +52,7 @@ import sys
 SHARED = ["Basic", "Semantics", "CommonCore", "Tactics", "CommonProofs", "Ladder",
           "BalanceAlgebra", "Compiled", "Forward", "Reverts", "ForwardCall",
           "RevertPayload", "ExecDeterminism", "ExecutionSettlement",
-          "ExecutionOccurrence"]
+          "ExecutionOccurrence", "CycleWriteFree"]
 
 CONTRACTS = {
     "weth": ["Weth", "WethCode", "Solvent", "WethLive", "WethGas"],

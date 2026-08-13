@@ -7,6 +7,7 @@ import Blanc.Weth10Code
 import Blanc.Compiled
 import Blanc.ExecutionSettlement
 import Blanc.ExecutionOccurrence
+import Blanc.CycleWriteFree
 import Blanc.Reverts
 import Blanc.FmintLive
 import Blanc.FmintReverts
@@ -105,6 +106,13 @@ import Blanc.Weth10AnyOrder
 #print axioms Blanc.Exec.NinstOccurrence.sourceSite_of_rawFrameRoot
 #print axioms Blanc.Exec.Deriv.sstore_acceptsSource
 #print axioms Blanc.Exec.NinstOccurrence.acceptsSource_of_rawFrameRoot
+#print axioms Blanc.Func.localSstoreFree_iff
+#print axioms Blanc.Prog.componentSstoreFree_iff
+#print axioms Blanc.Prog.entrySstoreFree_iff
+#print axioms Blanc.Prog.entrySstoreFree_sound
+#print axioms Blanc.Exec.Deriv.SourceCursor.noSstore_of_entrySstoreFree
+#print axioms Blanc.Exec.NinstOccurrence.instruction_ne_sstore_of_entrySstoreFree
+#print axioms Blanc.Exec.Deriv.noSstore_of_exactMain_entrySstoreFree
 #print axioms Blanc.Func.CompileShape.byteSize_compileShape
 #print axioms Blanc.Func.length_emitByShape
 #print axioms Blanc.Func.getD_emitByShape

@@ -375,6 +375,13 @@ Blanc.Exec.NinstOccurrence.exists_rawFrameRoot_parentPrefix|$STANDARD
 Blanc.Exec.NinstOccurrence.sourceSite_of_rawFrameRoot|$STANDARD
 Blanc.Exec.Deriv.sstore_acceptsSource|$STANDARD
 Blanc.Exec.NinstOccurrence.acceptsSource_of_rawFrameRoot|$STANDARD
+Blanc.Func.localSstoreFree_iff|propext
+Blanc.Prog.componentSstoreFree_iff|propext, Quot.sound
+Blanc.Prog.entrySstoreFree_iff|propext, Quot.sound
+Blanc.Prog.entrySstoreFree_sound|propext, Quot.sound
+Blanc.Exec.Deriv.SourceCursor.noSstore_of_entrySstoreFree|$STANDARD
+Blanc.Exec.NinstOccurrence.instruction_ne_sstore_of_entrySstoreFree|$STANDARD
+Blanc.Exec.Deriv.noSstore_of_exactMain_entrySstoreFree|$STANDARD
 Blanc.Func.CompileShape.byteSize_compileShape|propext
 Blanc.Func.length_emitByShape|propext
 Blanc.Func.getD_emitByShape|propext
