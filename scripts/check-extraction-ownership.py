@@ -37,7 +37,7 @@ DECL_RE = re.compile(
 IMPORT_RE = re.compile(rf"^\s*import\s+({IDENT})(?:\s|$)")
 ALIAS_COMMAND_RE = re.compile(
     r"(?m)^[ \t]*(?:@\[[^]]*\][ \t]*)*"
-    r"(?:(?:private|protected|noncomputable|unsafe)[ \t]+)*alias\b"
+    r"(?:[A-Za-z_][A-Za-z0-9_']*[ \t]+)*alias\b"
 )
 EXPORT_COMMAND_RE = re.compile(r"(?m)^[ \t]*export\b")
 

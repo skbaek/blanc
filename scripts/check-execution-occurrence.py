@@ -209,7 +209,7 @@ def main() -> int:
         alias_path.write_text(
             "import Blanc.CommonProofs\n"
             "namespace Blanc.Weth10\n"
-            "protected alias occurrenceLegacy :=\n"
+            "@[deprecated] public alias occurrenceLegacy :=\n"
             f"  {first_fqn}\n"
             "end Blanc.Weth10\n",
             encoding="utf-8",
