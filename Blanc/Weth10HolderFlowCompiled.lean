@@ -313,9 +313,12 @@ theorem Exec.Frame.NinstOccurrence.toCommon
     {n : Ninst} {stepPre stepPost : Devm} {xl : Xlot}
     (occurrence : Blanc.Weth10.Exec.Frame.NinstOccurrence
       dp ca frame n stepPre stepPost xl) :
-    ∃ common : Blanc.Exec.NinstOccurrence
-        (Blanc.Exec.Frame.rootDeriv frame),
-      common.node.devm = stepPre ∧
+    ∃ (pc : Nat)
+        (current : Exec pc frame.sevm stepPre frame.out)
+        (common : Blanc.Exec.NinstOccurrence
+          (Blanc.Exec.Frame.rootDeriv frame)),
+      common.node =
+          (⟨pc, frame.sevm, stepPre, frame.out, current⟩ : Blanc.Exec.Deriv) ∧
       common.instruction = n ∧
       common.slot = xl ∧
       common.stepResult = .ok stepPost := by
@@ -325,7 +328,7 @@ theorem Exec.Frame.NinstOccurrence.toCommon
   have neutralPrefix := path.toParentPrefix
   rcases neutralPrefix.rawNodes_decomposition with
     ⟨earlier, decomposition⟩
-  refine ⟨
+  refine ⟨pc, current,
     { node := ⟨pc, frame.sevm, stepPre, frame.out, current⟩
       instruction := n
       slot := xl

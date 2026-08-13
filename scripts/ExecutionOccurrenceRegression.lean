@@ -73,28 +73,51 @@ private def terminalErrorSevm : Sevm :=
   { (default : Sevm) with code := terminalErrorCode }
 private def terminalErrorPre : Devm :=
   (default : Devm).withGasLeft 100000
-private def terminalErrorOut : Execution :=
-  exec ⟨0, terminalErrorSevm, terminalErrorPre⟩
-private def terminalErrorRun :
-    Exec 0 terminalErrorSevm terminalErrorPre terminalErrorOut :=
-  Classical.choice ((exec_iff_exec_eq _ _ _ _).2 rfl)
+
+private structure TerminalFixture where
+  err : EvmError × Devm
+  hstep : Evm.step ⟨0, terminalErrorSevm, terminalErrorPre⟩ =
+    .halt (.error err)
+
+private def TerminalFixture.run (w : TerminalFixture) :
+    Exec 0 terminalErrorSevm terminalErrorPre (.error w.err) :=
+  .halt w.hstep
+
+private def TerminalFixture.root (w : TerminalFixture) : Exec.Deriv :=
+  ⟨0, terminalErrorSevm, terminalErrorPre, .error w.err, w.run⟩
+
+private def TerminalFixture.occurrence (w : TerminalFixture) :
+    Exec.NinstOccurrence w.root :=
+  { node := w.root
+    instruction := .reg .sstore
+    slot := .none
+    stepResult := .error w.err
+    reached := Exec.mem_rawNodes_self w.run
+    decoded := by
+      change Ninst.At terminalErrorSevm.code 0 (.reg .sstore)
+      rfl
+    filled := trivial
+    stepRun := by
+      change Ninst.StepRun 0 terminalErrorSevm terminalErrorPre
+        (.reg .sstore) .none (.error w.err)
+      unfold Ninst.StepRun
+      rw [← Evm.step_next
+        (show Ninst.At terminalErrorSevm.code 0 (.reg .sstore) by rfl),
+        w.hstep]
+      exact ⟨rfl, rfl⟩ }
+
+private def terminalFixture? : Option TerminalFixture :=
+  match hstep : Evm.step ⟨0, terminalErrorSevm, terminalErrorPre⟩ with
+  | .halt (.error err) => some { err, hstep }
+  | _ => none
 
 /-- An `Ninst` whose own step terminates in error remains a raw occurrence. -/
-private theorem terminalError_occurs :
-    ∃ occurrence : Exec.NinstOccurrence
-        (⟨0, terminalErrorSevm, terminalErrorPre, terminalErrorOut,
-          terminalErrorRun⟩ : Exec.Deriv),
-      occurrence.instruction = .reg .sstore := by
-  have decoded : Ninst.At terminalErrorSevm.code 0 (.reg .sstore) := by
-    rfl
-  let root : Exec.Deriv :=
-    ⟨0, terminalErrorSevm, terminalErrorPre, terminalErrorOut,
-      terminalErrorRun⟩
-  rcases Exec.exists_ninstOccurrence_of_mem_rawNodes
-      (root := root) (node := root) (n := .reg .sstore)
-      (Exec.mem_rawNodes_self terminalErrorRun) decoded with
-    ⟨occurrence, _, instruction⟩
-  exact ⟨occurrence, instruction⟩
+private theorem terminalError_occurs (fixture : TerminalFixture) :
+    fixture.occurrence.instruction = .reg .sstore ∧
+      fixture.occurrence.stepResult = .error fixture.err ∧
+      Exec.rawNodes fixture.run = [fixture.root] := by
+  exact ⟨rfl, rfl, by simp [TerminalFixture.run, TerminalFixture.root,
+    Exec.rawNodes]⟩
 
 private def noOpCode : ByteArray := ByteArray.mk #[0x55, 0x00]
 private def noOpSevm : Sevm :=
@@ -143,8 +166,26 @@ private def historySevm : Sevm :=
 private def historyPre : Devm := (default : Devm).withGasLeft 100000
 
 private structure HistoryFixture where
+  s2 : Devm
+  s4 : Devm
+  s5 : Devm
+  s7 : Devm
+  s9 : Devm
+  s10 : Devm
+  s12 : Devm
+  s14 : Devm
+  s15 : Devm
   out : Execution
-  run : Exec 0 historySevm historyPre out
+  h0 : Evm.step ⟨0, historySevm, historyPre⟩ = .cont 2 s2
+  h2 : Evm.step ⟨2, historySevm, s2⟩ = .cont 4 s4
+  h4 : Evm.step ⟨4, historySevm, s4⟩ = .cont 5 s5
+  h5 : Evm.step ⟨5, historySevm, s5⟩ = .cont 7 s7
+  h7 : Evm.step ⟨7, historySevm, s7⟩ = .cont 9 s9
+  h9 : Evm.step ⟨9, historySevm, s9⟩ = .cont 10 s10
+  h10 : Evm.step ⟨10, historySevm, s10⟩ = .cont 12 s12
+  h12 : Evm.step ⟨12, historySevm, s12⟩ = .cont 14 s14
+  h14 : Evm.step ⟨14, historySevm, s14⟩ = .cont 15 s15
+  h15 : Evm.step ⟨15, historySevm, s15⟩ = .halt out
   commits : Execution.commits out = true
   changed :
     (Devm.getStor historyPre historySevm.currentTarget).get 0 ≠
@@ -153,37 +194,190 @@ private structure HistoryFixture where
   finalValue :
     (Devm.getStor (Execution.committedPost out commits)
       historySevm.currentTarget).get 0 = 7
+  stack4 : s4.stack = [0, 5]
+  stack9 : s9.stack = [0, 7]
+  stack14 : s14.stack = [0, 7]
+
+private def HistoryFixture.run (w : HistoryFixture) :
+    Exec 0 historySevm historyPre w.out :=
+  .cont w.h0 (.cont w.h2 (.cont w.h4 (.cont w.h5 (.cont w.h7
+    (.cont w.h9 (.cont w.h10 (.cont w.h12 (.cont w.h14
+      (.halt w.h15)))))))))
+
+private def HistoryFixture.root (w : HistoryFixture) : Exec.Deriv :=
+  ⟨0, historySevm, historyPre, w.out, w.run⟩
+
+private def HistoryFixture.node14 (w : HistoryFixture) : Exec.Deriv :=
+  ⟨14, historySevm, w.s14, w.out, .cont w.h14 (.halt w.h15)⟩
+
+private def HistoryFixture.occurrence14 (w : HistoryFixture) :
+    Exec.NinstOccurrence w.root :=
+  { node := w.node14
+    instruction := .reg .sstore
+    slot := .none
+    stepResult := .ok w.s15
+    reached := by
+      simp [HistoryFixture.root, HistoryFixture.run, HistoryFixture.node14,
+        Exec.rawNodes]
+    decoded := by
+      change Ninst.At historySevm.code 14 (.reg .sstore)
+      rfl
+    filled := trivial
+    stepRun := by
+      change Ninst.StepRun 14 historySevm w.s14 (.reg .sstore)
+        .none (.ok w.s15)
+      unfold Ninst.StepRun
+      rw [← Evm.step_next
+        (show Ninst.At historySevm.code 14 (.reg .sstore) by rfl), w.h14]
+      exact ⟨rfl, rfl⟩ }
 
 private def historyFixture? : Option HistoryFixture :=
-  let out := exec ⟨0, historySevm, historyPre⟩
-  if commits : Execution.commits out = true then
-    if changed :
-        (Devm.getStor historyPre historySevm.currentTarget).get 0 ≠
-          (Devm.getStor (Execution.committedPost out commits)
-            historySevm.currentTarget).get 0 then
-      if finalValue :
-          (Devm.getStor (Execution.committedPost out commits)
-            historySevm.currentTarget).get 0 = 7 then
-        let run := Classical.choice ((exec_iff_exec_eq _ _ _ _).2 rfl)
-        some { out, run, commits, changed, finalValue }
-      else none
-    else none
-  else none
+  match h0 : Evm.step ⟨0, historySevm, historyPre⟩ with
+  | .cont pc2 s2 => if hp2 : pc2 = 2 then
+    match h2 : Evm.step ⟨2, historySevm, s2⟩ with
+    | .cont pc4 s4 => if hp4 : pc4 = 4 then
+      match h4 : Evm.step ⟨4, historySevm, s4⟩ with
+      | .cont pc5 s5 => if hp5 : pc5 = 5 then
+        match h5 : Evm.step ⟨5, historySevm, s5⟩ with
+        | .cont pc7 s7 => if hp7 : pc7 = 7 then
+          match h7 : Evm.step ⟨7, historySevm, s7⟩ with
+          | .cont pc9 s9 => if hp9 : pc9 = 9 then
+            match h9 : Evm.step ⟨9, historySevm, s9⟩ with
+            | .cont pc10 s10 => if hp10 : pc10 = 10 then
+              match h10 : Evm.step ⟨10, historySevm, s10⟩ with
+              | .cont pc12 s12 => if hp12 : pc12 = 12 then
+                match h12 : Evm.step ⟨12, historySevm, s12⟩ with
+                | .cont pc14 s14 => if hp14 : pc14 = 14 then
+                  match h14 : Evm.step ⟨14, historySevm, s14⟩ with
+                  | .cont pc15 s15 => if hp15 : pc15 = 15 then
+                    match h15 : Evm.step ⟨15, historySevm, s15⟩ with
+                    | .halt out =>
+                      if commits : Execution.commits out = true then
+                        if changed :
+                            (Devm.getStor historyPre
+                                historySevm.currentTarget).get 0 ≠
+                              (Devm.getStor
+                                (Execution.committedPost out commits)
+                                historySevm.currentTarget).get 0 then
+                          if finalValue :
+                              (Devm.getStor
+                                (Execution.committedPost out commits)
+                                historySevm.currentTarget).get 0 = 7 then
+                            if stack4 : s4.stack = [0, 5] then
+                              if stack9 : s9.stack = [0, 7] then
+                                if stack14 : s14.stack = [0, 7] then
+                                  some {
+                                    s2, s4, s5, s7, s9, s10, s12, s14, s15,
+                                    out
+                                    h0 := by simpa [hp2] using h0
+                                    h2 := by simpa [hp4] using h2
+                                    h4 := by simpa [hp5] using h4
+                                    h5 := by simpa [hp7] using h5
+                                    h7 := by simpa [hp9] using h7
+                                    h9 := by simpa [hp10] using h9
+                                    h10 := by simpa [hp12] using h10
+                                    h12 := by simpa [hp14] using h12
+                                    h14 := by simpa [hp15] using h14
+                                    h15, commits, changed, finalValue,
+                                    stack4, stack9, stack14 }
+                                else none else none else none
+                          else none
+                        else none
+                      else none
+                    | _ => none
+                  else none | _ => none
+                else none | _ => none
+              else none | _ => none
+            else none | _ => none
+          else none | _ => none
+        else none | _ => none
+      else none | _ => none
+    else none | _ => none
+  else none | _ => none
 
 private def historyAvailable : Bool :=
-  let out := exec ⟨0, historySevm, historyPre⟩
-  match out with
-  | .error _ => false
-  | .ok post => Execution.commits out &&
-      ((Devm.getStor historyPre historySevm.currentTarget).get 0 !=
-        (Devm.getStor post historySevm.currentTarget).get 0) &&
-      ((Devm.getStor post historySevm.currentTarget).get 0 == 7)
+  historyFixture?.isSome
 
 /-- The selected witness writes final value 7 and is last even though the last
 write is a no-op to the value established by the preceding write. -/
 private theorem history_lastWriter (fixture : HistoryFixture) :
     ∃ write : Exec.SuccessfulSstoreOccurrence
-        (⟨0, historySevm, historyPre, fixture.out, fixture.run⟩ : Exec.Deriv),
+        fixture.root,
+      write.Retained ∧
+      write.storageOwner = historySevm.currentTarget ∧
+      write.key = 0 ∧ write.value = 7 ∧
+      write.occurrence.node.pc = 14 ∧ write.IsLastRetained := by
+  rcases fixture.occurrence14.toSuccessfulSstore rfl rfl with
+    ⟨write, occurrenceEq⟩
+  have retained : write.Retained := by
+    unfold Exec.SuccessfulSstoreOccurrence.Retained
+    unfold Exec.NinstOccurrence.Retained
+    rw [occurrenceEq]
+    simp [HistoryFixture.occurrence14, HistoryFixture.root,
+      HistoryFixture.run, HistoryFixture.node14, Exec.retainedNodes,
+      Exec.retainedNodesOfCommits, fixture.commits]
+  have owner : write.storageOwner = historySevm.currentTarget := by
+    rw [Exec.SuccessfulSstoreOccurrence.storageOwner, occurrenceEq]
+    rfl
+  have popped := write.popped
+  rw [occurrenceEq] at popped
+  change fixture.s14.stack =
+    write.key :: write.value :: write.stepPost.stack at popped
+  rw [fixture.stack14] at popped
+  have key : write.key = 0 := by
+    exact Option.some.inj (by simpa using
+      (congrArg List.head? popped).symm)
+  have value : write.value = 7 := by
+    exact Option.some.inj (by simpa using
+      (congrArg (fun stack => stack.tail.head?) popped).symm)
+  have pc : write.occurrence.node.pc = 14 := by
+    rw [occurrenceEq]
+    rfl
+  refine ⟨write, retained, owner, key, value, pc, ?_⟩
+  unfold Exec.SuccessfulSstoreOccurrence.IsLastRetained
+  let beforeNodes := (Exec.retainedNodes fixture.run).take 8
+  let beforeWrites := beforeNodes.filterMap Exec.Deriv.successfulSstore?
+  refine ⟨beforeWrites, [], ?_, by simp⟩
+  have nodes : Exec.retainedNodes fixture.run =
+      beforeNodes ++ fixture.node14 ::
+        [(⟨15, historySevm, fixture.s15, fixture.out,
+          .halt fixture.h15⟩ : Exec.Deriv)] := by
+    simp [beforeNodes, HistoryFixture.run, HistoryFixture.node14,
+      Exec.retainedNodes, Exec.retainedNodesOfCommits, fixture.commits]
+  unfold Exec.retainedStorageWrites
+  change (Exec.retainedNodes fixture.run).filterMap
+    Exec.Deriv.successfulSstore? = beforeWrites ++ [write.storageWrite]
+  rw [nodes, List.filterMap_append]
+  unfold Exec.SuccessfulSstoreOccurrence.storageWrite
+  rw [occurrenceEq, key, value]
+  have get14 : Evm.getInst ⟨14, historySevm, fixture.s14⟩ =
+      some (.next (.reg .sstore)) := fixture.occurrence14.decoded
+  have projected14 : fixture.node14.successfulSstore? = some {
+      node := fixture.node14
+      owner := historySevm.currentTarget
+      key := 0
+      value := 7 } := by
+    simp [Exec.Deriv.successfulSstore?, HistoryFixture.node14,
+      get14, fixture.stack14]
+  have suffix : [fixture.node14,
+      (⟨15, historySevm, fixture.s15, fixture.out,
+        .halt fixture.h15⟩ : Exec.Deriv)].filterMap
+          Exec.Deriv.successfulSstore? = [{
+      node := fixture.node14
+      owner := historySevm.currentTarget
+      key := 0
+      value := 7 }] := by
+    simp only [List.filterMap_cons, List.filterMap_nil, projected14]
+    simp [Exec.Deriv.successfulSstore?]
+  rw [suffix]
+  simp [beforeWrites, HistoryFixture.occurrence14,
+    HistoryFixture.node14]
+
+/-- The same concrete history also instantiates the public changed-cell
+last-writer theorem; the explicit theorem above identifies its maximal event
+as the final no-op SSTORE at PC 14. -/
+private theorem history_publicLastWriter (fixture : HistoryFixture) :
+    ∃ write : Exec.SuccessfulSstoreOccurrence fixture.root,
       write.Retained ∧
       write.storageOwner = historySevm.currentTarget ∧
       write.key = 0 ∧ write.value = 7 ∧ write.IsLastRetained := by
@@ -211,6 +405,146 @@ private def payloadHasSourceSstore : Bool :=
 /-- Source enumeration rejects the `0x55` PUSH payload despite the raw byte. -/
 private theorem payload_not_source_sstore : payloadHasSourceSstore = false := by
   decide
+
+/-- One actual compiled source SSTORE, preceded only by the compiler's entry
+`JUMPDEST`, so its exact structural source path is at PC 1. -/
+private def sourceProgram : Prog :=
+  ⟨.next (.reg .sstore) (.last .stop), []⟩
+
+private def sourceAddress : Adr := 0x200
+private def otherSourceAddress : Adr := 0x201
+private def otherStorageTarget : Adr := 0x202
+private def sourceCode : ByteArray := ByteArray.mk #[0x5b, 0x55, 0x00]
+private def sourceSevm : Sevm :=
+  { (default : Sevm) with
+    code := sourceCode
+    codeAddress := some sourceAddress }
+private def sourcePre : Devm :=
+  ((default : Devm).withGasLeft 100000).withStack [0, 1]
+
+private structure SourceFixture where
+  afterJump : Devm
+  afterStore : Devm
+  out : Execution
+  step0 : Evm.step ⟨0, sourceSevm, sourcePre⟩ = .cont 1 afterJump
+  step1 : Evm.step ⟨1, sourceSevm, afterJump⟩ = .cont 2 afterStore
+  tail : Exec 2 sourceSevm afterStore out
+  commits : Execution.commits out = true
+  compiled : some sourceCode.toList = sourceProgram.compile
+
+private def SourceFixture.run (w : SourceFixture) :
+    Exec 0 sourceSevm sourcePre w.out :=
+  .cont w.step0 (.cont w.step1 w.tail)
+
+private def SourceFixture.frame (w : SourceFixture) : Exec.Frame :=
+  ⟨0, sourceSevm, sourcePre, w.out, w.run, w.commits⟩
+
+private def SourceFixture.node (w : SourceFixture) : Exec.Deriv :=
+  ⟨1, sourceSevm, w.afterJump, w.out, .cont w.step1 w.tail⟩
+
+private def SourceFixture.occurrence (w : SourceFixture) :
+    Exec.NinstOccurrence w.frame.rootDeriv :=
+  { node := w.node
+    instruction := .reg .sstore
+    slot := .none
+    stepResult := .ok w.afterStore
+    reached := by
+      simp [SourceFixture.frame, SourceFixture.run,
+        SourceFixture.node, Exec.Frame.rootDeriv, Exec.rawNodes]
+    decoded := by
+      change Ninst.At sourceSevm.code 1 (.reg .sstore)
+      rfl
+    filled := trivial
+    stepRun := by
+      change Ninst.StepRun 1 sourceSevm w.afterJump (.reg .sstore)
+        .none (.ok w.afterStore)
+      unfold Ninst.StepRun
+      rw [← Evm.step_next
+        (show Ninst.At sourceSevm.code 1 (.reg .sstore) by rfl),
+        w.step1]
+      exact ⟨rfl, rfl⟩ }
+
+private def sourceFixture? : Option SourceFixture :=
+  if compiled : some sourceCode.toList = sourceProgram.compile then
+    match step0 : Evm.step ⟨0, sourceSevm, sourcePre⟩ with
+    | .cont pc1 afterJump =>
+      if hpc1 : pc1 = 1 then
+        match step1 : Evm.step ⟨1, sourceSevm, afterJump⟩ with
+        | .cont pc2 afterStore =>
+          if hpc2 : pc2 = 2 then
+            let out := exec ⟨2, sourceSevm, afterStore⟩
+            if commits : Execution.commits out = true then
+              let tail : Exec 2 sourceSevm afterStore out :=
+                Classical.choice ((exec_iff_exec_eq _ _ _ _).2 rfl)
+              some {
+                afterJump
+                afterStore
+                out
+                step0 := by simpa [hpc1] using step0
+                step1 := by simpa [hpc2] using step1
+                tail
+                commits
+                compiled }
+            else none
+          else none
+        | _ => none
+      else none
+    | _ => none
+  else none
+
+private def exactSourceSite : Bool :=
+  match sourceProgram.sourceSiteAt 1 with
+  | some site =>
+      site.path == (⟨0, []⟩ : Prog.SourcePath) &&
+        site.pc == 1 &&
+          match site.instruction with
+          | .reg .sstore => true
+          | _ => false
+  | none => false
+
+private def sourceFixtureAvailable : Bool :=
+  match sourceProgram.compile with
+  | some bytes => if bytes = sourceCode.toList then
+      match Evm.step ⟨0, sourceSevm, sourcePre⟩ with
+      | .cont pc1 afterJump => pc1 == 1 &&
+          match Evm.step ⟨1, sourceSevm, afterJump⟩ with
+          | .cont pc2 afterStore => pc2 == 2 &&
+              Execution.commits (exec ⟨2, sourceSevm, afterStore⟩)
+          | _ => false
+      | _ => false
+    else false
+  | none => false
+
+private theorem SourceFixture.exact (w : SourceFixture) :
+    w.frame.exactInvocation sourceProgram
+      sourceSevm.currentTarget sourceAddress :=
+  ⟨rfl, rfl, rfl, w.compiled⟩
+
+private theorem SourceFixture.source_and_identity_controls
+    (w : SourceFixture) :
+    (∃ write : Exec.SuccessfulSstoreOccurrence w.frame.rootDeriv,
+      write.occurrence.node.pc = 1 ∧
+        sourceProgram.acceptsSstoreSite ⟨0, []⟩
+          write.occurrence.node.pc = true) ∧
+    w.frame.exactInvocation sourceProgram
+      sourceSevm.currentTarget sourceAddress ∧
+    ¬ w.frame.exactInvocation sourceProgram
+      otherStorageTarget sourceAddress ∧
+    ¬ w.frame.exactInvocation sourceProgram
+      sourceSevm.currentTarget otherSourceAddress := by
+  rcases w.occurrence.toSuccessfulSstore rfl rfl with ⟨write, occurrenceEq⟩
+  refine ⟨⟨write, ?_, ?_⟩, w.exact, ?_, ?_⟩
+  · rw [occurrenceEq]
+    rfl
+  · rw [occurrenceEq]
+    change sourceProgram.acceptsSstoreSite ⟨0, []⟩ 1 = true
+    decide
+  · intro drifted
+    exact (by decide : otherStorageTarget ≠ sourceSevm.currentTarget)
+      (drifted.2.1.symm.trans w.exact.2.1)
+  · intro drifted
+    exact (by decide : otherSourceAddress ≠ sourceAddress)
+      (Option.some.inj (drifted.2.2.1.symm.trans w.exact.2.2.1))
 
 /-! Exact invocation identity controls. -/
 
@@ -244,6 +578,134 @@ private def callPre (childCode : ByteArray) : Devm :=
 private def callEvm (childCode : ByteArray) : Evm :=
   ⟨0, callSevm, callPre childCode⟩
 
+private structure CallFixture where
+  childCode : ByteArray
+  nextPc : Nat
+  resumed : Devm
+  frame : Jaune.Frame
+  resume : Resume
+  childEvm : Evm
+  raw : Execution
+  out : Execution
+  hstep : (callEvm childCode).step = .spawn frame resume nextPc
+  henter : frame.enter = .run childEvm
+  child : Exec childEvm.pc childEvm.sta childEvm.dyna raw
+  hresume : resume.run (frame.settle raw) = .ok resumed
+  next : Exec nextPc callSevm resumed out
+  rootCommits : Execution.commits out = true
+
+private def CallFixture.run (w : CallFixture) :
+    Exec 0 callSevm (callPre w.childCode) w.out :=
+  .runOk w.hstep w.henter w.child w.hresume w.next
+
+private def CallFixture.root (w : CallFixture) : Exec.Deriv :=
+  ⟨0, callSevm, callPre w.childCode, w.out, w.run⟩
+
+private theorem CallFixture.raw_order (w : CallFixture) :
+    Exec.rawNodes w.run =
+      w.root :: (Exec.rawNodes w.child ++ Exec.rawNodes w.next) := by
+  simp [CallFixture.run, CallFixture.root, Exec.rawNodes]
+
+private theorem CallFixture.retained_order_of_settles
+    (w : CallFixture)
+    (settles : Frame.settlementCommits w.frame w.raw = true) :
+    Exec.retainedNodes w.run =
+      w.root :: (Exec.retainedNodes w.child ++ Exec.retainedNodes w.next) := by
+  simpa [CallFixture.run, CallFixture.root] using
+    Exec.retainedNodes_runOk_of_settlementCommits
+      w.hstep w.henter w.child w.hresume w.next w.rootCommits settles
+
+private theorem CallFixture.retained_prunes_of_not_settles
+    (w : CallFixture)
+    (notSettles : Frame.settlementCommits w.frame w.raw ≠ true) :
+    Exec.retainedNodes w.run = w.root :: Exec.retainedNodes w.next := by
+  simpa [CallFixture.run, CallFixture.root] using
+    Exec.retainedNodes_runOk_of_not_settlementCommits
+      w.hstep w.henter w.child w.hresume w.next w.rootCommits notSettles
+
+private def callFixture? (childCode : ByteArray) : Option CallFixture :=
+  match hstep : (callEvm childCode).step with
+  | .spawn frame resume nextPc =>
+      match henter : frame.enter with
+      | .run childEvm =>
+          let raw := exec childEvm
+          match hresume : resume.run (frame.settle raw) with
+          | .ok resumed =>
+              let out := exec ⟨nextPc, callSevm, resumed⟩
+              if rootCommits : Execution.commits out = true then
+                let child := Classical.choice
+                  ((exec_iff_exec_eq _ _ _ _).2 rfl)
+                let next := Classical.choice
+                  ((exec_iff_exec_eq _ _ _ _).2 rfl)
+                some {
+                  childCode := childCode
+                  nextPc := nextPc
+                  resumed := resumed
+                  frame := frame
+                  resume := resume
+                  childEvm := childEvm
+                  raw := raw
+                  out := out
+                  hstep := hstep
+                  henter := henter
+                  child := child
+                  hresume := hresume
+                  next := next
+                  rootCommits := rootCommits }
+              else none
+          | .error _ => none
+      | .done _ => none
+  | _ => none
+
+private structure CommittedCallFixture where
+  call : CallFixture
+  childCode_eq : call.childCode = committedChildCode
+  settles : Frame.settlementCommits call.frame call.raw = true
+
+private structure CaughtCallFixture where
+  call : CallFixture
+  childCode_eq : call.childCode = failedChildCode
+  rawDoesNotCommit : Execution.commits call.raw ≠ true
+  doesNotSettle : Frame.settlementCommits call.frame call.raw ≠ true
+
+private def committedCallFixture? : Option CommittedCallFixture :=
+  match callFixture? committedChildCode with
+  | some call =>
+      if childCode_eq : call.childCode = committedChildCode then
+        if settles : Frame.settlementCommits call.frame call.raw = true then
+          some ⟨call, childCode_eq, settles⟩
+        else none
+      else none
+  | none => none
+
+private def caughtCallFixture? : Option CaughtCallFixture :=
+  match callFixture? failedChildCode with
+  | some call =>
+      if childCode_eq : call.childCode = failedChildCode then
+        if rawDoesNotCommit : Execution.commits call.raw ≠ true then
+          if doesNotSettle :
+              Frame.settlementCommits call.frame call.raw ≠ true then
+            some ⟨call, childCode_eq, rawDoesNotCommit, doesNotSettle⟩
+          else none
+        else none
+      else none
+  | none => none
+
+private theorem committedCall_order (w : CommittedCallFixture) :
+    Exec.rawNodes w.call.run = w.call.root ::
+        (Exec.rawNodes w.call.child ++ Exec.rawNodes w.call.next) ∧
+      Exec.retainedNodes w.call.run = w.call.root ::
+        (Exec.retainedNodes w.call.child ++ Exec.retainedNodes w.call.next) :=
+  ⟨w.call.raw_order, w.call.retained_order_of_settles w.settles⟩
+
+private theorem caughtCall_raw_but_pruned (w : CaughtCallFixture) :
+    Exec.rawNodes w.call.run = w.call.root ::
+        (Exec.rawNodes w.call.child ++ Exec.rawNodes w.call.next) ∧
+      Exec.retainedNodes w.call.run =
+        w.call.root :: Exec.retainedNodes w.call.next :=
+  ⟨w.call.raw_order, w.call.retained_prunes_of_not_settles w.doesNotSettle⟩
+
+/-- Computable mirrors of the dependent CALL fixture branches. -/
 private def committedChildAvailable : Bool :=
   match (callEvm committedChildCode).step with
   | .spawn frame resume nextPc =>
@@ -274,7 +736,7 @@ private def caughtFailedChildAvailable : Bool :=
 
 -- The gate requires this exact evaluator vector.
 #eval! [
-  decide (Execution.commits terminalErrorOut ≠ true),
+  terminalFixture?.isSome,
   rootSstoreAvailable noOpSevm noOpPre,
   rootSstoreAvailable revertSevm revertPre,
   decide (Execution.commits (exec ⟨0, revertSevm, revertPre⟩) ≠ true),
@@ -284,13 +746,16 @@ private def caughtFailedChildAvailable : Bool :=
   caughtFailedChildAvailable,
   payloadContains55,
   !payloadHasSourceSstore,
-  historyAvailable]
+  historyAvailable,
+  sourceFixtureAvailable,
+  exactSourceSite]
 
 -- TERMINAL-ERROR-MUTANT-CONTROL
 -- RAW-ERROR-PRUNE-MUTANT-CONTROL
 -- RAW-BYTE-SCAN-MUTANT-CONTROL
 -- FIRST-WRITER-MUTANT-CONTROL
 -- IDENTITY-MUTANT-CONTROL
+-- CODE-IDENTITY-MUTANT-CONTROL
 -- WETH-BRIDGE-MUTANT-CONTROL
 
 end
