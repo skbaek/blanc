@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "commonModule": "Blanc/ExecutionOccurrence.lean",
+  "contractModuleGlobs": [
+    "Blanc/Weth10*.lean",
+    "Blanc/Lido*.lean"
+  ],
+  "owners": [
+    { "declaration": "Blanc.Exec.rawFrameDescendants", "kind": "def", "shadow": "forbid-contract-basename" },
+    { "declaration": "Blanc.Exec.rawFrameRoots", "kind": "def", "shadow": "forbid-contract-basename" },
+    { "declaration": "Blanc.Exec.mem_rawFrameRoots_self", "kind": "theorem", "shadow": "forbid-contract-basename" },
+    { "declaration": "Blanc.Exec.rawFrameRoots_runErr", "kind": "theorem", "shadow": "forbid-contract-basename" },
+    { "declaration": "Blanc.Exec.rawFrameRoots_runOk", "kind": "theorem", "shadow": "forbid-contract-basename" },
+    { "declaration": "Blanc.Exec.Deriv.ParentStep.parentPrefix_iff", "kind": "theorem", "shadow": "forbid-contract-basename" },
+    { "declaration": "Blanc.Exec.mem_rawNodes_iff_rawFrameRoot_parentPrefix", "kind": "theorem", "shadow": "forbid-contract-basename" },
+    { "declaration": "Blanc.Exec.Deriv.ParentPrefix.advance_pushToward", "kind": "theorem", "shadow": "forbid-contract-basename" },
+    { "declaration": "Blanc.Exec.Deriv.ParentPrefix.advance_jumpToward", "kind": "theorem", "shadow": "forbid-contract-basename" },
+    { "declaration": "Blanc.Exec.Deriv.exactInvocation", "kind": "def", "shadow": "owner-only" },
+    { "declaration": "Blanc.Exec.Frame.exactInvocation_iff_rootDeriv", "kind": "theorem", "shadow": "owner-only" },
+    { "declaration": "Blanc.Exec.Deriv.SourceCursor", "kind": "structure", "shadow": "owner-only" },
+    { "declaration": "Blanc.Exec.Deriv.SourceCursor.node", "kind": "def", "shadow": "owner-only" },
+    { "declaration": "Blanc.Exec.Deriv.SourceCursor.mainToward", "kind": "theorem", "shadow": "forbid-contract-basename" },
+    { "declaration": "Blanc.Exec.Deriv.SourceCursor.nextOfParentStep", "kind": "theorem", "shadow": "forbid-contract-basename" },
+    { "declaration": "Blanc.Exec.Deriv.SourceCursor.branchToward", "kind": "theorem", "shadow": "forbid-contract-basename" },
+    { "declaration": "Blanc.Exec.Deriv.SourceCursor.callToward", "kind": "theorem", "shadow": "forbid-contract-basename" },
+    { "declaration": "Blanc.Exec.Deriv.SourceCursor.sstoreSite", "kind": "theorem", "shadow": "forbid-contract-basename" },
+    { "declaration": "Blanc.Exec.Deriv.sstore_sourceSite", "kind": "theorem", "shadow": "forbid-contract-basename" },
+    { "declaration": "Blanc.Exec.Deriv.successfulSstore_sourceSite", "kind": "theorem", "shadow": "forbid-contract-basename" },
+    { "declaration": "Blanc.Exec.NinstOccurrence.exists_rawFrameRoot_parentPrefix", "kind": "theorem", "shadow": "forbid-contract-basename" },
+    { "declaration": "Blanc.Exec.NinstOccurrence.sourceSite_of_rawFrameRoot", "kind": "theorem", "shadow": "forbid-contract-basename" },
+    { "declaration": "Blanc.Exec.Frame.SourceCursor.toRaw", "kind": "def", "shadow": "owner-only" },
+    { "declaration": "Blanc.Exec.Frame.SourceCursor.toRaw_node", "kind": "theorem", "shadow": "owner-only" },
+    { "declaration": "Blanc.Exec.Deriv.sstore_acceptsSource", "kind": "theorem", "shadow": "forbid-contract-basename" },
+    { "declaration": "Blanc.Exec.NinstOccurrence.acceptsSource_of_rawFrameRoot", "kind": "theorem", "shadow": "forbid-contract-basename" }
+  ]
+}
