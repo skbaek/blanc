@@ -1,6 +1,7 @@
 import Blanc.ExecutionSettlement
 import Blanc.Compiled
 import Blanc.CommonProofs
+import Blanc.ExecDeterminism
 
 /-!
 Contract-neutral instruction occurrences over finite execution derivations.
@@ -223,6 +224,23 @@ theorem Exec.Deriv.ParentStep.unique
     nextLeft = nextRight := by
   cases left <;> cases right <;> simp_all
 
+/-- A same-frame parent edge is an immediate recursive derivation edge. -/
+theorem Exec.Deriv.ParentStep.prec
+    {root next : Exec.Deriv}
+    (edge : Exec.Deriv.ParentStep next root) : next ≺ root := by
+  cases edge with
+  | cont hstep next => exact .cont hstep next
+  | doneOk hstep henter hresume next =>
+      exact .doneOk hstep henter hresume next
+  | runOk hstep henter child hresume next =>
+      exact .runOkCont hstep henter child hresume next
+
+/-- A same-frame parent edge strictly descends in the execution proof. -/
+theorem Exec.Deriv.ParentStep.lt
+    {root next : Exec.Deriv}
+    (edge : Exec.Deriv.ParentStep next root) : Exec.Deriv.lt next root :=
+  Exec.Deriv.lt_of_prec edge.prec
+
 /-- A finite same-frame prefix. -/
 inductive Exec.Deriv.ParentPrefix : Exec.Deriv → Exec.Deriv → Prop
   | refl (root : Exec.Deriv) : ParentPrefix root root
@@ -230,6 +248,43 @@ inductive Exec.Deriv.ParentPrefix : Exec.Deriv → Exec.Deriv → Prop
       (head : Exec.Deriv.ParentStep next root)
       (rest : Exec.Deriv.ParentPrefix next tail) :
       Exec.Deriv.ParentPrefix root tail
+
+/-- Append one same-frame continuation edge. -/
+theorem Exec.Deriv.ParentPrefix.snoc
+    {root current next : Exec.Deriv}
+    (hprefix : Exec.Deriv.ParentPrefix root current)
+    (edge : Exec.Deriv.ParentStep next current) :
+    Exec.Deriv.ParentPrefix root next := by
+  induction hprefix with
+  | refl => exact .step edge (.refl _)
+  | step head rest ih => exact .step head (ih edge)
+
+/-- Follow one known childless machine continuation. -/
+theorem Exec.Deriv.ParentPrefix.advance_cont
+    {root : Exec.Deriv} {pc nextPc : Nat} {sevm : Sevm}
+    {pre nextPre : Devm} {out : Execution}
+    (current : Exec pc sevm pre out)
+    (hprefix : Exec.Deriv.ParentPrefix root
+      ⟨pc, sevm, pre, out, current⟩)
+    (hstep : Evm.step ⟨pc, sevm, pre⟩ = .cont nextPc nextPre) :
+    ∃ continuation : Exec nextPc sevm nextPre out,
+      Exec.Deriv.ParentStep
+          ⟨nextPc, sevm, nextPre, out, continuation⟩
+          ⟨pc, sevm, pre, out, current⟩ ∧
+      Exec.Deriv.ParentPrefix root
+        ⟨nextPc, sevm, nextPre, out, continuation⟩ := by
+  cases current with
+  | halt step => cases hstep.symm.trans step
+  | cont step next =>
+      cases hstep.symm.trans step
+      let edge : Exec.Deriv.ParentStep
+          ⟨nextPc, sevm, nextPre, out, next⟩
+          ⟨pc, sevm, pre, out, .cont hstep next⟩ := .cont hstep next
+      exact ⟨next, edge, hprefix.snoc edge⟩
+  | doneErr step enter resume => cases hstep.symm.trans step
+  | doneOk step enter resume next => cases hstep.symm.trans step
+  | runErr step enter child resume => cases hstep.symm.trans step
+  | runOk step enter child resume next => cases hstep.symm.trans step
 
 /-- Same-frame prefixes in a fixed execution proof are linearly ordered. -/
 theorem Exec.Deriv.ParentPrefix.linear
@@ -280,6 +335,80 @@ theorem Exec.Deriv.ParentPrefix.rawNodes_decomposition
       rcases head.rawNodes_decomposition with ⟨crossed, _, hhead⟩
       rcases ih with ⟨before, hrest⟩
       exact ⟨crossed ++ before, by rw [hhead, hrest, List.append_assoc]⟩
+
+theorem Ninst.At.false_of_jinstAt
+    {code : ByteArray} {pc : Nat} {n : Ninst} {j : Jinst}
+    (nextAt : Ninst.At code pc n) (jumpAt : Jinst.At code pc j) : False := by
+  unfold Ninst.At at nextAt
+  unfold Jinst.At at jumpAt
+  rw [nextAt] at jumpAt
+  cases jumpAt
+
+theorem Ninst.At.false_of_linstAt
+    {code : ByteArray} {pc : Nat} {n : Ninst} {instruction : Linst}
+    (nextAt : Ninst.At code pc n)
+    (lastAt : Linst.At code pc instruction) : False := by
+  unfold Ninst.At at nextAt
+  unfold Linst.At at lastAt
+  rw [nextAt] at lastAt
+  cases lastAt
+
+/-- A terminal instruction cannot have a same-frame continuation edge. -/
+theorem Exec.Deriv.ParentStep.false_of_linstAt
+    {root next : Exec.Deriv} {instruction : Linst}
+    (edge : Exec.Deriv.ParentStep next root)
+    (lastAt : Linst.At root.sevm.code root.pc instruction) : False := by
+  cases edge with
+  | cont hstep next => cases (Evm.step_last lastAt).symm.trans hstep
+  | doneOk hstep henter hresume next =>
+      cases (Evm.step_last lastAt).symm.trans hstep
+  | runOk hstep henter child hresume next =>
+      cases (Evm.step_last lastAt).symm.trans hstep
+
+/-- A same-frame compiler prefix containing no SSTORE instruction boundary. -/
+inductive Exec.Deriv.ParentNonSstorePrefix :
+    Exec.Deriv → Exec.Deriv → Prop
+  | refl (root) : ParentNonSstorePrefix root root
+  | step {root next tail}
+      (edge : Exec.Deriv.ParentStep next root)
+      (notStore : ¬ Ninst.At root.sevm.code root.pc (.reg .sstore))
+      (rest : ParentNonSstorePrefix next tail) :
+      ParentNonSstorePrefix root tail
+
+/-- Remove compiler-only non-SSTORE nodes from the front of a reached SSTORE
+prefix. -/
+theorem Exec.Deriv.ParentNonSstorePrefix.trim
+    {start tail occurrence : Exec.Deriv}
+    (compilerPrefix : Exec.Deriv.ParentNonSstorePrefix start tail)
+    (reached : Exec.Deriv.ParentPrefix start occurrence)
+    (storeAt : Ninst.At occurrence.sevm.code occurrence.pc (.reg .sstore)) :
+    Exec.Deriv.ParentPrefix tail occurrence := by
+  induction compilerPrefix generalizing occurrence with
+  | refl => exact reached
+  | step edge notStore rest ih =>
+      cases reached with
+      | refl => exact (notStore storeAt).elim
+      | step occurrenceEdge suffix =>
+          cases edge.unique occurrenceEdge
+          exact ih suffix storeAt
+
+/-- Compiler-prefix endpoints are recursive descendants of their starts. -/
+theorem Exec.Deriv.ParentNonSstorePrefix.le
+    {start tail : Exec.Deriv}
+    (hprefix : Exec.Deriv.ParentNonSstorePrefix start tail) :
+    Exec.Deriv.le tail start := by
+  induction hprefix with
+  | refl => exact .refl _
+  | step edge notStore rest ih => exact .step ih edge.prec
+
+/-- A nonempty compiler prefix strictly descends in the execution proof. -/
+theorem Exec.Deriv.ParentNonSstorePrefix.lt_of_step
+    {start next tail : Exec.Deriv}
+    (edge : Exec.Deriv.ParentStep next start)
+    (_notStore : ¬ Ninst.At start.sevm.code start.pc (.reg .sstore))
+    (rest : Exec.Deriv.ParentNonSstorePrefix next tail) :
+    Exec.Deriv.lt tail start :=
+  ⟨next, rest.le, edge.prec⟩
 
 /-! ## Executable compiler source sites -/
 
@@ -394,5 +523,610 @@ theorem Prog.sourceSiteAt_sound
     simpa [BEq.beq] using h
   · exact program.sourceSites_sound compiled
       (List.mem_of_find?_eq_some found)
+
+/-! ## Exact invocation identity -/
+
+/-- Exact contract-neutral identity of one retained compiled invocation.
+`currentTarget` is the storage owner, `codeAddress` names the executing code
+account, and the final conjunct pins the exact execution bytes.  Installation
+in the entry state and call-opcode provenance are intentionally separate. -/
+def Exec.Frame.exactInvocation
+    (program : Prog) (storageTarget codeAddress : Adr)
+    (frame : Exec.Frame) : Prop :=
+  frame.pc = 0 ∧
+    frame.sevm.currentTarget = storageTarget ∧
+    frame.sevm.codeAddress = some codeAddress ∧
+    some frame.sevm.code.toList = program.compile
+
+instance (program : Prog) (storageTarget codeAddress : Adr)
+    (frame : Exec.Frame) :
+    Decidable (frame.exactInvocation program storageTarget codeAddress) := by
+  unfold Exec.Frame.exactInvocation
+  infer_instance
+
+@[simp] theorem table_length (start : Nat) (functions : List Func) :
+    (table start functions).length = functions.length := by
+  induction functions generalizing start with
+  | nil => rfl
+  | cons head tail ih => simp [table, ih]
+
+/-- The root derivation bundled by a retained frame. -/
+def Exec.Frame.rootDeriv (frame : Exec.Frame) : Exec.Deriv :=
+  ⟨frame.pc, frame.sevm, frame.pre, frame.out, frame.run⟩
+
+/-- Proof cursor connecting one actually reached same-frame node to one
+compiler source body.  `sourceIncluded` embeds its local executable sites into
+the whole-program map and is preserved while following the finite execution
+prefix, including recursive internal calls. -/
+structure Exec.Frame.SourceCursor
+    (frame : Exec.Frame) (program : Prog)
+    (path : Prog.SourcePath) (source : Func) where
+  pc : Nat
+  pre : Devm
+  current : Exec pc frame.sevm pre frame.out
+  parentPrefix : Exec.Deriv.ParentPrefix frame.rootDeriv
+    ⟨pc, frame.sevm, pre, frame.out, current⟩
+  codeSlice : subcode frame.sevm.code.toList pc
+    (Func.compile (table 0 (program.main :: program.aux)) pc source)
+  codeBoundary : noPushBefore frame.sevm.code pc 32 = true
+  sourceIncluded : ∀ {site},
+    site ∈ Func.sourceSites path.functionIndex path.steps pc source →
+      site ∈ program.sourceSites
+
+/-- The exact reached derivation selected by a source cursor. -/
+def Exec.Frame.SourceCursor.node
+    {frame : Exec.Frame} {program : Prog}
+    {path : Prog.SourcePath} {source : Func}
+    (cursor : Exec.Frame.SourceCursor frame program path source) : Exec.Deriv :=
+  ⟨cursor.pc, frame.sevm, cursor.pre, frame.out, cursor.current⟩
+
+/-- Enter the main source body through the compiler's leading `JUMPDEST`. -/
+theorem Exec.Frame.SourceCursor.main
+    {frame : Exec.Frame} {program : Prog}
+    {storageTarget codeAddress : Adr}
+    (invocation : frame.exactInvocation program storageTarget codeAddress) :
+    ∃ cursor : Exec.Frame.SourceCursor frame program ⟨0, []⟩ program.main,
+      Exec.Deriv.ParentNonSstorePrefix frame.rootDeriv
+        ⟨cursor.pc, frame.sevm, cursor.pre, frame.out, cursor.current⟩ := by
+  rcases frame with ⟨pc, sevm, pre, out, run, committed⟩
+  rcases invocation with ⟨hpc, htarget, haddress, hcode⟩
+  dsimp at hpc htarget haddress hcode
+  subst pc
+  cases out with
+  | error error =>
+      simp [Execution.commits] at committed
+  | ok post =>
+      have hget :
+          (table 0 (program.main :: program.aux))[0]? =
+            some (0, program.main) := rfl
+      rcases subcode_of_get?_eq_some hcode hget with
+        ⟨jumpdestAt, sourceSlice⟩
+      have sourceBoundary : noPushBefore sevm.code 1 32 = true :=
+        (Prog.jumpable_of_get?_table hcode hget).2
+      rcases jumpdest_at_exact run jumpdestAt with
+        ⟨inter, current, burn, hgas, prec⟩
+      have entryStep : Evm.step ⟨0, sevm, pre⟩ = .cont 1 inter :=
+        Evm.jumpdest_cont jumpdestAt (Devm.BurnBy.of_burn burn hgas)
+      have runEq : run = .cont entryStep current := Exec.unique _ _
+      have parentPrefix : Exec.Deriv.ParentPrefix
+          (Exec.Frame.rootDeriv ⟨0, sevm, pre, .ok post, run, committed⟩)
+          ⟨1, sevm, inter, .ok post, current⟩ := by
+        rw [runEq]
+        exact .step (.cont entryStep current) (.refl _)
+      let edge : Exec.Deriv.ParentStep
+          ⟨1, sevm, inter, .ok post, current⟩
+          (Exec.Frame.rootDeriv
+            ⟨0, sevm, pre, .ok post, run, committed⟩) := by
+        rw [runEq]
+        exact .cont entryStep current
+      have notStore : ¬ Ninst.At sevm.code 0 (.reg .sstore) := by
+        intro storeAt
+        exact storeAt.false_of_jinstAt jumpdestAt
+      refine ⟨⟨1, inter, current, parentPrefix, sourceSlice,
+        sourceBoundary, ?_⟩, .step edge notStore (.refl _)⟩
+      intro site member
+      simp only [Prog.sourceSites, List.mem_flatMap]
+      refine ⟨0, by simp, ?_⟩
+      simpa only [hget] using member
+
+/-- Advance over one actually successful source `.next` instruction. -/
+theorem Exec.Frame.SourceCursor.next
+    {frame : Exec.Frame} {program : Prog}
+    {path : Prog.SourcePath} {instruction : Ninst} {tail : Func}
+    (cursor : Exec.Frame.SourceCursor frame program path
+      (.next instruction tail)) :
+    ∃ nextCursor : Exec.Frame.SourceCursor frame program
+        ⟨path.functionIndex, path.steps ++ [.rest]⟩ tail,
+      Exec.Deriv.ParentStep
+        ⟨nextCursor.pc, frame.sevm, nextCursor.pre, frame.out,
+          nextCursor.current⟩
+        ⟨cursor.pc, frame.sevm, cursor.pre, frame.out, cursor.current⟩ := by
+  rcases frame with ⟨rootPc, sevm, rootPre, out, rootRun, committed⟩
+  cases out with
+  | error error => simp [Execution.commits] at committed
+  | ok final =>
+      have sourceAt : Ninst.At sevm.code cursor.pc instruction :=
+        Func.sourceSites_sound cursor.codeSlice cursor.codeBoundary
+          (functionIndex := path.functionIndex) (steps := path.steps)
+          (site := { path := path, pc := cursor.pc, instruction := instruction })
+          (by rcases path with ⟨functionIndex, steps⟩
+              simp [Func.sourceSites])
+      rcases Func.noPushBefore_next cursor.codeSlice cursor.codeBoundary with
+        ⟨tailBoundary, tailSlice⟩
+      cases hcurrent : cursor.current with
+      | halt step =>
+          exact (Ninst.step_ne_halt_ok
+            ((Evm.step_next sourceAt).symm.trans step)).elim
+      | cont step next =>
+          have sourceStep := (Evm.step_next sourceAt).symm.trans step
+          cases Ninst.step_cont_pc sourceStep
+          let edge : Exec.Deriv.ParentStep
+              ⟨cursor.pc + instruction.size, sevm, _, .ok final, next⟩
+              ⟨cursor.pc, sevm, cursor.pre, .ok final, .cont step next⟩ :=
+            .cont step next
+          have oldPrefix := cursor.parentPrefix
+          rw [hcurrent] at oldPrefix
+          have nextPrefix := oldPrefix.snoc edge
+          refine ⟨⟨_, _, next, nextPrefix,
+            tailSlice, tailBoundary, ?_⟩, edge⟩
+          intro site member
+          apply cursor.sourceIncluded
+          simp [Func.sourceSites, member]
+      | doneOk step enter resume next =>
+          have sourceStep := (Evm.step_next sourceAt).symm.trans step
+          cases Ninst.step_spawn_pc sourceStep
+          let edge : Exec.Deriv.ParentStep
+              ⟨cursor.pc + instruction.size, sevm, _, .ok final, next⟩
+              ⟨cursor.pc, sevm, cursor.pre, .ok final,
+                .doneOk step enter resume next⟩ :=
+            .doneOk step enter resume next
+          have oldPrefix := cursor.parentPrefix
+          rw [hcurrent] at oldPrefix
+          have nextPrefix := oldPrefix.snoc edge
+          refine ⟨⟨_, _, next, nextPrefix,
+            tailSlice, tailBoundary, ?_⟩, edge⟩
+          intro site member
+          apply cursor.sourceIncluded
+          simp [Func.sourceSites, member]
+      | runOk step enter child resume next =>
+          have sourceStep := (Evm.step_next sourceAt).symm.trans step
+          cases Ninst.step_spawn_pc sourceStep
+          let edge : Exec.Deriv.ParentStep
+              ⟨cursor.pc + instruction.size, sevm, _, .ok final, next⟩
+              ⟨cursor.pc, sevm, cursor.pre, .ok final,
+                .runOk step enter child resume next⟩ :=
+            .runOk step enter child resume next
+          have oldPrefix := cursor.parentPrefix
+          rw [hcurrent] at oldPrefix
+          have nextPrefix := oldPrefix.snoc edge
+          refine ⟨⟨_, _, next, nextPrefix,
+            tailSlice, tailBoundary, ?_⟩, edge⟩
+          intro site member
+          apply cursor.sourceIncluded
+          simp [Func.sourceSites, member]
+
+/-- Select the source branch arm followed by the actual successful execution,
+crossing only the compiler's PUSH/JUMPI/JUMPDEST glue. -/
+theorem Exec.Frame.SourceCursor.branch
+    {frame : Exec.Frame} {program : Prog} {path : Prog.SourcePath}
+    {left right : Func}
+    (cursor : Exec.Frame.SourceCursor frame program path
+      (.branch left right)) :
+    (∃ arm : Exec.Frame.SourceCursor frame program
+        ⟨path.functionIndex, path.steps ++ [.branchLeft]⟩ left,
+      Exec.Deriv.ParentNonSstorePrefix
+        ⟨cursor.pc, frame.sevm, cursor.pre, frame.out, cursor.current⟩
+        ⟨arm.pc, frame.sevm, arm.pre, frame.out, arm.current⟩ ∧
+      Exec.Deriv.lt
+        ⟨arm.pc, frame.sevm, arm.pre, frame.out, arm.current⟩
+        ⟨cursor.pc, frame.sevm, cursor.pre, frame.out, cursor.current⟩) ∨
+    (∃ arm : Exec.Frame.SourceCursor frame program
+        ⟨path.functionIndex, path.steps ++ [.branchRight]⟩ right,
+      Exec.Deriv.ParentNonSstorePrefix
+        ⟨cursor.pc, frame.sevm, cursor.pre, frame.out, cursor.current⟩
+        ⟨arm.pc, frame.sevm, arm.pre, frame.out, arm.current⟩ ∧
+      Exec.Deriv.lt
+        ⟨arm.pc, frame.sevm, arm.pre, frame.out, arm.current⟩
+        ⟨cursor.pc, frame.sevm, cursor.pre, frame.out, cursor.current⟩) := by
+  rcases frame with ⟨rootPc, sevm, rootPre, out, rootRun, committed⟩
+  cases out with
+  | error error => simp [Execution.commits] at committed
+  | ok final =>
+      rcases subcode_compile_branch_jumpable cursor.codeSlice
+          cursor.codeBoundary with
+        ⟨loc, hlocEq, hloc, pushAt, jumpiAt, leftSlice, leftBoundary,
+          jumpdestAt, jumpable, rightSlice, rightBoundary⟩
+      rcases pushAt_exact cursor.current ⟨_, pushAt⟩ (by simp) with
+        ⟨afterPushPre, afterPush, pushBurn, room, pushGas, pushPrec⟩
+      rw [List.toB256_pair _ hloc] at pushBurn
+      rcases jumpi_at_exact afterPush jumpiAt with
+        ⟨x, armPre, armExec, popBurn, jumpGas, jumpPrec⟩ |
+        ⟨x, flag, beforeJumpdestPre, beforeJumpdest, popBurn, jumpGas,
+          actualJumpable, nonzero, jumpPrec⟩
+      · have combined : Devm.PopBurn [0] cursor.pre armPre := by
+          rcases (Devm.pushBurn_cons_popBurn_cons pushBurn popBurn).right with
+            ⟨stack, pushBurn', popBurn'⟩
+          exact Devm.popBurn_of_burn_of_popBurn
+            (Devm.burn_of_pushBurn_nil pushBurn') popBurn'
+        have steps := Evm.branch_zero_steps pushAt jumpiAt hloc room
+          (Devm.PopBurnBy.of_popBurn combined (by omega))
+        rcases cursor.parentPrefix.advance_cont cursor.current steps.1 with
+          ⟨afterPush', pushEdge, afterPushPrefix⟩
+        rcases afterPushPrefix.advance_cont afterPush' steps.2 with
+          ⟨armExec', jumpEdge, armPrefix⟩
+        let armCursor : Exec.Frame.SourceCursor
+            ⟨rootPc, sevm, rootPre, .ok final, rootRun, committed⟩ program
+            ⟨path.functionIndex, path.steps ++ [.branchLeft]⟩ left :=
+          ⟨_, _, armExec', armPrefix, leftSlice, leftBoundary, by
+            intro site member
+            apply cursor.sourceIncluded
+            simp only [Func.sourceSites, List.mem_append]
+            exact Or.inl member⟩
+        have pushNotStore : ¬ Ninst.At sevm.code cursor.pc (.reg .sstore) := by
+          intro storeAt
+          have impossible := Ninst.at_unique storeAt pushAt
+          cases impossible
+        have jumpNotStore : ¬ Ninst.At sevm.code (cursor.pc + 3)
+            (.reg .sstore) := by
+          intro storeAt
+          exact storeAt.false_of_jinstAt jumpiAt
+        let compilerPrefix : Exec.Deriv.ParentNonSstorePrefix
+            ⟨cursor.pc, sevm, cursor.pre, .ok final, cursor.current⟩
+            ⟨armCursor.pc, sevm, armCursor.pre, .ok final,
+              armCursor.current⟩ :=
+          .step pushEdge pushNotStore
+            (.step jumpEdge jumpNotStore (.refl _))
+        refine Or.inl ⟨armCursor, compilerPrefix, ?_⟩
+        exact Exec.Deriv.ParentNonSstorePrefix.lt_of_step
+          pushEdge pushNotStore
+          (.step jumpEdge jumpNotStore (.refl _))
+      · have hloc256 : loc < 2 ^ 256 := by
+          apply Nat.lt_trans hloc
+          rw [Nat.pow_lt_pow_iff_right] <;> omega
+        have combined : loc = x.toNat ∧
+            Devm.PopBurn [flag] cursor.pre beforeJumpdestPre := by
+          rcases Devm.pushBurn_cons_popBurn_cons pushBurn popBurn with
+            ⟨hx, stack, pushBurn', popBurn'⟩
+          have hlocToNat : loc.toB256.toNat = loc :=
+            B256.toNat_toB256_of_lt hloc256
+          rw [← congrArg B256.toNat hx, hlocToNat]
+          exact ⟨rfl, Devm.popBurn_of_burn_of_popBurn
+            (Devm.burn_of_pushBurn_nil pushBurn') popBurn'⟩
+        rcases combined with ⟨hxeq, combined⟩
+        have jumpdestAtX := jumpdestAt
+        rw [hxeq] at jumpdestAtX
+        rcases jumpdest_at_exact beforeJumpdest jumpdestAtX with
+          ⟨armPre, armExec, jumpdestBurn, jumpdestGas, jumpdestPrec⟩
+        have combined' : Devm.PopBurn [flag] cursor.pre armPre :=
+          Devm.popBurn_of_popBurn_of_pop combined jumpdestBurn
+        have totalGas : cursor.pre.gasLeft =
+            armPre.gasLeft + (gVerylow + gHigh + gJumpdest) := by omega
+        have steps := Evm.branch_succ_steps pushAt jumpiAt jumpdestAt
+          jumpable hloc nonzero room
+          (Devm.PopBurnBy.of_popBurn combined' totalGas)
+        rcases cursor.parentPrefix.advance_cont cursor.current steps.1 with
+          ⟨afterPush', pushEdge, afterPushPrefix⟩
+        rcases afterPushPrefix.advance_cont afterPush' steps.2.1 with
+          ⟨beforeJumpdest', jumpEdge, beforeJumpdestPrefix⟩
+        rcases beforeJumpdestPrefix.advance_cont beforeJumpdest'
+            steps.2.2 with
+          ⟨armExec', jumpdestEdge, armPrefix⟩
+        let armCursor : Exec.Frame.SourceCursor
+            ⟨rootPc, sevm, rootPre, .ok final, rootRun, committed⟩ program
+            ⟨path.functionIndex, path.steps ++ [.branchRight]⟩ right :=
+          ⟨_, _, armExec', armPrefix, rightSlice, rightBoundary, by
+            intro site member
+            apply cursor.sourceIncluded
+            simp only [Func.sourceSites, List.mem_append]
+            apply Or.inr
+            have hrightPc : loc + 1 = cursor.pc + compsize left + 5 := by omega
+            rw [← hrightPc]
+            exact member⟩
+        have pushNotStore : ¬ Ninst.At sevm.code cursor.pc (.reg .sstore) := by
+          intro storeAt
+          have impossible := Ninst.at_unique storeAt pushAt
+          cases impossible
+        have jumpNotStore : ¬ Ninst.At sevm.code (cursor.pc + 3)
+            (.reg .sstore) := by
+          intro storeAt
+          exact storeAt.false_of_jinstAt jumpiAt
+        have jumpdestNotStore : ¬ Ninst.At sevm.code loc
+            (.reg .sstore) := by
+          intro storeAt
+          exact storeAt.false_of_jinstAt jumpdestAt
+        let compilerPrefix : Exec.Deriv.ParentNonSstorePrefix
+            ⟨cursor.pc, sevm, cursor.pre, .ok final, cursor.current⟩
+            ⟨armCursor.pc, sevm, armCursor.pre, .ok final,
+              armCursor.current⟩ :=
+          .step pushEdge pushNotStore
+            (.step jumpEdge jumpNotStore
+              (.step jumpdestEdge jumpdestNotStore (.refl _)))
+        refine Or.inr ⟨armCursor, compilerPrefix, ?_⟩
+        exact Exec.Deriv.ParentNonSstorePrefix.lt_of_step
+          pushEdge pushNotStore
+          (.step jumpEdge jumpNotStore
+            (.step jumpdestEdge jumpdestNotStore (.refl _)))
+
+/-- Follow one actually executed internal source call to its table body.  The
+proof consumes exactly the PUSH/JUMP/JUMPDEST prefix and does not recurse over
+the source call graph. -/
+theorem Exec.Frame.SourceCursor.call
+    {frame : Exec.Frame} {program : Prog} {path : Prog.SourcePath}
+    {index : Nat}
+    (cursor : Exec.Frame.SourceCursor frame program path (.call index))
+    (compiled : some frame.sevm.code.toList = program.compile) :
+    ∃ body, (program.main :: program.aux)[index]? = some body ∧
+      ∃ bodyCursor : Exec.Frame.SourceCursor frame program ⟨index, []⟩ body,
+        Exec.Deriv.ParentNonSstorePrefix
+          ⟨cursor.pc, frame.sevm, cursor.pre, frame.out, cursor.current⟩
+          ⟨bodyCursor.pc, frame.sevm, bodyCursor.pre, frame.out,
+            bodyCursor.current⟩ ∧
+        Exec.Deriv.lt
+          ⟨bodyCursor.pc, frame.sevm, bodyCursor.pre, frame.out,
+            bodyCursor.current⟩
+          ⟨cursor.pc, frame.sevm, cursor.pre, frame.out, cursor.current⟩ := by
+  rcases frame with ⟨rootPc, sevm, rootPre, out, rootRun, committed⟩
+  cases out with
+  | error error => simp [Execution.commits] at committed
+  | ok final =>
+      rcases subcode_compile_call cursor.codeSlice with
+        ⟨loc, body, hgetTable, hloc, pushAt, jumpAt⟩
+      rcases pushAt with ⟨pushLe, pushAt⟩
+      have hgetBody : (program.main :: program.aux)[index]? = some body := by
+        have h := @Prog.get?_table 0 index (program.main :: program.aux)
+        rw [hgetTable] at h
+        simpa using h.symm
+      rcases pushAt_exact cursor.current ⟨pushLe, pushAt⟩ (by simp) with
+        ⟨afterPushPre, afterPush, pushBurn, room, pushGas, pushPrec⟩
+      rw [List.toB256_pair _ hloc] at pushBurn
+      rcases jump_at_exact afterPush jumpAt with
+        ⟨x, beforeJumpdestPre, beforeJumpdest, popBurn, jumpGas,
+          actualJumpable, jumpPrec⟩
+      have hloc256 : loc < 2 ^ 256 := by
+        apply Nat.lt_trans hloc
+        rw [Nat.pow_lt_pow_iff_right] <;> omega
+      have combined : loc = x.toNat ∧
+          Devm.Burn cursor.pre beforeJumpdestPre := by
+        rcases Devm.pushBurn_cons_popBurn_cons pushBurn popBurn with
+          ⟨hx, stack, pushBurn', popBurn'⟩
+        have hlocToNat : loc.toB256.toNat = loc :=
+          B256.toNat_toB256_of_lt hloc256
+        rw [← congrArg B256.toNat hx, hlocToNat]
+        exact ⟨rfl, Devm.burn_trans
+          (Devm.burn_of_pushBurn_nil pushBurn')
+          (Devm.burn_of_popBurn_nil popBurn')⟩
+      rcases combined with ⟨hxeq, combined⟩
+      rcases subcode_of_get?_eq_some compiled hgetTable with
+        ⟨jumpdestAt, bodySlice⟩
+      have targetJumpable := Prog.jumpable_of_get?_table compiled hgetTable
+      have jumpdestAtX := jumpdestAt
+      rw [hxeq] at jumpdestAtX
+      rcases jumpdest_at_exact beforeJumpdest jumpdestAtX with
+        ⟨bodyPre, bodyExec, jumpdestBurn, jumpdestGas, jumpdestPrec⟩
+      have totalBurn : Devm.Burn cursor.pre bodyPre :=
+        Devm.burn_trans combined jumpdestBurn
+      have totalGas : cursor.pre.gasLeft =
+          bodyPre.gasLeft + (gVerylow + gMid + gJumpdest) := by omega
+      have steps := Evm.call_steps (le := pushLe) pushAt jumpAt
+        jumpdestAt targetJumpable.1 hloc room
+        (Devm.BurnBy.of_burn totalBurn totalGas)
+      rcases cursor.parentPrefix.advance_cont cursor.current steps.1 with
+        ⟨afterPush', pushEdge, afterPushPrefix⟩
+      rcases afterPushPrefix.advance_cont afterPush' steps.2.1 with
+        ⟨beforeJumpdest', jumpEdge, beforeJumpdestPrefix⟩
+      rcases beforeJumpdestPrefix.advance_cont beforeJumpdest' steps.2.2 with
+        ⟨bodyExec', jumpdestEdge, bodyPrefix⟩
+      let bodyCursor : Exec.Frame.SourceCursor
+          ⟨rootPc, sevm, rootPre, .ok final, rootRun, committed⟩ program
+          ⟨index, []⟩ body :=
+        ⟨_, _, bodyExec', bodyPrefix, bodySlice, targetJumpable.2, by
+          intro site member
+          simp only [Prog.sourceSites, List.mem_flatMap]
+          refine ⟨index, ?_, ?_⟩
+          · exact List.mem_range.mpr
+              (List.getElem?_eq_some_iff.mp hgetBody).choose
+          · simpa only [hgetTable] using member⟩
+      have pushNotStore : ¬ Ninst.At sevm.code cursor.pc (.reg .sstore) := by
+        intro storeAt
+        have impossible := Ninst.at_unique storeAt pushAt
+        cases impossible
+      have jumpNotStore : ¬ Ninst.At sevm.code (cursor.pc + 3)
+          (.reg .sstore) := by
+        intro storeAt
+        exact storeAt.false_of_jinstAt jumpAt
+      have jumpdestNotStore : ¬ Ninst.At sevm.code loc
+          (.reg .sstore) := by
+        intro storeAt
+        exact storeAt.false_of_jinstAt jumpdestAt
+      let compilerPrefix : Exec.Deriv.ParentNonSstorePrefix
+          ⟨cursor.pc, sevm, cursor.pre, .ok final, cursor.current⟩
+          ⟨bodyCursor.pc, sevm, bodyCursor.pre, .ok final,
+            bodyCursor.current⟩ :=
+        .step pushEdge pushNotStore
+          (.step jumpEdge jumpNotStore
+            (.step jumpdestEdge jumpdestNotStore (.refl _)))
+      refine ⟨body, hgetBody, bodyCursor, compilerPrefix, ?_⟩
+      exact Exec.Deriv.ParentNonSstorePrefix.lt_of_step
+        pushEdge pushNotStore
+        (.step jumpEdge jumpNotStore
+          (.step jumpdestEdge jumpdestNotStore (.refl _)))
+
+/-- An actually reached successful SSTORE in a compiler cursor is represented
+by an exact source site.  Recursion follows the finite execution derivation,
+not the source call graph. -/
+private theorem Exec.Frame.SourceCursor.sstoreSite_core :
+    ∀ current : Exec.Deriv,
+      ∀ {frame : Exec.Frame} {program : Prog}
+        {path : Prog.SourcePath} {source : Func}
+        (cursor : Exec.Frame.SourceCursor frame program path source),
+        cursor.node = current →
+        some frame.sevm.code.toList = program.compile →
+        ∀ (target : Exec.Deriv),
+          Exec.Deriv.ParentPrefix cursor.node target →
+          Ninst.At target.sevm.code target.pc (.reg .sstore) →
+          ∃ site : Prog.SourceSite,
+            site ∈ program.sourceSites ∧
+            site.pc = target.pc ∧
+            site.instruction = .reg .sstore := by
+  let property : Exec.Deriv.Pred := fun current =>
+    ∀ {frame : Exec.Frame} {program : Prog}
+      {path : Prog.SourcePath} {source : Func}
+      (cursor : Exec.Frame.SourceCursor frame program path source),
+      cursor.node = current →
+      some frame.sevm.code.toList = program.compile →
+      ∀ (target : Exec.Deriv),
+        Exec.Deriv.ParentPrefix cursor.node target →
+        Ninst.At target.sevm.code target.pc (.reg .sstore) →
+        ∃ site : Prog.SourceSite,
+          site ∈ program.sourceSites ∧
+          site.pc = target.pc ∧
+          site.instruction = .reg .sstore
+  apply Exec.Deriv.strongRec property
+  intro current ih frame program path source cursor hcurrent compiled target reached storeAt
+  subst current
+  cases source with
+  | last outcome =>
+      have lastAt : Linst.At frame.sevm.code cursor.pc outcome :=
+        Linst.at_of_slice cursor.codeSlice
+      cases reached with
+      | refl => exact (storeAt.false_of_linstAt lastAt).elim
+      | step edge suffix =>
+          exact (edge.false_of_linstAt lastAt).elim
+  | next instruction tail =>
+      cases reached with
+      | refl =>
+          let site : Prog.SourceSite :=
+            { path := path, pc := cursor.pc, instruction := instruction }
+          have localMember : site ∈
+              Func.sourceSites path.functionIndex path.steps cursor.pc
+                (.next instruction tail) := by
+            rcases path with ⟨functionIndex, steps⟩
+            simp [site, Func.sourceSites]
+          have sourceAt : Ninst.At frame.sevm.code cursor.pc instruction :=
+            Func.sourceSites_sound cursor.codeSlice cursor.codeBoundary
+              localMember
+          have instructionEq := Ninst.at_unique sourceAt storeAt
+          cases instructionEq
+          exact ⟨site, cursor.sourceIncluded localMember, rfl, rfl⟩
+      | step occurrenceEdge suffix =>
+          rcases cursor.next with ⟨tailCursor, sourceEdge⟩
+          cases occurrenceEdge.unique sourceEdge
+          exact ih tailCursor.node sourceEdge.lt tailCursor rfl compiled target
+            suffix storeAt
+  | branch left right =>
+      rcases cursor.branch with
+        ⟨arm, compilerPrefix, decrease⟩ |
+        ⟨arm, compilerPrefix, decrease⟩
+      · exact ih arm.node decrease arm rfl compiled target
+          (compilerPrefix.trim reached storeAt) storeAt
+      · exact ih arm.node decrease arm rfl compiled target
+          (compilerPrefix.trim reached storeAt) storeAt
+  | call index =>
+      rcases cursor.call compiled with
+        ⟨body, hbody, bodyCursor, compilerPrefix, decrease⟩
+      exact ih bodyCursor.node decrease bodyCursor rfl compiled target
+        (compilerPrefix.trim reached storeAt) storeAt
+
+/-- Public cursor completeness for successful SSTORE source attribution. -/
+theorem Exec.Frame.SourceCursor.sstoreSite
+    {frame : Exec.Frame} {program : Prog}
+    {path : Prog.SourcePath} {source : Func}
+    (cursor : Exec.Frame.SourceCursor frame program path source)
+    (compiled : some frame.sevm.code.toList = program.compile)
+    (write : Exec.SuccessfulSstoreOccurrence frame.rootDeriv)
+    (reached : Exec.Deriv.ParentPrefix cursor.node write.occurrence.node) :
+    ∃ site : Prog.SourceSite,
+      site ∈ program.sourceSites ∧
+      site.pc = write.occurrence.node.pc ∧
+      site.instruction = .reg .sstore := by
+  have storeAt : Ninst.At write.occurrence.node.sevm.code
+      write.occurrence.node.pc (.reg .sstore) := by
+    rw [← write.instruction_eq]
+    exact write.occurrence.decoded
+  exact Exec.Frame.SourceCursor.sstoreSite_core cursor.node cursor rfl
+    compiled write.occurrence.node reached storeAt
+
+/-- Exact-invocation completeness: every same-frame successful SSTORE has an
+exact structural source site in the executable compiler map. -/
+theorem Exec.Frame.successfulSstore_sourceSite
+    {frame : Exec.Frame} {program : Prog}
+    {storageTarget codeAddress : Adr}
+    (invocation : frame.exactInvocation program storageTarget codeAddress)
+    (write : Exec.SuccessfulSstoreOccurrence frame.rootDeriv)
+    (sameFrame : Exec.Deriv.ParentPrefix frame.rootDeriv
+      write.occurrence.node) :
+    ∃ site : Prog.SourceSite,
+      site ∈ program.sourceSites ∧
+      site.pc = write.occurrence.node.pc ∧
+      site.instruction = .reg .sstore := by
+  rcases Exec.Frame.SourceCursor.main invocation with
+    ⟨mainCursor, compilerPrefix⟩
+  have storeAt : Ninst.At write.occurrence.node.sevm.code
+      write.occurrence.node.pc (.reg .sstore) := by
+    rw [← write.instruction_eq]
+    exact write.occurrence.decoded
+  have reached := compilerPrefix.trim sameFrame storeAt
+  exact mainCursor.sstoreSite invocation.2.2.2 write reached
+
+/-! ## Executable SSTORE source checker -/
+
+/-- Executable exact match for one structural SSTORE site. -/
+def Prog.SourceSite.matchesSstore
+    (site : Prog.SourceSite) (path : Prog.SourcePath) (pc : Nat) : Bool :=
+  site.path == path && site.pc == pc &&
+    match site.instruction with
+    | .reg .sstore => true
+    | _ => false
+
+@[simp] theorem Prog.SourceSite.matchesSstore_eq_true
+    {site : Prog.SourceSite} {path : Prog.SourcePath} {pc : Nat} :
+    site.matchesSstore path pc = true ↔
+      site.path = path ∧ site.pc = pc ∧
+        site.instruction = .reg .sstore := by
+  rcases site with ⟨sitePath, sitePc, instruction⟩
+  cases instruction <;> simp [Prog.SourceSite.matchesSstore]
+  rename_i regular
+  cases regular <;> simp
+
+/-- Decide whether a structural path and compiled PC name a source SSTORE. -/
+def Prog.acceptsSstoreSite
+    (program : Prog) (path : Prog.SourcePath) (pc : Nat) : Bool :=
+  program.sourceSites.any fun site => site.matchesSstore path pc
+
+/-- Logical specification of the executable SSTORE-site checker. -/
+theorem Prog.acceptsSstoreSite_iff
+    {program : Prog} {path : Prog.SourcePath} {pc : Nat} :
+    program.acceptsSstoreSite path pc = true ↔
+      ∃ site ∈ program.sourceSites,
+        site.path = path ∧ site.pc = pc ∧
+          site.instruction = .reg .sstore := by
+  simp [Prog.acceptsSstoreSite]
+
+/-- Checker acceptance decodes the exact SSTORE byte at the requested PC. -/
+theorem Prog.acceptsSstoreSite_sound
+    {program : Prog} {code : ByteArray}
+    {path : Prog.SourcePath} {pc : Nat}
+    (compiled : some code.toList = program.compile)
+    (accepted : program.acceptsSstoreSite path pc = true) :
+    Ninst.At code pc (.reg .sstore) := by
+  rcases Prog.acceptsSstoreSite_iff.mp accepted with
+    ⟨site, member, hpath, hpc, hinstruction⟩
+  simpa only [hpc, hinstruction] using program.sourceSites_sound compiled member
+
+/-- Every same-frame successful SSTORE from an exact invocation is accepted
+at its exact structural path and PC. -/
+theorem Exec.Frame.successfulSstore_acceptsSource
+    {frame : Exec.Frame} {program : Prog}
+    {storageTarget codeAddress : Adr}
+    (invocation : frame.exactInvocation program storageTarget codeAddress)
+    (write : Exec.SuccessfulSstoreOccurrence frame.rootDeriv)
+    (sameFrame : Exec.Deriv.ParentPrefix frame.rootDeriv
+      write.occurrence.node) :
+    ∃ path : Prog.SourcePath,
+      program.acceptsSstoreSite path write.occurrence.node.pc = true := by
+  rcases frame.successfulSstore_sourceSite invocation write sameFrame with
+    ⟨site, member, hpc, hinstruction⟩
+  exact ⟨site.path, Prog.acceptsSstoreSite_iff.mpr
+    ⟨site, member, rfl, hpc, hinstruction⟩⟩
 
 end Blanc
