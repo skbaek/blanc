@@ -805,6 +805,319 @@ private theorem rawAttributionAvailable_eq_true :
     rawAttributionAvailable = true := by
   native_decide
 
+/-! Successful SSTORE attribution under three enclosing outcomes. -/
+
+private def revertedSourceProgram : Prog :=
+  ⟨.next (.reg .sstore) (.last .rev), []⟩
+
+private def laterOogSourceProgram : Prog :=
+  ⟨.next (.reg .sstore) (.next (.reg .sload) (.last .stop)), []⟩
+
+private def revertedSourceCode : ByteArray :=
+  ByteArray.mk #[0x5b, 0x55, 0xfd]
+
+private def laterOogSourceCode : ByteArray :=
+  ByteArray.mk #[0x5b, 0x55, 0x54, 0x00]
+
+private def attributedSevm (code : ByteArray) : Sevm :=
+  { (default : Sevm) with code, codeAddress := some sourceAddress }
+
+private def noOpSourcePre : Devm :=
+  ((default : Devm).withGasLeft 100000).withStack [0, 0]
+
+private def revertedSourcePre : Devm :=
+  ((default : Devm).withGasLeft 100000).withStack [0, 1, 0, 0]
+
+/-- Entry JUMPDEST plus a successful cold SSTORE consume all 22101 gas, so
+the following SLOAD is the later nonterminal OOG site. -/
+private def laterOogSourcePre : Devm :=
+  ((default : Devm).withGasLeft 22101).withStack [0, 1, 0]
+
+private structure SuccessfulSourceFixture
+    (program : Prog) (code : ByteArray) (pre : Devm) where
+  afterJump : Devm
+  afterStore : Devm
+  out : Execution
+  step0 : Evm.step ⟨0, attributedSevm code, pre⟩ = .cont 1 afterJump
+  step1 : Evm.step ⟨1, attributedSevm code, afterJump⟩ = .cont 2 afterStore
+  tail : Exec 2 (attributedSevm code) afterStore out
+  compiled : some code.toList = program.compile
+
+private def SuccessfulSourceFixture.run
+    {program : Prog} {code : ByteArray} {pre : Devm}
+    (w : SuccessfulSourceFixture program code pre) :
+    Exec 0 (attributedSevm code) pre w.out :=
+  .cont w.step0 (.cont w.step1 w.tail)
+
+private def SuccessfulSourceFixture.root
+    {program : Prog} {code : ByteArray} {pre : Devm}
+    (w : SuccessfulSourceFixture program code pre) : Exec.Deriv :=
+  ⟨0, attributedSevm code, pre, w.out, w.run⟩
+
+private def SuccessfulSourceFixture.node
+    {program : Prog} {code : ByteArray} {pre : Devm}
+    (w : SuccessfulSourceFixture program code pre) : Exec.Deriv :=
+  ⟨1, attributedSevm code, w.afterJump, w.out, .cont w.step1 w.tail⟩
+
+private def SuccessfulSourceFixture.occurrence
+    {program : Prog} {code : ByteArray} {pre : Devm}
+    (w : SuccessfulSourceFixture program code pre)
+    (decoded : Ninst.At code 1 (.reg .sstore)) :
+    Exec.NinstOccurrence w.root :=
+  { node := w.node
+    instruction := .reg .sstore
+    slot := .none
+    stepResult := .ok w.afterStore
+    reached := by
+      simp [SuccessfulSourceFixture.root, SuccessfulSourceFixture.run,
+        SuccessfulSourceFixture.node, Exec.rawNodes]
+    decoded := by
+      change Ninst.At code 1 (.reg .sstore)
+      exact decoded
+    filled := trivial
+    stepRun := by
+      change Ninst.StepRun 1 (attributedSevm code) w.afterJump
+        (.reg .sstore) .none (.ok w.afterStore)
+      unfold Ninst.StepRun
+      rw [← Evm.step_next (by simpa [attributedSevm] using decoded), w.step1]
+      exact ⟨rfl, rfl⟩ }
+
+private theorem SuccessfulSourceFixture.sameFrame
+    {program : Prog} {code : ByteArray} {pre : Devm}
+    (w : SuccessfulSourceFixture program code pre) :
+    Exec.Deriv.ParentPrefix w.root w.node := by
+  exact .step (.cont w.step0 (.cont w.step1 w.tail)) (.refl _)
+
+private theorem SuccessfulSourceFixture.exact
+    {program : Prog} {code : ByteArray} {pre : Devm}
+    (w : SuccessfulSourceFixture program code pre) :
+    w.root.exactInvocation program
+      (attributedSevm code).currentTarget sourceAddress :=
+  ⟨rfl, rfl, rfl, w.compiled⟩
+
+private def successfulSourceFixture?
+    (program : Prog) (code : ByteArray) (pre : Devm) :
+    Option (SuccessfulSourceFixture program code pre) :=
+  if compiled : some code.toList = program.compile then
+    match step0 : Evm.step ⟨0, attributedSevm code, pre⟩ with
+    | .cont pc1 afterJump =>
+        if hpc1 : pc1 = 1 then
+          match step1 : Evm.step ⟨1, attributedSevm code, afterJump⟩ with
+          | .cont pc2 afterStore =>
+              if hpc2 : pc2 = 2 then
+                let out := exec ⟨2, attributedSevm code, afterStore⟩
+                let tail : Exec 2 (attributedSevm code) afterStore out :=
+                  Classical.choice ((exec_iff_exec_eq _ _ _ _).2 rfl)
+                some {
+                  afterJump
+                  afterStore
+                  out
+                  step0 := by simpa [hpc1] using step0
+                  step1 := by simpa [hpc2] using step1
+                  tail
+                  compiled }
+              else none
+          | _ => none
+        else none
+    | _ => none
+  else none
+
+private def successfulSourceAvailable
+    (program : Prog) (code : ByteArray) (pre : Devm) : Bool :=
+  match program.compile with
+  | some bytes => if bytes = code.toList then
+      match Evm.step ⟨0, attributedSevm code, pre⟩ with
+      | .cont pc1 afterJump => pc1 == 1 &&
+          match Evm.step ⟨1, attributedSevm code, afterJump⟩ with
+          | .cont pc2 _ => pc2 == 2
+          | _ => false
+      | _ => false
+    else false
+  | none => false
+
+private def noOpSourceAvailable : Bool :=
+  successfulSourceAvailable sourceProgram sourceCode noOpSourcePre &&
+    Execution.commits (exec ⟨0, attributedSevm sourceCode, noOpSourcePre⟩)
+
+private def revertedSourceAvailable : Bool :=
+  successfulSourceAvailable revertedSourceProgram revertedSourceCode
+      revertedSourcePre &&
+    match exec ⟨0, attributedSevm revertedSourceCode, revertedSourcePre⟩ with
+    | .error (.revert, _) => true
+    | _ => false
+
+private def laterOogSourceAvailable : Bool :=
+  successfulSourceAvailable laterOogSourceProgram laterOogSourceCode
+      laterOogSourcePre &&
+    match exec ⟨0, attributedSevm laterOogSourceCode, laterOogSourcePre⟩ with
+    | .error (.halt (.outOfGas .none), _) => true
+    | _ => false
+
+private theorem successfulSourceFixture_nonempty
+    {program : Prog} {code : ByteArray} {pre : Devm}
+    (available : successfulSourceAvailable program code pre = true) :
+    Nonempty (SuccessfulSourceFixture program code pre) := by
+  have hsome : (successfulSourceFixture? program code pre).isSome = true := by
+    unfold successfulSourceFixture? successfulSourceAvailable at *
+    repeat' split
+    all_goals grind
+  cases fixture : successfulSourceFixture? program code pre with
+  | none => simp [fixture] at hsome
+  | some witness => exact ⟨witness⟩
+
+private theorem noOpSourceFixture_nonempty :
+    Nonempty (SuccessfulSourceFixture sourceProgram sourceCode noOpSourcePre) := by
+  apply successfulSourceFixture_nonempty
+  have : noOpSourceAvailable = true := by native_decide
+  unfold noOpSourceAvailable at this
+  simp only [Bool.and_eq_true] at this
+  exact this.1
+
+private theorem revertedSourceFixture_nonempty :
+    Nonempty (SuccessfulSourceFixture revertedSourceProgram revertedSourceCode
+      revertedSourcePre) := by
+  apply successfulSourceFixture_nonempty
+  have : revertedSourceAvailable = true := by native_decide
+  unfold revertedSourceAvailable at this
+  simp only [Bool.and_eq_true] at this
+  exact this.1
+
+private theorem laterOogSourceFixture_nonempty :
+    Nonempty (SuccessfulSourceFixture laterOogSourceProgram laterOogSourceCode
+      laterOogSourcePre) := by
+  apply successfulSourceFixture_nonempty
+  have : laterOogSourceAvailable = true := by native_decide
+  unfold laterOogSourceAvailable at this
+  simp only [Bool.and_eq_true] at this
+  exact this.1
+
+private theorem SuccessfulSourceFixture.exactAttribution
+    {program : Prog} {code : ByteArray} {pre : Devm}
+    (w : SuccessfulSourceFixture program code pre)
+    (decoded : Ninst.At code 1 (.reg .sstore))
+    (pathUnique : ∀ path,
+      program.acceptsSstoreSite path 1 = true →
+        path = (⟨0, []⟩ : Prog.SourcePath)) :
+    (w.occurrence decoded).stepResult = .ok w.afterStore ∧
+      (w.occurrence decoded).node.pc = 1 ∧
+      program.acceptsSstoreSite ⟨0, []⟩
+        (w.occurrence decoded).node.pc = true := by
+  have selected : w.root ∈ Exec.rawFrameRoots w.root.exc :=
+    Exec.mem_rawFrameRoots_self w.run
+  rcases (w.occurrence decoded).acceptsSource_of_rawFrameRoot rfl selected
+      w.exact w.sameFrame with ⟨path, accepted⟩
+  change program.acceptsSstoreSite path 1 = true at accepted
+  have pathEq := pathUnique path accepted
+  refine ⟨rfl, rfl, ?_⟩
+  change program.acceptsSstoreSite ⟨0, []⟩ 1 = true
+  simpa [pathEq] using accepted
+
+private theorem noOpSourcePathUnique (path : Prog.SourcePath)
+    (accepted : sourceProgram.acceptsSstoreSite path 1 = true) :
+    path = (⟨0, []⟩ : Prog.SourcePath) := by
+  rcases Prog.acceptsSstoreSite_iff.mp accepted with
+    ⟨site, member, hpath, hpc, hinstruction⟩
+  simp [sourceProgram, Prog.sourceSites, table, Func.sourceSites] at member
+  rcases member with rfl
+  exact hpath.symm
+
+private theorem revertedSourcePathUnique (path : Prog.SourcePath)
+    (accepted : revertedSourceProgram.acceptsSstoreSite path 1 = true) :
+    path = (⟨0, []⟩ : Prog.SourcePath) := by
+  rcases Prog.acceptsSstoreSite_iff.mp accepted with
+    ⟨site, member, hpath, hpc, hinstruction⟩
+  simp [revertedSourceProgram, Prog.sourceSites, table, Func.sourceSites] at member
+  rcases member with rfl
+  exact hpath.symm
+
+private theorem laterOogSourcePathUnique (path : Prog.SourcePath)
+    (accepted : laterOogSourceProgram.acceptsSstoreSite path 1 = true) :
+    path = (⟨0, []⟩ : Prog.SourcePath) := by
+  rcases Prog.acceptsSstoreSite_iff.mp accepted with
+    ⟨site, member, hpath, hpc, hinstruction⟩
+  simp [laterOogSourceProgram, Prog.sourceSites, table, Func.sourceSites] at member
+  rcases member with rfl | rfl
+  · exact hpath.symm
+  · simp_all
+
+private theorem concrete_successful_source_outcomes :
+    (∃ w : SuccessfulSourceFixture sourceProgram sourceCode noOpSourcePre,
+      (w.occurrence (by rfl)).stepResult = .ok w.afterStore ∧
+      (w.occurrence (by rfl)).node.pc = 1 ∧
+      sourceProgram.acceptsSstoreSite ⟨0, []⟩ 1 = true ∧
+      Execution.commits w.out = true) ∧
+    (∃ w : SuccessfulSourceFixture revertedSourceProgram revertedSourceCode
+        revertedSourcePre,
+      (w.occurrence (by rfl)).stepResult = .ok w.afterStore ∧
+      (w.occurrence (by rfl)).node.pc = 1 ∧
+      revertedSourceProgram.acceptsSstoreSite ⟨0, []⟩ 1 = true ∧
+      (∃ post, w.out = .error (.revert, post)) ∧
+      Execution.commits w.out ≠ true) ∧
+    (∃ w : SuccessfulSourceFixture laterOogSourceProgram laterOogSourceCode
+        laterOogSourcePre,
+      (w.occurrence (by rfl)).stepResult = .ok w.afterStore ∧
+      (w.occurrence (by rfl)).node.pc = 1 ∧
+      laterOogSourceProgram.acceptsSstoreSite ⟨0, []⟩ 1 = true ∧
+      (∃ post, w.out = .error (.halt (.outOfGas .none), post)) ∧
+      Execution.commits w.out ≠ true) := by
+  rcases noOpSourceFixture_nonempty with ⟨noOp⟩
+  rcases revertedSourceFixture_nonempty with ⟨reverted⟩
+  rcases laterOogSourceFixture_nonempty with ⟨laterOog⟩
+  have noOpAttributed := noOp.exactAttribution (by rfl) noOpSourcePathUnique
+  have revertedAttributed :=
+    reverted.exactAttribution (by rfl) revertedSourcePathUnique
+  have laterOogAttributed :=
+    laterOog.exactAttribution (by rfl) laterOogSourcePathUnique
+  have noOpOutcome : Execution.commits noOp.out = true := by
+    have available : noOpSourceAvailable = true := by native_decide
+    unfold noOpSourceAvailable at available
+    simp only [Bool.and_eq_true] at available
+    have runEq := (exec_iff_exec_eq 0 (attributedSevm sourceCode)
+      noOpSourcePre noOp.out).mp ⟨noOp.run⟩
+    simpa [runEq] using available.2
+  have revertedOutcome : ∃ post, reverted.out = .error (.revert, post) := by
+    have available : revertedSourceAvailable = true := by native_decide
+    unfold revertedSourceAvailable at available
+    simp only [Bool.and_eq_true] at available
+    have runEq := (exec_iff_exec_eq 0 (attributedSevm revertedSourceCode)
+      revertedSourcePre reverted.out).mp ⟨reverted.run⟩
+    split at available
+    next result post resultEq =>
+      exact ⟨post, (resultEq.symm.trans runEq).symm⟩
+    all_goals simp_all
+  have laterOogOutcome :
+      ∃ post, laterOog.out = .error (.halt (.outOfGas .none), post) := by
+    have available : laterOogSourceAvailable = true := by native_decide
+    unfold laterOogSourceAvailable at available
+    simp only [Bool.and_eq_true] at available
+    have runEq := (exec_iff_exec_eq 0 (attributedSevm laterOogSourceCode)
+      laterOogSourcePre laterOog.out).mp ⟨laterOog.run⟩
+    split at available
+    next result post resultEq =>
+      exact ⟨post, (resultEq.symm.trans runEq).symm⟩
+    all_goals simp_all
+  refine ⟨⟨noOp, noOpAttributed.1, noOpAttributed.2.1,
+      by rw [← noOpAttributed.2.1]; exact noOpAttributed.2.2, noOpOutcome⟩,
+    ⟨reverted, revertedAttributed.1, revertedAttributed.2.1,
+      by rw [← revertedAttributed.2.1]; exact revertedAttributed.2.2,
+      revertedOutcome, ?_⟩,
+    ⟨laterOog, laterOogAttributed.1, laterOogAttributed.2.1,
+      by rw [← laterOogAttributed.2.1]; exact laterOogAttributed.2.2,
+      laterOogOutcome, ?_⟩⟩
+  · rcases revertedOutcome with ⟨post, outcome⟩
+    rw [outcome]
+    simp [Execution.commits]
+  · rcases laterOogOutcome with ⟨post, outcome⟩
+    rw [outcome]
+    simp [Execution.commits]
+
+private def successfulSourceOutcomesAvailable : Bool :=
+  noOpSourceAvailable && revertedSourceAvailable && laterOogSourceAvailable
+
+private theorem successfulSourceOutcomesAvailable_eq_true :
+    successfulSourceOutcomesAvailable = true := by
+  native_decide
+
 /-! Exact invocation identity controls. -/
 
 private theorem exactInvocation_rejects_identity_drift
