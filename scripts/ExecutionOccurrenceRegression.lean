@@ -441,6 +441,7 @@ private def sourceCode : ByteArray := ByteArray.mk #[0x5b, 0x55, 0x00]
 private def sourceSevm : Sevm :=
   { (default : Sevm) with
     code := sourceCode
+    currentTarget := sourceAddress
     codeAddress := some sourceAddress }
 private def sourcePre : Devm :=
   ((default : Devm).withGasLeft 100000).withStack [0, 1]
@@ -796,6 +797,17 @@ private theorem concrete_raw_attribution_controls :
   rcases terminalSourceFixture_nonempty with ⟨terminal⟩
   exact ⟨⟨entry, entry.exact, entry.boundary.1, entry.boundary.2.2⟩,
     ⟨terminal, terminal.exact, terminal.exactAttribution⟩⟩
+
+/-- Exact target/code fields can describe a top-level raw root whose traversal
+contains no entered child.  The predicate therefore carries no direct-CALL or
+nondelegation provenance. -/
+private theorem coincident_identity_top_level_control :
+    ∃ w : EntryOogFixture,
+      w.root.exactInvocation sourceProgram
+        sourceSevm.currentTarget sourceAddress ∧
+      Exec.rawFrameRoots w.run = [w.root] := by
+  rcases entryOogFixture_nonempty with ⟨w⟩
+  exact ⟨w, w.exact, w.boundary.1⟩
 
 /-- Named evaluator bundled without changing the gate-owned legacy vector. -/
 private def rawAttributionAvailable : Bool :=
@@ -1481,6 +1493,7 @@ an attributed child write that is later rolled back by its outer root. -/
 namespace RawChildAttribution
 
 private def callTarget : Adr := 0x100
+private def otherCallTarget : Adr := 0x101
 private def caughtParentCode : ByteArray := ByteArray.mk #[0xf1, 0x00]
 private def rollbackParentCode : ByteArray :=
   ByteArray.mk #[0xf1, 0x5f, 0x5f, 0xfd]
@@ -1893,7 +1906,87 @@ private theorem RollbackFixture.identity_negative (w : RollbackFixture) :
     exact different (Option.some.inj
       (weakened.2.2.1.symm.trans exact.2.2.1))
 
+private theorem CaughtFixture.same_code_other_address_rejected
+    (w : CaughtFixture) :
+    (¬ w.call.childRoot.exactInvocation caughtProgram
+      otherCallTarget callTarget) ∧
+    (¬ w.call.childRoot.exactInvocation caughtProgram
+      callTarget otherCallTarget) := by
+  exact ⟨w.identity_negative.1 otherCallTarget (by native_decide),
+    w.identity_negative.2 otherCallTarget (by native_decide)⟩
+
+private theorem RollbackFixture.different_code_not_caught
+    (w : RollbackFixture) :
+    ¬ w.call.childRoot.exactInvocation caughtProgram callTarget callTarget := by
+  intro drifted
+  have codeEq := drifted.2.2.2
+  change some w.call.childEvm.sta.code.toList = caughtProgram.compile at codeEq
+  rw [w.call.codeEq] at codeEq
+  exact (by native_decide :
+    some rollbackCode.toList ≠ caughtProgram.compile) codeEq
+
+private theorem parentPrefix_sevm_eq {root tail : Exec.Deriv}
+    (hprefix : Exec.Deriv.ParentPrefix root tail) :
+    root.sevm = tail.sevm := by
+  induction hprefix with
+  | refl => rfl
+  | step head rest ih =>
+      cases head <;> simpa using ih
+
+private theorem CaughtFixture.child_not_parent_prefix (w : CaughtFixture) :
+    ¬ Exec.Deriv.ParentPrefix w.call.root w.call.childRoot := by
+  intro hprefix
+  have sameSevm := parentPrefix_sevm_eq hprefix
+  have sameCode := congrArg (fun sevm : Sevm => sevm.code) sameSevm
+  change caughtParentCode = w.call.childEvm.sta.code at sameCode
+  rw [w.call.codeEq] at sameCode
+  exact (by native_decide : caughtParentCode ≠ caughtCode) sameCode
+
+/-- Concrete child ownership boundaries: the selected child has its own exact
+identity, the parent is not a same-frame prefix, equal bytes cannot be nominated
+at another address, and an actually entered different-code child is rejected. -/
+private theorem concrete_child_identity_boundaries :
+    ∃ caught : CaughtFixture, ∃ rollback : RollbackFixture,
+      caught.call.childRoot.exactInvocation caughtProgram
+        callTarget callTarget ∧
+      ¬ Exec.Deriv.ParentPrefix caught.call.root caught.call.childRoot ∧
+      ¬ caught.call.childRoot.exactInvocation caughtProgram
+        otherCallTarget callTarget ∧
+      ¬ caught.call.childRoot.exactInvocation caughtProgram
+        callTarget otherCallTarget ∧
+      ¬ rollback.call.childRoot.exactInvocation caughtProgram
+        callTarget callTarget := by
+  rcases caughtFixture_nonempty with ⟨caught⟩
+  rcases rollbackFixture_nonempty with ⟨rollback⟩
+  exact ⟨caught, rollback,
+    caught.call.childExact caughtProgram caught.compiled,
+    caught.child_not_parent_prefix,
+    caught.same_code_other_address_rejected.1,
+    caught.same_code_other_address_rejected.2,
+    rollback.different_code_not_caught⟩
+
 end RawChildAttribution
+
+/-- Lean-level positive-case manifest.  The gate pins this declaration; each
+local binding makes deletion of a required RA2--RA5 witness fail elaboration. -/
+private theorem required_positive_controls : True := by
+  let _terminalError := terminalError_occurs
+  let _rootWrites := @rootWriteControls
+  let _rawRootWrites := @rootWriteRawFrameControls
+  let _lastWriter := history_publicLastWriter
+  let _payload := payload_not_source_sstore
+  let _committedSource := concrete_source_and_identity_controls
+  let _rawSource := concrete_raw_attribution_controls
+  let _coincidentIdentity := coincident_identity_top_level_control
+  let _successfulOutcomes := concrete_successful_source_outcomes
+  let _callOrders := concreteCall_orders
+  let _rawCallOrders := concreteRawFrameRoot_orders
+  let _runErr := concreteRunErr_rawFrameRoots
+  let _caughtChild := RawChildAttribution.CaughtFixture.control
+  let _rollbackChild := RawChildAttribution.RollbackFixture.control
+  let _childOutcomes := RawChildAttribution.concrete_controls
+  let _childIdentity := RawChildAttribution.concrete_child_identity_boundaries
+  exact True.intro
 
 -- The gate requires this exact evaluator vector.
 #eval! [
@@ -1927,6 +2020,8 @@ end RawChildAttribution
 -- CONTINUATION-AS-FRAME-MUTANT-CONTROL
 -- COMMIT-REQUIRED-ATTRIBUTION-MUTANT-CONTROL
 -- RUNERR-CHILD-PRUNING-MUTANT-CONTROL
+-- CHILD-AS-PARENT-IDENTITY-MUTANT-CONTROL
+-- MISSING-PARENT-PREFIX-MUTANT-CONTROL
 -- WETH-BRIDGE-MUTANT-CONTROL
 
 end

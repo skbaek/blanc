@@ -1,4 +1,4 @@
-import Blanc.ExecutionSettlement
+import Blanc.ExecutionOccurrence
 
 /-!
 Concrete execution-level regression for CREATE code-deposit rollback.
@@ -64,6 +64,12 @@ private structure Fixture where
 private def Fixture.run (w : Fixture) : Exec w.pc w.sevm w.pre w.out :=
   Exec.runOk w.hstep w.henter w.child w.hresume w.next
 
+private def Fixture.root (w : Fixture) : Exec.Deriv :=
+  ⟨w.pc, w.sevm, w.pre, w.out, w.run⟩
+
+private def Fixture.childRoot (w : Fixture) : Exec.Deriv :=
+  ⟨w.childEvm.pc, w.childEvm.sta, w.childEvm.dyna, w.raw, w.child⟩
+
 private theorem Fixture.settlementTraversal_prunes (w : Fixture) :
     Exec.descendantFrames w.run = Exec.descendantFrames w.next :=
   Exec.descendantFrames_runOk_of_not_settlementCommits
@@ -76,6 +82,29 @@ private theorem Fixture.rawTraversal_retains (w : Fixture) :
           rawCommittedDescendantFrames w.next := by
   have hchild : Execution.commits w.child.outcome = true := w.rawCommits
   simp [Fixture.run, rawCommittedDescendantFrames, hchild]
+
+/-- The canonical all-outcome traversal retains the actual constructor child
+root even though complete CREATE settlement rejects it. -/
+private theorem Fixture.rawFrameRoots_retains (w : Fixture) :
+    Exec.rawFrameRoots w.run =
+      w.root ::
+        (Exec.rawFrameRoots w.child ++ Exec.rawFrameDescendants w.next) := by
+  simp [Fixture.run, Fixture.root]
+
+private theorem concrete_create_raw_vs_settlement (w : Fixture) :
+    w.childRoot ∈ Exec.rawFrameRoots w.run ∧
+      Exec.descendantFrames w.run = Exec.descendantFrames w.next ∧
+      Frame.settlementCommits w.frame w.raw ≠ true := by
+  refine ⟨?_, w.settlementTraversal_prunes, w.settlementDoesNotCommit⟩
+  rw [w.rawFrameRoots_retains]
+  simp [Fixture.childRoot, Exec.rawFrameRoots]
+
+/-- Lean-level positive manifest used by the settlement gate's deletion
+control. -/
+private theorem required_positive_controls : True := by
+  let _rawRoots := Fixture.rawFrameRoots_retains
+  let _contrast := concrete_create_raw_vs_settlement
+  exact True.intro
 
 private def initCode : Bytes :=
   [0x60, 0x01, 0x60, 0x00, 0x55,
@@ -175,6 +204,7 @@ private def fixture? : Option Fixture :=
 #eval! fixtureAvailable
 
 -- RAW-COMMIT-MUTANT-CONTROL
+-- SETTLEMENT-FILTERED-RAW-ROOT-MUTANT-CONTROL
 
 end
 

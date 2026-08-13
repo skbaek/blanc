@@ -20,6 +20,26 @@ RAW_ATTRIBUTION_OWNERSHIP = (
 )
 EXPECTED = "[true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true]"
 
+REQUIRED_POSITIVE_THEOREMS = {
+    "Blanc.ExecutionOccurrenceRegression.terminalError_occurs",
+    "Blanc.ExecutionOccurrenceRegression.rootWriteControls",
+    "Blanc.ExecutionOccurrenceRegression.rootWriteRawFrameControls",
+    "Blanc.ExecutionOccurrenceRegression.history_publicLastWriter",
+    "Blanc.ExecutionOccurrenceRegression.payload_not_source_sstore",
+    "Blanc.ExecutionOccurrenceRegression.concrete_source_and_identity_controls",
+    "Blanc.ExecutionOccurrenceRegression.concrete_raw_attribution_controls",
+    "Blanc.ExecutionOccurrenceRegression.coincident_identity_top_level_control",
+    "Blanc.ExecutionOccurrenceRegression.concrete_successful_source_outcomes",
+    "Blanc.ExecutionOccurrenceRegression.concreteCall_orders",
+    "Blanc.ExecutionOccurrenceRegression.concreteRawFrameRoot_orders",
+    "Blanc.ExecutionOccurrenceRegression.concreteRunErr_rawFrameRoots",
+    "Blanc.ExecutionOccurrenceRegression.RawChildAttribution.CaughtFixture.control",
+    "Blanc.ExecutionOccurrenceRegression.RawChildAttribution.RollbackFixture.control",
+    "Blanc.ExecutionOccurrenceRegression.RawChildAttribution.concrete_controls",
+    "Blanc.ExecutionOccurrenceRegression.RawChildAttribution.concrete_child_identity_boundaries",
+    "Blanc.ExecutionOccurrenceRegression.required_positive_controls",
+}
+
 MUTANTS = {
     "-- TERMINAL-ERROR-MUTANT-CONTROL": r"""
 private theorem terminalSuccessOnlyMutant (w : TerminalFixture) :
@@ -105,6 +125,23 @@ private theorem runErrChildPruningMutant (w : RunErrFixture) :
     Exec.rawFrameRoots w.run = [w.root] := by
   rfl
 """,
+    "-- CHILD-AS-PARENT-IDENTITY-MUTANT-CONTROL": r"""
+private theorem childAsParentIdentityMutant
+    (w : RawChildAttribution.CaughtFixture) :
+    w.call.root.exactInvocation RawChildAttribution.caughtProgram
+      RawChildAttribution.callTarget RawChildAttribution.callTarget := by
+  exact w.call.childExact RawChildAttribution.caughtProgram w.compiled
+""",
+    "-- MISSING-PARENT-PREFIX-MUTANT-CONTROL": r"""
+private theorem missingParentPrefixMutant
+    (w : RawChildAttribution.CaughtFixture) :
+    ∃ occurrence : Exec.NinstOccurrence w.call.root,
+      occurrence.instruction = .reg .sstore ∧
+      Exec.Deriv.ParentPrefix w.call.root occurrence.node := by
+  rcases w.control with
+    ⟨selected, exact, occurrence, instruction, sameFrame, pc, accepted⟩
+  exact ⟨occurrence, instruction, sameFrame⟩
+""",
 }
 
 
@@ -133,11 +170,30 @@ def load_ownership_parser():
     return module
 
 
+def missing_positive_theorems(ownership, path: pathlib.Path) -> list[str]:
+    declarations = ownership.declarations(path)
+    return sorted(
+        name for name in REQUIRED_POSITIVE_THEOREMS
+        if declarations.get(name, (None,))[0] != "theorem"
+    )
+
+
 def main() -> int:
     source = FIXTURE.read_text(encoding="utf-8")
     for marker in [*MUTANTS, "-- WETH-BRIDGE-MUTANT-CONTROL"]:
         if source.count(marker) != 1:
             return fail(f"fixture must contain exactly one `{marker}` marker")
+
+    try:
+        ownership = load_ownership_parser()
+    except (OSError, RuntimeError) as exc:
+        return fail(f"could not load fail-closed ownership parser: {exc}")
+    missing_positives = missing_positive_theorems(ownership, FIXTURE)
+    if missing_positives:
+        return fail(
+            "required positive proof declarations are absent or wrong-kind: "
+            + ", ".join(missing_positives)
+        )
 
     positive = run(["lake", "env", "lean", str(FIXTURE)])
     if positive.returncode != 0:
@@ -181,6 +237,10 @@ def main() -> int:
                     ("Application type mismatch",),
                 "-- RUNERR-CHILD-PRUNING-MUTANT-CONTROL":
                     ("Tactic `rfl` failed",),
+                "-- CHILD-AS-PARENT-IDENTITY-MUTANT-CONTROL":
+                    ("Application type mismatch", "Type mismatch"),
+                "-- MISSING-PARENT-PREFIX-MUTANT-CONTROL":
+                    ("Application type mismatch", "Type mismatch"),
             }[marker]
             if not any(expected in evidence for expected in expected_failures):
                 return fail(f"mutant `{marker}` failed unexpectedly", mutant)
@@ -213,10 +273,6 @@ def main() -> int:
     mappings = manifest["mappings"]
     if not isinstance(mappings, list) or len(mappings) != 9:
         return fail("occurrence move manifest must contain exactly 9 rows")
-    try:
-        ownership = load_ownership_parser()
-    except (OSError, RuntimeError) as exc:
-        return fail(f"could not load fail-closed ownership parser: {exc}")
     moved_names = {f'Blanc.{row["declaration"]}' for row in mappings}
     weth_declarations: dict[str, tuple[pathlib.Path, str, int]] = {}
     alias_hits: list[tuple[pathlib.Path, str, int, str]] = []
@@ -266,6 +322,18 @@ def main() -> int:
     relative_owner = ".".join(export_namespace.split(".")[1:])
     with tempfile.TemporaryDirectory(prefix="occurrence-ownership-controls-") as temp:
         temp_root = pathlib.Path(temp)
+        positive_deleted_path = temp_root / "PositiveDeleted.lean"
+        positive_deleted_path.write_text(
+            source.replace(
+                "private theorem CaughtFixture.control",
+                "private theorem CaughtFixture.control_removed",
+                1,
+            ),
+            encoding="utf-8",
+        )
+        if not missing_positive_theorems(ownership, positive_deleted_path):
+            return fail("required-positive deletion control failed")
+
         command_controls: list[tuple[pathlib.Path, str]] = []
         wrapped_alias_path = temp_root / "DonorWrappedAlias.lean"
         wrapped_alias_path.write_text(
@@ -433,10 +501,10 @@ def main() -> int:
         return fail("CREATE settlement control verdict drifted", settlement)
 
     print(
-        "OK — execution occurrence: 16 concrete controls; 13 Lean mutants; "
+        "OK — execution occurrence: 16 concrete controls; 15 Lean mutants; "
         "WETH bridge-removal mutant; 9 moved-owner + 9 ownership-parser controls; "
         "24 raw-attribution owners + exact signature + 4 controls; "
-        "CREATE raw-commit mutant"
+        "17 required positive proofs + deletion control; 2 CREATE mutants"
     )
     return 0
 
