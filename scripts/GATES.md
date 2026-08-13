@@ -35,14 +35,16 @@ Choose the gate by what you changed, cheapest falsifier first:
 | a proof, a theorem statement, or an axiom-relevant definition | `scripts/check.sh --no-build` | `scripts/check-elab.sh` |
 | a WETH10 flagship statement | `scripts/check-claims.sh` | `scripts/check.sh --no-build` |
 | anything that could move elaboration cost | `scripts/check-elab.sh` | — |
+| the elaboration selector, cache contract, or timing-gate implementation | `scripts/check-elab.sh --self-test` | `scripts/check-elab.sh --full` |
 | a contract's compiled bytes | `scripts/check-fmint.sh --no-build` + `scripts/check-weth.sh --no-build` | both `scripts/check-*-coverage.sh` |
 | a fixture, a fixture generator, or a borrower | the matching suite's `check-*.sh --no-build` | that suite's `check-*-coverage.sh` |
 | the pinned Jaune revision (`lakefile.lean` + `lake-manifest.json`) | `lake build` | the **full set**, in the order below |
 
 **No gate here takes `--jobs`.** Blanc's gates run from sub-second to roughly
-eight minutes and need no parallel mode, so the `--jobs` contract in Jaune's catalogue does not
-apply to this repository. `check-elab.sh`'s header records why it is sequential
-by construction: a gate whose only output is a timing cannot be run under
+eight minutes in the cache-cold/full case and need no parallel mode, so the
+`--jobs` contract in Jaune's catalogue does not apply to this repository.
+`check-elab.sh`'s header records why selected measurements are sequential by
+construction: a gate whose output is a timing cannot be run under
 self-inflicted contention.
 
 **The full set, in order.** This is what a checkpoint or merge candidate runs:
@@ -70,9 +72,15 @@ scripts/check-fmint-coverage.sh
 scripts/check-weth-coverage.sh
 ```
 
-`check-elab.sh` is the one gate that is skippable by evidence rather than by
-judgement: if no `.lean` file moved, it has nothing to measure. Every other row
-runs every time.
+Even the full set normally uses bare `check-elab.sh`: its content-addressed
+local cache measures only modules whose own source, transitive repository-local
+import closure, shared Lean/Lake configuration, or Lake-recorded transitive
+imported artifacts changed since their last successful measurement. It still
+represents and baseline-checks every module,
+so checkpoint or merge-candidate status alone is not a reason to discard valid
+evidence and add `--full`. Missing, corrupt, or incompatible cache state
+automatically falls back to a full measurement; do not hand-edit or manufacture
+`.lake/check-elab-state.json`. Every other row in the full set runs every time.
 
 ## Catalogue
 
@@ -104,6 +112,7 @@ against the gate.
 | `scripts/check-weth.sh --no-build` | WETH fixture conformance and the same byte-equality check against `Blanc.wethCode`. There is no WETH manifest, so no cross-check — the asymmetry is real, not an omission | 11 fixtures, 988 bytes | sub-second |
 | `scripts/check-fmint-coverage.sh` | selector reachability split into direct top-level entry, post-state-witnessed internal CALL, and uncredited embedding; five built-in callsite corruptions prove the evidence channel is live | 12 selectors: 2 direct + 7 witnessed internal, budget 3 | sub-second |
 | `scripts/check-weth-coverage.sh` | the same honest reachability split for WETH, plus direct empty-calldata `deposit()` fallback and the same five callsite falsifiers | 10 selectors: 4 direct + 6 witnessed internal + fallback, budget 0 | sub-second |
+| `scripts/check-elab.sh --self-test` | fail-closed elaboration-selection behavior: cache-cold full selection, unchanged-tree reuse, exact leaf/upstream/import-edge propagation, global configuration invalidation, new/deleted modules, corrupt-cache fallback, failed-result non-persistence, independent-green-result retention, concurrent-source-drift rejection, stable/changed/missing Lake trace evidence, and missing/cyclic local-import rejection | 17 invalidation/cache controls | sub-second |
 | `lake build` | integration elaboration, including the audited compile-witness, WETH10 deployment declarations and configured deployment root, stable-state packaging, constructive redemption certificates, and committed holder-flow conservation | 1003 jobs | incremental builds are a few seconds; clean rebuilds are substantially longer |
 | `scripts/check.sh --no-build` | axiom audit of the audited top theorems, each against its own pinned expected axiom set | 369 theorems | ~4 s |
 | `scripts/check-claims.sh` | Lean-checked exact statement pins for the WETH10 compile, flash-depth, backing, creation, static-certificate, stable-chain, configured deployment root/projections, creation-seed, constructive dual-selector redemption, full accounted history, dynamic balance-write completeness, committed no-wrap, conservation, residual-floor, hardened attribution, effectful dormancy, and supplied-list any-order flagships; constructor pins fail closed on record-field changes or hidden success premises; `Stor.Weth10Inv` is pinned by `rfl` unfolding, and the hardened-attribution computation, authorizing-act classifier, touched-pair list, projected allowance key identities, transaction envelopes, and canonical redemption run message are pinned definitionally so a *weakened conclusion term* fails closed too | 188 definitions/statements and constructors | ~2 s |
@@ -112,14 +121,15 @@ against the gate.
 
 | gate | proves | scale | time |
 |---|---|---|---|
-| `scripts/check-elab.sh` | per-module elaboration time vs the committed `scripts/baseline-elab.txt` | 95 files; 442.8 s baseline total | ~7.5 min |
+| `scripts/check-elab.sh` | affected-module elaboration time vs the committed `scripts/baseline-elab.txt`; every file is represented, but a file with unchanged recursive local-source and Lake transitive-artifact fingerprints reuses its last successful local measurement | 0–95 measured files; 95 represented; 442.8 s full baseline | from a few seconds when nothing is affected to ~7.5 min cache-cold or `--full` |
 
-No Blanc gate approaches the 1,000-second rule. The sequential elaboration
-gate is the longest at roughly eight minutes; every gate still runs inline.
+No Blanc gate approaches the 1,000-second rule. A cache-cold or explicit full
+sequential elaboration gate is the longest at roughly eight minutes; every gate
+still runs inline.
 
 ### The Python behind the shell
 
-Twenty-three helpers do the actual work and are not gates in their own right — they are
+Twenty-four helpers do the actual work and are not gates in their own right — they are
 invoked by the scripts above and should not be run directly in a report:
 
 | helper | used by | what it does |
@@ -146,6 +156,7 @@ invoked by the scripts above and should not be run directly in a report:
 | `scripts/selector_coverage.py` | both coverage gates | conservatively recognizes straight-line internal CALL sites tied to changed post-state recorder slots, inventories uncredited selector embeddings, and runs five corruption falsifiers |
 | `scripts/check-fmint-coverage.py` | `check-fmint-coverage.sh` | accounts for direct, witnessed-internal, embedded-only, and unreached selectors; identifies fmint by byte-equality against the committed literal |
 | `scripts/check-weth-coverage.py` | `check-weth-coverage.sh` | the same accounting for WETH, plus the direct empty-calldata fallback |
+| `scripts/check-elab-selection.py` | `check-elab.sh` | discovers all local Lean modules, parses the local import graph fail-closed, combines each module's recursive local-source fingerprint with Lake's transitive artifact `depHash`, selects only cache-invalid modules, atomically records non-drifting measurements after revalidating the tree while leaving any violating files invalid, and owns the 17 fast invalidation/cache controls |
 | `scripts/gate-lock.sh` | `check-elab.sh` | exclusive gate locking; sourced, never run |
 
 ## Pass criteria
@@ -184,7 +195,13 @@ at the expected assertion count.
 knobs**. A baseline, budget, or manifest count that must move for a gate to
 pass is a stop-and-report condition, not a step. `check-elab.sh --rebase` exists
 for deliberate, reported re-baselining and refuses to run against a tree that
-failed to elaborate; it is never the way to make a red gate green.
+failed to elaborate; it is never the way to make a red gate green. `--rebase`
+implies a full measurement. Bare `check-elab.sh` is the normal checkpoint,
+pre-push, and merge-candidate command. `--full` is reserved for a deliberate
+complete performance survey, explicit user/reviewer demand for one-run
+whole-tree timing, or a change to the selector/cache/timing implementation.
+Cache initialization and invalidation are automatic full fallbacks, not reasons
+to weaken selection or seed the cache from old reports.
 
 The fmint budget's historical 0-to-3 change is recorded in the budget itself:
 it corrected the former gate's false equation of selector embedding with
@@ -195,7 +212,16 @@ baseline, both coverage budgets remain shrink-only.
 
 `check-elab.sh` takes an exclusive lock through `scripts/gate-lock.sh` and a
 second concurrent run is **REFUSED** immediately, with the holder named. It does
-not queue and does not fall back.
+not queue and does not fall back. This also serializes atomic updates of its
+local `.lake/check-elab-state.json` cache.
+
+If a timing run is red, the cache update remains fail-closed but does not throw
+away unrelated work: files that elaborated successfully and stayed within
+baseline are recorded atomically, while every elaboration error, new module
+without a baseline, and timing violation remains invalid. A bare retry therefore
+remeasures the violating files (and anything newly invalidated), not the whole
+tree. A file edited between selection and cache commit invalidates the commit
+rather than being attached to stale evidence.
 
 The reason is on the record in `gate-lock.sh`'s own header: on 2026-07-31 two
 overlapping report-writing runs interleaved their appends into one report file
@@ -210,12 +236,15 @@ retry around** — it means two agents were competing for this host.
 | `scripts/check-elab.sh` | yes | yes |
 | every other gate here | — (writes none) | no |
 
-Only `check-elab.sh` writes a report (`scripts/report-elab.txt`). The rest print
-to stdout and touch nothing, which is why they are safe to run at will.
+Only `check-elab.sh` writes a report (`scripts/report-elab.txt`) and local cache
+state (`.lake/check-elab-state.json`). Both paths are ignored by Git. The rest
+print to stdout and touch nothing, which is why they are safe to run at will.
 
 **Host constraint.** This host has limited memory and ~9 GB of swap, so
-`check-elab.sh` refuses to measure under language-server contention — and that
-refusal is the gate working, not an obstacle.
+`check-elab.sh` refuses to measure one or more selected files under
+language-server contention — and that refusal is the gate working, not an
+obstacle. An all-cache-valid run performs no timing and therefore does not
+refuse on language-server memory.
 
 It keys on **resident size, not on the mere presence of a server**, and the
 distinction is deliberate: `lean-lsp-mcp` is mandated tooling here, so idle
@@ -232,9 +261,9 @@ worker that has been opening files. A `--force` run may not be rebased.
 
 1. **Never weaken a gate to make it green.** A baseline, budget, manifest,
    allowlist, or golden that must move in order to pass is a stop condition.
-2. **Never `--force`.** The two things it can bypass — the lock and the
-   language-server check — are the two things that make a measurement
-   trustworthy.
+2. **Never `--force`.** It bypasses the language-server contention check that
+   makes a measurement trustworthy. A forced measurement is never written to
+   the cache and cannot be rebased. The exclusive locks cannot be bypassed.
 3. **Report the exact command and its verdict line**, not a paraphrase. "Gates
    green" is not a verification record.
 4. **A gate's verdict is inherited only by commit identity.** Re-run rather than
@@ -254,3 +283,8 @@ worker that has been opening files. A `--force` run may not be rebased.
    `check-trust-surface.sh`, `check-weth10-reference.sh`, `check-error-data.sh`,
    `check.sh --no-build`, `check-claims.sh`, both suites `--no-build`, and both
    coverage gates. Extending one of those scripts extends CI directly.
+7. **Use incremental elaboration checking by default.** Do not add `--full`
+   after an ordinary proof edit merely for reassurance: the selector already
+   includes the exact downstream local import closure. Use `--full` only for
+   the special cases named above, and run `--self-test` when changing selection
+   or cache behavior.

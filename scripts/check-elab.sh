@@ -2,11 +2,14 @@
 # Elaboration-time gate for Blanc (port of Jaune's gate for
 # ~/plans/blanc-elab-gate.md).
 #
-# Measures how long each of our own modules takes to re-elaborate against
+# Measures how long each affected module takes to re-elaborate against
 # already-built dependencies — the cost an interactive session pays to open or
-# touch a file, and the cost that sits on `lake build`'s critical path. Compares
-# every file against the committed reference times in scripts/baseline-elab.txt
-# and fails when one has become materially slower.
+# touch a file, and the cost that sits on `lake build`'s critical path. A local
+# content-addressed cache fingerprints each file's entire repository-local
+# import closure and the shared Lean/Lake configuration. The default run skips
+# exactly the files whose fingerprints match a prior successful measurement;
+# --full measures every file. Every represented file is compared against the
+# committed reference time in scripts/baseline-elab.txt.
 #
 # This gate exists because nothing else measures this axis. check-hygiene.sh,
 # check-integrity.sh, and the conformance tiers all say nothing about
@@ -16,19 +19,25 @@
 # measured at all before this script.
 #
 # Usage:
-#   scripts/check-elab.sh [--rebase] [--list] [--no-build] [--force]
+#   scripts/check-elab.sh [--full] [--rebase] [--list] [--no-build] [--force]
+#                         [--self-test]
 #                         [--report <path>]
 #
+#   --full        measure every source file and refresh the local cache. Use for
+#                 deliberate or explicitly requested whole-tree evidence and
+#                 after changing this gate's selection/cache implementation.
 #   --rebase      accept the current times as the new committed baseline.
 #                 Refused if any file failed to elaborate — a baseline must
-#                 only ever record a green tree.
+#                 only ever record a green tree. Implies --full.
 #   --list        measure and print, compare nothing, write no baseline. Use
-#                 when investigating rather than gating.
+#                 when investigating rather than gating. Implies --full.
 #   --no-build    skip the `lake build` precondition. Permitted only when the
-#                 tree is already built at this exact source revision;
+#                 tree and every discovered module trace are already built at
+#                 this exact source revision;
 #                 otherwise the first file measured pays for everything stale
 #                 beneath it and every number is wrong.
 #   --force       run even though Lean language servers are alive. See below.
+#   --self-test   run the fast invalidation/cache controls and no timing work.
 #   --report      write the per-file report here instead of
 #                 scripts/report-elab.txt.
 #
@@ -87,11 +96,12 @@
 #
 # BASELINE FORMAT
 #
-# STATUS<TAB>TIME<TAB>path, sorted by path, matching the check.sh baselines.
-# STATUS is OK or ERROR. A source file with no baseline row is a configuration
-# error, not an unmeasured file: that is what forces a newly added module to
-# state its cost. A baseline row whose file no longer exists is reported as a
-# warning, never a failure.
+# Reports use STATUS<TAB>TIME<TAB>path<TAB>PROVENANCE, sorted by path, where
+# PROVENANCE is MEASURED or CACHED. The committed baseline retains its original
+# three-column format. STATUS is OK or ERROR. A source file with no baseline row
+# is a configuration error, not an unmeasured file: that is what forces a newly
+# added module to state its cost. A baseline row whose file no longer exists is
+# reported as a warning, never a failure.
 
 set -u
 
@@ -104,19 +114,26 @@ GATE_CMDLINE="$0 $*"
 . "$SCRIPT_DIR/gate-lock.sh"
 
 # One cleanup function, one EXIT trap, installed once: a second `trap ... EXIT`
-# would silently replace this one and leak RCFILE.
+# would silently replace this one and leak a temporary file.
 RCFILE=""
+PLANFILE=""
+MEASUREDFILE=""
+EXCLUDEFILE=""
 cleanup() {
   gate_lock_release_all
   if [ -n "$RCFILE" ]; then rm -f "$RCFILE"; fi
+  if [ -n "$PLANFILE" ]; then rm -f "$PLANFILE"; fi
+  if [ -n "$MEASUREDFILE" ]; then rm -f "$MEASUREDFILE"; fi
+  if [ -n "$EXCLUDEFILE" ]; then rm -f "$EXCLUDEFILE"; fi
   return 0
 }
 trap cleanup EXIT
 
 SRC_DIR="Blanc"
-ROOT_MODULES="Blanc.lean Main.lean"
 BASELINE="$SCRIPT_DIR/baseline-elab.txt"
 REPORT="$SCRIPT_DIR/report-elab.txt"
+STATE="$ROOT/.lake/check-elab-state.json"
+SELECTOR="$SCRIPT_DIR/check-elab-selection.py"
 
 DRIFT_FACTOR="2.0"
 DRIFT_FLOOR="1.0"
@@ -135,13 +152,18 @@ REBASE=0
 LIST_ONLY=0
 NO_BUILD=0
 FORCE=0
+FULL=0
+SELF_TEST=0
+FULL_REASON="explicit --full"
 
 while [ $# -gt 0 ]; do
   case "$1" in
+    --full)     FULL=1; shift ;;
     --rebase)   REBASE=1; shift ;;
     --list)     LIST_ONLY=1; shift ;;
     --no-build) NO_BUILD=1; shift ;;
     --force)    FORCE=1; shift ;;
+    --self-test) SELF_TEST=1; shift ;;
     --report)
       if [ $# -lt 2 ]; then
         echo "usage error: --report needs a path" >&2
@@ -149,7 +171,7 @@ while [ $# -gt 0 ]; do
       fi
       REPORT="$2"; shift 2 ;;
     *)
-      echo "usage: scripts/check-elab.sh [--rebase] [--list] [--no-build] [--force] [--report <path>]" >&2
+      echo "usage: scripts/check-elab.sh [--full] [--rebase] [--list] [--no-build] [--force] [--self-test] [--report <path>]" >&2
       exit 2 ;;
   esac
 done
@@ -158,47 +180,33 @@ if [ "$REBASE" -eq 1 ] && [ "$LIST_ONLY" -eq 1 ]; then
   echo "usage error: --rebase and --list are mutually exclusive" >&2
   exit 2
 fi
+if [ "$REBASE" -eq 1 ] && [ "$FORCE" -eq 1 ]; then
+  echo "usage error: --force may not be combined with --rebase; a contended run must never become the committed reference" >&2
+  exit 2
+fi
+
+if [ "$SELF_TEST" -eq 1 ]; then
+  if [ "$REBASE" -eq 1 ] || [ "$LIST_ONLY" -eq 1 ] || [ "$NO_BUILD" -eq 1 ] \
+      || [ "$FORCE" -eq 1 ] || [ "$FULL" -eq 1 ]; then
+    echo "usage error: --self-test must be used alone (apart from --report)" >&2
+    exit 2
+  fi
+  exec python3 "$SELECTOR" self-test
+fi
+
+if [ "$REBASE" -eq 1 ]; then
+  FULL=1
+  FULL_REASON="--rebase requires a whole-tree measurement"
+elif [ "$LIST_ONLY" -eq 1 ]; then
+  FULL=1
+  FULL_REASON="--list is an explicit whole-tree investigation"
+fi
 
 cd "$ROOT" || exit 2
 
 if [ ! -d "$SRC_DIR" ]; then
   echo "REGRESSION — elab: source tree not found: $ROOT/$SRC_DIR"
   exit 2
-fi
-
-# --- contention guard -------------------------------------------------------
-# Only our own toolchain's servers matter; match the binary invocation rather
-# than any command line mentioning the word "lean".
-LSP_PIDS="$(pgrep -f 'bin/lean --server' 2>/dev/null | tr '\n' ' ' | sed 's/ *$//')"
-LSP_MAX_MB=0
-LSP_SUM_MB=0
-if [ -n "$LSP_PIDS" ]; then
-  LSP_MAX_MB="$(ps -o rss= -p "$(printf '%s' "$LSP_PIDS" | tr ' ' ',')" 2>/dev/null \
-    | awk 'BEGIN{m=0} {v=$1/1024; if (v>m) m=v} END {printf "%.0f", m}')"
-  LSP_SUM_MB="$(ps -o rss= -p "$(printf '%s' "$LSP_PIDS" | tr ' ' ',')" 2>/dev/null \
-    | awk '{s+=$1/1024} END {printf "%.0f", s}')"
-  : "${LSP_MAX_MB:=0}" "${LSP_SUM_MB:=0}"
-fi
-
-if [ "${LSP_MAX_MB:-0}" -gt "$LSP_RSS_MAX_MB" ] || [ "${LSP_SUM_MB:-0}" -gt "$LSP_RSS_TOTAL_MB" ]; then
-  if [ "$FORCE" -eq 0 ]; then
-    echo "SETUP — elab: Lean language server(s) holding large environments (pid(s): $LSP_PIDS;"
-    echo "SETUP — elab: largest ${LSP_MAX_MB}MB, total ${LSP_SUM_MB}MB, limits ${LSP_RSS_MAX_MB}MB/${LSP_RSS_TOTAL_MB}MB)."
-    echo "SETUP — elab: these contend for memory and cores, and this gate's only output is a timing."
-    echo "SETUP — elab: Close the editing session and re-run, or pass --force to measure anyway"
-    echo "SETUP — elab: (a --force run may not be rebased)."
-    echo "REGRESSION — elab: refusing to measure under language-server contention"
-    exit 2
-  fi
-  if [ "$REBASE" -eq 1 ]; then
-    echo "usage error: --force may not be combined with --rebase; a contended run must never become the committed reference" >&2
-    exit 2
-  fi
-  echo "WARNING — elab: measuring under language-server contention (--force); times are indicative only"
-elif [ -n "$LSP_PIDS" ]; then
-  # Present but idle: report it so a surprising number has this context attached,
-  # and proceed. See the header on why presence alone must not refuse.
-  echo "NOTE — elab: $(printf '%s' "$LSP_PIDS" | wc -w | tr -d ' ') idle language server(s) present (largest ${LSP_MAX_MB}MB, total ${LSP_SUM_MB}MB); below the ${LSP_RSS_MAX_MB}MB/${LSP_RSS_TOTAL_MB}MB contention limits, proceeding"
 fi
 
 # --- concurrency guard ------------------------------------------------------
@@ -225,49 +233,140 @@ gate_lock_acquire "$REPORT.lock" "elab" "$REPORT" \
 # --- build precondition -----------------------------------------------------
 # Every measurement below elaborates one file against its dependencies' oleans.
 # If those are stale the first file to need them pays for rebuilding them and
-# its number is meaningless, so the tree must be current before we start.
+# its number is meaningless, so every discovered module must be current before
+# we start. Explicit targets also give a newly added, not-yet-imported module a
+# Lake trace; the selector uses each trace's transitive dependency hash.
 if [ "$NO_BUILD" -eq 0 ]; then
-  if ! lake build >/dev/null 2>&1; then
-    echo "SETUP — elab: 'lake build' failed; this gate measures a green tree only."
+  if ! MODULE_TARGETS="$(python3 "$SELECTOR" modules --root "$ROOT")"; then
+    echo "SETUP — elab: could not discover local module build targets."
+    echo "REGRESSION — elab: build precondition failed"
+    exit 2
+  fi
+  if ! lake build $MODULE_TARGETS >/dev/null 2>&1; then
+    echo "SETUP — elab: targeted 'lake build' failed; this gate measures a green tree only."
     echo "REGRESSION — elab: build precondition failed"
     exit 2
   fi
 fi
 
-# --- file discovery ---------------------------------------------------------
-# Discovered, never hardcoded: a new module is measured the moment it exists,
-# and then fails the gate until it has a baseline row.
-FILES="$( { find "$SRC_DIR" -name '*.lean' -type f | sed 's|^\./||'
-            for r in $ROOT_MODULES; do [ -f "$r" ] && echo "$r"; done
-          } | sort )"
-
-if [ -z "$FILES" ]; then
-  echo "REGRESSION — elab: no source files selected under $SRC_DIR"
+# --- content/import-closure selection ---------------------------------------
+# The cache is evidence from a prior successful timing run, never a build
+# substitute. The build above establishes current oleans; this step decides
+# which source files can reuse their prior measurements.
+if ! LEAN_ID="$(lake env lean --version 2>&1)"; then
+  echo "SETUP — elab: could not identify the active Lean toolchain"
+  echo "REGRESSION — elab: selection precondition failed"
   exit 2
 fi
 
+PLANFILE="$(mktemp)"
+MEASUREDFILE="$(mktemp)"
+: > "$MEASUREDFILE"
+
+if [ "$FULL" -eq 1 ]; then
+  if ! python3 "$SELECTOR" plan --root "$ROOT" --state "$STATE" \
+      --plan "$PLANFILE" --environment-id "$LEAN_ID" --full \
+      --full-reason "$FULL_REASON"; then
+    echo "REGRESSION — elab: could not construct a safe selection plan"
+    exit 2
+  fi
+else
+  if ! python3 "$SELECTOR" plan --root "$ROOT" --state "$STATE" \
+      --plan "$PLANFILE" --environment-id "$LEAN_ID"; then
+    echo "REGRESSION — elab: could not construct a safe selection plan"
+    exit 2
+  fi
+fi
+
+FILES="$(python3 "$SELECTOR" files --plan "$PLANFILE")" || exit 2
+AFFECTED="$(python3 "$SELECTOR" files --plan "$PLANFILE" --affected)" || exit 2
+NFILES="$(printf '%s\n' "$FILES" | grep -c .)"
+NMEASURE="$(printf '%s\n' "$AFFECTED" | grep -c .)"
+NSKIP=$((NFILES - NMEASURE))
+
+# --- contention guard -------------------------------------------------------
+# Cached files perform no timing work, so a no-op incremental run need not
+# refuse merely because an editor has a large Lean environment open.
+if [ "$NMEASURE" -gt 0 ]; then
+  # Only our own toolchain's servers matter; match the binary invocation rather
+  # than any command line mentioning the word "lean".
+  LSP_PIDS="$(pgrep -f 'bin/lean --server' 2>/dev/null | tr '\n' ' ' | sed 's/ *$//')"
+  LSP_MAX_MB=0
+  LSP_SUM_MB=0
+  if [ -n "$LSP_PIDS" ]; then
+    LSP_MAX_MB="$(ps -o rss= -p "$(printf '%s' "$LSP_PIDS" | tr ' ' ',')" 2>/dev/null \
+      | awk 'BEGIN{m=0} {v=$1/1024; if (v>m) m=v} END {printf "%.0f", m}')"
+    LSP_SUM_MB="$(ps -o rss= -p "$(printf '%s' "$LSP_PIDS" | tr ' ' ',')" 2>/dev/null \
+      | awk '{s+=$1/1024} END {printf "%.0f", s}')"
+    : "${LSP_MAX_MB:=0}" "${LSP_SUM_MB:=0}"
+  fi
+
+  if [ "${LSP_MAX_MB:-0}" -gt "$LSP_RSS_MAX_MB" ] || [ "${LSP_SUM_MB:-0}" -gt "$LSP_RSS_TOTAL_MB" ]; then
+    if [ "$FORCE" -eq 0 ]; then
+      echo "SETUP — elab: Lean language server(s) holding large environments (pid(s): $LSP_PIDS;"
+      echo "SETUP — elab: largest ${LSP_MAX_MB}MB, total ${LSP_SUM_MB}MB, limits ${LSP_RSS_MAX_MB}MB/${LSP_RSS_TOTAL_MB}MB)."
+      echo "SETUP — elab: these contend for memory and cores, and this gate's only output is a timing."
+      echo "SETUP — elab: Close the editing session and re-run, or pass --force to measure anyway"
+      echo "SETUP — elab: (a --force run may not be rebased)."
+      echo "REGRESSION — elab: refusing to measure under language-server contention"
+      exit 2
+    fi
+    if [ "$REBASE" -eq 1 ]; then
+      echo "usage error: --force may not be combined with --rebase; a contended run must never become the committed reference" >&2
+      exit 2
+    fi
+    echo "WARNING — elab: measuring under language-server contention (--force); times are indicative only"
+  elif [ -n "$LSP_PIDS" ]; then
+    echo "NOTE — elab: $(printf '%s' "$LSP_PIDS" | wc -w | tr -d ' ') idle language server(s) present (largest ${LSP_MAX_MB}MB, total ${LSP_SUM_MB}MB); below the ${LSP_RSS_MAX_MB}MB/${LSP_RSS_TOTAL_MB}MB contention limits, proceeding"
+  fi
+fi
+
 # --- measure ----------------------------------------------------------------
-RESULTS=""
 RCFILE="$(mktemp)"
 
-for f in $FILES; do
+for f in $AFFECTED; do
   TIMEFORMAT='%R'
   ELAPSED="$( { time { lake env lean "$f" >/dev/null 2>&1; echo $? >"$RCFILE"; } ; } 2>&1 )"
   RC="$(cat "$RCFILE")"
   if [ "$RC" -eq 0 ]; then STATUS="OK"; else STATUS="ERROR"; fi
   printf '%s\t%s\t%s\n' "$STATUS" "$ELAPSED" "$f"
-  RESULTS="$RESULTS$STATUS	$ELAPSED	$f
-"
+  printf '%s\t%s\t%s\tMEASURED\n' "$STATUS" "$ELAPSED" "$f" >> "$MEASUREDFILE"
 done
 
-printf '%s' "$RESULTS" > "$REPORT"
+if ! python3 "$SELECTOR" merge --plan "$PLANFILE" --measured "$MEASUREDFILE" \
+    --report "$REPORT"; then
+  echo "REGRESSION — elab: could not assemble the complete measured/cached report"
+  exit 2
+fi
 
-TOTAL="$(printf '%s' "$RESULTS" | awk -F'\t' 'NF{s+=$2} END {printf "%.1f", s}')"
-NFILES="$(printf '%s' "$RESULTS" | grep -c .)"
+RESULTS="$(cat "$REPORT")"
+TOTAL="$(printf '%s' "$RESULTS" | awk -F'\t' '$4=="MEASURED"{s+=$2} END {printf "%.1f", s}')"
 NERR="$(printf '%s' "$RESULTS" | awk -F'\t' '$1=="ERROR"' | grep -c .)"
 
 echo "---"
-echo "elab: $NFILES file(s), $TOTAL s total, report: ${REPORT#$ROOT/}"
+echo "elab: $NMEASURE measured, $NSKIP provably unaffected, $TOTAL s measured; report: ${REPORT#$ROOT/}"
+
+cache_results() {
+  local EXCLUSIONS="${1:-}"
+  if [ "$FORCE" -eq 1 ]; then
+    echo "NOTE — elab: --force measurements are indicative and were not cached"
+    return 0
+  fi
+  if [ -n "$EXCLUSIONS" ]; then
+    if ! python3 "$SELECTOR" commit --plan "$PLANFILE" --report "$REPORT" \
+        --state "$STATE" --exclude-file "$EXCLUSIONS"; then
+      echo "REGRESSION — elab: non-violating measurements could not be committed to the local cache"
+      return 1
+    fi
+  else
+    if ! python3 "$SELECTOR" commit --plan "$PLANFILE" --report "$REPORT" \
+        --state "$STATE"; then
+      echo "REGRESSION — elab: green measurements could not be committed to the local cache"
+      return 1
+    fi
+  fi
+  return 0
+}
 
 # --- list mode --------------------------------------------------------------
 if [ "$LIST_ONLY" -eq 1 ]; then
@@ -278,6 +377,7 @@ if [ "$LIST_ONLY" -eq 1 ]; then
     echo "REGRESSION — elab: $NERR file(s) failed to elaborate (--list compared no times)"
     exit 1
   fi
+  cache_results || exit 2
   echo "OK — elab: listed $NFILES file(s) in $TOTAL s (--list compares nothing)"
   exit 0
 fi
@@ -296,8 +396,9 @@ if [ "$REBASE" -eq 1 ]; then
     echo "# already-built dependencies, measured sequentially with no language server"
     echo "# alive. A file fails the gate above both ${DRIFT_FACTOR}x its time here and that time"
     echo "# plus ${DRIFT_FLOOR}s. Rewrite with: scripts/check-elab.sh --rebase"
-    printf '%s' "$RESULTS"
+    printf '%s\n' "$RESULTS" | awk -F'\t' 'BEGIN {OFS="\t"} NF {print $1, $2, $3}'
   } > "$BASELINE"
+  cache_results || exit 2
   echo "OK — elab: baseline rebased with $NFILES file(s), $TOTAL s total"
   exit 0
 fi
@@ -313,6 +414,8 @@ BASE_ROWS="$(grep -vE '^[[:space:]]*(#|$)' "$BASELINE")"
 
 VIOLATIONS=""
 NOTES=""
+EXCLUDEFILE="$(mktemp)"
+: > "$EXCLUDEFILE"
 
 for f in $FILES; do
   CUR_ROW="$(printf '%s' "$RESULTS" | awk -F'\t' -v p="$f" '$3==p {print; exit}')"
@@ -320,6 +423,7 @@ for f in $FILES; do
   CUR_TIME="$(printf '%s' "$CUR_ROW" | cut -f2)"
 
   if [ "$CUR_STATUS" = "ERROR" ]; then
+    printf '%s\n' "$f" >> "$EXCLUDEFILE"
     VIOLATIONS="${VIOLATIONS}ELAB — does not elaborate: $f
 "
     continue
@@ -327,6 +431,7 @@ for f in $FILES; do
 
   BASE_ROW="$(printf '%s' "$BASE_ROWS" | awk -F'\t' -v p="$f" '$3==p {print; exit}')"
   if [ -z "$BASE_ROW" ]; then
+    printf '%s\n' "$f" >> "$EXCLUDEFILE"
     VIOLATIONS="${VIOLATIONS}ELAB — no baseline row (new module must state its cost): $f
 "
     continue
@@ -342,6 +447,7 @@ for f in $FILES; do
 
   case "$VERDICT" in
     DRIFT)
+      printf '%s\n' "$f" >> "$EXCLUDEFILE"
       VIOLATIONS="${VIOLATIONS}ELAB — $f: ${CUR_TIME}s vs baseline ${BASE_TIME}s
 "
       ;;
@@ -368,10 +474,12 @@ if [ -n "$VIOLATIONS" ]; then
   printf '%s' "$VIOLATIONS"
   NVIO="$(printf '%s' "$VIOLATIONS" | grep -c .)"
   BASE_TOTAL="$(printf '%s' "$BASE_ROWS" | awk -F'\t' 'NF{s+=$2} END {printf "%.1f", s}')"
-  echo "REGRESSION — elab: $NVIO file(s) slower than ${DRIFT_FACTOR}x baseline (or newly failing); $TOTAL s total vs $BASE_TOTAL s baseline"
+  cache_results "$EXCLUDEFILE" || exit 2
+  echo "REGRESSION — elab: $NVIO file(s) slower than ${DRIFT_FACTOR}x baseline (or newly failing); $NMEASURE measured in $TOTAL s, $NSKIP provably unaffected; $BASE_TOTAL s full baseline"
   exit 1
 fi
 
 BASE_TOTAL="$(printf '%s' "$BASE_ROWS" | awk -F'\t' 'NF{s+=$2} END {printf "%.1f", s}')"
-echo "OK — elab: all $NFILES file(s) within ${DRIFT_FACTOR}x baseline; $TOTAL s total vs $BASE_TOTAL s baseline"
+cache_results || exit 2
+echo "OK — elab: $NMEASURE measured, $NSKIP provably unaffected; all $NFILES file(s) within ${DRIFT_FACTOR}x baseline; $TOTAL s measured vs $BASE_TOTAL s full baseline"
 exit 0
