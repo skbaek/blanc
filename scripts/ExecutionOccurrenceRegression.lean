@@ -52,6 +52,12 @@ private theorem RootSstoreFixture.successful (w : RootSstoreFixture) :
   rcases w.occurrence.toSuccessfulSstore rfl rfl with ⟨write, _⟩
   exact ⟨write⟩
 
+/-- The selected outer frame remains in the all-outcome traversal regardless
+of whether the later execution commits, reverts, or runs out of gas. -/
+private theorem RootSstoreFixture.rawFrameRoot (w : RootSstoreFixture) :
+    w.root ∈ Exec.rawFrameRoots w.run := by
+  exact Exec.mem_rawFrameRoots_self w.run
+
 private def rootSstoreFixture? (sevm : Sevm) (before : Devm)
     (decoded : Ninst.At sevm.code 0 (.reg .sstore)) :
     Option RootSstoreFixture :=
@@ -155,6 +161,23 @@ private theorem rootWriteControls
       Nonempty (Exec.SuccessfulSstoreOccurrence laterOogFixture.root) := by
   exact ⟨noOpFixture.successful, revertFixture.successful,
     laterOogFixture.successful⟩
+
+/-- The successful no-op store and the stores followed by REVERT or later OOG
+all retain their selected outer raw frame even when the enclosing outcome does
+not commit. -/
+private theorem rootWriteRawFrameControls
+    (_noOp : noOpFixture? = some noOpFixture)
+    (_reverted : revertFixture? = some revertFixture)
+    (_laterOog : laterOogFixture? = some laterOogFixture) :
+    (Nonempty (Exec.SuccessfulSstoreOccurrence noOpFixture.root) ∧
+      noOpFixture.root ∈ Exec.rawFrameRoots noOpFixture.run) ∧
+    (Nonempty (Exec.SuccessfulSstoreOccurrence revertFixture.root) ∧
+      revertFixture.root ∈ Exec.rawFrameRoots revertFixture.run) ∧
+    (Nonempty (Exec.SuccessfulSstoreOccurrence laterOogFixture.root) ∧
+      laterOogFixture.root ∈ Exec.rawFrameRoots laterOogFixture.run) := by
+  exact ⟨⟨noOpFixture.successful, noOpFixture.rawFrameRoot⟩,
+    ⟨revertFixture.successful, revertFixture.rawFrameRoot⟩,
+    ⟨laterOogFixture.successful, laterOogFixture.rawFrameRoot⟩⟩
 
 /-- Concrete multi-write history: 5, then 7, then a no-op 7 to the same cell. -/
 private def historyCode : ByteArray := ByteArray.mk #[
@@ -575,6 +598,213 @@ private theorem concrete_source_and_identity_controls :
   rcases sourceFixture_nonempty with ⟨w⟩
   exact ⟨w, w.source_and_identity_controls⟩
 
+/-! Arbitrary-outcome compiler attribution controls. -/
+
+private def entryOogPre : Devm :=
+  (default : Devm).withGasLeft 0
+
+private structure EntryOogFixture where
+  err : EvmError × Devm
+  step : Evm.step ⟨0, sourceSevm, entryOogPre⟩ = .halt (.error err)
+  compiled : some sourceCode.toList = sourceProgram.compile
+
+private def EntryOogFixture.run (w : EntryOogFixture) :
+    Exec 0 sourceSevm entryOogPre (.error w.err) :=
+  .halt w.step
+
+private def EntryOogFixture.root (w : EntryOogFixture) : Exec.Deriv :=
+  ⟨0, sourceSevm, entryOogPre, .error w.err, w.run⟩
+
+private def entryOogFixture? : Option EntryOogFixture :=
+  if compiled : some sourceCode.toList = sourceProgram.compile then
+    match step : Evm.step ⟨0, sourceSevm, entryOogPre⟩ with
+    | .halt (.error err) => some { err, step, compiled }
+    | _ => none
+  else none
+
+/-- Executable boundary control: exact compiled bytes do not imply that the
+leading compiler `JUMPDEST` was crossed. -/
+private def entryOogAvailable : Bool :=
+  match sourceProgram.compile with
+  | some bytes => if bytes = sourceCode.toList then
+      match Evm.step ⟨0, sourceSevm, entryOogPre⟩ with
+      | .halt (.error _) => true
+      | _ => false
+    else false
+  | none => false
+
+private theorem entryOogFixture_nonempty : Nonempty EntryOogFixture := by
+  have available : entryOogAvailable = true := by
+    native_decide
+  have hsome : entryOogFixture?.isSome = true := by
+    unfold entryOogFixture? entryOogAvailable at *
+    repeat' split
+    all_goals grind
+  cases fixture : entryOogFixture? with
+  | none => simp [fixture] at hsome
+  | some witness => exact ⟨witness⟩
+
+private theorem EntryOogFixture.exact (w : EntryOogFixture) :
+    w.root.exactInvocation sourceProgram
+      sourceSevm.currentTarget sourceAddress :=
+  ⟨rfl, rfl, rfl, w.compiled⟩
+
+/-- The errored outer root is retained, but no same-frame target at the main
+body's PC 1 can be reached from its terminal entry node. -/
+private theorem EntryOogFixture.boundary (w : EntryOogFixture) :
+    Exec.rawFrameRoots w.run = [w.root] ∧
+      Exec.rawNodes w.run = [w.root] ∧
+      ¬ ∃ target : Exec.Deriv,
+        Exec.Deriv.ParentPrefix w.root target ∧ target.pc = 1 := by
+  refine ⟨by simp [EntryOogFixture.run, EntryOogFixture.root,
+      Exec.rawFrameRoots, Exec.rawFrameDescendants],
+    by simp [EntryOogFixture.run, EntryOogFixture.root, Exec.rawNodes], ?_⟩
+  rintro ⟨target, hprefix, targetPc⟩
+  cases hprefix with
+  | refl => simp [EntryOogFixture.root] at targetPc
+  | step edge _ => cases edge
+
+private def terminalSourcePre : Devm :=
+  (default : Devm).withGasLeft 1
+
+private structure TerminalSourceFixture where
+  afterJump : Devm
+  err : EvmError × Devm
+  step0 : Evm.step ⟨0, sourceSevm, terminalSourcePre⟩ = .cont 1 afterJump
+  step1 : Evm.step ⟨1, sourceSevm, afterJump⟩ = .halt (.error err)
+  compiled : some sourceCode.toList = sourceProgram.compile
+
+private def TerminalSourceFixture.run (w : TerminalSourceFixture) :
+    Exec 0 sourceSevm terminalSourcePre (.error w.err) :=
+  .cont w.step0 (.halt w.step1)
+
+private def TerminalSourceFixture.root (w : TerminalSourceFixture) : Exec.Deriv :=
+  ⟨0, sourceSevm, terminalSourcePre, .error w.err, w.run⟩
+
+private def TerminalSourceFixture.node (w : TerminalSourceFixture) : Exec.Deriv :=
+  ⟨1, sourceSevm, w.afterJump, .error w.err, .halt w.step1⟩
+
+private def TerminalSourceFixture.occurrence (w : TerminalSourceFixture) :
+    Exec.NinstOccurrence w.root :=
+  { node := w.node
+    instruction := .reg .sstore
+    slot := .none
+    stepResult := .error w.err
+    reached := by
+      simp [TerminalSourceFixture.root, TerminalSourceFixture.run,
+        TerminalSourceFixture.node, Exec.rawNodes]
+    decoded := by
+      change Ninst.At sourceSevm.code 1 (.reg .sstore)
+      rfl
+    filled := trivial
+    stepRun := by
+      change Ninst.StepRun 1 sourceSevm w.afterJump (.reg .sstore)
+        .none (.error w.err)
+      unfold Ninst.StepRun
+      rw [← Evm.step_next
+        (show Ninst.At sourceSevm.code 1 (.reg .sstore) by rfl), w.step1]
+      exact ⟨rfl, rfl⟩ }
+
+private theorem TerminalSourceFixture.sameFrame (w : TerminalSourceFixture) :
+    Exec.Deriv.ParentPrefix w.root w.node := by
+  exact .step (.cont w.step0 (.halt w.step1)) (.refl _)
+
+private theorem TerminalSourceFixture.exact (w : TerminalSourceFixture) :
+    w.root.exactInvocation sourceProgram
+      sourceSevm.currentTarget sourceAddress :=
+  ⟨rfl, rfl, rfl, w.compiled⟩
+
+private def terminalSourceFixture? : Option TerminalSourceFixture :=
+  if compiled : some sourceCode.toList = sourceProgram.compile then
+    match step0 : Evm.step ⟨0, sourceSevm, terminalSourcePre⟩ with
+    | .cont pc1 afterJump =>
+        if hpc1 : pc1 = 1 then
+          match step1 : Evm.step ⟨1, sourceSevm, afterJump⟩ with
+          | .halt (.error err) => some {
+              afterJump
+              err
+              step0 := by simpa [hpc1] using step0
+              step1
+              compiled }
+          | _ => none
+        else none
+    | _ => none
+  else none
+
+/-- Executable positive control for an exact compiled frame that crosses entry
+glue and then errors at the current SSTORE itself. -/
+private def terminalSourceAvailable : Bool :=
+  match sourceProgram.compile with
+  | some bytes => if bytes = sourceCode.toList then
+      match Evm.step ⟨0, sourceSevm, terminalSourcePre⟩ with
+      | .cont pc1 afterJump => pc1 == 1 &&
+          match Evm.step ⟨1, sourceSevm, afterJump⟩ with
+          | .halt (.error _) => true
+          | _ => false
+      | _ => false
+    else false
+  | none => false
+
+private theorem terminalSourceFixture_nonempty :
+    Nonempty TerminalSourceFixture := by
+  have available : terminalSourceAvailable = true := by
+    native_decide
+  have hsome : terminalSourceFixture?.isSome = true := by
+    unfold terminalSourceFixture? terminalSourceAvailable at *
+    repeat' split
+    all_goals grind
+  cases fixture : terminalSourceFixture? with
+  | none => simp [fixture] at hsome
+  | some witness => exact ⟨witness⟩
+
+/-- The all-frame bridge attributes the terminal error to the exact structural
+path `{functionIndex := 0, steps := []}` at PC 1, without a success or commit
+premise. -/
+private theorem TerminalSourceFixture.exactAttribution
+    (w : TerminalSourceFixture) :
+    w.occurrence.stepResult = .error w.err ∧
+      w.occurrence.node.pc = 1 ∧
+      sourceProgram.acceptsSstoreSite ⟨0, []⟩
+        w.occurrence.node.pc = true := by
+  have selected : w.root ∈ Exec.rawFrameRoots w.root.exc :=
+    Exec.mem_rawFrameRoots_self w.run
+  rcases w.occurrence.acceptsSource_of_rawFrameRoot rfl selected w.exact
+      w.sameFrame with ⟨path, accepted⟩
+  have pathEq : path = (⟨0, []⟩ : Prog.SourcePath) := by
+    rcases Prog.acceptsSstoreSite_iff.mp accepted with
+      ⟨site, member, hpath, hpc, hinstruction⟩
+    simp [sourceProgram, Prog.sourceSites, table, Func.sourceSites] at member
+    rcases member with rfl
+    exact hpath.symm
+  exact ⟨rfl, rfl, by simpa [pathEq] using accepted⟩
+
+private theorem concrete_raw_attribution_controls :
+    (∃ w : EntryOogFixture,
+      w.root.exactInvocation sourceProgram
+        sourceSevm.currentTarget sourceAddress ∧
+      Exec.rawFrameRoots w.run = [w.root] ∧
+      ¬ ∃ target : Exec.Deriv,
+        Exec.Deriv.ParentPrefix w.root target ∧ target.pc = 1) ∧
+    (∃ w : TerminalSourceFixture,
+      w.root.exactInvocation sourceProgram
+        sourceSevm.currentTarget sourceAddress ∧
+      w.occurrence.stepResult = .error w.err ∧
+      w.occurrence.node.pc = 1 ∧
+      sourceProgram.acceptsSstoreSite ⟨0, []⟩
+        w.occurrence.node.pc = true) := by
+  rcases entryOogFixture_nonempty with ⟨entry⟩
+  rcases terminalSourceFixture_nonempty with ⟨terminal⟩
+  exact ⟨⟨entry, entry.exact, entry.boundary.1, entry.boundary.2.2⟩,
+    ⟨terminal, terminal.exact, terminal.exactAttribution⟩⟩
+
+/-- Named evaluator bundled without changing the gate-owned legacy vector. -/
+private def rawAttributionAvailable : Bool :=
+  entryOogAvailable && terminalSourceAvailable && exactSourceSite
+
+private theorem rawAttributionAvailable_eq_true :
+    rawAttributionAvailable = true := by
+  native_decide
+
 /-! Exact invocation identity controls. -/
 
 private theorem exactInvocation_rejects_identity_drift
@@ -634,6 +864,14 @@ private theorem CallFixture.raw_order (w : CallFixture) :
     Exec.rawNodes w.run =
       w.root :: (Exec.rawNodes w.child ++ Exec.rawNodes w.next) := by
   simp [CallFixture.run, CallFixture.root, Exec.rawNodes]
+
+/-- The actually entered child root and all of its descendants precede every
+frame entered after the parent resumes. -/
+private theorem CallFixture.rawFrameRoot_order (w : CallFixture) :
+    Exec.rawFrameRoots w.run =
+      w.root ::
+        (Exec.rawFrameRoots w.child ++ Exec.rawFrameDescendants w.next) := by
+  simp [CallFixture.run, CallFixture.root]
 
 private theorem CallFixture.retained_order_of_settles
     (w : CallFixture)
@@ -801,6 +1039,25 @@ private theorem concreteCall_orders :
   rcases caughtCallFixture_nonempty with ⟨caught⟩
   exact ⟨⟨committed, committedCall_order committed⟩,
     ⟨caught, caughtCall_raw_but_pruned caught⟩⟩
+
+/-- Both the settlement-retained child and the caught failed child appear in
+the same all-outcome frame-root order.  Settlement affects only the retained
+chronology, not this traversal. -/
+private theorem concreteRawFrameRoot_orders :
+    (∃ w : CommittedCallFixture,
+      Exec.rawFrameRoots w.call.run =
+        w.call.root ::
+          (Exec.rawFrameRoots w.call.child ++
+            Exec.rawFrameDescendants w.call.next)) ∧
+    (∃ w : CaughtCallFixture,
+      Exec.rawFrameRoots w.call.run =
+        w.call.root ::
+          (Exec.rawFrameRoots w.call.child ++
+            Exec.rawFrameDescendants w.call.next)) := by
+  rcases committedCallFixture_nonempty with ⟨committed⟩
+  rcases caughtCallFixture_nonempty with ⟨caught⟩
+  exact ⟨⟨committed, committed.call.rawFrameRoot_order⟩,
+    ⟨caught, caught.call.rawFrameRoot_order⟩⟩
 
 -- The gate requires this exact evaluator vector.
 #eval! [
