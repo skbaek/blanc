@@ -165,11 +165,22 @@ def donor_aliases_or_exports(path: Path, donors: set[str]) -> list[tuple[str, in
         namespace = [part for kind, parts in scopes if kind == "namespace" for part in parts]
         if match := EXPORT_RE.match(line):
             exported_namespace, exported_items = match.groups()
-            owner = qualify(namespace, exported_namespace).split(".")
+            if exported_namespace.startswith("Blanc.") or exported_namespace == "Blanc":
+                owners = [exported_namespace.split(".")]
+            else:
+                # Lean resolves a relative namespace first locally and then
+                # through every lexical namespace ancestor. Audit every such
+                # owner so `namespace Blanc.Weth10; export ProcessMessage ...`
+                # cannot hide a re-export of `Blanc.ProcessMessage`.
+                owners = [
+                    [*namespace[:depth], *exported_namespace.split(".")]
+                    for depth in range(len(namespace), -1, -1)
+                ]
             for item in re.findall(IDENT, exported_items):
-                fqn = qualify(owner, item)
-                if fqn in donors:
-                    hits.append((fqn, number, "export"))
+                for owner in owners:
+                    fqn = qualify(owner, item)
+                    if fqn in donors:
+                        hits.append((fqn, number, "export"))
         if match := ALIAS_RE.match(line):
             # Lean's alias forms name the newly introduced declaration after
             # either `=>` or `↔`; check every such target on this line.
