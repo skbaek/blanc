@@ -1943,7 +1943,7 @@ theorem Exec.Deriv.ParentNonSstorePrefix.lt_of_step
 
 /-- Cross an actually executed compiler PUSH only when the nominated SSTORE
 target lies later in the same-frame prefix. -/
-theorem Exec.Deriv.ParentPrefix.advance_pushToward
+private theorem Exec.Deriv.ParentPrefix.advance_pushToward
     {start target : Exec.Deriv} {xs : Bytes}
     (reached : Exec.Deriv.ParentPrefix start target)
     (pushAt : PushAt start.sevm.code start.pc xs)
@@ -1990,7 +1990,7 @@ theorem Exec.Deriv.ParentPrefix.advance_pushToward
 
 /-- Cross an actually executed compiler jump only when the nominated SSTORE
 target lies later in the same-frame prefix. -/
-theorem Exec.Deriv.ParentPrefix.advance_jumpToward
+private theorem Exec.Deriv.ParentPrefix.advance_jumpToward
     {start target : Exec.Deriv} {instruction : Jinst}
     (reached : Exec.Deriv.ParentPrefix start target)
     (jumpAt : Jinst.At start.sevm.code start.pc instruction)
