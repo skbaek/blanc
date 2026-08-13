@@ -18,7 +18,7 @@ MOVE_MANIFEST = ROOT / "scripts" / "execution-occurrence-lift-manifest.json"
 RAW_ATTRIBUTION_OWNERSHIP = (
     ROOT / "scripts" / "check-execution-raw-attribution-ownership.py"
 )
-EXPECTED = "[true, true, true, true, true, true, true, true, true, true, true, true, true]"
+EXPECTED = "[true, true, true, true, true, true, true, true, true, true, true, true, true, true]"
 
 MUTANTS = {
     "-- TERMINAL-ERROR-MUTANT-CONTROL": r"""
@@ -100,6 +100,11 @@ private theorem commitRequiredAttributionMutant (w : TerminalSourceFixture) :
       Execution.commits (.error w.err) = true := by
   exact ⟨w.exactAttribution.2.2, rfl⟩
 """,
+    "-- RUNERR-CHILD-PRUNING-MUTANT-CONTROL": r"""
+private theorem runErrChildPruningMutant (w : RunErrFixture) :
+    Exec.rawFrameRoots w.run = [w.root] := by
+  rfl
+""",
 }
 
 
@@ -174,6 +179,8 @@ def main() -> int:
                     ("Tactic `rfl` failed",),
                 "-- COMMIT-REQUIRED-ATTRIBUTION-MUTANT-CONTROL":
                     ("Application type mismatch",),
+                "-- RUNERR-CHILD-PRUNING-MUTANT-CONTROL":
+                    ("Tactic `rfl` failed",),
             }[marker]
             if not any(expected in evidence for expected in expected_failures):
                 return fail(f"mutant `{marker}` failed unexpectedly", mutant)
@@ -426,7 +433,7 @@ def main() -> int:
         return fail("CREATE settlement control verdict drifted", settlement)
 
     print(
-        "OK — execution occurrence: 13 concrete controls; 12 Lean mutants; "
+        "OK — execution occurrence: 14 concrete controls; 13 Lean mutants; "
         "WETH bridge-removal mutant; 9 moved-owner + 9 ownership-parser controls; "
         "24 raw-attribution owners + exact signature + 4 controls; "
         "CREATE raw-commit mutant"

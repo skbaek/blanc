@@ -1372,6 +1372,109 @@ private theorem concreteRawFrameRoot_orders :
   exact ⟨⟨committed, committed.call.rawFrameRoot_order⟩,
     ⟨caught, caught.call.rawFrameRoot_order⟩⟩
 
+/-! A fatal nested precompile makes the outer CALL an actual `Exec.runErr`.
+The custom rule table deliberately routes address `0x12` into the precompile
+dispatcher, whose absent implementation produces the required internal error. -/
+
+private def runErrChildTarget : Adr := 0x100
+private def runErrOuterCode : ByteArray := ByteArray.mk #[0xf1, 0x00]
+private def runErrChildCode : ByteArray := ByteArray.mk #[
+  0x5f, 0x5f, 0x5f, 0x5f, 0x5f, 0x60, 0x12,
+  0x61, 0x27, 0x10, 0xf1, 0x00]
+private def runErrRules : ForkRules :=
+  { pragueRules with precompiles := [0x12] }
+private def runErrSevm : Sevm :=
+  { (default : Sevm) with
+    code := runErrOuterCode
+    benvStat := { (default : BenvStat) with rules := runErrRules } }
+private def runErrPre : Devm :=
+  let pre := ((default : Devm).withGasLeft 200000).withStack
+    [100000, runErrChildTarget.toB256, 0, 0, 0, 0, 0]
+  pre.withState (pre.state.setCode runErrChildTarget runErrChildCode)
+
+private structure RunErrFixture where
+  frame : Jaune.Frame
+  resume : Resume
+  nextPc : Nat
+  childEvm : Evm
+  raw : Execution
+  error : EvmError × Devm
+  hstep : Evm.step ⟨0, runErrSevm, runErrPre⟩ =
+    .spawn frame resume nextPc
+  henter : frame.enter = .run childEvm
+  child : Exec childEvm.pc childEvm.sta childEvm.dyna raw
+  hresume : resume.run (frame.settle raw) = .error error
+
+private def RunErrFixture.run (w : RunErrFixture) :
+    Exec 0 runErrSevm runErrPre (.error w.error) :=
+  .runErr w.hstep w.henter w.child w.hresume
+
+private def RunErrFixture.root (w : RunErrFixture) : Exec.Deriv :=
+  ⟨0, runErrSevm, runErrPre, .error w.error, w.run⟩
+
+private def RunErrFixture.childRoot (w : RunErrFixture) : Exec.Deriv :=
+  ⟨w.childEvm.pc, w.childEvm.sta, w.childEvm.dyna, w.raw, w.child⟩
+
+private def runErrFixture? : Option RunErrFixture :=
+  match hstep : Evm.step ⟨0, runErrSevm, runErrPre⟩ with
+  | .spawn frame resume nextPc =>
+      match henter : frame.enter with
+      | .run childEvm =>
+          let raw := exec childEvm
+          match hresume : resume.run (frame.settle raw) with
+          | .error error =>
+              let child := Classical.choice
+                ((exec_iff_exec_eq _ _ _ _).2 rfl)
+              some {
+                frame := frame
+                resume := resume
+                nextPc := nextPc
+                childEvm := childEvm
+                raw := raw
+                error := error
+                hstep := hstep
+                henter := henter
+                child := child
+                hresume := hresume }
+          | .ok _ => none
+      | .done _ => none
+  | _ => none
+
+private def runErrAvailable : Bool :=
+  match Evm.step ⟨0, runErrSevm, runErrPre⟩ with
+  | .spawn frame resume _ =>
+      match frame.enter with
+      | .run childEvm =>
+          match resume.run (frame.settle (exec childEvm)) with
+          | .error _ => true
+          | .ok _ => false
+      | .done _ => false
+  | _ => false
+
+private theorem runErrFixture_nonempty : Nonempty RunErrFixture := by
+  have available : runErrAvailable = true := by native_decide
+  have hsome : runErrFixture?.isSome = true := by
+    unfold runErrFixture? runErrAvailable at *
+    repeat' split
+    all_goals grind
+  cases fixture : runErrFixture? with
+  | none => simp [fixture] at hsome
+  | some witness => exact ⟨witness⟩
+
+/-- The errored outer root retains the entered child root and every nested
+child root.  There is no resumed-parent derivation in a `runErr` constructor. -/
+private theorem RunErrFixture.rawFrameRoots_exact (w : RunErrFixture) :
+    Exec.rawFrameRoots w.run =
+      w.root :: Exec.rawFrameRoots w.child := by
+  simp [RunErrFixture.run, RunErrFixture.root]
+
+private theorem concreteRunErr_rawFrameRoots :
+    ∃ w : RunErrFixture,
+      Exec.rawFrameRoots w.run =
+        w.root :: Exec.rawFrameRoots w.child := by
+  rcases runErrFixture_nonempty with ⟨w⟩
+  exact ⟨w, w.rawFrameRoots_exact⟩
+
 -- The gate requires this exact evaluator vector.
 #eval! [
   terminalFixture?.isSome,
@@ -1386,7 +1489,8 @@ private theorem concreteRawFrameRoot_orders :
   !payloadHasSourceSstore,
   historyAvailable,
   sourceFixtureAvailable,
-  exactSourceSite]
+  exactSourceSite,
+  runErrAvailable]
 
 -- TERMINAL-ERROR-MUTANT-CONTROL
 -- RAW-ERROR-PRUNE-MUTANT-CONTROL
@@ -1400,6 +1504,7 @@ private theorem concreteRawFrameRoot_orders :
 -- DUPLICATE-CHILD-ROOT-MUTANT-CONTROL
 -- CONTINUATION-AS-FRAME-MUTANT-CONTROL
 -- COMMIT-REQUIRED-ATTRIBUTION-MUTANT-CONTROL
+-- RUNERR-CHILD-PRUNING-MUTANT-CONTROL
 -- WETH-BRIDGE-MUTANT-CONTROL
 
 end
