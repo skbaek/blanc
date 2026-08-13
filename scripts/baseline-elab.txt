@@ -709,3 +709,12 @@ OK	1.350	Blanc/Weth10AnyOrder.lean
 # row is admitted. Every pre-existing reference time above remains byte-for-byte
 # unchanged, and `--rebase` and `--force` were not used.
 OK	6.587	Blanc/ExecutionOccurrence.lean
+
+# 2026-08-14. The cycle-safe SSTORE-freedom foundation added exactly one
+# module, Blanc/CycleWriteFree.lean. Its 1.296 s row is the median of three
+# separate sequential `scripts/check-elab.sh --list --no-build` runs over all
+# 95 files: 1.275 s / 466.8 s total, 1.296 s / 438.3 s total, and 1.400 s /
+# 524.3 s total. The exact tree was built before measurement; `--rebase` and
+# `--force` were not used. Only this new row is admitted, and every
+# pre-existing reference row above remains byte-for-byte unchanged.
+OK	1.296	Blanc/CycleWriteFree.lean

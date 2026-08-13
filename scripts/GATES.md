@@ -26,6 +26,7 @@ Choose the gate by what you changed, cheapest falsifier first:
 | imported source or an import | `scripts/check-trust-surface.sh` | `lake build && scripts/check.sh --no-build` |
 | the execution-settlement substrate, its consumers, or lift manifest | `scripts/check-extraction-ownership.sh` + `scripts/check-execution-settlement.sh` | the **full set**, in the order below |
 | the execution-occurrence substrate, source map, retained replay, WETH bridge, or fixtures | `scripts/check-execution-occurrence.sh` + `scripts/check-extraction-ownership.sh` | the **full set**, in the order below |
+| the cycle-safe write-free certificate, execution theorem, owner manifest, or fixtures | `scripts/check-cycle-write-free.sh` | the **full set**, in the order below |
 | WETH10 deployed-reference inputs, lock, or checker | `scripts/check-weth10-reference.sh` | the **full set**, in the order below |
 | WETH10 runtime, concrete parameters, differential scenarios, or endpoint manifest | `lake build` then `scripts/check-weth10-differential.sh` | the **full set**, in the order below |
 | WETH10 redemption transaction fixtures, generator, or manifest | `scripts/check-weth10-redemption.sh --no-build` | the **full set**, in the order below |
@@ -55,6 +56,7 @@ scripts/check-weth10-reference.sh
 lake build
 scripts/check-execution-settlement.sh
 scripts/check-execution-occurrence.sh
+scripts/check-cycle-write-free.sh
 scripts/check-weth10-differential.sh
 scripts/check-weth10-redemption.sh --no-build
 scripts/check-weth10-deployment.sh
@@ -92,6 +94,7 @@ against the gate.
 | `scripts/check-trust-surface.sh` | exact transitive local import closure of `Blanc.lean` contains no new or stale source occurrence of `sorry`, bespoke `axiom`, `opaque`, `@[extern]`, `implemented_by`, `native_decide`, object-level `partial def`, or `dbg_trace`; exact reviewed comment/TacticM/MetaM rows are fail-closed allowlisted; unimported helpers are outside scope until imported | 94 closure modules; 21 exact allowlisted occurrences | sub-second |
 | `scripts/check-execution-settlement.sh` | compiles the concrete execution-level CREATE code-deposit rollback fixture, requires its constructor SSTORE and branch conditions to evaluate exactly true, pins the required proof declarations with a live deletion control, proves canonical `rawFrameRoots` retains the entered child while settlement traversal prunes it, and requires both the legacy raw-commit and settlement-filtered raw-root mutants to fail for pinned reasons | 1 concrete `Exec.runOk` fixture; 3 required positive proofs + 1 deletion control; 2 raw-traversal mutants | ~8 s |
 | `scripts/check-execution-occurrence.sh` | compiles proof-indexed all-outcome, explicit child-order, compiler-source, exact-identity and PC-14 last-writer controls; requires terminal-error result evidence, no-op/reverted/later-OOG writes, committed/caught child raw/retained equations, exact-compiled caught-child and later-outer-rollback attribution, an actual fatal-resume `runErr` retaining its entered child roots with no continuation, exact compiled SSTORE path, PUSH-payload rejection, inhabited owner/code-address filtering, child/parent identity separation and final no-op maximality; pins every required positive proof declaration with a live deletion control, parses both occurrence ownership manifests fail-closed, rejects contract-basename shadows, exactly pins the selected-root/`ParentPrefix` source-attribution signature, reruns CREATE rollback after a child SSTORE, and requires success-only, raw-pruning, raw-byte, first-writer, storage/code-identity, child-as-parent identity, missing-prefix, commitment-filtered child, unconditional-main-cursor, child/continuation reversal, duplicate-child, continuation-as-frame, commit-required attribution, `runErr` child-pruning, WETH-bridge and CREATE mutants to fail for pinned reasons | 16 concrete evaluator controls; 15 Lean mutants; 17 required positive proofs + 1 deletion control; 1 bridge mutant; 9 moved-owner rows + 9 parser controls; 24 raw-attribution owners + 1 exact signature + 4 controls; 2 CREATE mutants | ~60 s |
+| `scripts/check-cycle-write-free.sh` | independently compiles the finite local/component/entry certificate controls, exact self-loop and two-node cyclic executions and source cursors, cycle-spanning same-frame prefixes, arbitrary-outcome no-SSTORE specializations, no-op/reverted/terminal-error SSTORE occurrences, an external child-frame boundary, and a committing same-storage-owner CALLCODE child whose endpoint storage changes; rejects semantic mutants for entry linkage, lookup/index/body/component closure, pre/post-cycle and branch writers, bounded recursive substitution, byte scanning, source mismatch, arbitrary-outcome pruning, child-frame overreach, and endpoint equality; exactly pins the public theorem signatures and sole common owner/import surface, rejects contract shadows/aliases/exports, and preserves the one exact WETH fuel-bounded legacy exemption | 23 evaluator controls; 19 Lean mutants; 22 positive proofs + 22 deletions; 18 owners; 7 signatures; 22 parser controls; 1 exemption | ~34 s |
 | `scripts/check-weth10-reference.sh` | exact-schema validation and offline reconstruction of the deployed WETH10 lock: independently pinned deployment/compiler/source/RPC identities, installed runtime hex/codehash, exact template and immutable spans/values, full canonical 27-function + two-event + receive ABI, separate constructor boundary, source-derived branch-context guard/callback/event/storage inventories, exact drift evidence, deletion/mutation, wrong-type, coherent, deployment-derivation, and coordinated-input falsifiers, plus exact generated endpoint-key synchronization for the compatibility contract | schema v2; 27 selectors + receive; 9,975 runtime bytes; 23 falsifier families; 28 compatibility endpoint keys + 12 cross-cutting keys + deployment | ~25 s |
 | `scripts/check-weth10-differential.sh` | executes the locked installed oracle and the exact compiled Blanc mainnet/synthetic parameter instances in a clean pinned EELS Prague interpreter; checks generated 27-selector/receive endpoint equality, success/revert and exact returndata, logical projected state, ETH, ordered outer/child logs, callback-visible calldata, live CALL/STATICCALL traces even across outer rollback, caught nested-call failure with a committing parent and no child flow, a committed ordinary transfer inside successful flash settlement, zero redemption through both selectors, the distinct nonstable CALL sender-balance short circuit, invalid-input BLAKE2F-recipient rollback, Solidity-0.7 Boolean truthiness including noncanonical word `2` and max-word normalization, hostile state-mutating reentrancy, flash settlement, independent permit signatures/ecrecover/domain forks, static-context guard precedence, nonpayability, unknown dispatch, and bounded channel falsifiers | 147 declared rows; 27 selectors + receive; 2 identity worlds; 7 state-mutating reentrancy rows; 26 static-context rows; 69 traced oracle calls; 8 channel falsifiers | ~3 s |
 | `scripts/check-weth10-redemption.sh --no-build` | reruns the pinned EELS generator's 33 semantic assertions without writing; byte-compares the regenerated two-fixture set and exact transaction/receipt/authorization/holder-flow manifest; checks both embedded runtimes against `weth10MainnetCode`; and replays the committed Prague blocks through Jaune's full transaction/receipt path | 2 fixtures; 33 semantic assertions; exact booked-balance and six-field holder-flow totals; type-2 receipts 2 success + 1 failed; 1 successful type-4 authorization changing recipient code+nonce | ~2 s |
@@ -109,14 +112,14 @@ against the gate.
 
 | gate | proves | scale | time |
 |---|---|---|---|
-| `scripts/check-elab.sh` | per-module elaboration time vs the committed `scripts/baseline-elab.txt` | 94 files; 441.4 s baseline total | ~7.5 min |
+| `scripts/check-elab.sh` | per-module elaboration time vs the committed `scripts/baseline-elab.txt` | 95 files; 442.7 s baseline total | ~7.5 min |
 
 No Blanc gate approaches the 1,000-second rule. The sequential elaboration
 gate is the longest at roughly eight minutes; every gate still runs inline.
 
 ### The Python behind the shell
 
-Twenty-two helpers do the actual work and are not gates in their own right — they are
+Twenty-three helpers do the actual work and are not gates in their own right — they are
 invoked by the scripts above and should not be run directly in a report:
 
 | helper | used by | what it does |
@@ -125,6 +128,7 @@ invoked by the scripts above and should not be run directly in a report:
 | `scripts/check-extraction-ownership.py` | `check-extraction-ownership.sh` | strictly parses the sole lift manifest, declaration/import ownership, and three temp-tree negative controls |
 | `scripts/check-execution-settlement.py` | `check-execution-settlement.sh` | compiles the concrete CREATE rollback-after-SSTORE fixture, pins its three required positive proofs and evaluator verdict, runs a live deletion control, and requires both raw-retention mutants to fail for the child-frame reason |
 | `scripts/check-execution-occurrence.py` | `check-execution-occurrence.sh` | compiles 16 concrete occurrence controls, including exact-compiled caught-child and later-outer-rollback attribution, parser-pins 17 positive proofs with a live deletion control, runs 15 diagnostic-pinned Lean mutants spanning all-outcome traversal including fatal-resume `runErr`, frame ownership/order, cursor reachability, child/parent identity, attribution without commitment and exact identity, checks exact WETH projection removal, rejects every alias/export keyword token outside comments in WETH donors fail-closed, compile-checks wrapped/absolute/ancestor-relative/root alias and export controls (including attributed public and multiline forms), checks missing owner and wrong kind, composes the raw-attribution ownership/signature audit, then composes the two CREATE raw-retention falsifiers |
+| `scripts/check-cycle-write-free.py` | `check-cycle-write-free.sh` | validates the exact owner/signature/exemption manifest and its in-memory falsifiers, compiles the concrete cycle/arbitrary-outcome/frame-boundary fixture to an exact evaluator vector, rejects every diagnostic-pinned semantic mutant, and live-deletes each required positive proof independently |
 | `scripts/check-execution-raw-attribution-ownership.py` | `check-execution-occurrence.py` | strictly parses the 24-row common raw-attribution owner manifest, rejects forbidden contract-basename shadows across WETH10 and Lido modules, exactly pins the selected-root/`ParentPrefix` theorem signature, and runs four common-owner, shadow, and signature falsifiers |
 | `scripts/check-trust-surface.py` | `check-trust-surface.sh` | traverses `Blanc.lean`'s transitive local import closure and compares every normalized forbidden-token occurrence against the exact fail-closed allowlist |
 | `scripts/weth10-reference.py` | `check-weth10-reference.sh` | derives the schema-v2 target from vendored inputs, checks independent identity pins, and provides the explicit networked refresh |
@@ -243,9 +247,10 @@ worker that has been opening files. A `--force` run may not be rebased.
    WETH10 redemption fixtures and their manifest come only from
    `scripts/gen-weth10-redemption-fixtures.py`.
 6. **CI runs a subset of this file**, not a different thing:
-   `.github/workflows/ci.yml` invokes `check-layering.sh`,
+   `.github/workflows/ci.yml` invokes `check-doc-counts.sh`, `check-layering.sh`,
    `check-extraction-ownership.sh`, `check-execution-settlement.sh`,
    `check-execution-occurrence.sh`,
+   `check-cycle-write-free.sh`,
    `check-trust-surface.sh`, `check-weth10-reference.sh`, `check-error-data.sh`,
    `check.sh --no-build`, `check-claims.sh`, both suites `--no-build`, and both
    coverage gates. Extending one of those scripts extends CI directly.

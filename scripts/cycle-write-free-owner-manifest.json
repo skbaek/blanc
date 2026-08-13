@@ -1,0 +1,72 @@
+{
+  "schema": 1,
+  "commonModule": "Blanc/CycleWriteFree.lean",
+  "rootModule": "Blanc.lean",
+  "requiredRootImport": "Blanc.CycleWriteFree",
+  "exactCommonImports": [
+    "Blanc.ExecutionOccurrence"
+  ],
+  "contractModuleGlobs": [
+    "Blanc/Weth*.lean",
+    "Blanc/Fmint*.lean",
+    "Blanc/Lido*.lean"
+  ],
+  "owners": [
+    {"declaration": "Blanc.Func.LocalSstoreFree", "kind": "def"},
+    {"declaration": "Blanc.Func.localSstoreFree", "kind": "def"},
+    {"declaration": "Blanc.Func.localSstoreFree_iff", "kind": "theorem"},
+    {"declaration": "Blanc.Prog.function?", "kind": "def"},
+    {"declaration": "Blanc.Prog.ClosedSstoreFree", "kind": "def"},
+    {"declaration": "Blanc.Prog.componentSstoreFree", "kind": "def"},
+    {"declaration": "Blanc.Prog.componentSstoreFree_iff", "kind": "theorem"},
+    {"declaration": "Blanc.Prog.EntrySstoreFree", "kind": "def"},
+    {"declaration": "Blanc.Prog.entrySstoreFree", "kind": "def"},
+    {"declaration": "Blanc.Prog.entrySstoreFree_iff", "kind": "theorem"},
+    {"declaration": "Blanc.Prog.entrySstoreFree_sound", "kind": "theorem"},
+    {"declaration": "Blanc.Prog.componentSstoreFree_nil", "kind": "theorem"},
+    {"declaration": "Blanc.Prog.entrySstoreFree_nil_iff", "kind": "theorem"},
+    {"declaration": "Blanc.Prog.entrySstoreFree_duplicate_iff", "kind": "theorem"},
+    {"declaration": "Blanc.Prog.entrySstoreFree_eraseDups_iff", "kind": "theorem"},
+    {"declaration": "Blanc.Exec.Deriv.SourceCursor.noSstore_of_entrySstoreFree", "kind": "theorem"},
+    {"declaration": "Blanc.Exec.NinstOccurrence.instruction_ne_sstore_of_entrySstoreFree", "kind": "theorem"},
+    {"declaration": "Blanc.Exec.Deriv.noSstore_of_exactMain_entrySstoreFree", "kind": "theorem"}
+  ],
+  "signaturePins": [
+    {
+      "declaration": "Blanc.Func.localSstoreFree_iff",
+      "header": "theorem Func.localSstoreFree_iff {body : Func} : body.localSstoreFree = true ↔ body.LocalSstoreFree :="
+    },
+    {
+      "declaration": "Blanc.Prog.componentSstoreFree_iff",
+      "header": "theorem Prog.componentSstoreFree_iff {program : Prog} {members : List Nat} : program.componentSstoreFree members = true ↔ program.ClosedSstoreFree members :="
+    },
+    {
+      "declaration": "Blanc.Prog.entrySstoreFree_iff",
+      "header": "theorem Prog.entrySstoreFree_iff {program : Prog} {entry : Func} {members : List Nat} : program.entrySstoreFree entry members = true ↔ program.EntrySstoreFree entry members :="
+    },
+    {
+      "declaration": "Blanc.Prog.entrySstoreFree_sound",
+      "header": "theorem Prog.entrySstoreFree_sound {program : Prog} {entry : Func} {members : List Nat} (accepted : program.entrySstoreFree entry members = true) : program.EntrySstoreFree entry members :="
+    },
+    {
+      "declaration": "Blanc.Exec.Deriv.SourceCursor.noSstore_of_entrySstoreFree",
+      "header": "theorem Exec.Deriv.SourceCursor.noSstore_of_entrySstoreFree {root target : Exec.Deriv} {program : Prog} {path : Prog.SourcePath} {source : Func} (cursor : Exec.Deriv.SourceCursor root program path source) (compiled : some root.sevm.code.toList = program.compile) (members : List Nat) (accepted : program.entrySstoreFree source members = true) (reached : Exec.Deriv.ParentPrefix cursor.node target) (storeAt : Ninst.At target.sevm.code target.pc (.reg .sstore)) : False :="
+    },
+    {
+      "declaration": "Blanc.Exec.NinstOccurrence.instruction_ne_sstore_of_entrySstoreFree",
+      "header": "theorem Exec.NinstOccurrence.instruction_ne_sstore_of_entrySstoreFree {root : Exec.Deriv} {program : Prog} {path : Prog.SourcePath} {source : Func} (cursor : Exec.Deriv.SourceCursor root program path source) (compiled : some root.sevm.code.toList = program.compile) (members : List Nat) (accepted : program.entrySstoreFree source members = true) (occurrence : Exec.NinstOccurrence root) (owned : Exec.Deriv.ParentPrefix cursor.node occurrence.node) : occurrence.instruction ≠ .reg .sstore :="
+    },
+    {
+      "declaration": "Blanc.Exec.Deriv.noSstore_of_exactMain_entrySstoreFree",
+      "header": "theorem Exec.Deriv.noSstore_of_exactMain_entrySstoreFree {root target : Exec.Deriv} {program : Prog} {storageTarget codeAddress : Adr} (invocation : root.exactInvocation program storageTarget codeAddress) (members : List Nat) (accepted : program.entrySstoreFree program.main members = true) (sameFrame : Exec.Deriv.ParentPrefix root target) (storeAt : Ninst.At target.sevm.code target.pc (.reg .sstore)) : False :="
+    }
+  ],
+  "legacyExemptions": [
+    {
+      "declaration": "Blanc.Weth10.Func.sstoreFreeWithin",
+      "kind": "def",
+      "module": "Blanc/Weth10HolderFlowWriteCompleteness.lean",
+      "reason": "fuel-bounded contract refinement; intentionally rejects cycles"
+    }
+  ]
+}

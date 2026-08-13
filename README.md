@@ -84,6 +84,22 @@ This repo contains the following files:
   lets the settlement family below quantify over arbitrary borrower bytecode.
   The module also carries the EIP-150 retained-gas lower bound and the
   fatal/failed/successful split of child resumption.
+- [ExecutionSettlement.lean](Blanc/ExecutionSettlement.lean) and
+  [ExecutionOccurrence.lean](Blanc/ExecutionOccurrence.lean): common
+  proof-indexed execution evidence. The first owns settlement-aware retained
+  frame traversal; the second owns all-outcome instruction occurrences,
+  same-frame `ParentPrefix`, exact invocation identity, and compiler-structural
+  source cursors. Raw occurrences include terminal errors and work later
+  reverted; settlement survival is a separate refinement.
+- [CycleWriteFree.lean](Blanc/CycleWriteFree.lean): a total finite-component
+  certificate and arbitrary-outcome theorem for **same-frame source-level
+  SSTORE-occurrence freedom**. It scans selected bodies structurally, treats
+  internal `Func.call` as a finite-component edge, and accepts SSTORE-free
+  source cycles without fuel or a termination premise. The theorem follows an
+  actual finite source cursor and says nothing about endpoint storage equality,
+  TSTORE, logs, balances, memory/code effects, EVM CALL-family or CREATE child
+  frames, settlement, gas sufficiency, termination, or any particular
+  contract until that contract supplies the exact cursor and certificate.
 - [FmintLive.lean](Blanc/FmintLive.lean): fmint's demonstration of that layer,
   and the first place in this repository where a contract call is proved to
   **succeed**. `fmint_totalSupply_succeeds` drives `func_run` over `fmint`'s

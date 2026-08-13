@@ -197,6 +197,15 @@ theorem Prog.entrySstoreFree_duplicate_iff
   simp only [Prog.entrySstoreFree_iff]
   simp [Prog.EntrySstoreFree, Prog.ClosedSstoreFree]
 
+/-- Removing every duplicate from the finite member list preserves exactly the
+same entry-and-component authority. -/
+theorem Prog.entrySstoreFree_eraseDups_iff
+    {program : Prog} {entry : Func} {members : List Nat} :
+    program.entrySstoreFree entry members.eraseDups = true ↔
+      program.entrySstoreFree entry members = true := by
+  simp only [Prog.entrySstoreFree_iff]
+  simp [Prog.EntrySstoreFree, Prog.ClosedSstoreFree]
+
 /-! ## Arbitrary-outcome same-frame execution soundness -/
 
 private theorem Exec.Deriv.SourceCursor.noSstore_core :

@@ -42,6 +42,8 @@ jobs:
         run: scripts/check-execution-settlement.sh
       - name: Execution-occurrence semantic regression
         run: scripts/check-execution-occurrence.sh
+      - name: Cycle-safe same-frame SSTORE-occurrence regression
+        run: scripts/check-cycle-write-free.sh
       - name: Error(string) payload cross-derivation (offline)
         run: scripts/check-error-data.sh
       - name: Audit headline theorem axioms
