@@ -660,6 +660,7 @@ OK	2.445	Blanc/Weth10TemplateCode.lean
 # Only these new rows were appended. Every pre-existing reference time above
 # remains byte-for-byte unchanged; `--rebase` was not run.
 OK	2.184	Blanc/ExecDeterminism.lean
+OK	1.409	Blanc/ExecutionSettlement.lean
 OK	1.975	Blanc/Weth10HolderFlow.lean
 OK	1.173	Blanc/Weth10HolderFlowAlgebra.lean
 OK	1.187	Blanc/Weth10HolderFlowAuthenticity.lean
