@@ -112,7 +112,7 @@ against the gate.
 
 | gate | proves | scale | time |
 |---|---|---|---|
-| `scripts/check-elab.sh` | per-module elaboration time vs the committed `scripts/baseline-elab.txt` | 95 files; 442.7 s baseline total | ~7.5 min |
+| `scripts/check-elab.sh` | per-module elaboration time vs the committed `scripts/baseline-elab.txt` | 95 files; 442.8 s baseline total | ~7.5 min |
 
 No Blanc gate approaches the 1,000-second rule. The sequential elaboration
 gate is the longest at roughly eight minutes; every gate still runs inline.
