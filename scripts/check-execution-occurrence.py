@@ -18,7 +18,7 @@ MOVE_MANIFEST = ROOT / "scripts" / "execution-occurrence-lift-manifest.json"
 RAW_ATTRIBUTION_OWNERSHIP = (
     ROOT / "scripts" / "check-execution-raw-attribution-ownership.py"
 )
-EXPECTED = "[true, true, true, true, true, true, true, true, true, true, true, true, true, true]"
+EXPECTED = "[true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true]"
 
 MUTANTS = {
     "-- TERMINAL-ERROR-MUTANT-CONTROL": r"""
@@ -433,7 +433,7 @@ def main() -> int:
         return fail("CREATE settlement control verdict drifted", settlement)
 
     print(
-        "OK — execution occurrence: 14 concrete controls; 13 Lean mutants; "
+        "OK — execution occurrence: 16 concrete controls; 13 Lean mutants; "
         "WETH bridge-removal mutant; 9 moved-owner + 9 ownership-parser controls; "
         "24 raw-attribution owners + exact signature + 4 controls; "
         "CREATE raw-commit mutant"

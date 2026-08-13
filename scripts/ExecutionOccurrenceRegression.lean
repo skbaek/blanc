@@ -1475,6 +1475,426 @@ private theorem concreteRunErr_rawFrameRoots :
   rcases runErrFixture_nonempty with ⟨w⟩
   exact ⟨w, w.rawFrameRoots_exact⟩
 
+/-! Exact-compiled child attribution controls pin both a caught failed child and
+an attributed child write that is later rolled back by its outer root. -/
+
+namespace RawChildAttribution
+
+private def callTarget : Adr := 0x100
+private def caughtParentCode : ByteArray := ByteArray.mk #[0xf1, 0x00]
+private def rollbackParentCode : ByteArray :=
+  ByteArray.mk #[0xf1, 0x5f, 0x5f, 0xfd]
+
+private def caughtProgram : Prog :=
+  ⟨.next (.reg .sstore) (.last .stop), []⟩
+
+private def caughtCode : ByteArray := ByteArray.mk #[0x5b, 0x55, 0x00]
+
+private def rollbackProgram : Prog :=
+  ⟨Ninst.pushB256 1 ::: Ninst.pushB256 0 ::: Ninst.sstore ::: .last .stop,
+    []⟩
+
+private def rollbackCode : ByteArray :=
+  ByteArray.mk #[0x5b, 0x60, 0x01, 0x5f, 0x55, 0x00]
+
+private def parentSevm (code : ByteArray) : Sevm :=
+  { (default : Sevm) with code := code }
+
+private def parentPre (childCode : ByteArray) : Devm :=
+  let pre := ((default : Devm).withGasLeft 100000).withStack
+    [50000, callTarget.toB256, 0, 0, 0, 0, 0]
+  pre.withState (pre.state.setCode callTarget childCode)
+
+private def parentEvm (parentCode childCode : ByteArray) : Evm :=
+  ⟨0, parentSevm parentCode, parentPre childCode⟩
+
+private structure RawCallFixture (parentCode childCode : ByteArray) where
+  nextPc : Nat
+  resumed : Devm
+  frame : Jaune.Frame
+  resume : Resume
+  childEvm : Evm
+  raw : Execution
+  out : Execution
+  hstep : (parentEvm parentCode childCode).step = .spawn frame resume nextPc
+  henter : frame.enter = .run childEvm
+  child : Exec childEvm.pc childEvm.sta childEvm.dyna raw
+  hresume : resume.run (frame.settle raw) = .ok resumed
+  next : Exec nextPc (parentSevm parentCode) resumed out
+  childPc : childEvm.pc = 0
+  storageTarget : childEvm.sta.currentTarget = callTarget
+  codeAddress : childEvm.sta.codeAddress = some callTarget
+  codeEq : childEvm.sta.code = childCode
+
+private def RawCallFixture.run {parentCode childCode : ByteArray}
+    (w : RawCallFixture parentCode childCode) :
+    Exec 0 (parentSevm parentCode) (parentPre childCode) w.out :=
+  .runOk w.hstep w.henter w.child w.hresume w.next
+
+private def RawCallFixture.root {parentCode childCode : ByteArray}
+    (w : RawCallFixture parentCode childCode) : Exec.Deriv :=
+  ⟨0, parentSevm parentCode, parentPre childCode, w.out, w.run⟩
+
+private def RawCallFixture.childRoot {parentCode childCode : ByteArray}
+    (w : RawCallFixture parentCode childCode) : Exec.Deriv :=
+  ⟨w.childEvm.pc, w.childEvm.sta, w.childEvm.dyna, w.raw, w.child⟩
+
+private theorem RawCallFixture.childSelected {parentCode childCode : ByteArray}
+    (w : RawCallFixture parentCode childCode) :
+    w.childRoot ∈ Exec.rawFrameRoots w.run := by
+  simp [RawCallFixture.run, RawCallFixture.childRoot,
+    Exec.rawFrameRoots, Exec.rawFrameDescendants]
+
+private theorem RawCallFixture.childExact {parentCode childCode : ByteArray}
+    (w : RawCallFixture parentCode childCode) (program : Prog)
+  (compiled : some childCode.toList = program.compile) :
+    w.childRoot.exactInvocation program callTarget callTarget := by
+  exact ⟨w.childPc, w.storageTarget, w.codeAddress, by
+    change some w.childEvm.sta.code.toList = program.compile
+    rw [w.codeEq]
+    exact compiled⟩
+private structure CaughtFixture where
+  call : RawCallFixture caughtParentCode caughtCode
+  afterEntry : Devm
+  entryStep : Evm.step call.childEvm = .cont 1 afterEntry
+  rawFails : Execution.commits call.raw ≠ true
+  outerCommits : Execution.commits call.out = true
+  compiled : some caughtCode.toList = caughtProgram.compile
+private def caughtAttributionAvailable : Bool :=
+  match (parentEvm caughtParentCode caughtCode).step with
+  | .spawn frame resume nextPc =>
+      match frame.enter with
+      | .run childEvm =>
+          let raw := exec childEvm
+          childEvm.pc == 0 &&
+            childEvm.sta.currentTarget == callTarget &&
+            childEvm.sta.codeAddress == some callTarget &&
+            decide (childEvm.sta.code = caughtCode) &&
+            match Evm.step childEvm with
+            | .cont pc _ =>
+                pc == 1 && !Execution.commits raw &&
+                  match resume.run (frame.settle raw) with
+                  | .ok resumed =>
+                      Execution.commits
+                          (exec ⟨nextPc, parentSevm caughtParentCode, resumed⟩) &&
+                        decide (some caughtCode.toList = caughtProgram.compile)
+                  | .error _ => false
+            | _ => false
+      | .done _ => false
+  | _ => false
+
+private theorem caughtFixture_nonempty : Nonempty CaughtFixture := by
+  have available : caughtAttributionAvailable = true := by native_decide
+  unfold caughtAttributionAvailable at available
+  cases hstep : (parentEvm caughtParentCode caughtCode).step with
+  | spawn frame resume nextPc =>
+      cases henter : frame.enter with
+      | run childEvm =>
+          cases entryStep : Evm.step childEvm with
+          | cont pc afterEntry =>
+              cases hresume : resume.run (frame.settle (exec childEvm)) with
+              | ok resumed =>
+                  simp only [hstep, henter, entryStep, hresume,
+                    Bool.and_eq_true, beq_iff_eq,
+                    decide_eq_true_eq] at available
+                  rcases available with
+                    ⟨⟨⟨⟨childPc, storageTarget⟩, codeAddress⟩, codeEq⟩,
+                      ⟨⟨entryPc, rawFails⟩, outerCommits, compiled⟩⟩
+                  let raw := exec childEvm
+                  let out := exec ⟨nextPc,
+                    parentSevm caughtParentCode, resumed⟩
+                  let child := Classical.choice
+                    ((exec_iff_exec_eq _ _ _ _).2
+                      (show raw = exec childEvm by rfl))
+                  let next := Classical.choice
+                    ((exec_iff_exec_eq _ _ _ _).2
+                      (show out = exec ⟨nextPc,
+                        parentSevm caughtParentCode, resumed⟩ by rfl))
+                  let call : RawCallFixture caughtParentCode caughtCode := {
+                    nextPc := nextPc
+                    resumed := resumed
+                    frame := frame
+                    resume := resume
+                    childEvm := childEvm
+                    raw := raw
+                    out := out
+                    hstep := hstep
+                    henter := henter
+                    child := child
+                    hresume := by simpa [raw] using hresume
+                    next := next
+                    childPc := childPc
+                    storageTarget := storageTarget
+                    codeAddress := codeAddress
+                    codeEq := codeEq }
+                  exact ⟨{
+                    call := call
+                    afterEntry := afterEntry
+                    entryStep := by simpa [entryPc] using entryStep
+                    rawFails := by simpa [call, raw] using rawFails
+                    outerCommits := by simpa [call, out] using outerCommits
+                    compiled := compiled }⟩
+              | error error =>
+                  simp [hstep, henter, entryStep, hresume] at available
+          | halt result => simp [hstep, henter, entryStep] at available
+          | spawn childFrame childResume childNextPc =>
+              simp [hstep, henter, entryStep] at available
+      | done settled => simp [hstep, henter] at available
+  | halt result => simp [hstep] at available
+  | cont nextPc post => simp [hstep] at available
+
+private theorem CaughtFixture.control (w : CaughtFixture) :
+    w.call.childRoot ∈ Exec.rawFrameRoots w.call.run ∧
+    w.call.childRoot.exactInvocation caughtProgram callTarget callTarget ∧
+    ∃ occurrence : Exec.NinstOccurrence w.call.root,
+      occurrence.instruction = .reg .sstore ∧
+      Exec.Deriv.ParentPrefix w.call.childRoot occurrence.node ∧
+      occurrence.node.pc = 1 ∧
+      caughtProgram.acceptsSstoreSite ⟨0, []⟩ occurrence.node.pc = true := by
+  refine ⟨w.call.childSelected, w.call.childExact caughtProgram w.compiled, ?_⟩
+  rcases (Exec.Deriv.ParentPrefix.refl w.call.childRoot).advance_cont
+      w.call.child w.entryStep with ⟨next, edge, childPrefix⟩
+  let node : Exec.Deriv := ⟨1, w.call.childEvm.sta, w.afterEntry, w.call.raw, next⟩
+  have nodeEq : node = ⟨1, w.call.childEvm.sta, w.afterEntry,
+      w.call.raw, next⟩ := rfl
+  have decoded : Ninst.At node.sevm.code node.pc (.reg .sstore) := by
+    change Ninst.At w.call.childEvm.sta.code 1 (.reg .sstore)
+    rw [w.call.codeEq]
+    rfl
+  have reachedChild : Exec.Deriv.ParentPrefix w.call.childRoot node := by
+    simpa [node, RawCallFixture.childRoot] using childPrefix
+  have reachedGlobal : node ∈ Exec.rawNodes w.call.run :=
+    (Exec.mem_rawNodes_iff_rawFrameRoot_parentPrefix w.call.run node).mpr
+      ⟨w.call.childRoot, w.call.childSelected, reachedChild⟩
+  rcases Exec.exists_ninstOccurrence_of_mem_rawNodes
+      (root := w.call.root) reachedGlobal decoded with
+    ⟨occurrence, occurrenceNode, instructionEq⟩
+  have reachedOccurrence : Exec.Deriv.ParentPrefix w.call.childRoot
+      occurrence.node := by simpa [occurrenceNode] using reachedChild
+  rcases occurrence.acceptsSource_of_rawFrameRoot instructionEq
+      w.call.childSelected (w.call.childExact caughtProgram w.compiled)
+      reachedOccurrence with ⟨path, accepted⟩
+  have pathEq : path = (⟨0, []⟩ : Prog.SourcePath) := by
+    rcases Prog.acceptsSstoreSite_iff.mp accepted with
+      ⟨site, member, hpath, hpc, hinstruction⟩
+    simp [caughtProgram, Prog.sourceSites, table, Func.sourceSites] at member
+    rcases member with rfl
+    exact hpath.symm
+  refine ⟨occurrence, instructionEq, reachedOccurrence, ?_, ?_⟩
+  · simp [occurrenceNode, node]
+  · simpa [pathEq, occurrenceNode, node] using accepted
+
+private structure RollbackFixture where
+  call : RawCallFixture rollbackParentCode rollbackCode
+  afterEntry : Devm
+  afterValue : Devm
+  beforeStore : Devm
+  entryStep : Evm.step call.childEvm = .cont 1 afterEntry
+  valueStep : Evm.step ⟨1, call.childEvm.sta, afterEntry⟩ = .cont 3 afterValue
+  keyStep : Evm.step ⟨3, call.childEvm.sta, afterValue⟩ = .cont 4 beforeStore
+  childCommits : Execution.commits call.raw = true
+  outerFails : Execution.commits call.out ≠ true
+  compiled : some rollbackCode.toList = rollbackProgram.compile
+private def rollbackAttributionAvailable : Bool :=
+  match (parentEvm rollbackParentCode rollbackCode).step with
+  | .spawn frame resume nextPc =>
+      match frame.enter with
+      | .run childEvm =>
+          let raw := exec childEvm
+          childEvm.pc == 0 &&
+            childEvm.sta.currentTarget == callTarget &&
+            childEvm.sta.codeAddress == some callTarget &&
+            decide (childEvm.sta.code = rollbackCode) &&
+            match Evm.step childEvm with
+            | .cont pc1 afterEntry =>
+                pc1 == 1 &&
+                  match Evm.step ⟨1, childEvm.sta, afterEntry⟩ with
+                  | .cont pc3 afterValue =>
+                      pc3 == 3 &&
+                        match Evm.step ⟨3, childEvm.sta, afterValue⟩ with
+                        | .cont pc4 _ =>
+                            pc4 == 4 && Execution.commits raw &&
+                              match resume.run (frame.settle raw) with
+                              | .ok resumed =>
+                                  !Execution.commits (exec ⟨nextPc,
+                                    parentSevm rollbackParentCode, resumed⟩) &&
+                                  decide (some rollbackCode.toList =
+                                    rollbackProgram.compile)
+                              | .error _ => false
+                        | _ => false
+                  | _ => false
+            | _ => false
+      | .done _ => false
+  | _ => false
+
+private theorem rollbackFixture_nonempty : Nonempty RollbackFixture := by
+  have available : rollbackAttributionAvailable = true := by native_decide
+  unfold rollbackAttributionAvailable at available
+  cases hstep : (parentEvm rollbackParentCode rollbackCode).step with
+  | spawn frame resume nextPc =>
+      cases henter : frame.enter with
+      | run childEvm =>
+          cases entryStep : Evm.step childEvm with
+          | cont pc1 afterEntry =>
+              cases valueStep : Evm.step
+                  ⟨1, childEvm.sta, afterEntry⟩ with
+              | cont pc3 afterValue =>
+                  cases keyStep : Evm.step
+                      ⟨3, childEvm.sta, afterValue⟩ with
+                  | cont pc4 beforeStore =>
+                      cases hresume : resume.run
+                          (frame.settle (exec childEvm)) with
+                      | ok resumed =>
+                          simp only [hstep, henter, entryStep, valueStep,
+                            keyStep, hresume, Bool.and_eq_true, beq_iff_eq,
+                            decide_eq_true_eq] at available
+                          rcases available with
+                            ⟨⟨⟨⟨childPc, storageTarget⟩, codeAddress⟩,
+                                codeEq⟩,
+                              ⟨entryPc, valuePc, ⟨⟨keyPc, childCommits⟩,
+                                outerFails, compiled⟩⟩⟩
+                          let raw := exec childEvm
+                          let out := exec ⟨nextPc,
+                            parentSevm rollbackParentCode, resumed⟩
+                          let child := Classical.choice
+                            ((exec_iff_exec_eq _ _ _ _).2
+                              (show raw = exec childEvm by rfl))
+                          let next := Classical.choice
+                            ((exec_iff_exec_eq _ _ _ _).2
+                              (show out = exec ⟨nextPc,
+                                parentSevm rollbackParentCode, resumed⟩ by rfl))
+                          let call : RawCallFixture rollbackParentCode
+                              rollbackCode := {
+                            nextPc := nextPc
+                            resumed := resumed
+                            frame := frame
+                            resume := resume
+                            childEvm := childEvm
+                            raw := raw
+                            out := out
+                            hstep := hstep
+                            henter := henter
+                            child := child
+                            hresume := by simpa [raw] using hresume
+                            next := next
+                            childPc := childPc
+                            storageTarget := storageTarget
+                            codeAddress := codeAddress
+                            codeEq := codeEq }
+                          exact ⟨{
+                            call := call
+                            afterEntry := afterEntry
+                            afterValue := afterValue
+                            beforeStore := beforeStore
+                            entryStep := by simpa [entryPc] using entryStep
+                            valueStep := by simpa [valuePc] using valueStep
+                            keyStep := by simpa [keyPc] using keyStep
+                            childCommits := by
+                              simpa [call, raw] using childCommits
+                            outerFails := by
+                              simpa [call, out] using outerFails
+                            compiled := compiled }⟩
+                      | error error =>
+                          simp [hstep, henter, entryStep, valueStep,
+                            keyStep, hresume] at available
+                  | halt result =>
+                      simp [hstep, henter, entryStep, valueStep,
+                        keyStep] at available
+                  | spawn childFrame childResume childNextPc =>
+                      simp [hstep, henter, entryStep, valueStep,
+                        keyStep] at available
+              | halt result =>
+                  simp [hstep, henter, entryStep, valueStep] at available
+              | spawn childFrame childResume childNextPc =>
+                  simp [hstep, henter, entryStep, valueStep] at available
+          | halt result => simp [hstep, henter, entryStep] at available
+          | spawn childFrame childResume childNextPc =>
+              simp [hstep, henter, entryStep] at available
+      | done settled => simp [hstep, henter] at available
+  | halt result => simp [hstep] at available
+  | cont nextPc post => simp [hstep] at available
+
+private theorem RollbackFixture.control (w : RollbackFixture) :
+    w.call.childRoot ∈ Exec.rawFrameRoots w.call.run ∧
+    w.call.childRoot.exactInvocation rollbackProgram callTarget callTarget ∧
+    Execution.commits w.call.raw = true ∧
+    Execution.commits w.call.out ≠ true ∧
+    ∃ occurrence : Exec.NinstOccurrence w.call.root,
+      occurrence.instruction = .reg .sstore ∧
+      Exec.Deriv.ParentPrefix w.call.childRoot occurrence.node ∧
+      occurrence.node.pc = 4 ∧
+      rollbackProgram.acceptsSstoreSite
+        ⟨0, [.rest, .rest]⟩ occurrence.node.pc = true := by
+  refine ⟨w.call.childSelected, w.call.childExact rollbackProgram w.compiled,
+    w.childCommits, w.outerFails, ?_⟩
+  rcases (Exec.Deriv.ParentPrefix.refl w.call.childRoot).advance_cont
+      w.call.child w.entryStep with ⟨at1, edge1, prefix1⟩
+  rcases prefix1.advance_cont at1 w.valueStep with ⟨at3, edge3, prefix3⟩
+  rcases prefix3.advance_cont at3 w.keyStep with ⟨at4, edge4, prefix4⟩
+  let node : Exec.Deriv := ⟨4, w.call.childEvm.sta, w.beforeStore, w.call.raw, at4⟩
+  have decoded : Ninst.At node.sevm.code node.pc (.reg .sstore) := by
+    change Ninst.At w.call.childEvm.sta.code 4 (.reg .sstore)
+    rw [w.call.codeEq]
+    rfl
+  have reachedChild : Exec.Deriv.ParentPrefix w.call.childRoot node := by
+    simpa [node, RawCallFixture.childRoot] using prefix4
+  have reachedGlobal : node ∈ Exec.rawNodes w.call.run :=
+    (Exec.mem_rawNodes_iff_rawFrameRoot_parentPrefix w.call.run node).mpr
+      ⟨w.call.childRoot, w.call.childSelected, reachedChild⟩
+  rcases Exec.exists_ninstOccurrence_of_mem_rawNodes
+      (root := w.call.root) reachedGlobal decoded with
+    ⟨occurrence, occurrenceNode, instructionEq⟩
+  have reachedOccurrence : Exec.Deriv.ParentPrefix w.call.childRoot
+      occurrence.node := by simpa [occurrenceNode] using reachedChild
+  rcases occurrence.acceptsSource_of_rawFrameRoot instructionEq
+      w.call.childSelected (w.call.childExact rollbackProgram w.compiled)
+      reachedOccurrence with ⟨path, accepted⟩
+  have pathEq : path =
+      (⟨0, [.rest, .rest]⟩ : Prog.SourcePath) := by
+    rcases Prog.acceptsSstoreSite_iff.mp accepted with
+      ⟨site, member, hpath, hpc, hinstruction⟩
+    simp [rollbackProgram, Prog.sourceSites, table, Func.sourceSites,
+      Ninst.pushB256] at member
+    rcases member with rfl | rfl | rfl
+    · simp_all
+    · simp_all
+    · exact hpath.symm
+  refine ⟨occurrence, instructionEq, reachedOccurrence, ?_, ?_⟩
+  · simp [occurrenceNode, node]
+  · simpa [pathEq, occurrenceNode, node] using accepted
+
+private theorem concrete_controls :
+    Nonempty CaughtFixture ∧ Nonempty RollbackFixture :=
+  ⟨caughtFixture_nonempty, rollbackFixture_nonempty⟩
+
+private theorem CaughtFixture.identity_negative (w : CaughtFixture) :
+    (∀ other, other ≠ callTarget →
+      ¬ w.call.childRoot.exactInvocation caughtProgram other callTarget) ∧
+    (∀ other, other ≠ callTarget →
+      ¬ w.call.childRoot.exactInvocation caughtProgram callTarget other) := by
+  have exact := w.call.childExact caughtProgram w.compiled
+  constructor
+  · intro other different weakened
+    exact different (weakened.2.1.symm.trans exact.2.1)
+  · intro other different weakened
+    exact different (Option.some.inj
+      (weakened.2.2.1.symm.trans exact.2.2.1))
+
+private theorem RollbackFixture.identity_negative (w : RollbackFixture) :
+    (∀ other, other ≠ callTarget →
+      ¬ w.call.childRoot.exactInvocation rollbackProgram other callTarget) ∧
+    (∀ other, other ≠ callTarget →
+      ¬ w.call.childRoot.exactInvocation rollbackProgram callTarget other) := by
+  have exact := w.call.childExact rollbackProgram w.compiled
+  constructor
+  · intro other different weakened
+    exact different (weakened.2.1.symm.trans exact.2.1)
+  · intro other different weakened
+    exact different (Option.some.inj
+      (weakened.2.2.1.symm.trans exact.2.2.1))
+
+end RawChildAttribution
+
 -- The gate requires this exact evaluator vector.
 #eval! [
   terminalFixture?.isSome,
@@ -1490,7 +1910,9 @@ private theorem concreteRunErr_rawFrameRoots :
   historyAvailable,
   sourceFixtureAvailable,
   exactSourceSite,
-  runErrAvailable]
+  runErrAvailable,
+  RawChildAttribution.caughtAttributionAvailable,
+  RawChildAttribution.rollbackAttributionAvailable]
 
 -- TERMINAL-ERROR-MUTANT-CONTROL
 -- RAW-ERROR-PRUNE-MUTANT-CONTROL
