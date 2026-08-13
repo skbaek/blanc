@@ -38,6 +38,70 @@ def Exec.rawNodes {pc : Nat} {sevm : Sevm} {pre : Devm}
       root :: (Exec.rawNodes child ++ Exec.rawNodes next)
 termination_by sizeOf run
 
+/-- Roots of actually entered child code frames, in execution order.  Same-frame
+continuations contribute only the child frames that they later enter. -/
+def Exec.rawFrameDescendants {pc : Nat} {sevm : Sevm} {pre : Devm}
+    {out : Execution} (run : Exec pc sevm pre out) : List Exec.Deriv :=
+  match run with
+  | .halt _ => []
+  | .cont _ next => Exec.rawFrameDescendants next
+  | .doneErr _ _ _ => []
+  | .doneOk _ _ _ next => Exec.rawFrameDescendants next
+  | .runErr _ _ child _ =>
+      ⟨_, _, _, _, child⟩ :: Exec.rawFrameDescendants child
+  | .runOk _ _ child _ next =>
+      ⟨_, _, _, _, child⟩ ::
+        (Exec.rawFrameDescendants child ++ Exec.rawFrameDescendants next)
+termination_by sizeOf run
+
+/-- The all-outcome code-frame traversal: the selected outer root followed by
+every actually entered child root, with child descendants before roots reached
+after the parent resumes.  No commitment or settlement filter is applied. -/
+def Exec.rawFrameRoots {pc : Nat} {sevm : Sevm} {pre : Devm}
+    {out : Execution} (run : Exec pc sevm pre out) : List Exec.Deriv :=
+  ⟨pc, sevm, pre, out, run⟩ :: Exec.rawFrameDescendants run
+
+/-- The selected outer execution always heads its raw-frame traversal. -/
+theorem Exec.mem_rawFrameRoots_self
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) :
+    (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv) ∈
+      Exec.rawFrameRoots run := by
+  simp [Exec.rawFrameRoots]
+
+/-- A failed parent resume still retains the entered child and all of its raw
+descendant frame roots. -/
+@[simp] theorem Exec.rawFrameRoots_runErr
+    {pc pc' : Nat} {sevm : Sevm} {pre : Devm}
+    {frame : Jaune.Frame} {resume : Resume} {childEvm : Evm}
+    {raw : Execution} {error : EvmError × Devm}
+    (hstep : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume pc')
+    (henter : frame.enter = .run childEvm)
+    (child : Exec childEvm.pc childEvm.sta childEvm.dyna raw)
+    (hresume : resume.run (frame.settle raw) = .error error) :
+    Exec.rawFrameRoots (.runErr hstep henter child hresume) =
+      ⟨pc, sevm, pre, .error error,
+        Exec.runErr hstep henter child hresume⟩ ::
+        Exec.rawFrameRoots child := by
+  simp [Exec.rawFrameRoots, Exec.rawFrameDescendants]
+
+/-- On a successful parent resume, the child's complete raw-frame segment
+precedes every child frame entered later by the resumed parent. -/
+@[simp] theorem Exec.rawFrameRoots_runOk
+    {pc pc' : Nat} {sevm : Sevm} {pre post : Devm}
+    {frame : Jaune.Frame} {resume : Resume} {childEvm : Evm}
+    {raw out : Execution}
+    (hstep : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume pc')
+    (henter : frame.enter = .run childEvm)
+    (child : Exec childEvm.pc childEvm.sta childEvm.dyna raw)
+    (hresume : resume.run (frame.settle raw) = .ok post)
+    (next : Exec pc' sevm post out) :
+    Exec.rawFrameRoots (.runOk hstep henter child hresume next) =
+      ⟨pc, sevm, pre, out,
+        Exec.runOk hstep henter child hresume next⟩ ::
+        (Exec.rawFrameRoots child ++ Exec.rawFrameDescendants next) := by
+  simp [Exec.rawFrameRoots, Exec.rawFrameDescendants]
+
 /-- The execution proof itself heads its raw chronology. -/
 theorem Exec.mem_rawNodes_self
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
@@ -1533,7 +1597,7 @@ theorem Exec.Deriv.ParentPrefix.linear
 
 /-- Following a known same-frame edge characterizes every prefix from its
 source as either the source itself or a prefix from the unique continuation. -/
-private theorem Exec.Deriv.ParentStep.parentPrefix_iff
+theorem Exec.Deriv.ParentStep.parentPrefix_iff
     {root next tail : Exec.Deriv}
     (edge : Exec.Deriv.ParentStep next root) :
     Exec.Deriv.ParentPrefix root tail ↔
@@ -1548,6 +1612,143 @@ private theorem Exec.Deriv.ParentStep.parentPrefix_iff
   · rintro (rfl | rest)
     · exact .refl _
     · exact .step edge rest
+
+/-- Raw-node membership is either in the selected outer frame's same-frame
+prefix or in the prefix of one of its actually entered descendant frames. -/
+private theorem Exec.mem_rawNodes_iff_rawFrameDescendant_parentPrefix :
+    ∀ {pc : Nat} {sevm : Sevm} {pre : Devm}
+      {out : Execution} (run : Exec pc sevm pre out) (node : Exec.Deriv),
+      node ∈ Exec.rawNodes run ↔
+        Exec.Deriv.ParentPrefix
+          ⟨pc, sevm, pre, out, run⟩ node ∨
+        ∃ root ∈ Exec.rawFrameDescendants run,
+          Exec.Deriv.ParentPrefix root node := by
+  intro pc sevm pre out run
+  induction run with
+  | halt hstep =>
+      intro node
+      constructor
+      · intro h
+        simp only [Exec.rawNodes, List.mem_singleton] at h
+        subst node
+        exact Or.inl (.refl _)
+      · rintro (h | ⟨root, hroot, _⟩)
+        · cases h with
+          | refl => simp [Exec.rawNodes]
+          | step edge _ => cases edge
+        · simp [Exec.rawFrameDescendants] at hroot
+  | cont hstep next ih =>
+      intro node
+      let edge : Exec.Deriv.ParentStep
+          (⟨_, _, _, _, next⟩ : Exec.Deriv)
+          (⟨_, _, _, _, Exec.cont hstep next⟩ : Exec.Deriv) :=
+        .cont hstep next
+      simp only [Exec.rawNodes, Exec.rawFrameDescendants, List.mem_cons, ih]
+      rw [edge.parentPrefix_iff]
+      aesop
+  | doneErr hstep henter hresume =>
+      intro node
+      constructor
+      · intro h
+        simp only [Exec.rawNodes, List.mem_singleton] at h
+        subst node
+        exact Or.inl (.refl _)
+      · rintro (h | ⟨root, hroot, _⟩)
+        · cases h with
+          | refl => simp [Exec.rawNodes]
+          | step edge _ => cases edge
+        · simp [Exec.rawFrameDescendants] at hroot
+  | doneOk hstep henter hresume next ih =>
+      intro node
+      let edge : Exec.Deriv.ParentStep
+          (⟨_, _, _, _, next⟩ : Exec.Deriv)
+          (⟨_, _, _, _, Exec.doneOk hstep henter hresume next⟩ : Exec.Deriv) :=
+        .doneOk hstep henter hresume next
+      simp only [Exec.rawNodes, Exec.rawFrameDescendants, List.mem_cons, ih]
+      rw [edge.parentPrefix_iff]
+      aesop
+  | runErr hstep henter child hresume ih =>
+      intro node
+      constructor
+      · intro h
+        simp only [Exec.rawNodes, List.mem_cons] at h
+        rcases h with rfl | hchild
+        · exact Or.inl (.refl _)
+        · right
+          rcases (ih node).mp hchild with
+            hprefix | ⟨root, hroot, hprefix⟩
+          · exact ⟨⟨_, _, _, _, child⟩,
+              by simp [Exec.rawFrameDescendants], hprefix⟩
+          · exact ⟨root,
+              by simp [Exec.rawFrameDescendants, hroot], hprefix⟩
+      · rintro (hprefix | ⟨root, hroot, hprefix⟩)
+        · cases hprefix with
+          | refl => simp [Exec.rawNodes]
+          | step edge _ => cases edge
+        · simp only [Exec.rawFrameDescendants, List.mem_cons] at hroot
+          rcases hroot with rfl | hroot
+          · simp only [Exec.rawNodes, List.mem_cons]
+            exact Or.inr ((ih node).mpr (Or.inl hprefix))
+          · simp only [Exec.rawNodes, List.mem_cons]
+            exact Or.inr ((ih node).mpr
+              (Or.inr ⟨root, hroot, hprefix⟩))
+  | runOk hstep henter child hresume next childIh nextIh =>
+      intro node
+      let edge : Exec.Deriv.ParentStep
+          (⟨_, _, _, _, next⟩ : Exec.Deriv)
+          (⟨_, _, _, _, Exec.runOk hstep henter child hresume next⟩ :
+            Exec.Deriv) :=
+        .runOk hstep henter child hresume next
+      constructor
+      · intro h
+        simp only [Exec.rawNodes, List.mem_cons, List.mem_append] at h
+        rcases h with rfl | hrest
+        · exact Or.inl (.refl _)
+        · rcases hrest with hchild | hnext
+          · right
+            rcases (childIh node).mp hchild with
+              hprefix | ⟨root, hroot, hprefix⟩
+            · exact ⟨⟨_, _, _, _, child⟩,
+                by simp [Exec.rawFrameDescendants], hprefix⟩
+            · exact ⟨root,
+                by simp [Exec.rawFrameDescendants, hroot], hprefix⟩
+          · rcases (nextIh node).mp hnext with
+              hprefix | ⟨root, hroot, hprefix⟩
+            · exact Or.inl (.step edge hprefix)
+            · exact Or.inr ⟨root,
+                by simp [Exec.rawFrameDescendants, hroot], hprefix⟩
+      · rintro (hprefix | ⟨root, hroot, hprefix⟩)
+        · rw [edge.parentPrefix_iff] at hprefix
+          rcases hprefix with rfl | hnext
+          · simp [Exec.rawNodes]
+          · simp only [Exec.rawNodes, List.mem_cons, List.mem_append]
+            exact Or.inr (Or.inr
+              ((nextIh node).mpr (Or.inl hnext)))
+        · simp only [Exec.rawFrameDescendants, List.mem_cons,
+            List.mem_append] at hroot
+          simp only [Exec.rawNodes, List.mem_cons, List.mem_append]
+          rcases hroot with rfl | hrest
+          · exact Or.inr (Or.inl
+              ((childIh node).mpr (Or.inl hprefix)))
+          · rcases hrest with hchild | hnext
+            · exact Or.inr (Or.inl
+                ((childIh node).mpr
+                  (Or.inr ⟨root, hchild, hprefix⟩)))
+            · exact Or.inr (Or.inr
+                ((nextIh node).mpr
+                  (Or.inr ⟨root, hnext, hprefix⟩)))
+
+/-- Exact all-outcome frame ownership of raw chronology.  No commitment,
+settlement, uniqueness, or `Nodup` claim is involved. -/
+theorem Exec.mem_rawNodes_iff_rawFrameRoot_parentPrefix
+    {pc : Nat} {sevm : Sevm} {pre : Devm}
+    {out : Execution} (run : Exec pc sevm pre out) (node : Exec.Deriv) :
+    node ∈ Exec.rawNodes run ↔
+      ∃ root ∈ Exec.rawFrameRoots run,
+        Exec.Deriv.ParentPrefix root node := by
+  rw [Exec.mem_rawNodes_iff_rawFrameDescendant_parentPrefix run node]
+  simp only [Exec.rawFrameRoots, List.mem_cons]
+  aesop
 
 /-- Under a committing root, retained-node membership is exactly membership in
 the root frame's same-frame prefix or in one of its landed descendant frames. -/
