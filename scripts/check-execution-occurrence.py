@@ -60,6 +60,46 @@ private theorem codeIdentityWeakenedMutant
     frame.exactInvocation program storage other := by
   exact exact
 """,
+    "-- COMMITMENT-FILTERED-RAW-CHILD-MUTANT-CONTROL": r"""
+private theorem commitmentFilteredRawChildMutant (w : CaughtCallFixture) :
+    Exec.rawFrameRoots w.call.run =
+      w.call.root :: Exec.rawFrameDescendants w.call.next := by
+  rfl
+""",
+    "-- UNCONDITIONAL-MAIN-CURSOR-OOG-MUTANT-CONTROL": r"""
+private theorem unconditionalMainCursorAfterEntryOogMutant
+    (w : EntryOogFixture) :
+    (Exec.rawNodes w.run).map (fun node => node.pc) = [0, 1] := by
+  rfl
+""",
+    "-- CHILD-CONTINUATION-ORDER-MUTANT-CONTROL": r"""
+private theorem childContinuationOrderReversalMutant (w : CallFixture) :
+    Exec.rawFrameRoots w.run =
+      w.root ::
+        (Exec.rawFrameDescendants w.next ++ Exec.rawFrameRoots w.child) := by
+  rfl
+""",
+    "-- DUPLICATE-CHILD-ROOT-MUTANT-CONTROL": r"""
+private theorem duplicateChildRootConstructionMutant (w : CallFixture) :
+    Exec.rawFrameRoots w.run =
+      w.root ::
+        (Exec.rawFrameRoots w.child ++ Exec.rawFrameRoots w.child ++
+          Exec.rawFrameDescendants w.next) := by
+  rfl
+""",
+    "-- CONTINUATION-AS-FRAME-MUTANT-CONTROL": r"""
+private theorem continuationAsFrameMutant (w : CallFixture) :
+    Exec.rawFrameRoots w.run =
+      w.root :: (Exec.rawFrameRoots w.child ++ Exec.rawFrameRoots w.next) := by
+  rfl
+""",
+    "-- COMMIT-REQUIRED-ATTRIBUTION-MUTANT-CONTROL": r"""
+private theorem commitRequiredAttributionMutant (w : TerminalSourceFixture) :
+    sourceProgram.acceptsSstoreSite ⟨0, []⟩
+        w.occurrence.node.pc = true ∧
+      Execution.commits (.error w.err) = true := by
+  exact ⟨w.exactAttribution.2.2, rfl⟩
+""",
 }
 
 
@@ -122,6 +162,18 @@ def main() -> int:
                     ("Application type mismatch", "Type mismatch"),
                 "-- CODE-IDENTITY-MUTANT-CONTROL":
                     ("Application type mismatch", "Type mismatch"),
+                "-- COMMITMENT-FILTERED-RAW-CHILD-MUTANT-CONTROL":
+                    ("Tactic `rfl` failed",),
+                "-- UNCONDITIONAL-MAIN-CURSOR-OOG-MUTANT-CONTROL":
+                    ("Tactic `rfl` failed",),
+                "-- CHILD-CONTINUATION-ORDER-MUTANT-CONTROL":
+                    ("Tactic `rfl` failed",),
+                "-- DUPLICATE-CHILD-ROOT-MUTANT-CONTROL":
+                    ("Tactic `rfl` failed",),
+                "-- CONTINUATION-AS-FRAME-MUTANT-CONTROL":
+                    ("Tactic `rfl` failed",),
+                "-- COMMIT-REQUIRED-ATTRIBUTION-MUTANT-CONTROL":
+                    ("Application type mismatch",),
             }[marker]
             if not any(expected in evidence for expected in expected_failures):
                 return fail(f"mutant `{marker}` failed unexpectedly", mutant)
@@ -374,7 +426,7 @@ def main() -> int:
         return fail("CREATE settlement control verdict drifted", settlement)
 
     print(
-        "OK — execution occurrence: 13 concrete controls; 6 Lean mutants; "
+        "OK — execution occurrence: 13 concrete controls; 12 Lean mutants; "
         "WETH bridge-removal mutant; 9 moved-owner + 9 ownership-parser controls; "
         "24 raw-attribution owners + exact signature + 4 controls; "
         "CREATE raw-commit mutant"
