@@ -17,6 +17,10 @@ namespace Blanc
 
 open Jaune
 
+/-- The root derivation bundled by a retained frame. -/
+def Exec.Frame.rootDeriv (frame : Exec.Frame) : Exec.Deriv :=
+  ⟨frame.pc, frame.sevm, frame.pre, frame.out, frame.run⟩
+
 /-- Every reached driver node, in execution order.  This is deliberately not
 `Exec.Deriv.le`: the child and resumed continuation of `runOk` are sibling
 recursive premises, while the chronology orders the child first. -/
@@ -33,6 +37,227 @@ def Exec.rawNodes {pc : Nat} {sevm : Sevm} {pre : Devm}
       root :: (Exec.rawNodes child ++ Exec.rawNodes next)
 termination_by sizeOf run
 
+/-! ## Settlement-retained chronology -/
+
+/-- The retained node stream of a known-committing execution.  A spawned
+child is included only when complete frame settlement commits; in particular,
+raw CREATE success is insufficient when code deposit rolls back. -/
+def Exec.retainedNodesOfCommits
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) (committed : Execution.commits out = true) :
+    List Exec.Deriv :=
+  let root : Exec.Deriv := ⟨pc, sevm, pre, out, run⟩
+  match run with
+  | .halt _ => [root]
+  | .cont _ next => root :: Exec.retainedNodesOfCommits next committed
+  | .doneErr _ _ _ => by simp [Execution.commits] at committed
+  | .doneOk _ _ _ next => root :: Exec.retainedNodesOfCommits next committed
+  | .runErr _ _ _ _ => by simp [Execution.commits] at committed
+  | .runOk (f := frame) (raw := raw) _ _ child _ next =>
+      root ::
+        ((if h : Frame.settlementCommits frame raw = true then
+            Exec.retainedNodesOfCommits child
+              (Frame.raw_commits_of_settlementCommits h)
+          else []) ++
+          Exec.retainedNodesOfCommits next committed)
+termination_by sizeOf run
+
+/-- Public retained chronology.  The whole stream is erased when the root
+does not commit, so locally successful work cannot leak through rollback. -/
+def Exec.retainedNodes
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) : List Exec.Deriv :=
+  if h : Execution.commits out = true then
+    Exec.retainedNodesOfCommits run h
+  else []
+
+@[simp] theorem Exec.retainedNodes_eq_nil_of_not_commits
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out)
+    (h : Execution.commits out ≠ true) :
+    Exec.retainedNodes run = [] := by
+  simp [Exec.retainedNodes, h]
+
+@[simp] theorem Exec.retainedNodes_eq_of_commits
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out)
+    (h : Execution.commits out = true) :
+    Exec.retainedNodes run = Exec.retainedNodesOfCommits run h := by
+  simp [Exec.retainedNodes, h]
+
+@[simp] theorem Exec.retainedNodes_runOk_of_settlementCommits
+    {pc pc' : Nat} {sevm : Sevm} {pre devm' : Devm}
+    {frame : Jaune.Frame} {resume : Resume}
+    {childEvm : Evm} {raw out : Execution}
+    (hstep : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume pc')
+    (henter : frame.enter = .run childEvm)
+    (child : Exec childEvm.pc childEvm.sta childEvm.dyna raw)
+    (hresume : resume.run (frame.settle raw) = .ok devm')
+    (next : Exec pc' sevm devm' out)
+    (rootCommits : Execution.commits out = true)
+    (childSettles : Frame.settlementCommits frame raw = true) :
+    Exec.retainedNodes (.runOk hstep henter child hresume next) =
+      ⟨pc, sevm, pre, out,
+        Exec.runOk hstep henter child hresume next⟩ ::
+        (Exec.retainedNodes child ++ Exec.retainedNodes next) := by
+  have childCommits := Frame.raw_commits_of_settlementCommits childSettles
+  simp [Exec.retainedNodes, Exec.retainedNodesOfCommits, rootCommits,
+    childSettles, childCommits]
+
+@[simp] theorem Exec.retainedNodes_runOk_of_not_settlementCommits
+    {pc pc' : Nat} {sevm : Sevm} {pre devm' : Devm}
+    {frame : Jaune.Frame} {resume : Resume}
+    {childEvm : Evm} {raw out : Execution}
+    (hstep : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume pc')
+    (henter : frame.enter = .run childEvm)
+    (child : Exec childEvm.pc childEvm.sta childEvm.dyna raw)
+    (hresume : resume.run (frame.settle raw) = .ok devm')
+    (next : Exec pc' sevm devm' out)
+    (rootCommits : Execution.commits out = true)
+    (childDoesNotSettle : Frame.settlementCommits frame raw ≠ true) :
+    Exec.retainedNodes (.runOk hstep henter child hresume next) =
+      ⟨pc, sevm, pre, out,
+        Exec.runOk hstep henter child hresume next⟩ ::
+        Exec.retainedNodes next := by
+  simp [Exec.retainedNodes, Exec.retainedNodesOfCommits, rootCommits,
+    childDoesNotSettle]
+
+private theorem List.nilSublist {α : Type} (xs : List α) :
+    List.Sublist [] xs := by
+  induction xs with
+  | nil => exact .slnil
+  | cons head tail ih => exact ih.cons _
+
+private theorem List.Sublist.appendRight
+    {α : Type} {xs ys : List α} (front : List α)
+    (h : List.Sublist xs ys) : List.Sublist xs (front ++ ys) := by
+  induction front with
+  | nil => exact h
+  | cons head tail ih => exact ih.cons _
+
+/-- Settlement retention only removes nodes from the raw chronology. -/
+theorem Exec.retainedNodesOfCommits_sublist_rawNodes
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) (committed : Execution.commits out = true) :
+    List.Sublist (Exec.retainedNodesOfCommits run committed)
+      (Exec.rawNodes run) := by
+  induction run with
+  | halt => simp [Exec.retainedNodesOfCommits, Exec.rawNodes]
+  | cont hstep next ih =>
+      simp only [Exec.retainedNodesOfCommits, Exec.rawNodes]
+      exact (ih committed).cons_cons _
+  | doneErr => simp [Execution.commits] at committed
+  | doneOk hstep henter hresume next ih =>
+      simp only [Exec.retainedNodesOfCommits, Exec.rawNodes]
+      exact (ih committed).cons_cons _
+  | runErr => simp [Execution.commits] at committed
+  | runOk hstep henter child hresume next childIh nextIh =>
+      simp only [Exec.retainedNodesOfCommits, Exec.rawNodes]
+      split
+      next childSettles =>
+        exact ((childIh (Frame.raw_commits_of_settlementCommits childSettles)).append
+          (nextIh committed)).cons_cons _
+      next childDoesNotSettle =>
+        exact (List.Sublist.appendRight (Exec.rawNodes child)
+          (nextIh committed)).cons_cons _
+
+theorem Exec.retainedNodes_sublist_rawNodes
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) :
+    List.Sublist (Exec.retainedNodes run) (Exec.rawNodes run) := by
+  unfold Exec.retainedNodes
+  split
+  next committed => exact run.retainedNodesOfCommits_sublist_rawNodes committed
+  next notCommitted => exact List.nilSublist _
+
+private def Exec.retainedTailOfCommits
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) (committed : Execution.commits out = true) :
+    List Exec.Deriv :=
+  match run with
+  | .halt _ => []
+  | .cont _ next => Exec.retainedNodesOfCommits next committed
+  | .doneErr _ _ _ => by simp [Execution.commits] at committed
+  | .doneOk _ _ _ next => Exec.retainedNodesOfCommits next committed
+  | .runErr _ _ _ _ => by simp [Execution.commits] at committed
+  | .runOk (f := frame) (raw := raw) _ _ child _ next =>
+      (if h : Frame.settlementCommits frame raw = true then
+          Exec.retainedNodesOfCommits child
+            (Frame.raw_commits_of_settlementCommits h)
+        else []) ++ Exec.retainedNodesOfCommits next committed
+
+private theorem Exec.retainedNodesOfCommits_eq_root_cons
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) (committed : Execution.commits out = true) :
+    Exec.retainedNodesOfCommits run committed =
+      ⟨pc, sevm, pre, out, run⟩ ::
+        Exec.retainedTailOfCommits run committed := by
+  cases run with
+  | halt => simp [Exec.retainedNodesOfCommits, Exec.retainedTailOfCommits]
+  | cont => simp [Exec.retainedNodesOfCommits, Exec.retainedTailOfCommits]
+  | doneErr => simp [Execution.commits] at committed
+  | doneOk => simp [Exec.retainedNodesOfCommits, Exec.retainedTailOfCommits]
+  | runErr => simp [Execution.commits] at committed
+  | runOk => simp [Exec.retainedNodesOfCommits, Exec.retainedTailOfCommits]
+
+private theorem Exec.descendantFrameRoots_sublist_retainedNodesOfCommits
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) (committed : Execution.commits out = true) :
+    List.Sublist ((Exec.descendantFrames run).map Exec.Frame.rootDeriv)
+      (Exec.retainedTailOfCommits run committed) := by
+  induction run with
+  | halt => simp [Exec.descendantFrames, Exec.retainedTailOfCommits]
+  | cont hstep next ih =>
+      simp only [Exec.descendantFrames, Exec.retainedTailOfCommits]
+      rw [next.retainedNodesOfCommits_eq_root_cons committed]
+      exact (ih committed).cons _
+  | doneErr => simp [Execution.commits] at committed
+  | doneOk hstep henter hresume next ih =>
+      simp only [Exec.descendantFrames, Exec.retainedTailOfCommits]
+      rw [next.retainedNodesOfCommits_eq_root_cons committed]
+      exact (ih committed).cons _
+  | runErr => simp [Execution.commits] at committed
+  | runOk hstep henter child hresume next childIh nextIh =>
+      simp only [Exec.descendantFrames, Exec.retainedTailOfCommits]
+      split
+      next childSettles =>
+        have childCommits :=
+          Frame.raw_commits_of_settlementCommits childSettles
+        have childFrames : List.Sublist
+            ((Exec.Frame.ofRun child childCommits ::
+                Exec.descendantFrames child).map Exec.Frame.rootDeriv)
+            (Exec.retainedNodesOfCommits child childCommits) := by
+          rw [child.retainedNodesOfCommits_eq_root_cons childCommits]
+          simp only [List.map_cons, Exec.Frame.rootDeriv, Exec.Frame.ofRun]
+          exact (childIh childCommits).cons_cons _
+        have nextFrames : List.Sublist
+            ((Exec.descendantFrames next).map Exec.Frame.rootDeriv)
+            (Exec.retainedNodesOfCommits next committed) := by
+          rw [next.retainedNodesOfCommits_eq_root_cons committed]
+          exact (nextIh committed).cons _
+        simpa only [List.map_append] using
+          childFrames.append nextFrames
+      next childDoesNotSettle =>
+        rw [next.retainedNodesOfCommits_eq_root_cons committed]
+        exact (nextIh committed).cons _
+
+/-- Committed-frame entry roots occur in the retained instruction stream in
+the same order.  The sublist relation is the explicit cross-level chronology
+link; it does not identify ancestry with global execution order. -/
+theorem Exec.committedFrameRoots_sublist_retainedNodes
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) :
+    List.Sublist ((Exec.committedFrames run).map Exec.Frame.rootDeriv)
+      (Exec.retainedNodes run) := by
+  unfold Exec.committedFrames Exec.retainedNodes
+  split
+  next committed =>
+    rw [run.retainedNodesOfCommits_eq_root_cons committed]
+    simp only [List.map_cons, Exec.Frame.rootDeriv, Exec.Frame.ofRun]
+    exact (Exec.descendantFrameRoots_sublist_retainedNodesOfCommits
+      run committed).cons_cons _
+  next notCommitted => exact .slnil
+
 /-- An exact reached nonterminal instruction.  The result is the instruction's
 own step result, not the enclosing derivation's endpoint.  `slot` retains the
 concrete recursive child proof when the instruction entered a child frame. -/
@@ -45,6 +270,11 @@ structure Exec.NinstOccurrence (root : Exec.Deriv) : Type where
   decoded : Ninst.At node.sevm.code node.pc instruction
   filled : slot.Filled
   stepRun : Ninst.StepRun node.pc node.sevm node.devm instruction slot stepResult
+
+/-- The occurrence survives complete root and nested-frame settlement. -/
+def Exec.NinstOccurrence.Retained
+    {root : Exec.Deriv} (occurrence : Exec.NinstOccurrence root) : Prop :=
+  occurrence.node ∈ Exec.retainedNodes root.exc
 
 private theorem List.exists_eq_append_cons_of_mem
     {α : Type} {x : α} {xs : List α} (h : x ∈ xs) :
@@ -64,6 +294,14 @@ theorem Exec.NinstOccurrence.rawNodes_decomposition
     ∃ before after,
       Exec.rawNodes root.exc = before ++ occurrence.node :: after :=
   List.exists_eq_append_cons_of_mem occurrence.reached
+
+/-- A retained occurrence splits the settlement chronology at its exact node. -/
+theorem Exec.NinstOccurrence.retainedNodes_decomposition
+    {root : Exec.Deriv} (occurrence : Exec.NinstOccurrence root)
+    (retained : occurrence.Retained) :
+    ∃ before after,
+      Exec.retainedNodes root.exc = before ++ occurrence.node :: after :=
+  List.exists_eq_append_cons_of_mem retained
 
 /-- Decoding the root of any derivation as a nonterminal instruction recovers
 the exact recursive slot and step result for all six `Exec` outcomes. -/
@@ -148,6 +386,12 @@ structure Exec.SuccessfulSstoreOccurrence (root : Exec.Deriv) : Type where
   key : B256
   value : B256
   popped : Stack.Pop [key, value] occurrence.node.devm.stack stepPost.stack
+
+/-- A successful SSTORE whose effects survive complete settlement. -/
+def Exec.SuccessfulSstoreOccurrence.Retained
+    {root : Exec.Deriv}
+    (write : Exec.SuccessfulSstoreOccurrence root) : Prop :=
+  write.occurrence.Retained
 
 /-- The storage owner is the executing frame's current target. -/
 def Exec.SuccessfulSstoreOccurrence.storageOwner
@@ -549,10 +793,6 @@ instance (program : Prog) (storageTarget codeAddress : Adr)
   induction functions generalizing start with
   | nil => rfl
   | cons head tail ih => simp [table, ih]
-
-/-- The root derivation bundled by a retained frame. -/
-def Exec.Frame.rootDeriv (frame : Exec.Frame) : Exec.Deriv :=
-  ⟨frame.pc, frame.sevm, frame.pre, frame.out, frame.run⟩
 
 /-- Proof cursor connecting one actually reached same-frame node to one
 compiler source body.  `sourceIncluded` embeds its local executable sites into
