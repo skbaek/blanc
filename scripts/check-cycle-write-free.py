@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import importlib.util
 import pathlib
 import re
 import subprocess
@@ -71,14 +72,17 @@ MUTANTS = {
   native_decide
 """, NATIVE_FALSE),
     "-- BODY-SUBSTITUTION-MUTANT-CONTROL": (
-        """private theorem bodySubstitutionMutant :
-    writer.localSstoreFree = true := by native_decide
-""", NATIVE_FALSE),
+        """private theorem bodySubstitutionMutant
+    (w : CycleFixture selfLoopProgram selfLoopCode selfLoopPre [0]) :
+    outsideWriterProgram.entrySstoreFree writer [] = true := by
+  exact w.accepted
+""", TYPE_MISMATCH),
     "-- INDEX-SUBSTITUTION-MUTANT-CONTROL": (
-        """private theorem indexSubstitutionMutant :
-    twoNodeProgram.entrySstoreFree twoNodeProgram.main [1] = true := by
-  native_decide
-""", NATIVE_FALSE),
+        """private theorem indexSubstitutionMutant
+    (w : CycleFixture twoNodeProgram twoNodeCode twoNodePre [0, 1]) :
+    twoNodeProgram.entrySstoreFree twoNodeProgram.main [0] = true := by
+  exact w.accepted
+""", TYPE_MISMATCH),
     "-- OFF-BY-ONE-LOOKUP-MUTANT-CONTROL": (
         """private theorem offByOneLookupMutant :
     twoNodeProgram.aux[1]?.isSome = true := by
@@ -119,9 +123,28 @@ MUTANTS = {
     pushPayloadProgram.main.localSstoreFree = false := by native_decide
 """, NATIVE_FALSE),
     "-- WRONG-SOURCE-BODY-MUTANT-CONTROL": (
-        """private theorem wrongSourceBodyMutant :
-    outsideWriterProgram.entrySstoreFree writer [] = true := by native_decide
-""", NATIVE_FALSE),
+        """private theorem wrongSourceBodyMutant
+    (w : CycleFixture selfLoopProgram selfLoopCode selfLoopPre [0]) :
+    selectedWriterProgram.entrySstoreFree
+      selectedWriterProgram.main [1] = true := by
+  exact w.accepted
+""", TYPE_MISMATCH),
+    "-- MISSING-PARENT-PREFIX-MUTANT-CONTROL": (
+        """private theorem missingParentPrefixMutant :
+    ¬ (∃ w : ExternalChild.Fixture,
+      some ExternalChild.parentCode.toList =
+        ExternalChild.parentProgram.compile ∧
+      ExternalChild.parentProgram.entrySstoreFree
+        ExternalChild.parentProgram.main [] = true ∧
+      ∃ occurrence : Exec.NinstOccurrence w.root,
+        occurrence.instruction = .reg .sstore ∧
+        ¬ Exec.Deriv.ParentPrefix w.cursor.node occurrence.node) := by
+  rintro ⟨w, compiled, accepted, occurrence, isStore, notOwned⟩
+  have noStore :=
+    occurrence.instruction_ne_sstore_of_entrySstoreFree
+      w.cursor compiled [] accepted
+  exact noStore isStore
+""", TYPE_MISMATCH),
     "-- EXTERNAL-CHILD-ALL-FRAME-MUTANT-CONTROL": (
         """private theorem externalChildAllFrameMutant :
     ∀ w : ExternalChild.Fixture,
@@ -357,12 +380,33 @@ def read_manifest() -> dict[str, object]:
 
 
 def contract_paths(manifest: dict[str, object]) -> list[pathlib.Path]:
-    found: set[pathlib.Path] = set()
+    globbed: set[pathlib.Path] = set()
     for pattern in manifest["contractModuleGlobs"]:
-        found.update(ROOT.glob(pattern))
-    if not found:
+        globbed.update(ROOT.glob(pattern))
+    if not globbed:
         raise ValueError("contract globs matched no modules")
-    return sorted(found)
+    layering_path = ROOT / "scripts" / "check-layering.py"
+    spec = importlib.util.spec_from_file_location(
+        "cycle_write_free_layering", layering_path
+    )
+    if spec is None or spec.loader is None:
+        raise ValueError("could not load the authoritative contract classification")
+    layering = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(layering)
+    classified = {
+        ROOT / "Blanc" / f"{module}.lean"
+        for modules in layering.CONTRACTS.values()
+        for module in modules
+    }
+    if not classified or not all(path.is_file() for path in classified):
+        raise ValueError("authoritative contract classification is empty or stale")
+    if not globbed.issubset(classified):
+        extras = ", ".join(
+            path.relative_to(ROOT).as_posix()
+            for path in sorted(globbed - classified)
+        )
+        raise ValueError(f"contract globs include non-contract modules: {extras}")
+    return sorted(classified)
 
 
 def audit_sources(

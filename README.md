@@ -99,7 +99,9 @@ This repo contains the following files:
   actual finite source cursor and says nothing about endpoint storage equality,
   TSTORE, logs, balances, memory/code effects, EVM CALL-family or CREATE child
   frames, settlement, gas sufficiency, termination, or any particular
-  contract until that contract supplies the exact cursor and certificate.
+  contract until that contract supplies the exact cursor and certificate. It
+  does not establish installation, authorization, transaction behavior, ABI
+  enumeration, or any Lido-specific claim.
 - [FmintLive.lean](Blanc/FmintLive.lean): fmint's demonstration of that layer,
   and the first place in this repository where a contract call is proved to
   **succeed**. `fmint_totalSupply_succeeds` drives `func_run` over `fmint`'s

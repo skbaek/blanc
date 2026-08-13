@@ -14,7 +14,9 @@ This module says only that source `.reg .sstore` does not occur along the
 selected same-frame execution prefix. It does not establish storage equality,
 termination, gas sufficiency, settlement survival, child-frame freedom, or
 absence of TSTORE, logs, balance, memory, code, creation, or selfdestruct
-effects.
+effects. It also says nothing about installation, authorization, transaction
+behavior, ABI coverage, or any particular contract or Lido behavior until a
+consumer supplies the exact compiled cursor and accepted certificate.
 -/
 
 namespace Blanc

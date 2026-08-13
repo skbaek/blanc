@@ -533,8 +533,9 @@ private theorem parentPrefix_sevm_eq {root tail : Exec.Deriv}
 namespace ExternalChild
 
 private def target : Adr := 0x700
-private def parentProgram : Prog := ⟨.last .stop, []⟩
-private def parentCode : ByteArray := ByteArray.mk #[0xf1, 0x00]
+private def parentProgram : Prog :=
+  ⟨.next (.exec .call) (.last .stop), []⟩
+private def parentCode : ByteArray := ByteArray.mk #[0x5b, 0xf1, 0x00]
 private def childCode : ByteArray := ByteArray.mk #[0x55, 0x00]
 private def parentSevm : Sevm :=
   { (default : Sevm) with code := parentCode }
@@ -551,7 +552,7 @@ private structure Fixture where
   childEvm : Evm
   raw : Execution
   out : Execution
-  hstep : Evm.step ⟨0, parentSevm, parentPre⟩ =
+  hstep : Evm.step ⟨1, parentSevm, parentPre⟩ =
     .spawn frame resume nextPc
   henter : frame.enter = .run childEvm
   child : Exec childEvm.pc childEvm.sta childEvm.dyna raw
@@ -560,17 +561,59 @@ private structure Fixture where
   childPc : childEvm.pc = 0
   childCodeEq : childEvm.sta.code = childCode
 
-private def Fixture.run (w : Fixture) : Exec 0 parentSevm parentPre w.out :=
+private def Fixture.run (w : Fixture) : Exec 1 parentSevm parentPre w.out :=
   .runOk w.hstep w.henter w.child w.hresume w.next
 
 private def Fixture.root (w : Fixture) : Exec.Deriv :=
-  ⟨0, parentSevm, parentPre, w.out, w.run⟩
+  ⟨1, parentSevm, parentPre, w.out, w.run⟩
 
 private def Fixture.childRoot (w : Fixture) : Exec.Deriv :=
   ⟨w.childEvm.pc, w.childEvm.sta, w.childEvm.dyna, w.raw, w.child⟩
 
+private theorem Fixture.sourceSlice (_w : Fixture) :
+    subcode parentCode.toList 1
+      (Func.compile (table 0 (parentProgram.main :: parentProgram.aux))
+        1 parentProgram.main) := by
+  have compiled : some parentCode.toList = parentProgram.compile := by
+    native_decide
+  have hget :
+      (table 0 (parentProgram.main :: parentProgram.aux))[0]? =
+      some (0, parentProgram.main) := rfl
+  rcases subcode_of_get?_eq_some compiled hget with ⟨_, sourceSlice⟩
+  simpa [parentProgram] using sourceSlice
+
+private theorem Fixture.sourceBoundary (_w : Fixture) :
+    noPushBefore parentCode 1 32 = true := by
+  have compiled : some parentCode.toList = parentProgram.compile := by
+    native_decide
+  have hget :
+      (table 0 (parentProgram.main :: parentProgram.aux))[0]? =
+      some (0, parentProgram.main) := rfl
+  exact (Prog.jumpable_of_get?_table compiled hget).2
+
+private def Fixture.cursor (w : Fixture) :
+    Exec.Deriv.SourceCursor w.root parentProgram ⟨0, []⟩
+      parentProgram.main :=
+  { pc := 1
+    pre := parentPre
+    current := w.run
+    parentPrefix := .refl _
+    codeSlice := w.sourceSlice
+    codeBoundary := w.sourceBoundary
+    sourceIncluded := by
+      have hget :
+          (table 0 (parentProgram.main :: parentProgram.aux))[0]? =
+          some (0, parentProgram.main) := rfl
+      intro site member
+      simp only [Prog.sourceSites, List.mem_flatMap]
+      refine ⟨0, by simp, ?_⟩
+      simpa only [hget] using member }
+
+private theorem Fixture.cursorNode (w : Fixture) :
+    w.cursor.node = w.root := rfl
+
 private def fixture? : Option Fixture :=
-  match hstep : Evm.step ⟨0, parentSevm, parentPre⟩ with
+  match hstep : Evm.step ⟨1, parentSevm, parentPre⟩ with
   | .spawn frame resume nextPc =>
       match henter : frame.enter with
       | .run childEvm =>
@@ -604,7 +647,7 @@ private def fixture? : Option Fixture :=
   | _ => none
 
 private def available : Bool :=
-  match Evm.step ⟨0, parentSevm, parentPre⟩ with
+  match Evm.step ⟨1, parentSevm, parentPre⟩ with
   | .spawn frame resume _ =>
       match frame.enter with
       | .run childEvm =>
@@ -618,7 +661,7 @@ private def available : Bool :=
 private theorem fixture_nonempty : Nonempty Fixture := by
   have h : available = true := by native_decide
   unfold available at h
-  cases hstep : Evm.step ⟨0, parentSevm, parentPre⟩ with
+  cases hstep : Evm.step ⟨1, parentSevm, parentPre⟩ with
   | spawn frame resume nextPc =>
     cases henter : frame.enter with
     | run childEvm =>
@@ -688,23 +731,30 @@ private theorem Fixture.child_sstore (w : Fixture) :
 
 theorem control :
     ∃ w : Fixture,
+      some parentCode.toList = parentProgram.compile ∧
+      parentProgram.entrySstoreFree parentProgram.main [] = true ∧
+      Nonempty (Exec.Deriv.SourceCursor w.root parentProgram
+        ⟨0, []⟩ parentProgram.main) ∧
       w.childRoot ∈ Exec.rawFrameRoots w.run ∧
       (∃ occurrence : Exec.NinstOccurrence w.root,
         occurrence.instruction = .reg .sstore ∧
         Exec.Deriv.ParentPrefix w.childRoot occurrence.node ∧
-        ¬ Exec.Deriv.ParentPrefix w.root occurrence.node) := by
+        ¬ Exec.Deriv.ParentPrefix w.cursor.node occurrence.node) := by
   rcases fixture_nonempty with ⟨w⟩
-  refine ⟨w, ?_, w.child_sstore⟩
-  simp [Fixture.run, Fixture.childRoot, Exec.rawFrameRoots,
+  refine ⟨w, by native_decide, rfl, ⟨w.cursor⟩, ?_, ?_⟩
+  · simp [Fixture.run, Fixture.childRoot, Exec.rawFrameRoots,
     Exec.rawFrameDescendants]
+  · simpa [w.cursorNode] using w.child_sstore
 
 theorem false_all_frame_refuted :
     ¬ (∀ w : Fixture, ∀ occurrence : Exec.NinstOccurrence w.root,
       occurrence.instruction = .reg .sstore →
         Exec.Deriv.ParentPrefix w.root occurrence.node) := by
   rintro falseClaim
-  rcases control with ⟨w, _, occurrence, isStore, _, notOwned⟩
-  exact notOwned (falseClaim w occurrence isStore)
+  rcases control with ⟨w, _, _, _, _, occurrence, isStore, _, notOwned⟩
+  have wronglyOwned : Exec.Deriv.ParentPrefix w.cursor.node occurrence.node := by
+    simpa [w.cursorNode] using falseClaim w occurrence isStore
+  exact notOwned wronglyOwned
 
 end ExternalChild
 
@@ -717,7 +767,9 @@ same `currentTarget`. -/
 
 private def owner : Adr := 0x600
 private def target : Adr := 0x700
-private def parentCode : ByteArray := ByteArray.mk #[0xf2, 0x00]
+private def parentProgram : Prog :=
+  ⟨.next (.exec .callcode) (.last .stop), []⟩
+private def parentCode : ByteArray := ByteArray.mk #[0x5b, 0xf2, 0x00]
 private def childCode : ByteArray :=
   ByteArray.mk #[0x60, 0x01, 0x60, 0x00, 0x55, 0x00]
 private def parentSevm : Sevm :=
@@ -738,7 +790,7 @@ private structure Fixture where
   childEvm : Evm
   raw : Execution
   out : Execution
-  hstep : Evm.step ⟨0, parentSevm, parentPre⟩ =
+  hstep : Evm.step ⟨1, parentSevm, parentPre⟩ =
     .spawn frame resume nextPc
   henter : frame.enter = .run childEvm
   child : Exec childEvm.pc childEvm.sta childEvm.dyna raw
@@ -757,17 +809,59 @@ private structure Fixture where
     (Devm.getStor parentPre owner).get 0 ≠
       (Devm.getStor resumed owner).get 0
 
-private def Fixture.run (w : Fixture) : Exec 0 parentSevm parentPre w.out :=
+private def Fixture.run (w : Fixture) : Exec 1 parentSevm parentPre w.out :=
   .runOk w.hstep w.henter w.child w.hresume w.next
 
 private def Fixture.root (w : Fixture) : Exec.Deriv :=
-  ⟨0, parentSevm, parentPre, w.out, w.run⟩
+  ⟨1, parentSevm, parentPre, w.out, w.run⟩
 
 private def Fixture.childRoot (w : Fixture) : Exec.Deriv :=
   ⟨w.childEvm.pc, w.childEvm.sta, w.childEvm.dyna, w.raw, w.child⟩
 
+private theorem Fixture.sourceSlice (_w : Fixture) :
+    subcode parentCode.toList 1
+      (Func.compile (table 0 (parentProgram.main :: parentProgram.aux))
+        1 parentProgram.main) := by
+  have compiled : some parentCode.toList = parentProgram.compile := by
+    native_decide
+  have hget :
+      (table 0 (parentProgram.main :: parentProgram.aux))[0]? =
+      some (0, parentProgram.main) := rfl
+  rcases subcode_of_get?_eq_some compiled hget with ⟨_, sourceSlice⟩
+  simpa [parentProgram] using sourceSlice
+
+private theorem Fixture.sourceBoundary (_w : Fixture) :
+    noPushBefore parentCode 1 32 = true := by
+  have compiled : some parentCode.toList = parentProgram.compile := by
+    native_decide
+  have hget :
+      (table 0 (parentProgram.main :: parentProgram.aux))[0]? =
+      some (0, parentProgram.main) := rfl
+  exact (Prog.jumpable_of_get?_table compiled hget).2
+
+private def Fixture.cursor (w : Fixture) :
+    Exec.Deriv.SourceCursor w.root parentProgram ⟨0, []⟩
+      parentProgram.main :=
+  { pc := 1
+    pre := parentPre
+    current := w.run
+    parentPrefix := .refl _
+    codeSlice := w.sourceSlice
+    codeBoundary := w.sourceBoundary
+    sourceIncluded := by
+      have hget :
+          (table 0 (parentProgram.main :: parentProgram.aux))[0]? =
+          some (0, parentProgram.main) := rfl
+      intro site member
+      simp only [Prog.sourceSites, List.mem_flatMap]
+      refine ⟨0, by simp, ?_⟩
+      simpa only [hget] using member }
+
+private theorem Fixture.cursorNode (w : Fixture) :
+    w.cursor.node = w.root := rfl
+
 private def available : Bool :=
-  match Evm.step ⟨0, parentSevm, parentPre⟩ with
+  match Evm.step ⟨1, parentSevm, parentPre⟩ with
   | .spawn frame resume nextPc =>
       match frame.enter with
       | .run childEvm =>
@@ -795,7 +889,7 @@ private def available : Bool :=
 private theorem fixture_nonempty : Nonempty Fixture := by
   have h : available = true := by native_decide
   unfold available at h
-  cases hstep : Evm.step ⟨0, parentSevm, parentPre⟩ with
+  cases hstep : Evm.step ⟨1, parentSevm, parentPre⟩ with
   | spawn frame resume nextPc =>
     cases henter : frame.enter with
     | run childEvm =>
@@ -897,6 +991,10 @@ private theorem Fixture.child_sstore (w : Fixture) :
 
 theorem control :
     ∃ w : Fixture,
+      some parentCode.toList = parentProgram.compile ∧
+      parentProgram.entrySstoreFree parentProgram.main [] = true ∧
+      Nonempty (Exec.Deriv.SourceCursor w.root parentProgram
+        ⟨0, []⟩ parentProgram.main) ∧
       w.childRoot.sevm.currentTarget = w.root.sevm.currentTarget ∧
       Execution.commits w.raw = true ∧
       Execution.commits w.out = true ∧
@@ -905,10 +1003,12 @@ theorem control :
       (∃ occurrence : Exec.NinstOccurrence w.root,
         occurrence.instruction = .reg .sstore ∧
         Exec.Deriv.ParentPrefix w.childRoot occurrence.node ∧
-        ¬ Exec.Deriv.ParentPrefix w.root occurrence.node) := by
+        ¬ Exec.Deriv.ParentPrefix w.cursor.node occurrence.node) := by
   rcases fixture_nonempty with ⟨w⟩
-  refine ⟨w, w.sameOwner, w.childCommits, w.parentCommits,
-    w.storageChanged, w.child_sstore⟩
+  refine ⟨w, by native_decide, rfl, ⟨w.cursor⟩,
+    w.sameOwner, w.childCommits,
+    w.parentCommits, w.storageChanged, ?_⟩
+  simpa [w.cursorNode] using w.child_sstore
 
 theorem storage_equality_refuted :
     ¬ (∀ w : Fixture,
@@ -917,7 +1017,7 @@ theorem storage_equality_refuted :
       (Devm.getStor parentPre owner).get 0 =
         (Devm.getStor w.resumed owner).get 0) := by
   rintro falseClaim
-  rcases control with ⟨w, _, childCommits, parentCommits,
+  rcases control with ⟨w, _, _, _, _, childCommits, parentCommits,
     storageChanged, _⟩
   exact storageChanged (falseClaim w childCommits parentCommits)
 
@@ -1067,6 +1167,7 @@ theorem required_positive_controls : True := by
 -- FUEL-RECURSIVE-SUBSTITUTION-MUTANT-CONTROL
 -- RAW-BYTE-SCAN-MUTANT-CONTROL
 -- WRONG-SOURCE-BODY-MUTANT-CONTROL
+-- MISSING-PARENT-PREFIX-MUTANT-CONTROL
 -- EXTERNAL-CHILD-ALL-FRAME-MUTANT-CONTROL
 -- NOOP-SSTORE-PRUNE-MUTANT-CONTROL
 -- REVERTED-SSTORE-PRUNE-MUTANT-CONTROL
