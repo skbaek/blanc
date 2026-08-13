@@ -100,7 +100,8 @@ FOREIGN_SURFACES = [
 # under this gate's constraints -- no toolchain, no build, no network -- which
 # is exactly why they are not here:
 #
-#   * 147/147 WETH10 differential rows (docs/index.html:384, :430, :713).
+#   * 147/147 WETH10 differential rows (the hero terminal, fact tile, §1
+#     differential rung, and portfolio table in docs/index.html).
 #     Produced by scripts/check-weth10-differential.sh, which needs a build.
 #     Adding it means committing the row count as a small generated file the
 #     differential gate writes and this one reads.
