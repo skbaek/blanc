@@ -2529,6 +2529,157 @@ def Exec.InvDepth (k : Nat) (ca : Adr) (p : Prog)
 
 /-! ## The contract-generic ladder -/
 
+/-- A successful synchronous generic call cannot change persistent storage.
+This includes empty-code and precompile execution as well as failed child
+settlement; value transfer changes balances only. -/
+lemma GenericCall.none_getStor_eq {sevm : Sevm} {devm inter : Devm}
+    {gas : Nat} {value : B256} {caller target codeAddress : Adr}
+    {stv isStatic : Bool} {ii is oi os : Nat} {code : ByteArray} {dp : Bool}
+    (h_run : GenericCall sevm devm gas value caller target codeAddress stv
+      isStatic ii is oi os code dp .none (.ok inter)) :
+    Devm.getStor inter = Devm.getStor devm := by
+  unfold GenericCall genericCall.step at h_run
+  simp only [Bind.bind, Except.bind, Pure.pure, Except.pure] at h_run
+  repeat' split at h_run
+  all_goals simp only [XStep.ofExcept, XStep.Run] at h_run
+  · cases h_run.2
+  · rename_i h_push
+    apply funext
+    apply getStor_eq_of_state_eq
+    rw [Except.ok.inj h_run.2, ← (Devm.push_of_push h_push).state]
+    rfl
+  · obtain ⟨r, hframe, hres⟩ := h_run
+    obtain ⟨childMsg, hframe, hc_state, hc_stv, hc_caller, hc_value, hc_ct,
+        hc_ca⟩ :
+        ∃ m : Msg, ProcessMessage m .none r ∧
+          m.benv.state = devm.state ∧ m.shouldTransferValue = stv ∧
+          m.caller = caller ∧ m.value = value ∧ m.currentTarget = target ∧
+          m.codeAddress = some codeAddress :=
+      ⟨_, hframe, rfl, rfl, rfl, rfl, rfl, rfl⟩
+    rcases r with err | child
+    · cases Resume.call_run_error hres.symm
+    have h_inter_state : inter.state = child.state := Resume.call_state hres.symm
+    obtain ⟨r0, hbody, hset⟩ := ProcessMessage.iff_body.mp hframe
+    unfold FrameBody at hbody
+    rcases eq_bt : childMsg.benvAfterTransfer with e | benv <;>
+      rw [eq_bt] at hbody
+    · rw [hbody.2, processMessage.settle_error] at hset
+      cases hset
+    have run_ec : ExecuteCode (childMsg.withBenv benv) .none r0 := hbody
+    rcases r0 with x | evm2
+    · rw [processMessage.settle_error] at hset
+      cases hset
+    unfold processMessage.settle at hset
+    dsimp only [bind, Except.bind] at hset
+    by_cases h_err2 : evm2.error.isSome = true
+    · rw [if_pos h_err2] at hset
+      apply funext
+      apply getStor_eq_of_state_eq
+      rw [h_inter_state, ← Except.ok.inj hset.symm]
+      exact hc_state
+    · rw [if_neg h_err2] at hset
+      have h_eq_child := Except.ok.inj hset.symm
+      subst h_eq_child
+      have hc_ca2 : (childMsg.withBenv benv).codeAddress = some codeAddress :=
+        hc_ca
+      rcases of_executeCode_someCode hc_ca2 run_ec with
+        ⟨_, _, h_he⟩ | ⟨_, exn, h_xl_some, _⟩
+      · have h_child_state : evm2.state = benv.state := by
+          have h := state_of_executePrecomp_ok h_he h_err2
+          rw [h]
+          rfl
+        by_cases h_stv : stv = true
+        · rcases of_benvAfterTransfer (hc_stv.trans h_stv) eq_bt with
+            ⟨st_mid, h_sub, hB⟩
+          rw [hc_state, hc_caller, hc_value] at h_sub
+          have hBs : benv.state = st_mid.addBal target value := by
+            rw [hB, hc_ct, hc_value]
+            rfl
+          apply funext
+          intro a
+          show (inter.state.get a).stor = (devm.state.get a).stor
+          rw [h_inter_state, h_child_state, hBs]
+          exact (of_state_transfer_fields h_sub).1 a
+        · have h_stv2 : ¬ childMsg.shouldTransferValue = true := by
+            rw [hc_stv]
+            exact h_stv
+          have h_benv : benv = childMsg.benv :=
+            of_benvAfterTransfer_no h_stv2 eq_bt
+          apply funext
+          apply getStor_eq_of_state_eq
+          rw [h_inter_state, h_child_state, h_benv]
+          exact hc_state
+      · cases h_xl_some
+
+/-- A successful synchronous generic create cannot change persistent storage.
+The only nontrivial childless success increments the creator nonce. -/
+lemma GenericCreate.none_getStor_eq {sevm : Sevm} {devm inter : Devm}
+    {endowment : B256} {newAddress : Adr} {memoryIndex memorySize : Nat}
+    (h_run : GenericCreate sevm devm endowment newAddress memoryIndex memorySize
+      .none (.ok inter)) :
+    Devm.getStor inter = Devm.getStor devm := by
+  unfold GenericCreate genericCreate.step at h_run
+  simp only [Bind.bind, Except.bind, Except.assert, assertDynamic, Pure.pure,
+    Except.pure] at h_run
+  repeat' split at h_run
+  all_goals simp only [XStep.ofExcept, XStep.Run] at h_run
+  · cases h_run.2
+  · cases h_run.2
+  · cases h_run.2
+  · rename_i h_push
+    apply funext
+    apply getStor_eq_of_state_eq
+    rw [Except.ok.inj h_run.2, ← (Devm.push_of_push h_push).state]
+    rfl
+  · cases h_run.2
+  · rename_i h_push
+    have h_state : inter.state = devm.state.incrNonce sevm.currentTarget := by
+      rw [Except.ok.inj h_run.2, ← (Devm.push_of_push h_push).state]
+      rfl
+    apply funext
+    intro a
+    show (inter.state.get a).stor = (devm.state.get a).stor
+    rw [h_state]
+    exact State.incrNonce_get_stor
+  · exfalso
+    obtain ⟨r, hframe, hres⟩ := h_run
+    obtain ⟨childMsg, hframe, hc_ca⟩ :
+        ∃ m : Msg, ProcessCreateMessage m .none r ∧ m.codeAddress = .none :=
+      ⟨_, hframe, rfl⟩
+    obtain ⟨r1, hpm, hset⟩ := ProcessCreateMessage.iff_processMessage.mp hframe
+    obtain ⟨r0, hbody, hset1⟩ := ProcessMessage.iff_body.mp hpm
+    unfold FrameBody at hbody
+    rcases eq_bt : (processCreateMessage.msg childMsg).benvAfterTransfer with
+      e | benv <;> rw [eq_bt] at hbody
+    · rw [hbody.2, processMessage.settle_error] at hset1
+      rw [hset1, processCreateMessage.settle_error] at hset
+      rw [hset] at hres
+      exact Resume.create_run_error hres.symm
+    · have hca :
+          ((processCreateMessage.msg childMsg).withBenv benv).codeAddress =
+            .none := hc_ca
+      obtain ⟨exn, h_xl, -⟩ := of_executeCode_noneCode hca hbody
+      cases h_xl
+
+/-- Any successful childless executable instruction preserves persistent
+storage at every address. -/
+lemma Xinst.none_getStor_eq {sevm : Sevm} {devm inter : Devm} {x : Xinst}
+    (h_run : Xinst.Run sevm devm x .none (.ok inter)) :
+    Devm.getStor inter = Devm.getStor devm := by
+  unfold Xinst.Run at h_run
+  rcases Xinst.step_shape sevm devm x with ⟨ex, hs, hframe⟩ |
+    ⟨d, e, na, mi, ms, hf, hs⟩ |
+    ⟨d, d₀, g, v, c, t, cadr, stv, isSt, ii, isz, oi, osz, code, dp,
+      hf, -, hcal, -, hs⟩ <;> rw [hs] at h_run
+  · obtain ⟨-, hex⟩ := h_run
+    rw [← hex] at hframe
+    have hif : Devm.InstructionFrame devm inter := hframe
+    exact (funext hif.getStor).symm
+  · exact GenericCreate.none_getStor_eq h_run |>.trans
+      (funext hf.getStor).symm
+  · exact GenericCall.none_getStor_eq h_run |>.trans
+      (funext hf.getStor).symm
+
 namespace ContractSpec
 
 variable {c : ContractSpec}
