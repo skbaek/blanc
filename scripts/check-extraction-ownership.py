@@ -35,7 +35,7 @@ DECL_RE = re.compile(
     rf"^\s*(?:@\[[^]]+\]\s*)*(?:(?:private|protected|noncomputable|unsafe)\s+)*(def|theorem|structure|abbrev|opaque|axiom|inductive|class)\s+({IDENT})\b"
 )
 IMPORT_RE = re.compile(rf"^\s*import\s+({IDENT})(?:\s|$)")
-EXPORT_RE = re.compile(rf"^\s*export\s+{IDENT}\s*\(([^)]*)\)")
+EXPORT_RE = re.compile(rf"^\s*export\s+({IDENT})\s*\(([^)]*)\)")
 ALIAS_RE = re.compile(r"^\s*alias\s+(.+)$")
 
 
@@ -164,8 +164,10 @@ def donor_aliases_or_exports(path: Path, donors: set[str]) -> list[tuple[str, in
             continue
         namespace = [part for kind, parts in scopes if kind == "namespace" for part in parts]
         if match := EXPORT_RE.match(line):
-            for item in re.findall(IDENT, match.group(1)):
-                fqn = qualify(namespace, item)
+            exported_namespace, exported_items = match.groups()
+            owner = qualify(namespace, exported_namespace).split(".")
+            for item in re.findall(IDENT, exported_items):
+                fqn = qualify(owner, item)
                 if fqn in donors:
                     hits.append((fqn, number, "export"))
         if match := ALIAS_RE.match(line):

@@ -515,6 +515,17 @@ private def sourceFixtureAvailable : Bool :=
     else false
   | none => false
 
+private theorem sourceFixture_nonempty : Nonempty SourceFixture := by
+  have available : sourceFixtureAvailable = true := by
+    native_decide
+  have hsome : sourceFixture?.isSome = true := by
+    unfold sourceFixture? sourceFixtureAvailable at *
+    repeat' split
+    all_goals grind
+  cases fixture : sourceFixture? with
+  | none => simp [fixture] at hsome
+  | some witness => exact ⟨witness⟩
+
 private theorem SourceFixture.exact (w : SourceFixture) :
     w.frame.exactInvocation sourceProgram
       sourceSevm.currentTarget sourceAddress :=
@@ -545,6 +556,24 @@ private theorem SourceFixture.source_and_identity_controls
   · intro drifted
     exact (by decide : otherSourceAddress ≠ sourceAddress)
       (Option.some.inj (drifted.2.2.1.symm.trans w.exact.2.2.1))
+
+/-- The evaluator's exact `sourceFixture?` builder supplies the proof-indexed
+compiled SSTORE and exact-identity control, rather than merely mirroring its
+field tests in a disconnected Boolean. -/
+private theorem concrete_source_and_identity_controls :
+    ∃ w : SourceFixture,
+      (∃ write : Exec.SuccessfulSstoreOccurrence w.frame.rootDeriv,
+        write.occurrence.node.pc = 1 ∧
+          sourceProgram.acceptsSstoreSite ⟨0, []⟩
+            write.occurrence.node.pc = true) ∧
+      w.frame.exactInvocation sourceProgram
+        sourceSevm.currentTarget sourceAddress ∧
+      ¬ w.frame.exactInvocation sourceProgram
+        otherStorageTarget sourceAddress ∧
+      ¬ w.frame.exactInvocation sourceProgram
+        sourceSevm.currentTarget otherSourceAddress := by
+  rcases sourceFixture_nonempty with ⟨w⟩
+  exact ⟨w, w.source_and_identity_controls⟩
 
 /-! Exact invocation identity controls. -/
 
@@ -705,7 +734,6 @@ private theorem caughtCall_raw_but_pruned (w : CaughtCallFixture) :
         w.call.root :: Exec.retainedNodes w.call.next :=
   ⟨w.call.raw_order, w.call.retained_prunes_of_not_settles w.doesNotSettle⟩
 
-/-- Computable mirrors of the dependent CALL fixture branches. -/
 private def committedChildAvailable : Bool :=
   match (callEvm committedChildCode).step with
   | .spawn frame resume nextPc =>
@@ -733,6 +761,46 @@ private def caughtFailedChildAvailable : Bool :=
             | .error _ => false
       | .done _ => false
   | _ => false
+
+private theorem committedCallFixture_nonempty : Nonempty CommittedCallFixture := by
+  have available : committedChildAvailable = true := by
+    native_decide
+  have hsome : committedCallFixture?.isSome = true := by
+    unfold committedCallFixture? callFixture? committedChildAvailable at *
+    repeat' split
+    all_goals grind
+  cases fixture : committedCallFixture? with
+  | none => simp [fixture] at hsome
+  | some witness => exact ⟨witness⟩
+
+private theorem caughtCallFixture_nonempty : Nonempty CaughtCallFixture := by
+  have available : caughtFailedChildAvailable = true := by
+    native_decide
+  have hsome : caughtCallFixture?.isSome = true := by
+    unfold caughtCallFixture? callFixture? caughtFailedChildAvailable at *
+    repeat' split
+    all_goals grind
+  cases fixture : caughtCallFixture? with
+  | none => simp [fixture] at hsome
+  | some witness => exact ⟨witness⟩
+
+/-- Both exact option builders are inhabited and feed the proof-indexed raw
+and retained chronology equations used by this gate. -/
+private theorem concreteCall_orders :
+    (∃ w : CommittedCallFixture,
+      Exec.rawNodes w.call.run = w.call.root ::
+          (Exec.rawNodes w.call.child ++ Exec.rawNodes w.call.next) ∧
+        Exec.retainedNodes w.call.run = w.call.root ::
+          (Exec.retainedNodes w.call.child ++ Exec.retainedNodes w.call.next)) ∧
+    (∃ w : CaughtCallFixture,
+      Exec.rawNodes w.call.run = w.call.root ::
+          (Exec.rawNodes w.call.child ++ Exec.rawNodes w.call.next) ∧
+        Exec.retainedNodes w.call.run =
+          w.call.root :: Exec.retainedNodes w.call.next) := by
+  rcases committedCallFixture_nonempty with ⟨committed⟩
+  rcases caughtCallFixture_nonempty with ⟨caught⟩
+  exact ⟨⟨committed, committedCall_order committed⟩,
+    ⟨caught, caughtCall_raw_but_pruned caught⟩⟩
 
 -- The gate requires this exact evaluator vector.
 #eval! [

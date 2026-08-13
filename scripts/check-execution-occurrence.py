@@ -194,8 +194,9 @@ def main() -> int:
         ):
             return fail(f"common-owner removal control failed for `{fqn}`")
 
-    # Parser-channel controls: exact donor aliases and missing/wrong-kind
-    # common owners must be detected independently of literal source search.
+    # Parser-channel controls: exact donor aliases/re-exports and missing or
+    # wrong-kind common owners must be detected independently of literal
+    # source search.
     first = mappings[0]
     first_fqn = f'Blanc.{first["declaration"]}'
     with tempfile.TemporaryDirectory(prefix="occurrence-ownership-controls-") as temp:
@@ -212,6 +213,20 @@ def main() -> int:
         )
         if not alias_control or alias_control[0][0] != first_fqn:
             return fail("ownership parser donor-alias negative control failed")
+
+        export_path = temp_root / "DonorExport.lean"
+        export_namespace, export_item = first_fqn.rsplit(".", 1)
+        export_path.write_text(
+            "namespace Blanc.Weth10\n"
+            f"export {export_namespace} ({export_item})\n"
+            "end Blanc.Weth10\n",
+            encoding="utf-8",
+        )
+        export_control = ownership.donor_aliases_or_exports(
+            export_path, {first_fqn}
+        )
+        if not export_control or export_control[0][0] != first_fqn:
+            return fail("ownership parser donor-export negative control failed")
 
         common_path = ROOT / first["commonModule"]
         common_source = common_path.read_text(encoding="utf-8")
@@ -241,7 +256,7 @@ def main() -> int:
 
     print(
         "OK — execution occurrence: 13 concrete controls; 6 Lean mutants; "
-        "WETH bridge-removal mutant; 9 moved-owner + 3 ownership-parser controls; "
+        "WETH bridge-removal mutant; 9 moved-owner + 4 ownership-parser controls; "
         "CREATE raw-commit mutant"
     )
     return 0
