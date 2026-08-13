@@ -336,7 +336,7 @@ footer a:hover{color:var(--ink)}
     </a>
     <nav class="navlinks">
       <a href="#toc">Contents</a>
-      <a href="#claims">The question</a>
+      <a href="#claims">The claim</a>
       <a href="#flagship">The flagship</a>
       <a href="#price">The price</a>
       <a href="#agents">Agents</a>
@@ -445,7 +445,7 @@ footer a:hover{color:var(--ink)}
     <nav class="toc" id="toc" aria-label="Contents">
       <h2>Contents</h2>
       <ol>
-        <li><a href="#claims"><span class="no">1</span> The question we expect <span class="dots"></span></a></li>
+        <li><a href="#claims"><span class="no">1</span> What a port claims — and how we earn it <span class="dots"></span></a></li>
         <li><a href="#canvas"><span class="no">2</span> A blank canvas over the EVM <span class="dots"></span></a></li>
         <li><a href="#portfolio"><span class="no">3</span> Three contracts in <span class="dots"></span></a></li>
         <li><a href="#flagship"><span class="no">4</span> The flagship: future redeemability <span class="dots"></span></a></li>
@@ -463,16 +463,33 @@ footer a:hover{color:var(--ink)}
 <!-- ═══════════════════════ §1 THE QUESTION ═══════════════════════ -->
 <section id="claims">
   <div class="wrap">
-    <p class="eyebrow"><span class="secno">§ 1</span> The question we expect</p>
-    <h2 style="max-width:30ch">“So how do we know it has the right behavior?”</h2>
+    <p class="eyebrow"><span class="secno">§ 1</span> The questions we expect</p>
+    <h2 style="max-width:26ch">What a port claims — and how we earn it.</h2>
     <p class="lede" style="margin-top:18px">
-      Grant everything the title block asked you to grant — a new language, ports as capability
-      demonstrations, the deployed original as reference rather than
-      subject<sup class="fn"><a href="#fn5">5</a></sup> — and this is the question left standing.
-      It is the right one. A familiar name is not evidence, and a correct compiler is no defense
-      if the program it faithfully compiles is the wrong program. So the answer is built in
-      layers, each catching a different way the claim could fail, none asked to do another’s job.
-      WETH10, the fullest instance to date, answers like this:
+      The evidence above is a portfolio of ports: a WETH, a flash-mint token, a full 27-selector
+      WETH10 — contracts you already know, rebuilt in a language you have never heard of. Which
+      invites a fair suspicion: <em>is this claiming to be WETH10 — to the byte? And if not, what
+      kind of win is being advertised?</em>
+    </p>
+    <p class="lede" style="margin-top:14px">
+      To the byte: no — permanently no.<sup class="fn"><a href="#fn5">5</a></sup> What a port
+      claims is a counterfactual: <strong style="color:var(--ink)">were X being written and
+      deployed today, the Blanc implementation would be a better way to build it</strong> — where
+      better is three specific things: behavior that follows a stated, proved specification; an
+      artifact that stays within reach of interactive verification; low-level freedom spent on
+      measured wins. The ports are demonstrations, staged on contracts whose behavior you already
+      know so that the demonstration can be checked against something you trust. And if what you
+      need verified is bytecode already on chain, Blanc is not that instrument — every theorem
+      here is about Blanc’s own artifact, a boundary §&nbsp;6’s ledger prices with the rest of
+      the bill.
+    </p>
+    <p class="lede" style="margin-top:14px">
+      If you are still reading, you have granted the premises, and the question left standing is
+      the one this section exists to answer: <em>what counts as the right behavior — and how do
+      we know the ports have it?</em> A familiar name is not evidence, and a correct compiler is
+      no defense if the program it faithfully compiles is the wrong program. So the answer is
+      built in layers — each catching a different way the claim could fail, none asked to do
+      another’s job. WETH10, the fullest instance to date, answers like this:
     </p>
 
     <div class="ladder">
@@ -535,13 +552,6 @@ footer a:hover{color:var(--ink)}
       </div>
       <div class="panel">
         <span class="tick">claims end where evidence ends</span>
-        <p class="dim" style="font-size:.94rem">
-          What a port claims, precisely, is a counterfactual — <strong style="color:var(--ink)">were X being
-          written and deployed today, the Blanc implementation would be a better way to build
-          it</strong> — where better is three measured things: behavior following a stated, proved
-          specification; an artifact within reach of interactive verification; low-level freedom
-          spent on measured wins. The layers above are the first of the three, made inspectable.
-        </p>
         <p class="dim" style="font-size:.94rem;margin-bottom:0">
           A property believed but not yet proved is recorded as a counted <em>verification
           debt</em>, never asserted — asserting unproved properties is what every unverified
@@ -1305,17 +1315,14 @@ footer a:hover{color:var(--ink)}
           2026-08-12 — except that one long line is wrapped and ellipses mark elision; the
           differential line continues “… 7 state-mutating reentrancy rows, 26
           STATICCALL-context rows, 69 oracle calls traced, 8 channel falsifiers live.”</li>
-        <li id="fn5">The premises §&nbsp;1 grants, spelled out rather than argued: Blanc is a
-          language for writing <em>new</em> bytecode, not an instrument for verifying bytecode
-          already on chain — when a Blanc contract reimplements WETH9 or WETH10, the deployed
-          original is the <em>reference</em>, never the subject, and nothing on this page proves
-          anything about the contract at the reference address. Ports of familiar contracts exist
-          to make the language’s reach legible on targets whose behavior you already know. And
-          byte-identity with the original is a non-goal, permanently: a compiler that chases
-          another compiler’s bytes inherits its dispatcher, its stack discipline, and its bugs,
-          and can justify nothing beyond “same as before.” If any of this is news, start at
-          <a href="https://github.com/skbaek/blanc/blob/main/PORTING.md">PORTING.md</a> — the
-          standing statement of what a port claims and never claims.</li>
+        <li id="fn5">Spelled out, because the boundary rewards precision: when a Blanc contract
+          reimplements WETH9 or WETH10, the deployed original is the <em>reference</em>, never
+          the subject — nothing on this page proves anything about the contract at the reference
+          address. And byte-identity is a non-goal <em>permanently</em>, not merely so far: a
+          compiler that chases another compiler’s bytes inherits its dispatcher, its stack
+          discipline, and its bugs, and can justify nothing beyond “same as before.” The standing
+          statement of what a port claims and never claims is
+          <a href="https://github.com/skbaek/blanc/blob/main/PORTING.md">PORTING.md</a>.</li>
       </ol>
     </div>
   </div>
