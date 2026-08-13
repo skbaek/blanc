@@ -98,6 +98,13 @@ import Blanc.Weth10AnyOrder
 #print axioms Blanc.Prog.acceptsSstoreSite_sound
 #print axioms Blanc.Exec.Frame.successfulSstore_acceptsSource
 #print axioms Blanc.Weth10.Exec.Frame.NinstOccurrence.toCommon
+#print axioms Blanc.Exec.mem_rawNodes_iff_rawFrameRoot_parentPrefix
+#print axioms Blanc.Exec.Deriv.sstore_sourceSite
+#print axioms Blanc.Exec.Deriv.successfulSstore_sourceSite
+#print axioms Blanc.Exec.NinstOccurrence.exists_rawFrameRoot_parentPrefix
+#print axioms Blanc.Exec.NinstOccurrence.sourceSite_of_rawFrameRoot
+#print axioms Blanc.Exec.Deriv.sstore_acceptsSource
+#print axioms Blanc.Exec.NinstOccurrence.acceptsSource_of_rawFrameRoot
 #print axioms Blanc.Func.CompileShape.byteSize_compileShape
 #print axioms Blanc.Func.length_emitByShape
 #print axioms Blanc.Func.getD_emitByShape

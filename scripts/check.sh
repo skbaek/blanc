@@ -368,6 +368,13 @@ Blanc.Exec.exists_lastRetainedSstore_of_getStor_ne|$STANDARD
 Blanc.Prog.acceptsSstoreSite_sound|$STANDARD
 Blanc.Exec.Frame.successfulSstore_acceptsSource|$STANDARD
 Blanc.Weth10.Exec.Frame.NinstOccurrence.toCommon|$STANDARD
+Blanc.Exec.mem_rawNodes_iff_rawFrameRoot_parentPrefix|$STANDARD
+Blanc.Exec.Deriv.sstore_sourceSite|$STANDARD
+Blanc.Exec.Deriv.successfulSstore_sourceSite|$STANDARD
+Blanc.Exec.NinstOccurrence.exists_rawFrameRoot_parentPrefix|$STANDARD
+Blanc.Exec.NinstOccurrence.sourceSite_of_rawFrameRoot|$STANDARD
+Blanc.Exec.Deriv.sstore_acceptsSource|$STANDARD
+Blanc.Exec.NinstOccurrence.acceptsSource_of_rawFrameRoot|$STANDARD
 Blanc.Func.CompileShape.byteSize_compileShape|propext
 Blanc.Func.length_emitByShape|propext
 Blanc.Func.getD_emitByShape|propext
