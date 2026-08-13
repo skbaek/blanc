@@ -216,7 +216,7 @@ def CountedFrame.ofFrame (dp : DeployParams) (ca : Adr)
       if frame.sevm.data.length.toB256 = 0 then none
       else some (Sevm.selector frame.sevm)
     allowance := frameAllowanceEvent frame.sevm frame.pre frame.post
-    action := frame.flowAction? dp ca }
+    action := Blanc.Weth10.Exec.Frame.flowAction? dp ca frame }
 
 /-- Whether an entry context dispatches to `flashLoan`, whose allowance
 settlement chronologically follows its spawned borrower callback. -/
@@ -274,7 +274,7 @@ theorem isPermitInvocation_eq_false_of_ownRecordLast {e : Sevm}
 according to the runtime phase of its allowance activity. -/
 def Exec.frameContribution (dp : DeployParams) (ca : Adr)
     (frame : Exec.Frame) (inner : List CountedFrame) : List CountedFrame :=
-  if frame.exactInvocation dp ca then
+  if Blanc.Weth10.Exec.Frame.exactInvocation dp ca frame then
     let own := CountedFrame.ofFrame dp ca frame
     if ownRecordLast frame.sevm then inner ++ [own] else own :: inner
   else inner
@@ -293,10 +293,10 @@ def Exec.attributionInner (dp : DeployParams) (ca : Adr)
   | .doneOk _ _ _ next => Exec.attributionInner dp ca next
   | .runErr _ _ _ _ => []
   | .runOk (f := f) (raw := raw) _ _ child _ next =>
-      (if h : Blanc.Weth10.Frame.settlementCommits f raw = true then
+      (if h : Blanc.Frame.settlementCommits f raw = true then
         Exec.frameContribution dp ca
           (Exec.Frame.ofRun child
-            (Blanc.Weth10.Frame.raw_commits_of_settlementCommits h))
+            (Blanc.Frame.raw_commits_of_settlementCommits h))
           (Exec.attributionInner dp ca child)
       else []) ++ Exec.attributionInner dp ca next
 termination_by sizeOf run

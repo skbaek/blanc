@@ -114,8 +114,8 @@ inductive RichLocalStorageEffect (dp : DeployParams) (ca : Adr)
 classification that selected the action. -/
 structure Exec.Frame.HasRichLocalStorageEffect (dp : DeployParams)
     (ca : Adr) (frame : Exec.Frame) (action : FlowAction) : Prop where
-  authentic : frame.AuthenticContext dp ca
-  classified : frame.flowAction? dp ca = some action
+  authentic : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame
+  classified : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action
   effect : RichLocalStorageEffect dp ca frame.sevm frame.pre frame.post action
 
 /-- Proper-descendant labels of one retained frame, excluding its own
@@ -124,13 +124,13 @@ witnesses can identify the exact child derivations contributing each suffix. -/
 def Exec.Frame.descendantFlowActions (dp : DeployParams) (ca : Adr)
     (frame : Exec.Frame) : List FlowAction :=
   (Exec.descendantFrames frame.run).filterMap
-    (Exec.Frame.flowAction? dp ca)
+    (Blanc.Weth10.Exec.Frame.flowAction? dp ca)
 
 /-- Proper-descendant labels for an arbitrary proof-indexed execution. -/
 def Exec.Deriv.descendantFlowActions (dp : DeployParams) (ca : Adr)
     (deriv : Exec.Deriv) : List FlowAction :=
   (Exec.descendantFrames deriv.exc).filterMap
-    (Exec.Frame.flowAction? dp ca)
+    (Blanc.Weth10.Exec.Frame.flowAction? dp ca)
 
 /-- One same-frame continuation edge, labelled by exactly the retained child
 actions crossed by that edge.  Child-derivation edges are intentionally not
@@ -170,7 +170,7 @@ inductive Exec.Deriv.ParentStepActions (dp : DeployParams) (ca : Adr) :
         ⟨pc', sevm, post, out, next⟩
         ⟨pc, sevm, pre, out,
           .runOk hstep henter child hresume next⟩
-        (if Blanc.Weth10.Frame.settlementCommits f raw = true then
+        (if Blanc.Frame.settlementCommits f raw = true then
           Exec.flowActions dp ca child
          else [])
 
@@ -204,7 +204,7 @@ theorem Exec.Deriv.ParentStepActions.descendantFlowActions_eq
         Exec.descendantFrames]
       split <;> rename_i hcommit
       · have hraw :=
-          Blanc.Weth10.Frame.raw_commits_of_settlementCommits hcommit
+          Blanc.Frame.raw_commits_of_settlementCommits hcommit
         simp [Exec.flowActions, Exec.committedFrames, hraw]
         rw [← List.cons_append, List.filterMap_append]
       · simp
@@ -252,9 +252,9 @@ frame.  Unlike an endpoint-only effect, this equation is indexed by the
 frame's concrete `Exec` proof. -/
 structure Exec.Frame.ClassifiedActionLedger (dp : DeployParams)
     (ca : Adr) (frame : Exec.Frame) (action : FlowAction) : Prop where
-  rich : frame.HasRichLocalStorageEffect dp ca action
+  rich : Blanc.Weth10.Exec.Frame.HasRichLocalStorageEffect dp ca frame action
   actions_eq : Exec.flowActions dp ca frame.run =
-    action :: frame.descendantFlowActions dp ca
+    action :: Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame
 
 /-- An executed nonterminal instruction together with its exact continuation
 inside the retained frame's original `Exec` derivation.  For a spawning slot,
@@ -285,7 +285,7 @@ the selected instruction's settled child (or `[]`), then the continuation. -/
 theorem Exec.Frame.NinstOccurrence.chronological_descendantFlowActions
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {n : Ninst} {stepPre stepPost : Devm} {xl : Xlot}
-    (occurrence : frame.NinstOccurrence dp ca n stepPre stepPost xl) :
+    (occurrence : Blanc.Weth10.Exec.Frame.NinstOccurrence dp ca frame n stepPre stepPost xl) :
     ∃ (pc : Nat)
         (current : Exec pc frame.sevm stepPre frame.out)
         (continuation : Exec (pc + n.size) frame.sevm stepPost frame.out)
@@ -302,7 +302,7 @@ theorem Exec.Frame.NinstOccurrence.chronological_descendantFlowActions
       Exec.Deriv.ParentStepActions dp ca
         ⟨pc + n.size, frame.sevm, stepPost, frame.out, continuation⟩
         ⟨pc, frame.sevm, stepPre, frame.out, current⟩ selected ∧
-      frame.descendantFlowActions dp ca =
+      Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame =
         before ++ selected ++
           Exec.Deriv.descendantFlowActions dp ca
             ⟨pc + n.size, frame.sevm, stepPost, frame.out, continuation⟩ := by
@@ -322,9 +322,9 @@ proper-descendant split. -/
 theorem Exec.Frame.ClassifiedActionLedger.flowActions_eq_chronological
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {action : FlowAction}
-    (ledger : frame.ClassifiedActionLedger dp ca action)
+    (ledger : Blanc.Weth10.Exec.Frame.ClassifiedActionLedger dp ca frame action)
     {before selected suffix : List FlowAction}
-    (hdesc : frame.descendantFlowActions dp ca =
+    (hdesc : Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame =
       before ++ selected ++ suffix) :
     Exec.flowActions dp ca frame.run =
       action :: (before ++ selected ++ suffix) := by
@@ -343,7 +343,7 @@ theorem Exec.Frame.exists_ninstOccurrence_of_parentPrefix
       ⟨pc, frame.sevm, stepPre, frame.out, current⟩ before)
     (hat : Ninst.At frame.sevm.code pc n) :
     ∃ (stepPost : Devm) (xl : Xlot),
-      frame.NinstOccurrence dp ca n stepPre stepPost xl := by
+      Blanc.Weth10.Exec.Frame.NinstOccurrence dp ca frame n stepPre stepPost xl := by
   rcases frame with ⟨rootPc, sevm, rootPre, out, rootRun, committed⟩
   cases out with
   | error err => simp [Execution.commits] at committed
@@ -422,7 +422,7 @@ theorem Exec.Frame.advance_runCompiled_next
     ∃ (xl : Xlot)
         (continuation : Exec (pc + n.size) frame.sevm stepPost frame.out)
         (selected : List FlowAction),
-      frame.NinstOccurrence dp ca n stepPre stepPost xl ∧
+      Blanc.Weth10.Exec.Frame.NinstOccurrence dp ca frame n stepPre stepPost xl ∧
       Exec.Deriv.ParentStepActions dp ca
         ⟨pc + n.size, frame.sevm, stepPost, frame.out, continuation⟩
         ⟨pc, frame.sevm, stepPre, frame.out, current⟩ selected ∧
@@ -503,7 +503,7 @@ theorem Exec.Frame.advance_runCompiled_next
           cases hout
           cases Ninst.step_spawn_pc hs
           let selected :=
-            if Blanc.Weth10.Frame.settlementCommits f raw = true then
+            if Blanc.Frame.settlementCommits f raw = true then
               Exec.flowActions dp ca child
             else []
           let edge : Exec.Deriv.ParentStepActions dp ca
@@ -603,7 +603,7 @@ theorem Exec.Frame.advance_runCompiled_prepend
       | next hcompiled htail =>
           have hat : Ninst.At frame.sevm.code pc n :=
             ninstAt_of_subcode_next sub
-          rcases frame.advance_runCompiled_next current hprefix hat
+          rcases Blanc.Weth10.Exec.Frame.advance_runCompiled_next (frame := frame) current hprefix hat
               hcompiled with
             ⟨xl, continuation, selected, occurrence, hedge, hnextPrefix⟩
           obtain ⟨nextBoundary, nextSub⟩ :=
@@ -660,9 +660,9 @@ theorem Exec.Frame.advance_runCompiled_branch
   | zero hroom hpop hleft =>
       rcases Evm.branch_zero_steps hpush hjumpi hloc hroom hpop with
         ⟨hstepPush, hstepJumpi⟩
-      rcases frame.advance_cont current hprefix hstepPush with
+      rcases Blanc.Weth10.Exec.Frame.advance_cont (frame := frame) current hprefix hstepPush with
         ⟨afterPush, hpPush⟩
-      rcases frame.advance_cont afterPush hpPush hstepJumpi with
+      rcases Blanc.Weth10.Exec.Frame.advance_cont (frame := frame) afterPush hpPush hstepJumpi with
         ⟨armExec, hpArm⟩
       exact Or.inl ⟨pc + 4, _, armExec, hpArm, hleft,
         hsubLeft, hboundLeft⟩
@@ -670,11 +670,11 @@ theorem Exec.Frame.advance_runCompiled_branch
       rcases Evm.branch_succ_steps hpush hjumpi hjumpdest hjumpable
           hloc hne hroom hpop with
         ⟨hstepPush, hstepJumpi, hstepJumpdest⟩
-      rcases frame.advance_cont current hprefix hstepPush with
+      rcases Blanc.Weth10.Exec.Frame.advance_cont (frame := frame) current hprefix hstepPush with
         ⟨afterPush, hpPush⟩
-      rcases frame.advance_cont afterPush hpPush hstepJumpi with
+      rcases Blanc.Weth10.Exec.Frame.advance_cont (frame := frame) afterPush hpPush hstepJumpi with
         ⟨afterJump, hpJump⟩
-      rcases frame.advance_cont afterJump hpJump hstepJumpdest with
+      rcases Blanc.Weth10.Exec.Frame.advance_cont (frame := frame) afterJump hpJump hstepJumpdest with
         ⟨armExec, hpArm⟩
       exact Or.inr ⟨loc + 1, _, armExec, hpArm, hright,
         hsubRight, hboundRight⟩
@@ -848,14 +848,14 @@ theorem Exec.Frame.CompiledCursor.peelLine
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {table : List (Nat × Func)}
     {line : Line} {tail : Func} {final : Devm}
-    (cursor : frame.CompiledCursor dp ca fs table (line +++ tail) final) :
-    ∃ tailCursor : frame.CompiledCursor dp ca fs table tail final,
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table (line +++ tail) final) :
+    ∃ tailCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table tail final,
       Line.Run frame.sevm cursor.pre line tailCursor.pre := by
-  rcases frame.advance_runCompiled_prepend cursor.current cursor.parentPrefix
+  rcases Blanc.Weth10.Exec.Frame.advance_runCompiled_prepend (frame := frame) cursor.current cursor.parentPrefix
       cursor.run cursor.codeSlice cursor.codeBoundary with
     ⟨tailPc, tailPre, tailExec, crossed, htailPrefix, hline,
       htailRun, htailSub, htailBoundary⟩
-  let tailCursor : frame.CompiledCursor dp ca fs table tail final :=
+  let tailCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table tail final :=
     ⟨tailPc, tailPre, tailExec, cursor.actions ++ crossed, htailPrefix,
       htailRun, htailSub, htailBoundary⟩
   exact ⟨tailCursor, hline⟩
@@ -865,11 +865,11 @@ theorem Exec.Frame.CompiledCursor.selectBranch
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {table : List (Nat × Func)}
     {left right : Func} {final : Devm}
-    (cursor : frame.CompiledCursor dp ca fs table
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table
       (.branch left right) final) :
-    Nonempty (frame.CompiledCursor dp ca fs table left final) ∨
-      Nonempty (frame.CompiledCursor dp ca fs table right final) := by
-  rcases frame.advance_runCompiled_branch cursor.current cursor.parentPrefix
+    Nonempty (Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table left final) ∨
+      Nonempty (Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table right final) := by
+  rcases Blanc.Weth10.Exec.Frame.advance_runCompiled_branch (frame := frame) cursor.current cursor.parentPrefix
       cursor.run cursor.codeSlice cursor.codeBoundary with hleft | hright
   · rcases hleft with
       ⟨armPc, armPre, armExec, hpArm, hrun, hsub, hbound⟩
@@ -886,13 +886,13 @@ theorem Exec.Frame.CompiledCursor.selectBranchWithActions
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {table : List (Nat × Func)}
     {left right : Func} {final : Devm}
-    (cursor : frame.CompiledCursor dp ca fs table
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table
       (.branch left right) final) :
-    (∃ arm : frame.CompiledCursor dp ca fs table left final,
+    (∃ arm : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table left final,
       arm.actions = cursor.actions) ∨
-    (∃ arm : frame.CompiledCursor dp ca fs table right final,
+    (∃ arm : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table right final,
       arm.actions = cursor.actions) := by
-  rcases frame.advance_runCompiled_branch cursor.current cursor.parentPrefix
+  rcases Blanc.Weth10.Exec.Frame.advance_runCompiled_branch (frame := frame) cursor.current cursor.parentPrefix
       cursor.run cursor.codeSlice cursor.codeBoundary with hleft | hright
   · rcases hleft with
       ⟨armPc, armPre, armExec, hpArm, hrun, hsub, hbound⟩
@@ -910,10 +910,10 @@ theorem Exec.Frame.CompiledCursor.selectBranchLeftWithBurn
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {table : List (Nat × Func)}
     {left right : Func} {final : Devm}
-    (cursor : frame.CompiledCursor dp ca fs table
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table
       (.branch left right) final)
     (hnoRight : ∀ pre, ¬ Func.Run fs frame.sevm pre right final) :
-    ∃ arm : frame.CompiledCursor dp ca fs table left final,
+    ∃ arm : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table left final,
       Devm.PopBurnBy [0] (gVerylow + gHigh) cursor.pre arm.pre ∧
       arm.actions = cursor.actions := by
   have compiled := cursor.run
@@ -925,11 +925,11 @@ theorem Exec.Frame.CompiledCursor.selectBranchLeftWithBurn
   | zero hroom hpop hleft =>
       rcases Evm.branch_zero_steps hpush hjumpi hloc hroom hpop with
         ⟨hstepPush, hstepJumpi⟩
-      rcases frame.advance_cont cursor.current cursor.parentPrefix
+      rcases Blanc.Weth10.Exec.Frame.advance_cont (frame := frame) cursor.current cursor.parentPrefix
           hstepPush with ⟨afterPush, hpPush⟩
-      rcases frame.advance_cont afterPush hpPush hstepJumpi with
+      rcases Blanc.Weth10.Exec.Frame.advance_cont (frame := frame) afterPush hpPush hstepJumpi with
         ⟨armExec, hpArm⟩
-      let arm : frame.CompiledCursor dp ca fs table left final :=
+      let arm : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table left final :=
         ⟨cursor.pc + 4, _, armExec, cursor.actions, hpArm,
           hleft, hsubLeft, hboundLeft⟩
       exact ⟨arm, hpop, rfl⟩
@@ -941,10 +941,10 @@ theorem Exec.Frame.CompiledCursor.selectBranchZero
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {table : List (Nat × Func)}
     {left right : Func} {final : Devm} {stack : Stack}
-    (cursor : frame.CompiledCursor dp ca fs table
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table
       (.branch left right) final)
     (hstack : (0 : B256) :: stack <<+ cursor.pre.stack) :
-    ∃ arm : frame.CompiledCursor dp ca fs table left final,
+    ∃ arm : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table left final,
       stack <<+ arm.pre.stack ∧ arm.actions = cursor.actions := by
   have compiled := cursor.run
   rcases subcode_compile_branch_jumpable cursor.codeSlice
@@ -956,11 +956,11 @@ theorem Exec.Frame.CompiledCursor.selectBranchZero
       have hw := popBurn_pref (Devm.PopBurn.of_popBurnBy hpop) hstack
       rcases Evm.branch_zero_steps hpush hjumpi hloc hroom hpop with
         ⟨hstepPush, hstepJumpi⟩
-      rcases frame.advance_cont cursor.current cursor.parentPrefix
+      rcases Blanc.Weth10.Exec.Frame.advance_cont (frame := frame) cursor.current cursor.parentPrefix
           hstepPush with ⟨afterPush, hpPush⟩
-      rcases frame.advance_cont afterPush hpPush hstepJumpi with
+      rcases Blanc.Weth10.Exec.Frame.advance_cont (frame := frame) afterPush hpPush hstepJumpi with
         ⟨armExec, hpArm⟩
-      let arm : frame.CompiledCursor dp ca fs table left final :=
+      let arm : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table left final :=
         ⟨cursor.pc + 4, _, armExec, cursor.actions, hpArm,
           hleft, hsubLeft, hboundLeft⟩
       exact ⟨arm, hw.2, rfl⟩
@@ -973,11 +973,11 @@ theorem Exec.Frame.CompiledCursor.selectBranchSucc
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {table : List (Nat × Func)}
     {left right : Func} {final : Devm} {flag : B256} {stack : Stack}
-    (cursor : frame.CompiledCursor dp ca fs table
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table
       (.branch left right) final)
     (hflag : flag ≠ 0)
     (hstack : flag :: stack <<+ cursor.pre.stack) :
-    ∃ arm : frame.CompiledCursor dp ca fs table right final,
+    ∃ arm : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table right final,
       stack <<+ arm.pre.stack ∧ arm.actions = cursor.actions := by
   have compiled := cursor.run
   rcases subcode_compile_branch_jumpable cursor.codeSlice
@@ -993,13 +993,13 @@ theorem Exec.Frame.CompiledCursor.selectBranchSucc
       rcases Evm.branch_succ_steps hpush hjumpi hjumpdest hjumpable
           hloc hne hroom hpop with
         ⟨hstepPush, hstepJumpi, hstepJumpdest⟩
-      rcases frame.advance_cont cursor.current cursor.parentPrefix
+      rcases Blanc.Weth10.Exec.Frame.advance_cont (frame := frame) cursor.current cursor.parentPrefix
           hstepPush with ⟨afterPush, hpPush⟩
-      rcases frame.advance_cont afterPush hpPush hstepJumpi with
+      rcases Blanc.Weth10.Exec.Frame.advance_cont (frame := frame) afterPush hpPush hstepJumpi with
         ⟨afterJump, hpJump⟩
-      rcases frame.advance_cont afterJump hpJump hstepJumpdest with
+      rcases Blanc.Weth10.Exec.Frame.advance_cont (frame := frame) afterJump hpJump hstepJumpdest with
         ⟨armExec, hpArm⟩
-      let arm : frame.CompiledCursor dp ca fs table right final :=
+      let arm : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table right final :=
         ⟨loc + 1, _, armExec, cursor.actions, hpArm,
           hright, hsubRight, hboundRight⟩
       exact ⟨arm, hw.2, rfl⟩
@@ -1009,10 +1009,10 @@ private theorem Exec.Frame.CompiledCursor.selectBranchZeroSilent
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {table : List (Nat × Func)}
     {left right : Func} {final : Devm} {stack : Stack}
-    (cursor : frame.CompiledCursor dp ca fs table
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table
       (.branch left right) final)
     (hstack : (0 : B256) :: stack <<+ cursor.pre.stack) :
-    ∃ arm : frame.CompiledCursor dp ca fs table left final,
+    ∃ arm : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table left final,
       stack <<+ arm.pre.stack ∧ arm.actions = cursor.actions ∧
       Devm.DispatchSilent cursor.pre arm.pre := by
   have compiled := cursor.run
@@ -1025,11 +1025,11 @@ private theorem Exec.Frame.CompiledCursor.selectBranchZeroSilent
       have hw := popBurn_pref (Devm.PopBurn.of_popBurnBy hpop) hstack
       rcases Evm.branch_zero_steps hpush hjumpi hloc hroom hpop with
         ⟨hstepPush, hstepJumpi⟩
-      rcases frame.advance_cont cursor.current cursor.parentPrefix
+      rcases Blanc.Weth10.Exec.Frame.advance_cont (frame := frame) cursor.current cursor.parentPrefix
           hstepPush with ⟨afterPush, hpPush⟩
-      rcases frame.advance_cont afterPush hpPush hstepJumpi with
+      rcases Blanc.Weth10.Exec.Frame.advance_cont (frame := frame) afterPush hpPush hstepJumpi with
         ⟨armExec, hpArm⟩
-      let arm : frame.CompiledCursor dp ca fs table left final :=
+      let arm : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table left final :=
         ⟨cursor.pc + 4, _, armExec, cursor.actions, hpArm,
           hleft, hsubLeft, hboundLeft⟩
       exact ⟨arm, hw.2, rfl, Devm.DispatchSilent.of_popBurnBy hpop⟩
@@ -1042,11 +1042,11 @@ private theorem Exec.Frame.CompiledCursor.selectBranchSuccSilent
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {table : List (Nat × Func)}
     {left right : Func} {final : Devm} {flag : B256} {stack : Stack}
-    (cursor : frame.CompiledCursor dp ca fs table
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table
       (.branch left right) final)
     (hflag : flag ≠ 0)
     (hstack : flag :: stack <<+ cursor.pre.stack) :
-    ∃ arm : frame.CompiledCursor dp ca fs table right final,
+    ∃ arm : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table right final,
       stack <<+ arm.pre.stack ∧ arm.actions = cursor.actions ∧
       Devm.DispatchSilent cursor.pre arm.pre := by
   have compiled := cursor.run
@@ -1063,13 +1063,13 @@ private theorem Exec.Frame.CompiledCursor.selectBranchSuccSilent
       rcases Evm.branch_succ_steps hpush hjumpi hjumpdest hjumpable
           hloc hne hroom hpop with
         ⟨hstepPush, hstepJumpi, hstepJumpdest⟩
-      rcases frame.advance_cont cursor.current cursor.parentPrefix
+      rcases Blanc.Weth10.Exec.Frame.advance_cont (frame := frame) cursor.current cursor.parentPrefix
           hstepPush with ⟨afterPush, hpPush⟩
-      rcases frame.advance_cont afterPush hpPush hstepJumpi with
+      rcases Blanc.Weth10.Exec.Frame.advance_cont (frame := frame) afterPush hpPush hstepJumpi with
         ⟨afterJump, hpJump⟩
-      rcases frame.advance_cont afterJump hpJump hstepJumpdest with
+      rcases Blanc.Weth10.Exec.Frame.advance_cont (frame := frame) afterJump hpJump hstepJumpdest with
         ⟨armExec, hpArm⟩
-      let arm : frame.CompiledCursor dp ca fs table right final :=
+      let arm : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table right final :=
         ⟨loc + 1, _, armExec, cursor.actions, hpArm,
           hright, hsubRight, hboundRight⟩
       exact ⟨arm, hw.2, rfl, Devm.DispatchSilent.of_popBurnBy hpop⟩
@@ -1080,16 +1080,16 @@ theorem Exec.Frame.CompiledCursor.selectNext
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {table : List (Nat × Func)}
     {n : Ninst} {tail : Func} {final : Devm}
-    (cursor : frame.CompiledCursor dp ca fs table (.next n tail) final) :
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table (.next n tail) final) :
     ∃ stepPre stepPost xl,
-      frame.NinstOccurrence dp ca n stepPre stepPost xl ∧
-      Nonempty (frame.CompiledCursor dp ca fs table tail final) := by
+      Blanc.Weth10.Exec.Frame.NinstOccurrence dp ca frame n stepPre stepPost xl ∧
+      Nonempty (Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table tail final) := by
   have compiled := cursor.run
   cases compiled with
   | next hcompiled htail =>
       have hat : Ninst.At frame.sevm.code cursor.pc n :=
         ninstAt_of_subcode_next cursor.codeSlice
-      rcases frame.advance_runCompiled_next cursor.current
+      rcases Blanc.Weth10.Exec.Frame.advance_runCompiled_next (frame := frame) cursor.current
           cursor.parentPrefix hat hcompiled with
         ⟨xl, continuation, selected, occurrence, hedge, hnextPrefix⟩
       obtain ⟨nextBoundary, nextSub⟩ :=
@@ -1106,10 +1106,10 @@ theorem Exec.Frame.CompiledCursor.selectNextWithActions
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {table : List (Nat × Func)}
     {n : Ninst} {tail : Func} {final : Devm}
-    (cursor : frame.CompiledCursor dp ca fs table (.next n tail) final) :
-    ∃ (tailCursor : frame.CompiledCursor dp ca fs table tail final)
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table (.next n tail) final) :
+    ∃ (tailCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table tail final)
         (xl : Xlot) (selected : List FlowAction),
-      frame.NinstOccurrence dp ca n cursor.pre tailCursor.pre xl ∧
+      Blanc.Weth10.Exec.Frame.NinstOccurrence dp ca frame n cursor.pre tailCursor.pre xl ∧
       Exec.Deriv.ParentStepActions dp ca
         ⟨tailCursor.pc, frame.sevm, tailCursor.pre, frame.out,
           tailCursor.current⟩
@@ -1120,12 +1120,12 @@ theorem Exec.Frame.CompiledCursor.selectNextWithActions
   | next hcompiled htail =>
       have hat : Ninst.At frame.sevm.code cursor.pc n :=
         ninstAt_of_subcode_next cursor.codeSlice
-      rcases frame.advance_runCompiled_next cursor.current
+      rcases Blanc.Weth10.Exec.Frame.advance_runCompiled_next (frame := frame) cursor.current
           cursor.parentPrefix hat hcompiled with
         ⟨xl, continuation, selected, occurrence, hedge, hnextPrefix⟩
       obtain ⟨nextBoundary, nextSub⟩ :=
         Func.noPushBefore_next cursor.codeSlice cursor.codeBoundary
-      let tailCursor : frame.CompiledCursor dp ca fs table tail final :=
+      let tailCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table tail final :=
         ⟨cursor.pc + n.size, _, continuation,
           cursor.actions ++ selected, hnextPrefix, htail, nextSub,
           nextBoundary⟩
@@ -1139,15 +1139,15 @@ theorem Exec.Frame.CompiledCursor.alignExecStep
     {fs : List Func} {table : List (Nat × Func)}
     {x : Xinst} {tail : Func} {final rawPost : Devm}
     {rawSlot : Xlot} {rawPc : Nat}
-    (cursor : frame.CompiledCursor dp ca fs table
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table
       (.next (.exec x) tail) final)
     (rawFilled : rawSlot.Filled)
     (rawStep : Ninst.StepRun rawPc frame.sevm cursor.pre
       (.exec x) rawSlot (.ok rawPost)) :
-    ∃ (tailCursor : frame.CompiledCursor dp ca fs table tail final)
+    ∃ (tailCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table tail final)
         (selected : List FlowAction),
       tailCursor.pre = rawPost ∧
-      frame.NinstOccurrence dp ca (.exec x)
+      Blanc.Weth10.Exec.Frame.NinstOccurrence dp ca frame (.exec x)
         cursor.pre rawPost rawSlot ∧
       Exec.Deriv.ParentStepActions dp ca
         ⟨tailCursor.pc, frame.sevm, tailCursor.pre, frame.out,
@@ -1169,23 +1169,6 @@ theorem Exec.Frame.CompiledCursor.alignExecStep
   subst actualSlot
   subst rawPost
   exact ⟨tailCursor, selected, rfl, occurrence, edge, hactions⟩
-
-/-- A clean retained `ProcessMessage` child survives the full settlement of
-its ordinary CALL frame.  This is the exact settlement fact needed to turn a
-selected parent CALL edge into the retained child's action list. -/
-theorem ProcessMessage.settlementCommits_of_some_ok_clean
-    {msg : Msg} {pc : Nat} {sevm : Sevm} {pre child : Devm}
-    {raw : Execution}
-    (hprocess : ProcessMessage msg
-      (.some ⟨⟨pc, sevm, pre⟩, raw⟩) (.ok child))
-    (hclean : child.error.isSome = false) :
-    Frame.settlementCommits (Frame.ofCall msg) raw = true := by
-  have hsettle := (RunFrame.some_inv hprocess).2
-  have hclean' : child.error.isNone = true := by
-    cases herror : child.error <;> simp_all
-  unfold Frame.settlementCommits
-  rw [← hsettle]
-  exact hclean'
 
 /-- Exact CALL frame and resumption selected by a successful spawn. -/
 theorem genericCall_step_spawn_exact
@@ -1231,21 +1214,6 @@ theorem Ninst.step_call_spawn_ofCall
       simpa only [Ninst.call, Ninst.step_exec] using hspawn)
   exact Xinst.step_call_spawn_ofCall hx
 
-theorem Frame.settlementCommits_ofCall_of_raw_commits
-    {msg : Msg} {raw : Execution}
-    (hraw : Execution.commits raw = true) :
-    Frame.settlementCommits (Frame.ofCall msg) raw = true := by
-  cases raw with
-  | error err =>
-      simp [Execution.commits] at hraw
-  | ok post =>
-      cases herror : post.error with
-      | none =>
-          simp [Frame.settlementCommits, Frame.settle, Frame.settleMsg,
-            Frame.ofCall, executeCode.handleError,
-            processMessage.settle, herror]
-      | some error =>
-          simp [Execution.commits, herror] at hraw
 
 /-- Whether the raw outcome retained by a recursive slot commits.  The empty
 slot is vacuously committing because it contributes no child actions. -/
@@ -1325,16 +1293,16 @@ theorem Exec.Frame.CompiledCursor.alignCommittedCallStep
     {fs : List Func} {table : List (Nat × Func)}
     {tail : Func} {final rawPost : Devm}
     {rawSlot : Xlot} {rawPc : Nat}
-    (cursor : frame.CompiledCursor dp ca fs table
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table
       (.next Ninst.call tail) final)
     (rawFilled : rawSlot.Filled)
     (rawStep : Ninst.StepRun rawPc frame.sevm cursor.pre
       Ninst.call rawSlot (.ok rawPost))
     (retained : RetainedXlot rawSlot)
     (commits : retained.RawCommits) :
-    ∃ tailCursor : frame.CompiledCursor dp ca fs table tail final,
+    ∃ tailCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table tail final,
       tailCursor.pre = rawPost ∧
-      frame.NinstOccurrence dp ca Ninst.call
+      Blanc.Weth10.Exec.Frame.NinstOccurrence dp ca frame Ninst.call
         cursor.pre rawPost rawSlot ∧
       tailCursor.actions =
         cursor.actions ++ retained.flowActions dp ca := by
@@ -1381,18 +1349,18 @@ theorem Exec.Frame.CompiledCursor.selectNextChildless
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {table : List (Nat × Func)}
     {n : Ninst} {tail : Func} {final : Devm}
-    (cursor : frame.CompiledCursor dp ca fs table (.next n tail) final)
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table (.next n tail) final)
     (hchildless : NinstIsChildless n) :
-    ∃ (tailCursor : frame.CompiledCursor dp ca fs table tail final)
+    ∃ (tailCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table tail final)
         (xl : Xlot),
       Ninst.Run frame.sevm cursor.pre n tailCursor.pre ∧
-      frame.NinstOccurrence dp ca n cursor.pre tailCursor.pre xl ∧
+      Blanc.Weth10.Exec.Frame.NinstOccurrence dp ca frame n cursor.pre tailCursor.pre xl ∧
       tailCursor.actions = cursor.actions := by
   cases hrun : cursor.run with
   | next hcompiled htail =>
       have hat : Ninst.At frame.sevm.code cursor.pc n :=
         ninstAt_of_subcode_next cursor.codeSlice
-      rcases frame.advance_runCompiled_next cursor.current
+      rcases Blanc.Weth10.Exec.Frame.advance_runCompiled_next (frame := frame) cursor.current
           cursor.parentPrefix hat hcompiled with
         ⟨xl, continuation, selected, occurrence, hedge, hnextPrefix⟩
       have hselected : selected = [] :=
@@ -1400,7 +1368,7 @@ theorem Exec.Frame.CompiledCursor.selectNextChildless
       subst selected
       obtain ⟨nextBoundary, nextSub⟩ :=
         Func.noPushBefore_next cursor.codeSlice cursor.codeBoundary
-      let tailCursor : frame.CompiledCursor dp ca fs table tail final :=
+      let tailCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table tail final :=
         ⟨cursor.pc + n.size, _, continuation, cursor.actions, by
           simpa using hnextPrefix, htail, nextSub, nextBoundary⟩
       exact ⟨tailCursor, xl, Ninst.Run.of_runCompiled hcompiled,
@@ -1412,15 +1380,15 @@ theorem Exec.Frame.CompiledCursor.peelChildlessLine
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {table : List (Nat × Func)}
     {line : Line} {tail : Func} {final : Devm}
-    (cursor : frame.CompiledCursor dp ca fs table (line +++ tail) final)
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table (line +++ tail) final)
     (hchildless : ∀ n ∈ line, NinstIsChildless n) :
-    ∃ tailCursor : frame.CompiledCursor dp ca fs table tail final,
+    ∃ tailCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table tail final,
       Line.Run frame.sevm cursor.pre line tailCursor.pre ∧
       tailCursor.actions = cursor.actions := by
   induction line with
   | nil => exact ⟨cursor, .nil, rfl⟩
   | cons n line ih =>
-      change frame.CompiledCursor dp ca fs table
+      change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table
         (.next n (line +++ tail)) final at cursor
       rcases cursor.selectNextChildless (hchildless n (by simp)) with
         ⟨nextCursor, xl, hrun, occurrence, hactions⟩
@@ -1656,8 +1624,8 @@ theorem Devm.eq_of_burnBy
 `JUMPDEST`, is a compiled cursor at `weth10Main`. -/
 theorem Exec.Frame.compiledMainCursor
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca) :
-    ∃ cursor : frame.CompiledCursor dp ca
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame) :
+    ∃ cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
         ((weth10 dp).main :: weth10Aux)
         (table 0 ((weth10 dp).main :: weth10Aux))
         (weth10 dp).main frame.post,
@@ -1691,7 +1659,7 @@ theorem Exec.Frame.compiledMainCursor
           ⟨0, e, pre, .ok post, run⟩
           ⟨0, e, pre, .ok post, run⟩ [] :=
         Exec.Deriv.ParentPrefixActions.refl _
-      rcases Exec.Frame.advance_cont
+      rcases Blanc.Weth10.Exec.Frame.advance_cont
           (frame := ⟨0, e, pre, .ok post, run, committed⟩)
           run hrootPrefix hstep with
         ⟨actualContinuation, hentryPrefix⟩
@@ -1706,8 +1674,8 @@ theorem Exec.Frame.compiledMainCursor
 post-`JUMPDEST` state used by the original execution. -/
 private theorem Exec.Frame.compiledMainCursorSilent
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca) :
-    ∃ cursor : frame.CompiledCursor dp ca
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame) :
+    ∃ cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
         ((weth10 dp).main :: weth10Aux)
         (table 0 ((weth10 dp).main :: weth10Aux))
         (weth10 dp).main frame.post,
@@ -1742,7 +1710,7 @@ private theorem Exec.Frame.compiledMainCursorSilent
           ⟨0, e, pre, .ok post, run⟩
           ⟨0, e, pre, .ok post, run⟩ [] :=
         Exec.Deriv.ParentPrefixActions.refl _
-      rcases Exec.Frame.advance_cont
+      rcases Blanc.Weth10.Exec.Frame.advance_cont
           (frame := ⟨0, e, pre, .ok post, run, committed⟩)
           run hrootPrefix hstep with
         ⟨actualContinuation, hentryPrefix⟩
@@ -1761,17 +1729,17 @@ private theorem Exec.Frame.CompiledCursor.reachDispatchLeaf
     {fs : List Func} {table : List (Nat × Func)} {final : Devm}
     {sig w : B256} {f body : Func} {k : Nat} {stack : Stack}
     (hmem : (sig, f) ∈ [(w, body)])
-    (cursor : frame.CompiledCursor dp ca fs table
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table
       (dispatchWith k (.leaf w body)) final)
     (hstack : sig :: stack <<+ cursor.pre.stack) :
-    ∃ bodyCursor : frame.CompiledCursor dp ca fs table f final,
+    ∃ bodyCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table f final,
       stack <<+ bodyCursor.pre.stack ∧
       bodyCursor.actions = cursor.actions := by
   have heq : (sig, f) = (w, body) := List.mem_singleton.mp hmem
   injection heq with hsig hfun
   subst w
   subst body
-  change frame.CompiledCursor dp ca fs table
+  change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table
     ([Ninst.pushB256 sig, Ninst.eq] +++ (f <?> .call k)) final at cursor
   rcases cursor.peelChildlessLine
       (by simp [NinstIsChildless, Ninst.pushB256]) with
@@ -1800,10 +1768,10 @@ private theorem Exec.Frame.CompiledCursor.reachDispatchWith_build :
       DispatchTree.sorted xs = true →
       xs.length ≤ n + 1 →
       (sig, f) ∈ xs →
-      (cursor : frame.CompiledCursor dp ca fs table
+      (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table
         (dispatchWith k (DispatchTree.build n xs)) final) →
       (sig :: stack <<+ cursor.pre.stack) →
-      ∃ bodyCursor : frame.CompiledCursor dp ca fs table f final,
+      ∃ bodyCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table f final,
         stack <<+ bodyCursor.pre.stack ∧
         bodyCursor.actions = cursor.actions := by
   intro n
@@ -1864,7 +1832,7 @@ private theorem Exec.Frame.CompiledCursor.reachDispatchWith_build :
           apply List.mem_append.mp
           rw [List.take_append_drop]
           exact hmem
-        change frame.CompiledCursor dp ca fs table
+        change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table
           ([Ninst.dup 0,
               Ninst.pushB256 (leftmostFsig
                 (DispatchTree.build n
@@ -1953,10 +1921,10 @@ theorem Exec.Frame.CompiledCursor.reachDispatchWith
     {k : Nat} {stack : Stack}
     (hsorted : DispatchTree.sorted funcs = true)
     (hmem : (sig, f) ∈ funcs)
-    (cursor : frame.CompiledCursor dp ca fs table
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table
       (dispatchWith k (DispatchTree.ofSorted funcs)) final)
     (hstack : sig :: stack <<+ cursor.pre.stack) :
-    ∃ bodyCursor : frame.CompiledCursor dp ca fs table f final,
+    ∃ bodyCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table f final,
       stack <<+ bodyCursor.pre.stack ∧
       bodyCursor.actions = cursor.actions :=
   cursor.reachDispatchWith_build hsorted (Nat.le_succ _) hmem hstack
@@ -1967,10 +1935,10 @@ private theorem Exec.Frame.CompiledCursor.reachDispatchLeafSilent
     {fs : List Func} {table : List (Nat × Func)} {final : Devm}
     {sig w : B256} {f body : Func} {k : Nat} {stack : Stack}
     (hmem : (sig, f) ∈ [(w, body)])
-    (cursor : frame.CompiledCursor dp ca fs table
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table
       (dispatchWith k (.leaf w body)) final)
     (hstack : sig :: stack <<+ cursor.pre.stack) :
-    ∃ bodyCursor : frame.CompiledCursor dp ca fs table f final,
+    ∃ bodyCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table f final,
       stack <<+ bodyCursor.pre.stack ∧
       bodyCursor.actions = cursor.actions ∧
       Devm.DispatchSilent cursor.pre bodyCursor.pre := by
@@ -1978,7 +1946,7 @@ private theorem Exec.Frame.CompiledCursor.reachDispatchLeafSilent
   injection heq with hsig hfun
   subst w
   subst body
-  change frame.CompiledCursor dp ca fs table
+  change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table
     ([Ninst.pushB256 sig, Ninst.eq] +++ (f <?> .call k)) final at cursor
   rcases cursor.peelChildlessLine
       (by simp [NinstIsChildless, Ninst.pushB256]) with
@@ -2010,10 +1978,10 @@ private theorem Exec.Frame.CompiledCursor.reachDispatchWithSilent_build :
       DispatchTree.sorted xs = true →
       xs.length ≤ n + 1 →
       (sig, f) ∈ xs →
-      (cursor : frame.CompiledCursor dp ca fs table
+      (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table
         (dispatchWith k (DispatchTree.build n xs)) final) →
       (sig :: stack <<+ cursor.pre.stack) →
-      ∃ bodyCursor : frame.CompiledCursor dp ca fs table f final,
+      ∃ bodyCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table f final,
         stack <<+ bodyCursor.pre.stack ∧
         bodyCursor.actions = cursor.actions ∧
         Devm.DispatchSilent cursor.pre bodyCursor.pre := by
@@ -2075,7 +2043,7 @@ private theorem Exec.Frame.CompiledCursor.reachDispatchWithSilent_build :
           apply List.mem_append.mp
           rw [List.take_append_drop]
           exact hmem
-        change frame.CompiledCursor dp ca fs table
+        change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table
           ([Ninst.dup 0,
               Ninst.pushB256 (leftmostFsig
                 (DispatchTree.build n
@@ -2167,10 +2135,10 @@ theorem Exec.Frame.CompiledCursor.reachDispatchWithSilent
     {k : Nat} {stack : Stack}
     (hsorted : DispatchTree.sorted funcs = true)
     (hmem : (sig, f) ∈ funcs)
-    (cursor : frame.CompiledCursor dp ca fs table
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table
       (dispatchWith k (DispatchTree.ofSorted funcs)) final)
     (hstack : sig :: stack <<+ cursor.pre.stack) :
-    ∃ bodyCursor : frame.CompiledCursor dp ca fs table f final,
+    ∃ bodyCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table f final,
       stack <<+ bodyCursor.pre.stack ∧
       bodyCursor.actions = cursor.actions ∧
       Devm.DispatchSilent cursor.pre bodyCursor.pre :=
@@ -2198,8 +2166,8 @@ theorem Exec.Frame.CompiledCursor.finishLast
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {table : List (Nat × Func)}
     {i : Linst} {final : Devm}
-    (cursor : frame.CompiledCursor dp ca fs table (.last i) final) :
-    frame.descendantFlowActions dp ca = cursor.actions := by
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table (.last i) final) :
+    Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame = cursor.actions := by
   have htail : Exec.Deriv.descendantFlowActions dp ca
       ⟨cursor.pc, frame.sevm, cursor.pre, frame.out, cursor.current⟩ = [] := by
     have hat : Linst.At frame.sevm.code cursor.pc i :=
@@ -2208,7 +2176,7 @@ theorem Exec.Frame.CompiledCursor.finishLast
     simp [Exec.Deriv.descendantFlowActions,
       Exec.descendantFrames_eq_nil_of_halt_step cursor.current hstep]
   have hp := cursor.parentPrefix.descendantFlowActions_eq
-  change frame.descendantFlowActions dp ca =
+  change Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame =
     cursor.actions ++ Exec.Deriv.descendantFlowActions dp ca
       ⟨cursor.pc, frame.sevm, cursor.pre, frame.out, cursor.current⟩ at hp
   rw [htail] at hp
@@ -2217,17 +2185,17 @@ theorem Exec.Frame.CompiledCursor.finishLast
 /-- Entry-silent exact cursor for a successful recognized selector. -/
 theorem Exec.Frame.compiledSelectorBodyCursorSilent
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame} {body : Func}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hmem : (Sevm.selector frame.sevm, body) ∈ weth10Funcs dp) :
-    ∃ bodyCursor : frame.CompiledCursor dp ca
+    ∃ bodyCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
         ((weth10 dp).main :: weth10Aux)
         (table 0 ((weth10 dp).main :: weth10Aux)) body frame.post,
       [] <<+ bodyCursor.pre.stack ∧ bodyCursor.actions = [] ∧
       Devm.DispatchSilent frame.pre bodyCursor.pre := by
-  rcases frame.compiledMainCursorSilent context with
+  rcases Blanc.Weth10.Exec.Frame.compiledMainCursorSilent (frame := frame) context with
     ⟨mainCursor, hmainActions, hmainSilent⟩
-  change frame.CompiledCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     ([Ninst.calldatasize, Ninst.iszero] +++
@@ -2258,7 +2226,7 @@ theorem Exec.Frame.compiledSelectorBodyCursorSilent
   rcases entryBranchCursor.selectBranchZeroSilent hflagPrefix with
     ⟨dispatchPrefixCursor, hdispatchStack, hdispatchActions,
       hdispatchSilent⟩
-  change frame.CompiledCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (fsig +++ dispatchWith fallbackSlot (weth10Tree dp))
@@ -2273,7 +2241,7 @@ theorem Exec.Frame.compiledSelectorBodyCursorSilent
   have hselectorPrefix : Sevm.selector frame.sevm :: [] <<+
       dispatchCursor.pre.stack :=
     prefix_of_fsig nil_pref hfsig
-  change frame.CompiledCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (dispatchWith fallbackSlot
@@ -2293,14 +2261,14 @@ exact listed selector body.  This is the proof-indexed counterpart of
 frame and therefore remembers every earlier child action. -/
 theorem Exec.Frame.compiledSelectorBodyCursor
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame} {body : Func}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hmem : (Sevm.selector frame.sevm, body) ∈ weth10Funcs dp) :
-    ∃ bodyCursor : frame.CompiledCursor dp ca
+    ∃ bodyCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
         ((weth10 dp).main :: weth10Aux)
         (table 0 ((weth10 dp).main :: weth10Aux)) body frame.post,
       [] <<+ bodyCursor.pre.stack ∧ bodyCursor.actions = [] := by
-  rcases frame.compiledSelectorBodyCursorSilent context hnonempty hmem with
+  rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorSilent (frame := frame) context hnonempty hmem with
     ⟨bodyCursor, hstack, hactions, _hsilent⟩
   exact ⟨bodyCursor, hstack, hactions⟩
 
@@ -2310,16 +2278,16 @@ theorem Exec.Frame.CompiledCursor.enterNonpayableSilent
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {table : List (Nat × Func)}
     {body : Func} {final : Devm}
-    (cursor : frame.CompiledCursor dp ca fs table
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table
       (nonpayable body) final) :
-    ∃ bodyCursor : frame.CompiledCursor dp ca fs table body final,
+    ∃ bodyCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table body final,
       [] <<+ bodyCursor.pre.stack ∧
       bodyCursor.actions = cursor.actions ∧
       Devm.DispatchSilent cursor.pre bodyCursor.pre := by
   have hvalue : frame.sevm.value = 0 :=
     value_eq_zero_of_run_nonpayable
       (Func.Run.of_runCompiled cursor.run)
-  change frame.CompiledCursor dp ca fs table
+  change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table
     ([Ninst.callvalue, Ninst.iszero] +++ (body <?> Func.rev)) final at cursor
   rcases cursor.peelChildlessLine
       (by simp [NinstIsChildless]) with
@@ -2351,9 +2319,9 @@ theorem Exec.Frame.CompiledCursor.enterNonpayable
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {table : List (Nat × Func)}
     {body : Func} {final : Devm}
-    (cursor : frame.CompiledCursor dp ca fs table
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table
       (nonpayable body) final) :
-    ∃ bodyCursor : frame.CompiledCursor dp ca fs table body final,
+    ∃ bodyCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table body final,
       [] <<+ bodyCursor.pre.stack ∧
       bodyCursor.actions = cursor.actions := by
   rcases cursor.enterNonpayableSilent with
@@ -2367,12 +2335,12 @@ cannot identify the called table body. -/
 theorem Exec.Frame.CompiledCursor.enterCall
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {f₀ : Func} {aux : List Func} {k : Nat} {final : Devm}
-    (cursor : frame.CompiledCursor dp ca (f₀ :: aux)
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame (f₀ :: aux)
       (table 0 (f₀ :: aux)) (.call k) final)
     (hcode : some frame.sevm.code.toList = Prog.compile ⟨f₀, aux⟩) :
     ∃ body,
       (f₀ :: aux)[k]? = some body ∧
-      ∃ bodyCursor : frame.CompiledCursor dp ca (f₀ :: aux)
+      ∃ bodyCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame (f₀ :: aux)
           (table 0 (f₀ :: aux)) body final,
         bodyCursor.actions = cursor.actions := by
   cases hrun : cursor.run with
@@ -2392,14 +2360,14 @@ theorem Exec.Frame.CompiledCursor.enterCall
       rcases Evm.call_steps (le := le) hpush hjump hjumpdest
           hjumpable.1 hloc hroom hburn with
         ⟨hstepPush, hstepJump, hstepJumpdest⟩
-      rcases frame.advance_cont cursor.current cursor.parentPrefix
+      rcases Blanc.Weth10.Exec.Frame.advance_cont (frame := frame) cursor.current cursor.parentPrefix
           hstepPush with
         ⟨afterPush, hprefixPush⟩
-      rcases frame.advance_cont afterPush hprefixPush hstepJump with
+      rcases Blanc.Weth10.Exec.Frame.advance_cont (frame := frame) afterPush hprefixPush hstepJump with
         ⟨afterJump, hprefixJump⟩
-      rcases frame.advance_cont afterJump hprefixJump hstepJumpdest with
+      rcases Blanc.Weth10.Exec.Frame.advance_cont (frame := frame) afterJump hprefixJump hstepJumpdest with
         ⟨bodyExec, hprefixBody⟩
-      let bodyCursor : frame.CompiledCursor dp ca (f₀ :: aux)
+      let bodyCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame (f₀ :: aux)
           (table 0 (f₀ :: aux)) _ final :=
         ⟨loc + 1, _, bodyExec, cursor.actions, hprefixBody,
           hbody, hsub, hjumpable.2⟩
@@ -2412,10 +2380,10 @@ theorem Exec.Frame.CompiledCursor.reachCallBoolCallback
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {f₀ : Func} {aux : List Func} {table : List (Nat × Func)}
     {sel targetArg dataArg : B256} {value : Line} {final : Devm}
-    (cursor : frame.CompiledCursor dp ca (f₀ :: aux) table
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame (f₀ :: aux) table
       (callBoolCallback sel targetArg dataArg value) final)
     (hvalue : ∀ n ∈ value, NinstIsChildless n) :
-    ∃ callCursor : frame.CompiledCursor dp ca (f₀ :: aux) table
+    ∃ callCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame (f₀ :: aux) table
         (.next Ninst.call (.call boolReturnSlot)) final,
       callCursor.actions = cursor.actions := by
   unfold callBoolCallback at cursor
@@ -2486,7 +2454,7 @@ theorem Exec.Frame.CompiledCursor.reachCallBoolCallbackWithPrefix
     {f₀ : Func} {aux : List Func} {table : List (Nat × Func)}
     {sel targetArg dataArg valueWord : B256} {value : Line}
     {final : Devm} {img : Bytes}
-    (cursor : frame.CompiledCursor dp ca (f₀ :: aux) table
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame (f₀ :: aux) table
       (callBoolCallback sel targetArg dataArg value) final)
     (hvalueChildless : ∀ n ∈ value, NinstIsChildless n)
     (h_value_stack : ∀ {a b : Devm} {xs : Stack},
@@ -2500,7 +2468,7 @@ theorem Exec.Frame.CompiledCursor.reachCallBoolCallbackWithPrefix
     (h_value_output : Line.Inv Devm.output value)
     (h_wf : Mem.Wf cursor.pre.memory)
     (h_reads : Mem.Reads cursor.pre.memory img) :
-    ∃ callCursor : frame.CompiledCursor dp ca (f₀ :: aux) table
+    ∃ callCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame (f₀ :: aux) table
         (.next Ninst.call (.call boolReturnSlot)) final,
       callCursor.actions = cursor.actions ∧
       RawTokenCallbackCallPrefix frame.sevm sel targetArg dataArg valueWord
@@ -2574,10 +2542,10 @@ theorem Exec.Frame.CompiledCursor.finishTerminalChildlessLine
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {table : List (Nat × Func)}
     {line : Line} {i : Linst} {final : Devm}
-    (cursor : frame.CompiledCursor dp ca fs table
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table
       (line +++ Func.last i) final)
     (hchildless : ∀ n ∈ line, NinstIsChildless n) :
-    frame.descendantFlowActions dp ca = cursor.actions := by
+    Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame = cursor.actions := by
   rcases cursor.peelChildlessLine hchildless with
     ⟨lastCursor, _hline, hactions⟩
   exact lastCursor.finishLast.trans hactions
@@ -2588,12 +2556,12 @@ frame's committed final state, while its decode arm is childless. -/
 theorem Exec.Frame.CompiledCursor.finishBoolReturnCall
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {final : Devm}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       (.call boolReturnSlot) final)
     (hcode : some frame.sevm.code.toList = Prog.compile (weth10 dp)) :
-    frame.descendantFlowActions dp ca = cursor.actions := by
+    Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame = cursor.actions := by
   rcases cursor.enterCall hcode with
     ⟨body, hget, bodyCursor, hbodyActions⟩
   have hbody : body = boolReturn := by
@@ -2614,7 +2582,7 @@ theorem Exec.Frame.CompiledCursor.finishBoolReturnCall
     rcases secondBranchCursor.selectBranchWithActions with
         hreturn | hrev
     · rcases hreturn with ⟨returnCursor, hreturnActions⟩
-      change frame.CompiledCursor dp ca
+      change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
         ((weth10 dp).main :: weth10Aux)
         (table 0 ((weth10 dp).main :: weth10Aux))
         ((pushList [32, 0, 0] ++
@@ -2656,8 +2624,8 @@ def Exec.Frame.CompiledTokenCallbackChronology
       (Sevm.tailBytes frame.sevm dataArg) input pre post callPre callPost
       parent child xl pc ∧
     retained.RawCommits ∧
-    frame.NinstOccurrence dp ca Ninst.call callPre callPost xl ∧
-    frame.descendantFlowActions dp ca =
+    Blanc.Weth10.Exec.Frame.NinstOccurrence dp ca frame Ninst.call callPre callPost xl ∧
+    Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame =
       prefixActions ++ retained.flowActions dp ca
 
 /-- Construct the exact callback chronology directly from the original
@@ -2667,7 +2635,7 @@ theorem Exec.Frame.CompiledCursor.compiledTokenCallbackChronology
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {sel targetArg dataArg valueWord : B256} {value : Line}
     {final : Devm} {img : Bytes}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       (callBoolCallback sel targetArg dataArg value) final)
@@ -2684,7 +2652,7 @@ theorem Exec.Frame.CompiledCursor.compiledTokenCallbackChronology
     (h_wf : Mem.Wf cursor.pre.memory)
     (h_reads : Mem.Reads cursor.pre.memory img)
     (hcode : some frame.sevm.code.toList = Prog.compile (weth10 dp)) :
-    frame.CompiledTokenCallbackChronology dp ca sel targetArg dataArg
+    Blanc.Weth10.Exec.Frame.CompiledTokenCallbackChronology dp ca frame sel targetArg dataArg
       valueWord cursor.pre final cursor.actions := by
   rcases cursor.reachCallBoolCallbackWithPrefix hvalueChildless
       h_value_stack h_value_stor h_value_bal h_value_code h_value_mem
@@ -2721,7 +2689,7 @@ theorem Exec.Frame.CompiledCursor.compiledTokenCallbackChronology
       refine ⟨inputSize, input, callCursor.pre, _, parent, child, xl,
         pc, retained, hraw, hcommits, occurrence, ?_⟩
       calc
-        frame.descendantFlowActions dp ca = tailCursor.actions := hdesc
+        Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame = tailCursor.actions := hdesc
         _ = callCursor.actions ++ retained.flowActions dp ca :=
           htailActions
         _ = cursor.actions ++ retained.flowActions dp ca := by
@@ -2744,22 +2712,22 @@ def Exec.Frame.CompiledDepositToAndCallChronology
     Devm.getBal callbackPre = Devm.getBal frame.pre ∧
     Devm.getCode callbackPre = Devm.getCode frame.pre ∧
     callbackPre.output = frame.pre.output ∧
-    frame.CompiledTokenCallbackChronology dp ca
+    Blanc.Weth10.Exec.Frame.CompiledTokenCallbackChronology dp ca frame
       onTokenTransferSelector 0 1 frame.sevm.value callbackPre frame.post []
 
 /-- Construct the exact `depositToAndCall` mint/callback chronology from the
 authentic retained frame. -/
 theorem Exec.Frame.compiledDepositToAndCallChronology
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = depositToAndCallSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    frame.CompiledDepositToAndCallChronology dp ca := by
+    Blanc.Weth10.Exec.Frame.CompiledDepositToAndCallChronology dp ca frame := by
   have hmem :
       (Sevm.selector frame.sevm, depositToAndCall) ∈ weth10Funcs dp := by
     rw [hselector]
     simp [depositToAndCallSelector, weth10Funcs]
-  rcases frame.compiledSelectorBodyCursorSilent context hnonempty hmem with
+  rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorSilent (frame := frame) context hnonempty hmem with
     ⟨bodyCursor, _hbodyStack, hbodyActions, hentrySilent⟩
   unfold depositToAndCall at bodyCursor
   rcases bodyCursor.peelChildlessLine
@@ -2833,7 +2801,7 @@ def Exec.Frame.CompiledApproveAndCallChronology
     Devm.getBal callbackPre = Devm.getBal frame.pre ∧
     Devm.getCode callbackPre = Devm.getCode frame.pre ∧
     callbackPre.output = frame.pre.output ∧
-    frame.CompiledTokenCallbackChronology dp ca
+    Blanc.Weth10.Exec.Frame.CompiledTokenCallbackChronology dp ca frame
       onTokenApprovalSelector 0 2 (Sevm.argWord frame.sevm 1)
       callbackPre frame.post []
 
@@ -2841,16 +2809,16 @@ def Exec.Frame.CompiledApproveAndCallChronology
 the authentic retained frame. -/
 theorem Exec.Frame.compiledApproveAndCallChronology
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = approveAndCallSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    frame.CompiledApproveAndCallChronology dp ca := by
+    Blanc.Weth10.Exec.Frame.CompiledApproveAndCallChronology dp ca frame := by
   have hmem :
       (Sevm.selector frame.sevm, nonpayable approveAndCall) ∈
         weth10Funcs dp := by
     rw [hselector]
     simp [approveAndCallSelector, weth10Funcs]
-  rcases frame.compiledSelectorBodyCursorSilent context hnonempty hmem with
+  rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorSilent (frame := frame) context hnonempty hmem with
     ⟨wrapperCursor, _hwrapperStack, hwrapperActions, hentrySilent⟩
   rcases wrapperCursor.enterNonpayableSilent with
     ⟨bodyCursor, hbodyStack, hbodyActions, hnonpayableSilent⟩
@@ -3185,13 +3153,13 @@ def Exec.Frame.CompiledValueRedemptionChronology
     BurnCallPrefix frame.sevm pre callPre guardPost owner amount target ∧
     trace.slot = trace.retained.slot ∧
     trace.retained.retained.RawCommits ∧
-    frame.NinstOccurrence dp ca Ninst.call callPre trace.callPost
+    Blanc.Weth10.Exec.Frame.NinstOccurrence dp ca frame Ninst.call callPre trace.callPost
       trace.retained.slot ∧
     Devm.getStor guardPost = Devm.getStor frame.post ∧
     Devm.getBal guardPost = Devm.getBal frame.post ∧
     Devm.getCode guardPost = Devm.getCode frame.post ∧
     guardPost.logs = frame.post.logs ∧
-    frame.descendantFlowActions dp ca =
+    Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame =
       prefixActions ++ trace.retained.retained.flowActions dp ca
 
 /-- Rebase only the call-free entry observations of an exact redemption
@@ -3201,14 +3169,14 @@ theorem Exec.Frame.CompiledValueRedemptionChronology.of_entry_eq
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {pre pre' : Devm} {owner : Adr} {amount target : B256}
     {prefixActions : List FlowAction}
-    (chronology : frame.CompiledValueRedemptionChronology dp ca pre owner
+    (chronology : Blanc.Weth10.Exec.Frame.CompiledValueRedemptionChronology dp ca frame pre owner
       amount target prefixActions)
     (hstor : Devm.getStor pre' = Devm.getStor pre)
     (hbal : Devm.getBal pre' = Devm.getBal pre)
     (hcode : Devm.getCode pre' = Devm.getCode pre)
     (hlogs : pre'.logs = pre.logs)
     (houtput : pre'.output = pre.output) :
-    frame.CompiledValueRedemptionChronology dp ca pre' owner amount target
+    Blanc.Weth10.Exec.Frame.CompiledValueRedemptionChronology dp ca frame pre' owner amount target
       prefixActions := by
   rcases chronology with ⟨callPre, guardPost, trace, burn, rest⟩
   exact ⟨callPre, guardPost, trace,
@@ -3397,7 +3365,7 @@ private theorem Exec.Frame.CompiledCursor.compiledValueRedemptionContinuation
     {sendPrefix : Line} {success : Func} {final : Devm}
     {sendErrorSlot : Nat} {sendErrorReason : String}
     {target : B256} {img : Bytes}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       (valueRedemptionBody source amountArg sendPrefix sendErrorSlot
@@ -3417,7 +3385,7 @@ private theorem Exec.Frame.CompiledCursor.compiledValueRedemptionContinuation
       (((weth10 dp).main :: weth10Aux)[sendErrorSlot]? =
         some (Func.revWith sendErrorReason))) :
     ∃ (callPre : Devm)
-        (successCursor : frame.CompiledCursor dp ca
+        (successCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
           ((weth10 dp).main :: weth10Aux)
           (table 0 ((weth10 dp).main :: weth10Aux)) success final)
         (trace : AcceptedValueCallTrace frame.sevm target
@@ -3427,7 +3395,7 @@ private theorem Exec.Frame.CompiledCursor.compiledValueRedemptionContinuation
         (Sevm.argWord frame.sevm amountArg) target ∧
       trace.slot = trace.retained.slot ∧
       trace.retained.retained.RawCommits ∧
-      frame.NinstOccurrence dp ca Ninst.call callPre trace.callPost
+      Blanc.Weth10.Exec.Frame.NinstOccurrence dp ca frame Ninst.call callPre trace.callPost
         trace.retained.slot ∧
       successCursor.actions = cursor.actions ++
         trace.retained.retained.flowActions dp ca ∧
@@ -3567,7 +3535,7 @@ private theorem Exec.Frame.CompiledCursor.compiledValueRedemptionContinuation
   have hpost : trace.callPost = testCursor.pre :=
     Except.ok.inj halign.2
   subst actualSlot
-  have traceOccurrence : frame.NinstOccurrence dp ca Ninst.call
+  have traceOccurrence : Blanc.Weth10.Exec.Frame.NinstOccurrence dp ca frame Ninst.call
       callCursor.pre trace.callPost trace.retained.slot := by
     simpa only [← hpost] using actualOccurrence
   have hcallAt : Ninst.At frame.sevm.code callCursor.pc Ninst.call :=
@@ -3662,7 +3630,7 @@ theorem Exec.Frame.CompiledCursor.compiledValueRedemptionChronology
     {sendPrefix successLine : Line} {successLast : Linst}
     {sendErrorSlot : Nat} {sendErrorReason : String}
     {target : B256} {img : Bytes}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       (valueRedemptionBody source amountArg sendPrefix sendErrorSlot
@@ -3691,7 +3659,7 @@ theorem Exec.Frame.CompiledCursor.compiledValueRedemptionChronology
     (hsendError :
       (((weth10 dp).main :: weth10Aux)[sendErrorSlot]? =
         some (Func.revWith sendErrorReason))) :
-    frame.CompiledValueRedemptionChronology dp ca cursor.pre
+    Blanc.Weth10.Exec.Frame.CompiledValueRedemptionChronology dp ca frame cursor.pre
       (source.word frame.sevm).toAdr
       (Sevm.argWord frame.sevm amountArg) target
       cursor.actions := by
@@ -3713,7 +3681,7 @@ theorem Exec.Frame.CompiledCursor.compiledValueRedemptionChronology
     hsuccessLogs hsuccessRun
   have hdesc := successCursor.finishTerminalChildlessLine
     hsuccessChildless
-  have hdescExact : frame.descendantFlowActions dp ca =
+  have hdescExact : Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame =
       cursor.actions ++ trace.retained.retained.flowActions dp ca :=
     hdesc.trans hsuccessActions
   exact ⟨callPre, successCursor.pre, trace, burn, htraceSlot,
@@ -3727,7 +3695,7 @@ event-word memory image preserved for a following callback. -/
 theorem Exec.Frame.CompiledCursor.enterTransferZeroThen
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {success : Func} {final : Devm} {img : Bytes}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       (transferZeroThen success) final)
@@ -3738,7 +3706,7 @@ theorem Exec.Frame.CompiledCursor.enterTransferZeroThen
         (trace : AcceptedValueCallTrace frame.sevm
           frame.sevm.caller.toB256 (Sevm.argWord frame.sevm 1)
           callPre guardPost)
-        (successCursor : frame.CompiledCursor dp ca
+        (successCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
           ((weth10 dp).main :: weth10Aux)
           (table 0 ((weth10 dp).main :: weth10Aux)) success final),
       BurnCallPrefix frame.sevm cursor.pre callPre guardPost
@@ -3746,7 +3714,7 @@ theorem Exec.Frame.CompiledCursor.enterTransferZeroThen
         frame.sevm.caller.toB256 ∧
       trace.slot = trace.retained.slot ∧
       trace.retained.retained.RawCommits ∧
-      frame.NinstOccurrence dp ca Ninst.call callPre trace.callPost
+      Blanc.Weth10.Exec.Frame.NinstOccurrence dp ca frame Ninst.call callPre trace.callPost
         trace.retained.slot ∧
       successCursor.pre = guardPost ∧
       successCursor.actions = cursor.actions ++
@@ -3754,7 +3722,7 @@ theorem Exec.Frame.CompiledCursor.enterTransferZeroThen
       Mem.Wf successCursor.pre.memory ∧
       Mem.Reads successCursor.pre.memory
         (Bytes.writeAt img 0 (Sevm.argWord frame.sevm 1).toBytes) := by
-  change frame.CompiledCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (valueRedemptionBody .caller 1 sendValueToCallerPrefix
@@ -3783,23 +3751,23 @@ The public entry/dispatch/nonpayable prefix is rebased only through its proved
 observation equalities. -/
 theorem Exec.Frame.compiledWithdrawChronology
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = withdrawSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    frame.CompiledValueRedemptionChronology dp ca frame.pre
+    Blanc.Weth10.Exec.Frame.CompiledValueRedemptionChronology dp ca frame frame.pre
       frame.sevm.caller (Sevm.argWord frame.sevm 0)
       frame.sevm.caller.toB256 [] := by
   have hmem :
       (Sevm.selector frame.sevm, nonpayable withdraw) ∈ weth10Funcs dp := by
     rw [hselector]
     simp [withdrawSelector, weth10Funcs]
-  rcases frame.compiledSelectorBodyCursorSilent context hnonempty hmem with
+  rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorSilent (frame := frame) context hnonempty hmem with
     ⟨wrapperCursor, _hwrapperStack, hwrapperActions, hentrySilent⟩
   rcases wrapperCursor.enterNonpayableSilent with
     ⟨bodyCursor, hbodyStack, hbodyActions, hnonpayableSilent⟩
   have hbodySilent : Devm.DispatchSilent frame.pre bodyCursor.pre :=
     hentrySilent.trans hnonpayableSilent
-  change frame.CompiledCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (valueRedemptionBody .caller 0 sendValueToCallerPrefix
@@ -3843,23 +3811,23 @@ theorem Exec.Frame.compiledWithdrawChronology
 actual value `CALL`. -/
 theorem Exec.Frame.compiledWithdrawToChronology
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = withdrawToSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    frame.CompiledValueRedemptionChronology dp ca frame.pre
+    Blanc.Weth10.Exec.Frame.CompiledValueRedemptionChronology dp ca frame frame.pre
       frame.sevm.caller (Sevm.argWord frame.sevm 1)
       (Sevm.argWord frame.sevm 0) [] := by
   have hmem :
       (Sevm.selector frame.sevm, nonpayable withdrawTo) ∈ weth10Funcs dp := by
     rw [hselector]
     simp [withdrawToSelector, weth10Funcs]
-  rcases frame.compiledSelectorBodyCursorSilent context hnonempty hmem with
+  rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorSilent (frame := frame) context hnonempty hmem with
     ⟨wrapperCursor, _hwrapperStack, hwrapperActions, hentrySilent⟩
   rcases wrapperCursor.enterNonpayableSilent with
     ⟨bodyCursor, hbodyStack, hbodyActions, hnonpayableSilent⟩
   have hbodySilent : Devm.DispatchSilent frame.pre bodyCursor.pre :=
     hentrySilent.trans hnonpayableSilent
-  change frame.CompiledCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (valueRedemptionBody .caller 1 (sendValueToArgPrefix 0)
@@ -3919,24 +3887,24 @@ raw recipient word is zero.  The Boolean `RETURN` suffix is retained only
 through the observations it actually preserves. -/
 theorem Exec.Frame.compiledTransferZeroChronology
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = transferSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hto : Sevm.argWord frame.sevm 0 = 0) :
-    frame.CompiledValueRedemptionChronology dp ca frame.pre
+    Blanc.Weth10.Exec.Frame.CompiledValueRedemptionChronology dp ca frame frame.pre
       frame.sevm.caller (Sevm.argWord frame.sevm 1)
       frame.sevm.caller.toB256 [] := by
   have hmem :
       (Sevm.selector frame.sevm, nonpayable transfer) ∈ weth10Funcs dp := by
     rw [hselector]
     simp [transferSelector, weth10Funcs]
-  rcases frame.compiledSelectorBodyCursorSilent context hnonempty hmem with
+  rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorSilent (frame := frame) context hnonempty hmem with
     ⟨wrapperCursor, _hwrapperStack, hwrapperActions, hentrySilent⟩
   rcases wrapperCursor.enterNonpayableSilent with
     ⟨bodyCursor, _hbodyStack, hbodyActions, hnonpayableSilent⟩
   have hbodySilent : Devm.DispatchSilent frame.pre bodyCursor.pre :=
     hentrySilent.trans hnonpayableSilent
-  change frame.CompiledCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (transferZeroSelectLine +++
@@ -3987,7 +3955,7 @@ theorem Exec.Frame.compiledTransferZeroChronology
     hbodySilent.output.trans
       ((Line.of_inv Devm.output (by line_inv) htargetLine).trans
         hbranchSilent.output)
-  change frame.CompiledCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (valueRedemptionBody .caller 1 sendValueToCallerPrefix
@@ -4085,12 +4053,12 @@ reaching the called body preserves the allowance-prefix observations. -/
 private theorem Exec.Frame.CompiledCursor.enterCallSilent
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {f₀ : Func} {aux : List Func} {k : Nat} {final : Devm}
-    (cursor : frame.CompiledCursor dp ca (f₀ :: aux)
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame (f₀ :: aux)
       (table 0 (f₀ :: aux)) (.call k) final)
     (hcode : some frame.sevm.code.toList = Prog.compile ⟨f₀, aux⟩) :
     ∃ body,
       (f₀ :: aux)[k]? = some body ∧
-      ∃ bodyCursor : frame.CompiledCursor dp ca (f₀ :: aux)
+      ∃ bodyCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame (f₀ :: aux)
           (table 0 (f₀ :: aux)) body final,
         bodyCursor.actions = cursor.actions ∧
         Devm.DispatchSilent cursor.pre bodyCursor.pre := by
@@ -4111,14 +4079,14 @@ private theorem Exec.Frame.CompiledCursor.enterCallSilent
       rcases Evm.call_steps (le := le) hpush hjump hjumpdest
           hjumpable.1 hloc hroom hburn with
         ⟨hstepPush, hstepJump, hstepJumpdest⟩
-      rcases frame.advance_cont cursor.current cursor.parentPrefix
+      rcases Blanc.Weth10.Exec.Frame.advance_cont (frame := frame) cursor.current cursor.parentPrefix
           hstepPush with
         ⟨afterPush, hprefixPush⟩
-      rcases frame.advance_cont afterPush hprefixPush hstepJump with
+      rcases Blanc.Weth10.Exec.Frame.advance_cont (frame := frame) afterPush hprefixPush hstepJump with
         ⟨afterJump, hprefixJump⟩
-      rcases frame.advance_cont afterJump hprefixJump hstepJumpdest with
+      rcases Blanc.Weth10.Exec.Frame.advance_cont (frame := frame) afterJump hprefixJump hstepJumpdest with
         ⟨bodyExec, hprefixBody⟩
-      let bodyCursor : frame.CompiledCursor dp ca (f₀ :: aux)
+      let bodyCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame (f₀ :: aux)
           (table 0 (f₀ :: aux)) _ final :=
         ⟨loc + 1, _, bodyExec, cursor.actions, hprefixBody,
           hbody, hsub, hjumpable.2⟩
@@ -4258,7 +4226,7 @@ theorem Exec.Frame.CompiledCursor.enterSpendCallerAllowanceThen
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {f₀ : Func} {aux : List Func} {amount : B256} {nextSlot : Nat}
     {final : Devm}
-    (cursor : frame.CompiledCursor dp ca (f₀ :: aux)
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame (f₀ :: aux)
       (table 0 (f₀ :: aux))
       (spendCallerAllowanceThen amount nextSlot) final)
     (hcode : some frame.sevm.code.toList = Prog.compile ⟨f₀, aux⟩)
@@ -4266,7 +4234,7 @@ theorem Exec.Frame.CompiledCursor.enterSpendCallerAllowanceThen
       (f₀ :: aux)[allowanceErrorSlot]? = some allowanceError) :
     ∃ body,
       (f₀ :: aux)[nextSlot]? = some body ∧
-      ∃ bodyCursor : frame.CompiledCursor dp ca (f₀ :: aux)
+      ∃ bodyCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame (f₀ :: aux)
           (table 0 (f₀ :: aux)) body final,
         bodyCursor.actions = cursor.actions := by
   unfold spendCallerAllowanceThen at cursor
@@ -4343,7 +4311,7 @@ theorem Exec.Frame.CompiledCursor.enterSpendCallerAllowanceThenWithObservations
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {f₀ : Func} {aux : List Func} {amount : B256} {nextSlot : Nat}
     {final : Devm}
-    (cursor : frame.CompiledCursor dp ca (f₀ :: aux)
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame (f₀ :: aux)
       (table 0 (f₀ :: aux))
       (spendCallerAllowanceThen amount nextSlot) final)
     (hcode : some frame.sevm.code.toList = Prog.compile ⟨f₀, aux⟩)
@@ -4351,7 +4319,7 @@ theorem Exec.Frame.CompiledCursor.enterSpendCallerAllowanceThenWithObservations
       (f₀ :: aux)[allowanceErrorSlot]? = some allowanceError) :
     ∃ body,
       (f₀ :: aux)[nextSlot]? = some body ∧
-      ∃ bodyCursor : frame.CompiledCursor dp ca (f₀ :: aux)
+      ∃ bodyCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame (f₀ :: aux)
           (table 0 (f₀ :: aux)) body final,
         bodyCursor.actions = cursor.actions ∧
         AllowancePrefixObservations frame.sevm cursor.pre
@@ -4642,13 +4610,13 @@ the redemption chronology therefore starts at that cursor rather than being
 rebased across the allowance mutation. -/
 theorem Exec.Frame.compiledTransferFromZeroChronology
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = transferFromSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hto : Sevm.argWord frame.sevm 1 = 0) :
     ∃ ownPre,
       AllowancePrefixObservations frame.sevm frame.pre ownPre ∧
-      frame.CompiledValueRedemptionChronology dp ca ownPre
+      Blanc.Weth10.Exec.Frame.CompiledValueRedemptionChronology dp ca frame ownPre
         (normalizedAddressArg frame.sevm 0).toAdr
         (Sevm.argWord frame.sevm 2) frame.sevm.caller.toB256 [] := by
   have hmem :
@@ -4656,7 +4624,7 @@ theorem Exec.Frame.compiledTransferFromZeroChronology
         weth10Funcs dp := by
     rw [hselector]
     simp [transferFromSelector, weth10Funcs]
-  rcases frame.compiledSelectorBodyCursorSilent context hnonempty hmem with
+  rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorSilent (frame := frame) context hnonempty hmem with
     ⟨wrapperCursor, _hwrapperStack, hwrapperActions, hentrySilent⟩
   rcases wrapperCursor.enterNonpayableSilent with
     ⟨transferCursor, _htransferStack, htransferActions,
@@ -4665,7 +4633,7 @@ theorem Exec.Frame.compiledTransferFromZeroChronology
       transferCursor.pre :=
     AllowancePrefixObservations.of_dispatchSilent
       (hentrySilent.trans hnonpayableSilent)
-  change frame.CompiledCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (spendCallerAllowanceThen 2 transferFromCoreSlot) frame.post at transferCursor
@@ -4676,7 +4644,7 @@ theorem Exec.Frame.compiledTransferFromZeroChronology
   have hbody : body = transferFromCore := by
     simpa [weth10, weth10Aux, transferFromCoreSlot] using hget.symm
   subst body
-  change frame.CompiledCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (transferFromSelectLine +++
@@ -4711,7 +4679,7 @@ theorem Exec.Frame.compiledTransferFromZeroChronology
     hentryObs.trans (hallowanceObs.trans hselectObs)
   obtain ⟨hwfZero, img, hreadsZero⟩ :=
     hownObs.memory context.memory_wf context.memory_reads_empty
-  change frame.CompiledCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (valueRedemptionBody (.arg 0) 2 sendValueToCallerPrefix
@@ -4748,12 +4716,12 @@ owner cursor, while the accepted value child and descendant ledger remain
 owned by the redemption chronology starting there. -/
 theorem Exec.Frame.compiledWithdrawFromChronology
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = withdrawFromSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
     ∃ ownPre,
       AllowancePrefixObservations frame.sevm frame.pre ownPre ∧
-      frame.CompiledValueRedemptionChronology dp ca ownPre
+      Blanc.Weth10.Exec.Frame.CompiledValueRedemptionChronology dp ca frame ownPre
         (normalizedAddressArg frame.sevm 0).toAdr
         (Sevm.argWord frame.sevm 2) (Sevm.argWord frame.sevm 1) [] := by
   have hmem :
@@ -4761,7 +4729,7 @@ theorem Exec.Frame.compiledWithdrawFromChronology
         weth10Funcs dp := by
     rw [hselector]
     simp [withdrawFromSelector, weth10Funcs]
-  rcases frame.compiledSelectorBodyCursorSilent context hnonempty hmem with
+  rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorSilent (frame := frame) context hnonempty hmem with
     ⟨wrapperCursor, _hwrapperStack, hwrapperActions, hentrySilent⟩
   rcases wrapperCursor.enterNonpayableSilent with
     ⟨withdrawCursor, _hwithdrawStack, hwithdrawActions,
@@ -4770,7 +4738,7 @@ theorem Exec.Frame.compiledWithdrawFromChronology
       withdrawCursor.pre :=
     AllowancePrefixObservations.of_dispatchSilent
       (hentrySilent.trans hnonpayableSilent)
-  change frame.CompiledCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (spendCallerAllowanceThen 2 withdrawFromCoreSlot) frame.post at withdrawCursor
@@ -4785,7 +4753,7 @@ theorem Exec.Frame.compiledWithdrawFromChronology
       ownCursor.pre := hentryObs.trans hallowanceObs
   obtain ⟨hwfOwn, img, hreadsOwn⟩ :=
     hownObs.memory context.memory_wf context.memory_reads_empty
-  change frame.CompiledCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (valueRedemptionBody (.arg 0) 2 (sendValueToArgPrefix 1)
@@ -4829,17 +4797,17 @@ log, and Boolean return are all childless; the fixed reverter alternatives
 cannot be the retained frame's committed continuation. -/
 theorem Exec.Frame.descendantFlowActions_eq_nil_of_transferFromNonzero
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = transferFromSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hto : Sevm.argWord frame.sevm 1 ≠ 0) :
-    frame.descendantFlowActions dp ca = [] := by
+    Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame = [] := by
   have hmem :
       (Sevm.selector frame.sevm, nonpayable transferFrom) ∈
         weth10Funcs dp := by
     rw [hselector]
     simp [transferFromSelector, weth10Funcs]
-  rcases frame.compiledSelectorBodyCursor context hnonempty hmem with
+  rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursor (frame := frame) context hnonempty hmem with
     ⟨wrapperCursor, _hwrapperStack, hwrapperActions⟩
   rcases wrapperCursor.enterNonpayable with
     ⟨transferCursor, _htransferStack, htransferActions⟩
@@ -4850,7 +4818,7 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_transferFromNonzero
   have hbody : body = transferFromCore := by
     simpa [weth10, weth10Aux, transferFromCoreSlot] using hget.symm
   subst body
-  change frame.CompiledCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (transferFromSelectLine +++
@@ -4874,7 +4842,7 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_transferFromNonzero
   rw [htargetCheck] at htargetPrefix
   rcases targetBranchCursor.selectBranchZero htargetPrefix with
     ⟨nonzeroCursor, _hnonzeroStack, hnonzeroActions⟩
-  change frame.CompiledCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (transferFromBalanceCheckLine +++
@@ -4942,8 +4910,8 @@ inductive FlowAction.AcceptedDebit (dp : DeployParams)
 classification witnesses that produced the stored action. -/
 structure Exec.Frame.HasAcceptedDebit (dp : DeployParams) (ca : Adr)
     (frame : Exec.Frame) (action : FlowAction) : Prop where
-  authentic : frame.AuthenticContext dp ca
-  classified : frame.flowAction? dp ca = some action
+  authentic : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame
+  classified : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action
   accepted : action.AcceptedDebit dp frame.sevm frame.pre frame.post
 
 /-- Exact WETH-emitter evidence for a successful compiled frame.  The direct
@@ -4995,8 +4963,8 @@ inductive GenuineWethEmitterEffect (dp : DeployParams) (e : Sevm)
 classification that selected the same frame action. -/
 structure Exec.Frame.HasGenuineWethEmitterEffect (dp : DeployParams)
     (ca : Adr) (frame : Exec.Frame) (action : FlowAction) : Prop where
-  authentic : frame.AuthenticContext dp ca
-  classified : frame.flowAction? dp ca = some action
+  authentic : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame
+  classified : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action
   effect : GenuineWethEmitterEffect dp frame.sevm frame.pre frame.post
 
 /-- Exact absence of an own WETH balance write for the non-flow public
@@ -5100,8 +5068,8 @@ inductive NoWethBalanceOwnEffect (dp : DeployParams) (e : Sevm)
 /-- Authentic unclassified-frame wrapper for a genuine silent own segment. -/
 structure Exec.Frame.HasNoWethBalanceOwnEffect (dp : DeployParams)
     (ca : Adr) (frame : Exec.Frame) : Prop where
-  authentic : frame.AuthenticContext dp ca
-  unclassified : frame.flowAction? dp ca = none
+  authentic : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame
+  unclassified : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = none
   effect : NoWethBalanceOwnEffect dp frame.sevm frame.pre frame.post
 
 /-- Exhaustive own-storage classification of a successful authentic compiled
@@ -5111,8 +5079,8 @@ own code did not write a WETH balance slot. -/
 inductive Exec.Frame.HasCompiledBalanceOwnEffect (dp : DeployParams)
     (ca : Adr) (frame : Exec.Frame) : Prop
   | flow (action : FlowAction)
-      (effect : frame.HasRichLocalStorageEffect dp ca action)
-  | noFlow (effect : frame.HasNoWethBalanceOwnEffect dp ca)
+      (effect : Blanc.Weth10.Exec.Frame.HasRichLocalStorageEffect dp ca frame action)
+  | noFlow (effect : Blanc.Weth10.Exec.Frame.HasNoWethBalanceOwnEffect dp ca frame)
 
 private theorem publicReadResult_weth10Silent
     {P : Devm → Prop} {e : Sevm} {pre post : Devm}
@@ -5181,7 +5149,7 @@ nonempty calldata entered one of the 27 listed public selector bodies.  This is
 proved from the retained `Exec`, not assumed from the selector word. -/
 theorem Exec.Frame.recognizedSelector_of_nonempty
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
     ∃ body, (Sevm.selector frame.sevm, body) ∈ weth10Funcs dp := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
@@ -5244,9 +5212,9 @@ theorem Exec.Frame.recognizedSelector_of_nonempty
 private theorem action_eq_of_flowAction_eq
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {atom : FlowAtom} {action : FlowAction}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hatom : primaryFlowAtom frame.sevm = some atom)
-    (haction : frame.flowAction? dp ca = some action) :
+    (haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action) :
     action =
       { atom
         credit := atom.creditOccurrence frame.pre ca
@@ -5255,18 +5223,18 @@ private theorem action_eq_of_flowAction_eq
         currentTarget := frame.sevm.currentTarget
         codeAddress := frame.sevm.codeAddress
         depth := frame.sevm.depth } := by
-  simp only [Exec.Frame.flowAction?, if_pos context.invocation, hatom,
+  simp only [Blanc.Weth10.Exec.Frame.flowAction?, if_pos context.invocation, hatom,
     Option.map_some, Option.some.injEq] at haction
   exact haction.symm
 
 private theorem debit_eq_of_flowAction_eq
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {action : FlowAction}
-    (context : frame.AuthenticContext dp ca)
-    (haction : frame.flowAction? dp ca = some action) :
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
+    (haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action) :
     action.debit =
       primaryDebitProvenance frame.sevm frame.pre frame.post := by
-  unfold Exec.Frame.flowAction? at haction
+  unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
   rw [if_pos context.invocation] at haction
   cases hatom : primaryFlowAtom frame.sevm with
   | none => simp [hatom] at haction
@@ -5584,10 +5552,10 @@ private theorem localOwnEffect_flashPair
 theorem Exec.Frame.hasLocalOwnEffect_of_receive
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {action : FlowAction}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hempty : frame.sevm.data.length.toB256 = 0)
-    (haction : frame.flowAction? dp ca = some action) :
-    frame.HasLocalOwnEffect ca action := by
+    (haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action) :
+    Blanc.Weth10.Exec.Frame.HasLocalOwnEffect ca frame action := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
   | error err => simp [Execution.commits] at committed
@@ -5600,11 +5568,11 @@ theorem Exec.Frame.hasLocalOwnEffect_of_receive
       have htarget : e.currentTarget = ca := context.invocation.2.1
       rw [htarget] at hinc
       have haction' := haction
-      simp [Exec.Frame.flowAction?, context.invocation, primaryFlowAtom,
+      simp [Blanc.Weth10.Exec.Frame.flowAction?, context.invocation, primaryFlowAtom,
         primaryDebitProvenance, hempty] at haction'
       symm at haction'
       subst action
-      unfold Exec.Frame.HasLocalOwnEffect
+      unfold Blanc.Weth10.Exec.Frame.HasLocalOwnEffect
       refine ⟨Stor.rest (Devm.getStor post ca), ?_⟩
       apply localOwnEffect_ordinaryMint
       · rfl
@@ -5617,11 +5585,11 @@ theorem Exec.Frame.hasLocalOwnEffect_of_receive
 theorem Exec.Frame.hasLocalOwnEffect_of_deposit
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {action : FlowAction}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = depositSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
-    (haction : frame.flowAction? dp ca = some action) :
-    frame.HasLocalOwnEffect ca action := by
+    (haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action) :
+    Blanc.Weth10.Exec.Frame.HasLocalOwnEffect ca frame action := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
   | error err => simp [Execution.commits] at committed
@@ -5635,7 +5603,7 @@ theorem Exec.Frame.hasLocalOwnEffect_of_deposit
       have htarget : e.currentTarget = ca := context.invocation.2.1
       rw [htarget] at hinc
       have haction' := haction
-      simp [Exec.Frame.flowAction?, context.invocation, primaryFlowAtom,
+      simp [Blanc.Weth10.Exec.Frame.flowAction?, context.invocation, primaryFlowAtom,
         primaryDebitProvenance, hnonempty, hselector,
         depositSelector_ne_transferSelector,
         depositSelector_ne_transferAndCallSelector,
@@ -5646,7 +5614,7 @@ theorem Exec.Frame.hasLocalOwnEffect_of_deposit
         depositSelector_ne_flashLoanSelector] at haction'
       symm at haction'
       subst action
-      unfold Exec.Frame.HasLocalOwnEffect
+      unfold Blanc.Weth10.Exec.Frame.HasLocalOwnEffect
       refine ⟨Stor.rest (Devm.getStor post ca), ?_⟩
       apply localOwnEffect_ordinaryMint
       · rfl
@@ -5659,11 +5627,11 @@ theorem Exec.Frame.hasLocalOwnEffect_of_deposit
 theorem Exec.Frame.hasLocalOwnEffect_of_transfer
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {action : FlowAction}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = transferSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
-    (haction : frame.flowAction? dp ca = some action) :
-    frame.HasLocalOwnEffect ca action := by
+    (haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action) :
+    Blanc.Weth10.Exec.Frame.HasLocalOwnEffect ca frame action := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
   | error err => simp [Execution.commits] at committed
@@ -5688,7 +5656,7 @@ theorem Exec.Frame.hasLocalOwnEffect_of_transfer
             transferSelector_ne_depositToAndCallSelector, hraw]
         have heq := action_eq_of_flowAction_eq context hatom haction
         subst action
-        unfold Exec.Frame.HasLocalOwnEffect
+        unfold Blanc.Weth10.Exec.Frame.HasLocalOwnEffect
         refine ⟨Stor.rest (Devm.getStor callPre ca), ?_⟩
         apply localOwnEffect_redemption
         · rfl
@@ -5715,7 +5683,7 @@ theorem Exec.Frame.hasLocalOwnEffect_of_transfer
             transferSelector_ne_depositToAndCallSelector, hraw]
         have heq := action_eq_of_flowAction_eq context hatom haction
         subst action
-        unfold Exec.Frame.HasLocalOwnEffect
+        unfold Blanc.Weth10.Exec.Frame.HasLocalOwnEffect
         refine ⟨Stor.rest (Devm.getStor post ca), ?_⟩
         apply localOwnEffect_ordinaryTransfer
         · rfl
@@ -5729,11 +5697,11 @@ theorem Exec.Frame.hasLocalOwnEffect_of_transfer
 theorem Exec.Frame.hasLocalOwnEffect_of_depositTo
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {action : FlowAction}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = depositToSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
-    (haction : frame.flowAction? dp ca = some action) :
-    frame.HasLocalOwnEffect ca action := by
+    (haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action) :
+    Blanc.Weth10.Exec.Frame.HasLocalOwnEffect ca frame action := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
   | error err => simp [Execution.commits] at committed
@@ -5758,7 +5726,7 @@ theorem Exec.Frame.hasLocalOwnEffect_of_depositTo
           depositToSelector_ne_depositSelector]
       have heq := action_eq_of_flowAction_eq context hatom haction
       subst action
-      unfold Exec.Frame.HasLocalOwnEffect
+      unfold Blanc.Weth10.Exec.Frame.HasLocalOwnEffect
       refine ⟨Stor.rest (Devm.getStor post ca), ?_⟩
       apply localOwnEffect_ordinaryMint
       · rfl
@@ -5778,12 +5746,12 @@ theorem Exec.Frame.hasLocalOwnEffect_of_depositTo
 theorem Exec.Frame.hasLocalOwnEffect_of_depositToAndCall
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {action : FlowAction}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector :
       Sevm.selector frame.sevm = depositToAndCallSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
-    (haction : frame.flowAction? dp ca = some action) :
-    frame.HasLocalOwnEffect ca action := by
+    (haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action) :
+    Blanc.Weth10.Exec.Frame.HasLocalOwnEffect ca frame action := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
   | error err => simp [Execution.commits] at committed
@@ -5811,7 +5779,7 @@ theorem Exec.Frame.hasLocalOwnEffect_of_depositToAndCall
           depositToAndCallSelector_ne_depositSelector]
       have heq := action_eq_of_flowAction_eq context hatom haction
       subst action
-      unfold Exec.Frame.HasLocalOwnEffect
+      unfold Blanc.Weth10.Exec.Frame.HasLocalOwnEffect
       refine ⟨Stor.rest (Devm.getStor callbackPre ca), ?_⟩
       apply localOwnEffect_ordinaryMint
       · rfl
@@ -5831,11 +5799,11 @@ theorem Exec.Frame.hasLocalOwnEffect_of_depositToAndCall
 theorem Exec.Frame.hasLocalOwnEffect_of_transferAndCall
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {action : FlowAction}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = transferAndCallSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
-    (haction : frame.flowAction? dp ca = some action) :
-    frame.HasLocalOwnEffect ca action := by
+    (haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action) :
+    Blanc.Weth10.Exec.Frame.HasLocalOwnEffect ca frame action := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
   | error err => simp [Execution.commits] at committed
@@ -5861,7 +5829,7 @@ theorem Exec.Frame.hasLocalOwnEffect_of_transferAndCall
             transferAndCallSelector_ne_depositToAndCallSelector, hraw]
         have heq := action_eq_of_flowAction_eq context hatom haction
         subst action
-        unfold Exec.Frame.HasLocalOwnEffect
+        unfold Blanc.Weth10.Exec.Frame.HasLocalOwnEffect
         refine ⟨Stor.rest (Devm.getStor callPre ca), ?_⟩
         apply localOwnEffect_redemption
         · rfl
@@ -5889,7 +5857,7 @@ theorem Exec.Frame.hasLocalOwnEffect_of_transferAndCall
             transferAndCallSelector_ne_depositToAndCallSelector, hraw]
         have heq := action_eq_of_flowAction_eq context hatom haction
         subst action
-        unfold Exec.Frame.HasLocalOwnEffect
+        unfold Blanc.Weth10.Exec.Frame.HasLocalOwnEffect
         refine ⟨Stor.rest (Devm.getStor callbackPre ca), ?_⟩
         apply localOwnEffect_ordinaryTransfer
         · rfl
@@ -5903,11 +5871,11 @@ theorem Exec.Frame.hasLocalOwnEffect_of_transferAndCall
 theorem Exec.Frame.hasLocalOwnEffect_of_transferFrom
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {action : FlowAction}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = transferFromSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
-    (haction : frame.flowAction? dp ca = some action) :
-    frame.HasLocalOwnEffect ca action := by
+    (haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action) :
+    Blanc.Weth10.Exec.Frame.HasLocalOwnEffect ca frame action := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
   | error err => simp [Execution.commits] at committed
@@ -5945,7 +5913,7 @@ theorem Exec.Frame.hasLocalOwnEffect_of_transferFrom
             transferFromSelector_ne_transferAndCallSelector, hraw]
         have heq := action_eq_of_flowAction_eq context hatom haction
         subst action
-        unfold Exec.Frame.HasLocalOwnEffect
+        unfold Blanc.Weth10.Exec.Frame.HasLocalOwnEffect
         refine ⟨Stor.rest (Devm.getStor callPre ca), ?_⟩
         apply localOwnEffect_redemption
         · rfl
@@ -5979,7 +5947,7 @@ theorem Exec.Frame.hasLocalOwnEffect_of_transferFrom
             transferFromSelector_ne_transferAndCallSelector, hraw]
         have heq := action_eq_of_flowAction_eq context hatom haction
         subst action
-        unfold Exec.Frame.HasLocalOwnEffect
+        unfold Blanc.Weth10.Exec.Frame.HasLocalOwnEffect
         refine ⟨Stor.rest (Devm.getStor post ca), ?_⟩
         apply localOwnEffect_ordinaryTransfer
         · rfl
@@ -5997,11 +5965,11 @@ theorem Exec.Frame.hasLocalOwnEffect_of_transferFrom
 theorem Exec.Frame.hasLocalOwnEffect_of_withdraw
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {action : FlowAction}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = withdrawSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
-    (haction : frame.flowAction? dp ca = some action) :
-    frame.HasLocalOwnEffect ca action := by
+    (haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action) :
+    Blanc.Weth10.Exec.Frame.HasLocalOwnEffect ca frame action := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
   | error err => simp [Execution.commits] at committed
@@ -6028,7 +5996,7 @@ theorem Exec.Frame.hasLocalOwnEffect_of_withdraw
           withdrawSelector_ne_transferFromSelector]
       have heq := action_eq_of_flowAction_eq context hatom haction
       subst action
-      unfold Exec.Frame.HasLocalOwnEffect
+      unfold Blanc.Weth10.Exec.Frame.HasLocalOwnEffect
       refine ⟨Stor.rest (Devm.getStor callPre ca), ?_⟩
       apply localOwnEffect_redemption
       · rfl
@@ -6041,11 +6009,11 @@ theorem Exec.Frame.hasLocalOwnEffect_of_withdraw
 theorem Exec.Frame.hasLocalOwnEffect_of_withdrawTo
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {action : FlowAction}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = withdrawToSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
-    (haction : frame.flowAction? dp ca = some action) :
-    frame.HasLocalOwnEffect ca action := by
+    (haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action) :
+    Blanc.Weth10.Exec.Frame.HasLocalOwnEffect ca frame action := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
   | error err => simp [Execution.commits] at committed
@@ -6073,7 +6041,7 @@ theorem Exec.Frame.hasLocalOwnEffect_of_withdrawTo
           withdrawToSelector_ne_withdrawSelector]
       have heq := action_eq_of_flowAction_eq context hatom haction
       subst action
-      unfold Exec.Frame.HasLocalOwnEffect
+      unfold Blanc.Weth10.Exec.Frame.HasLocalOwnEffect
       refine ⟨Stor.rest (Devm.getStor callPre ca), ?_⟩
       apply localOwnEffect_redemption
       · rfl
@@ -6086,11 +6054,11 @@ theorem Exec.Frame.hasLocalOwnEffect_of_withdrawTo
 theorem Exec.Frame.hasLocalOwnEffect_of_withdrawFrom
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {action : FlowAction}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = withdrawFromSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
-    (haction : frame.flowAction? dp ca = some action) :
-    frame.HasLocalOwnEffect ca action := by
+    (haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action) :
+    Blanc.Weth10.Exec.Frame.HasLocalOwnEffect ca frame action := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
   | error err => simp [Execution.commits] at committed
@@ -6125,7 +6093,7 @@ theorem Exec.Frame.hasLocalOwnEffect_of_withdrawFrom
           withdrawFromSelector_ne_withdrawToSelector]
       have heq := action_eq_of_flowAction_eq context hatom haction
       subst action
-      unfold Exec.Frame.HasLocalOwnEffect
+      unfold Blanc.Weth10.Exec.Frame.HasLocalOwnEffect
       refine ⟨Stor.rest (Devm.getStor callPre ca), ?_⟩
       apply localOwnEffect_redemption
       · rfl
@@ -6143,11 +6111,11 @@ theorem Exec.Frame.hasLocalOwnEffect_of_withdrawFrom
 theorem Exec.Frame.hasLocalOwnEffect_of_flashLoan
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {action : FlowAction}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = flashLoanSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
-    (haction : frame.flowAction? dp ca = some action) :
-    frame.HasLocalOwnEffect ca action := by
+    (haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action) :
+    Blanc.Weth10.Exec.Frame.HasLocalOwnEffect ca frame action := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
   | error err => simp [Execution.commits] at committed
@@ -6191,7 +6159,7 @@ theorem Exec.Frame.hasLocalOwnEffect_of_flashLoan
           flashLoanSelector_ne_withdrawFromSelector]
       have heq := action_eq_of_flowAction_eq context hatom haction
       subst action
-      unfold Exec.Frame.HasLocalOwnEffect
+      unfold Blanc.Weth10.Exec.Frame.HasLocalOwnEffect
       refine ⟨Stor.rest (Devm.getStor post ca), ?_⟩
       apply localOwnEffect_flashPair
       · rfl
@@ -6217,9 +6185,9 @@ carry `CallerAllowanceAccepted`, and flash repayment carries
 theorem Exec.Frame.hasAcceptedDebit_of_flowAction?_eq_some
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {action : FlowAction}
-    (context : frame.AuthenticContext dp ca)
-    (haction : frame.flowAction? dp ca = some action) :
-    frame.HasAcceptedDebit dp ca action := by
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
+    (haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action) :
+    Blanc.Weth10.Exec.Frame.HasAcceptedDebit dp ca frame action := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
   | error err => simp [Execution.commits] at committed
@@ -6329,9 +6297,9 @@ and its arbitrary child-log segment. -/
 theorem Exec.Frame.hasGenuineWethEmitterEffect_of_flowAction?_eq_some
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {action : FlowAction}
-    (context : frame.AuthenticContext dp ca)
-    (haction : frame.flowAction? dp ca = some action) :
-    frame.HasGenuineWethEmitterEffect dp ca action := by
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
+    (haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action) :
+    Blanc.Weth10.Exec.Frame.HasGenuineWethEmitterEffect dp ca frame action := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
   | error err => simp [Execution.commits] at committed
@@ -6426,7 +6394,7 @@ theorem Exec.Frame.hasGenuineWethEmitterEffect_of_flowAction?_eq_some
         simp [primaryFlowAtom, hnonempty, hdeposit, hdepositTo,
           hdepositCall, htransfer, htransferCall, htransferFrom,
           hwithdraw, hwithdrawTo, hwithdrawFrom, hflash]
-      simp [Exec.Frame.flowAction?, context.invocation, hprimary] at haction
+      simp [Blanc.Weth10.Exec.Frame.flowAction?, context.invocation, hprimary] at haction
 
 /-- Reverse leaf classification for every recognized non-flow selector.
 The recognized-leaf premise is deliberately explicit: deriving it from an
@@ -6437,11 +6405,11 @@ All fourteen read leaves and `approve` are silent at the public endpoint.
 with every own balance-region prefix and suffix proved silent. -/
 theorem Exec.Frame.hasNoWethBalanceOwnEffect_of_recognized
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
-    (hnone : frame.flowAction? dp ca = none)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
+    (hnone : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = none)
     (hrecognized : ∃ body,
       (Sevm.selector frame.sevm, body) ∈ weth10Funcs dp) :
-    frame.HasNoWethBalanceOwnEffect dp ca := by
+    Blanc.Weth10.Exec.Frame.HasNoWethBalanceOwnEffect dp ca frame := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
   | error err => simp [Execution.commits] at committed
@@ -6452,14 +6420,14 @@ theorem Exec.Frame.hasNoWethBalanceOwnEffect_of_recognized
       by_cases hempty : e.data.length.toB256 = 0
       · have hprimary : primaryFlowAtom e ≠ none := by
           simp [primaryFlowAtom, hempty]
-        unfold Exec.Frame.flowAction? at hnone
+        unfold Blanc.Weth10.Exec.Frame.flowAction? at hnone
         rw [if_pos context.invocation] at hnone
         cases h : primaryFlowAtom e with
         | none => exact (hprimary h).elim
         | some atom => simp [h] at hnone
       have hnonempty : e.data.length.toB256 ≠ 0 := hempty
       have hprimary : primaryFlowAtom e = none := by
-        unfold Exec.Frame.flowAction? at hnone
+        unfold Blanc.Weth10.Exec.Frame.flowAction? at hnone
         rw [if_pos context.invocation] at hnone
         cases h : primaryFlowAtom e with
         | none => rfl
@@ -6706,10 +6674,10 @@ frame endpoint. -/
 theorem Exec.Frame.hasRichLocalStorageEffect_of_receive
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {action : FlowAction}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hempty : frame.sevm.data.length.toB256 = 0)
-    (haction : frame.flowAction? dp ca = some action) :
-    frame.HasRichLocalStorageEffect dp ca action := by
+    (haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action) :
+    Blanc.Weth10.Exec.Frame.HasRichLocalStorageEffect dp ca frame action := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
   | error err => simp [Execution.commits] at committed
@@ -6722,7 +6690,7 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_receive
       have htarget : e.currentTarget = ca := context.invocation.2.1
       rw [htarget] at hinc
       have haction' := haction
-      simp [Exec.Frame.flowAction?, context.invocation, primaryFlowAtom,
+      simp [Blanc.Weth10.Exec.Frame.flowAction?, context.invocation, primaryFlowAtom,
         primaryDebitProvenance, hempty] at haction'
       symm at haction'
       subst action
@@ -6738,11 +6706,11 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_receive
 theorem Exec.Frame.hasRichLocalStorageEffect_of_deposit
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {action : FlowAction}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = depositSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
-    (haction : frame.flowAction? dp ca = some action) :
-    frame.HasRichLocalStorageEffect dp ca action := by
+    (haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action) :
+    Blanc.Weth10.Exec.Frame.HasRichLocalStorageEffect dp ca frame action := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
   | error err => simp [Execution.commits] at committed
@@ -6756,7 +6724,7 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_deposit
       have htarget : e.currentTarget = ca := context.invocation.2.1
       rw [htarget] at hinc
       have haction' := haction
-      simp [Exec.Frame.flowAction?, context.invocation, primaryFlowAtom,
+      simp [Blanc.Weth10.Exec.Frame.flowAction?, context.invocation, primaryFlowAtom,
         primaryDebitProvenance, hnonempty, hselector,
         depositSelector_ne_transferSelector,
         depositSelector_ne_transferAndCallSelector,
@@ -6779,11 +6747,11 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_deposit
 theorem Exec.Frame.hasRichLocalStorageEffect_of_depositTo
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {action : FlowAction}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = depositToSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
-    (haction : frame.flowAction? dp ca = some action) :
-    frame.HasRichLocalStorageEffect dp ca action := by
+    (haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action) :
+    Blanc.Weth10.Exec.Frame.HasRichLocalStorageEffect dp ca frame action := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
   | error err => simp [Execution.commits] at committed
@@ -6827,11 +6795,11 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_depositTo
 theorem Exec.Frame.hasRichLocalStorageEffect_of_depositToAndCall
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {action : FlowAction}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = depositToAndCallSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
-    (haction : frame.flowAction? dp ca = some action) :
-    frame.HasRichLocalStorageEffect dp ca action := by
+    (haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action) :
+    Blanc.Weth10.Exec.Frame.HasRichLocalStorageEffect dp ca frame action := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
   | error err => simp [Execution.commits] at committed
@@ -6883,11 +6851,11 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_depositToAndCall
 theorem Exec.Frame.hasRichLocalStorageEffect_of_transfer
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {action : FlowAction}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = transferSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
-    (haction : frame.flowAction? dp ca = some action) :
-    frame.HasRichLocalStorageEffect dp ca action := by
+    (haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action) :
+    Blanc.Weth10.Exec.Frame.HasRichLocalStorageEffect dp ca frame action := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
   | error err => simp [Execution.commits] at committed
@@ -6962,11 +6930,11 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_transfer
 theorem Exec.Frame.hasRichLocalStorageEffect_of_transferAndCall
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {action : FlowAction}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = transferAndCallSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
-    (haction : frame.flowAction? dp ca = some action) :
-    frame.HasRichLocalStorageEffect dp ca action := by
+    (haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action) :
+    Blanc.Weth10.Exec.Frame.HasRichLocalStorageEffect dp ca frame action := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
   | error err => simp [Execution.commits] at committed
@@ -7049,11 +7017,11 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_transferAndCall
 theorem Exec.Frame.hasRichLocalStorageEffect_of_transferFrom
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {action : FlowAction}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = transferFromSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
-    (haction : frame.flowAction? dp ca = some action) :
-    frame.HasRichLocalStorageEffect dp ca action := by
+    (haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action) :
+    Blanc.Weth10.Exec.Frame.HasRichLocalStorageEffect dp ca frame action := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
   | error err => simp [Execution.commits] at committed
@@ -7150,11 +7118,11 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_transferFrom
 theorem Exec.Frame.hasRichLocalStorageEffect_of_withdraw
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {action : FlowAction}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = withdrawSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
-    (haction : frame.flowAction? dp ca = some action) :
-    frame.HasRichLocalStorageEffect dp ca action := by
+    (haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action) :
+    Blanc.Weth10.Exec.Frame.HasRichLocalStorageEffect dp ca frame action := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
   | error err => simp [Execution.commits] at committed
@@ -7202,11 +7170,11 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_withdraw
 theorem Exec.Frame.hasRichLocalStorageEffect_of_withdrawTo
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {action : FlowAction}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = withdrawToSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
-    (haction : frame.flowAction? dp ca = some action) :
-    frame.HasRichLocalStorageEffect dp ca action := by
+    (haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action) :
+    Blanc.Weth10.Exec.Frame.HasRichLocalStorageEffect dp ca frame action := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
   | error err => simp [Execution.commits] at committed
@@ -7256,11 +7224,11 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_withdrawTo
 theorem Exec.Frame.hasRichLocalStorageEffect_of_withdrawFrom
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {action : FlowAction}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = withdrawFromSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
-    (haction : frame.flowAction? dp ca = some action) :
-    frame.HasRichLocalStorageEffect dp ca action := by
+    (haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action) :
+    Blanc.Weth10.Exec.Frame.HasRichLocalStorageEffect dp ca frame action := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
   | error err => simp [Execution.commits] at committed
@@ -7323,11 +7291,11 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_withdrawFrom
 theorem Exec.Frame.hasRichLocalStorageEffect_of_flashLoan
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {action : FlowAction}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = flashLoanSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
-    (haction : frame.flowAction? dp ca = some action) :
-    frame.HasRichLocalStorageEffect dp ca action := by
+    (haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action) :
+    Blanc.Weth10.Exec.Frame.HasRichLocalStorageEffect dp ca frame action := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
   | error err => simp [Execution.commits] at committed
@@ -7459,51 +7427,51 @@ slot and child execution supplied by the compiled program proof. -/
 theorem Exec.Frame.hasRichLocalStorageEffect_of_flowAction?_eq_some
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {action : FlowAction}
-    (context : frame.AuthenticContext dp ca)
-    (haction : frame.flowAction? dp ca = some action) :
-    frame.HasRichLocalStorageEffect dp ca action := by
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
+    (haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action) :
+    Blanc.Weth10.Exec.Frame.HasRichLocalStorageEffect dp ca frame action := by
   by_cases hempty : frame.sevm.data.length.toB256 = 0
-  · exact frame.hasRichLocalStorageEffect_of_receive context hempty haction
+  · exact Blanc.Weth10.Exec.Frame.hasRichLocalStorageEffect_of_receive (frame := frame) context hempty haction
   have hnonempty : frame.sevm.data.length.toB256 ≠ 0 := hempty
   by_cases hdeposit : Sevm.selector frame.sevm = depositSelector
-  · exact frame.hasRichLocalStorageEffect_of_deposit context hdeposit
+  · exact Blanc.Weth10.Exec.Frame.hasRichLocalStorageEffect_of_deposit (frame := frame) context hdeposit
       hnonempty haction
   by_cases hdepositTo : Sevm.selector frame.sevm = depositToSelector
-  · exact frame.hasRichLocalStorageEffect_of_depositTo context hdepositTo
+  · exact Blanc.Weth10.Exec.Frame.hasRichLocalStorageEffect_of_depositTo (frame := frame) context hdepositTo
       hnonempty haction
   by_cases hdepositCall :
       Sevm.selector frame.sevm = depositToAndCallSelector
-  · exact frame.hasRichLocalStorageEffect_of_depositToAndCall context
+  · exact Blanc.Weth10.Exec.Frame.hasRichLocalStorageEffect_of_depositToAndCall (frame := frame) context
       hdepositCall hnonempty haction
   by_cases htransfer : Sevm.selector frame.sevm = transferSelector
-  · exact frame.hasRichLocalStorageEffect_of_transfer context htransfer
+  · exact Blanc.Weth10.Exec.Frame.hasRichLocalStorageEffect_of_transfer (frame := frame) context htransfer
       hnonempty haction
   by_cases htransferCall :
       Sevm.selector frame.sevm = transferAndCallSelector
-  · exact frame.hasRichLocalStorageEffect_of_transferAndCall context
+  · exact Blanc.Weth10.Exec.Frame.hasRichLocalStorageEffect_of_transferAndCall (frame := frame) context
       htransferCall hnonempty haction
   by_cases htransferFrom :
       Sevm.selector frame.sevm = transferFromSelector
-  · exact frame.hasRichLocalStorageEffect_of_transferFrom context
+  · exact Blanc.Weth10.Exec.Frame.hasRichLocalStorageEffect_of_transferFrom (frame := frame) context
       htransferFrom hnonempty haction
   by_cases hwithdraw : Sevm.selector frame.sevm = withdrawSelector
-  · exact frame.hasRichLocalStorageEffect_of_withdraw context hwithdraw
+  · exact Blanc.Weth10.Exec.Frame.hasRichLocalStorageEffect_of_withdraw (frame := frame) context hwithdraw
       hnonempty haction
   by_cases hwithdrawTo : Sevm.selector frame.sevm = withdrawToSelector
-  · exact frame.hasRichLocalStorageEffect_of_withdrawTo context hwithdrawTo
+  · exact Blanc.Weth10.Exec.Frame.hasRichLocalStorageEffect_of_withdrawTo (frame := frame) context hwithdrawTo
       hnonempty haction
   by_cases hwithdrawFrom :
       Sevm.selector frame.sevm = withdrawFromSelector
-  · exact frame.hasRichLocalStorageEffect_of_withdrawFrom context
+  · exact Blanc.Weth10.Exec.Frame.hasRichLocalStorageEffect_of_withdrawFrom (frame := frame) context
       hwithdrawFrom hnonempty haction
   by_cases hflash : Sevm.selector frame.sevm = flashLoanSelector
-  · exact frame.hasRichLocalStorageEffect_of_flashLoan context hflash
+  · exact Blanc.Weth10.Exec.Frame.hasRichLocalStorageEffect_of_flashLoan (frame := frame) context hflash
       hnonempty haction
   have hprimary : primaryFlowAtom frame.sevm = none := by
     simp [primaryFlowAtom, hnonempty, hdeposit, hdepositTo,
       hdepositCall, htransfer, htransferCall, htransferFrom, hwithdraw,
       hwithdrawTo, hwithdrawFrom, hflash]
-  simp [Exec.Frame.flowAction?, context.invocation, hprimary] at haction
+  simp [Blanc.Weth10.Exec.Frame.flowAction?, context.invocation, hprimary] at haction
 
 /-- Exhaustive compiled-program classifier for receive plus all 27 selector
 leaves.  Nonempty successful calldata is first proved to have entered an
@@ -7511,35 +7479,35 @@ actual listed dispatch leaf; therefore the non-flow arm is not conditional on
 an externally supplied recognition assumption. -/
 theorem Exec.Frame.hasCompiledBalanceOwnEffect
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca) :
-    frame.HasCompiledBalanceOwnEffect dp ca := by
-  cases haction : frame.flowAction? dp ca with
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame) :
+    Blanc.Weth10.Exec.Frame.HasCompiledBalanceOwnEffect dp ca frame := by
+  cases haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
   | some action =>
       exact .flow action
-        (frame.hasRichLocalStorageEffect_of_flowAction?_eq_some
+        (Blanc.Weth10.Exec.Frame.hasRichLocalStorageEffect_of_flowAction?_eq_some (frame := frame)
           context haction)
   | none =>
       by_cases hempty : frame.sevm.data.length.toB256 = 0
       · have hprimary : primaryFlowAtom frame.sevm ≠ none := by
           simp [primaryFlowAtom, hempty]
-        unfold Exec.Frame.flowAction? at haction
+        unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
         rw [if_pos context.invocation] at haction
         cases hatom : primaryFlowAtom frame.sevm with
         | none => exact (hprimary hatom).elim
         | some atom => simp [hatom] at haction
       · exact .noFlow
-          (frame.hasNoWethBalanceOwnEffect_of_recognized context haction
-            (frame.recognizedSelector_of_nonempty context hempty))
+          (Blanc.Weth10.Exec.Frame.hasNoWethBalanceOwnEffect_of_recognized (frame := frame) context haction
+            (Blanc.Weth10.Exec.Frame.recognizedSelector_of_nonempty (frame := frame) context hempty))
 
 /-- Identifier-safe alias for tooling that cannot parse `?` in declaration
 names. -/
 theorem Exec.Frame.hasRichLocalStorageEffect_of_classified
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {action : FlowAction}
-    (context : frame.AuthenticContext dp ca)
-    (haction : frame.flowAction? dp ca = some action) :
-    frame.HasRichLocalStorageEffect dp ca action :=
-  frame.hasRichLocalStorageEffect_of_flowAction?_eq_some context haction
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
+    (haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action) :
+    Blanc.Weth10.Exec.Frame.HasRichLocalStorageEffect dp ca frame action :=
+  Blanc.Weth10.Exec.Frame.hasRichLocalStorageEffect_of_flowAction?_eq_some (frame := frame) context haction
 
 /-- A classified authentic frame contributes its own action first, followed
 by exactly the labels computed from the original proof-indexed proper
@@ -7547,16 +7515,16 @@ descendant traversal. -/
 theorem Exec.Frame.hasClassifiedActionLedger_of_flowAction_eq_some
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {action : FlowAction}
-    (context : frame.AuthenticContext dp ca)
-    (haction : frame.flowAction? dp ca = some action) :
-    frame.ClassifiedActionLedger dp ca action := by
-  refine ⟨frame.hasRichLocalStorageEffect_of_classified context haction, ?_⟩
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
+    (haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action) :
+    Blanc.Weth10.Exec.Frame.ClassifiedActionLedger dp ca frame action := by
+  refine ⟨Blanc.Weth10.Exec.Frame.hasRichLocalStorageEffect_of_classified (frame := frame) context haction, ?_⟩
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
-  have hroot : Exec.Frame.flowAction? dp ca
+  have hroot : Blanc.Weth10.Exec.Frame.flowAction? dp ca
       (Exec.Frame.ofRun run committed) = some action := by
     exact haction
   simp [Exec.flowActions, Exec.committedFrames,
-    Exec.Frame.descendantFlowActions, committed, hroot]
+    Blanc.Weth10.Exec.Frame.descendantFlowActions, committed, hroot]
 
 /-- Every executable flow classification of an authentic committed WETH10
 frame is backed by the exact local balance segment executed by that frame.
@@ -7566,51 +7534,51 @@ the selector-specific proofs above. -/
 theorem Exec.Frame.hasLocalOwnEffect_of_flowAction?_eq_some
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {action : FlowAction}
-    (context : frame.AuthenticContext dp ca)
-    (haction : frame.flowAction? dp ca = some action) :
-    frame.HasLocalOwnEffect ca action := by
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
+    (haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action) :
+    Blanc.Weth10.Exec.Frame.HasLocalOwnEffect ca frame action := by
   by_cases hempty : frame.sevm.data.length.toB256 = 0
-  · exact frame.hasLocalOwnEffect_of_receive context hempty haction
+  · exact Blanc.Weth10.Exec.Frame.hasLocalOwnEffect_of_receive (frame := frame) context hempty haction
   have hnonempty : frame.sevm.data.length.toB256 ≠ 0 := hempty
   by_cases hdeposit : Sevm.selector frame.sevm = depositSelector
-  · exact frame.hasLocalOwnEffect_of_deposit context hdeposit hnonempty
+  · exact Blanc.Weth10.Exec.Frame.hasLocalOwnEffect_of_deposit (frame := frame) context hdeposit hnonempty
       haction
   by_cases hdepositTo : Sevm.selector frame.sevm = depositToSelector
-  · exact frame.hasLocalOwnEffect_of_depositTo context hdepositTo
+  · exact Blanc.Weth10.Exec.Frame.hasLocalOwnEffect_of_depositTo (frame := frame) context hdepositTo
       hnonempty haction
   by_cases hdepositCall :
       Sevm.selector frame.sevm = depositToAndCallSelector
-  · exact frame.hasLocalOwnEffect_of_depositToAndCall context hdepositCall
+  · exact Blanc.Weth10.Exec.Frame.hasLocalOwnEffect_of_depositToAndCall (frame := frame) context hdepositCall
       hnonempty haction
   by_cases htransfer : Sevm.selector frame.sevm = transferSelector
-  · exact frame.hasLocalOwnEffect_of_transfer context htransfer hnonempty
+  · exact Blanc.Weth10.Exec.Frame.hasLocalOwnEffect_of_transfer (frame := frame) context htransfer hnonempty
       haction
   by_cases htransferCall :
       Sevm.selector frame.sevm = transferAndCallSelector
-  · exact frame.hasLocalOwnEffect_of_transferAndCall context htransferCall
+  · exact Blanc.Weth10.Exec.Frame.hasLocalOwnEffect_of_transferAndCall (frame := frame) context htransferCall
       hnonempty haction
   by_cases htransferFrom :
       Sevm.selector frame.sevm = transferFromSelector
-  · exact frame.hasLocalOwnEffect_of_transferFrom context htransferFrom
+  · exact Blanc.Weth10.Exec.Frame.hasLocalOwnEffect_of_transferFrom (frame := frame) context htransferFrom
       hnonempty haction
   by_cases hwithdraw : Sevm.selector frame.sevm = withdrawSelector
-  · exact frame.hasLocalOwnEffect_of_withdraw context hwithdraw hnonempty
+  · exact Blanc.Weth10.Exec.Frame.hasLocalOwnEffect_of_withdraw (frame := frame) context hwithdraw hnonempty
       haction
   by_cases hwithdrawTo : Sevm.selector frame.sevm = withdrawToSelector
-  · exact frame.hasLocalOwnEffect_of_withdrawTo context hwithdrawTo
+  · exact Blanc.Weth10.Exec.Frame.hasLocalOwnEffect_of_withdrawTo (frame := frame) context hwithdrawTo
       hnonempty haction
   by_cases hwithdrawFrom :
       Sevm.selector frame.sevm = withdrawFromSelector
-  · exact frame.hasLocalOwnEffect_of_withdrawFrom context hwithdrawFrom
+  · exact Blanc.Weth10.Exec.Frame.hasLocalOwnEffect_of_withdrawFrom (frame := frame) context hwithdrawFrom
       hnonempty haction
   by_cases hflash : Sevm.selector frame.sevm = flashLoanSelector
-  · exact frame.hasLocalOwnEffect_of_flashLoan context hflash hnonempty
+  · exact Blanc.Weth10.Exec.Frame.hasLocalOwnEffect_of_flashLoan (frame := frame) context hflash hnonempty
       haction
   have hprimary : primaryFlowAtom frame.sevm = none := by
     simp [primaryFlowAtom, hnonempty, hdeposit, hdepositTo,
       hdepositCall, htransfer, htransferCall, htransferFrom, hwithdraw,
       hwithdrawTo, hwithdrawFrom, hflash]
-  simp [Exec.Frame.flowAction?, context.invocation, hprimary] at haction
+  simp [Blanc.Weth10.Exec.Frame.flowAction?, context.invocation, hprimary] at haction
 
 /-! ## Literal generated-program SSTORE inventory
 

@@ -104,11 +104,12 @@ contributes no proper-descendant counted records; the counted mirror of
 `Exec.Frame.descendantFlowActions_eq_nil_of_receive`. -/
 theorem Exec.Frame.attributionInner_eq_nil_of_receive
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hempty : frame.sevm.data.length.toB256 = 0) :
     Exec.attributionInner dp ca frame.run = [] := by
-  rcases frame.compiledMainCursorCounted context with ⟨mainCursor⟩
-  change frame.CountedCursor dp ca
+  rcases Blanc.Weth10.Exec.Frame.compiledMainCursorCounted (frame := frame)
+      context with ⟨mainCursor⟩
+  change Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     ([Ninst.calldatasize, Ninst.iszero] +++
@@ -134,7 +135,7 @@ theorem Exec.Frame.attributionInner_eq_nil_of_receive
   rcases entryBranchCursor.selectBranchSucc (flag := (1 : B256))
       (by decide) hflagPrefix with
     ⟨receiveCursor, _hstack⟩
-  change frame.CountedCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (mintCallerLine +++ Func.last .stop) frame.post at receiveCursor
@@ -150,12 +151,13 @@ calldata test, and the caller-key mint leaves every tagged allowance key
 at its entry value. -/
 theorem Exec.Frame.allowanceRegionEffect_of_receive
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hempty : frame.sevm.data.length.toB256 = 0) :
     AllowanceRegionEffect ca frame.pre frame.post
       (Exec.attributionStream dp ca frame.run) := by
   have hinner : Exec.attributionInner dp ca frame.run = [] :=
-    frame.attributionInner_eq_nil_of_receive context hempty
+    Blanc.Weth10.Exec.Frame.attributionInner_eq_nil_of_receive (frame := frame)
+      context hempty
   have hnotlast : ownRecordLast frame.sevm = false := by
     simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hempty]
   have hframe : Exec.Frame.ofRun frame.run frame.committed = frame := by
@@ -207,16 +209,17 @@ proper-descendant counted records; the counted mirror of
 `Exec.Frame.descendantFlowActions_eq_nil_of_deposit`. -/
 theorem Exec.Frame.attributionInner_eq_nil_of_deposit
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = selector "deposit" [])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
     Exec.attributionInner dp ca frame.run = [] := by
   have hmem : (Sevm.selector frame.sevm, deposit) ∈ weth10Funcs dp := by
     rw [hselector]
     simp [weth10Funcs]
-  rcases frame.compiledSelectorBodyCursorCounted context hnonempty hmem with
+  rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorCounted (frame := frame)
+      context hnonempty hmem with
     ⟨bodyCursor⟩
-  change frame.CountedCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (mintCallerLine +++ Func.last .stop) frame.post at bodyCursor
@@ -232,13 +235,14 @@ and the caller-key mint leaves every tagged allowance key at its entry
 value. -/
 theorem Exec.Frame.allowanceRegionEffect_of_deposit
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = selector "deposit" [])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
     AllowanceRegionEffect ca frame.pre frame.post
       (Exec.attributionStream dp ca frame.run) := by
   have hinner : Exec.attributionInner dp ca frame.run = [] :=
-    frame.attributionInner_eq_nil_of_deposit context hselector hnonempty
+    Blanc.Weth10.Exec.Frame.attributionInner_eq_nil_of_deposit (frame := frame)
+      context hselector hnonempty
   have hsel : Sevm.selector frame.sevm = depositSelector := hselector
   have hnotlast : ownRecordLast frame.sevm = false := by
     simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hsel,
@@ -302,16 +306,17 @@ proper-descendant counted records; the counted mirror of
 `Exec.Frame.descendantFlowActions_eq_nil_of_depositTo`. -/
 theorem Exec.Frame.attributionInner_eq_nil_of_depositTo
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = selector "depositTo" [.address])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
     Exec.attributionInner dp ca frame.run = [] := by
   have hmem : (Sevm.selector frame.sevm, depositTo) ∈ weth10Funcs dp := by
     rw [hselector]
     simp [weth10Funcs]
-  rcases frame.compiledSelectorBodyCursorCounted context hnonempty hmem with
+  rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorCounted (frame := frame)
+      context hnonempty hmem with
     ⟨bodyCursor⟩
-  change frame.CountedCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (mintToPrefix +++ Func.last .stop) frame.post at bodyCursor
@@ -328,13 +333,14 @@ and the normalized-key mint leaves every tagged allowance key at its
 entry value. -/
 theorem Exec.Frame.allowanceRegionEffect_of_depositTo
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = selector "depositTo" [.address])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
     AllowanceRegionEffect ca frame.pre frame.post
       (Exec.attributionStream dp ca frame.run) := by
   have hinner : Exec.attributionInner dp ca frame.run = [] :=
-    frame.attributionInner_eq_nil_of_depositTo context hselector hnonempty
+    Blanc.Weth10.Exec.Frame.attributionInner_eq_nil_of_depositTo (frame := frame)
+      context hselector hnonempty
   have hsel : Sevm.selector frame.sevm = depositToSelector := hselector
   have hnotlast : ownRecordLast frame.sevm = false := by
     simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hsel,
@@ -520,7 +526,7 @@ proper-descendant counted records.  The counted mirror of
 `Exec.Frame.descendantFlowActions_eq_nil_of_transferNonzero`. -/
 theorem Exec.Frame.attributionInner_eq_nil_of_transferNonzero
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm =
       selector "transfer" [.address, .uint256])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
@@ -530,10 +536,11 @@ theorem Exec.Frame.attributionInner_eq_nil_of_transferNonzero
       weth10Funcs dp := by
     rw [hselector]
     simp [weth10Funcs]
-  rcases frame.compiledSelectorBodyCursorCounted context hnonempty hmem with
+  rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorCounted (frame := frame)
+      context hnonempty hmem with
     ⟨wrapperCursor⟩
   rcases wrapperCursor.enterNonpayable with ⟨transferCursor⟩
-  change frame.CountedCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (transferSelectLine +++
@@ -558,7 +565,7 @@ theorem Exec.Frame.attributionInner_eq_nil_of_transferNonzero
   rw [htargetCheck] at htargetPrefix
   rcases targetBranchCursor.selectBranchZero htargetPrefix with
     ⟨nonzeroCursor, _hnonzeroStack⟩
-  change frame.CountedCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (transferBalanceCheckLine +++
@@ -602,7 +609,7 @@ on every selector test, and the two balance-key writes leave every tagged
 allowance key at its entry value. -/
 theorem Exec.Frame.allowanceRegionEffect_of_transferNonzero
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm =
       selector "transfer" [.address, .uint256])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
@@ -610,7 +617,8 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferNonzero
     AllowanceRegionEffect ca frame.pre frame.post
       (Exec.attributionStream dp ca frame.run) := by
   have hinner : Exec.attributionInner dp ca frame.run = [] :=
-    frame.attributionInner_eq_nil_of_transferNonzero context hselector
+    Blanc.Weth10.Exec.Frame.attributionInner_eq_nil_of_transferNonzero (frame := frame)
+      context hselector
       hnonempty hto
   have hsel : Sevm.selector frame.sevm = transferSelector := hselector
   have hnotlast : ownRecordLast frame.sevm = false := by
@@ -707,27 +715,27 @@ calldata length rather than a selector separation. -/
 the frame's own eventless record alone. -/
 theorem Exec.Frame.allowanceRegionEffectSound_of_receive
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hempty : frame.sevm.data.length.toB256 = 0) :
     AllowanceRegionEffectSound ca frame.pre frame.post
       (Exec.attributionStream dp ca frame.run) :=
   .of_singletonArm context
-    (frame.allowanceRegionEffect_of_receive context hempty)
-    (frame.attributionInner_eq_nil_of_receive context hempty)
+    (Blanc.Weth10.Exec.Frame.allowanceRegionEffect_of_receive (frame := frame) context hempty)
+    (Blanc.Weth10.Exec.Frame.attributionInner_eq_nil_of_receive (frame := frame) context hempty)
     (ownRecordLast_eq_false_of_data_empty hempty)
 
 /-- `deposit` transports the allowance region read-soundly: its ledger is
 the frame's own eventless record alone. -/
 theorem Exec.Frame.allowanceRegionEffectSound_of_deposit
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = selector "deposit" [])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
     AllowanceRegionEffectSound ca frame.pre frame.post
       (Exec.attributionStream dp ca frame.run) :=
   .of_singletonArm context
-    (frame.allowanceRegionEffect_of_deposit context hselector hnonempty)
-    (frame.attributionInner_eq_nil_of_deposit context hselector hnonempty)
+    (Blanc.Weth10.Exec.Frame.allowanceRegionEffect_of_deposit (frame := frame) context hselector hnonempty)
+    (Blanc.Weth10.Exec.Frame.attributionInner_eq_nil_of_deposit (frame := frame) context hselector hnonempty)
     (ownRecordLast_eq_false_of_selector hselector
       depositSelector_ne_flashLoanSelector depositSelector_ne_permitSelector)
 
@@ -735,14 +743,14 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_deposit
 the frame's own eventless record alone. -/
 theorem Exec.Frame.allowanceRegionEffectSound_of_depositTo
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = selector "depositTo" [.address])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
     AllowanceRegionEffectSound ca frame.pre frame.post
       (Exec.attributionStream dp ca frame.run) :=
   .of_singletonArm context
-    (frame.allowanceRegionEffect_of_depositTo context hselector hnonempty)
-    (frame.attributionInner_eq_nil_of_depositTo context hselector hnonempty)
+    (Blanc.Weth10.Exec.Frame.allowanceRegionEffect_of_depositTo (frame := frame) context hselector hnonempty)
+    (Blanc.Weth10.Exec.Frame.attributionInner_eq_nil_of_depositTo (frame := frame) context hselector hnonempty)
     (ownRecordLast_eq_false_of_selector hselector
       depositToSelector_ne_flashLoanSelector
       depositToSelector_ne_permitSelector)
@@ -751,7 +759,7 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_depositTo
 read-soundly: its ledger is the frame's own eventless record alone. -/
 theorem Exec.Frame.allowanceRegionEffectSound_of_transferNonzero
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm =
       selector "transfer" [.address, .uint256])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
@@ -759,9 +767,9 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_transferNonzero
     AllowanceRegionEffectSound ca frame.pre frame.post
       (Exec.attributionStream dp ca frame.run) :=
   .of_singletonArm context
-    (frame.allowanceRegionEffect_of_transferNonzero context hselector
+    (Blanc.Weth10.Exec.Frame.allowanceRegionEffect_of_transferNonzero (frame := frame) context hselector
       hnonempty hto)
-    (frame.attributionInner_eq_nil_of_transferNonzero context hselector
+    (Blanc.Weth10.Exec.Frame.attributionInner_eq_nil_of_transferNonzero (frame := frame) context hselector
       hnonempty hto)
     (ownRecordLast_eq_false_of_selector hselector
       transferSelector_ne_flashLoanSelector transferSelector_ne_permitSelector)

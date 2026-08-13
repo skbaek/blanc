@@ -209,7 +209,7 @@ private theorem Exec.Frame.CountedCursor.enterSpendCallerAllowanceThenFork
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {f₀ : Func} {aux : List Func} {amount : B256} {nextSlot : Nat}
     {final : Devm} {img : Bytes}
-    (cursor : frame.CountedCursor dp ca (f₀ :: aux)
+    (cursor : Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca (f₀ :: aux)
       (table 0 (f₀ :: aux))
       (spendCallerAllowanceThen amount nextSlot) final)
     (hcode : some frame.sevm.code.toList = Prog.compile ⟨f₀, aux⟩)
@@ -220,7 +220,7 @@ private theorem Exec.Frame.CountedCursor.enterSpendCallerAllowanceThenFork
     (hreads : Mem.Reads cursor.pre.memory img) :
     ∃ body,
       (f₀ :: aux)[nextSlot]? = some body ∧
-      ∃ bodyCursor : frame.CountedCursor dp ca (f₀ :: aux)
+      ∃ bodyCursor : Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca (f₀ :: aux)
           (table 0 (f₀ :: aux)) body final,
         Mem.Wf bodyCursor.pre.memory ∧
         (∃ out, Mem.Reads bodyCursor.pre.memory out) ∧
@@ -539,7 +539,7 @@ private theorem Exec.Frame.CountedCursor.redeemFromAllowanceStorage
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {ownerArg amountArg target : B256} {sendPrefix successLine : Line}
     {successLast : Linst} {img : Bytes} {errSlot : Nat} {reason : String}
-    (cursor : frame.CountedCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       (redeemFromBody ownerArg amountArg sendPrefix errSlot
@@ -725,7 +725,7 @@ private theorem Exec.Frame.CountedCursor.redeemFromAllowanceStorage
             Func.noPushBefore_next callCursor.codeSlice
               callCursor.codeBoundary
           rcases callCursor.parentPrefix with ⟨actionsBefore, hbefore⟩
-          rcases Exec.Frame.advance_runCompiled_next
+          rcases Blanc.Weth10.Exec.Frame.advance_runCompiled_next
               (frame := ⟨fpc, e, fpre, .ok fpost, frun, fcommitted⟩)
               callCursor.current hbefore hat hcompiled with
             ⟨xl, continuation, selected, occurrence, hedge, _hnextPrefix⟩
@@ -882,7 +882,7 @@ the normalized owner argument, and the committed send child's counted stream
 is transported by the recursion hypothesis. -/
 theorem Exec.Frame.allowanceRegionEffect_of_withdrawFrom
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = withdrawFromSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
@@ -894,14 +894,14 @@ theorem Exec.Frame.allowanceRegionEffect_of_withdrawFrom
       weth10Funcs dp := by
     rw [hselector]
     simp [withdrawFromSelector, weth10Funcs]
-  rcases frame.compiledSelectorBodyCursorCountedSilent context hnonempty
+  rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorCountedSilent (frame := frame) context hnonempty
       hmem with
     ⟨wrapperCursor, hentrySilent⟩
   rcases wrapperCursor.enterNonpayableSilent with
     ⟨spendCursor, hnonpayableSilent⟩
   have hspendSilent : Devm.DispatchSilent frame.pre spendCursor.pre :=
     hentrySilent.trans hnonpayableSilent
-  change frame.CountedCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (spendCallerAllowanceThen 2 withdrawFromCoreSlot) frame.post
@@ -915,7 +915,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_withdrawFrom
   have hbody : body = withdrawFromCore := by
     simpa [weth10, weth10Aux, withdrawFromCoreSlot] using hget.symm
   subst body
-  change frame.CountedCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (redeemFromBody 0 2 (redeemSendToArgPrefix 1) etherTransferErrorSlot
@@ -1034,7 +1034,7 @@ to the caller, and transports the allowance region exactly as delegated
 `withdrawFrom` does. -/
 theorem Exec.Frame.allowanceRegionEffect_of_transferFromZero
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = transferFromSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hzero : Sevm.argWord frame.sevm 1 = 0)
@@ -1047,14 +1047,14 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferFromZero
       weth10Funcs dp := by
     rw [hselector]
     simp [transferFromSelector, weth10Funcs]
-  rcases frame.compiledSelectorBodyCursorCountedSilent context hnonempty
+  rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorCountedSilent (frame := frame) context hnonempty
       hmem with
     ⟨wrapperCursor, hentrySilent⟩
   rcases wrapperCursor.enterNonpayableSilent with
     ⟨spendCursor, hnonpayableSilent⟩
   have hspendSilent : Devm.DispatchSilent frame.pre spendCursor.pre :=
     hentrySilent.trans hnonpayableSilent
-  change frame.CountedCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (spendCallerAllowanceThen 2 transferFromCoreSlot) frame.post
@@ -1068,7 +1068,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferFromZero
   have hbody : body = transferFromCore := by
     simpa [weth10, weth10Aux, transferFromCoreSlot] using hget.symm
   subst body
-  change frame.CountedCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     ((arg 1 ++ [iszero]) +++ (transferFromZero <?> transferFromNonzero))
@@ -1100,7 +1100,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferFromZero
   have hcoreToZero : Devm.getStor coreCursor.pre =
       Devm.getStor zeroCursor.pre := by
     rw [hlineStor, funext (getStor_eq_of_state_eq hbranchSilent.state)]
-  change frame.CountedCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (redeemFromBody 0 2 redeemSendToCallerPrefix ethTransferErrorSlot
@@ -1236,7 +1236,7 @@ private theorem Exec.Frame.CountedCursor.redeemFromAllowanceSound
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {ownerArg amountArg target : B256} {sendPrefix successLine : Line}
     {successLast : Linst} {img : Bytes} {errSlot : Nat} {reason : String}
-    (cursor : frame.CountedCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       (redeemFromBody ownerArg amountArg sendPrefix errSlot
@@ -1427,7 +1427,7 @@ private theorem Exec.Frame.CountedCursor.redeemFromAllowanceSound
             Func.noPushBefore_next callCursor.codeSlice
               callCursor.codeBoundary
           rcases callCursor.parentPrefix with ⟨actionsBefore, hbefore⟩
-          rcases Exec.Frame.advance_runCompiled_next
+          rcases Blanc.Weth10.Exec.Frame.advance_runCompiled_next
               (frame := ⟨fpc, e, fpre, .ok fpost, frun, fcommitted⟩)
               callCursor.current hbefore hat hcompiled with
             ⟨xl, continuation, selected, occurrence, hedge, _hnextPrefix⟩
@@ -1598,7 +1598,7 @@ per-key binder: its proof never depended on the key being tagged. -/
 /-- Delegated `withdrawFrom` transports the allowance region read-soundly. -/
 theorem Exec.Frame.allowanceRegionEffectSound_of_withdrawFrom
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = withdrawFromSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
@@ -1610,14 +1610,14 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_withdrawFrom
       weth10Funcs dp := by
     rw [hselector]
     simp [withdrawFromSelector, weth10Funcs]
-  rcases frame.compiledSelectorBodyCursorCountedSilent context hnonempty
+  rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorCountedSilent (frame := frame) context hnonempty
       hmem with
     ⟨wrapperCursor, hentrySilent⟩
   rcases wrapperCursor.enterNonpayableSilent with
     ⟨spendCursor, hnonpayableSilent⟩
   have hspendSilent : Devm.DispatchSilent frame.pre spendCursor.pre :=
     hentrySilent.trans hnonpayableSilent
-  change frame.CountedCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (spendCallerAllowanceThen 2 withdrawFromCoreSlot) frame.post
@@ -1631,7 +1631,7 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_withdrawFrom
   have hbody : body = withdrawFromCore := by
     simpa [weth10, weth10Aux, withdrawFromCoreSlot] using hget.symm
   subst body
-  change frame.CountedCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (redeemFromBody 0 2 (redeemSendToArgPrefix 1) etherTransferErrorSlot
@@ -1753,7 +1753,7 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_withdrawFrom
 allowance region read-soundly, exactly as delegated `withdrawFrom` does. -/
 theorem Exec.Frame.allowanceRegionEffectSound_of_transferFromZero
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = transferFromSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hzero : Sevm.argWord frame.sevm 1 = 0)
@@ -1766,14 +1766,14 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_transferFromZero
       weth10Funcs dp := by
     rw [hselector]
     simp [transferFromSelector, weth10Funcs]
-  rcases frame.compiledSelectorBodyCursorCountedSilent context hnonempty
+  rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorCountedSilent (frame := frame) context hnonempty
       hmem with
     ⟨wrapperCursor, hentrySilent⟩
   rcases wrapperCursor.enterNonpayableSilent with
     ⟨spendCursor, hnonpayableSilent⟩
   have hspendSilent : Devm.DispatchSilent frame.pre spendCursor.pre :=
     hentrySilent.trans hnonpayableSilent
-  change frame.CountedCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (spendCallerAllowanceThen 2 transferFromCoreSlot) frame.post
@@ -1787,7 +1787,7 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_transferFromZero
   have hbody : body = transferFromCore := by
     simpa [weth10, weth10Aux, transferFromCoreSlot] using hget.symm
   subst body
-  change frame.CountedCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     ((arg 1 ++ [iszero]) +++ (transferFromZero <?> transferFromNonzero))
@@ -1819,7 +1819,7 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_transferFromZero
   have hcoreToZero : Devm.getStor coreCursor.pre =
       Devm.getStor zeroCursor.pre := by
     rw [hlineStor, funext (getStor_eq_of_state_eq hbranchSilent.state)]
-  change frame.CountedCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (redeemFromBody 0 2 redeemSendToCallerPrefix ethTransferErrorSlot

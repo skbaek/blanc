@@ -139,7 +139,8 @@ private theorem FlowAtom.ethMint_le_value_of_primaryFlowAtom_eq_some
 theorem Exec.Frame.flowActionsEthMint_entryEthActions_le_value
     {dp : DeployParams} {ca : Adr} (frame : Exec.Frame) :
     flowActionsEthMint
-        (flowActionEntryEthActions (frame.flowAction? dp ca)) ≤
+        (flowActionEntryEthActions
+          (Blanc.Weth10.Exec.Frame.flowAction? dp ca frame)) ≤
       frame.sevm.value.toNat := by
   unfold Exec.Frame.flowAction?
   split
@@ -450,8 +451,8 @@ theorem Exec.entryEthBound
   have hmint :
       flowActionsEthMint
           (Exec.entryEthActions dp ca run hcommit) ≤ msg.value.toNat := by
-    have h := root.flowActionsEthMint_entryEthActions_le_value
-      (dp := dp) (ca := ca)
+    have h := Blanc.Weth10.Exec.Frame.flowActionsEthMint_entryEthActions_le_value
+      (dp := dp) (ca := ca) root
     simpa [root, Exec.entryEthActions, Exec.Frame.ofRun,
       initSevm, Msg.withBenv] using h
   have hredeem :
@@ -559,8 +560,8 @@ theorem Exec.redemptionEntryEthBound
   have hmint :
       flowActionsEthMint
           (Exec.entryEthActions dp ca run hcommit) ≤ msg.value.toNat := by
-    have h := root.flowActionsEthMint_entryEthActions_le_value
-      (dp := dp) (ca := ca)
+    have h := Blanc.Weth10.Exec.Frame.flowActionsEthMint_entryEthActions_le_value
+      (dp := dp) (ca := ca) root
     simpa [root, Exec.entryEthActions, Exec.Frame.ofRun,
       initSevm, Msg.withBenv] using h
   have hredeem :
@@ -1391,10 +1392,10 @@ theorem ProcessMessage.ethBound_of_redemptionBodyBound
   rcases Frame.enter_run_inv henter with ⟨benv, htransfer, hinit⟩
   have hsettle := (RunFrame.some_inv hprocess).2
   have hsettleCommit :
-      Blanc.Weth10.Frame.settlementCommits (Frame.ofCall msg) out = true := by
+      Blanc.Frame.settlementCommits (Frame.ofCall msg) out = true := by
     have hclean' : post.error.isNone = true := by
       cases herror : post.error <;> simp_all
-    unfold Blanc.Weth10.Frame.settlementCommits
+    unfold Blanc.Frame.settlementCommits
     rw [← hsettle]
     exact hclean'
   have hcommit : Execution.commits out = true :=

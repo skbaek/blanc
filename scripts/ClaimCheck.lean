@@ -1106,10 +1106,10 @@ example : Sevm → Devm → Devm → AllowanceBranch → Prop :=
 
 example {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {action : FlowAction}
-    (authentic : frame.AuthenticContext dp ca)
-    (classified : frame.flowAction? dp ca = some action)
+    (authentic : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
+    (classified : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action)
     (accepted : action.AcceptedDebit dp frame.sevm frame.pre frame.post) :
-    frame.HasAcceptedDebit dp ca action :=
+    Blanc.Weth10.Exec.Frame.HasAcceptedDebit dp ca frame action :=
   { authentic := authentic
     classified := classified
     accepted := accepted }
@@ -1144,33 +1144,33 @@ example {dp : DeployParams} {action : FlowAction}
 
 example {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {action : FlowAction}
-    (context : frame.AuthenticContext dp ca)
-    (haction : frame.flowAction? dp ca = some action) :
-    frame.HasAcceptedDebit dp ca action :=
-  frame.hasAcceptedDebit_of_flowAction?_eq_some context haction
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
+    (haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action) :
+    Blanc.Weth10.Exec.Frame.HasAcceptedDebit dp ca frame action :=
+  Blanc.Weth10.Exec.Frame.hasAcceptedDebit_of_flowAction?_eq_some context haction
 
 example {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {action : FlowAction}
-    (authentic : frame.AuthenticContext dp ca)
-    (classified : frame.flowAction? dp ca = some action)
+    (authentic : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
+    (classified : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action)
     (effect : GenuineWethEmitterEffect dp frame.sevm frame.pre frame.post) :
-    frame.HasGenuineWethEmitterEffect dp ca action :=
+    Blanc.Weth10.Exec.Frame.HasGenuineWethEmitterEffect dp ca frame action :=
   { authentic := authentic
     classified := classified
     effect := effect }
 
 example {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {action : FlowAction}
-    (context : frame.AuthenticContext dp ca)
-    (haction : frame.flowAction? dp ca = some action) :
-    frame.HasGenuineWethEmitterEffect dp ca action :=
-  frame.hasGenuineWethEmitterEffect_of_flowAction?_eq_some context haction
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
+    (haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action) :
+    Blanc.Weth10.Exec.Frame.HasGenuineWethEmitterEffect dp ca frame action :=
+  Blanc.Weth10.Exec.Frame.hasGenuineWethEmitterEffect_of_flowAction?_eq_some context haction
 
 /-! CREATE children are retained only through complete code-deposit
 settlement, not merely because their raw interpreter result committed. -/
 
 example : Jaune.Frame → Execution → Bool :=
-  Blanc.Weth10.Frame.settlementCommits
+  Blanc.Frame.settlementCommits
 
 example {dp : DeployParams} {ca : Adr} {f : Jaune.Frame}
     {raw : Execution} {settled : Devm}
@@ -1182,7 +1182,7 @@ example {dp : DeployParams} {ca : Adr} {f : Jaune.Frame}
       (processMessage.settle f.inner (executeCode.handleError raw)) =
         .ok settled)
     (herror : settled.error.isSome = true) :
-    (if Blanc.Weth10.Frame.settlementCommits f raw = true then
+    (if Blanc.Frame.settlementCommits f raw = true then
       Exec.flowActions dp ca child
      else []) = [] :=
   Exec.retainedChildActions_eq_nil_of_create_codeDepositRollback child
@@ -1199,15 +1199,15 @@ example (dp : DeployParams) (ca : Adr) :
 example {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {stepPre stepPost : Devm} {slot : Xlot}
     {key value : B256} {holder : Adr} {action : FlowAction}
-    (occurrence : frame.BalanceSstoreOccurrence dp ca stepPre stepPost slot
+    (occurrence : Blanc.Weth10.Exec.Frame.BalanceSstoreOccurrence dp ca frame stepPre stepPost slot
       key value holder)
-    (authentic : frame.AuthenticContext dp ca)
-    (classified : frame.flowAction? dp ca = some action)
+    (authentic : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
+    (classified : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action)
     (role : BalanceSstoreRole ca stepPre action.atom holder value)
-    (rich : frame.HasRichLocalStorageEffect dp ca action)
-    (emitter : frame.HasGenuineWethEmitterEffect dp ca action)
-    (acceptedDebit : frame.HasAcceptedDebit dp ca action) :
-    frame.BalanceSstoreClassification dp ca stepPre stepPost slot
+    (rich : Blanc.Weth10.Exec.Frame.HasRichLocalStorageEffect dp ca frame action)
+    (emitter : Blanc.Weth10.Exec.Frame.HasGenuineWethEmitterEffect dp ca frame action)
+    (acceptedDebit : Blanc.Weth10.Exec.Frame.HasAcceptedDebit dp ca frame action) :
+    Blanc.Weth10.Exec.Frame.BalanceSstoreClassification dp ca frame stepPre stepPost slot
       key value holder action :=
   { occurrence := occurrence
     authentic := authentic
@@ -1224,13 +1224,13 @@ example {dp : DeployParams} {ca : Adr}
     (rootPc : pc = 0) (rootMemory : pre.memory = Mem.empty)
     {frame : Exec.Frame}
     (retained : frame ∈ Exec.committedFrames run)
-    (invocation : frame.exactInvocation dp ca)
+    (invocation : Blanc.Weth10.Exec.Frame.exactInvocation dp ca frame)
     {stepPre stepPost : Devm} {slot : Xlot}
     {key value : B256} {holder : Adr}
-    (occurrence : frame.BalanceSstoreOccurrence dp ca stepPre stepPost slot
+    (occurrence : Blanc.Weth10.Exec.Frame.BalanceSstoreOccurrence dp ca frame stepPre stepPost slot
       key value holder) :
     ∃ action : FlowAction,
-      frame.BalanceSstoreClassification dp ca stepPre stepPost slot
+      Blanc.Weth10.Exec.Frame.BalanceSstoreClassification dp ca frame stepPre stepPost slot
         key value holder action :=
   Exec.weth10BalanceSstoreClassification_of_mem_committedFrames
     run installed rootPc rootMemory retained invocation occurrence
@@ -1423,23 +1423,23 @@ example {dp : DeployParams} {ca : Adr} {e : Sevm}
 
 example {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     (htarget : frame.sevm.currentTarget ≠ ca) :
-    frame.flowAction? dp ca = none :=
-  frame.flowAction_eq_none_of_currentTarget_ne htarget
+    Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = none :=
+  Blanc.Weth10.Exec.Frame.flowAction_eq_none_of_currentTarget_ne htarget
 
 example {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     (hcodeAddress : frame.sevm.codeAddress ≠ some ca) :
-    frame.flowAction? dp ca = none :=
-  frame.flowAction_eq_none_of_codeAddress_ne hcodeAddress
+    Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = none :=
+  Blanc.Weth10.Exec.Frame.flowAction_eq_none_of_codeAddress_ne hcodeAddress
 
 example {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     (hcode : some frame.sevm.code.toList ≠ Prog.compile (weth10 dp)) :
-    frame.flowAction? dp ca = none :=
-  frame.flowAction_eq_none_of_code_ne hcode
+    Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = none :=
+  Blanc.Weth10.Exec.Frame.flowAction_eq_none_of_code_ne hcode
 
 example {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     (hpc : frame.pc ≠ 0) :
-    frame.flowAction? dp ca = none :=
-  frame.flowAction_eq_none_of_pc_ne hpc
+    Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = none :=
+  Blanc.Weth10.Exec.Frame.flowAction_eq_none_of_pc_ne hpc
 
 /-! The executable numeric fixtures pin the category fold independently of
 the proof-carrying history constructors. -/

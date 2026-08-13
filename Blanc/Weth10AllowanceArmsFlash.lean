@@ -96,10 +96,10 @@ preserving the empty counted prefix; the counted mirror of
 `Exec.Frame.CompiledCursor.reachFlashLoanSuccessTailCursor`. -/
 private theorem Exec.Frame.CountedCursor.reachFlashCallback
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame} {final : Devm}
-    (cursor : frame.CountedCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux)) flashLoan final) :
-    Nonempty (frame.CountedCursor dp ca
+    Nonempty (Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       flashLoanSuccessTail final) := by
@@ -165,7 +165,7 @@ reverters, so it contributes no counted record. -/
 /-- The shared burn continuation crosses no recursive child. -/
 private theorem Exec.Frame.CountedCursor.finishFlashBurn
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame} {final : Devm}
-    (cursor : frame.CountedCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux)) flashBurn final) :
     Exec.attributionInner dp ca frame.run = [] := by
@@ -190,7 +190,7 @@ private theorem Exec.Frame.CountedCursor.finishFlashBurn
 allowance arm, and neither arm crosses a recursive child. -/
 private theorem Exec.Frame.CountedCursor.finishFlashSettle
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame} {final : Devm}
-    (cursor : frame.CountedCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux)) flashSettle final)
     (hcode : some frame.sevm.code.toList = Prog.compile (weth10 dp)) :
@@ -234,7 +234,7 @@ private theorem Exec.Frame.CountedCursor.finishFlashSettle
 crosses no further recursive child. -/
 private theorem Exec.Frame.CountedCursor.finishFlashLoanAfterCallback
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame} {final : Devm}
-    (cursor : frame.CountedCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       flashLoanAfterCallback final)
@@ -289,7 +289,7 @@ proper-descendant counted stream is the retained callback child's
 attribution stream. -/
 private theorem Exec.Frame.CountedCursor.crossFlashCallback
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (callCursor : frame.CountedCursor dp ca
+    (callCursor : Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       flashLoanSuccessTail frame.post)
@@ -319,7 +319,7 @@ private theorem Exec.Frame.CountedCursor.crossFlashCallback
           obtain ⟨nextBoundary, nextSub⟩ :=
             Func.noPushBefore_next hsub callCursor.codeBoundary
           rcases callCursor.parentPrefix with ⟨actionsBefore, hbefore⟩
-          rcases Exec.Frame.advance_runCompiled_next
+          rcases Blanc.Weth10.Exec.Frame.advance_runCompiled_next
               (frame := ⟨fpc, e, fpre, .ok fpost, frun, fcommitted⟩)
               callCursor.current hbefore hat hcompiled with
             ⟨xl, continuation, selected, occurrence, hedge, _hnextPrefix⟩
@@ -337,7 +337,8 @@ private theorem Exec.Frame.CountedCursor.crossFlashCallback
               ⟨callCursor.pc + Ninst.call.size, e, midD, .ok fpost,
                 continuation, fcommitted⟩
             let tailCursor :
-                Exec.Frame.CountedCursor dp ca tailFrame
+                Blanc.Weth10.Exec.Frame.CountedCursor
+                  (frame := tailFrame) dp ca
                   ((weth10 dp).main :: weth10Aux)
                   (table 0 ((weth10 dp).main :: weth10Aux))
                   flashLoanAfterCallback fpost :=
@@ -368,7 +369,7 @@ stream is that child's attribution stream.  This is the bridge from the
 action-labelled flash chronology to the counted ledger. -/
 theorem Exec.Frame.attributionInner_eq_callback_of_flashLoan
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = flashLoanSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
     ∃ (callPre callPost : Devm) (pc : Nat) (xl : Xlot)
@@ -386,7 +387,7 @@ theorem Exec.Frame.attributionInner_eq_callback_of_flashLoan
     simp [flashLoanSelector, weth10Funcs]
   have hcode : some frame.sevm.code.toList = Prog.compile (weth10 dp) :=
     context.invocation.2.2.2
-  rcases frame.compiledSelectorBodyCursorCounted context hnonempty hmember
+  rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorCounted (frame := frame) context hnonempty hmember
     with ⟨wrapperCursor⟩
   rcases wrapperCursor.enterNonpayable with ⟨bodyCursor⟩
   rcases bodyCursor.reachFlashCallback with ⟨callCursor⟩
@@ -402,7 +403,7 @@ Neither the stack image at the callback boundary nor any memory invariant is
 needed for this step. -/
 theorem Exec.Frame.flashCallbackAndSettlement
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = flashLoanSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
     ∃ (callPre callPost settlePre : Devm) (pc : Nat) (xl : Xlot)
@@ -417,7 +418,7 @@ theorem Exec.Frame.flashCallbackAndSettlement
         retained.attributionStream dp ca := by
   obtain ⟨callPre, callPost, pc, xl, retained, hat, hfilled, hstep,
       hcallFunc, hinner⟩ :=
-    frame.attributionInner_eq_callback_of_flashLoan context hselector
+    Blanc.Weth10.Exec.Frame.attributionInner_eq_callback_of_flashLoan (frame := frame) context hselector
       hnonempty
   obtain ⟨sf, settlePre, hcall, hsettle, hstor, _hbal⟩ :=
     of_run_flashLoanFromCall dp
@@ -620,12 +621,12 @@ callback boundary's stack, memory and prefix-locality witnesses attached,
 while preserving the empty counted prefix. -/
 private theorem Exec.Frame.CountedCursor.reachFlashCallbackWitnessed
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (cursor : frame.CountedCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux)) flashLoan frame.post)
     (hwfEntry : Mem.Wf cursor.pre.memory)
     (hreadsEntry : Mem.Reads cursor.pre.memory []) :
-    ∃ (gasWord : B256) (callCursor : frame.CountedCursor dp ca
+    ∃ (gasWord : B256) (callCursor : Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca
         ((weth10 dp).main :: weth10Aux)
         (table 0 ((weth10 dp).main :: weth10Aux))
         flashLoanSuccessTail frame.post),
@@ -643,7 +644,7 @@ private theorem Exec.Frame.CountedCursor.reachFlashCallbackWitnessed
       ∀ k : B256, ¬ ValidAdr k → k ≠ flashMintedSlot →
         (Devm.getStor callCursor.pre frame.sevm.currentTarget).get k =
           (Devm.getStor cursor.pre frame.sevm.currentTarget).get k := by
-  change frame.CountedCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     flashLoanBodyShape frame.post at cursor
@@ -721,7 +722,7 @@ follows that subtree precisely because the runtime settles the repayment
 allowance only once the borrower has returned. -/
 theorem Exec.Frame.allowanceRegionEffect_of_flashLoan
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = flashLoanSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
@@ -736,7 +737,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_flashLoan
     context.invocation.2.2.2
   have htarget : frame.sevm.currentTarget = ca := context.invocation.2.1
   -- reach the borrower callback with all four witnesses
-  rcases frame.compiledSelectorBodyCursorCountedSilent context hnonempty
+  rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorCountedSilent (frame := frame) context hnonempty
       hmember with ⟨wrapperCursor, hwrapperSilent⟩
   rcases wrapperCursor.enterNonpayableSilent with
     ⟨bodyCursor, hbodySilent⟩
@@ -1006,7 +1007,7 @@ follows that subtree precisely because the runtime settles the repayment
 allowance only once the borrower has returned. -/
 theorem Exec.Frame.allowanceRegionEffectSound_of_flashLoan
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = flashLoanSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
@@ -1021,7 +1022,7 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_flashLoan
     context.invocation.2.2.2
   have htarget : frame.sevm.currentTarget = ca := context.invocation.2.1
   -- reach the borrower callback with all four witnesses
-  rcases frame.compiledSelectorBodyCursorCountedSilent context hnonempty
+  rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorCountedSilent (frame := frame) context hnonempty
       hmember with ⟨wrapperCursor, hwrapperSilent⟩
   rcases wrapperCursor.enterNonpayableSilent with
     ⟨bodyCursor, hbodySilent⟩

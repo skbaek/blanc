@@ -134,7 +134,7 @@ record ahead of its descendant stream. -/
 theorem Exec.frameContribution_eq_cons
     (dp : DeployParams) (ca : Adr) (frame : Exec.Frame)
     (inner : List CountedFrame)
-    (hexact : frame.exactInvocation dp ca)
+    (hexact : Blanc.Weth10.Exec.Frame.exactInvocation dp ca frame)
     (hnotlast : ownRecordLast frame.sevm = false) :
     Exec.frameContribution dp ca frame inner =
       CountedFrame.ofFrame dp ca frame :: inner := by
@@ -147,7 +147,7 @@ its own record behind its descendant stream. -/
 theorem Exec.frameContribution_eq_append
     (dp : DeployParams) (ca : Adr) (frame : Exec.Frame)
     (inner : List CountedFrame)
-    (hexact : frame.exactInvocation dp ca)
+    (hexact : Blanc.Weth10.Exec.Frame.exactInvocation dp ca frame)
     (hlast : ownRecordLast frame.sevm = true) :
     Exec.frameContribution dp ca frame inner =
       inner ++ [CountedFrame.ofFrame dp ca frame] := by
@@ -158,7 +158,7 @@ theorem Exec.frameContribution_eq_append
 theorem Exec.frameContribution_eq_append_of_flash
     (dp : DeployParams) (ca : Adr) (frame : Exec.Frame)
     (inner : List CountedFrame)
-    (hexact : frame.exactInvocation dp ca)
+    (hexact : Blanc.Weth10.Exec.Frame.exactInvocation dp ca frame)
     (hflash : isFlashInvocation frame.sevm = true) :
     Exec.frameContribution dp ca frame inner =
       inner ++ [CountedFrame.ofFrame dp ca frame] :=
@@ -169,7 +169,7 @@ theorem Exec.frameContribution_eq_append_of_flash
 theorem Exec.frameContribution_eq_append_of_permit
     (dp : DeployParams) (ca : Adr) (frame : Exec.Frame)
     (inner : List CountedFrame)
-    (hexact : frame.exactInvocation dp ca)
+    (hexact : Blanc.Weth10.Exec.Frame.exactInvocation dp ca frame)
     (hpermit : isPermitInvocation frame.sevm = true) :
     Exec.frameContribution dp ca frame inner =
       inner ++ [CountedFrame.ofFrame dp ca frame] :=
@@ -179,7 +179,7 @@ theorem Exec.frameContribution_eq_append_of_permit
 theorem Exec.frameContribution_eq_inner
     (dp : DeployParams) (ca : Adr) (frame : Exec.Frame)
     (inner : List CountedFrame)
-    (hnotexact : ¬ frame.exactInvocation dp ca) :
+    (hnotexact : ¬ Blanc.Weth10.Exec.Frame.exactInvocation dp ca frame) :
     Exec.frameContribution dp ca frame inner = inner := by
   unfold Exec.frameContribution
   rw [if_neg hnotexact]
@@ -427,7 +427,7 @@ theorem ownRecordLast_eq_false_of_data_empty {e : Sevm}
 counted descendants is that frame's own record alone. -/
 theorem Exec.attributionStream_eq_singleton
     (dp : DeployParams) (ca : Adr) (frame : Exec.Frame)
-    (hexact : frame.exactInvocation dp ca)
+    (hexact : Blanc.Weth10.Exec.Frame.exactInvocation dp ca frame)
     (hinner : Exec.attributionInner dp ca frame.run = [])
     (hnotlast : ownRecordLast frame.sevm = false) :
     Exec.attributionStream dp ca frame.run =
@@ -445,7 +445,7 @@ non-flash frame's recorded read is by construction its entry word.  The
 storage side is reused verbatim from the arm's existing transport. -/
 theorem AllowanceRegionEffectSound.of_singletonArm
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (heffect : AllowanceRegionEffect ca frame.pre frame.post
       (Exec.attributionStream dp ca frame.run))
     (hinner : Exec.attributionInner dp ca frame.run = [])
@@ -497,7 +497,7 @@ def CompiledBodyAllowanceHandler (dp : DeployParams) (ca : Adr) : Prop :=
 selector chronology, exposing the authentic frame directly. -/
 def CompiledFrameAllowanceHandler (dp : DeployParams) (ca : Adr) : Prop :=
   ∀ (frame : Exec.Frame),
-    frame.AuthenticContext dp ca →
+    Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame →
     ForallDeeperAt frame.sevm.depth ca (weth10 dp)
       (fun pc sevm pre out _ =>
         Exec.CoreAllowanceSound dp ca pc sevm pre out) →
@@ -513,7 +513,7 @@ theorem CompiledFrameAllowanceHandler.compiledBodyAllowanceHandler
   intro sevm pre post hrun htarget hdeeper run committed installed rootDirect
   let frame := Exec.Frame.ofRun run committed
   have hrootDirect := rootDirect htarget
-  have context : frame.AuthenticContext dp ca := by
+  have context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame := by
     refine ⟨hrootDirect.1, ?_, installed⟩
     refine ⟨rfl, htarget, hrootDirect.2, ?_⟩
     exact (installed.2 htarget).1
@@ -568,7 +568,7 @@ def CompiledBodyAllowanceReadHandler (dp : DeployParams) (ca : Adr) : Prop :=
 /-- Read-sound sibling of `CompiledFrameAllowanceHandler`. -/
 def CompiledFrameAllowanceReadHandler (dp : DeployParams) (ca : Adr) : Prop :=
   ∀ (frame : Exec.Frame),
-    frame.AuthenticContext dp ca →
+    Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame →
     ForallDeeperAt frame.sevm.depth ca (weth10 dp)
       (fun pc sevm pre out _ =>
         Exec.CoreAllowanceReadSound dp ca pc sevm pre out) →
@@ -584,7 +584,7 @@ theorem CompiledFrameAllowanceReadHandler.compiledBodyAllowanceReadHandler
   intro sevm pre post hrun htarget hdeeper run committed installed rootDirect
   let frame := Exec.Frame.ofRun run committed
   have hrootDirect := rootDirect htarget
-  have context : frame.AuthenticContext dp ca := by
+  have context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame := by
     refine ⟨hrootDirect.1, ?_, installed⟩
     refine ⟨rfl, htarget, hrootDirect.2, ?_⟩
     exact (installed.2 htarget).1
@@ -593,4 +593,3 @@ theorem CompiledFrameAllowanceReadHandler.compiledBodyAllowanceReadHandler
 end Weth10
 
 end Blanc
-

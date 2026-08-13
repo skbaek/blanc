@@ -33,9 +33,9 @@ def Exec.Frame.CompiledTransferAndCallZeroChronology
       frame.sevm.caller.toB256 ∧
     trace.slot = trace.retained.slot ∧
     trace.retained.retained.RawCommits ∧
-    frame.NinstOccurrence dp ca Ninst.call callPre trace.callPost
+    Blanc.Weth10.Exec.Frame.NinstOccurrence dp ca frame Ninst.call callPre trace.callPost
       trace.retained.slot ∧
-    frame.CompiledTokenCallbackChronology dp ca
+    Blanc.Weth10.Exec.Frame.CompiledTokenCallbackChronology dp ca frame
       onTokenTransferSelector 0 2 (Sevm.argWord frame.sevm 1)
       callbackPre frame.post
       (trace.retained.retained.flowActions dp ca)
@@ -63,7 +63,7 @@ def Exec.Frame.CompiledTransferAndCallNonzeroChronology
     Devm.getBal callbackPre = Devm.getBal frame.pre ∧
     Devm.getCode callbackPre = Devm.getCode frame.pre ∧
     callbackPre.output = frame.pre.output ∧
-    frame.CompiledTokenCallbackChronology dp ca
+    Blanc.Weth10.Exec.Frame.CompiledTokenCallbackChronology dp ca frame
       onTokenTransferSelector 0 2 (Sevm.argWord frame.sevm 1)
       callbackPre frame.post []
 
@@ -71,8 +71,8 @@ def Exec.Frame.CompiledTransferAndCallNonzeroChronology
 word rather than by its normalized address. -/
 def Exec.Frame.CompiledTransferAndCallChronology
     (dp : DeployParams) (ca : Adr) (frame : Exec.Frame) : Prop :=
-  frame.CompiledTransferAndCallZeroChronology dp ca ∨
-    frame.CompiledTransferAndCallNonzeroChronology dp ca
+  Blanc.Weth10.Exec.Frame.CompiledTransferAndCallZeroChronology dp ca frame ∨
+    Blanc.Weth10.Exec.Frame.CompiledTransferAndCallNonzeroChronology dp ca frame
 
 private def transferAndCallCallback : Func :=
   callBoolCallback onTokenTransferSelector 0 2 (arg 1)
@@ -146,10 +146,10 @@ private theorem Exec.Frame.CompiledCursor.selectZeroArmSilent
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {table : List (Nat × Func)}
     {left right : Func} {final : Devm} {stack : Stack}
-    (cursor : frame.CompiledCursor dp ca fs table
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table
       (.branch left right) final)
     (hstack : (0 : B256) :: stack <<+ cursor.pre.stack) :
-    ∃ arm : frame.CompiledCursor dp ca fs table left final,
+    ∃ arm : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table left final,
       stack <<+ arm.pre.stack ∧ arm.actions = cursor.actions ∧
       Devm.DispatchSilent cursor.pre arm.pre := by
   have compiled := cursor.run
@@ -162,11 +162,11 @@ private theorem Exec.Frame.CompiledCursor.selectZeroArmSilent
       have hw := popBurn_pref (Devm.PopBurn.of_popBurnBy hpop) hstack
       rcases Evm.branch_zero_steps hpush hjumpi hloc hroom hpop with
         ⟨hstepPush, hstepJumpi⟩
-      rcases frame.advance_cont cursor.current cursor.parentPrefix
+      rcases Blanc.Weth10.Exec.Frame.advance_cont (frame := frame) cursor.current cursor.parentPrefix
           hstepPush with ⟨afterPush, hpPush⟩
-      rcases frame.advance_cont afterPush hpPush hstepJumpi with
+      rcases Blanc.Weth10.Exec.Frame.advance_cont (frame := frame) afterPush hpPush hstepJumpi with
         ⟨armExec, hpArm⟩
-      let arm : frame.CompiledCursor dp ca fs table left final :=
+      let arm : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table left final :=
         ⟨cursor.pc + 4, _, armExec, cursor.actions, hpArm,
           hleft, hsubLeft, hboundLeft⟩
       exact ⟨arm, hw.2, rfl, dispatchSilent_of_popBurnBy hpop⟩
@@ -180,11 +180,11 @@ private theorem Exec.Frame.CompiledCursor.selectNonzeroArmSilent
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {table : List (Nat × Func)}
     {left right : Func} {final : Devm} {flag : B256} {stack : Stack}
-    (cursor : frame.CompiledCursor dp ca fs table
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table
       (.branch left right) final)
     (hflag : flag ≠ 0)
     (hstack : flag :: stack <<+ cursor.pre.stack) :
-    ∃ arm : frame.CompiledCursor dp ca fs table right final,
+    ∃ arm : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table right final,
       stack <<+ arm.pre.stack ∧ arm.actions = cursor.actions ∧
       Devm.DispatchSilent cursor.pre arm.pre := by
   have compiled := cursor.run
@@ -201,13 +201,13 @@ private theorem Exec.Frame.CompiledCursor.selectNonzeroArmSilent
       rcases Evm.branch_succ_steps hpush hjumpi hjumpdest hjumpable
           hloc hne hroom hpop with
         ⟨hstepPush, hstepJumpi, hstepJumpdest⟩
-      rcases frame.advance_cont cursor.current cursor.parentPrefix
+      rcases Blanc.Weth10.Exec.Frame.advance_cont (frame := frame) cursor.current cursor.parentPrefix
           hstepPush with ⟨afterPush, hpPush⟩
-      rcases frame.advance_cont afterPush hpPush hstepJumpi with
+      rcases Blanc.Weth10.Exec.Frame.advance_cont (frame := frame) afterPush hpPush hstepJumpi with
         ⟨afterJump, hpJump⟩
-      rcases frame.advance_cont afterJump hpJump hstepJumpdest with
+      rcases Blanc.Weth10.Exec.Frame.advance_cont (frame := frame) afterJump hpJump hstepJumpdest with
         ⟨armExec, hpArm⟩
-      let arm : frame.CompiledCursor dp ca fs table right final :=
+      let arm : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table right final :=
         ⟨loc + 1, _, armExec, cursor.actions, hpArm,
           hright, hsubRight, hboundRight⟩
       exact ⟨arm, hw.2, rfl, dispatchSilent_of_popBurnBy hpop⟩
@@ -218,25 +218,25 @@ branch decision. -/
 private theorem Exec.Frame.CompiledCursor.selectTransferArm
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {next : Func} {final : Devm}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       (transferThen next) final) :
     (Sevm.argWord frame.sevm 0 = 0 ∧
-      ∃ zeroCursor : frame.CompiledCursor dp ca
+      ∃ zeroCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
           ((weth10 dp).main :: weth10Aux)
           (table 0 ((weth10 dp).main :: weth10Aux))
           (transferZeroThen next) final,
         zeroCursor.actions = cursor.actions ∧
         Devm.DispatchSilent cursor.pre zeroCursor.pre) ∨
     (Sevm.argWord frame.sevm 0 ≠ 0 ∧
-      ∃ nonzeroCursor : frame.CompiledCursor dp ca
+      ∃ nonzeroCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
           ((weth10 dp).main :: weth10Aux)
           (table 0 ((weth10 dp).main :: weth10Aux))
           (transferNonzeroThen next) final,
         nonzeroCursor.actions = cursor.actions ∧
         Devm.DispatchSilent cursor.pre nonzeroCursor.pre) := by
-  change frame.CompiledCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (transferSelectLine +++
@@ -307,14 +307,14 @@ every crossed source instruction is childless. -/
 private theorem Exec.Frame.CompiledCursor.reachTransferNonzeroCallback
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {next : Func} {final : Devm}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       (transferNonzeroThen next) final)
     (h_wf : Mem.Wf cursor.pre.memory)
     (h_reads : Mem.Reads cursor.pre.memory []) :
     ∃ (recipient : Adr)
-        (callbackCursor : frame.CompiledCursor dp ca
+        (callbackCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
           ((weth10 dp).main :: weth10Aux)
           (table 0 ((weth10 dp).main :: weth10Aux)) next final),
       recipient.toB256 = normalizedAddressArg frame.sevm 0 ∧
@@ -338,7 +338,7 @@ private theorem Exec.Frame.CompiledCursor.reachTransferNonzeroCallback
       Mem.Reads callbackCursor.pre.memory
         (Sevm.argWord frame.sevm 1).toBytes ∧
       callbackCursor.actions = cursor.actions := by
-  change frame.CompiledCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (transferNonzeroGuardLine +++
@@ -559,23 +559,24 @@ private theorem Exec.Frame.CompiledCursor.reachTransferNonzeroCallback
 literal entry cursor of the indexed token callback. -/
 theorem Exec.Frame.compiledTransferAndCallNonzeroChronology
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = transferAndCallSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hraw : Sevm.argWord frame.sevm 0 ≠ 0) :
-    frame.CompiledTransferAndCallNonzeroChronology dp ca := by
+    Blanc.Weth10.Exec.Frame.CompiledTransferAndCallNonzeroChronology dp ca frame := by
   have hmem :
       (Sevm.selector frame.sevm, nonpayable transferAndCall) ∈
         weth10Funcs dp := by
     rw [hselector]
     simp [transferAndCallSelector, weth10Funcs]
-  rcases frame.compiledSelectorBodyCursorSilent context hnonempty hmem with
+  rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorSilent (frame := frame)
+      context hnonempty hmem with
     ⟨wrapperCursor, _hwrapperStack, hwrapperActions, hentrySilent⟩
   rcases wrapperCursor.enterNonpayableSilent with
     ⟨bodyCursor, _hbodyStack, hbodyActions, hnonpayableSilent⟩
   have hbodySilent : Devm.DispatchSilent frame.pre bodyCursor.pre :=
     dispatchSilent_trans hentrySilent hnonpayableSilent
-  change frame.CompiledCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (transferThen transferAndCallCallback) frame.post at bodyCursor
@@ -617,7 +618,7 @@ theorem Exec.Frame.compiledTransferAndCallNonzeroChronology
         _ = bodyCursor.actions := hnonzeroActions
         _ = wrapperCursor.actions := hbodyActions
         _ = [] := hwrapperActions
-    have hchron' : frame.CompiledTokenCallbackChronology dp ca
+    have hchron' : Blanc.Weth10.Exec.Frame.CompiledTokenCallbackChronology dp ca frame
         onTokenTransferSelector 0 2 (Sevm.argWord frame.sevm 1)
         callbackCursor.pre frame.post [] := by
       simpa only [hcallbackActionsNil] using hchron
@@ -645,23 +646,24 @@ its retained action list is then used as the literal prefix of the indexed
 token callback chronology. -/
 theorem Exec.Frame.compiledTransferAndCallZeroChronology
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = transferAndCallSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hraw : Sevm.argWord frame.sevm 0 = 0) :
-    frame.CompiledTransferAndCallZeroChronology dp ca := by
+    Blanc.Weth10.Exec.Frame.CompiledTransferAndCallZeroChronology dp ca frame := by
   have hmem :
       (Sevm.selector frame.sevm, nonpayable transferAndCall) ∈
         weth10Funcs dp := by
     rw [hselector]
     simp [transferAndCallSelector, weth10Funcs]
-  rcases frame.compiledSelectorBodyCursorSilent context hnonempty hmem with
+  rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorSilent (frame := frame)
+      context hnonempty hmem with
     ⟨wrapperCursor, _hwrapperStack, hwrapperActions, hentrySilent⟩
   rcases wrapperCursor.enterNonpayableSilent with
     ⟨bodyCursor, _hbodyStack, hbodyActions, hnonpayableSilent⟩
   have hbodySilent : Devm.DispatchSilent frame.pre bodyCursor.pre :=
     dispatchSilent_trans hentrySilent hnonpayableSilent
-  change frame.CompiledCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (transferThen transferAndCallCallback) frame.post at bodyCursor
@@ -714,7 +716,7 @@ theorem Exec.Frame.compiledTransferAndCallZeroChronology
             trace.retained.retained.flowActions dp ca := hcallbackActions
         _ = trace.retained.retained.flowActions dp ca := by
           rw [hzeroActionsNil, List.nil_append]
-    have hchron' : frame.CompiledTokenCallbackChronology dp ca
+    have hchron' : Blanc.Weth10.Exec.Frame.CompiledTokenCallbackChronology dp ca frame
         onTokenTransferSelector 0 2 (Sevm.argWord frame.sevm 1)
         callbackCursor.pre frame.post
         (trace.retained.retained.flowActions dp ca) := by
@@ -742,14 +744,14 @@ theorem Exec.Frame.compiledTransferAndCallZeroChronology
 proof-indexed chronology selected by its unmodified raw recipient word. -/
 theorem Exec.Frame.compiledTransferAndCallChronology
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = transferAndCallSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    frame.CompiledTransferAndCallChronology dp ca := by
+    Blanc.Weth10.Exec.Frame.CompiledTransferAndCallChronology dp ca frame := by
   by_cases hraw : Sevm.argWord frame.sevm 0 = 0
-  · exact Or.inl (frame.compiledTransferAndCallZeroChronology
+  · exact Or.inl (Blanc.Weth10.Exec.Frame.compiledTransferAndCallZeroChronology (frame := frame)
       context hselector hnonempty hraw)
-  · exact Or.inr (frame.compiledTransferAndCallNonzeroChronology
+  · exact Or.inr (Blanc.Weth10.Exec.Frame.compiledTransferAndCallNonzeroChronology (frame := frame)
       context hselector hnonempty hraw)
 
 end Weth10

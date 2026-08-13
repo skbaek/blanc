@@ -173,7 +173,7 @@ zero amount: the accepted finite arm bounds the request by the word read, and
 the maximum arm is impossible at a zero word. -/
 private theorem argWord_two_toNat_eq_zero_of_read_zero
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (hroot : frame.IsRoot) (hexact : frame.exactInvocation dp ca)
+    (hroot : Blanc.Weth10.Exec.Frame.IsRoot frame) (hexact : Blanc.Weth10.Exec.Frame.exactInvocation dp ca frame)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hsel : Sevm.selector frame.sevm = transferFromSelector ∨
       Sevm.selector frame.sevm = withdrawFromSelector)
@@ -671,7 +671,7 @@ not carry — only the flash-counter restoration does, and that is discarded
 here. -/
 private theorem exists_flashAllowanceOutcome
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (hroot : frame.IsRoot) (hexact : frame.exactInvocation dp ca)
+    (hroot : Blanc.Weth10.Exec.Frame.IsRoot frame) (hexact : Blanc.Weth10.Exec.Frame.exactInvocation dp ca frame)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hsel : Sevm.selector frame.sevm = flashLoanSelector) :
     ∃ settle burn : Devm,

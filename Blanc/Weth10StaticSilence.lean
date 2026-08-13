@@ -473,7 +473,7 @@ theorem withdrawFrom_mem_weth10Funcs (dp : DeployParams) :
 runs in a dynamic context. -/
 theorem Exec.Frame.isStatic_eq_false_of_storesOrHalts
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame} {body : Func}
-    (hexact : frame.exactInvocation dp ca)
+    (hexact : Blanc.Weth10.Exec.Frame.exactInvocation dp ca frame)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hmem : (Sevm.selector frame.sevm, nonpayable body) ∈ weth10Funcs dp)
     (hstores : StoresOrHalts ((weth10 dp).main :: weth10Aux) body) :
@@ -491,7 +491,7 @@ theorem Exec.Frame.isStatic_eq_false_of_storesOrHalts
 
 private theorem static_writing_selector_absurd
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame} {body : Func}
-    (hexact : frame.exactInvocation dp ca)
+    (hexact : Blanc.Weth10.Exec.Frame.exactInvocation dp ca frame)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hmem : (Sevm.selector frame.sevm, nonpayable body) ∈ weth10Funcs dp)
     (hstores : StoresOrHalts ((weth10 dp).main :: weth10Aux) body)
@@ -504,7 +504,7 @@ private theorem static_writing_selector_absurd
 `STATIC` records no writing allowance visit. -/
 theorem frameAllowanceEvent_written_eq_none_of_static
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (hexact : frame.exactInvocation dp ca)
+    (hexact : Blanc.Weth10.Exec.Frame.exactInvocation dp ca frame)
     (hstatic : frame.sevm.isStatic = true)
     {event : AllowanceEvent}
     (hevent :
@@ -792,10 +792,10 @@ theorem writeFreeLedger_statcallCrossing
     (henter : f.enter = .run cevm)
     (child : Exec cevm.pc cevm.sta cevm.dyna raw) :
     WriteFreeLedger
-      (if h : Blanc.Weth10.Frame.settlementCommits f raw = true then
+      (if h : Blanc.Frame.settlementCommits f raw = true then
         Exec.frameContribution dp ca
           (Exec.Frame.ofRun child
-            (Blanc.Weth10.Frame.raw_commits_of_settlementCommits h))
+            (Blanc.Frame.raw_commits_of_settlementCommits h))
           (Exec.attributionInner dp ca child)
        else []) := by
   have hstatic : cevm.sta.isStatic = true :=

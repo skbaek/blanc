@@ -192,8 +192,8 @@ theorem LocalOwnEffect.booked_equations
 theorem Exec.committedFrames_eq_nil_of_not_commits
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out) (h : Execution.commits out ≠ true) :
-    Blanc.Weth10.Exec.committedFrames run = [] := by
-  simp [Blanc.Weth10.Exec.committedFrames, h]
+    Blanc.Exec.committedFrames run = [] := by
+  simp [Blanc.Exec.committedFrames, h]
 
 theorem Exec.flowActions_eq_nil_of_error
     {dp : DeployParams} {ca : Adr}
@@ -210,8 +210,8 @@ theorem Exec.mem_flowActions_iff
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out) (action : FlowAction) :
     action ∈ Blanc.Weth10.Exec.flowActions dp ca run ↔
-      ∃ frame ∈ Blanc.Weth10.Exec.committedFrames run,
-        frame.flowAction? dp ca = some action := by
+      ∃ frame ∈ Blanc.Exec.committedFrames run,
+        Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action := by
   simp [Blanc.Weth10.Exec.flowActions, List.mem_filterMap]
 
 /-- Every retained action therefore has a concrete committing frame and an
@@ -221,13 +221,13 @@ theorem Exec.exists_exact_committedFrame_of_mem_flowActions
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     {run : Exec pc sevm pre out} {action : FlowAction}
     (h : action ∈ Blanc.Weth10.Exec.flowActions dp ca run) :
-    ∃ frame ∈ Blanc.Weth10.Exec.committedFrames run,
-      frame.flowAction? dp ca = some action ∧
-        frame.exactInvocation dp ca := by
+    ∃ frame ∈ Blanc.Exec.committedFrames run,
+      Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action ∧
+        Blanc.Weth10.Exec.Frame.exactInvocation dp ca frame := by
   rcases (Exec.mem_flowActions_iff run action).mp h with
     ⟨frame, hframe, haction⟩
   exact ⟨frame, hframe, haction,
-    frame.exactInvocation_of_flowAction?_eq_some haction⟩
+    Blanc.Weth10.Exec.Frame.exactInvocation_of_flowAction?_eq_some haction⟩
 
 /-- With the raw root's installed-code and fresh-entry facts, retained-action
 membership upgrades to the complete compiled-functional context. -/
@@ -238,13 +238,13 @@ theorem Exec.exists_authentic_committedFrame_of_mem_flowActions
     (hcode : some (pre.getCode ca).toList = Prog.compile (weth10 dp))
     (hpc : pc = 0) (hmemory : pre.memory = Mem.empty)
     (h : action ∈ Blanc.Weth10.Exec.flowActions dp ca run) :
-    ∃ frame ∈ Blanc.Weth10.Exec.committedFrames run,
-      frame.flowAction? dp ca = some action ∧
-        frame.AuthenticContext dp ca := by
+    ∃ frame ∈ Blanc.Exec.committedFrames run,
+      Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action ∧
+        Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame := by
   rcases (Exec.mem_flowActions_iff run action).mp h with
     ⟨frame, hframe, haction⟩
   exact ⟨frame, hframe, haction,
-    frame.authenticContext_of_mem_committedFrames
+    Blanc.Weth10.Exec.Frame.authenticContext_of_mem_committedFrames
       run hcode hpc hmemory hframe haction⟩
 
 /-- The executable action ledger is storage-authentic: every retained action
@@ -259,9 +259,9 @@ theorem Exec.exists_authenticLocalStorage_of_mem_flowActions
     (hcode : some (pre.getCode ca).toList = Prog.compile (weth10 dp))
     (hpc : pc = 0) (hmemory : pre.memory = Mem.empty)
     (h : action ∈ Blanc.Weth10.Exec.flowActions dp ca run) :
-    ∃ frame ∈ Blanc.Weth10.Exec.committedFrames run,
-      frame.flowAction? dp ca = some action ∧
-        frame.AuthenticContext dp ca ∧
+    ∃ frame ∈ Blanc.Exec.committedFrames run,
+      Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action ∧
+        Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame ∧
           ∃ ownPost : HolderBalances,
             LocalOwnEffect action
                 (Stor.rest (Devm.getStor frame.pre ca)) ownPost ∧
@@ -272,7 +272,7 @@ theorem Exec.exists_authenticLocalStorage_of_mem_flowActions
   rcases Exec.exists_authentic_committedFrame_of_mem_flowActions
     (run := run) hcode hpc hmemory h with
     ⟨frame, hframe, haction, context⟩
-  rcases frame.hasLocalOwnEffect_of_flowAction?_eq_some context haction with
+  rcases Blanc.Weth10.Exec.Frame.hasLocalOwnEffect_of_flowAction?_eq_some context haction with
     ⟨ownPost, effect⟩
   exact ⟨frame, hframe, haction, context, ownPost, effect,
     fun u => effect.holder_equations u, effect.booked_equations⟩
@@ -303,22 +303,22 @@ def FlowAction.HasExecOrigin (dp : DeployParams) (ca : Adr)
     (action : FlowAction) : Prop :=
   ∃ (pc : Nat) (sevm : Sevm) (pre : Devm) (out : Execution)
       (run : Exec pc sevm pre out) (frame : Exec.Frame),
-    frame ∈ Blanc.Weth10.Exec.committedFrames run ∧
-      frame.flowAction? dp ca = some action ∧ frame.IsRoot
+    frame ∈ Blanc.Exec.committedFrames run ∧
+      Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action ∧ Blanc.Weth10.Exec.Frame.IsRoot frame
 
 theorem FlowAction.HasExecOrigin.exists_exact_committedFrame
     {dp : DeployParams} {ca : Adr} {action : FlowAction}
     (origin : action.HasExecOrigin dp ca) :
     ∃ (pc : Nat) (sevm : Sevm) (pre : Devm) (out : Execution)
         (run : Exec pc sevm pre out) (frame : Exec.Frame),
-      frame ∈ Blanc.Weth10.Exec.committedFrames run ∧
-        frame.flowAction? dp ca = some action ∧
-        frame.IsRoot ∧ frame.exactInvocation dp ca := by
+      frame ∈ Blanc.Exec.committedFrames run ∧
+        Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action ∧
+        Blanc.Weth10.Exec.Frame.IsRoot frame ∧ Blanc.Weth10.Exec.Frame.exactInvocation dp ca frame := by
   rcases origin with
     ⟨pc, sevm, pre, out, run, frame, hframe, hclassified, hroot⟩
   exact ⟨pc, sevm, pre, out, run, frame,
     hframe, hclassified, hroot,
-    frame.exactInvocation_of_flowAction?_eq_some hclassified⟩
+    Blanc.Weth10.Exec.Frame.exactInvocation_of_flowAction?_eq_some hclassified⟩
 
 theorem RetainedXlot.hasExecOrigin_of_mem_flowActions
     {dp : DeployParams} {ca : Adr} {xl : Xlot}
@@ -367,8 +367,8 @@ theorem ProcessMessageTrace.exists_authenticFrame_of_mem_flowActions
       Prog.compile (weth10 dp))
     {action : FlowAction}
     (h : action ∈ trace.retained.flowActions dp ca) :
-    ∃ frame : Exec.Frame, frame.flowAction? dp ca = some action ∧
-      frame.AuthenticContext dp ca := by
+    ∃ frame : Exec.Frame, Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action ∧
+      Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame := by
   rcases trace with ⟨slot, retained, hrun⟩
   cases retained with
   | none => simp [RetainedXlot.flowActions] at h
@@ -393,8 +393,8 @@ theorem ProcessCreateMessageTrace.exists_authenticFrame_of_mem_flowActions
       Prog.compile (weth10 dp))
     {action : FlowAction}
     (h : action ∈ trace.retained.flowActions dp ca) :
-    ∃ frame : Exec.Frame, frame.flowAction? dp ca = some action ∧
-      frame.AuthenticContext dp ca := by
+    ∃ frame : Exec.Frame, Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action ∧
+      Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame := by
   rcases trace with ⟨slot, retained, hrun⟩
   cases retained with
   | none => simp [RetainedXlot.flowActions] at h

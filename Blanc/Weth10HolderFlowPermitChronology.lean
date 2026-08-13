@@ -621,12 +621,12 @@ private theorem Exec.Frame.CompiledCursor.selectBranchObserved
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {table : List (Nat × Func)}
     {left right : Func} {final : Devm}
-    (cursor : frame.CompiledCursor dp ca fs table
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table
       (.branch left right) final) :
-    (∃ arm : frame.CompiledCursor dp ca fs table left final,
+    (∃ arm : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table left final,
       arm.actions = cursor.actions ∧
       PermitOwnObservations frame.sevm cursor.pre arm.pre) ∨
-    (∃ arm : frame.CompiledCursor dp ca fs table right final,
+    (∃ arm : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table right final,
       arm.actions = cursor.actions ∧
       PermitOwnObservations frame.sevm cursor.pre arm.pre) := by
   have compiled := cursor.run
@@ -638,11 +638,11 @@ private theorem Exec.Frame.CompiledCursor.selectBranchObserved
   | zero hroom hpop hleft =>
       rcases Evm.branch_zero_steps hpush hjumpi hloc hroom hpop with
         ⟨hstepPush, hstepJumpi⟩
-      rcases frame.advance_cont cursor.current cursor.parentPrefix
+      rcases Blanc.Weth10.Exec.Frame.advance_cont (frame := frame) cursor.current cursor.parentPrefix
           hstepPush with ⟨afterPush, hpPush⟩
-      rcases frame.advance_cont afterPush hpPush hstepJumpi with
+      rcases Blanc.Weth10.Exec.Frame.advance_cont (frame := frame) afterPush hpPush hstepJumpi with
         ⟨armExec, hpArm⟩
-      let arm : frame.CompiledCursor dp ca fs table left final :=
+      let arm : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table left final :=
         ⟨cursor.pc + 4, _, armExec, cursor.actions, hpArm,
           hleft, hsubLeft, hboundLeft⟩
       exact Or.inl ⟨arm, rfl,
@@ -651,13 +651,13 @@ private theorem Exec.Frame.CompiledCursor.selectBranchObserved
       rcases Evm.branch_succ_steps hpush hjumpi hjumpdest hjumpable
           hloc hne hroom hpop with
         ⟨hstepPush, hstepJumpi, hstepJumpdest⟩
-      rcases frame.advance_cont cursor.current cursor.parentPrefix
+      rcases Blanc.Weth10.Exec.Frame.advance_cont (frame := frame) cursor.current cursor.parentPrefix
           hstepPush with ⟨afterPush, hpPush⟩
-      rcases frame.advance_cont afterPush hpPush hstepJumpi with
+      rcases Blanc.Weth10.Exec.Frame.advance_cont (frame := frame) afterPush hpPush hstepJumpi with
         ⟨afterJump, hpJump⟩
-      rcases frame.advance_cont afterJump hpJump hstepJumpdest with
+      rcases Blanc.Weth10.Exec.Frame.advance_cont (frame := frame) afterJump hpJump hstepJumpdest with
         ⟨armExec, hpArm⟩
-      let arm : frame.CompiledCursor dp ca fs table right final :=
+      let arm : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table right final :=
         ⟨loc + 1, _, armExec, cursor.actions, hpArm,
           hright, hsubRight, hboundRight⟩
       exact Or.inr ⟨arm, rfl,
@@ -668,12 +668,12 @@ silence of its push/jump/jumpdest scaffold. -/
 private theorem Exec.Frame.CompiledCursor.enterCallObserved
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {f₀ : Func} {aux : List Func} {k : Nat} {final : Devm}
-    (cursor : frame.CompiledCursor dp ca (f₀ :: aux)
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame (f₀ :: aux)
       (table 0 (f₀ :: aux)) (.call k) final)
     (hcode : some frame.sevm.code.toList = Prog.compile ⟨f₀, aux⟩) :
     ∃ body,
       (f₀ :: aux)[k]? = some body ∧
-      ∃ bodyCursor : frame.CompiledCursor dp ca (f₀ :: aux)
+      ∃ bodyCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame (f₀ :: aux)
           (table 0 (f₀ :: aux)) body final,
         bodyCursor.actions = cursor.actions ∧
         PermitOwnObservations frame.sevm cursor.pre bodyCursor.pre := by
@@ -694,13 +694,13 @@ private theorem Exec.Frame.CompiledCursor.enterCallObserved
       rcases Evm.call_steps (le := le) hpush hjump hjumpdest
           hjumpable.1 hloc hroom hburn with
         ⟨hstepPush, hstepJump, hstepJumpdest⟩
-      rcases frame.advance_cont cursor.current cursor.parentPrefix
+      rcases Blanc.Weth10.Exec.Frame.advance_cont (frame := frame) cursor.current cursor.parentPrefix
           hstepPush with ⟨afterPush, hprefixPush⟩
-      rcases frame.advance_cont afterPush hprefixPush hstepJump with
+      rcases Blanc.Weth10.Exec.Frame.advance_cont (frame := frame) afterPush hprefixPush hstepJump with
         ⟨afterJump, hprefixJump⟩
-      rcases frame.advance_cont afterJump hprefixJump hstepJumpdest with
+      rcases Blanc.Weth10.Exec.Frame.advance_cont (frame := frame) afterJump hprefixJump hstepJumpdest with
         ⟨bodyExec, hprefixBody⟩
-      let bodyCursor : frame.CompiledCursor dp ca (f₀ :: aux)
+      let bodyCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame (f₀ :: aux)
           (table 0 (f₀ :: aux)) _ final :=
         ⟨loc + 1, _, bodyExec, cursor.actions, hprefixBody,
           hbody, hsub, hjumpable.2⟩
@@ -1039,7 +1039,7 @@ private theorem Exec.Frame.CompiledCursor.castSource_actions_permit
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {sourceTable : List (Nat × Func)}
     {source target : Func} {final : Devm}
-    (cursor : frame.CompiledCursor dp ca fs sourceTable source final)
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs sourceTable source final)
     (hsource : source = target) :
     (hsource ▸ cursor).actions = cursor.actions := by
   cases hsource
@@ -1050,12 +1050,12 @@ The two rejected arms are fixed reverters, so the literal retained path ends
 in the tagged approval write and contains no further recursive instruction. -/
 private theorem Exec.Frame.CompiledCursor.finishPermitAfterStaticcall
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       permitAfterStaticcall frame.post) :
     PermitOwnObservations frame.sevm cursor.pre frame.post ∧
-      frame.descendantFlowActions dp ca = cursor.actions := by
+      Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame = cursor.actions := by
   unfold permitAfterStaticcall at cursor
   rcases cursor.peelChildlessLine (line := permitFirstSignerGuardLine)
       (by simp [permitFirstSignerGuardLine, NinstIsChildless,
@@ -1076,14 +1076,14 @@ private theorem Exec.Frame.CompiledCursor.finishPermitAfterStaticcall
         simp [weth10, weth10Aux, invalidPermitErrorSlot,
           invalidPermitError])) with
     ⟨approveCursor, hsecondPop, hsecondBranchActions⟩
-  let terminalCursor : frame.CompiledCursor dp ca
+  let terminalCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       (approvePermitLine +++ Func.stop) frame.post :=
     approvePermit_shape ▸ approveCursor
   have hterminalActions : terminalCursor.actions = approveCursor.actions :=
     approveCursor.castSource_actions_permit approvePermit_shape
-  have hdesc : frame.descendantFlowActions dp ca =
+  have hdesc : Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame =
       approveCursor.actions :=
     (terminalCursor.finishTerminalChildlessLine (by
       simp [approvePermitLine, argCopy, cdc, allowanceKeyFromMemory,
@@ -1139,18 +1139,18 @@ private theorem permitDomainDispatch_shape (dp : DeployParams) :
 parent-only instructions and the generated internal call scaffold. -/
 private theorem Exec.Frame.CompiledCursor.enterPermitDomainDispatch
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame} {final : Devm}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       (permitDomainDispatch dp) final)
     (hcode : some frame.sevm.code.toList = Prog.compile (weth10 dp)) :
-    ∃ recoverCursor : frame.CompiledCursor dp ca
+    ∃ recoverCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
         ((weth10 dp).main :: weth10Aux)
         (table 0 ((weth10 dp).main :: weth10Aux))
       permitRecover final,
       recoverCursor.actions = cursor.actions ∧
       PermitOwnObservations frame.sevm cursor.pre recoverCursor.pre := by
-  change frame.CompiledCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (permitDomainTestLine dp +++
@@ -1226,12 +1226,12 @@ private theorem Exec.Frame.CompiledCursor.enterPermitDomainDispatch
 
 private theorem Exec.Frame.CompiledCursor.enterPermitAfterDeadline
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame} {final : Devm}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       (permitAfterDeadline dp) final)
     (hcode : some frame.sevm.code.toList = Prog.compile (weth10 dp)) :
-    ∃ recoverCursor : frame.CompiledCursor dp ca
+    ∃ recoverCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
         ((weth10 dp).main :: weth10Aux)
         (table 0 ((weth10 dp).main :: weth10Aux))
         permitRecover final,
@@ -1271,10 +1271,10 @@ cursor.  All earlier generated instructions contribute no descendant action;
 the prefix observations include the tentative tagged nonce increment. -/
 private theorem Exec.Frame.reachCompiledPermitRecover
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = permitSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    ∃ recoverCursor : frame.CompiledCursor dp ca
+    ∃ recoverCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
         ((weth10 dp).main :: weth10Aux)
         (table 0 ((weth10 dp).main :: weth10Aux))
         permitRecover frame.post,
@@ -1285,12 +1285,13 @@ private theorem Exec.Frame.reachCompiledPermitRecover
         weth10Funcs dp := by
     rw [hselector]
     exact permit_mem_weth10Funcs dp
-  rcases frame.compiledSelectorBodyCursorSilent context hnonempty hmem with
+  rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorSilent (frame := frame)
+      context hnonempty hmem with
     ⟨wrapperCursor, _hwrapperStack, hwrapperActions, hentrySilent⟩
   rcases wrapperCursor.enterNonpayableSilent with
     ⟨permitCursor, _hpermitStack, hpermitActions,
       hnonpayableSilent⟩
-  change frame.CompiledCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (permitDeadlineLine +++
@@ -1332,7 +1333,7 @@ private theorem Exec.Frame.CompiledCursor.headNinstRun
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {table : List (Nat × Func)}
     {n : Ninst} {tail : Func} {final : Devm}
-    (cursor : frame.CompiledCursor dp ca fs table (.next n tail) final) :
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table (.next n tail) final) :
     ∃ post, Ninst.Run frame.sevm cursor.pre n post := by
   cases hrun : cursor.run with
   | next hcompiled htail =>
@@ -1342,7 +1343,7 @@ private theorem Exec.Frame.CompiledCursor.headNinstAt_permit
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {sourceTable : List (Nat × Func)}
     {n : Ninst} {tail : Func} {final : Devm}
-    (cursor : frame.CompiledCursor dp ca fs sourceTable
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs sourceTable
       (.next n tail) final) :
     Ninst.At frame.sevm.code cursor.pc n :=
   ninstAt_of_subcode_next cursor.codeSlice
@@ -1354,12 +1355,12 @@ def Exec.Frame.CompiledPermitChronology
     (dp : DeployParams) (ca : Adr) (frame : Exec.Frame) : Prop :=
   ∃ (callPre callPost : Devm) (slot : Xlot)
       (selected : List FlowAction),
-    frame.NinstOccurrence dp ca Ninst.statcall callPre callPost slot ∧
+    Blanc.Weth10.Exec.Frame.NinstOccurrence dp ca frame Ninst.statcall callPre callPost slot ∧
     PermitStaticcallOperandPrefix callPre ∧
     PermitStaticcallOutcome dp ca frame.sevm callPre callPost slot selected ∧
     PermitOwnObservations frame.sevm frame.pre callPre ∧
     PermitOwnObservations frame.sevm callPost frame.post ∧
-    frame.descendantFlowActions dp ca = selected
+    Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame = selected
 
 /-- Exact proof-indexed chronology for a successful selected `permit` frame.
 The theorem is unconditional in the code installed at address `1`: an empty
@@ -1367,13 +1368,14 @@ precompile slot, a committing delegated/interpreted child, and a rolled-back
 child are all retained exactly as the original execution selected them. -/
 theorem Exec.Frame.compiledPermitChronology
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = permitSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    frame.CompiledPermitChronology dp ca := by
-  rcases frame.reachCompiledPermitRecover context hselector hnonempty with
+    Blanc.Weth10.Exec.Frame.CompiledPermitChronology dp ca frame := by
+  rcases Blanc.Weth10.Exec.Frame.reachCompiledPermitRecover (frame := frame)
+      context hselector hnonempty with
     ⟨recoverCursor, hrecoverActions, hrecoverObs⟩
-  change frame.CompiledCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     ((permitDigest ++ permitRecoverPrepare) +++
@@ -1430,7 +1432,7 @@ theorem Exec.Frame.compiledPermitChronology
     hrecoverPrefixActions.trans hrecoverActions
   have htailSelected : tailCursor.actions = selected := by
     simpa only [hcallActions, List.nil_append] using htailActions
-  have exactOccurrence : frame.NinstOccurrence dp ca Ninst.statcall
+  have exactOccurrence : Blanc.Weth10.Exec.Frame.NinstOccurrence dp ca frame Ninst.statcall
       callCursor.pre tailCursor.pre rawSlot :=
     htailPre.symm ▸ occurrence
   exact ⟨callCursor.pre, tailCursor.pre, rawSlot, selected,

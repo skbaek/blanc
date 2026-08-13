@@ -346,6 +346,13 @@ Blanc.Weth10.weth10Code_compile|$STANDARD
 Blanc.Func.compile_eq_emitUnchecked|$STANDARD
 Blanc.Table.compile_eq_emitUnchecked|$STANDARD
 Blanc.Prog.compile_eq_emitUnchecked|$STANDARD
+Blanc.Frame.raw_commits_of_settlementCommits|$STANDARD
+Blanc.Exec.descendantFrames_runOk_of_settlementCommits|$STANDARD
+Blanc.Exec.descendantFrames_runOk_of_not_settlementCommits|$STANDARD
+Blanc.Exec.descendantFrames_runOk_create_codeDepositRollback|$STANDARD
+Blanc.Exec.committedFrames_eq_nil_of_not_commits|$STANDARD
+Blanc.ProcessMessage.settlementCommits_of_some_ok_clean|$STANDARD
+Blanc.Frame.settlementCommits_ofCall_of_raw_commits|$STANDARD
 Blanc.Func.CompileShape.byteSize_compileShape|propext
 Blanc.Func.length_emitByShape|propext
 Blanc.Func.getD_emitByShape|propext

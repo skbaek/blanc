@@ -48,101 +48,101 @@ split is the balance development's already-proved partition. -/
 theorem compiledFrameAllowanceHandler (dp : DeployParams) (ca : Adr) :
     CompiledFrameAllowanceHandler dp ca := by
   intro frame context hdeeper
-  rcases frame.callFreeStorageBranch_or_remaining context with
+  rcases Blanc.Weth10.Exec.Frame.callFreeStorageBranch_or_remaining (frame := frame) context with
       closed | openCase
   · cases closed with
     | receive empty =>
-        exact frame.allowanceRegionEffect_of_receive context empty
+        exact Blanc.Weth10.Exec.Frame.allowanceRegionEffect_of_receive (frame := frame) context empty
     | deposit nonempty selected =>
-        exact frame.allowanceRegionEffect_of_deposit context selected nonempty
+        exact Blanc.Weth10.Exec.Frame.allowanceRegionEffect_of_deposit (frame := frame) context selected nonempty
     | depositTo nonempty selected =>
-        exact frame.allowanceRegionEffect_of_depositTo context selected nonempty
+        exact Blanc.Weth10.Exec.Frame.allowanceRegionEffect_of_depositTo (frame := frame) context selected nonempty
     | transferNonzero nonempty selected recipient =>
-        exact frame.allowanceRegionEffect_of_transferNonzero
+        exact Blanc.Weth10.Exec.Frame.allowanceRegionEffect_of_transferNonzero (frame := frame)
           context selected nonempty recipient
     | transferFromNonzero nonempty selected recipient =>
-        exact frame.allowanceRegionEffect_of_transferFromNonzero
+        exact Blanc.Weth10.Exec.Frame.allowanceRegionEffect_of_transferFromNonzero (frame := frame)
           context selected nonempty recipient
     | noFlow branch =>
         cases branch with
         | name nonempty selected =>
-            exact frame.allowanceRegionEffect_of_name
+            exact Blanc.Weth10.Exec.Frame.allowanceRegionEffect_of_name (frame := frame)
               context selected nonempty
         | approve nonempty selected =>
-            exact frame.allowanceRegionEffect_of_approve
+            exact Blanc.Weth10.Exec.Frame.allowanceRegionEffect_of_approve (frame := frame)
               context selected nonempty
         | totalSupply nonempty selected =>
-            exact frame.allowanceRegionEffect_of_totalSupply
+            exact Blanc.Weth10.Exec.Frame.allowanceRegionEffect_of_totalSupply (frame := frame)
               context selected nonempty
         | permitTypehash nonempty selected =>
-            exact frame.allowanceRegionEffect_of_permitTypehash
+            exact Blanc.Weth10.Exec.Frame.allowanceRegionEffect_of_permitTypehash (frame := frame)
               context selected nonempty
         | decimals nonempty selected =>
-            exact frame.allowanceRegionEffect_of_decimals
+            exact Blanc.Weth10.Exec.Frame.allowanceRegionEffect_of_decimals (frame := frame)
               context selected nonempty
         | domainSeparator nonempty selected =>
-            exact frame.allowanceRegionEffect_of_domainSeparator
+            exact Blanc.Weth10.Exec.Frame.allowanceRegionEffect_of_domainSeparator (frame := frame)
               context selected nonempty
         | maxFlashLoan nonempty selected =>
-            exact frame.allowanceRegionEffect_of_maxFlashLoan
+            exact Blanc.Weth10.Exec.Frame.allowanceRegionEffect_of_maxFlashLoan (frame := frame)
               context selected nonempty
         | balanceOf nonempty selected =>
-            exact frame.allowanceRegionEffect_of_balanceOf
+            exact Blanc.Weth10.Exec.Frame.allowanceRegionEffect_of_balanceOf (frame := frame)
               context selected nonempty
         | nonces nonempty selected =>
-            exact frame.allowanceRegionEffect_of_nonces
+            exact Blanc.Weth10.Exec.Frame.allowanceRegionEffect_of_nonces (frame := frame)
               context selected nonempty
         | callbackSuccess nonempty selected =>
-            exact frame.allowanceRegionEffect_of_callbackSuccess
+            exact Blanc.Weth10.Exec.Frame.allowanceRegionEffect_of_callbackSuccess (frame := frame)
               context selected nonempty
         | flashMinted nonempty selected =>
-            exact frame.allowanceRegionEffect_of_flashMinted
+            exact Blanc.Weth10.Exec.Frame.allowanceRegionEffect_of_flashMinted (frame := frame)
               context selected nonempty
         | symbol nonempty selected =>
-            exact frame.allowanceRegionEffect_of_symbol
+            exact Blanc.Weth10.Exec.Frame.allowanceRegionEffect_of_symbol (frame := frame)
               context selected nonempty
         | deploymentChainId nonempty selected =>
-            exact frame.allowanceRegionEffect_of_deploymentChainId
+            exact Blanc.Weth10.Exec.Frame.allowanceRegionEffect_of_deploymentChainId (frame := frame)
               context selected nonempty
         | flashFee nonempty selected =>
-            exact frame.allowanceRegionEffect_of_flashFee
+            exact Blanc.Weth10.Exec.Frame.allowanceRegionEffect_of_flashFee (frame := frame)
               context selected nonempty
         | allowance nonempty selected =>
-            exact frame.allowanceRegionEffect_of_allowance
+            exact Blanc.Weth10.Exec.Frame.allowanceRegionEffect_of_allowance (frame := frame)
               context selected nonempty
   · cases openCase with
     | depositToAndCall nonempty selected =>
-        exact frame.allowanceRegionEffect_of_depositToAndCall
+        exact Blanc.Weth10.Exec.Frame.allowanceRegionEffect_of_depositToAndCall (frame := frame)
           context selected nonempty hdeeper
     | transferZero nonempty selected recipient =>
-        exact frame.allowanceRegionEffect_of_transferZero
+        exact Blanc.Weth10.Exec.Frame.allowanceRegionEffect_of_transferZero (frame := frame)
           context selected nonempty recipient hdeeper
     | transferAndCall nonempty selected =>
         by_cases hzero : Sevm.argWord frame.sevm 0 = 0
-        · exact frame.allowanceRegionEffect_of_transferAndCallZero
+        · exact Blanc.Weth10.Exec.Frame.allowanceRegionEffect_of_transferAndCallZero (frame := frame)
             context selected nonempty hzero hdeeper
-        · exact frame.allowanceRegionEffect_of_transferAndCall
+        · exact Blanc.Weth10.Exec.Frame.allowanceRegionEffect_of_transferAndCall (frame := frame)
             context selected nonempty hzero hdeeper
     | transferFromZero nonempty selected recipient =>
-        exact frame.allowanceRegionEffect_of_transferFromZero
+        exact Blanc.Weth10.Exec.Frame.allowanceRegionEffect_of_transferFromZero (frame := frame)
           context selected nonempty recipient hdeeper
     | withdraw nonempty selected =>
-        exact frame.allowanceRegionEffect_of_withdraw
+        exact Blanc.Weth10.Exec.Frame.allowanceRegionEffect_of_withdraw (frame := frame)
           context selected nonempty hdeeper
     | withdrawTo nonempty selected =>
-        exact frame.allowanceRegionEffect_of_withdrawTo
+        exact Blanc.Weth10.Exec.Frame.allowanceRegionEffect_of_withdrawTo (frame := frame)
           context selected nonempty hdeeper
     | withdrawFrom nonempty selected =>
-        exact frame.allowanceRegionEffect_of_withdrawFrom
+        exact Blanc.Weth10.Exec.Frame.allowanceRegionEffect_of_withdrawFrom (frame := frame)
           context selected nonempty hdeeper
     | flashLoan nonempty selected =>
-        exact frame.allowanceRegionEffect_of_flashLoan
+        exact Blanc.Weth10.Exec.Frame.allowanceRegionEffect_of_flashLoan (frame := frame)
           context selected nonempty hdeeper
     | approveAndCall nonempty selected =>
-        exact frame.allowanceRegionEffect_of_approveAndCall
+        exact Blanc.Weth10.Exec.Frame.allowanceRegionEffect_of_approveAndCall (frame := frame)
           context selected nonempty hdeeper
     | permit nonempty selected =>
-        exact frame.allowanceRegionEffect_of_permit
+        exact Blanc.Weth10.Exec.Frame.allowanceRegionEffect_of_permit (frame := frame)
           context selected nonempty hdeeper
 
 /-! ## Lift to the history level -/
@@ -194,103 +194,103 @@ is the balance development's already-proved partition, exactly as in
 theorem compiledFrameAllowanceHandlerSound (dp : DeployParams) (ca : Adr) :
     CompiledFrameAllowanceReadHandler dp ca := by
   intro frame context hdeeper
-  rcases frame.callFreeStorageBranch_or_remaining context with
+  rcases Blanc.Weth10.Exec.Frame.callFreeStorageBranch_or_remaining (frame := frame) context with
       closed | openCase
   · cases closed with
     | receive empty =>
-        exact frame.allowanceRegionEffectSound_of_receive context empty
+        exact Blanc.Weth10.Exec.Frame.allowanceRegionEffectSound_of_receive (frame := frame) context empty
     | deposit nonempty selected =>
-        exact frame.allowanceRegionEffectSound_of_deposit context selected
+        exact Blanc.Weth10.Exec.Frame.allowanceRegionEffectSound_of_deposit (frame := frame) context selected
           nonempty
     | depositTo nonempty selected =>
-        exact frame.allowanceRegionEffectSound_of_depositTo context selected
+        exact Blanc.Weth10.Exec.Frame.allowanceRegionEffectSound_of_depositTo (frame := frame) context selected
           nonempty
     | transferNonzero nonempty selected recipient =>
-        exact frame.allowanceRegionEffectSound_of_transferNonzero
+        exact Blanc.Weth10.Exec.Frame.allowanceRegionEffectSound_of_transferNonzero (frame := frame)
           context selected nonempty recipient
     | transferFromNonzero nonempty selected recipient =>
-        exact frame.allowanceRegionEffectSound_of_transferFromNonzero
+        exact Blanc.Weth10.Exec.Frame.allowanceRegionEffectSound_of_transferFromNonzero (frame := frame)
           context selected nonempty recipient
     | noFlow branch =>
         cases branch with
         | name nonempty selected =>
-            exact frame.allowanceRegionEffectSound_of_name
+            exact Blanc.Weth10.Exec.Frame.allowanceRegionEffectSound_of_name (frame := frame)
               context selected nonempty
         | approve nonempty selected =>
-            exact frame.allowanceRegionEffectSound_of_approve
+            exact Blanc.Weth10.Exec.Frame.allowanceRegionEffectSound_of_approve (frame := frame)
               context selected nonempty
         | totalSupply nonempty selected =>
-            exact frame.allowanceRegionEffectSound_of_totalSupply
+            exact Blanc.Weth10.Exec.Frame.allowanceRegionEffectSound_of_totalSupply (frame := frame)
               context selected nonempty
         | permitTypehash nonempty selected =>
-            exact frame.allowanceRegionEffectSound_of_permitTypehash
+            exact Blanc.Weth10.Exec.Frame.allowanceRegionEffectSound_of_permitTypehash (frame := frame)
               context selected nonempty
         | decimals nonempty selected =>
-            exact frame.allowanceRegionEffectSound_of_decimals
+            exact Blanc.Weth10.Exec.Frame.allowanceRegionEffectSound_of_decimals (frame := frame)
               context selected nonempty
         | domainSeparator nonempty selected =>
-            exact frame.allowanceRegionEffectSound_of_domainSeparator
+            exact Blanc.Weth10.Exec.Frame.allowanceRegionEffectSound_of_domainSeparator (frame := frame)
               context selected nonempty
         | maxFlashLoan nonempty selected =>
-            exact frame.allowanceRegionEffectSound_of_maxFlashLoan
+            exact Blanc.Weth10.Exec.Frame.allowanceRegionEffectSound_of_maxFlashLoan (frame := frame)
               context selected nonempty
         | balanceOf nonempty selected =>
-            exact frame.allowanceRegionEffectSound_of_balanceOf
+            exact Blanc.Weth10.Exec.Frame.allowanceRegionEffectSound_of_balanceOf (frame := frame)
               context selected nonempty
         | nonces nonempty selected =>
-            exact frame.allowanceRegionEffectSound_of_nonces
+            exact Blanc.Weth10.Exec.Frame.allowanceRegionEffectSound_of_nonces (frame := frame)
               context selected nonempty
         | callbackSuccess nonempty selected =>
-            exact frame.allowanceRegionEffectSound_of_callbackSuccess
+            exact Blanc.Weth10.Exec.Frame.allowanceRegionEffectSound_of_callbackSuccess (frame := frame)
               context selected nonempty
         | flashMinted nonempty selected =>
-            exact frame.allowanceRegionEffectSound_of_flashMinted
+            exact Blanc.Weth10.Exec.Frame.allowanceRegionEffectSound_of_flashMinted (frame := frame)
               context selected nonempty
         | symbol nonempty selected =>
-            exact frame.allowanceRegionEffectSound_of_symbol
+            exact Blanc.Weth10.Exec.Frame.allowanceRegionEffectSound_of_symbol (frame := frame)
               context selected nonempty
         | deploymentChainId nonempty selected =>
-            exact frame.allowanceRegionEffectSound_of_deploymentChainId
+            exact Blanc.Weth10.Exec.Frame.allowanceRegionEffectSound_of_deploymentChainId (frame := frame)
               context selected nonempty
         | flashFee nonempty selected =>
-            exact frame.allowanceRegionEffectSound_of_flashFee
+            exact Blanc.Weth10.Exec.Frame.allowanceRegionEffectSound_of_flashFee (frame := frame)
               context selected nonempty
         | allowance nonempty selected =>
-            exact frame.allowanceRegionEffectSound_of_allowance
+            exact Blanc.Weth10.Exec.Frame.allowanceRegionEffectSound_of_allowance (frame := frame)
               context selected nonempty
   · cases openCase with
     | depositToAndCall nonempty selected =>
-        exact frame.allowanceRegionEffectSound_of_depositToAndCall
+        exact Blanc.Weth10.Exec.Frame.allowanceRegionEffectSound_of_depositToAndCall (frame := frame)
           context selected nonempty hdeeper
     | transferZero nonempty selected recipient =>
-        exact frame.allowanceRegionEffectSound_of_transferZero
+        exact Blanc.Weth10.Exec.Frame.allowanceRegionEffectSound_of_transferZero (frame := frame)
           context selected nonempty recipient hdeeper
     | transferAndCall nonempty selected =>
         by_cases hzero : Sevm.argWord frame.sevm 0 = 0
-        · exact frame.allowanceRegionEffectSound_of_transferAndCallZero
+        · exact Blanc.Weth10.Exec.Frame.allowanceRegionEffectSound_of_transferAndCallZero (frame := frame)
             context selected nonempty hzero hdeeper
-        · exact frame.allowanceRegionEffectSound_of_transferAndCall
+        · exact Blanc.Weth10.Exec.Frame.allowanceRegionEffectSound_of_transferAndCall (frame := frame)
             context selected nonempty hzero hdeeper
     | transferFromZero nonempty selected recipient =>
-        exact frame.allowanceRegionEffectSound_of_transferFromZero
+        exact Blanc.Weth10.Exec.Frame.allowanceRegionEffectSound_of_transferFromZero (frame := frame)
           context selected nonempty recipient hdeeper
     | withdraw nonempty selected =>
-        exact frame.allowanceRegionEffectSound_of_withdraw
+        exact Blanc.Weth10.Exec.Frame.allowanceRegionEffectSound_of_withdraw (frame := frame)
           context selected nonempty hdeeper
     | withdrawTo nonempty selected =>
-        exact frame.allowanceRegionEffectSound_of_withdrawTo
+        exact Blanc.Weth10.Exec.Frame.allowanceRegionEffectSound_of_withdrawTo (frame := frame)
           context selected nonempty hdeeper
     | withdrawFrom nonempty selected =>
-        exact frame.allowanceRegionEffectSound_of_withdrawFrom
+        exact Blanc.Weth10.Exec.Frame.allowanceRegionEffectSound_of_withdrawFrom (frame := frame)
           context selected nonempty hdeeper
     | flashLoan nonempty selected =>
-        exact frame.allowanceRegionEffectSound_of_flashLoan
+        exact Blanc.Weth10.Exec.Frame.allowanceRegionEffectSound_of_flashLoan (frame := frame)
           context selected nonempty hdeeper
     | approveAndCall nonempty selected =>
-        exact frame.allowanceRegionEffectSound_of_approveAndCall
+        exact Blanc.Weth10.Exec.Frame.allowanceRegionEffectSound_of_approveAndCall (frame := frame)
           context selected nonempty hdeeper
     | permit nonempty selected =>
-        exact frame.allowanceRegionEffectSound_of_permit
+        exact Blanc.Weth10.Exec.Frame.allowanceRegionEffectSound_of_permit (frame := frame)
           context selected nonempty hdeeper
 
 /-! ## Lift the read-sound dispatch to the history level -/

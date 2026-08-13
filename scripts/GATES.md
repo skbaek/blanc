@@ -24,6 +24,7 @@ Choose the gate by what you changed, cheapest falsifier first:
 |---|---|---|
 | anything at all | `scripts/check-doc-counts.sh` + `scripts/check-layering.sh` + `lake build` | `scripts/check.sh --no-build` |
 | imported source or an import | `scripts/check-trust-surface.sh` | `lake build && scripts/check.sh --no-build` |
+| the execution-settlement substrate, its consumers, or lift manifest | `scripts/check-extraction-ownership.sh` + `scripts/check-execution-settlement.sh` | the **full set**, in the order below |
 | WETH10 deployed-reference inputs, lock, or checker | `scripts/check-weth10-reference.sh` | the **full set**, in the order below |
 | WETH10 runtime, concrete parameters, differential scenarios, or endpoint manifest | `lake build` then `scripts/check-weth10-differential.sh` | the **full set**, in the order below |
 | WETH10 redemption transaction fixtures, generator, or manifest | `scripts/check-weth10-redemption.sh --no-build` | the **full set**, in the order below |
@@ -47,9 +48,11 @@ self-inflicted contention.
 ```
 scripts/check-doc-counts.sh
 scripts/check-layering.sh
+scripts/check-extraction-ownership.sh
 scripts/check-trust-surface.sh
 scripts/check-weth10-reference.sh
 lake build
+scripts/check-execution-settlement.sh
 scripts/check-weth10-differential.sh
 scripts/check-weth10-redemption.sh --no-build
 scripts/check-weth10-deployment.sh
@@ -82,8 +85,10 @@ against the gate.
 | gate | proves | scale | time |
 |---|---|---|---|
 | `scripts/check-doc-counts.sh` | every public surface that quotes the audited-theorem count agrees with the count the axiom audit actually produces: the gate computes it from `scripts/AxiomCheck.lean` and checks each registered quotation in `README.md`, this file and `docs/index.html`. Anti-vacuous per pattern — a surface reworded out of the gate's sight FAILS rather than passing silently. Jaune's site quotes the same number and no gate can cross the repository boundary, so a pass prints that reminder rather than implying coverage it does not have | 11 quotations across 3 files; 2 published numbers deliberately unchecked and named in the script | sub-second |
-| `scripts/check-layering.sh` | contracts are siblings in the import hierarchy: no cross-contract import, no shared module importing a contract, no unclassified module (rule and rationale in `README.md`) | 3 contracts, 92 modules, 90 non-root | sub-second |
-| `scripts/check-trust-surface.sh` | exact transitive local import closure of `Blanc.lean` contains no new or stale source occurrence of `sorry`, bespoke `axiom`, `opaque`, `@[extern]`, `implemented_by`, `native_decide`, object-level `partial def`, or `dbg_trace`; exact reviewed comment/TacticM/MetaM rows are fail-closed allowlisted; unimported helpers are outside scope until imported | 91 closure modules; 21 exact allowlisted occurrences | sub-second |
+| `scripts/check-layering.sh` | contracts are siblings in the import hierarchy: no cross-contract import, no shared module importing a contract, no unclassified module (rule and rationale in `README.md`) | 3 contracts, 93 modules, 91 non-root | sub-second |
+| `scripts/check-extraction-ownership.sh` | the manifest's 14 execution-settlement declarations exist only under their common owners, no donor declaration/alias/export survives in a WETH10 module, and `Weth10HolderFlow` directly imports the common module; three built-in temp-tree controls remove each required condition | 14 moved declarations; 3 negative controls | sub-second |
+| `scripts/check-trust-surface.sh` | exact transitive local import closure of `Blanc.lean` contains no new or stale source occurrence of `sorry`, bespoke `axiom`, `opaque`, `@[extern]`, `implemented_by`, `native_decide`, object-level `partial def`, or `dbg_trace`; exact reviewed comment/TacticM/MetaM rows are fail-closed allowlisted; unimported helpers are outside scope until imported | 92 closure modules; 21 exact allowlisted occurrences | sub-second |
+| `scripts/check-execution-settlement.sh` | compiles the concrete execution-level CREATE code-deposit rollback fixture, requires its branch conditions to evaluate exactly true, proves settlement traversal prunes while the test-only raw-commit traversal retains the child, and requires the raw-commit mutant to fail with the retained-frame goal | 1 concrete `Exec.runOk` fixture; 1 raw-commit mutant | ~4 s |
 | `scripts/check-weth10-reference.sh` | exact-schema validation and offline reconstruction of the deployed WETH10 lock: independently pinned deployment/compiler/source/RPC identities, installed runtime hex/codehash, exact template and immutable spans/values, full canonical 27-function + two-event + receive ABI, separate constructor boundary, source-derived branch-context guard/callback/event/storage inventories, exact drift evidence, deletion/mutation, wrong-type, coherent, deployment-derivation, and coordinated-input falsifiers, plus exact generated endpoint-key synchronization for the compatibility contract | schema v2; 27 selectors + receive; 9,975 runtime bytes; 23 falsifier families; 28 compatibility endpoint keys + 12 cross-cutting keys + deployment | ~25 s |
 | `scripts/check-weth10-differential.sh` | executes the locked installed oracle and the exact compiled Blanc mainnet/synthetic parameter instances in a clean pinned EELS Prague interpreter; checks generated 27-selector/receive endpoint equality, success/revert and exact returndata, logical projected state, ETH, ordered outer/child logs, callback-visible calldata, live CALL/STATICCALL traces even across outer rollback, caught nested-call failure with a committing parent and no child flow, a committed ordinary transfer inside successful flash settlement, zero redemption through both selectors, the distinct nonstable CALL sender-balance short circuit, invalid-input BLAKE2F-recipient rollback, Solidity-0.7 Boolean truthiness including noncanonical word `2` and max-word normalization, hostile state-mutating reentrancy, flash settlement, independent permit signatures/ecrecover/domain forks, static-context guard precedence, nonpayability, unknown dispatch, and bounded channel falsifiers | 147 declared rows; 27 selectors + receive; 2 identity worlds; 7 state-mutating reentrancy rows; 26 static-context rows; 69 traced oracle calls; 8 channel falsifiers | ~3 s |
 | `scripts/check-weth10-redemption.sh --no-build` | reruns the pinned EELS generator's 33 semantic assertions without writing; byte-compares the regenerated two-fixture set and exact transaction/receipt/authorization/holder-flow manifest; checks both embedded runtimes against `weth10MainnetCode`; and replays the committed Prague blocks through Jaune's full transaction/receipt path | 2 fixtures; 33 semantic assertions; exact booked-balance and six-field holder-flow totals; type-2 receipts 2 success + 1 failed; 1 successful type-4 authorization changing recipient code+nonce | ~2 s |
@@ -94,7 +99,7 @@ against the gate.
 | `scripts/check-fmint-coverage.sh` | selector reachability split into direct top-level entry, post-state-witnessed internal CALL, and uncredited embedding; five built-in callsite corruptions prove the evidence channel is live | 12 selectors: 2 direct + 7 witnessed internal, budget 3 | sub-second |
 | `scripts/check-weth-coverage.sh` | the same honest reachability split for WETH, plus direct empty-calldata `deposit()` fallback and the same five callsite falsifiers | 10 selectors: 4 direct + 6 witnessed internal + fallback, budget 0 | sub-second |
 | `lake build` | integration elaboration, including the audited compile-witness, WETH10 deployment declarations and configured deployment root, stable-state packaging, constructive redemption certificates, and committed holder-flow conservation | 1000 jobs | incremental builds are a few seconds; clean rebuilds are substantially longer |
-| `scripts/check.sh --no-build` | axiom audit of the audited top theorems, each against its own pinned expected axiom set | 333 theorems | ~4 s |
+| `scripts/check.sh --no-build` | axiom audit of the audited top theorems, each against its own pinned expected axiom set | 340 theorems | ~4 s |
 | `scripts/check-claims.sh` | Lean-checked exact statement pins for the WETH10 compile, flash-depth, backing, creation, static-certificate, stable-chain, configured deployment root/projections, creation-seed, constructive dual-selector redemption, full accounted history, dynamic balance-write completeness, committed no-wrap, conservation, residual-floor, hardened attribution, effectful dormancy, and supplied-list any-order flagships; constructor pins fail closed on record-field changes or hidden success premises; `Stor.Weth10Inv` is pinned by `rfl` unfolding, and the hardened-attribution computation, authorizing-act classifier, touched-pair list, projected allowance key identities, transaction envelopes, and canonical redemption run message are pinned definitionally so a *weakened conclusion term* fails closed too | 188 definitions/statements and constructors | ~2 s |
 
 ### Medium — before a commit or push candidate
@@ -108,12 +113,14 @@ gate is the longest at roughly eight minutes; every gate still runs inline.
 
 ### The Python behind the shell
 
-Eighteen helpers do the actual work and are not gates in their own right — they are
+Twenty helpers do the actual work and are not gates in their own right — they are
 invoked by the scripts above and should not be run directly in a report:
 
 | helper | used by | what it does |
 |---|---|---|
 | `scripts/check-doc-counts.py` | `check-doc-counts.sh` | derives the audited-theorem count from `scripts/AxiomCheck.lean` and fail-closed checks every registered quotation in the README, gate catalogue and site |
+| `scripts/check-extraction-ownership.py` | `check-extraction-ownership.sh` | strictly parses the sole lift manifest, declaration/import ownership, and three temp-tree negative controls |
+| `scripts/check-execution-settlement.py` | `check-execution-settlement.sh` | compiles the concrete CREATE rollback fixture, pins its evaluator verdict, and requires a raw-retention mutant to fail for the child-frame reason |
 | `scripts/check-trust-surface.py` | `check-trust-surface.sh` | traverses `Blanc.lean`'s transitive local import closure and compares every normalized forbidden-token occurrence against the exact fail-closed allowlist |
 | `scripts/weth10-reference.py` | `check-weth10-reference.sh` | derives the schema-v2 target from vendored inputs, checks independent identity pins, and provides the explicit networked refresh |
 | `scripts/weth10_reference_schema.py` | `check-weth10-reference.sh` | validates the complete generated lock against a hand-maintained exact nested schema independent of the builder |
@@ -232,6 +239,7 @@ worker that has been opening files. A `--force` run may not be rebased.
    `scripts/gen-weth10-redemption-fixtures.py`.
 6. **CI runs a subset of this file**, not a different thing:
    `.github/workflows/ci.yml` invokes `check-layering.sh`,
+   `check-extraction-ownership.sh`, `check-execution-settlement.sh`,
    `check-trust-surface.sh`, `check-weth10-reference.sh`, `check-error-data.sh`,
    `check.sh --no-build`, `check-claims.sh`, both suites `--no-build`, and both
    coverage gates. Extending one of those scripts extends CI directly.

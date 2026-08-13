@@ -63,7 +63,7 @@ records; the counted mirror of
 `Exec.Frame.descendantFlowActions_eq_nil_of_approve`. -/
 theorem Exec.Frame.attributionInner_eq_nil_of_approve
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm =
       selector "approve" [.address, .uint256])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
@@ -77,7 +77,7 @@ theorem Exec.Frame.attributionInner_eq_nil_of_approve
     simp [approveLine, approvePrefix, returnTrueLine,
       argCopy, cdc, arg, cdl, allowanceKeyFromMemory, Blanc.logApprove,
       NinstIsChildless, Ninst.pushB256, mstoreAt, logWith, pushList]
-  exact frame.attributionInner_eq_nil_of_nonpayableChildless
+  exact Blanc.Weth10.Exec.Frame.attributionInner_eq_nil_of_nonpayableChildless
     context hnonempty hmem hchildless
 
 /-- `approve` transports the allowance region: the attribution stream is
@@ -85,14 +85,14 @@ the frame's own record alone, and its event stores the raw value word at
 the projected caller/spender key. -/
 theorem Exec.Frame.allowanceRegionEffect_of_approve
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm =
       selector "approve" [.address, .uint256])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
     AllowanceRegionEffect ca frame.pre frame.post
       (Exec.attributionStream dp ca frame.run) := by
   have hinner : Exec.attributionInner dp ca frame.run = [] :=
-    frame.attributionInner_eq_nil_of_approve context hselector hnonempty
+    Blanc.Weth10.Exec.Frame.attributionInner_eq_nil_of_approve context hselector hnonempty
   have hsel : Sevm.selector frame.sevm = approveSelector := hselector
   have hnotlast : ownRecordLast frame.sevm = false := by
     simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hsel,
@@ -164,7 +164,7 @@ authentic committed frame contributes no proper-descendant counted
 records. -/
 theorem Exec.Frame.attributionInner_eq_nil_of_allowance
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm =
       selector "allowance" [.address, .address])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
@@ -179,7 +179,7 @@ theorem Exec.Frame.attributionInner_eq_nil_of_allowance
   have hchildless : ∀ n ∈ allowanceLine, NinstIsChildless n := by
     simp [allowanceLine, argCopy, cdc, allowanceKeyFromMemory,
       NinstIsChildless, Ninst.pushB256, mstoreAt, pushList]
-  exact frame.attributionInner_eq_nil_of_nonpayableChildless
+  exact Blanc.Weth10.Exec.Frame.attributionInner_eq_nil_of_nonpayableChildless
     context hnonempty hmem hchildless
 
 /-- The `allowance` view transports the allowance region: the attribution
@@ -187,14 +187,14 @@ stream is the frame's own record alone, its event writes nothing, and the
 committed storage is the entry storage. -/
 theorem Exec.Frame.allowanceRegionEffect_of_allowance
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm =
       selector "allowance" [.address, .address])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
     AllowanceRegionEffect ca frame.pre frame.post
       (Exec.attributionStream dp ca frame.run) := by
   have hinner : Exec.attributionInner dp ca frame.run = [] :=
-    frame.attributionInner_eq_nil_of_allowance context hselector hnonempty
+    Blanc.Weth10.Exec.Frame.attributionInner_eq_nil_of_allowance context hselector hnonempty
   have hsel : Sevm.selector frame.sevm = allowanceSelector := hselector
   have hnotlast : ownRecordLast frame.sevm = false := by
     simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hsel,
@@ -269,15 +269,15 @@ the frame's own record alone, and an `approveStore` visit records the entry
 word at the approved key. -/
 theorem Exec.Frame.allowanceRegionEffectSound_of_approve
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm =
       selector "approve" [.address, .uint256])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
     AllowanceRegionEffectSound ca frame.pre frame.post
       (Exec.attributionStream dp ca frame.run) :=
   .of_singletonArm context
-    (frame.allowanceRegionEffect_of_approve context hselector hnonempty)
-    (frame.attributionInner_eq_nil_of_approve context hselector hnonempty)
+    (Blanc.Weth10.Exec.Frame.allowanceRegionEffect_of_approve context hselector hnonempty)
+    (Blanc.Weth10.Exec.Frame.attributionInner_eq_nil_of_approve context hselector hnonempty)
     (ownRecordLast_eq_false_of_selector hselector
       approveSelector_ne_flashLoanSelector approveSelector_ne_permitSelector)
 
@@ -286,15 +286,15 @@ the frame's own record alone, and a `viewRead` visit is by construction the
 entry word at the queried key. -/
 theorem Exec.Frame.allowanceRegionEffectSound_of_allowance
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm =
       selector "allowance" [.address, .address])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
     AllowanceRegionEffectSound ca frame.pre frame.post
       (Exec.attributionStream dp ca frame.run) :=
   .of_singletonArm context
-    (frame.allowanceRegionEffect_of_allowance context hselector hnonempty)
-    (frame.attributionInner_eq_nil_of_allowance context hselector hnonempty)
+    (Blanc.Weth10.Exec.Frame.allowanceRegionEffect_of_allowance context hselector hnonempty)
+    (Blanc.Weth10.Exec.Frame.attributionInner_eq_nil_of_allowance context hselector hnonempty)
     (ownRecordLast_eq_false_of_selector hselector
       allowanceSelector_ne_flashLoanSelector
       allowanceSelector_ne_permitSelector)
@@ -302,4 +302,3 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_allowance
 end Weth10
 
 end Blanc
-

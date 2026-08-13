@@ -70,10 +70,10 @@ inductive Exec.Deriv.ParentStepCounted (dp : DeployParams) (ca : Adr) :
         ⟨pc', sevm, post, out, next⟩
         ⟨pc, sevm, pre, out,
           .runOk hstep henter child hresume next⟩
-        (if h : Blanc.Weth10.Frame.settlementCommits f raw = true then
+        (if h : Blanc.Frame.settlementCommits f raw = true then
           Exec.frameContribution dp ca
             (Exec.Frame.ofRun child
-              (Blanc.Weth10.Frame.raw_commits_of_settlementCommits h))
+              (Blanc.Frame.raw_commits_of_settlementCommits h))
             (Exec.attributionInner dp ca child)
          else [])
 
@@ -364,9 +364,9 @@ theorem Exec.Frame.CountedCursor.selectNextChildless
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {table : List (Nat × Func)}
     {n : Ninst} {tail : Func} {final : Devm}
-    (cursor : frame.CountedCursor dp ca fs table (.next n tail) final)
+    (cursor : Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table (.next n tail) final)
     (hchildless : NinstIsChildless n) :
-    ∃ tailCursor : frame.CountedCursor dp ca fs table tail final,
+    ∃ tailCursor : Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table tail final,
       Ninst.Run frame.sevm cursor.pre n tailCursor.pre := by
   have compiled := cursor.run
   cases compiled with
@@ -374,7 +374,8 @@ theorem Exec.Frame.CountedCursor.selectNextChildless
       have hat : Ninst.At frame.sevm.code cursor.pc n :=
         ninstAt_of_subcode_next cursor.codeSlice
       rcases cursor.parentPrefix with ⟨before, hbefore⟩
-      rcases frame.advance_runCompiled_next cursor.current hbefore hat
+      rcases Blanc.Weth10.Exec.Frame.advance_runCompiled_next (frame := frame)
+          cursor.current hbefore hat
           hcompiled with
         ⟨xl, continuation, selected, _occurrence, hedge, hnextPrefix⟩
       have hcountedEdge := hedge.counted_of_isChildless hat hchildless
@@ -390,14 +391,14 @@ theorem Exec.Frame.CountedCursor.peelChildlessLine
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {table : List (Nat × Func)}
     {line : Line} {tail : Func} {final : Devm}
-    (cursor : frame.CountedCursor dp ca fs table (line +++ tail) final)
+    (cursor : Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table (line +++ tail) final)
     (hchildless : ∀ n ∈ line, NinstIsChildless n) :
-    ∃ tailCursor : frame.CountedCursor dp ca fs table tail final,
+    ∃ tailCursor : Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table tail final,
       Line.Run frame.sevm cursor.pre line tailCursor.pre := by
   induction line with
   | nil => exact ⟨cursor, .nil⟩
   | cons n line ih =>
-      change frame.CountedCursor dp ca fs table
+      change Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table
         (.next n (line +++ tail)) final at cursor
       rcases cursor.selectNextChildless (hchildless n (by simp)) with
         ⟨nextCursor, hrun⟩
@@ -412,10 +413,10 @@ theorem Exec.Frame.CountedCursor.selectBranchZero
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {table : List (Nat × Func)}
     {left right : Func} {final : Devm} {stack : Stack}
-    (cursor : frame.CountedCursor dp ca fs table
+    (cursor : Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table
       (.branch left right) final)
     (hstack : (0 : B256) :: stack <<+ cursor.pre.stack) :
-    ∃ arm : frame.CountedCursor dp ca fs table left final,
+    ∃ arm : Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table left final,
       stack <<+ arm.pre.stack := by
   rcases subcode_compile_branch_jumpable cursor.codeSlice
       cursor.codeBoundary with
@@ -427,10 +428,12 @@ theorem Exec.Frame.CountedCursor.selectBranchZero
       have hw := popBurn_pref (Devm.PopBurn.of_popBurnBy hpop) hstack
       rcases Evm.branch_zero_steps hpush hjumpi hloc hroom hpop with
         ⟨hstepPush, hstepJumpi⟩
-      rcases frame.advance_cont_counted cursor.current cursor.parentPrefix
+      rcases Blanc.Weth10.Exec.Frame.advance_cont_counted (frame := frame)
+          cursor.current cursor.parentPrefix
           cursor.countedPrefix hstepPush with
         ⟨afterPush, hpPush, hcPush⟩
-      rcases frame.advance_cont_counted afterPush hpPush hcPush
+      rcases Blanc.Weth10.Exec.Frame.advance_cont_counted (frame := frame)
+          afterPush hpPush hcPush
           hstepJumpi with
         ⟨armExec, hpArm, hcArm⟩
       exact ⟨⟨cursor.pc + 4, _, armExec, hpArm, hcArm, hleft,
@@ -446,11 +449,11 @@ theorem Exec.Frame.CountedCursor.selectBranchSucc
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {table : List (Nat × Func)}
     {left right : Func} {final : Devm} {flag : B256} {stack : Stack}
-    (cursor : frame.CountedCursor dp ca fs table
+    (cursor : Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table
       (.branch left right) final)
     (hflag : flag ≠ 0)
     (hstack : flag :: stack <<+ cursor.pre.stack) :
-    ∃ arm : frame.CountedCursor dp ca fs table right final,
+    ∃ arm : Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table right final,
       stack <<+ arm.pre.stack := by
   rcases subcode_compile_branch_jumpable cursor.codeSlice
       cursor.codeBoundary with
@@ -466,13 +469,16 @@ theorem Exec.Frame.CountedCursor.selectBranchSucc
       rcases Evm.branch_succ_steps hpush hjumpi hjumpdest hjumpable
           hloc hne hroom hpop with
         ⟨hstepPush, hstepJumpi, hstepJumpdest⟩
-      rcases frame.advance_cont_counted cursor.current cursor.parentPrefix
+      rcases Blanc.Weth10.Exec.Frame.advance_cont_counted (frame := frame)
+          cursor.current cursor.parentPrefix
           cursor.countedPrefix hstepPush with
         ⟨afterPush, hpPush, hcPush⟩
-      rcases frame.advance_cont_counted afterPush hpPush hcPush
+      rcases Blanc.Weth10.Exec.Frame.advance_cont_counted (frame := frame)
+          afterPush hpPush hcPush
           hstepJumpi with
         ⟨afterJump, hpJump, hcJump⟩
-      rcases frame.advance_cont_counted afterJump hpJump hcJump
+      rcases Blanc.Weth10.Exec.Frame.advance_cont_counted (frame := frame)
+          afterJump hpJump hcJump
           hstepJumpdest with
         ⟨armExec, hpArm, hcArm⟩
       exact ⟨⟨loc + 1, _, armExec, hpArm, hcArm, hright,
@@ -486,16 +492,16 @@ private theorem Exec.Frame.CountedCursor.reachDispatchLeaf
     {fs : List Func} {table : List (Nat × Func)} {final : Devm}
     {sig w : B256} {f body : Func} {k : Nat} {stack : Stack}
     (hmem : (sig, f) ∈ [(w, body)])
-    (cursor : frame.CountedCursor dp ca fs table
+    (cursor : Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table
       (dispatchWith k (.leaf w body)) final)
     (hstack : sig :: stack <<+ cursor.pre.stack) :
-    ∃ bodyCursor : frame.CountedCursor dp ca fs table f final,
+    ∃ bodyCursor : Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table f final,
       stack <<+ bodyCursor.pre.stack := by
   have heq : (sig, f) = (w, body) := List.mem_singleton.mp hmem
   injection heq with hsig hfun
   subst w
   subst body
-  change frame.CountedCursor dp ca fs table
+  change Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table
     ([Ninst.pushB256 sig, Ninst.eq] +++ (f <?> .call k)) final at cursor
   rcases cursor.peelChildlessLine
       (by simp [NinstIsChildless, Ninst.pushB256]) with
@@ -525,10 +531,10 @@ private theorem Exec.Frame.CountedCursor.reachDispatchWith_build :
       DispatchTree.sorted xs = true →
       xs.length ≤ n + 1 →
       (sig, f) ∈ xs →
-      (cursor : frame.CountedCursor dp ca fs table
+      (cursor : Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table
         (dispatchWith k (DispatchTree.build n xs)) final) →
       (sig :: stack <<+ cursor.pre.stack) →
-      ∃ bodyCursor : frame.CountedCursor dp ca fs table f final,
+      ∃ bodyCursor : Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table f final,
         stack <<+ bodyCursor.pre.stack := by
   intro n
   induction n with
@@ -588,7 +594,7 @@ private theorem Exec.Frame.CountedCursor.reachDispatchWith_build :
           apply List.mem_append.mp
           rw [List.take_append_drop]
           exact hmem
-        change frame.CountedCursor dp ca fs table
+        change Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table
           ([Ninst.dup 0,
               Ninst.pushB256 (leftmostFsig
                 (DispatchTree.build n
@@ -675,10 +681,10 @@ theorem Exec.Frame.CountedCursor.reachDispatchWith
     {k : Nat} {stack : Stack}
     (hsorted : DispatchTree.sorted funcs = true)
     (hmem : (sig, f) ∈ funcs)
-    (cursor : frame.CountedCursor dp ca fs table
+    (cursor : Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table
       (dispatchWith k (DispatchTree.ofSorted funcs)) final)
     (hstack : sig :: stack <<+ cursor.pre.stack) :
-    ∃ bodyCursor : frame.CountedCursor dp ca fs table f final,
+    ∃ bodyCursor : Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table f final,
       stack <<+ bodyCursor.pre.stack :=
   cursor.reachDispatchWith_build hsorted (Nat.le_succ _) hmem hstack
 
@@ -687,8 +693,8 @@ theorem Exec.Frame.CountedCursor.reachDispatchWith
 of `Exec.Frame.compiledMainCursor`. -/
 theorem Exec.Frame.compiledMainCursorCounted
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca) :
-    Nonempty (frame.CountedCursor dp ca
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame) :
+    Nonempty (Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       (weth10 dp).main frame.post) := by
@@ -736,14 +742,15 @@ for its exact listed selector body; the counted mirror of
 `Exec.Frame.compiledSelectorBodyCursor`. -/
 theorem Exec.Frame.compiledSelectorBodyCursorCounted
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame} {body : Func}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hmem : (Sevm.selector frame.sevm, body) ∈ weth10Funcs dp) :
-    Nonempty (frame.CountedCursor dp ca
+    Nonempty (Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux)) body frame.post) := by
-  rcases frame.compiledMainCursorCounted context with ⟨mainCursor⟩
-  change frame.CountedCursor dp ca
+  rcases Blanc.Weth10.Exec.Frame.compiledMainCursorCounted (frame := frame)
+      context with ⟨mainCursor⟩
+  change Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     ([Ninst.calldatasize, Ninst.iszero] +++
@@ -770,7 +777,7 @@ theorem Exec.Frame.compiledSelectorBodyCursorCounted
   rw [hflagZero] at hflagPrefix
   rcases entryBranchCursor.selectBranchZero hflagPrefix with
     ⟨dispatchPrefixCursor, _hdispatchStack⟩
-  change frame.CountedCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (fsig +++ dispatchWith fallbackSlot (weth10Tree dp))
@@ -782,7 +789,7 @@ theorem Exec.Frame.compiledSelectorBodyCursorCounted
   have hselectorPrefix : Sevm.selector frame.sevm :: [] <<+
       dispatchCursor.pre.stack :=
     prefix_of_fsig nil_pref hfsig
-  change frame.CountedCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (dispatchWith fallbackSlot
@@ -798,13 +805,13 @@ theorem Exec.Frame.CountedCursor.enterNonpayable
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {table : List (Nat × Func)}
     {body : Func} {final : Devm}
-    (cursor : frame.CountedCursor dp ca fs table
+    (cursor : Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table
       (nonpayable body) final) :
-    Nonempty (frame.CountedCursor dp ca fs table body final) := by
+    Nonempty (Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table body final) := by
   have hvalue : frame.sevm.value = 0 :=
     value_eq_zero_of_run_nonpayable
       (Func.Run.of_runCompiled cursor.run)
-  change frame.CountedCursor dp ca fs table
+  change Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table
     ([Ninst.callvalue, Ninst.iszero] +++ (body <?> Func.rev)) final
     at cursor
   rcases cursor.peelChildlessLine
@@ -835,7 +842,7 @@ theorem Exec.Frame.CountedCursor.finishAttributionInner
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {table : List (Nat × Func)}
     {i : Linst} {final : Devm}
-    (cursor : frame.CountedCursor dp ca fs table (.last i) final) :
+    (cursor : Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table (.last i) final) :
     Exec.attributionInner dp ca frame.run = [] := by
   have hat : Linst.At frame.sevm.code cursor.pc i :=
     Linst.at_of_slice cursor.codeSlice
@@ -856,13 +863,14 @@ counted stream; the counted mirror of
 theorem Exec.Frame.attributionInner_eq_nil_of_nonpayableChildless
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {line : Line} {i : Linst}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hmem : (Sevm.selector frame.sevm,
       nonpayable (line +++ Func.last i)) ∈ weth10Funcs dp)
     (hchildless : ∀ n ∈ line, NinstIsChildless n) :
     Exec.attributionInner dp ca frame.run = [] := by
-  rcases frame.compiledSelectorBodyCursorCounted context hnonempty hmem with
+  rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorCounted (frame := frame)
+      context hnonempty hmem with
     ⟨wrapperCursor⟩
   rcases wrapperCursor.enterNonpayable with ⟨bodyCursor⟩
   rcases bodyCursor.peelChildlessLine hchildless with ⟨lastCursor, -⟩
@@ -886,10 +894,10 @@ theorem Exec.Frame.CountedCursor.selectBranchZeroSilent
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {table : List (Nat × Func)}
     {left right : Func} {final : Devm} {stack : Stack}
-    (cursor : frame.CountedCursor dp ca fs table
+    (cursor : Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table
       (.branch left right) final)
     (hstack : (0 : B256) :: stack <<+ cursor.pre.stack) :
-    ∃ arm : frame.CountedCursor dp ca fs table left final,
+    ∃ arm : Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table left final,
       stack <<+ arm.pre.stack ∧
       Devm.DispatchSilent cursor.pre arm.pre := by
   rcases subcode_compile_branch_jumpable cursor.codeSlice
@@ -902,10 +910,12 @@ theorem Exec.Frame.CountedCursor.selectBranchZeroSilent
       have hw := popBurn_pref (Devm.PopBurn.of_popBurnBy hpop) hstack
       rcases Evm.branch_zero_steps hpush hjumpi hloc hroom hpop with
         ⟨hstepPush, hstepJumpi⟩
-      rcases frame.advance_cont_counted cursor.current cursor.parentPrefix
+      rcases Blanc.Weth10.Exec.Frame.advance_cont_counted (frame := frame)
+          cursor.current cursor.parentPrefix
           cursor.countedPrefix hstepPush with
         ⟨afterPush, hpPush, hcPush⟩
-      rcases frame.advance_cont_counted afterPush hpPush hcPush
+      rcases Blanc.Weth10.Exec.Frame.advance_cont_counted (frame := frame)
+          afterPush hpPush hcPush
           hstepJumpi with
         ⟨armExec, hpArm, hcArm⟩
       exact ⟨⟨cursor.pc + 4, _, armExec, hpArm, hcArm, hleft,
@@ -921,11 +931,11 @@ theorem Exec.Frame.CountedCursor.selectBranchSuccSilent
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {table : List (Nat × Func)}
     {left right : Func} {final : Devm} {flag : B256} {stack : Stack}
-    (cursor : frame.CountedCursor dp ca fs table
+    (cursor : Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table
       (.branch left right) final)
     (hflag : flag ≠ 0)
     (hstack : flag :: stack <<+ cursor.pre.stack) :
-    ∃ arm : frame.CountedCursor dp ca fs table right final,
+    ∃ arm : Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table right final,
       stack <<+ arm.pre.stack ∧
       Devm.DispatchSilent cursor.pre arm.pre := by
   rcases subcode_compile_branch_jumpable cursor.codeSlice
@@ -942,13 +952,16 @@ theorem Exec.Frame.CountedCursor.selectBranchSuccSilent
       rcases Evm.branch_succ_steps hpush hjumpi hjumpdest hjumpable
           hloc hne hroom hpop with
         ⟨hstepPush, hstepJumpi, hstepJumpdest⟩
-      rcases frame.advance_cont_counted cursor.current cursor.parentPrefix
+      rcases Blanc.Weth10.Exec.Frame.advance_cont_counted (frame := frame)
+          cursor.current cursor.parentPrefix
           cursor.countedPrefix hstepPush with
         ⟨afterPush, hpPush, hcPush⟩
-      rcases frame.advance_cont_counted afterPush hpPush hcPush
+      rcases Blanc.Weth10.Exec.Frame.advance_cont_counted (frame := frame)
+          afterPush hpPush hcPush
           hstepJumpi with
         ⟨afterJump, hpJump, hcJump⟩
-      rcases frame.advance_cont_counted afterJump hpJump hcJump
+      rcases Blanc.Weth10.Exec.Frame.advance_cont_counted (frame := frame)
+          afterJump hpJump hcJump
           hstepJumpdest with
         ⟨armExec, hpArm, hcArm⟩
       exact ⟨⟨loc + 1, _, armExec, hpArm, hcArm, hright,
@@ -962,10 +975,10 @@ theorem Exec.Frame.CountedCursor.selectBranchLeftWithBurn
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {table : List (Nat × Func)}
     {left right : Func} {final : Devm}
-    (cursor : frame.CountedCursor dp ca fs table
+    (cursor : Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table
       (.branch left right) final)
     (hnoRight : ∀ pre, ¬ Func.Run fs frame.sevm pre right final) :
-    ∃ arm : frame.CountedCursor dp ca fs table left final,
+    ∃ arm : Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table left final,
       Devm.PopBurnBy [0] (gVerylow + gHigh) cursor.pre arm.pre := by
   rcases subcode_compile_branch_jumpable cursor.codeSlice
       cursor.codeBoundary with
@@ -976,10 +989,12 @@ theorem Exec.Frame.CountedCursor.selectBranchLeftWithBurn
   | zero hroom hpop hleft =>
       rcases Evm.branch_zero_steps hpush hjumpi hloc hroom hpop with
         ⟨hstepPush, hstepJumpi⟩
-      rcases frame.advance_cont_counted cursor.current cursor.parentPrefix
+      rcases Blanc.Weth10.Exec.Frame.advance_cont_counted (frame := frame)
+          cursor.current cursor.parentPrefix
           cursor.countedPrefix hstepPush with
         ⟨afterPush, hpPush, hcPush⟩
-      rcases frame.advance_cont_counted afterPush hpPush hcPush
+      rcases Blanc.Weth10.Exec.Frame.advance_cont_counted (frame := frame)
+          afterPush hpPush hcPush
           hstepJumpi with
         ⟨armExec, hpArm, hcArm⟩
       exact ⟨⟨cursor.pc + 4, _, armExec, hpArm, hcArm, hleft,
@@ -994,17 +1009,17 @@ theorem Exec.Frame.CountedCursor.reachDispatchLeafSilent
     {fs : List Func} {table : List (Nat × Func)} {final : Devm}
     {sig w : B256} {f body : Func} {k : Nat} {stack : Stack}
     (hmem : (sig, f) ∈ [(w, body)])
-    (cursor : frame.CountedCursor dp ca fs table
+    (cursor : Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table
       (dispatchWith k (.leaf w body)) final)
     (hstack : sig :: stack <<+ cursor.pre.stack) :
-    ∃ bodyCursor : frame.CountedCursor dp ca fs table f final,
+    ∃ bodyCursor : Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table f final,
       stack <<+ bodyCursor.pre.stack ∧
       Devm.DispatchSilent cursor.pre bodyCursor.pre := by
   have heq : (sig, f) = (w, body) := List.mem_singleton.mp hmem
   injection heq with hsig hfun
   subst w
   subst body
-  change frame.CountedCursor dp ca fs table
+  change Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table
     ([Ninst.pushB256 sig, Ninst.eq] +++ (f <?> .call k)) final at cursor
   rcases cursor.peelChildlessLine
       (by simp [NinstIsChildless, Ninst.pushB256]) with
@@ -1034,10 +1049,10 @@ theorem Exec.Frame.CountedCursor.reachDispatchWithSilent_build :
       DispatchTree.sorted xs = true →
       xs.length ≤ n + 1 →
       (sig, f) ∈ xs →
-      (cursor : frame.CountedCursor dp ca fs table
+      (cursor : Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table
         (dispatchWith k (DispatchTree.build n xs)) final) →
       (sig :: stack <<+ cursor.pre.stack) →
-      ∃ bodyCursor : frame.CountedCursor dp ca fs table f final,
+      ∃ bodyCursor : Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table f final,
         stack <<+ bodyCursor.pre.stack ∧
         Devm.DispatchSilent cursor.pre bodyCursor.pre := by
   intro n
@@ -1098,7 +1113,7 @@ theorem Exec.Frame.CountedCursor.reachDispatchWithSilent_build :
           apply List.mem_append.mp
           rw [List.take_append_drop]
           exact hmem
-        change frame.CountedCursor dp ca fs table
+        change Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table
           ([Ninst.dup 0,
               Ninst.pushB256 (leftmostFsig
                 (DispatchTree.build n
@@ -1184,8 +1199,8 @@ theorem Exec.Frame.CountedCursor.reachDispatchWithSilent_build :
 retains the frame-entry observations. -/
 theorem Exec.Frame.compiledMainCursorCountedSilent
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca) :
-    ∃ cursor : frame.CountedCursor dp ca
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame) :
+    ∃ cursor : Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       (weth10 dp).main frame.post,
@@ -1237,16 +1252,17 @@ observations; the counted mirror of
 `Exec.Frame.compiledSelectorBodyCursorSilent`. -/
 theorem Exec.Frame.compiledSelectorBodyCursorCountedSilent
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame} {body : Func}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hmem : (Sevm.selector frame.sevm, body) ∈ weth10Funcs dp) :
-    ∃ bodyCursor : frame.CountedCursor dp ca
+    ∃ bodyCursor : Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux)) body frame.post,
       Devm.DispatchSilent frame.pre bodyCursor.pre := by
-  rcases frame.compiledMainCursorCountedSilent context with
+  rcases Blanc.Weth10.Exec.Frame.compiledMainCursorCountedSilent (frame := frame)
+      context with
     ⟨mainCursor, hmainSilent⟩
-  change frame.CountedCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     ([Ninst.calldatasize, Ninst.iszero] +++
@@ -1274,7 +1290,7 @@ theorem Exec.Frame.compiledSelectorBodyCursorCountedSilent
   rw [hflagZero] at hflagPrefix
   rcases entryBranchCursor.selectBranchZeroSilent hflagPrefix with
     ⟨dispatchPrefixCursor, _hdispatchStack, hentryBranchSilent⟩
-  change frame.CountedCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (fsig +++ dispatchWith fallbackSlot (weth10Tree dp))
@@ -1287,7 +1303,7 @@ theorem Exec.Frame.compiledSelectorBodyCursorCountedSilent
   have hselectorPrefix : Sevm.selector frame.sevm :: [] <<+
       dispatchCursor.pre.stack :=
     prefix_of_fsig nil_pref hfsig
-  change frame.CountedCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (dispatchWith fallbackSlot
@@ -1306,14 +1322,14 @@ theorem Exec.Frame.CountedCursor.enterNonpayableSilent
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {table : List (Nat × Func)}
     {body : Func} {final : Devm}
-    (cursor : frame.CountedCursor dp ca fs table
+    (cursor : Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table
       (nonpayable body) final) :
-    ∃ bodyCursor : frame.CountedCursor dp ca fs table body final,
+    ∃ bodyCursor : Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table body final,
       Devm.DispatchSilent cursor.pre bodyCursor.pre := by
   have hvalue : frame.sevm.value = 0 :=
     value_eq_zero_of_run_nonpayable
       (Func.Run.of_runCompiled cursor.run)
-  change frame.CountedCursor dp ca fs table
+  change Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table
     ([Ninst.callvalue, Ninst.iszero] +++ (body <?> Func.rev)) final
     at cursor
   rcases cursor.peelChildlessLine
@@ -1343,12 +1359,12 @@ observations; the silent mirror of `Exec.Frame.CountedCursor.enterCall`. -/
 theorem Exec.Frame.CountedCursor.enterCallSilent
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {f₀ : Func} {aux : List Func} {k : Nat} {final : Devm}
-    (cursor : frame.CountedCursor dp ca (f₀ :: aux)
+    (cursor : Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame (f₀ :: aux)
       (table 0 (f₀ :: aux)) (.call k) final)
     (hcode : some frame.sevm.code.toList = Prog.compile ⟨f₀, aux⟩) :
     ∃ body,
       (f₀ :: aux)[k]? = some body ∧
-      ∃ bodyCursor : frame.CountedCursor dp ca (f₀ :: aux)
+      ∃ bodyCursor : Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame (f₀ :: aux)
           (table 0 (f₀ :: aux)) body final,
         Devm.DispatchSilent cursor.pre bodyCursor.pre := by
   cases hrun : cursor.run with
@@ -1368,13 +1384,16 @@ theorem Exec.Frame.CountedCursor.enterCallSilent
       rcases Evm.call_steps (le := le) hpush hjump hjumpdest
           hjumpable.1 hloc hroom hburn with
         ⟨hstepPush, hstepJump, hstepJumpdest⟩
-      rcases frame.advance_cont_counted cursor.current cursor.parentPrefix
+      rcases Blanc.Weth10.Exec.Frame.advance_cont_counted (frame := frame)
+          cursor.current cursor.parentPrefix
           cursor.countedPrefix hstepPush with
         ⟨afterPush, hpPush, hcPush⟩
-      rcases frame.advance_cont_counted afterPush hpPush hcPush
+      rcases Blanc.Weth10.Exec.Frame.advance_cont_counted (frame := frame)
+          afterPush hpPush hcPush
           hstepJump with
         ⟨afterJump, hpJump, hcJump⟩
-      rcases frame.advance_cont_counted afterJump hpJump hcJump
+      rcases Blanc.Weth10.Exec.Frame.advance_cont_counted (frame := frame)
+          afterJump hpJump hcJump
           hstepJumpdest with
         ⟨bodyExec, hpBody, hcBody⟩
       exact ⟨_, hget, ⟨loc + 1, _, bodyExec, hpBody, hcBody, hbody,
@@ -1387,11 +1406,11 @@ theorem Exec.Frame.CountedCursor.selectBranchSplitSilent
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {table : List (Nat × Func)}
     {left right : Func} {final : Devm}
-    (cursor : frame.CountedCursor dp ca fs table
+    (cursor : Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table
       (.branch left right) final) :
-    (∃ arm : frame.CountedCursor dp ca fs table left final,
+    (∃ arm : Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table left final,
       Devm.DispatchSilent cursor.pre arm.pre) ∨
-    (∃ arm : frame.CountedCursor dp ca fs table right final,
+    (∃ arm : Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table right final,
       Devm.DispatchSilent cursor.pre arm.pre) := by
   rcases subcode_compile_branch_jumpable cursor.codeSlice
       cursor.codeBoundary with
@@ -1402,10 +1421,12 @@ theorem Exec.Frame.CountedCursor.selectBranchSplitSilent
   | zero hroom hpop hleft =>
       rcases Evm.branch_zero_steps hpush hjumpi hloc hroom hpop with
         ⟨hstepPush, hstepJumpi⟩
-      rcases frame.advance_cont_counted cursor.current cursor.parentPrefix
+      rcases Blanc.Weth10.Exec.Frame.advance_cont_counted (frame := frame)
+          cursor.current cursor.parentPrefix
           cursor.countedPrefix hstepPush with
         ⟨afterPush, hpPush, hcPush⟩
-      rcases frame.advance_cont_counted afterPush hpPush hcPush
+      rcases Blanc.Weth10.Exec.Frame.advance_cont_counted (frame := frame)
+          afterPush hpPush hcPush
           hstepJumpi with
         ⟨armExec, hpArm, hcArm⟩
       exact Or.inl ⟨⟨cursor.pc + 4, _, armExec, hpArm, hcArm, hleft,
@@ -1414,13 +1435,16 @@ theorem Exec.Frame.CountedCursor.selectBranchSplitSilent
       rcases Evm.branch_succ_steps hpush hjumpi hjumpdest hjumpable
           hloc hne hroom hpop with
         ⟨hstepPush, hstepJumpi, hstepJumpdest⟩
-      rcases frame.advance_cont_counted cursor.current cursor.parentPrefix
+      rcases Blanc.Weth10.Exec.Frame.advance_cont_counted (frame := frame)
+          cursor.current cursor.parentPrefix
           cursor.countedPrefix hstepPush with
         ⟨afterPush, hpPush, hcPush⟩
-      rcases frame.advance_cont_counted afterPush hpPush hcPush
+      rcases Blanc.Weth10.Exec.Frame.advance_cont_counted (frame := frame)
+          afterPush hpPush hcPush
           hstepJumpi with
         ⟨afterJump, hpJump, hcJump⟩
-      rcases frame.advance_cont_counted afterJump hpJump hcJump
+      rcases Blanc.Weth10.Exec.Frame.advance_cont_counted (frame := frame)
+          afterJump hpJump hcJump
           hstepJumpdest with
         ⟨armExec, hpArm, hcArm⟩
       exact Or.inr ⟨⟨loc + 1, _, armExec, hpArm, hcArm, hright,
@@ -1440,10 +1464,10 @@ theorem Exec.Frame.CountedCursor.selectBranchSplit
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {table : List (Nat × Func)}
     {left right : Func} {final : Devm}
-    (cursor : frame.CountedCursor dp ca fs table
+    (cursor : Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table
       (.branch left right) final) :
-    Nonempty (frame.CountedCursor dp ca fs table left final) ∨
-      Nonempty (frame.CountedCursor dp ca fs table right final) := by
+    Nonempty (Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table left final) ∨
+      Nonempty (Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table right final) := by
   rcases subcode_compile_branch_jumpable cursor.codeSlice
       cursor.codeBoundary with
     ⟨loc, _hlocEq, hloc, hpush, hjumpi, hsubLeft, hboundLeft,
@@ -1453,10 +1477,12 @@ theorem Exec.Frame.CountedCursor.selectBranchSplit
   | zero hroom hpop hleft =>
       rcases Evm.branch_zero_steps hpush hjumpi hloc hroom hpop with
         ⟨hstepPush, hstepJumpi⟩
-      rcases frame.advance_cont_counted cursor.current cursor.parentPrefix
+      rcases Blanc.Weth10.Exec.Frame.advance_cont_counted (frame := frame)
+          cursor.current cursor.parentPrefix
           cursor.countedPrefix hstepPush with
         ⟨afterPush, hpPush, hcPush⟩
-      rcases frame.advance_cont_counted afterPush hpPush hcPush
+      rcases Blanc.Weth10.Exec.Frame.advance_cont_counted (frame := frame)
+          afterPush hpPush hcPush
           hstepJumpi with
         ⟨armExec, hpArm, hcArm⟩
       exact Or.inl ⟨⟨cursor.pc + 4, _, armExec, hpArm, hcArm, hleft,
@@ -1465,13 +1491,16 @@ theorem Exec.Frame.CountedCursor.selectBranchSplit
       rcases Evm.branch_succ_steps hpush hjumpi hjumpdest hjumpable
           hloc hne hroom hpop with
         ⟨hstepPush, hstepJumpi, hstepJumpdest⟩
-      rcases frame.advance_cont_counted cursor.current cursor.parentPrefix
+      rcases Blanc.Weth10.Exec.Frame.advance_cont_counted (frame := frame)
+          cursor.current cursor.parentPrefix
           cursor.countedPrefix hstepPush with
         ⟨afterPush, hpPush, hcPush⟩
-      rcases frame.advance_cont_counted afterPush hpPush hcPush
+      rcases Blanc.Weth10.Exec.Frame.advance_cont_counted (frame := frame)
+          afterPush hpPush hcPush
           hstepJumpi with
         ⟨afterJump, hpJump, hcJump⟩
-      rcases frame.advance_cont_counted afterJump hpJump hcJump
+      rcases Blanc.Weth10.Exec.Frame.advance_cont_counted (frame := frame)
+          afterJump hpJump hcJump
           hstepJumpdest with
         ⟨armExec, hpArm, hcArm⟩
       exact Or.inr ⟨⟨loc + 1, _, armExec, hpArm, hcArm, hright,
@@ -1483,12 +1512,12 @@ counted prefix; the counted mirror of
 theorem Exec.Frame.CountedCursor.enterCall
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {f₀ : Func} {aux : List Func} {k : Nat} {final : Devm}
-    (cursor : frame.CountedCursor dp ca (f₀ :: aux)
+    (cursor : Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame (f₀ :: aux)
       (table 0 (f₀ :: aux)) (.call k) final)
     (hcode : some frame.sevm.code.toList = Prog.compile ⟨f₀, aux⟩) :
     ∃ body,
       (f₀ :: aux)[k]? = some body ∧
-      Nonempty (frame.CountedCursor dp ca (f₀ :: aux)
+      Nonempty (Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame (f₀ :: aux)
         (table 0 (f₀ :: aux)) body final) := by
   cases hrun : cursor.run with
   | call hget hroom hburn hbody =>
@@ -1507,13 +1536,16 @@ theorem Exec.Frame.CountedCursor.enterCall
       rcases Evm.call_steps (le := le) hpush hjump hjumpdest
           hjumpable.1 hloc hroom hburn with
         ⟨hstepPush, hstepJump, hstepJumpdest⟩
-      rcases frame.advance_cont_counted cursor.current cursor.parentPrefix
+      rcases Blanc.Weth10.Exec.Frame.advance_cont_counted (frame := frame)
+          cursor.current cursor.parentPrefix
           cursor.countedPrefix hstepPush with
         ⟨afterPush, hpPush, hcPush⟩
-      rcases frame.advance_cont_counted afterPush hpPush hcPush
+      rcases Blanc.Weth10.Exec.Frame.advance_cont_counted (frame := frame)
+          afterPush hpPush hcPush
           hstepJump with
         ⟨afterJump, hpJump, hcJump⟩
-      rcases frame.advance_cont_counted afterJump hpJump hcJump
+      rcases Blanc.Weth10.Exec.Frame.advance_cont_counted (frame := frame)
+          afterJump hpJump hcJump
           hstepJumpdest with
         ⟨bodyExec, hpBody, hcBody⟩
       exact ⟨_, hget, ⟨⟨loc + 1, _, bodyExec, hpBody, hcBody, hbody,
@@ -1580,14 +1612,14 @@ theorem Exec.Deriv.ParentStepCounted.selected_eq_retained_of_call
           subst retainedRun
           rcases Ninst.step_call_spawn_ofCall hs with ⟨msg, rfl⟩
           by_cases hraw : Execution.commits raw = true
-          · have hcommit : Blanc.Weth10.Frame.settlementCommits
+          · have hcommit : Blanc.Frame.settlementCommits
                 (Frame.ofCall msg) raw = true :=
               Frame.settlementCommits_ofCall_of_raw_commits hraw
             simp [hcommit, RetainedXlot.attributionStream,
               Exec.attributionStream, hraw]
-          · have hnot : ¬ Blanc.Weth10.Frame.settlementCommits
+          · have hnot : ¬ Blanc.Frame.settlementCommits
                 (Frame.ofCall msg) raw = true := fun h =>
-              hraw (Blanc.Weth10.Frame.raw_commits_of_settlementCommits h)
+              hraw (Blanc.Frame.raw_commits_of_settlementCommits h)
             simp [RetainedXlot.attributionStream,
               Exec.attributionStream, hnot, hraw]
 

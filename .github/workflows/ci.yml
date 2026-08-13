@@ -31,11 +31,15 @@ jobs:
       # second when a contract reaches into another contract's modules.
       - name: Import hierarchy (contracts are siblings)
         run: scripts/check-layering.sh
+      - name: Execution-settlement extraction ownership
+        run: scripts/check-extraction-ownership.sh
       - name: Imported source trust surface
         run: scripts/check-trust-surface.sh
       - name: Deployed WETH10 reference lock (offline)
         run: scripts/check-weth10-reference.sh
       - uses: leanprover/lean-action@v1
+      - name: Execution-settlement CREATE rollback regression
+        run: scripts/check-execution-settlement.sh
       - name: Error(string) payload cross-derivation (offline)
         run: scripts/check-error-data.sh
       - name: Audit headline theorem axioms

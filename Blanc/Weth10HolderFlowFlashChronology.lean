@@ -113,12 +113,12 @@ theorem flashBurn_shape :
 only branch alternative is the fixed balance-error reverter. -/
 private theorem Exec.Frame.CompiledCursor.finishFlashBurn
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame} {final : Devm}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux)) flashBurn final)
     (hcode : some frame.sevm.code.toList = Prog.compile (weth10 dp)) :
-    frame.descendantFlowActions dp ca = cursor.actions := by
-  change frame.CompiledCursor dp ca
+    Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame = cursor.actions := by
+  change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (flashBurnGuardLine +++
@@ -171,12 +171,12 @@ theorem flashSettle_shape :
 allowance arm, and neither arm crosses an external child. -/
 private theorem Exec.Frame.CompiledCursor.finishFlashSettle
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame} {final : Devm}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux)) flashSettle final)
     (hcode : some frame.sevm.code.toList = Prog.compile (weth10 dp)) :
-    frame.descendantFlowActions dp ca = cursor.actions := by
-  change frame.CompiledCursor dp ca
+    Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame = cursor.actions := by
+  change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (flashSettleKeyLine +++
@@ -253,12 +253,12 @@ theorem flashLoanSuccessTail_shape :
 external child.  All failure alternatives are fixed nonreturning bodies. -/
 private theorem Exec.Frame.CompiledCursor.finishFlashLoanAfterCallback
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame} {final : Devm}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       flashLoanAfterCallback final)
     (hcode : some frame.sevm.code.toList = Prog.compile (weth10 dp)) :
-    frame.descendantFlowActions dp ca = cursor.actions := by
+    Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame = cursor.actions := by
   unfold flashLoanAfterCallback at cursor
   rcases cursor.selectNextChildless (by simp [NinstIsChildless]) with
     ⟨callbackBranchCursor, _, _hiszero, _, hiszeroActions⟩
@@ -1285,13 +1285,13 @@ body.  Every earlier instruction is childless and every alternate branch is a
 fixed reverter, so the returned cursor has crossed no recursive child. -/
 private theorem Exec.Frame.CompiledCursor.reachFlashLoanSuccessTailCursor
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux)) flashLoan frame.post)
     (hwfEntry : Mem.Wf cursor.pre.memory)
     (hreadsEntry : Mem.Reads cursor.pre.memory [])
     :
-    ∃ (gasWord : B256) (callCursor : frame.CompiledCursor dp ca
+    ∃ (gasWord : B256) (callCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
         ((weth10 dp).main :: weth10Aux)
         (table 0 ((weth10 dp).main :: weth10Aux))
         flashLoanSuccessTail frame.post),
@@ -1314,7 +1314,7 @@ private theorem Exec.Frame.CompiledCursor.reachFlashLoanSuccessTailCursor
           (Devm.getStor callCursor.pre frame.sevm.currentTarget)) ∧
       Devm.getBal cursor.pre = Devm.getBal callCursor.pre ∧
       Devm.getCode cursor.pre = Devm.getCode callCursor.pre := by
-  change frame.CompiledCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     flashLoanBodyShape frame.post at cursor
@@ -1424,7 +1424,7 @@ def Exec.Frame.CompiledFlashLoanChronology
       (flashCallbackRuntimeInput frame.sevm)
       callbackPre callbackPost parent child xl pc ∧
     retained.RawCommits ∧
-    frame.NinstOccurrence dp ca Ninst.call callbackPre callbackPost xl ∧
+    Blanc.Weth10.Exec.Frame.NinstOccurrence dp ca frame Ninst.call callbackPre callbackPost xl ∧
     Increase receiver amount
       (Stor.rest (Devm.getStor frame.pre ca))
       (Stor.rest (Devm.getStor callbackPre ca)) ∧
@@ -1449,7 +1449,7 @@ def Exec.Frame.CompiledFlashLoanChronology
     Devm.getCode settlePre = Devm.getCode frame.post ∧
     Func.Run ((weth10 dp).main :: weth10Aux) frame.sevm burnPre
       flashBurn frame.post ∧
-    frame.descendantFlowActions dp ca =
+    Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame =
       prefixActions ++ retained.flowActions dp ca
 
 /-- The allowance fork touches only the tagged allowance key (or nothing),
@@ -1473,7 +1473,7 @@ original-frame compiled cursor. -/
 theorem Exec.Frame.CompiledCursor.compiledFlashLoanChronology
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {receiver : Adr} {amount gasWord : B256} {img : Bytes}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       flashLoanSuccessTail frame.post)
@@ -1497,7 +1497,7 @@ theorem Exec.Frame.CompiledCursor.compiledFlashLoanChronology
     (hprefixBal : Devm.getBal frame.pre = Devm.getBal cursor.pre)
     (hprefixCode : Devm.getCode frame.pre = Devm.getCode cursor.pre)
     (hcode : some frame.sevm.code.toList = Prog.compile (weth10 dp)) :
-    frame.CompiledFlashLoanChronology dp ca receiver amount
+    Blanc.Weth10.Exec.Frame.CompiledFlashLoanChronology dp ca frame receiver amount
       cursor.actions := by
   have hrun : Func.Run ((weth10 dp).main :: weth10Aux) frame.sevm
       cursor.pre flashLoanSuccessTail frame.post :=
@@ -1529,7 +1529,7 @@ theorem Exec.Frame.CompiledCursor.compiledFlashLoanChronology
         exact Frame.raw_commits_of_settlementCommits
           (ProcessMessage.settlementCommits_of_some_ok_clean
             hprocess hclean)
-  change frame.CompiledCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (Ninst.call ::: flashLoanAfterCallback) frame.post at cursor
@@ -1564,7 +1564,7 @@ theorem Exec.Frame.CompiledCursor.compiledFlashLoanChronology
     hwfSettle, ⟨settleImg, hreadsSettle⟩, hsettle, hsilent, hcover',
     hdecrease', hsettlePostBal, hsettlePostCode, hburn, ?_⟩
   calc
-    frame.descendantFlowActions dp ca = tailCursor.actions := hdesc
+    Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame = tailCursor.actions := hdesc
     _ = cursor.actions ++ retained.flowActions dp ca := htailActions
 
 /-- Exact selector-level flash chronology for an authentic committed WETH10
@@ -1572,17 +1572,18 @@ frame.  Dispatch and the nonpayable wrapper are observation-silent; the
 borrower callback is therefore the sole retained descendant action segment. -/
 theorem Exec.Frame.compiledFlashLoanChronology
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = flashLoanSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    frame.CompiledFlashLoanChronology dp ca
+    Blanc.Weth10.Exec.Frame.CompiledFlashLoanChronology dp ca frame
       (normalizedAddressArg frame.sevm 0).toAdr
       (Sevm.argWord frame.sevm 2) [] := by
   have hmember :
       (Sevm.selector frame.sevm, nonpayable flashLoan) ∈ weth10Funcs dp := by
     rw [hselector]
     simp [flashLoanSelector, weth10Funcs]
-  rcases frame.compiledSelectorBodyCursorSilent context hnonempty hmember with
+  rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorSilent (frame := frame)
+      context hnonempty hmember with
     ⟨wrapperCursor, _hwrapperStack, hwrapperActions, hwrapperSilent⟩
   rcases wrapperCursor.enterNonpayableSilent with
     ⟨bodyCursor, _hbodyStack, hbodyActions, hbodySilent⟩

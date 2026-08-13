@@ -52,7 +52,7 @@ private theorem Exec.Frame.CountedCursor.enterSpendCallerAllowanceThen
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {f₀ : Func} {aux : List Func} {amount : B256} {nextSlot : Nat}
     {final : Devm}
-    (cursor : frame.CountedCursor dp ca (f₀ :: aux)
+    (cursor : Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca (f₀ :: aux)
       (table 0 (f₀ :: aux))
       (spendCallerAllowanceThen amount nextSlot) final)
     (hcode : some frame.sevm.code.toList = Prog.compile ⟨f₀, aux⟩)
@@ -61,7 +61,7 @@ private theorem Exec.Frame.CountedCursor.enterSpendCallerAllowanceThen
         some (Func.revWith "WETH: request exceeds allowance")) :
     ∃ body,
       (f₀ :: aux)[nextSlot]? = some body ∧
-      Nonempty (frame.CountedCursor dp ca (f₀ :: aux)
+      Nonempty (Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca (f₀ :: aux)
         (table 0 (f₀ :: aux)) body final) := by
   unfold spendCallerAllowanceThen at cursor
   rcases cursor.peelChildlessLine
@@ -291,7 +291,7 @@ continuation; the counted mirror of
 `Exec.Frame.descendantFlowActions_eq_nil_of_transferFromNonzero`. -/
 theorem Exec.Frame.attributionInner_eq_nil_of_transferFromNonzero
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm =
       selector "transferFrom" [.address, .address, .uint256])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
@@ -301,10 +301,10 @@ theorem Exec.Frame.attributionInner_eq_nil_of_transferFromNonzero
       weth10Funcs dp := by
     rw [hselector]
     simp [weth10Funcs]
-  rcases frame.compiledSelectorBodyCursorCounted context hnonempty hmem with
+  rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorCounted (frame := frame) context hnonempty hmem with
     ⟨wrapperCursor⟩
   rcases wrapperCursor.enterNonpayable with ⟨spendCursor⟩
-  change frame.CountedCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (spendCallerAllowanceThen 2 transferFromCoreSlot) frame.post
@@ -315,7 +315,7 @@ theorem Exec.Frame.attributionInner_eq_nil_of_transferFromNonzero
   have hbody : body = transferFromCore := by
     simpa [weth10, weth10Aux, transferFromCoreSlot] using hget.symm
   subst body
-  change frame.CountedCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (transferFromSelectLine +++
@@ -339,7 +339,7 @@ theorem Exec.Frame.attributionInner_eq_nil_of_transferFromNonzero
   rw [htargetCheck] at htargetPrefix
   rcases targetBranchCursor.selectBranchZero htargetPrefix with
     ⟨nonzeroCursor, _hnonzeroStack⟩
-  change frame.CountedCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (transferFromBalanceCheckLine +++
@@ -375,7 +375,7 @@ balance-key writes leave every tagged allowance key at the value the
 singleton replay prescribes. -/
 theorem Exec.Frame.allowanceRegionEffect_of_transferFromNonzero
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm =
       selector "transferFrom" [.address, .address, .uint256])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
@@ -383,7 +383,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferFromNonzero
     AllowanceRegionEffect ca frame.pre frame.post
       (Exec.attributionStream dp ca frame.run) := by
   have hinner : Exec.attributionInner dp ca frame.run = [] :=
-    frame.attributionInner_eq_nil_of_transferFromNonzero context hselector
+    Blanc.Weth10.Exec.Frame.attributionInner_eq_nil_of_transferFromNonzero (frame := frame) context hselector
       hnonempty hto
   have hsel : Sevm.selector frame.sevm = transferFromSelector := hselector
   have hnotlast : ownRecordLast frame.sevm = false := by
@@ -556,7 +556,7 @@ own record alone.  Stated separately from
 inline, so the read-sound variant can name the ledger. -/
 private theorem Exec.Frame.attributionStream_of_transferFromNonzero
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm =
       selector "transferFrom" [.address, .address, .uint256])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
@@ -565,7 +565,7 @@ private theorem Exec.Frame.attributionStream_of_transferFromNonzero
     Exec.attributionStream dp ca frame.run =
       [CountedFrame.ofFrame dp ca frame] := by
   have hinner : Exec.attributionInner dp ca frame.run = [] :=
-    frame.attributionInner_eq_nil_of_transferFromNonzero context hselector
+    Blanc.Weth10.Exec.Frame.attributionInner_eq_nil_of_transferFromNonzero (frame := frame) context hselector
       hnonempty hto
   have hframe : Exec.Frame.ofRun frame.run frame.committed = frame := by
     cases frame
@@ -581,7 +581,7 @@ spend read the entry word at its own key, which is what the empty ledger
 prefix before its record prescribes. -/
 theorem Exec.Frame.allowanceRegionEffectSound_of_transferFromNonzero
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm =
       selector "transferFrom" [.address, .address, .uint256])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
@@ -596,10 +596,10 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_transferFromNonzero
   have hnotflash : isFlashInvocation frame.sevm = false :=
     isFlashInvocation_eq_false_of_ownRecordLast hnotlast
   refine
-    { frame.allowanceRegionEffect_of_transferFromNonzero context hselector
+    { Blanc.Weth10.Exec.Frame.allowanceRegionEffect_of_transferFromNonzero (frame := frame) context hselector
         hnonempty hto with
       entryRead := ?_ }
-  rw [frame.attributionStream_of_transferFromNonzero context hselector
+  rw [Blanc.Weth10.Exec.Frame.attributionStream_of_transferFromNonzero (frame := frame) context hselector
     hnonempty hto hnotlast]
   exact AllowanceEntryReadSound.ofFrame context.invocation.2.1 hnotflash
 

@@ -57,14 +57,14 @@ theorem Exec.attributionInner_runOk
     (next : Exec pc' sevm devm' out) :
     Exec.attributionInner dp ca
         (Exec.runOk hstep henter child hr next) =
-      (if _h : Blanc.Weth10.Frame.settlementCommits f raw = true then
+      (if _h : Blanc.Frame.settlementCommits f raw = true then
         Exec.attributionStream dp ca child
        else []) ++ Exec.attributionInner dp ca next := by
   rw [Exec.attributionInner]
-  by_cases hs : Blanc.Weth10.Frame.settlementCommits f raw = true
+  by_cases hs : Blanc.Frame.settlementCommits f raw = true
   · rw [dif_pos hs, dif_pos hs,
       Exec.attributionStream_eq_frameContribution dp ca child
-        (Blanc.Weth10.Frame.raw_commits_of_settlementCommits hs)]
+        (Blanc.Frame.raw_commits_of_settlementCommits hs)]
   · rw [dif_neg hs, dif_neg hs]
 
 /-! ## Message-level allowance transport -/
@@ -111,10 +111,10 @@ theorem ProcessMessage.allowanceRegionEffect_of_bodyEffect
         (Execution.committedPost out committed)
         (Exec.attributionStream dp ca run)) :
     AllowanceRegionEffect ca parent post
-      (if Blanc.Weth10.Frame.settlementCommits
+      (if Blanc.Frame.settlementCommits
           (Frame.ofCall msg) out = true
        then Exec.attributionStream dp ca run else []) := by
-  by_cases hsettle : Blanc.Weth10.Frame.settlementCommits
+  by_cases hsettle : Blanc.Frame.settlementCommits
       (Frame.ofCall msg) out = true
   · rw [if_pos hsettle]
     have committed : Execution.commits out = true :=
@@ -158,7 +158,7 @@ theorem ProcessMessage.allowanceRegionEffect_of_bodyEffect
       have hnone : post.error.isNone ≠ true := by
         intro hnone
         apply hsettle
-        unfold Blanc.Weth10.Frame.settlementCommits
+        unfold Blanc.Frame.settlementCommits
         rw [← hset]
         exact hnone
       cases he : post.error <;> simp_all
@@ -188,10 +188,10 @@ theorem ProcessCreateMessage.allowanceRegionEffect_of_bodyEffect
         (Execution.committedPost out committed)
         (Exec.attributionStream dp ca run)) :
     AllowanceRegionEffect ca parent post
-      (if Blanc.Weth10.Frame.settlementCommits
+      (if Blanc.Frame.settlementCommits
           (Frame.ofCreate msg) out = true
        then Exec.attributionStream dp ca run else []) := by
-  by_cases hsettle : Blanc.Weth10.Frame.settlementCommits
+  by_cases hsettle : Blanc.Frame.settlementCommits
       (Frame.ofCreate msg) out = true
   · rw [if_pos hsettle]
     have committed : Execution.commits out = true :=
@@ -199,7 +199,7 @@ theorem ProcessCreateMessage.allowanceRegionEffect_of_bodyEffect
     have body := hbody committed
     have hset := (RunFrame.some_inv hprocess).2
     have hnone : post.error.isNone = true := by
-      unfold Blanc.Weth10.Frame.settlementCommits at hsettle
+      unfold Blanc.Frame.settlementCommits at hsettle
       rw [← hset] at hsettle
       exact hsettle
     have herr : post.error.isSome = false := by
@@ -258,7 +258,7 @@ theorem ProcessCreateMessage.allowanceRegionEffect_of_bodyEffect
       have hnone : post.error.isNone ≠ true := by
         intro hnone
         apply hsettle
-        unfold Blanc.Weth10.Frame.settlementCommits
+        unfold Blanc.Frame.settlementCommits
         rw [← hset]
         exact hnone
       cases he : post.error <;> simp_all
@@ -292,7 +292,7 @@ theorem GenericCall.allowanceRegionEffect_some_of_bodyEffect
         (Execution.committedPost childOut committed)
         (Exec.attributionStream dp ca childRun)) :
     AllowanceRegionEffect ca pre inter
-      (if Blanc.Weth10.Frame.settlementCommits
+      (if Blanc.Frame.settlementCommits
           (Frame.ofCall
             (callMsg sevm (pre.withReturnData []) gas value caller target
               codeAddress stv isStatic ((pre.memory.read ii is).1)
@@ -336,7 +336,7 @@ theorem GenericCall.allowanceRegionEffect_some_of_bodyEffect
         (effect.append
           (AllowanceRegionEffect.of_getStorCode_eq
             hpostStorage hpostCode)) using 1
-    by_cases hretain : Blanc.Weth10.Frame.settlementCommits
+    by_cases hretain : Blanc.Frame.settlementCommits
         (Frame.ofCall
           (callMsg sevm (pre.withReturnData []) gas value caller target
             codeAddress stv isStatic ((pre.memory.read ii is).1) code
@@ -413,7 +413,7 @@ theorem GenericCreate.allowanceRegionEffect_some_of_bodyEffect
         (Execution.committedPost raw committed)
         (Exec.attributionStream dp ca childRun)) :
     AllowanceRegionEffect ca pre post
-      (if Blanc.Weth10.Frame.settlementCommits
+      (if Blanc.Frame.settlementCommits
           (Frame.ofCreate
             (createMsg sevm
               (addAccessedAddress
@@ -478,7 +478,7 @@ theorem GenericCreate.allowanceRegionEffect_some_of_bodyEffect
           (effect.append
             (AllowanceRegionEffect.of_getStorCode_eq
               hpostStorage hpostCode)) using 1
-      by_cases hretain : Blanc.Weth10.Frame.settlementCommits
+      by_cases hretain : Blanc.Frame.settlementCommits
           (Frame.ofCreate
             (createMsg sevm
               (addAccessedAddress
@@ -570,7 +570,7 @@ theorem Xinst.allowanceRegionEffect_some_of_bodyEffect
         (Execution.committedPost raw committed)
         (Exec.attributionStream dp ca child)) :
     AllowanceRegionEffect ca pre post
-      (if Blanc.Weth10.Frame.settlementCommits frame raw = true
+      (if Blanc.Frame.settlementCommits frame raw = true
        then Exec.attributionStream dp ca child else []) := by
   rcases Xinst.step_shape sevm pre x with
     ⟨ex, hs, hprefix⟩ |
@@ -1190,10 +1190,10 @@ theorem ProcessMessage.allowanceRegionEffectSound_of_bodyEffect
         (Execution.committedPost out committed)
         (Exec.attributionStream dp ca run)) :
     AllowanceRegionEffectSound ca parent post
-      (if Blanc.Weth10.Frame.settlementCommits
+      (if Blanc.Frame.settlementCommits
           (Frame.ofCall msg) out = true
        then Exec.attributionStream dp ca run else []) := by
-  by_cases hsettle : Blanc.Weth10.Frame.settlementCommits
+  by_cases hsettle : Blanc.Frame.settlementCommits
       (Frame.ofCall msg) out = true
   · rw [if_pos hsettle]
     have committed : Execution.commits out = true :=
@@ -1237,7 +1237,7 @@ theorem ProcessMessage.allowanceRegionEffectSound_of_bodyEffect
       have hnone : post.error.isNone ≠ true := by
         intro hnone
         apply hsettle
-        unfold Blanc.Weth10.Frame.settlementCommits
+        unfold Blanc.Frame.settlementCommits
         rw [← hset]
         exact hnone
       cases he : post.error <;> simp_all
@@ -1267,10 +1267,10 @@ theorem ProcessCreateMessage.allowanceRegionEffectSound_of_bodyEffect
         (Execution.committedPost out committed)
         (Exec.attributionStream dp ca run)) :
     AllowanceRegionEffectSound ca parent post
-      (if Blanc.Weth10.Frame.settlementCommits
+      (if Blanc.Frame.settlementCommits
           (Frame.ofCreate msg) out = true
        then Exec.attributionStream dp ca run else []) := by
-  by_cases hsettle : Blanc.Weth10.Frame.settlementCommits
+  by_cases hsettle : Blanc.Frame.settlementCommits
       (Frame.ofCreate msg) out = true
   · rw [if_pos hsettle]
     have committed : Execution.commits out = true :=
@@ -1278,7 +1278,7 @@ theorem ProcessCreateMessage.allowanceRegionEffectSound_of_bodyEffect
     have body := hbody committed
     have hset := (RunFrame.some_inv hprocess).2
     have hnone : post.error.isNone = true := by
-      unfold Blanc.Weth10.Frame.settlementCommits at hsettle
+      unfold Blanc.Frame.settlementCommits at hsettle
       rw [← hset] at hsettle
       exact hsettle
     have herr : post.error.isSome = false := by
@@ -1337,7 +1337,7 @@ theorem ProcessCreateMessage.allowanceRegionEffectSound_of_bodyEffect
       have hnone : post.error.isNone ≠ true := by
         intro hnone
         apply hsettle
-        unfold Blanc.Weth10.Frame.settlementCommits
+        unfold Blanc.Frame.settlementCommits
         rw [← hset]
         exact hnone
       cases he : post.error <;> simp_all
@@ -1369,7 +1369,7 @@ theorem GenericCall.allowanceRegionEffectSound_some_of_bodyEffect
         (Execution.committedPost childOut committed)
         (Exec.attributionStream dp ca childRun)) :
     AllowanceRegionEffectSound ca pre inter
-      (if Blanc.Weth10.Frame.settlementCommits
+      (if Blanc.Frame.settlementCommits
           (Frame.ofCall
             (callMsg sevm (pre.withReturnData []) gas value caller target
               codeAddress stv isStatic ((pre.memory.read ii is).1)
@@ -1413,7 +1413,7 @@ theorem GenericCall.allowanceRegionEffectSound_some_of_bodyEffect
         (effect.append
           (AllowanceRegionEffectSound.of_getStorCode_eq
             hpostStorage hpostCode)) using 1
-    by_cases hretain : Blanc.Weth10.Frame.settlementCommits
+    by_cases hretain : Blanc.Frame.settlementCommits
         (Frame.ofCall
           (callMsg sevm (pre.withReturnData []) gas value caller target
             codeAddress stv isStatic ((pre.memory.read ii is).1) code
@@ -1436,7 +1436,7 @@ theorem GenericCreate.allowanceRegionEffectSound_some_of_bodyEffect
         (Execution.committedPost raw committed)
         (Exec.attributionStream dp ca childRun)) :
     AllowanceRegionEffectSound ca pre post
-      (if Blanc.Weth10.Frame.settlementCommits
+      (if Blanc.Frame.settlementCommits
           (Frame.ofCreate
             (createMsg sevm
               (addAccessedAddress
@@ -1501,7 +1501,7 @@ theorem GenericCreate.allowanceRegionEffectSound_some_of_bodyEffect
           (effect.append
             (AllowanceRegionEffectSound.of_getStorCode_eq
               hpostStorage hpostCode)) using 1
-      by_cases hretain : Blanc.Weth10.Frame.settlementCommits
+      by_cases hretain : Blanc.Frame.settlementCommits
           (Frame.ofCreate
             (createMsg sevm
               (addAccessedAddress
@@ -1530,7 +1530,7 @@ theorem Xinst.allowanceRegionEffectSound_some_of_bodyEffect
         (Execution.committedPost raw committed)
         (Exec.attributionStream dp ca child)) :
     AllowanceRegionEffectSound ca pre post
-      (if Blanc.Weth10.Frame.settlementCommits frame raw = true
+      (if Blanc.Frame.settlementCommits frame raw = true
        then Exec.attributionStream dp ca child else []) := by
   rcases Xinst.step_shape sevm pre x with
     ⟨ex, hs, hprefix⟩ |

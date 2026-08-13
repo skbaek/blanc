@@ -1224,7 +1224,7 @@ account's storage: a foreign current target produces no root flow action. -/
 theorem Exec.Frame.flowAction_eq_none_of_currentTarget_ne
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     (htarget : frame.sevm.currentTarget ≠ ca) :
-    frame.flowAction? dp ca = none := by
+    Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = none := by
   unfold Exec.Frame.flowAction?
   rw [if_neg]
   intro invocation
@@ -1235,7 +1235,7 @@ as a direct WETH10 invocation in the executable ledger. -/
 theorem Exec.Frame.flowAction_eq_none_of_codeAddress_ne
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     (hcodeAddress : frame.sevm.codeAddress ≠ some ca) :
-    frame.flowAction? dp ca = none := by
+    Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = none := by
   unfold Exec.Frame.flowAction?
   rw [if_neg]
   intro invocation
@@ -1246,7 +1246,7 @@ theorem Exec.Frame.flowAction_eq_none_of_codeAddress_ne
 theorem Exec.Frame.flowAction_eq_none_of_code_ne
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     (hcode : some frame.sevm.code.toList ≠ Prog.compile (weth10 dp)) :
-    frame.flowAction? dp ca = none := by
+    Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = none := by
   unfold Exec.Frame.flowAction?
   rw [if_neg]
   intro invocation
@@ -1257,7 +1257,7 @@ public action; only whole entered frames at `pc = 0` enter the ledger. -/
 theorem Exec.Frame.flowAction_eq_none_of_pc_ne
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     (hpc : frame.pc ≠ 0) :
-    frame.flowAction? dp ca = none := by
+    Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = none := by
   unfold Exec.Frame.flowAction?
   rw [if_neg]
   intro invocation

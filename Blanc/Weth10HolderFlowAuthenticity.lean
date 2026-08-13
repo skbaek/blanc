@@ -42,25 +42,25 @@ authentic whole-program action.  It adds the installed-code witness that is
 deliberately absent from the decidable filter. -/
 structure Exec.Frame.AuthenticContext
     (dp : DeployParams) (ca : Adr) (frame : Exec.Frame) : Prop where
-  root : frame.IsRoot
-  invocation : frame.exactInvocation dp ca
+  root : Blanc.Weth10.Exec.Frame.IsRoot frame
+  invocation : Blanc.Weth10.Exec.Frame.exactInvocation dp ca frame
   installed : Prog.At (weth10 dp) ca frame.pc frame.sevm frame.pre
 
 theorem Exec.Frame.AuthenticContext.memory_wf
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (h : frame.AuthenticContext dp ca) : Mem.Wf frame.pre.memory := by
+    (h : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame) : Mem.Wf frame.pre.memory := by
   rw [h.root.2]
   exact Mem.wf_empty
 
 theorem Exec.Frame.AuthenticContext.memory_reads_empty
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (h : frame.AuthenticContext dp ca) : Mem.Reads frame.pre.memory [] := by
+    (h : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame) : Mem.Reads frame.pre.memory [] := by
   rw [h.root.2]
   exact Mem.reads_empty
 
 theorem Exec.Frame.AuthenticContext.stateCode_eq
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (h : frame.AuthenticContext dp ca) :
+    (h : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame) :
     frame.pre.getCode ca = frame.sevm.code := by
   apply byteArray_eq_of_toList_eq
   exact Option.some.inj (h.installed.1.trans h.invocation.2.2.2.symm)
@@ -86,23 +86,23 @@ theorem Exec.mem_descendantFrames_installedCode
     (run : Exec pc sevm pre out)
     (hcode : some (pre.getCode ca).toList = Prog.compile (weth10 dp))
     {frame : Exec.Frame}
-    (hmem : frame ∈ Blanc.Weth10.Exec.descendantFrames run) :
+    (hmem : frame ∈ Blanc.Exec.descendantFrames run) :
     some (frame.pre.getCode ca).toList = Prog.compile (weth10 dp) := by
   revert hcode frame
   induction run with
   | halt hstep =>
       intro hcode frame hmem
-      simp [Blanc.Weth10.Exec.descendantFrames] at hmem
+      simp [Blanc.Exec.descendantFrames] at hmem
   | cont hstep next ih =>
       intro hcode frame hmem
       apply ih
       · rw [step_ok_getCode_eq (dp := dp) (ca := ca) (xl := .none) trivial
           (by rw [hstep]; exact ⟨rfl, rfl⟩) hcode]
         exact hcode
-      · simpa only [Blanc.Weth10.Exec.descendantFrames] using hmem
+      · simpa only [Blanc.Exec.descendantFrames] using hmem
   | doneErr hstep henter hresume =>
       intro hcode frame hmem
-      simp [Blanc.Weth10.Exec.descendantFrames] at hmem
+      simp [Blanc.Exec.descendantFrames] at hmem
   | doneOk hstep henter hresume next ih =>
       intro hcode frame hmem
       apply ih
@@ -111,10 +111,10 @@ theorem Exec.mem_descendantFrames_installedCode
             rw [hstep]
             exact ⟨_, RunFrame.of_done henter, hresume.symm⟩) hcode]
         exact hcode
-      · simpa only [Blanc.Weth10.Exec.descendantFrames] using hmem
+      · simpa only [Blanc.Exec.descendantFrames] using hmem
   | runErr hstep henter child hresume ihChild =>
       intro hcode frame hmem
-      simp [Blanc.Weth10.Exec.descendantFrames] at hmem
+      simp [Blanc.Exec.descendantFrames] at hmem
   | @runOk pc sevm pre f rsm pc' cevm raw nextPre out hstep henter child
       hresume next ihChild ihNext =>
       intro hcode frame hmem
@@ -134,7 +134,7 @@ theorem Exec.mem_descendantFrames_installedCode
             rw [hstep]
             exact ⟨_, RunFrame.of_run henter, hresume.symm⟩) hcode]
         exact hcode
-      simp only [Blanc.Weth10.Exec.descendantFrames] at hmem
+      simp only [Blanc.Exec.descendantFrames] at hmem
       split at hmem
       · simp only [List.mem_append, List.mem_cons] at hmem
         rcases hmem with (rfl | hchild) | hnext
@@ -148,15 +148,15 @@ theorem Exec.committedFrames_installedCode
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out)
     (hcode : some (pre.getCode ca).toList = Prog.compile (weth10 dp)) :
-    ∀ frame ∈ Blanc.Weth10.Exec.committedFrames run,
+    ∀ frame ∈ Blanc.Exec.committedFrames run,
       some (frame.pre.getCode ca).toList = Prog.compile (weth10 dp) := by
   intro frame hframe
-  unfold Blanc.Weth10.Exec.committedFrames at hframe
+  unfold Blanc.Exec.committedFrames at hframe
   split at hframe
   · simp only [List.mem_cons] at hframe
     rcases hframe with rfl | hdesc
     · exact hcode
-    · exact Exec.mem_descendantFrames_installedCode run hcode hdesc
+    · exact Blanc.Weth10.Exec.mem_descendantFrames_installedCode run hcode hdesc
   · cases hframe
 
 /-- Every descendant retained by `Exec.descendantFrames` is the initial
@@ -164,23 +164,23 @@ machine of an actually entered child frame. -/
 theorem Exec.mem_descendantFrames_isRoot
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out) {frame : Exec.Frame}
-    (hmem : frame ∈ Blanc.Weth10.Exec.descendantFrames run) :
-    frame.IsRoot := by
+    (hmem : frame ∈ Blanc.Exec.descendantFrames run) :
+    Blanc.Weth10.Exec.Frame.IsRoot frame := by
   induction run with
   | halt hstep =>
-      simp [Blanc.Weth10.Exec.descendantFrames] at hmem
+      simp [Blanc.Exec.descendantFrames] at hmem
   | cont hstep next ih =>
       apply ih
-      simpa only [Blanc.Weth10.Exec.descendantFrames] using hmem
+      simpa only [Blanc.Exec.descendantFrames] using hmem
   | doneErr hstep henter hresume =>
-      simp [Blanc.Weth10.Exec.descendantFrames] at hmem
+      simp [Blanc.Exec.descendantFrames] at hmem
   | doneOk hstep henter hresume next ih =>
       apply ih
-      simpa only [Blanc.Weth10.Exec.descendantFrames] using hmem
+      simpa only [Blanc.Exec.descendantFrames] using hmem
   | runErr hstep henter child hresume ihChild =>
-      simp [Blanc.Weth10.Exec.descendantFrames] at hmem
+      simp [Blanc.Exec.descendantFrames] at hmem
   | runOk hstep henter child hresume next ihChild ihNext =>
-      simp only [Blanc.Weth10.Exec.descendantFrames] at hmem
+      simp only [Blanc.Exec.descendantFrames] at hmem
       split at hmem
       · simp only [List.mem_append, List.mem_cons] at hmem
         rcases hmem with (rfl | hchild) | hnext
@@ -196,14 +196,14 @@ theorem Exec.committedFrames_isRoot
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out)
     (hpc : pc = 0) (hmemory : pre.memory = Mem.empty) :
-    ∀ frame ∈ Blanc.Weth10.Exec.committedFrames run, frame.IsRoot := by
+    ∀ frame ∈ Blanc.Exec.committedFrames run, Blanc.Weth10.Exec.Frame.IsRoot frame := by
   intro frame hframe
-  unfold Blanc.Weth10.Exec.committedFrames at hframe
+  unfold Blanc.Exec.committedFrames at hframe
   split at hframe
   · simp only [List.mem_cons] at hframe
     rcases hframe with rfl | hdesc
     · exact ⟨hpc, hmemory⟩
-    · exact Exec.mem_descendantFrames_isRoot run hdesc
+    · exact Blanc.Weth10.Exec.mem_descendantFrames_isRoot run hdesc
   · cases hframe
 
 /-- A retained numeric action can only come from the exact direct WETH10
@@ -211,9 +211,9 @@ invocation arm of the executable classifier. -/
 theorem Exec.Frame.exactInvocation_of_flowAction?_eq_some
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {action : FlowAction}
-    (haction : frame.flowAction? dp ca = some action) :
-    frame.exactInvocation dp ca := by
-  unfold Exec.Frame.flowAction? at haction
+    (haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action) :
+    Blanc.Weth10.Exec.Frame.exactInvocation dp ca frame := by
+  unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
   split at haction
   · assumption
   · simp at haction
@@ -230,12 +230,12 @@ theorem Exec.Frame.authenticContext_of_mem_committedFrames_exactInvocation
     (hcode : some (pre.getCode ca).toList = Prog.compile (weth10 dp))
     (hpc : pc = 0) (hmemory : pre.memory = Mem.empty)
     {frame : Exec.Frame}
-    (hframe : frame ∈ Blanc.Weth10.Exec.committedFrames run)
-    (hinvocation : frame.exactInvocation dp ca) :
-    frame.AuthenticContext dp ca := by
-  refine ⟨Exec.committedFrames_isRoot run hpc hmemory frame hframe,
+    (hframe : frame ∈ Blanc.Exec.committedFrames run)
+    (hinvocation : Blanc.Weth10.Exec.Frame.exactInvocation dp ca frame) :
+    Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame := by
+  refine ⟨Blanc.Weth10.Exec.committedFrames_isRoot run hpc hmemory frame hframe,
     hinvocation, ?_⟩
-  refine ⟨Exec.committedFrames_installedCode run hcode frame hframe, ?_⟩
+  refine ⟨Blanc.Weth10.Exec.committedFrames_installedCode run hcode frame hframe, ?_⟩
   intro _
   exact ⟨hinvocation.2.2.2, hinvocation.1⟩
 
@@ -248,12 +248,12 @@ theorem Exec.Frame.authenticContext_of_mem_committedFrames
     (hcode : some (pre.getCode ca).toList = Prog.compile (weth10 dp))
     (hpc : pc = 0) (hmemory : pre.memory = Mem.empty)
     {frame : Exec.Frame} {action : FlowAction}
-    (hframe : frame ∈ Blanc.Weth10.Exec.committedFrames run)
-    (haction : frame.flowAction? dp ca = some action) :
-    frame.AuthenticContext dp ca := by
+    (hframe : frame ∈ Blanc.Exec.committedFrames run)
+    (haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action) :
+    Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame := by
   have hinvocation :=
-    Exec.Frame.exactInvocation_of_flowAction?_eq_some haction
-  exact frame.authenticContext_of_mem_committedFrames_exactInvocation
+    Blanc.Weth10.Exec.Frame.exactInvocation_of_flowAction?_eq_some haction
+  exact Blanc.Weth10.Exec.Frame.authenticContext_of_mem_committedFrames_exactInvocation
     run hcode hpc hmemory hframe hinvocation
 
 /-- All committed frames retained by one raw execution slot start at whole
@@ -262,7 +262,7 @@ def RetainedXlot.AllFramesRoot :
     {xl : Xlot} → RetainedXlot xl → Prop
   | _, .none => True
   | _, .some run =>
-      ∀ frame ∈ Blanc.Weth10.Exec.committedFrames run, frame.IsRoot
+      ∀ frame ∈ Blanc.Exec.committedFrames run, Blanc.Weth10.Exec.Frame.IsRoot frame
 
 theorem ProcessMessageTrace.allFramesRoot
     {msg : Msg} {out : Except (EvmError × State × AdrSet × Tra) Devm}
@@ -275,7 +275,7 @@ theorem ProcessMessageTrace.allFramesRoot
       have henter : (Frame.ofCall msg).enter =
           .run ⟨pc, sevm, pre⟩ :=
         (RunFrame.some_inv hrun).1
-      exact Exec.committedFrames_isRoot run
+      exact Blanc.Weth10.Exec.committedFrames_isRoot run
         (Frame.enter_run_pc henter)
         (frame_enter_run_memory henter)
 
@@ -290,7 +290,7 @@ theorem ProcessCreateMessageTrace.allFramesRoot
       have henter : (Frame.ofCreate msg).enter =
           .run ⟨pc, sevm, pre⟩ :=
         (RunFrame.some_inv hrun).1
-      exact Exec.committedFrames_isRoot run
+      exact Blanc.Weth10.Exec.committedFrames_isRoot run
         (Frame.enter_run_pc henter)
         (frame_enter_run_memory henter)
 

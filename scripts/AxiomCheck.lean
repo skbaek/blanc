@@ -5,6 +5,7 @@ import Blanc.WethCode
 import Blanc.FmintCode
 import Blanc.Weth10Code
 import Blanc.Compiled
+import Blanc.ExecutionSettlement
 import Blanc.Reverts
 import Blanc.FmintLive
 import Blanc.FmintReverts
@@ -74,6 +75,13 @@ import Blanc.Weth10AnyOrder
 #print axioms Blanc.Func.compile_eq_emitUnchecked
 #print axioms Blanc.Table.compile_eq_emitUnchecked
 #print axioms Blanc.Prog.compile_eq_emitUnchecked
+#print axioms Blanc.Frame.raw_commits_of_settlementCommits
+#print axioms Blanc.Exec.descendantFrames_runOk_of_settlementCommits
+#print axioms Blanc.Exec.descendantFrames_runOk_of_not_settlementCommits
+#print axioms Blanc.Exec.descendantFrames_runOk_create_codeDepositRollback
+#print axioms Blanc.Exec.committedFrames_eq_nil_of_not_commits
+#print axioms Blanc.ProcessMessage.settlementCommits_of_some_ok_clean
+#print axioms Blanc.Frame.settlementCommits_ofCall_of_raw_commits
 #print axioms Blanc.Func.CompileShape.byteSize_compileShape
 #print axioms Blanc.Func.length_emitByShape
 #print axioms Blanc.Func.getD_emitByShape

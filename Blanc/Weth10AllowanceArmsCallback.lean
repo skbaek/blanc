@@ -96,16 +96,16 @@ private theorem Exec.Deriv.ParentStepActions.counted_of_call
           subst retainedRun
           rcases Ninst.step_call_spawn_ofCall hs with ⟨msg, rfl⟩
           have hrawCommits : Execution.commits raw = true := commits
-          have hcommit : Blanc.Weth10.Frame.settlementCommits
+          have hcommit : Blanc.Frame.settlementCommits
               (Frame.ofCall msg) raw = true :=
             Frame.settlementCommits_ofCall_of_raw_commits hrawCommits
           have hlabel : RetainedXlot.attributionStream dp ca
               (RetainedXlot.some child) =
-              (if h : Blanc.Weth10.Frame.settlementCommits
+              (if h : Blanc.Frame.settlementCommits
                     (Frame.ofCall msg) raw = true then
                 Exec.frameContribution dp ca
                   (Exec.Frame.ofRun child
-                    (Blanc.Weth10.Frame.raw_commits_of_settlementCommits h))
+                    (Blanc.Frame.raw_commits_of_settlementCommits h))
                   (Exec.attributionInner dp ca child)
               else []) := by
             simp [RetainedXlot.attributionStream, Exec.attributionStream,
@@ -121,7 +121,7 @@ private theorem Exec.Frame.CountedCursor.crossCommittedCall
     {fs : List Func} {table : List (Nat × Func)}
     {tail : Func} {final rawPost : Devm}
     {rawSlot : Xlot} {rawPc : Nat}
-    (cursor : frame.CountedCursor dp ca fs table
+    (cursor : Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca fs table
       (.next Ninst.call tail) final)
     (rawFilled : rawSlot.Filled)
     (rawStep : Ninst.StepRun rawPc frame.sevm cursor.pre
@@ -142,7 +142,7 @@ private theorem Exec.Frame.CountedCursor.crossCommittedCall
       have hat : Ninst.At frame.sevm.code cursor.pc Ninst.call :=
         ninstAt_of_subcode_next cursor.codeSlice
       rcases cursor.parentPrefix with ⟨before, hbefore⟩
-      rcases frame.advance_runCompiled_next cursor.current hbefore hat
+      rcases Blanc.Weth10.Exec.Frame.advance_runCompiled_next (frame := frame) cursor.current hbefore hat
           hcompiled with
         ⟨_xl, continuation, _selected, _occurrence, hedge, _hnextPrefix⟩
       rcases hcompiled with ⟨actualSlot, actualFilled, hsteps⟩
@@ -174,7 +174,7 @@ private theorem Exec.Frame.CountedCursor.reachCallBoolCallbackCounted
     {f₀ : Func} {aux : List Func} {table : List (Nat × Func)}
     {sel targetArg dataArg valueWord : B256} {value : Line}
     {final : Devm} {img : Bytes}
-    (cursor : frame.CountedCursor dp ca (f₀ :: aux) table
+    (cursor : Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca (f₀ :: aux) table
       (callBoolCallback sel targetArg dataArg value) final)
     (hvalueChildless : ∀ n ∈ value, NinstIsChildless n)
     (h_value_stack : ∀ {a b : Devm} {xs : Stack},
@@ -188,7 +188,7 @@ private theorem Exec.Frame.CountedCursor.reachCallBoolCallbackCounted
     (h_value_output : Line.Inv Devm.output value)
     (h_wf : Mem.Wf cursor.pre.memory)
     (h_reads : Mem.Reads cursor.pre.memory img) :
-    ∃ callCursor : frame.CountedCursor dp ca (f₀ :: aux) table
+    ∃ callCursor : Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca (f₀ :: aux) table
         (.next Ninst.call (.call boolReturnSlot)) final,
       RawTokenCallbackCallPrefix frame.sevm sel targetArg dataArg valueWord
         img cursor.pre callCursor.pre := by
@@ -260,7 +260,8 @@ private theorem Exec.attributionInner_eq_nil_of_boolReturnTail
     (hcode : some fsevm.code.toList = Prog.compile (weth10 dp)) :
     Exec.attributionInner dp ca next = [] := by
   let tailFrame : Exec.Frame := ⟨pcT, fsevm, midD, out, next, committed⟩
-  let tailCursor : Exec.Frame.CountedCursor dp ca tailFrame
+  let tailCursor : Blanc.Weth10.Exec.Frame.CountedCursor
+      (frame := tailFrame) dp ca
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       (.call boolReturnSlot) final :=
@@ -282,7 +283,8 @@ private theorem Exec.attributionInner_eq_nil_of_boolReturnTail
       ⟨secondBranchCursor, -⟩
     rcases secondBranchCursor.selectBranchSplit with hreturn | hrev
     · rcases hreturn with ⟨returnCursor⟩
-      change Exec.Frame.CountedCursor dp ca tailFrame
+      change Blanc.Weth10.Exec.Frame.CountedCursor
+        (frame := tailFrame) dp ca
         ((weth10 dp).main :: weth10Aux)
         (table 0 ((weth10 dp).main :: weth10Aux))
         ((pushList [32, 0, 0] ++
@@ -315,7 +317,7 @@ mirror of `Exec.Frame.CompiledCursor.compiledTokenCallbackChronology`. -/
 private theorem Exec.Frame.CountedCursor.countedTokenCallbackChronology
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {sel targetArg dataArg valueWord : B256} {value : Line} {img : Bytes}
-    (cursor : frame.CountedCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       (callBoolCallback sel targetArg dataArg value) frame.post)
@@ -460,7 +462,7 @@ record carries no allowance event, so that record replays transparently
 ahead of the retained callback child's attribution stream. -/
 theorem Exec.Frame.allowanceRegionEffect_of_depositToAndCall
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = depositToAndCallSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
@@ -472,7 +474,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_depositToAndCall
       weth10Funcs dp := by
     rw [hselector]
     simp [depositToAndCallSelector, weth10Funcs]
-  rcases frame.compiledSelectorBodyCursorCountedSilent context hnonempty
+  rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorCountedSilent (frame := frame) context hnonempty
       hmem with
     ⟨bodyCursor, hentrySilent⟩
   unfold depositToAndCall at bodyCursor
@@ -727,7 +729,7 @@ frame's own record carries no allowance event and replays transparently,
 and the retained callback child supplies the rest of the ledger. -/
 theorem Exec.Frame.allowanceRegionEffect_of_transferAndCall
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = transferAndCallSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hto : Sevm.argWord frame.sevm 0 ≠ 0)
@@ -740,7 +742,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferAndCall
       weth10Funcs dp := by
     rw [hselector]
     simp [transferAndCallSelector, weth10Funcs]
-  rcases frame.compiledSelectorBodyCursorCountedSilent context hnonempty
+  rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorCountedSilent (frame := frame) context hnonempty
       hmem with
     ⟨wrapperCursor, hentrySilent⟩
   rcases wrapperCursor.enterNonpayableSilent with
@@ -936,8 +938,9 @@ private theorem Exec.Frame.tokenCallbackSuccessAllowanceCloser
   intro entryPc entry continuation hrun hsub hbound hwfEntry hreadsEntry
     hcodeEntry key hkey
   let suffixCursor :
-      (⟨entryPc, frame.sevm, entry, frame.out, continuation,
-          frame.committed⟩ : Exec.Frame).CountedCursor dp ca
+      Blanc.Weth10.Exec.Frame.CountedCursor
+        (frame := ⟨entryPc, frame.sevm, entry, frame.out, continuation,
+          frame.committed⟩) dp ca
         ((weth10 dp).main :: weth10Aux)
         (table 0 ((weth10 dp).main :: weth10Aux))
         (callBoolCallback onTokenTransferSelector 0 dataArg (arg 1))
@@ -975,7 +978,7 @@ ERC-677 callback; neither retained child is the frame's own record, which
 carries no allowance event and replays transparently ahead of them. -/
 theorem Exec.Frame.allowanceRegionEffect_of_transferAndCallZero
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = transferAndCallSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hzero : Sevm.argWord frame.sevm 0 = 0)
@@ -988,7 +991,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferAndCallZero
       weth10Funcs dp := by
     rw [hselector]
     simp [transferAndCallSelector, weth10Funcs]
-  rcases frame.compiledSelectorBodyCursorCountedSilent context hnonempty
+  rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorCountedSilent (frame := frame) context hnonempty
       hmem with
     ⟨wrapperCursor, hentrySilent⟩
   rcases wrapperCursor.enterNonpayableSilent with
@@ -1033,7 +1036,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferAndCallZero
         (getCode_eq_of_state_eq hbranchSilent.state ca))
   have hbodyMem : frame.pre.memory = bodyCursor.pre.memory :=
     hbodySilent.memory.trans (hlineMem.trans hbranchSilent.memory)
-  change frame.CountedCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (redeemBody 1 redeemSendToCallerPrefix
@@ -1054,7 +1057,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferAndCallZero
       exact redeemSendToCallerPrefix_effect hp hrun)
     (by
       rw [Bytes.writeAt_zero_of_le (Nat.zero_le _)]
-      exact frame.tokenCallbackSuccessAllowanceCloser context.invocation.2.1
+      exact Blanc.Weth10.Exec.Frame.tokenCallbackSuccessAllowanceCloser (frame := frame) context.invocation.2.1
         context.invocation.2.2.2 hdeeper)
     hdeeper
   have hnotlast : ownRecordLast frame.sevm = false := by
@@ -1099,7 +1102,7 @@ exactly at that event's projected key before the callback child is
 spawned, so the record replays ahead of the child's stream. -/
 theorem Exec.Frame.allowanceRegionEffect_of_approveAndCall
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = approveAndCallSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
@@ -1111,7 +1114,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_approveAndCall
       weth10Funcs dp := by
     rw [hselector]
     simp [approveAndCallSelector, weth10Funcs]
-  rcases frame.compiledSelectorBodyCursorCountedSilent context hnonempty
+  rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorCountedSilent (frame := frame) context hnonempty
       hmem with
     ⟨wrapperCursor, hentrySilent⟩
   rcases wrapperCursor.enterNonpayableSilent with
@@ -1301,7 +1304,7 @@ record carries no allowance event, so that record replays transparently
 ahead of the retained callback child's attribution stream. -/
 theorem Exec.Frame.allowanceRegionEffectSound_of_depositToAndCall
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = depositToAndCallSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
@@ -1313,7 +1316,7 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_depositToAndCall
       weth10Funcs dp := by
     rw [hselector]
     simp [depositToAndCallSelector, weth10Funcs]
-  rcases frame.compiledSelectorBodyCursorCountedSilent context hnonempty
+  rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorCountedSilent (frame := frame) context hnonempty
       hmem with
     ⟨bodyCursor, hentrySilent⟩
   unfold depositToAndCall at bodyCursor
@@ -1423,7 +1426,7 @@ frame's own record carries no allowance event and replays transparently,
 and the retained callback child supplies the rest of the ledger. -/
 theorem Exec.Frame.allowanceRegionEffectSound_of_transferAndCall
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = transferAndCallSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hto : Sevm.argWord frame.sevm 0 ≠ 0)
@@ -1436,7 +1439,7 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_transferAndCall
       weth10Funcs dp := by
     rw [hselector]
     simp [transferAndCallSelector, weth10Funcs]
-  rcases frame.compiledSelectorBodyCursorCountedSilent context hnonempty
+  rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorCountedSilent (frame := frame) context hnonempty
       hmem with
     ⟨wrapperCursor, hentrySilent⟩
   rcases wrapperCursor.enterNonpayableSilent with
@@ -1615,7 +1618,7 @@ exactly at that event's projected key before the callback child is
 spawned, so the record replays ahead of the child's stream. -/
 theorem Exec.Frame.allowanceRegionEffectSound_of_approveAndCall
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = approveAndCallSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
@@ -1627,7 +1630,7 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_approveAndCall
       weth10Funcs dp := by
     rw [hselector]
     simp [approveAndCallSelector, weth10Funcs]
-  rcases frame.compiledSelectorBodyCursorCountedSilent context hnonempty
+  rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorCountedSilent (frame := frame) context hnonempty
       hmem with
     ⟨wrapperCursor, hentrySilent⟩
   rcases wrapperCursor.enterNonpayableSilent with
@@ -1760,8 +1763,9 @@ private theorem Exec.Frame.tokenCallbackSuccessAllowanceCloserSound
   intro entryPc entry continuation hrun hsub hbound hwfEntry hreadsEntry
     hcodeEntry
   let suffixCursor :
-      (⟨entryPc, frame.sevm, entry, frame.out, continuation,
-          frame.committed⟩ : Exec.Frame).CountedCursor dp ca
+      Blanc.Weth10.Exec.Frame.CountedCursor
+        (frame := ⟨entryPc, frame.sevm, entry, frame.out, continuation,
+          frame.committed⟩) dp ca
         ((weth10 dp).main :: weth10Aux)
         (table 0 ((weth10 dp).main :: weth10Aux))
         (callBoolCallback onTokenTransferSelector 0 dataArg (arg 1))
@@ -1799,7 +1803,7 @@ strengthened recursion hypothesis, and so is the ERC-677 callback the
 success continuation spawns behind it. -/
 theorem Exec.Frame.allowanceRegionEffectSound_of_transferAndCallZero
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = transferAndCallSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hzero : Sevm.argWord frame.sevm 0 = 0)
@@ -1812,7 +1816,7 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_transferAndCallZero
       weth10Funcs dp := by
     rw [hselector]
     simp [transferAndCallSelector, weth10Funcs]
-  rcases frame.compiledSelectorBodyCursorCountedSilent context hnonempty
+  rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorCountedSilent (frame := frame) context hnonempty
       hmem with
     ⟨wrapperCursor, hentrySilent⟩
   rcases wrapperCursor.enterNonpayableSilent with
@@ -1857,7 +1861,7 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_transferAndCallZero
         (getCode_eq_of_state_eq hbranchSilent.state ca))
   have hbodyMem : frame.pre.memory = bodyCursor.pre.memory :=
     hbodySilent.memory.trans (hlineMem.trans hbranchSilent.memory)
-  change frame.CountedCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (redeemBody 1 redeemSendToCallerPrefix
@@ -1878,7 +1882,7 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_transferAndCallZero
       exact redeemSendToCallerPrefix_effect hp hrun)
     (by
       rw [Bytes.writeAt_zero_of_le (Nat.zero_le _)]
-      exact frame.tokenCallbackSuccessAllowanceCloserSound
+      exact Blanc.Weth10.Exec.Frame.tokenCallbackSuccessAllowanceCloserSound (frame := frame)
         context.invocation.2.1 context.invocation.2.2.2 hdeeper)
     hdeeper
   have hnotlast : ownRecordLast frame.sevm = false := by

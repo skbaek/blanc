@@ -146,12 +146,12 @@ private theorem Exec.Frame.CountedCursor.selectBranchSplitFrame
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {table : List (Nat × Func)}
     {left right : Func} {final : Devm}
-    (cursor : frame.CountedCursor dp ca fs table
+    (cursor : Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca fs table
       (.branch left right) final) :
-    (∃ arm : frame.CountedCursor dp ca fs table left final,
+    (∃ arm : Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca fs table left final,
       Devm.getCode cursor.pre = Devm.getCode arm.pre ∧
       AllowanceAgree frame.sevm cursor.pre arm.pre) ∨
-    (∃ arm : frame.CountedCursor dp ca fs table right final,
+    (∃ arm : Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca fs table right final,
       Devm.getCode cursor.pre = Devm.getCode arm.pre ∧
       AllowanceAgree frame.sevm cursor.pre arm.pre) := by
   rcases cursor.selectBranchSplitSilent with ⟨arm, hsilent⟩ | ⟨arm, hsilent⟩
@@ -166,12 +166,12 @@ map and allowance region; the silent-frame projection of
 private theorem Exec.Frame.CountedCursor.enterCallFrame
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {f₀ : Func} {aux : List Func} {k : Nat} {final : Devm}
-    (cursor : frame.CountedCursor dp ca (f₀ :: aux)
+    (cursor : Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca (f₀ :: aux)
       (table 0 (f₀ :: aux)) (.call k) final)
     (hcode : some frame.sevm.code.toList = Prog.compile ⟨f₀, aux⟩) :
     ∃ body,
       (f₀ :: aux)[k]? = some body ∧
-      ∃ bodyCursor : frame.CountedCursor dp ca (f₀ :: aux)
+      ∃ bodyCursor : Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca (f₀ :: aux)
         (table 0 (f₀ :: aux)) body final,
         Devm.getCode cursor.pre = Devm.getCode bodyCursor.pre ∧
         AllowanceAgree frame.sevm cursor.pre bodyCursor.pre := by
@@ -405,7 +405,7 @@ private theorem Exec.Frame.CountedCursor.crossPermitStaticcall
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {table : List (Nat × Func)}
     {tail : Func} {final : Devm}
-    (cursor : frame.CountedCursor dp ca fs table
+    (cursor : Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca fs table
       (.next Ninst.statcall tail) final)
     (hprecomp : decide
       (frame.sevm.benvStat.rules.isPrecomp (1 : B256).toAdr) = true)
@@ -414,14 +414,14 @@ private theorem Exec.Frame.CountedCursor.crossPermitStaticcall
     {gasWord : B256} {stack : Stack}
     (operands : gasWord :: (1 : B256) :: (0 : B256) :: (128 : B256) ::
       (128 : B256) :: (32 : B256) :: stack <<+ cursor.pre.stack) :
-    Nonempty (frame.CountedCursor dp ca fs table tail final) := by
+    Nonempty (Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca fs table tail final) := by
   have compiled := cursor.run
   cases compiled with
   | next hcompiled htail =>
       have hat : Ninst.At frame.sevm.code cursor.pc Ninst.statcall :=
         ninstAt_of_subcode_next cursor.codeSlice
       rcases cursor.parentPrefix with ⟨before, hbefore⟩
-      rcases frame.advance_runCompiled_next cursor.current hbefore hat
+      rcases Blanc.Weth10.Exec.Frame.advance_runCompiled_next (frame := frame) cursor.current hbefore hat
           hcompiled with
         ⟨xl, continuation, selected, _occurrence, hedge, hnextPrefix⟩
       have hcountedEdge :=
@@ -440,9 +440,9 @@ private theorem Exec.Frame.CountedCursor.enterNonpayableFrame
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {table : List (Nat × Func)}
     {body : Func} {final : Devm}
-    (cursor : frame.CountedCursor dp ca fs table
+    (cursor : Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca fs table
       (nonpayable body) final) :
-    ∃ bodyCursor : frame.CountedCursor dp ca fs table body final,
+    ∃ bodyCursor : Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca fs table body final,
       Devm.getCode cursor.pre = Devm.getCode bodyCursor.pre ∧
       AllowanceAgree frame.sevm cursor.pre bodyCursor.pre := by
   rcases cursor.enterNonpayableSilent with ⟨bodyCursor, hsilent⟩
@@ -539,7 +539,7 @@ childless `approvePermit` store and the frame's proper-descendant counted
 stream is empty. -/
 private theorem Exec.Frame.CountedCursor.finishPermitAfterStaticcall
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (cursor : frame.CountedCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       permitAfterStaticcall frame.post) :
@@ -558,7 +558,7 @@ private theorem Exec.Frame.CountedCursor.finishPermitAfterStaticcall
       ⟨secondBranchCursor, -⟩
     rcases secondBranchCursor.selectBranchSplitFrame with happrove | herror
     · rcases happrove with ⟨approveCursor, -, -⟩
-      have approveCursor' : frame.CountedCursor dp ca
+      have approveCursor' : Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca
           ((weth10 dp).main :: weth10Aux)
           (table 0 ((weth10 dp).main :: weth10Aux))
           (approvePermitLine +++ Func.stop) frame.post :=
@@ -622,10 +622,11 @@ private theorem
     Exec.Frame.CountedCursor.attributionInner_writeFree_of_statcall
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {table : List (Nat × Func)} {tail : Func}
-    (cursor : frame.CountedCursor dp ca fs table
+    (cursor : Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca fs table
       (.next Ninst.statcall tail) frame.post)
     (hfinish : ∀ suffixFrame : Exec.Frame,
-      suffixFrame.CountedCursor dp ca fs table tail suffixFrame.post →
+      Blanc.Weth10.Exec.Frame.CountedCursor
+        (frame := suffixFrame) dp ca fs table tail suffixFrame.post →
       Exec.attributionInner dp ca suffixFrame.run = []) :
     WriteFreeLedger (Exec.attributionInner dp ca frame.run) := by
   have compiled := cursor.run
@@ -637,7 +638,7 @@ private theorem
       obtain ⟨nextBoundary, nextSub⟩ :=
         Func.noPushBefore_next cursor.codeSlice cursor.codeBoundary
       rcases cursor.parentPrefix with ⟨before, hbefore⟩
-      rcases frame.advance_runCompiled_next cursor.current hbefore hat
+      rcases Blanc.Weth10.Exec.Frame.advance_runCompiled_next (frame := frame) cursor.current hbefore hat
           hcompiled with
         ⟨_xl, continuation, _selected, _occurrence, hedge, _hnextPrefix⟩
       rcases hedge.exists_counted with ⟨counted, hcountedEdge⟩
@@ -816,16 +817,16 @@ private theorem entryReadSound_statcallCrossing
     (hdeeper : ForallDeeperAt sevm.depth ca (weth10 dp)
       (fun p s d out _ => Exec.CoreAllowanceReadSound dp ca p s d out)) :
     AllowanceEntryReadSound (Devm.getStor pre ca)
-      (if h : Blanc.Weth10.Frame.settlementCommits f raw = true then
+      (if h : Blanc.Frame.settlementCommits f raw = true then
         Exec.frameContribution dp ca
           (Exec.Frame.ofRun child
-            (Blanc.Weth10.Frame.raw_commits_of_settlementCommits h))
+            (Blanc.Frame.raw_commits_of_settlementCommits h))
           (Exec.attributionInner dp ca child)
        else []) := by
-  by_cases hcommit : Blanc.Weth10.Frame.settlementCommits f raw = true
+  by_cases hcommit : Blanc.Frame.settlementCommits f raw = true
   · rw [dif_pos hcommit]
     have hcommits :=
-      Blanc.Weth10.Frame.raw_commits_of_settlementCommits hcommit
+      Blanc.Frame.raw_commits_of_settlementCommits hcommit
     have hstream : Exec.attributionStream dp ca child =
         Exec.frameContribution dp ca (Exec.Frame.ofRun child hcommits)
           (Exec.attributionInner dp ca child) := by
@@ -837,7 +838,7 @@ private theorem entryReadSound_statcallCrossing
     have hrun : RunFrame f (some (cevm, raw)) (f.settle raw) :=
       RunFrame.of_run henter
     rcases hsettle : Jaune.Frame.settle f raw with err | settled
-    · rw [Blanc.Weth10.Frame.settlementCommits, hsettle] at hcommit
+    · rw [Blanc.Frame.settlementCommits, hsettle] at hcommit
       exact absurd hcommit (by simp)
     · rw [hsettle] at hrun
       subst hframe
@@ -885,14 +886,15 @@ private theorem
     Exec.Frame.CountedCursor.attributionInner_entryReadSound_of_statcall
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {table : List (Nat × Func)} {tail : Func}
-    (cursor : frame.CountedCursor dp ca fs table
+    (cursor : Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca fs table
       (.next Ninst.statcall tail) frame.post)
     (installed :
       some (cursor.pre.getCode ca).toList = Prog.compile (weth10 dp))
     (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
       (fun p s d out _ => Exec.CoreAllowanceReadSound dp ca p s d out))
     (hfinish : ∀ suffixFrame : Exec.Frame,
-      suffixFrame.CountedCursor dp ca fs table tail suffixFrame.post →
+      Blanc.Weth10.Exec.Frame.CountedCursor
+        (frame := suffixFrame) dp ca fs table tail suffixFrame.post →
       Exec.attributionInner dp ca suffixFrame.run = []) :
     AllowanceEntryReadSound (Devm.getStor cursor.pre ca)
       (Exec.attributionInner dp ca frame.run) := by
@@ -905,7 +907,7 @@ private theorem
       obtain ⟨nextBoundary, nextSub⟩ :=
         Func.noPushBefore_next cursor.codeSlice cursor.codeBoundary
       rcases cursor.parentPrefix with ⟨before, hbefore⟩
-      rcases frame.advance_runCompiled_next cursor.current hbefore hat
+      rcases Blanc.Weth10.Exec.Frame.advance_runCompiled_next (frame := frame) cursor.current hbefore hat
           hcompiled with
         ⟨_xl, continuation, _selected, _occurrence, hedge, _hnextPrefix⟩
       rcases hedge.exists_counted with ⟨counted, hcountedEdge⟩
@@ -938,15 +940,15 @@ allowance region attached; the silent-frame projection of
 `Exec.Frame.compiledSelectorBodyCursorCountedSilent`. -/
 private theorem Exec.Frame.compiledSelectorBodyCursorFrame
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame} {body : Func}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hmem : (Sevm.selector frame.sevm, body) ∈ weth10Funcs dp) :
-    ∃ bodyCursor : frame.CountedCursor dp ca
+    ∃ bodyCursor : Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux)) body frame.post,
       Devm.getCode frame.pre = Devm.getCode bodyCursor.pre ∧
       AllowanceAgree frame.sevm frame.pre bodyCursor.pre := by
-  rcases frame.compiledSelectorBodyCursorCountedSilent context hnonempty hmem
+  rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorCountedSilent (frame := frame) context hnonempty hmem
     with ⟨bodyCursor, hsilent⟩
   exact ⟨bodyCursor, getCode_map_eq_of_state_eq hsilent.state,
     AllowanceAgree.of_state_eq hsilent.state⟩
@@ -964,11 +966,11 @@ increment — lands in the nonce region.  Continuation-passing, because a
 private theorem Exec.Frame.reachPermitStatcall
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame} {motive : Prop}
     (hcode : some frame.sevm.code.toList = Prog.compile (weth10 dp))
-    (bodyCursor : frame.CountedCursor dp ca
+    (bodyCursor : Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       (nonpayable (permit dp)) frame.post)
-    (k : ∀ (boundaryCursor : frame.CountedCursor dp ca
+    (k : ∀ (boundaryCursor : Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca
           ((weth10 dp).main :: weth10Aux)
           (table 0 ((weth10 dp).main :: weth10Aux))
           (Ninst.statcall ::: permitAfterStaticcall) frame.post)
@@ -981,7 +983,7 @@ private theorem Exec.Frame.reachPermitStatcall
     motive := by
   rcases bodyCursor.enterNonpayableFrame with
     ⟨permitCursor, hcodeWrap, hagreeWrap⟩
-  change frame.CountedCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (permitDeadlineLine +++
@@ -1003,7 +1005,7 @@ private theorem Exec.Frame.reachPermitStatcall
       line_inv) hdeadlineLine)
   rcases deadlineBranchCursor.selectBranchSplitFrame with hlive | hexpired
   · rcases hlive with ⟨liveCursor, hcodeBranch, hagreeBranch⟩
-    change frame.CountedCursor dp ca
+    change Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       (permitNoncePrepare +++
@@ -1040,7 +1042,7 @@ private theorem Exec.Frame.reachPermitStatcall
       .of_stor_eq (Line.of_inv Devm.getStor (by
         unfold permitStructPrepare argCopy cdc arg cdl mstoreAt pushList
         line_inv) hstructLine)
-    change frame.CountedCursor dp ca
+    change Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       (permitDomainTestLine dp +++
@@ -1072,7 +1074,7 @@ private theorem Exec.Frame.reachPermitStatcall
       hagreeWrap.trans (hagreeDeadline.trans (hagreeBranch.trans
         (hagreeNonce.trans (hagreeStruct.trans hagreeDomainTest))))
     have finish :
-        ∀ callCursor : frame.CountedCursor dp ca
+        ∀ callCursor : Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca
             ((weth10 dp).main :: weth10Aux)
             (table 0 ((weth10 dp).main :: weth10Aux))
             (.call permitRecoverSlot) frame.post,
@@ -1085,7 +1087,7 @@ private theorem Exec.Frame.reachPermitStatcall
       have hbody : body = permitRecover := by
         simpa [weth10, weth10Aux, permitRecoverSlot] using hget.symm
       subst body
-      change frame.CountedCursor dp ca
+      change Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca
         ((weth10 dp).main :: weth10Aux)
         (table 0 ((weth10 dp).main :: weth10Aux))
         ((permitDigest ++ permitRecoverPrepare) +++
@@ -1189,7 +1191,7 @@ empty. -/
 private theorem Exec.Frame.attributionInner_eq_nil_of_permitBodyCursor
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     (hcode : some frame.sevm.code.toList = Prog.compile (weth10 dp))
-    (bodyCursor : frame.CountedCursor dp ca
+    (bodyCursor : Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       (nonpayable (permit dp)) frame.post)
@@ -1198,7 +1200,7 @@ private theorem Exec.Frame.attributionInner_eq_nil_of_permitBodyCursor
     (hnodeleg : getDelegatedCodeAddress
       (Devm.getCode bodyCursor.pre (1 : B256).toAdr) = none) :
     Exec.attributionInner dp ca frame.run = [] := by
-  refine frame.reachPermitStatcall hcode bodyCursor ?_
+  refine Blanc.Weth10.Exec.Frame.reachPermitStatcall (frame := frame) hcode bodyCursor ?_
   intro boundaryCursor _gasWord _stack hoperands hcodeBoundary _hagree
   have hnodelegBoundary : getDelegatedCodeAddress
       (Devm.getCode boundaryCursor.pre (1 : B256).toAdr) = none := by
@@ -1215,14 +1217,14 @@ proper-descendant counted stream is write-free. -/
 private theorem Exec.Frame.attributionInner_writeFree_of_permitBodyCursor
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     (hcode : some frame.sevm.code.toList = Prog.compile (weth10 dp))
-    (bodyCursor : frame.CountedCursor dp ca
+    (bodyCursor : Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       (nonpayable (permit dp)) frame.post) :
     WriteFreeLedger (Exec.attributionInner dp ca frame.run) := by
-  refine frame.reachPermitStatcall hcode bodyCursor ?_
+  refine Blanc.Weth10.Exec.Frame.reachPermitStatcall (frame := frame) hcode bodyCursor ?_
   intro boundaryCursor _gasWord _stack _hoperands _hcodeBoundary _hagree
-  exact boundaryCursor.attributionInner_writeFree_of_statcall
+  exact Blanc.Weth10.Exec.Frame.CountedCursor.attributionInner_writeFree_of_statcall boundaryCursor
     (fun _ suffixCursor => suffixCursor.finishPermitAfterStaticcall)
 
 /-- Without any routing premise the crossing may retain an interpreted static
@@ -1235,7 +1237,7 @@ private theorem
     Exec.Frame.attributionInner_entryReadSound_of_permitBodyCursor
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     (hcode : some frame.sevm.code.toList = Prog.compile (weth10 dp))
-    (bodyCursor : frame.CountedCursor dp ca
+    (bodyCursor : Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       (nonpayable (permit dp)) frame.post)
@@ -1248,14 +1250,14 @@ private theorem
       (fun p s d out _ => Exec.CoreAllowanceReadSound dp ca p s d out)) :
     AllowanceEntryReadSound (Devm.getStor frame.pre ca)
       (Exec.attributionInner dp ca frame.run) := by
-  refine frame.reachPermitStatcall hcode bodyCursor ?_
+  refine Blanc.Weth10.Exec.Frame.reachPermitStatcall (frame := frame) hcode bodyCursor ?_
   intro boundaryCursor _gasWord _stack _hoperands hcodeBoundary hagree
   have hinstalled : some (boundaryCursor.pre.getCode ca).toList =
       Prog.compile (weth10 dp) := by
     rw [← congrFun (hentryCode.trans hcodeBoundary) ca]
     exact installed
   refine AllowanceEntryReadSound.congr (fun key hkey => ?_)
-    (boundaryCursor.attributionInner_entryReadSound_of_statcall hinstalled
+    (Blanc.Weth10.Exec.Frame.CountedCursor.attributionInner_entryReadSound_of_statcall boundaryCursor hinstalled
       hdeeper
       (fun _ suffixCursor => suffixCursor.finishPermitAfterStaticcall))
   have hfull := (hentryAgree.trans hagree) key hkey
@@ -1274,7 +1276,7 @@ the model admits an EIP-7702 delegation designator on address `1`, whose
 interpreted static child may retain counted view frames of its own. -/
 theorem Exec.Frame.attributionInner_eq_nil_of_permit
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm =
       selector "permit" [.address, .address, .uint256, .uint256,
         .uint 8, .bytes 32, .bytes 32])
@@ -1288,9 +1290,9 @@ theorem Exec.Frame.attributionInner_eq_nil_of_permit
       weth10Funcs dp := by
     rw [hselector]
     exact permit_mem_weth10Funcs dp
-  rcases frame.compiledSelectorBodyCursorFrame context hnonempty hmem with
+  rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorFrame (frame := frame) context hnonempty hmem with
     ⟨bodyCursor, hcodeEntry, -⟩
-  refine frame.attributionInner_eq_nil_of_permitBodyCursor
+  refine Blanc.Weth10.Exec.Frame.attributionInner_eq_nil_of_permitBodyCursor (frame := frame)
     context.invocation.2.2.2 bodyCursor
     (by rw [one_toAdr_local]; exact hprecomp) ?_
   rw [one_toAdr_local, ← congrFun hcodeEntry (1 : Adr)]
@@ -1303,7 +1305,7 @@ interpreted child it admits runs under `STATIC`, and no counted frame
 retained under `STATIC` commits an allowance word. -/
 theorem Exec.Frame.attributionInner_writeFree_of_permit
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm =
       selector "permit" [.address, .address, .uint256, .uint256,
         .uint 8, .bytes 32, .bytes 32])
@@ -1313,9 +1315,9 @@ theorem Exec.Frame.attributionInner_writeFree_of_permit
       weth10Funcs dp := by
     rw [hselector]
     exact permit_mem_weth10Funcs dp
-  rcases frame.compiledSelectorBodyCursorFrame context hnonempty hmem with
+  rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorFrame (frame := frame) context hnonempty hmem with
     ⟨bodyCursor, -, -⟩
-  exact frame.attributionInner_writeFree_of_permitBodyCursor
+  exact Blanc.Weth10.Exec.Frame.attributionInner_writeFree_of_permitBodyCursor (frame := frame)
     context.invocation.2.2.2 bodyCursor
 
 /-- A committed authentic `permit` frame's proper-descendant counted records
@@ -1324,7 +1326,7 @@ hypothesis about how address `1` resolves.  Together with write-freeness this
 is everything the strengthened carrier asks of the descendant stream. -/
 theorem Exec.Frame.attributionInner_entryReadSound_of_permit
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm =
       selector "permit" [.address, .address, .uint256, .uint256,
         .uint 8, .bytes 32, .bytes 32])
@@ -1338,9 +1340,9 @@ theorem Exec.Frame.attributionInner_entryReadSound_of_permit
       weth10Funcs dp := by
     rw [hselector]
     exact permit_mem_weth10Funcs dp
-  rcases frame.compiledSelectorBodyCursorFrame context hnonempty hmem with
+  rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorFrame (frame := frame) context hnonempty hmem with
     ⟨bodyCursor, hcodeEntry, hagreeEntry⟩
-  exact frame.attributionInner_entryReadSound_of_permitBodyCursor
+  exact Blanc.Weth10.Exec.Frame.attributionInner_entryReadSound_of_permitBodyCursor (frame := frame)
     context.invocation.2.2.2 bodyCursor context.invocation.2.1 hcodeEntry
     hagreeEntry context.installed.1 hdeeper
 
@@ -1458,7 +1460,7 @@ own record: `Exec.frameContribution` classifies `permit` alongside
 recovery `STATICCALL` before the `approvePermit` store. -/
 private theorem Exec.Frame.attributionStream_of_permit
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = permitSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
     Exec.attributionStream dp ca frame.run =
@@ -1483,7 +1485,7 @@ the runtime keys the body actually computes, so short and dirty calldata are
 covered on the same footing as a canonical ABI encoding. -/
 private theorem Exec.Frame.allowanceRegionEffect_ownRecord_of_permit
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = permitSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hsilent : PermitStatcallRegionSilent frame.sevm
@@ -1549,7 +1551,7 @@ the `STATICCALL` crossing, exactly as it does for the sibling callback
 arms. -/
 theorem Exec.Frame.allowanceRegionEffect_of_permit
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm =
       selector "permit" [.address, .address, .uint256, .uint256,
         .uint 8, .bytes 32, .bytes 32])
@@ -1559,13 +1561,13 @@ theorem Exec.Frame.allowanceRegionEffect_of_permit
         Exec.CoreAllowanceSound dp ca pc sevm pre out)) :
     AllowanceRegionEffect ca frame.pre frame.post
       (Exec.attributionStream dp ca frame.run) := by
-  rw [frame.attributionStream_of_permit context hselector hnonempty]
+  rw [Blanc.Weth10.Exec.Frame.attributionStream_of_permit (frame := frame) context hselector hnonempty]
   exact AllowanceRegionEffect.snoc_writeFree
-    (frame.allowanceRegionEffect_ownRecord_of_permit context hselector
+    (Blanc.Weth10.Exec.Frame.allowanceRegionEffect_ownRecord_of_permit (frame := frame) context hselector
       hnonempty
       (permitStatcallRegionSilent_of_forallDeeperAt context.invocation.2.1
         context.installed.1 hdeeper))
-    (frame.attributionInner_writeFree_of_permit context hselector hnonempty)
+    (Blanc.Weth10.Exec.Frame.attributionInner_writeFree_of_permit (frame := frame) context hselector hnonempty)
 
 /-- The strengthened carrier's `permit` arm.  The storage side is the arm
 above; the new entry-read clause splits exactly two ways along the
@@ -1590,7 +1592,7 @@ above; the hypotheses are those of the sibling callback arms with
 `Exec.CoreAllowanceSound` strengthened to its read-sound sibling. -/
 theorem Exec.Frame.allowanceRegionEffectSound_of_permit
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm =
       selector "permit" [.address, .address, .uint256, .uint256,
         .uint 8, .bytes 32, .bytes 32])
@@ -1600,15 +1602,15 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_permit
         Exec.CoreAllowanceReadSound dp ca pc sevm pre out)) :
     AllowanceRegionEffectSound ca frame.pre frame.post
       (Exec.attributionStream dp ca frame.run) := by
-  rw [frame.attributionStream_of_permit context hselector hnonempty]
+  rw [Blanc.Weth10.Exec.Frame.attributionStream_of_permit (frame := frame) context hselector hnonempty]
   exact AllowanceRegionEffectSound.snoc_writeFree
-    (frame.allowanceRegionEffect_ownRecord_of_permit context hselector
+    (Blanc.Weth10.Exec.Frame.allowanceRegionEffect_ownRecord_of_permit (frame := frame) context hselector
       hnonempty
       (permitStatcallRegionSilent_of_forallDeeperAt context.invocation.2.1
         context.installed.1
         (forallDeeperAt_allowanceSound_of_readSound hdeeper)))
-    (frame.attributionInner_writeFree_of_permit context hselector hnonempty)
-    (frame.attributionInner_entryReadSound_of_permit context hselector
+    (Blanc.Weth10.Exec.Frame.attributionInner_writeFree_of_permit (frame := frame) context hselector hnonempty)
+    (Blanc.Weth10.Exec.Frame.attributionInner_entryReadSound_of_permit (frame := frame) context hselector
       hnonempty hdeeper)
     (permit_own_read_eq_none hselector hnonempty)
 

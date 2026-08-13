@@ -181,11 +181,11 @@ theorem LedgerMirrors.append_comm {dp : DeployParams} {ca : Adr}
 theorem LedgerMirrors.ofFrame (dp : DeployParams) (ca : Adr)
     (frame : Exec.Frame) :
     LedgerMirrors dp ca [CountedFrame.ofFrame dp ca frame]
-      ((frame.flowAction? dp ca).toList) := by
+      ((Blanc.Weth10.Exec.Frame.flowAction? dp ca frame).toList) := by
   refine ⟨fun record hrecord => ?_, fun u => ?_⟩
   · rw [List.mem_singleton.mp hrecord]
     exact ⟨frame, rfl⟩
-  · cases haction : frame.flowAction? dp ca with
+  · cases haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
     | none =>
         simp [ledgerOutflow, CountedFrame.permanentOutflow,
           CountedFrame.ofFrame, haction]
@@ -200,8 +200,8 @@ theorem LedgerMirrors.frameContribution {dp : DeployParams} {ca : Adr}
     {innerActions : List FlowAction}
     (h : LedgerMirrors dp ca inner innerActions) :
     LedgerMirrors dp ca (Exec.frameContribution dp ca frame inner)
-      ((frame.flowAction? dp ca).toList ++ innerActions) := by
-  by_cases hexact : frame.exactInvocation dp ca
+      ((Blanc.Weth10.Exec.Frame.flowAction? dp ca frame).toList ++ innerActions) := by
+  by_cases hexact : Blanc.Weth10.Exec.Frame.exactInvocation dp ca frame
   · by_cases hlast : ownRecordLast frame.sevm = true
     · rw [Exec.frameContribution_eq_append dp ca frame inner hexact hlast]
       exact h.append_comm (LedgerMirrors.ofFrame dp ca frame)
@@ -209,11 +209,11 @@ theorem LedgerMirrors.frameContribution {dp : DeployParams} {ca : Adr}
         (by simpa using hlast)]
       exact (LedgerMirrors.ofFrame dp ca frame).append h
   · rw [Exec.frameContribution_eq_inner dp ca frame inner hexact]
-    have hnone : frame.flowAction? dp ca = none := by
-      cases haction : frame.flowAction? dp ca with
+    have hnone : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = none := by
+      cases haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
       | none => rfl
       | some action =>
-          exact absurd (frame.exactInvocation_of_flowAction?_eq_some haction)
+          exact absurd (Blanc.Weth10.Exec.Frame.exactInvocation_of_flowAction?_eq_some haction)
             hexact
     simpa [hnone] using h
 
@@ -247,7 +247,7 @@ theorem Exec.ledgerMirrors_attributionInner (dp : DeployParams) (ca : Adr)
       split
       · rename_i hs
         rw [Exec.flowActions_eq_root_append_descendants child
-          (Blanc.Weth10.Frame.raw_commits_of_settlementCommits hs)]
+          (Blanc.Frame.raw_commits_of_settlementCommits hs)]
         exact LedgerMirrors.frameContribution _ ihChild
       · exact .nil dp ca
 
@@ -383,7 +383,7 @@ witness. -/
 def CountedFrame.HasRootedOrigin (dp : DeployParams) (ca : Adr)
     (record : CountedFrame) : Prop :=
   ∃ frame : Exec.Frame, record = CountedFrame.ofFrame dp ca frame ∧
-    frame.IsRoot ∧ frame.exactInvocation dp ca
+    Blanc.Weth10.Exec.Frame.IsRoot frame ∧ Blanc.Weth10.Exec.Frame.exactInvocation dp ca frame
 
 theorem CountedFrame.HasRootedOrigin.hasFrameOrigin
     {dp : DeployParams} {ca : Adr} {record : CountedFrame}
@@ -418,7 +418,7 @@ theorem Exec.mem_frameContribution {dp : DeployParams} {ca : Adr}
     {frame : Exec.Frame} {inner : List CountedFrame} {record : CountedFrame}
     (hmem : record ∈ Exec.frameContribution dp ca frame inner) :
     (record = CountedFrame.ofFrame dp ca frame ∧
-        frame.exactInvocation dp ca) ∨ record ∈ inner := by
+        Blanc.Weth10.Exec.Frame.exactInvocation dp ca frame) ∨ record ∈ inner := by
   unfold Exec.frameContribution at hmem
   split at hmem
   · rename_i hexact
@@ -438,9 +438,9 @@ theorem Exec.exists_descendantFrame_of_mem_attributionInner
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out) :
     ∀ record ∈ Exec.attributionInner dp ca run,
-      ∃ frame ∈ Blanc.Weth10.Exec.descendantFrames run,
+      ∃ frame ∈ Blanc.Exec.descendantFrames run,
         record = CountedFrame.ofFrame dp ca frame ∧
-          frame.exactInvocation dp ca := by
+          Blanc.Weth10.Exec.Frame.exactInvocation dp ca frame := by
   induction run with
   | halt hstep =>
       intro record hmem
@@ -449,7 +449,7 @@ theorem Exec.exists_descendantFrame_of_mem_attributionInner
   | cont hstep next ih =>
       intro record hmem
       simp only [Exec.attributionInner] at hmem
-      simpa only [Blanc.Weth10.Exec.descendantFrames] using ih record hmem
+      simpa only [Blanc.Exec.descendantFrames] using ih record hmem
   | doneErr hstep henter hresume =>
       intro record hmem
       simp only [Exec.attributionInner] at hmem
@@ -457,7 +457,7 @@ theorem Exec.exists_descendantFrame_of_mem_attributionInner
   | doneOk hstep henter hresume next ih =>
       intro record hmem
       simp only [Exec.attributionInner] at hmem
-      simpa only [Blanc.Weth10.Exec.descendantFrames] using ih record hmem
+      simpa only [Blanc.Exec.descendantFrames] using ih record hmem
   | runErr hstep henter child hresume ihChild =>
       intro record hmem
       simp only [Exec.attributionInner] at hmem
@@ -465,7 +465,7 @@ theorem Exec.exists_descendantFrame_of_mem_attributionInner
   | runOk hstep henter child hresume next ihChild ihNext =>
       intro record hmem
       simp only [Exec.attributionInner] at hmem
-      simp only [Blanc.Weth10.Exec.descendantFrames]
+      simp only [Blanc.Exec.descendantFrames]
       rcases List.mem_append.mp hmem with hhere | hnext
       · split at hhere
         · rename_i hsettles
@@ -489,17 +489,17 @@ theorem Exec.exists_committedFrame_of_mem_attributionStream
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out) :
     ∀ record ∈ Exec.attributionStream dp ca run,
-      ∃ frame ∈ Blanc.Weth10.Exec.committedFrames run,
+      ∃ frame ∈ Blanc.Exec.committedFrames run,
         record = CountedFrame.ofFrame dp ca frame ∧
-          frame.exactInvocation dp ca := by
+          Blanc.Weth10.Exec.Frame.exactInvocation dp ca frame := by
   intro record hmem
   unfold Exec.attributionStream at hmem
   split at hmem
   · rename_i hcommits
-    have hframes : Blanc.Weth10.Exec.committedFrames run =
+    have hframes : Blanc.Exec.committedFrames run =
         Exec.Frame.ofRun run hcommits ::
-          Blanc.Weth10.Exec.descendantFrames run := by
-      unfold Blanc.Weth10.Exec.committedFrames
+          Blanc.Exec.descendantFrames run := by
+      unfold Blanc.Exec.committedFrames
       rw [dif_pos hcommits]
     rcases Exec.mem_frameContribution hmem with ⟨hrecord, hexact⟩ | hinner
     · exact ⟨_, by rw [hframes]; exact List.mem_cons_self, hrecord, hexact⟩
@@ -800,7 +800,7 @@ theorem primaryDebit_witness {e : Sevm} {pre post : Devm} {u : Adr}
 and debit computed from that frame's entry context. -/
 theorem Exec.Frame.flowAction?_inv {dp : DeployParams} {ca : Adr}
     {frame : Exec.Frame} {action : FlowAction}
-    (haction : frame.flowAction? dp ca = some action) :
+    (haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action) :
     primaryFlowAtom frame.sevm = some action.atom ∧
       action.debit =
         primaryDebitProvenance frame.sevm frame.pre frame.post := by

@@ -51,7 +51,7 @@ def Exec.descendantActions (dp : DeployParams) (ca : Adr)
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out) : List FlowAction :=
   (Exec.descendantFrames run).filterMap
-    (Exec.Frame.flowAction? dp ca)
+    (Blanc.Weth10.Exec.Frame.flowAction? dp ca)
 
 /-- On a committed execution, the retained action traversal is the optional
 root action followed by the proper descendants. -/
@@ -61,12 +61,12 @@ theorem Exec.flowActions_eq_root_append_descendants
     (run : Exec pc sevm pre out)
     (hcommits : Execution.commits out = true) :
     Exec.flowActions dp ca run =
-      (Exec.Frame.flowAction? dp ca
+      (Blanc.Weth10.Exec.Frame.flowAction? dp ca
         (Exec.Frame.ofRun run hcommits)).toList ++
         Exec.descendantActions dp ca run := by
   unfold Exec.flowActions Exec.descendantActions Exec.committedFrames
   simp only [dif_pos hcommits, List.filterMap_cons, Option.toList]
-  cases Exec.Frame.flowAction? dp ca
+  cases Blanc.Weth10.Exec.Frame.flowAction? dp ca
       (Exec.Frame.ofRun run hcommits) <;> rfl
 
 /-- In a successful spawned step, descendant actions split into the child
@@ -85,15 +85,15 @@ theorem Exec.descendantActions_runOk
     (next : Exec pc' sevm devm' out) :
     Exec.descendantActions dp ca
         (Exec.runOk hstep henter child hr next) =
-      (if _h : Blanc.Weth10.Frame.settlementCommits f raw = true then
+      (if _h : Blanc.Frame.settlementCommits f raw = true then
         Exec.flowActions dp ca child
        else []) ++ Exec.descendantActions dp ca next := by
   unfold Exec.descendantActions Exec.flowActions
   simp only [Exec.descendantFrames, Exec.committedFrames,
     List.filterMap_append]
-  by_cases hs : Blanc.Weth10.Frame.settlementCommits f raw = true
+  by_cases hs : Blanc.Frame.settlementCommits f raw = true
   · have hc : Execution.commits raw = true :=
-      Blanc.Weth10.Frame.raw_commits_of_settlementCommits hs
+      Blanc.Frame.raw_commits_of_settlementCommits hs
     simp only [dif_pos hs, dif_pos hc]
   · simp only [dif_neg hs, List.filterMap_nil, List.nil_append]
 
@@ -1197,10 +1197,10 @@ theorem ProcessMessage.storageSegmentEffect_of_settlement
       some msg.code.toList = Prog.compile (weth10 dp))
     (hbelow : StorageSegmentTraceBelow dp ca depth) :
     Nonempty (StorageSegmentEffect ca parent post
-      (if Blanc.Weth10.Frame.settlementCommits
+      (if Blanc.Frame.settlementCommits
           (Frame.ofCall msg) out = true
        then Exec.flowActions dp ca run else [])) := by
-  by_cases hsettle : Blanc.Weth10.Frame.settlementCommits
+  by_cases hsettle : Blanc.Frame.settlementCommits
       (Frame.ofCall msg) out = true
   · rw [if_pos hsettle]
     let trace : ProcessMessageTrace msg (.ok post) :=
@@ -1213,7 +1213,7 @@ theorem ProcessMessage.storageSegmentEffect_of_settlement
       have hnone : post.error.isNone ≠ true := by
         intro hnone
         apply hsettle
-        unfold Blanc.Weth10.Frame.settlementCommits
+        unfold Blanc.Frame.settlementCommits
         rw [← hset]
         exact hnone
       cases he : post.error <;> simp_all
@@ -1243,10 +1243,10 @@ theorem ProcessMessage.storageSegmentEffect_of_bodyEffect
         (Execution.committedPost out committed)
         (Exec.flowActions dp ca run))) :
     Nonempty (StorageSegmentEffect ca parent post
-      (if Blanc.Weth10.Frame.settlementCommits
+      (if Blanc.Frame.settlementCommits
           (Frame.ofCall msg) out = true
        then Exec.flowActions dp ca run else [])) := by
-  by_cases hsettle : Blanc.Weth10.Frame.settlementCommits
+  by_cases hsettle : Blanc.Frame.settlementCommits
       (Frame.ofCall msg) out = true
   · rw [if_pos hsettle]
     have committed : Execution.commits out = true :=
@@ -1291,7 +1291,7 @@ theorem ProcessMessage.storageSegmentEffect_of_bodyEffect
       have hnone : post.error.isNone ≠ true := by
         intro hnone
         apply hsettle
-        unfold Blanc.Weth10.Frame.settlementCommits
+        unfold Blanc.Frame.settlementCommits
         rw [← hset]
         exact hnone
       cases he : post.error <;> simp_all
@@ -1436,10 +1436,10 @@ theorem ProcessCreateMessage.storageSegmentEffect_of_bodyEffect
         (Execution.committedPost out committed)
         (Exec.flowActions dp ca run))) :
     Nonempty (StorageSegmentEffect ca parent post
-      (if Blanc.Weth10.Frame.settlementCommits
+      (if Blanc.Frame.settlementCommits
           (Frame.ofCreate msg) out = true
        then Exec.flowActions dp ca run else [])) := by
-  by_cases hsettle : Blanc.Weth10.Frame.settlementCommits
+  by_cases hsettle : Blanc.Frame.settlementCommits
       (Frame.ofCreate msg) out = true
   · rw [if_pos hsettle]
     have committed : Execution.commits out = true :=
@@ -1447,7 +1447,7 @@ theorem ProcessCreateMessage.storageSegmentEffect_of_bodyEffect
     rcases hbody committed with ⟨body⟩
     have hset := (RunFrame.some_inv hprocess).2
     have hnone : post.error.isNone = true := by
-      unfold Blanc.Weth10.Frame.settlementCommits at hsettle
+      unfold Blanc.Frame.settlementCommits at hsettle
       rw [← hset] at hsettle
       exact hsettle
     have herr : post.error.isSome = false := by
@@ -1508,7 +1508,7 @@ theorem ProcessCreateMessage.storageSegmentEffect_of_bodyEffect
       have hnone : post.error.isNone ≠ true := by
         intro hnone
         apply hsettle
-        unfold Blanc.Weth10.Frame.settlementCommits
+        unfold Blanc.Frame.settlementCommits
         rw [← hset]
         exact hnone
       cases he : post.error <;> simp_all
@@ -1544,7 +1544,7 @@ theorem GenericCall.storageSegmentDelta_some
       some code.toList = Prog.compile (weth10 dp))
     (hbelow : StorageSegmentTraceBelow dp ca depth) :
     Nonempty (StorageSegmentEffect ca pre inter
-      (if Blanc.Weth10.Frame.settlementCommits
+      (if Blanc.Frame.settlementCommits
           (Frame.ofCall
             (callMsg sevm (pre.withReturnData []) gas value caller target
               codeAddress stv isStatic ((pre.memory.read ii is).1)
@@ -1603,7 +1603,7 @@ theorem GenericCall.storageSegmentDelta_some
           (effect.append
             (StorageSegmentEffect.of_getStorCode_eq
               hpostStorage hpostCode)) using 1
-      by_cases hretain : Blanc.Weth10.Frame.settlementCommits
+      by_cases hretain : Blanc.Frame.settlementCommits
           (Frame.ofCall
             (callMsg sevm (pre.withReturnData []) gas value caller target
               codeAddress stv isStatic ((pre.memory.read ii is).1) code
@@ -1629,7 +1629,7 @@ theorem GenericCall.storageSegmentEffect_some_of_bodyEffect
         (Execution.committedPost childOut committed)
         (Exec.flowActions dp ca childRun))) :
     Nonempty (StorageSegmentEffect ca pre inter
-      (if Blanc.Weth10.Frame.settlementCommits
+      (if Blanc.Frame.settlementCommits
           (Frame.ofCall
             (callMsg sevm (pre.withReturnData []) gas value caller target
               codeAddress stv isStatic ((pre.memory.read ii is).1)
@@ -1674,7 +1674,7 @@ theorem GenericCall.storageSegmentEffect_some_of_bodyEffect
           (effect.append
             (StorageSegmentEffect.of_getStorCode_eq
               hpostStorage hpostCode)) using 1
-      by_cases hretain : Blanc.Weth10.Frame.settlementCommits
+      by_cases hretain : Blanc.Frame.settlementCommits
           (Frame.ofCall
             (callMsg sevm (pre.withReturnData []) gas value caller target
               codeAddress stv isStatic ((pre.memory.read ii is).1) code
@@ -1753,7 +1753,7 @@ theorem GenericCreate.storageSegmentEffect_some
       Prog.compile (weth10 dp))
     (hbelow : StorageSegmentTraceBelow dp ca depth) :
     Nonempty (StorageSegmentEffect ca pre post
-      (if Blanc.Weth10.Frame.settlementCommits
+      (if Blanc.Frame.settlementCommits
           (Frame.ofCreate
             (createMsg sevm
               (addAccessedAddress
@@ -1850,7 +1850,7 @@ theorem GenericCreate.storageSegmentEffect_some_of_bodyEffect
         (Execution.committedPost raw committed)
         (Exec.flowActions dp ca childRun))) :
     Nonempty (StorageSegmentEffect ca pre post
-      (if Blanc.Weth10.Frame.settlementCommits
+      (if Blanc.Frame.settlementCommits
           (Frame.ofCreate
             (createMsg sevm
               (addAccessedAddress
@@ -1917,7 +1917,7 @@ theorem GenericCreate.storageSegmentEffect_some_of_bodyEffect
             (effect.append
               (StorageSegmentEffect.of_getStorCode_eq
                 hpostStorage hpostCode)) using 1
-        by_cases hretain : Blanc.Weth10.Frame.settlementCommits
+        by_cases hretain : Blanc.Frame.settlementCommits
             (Frame.ofCreate
               (createMsg sevm
                 (addAccessedAddress
@@ -2113,7 +2113,7 @@ theorem Xinst.storageSegmentEffect_some
       some frame.inner.code.toList = Prog.compile (weth10 dp))
     (hbelow : StorageSegmentTraceBelow dp ca depth) :
     Nonempty (StorageSegmentEffect ca pre post
-      (if Blanc.Weth10.Frame.settlementCommits frame raw = true
+      (if Blanc.Frame.settlementCommits frame raw = true
        then Exec.flowActions dp ca child else [])) := by
   rcases Xinst.step_shape sevm pre x with
     ⟨ex, hs, hprefix⟩ |
@@ -2179,7 +2179,7 @@ theorem Xinst.storageSegmentEffect_some_of_bodyEffect
         (Execution.committedPost raw committed)
         (Exec.flowActions dp ca child))) :
     Nonempty (StorageSegmentEffect ca pre post
-      (if Blanc.Weth10.Frame.settlementCommits frame raw = true
+      (if Blanc.Frame.settlementCommits frame raw = true
        then Exec.flowActions dp ca child else [])) := by
   rcases Xinst.step_shape sevm pre x with
     ⟨ex, hs, hprefix⟩ |
@@ -2293,7 +2293,7 @@ theorem Exec.flowActions_eq_descendantActions_of_currentTarget_ne
     (hforeign : sevm.currentTarget ≠ ca) :
     Exec.flowActions dp ca run = Exec.descendantActions dp ca run := by
   rw [Exec.flowActions_eq_root_append_descendants run committed]
-  simp [Exec.Frame.flowAction?, Exec.Frame.exactInvocation,
+  simp [Blanc.Weth10.Exec.Frame.flowAction?, Blanc.Weth10.Exec.Frame.exactInvocation,
     exactInvocation, Exec.Frame.ofRun, hforeign]
 
 /-- Proof-indexed storage predicate consumed by `lift_core`.  Root freshness
@@ -2334,7 +2334,7 @@ consumer of selector chronology because it exposes the authentic frame and
 its proof-indexed descendant ledger directly. -/
 def CompiledFrameStorageHandler (dp : DeployParams) (ca : Adr) : Prop :=
   ∀ (frame : Exec.Frame),
-    frame.AuthenticContext dp ca →
+    Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame →
     ForallDeeperAt frame.sevm.depth ca (weth10 dp)
       (fun pc sevm pre out _ =>
         Exec.CoreStorageSound dp ca pc sevm pre out) →
@@ -2350,7 +2350,7 @@ theorem CompiledFrameStorageHandler.compiledBodyStorageHandler
   intro sevm pre post hrun htarget hdeeper run committed installed rootDirect
   let frame := Exec.Frame.ofRun run committed
   have hrootDirect := rootDirect htarget
-  have context : frame.AuthenticContext dp ca := by
+  have context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame := by
     refine ⟨hrootDirect.1, ?_, installed⟩
     refine ⟨rfl, htarget, hrootDirect.2, ?_⟩
     exact (installed.2 htarget).1
@@ -2938,10 +2938,10 @@ private theorem Exec.Frame.CompiledCursor.peelChildlessLine_of_sourceShape
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {table : List (Nat × Func)}
     {body : Func} {line : Line} {tail : Func} {final : Devm}
-    (cursor : frame.CompiledCursor dp ca fs table body final)
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table body final)
     (shape : body = line +++ tail)
     (hchildless : ∀ n ∈ line, NinstIsChildless n) :
-    ∃ tailCursor : frame.CompiledCursor dp ca fs table tail final,
+    ∃ tailCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table tail final,
       Line.Run frame.sevm cursor.pre line tailCursor.pre ∧
       tailCursor.actions = cursor.actions := by
   subst body
@@ -2955,10 +2955,10 @@ theorem Exec.Frame.CompiledCursor.finishChildlessLine
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {table : List (Nat × Func)}
     {line : Line} {i : Linst} {final : Devm}
-    (cursor : frame.CompiledCursor dp ca fs table
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table
       (line +++ Func.last i) final)
     (hchildless : ∀ n ∈ line, NinstIsChildless n) :
-    frame.descendantFlowActions dp ca = cursor.actions := by
+    Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame = cursor.actions := by
   rcases cursor.peelChildlessLine hchildless with
     ⟨lastCursor, _hline, hactions⟩
   exact lastCursor.finishLast.trans hactions
@@ -2969,10 +2969,10 @@ private theorem Exec.Frame.CompiledCursor.finishChildlessLine_of_sourceShape
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {table : List (Nat × Func)}
     {body : Func} {line : Line} {i : Linst} {final : Devm}
-    (cursor : frame.CompiledCursor dp ca fs table body final)
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table body final)
     (shape : body = line +++ Func.last i)
     (hchildless : ∀ n ∈ line, NinstIsChildless n) :
-    frame.descendantFlowActions dp ca = cursor.actions := by
+    Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame = cursor.actions := by
   subst body
   exact cursor.finishChildlessLine hchildless
 
@@ -2984,14 +2984,14 @@ theorem Exec.Frame.CompiledCursor.finishChildlessBranch
     {fs : List Func} {table : List (Nat × Func)}
     {linePrefix left right : Line} {leftLast rightLast : Linst}
     {final : Devm}
-    (cursor : frame.CompiledCursor dp ca fs table
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table
       (linePrefix +++
         ((left +++ Func.last leftLast) <?>
           (right +++ Func.last rightLast))) final)
     (hprefix : ∀ n ∈ linePrefix, NinstIsChildless n)
     (hleft : ∀ n ∈ left, NinstIsChildless n)
     (hright : ∀ n ∈ right, NinstIsChildless n) :
-    frame.descendantFlowActions dp ca = cursor.actions := by
+    Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame = cursor.actions := by
   rcases cursor.peelChildlessLine hprefix with
     ⟨branchCursor, _hline, hbranchActions⟩
   rcases branchCursor.selectBranchWithActions with hleftArm | hrightArm
@@ -3009,7 +3009,7 @@ private theorem Exec.Frame.CompiledCursor.finishChildlessBranch_of_sourceShape
     {fs : List Func} {table : List (Nat × Func)}
     {body : Func} {linePrefix left right : Line}
     {leftLast rightLast : Linst} {final : Devm}
-    (cursor : frame.CompiledCursor dp ca fs table body final)
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table body final)
     (shape : body =
       linePrefix +++
         ((left +++ Func.last leftLast) <?>
@@ -3017,7 +3017,7 @@ private theorem Exec.Frame.CompiledCursor.finishChildlessBranch_of_sourceShape
     (hprefix : ∀ n ∈ linePrefix, NinstIsChildless n)
     (hleft : ∀ n ∈ left, NinstIsChildless n)
     (hright : ∀ n ∈ right, NinstIsChildless n) :
-    frame.descendantFlowActions dp ca = cursor.actions := by
+    Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame = cursor.actions := by
   subst body
   exact cursor.finishChildlessBranch hprefix hleft hright
 
@@ -3025,10 +3025,10 @@ private theorem Exec.Frame.CompiledCursor.finishChildlessBranch_of_sourceShape
 original retained execution has no proper-descendant flow actions. -/
 theorem Exec.Frame.descendantFlowActions_eq_nil_of_receive
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hempty : frame.sevm.data.length.toB256 = 0) :
-    frame.descendantFlowActions dp ca = [] := by
-  rcases frame.compiledMainCursor context with
+    Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame = [] := by
+  rcases Blanc.Weth10.Exec.Frame.compiledMainCursor (frame := frame) context with
     ⟨mainCursor, hmainActions⟩
   rcases mainCursor.peelChildlessLine_of_sourceShape
       (weth10Main_entry_sourceShape dp)
@@ -3063,14 +3063,14 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_receive
 the receive arm, so its exact original-frame descendant ledger is empty. -/
 theorem Exec.Frame.descendantFlowActions_eq_nil_of_deposit
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = depositSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    frame.descendantFlowActions dp ca = [] := by
+    Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame = [] := by
   have hmem : (Sevm.selector frame.sevm, deposit) ∈ weth10Funcs dp := by
     rw [hselector]
     simp [depositSelector, weth10Funcs]
-  rcases frame.compiledSelectorBodyCursor context hnonempty hmem with
+  rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursor (frame := frame) context hnonempty hmem with
     ⟨bodyCursor, _hstack, hbodyActions⟩
   have hdesc := bodyCursor.finishChildlessLine_of_sourceShape
     deposit_sourceShape
@@ -3082,14 +3082,14 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_deposit
 stop, hence it also has an empty proper-descendant ledger. -/
 theorem Exec.Frame.descendantFlowActions_eq_nil_of_depositTo
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = depositToSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    frame.descendantFlowActions dp ca = [] := by
+    Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame = [] := by
   have hmem : (Sevm.selector frame.sevm, depositTo) ∈ weth10Funcs dp := by
     rw [hselector]
     simp [depositToSelector, weth10Funcs]
-  rcases frame.compiledSelectorBodyCursor context hnonempty hmem with
+  rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursor (frame := frame) context hnonempty hmem with
     ⟨bodyCursor, _hstack, hbodyActions⟩
   have hdesc := bodyCursor.finishChildlessLine_of_sourceShape
     depositTo_sourceShape
@@ -3103,13 +3103,13 @@ ending in a terminal instruction has an empty proper-descendant ledger. -/
 theorem Exec.Frame.descendantFlowActions_eq_nil_of_nonpayableChildless
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {line : Line} {i : Linst}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hmem : (Sevm.selector frame.sevm,
       nonpayable (line +++ Func.last i)) ∈ weth10Funcs dp)
     (hchildless : ∀ n ∈ line, NinstIsChildless n) :
-    frame.descendantFlowActions dp ca = [] := by
-  rcases frame.compiledSelectorBodyCursor context hnonempty hmem with
+    Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame = [] := by
+  rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursor (frame := frame) context hnonempty hmem with
     ⟨wrapperCursor, _hstack, hwrapperActions⟩
   rcases wrapperCursor.enterNonpayable with
     ⟨bodyCursor, _hbodyStack, hbodyActions⟩
@@ -3148,16 +3148,16 @@ branch tail-calls a fixed reverter and therefore cannot be the cursor of this
 committed frame. -/
 theorem Exec.Frame.descendantFlowActions_eq_nil_of_transferNonzero
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = transferSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hto : Sevm.argWord frame.sevm 0 ≠ 0) :
-    frame.descendantFlowActions dp ca = [] := by
+    Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame = [] := by
   have hmem :
       (Sevm.selector frame.sevm, nonpayable transfer) ∈ weth10Funcs dp := by
     rw [hselector]
     simp [transferSelector, weth10Funcs]
-  rcases frame.compiledSelectorBodyCursor context hnonempty hmem with
+  rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursor (frame := frame) context hnonempty hmem with
     ⟨wrapperCursor, _hwrapperStack, hwrapperActions⟩
   rcases wrapperCursor.enterNonpayable with
     ⟨transferCursor, _htransferStack, htransferActions⟩
@@ -3219,9 +3219,9 @@ exact invocation guard and primary atom are fixed, the `some` payload of
 private theorem action_eq_of_primaryFlowAtom
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {atom : FlowAtom} {action : FlowAction}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hatom : primaryFlowAtom frame.sevm = some atom)
-    (haction : frame.flowAction? dp ca = some action) :
+    (haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action) :
     action =
       { atom
         credit := atom.creditOccurrence frame.pre ca
@@ -3230,7 +3230,7 @@ private theorem action_eq_of_primaryFlowAtom
         currentTarget := frame.sevm.currentTarget
         codeAddress := frame.sevm.codeAddress
         depth := frame.sevm.depth } := by
-  simp only [Exec.Frame.flowAction?, if_pos context.invocation, hatom,
+  simp only [Blanc.Weth10.Exec.Frame.flowAction?, if_pos context.invocation, hatom,
     Option.map_some, Option.some.injEq] at haction
   exact haction.symm
 
@@ -3296,22 +3296,22 @@ theorem SelectsNoPrimaryFlow.primaryFlowAtom_eq_none
 
 theorem Exec.Frame.flowAction_eq_none_of_selectsNoPrimaryFlow
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (selected : SelectsNoPrimaryFlow frame.sevm)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    frame.flowAction? dp ca = none := by
-  simp [Exec.Frame.flowAction?, context.invocation,
+    Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = none := by
+  simp [Blanc.Weth10.Exec.Frame.flowAction?, context.invocation,
     selected.primaryFlowAtom_eq_none hnonempty]
 
 /-- The ordinary `approve` body contains no recursive instruction, so a
 successful authentic frame has no proper-descendant WETH flow actions. -/
 theorem Exec.Frame.descendantFlowActions_eq_nil_of_approve
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm =
       selector "approve" [.address, .uint256])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    frame.descendantFlowActions dp ca = [] := by
+    Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame = [] := by
   have hmem : (Sevm.selector frame.sevm,
       nonpayable (approveLine +++ Func.ret)) ∈ weth10Funcs dp := by
     rw [hselector]
@@ -3321,7 +3321,7 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_approve
     simp [approveLine, approvePrefix, returnTrueLine,
       argCopy, cdc, arg, cdl, allowanceKeyFromMemory, Blanc.logApprove,
       NinstIsChildless, Ninst.pushB256, mstoreAt, logWith, pushList]
-  exact frame.descendantFlowActions_eq_nil_of_nonpayableChildless
+  exact Blanc.Weth10.Exec.Frame.descendantFlowActions_eq_nil_of_nonpayableChildless (frame := frame)
     context hnonempty hmem hchildless
 
 /-- An actual execution starting with installed WETH10 code preserves that
@@ -3355,9 +3355,9 @@ ledger and global code preservation close the exact frame effect. -/
 theorem Exec.Frame.ClassifiedActionLedger.storageSegmentEffect
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {action : FlowAction}
-    (ledger : frame.ClassifiedActionLedger dp ca action)
+    (ledger : Blanc.Weth10.Exec.Frame.ClassifiedActionLedger dp ca frame action)
     (accounting : RichStorageAccounting ca frame.pre frame.post action
-      (frame.descendantFlowActions dp ca)) :
+      (Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame)) :
     Nonempty (StorageSegmentEffect ca frame.pre frame.post
       (Exec.flowActions dp ca frame.run)) := by
   have hcode : frame.pre.getCode ca = frame.post.getCode ca :=
@@ -3371,9 +3371,9 @@ theorem Exec.Frame.ClassifiedActionLedger.storageSegmentEffect
 its chronological descendants is already the full frame effect. -/
 theorem Exec.Frame.HasNoWethBalanceOwnEffect.storageSegmentEffect
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (own : frame.HasNoWethBalanceOwnEffect dp ca)
+    (own : Blanc.Weth10.Exec.Frame.HasNoWethBalanceOwnEffect dp ca frame)
     (delta : StorageSegmentDelta ca frame.pre frame.post
-      (frame.descendantFlowActions dp ca)) :
+      (Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame)) :
     Nonempty (StorageSegmentEffect ca frame.pre frame.post
       (Exec.flowActions dp ca frame.run)) := by
   have hcode : frame.pre.getCode ca = frame.post.getCode ca :=
@@ -3382,7 +3382,7 @@ theorem Exec.Frame.HasNoWethBalanceOwnEffect.storageSegmentEffect
   have hframe : Exec.Frame.ofRun frame.run frame.committed = frame := by
     cases frame
     rfl
-  have hroot : Exec.Frame.flowAction? dp ca
+  have hroot : Blanc.Weth10.Exec.Frame.flowAction? dp ca
       (Exec.Frame.ofRun frame.run frame.committed) = none := by
     rw [hframe]
     exact own.unclassified
@@ -3390,7 +3390,7 @@ theorem Exec.Frame.HasNoWethBalanceOwnEffect.storageSegmentEffect
       frame.run frame.committed]
   simp only [hroot, Option.toList, List.nil_append]
   change Nonempty (StorageSegmentEffect ca frame.pre frame.post
-    (frame.descendantFlowActions dp ca))
+    (Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame))
   exact ⟨⟨delta, hcode⟩⟩
 
 /-- Final proof-indexed storage package for one authentic compiled frame.
@@ -3399,19 +3399,19 @@ composition; the no-flow arm accounts only for the actual descendants. -/
 inductive Exec.Frame.HasProofIndexedStorageAccounting
     (dp : DeployParams) (ca : Adr) (frame : Exec.Frame) : Prop
   | flow {action : FlowAction}
-      (ledger : frame.ClassifiedActionLedger dp ca action)
+      (ledger : Blanc.Weth10.Exec.Frame.ClassifiedActionLedger dp ca frame action)
       (accounting : RichStorageAccounting ca frame.pre frame.post action
-        (frame.descendantFlowActions dp ca))
+        (Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame))
   | noFlow
-      (own : frame.HasNoWethBalanceOwnEffect dp ca)
+      (own : Blanc.Weth10.Exec.Frame.HasNoWethBalanceOwnEffect dp ca frame)
       (accounting : NoFlowStorageAccounting ca frame.pre frame.post
-        (frame.descendantFlowActions dp ca))
+        (Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame))
 
 /-- Either exhaustive frame-accounting arm yields the exact storage effect
 for the frame's complete settlement-pruned action ledger. -/
 theorem Exec.Frame.HasProofIndexedStorageAccounting.storageSegmentEffect
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (accounting : frame.HasProofIndexedStorageAccounting dp ca) :
+    (accounting : Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting dp ca frame) :
     Nonempty (StorageSegmentEffect ca frame.pre frame.post
       (Exec.flowActions dp ca frame.run)) := by
   cases accounting with
@@ -3426,7 +3426,7 @@ projection from the compiled operational classification, not an endpoint
 assumption. -/
 theorem Exec.Frame.HasNoWethBalanceOwnEffect.weth10Silent_of_not_recursive
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (own : frame.HasNoWethBalanceOwnEffect dp ca)
+    (own : Blanc.Weth10.Exec.Frame.HasNoWethBalanceOwnEffect dp ca frame)
     (happroveCall : Sevm.selector frame.sevm ≠ approveAndCallSelector)
     (hpermit : Sevm.selector frame.sevm ≠ permitSelector) :
     Stor.Weth10Silent (Devm.getStor frame.pre ca)
@@ -3461,11 +3461,11 @@ theorem Exec.Frame.HasNoWethBalanceOwnEffect.weth10Silent_of_not_recursive
 leaf into the final proof-indexed storage package. -/
 theorem Exec.Frame.HasNoWethBalanceOwnEffect.proofIndexed_of_childless
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (own : frame.HasNoWethBalanceOwnEffect dp ca)
+    (own : Blanc.Weth10.Exec.Frame.HasNoWethBalanceOwnEffect dp ca frame)
     (happroveCall : Sevm.selector frame.sevm ≠ approveAndCallSelector)
     (hpermit : Sevm.selector frame.sevm ≠ permitSelector)
-    (chronology : frame.descendantFlowActions dp ca = []) :
-    frame.HasProofIndexedStorageAccounting dp ca :=
+    (chronology : Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame = []) :
+    Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting dp ca frame :=
   .noFlow own (.silent
     (own.weth10Silent_of_not_recursive happroveCall hpermit) chronology)
 
@@ -3493,9 +3493,9 @@ def Exec.Frame.ChildlessNoFlowStorageCase
 storage accounting for the original retained execution. -/
 theorem Exec.Frame.hasProofIndexedStorageAccounting_of_childlessNoFlow
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
-    (branch : frame.ChildlessNoFlowStorageCase dp) :
-    frame.HasProofIndexedStorageAccounting dp ca := by
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
+    (branch : Blanc.Weth10.Exec.Frame.ChildlessNoFlowStorageCase dp frame) :
+    Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting dp ca frame := by
   rcases branch with ⟨body, hnonempty, hmember,
     ⟨line, terminal, hbody, hchildless⟩,
     hnoFlow, hnotApproveCall, hnotPermit⟩
@@ -3503,11 +3503,11 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_childlessNoFlow
       nonpayable (line +++ Func.last terminal)) ∈ weth10Funcs dp := by
     simpa only [← hbody] using hmember
   have chronology :=
-    frame.descendantFlowActions_eq_nil_of_nonpayableChildless context
+    Blanc.Weth10.Exec.Frame.descendantFlowActions_eq_nil_of_nonpayableChildless (frame := frame) context
       hnonempty hmember' hchildless
-  have hnone := frame.flowAction_eq_none_of_selectsNoPrimaryFlow context
+  have hnone := Blanc.Weth10.Exec.Frame.flowAction_eq_none_of_selectsNoPrimaryFlow (frame := frame) context
     hnoFlow hnonempty
-  have own := frame.hasNoWethBalanceOwnEffect_of_recognized context hnone
+  have own := Blanc.Weth10.Exec.Frame.hasNoWethBalanceOwnEffect_of_recognized (frame := frame) context hnone
     ⟨nonpayable body, hmember⟩
   exact own.proofIndexed_of_childless hnotApproveCall hnotPermit chronology
 
@@ -3515,17 +3515,17 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_childlessNoFlow
 cursor chronology has independently been closed. -/
 theorem Exec.Frame.hasProofIndexedStorageAccounting_of_noFlowNil
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame} {body : Func}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hmember : (Sevm.selector frame.sevm, body) ∈ weth10Funcs dp)
     (hnoFlow : SelectsNoPrimaryFlow frame.sevm)
     (hnotApproveCall : Sevm.selector frame.sevm ≠ approveAndCallSelector)
     (hnotPermit : Sevm.selector frame.sevm ≠ permitSelector)
-    (chronology : frame.descendantFlowActions dp ca = []) :
-    frame.HasProofIndexedStorageAccounting dp ca := by
-  have hnone := frame.flowAction_eq_none_of_selectsNoPrimaryFlow context
+    (chronology : Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame = []) :
+    Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting dp ca frame := by
+  have hnone := Blanc.Weth10.Exec.Frame.flowAction_eq_none_of_selectsNoPrimaryFlow (frame := frame) context
     hnoFlow hnonempty
-  have own := frame.hasNoWethBalanceOwnEffect_of_recognized context hnone
+  have own := Blanc.Weth10.Exec.Frame.hasNoWethBalanceOwnEffect_of_recognized (frame := frame) context hnone
     ⟨body, hmember⟩
   exact own.proofIndexed_of_childless hnotApproveCall hnotPermit chronology
 
@@ -3543,11 +3543,11 @@ private theorem name_childlessTerminal : ChildlessTerminal name := by
 /-- Exact proof-indexed accounting for the childless `name` view. -/
 theorem Exec.Frame.hasProofIndexedStorageAccounting_of_name
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = selector "name" [])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    frame.HasProofIndexedStorageAccounting dp ca := by
-  apply frame.hasProofIndexedStorageAccounting_of_childlessNoFlow context
+    Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting dp ca frame := by
+  apply Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_childlessNoFlow (frame := frame) context
   refine ⟨name, hnonempty, ?_, name_childlessTerminal, ?_, ?_, ?_⟩
   · rw [hselector]
     exact List.mem_cons.mpr (Or.inl rfl)
@@ -3569,12 +3569,12 @@ private theorem returnWord_childlessTerminal (w : B256) :
 /-- Exact proof-indexed accounting for the childless `PERMIT_TYPEHASH` view. -/
 theorem Exec.Frame.hasProofIndexedStorageAccounting_of_permitTypehash
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm =
       selector "PERMIT_TYPEHASH" [])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    frame.HasProofIndexedStorageAccounting dp ca := by
-  apply frame.hasProofIndexedStorageAccounting_of_childlessNoFlow context
+    Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting dp ca frame := by
+  apply Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_childlessNoFlow (frame := frame) context
   refine ⟨permitTypehash, hnonempty, ?_, ?_, ?_, ?_, ?_⟩
   · rw [hselector]
     simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false]
@@ -3590,11 +3590,11 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_permitTypehash
 /-- Exact proof-indexed accounting for the childless `decimals` view. -/
 theorem Exec.Frame.hasProofIndexedStorageAccounting_of_decimals
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = selector "decimals" [])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    frame.HasProofIndexedStorageAccounting dp ca := by
-  apply frame.hasProofIndexedStorageAccounting_of_childlessNoFlow context
+    Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting dp ca frame := by
+  apply Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_childlessNoFlow (frame := frame) context
   refine ⟨decimals, hnonempty, ?_, ?_, ?_, ?_, ?_⟩
   · rw [hselector]
     simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false]
@@ -3611,12 +3611,12 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_decimals
 /-- Exact proof-indexed accounting for the childless `CALLBACK_SUCCESS` view. -/
 theorem Exec.Frame.hasProofIndexedStorageAccounting_of_callbackSuccess
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm =
       selector "CALLBACK_SUCCESS" [])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    frame.HasProofIndexedStorageAccounting dp ca := by
-  apply frame.hasProofIndexedStorageAccounting_of_childlessNoFlow context
+    Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting dp ca frame := by
+  apply Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_childlessNoFlow (frame := frame) context
   refine ⟨callbackSuccess, hnonempty, ?_, ?_, ?_, ?_, ?_⟩
   · rw [hselector]
     simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false]
@@ -3698,11 +3698,11 @@ private theorem allowance_childlessTerminal : ChildlessTerminal allowance :=
 /-- Exact proof-indexed accounting for the childless `totalSupply` view. -/
 theorem Exec.Frame.hasProofIndexedStorageAccounting_of_totalSupply
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = selector "totalSupply" [])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    frame.HasProofIndexedStorageAccounting dp ca := by
-  apply frame.hasProofIndexedStorageAccounting_of_childlessNoFlow context
+    Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting dp ca frame := by
+  apply Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_childlessNoFlow (frame := frame) context
   refine ⟨totalSupply, hnonempty, ?_, totalSupply_childlessTerminal,
     ?_, ?_, ?_⟩
   · rw [hselector]
@@ -3717,12 +3717,12 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_totalSupply
 /-- Exact proof-indexed accounting for the childless `balanceOf` view. -/
 theorem Exec.Frame.hasProofIndexedStorageAccounting_of_balanceOf
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm =
       selector "balanceOf" [.address])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    frame.HasProofIndexedStorageAccounting dp ca := by
-  apply frame.hasProofIndexedStorageAccounting_of_childlessNoFlow context
+    Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting dp ca frame := by
+  apply Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_childlessNoFlow (frame := frame) context
   refine ⟨balanceOfEndpoint, hnonempty, ?_, balanceOf_childlessTerminal,
     ?_, ?_, ?_⟩
   · rw [hselector]
@@ -3737,11 +3737,11 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_balanceOf
 /-- Exact proof-indexed accounting for the childless `nonces` view. -/
 theorem Exec.Frame.hasProofIndexedStorageAccounting_of_nonces
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = selector "nonces" [.address])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    frame.HasProofIndexedStorageAccounting dp ca := by
-  apply frame.hasProofIndexedStorageAccounting_of_childlessNoFlow context
+    Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting dp ca frame := by
+  apply Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_childlessNoFlow (frame := frame) context
   refine ⟨nonces, hnonempty, ?_, nonces_childlessTerminal, ?_, ?_, ?_⟩
   · rw [hselector]
     simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false]
@@ -3755,11 +3755,11 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_nonces
 /-- Exact proof-indexed accounting for the childless `flashMinted` view. -/
 theorem Exec.Frame.hasProofIndexedStorageAccounting_of_flashMinted
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = selector "flashMinted" [])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    frame.HasProofIndexedStorageAccounting dp ca := by
-  apply frame.hasProofIndexedStorageAccounting_of_childlessNoFlow context
+    Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting dp ca frame := by
+  apply Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_childlessNoFlow (frame := frame) context
   refine ⟨flashMinted, hnonempty, ?_, flashMinted_childlessTerminal,
     ?_, ?_, ?_⟩
   · rw [hselector]
@@ -3774,11 +3774,11 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_flashMinted
 /-- Exact proof-indexed accounting for the childless `symbol` view. -/
 theorem Exec.Frame.hasProofIndexedStorageAccounting_of_symbol
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = selector "symbol" [])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    frame.HasProofIndexedStorageAccounting dp ca := by
-  apply frame.hasProofIndexedStorageAccounting_of_childlessNoFlow context
+    Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting dp ca frame := by
+  apply Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_childlessNoFlow (frame := frame) context
   refine ⟨symbol, hnonempty, ?_, symbol_childlessTerminal, ?_, ?_, ?_⟩
   · rw [hselector]
     simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false]
@@ -3792,12 +3792,12 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_symbol
 /-- Exact proof-indexed accounting for the childless deployment-chain view. -/
 theorem Exec.Frame.hasProofIndexedStorageAccounting_of_deploymentChainId
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm =
       selector "deploymentChainId" [])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    frame.HasProofIndexedStorageAccounting dp ca := by
-  apply frame.hasProofIndexedStorageAccounting_of_childlessNoFlow context
+    Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting dp ca frame := by
+  apply Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_childlessNoFlow (frame := frame) context
   refine ⟨deploymentChainId dp, hnonempty, ?_,
     deploymentChainId_childlessTerminal dp, ?_, ?_, ?_⟩
   · rw [hselector]
@@ -3812,12 +3812,12 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_deploymentChainId
 /-- Exact proof-indexed accounting for the childless `allowance` view. -/
 theorem Exec.Frame.hasProofIndexedStorageAccounting_of_allowance
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm =
       selector "allowance" [.address, .address])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    frame.HasProofIndexedStorageAccounting dp ca := by
-  apply frame.hasProofIndexedStorageAccounting_of_childlessNoFlow context
+    Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting dp ca frame := by
+  apply Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_childlessNoFlow (frame := frame) context
   refine ⟨allowance, hnonempty, ?_, allowance_childlessTerminal,
     ?_, ?_, ?_⟩
   · rw [hselector]
@@ -3850,17 +3850,17 @@ private theorem domainSeparator_sourceShape (dp : DeployParams) :
 original-frame descendant action ledger is empty. -/
 theorem Exec.Frame.descendantFlowActions_eq_nil_of_domainSeparator
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm =
       selector "DOMAIN_SEPARATOR" [])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    frame.descendantFlowActions dp ca = [] := by
+    Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame = [] := by
   have hmem : (Sevm.selector frame.sevm,
       nonpayable (domainSeparator dp)) ∈ weth10Funcs dp := by
     rw [hselector]
     simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false]
     aesop
-  rcases frame.compiledSelectorBodyCursor context hnonempty hmem with
+  rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursor (frame := frame) context hnonempty hmem with
     ⟨wrapperCursor, _hstack, hwrapperActions⟩
   rcases wrapperCursor.enterNonpayable with
     ⟨bodyCursor, _hbodyStack, hbodyActions⟩
@@ -3876,24 +3876,24 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_domainSeparator
 /-- Exact proof-indexed accounting for both childless domain-separator arms. -/
 theorem Exec.Frame.hasProofIndexedStorageAccounting_of_domainSeparator
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm =
       selector "DOMAIN_SEPARATOR" [])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    frame.HasProofIndexedStorageAccounting dp ca := by
+    Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting dp ca frame := by
   have hmember : (Sevm.selector frame.sevm,
       nonpayable (domainSeparator dp)) ∈ weth10Funcs dp := by
     rw [hselector]
     simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false]
     aesop
-  apply frame.hasProofIndexedStorageAccounting_of_noFlowNil context
+  apply Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_noFlowNil (frame := frame) context
     hnonempty hmember
   · constructor <;> rw [hselector] <;> decide +kernel
   · rw [hselector]
     decide +kernel
   · rw [hselector]
     decide +kernel
-  · exact frame.descendantFlowActions_eq_nil_of_domainSeparator
+  · exact Blanc.Weth10.Exec.Frame.descendantFlowActions_eq_nil_of_domainSeparator (frame := frame)
       context hselector hnonempty
 
 private def maxFlashLoanSelectLine : Line := arg 0 ++ [address, eq]
@@ -3913,17 +3913,17 @@ private theorem maxFlashLoan_sourceShape :
 /-- Both successful `maxFlashLoan` result arms are childless. -/
 theorem Exec.Frame.descendantFlowActions_eq_nil_of_maxFlashLoan
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm =
       selector "maxFlashLoan" [.address])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    frame.descendantFlowActions dp ca = [] := by
+    Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame = [] := by
   have hmem : (Sevm.selector frame.sevm,
       nonpayable maxFlashLoan) ∈ weth10Funcs dp := by
     rw [hselector]
     simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false]
     aesop
-  rcases frame.compiledSelectorBodyCursor context hnonempty hmem with
+  rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursor (frame := frame) context hnonempty hmem with
     ⟨wrapperCursor, _hstack, hwrapperActions⟩
   rcases wrapperCursor.enterNonpayable with
     ⟨bodyCursor, _hbodyStack, hbodyActions⟩
@@ -3940,24 +3940,24 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_maxFlashLoan
 /-- Exact proof-indexed accounting for both `maxFlashLoan` result arms. -/
 theorem Exec.Frame.hasProofIndexedStorageAccounting_of_maxFlashLoan
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm =
       selector "maxFlashLoan" [.address])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    frame.HasProofIndexedStorageAccounting dp ca := by
+    Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting dp ca frame := by
   have hmember : (Sevm.selector frame.sevm,
       nonpayable maxFlashLoan) ∈ weth10Funcs dp := by
     rw [hselector]
     simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false]
     aesop
-  apply frame.hasProofIndexedStorageAccounting_of_noFlowNil context
+  apply Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_noFlowNil (frame := frame) context
     hnonempty hmember
   · constructor <;> rw [hselector] <;> decide +kernel
   · rw [hselector]
     decide +kernel
   · rw [hselector]
     decide +kernel
-  · exact frame.descendantFlowActions_eq_nil_of_maxFlashLoan
+  · exact Blanc.Weth10.Exec.Frame.descendantFlowActions_eq_nil_of_maxFlashLoan (frame := frame)
       context hselector hnonempty
 
 private def flashFeeSelectLine : Line :=
@@ -3975,17 +3975,17 @@ the fixed `flashTokenError` reverter and therefore cannot be the successful
 cursor of this retained frame. -/
 theorem Exec.Frame.descendantFlowActions_eq_nil_of_flashFee
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm =
       selector "flashFee" [.address, .uint256])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    frame.descendantFlowActions dp ca = [] := by
+    Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame = [] := by
   have hmem : (Sevm.selector frame.sevm,
       nonpayable flashFee) ∈ weth10Funcs dp := by
     rw [hselector]
     simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false]
     aesop
-  rcases frame.compiledSelectorBodyCursor context hnonempty hmem with
+  rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursor (frame := frame) context hnonempty hmem with
     ⟨wrapperCursor, _hstack, hwrapperActions⟩
   rcases wrapperCursor.enterNonpayable with
     ⟨bodyCursor, _hbodyStack, hbodyActions⟩
@@ -4013,24 +4013,24 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_flashFee
 /-- Exact proof-indexed accounting for successful `flashFee`. -/
 theorem Exec.Frame.hasProofIndexedStorageAccounting_of_flashFee
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm =
       selector "flashFee" [.address, .uint256])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    frame.HasProofIndexedStorageAccounting dp ca := by
+    Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting dp ca frame := by
   have hmember : (Sevm.selector frame.sevm,
       nonpayable flashFee) ∈ weth10Funcs dp := by
     rw [hselector]
     simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false]
     aesop
-  apply frame.hasProofIndexedStorageAccounting_of_noFlowNil context
+  apply Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_noFlowNil (frame := frame) context
     hnonempty hmember
   · constructor <;> rw [hselector] <;> decide +kernel
   · rw [hselector]
     decide +kernel
   · rw [hselector]
     decide +kernel
-  · exact frame.descendantFlowActions_eq_nil_of_flashFee
+  · exact Blanc.Weth10.Exec.Frame.descendantFlowActions_eq_nil_of_flashFee (frame := frame)
       context hselector hnonempty
 
 /-- Selector chronology provider expected from the concrete compiled WETH10
@@ -4040,11 +4040,11 @@ above, never an assumed endpoint equation. -/
 def CompiledStorageAccountingProvider
     (dp : DeployParams) (ca : Adr) : Prop :=
   ∀ (frame : Exec.Frame),
-    frame.AuthenticContext dp ca →
+    Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame →
     ForallDeeperAt frame.sevm.depth ca (weth10 dp)
       (fun pc sevm pre out _ =>
         Exec.CoreStorageSound dp ca pc sevm pre out) →
-    frame.HasProofIndexedStorageAccounting dp ca
+    Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting dp ca frame
 
 /-- A concrete proof-indexed selector chronology provider is exactly the
 remaining compiled-frame handler needed by the generic interpreter lift. -/
@@ -4058,24 +4058,24 @@ theorem CompiledStorageAccountingProvider.compiledFrameStorageHandler
 /-- Exact proof-indexed accounting for the childless receive mint. -/
 theorem Exec.Frame.hasProofIndexedStorageAccounting_of_receive
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hempty : frame.sevm.data.length.toB256 = 0) :
-    frame.HasProofIndexedStorageAccounting dp ca := by
-  cases haction : frame.flowAction? dp ca with
+    Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting dp ca frame := by
+  cases haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
   | none =>
       have hprimary : primaryFlowAtom frame.sevm ≠ none := by
         simp [primaryFlowAtom, hempty]
-      unfold Exec.Frame.flowAction? at haction
+      unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
       rw [if_pos context.invocation] at haction
       cases hatom : primaryFlowAtom frame.sevm with
       | none => exact (hprimary hatom).elim
       | some atom => simp [hatom] at haction
   | some action =>
       have ledger :=
-        frame.hasClassifiedActionLedger_of_flowAction_eq_some
+        Blanc.Weth10.Exec.Frame.hasClassifiedActionLedger_of_flowAction_eq_some (frame := frame)
           context haction
       have chronology :=
-        frame.descendantFlowActions_eq_nil_of_receive context hempty
+        Blanc.Weth10.Exec.Frame.descendantFlowActions_eq_nil_of_receive (frame := frame) context hempty
       rcases frame with ⟨pc, e, pre, out, run, committed⟩
       cases out with
       | error err => simp [Execution.commits] at committed
@@ -4089,11 +4089,11 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_receive
             context.invocation.2.1
           rw [htarget] at hinc
           have haction' := haction
-          simp [Exec.Frame.flowAction?, context.invocation,
+          simp [Blanc.Weth10.Exec.Frame.flowAction?, context.invocation,
             primaryFlowAtom, primaryDebitProvenance, hempty] at haction'
           symm at haction'
           subst action
-          apply Exec.Frame.HasProofIndexedStorageAccounting.flow ledger
+          apply Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting.flow ledger
           apply RichStorageAccounting.ordinaryMint
           · exact LocalActionSegment.ordinaryMint
               e.caller.toB256 e.caller e.value rfl (by
@@ -4105,25 +4105,25 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_receive
 /-- Exact proof-indexed accounting for the childless `deposit` mint. -/
 theorem Exec.Frame.hasProofIndexedStorageAccounting_of_deposit
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = depositSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    frame.HasProofIndexedStorageAccounting dp ca := by
-  cases haction : frame.flowAction? dp ca with
+    Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting dp ca frame := by
+  cases haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
   | none =>
       have hatom : primaryFlowAtom frame.sevm = some
           (.ordinaryMint frame.sevm.caller.toB256 frame.sevm.caller
             frame.sevm.value.toNat) := by
         simp [primaryFlowAtom, hnonempty, hselector]
-      unfold Exec.Frame.flowAction? at haction
+      unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
       rw [if_pos context.invocation, hatom] at haction
       simp at haction
   | some action =>
       have ledger :=
-        frame.hasClassifiedActionLedger_of_flowAction_eq_some
+        Blanc.Weth10.Exec.Frame.hasClassifiedActionLedger_of_flowAction_eq_some (frame := frame)
           context haction
       have chronology :=
-        frame.descendantFlowActions_eq_nil_of_deposit
+        Blanc.Weth10.Exec.Frame.descendantFlowActions_eq_nil_of_deposit (frame := frame)
           context hselector hnonempty
       rcases frame with ⟨pc, e, pre, out, run, committed⟩
       cases out with
@@ -4139,7 +4139,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_deposit
             context.invocation.2.1
           rw [htarget] at hinc
           have haction' := haction
-          simp [Exec.Frame.flowAction?, context.invocation,
+          simp [Blanc.Weth10.Exec.Frame.flowAction?, context.invocation,
             primaryFlowAtom, primaryDebitProvenance, hnonempty, hselector,
             depositSelector_ne_transferSelector,
             depositSelector_ne_transferAndCallSelector,
@@ -4150,7 +4150,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_deposit
             depositSelector_ne_flashLoanSelector] at haction'
           symm at haction'
           subst action
-          apply Exec.Frame.HasProofIndexedStorageAccounting.flow ledger
+          apply Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting.flow ledger
           apply RichStorageAccounting.ordinaryMint
           · exact LocalActionSegment.ordinaryMint
               e.caller.toB256 e.caller e.value rfl (by
@@ -4162,26 +4162,26 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_deposit
 /-- Exact proof-indexed accounting for the childless `depositTo` mint. -/
 theorem Exec.Frame.hasProofIndexedStorageAccounting_of_depositTo
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = depositToSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    frame.HasProofIndexedStorageAccounting dp ca := by
-  cases haction : frame.flowAction? dp ca with
+    Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting dp ca frame := by
+  cases haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
   | none =>
       have hatom : primaryFlowAtom frame.sevm = some
           (.ordinaryMint (Sevm.argWord frame.sevm 0)
             (Sevm.argWord frame.sevm 0).toAdr frame.sevm.value.toNat) := by
         simp [primaryFlowAtom, hnonempty, hselector,
           depositToSelector_ne_depositSelector]
-      unfold Exec.Frame.flowAction? at haction
+      unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
       rw [if_pos context.invocation, hatom] at haction
       simp at haction
   | some action =>
       have ledger :=
-        frame.hasClassifiedActionLedger_of_flowAction_eq_some
+        Blanc.Weth10.Exec.Frame.hasClassifiedActionLedger_of_flowAction_eq_some (frame := frame)
           context haction
       have chronology :=
-        frame.descendantFlowActions_eq_nil_of_depositTo
+        Blanc.Weth10.Exec.Frame.descendantFlowActions_eq_nil_of_depositTo (frame := frame)
           context hselector hnonempty
       rcases frame with ⟨pc, e, pre, out, run, committed⟩
       cases out with
@@ -4209,7 +4209,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_depositTo
               depositToSelector_ne_depositSelector]
           have heq := action_eq_of_primaryFlowAtom context hatom haction
           subst action
-          apply Exec.Frame.HasProofIndexedStorageAccounting.flow ledger
+          apply Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting.flow ledger
           apply RichStorageAccounting.ordinaryMint
           · exact LocalActionSegment.ordinaryMint
               (Sevm.argWord e 0) (Sevm.argWord e 0).toAdr e.value
@@ -4233,14 +4233,14 @@ ends at the indexed callback boundary, whose retained child is then accounted
 by the strong-depth hypothesis. -/
 theorem Exec.Frame.hasProofIndexedStorageAccounting_of_depositToAndCall
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = depositToAndCallSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
       (fun pc sevm pre out _ =>
         Exec.CoreStorageSound dp ca pc sevm pre out)) :
-    frame.HasProofIndexedStorageAccounting dp ca := by
-  rcases frame.compiledDepositToAndCallChronology context hselector
+    Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting dp ca frame := by
+  rcases Blanc.Weth10.Exec.Frame.compiledDepositToAndCallChronology (frame := frame) context hselector
       hnonempty with
     ⟨callbackPre, hstorage, _hlogs, _hbalance, hcode, _houtput,
       inputSize, input, callPre, callPost, parent, child, xl, pc,
@@ -4265,18 +4265,18 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_depositToAndCall
     simp [primaryFlowAtom, hnonempty, hselector,
       depositToAndCallSelector_ne_depositSelector,
       depositToAndCallSelector_ne_depositToSelector]
-  cases haction : frame.flowAction? dp ca with
+  cases haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
   | none =>
-      unfold Exec.Frame.flowAction? at haction
+      unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
       rw [if_pos context.invocation, hatom] at haction
       simp at haction
   | some action =>
       have ledger :=
-        frame.hasClassifiedActionLedger_of_flowAction_eq_some
+        Blanc.Weth10.Exec.Frame.hasClassifiedActionLedger_of_flowAction_eq_some (frame := frame)
           context haction
       have actionEq := action_eq_of_primaryFlowAtom context hatom haction
       subst action
-      apply Exec.Frame.HasProofIndexedStorageAccounting.flow ledger
+      apply Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting.flow ledger
       apply RichStorageAccounting.tokenCallback
       · apply StorageSegmentDelta.ofOrdinaryMint
         exact LocalActionSegment.ordinaryMint
@@ -4303,14 +4303,14 @@ prefix is WETH-balance silent, while the indexed callback supplies the exact
 rollback-pruned descendant storage delta. -/
 theorem Exec.Frame.hasProofIndexedStorageAccounting_of_approveAndCall
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = approveAndCallSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
       (fun pc sevm pre out _ =>
         Exec.CoreStorageSound dp ca pc sevm pre out)) :
-    frame.HasProofIndexedStorageAccounting dp ca := by
-  rcases frame.compiledApproveAndCallChronology context hselector
+    Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting dp ca frame := by
+  rcases Blanc.Weth10.Exec.Frame.compiledApproveAndCallChronology (frame := frame) context hselector
       hnonempty with
     ⟨callbackPre, hsilent, _hlogs, _hbalance, hcode, _houtput,
       inputSize, input, callPre, callPost, parent, child, xl, pc,
@@ -4326,13 +4326,13 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_approveAndCall
   rw [htarget] at hsilent
   have hnoPrimary : SelectsNoPrimaryFlow frame.sevm := by
     constructor <;> rw [hselector] <;> decide +kernel
-  have hnone := frame.flowAction_eq_none_of_selectsNoPrimaryFlow context
+  have hnone := Blanc.Weth10.Exec.Frame.flowAction_eq_none_of_selectsNoPrimaryFlow (frame := frame) context
     hnoPrimary hnonempty
-  have own := frame.hasNoWethBalanceOwnEffect_of_recognized context hnone
+  have own := Blanc.Weth10.Exec.Frame.hasNoWethBalanceOwnEffect_of_recognized (frame := frame) context hnone
     ⟨nonpayable Weth10.approveAndCall, by
       rw [hselector]
       simp [approveAndCallSelector, weth10Funcs]⟩
-  apply Exec.Frame.HasProofIndexedStorageAccounting.noFlow own
+  apply Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting.noFlow own
   exact NoFlowStorageAccounting.callback hsilent callbackEffect.delta (by
     simpa only [List.nil_append] using chronology)
 
@@ -4341,14 +4341,14 @@ The credit, indexed retained callback, allowance bridge, and repayment all
 come from one selector-level compiled chronology. -/
 theorem Exec.Frame.hasProofIndexedStorageAccounting_of_flashLoan
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = flashLoanSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
       (fun pc sevm pre out _ =>
         Exec.CoreStorageSound dp ca pc sevm pre out)) :
-    frame.HasProofIndexedStorageAccounting dp ca := by
-  rcases frame.compiledFlashLoanChronology context hselector hnonempty with
+    Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting dp ca frame := by
+  rcases Blanc.Weth10.Exec.Frame.compiledFlashLoanChronology (frame := frame) context hselector hnonempty with
     ⟨callbackPre, callbackPost, settlePre, burnPre, parent, child, xl, pc,
       retained, callback, _rawCommits, _occurrence, hcredit, _hprefixBal,
       hprefixCode, hcallbackStor, _hcallbackBal, _hcallbackCode,
@@ -4379,18 +4379,18 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_flashLoan
       flashLoanSelector_ne_withdrawSelector,
       flashLoanSelector_ne_withdrawToSelector,
       flashLoanSelector_ne_withdrawFromSelector]
-  cases haction : frame.flowAction? dp ca with
+  cases haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
   | none =>
-      unfold Exec.Frame.flowAction? at haction
+      unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
       rw [if_pos context.invocation, hprimary] at haction
       simp at haction
   | some action =>
       have ledger :=
-        frame.hasClassifiedActionLedger_of_flowAction_eq_some
+        Blanc.Weth10.Exec.Frame.hasClassifiedActionLedger_of_flowAction_eq_some (frame := frame)
           context haction
       have actionEq := action_eq_of_primaryFlowAtom context hprimary haction
       subst action
-      apply Exec.Frame.HasProofIndexedStorageAccounting.flow ledger
+      apply Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting.flow ledger
       apply RichStorageAccounting.flash
       · exact LocalActionSegment.flashCredit
           (Sevm.argWord frame.sevm 0)
@@ -4443,8 +4443,8 @@ private theorem Exec.Frame.hasProofIndexedStorageAccounting_of_valueRedemption
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {action : FlowAction} {rawSource : B256} {source ethRecipient : Adr}
     {amount target : B256} {callPre guardPost : Devm}
-    (context : frame.AuthenticContext dp ca)
-    (classified : frame.flowAction? dp ca = some action)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
+    (classified : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action)
     (hatom : action.atom =
       .redemption rawSource source ethRecipient amount.toNat)
     (hcredit : action.credit = none)
@@ -4454,12 +4454,12 @@ private theorem Exec.Frame.hasProofIndexedStorageAccounting_of_valueRedemption
     (burn : BurnCallPrefix frame.sevm frame.pre callPre guardPost
       source amount target)
     (hguardStor : Devm.getStor guardPost = Devm.getStor frame.post)
-    (chronology : frame.descendantFlowActions dp ca =
+    (chronology : Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame =
       trace.retained.retained.flowActions dp ca)
     (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
       (fun pc sevm pre out _ =>
         Exec.CoreStorageSound dp ca pc sevm pre out)) :
-    frame.HasProofIndexedStorageAccounting dp ca := by
+    Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting dp ca frame := by
   have installedCall : some (callPre.getCode ca).toList =
       Prog.compile (weth10 dp) := by
     rw [burn.2.2.2.2.2.1]
@@ -4474,9 +4474,9 @@ private theorem Exec.Frame.hasProofIndexedStorageAccounting_of_valueRedemption
       (Stor.rest (Devm.getStor callPre ca)) := by
     exact .redemption rawSource source ethRecipient amount hatom hcredit
       hdebit hamountLe hdecrease
-  have ledger := frame.hasClassifiedActionLedger_of_flowAction_eq_some
+  have ledger := Blanc.Weth10.Exec.Frame.hasClassifiedActionLedger_of_flowAction_eq_some (frame := frame)
     context classified
-  apply Exec.Frame.HasProofIndexedStorageAccounting.flow ledger
+  apply Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting.flow ledger
   exact RichStorageAccounting.redemption segment childEffect.delta
     (Stor.Weth10Silent.of_eq (congrFun hguardStor ca)) chronology
 
@@ -4488,8 +4488,8 @@ private theorem Exec.Frame.hasProofIndexedStorageAccounting_of_allowanceValueRed
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {action : FlowAction} {rawSource : B256} {source ethRecipient : Adr}
     {amount target : B256} {ownPre callPre guardPost : Devm}
-    (context : frame.AuthenticContext dp ca)
-    (classified : frame.flowAction? dp ca = some action)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
+    (classified : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action)
     (hatom : action.atom =
       .redemption rawSource source ethRecipient amount.toNat)
     (hcredit : action.credit = none)
@@ -4500,12 +4500,12 @@ private theorem Exec.Frame.hasProofIndexedStorageAccounting_of_allowanceValueRed
     (burn : BurnCallPrefix frame.sevm ownPre callPre guardPost
       source amount target)
     (hguardStor : Devm.getStor guardPost = Devm.getStor frame.post)
-    (chronology : frame.descendantFlowActions dp ca =
+    (chronology : Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame =
       trace.retained.retained.flowActions dp ca)
     (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
       (fun pc sevm pre out _ =>
         Exec.CoreStorageSound dp ca pc sevm pre out)) :
-    frame.HasProofIndexedStorageAccounting dp ca := by
+    Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting dp ca frame := by
   have installedCall : some (callPre.getCode ca).toList =
       Prog.compile (weth10 dp) := by
     rw [burn.2.2.2.2.2.1, ← entry.code]
@@ -4522,9 +4522,9 @@ private theorem Exec.Frame.hasProofIndexedStorageAccounting_of_allowanceValueRed
       (Stor.rest (Devm.getStor callPre ca)) := by
     exact .redemption rawSource source ethRecipient amount hatom hcredit
       hdebit hamountLe hdecrease
-  have ledger := frame.hasClassifiedActionLedger_of_flowAction_eq_some
+  have ledger := Blanc.Weth10.Exec.Frame.hasClassifiedActionLedger_of_flowAction_eq_some (frame := frame)
     context classified
-  apply Exec.Frame.HasProofIndexedStorageAccounting.flow ledger
+  apply Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting.flow ledger
   exact RichStorageAccounting.redemption segment childEffect.delta
     (Stor.Weth10Silent.of_eq (congrFun hguardStor ca)) chronology
 
@@ -4532,13 +4532,13 @@ private theorem Exec.Frame.hasProofIndexedStorageAccounting_of_allowanceValueRed
 `withdraw(uint256)`. -/
 theorem Exec.Frame.hasProofIndexedStorageAccounting_of_withdraw
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = withdrawSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
       (fun pc sevm pre out _ =>
         Exec.CoreStorageSound dp ca pc sevm pre out)) :
-    frame.HasProofIndexedStorageAccounting dp ca := by
+    Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting dp ca frame := by
   have hprimary : primaryFlowAtom frame.sevm = some
       (.redemption frame.sevm.caller.toB256 frame.sevm.caller
         frame.sevm.caller (Sevm.argWord frame.sevm 0).toNat) := by
@@ -4549,19 +4549,19 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_withdraw
       withdrawSelector_ne_transferSelector,
       withdrawSelector_ne_transferAndCallSelector,
       withdrawSelector_ne_transferFromSelector]
-  cases haction : frame.flowAction? dp ca with
+  cases haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
   | none =>
-      unfold Exec.Frame.flowAction? at haction
+      unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
       rw [if_pos context.invocation, hprimary] at haction
       simp at haction
   | some action =>
       have actionEq := action_eq_of_primaryFlowAtom context hprimary haction
       subst action
-      rcases frame.compiledWithdrawChronology context hselector hnonempty with
+      rcases Blanc.Weth10.Exec.Frame.compiledWithdrawChronology (frame := frame) context hselector hnonempty with
         ⟨callPre, guardPost, trace, burn, _hslot, _hcommits,
           _hoccurrence, hguardStor, _hguardBalance, _hguardCode,
           _hguardLogs, chronology⟩
-      refine frame.hasProofIndexedStorageAccounting_of_valueRedemption
+      refine Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_valueRedemption (frame := frame)
         (rawSource := frame.sevm.caller.toB256)
         (source := frame.sevm.caller)
         (ethRecipient := frame.sevm.caller)
@@ -4577,13 +4577,13 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_withdraw
 `withdrawTo(address,uint256)`. -/
 theorem Exec.Frame.hasProofIndexedStorageAccounting_of_withdrawTo
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = withdrawToSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
       (fun pc sevm pre out _ =>
         Exec.CoreStorageSound dp ca pc sevm pre out)) :
-    frame.HasProofIndexedStorageAccounting dp ca := by
+    Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting dp ca frame := by
   have hprimary : primaryFlowAtom frame.sevm = some
       (.redemption frame.sevm.caller.toB256 frame.sevm.caller
         (Sevm.argWord frame.sevm 0).toAdr
@@ -4596,20 +4596,20 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_withdrawTo
       withdrawToSelector_ne_transferAndCallSelector,
       withdrawToSelector_ne_transferFromSelector,
       withdrawToSelector_ne_withdrawSelector]
-  cases haction : frame.flowAction? dp ca with
+  cases haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
   | none =>
-      unfold Exec.Frame.flowAction? at haction
+      unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
       rw [if_pos context.invocation, hprimary] at haction
       simp at haction
   | some action =>
       have actionEq := action_eq_of_primaryFlowAtom context hprimary haction
       subst action
-      rcases frame.compiledWithdrawToChronology context hselector
+      rcases Blanc.Weth10.Exec.Frame.compiledWithdrawToChronology (frame := frame) context hselector
           hnonempty with
         ⟨callPre, guardPost, trace, burn, _hslot, _hcommits,
           _hoccurrence, hguardStor, _hguardBalance, _hguardCode,
           _hguardLogs, chronology⟩
-      refine frame.hasProofIndexedStorageAccounting_of_valueRedemption
+      refine Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_valueRedemption (frame := frame)
         (rawSource := frame.sevm.caller.toB256)
         (source := frame.sevm.caller)
         (ethRecipient := (Sevm.argWord frame.sevm 0).toAdr)
@@ -4625,14 +4625,14 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_withdrawTo
 `transfer(address,uint256)` redemption arm. -/
 theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferZero
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = transferSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hto : Sevm.argWord frame.sevm 0 = 0)
     (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
       (fun pc sevm pre out _ =>
         Exec.CoreStorageSound dp ca pc sevm pre out)) :
-    frame.HasProofIndexedStorageAccounting dp ca := by
+    Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting dp ca frame := by
   have hprimary : primaryFlowAtom frame.sevm = some
       (.redemption frame.sevm.caller.toB256 frame.sevm.caller
         frame.sevm.caller (Sevm.argWord frame.sevm 1).toNat) := by
@@ -4640,20 +4640,20 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferZero
       transferSelector_ne_depositSelector,
       transferSelector_ne_depositToSelector,
       transferSelector_ne_depositToAndCallSelector, hto]
-  cases haction : frame.flowAction? dp ca with
+  cases haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
   | none =>
-      unfold Exec.Frame.flowAction? at haction
+      unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
       rw [if_pos context.invocation, hprimary] at haction
       simp at haction
   | some action =>
       have actionEq := action_eq_of_primaryFlowAtom context hprimary haction
       subst action
-      rcases frame.compiledTransferZeroChronology context hselector
+      rcases Blanc.Weth10.Exec.Frame.compiledTransferZeroChronology (frame := frame) context hselector
           hnonempty hto with
         ⟨callPre, guardPost, trace, burn, _hslot, _hcommits,
           _hoccurrence, hguardStor, _hguardBalance, _hguardCode,
           _hguardLogs, chronology⟩
-      refine frame.hasProofIndexedStorageAccounting_of_valueRedemption
+      refine Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_valueRedemption (frame := frame)
         (rawSource := frame.sevm.caller.toB256)
         (source := frame.sevm.caller)
         (ethRecipient := frame.sevm.caller)
@@ -4669,14 +4669,14 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferZero
 delegated `transferFrom` redemption arm. -/
 theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferFromZero
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = transferFromSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hto : Sevm.argWord frame.sevm 1 = 0)
     (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
       (fun pc sevm pre out _ =>
         Exec.CoreStorageSound dp ca pc sevm pre out)) :
-    frame.HasProofIndexedStorageAccounting dp ca := by
+    Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting dp ca frame := by
   have hprimary : primaryFlowAtom frame.sevm = some
       (.redemption (Sevm.argWord frame.sevm 0)
         (Sevm.argWord frame.sevm 0).toAdr frame.sevm.caller
@@ -4687,15 +4687,15 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferFromZero
       transferFromSelector_ne_depositToAndCallSelector,
       transferFromSelector_ne_transferSelector,
       transferFromSelector_ne_transferAndCallSelector, hto]
-  cases haction : frame.flowAction? dp ca with
+  cases haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
   | none =>
-      unfold Exec.Frame.flowAction? at haction
+      unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
       rw [if_pos context.invocation, hprimary] at haction
       simp at haction
   | some action =>
       have actionEq := action_eq_of_primaryFlowAtom context hprimary haction
       subst action
-      rcases frame.compiledTransferFromZeroChronology context hselector
+      rcases Blanc.Weth10.Exec.Frame.compiledTransferFromZeroChronology (frame := frame) context hselector
           hnonempty hto with
         ⟨ownPre, entry, callPre, guardPost, trace, burn, _hslot,
           _hcommits, _hoccurrence, hguardStor, _hguardBalance,
@@ -4707,7 +4707,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferFromZero
           (Sevm.argWord frame.sevm 0).toAdr
           (Sevm.argWord frame.sevm 2) frame.sevm.caller.toB256 := by
         simpa only [hsource] using burn
-      refine frame.hasProofIndexedStorageAccounting_of_allowanceValueRedemption
+      refine Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_allowanceValueRedemption (frame := frame)
         (rawSource := Sevm.argWord frame.sevm 0)
         (source := (Sevm.argWord frame.sevm 0).toAdr)
         (ethRecipient := frame.sevm.caller)
@@ -4727,13 +4727,13 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferFromZero
 `withdrawFrom(address,address,uint256)`. -/
 theorem Exec.Frame.hasProofIndexedStorageAccounting_of_withdrawFrom
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = withdrawFromSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
       (fun pc sevm pre out _ =>
         Exec.CoreStorageSound dp ca pc sevm pre out)) :
-    frame.HasProofIndexedStorageAccounting dp ca := by
+    Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting dp ca frame := by
   have hprimary : primaryFlowAtom frame.sevm = some
       (.redemption (Sevm.argWord frame.sevm 0)
         (Sevm.argWord frame.sevm 0).toAdr
@@ -4748,15 +4748,15 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_withdrawFrom
       withdrawFromSelector_ne_transferFromSelector,
       withdrawFromSelector_ne_withdrawSelector,
       withdrawFromSelector_ne_withdrawToSelector]
-  cases haction : frame.flowAction? dp ca with
+  cases haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
   | none =>
-      unfold Exec.Frame.flowAction? at haction
+      unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
       rw [if_pos context.invocation, hprimary] at haction
       simp at haction
   | some action =>
       have actionEq := action_eq_of_primaryFlowAtom context hprimary haction
       subst action
-      rcases frame.compiledWithdrawFromChronology context hselector
+      rcases Blanc.Weth10.Exec.Frame.compiledWithdrawFromChronology (frame := frame) context hselector
           hnonempty with
         ⟨ownPre, entry, callPre, guardPost, trace, burn, _hslot,
           _hcommits, _hoccurrence, hguardStor, _hguardBalance,
@@ -4768,7 +4768,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_withdrawFrom
           (Sevm.argWord frame.sevm 0).toAdr
           (Sevm.argWord frame.sevm 2) (Sevm.argWord frame.sevm 1) := by
         simpa only [hsource] using burn
-      refine frame.hasProofIndexedStorageAccounting_of_allowanceValueRedemption
+      refine Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_allowanceValueRedemption (frame := frame)
         (rawSource := Sevm.argWord frame.sevm 0)
         (source := (Sevm.argWord frame.sevm 0).toAdr)
         (ethRecipient := (Sevm.argWord frame.sevm 1).toAdr)
@@ -4791,14 +4791,14 @@ before the later ERC-677 callback; the nonzero arm retains only the callback
 after the ordinary booked-balance transfer. -/
 theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferAndCall
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = transferAndCallSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
       (fun pc sevm pre out _ =>
         Exec.CoreStorageSound dp ca pc sevm pre out)) :
-    frame.HasProofIndexedStorageAccounting dp ca := by
-  rcases frame.compiledTransferAndCallChronology context hselector
+    Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting dp ca frame := by
+  rcases Blanc.Weth10.Exec.Frame.compiledTransferAndCallChronology (frame := frame) context hselector
       hnonempty with hzero | hnonzero
   · rcases hzero with
       ⟨hraw, callPre, callbackPre, trace, burn, _hslot, _hcommits,
@@ -4826,9 +4826,9 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferAndCall
         transferAndCallSelector_ne_depositSelector,
         transferAndCallSelector_ne_depositToSelector,
         transferAndCallSelector_ne_depositToAndCallSelector, hraw]
-    cases haction : frame.flowAction? dp ca with
+    cases haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
     | none =>
-        unfold Exec.Frame.flowAction? at haction
+        unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
         rw [if_pos context.invocation, hprimary] at haction
         simp at haction
     | some action =>
@@ -4863,9 +4863,9 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferAndCall
           · exact hamountLe
           · exact hdecrease
         have ledger :=
-          frame.hasClassifiedActionLedger_of_flowAction_eq_some
+          Blanc.Weth10.Exec.Frame.hasClassifiedActionLedger_of_flowAction_eq_some (frame := frame)
             context haction
-        apply Exec.Frame.HasProofIndexedStorageAccounting.flow ledger
+        apply Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting.flow ledger
         exact RichStorageAccounting.redemptionThenTokenCallback segment
           valueEffect.delta callbackEffect.delta chronology
   · rcases hnonzero with
@@ -4899,9 +4899,9 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferAndCall
         transferAndCallSelector_ne_depositSelector,
         transferAndCallSelector_ne_depositToSelector,
         transferAndCallSelector_ne_depositToAndCallSelector, hraw]
-    cases haction : frame.flowAction? dp ca with
+    cases haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
     | none =>
-        unfold Exec.Frame.flowAction? at haction
+        unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
         rw [if_pos context.invocation, hprimary] at haction
         simp at haction
     | some action =>
@@ -4909,9 +4909,9 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferAndCall
           action_eq_of_primaryFlowAtom context hprimary haction
         subst action
         have ledger :=
-          frame.hasClassifiedActionLedger_of_flowAction_eq_some
+          Blanc.Weth10.Exec.Frame.hasClassifiedActionLedger_of_flowAction_eq_some (frame := frame)
             context haction
-        apply Exec.Frame.HasProofIndexedStorageAccounting.flow ledger
+        apply Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting.flow ledger
         apply RichStorageAccounting.tokenCallback
         · apply StorageSegmentDelta.ofOrdinaryTransfer
           rcases htransfer with
@@ -4955,14 +4955,14 @@ uses the exact retained child and the same call boundary selected by compiled
 chronology. -/
 theorem Exec.Frame.hasProofIndexedStorageAccounting_of_permit
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = permitSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
       (fun pc sevm pre out _ =>
         Exec.CoreStorageSound dp ca pc sevm pre out)) :
-    frame.HasProofIndexedStorageAccounting dp ca := by
-  rcases frame.compiledPermitChronology context hselector hnonempty with
+    Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting dp ca frame := by
+  rcases Blanc.Weth10.Exec.Frame.compiledPermitChronology (frame := frame) context hselector hnonempty with
     ⟨callPre, callPost, slot, selected, _occurrence, _operands,
       outcome, ownPrefix, ownSuffix, chronology⟩
   have htarget : frame.sevm.currentTarget = ca :=
@@ -4975,14 +4975,14 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_permit
     simpa only [htarget] using ownSuffix.storage
   have hnoPrimary : SelectsNoPrimaryFlow frame.sevm := by
     constructor <;> rw [hselector] <;> decide +kernel
-  have classified := frame.flowAction_eq_none_of_selectsNoPrimaryFlow
+  have classified := Blanc.Weth10.Exec.Frame.flowAction_eq_none_of_selectsNoPrimaryFlow (frame := frame)
     context hnoPrimary hnonempty
-  have ownRoot := frame.hasNoWethBalanceOwnEffect_of_recognized
+  have ownRoot := Blanc.Weth10.Exec.Frame.hasNoWethBalanceOwnEffect_of_recognized (frame := frame)
     context classified
     ⟨nonpayable (Weth10.permit dp), by
       rw [hselector]
       simp [permitSelector, weth10Funcs]⟩
-  apply Exec.Frame.HasProofIndexedStorageAccounting.noFlow ownRoot
+  apply Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting.noFlow ownRoot
   cases outcome with
   | none own =>
       have callSilent : Stor.Weth10Silent
@@ -5042,12 +5042,12 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_permit
 `transfer` branch. -/
 theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferNonzero
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = transferSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hto : Sevm.argWord frame.sevm 0 ≠ 0) :
-    frame.HasProofIndexedStorageAccounting dp ca := by
-  cases haction : frame.flowAction? dp ca with
+    Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting dp ca frame := by
+  cases haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
   | none =>
       have hatom : primaryFlowAtom frame.sevm = some
           (.transfer frame.sevm.caller.toB256
@@ -5058,15 +5058,15 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferNonzero
           transferSelector_ne_depositSelector,
           transferSelector_ne_depositToSelector,
           transferSelector_ne_depositToAndCallSelector, hto]
-      unfold Exec.Frame.flowAction? at haction
+      unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
       rw [if_pos context.invocation, hatom] at haction
       simp at haction
   | some action =>
       have ledger :=
-        frame.hasClassifiedActionLedger_of_flowAction_eq_some
+        Blanc.Weth10.Exec.Frame.hasClassifiedActionLedger_of_flowAction_eq_some (frame := frame)
           context haction
       have chronology :=
-        frame.descendantFlowActions_eq_nil_of_transferNonzero
+        Blanc.Weth10.Exec.Frame.descendantFlowActions_eq_nil_of_transferNonzero (frame := frame)
           context hselector hnonempty hto
       rcases frame with ⟨pc, e, pre, out, run, committed⟩
       cases out with
@@ -5102,7 +5102,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferNonzero
                 transferSelector_ne_depositToAndCallSelector, hraw]
             have heq := action_eq_of_primaryFlowAtom context hatom haction
             subst action
-            apply Exec.Frame.HasProofIndexedStorageAccounting.flow ledger
+            apply Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting.flow ledger
             apply RichStorageAccounting.ordinaryTransfer
             · rcases htransfer with
                 ⟨hle, intermediate, hdecrease, hincrease⟩
@@ -5138,11 +5138,11 @@ leaf.  The only storage write uses a runtime-tagged allowance key, so the
 WETH balance region is silent and the descendant ledger is empty. -/
 theorem Exec.Frame.hasProofIndexedStorageAccounting_of_approve
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm =
       selector "approve" [.address, .uint256])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    frame.HasProofIndexedStorageAccounting dp ca := by
+    Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting dp ca frame := by
   have hneDeposit : selector "approve" [.address, .uint256] ≠
       depositSelector := by decide +kernel
   have hneDepositTo : selector "approve" [.address, .uint256] ≠
@@ -5168,9 +5168,9 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_approve
       hneDepositTo, hneDepositCall, hneTransfer, hneTransferCall,
       hneTransferFrom, hneWithdraw, hneWithdrawTo, hneWithdrawFrom,
       hneFlash]
-  have hnone : frame.flowAction? dp ca = none := by
-    simp [Exec.Frame.flowAction?, context.invocation, hprimary]
-  have chronology := frame.descendantFlowActions_eq_nil_of_approve
+  have hnone : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = none := by
+    simp [Blanc.Weth10.Exec.Frame.flowAction?, context.invocation, hprimary]
+  have chronology := Blanc.Weth10.Exec.Frame.descendantFlowActions_eq_nil_of_approve (frame := frame)
     context hselector hnonempty
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
@@ -5228,13 +5228,13 @@ functional allowance fork and transfer effect close exact storage accounting
 without any callback or endpoint premise. -/
 theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferFromNonzero
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = transferFromSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hto : Sevm.argWord frame.sevm 1 ≠ 0)
-    (chronology : frame.descendantFlowActions dp ca = []) :
-    frame.HasProofIndexedStorageAccounting dp ca := by
-  cases haction : frame.flowAction? dp ca with
+    (chronology : Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame = []) :
+    Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting dp ca frame := by
+  cases haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
   | none =>
       have hatom : primaryFlowAtom frame.sevm = some
           (.transfer (Sevm.argWord frame.sevm 0)
@@ -5248,12 +5248,12 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferFromNonzero
           transferFromSelector_ne_depositToAndCallSelector,
           transferFromSelector_ne_transferSelector,
           transferFromSelector_ne_transferAndCallSelector, hto]
-      unfold Exec.Frame.flowAction? at haction
+      unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
       rw [if_pos context.invocation, hatom] at haction
       simp at haction
   | some action =>
       have ledger :=
-        frame.hasClassifiedActionLedger_of_flowAction_eq_some
+        Blanc.Weth10.Exec.Frame.hasClassifiedActionLedger_of_flowAction_eq_some (frame := frame)
           context haction
       rcases frame with ⟨pc, e, pre, out, run, committed⟩
       cases out with
@@ -5301,7 +5301,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferFromNonzero
                 hto]
             have heq := action_eq_of_primaryFlowAtom context hatom haction
             subst action
-            apply Exec.Frame.HasProofIndexedStorageAccounting.flow ledger
+            apply Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting.flow ledger
             apply RichStorageAccounting.ordinaryTransfer
             · rcases htransfer with
                 ⟨hle, intermediate, hdecrease, hincrease⟩
@@ -5403,7 +5403,7 @@ inductive Exec.Frame.CallFreeNoFlowStorageBranch
 /-- Every closed non-flow branch has nonempty calldata. -/
 theorem Exec.Frame.CallFreeNoFlowStorageBranch.nonempty
     {frame : Exec.Frame}
-    (branch : frame.CallFreeNoFlowStorageBranch) :
+    (branch : Blanc.Weth10.Exec.Frame.CallFreeNoFlowStorageBranch frame) :
     frame.sevm.data.length.toB256 ≠ 0 := by
   cases branch <;> assumption
 
@@ -5604,7 +5604,7 @@ private theorem allowanceSelector_noPrimaryFlow :
 selector families. -/
 theorem Exec.Frame.CallFreeNoFlowStorageBranch.selectsNoPrimaryFlow
     {frame : Exec.Frame}
-    (branch : frame.CallFreeNoFlowStorageBranch) :
+    (branch : Blanc.Weth10.Exec.Frame.CallFreeNoFlowStorageBranch frame) :
     SelectsNoPrimaryFlow frame.sevm := by
   cases branch with
   | name _ selected =>
@@ -5656,54 +5656,54 @@ theorem Exec.Frame.CallFreeNoFlowStorageBranch.selectsNoPrimaryFlow
 /-- Exact storage dispatcher for all fifteen already-closed non-flow leaves. -/
 theorem Exec.Frame.hasProofIndexedStorageAccounting_of_callFreeNoFlowBranch
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
-    (branch : frame.CallFreeNoFlowStorageBranch) :
-    frame.HasProofIndexedStorageAccounting dp ca := by
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
+    (branch : Blanc.Weth10.Exec.Frame.CallFreeNoFlowStorageBranch frame) :
+    Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting dp ca frame := by
   cases branch with
   | name nonempty selected =>
-      exact frame.hasProofIndexedStorageAccounting_of_name
+      exact Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_name (frame := frame)
         context selected nonempty
   | approve nonempty selected =>
-      exact frame.hasProofIndexedStorageAccounting_of_approve
+      exact Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_approve (frame := frame)
         context selected nonempty
   | totalSupply nonempty selected =>
-      exact frame.hasProofIndexedStorageAccounting_of_totalSupply
+      exact Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_totalSupply (frame := frame)
         context selected nonempty
   | permitTypehash nonempty selected =>
-      exact frame.hasProofIndexedStorageAccounting_of_permitTypehash
+      exact Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_permitTypehash (frame := frame)
         context selected nonempty
   | decimals nonempty selected =>
-      exact frame.hasProofIndexedStorageAccounting_of_decimals
+      exact Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_decimals (frame := frame)
         context selected nonempty
   | domainSeparator nonempty selected =>
-      exact frame.hasProofIndexedStorageAccounting_of_domainSeparator
+      exact Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_domainSeparator (frame := frame)
         context selected nonempty
   | maxFlashLoan nonempty selected =>
-      exact frame.hasProofIndexedStorageAccounting_of_maxFlashLoan
+      exact Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_maxFlashLoan (frame := frame)
         context selected nonempty
   | balanceOf nonempty selected =>
-      exact frame.hasProofIndexedStorageAccounting_of_balanceOf
+      exact Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_balanceOf (frame := frame)
         context selected nonempty
   | nonces nonempty selected =>
-      exact frame.hasProofIndexedStorageAccounting_of_nonces
+      exact Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_nonces (frame := frame)
         context selected nonempty
   | callbackSuccess nonempty selected =>
-      exact frame.hasProofIndexedStorageAccounting_of_callbackSuccess
+      exact Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_callbackSuccess (frame := frame)
         context selected nonempty
   | flashMinted nonempty selected =>
-      exact frame.hasProofIndexedStorageAccounting_of_flashMinted
+      exact Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_flashMinted (frame := frame)
         context selected nonempty
   | symbol nonempty selected =>
-      exact frame.hasProofIndexedStorageAccounting_of_symbol
+      exact Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_symbol (frame := frame)
         context selected nonempty
   | deploymentChainId nonempty selected =>
-      exact frame.hasProofIndexedStorageAccounting_of_deploymentChainId
+      exact Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_deploymentChainId (frame := frame)
         context selected nonempty
   | flashFee nonempty selected =>
-      exact frame.hasProofIndexedStorageAccounting_of_flashFee
+      exact Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_flashFee (frame := frame)
         context selected nonempty
   | allowance nonempty selected =>
-      exact frame.hasProofIndexedStorageAccounting_of_allowance
+      exact Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_allowance (frame := frame)
         context selected nonempty
 
 /-- The currently closed call-free storage branches, expressed only by their
@@ -5725,35 +5725,35 @@ inductive Exec.Frame.CallFreeStorageBranch (frame : Exec.Frame) : Prop
       (nonempty : frame.sevm.data.length.toB256 ≠ 0)
       (selected : Sevm.selector frame.sevm = transferFromSelector)
       (recipient : Sevm.argWord frame.sevm 1 ≠ 0)
-  | noFlow (branch : frame.CallFreeNoFlowStorageBranch)
+  | noFlow (branch : Blanc.Weth10.Exec.Frame.CallFreeNoFlowStorageBranch frame)
 
 /-- Incremental concrete dispatcher for every childless primary flow branch.
 It is premise-free beyond the executable branch test itself and does not wait
 on any callback chronology theorem. -/
 theorem Exec.Frame.hasProofIndexedStorageAccounting_of_callFreeBranch
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
-    (branch : frame.CallFreeStorageBranch) :
-    frame.HasProofIndexedStorageAccounting dp ca := by
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
+    (branch : Blanc.Weth10.Exec.Frame.CallFreeStorageBranch frame) :
+    Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting dp ca frame := by
   cases branch with
   | receive empty =>
-      exact frame.hasProofIndexedStorageAccounting_of_receive context empty
+      exact Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_receive (frame := frame) context empty
   | deposit nonempty selected =>
-      exact frame.hasProofIndexedStorageAccounting_of_deposit
+      exact Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_deposit (frame := frame)
         context selected nonempty
   | depositTo nonempty selected =>
-      exact frame.hasProofIndexedStorageAccounting_of_depositTo
+      exact Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_depositTo (frame := frame)
         context selected nonempty
   | transferNonzero nonempty selected recipient =>
-      exact frame.hasProofIndexedStorageAccounting_of_transferNonzero
+      exact Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_transferNonzero (frame := frame)
         context selected nonempty recipient
   | transferFromNonzero nonempty selected recipient =>
-      exact frame.hasProofIndexedStorageAccounting_of_transferFromNonzero
+      exact Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_transferFromNonzero (frame := frame)
         context selected nonempty recipient
-        (frame.descendantFlowActions_eq_nil_of_transferFromNonzero
+        (Blanc.Weth10.Exec.Frame.descendantFlowActions_eq_nil_of_transferFromNonzero (frame := frame)
           context selected nonempty recipient)
   | noFlow noFlow =>
-      exact frame.hasProofIndexedStorageAccounting_of_callFreeNoFlowBranch
+      exact Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_callFreeNoFlowBranch (frame := frame)
         context noFlow
 
 /-- The exact selector branches still awaiting recursive storage chronology.
@@ -5797,12 +5797,12 @@ inductive Exec.Frame.RemainingStorageBranch (frame : Exec.Frame) : Prop
 already-closed call-free case or one exact remaining recursive case. -/
 theorem Exec.Frame.callFreeStorageBranch_or_remaining
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca) :
-    frame.CallFreeStorageBranch ∨ frame.RemainingStorageBranch := by
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame) :
+    Blanc.Weth10.Exec.Frame.CallFreeStorageBranch frame ∨ Blanc.Weth10.Exec.Frame.RemainingStorageBranch frame := by
   by_cases hempty : frame.sevm.data.length.toB256 = 0
   · exact Or.inl (.receive hempty)
   have hnonempty : frame.sevm.data.length.toB256 ≠ 0 := hempty
-  rcases frame.recognizedSelector_of_nonempty context hnonempty with
+  rcases Blanc.Weth10.Exec.Frame.recognizedSelector_of_nonempty (frame := frame) context hnonempty with
     ⟨body, hmember⟩
   have hselector : Sevm.selector frame.sevm ∈
       (weth10Funcs dp).map Prod.fst :=
@@ -5870,40 +5870,40 @@ theorem compiledFrameStorageHandler
     (dp : DeployParams) (ca : Adr) :
     CompiledFrameStorageHandler dp ca := by
   intro frame context hdeeper
-  rcases frame.callFreeStorageBranch_or_remaining context with
+  rcases Blanc.Weth10.Exec.Frame.callFreeStorageBranch_or_remaining (frame := frame) context with
       closed | openCase
-  · exact (frame.hasProofIndexedStorageAccounting_of_callFreeBranch
+  · exact (Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_callFreeBranch (frame := frame)
       context closed).storageSegmentEffect
   · cases openCase with
     | depositToAndCall nonempty selected =>
-        exact (frame.hasProofIndexedStorageAccounting_of_depositToAndCall
+        exact (Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_depositToAndCall (frame := frame)
           context selected nonempty hdeeper).storageSegmentEffect
     | transferZero nonempty selected recipient =>
-        exact (frame.hasProofIndexedStorageAccounting_of_transferZero
+        exact (Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_transferZero (frame := frame)
           context selected nonempty recipient hdeeper).storageSegmentEffect
     | transferAndCall nonempty selected =>
-        exact (frame.hasProofIndexedStorageAccounting_of_transferAndCall
+        exact (Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_transferAndCall (frame := frame)
           context selected nonempty hdeeper).storageSegmentEffect
     | transferFromZero nonempty selected recipient =>
-        exact (frame.hasProofIndexedStorageAccounting_of_transferFromZero
+        exact (Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_transferFromZero (frame := frame)
           context selected nonempty recipient hdeeper).storageSegmentEffect
     | withdraw nonempty selected =>
-        exact (frame.hasProofIndexedStorageAccounting_of_withdraw
+        exact (Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_withdraw (frame := frame)
           context selected nonempty hdeeper).storageSegmentEffect
     | withdrawTo nonempty selected =>
-        exact (frame.hasProofIndexedStorageAccounting_of_withdrawTo
+        exact (Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_withdrawTo (frame := frame)
           context selected nonempty hdeeper).storageSegmentEffect
     | withdrawFrom nonempty selected =>
-        exact (frame.hasProofIndexedStorageAccounting_of_withdrawFrom
+        exact (Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_withdrawFrom (frame := frame)
           context selected nonempty hdeeper).storageSegmentEffect
     | flashLoan nonempty selected =>
-        exact (frame.hasProofIndexedStorageAccounting_of_flashLoan
+        exact (Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_flashLoan (frame := frame)
           context selected nonempty hdeeper).storageSegmentEffect
     | approveAndCall nonempty selected =>
-        exact (frame.hasProofIndexedStorageAccounting_of_approveAndCall
+        exact (Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_approveAndCall (frame := frame)
           context selected nonempty hdeeper).storageSegmentEffect
     | permit nonempty selected =>
-        exact (frame.hasProofIndexedStorageAccounting_of_permit
+        exact (Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_permit (frame := frame)
           context selected nonempty hdeeper).storageSegmentEffect
 
 /-- Premise-free compiled-program storage handler consumed by recursion. -/

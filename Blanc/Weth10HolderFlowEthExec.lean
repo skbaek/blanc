@@ -215,8 +215,8 @@ theorem Exec.entryEthBound_of_value_eq_zero
   have hmint :
       flowActionsEthMint
           (Exec.entryEthActions dp ca run hcommit) ≤ msg.value.toNat := by
-    have h := root.flowActionsEthMint_entryEthActions_le_value
-      (dp := dp) (ca := ca)
+    have h := Blanc.Weth10.Exec.Frame.flowActionsEthMint_entryEthActions_le_value
+      (dp := dp) (ca := ca) root
     simpa [root, Exec.entryEthActions, Exec.Frame.ofRun,
       initSevm, Msg.withBenv] using h
   have hmintZero :
@@ -781,8 +781,8 @@ theorem EthBound.cons_of_atom_eth_eq_zero
 theorem Exec.Frame.bodyEthActions_eq
     {dp : DeployParams} {ca : Adr} (frame : Exec.Frame) :
     Exec.bodyEthActions dp ca frame.run frame.committed =
-      flowActionBodyEthActions (frame.flowAction? dp ca) ++
-        frame.descendantFlowActions dp ca := by
+      flowActionBodyEthActions (Blanc.Weth10.Exec.Frame.flowAction? dp ca frame) ++
+        Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame := by
   cases frame
   rfl
 
@@ -1413,11 +1413,11 @@ theorem ProcessMessage.ethBound_of_settledBodyBound
         (Execution.committedPost out hcommit).state
         (Exec.bodyEthActions dp ca run hcommit)) :
     EthBound ca msg.benv.state post.state
-      (if Blanc.Weth10.Frame.settlementCommits
+      (if Blanc.Frame.settlementCommits
           (Frame.ofCall msg) out = true
        then Exec.flowActions dp ca run else []) := by
   by_cases hsettle :
-      Blanc.Weth10.Frame.settlementCommits
+      Blanc.Frame.settlementCommits
         (Frame.ofCall msg) out = true
   · rw [if_pos hsettle]
     exact ProcessMessage.ethBound_of_bodyBound run hprocess
@@ -1428,7 +1428,7 @@ theorem ProcessMessage.ethBound_of_settledBodyBound
       have hnone : post.error.isNone ≠ true := by
         intro hnone
         apply hsettle
-        unfold Blanc.Weth10.Frame.settlementCommits
+        unfold Blanc.Frame.settlementCommits
         rw [← hset]
         exact hnone
       cases he : post.error <;> simp_all
@@ -1455,16 +1455,16 @@ theorem ProcessCreateMessage.ethBound_of_settledBodyBound
         (Execution.committedPost out hcommit).state
         (Exec.bodyEthActions dp ca run hcommit)) :
     EthBound ca msg.benv.state post.state
-      (if Blanc.Weth10.Frame.settlementCommits
+      (if Blanc.Frame.settlementCommits
           (Frame.ofCreate msg) out = true
        then Exec.flowActions dp ca run else []) := by
   by_cases hsettle :
-      Blanc.Weth10.Frame.settlementCommits
+      Blanc.Frame.settlementCommits
         (Frame.ofCreate msg) out = true
   · rw [if_pos hsettle]
     have hset := (RunFrame.some_inv hprocess).2
     have hnone : post.error.isNone = true := by
-      unfold Blanc.Weth10.Frame.settlementCommits at hsettle
+      unfold Blanc.Frame.settlementCommits at hsettle
       rw [← hset] at hsettle
       exact hsettle
     have herr : post.error.isSome = false := by
@@ -1495,7 +1495,7 @@ theorem ProcessCreateMessage.ethBound_of_settledBodyBound
       have hnone : post.error.isNone ≠ true := by
         intro hnone
         apply hsettle
-        unfold Blanc.Weth10.Frame.settlementCommits
+        unfold Blanc.Frame.settlementCommits
         rw [← hset]
         exact hnone
       cases he : post.error <;> simp_all
@@ -1524,7 +1524,7 @@ theorem GenericCall.foreignSomeEthBound
     (hval0 : stv = false → target = ca → value = 0)
     (hsum : sum pre.state.bal < 2 ^ 256) :
     EthBound ca pre.state post.state
-      (if Blanc.Weth10.Frame.settlementCommits
+      (if Blanc.Frame.settlementCommits
           (Frame.ofCall
             (callMsg sevm (pre.withReturnData [])
               gas
@@ -1627,7 +1627,7 @@ theorem GenericCreate.foreignSomeEthBound
     (hforeign : sevm.currentTarget ≠ ca)
     (hsum : sum pre.state.bal < 2 ^ 256) :
     EthBound ca pre.state post.state
-      (if Blanc.Weth10.Frame.settlementCommits
+      (if Blanc.Frame.settlementCommits
           (Frame.ofCreate
             (createMsg sevm
               (addAccessedAddress
@@ -1968,7 +1968,7 @@ theorem Xinst.foreignSomeEthBound
     (hforeign : sevm.currentTarget ≠ ca)
     (hsum : sum pre.state.bal < 2 ^ 256) :
     EthBound ca pre.state post.state
-      (if Blanc.Weth10.Frame.settlementCommits frame raw = true
+      (if Blanc.Frame.settlementCommits frame raw = true
        then Exec.flowActions dp ca child else []) := by
   rcases Xinst.step_shape sevm pre x with
     ⟨ex, hs, hprefix⟩ |
@@ -2171,7 +2171,8 @@ theorem Exec.bodyEthActions_eq_descendantActions_of_currentTarget_ne
     (hne : sevm.currentTarget ≠ ca) :
     Exec.bodyEthActions dp ca run hcommit =
       Exec.descendantActions dp ca run := by
-  have hnot : ¬ (Exec.Frame.ofRun run hcommit).exactInvocation dp ca := by
+  have hnot : ¬ Blanc.Weth10.Exec.Frame.exactInvocation dp ca
+      (Exec.Frame.ofRun run hcommit) := by
     rintro ⟨_, htarget, _, _⟩
     exact hne htarget
   simp [Exec.bodyEthActions, Exec.descendantActions,
@@ -2182,40 +2183,40 @@ actual root classification and rollback-pruned descendant ledger. -/
 inductive Exec.Frame.CompiledBodyEthAccounting
     (dp : DeployParams) (ca : Adr) (frame : Exec.Frame) : Prop
   | flow (action : FlowAction)
-      (classified : frame.flowAction? dp ca = some action)
+      (classified : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action)
       (accounting : RichBodyEthAccounting dp ca frame.sevm
-        frame.pre frame.post action (frame.descendantFlowActions dp ca))
+        frame.pre frame.post action (Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame))
   | noFlow
-      (classified : frame.flowAction? dp ca = none)
+      (classified : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = none)
       (accounting : NoFlowBodyEthAccounting dp ca frame.sevm
-        frame.pre frame.post (frame.descendantFlowActions dp ca))
+        frame.pre frame.post (Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame))
 
 /-- Reusable ETH closure for a recognized nonpayable body whose source line
 contains no recursive machine instruction and ends at one terminal opcode. -/
 theorem Exec.Frame.compiledBodyEthAccounting_of_nonpayableChildless_noFlow
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {line : Line} {i : Linst}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
-    (classified : frame.flowAction? dp ca = none)
+    (classified : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = none)
     (hmem : (Sevm.selector frame.sevm,
       nonpayable (line +++ Func.last i)) ∈ weth10Funcs dp)
     (hchildless : ∀ n ∈ line, NinstIsChildless n)
     (balance : Devm.getBal frame.post = Devm.getBal frame.pre) :
-    frame.CompiledBodyEthAccounting dp ca := by
+    Blanc.Weth10.Exec.Frame.CompiledBodyEthAccounting dp ca frame := by
   apply Exec.Frame.CompiledBodyEthAccounting.noFlow classified
   exact NoFlowBodyEthAccounting.silent balance
-    (frame.descendantFlowActions_eq_nil_of_nonpayableChildless
-      context hnonempty hmem hchildless)
+    (Blanc.Weth10.Exec.Frame.descendantFlowActions_eq_nil_of_nonpayableChildless
+      (frame := frame) context hnonempty hmem hchildless)
 
 /-- ETH-local chronology closure for a nonpayable body made of a childless
 guard prefix and two childless terminal branches. -/
 theorem Exec.Frame.compiledBodyEthAccounting_of_nonpayableChildlessBranches_noFlow
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {head left right : Line} {leftLast rightLast : Linst}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
-    (classified : frame.flowAction? dp ca = none)
+    (classified : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = none)
     (hmem : (Sevm.selector frame.sevm,
       nonpayable (head +++
         ((left +++ Func.last leftLast) <?>
@@ -2224,10 +2225,11 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_nonpayableChildlessBranches_noFl
     (hleft : ∀ n ∈ left, NinstIsChildless n)
     (hright : ∀ n ∈ right, NinstIsChildless n)
     (balance : Devm.getBal frame.post = Devm.getBal frame.pre) :
-    frame.CompiledBodyEthAccounting dp ca := by
+    Blanc.Weth10.Exec.Frame.CompiledBodyEthAccounting dp ca frame := by
   apply Exec.Frame.CompiledBodyEthAccounting.noFlow classified
   apply NoFlowBodyEthAccounting.silent balance
-  rcases frame.compiledSelectorBodyCursor context hnonempty hmem with
+  rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursor (frame := frame)
+      context hnonempty hmem with
     ⟨wrapperCursor, _hwrapperStack, hwrapperActions⟩
   rcases wrapperCursor.enterNonpayable with
     ⟨bodyCursor, _hbodyStack, hbodyActions⟩
@@ -2246,11 +2248,11 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_nonpayableChildlessBranches_noFl
 /-- Exact no-flow ETH accounting for `name()`. -/
 theorem Exec.Frame.compiledBodyEthAccounting_of_name
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
-    (classified : frame.flowAction? dp ca = none)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
+    (classified : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = none)
     (hselector : Sevm.selector frame.sevm = selector "name" [])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    frame.CompiledBodyEthAccounting dp ca := by
+    Blanc.Weth10.Exec.Frame.CompiledBodyEthAccounting dp ca frame := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
   | error err => simp [Execution.commits] at committed
@@ -2278,11 +2280,11 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_name
 /-- Exact no-flow ETH accounting for `symbol()`. -/
 theorem Exec.Frame.compiledBodyEthAccounting_of_symbol
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
-    (classified : frame.flowAction? dp ca = none)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
+    (classified : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = none)
     (hselector : Sevm.selector frame.sevm = selector "symbol" [])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    frame.CompiledBodyEthAccounting dp ca := by
+    Blanc.Weth10.Exec.Frame.CompiledBodyEthAccounting dp ca frame := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
   | error err => simp [Execution.commits] at committed
@@ -2310,12 +2312,12 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_symbol
 /-- Exact no-flow ETH accounting for `CALLBACK_SUCCESS()`. -/
 theorem Exec.Frame.compiledBodyEthAccounting_of_callbackSuccess
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
-    (classified : frame.flowAction? dp ca = none)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
+    (classified : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = none)
     (hselector :
       Sevm.selector frame.sevm = selector "CALLBACK_SUCCESS" [])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    frame.CompiledBodyEthAccounting dp ca := by
+    Blanc.Weth10.Exec.Frame.CompiledBodyEthAccounting dp ca frame := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
   | error err => simp [Execution.commits] at committed
@@ -2341,12 +2343,12 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_callbackSuccess
 /-- Exact no-flow ETH accounting for `PERMIT_TYPEHASH()`. -/
 theorem Exec.Frame.compiledBodyEthAccounting_of_permitTypehash
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
-    (classified : frame.flowAction? dp ca = none)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
+    (classified : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = none)
     (hselector :
       Sevm.selector frame.sevm = selector "PERMIT_TYPEHASH" [])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    frame.CompiledBodyEthAccounting dp ca := by
+    Blanc.Weth10.Exec.Frame.CompiledBodyEthAccounting dp ca frame := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
   | error err => simp [Execution.commits] at committed
@@ -2372,11 +2374,11 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_permitTypehash
 /-- Exact no-flow ETH accounting for `decimals()`. -/
 theorem Exec.Frame.compiledBodyEthAccounting_of_decimals
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
-    (classified : frame.flowAction? dp ca = none)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
+    (classified : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = none)
     (hselector : Sevm.selector frame.sevm = selector "decimals" [])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    frame.CompiledBodyEthAccounting dp ca := by
+    Blanc.Weth10.Exec.Frame.CompiledBodyEthAccounting dp ca frame := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
   | error err => simp [Execution.commits] at committed
@@ -2400,12 +2402,12 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_decimals
 /-- Exact no-flow ETH accounting for `deploymentChainId()`. -/
 theorem Exec.Frame.compiledBodyEthAccounting_of_deploymentChainId
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
-    (classified : frame.flowAction? dp ca = none)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
+    (classified : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = none)
     (hselector :
       Sevm.selector frame.sevm = selector "deploymentChainId" [])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    frame.CompiledBodyEthAccounting dp ca := by
+    Blanc.Weth10.Exec.Frame.CompiledBodyEthAccounting dp ca frame := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
   | error err => simp [Execution.commits] at committed
@@ -2432,12 +2434,12 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_deploymentChainId
 childless chain-id branches. -/
 theorem Exec.Frame.compiledBodyEthAccounting_of_domainSeparator
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
-    (classified : frame.flowAction? dp ca = none)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
+    (classified : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = none)
     (hselector :
       Sevm.selector frame.sevm = selector "DOMAIN_SEPARATOR" [])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    frame.CompiledBodyEthAccounting dp ca := by
+    Blanc.Weth10.Exec.Frame.CompiledBodyEthAccounting dp ca frame := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
   | error err => simp [Execution.commits] at committed
@@ -2475,12 +2477,12 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_domainSeparator
 childless token-test branches. -/
 theorem Exec.Frame.compiledBodyEthAccounting_of_maxFlashLoan
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
-    (classified : frame.flowAction? dp ca = none)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
+    (classified : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = none)
     (hselector : Sevm.selector frame.sevm =
       selector "maxFlashLoan" [.address])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    frame.CompiledBodyEthAccounting dp ca := by
+    Blanc.Weth10.Exec.Frame.CompiledBodyEthAccounting dp ca frame := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
   | error err => simp [Execution.commits] at committed
@@ -2519,12 +2521,12 @@ successful arm is balance-silent and its original descendant chronology is
 empty. -/
 theorem Exec.Frame.compiledBodyEthAccounting_of_flashFee
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
-    (classified : frame.flowAction? dp ca = none)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
+    (classified : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = none)
     (hselector : Sevm.selector frame.sevm =
       selector "flashFee" [.address, .uint256])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    frame.CompiledBodyEthAccounting dp ca := by
+    Blanc.Weth10.Exec.Frame.CompiledBodyEthAccounting dp ca frame := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
   | error err => simp [Execution.commits] at committed
@@ -2542,12 +2544,12 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_flashFee
 /-- Exact no-flow ETH accounting for `balanceOf(address)`. -/
 theorem Exec.Frame.compiledBodyEthAccounting_of_balanceOf
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
-    (classified : frame.flowAction? dp ca = none)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
+    (classified : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = none)
     (hselector :
       Sevm.selector frame.sevm = selector "balanceOf" [.address])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    frame.CompiledBodyEthAccounting dp ca := by
+    Blanc.Weth10.Exec.Frame.CompiledBodyEthAccounting dp ca frame := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
   | error err => simp [Execution.commits] at committed
@@ -2572,12 +2574,12 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_balanceOf
 /-- Exact no-flow ETH accounting for `allowance(address,address)`. -/
 theorem Exec.Frame.compiledBodyEthAccounting_of_allowance
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
-    (classified : frame.flowAction? dp ca = none)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
+    (classified : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = none)
     (hselector : Sevm.selector frame.sevm =
       selector "allowance" [.address, .address])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    frame.CompiledBodyEthAccounting dp ca := by
+    Blanc.Weth10.Exec.Frame.CompiledBodyEthAccounting dp ca frame := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
   | error err => simp [Execution.commits] at committed
@@ -2603,12 +2605,12 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_allowance
 /-- Exact no-flow ETH accounting for `nonces(address)`. -/
 theorem Exec.Frame.compiledBodyEthAccounting_of_nonces
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
-    (classified : frame.flowAction? dp ca = none)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
+    (classified : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = none)
     (hselector :
       Sevm.selector frame.sevm = selector "nonces" [.address])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    frame.CompiledBodyEthAccounting dp ca := by
+    Blanc.Weth10.Exec.Frame.CompiledBodyEthAccounting dp ca frame := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
   | error err => simp [Execution.commits] at committed
@@ -2634,11 +2636,11 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_nonces
 /-- Exact no-flow ETH accounting for `flashMinted()`. -/
 theorem Exec.Frame.compiledBodyEthAccounting_of_flashMinted
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
-    (classified : frame.flowAction? dp ca = none)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
+    (classified : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = none)
     (hselector : Sevm.selector frame.sevm = selector "flashMinted" [])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    frame.CompiledBodyEthAccounting dp ca := by
+    Blanc.Weth10.Exec.Frame.CompiledBodyEthAccounting dp ca frame := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
   | error err => simp [Execution.commits] at committed
@@ -2665,11 +2667,11 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_flashMinted
 `SELFBALANCE`, but does not alter the contract balance. -/
 theorem Exec.Frame.compiledBodyEthAccounting_of_totalSupply
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
-    (classified : frame.flowAction? dp ca = none)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
+    (classified : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = none)
     (hselector : Sevm.selector frame.sevm = selector "totalSupply" [])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    frame.CompiledBodyEthAccounting dp ca := by
+    Blanc.Weth10.Exec.Frame.CompiledBodyEthAccounting dp ca frame := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
   | error err => simp [Execution.commits] at committed
@@ -2695,12 +2697,12 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_totalSupply
 /-- Exact no-flow ETH accounting for the call-free `approve` body. -/
 theorem Exec.Frame.compiledBodyEthAccounting_of_approve
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
-    (classified : frame.flowAction? dp ca = none)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
+    (classified : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = none)
     (hselector : Sevm.selector frame.sevm =
       selector "approve" [.address, .uint256])
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    frame.CompiledBodyEthAccounting dp ca := by
+    Blanc.Weth10.Exec.Frame.CompiledBodyEthAccounting dp ca frame := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
   | error err => simp [Execution.commits] at committed
@@ -2721,12 +2723,12 @@ with no retained child. -/
 theorem Exec.Frame.compiledBodyEthAccounting_of_transferNonzero
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {action : FlowAction}
-    (context : frame.AuthenticContext dp ca)
-    (classified : frame.flowAction? dp ca = some action)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
+    (classified : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action)
     (hselector : Sevm.selector frame.sevm = transferSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hto : Sevm.argWord frame.sevm 0 ≠ 0) :
-    frame.CompiledBodyEthAccounting dp ca := by
+    Blanc.Weth10.Exec.Frame.CompiledBodyEthAccounting dp ca frame := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
   | error err => simp [Execution.commits] at committed
@@ -2770,13 +2772,13 @@ allowance prefix and transfer body preserve ETH balances; only its exact
 call-free cursor chronology remains an input. -/
 theorem Exec.Frame.compiledBodyEthAccounting_of_transferFromNonzero
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = transferFromSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hto : Sevm.argWord frame.sevm 1 ≠ 0)
-    (chronology : frame.descendantFlowActions dp ca = []) :
-    frame.CompiledBodyEthAccounting dp ca := by
-  cases haction : frame.flowAction? dp ca with
+    (chronology : Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame = []) :
+    Blanc.Weth10.Exec.Frame.CompiledBodyEthAccounting dp ca frame := by
+  cases haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
   | none =>
       have hprimary : primaryFlowAtom frame.sevm = some
           (.transfer (Sevm.argWord frame.sevm 0)
@@ -2840,9 +2842,9 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_transferFromNonzero
 body has neither an ETH balance effect nor a retained child. -/
 theorem Exec.Frame.compiledBodyEthAccounting_of_receive
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hempty : frame.sevm.data.length.toB256 = 0) :
-    frame.CompiledBodyEthAccounting dp ca := by
+    Blanc.Weth10.Exec.Frame.CompiledBodyEthAccounting dp ca frame := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
   | error err => simp [Execution.commits] at committed
@@ -2884,10 +2886,10 @@ Its ordinary mint is funded at message entry; the installed body itself is
 ETH-balance silent and has no retained children. -/
 theorem Exec.Frame.compiledBodyEthAccounting_of_deposit
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = depositSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    frame.CompiledBodyEthAccounting dp ca := by
+    Blanc.Weth10.Exec.Frame.CompiledBodyEthAccounting dp ca frame := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
   | error err => simp [Execution.commits] at committed
@@ -2930,10 +2932,10 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_deposit
 `depositTo(address)` leaf. -/
 theorem Exec.Frame.compiledBodyEthAccounting_of_depositTo
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = depositToSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
-    frame.CompiledBodyEthAccounting dp ca := by
+    Blanc.Weth10.Exec.Frame.CompiledBodyEthAccounting dp ca frame := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
   | error err => simp [Execution.commits] at committed
@@ -2981,15 +2983,15 @@ The mint prefix is balance-silent inside the body, and the indexed retained
 callback contributes its exact zero-value child ledger. -/
 theorem Exec.Frame.compiledBodyEthAccounting_of_depositToAndCall
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = depositToAndCallSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
       (fun pc sevm pre out _ =>
         Exec.CoreEthSound dp ca pc sevm pre out))
     (hsum : sum frame.pre.state.bal < 2 ^ 256) :
-    frame.CompiledBodyEthAccounting dp ca := by
-  rcases frame.compiledDepositToAndCallChronology context hselector
+    Blanc.Weth10.Exec.Frame.CompiledBodyEthAccounting dp ca frame := by
+  rcases Blanc.Weth10.Exec.Frame.compiledDepositToAndCallChronology (frame := frame) context hselector
       hnonempty with
     ⟨callbackPre, _hstorage, _hlogs, hbalance, hcode, _houtput,
       inputSize, input, callPre, callPost, parent, child, xl, pc,
@@ -3017,7 +3019,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_depositToAndCall
     simp [primaryFlowAtom, hnonempty, hselector,
       depositToAndCallSelector_ne_depositSelector,
       depositToAndCallSelector_ne_depositToSelector]
-  cases haction : frame.flowAction? dp ca with
+  cases haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
   | none =>
       unfold Exec.Frame.flowAction? at haction
       rw [if_pos context.invocation, hprimary] at haction
@@ -3032,7 +3034,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_depositToAndCall
         exact congrArg FlowAction.atom (Option.some.inj haction).symm
       apply RichBodyEthAccounting.mintCallback hatom callbackForFrame
       calc
-        frame.descendantFlowActions dp ca =
+        Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame =
             retained.flowActions dp ca := by
           simpa only [List.nil_append] using chronology
         _ = callbackForFrame.call.trace.retained.flowActions dp ca := by
@@ -3043,15 +3045,15 @@ prefix is balance-silent, and the indexed retained callback contributes its
 exact zero-value child ledger. -/
 theorem Exec.Frame.compiledBodyEthAccounting_of_approveAndCall
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = approveAndCallSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
       (fun pc sevm pre out _ =>
         Exec.CoreEthSound dp ca pc sevm pre out))
     (hsum : sum frame.pre.state.bal < 2 ^ 256) :
-    frame.CompiledBodyEthAccounting dp ca := by
-  rcases frame.compiledApproveAndCallChronology context hselector
+    Blanc.Weth10.Exec.Frame.CompiledBodyEthAccounting dp ca frame := by
+  rcases Blanc.Weth10.Exec.Frame.compiledApproveAndCallChronology (frame := frame) context hselector
       hnonempty with
     ⟨callbackPre, _hstorage, _hlogs, hbalance, hcode, _houtput,
       inputSize, input, callPre, callPost, parent, child, xl, pc,
@@ -3075,12 +3077,13 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_approveAndCall
       hbalance.symm.trans hcallbackPreBalance, hpostBalance⟩
   have hnoPrimary : SelectsNoPrimaryFlow frame.sevm := by
     constructor <;> rw [hselector] <;> decide +kernel
-  have classified := frame.flowAction_eq_none_of_selectsNoPrimaryFlow context
+  have classified := Blanc.Weth10.Exec.Frame.flowAction_eq_none_of_selectsNoPrimaryFlow
+    (frame := frame) context
     hnoPrimary hnonempty
   apply Exec.Frame.CompiledBodyEthAccounting.noFlow classified
   apply NoFlowBodyEthAccounting.callback callbackForFrame
   calc
-    frame.descendantFlowActions dp ca =
+    Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame =
         retained.flowActions dp ca := by
       simpa only [List.nil_append] using chronology
     _ = callbackForFrame.call.trace.retained.flowActions dp ca := by
@@ -3091,15 +3094,16 @@ credit and repayment are ETH-silent, while the chronology's exact retained
 borrower callback contributes the only recursive ETH segment. -/
 theorem Exec.Frame.compiledBodyEthAccounting_of_flashLoan
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = flashLoanSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
       (fun pc sevm pre out _ =>
         Exec.CoreEthSound dp ca pc sevm pre out))
     (hsum : sum frame.pre.state.bal < 2 ^ 256) :
-    frame.CompiledBodyEthAccounting dp ca := by
-  rcases frame.compiledFlashLoanChronology context hselector hnonempty with
+    Blanc.Weth10.Exec.Frame.CompiledBodyEthAccounting dp ca frame := by
+  rcases Blanc.Weth10.Exec.Frame.compiledFlashLoanChronology (frame := frame)
+      context hselector hnonempty with
     ⟨callbackPre, callbackPost, settlePre, burnPre, parent, child, xl, pc,
       retained, callback, _rawCommits, _occurrence, _hcredit, hprefixBal,
       hprefixCode, _hcallbackStor, hcallbackBal, _hcallbackCode,
@@ -3139,7 +3143,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_flashLoan
       flashLoanSelector_ne_withdrawSelector,
       flashLoanSelector_ne_withdrawToSelector,
       flashLoanSelector_ne_withdrawFromSelector]
-  cases haction : frame.flowAction? dp ca with
+  cases haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
   | none =>
       unfold Exec.Frame.flowAction? at haction
       rw [if_pos context.invocation, hprimary] at haction
@@ -3159,7 +3163,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_flashLoan
       · simp [FlowAtom.ethMint, hatom]
       · simp [FlowAtom.ethRedemption, hatom]
       · calc
-          frame.descendantFlowActions dp ca =
+          Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame =
               retained.flowActions dp ca := by
             simpa only [List.nil_append] using chronology
           _ = callbackForFrame.call.trace.retained.flowActions dp ca := by
@@ -3172,8 +3176,8 @@ private theorem Exec.Frame.compiledBodyEthAccounting_of_valueRedemption
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {action : FlowAction} {rawSource : B256} {source ethRecipient : Adr}
     {amount target : B256} {callPre guardPost : Devm}
-    (context : frame.AuthenticContext dp ca)
-    (classified : frame.flowAction? dp ca = some action)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
+    (classified : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action)
     (hatom : action.atom =
       .redemption rawSource source ethRecipient amount.toNat)
     (trace : AcceptedValueCallTrace frame.sevm target amount
@@ -3181,13 +3185,13 @@ private theorem Exec.Frame.compiledBodyEthAccounting_of_valueRedemption
     (burn : BurnCallPrefix frame.sevm frame.pre callPre guardPost
       source amount target)
     (hguardBalance : Devm.getBal guardPost = Devm.getBal frame.post)
-    (chronology : frame.descendantFlowActions dp ca =
+    (chronology : Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame =
       trace.retained.retained.flowActions dp ca)
     (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
       (fun pc sevm pre out _ =>
         Exec.CoreEthSound dp ca pc sevm pre out))
     (hsum : sum frame.pre.state.bal < 2 ^ 256) :
-    frame.CompiledBodyEthAccounting dp ca := by
+    Blanc.Weth10.Exec.Frame.CompiledBodyEthAccounting dp ca frame := by
   have installedCall : some (callPre.getCode ca).toList =
       Prog.compile (weth10 dp) := by
     rw [burn.2.2.2.2.2.1]
@@ -3217,8 +3221,8 @@ private theorem Exec.Frame.compiledBodyEthAccounting_of_allowanceValueRedemption
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {action : FlowAction} {rawSource : B256} {source ethRecipient : Adr}
     {amount target : B256} {ownPre callPre guardPost : Devm}
-    (context : frame.AuthenticContext dp ca)
-    (classified : frame.flowAction? dp ca = some action)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
+    (classified : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action)
     (hatom : action.atom =
       .redemption rawSource source ethRecipient amount.toNat)
     (entry : AllowancePrefixObservations frame.sevm frame.pre ownPre)
@@ -3227,13 +3231,13 @@ private theorem Exec.Frame.compiledBodyEthAccounting_of_allowanceValueRedemption
     (burn : BurnCallPrefix frame.sevm ownPre callPre guardPost
       source amount target)
     (hguardBalance : Devm.getBal guardPost = Devm.getBal frame.post)
-    (chronology : frame.descendantFlowActions dp ca =
+    (chronology : Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame =
       trace.retained.retained.flowActions dp ca)
     (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
       (fun pc sevm pre out _ =>
         Exec.CoreEthSound dp ca pc sevm pre out))
     (hsum : sum frame.pre.state.bal < 2 ^ 256) :
-    frame.CompiledBodyEthAccounting dp ca := by
+    Blanc.Weth10.Exec.Frame.CompiledBodyEthAccounting dp ca frame := by
   have installedCall : some (callPre.getCode ca).toList =
       Prog.compile (weth10 dp) := by
     rw [burn.2.2.2.2.2.1, ← entry.code]
@@ -3260,14 +3264,14 @@ private theorem Exec.Frame.compiledBodyEthAccounting_of_allowanceValueRedemption
 /-- Premise-free exact body ETH accounting for `withdraw(uint256)`. -/
 theorem Exec.Frame.compiledBodyEthAccounting_of_withdraw
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = withdrawSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
       (fun pc sevm pre out _ =>
         Exec.CoreEthSound dp ca pc sevm pre out))
     (hsum : sum frame.pre.state.bal < 2 ^ 256) :
-    frame.CompiledBodyEthAccounting dp ca := by
+    Blanc.Weth10.Exec.Frame.CompiledBodyEthAccounting dp ca frame := by
   have hprimary : primaryFlowAtom frame.sevm = some
       (.redemption frame.sevm.caller.toB256 frame.sevm.caller
         frame.sevm.caller (Sevm.argWord frame.sevm 0).toNat) := by
@@ -3278,7 +3282,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_withdraw
       withdrawSelector_ne_transferSelector,
       withdrawSelector_ne_transferAndCallSelector,
       withdrawSelector_ne_transferFromSelector]
-  cases haction : frame.flowAction? dp ca with
+  cases haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
   | none =>
       unfold Exec.Frame.flowAction? at haction
       rw [if_pos context.invocation, hprimary] at haction
@@ -3290,11 +3294,12 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_withdraw
         unfold Exec.Frame.flowAction? at haction
         rw [if_pos context.invocation, hprimary] at haction
         exact congrArg FlowAction.atom (Option.some.inj haction).symm
-      rcases frame.compiledWithdrawChronology context hselector hnonempty with
+      rcases Blanc.Weth10.Exec.Frame.compiledWithdrawChronology (frame := frame)
+          context hselector hnonempty with
         ⟨callPre, guardPost, trace, burn, _hslot, _hcommits,
           _hoccurrence, _hguardStor, hguardBalance, _hguardCode,
           _hguardLogs, chronology⟩
-      refine frame.compiledBodyEthAccounting_of_valueRedemption
+      refine Blanc.Weth10.Exec.Frame.compiledBodyEthAccounting_of_valueRedemption (frame := frame)
         (rawSource := frame.sevm.caller.toB256)
         (source := frame.sevm.caller)
         (ethRecipient := frame.sevm.caller)
@@ -3308,14 +3313,14 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_withdraw
 `withdrawTo(address,uint256)`. -/
 theorem Exec.Frame.compiledBodyEthAccounting_of_withdrawTo
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = withdrawToSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
       (fun pc sevm pre out _ =>
         Exec.CoreEthSound dp ca pc sevm pre out))
     (hsum : sum frame.pre.state.bal < 2 ^ 256) :
-    frame.CompiledBodyEthAccounting dp ca := by
+    Blanc.Weth10.Exec.Frame.CompiledBodyEthAccounting dp ca frame := by
   have hprimary : primaryFlowAtom frame.sevm = some
       (.redemption frame.sevm.caller.toB256 frame.sevm.caller
         (Sevm.argWord frame.sevm 0).toAdr
@@ -3328,7 +3333,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_withdrawTo
       withdrawToSelector_ne_transferAndCallSelector,
       withdrawToSelector_ne_transferFromSelector,
       withdrawToSelector_ne_withdrawSelector]
-  cases haction : frame.flowAction? dp ca with
+  cases haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
   | none =>
       unfold Exec.Frame.flowAction? at haction
       rw [if_pos context.invocation, hprimary] at haction
@@ -3341,12 +3346,12 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_withdrawTo
         unfold Exec.Frame.flowAction? at haction
         rw [if_pos context.invocation, hprimary] at haction
         exact congrArg FlowAction.atom (Option.some.inj haction).symm
-      rcases frame.compiledWithdrawToChronology context hselector
+      rcases Blanc.Weth10.Exec.Frame.compiledWithdrawToChronology (frame := frame) context hselector
           hnonempty with
         ⟨callPre, guardPost, trace, burn, _hslot, _hcommits,
           _hoccurrence, _hguardStor, hguardBalance, _hguardCode,
           _hguardLogs, chronology⟩
-      refine frame.compiledBodyEthAccounting_of_valueRedemption
+      refine Blanc.Weth10.Exec.Frame.compiledBodyEthAccounting_of_valueRedemption (frame := frame)
         (rawSource := frame.sevm.caller.toB256)
         (source := frame.sevm.caller)
         (ethRecipient := (Sevm.argWord frame.sevm 0).toAdr)
@@ -3360,7 +3365,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_withdrawTo
 `transfer(address,uint256)` redemption arm. -/
 theorem Exec.Frame.compiledBodyEthAccounting_of_transferZero
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = transferSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hto : Sevm.argWord frame.sevm 0 = 0)
@@ -3368,7 +3373,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_transferZero
       (fun pc sevm pre out _ =>
         Exec.CoreEthSound dp ca pc sevm pre out))
     (hsum : sum frame.pre.state.bal < 2 ^ 256) :
-    frame.CompiledBodyEthAccounting dp ca := by
+    Blanc.Weth10.Exec.Frame.CompiledBodyEthAccounting dp ca frame := by
   have hprimary : primaryFlowAtom frame.sevm = some
       (.redemption frame.sevm.caller.toB256 frame.sevm.caller
         frame.sevm.caller (Sevm.argWord frame.sevm 1).toNat) := by
@@ -3376,7 +3381,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_transferZero
       transferSelector_ne_depositSelector,
       transferSelector_ne_depositToSelector,
       transferSelector_ne_depositToAndCallSelector, hto]
-  cases haction : frame.flowAction? dp ca with
+  cases haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
   | none =>
       unfold Exec.Frame.flowAction? at haction
       rw [if_pos context.invocation, hprimary] at haction
@@ -3388,12 +3393,12 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_transferZero
         unfold Exec.Frame.flowAction? at haction
         rw [if_pos context.invocation, hprimary] at haction
         exact congrArg FlowAction.atom (Option.some.inj haction).symm
-      rcases frame.compiledTransferZeroChronology context hselector
+      rcases Blanc.Weth10.Exec.Frame.compiledTransferZeroChronology (frame := frame) context hselector
           hnonempty hto with
         ⟨callPre, guardPost, trace, burn, _hslot, _hcommits,
           _hoccurrence, _hguardStor, hguardBalance, _hguardCode,
           _hguardLogs, chronology⟩
-      refine frame.compiledBodyEthAccounting_of_valueRedemption
+      refine Blanc.Weth10.Exec.Frame.compiledBodyEthAccounting_of_valueRedemption (frame := frame)
         (rawSource := frame.sevm.caller.toB256)
         (source := frame.sevm.caller)
         (ethRecipient := frame.sevm.caller)
@@ -3407,7 +3412,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_transferZero
 `transferFrom` redemption arm. -/
 theorem Exec.Frame.compiledBodyEthAccounting_of_transferFromZero
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = transferFromSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hto : Sevm.argWord frame.sevm 1 = 0)
@@ -3415,7 +3420,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_transferFromZero
       (fun pc sevm pre out _ =>
         Exec.CoreEthSound dp ca pc sevm pre out))
     (hsum : sum frame.pre.state.bal < 2 ^ 256) :
-    frame.CompiledBodyEthAccounting dp ca := by
+    Blanc.Weth10.Exec.Frame.CompiledBodyEthAccounting dp ca frame := by
   have hprimary : primaryFlowAtom frame.sevm = some
       (.redemption (Sevm.argWord frame.sevm 0)
         (Sevm.argWord frame.sevm 0).toAdr frame.sevm.caller
@@ -3426,7 +3431,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_transferFromZero
       transferFromSelector_ne_depositToAndCallSelector,
       transferFromSelector_ne_transferSelector,
       transferFromSelector_ne_transferAndCallSelector, hto]
-  cases haction : frame.flowAction? dp ca with
+  cases haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
   | none =>
       unfold Exec.Frame.flowAction? at haction
       rw [if_pos context.invocation, hprimary] at haction
@@ -3439,7 +3444,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_transferFromZero
         unfold Exec.Frame.flowAction? at haction
         rw [if_pos context.invocation, hprimary] at haction
         exact congrArg FlowAction.atom (Option.some.inj haction).symm
-      rcases frame.compiledTransferFromZeroChronology context hselector
+      rcases Blanc.Weth10.Exec.Frame.compiledTransferFromZeroChronology (frame := frame) context hselector
           hnonempty hto with
         ⟨ownPre, entry, callPre, guardPost, trace, burn, _hslot,
           _hcommits, _hoccurrence, _hguardStor, hguardBalance,
@@ -3451,7 +3456,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_transferFromZero
           (Sevm.argWord frame.sevm 0).toAdr
           (Sevm.argWord frame.sevm 2) frame.sevm.caller.toB256 := by
         simpa only [hsource] using burn
-      refine frame.compiledBodyEthAccounting_of_allowanceValueRedemption
+      refine Blanc.Weth10.Exec.Frame.compiledBodyEthAccounting_of_allowanceValueRedemption (frame := frame)
         (rawSource := Sevm.argWord frame.sevm 0)
         (source := (Sevm.argWord frame.sevm 0).toAdr)
         (ethRecipient := frame.sevm.caller)
@@ -3466,14 +3471,14 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_transferFromZero
 `withdrawFrom(address,address,uint256)`. -/
 theorem Exec.Frame.compiledBodyEthAccounting_of_withdrawFrom
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = withdrawFromSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
       (fun pc sevm pre out _ =>
         Exec.CoreEthSound dp ca pc sevm pre out))
     (hsum : sum frame.pre.state.bal < 2 ^ 256) :
-    frame.CompiledBodyEthAccounting dp ca := by
+    Blanc.Weth10.Exec.Frame.CompiledBodyEthAccounting dp ca frame := by
   have hprimary : primaryFlowAtom frame.sevm = some
       (.redemption (Sevm.argWord frame.sevm 0)
         (Sevm.argWord frame.sevm 0).toAdr
@@ -3488,7 +3493,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_withdrawFrom
       withdrawFromSelector_ne_transferFromSelector,
       withdrawFromSelector_ne_withdrawSelector,
       withdrawFromSelector_ne_withdrawToSelector]
-  cases haction : frame.flowAction? dp ca with
+  cases haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
   | none =>
       unfold Exec.Frame.flowAction? at haction
       rw [if_pos context.invocation, hprimary] at haction
@@ -3502,7 +3507,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_withdrawFrom
         unfold Exec.Frame.flowAction? at haction
         rw [if_pos context.invocation, hprimary] at haction
         exact congrArg FlowAction.atom (Option.some.inj haction).symm
-      rcases frame.compiledWithdrawFromChronology context hselector
+      rcases Blanc.Weth10.Exec.Frame.compiledWithdrawFromChronology (frame := frame) context hselector
           hnonempty with
         ⟨ownPre, entry, callPre, guardPost, trace, burn, _hslot,
           _hcommits, _hoccurrence, _hguardStor, hguardBalance,
@@ -3514,7 +3519,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_withdrawFrom
           (Sevm.argWord frame.sevm 0).toAdr
           (Sevm.argWord frame.sevm 2) (Sevm.argWord frame.sevm 1) := by
         simpa only [hsource] using burn
-      refine frame.compiledBodyEthAccounting_of_allowanceValueRedemption
+      refine Blanc.Weth10.Exec.Frame.compiledBodyEthAccounting_of_allowanceValueRedemption (frame := frame)
         (rawSource := Sevm.argWord frame.sevm 0)
         (source := (Sevm.argWord frame.sevm 0).toAdr)
         (ethRecipient := (Sevm.argWord frame.sevm 1).toAdr)
@@ -3530,15 +3535,15 @@ The raw-zero arm composes the retained value redemption before the retained
 zero-value ERC-677 callback; the nonzero arm contributes only that callback. -/
 theorem Exec.Frame.compiledBodyEthAccounting_of_transferAndCall
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = transferAndCallSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
       (fun pc sevm pre out _ =>
         Exec.CoreEthSound dp ca pc sevm pre out))
     (hsum : sum frame.pre.state.bal < 2 ^ 256) :
-    frame.CompiledBodyEthAccounting dp ca := by
-  rcases frame.compiledTransferAndCallChronology context hselector
+    Blanc.Weth10.Exec.Frame.CompiledBodyEthAccounting dp ca frame := by
+  rcases Blanc.Weth10.Exec.Frame.compiledTransferAndCallChronology (frame := frame) context hselector
       hnonempty with hzero | hnonzero
   · rcases hzero with
       ⟨hraw, callPre, callbackPre, trace, burn, _hslot, _hcommits,
@@ -3562,7 +3567,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_transferAndCall
         transferAndCallSelector_ne_depositSelector,
         transferAndCallSelector_ne_depositToSelector,
         transferAndCallSelector_ne_depositToAndCallSelector, hraw]
-    cases haction : frame.flowAction? dp ca with
+    cases haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
     | none =>
         unfold Exec.Frame.flowAction? at haction
         rw [if_pos context.invocation, hprimary] at haction
@@ -3599,7 +3604,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_transferAndCall
         apply RichBodyEthAccounting.redemptionThenCallback redemption
           callbackSegment
         calc
-          frame.descendantFlowActions dp ca =
+          Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame =
               trace.retained.retained.flowActions dp ca ++
                 retained.flowActions dp ca := chronology
           _ = redemption.accepted.trace.retained.retained.flowActions
@@ -3640,7 +3645,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_transferAndCall
         transferAndCallSelector_ne_depositSelector,
         transferAndCallSelector_ne_depositToSelector,
         transferAndCallSelector_ne_depositToAndCallSelector, hraw]
-    cases haction : frame.flowAction? dp ca with
+    cases haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
     | none =>
         unfold Exec.Frame.flowAction? at haction
         rw [if_pos context.invocation, hprimary] at haction
@@ -3661,7 +3666,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_transferAndCall
         · simp [FlowAtom.ethMint, hactionAtom]
         · simp [FlowAtom.ethRedemption, hactionAtom]
         · calc
-            frame.descendantFlowActions dp ca =
+            Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame =
                 retained.flowActions dp ca := by
               simpa only [List.nil_append] using chronology
             _ = callbackForFrame.call.trace.retained.flowActions
@@ -3673,22 +3678,24 @@ rolled-back STATICCALL outcomes are balance-silent; the committing outcome
 uses the exact retained zero-value child selected by compiled chronology. -/
 theorem Exec.Frame.compiledBodyEthAccounting_of_permit
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (hselector : Sevm.selector frame.sevm = permitSelector)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
       (fun pc sevm pre out _ =>
         Exec.CoreEthSound dp ca pc sevm pre out))
     (hsum : sum frame.pre.state.bal < 2 ^ 256) :
-    frame.CompiledBodyEthAccounting dp ca := by
-  rcases frame.compiledPermitChronology context hselector hnonempty with
+    Blanc.Weth10.Exec.Frame.CompiledBodyEthAccounting dp ca frame := by
+  rcases Blanc.Weth10.Exec.Frame.compiledPermitChronology (frame := frame)
+      context hselector hnonempty with
     ⟨callPre, callPost, slot, selected, _occurrence, _operands,
       outcome, ownPrefix, ownSuffix, chronology⟩
   have htarget : frame.sevm.currentTarget = ca :=
     context.invocation.2.1
   have hnoPrimary : SelectsNoPrimaryFlow frame.sevm := by
     constructor <;> rw [hselector] <;> decide +kernel
-  have classified := frame.flowAction_eq_none_of_selectsNoPrimaryFlow
+  have classified := Blanc.Weth10.Exec.Frame.flowAction_eq_none_of_selectsNoPrimaryFlow
+    (frame := frame)
     context hnoPrimary hnonempty
   cases outcome with
   | none own =>
@@ -3746,74 +3753,74 @@ classification is derived from the selector inventory rather than accepted
 as an extra branch premise. -/
 theorem Exec.Frame.compiledBodyEthAccounting_of_callFreeNoFlowBranch
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
-    (branch : frame.CallFreeNoFlowStorageBranch) :
-    frame.CompiledBodyEthAccounting dp ca := by
-  have classified : frame.flowAction? dp ca = none :=
-    frame.flowAction_eq_none_of_selectsNoPrimaryFlow context
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
+    (branch : Blanc.Weth10.Exec.Frame.CallFreeNoFlowStorageBranch frame) :
+    Blanc.Weth10.Exec.Frame.CompiledBodyEthAccounting dp ca frame := by
+  have classified : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = none :=
+    Blanc.Weth10.Exec.Frame.flowAction_eq_none_of_selectsNoPrimaryFlow (frame := frame) context
       branch.selectsNoPrimaryFlow branch.nonempty
   cases branch with
   | name nonempty selected =>
-      exact frame.compiledBodyEthAccounting_of_name
+      exact Blanc.Weth10.Exec.Frame.compiledBodyEthAccounting_of_name (frame := frame)
         context classified selected nonempty
   | approve nonempty selected =>
-      exact frame.compiledBodyEthAccounting_of_approve
+      exact Blanc.Weth10.Exec.Frame.compiledBodyEthAccounting_of_approve (frame := frame)
         context classified selected nonempty
   | totalSupply nonempty selected =>
-      exact frame.compiledBodyEthAccounting_of_totalSupply
+      exact Blanc.Weth10.Exec.Frame.compiledBodyEthAccounting_of_totalSupply (frame := frame)
         context classified selected nonempty
   | permitTypehash nonempty selected =>
-      exact frame.compiledBodyEthAccounting_of_permitTypehash
+      exact Blanc.Weth10.Exec.Frame.compiledBodyEthAccounting_of_permitTypehash (frame := frame)
         context classified selected nonempty
   | decimals nonempty selected =>
-      exact frame.compiledBodyEthAccounting_of_decimals
+      exact Blanc.Weth10.Exec.Frame.compiledBodyEthAccounting_of_decimals (frame := frame)
         context classified selected nonempty
   | domainSeparator nonempty selected =>
-      exact frame.compiledBodyEthAccounting_of_domainSeparator
+      exact Blanc.Weth10.Exec.Frame.compiledBodyEthAccounting_of_domainSeparator (frame := frame)
         context classified selected nonempty
   | maxFlashLoan nonempty selected =>
-      exact frame.compiledBodyEthAccounting_of_maxFlashLoan
+      exact Blanc.Weth10.Exec.Frame.compiledBodyEthAccounting_of_maxFlashLoan (frame := frame)
         context classified selected nonempty
   | balanceOf nonempty selected =>
-      exact frame.compiledBodyEthAccounting_of_balanceOf
+      exact Blanc.Weth10.Exec.Frame.compiledBodyEthAccounting_of_balanceOf (frame := frame)
         context classified selected nonempty
   | nonces nonempty selected =>
-      exact frame.compiledBodyEthAccounting_of_nonces
+      exact Blanc.Weth10.Exec.Frame.compiledBodyEthAccounting_of_nonces (frame := frame)
         context classified selected nonempty
   | callbackSuccess nonempty selected =>
-      exact frame.compiledBodyEthAccounting_of_callbackSuccess
+      exact Blanc.Weth10.Exec.Frame.compiledBodyEthAccounting_of_callbackSuccess (frame := frame)
         context classified selected nonempty
   | flashMinted nonempty selected =>
-      exact frame.compiledBodyEthAccounting_of_flashMinted
+      exact Blanc.Weth10.Exec.Frame.compiledBodyEthAccounting_of_flashMinted (frame := frame)
         context classified selected nonempty
   | symbol nonempty selected =>
-      exact frame.compiledBodyEthAccounting_of_symbol
+      exact Blanc.Weth10.Exec.Frame.compiledBodyEthAccounting_of_symbol (frame := frame)
         context classified selected nonempty
   | deploymentChainId nonempty selected =>
-      exact frame.compiledBodyEthAccounting_of_deploymentChainId
+      exact Blanc.Weth10.Exec.Frame.compiledBodyEthAccounting_of_deploymentChainId (frame := frame)
         context classified selected nonempty
   | flashFee nonempty selected =>
-      exact frame.compiledBodyEthAccounting_of_flashFee
+      exact Blanc.Weth10.Exec.Frame.compiledBodyEthAccounting_of_flashFee (frame := frame)
         context classified selected nonempty
   | allowance nonempty selected =>
-      exact frame.compiledBodyEthAccounting_of_allowance
+      exact Blanc.Weth10.Exec.Frame.compiledBodyEthAccounting_of_allowance (frame := frame)
         context classified selected nonempty
 
 /-- Exact ETH dispatcher for every already-closed call-free flow/no-flow
 branch. -/
 theorem Exec.Frame.compiledBodyEthAccounting_of_callFreeBranch
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
-    (branch : frame.CallFreeStorageBranch) :
-    frame.CompiledBodyEthAccounting dp ca := by
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
+    (branch : Blanc.Weth10.Exec.Frame.CallFreeStorageBranch frame) :
+    Blanc.Weth10.Exec.Frame.CompiledBodyEthAccounting dp ca frame := by
   cases branch with
   | receive empty =>
-      exact frame.compiledBodyEthAccounting_of_receive context empty
+      exact Blanc.Weth10.Exec.Frame.compiledBodyEthAccounting_of_receive (frame := frame) context empty
   | deposit nonempty selected =>
-      exact frame.compiledBodyEthAccounting_of_deposit
+      exact Blanc.Weth10.Exec.Frame.compiledBodyEthAccounting_of_deposit (frame := frame)
         context selected nonempty
   | depositTo nonempty selected =>
-      exact frame.compiledBodyEthAccounting_of_depositTo
+      exact Blanc.Weth10.Exec.Frame.compiledBodyEthAccounting_of_depositTo (frame := frame)
         context selected nonempty
   | transferNonzero nonempty selected recipient =>
       have hprimary : primaryFlowAtom frame.sevm = some
@@ -3825,29 +3832,29 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_callFreeBranch
           transferSelector_ne_depositSelector,
           transferSelector_ne_depositToSelector,
           transferSelector_ne_depositToAndCallSelector, recipient]
-      cases classified : frame.flowAction? dp ca with
+      cases classified : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
       | none =>
           unfold Exec.Frame.flowAction? at classified
           rw [if_pos context.invocation, hprimary] at classified
           simp at classified
       | some action =>
-          exact frame.compiledBodyEthAccounting_of_transferNonzero
+          exact Blanc.Weth10.Exec.Frame.compiledBodyEthAccounting_of_transferNonzero (frame := frame)
             context classified selected nonempty recipient
   | transferFromNonzero nonempty selected recipient =>
-      exact frame.compiledBodyEthAccounting_of_transferFromNonzero
+      exact Blanc.Weth10.Exec.Frame.compiledBodyEthAccounting_of_transferFromNonzero (frame := frame)
         context selected nonempty recipient
-        (frame.descendantFlowActions_eq_nil_of_transferFromNonzero
-          context selected nonempty recipient)
+        (Blanc.Weth10.Exec.Frame.descendantFlowActions_eq_nil_of_transferFromNonzero
+          (frame := frame) context selected nonempty recipient)
   | noFlow noFlow =>
-      exact frame.compiledBodyEthAccounting_of_callFreeNoFlowBranch
+      exact Blanc.Weth10.Exec.Frame.compiledBodyEthAccounting_of_callFreeNoFlowBranch (frame := frame)
         context noFlow
 
 theorem Exec.Frame.CompiledBodyEthAccounting.bound
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (accounting : frame.CompiledBodyEthAccounting dp ca) :
+    (accounting : Blanc.Weth10.Exec.Frame.CompiledBodyEthAccounting dp ca frame) :
     EthBound ca frame.pre.state frame.post.state
       (Exec.bodyEthActions dp ca frame.run frame.committed) := by
-  rw [frame.bodyEthActions_eq]
+  rw [Blanc.Weth10.Exec.Frame.bodyEthActions_eq]
   cases accounting with
   | flow action classified body =>
       rw [classified]
@@ -3862,12 +3869,12 @@ child soundness and the non-wrapping world-sum bound. -/
 def CompiledFrameBodyEthAccountingHandler
     (dp : DeployParams) (ca : Adr) : Prop :=
   ∀ (frame : Exec.Frame),
-    frame.AuthenticContext dp ca →
+    Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame →
     ForallDeeperAt frame.sevm.depth ca (weth10 dp)
       (fun pc sevm pre out _ =>
         Exec.CoreEthSound dp ca pc sevm pre out) →
     sum frame.pre.state.bal < 2 ^ 256 →
-    frame.CompiledBodyEthAccounting dp ca
+    Blanc.Weth10.Exec.Frame.CompiledBodyEthAccounting dp ca frame
 
 /-- Premise-free exact body ETH accounting handler for every authentic
 compiled WETH10 frame. -/
@@ -3875,40 +3882,40 @@ theorem compiledFrameBodyEthAccountingHandler
     (dp : DeployParams) (ca : Adr) :
     CompiledFrameBodyEthAccountingHandler dp ca := by
   intro frame context hdeeper hsum
-  rcases frame.callFreeStorageBranch_or_remaining context with
+  rcases Blanc.Weth10.Exec.Frame.callFreeStorageBranch_or_remaining (frame := frame) context with
       closed | openCase
-  · exact frame.compiledBodyEthAccounting_of_callFreeBranch
+  · exact Blanc.Weth10.Exec.Frame.compiledBodyEthAccounting_of_callFreeBranch (frame := frame)
       context closed
   · cases openCase with
     | depositToAndCall nonempty selected =>
-        exact frame.compiledBodyEthAccounting_of_depositToAndCall
+        exact Blanc.Weth10.Exec.Frame.compiledBodyEthAccounting_of_depositToAndCall (frame := frame)
           context selected nonempty hdeeper hsum
     | transferZero nonempty selected recipient =>
-        exact frame.compiledBodyEthAccounting_of_transferZero
+        exact Blanc.Weth10.Exec.Frame.compiledBodyEthAccounting_of_transferZero (frame := frame)
           context selected nonempty recipient hdeeper hsum
     | transferAndCall nonempty selected =>
-        exact frame.compiledBodyEthAccounting_of_transferAndCall
+        exact Blanc.Weth10.Exec.Frame.compiledBodyEthAccounting_of_transferAndCall (frame := frame)
           context selected nonempty hdeeper hsum
     | transferFromZero nonempty selected recipient =>
-        exact frame.compiledBodyEthAccounting_of_transferFromZero
+        exact Blanc.Weth10.Exec.Frame.compiledBodyEthAccounting_of_transferFromZero (frame := frame)
           context selected nonempty recipient hdeeper hsum
     | withdraw nonempty selected =>
-        exact frame.compiledBodyEthAccounting_of_withdraw
+        exact Blanc.Weth10.Exec.Frame.compiledBodyEthAccounting_of_withdraw (frame := frame)
           context selected nonempty hdeeper hsum
     | withdrawTo nonempty selected =>
-        exact frame.compiledBodyEthAccounting_of_withdrawTo
+        exact Blanc.Weth10.Exec.Frame.compiledBodyEthAccounting_of_withdrawTo (frame := frame)
           context selected nonempty hdeeper hsum
     | withdrawFrom nonempty selected =>
-        exact frame.compiledBodyEthAccounting_of_withdrawFrom
+        exact Blanc.Weth10.Exec.Frame.compiledBodyEthAccounting_of_withdrawFrom (frame := frame)
           context selected nonempty hdeeper hsum
     | flashLoan nonempty selected =>
-        exact frame.compiledBodyEthAccounting_of_flashLoan
+        exact Blanc.Weth10.Exec.Frame.compiledBodyEthAccounting_of_flashLoan (frame := frame)
           context selected nonempty hdeeper hsum
     | approveAndCall nonempty selected =>
-        exact frame.compiledBodyEthAccounting_of_approveAndCall
+        exact Blanc.Weth10.Exec.Frame.compiledBodyEthAccounting_of_approveAndCall (frame := frame)
           context selected nonempty hdeeper hsum
     | permit nonempty selected =>
-        exact frame.compiledBodyEthAccounting_of_permit
+        exact Blanc.Weth10.Exec.Frame.compiledBodyEthAccounting_of_permit (frame := frame)
           context selected nonempty hdeeper hsum
 
 /-- The single compiled-program handler expected by the generic recursion.
@@ -3941,7 +3948,7 @@ theorem CompiledFrameBodyEthAccountingHandler.compiledBodyEthHandler
     hsum
   let frame := Exec.Frame.ofRun run hcommit
   have hrootDirect := rootDirect htarget
-  have context : frame.AuthenticContext dp ca := by
+  have context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame := by
     refine ⟨hrootDirect.1, ?_, installed⟩
     refine ⟨rfl, htarget, hrootDirect.2, ?_⟩
     exact (installed.2 htarget).1
@@ -4184,7 +4191,7 @@ theorem Exec.CoreEthSound.nextSome
               unfold Exec.descendantActions at hbound ⊢
               simp only [canonical, Exec.descendantFrames]
               by_cases hscommits :
-                  Blanc.Weth10.Frame.settlementCommits frame raw = true
+                  Blanc.Frame.settlementCommits frame raw = true
               · simp only [hscommits, dif_pos, if_pos,
                   List.filterMap_append, List.filterMap_cons] at hbound ⊢
                 have hraw :=

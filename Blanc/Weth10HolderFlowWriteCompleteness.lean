@@ -68,7 +68,7 @@ def Exec.Frame.BalanceSstoreOccurrence
     (dp : DeployParams) (ca : Adr) (frame : Exec.Frame)
     (stepPre stepPost : Devm) (slot : Xlot)
     (key value : B256) (holder : Adr) : Prop :=
-  frame.NinstOccurrence dp ca (.reg .sstore) stepPre stepPost slot ∧
+  Blanc.Weth10.Exec.Frame.NinstOccurrence dp ca frame (.reg .sstore) stepPre stepPost slot ∧
     ValidAdr key ∧
     key = holder.toB256 ∧
     ∃ tail : Stack, key :: value :: tail <<+ stepPre.stack
@@ -83,8 +83,8 @@ theorem Exec.Frame.NinstOccurrence.comparable_with_cursor
     {fs : List Func} {table : List (Nat × Func)}
     {body : Func} {final : Devm}
     {n : Ninst} {stepPre stepPost : Devm} {slot : Xlot}
-    (occurrence : frame.NinstOccurrence dp ca n stepPre stepPost slot)
-    (cursor : frame.CompiledCursor dp ca fs table body final) :
+    (occurrence : Blanc.Weth10.Exec.Frame.NinstOccurrence dp ca frame n stepPre stepPost slot)
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table body final) :
     ∃ (pc : Nat) (current : Exec pc frame.sevm stepPre frame.out),
       Ninst.At frame.sevm.code pc n ∧
       ((∃ suffix, Exec.Deriv.ParentPrefixActions dp ca
@@ -127,9 +127,9 @@ def Exec.Frame.NinstOccurrenceFromCursor
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {table : List (Nat × Func)}
     {body : Func} {final : Devm}
-    (cursor : frame.CompiledCursor dp ca fs table body final)
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table body final)
     (n : Ninst) (stepPre stepPost : Devm) (slot : Xlot) : Prop :=
-  frame.NinstOccurrenceFromDeriv dp ca
+  Blanc.Weth10.Exec.Frame.NinstOccurrenceFromDeriv dp ca frame
     ⟨cursor.pc, frame.sevm, cursor.pre, frame.out, cursor.current⟩
     n stepPre stepPost slot
 
@@ -141,9 +141,9 @@ theorem Exec.Frame.NinstOccurrence.fromCursor_or_before
     {fs : List Func} {table : List (Nat × Func)}
     {body : Func} {final : Devm}
     {n : Ninst} {stepPre stepPost : Devm} {slot : Xlot}
-    (occurrence : frame.NinstOccurrence dp ca n stepPre stepPost slot)
-    (cursor : frame.CompiledCursor dp ca fs table body final) :
-    frame.NinstOccurrenceFromCursor cursor n stepPre stepPost slot ∨
+    (occurrence : Blanc.Weth10.Exec.Frame.NinstOccurrence dp ca frame n stepPre stepPost slot)
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table body final) :
+    Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor n stepPre stepPost slot ∨
       ∃ (pc : Nat) (current : Exec pc frame.sevm stepPre frame.out)
           (before : List FlowAction),
         Ninst.At frame.sevm.code pc n ∧
@@ -168,16 +168,16 @@ theorem Exec.Frame.CompiledCursor.ninstOccurrenceFromCursor_head_or_tail
     {fs : List Func} {sourceTable : List (Nat × Func)}
     {source : Ninst} {tail : Func} {final : Devm}
     {n : Ninst} {stepPre stepPost : Devm} {slot : Xlot}
-    (cursor : frame.CompiledCursor dp ca fs sourceTable
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs sourceTable
       (.next source tail) final)
-    (occurrence : frame.NinstOccurrenceFromCursor cursor n
+    (occurrence : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor n
       stepPre stepPost slot) :
     (n = source ∧ stepPre = cursor.pre) ∨
-      ∃ (tailCursor : frame.CompiledCursor dp ca fs sourceTable tail final)
+      ∃ (tailCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs sourceTable tail final)
           (sourceSlot : Xlot),
-        frame.NinstOccurrence dp ca source cursor.pre tailCursor.pre
+        Blanc.Weth10.Exec.Frame.NinstOccurrence dp ca frame source cursor.pre tailCursor.pre
           sourceSlot ∧
-        frame.NinstOccurrenceFromCursor tailCursor n
+        Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) tailCursor n
           stepPre stepPost slot := by
   rcases occurrence with
     ⟨pc, current, continuation, crossed, selected, hpath, hat,
@@ -236,9 +236,9 @@ theorem Exec.Deriv.ParentNonSstorePrefix.trim_balanceSstoreOccurrence
     {start tail : Exec.Deriv}
     (compilerPrefix : Exec.Deriv.ParentNonSstorePrefix dp ca start tail)
     {stepPre stepPost : Devm} {slot : Xlot}
-    (occurrence : frame.NinstOccurrenceFromDeriv dp ca start
+    (occurrence : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromDeriv dp ca frame start
       (.reg .sstore) stepPre stepPost slot) :
-    frame.NinstOccurrenceFromDeriv dp ca tail
+    Blanc.Weth10.Exec.Frame.NinstOccurrenceFromDeriv dp ca frame tail
       (.reg .sstore) stepPre stepPost slot := by
   induction compilerPrefix with
   | refl => exact occurrence
@@ -260,10 +260,10 @@ inductive Exec.Frame.CompiledCursor.ActualBranch
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {sourceTable : List (Nat × Func)}
     {left right : Func} {final : Devm}
-    (cursor : frame.CompiledCursor dp ca fs sourceTable
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs sourceTable
       (.branch left right) final) : Prop
   | zero
-      (arm : frame.CompiledCursor dp ca fs sourceTable left final)
+      (arm : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs sourceTable left final)
       (pop : Devm.PopBurnBy [0] (gVerylow + gHigh)
         cursor.pre arm.pre)
       (compilerPrefix : Exec.Deriv.ParentNonSstorePrefix dp ca
@@ -272,7 +272,7 @@ inductive Exec.Frame.CompiledCursor.ActualBranch
       ActualBranch cursor
   | succ (flag : B256)
       (nonzero : flag ≠ 0)
-      (arm : frame.CompiledCursor dp ca fs sourceTable right final)
+      (arm : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs sourceTable right final)
       (pop : Devm.PopBurnBy [flag]
         (gVerylow + gHigh + gJumpdest) cursor.pre arm.pre)
       (compilerPrefix : Exec.Deriv.ParentNonSstorePrefix dp ca
@@ -287,7 +287,7 @@ private theorem Exec.Frame.CompiledCursor.selectBranchWithSourcePrefix
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {sourceTable : List (Nat × Func)}
     {left right : Func} {final : Devm}
-    (cursor : frame.CompiledCursor dp ca fs sourceTable
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs sourceTable
       (.branch left right) final) :
     cursor.ActualBranch := by
   rcases subcode_compile_branch_jumpable cursor.codeSlice
@@ -298,16 +298,16 @@ private theorem Exec.Frame.CompiledCursor.selectBranchWithSourcePrefix
   | zero room pop leftRun =>
       rcases Evm.branch_zero_steps pushAt jumpiAt locBound room pop with
         ⟨pushStep, jumpiStep⟩
-      rcases frame.advance_cont cursor.current cursor.parentPrefix
+      rcases Blanc.Weth10.Exec.Frame.advance_cont (frame := frame) cursor.current cursor.parentPrefix
           pushStep with
         ⟨afterPush, afterPushPrefix⟩
-      rcases frame.advance_cont afterPush afterPushPrefix jumpiStep with
+      rcases Blanc.Weth10.Exec.Frame.advance_cont (frame := frame) afterPush afterPushPrefix jumpiStep with
         ⟨armExec, armPrefix⟩
       have currentEq : cursor.current = .cont pushStep afterPush :=
         Exec.unique _ _
       have afterPushEq : afterPush = .cont jumpiStep armExec :=
         Exec.unique _ _
-      let arm : frame.CompiledCursor dp ca fs sourceTable left final :=
+      let arm : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs sourceTable left final :=
         ⟨cursor.pc + 4, _, armExec, cursor.actions, armPrefix,
           leftRun, leftSub, leftBoundary⟩
       have pushEdge : Exec.Deriv.ParentStepActions dp ca
@@ -336,12 +336,12 @@ private theorem Exec.Frame.CompiledCursor.selectBranchWithSourcePrefix
       rcases Evm.branch_succ_steps pushAt jumpiAt jumpdestAt jumpable
           locBound nonzero room pop with
         ⟨pushStep, jumpiStep, jumpdestStep⟩
-      rcases frame.advance_cont cursor.current cursor.parentPrefix
+      rcases Blanc.Weth10.Exec.Frame.advance_cont (frame := frame) cursor.current cursor.parentPrefix
           pushStep with
         ⟨afterPush, afterPushPrefix⟩
-      rcases frame.advance_cont afterPush afterPushPrefix jumpiStep with
+      rcases Blanc.Weth10.Exec.Frame.advance_cont (frame := frame) afterPush afterPushPrefix jumpiStep with
         ⟨afterJump, afterJumpPrefix⟩
-      rcases frame.advance_cont afterJump afterJumpPrefix jumpdestStep with
+      rcases Blanc.Weth10.Exec.Frame.advance_cont (frame := frame) afterJump afterJumpPrefix jumpdestStep with
         ⟨armExec, armPrefix⟩
       have currentEq : cursor.current = .cont pushStep afterPush :=
         Exec.unique _ _
@@ -349,7 +349,7 @@ private theorem Exec.Frame.CompiledCursor.selectBranchWithSourcePrefix
         Exec.unique _ _
       have afterJumpEq : afterJump = .cont jumpdestStep armExec :=
         Exec.unique _ _
-      let arm : frame.CompiledCursor dp ca fs sourceTable right final :=
+      let arm : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs sourceTable right final :=
         ⟨loc + 1, _, armExec, cursor.actions, armPrefix,
           rightRun, rightSub, rightBoundary⟩
       have pushEdge : Exec.Deriv.ParentStepActions dp ca
@@ -391,19 +391,19 @@ theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_branchWithFlag
     {fs : List Func} {sourceTable : List (Nat × Func)}
     {left right : Func} {final : Devm}
     {stepPre stepPost : Devm} {slot : Xlot}
-    (cursor : frame.CompiledCursor dp ca fs sourceTable
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs sourceTable
       (.branch left right) final)
-    (occurrence : frame.NinstOccurrenceFromCursor cursor
+    (occurrence : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot) :
-    (∃ arm : frame.CompiledCursor dp ca fs sourceTable left final,
+    (∃ arm : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs sourceTable left final,
       Devm.PopBurnBy [0] (gVerylow + gHigh) cursor.pre arm.pre ∧
-      frame.NinstOccurrenceFromCursor arm (.reg .sstore)
+      Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) arm (.reg .sstore)
         stepPre stepPost slot) ∨
     (∃ (flag : B256), flag ≠ 0 ∧
-      ∃ arm : frame.CompiledCursor dp ca fs sourceTable right final,
+      ∃ arm : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs sourceTable right final,
       Devm.PopBurnBy [flag] (gVerylow + gHigh + gJumpdest)
         cursor.pre arm.pre ∧
-      frame.NinstOccurrenceFromCursor arm (.reg .sstore)
+      Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) arm (.reg .sstore)
         stepPre stepPost slot) := by
   cases cursor.selectBranchWithSourcePrefix with
   | zero arm pop compilerPrefix =>
@@ -421,15 +421,15 @@ theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_branch
     {fs : List Func} {sourceTable : List (Nat × Func)}
     {left right : Func} {final : Devm}
     {stepPre stepPost : Devm} {slot : Xlot}
-    (cursor : frame.CompiledCursor dp ca fs sourceTable
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs sourceTable
       (.branch left right) final)
-    (occurrence : frame.NinstOccurrenceFromCursor cursor
+    (occurrence : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot) :
-    (∃ arm : frame.CompiledCursor dp ca fs sourceTable left final,
-      frame.NinstOccurrenceFromCursor arm (.reg .sstore)
+    (∃ arm : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs sourceTable left final,
+      Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) arm (.reg .sstore)
         stepPre stepPost slot) ∨
-    (∃ arm : frame.CompiledCursor dp ca fs sourceTable right final,
-      frame.NinstOccurrenceFromCursor arm (.reg .sstore)
+    (∃ arm : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs sourceTable right final,
+      Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) arm (.reg .sstore)
         stepPre stepPost slot) := by
   rcases cursor.balanceSstoreOccurrence_branchWithFlag occurrence with
     ⟨arm, _pop, inside⟩ |
@@ -443,12 +443,12 @@ instructions, and each is explicitly ruled out as the selected `SSTORE`. -/
 private theorem Exec.Frame.CompiledCursor.enterCallWithSourcePrefix
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {f₀ : Func} {aux : List Func} {k : Nat} {final : Devm}
-    (cursor : frame.CompiledCursor dp ca (f₀ :: aux)
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame (f₀ :: aux)
       (table 0 (f₀ :: aux)) (.call k) final)
     (hcode : some frame.sevm.code.toList = Prog.compile ⟨f₀, aux⟩) :
     ∃ body,
       (f₀ :: aux)[k]? = some body ∧
-      ∃ bodyCursor : frame.CompiledCursor dp ca (f₀ :: aux)
+      ∃ bodyCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame (f₀ :: aux)
           (table 0 (f₀ :: aux)) body final,
         Exec.Deriv.ParentNonSstorePrefix dp ca
           ⟨cursor.pc, frame.sevm, cursor.pre, frame.out, cursor.current⟩
@@ -471,12 +471,12 @@ private theorem Exec.Frame.CompiledCursor.enterCallWithSourcePrefix
       rcases Evm.call_steps (le := le) hpush hjump hjumpdest
           hjumpable.1 hloc hroom hburn with
         ⟨hstepPush, hstepJump, hstepJumpdest⟩
-      rcases frame.advance_cont cursor.current cursor.parentPrefix
+      rcases Blanc.Weth10.Exec.Frame.advance_cont (frame := frame) cursor.current cursor.parentPrefix
           hstepPush with
         ⟨afterPush, hprefixPush⟩
-      rcases frame.advance_cont afterPush hprefixPush hstepJump with
+      rcases Blanc.Weth10.Exec.Frame.advance_cont (frame := frame) afterPush hprefixPush hstepJump with
         ⟨afterJump, hprefixJump⟩
-      rcases frame.advance_cont afterJump hprefixJump hstepJumpdest with
+      rcases Blanc.Weth10.Exec.Frame.advance_cont (frame := frame) afterJump hprefixJump hstepJumpdest with
         ⟨bodyExec, hprefixBody⟩
       have currentEq : cursor.current = .cont hstepPush afterPush :=
         Exec.unique _ _
@@ -484,7 +484,7 @@ private theorem Exec.Frame.CompiledCursor.enterCallWithSourcePrefix
         Exec.unique _ _
       have afterJumpEq : afterJump = .cont hstepJumpdest bodyExec :=
         Exec.unique _ _
-      let bodyCursor : frame.CompiledCursor dp ca (f₀ :: aux)
+      let bodyCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame (f₀ :: aux)
           (table 0 (f₀ :: aux)) _ final :=
         ⟨loc + 1, _, bodyExec, cursor.actions, hprefixBody,
           hbody, hsub, hjumpable.2⟩
@@ -530,16 +530,16 @@ theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_call
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {f₀ : Func} {aux : List Func} {k : Nat} {final : Devm}
     {stepPre stepPost : Devm} {slot : Xlot}
-    (cursor : frame.CompiledCursor dp ca (f₀ :: aux)
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame (f₀ :: aux)
       (table 0 (f₀ :: aux)) (.call k) final)
     (hcode : some frame.sevm.code.toList = Prog.compile ⟨f₀, aux⟩)
-    (occurrence : frame.NinstOccurrenceFromCursor cursor
+    (occurrence : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot) :
     ∃ body,
       (f₀ :: aux)[k]? = some body ∧
-      ∃ bodyCursor : frame.CompiledCursor dp ca (f₀ :: aux)
+      ∃ bodyCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame (f₀ :: aux)
           (table 0 (f₀ :: aux)) body final,
-        frame.NinstOccurrenceFromCursor bodyCursor (.reg .sstore)
+        Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) bodyCursor (.reg .sstore)
           stepPre stepPost slot := by
   rcases cursor.enterCallWithSourcePrefix hcode with
     ⟨body, hget, bodyCursor, compilerPrefix⟩
@@ -549,7 +549,7 @@ theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_call
 theorem Exec.Frame.NinstOccurrence.run
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {n : Ninst} {stepPre stepPost : Devm} {slot : Xlot}
-    (occurrence : frame.NinstOccurrence dp ca n stepPre stepPost slot) :
+    (occurrence : Blanc.Weth10.Exec.Frame.NinstOccurrence dp ca frame n stepPre stepPost slot) :
     Ninst.Run frame.sevm stepPre n stepPost := by
   rcases occurrence with
     ⟨pc, current, continuation, before, selected, hprefix, hat,
@@ -565,16 +565,16 @@ theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_next_ne
     {fs : List Func} {sourceTable : List (Nat × Func)}
     {source : Ninst} {tail : Func} {final : Devm}
     {stepPre stepPost : Devm} {slot : Xlot}
-    (cursor : frame.CompiledCursor dp ca fs sourceTable
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs sourceTable
       (.next source tail) final)
     (notStore : source ≠ .reg .sstore)
-    (occurrence : frame.NinstOccurrenceFromCursor cursor
+    (occurrence : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot) :
-    ∃ (tailCursor : frame.CompiledCursor dp ca fs sourceTable tail final)
+    ∃ (tailCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs sourceTable tail final)
         (sourceSlot : Xlot),
-      frame.NinstOccurrence dp ca source cursor.pre tailCursor.pre
+      Blanc.Weth10.Exec.Frame.NinstOccurrence dp ca frame source cursor.pre tailCursor.pre
         sourceSlot ∧
-      frame.NinstOccurrenceFromCursor tailCursor (.reg .sstore)
+      Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) tailCursor (.reg .sstore)
         stepPre stepPost slot := by
   rcases cursor.ninstOccurrenceFromCursor_head_or_tail occurrence with
     ⟨sourceEq, _preEq⟩ |
@@ -589,19 +589,19 @@ theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_after_line
     {fs : List Func} {sourceTable : List (Nat × Func)}
     {line : Line} {tail : Func} {final : Devm}
     {stepPre stepPost : Devm} {slot : Xlot}
-    (cursor : frame.CompiledCursor dp ca fs sourceTable
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs sourceTable
       (line +++ tail) final)
     (noStore : ∀ n ∈ line, n ≠ .reg .sstore)
-    (occurrence : frame.NinstOccurrenceFromCursor cursor
+    (occurrence : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot) :
-    ∃ tailCursor : frame.CompiledCursor dp ca fs sourceTable tail final,
+    ∃ tailCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs sourceTable tail final,
       Line.Run frame.sevm cursor.pre line tailCursor.pre ∧
-      frame.NinstOccurrenceFromCursor tailCursor (.reg .sstore)
+      Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) tailCursor (.reg .sstore)
         stepPre stepPost slot := by
   induction line with
   | nil => exact ⟨cursor, .nil, occurrence⟩
   | cons source line ih =>
-      change frame.CompiledCursor dp ca fs sourceTable
+      change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs sourceTable
         (.next source (line +++ tail)) final at cursor
       have sourceNotStore : source ≠ .reg .sstore :=
         noStore source (by simp)
@@ -621,13 +621,13 @@ theorem Exec.Frame.CompiledCursor.castSourceWithOccurrence
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {fs : List Func} {sourceTable : List (Nat × Func)}
     {source target : Func} {final stepPre stepPost : Devm} {slot : Xlot}
-    (cursor : frame.CompiledCursor dp ca fs sourceTable source final)
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs sourceTable source final)
     (sourceEq : source = target)
-    (occurrence : frame.NinstOccurrenceFromCursor cursor
+    (occurrence : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot) :
-    ∃ targetCursor : frame.CompiledCursor dp ca fs sourceTable target final,
+    ∃ targetCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs sourceTable target final,
       targetCursor.pre = cursor.pre ∧
-      frame.NinstOccurrenceFromCursor targetCursor (.reg .sstore)
+      Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) targetCursor (.reg .sstore)
         stepPre stepPost slot := by
   subst target
   exact ⟨cursor, rfl, occurrence⟩
@@ -679,8 +679,8 @@ private theorem Exec.Frame.CompiledCursor.no_balanceSstoreOccurrence_last
     {fs : List Func} {sourceTable : List (Nat × Func)}
     {i : Linst} {final : Devm}
     {stepPre stepPost : Devm} {slot : Xlot}
-    (cursor : frame.CompiledCursor dp ca fs sourceTable (.last i) final)
-    (occurrence : frame.NinstOccurrenceFromCursor cursor
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs sourceTable (.last i) final)
+    (occurrence : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot) : False := by
   cases hrun : cursor.run with
   | last terminalRun =>
@@ -757,11 +757,11 @@ theorem Exec.Frame.CompiledCursor.no_balanceSstoreOccurrence_of_free
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {f₀ : Func} {aux : List Func} {body : Func} {final : Devm}
     {stepPre stepPost : Devm} {slot : Xlot} {fuel : Nat}
-    (cursor : frame.CompiledCursor dp ca (f₀ :: aux)
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame (f₀ :: aux)
       (table 0 (f₀ :: aux)) body final)
     (hcode : some frame.sevm.code.toList = Prog.compile ⟨f₀, aux⟩)
     (free : Func.sstoreFreeWithin fuel (f₀ :: aux) body = true)
-    (occurrence : frame.NinstOccurrenceFromCursor cursor
+    (occurrence : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot) : False := by
   induction fuel generalizing body with
   | zero => simp [Func.sstoreFreeWithin] at free
@@ -819,17 +819,17 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_routedToCall
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {f₀ : Func} {aux : List Func} {body : Func} {target fuel : Nat}
     {final stepPre stepPost : Devm} {slot : Xlot}
-    (cursor : frame.CompiledCursor dp ca (f₀ :: aux)
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame (f₀ :: aux)
       (table 0 (f₀ :: aux)) body final)
     (hcode : some frame.sevm.code.toList = Prog.compile ⟨f₀, aux⟩)
     (routed : Func.balanceSstoreRoutedToCallWithin fuel
       (f₀ :: aux) target body = true)
-    (occurrence : frame.NinstOccurrenceFromCursor cursor
+    (occurrence : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot) :
     ∃ targetBody, (f₀ :: aux)[target]? = some targetBody ∧
-      ∃ targetCursor : frame.CompiledCursor dp ca (f₀ :: aux)
+      ∃ targetCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame (f₀ :: aux)
           (table 0 (f₀ :: aux)) targetBody final,
-        frame.NinstOccurrenceFromCursor targetCursor (.reg .sstore)
+        Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) targetCursor (.reg .sstore)
           stepPre stepPost slot := by
   induction fuel generalizing body with
   | zero => simp [Func.balanceSstoreRoutedToCallWithin] at routed
@@ -870,8 +870,8 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_routedToCall
 explicit non-SSTORE prefix. -/
 private theorem Exec.Frame.compiledMainCursorWithSourcePrefix
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca) :
-    ∃ cursor : frame.CompiledCursor dp ca
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame) :
+    ∃ cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
         ((weth10 dp).main :: weth10Aux)
         (table 0 ((weth10 dp).main :: weth10Aux))
         (weth10 dp).main frame.post,
@@ -931,18 +931,18 @@ theorem Exec.Frame.BalanceSstoreOccurrence.fromMainCursor
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {stepPre stepPost : Devm} {slot : Xlot}
     {key value : B256} {holder : Adr}
-    (occurrence : frame.BalanceSstoreOccurrence dp ca stepPre stepPost slot
+    (occurrence : Blanc.Weth10.Exec.Frame.BalanceSstoreOccurrence dp ca frame stepPre stepPost slot
       key value holder)
-    (context : frame.AuthenticContext dp ca) :
-    ∃ mainCursor : frame.CompiledCursor dp ca
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame) :
+    ∃ mainCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
         ((weth10 dp).main :: weth10Aux)
         (table 0 ((weth10 dp).main :: weth10Aux))
         (weth10 dp).main frame.post,
-      frame.NinstOccurrenceFromCursor mainCursor (.reg .sstore)
+      Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) mainCursor (.reg .sstore)
         stepPre stepPost slot := by
-  rcases frame.compiledMainCursorWithSourcePrefix context with
+  rcases Blanc.Weth10.Exec.Frame.compiledMainCursorWithSourcePrefix (frame := frame) context with
     ⟨mainCursor, entryPrefix⟩
-  have fromRoot : frame.NinstOccurrenceFromDeriv dp ca
+  have fromRoot : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromDeriv dp ca frame
       ⟨frame.pc, frame.sevm, frame.pre, frame.out, frame.run⟩
       (.reg .sstore) stepPre stepPost slot := occurrence.1
   exact ⟨mainCursor,
@@ -954,28 +954,28 @@ arm chosen by that flag. -/
 private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_main
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {stepPre stepPost : Devm} {slot : Xlot}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       (weth10 dp).main frame.post)
-    (occurrence : frame.NinstOccurrenceFromCursor cursor
+    (occurrence : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot) :
-    (∃ dispatchCursor : frame.CompiledCursor dp ca
+    (∃ dispatchCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
         ((weth10 dp).main :: weth10Aux)
         (table 0 ((weth10 dp).main :: weth10Aux))
         (fsig +++ dispatchWith fallbackSlot (weth10Tree dp)) frame.post,
       frame.sevm.data.length.toB256 ≠ 0 ∧
-      frame.NinstOccurrenceFromCursor dispatchCursor (.reg .sstore)
+      Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) dispatchCursor (.reg .sstore)
         stepPre stepPost slot) ∨
-    (∃ receiveCursor : frame.CompiledCursor dp ca
+    (∃ receiveCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
         ((weth10 dp).main :: weth10Aux)
         (table 0 ((weth10 dp).main :: weth10Aux))
         receiveEther frame.post,
       frame.sevm.data.length.toB256 = 0 ∧
-      frame.NinstOccurrenceFromCursor receiveCursor (.reg .sstore)
+      Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) receiveCursor (.reg .sstore)
         stepPre stepPost slot) := by
   unfold weth10 weth10Main at cursor
-  change frame.CompiledCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
     (weth10Main dp :: weth10Aux)
     (table 0 (weth10Main dp :: weth10Aux))
     ([Ninst.calldatasize, Ninst.iszero] +++
@@ -1031,19 +1031,19 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_dispatchWith :
       {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
       {f₀ : Func} {aux : List Func} {k fuel : Nat}
       {fallback : Func} {final stepPre stepPost : Devm} {slot : Xlot},
-      (cursor : frame.CompiledCursor dp ca (f₀ :: aux)
+      (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame (f₀ :: aux)
         (table 0 (f₀ :: aux)) (dispatchWith k tree) final) →
       some frame.sevm.code.toList = Prog.compile ⟨f₀, aux⟩ →
       (f₀ :: aux)[k]? = some fallback →
       Func.sstoreFreeWithin fuel (f₀ :: aux) fallback = true →
       sig :: stack <<+ cursor.pre.stack →
-      frame.NinstOccurrenceFromCursor cursor (.reg .sstore)
+      Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor (.reg .sstore)
         stepPre stepPost slot →
       ∃ body : Func, (sig, body) ∈ tree ∧
-        ∃ bodyCursor : frame.CompiledCursor dp ca (f₀ :: aux)
+        ∃ bodyCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame (f₀ :: aux)
             (table 0 (f₀ :: aux)) body final,
           stack <<+ bodyCursor.pre.stack ∧
-          frame.NinstOccurrenceFromCursor bodyCursor (.reg .sstore)
+          Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) bodyCursor (.reg .sstore)
             stepPre stepPost slot := by
   intro tree
   induction tree with
@@ -1146,21 +1146,21 @@ the returned cursor retains the arbitrary occurrence selected by the caller. -/
 private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_selectorBody
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {stepPre stepPost : Devm} {slot : Xlot}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       (weth10 dp).main frame.post)
-    (fromCursor : frame.NinstOccurrenceFromCursor cursor
+    (fromCursor : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot)
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (nonempty : frame.sevm.data.length.toB256 ≠ 0) :
     ∃ body : Func,
       (Sevm.selector frame.sevm, body) ∈ weth10Funcs dp ∧
-      ∃ bodyCursor : frame.CompiledCursor dp ca
+      ∃ bodyCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
           ((weth10 dp).main :: weth10Aux)
           (table 0 ((weth10 dp).main :: weth10Aux)) body frame.post,
         [] <<+ bodyCursor.pre.stack ∧
-        frame.NinstOccurrenceFromCursor bodyCursor (.reg .sstore)
+        Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) bodyCursor (.reg .sstore)
           stepPre stepPost slot := by
   rcases cursor.balanceSstoreOccurrence_main fromCursor with
     ⟨dispatchPrefixCursor, _selectedNonempty, insideDispatch⟩ |
@@ -1199,14 +1199,14 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_nonpayable
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {f₀ : Func} {aux : List Func}
     {body : Func} {final stepPre stepPost : Devm} {slot : Xlot}
-    (cursor : frame.CompiledCursor dp ca (f₀ :: aux)
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame (f₀ :: aux)
       (table 0 (f₀ :: aux)) (nonpayable body) final)
     (hcode : some frame.sevm.code.toList = Prog.compile ⟨f₀, aux⟩)
-    (fromCursor : frame.NinstOccurrenceFromCursor cursor
+    (fromCursor : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot) :
-    ∃ bodyCursor : frame.CompiledCursor dp ca (f₀ :: aux)
+    ∃ bodyCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame (f₀ :: aux)
         (table 0 (f₀ :: aux)) body final,
-      frame.NinstOccurrenceFromCursor bodyCursor (.reg .sstore)
+      Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) bodyCursor (.reg .sstore)
         stepPre stepPost slot := by
   rcases cursor.balanceSstoreOccurrence_after_line
       (line := [Ninst.callvalue, Ninst.iszero])
@@ -1226,11 +1226,11 @@ private theorem Exec.Frame.CompiledCursor.no_balanceSstoreOccurrence_nonpayable_
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {f₀ : Func} {aux : List Func} {body : Func}
     {final stepPre stepPost : Devm} {slot : Xlot} {fuel : Nat}
-    (cursor : frame.CompiledCursor dp ca (f₀ :: aux)
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame (f₀ :: aux)
       (table 0 (f₀ :: aux)) (nonpayable body) final)
     (hcode : some frame.sevm.code.toList = Prog.compile ⟨f₀, aux⟩)
     (free : Func.sstoreFreeWithin fuel (f₀ :: aux) body = true)
-    (occurrence : frame.NinstOccurrenceFromCursor cursor
+    (occurrence : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot) : False := by
   rcases cursor.balanceSstoreOccurrence_nonpayable hcode occurrence with
     ⟨bodyCursor, insideBody⟩
@@ -1241,12 +1241,12 @@ private theorem Exec.Frame.CompiledCursor.no_balanceSstoreOccurrence_nonpayable_
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {f₀ : Func} {aux : List Func} {body : Func}
     {final stepPre stepPost : Devm} {slot : Xlot} {fuel : Nat}
-    (cursor : frame.CompiledCursor dp ca (f₀ :: aux)
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame (f₀ :: aux)
       (table 0 (f₀ :: aux)) (nonpayable body) final)
     (hcode : some frame.sevm.code.toList = Prog.compile ⟨f₀, aux⟩)
     (noCalls : body.NoCalls)
     (nilFree : Func.sstoreFreeWithin fuel [] body = true)
-    (occurrence : frame.NinstOccurrenceFromCursor cursor
+    (occurrence : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot) : False := by
   have free : Func.sstoreFreeWithin fuel (f₀ :: aux) body = true := by
     calc
@@ -1261,12 +1261,12 @@ private theorem Exec.Frame.CompiledCursor.no_balanceSstoreOccurrence_of_noCalls
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {f₀ : Func} {aux : List Func} {body : Func}
     {final stepPre stepPost : Devm} {slot : Xlot} {fuel : Nat}
-    (cursor : frame.CompiledCursor dp ca (f₀ :: aux)
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame (f₀ :: aux)
       (table 0 (f₀ :: aux)) body final)
     (hcode : some frame.sevm.code.toList = Prog.compile ⟨f₀, aux⟩)
     (noCalls : body.NoCalls)
     (nilFree : Func.sstoreFreeWithin fuel [] body = true)
-    (occurrence : frame.NinstOccurrenceFromCursor cursor
+    (occurrence : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot) : False := by
   have free : Func.sstoreFreeWithin fuel (f₀ :: aux) body = true := by
     calc
@@ -1423,14 +1423,14 @@ structure Exec.Frame.BalanceSstoreClassification
     (dp : DeployParams) (ca : Adr) (frame : Exec.Frame)
     (stepPre stepPost : Devm) (slot : Xlot)
     (key value : B256) (holder : Adr) (action : FlowAction) : Prop where
-  occurrence : frame.BalanceSstoreOccurrence dp ca stepPre stepPost slot
+  occurrence : Blanc.Weth10.Exec.Frame.BalanceSstoreOccurrence dp ca frame stepPre stepPost slot
     key value holder
-  authentic : frame.AuthenticContext dp ca
-  classified : frame.flowAction? dp ca = some action
+  authentic : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame
+  classified : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action
   role : BalanceSstoreRole ca stepPre action.atom holder value
-  rich : frame.HasRichLocalStorageEffect dp ca action
-  emitter : frame.HasGenuineWethEmitterEffect dp ca action
-  acceptedDebit : frame.HasAcceptedDebit dp ca action
+  rich : Blanc.Weth10.Exec.Frame.HasRichLocalStorageEffect dp ca frame action
+  emitter : Blanc.Weth10.Exec.Frame.HasGenuineWethEmitterEffect dp ca frame action
+  acceptedDebit : Blanc.Weth10.Exec.Frame.HasAcceptedDebit dp ca frame action
 
 /-- Once a source-path proof has identified the role of an occurrence, the
 existing compiled-functional theorems attach the exact rich storage, genuine
@@ -1439,23 +1439,23 @@ theorem Exec.Frame.BalanceSstoreOccurrence.classify_of_role
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {stepPre stepPost : Devm} {slot : Xlot}
     {key value : B256} {holder : Adr} {action : FlowAction}
-    (occurrence : frame.BalanceSstoreOccurrence dp ca stepPre stepPost slot
+    (occurrence : Blanc.Weth10.Exec.Frame.BalanceSstoreOccurrence dp ca frame stepPre stepPost slot
       key value holder)
-    (context : frame.AuthenticContext dp ca)
-    (classified : frame.flowAction? dp ca = some action)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
+    (classified : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action)
     (role : BalanceSstoreRole ca stepPre action.atom holder value) :
-    frame.BalanceSstoreClassification dp ca stepPre stepPost slot
+    Blanc.Weth10.Exec.Frame.BalanceSstoreClassification dp ca frame stepPre stepPost slot
       key value holder action := by
   exact
     { occurrence
       authentic := context
       classified
       role
-      rich := frame.hasRichLocalStorageEffect_of_flowAction?_eq_some
+      rich := Blanc.Weth10.Exec.Frame.hasRichLocalStorageEffect_of_flowAction?_eq_some (frame := frame)
         context classified
-      emitter := frame.hasGenuineWethEmitterEffect_of_flowAction?_eq_some
+      emitter := Blanc.Weth10.Exec.Frame.hasGenuineWethEmitterEffect_of_flowAction?_eq_some (frame := frame)
         context classified
-      acceptedDebit := frame.hasAcceptedDebit_of_flowAction?_eq_some
+      acceptedDebit := Blanc.Weth10.Exec.Frame.hasAcceptedDebit_of_flowAction?_eq_some (frame := frame)
         context classified }
 
 /-- Project the atom selected by the executable frame classifier without
@@ -1463,10 +1463,10 @@ discarding the installed invocation guard. -/
 theorem Exec.Frame.primaryFlowAtom_eq_some_of_flowAction_eq_some
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {action : FlowAction}
-    (context : frame.AuthenticContext dp ca)
-    (classified : frame.flowAction? dp ca = some action) :
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
+    (classified : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action) :
     primaryFlowAtom frame.sevm = some action.atom := by
-  unfold Exec.Frame.flowAction? at classified
+  unfold Blanc.Weth10.Exec.Frame.flowAction? at classified
   rw [if_pos context.invocation] at classified
   have mapped := congrArg (Option.map FlowAction.atom) classified
   simpa [Function.comp_def] using mapped
@@ -1478,22 +1478,22 @@ theorem Exec.Frame.BalanceSstoreOccurrence.classify_of_primary_role
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {stepPre stepPost : Devm} {slot : Xlot}
     {key value : B256} {holder : Adr} {atom : FlowAtom}
-    (occurrence : frame.BalanceSstoreOccurrence dp ca stepPre stepPost slot
+    (occurrence : Blanc.Weth10.Exec.Frame.BalanceSstoreOccurrence dp ca frame stepPre stepPost slot
       key value holder)
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (primary : primaryFlowAtom frame.sevm = some atom)
     (role : BalanceSstoreRole ca stepPre atom holder value) :
     ∃ action : FlowAction,
-      frame.BalanceSstoreClassification dp ca stepPre stepPost slot
+      Blanc.Weth10.Exec.Frame.BalanceSstoreClassification dp ca frame stepPre stepPost slot
         key value holder action := by
-  cases classified : frame.flowAction? dp ca with
+  cases classified : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
   | none =>
-      unfold Exec.Frame.flowAction? at classified
+      unfold Blanc.Weth10.Exec.Frame.flowAction? at classified
       rw [if_pos context.invocation, primary] at classified
       simp at classified
   | some action =>
       have selected :=
-        frame.primaryFlowAtom_eq_some_of_flowAction_eq_some
+        Blanc.Weth10.Exec.Frame.primaryFlowAtom_eq_some_of_flowAction_eq_some (frame := frame)
           context classified
       have atomEq : action.atom = atom := by
         rw [primary] at selected
@@ -1511,13 +1511,13 @@ theorem Exec.Frame.CompiledCursor.exists_balanceSstoreOccurrence
     {fs : List Func} {table : List (Nat × Func)}
     {tail : Func} {final : Devm}
     {key value : B256} {stack : Stack}
-    (cursor : frame.CompiledCursor dp ca fs table
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table
       (.next (.reg .sstore) tail) final)
     (valid : ValidAdr key)
     (stackPrefix : key :: value :: stack <<+ cursor.pre.stack) :
-    ∃ (tailCursor : frame.CompiledCursor dp ca fs table tail final)
+    ∃ (tailCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table tail final)
         (slot : Xlot) (holder : Adr),
-      frame.BalanceSstoreOccurrence dp ca cursor.pre tailCursor.pre slot
+      Blanc.Weth10.Exec.Frame.BalanceSstoreOccurrence dp ca frame cursor.pre tailCursor.pre slot
         key value holder := by
   rcases valid with ⟨holder, holderKey⟩
   rcases cursor.selectNextChildless (by simp [NinstIsChildless]) with
@@ -1534,16 +1534,16 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_after_invalidK
     {fs : List Func} {sourceTable : List (Nat × Func)}
     {tail : Func} {final stepPre stepPost : Devm} {slot : Xlot}
     {key value storeKey storeValue : B256} {holder : Adr} {stack : Stack}
-    (cursor : frame.CompiledCursor dp ca fs sourceTable
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs sourceTable
       (.next (.reg .sstore) tail) final)
-    (fromCursor : frame.NinstOccurrenceFromCursor cursor
+    (fromCursor : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot)
-    (occurrence : frame.BalanceSstoreOccurrence dp ca stepPre stepPost slot
+    (occurrence : Blanc.Weth10.Exec.Frame.BalanceSstoreOccurrence dp ca frame stepPre stepPost slot
       key value holder)
     (invalid : ¬ ValidAdr storeKey)
     (storePrefix : storeKey :: storeValue :: stack <<+ cursor.pre.stack) :
-    ∃ tailCursor : frame.CompiledCursor dp ca fs sourceTable tail final,
-      frame.NinstOccurrenceFromCursor tailCursor (.reg .sstore)
+    ∃ tailCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs sourceTable tail final,
+      Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) tailCursor (.reg .sstore)
         stepPre stepPost slot := by
   rcases cursor.ninstOccurrenceFromCursor_head_or_tail fromCursor with
     ⟨_sourceEq, preEq⟩ |
@@ -1643,15 +1643,15 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreRole_mintCaller
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {stepPre stepPost : Devm} {slot : Xlot}
     {key value : B256} {holder : Adr}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       receiveEther frame.post)
-    (fromCursor : frame.NinstOccurrenceFromCursor cursor
+    (fromCursor : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot)
-    (occurrence : frame.BalanceSstoreOccurrence dp ca stepPre stepPost slot
+    (occurrence : Blanc.Weth10.Exec.Frame.BalanceSstoreOccurrence dp ca frame stepPre stepPost slot
       key value holder)
-    (context : frame.AuthenticContext dp ca) :
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame) :
     BalanceSstoreRole ca stepPre
       (.ordinaryMint frame.sevm.caller.toB256 frame.sevm.caller
         frame.sevm.value.toNat) holder value := by
@@ -1754,15 +1754,15 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreRole_mintTo
     {continuation : Func} {fuel : Nat}
     {stepPre stepPost : Devm} {slot : Xlot}
     {key value : B256} {holder : Adr}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       (mintToPrefix +++ continuation) frame.post)
-    (fromCursor : frame.NinstOccurrenceFromCursor cursor
+    (fromCursor : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot)
-    (occurrence : frame.BalanceSstoreOccurrence dp ca stepPre stepPost slot
+    (occurrence : Blanc.Weth10.Exec.Frame.BalanceSstoreOccurrence dp ca frame stepPre stepPost slot
       key value holder)
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (freeTail : Func.sstoreFreeWithin fuel
       ((weth10 dp).main :: weth10Aux)
       (mintToAfterSstore continuation) = true) :
@@ -1878,14 +1878,14 @@ private theorem Exec.Frame.CompiledCursor.balanceSstorePrimaryRole_deposit
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {stepPre stepPost : Devm} {slot : Xlot}
     {key value : B256} {holder : Adr}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux)) deposit frame.post)
-    (fromCursor : frame.NinstOccurrenceFromCursor cursor
+    (fromCursor : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot)
-    (occurrence : frame.BalanceSstoreOccurrence dp ca stepPre stepPost slot
+    (occurrence : Blanc.Weth10.Exec.Frame.BalanceSstoreOccurrence dp ca frame stepPre stepPost slot
       key value holder)
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (selectorEq : Sevm.selector frame.sevm = depositSelector)
     (nonempty : frame.sevm.data.length.toB256 ≠ 0) :
     primaryFlowAtom frame.sevm = some
@@ -1902,14 +1902,14 @@ private theorem Exec.Frame.CompiledCursor.balanceSstorePrimaryRole_depositTo
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {stepPre stepPost : Devm} {slot : Xlot}
     {key value : B256} {holder : Adr}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux)) depositTo frame.post)
-    (fromCursor : frame.NinstOccurrenceFromCursor cursor
+    (fromCursor : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot)
-    (occurrence : frame.BalanceSstoreOccurrence dp ca stepPre stepPost slot
+    (occurrence : Blanc.Weth10.Exec.Frame.BalanceSstoreOccurrence dp ca frame stepPre stepPost slot
       key value holder)
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (selectorEq : Sevm.selector frame.sevm = depositToSelector)
     (nonempty : frame.sevm.data.length.toB256 ≠ 0) :
     primaryFlowAtom frame.sevm = some
@@ -1932,15 +1932,15 @@ private theorem Exec.Frame.CompiledCursor.balanceSstorePrimaryRole_depositToAndC
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {stepPre stepPost : Devm} {slot : Xlot}
     {key value : B256} {holder : Adr}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       depositToAndCall frame.post)
-    (fromCursor : frame.NinstOccurrenceFromCursor cursor
+    (fromCursor : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot)
-    (occurrence : frame.BalanceSstoreOccurrence dp ca stepPre stepPost slot
+    (occurrence : Blanc.Weth10.Exec.Frame.BalanceSstoreOccurrence dp ca frame stepPre stepPost slot
       key value holder)
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (selectorEq : Sevm.selector frame.sevm = depositToAndCallSelector)
     (nonempty : frame.sevm.data.length.toB256 ≠ 0) :
     primaryFlowAtom frame.sevm = some
@@ -1975,23 +1975,23 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_debitLoadedBal
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {continuation : Func} {final stepPre stepPost : Devm} {slot : Xlot}
     {key value balance amount : B256} {holder owner : Adr}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       (debitLoadedBalance +++ continuation) final)
-    (fromCursor : frame.NinstOccurrenceFromCursor cursor
+    (fromCursor : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot)
-    (occurrence : frame.BalanceSstoreOccurrence dp ca stepPre stepPost slot
+    (occurrence : Blanc.Weth10.Exec.Frame.BalanceSstoreOccurrence dp ca frame stepPre stepPost slot
       key value holder)
     (stackPrefix : [balance, amount, owner.toB256] <<+ cursor.pre.stack)
     (balanceEq : balance =
       (Devm.getStor cursor.pre ca).get owner.toB256) :
     (holder = owner ∧
         value = Stor.rest (Devm.getStor stepPre ca) owner - amount) ∨
-      ∃ tailCursor : frame.CompiledCursor dp ca
+      ∃ tailCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
           ((weth10 dp).main :: weth10Aux)
           (table 0 ((weth10 dp).main :: weth10Aux)) continuation final,
-        frame.NinstOccurrenceFromCursor tailCursor (.reg .sstore)
+        Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) tailCursor (.reg .sstore)
           stepPre stepPost slot := by
   rcases cursor.castSourceWithOccurrence
       (debitLoadedBalance_append_eq_sstoreSplit continuation) fromCursor with
@@ -2072,19 +2072,19 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_callerDebit
     {amountArg : B256} {errorSlot fuel : Nat}
     {errorBody continuation : Func}
     {final stepPre stepPost : Devm} {slot : Xlot}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       (callerDebitSource amountArg errorSlot continuation) final)
-    (fromCursor : frame.NinstOccurrenceFromCursor cursor
+    (fromCursor : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot)
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (errorLookup : (((weth10 dp).main :: weth10Aux)[errorSlot]?) =
       some errorBody)
     (errorFree : Func.sstoreFreeWithin fuel
       ((weth10 dp).main :: weth10Aux) errorBody = true) :
     ∃ (balance : B256)
-        (debitCursor : frame.CompiledCursor dp ca
+        (debitCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
           ((weth10 dp).main :: weth10Aux)
           (table 0 ((weth10 dp).main :: weth10Aux))
           (debitLoadedBalance +++ continuation) final),
@@ -2092,7 +2092,7 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_callerDebit
           frame.sevm.caller.toB256] <<+ debitCursor.pre.stack ∧
       balance = (Devm.getStor debitCursor.pre ca).get
         frame.sevm.caller.toB256 ∧
-      frame.NinstOccurrenceFromCursor debitCursor (.reg .sstore)
+      Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) debitCursor (.reg .sstore)
         stepPre stepPost slot := by
   rcases cursor.balanceSstoreOccurrence_after_line
       (by
@@ -2255,17 +2255,17 @@ private theorem Exec.Frame.CompiledCursor.no_balanceSstoreOccurrence_stopOrError
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {linePrefix : Line} {errorSlot fuel : Nat} {errorBody : Func}
     {final stepPre stepPost : Devm} {slot : Xlot}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       (linePrefix +++ (.branch Func.stop (.call errorSlot))) final)
     (noStore : ∀ n ∈ linePrefix, n ≠ .reg .sstore)
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (errorLookup : (((weth10 dp).main :: weth10Aux)[errorSlot]?) =
       some errorBody)
     (errorFree : Func.sstoreFreeWithin fuel
       ((weth10 dp).main :: weth10Aux) errorBody = true)
-    (occurrence : frame.NinstOccurrenceFromCursor cursor
+    (occurrence : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot) : False := by
   rcases cursor.balanceSstoreOccurrence_after_line noStore occurrence with
     ⟨branchCursor, _prefixRun, atBranch⟩
@@ -2290,19 +2290,19 @@ private theorem Exec.Frame.CompiledCursor.no_balanceSstoreOccurrence_successOrEr
     {linePrefix : Line} {success errorBody : Func}
     {errorSlot successFuel errorFuel : Nat}
     {final stepPre stepPost : Devm} {slot : Xlot}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       (linePrefix +++ (.branch success (.call errorSlot))) final)
     (noStore : ∀ n ∈ linePrefix, n ≠ .reg .sstore)
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (successFree : Func.sstoreFreeWithin successFuel
       ((weth10 dp).main :: weth10Aux) success = true)
     (errorLookup : (((weth10 dp).main :: weth10Aux)[errorSlot]?) =
       some errorBody)
     (errorFree : Func.sstoreFreeWithin errorFuel
       ((weth10 dp).main :: weth10Aux) errorBody = true)
-    (occurrence : frame.NinstOccurrenceFromCursor cursor
+    (occurrence : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot) : False := by
   rcases cursor.balanceSstoreOccurrence_after_line noStore occurrence with
     ⟨branchCursor, _prefixRun, atBranch⟩
@@ -2339,14 +2339,14 @@ private theorem Exec.Frame.CompiledCursor.balanceSstorePrimaryRole_withdraw
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {stepPre stepPost : Devm} {slot : Xlot}
     {key value : B256} {holder : Adr}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux)) withdraw frame.post)
-    (fromCursor : frame.NinstOccurrenceFromCursor cursor
+    (fromCursor : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot)
-    (occurrence : frame.BalanceSstoreOccurrence dp ca stepPre stepPost slot
+    (occurrence : Blanc.Weth10.Exec.Frame.BalanceSstoreOccurrence dp ca frame stepPre stepPost slot
       key value holder)
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (selectorEq : Sevm.selector frame.sevm = withdrawSelector)
     (nonempty : frame.sevm.data.length.toB256 ≠ 0) :
     primaryFlowAtom frame.sevm = some
@@ -2430,14 +2430,14 @@ private theorem Exec.Frame.CompiledCursor.balanceSstorePrimaryRole_withdrawTo
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {stepPre stepPost : Devm} {slot : Xlot}
     {key value : B256} {holder : Adr}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux)) withdrawTo frame.post)
-    (fromCursor : frame.NinstOccurrenceFromCursor cursor
+    (fromCursor : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot)
-    (occurrence : frame.BalanceSstoreOccurrence dp ca stepPre stepPost slot
+    (occurrence : Blanc.Weth10.Exec.Frame.BalanceSstoreOccurrence dp ca frame stepPre stepPost slot
       key value holder)
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (selectorEq : Sevm.selector frame.sevm = withdrawToSelector)
     (nonempty : frame.sevm.data.length.toB256 ≠ 0) :
     primaryFlowAtom frame.sevm = some
@@ -2520,23 +2520,23 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_creditAddressA
     {ownerArg amountArg : B256} {continuation : Func}
     {final stepPre stepPost : Devm} {slot : Xlot}
     {key value : B256} {holder : Adr}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       (creditAddressArgSource ownerArg amountArg continuation) final)
-    (fromCursor : frame.NinstOccurrenceFromCursor cursor
+    (fromCursor : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot)
-    (occurrence : frame.BalanceSstoreOccurrence dp ca stepPre stepPost slot
+    (occurrence : Blanc.Weth10.Exec.Frame.BalanceSstoreOccurrence dp ca frame stepPre stepPost slot
       key value holder)
-    (context : frame.AuthenticContext dp ca) :
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame) :
     (holder = (Sevm.argWord frame.sevm ownerArg).toAdr ∧
         value = Stor.rest (Devm.getStor stepPre ca)
           (Sevm.argWord frame.sevm ownerArg).toAdr +
             Sevm.argWord frame.sevm amountArg) ∨
-      ∃ tailCursor : frame.CompiledCursor dp ca
+      ∃ tailCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
           ((weth10 dp).main :: weth10Aux)
           (table 0 ((weth10 dp).main :: weth10Aux)) continuation final,
-        frame.NinstOccurrenceFromCursor tailCursor (.reg .sstore)
+        Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) tailCursor (.reg .sstore)
           stepPre stepPost slot := by
   rcases cursor.balanceSstoreOccurrence_after_line
       (by
@@ -2682,25 +2682,25 @@ transfer arm cursor and the exact raw-word fact that chose it. -/
 private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_transferThen
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {continuation : Func} {final stepPre stepPost : Devm} {slot : Xlot}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       (transferThen continuation) final)
-    (fromCursor : frame.NinstOccurrenceFromCursor cursor
+    (fromCursor : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot) :
     (Sevm.argWord frame.sevm 0 ≠ 0 ∧
-      ∃ armCursor : frame.CompiledCursor dp ca
+      ∃ armCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
           ((weth10 dp).main :: weth10Aux)
           (table 0 ((weth10 dp).main :: weth10Aux))
           (transferNonzeroThen continuation) final,
-        frame.NinstOccurrenceFromCursor armCursor (.reg .sstore)
+        Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) armCursor (.reg .sstore)
           stepPre stepPost slot) ∨
       (Sevm.argWord frame.sevm 0 = 0 ∧
-      ∃ armCursor : frame.CompiledCursor dp ca
+      ∃ armCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
           ((weth10 dp).main :: weth10Aux)
           (table 0 ((weth10 dp).main :: weth10Aux))
           (transferZeroThen continuation) final,
-        frame.NinstOccurrenceFromCursor armCursor (.reg .sstore)
+        Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) armCursor (.reg .sstore)
           stepPre stepPost slot) := by
   rcases cursor.castSourceWithOccurrence
       (transferThen_eq_select continuation) fromCursor with
@@ -2787,15 +2787,15 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreRole_transferNonzeroThen
     {continuation : Func} {fuel : Nat}
     {stepPre stepPost : Devm} {slot : Xlot}
     {key value : B256} {holder : Adr}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       (transferNonzeroThen continuation) frame.post)
-    (fromCursor : frame.NinstOccurrenceFromCursor cursor
+    (fromCursor : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot)
-    (occurrence : frame.BalanceSstoreOccurrence dp ca stepPre stepPost slot
+    (occurrence : Blanc.Weth10.Exec.Frame.BalanceSstoreOccurrence dp ca frame stepPre stepPost slot
       key value holder)
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (freeTail : Func.sstoreFreeWithin fuel
       ((weth10 dp).main :: weth10Aux)
       (transferAfterCredit continuation) = true) :
@@ -2850,15 +2850,15 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreRole_transferZeroThen
     {continuation : Func} {fuel : Nat}
     {stepPre stepPost : Devm} {slot : Xlot}
     {key value : B256} {holder : Adr}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       (transferZeroThen continuation) frame.post)
-    (fromCursor : frame.NinstOccurrenceFromCursor cursor
+    (fromCursor : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot)
-    (occurrence : frame.BalanceSstoreOccurrence dp ca stepPre stepPost slot
+    (occurrence : Blanc.Weth10.Exec.Frame.BalanceSstoreOccurrence dp ca frame stepPre stepPost slot
       key value holder)
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (continuationFree : Func.sstoreFreeWithin fuel
       ((weth10 dp).main :: weth10Aux)
       continuation = true) :
@@ -2917,15 +2917,15 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreRole_transferThen
     {continuation : Func} {nonzeroFuel zeroFuel : Nat}
     {stepPre stepPost : Devm} {slot : Xlot}
     {key value : B256} {holder : Adr}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       (transferThen continuation) frame.post)
-    (fromCursor : frame.NinstOccurrenceFromCursor cursor
+    (fromCursor : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot)
-    (occurrence : frame.BalanceSstoreOccurrence dp ca stepPre stepPost slot
+    (occurrence : Blanc.Weth10.Exec.Frame.BalanceSstoreOccurrence dp ca frame stepPre stepPost slot
       key value holder)
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (nonzeroFree : Func.sstoreFreeWithin nonzeroFuel
       ((weth10 dp).main :: weth10Aux)
       (transferAfterCredit continuation) = true)
@@ -2959,20 +2959,20 @@ private theorem Exec.Frame.CompiledCursor.classifyBalanceSstore_transfer
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {stepPre stepPost : Devm} {slot : Xlot}
     {key value : B256} {holder : Adr}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux)) transfer frame.post)
-    (fromCursor : frame.NinstOccurrenceFromCursor cursor
+    (fromCursor : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot)
-    (occurrence : frame.BalanceSstoreOccurrence dp ca stepPre stepPost slot
+    (occurrence : Blanc.Weth10.Exec.Frame.BalanceSstoreOccurrence dp ca frame stepPre stepPost slot
       key value holder)
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (selectorEq : Sevm.selector frame.sevm = transferSelector)
     (nonempty : frame.sevm.data.length.toB256 ≠ 0) :
     ∃ action : FlowAction,
-      frame.BalanceSstoreClassification dp ca stepPre stepPost slot
+      Blanc.Weth10.Exec.Frame.BalanceSstoreClassification dp ca frame stepPre stepPost slot
         key value holder action := by
-  change frame.CompiledCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (transferThen returnTrue) frame.post at cursor
@@ -3012,22 +3012,22 @@ private theorem Exec.Frame.CompiledCursor.classifyBalanceSstore_transferAndCall
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {stepPre stepPost : Devm} {slot : Xlot}
     {key value : B256} {holder : Adr}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux)) transferAndCall frame.post)
-    (fromCursor : frame.NinstOccurrenceFromCursor cursor
+    (fromCursor : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot)
-    (occurrence : frame.BalanceSstoreOccurrence dp ca stepPre stepPost slot
+    (occurrence : Blanc.Weth10.Exec.Frame.BalanceSstoreOccurrence dp ca frame stepPre stepPost slot
       key value holder)
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (selectorEq : Sevm.selector frame.sevm = transferAndCallSelector)
     (nonempty : frame.sevm.data.length.toB256 ≠ 0) :
     ∃ action : FlowAction,
-      frame.BalanceSstoreClassification dp ca stepPre stepPost slot
+      Blanc.Weth10.Exec.Frame.BalanceSstoreClassification dp ca frame stepPre stepPost slot
         key value holder action := by
   let callback :=
     callBoolCallback onTokenTransferSelector 0 2 (arg 1)
-  change frame.CompiledCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (transferThen callback) frame.post at cursor
@@ -3077,19 +3077,19 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_argDebit
     {ownerArg amountArg : B256} {errorSlot fuel : Nat}
     {errorBody continuation : Func}
     {final stepPre stepPost : Devm} {slot : Xlot}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       (argDebitSource ownerArg amountArg errorSlot continuation) final)
-    (fromCursor : frame.NinstOccurrenceFromCursor cursor
+    (fromCursor : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot)
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (errorLookup : (((weth10 dp).main :: weth10Aux)[errorSlot]?) =
       some errorBody)
     (errorFree : Func.sstoreFreeWithin fuel
       ((weth10 dp).main :: weth10Aux) errorBody = true) :
     ∃ (balance : B256)
-        (debitCursor : frame.CompiledCursor dp ca
+        (debitCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
           ((weth10 dp).main :: weth10Aux)
           (table 0 ((weth10 dp).main :: weth10Aux))
           (debitLoadedBalance +++ continuation) final),
@@ -3098,7 +3098,7 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_argDebit
         debitCursor.pre.stack ∧
       balance = (Devm.getStor debitCursor.pre ca).get
         (Sevm.argWord frame.sevm ownerArg).toAdr.toB256 ∧
-      frame.NinstOccurrenceFromCursor debitCursor (.reg .sstore)
+      Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) debitCursor (.reg .sstore)
         stepPre stepPost slot := by
   rcases cursor.balanceSstoreOccurrence_after_line
       (by
@@ -3180,21 +3180,21 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_spendCallerAll
     {amount : B256} {nextSlot : Nat}
     {final stepPre stepPost : Devm} {slot : Xlot}
     {key value : B256} {holder : Adr}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       (spendCallerAllowanceThen amount nextSlot) final)
-    (fromCursor : frame.NinstOccurrenceFromCursor cursor
+    (fromCursor : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot)
-    (occurrence : frame.BalanceSstoreOccurrence dp ca stepPre stepPost slot
+    (occurrence : Blanc.Weth10.Exec.Frame.BalanceSstoreOccurrence dp ca frame stepPre stepPost slot
       key value holder)
-    (context : frame.AuthenticContext dp ca) :
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame) :
     ∃ body,
       (((weth10 dp).main :: weth10Aux)[nextSlot]?) = some body ∧
-      ∃ bodyCursor : frame.CompiledCursor dp ca
+      ∃ bodyCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
           ((weth10 dp).main :: weth10Aux)
           (table 0 ((weth10 dp).main :: weth10Aux)) body final,
-        frame.NinstOccurrenceFromCursor bodyCursor (.reg .sstore)
+        Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) bodyCursor (.reg .sstore)
           stepPre stepPost slot := by
   unfold spendCallerAllowanceThen at cursor
   rcases cursor.balanceSstoreOccurrence_after_line
@@ -3206,7 +3206,7 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_spendCallerAll
   rcases callerBranchCursor.balanceSstoreOccurrence_branch atCallerBranch with
     ⟨allowanceCursor, insideAllowance⟩ |
       ⟨directCallCursor, insideDirectCall⟩
-  · change frame.CompiledCursor dp ca
+  · change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
         ((weth10 dp).main :: weth10Aux)
         (table 0 ((weth10 dp).main :: weth10Aux))
         (spendAllowanceLoadLine +++
@@ -3417,24 +3417,24 @@ selected exact body cursor and the raw-word fact that chose it. -/
 private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_transferFromCore
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {final stepPre stepPost : Devm} {slot : Xlot}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux)) transferFromCore final)
-    (fromCursor : frame.NinstOccurrenceFromCursor cursor
+    (fromCursor : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot) :
     (Sevm.argWord frame.sevm 1 ≠ 0 ∧
-      ∃ armCursor : frame.CompiledCursor dp ca
+      ∃ armCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
           ((weth10 dp).main :: weth10Aux)
           (table 0 ((weth10 dp).main :: weth10Aux))
           transferFromNonzero final,
-        frame.NinstOccurrenceFromCursor armCursor (.reg .sstore)
+        Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) armCursor (.reg .sstore)
           stepPre stepPost slot) ∨
     (Sevm.argWord frame.sevm 1 = 0 ∧
-      ∃ armCursor : frame.CompiledCursor dp ca
+      ∃ armCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
           ((weth10 dp).main :: weth10Aux)
           (table 0 ((weth10 dp).main :: weth10Aux))
           transferFromZero final,
-        frame.NinstOccurrenceFromCursor armCursor (.reg .sstore)
+        Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) armCursor (.reg .sstore)
           stepPre stepPost slot) := by
   rcases cursor.castSourceWithOccurrence
       transferFromCore_eq_select_writeCompleteness fromCursor with
@@ -3485,15 +3485,15 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreRole_transferFromNonzero
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {stepPre stepPost : Devm} {slot : Xlot}
     {key value : B256} {holder : Adr}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       transferFromNonzero frame.post)
-    (fromCursor : frame.NinstOccurrenceFromCursor cursor
+    (fromCursor : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot)
-    (occurrence : frame.BalanceSstoreOccurrence dp ca stepPre stepPost slot
+    (occurrence : Blanc.Weth10.Exec.Frame.BalanceSstoreOccurrence dp ca frame stepPre stepPost slot
       key value holder)
-    (context : frame.AuthenticContext dp ca) :
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame) :
     BalanceSstoreRole ca stepPre
       (.transfer (Sevm.argWord frame.sevm 0) (Sevm.argWord frame.sevm 1)
         (Sevm.argWord frame.sevm 0).toAdr
@@ -3547,15 +3547,15 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreRole_transferFromZero
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {stepPre stepPost : Devm} {slot : Xlot}
     {key value : B256} {holder : Adr}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       transferFromZero frame.post)
-    (fromCursor : frame.NinstOccurrenceFromCursor cursor
+    (fromCursor : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot)
-    (occurrence : frame.BalanceSstoreOccurrence dp ca stepPre stepPost slot
+    (occurrence : Blanc.Weth10.Exec.Frame.BalanceSstoreOccurrence dp ca frame stepPre stepPost slot
       key value holder)
-    (context : frame.AuthenticContext dp ca) :
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame) :
     BalanceSstoreRole ca stepPre
       (.redemption (Sevm.argWord frame.sevm 0)
         (Sevm.argWord frame.sevm 0).toAdr frame.sevm.caller
@@ -3615,20 +3615,20 @@ private theorem Exec.Frame.CompiledCursor.classifyBalanceSstore_transferFrom
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {stepPre stepPost : Devm} {slot : Xlot}
     {key value : B256} {holder : Adr}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux)) transferFrom frame.post)
-    (fromCursor : frame.NinstOccurrenceFromCursor cursor
+    (fromCursor : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot)
-    (occurrence : frame.BalanceSstoreOccurrence dp ca stepPre stepPost slot
+    (occurrence : Blanc.Weth10.Exec.Frame.BalanceSstoreOccurrence dp ca frame stepPre stepPost slot
       key value holder)
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (selectorEq : Sevm.selector frame.sevm = transferFromSelector)
     (nonempty : frame.sevm.data.length.toB256 ≠ 0) :
     ∃ action : FlowAction,
-      frame.BalanceSstoreClassification dp ca stepPre stepPost slot
+      Blanc.Weth10.Exec.Frame.BalanceSstoreClassification dp ca frame stepPre stepPost slot
         key value holder action := by
-  change frame.CompiledCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (spendCallerAllowanceThen 2 transferFromCoreSlot) frame.post at cursor
@@ -3697,15 +3697,15 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreRole_withdrawFromCore
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {stepPre stepPost : Devm} {slot : Xlot}
     {key value : B256} {holder : Adr}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       withdrawFromCore frame.post)
-    (fromCursor : frame.NinstOccurrenceFromCursor cursor
+    (fromCursor : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot)
-    (occurrence : frame.BalanceSstoreOccurrence dp ca stepPre stepPost slot
+    (occurrence : Blanc.Weth10.Exec.Frame.BalanceSstoreOccurrence dp ca frame stepPre stepPost slot
       key value holder)
-    (context : frame.AuthenticContext dp ca) :
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame) :
     BalanceSstoreRole ca stepPre
       (.redemption (Sevm.argWord frame.sevm 0)
         (Sevm.argWord frame.sevm 0).toAdr
@@ -3758,20 +3758,20 @@ private theorem Exec.Frame.CompiledCursor.classifyBalanceSstore_withdrawFrom
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {stepPre stepPost : Devm} {slot : Xlot}
     {key value : B256} {holder : Adr}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux)) withdrawFrom frame.post)
-    (fromCursor : frame.NinstOccurrenceFromCursor cursor
+    (fromCursor : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot)
-    (occurrence : frame.BalanceSstoreOccurrence dp ca stepPre stepPost slot
+    (occurrence : Blanc.Weth10.Exec.Frame.BalanceSstoreOccurrence dp ca frame stepPre stepPost slot
       key value holder)
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (selectorEq : Sevm.selector frame.sevm = withdrawFromSelector)
     (nonempty : frame.sevm.data.length.toB256 ≠ 0) :
     ∃ action : FlowAction,
-      frame.BalanceSstoreClassification dp ca stepPre stepPost slot
+      Blanc.Weth10.Exec.Frame.BalanceSstoreClassification dp ca frame stepPre stepPost slot
         key value holder action := by
-  change frame.CompiledCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (spendCallerAllowanceThen 2 withdrawFromCoreSlot) frame.post at cursor
@@ -3826,14 +3826,14 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreRole_flashBurn
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {stepPre stepPost : Devm} {slot : Xlot}
     {key value : B256} {holder : Adr}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux)) flashBurn frame.post)
-    (fromCursor : frame.NinstOccurrenceFromCursor cursor
+    (fromCursor : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot)
-    (occurrence : frame.BalanceSstoreOccurrence dp ca stepPre stepPost slot
+    (occurrence : Blanc.Weth10.Exec.Frame.BalanceSstoreOccurrence dp ca frame stepPre stepPost slot
       key value holder)
-    (context : frame.AuthenticContext dp ca) :
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame) :
     BalanceSstoreRole ca stepPre
       (.flashPair (Sevm.argWord frame.sevm 0)
         (Sevm.argWord frame.sevm 0).toAdr
@@ -3920,20 +3920,20 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreRole_flashSettle
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {stepPre stepPost : Devm} {slot : Xlot}
     {key value : B256} {holder : Adr}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux)) flashSettle frame.post)
-    (fromCursor : frame.NinstOccurrenceFromCursor cursor
+    (fromCursor : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot)
-    (occurrence : frame.BalanceSstoreOccurrence dp ca stepPre stepPost slot
+    (occurrence : Blanc.Weth10.Exec.Frame.BalanceSstoreOccurrence dp ca frame stepPre stepPost slot
       key value holder)
-    (context : frame.AuthenticContext dp ca) :
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame) :
     BalanceSstoreRole ca stepPre
       (.flashPair (Sevm.argWord frame.sevm 0)
         (Sevm.argWord frame.sevm 0).toAdr
         (Sevm.argWord frame.sevm 2).toNat)
       holder value := by
-  change frame.CompiledCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     (flashSettleLoadLine +++
@@ -4178,14 +4178,14 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreRole_flashLoan
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {stepPre stepPost : Devm} {slot : Xlot}
     {key value : B256} {holder : Adr}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux)) flashLoan frame.post)
-    (fromCursor : frame.NinstOccurrenceFromCursor cursor
+    (fromCursor : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot)
-    (occurrence : frame.BalanceSstoreOccurrence dp ca stepPre stepPost slot
+    (occurrence : Blanc.Weth10.Exec.Frame.BalanceSstoreOccurrence dp ca frame stepPre stepPost slot
       key value holder)
-    (context : frame.AuthenticContext dp ca) :
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame) :
     BalanceSstoreRole ca stepPre
       (.flashPair (Sevm.argWord frame.sevm 0)
         (Sevm.argWord frame.sevm 0).toAdr
@@ -4553,18 +4553,18 @@ private theorem Exec.Frame.CompiledCursor.classifyBalanceSstore_flashLoan
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {stepPre stepPost : Devm} {slot : Xlot}
     {key value : B256} {holder : Adr}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux)) flashLoan frame.post)
-    (fromCursor : frame.NinstOccurrenceFromCursor cursor
+    (fromCursor : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot)
-    (occurrence : frame.BalanceSstoreOccurrence dp ca stepPre stepPost slot
+    (occurrence : Blanc.Weth10.Exec.Frame.BalanceSstoreOccurrence dp ca frame stepPre stepPost slot
       key value holder)
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (selectorEq : Sevm.selector frame.sevm = flashLoanSelector)
     (nonempty : frame.sevm.data.length.toB256 ≠ 0) :
     ∃ action : FlowAction,
-      frame.BalanceSstoreClassification dp ca stepPre stepPost slot
+      Blanc.Weth10.Exec.Frame.BalanceSstoreClassification dp ca frame stepPre stepPost slot
         key value holder action := by
   have role := cursor.balanceSstoreRole_flashLoan
     fromCursor occurrence context
@@ -4610,15 +4610,15 @@ private theorem Exec.Frame.CompiledCursor.no_balanceSstoreOccurrence_approvePref
     {continuation : Func} {fuel : Nat}
     {final stepPre stepPost : Devm} {slot : Xlot}
     {key value : B256} {holder : Adr}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       (approvePrefix +++ continuation) final)
-    (fromCursor : frame.NinstOccurrenceFromCursor cursor
+    (fromCursor : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot)
-    (occurrence : frame.BalanceSstoreOccurrence dp ca stepPre stepPost slot
+    (occurrence : Blanc.Weth10.Exec.Frame.BalanceSstoreOccurrence dp ca frame stepPre stepPost slot
       key value holder)
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (tailFree : Func.sstoreFreeWithin fuel
       ((weth10 dp).main :: weth10Aux)
       (approveEntryAfterStore continuation) = true) : False := by
@@ -4690,15 +4690,15 @@ private theorem Exec.Frame.CompiledCursor.no_balanceSstoreOccurrence_approvePerm
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {final stepPre stepPost : Devm} {slot : Xlot}
     {key value : B256} {holder : Adr}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       approvePermit final)
-    (fromCursor : frame.NinstOccurrenceFromCursor cursor
+    (fromCursor : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot)
-    (occurrence : frame.BalanceSstoreOccurrence dp ca stepPre stepPost slot
+    (occurrence : Blanc.Weth10.Exec.Frame.BalanceSstoreOccurrence dp ca frame stepPre stepPost slot
       key value holder)
-    (context : frame.AuthenticContext dp ca) : False := by
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame) : False := by
   rcases cursor.castSourceWithOccurrence approvePermit_eq_storeSplit
       fromCursor with
     ⟨sourceCursor, _sourcePre, fromSource⟩
@@ -4773,15 +4773,15 @@ private theorem Exec.Frame.CompiledCursor.no_balanceSstoreOccurrence_permitRecov
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {final stepPre stepPost : Devm} {slot : Xlot}
     {key value : B256} {holder : Adr}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       permitRecover final)
-    (fromCursor : frame.NinstOccurrenceFromCursor cursor
+    (fromCursor : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot)
-    (occurrence : frame.BalanceSstoreOccurrence dp ca stepPre stepPost slot
+    (occurrence : Blanc.Weth10.Exec.Frame.BalanceSstoreOccurrence dp ca frame stepPre stepPost slot
       key value holder)
-    (context : frame.AuthenticContext dp ca) : False := by
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame) : False := by
   rcases cursor.castSourceWithOccurrence permitRecover_eq_source
       fromCursor with
     ⟨sourceCursor, _sourcePre, fromSource⟩
@@ -4888,15 +4888,15 @@ private theorem Exec.Frame.CompiledCursor.no_balanceSstoreOccurrence_permit
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {final stepPre stepPost : Devm} {slot : Xlot}
     {key value : B256} {holder : Adr}
-    (cursor : frame.CompiledCursor dp ca
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       (permit dp) final)
-    (fromCursor : frame.NinstOccurrenceFromCursor cursor
+    (fromCursor : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot)
-    (occurrence : frame.BalanceSstoreOccurrence dp ca stepPre stepPost slot
+    (occurrence : Blanc.Weth10.Exec.Frame.BalanceSstoreOccurrence dp ca frame stepPre stepPost slot
       key value holder)
-    (context : frame.AuthenticContext dp ca) : False := by
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame) : False := by
   rcases cursor.castSourceWithOccurrence (permit_eq_source dp)
       fromCursor with
     ⟨sourceCursor, _sourcePre, fromSource⟩
@@ -5058,12 +5058,12 @@ theorem Exec.Frame.BalanceSstoreOccurrence.classify_of_receive
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {stepPre stepPost : Devm} {slot : Xlot}
     {key value : B256} {holder : Adr}
-    (occurrence : frame.BalanceSstoreOccurrence dp ca stepPre stepPost slot
+    (occurrence : Blanc.Weth10.Exec.Frame.BalanceSstoreOccurrence dp ca frame stepPre stepPost slot
       key value holder)
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (empty : frame.sevm.data.length.toB256 = 0) :
     ∃ action : FlowAction,
-      frame.BalanceSstoreClassification dp ca stepPre stepPost slot
+      Blanc.Weth10.Exec.Frame.BalanceSstoreClassification dp ca frame stepPre stepPost slot
         key value holder action := by
   rcases occurrence.fromMainCursor context with ⟨mainCursor, fromMain⟩
   rcases mainCursor.balanceSstoreOccurrence_main fromMain with
@@ -5072,9 +5072,9 @@ theorem Exec.Frame.BalanceSstoreOccurrence.classify_of_receive
   · exact (nonempty empty).elim
   · have role := receiveCursor.balanceSstoreRole_mintCaller
       inside occurrence context
-    cases classified : frame.flowAction? dp ca with
+    cases classified : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
     | none =>
-        unfold Exec.Frame.flowAction? at classified
+        unfold Blanc.Weth10.Exec.Frame.flowAction? at classified
         rw [if_pos context.invocation] at classified
         simp [primaryFlowAtom, empty] at classified
     | some action =>
@@ -5082,7 +5082,7 @@ theorem Exec.Frame.BalanceSstoreOccurrence.classify_of_receive
             .ordinaryMint frame.sevm.caller.toB256 frame.sevm.caller
               frame.sevm.value.toNat := by
           have selected :=
-            frame.primaryFlowAtom_eq_some_of_flowAction_eq_some
+            Blanc.Weth10.Exec.Frame.primaryFlowAtom_eq_some_of_flowAction_eq_some (frame := frame)
               context classified
           simpa [primaryFlowAtom, empty] using selected.symm
         refine ⟨action,
@@ -5094,16 +5094,16 @@ theorem Exec.Frame.BalanceSstoreOccurrence.classify_of_receive
 proof-indexed frame execution. -/
 private theorem Exec.Frame.compiledReceiveCursor
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (empty : frame.sevm.data.length.toB256 = 0) :
-    ∃ receiveCursor : frame.CompiledCursor dp ca
+    ∃ receiveCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
         ((weth10 dp).main :: weth10Aux)
         (table 0 ((weth10 dp).main :: weth10Aux))
         receiveEther frame.post,
       [] <<+ receiveCursor.pre.stack ∧ receiveCursor.actions = [] := by
-  rcases frame.compiledMainCursor context with
+  rcases Blanc.Weth10.Exec.Frame.compiledMainCursor (frame := frame) context with
     ⟨mainCursor, mainActions⟩
-  change frame.CompiledCursor dp ca
+  change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
     ((weth10 dp).main :: weth10Aux)
     (table 0 ((weth10 dp).main :: weth10Aux))
     ([Ninst.calldatasize, Ninst.iszero] +++
@@ -5139,15 +5139,15 @@ occurrence at the caller key, with the exact word computed by its immediate
 load/add prefix. -/
 theorem Exec.Frame.exists_balanceSstoreOccurrence_of_receive
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (empty : frame.sevm.data.length.toB256 = 0) :
     ∃ (storePre storePost : Devm) (slot : Xlot),
-      frame.BalanceSstoreOccurrence dp ca storePre storePost slot
+      Blanc.Weth10.Exec.Frame.BalanceSstoreOccurrence dp ca frame storePre storePost slot
         frame.sevm.caller.toB256
         (Stor.rest (Devm.getStor storePre ca) frame.sevm.caller +
           Nat.toB256 frame.sevm.value.toNat)
         frame.sevm.caller := by
-  rcases frame.compiledReceiveCursor context empty with
+  rcases Blanc.Weth10.Exec.Frame.compiledReceiveCursor (frame := frame) context empty with
     ⟨receiveCursor, _receiveStack, _receiveActions⟩
   rw [receiveEther_eq_sstoreSplit] at receiveCursor
   rcases receiveCursor.peelChildlessLine
@@ -5218,22 +5218,22 @@ evidence attached. -/
 theorem Exec.Frame.exists_balanceSstoreClassification_of_receive
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {action : FlowAction}
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (empty : frame.sevm.data.length.toB256 = 0)
-    (classified : frame.flowAction? dp ca = some action) :
+    (classified : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action) :
     ∃ (storePre storePost : Devm) (slot : Xlot),
-      frame.BalanceSstoreClassification dp ca storePre storePost slot
+      Blanc.Weth10.Exec.Frame.BalanceSstoreClassification dp ca frame storePre storePost slot
         frame.sevm.caller.toB256
         (Stor.rest (Devm.getStor storePre ca) frame.sevm.caller +
           Nat.toB256 frame.sevm.value.toNat)
         frame.sevm.caller action := by
-  rcases frame.exists_balanceSstoreOccurrence_of_receive context empty with
+  rcases Blanc.Weth10.Exec.Frame.exists_balanceSstoreOccurrence_of_receive (frame := frame) context empty with
     ⟨storePre, storePost, slot, occurrence⟩
   have atomEq : action.atom =
       .ordinaryMint frame.sevm.caller.toB256 frame.sevm.caller
         frame.sevm.value.toNat := by
     have selected :=
-      frame.primaryFlowAtom_eq_some_of_flowAction_eq_some context classified
+      Blanc.Weth10.Exec.Frame.primaryFlowAtom_eq_some_of_flowAction_eq_some (frame := frame) context classified
     simpa [primaryFlowAtom, empty] using selected.symm
   refine ⟨storePre, storePost, slot,
     occurrence.classify_of_role context classified ?_⟩
@@ -5252,14 +5252,14 @@ private theorem Exec.Frame.CompiledCursor.castSourceWithOccurrence_of_pairEq
     {fs : List Func} {sourceTable : List (Nat × Func)}
     {sig targetSig : B256} {source targetSource : Func}
     {final stepPre stepPost : Devm} {slot : Xlot}
-    (cursor : frame.CompiledCursor dp ca fs sourceTable source final)
+    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs sourceTable source final)
     (pairEq : (sig, source) = (targetSig, targetSource))
-    (occurrence : frame.NinstOccurrenceFromCursor cursor
+    (occurrence : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot) :
     sig = targetSig ∧
-      ∃ targetCursor : frame.CompiledCursor dp ca fs sourceTable
+      ∃ targetCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs sourceTable
           targetSource final,
-        frame.NinstOccurrenceFromCursor targetCursor (.reg .sstore)
+        Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) targetCursor (.reg .sstore)
           stepPre stepPost slot := by
   have sigEq : sig = targetSig := congrArg Prod.fst pairEq
   have sourceEq : source = targetSource := congrArg Prod.snd pairEq
@@ -5275,12 +5275,12 @@ private theorem Exec.Frame.BalanceSstoreOccurrence.classify_of_nonempty
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {stepPre stepPost : Devm} {slot : Xlot}
     {key value : B256} {holder : Adr}
-    (occurrence : frame.BalanceSstoreOccurrence dp ca stepPre stepPost slot
+    (occurrence : Blanc.Weth10.Exec.Frame.BalanceSstoreOccurrence dp ca frame stepPre stepPost slot
       key value holder)
-    (context : frame.AuthenticContext dp ca)
+    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
     (nonempty : frame.sevm.data.length.toB256 ≠ 0) :
     ∃ action : FlowAction,
-      frame.BalanceSstoreClassification dp ca stepPre stepPost slot
+      Blanc.Weth10.Exec.Frame.BalanceSstoreClassification dp ca frame stepPre stepPost slot
         key value holder action := by
   rcases occurrence.fromMainCursor context with ⟨mainCursor, fromMain⟩
   rcases mainCursor.balanceSstoreOccurrence_selectorBody fromMain context
@@ -5300,7 +5300,7 @@ private theorem Exec.Frame.BalanceSstoreOccurrence.classify_of_nonempty
     rcases caseCursor.balanceSstoreOccurrence_nonpayable
           context.invocation.2.2.2 insideCase with
         ⟨approveCursor, insideApprove⟩
-    change frame.CompiledCursor dp ca
+    change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
         ((weth10 dp).main :: weth10Aux)
         (table 0 ((weth10 dp).main :: weth10Aux))
         (approvePrefix +++ returnTrue) frame.post at approveCursor
@@ -5432,7 +5432,7 @@ private theorem Exec.Frame.BalanceSstoreOccurrence.classify_of_nonempty
         ⟨approveCallCursor, insideApproveCall⟩
     let callback :=
       callBoolCallback onTokenApprovalSelector 0 2 (arg 1)
-    change frame.CompiledCursor dp ca
+    change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
         ((weth10 dp).main :: weth10Aux)
         (table 0 ((weth10 dp).main :: weth10Aux))
         (approvePrefix +++ callback) frame.post at approveCallCursor
@@ -5481,13 +5481,13 @@ balance-region `SSTORE` occurrence in an authentic exact WETH10 frame.  It has
 no endpoint balance equation, log list, or preselected action hypothesis. -/
 def CompiledBalanceSstoreReverseComplete (dp : DeployParams) (ca : Adr) :
     Prop :=
-  ∀ (frame : Exec.Frame), frame.AuthenticContext dp ca →
+  ∀ (frame : Exec.Frame), Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame →
     ∀ (stepPre stepPost : Devm) (slot : Xlot)
       (key value : B256) (holder : Adr),
-      frame.BalanceSstoreOccurrence dp ca stepPre stepPost slot
+      Blanc.Weth10.Exec.Frame.BalanceSstoreOccurrence dp ca frame stepPre stepPost slot
         key value holder →
       ∃ action : FlowAction,
-        frame.BalanceSstoreClassification dp ca stepPre stepPost slot
+        Blanc.Weth10.Exec.Frame.BalanceSstoreClassification dp ca frame stepPre stepPost slot
           key value holder action
 
 /-- Concrete dynamic reverse completeness of the generated WETH10 program,
@@ -5515,16 +5515,16 @@ theorem Exec.balanceSstoreClassification_of_mem_committedFrames
     (rootPc : pc = 0) (rootMemory : pre.memory = Mem.empty)
     {frame : Exec.Frame}
     (retained : frame ∈ Exec.committedFrames run)
-    (invocation : frame.exactInvocation dp ca)
+    (invocation : Blanc.Weth10.Exec.Frame.exactInvocation dp ca frame)
     {stepPre stepPost : Devm} {slot : Xlot}
     {key value : B256} {holder : Adr}
-    (occurrence : frame.BalanceSstoreOccurrence dp ca stepPre stepPost slot
+    (occurrence : Blanc.Weth10.Exec.Frame.BalanceSstoreOccurrence dp ca frame stepPre stepPost slot
       key value holder) :
     ∃ action : FlowAction,
-      frame.BalanceSstoreClassification dp ca stepPre stepPost slot
+      Blanc.Weth10.Exec.Frame.BalanceSstoreClassification dp ca frame stepPre stepPost slot
         key value holder action := by
   have context :=
-    frame.authenticContext_of_mem_committedFrames_exactInvocation
+    Blanc.Weth10.Exec.Frame.authenticContext_of_mem_committedFrames_exactInvocation (frame := frame)
       run installed rootPc rootMemory retained invocation
   exact complete frame context stepPre stepPost slot key value holder occurrence
 
@@ -5539,13 +5539,13 @@ theorem Exec.weth10BalanceSstoreClassification_of_mem_committedFrames
     (rootPc : pc = 0) (rootMemory : pre.memory = Mem.empty)
     {frame : Exec.Frame}
     (retained : frame ∈ Exec.committedFrames run)
-    (invocation : frame.exactInvocation dp ca)
+    (invocation : Blanc.Weth10.Exec.Frame.exactInvocation dp ca frame)
     {stepPre stepPost : Devm} {slot : Xlot}
     {key value : B256} {holder : Adr}
-    (occurrence : frame.BalanceSstoreOccurrence dp ca stepPre stepPost slot
+    (occurrence : Blanc.Weth10.Exec.Frame.BalanceSstoreOccurrence dp ca frame stepPre stepPost slot
       key value holder) :
     ∃ action : FlowAction,
-      frame.BalanceSstoreClassification dp ca stepPre stepPost slot
+      Blanc.Weth10.Exec.Frame.BalanceSstoreClassification dp ca frame stepPre stepPost slot
         key value holder action := by
   exact Exec.balanceSstoreClassification_of_mem_committedFrames
     (compiledBalanceSstoreReverseComplete dp ca) run installed rootPc

@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "commonModule": "Blanc/ExecutionSettlement.lean",
+  "weth10ModuleGlob": "Blanc/Weth10*.lean",
+  "requiredDirectImport": {
+    "module": "Blanc/Weth10HolderFlow.lean",
+    "import": "Blanc.ExecutionSettlement"
+  },
+  "mappings": [
+    { "donor": "Blanc.Weth10.Execution.commits", "common": "Blanc.Execution.commits", "kind": "def" },
+    { "donor": "Blanc.Weth10.Frame.settlementCommits", "common": "Blanc.Frame.settlementCommits", "kind": "def" },
+    { "donor": "Blanc.Weth10.Frame.raw_commits_of_settlementCommits", "common": "Blanc.Frame.raw_commits_of_settlementCommits", "kind": "theorem" },
+    { "donor": "Blanc.Weth10.Exec.outcome", "common": "Blanc.Exec.outcome", "kind": "def" },
+    { "donor": "Blanc.Weth10.Exec.Frame", "common": "Blanc.Exec.Frame", "kind": "structure" },
+    { "donor": "Blanc.Weth10.Execution.committedPost", "common": "Blanc.Execution.committedPost", "kind": "def" },
+    { "donor": "Blanc.Weth10.Exec.Frame.post", "common": "Blanc.Exec.Frame.post", "kind": "def" },
+    { "donor": "Blanc.Weth10.Exec.Frame.ofRun", "common": "Blanc.Exec.Frame.ofRun", "kind": "def" },
+    { "donor": "Blanc.Weth10.Exec.descendantFrames", "common": "Blanc.Exec.descendantFrames", "kind": "def" },
+    { "donor": "Blanc.Weth10.Exec.descendantFrames_runOk_of_not_settlementCommits", "common": "Blanc.Exec.descendantFrames_runOk_of_not_settlementCommits", "kind": "theorem" },
+    { "donor": "Blanc.Weth10.Exec.descendantFrames_runOk_create_codeDepositRollback", "common": "Blanc.Exec.descendantFrames_runOk_create_codeDepositRollback", "kind": "theorem" },
+    { "donor": "Blanc.Weth10.Exec.committedFrames", "common": "Blanc.Exec.committedFrames", "kind": "def" },
+    { "donor": "Blanc.Weth10.ProcessMessage.settlementCommits_of_some_ok_clean", "common": "Blanc.ProcessMessage.settlementCommits_of_some_ok_clean", "kind": "theorem" },
+    { "donor": "Blanc.Weth10.Frame.settlementCommits_ofCall_of_raw_commits", "common": "Blanc.Frame.settlementCommits_ofCall_of_raw_commits", "kind": "theorem" }
+  ]
+}
