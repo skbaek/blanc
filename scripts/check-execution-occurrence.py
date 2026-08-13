@@ -204,13 +204,17 @@ def main() -> int:
     relative_owner = ".".join(export_namespace.split(".")[1:])
     with tempfile.TemporaryDirectory(prefix="occurrence-ownership-controls-") as temp:
         temp_root = pathlib.Path(temp)
+        command_controls: list[tuple[pathlib.Path, str]] = []
         alias_path = temp_root / "DonorAlias.lean"
         alias_path.write_text(
+            "import Blanc.CommonProofs\n"
             "namespace Blanc.Weth10\n"
-            f"alias occurrenceLegacy := {first_fqn}\n"
+            "protected alias occurrenceLegacy :=\n"
+            f"  {first_fqn}\n"
             "end Blanc.Weth10\n",
             encoding="utf-8",
         )
+        command_controls.append((alias_path, "protected multiline alias"))
         alias_control = ownership.donor_aliases_or_exports(
             alias_path, {first_fqn}
         )
@@ -219,13 +223,16 @@ def main() -> int:
 
         relative_alias_path = temp_root / "DonorRelativeAlias.lean"
         relative_alias_path.write_text(
+            "import Blanc.CommonProofs\n"
             "namespace Blanc\n"
             "namespace Weth10\n"
-            f"alias occurrenceRelativeLegacy := {relative_owner}.{export_item}\n"
+            "alias occurrenceRelativeLegacy :=\n"
+            f"  {relative_owner}.{export_item}\n"
             "end Weth10\n"
             "end Blanc\n",
             encoding="utf-8",
         )
+        command_controls.append((relative_alias_path, "relative multiline alias"))
         relative_alias_control = ownership.donor_aliases_or_exports(
             relative_alias_path, {first_fqn}
         )
@@ -237,11 +244,14 @@ def main() -> int:
 
         root_alias_path = temp_root / "DonorRootAlias.lean"
         root_alias_path.write_text(
+            "import Blanc.CommonProofs\n"
             "namespace Blanc.Weth10\n"
-            f"alias occurrenceRootLegacy := _root_.{first_fqn}\n"
+            "alias occurrenceRootLegacy :=\n"
+            f"  _root_.{first_fqn}\n"
             "end Blanc.Weth10\n",
             encoding="utf-8",
         )
+        command_controls.append((root_alias_path, "root multiline alias"))
         root_alias_control = ownership.donor_aliases_or_exports(
             root_alias_path, {first_fqn}
         )
@@ -250,11 +260,13 @@ def main() -> int:
 
         export_path = temp_root / "DonorExport.lean"
         export_path.write_text(
+            "import Blanc.CommonProofs\n"
             "namespace Blanc.Weth10\n"
             f"export {export_namespace} ({export_item})\n"
             "end Blanc.Weth10\n",
             encoding="utf-8",
         )
+        command_controls.append((export_path, "absolute export"))
         export_control = ownership.donor_aliases_or_exports(
             export_path, {first_fqn}
         )
@@ -263,6 +275,7 @@ def main() -> int:
 
         relative_export_path = temp_root / "DonorRelativeExport.lean"
         relative_export_path.write_text(
+            "import Blanc.CommonProofs\n"
             f"namespace {ancestor}\n"
             "namespace Weth10\n"
             f"export {relative_owner} ({export_item})\n"
@@ -270,6 +283,7 @@ def main() -> int:
             f"end {ancestor}\n",
             encoding="utf-8",
         )
+        command_controls.append((relative_export_path, "relative export"))
         relative_export_control = ownership.donor_aliases_or_exports(
             relative_export_path, {first_fqn}
         )
@@ -281,6 +295,7 @@ def main() -> int:
 
         root_export_path = temp_root / "DonorRootExport.lean"
         root_export_path.write_text(
+            "import Blanc.CommonProofs\n"
             "namespace Blanc\n"
             "namespace Weth10\n"
             f"export _root_.{export_namespace} ({export_item})\n"
@@ -288,6 +303,7 @@ def main() -> int:
             "end Blanc\n",
             encoding="utf-8",
         )
+        command_controls.append((root_export_path, "root export"))
         root_export_control = ownership.donor_aliases_or_exports(
             root_export_path, {first_fqn}
         )
@@ -295,6 +311,14 @@ def main() -> int:
             return fail(
                 "ownership parser donor-root-export negative control failed"
             )
+
+        for control_path, label in command_controls:
+            compiled_control = run(["lake", "env", "lean", str(control_path)])
+            if compiled_control.returncode != 0:
+                return fail(
+                    f"ownership parser {label} control is not valid Lean",
+                    compiled_control,
+                )
 
         common_path = ROOT / first["commonModule"]
         common_source = common_path.read_text(encoding="utf-8")

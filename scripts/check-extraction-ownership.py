@@ -35,8 +35,11 @@ DECL_RE = re.compile(
     rf"^\s*(?:@\[[^]]+\]\s*)*(?:(?:private|protected|noncomputable|unsafe)\s+)*(def|theorem|structure|abbrev|opaque|axiom|inductive|class)\s+({IDENT})\b"
 )
 IMPORT_RE = re.compile(rf"^\s*import\s+({IDENT})(?:\s|$)")
-EXPORT_RE = re.compile(rf"^\s*export\s+({IDENT})\s*\(([^)]*)\)")
-ALIAS_RE = re.compile(r"^\s*alias\s+(.+)$")
+ALIAS_COMMAND_RE = re.compile(
+    r"(?m)^[ \t]*(?:@\[[^]]*\][ \t]*)*"
+    r"(?:(?:private|protected|noncomputable|unsafe)[ \t]+)*alias\b"
+)
+EXPORT_COMMAND_RE = re.compile(r"(?m)^[ \t]*export\b")
 
 
 @dataclass(frozen=True)
@@ -105,18 +108,6 @@ def qualify(namespace: list[str], name: str) -> str:
     return ".".join([*namespace, name]) if namespace else name
 
 
-def resolve_name(namespace: list[str], name: str) -> list[str]:
-    """Return every Lean lexical candidate for an identifier spelling."""
-    if name.startswith("_root_."):
-        return [name.removeprefix("_root_.")]
-    if name.startswith("Blanc.") or name == "Blanc":
-        return [name]
-    return [
-        qualify(namespace[:depth], name)
-        for depth in range(len(namespace), -1, -1)
-    ]
-
-
 def declarations(path: Path) -> dict[str, tuple[str, int]]:
     """Return actual Lean declaration headers, qualified under namespaces."""
     scopes: list[tuple[str, list[str]]] = []
@@ -156,59 +147,19 @@ def imports(path: Path) -> set[str]:
 
 
 def donor_aliases_or_exports(path: Path, donors: set[str]) -> list[tuple[str, int, str]]:
-    """Recognize declared aliases/exports under the current namespace.
+    """Reject every alias/export command in a donor module, fail closed.
 
-    This is deliberately restricted to declaration syntax.  Ordinary use of a
-    WETH10-only extension such as ``Exec.Frame.AuthenticContext`` is not an
-    ownership regression for the extracted ``Exec.Frame`` structure.
+    The audited WETH donor set contains no legitimate alias or export command.
+    Rejecting the command itself avoids unsound approximations of Lean's
+    modifier, multiline, root-qualified, and ancestor-relative name grammar.
+    Comments are stripped first, so prose uses of these words are harmless.
     """
-    scopes: list[tuple[str, list[str]]] = []
+    source = strip_comments(path.read_text(encoding="utf-8"))
     hits: list[tuple[str, int, str]] = []
-    for number, line in enumerate(strip_comments(path.read_text(encoding="utf-8")).splitlines(), 1):
-        if match := NAMESPACE_RE.match(line):
-            name = match.group(1)
-            parts = name.split(".")
-            scopes.append(("namespace", parts))
-            continue
-        if SECTION_RE.match(line):
-            scopes.append(("section", []))
-            continue
-        if END_RE.match(line):
-            if not scopes:
-                raise ValueError(f"{path}: line {number}: unmatched end")
-            scopes.pop()
-            continue
-        namespace = [part for kind, parts in scopes if kind == "namespace" for part in parts]
-        if match := EXPORT_RE.match(line):
-            exported_namespace, exported_items = match.groups()
-            # Lean resolves a relative namespace first locally and then
-            # through every lexical namespace ancestor. Audit every such
-            # owner so `namespace Blanc.Weth10; export ProcessMessage ...`
-            # cannot hide a re-export of `Blanc.ProcessMessage`.
-            owners = [
-                owner.split(".")
-                for owner in resolve_name(namespace, exported_namespace)
-            ]
-            for item in re.findall(IDENT, exported_items):
-                for owner in owners:
-                    fqn = qualify(owner, item)
-                    if fqn in donors:
-                        hits.append((fqn, number, "export"))
-        if match := ALIAS_RE.match(line):
-            # `alias newName := target` can recreate a removed donor name or
-            # introduce a differently named compatibility shim for a moved
-            # common declaration. Audit both sides with Lean's lexical rules.
-            alias_match = re.match(
-                rf"\s*({IDENT})\s*:=\s*({IDENT})", match.group(1)
-            )
-            if alias_match:
-                introduced, target = alias_match.groups()
-                for spelling in (introduced, target):
-                    for fqn in resolve_name(namespace, spelling):
-                        if fqn in donors:
-                            hits.append((fqn, number, "alias"))
-    if scopes:
-        raise ValueError(f"{path}: unclosed scope")
+    for form, pattern in (("alias", ALIAS_COMMAND_RE), ("export", EXPORT_COMMAND_RE)):
+        for match in pattern.finditer(source):
+            line = source.count("\n", 0, match.start()) + 1
+            hits.extend((donor, line, form) for donor in sorted(donors))
     return hits
 
 
