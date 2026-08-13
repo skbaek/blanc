@@ -1,3 +1,4 @@
+import Blanc.ExecutionOccurrence
 import Blanc.ExecDeterminism
 import Blanc.Weth10HolderFlowAuthenticity
 import Blanc.Weth10HolderFlowEth
@@ -174,6 +175,20 @@ inductive Exec.Deriv.ParentStepActions (dp : DeployParams) (ca : Adr) :
           Exec.flowActions dp ca child
          else [])
 
+/-- Forget the WETH action label while preserving the exact same-frame
+continuation edge and its recursive child proof. -/
+theorem Exec.Deriv.ParentStepActions.toParentStep
+    {dp : DeployParams} {ca : Adr}
+    {next root : Exec.Deriv} {actions : List FlowAction}
+    (edge : Exec.Deriv.ParentStepActions dp ca next root actions) :
+    Blanc.Exec.Deriv.ParentStep next root := by
+  cases edge with
+  | cont hstep next => exact .cont hstep next
+  | doneOk hstep henter hresume next =>
+      exact .doneOk hstep henter hresume next
+  | runOk hstep henter child hresume next =>
+      exact .runOk hstep henter child hresume next
+
 /-- A chronological same-frame prefix, labelled by all retained child action
 lists crossed before its endpoint. -/
 inductive Exec.Deriv.ParentPrefixActions (dp : DeployParams) (ca : Adr) :
@@ -185,6 +200,17 @@ inductive Exec.Deriv.ParentPrefixActions (dp : DeployParams) (ca : Adr) :
       (rest : Exec.Deriv.ParentPrefixActions dp ca next tail tailActions) :
       Exec.Deriv.ParentPrefixActions dp ca root tail
         (headActions ++ tailActions)
+
+/-- Forget the accumulated WETH action labels while preserving the exact
+same-frame prefix. -/
+theorem Exec.Deriv.ParentPrefixActions.toParentPrefix
+    {dp : DeployParams} {ca : Adr}
+    {root tail : Exec.Deriv} {actions : List FlowAction}
+    (prefix : Exec.Deriv.ParentPrefixActions dp ca root tail actions) :
+    Blanc.Exec.Deriv.ParentPrefix root tail := by
+  induction prefix with
+  | refl => exact .refl _
+  | step head rest ih => exact .step head.toParentStep ih
 
 /-- One labelled parent-continuation edge is exactly the corresponding split
 of proper-descendant actions. -/
@@ -278,6 +304,33 @@ def Exec.Frame.NinstOccurrence (dp : DeployParams) (ca : Adr)
     Exec.Deriv.ParentStepActions dp ca
       ⟨pc + n.size, frame.sevm, stepPost, frame.out, continuation⟩
       ⟨pc, frame.sevm, stepPre, frame.out, current⟩ selected
+
+/-- Erase the WETH action chronology from an occurrence while preserving its
+exact proof-indexed node, program counter, machine states, decoded
+instruction, recursive slot, and step result. -/
+theorem Exec.Frame.NinstOccurrence.toCommon
+    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
+    {n : Ninst} {stepPre stepPost : Devm} {xl : Xlot}
+    (occurrence : Blanc.Weth10.Exec.Frame.NinstOccurrence
+      dp ca frame n stepPre stepPost xl) :
+    Blanc.Exec.NinstOccurrence (Blanc.Exec.Frame.rootDeriv frame) := by
+  rcases occurrence with
+    ⟨pc, current, continuation, before, selected, prefix, decoded,
+      filled, stepRun, prec, edge⟩
+  have neutralPrefix := prefix.toParentPrefix
+  rcases neutralPrefix.rawNodes_decomposition with
+    ⟨earlier, decomposition⟩
+  refine
+    { node := ⟨pc, frame.sevm, stepPre, frame.out, current⟩
+      instruction := n
+      slot := xl
+      stepResult := .ok stepPost
+      reached := ?_
+      decoded := decoded
+      filled := filled
+      stepRun := stepRun }
+  rw [decomposition]
+  simp [Blanc.Exec.rawNodes]
 
 /-- An instruction occurrence exposes the exact chronological split of the
 enclosing frame's proper-descendant ledger: all earlier settled children,
