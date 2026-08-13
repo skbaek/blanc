@@ -3,6 +3,7 @@ import Blanc.WethCode
 import Blanc.Ladder
 import Blanc.BalanceAlgebra
 import Blanc.ExecutionSettlement
+import Blanc.ExecutionOccurrence
 import Blanc.Weth10Core
 import Blanc.Weth10Backed
 import Blanc.Weth10Spec
