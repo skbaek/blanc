@@ -4448,6 +4448,26 @@ lemma of_run_reg {e : Sevm} {s s' : Devm} {r : Rinst}
   simp only [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at run
   exact ⟨pc, run.2.symm⟩
 
+/-- The atomic static fact: `SSTORE` clears `assertDynamic` before it commits,
+so a successful storage write witnesses a dynamic context. -/
+theorem of_run_sstore_not_static {e : Sevm} {s s' : Devm}
+    (h : Ninst.Run e s sstore s') : e.isStatic = false := by
+  rcases of_run_reg h with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨⟨_, _⟩, _, run₁⟩
+  rcases Except.bind_eq_ok run₁ with ⟨⟨_, _⟩, _, run₂⟩
+  rcases Except.bind_eq_ok run₂ with ⟨_, _, run₃⟩
+  rcases Except.bind_eq_ok run₃ with ⟨⟨_, _⟩, _, run₄⟩
+  rcases Except.bind_eq_ok run₄ with ⟨_, _, run₅⟩
+  rcases Except.bind_eq_ok run₅ with ⟨_, _, run₆⟩
+  rcases Except.bind_eq_ok run₆ with ⟨_, _, run₇⟩
+  rcases Except.bind_eq_ok run₇ with ⟨_, hassert, _⟩
+  unfold assertDynamic Except.assert at hassert
+  split at hassert
+  · rename_i hdynamic
+    simpa using hdynamic
+  · exact absurd hassert (by simp)
+
 lemma of_run_push {e s s' xs p} (h : Ninst.Run e s (push xs p) s') :
     Devm.PushBurn [xs.toB256] s s' := by
   rcases h with ⟨xl, _, pc, run⟩

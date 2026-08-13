@@ -719,3 +719,14 @@ OK	6.587	Blanc/ExecutionOccurrence.lean
 # `--force` were not used. Only this new row is admitted, and every
 # pre-existing reference row above remains byte-for-byte unchanged.
 OK	1.349	Blanc/CycleWriteFree.lean
+
+# 2026-08-14. The transient-settlement foundation added exactly one module,
+# Blanc/TransientSettlement.lean. Its 1.314 s row is the median of three
+# separate uncontended sequential `scripts/check-elab.sh --list --no-build`
+# runs over all 96 files on the exact final Lean source tree: 1.314 s / 431.2 s
+# total, 1.311 s / 432.1 s total, and 1.320 s / 432.1 s total. Only the gate's
+# Python mutant descriptions changed between the first measurement and the
+# final commit; every measured Lean source was byte-identical. `--rebase` and
+# `--force` were not used. Only this new row is admitted, and every
+# pre-existing reference row above remains byte-for-byte unchanged.
+OK	1.314	Blanc/TransientSettlement.lean

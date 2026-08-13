@@ -1,0 +1,113 @@
+{
+  "schema": 1,
+  "commonModule": "Blanc/TransientSettlement.lean",
+  "rootModule": "Blanc.lean",
+  "requiredRootImport": "Blanc.TransientSettlement",
+  "exactCommonImports": ["Blanc.Ladder", "Blanc.ForwardCall"],
+  "owners": [
+    ["tstore_run_cell", "theorem"],
+    ["tstore_run_zero", "theorem"],
+    ["tload_run_cell", "theorem"],
+    ["directCall_nonzero_spawn", "theorem"],
+    ["directCall_zero_spawn", "theorem"],
+    ["directStatcall_spawn", "theorem"],
+    ["caughtCall_childSettlement", "theorem"],
+    ["cleanCall_childSettlement", "theorem"],
+    ["PreparedTransactionMessage", "structure"],
+    ["preparedTransactionMessage_exists", "theorem"],
+    ["PreparedTransactionMessage.transientStorage_eq_empty", "theorem"],
+    ["processMessageCall_error_logs_eq_nil", "theorem"],
+    ["PreparedTransactionMessage.error_logs_eq_nil", "theorem"]
+  ],
+  "signatureHashes": {
+    "tstore_run_cell": "6877e3c99880c1eec12c9d675bf123364d7f07fc18527de4f4de64b9bcc16db5",
+    "tstore_run_zero": "1089beb9e6cdbef48a63c5bae7447b1638e40411969686992ea8fb4ec8fb673b",
+    "tload_run_cell": "74852521f83dbb2f0fff4fa5bdcd0d39d637a9d5f56a3f2d50090f1acf0d43fc",
+    "directCall_nonzero_spawn": "80655801d226902fd38dde11bdce104f727485f0f067bda3a636b4dfbac20f40",
+    "directCall_zero_spawn": "7ec4b17ab39bbf7643d23a8d73f87ddeb24e07f159c35604af7e869c653735a7",
+    "directStatcall_spawn": "4f35c5c098562216509ed7adddca2cabddfb99bfc97845bca66028f61d4865c0",
+    "caughtCall_childSettlement": "0e3051d226a55f24b232086be865c0abea4b561037cbebf181843465e7709738",
+    "cleanCall_childSettlement": "6fad9951db50be664cf79858c4c8a5d8a2dfe7096bcc7a054de6dcf9f6c5f1b7",
+    "PreparedTransactionMessage": "21d9776a54ebd7e58eb92f43f85f124401f6e1c120b3f816ec1898440f88786c",
+    "preparedTransactionMessage_exists": "466320301a1e39053c7be80b5e56b7b387d840cf4c4d9d4edd4dfd05d96d6b59",
+    "PreparedTransactionMessage.transientStorage_eq_empty": "2a6c809bb75a4c04a4667efbab003cf5c6084676cf8e2a70be500aea8bd27cd3",
+    "processMessageCall_error_logs_eq_nil": "1721d1a3eb0d897da612cc3d3115fe0e4f7916c7d8103e9991d4554b3d6ffab6",
+    "PreparedTransactionMessage.error_logs_eq_nil": "ed63197f8695d4de8f3915898808d5ac18bdb36da22dc6c737fd376039b5feff"
+  },
+  "movedDonors": [
+    ["Blanc/CommonProofs.lean", "of_run_sstore_not_static", "theorem"],
+    ["Blanc/Ladder.lean", "genericCall.step_spawn_isStatic", "theorem"],
+    ["Blanc/Ladder.lean", "genericCreate.step_spawn_not_static", "theorem"],
+    ["Blanc/Ladder.lean", "Xinst.step_spawn_isStatic", "theorem"],
+    ["Blanc/Ladder.lean", "Evm.step_spawn_isStatic", "theorem"],
+    ["Blanc/Ladder.lean", "executeCode.enter_inl_isStatic", "theorem"],
+    ["Blanc/Ladder.lean", "Frame.enter_run_isStatic", "theorem"],
+    ["Blanc/Ladder.lean", "Evm.step_run_isStatic", "theorem"],
+    ["Blanc/Ladder.lean", "genericCall.step_spawn_isStatic_of_staticcall", "theorem"],
+    ["Blanc/Ladder.lean", "Xinst.step_statcall_spawn_isStatic", "theorem"],
+    ["Blanc/Ladder.lean", "Ninst.step_statcall_spawn_isStatic", "theorem"],
+    ["Blanc/Ladder.lean", "Ninst.step_statcall_run_isStatic", "theorem"]
+  ],
+  "donorSource": "Blanc/Weth10StaticSilence.lean",
+  "touchedConsumers": [
+    "Blanc/Weth10StaticSilence.lean",
+    "Blanc/Weth10AllowanceArmsPermit.lean"
+  ],
+  "movedSignatureHashes": {
+    "of_run_sstore_not_static": "a1ba2a44a3c628b1a562785e816ffabe492cc598060197b269b599d7c18cf231",
+    "genericCall.step_spawn_isStatic": "151609db791aaebf3f6dac11ce3face1b0f7db129bc15eb22a7d05ff1193f560",
+    "genericCreate.step_spawn_not_static": "3683fbf25f8a6c62f6845e9100553e8505b9adcc1d5d4c1a7a6af082d42bf18c",
+    "Xinst.step_spawn_isStatic": "fd45a6aa3873fec40528142a05e12824669b7894e509d7f8ba76580158bc3bd0",
+    "Evm.step_spawn_isStatic": "f8a6567e0f9f39a2a432936a7e29f5409d5cdaa791521493d29bc4fc98ad89f6",
+    "executeCode.enter_inl_isStatic": "35b35f1fdab5b51851233946c59561550df2f4a0b0224ed203c7602d732cf49e",
+    "Frame.enter_run_isStatic": "c9c6171d4815e1f6b6d6269e12ec6eeb3c8a9c516392dbaa862634a91ffa7a44",
+    "Evm.step_run_isStatic": "d6e927015acc5aaa99737cee615651a2f48781c1821f03eeeda8fd6f6ffe34a5",
+    "genericCall.step_spawn_isStatic_of_staticcall": "24e560e5b03ba992788379a7ae16af0a87e06179c3534146e239594de98b6902",
+    "Xinst.step_statcall_spawn_isStatic": "ae1ebc067f0fbf46abf6785da0868c1488c107e557f11408bfd1668b04c718c5",
+    "Ninst.step_statcall_spawn_isStatic": "8084f8dc73822367615944a60600a80b6d91d702d44acc15255bd933b0e5cfe5",
+    "Ninst.step_statcall_run_isStatic": "b1941fc19755c7781d224e837870185c50a8b883c776577e50f111ca379ca49b"
+  },
+  "touchedConsumerHashes": {
+    "Blanc/Weth10StaticSilence.lean": "7d99de5ead573717042030decbcc18f341a7a3d7dcb68d15bf6334299ba5887a",
+    "Blanc/Weth10AllowanceArmsPermit.lean": "6de9df894e616157984faf9e6a1ed07deab3b1388b414fe7faa6aa068a7053b4"
+  },
+  "jaunePinFiles": {
+    "lakefile.lean": "58b96d456fb06d0cdf06cc84640f2aa92543bf7d07423ce6533022c2f4458506",
+    "lake-manifest.json": "cf992d946883cfc8c842e998d2b54f733e4c865a929a76f33c9c21d11bd94fcf"
+  },
+  "wethPublicHeaderAggregate": "7c22885d0c53dd826ff2c3026d74a688bc7c07e1744f4ec2fbcdc00174959f3b",
+  "requiredSharedClassification": "TransientSettlement",
+  "forbiddenTraceFamily": [
+    "ProcessMessageTrace",
+    "ProcessCreateMessageTrace",
+    "messageCallDelegation",
+    "messageCallExecutionMessage",
+    "MessageCallTrace",
+    "exists_messageCallTrace",
+    "transactionPreludeBout",
+    "transactionBlobGasFee",
+    "transactionTenv",
+    "TransactionTrace",
+    "exists_transactionTrace"
+  ],
+  "requiredPositiveTheorems": [
+    "concrete_controls",
+    "required_positive_controls"
+  ],
+  "frozenAssuranceFiles": {
+    "Blanc/ExecutionSettlement.lean": "e685e15b95d2e3c03378d5577d61b9b3f4b26593bac0d8e819c47c4d079b0289",
+    "Blanc/ExecutionOccurrence.lean": "476669a408895dce6b7929a93fabbf2c00e572f67eba1487a54c262f1c7b8f79",
+    "Blanc/CycleWriteFree.lean": "fbe2acf05172ac3286092afe29b023521323df76fab399c9536c89e6dcc0ec1e",
+    "scripts/ExecutionSettlementRegression.lean": "d1e4fc1aeb4e31a9188af49a9df1ce2bf23b87571544f7f31e0af1abcea74c2f",
+    "scripts/check-execution-settlement.py": "b43f5b3cdc2de74332d16be957553bd23014b59b346ce8450e133cf70c7d308b",
+    "scripts/execution-settlement-lift-manifest.json": "983071a64b42966cd392c3c8a7d02c51fba787ca81878dba529de0047950be40",
+    "scripts/ExecutionOccurrenceRegression.lean": "5bbc70e047d696c1399224fe5cbb1e317635a737ef080e59a2b5f96a8b58e58b",
+    "scripts/check-execution-occurrence.py": "4f5bdd31a22a646ca38c1d0515cba691111c0b4d1e4bafe595e7eeb5c8ab6082",
+    "scripts/execution-occurrence-lift-manifest.json": "87e91c05367654456d521e705e12ba54d2b6100f23fd59da570290ca4dadef93",
+    "scripts/check-execution-raw-attribution-ownership.py": "448a7fb37021052002b9ec2c4e6493d2fb29c71c1e2066f6082cd9c0947a1012",
+    "scripts/execution-raw-attribution-owner-manifest.json": "f23f44a59f0e68c1e6c54eadeb2d1b06d7dcf8597173cdf9b04b8d82314b75f9",
+    "scripts/CycleWriteFreeRegression.lean": "972fb8c3d780e281490b80bb38c32e4aae4702b49a7f016a3c9313cd8fc5db7e",
+    "scripts/check-cycle-write-free.py": "5cc462ff491d1812fc401760ac13f32709b1bb29c5a78fd22df8290b426e0173",
+    "scripts/cycle-write-free-owner-manifest.json": "563714dc1786700a93ffad5d4201d58f80a39b09b9ae162cc68f641da9c2cca3"
+  }
+}

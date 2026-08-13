@@ -1393,7 +1393,7 @@ private theorem permitStatcallRegionSilent_of_forallDeeperAt
       | none => exact writeFreeLedger_nil
       | some childRun =>
           refine Exec.attributionStream_writeFree_of_static childRun ?_
-          have hstatic := Frame.enter_run_isStatic (RunFrame.some_inv
+          have hstatic := Blanc.Frame.enter_run_isStatic (RunFrame.some_inv
             hprocess).1
           simpa only [Jaune.Frame.ofCall, callMsg, Bool.true_or] using hstatic
     have hchild := ProcessMessageTrace.allowanceRegionDelta_of_forallDeeperAt

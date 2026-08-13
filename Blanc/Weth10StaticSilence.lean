@@ -137,129 +137,6 @@ theorem applyAllowanceLedger_writeFree_append
     lastAllowanceWriteAt_eq_none_of_writeFree hfree.reverse key]
   cases lastAllowanceWriteAt right.reverse key <;> rfl
 
-/-! ## Static propagation across a spawned frame -/
-
-/-- A `CALL`-family child inherits its parent's static flag: `callMsg` sets
-`isStatic := isStaticcall || sevm.isStatic`. -/
-theorem genericCall.step_spawn_isStatic
-    {sevm : Sevm} {devm : Devm} {gas : Nat} {value : B256}
-    {caller target codeAddress : Adr} {shouldTransferValue isStaticcall : Bool}
-    {inputIndex inputSize outputIndex outputSize : Nat} {code : ByteArray}
-    {disablePrecompiles : Bool} {f : Jaune.Frame} {rsm : Resume}
-    (hs : genericCall.step sevm devm gas value caller target codeAddress
-      shouldTransferValue isStaticcall inputIndex inputSize outputIndex
-      outputSize code disablePrecompiles = .spawn f rsm)
-    (hstatic : sevm.isStatic = true) :
-    f.inner.isStatic = true := by
-  simp only [genericCall.step, Bind.bind, Except.bind, Pure.pure,
-    Except.pure] at hs
-  repeat' split at hs
-  all_goals simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hs
-  all_goals obtain ⟨rfl, -⟩ := hs
-  all_goals simp only [Jaune.Frame.ofCall, callMsg, hstatic, Bool.or_true]
-
-/-- A `CREATE`-family child is never spawned from a static context: the
-`assertDynamic` guard precedes the spawn. -/
-theorem genericCreate.step_spawn_not_static
-    {sevm : Sevm} {devm : Devm} {endowment : B256} {newAddress : Adr}
-    {memoryIndex memorySize : Nat} {f : Jaune.Frame} {rsm : Resume}
-    (hs : genericCreate.step sevm devm endowment newAddress memoryIndex
-      memorySize = .spawn f rsm) :
-    sevm.isStatic = false := by
-  simp only [genericCreate.step, Bind.bind, Except.bind, Except.assert,
-    assertDynamic, Pure.pure, Except.pure] at hs
-  repeat' split at hs
-  all_goals simp only [XStep.ofExcept, reduceCtorEq] at hs
-  all_goals simp_all
-
-/-- Every child frame spawned by a recursive instruction from a static
-context is itself static. -/
-theorem Xinst.step_spawn_isStatic {sevm : Sevm} {devm : Devm} {x : Xinst}
-    {f : Jaune.Frame} {rsm : Resume}
-    (hs : Xinst.step sevm devm x = .spawn f rsm)
-    (hstatic : sevm.isStatic = true) :
-    f.inner.isStatic = true := by
-  cases x <;>
-    simp only [Xinst.step, Bind.bind, Except.bind, Except.assert,
-      Pure.pure, Except.pure] at hs <;>
-    repeat' split at hs
-  all_goals simp only [XStep.ofExcept, reduceCtorEq] at hs
-  all_goals
-    first
-      | exact absurd hstatic
-          (by rw [genericCreate.step_spawn_not_static hs]; exact Bool.noConfusion)
-      | exact genericCall.step_spawn_isStatic hs hstatic
-
-/-- Every child frame spawned by one driver step from a static context is
-itself static. -/
-theorem Evm.step_spawn_isStatic {pc pc' : Nat} {sevm : Sevm} {devm : Devm}
-    {f : Jaune.Frame} {rsm : Resume}
-    (hs : Jaune.Evm.step ⟨pc, sevm, devm⟩ = .spawn f rsm pc')
-    (hstatic : sevm.isStatic = true) :
-    f.inner.isStatic = true := by
-  obtain ⟨_, _, hx, _⟩ := Evm.step_spawn_inv hs
-  exact Xinst.step_spawn_isStatic hx hstatic
-
-/-- Frame entry hands the spawned message's static flag straight to the
-interpreted child context: `initSevm`'s `isStatic` *is* `msg.isStatic`, and
-neither `Msg.withBenv` nor the value transfer touches it. -/
-theorem executeCode.enter_inl_isStatic {msg : Msg} {e : Evm}
-    (h : executeCode.enter msg = .inl e) : e.sta.isStatic = msg.isStatic := by
-  unfold executeCode.enter at h
-  split at h
-  · cases h
-    rfl
-  · split at h
-    · cases h
-    · cases h
-      rfl
-
-theorem Frame.enter_run_isStatic {f : Jaune.Frame} {cevm : Evm}
-    (henter : f.enter = .run cevm) :
-    cevm.sta.isStatic = f.inner.isStatic := by
-  unfold Jaune.Frame.enter at henter
-  split at henter
-  · cases henter
-  · rename_i benv _
-    split at henter
-    · rename_i e he
-      cases henter
-      exact executeCode.enter_inl_isStatic (msg := f.inner.withBenv benv) he
-    · cases henter
-
-/-- The composite propagation step consumed by the subtree induction: an
-interpreted child of a static frame runs statically. -/
-theorem Evm.step_run_isStatic {pc pc' : Nat} {sevm : Sevm} {devm : Devm}
-    {f : Jaune.Frame} {rsm : Resume} {cevm : Evm}
-    (hs : Jaune.Evm.step ⟨pc, sevm, devm⟩ = .spawn f rsm pc')
-    (henter : f.enter = .run cevm)
-    (hstatic : sevm.isStatic = true) :
-    cevm.sta.isStatic = true :=
-  (Frame.enter_run_isStatic henter).trans
-    (Evm.step_spawn_isStatic hs hstatic)
-
-/-! ## A committed storage write forbids the static context -/
-
-/-- The atomic static fact: `SSTORE` clears `assertDynamic` before it commits,
-so a successful storage write witnesses a dynamic context. -/
-theorem of_run_sstore_not_static {e : Sevm} {s s' : Devm}
-    (h : Ninst.Run e s sstore s') : e.isStatic = false := by
-  rcases of_run_reg h with ⟨pc, run⟩
-  simp only [Rinst.run, Rinst.runCore] at run
-  rcases Except.bind_eq_ok run with ⟨⟨_, _⟩, _, run₁⟩
-  rcases Except.bind_eq_ok run₁ with ⟨⟨_, _⟩, _, run₂⟩
-  rcases Except.bind_eq_ok run₂ with ⟨_, _, run₃⟩
-  rcases Except.bind_eq_ok run₃ with ⟨⟨_, _⟩, _, run₄⟩
-  rcases Except.bind_eq_ok run₄ with ⟨_, _, run₅⟩
-  rcases Except.bind_eq_ok run₅ with ⟨_, _, run₆⟩
-  rcases Except.bind_eq_ok run₆ with ⟨_, _, run₇⟩
-  rcases Except.bind_eq_ok run₇ with ⟨_, hassert, _⟩
-  unfold assertDynamic Except.assert at hassert
-  split at hassert
-  · rename_i hdynamic
-    simpa using hdynamic
-  · exact absurd hassert (by simp)
-
 /-! ## Compiled bodies that cannot avoid a storage write -/
 
 /-- A compiled body every successful run of which passes an `SSTORE`.  The
@@ -284,7 +161,7 @@ theorem StoresOrHalts.isStatic_eq_false {fs : List Func} {f : Func}
   | store =>
       intro e s r run
       cases run with
-      | next hi _ => exact of_run_sstore_not_static hi
+      | next hi _ => exact Blanc.of_run_sstore_not_static hi
   | next _ ih =>
       intro e s r run
       cases run with
@@ -608,7 +485,7 @@ theorem Exec.attributionInner_writeFree_of_static
       exact writeFreeLedger_nil
   | runOk hstep henter child hr next ihchild ihnext =>
       intro hstatic
-      have hchild := Evm.step_run_isStatic hstep henter hstatic
+      have hchild := Blanc.Evm.step_run_isStatic hstep henter hstatic
       rw [Exec.attributionInner]
       refine WriteFreeLedger.append ?_ (ihnext hstatic)
       split
@@ -627,56 +504,6 @@ theorem Exec.attributionStream_writeFree_of_static
   · exact writeFreeLedger_frameContribution hstatic
       (Exec.attributionInner_writeFree_of_static run hstatic)
   · exact writeFreeLedger_nil
-
-/-! ## `STATICCALL` children are static whatever their parent is -/
-
-/-- `STATICCALL` passes `isStaticcall := true`, so its child is static even
-from a dynamic parent. -/
-theorem genericCall.step_spawn_isStatic_of_staticcall
-    {sevm : Sevm} {devm : Devm} {gas : Nat} {value : B256}
-    {caller target codeAddress : Adr} {shouldTransferValue : Bool}
-    {inputIndex inputSize outputIndex outputSize : Nat} {code : ByteArray}
-    {disablePrecompiles : Bool} {f : Jaune.Frame} {rsm : Resume}
-    (hs : genericCall.step sevm devm gas value caller target codeAddress
-      shouldTransferValue true inputIndex inputSize outputIndex
-      outputSize code disablePrecompiles = .spawn f rsm) :
-    f.inner.isStatic = true := by
-  simp only [genericCall.step, Bind.bind, Except.bind, Pure.pure,
-    Except.pure] at hs
-  repeat' split at hs
-  all_goals simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hs
-  all_goals obtain ⟨rfl, -⟩ := hs
-  all_goals simp only [Jaune.Frame.ofCall, callMsg, Bool.true_or]
-
-theorem Xinst.step_statcall_spawn_isStatic
-    {sevm : Sevm} {devm : Devm} {f : Jaune.Frame} {rsm : Resume}
-    (hs : Xinst.step sevm devm .statcall = .spawn f rsm) :
-    f.inner.isStatic = true := by
-  simp only [Xinst.step, Bind.bind, Except.bind, Pure.pure,
-    Except.pure] at hs
-  repeat' split at hs
-  all_goals simp only [XStep.ofExcept, reduceCtorEq] at hs
-  all_goals exact genericCall.step_spawn_isStatic_of_staticcall hs
-
-theorem Ninst.step_statcall_spawn_isStatic
-    {pc pc' : Nat} {sevm : Sevm} {pre : Devm}
-    {f : Jaune.Frame} {rsm : Resume}
-    (hspawn : Ninst.step ⟨pc, sevm, pre⟩ Ninst.statcall = .spawn f rsm pc') :
-    f.inner.isStatic = true := by
-  have hx : Xinst.step sevm pre .statcall = .spawn f rsm :=
-    XStep.toStep_spawn (by
-      simpa only [Ninst.statcall, Ninst.step_exec] using hspawn)
-  exact Xinst.step_statcall_spawn_isStatic hx
-
-/-- An interpreted child of a `STATICCALL` runs statically. -/
-theorem Ninst.step_statcall_run_isStatic
-    {pc pc' : Nat} {sevm : Sevm} {pre : Devm}
-    {f : Jaune.Frame} {rsm : Resume} {cevm : Evm}
-    (hspawn : Ninst.step ⟨pc, sevm, pre⟩ Ninst.statcall = .spawn f rsm pc')
-    (henter : f.enter = .run cevm) :
-    cevm.sta.isStatic = true :=
-  (Frame.enter_run_isStatic henter).trans
-    (Ninst.step_statcall_spawn_isStatic hspawn)
 
 /-! ## The payoff -/
 
@@ -799,7 +626,7 @@ theorem writeFreeLedger_statcallCrossing
           (Exec.attributionInner dp ca child)
        else []) := by
   have hstatic : cevm.sta.isStatic = true :=
-    Ninst.step_statcall_run_isStatic hspawn henter
+    Blanc.Ninst.step_statcall_run_isStatic hspawn henter
   split
   · exact writeFreeLedger_frameContribution hstatic
       (Exec.attributionInner_writeFree_of_static child hstatic)
@@ -816,7 +643,7 @@ theorem Exec.attributionStream_writeFree_of_statcallChild
     (child : Exec cevm.pc cevm.sta cevm.dyna raw) :
     WriteFreeLedger (Exec.attributionStream dp ca child) :=
   Exec.attributionStream_writeFree_of_static child
-    (Ninst.step_statcall_run_isStatic hspawn henter)
+    (Blanc.Ninst.step_statcall_run_isStatic hspawn henter)
 
 end Weth10
 

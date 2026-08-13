@@ -8,6 +8,7 @@ import Blanc.Compiled
 import Blanc.ExecutionSettlement
 import Blanc.ExecutionOccurrence
 import Blanc.CycleWriteFree
+import Blanc.TransientSettlement
 import Blanc.Reverts
 import Blanc.FmintLive
 import Blanc.FmintReverts
@@ -113,6 +114,30 @@ import Blanc.Weth10AnyOrder
 #print axioms Blanc.Exec.Deriv.SourceCursor.noSstore_of_entrySstoreFree
 #print axioms Blanc.Exec.NinstOccurrence.instruction_ne_sstore_of_entrySstoreFree
 #print axioms Blanc.Exec.Deriv.noSstore_of_exactMain_entrySstoreFree
+#print axioms Blanc.tstore_run_cell
+#print axioms Blanc.tstore_run_zero
+#print axioms Blanc.tload_run_cell
+#print axioms Blanc.directCall_nonzero_spawn
+#print axioms Blanc.directCall_zero_spawn
+#print axioms Blanc.directStatcall_spawn
+#print axioms Blanc.caughtCall_childSettlement
+#print axioms Blanc.cleanCall_childSettlement
+#print axioms Blanc.preparedTransactionMessage_exists
+#print axioms Blanc.PreparedTransactionMessage.transientStorage_eq_empty
+#print axioms Blanc.processMessageCall_error_logs_eq_nil
+#print axioms Blanc.PreparedTransactionMessage.error_logs_eq_nil
+#print axioms Blanc.of_run_sstore_not_static
+#print axioms Blanc.genericCall.step_spawn_isStatic
+#print axioms Blanc.genericCreate.step_spawn_not_static
+#print axioms Blanc.Xinst.step_spawn_isStatic
+#print axioms Blanc.Evm.step_spawn_isStatic
+#print axioms Blanc.executeCode.enter_inl_isStatic
+#print axioms Blanc.Frame.enter_run_isStatic
+#print axioms Blanc.Evm.step_run_isStatic
+#print axioms Blanc.genericCall.step_spawn_isStatic_of_staticcall
+#print axioms Blanc.Xinst.step_statcall_spawn_isStatic
+#print axioms Blanc.Ninst.step_statcall_spawn_isStatic
+#print axioms Blanc.Ninst.step_statcall_run_isStatic
 #print axioms Blanc.Func.CompileShape.byteSize_compileShape
 #print axioms Blanc.Func.length_emitByShape
 #print axioms Blanc.Func.getD_emitByShape
