@@ -205,6 +205,22 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="occurrence-ownership-controls-") as temp:
         temp_root = pathlib.Path(temp)
         command_controls: list[tuple[pathlib.Path, str]] = []
+        wrapped_alias_path = temp_root / "DonorWrappedAlias.lean"
+        wrapped_alias_path.write_text(
+            "import Blanc.CommonProofs\n"
+            "namespace Blanc.Weth10\n"
+            "set_option linter.unusedVariables false in\n"
+            f"alias occurrenceWrappedLegacy := {first_fqn}\n"
+            "end Blanc.Weth10\n",
+            encoding="utf-8",
+        )
+        wrapped_alias_control = ownership.donor_aliases_or_exports(
+            wrapped_alias_path, {first_fqn}
+        )
+        if not wrapped_alias_control or wrapped_alias_control[0][0] != first_fqn:
+            return fail("ownership parser donor-wrapped-alias negative control failed")
+        command_controls.append((wrapped_alias_path, "wrapped alias"))
+
         alias_path = temp_root / "DonorAlias.lean"
         alias_path.write_text(
             "import Blanc.CommonProofs\n"
@@ -348,7 +364,7 @@ def main() -> int:
 
     print(
         "OK — execution occurrence: 13 concrete controls; 6 Lean mutants; "
-        "WETH bridge-removal mutant; 9 moved-owner + 8 ownership-parser controls; "
+        "WETH bridge-removal mutant; 9 moved-owner + 9 ownership-parser controls; "
         "CREATE raw-commit mutant"
     )
     return 0

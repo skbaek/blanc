@@ -35,11 +35,8 @@ DECL_RE = re.compile(
     rf"^\s*(?:@\[[^]]+\]\s*)*(?:(?:private|protected|noncomputable|unsafe)\s+)*(def|theorem|structure|abbrev|opaque|axiom|inductive|class)\s+({IDENT})\b"
 )
 IMPORT_RE = re.compile(rf"^\s*import\s+({IDENT})(?:\s|$)")
-ALIAS_COMMAND_RE = re.compile(
-    r"(?m)^[ \t]*(?:@\[[^]]*\][ \t]*)*"
-    r"(?:[A-Za-z_][A-Za-z0-9_']*[ \t]+)*alias\b"
-)
-EXPORT_COMMAND_RE = re.compile(r"(?m)^[ \t]*export\b")
+ALIAS_COMMAND_RE = re.compile(r"\balias\b")
+EXPORT_COMMAND_RE = re.compile(r"\bexport\b")
 
 
 @dataclass(frozen=True)
@@ -150,9 +147,10 @@ def donor_aliases_or_exports(path: Path, donors: set[str]) -> list[tuple[str, in
     """Reject every alias/export command in a donor module, fail closed.
 
     The audited WETH donor set contains no legitimate alias or export command.
-    Rejecting the command itself avoids unsound approximations of Lean's
-    modifier, multiline, root-qualified, and ancestor-relative name grammar.
-    Comments are stripped first, so prose uses of these words are harmless.
+    Rejecting either command keyword token anywhere outside comments avoids
+    unsound approximations of Lean's command wrappers, modifiers, multiline,
+    root-qualified, and ancestor-relative name grammar. A future string or
+    macro containing the token fails conservatively for human review.
     """
     source = strip_comments(path.read_text(encoding="utf-8"))
     hits: list[tuple[str, int, str]] = []
