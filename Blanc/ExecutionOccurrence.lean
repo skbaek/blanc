@@ -281,4 +281,118 @@ theorem Exec.Deriv.ParentPrefix.rawNodes_decomposition
       rcases ih with ⟨before, hrest⟩
       exact ⟨crossed ++ before, by rw [hhead, hrest, List.append_assoc]⟩
 
+/-! ## Executable compiler source sites -/
+
+/-- One structural descent in a source `Func`.  Compiler-only control-flow
+bytes are deliberately absent. -/
+inductive Prog.SourceStep where
+  | rest
+  | branchLeft
+  | branchRight
+deriving DecidableEq, Repr
+
+/-- Stable structural identity of a source instruction. -/
+structure Prog.SourcePath where
+  functionIndex : Nat
+  steps : List Prog.SourceStep
+deriving DecidableEq, Repr
+
+/-- An executable compiler-produced source instruction site. -/
+structure Prog.SourceSite where
+  path : Prog.SourcePath
+  pc : Nat
+  instruction : Ninst
+
+/-- Enumerate exactly the `.next` nodes of a source function at their compiled
+program counters.  `branch` and `call` contribute only compiler glue, so they
+do not themselves produce source sites. -/
+def Func.sourceSites (functionIndex : Nat) (steps : List Prog.SourceStep)
+    (pc : Nat) : Func → List Prog.SourceSite
+  | .last _ => []
+  | .next instruction tail =>
+      { path := ⟨functionIndex, steps⟩, pc, instruction } ::
+        Func.sourceSites functionIndex (steps ++ [.rest])
+          (pc + instruction.size) tail
+  | .branch left right =>
+      Func.sourceSites functionIndex (steps ++ [.branchLeft]) (pc + 4) left ++
+        Func.sourceSites functionIndex (steps ++ [.branchRight])
+          (pc + compsize left + 5) right
+  | .call _ => []
+
+/-- Executable source map for every function body in compiler-table order. -/
+def Prog.sourceSites (program : Prog) : List Prog.SourceSite :=
+  (List.range (program.main :: program.aux).length).flatMap fun index =>
+    match (table 0 (program.main :: program.aux))[index]? with
+    | some (pc, body) => Func.sourceSites index [] (pc + 1) body
+    | none => []
+
+/-- Look up a source site by compiled program counter. -/
+def Prog.sourceSiteAt (program : Prog) (pc : Nat) : Option Prog.SourceSite :=
+  program.sourceSites.find? fun site => site.pc == pc
+
+/-- Every enumerated function site decodes to its recorded instruction in the
+compiler output. -/
+theorem Func.sourceSites_sound
+    {code : ByteArray} {layout : List (Nat × Func)}
+    {functionIndex : Nat} {steps : List Prog.SourceStep}
+    {pc : Nat} {body : Func} {site : Prog.SourceSite}
+    (sub : subcode code.toList pc (Func.compile layout pc body))
+    (boundary : noPushBefore code pc 32 = true)
+    (member : site ∈ Func.sourceSites functionIndex steps pc body) :
+    Ninst.At code site.pc site.instruction := by
+  induction body generalizing pc steps with
+  | last outcome =>
+      simp [Func.sourceSites] at member
+  | next instruction tail ih =>
+      simp only [Func.sourceSites, List.mem_cons] at member
+      rcases member with rfl | member
+      · rcases of_subcode sub with ⟨compiled, hcompile, hslice⟩
+        rcases of_bind_eq_some hcompile with ⟨tailBytes, htail, hwhole⟩
+        rw [← of_pure_eq_some hwhole] at hslice
+        exact Ninst.at_of_slice (List.slice_prefix hslice)
+      · rcases Func.noPushBefore_next sub boundary with
+          ⟨nextBoundary, nextSub⟩
+        exact ih nextSub nextBoundary member
+  | branch left right left_ih right_ih =>
+      simp only [Func.sourceSites, List.mem_append] at member
+      rcases subcode_compile_branch_jumpable sub boundary with
+        ⟨loc, hloc, _, _, _, leftSub, leftBoundary, _, _, rightSub,
+          rightBoundary⟩
+      rcases member with leftMember | rightMember
+      · exact left_ih leftSub leftBoundary leftMember
+      · have hpc : loc + 1 = pc + compsize left + 5 := by omega
+        rw [hpc] at rightSub rightBoundary
+        exact right_ih rightSub rightBoundary rightMember
+  | call index =>
+      simp [Func.sourceSites] at member
+
+/-- The program-level source map is sound against the exact compiler output. -/
+theorem Prog.sourceSites_sound
+    {program : Prog} {code : ByteArray} {site : Prog.SourceSite}
+    (compiled : some code.toList = program.compile)
+    (member : site ∈ program.sourceSites) :
+    Ninst.At code site.pc site.instruction := by
+  simp only [Prog.sourceSites, List.mem_flatMap] at member
+  rcases member with ⟨index, index_mem, member⟩
+  split at member
+  next body hentry =>
+    have sub := (subcode_of_get?_eq_some compiled hentry).2
+    have boundary := (Prog.jumpable_of_get?_table compiled hentry).2
+    exact Func.sourceSites_sound sub boundary member
+  next hnone =>
+    simp at member
+
+/-- A successful executable lookup has the requested PC and decodes exactly
+as recorded. -/
+theorem Prog.sourceSiteAt_sound
+    {program : Prog} {code : ByteArray} {pc : Nat} {site : Prog.SourceSite}
+    (compiled : some code.toList = program.compile)
+    (found : program.sourceSiteAt pc = some site) :
+    site.pc = pc ∧ Ninst.At code site.pc site.instruction := by
+  constructor
+  · have h := List.find?_some found
+    simpa [BEq.beq] using h
+  · exact program.sourceSites_sound compiled
+      (List.mem_of_find?_eq_some found)
+
 end Blanc
