@@ -49,18 +49,22 @@ def lastTargetIndexKey : Line := loadWord lastTargetWord ++ tagTop indexRegion
 def customErrorData (name : String) (args : List ArgType := []) : Bytes :=
   (signatureHash name args).toBytes.take 4
 
-def pausableZeroError : Func := Func.revData (customErrorData "PausableZero")
-def senderNotAdminError : Func := Func.revData (customErrorData "SenderNotAdmin")
-def senderNotPauserError : Func := Func.revData (customErrorData "SenderNotPauser")
-def pauseBelowMinError : Func := Func.revData (customErrorData "PauseDurationBelowMin")
-def pauseAboveMaxError : Func := Func.revData (customErrorData "PauseDurationAboveMax")
+private def runtimeError (name : String) : Func :=
+  Func.revSelector (customErrorData name) (by
+    simp [customErrorData, B256.length_toBytes])
+
+def pausableZeroError : Func := runtimeError "PausableZero"
+def senderNotAdminError : Func := runtimeError "SenderNotAdmin"
+def senderNotPauserError : Func := runtimeError "SenderNotPauser"
+def pauseBelowMinError : Func := runtimeError "PauseDurationBelowMin"
+def pauseAboveMaxError : Func := runtimeError "PauseDurationAboveMax"
 def heartbeatBelowMinError : Func :=
-  Func.revData (customErrorData "HeartbeatIntervalBelowMin")
+  runtimeError "HeartbeatIntervalBelowMin"
 def heartbeatAboveMaxError : Func :=
-  Func.revData (customErrorData "HeartbeatIntervalAboveMax")
-def heartbeatExpiredError : Func := Func.revData (customErrorData "HeartbeatExpired")
-def pauseFailedError : Func := Func.revData (customErrorData "PauseFailed")
-def reentrantCallError : Func := Func.revData (customErrorData "ReentrantCall")
+  runtimeError "HeartbeatIntervalAboveMax"
+def heartbeatExpiredError : Func := runtimeError "HeartbeatExpired"
+def pauseFailedError : Func := runtimeError "PauseFailed"
+def reentrantCallError : Func := runtimeError "ReentrantCall"
 
 def pauserSetEvent : B256 :=
   signatureHash "PauserSet" [.address, .address, .address]

@@ -31,12 +31,12 @@ IMMUTABLE_FIELDS = (
     "admin", "min-pause", "max-pause", "min-heartbeat", "max-heartbeat",
 )
 EXPECTED_SIZES = {
-    "current-balanced": 4890,
-    "wrapped-linear": 4666,
-    "two-branch-shared-balanced": 4744,
-    "shared-balanced": 4734,
-    "shared-linear": 4510,
-    "shared-hybrid-5-4-4-4": 4552,
+    "current-balanced": 4620,
+    "wrapped-linear": 4396,
+    "two-branch-shared-balanced": 4474,
+    "shared-balanced": 4464,
+    "shared-linear": 4240,
+    "shared-hybrid-5-4-4-4": 4282,
 }
 EXPECTED_TOPOLOGIES = {
     "current-balanced": (
