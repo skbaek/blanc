@@ -30,6 +30,24 @@ REPO = Path(__file__).resolve().parents[1]
 LOCK_PATH = REPO / "scripts" / "lido-circuit-breaker-reference.json"
 MANIFEST_PATH = REPO / "scripts" / "fixtures" / "lido-circuit-breaker" / "manifest.json"
 EELS_PIN = "4198b9c5996713b268aed602739d5aa40e277694"
+RESOURCE_SCHEMA = 1
+RESOURCE_LIFECYCLE = "baseline"
+RESOURCE_BASELINE_COMMIT = "fc3edee6dbfb77eaf344afee43c921d48ff8a3af"
+RESOURCE_BASELINE_MANIFEST_SHA256 = \
+    "6cde638ac37977f3aea228ad877a85d37e415ac4f927e66a099be67de7d30cef"
+RESOURCE_BASELINE_BLANC_IDENTITIES = {
+    "creationTemplateSha256":
+        "3cbf5dec4dacbed0b0d5ee94f01fc0845b602fd67f260031ca693458e32fd28f",
+    "officialFullCreateSha256":
+        "3e207da94a889e623ecb92719f5782e0506c39d81a0eec2d7f41d14049e1ec2d",
+    "officialRuntimeSha256":
+        "fa628a48ab7544301c5a4b287315ccff998fb43ec23fc16250f4a4309d9c100a",
+    "independentFullCreateSha256":
+        "a7eb1fd354306a089af848b0601600b0030ff8d82102bf1cbf8cfaac45e3d8ce",
+    "independentRuntimeSha256":
+        "c5c98c4e99e43fa3fc61693e730b87e69dc37f6bba38f3adcdeb801c4375835f",
+}
+DEFAULT_GAS_LIMIT = 20_000_000
 
 CIRCUIT = "0x6019cb557978296ba3c08a7b73225c0975dfb2f7"
 CLONE = "0x9999999999999999999999999999999999999999"
@@ -196,7 +214,7 @@ class Tx:
     calldata: bytes
     value: int = 0
     timestamp: int = 1_700_000_000
-    gas: int = 20_000_000
+    gas: int = DEFAULT_GAS_LIMIT
     target: str = CIRCUIT
 
 
@@ -449,7 +467,7 @@ def normalized_logs(logs) -> List[Mapping]:
 
 
 def execute_create(state, target: str, initcode: bytes, value: int,
-                   timestamp: int = 1_700_000_000, gas: int = 20_000_000):
+                   timestamp: int = 1_700_000_000, gas: int = DEFAULT_GAS_LIMIT):
     from ethereum.prague.fork_types import Account, Address
     from ethereum.prague.state import get_account, set_account
     from ethereum.prague.vm import Message
@@ -627,7 +645,7 @@ CHANNEL_FIELDS = {
 
 def normalize_runtime(case: Case, state,
                       outputs: Sequence[Tuple[object, Sequence[Mapping], int, Sequence[Mapping]]],
-                      side: str) -> Mapping:
+                      side: str, resource_boundaries: Sequence[Mapping]) -> Mapping:
     rows = [{
         "status": outcome(output), "returndata": "0x" + bytes(output.return_data).hex(),
         "logs": normalized_logs(output.logs), "callTrace": list(trace), "gasUsed": gas_used,
@@ -641,7 +659,14 @@ def normalize_runtime(case: Case, state,
         "callTrace": [row["callTrace"] for row in rows],
         "gasUsed": [row["gasUsed"] for row in rows],
         "writeTrace": [row["writeTrace"] for row in rows],
+        "_resourceBoundaries": list(resource_boundaries),
         **projected,
+    }
+
+
+def resource_boundary(output, gas_limit: int, gas_used: int) -> Mapping:
+    return {
+        "status": outcome(output), "gasLimit": gas_limit, "gasUsed": gas_used,
     }
 
 
@@ -700,23 +725,35 @@ def run_side(case: Case, side: str, lock: Mapping, artifacts: Mapping) -> Mappin
             "_rawSlotZero": projection["_rawSlotZero"],
             "eth": projection["eth"], "logs": [normalized_logs(created.logs)],
             "callTrace": [[]], "gasUsed": [create_gas],
+            "_resourceBoundaries": [
+                resource_boundary(created, DEFAULT_GAS_LIMIT, create_gas)
+            ],
             "runtimeIdentity": hashlib.sha256(installed).hexdigest() if installed else None,
             "createInputIdentity": hashlib.sha256(create_input).hexdigest(),
         }
 
     if created_status != "success":
         die(f"{case.name}/{side}: causal constructor seed failed: {created_status} {created_return.hex()}")
+    resource_boundaries = [
+        resource_boundary(created, DEFAULT_GAS_LIMIT, create_gas)
+    ]
     install_code(state, case.code)
     if case.clone_history:
-        clone_created, clone_installed, _ = execute_create(state, CLONE, ordinary_create, 0)
+        clone_created, clone_installed, clone_gas = execute_create(
+            state, CLONE, ordinary_create, 0)
         if outcome(clone_created) != "success" or clone_installed != expected_runtime:
             die(f"{case.name}/{side}: causal clone constructor seed failed")
+        resource_boundaries.append(
+            resource_boundary(clone_created, DEFAULT_GAS_LIMIT, clone_gas))
     outputs: List[Tuple[object, Sequence[Mapping], int, Sequence[Mapping]]] = []
     for transaction in [*case.clone_history, *case.history, case.action]:
         if transaction is None:
             continue
-        outputs.append(execute_tx(state, transaction))
-    return normalize_runtime(case, state, outputs, side)
+        result = execute_tx(state, transaction)
+        outputs.append(result)
+        resource_boundaries.append(
+            resource_boundary(result[0], transaction.gas, result[2]))
+    return normalize_runtime(case, state, outputs, side, resource_boundaries)
 
 
 def build_constructor_cases() -> List[Case]:
@@ -1313,7 +1350,7 @@ def case_execution_descriptor(case: Case) -> Mapping:
         "constructor": {
             "boundary": 0, "target": canonical_address(CIRCUIT),
             "caller": canonical_address(CREATE_CALLER), "value": case.constructor_value,
-            "timestamp": 1_700_000_000, "gas": 20_000_000,
+            "timestamp": 1_700_000_000, "gas": DEFAULT_GAS_LIMIT,
             "parameters": params_descriptor(params),
             "argumentSuffixSource": "derived" if suffix is None else "override",
             "argumentSuffix": byte_descriptor(actual_suffix),
@@ -1329,7 +1366,7 @@ def case_execution_descriptor(case: Case) -> Mapping:
         "cloneConstructor": None if not case.clone_history else {
             "boundary": 1, "target": canonical_address(CLONE),
             "caller": canonical_address(CREATE_CALLER), "value": 0,
-            "timestamp": 1_700_000_000, "gas": 20_000_000,
+            "timestamp": 1_700_000_000, "gas": DEFAULT_GAS_LIMIT,
             "parameters": params_descriptor(params),
             "argumentSuffix": byte_descriptor(ordinary_suffix),
         },
@@ -1727,7 +1764,282 @@ def resource_evidence(results: Mapping[str, Tuple[Mapping, Mapping]]) -> None:
         die(f"large-return parent allocation slopes diverge: Solidity {sol_delta}, Blanc {blanc_delta}")
 
 
-def resource_metrics(results: Mapping[str, Tuple[Mapping, Mapping]]) -> Mapping:
+def canonical_digest(value: object) -> str:
+    payload = json.dumps(
+        value, sort_keys=True, separators=(",", ":"), ensure_ascii=True,
+    ).encode()
+    return hashlib.sha256(payload).hexdigest()
+
+
+def resource_identities(lock: Mapping, artifacts: Mapping) -> Mapping:
+    worlds = {world["name"]: world for world in lock["artifacts"]["worlds"]}
+    official = worlds["official-mainnet"]
+    independent = worlds["independent-parameters"]
+    return {
+        "eelsCommit": EELS_PIN,
+        "referenceSourceCommit": lock["target"]["releaseCommit"],
+        "solidityOfficialFullCreateSha256": official["fullCreateInput"]["sha256"],
+        "solidityOfficialRuntimeSha256": official["returnedRuntime"]["sha256"],
+        "solidityIndependentFullCreateSha256": independent["fullCreateInput"]["sha256"],
+        "solidityIndependentRuntimeSha256": independent["returnedRuntime"]["sha256"],
+        "blancCreationTemplateSha256": hashlib.sha256(
+            artifacts["creation-template"]).hexdigest(),
+        "blancOfficialFullCreateSha256": hashlib.sha256(
+            artifacts["official-create"]).hexdigest(),
+        "blancOfficialRuntimeSha256": hashlib.sha256(
+            artifacts["official-runtime"]).hexdigest(),
+        "blancIndependentFullCreateSha256": hashlib.sha256(
+            artifacts["independent-create"]).hexdigest(),
+        "blancIndependentRuntimeSha256": hashlib.sha256(
+            artifacts["independent-runtime"]).hexdigest(),
+    }
+
+
+def resource_model() -> Mapping:
+    return {
+        "engine": "ethereum/execution-specs",
+        "fork": "Prague",
+        "scope": "direct-eels-message",
+        "gasUsedFormula": "message.gas - output.gas_left",
+        "refundAccounting": "pre-refund",
+        "transactionIntrinsicGasIncluded": False,
+        "createCodeDepositGasIncluded": True,
+    }
+
+
+def resource_lifecycle() -> Mapping:
+    return {
+        "stage": RESOURCE_LIFECYCLE,
+        "baselineBlancCommit": RESOURCE_BASELINE_COMMIT,
+        "baselineManifestSha256": RESOURCE_BASELINE_MANIFEST_SHA256,
+        "optimizedTransitionRequires": {
+            "adequateGasDominance": True,
+            "strictSuccessfulImprovement": True,
+            "independentDigestRepin": True,
+        },
+    }
+
+
+def enforce_resource_lifecycle(
+        blanc_identities: Mapping, summary: Mapping, *,
+        read_only_experiment: bool, lifecycle: str = RESOURCE_LIFECYCLE) -> None:
+    if lifecycle not in {"baseline", "optimized"}:
+        die(f"unknown resource lifecycle {lifecycle}")
+    # Experiments still execute and compare every behavior/resource boundary.
+    # They skip only the acceptance decision so a candidate artifact can be
+    # measured before its reviewed lifecycle transition and independent pins.
+    if read_only_experiment:
+        return
+    if lifecycle == "baseline":
+        if blanc_identities != RESOURCE_BASELINE_BLANC_IDENTITIES:
+            die("baseline resource lifecycle artifact identity drifted; transition deliberately")
+        return
+    if summary["adequatePositiveDeltaCount"] != 0:
+        die("optimized resource lifecycle has a positive adequate-gas boundary")
+    if summary["successfulStrictImprovementCount"] < 1:
+        die("optimized resource lifecycle lacks a strict successful improvement")
+
+
+def experiment_summary_payload(metrics: Mapping) -> Mapping:
+    adequate_positive = [
+        {"coordinate": row["coordinate"], "delta": row["blancMinusSolidity"]}
+        for row in metrics["boundaries"]
+        if row["adequacy"] == "adequate" and row["blancMinusSolidity"] > 0
+    ]
+    return {
+        "mode": "read-only-experiment",
+        "lifecycleAcceptance": "skipped-read-only-experiment",
+        "lifecycle": metrics["lifecycle"],
+        "identities": metrics["identities"],
+        "summary": metrics["summary"],
+        "vectorDigests": metrics["vectorDigests"],
+        "worstAdequatePositive": sorted(
+            adequate_positive, key=lambda row: row["delta"], reverse=True)[:20],
+    }
+
+
+def resource_experiment_escape_self_check() -> None:
+    drifted = dict(RESOURCE_BASELINE_BLANC_IDENTITIES)
+    drifted["creationTemplateSha256"] = "0" * 64
+    synthetic_summary = {
+        "adequatePositiveDeltaCount": 1,
+        "successfulStrictImprovementCount": 0,
+    }
+    enforce_resource_lifecycle(
+        drifted, synthetic_summary, read_only_experiment=True,
+        lifecycle="baseline")
+    enforce_resource_lifecycle(
+        drifted, synthetic_summary, read_only_experiment=True,
+        lifecycle="optimized")
+    synthetic_payload = experiment_summary_payload({
+        "boundaries": [], "lifecycle": {"stage": "baseline"},
+        "identities": {"blancCreationTemplateSha256":
+                       drifted["creationTemplateSha256"]},
+        "summary": synthetic_summary, "vectorDigests": {},
+    })
+    if synthetic_payload["identities"]["blancCreationTemplateSha256"] != "0" * 64:
+        die("read-only experiment omitted synthetic artifact identity drift")
+    try:
+        enforce_resource_lifecycle(
+            drifted, synthetic_summary, read_only_experiment=False,
+            lifecycle="baseline")
+    except RuntimeError as exc:
+        if str(exc) != \
+                "baseline resource lifecycle artifact identity drifted; transition deliberately":
+            raise
+    else:
+        die("ordinary baseline lifecycle accepted synthetic artifact identity drift")
+    try:
+        enforce_resource_lifecycle(
+            drifted, synthetic_summary, read_only_experiment=False,
+            lifecycle="optimized")
+    except RuntimeError as exc:
+        if str(exc) != \
+                "optimized resource lifecycle has a positive adequate-gas boundary":
+            raise
+    else:
+        die("ordinary optimized lifecycle accepted a synthetic positive gas delta")
+    no_strict_improvement = {
+        "adequatePositiveDeltaCount": 0,
+        "successfulStrictImprovementCount": 0,
+    }
+    try:
+        enforce_resource_lifecycle(
+            drifted, no_strict_improvement, read_only_experiment=False,
+            lifecycle="optimized")
+    except RuntimeError as exc:
+        if str(exc) != \
+                "optimized resource lifecycle lacks a strict successful improvement":
+            raise
+    else:
+        die("ordinary optimized lifecycle accepted no strict successful improvement")
+
+
+def resource_descriptor_rows(case: Case) -> List[Mapping]:
+    execution = case_execution_descriptor(case)
+    rows: List[Mapping] = [{
+        "boundary": execution["constructor"]["boundary"],
+        "label": execution["boundaryOrder"][0],
+        "phase": "primaryConstructor", "orderWithinPhase": 0,
+        "gasLimit": execution["constructor"]["gas"],
+    }]
+    offset = 1
+    clone_constructor = execution["cloneConstructor"]
+    if clone_constructor is not None:
+        rows.append({
+            "boundary": clone_constructor["boundary"],
+            "label": execution["boundaryOrder"][offset],
+            "phase": "cloneConstructor", "orderWithinPhase": 0,
+            "gasLimit": clone_constructor["gas"],
+        })
+        offset += 1
+    for phase in ("cloneHistory", "history"):
+        for descriptor in execution[phase]:
+            rows.append({
+                "boundary": descriptor["boundary"],
+                "label": execution["boundaryOrder"][offset],
+                "phase": phase,
+                "orderWithinPhase": descriptor["orderWithinPhase"],
+                "gasLimit": descriptor["gas"],
+            })
+            offset += 1
+    action = execution["action"]
+    if action is not None:
+        rows.append({
+            "boundary": action["boundary"],
+            "label": execution["boundaryOrder"][offset],
+            "phase": "action", "orderWithinPhase": action["orderWithinPhase"],
+            "gasLimit": action["gas"],
+        })
+        offset += 1
+    if offset != len(execution["boundaryOrder"]):
+        die(f"{case.name}: resource descriptors do not consume boundaryOrder")
+    if [row["boundary"] for row in rows] != list(range(len(rows))):
+        die(f"{case.name}: resource descriptor boundaries are not contiguous")
+    return rows
+
+
+def full_resource_boundaries(
+        cases: Sequence[Case], results: Mapping[str, Tuple[Mapping, Mapping]]) -> List[Mapping]:
+    boundaries: List[Mapping] = []
+    for case in cases:
+        descriptors = resource_descriptor_rows(case)
+        solidity = results[case.name][0]["_resourceBoundaries"]
+        blanc = results[case.name][1]["_resourceBoundaries"]
+        if len(solidity) != len(descriptors) or len(blanc) != len(descriptors):
+            die(f"{case.name}: measured resources do not align with boundaryOrder")
+        for descriptor, sol, bla in zip(descriptors, solidity, blanc):
+            if sol["gasLimit"] != descriptor["gasLimit"] or \
+                    bla["gasLimit"] != descriptor["gasLimit"]:
+                die(f"{case.name}: measured gas limit differs from descriptor")
+            if sol["status"] != bla["status"]:
+                die(f"{case.name}: resource status differs across implementations")
+            phase = descriptor["phase"]
+            oog_control = "oog-control" in case.tags and phase == "action"
+            if oog_control:
+                expected_oog = "exception:OutOfGasError"
+                if sol["status"] != expected_oog:
+                    die(f"{case.name}: named OOG resource control did not exhaust gas")
+                adequacy = "oog-control"
+            else:
+                if sol["status"] == "exception:OutOfGasError":
+                    die(f"{case.name}: unlabelled resource boundary exhausted gas")
+                adequacy = "adequate"
+            delta = bla["gasUsed"] - sol["gasUsed"]
+            comparison = (
+                "blanc-cheaper" if delta < 0 else
+                "blanc-dearer" if delta > 0 else "equal")
+            boundary = descriptor["boundary"]
+            label = descriptor["label"]
+            boundaries.append({
+                "ordinal": len(boundaries),
+                "coordinate": f"{case.name}#{boundary}:{label}",
+                "case": case.name, "boundary": boundary,
+                "label": label, "phase": phase,
+                "orderWithinPhase": descriptor["orderWithinPhase"],
+                "adequacy": adequacy,
+                "solidityStatus": sol["status"], "blancStatus": bla["status"],
+                "solidityGasLimit": sol["gasLimit"],
+                "blancGasLimit": bla["gasLimit"],
+                "solidityGasUsed": sol["gasUsed"],
+                "blancGasUsed": bla["gasUsed"],
+                "blancMinusSolidity": delta,
+                "comparisonClass": comparison,
+            })
+    if len(boundaries) != 455:
+        die(f"full resource-vector boundary count drifted: {len(boundaries)}")
+    return boundaries
+
+
+def resource_summary(boundaries: Sequence[Mapping]) -> Mapping:
+    class_counts = {key: 0 for key in ("blanc-cheaper", "equal", "blanc-dearer")}
+    adequacy_counts = {key: 0 for key in ("adequate", "oog-control")}
+    for row in boundaries:
+        class_counts[row["comparisonClass"]] += 1
+        adequacy_counts[row["adequacy"]] += 1
+    return {
+        "boundaryCount": len(boundaries),
+        "adequacyCounts": adequacy_counts,
+        "comparisonClassCounts": class_counts,
+        "adequatePositiveDeltaCount": sum(
+            row["adequacy"] == "adequate" and row["blancMinusSolidity"] > 0
+            for row in boundaries),
+        "successfulStrictImprovementCount": sum(
+            row["adequacy"] == "adequate" and
+            row["solidityStatus"] == "success" and
+            row["blancStatus"] == "success" and
+            row["blancMinusSolidity"] < 0
+            for row in boundaries),
+        "solidityGasUsedTotal": sum(row["solidityGasUsed"] for row in boundaries),
+        "blancGasUsedTotal": sum(row["blancGasUsed"] for row in boundaries),
+        "blancMinusSolidityTotal": sum(
+            row["blancMinusSolidity"] for row in boundaries),
+    }
+
+
+def resource_metrics(cases: Sequence[Case], results: Mapping[str, Tuple[Mapping, Mapping]],
+                     lock: Mapping, artifacts: Mapping, *,
+                     read_only_experiment: bool = False) -> Mapping:
     sizes = (64, 256, 1024, 4096, 16384, 32768)
     rows = {}
     for size in sizes:
@@ -1774,8 +2086,39 @@ def resource_metrics(results: Mapping[str, Tuple[Mapping, Mapping]]) -> Mapping:
             "returnBytes": size, "solidityGasUsed": solidity,
             "blancGasUsed": blanc, "blancMinusSolidity": blanc - solidity,
         }
+    boundaries = full_resource_boundaries(cases, results)
+    summary = resource_summary(boundaries)
+    identities = resource_identities(lock, artifacts)
+    model = resource_model()
+    lifecycle = resource_lifecycle()
+    baseline_blanc = {
+        "creationTemplateSha256": identities["blancCreationTemplateSha256"],
+        "officialFullCreateSha256": identities["blancOfficialFullCreateSha256"],
+        "officialRuntimeSha256": identities["blancOfficialRuntimeSha256"],
+        "independentFullCreateSha256": identities[
+            "blancIndependentFullCreateSha256"],
+        "independentRuntimeSha256": identities["blancIndependentRuntimeSha256"],
+    }
+    enforce_resource_lifecycle(
+        baseline_blanc, summary, read_only_experiment=read_only_experiment)
+    coordinates = [row["coordinate"] for row in boundaries]
+    vector_payload = {
+        "schema": RESOURCE_SCHEMA, "gasModel": model, "lifecycle": lifecycle,
+        "identities": identities, "boundaries": boundaries,
+    }
     return {
+        "schema": RESOURCE_SCHEMA,
         "adequateGasEnvelope": 20_000_000,
+        "gasModel": model,
+        "lifecycle": lifecycle,
+        "identities": identities,
+        "boundaries": boundaries,
+        "summary": summary,
+        "vectorDigests": {
+            "orderedCoordinatesSha256": hashlib.sha256(
+                ("\n".join(coordinates) + "\n").encode()).hexdigest(),
+            "fullResourceVectorSha256": canonical_digest(vector_payload),
+        },
         "successfulLargeReturnPaths": rows,
         "successfulRangeDelta": {
             "fromReturnBytes": 64, "toReturnBytes": 32768,
@@ -1785,7 +2128,11 @@ def resource_metrics(results: Mapping[str, Tuple[Mapping, Mapping]]) -> Mapping:
         "oogControls": controls,
         "representativePublicPaths": representatives,
         "shortReturnPaths": short_return_paths,
-        "adjudication": "measured evidence only; exact gas equality and identical OOG thresholds are excluded",
+        "adjudication": (
+            "frozen pre-optimization measurement; positive deltas require deliberate "
+            "optimized-lifecycle transition" if RESOURCE_LIFECYCLE == "baseline" else
+            "optimized lifecycle requires adequate-gas per-boundary dominance and at "
+            "least one strict successful improvement"),
     }
 
 
@@ -1892,6 +2239,35 @@ def validate_manifest_schema(manifest: Mapping) -> None:
             *[row["signature"] for row in _LOCK["abi"]["functions"]]}:
         die("Lido differential manifest endpoint surface is not exact")
     resources = manifest.get("resourceEvidence", {})
+    expected_resource_keys = {
+        "schema", "adequateGasEnvelope", "gasModel", "lifecycle", "identities",
+        "boundaries", "summary", "vectorDigests", "successfulLargeReturnPaths",
+        "successfulRangeDelta", "oogControls", "representativePublicPaths",
+        "shortReturnPaths", "adjudication",
+    }
+    if not isinstance(resources, dict) or set(resources) != expected_resource_keys or \
+            resources.get("schema") != RESOURCE_SCHEMA:
+        die("Lido differential full resource-evidence schema drifted")
+    resource_rows = resources.get("boundaries")
+    if not isinstance(resource_rows, list) or len(resource_rows) != 455 or \
+            [row.get("ordinal") for row in resource_rows] != list(range(455)) or \
+            len({row.get("coordinate") for row in resource_rows}) != 455:
+        die("Lido differential full resource-vector coverage/order drifted")
+    if resources.get("summary") != resource_summary(resource_rows):
+        die("Lido differential full resource-vector summary drifted")
+    coordinates = [row["coordinate"] for row in resource_rows]
+    vector_payload = {
+        "schema": resources["schema"], "gasModel": resources["gasModel"],
+        "lifecycle": resources["lifecycle"], "identities": resources["identities"],
+        "boundaries": resource_rows,
+    }
+    expected_digests = {
+        "orderedCoordinatesSha256": hashlib.sha256(
+            ("\n".join(coordinates) + "\n").encode()).hexdigest(),
+        "fullResourceVectorSha256": canonical_digest(vector_payload),
+    }
+    if resources.get("vectorDigests") != expected_digests:
+        die("Lido differential full resource-vector digest drifted")
     successful = resources.get("successfulLargeReturnPaths", {})
     expected_resource_names = {
         f"pause-return-true-large-{size}" for size in (64, 256, 1024, 4096, 16384, 32768)}
@@ -1920,8 +2296,12 @@ def main(argv: Sequence[str]) -> int:
     parser.add_argument("--blanc-artifacts", required=True)
     parser.add_argument("--write-manifest", action="store_true")
     parser.add_argument("--manifest-only", action="store_true")
+    parser.add_argument("--experiment-summary", action="store_true")
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args(argv)
+    if args.write_manifest and args.experiment_summary:
+        die("--experiment-summary is read-only and cannot write the manifest")
+    resource_experiment_escape_self_check()
 
     verify_eels_pin(Path(args.eels_root).expanduser().resolve())
     global _LOCK
@@ -1931,16 +2311,9 @@ def main(argv: Sequence[str]) -> int:
     cases = build_cases()
     mismatches = []
     results: Dict[str, Tuple[Mapping, Mapping]] = {}
-    resource_names = {
-        f"pause-return-true-large-{size}" for size in (64, 256, 1024, 4096, 16384, 32768)} | {
-        f"pause-return-large-{size}-oog-control" for size in (4096, 32768)} | {
-        "constructor-success-official", "view-pause-duration",
-        "setter-pause-authorized-lower", "register-fresh", "pause-return-true",
-        "enumeration-64-targets", "pause-return-empty", "pause-return-one-byte",
-        "pause-return-31-bytes"}
-    executed_cases = [case for case in cases
-                      if not args.manifest_only or case.name in resource_names]
-    for case in executed_cases:
+    # Manifest generation owns the complete resource vector, so even the
+    # deliberate --manifest-only route executes all cases and all boundaries.
+    for case in cases:
         solidity = run_side(case, "solidity", _LOCK, artifacts)
         blanc = run_side(case, "blanc", _LOCK, artifacts)
         bad = compare(case, solidity, blanc)
@@ -1957,10 +2330,17 @@ def main(argv: Sequence[str]) -> int:
                            f"B={json.dumps(blanc[field], sort_keys=True)}" for field in bad)
         die(f"{len(mismatches)}/{len(cases)} rows mismatch; first {name}: {detail[:1800]}")
     resource_evidence(results)
-    expected_manifest = build_manifest(cases, _LOCK, artifacts, resource_metrics(results))
+    metrics = resource_metrics(
+        cases, results, _LOCK, artifacts,
+        read_only_experiment=args.experiment_summary)
+    if args.experiment_summary:
+        print(json.dumps(experiment_summary_payload(metrics), indent=2, sort_keys=True))
+        return 0
+    expected_manifest = build_manifest(cases, _LOCK, artifacts, metrics)
     require_manifest(expected_manifest, args.write_manifest)
     if args.manifest_only:
         print(f"OK — Lido CircuitBreaker differential manifest: {len(cases)} explicit rows; "
+              f"{metrics['summary']['boundaryCount']} complete resource boundaries; "
               "17/17 selectors + constructor covered; 15 positive artifact checks + "
               "1 runtime corruption live")
         return 0
@@ -1976,6 +2356,7 @@ def main(argv: Sequence[str]) -> int:
     histories = sum(len(case.history) + len(case.clone_history) for case in cases)
     print(f"OK — Lido CircuitBreaker differential: {len(cases)}/{len(cases)} rows agree; "
           f"17/17 selectors + constructor; {histories} causal history transactions; "
+          f"{metrics['summary']['boundaryCount']} resource boundaries; "
           f"{traced} Solidity CALL/STATICCALL traces; {positive_artifact_checks} positive "
           f"artifact checks + {identity_corruptions} runtime corruption; "
           f"{falsifiers + projection_checks + identity_corruptions + 1} live "

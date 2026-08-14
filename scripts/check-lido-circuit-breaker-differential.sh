@@ -9,7 +9,8 @@ EELS_ROOT="${EELS_ROOT:-$HOME/execution-specs}"
 EELS_PY="$EELS_ROOT/venv/bin/python"
 ARTIFACTS="$(mktemp)"
 ERRORS="$(mktemp)"
-trap 'rm -f "$ARTIFACTS" "$ERRORS"' EXIT
+GENERATOR_OUT="$(mktemp)"
+trap 'rm -f "$ARTIFACTS" "$ERRORS" "$GENERATOR_OUT"' EXIT
 
 if [ ! -x "$EELS_PY" ]; then
   echo "REGRESSION — Lido CircuitBreaker differential: pinned EELS python not found at $EELS_PY"
@@ -21,11 +22,18 @@ if ! (cd "$ROOT" && lake env lean scripts/eval-lido-circuit-breaker-artifacts.le
   exit 1
 fi
 
-if ! PYTHONPATH="$EELS_ROOT/src" "$EELS_PY" \
+if ! PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$EELS_ROOT/src" "$EELS_PY" \
   "$SCRIPT_DIR/gen-lido-circuit-breaker-differential.py" \
-  --eels-root "$EELS_ROOT" --blanc-artifacts "$ARTIFACTS" "$@"; then
+  --eels-root "$EELS_ROOT" --blanc-artifacts "$ARTIFACTS" "$@" >"$GENERATOR_OUT"; then
   exit 1
 fi
+
+for argument in "$@"; do
+  if [ "$argument" = "--experiment-summary" ]; then
+    cat "$GENERATOR_OUT"
+    exit 0
+  fi
+done
 
 # Independent fail-closed ownership for the exact AC9 required-tag set.  This
 # digest is intentionally outside the mutable case generator and covers the
@@ -37,3 +45,15 @@ if [ "$TAG_INFO" != "2 77 $EXPECTED_REQUIRED_TAGS_SHA256" ]; then
   echo "REGRESSION — Lido CircuitBreaker differential: manifest schema or exact required-tag ownership drifted"
   exit 1
 fi
+
+if ! PYTHONDONTWRITEBYTECODE=1 "$EELS_PY" \
+  "$SCRIPT_DIR/lido_circuit_breaker_resource_schema.py" "$MANIFEST" >/dev/null; then
+  exit 1
+fi
+
+if ! PYTHONDONTWRITEBYTECODE=1 "$EELS_PY" \
+  "$SCRIPT_DIR/test-lido-circuit-breaker-resource-falsifiers.py" >/dev/null; then
+  exit 1
+fi
+
+cat "$GENERATOR_OUT"
