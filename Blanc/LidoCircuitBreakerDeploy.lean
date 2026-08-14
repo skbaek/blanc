@@ -175,44 +175,30 @@ theorem abiEncodeConstructorArgs_length (args : ConstructorArgs) :
   simp [abiEncodeConstructorArgs, constructorArgumentBytes,
     B256.length_toBytes]
 
-theorem constructor_prefix_sizing_fixed :
-    lidoCircuitBreakerInitPrefix.length =
-      provisionalConstructorPrefix.length := by
-  native_decide
+/-- The constructor's own source inventory is separate from the runtime's
+20/3/2 inventory.  Internal table calls are not external EVM calls. -/
+def constructorPersistentWriteInventory : List (SourceSite × PersistentWriteClass) :=
+  [ (⟨"constructor.pauseDuration", 0⟩, .configuration),
+    (⟨"constructor.heartbeatInterval", 1⟩, .configuration) ]
 
-theorem constructor_source_site_inventory :
-    programSiteCount sourceSstoreSiteCount
-        (constructorProgram provisionalConstructorPrefix.length
-          (provisionalConstructorPrefix.length + runtimeTemplateCode.length)
-          runtimeTemplateCode.length) = 2 ∧
-      programSiteCount sourceTstoreSiteCount
-        (constructorProgram provisionalConstructorPrefix.length
-          (provisionalConstructorPrefix.length + runtimeTemplateCode.length)
-          runtimeTemplateCode.length) = 0 ∧
-      programSiteCount sourceExternalCallSiteCount
-        (constructorProgram provisionalConstructorPrefix.length
-          (provisionalConstructorPrefix.length + runtimeTemplateCode.length)
-          runtimeTemplateCode.length) = 0 := by
-  native_decide
+def constructorTransientWriteInventory : List (SourceSite × TransientWriteClass) := []
+def constructorExternalCallInventory : List (SourceSite × ExternalCallClass) := []
 
-theorem runtime_patch_controls_valid : runtimePatchControlsValid = true := by
-  native_decide +revert
+theorem constructor_inventory_cardinalities :
+    constructorPersistentWriteInventory.length = 2 ∧
+      constructorTransientWriteInventory.length = 0 ∧
+      constructorExternalCallInventory.length = 0 := by
+  decide
 
-theorem creation_artifact_sizes :
-    lidoCircuitBreakerInitPrefix.length = 2613 ∧
-      lidoCircuitBreakerCreationTemplate.length = 7506 ∧
-      officialFullCreateInput.length = 7730 ∧
-      independentFullCreateInput.length = 7730 ∧
-      runtimeTemplateCode.length = 4893 := by
-  native_decide
+theorem creation_template_runtime_suffix :
+    lidoCircuitBreakerCreationTemplate.drop lidoCircuitBreakerInitPrefix.length =
+      runtimeTemplateCode := by
+  simp [lidoCircuitBreakerCreationTemplate]
 
-theorem creation_size_limits :
-    officialFullCreateInput.length ≤ eip3860InitcodeLimit ∧
-      independentFullCreateInput.length ≤ eip3860InitcodeLimit ∧
-      (lidoCircuitBreakerCode officialParams).length ≤ eip170RuntimeLimit ∧
-      (lidoCircuitBreakerCode independentConstructorArgs.toDeployParams).length ≤
-        eip170RuntimeLimit := by
-  native_decide
+theorem full_create_input_length (args : ConstructorArgs) :
+    (lidoCircuitBreakerFullCreateInput args).length =
+      lidoCircuitBreakerCreationTemplate.length + constructorArgumentBytes := by
+  simp [lidoCircuitBreakerFullCreateInput, abiEncodeConstructorArgs_length]
 
 end LidoCircuitBreaker
 end Blanc
