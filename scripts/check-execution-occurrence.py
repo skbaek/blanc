@@ -178,6 +178,34 @@ def missing_positive_theorems(ownership, path: pathlib.Path) -> list[str]:
     )
 
 
+def contract_ownership_errors(
+    ownership, paths: list[pathlib.Path], moved_names: set[str]
+) -> list[str]:
+    """Reject exact survivors, basename shadows, and aliases/exports."""
+    errors: list[str] = []
+    forbidden_basenames = {name.rsplit(".", 1)[-1] for name in moved_names}
+    for path in paths:
+        rel = path.relative_to(ROOT) if path.is_relative_to(ROOT) else path
+        for name, (kind, line) in ownership.declarations(path).items():
+            if name in moved_names:
+                errors.append(
+                    f"contract donor declaration survives for `{name}` as {kind} "
+                    f"at {rel}:{line}"
+                )
+            elif name.rsplit(".", 1)[-1] in forbidden_basenames:
+                errors.append(
+                    f"contract basename shadow survives for `{name}` as {kind} "
+                    f"at {rel}:{line}"
+                )
+        for name, line, form in ownership.donor_aliases_or_exports(
+            path, moved_names
+        ):
+            errors.append(
+                f"contract {form} survives for `{name}` at {rel}:{line}"
+            )
+    return errors
+
+
 def main() -> int:
     source = FIXTURE.read_text(encoding="utf-8")
     for marker in [*MUTANTS, "-- WETH-BRIDGE-MUTANT-CONTROL"]:
@@ -268,43 +296,40 @@ def main() -> int:
         manifest = json.loads(MOVE_MANIFEST.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         return fail(f"occurrence move manifest is unreadable: {exc}")
-    if set(manifest) != {"schema", "mappings"} or manifest["schema"] != 1:
+    if (not isinstance(manifest, dict) or
+            set(manifest) != {"schema", "contractModuleGlobs", "mappings"} or
+            manifest["schema"] != 2):
         return fail("occurrence move manifest schema drifted")
+    contract_globs = manifest["contractModuleGlobs"]
+    if contract_globs != ["Blanc/Weth10*.lean", "Blanc/Lido*.lean"]:
+        return fail("occurrence move manifest contract-module globs drifted")
     mappings = manifest["mappings"]
     if not isinstance(mappings, list) or len(mappings) != 9:
         return fail("occurrence move manifest must contain exactly 9 rows")
-    moved_names = {f'Blanc.{row["declaration"]}' for row in mappings}
-    weth_declarations: dict[str, tuple[pathlib.Path, str, int]] = {}
-    alias_hits: list[tuple[pathlib.Path, str, int, str]] = []
-    for path in sorted(ROOT.glob("Blanc/Weth10*.lean")):
-        for name, (kind, line) in ownership.declarations(path).items():
-            weth_declarations[name] = (path, kind, line)
-        for name, line, form in ownership.donor_aliases_or_exports(
-            path, moved_names
-        ):
-            alias_hits.append((path, name, line, form))
-    if alias_hits:
-        path, name, line, form = alias_hits[0]
-        return fail(
-            f"WETH donor {form} survives for `{name}` at "
-            f"{path.relative_to(ROOT)}:{line}"
-        )
     for index, row in enumerate(mappings, 1):
         if not isinstance(row, dict) or set(row) != {
             "declaration", "kind", "donorModule", "commonModule"
         } or row["kind"] != "theorem":
             return fail(f"occurrence move row {index} has invalid schema")
+    moved_names = {f'Blanc.{row["declaration"]}' for row in mappings}
+    contract_paths: list[pathlib.Path] = []
+    for pattern in contract_globs:
+        matches = sorted(ROOT.glob(pattern))
+        if not matches:
+            return fail(f"occurrence contract-module glob matched nothing: {pattern}")
+        contract_paths.extend(matches)
+    contract_paths = sorted(set(contract_paths))
+    ownership_errors = contract_ownership_errors(
+        ownership, contract_paths, moved_names
+    )
+    if ownership_errors:
+        return fail(ownership_errors[0])
+    for row in mappings:
         fqn = f'Blanc.{row["declaration"]}'
         common_path = ROOT / row["commonModule"]
         common_declarations = ownership.declarations(common_path)
         if common_declarations.get(fqn, (None,))[0] != row["kind"]:
             return fail(f"common owner missing or wrong-kind `{fqn}`")
-        if fqn in weth_declarations:
-            path, kind, line = weth_declarations[fqn]
-            return fail(
-                f"WETH donor declaration survives for `{fqn}` as {kind} at "
-                f"{path.relative_to(ROOT)}:{line}"
-            )
         token = f'{row["kind"]} {row["declaration"]}'
         common = common_path.read_text(encoding="utf-8")
         if token not in common or token in common.replace(
@@ -458,6 +483,39 @@ def main() -> int:
                 "ownership parser donor-root-export negative control failed"
             )
 
+        lido_shadow_path = temp_root / "LidoShadow.lean"
+        lido_shadow_path.write_text(
+            "namespace Blanc.LidoCircuitBreaker.ProcessMessage\n"
+            "theorem ok_state_eq_committedPost : True := by trivial\n"
+            "end Blanc.LidoCircuitBreaker.ProcessMessage\n",
+            encoding="utf-8",
+        )
+        lido_shadow_errors = contract_ownership_errors(
+            ownership, [lido_shadow_path], moved_names
+        )
+        if not any("basename shadow" in error for error in lido_shadow_errors):
+            return fail("Lido basename-shadow negative control failed")
+
+        lido_alias_path = temp_root / "LidoAlias.lean"
+        lido_alias_path.write_text(
+            "import Blanc.CommonProofs\n"
+            "namespace Blanc.LidoCircuitBreaker\n"
+            f"alias occurrenceLidoLegacy := {first_fqn}\n"
+            "end Blanc.LidoCircuitBreaker\n",
+            encoding="utf-8",
+        )
+        lido_alias_errors = contract_ownership_errors(
+            ownership, [lido_alias_path], moved_names
+        )
+        if not any("contract alias" in error for error in lido_alias_errors):
+            return fail("Lido alias negative control failed")
+        compiled_lido_alias = run(["lake", "env", "lean", str(lido_alias_path)])
+        if compiled_lido_alias.returncode != 0:
+            return fail(
+                "Lido alias negative control is not valid Lean",
+                compiled_lido_alias,
+            )
+
         for control_path, label in command_controls:
             compiled_control = run(["lake", "env", "lean", str(control_path)])
             if compiled_control.returncode != 0:
@@ -502,7 +560,7 @@ def main() -> int:
 
     print(
         "OK — execution occurrence: 16 concrete controls; 15 Lean mutants; "
-        "WETH bridge-removal mutant; 9 moved-owner + 9 ownership-parser controls; "
+        "WETH bridge-removal mutant; 9 moved-owner + 11 ownership-parser controls; "
         "24 raw-attribution owners + exact signature + 4 controls; "
         "17 required positive proofs + deletion control; 2 CREATE mutants"
     )

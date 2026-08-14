@@ -1,7 +1,10 @@
 {
-  "schema": 1,
+  "schema": 2,
   "commonModule": "Blanc/ExecutionSettlement.lean",
-  "weth10ModuleGlob": "Blanc/Weth10*.lean",
+  "contractModuleGlobs": [
+    "Blanc/Weth10*.lean",
+    "Blanc/Lido*.lean"
+  ],
   "requiredDirectImport": {
     "module": "Blanc/Weth10HolderFlow.lean",
     "import": "Blanc.ExecutionSettlement"

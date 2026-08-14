@@ -37,6 +37,12 @@ jobs:
         run: scripts/check-trust-surface.sh
       - name: Deployed WETH10 reference lock (offline)
         run: scripts/check-weth10-reference.sh
+      - name: Lido CircuitBreaker reference lock (offline)
+        run: scripts/check-lido-circuit-breaker-reference.sh
+      # The Lido differential remains a mandatory local candidate gate.  This
+      # job does not provision the clean execution-specs checkout and venv at
+      # the gate's pinned EELS commit, so CI cannot satisfy its dependency
+      # contract without a separately reviewed dependency-provisioning change.
       - uses: leanprover/lean-action@v1
       - name: Execution-settlement CREATE rollback regression
         run: scripts/check-execution-settlement.sh
@@ -50,7 +56,7 @@ jobs:
         run: scripts/check-error-data.sh
       - name: Audit headline theorem axioms
         run: scripts/check.sh --no-build
-      - name: Pin WETH10 flagship statements
+      - name: Pin WETH10/Lido artifact statements
         run: scripts/check-claims.sh
       - name: Build the Jaune fixture runner
         run: lake build jaune/jaune

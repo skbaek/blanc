@@ -140,14 +140,19 @@ private def provisionalConstructorPrefix : Bytes :=
   (Prog.compile
     (constructorProgram 0 0 runtimeTemplateCode.length)).getD []
 
+/-- The exact constructor program compiled into the creation prefix. Keeping
+this source owner public lets inventory gates count its actual syntax rather
+than trusting a parallel hand-authored list. -/
+def lidoCircuitBreakerConstructorProgram : Prog :=
+  let prefixLength := provisionalConstructorPrefix.length
+  constructorProgram prefixLength
+    (prefixLength + runtimeTemplateCode.length)
+    runtimeTemplateCode.length
+
 /-- Constructor instructions.  All internal offsets use PUSH32, so the
 provisional sizing pass and final pass have the same compiler shape. -/
 def lidoCircuitBreakerInitPrefix : Bytes :=
-  let prefixLength := provisionalConstructorPrefix.length
-  (Prog.compile
-    (constructorProgram prefixLength
-      (prefixLength + runtimeTemplateCode.length)
-      runtimeTemplateCode.length)).getD []
+  (Prog.compile lidoCircuitBreakerConstructorProgram).getD []
 
 /-- Parameter-neutral Blanc creation-code template. -/
 def lidoCircuitBreakerCreationTemplate : Bytes :=
@@ -183,6 +188,15 @@ def constructorPersistentWriteInventory : List (SourceSite × PersistentWriteCla
 
 def constructorTransientWriteInventory : List (SourceSite × TransientWriteClass) := []
 def constructorExternalCallInventory : List (SourceSite × ExternalCallClass) := []
+
+/-- Actual syntax counts over the exact constructor `Prog`.  The differential
+gate compares these computed values with the separately classified inventory,
+so adding any persistent, transient, or external execution instruction cannot
+be hidden by leaving the hand-labelled rows unchanged. -/
+def constructorProgramSiteCounts : Nat × Nat × Nat :=
+  (programSiteCount sourceSstoreSiteCount lidoCircuitBreakerConstructorProgram,
+   programSiteCount sourceTstoreSiteCount lidoCircuitBreakerConstructorProgram,
+   programSiteCount sourceExternalCallSiteCount lidoCircuitBreakerConstructorProgram)
 
 theorem constructor_inventory_cardinalities :
     constructorPersistentWriteInventory.length = 2 ∧

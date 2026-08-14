@@ -3,14 +3,17 @@
 
 The sole ownership map is execution-settlement-lift-manifest.json.  It checks
 that every listed declaration is genuinely declared by the common module, that
-no listed donor declaration, alias, or export survives in any WETH10 module,
-and that Weth10HolderFlow imports the common module directly.  It deliberately
-does not try to recognize renamed or propositionally equivalent shadows; that
-is the independent review obligation recorded by the migration goal.
+no listed donor declaration or common-owner basename shadow survives in the
+historical WETH10 donor family or the Lido family, that neither family contains
+an alias/export command, and that Weth10HolderFlow imports the common module
+directly.  It deliberately does not try to recognize propositionally
+equivalent declarations under unrelated names; that remains an independent
+review obligation.
 
-``--negative-controls`` runs three in-memory-copy controls: donor alias,
-missing common declaration, and missing direct import.  Each must fail with its
-own diagnostic tag, so a green control run proves the relevant channel is live.
+``--negative-controls`` runs five in-memory-copy controls: the historical donor
+alias, a Lido common-owner basename shadow, a Lido alias, a missing common
+declaration, and a missing direct import.  Each must fail with its own
+diagnostic tag, so a green control run proves the relevant channel is live.
 """
 
 from __future__ import annotations
@@ -49,7 +52,7 @@ class Mapping:
 @dataclass(frozen=True)
 class Config:
     common_module: str
-    weth10_glob: str
+    contract_globs: tuple[str, ...]
     direct_module: str
     direct_import: str
     mappings: tuple[Mapping, ...]
@@ -170,11 +173,15 @@ def read_config(root: Path) -> Config:
     except json.JSONDecodeError as exc:
         raise ValueError(f"malformed manifest {MANIFEST}: {exc.msg}") from exc
     if not isinstance(value, dict) or set(value) != {
-        "schema", "commonModule", "weth10ModuleGlob", "requiredDirectImport", "mappings"
+        "schema", "commonModule", "contractModuleGlobs", "requiredDirectImport", "mappings"
     }:
-        raise ValueError("manifest must contain exactly schema/commonModule/weth10ModuleGlob/requiredDirectImport/mappings")
-    if value["schema"] != 1 or not all(isinstance(value[key], str) and value[key] for key in ("commonModule", "weth10ModuleGlob")):
+        raise ValueError("manifest must contain exactly schema/commonModule/contractModuleGlobs/requiredDirectImport/mappings")
+    if value["schema"] != 2 or not isinstance(value["commonModule"], str) or not value["commonModule"]:
         raise ValueError("manifest has unsupported schema or invalid module paths")
+    contract_globs = value["contractModuleGlobs"]
+    if (not isinstance(contract_globs, list) or
+            contract_globs != ["Blanc/Weth10*.lean", "Blanc/Lido*.lean"]):
+        raise ValueError("manifest must pin the WETH10 and Lido contract module globs")
     direct = value["requiredDirectImport"]
     if not isinstance(direct, dict) or set(direct) != {"module", "import"} or not all(isinstance(direct[k], str) and direct[k] for k in direct):
         raise ValueError("manifest requiredDirectImport must contain exactly nonempty module/import")
@@ -193,7 +200,7 @@ def read_config(root: Path) -> Config:
         mappings.append(Mapping(donor, common, kind))
     if len({row.donor for row in mappings}) != len(mappings) or len({row.common for row in mappings}) != len(mappings):
         raise ValueError("manifest mappings must have unique donor and common names")
-    return Config(value["commonModule"], value["weth10ModuleGlob"], direct["module"], direct["import"], tuple(mappings))
+    return Config(value["commonModule"], tuple(contract_globs), direct["module"], direct["import"], tuple(mappings))
 
 
 def audit(root: Path) -> list[str]:
@@ -210,17 +217,27 @@ def audit(root: Path) -> list[str]:
                 errors.append(f"COMMON-MISSING — {row.common} is not declared in {config.common_module}")
             elif got[0] != row.kind:
                 errors.append(f"COMMON-KIND-MISMATCH — {row.common} is {got[0]}, manifest requires {row.kind}")
-        donor_files = sorted(root.glob(config.weth10_glob))
-        if not donor_files:
-            errors.append(f"SETUP — extraction ownership: no donor modules match {config.weth10_glob}")
+        donor_files: list[Path] = []
+        for pattern in config.contract_globs:
+            matches = sorted(root.glob(pattern))
+            if not matches:
+                errors.append(
+                    f"SETUP — extraction ownership: no contract modules match {pattern}"
+                )
+            donor_files.extend(matches)
+        donor_files = sorted(set(donor_files))
         donors = {row.donor for row in config.mappings}
+        common_basenames = {row.common.rsplit(".", 1)[-1] for row in config.mappings}
         for path in donor_files:
             rel = path.relative_to(root).as_posix()
             for name, (kind, line) in declarations(path).items():
                 if name in donors:
                     errors.append(f"DONOR-SURVIVOR — {rel}:{line}: {kind} {name}")
+                elif name.rsplit(".", 1)[-1] in common_basenames:
+                    errors.append(f"CONTRACT-SHADOW — {rel}:{line}: {kind} {name}")
             for name, line, form in donor_aliases_or_exports(path, donors):
-                errors.append(f"DONOR-SURVIVOR — {rel}:{line}: {form} {name}")
+                tag = "CONTRACT-ALIAS" if rel.startswith("Blanc/Lido") else "DONOR-SURVIVOR"
+                errors.append(f"{tag} — {rel}:{line}: {form} {name}")
         direct_path = root / config.direct_module
         if not direct_path.is_file():
             errors.append(f"DIRECT-IMPORT-MISSING — required consumer module missing: {config.direct_module}")
@@ -250,6 +267,26 @@ def mutate_common_missing(root: Path) -> None:
     path.write_text(text.replace(old, "def executionSettlementControlMissing", 1), encoding="utf-8")
 
 
+def mutate_lido_shadow(root: Path) -> None:
+    path = root / "Blanc/LidoCircuitBreakerCore.lean"
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(
+            "\nnamespace Blanc.LidoCircuitBreaker.Exec\n"
+            "def committedFrames := Blanc.Exec.committedFrames\n"
+            "end Blanc.LidoCircuitBreaker.Exec\n"
+        )
+
+
+def mutate_lido_alias(root: Path) -> None:
+    path = root / "Blanc/LidoCircuitBreakerCore.lean"
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(
+            "\nnamespace Blanc.LidoCircuitBreaker\n"
+            "alias lidoSettlementLegacy := Blanc.Execution.commits\n"
+            "end Blanc.LidoCircuitBreaker\n"
+        )
+
+
 def mutate_direct_import_missing(root: Path) -> None:
     path = root / "Blanc/Weth10HolderFlow.lean"
     text = path.read_text(encoding="utf-8")
@@ -262,6 +299,8 @@ def mutate_direct_import_missing(root: Path) -> None:
 def negative_controls(root: Path) -> list[str]:
     controls = [
         ("donor-alias", "DONOR-SURVIVOR", mutate_donor_alias),
+        ("lido-shadow", "CONTRACT-SHADOW", mutate_lido_shadow),
+        ("lido-alias", "CONTRACT-ALIAS", mutate_lido_alias),
         ("common-missing", "COMMON-MISSING", mutate_common_missing),
         ("direct-import-missing", "DIRECT-IMPORT-MISSING", mutate_direct_import_missing),
     ]
@@ -303,9 +342,9 @@ def main() -> int:
                 print(control)
             print(f"REGRESSION — extraction ownership: {len(controls)} negative control(s) failed")
             return 1
-        print("OK — extraction ownership: 14/14 common declarations present; no donor survivor; direct import present; 3/3 negative controls live")
+        print("OK — extraction ownership: 14/14 common declarations present; WETH10/Lido shadows and aliases absent; direct import present; 5/5 negative controls live")
     else:
-        print("OK — extraction ownership: 14/14 common declarations present; no donor survivor; direct import present")
+        print("OK — extraction ownership: 14/14 common declarations present; WETH10/Lido shadows and aliases absent; direct import present")
     return 0
 
 

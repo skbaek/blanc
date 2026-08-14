@@ -4,7 +4,7 @@ This document freezes the public conformance boundary for the Blanc port of
 Lido CircuitBreaker v1.0.0.  It is read with `PORTING.md`: the port does not
 claim Solidity-bytecode, code-hash, gas, or raw-storage-layout identity.
 It claims only the declared interface behavior supported by named evidence.
-The pinned reference lock and differential manifest, when landed, are the
+The pinned reference lock and committed differential manifest are the
 authorities for exact selectors, source identities, and finite observations.
 
 ## Runtime endpoints
@@ -118,8 +118,21 @@ nonzero runtime value are explicit comparison cases; no fallback behavior is inf
 <!-- LIDO-CIRCUIT-BREAKER-CROSSCUT registry-histories -->
 ### registry-histories
 
-Registry agreement covers zero/fresh/same/distinct targets, first/middle/last/only
-removal, moved-element follow-up, and one-pauser/many-target histories in finite rows.
+<!-- LIDO-CIRCUIT-BREAKER-SEMANTIC registry-zero-zero -->
+For the absent `0 → 0` route, the source temporarily appends the target, writes
+its one-based index, then removes it and clears the index; it emits `PauserSet`
+even though the boundary Registry is unchanged.
+
+<!-- LIDO-CIRCUIT-BREAKER-SEMANTIC registry-same-pauser -->
+Replacing a target with the same nonzero pauser decrements that pauser's count
+and then increments it; the observable boundary count is unchanged, but the
+ordered writes and `PauserSet` remain part of compatibility.
+
+<!-- LIDO-CIRCUIT-BREAKER-SEMANTIC registry-swap-pop -->
+Unregistration uses swap-and-pop, repairs the moved target's one-based index,
+and preserves the source's last/self-swap behavior. Registry agreement covers
+zero/fresh/same/distinct targets, first/middle/last/only removal,
+moved-element follow-up, and one-pauser/many-target histories in finite rows.
 
 <!-- LIDO-CIRCUIT-BREAKER-CROSSCUT temporal-arithmetic -->
 ### temporal-arithmetic
@@ -136,27 +149,63 @@ families, indexed/data words, and ordering are lock and differential obligations
 <!-- LIDO-CIRCUIT-BREAKER-CROSSCUT external-return-allocation -->
 ### external-return-allocation
 
-`pauseFor` and `isPaused` call shape, complete successful-returndata allocation/copy,
-Boolean decoding, bubbling, and adequate-gas scaling are compared; first-word-only
-shortcuts are outside the allowed implementation freedom.
+<!-- LIDO-CIRCUIT-BREAKER-SEMANTIC pause-chronology -->
+Pause chronology is calldata/canonical-address checks; addressed transient-lock
+check/set; assignment and strict-liveness checks; duration snapshot; complete
+unregister; `EXTCODESIZE`; `pauseFor(duration)` `CALL`; `isPaused()`
+`STATICCALL`; Boolean decode; `PauseTriggered`; expiry update using the
+post-callback count and then-current heartbeat interval; and addressed unlock.
+
+<!-- LIDO-CIRCUIT-BREAKER-SEMANTIC return-data -->
+Child failure bubbles. A successful `isPaused()` return shorter than 32 bytes
+empty-reverts; first word `0` yields `PauseFailed`; `1` succeeds; any other
+first word empty-reverts as a noncanonical Boolean; trailing bytes after `0` or
+`1` do not change the decoded value. The complete successful returndata is
+allocated/copied before decoding, so its size remains resource-observable.
+First-word-only shortcuts are outside the allowed implementation freedom.
 
 <!-- LIDO-CIRCUIT-BREAKER-CROSSCUT reentry-interference -->
 ### reentry-interference
 
-Finite hostile callback rows cover same/different target and caught/bubbled cases.
-They are not an arbitrary-descendant reentry theorem.
+<!-- LIDO-CIRCUIT-BREAKER-SEMANTIC lock-namespace -->
+The transient lock is addressed by the current CircuitBreaker account and lock
+key. It excludes descendant `pause` on that exact instance; a clone has a
+different storage namespace, and `CALLCODE`, `DELEGATECALL`, or foreign
+installed code is not silently identified with the locked instance.
+
+Finite hostile callback rows cover same/different target and caught/bubbled
+cases. An authorized admin callback may reassign Registry state while pause is
+yielded. They are not an arbitrary-descendant reentry or unconditional final
+noninterference theorem.
 
 <!-- LIDO-CIRCUIT-BREAKER-CROSSCUT rollback -->
 ### rollback
 
+<!-- LIDO-CIRCUIT-BREAKER-SEMANTIC intermediate-liveness -->
+During pause, unregister may already make assignment/count zero while the old
+expiry still makes `isPauserLive` true. Callback-visible intermediate state is
+therefore distinct from the settled boundary.
+
 Status, post-state projection, logs, and retained call traces are compared across
-outer rollback; a successful parent may catch a failed child.
+outer rollback; caught child failure restores the child-entry world, bubbled
+outer failure restores the outer-entry world, and a successful parent may catch
+a failed child. Failed-child logs, raw internal logs, top-level output logs, and
+receipt logs are distinct evidence layers.
 
 <!-- LIDO-CIRCUIT-BREAKER-CROSSCUT logical-state-projection -->
 ### logical-state-projection
 
-Comparison is over the frozen logical CircuitBreaker state, never equality of the
-two implementations' raw storage slots.
+<!-- LIDO-CIRCUIT-BREAKER-SEMANTIC projection-domain -->
+`RegistryWitness` relates a duplicate-free ordered array of nonzero canonical
+targets and nonzero canonical pausers to assignment, one-based index, array
+entries/length, per-pauser multiplicity, and `count[0] = 0`. Tagged mapping
+regions quantify only canonical address payloads; region/tag disjointness and
+length/index/count nonwrap are later, currently unproved theorem obligations.
+No global Keccak
+injectivity, raw-slot equality, or storage-root equality is assumed.
+
+Comparison is over this frozen logical CircuitBreaker state, never equality of
+the two implementations' raw storage slots.
 
 <!-- LIDO-CIRCUIT-BREAKER-CROSSCUT oracle-independence -->
 ### oracle-independence
@@ -166,6 +215,12 @@ evaluator-derived Blanc artifact. Neither supplies the other's expected values.
 
 <!-- LIDO-CIRCUIT-BREAKER-CROSSCUT finite-evidence -->
 ### finite-evidence
+
+<!-- LIDO-CIRCUIT-BREAKER-SEMANTIC gas-boundary -->
+Exact gas equality and an identical OOG threshold are excluded, but a measured
+gas increase on any externally callable named path is an observable behavioral
+deviation governed by `LIDO_CIRCUIT_BREAKER_DEVIATIONS.md`; adequate-gas and
+returndata-scaling controls do not erase that registry obligation.
 
 Differential agreement is only for manifest-listed worlds/channels. It is not
 universal functional correctness, deployed-bytecode verification, Registry proof,

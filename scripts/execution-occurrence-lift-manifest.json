@@ -1,5 +1,9 @@
 {
-  "schema": 1,
+  "schema": 2,
+  "contractModuleGlobs": [
+    "Blanc/Weth10*.lean",
+    "Blanc/Lido*.lean"
+  ],
   "mappings": [
     {
       "declaration": "ProcessMessage.ok_state_eq_committedPost",

@@ -9,9 +9,12 @@ import Blanc.Weth10Hardened
 import Blanc.Weth10Dormant
 import Blanc.Weth10FutureRedeemable
 import Blanc.Weth10AnyOrder
+import Blanc.LidoCircuitBreakerDeploy
+import Blanc.LidoCircuitBreakerRegistryModel
 
 /-!
-Lean-checked statement pins for the WETH10 flagship declarations.  Each
+Lean-checked statement pins for the WETH10 flagship declarations and the Lido
+CircuitBreaker artifact witnesses/canaries.  Each
 wrapper has the exact intended type and uses the named declaration as its
 body, so a statement change breaks this file while a proof-only refactor does
 not.  `Stor.Weth10Inv` is pinned separately by definitional unfolding.
@@ -2267,5 +2270,109 @@ example {chainId : UInt64} {dp : DeployParams} {ca : Adr}
     hroot hfuture hnodup hrecipients hperm
 
 end Weth10
+
+namespace LidoCircuitBreaker
+
+example (storage : LogicalStorage) (entries : List Entry)
+    (targetsNodup : (entries.map Prod.fst).Nodup)
+    (targetsValid : ∀ entry ∈ entries, nonzeroCanonicalAddress entry.1)
+    (pausersValid : ∀ entry ∈ entries, nonzeroCanonicalAddress entry.2)
+    (lengthWord : storage.read arrayLengthSlot = Nat.toB256 entries.length)
+    (arrayWords : ∀ index, index < entries.length →
+      storage.read (arrayEntrySlot (Nat.toB256 (index + 1))) = targetAt entries index)
+    (assignments : ∀ target, canonicalAddress target →
+      storage.read (assignmentSlot target) = assignmentAt entries target)
+    (indices : ∀ target, canonicalAddress target →
+      storage.read (indexSlot target) = Nat.toB256 (oneBasedIndexAt entries target))
+    (counts : ∀ pauser, canonicalAddress pauser →
+      storage.read (countSlot pauser) = Nat.toB256 (assignmentCount entries pauser))
+    (zeroCount : storage.read (countSlot 0) = 0) :
+    RegistryWitness storage entries :=
+  { targetsNodup := targetsNodup
+    targetsValid := targetsValid
+    pausersValid := pausersValid
+    lengthWord := lengthWord
+    arrayWords := arrayWords
+    assignments := assignments
+    indices := indices
+    counts := counts
+    zeroCount := zeroCount }
+
+example (pauseDuration heartbeatInterval : B256) (registry : LogicalStorage)
+    (heartbeatExpiry : B256 → B256) : LogicalState :=
+  { pauseDuration := pauseDuration
+    heartbeatInterval := heartbeatInterval
+    registry := registry
+    heartbeatExpiry := heartbeatExpiry }
+
+example : RegistryWitness emptyStorage [] :=
+  emptyWitness
+
+example (dp : DeployParams) :
+    Prog.compile (runtime dp) = some (lidoCircuitBreakerCode dp) :=
+  lidoCircuitBreakerCode_compile dp
+
+example (dp : DeployParams) :
+    (funcs dp).map Prod.fst = runtimeEndpoints.map AbiEndpoint.selector :=
+  funcs_selectors_eq_runtimeEndpoints dp
+
+example :
+    programSiteCount sourceSstoreSiteCount (runtime officialParams) = 20 :=
+  runtime_source_sstore_site_count
+
+example :
+    programSiteCount sourceTstoreSiteCount (runtime officialParams) = 3 :=
+  runtime_source_tstore_site_count
+
+example :
+    programSiteCount sourceExternalCallSiteCount (runtime officialParams) = 2 :=
+  runtime_source_external_call_site_count
+
+example :
+    persistentWriteInventory.length =
+        programSiteCount sourceSstoreSiteCount (runtime officialParams) ∧
+      transientWriteInventory.length =
+        programSiteCount sourceTstoreSiteCount (runtime officialParams) ∧
+      externalCallInventory.length =
+        programSiteCount sourceExternalCallSiteCount (runtime officialParams) :=
+  sourceInventory_cardinalities
+
+example :
+    (runtime officialParams).entrySstoreFree
+      getPausables enumerationComponent = true :=
+  enumeration_entry_sstore_free
+
+example :
+    (enumerationWritingMutant officialParams).entrySstoreFree
+      getPausables enumerationComponent = false :=
+  enumeration_writing_mutant_rejected
+
+example (args : ConstructorArgs) :
+    (abiEncodeConstructorArgs args).length = constructorArgumentBytes :=
+  abiEncodeConstructorArgs_length args
+
+example :
+    constructorPersistentWriteInventory.length = 2 ∧
+      constructorTransientWriteInventory.length = 0 ∧
+      constructorExternalCallInventory.length = 0 :=
+  constructor_inventory_cardinalities
+
+example : constructorProgramSiteCounts =
+    (programSiteCount sourceSstoreSiteCount lidoCircuitBreakerConstructorProgram,
+     programSiteCount sourceTstoreSiteCount lidoCircuitBreakerConstructorProgram,
+     programSiteCount sourceExternalCallSiteCount lidoCircuitBreakerConstructorProgram) :=
+  rfl
+
+example :
+    lidoCircuitBreakerCreationTemplate.drop lidoCircuitBreakerInitPrefix.length =
+      runtimeTemplateCode :=
+  creation_template_runtime_suffix
+
+example (args : ConstructorArgs) :
+    (lidoCircuitBreakerFullCreateInput args).length =
+      lidoCircuitBreakerCreationTemplate.length + constructorArgumentBytes :=
+  full_create_input_length args
+
+end LidoCircuitBreaker
 
 end Blanc

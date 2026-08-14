@@ -730,3 +730,17 @@ OK	1.349	Blanc/CycleWriteFree.lean
 # `--force` were not used. Only this new row is admitted, and every
 # pre-existing reference row above remains byte-for-byte unchanged.
 OK	1.314	Blanc/TransientSettlement.lean
+
+# 2026-08-14. The Lido CircuitBreaker artifact-conformance goal added exactly
+# five production modules. Each row below is the per-file median of three
+# separate uncontended sequential `scripts/check-elab.sh --list --no-build`
+# runs over all 101 files on the exact already-built final Lean candidate:
+# 469.3 s, 462.3 s, and 460.1 s total. The five measurement triples were
+# recorded in `/private/tmp/lido-final-elab-{1,2,3}.txt`; only these new rows
+# are admitted. Every pre-existing reference row above remains byte-for-byte
+# unchanged, and `--rebase` and `--force` were not used.
+OK	20.843	Blanc/LidoCircuitBreaker.lean
+OK	1.550	Blanc/LidoCircuitBreakerCode.lean
+OK	1.230	Blanc/LidoCircuitBreakerCore.lean
+OK	1.202	Blanc/LidoCircuitBreakerDeploy.lean
+OK	1.180	Blanc/LidoCircuitBreakerRegistryModel.lean

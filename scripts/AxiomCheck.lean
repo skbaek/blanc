@@ -41,6 +41,8 @@ import Blanc.Weth10Hardened
 import Blanc.Weth10Dormant
 import Blanc.Weth10FutureRedeemable
 import Blanc.Weth10AnyOrder
+import Blanc.LidoCircuitBreakerDeploy
+import Blanc.LidoCircuitBreakerRegistryModel
 
 #print axioms Blanc.weth_preserves_solvent
 #print axioms Blanc.stateTransition_preserves_solvent
@@ -435,3 +437,16 @@ import Blanc.Weth10AnyOrder
 #print axioms Blanc.Weth10.redeemEveryoneList_anyOrder
 #print axioms Blanc.Weth10.deployment_reachable_redeemClaims_anyOrder
 #print axioms Blanc.Weth10.deployment_reachable_redeemEveryoneList_anyOrder
+#print axioms Blanc.LidoCircuitBreaker.emptyWitness
+#print axioms Blanc.LidoCircuitBreaker.lidoCircuitBreakerCode_compile
+#print axioms Blanc.LidoCircuitBreaker.funcs_selectors_eq_runtimeEndpoints
+#print axioms Blanc.LidoCircuitBreaker.runtime_source_sstore_site_count
+#print axioms Blanc.LidoCircuitBreaker.runtime_source_tstore_site_count
+#print axioms Blanc.LidoCircuitBreaker.runtime_source_external_call_site_count
+#print axioms Blanc.LidoCircuitBreaker.sourceInventory_cardinalities
+#print axioms Blanc.LidoCircuitBreaker.enumeration_entry_sstore_free
+#print axioms Blanc.LidoCircuitBreaker.enumeration_writing_mutant_rejected
+#print axioms Blanc.LidoCircuitBreaker.abiEncodeConstructorArgs_length
+#print axioms Blanc.LidoCircuitBreaker.constructor_inventory_cardinalities
+#print axioms Blanc.LidoCircuitBreaker.creation_template_runtime_suffix
+#print axioms Blanc.LidoCircuitBreaker.full_create_input_length

@@ -702,7 +702,20 @@ Blanc.Weth10.deployment_reachable_dormant_holder_balance_monotone|$STANDARD
 Blanc.Weth10.redeemClaims_anyOrder|$STANDARD
 Blanc.Weth10.redeemEveryoneList_anyOrder|$STANDARD
 Blanc.Weth10.deployment_reachable_redeemClaims_anyOrder|$STANDARD
-Blanc.Weth10.deployment_reachable_redeemEveryoneList_anyOrder|$STANDARD"
+Blanc.Weth10.deployment_reachable_redeemEveryoneList_anyOrder|$STANDARD
+Blanc.LidoCircuitBreaker.emptyWitness|propext, Quot.sound
+Blanc.LidoCircuitBreaker.lidoCircuitBreakerCode_compile|$STANDARD
+Blanc.LidoCircuitBreaker.funcs_selectors_eq_runtimeEndpoints|$STANDARD
+Blanc.LidoCircuitBreaker.runtime_source_sstore_site_count|$STANDARD
+Blanc.LidoCircuitBreaker.runtime_source_tstore_site_count|$STANDARD
+Blanc.LidoCircuitBreaker.runtime_source_external_call_site_count|$STANDARD
+Blanc.LidoCircuitBreaker.sourceInventory_cardinalities|$STANDARD
+Blanc.LidoCircuitBreaker.enumeration_entry_sstore_free|$STANDARD
+Blanc.LidoCircuitBreaker.enumeration_writing_mutant_rejected|$STANDARD
+Blanc.LidoCircuitBreaker.abiEncodeConstructorArgs_length|propext
+Blanc.LidoCircuitBreaker.constructor_inventory_cardinalities|
+Blanc.LidoCircuitBreaker.creation_template_runtime_suffix|$STANDARD
+Blanc.LidoCircuitBreaker.full_create_input_length|$STANDARD"
 # Secondary net only: the exact-set comparison below is the primary check;
 # this pattern catches forbidden names in output the per-theorem parse missed.
 FORBIDDEN='sorryAx|ofReduceBool|ofReduceNat|_native\.'

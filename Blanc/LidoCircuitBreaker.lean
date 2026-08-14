@@ -36,6 +36,10 @@ def removedIndexWord : B256 := 20
 def arrayLengthWord : B256 := 21
 def lastTargetWord : B256 := 22
 def durationWord : B256 := 23
+/-- Successful external returndata is copied in full above every private
+scratch/ABI word.  Its unbounded tail may grow upward without corrupting the
+Registry continuation state below this base. -/
+def returndataWord : B256 := 32
 
 def targetKey : Line := loadWord targetWord ++ tagTop assignmentRegion
 def targetIndexKey : Line := loadWord targetWord ++ tagTop indexRegion
@@ -334,10 +338,11 @@ def pauseSuccess : Func :=
       pauseExpiryFinish))
 
 def decodePausedResult : Func :=
+  retdatasize ::: pushB256 0 :::
+  pushB256 (returndataWord * 32) ::: retdatacopy :::
   retdataShorterThan 32 +++
   ((.call emptyRevertSlot) <?>
-    (retdatasize ::: pushB256 0 ::: pushB256 0 ::: retdatacopy :::
-      pushB256 0 ::: mload :::
+    (loadWord returndataWord +++
       dup 0 ::: iszero :::
       ((.call pauseFailedErrorSlot) <?>
         (pushB256 1 ::: eq :::
@@ -651,8 +656,7 @@ def sourceTstoreSiteCount : Func → Nat
 
 def sourceExternalCallSiteCount : Func → Nat
   | .last _ => 0
-  | .next (.exec .call) rest => 1 + sourceExternalCallSiteCount rest
-  | .next (.exec .statcall) rest => 1 + sourceExternalCallSiteCount rest
+  | .next (.exec _) rest => 1 + sourceExternalCallSiteCount rest
   | .next _ rest => sourceExternalCallSiteCount rest
   | .branch left right =>
       sourceExternalCallSiteCount left + sourceExternalCallSiteCount right
