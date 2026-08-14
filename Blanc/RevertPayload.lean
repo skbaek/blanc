@@ -622,24 +622,18 @@ independently of the prior memory image. -/
 private lemma Bytes.sliceD_writeAt_selector
     (img data : Bytes) (h : data.length = 4) :
     (Bytes.writeAt img 0 data.toB256.toBytes).sliceD 28 4 0 = data := by
-  unfold List.sliceD Bytes.writeAt
-  simp only [List.takeD_zero, List.nil_append]
-  rw [List.drop_append_of_le_length (by rw [B256.length_toBytes]; omega)]
-  have hdlen : (List.drop 28 data.toB256.toBytes).length = 4 := by
-    rw [List.length_drop, B256.length_toBytes]
-  calc
-    List.takeD 4
-        (List.drop 28 data.toB256.toBytes ++
-          List.drop (0 + data.toB256.toBytes.length) img) 0 =
-      List.takeD ((List.drop 28 data.toB256.toBytes).length + 0)
-        (List.drop 28 data.toB256.toBytes ++
-          List.drop (0 + data.toB256.toBytes.length) img) 0 := by
-            rw [hdlen]
-    _ = List.drop 28 data.toB256.toBytes ++
-        List.takeD 0 (List.drop (0 + data.toB256.toBytes.length) img) 0 :=
-      List.takeD_length_add_append _ _ _ _
-    _ = data := by
-      simp [Bytes.toB256_toBytes_drop28_of_length_four data h]
+  rw [List.sliceD_eq_map]
+  apply List.ext_getElem
+  · simp [h]
+  · intro i h₁ h₂
+    simp only [List.getElem_map, List.getElem_range]
+    rw [Bytes.getD_writeAt, if_pos (by
+      simp only [Nat.zero_le, true_and, B256.length_toBytes]
+      omega)]
+    have hd := congrArg (fun bs : Bytes => bs.getD i 0)
+      (Bytes.toB256_toBytes_drop28_of_length_four data h)
+    rw [List.getD_drop] at hd
+    simpa [List.getD_eq_getElem?_getD, h₂] using hd
 
 /-- A word write preserves word alignment of the logical memory size. -/
 lemma Mem.aligned_write_word {M : Mem} {i : Nat} {w : B256}
