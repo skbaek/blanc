@@ -25,6 +25,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Mapping, NoReturn, Sequence, Tuple
 
+from lido_circuit_breaker_ac5_shape_schema import (
+    Ac5ShapeError,
+    CANDIDATE_SHAPE_CASES,
+    validate_candidate_shape_against_resource_paths,
+    validate_candidate_shape_evidence,
+    validate_candidate_parent_shape,
+)
+
 
 REPO = Path(__file__).resolve().parents[1]
 LOCK_PATH = REPO / "scripts" / "lido-circuit-breaker-reference.json"
@@ -146,12 +154,20 @@ def push(value: int | bytes, width: int | None = None) -> bytes:
 
 def data_result(payload: bytes, revert: bool = False, base_offset: int = 0) -> bytes:
     """Constant-code response supporting return bombs without host literals."""
-    if len(payload) > 0xffff:
-        die("target payload exceeds PUSH2 harness bound")
-    prefix_len = 13
     op = b"\xfd" if revert else b"\xf3"
-    return (push(len(payload), 2) + push(base_offset + prefix_len, 2) + b"\x5f\x39" +
-            push(len(payload), 2) + b"\x5f" + op + payload)
+    if len(payload) <= 0xffff:
+        # Preserve every frozen baseline target byte exactly.
+        prefix_len = 13
+        return (push(len(payload), 2) + push(base_offset + prefix_len, 2) +
+                b"\x5f\x39" + push(len(payload), 2) + b"\x5f" + op + payload)
+    if len(payload) > 0xffffff:
+        die("target payload exceeds PUSH3 harness bound")
+    prefix_len = 16
+    data_offset = base_offset + prefix_len
+    if data_offset > 0xffffff:
+        die("target payload offset exceeds PUSH3 harness bound")
+    return (push(len(payload), 3) + push(data_offset, 3) + b"\x5f\x39" +
+            push(len(payload), 3) + b"\x5f" + op + payload)
 
 
 def size_dispatch(pause_body: bytes, query_body: bytes) -> bytes:
@@ -516,6 +532,7 @@ def execute_tx(state, txspec: Tx):
         disable_precompiles=False, parent_evm=None)
     traces: List[Dict[str, object]] = []
     writes: List[Dict[str, object]] = []
+    resource_ops: List[Dict[str, object]] = []
     pending: Dict[int, List[int]] = {}
 
     def memread(memory: bytearray, start: int, size: int) -> bytes:
@@ -542,8 +559,16 @@ def execute_tx(state, txspec: Tx):
             called = target_word.to_bytes(32, "big")[-20:]
             if opcode == "CALL":
                 value = int(evm.stack[-3]); offset = int(evm.stack[-4]); size = int(evm.stack[-5])
+                output_offset = int(evm.stack[-6]); output_size = int(evm.stack[-7])
             else:
                 value = 0; offset = int(evm.stack[-3]); size = int(evm.stack[-4])
+                output_offset = int(evm.stack[-5]); output_size = int(evm.stack[-6])
+            resource_ops.append({
+                "opcode": opcode,
+                "source": "0x" + bytes(evm.message.current_target).hex(),
+                "outputOffset": output_offset,
+                "outputSize": output_size,
+            })
             traces.append({
                 "opcode": opcode,
                 "source": "0x" + bytes(evm.message.current_target).hex(),
@@ -551,6 +576,16 @@ def execute_tx(state, txspec: Tx):
                 "input": "0x" + memread(evm.memory, offset, size).hex(),
             })
             pending.setdefault(id(evm), []).append(len(traces) - 1)
+        elif isinstance(event, OpStart) and event.op.name == "RETURNDATACOPY":
+            if len(evm.stack) < 3:
+                die("traced RETURNDATACOPY stack underflow")
+            resource_ops.append({
+                "opcode": "RETURNDATACOPY",
+                "source": "0x" + bytes(evm.message.current_target).hex(),
+                "memoryOffset": int(evm.stack[-1]),
+                "returndataOffset": int(evm.stack[-2]),
+                "size": int(evm.stack[-3]),
+            })
         elif isinstance(event, OpEnd):
             indices = pending.get(id(evm), [])
             if indices:
@@ -565,7 +600,7 @@ def execute_tx(state, txspec: Tx):
         set_evm_trace(previous)
     if any(pending.values()):
         die("call trace contains unmatched opcode start")
-    return output, traces, txspec.gas - int(output.gas_left), writes
+    return output, traces, txspec.gas - int(output.gas_left), writes, resource_ops
 
 
 def install_code(state, mapping: Mapping[str, bytes]) -> None:
@@ -644,13 +679,16 @@ CHANNEL_FIELDS = {
 
 
 def normalize_runtime(case: Case, state,
-                      outputs: Sequence[Tuple[object, Sequence[Mapping], int, Sequence[Mapping]]],
+                      outputs: Sequence[Tuple[
+                          object, Sequence[Mapping], int, Sequence[Mapping],
+                          Sequence[Mapping]]],
                       side: str, resource_boundaries: Sequence[Mapping]) -> Mapping:
     rows = [{
         "status": outcome(output), "returndata": "0x" + bytes(output.return_data).hex(),
         "logs": normalized_logs(output.logs), "callTrace": list(trace), "gasUsed": gas_used,
         "writeTrace": list(writes),
-    } for output, trace, gas_used, writes in outputs]
+        "resourceOps": list(resource_ops),
+    } for output, trace, gas_used, writes, resource_ops in outputs]
     projected = project_state(case, state, side)
     return {
         "status": [row["status"] for row in rows],
@@ -659,6 +697,7 @@ def normalize_runtime(case: Case, state,
         "callTrace": [row["callTrace"] for row in rows],
         "gasUsed": [row["gasUsed"] for row in rows],
         "writeTrace": [row["writeTrace"] for row in rows],
+        "_resourceOps": [row["resourceOps"] for row in rows],
         "_resourceBoundaries": list(resource_boundaries),
         **projected,
     }
@@ -745,7 +784,8 @@ def run_side(case: Case, side: str, lock: Mapping, artifacts: Mapping) -> Mappin
             die(f"{case.name}/{side}: causal clone constructor seed failed")
         resource_boundaries.append(
             resource_boundary(clone_created, DEFAULT_GAS_LIMIT, clone_gas))
-    outputs: List[Tuple[object, Sequence[Mapping], int, Sequence[Mapping]]] = []
+    outputs: List[Tuple[
+        object, Sequence[Mapping], int, Sequence[Mapping], Sequence[Mapping]]] = []
     for transaction in [*case.clone_history, *case.history, case.action]:
         if transaction is None:
             continue
@@ -1066,7 +1106,7 @@ def temporal_cases() -> List[Case]:
     return cases
 
 
-def pause_result_cases() -> List[Case]:
+def pause_result_cases(include_candidate_resource_cases: bool = False) -> List[Case]:
     cases: List[Case] = []
     variants = [
         ("eoa", b"", ("eoa", "extcodesize")),
@@ -1089,16 +1129,34 @@ def pause_result_cases() -> List[Case]:
                             history=[reg(TARGET_1, PAUSER_A)], code=mapping,
                             observe_targets=[TARGET_1], observe_pausers=[PAUSER_A],
                             tags=("pause-outcome", "full-rollback", *tags)))
-    for size in (64, 256, 1024, 4096, 16384, 32768):
+    successful_sizes = [64, 256, 1024, 4096, 16384, 32768]
+    if include_candidate_resource_cases:
+        successful_sizes.append(65536)
+    for size in successful_sizes:
         payload = h256(1) + bytes((i * 17 + 3) & 0xff for i in range(size - 32))
         cases.append(rtcase(f"pause-return-true-large-{size}", "return-data-resource",
                             pause(TARGET_1), history=[reg(TARGET_1, PAUSER_A)],
                             code={TARGET_1: target_code(payload)}, observe_targets=[TARGET_1],
                             observe_pausers=[PAUSER_A],
                             tags=("large-return", f"return-size-{size}", "adequate-gas")))
+    if include_candidate_resource_cases:
+        large_revert = bytes((i * 29 + 7) & 0xff for i in range(256))
+        cases.append(rtcase(
+            "pause-pause-target-revert-large-256", "return-data-resource",
+            pause(TARGET_1), history=[reg(TARGET_1, PAUSER_A)],
+            code={TARGET_1: target_code(pause_revert=large_revert)},
+            observe_targets=[TARGET_1], observe_pausers=[PAUSER_A],
+            tags=("target-revert", "bubble", "return-size-256")))
+        cases.append(rtcase(
+            "pause-query-revert-large-256", "return-data-resource",
+            pause(TARGET_1), history=[reg(TARGET_1, PAUSER_A)],
+            code={TARGET_1: target_code(
+                query_payload=large_revert, query_revert=True)},
+            observe_targets=[TARGET_1], observe_pausers=[PAUSER_A],
+            tags=("query-revert", "bubble", "return-size-256")))
     # Explicit low-gas controls are calibrated far below any successful pause;
     # both sides must exhaust exceptional execution while the high-gas rows
-    # above provide the source-compatible allocation scaling evidence.
+    # above provide source-compatible return-data resource evidence.
     for size in (4096, 32768):
         payload = h256(1) + bytes(size - 32)
         cases.append(rtcase(f"pause-return-large-{size}-oog-control", "return-data-resource",
@@ -1236,9 +1294,10 @@ def overflow_pause_cases() -> List[Case]:
     ]
 
 
-def build_cases() -> List[Case]:
+def build_cases(include_candidate_resource_cases: bool = False) -> List[Case]:
     cases = (build_constructor_cases() + runtime_surface_cases() + registry_cases() +
-             abi_boundary_cases() + temporal_cases() + pause_result_cases() +
+             abi_boundary_cases() + temporal_cases() + pause_result_cases(
+                 include_candidate_resource_cases) +
              callback_and_history_cases() + overflow_pause_cases())
     names = [case.name for case in cases]
     if len(names) != len(set(names)):
@@ -1744,24 +1803,161 @@ def projection_falsifiers(sample: Case, solidity: Mapping, blanc: Mapping) -> in
     return checks
 
 
-def resource_evidence(results: Mapping[str, Tuple[Mapping, Mapping]]) -> None:
+def candidate_ac5_shape_evidence(
+        results: Mapping[str, Tuple[Mapping, Mapping]]) -> Mapping:
+    rows: List[Mapping] = []
+    parent = canonical_address(CIRCUIT)
+    for case_name, return_bytes, _ in CANDIDATE_SHAPE_CASES:
+        for side_index, side in ((0, "solidity"), (1, "blanc")):
+            result = results[case_name][side_index]
+            operations = result["_resourceOps"][-1]
+            staticcalls = [
+                row for row in operations
+                if row["opcode"] == "STATICCALL" and row["source"] == parent
+            ]
+            trace_staticcalls = [
+                row for row in result["callTrace"][-1]
+                if row["opcode"] == "STATICCALL" and row["source"] == parent
+            ]
+            if len(staticcalls) != 1 or len(trace_staticcalls) != 1:
+                die(f"{case_name}/{side}: exact parent STATICCALL evidence differs")
+            copied = [
+                row for row in operations
+                if row["opcode"] == "RETURNDATACOPY" and row["source"] == parent
+            ]
+            observed_return_bytes = len(bytes.fromhex(
+                trace_staticcalls[0]["returndata"].removeprefix("0x")))
+            rows.append({
+                "case": case_name,
+                "side": side,
+                "returnBytes": return_bytes,
+                "status": result["status"][-1],
+                "staticcallSource": staticcalls[0]["source"],
+                "staticcallTarget": trace_staticcalls[0]["target"],
+                "staticcallOutputOffset": staticcalls[0]["outputOffset"],
+                "staticcallOutputSize": staticcalls[0]["outputSize"],
+                "staticcallReturndataBytes": observed_return_bytes,
+                "successReturndatacopy": copied,
+            })
+    validate_candidate_parent_shape(rows)
+
+    # Mutate an actually captured 65,536-byte candidate row, not a toy shape.
+    # A complete successful-tail copy must be rejected by the same independent
+    # validator that accepts the measured trace rows above.
+    mutant = copy.deepcopy(rows)
+    mutant[-1]["successReturndatacopy"].append({
+        "opcode": "RETURNDATACOPY", "source": parent,
+        "memoryOffset": 1024, "returndataOffset": 0,
+        "size": mutant[-1]["returnBytes"],
+    })
+    try:
+        validate_candidate_parent_shape(mutant, "AC5 full-copy mutant")
+    except Ac5ShapeError as exc:
+        if "successful-tail RETURNDATACOPY is prohibited" not in str(exc):
+            raise
+    else:
+        die("AC5 full-success-tail-copy mutant escaped independent shape validation")
+
+    failure_rows: List[Mapping] = []
+    for case_name, expected_bytes in (
+            ("pause-pause-target-revert", 4),
+            ("pause-query-revert", 2),
+            ("pause-pause-target-revert-large-256", 256),
+            ("pause-query-revert-large-256", 256)):
+        for side_index, side in ((0, "solidity"), (1, "blanc")):
+            result = results[case_name][side_index]
+            calls = [
+                row for row in result["_resourceOps"][-1]
+                if row["opcode"] in ("CALL", "STATICCALL") and
+                row["source"] == parent
+            ]
+            failed_traces = [
+                row for row in result["callTrace"][-1]
+                if row["source"] == parent and row["target"] == TARGET_1 and
+                row.get("success") == "0x0"
+            ]
+            if len(failed_traces) != 1:
+                die(f"{case_name}/{side}: exact failed parent call differs")
+            failed_trace = failed_traces[0]
+            call_shapes = [row for row in calls if row["opcode"] == failed_trace["opcode"]]
+            if len(call_shapes) != 1:
+                die(f"{case_name}/{side}: failed parent call geometry differs")
+            failed_call = call_shapes[0]
+            observed_failure_bytes = len(bytes.fromhex(
+                failed_trace["returndata"].removeprefix("0x")))
+            copies = [
+                row for row in result["_resourceOps"][-1]
+                if row["opcode"] == "RETURNDATACOPY" and row["source"] == parent
+            ]
+            if len(copies) != 1 or copies[0]["returndataOffset"] != 0 or \
+                    copies[0]["size"] != expected_bytes:
+                die(f"{case_name}/{side}: full failure-returndata copy evidence differs")
+            failure_rows.append({
+                "case": case_name, "side": side,
+                "returndataBytes": expected_bytes,
+                "failedCall": {
+                    "opcode": failed_trace["opcode"],
+                    "source": failed_trace["source"],
+                    "target": failed_trace["target"],
+                    "outputOffset": failed_call["outputOffset"],
+                    "outputSize": failed_call["outputSize"],
+                    "returndataBytes": observed_failure_bytes,
+                },
+                "returndatacopy": copies[0],
+            })
+    return {
+        "schema": 1,
+        "successfulStaticcallRows": rows,
+        "failureBubbleRows": failure_rows,
+        "fullCopyMutantRejected": True,
+        "failureMutantsRejected": True,
+    }
+
+
+def resource_evidence(
+        results: Mapping[str, Tuple[Mapping, Mapping]], *,
+        candidate_shape: bool = False) -> Mapping | None:
     sizes = (64, 256, 1024, 4096, 16384, 32768)
     for side_index, side in [(0, "solidity"), (1, "blanc")]:
         gas = [results[f"pause-return-true-large-{size}"][side_index]["gasUsed"][-1]
                for size in sizes]
         if any(a >= b for a, b in zip(gas, gas[1:])):
-            die(f"{side} successful-return gas does not scale strictly with complete returndata: {gas}")
+            die(f"{side} successful-return gas is not strictly increasing: {gas}")
         if gas[-1] - gas[0] < 3_000:
-            die(f"{side} large-return scaling is too small to distinguish full allocation")
+            die(f"{side} large-return execution scaling is unexpectedly small")
     sol_delta = (results["pause-return-true-large-32768"][0]["gasUsed"][-1] -
                  results["pause-return-true-large-64"][0]["gasUsed"][-1])
     blanc_delta = (results["pause-return-true-large-32768"][1]["gasUsed"][-1] -
                    results["pause-return-true-large-64"][1]["gasUsed"][-1])
-    # The child target's own cost is identical.  Requiring close remaining
-    # slopes catches a parent that copies only one word without requiring gas
-    # equality or an identical OOG threshold.
-    if abs(sol_delta - blanc_delta) > max(1_500, sol_delta // 4):
-        die(f"large-return parent allocation slopes diverge: Solidity {sol_delta}, Blanc {blanc_delta}")
+    if not candidate_shape:
+        # Frozen fc3edee compatibility: the old Blanc implementation copied
+        # the complete successful tail, so its slope stayed close to Solidity.
+        if abs(sol_delta - blanc_delta) > max(1_500, sol_delta // 4):
+            die(f"large-return parent allocation slopes diverge: Solidity {sol_delta}, Blanc {blanc_delta}")
+        return None
+
+    extended_sizes = (*sizes, 65536)
+    for side_index, side in ((0, "solidity"), (1, "blanc")):
+        gas = [results[f"pause-return-true-large-{size}"][side_index]["gasUsed"][-1]
+               for size in extended_sizes]
+        if any(a >= b for a, b in zip(gas, gas[1:])):
+            die(f"{side} amended successful-return gas is not strictly increasing: {gas}")
+    # The pinned full-copy Blanc slope was 16,488 gas over 64→32,768 bytes.
+    # The amended candidate must exhibit the materially smaller no-tail-copy
+    # class as well as the direct opcode-shape evidence below.
+    if blanc_delta > sol_delta or blanc_delta >= 16_488:
+        die("amended Blanc successful-return slope remains full-copy-class: "
+            f"Solidity {sol_delta}, Blanc {blanc_delta}")
+    shape = dict(candidate_ac5_shape_evidence(results))
+    shape["gasSlope"] = {
+        "fromReturnBytes": 64,
+        "toReturnBytes": 32768,
+        "solidityGasUsedDelta": sol_delta,
+        "blancGasUsedDelta": blanc_delta,
+        "frozenBlancFullCopyGasUsedDelta": 16_488,
+    }
+    validate_candidate_shape_evidence(shape)
+    return shape
 
 
 def canonical_digest(value: object) -> str:
@@ -1846,7 +2042,7 @@ def experiment_summary_payload(metrics: Mapping) -> Mapping:
         for row in metrics["boundaries"]
         if row["adequacy"] == "adequate" and row["blancMinusSolidity"] > 0
     ]
-    return {
+    payload = {
         "mode": "read-only-experiment",
         "lifecycleAcceptance": "skipped-read-only-experiment",
         "lifecycle": metrics["lifecycle"],
@@ -1856,6 +2052,9 @@ def experiment_summary_payload(metrics: Mapping) -> Mapping:
         "worstAdequatePositive": sorted(
             adequate_positive, key=lambda row: row["delta"], reverse=True)[:20],
     }
+    if "successfulReturnShape" in metrics:
+        payload["successfulReturnShape"] = metrics["successfulReturnShape"]
+    return payload
 
 
 def resource_experiment_escape_self_check() -> None:
@@ -1962,8 +2161,10 @@ def resource_descriptor_rows(case: Case) -> List[Mapping]:
 def full_resource_boundaries(
         cases: Sequence[Case], results: Mapping[str, Tuple[Mapping, Mapping]]) -> List[Mapping]:
     boundaries: List[Mapping] = []
+    expected_boundary_count = 0
     for case in cases:
         descriptors = resource_descriptor_rows(case)
+        expected_boundary_count += len(descriptors)
         solidity = results[case.name][0]["_resourceBoundaries"]
         blanc = results[case.name][1]["_resourceBoundaries"]
         if len(solidity) != len(descriptors) or len(blanc) != len(descriptors):
@@ -2006,8 +2207,9 @@ def full_resource_boundaries(
                 "blancMinusSolidity": delta,
                 "comparisonClass": comparison,
             })
-    if len(boundaries) != 455:
-        die(f"full resource-vector boundary count drifted: {len(boundaries)}")
+    if len(boundaries) != expected_boundary_count:
+        die("full resource-vector boundary count differs from execution descriptors: "
+            f"{len(boundaries)} != {expected_boundary_count}")
     return boundaries
 
 
@@ -2039,8 +2241,11 @@ def resource_summary(boundaries: Sequence[Mapping]) -> Mapping:
 
 def resource_metrics(cases: Sequence[Case], results: Mapping[str, Tuple[Mapping, Mapping]],
                      lock: Mapping, artifacts: Mapping, *,
-                     read_only_experiment: bool = False) -> Mapping:
-    sizes = (64, 256, 1024, 4096, 16384, 32768)
+                     read_only_experiment: bool = False,
+                     ac5_shape_evidence: Mapping | None = None) -> Mapping:
+    sizes = [64, 256, 1024, 4096, 16384, 32768]
+    if ac5_shape_evidence is not None:
+        sizes.append(65536)
     rows = {}
     for size in sizes:
         name = f"pause-return-true-large-{size}"
@@ -2062,7 +2267,7 @@ def resource_metrics(cases: Sequence[Case], results: Mapping[str, Tuple[Mapping,
             "blancStatus": results[name][1]["status"][-1],
         }
     first, last = rows["pause-return-true-large-64"], rows[
-        "pause-return-true-large-32768"]
+        f"pause-return-true-large-{sizes[-1]}"]
     representative_names = (
         "constructor-success-official", "view-pause-duration",
         "setter-pause-authorized-lower", "register-fresh", "pause-return-true",
@@ -2106,7 +2311,7 @@ def resource_metrics(cases: Sequence[Case], results: Mapping[str, Tuple[Mapping,
         "schema": RESOURCE_SCHEMA, "gasModel": model, "lifecycle": lifecycle,
         "identities": identities, "boundaries": boundaries,
     }
-    return {
+    metrics = {
         "schema": RESOURCE_SCHEMA,
         "adequateGasEnvelope": 20_000_000,
         "gasModel": model,
@@ -2121,7 +2326,7 @@ def resource_metrics(cases: Sequence[Case], results: Mapping[str, Tuple[Mapping,
         },
         "successfulLargeReturnPaths": rows,
         "successfulRangeDelta": {
-            "fromReturnBytes": 64, "toReturnBytes": 32768,
+            "fromReturnBytes": 64, "toReturnBytes": sizes[-1],
             "solidityGasUsedDelta": last["solidityGasUsed"] - first["solidityGasUsed"],
             "blancGasUsedDelta": last["blancGasUsed"] - first["blancGasUsed"],
         },
@@ -2134,6 +2339,9 @@ def resource_metrics(cases: Sequence[Case], results: Mapping[str, Tuple[Mapping,
             "optimized lifecycle requires adequate-gas per-boundary dominance and at "
             "least one strict successful improvement"),
     }
+    if ac5_shape_evidence is not None:
+        metrics["successfulReturnShape"] = ac5_shape_evidence
+    return metrics
 
 
 def validate_manifest_schema(manifest: Mapping) -> None:
@@ -2145,9 +2353,16 @@ def validate_manifest_schema(manifest: Mapping) -> None:
         die("Lido differential manifest schema/top-level keys drifted")
     rows = manifest.get("rows")
     counts = manifest.get("counts")
+    resource_stage = manifest.get("resourceEvidence", {}).get(
+        "lifecycle", {}).get("stage")
+    if resource_stage not in {"baseline", "optimized"}:
+        die("Lido differential resource lifecycle stage drifted")
+    candidate_resource_shape = resource_stage == "optimized"
+    expected_row_count = 175 if candidate_resource_shape else 172
+    expected_boundary_count = 464 if candidate_resource_shape else 455
     if not isinstance(rows, list) or not isinstance(counts, dict):
         die("Lido differential manifest rows/counts have wrong types")
-    if counts != {"rows": 172, "runtimeSelectors": 17,
+    if counts != {"rows": expected_row_count, "runtimeSelectors": 17,
                   "constructorArguments": 7, "customErrors": 15, "events": 6}:
         die(f"Lido differential manifest fixed counts drifted: {counts}")
     if len(rows) != counts["rows"] or len({row.get("name") for row in rows}) != len(rows):
@@ -2245,13 +2460,18 @@ def validate_manifest_schema(manifest: Mapping) -> None:
         "successfulRangeDelta", "oogControls", "representativePublicPaths",
         "shortReturnPaths", "adjudication",
     }
+    if candidate_resource_shape:
+        expected_resource_keys.add("successfulReturnShape")
     if not isinstance(resources, dict) or set(resources) != expected_resource_keys or \
             resources.get("schema") != RESOURCE_SCHEMA:
         die("Lido differential full resource-evidence schema drifted")
     resource_rows = resources.get("boundaries")
-    if not isinstance(resource_rows, list) or len(resource_rows) != 455 or \
-            [row.get("ordinal") for row in resource_rows] != list(range(455)) or \
-            len({row.get("coordinate") for row in resource_rows}) != 455:
+    if not isinstance(resource_rows, list) or \
+            len(resource_rows) != expected_boundary_count or \
+            [row.get("ordinal") for row in resource_rows] != \
+            list(range(expected_boundary_count)) or \
+            len({row.get("coordinate") for row in resource_rows}) != \
+            expected_boundary_count:
         die("Lido differential full resource-vector coverage/order drifted")
     if resources.get("summary") != resource_summary(resource_rows):
         die("Lido differential full resource-vector summary drifted")
@@ -2270,7 +2490,10 @@ def validate_manifest_schema(manifest: Mapping) -> None:
         die("Lido differential full resource-vector digest drifted")
     successful = resources.get("successfulLargeReturnPaths", {})
     expected_resource_names = {
-        f"pause-return-true-large-{size}" for size in (64, 256, 1024, 4096, 16384, 32768)}
+        f"pause-return-true-large-{size}"
+        for size in ((64, 256, 1024, 4096, 16384, 32768, 65536)
+                     if candidate_resource_shape else
+                     (64, 256, 1024, 4096, 16384, 32768))}
     if set(successful) != expected_resource_names or resources.get("adequateGasEnvelope") != 20_000_000:
         die("Lido differential resource/gas evidence is incomplete")
     if set(resources.get("representativePublicPaths", {})) != {
@@ -2281,6 +2504,9 @@ def validate_manifest_schema(manifest: Mapping) -> None:
     if set(resources.get("shortReturnPaths", {})) != {
             "pause-return-empty", "pause-return-one-byte", "pause-return-31-bytes"}:
         die("Lido differential short-return chronology evidence is incomplete")
+    if candidate_resource_shape:
+        validate_candidate_shape_against_resource_paths(
+            resources.get("successfulReturnShape"), successful)
     blanc = manifest.get("blanc", {})
     if blanc.get("patchControlsValid") is not True or blanc.get("runtimeSyntaxSiteCounts") != {
             "persistent": 20, "transient": 3, "external": 2}:
@@ -2308,7 +2534,9 @@ def main(argv: Sequence[str]) -> int:
     _LOCK = json.loads(LOCK_PATH.read_text())
     artifacts = parse_artifacts(Path(args.blanc_artifacts).read_text())
     positive_artifact_checks, identity_corruptions = validate_identities(_LOCK, artifacts)
-    cases = build_cases()
+    candidate_resource_shape = args.experiment_summary or \
+        RESOURCE_LIFECYCLE == "optimized"
+    cases = build_cases(candidate_resource_shape)
     mismatches = []
     results: Dict[str, Tuple[Mapping, Mapping]] = {}
     # Manifest generation owns the complete resource vector, so even the
@@ -2329,10 +2557,12 @@ def main(argv: Sequence[str]) -> int:
         detail = "; ".join(f"{field}: S={json.dumps(solidity[field], sort_keys=True)} "
                            f"B={json.dumps(blanc[field], sort_keys=True)}" for field in bad)
         die(f"{len(mismatches)}/{len(cases)} rows mismatch; first {name}: {detail[:1800]}")
-    resource_evidence(results)
+    ac5_shape_evidence = resource_evidence(
+        results, candidate_shape=candidate_resource_shape)
     metrics = resource_metrics(
         cases, results, _LOCK, artifacts,
-        read_only_experiment=args.experiment_summary)
+        read_only_experiment=args.experiment_summary,
+        ac5_shape_evidence=ac5_shape_evidence)
     if args.experiment_summary:
         print(json.dumps(experiment_summary_payload(metrics), indent=2, sort_keys=True))
         return 0

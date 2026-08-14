@@ -36,10 +36,6 @@ def removedIndexWord : B256 := 20
 def arrayLengthWord : B256 := 21
 def lastTargetWord : B256 := 22
 def durationWord : B256 := 23
-/-- Successful external returndata is copied in full above every private
-scratch/ABI word.  Its unbounded tail may grow upward without corrupting the
-Registry continuation state below this base. -/
-def returndataWord : B256 := 32
 
 def targetKey : Line := loadWord targetWord ++ tagTop assignmentRegion
 def targetIndexKey : Line := loadWord targetWord ++ tagTop indexRegion
@@ -337,12 +333,14 @@ def pauseSuccess : Func :=
     (checkedHeartbeatExpiry <|
       pauseExpiryFinish))
 
+/-- The successful `isPaused()` STATICCALL writes at most its first word to
+memory zero.  Validate the retained returndata length and canonical Boolean
+without copying the unused successful tail; the caller handles failure first
+and still bubbles its complete returndata. -/
 def decodePausedResult : Func :=
-  retdatasize ::: pushB256 0 :::
-  pushB256 (returndataWord * 32) ::: retdatacopy :::
   retdataShorterThan 32 +++
   ((.call emptyRevertSlot) <?>
-    (loadWord returndataWord +++
+    (loadWord 0 +++
       dup 0 ::: iszero :::
       ((.call pauseFailedErrorSlot) <?>
         (pushB256 1 ::: eq :::
@@ -358,7 +356,7 @@ def pauseAfterSet : Func :=
       iszero :::
       ((.call bubbleRevertSlot) <?>
         (pushB256 isPausedSelector ::: mstoreAt 8 +++
-          pushList [0, 0, 4, 0x11c] +++ loadWord targetWord +++ gas ::: statcall :::
+          pushList [32, 0, 4, 0x11c] +++ loadWord targetWord +++ gas ::: statcall :::
           iszero :::
           ((.call bubbleRevertSlot) <?>
             decodePausedResult)))))

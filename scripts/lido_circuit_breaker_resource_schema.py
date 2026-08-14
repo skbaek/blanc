@@ -16,9 +16,17 @@ import sys
 from pathlib import Path
 from typing import Any, Mapping, NoReturn, Sequence
 
+from lido_circuit_breaker_ac5_shape_schema import (
+    Ac5ShapeError,
+    validate_candidate_shape_against_resource_paths,
+    validate_candidate_shape_evidence,
+)
+
 
 RESOURCE_SCHEMA = 1
-EXPECTED_BOUNDARIES = 455
+# The optimized count is the provisional AC5 stage.  O4 threshold descriptors
+# intentionally expand and repin it before the optimized lifecycle can land.
+EXPECTED_BOUNDARIES = {"baseline": 455, "optimized": 464}
 EELS_PIN = "4198b9c5996713b268aed602739d5aa40e277694"
 REFERENCE_SOURCE_COMMIT = "6829a5a962ece56564bd9d72d01c29cabf157579"
 BASELINE_BLANC_COMMIT = "fc3edee6dbfb77eaf344afee43c921d48ff8a3af"
@@ -63,9 +71,13 @@ BASELINE_BLANC_IDENTITIES = {
 }
 
 # These pins are intentionally outside the mutable generator.  Baseline pins
-# are filled only after a complete 172-case/455-boundary measurement.  An
-# optimized transition remains fail-closed until its independent pins replace
-# the None values in a deliberate reviewable edit.
+# are filled only after the complete 172-case/455-boundary baseline
+# measurement.  The provisional AC5-stage optimized descriptor set adds the
+# 65,536-byte row plus two long failure-bubbling rows and therefore has 175
+# cases/464 boundaries.  Its coordinate pin below is intentionally not the
+# final O4-expanded pin.  The transition
+# remains fail-closed until O4 has repinned the descriptors and a measured
+# full-vector pin replaces None in a deliberate reviewable edit.
 EXPECTED_VECTOR_PINS = {
     "baseline": {
         "orderedCoordinatesSha256":
@@ -74,7 +86,8 @@ EXPECTED_VECTOR_PINS = {
             "104e373458d395c8a6ca7b02c6a7f9baefef21064e5408402df13eebc2dd8169",
     },
     "optimized": {
-        "orderedCoordinatesSha256": None,
+        "orderedCoordinatesSha256":
+            "07ca7475b4af537e4866de0a8f102f043ced22c4207ef8587d7570bd9151aef2",
         "fullResourceVectorSha256": None,
     },
 }
@@ -151,7 +164,9 @@ def tx_meta(descriptor: Any, phase: str, order: int, label: str) -> Mapping[str,
     }
 
 
-def expected_boundaries(manifest: Mapping[str, Any], label: str) -> list[Mapping[str, Any]]:
+def expected_boundaries(
+        manifest: Mapping[str, Any], label: str,
+        expected_count: int) -> list[Mapping[str, Any]]:
     rows = manifest.get("rows")
     if not isinstance(rows, list):
         fail(label, "manifest rows are not an array")
@@ -236,8 +251,9 @@ def expected_boundaries(manifest: Mapping[str, Any], label: str) -> list[Mapping
                 "gasLimit": item["gasLimit"],
                 "adequacy": "oog-control" if oog_control else "adequate",
             })
-    if len(expected) != EXPECTED_BOUNDARIES:
-        fail(label, f"descriptor-derived boundary count is {len(expected)}, expected 455")
+    if len(expected) != expected_count:
+        fail(label, "descriptor-derived boundary count is "
+             f"{len(expected)}, expected {expected_count}")
     return expected
 
 
@@ -301,7 +317,19 @@ def expected_identities(manifest: Mapping[str, Any], label: str) -> Mapping[str,
 def validate_resource_manifest(manifest: Mapping[str, Any], label: str = "manifest") -> Mapping[str, Any]:
     if not isinstance(manifest, dict):
         fail(label, "manifest root is not an object")
-    resources = require_keys(manifest.get("resourceEvidence"), RESOURCE_KEYS,
+    raw_resources = manifest.get("resourceEvidence")
+    if not isinstance(raw_resources, dict):
+        fail(label, "resource evidence is not an object")
+    raw_lifecycle = raw_resources.get("lifecycle")
+    if not isinstance(raw_lifecycle, dict):
+        fail(label, "resource lifecycle is not an object")
+    raw_stage = raw_lifecycle.get("stage")
+    if raw_stage not in EXPECTED_BOUNDARIES:
+        fail(label, "resource lifecycle stage is neither baseline nor optimized")
+    expected_resource_keys = set(RESOURCE_KEYS)
+    if raw_stage == "optimized":
+        expected_resource_keys.add("successfulReturnShape")
+    resources = require_keys(raw_resources, expected_resource_keys,
                              label + ".resourceEvidence")
     if exact_int(resources.get("schema"), label + ".resourceEvidence.schema") != \
             RESOURCE_SCHEMA:
@@ -348,7 +376,6 @@ def validate_resource_manifest(manifest: Mapping[str, Any], label: str = "manife
         lifecycle.get("stage"), label + ".resourceEvidence.lifecycle.stage")
     if stage not in EXPECTED_VECTOR_PINS:
         fail(label, "resource lifecycle stage is neither baseline nor optimized")
-
     expected_identity = expected_identities(manifest, label)
     identities = require_keys(
         resources.get("identities"), set(expected_identity),
@@ -370,10 +397,45 @@ def validate_resource_manifest(manifest: Mapping[str, Any], label: str = "manife
         fail(label, "baseline lifecycle Blanc identity drifted; transition required")
     if stage == "optimized" and baseline_blanc == BASELINE_BLANC_IDENTITIES:
         fail(label, "optimized lifecycle still carries the complete baseline Blanc identity")
+    if stage == "optimized":
+        summary_preview = resources.get("summary")
+        if not isinstance(summary_preview, dict):
+            fail(label, "optimized resource summary is not an object")
+        if exact_int(summary_preview.get("adequatePositiveDeltaCount"),
+                     label + ".resourceEvidence.summary.adequatePositiveDeltaCount") != 0:
+            fail(label, "optimized lifecycle has a positive adequate-gas delta")
+        if exact_int(summary_preview.get("successfulStrictImprovementCount"),
+                     label + ".resourceEvidence.summary.successfulStrictImprovementCount") < 1:
+            fail(label, "optimized lifecycle has no strict successful improvement")
+        candidate_shape = resources.get("successfulReturnShape")
+        shape_checked = isinstance(candidate_shape, dict) and \
+            "successfulStaticcallRows" in candidate_shape
+        # Exercise the independent captured-row full-copy falsifier even while
+        # the lifecycle is deliberately held closed on its pending vector pin.
+        if shape_checked:
+            try:
+                validate_candidate_shape_against_resource_paths(
+                    candidate_shape,
+                    resources.get("successfulLargeReturnPaths"),
+                    label + ".resourceEvidence.successfulReturnShape")
+            except Ac5ShapeError as exc:
+                fail(label, str(exc))
+        pins = EXPECTED_VECTOR_PINS[stage]
+        if any(value is None or value.startswith("PENDING-")
+               for value in pins.values()):
+            fail(label, f"{stage} independent resource-vector pin is not installed")
+        if not shape_checked:
+            try:
+                validate_candidate_shape_evidence(
+                    candidate_shape,
+                    label + ".resourceEvidence.successfulReturnShape")
+            except Ac5ShapeError as exc:
+                fail(label, str(exc))
 
-    expected = expected_boundaries(manifest, label)
+    expected_count = EXPECTED_BOUNDARIES[stage]
+    expected = expected_boundaries(manifest, label, expected_count)
     boundaries = resources.get("boundaries")
-    if not isinstance(boundaries, list) or len(boundaries) != EXPECTED_BOUNDARIES:
+    if not isinstance(boundaries, list) or len(boundaries) != expected_count:
         fail(label, "resource boundary deletion/count drifted")
     coordinates: set[str] = set()
     for index, (row, descriptor) in enumerate(zip(boundaries, expected)):
@@ -466,11 +528,12 @@ def validate_resource_manifest(manifest: Mapping[str, Any], label: str = "manife
     if digest_claim != actual_digests:
         fail(label, "embedded resource-vector digests are not derived")
     pins = EXPECTED_VECTOR_PINS[stage]
-    if any(value is None or value.startswith("PENDING-") for value in pins.values()):
-        fail(label, f"{stage} independent resource-vector pin is not installed")
     if actual_digests != pins:
         fail(label, f"{stage} independent resource-vector digest differs")
-    return {"stage": stage, "summary": summary, "digests": actual_digests}
+    return {
+        "stage": stage, "summary": summary, "digests": actual_digests,
+        "expectedBoundaryCount": expected_count,
+    }
 
 
 def reject_constant(value: str) -> NoReturn:
@@ -502,7 +565,7 @@ def main(argv: Sequence[str]) -> int:
     summary = result["summary"]
     print(
         "OK — Lido CircuitBreaker resource schema: "
-        f"{summary['boundaryCount']}/455 ordered boundaries; "
+        f"{summary['boundaryCount']}/{result['expectedBoundaryCount']} ordered boundaries; "
         f"lifecycle {result['stage']}; coordinate/vector digests independently pinned"
     )
     return 0
@@ -511,7 +574,8 @@ def main(argv: Sequence[str]) -> int:
 if __name__ == "__main__":
     try:
         raise SystemExit(main(sys.argv[1:]))
-    except (OSError, ValueError, json.JSONDecodeError, ResourceSchemaError) as exc:
+    except (OSError, ValueError, json.JSONDecodeError, ResourceSchemaError,
+            Ac5ShapeError) as exc:
         print("REGRESSION — Lido CircuitBreaker resource schema: " + str(exc),
               file=sys.stderr)
         raise SystemExit(1)

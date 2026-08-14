@@ -105,6 +105,7 @@ def coherent_gas_delta(value: dict[str, Any]) -> None:
 
 def positive_optimized_delta(value: dict[str, Any]) -> None:
     resources(value)["lifecycle"]["stage"] = "optimized"
+    resources(value)["successfulReturnShape"] = {}
     replacement = "1" * 64
     value["blanc"]["creationTemplate"]["sha256"] = replacement
     resources(value)["identities"]["blancCreationTemplateSha256"] = replacement
@@ -113,6 +114,7 @@ def positive_optimized_delta(value: dict[str, Any]) -> None:
 def unpinned_optimized_transition(value: dict[str, Any]) -> None:
     resource = resources(value)
     resource["lifecycle"]["stage"] = "optimized"
+    resource["successfulReturnShape"] = {}
     replacement = "2" * 64
     value["blanc"]["creationTemplate"]["sha256"] = replacement
     resource["identities"]["blancCreationTemplateSha256"] = replacement
