@@ -6,6 +6,11 @@ import Blanc.ExecutionSettlement
 import Blanc.ExecutionOccurrence
 import Blanc.CycleWriteFree
 import Blanc.TransientSettlement
+import Blanc.LidoCircuitBreakerCore
+import Blanc.LidoCircuitBreakerRegistryModel
+import Blanc.LidoCircuitBreaker
+import Blanc.LidoCircuitBreakerCode
+import Blanc.LidoCircuitBreakerDeploy
 import Blanc.Weth10Core
 import Blanc.Weth10Backed
 import Blanc.Weth10Spec

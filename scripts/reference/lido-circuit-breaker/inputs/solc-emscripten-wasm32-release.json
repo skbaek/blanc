@@ -1,0 +1,11 @@
+{
+  "build": "commit.80d5c536",
+  "keccak256": "0xf535c144f0bce3a603161abb62e40008e4482ef8c222a40a92f8752b639b1f89",
+  "longVersion": "0.8.34+commit.80d5c536",
+  "path": "solc-emscripten-wasm32-v0.8.34+commit.80d5c536.js",
+  "sha256": "0xc8649f8d57f81b3244c7d2dd662efc0620d1ae296f623b347a2c616a6cfd11d8",
+  "urls": [
+    "dweb:/ipfs/QmPAVftdMu79ygr6joPuJK5GDV3D9AaH3aiBFkFkHPFbLK"
+  ],
+  "version": "0.8.34"
+}
