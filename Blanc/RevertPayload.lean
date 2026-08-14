@@ -432,6 +432,32 @@ def Func.revData (blob : Bytes) : Func :=
     (.next (Ninst.pushB256 (Nat.toB256 blob.length))
       (.next (Ninst.pushB256 0) (.last .rev)))
 
+/-- Revert with an exact four-byte selector using a fixed-width `PUSH4`.
+
+`MSTORE` right-aligns the pushed value in its word, so the final `(28, 4)`
+window returns the original bytes without carrying a 32-byte immediate.  The
+length proof fixes the compiled instruction width even when the selector starts
+with zero. -/
+def Func.revSelector (data : Bytes) (h : data.length = 4) : Func :=
+  .next (.push data (by omega))
+    (.next (Ninst.pushB256 0)
+      (.next (Ninst.reg Rinst.mstore)
+        (.next (Ninst.pushB256 4)
+          (.next (Ninst.pushB256 28) (.last .rev)))))
+
+/-- The compact selector reverter is exactly twelve bytes. -/
+lemma Func.compsize_revSelector (data : Bytes) (h : data.length = 4) :
+    compsize (Func.revSelector data h) = 12 := by
+  have h0 : (Ninst.toBytes (Ninst.pushB256 0)).length = 1 := by
+    rfl
+  have h4 : (Ninst.toBytes (Ninst.pushB256 4)).length = 2 := by
+    rfl
+  have h28 : (Ninst.toBytes (Ninst.pushB256 28)).length = 2 := by
+    rfl
+  simp only [Func.revSelector, compsize]
+  rw [h0, h4, h28]
+  simp [Ninst.toBytes, pushToB8L, h]
+
 /-- `Func.revData` specialized to ABI `Error(string)` returndata. -/
 def Func.revWith (s : String) : Func := .revData (errorData s)
 
@@ -490,6 +516,10 @@ def Func.revReturnData : Func :=
   Ninst.retdatasize :::
   Ninst.pushB256 0 :::
   .last .rev
+
+/-- Exact frame-local cost of `Func.revSelector`. -/
+def revSelectorCost (devm : Devm) : Nat :=
+  4 * gVerylow + gBase + devm.extCost [⟨0, 32⟩]
 
 /-- Exact frame-local cost of `Func.revReturnData` at its entry state. -/
 def revReturnDataCost (devm : Devm) : Nat :=
@@ -578,6 +608,39 @@ lemma Func.runCompiledTo_prependStoresRev {fs : List Func} {sevm : Sevm}
         · simp only [Devm.memory_setMach, Mem.writeStoresRev, hoff]
         · simpa only [Devm.setMach_setMach] using h_next
 
+/-- A four-byte value occupies the last four bytes of its `B256` image. -/
+private lemma Bytes.toB256_toBytes_drop28_of_length_four
+    (data : Bytes) (h : data.length = 4) :
+    data.toB256.toBytes.drop 28 = data := by
+  have hp := Bytes.toBytes_toB256_of_length
+    (xs := List.replicate 28 0 ++ data) (by simp [h])
+  exact (by
+    simpa [Bytes.toB256_zero_cons] using congrArg (List.drop 28) hp)
+
+/-- Reading the low four bytes of the selector word returns the exact input,
+independently of the prior memory image. -/
+private lemma Bytes.sliceD_writeAt_selector
+    (img data : Bytes) (h : data.length = 4) :
+    (Bytes.writeAt img 0 data.toB256.toBytes).sliceD 28 4 0 = data := by
+  unfold List.sliceD Bytes.writeAt
+  simp only [List.takeD_zero, List.nil_append]
+  rw [List.drop_append_of_le_length (by rw [B256.length_toBytes]; omega)]
+  have hdlen : (List.drop 28 data.toB256.toBytes).length = 4 := by
+    rw [List.length_drop, B256.length_toBytes]
+  calc
+    List.takeD 4
+        (List.drop 28 data.toB256.toBytes ++
+          List.drop (0 + data.toB256.toBytes.length) img) 0 =
+      List.takeD ((List.drop 28 data.toB256.toBytes).length + 0)
+        (List.drop 28 data.toB256.toBytes ++
+          List.drop (0 + data.toB256.toBytes.length) img) 0 := by
+            rw [hdlen]
+    _ = List.drop 28 data.toB256.toBytes ++
+        List.takeD 0 (List.drop (0 + data.toB256.toBytes.length) img) 0 :=
+      List.takeD_length_add_append _ _ _ _
+    _ = data := by
+      simp [Bytes.toB256_toBytes_drop28_of_length_four data h]
+
 /-- A word write preserves word alignment of the logical memory size. -/
 lemma Mem.aligned_write_word {M : Mem} {i : Nat} {w : B256}
     (h : M.size % 32 = 0) : (M.write i w.toBytes).size % 32 = 0 := by
@@ -586,6 +649,123 @@ lemma Mem.aligned_write_word {M : Mem} {i : Nat} {w : B256}
   · exact h
   · rw [ceil32_eq_mul]
     omega
+
+/-- The compact selector emitter reverts with exactly its four input bytes,
+with exact gas and final memory for an arbitrary aligned prior image. -/
+lemma Func.runCompiledTo_revSelector {fs : List Func} {sevm : Sevm}
+    {devm : Devm} {data img : Bytes} {G : Nat}
+    (hlen : data.length = 4)
+    (hwf : Mem.Wf devm.memory) (hr : Mem.Reads devm.memory img)
+    (halign : devm.memory.size % 32 = 0)
+    (h_gas : devm.gasLeft = G + revSelectorCost devm)
+    (h_room : devm.stack.length < 1023) :
+    Func.RunCompiledTo fs sevm devm (Func.revSelector data hlen)
+      (.error (.revert,
+        (devm.setMach ⟨devm.stack,
+          devm.memory.write 0 data.toB256.toBytes, G⟩).withOutput data)) := by
+  let w := data.toB256
+  let M' := devm.memory.write 0 w.toBytes
+  let e := devm.extCost [⟨0, 32⟩]
+  have hdata : data ≠ [] := by
+    intro hd
+    rw [hd] at hlen
+    simp at hlen
+  have hpush : pushCost data = gVerylow := by
+    simp [pushCost, hdata]
+  have hn4 : Nat.toB256 4 ≠ 0 := by
+    intro hz
+    have hh := congrArg B256.toNat hz
+    rw [B256.toNat_toB256_of_lt (by norm_num), B256.toNat_zero] at hh
+    omega
+  have hn28 : Nat.toB256 28 ≠ 0 := by
+    intro hz
+    have hh := congrArg B256.toNat hz
+    rw [B256.toNat_toB256_of_lt (by norm_num), B256.toNat_zero] at hh
+    omega
+  have hc4 : pushCost (Nat.toB256 4).toBytes.sig = gVerylow :=
+    pushCost_of_ne_zero hn4
+  have hc28 : pushCost (Nat.toB256 28).toBytes.sig = gVerylow :=
+    pushCost_of_ne_zero hn28
+  change Func.RunCompiledTo fs sevm devm
+    (.next (.push data _) (.next (Ninst.pushB256 0)
+      (.next (Ninst.reg Rinst.mstore)
+        (.next (Ninst.pushB256 4)
+          (.next (Ninst.pushB256 28) (.last .rev)))))) _
+  refine Func.RunCompiledTo.next
+    (Ninst.runCompiled_pushBytes (c := gVerylow)
+      (G := G + (3 * gVerylow + gBase + e)) hpush ?_ (by omega)) ?_
+  · unfold revSelectorCost at h_gas
+    dsimp only [e] at h_gas ⊢
+    omega
+  · refine Func.RunCompiledTo.next
+      (Ninst.runCompiled_pushB256 (w := 0) (c := gBase)
+        (G := G + (3 * gVerylow + e)) pushCost_zero
+        (by simp only [Devm.gasLeft_setMach]; omega)
+        (by simp only [Devm.stack_setMach, List.length_cons]; omega)) ?_
+    simp only [Devm.setMach_setMach]
+    refine Func.RunCompiledTo.next
+      (Ninst.runCompiled_mstore_of
+        (i := 0) (v := w) (s := devm.stack)
+        (G := G + 2 * gVerylow) (e := e) (M := M') rfl ?_ ?_ rfl) ?_
+    · dsimp only [e]
+      simp only [Devm.extCost, Devm.memory_setMach, B256.toNat_zero]
+    · simp only [Devm.gasLeft_setMach]
+      omega
+    · simp only [Devm.setMach_setMach]
+      refine Func.RunCompiledTo.next
+        (Ninst.runCompiled_pushB256 (w := 4) (c := gVerylow)
+          (G := G + gVerylow) hc4
+          (by simp only [Devm.gasLeft_setMach]; omega)
+          (by simp only [Devm.stack_setMach]; omega)) ?_
+      simp only [Devm.setMach_setMach]
+      refine Func.RunCompiledTo.next
+        (Ninst.runCompiled_pushB256 (w := 28) (c := gVerylow)
+          (G := G) hc28
+          (by simp only [Devm.gasLeft_setMach])
+          (by simp only [Devm.stack_setMach, List.length_cons]; omega)) ?_
+      simp only [Devm.setMach_setMach]
+      have h4nat : (Nat.toB256 4).toNat = 4 :=
+        B256.toNat_toB256_of_lt (by norm_num)
+      have h28nat : (Nat.toB256 28).toNat = 28 :=
+        B256.toNat_toB256_of_lt (by norm_num)
+      have ha : M'.size % 32 = 0 := by
+        dsimp only [M']
+        exact Mem.aligned_write_word halign
+      have hc : 32 ≤ M'.size := by
+        dsimp only [M']
+        rw [Mem.size_write_word_at]
+        split
+        case isTrue h => omega
+        case isFalse h => exact Nat.le_ceil32 _
+      have hcover : 28 + 4 ≤ M'.size := by omega
+      have hinv := Mem.Reads.write hwf hr 0 w.toBytes
+      have hout : (M'.read 28 4).1 = data := by
+        rw [Mem.Reads.read hinv]
+        exact Bytes.sliceD_writeAt_selector img data hlen
+      have himg : (M'.read 28 4).2 = M' :=
+        Mem.read_snd_eq_self (memExtSize_of_le ha hcover)
+      have hread :
+          (devm.setMach ⟨devm.stack, M', G⟩).memRead 28 4 =
+            ⟨data, devm.setMach ⟨devm.stack, M', G⟩⟩ := by
+        apply Prod.ext hout
+        show (devm.setMach ⟨devm.stack, M', G⟩).withMemory
+            (M'.read 28 4).2 = devm.setMach ⟨devm.stack, M', G⟩
+        rw [himg]
+        apply Devm.eq_of_proj <;> rfl
+      exact Func.runCompiledTo_rev_of
+        (i := Nat.toB256 28) (sz := Nat.toB256 4) (s := devm.stack)
+        (G := G) (e := 0) (out := data)
+        (d' := devm.setMach ⟨devm.stack, M', G⟩)
+        rfl
+        (by
+          simp only [h28nat, h4nat, Devm.extCost, Devm.memory_setMach,
+            memExtsSize]
+          change Mem.expansionCost M' 28 4 = 0
+          unfold Mem.expansionCost
+          rw [memExtSize_of_le ha hcover, Nat.sub_self])
+        rfl
+        (by simpa only [h28nat, h4nat, Devm.setMach_setMach,
+          Devm.stack_setMach, Devm.memory_setMach] using hread)
 
 /-- Every store sequence emitted here preserves logical-size alignment. -/
 lemma Mem.aligned_writeStoresRev {M : Mem} {iws : List (B256 × Nat)}
