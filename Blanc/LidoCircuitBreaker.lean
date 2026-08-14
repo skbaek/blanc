@@ -379,30 +379,63 @@ def pause : Func :=
 /-! ## Integrated dispatcher and compiler input -/
 
 def funcs (dp : DeployParams) : List (B256 × Func) :=
-  [ (selector "pauseDuration" [], nonpayable pauseDuration),
-    (selector "MAX_PAUSE_DURATION" [], nonpayable (maxPauseDuration dp)),
-    (selector "ADMIN" [], nonpayable (admin dp)),
+  [ (selector "pauseDuration" [], pauseDuration),
+    (selector "MAX_PAUSE_DURATION" [], maxPauseDuration dp),
+    (selector "ADMIN" [], admin dp),
     (selector "registerPauser" [.address, .address],
-      nonpayable (registerPauser dp)),
-    (selector "heartbeat" [], nonpayable heartbeat),
-    (selector "getPauser" [.address], nonpayable getPauser),
-    (selector "getPausables" [], nonpayable getPausables),
-    (selector "heartbeatInterval" [], nonpayable heartbeatInterval),
+      registerPauser dp),
+    (selector "heartbeat" [], heartbeat),
+    (selector "getPauser" [.address], getPauser),
+    (selector "getPausables" [], getPausables),
+    (selector "heartbeatInterval" [], heartbeatInterval),
     (selector "setHeartbeatInterval" [.uint256],
-      nonpayable (setHeartbeatInterval dp)),
-    (selector "pause" [.address], nonpayable pause),
-    (selector "MIN_PAUSE_DURATION" [], nonpayable (minPauseDuration dp)),
+      setHeartbeatInterval dp),
+    (selector "pause" [.address], pause),
+    (selector "MIN_PAUSE_DURATION" [], minPauseDuration dp),
     (selector "MAX_HEARTBEAT_INTERVAL" [],
-      nonpayable (maxHeartbeatInterval dp)),
-    (selector "getPausableCount" [.address], nonpayable getPausableCount),
+      maxHeartbeatInterval dp),
+    (selector "getPausableCount" [.address], getPausableCount),
     (selector "MIN_HEARTBEAT_INTERVAL" [],
-      nonpayable (minHeartbeatInterval dp)),
-    (selector "heartbeatExpiry" [.address], nonpayable heartbeatExpiry),
+      minHeartbeatInterval dp),
+    (selector "heartbeatExpiry" [.address], heartbeatExpiry),
     (selector "setPauseDuration" [.uint256],
-      nonpayable (setPauseDuration dp)),
-    (selector "isPauserLive" [.address], nonpayable isPauserLive) ]
+      setPauseDuration dp),
+    (selector "isPauserLive" [.address], isPauserLive) ]
 
-def tree (dp : DeployParams) : DispatchTree := .ofSorted (funcs dp)
+/-! The dispatcher remains entirely in Blanc's structured `Func.branch`
+language.  Its four equality chains share one entry guard and are separated by
+three balanced pivots, yielding the measured 5/4/4/4 Pareto topology without
+direct calls or jumps to selector destinations. -/
+
+def linearDispatchWith (k : Nat) :
+    List (B256 × Func) → Func
+  | [] => .call k
+  | [(word, body)] => pushB256 word ::: eq ::: (body <?> .call k)
+  | (word, body) :: rest =>
+      dup 0 ::: pushB256 word ::: eq :::
+        ((pop ::: body) <?> linearDispatchWith k rest)
+
+def splitDispatch (pivot : B256) (left right : Func) : Func :=
+  dup 0 ::: pushB256 pivot ::: gt ::: (left <?> right)
+
+def firstSelector (entries : List (B256 × Func)) : B256 :=
+  entries.head?.map Prod.fst |>.getD 0
+
+def hybridDispatchWith (k : Nat)
+    (entries : List (B256 × Func)) : Func :=
+  let first := entries.take 5
+  let second := (entries.drop 5).take 4
+  let third := (entries.drop 9).take 4
+  let fourth := entries.drop 13
+  let left := splitDispatch (firstSelector second)
+    (linearDispatchWith k first) (linearDispatchWith k second)
+  let right := splitDispatch (firstSelector fourth)
+    (linearDispatchWith k third) (linearDispatchWith k fourth)
+  splitDispatch (firstSelector third) left right
+
+def runtimeMain (dp : DeployParams) : Func :=
+  callvalue ::: pushB256 4 ::: calldatasize ::: lt ::: Ninst.or :::
+    (Func.rev <?> (fsig +++ hybridDispatchWith fallbackSlot (funcs dp)))
 
 def aux : List Func :=
   [ Func.rev,
@@ -431,7 +464,7 @@ def aux : List Func :=
         (Nat.toB256 0x11).toBytes) ]
 
 def runtime (dp : DeployParams) : Prog :=
-  ⟨Func.mainWith fallbackSlot (tree dp), aux⟩
+  ⟨runtimeMain dp, aux⟩
 
 def runtimeCode (dp : DeployParams) : Bytes :=
   (Prog.compile (runtime dp)).getD []
@@ -450,161 +483,126 @@ theorem funcs_sorted (dp : DeployParams) :
 
 /-! ## Parameter-independent compiler shape
 
-As in WETH10, a compact dispatcher erasure compares the parameter-independent
-leaf shapes before rebuilding the tree.  This avoids a full-program
-definitional comparison at each use. -/
-
-private inductive DispatchCompileShape : Type
-  | leaf (selector : B256) (body : Func.CompileShape)
-  | fork (left right : DispatchCompileShape)
-
-private def dispatchCompileShape : DispatchTree → DispatchCompileShape
-  | .leaf w p => .leaf w p.compileShape
-  | .fork l r => .fork (dispatchCompileShape l) (dispatchCompileShape r)
+The deployed words change instruction payloads but not widths.  The following
+erasure propagates that fact through the exact linear-chain and hybrid
+dispatcher builders without asking the elaborator to normalize the complete
+runtime. -/
 
 private def dispatchEntryShapes (xs : List (B256 × Func)) :
     List (B256 × Func.CompileShape) :=
   xs.map fun wp => (wp.1, wp.2.compileShape)
 
-private theorem dispatchCompileShape_build_eq
+private theorem linearDispatchWith_compileShape_eq
     {xs ys : List (B256 × Func)}
-    (h : dispatchEntryShapes xs = dispatchEntryShapes ys) (fuel : Nat) :
-    dispatchCompileShape (DispatchTree.build fuel xs) =
-      dispatchCompileShape (DispatchTree.build fuel ys) := by
-  induction fuel generalizing xs ys with
-  | zero =>
+    (h : dispatchEntryShapes xs = dispatchEntryShapes ys) (k : Nat) :
+    (linearDispatchWith k xs).compileShape =
+      (linearDispatchWith k ys).compileShape := by
+  induction xs generalizing ys with
+  | nil =>
+      cases ys with
+      | nil => rfl
+      | cons y ys => simp [dispatchEntryShapes] at h
+  | cons x xs ih =>
       cases xs with
       | nil =>
-          cases ys <;>
-            simp [dispatchEntryShapes, DispatchTree.build,
-              dispatchCompileShape] at h ⊢
-      | cons x xs =>
-          cases xs with
-          | nil =>
+          cases ys with
+          | nil => simp [dispatchEntryShapes] at h
+          | cons y ys =>
               cases ys with
-              | nil => simp [dispatchEntryShapes] at h
-              | cons y ys =>
-                  cases ys with
-                  | nil =>
-                      simp [dispatchEntryShapes, DispatchTree.build,
-                        dispatchCompileShape] at h ⊢
-                      exact h
-                  | cons y' ys =>
+              | nil =>
+                  cases x with
+                  | mk xw xb =>
+                    cases y with
+                    | mk yw yb =>
                       simp [dispatchEntryShapes] at h
-          | cons x' xs =>
+                      rcases h with ⟨rfl, hb⟩
+                      simp [linearDispatchWith, Func.compileShape, hb]
+              | cons y' ys => simp [dispatchEntryShapes] at h
+      | cons x' xs =>
+          cases ys with
+          | nil => simp [dispatchEntryShapes] at h
+          | cons y ys =>
               cases ys with
               | nil => simp [dispatchEntryShapes] at h
-              | cons y ys =>
-                  cases ys with
-                  | nil => simp [dispatchEntryShapes] at h
-                  | cons y' ys =>
-                      simpa [dispatchEntryShapes, DispatchTree.build,
-                        dispatchCompileShape] using congrArg List.head? h
-  | succ fuel ih =>
-      cases xs with
-      | nil =>
-          cases ys <;>
-            simp [dispatchEntryShapes, DispatchTree.build,
-              dispatchCompileShape] at h ⊢
-      | cons x xs =>
-          cases xs with
-          | nil =>
-              cases ys with
-              | nil => simp [dispatchEntryShapes] at h
-              | cons y ys =>
-                  cases ys with
-                  | nil =>
-                      simp [dispatchEntryShapes, DispatchTree.build,
-                        dispatchCompileShape] at h ⊢
-                      exact h
-                  | cons y' ys =>
-                      simp [dispatchEntryShapes] at h
-          | cons x' xs =>
-              cases ys with
-              | nil => simp [dispatchEntryShapes] at h
-              | cons y ys =>
-                  cases ys with
-                  | nil => simp [dispatchEntryShapes] at h
-                  | cons y' ys =>
-                      have hlen : xs.length = ys.length := by
-                        simpa [dispatchEntryShapes] using
-                          congrArg List.length h
-                      simp only [DispatchTree.build, dispatchCompileShape,
-                        List.length_cons]
-                      rw [← hlen]
-                      congr 1
-                      · apply ih
-                        simpa [dispatchEntryShapes] using
-                          congrArg
-                            (List.take
-                              (((x :: x' :: xs).length + 1) / 2)) h
-                      · apply ih
-                        simpa [dispatchEntryShapes] using
-                          congrArg
-                            (List.drop
-                              (((x :: x' :: xs).length + 1) / 2)) h
+              | cons y' ys =>
+                  cases x with
+                  | mk xw xb =>
+                    cases y with
+                    | mk yw yb =>
+                      have hhead :
+                          (xw, xb.compileShape) = (yw, yb.compileShape) := by
+                        simpa [dispatchEntryShapes] using congrArg List.head? h
+                      have htail :
+                          dispatchEntryShapes (x' :: xs) =
+                            dispatchEntryShapes (y' :: ys) := by
+                        simpa [dispatchEntryShapes] using congrArg List.tail h
+                      have hw : xw = yw := congrArg Prod.fst hhead
+                      have hb : xb.compileShape = yb.compileShape :=
+                        congrArg Prod.snd hhead
+                      subst yw
+                      simp only [linearDispatchWith, Func.compileShape]
+                      rw [hb, ih htail]
 
-private theorem leftmostFsig_eq_of_dispatchCompileShape
-    {t t' : DispatchTree}
-    (h : dispatchCompileShape t = dispatchCompileShape t') :
-    leftmostFsig t = leftmostFsig t' := by
-  induction t generalizing t' with
-  | leaf w p =>
-      cases t' with
-      | leaf w' p' =>
-          have hw :=
-            congrArg (fun s =>
-                match s with
-                | DispatchCompileShape.leaf w _ => w
-                | DispatchCompileShape.fork _ _ => 0) h
-          simpa [dispatchCompileShape, leftmostFsig] using hw
-      | fork _ _ => simp [dispatchCompileShape] at h
-  | fork l r ihl ihr =>
-      cases t' with
-      | leaf _ _ => simp [dispatchCompileShape] at h
-      | fork l' r' =>
-          simp only [dispatchCompileShape,
-            DispatchCompileShape.fork.injEq] at h
-          exact ihl (t' := l') h.1
+private theorem splitDispatch_compileShape_eq
+    {pivot pivot' : B256} {left right left' right' : Func}
+    (hp : pivot = pivot')
+    (hl : left.compileShape = left'.compileShape)
+    (hr : right.compileShape = right'.compileShape) :
+    (splitDispatch pivot left right).compileShape =
+      (splitDispatch pivot' left' right').compileShape := by
+  subst pivot'
+  simp [splitDispatch, Func.compileShape, hl, hr]
 
-private theorem dispatchWith_compileShape_eq
-    {t t' : DispatchTree}
-    (h : dispatchCompileShape t = dispatchCompileShape t') (k : Nat) :
-    (dispatchWith k t).compileShape =
-      (dispatchWith k t').compileShape := by
-  induction t generalizing t' with
-  | leaf w p =>
-      cases t' with
-      | leaf w' p' =>
-          simp only [dispatchCompileShape,
-            DispatchCompileShape.leaf.injEq] at h
-          simp [dispatchWith, Func.compileShape, h.1, h.2]
-      | fork _ _ => simp [dispatchCompileShape] at h
-  | fork l r ihl ihr =>
-      cases t' with
-      | leaf _ _ => simp [dispatchCompileShape] at h
-      | fork l' r' =>
-          simp only [dispatchCompileShape,
-            DispatchCompileShape.fork.injEq] at h
-          have hw := leftmostFsig_eq_of_dispatchCompileShape h.2
-          simp [dispatchWith, Func.compileShape, hw, ihl h.1, ihr h.2]
+private theorem firstSelector_eq_of_dispatchEntryShapes_eq
+    {xs ys : List (B256 × Func)}
+    (h : dispatchEntryShapes xs = dispatchEntryShapes ys) :
+    firstSelector xs = firstSelector ys := by
+  cases xs with
+  | nil =>
+      cases ys with
+      | nil => rfl
+      | cons y ys => simp [dispatchEntryShapes] at h
+  | cons x xs =>
+      cases ys with
+      | nil => simp [dispatchEntryShapes] at h
+      | cons y ys =>
+          have hhead :
+              (x.1, x.2.compileShape) = (y.1, y.2.compileShape) := by
+            simpa [dispatchEntryShapes] using congrArg List.head? h
+          simpa [firstSelector] using congrArg Prod.fst hhead
+
+private theorem hybridDispatchWith_compileShape_eq
+    {xs ys : List (B256 × Func)}
+    (h : dispatchEntryShapes xs = dispatchEntryShapes ys) (k : Nat) :
+    (hybridDispatchWith k xs).compileShape =
+      (hybridDispatchWith k ys).compileShape := by
+  have htake (n : Nat) :
+      dispatchEntryShapes (xs.take n) = dispatchEntryShapes (ys.take n) := by
+    simpa [dispatchEntryShapes] using congrArg (List.take n) h
+  have hdrop (n : Nat) :
+      dispatchEntryShapes (xs.drop n) = dispatchEntryShapes (ys.drop n) := by
+    simpa [dispatchEntryShapes] using congrArg (List.drop n) h
+  have hslice (drop take : Nat) :
+      dispatchEntryShapes ((xs.drop drop).take take) =
+        dispatchEntryShapes ((ys.drop drop).take take) := by
+    simpa [dispatchEntryShapes] using congrArg (List.take take) (hdrop drop)
+  unfold hybridDispatchWith
+  apply splitDispatch_compileShape_eq
+  · exact firstSelector_eq_of_dispatchEntryShapes_eq (hslice 9 4)
+  · apply splitDispatch_compileShape_eq
+    · exact firstSelector_eq_of_dispatchEntryShapes_eq (hslice 5 4)
+    · exact linearDispatchWith_compileShape_eq (htake 5) k
+    · exact linearDispatchWith_compileShape_eq (hslice 5 4) k
+  · apply splitDispatch_compileShape_eq
+    · exact firstSelector_eq_of_dispatchEntryShapes_eq (hdrop 13)
+    · exact linearDispatchWith_compileShape_eq (hslice 9 4) k
+    · exact linearDispatchWith_compileShape_eq (hdrop 13) k
 
 set_option maxHeartbeats 800000 in
 private theorem runtimeEntryShapes_eq (dp : DeployParams) :
     dispatchEntryShapes (funcs dp) =
       dispatchEntryShapes (funcs ⟨0, 0, 0, 0, 0⟩) := by
   rfl
-
-private theorem runtimeTree_compileShape_eq (dp : DeployParams) :
-    dispatchCompileShape (tree dp) =
-      dispatchCompileShape (tree ⟨0, 0, 0, 0, 0⟩) := by
-  unfold tree DispatchTree.ofSorted
-  have hlen :
-      (funcs dp).length = (funcs ⟨0, 0, 0, 0, 0⟩).length := by
-    simpa [dispatchEntryShapes] using
-      congrArg List.length (runtimeEntryShapes_eq dp)
-  rw [← hlen]
-  exact dispatchCompileShape_build_eq (runtimeEntryShapes_eq dp) _
 
 private theorem prepend_compileShape_eq (l : Line) {p q : Func}
     (h : p.compileShape = q.compileShape) :
@@ -614,11 +612,15 @@ private theorem prepend_compileShape_eq (l : Line) {p q : Func}
   | cons i l ih => simp [prepend, Func.compileShape, ih]
 
 private theorem runtimeMain_compileShape_eq (dp : DeployParams) :
-    (Func.mainWith fallbackSlot (tree dp)).compileShape =
-      (Func.mainWith fallbackSlot (tree ⟨0, 0, 0, 0, 0⟩)).compileShape := by
-  have hd :=
-    dispatchWith_compileShape_eq (runtimeTree_compileShape_eq dp) fallbackSlot
-  simpa [Func.mainWith] using prepend_compileShape_eq fsig hd
+    (runtimeMain dp).compileShape =
+      (runtimeMain ⟨0, 0, 0, 0, 0⟩).compileShape := by
+  have hd := hybridDispatchWith_compileShape_eq (runtimeEntryShapes_eq dp)
+    fallbackSlot
+  have hp := prepend_compileShape_eq fsig hd
+  unfold runtimeMain
+  exact prepend_compileShape_eq
+    [callvalue, pushB256 4, calldatasize, lt, Ninst.or] <| by
+      simp [Func.compileShape, hp]
 
 /-- All deployment parameters occupy fixed-width PUSH32 instructions. -/
 theorem runtime_compileShape_eq_zero (dp : DeployParams) :
@@ -732,7 +734,7 @@ def enumLoopWritingMutant : Func :=
 
 def enumerationWritingMutant (dp : DeployParams) : Prog :=
   let mutantAux := aux.set (enumLoopSlot - 1) enumLoopWritingMutant
-  ⟨Func.mainWith fallbackSlot (tree dp), mutantAux⟩
+  ⟨runtimeMain dp, mutantAux⟩
 
 theorem enumeration_writing_mutant_rejected :
     (enumerationWritingMutant officialParams).entrySstoreFree

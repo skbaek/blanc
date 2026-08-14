@@ -75,29 +75,64 @@ private structure LayoutSpan where
 private def lineSize (line : Line) : Nat :=
   line.foldl (fun total inst => total + inst.size) 0
 
-/-- Endpoint bodies are inline in the balanced dispatcher.  Walk the same
-`DispatchTree` and the same `dispatchWith` size equation to expose each leaf's
-exact byte interval. -/
-private def endpointSpans (start : Nat) : DispatchTree → List LayoutSpan
-  | .leaf word body =>
+/-- Endpoint bodies are inline in four equality chains.  A non-final equality
+compiles its remaining chain first, then a JUMPDEST and the matched POP/body;
+the terminal equality similarly compiles its fallback call first. -/
+private def linearEndpointSpans (start : Nat) :
+    List (B256 × Func) → List LayoutSpan
+  | [] => []
+  | [(word, body)] =>
       let prefixSize := lineSize [Ninst.pushB256 word, Ninst.eq]
-      -- `body <?> .call fallbackSlot` is `Func.branch (.call ...) body`:
-      -- compile the fallback call first, then JUMPDEST, then the body.
       [{ label := word.toHex,
          start := start + prefixSize + 4 + compsize (.call fallbackSlot) + 1,
          length := compsize body }]
-  | .fork left right =>
+  | (word, body) :: rest =>
+      let prefixSize := lineSize [Ninst.dup 0, Ninst.pushB256 word, Ninst.eq]
+      let restStart := start + prefixSize + 4
+      let bodyStart := restStart +
+        compsize (linearDispatchWith fallbackSlot rest) + 1 +
+        lineSize [Ninst.pop]
+      linearEndpointSpans restStart rest ++
+        [{ label := word.toHex, start := bodyStart, length := compsize body }]
+
+private inductive EndpointLayout
+  | chain (entries : List (B256 × Func))
+  | split (pivot : B256) (left right : EndpointLayout)
+
+private def EndpointLayout.toFunc : EndpointLayout → Func
+  | .chain entries => linearDispatchWith fallbackSlot entries
+  | .split pivot left right =>
+      splitDispatch pivot left.toFunc right.toFunc
+
+/-- `left <?> right` is `Func.branch right left`, so the compiler emits the
+right layout first, then JUMPDEST, then the left layout. -/
+private def EndpointLayout.spans (start : Nat) :
+    EndpointLayout → List LayoutSpan
+  | .chain entries => linearEndpointSpans start entries
+  | .split pivot left right =>
       let prefixSize := lineSize
-        [Ninst.dup 0, Ninst.pushB256 (leftmostFsig right), Ninst.gt]
-      -- `left <?> right` is `Func.branch right left`: compiler byte order is
-      -- the right subtree, JUMPDEST, then the left subtree.
+        [Ninst.dup 0, Ninst.pushB256 pivot, Ninst.gt]
       let rightStart := start + prefixSize + 4
-      let leftStart := rightStart + compsize (dispatchWith fallbackSlot right) + 1
-      endpointSpans rightStart right ++ endpointSpans leftStart left
+      let leftStart := rightStart + compsize right.toFunc + 1
+      right.spans rightStart ++ left.spans leftStart
+
+private def runtimeEndpointLayout : EndpointLayout :=
+  let entries := funcs officialParams
+  let first := entries.take 5
+  let second := (entries.drop 5).take 4
+  let third := (entries.drop 9).take 4
+  let fourth := entries.drop 13
+  .split (firstSelector third)
+    (.split (firstSelector second) (.chain first) (.chain second))
+    (.split (firstSelector fourth) (.chain third) (.chain fourth))
 
 private def runtimeEndpointSpans : List LayoutSpan :=
-  -- Byte zero is the main table entry's JUMPDEST; `fsig` precedes dispatch.
-  endpointSpans (1 + lineSize fsig) (tree officialParams)
+  -- Byte zero is the main table entry's JUMPDEST.  The false arm of the
+  -- six-byte shared guard starts after its four-byte branch header; FSIG then
+  -- precedes the hybrid dispatcher.
+  let guard := [Ninst.callvalue, Ninst.pushB256 4, Ninst.calldatasize,
+    Ninst.lt, Ninst.or]
+  runtimeEndpointLayout.spans (1 + lineSize guard + 4 + lineSize fsig)
 
 private def runtimeTableNames : List String :=
   [ "main", "fallback", "error-pausable-zero", "error-sender-not-admin",
