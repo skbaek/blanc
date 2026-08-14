@@ -21,20 +21,32 @@ namespace LidoCircuitBreaker
 def constructorArgumentBytes : Nat := 7 * 32
 def eip3860InitcodeLimit : Nat := 49152
 
-private def constructorScratch (runtimeLength : Nat) : Nat :=
-  ((runtimeLength + 31) / 32) * 32
+private def constructorRuntimeBase : Nat := constructorArgumentBytes
+
+private def constructorEventScratch (runtimeLength : Nat) : Nat :=
+  ((constructorRuntimeBase + runtimeLength + 31) / 32) * 32
 
 private def pushFixedNat (value : Nat) : Ninst :=
-  pushDeployWord (Nat.toB256 value)
+  if value < 2 ^ 16 then
+    Ninst.push [(value >>> 8).toUInt8, value.toUInt8] (by simp)
+  else
+    -- Never truncate a future layout that outgrows PUSH2.  Current generated
+    -- coordinates take the fixed-width branch, so provisional and final
+    -- constructor passes retain the same compiler shape.
+    pushDeployWord (Nat.toB256 value)
 
-private def loadByteOffset (offset : Nat) : Line :=
-  [pushFixedNat offset, mload]
+private def pushCompactNat (value : Nat) : Ninst :=
+  pushB256 (Nat.toB256 value)
+
+private def loadArgumentIndex (index : Nat) : Line :=
+  [pushCompactNat (32 * index), mload]
 
 private def storeByteOffset (offset : Nat) : Line :=
   [pushFixedNat offset, mstore]
 
 private def constructorError (name : String) : Func :=
-  Func.revData (customErrorData name)
+  Func.revSelector (customErrorData name) (by
+    simp [customErrorData, B256.length_toBytes])
 
 private def patchArgumentIndex : ImmutableParameter → Nat
   | .admin => 0
@@ -44,82 +56,85 @@ private def patchArgumentIndex : ImmutableParameter → Nat
   | .maxHeartbeatInterval => 4
 
 private def patchFieldLine
-    (scratch : Nat) (field : ImmutableParameter) : Line :=
+    (runtimeBase : Nat) (field : ImmutableParameter) : Line :=
   (immutableWordOffsets field).flatMap fun offset =>
-    loadByteOffset (scratch + 32 * patchArgumentIndex field) ++
-      storeByteOffset offset
+    loadArgumentIndex (patchArgumentIndex field) ++
+      storeByteOffset (runtimeBase + offset)
 
-private def patchRuntimeLine (scratch : Nat) : Line :=
-  immutableParameters.flatMap (patchFieldLine scratch)
+private def patchRuntimeLine (runtimeBase : Nat) : Line :=
+  immutableParameters.flatMap (patchFieldLine runtimeBase)
 
 private def constructorBody
     (runtimeOffset argsOffset runtimeLength : Nat) : Func :=
-  let scratch := constructorScratch runtimeLength
-  let eventScratch := scratch + constructorArgumentBytes
+  let eventScratch := constructorEventScratch runtimeLength
   -- The full input must contain the complete static seven-word head.  Extra
   -- trailing creation data is accepted, as by Solidity's static decoder.
   pushFixedNat (argsOffset + constructorArgumentBytes) ::: codesize ::: lt :::
   ((.call 1) <?>
-    -- Copy the compiled zero-parameter runtime and the seven argument words.
-    (pushFixedNat runtimeLength ::: pushFixedNat runtimeOffset :::
-      pushFixedNat 0 ::: codecopy :::
-      pushFixedNat constructorArgumentBytes ::: pushFixedNat argsOffset :::
-      pushFixedNat scratch ::: codecopy :::
+    -- Decode at low memory first.  The runtime is copied only after every
+    -- source-order validation succeeds, then returned from the adjacent base.
+    (pushCompactNat constructorArgumentBytes ::: pushFixedNat argsOffset :::
+      pushCompactNat 0 ::: codecopy :::
       -- The only address word must be canonical before source-level checks.
-      loadByteOffset scratch +++ checkNonAddress +++
+      loadArgumentIndex 0 +++ checkNonAddress +++
       ((.call 1) <?>
-        (loadByteOffset scratch +++ iszero :::
+        (loadArgumentIndex 0 +++ iszero :::
           ((.call 2) <?>
-            (loadByteOffset (scratch + 32) +++ iszero :::
+            (loadArgumentIndex 1 +++ iszero :::
               ((.call 3) <?>
-                (loadByteOffset (scratch + 64) +++
-                  loadByteOffset (scratch + 32) +++ gt :::
+                (loadArgumentIndex 2 +++
+                  loadArgumentIndex 1 +++ gt :::
                   ((.call 4) <?>
-                    (loadByteOffset (scratch + 96) +++ iszero :::
+                    (loadArgumentIndex 3 +++ iszero :::
                       ((.call 5) <?>
-                        (loadByteOffset (scratch + 128) +++
-                          loadByteOffset (scratch + 96) +++ gt :::
+                        (loadArgumentIndex 4 +++
+                          loadArgumentIndex 3 +++ gt :::
                           ((.call 6) <?>
-                            (loadByteOffset (scratch + 32) +++
-                              loadByteOffset (scratch + 160) +++ lt :::
+                            (loadArgumentIndex 1 +++
+                              loadArgumentIndex 5 +++ lt :::
                               ((.call 7) <?>
-                                (loadByteOffset (scratch + 64) +++
-                                  loadByteOffset (scratch + 160) +++ gt :::
+                                (loadArgumentIndex 2 +++
+                                  loadArgumentIndex 5 +++ gt :::
                                   ((.call 8) <?>
-                                    (loadByteOffset (scratch + 96) +++
-                                      loadByteOffset (scratch + 192) +++ lt :::
+                                    (loadArgumentIndex 3 +++
+                                      loadArgumentIndex 6 +++ lt :::
                                       ((.call 9) <?>
-                                        (loadByteOffset (scratch + 128) +++
-                                          loadByteOffset (scratch + 192) +++ gt :::
+                                        (loadArgumentIndex 4 +++
+                                          loadArgumentIndex 6 +++ gt :::
                                           ((.call 10) <?>
-                                            (patchRuntimeLine scratch +++
+                                            (pushFixedNat runtimeLength :::
+                                              pushFixedNat runtimeOffset :::
+                                              pushCompactNat constructorRuntimeBase :::
+                                              codecopy :::
+                                              patchRuntimeLine constructorRuntimeBase +++
                                               -- CircuitBreakerInitialized.
-                                              loadByteOffset scratch +++
+                                              loadArgumentIndex 0 +++
                                               pushB256 circuitBreakerInitializedEvent :::
                                               logWith 1
-                                                (Nat.toB256 ((scratch + 32) / 32)) 4 +++
+                                                1 4 +++
                                               -- PauseDurationUpdated(0, initial).
                                               pushB256 0 :::
                                               storeByteOffset eventScratch +++
-                                              loadByteOffset (scratch + 160) +++
+                                              loadArgumentIndex 5 +++
                                               storeByteOffset (eventScratch + 32) +++
                                               pushB256 pauseDurationUpdatedEvent :::
                                               logWith 0
                                                 (Nat.toB256 (eventScratch / 32)) 2 +++
-                                              loadByteOffset (scratch + 160) +++
+                                              loadArgumentIndex 5 +++
                                               pushB256 pauseDurationSlot ::: sstore :::
                                               -- HeartbeatIntervalUpdated(0, initial).
                                               pushB256 0 :::
                                               storeByteOffset eventScratch +++
-                                              loadByteOffset (scratch + 192) +++
+                                              loadArgumentIndex 6 +++
                                               storeByteOffset (eventScratch + 32) +++
                                               pushB256 heartbeatIntervalUpdatedEvent :::
                                               logWith 0
                                                 (Nat.toB256 (eventScratch / 32)) 2 +++
-                                              loadByteOffset (scratch + 192) +++
+                                              loadArgumentIndex 6 +++
                                               pushB256 heartbeatIntervalSlot ::: sstore :::
                                               pushFixedNat runtimeLength :::
-                                              pushB256 0 ::: Func.ret))))))))))))))))))))))
+                                              pushCompactNat constructorRuntimeBase :::
+                                              Func.ret))))))))))))))))))))))
 
 private def constructorProgram
     (runtimeOffset argsOffset runtimeLength : Nat) : Prog :=
@@ -149,8 +164,9 @@ def lidoCircuitBreakerConstructorProgram : Prog :=
     (prefixLength + runtimeTemplateCode.length)
     runtimeTemplateCode.length
 
-/-- Constructor instructions.  All internal offsets use PUSH32, so the
-provisional sizing pass and final pass have the same compiler shape. -/
+/-- Constructor instructions.  Layout-dependent coordinates use PUSH2 while
+they fit; the exact full-width fallback prevents silent truncation if a future
+artifact crosses that bound. -/
 def lidoCircuitBreakerInitPrefix : Bytes :=
   (Prog.compile lidoCircuitBreakerConstructorProgram).getD []
 
