@@ -35,7 +35,8 @@ EELS_ROOT="${EELS_ROOT:-$HOME/execution-specs}"
 EELS_PY="$EELS_ROOT/venv/bin/python"
 BLANC_ARTIFACTS="$(mktemp)"
 DISPATCH_ARTIFACTS="$(mktemp)"
-trap 'rm -f "$BLANC_ARTIFACTS" "$DISPATCH_ARTIFACTS"' EXIT
+PROFILE="$(mktemp)"
+trap 'rm -f "$BLANC_ARTIFACTS" "$DISPATCH_ARTIFACTS" "$PROFILE"' EXIT
 
 if [ ! -x "$EELS_PY" ]; then
   echo "REGRESSION — Lido CircuitBreaker dispatcher: pinned EELS python not found"
@@ -54,10 +55,22 @@ if ! (cd "$ROOT" && lake env lean scripts/eval-lido-circuit-breaker-dispatchers.
   exit 1
 fi
 
-PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$EELS_ROOT/src:$SCRIPT_DIR" "$EELS_PY" \
-  "$SCRIPT_DIR/check-lido-circuit-breaker-dispatchers.py" \
-  --eels-root "$EELS_ROOT" \
-  --blanc-artifacts "$BLANC_ARTIFACTS" \
-  --dispatcher-artifacts "$DISPATCH_ARTIFACTS" \
-  --mode "$DISPATCH_MODE" \
-  --selection-stage "$DISPATCH_SELECTION_STAGE"
+if ! PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$EELS_ROOT/src:$SCRIPT_DIR" \
+    "$EELS_PY" "$SCRIPT_DIR/check-lido-circuit-breaker-dispatchers.py" \
+    --eels-root "$EELS_ROOT" \
+    --blanc-artifacts "$BLANC_ARTIFACTS" \
+    --dispatcher-artifacts "$DISPATCH_ARTIFACTS" \
+    --mode "$DISPATCH_MODE" \
+    --selection-stage "$DISPATCH_SELECTION_STAGE" >"$PROFILE"; then
+  exit 1
+fi
+
+if ! SUMMARY="$("$EELS_PY" -c 'import json,sys
+p=json.load(open(sys.argv[1], encoding="utf-8")); label=p["selection"]["selected"]
+c=p["candidates"][label]; f=p["fullVector"]["candidates"][label]; s=f["runtimeSummary"]
+print(f"OK — Lido CircuitBreaker dispatcher: {len(p['"'"'candidateOrder'"'"'])} legal .branch candidates; selected {label} at {c['"'"'byteLength'"'"']} bytes; {len(c['"'"'directRows'"'"'])} focused rows + {len(c['"'"'reachableEndpoints'"'"'])} endpoint cases + {f['"'"'caseCount'"'"']}-case/{f['"'"'boundaryCount'"'"']}-boundary replay; {s['"'"'adequacyCounts'"'"']['"'"'adequate'"'"']} adequate runtime boundaries cheaper, {s['"'"'adequacyCounts'"'"']['"'"'oog-control'"'"']} equal OOG, {s['"'"'adequatePositiveDeltaCount'"'"']} positives; dual-world production match; {s['"'"'successfulStrictImprovementCount'"'"']} strict successful improvements")' \
+  "$PROFILE" 2>/dev/null)"; then
+  echo "REGRESSION — Lido CircuitBreaker dispatcher: checker summary schema drifted"
+  exit 1
+fi
+echo "$SUMMARY"

@@ -24,8 +24,6 @@ from lido_circuit_breaker_ac5_shape_schema import (
 
 
 RESOURCE_SCHEMA = 1
-# The optimized count is the provisional AC5 stage.  O4 threshold descriptors
-# intentionally expand and repin it before the optimized lifecycle can land.
 EXPECTED_BOUNDARIES = {"baseline": 455, "optimized": 464}
 EELS_PIN = "4198b9c5996713b268aed602739d5aa40e277694"
 REFERENCE_SOURCE_COMMIT = "6829a5a962ece56564bd9d72d01c29cabf157579"
@@ -42,10 +40,17 @@ EXPECTED_MODEL = {
     "transactionIntrinsicGasIncluded": False,
     "createCodeDepositGasIncluded": True,
 }
-EXPECTED_TRANSITION = {
-    "adequateGasDominance": True,
-    "strictSuccessfulImprovement": True,
-    "independentDigestRepin": True,
+EXPECTED_TRANSITIONS = {
+    "baseline": {
+        "adequateGasDominance": True,
+        "strictSuccessfulImprovement": True,
+        "independentDigestRepin": True,
+    },
+    "optimized": {
+        "perBoundaryDominanceOrPinnedIntrinsicBranchDispatch": True,
+        "strictSuccessfulImprovement": True,
+        "independentCoordinateVectorAndExceptionRepin": True,
+    },
 }
 SOLIDITY_IDENTITIES = {
     "solidityOfficialFullCreateSha256":
@@ -70,14 +75,11 @@ BASELINE_BLANC_IDENTITIES = {
         "c5c98c4e99e43fa3fc61693e730b87e69dc37f6bba38f3adcdeb801c4375835f",
 }
 
-# These pins are intentionally outside the mutable generator.  Baseline pins
-# are filled only after the complete 172-case/455-boundary baseline
-# measurement.  The provisional AC5-stage optimized descriptor set adds the
-# 65,536-byte row plus two long failure-bubbling rows and therefore has 175
-# cases/464 boundaries.  Its coordinate pin below is intentionally not the
-# final O4-expanded pin.  The transition
-# remains fail-closed until O4 has repinned the descriptors and a measured
-# full-vector pin replaces None in a deliberate reviewable edit.
+# These pins are intentionally outside the mutable generator. The baseline
+# pins preserve the exact 172-case/455-boundary launch evidence. The optimized
+# descriptor set adds the 65,536-byte row and two long failure-bubbling rows,
+# for 175 cases/464 boundaries. Its full-vector pin is installed only after a
+# complete optimized measurement through the documented manifest write path.
 EXPECTED_VECTOR_PINS = {
     "baseline": {
         "orderedCoordinatesSha256":
@@ -88,9 +90,107 @@ EXPECTED_VECTOR_PINS = {
     "optimized": {
         "orderedCoordinatesSha256":
             "07ca7475b4af537e4866de0a8f102f043ced22c4207ef8587d7570bd9151aef2",
-        "fullResourceVectorSha256": None,
+        "fullResourceVectorSha256":
+            "98392ffe11a9eeef6407e90cc42b55739f384c154ef090473882e5d60d69a335",
     },
 }
+
+INTRINSIC_BRANCH_ARCHITECTURE = \
+    "all Blanc control flow, including selector dispatch, uses Func.branch"
+INTRINSIC_BRANCH_CLASSIFICATION = "intrinsic-branch-dispatch"
+INTRINSIC_BRANCH_ADMISSION_REQUIRES = [
+    "independent opcode traces place the entire excess before the selected leaf",
+    "no later Blanc segment is costlier than the Solidity segment",
+    "the selected legal tree is Pareto-justified against balanced, linear, and hybrid legal trees",
+    "the exact coordinate and delta are independently pinned and mutation-tested",
+]
+EXPECTED_INTRINSIC_BRANCH_ROWS: list[Mapping[str, Any]] = []
+EXPECTED_INTRINSIC_BRANCH_ROWS_SHA256 = \
+    "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+
+COMPLETION_THRESHOLD_DEFINITION = (
+    "minimum direct EELS message gas reproducing the complete adequate boundary "
+    "outcome across every declared semantic channel; successful constructors also "
+    "reproduce their independently owned installed-runtime identity"
+)
+COMPLETION_THRESHOLD_SCOPE = (
+    "33 former GAS-1..GAS-5 positive-family witnesses; the two named "
+    "25000-gas equal-OOG controls remain separate in resourceEvidence.oogControls"
+)
+COMPLETION_THRESHOLD_SEARCH = (
+    "exact integer binary search over [0, 20000000] with a fresh causal world per "
+    "probe; runtime seed and history messages retain adequate gas and only the final "
+    "action gas varies"
+)
+# Exact (class, case, coordinate, Solidity threshold, Blanc threshold, delta)
+# pins are populated from one complete optimized manifest-write measurement and
+# are deliberately owned outside the generator.
+EXPECTED_COMPLETION_THRESHOLD_PINS: tuple[
+    tuple[str, str, str, int, int, int], ...
+] = (
+    ("GAS-1", "constructor-success-official", "constructor-success-official#0:primaryConstructor@0x6019cb557978296ba3c08a7b73225c0975dfb2f7", 967777, 906729, -61048),
+    ("GAS-1", "constructor-success-independent", "constructor-success-independent#0:primaryConstructor@0x6019cb557978296ba3c08a7b73225c0975dfb2f7", 967777, 906729, -61048),
+    ("GAS-1", "constructor-success-exact-lower-bounds", "constructor-success-exact-lower-bounds#0:primaryConstructor@0x6019cb557978296ba3c08a7b73225c0975dfb2f7", 967777, 906729, -61048),
+    ("GAS-1", "constructor-success-exact-upper-bounds", "constructor-success-exact-upper-bounds#0:primaryConstructor@0x6019cb557978296ba3c08a7b73225c0975dfb2f7", 967777, 906729, -61048),
+    ("GAS-1", "constructor-success-equal-bounds", "constructor-success-equal-bounds#0:primaryConstructor@0x6019cb557978296ba3c08a7b73225c0975dfb2f7", 967777, 906729, -61048),
+    ("GAS-1", "constructor-trailing-arguments", "constructor-trailing-arguments#0:primaryConstructor@0x6019cb557978296ba3c08a7b73225c0975dfb2f7", 967783, 906729, -61054),
+    ("GAS-2", "constructor-dirty-admin", "constructor-dirty-admin#0:primaryConstructor@0x6019cb557978296ba3c08a7b73225c0975dfb2f7", 260, 143, -117),
+    ("GAS-2", "constructor-error-admin-zero", "constructor-error-admin-zero#0:primaryConstructor@0x6019cb557978296ba3c08a7b73225c0975dfb2f7", 481, 174, -307),
+    ("GAS-2", "constructor-error-min-heartbeat-above-max", "constructor-error-min-heartbeat-above-max#0:primaryConstructor@0x6019cb557978296ba3c08a7b73225c0975dfb2f7", 577, 274, -303),
+    ("GAS-2", "constructor-error-min-heartbeat-zero", "constructor-error-min-heartbeat-zero#0:primaryConstructor@0x6019cb557978296ba3c08a7b73225c0975dfb2f7", 551, 246, -305),
+    ("GAS-2", "constructor-error-min-pause-above-max", "constructor-error-min-pause-above-max#0:primaryConstructor@0x6019cb557978296ba3c08a7b73225c0975dfb2f7", 529, 224, -305),
+    ("GAS-2", "constructor-error-min-pause-zero", "constructor-error-min-pause-zero#0:primaryConstructor@0x6019cb557978296ba3c08a7b73225c0975dfb2f7", 503, 196, -307),
+    ("GAS-2", "constructor-precedence-admin-zero-plus-min-pause-zero", "constructor-precedence-admin-zero-plus-min-pause-zero#0:primaryConstructor@0x6019cb557978296ba3c08a7b73225c0975dfb2f7", 481, 174, -307),
+    ("GAS-2", "constructor-precedence-both-bound-inversions", "constructor-precedence-both-bound-inversions#0:primaryConstructor@0x6019cb557978296ba3c08a7b73225c0975dfb2f7", 529, 224, -305),
+    ("GAS-3", "nonpayable-ADMIN", "nonpayable-ADMIN#1:action", 43, 32, -11),
+    ("GAS-3", "nonpayable-MAX_HEARTBEAT_INTERVAL", "nonpayable-MAX_HEARTBEAT_INTERVAL#1:action", 43, 32, -11),
+    ("GAS-3", "nonpayable-MAX_PAUSE_DURATION", "nonpayable-MAX_PAUSE_DURATION#1:action", 43, 32, -11),
+    ("GAS-3", "nonpayable-MIN_HEARTBEAT_INTERVAL", "nonpayable-MIN_HEARTBEAT_INTERVAL#1:action", 43, 32, -11),
+    ("GAS-3", "nonpayable-MIN_PAUSE_DURATION", "nonpayable-MIN_PAUSE_DURATION#1:action", 43, 32, -11),
+    ("GAS-3", "nonpayable-getPausableCount", "nonpayable-getPausableCount#1:action", 43, 32, -11),
+    ("GAS-3", "nonpayable-getPausables", "nonpayable-getPausables#1:action", 43, 32, -11),
+    ("GAS-3", "nonpayable-getPauser", "nonpayable-getPauser#1:action", 43, 32, -11),
+    ("GAS-3", "nonpayable-heartbeat", "nonpayable-heartbeat#1:action", 43, 32, -11),
+    ("GAS-3", "nonpayable-heartbeatExpiry", "nonpayable-heartbeatExpiry#1:action", 43, 32, -11),
+    ("GAS-3", "nonpayable-heartbeatInterval", "nonpayable-heartbeatInterval#1:action", 43, 32, -11),
+    ("GAS-3", "nonpayable-isPauserLive", "nonpayable-isPauserLive#1:action", 43, 32, -11),
+    ("GAS-3", "nonpayable-pause", "nonpayable-pause#1:action", 43, 32, -11),
+    ("GAS-3", "nonpayable-pauseDuration", "nonpayable-pauseDuration#1:action", 43, 32, -11),
+    ("GAS-3", "nonpayable-registerPauser", "nonpayable-registerPauser#1:action", 43, 32, -11),
+    ("GAS-3", "nonpayable-setHeartbeatInterval", "nonpayable-setHeartbeatInterval#1:action", 43, 32, -11),
+    ("GAS-3", "nonpayable-setPauseDuration", "nonpayable-setPauseDuration#1:action", 43, 32, -11),
+    ("GAS-4", "runtime-empty-calldata", "runtime-empty-calldata#1:action", 68, 32, -36),
+    ("GAS-5", "pause-return-true-large-32768", "pause-return-true-large-32768#2:action", 57317, 49873, -7444),
+)
+EXPECTED_COMPLETION_THRESHOLD_ROWS_SHA256 = \
+    "49456665e2c6095cb1aa467231d78e45deef3d5dc9614248fcdcd756217c83fe"
+EXPECTED_DISPATCHER_THRESHOLD_CASES = (
+    ("GAS-3", "nonpayable-ADMIN", "nonzero-ADMIN()"),
+    ("GAS-3", "nonpayable-MAX_HEARTBEAT_INTERVAL",
+     "nonzero-MAX_HEARTBEAT_INTERVAL()"),
+    ("GAS-3", "nonpayable-MAX_PAUSE_DURATION", "nonzero-MAX_PAUSE_DURATION()"),
+    ("GAS-3", "nonpayable-MIN_HEARTBEAT_INTERVAL",
+     "nonzero-MIN_HEARTBEAT_INTERVAL()"),
+    ("GAS-3", "nonpayable-MIN_PAUSE_DURATION", "nonzero-MIN_PAUSE_DURATION()"),
+    ("GAS-3", "nonpayable-getPausableCount", "nonzero-getPausableCount(address)"),
+    ("GAS-3", "nonpayable-getPausables", "nonzero-getPausables()"),
+    ("GAS-3", "nonpayable-getPauser", "nonzero-getPauser(address)"),
+    ("GAS-3", "nonpayable-heartbeat", "nonzero-heartbeat()"),
+    ("GAS-3", "nonpayable-heartbeatExpiry", "nonzero-heartbeatExpiry(address)"),
+    ("GAS-3", "nonpayable-heartbeatInterval", "nonzero-heartbeatInterval()"),
+    ("GAS-3", "nonpayable-isPauserLive", "nonzero-isPauserLive(address)"),
+    ("GAS-3", "nonpayable-pause", "nonzero-pause(address)"),
+    ("GAS-3", "nonpayable-pauseDuration", "nonzero-pauseDuration()"),
+    ("GAS-3", "nonpayable-registerPauser",
+     "nonzero-registerPauser(address,address)"),
+    ("GAS-3", "nonpayable-setHeartbeatInterval",
+     "nonzero-setHeartbeatInterval(uint256)"),
+    ("GAS-3", "nonpayable-setPauseDuration",
+     "nonzero-setPauseDuration(uint256)"),
+    ("GAS-4", "runtime-empty-calldata", "short-0"),
+)
+EXPECTED_DISPATCHER_THRESHOLD_ROWS_SHA256 = \
+    "b7b8f0ad5ca7e96de4cff76f54b4c661fce7f3faefd8e6d15526d9317db78bee"
 
 RESOURCE_KEYS = {
     "schema", "adequateGasEnvelope", "gasModel", "lifecycle", "identities",
@@ -103,6 +203,31 @@ BOUNDARY_KEYS = {
     "orderWithinPhase", "adequacy", "solidityStatus", "blancStatus",
     "solidityGasLimit", "blancGasLimit", "solidityGasUsed", "blancGasUsed",
     "blancMinusSolidity", "comparisonClass",
+}
+INTRINSIC_BRANCH_KEYS = {
+    "architecture", "classification", "directJumpDispatchAllowed",
+    "admissionRequires", "rowCount", "orderedRows", "orderedRowsSha256",
+}
+INTRINSIC_BRANCH_ROW_KEYS = {
+    "ordinal", "coordinate", "blancMinusSolidity",
+}
+COMPLETION_THRESHOLD_KEYS = {
+    "schema", "definition", "scope", "search", "rowCount", "orderedRows",
+    "orderedRowsSha256", "dispatcherCrossCheck",
+}
+COMPLETION_THRESHOLD_ROW_KEYS = {
+    "ordinal", "class", "case", "coordinate", "solidityCompletionGas",
+    "blancCompletionGas", "blancMinusSolidity", "comparisonClass",
+    "solidityThresholdMinusOneCompletes", "blancThresholdMinusOneCompletes",
+}
+DISPATCHER_THRESHOLD_KEYS = {
+    "owner", "selectedDispatcher", "independentDirectState",
+    "productionOfficialRuntimeSha256", "rowCount", "orderedRows",
+    "orderedRowsSha256",
+}
+DISPATCHER_THRESHOLD_ROW_KEYS = {
+    "ordinal", "class", "case", "coordinate", "dispatcherCase",
+    "solidityCompletionGas", "blancCompletionGas",
 }
 HEX256 = re.compile(r"[0-9a-f]{64}")
 HEX_COMMIT = re.compile(r"[0-9a-f]{40}")
@@ -285,6 +410,202 @@ def derive_summary(boundaries: Sequence[Mapping[str, Any]]) -> Mapping[str, Any]
     }
 
 
+def validate_intrinsic_branch_dispatch(
+        value: Any, boundaries: Sequence[Mapping[str, Any]],
+        label: str) -> Mapping[str, Any]:
+    evidence = require_keys(value, INTRINSIC_BRANCH_KEYS, label)
+    architecture = exact_string(evidence.get("architecture"), label + ".architecture")
+    classification = exact_string(
+        evidence.get("classification"), label + ".classification")
+    direct_jump = exact_bool(
+        evidence.get("directJumpDispatchAllowed"),
+        label + ".directJumpDispatchAllowed")
+    admission = evidence.get("admissionRequires")
+    if architecture != INTRINSIC_BRANCH_ARCHITECTURE or \
+            classification != INTRINSIC_BRANCH_CLASSIFICATION or direct_jump is not False or \
+            admission != INTRINSIC_BRANCH_ADMISSION_REQUIRES:
+        fail(label, "architecture/admission rule differs from amendment 4")
+    rows = evidence.get("orderedRows")
+    if not isinstance(rows, list):
+        fail(label, "orderedRows is not an array")
+    expected_rows = [
+        {
+            "ordinal": row["ordinal"],
+            "coordinate": row["coordinate"],
+            "blancMinusSolidity": row["blancMinusSolidity"],
+        }
+        for row in boundaries
+        if row["adequacy"] == "adequate" and row["blancMinusSolidity"] > 0
+    ]
+    for index, row in enumerate(rows):
+        row_label = f"{label}.orderedRows[{index}]"
+        require_keys(row, INTRINSIC_BRANCH_ROW_KEYS, row_label)
+        exact_int(row.get("ordinal"), row_label + ".ordinal")
+        exact_int(row.get("blancMinusSolidity"), row_label + ".blancMinusSolidity")
+        exact_string(row.get("coordinate"), row_label + ".coordinate")
+    if rows != expected_rows:
+        fail(label, "ordered rows differ from all adequate positive boundaries")
+    if exact_int(evidence.get("rowCount"), label + ".rowCount") != len(rows):
+        fail(label, "rowCount differs from orderedRows")
+    digest = exact_string(
+        evidence.get("orderedRowsSha256"), label + ".orderedRowsSha256")
+    if not HEX256.fullmatch(digest) or digest != canonical_digest(rows):
+        fail(label, "ordered-row digest is not derived")
+    if rows != EXPECTED_INTRINSIC_BRANCH_ROWS or \
+            digest != EXPECTED_INTRINSIC_BRANCH_ROWS_SHA256:
+        fail(label, "independent intrinsic-branch-dispatch row pin differs")
+    return evidence
+
+
+def validate_completion_thresholds(
+        value: Any, descriptors: Sequence[Mapping[str, Any]],
+        boundaries: Sequence[Mapping[str, Any]], official_runtime_sha256: str,
+        label: str) -> Mapping[str, Any]:
+    evidence = require_keys(value, COMPLETION_THRESHOLD_KEYS, label)
+    if exact_int(evidence.get("schema"), label + ".schema") != 1 or \
+            exact_string(evidence.get("definition"), label + ".definition") != \
+                COMPLETION_THRESHOLD_DEFINITION or \
+            exact_string(evidence.get("scope"), label + ".scope") != \
+                COMPLETION_THRESHOLD_SCOPE or \
+            exact_string(evidence.get("search"), label + ".search") != \
+                COMPLETION_THRESHOLD_SEARCH:
+        fail(label, "definition/scope/search differs from the independent threshold contract")
+    if len(EXPECTED_COMPLETION_THRESHOLD_PINS) != 33 or \
+            EXPECTED_COMPLETION_THRESHOLD_ROWS_SHA256.startswith("PENDING-") or \
+            EXPECTED_DISPATCHER_THRESHOLD_ROWS_SHA256.startswith("PENDING-"):
+        fail(label, "independent completion-threshold pins are not installed")
+    expected_rows = []
+    class_counts = {f"GAS-{index}": 0 for index in range(1, 6)}
+    for ordinal, pin in enumerate(EXPECTED_COMPLETION_THRESHOLD_PINS):
+        gas_class, case, coordinate, solidity, blanc, pinned_delta = pin
+        delta = blanc - solidity
+        if pinned_delta != delta:
+            fail(label, f"independent threshold delta pin is not derived: {case}")
+        if gas_class not in class_counts:
+            fail(label, f"independent threshold class is unknown: {gas_class}")
+        class_counts[gas_class] += 1
+        expected_rows.append({
+            "ordinal": ordinal, "class": gas_class, "case": case,
+            "coordinate": coordinate,
+            "solidityCompletionGas": solidity,
+            "blancCompletionGas": blanc,
+            "blancMinusSolidity": delta,
+            "comparisonClass": "blanc-cheaper" if delta < 0 else
+                "blanc-dearer" if delta > 0 else "equal",
+            "solidityThresholdMinusOneCompletes": False,
+            "blancThresholdMinusOneCompletes": False,
+        })
+    if class_counts != {
+            "GAS-1": 6, "GAS-2": 8, "GAS-3": 17,
+            "GAS-4": 1, "GAS-5": 1}:
+        fail(label, "independent GAS-1..GAS-5 threshold roster differs")
+    rows = evidence.get("orderedRows")
+    if not isinstance(rows, list):
+        fail(label, "orderedRows is not an array")
+    for index, row in enumerate(rows):
+        row_label = f"{label}.orderedRows[{index}]"
+        require_keys(row, COMPLETION_THRESHOLD_ROW_KEYS, row_label)
+        for field in (
+                "ordinal", "solidityCompletionGas", "blancCompletionGas",
+                "blancMinusSolidity"):
+            exact_int(row.get(field), row_label + "." + field)
+        for field in ("class", "case", "coordinate", "comparisonClass"):
+            exact_string(row.get(field), row_label + "." + field)
+        exact_bool(
+            row.get("solidityThresholdMinusOneCompletes"),
+            row_label + ".solidityThresholdMinusOneCompletes")
+        exact_bool(
+            row.get("blancThresholdMinusOneCompletes"),
+            row_label + ".blancThresholdMinusOneCompletes")
+        solidity = row["solidityCompletionGas"]
+        blanc = row["blancCompletionGas"]
+        delta = blanc - solidity
+        comparison = "blanc-cheaper" if delta < 0 else \
+            "blanc-dearer" if delta > 0 else "equal"
+        if row["blancMinusSolidity"] != delta or \
+                row["comparisonClass"] != comparison or \
+                row["solidityThresholdMinusOneCompletes"] is not False or \
+                row["blancThresholdMinusOneCompletes"] is not False:
+            fail(row_label, "threshold delta/class/minimality is not derived")
+        if delta > 0:
+            fail(row_label, "optimized completion threshold is Blanc-dearer")
+    if rows != expected_rows:
+        fail(label, "ordered threshold rows differ from independent exact pins")
+    if exact_int(evidence.get("rowCount"), label + ".rowCount") != 33:
+        fail(label, "threshold rowCount is not exactly 33")
+    digest = exact_string(
+        evidence.get("orderedRowsSha256"), label + ".orderedRowsSha256")
+    if not HEX256.fullmatch(digest) or digest != canonical_digest(rows) or \
+            digest != EXPECTED_COMPLETION_THRESHOLD_ROWS_SHA256:
+        fail(label, "threshold ordered-row digest differs from the independent pin")
+    descriptor_by_case: dict[str, Mapping[str, Any]] = {}
+    measured_by_coordinate = {
+        row["coordinate"]: row for row in boundaries
+    }
+    for descriptor in descriptors:
+        descriptor_by_case[descriptor["case"]] = descriptor
+    for row in rows:
+        descriptor = descriptor_by_case.get(row["case"])
+        measured = measured_by_coordinate.get(row["coordinate"])
+        if descriptor is None or row["coordinate"] != descriptor["coordinate"] or \
+                measured is None or measured["adequacy"] != "adequate":
+            fail(label, "threshold witness is not its case's adequate final boundary")
+        if not 0 <= row["solidityCompletionGas"] <= 20_000_000 or \
+                not 0 <= row["blancCompletionGas"] <= 20_000_000:
+            fail(label, "completion threshold lies outside the adequate envelope")
+
+    cross_label = label + ".dispatcherCrossCheck"
+    cross = require_keys(
+        evidence.get("dispatcherCrossCheck"), DISPATCHER_THRESHOLD_KEYS,
+        cross_label)
+    if exact_string(cross.get("owner"), cross_label + ".owner") != \
+            "scripts/check-lido-circuit-breaker-dispatchers.py" or \
+            exact_string(cross.get("selectedDispatcher"),
+                         cross_label + ".selectedDispatcher") != \
+                "shared-hybrid-5-4-4-4" or \
+            exact_bool(cross.get("independentDirectState"),
+                       cross_label + ".independentDirectState") is not True or \
+            exact_string(cross.get("productionOfficialRuntimeSha256"),
+                         cross_label + ".productionOfficialRuntimeSha256") != \
+                official_runtime_sha256:
+        fail(cross_label, "dispatcher owner/selection/runtime identity differs")
+    completion_by_case = {row["case"]: row for row in rows}
+    expected_cross_rows = []
+    for ordinal, (gas_class, case, dispatcher_case) in enumerate(
+            EXPECTED_DISPATCHER_THRESHOLD_CASES):
+        completion = completion_by_case.get(case)
+        if completion is None or completion["class"] != gas_class:
+            fail(cross_label, f"dispatcher cross-check case is not a threshold row: {case}")
+        expected_cross_rows.append({
+            "ordinal": ordinal, "class": gas_class, "case": case,
+            "coordinate": completion["coordinate"],
+            "dispatcherCase": dispatcher_case,
+            "solidityCompletionGas": completion["solidityCompletionGas"],
+            "blancCompletionGas": completion["blancCompletionGas"],
+        })
+    cross_rows = cross.get("orderedRows")
+    if not isinstance(cross_rows, list):
+        fail(cross_label, "orderedRows is not an array")
+    for index, row in enumerate(cross_rows):
+        row_label = f"{cross_label}.orderedRows[{index}]"
+        require_keys(row, DISPATCHER_THRESHOLD_ROW_KEYS, row_label)
+        for field in (
+                "ordinal", "solidityCompletionGas", "blancCompletionGas"):
+            exact_int(row.get(field), row_label + "." + field)
+        for field in ("class", "case", "coordinate", "dispatcherCase"):
+            exact_string(row.get(field), row_label + "." + field)
+    if cross_rows != expected_cross_rows or \
+            exact_int(cross.get("rowCount"), cross_label + ".rowCount") != 18:
+        fail(cross_label, "exact GAS-3/4 dispatcher threshold rows differ")
+    cross_digest = exact_string(
+        cross.get("orderedRowsSha256"), cross_label + ".orderedRowsSha256")
+    if not HEX256.fullmatch(cross_digest) or \
+            cross_digest != canonical_digest(cross_rows) or \
+            cross_digest != EXPECTED_DISPATCHER_THRESHOLD_ROWS_SHA256:
+        fail(cross_label, "dispatcher threshold digest differs from independent pin")
+    return evidence
+
+
 def expected_identities(manifest: Mapping[str, Any], label: str) -> Mapping[str, Any]:
     oracle = manifest.get("oracle")
     blanc = manifest.get("blanc")
@@ -329,6 +650,8 @@ def validate_resource_manifest(manifest: Mapping[str, Any], label: str = "manife
     expected_resource_keys = set(RESOURCE_KEYS)
     if raw_stage == "optimized":
         expected_resource_keys.add("successfulReturnShape")
+        expected_resource_keys.add("intrinsicBranchDispatch")
+        expected_resource_keys.add("completionThresholds")
     resources = require_keys(raw_resources, expected_resource_keys,
                              label + ".resourceEvidence")
     if exact_int(resources.get("schema"), label + ".resourceEvidence.schema") != \
@@ -358,10 +681,11 @@ def validate_resource_manifest(manifest: Mapping[str, Any], label: str = "manife
     baseline_manifest = exact_string(
         lifecycle.get("baselineManifestSha256"),
         label + ".resourceEvidence.lifecycle.baselineManifestSha256")
+    expected_transition = EXPECTED_TRANSITIONS[raw_stage]
     transition = require_keys(
-        lifecycle.get("optimizedTransitionRequires"), set(EXPECTED_TRANSITION),
+        lifecycle.get("optimizedTransitionRequires"), set(expected_transition),
         label + ".resourceEvidence.lifecycle.optimizedTransitionRequires")
-    for key, expected_value in EXPECTED_TRANSITION.items():
+    for key, expected_value in expected_transition.items():
         if exact_bool(
                 transition.get(key),
                 label + ".resourceEvidence.lifecycle.optimizedTransitionRequires." + key
@@ -401,9 +725,6 @@ def validate_resource_manifest(manifest: Mapping[str, Any], label: str = "manife
         summary_preview = resources.get("summary")
         if not isinstance(summary_preview, dict):
             fail(label, "optimized resource summary is not an object")
-        if exact_int(summary_preview.get("adequatePositiveDeltaCount"),
-                     label + ".resourceEvidence.summary.adequatePositiveDeltaCount") != 0:
-            fail(label, "optimized lifecycle has a positive adequate-gas delta")
         if exact_int(summary_preview.get("successfulStrictImprovementCount"),
                      label + ".resourceEvidence.summary.successfulStrictImprovementCount") < 1:
             fail(label, "optimized lifecycle has no strict successful improvement")
@@ -502,11 +823,20 @@ def validate_resource_manifest(manifest: Mapping[str, Any], label: str = "manife
     summary = derive_summary(boundaries)
     if summary_claim != summary:
         fail(label, "resource summary is not derived from the full vector")
+    intrinsic_dispatch = None
+    completion_thresholds = None
     if stage == "optimized":
-        if summary["adequatePositiveDeltaCount"] != 0:
-            fail(label, "optimized lifecycle has a positive adequate-gas delta")
+        intrinsic_dispatch = validate_intrinsic_branch_dispatch(
+            resources.get("intrinsicBranchDispatch"), boundaries,
+            label + ".resourceEvidence.intrinsicBranchDispatch")
+        if summary["adequatePositiveDeltaCount"] != intrinsic_dispatch["rowCount"]:
+            fail(label, "optimized lifecycle has an unclassified adequate positive delta")
         if summary["successfulStrictImprovementCount"] < 1:
             fail(label, "optimized lifecycle has no strict successful improvement")
+        completion_thresholds = validate_completion_thresholds(
+            resources.get("completionThresholds"), expected, boundaries,
+            identities["blancOfficialRuntimeSha256"],
+            label + ".resourceEvidence.completionThresholds")
 
     coordinate_payload = ("\n".join(row["coordinate"] for row in boundaries) + "\n").encode()
     vector_payload = {
@@ -514,6 +844,10 @@ def validate_resource_manifest(manifest: Mapping[str, Any], label: str = "manife
         "lifecycle": resources["lifecycle"], "identities": resources["identities"],
         "boundaries": boundaries,
     }
+    if intrinsic_dispatch is not None:
+        vector_payload["intrinsicBranchDispatch"] = intrinsic_dispatch
+    if completion_thresholds is not None:
+        vector_payload["completionThresholds"] = completion_thresholds
     actual_digests = {
         "orderedCoordinatesSha256": hashlib.sha256(coordinate_payload).hexdigest(),
         "fullResourceVectorSha256": canonical_digest(vector_payload),
@@ -533,6 +867,8 @@ def validate_resource_manifest(manifest: Mapping[str, Any], label: str = "manife
     return {
         "stage": stage, "summary": summary, "digests": actual_digests,
         "expectedBoundaryCount": expected_count,
+        "completionThresholdCount": 0 if completion_thresholds is None else
+            completion_thresholds["rowCount"],
     }
 
 
@@ -566,7 +902,9 @@ def main(argv: Sequence[str]) -> int:
     print(
         "OK — Lido CircuitBreaker resource schema: "
         f"{summary['boundaryCount']}/{result['expectedBoundaryCount']} ordered boundaries; "
-        f"lifecycle {result['stage']}; coordinate/vector digests independently pinned"
+        f"lifecycle {result['stage']}; "
+        f"{result['completionThresholdCount']} completion thresholds; "
+        "coordinate/vector digests independently pinned"
     )
     return 0
 

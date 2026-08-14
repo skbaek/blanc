@@ -157,12 +157,13 @@ unregister; `EXTCODESIZE`; `pauseFor(duration)` `CALL`; `isPaused()`
 post-callback count and then-current heartbeat interval; and addressed unlock.
 
 <!-- LIDO-CIRCUIT-BREAKER-SEMANTIC return-data -->
-Child failure bubbles. A successful `isPaused()` return shorter than 32 bytes
-empty-reverts; first word `0` yields `PauseFailed`; `1` succeeds; any other
-first word empty-reverts as a noncanonical Boolean; trailing bytes after `0` or
-`1` do not change the decoded value. The complete successful returndata is
-allocated/copied before decoding, so its size remains resource-observable.
-First-word-only shortcuts are outside the allowed implementation freedom.
+Child failure bubbles the complete revert data. A successful `isPaused()` call
+requests and captures a 32-byte `STATICCALL` output window, requires
+`RETURNDATASIZE ≥ 32`, and then decodes the first word. A return shorter than 32
+bytes empty-reverts; first word `0` yields `PauseFailed`; `1` succeeds; any
+other first word empty-reverts as a noncanonical Boolean; trailing bytes after
+`0` or `1` do not change the decoded value. The parent does not copy the unused
+successful tail.
 
 <!-- LIDO-CIRCUIT-BREAKER-CROSSCUT reentry-interference -->
 ### reentry-interference
@@ -217,10 +218,17 @@ evaluator-derived Blanc artifact. Neither supplies the other's expected values.
 ### finite-evidence
 
 <!-- LIDO-CIRCUIT-BREAKER-SEMANTIC gas-boundary -->
-Exact gas equality and an identical OOG threshold are excluded, but a measured
-gas increase on any externally callable named path is an observable behavioral
-deviation governed by `LIDO_CIRCUIT_BREAKER_DEVIATIONS.md`; adequate-gas and
-returndata-scaling controls do not erase that registry obligation.
+Exact gas equality and an identical OOG threshold are excluded. In the exact
+175-case/464-boundary optimized manifest, every adequate boundary in the
+optimized finite vector is cheaper. All 33 former `GAS-1` through `GAS-5`
+witnesses have independently pinned minimum-completion thresholds with Blanc no
+greater than Solidity, while the two 25,000-gas equal-OOG controls remain
+separate. The independently pinned
+`intrinsic-branch-dispatch` set is empty. This finite result does not claim
+universal gas dominance. A future positive adequate boundary must be repaired,
+registered as a behavioral deviation, or satisfy the optimization goal's exact
+independent `.branch`-architecture evidence rule; aggregate savings cannot hide
+it.
 
 Differential agreement is only for manifest-listed worlds/channels. It is not
 universal functional correctness, deployed-bytecode verification, Registry proof,

@@ -36,6 +36,9 @@ def refresh_derived_claims(value: dict[str, Any]) -> None:
         "lifecycle": resource["lifecycle"], "identities": resource["identities"],
         "boundaries": boundaries,
     }
+    if resource["lifecycle"]["stage"] == "optimized":
+        payload["intrinsicBranchDispatch"] = resource["intrinsicBranchDispatch"]
+        payload["completionThresholds"] = resource["completionThresholds"]
     resource["vectorDigests"] = {
         "orderedCoordinatesSha256": hashlib.sha256(
             ("\n".join(coordinates) + "\n").encode()).hexdigest(),
@@ -104,25 +107,50 @@ def coherent_gas_delta(value: dict[str, Any]) -> None:
 
 
 def positive_optimized_delta(value: dict[str, Any]) -> None:
-    resources(value)["lifecycle"]["stage"] = "optimized"
-    resources(value)["successfulReturnShape"] = {}
-    replacement = "1" * 64
-    value["blanc"]["creationTemplate"]["sha256"] = replacement
-    resources(value)["identities"]["blancCreationTemplateSha256"] = replacement
+    row = next(row for row in resources(value)["boundaries"]
+               if row["adequacy"] == "adequate")
+    row["blancGasUsed"] = row["solidityGasUsed"] + 1
+    row["blancMinusSolidity"] = 1
+    row["comparisonClass"] = "blanc-dearer"
+    refresh_derived_claims(value)
 
 
-def unpinned_optimized_transition(value: dict[str, Any]) -> None:
+def coherent_intrinsic_exception(value: dict[str, Any]) -> None:
+    positive_optimized_delta(value)
     resource = resources(value)
-    resource["lifecycle"]["stage"] = "optimized"
-    resource["successfulReturnShape"] = {}
-    replacement = "2" * 64
-    value["blanc"]["creationTemplate"]["sha256"] = replacement
-    resource["identities"]["blancCreationTemplateSha256"] = replacement
-    for row in resource["boundaries"]:
-        if row["adequacy"] == "adequate" and row["blancMinusSolidity"] > 0:
-            row["blancGasUsed"] = row["solidityGasUsed"]
-            row["blancMinusSolidity"] = 0
-            row["comparisonClass"] = "equal"
+    positive = next(row for row in resource["boundaries"]
+                    if row["adequacy"] == "adequate" and
+                    row["blancMinusSolidity"] > 0)
+    intrinsic = resource["intrinsicBranchDispatch"]
+    intrinsic["orderedRows"] = [{
+        "ordinal": positive["ordinal"], "coordinate": positive["coordinate"],
+        "blancMinusSolidity": positive["blancMinusSolidity"],
+    }]
+    intrinsic["rowCount"] = 1
+    intrinsic["orderedRowsSha256"] = canonical_digest(intrinsic["orderedRows"])
+    refresh_derived_claims(value)
+
+
+def architecture_relabel(value: dict[str, Any]) -> None:
+    resources(value)["intrinsicBranchDispatch"]["classification"] = \
+        "ordinary-gas-deviation"
+    refresh_derived_claims(value)
+
+
+def delete_intrinsic_block(value: dict[str, Any]) -> None:
+    resources(value).pop("intrinsicBranchDispatch")
+
+
+def fake_intrinsic_row(value: dict[str, Any]) -> None:
+    resource = resources(value)
+    row = resource["boundaries"][0]
+    intrinsic = resource["intrinsicBranchDispatch"]
+    intrinsic["orderedRows"] = [{
+        "ordinal": row["ordinal"], "coordinate": row["coordinate"],
+        "blancMinusSolidity": row["blancMinusSolidity"],
+    }]
+    intrinsic["rowCount"] = 1
+    intrinsic["orderedRowsSha256"] = canonical_digest(intrinsic["orderedRows"])
     refresh_derived_claims(value)
 
 
@@ -130,12 +158,65 @@ def coherent_identity(value: dict[str, Any]) -> None:
     replacement = "0" * 64
     value["blanc"]["official"]["runtimeSha256"] = replacement
     resources(value)["identities"]["blancOfficialRuntimeSha256"] = replacement
+    resources(value)["completionThresholds"]["dispatcherCrossCheck"][
+        "productionOfficialRuntimeSha256"] = replacement
     refresh_derived_claims(value)
 
 
 def gas_model(value: dict[str, Any]) -> None:
     resources(value)["gasModel"]["refundAccounting"] = "post-refund"
     refresh_derived_claims(value)
+
+
+def refresh_threshold_digest(value: dict[str, Any]) -> None:
+    threshold = resources(value)["completionThresholds"]
+    threshold["orderedRowsSha256"] = canonical_digest(threshold["orderedRows"])
+
+
+def delete_threshold_row(value: dict[str, Any]) -> None:
+    resources(value)["completionThresholds"]["orderedRows"].pop()
+
+
+def reorder_threshold_rows(value: dict[str, Any]) -> None:
+    rows = resources(value)["completionThresholds"]["orderedRows"]
+    rows[0], rows[1] = rows[1], rows[0]
+    rows[0]["ordinal"], rows[1]["ordinal"] = 0, 1
+    refresh_threshold_digest(value)
+    refresh_derived_claims(value)
+
+
+def relabel_threshold_row(value: dict[str, Any]) -> None:
+    row = resources(value)["completionThresholds"]["orderedRows"][0]
+    row["class"] = "GAS-2"
+    refresh_threshold_digest(value)
+    refresh_derived_claims(value)
+
+
+def nonderived_threshold(value: dict[str, Any]) -> None:
+    resources(value)["completionThresholds"]["orderedRows"][0][
+        "blancCompletionGas"] += 1
+
+
+def coherent_threshold_regeneration(value: dict[str, Any]) -> None:
+    row = resources(value)["completionThresholds"]["orderedRows"][0]
+    row["solidityCompletionGas"] += 1
+    row["blancCompletionGas"] += 1
+    refresh_threshold_digest(value)
+    refresh_derived_claims(value)
+
+
+def positive_completion_threshold(value: dict[str, Any]) -> None:
+    row = resources(value)["completionThresholds"]["orderedRows"][0]
+    row["blancCompletionGas"] = row["solidityCompletionGas"] + 1
+    row["blancMinusSolidity"] = 1
+    row["comparisonClass"] = "blanc-dearer"
+    refresh_threshold_digest(value)
+    refresh_derived_claims(value)
+
+
+def delete_dispatcher_threshold_row(value: dict[str, Any]) -> None:
+    cross = resources(value)["completionThresholds"]["dispatcherCrossCheck"]
+    cross["orderedRows"].pop()
 
 
 def main() -> int:
@@ -145,22 +226,40 @@ def main() -> int:
         ("delete", "deletion/count", delete_boundary),
         ("duplicate", "duplicate resource coordinate", duplicate_boundary),
         ("reorder", "independent resource-vector digest differs", reorder_boundaries),
-        ("relabel", "independent resource-vector digest differs", relabel_boundary),
+        ("relabel", "threshold witness is not its case's adequate final boundary",
+         relabel_boundary),
         ("drop-primary-constructor", "deletion/count", drop_primary_constructor),
         ("mutate-gas", "delta is not derived", mutate_gas),
         ("coherent-gas-delta", "independent resource-vector digest differs", coherent_gas_delta),
-        ("positive-optimized-delta", "positive adequate-gas delta", positive_optimized_delta),
-        ("unpinned-optimized-transition", "independent resource-vector pin is not installed",
-         unpinned_optimized_transition),
-        ("coherent-identity", "baseline lifecycle Blanc identity drifted", coherent_identity),
+        ("positive-optimized-delta", "ordered rows differ from all adequate positive boundaries",
+         positive_optimized_delta),
+        ("coherent-intrinsic-exception", "independent intrinsic-branch-dispatch row pin differs",
+         coherent_intrinsic_exception),
+        ("architecture-relabel", "architecture/admission rule differs from amendment 4",
+         architecture_relabel),
+        ("delete-intrinsic-block", "keys differ", delete_intrinsic_block),
+        ("fake-intrinsic-row", "ordered rows differ from all adequate positive boundaries",
+         fake_intrinsic_row),
+        ("coherent-identity", "independent resource-vector digest differs", coherent_identity),
         ("gas-model", "gas model differs", gas_model),
+        ("delete-threshold-row", "ordered threshold rows differ", delete_threshold_row),
+        ("reorder-threshold-rows", "ordered threshold rows differ", reorder_threshold_rows),
+        ("relabel-threshold-row", "ordered threshold rows differ", relabel_threshold_row),
+        ("nonderived-threshold", "threshold delta/class/minimality is not derived",
+         nonderived_threshold),
+        ("coherent-threshold-regeneration", "ordered threshold rows differ",
+         coherent_threshold_regeneration),
+        ("positive-completion-threshold", "optimized completion threshold is Blanc-dearer",
+         positive_completion_threshold),
+        ("delete-dispatcher-threshold-row", "exact GAS-3/4 dispatcher threshold rows differ",
+         delete_dispatcher_threshold_row),
     ]
     for name, diagnostic, mutate in cases:
         must_reject(baseline, name, diagnostic, mutate)
     print(
         "OK — Lido CircuitBreaker resource falsifiers: "
         f"{len(cases)} deletion/duplicate/order/label/constructor/gas/delta/"
-        "dominance/transition/identity/model mutants rejected"
+        "dominance/architecture/exception/identity/model/threshold mutants rejected"
     )
     return 0
 

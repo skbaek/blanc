@@ -17,11 +17,12 @@ from __future__ import annotations
 import argparse
 import copy
 import hashlib
+import importlib.util
 import json
 import os
 import subprocess
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Dict, List, Mapping, NoReturn, Sequence, Tuple
 
@@ -39,7 +40,7 @@ LOCK_PATH = REPO / "scripts" / "lido-circuit-breaker-reference.json"
 MANIFEST_PATH = REPO / "scripts" / "fixtures" / "lido-circuit-breaker" / "manifest.json"
 EELS_PIN = "4198b9c5996713b268aed602739d5aa40e277694"
 RESOURCE_SCHEMA = 1
-RESOURCE_LIFECYCLE = "baseline"
+RESOURCE_LIFECYCLE = "optimized"
 RESOURCE_BASELINE_COMMIT = "fc3edee6dbfb77eaf344afee43c921d48ff8a3af"
 RESOURCE_BASELINE_MANIFEST_SHA256 = \
     "6cde638ac37977f3aea228ad877a85d37e415ac4f927e66a099be67de7d30cef"
@@ -56,6 +57,66 @@ RESOURCE_BASELINE_BLANC_IDENTITIES = {
         "c5c98c4e99e43fa3fc61693e730b87e69dc37f6bba38f3adcdeb801c4375835f",
 }
 DEFAULT_GAS_LIMIT = 20_000_000
+
+INTRINSIC_BRANCH_ARCHITECTURE = \
+    "all Blanc control flow, including selector dispatch, uses Func.branch"
+INTRINSIC_BRANCH_CLASSIFICATION = "intrinsic-branch-dispatch"
+INTRINSIC_BRANCH_ADMISSION_REQUIRES = [
+    "independent opcode traces place the entire excess before the selected leaf",
+    "no later Blanc segment is costlier than the Solidity segment",
+    "the selected legal tree is Pareto-justified against balanced, linear, and hybrid legal trees",
+    "the exact coordinate and delta are independently pinned and mutation-tested",
+]
+
+COMPLETION_THRESHOLD_DEFINITION = (
+    "minimum direct EELS message gas reproducing the complete adequate boundary "
+    "outcome across every declared semantic channel; successful constructors also "
+    "reproduce their independently owned installed-runtime identity"
+)
+COMPLETION_THRESHOLD_SEARCH = (
+    "exact integer binary search over [0, 20000000] with a fresh causal world per "
+    "probe; runtime seed and history messages retain adequate gas and only the final "
+    "action gas varies"
+)
+COMPLETION_THRESHOLD_CASES = (
+    ("GAS-1", "constructor-success-official"),
+    ("GAS-1", "constructor-success-independent"),
+    ("GAS-1", "constructor-success-exact-lower-bounds"),
+    ("GAS-1", "constructor-success-exact-upper-bounds"),
+    ("GAS-1", "constructor-success-equal-bounds"),
+    ("GAS-1", "constructor-trailing-arguments"),
+    ("GAS-2", "constructor-dirty-admin"),
+    ("GAS-2", "constructor-error-admin-zero"),
+    ("GAS-2", "constructor-error-min-heartbeat-above-max"),
+    ("GAS-2", "constructor-error-min-heartbeat-zero"),
+    ("GAS-2", "constructor-error-min-pause-above-max"),
+    ("GAS-2", "constructor-error-min-pause-zero"),
+    ("GAS-2", "constructor-precedence-admin-zero-plus-min-pause-zero"),
+    ("GAS-2", "constructor-precedence-both-bound-inversions"),
+    ("GAS-3", "nonpayable-ADMIN"),
+    ("GAS-3", "nonpayable-MAX_HEARTBEAT_INTERVAL"),
+    ("GAS-3", "nonpayable-MAX_PAUSE_DURATION"),
+    ("GAS-3", "nonpayable-MIN_HEARTBEAT_INTERVAL"),
+    ("GAS-3", "nonpayable-MIN_PAUSE_DURATION"),
+    ("GAS-3", "nonpayable-getPausableCount"),
+    ("GAS-3", "nonpayable-getPausables"),
+    ("GAS-3", "nonpayable-getPauser"),
+    ("GAS-3", "nonpayable-heartbeat"),
+    ("GAS-3", "nonpayable-heartbeatExpiry"),
+    ("GAS-3", "nonpayable-heartbeatInterval"),
+    ("GAS-3", "nonpayable-isPauserLive"),
+    ("GAS-3", "nonpayable-pause"),
+    ("GAS-3", "nonpayable-pauseDuration"),
+    ("GAS-3", "nonpayable-registerPauser"),
+    ("GAS-3", "nonpayable-setHeartbeatInterval"),
+    ("GAS-3", "nonpayable-setPauseDuration"),
+    ("GAS-4", "runtime-empty-calldata"),
+    ("GAS-5", "pause-return-true-large-32768"),
+)
+DISPATCHER_THRESHOLD_CASES = COMPLETION_THRESHOLD_CASES[14:32]
+DISPATCHER_THRESHOLD_OWNER = \
+    REPO / "scripts" / "check-lido-circuit-breaker-dispatchers.py"
+SELECTED_DISPATCHER = "shared-hybrid-5-4-4-4"
 
 CIRCUIT = "0x6019cb557978296ba3c08a7b73225c0975dfb2f7"
 CLONE = "0x9999999999999999999999999999999999999999"
@@ -728,7 +789,8 @@ def side_artifacts(side: str, params: Mapping[str, object], lock: Mapping,
     return template, template + suffix, runtime
 
 
-def run_side(case: Case, side: str, lock: Mapping, artifacts: Mapping) -> Mapping:
+def run_side(case: Case, side: str, lock: Mapping, artifacts: Mapping, *,
+             completion_gas_override: int | None = None) -> Mapping:
     from ethereum.prague.fork_types import Address
     from ethereum.prague.state import State, get_account_optional
 
@@ -738,8 +800,12 @@ def run_side(case: Case, side: str, lock: Mapping, artifacts: Mapping) -> Mappin
     create_input = ordinary_create if suffix is None else template + suffix
     create_input += case.constructor_trailing
     state = State()
+    create_gas_limit = completion_gas_override \
+        if case.family == "constructor" and completion_gas_override is not None \
+        else DEFAULT_GAS_LIMIT
     created, installed, create_gas = execute_create(
-        state, CIRCUIT, create_input, case.constructor_value)
+        state, CIRCUIT, create_input, case.constructor_value,
+        gas=create_gas_limit)
     created_status = outcome(created)
     created_return = bytes(created.return_data)
     account_exists = get_account_optional(state, Address(address_bytes(CIRCUIT))) is not None
@@ -765,7 +831,7 @@ def run_side(case: Case, side: str, lock: Mapping, artifacts: Mapping) -> Mappin
             "eth": projection["eth"], "logs": [normalized_logs(created.logs)],
             "callTrace": [[]], "gasUsed": [create_gas],
             "_resourceBoundaries": [
-                resource_boundary(created, DEFAULT_GAS_LIMIT, create_gas)
+                resource_boundary(created, create_gas_limit, create_gas)
             ],
             "runtimeIdentity": hashlib.sha256(installed).hexdigest() if installed else None,
             "createInputIdentity": hashlib.sha256(create_input).hexdigest(),
@@ -774,7 +840,7 @@ def run_side(case: Case, side: str, lock: Mapping, artifacts: Mapping) -> Mappin
     if created_status != "success":
         die(f"{case.name}/{side}: causal constructor seed failed: {created_status} {created_return.hex()}")
     resource_boundaries = [
-        resource_boundary(created, DEFAULT_GAS_LIMIT, create_gas)
+        resource_boundary(created, create_gas_limit, create_gas)
     ]
     install_code(state, case.code)
     if case.clone_history:
@@ -786,9 +852,13 @@ def run_side(case: Case, side: str, lock: Mapping, artifacts: Mapping) -> Mappin
             resource_boundary(clone_created, DEFAULT_GAS_LIMIT, clone_gas))
     outputs: List[Tuple[
         object, Sequence[Mapping], int, Sequence[Mapping], Sequence[Mapping]]] = []
-    for transaction in [*case.clone_history, *case.history, case.action]:
+    transactions = [*case.clone_history, *case.history, case.action]
+    for index, transaction in enumerate(transactions):
         if transaction is None:
             continue
+        if completion_gas_override is not None and \
+                case.action is not None and index == len(transactions) - 1:
+            transaction = replace(transaction, gas=completion_gas_override)
         result = execute_tx(state, transaction)
         outputs.append(result)
         resource_boundaries.append(
@@ -2004,20 +2074,55 @@ def resource_model() -> Mapping:
 
 
 def resource_lifecycle() -> Mapping:
+    transition = ({
+        "adequateGasDominance": True,
+        "strictSuccessfulImprovement": True,
+        "independentDigestRepin": True,
+    } if RESOURCE_LIFECYCLE == "baseline" else {
+        "perBoundaryDominanceOrPinnedIntrinsicBranchDispatch": True,
+        "strictSuccessfulImprovement": True,
+        "independentCoordinateVectorAndExceptionRepin": True,
+    })
     return {
         "stage": RESOURCE_LIFECYCLE,
         "baselineBlancCommit": RESOURCE_BASELINE_COMMIT,
         "baselineManifestSha256": RESOURCE_BASELINE_MANIFEST_SHA256,
-        "optimizedTransitionRequires": {
-            "adequateGasDominance": True,
-            "strictSuccessfulImprovement": True,
-            "independentDigestRepin": True,
-        },
+        "optimizedTransitionRequires": transition,
+    }
+
+
+def intrinsic_branch_dispatch_evidence(boundaries: Sequence[Mapping]) -> Mapping:
+    positive_rows = [
+        {
+            "ordinal": row["ordinal"],
+            "coordinate": row["coordinate"],
+            "blancMinusSolidity": row["blancMinusSolidity"],
+        }
+        for row in boundaries
+        if row["adequacy"] == "adequate" and row["blancMinusSolidity"] > 0
+    ]
+    # A nonempty block needs independently captured segment traces and a
+    # deliberate external pin. The current optimized candidate has no such
+    # rows, so fail closed rather than manufacture architecture evidence from
+    # the mutable gas generator.
+    if positive_rows:
+        die("optimized resource lifecycle has an adequate positive boundary "
+            "without independently installed intrinsic-branch-dispatch evidence")
+    return {
+        "architecture": INTRINSIC_BRANCH_ARCHITECTURE,
+        "classification": INTRINSIC_BRANCH_CLASSIFICATION,
+        "directJumpDispatchAllowed": False,
+        "admissionRequires": INTRINSIC_BRANCH_ADMISSION_REQUIRES,
+        "rowCount": len(positive_rows),
+        "orderedRows": positive_rows,
+        "orderedRowsSha256": canonical_digest(positive_rows),
     }
 
 
 def enforce_resource_lifecycle(
-        blanc_identities: Mapping, summary: Mapping, *,
+        blanc_identities: Mapping, summary: Mapping,
+        intrinsic_branch_dispatch: Mapping | None,
+        completion_thresholds: Mapping | None, *,
         read_only_experiment: bool, lifecycle: str = RESOURCE_LIFECYCLE) -> None:
     if lifecycle not in {"baseline", "optimized"}:
         die(f"unknown resource lifecycle {lifecycle}")
@@ -2030,10 +2135,23 @@ def enforce_resource_lifecycle(
         if blanc_identities != RESOURCE_BASELINE_BLANC_IDENTITIES:
             die("baseline resource lifecycle artifact identity drifted; transition deliberately")
         return
-    if summary["adequatePositiveDeltaCount"] != 0:
-        die("optimized resource lifecycle has a positive adequate-gas boundary")
+    if not isinstance(intrinsic_branch_dispatch, dict):
+        die("optimized resource lifecycle lacks intrinsic-branch-dispatch evidence")
+    if summary["adequatePositiveDeltaCount"] != \
+            intrinsic_branch_dispatch.get("rowCount"):
+        die("optimized resource lifecycle has an unclassified adequate positive boundary")
     if summary["successfulStrictImprovementCount"] < 1:
         die("optimized resource lifecycle lacks a strict successful improvement")
+    if not isinstance(completion_thresholds, dict) or \
+            completion_thresholds.get("rowCount") != \
+                len(COMPLETION_THRESHOLD_CASES) or \
+            not isinstance(completion_thresholds.get("orderedRows"), list) or \
+            len(completion_thresholds["orderedRows"]) != \
+                len(COMPLETION_THRESHOLD_CASES):
+        die("optimized resource lifecycle lacks complete threshold evidence")
+    if any(row.get("blancMinusSolidity", 1) > 0
+           for row in completion_thresholds["orderedRows"]):
+        die("optimized resource lifecycle has a positive completion threshold")
 
 
 def experiment_summary_payload(metrics: Mapping) -> Mapping:
@@ -2049,6 +2167,8 @@ def experiment_summary_payload(metrics: Mapping) -> Mapping:
         "identities": metrics["identities"],
         "summary": metrics["summary"],
         "vectorDigests": metrics["vectorDigests"],
+        "intrinsicBranchDispatch": metrics.get("intrinsicBranchDispatch"),
+        "completionThresholds": metrics.get("completionThresholds"),
         "worstAdequatePositive": sorted(
             adequate_positive, key=lambda row: row["delta"], reverse=True)[:20],
     }
@@ -2065,10 +2185,10 @@ def resource_experiment_escape_self_check() -> None:
         "successfulStrictImprovementCount": 0,
     }
     enforce_resource_lifecycle(
-        drifted, synthetic_summary, read_only_experiment=True,
+        drifted, synthetic_summary, None, None, read_only_experiment=True,
         lifecycle="baseline")
     enforce_resource_lifecycle(
-        drifted, synthetic_summary, read_only_experiment=True,
+        drifted, synthetic_summary, None, None, read_only_experiment=True,
         lifecycle="optimized")
     synthetic_payload = experiment_summary_payload({
         "boundaries": [], "lifecycle": {"stage": "baseline"},
@@ -2080,7 +2200,7 @@ def resource_experiment_escape_self_check() -> None:
         die("read-only experiment omitted synthetic artifact identity drift")
     try:
         enforce_resource_lifecycle(
-            drifted, synthetic_summary, read_only_experiment=False,
+            drifted, synthetic_summary, None, None, read_only_experiment=False,
             lifecycle="baseline")
     except RuntimeError as exc:
         if str(exc) != \
@@ -2090,11 +2210,12 @@ def resource_experiment_escape_self_check() -> None:
         die("ordinary baseline lifecycle accepted synthetic artifact identity drift")
     try:
         enforce_resource_lifecycle(
-            drifted, synthetic_summary, read_only_experiment=False,
+            drifted, synthetic_summary, {"rowCount": 0}, None,
+            read_only_experiment=False,
             lifecycle="optimized")
     except RuntimeError as exc:
         if str(exc) != \
-                "optimized resource lifecycle has a positive adequate-gas boundary":
+                "optimized resource lifecycle has an unclassified adequate positive boundary":
             raise
     else:
         die("ordinary optimized lifecycle accepted a synthetic positive gas delta")
@@ -2104,7 +2225,8 @@ def resource_experiment_escape_self_check() -> None:
     }
     try:
         enforce_resource_lifecycle(
-            drifted, no_strict_improvement, read_only_experiment=False,
+            drifted, no_strict_improvement, {"rowCount": 0}, None,
+            read_only_experiment=False,
             lifecycle="optimized")
     except RuntimeError as exc:
         if str(exc) != \
@@ -2112,6 +2234,20 @@ def resource_experiment_escape_self_check() -> None:
             raise
     else:
         die("ordinary optimized lifecycle accepted no strict successful improvement")
+    strict_improvement = {
+        "adequatePositiveDeltaCount": 0,
+        "successfulStrictImprovementCount": 1,
+    }
+    try:
+        enforce_resource_lifecycle(
+            drifted, strict_improvement, {"rowCount": 0}, None,
+            read_only_experiment=False, lifecycle="optimized")
+    except RuntimeError as exc:
+        if str(exc) != \
+                "optimized resource lifecycle lacks complete threshold evidence":
+            raise
+    else:
+        die("ordinary optimized lifecycle accepted missing threshold evidence")
 
 
 def resource_descriptor_rows(case: Case) -> List[Mapping]:
@@ -2239,6 +2375,262 @@ def resource_summary(boundaries: Sequence[Mapping]) -> Mapping:
     }
 
 
+def completion_outcome_matches(
+        case: Case, expected: Mapping, actual: Mapping) -> bool:
+    if compare(case, expected, actual):
+        return False
+    if case.family == "constructor":
+        return all(
+            actual.get(field) == expected.get(field)
+            for field in ("runtimeIdentity", "createInputIdentity"))
+    return True
+
+
+def exact_completion_threshold(
+        case: Case, side: str, expected: Mapping, lock: Mapping,
+        artifacts: Mapping) -> Tuple[int, bool]:
+    low = -1
+    high = DEFAULT_GAS_LIMIT
+    while low + 1 < high:
+        middle = (low + high) // 2
+        actual = run_side(
+            case, side, lock, artifacts, completion_gas_override=middle)
+        if completion_outcome_matches(case, expected, actual):
+            high = middle
+        else:
+            low = middle
+    at_threshold = run_side(
+        case, side, lock, artifacts, completion_gas_override=high)
+    if not completion_outcome_matches(case, expected, at_threshold):
+        die(f"{case.name}/{side}: completion-threshold search did not converge")
+    below_completes = False
+    if high > 0:
+        below = run_side(
+            case, side, lock, artifacts, completion_gas_override=high - 1)
+        below_completes = completion_outcome_matches(case, expected, below)
+        if below_completes:
+            die(f"{case.name}/{side}: completion threshold is not minimal")
+    return high, below_completes
+
+
+def load_dispatcher_threshold_owner():
+    module_name = "lido_completion_threshold_dispatcher_owner"
+    existing = sys.modules.get(module_name)
+    if existing is not None:
+        return existing
+    spec = importlib.util.spec_from_file_location(
+        module_name, DISPATCHER_THRESHOLD_OWNER)
+    if spec is None or spec.loader is None:
+        die("cannot load independent dispatcher threshold owner")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def dispatcher_completion_threshold_crosscheck(
+        cases: Sequence[Case], completion_rows: Sequence[Mapping],
+        lock: Mapping, artifacts: Mapping) -> Mapping:
+    owner = load_dispatcher_threshold_owner()
+    if owner.SELECTED != SELECTED_DISPATCHER:
+        die("selected dispatcher threshold owner differs")
+    direct = {
+        row["name"]: row for row in owner.boundary_cases(sys.modules[__name__], lock)
+        if row["family"] == "known-nonzero-value" or row["name"] == "short-0"
+    }
+    if len(direct) != len(DISPATCHER_THRESHOLD_CASES):
+        die("independent dispatcher threshold case count differs")
+    full_cases = {case.name: case for case in cases}
+    completion_by_case = {row["case"]: row for row in completion_rows}
+    solidity_code = patch_solidity_runtime(lock, OFFICIAL)
+    blanc_code = artifacts["official-runtime"]
+    rows = []
+    for gas_class, case_name in DISPATCHER_THRESHOLD_CASES:
+        case = full_cases.get(case_name)
+        completion = completion_by_case.get(case_name)
+        if case is None or case.action is None or completion is None:
+            die(f"dispatcher threshold case disappeared: {case_name}")
+        if gas_class == "GAS-3":
+            signature = next(
+                row["signature"] for row in lock["abi"]["functions"]
+                if "nonpayable-" + row["signature"].split("(")[0] == case_name)
+            direct_name = "nonzero-" + signature
+        elif (gas_class, case_name) == ("GAS-4", "runtime-empty-calldata"):
+            direct_name = "short-0"
+        else:
+            die(f"dispatcher threshold class is not GAS-3/4: {case_name}")
+        direct_case = direct.get(direct_name)
+        if direct_case is None or direct_case["calldata"] != case.action.calldata or \
+                direct_case["value"] != case.action.value:
+            die(f"dispatcher/full-vector threshold input differs: {case_name}")
+        solidity_semantic, solidity_gas = owner.execute_direct(
+            sys.modules[__name__], solidity_code, direct_case["calldata"],
+            direct_case["value"], DEFAULT_GAS_LIMIT)
+        blanc_semantic, blanc_gas = owner.execute_direct(
+            sys.modules[__name__], blanc_code, direct_case["calldata"],
+            direct_case["value"], DEFAULT_GAS_LIMIT)
+        if solidity_semantic != blanc_semantic:
+            die(f"dispatcher threshold semantics differ: {case_name}")
+        solidity_threshold = owner.exact_threshold(
+            sys.modules[__name__], solidity_code, direct_case["calldata"],
+            direct_case["value"], solidity_semantic, solidity_gas)
+        blanc_threshold = owner.exact_threshold(
+            sys.modules[__name__], blanc_code, direct_case["calldata"],
+            direct_case["value"], blanc_semantic, blanc_gas)
+        if solidity_threshold != completion["solidityCompletionGas"] or \
+                blanc_threshold != completion["blancCompletionGas"]:
+            die(f"dispatcher/full-vector completion thresholds differ: {case_name}")
+        rows.append({
+            "ordinal": len(rows), "class": gas_class, "case": case_name,
+            "coordinate": completion["coordinate"],
+            "dispatcherCase": direct_name,
+            "solidityCompletionGas": solidity_threshold,
+            "blancCompletionGas": blanc_threshold,
+        })
+    return {
+        "owner": "scripts/check-lido-circuit-breaker-dispatchers.py",
+        "selectedDispatcher": SELECTED_DISPATCHER,
+        "independentDirectState": True,
+        "productionOfficialRuntimeSha256": hashlib.sha256(blanc_code).hexdigest(),
+        "rowCount": len(rows), "orderedRows": rows,
+        "orderedRowsSha256": canonical_digest(rows),
+    }
+
+
+def validate_completion_threshold_evidence(
+        evidence: Mapping, boundaries: Sequence[Mapping], *,
+        require_dominance: bool) -> None:
+    expected_keys = {
+        "schema", "definition", "scope", "search", "rowCount",
+        "orderedRows", "orderedRowsSha256", "dispatcherCrossCheck",
+    }
+    if not isinstance(evidence, dict) or set(evidence) != expected_keys or \
+            evidence.get("schema") != 1 or \
+            evidence.get("definition") != COMPLETION_THRESHOLD_DEFINITION or \
+            evidence.get("search") != COMPLETION_THRESHOLD_SEARCH or \
+            evidence.get("scope") != (
+                "33 former GAS-1..GAS-5 positive-family witnesses; the two named "
+                "25000-gas equal-OOG controls remain separate in resourceEvidence.oogControls"):
+        die("completion-threshold evidence schema/definition drifted")
+    rows = evidence.get("orderedRows")
+    if not isinstance(rows, list) or len(rows) != len(COMPLETION_THRESHOLD_CASES) or \
+            evidence.get("rowCount") != len(rows) or \
+            evidence.get("orderedRowsSha256") != canonical_digest(rows):
+        die("completion-threshold evidence count/digest drifted")
+    final_by_case: Dict[str, Mapping] = {}
+    for boundary in boundaries:
+        final_by_case[boundary["case"]] = boundary
+    row_keys = {
+        "ordinal", "class", "case", "coordinate", "solidityCompletionGas",
+        "blancCompletionGas", "blancMinusSolidity", "comparisonClass",
+        "solidityThresholdMinusOneCompletes", "blancThresholdMinusOneCompletes",
+    }
+    for ordinal, (row, expected_case) in enumerate(
+            zip(rows, COMPLETION_THRESHOLD_CASES)):
+        if not isinstance(row, dict) or set(row) != row_keys or \
+                (row.get("class"), row.get("case")) != expected_case or \
+                row.get("ordinal") != ordinal:
+            die(f"completion-threshold row order/identity drifted: {ordinal}")
+        boundary = final_by_case.get(row["case"])
+        if boundary is None or row["coordinate"] != boundary["coordinate"] or \
+                boundary["adequacy"] != "adequate":
+            die(f"completion-threshold coordinate is not the adequate final boundary: {ordinal}")
+        solidity = row.get("solidityCompletionGas")
+        blanc = row.get("blancCompletionGas")
+        if type(solidity) is not int or type(blanc) is not int or \
+                not 0 <= solidity <= DEFAULT_GAS_LIMIT or \
+                not 0 <= blanc <= DEFAULT_GAS_LIMIT:
+            die(f"completion threshold lies outside the adequate envelope: {ordinal}")
+        delta = blanc - solidity
+        comparison = "blanc-cheaper" if delta < 0 else \
+            "blanc-dearer" if delta > 0 else "equal"
+        if row.get("blancMinusSolidity") != delta or \
+                row.get("comparisonClass") != comparison or \
+                row.get("solidityThresholdMinusOneCompletes") is not False or \
+                row.get("blancThresholdMinusOneCompletes") is not False:
+            die(f"completion threshold delta/class/minimality is not derived: {ordinal}")
+        if require_dominance and delta > 0:
+            die(f"optimized completion threshold is positive: {row['case']}")
+    cross = evidence.get("dispatcherCrossCheck")
+    cross_keys = {
+        "owner", "selectedDispatcher", "independentDirectState",
+        "productionOfficialRuntimeSha256", "rowCount", "orderedRows",
+        "orderedRowsSha256",
+    }
+    if not isinstance(cross, dict) or set(cross) != cross_keys or \
+            cross.get("owner") != \
+                "scripts/check-lido-circuit-breaker-dispatchers.py" or \
+            cross.get("selectedDispatcher") != SELECTED_DISPATCHER or \
+            cross.get("independentDirectState") is not True:
+        die("dispatcher completion-threshold cross-check identity drifted")
+    cross_rows = cross.get("orderedRows")
+    cross_row_keys = {
+        "ordinal", "class", "case", "coordinate", "dispatcherCase",
+        "solidityCompletionGas", "blancCompletionGas",
+    }
+    completion_by_case = {row["case"]: row for row in rows}
+    if not isinstance(cross_rows, list) or \
+            len(cross_rows) != len(DISPATCHER_THRESHOLD_CASES) or \
+            cross.get("rowCount") != len(cross_rows) or \
+            cross.get("orderedRowsSha256") != canonical_digest(cross_rows):
+        die("dispatcher completion-threshold cross-check count/digest drifted")
+    for ordinal, (row, expected_case) in enumerate(
+            zip(cross_rows, DISPATCHER_THRESHOLD_CASES)):
+        completion = completion_by_case[expected_case[1]]
+        if not isinstance(row, dict) or set(row) != cross_row_keys or \
+                row.get("ordinal") != ordinal or \
+                (row.get("class"), row.get("case")) != expected_case or \
+                any(row.get(field) != completion[field] for field in (
+                    "coordinate", "solidityCompletionGas", "blancCompletionGas")):
+            die(f"dispatcher completion threshold does not cross-check full outcome: {ordinal}")
+
+
+def completion_threshold_evidence(
+        cases: Sequence[Case], results: Mapping[str, Tuple[Mapping, Mapping]],
+        boundaries: Sequence[Mapping], lock: Mapping, artifacts: Mapping) -> Mapping:
+    cases_by_name = {case.name: case for case in cases}
+    final_by_case: Dict[str, Mapping] = {}
+    for boundary in boundaries:
+        final_by_case[boundary["case"]] = boundary
+    rows = []
+    for gas_class, case_name in COMPLETION_THRESHOLD_CASES:
+        case = cases_by_name.get(case_name)
+        boundary = final_by_case.get(case_name)
+        if case is None or boundary is None or boundary["adequacy"] != "adequate":
+            die(f"completion-threshold witness disappeared: {case_name}")
+        solidity, solidity_below = exact_completion_threshold(
+            case, "solidity", results[case_name][0], lock, artifacts)
+        blanc, blanc_below = exact_completion_threshold(
+            case, "blanc", results[case_name][1], lock, artifacts)
+        delta = blanc - solidity
+        rows.append({
+            "ordinal": len(rows), "class": gas_class, "case": case_name,
+            "coordinate": boundary["coordinate"],
+            "solidityCompletionGas": solidity,
+            "blancCompletionGas": blanc,
+            "blancMinusSolidity": delta,
+            "comparisonClass": "blanc-cheaper" if delta < 0 else
+                "blanc-dearer" if delta > 0 else "equal",
+            "solidityThresholdMinusOneCompletes": solidity_below,
+            "blancThresholdMinusOneCompletes": blanc_below,
+        })
+    evidence = {
+        "schema": 1,
+        "definition": COMPLETION_THRESHOLD_DEFINITION,
+        "scope": (
+            "33 former GAS-1..GAS-5 positive-family witnesses; the two named "
+            "25000-gas equal-OOG controls remain separate in resourceEvidence.oogControls"),
+        "search": COMPLETION_THRESHOLD_SEARCH,
+        "rowCount": len(rows), "orderedRows": rows,
+        "orderedRowsSha256": canonical_digest(rows),
+        "dispatcherCrossCheck": dispatcher_completion_threshold_crosscheck(
+            cases, rows, lock, artifacts),
+    }
+    validate_completion_threshold_evidence(
+        evidence, boundaries, require_dominance=False)
+    return evidence
+
+
 def resource_metrics(cases: Sequence[Case], results: Mapping[str, Tuple[Mapping, Mapping]],
                      lock: Mapping, artifacts: Mapping, *,
                      read_only_experiment: bool = False,
@@ -2296,6 +2688,12 @@ def resource_metrics(cases: Sequence[Case], results: Mapping[str, Tuple[Mapping,
     identities = resource_identities(lock, artifacts)
     model = resource_model()
     lifecycle = resource_lifecycle()
+    intrinsic_dispatch = (
+        intrinsic_branch_dispatch_evidence(boundaries)
+        if RESOURCE_LIFECYCLE == "optimized" else None)
+    completion_thresholds = (
+        completion_threshold_evidence(cases, results, boundaries, lock, artifacts)
+        if RESOURCE_LIFECYCLE == "optimized" else None)
     baseline_blanc = {
         "creationTemplateSha256": identities["blancCreationTemplateSha256"],
         "officialFullCreateSha256": identities["blancOfficialFullCreateSha256"],
@@ -2305,12 +2703,17 @@ def resource_metrics(cases: Sequence[Case], results: Mapping[str, Tuple[Mapping,
         "independentRuntimeSha256": identities["blancIndependentRuntimeSha256"],
     }
     enforce_resource_lifecycle(
-        baseline_blanc, summary, read_only_experiment=read_only_experiment)
+        baseline_blanc, summary, intrinsic_dispatch, completion_thresholds,
+        read_only_experiment=read_only_experiment)
     coordinates = [row["coordinate"] for row in boundaries]
     vector_payload = {
         "schema": RESOURCE_SCHEMA, "gasModel": model, "lifecycle": lifecycle,
         "identities": identities, "boundaries": boundaries,
     }
+    if intrinsic_dispatch is not None:
+        vector_payload["intrinsicBranchDispatch"] = intrinsic_dispatch
+    if completion_thresholds is not None:
+        vector_payload["completionThresholds"] = completion_thresholds
     metrics = {
         "schema": RESOURCE_SCHEMA,
         "adequateGasEnvelope": 20_000_000,
@@ -2336,9 +2739,14 @@ def resource_metrics(cases: Sequence[Case], results: Mapping[str, Tuple[Mapping,
         "adjudication": (
             "frozen pre-optimization measurement; positive deltas require deliberate "
             "optimized-lifecycle transition" if RESOURCE_LIFECYCLE == "baseline" else
-            "optimized lifecycle requires adequate-gas per-boundary dominance and at "
-            "least one strict successful improvement"),
+            "optimized lifecycle requires every adequate positive boundary to be an "
+            "independently pinned intrinsic-branch-dispatch row and at least one strict "
+            "successful improvement"),
     }
+    if intrinsic_dispatch is not None:
+        metrics["intrinsicBranchDispatch"] = intrinsic_dispatch
+    if completion_thresholds is not None:
+        metrics["completionThresholds"] = completion_thresholds
     if ac5_shape_evidence is not None:
         metrics["successfulReturnShape"] = ac5_shape_evidence
     return metrics
@@ -2462,6 +2870,8 @@ def validate_manifest_schema(manifest: Mapping) -> None:
     }
     if candidate_resource_shape:
         expected_resource_keys.add("successfulReturnShape")
+        expected_resource_keys.add("intrinsicBranchDispatch")
+        expected_resource_keys.add("completionThresholds")
     if not isinstance(resources, dict) or set(resources) != expected_resource_keys or \
             resources.get("schema") != RESOURCE_SCHEMA:
         die("Lido differential full resource-evidence schema drifted")
@@ -2475,12 +2885,41 @@ def validate_manifest_schema(manifest: Mapping) -> None:
         die("Lido differential full resource-vector coverage/order drifted")
     if resources.get("summary") != resource_summary(resource_rows):
         die("Lido differential full resource-vector summary drifted")
+    intrinsic_dispatch = resources.get("intrinsicBranchDispatch")
+    completion_thresholds = resources.get("completionThresholds")
+    if candidate_resource_shape:
+        expected_intrinsic_rows = [
+            {"ordinal": row["ordinal"], "coordinate": row["coordinate"],
+             "blancMinusSolidity": row["blancMinusSolidity"]}
+            for row in resource_rows
+            if row["adequacy"] == "adequate" and row["blancMinusSolidity"] > 0
+        ]
+        expected_intrinsic = {
+            "architecture": INTRINSIC_BRANCH_ARCHITECTURE,
+            "classification": INTRINSIC_BRANCH_CLASSIFICATION,
+            "directJumpDispatchAllowed": False,
+            "admissionRequires": INTRINSIC_BRANCH_ADMISSION_REQUIRES,
+            "rowCount": len(expected_intrinsic_rows),
+            "orderedRows": expected_intrinsic_rows,
+            "orderedRowsSha256": canonical_digest(expected_intrinsic_rows),
+        }
+        if intrinsic_dispatch != expected_intrinsic:
+            die("Lido differential intrinsic-branch-dispatch evidence differs from adequate positives")
+        validate_completion_threshold_evidence(
+            completion_thresholds, resource_rows, require_dominance=True)
+        if completion_thresholds["dispatcherCrossCheck"][
+                "productionOfficialRuntimeSha256"] != resources[
+                    "identities"]["blancOfficialRuntimeSha256"]:
+            die("dispatcher threshold runtime identity differs from resource identity")
     coordinates = [row["coordinate"] for row in resource_rows]
     vector_payload = {
         "schema": resources["schema"], "gasModel": resources["gasModel"],
         "lifecycle": resources["lifecycle"], "identities": resources["identities"],
         "boundaries": resource_rows,
     }
+    if candidate_resource_shape:
+        vector_payload["intrinsicBranchDispatch"] = intrinsic_dispatch
+        vector_payload["completionThresholds"] = completion_thresholds
     expected_digests = {
         "orderedCoordinatesSha256": hashlib.sha256(
             ("\n".join(coordinates) + "\n").encode()).hexdigest(),

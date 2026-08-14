@@ -39,11 +39,17 @@ jobs:
         run: scripts/check-weth10-reference.sh
       - name: Lido CircuitBreaker reference lock (offline)
         run: scripts/check-lido-circuit-breaker-reference.sh
-      # The Lido differential remains a mandatory local candidate gate.  This
-      # job does not provision the clean execution-specs checkout and venv at
-      # the gate's pinned EELS commit, so CI cannot satisfy its dependency
-      # contract without a separately reviewed dependency-provisioning change.
+      # The Lido dispatcher and differential remain mandatory local candidate
+      # gates. This job does not provision the clean execution-specs checkout
+      # and venv at the gates' pinned EELS commit, so CI cannot satisfy their
+      # dependency contract without a separately reviewed provisioning change.
       - uses: leanprover/lean-action@v1
+      - name: Lido launch/current artifact ownership ledgers (offline)
+        run: scripts/check-lido-circuit-breaker-artifact-profile.sh
+      - name: Lido constructor emitted-byte schema (offline)
+        run: scripts/check-lido-circuit-breaker-constructor.sh
+      - name: Lido runtime error-table schema (offline)
+        run: scripts/check-lido-circuit-breaker-runtime-errors.sh
       - name: Execution-settlement CREATE rollback regression
         run: scripts/check-execution-settlement.sh
       - name: Execution-occurrence semantic regression

@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Generate/check the frozen Lido CircuitBreaker byte/opcode ownership ledger.
+"""Generate/check the optimized Lido CircuitBreaker byte/opcode ownership ledger.
 
 Blanc bytes come only from the Lean evaluator supplied with --blanc-artifacts;
 Solidity bytes come only from the schema-v2 reference lock.  The committed
-ledger contains lengths, hashes, partitions, and opcode summaries, never a
-second behavior-bearing bytecode literal.
+optimized ledger contains lengths, hashes, partitions, opcode summaries, and a
+derived comparison to the separately immutable launch ledger.  Neither ledger
+contains a second behavior-bearing bytecode literal.
 """
 
 from __future__ import annotations
@@ -19,19 +20,21 @@ from pathlib import Path
 from typing import Dict, List, Mapping, MutableSequence, NoReturn, Sequence, Tuple
 
 from lido_circuit_breaker_artifact_profile_schema import (
-    BASELINE_MANIFEST_SCHEMA, BASELINE_MANIFEST_SHA256, EELS_COMMIT,
-    EXPECTED_CONSTRUCTOR_TABLE, EXPECTED_ENDPOINT_SPANS,
-    EXPECTED_ENDPOINT_TOTAL_BYTES, EXPECTED_IDENTITIES,
-    EXPECTED_IMMUTABLE_OFFSETS, EXPECTED_RUNTIME_TABLE, REFERENCE_LOCK_SHA256,
-    SCHEMA, validate_rendered,
+    EXPECTED_OPTIMIZED_CONSTRUCTOR_TABLE, EXPECTED_OPTIMIZED_ENDPOINT_SPANS,
+    EXPECTED_OPTIMIZED_ENDPOINT_TOTAL_BYTES,
+    EXPECTED_OPTIMIZED_FIXED_COORDINATE_PUSHES,
+    EXPECTED_OPTIMIZED_IDENTITIES, EXPECTED_OPTIMIZED_IMMUTABLE_OFFSETS,
+    EXPECTED_OPTIMIZED_RUNTIME_TABLE, FROZEN_LEDGER_SHA256, OPTIMIZED_SCHEMA,
+    REFERENCE_LOCK_SHA256, SCHEMA, validate_optimized_rendered,
+    validate_rendered,
 )
 
 
 REPO = Path(__file__).resolve().parents[1]
 LOCK_PATH = REPO / "scripts" / "lido-circuit-breaker-reference.json"
 COMPILER_OUTPUT_PATH = REPO / "scripts" / "reference" / "lido-circuit-breaker" / "inputs" / "std-json-output.json"
-BASELINE_MANIFEST_PATH = REPO / "scripts" / "fixtures" / "lido-circuit-breaker" / "manifest.json"
-LEDGER_PATH = REPO / "scripts" / "fixtures" / "lido-circuit-breaker" / "artifact-profile-baseline.json"
+FROZEN_LEDGER_PATH = REPO / "scripts" / "fixtures" / "lido-circuit-breaker" / "artifact-profile-baseline.json"
+OPTIMIZED_LEDGER_PATH = REPO / "scripts" / "fixtures" / "lido-circuit-breaker" / "artifact-profile-optimized.json"
 
 
 OPCODES = {
@@ -145,20 +148,20 @@ def parse_evaluator(text: str) -> Mapping[str, object]:
         die("evaluator layout/control rows incomplete")
     if selectors is None or len(selectors) != 17:
         die("evaluator selector surface is incomplete")
-    if offsets != EXPECTED_IMMUTABLE_OFFSETS:
-        die("evaluator immutable offsets drifted from the frozen baseline")
+    if offsets != EXPECTED_OPTIMIZED_IMMUTABLE_OFFSETS:
+        die("evaluator immutable offsets drifted from the optimized candidate")
     if layouts["runtime-table-layout"] != [
             {"name": n, "start": s, "byteLength": z}
-            for n, s, z in EXPECTED_RUNTIME_TABLE]:
-        die("evaluator runtime table drifted from the frozen baseline")
+            for n, s, z in EXPECTED_OPTIMIZED_RUNTIME_TABLE]:
+        die("evaluator runtime table drifted from the optimized candidate")
     if layouts["runtime-endpoint-layout"] != [
             {"name": n, "start": s, "byteLength": z}
-            for n, s, z in EXPECTED_ENDPOINT_SPANS]:
-        die("evaluator runtime endpoint layout drifted from the frozen baseline")
+            for n, s, z in EXPECTED_OPTIMIZED_ENDPOINT_SPANS]:
+        die("evaluator runtime endpoint layout drifted from the optimized candidate")
     if layouts["constructor-table-layout"] != [
             {"name": n, "start": s, "byteLength": z}
-            for n, s, z in EXPECTED_CONSTRUCTOR_TABLE]:
-        die("evaluator constructor table drifted from the frozen baseline")
+            for n, s, z in EXPECTED_OPTIMIZED_CONSTRUCTOR_TABLE]:
+        die("evaluator constructor table drifted from the optimized candidate")
     if layouts["offset-metadata-valid"] is not True or layouts["patch-controls-valid"] is not True:
         die("evaluator immutable patch controls are not green")
     return {"artifacts": artifacts, "layouts": layouts,
@@ -188,13 +191,13 @@ def disassemble(code: bytes, start: int = 0, end: int | None = None) -> List[Map
 def validate_runtime_endpoint_layout(code: bytes, parsed: Mapping) -> None:
     """Fail closed unless evaluator spans are exact code-aligned leaf bodies."""
     spans = parsed["layouts"]["runtime-endpoint-layout"]
-    if len(spans) != len(EXPECTED_ENDPOINT_SPANS):
+    if len(spans) != len(EXPECTED_OPTIMIZED_ENDPOINT_SPANS):
         die("evaluator runtime endpoint count drifted")
-    if sum(int(span["byteLength"]) for span in spans) != EXPECTED_ENDPOINT_TOTAL_BYTES:
+    if sum(int(span["byteLength"]) for span in spans) != EXPECTED_OPTIMIZED_ENDPOINT_TOTAL_BYTES:
         die("evaluator runtime endpoint byte coverage drifted")
 
-    main_start = EXPECTED_RUNTIME_TABLE[0][1]
-    main_end = main_start + EXPECTED_RUNTIME_TABLE[0][2]
+    main_start = EXPECTED_OPTIMIZED_RUNTIME_TABLE[0][1]
+    main_end = main_start + EXPECTED_OPTIMIZED_RUNTIME_TABLE[0][2]
     boundaries = {int(row["pc"]) for row in disassemble(code)}
     boundaries.add(len(code))
     prior_end = main_start
@@ -347,30 +350,38 @@ def blanc_runtime_marks(code: bytes, parsed: Mapping, signatures: Mapping[str, s
     return marks
 
 
+def optimized_fixed_coordinate_pushes(prefix: bytes) -> List[Mapping[str, int]]:
+    instructions = disassemble(prefix, 0, len(prefix))
+    by_pc = {int(row["pc"]): row for row in instructions}
+    result = []
+    for pc, value in EXPECTED_OPTIMIZED_FIXED_COORDINATE_PUSHES:
+        row = by_pc.get(pc)
+        if row is None or row["opcode"] != "PUSH2" or int(row["end"]) != pc + 3:
+            die(f"optimized constructor coordinate at {pc} is not an exact PUSH2")
+        if int.from_bytes(prefix[pc + 1:pc + 3], "big") != value:
+            die(f"optimized constructor coordinate value drifted at {pc}")
+        result.append({"pc": pc, "value": int.from_bytes(
+            prefix[pc + 1:pc + 3], "big")})
+    return result
+
+
 def blanc_constructor_marks(prefix: bytes, runtime_marks: Sequence[Mark]) -> List[Mark]:
     marks = blank_marks(len(prefix), (
         "constructor-main", "Lido-private", "exact",
         "evaluator-derived constructor Prog main"))
-    for name, start, length in EXPECTED_CONSTRUCTOR_TABLE[1:]:
+    for name, start, length in EXPECTED_OPTIMIZED_CONSTRUCTOR_TABLE[1:]:
         paint(marks, start, start + length, (
             "constructor-aux-error:" + name, "Lido-private", "exact",
             "evaluator-emitted constructor Prog table entry"))
-    instructions = disassemble(prefix, 0, len(prefix))
-    fixed = [row for row in instructions
-             if row["opcode"] == "PUSH32" and int.from_bytes(
-                 prefix[int(row["pc"]) + 1:int(row["end"])], "big") < 2 ** 16
-             and int(row["pc"]) < EXPECTED_CONSTRUCTOR_TABLE[0][2]]
-    if len(fixed) != 57:
-        die(f"expected 57 fixed-width constructor coordinate pushes, found {len(fixed)}")
-    for row in fixed:
-        pc, end = int(row["pc"]), int(row["end"])
+    for fixed in optimized_fixed_coordinate_pushes(prefix):
+        pc, end = int(fixed["pc"]), int(fixed["pc"]) + 3
         paint(marks, pc, pc + 1, (
-            "constructor-fixed-width-opcode", "Lido-private", "exact",
-            "PUSH32 opcode from private pushFixedNat coordinate helper"))
+            "constructor-fixed-coordinate-opcode", "Lido-private", "exact",
+            "PUSH2 opcode from private pushFixedNat coordinate helper"))
         paint(marks, pc + 1, end, (
-            "constructor-fixed-width-immediate", "Lido-private", "exact",
-            "sub-2^16 coordinate encoded in a fixed 32-byte immediate"))
-    for name, start, _length in EXPECTED_CONSTRUCTOR_TABLE:
+            "constructor-fixed-coordinate-immediate", "Lido-private", "exact",
+            "sub-2^16 coordinate encoded in an exact two-byte immediate"))
+    for name, start, _length in EXPECTED_OPTIMIZED_CONSTRUCTOR_TABLE:
         paint(marks, start, start + 1, (
             "table-framing:" + name, "Blanc-common", "exact",
             "Prog.compile table-entry JUMPDEST"))
@@ -466,103 +477,135 @@ def artifact(code: bytes, marks: Sequence[Mark],
             "regions": materialize_regions(code, marks, rows)}
 
 
-def gas_row(name: str, solidity: int, blanc: int) -> Mapping[str, object]:
-    return {"name": name, "solidityGas": solidity, "blancGas": blanc,
-            "delta": blanc - solidity}
+def normalized_runtime_role(role: str) -> str:
+    if role == "dispatcher":
+        return "dispatcher"
+    if role.startswith("endpoint-body:"):
+        return "endpoint-bodies"
+    if role.startswith("immutable-lane:"):
+        return "immutable-lanes"
+    if role.startswith("aux-error:"):
+        return "aux-errors"
+    if role.startswith("shared-registry-kernel:"):
+        return "shared-registry-kernel"
+    if role.startswith("continuation:"):
+        return "continuations"
+    if role.startswith("table-framing:"):
+        return "table-framing"
+    die(f"unclassified runtime attribution role {role}")
 
 
-def gas_classes() -> Mapping[str, object]:
-    gas1 = [gas_row(name, sol, 1029868) for name, sol in [
-        ("constructor-success-official", 967777),
-        ("constructor-success-independent", 967777),
-        ("constructor-success-exact-lower-bounds", 967777),
-        ("constructor-success-exact-upper-bounds", 967777),
-        ("constructor-success-equal-bounds", 967777),
-        ("constructor-trailing-arguments", 967783),
-    ]]
-    gas2 = [gas_row(name, sol, blanc) for name, sol, blanc in [
-        ("constructor-error-admin-zero", 481, 1162),
-        ("constructor-error-min-pause-zero", 503, 1184),
-        ("constructor-error-min-pause-above-max", 529, 1212),
-        ("constructor-error-min-heartbeat-zero", 551, 1234),
-        ("constructor-error-min-heartbeat-above-max", 577, 1262),
-        ("constructor-dirty-admin", 260, 1131),
-        ("constructor-precedence-admin-zero-plus-min-pause-zero", 481, 1162),
-        ("constructor-precedence-both-bound-inversions", 529, 1212),
-    ]]
-    gas3_values = [
-        ("ADMIN()", 145), ("MAX_HEARTBEAT_INTERVAL()", 144),
-        ("MAX_PAUSE_DURATION()", 168), ("MIN_HEARTBEAT_INTERVAL()", 144),
-        ("MIN_PAUSE_DURATION()", 144), ("getPausableCount(address)", 143),
-        ("getPausables()", 144), ("getPauser(address)", 145),
-        ("heartbeat()", 144), ("heartbeatExpiry(address)", 143),
-        ("heartbeatInterval()", 144), ("isPauserLive(address)", 142),
-        ("pause(address)", 145), ("pauseDuration()", 169),
-        ("registerPauser(address,address)", 145),
-        ("setHeartbeatInterval(uint256)", 143), ("setPauseDuration(uint256)", 143),
-    ]
-    gas3 = [gas_row("nonpayable-" + signature.split("(")[0], 43, blanc)
-            | {"endpoint": signature} for signature, blanc in gas3_values]
+def normalized_constructor_role(role: str) -> str:
+    if role == "constructor-main":
+        return "constructor-main"
+    if role.startswith("constructor-aux-error:"):
+        return "constructor-aux-errors"
+    if role in {"constructor-fixed-width-opcode",
+                "constructor-fixed-coordinate-opcode"}:
+        return "coordinate-push-opcodes"
+    if role in {"constructor-fixed-width-immediate",
+                "constructor-fixed-coordinate-immediate"}:
+        return "coordinate-push-immediates"
+    if role.startswith("table-framing:"):
+        return "table-framing"
+    die(f"unclassified constructor attribution role {role}")
+
+
+def role_totals(regions: Sequence[Mapping[str, object]], classifier,
+                end: int | None = None) -> Mapping[str, int]:
+    totals: Counter[str] = Counter()
+    covered = 0
+    for region in regions:
+        start = int(region["start"])
+        stop = int(region["end"])
+        if end is not None:
+            if start >= end:
+                continue
+            if stop > end:
+                die("attribution boundary cuts a generated region")
+        length = int(region["byteLength"])
+        totals[classifier(str(region["role"]))] += length
+        covered += length
+    expected = end if end is not None else sum(
+        int(region["byteLength"]) for region in regions)
+    if covered != expected:
+        die(f"attribution covers {covered} of {expected} bytes")
+    return dict(sorted(totals.items()))
+
+
+def comparison_vector(before: Mapping[str, int], after: Mapping[str, int]) -> Mapping[str, object]:
+    keys = sorted(set(before) | set(after))
+    before_full = {key: int(before.get(key, 0)) for key in keys}
+    after_full = {key: int(after.get(key, 0)) for key in keys}
     return {
-        "GAS-1": {"rows": gas1, "attribution": {
-            "mechanism": "EVM code deposit plus constructor execution residual",
-            "runtimeByteDelta": 313, "codeDepositGasPerByte": 200,
-            "codeDepositDeltaGas": 62600, "observedResidualGas": [-515, -509],
-            "certainty": "exact arithmetic over locked lengths and EELS rows"}},
-        "GAS-2": {"rows": gas2, "attribution": {
-            "mechanism": "Blanc executes two CODECOPY operations before canonical/source validation",
-            "runtimeCopy": {"bytes": 4897, "words": 154, "opcodeGas": 465,
-                            "memoryExpansionGas": 508},
-            "argumentCopy": {"bytes": 224, "words": 7, "opcodeGas": 24,
-                             "incrementalMemoryExpansionGas": 25},
-            "knownAvoidablePrevalidationGas": 1022,
-            "certainty": "exact opcode/memory formula; observed net includes other constructor differences"}},
-        "GAS-3": {"rows": gas3, "attribution": {
-            "mechanism": "balanced selector traversal followed by a leaf-local nonpayable guard",
-            "executedLeafGuardGas": 23,
-            "executedLeafGuardOpcodes": {
-                "CALLVALUE": 2, "ISZERO": 3, "PUSH2": 3, "JUMPI": 10,
-                "JUMPDEST": 1, "PUSH0x2": 4, "REVERT": 0},
-            "selectorDependentDeltaRange": [99, 126],
-            "certainty": "exact failing suffix and EELS totals; traversal share is path dependent"}},
-        "GAS-4": {"rows": [gas_row("runtime-empty-calldata", 68, 162)],
-            "attribution": {
-                "mechanism": "zero-padded CALLDATALOAD traverses the balanced tree before fallback",
-                "deltaGas": 94,
-                "certainty": "exact EELS row; opcode owner is Blanc-common dispatcher"}},
-        "GAS-5": {"rows": [gas_row("pause-return-true-large-32768", 57317, 58262)],
-            "attribution": {
-                "mechanism": "Blanc RETURNDATACOPY copies the complete successful tail after a zero-output STATICCALL",
-                "range": {"fromBytes": 64, "toBytes": 32768,
-                          "solidityGasGrowth": 13314, "blancGasGrowth": 16488,
-                          "excessGrowth": 3174},
-                "incrementalCopyWords": 1022,
-                "incrementalRETURNDATACOPYWordGas": 3066,
-                "certainty": "exact EELS slope and Prague copy-word formula; 108 gas remains choreography/memory interaction"}},
-        "representativeSavings": [
-            gas_row("view-pause-duration", 2306, 2282),
-            gas_row("setter-pause-authorized-lower", 6732, 6538),
-            gas_row("register-fresh", 139755, 138725),
-            gas_row("pause-return-true/action", 43994, 41762),
-        ],
+        "baseline": before_full,
+        "optimized": after_full,
+        "delta": {key: after_full[key] - before_full[key] for key in keys},
+    }
+
+
+def before_after_attribution(baseline: Mapping[str, object],
+                             optimized: Mapping[str, object],
+                             optimized_prefix_len: int) -> Mapping[str, object]:
+    baseline_blanc = baseline["artifacts"]["blanc"]
+    optimized_blanc = optimized["artifacts"]["blanc"]
+    baseline_prefix_len = (baseline_blanc["creationTemplate"]["byteLength"] -
+                           baseline_blanc["runtime"]["byteLength"])
+    artifact_names = {
+        "runtime": (baseline_blanc["runtime"]["byteLength"],
+                    optimized_blanc["runtime"]["byteLength"]),
+        "constructorPrefix": (baseline_prefix_len, optimized_prefix_len),
+        "creationTemplate": (baseline_blanc["creationTemplate"]["byteLength"],
+                             optimized_blanc["creationTemplate"]["byteLength"]),
+        "fullCreate": (baseline_blanc["fullCreate"]["byteLength"],
+                       optimized_blanc["fullCreate"]["byteLength"]),
+    }
+    sizes = {
+        name: {"baselineBytes": int(pair[0]), "optimizedBytes": int(pair[1]),
+               "deltaBytes": int(pair[1]) - int(pair[0])}
+        for name, pair in artifact_names.items()
+    }
+    baseline_runtime = role_totals(
+        baseline_blanc["runtime"]["regions"], normalized_runtime_role)
+    optimized_runtime = role_totals(
+        optimized_blanc["runtime"]["regions"], normalized_runtime_role)
+    baseline_constructor = role_totals(
+        baseline_blanc["creationTemplate"]["regions"],
+        normalized_constructor_role, baseline_prefix_len)
+    optimized_constructor = role_totals(
+        optimized_blanc["creationTemplate"]["regions"],
+        normalized_constructor_role, optimized_prefix_len)
+    baseline_owners = {
+        owner: int(row["blancArtifactBytes"])
+        for owner, row in baseline["ownershipSummary"].items()
+    }
+    optimized_owners = {
+        owner: int(row["blancArtifactBytes"])
+        for owner, row in optimized["ownershipSummary"].items()
+    }
+    return {
+        "baselineLedger": {
+            "path": "scripts/fixtures/lido-circuit-breaker/artifact-profile-baseline.json",
+            "schema": SCHEMA, "sha256": FROZEN_LEDGER_SHA256,
+        },
+        "artifactSizes": sizes,
+        "runtimeRoleBytes": comparison_vector(baseline_runtime, optimized_runtime),
+        "constructorPrefixRoleBytes": comparison_vector(
+            baseline_constructor, optimized_constructor),
+        "creationTemplateOwnerBytes": comparison_vector(
+            baseline_owners, optimized_owners),
+        "derivation": "exact subtraction of canonical generated partitions; negative deltas are byte reductions",
     }
 
 
 def build_profile(evaluator_text: str, lock_raw: bytes, compiler_raw: bytes,
-                  baseline_manifest_raw: bytes | None) -> Mapping[str, object]:
+                  baseline: Mapping[str, object]) -> Mapping[str, object]:
     if sha(lock_raw) != REFERENCE_LOCK_SHA256:
         die("reference-lock raw identity drifted")
     lock = json.loads(lock_raw)
     compiler_output = json.loads(compiler_raw)
     if sha(compiler_raw) != lock["compiler"]["standardOutputRawSha256"]:
         die("vendored compiler-output raw identity drifted from the reference lock")
-    if baseline_manifest_raw is not None:
-        if sha(baseline_manifest_raw) != BASELINE_MANIFEST_SHA256:
-            die("deliberate baseline write requires the exact frozen differential manifest")
-        manifest = json.loads(baseline_manifest_raw)
-        if manifest.get("schema") != BASELINE_MANIFEST_SCHEMA:
-            die("frozen differential manifest schema drifted")
-
     parsed = parse_evaluator(evaluator_text)
     blanc_bytes = parsed["artifacts"]
     sol_creation = bytes.fromhex(lock["artifacts"]["creationTemplate"]["hex"].removeprefix("0x"))
@@ -585,10 +628,10 @@ def build_profile(evaluator_text: str, lock_raw: bytes, compiler_raw: bytes,
             "independentFullCreate": identity(blanc_bytes["independent-create"]),
             "independentRuntime": identity(blanc_bytes["independent-runtime"])},
     }
-    for side, expected in EXPECTED_IDENTITIES.items():
+    for side, expected in EXPECTED_OPTIMIZED_IDENTITIES.items():
         for name, (length, digest) in expected.items():
             if actual_identities[side][name] != {"byteLength": length, "sha256": digest}:
-                die(f"{side} {name} baseline identity drifted")
+                die(f"{side} {name} optimized identity drifted")
 
     contract = compiler_output["contracts"]["src/CircuitBreaker.sol"]["CircuitBreaker"]["evm"]
     if bytes.fromhex(contract["bytecode"]["object"]) != sol_creation:
@@ -599,7 +642,7 @@ def build_profile(evaluator_text: str, lock_raw: bytes, compiler_raw: bytes,
     if sol_prefix_len != 830 or sol_creation[sol_prefix_len:] != sol_runtime_template:
         die("locked Solidity creation/runtime suffix relation drifted")
     blanc_prefix_len = len(blanc_bytes["creation-template"]) - len(blanc_bytes["official-runtime"])
-    if blanc_prefix_len != 2613 or len(
+    if blanc_prefix_len != 616 or len(
             blanc_bytes["creation-template"][blanc_prefix_len:]) != len(blanc_bytes["official-runtime"]):
         # The evaluator owns the zero-parameter runtime template, which differs
         # from the official member only at generated immutable payloads.
@@ -673,18 +716,17 @@ def build_profile(evaluator_text: str, lock_raw: bytes, compiler_raw: bytes,
 
     layout = parsed["layouts"]
     profile = {
-        "schema": SCHEMA, "profile": "lido-circuit-breaker-pre-optimization",
+        "schema": OPTIMIZED_SCHEMA, "profile": "lido-circuit-breaker-optimized",
         "provenance": {
             "blancEvaluator": "scripts/eval-lido-circuit-breaker-artifacts.lean",
             "referenceLock": {"path": "scripts/lido-circuit-breaker-reference.json",
                               "schema": lock["schema"], "sha256": sha(lock_raw)},
             "compilerOutput": {"path": "scripts/reference/lido-circuit-breaker/inputs/std-json-output.json",
                                "sha256": sha(compiler_raw)},
-            "baselineManifest": {"path": "scripts/fixtures/lido-circuit-breaker/manifest.json",
-                                 "schema": BASELINE_MANIFEST_SCHEMA,
-                                 "sha256": BASELINE_MANIFEST_SHA256},
-            "eelsCommit": EELS_COMMIT,
-            "derivation": "no byte literal: Blanc=evaluator output; Solidity=reference-lock bytes",
+            "baselineLedger": {
+                "path": "scripts/fixtures/lido-circuit-breaker/artifact-profile-baseline.json",
+                "schema": SCHEMA, "sha256": FROZEN_LEDGER_SHA256},
+            "derivation": "no byte literal: Blanc=evaluator output; Solidity=reference-lock bytes; before/after=frozen-ledger subtraction",
         },
         "artifacts": {
             "blanc": {"identities": actual_identities["blanc"],
@@ -696,7 +738,9 @@ def build_profile(evaluator_text: str, lock_raw: bytes, compiler_raw: bytes,
                     "runtimeEndpoints": layout["runtime-endpoint-layout"],
                     "constructorTable": layout["constructor-table-layout"],
                     "immutableOffsets": parsed["offsets"],
-                    "ownershipDecision": "Blanc CommonCore owns table/dispatch emission; Lido owns bodies/layout helpers; no direct Jaune byte owner found"}},
+                    "fixedCoordinatePushes": optimized_fixed_coordinate_pushes(
+                        blanc_prefix),
+                    "ownershipDecision": "Blanc CommonCore owns table/branch dispatch emission; Lido owns bodies/layout helpers and compact coordinate selection; no direct Jaune byte owner found"}},
             "solidity": {"identities": actual_identities["solidity"],
                 "runtime": solidity_runtime_artifact,
                 "creationTemplate": solidity_creation_artifact,
@@ -709,17 +753,17 @@ def build_profile(evaluator_text: str, lock_raw: bytes, compiler_raw: bytes,
                     "sourceMapOwner": "vendored locked solc standard output"}},
         },
         "sizeComparison": {
-            "runtime": {"solidityBytes": 4584, "blancBytes": 4897, "deltaBytes": 313},
-            "creationTemplate": {"solidityBytes": 5414, "blancBytes": 7510, "deltaBytes": 2096},
-            "constructorPrefix": {"solidityBytes": 830, "blancBytes": 2613, "deltaBytes": 1783},
-            "fullCreate": {"solidityBytes": 5638, "blancBytes": 7734, "deltaBytes": 2096}},
-        "gasClasses": gas_classes(),
+            "runtime": {"solidityBytes": 4584, "blancBytes": 4282, "deltaBytes": -302},
+            "creationTemplate": {"solidityBytes": 5414, "blancBytes": 4898, "deltaBytes": -516},
+            "constructorPrefix": {"solidityBytes": 830, "blancBytes": 616, "deltaBytes": -214},
+            "fullCreate": {"solidityBytes": 5638, "blancBytes": 5122, "deltaBytes": -516}},
+        "beforeAfter": {},
         "ownershipSummary": {},
         "limitations": [
             "Solidity regions use the locked source map; optimizer sharing can make one interval serve multiple source expressions.",
             "Blanc immutable payloads split PUSH32 instructions, so their regions contain immediate bytes but no opcode starts.",
-            "GAS-2 and GAS-5 separate exact known opcode costs from explicitly labelled residual interaction; they are not universal gas proofs.",
-            "Jaune defines EVM semantics/types but emitted table, branch, push-width, and dispatcher bytes are owned by Blanc CommonCore or Lido-private helpers in this baseline.",
+            "The frozen ledger owns launch GAS-1…GAS-5 attribution; complete optimized gas vectors are owned by the differential manifest rather than duplicated here.",
+            "Jaune defines EVM semantics/types but emitted table, branch, push-width, and dispatcher bytes are owned by Blanc CommonCore or Lido-private helpers in this optimized artifact.",
         ],
     }
     owner_counts = {owner: 0 for owner in (
@@ -731,44 +775,48 @@ def build_profile(evaluator_text: str, lock_raw: bytes, compiler_raw: bytes,
         owner: {"blancArtifactBytes": count,
                 "basis": "unique bytes in the Blanc creation template (constructor prefix plus embedded runtime)"}
         for owner, count in owner_counts.items()}
+    profile["beforeAfter"] = before_after_attribution(
+        baseline, profile, blanc_prefix_len)
     return profile
 
 
 def main(argv: Sequence[str]) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--blanc-artifacts", required=True)
-    parser.add_argument("--baseline-manifest")
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--check", action="store_true")
-    mode.add_argument("--write-baseline", action="store_true")
+    mode.add_argument("--write-optimized", action="store_true")
     mode.add_argument("--print-current", action="store_true")
     args = parser.parse_args(argv)
-    if args.write_baseline and not args.baseline_manifest:
-        die("--write-baseline requires --baseline-manifest naming the exact frozen manifest")
-    baseline_manifest_raw = (Path(args.baseline_manifest).read_bytes()
-                             if args.baseline_manifest else None)
+
+    if not FROZEN_LEDGER_PATH.is_file():
+        die("frozen launch artifact profile is missing")
+    frozen_raw = FROZEN_LEDGER_PATH.read_bytes()
+    if sha(frozen_raw) != FROZEN_LEDGER_SHA256:
+        die("frozen launch artifact profile identity drifted; regeneration is prohibited")
+    baseline = validate_rendered(frozen_raw.decode())
     profile = build_profile(Path(args.blanc_artifacts).read_text(), LOCK_PATH.read_bytes(),
-                            COMPILER_OUTPUT_PATH.read_bytes(), baseline_manifest_raw)
+                            COMPILER_OUTPUT_PATH.read_bytes(), baseline)
     rendered = json.dumps(profile, indent=2, sort_keys=True) + "\n"
-    validate_rendered(rendered)
+    validate_optimized_rendered(rendered)
     if args.print_current:
         sys.stdout.write(rendered)
         return 0
-    if args.write_baseline:
-        LEDGER_PATH.parent.mkdir(parents=True, exist_ok=True)
-        LEDGER_PATH.write_text(rendered)
-        print("OK — Lido artifact profile baseline deliberately regenerated")
+    if args.write_optimized:
+        OPTIMIZED_LEDGER_PATH.parent.mkdir(parents=True, exist_ok=True)
+        OPTIMIZED_LEDGER_PATH.write_text(rendered)
+        print("OK — Lido optimized artifact profile generated; frozen launch ledger unchanged")
         return 0
-    if not LEDGER_PATH.is_file():
-        die("committed artifact profile baseline is missing; use --write-baseline deliberately")
-    committed = LEDGER_PATH.read_text()
-    validate_rendered(committed)
+    if not OPTIMIZED_LEDGER_PATH.is_file():
+        die("committed optimized artifact profile is missing; use --write-optimized deliberately")
+    committed = OPTIMIZED_LEDGER_PATH.read_text()
+    validate_optimized_rendered(committed)
     if committed != rendered:
-        die("committed artifact profile baseline is stale; inspect before deliberate regeneration")
+        die("committed optimized artifact profile is stale")
     regions = sum(len(profile["artifacts"][side][artifact]["regions"])
                   for side in ("blanc", "solidity")
                   for artifact in ("runtime", "creationTemplate", "fullCreate"))
-    print(f"OK — Lido artifact profile baseline: 10 exact artifacts; {regions} partition regions; GAS-1…GAS-5 pinned")
+    print(f"OK — Lido artifact profiles: frozen launch digest pinned; optimized 10 exact artifacts; {regions} partition regions; before/after attribution pinned")
     return 0
 
 
