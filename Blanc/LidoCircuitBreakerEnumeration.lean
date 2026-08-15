@@ -342,4 +342,229 @@ theorem enumPrefixMemory_append (entries done : List Entry) (entry : Entry) :
         (Nat.toB256 entries.length).toBytes) done).size = 64 + 32 * done.length by
       simpa [enumPrefixMemory] using (enumPrefixMemory_invariant entries done).2.1]
 
+/-- Ordered storage reads of `getPausables`: length first, then one target slot per entry. -/
+def enumerationEntryKeysFrom : Nat → List Entry → List B256
+  | _, [] => []
+  | i, _ :: rest => arrayEntrySlot (Nat.toB256 (i + 1)) ::
+      enumerationEntryKeysFrom (i + 1) rest
+
+def enumerationStorageKeys (entries : List Entry) : List B256 :=
+  arrayLengthSlot :: enumerationEntryKeysFrom 0 entries
+
+def prepareEnumerationStorage (sevm : Sevm) (base : Devm) (entries : List Entry) : Devm :=
+  (enumerationStorageKeys entries).foldl
+    (fun devm key => addAccessedStorageKey devm sevm.currentTarget key) base
+
+private theorem prewarmStorage_preserves (sevm : Sevm) (keys : List B256) (base : Devm)
+    {pair : Adr × B256} (hmem : pair ∈ base.accessedStorageKeys) :
+    pair ∈ (keys.foldl (fun devm key =>
+      addAccessedStorageKey devm sevm.currentTarget key) base).accessedStorageKeys := by
+  induction keys generalizing base with
+  | nil => simpa
+  | cons key rest ih =>
+      apply ih
+      change pair ∈ base.accessedStorageKeys.insert ⟨sevm.currentTarget, key⟩
+      exact Std.HashSet.mem_insert.mpr (Or.inr hmem)
+
+private theorem prewarmStorage_mem (sevm : Sevm) (keys : List B256) (base : Devm)
+    {key : B256} (hkey : key ∈ keys) :
+    (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈
+      (keys.foldl (fun devm k =>
+        addAccessedStorageKey devm sevm.currentTarget k) base).accessedStorageKeys := by
+  induction keys generalizing base with
+  | nil => simp at hkey
+  | cons _ rest ih =>
+      simp only [List.mem_cons] at hkey
+      rcases hkey with rfl | hkey
+      · apply prewarmStorage_preserves sevm rest
+        change (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈
+          base.accessedStorageKeys.insert ⟨sevm.currentTarget, key⟩
+        exact Std.HashSet.mem_insert_self
+      · exact ih (addAccessedStorageKey base sevm.currentTarget _ ) hkey
+
+theorem prepareEnumerationStorage_warm (sevm : Sevm) (base : Devm)
+    (entries : List Entry) {key : B256} (hkey : key ∈ enumerationStorageKeys entries) :
+    (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈
+      (prepareEnumerationStorage sevm base entries).accessedStorageKeys :=
+  prewarmStorage_mem sevm _ base hkey
+
+theorem arrayLengthSlot_mem_enumerationStorageKeys (entries : List Entry) :
+    arrayLengthSlot ∈ enumerationStorageKeys entries := by
+  simp [enumerationStorageKeys]
+
+theorem arrayEntrySlot_mem_enumerationEntryKeysFrom :
+    ∀ (entries : List Entry) (start offset : Nat),
+      offset < entries.length →
+      arrayEntrySlot (Nat.toB256 (start + offset + 1)) ∈
+        enumerationEntryKeysFrom start entries := by
+  intro entries
+  induction entries with
+  | nil =>
+      intro start offset h
+      simp at h
+  | cons entry rest ih =>
+      intro start offset h
+      simp only [List.length_cons] at h
+      cases offset with
+      | zero =>
+          simp only [enumerationEntryKeysFrom, List.mem_cons]
+          exact Or.inl trivial
+      | succ offset =>
+          simp only [enumerationEntryKeysFrom, List.mem_cons]
+          apply Or.inr
+          have hoff : offset < rest.length := by omega
+          simpa only [Nat.add_assoc, Nat.add_left_comm, Nat.add_comm] using
+            ih (start + 1) offset hoff
+
+theorem arrayEntrySlot_mem_enumerationStorageKeys (entries : List Entry)
+    (i : Nat) (hi : i < entries.length) :
+    arrayEntrySlot (Nat.toB256 (i + 1)) ∈ enumerationStorageKeys entries := by
+  simp only [enumerationStorageKeys, List.mem_cons]
+  exact Or.inr (by simpa using
+    arrayEntrySlot_mem_enumerationEntryKeysFrom entries 0 i hi)
+
+private theorem prewarmStorage_mach (sevm : Sevm) (keys : List B256) (base : Devm) :
+    (keys.foldl (fun devm key =>
+      addAccessedStorageKey devm sevm.currentTarget key) base).mach = base.mach := by
+  induction keys generalizing base with
+  | nil => rfl
+  | cons key rest ih =>
+      rw [List.foldl_cons, ih]
+      rfl
+
+private theorem prewarmStorage_logs (sevm : Sevm) (keys : List B256) (base : Devm) :
+    (keys.foldl (fun devm key =>
+      addAccessedStorageKey devm sevm.currentTarget key) base).logs = base.logs := by
+  induction keys generalizing base with
+  | nil => rfl
+  | cons key rest ih =>
+      rw [List.foldl_cons, ih]
+      rfl
+
+private theorem prewarmStorage_state (sevm : Sevm) (keys : List B256) (base : Devm) :
+    (keys.foldl (fun devm key =>
+      addAccessedStorageKey devm sevm.currentTarget key) base).state = base.state := by
+  induction keys generalizing base with
+  | nil => rfl
+  | cons key rest ih =>
+      rw [List.foldl_cons, ih]
+      rfl
+
+private theorem prewarmStorage_transientStorage
+    (sevm : Sevm) (keys : List B256) (base : Devm) :
+    (keys.foldl (fun devm key =>
+      addAccessedStorageKey devm sevm.currentTarget key) base).transientStorage =
+        base.transientStorage := by
+  induction keys generalizing base with
+  | nil => rfl
+  | cons key rest ih =>
+      rw [List.foldl_cons, ih]
+      rfl
+
+theorem prepareEnumerationStorage_mach (sevm : Sevm) (base : Devm)
+    (entries : List Entry) :
+    (prepareEnumerationStorage sevm base entries).mach = base.mach :=
+  prewarmStorage_mach sevm _ base
+
+theorem prepareEnumerationStorage_logs (sevm : Sevm) (base : Devm)
+    (entries : List Entry) :
+    (prepareEnumerationStorage sevm base entries).logs = base.logs :=
+  prewarmStorage_logs sevm _ base
+
+theorem prepareEnumerationStorage_worldEq (sevm : Sevm) (base : Devm)
+    (entries : List Entry) :
+    Devm.WorldEq base (prepareEnumerationStorage sevm base entries) := by
+  exact ⟨(prewarmStorage_state sevm _ base).symm,
+    (prewarmStorage_transientStorage sevm _ base).symm⟩
+
+/-- Warm cost for the source loop from word index `i`; each live pass owns one
+memory-word expansion and the loop exit costs 49. -/
+def enumLoopGasWarmFrom : Nat → List Entry → Nat
+  | _, [] => 49
+  | i, _ :: rest => 179 +
+      (calculateMemoryGasCost (64 + 32 * (i + 1)) -
+        calculateMemoryGasCost (64 + 32 * i)) +
+      enumLoopGasWarmFrom (i + 1) rest
+
+def getPausablesGasWarm (entries : List Entry) : Nat :=
+  131 + calculateMemoryGasCost 64 + enumLoopGasWarmFrom 0 entries
+
+@[simp] theorem enumLoopGasWarmFrom_nil (i : Nat) :
+    enumLoopGasWarmFrom i [] = 49 := rfl
+
+@[simp] theorem enumLoopGasWarmFrom_cons (i : Nat) (entry : Entry)
+    (rest : List Entry) :
+    enumLoopGasWarmFrom i (entry :: rest) =
+      179 +
+        (calculateMemoryGasCost (64 + 32 * (i + 1)) -
+          calculateMemoryGasCost (64 + 32 * i)) +
+        enumLoopGasWarmFrom (i + 1) rest := rfl
+
+theorem getPausablesGasWarm_nil : getPausablesGasWarm [] = 186 := rfl
+
+theorem getPausablesGasWarm_singleton (entry : Entry) :
+    getPausablesGasWarm [entry] = 368 := rfl
+
+/-- Explicit source-body resources for enumeration.  Warmth is stated for the
+ordered source read-set, so it can be reused at every recursive loop step. -/
+structure EnumerationResources (sevm : Sevm) (pre : Devm)
+    (entries : List Entry) : Prop where
+  stack_empty : pre.stack = []
+  memory_empty : pre.memory = Mem.empty
+  warm : ∀ key ∈ enumerationStorageKeys entries,
+    (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈ pre.accessedStorageKeys
+  gas_sufficient : getPausablesGasWarm entries ≤ pre.gasLeft
+
+def preparedEnumerationState (sevm : Sevm) (base : Devm)
+    (entries : List Entry) : Devm :=
+  (prepareEnumerationStorage sevm base entries).setMach
+    ⟨[], Mem.empty, getPausablesGasWarm entries⟩
+
+theorem enumerationResources_prepared (sevm : Sevm) (base : Devm)
+    (entries : List Entry) :
+    EnumerationResources sevm (preparedEnumerationState sevm base entries) entries := by
+  refine ⟨rfl, rfl, ?_, Nat.le_refl _⟩
+  intro key hkey
+  change (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈
+    (prepareEnumerationStorage sevm base entries).accessedStorageKeys
+  exact prepareEnumerationStorage_warm sevm base entries hkey
+
+theorem EnumerationResources.length_warm {sevm : Sevm} {pre : Devm}
+    {entries : List Entry} (h : EnumerationResources sevm pre entries) :
+    (⟨sevm.currentTarget, arrayLengthSlot⟩ : Adr × B256) ∈
+      pre.accessedStorageKeys :=
+  h.warm _ (arrayLengthSlot_mem_enumerationStorageKeys entries)
+
+theorem EnumerationResources.entry_warm {sevm : Sevm} {pre : Devm}
+    {entries : List Entry} (h : EnumerationResources sevm pre entries)
+    (i : Nat) (hi : i < entries.length) :
+    (⟨sevm.currentTarget, arrayEntrySlot (Nat.toB256 (i + 1))⟩ : Adr × B256) ∈
+      pre.accessedStorageKeys :=
+  h.warm _ (arrayEntrySlot_mem_enumerationStorageKeys entries i hi)
+
+theorem preparedEnumerationState_worldEq (sevm : Sevm) (base : Devm)
+    (entries : List Entry) :
+    Devm.WorldEq base (preparedEnumerationState sevm base entries) := by
+  rcases prepareEnumerationStorage_worldEq sevm base entries with
+    ⟨hstate, htransient⟩
+  exact ⟨hstate, htransient⟩
+
+theorem preparedEnumerationState_logs (sevm : Sevm) (base : Devm)
+    (entries : List Entry) :
+    (preparedEnumerationState sevm base entries).logs = base.logs := by
+  change (prepareEnumerationStorage sevm base entries).logs = base.logs
+  exact prepareEnumerationStorage_logs sevm base entries
+
+theorem preparedEnumerationState_getCode (sevm : Sevm) (base : Devm)
+    (entries : List Entry) (address : Adr) :
+    (preparedEnumerationState sevm base entries).getCode address =
+      base.getCode address :=
+  (preparedEnumerationState_worldEq sevm base entries).getCode address |>.symm
+
+theorem preparedEnumerationState_getStor (sevm : Sevm) (base : Devm)
+    (entries : List Entry) (address : Adr) :
+    Devm.getStor (preparedEnumerationState sevm base entries) address =
+      Devm.getStor base address :=
+  (preparedEnumerationState_worldEq sevm base entries).getStor address |>.symm
+
 end Blanc.LidoCircuitBreaker
