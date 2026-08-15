@@ -756,3 +756,19 @@ OK	1.180	Blanc/LidoCircuitBreakerRegistryModel.lean
 # Only this new row is admitted. Every pre-existing row above remains
 # byte-for-byte unchanged, and `--rebase` and `--force` were not used.
 OK	68.192	Blanc/LidoCircuitBreakerRegistry.lean
+
+# 2026-08-16. The Lido CircuitBreaker enumeration-observability goal added
+# exactly one proof owner, Blanc/LidoCircuitBreakerEnumeration.lean. Its
+# 42.170 s row is the median of three separate uncontended sequential
+# `scripts/check-elab.sh --list --no-build --report <absolute-path>` runs over
+# all 103 files on the exact already-built pre-admission candidate based on
+# Blanc 6b79e80 with task patch SHA-256
+# 0b83e76dc9c0c98072c4deb09a530f6916f289f46246cdb98e048edc21c3f8d0:
+# 39.740 s / 564.2 s total, 50.174 s / 616.0 s total, and 42.170 s /
+# 569.3 s total. The reports are `/private/tmp/lido-enum-elab-{1,2,3}.json`;
+# the measured owner SHA-256 is
+# 43d8e963ac3c6e7928664e9b18476e425b8f03ba64bc35b3b0d31853674101a8.
+# Only this new row is admitted. Every pre-existing row above remains
+# byte-for-byte unchanged, and `--rebase`, `--force`, and `--full` were not
+# used.
+OK	42.170	Blanc/LidoCircuitBreakerEnumeration.lean

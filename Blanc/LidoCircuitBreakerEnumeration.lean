@@ -627,6 +627,60 @@ theorem prepareEnumerationStorage_worldEq (sevm : Sevm) (base : Devm)
   exact ⟨(prewarmStorage_state sevm _ base).symm,
     (prewarmStorage_transientStorage sevm _ base).symm⟩
 
+/-- Prewarm exactly the three Registry-view read sets while preserving the
+stable world and log snapshot that those views observe. -/
+def prepareRegistryViewsStorage (sevm : Sevm) (base : Devm)
+    (entries : List Entry) (target pauser : B256) : Devm :=
+  addAccessedStorageKey
+    (addAccessedStorageKey
+      (prepareEnumerationStorage sevm base entries)
+      sevm.currentTarget (assignmentSlot target))
+    sevm.currentTarget (countSlot pauser)
+
+theorem prepareRegistryViewsStorage_getStor (sevm : Sevm) (base : Devm)
+    (entries : List Entry) (target pauser : B256) :
+    Devm.getStor (prepareRegistryViewsStorage sevm base entries target pauser) =
+      Devm.getStor base := by
+  unfold prepareRegistryViewsStorage
+  rw [addAccessedStorageKey_getStor, addAccessedStorageKey_getStor]
+  funext a
+  exact ((prepareEnumerationStorage_worldEq sevm base entries).getStor a).symm
+
+theorem prepareRegistryViewsStorage_logs (sevm : Sevm) (base : Devm)
+    (entries : List Entry) (target pauser : B256) :
+    (prepareRegistryViewsStorage sevm base entries target pauser).logs =
+      base.logs := by
+  unfold prepareRegistryViewsStorage
+  exact prepareEnumerationStorage_logs sevm base entries
+
+theorem prepareRegistryViewsStorage_enumWarm (sevm : Sevm) (base : Devm)
+    (entries : List Entry) (target pauser : B256) {key : B256}
+    (hkey : key ∈ enumerationStorageKeys entries) :
+    (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈
+      (prepareRegistryViewsStorage sevm base entries target pauser).accessedStorageKeys := by
+  unfold prepareRegistryViewsStorage
+  apply Std.HashSet.mem_insert.mpr
+  apply Or.inr
+  apply Std.HashSet.mem_insert.mpr
+  exact Or.inr (prepareEnumerationStorage_warm sevm base entries hkey)
+
+theorem prepareRegistryViewsStorage_assignmentWarm
+    (sevm : Sevm) (base : Devm) (entries : List Entry)
+    (target pauser : B256) :
+    (⟨sevm.currentTarget, assignmentSlot target⟩ : Adr × B256) ∈
+      (prepareRegistryViewsStorage sevm base entries target pauser).accessedStorageKeys := by
+  unfold prepareRegistryViewsStorage
+  apply Std.HashSet.mem_insert.mpr
+  exact Or.inr Std.HashSet.mem_insert_self
+
+theorem prepareRegistryViewsStorage_countWarm
+    (sevm : Sevm) (base : Devm) (entries : List Entry)
+    (target pauser : B256) :
+    (⟨sevm.currentTarget, countSlot pauser⟩ : Adr × B256) ∈
+      (prepareRegistryViewsStorage sevm base entries target pauser).accessedStorageKeys := by
+  unfold prepareRegistryViewsStorage
+  exact Std.HashSet.mem_insert_self
+
 /-- Warm cost for the source loop from word index `i`; each live pass owns one
 memory-word expansion and the loop exit costs 49. -/
 def enumLoopGasWarmFrom : Nat → List Entry → Nat
@@ -1036,6 +1090,7 @@ theorem getPausables_runCompiled
     (hdata : sevm.data.length.toB256 = 4)
     (hvalue : sevm.value = 0)
     (hselector : Sevm.selector sevm = selector "getPausables" [])
+    (_hcodeAddress : sevm.codeAddress = some sevm.currentTarget)
     (hcode : sevm.code.toList = lidoCircuitBreakerCode dp)
     (hw : RegistryWitness
       (logicalStorageOfStor (Devm.getStor base sevm.currentTarget)) entries)
@@ -1103,6 +1158,7 @@ theorem EnumerationRuntimeResources.getPausables_runCompiled
     (hdata : sevm.data.length.toB256 = 4)
     (hvalue : sevm.value = 0)
     (hselector : Sevm.selector sevm = selector "getPausables" [])
+    (hcodeAddress : sevm.codeAddress = some sevm.currentTarget)
     (hcode : sevm.code.toList = lidoCircuitBreakerCode dp)
     (hw : RegistryWitness
       (logicalStorageOfStor (Devm.getStor pre sevm.currentTarget)) entries) :
@@ -1124,7 +1180,7 @@ theorem EnumerationRuntimeResources.getPausables_runCompiled
   simpa only [hgas, hpre] using
     Blanc.LidoCircuitBreaker.getPausables_runCompiled dp sevm pre entries
       (pre.gasLeft - getPausablesRuntimeGas entries)
-      hdata hvalue hselector hcode hw resources.warm
+      hdata hvalue hselector hcodeAddress hcode hw resources.warm
 
 theorem getPausables_post_worldEq (base : Devm) (entries : List Entry)
     (G : Nat) :
@@ -1153,6 +1209,16 @@ theorem getPausables_noSstore_occurrence
     occurrence.instruction ≠ .reg .sstore :=
   occurrence.instruction_ne_sstore_of_entrySstoreFree
     cursor compiled enumerationComponent enumeration_entry_sstore_free owned
+
+/-- The live enumeration writing mutant cannot supply the semantic component
+certificate required by the occurrence-level no-SSTORE theorem. -/
+theorem enumeration_writing_mutant_certificate_rejected :
+    ¬ (enumerationWritingMutant officialParams).EntrySstoreFree
+      getPausables enumerationComponent := by
+  intro accepted
+  have hbool := Prog.entrySstoreFree_iff.mpr accepted
+  rw [enumeration_writing_mutant_rejected] at hbool
+  contradiction
 
 theorem canonicalAddress_mask_zero {word : B256}
     (h : canonicalAddress word) : addressMask &&& word = 0 := by
@@ -1185,12 +1251,14 @@ private theorem registryScalarReturn_runCompiled
       Func.RunCompiled fs sevm
         (base.setMach ⟨[0, 32], Mem.empty.write 0 word.toBytes, G⟩)
         Func.ret post ∧
-      Devm.output post = word.toBytes := by
+      Devm.output post = word.toBytes ∧
+      Devm.WorldEq base post ∧
+      post.logs = base.logs := by
   let retPre := base.setMach
     ⟨[0, 32], Mem.empty.write 0 word.toBytes, G⟩
   let d := (retPre.setMach ⟨[], retPre.memory, G⟩).memRead 0 32
   let post := d.2.withOutput word.toBytes
-  refine ⟨post, ?_, rfl⟩
+  refine ⟨post, ?_, rfl, ?_, rfl⟩
   have hread :
       (retPre.setMach ⟨[], retPre.memory, G⟩).memRead 0 32 =
         ⟨word.toBytes, d.2⟩ := by
@@ -1201,6 +1269,7 @@ private theorem registryScalarReturn_runCompiled
   exact Func.runCompiled_ret_of (devm := retPre) (G := G) (e := 0)
     (out := word.toBytes) (d' := d.2) rfl
     (Devm.extCost_word_word Mem.size_write_word) rfl hread
+  · exact ⟨rfl, rfl⟩
 
 /-- Exact compiled-body result for the assignment view on a canonical ABI
 address word and the same concrete Registry owner used by enumeration. -/
@@ -1218,7 +1287,9 @@ theorem getPauser_body_runCompiled
       Func.RunCompiled fs sevm
         (base.setMach ⟨[], Mem.empty, G + registryScalarBodyGasWarm⟩)
         getPauser post ∧
-      Devm.output post = (assignmentAt entries target).toBytes := by
+      Devm.output post = (assignmentAt entries target).toBytes ∧
+      Devm.WorldEq base post ∧
+      post.logs = base.logs := by
   have hcanonical := canonicalAddress_mask_zero htarget
   have hstorage :
       Devm.getStorVal base sevm.currentTarget (assignmentSlot target) =
@@ -1264,7 +1335,9 @@ theorem getPausableCount_body_runCompiled
         (base.setMach ⟨[], Mem.empty, G + registryScalarBodyGasWarm⟩)
         getPausableCount post ∧
       Devm.output post =
-        (Nat.toB256 (assignmentCount entries pauser)).toBytes := by
+        (Nat.toB256 (assignmentCount entries pauser)).toBytes ∧
+      Devm.WorldEq base post ∧
+      post.logs = base.logs := by
   have hcanonical := canonicalAddress_mask_zero hpauser
   have hstorage :
       Devm.getStorVal base sevm.currentTarget (countSlot pauser) =
@@ -1350,6 +1423,36 @@ theorem RegistryWitness.snapshotCoherence
   exact ⟨hmember, hw.targetsValid, hw.targetsNodup,
     assignmentCount_eq_multiplicity entries pauser, hzeroCount⟩
 
+/-- Exact successful body runs for the three Registry views over one prepared
+stable snapshot, including their outputs and state/log silence. -/
+def RegistryViewsRun (fs : List Func)
+    (enumSevm pauserSevm countSevm : Sevm) (base : Devm)
+    (entries : List Entry) (target pauser : B256)
+    (enumG pauserG countG : Nat) : Prop :=
+  ∃ pauserPost countPost,
+    Func.RunCompiled fs enumSevm
+      (base.setMach ⟨[], Mem.empty,
+        enumG + getPausablesGasWarm entries⟩)
+      getPausables
+      ((base.setMach ⟨[], enumPrefixMemory entries entries, enumG⟩).withOutput
+        (abiAddressArray entries)) ∧
+    Func.RunCompiled fs pauserSevm
+      (base.setMach ⟨[], Mem.empty,
+        pauserG + registryScalarBodyGasWarm⟩)
+      getPauser pauserPost ∧
+    Devm.output pauserPost = (assignmentAt entries target).toBytes ∧
+    Devm.WorldEq base pauserPost ∧
+    pauserPost.logs = base.logs ∧
+    Func.RunCompiled fs countSevm
+      (base.setMach ⟨[], Mem.empty,
+        countG + registryScalarBodyGasWarm⟩)
+      getPausableCount countPost ∧
+    Devm.output countPost =
+      (Nat.toB256 (assignmentCount entries pauser)).toBytes ∧
+    Devm.WorldEq base countPost ∧
+    countPost.logs = base.logs ∧
+    RegistrySnapshotCoherence entries target pauser
+
 /-- The exact enumeration, assignment, and multiplicity bodies read one
 concrete Registry snapshot.  Their successful outputs therefore agree with
 ordered membership, target validity/uniqueness, and pauser multiplicity. -/
@@ -1378,25 +1481,9 @@ theorem registryViews_coherent
       (⟨countSevm.currentTarget, countSlot pauser⟩ : Adr × B256) ∈
         base.accessedStorageKeys)
     (hfs : fs[enumLoopSlot]? = some enumLoop) :
-    ∃ pauserPost countPost,
-      Func.RunCompiled fs enumSevm
-        (base.setMach ⟨[], Mem.empty,
-          enumG + getPausablesGasWarm entries⟩)
-        getPausables
-        ((base.setMach ⟨[], enumPrefixMemory entries entries, enumG⟩).withOutput
-          (abiAddressArray entries)) ∧
-      Func.RunCompiled fs pauserSevm
-        (base.setMach ⟨[], Mem.empty,
-          pauserG + registryScalarBodyGasWarm⟩)
-        getPauser pauserPost ∧
-      Devm.output pauserPost = (assignmentAt entries target).toBytes ∧
-      Func.RunCompiled fs countSevm
-        (base.setMach ⟨[], Mem.empty,
-          countG + registryScalarBodyGasWarm⟩)
-        getPausableCount countPost ∧
-      Devm.output countPost =
-        (Nat.toB256 (assignmentCount entries pauser)).toBytes ∧
-      RegistrySnapshotCoherence entries target pauser := by
+    RegistryViewsRun fs enumSevm pauserSevm countSevm base entries
+      target pauser enumG pauserG countG := by
+  unfold RegistryViewsRun
   have hwPauser : RegistryWitness
       (logicalStorageOfStor
         (Devm.getStor base pauserSevm.currentTarget)) entries := by
@@ -1407,14 +1494,15 @@ theorem registryViews_coherent
     simpa only [hcountOwner] using hw
   rcases getPauser_body_runCompiled fs pauserSevm base entries target pauserG
       hpauserData hpauserWord htarget hwPauser hpauserWarm with
-    ⟨pauserPost, hpauserRun, hpauserOutput⟩
+    ⟨pauserPost, hpauserRun, hpauserOutput, hpauserWorld, hpauserLogs⟩
   rcases getPausableCount_body_runCompiled fs countSevm base entries
       pauser countG hcountData hcountWord hpauser hwCount hcountWarm with
-    ⟨countPost, hcountRun, hcountOutput⟩
+    ⟨countPost, hcountRun, hcountOutput, hcountWorld, hcountLogs⟩
   refine ⟨pauserPost, countPost,
     getPausables_body_runCompiled fs enumSevm base entries enumG
       hw henumWarm hfs,
-    hpauserRun, hpauserOutput, hcountRun, hcountOutput, ?_⟩
+    hpauserRun, hpauserOutput, hpauserWorld, hpauserLogs,
+    hcountRun, hcountOutput, hcountWorld, hcountLogs, ?_⟩
   have hassignment :
       (Devm.getStor base enumSevm.currentTarget).get (assignmentSlot target) =
         assignmentAt entries target := by
@@ -1516,6 +1604,279 @@ private theorem enumeration_prefix_of_loadWord_image
     have hpush := Devm.push_of_push run2
     exact hb1.logs.trans (((p1.logs.trans hb.logs).trans rfl).trans hpush.logs)
 
+/-! The direct-register continuation may append heartbeat events, but it never
+removes the already-emitted `PauserSet` prefix.  This private, source-shaped
+composition layer states exactly that append-only fact; it is intentionally
+not presented as a generic theorem about arbitrary external EVM instructions. -/
+
+open Blanc.Ninst
+open scoped LogOutputHinv
+
+private def LogsAppend (pre post : Devm) : Prop :=
+  ∃ suffix, post.logs = pre.logs ++ suffix
+
+private def Line.LogsAppend (line : Line) : Prop :=
+  ∀ {sevm pre post}, Line.Run sevm pre line post →
+    LidoCircuitBreaker.LogsAppend pre post
+
+private def Func.LogsAppend (fs : List Func) (body : Func) : Prop :=
+  ∀ {sevm pre post}, Func.Run fs sevm pre body post →
+    LidoCircuitBreaker.LogsAppend pre post
+
+private theorem LogsAppend.trans {a b c : Devm}
+    (hab : LogsAppend a b) (hbc : LogsAppend b c) : LogsAppend a c := by
+  rcases hab with ⟨ab, hab⟩
+  rcases hbc with ⟨bc, hbc⟩
+  refine ⟨ab ++ bc, ?_⟩
+  rw [hbc, hab, List.append_assoc]
+
+private theorem Line.LogsAppend.of_inv {line : Line}
+    (h : Line.Inv Devm.logs line) : Line.LogsAppend line := by
+  intro sevm pre post run
+  exact ⟨[], by simp [← Line.of_inv Devm.logs h run]⟩
+
+private theorem Line.logWith_logsAppend (k : Fin 4) (x y : B256) :
+    Line.LogsAppend (logWith k x y) := by
+  intro sevm pre post run
+  rcases Line.of_run_cons run with ⟨s1, h1, rest1⟩
+  rcases Line.of_run_cons rest1 with ⟨s2, h2, rest2⟩
+  rcases Line.of_run_cons rest2 with ⟨s3, hlog, hnil⟩
+  cases hnil
+  rcases of_run_log_val hlog with
+    ⟨mi, sz, topics, hlen, hpop, hlogs⟩
+  refine ⟨[⟨sevm.currentTarget, topics,
+    (s2.memory.read mi.toNat sz.toNat).1⟩], ?_⟩
+  rw [hlogs]
+  have hp1 : pre.logs = s1.logs :=
+    Ninst.Hinv.inv (f := Devm.logs) h1
+  have hp2 : s1.logs = s2.logs :=
+    Ninst.Hinv.inv (f := Devm.logs) h2
+  rw [← hp2, ← hp1]
+
+private theorem Func.LogsAppend.stop : Func.LogsAppend fs Func.stop := by
+  intro sevm pre post run
+  cases run with
+  | last h =>
+      exact ⟨[], by
+        have hs : pre.logs = post.logs :=
+          Linst.Hinv.inv (f := Devm.logs) (g := Devm.logs) h
+        simp [← hs]⟩
+
+private theorem Func.LogsAppend.prepend {line : Line} {body : Func}
+    (hl : Line.LogsAppend line) (hb : Func.LogsAppend fs body) :
+    Func.LogsAppend fs (line +++ body) := by
+  intro sevm pre post run
+  rcases of_run_prepend line body run with ⟨mid, hline, htail⟩
+  exact (hl hline).trans (hb htail)
+
+private theorem Func.LogsAppend.branch {left right : Func}
+    (hl : Func.LogsAppend fs left) (hr : Func.LogsAppend fs right) :
+    Func.LogsAppend fs (Func.branch left right) := by
+  intro sevm pre post run
+  cases run with
+  | zero hpop hrun =>
+      rcases hl hrun with ⟨tail, ht⟩
+      exact ⟨tail, by rw [ht, ← hpop.logs]⟩
+  | succ hnz hpop hburn hrun =>
+      rcases hr hrun with ⟨tail, ht⟩
+      exact ⟨tail, by rw [ht, ← hburn.logs, ← hpop.logs]⟩
+
+private theorem revData_not_successful
+    {fs : List Func} {sevm : Sevm} {pre post : Devm} {blob : Bytes} :
+    ¬ Func.Run fs sevm pre (Func.revData blob) post := by
+  have no_last : ∀ {s r : Devm},
+      ¬ Func.Run fs sevm s (.last .rev) r := by
+    intro s r run
+    cases run with
+    | last hrun =>
+        simp only [Linst.Run, Linst.run] at hrun
+        rcases Except.bind_eq_ok hrun with ⟨v1, h1, h2⟩
+        rcases Except.bind_eq_ok h2 with ⟨v2, h3, h4⟩
+        rcases Except.bind_eq_ok h4 with ⟨v3, h5, h6⟩
+        contradiction
+  have no_stores :
+      ∀ (iws : List (B256 × Nat)) (rest : Func),
+        (∀ {s r : Devm}, ¬ Func.Run fs sevm s rest r) →
+        ∀ {s r : Devm},
+          ¬ Func.Run fs sevm s (prependStoresRev iws rest) r := by
+    intro iws
+    induction iws with
+    | nil =>
+        intro rest h s r run
+        exact h run
+    | cons iw iws ih =>
+        intro rest h
+        simp only [prependStoresRev]
+        apply ih
+        intro s r run
+        unfold prependStore at run
+        rcases of_run_next run with ⟨s1, h1, run1⟩
+        rcases of_run_next run1 with ⟨s2, h2, run2⟩
+        rcases of_run_next run2 with ⟨s3, h3, run3⟩
+        exact h run3
+  unfold Func.revData
+  apply no_stores
+  intro s r run
+  rcases of_run_next run with ⟨s1, h1, run1⟩
+  rcases of_run_next run1 with ⟨s2, h2, run2⟩
+  exact no_last run2
+
+private theorem Func.LogsAppend.callRevData {fs : List Func} {slot : Nat}
+    {blob : Bytes} (hlookup : fs[slot]? = some (Func.revData blob)) :
+    Func.LogsAppend fs (.call slot) := by
+  intro sevm pre post run
+  rcases of_run_call run with ⟨body, mid, hget, hburn, hbody⟩
+  rw [hlookup] at hget
+  injection hget with heq
+  subst body
+  exact (revData_not_successful hbody).elim
+
+private theorem timestamp_logs_hinv :
+    Rinst.Hinv Devm.logs Rinst.timestamp := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  exact (Devm.pushBurn_of_pushItem run).logs⟩
+
+private theorem mload_logs_hinv : Rinst.Hinv Devm.logs Rinst.mload := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨⟨si, t1⟩, h1, run1⟩
+  rcases Except.bind_eq_ok run1 with ⟨t2, h2, run2⟩
+  rcases Devm.pop_of_popToNat h1 with ⟨x, p1⟩
+  have hb := Devm.burn_of_chargeGas h2
+  have hpush := Devm.push_of_push run2
+  exact ((p1.logs.trans hb.logs).trans rfl).trans hpush.logs⟩
+
+private theorem registerWrite_logsAppend (fs : List Func) :
+    Func.LogsAppend fs
+      (dup 0 ::: mstoreAt 0 +++
+        loadWord newPauserWord +++ tagTop expiryRegion +++ sstore :::
+        loadWord newPauserWord +++ pushB256 heartbeatUpdatedEvent :::
+        logWith 1 0 1 +++ Func.stop) := by
+  letI : Rinst.Hinv Devm.logs Rinst.mload := mload_logs_hinv
+  apply Func.LogsAppend.prepend
+      (line := [dup 0] ++ mstoreAt 0 ++ loadWord newPauserWord ++
+        tagTop expiryRegion ++ [sstore] ++ loadWord newPauserWord ++
+        [pushB256 heartbeatUpdatedEvent])
+  · apply Line.LogsAppend.of_inv
+    line_inv
+  · apply Func.LogsAppend.prepend (Line.logWith_logsAppend 1 0 1)
+    exact Func.LogsAppend.stop
+
+private theorem checkedHeartbeatExpiry_logsAppend
+    (fs : List Func) (blob : Bytes)
+    (hlookup : fs[arithmeticPanicSlot]? = some (Func.revData blob)) :
+    Func.LogsAppend fs
+      (checkedHeartbeatExpiry <|
+        dup 0 ::: mstoreAt 0 +++
+        loadWord newPauserWord +++ tagTop expiryRegion +++ sstore :::
+        loadWord newPauserWord +++ pushB256 heartbeatUpdatedEvent :::
+        logWith 1 0 1 +++ Func.stop) := by
+  letI : Rinst.Hinv Devm.logs Rinst.timestamp := timestamp_logs_hinv
+  unfold checkedHeartbeatExpiry
+  apply Func.LogsAppend.prepend
+      (line := [timestamp, pushB256 heartbeatIntervalSlot, sload, add,
+        dup 0, timestamp, swap 0, lt])
+  · apply Line.LogsAppend.of_inv
+    line_inv
+  · apply Func.LogsAppend.branch
+    · exact registerWrite_logsAppend fs
+    · exact Func.LogsAppend.callRevData hlookup
+
+private theorem optionalNew_logsAppend (fs : List Func) (blob : Bytes)
+    (hlookup : fs[arithmeticPanicSlot]? = some (Func.revData blob)) :
+    Func.LogsAppend fs
+      (loadWord newPauserWord +++ iszero :::
+        (Func.stop <?>
+          (checkedHeartbeatExpiry <|
+            dup 0 ::: mstoreAt 0 +++
+            loadWord newPauserWord +++ tagTop expiryRegion +++ sstore :::
+            loadWord newPauserWord +++ pushB256 heartbeatUpdatedEvent :::
+            logWith 1 0 1 +++ Func.stop))) := by
+  letI : Rinst.Hinv Devm.logs Rinst.mload := mload_logs_hinv
+  apply Func.LogsAppend.prepend
+      (line := loadWord newPauserWord ++ [iszero])
+  · apply Line.LogsAppend.of_inv
+    line_inv
+  · apply Func.LogsAppend.branch
+    · exact checkedHeartbeatExpiry_logsAppend fs blob hlookup
+    · exact Func.LogsAppend.stop
+
+private theorem clearOldThenNew_logsAppend (fs : List Func) (blob : Bytes)
+    (hlookup : fs[arithmeticPanicSlot]? = some (Func.revData blob)) :
+    Func.LogsAppend fs
+      (pushB256 0 ::: loadWord previousPauserWord +++ tagTop expiryRegion +++
+        sstore ::: pushB256 0 ::: mstoreAt 0 +++
+        loadWord previousPauserWord +++ pushB256 heartbeatUpdatedEvent :::
+        logWith 1 0 1 +++
+        loadWord newPauserWord +++ iszero :::
+        (Func.stop <?>
+          (checkedHeartbeatExpiry <|
+            dup 0 ::: mstoreAt 0 +++
+            loadWord newPauserWord +++ tagTop expiryRegion +++ sstore :::
+            loadWord newPauserWord +++ pushB256 heartbeatUpdatedEvent :::
+            logWith 1 0 1 +++ Func.stop))) := by
+  letI : Rinst.Hinv Devm.logs Rinst.mload := mload_logs_hinv
+  apply Func.LogsAppend.prepend
+      (line := [pushB256 0] ++ loadWord previousPauserWord ++
+        tagTop expiryRegion ++ [sstore, pushB256 0] ++ mstoreAt 0 ++
+        loadWord previousPauserWord ++ [pushB256 heartbeatUpdatedEvent])
+  · apply Line.LogsAppend.of_inv
+    line_inv
+  · apply Func.LogsAppend.prepend (Line.logWith_logsAppend 1 0 1)
+    exact optionalNew_logsAppend fs blob hlookup
+
+private theorem previousCountBranch_logsAppend
+    (fs : List Func) (blob : Bytes)
+    (hlookup : fs[arithmeticPanicSlot]? = some (Func.revData blob)) :
+    Func.LogsAppend fs
+      (previousCountKey +++ sload ::: iszero :::
+        (pushB256 0 ::: loadWord previousPauserWord +++
+          tagTop expiryRegion +++ sstore ::: pushB256 0 ::: mstoreAt 0 +++
+          loadWord previousPauserWord +++
+          pushB256 heartbeatUpdatedEvent ::: logWith 1 0 1 +++
+          loadWord newPauserWord +++ iszero :::
+          (Func.stop <?>
+            (checkedHeartbeatExpiry <|
+              dup 0 ::: mstoreAt 0 +++
+              loadWord newPauserWord +++ tagTop expiryRegion +++ sstore :::
+              loadWord newPauserWord +++ pushB256 heartbeatUpdatedEvent :::
+              logWith 1 0 1 +++ Func.stop))) <?>
+        (loadWord newPauserWord +++ iszero :::
+          (Func.stop <?>
+            (checkedHeartbeatExpiry <|
+              dup 0 ::: mstoreAt 0 +++
+              loadWord newPauserWord +++ tagTop expiryRegion +++ sstore :::
+              loadWord newPauserWord +++ pushB256 heartbeatUpdatedEvent :::
+              logWith 1 0 1 +++ Func.stop)))) := by
+  letI : Rinst.Hinv Devm.logs Rinst.mload := mload_logs_hinv
+  apply Func.LogsAppend.prepend
+      (line := previousCountKey ++ [sload, iszero])
+  · apply Line.LogsAppend.of_inv
+    line_inv
+  · apply Func.LogsAppend.branch
+    · exact optionalNew_logsAppend fs blob hlookup
+    · exact clearOldThenNew_logsAppend fs blob hlookup
+
+/-- Every successful direct-register continuation retains all logs present at
+its entry, appending only its optional heartbeat records. -/
+theorem registerAfterSet_logsAppend
+    {fs : List Func} {sevm : Sevm} {pre post : Devm} {blob : Bytes}
+    (hlookup : fs[arithmeticPanicSlot]? = some (Func.revData blob))
+    (hrun : Func.Run fs sevm pre registerAfterSet post) :
+    ∃ suffix, post.logs = pre.logs ++ suffix := by
+  letI : Rinst.Hinv Devm.logs Rinst.mload := mload_logs_hinv
+  have hmono : Func.LogsAppend fs registerAfterSet := by
+    unfold registerAfterSet
+    apply Func.LogsAppend.prepend
+        (line := loadWord previousPauserWord ++ [iszero])
+    · apply Line.LogsAppend.of_inv
+      line_inv
+    · apply Func.LogsAppend.branch
+      · exact previousCountBranch_logsAppend fs blob hlookup
+      · exact optionalNew_logsAppend fs blob hlookup
+  exact hmono hrun
+
 /-- Every successful source execution through the sole production event site
 reaches a post-log continuation state with exactly one appended `PauserSet`
 record and unchanged Registry storage. -/
@@ -1535,6 +1896,8 @@ theorem finishSetPauser_run_extracts_event
       logged.logs = pre.logs ++
         [⟨sevm.currentTarget,
           [pauserSetEvent, target, previousPauser, newPauser], []⟩] ∧
+      Mem.Wf logged.memory ∧
+      Mem.Reads logged.memory img ∧
       Devm.getStor logged = Devm.getStor pre ∧
       Func.Run fs sevm logged
         (loadWord continuationWord +++ Ninst.iszero :::
@@ -1559,7 +1922,7 @@ theorem finishSetPauser_run_extracts_event
     ⟨hpPrevious, hwfPrevious, hrPrevious, hstorPrevious, hlogsPrevious⟩
   rcases enumeration_prefix_of_loadWord_image
       hpPrevious hwfPrevious hrPrevious htargetRead hloadTarget with
-    ⟨hpTarget, _, _, hstorTarget, hlogsTarget⟩
+    ⟨hpTarget, hwfTarget, hrTarget, hstorTarget, hlogsTarget⟩
   have hpush := of_run_pushB256 hpushEvent
   have hpEvent :
       pauserSetEvent :: target :: previousPauser :: newPauser :: pre.stack
@@ -1576,7 +1939,33 @@ theorem finishSetPauser_run_extracts_event
     Ninst.Hinv.inv (f := Devm.getStor) hpushEvent
   have hstorLog : Devm.getStor sEvent = Devm.getStor sLog :=
     Line.of_inv Devm.getStor (by line_inv) hlog
-  exact ⟨sLog, hlogs,
+  have hwfEvent : Mem.Wf sEvent.memory := by
+    rw [← hpush.memory]
+    exact hwfTarget
+  have hrEvent : Mem.Reads sEvent.memory img := by
+    rw [← hpush.memory]
+    exact hrTarget
+  rcases Line.of_run_cons hlog with ⟨sSize, hpushSize, hlogRest1⟩
+  rcases Line.of_run_cons hlogRest1 with
+    ⟨sOffset, hpushOffset, hlogRest2⟩
+  rcases Line.of_run_cons hlogRest2 with ⟨sAfterLog, hlogInst, hnil⟩
+  cases hnil
+  have hsize := of_run_pushB256 hpushSize
+  have hoffset := of_run_pushB256 hpushOffset
+  have hwfOffset : Mem.Wf sOffset.memory := by
+    rw [← hoffset.memory, ← hsize.memory]
+    exact hwfEvent
+  have hrOffset : Mem.Reads sOffset.memory img := by
+    rw [← hoffset.memory, ← hsize.memory]
+    exact hrEvent
+  rcases of_run_log_mem hlogInst with ⟨mi, sz, hmemLog⟩
+  have hwfLog : Mem.Wf sLog.memory := by
+    rw [hmemLog]
+    exact hwfOffset.extend mi sz
+  have hrLog : Mem.Reads sLog.memory img := by
+    rw [hmemLog]
+    exact hrOffset.extend mi sz
+  exact ⟨sLog, hlogs, hwfLog, hrLog,
     (hstorNew.trans (hstorPrevious.trans
       (hstorTarget.trans (hstorEvent.trans hstorLog)))).symm,
     htail⟩
@@ -1620,6 +2009,10 @@ theorem pauserSet_local_transition
         [⟨ca,
           [pauserSetEvent, target, assignmentAt entries target, newPauser],
           []⟩] ∧
+      Mem.Wf logged.memory ∧
+      Mem.Reads logged.memory postImg ∧
+      Bytes.toB256
+        (postImg.sliceD (continuationWord * 32).toNat 32 0) = continuation ∧
       Devm.getStor logged = Devm.getStor postRegistry ∧
       Func.Run ((runtime dp).main :: (runtime dp).aux) sevm logged
         (loadWord continuationWord +++ Ninst.iszero :::
@@ -1656,16 +2049,191 @@ theorem pauserSet_local_transition
   have hmodel := (setPauser_sourceTrace_refines_model htarget0 htrace).1
   rcases finishSetPauser_run_extracts_event hwfPost hrPost
       hnewPost hpreviousPost htargetPost hfinish with
-    ⟨logged, hlogs, hstorLogged, htail⟩
+    ⟨logged, hlogs, hwfLogged, hrLogged, hstorLogged, htail⟩
   rcases runtime_caller_lookups dp with
     ⟨hregisterLookup, hpauseLookup, panicData, hpanicLookup⟩
   have hsplit := finishSetPauser_run_split_continuation hwfPost hrPost
     hnewPost hpreviousPost htargetPost hcontinuationPost howner
     hregisterLookup hpauseLookup hfinish
   refine ⟨trace, postRegistry, postImg, logged, htrace, hmodel, hstorPost,
-    hwPost, ?_, hstorLogged, htail, ?_⟩
+    hwPost, ?_, hwfLogged, hrLogged, hcontinuationPost,
+    hstorLogged, htail, ?_⟩
   · simpa [howner] using hlogs
   · exact hsplit
+
+private theorem registerContinuation_logsAppend
+    {fs : List Func} {sevm : Sevm} {pre final : Devm}
+    {img : Bytes} {continuation : B256}
+    {panicData : Bytes}
+    (hwf : Mem.Wf pre.memory)
+    (hr : Mem.Reads pre.memory img)
+    (hcontinuationRead : Bytes.toB256
+      (img.sliceD (continuationWord * 32).toNat 32 0) = continuation)
+    (hcontinuation : continuation = 0)
+    (hregisterLookup : fs[registerAfterSetSlot]? = some registerAfterSet)
+    (hpanicLookup : fs[arithmeticPanicSlot]? =
+      some (Func.revData panicData))
+    (hrun : Func.Run fs sevm pre
+      (loadWord continuationWord +++ Ninst.iszero :::
+        (Func.call pauseAfterSetSlot).branch
+          (Func.call registerAfterSetSlot)) final) :
+    ∃ suffix, final.logs = pre.logs ++ suffix := by
+  rcases of_run_prepend (loadWord continuationWord) _ hrun with
+    ⟨sContinuation, hload, h1⟩
+  rcases of_run_next h1 with ⟨sFlag, hiszero, hbranch⟩
+  have hp0 : pre.stack <<+ pre.stack := by
+    simpa only [List.append_nil] using pref_append pre.stack []
+  rcases enumeration_prefix_of_loadWord_image hp0 hwf hr
+      hcontinuationRead hload with
+    ⟨hpContinuation, hwfContinuation, hrContinuation,
+      hstorContinuation, hlogsContinuation⟩
+  have hpFlag : (continuation =? 0) :: pre.stack <<+ sFlag.stack :=
+    prefix_of_iszero hiszero hpContinuation
+  have hlogsFlag : sContinuation.logs = sFlag.logs :=
+    Ninst.Hinv.inv (f := Devm.logs) hiszero
+  cases hbranch with
+  | zero hpop hpause =>
+      have hflag := (popBurn_pref hpop hpFlag).1
+      rw [hcontinuation] at hflag
+      simp [B256.eqCheck] at hflag
+      exact ((by decide : (0 : B256) ≠ 1) hflag).elim
+  | succ hnz hpop hbranchBurn hregister =>
+      rcases of_run_call hregister with
+        ⟨body, registerPre, hget, hburn, hbody⟩
+      rw [hregisterLookup] at hget
+      injection hget with heq
+      subst body
+      rcases registerAfterSet_logsAppend hpanicLookup hbody with
+        ⟨suffix, hfinal⟩
+      refine ⟨suffix, ?_⟩
+      rw [hfinal, ← hburn.logs, ← hbranchBurn.logs, ← hpop.logs,
+        ← hlogsFlag, ← hlogsContinuation]
+
+set_option maxRecDepth 4096 in
+/-- A successful exact direct-register continuation retains the `PauserSet`
+event in the terminal raw frame and reaches the same Registry snapshot as the
+source transition.  Optional heartbeat records form only a later suffix. -/
+theorem pauserSet_register_success
+    (dp : DeployParams) {ca : Adr} {sevm : Sevm}
+    {pre final : Devm} {loc : Nat} {img : Bytes}
+    {entries : List Entry} {target newPauser continuation : B256}
+    (howner : sevm.currentTarget = ca)
+    (hcodeAddress : sevm.codeAddress = some ca)
+    (hbytes : sevm.code.toList = lidoCircuitBreakerCode dp)
+    (htable : (table 0
+      ((runtime dp).main :: (runtime dp).aux))[setPauserSlot]? =
+        some (loc, setPauserKernel))
+    (hwf : Mem.Wf pre.memory)
+    (hr : Mem.Reads pre.memory img)
+    (htargetRead : Bytes.toB256
+      (img.sliceD (targetWord * 32).toNat 32 0) = target)
+    (hnewRead : Bytes.toB256
+      (img.sliceD (newPauserWord * 32).toNat 32 0) = newPauser)
+    (hcontinuationRead : Bytes.toB256
+      (img.sliceD (continuationWord * 32).toNat 32 0) = continuation)
+    (hcontinuation : continuation = 0)
+    (hw : RegistryWitness
+      (logicalStorageOfStor (Devm.getStor pre ca)) entries)
+    (htarget : canonicalAddress target)
+    (hnew : canonicalAddress newPauser)
+    (hexec : Exec (loc + 1) sevm pre (.ok final)) :
+    ∃ (trace : SetPauserSourceTrace) (postRegistry : Devm)
+        (suffix : List Log),
+      setPauser entries target newPauser = some trace.postEntries ∧
+      RegistryWitness
+        (logicalStorageOfStor (Devm.getStor final ca)) trace.postEntries ∧
+      final.logs = postRegistry.logs ++
+        [⟨ca,
+          [pauserSetEvent, target, assignmentAt entries target, newPauser],
+          []⟩] ++ suffix := by
+  rcases pauserSet_local_transition dp howner hcodeAddress hbytes htable
+      hwf hr htargetRead hnewRead hcontinuationRead hw htarget hnew hexec with
+    ⟨trace, postRegistry, postImg, logged, htrace, hmodel, hstorPost,
+      hwPost, hlogs, hwfLogged, hrLogged, hcontinuationPost,
+      hstorLogged, htail, hsplit⟩
+  rcases runtime_caller_lookups dp with
+    ⟨hregisterLookup, hpauseLookup, panicData, hpanicLookup⟩
+  rcases registerContinuation_logsAppend hwfLogged hrLogged
+      hcontinuationPost hcontinuation hregisterLookup hpanicLookup htail with
+    ⟨suffix, hfinalLogs⟩
+  have hcontinuationReadZero : Bytes.toB256
+      (img.sliceD (continuationWord * 32).toNat 32 0) = 0 := by
+    rw [← hcontinuation]
+    exact hcontinuationRead
+  rcases registerPauser_kernel_exec_preserves_registry dp howner hcodeAddress
+      hbytes htable hwf hr htargetRead hnewRead hcontinuationReadZero
+      hw htarget hnew hexec with
+    ⟨traceFinal, htraceFinal, hwFinal⟩
+  have htraceEq : traceFinal = trace := by
+    have : some traceFinal = some trace := htraceFinal.symm.trans htrace
+    exact Option.some.inj this
+  subst traceFinal
+  refine ⟨trace, postRegistry, suffix, hmodel, hwFinal, ?_⟩
+  rw [hfinalLogs, hlogs, List.append_assoc]
+
+set_option maxRecDepth 4096 in
+/-- Clean settlement of an exact direct `registerPauser` message retains the
+raw successful event and its matching terminal Registry snapshot.  The filled
+slot names EO4's explicit kernel boundary; settlement contributes no new
+state or log effect on the clean path. -/
+theorem pauserSet_register_success_committed
+    (dp : DeployParams) {msg : Msg} {ca : Adr}
+    {final settled : Devm} {loc : Nat} {img : Bytes}
+    {entries : List Entry} {target newPauser continuation : B256}
+    (_htargetOwner : msg.target = some ca)
+    (howner : msg.currentTarget = ca)
+    (hcodeAddress : msg.codeAddress = some ca)
+    (hcode : msg.code.toList = lidoCircuitBreakerCode dp)
+    (_hvalue : msg.value = 0)
+    (_hdata : msg.data = registerPauserCalldata target newPauser)
+    (htable : (table 0
+      ((runtime dp).main :: (runtime dp).aux))[setPauserSlot]? =
+        some (loc, setPauserKernel))
+    (hwf : Mem.Wf (initDevm msg).memory)
+    (hr : Mem.Reads (initDevm msg).memory img)
+    (htargetRead : Bytes.toB256
+      (img.sliceD (targetWord * 32).toNat 32 0) = target)
+    (hnewRead : Bytes.toB256
+      (img.sliceD (newPauserWord * 32).toNat 32 0) = newPauser)
+    (hcontinuationRead : Bytes.toB256
+      (img.sliceD (continuationWord * 32).toNat 32 0) = continuation)
+    (hcontinuation : continuation = 0)
+    (hw : RegistryWitness
+      (logicalStorageOfStor (Devm.getStor (initDevm msg) ca)) entries)
+    (htarget : canonicalAddress target)
+    (hnew : canonicalAddress newPauser)
+    (hexec : Exec (loc + 1) (initSevm msg) (initDevm msg) (.ok final))
+    (hprocess : ProcessMessage msg
+      (.some ⟨⟨loc + 1, initSevm msg, initDevm msg⟩, .ok final⟩)
+      (.ok settled))
+    (hclean : final.error.isNone = true) :
+    ∃ (trace : SetPauserSourceTrace) (postRegistry : Devm)
+        (suffix : List Log),
+      setPauser entries target newPauser = some trace.postEntries ∧
+      RegistryWitness
+        (logicalStorageOfStor (Devm.getStor settled ca)) trace.postEntries ∧
+      settled.logs = postRegistry.logs ++
+        [⟨ca,
+          [pauserSetEvent, target, assignmentAt entries target, newPauser],
+          []⟩] ++ suffix := by
+  have hsettle := (RunFrame.some_inv hprocess).2
+  simp [Frame.ofCall, Frame.settle, Frame.settleMsg,
+    executeCode.handleError, processMessage.settle] at hsettle
+  have hnotError : final.error.isSome ≠ true := by
+    cases herror : final.error <;> simp_all
+  rw [if_neg hnotError] at hsettle
+  have hsettled : settled = final := Except.ok.inj hsettle
+  subst settled
+  have hinitOwner : (initSevm msg).currentTarget = ca := by
+    simpa [initSevm] using howner
+  have hinitCodeAddress : (initSevm msg).codeAddress = some ca := by
+    simpa [initSevm] using hcodeAddress
+  have hinitCode : (initSevm msg).code.toList =
+      lidoCircuitBreakerCode dp := by
+    simpa [initSevm] using hcode
+  exact pauserSet_register_success dp hinitOwner hinitCodeAddress hinitCode
+    htable hwf hr htargetRead hnewRead hcontinuationRead hcontinuation
+    hw htarget hnew hexec
 
 /-- A target-zero entry cannot be an exact successful emitted-kernel
 execution, hence it cannot reach the production event suffix.  The matching
@@ -1703,22 +2271,87 @@ theorem pauserSet_target_zero_no_success
   rw [setPauserSourceTrace_target_zero] at htrace
   cases htrace
 
+set_option maxRecDepth 4096 in
+/-- The exact forward-constructed target-zero revert reaches no Registry
+write occurrence and preserves the entry log list, so it cannot expose a
+`PauserSet` record. -/
+theorem pauserSet_target_zero_error_logs_unchanged
+    (dp : DeployParams) {ca : Adr} {sevm : Sevm} {pre : Devm}
+    {loc : Nat} {img : Bytes} {stack : List B256}
+    {target : B256} {G : Nat}
+    (howner : sevm.currentTarget = ca)
+    (hcodeAddress : sevm.codeAddress = some ca)
+    (hbytes : sevm.code.toList = lidoCircuitBreakerCode dp)
+    (htable : (table 0
+      ((runtime dp).main :: (runtime dp).aux))[setPauserSlot]? =
+        some (loc, setPauserKernel))
+    (hstack : pre.stack = stack)
+    (hwf : Mem.Wf pre.memory)
+    (hr : Mem.Reads pre.memory img)
+    (htargetRead : Bytes.toB256
+      (img.sliceD (targetWord * 32).toNat 32 0) = target)
+    (htargetCanonical : canonicalAddress target)
+    (htargetZero : target = 0)
+    (halign : pre.memory.size % 32 = 0)
+    (hgas : pre.gasLeft = G +
+      (gVerylow +
+        (gVerylow + pre.extCost [⟨(targetWord * 32).toNat, 32⟩]) +
+        gVerylow + (gVerylow + gHigh + gJumpdest) +
+        (gVerylow + gMid + gJumpdest) +
+        revSelectorCost (pre.setMach ⟨pre.stack,
+          (pre.memory.read (targetWord * 32).toNat 32).2, 0⟩)))
+    (hroom : pre.stack.length < 1023) :
+    let fs := (runtime dp).main :: (runtime dp).aux
+    let data := customErrorData "PausableZero"
+    let post := (pre.setMach ⟨stack,
+      (pre.memory.read (targetWord * 32).toNat 32).2.write 0
+        data.toB256.toBytes, G⟩).withOutput data
+    (Func.RunCompiledTo fs sevm pre setPauserKernel
+        (.error (.revert, post)) ∧
+      ∃ execution : Exec (loc + 1) sevm pre (.error (.revert, post)),
+        ∀ occurrence : Exec.NinstOccurrence
+            (⟨loc + 1, sevm, pre, .error (.revert, post), execution⟩ :
+              Exec.Deriv),
+          occurrence.instruction ≠ .reg .sstore) ∧
+      post.logs = pre.logs := by
+  dsimp only
+  refine ⟨setPauser_zero_runCompiledTo_pausableZero_noRegistryWrite dp
+    howner hcodeAddress hbytes htable hstack hwf hr htargetRead
+    htargetCanonical htargetZero halign hgas hroom, rfl⟩
+
 /-- At the top-level message boundary an exact direct register or pause call
 that settles with an error exposes no logs, so a raw frame-local `PauserSet`
 record is not observable. -/
 theorem pauserSet_settled_error_not_observable
     (dp : DeployParams) {msg : Msg} {state : State} {out : MsgCallOutput}
+    {slot : Xlot} {post : Devm} {entries : List Entry}
     {ca : Adr} {target newPauser : B256}
-    (_htarget : msg.target = some ca)
-    (_howner : msg.currentTarget = ca)
-    (_hcodeAddress : msg.codeAddress = some ca)
-    (_hcode : msg.code.toList = lidoCircuitBreakerCode dp)
-    (_hvalue : msg.value = 0)
-    (_hdata : msg.data = registerPauserCalldata target newPauser ∨
+    (htargetOwner : msg.target = some ca)
+    (howner : msg.currentTarget = ca)
+    (hcodeAddress : msg.codeAddress = some ca)
+    (hcode : msg.code.toList = lidoCircuitBreakerCode dp)
+    (hvalue : msg.value = 0)
+    (hdata : msg.data = registerPauserCalldata target newPauser ∨
       msg.data = pauseCalldata target)
+    (htarget : canonicalAddress target)
+    (hnew : canonicalAddress newPauser)
+    (hentry : RegistryWitness
+      (logicalStorageOfStor (msg.benv.state.getStor ca)) entries)
+    (hprocess : ProcessMessage msg slot (.ok post))
+    (hpostError : post.error.isSome)
     (hrun : processMessageCall msg = .ok (state, out))
-    (herror : out.error.isSome) : out.logs = [] :=
-  processMessageCall_error_logs_eq_nil hrun herror
+    (herror : out.error.isSome) :
+    out.logs = [] ∧
+      RegistryWitness
+        (logicalStorageOfStor (Devm.getStor post ca)) entries := by
+  refine ⟨processMessageCall_error_logs_eq_nil hrun herror, ?_⟩
+  rcases hdata with hregister | hpause
+  · exact registerPauser_settled_error_restores_registry dp
+      htargetOwner howner hcodeAddress hcode hvalue hregister htarget hnew
+      hentry hprocess hpostError
+  · exact pause_settled_error_restores_registry dp
+      htargetOwner howner hcodeAddress hcode hvalue hpause htarget
+      hentry hprocess hpostError
 
 set_option maxRecDepth 4096 in
 /-- A monitor observation derived from this exact successful local site agrees
@@ -1726,10 +2359,13 @@ with the stable post-Registry snapshot: the event records the pre-assignment
 and requested pauser, while the poststate satisfies the same coherence facts
 that the three exact Registry views expose.  This is deliberately local and
 does not assert delivery, history completeness, or finality. -/
-theorem registryObservation_sound
-    (dp : DeployParams) {ca : Adr} {sevm : Sevm}
+theorem registryObservation_raw_sound
+    (dp : DeployParams) (fs : List Func)
+    (enumSevm pauserSevm countSevm : Sevm)
+    {ca : Adr} {sevm : Sevm}
     {pre final : Devm} {loc : Nat} {img : Bytes}
     {entries : List Entry} {target newPauser continuation : B256}
+    (enumG pauserG countG : Nat)
     (howner : sevm.currentTarget = ca)
     (hcodeAddress : sevm.codeAddress = some ca)
     (hbytes : sevm.code.toList = lidoCircuitBreakerCode dp)
@@ -1748,8 +2384,16 @@ theorem registryObservation_sound
       (logicalStorageOfStor (Devm.getStor pre ca)) entries)
     (htarget : canonicalAddress target)
     (hnew : canonicalAddress newPauser)
+    (henumOwner : enumSevm.currentTarget = ca)
+    (hpauserOwner : pauserSevm.currentTarget = enumSevm.currentTarget)
+    (hcountOwner : countSevm.currentTarget = enumSevm.currentTarget)
+    (hpauserData : pauserSevm.data.length.toB256 <? 36 = 0)
+    (hpauserWord : Sevm.dataWord pauserSevm 4 = target)
+    (hcountData : countSevm.data.length.toB256 <? 36 = 0)
+    (hcountWord : Sevm.dataWord countSevm 4 = newPauser)
+    (hfs : fs[enumLoopSlot]? = some enumLoop)
     (hexec : Exec (loc + 1) sevm pre (.ok final)) :
-    ∃ (trace : SetPauserSourceTrace) (postRegistry logged : Devm),
+    ∃ (trace : SetPauserSourceTrace) (postRegistry logged viewBase : Devm),
       setPauser entries target newPauser = some trace.postEntries ∧
       RegistryWitness
         (logicalStorageOfStor (Devm.getStor postRegistry ca))
@@ -1759,13 +2403,156 @@ theorem registryObservation_sound
           [pauserSetEvent, target, assignmentAt entries target, newPauser],
           []⟩] ∧
       Devm.getStor logged = Devm.getStor postRegistry ∧
-      RegistrySnapshotCoherence trace.postEntries target newPauser := by
+      viewBase = prepareRegistryViewsStorage enumSevm postRegistry
+        trace.postEntries target newPauser ∧
+      Devm.getStor viewBase = Devm.getStor postRegistry ∧
+      viewBase.logs = postRegistry.logs ∧
+      RegistryViewsRun fs enumSevm pauserSevm countSevm viewBase
+        trace.postEntries target newPauser enumG pauserG countG := by
   rcases pauserSet_local_transition dp howner hcodeAddress hbytes htable
       hwf hr htargetRead hnewRead hcontinuationRead hw htarget hnew hexec with
     ⟨trace, postRegistry, postImg, logged, htrace, hmodel, hstorPost,
-      hwPost, hlogs, hstorLogged, htail, hsplit⟩
-  exact ⟨trace, postRegistry, logged, hmodel, hwPost, hlogs,
-    hstorLogged, hwPost.snapshotCoherence target newPauser htarget⟩
+      hwPost, hlogs, _hwfLogged, _hrLogged, _hcontinuationPost,
+      hstorLogged, htail, hsplit⟩
+  let viewBase := prepareRegistryViewsStorage enumSevm postRegistry
+    trace.postEntries target newPauser
+  have hviewStor : Devm.getStor viewBase = Devm.getStor postRegistry := by
+    exact prepareRegistryViewsStorage_getStor enumSevm postRegistry
+      trace.postEntries target newPauser
+  have hviewLogs : viewBase.logs = postRegistry.logs := by
+    exact prepareRegistryViewsStorage_logs enumSevm postRegistry
+      trace.postEntries target newPauser
+  have hwView : RegistryWitness
+      (logicalStorageOfStor
+        (Devm.getStor viewBase enumSevm.currentTarget)) trace.postEntries := by
+    rw [hviewStor, henumOwner]
+    exact hwPost
+  have hpauserWarm :
+      (⟨pauserSevm.currentTarget, assignmentSlot target⟩ : Adr × B256) ∈
+        viewBase.accessedStorageKeys := by
+    rw [hpauserOwner]
+    dsimp only [viewBase]
+    exact prepareRegistryViewsStorage_assignmentWarm enumSevm postRegistry
+      trace.postEntries target newPauser
+  have hcountWarm :
+      (⟨countSevm.currentTarget, countSlot newPauser⟩ : Adr × B256) ∈
+        viewBase.accessedStorageKeys := by
+    rw [hcountOwner]
+    dsimp only [viewBase]
+    exact prepareRegistryViewsStorage_countWarm enumSevm postRegistry
+      trace.postEntries target newPauser
+  have hviews := registryViews_coherent fs enumSevm pauserSevm countSevm
+    viewBase trace.postEntries target newPauser enumG pauserG countG
+    hpauserOwner hcountOwner hpauserData hpauserWord hcountData hcountWord
+    htarget hnew hwView
+    (fun key hkey => prepareRegistryViewsStorage_enumWarm enumSevm postRegistry
+      trace.postEntries target newPauser hkey)
+    hpauserWarm hcountWarm hfs
+  exact ⟨trace, postRegistry, logged, viewBase, hmodel, hwPost, hlogs,
+    hstorLogged, rfl, hviewStor, hviewLogs, hviews⟩
+
+set_option maxRecDepth 4096 in
+/-- A committed direct-register event and exact re-reads of the three Registry
+views agree on one clean settled snapshot.  The theorem is local to the named
+message and snapshot; it makes no history, delivery, reorg, or availability
+claim. -/
+theorem registryObservation_sound
+    (dp : DeployParams) (fs : List Func)
+    (enumSevm pauserSevm countSevm : Sevm)
+    {msg : Msg} {ca : Adr} {final settled : Devm}
+    {loc : Nat} {img : Bytes} {entries : List Entry}
+    {target newPauser continuation : B256}
+    (enumG pauserG countG : Nat)
+    (htargetOwner : msg.target = some ca)
+    (howner : msg.currentTarget = ca)
+    (hcodeAddress : msg.codeAddress = some ca)
+    (hcode : msg.code.toList = lidoCircuitBreakerCode dp)
+    (hvalue : msg.value = 0)
+    (hdata : msg.data = registerPauserCalldata target newPauser)
+    (htable : (table 0
+      ((runtime dp).main :: (runtime dp).aux))[setPauserSlot]? =
+        some (loc, setPauserKernel))
+    (hwf : Mem.Wf (initDevm msg).memory)
+    (hr : Mem.Reads (initDevm msg).memory img)
+    (htargetRead : Bytes.toB256
+      (img.sliceD (targetWord * 32).toNat 32 0) = target)
+    (hnewRead : Bytes.toB256
+      (img.sliceD (newPauserWord * 32).toNat 32 0) = newPauser)
+    (hcontinuationRead : Bytes.toB256
+      (img.sliceD (continuationWord * 32).toNat 32 0) = continuation)
+    (hcontinuation : continuation = 0)
+    (hw : RegistryWitness
+      (logicalStorageOfStor (Devm.getStor (initDevm msg) ca)) entries)
+    (htarget : canonicalAddress target)
+    (hnew : canonicalAddress newPauser)
+    (henumOwner : enumSevm.currentTarget = ca)
+    (hpauserOwner : pauserSevm.currentTarget = enumSevm.currentTarget)
+    (hcountOwner : countSevm.currentTarget = enumSevm.currentTarget)
+    (hpauserData : pauserSevm.data.length.toB256 <? 36 = 0)
+    (hpauserWord : Sevm.dataWord pauserSevm 4 = target)
+    (hcountData : countSevm.data.length.toB256 <? 36 = 0)
+    (hcountWord : Sevm.dataWord countSevm 4 = newPauser)
+    (hfs : fs[enumLoopSlot]? = some enumLoop)
+    (hexec : Exec (loc + 1) (initSevm msg) (initDevm msg) (.ok final))
+    (hprocess : ProcessMessage msg
+      (.some ⟨⟨loc + 1, initSevm msg, initDevm msg⟩, .ok final⟩)
+      (.ok settled))
+    (hclean : final.error.isNone = true) :
+    ∃ (trace : SetPauserSourceTrace) (postRegistry : Devm)
+        (suffix : List Log) (viewBase : Devm),
+      setPauser entries target newPauser = some trace.postEntries ∧
+      RegistryWitness
+        (logicalStorageOfStor (Devm.getStor settled ca)) trace.postEntries ∧
+      settled.logs = postRegistry.logs ++
+        [⟨ca,
+          [pauserSetEvent, target, assignmentAt entries target, newPauser],
+          []⟩] ++ suffix ∧
+      viewBase = prepareRegistryViewsStorage enumSevm settled
+        trace.postEntries target newPauser ∧
+      Devm.getStor viewBase = Devm.getStor settled ∧
+      viewBase.logs = settled.logs ∧
+      RegistryViewsRun fs enumSevm pauserSevm countSevm viewBase
+        trace.postEntries target newPauser enumG pauserG countG := by
+  rcases pauserSet_register_success_committed dp htargetOwner howner
+      hcodeAddress hcode hvalue hdata htable hwf hr htargetRead hnewRead
+      hcontinuationRead hcontinuation hw htarget hnew hexec hprocess hclean with
+    ⟨trace, postRegistry, suffix, hmodel, hwSettled, hlogs⟩
+  let viewBase := prepareRegistryViewsStorage enumSevm settled
+    trace.postEntries target newPauser
+  have hviewStor : Devm.getStor viewBase = Devm.getStor settled := by
+    exact prepareRegistryViewsStorage_getStor enumSevm settled
+      trace.postEntries target newPauser
+  have hviewLogs : viewBase.logs = settled.logs := by
+    exact prepareRegistryViewsStorage_logs enumSevm settled
+      trace.postEntries target newPauser
+  have hwView : RegistryWitness
+      (logicalStorageOfStor
+        (Devm.getStor viewBase enumSevm.currentTarget)) trace.postEntries := by
+    rw [hviewStor, henumOwner]
+    exact hwSettled
+  have hpauserWarm :
+      (⟨pauserSevm.currentTarget, assignmentSlot target⟩ : Adr × B256) ∈
+        viewBase.accessedStorageKeys := by
+    rw [hpauserOwner]
+    dsimp only [viewBase]
+    exact prepareRegistryViewsStorage_assignmentWarm enumSevm settled
+      trace.postEntries target newPauser
+  have hcountWarm :
+      (⟨countSevm.currentTarget, countSlot newPauser⟩ : Adr × B256) ∈
+        viewBase.accessedStorageKeys := by
+    rw [hcountOwner]
+    dsimp only [viewBase]
+    exact prepareRegistryViewsStorage_countWarm enumSevm settled
+      trace.postEntries target newPauser
+  have hviews := registryViews_coherent fs enumSevm pauserSevm countSevm
+    viewBase trace.postEntries target newPauser enumG pauserG countG
+    hpauserOwner hcountOwner hpauserData hpauserWord hcountData hcountWord
+    htarget hnew hwView
+    (fun key hkey => prepareRegistryViewsStorage_enumWarm enumSevm settled
+      trace.postEntries target newPauser hkey)
+    hpauserWarm hcountWarm hfs
+  exact ⟨trace, postRegistry, suffix, viewBase, hmodel, hwSettled, hlogs,
+    rfl, hviewStor, hviewLogs, hviews⟩
 
 set_option maxRecDepth 1000
 

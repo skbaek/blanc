@@ -2939,6 +2939,10 @@ gate additionally hashes each normalized declaration header fail-closed. -/
 #check getPausables_noSstore_occurrence
 #check registryViews_coherent
 #check pauserSet_local_transition
+#check pauserSet_target_zero_no_success
+#check pauserSet_target_zero_error_logs_unchanged
+#check pauserSet_register_success
+#check pauserSet_register_success_committed
 #check pauserSet_settled_error_not_observable
 #check registryObservation_sound
 

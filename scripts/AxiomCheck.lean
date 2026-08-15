@@ -476,5 +476,9 @@ import Blanc.LidoCircuitBreakerRegistryModel
 #print axioms Blanc.LidoCircuitBreaker.getPausables_noSstore_occurrence
 #print axioms Blanc.LidoCircuitBreaker.registryViews_coherent
 #print axioms Blanc.LidoCircuitBreaker.pauserSet_local_transition
+#print axioms Blanc.LidoCircuitBreaker.pauserSet_target_zero_no_success
+#print axioms Blanc.LidoCircuitBreaker.pauserSet_target_zero_error_logs_unchanged
+#print axioms Blanc.LidoCircuitBreaker.pauserSet_register_success
+#print axioms Blanc.LidoCircuitBreaker.pauserSet_register_success_committed
 #print axioms Blanc.LidoCircuitBreaker.pauserSet_settled_error_not_observable
 #print axioms Blanc.LidoCircuitBreaker.registryObservation_sound

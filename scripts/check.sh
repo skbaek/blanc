@@ -740,6 +740,10 @@ Blanc.LidoCircuitBreaker.getPausables_runCompiled|$STANDARD
 Blanc.LidoCircuitBreaker.getPausables_noSstore_occurrence|$STANDARD
 Blanc.LidoCircuitBreaker.registryViews_coherent|$STANDARD
 Blanc.LidoCircuitBreaker.pauserSet_local_transition|$STANDARD
+Blanc.LidoCircuitBreaker.pauserSet_target_zero_no_success|$STANDARD
+Blanc.LidoCircuitBreaker.pauserSet_target_zero_error_logs_unchanged|$STANDARD
+Blanc.LidoCircuitBreaker.pauserSet_register_success|$STANDARD
+Blanc.LidoCircuitBreaker.pauserSet_register_success_committed|$STANDARD
 Blanc.LidoCircuitBreaker.pauserSet_settled_error_not_observable|$STANDARD
 Blanc.LidoCircuitBreaker.registryObservation_sound|$STANDARD"
 # Secondary net only: the exact-set comparison below is the primary check;

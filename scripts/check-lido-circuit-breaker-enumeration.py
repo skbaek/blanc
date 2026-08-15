@@ -17,24 +17,32 @@ ROOT = Path(__file__).resolve().parent.parent
 OWNER = ROOT / "Blanc/LidoCircuitBreakerEnumeration.lean"
 FIXTURE = ROOT / "scripts/LidoCircuitBreakerEnumerationControls.lean"
 REQUIRED = (
+    "exact_code_empty_control", "exact_code_singleton_control",
+    "exact_code_sixty_four_control",
     "empty_image_control", "singleton_size_control", "sixtyFour_size_control",
     "sixtyFour_not_capped_at_one", "full_prefix_image_control",
-    "cursor_not_memory_resident_control", "reachable_writer_rejected_control",
+    "cursor_not_memory_resident_control", "memory_resident_cursor_alias_rejected",
+    "reachable_writer_rejected_control",
+    "writer_certificate_rejected_control",
     "order_omission_duplication_and_truncation_rejected",
     "abi_header_size_and_padding_control",
     "unbounded_offset_needs_witness_bound",
     "noop_shaped_transitions_still_exist",
+    "noop_event_omission_premise_rejected",
     "event_shape_mutants_rejected",
 )
 FORBIDDEN = re.compile(r"\b(sorry|admit|axiom|opaque|native_decide|implemented_by)\b")
 ROLES = {
-    "getPausables_runCompiled": "3238654f9c531f1893bd3eebb4f197c497db83b0730b0f97a061562288ffea9c",
-    "getPausables_noSstore_occurrence": "59044ce54c2dd2bed592ecfc06240c0c55243ed3a3ee88676ca21752b246f8ac",
-    "registryViews_coherent": "8bb6bdd2c1819c8d8758e4bb9d3c1eb09e6880248b063a9008d472498f24e565",
-    "pauserSet_local_transition": "d81430d517bc25a50015b2eb098bae5ead3e8e17febed62dd30be918fb32ad0d",
+    "getPausables_runCompiled": "860917a14bb01c38221ef7a97c5da4247aa3453b877183eb60d5f5cdde83f0d3",
+    "getPausables_noSstore_occurrence": "6815a8a692e9523c0dba7fb4437dc4f29bd57974d46cc673083b64c1b7f3bd96",
+    "registryViews_coherent": "2ccb5c749f4b2a56daca773c1430c172e20bf73fdd8e8e29c63c2559dd4b087d",
+    "pauserSet_local_transition": "80d926b239cf4ac0df7414260d83a79ce2bc33702bdf3f96d566a0f1d1c7a42d",
     "pauserSet_target_zero_no_success": "5ddcaaebf789223390d7949699b0816c443500d35b49b67600743ba3831ba12d",
-    "pauserSet_settled_error_not_observable": "41b67d67d121ee7c98c17f5106372cfe3dc2c0be3416e1df4f15c7a0a87f68e3",
-    "registryObservation_sound": "980e86c35658906a9b2b0b50a0ea8322ddf123dce2d859083961a178e723e54d",
+    "pauserSet_target_zero_error_logs_unchanged": "6fc80f773bfaad4c9a42e8cefef9c5951daa53f754d1a00cf94995cdc75a127e",
+    "pauserSet_register_success": "322d07f5645ed20c12db9421d5dbf18f72e0d9245eca11b199771832bbf5fc34",
+    "pauserSet_register_success_committed": "423931268008b2515cb862901f86cae9c17149c842f20a9b1223018207c01ecd",
+    "pauserSet_settled_error_not_observable": "fc87de212f62e2e7eed74b6cefe6bd6cbeaa5e5b1f098c997f70b5543a5423b1",
+    "registryObservation_sound": "76b2c05b54e1c0ea96cd846651290a27529e065331e2524c3e380ae2ee5b593e",
 }
 EXPECTED_AXIOMS = {"propext", "Classical.choice", "Quot.sound"}
 
@@ -50,8 +58,11 @@ def require_controls(source: str) -> None:
     for name in REQUIRED:
         if not re.search(rf"(?m)^theorem\s+{re.escape(name)}\b", source):
             fail(f"missing positive/deletion control {name}")
-    for token in ("List.range 64", "enumLoop_pre_memory_independent_of_cursor",
-                  "enumeration_writing_mutant_rejected", "enumPrefixMemory_full_read"):
+    for token in ("List.range 64", "exactCodeEnumerationRun",
+                  "controlRegistryWitness", "enumLoop_pre_memory_independent_of_cursor",
+                  "cursorAliasedSingletonMemory",
+                  "enumeration_writing_mutant_rejected", "EntrySstoreFree",
+                  "enumPrefixMemory_full_read"):
         if token not in source:
             fail(f"fixture no longer owns required semantic channel {token}")
 
@@ -147,9 +158,20 @@ def header_mutation_controls(source: str) -> None:
             "    (hdata : sevm.data.length.toB256 = 4)",
         ),
         "wrong event identity": ("pauserSetEvent", "wrongPauserSetEvent"),
+        "event before stable Registry boundary": (
+            "settled.logs = postRegistry.logs ++",
+            "postRegistry.logs = settled.logs ++",
+        ),
         "wrong event topic order": (
             "[pauserSetEvent, target, assignmentAt entries target, newPauser]",
             "[pauserSetEvent, assignmentAt entries target, target, newPauser]",
+        ),
+        "missing no-op-shaped event coverage": (
+            "    (hnew : canonicalAddress newPauser)\n"
+            "    (hexec : Exec (loc + 1) sevm pre (.ok final)) :",
+            "    (hnew : canonicalAddress newPauser)\n"
+            "    (_hchanged : assignmentAt entries target ≠ newPauser)\n"
+            "    (hexec : Exec (loc + 1) sevm pre (.ok final)) :",
         ),
         "foreign storage owner": (
             "Devm.getStor base sevm.currentTarget", "Devm.getStor base ca",
@@ -157,8 +179,16 @@ def header_mutation_controls(source: str) -> None:
         "fixed code identity": (
             "lidoCircuitBreakerCode dp", "lidoCircuitBreakerCode officialParams",
         ),
-        "rolled-back log treated as visible": (
-            ": out.logs = [] :=", ": True :=",
+        "rolled-back raw log treated as committed": (
+            "    out.logs = [] ∧\n      RegistryWitness",
+            "    out.logs = [⟨ca, [pauserSetEvent, target,\n"
+            "        assignmentAt entries target, newPauser], []⟩] ∧\n"
+            "      RegistryWitness",
+        ),
+        "witness arithmetic premise deleted": (
+            "    (hw : RegistryWitness\n      (logicalStorageOfStor "
+            "(Devm.getStor base sevm.currentTarget)) entries)",
+            "    (_hw : True)",
         ),
     }
     for label, (old, new) in mutations.items():
@@ -183,7 +213,7 @@ def main() -> None:
     header_mutation_controls(text(OWNER))
     compile_fixture()
     axiom_checks()
-    print("OK — S3 enumeration assurance: 12 Lean controls; 7 exact public headers and axiom pins; empty/singleton/64; ABI/order/padding/wrap, cursor, writer, cap, no-op event, event-shape, owner/code and rollback channels; deletion and trust controls")
+    print("OK — S3 enumeration assurance: 18 Lean controls; 10 exact public/auxiliary headers and axiom pins; exact-code Registry witnesses at empty/singleton/64; ABI/order/padding/wrap, cursor independence and collision rejection, writer certificate rejection, cap, no-op model/event-omission and event-shape controls; header mutation, deletion and trust controls")
 
 if __name__ == "__main__":
     main()
